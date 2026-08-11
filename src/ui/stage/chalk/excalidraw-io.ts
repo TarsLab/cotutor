@@ -64,14 +64,24 @@ async function correctTextWidths<T extends { type: string; width: number }>(
   }
 }
 
+/** 创作层 animateDuration 字段 → excalidraw-animate 的 id 约定(0.7.2 只认 id 中的
+ *  `animateDuration:N`),这个 hack 隔离在本层,创作面与课包 JSON 保持干净字段 */
+function withDurationIds(skeletons: readonly ChalkSkeleton[]): readonly ChalkSkeleton[] {
+  return skeletons.map((el) =>
+    el.animateDuration == null
+      ? el
+      : { ...el, animateDuration: undefined, id: `${el.id}-animateDuration:${el.animateDuration}` },
+  );
+}
+
 /** skeleton → 元素 → 静态 SVG → 原地打上 SMIL 逐笔动画(含笔尖跟随),返回时暂停在 0 */
 export async function buildAnimatedSvg(
   skeletons: readonly ChalkSkeleton[],
   options: BuildOptions = {},
 ): Promise<AnimatedScene> {
-  // regenerateIds: false —— id 携带 animateDuration,也是 manifest 的对齐键
+  // regenerateIds: false —— id 是与 manifest 的对齐键(时长指令已在上面注入)
   const elements = convertToExcalidrawElements(
-    skeletons as unknown as Parameters<typeof convertToExcalidrawElements>[0],
+    withDurationIds(skeletons) as unknown as Parameters<typeof convertToExcalidrawElements>[0],
     { regenerateIds: false },
   );
   const svg = await exportToSvg({

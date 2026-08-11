@@ -1,17 +1,19 @@
 /**
- * chalk-player 数据面。
+ * 播放器数据面。
  *
- * 场景语言 = excalidraw skeleton(架构.md 契约 1),这里只声明我们消费的最小面,
+ * 场景语言 = excalidraw skeleton(契约 1),这里只声明我们消费的最小面,
  * 深路径类型脆弱,一律不 import excalidraw 内部类型。
- * 步结构对齐 schema 的 LessonManifestDraft(M4 定稿前,音频字段可缺省)。
+ * 运行时校验在 src/schema/scene.ts(zod),两处结构保持对齐。
  */
 
-/** skeleton 元素:draw 顺序 = 数组顺序;id 内可携带 `animateDuration:毫秒` 控制单笔时长 */
+/** skeleton 元素:draw 顺序 = 数组顺序;id 保持干净,单笔时长走 animateDuration 字段 */
 export interface ChalkSkeleton {
   type: string;
   id: string;
   x: number;
   y: number;
+  /** 单笔时长(毫秒),缺省 500;由 excalidraw-io 注回 id 喂给 excalidraw-animate */
+  animateDuration?: number;
   [key: string]: unknown;
 }
 

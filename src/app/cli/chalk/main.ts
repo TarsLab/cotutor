@@ -4,6 +4,7 @@
  * exit code:0 通过 · 1 场景有问题 · 2 用法错误 · 3 已规划未实现 · 4 内部错误。
  */
 
+import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildBundle } from './build.ts';
 import { checkScene, type Finding } from './check.ts';
@@ -23,9 +24,14 @@ const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的
   drawtell build <scene.ts> [--out <dir>] [--json]
       场景 → 课包目录(scene.json + manifest.json),先跑 check,有错误即中止。
       默认输出 bundles/<scene-id>/,幂等,已存在的 audio/ 不动。
+  drawtell serve [--port <n>] [--bundles <dir>] [--json]
+      本地 web 服务:播放器页 + 课包分发(/bundles/<id>/)+ 清单(/api/bundles)。
+      默认端口 5175,课包目录 ./bundles;监听 0.0.0.0,iPad 走局域网地址。
+      播放页参数:?scene=<id> 载入课包,&step=<n> 定格第 n 步,&bare=1 纯净画面。
+      需要先构建播放页:仓库根 pnpm build。
   drawtell --help | --version [--json]
 
-规划中(调用返回 exit 3):snap(keyframe 截图)· serve(播放器+课包库+局域网分发)· ls
+规划中(调用返回 exit 3):snap(keyframe 截图)· ls
 
 exit code:0 通过 · 1 场景有问题(findings 里有修复指引)· 2 用法错误 · 3 已规划未实现 · 4 内部错误
 
@@ -33,6 +39,7 @@ exit code:0 通过 · 1 场景有问题(findings 里有修复指引)· 2 用法�
   drawtell check scenes/dengche.ts
   drawtell check scenes/dengche.ts --json   # findings[]:{level, rule, message}
   drawtell build scenes/dengche.ts          # → bundles/dengche/
+  drawtell serve --port 5175                # 打开 http://localhost:5175/?scene=dengche&step=2
 
 ${HOMEPAGE}`;
 
@@ -57,8 +64,10 @@ export async function main(argv: string[]): Promise<void> {
       case 'build':
         await runBuild(args.slice(1), json);
         return;
-      case 'snap':
       case 'serve':
+        await runServe(args.slice(1), json);
+        return;
+      case 'snap':
       case 'ls':
         fail(json, 3, 'not_implemented', `'drawtell ${cmd}' 已规划、尚未实现(当前 ${VERSION})。进度见 ${HOMEPAGE}`);
         return;
@@ -128,7 +137,7 @@ function report(json: boolean, r: Report): void {
   if (r.bundle) console.log(`  课包 → ${r.bundle}(${(r.files ?? []).map((p) => p.split('/').pop()).join(' + ')})`);
 }
 
-function parseCmdArgs(rest: string[], cmdUsage: string, allowedFlags: string[]): { file: string; flags: Map<string, string> } {
+function parseCmdArgs(rest: string[], cmdUsage: string, allowedFlags: string[], fileArg = true): { file: string; flags: Map<string, string> } {
   const flags = new Map<string, string>();
   const positionals: string[] = [];
   for (let i = 0; i < rest.length; i++) {
@@ -143,8 +152,9 @@ function parseCmdArgs(rest: string[], cmdUsage: string, allowedFlags: string[]):
       positionals.push(a);
     }
   }
-  if (positionals.length !== 1) throw new UsageError(`需要且只要一个场景文件参数。用法:${cmdUsage}`);
-  return { file: positionals[0], flags };
+  if (fileArg && positionals.length !== 1) throw new UsageError(`需要且只要一个场景文件参数。用法:${cmdUsage}`);
+  if (!fileArg && positionals.length > 0) throw new UsageError(`多余的参数 '${positionals[0]}'。用法:${cmdUsage}`);
+  return { file: positionals[0] ?? '', flags };
 }
 
 async function runCheck(rest: string[], json: boolean): Promise<void> {
@@ -170,4 +180,20 @@ async function runBuild(rest: string[], json: boolean): Promise<void> {
   const outDir = flags.get('--out') ?? join('bundles', scene.id);
   const files = await buildBundle(scene, outDir);
   report(json, { command: 'build', file, exportName, ok: true, findings, bundle: outDir, files });
+}
+
+async function runServe(rest: string[], json: boolean): Promise<void> {
+  const usage = 'drawtell serve [--port <n>] [--bundles <dir>] [--json]';
+  const { flags } = parseCmdArgs(rest, usage, ['--port', '--bundles'], false);
+  const port = Number(flags.get('--port') ?? 5175);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new UsageError(`--port 需要 1–65535 的整数,拿到 '${flags.get('--port')}'。用法:${usage}`);
+  }
+  const { serve, WEB_ROOT } = await import('./serve.ts');
+  try {
+    await stat(join(WEB_ROOT, 'index.html'));
+  } catch {
+    throw new UsageError(`播放页构建产物不存在(${WEB_ROOT});先在 drawtell 仓库根运行 pnpm build,再 drawtell serve`);
+  }
+  await serve({ port, bundlesDir: flags.get('--bundles') ?? 'bundles', json });
 }

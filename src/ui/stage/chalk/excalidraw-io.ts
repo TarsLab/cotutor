@@ -5,7 +5,7 @@
 
 import { convertToExcalidrawElements, exportToSvg } from '@excalidraw/excalidraw';
 import { animateSvg } from 'excalidraw-animate';
-import type { ChalkSkeleton } from './types';
+import type { ChalkSkeleton } from './types.ts';
 
 export interface AnimatedScene {
   svg: SVGSVGElement;
@@ -74,6 +74,21 @@ function withDurationIds(skeletons: readonly ChalkSkeleton[]): readonly ChalkSke
   );
 }
 
+/** 无 seed 的元素按 id 派生一个稳定 seed(FNV-1a):手绘抖动不再每次渲染重新随机,
+ *  snap 帧间可 diff、播放可复现;作者显式给了 seed 则尊重 */
+export function seedFromId(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return (h % 2147483647) + 1;
+}
+
+function withStableSeeds(skeletons: readonly ChalkSkeleton[]): readonly ChalkSkeleton[] {
+  return skeletons.map((el) => (typeof el.seed === 'number' ? el : { ...el, seed: seedFromId(el.id) }));
+}
+
 /** skeleton → 元素 → 静态 SVG → 原地打上 SMIL 逐笔动画(含笔尖跟随),返回时暂停在 0 */
 export async function buildAnimatedSvg(
   skeletons: readonly ChalkSkeleton[],
@@ -81,16 +96,21 @@ export async function buildAnimatedSvg(
 ): Promise<AnimatedScene> {
   // regenerateIds: false —— id 是与 manifest 的对齐键(时长指令已在上面注入)
   const elements = convertToExcalidrawElements(
-    withDurationIds(skeletons) as unknown as Parameters<typeof convertToExcalidrawElements>[0],
+    withDurationIds(withStableSeeds(skeletons)) as unknown as Parameters<typeof convertToExcalidrawElements>[0],
     { regenerateIds: false },
   );
-  const svg = await exportToSvg({
-    elements,
+  const exportOpts = {
     appState: { exportBackground: false, exportWithDarkMode: false },
     files: null,
     exportPadding: options.exportPadding ?? 24,
-  });
+  };
+  let svg = await exportToSvg({ ...exportOpts, elements });
   const corrected = await correctTextWidths(svg, elements);
+  // 量宽回写后若有文本变宽,用校正后的元素重导一次:viewBox 才会把真实字宽算进去,
+  // 否则最右侧的长文本(尤其中文)会被画面边缘裁掉(第一批真题 palou / zuohua 踩中)
+  if (corrected.some((el, i) => el !== elements[i])) {
+    svg = await exportToSvg({ ...exportOpts, elements: corrected as unknown as typeof elements });
+  }
   const { finishedMs } = animateSvg(
     svg,
     corrected as unknown as Parameters<typeof animateSvg>[1],

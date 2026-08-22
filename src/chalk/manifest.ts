@@ -4,7 +4,7 @@
  * 前身是 growth-apps packages/schema 的 LessonManifestDraft,随架构重设计迁入并定版 v1。
  */
 
-import type { ChalkScene, ChalkStep } from '../player/types';
+import type { ChalkScene, ChalkStep } from '../player/types.ts';
 
 export interface SceneJson {
   schema: 'chalk-scene';
@@ -23,5 +23,5 @@ export interface LessonManifest {
   steps: LessonStep[];
 }
 
-/** line 暂充字幕;TTS 就绪后 audioSrc 指向课包内 audio/ 文件 */
-export type LessonStep = Pick<ChalkStep, 'step' | 'elementIds' | 'line' | 'pauseAfter' | 'audioSrc'>;
+/** line 兼作字幕;audioSrc 指向课包内 audio/ 文件,audioDurationMs 是它的时长(dub 写入,与 audioSrc 同生命周期) */
+export type LessonStep = Pick<ChalkStep, 'step' | 'elementIds' | 'line' | 'pauseAfter' | 'audioSrc' | 'audioDurationMs'>;

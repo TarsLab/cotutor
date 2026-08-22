@@ -5,7 +5,7 @@
  */
 
 import { KNOWN_ELEMENT_TYPES, sceneSchema } from '../schema/scene.ts';
-import type { ChalkScene, ChalkSkeleton } from '../player/types';
+import type { ChalkScene, ChalkSkeleton } from '../player/types.ts';
 
 export interface Finding {
   level: 'error' | 'warning';
@@ -104,7 +104,7 @@ function lintSemantics(scene: ChalkScene, findings: Finding[]): void {
 
 // ---- 层 3:确定性布局检查(近似包围盒;真值以 snap 截图为准) ----
 
-interface Box {
+export interface Box {
   id: string;
   minX: number;
   minY: number;
@@ -112,8 +112,8 @@ interface Box {
   maxY: number;
 }
 
-/** 文本宽度近似:CJK ≈ fontSize,其余 ≈ 0.55 × fontSize;行高 1.3 */
-function bboxOf(el: ChalkSkeleton): Box {
+/** 文本宽度近似:CJK ≈ fontSize,其余 ≈ 0.55 × fontSize;行高 1.3(snap 的元素清单也用它) */
+export function bboxOf(el: ChalkSkeleton): Box {
   let w = typeof el.width === 'number' ? el.width : 0;
   let h = typeof el.height === 'number' ? el.height : 0;
   if (el.type === 'text' && typeof el.text === 'string' && typeof el.fontSize === 'number') {

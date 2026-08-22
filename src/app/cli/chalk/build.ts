@@ -1,13 +1,16 @@
 /**
  * build:场景(已过 check)→ 课包目录。幂等:同输入产出相同字节。
- * 课包 = 自包含目录:scene.json + manifest.json(+ audio/,TTS 就绪后;已存在的 audio/ 不动)。
+ * 课包 = 自包含目录:scene.json + manifest.json(+ audio/,由 drawtell dub 落进来;build 不动 audio/)。
+ * audio/index.json 里讲稿 hash 仍匹配的步,build 会把 audioSrc 回填进 manifest——
+ * 讲稿改了的步自动失去音频(等重新 dub),不会拿旧音配新词。
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { ChalkScene } from '../player/types';
+import type { ChalkScene } from '../player/types.ts';
 import { sceneSchema } from '../schema/scene.ts';
-import type { LessonManifest, SceneJson } from '../schema/lesson-manifest';
+import type { LessonManifest, SceneJson } from '../schema/lesson-manifest.ts';
+import { attachAudio } from './dub.ts';
 import { LoadError, NotFoundError } from './load-scene.ts';
 
 export async function buildBundle(scene: ChalkScene, outDir: string): Promise<string[]> {
@@ -30,9 +33,11 @@ export async function buildBundle(scene: ChalkScene, outDir: string): Promise<st
       line: s.line,
       pauseAfter: s.pauseAfter,
       ...(s.audioSrc ? { audioSrc: s.audioSrc } : {}),
+      ...(s.audioSrc && s.audioDurationMs ? { audioDurationMs: s.audioDurationMs } : {}),
     })),
   };
   await mkdir(outDir, { recursive: true });
+  await attachAudio(outDir, manifest);
   const files: string[] = [];
   for (const [name, data] of [
     ['scene.json', sceneJson],

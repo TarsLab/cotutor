@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import type { ChalkScene } from '../player/types';
+import type { ChalkScene } from '../player/types.ts';
 
 /** 已在引擎(convertToExcalidrawElements + animateSvg)上验证过的元素类型 */
 export const KNOWN_ELEMENT_TYPES = [
@@ -34,6 +34,7 @@ export const stepSchema = z.strictObject({
   line: z.string().min(1),
   pauseAfter: z.boolean(),
   audioSrc: z.string().min(1).optional(),
+  audioDurationMs: z.number().positive().optional(),
 });
 
 export const sceneSchema = z.strictObject({

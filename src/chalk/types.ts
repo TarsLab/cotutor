@@ -27,6 +27,8 @@ export interface ChalkStep {
   pauseAfter: boolean;
   /** 相对课包目录的音频路径,TTS 就绪后启用 */
   audioSrc?: string;
+  /** 该步讲稿音频时长(毫秒),由 dub 写入;播放器据此把该步笔画拉伸到讲稿长度(只拉不缩) */
+  audioDurationMs?: number;
 }
 
 export interface ChalkScene {

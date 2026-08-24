@@ -37,6 +37,7 @@ const envelope = {
   problem: '圈一个词读给你听',
   model: 'reading-page',
   template: 'static',
+  subject: '英语',
   blocks: [{ id: 'w-0-0', elementIds: ['tok-0-0', 'tokp-0-0'], text: 'ram', audioSrc: 'audio/tokens/ram.mp3' }],
 };
 
@@ -81,6 +82,7 @@ try {
     const back = await readBundle(join(root, 'bundles'), scene.id);
     check('build 往返 blocks 保全', JSON.stringify(back.blocks) === JSON.stringify(envelope.blocks));
     check('build 往返 template static', back.template === 'static' && back.steps.length === 0);
+    check('build 往返 subject 保全', back.subject === '英语', String(back.subject));
   }
 
   // ---- bboxOf 实测宽度优先:去掉实测宽度后,近似把 'am'(48 宽)算重叠;有实测(46 起点 84)不重叠已在上面 0 错里证明 ----

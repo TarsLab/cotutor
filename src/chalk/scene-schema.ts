@@ -66,6 +66,7 @@ export const sceneSchema = z.strictObject({
   problem: z.string().min(1),
   model: z.string().min(1),
   template: z.enum(['paper-strict', 'camera-free', 'motion', 'static']),
+  subject: z.string().min(1).optional(),
   skeletons: z.array(skeletonSchema).min(1),
   // 可省略 = 静态场景;规范形是空数组。「讲解三档必须非空、static 必须空」是语义,归 lint
   steps: z.array(stepSchema).default([]),

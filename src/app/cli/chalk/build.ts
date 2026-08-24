@@ -22,6 +22,7 @@ export async function buildBundle(scene: ChalkScene, outDir: string): Promise<st
     problem: scene.problem,
     model: scene.model,
     template: scene.template,
+    ...(scene.subject ? { subject: scene.subject } : {}),
     skeletons: scene.skeletons,
   };
   const manifest: LessonManifest = {
@@ -68,6 +69,7 @@ export async function readBundle(bundlesDir: string, id: string): Promise<ChalkS
     problem: sceneJson.problem,
     model: sceneJson.model,
     template: sceneJson.template,
+    ...(sceneJson.subject != null ? { subject: sceneJson.subject } : {}),
     skeletons: sceneJson.skeletons,
     steps: manifest.steps,
     ...(manifest.blocks != null ? { blocks: manifest.blocks } : {}),

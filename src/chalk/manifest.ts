@@ -14,6 +14,7 @@ export interface SceneJson {
   problem: string;
   model: string;
   template: ChalkScene['template'];
+  subject?: string;
   skeletons: ChalkScene['skeletons'];
 }
 

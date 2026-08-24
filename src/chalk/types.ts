@@ -81,6 +81,8 @@ export interface ChalkScene {
   model: string;
   /** 讲解模板三档(架构.md)+ static(静态场景:无时间轴的点读/圈读页,steps 必空) */
   template: 'paper-strict' | 'camera-free' | 'motion' | 'static';
+  /** 学科标签(自由文本,如 语文/数学/英语),入口按它归类;机制不枚举,枚举是应用政策 */
+  subject?: string;
   skeletons: ChalkSkeleton[];
   /** 空数组 = 静态场景(装载即整幅定格);讲解三档必须非空,check 把关 */
   steps: ChalkStep[];

@@ -42,6 +42,8 @@ export function computeStepWindows(
   skeletons: readonly ChalkSkeleton[],
   steps: readonly ChalkStep[],
 ): StepWindow[] {
+  // 静态场景(steps 为空)没有时间窗;覆盖检查只对有步进的场景有意义
+  if (!steps.length) return [];
   const flat = steps.flatMap((s) => s.elementIds);
   const ids = skeletons.map((e) => e.id);
   if (flat.length !== ids.length || flat.some((id, i) => id !== ids[i])) {

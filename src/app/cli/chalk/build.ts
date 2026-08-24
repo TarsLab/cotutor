@@ -26,7 +26,7 @@ export async function buildBundle(scene: ChalkScene, outDir: string): Promise<st
   };
   const manifest: LessonManifest = {
     schema: 'lesson-manifest',
-    version: 1,
+    version: 2,
     steps: scene.steps.map((s) => ({
       step: s.step,
       elementIds: s.elementIds,
@@ -35,6 +35,8 @@ export async function buildBundle(scene: ChalkScene, outDir: string): Promise<st
       ...(s.audioSrc ? { audioSrc: s.audioSrc } : {}),
       ...(s.audioSrc && s.audioDurationMs ? { audioDurationMs: s.audioDurationMs } : {}),
     })),
+    ...(scene.blocks?.length ? { blocks: scene.blocks } : {}),
+    ...(scene.subscenes?.length ? { subscenes: scene.subscenes } : {}),
   };
   await mkdir(outDir, { recursive: true });
   await attachAudio(outDir, manifest);
@@ -68,6 +70,8 @@ export async function readBundle(bundlesDir: string, id: string): Promise<ChalkS
     template: sceneJson.template,
     skeletons: sceneJson.skeletons,
     steps: manifest.steps,
+    ...(manifest.blocks != null ? { blocks: manifest.blocks } : {}),
+    ...(manifest.subscenes != null ? { subscenes: manifest.subscenes } : {}),
   });
   if (!parsed.success) {
     const first = parsed.error.issues

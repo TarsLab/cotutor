@@ -18,6 +18,7 @@ import type { ChalkSkeleton } from '../player/types.ts';
 import { GLYPHS } from './registry.ts';
 import { sampleStroke, strokeLength } from './sample.ts';
 import type { Pt } from './sample.ts';
+import type { Glyph } from './types.ts';
 
 /** freedraw 透传所需的完整字段(见文件头坑 1) */
 const FREEDRAW_BASE = {
@@ -61,18 +62,24 @@ export interface GlyphPenOptions {
   letterSpacing?: number;
   /** 采样步长(归一化单位);缺省 SAMPLE_STEP。调小更平滑,但动画 DOM 体积约按平方涨 */
   sampleStep?: number;
+  /**
+   * 字形表(provider):缺省内置拉丁包(a–z / A–Z)。扩展字形数据包
+   * (如 drawtell-glyphs-hanzi)导出同构的 Map,从这里传入即共用同一支笔——
+   * 归一化约定由各包自定并写明(拉丁 = 四线三格;汉字 = 格子高 1、底线 y=0、顶 y=-1)。
+   */
+  glyphs?: ReadonlyMap<string, Glyph>;
 }
 
 const DEFAULTS = { msPerUnit: 200, minStrokeMs: 90, letterSpacing: 0.22, idPrefix: 'g' };
 /** 空格的前进宽度(x 高为 1 单位):不产生笔画,只让光标走一段 */
 export const SPACE_ADVANCE = 0.55;
 
-/** 未收录的字符(数字、标点):本包只做 a–z / A–Z,由调用方决定回退 */
+/** 字形表未收录的字符:由调用方决定回退,这里不猜 */
 export class UnknownGlyphError extends Error {
   /** node 的 strip-only 类型擦除不支持构造函数参数属性,字段显式声明 */
   ch: string;
   constructor(ch: string) {
-    super(`字形包收录 a–z 与 A–Z,拿到 '${ch}'。数字与符号请另行提供。`);
+    super(`字形表未收录 '${ch}'。内置包只有 a–z 与 A–Z;汉字等扩展字形经 glyphs 选项传入(如 drawtell-glyphs-hanzi)。`);
     this.ch = ch;
   }
 }
@@ -105,7 +112,7 @@ function strokeSkeleton(pts: Pt[], id: string, ms: number, o: GlyphPenOptions): 
  * 返回顺序即笔顺,可直接铺进 scene.skeletons / 交给 buildAnimatedSvg。
  */
 export function glyphSkeletons(ch: string, o: GlyphPenOptions): ChalkSkeleton[] {
-  const glyph = GLYPHS.get(ch);
+  const glyph = (o.glyphs ?? GLYPHS).get(ch);
   if (!glyph) throw new UnknownGlyphError(ch);
   const msPerUnit = o.msPerUnit ?? DEFAULTS.msPerUnit;
   const minMs = o.minStrokeMs ?? DEFAULTS.minStrokeMs;
@@ -118,12 +125,13 @@ export function glyphSkeletons(ch: string, o: GlyphPenOptions): ChalkSkeleton[] 
 }
 
 /** 一个词的排版宽度(px),含字间距,不含末尾空隙;空格按 SPACE_ADVANCE 计 */
-export function wordAdvance(word: string, o: Pick<GlyphPenOptions, 'xHeight' | 'letterSpacing'>): number {
+export function wordAdvance(word: string, o: Pick<GlyphPenOptions, 'xHeight' | 'letterSpacing' | 'glyphs'>): number {
+  const table = o.glyphs ?? GLYPHS;
   const gap = o.letterSpacing ?? DEFAULTS.letterSpacing;
   let w = 0;
   [...word].forEach((ch, i) => {
-    if (ch !== ' ' && !GLYPHS.has(ch)) throw new UnknownGlyphError(ch);
-    w += (i > 0 ? gap : 0) + (ch === ' ' ? SPACE_ADVANCE : GLYPHS.get(ch)!.advance);
+    if (ch !== ' ' && !table.has(ch)) throw new UnknownGlyphError(ch);
+    w += (i > 0 ? gap : 0) + (ch === ' ' ? SPACE_ADVANCE : table.get(ch)!.advance);
   });
   return w * o.xHeight;
 }
@@ -138,12 +146,13 @@ export function wordSkeletons(word: string, o: GlyphPenOptions): ChalkSkeleton[]
   const prefix = o.idPrefix ?? DEFAULTS.idPrefix;
   const out: ChalkSkeleton[] = [];
   let cursor = o.x;
+  const table = o.glyphs ?? GLYPHS;
   [...word].forEach((ch, i) => {
     if (ch === ' ') {
       cursor += SPACE_ADVANCE * o.xHeight + gap;
       return;
     }
-    const g = GLYPHS.get(ch);
+    const g = table.get(ch);
     if (!g) throw new UnknownGlyphError(ch);
     out.push(...glyphSkeletons(ch, { ...o, x: cursor, idPrefix: `${prefix}-${i + 1}` }));
     cursor += g.advance * o.xHeight + gap;

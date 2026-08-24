@@ -1,18 +1,21 @@
 /**
- * CLI 入口。约定(agent-friendly.md):
+ * CLI 入口。约定(README「Design principles」):
  * 全命令支持 --json;无交互式提示;错误信息 = 修复指南;
  * exit code:0 通过 · 1 场景有问题 · 2 用法错误 · 3 已规划未实现 · 4 内部错误。
  */
 
 import { stat } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { buildBundle, readBundle } from './build.ts';
 import { checkScene, type Finding } from './check.ts';
-import { LoadError, NotFoundError, loadScene } from './load-scene.ts';
+import { typecheckScene } from './typecheck.ts';
+import { LoadError, NotFoundError, loadScene, loadSceneFiles, resolveSceneInput } from './load-scene.ts';
 import type { ChalkScene } from '../player/types.ts';
-import { loadWorkspace, redactHome, workspaceReport } from './workspace.ts';
+import { loadWorkspace, redactDeep, redactHome, workspaceReport } from './workspace.ts';
 
-const VERSION = '0.1.0';
+// 版本只有一个真相:package.json(src/cli 与 dist/cli 到仓库根都是两级)
+const VERSION: string = createRequire(import.meta.url)('../../package.json').version;
 const HOMEPAGE = 'https://github.com/tarslab/drawtell';
 
 class UsageError extends Error {}
@@ -20,22 +23,26 @@ class UsageError extends Error {}
 const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的黑板讲解动画。
 
 用法:
-  drawtell check <scene.ts> [--json]
-      校验场景:模块求值(层1)→ schema + 语义 lint(层2)→ 确定性布局检查(层3)。
-      类型层面的把关另跑 tsc(仓库内 pnpm typecheck);视觉真值归 snap(层4,规划中)。
-  drawtell build <scene.ts> [--out <dir>] [--json]
+  drawtell check <scene.ts|scene-dir> [--no-types] [--json]
+      校验场景:类型(内嵌 tsc,工作区零配置;--no-types 跳过)→ 模块求值 → schema + 语义 lint → 确定性布局检查。
+      视觉真值归 snap(层4)。
+  drawtell build <scene.ts|scene-dir> [--out <dir>] [--json]
       场景 → 课包目录(scene.json + manifest.json),先跑 check,有错误即中止。
-      默认输出 bundles/<scene-id>/,幂等,已存在的 audio/ 不动。
+      场景源两条路:TS 纯数据模块,或双文件目录(scene.excalidraw 画面 + scene.json 信封
+      schema 'chalk-scene-src':除 skeletons 外的全部字段——id/title/template/blocks/subscenes…;
+      生成器与 excalidraw 编辑器产物走这条,静态点读页用 template 'static')。
+      缺省输出 <paths.bundles>/<scene-id>/(drawtell.json 的 paths,缺省工作区 bundles/),幂等,已存在的 audio/ 不动。
   drawtell serve [--port <n>] [--bundles <dir>] [--json]
-      本地 web 服务:播放器页 + 课包分发(/bundles/<id>/)+ 清单(/api/bundles)。
-      默认端口 5175,课包目录 ./bundles;监听 0.0.0.0,iPad 走局域网地址。
-      播放页参数:?scene=<id> 载入课包,&step=<n> 定格第 n 步,&bare=1 纯净画面。
+      本地 web 服务:/ 无参 = 课包清单页(iPad 入口,读 /api/bundles)、?scene=<id> 播放、/bundles/<id>/ 分发。
+      默认端口 5175,课包目录 = paths.bundles(--bundles 覆盖);监听 0.0.0.0,iPad 走局域网地址。
+      播放页参数:?scene=<id> 载入课包,&step=<n> 定格第 n 步,&bare=1 纯净画面,&cursor=0 不画笔尖。
+      GET /api/config 给 {title}(工作区 drawtell.json 的 title,孩子端页面读它)。
       需要先构建播放页:仓库根 pnpm build。
   drawtell snap <scene.ts|bundle-id> [--step <n>] [--no-cursor] [--out <dir>] [--bundles <dir>] [--json]
       阶梯层 4:keyframe 截图,给视觉检验用。输入 .ts 会先 check + build。
       产物 <out>/step-<n>.png(0 = 空板配题面)+ index.json(图↔讲稿对照 + 每步新增元素清单 + 画板 viewBox)。
       --step n 只重截一步,index.json 只替换该步;--no-cursor 不画笔尖(检验用 keyframe 建议加)。
-      默认输出 snaps/<scene-id>/;需要 playwright 与已构建的播放页(pnpm build)。
+      缺省输出 <paths.snaps>/<scene-id>/(drawtell.json 的 paths,缺省工作区 snaps/);需要 playwright 与已构建的播放页(pnpm build)。
   drawtell dub <scene.ts|bundle-id> [--voice <v>] [--instruction <s>] [--model <m>] [--dry-run] [--force] [--voxtell <bin>] [--bundles <dir>] [--json]
       课包配音:manifest 各步讲稿 → voxtell batch(用户级缓存,幂等)→ bundles/<id>/audio/step-<n>.mp3
       + audio/index.json → 回填 manifest.audioSrc。--voice 必填(或工作区根 drawtell.json 的 dub.voice);
@@ -45,16 +52,19 @@ const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的
   drawtell ls [--json]
       工作区现状:一行一个场景,五态一眼看全——源 / 课包 / 音频 / 截图 / 验收。
       agent 无记忆,进来先跑它。课包在但工作区没有源的标 orphan(多半是工具仓种子)。
+  drawtell tidy <dir> [--older-than <天>] [--delete] [--json]
+      清理 <dir> 下无笔记引用且超龄的文件:默认只列清单,--delete 才删,删除清单追加到工作区 tidy-log.md。
+      被任何 .md 以 ![[…]] / 文件名引用的永不进清单(宁可漏删)。
 
 工作区:命令在**内容工作区**根目录跑(有 drawtell.json 的那个目录)。cwd 没有就回落到
       ~/.config/drawtell/config.json 的 workspace,再没有就把 cwd 当工作区。每条 --json 都回报
-      解析到了哪个工作区(workspace / workspaceSource),家目录脱敏成 $HOME。
+      解析到了哪个工作区(workspace / workspaceSource)与各目录角色,路径一律脱敏成 $HOME。
       drawtell.json 的 paths 段可以把**派生物**挪出工作区(课包与截图 build/snap 都能重来):
         {"paths": {"bundles": "~/.cache/drawtell/<ws>/bundles", "snaps": "~/.cache/drawtell/<ws>/snaps"},
          "dub": {"voice": "…"}}
       缺省仍是工作区下的 bundles/ 与 snaps/;--out / --bundles 优先级最高。
 
-exit code:0 通过 · 1 场景有问题(findings 里有修复指引)· 2 用法错误 · 3 已规划未实现 · 4 内部错误
+exit code:0 通过 · 1 场景有问题(findings 里有修复指引)· 2 用法错误 · 3 已规划未实现(预留,当前无命令返回)· 4 内部错误
 
 示例:
   drawtell check scenes/dengche.ts
@@ -105,9 +115,6 @@ export async function main(argv: string[]): Promise<void> {
       case 'dub':
         await runDub(args.slice(1), json);
         return;
-      case 'ls':
-        fail(json, 3, 'not_implemented', `'drawtell ${cmd}' 已规划、尚未实现(当前 ${VERSION})。进度见 ${HOMEPAGE}`);
-        return;
       default:
         fail(json, 2, 'unknown_command', `未知命令 '${cmd}'。运行 drawtell --help 查看用法。`);
     }
@@ -132,8 +139,8 @@ function jsonHelp(): string {
       name: 'drawtell',
       version: VERSION,
       commands: {
-        check: { usage: 'drawtell check <scene.ts> [--json]', desc: '层1-3 校验,exit 0/1' },
-        build: { usage: 'drawtell build <scene.ts> [--out <dir>] [--json]', desc: '场景 → 课包目录,先 check' },
+        check: { usage: 'drawtell check <scene.ts|scene-dir> [--json]', desc: '层1-3 校验,exit 0/1' },
+        build: { usage: 'drawtell build <scene.ts|scene-dir> [--out <dir>] [--json]', desc: '场景 → 课包目录,先 check' },
         serve: { usage: 'drawtell serve [--port <n>] [--bundles <dir>] [--json]', desc: '播放页 + 课包分发' },
         snap: { usage: 'drawtell snap <scene.ts|bundle-id> [--step <n>] [--no-cursor] [--out <dir>] [--bundles <dir>] [--json]', desc: 'keyframe 截图 + index.json' },
         dub: { usage: 'drawtell dub <scene.ts|bundle-id> [--voice <v>] [--instruction <s>] [--dry-run] [--force] [--json]', desc: '课包配音(voxtell 粘合)' },
@@ -162,6 +169,8 @@ interface Report {
   findings: Finding[];
   bundle?: string;
   files?: string[];
+  /** 其余字段(workspaceReport 等)原样进 --json */
+  [extra: string]: unknown;
 }
 
 function report(json: boolean, r: Report): void {
@@ -212,17 +221,32 @@ function parseCmdArgs(
 }
 
 async function runCheck(rest: string[], json: boolean): Promise<void> {
-  const { file } = parseCmdArgs(rest, 'drawtell check <scene.ts> [--json]', []);
-  const { raw, exportName } = await loadScene(file);
-  const { findings } = checkScene(raw);
+  const { file, flags } = parseCmdArgs(rest, 'drawtell check <scene.ts|scene-dir> [--no-types] [--json]', [], true, ['--no-types']);
+  const ws = await loadWorkspace();
+  const input = await resolveSceneInput(file);
+  // 层 1 类型:先跑,错了也继续往下——agent 一次拿全所有层的问题;双文件是 JSON,没有类型层
+  const types = flags.has('--no-types') || input.kind === 'files' ? { ran: false, findings: [] } : await typecheckScene(file);
+  let exportName: string | undefined;
+  let structural: Finding[];
+  try {
+    const loaded = input.kind === 'files' ? await loadSceneFiles(input.dir) : await loadScene(file);
+    exportName = loaded.exportName;
+    structural = checkScene(loaded.raw).findings;
+  } catch (err) {
+    // 求值失败(非文件缺失)也要连同类型层的发现一起报,别让 tsc 的结果丢在半路
+    if (!(err instanceof LoadError)) throw err;
+    structural = [{ level: 'error', rule: 'load', message: err.message }];
+  }
+  const findings = [...types.findings, ...structural];
   const ok = !findings.some((f) => f.level === 'error');
-  report(json, { command: 'check', file, exportName, ok, findings });
+  report(json, { command: 'check', file, exportName, ok, findings, typesChecked: types.ran, ...workspaceReport(ws) });
   if (!ok) process.exitCode = 1;
 }
 
 async function runBuild(rest: string[], json: boolean): Promise<void> {
-  const { file, flags } = parseCmdArgs(rest, 'drawtell build <scene.ts> [--out <dir>] [--json]', ['--out']);
-  const { raw, exportName } = await loadScene(file);
+  const { file, flags } = parseCmdArgs(rest, 'drawtell build <scene.ts|scene-dir> [--out <dir>] [--json]', ['--out']);
+  const input = await resolveSceneInput(file);
+  const { raw, exportName } = input.kind === 'files' ? await loadSceneFiles(input.dir) : await loadScene(file);
   const { scene, findings } = checkScene(raw);
   const ok = !findings.some((f) => f.level === 'error');
   if (!ok || !scene) {
@@ -288,7 +312,7 @@ async function runSnap(rest: string[], json: boolean): Promise<void> {
   const cursor = !flags.has('--no-cursor');
   const shots = await snapScene({ scene, bundlesDir, outDir, step, cursor });
   if (json) {
-    console.log(JSON.stringify({ command: 'snap', file, ok: true, scene: scene.id, outDir: redactHome(outDir), cursor, findings, shots, ...workspaceReport(ws) }, null, 2));
+    console.log(JSON.stringify(redactDeep({ command: 'snap', file, ok: true, scene: scene.id, outDir, cursor, findings, shots, ...workspaceReport(ws) }), null, 2));
   } else {
     console.log(`✓ ${file} — ${shots.length} 张 keyframe → ${outDir}/(${shots.map((s) => `step-${s.step}.png`).join(' ')} + index.json${step != null ? ',已合并' : ''}${cursor ? '' : ',无笔尖'})`);
     for (const f of findings) console.log(`  [${f.level}] ${f.rule}: ${f.message}`);
@@ -340,7 +364,7 @@ async function runDub(rest: string[], json: boolean): Promise<void> {
     voxtellBin: flags.get('--voxtell'),
   });
   if (json) {
-    console.log(JSON.stringify({ command: 'dub', file, scene: scene.id, voice, instruction: instruction ?? null, model: model ?? null, findings, ...result, ...workspaceReport(ws) }, null, 2));
+    console.log(JSON.stringify(redactDeep({ command: 'dub', file, scene: scene.id, voice, instruction: instruction ?? null, model: model ?? null, findings, ...result, ...workspaceReport(ws) }), null, 2));
   } else {
     const s = result.summary;
     const head = result.dryRun ? '算账(未合成)' : result.ok ? '配音完成' : `配音有 ${s.failed} 步失败`;
@@ -368,7 +392,7 @@ async function runTidy(rest: string[], json: boolean): Promise<void> {
   const { tidy } = await import('./tidy.ts');
   const r = await tidy(ws, dir, { olderThanDays, del: flags.has('--delete') });
   if (json) {
-    console.log(JSON.stringify({ command: 'tidy', ...r, olderThanDays, deleted: r.deleted, ...workspaceReport(ws) }, null, 2));
+    console.log(JSON.stringify(redactDeep({ command: 'tidy', ...r, olderThanDays, deleted: r.deleted, ...workspaceReport(ws) }), null, 2));
     return;
   }
   const mb = (n: number) => `${(n / 1048576).toFixed(1)}M`;
@@ -411,5 +435,5 @@ async function runServe(rest: string[], json: boolean): Promise<void> {
   await requireWebBuild();
   const ws = await loadWorkspace();
   const { serve } = await import('./serve.ts');
-  await serve({ port, bundlesDir: flags.get('--bundles') ?? ws.paths.bundles, json, title: ws.title });
+  await serve({ port, bundlesDir: flags.get('--bundles') ?? ws.paths.bundles, json, title: ws.title, report: workspaceReport(ws) });
 }

@@ -30,18 +30,6 @@ export interface AudioIndex {
   steps: Array<{ step: number; file: string; textHash: string; characters: number; durationMs: number | null }>;
 }
 
-export interface DubPolicy {
-  voice?: string;
-  instruction?: string;
-  model?: string;
-}
-
-/** 工作区政策文件:<工作区>/drawtell.json 的 dub 段。解析统一走 workspace.ts,这里只是转发。 */
-export async function readWorkspacePolicy(cwd = process.cwd()): Promise<DubPolicy> {
-  const { loadWorkspace } = await import('./workspace.ts');
-  return (await loadWorkspace(cwd)).dub;
-}
-
 export interface DubOptions {
   scene: ChalkScene;
   bundleDir: string;

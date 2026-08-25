@@ -1,6 +1,7 @@
 /**
  * CLI 入口。约定(README「Design principles」):
- * 全命令支持 --json;无交互式提示;错误信息 = 修复指南;
+ * 全命令支持 --json;全局 --workspace <dir> 显式指定工作区(在这里剥离,显式传给各命令,
+ * 优先级与解析见 workspace.ts);无交互式提示;错误信息 = 修复指南;
  * exit code:0 通过 · 1 场景有问题 · 2 用法错误 · 3 已规划未实现 · 4 内部错误。
  */
 
@@ -12,13 +13,11 @@ import { checkScene, type Finding } from './check.ts';
 import { typecheckScene } from './typecheck.ts';
 import { LoadError, NotFoundError, loadScene, loadSceneFiles, resolveSceneInput } from './load-scene.ts';
 import type { ChalkScene } from '../player/types.ts';
-import { loadWorkspace, redactDeep, redactHome, workspaceReport } from './workspace.ts';
+import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from './workspace.ts';
 
 // 版本只有一个真相:package.json(src/cli 与 dist/cli 到仓库根都是两级)
 const VERSION: string = createRequire(import.meta.url)('../../package.json').version;
 const HOMEPAGE = 'https://github.com/tarslab/drawtell';
-
-class UsageError extends Error {}
 
 const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的黑板讲解动画。
 
@@ -49,6 +48,10 @@ const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的
       --dry-run 只算账。之后 build 会按 audio/index.json 的讲稿 hash 回填 audioSrc,改了讲稿的步自动失去音频。
   drawtell --help | --version [--json]
 
+全局选项(所有命令通用,和命令级选项写在哪都行):
+  --json               机器可读输出(每条命令都支持)
+  --workspace <dir>    显式指定内容工作区根(可用 ~;目录必须存在),优先级最高
+
   drawtell ls [--json]
       工作区现状:一行一个场景,五态一眼看全——源 / 课包 / 音频 / 截图 / 验收。
       agent 无记忆,进来先跑它。课包在但工作区没有源的标 orphan(多半是工具仓种子)。
@@ -56,9 +59,11 @@ const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的
       清理 <dir> 下无笔记引用且超龄的文件:默认只列清单,--delete 才删,删除清单追加到工作区 tidy-log.md。
       被任何 .md 以 ![[…]] / 文件名引用的永不进清单(宁可漏删)。
 
-工作区:命令在**内容工作区**根目录跑(有 drawtell.json 的那个目录)。cwd 没有就回落到
-      ~/.config/drawtell/config.json 的 workspace,再没有就把 cwd 当工作区。每条 --json 都回报
-      解析到了哪个工作区(workspace / workspaceSource)与各目录角色,路径一律脱敏成 $HOME。
+工作区:优先级 --workspace <dir> > cwd 有 drawtell.json > ~/.config/drawtell/config.json 的
+      workspace > 把 cwd 当工作区。--workspace 决定工作区与 paths 落点(bundles/snaps/reviews…);
+      场景位置参数与 --out / --bundles 的相对路径仍按 cwd 解析。每条 --json 都回报
+      解析到了哪个工作区(workspace / workspaceSource:flag / cwd / user-config / default)
+      与各目录角色,路径一律脱敏成 $HOME。
       drawtell.json 的 paths 段可以把**派生物**挪出工作区(课包与截图 build/snap 都能重来):
         {"paths": {"bundles": "~/.cache/drawtell/<ws>/bundles", "snaps": "~/.cache/drawtell/<ws>/snaps"},
          "dub": {"voice": "…"}}
@@ -81,9 +86,24 @@ ${HOMEPAGE}`;
 
 export async function main(argv: string[]): Promise<void> {
   const json = argv.includes('--json');
-  const args = argv.filter((a) => a !== '--json');
-  const cmd = args[0];
+  const args: string[] = [];
+  let cmd: string | undefined;
   try {
+    // 全局层剥离:先剥 --json(布尔),再单遍扫描取 --workspace 的值并移除两个 token。
+    // parseCmdArgs 的白名单严格且带值 flag 的值不许以 -- 开头,全局 flag 不进各命令。
+    let workspace: string | undefined;
+    const rest = argv.filter((a) => a !== '--json');
+    for (let i = 0; i < rest.length; i++) {
+      if (rest[i] === '--workspace') {
+        const next = rest[i + 1];
+        if (next === undefined || next.startsWith('--')) throw new UsageError('--workspace 需要一个路径值');
+        workspace = next;
+        i++;
+      } else {
+        args.push(rest[i]);
+      }
+    }
+    cmd = args[0];
     switch (cmd) {
       case undefined:
       case '--help':
@@ -95,25 +115,25 @@ export async function main(argv: string[]): Promise<void> {
         console.log(json ? JSON.stringify({ name: 'drawtell', version: VERSION }) : VERSION);
         return;
       case 'check':
-        await runCheck(args.slice(1), json);
+        await runCheck(args.slice(1), json, workspace);
         return;
       case 'build':
-        await runBuild(args.slice(1), json);
+        await runBuild(args.slice(1), json, workspace);
         return;
       case 'tidy':
-        await runTidy(args.slice(1), json);
+        await runTidy(args.slice(1), json, workspace);
         return;
       case 'ls':
-        await runLs(args.slice(1), json);
+        await runLs(args.slice(1), json, workspace);
         return;
       case 'serve':
-        await runServe(args.slice(1), json);
+        await runServe(args.slice(1), json, workspace);
         return;
       case 'snap':
-        await runSnap(args.slice(1), json);
+        await runSnap(args.slice(1), json, workspace);
         return;
       case 'dub':
-        await runDub(args.slice(1), json);
+        await runDub(args.slice(1), json, workspace);
         return;
       default:
         fail(json, 2, 'unknown_command', `未知命令 '${cmd}'。运行 drawtell --help 查看用法。`);
@@ -147,6 +167,11 @@ function jsonHelp(): string {
         ls: { usage: 'drawtell ls [--json]', desc: '工作区现状:源 / 课包 / 音频 / 截图 / 验收' },
         tidy: { usage: 'drawtell tidy <dir> [--older-than <天>] [--delete] [--json]', desc: '清理无引用的旧文件(默认只列不删)' },
       },
+      globalOptions: {
+        '--json': '机器可读输出(每条命令都支持)',
+        '--workspace <dir>': '显式指定内容工作区根(可用 ~;目录必须存在),优先级最高;场景位置参数与 --out / --bundles 的相对路径仍按 cwd 解析',
+      },
+      workspacePriority: ['--workspace', 'cwd 的 drawtell.json', '~/.config/drawtell/config.json 的 workspace', 'cwd 兜底'],
       planned: [],
       exitCodes: { 0: '通过', 1: '场景有问题', 2: '用法错误', 3: '已规划未实现', 4: '内部错误' },
       homepage: HOMEPAGE,
@@ -220,9 +245,9 @@ function parseCmdArgs(
   return { file: positionals[0] ?? '', flags };
 }
 
-async function runCheck(rest: string[], json: boolean): Promise<void> {
+async function runCheck(rest: string[], json: boolean, workspace?: string): Promise<void> {
   const { file, flags } = parseCmdArgs(rest, 'drawtell check <scene.ts|scene-dir> [--no-types] [--json]', [], true, ['--no-types']);
-  const ws = await loadWorkspace();
+  const ws = await loadWorkspace(workspace);
   const input = await resolveSceneInput(file);
   // 层 1 类型:先跑,错了也继续往下——agent 一次拿全所有层的问题;双文件是 JSON,没有类型层
   const types = flags.has('--no-types') || input.kind === 'files' ? { ran: false, findings: [] } : await typecheckScene(file);
@@ -243,7 +268,7 @@ async function runCheck(rest: string[], json: boolean): Promise<void> {
   if (!ok) process.exitCode = 1;
 }
 
-async function runBuild(rest: string[], json: boolean): Promise<void> {
+async function runBuild(rest: string[], json: boolean, workspace?: string): Promise<void> {
   const { file, flags } = parseCmdArgs(rest, 'drawtell build <scene.ts|scene-dir> [--out <dir>] [--json]', ['--out']);
   const input = await resolveSceneInput(file);
   const { raw, exportName } = input.kind === 'files' ? await loadSceneFiles(input.dir) : await loadScene(file);
@@ -255,7 +280,7 @@ async function runBuild(rest: string[], json: boolean): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const ws = await loadWorkspace();
+  const ws = await loadWorkspace(workspace);
   const outDir = flags.get('--out') ?? join(ws.paths.bundles, scene.id);
   const files = await buildBundle(scene, outDir);
   report(json, { command: 'build', file, exportName, ok: true, findings, bundle: outDir, files, ...workspaceReport(ws) });
@@ -273,10 +298,10 @@ async function requireWebBuild(): Promise<void> {
   }
 }
 
-async function runSnap(rest: string[], json: boolean): Promise<void> {
+async function runSnap(rest: string[], json: boolean, workspace?: string): Promise<void> {
   const usage = 'drawtell snap <scene.ts|bundle-id> [--step <n>] [--no-cursor] [--out <dir>] [--bundles <dir>] [--json]';
   const { file, flags } = parseCmdArgs(rest, usage, ['--step', '--out', '--bundles'], true, ['--no-cursor']);
-  const ws = await loadWorkspace();
+  const ws = await loadWorkspace(workspace);
   const bundlesDir = flags.get('--bundles') ?? ws.paths.bundles;
   await requireWebBuild();
 
@@ -319,10 +344,10 @@ async function runSnap(rest: string[], json: boolean): Promise<void> {
   }
 }
 
-async function runDub(rest: string[], json: boolean): Promise<void> {
+async function runDub(rest: string[], json: boolean, workspace?: string): Promise<void> {
   const usage = 'drawtell dub <scene.ts|bundle-id> [--voice <v>] [--instruction <s>] [--model <m>] [--dry-run] [--force] [--voxtell <bin>] [--bundles <dir>] [--json]';
   const { file, flags } = parseCmdArgs(rest, usage, ['--voice', '--instruction', '--model', '--voxtell', '--bundles'], true, ['--dry-run', '--force']);
-  const ws = await loadWorkspace();
+  const ws = await loadWorkspace(workspace);
   const bundlesDir = flags.get('--bundles') ?? ws.paths.bundles;
   const { dubBundle } = await import('./dub.ts');
   const policy = ws.dub;
@@ -381,14 +406,14 @@ async function runDub(rest: string[], json: boolean): Promise<void> {
   if (!result.ok) process.exitCode = 1;
 }
 
-async function runTidy(rest: string[], json: boolean): Promise<void> {
+async function runTidy(rest: string[], json: boolean, workspace?: string): Promise<void> {
   const usage = 'drawtell tidy <dir> [--older-than <天>] [--delete] [--json]';
   const { file: dir, flags } = parseCmdArgs(rest, usage, ['--older-than'], true, ['--delete']);
   const olderThanDays = Number(flags.get('--older-than') ?? 90);
   if (!Number.isInteger(olderThanDays) || olderThanDays < 0) {
     throw new UsageError(`--older-than 需要非负整数天数,拿到 '${flags.get('--older-than')}'。用法:${usage}`);
   }
-  const ws = await loadWorkspace();
+  const ws = await loadWorkspace(workspace);
   const { tidy } = await import('./tidy.ts');
   const r = await tidy(ws, dir, { olderThanDays, del: flags.has('--delete') });
   if (json) {
@@ -413,9 +438,9 @@ async function runTidy(rest: string[], json: boolean): Promise<void> {
   }
 }
 
-async function runLs(rest: string[], json: boolean): Promise<void> {
+async function runLs(rest: string[], json: boolean, workspace?: string): Promise<void> {
   parseCmdArgs(rest, 'drawtell ls [--json]', [], false);
-  const ws = await loadWorkspace();
+  const ws = await loadWorkspace(workspace);
   const { listWorkspace, formatRows } = await import('./ls.ts');
   const rows = await listWorkspace(ws);
   if (json) {
@@ -425,7 +450,7 @@ async function runLs(rest: string[], json: boolean): Promise<void> {
   }
 }
 
-async function runServe(rest: string[], json: boolean): Promise<void> {
+async function runServe(rest: string[], json: boolean, workspace?: string): Promise<void> {
   const usage = 'drawtell serve [--port <n>] [--bundles <dir>] [--json]';
   const { flags } = parseCmdArgs(rest, usage, ['--port', '--bundles'], false);
   const port = Number(flags.get('--port') ?? 5175);
@@ -433,7 +458,7 @@ async function runServe(rest: string[], json: boolean): Promise<void> {
     throw new UsageError(`--port 需要 1–65535 的整数,拿到 '${flags.get('--port')}'。用法:${usage}`);
   }
   await requireWebBuild();
-  const ws = await loadWorkspace();
+  const ws = await loadWorkspace(workspace);
   const { serve } = await import('./serve.ts');
   await serve({ port, bundlesDir: flags.get('--bundles') ?? ws.paths.bundles, json, title: ws.title, report: workspaceReport(ws) });
 }

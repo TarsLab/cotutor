@@ -46,6 +46,11 @@ const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的
       课包配音:manifest 各步讲稿 → voxtell batch(用户级缓存,幂等)→ bundles/<id>/audio/step-<n>.mp3
       + audio/index.json → 回填 manifest.audioSrc。--voice 必填(或工作区根 drawtell.json 的 dub.voice);
       --dry-run 只算账。之后 build 会按 audio/index.json 的讲稿 hash 回填 audioSrc,改了讲稿的步自动失去音频。
+  drawtell note <scene.ts|bundle-id> [--json]
+      课包档案段 → stdout:标题 + 题面 + 终帧 wikilink + 每步讲稿的一段 markdown(--json 放 markdown 字段);
+      终帧截图拷到 <paths.attachments>/<id>-final.png(固定名,重生成覆盖,wikilink 永不断)。
+      落进 Obsidian 日记由调用方负责(日记只追加)。需要已 build 的课包与终帧截图
+      (先 drawtell build,再 drawtell snap <id> --no-cursor)。
   drawtell --help | --version [--json]
 
 全局选项(所有命令通用,和命令级选项写在哪都行):
@@ -60,7 +65,7 @@ const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的
       被任何 .md 以 ![[…]] / 文件名引用的永不进清单(宁可漏删)。
 
 工作区:优先级 --workspace <dir> > cwd 有 drawtell.json > ~/.config/drawtell/config.json 的
-      workspace > 把 cwd 当工作区。--workspace 决定工作区与 paths 落点(bundles/snaps/reviews…);
+      workspace > 把 cwd 当工作区。--workspace 决定工作区与 paths 落点(bundles/snaps/attachments…);
       场景位置参数与 --out / --bundles 的相对路径仍按 cwd 解析。每条 --json 都回报
       解析到了哪个工作区(workspace / workspaceSource:flag / cwd / user-config / default)
       与各目录角色,路径一律脱敏成 $HOME。
@@ -135,6 +140,9 @@ export async function main(argv: string[]): Promise<void> {
       case 'dub':
         await runDub(args.slice(1), json, workspace);
         return;
+      case 'note':
+        await runNote(args.slice(1), json, workspace);
+        return;
       default:
         fail(json, 2, 'unknown_command', `未知命令 '${cmd}'。运行 drawtell --help 查看用法。`);
     }
@@ -164,6 +172,7 @@ function jsonHelp(): string {
         serve: { usage: 'drawtell serve [--port <n>] [--bundles <dir>] [--json]', desc: '播放页 + 课包分发' },
         snap: { usage: 'drawtell snap <scene.ts|bundle-id> [--step <n>] [--no-cursor] [--out <dir>] [--bundles <dir>] [--json]', desc: 'keyframe 截图 + index.json' },
         dub: { usage: 'drawtell dub <scene.ts|bundle-id> [--voice <v>] [--instruction <s>] [--dry-run] [--force] [--json]', desc: '课包配音(voxtell 粘合)' },
+        note: { usage: 'drawtell note <scene.ts|bundle-id> [--json]', desc: '课包档案段 → stdout(标题+题面+终帧 wikilink+每步讲稿),终帧拷到 <paths.attachments>/<id>-final.png;落进日记由调用方决定' },
         ls: { usage: 'drawtell ls [--json]', desc: '工作区现状:源 / 课包 / 音频 / 截图 / 验收' },
         tidy: { usage: 'drawtell tidy <dir> [--older-than <天>] [--delete] [--json]', desc: '清理无引用的旧文件(默认只列不删)' },
       },
@@ -404,6 +413,20 @@ async function runDub(rest: string[], json: boolean, workspace?: string): Promis
     for (const f of findings) console.log(`  [${f.level}] ${f.rule}: ${f.message}`);
   }
   if (!result.ok) process.exitCode = 1;
+}
+
+async function runNote(rest: string[], json: boolean, workspace?: string): Promise<void> {
+  const usage = 'drawtell note <scene.ts|bundle-id> [--json]';
+  const { file } = parseCmdArgs(rest, usage, []);
+  const ws = await loadWorkspace(workspace);
+  const { noteBundle } = await import('./note.ts');
+  const r = await noteBundle({ file, bundlesDir: ws.paths.bundles, snapsDir: ws.paths.snaps, attachmentsDir: ws.paths.attachments });
+  if (json) {
+    console.log(JSON.stringify({ command: 'note', scene: r.scene, image: redactHome(r.image), steps: r.steps, markdown: r.markdown, ok: true, ...workspaceReport(ws) }, null, 2));
+  } else {
+    // 档案段原样打到 stdout:调用方直接拿去 append 进日记
+    console.log(r.markdown);
+  }
 }
 
 async function runTidy(rest: string[], json: boolean, workspace?: string): Promise<void> {

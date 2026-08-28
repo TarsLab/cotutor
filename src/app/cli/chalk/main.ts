@@ -51,6 +51,16 @@ const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的
       终帧截图拷到 <paths.attachments>/<id>-final.png(固定名,重生成覆盖,wikilink 永不断)。
       落进 Obsidian 日记由调用方负责(日记只追加)。需要已 build 的课包与终帧截图
       (先 drawtell build,再 drawtell snap <id> --no-cursor)。
+  drawtell init [dir] [--json]
+      初始化/修补工作区:幂等补缺,已有文件与目录一律不动,所以它同时就是修复命令。
+      建目录骨架(scenes/ + 子产品目录 problems/captures/homework/tools/books/)+ drawtell.json 模板
+      + .gitignore;用户配置还没指定 workspace 时把它指过来(已指向别处不改)。dir 缺省 = cwd
+      (给了全局 --workspace 就用它,目录可以不存在)。政策文件(drawtell.json)永不自动重建或覆盖:
+      写坏了靠 git 回退。新机器闭环:npm i -g drawtell → drawtell init <dir> → drawtell doctor。
+  drawtell doctor [--json]
+      逐项体检,失败项附修复命令:环境(node;serve/snap/dub 的外部依赖)+ 工作区(解析到哪个根、
+      从哪来的,drawtell.json 可解析与形状,骨架目录,paths 各角色指向存在性与 iCloud 驱逐占位,
+      reviews.json,用户配置,git)。内容层不归它:单场景看 check,全景盘点看 ls。exit 0/1。
   drawtell --help | --version [--json]
 
 全局选项(所有命令通用,和命令级选项写在哪都行):
@@ -77,6 +87,8 @@ const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的
 exit code:0 通过 · 1 场景有问题(findings 里有修复指引)· 2 用法错误 · 3 已规划未实现(预留,当前无命令返回)· 4 内部错误
 
 示例:
+  drawtell init ~/drawtell-workspace       # 新机器:建骨架并把用户配置指过来(幂等,可重跑)
+  drawtell doctor                           # 哪里不对一眼看全,失败项附修复命令
   drawtell check scenes/dengche.ts
   drawtell check scenes/dengche.ts --json   # findings[]:{level, rule, message}
   drawtell build scenes/dengche.ts          # → bundles/dengche/
@@ -143,6 +155,12 @@ export async function main(argv: string[]): Promise<void> {
       case 'note':
         await runNote(args.slice(1), json, workspace);
         return;
+      case 'init':
+        await runInit(args.slice(1), json, workspace);
+        return;
+      case 'doctor':
+        await runDoctor(args.slice(1), json, workspace);
+        return;
       default:
         fail(json, 2, 'unknown_command', `未知命令 '${cmd}'。运行 drawtell --help 查看用法。`);
     }
@@ -175,6 +193,8 @@ function jsonHelp(): string {
         note: { usage: 'drawtell note <scene.ts|bundle-id> [--json]', desc: '课包档案段 → stdout(标题+题面+终帧 wikilink+每步讲稿),终帧拷到 <paths.attachments>/<id>-final.png;落进日记由调用方决定' },
         ls: { usage: 'drawtell ls [--json]', desc: '工作区现状:源 / 课包 / 音频 / 截图 / 验收' },
         tidy: { usage: 'drawtell tidy <dir> [--older-than <天>] [--delete] [--json]', desc: '清理无引用的旧文件(默认只列不删)' },
+        init: { usage: 'drawtell init [dir] [--json]', desc: '初始化/修补工作区骨架(幂等补缺,已有文件一律不动;政策文件永不覆盖)' },
+        doctor: { usage: 'drawtell doctor [--json]', desc: '环境 + 工作区逐项体检,失败项附修复命令;exit 0/1' },
       },
       globalOptions: {
         '--json': '机器可读输出(每条命令都支持)',
@@ -427,6 +447,45 @@ async function runNote(rest: string[], json: boolean, workspace?: string): Promi
     // 档案段原样打到 stdout:调用方直接拿去 append 进日记
     console.log(r.markdown);
   }
+}
+
+async function runInit(rest: string[], json: boolean, workspace?: string): Promise<void> {
+  const usage = 'drawtell init [dir] [--json]';
+  const positionals: string[] = [];
+  for (const a of rest) {
+    if (a.startsWith('--')) throw new UsageError(`未知选项 '${a}'。用法:${usage}`);
+    positionals.push(a);
+  }
+  if (positionals.length > 1) throw new UsageError(`最多一个目录参数。用法:${usage}`);
+  // 目录来源:位置参数 > 全局 --workspace(init 是唯一允许它不存在的命令)> cwd
+  const dir = positionals[0] ?? workspace ?? process.cwd();
+  const { initWorkspace } = await import('./init.ts');
+  const r = await initWorkspace(dir);
+  if (json) {
+    console.log(JSON.stringify(redactDeep({ command: 'init', ok: true, root: r.root, steps: r.steps, suggestions: r.suggestions }), null, 2));
+    return;
+  }
+  console.log(`✓ ${redactHome(r.root)} — 工作区骨架就绪(幂等补缺,已有的没动)`);
+  const mark = { created: '+', exists: '=', kept: '=' } as const;
+  for (const s of r.steps) {
+    console.log(`  ${mark[s.action]} ${s.item.padEnd(14)} ${s.action === 'created' ? '建立' : s.action === 'exists' ? '已有' : '保留'}${s.note ? `(${s.note})` : ''}`);
+  }
+  for (const s of r.suggestions) console.log(`  → ${s}`);
+}
+
+async function runDoctor(rest: string[], json: boolean, workspace?: string): Promise<void> {
+  parseCmdArgs(rest, 'drawtell doctor [--json]', [], false);
+  const { doctorWorkspace } = await import('./doctor.ts');
+  const r = await doctorWorkspace(workspace);
+  if (json) {
+    console.log(JSON.stringify(redactDeep({ command: 'doctor', ok: r.ok, workspace: r.root, workspaceSource: r.source, checks: r.checks }), null, 2));
+  } else {
+    for (const c of r.checks) {
+      console.log(`${c.ok ? '✓' : c.required ? '✗' : '·'} ${c.name}: ${c.detail}${c.fix && !c.ok ? `\n    → ${c.fix}` : ''}`);
+    }
+    console.log(r.ok ? '体检通过。' : '有必需项未通过,按 → 提示修复后重跑 drawtell doctor');
+  }
+  if (!r.ok) process.exitCode = 1;
 }
 
 async function runTidy(rest: string[], json: boolean, workspace?: string): Promise<void> {

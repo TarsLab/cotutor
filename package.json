@@ -1,0 +1,49 @@
+{
+  "name": "cotutor",
+  "version": "0.1.0",
+  "description": "家里的 AI 助教团队:老师 = 可直接对话的 agent 文件 + 自己的会话;一孩一 workspace",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:TarsLab/cotutor",
+  "bin": {
+    "cotutor": "bin/cotutor.js"
+  },
+  "exports": {
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "default": "./dist/schema/index.js"
+    },
+    "./workspace": {
+      "types": "./dist/cli/workspace.d.ts",
+      "default": "./dist/cli/workspace.js"
+    },
+    "./lib": {
+      "types": "./dist/lib/index.d.ts",
+      "default": "./dist/lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "agents",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types scripts/test.ts",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepublishOnly": "pnpm run typecheck && pnpm run test && pnpm run build && node bin/cotutor.js --version"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.6.0"
+  }
+}

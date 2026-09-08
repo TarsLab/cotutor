@@ -5,6 +5,18 @@
   "type": "module",
   "license": "MIT",
   "repository": "github:TarsLab/cotutor",
+  "homepage": "https://github.com/TarsLab/cotutor#readme",
+  "bugs": "https://github.com/TarsLab/cotutor/issues",
+  "keywords": [
+    "ai",
+    "agent",
+    "claude-code",
+    "qwen-code",
+    "tutor",
+    "education",
+    "homeschool",
+    "cli"
+  ],
   "bin": {
     "cotutor": "bin/cotutor.js"
   },
@@ -34,7 +46,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types scripts/test.ts",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "prepublishOnly": "pnpm run typecheck && pnpm run test && pnpm run build && node bin/cotutor.js --version"
+    "prepublishOnly": "pnpm run typecheck && pnpm run test && pnpm run build && pnpm run smoke",
+    "smoke": "node --experimental-strip-types scripts/smoke.ts"
   },
   "engines": {
     "node": ">=22.18"

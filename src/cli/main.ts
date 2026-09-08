@@ -54,16 +54,16 @@ export async function main(argv: string[]): Promise<void> {
     const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
+    // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
+    if (flags.version === true || cmd === '-v') {
+      process.stdout.write(`${version()}\n`);
+      return;
+    }
+    if (flags.help === true || cmd === undefined || cmd === '-h') {
+      process.stdout.write(USAGE);
+      return;
+    }
     switch (cmd) {
-      case undefined:
-      case '--help':
-      case '-h':
-        process.stdout.write(USAGE);
-        return;
-      case '--version':
-      case '-v':
-        process.stdout.write(`${version()}\n`);
-        return;
       case 'init': {
         const slug = positionals[0];
         if (!slug || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) throw new UsageError(`init 需要一个 slug(小写字母数字连字符,是短名不是真名),如 cotutor init ming。\n${USAGE}`);

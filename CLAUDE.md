@@ -1,6 +1,6 @@
 # cotutor
 
-家里的 AI 助教团队(应用仓,全新项目,2026-09-08 起)。设计文档暂在 growth-apps 仓根《cotutor产品规划.md》《cotutor-agent层设计.md》《cotutor契约草案.md》,拍板都在那里;本文件只写这个仓怎么长的。底层工具 drawtell / voxtell 按 npm 版本依赖,不在本仓。
+家里的 AI 助教团队(应用仓,全新项目,2026-09-08 起)。设计文档在 `docs/`:《产品规划.md》(定位、两个端、回复形式阶梯、里程碑 R0–R8、拍板记录)、《agent层设计.md》(目录、三种记忆、子代理、规划老师)、《契约草案.md》(各文件形状,已逐条拍板;契约的真相是 `src/schema/`,它只剩「为什么」)。拍板都在那里;本文件只写这个仓怎么长的。草稿与随手记放 `docs/wip/`(gitignore,不入库)。底层工具 drawtell / voxtell 按 npm 版本依赖,不在本仓。
 
 ## 结构(单包,subpath export,同 drawtell)
 

@@ -2,7 +2,7 @@
 
 家里的 AI 助教团队。老师 = 一个可直接对话的 agent 文件 + 自己的会话;一孩一 workspace;家长看全部过程,孩子看精简后的对话与产物。
 
-设计文档暂在 growth-apps 仓根:《cotutor产品规划.md》《cotutor-agent层设计.md》《cotutor契约草案.md》(R8 迁入本仓)。
+设计文档在 [docs/](docs/):《产品规划.md》《agent层设计.md》《契约草案.md》。
 
 ## 现在能做什么(R1 骨架与契约)
 

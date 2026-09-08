@@ -3,3 +3,5 @@ dist/
 *.log
 .DS_Store
 *.tgz
+# 设计草稿与随手记,不入库(定稿的进 docs/)
+docs/wip/

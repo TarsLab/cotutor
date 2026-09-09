@@ -1,5 +1,5 @@
-/** 运行规划:同预设有会话 → resume;跨预设 / 无会话 → 新开;{agentBody} 只给用到它的预设;ISO 周;recent 取材。 */
-import { getPreset, planRun, presetUses } from '../src/lib/run-plan.ts';
+/** 运行规划:同运行时有会话 → resume;跨运行时 / 无会话 → 新开;{agentBody} 只给用到它的运行时;ISO 周;recent 取材。 */
+import { getRuntime, planRun, runtimeUses } from '../src/lib/run-plan.ts';
 import { isoWeek } from '../src/lib/plan.ts';
 import { recentObservations } from '../src/lib/ledger.ts';
 import { applyRun, emptyIndex, addMessage } from '../src/lib/conversation.ts';
@@ -14,33 +14,33 @@ const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\
 
 {
   const fresh = planRun(config, { session: null }, vars);
-  check('无会话 → run,缺省 claude', fresh.preset === 'claude' && !fresh.resume && fresh.argv[0] === 'claude' && !fresh.argv.includes('--resume') && fresh.argv.includes(vars.prompt), fresh.argv.join(' '));
-  const again = planRun(config, { session: { id: 's-1', agent: 'claude' } }, vars);
-  check('同预设有会话 → resume 带 id', again.resume && again.session === 's-1' && again.argv.includes('--resume') && again.argv[again.argv.indexOf('--resume') + 1] === 's-1');
-  const switched = planRun(config, { session: { id: 's-1', agent: 'claude' } }, { ...vars, preset: 'qwen' });
-  check('换预设 → 新开,不带别家的会话 id', switched.preset === 'qwen' && !switched.resume && switched.argv[0] === 'qwen' && !switched.argv.includes('s-1'));
-  check('qwen 模板拿到老师正文', switched.argv.includes('正文') && presetUses(config.agents.qwen as { run: string[]; resume: string[] }, '{agentBody}'));
-  check('claude 模板不用正文', !presetUses(config.agents.claude as { run: string[]; resume: string[] }, '{agentBody}'));
+  check('无会话 → run,缺省 claude', fresh.runtime === 'claude' && !fresh.resume && fresh.argv[0] === 'claude' && !fresh.argv.includes('--resume') && fresh.argv.includes(vars.prompt), fresh.argv.join(' '));
+  const again = planRun(config, { session: { id: 's-1', runtime: 'claude' } }, vars);
+  check('同运行时有会话 → resume 带 id', again.resume && again.session === 's-1' && again.argv.includes('--resume') && again.argv[again.argv.indexOf('--resume') + 1] === 's-1');
+  const switched = planRun(config, { session: { id: 's-1', runtime: 'claude' } }, { ...vars, runtime: 'qwen' });
+  check('换运行时 → 新开,不带别家的会话 id', switched.runtime === 'qwen' && !switched.resume && switched.argv[0] === 'qwen' && !switched.argv.includes('s-1'));
+  check('qwen 模板拿到老师正文', switched.argv.includes('正文') && runtimeUses(config.runtimes.qwen as { run: string[]; resume: string[] }, '{agentBody}'));
+  check('claude 模板不用正文', !runtimeUses(config.runtimes.claude as { run: string[]; resume: string[] }, '{agentBody}'));
   let threw = '';
   try {
-    getPreset(config, 'gemini');
+    getRuntime(config, 'gemini');
   } catch (e) {
     threw = (e as Error).message;
   }
-  check('不存在的预设 → 报错列出可用的', threw.includes('gemini') && threw.includes('claude') && threw.includes('qwen'), threw);
+  check('不存在的运行时 → 报错列出可用的', threw.includes('gemini') && threw.includes('claude') && threw.includes('qwen'), threw);
 }
 {
-  // 换预设后 applyRun 要把索引里的会话换成新的(不然下一条又拿旧 id 去 resume)
+  // 换运行时后 applyRun 要把索引里的会话换成新的(不然下一条又拿旧 id 去 resume)
   let idx = emptyIndex('math-tutor', '2026-09-08');
-  idx = { ...idx, session: { id: 'c-1', agent: 'claude' } };
+  idx = { ...idx, session: { id: 'c-1', runtime: 'claude' } };
   idx = addMessage(idx, { job: '1', at: 'x', from: 'parent', text: 'hi', result: 'running', artifacts: [] });
   const t = parseTranscript('{"type":"system","session_id":"q-1"}\n{"type":"result","subtype":"success","result":"好"}');
-  const after = applyRun(idx, '1', { transcript: t, kidView: deriveKidView(t, { replyMaxChars: 60 }), agent: 'qwen' });
-  check('换预设后索引会话换成新家的', after.session?.id === 'q-1' && after.session.agent === 'qwen' && after.messages[0].agent === 'qwen', JSON.stringify(after.session));
-  const same = applyRun({ ...idx, session: { id: 'q-0', agent: 'qwen' } }, '1', { transcript: t, kidView: deriveKidView(t, { replyMaxChars: 60 }), agent: 'qwen' });
-  check('同预设保留原会话', same.session?.id === 'q-0');
+  const after = applyRun(idx, '1', { transcript: t, kidView: deriveKidView(t, { replyMaxChars: 60 }), runtime: 'qwen' });
+  check('换运行时后索引会话换成新家的', after.session?.id === 'q-1' && after.session.runtime === 'qwen' && after.messages[0].runtime === 'qwen', JSON.stringify(after.session));
+  const same = applyRun({ ...idx, session: { id: 'q-0', runtime: 'qwen' } }, '1', { transcript: t, kidView: deriveKidView(t, { replyMaxChars: 60 }), runtime: 'qwen' });
+  check('同运行时保留原会话', same.session?.id === 'q-0');
   const failed = parseTranscript('{"type":"result","subtype":"error_max_turns","is_error":true}');
-  const bad = applyRun(idx, '1', { transcript: failed, kidView: deriveKidView(failed, { replyMaxChars: 60 }), agent: 'claude' });
+  const bad = applyRun(idx, '1', { transcript: failed, kidView: deriveKidView(failed, { replyMaxChars: 60 }), runtime: 'claude' });
   check('出错写 error 原因', bad.messages[0].result === 'error' && bad.messages[0].error === 'error_max_turns');
 }
 {

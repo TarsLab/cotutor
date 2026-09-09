@@ -93,7 +93,7 @@ export async function readAgentBody(ws: Workspace, name: string): Promise<string
   throw new ConfigError(join(ws.dirs.claudeAgents, `${name}.md`), '老师定义读不到(链断了或没建);cotutor init 重链');
 }
 
-/** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 预设模板走编辑器 */
+/** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 运行时模板走编辑器 */
 export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'agents', 'paths', 'server', 'tts'] as const;
 
 const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
@@ -111,13 +111,13 @@ export function deepMerge(base: unknown, patch: unknown): unknown {
 
 /**
  * 补丁合到原始 JSON 上(保留 _note 等机器不认识的键),整份过契约再写;写坏了不落盘。
- * 返回新配置;agents 只允许改 default(预设模板走编辑器,页面上改错一个引号就把老师全弄哑)。
+ * 返回新配置;agents 只允许改 default(运行时模板走编辑器,页面上改错一个引号就把老师全弄哑)。
  */
 export async function patchConfig(ws: Workspace, patch: Record<string, unknown>): Promise<CotutorConfig> {
   const unknown = Object.keys(patch).filter((k) => !(CONFIG_PATCH_KEYS as readonly string[]).includes(k));
   if (unknown.length) throw new ConfigError(ws.files.config, `页面只能改 ${CONFIG_PATCH_KEYS.join(' / ')},不认识:${unknown.join(', ')};其余字段请直接编辑文件`);
   if (isObj(patch.agents) && Object.keys(patch.agents).some((k) => k !== 'default')) {
-    throw new ConfigError(ws.files.config, 'agents 只能在页面上改 default;预设模板请直接编辑文件');
+    throw new ConfigError(ws.files.config, 'agents 只能在页面上改 default;运行时模板请直接编辑文件');
   }
   const raw = readJson(ws.files.config);
   if (raw === null) throw new ConfigError(ws.files.config, '不存在');

@@ -22,9 +22,9 @@ const USAGE = `用法:
   cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录
   cotutor serve [--workspace <dir>] [--port <n>] [--http]               起服务(一 workspace 一进程;certs/ 里有证书就走 HTTPS)
   cotutor cert [--workspace <dir>] [--host <名或IP>]...                  用 mkcert 建自签证书到 certs/(iPad 上录音要 HTTPS)
-  cotutor send <老师> <消息> [--from parent|kid|system] [--preset <名>]   终端里发一条,等老师说完打印结果(与页面同一条路)
+  cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>]   终端里发一条,等老师说完打印结果(与页面同一条路)
   cotutor --version | --help
-工作区解析:--workspace > COTUTOR_WORKSPACE > cwd 或祖先有 cotutor.json > ~/.config/cotutor/config.json > ~/cotutor/ 下唯一的孩子目录
+workspace解析:--workspace > COTUTOR_WORKSPACE > cwd 或祖先有 cotutor.json > ~/.config/cotutor/config.json > ~/cotutor/ 下唯一的孩子目录
 `;
 
 function version(): string {
@@ -61,7 +61,7 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'preset', 'force', 'display', 'subject', 'avatar', 'description']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -162,11 +162,11 @@ export async function main(argv: string[]): Promise<void> {
         const from = typeof flags.from === 'string' ? flags.from : 'parent';
         if (!(MESSAGE_FROM as readonly string[]).includes(from)) throw new UsageError(`--from 只能是 ${MESSAGE_FROM.join(' / ')}`);
         const ctx = createContext(loadWorkspace(workspace));
-        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, preset: typeof flags.preset === 'string' ? flags.preset : undefined });
-        if (!json) process.stdout.write(`→ ${tutor} ${started.date} ${started.job}(${started.plan.preset}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
+        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined });
+        if (!json) process.stdout.write(`→ ${tutor} ${started.date} ${started.job}(${started.plan.runtime}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
         const index = await started.done;
         const m = index.messages.find((x) => x.job === started.job);
-        if (json) process.stdout.write(`${JSON.stringify({ tutor, date: started.date, job: started.job, preset: started.plan.preset, resume: started.plan.resume, message: m, session: index.session, costUsd: index.costUsd }, null, 2)}\n`);
+        if (json) process.stdout.write(`${JSON.stringify({ tutor, date: started.date, job: started.job, runtime: started.plan.runtime, resume: started.plan.resume, message: m, session: index.session, costUsd: index.costUsd }, null, 2)}\n`);
         else if (!m || m.result !== 'ok') {
           process.stdout.write(`本轮出错:${m?.error ?? '未知'};看 conversations/${tutor}/${started.date}.${started.job}.err.log\n`);
           process.exitCode = 1;

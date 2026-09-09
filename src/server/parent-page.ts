@@ -2,7 +2,7 @@
  * 家长端 /parent:三个标签(对话 / 老师团 / 设置),零依赖内联脚本,只走 /api/*。
  * 对话 = 原始视图:主线说话、工具行折叠、子代理折叠、待裁量按钮、孩子视图预览(kidText)、出错红条。
  * 老师团 = 老师卡片(人设与政策 → PATCH /api/config;老师文件正文 → /api/tutors/<name>/file;新老师 → POST /api/tutors;自家的能删)。
- * 设置 = paths / 端口 / 证书 / 配音命令,同样只写 cotutor.json;kid、version、预设模板留给编辑器。
+ * 设置 = paths / 端口 / 证书 / 配音命令,同样只写 cotutor.json;kid、version、运行时模板留给编辑器。
  * 放在 .ts 里而不是 .html,是因为 tsc 不拷贝静态文件,dist 里就少一份。
  */
 export const PARENT_PAGE = `<!doctype html>
@@ -99,7 +99,7 @@ export const PARENT_PAGE = `<!doctype html>
     <div id="msgs"><p class="empty">左边选一位老师</p></div>
     <form id="composer">
       <select id="from" title="以谁的身份说"><option value="parent">家长</option><option value="kid">孩子(模拟)</option><option value="system">系统</option></select>
-      <select id="preset" title="预设"></select>
+      <select id="runtime" title="运行时"></select>
       <textarea id="text" placeholder="对老师说……(⌘/Ctrl+Enter 发送)"></textarea>
       <button type="submit" id="send">发送</button>
     </form>
@@ -150,8 +150,8 @@ export const PARENT_PAGE = `<!doctype html>
     state.config = await api('GET', '/api/config');
     $('#title').textContent = state.config.title + ' · 家长端';
     document.title = state.config.title + ' · 家长端';
-    const ps = $('#preset');
-    ps.replaceChildren(...state.config.presets.map((p) => h('option', { value: p, selected: p === state.config.agent ? '' : undefined }, p === state.config.agent ? p + '(缺省)' : p)));
+    const ps = $('#runtime');
+    ps.replaceChildren(...state.config.runtimes.map((p) => h('option', { value: p, selected: p === state.config.runtime ? '' : undefined }, p === state.config.runtime ? p + '(缺省)' : p)));
     renderTutors();
   };
 
@@ -211,7 +211,7 @@ export const PARENT_PAGE = `<!doctype html>
     const FROM = { kid: '孩子', parent: '家长', system: '系统' };
     const nodes = v.index.messages.map((m) => {
       const el = h('div', { class: 'msg from-' + m.from });
-      el.append(h('div', { class: 'meta' }, FROM[m.from] || m.from, ' · ', m.at, ' · ', m.job, m.agent ? ' · ' + m.agent : '', m.focus && m.focus.artifact ? ' · 看着 ' + m.focus.artifact + (m.focus.step !== undefined ? ' 第 ' + m.focus.step + ' 步' : '') : ''));
+      el.append(h('div', { class: 'meta' }, FROM[m.from] || m.from, ' · ', m.at, ' · ', m.job, m.runtime ? ' · ' + m.runtime : '', m.focus && m.focus.artifact ? ' · 看着 ' + m.focus.artifact + (m.focus.step !== undefined ? ' 第 ' + m.focus.step + ' 步' : '') : ''));
       el.append(h('div', { class: 'bubble in' }, m.text));
       const rows = v.runs[m.job] || [];
       const run = h('div', { class: 'run' }, h('div', { class: 'meta' }, (t.avatar || '') + ' ' + t.display), ...rowsEl(rows));
@@ -228,7 +228,7 @@ export const PARENT_PAGE = `<!doctype html>
       if (m.handoff) el.append(h('div', { class: 'kid' }, '转交 → ' + m.handoff.to + (m.handoff.why ? ':' + m.handoff.why : '') + '(自动转交在 R5)'));
       return el;
     });
-    nodes.push(h('div', { class: 'meta', style: 'text-align:center' }, '今日费用 $' + v.index.costUsd.toFixed(2), v.index.session ? ' · 会话 ' + v.index.session.id.slice(0, 8) + '(' + v.index.session.agent + ')' : ''));
+    nodes.push(h('div', { class: 'meta', style: 'text-align:center' }, '今日费用 $' + v.index.costUsd.toFixed(2), v.index.session ? ' · 会话 ' + v.index.session.id.slice(0, 8) + '(' + v.index.session.runtime + ')' : ''));
     $('#msgs').replaceChildren(...nodes);
   };
 
@@ -237,7 +237,7 @@ export const PARENT_PAGE = `<!doctype html>
     const today = state.dates[0];
     try {
       $('#send').disabled = true;
-      await api('POST', '/api/conversations/' + state.tutor + '/messages', { text, from: from || $('#from').value, preset: $('#preset').value });
+      await api('POST', '/api/conversations/' + state.tutor + '/messages', { text, from: from || $('#from').value, runtime: $('#runtime').value });
       $('#text').value = '';
       if (state.date !== today) await pickTutor(state.tutor, today); else await loadDay();
     } catch (e) { alert(e.message); $('#send').disabled = false; }
@@ -315,10 +315,10 @@ export const PARENT_PAGE = `<!doctype html>
     const root = $('#team');
     const top = h('div', { class: 'card' }, h('h2', {}, '全局'), h('div', { class: 'grid' },
       h('label', {}, '孩子端标题', h('input', { type: 'text', id: 'g-title', value: c.title })),
-      h('label', {}, '缺省预设(agents.default)', h('select', { id: 'g-agent' }, ...c.presets.map((p) => h('option', { value: p, selected: p === c.agent ? '' : undefined }, p)))),
+      h('label', {}, '缺省运行时(runtimes.default)', h('select', { id: 'g-agent' }, ...c.runtimes.map((p) => h('option', { value: p, selected: p === c.runtime ? '' : undefined }, p)))),
       ...policyInputs(c.policyDefaults, c.tutors[0] ? Object.assign({}, c.tutors[0].policy, c.policyDefaults) : {}, { inherit: false })),
-      h('p', { class: 'hint' }, 'policyDefaults 留空 = 用出厂缺省(60 字 / 30 条 / 3 次 / 验收关 / L0,L1,L3,L4 / 10,10)。预设模板、paths、端口请直接编辑 cotutor.json。'),
-      h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button', on: { click: () => { try { patchAndReload(top, { title: $('#g-title').value, agents: { default: $('#g-agent').value }, policyDefaults: readPolicy(top) }); } catch (e) { feedback(top, false, e.message); } } } }, '保存全局'), h('span', { class: 'fb' })));
+      h('p', { class: 'hint' }, 'policyDefaults 留空 = 用出厂缺省(60 字 / 30 条 / 3 次 / 验收关 / L0,L1,L3,L4 / 10,10)。运行时模板、paths、端口请直接编辑 cotutor.json。'),
+      h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button', on: { click: () => { try { patchAndReload(top, { title: $('#g-title').value, runtimes: { default: $('#g-agent').value }, policyDefaults: readPolicy(top) }); } catch (e) { feedback(top, false, e.message); } } } }, '保存全局'), h('span', { class: 'fb' })));
     const cards = c.tutors.map((t) => {
       const patch = c.tutorPatches[t.name] || {};
       const card = h('div', { class: 'card' },
@@ -356,7 +356,7 @@ export const PARENT_PAGE = `<!doctype html>
       h('label', {}, 'HTTPS 证书(相对 workspace;空 = 看 certs/)', h('input', { type: 'text', id: 's-cert', value: c.https ? c.https.cert : '', placeholder: 'certs/cert.pem' })),
       h('label', {}, 'HTTPS 私钥', h('input', { type: 'text', id: 's-key', value: c.https ? c.https.key : '', placeholder: 'certs/key.pem' }))),
       h('label', { style: 'display:block;margin-top:10px;font-size:12px;color:var(--dim)' }, '配音命令(JSON 数组;占位 {text} {voice} {out};voxtell 不在 PATH 就把第一项写成完整路径)', h('textarea', { id: 's-tts', style: 'min-height:60px' }, JSON.stringify(c.tts.say))),
-      h('p', { class: 'hint' }, '写回 cotutor.json;kid、version、agents 的预设模板请直接编辑文件。留空的路径角色用缺省;右侧灰字是现在解析到的绝对路径。'),
+      h('p', { class: 'hint' }, '写回 cotutor.json;kid、version、agents 的运行时模板请直接编辑文件。留空的路径角色用缺省;右侧灰字是现在解析到的绝对路径。'),
       h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button', on: { click: async () => {
         try {
           const paths = {};

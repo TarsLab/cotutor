@@ -1,5 +1,5 @@
 /**
- * 老师定义文件(.claude/agents/<name>.md 同一份链到 .qwen/agents/):YAML frontmatter + 正文即系统提示。
+ * 老师文件文件(.claude/agents/<name>.md 同一份链到 .qwen/agents/):YAML frontmatter + 正文即系统提示。
  * 这里只认平铺的 `key: value` frontmatter(两个 CLI 的公共子集:name / description / maxTurns / permissionMode / memory);
  * 正文给没有 --agent 的 CLI 经 {agentBody} 塞进 --append-system-prompt。
  */

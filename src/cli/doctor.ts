@@ -1,5 +1,5 @@
 /**
- * cotutor doctor:环境 + 工作区逐项体检,失败项附修复命令(错误信息即修复指南)。
+ * cotutor doctor:环境 + workspace逐项体检,失败项附修复命令(错误信息即修复指南)。
  * 静默失败摆到明面:配置坏了、老师链断了、账本有坏行、角色指向踩空。
  * exit 约定同 drawtell / voxtell doctor:必需项全过 exit 0,否则 1;--json 带 ok 与整份 checks。
  */
@@ -58,31 +58,31 @@ async function evictedCount(dir: string): Promise<number> {
   }
 }
 
-/** 预设的 CLI 名(run[0] 的 basename):决定链在 .claude 还是 .qwen 下 */
-export function presetCli(run: readonly string[]): string {
+/** 运行时的 CLI 名(run[0] 的 basename):决定链在 .claude 还是 .qwen 下 */
+export function runtimeCli(run: readonly string[]): string {
   return basename(run[0] ?? '');
 }
 
 /** 已知的环境坑,从 CLI 的输出里认出来给修复命令(错误信息即修复指南) */
-export function explainLlmFailure(text: string, preset: readonly string[]): string {
-  const bin = presetCli(preset);
+export function explainLlmFailure(text: string, runtime: readonly string[]): string {
+  const bin = runtimeCli(runtime);
   if (/does not support this model|version [\d.]+ or newer is required/i.test(text)) {
-    return `这版 ${bin} 不认全局 settings 里的模型:给 cotutor.json 的 ${bin} 预设 run / resume 末尾加 "--model", "sonnet"(或 ${bin} update 升级)`;
+    return `这版 ${bin} 不认全局 settings 里的模型:给 cotutor.json 的 ${bin} 运行时 run / resume 末尾加 "--model", "sonnet"(或 ${bin} update 升级)`;
   }
   if (/nested|CLAUDECODE|already running inside/i.test(text)) return '在 Claude Code 会话里嵌套起 claude 被拒:换个普通终端,或 unset CLAUDECODE 及 CLAUDE_CODE_* 后再跑';
   if (/not logged in|login|authentication|401|unauthorized/i.test(text)) return `${bin} 没登录或 key 失效:先在终端跑一次 ${bin} 登录`;
   if (/ENOENT|command not found/i.test(text)) return `PATH 里没有 ${bin}`;
-  if (/budget|max_budget/i.test(text)) return '预算旗太小:调大预设模板里的 --max-budget-usd';
+  if (/budget|max_budget/i.test(text)) return '预算旗太小:调大运行时模板里的 --max-budget-usd';
   return `看上面的原文;不认识的错先在终端手跑一次同样的命令`;
 }
 
 /**
- * --live:真起一次老师(预设的 run 模板,第一位开着的老师,只回一个字),把 API 层的坑(模型不认、没登录)摆到明面。
+ * --live:真起一次老师(运行时的 run 模板,第一位开着的老师,只回一个字),把 API 层的坑(模型不认、没登录)摆到明面。
  * 花一分钱级别的费用,所以缺省不跑。配音同理:老师配了 voice 就合成一句。
  */
 async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: NodeJS.ProcessEnv): Promise<void> {
   const { spawn } = await import('node:child_process');
-  const { fillPreset, fillTts, listTutors } = await import('../schema/index.ts');
+  const { fillRuntime, fillTts, listTutors } = await import('../schema/index.ts');
   const { parseTranscript } = await import('../lib/transcript.ts');
   const { parseAgentFile } = await import('../lib/agent-file.ts');
   const { tmpdir } = await import('node:os');
@@ -93,16 +93,16 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
     push({ name: 'live.agent', ok: false, required: false, detail: '没有开着的老师,没法探', fix: 'cotutor.json 里至少开一位' });
     return;
   }
-  const presetName = ws.config.agents.default;
-  const preset = ws.config.agents[presetName];
-  if (!preset || typeof preset === 'string') return;
+  const runtimeName = ws.config.runtimes.default;
+  const runtime = ws.config.runtimes[runtimeName];
+  if (!runtime || typeof runtime === 'string') return;
   let agentBody: string | undefined;
   try {
     agentBody = parseAgentFile(await readFile(join(ws.dirs.claudeAgents, `${first.name}.md`), 'utf8')).body;
   } catch {
     /* 上面 tutor.* 已报 */
   }
-  const argv = fillPreset(preset.run, { agent: first.name, prompt: '只回一个字:好', agentBody });
+  const argv = fillRuntime(runtime.run, { agent: first.name, prompt: '只回一个字:好', agentBody });
   const cwd = join(ws.dirs.agents, first.name);
   const run = await new Promise<{ out: string; err: string; code: number | null; spawnErr?: string }>((resolveRun) => {
     let out = '';
@@ -125,11 +125,11 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
   const ok = Boolean(t.final?.ok) && !run.spawnErr;
   const raw = run.spawnErr ?? (t.final ? `${t.final.reason ?? ''} ${said}`.trim() : `没有 result 事件(exit ${run.code}):${run.err.trim().split('\n').slice(-3).join(' / ')}`);
   push({
-    name: `live.${presetName}`,
+    name: `live.${runtimeName}`,
     ok,
     required: false,
     detail: ok ? `${first.display} 回了「${(t.final?.text ?? '').slice(0, 20)}」${t.final?.costUsd !== undefined ? ` · $${t.final.costUsd.toFixed(3)}` : ''}` : `起不来或没答上:${raw.slice(0, 300)}`,
-    fix: ok ? undefined : explainLlmFailure(raw, preset.run),
+    fix: ok ? undefined : explainLlmFailure(raw, runtime.run),
   });
 
   const voiced = tutors.find((x) => x.voice);
@@ -198,7 +198,7 @@ export async function doctorWorkspace(
         name: CONFIG_FILE,
         ok: true,
         required: true,
-        detail: `kid ${config.kid.slug}、${Object.keys(config.tutors).length} 位老师、预设 ${config.agents.default}、端口 ${config.server.port}`,
+        detail: `kid ${config.kid.slug}、${Object.keys(config.tutors).length} 位老师、运行时 ${config.runtimes.default}、端口 ${config.server.port}`,
       });
     }
   } catch (err) {
@@ -227,7 +227,7 @@ export async function doctorWorkspace(
 
   if (ws) {
     // ---- 老师:定义文件(拷贝)+ 名字一致 + 出厂 / 自定义状态 + 老师目录 ----
-    const defaultCli = presetCli(ws.config.agents[ws.config.agents.default]?.run ?? []);
+    const defaultCli = runtimeCli(ws.config.runtimes[ws.config.runtimes.default]?.run ?? []);
     const statuses = new Map((await tutorStatuses(root)).map((s) => [s.name, s]));
     for (const name of Object.keys(ws.config.tutors)) {
       const shipped = statuses.has(name);
@@ -321,24 +321,24 @@ export async function doctorWorkspace(
     const tls = httpsFiles(ws);
     push({ name: 'https', ok: tls !== null, required: false, detail: tls ? `${redactHome(tls.cert)}` : '没有证书,serve 走 HTTP(iPad Safari 上按住说话不可用)', fix: tls ? undefined : 'cotutor cert(需要 mkcert:brew install mkcert && mkcert -install)' });
 
-    // ---- 预设的 CLI 在不在 ----
+    // ---- 运行时的 CLI 在不在 ----
     if (probeEnv) {
-      const ttsBin = presetCli(ws.config.tts.say);
+      const ttsBin = runtimeCli(ws.config.tts.say);
       try {
         await execFileP(ttsBin, ['--version'], { timeout: 8000 });
         push({ name: 'tts', ok: true, required: false, detail: `${ttsBin} 在;老师配了 voice 的回复会配音` });
       } catch {
         push({ name: 'tts', ok: false, required: false, detail: `PATH 里没有 ${ttsBin},回复不配音(孩子端用浏览器的声)`, fix: `装 ${ttsBin},或改 cotutor.json 的 tts.say` });
       }
-      for (const [preset, p] of Object.entries(ws.config.agents)) {
-        if (preset === 'default' || typeof p === 'string') continue;
-        const bin = presetCli(p.run);
-        const required = preset === ws.config.agents.default;
+      for (const [runtime, p] of Object.entries(ws.config.runtimes)) {
+        if (runtime === 'default' || typeof p === 'string') continue;
+        const bin = runtimeCli(p.run);
+        const required = runtime === ws.config.runtimes.default;
         try {
           const { stdout } = await execFileP(bin, ['--version'], { timeout: 8000 });
-          push({ name: `agents.${preset}`, ok: true, required, detail: `${bin} ${stdout.trim().split('\n')[0]}` });
+          push({ name: `runtime.${runtime}`, ok: true, required, detail: `${bin} ${stdout.trim().split('\n')[0]}` });
         } catch {
-          push({ name: `agents.${preset}`, ok: false, required, detail: `PATH 里没有 ${bin}`, fix: required ? `装 ${bin},或把 agents.default 改成装了的那个预设` : undefined });
+          push({ name: `runtime.${runtime}`, ok: false, required, detail: `PATH 里没有 ${bin}`, fix: required ? `装 ${bin},或把 runtimes.default 改成装了的那个运行时` : undefined });
         }
       }
     }
@@ -360,7 +360,7 @@ export async function doctorWorkspace(
   }
 
   const gitThere = (await statOrNull(join(root, '.git'))) !== null;
-  push({ name: 'git', ok: gitThere, required: false, detail: gitThere ? '工作区是 git 仓' : '工作区不在 git 里', fix: gitThere ? undefined : '建议 git init:老师记忆、账本、政策都是不可再生状态' });
+  push({ name: 'git', ok: gitThere, required: false, detail: gitThere ? 'workspace是 git 仓' : 'workspace不在 git 里', fix: gitThere ? undefined : '建议 git init:老师记忆、账本、政策都是不可再生状态' });
 
   return { ok: checks.filter((c) => c.required).every((c) => c.ok), root, source, checks };
 }

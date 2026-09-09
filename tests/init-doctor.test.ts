@@ -1,4 +1,4 @@
-/** init 幂等补缺、老师定义是拷贝(旧链自动换);doctor 把缺文件、坏配置、坏账本摆到明面。 */
+/** init 幂等补缺、老师文件是拷贝(旧链自动换);doctor 把缺文件、坏配置、坏账本摆到明面。 */
 import { existsSync, lstatSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,7 +20,7 @@ try {
   check('骨架目录齐', ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents'].every((d) => existsSync(join(ws, d))));
   check('老师目录齐', ['math-tutor', 'chinese-tutor', 'reading-tutor', 'homework-tutor', 'planner'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
   const link = join(ws, '.claude', 'agents', 'math-tutor.md');
-  check('老师定义是拷贝,内容同本包', !lstatSync(link).isSymbolicLink() && readFileSync(link, 'utf8') === readFileSync(join(PACKAGE_AGENTS_DIR, 'math-tutor.md'), 'utf8'));
+  check('老师文件是拷贝,内容同本包', !lstatSync(link).isSymbolicLink() && readFileSync(link, 'utf8') === readFileSync(join(PACKAGE_AGENTS_DIR, 'math-tutor.md'), 'utf8'));
   check('.qwen 是指向 .claude 的相对链', lstatSync(join(ws, '.qwen', 'agents', 'planner.md')).isSymbolicLink() && readlinkSync(join(ws, '.qwen', 'agents', 'planner.md')) === '../../.claude/agents/planner.md');
   check('出厂 hash 记下', (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { tutors: Record<string, { hash: string }> }).tutors['math-tutor'].hash.startsWith('sha256:'));
   check('账本空文件在', existsSync(join(ws, 'ledger', 'observations.jsonl')) && existsSync(join(ws, 'ledger', 'artifacts.jsonl')));
@@ -40,9 +40,9 @@ try {
   check('用户配置已指向别处 → kept', r3.steps.find((s) => s.item === 'user-config')?.action === 'kept');
 
   const d1 = await doctorWorkspace(ws, { probeEnv: false });
-  check('健康工作区体检通过', d1.ok, JSON.stringify(d1.checks.filter((c) => c.required && !c.ok)));
+  check('健康workspace体检通过', d1.ok, JSON.stringify(d1.checks.filter((c) => c.required && !c.ok)));
   check('老师链都查了', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 5);
-  check('默认预设是 claude → .claude 链必需、.qwen 链非必需', d1.checks.some((c) => c.name === 'tutor.math-tutor.claude' && c.required) && d1.checks.some((c) => c.name === 'tutor.math-tutor.qwen' && !c.required));
+  check('默认运行时是 claude → .claude 链必需、.qwen 链非必需', d1.checks.some((c) => c.name === 'tutor.math-tutor.claude' && c.required) && d1.checks.some((c) => c.name === 'tutor.math-tutor.qwen' && !c.required));
   check('git 是建议', d1.checks.some((c) => c.name === 'git' && !c.ok && !c.required));
 
   unlinkSync(link);
@@ -50,7 +50,7 @@ try {
   check('文件没了 → 必需失败附 init', !d2.ok && d2.checks.some((c) => c.name === 'tutor.math-tutor.claude' && !c.ok && c.fix?.includes('init')));
   await initWorkspace({ slug: 'ming' });
   check('init 补拷', existsSync(link) && !lstatSync(link).isSymbolicLink());
-  // 旧工作区:指向包的链 → init 换成拷贝
+  // 旧workspace:指向包的链 → init 换成拷贝
   unlinkSync(link);
   symlinkSync(join(PACKAGE_AGENTS_DIR, 'math-tutor.md'), link);
   const dLegacy = await doctorWorkspace(ws, { probeEnv: false });

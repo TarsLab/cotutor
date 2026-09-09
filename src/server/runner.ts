@@ -1,5 +1,5 @@
 /**
- * 发消息 = 拼上下文包 → 按预设 spawn / resume → stream-json 落 conversations/<老师>/<日期>.<job>.log → 索引更新。
+ * 发消息 = 拼上下文包 → 按运行时 spawn / resume → stream-json 落 conversations/<老师>/<日期>.<job>.log → 索引更新。
  * 一老师同时只跑一条(老师还在回上一条就 409),跨天自动新开(索引按本地日期分文件,新文件没 session 就不带 --resume)。
  * 进程 cwd 是老师目录 agents/<name>/(《agent层设计.md》拍板)。
  */
@@ -12,7 +12,7 @@ import { addMessage, applyRun, conversationFiles, jobId, localDate, localMinute 
 import { deriveKidView } from '../lib/kid-view.ts';
 import { mergeObservations, parseObservations, recentObservations } from '../lib/ledger.ts';
 import { isoWeek, parsePlan, planLinesFor } from '../lib/plan.ts';
-import { getPreset, planRun, presetUses, type RunPlan } from '../lib/run-plan.ts';
+import { getRuntime, planRun, runtimeUses, type RunPlan } from '../lib/run-plan.ts';
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript } from '../lib/transcript.ts';
 import { resolvePolicy, type ContextPack, type ConversationIndex, type Focus, type MessageFrom } from '../schema/index.ts';
@@ -30,8 +30,8 @@ export interface SendInput {
   from: MessageFrom;
   text: string;
   focus?: Focus;
-  /** 预设名,缺省 cotutor.json 的 agents.default */
-  preset?: string;
+  /** 运行时名,缺省 cotutor.json 的 runtimes.default */
+  runtime?: string;
 }
 
 export interface SendStarted {
@@ -103,14 +103,14 @@ export class Runner {
     const date = localDate(now);
     const index = await readIndex(ws, tutor, date);
     const job = jobId(now, index.messages.length + 1);
-    const { preset } = getPreset(ws.config, input.preset);
-    const agentBody = presetUses(preset, '{agentBody}') ? await readAgentBody(ws, tutor) : undefined;
+    const { runtime } = getRuntime(ws.config, input.runtime);
+    const agentBody = runtimeUses(runtime, '{agentBody}') ? await readAgentBody(ws, tutor) : undefined;
     const pack = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus });
     const policy = resolvePolicy(ws.config, tutor);
     const prompt = buildContextPack(pack, text, policy.contextPack);
-    const plan = planRun(ws.config, index, { agent: tutor, prompt, agentBody, preset: input.preset });
+    const plan = planRun(ws.config, index, { agent: tutor, prompt, agentBody, runtime: input.runtime });
 
-    const started = addMessage(index, { job, at: pack.at, from: input.from, text, focus: input.focus, result: 'running', artifacts: [], agent: plan.preset });
+    const started = addMessage(index, { job, at: pack.at, from: input.from, text, focus: input.focus, result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
 
     const done = this.spawn(ws, tutor, date, job, plan, policy.replyMaxChars).finally(() => this.active.delete(tutor));
@@ -151,7 +151,7 @@ export class Runner {
     const audio = kidView.kidText && voice ? await dubReply(ws.config.tts, kidView.kidText, voice, { audio: files.audio(job), err: files.err(job) }, this.opts.env) : null;
     // 重新读索引再并入:跑的这段时间里别的字段(比如家长改了别的)不被旧对象盖掉
     const latest = await readIndex(ws, tutor, date);
-    const next = applyRun(latest, job, { transcript, kidView, agent: plan.preset, audio });
+    const next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, audio });
     await writeIndex(ws, next);
     return next;
   }

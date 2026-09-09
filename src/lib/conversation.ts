@@ -1,5 +1,5 @@
 /**
- * 会话索引的纯函数:日期与 job 命名、空索引、把一次运行的结果并进索引(不改旧对象)。
+ * 对话索引的纯函数:日期与 job 命名、空索引、把一次运行的结果并进索引(不改旧对象)。
  */
 import { ConversationIndexSchema, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
 import type { KidView } from './kid-view.ts';
@@ -47,7 +47,7 @@ export function addMessage(index: ConversationIndex, msg: ConversationMessage): 
 export function applyRun(
   index: ConversationIndex,
   job: string,
-  run: { transcript: Transcript; kidView: KidView; agent: string; artifacts?: string[]; audio?: string | null },
+  run: { transcript: Transcript; kidView: KidView; runtime: string; artifacts?: string[]; audio?: string | null },
 ): ConversationIndex {
   const { transcript, kidView } = run;
   const messages = index.messages.map((m) =>
@@ -58,7 +58,7 @@ export function applyRun(
           costUsd: transcript.final?.costUsd,
           kidText: kidView.kidText,
           artifacts: run.artifacts ?? m.artifacts,
-          agent: run.agent,
+          runtime: run.runtime,
           holdup: kidView.holdup,
           handoff: kidView.handoff,
           error: transcript.final?.ok === false ? transcript.final.reason : null,
@@ -66,9 +66,9 @@ export function applyRun(
         }
       : m,
   );
-  // 会话:首次拿到就记;换了预设(agent 不同)就以这次的为准——跨 CLI 不能 resume,索引要跟着换
-  const keep = index.session && index.session.agent === run.agent ? index.session : null;
-  const session = keep ?? (transcript.sessionId ? { id: transcript.sessionId, agent: run.agent } : index.session);
+  // 会话:首次拿到就记;换了运行时(agent 不同)就以这次的为准——跨 CLI 不能 resume,索引要跟着换
+  const keep = index.session && index.session.runtime === run.runtime ? index.session : null;
+  const session = keep ?? (transcript.sessionId ? { id: transcript.sessionId, runtime: run.runtime } : index.session);
   const costUsd = messages.reduce((s, m) => s + (m.costUsd ?? 0), 0);
   return { ...index, session, messages, costUsd: Math.round(costUsd * 1e4) / 1e4 };
 }

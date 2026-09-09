@@ -1,4 +1,4 @@
-/** 工作区解析链:flag → env → cwd 向上 → 用户配置 → ~/cotutor 唯一 → 报错;配置坏了响亮报错。HOME 注入后动态 import。 */
+/** workspace解析链:flag → env → cwd 向上 → 用户配置 → ~/cotutor 唯一 → 报错;配置坏了响亮报错。HOME 注入后动态 import。 */
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -87,7 +87,7 @@ try {
     threw = e instanceof ConfigError && e.message.includes('JSON');
   }
   check('JSON 坏 → ConfigError', threw);
-  writeFileSync(join(other, 'cotutor.json'), JSON.stringify({ version: 1, kid: { slug: 'x' }, agents: { default: 'zz' } }));
+  writeFileSync(join(other, 'cotutor.json'), JSON.stringify({ version: 1, kid: { slug: 'x' }, runtimes: { default: 'zz' } }));
   threw = false;
   let msg = '';
   try {
@@ -96,7 +96,7 @@ try {
     threw = e instanceof ConfigError;
     msg = (e as Error).message;
   }
-  check('形状不对 → ConfigError 附逐条指南', threw && msg.includes('agents.default'), msg);
+  check('形状不对 → ConfigError 附逐条指南', threw && msg.includes('runtimes.default'), msg);
   rmSync(join(other, 'cotutor.json'));
   threw = false;
   try {

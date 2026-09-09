@@ -1,8 +1,8 @@
 /**
- * 工作区骨架清单:init 建、doctor 查,同一张清单(两边各写一遍必然漂移)。
+ * workspace骨架清单:init 建、doctor 查,同一张清单(两边各写一遍必然漂移)。
  * 布局见《cotutor-agent层设计.md》§2:
- *   cotutor.json / CLAUDE.md QWEN.md(家规)/ .claude/agents(老师定义,拷自本包 agents/,是家长的)/ .qwen/agents(相对链)/ .cotutor/shipped.json(出厂 hash)
- *   agents/<name>/(老师的家 = 会话 cwd)/ ledger/(两本账)/ conversations/(会话索引与转录)
+ *   cotutor.json / CLAUDE.md QWEN.md(家规)/ .claude/agents(老师文件,拷自本包 agents/,是家长的)/ .qwen/agents(相对链)/ .cotutor/shipped.json(出厂 hash)
+ *   agents/<name>/(老师的家 = 会话 cwd)/ ledger/(两本账)/ conversations/(对话索引与转录)
  */
 import { readFileSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
@@ -15,7 +15,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents'] as const;
 export const LEDGER_FILES = ['ledger/observations.jsonl', 'ledger/artifacts.jsonl'] as const;
 
-/** 本包自带的老师定义目录(仓库检出与 npm 安装都在包根 agents/) */
+/** 本包自带的老师文件目录(仓库检出与 npm 安装都在包根 agents/) */
 export const PACKAGE_AGENTS_DIR = fileURLToPath(new URL('../../agents/', import.meta.url));
 /** 本包版本(出厂件的 hash 记录带它,升级时知道基于哪版) */
 export const PACKAGE_VERSION = (JSON.parse(readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8')) as { version: string }).version;
@@ -36,7 +36,7 @@ export async function shippedAgents(dir = PACKAGE_AGENTS_DIR): Promise<ShippedAg
   return out;
 }
 
-export const GITIGNORE = `# 转录日志体积大、可从会话索引重建关键信息;要留全档就删掉下面这行
+export const GITIGNORE = `# 转录日志体积大、可从对话索引重建关键信息;要留全档就删掉下面这行
 conversations/**/*.log
 # 配音可重新合成
 conversations/**/*.mp3
@@ -101,7 +101,7 @@ export interface ConfigTemplateInput {
   tutors: ShippedAgent[];
 }
 
-const TUTOR_PRESETS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean }> = {
+const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean }> = {
   'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮' },
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚' },
   'reading-tutor': { display: '朗读老师', subject: '英语', avatar: '📖' },
@@ -113,7 +113,7 @@ const TUTOR_PRESETS: Record<string, { display: string; subject?: string; avatar:
 export function configTemplate(input: ConfigTemplateInput): string {
   const tutors: Record<string, unknown> = {};
   for (const a of input.tutors) {
-    const p = TUTOR_PRESETS[a.name];
+    const p = TUTOR_DEFAULTS[a.name];
     tutors[a.name] = p
       ? { display: p.display, ...(p.subject ? { subject: p.subject } : {}), avatar: p.avatar, enabled: true, ...(p.hidden ? { hidden: true } : {}) }
       : { display: a.name, enabled: true };
@@ -127,7 +127,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
     paths: {},
     policyDefaults: {},
     tutors,
-    agents: {
+    runtimes: {
       default: 'claude',
       claude: {
         run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '2'],
@@ -144,7 +144,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
       'tutors = 老师表(key 与 .claude/agents/<key>.md 的 name 一致):display 显示名、avatar、voice 用 voxtell 音色 id、enabled 开关、hidden 孩子端不露、policy 覆盖 policyDefaults。' +
       'policyDefaults 缺省:replyMaxChars 60、dailyMessages 30、dailyRegen 3、reviewGate false、contextPack {recent 10, planLines 10}。' +
       'paths = 角色映射:vault 指 Obsidian vault 根(一孩一 vault),photos/diary/plans/profile/timetable 相对 vault。' +
-      'agents = 运行时预设,占位 {agent} {agentBody} {prompt} {session};政策旋钮(预算、时限、模型)写进模板。' +
+      'runtimes = 运行时,占位 {agent} {agentBody} {prompt} {session};政策旋钮(预算、时限、模型)写进模板。' +
       'tts = 配音命令,占位 {text} {voice} {out};老师没配 voice 就不合成,孩子端用浏览器的声。' +
       'server.https = {cert, key} 自签证书路径(相对 workspace 根);不配则看 certs/cert.pem + key.pem(cotutor cert 用 mkcert 建)。',
   };

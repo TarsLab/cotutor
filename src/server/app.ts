@@ -9,7 +9,7 @@ import { readFile, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
-import { PresetError } from '../lib/run-plan.ts';
+import { RuntimeError } from '../lib/run-plan.ts';
 import { localDate } from '../lib/conversation.ts';
 import { kidConversation, kidMessageCount, type KidMessage } from '../lib/kid-view.ts';
 import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
@@ -189,8 +189,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             title: ws.config.title,
             kid: ws.config.kid,
             server: ws.config.server,
-            agent: ws.config.agents.default,
-            presets: Object.keys(ws.config.agents).filter((k) => k !== 'default'),
+            runtime: ws.config.runtimes.default,
+            runtimes: Object.keys(ws.config.runtimes).filter((k) => k !== 'default'),
             policyDefaults: ws.config.policyDefaults,
             paths: ws.config.paths,
             resolvedPaths: Object.fromEntries(Object.entries(ws.paths).map(([k, v]) => [k, redactHome(v)])),
@@ -207,7 +207,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (!isObj(body)) return { status: 400, json: { error: 'bad_request', message: '要一个 JSON 对象' } };
         await patchConfig(ws, body);
         await ctx.reload();
-        return { status: 200, json: { ok: true, tutors: listTutors(ctx.ws.config), agent: ctx.ws.config.agents.default } };
+        return { status: 200, json: { ok: true, tutors: listTutors(ctx.ws.config), runtime: ctx.ws.config.runtimes.default } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
@@ -280,7 +280,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         return { status: 200, json: { tutor, today: localDate(ctx.now()), dates: await listDates(ws, tutor), running: ctx.runner.running(tutor) } };
       }
       if (tail === 'messages' && method === 'POST') {
-        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, from?, focus?, preset?}' } };
+        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, from?, focus?, runtime?}' } };
         const from = body.from ?? 'parent';
         if (!(MESSAGE_FROM as readonly unknown[]).includes(from)) return { status: 400, json: { error: 'bad_request', message: `from 只能是 ${MESSAGE_FROM.join(' / ')}` } };
         const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
@@ -289,9 +289,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           from: from as (typeof MESSAGE_FROM)[number],
           text: body.text,
           focus: focus?.data,
-          preset: typeof body.preset === 'string' ? body.preset : undefined,
+          runtime: typeof body.runtime === 'string' ? body.runtime : undefined,
         });
-        return { status: 202, json: { tutor, date: started.date, job: started.job, preset: started.plan.preset, resume: started.plan.resume } };
+        return { status: 202, json: { tutor, date: started.date, job: started.job, runtime: started.plan.runtime, resume: started.plan.resume } };
       }
       if (tail !== undefined && tail !== 'messages' && method === 'GET') {
         const date = tail === 'today' ? localDate(ctx.now()) : tail;
@@ -307,7 +307,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     return { status: 404, json: { error: 'not_found', path: p } };
   } catch (err) {
     if (err instanceof BusyError) return { status: 409, json: { error: 'busy', message: err.message } };
-    if (err instanceof PresetError) return { status: 400, json: { error: 'bad_preset', message: err.message } };
+    if (err instanceof RuntimeError) return { status: 400, json: { error: 'bad_runtime', message: err.message } };
     if (err instanceof ConfigError) return { status: 422, json: { error: 'config', message: err.message } };
     if (err instanceof IndexError) return { status: 500, json: { error: 'index', message: err.message } };
     if (err instanceof UsageError) return { status: 400, json: { error: 'usage', message: err.message } };

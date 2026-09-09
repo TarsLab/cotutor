@@ -14,7 +14,7 @@ export function cotutorJsonSchema(): Record<string, unknown> {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     $id: 'https://github.com/TarsLab/cotutor/cotutor.schema.json',
     title: 'cotutor.json',
-    description: '一孩一 workspace 的政策文件:老师表、政策、运行时预设、配音、路径角色。家长改这里;机器不覆盖。',
+    description: '一孩一 workspace 的政策文件:老师表、政策、运行时、配音、路径角色。家长改这里;机器不覆盖。',
     ...js,
     properties: {
       $schema: { type: 'string', description: '指向本 schema,给编辑器用' },

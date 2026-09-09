@@ -1,12 +1,12 @@
 /**
- * 老师定义的安装与升级(2026-09-09 拍板:**拷贝,不链**)。
+ * 老师文件的安装与升级(2026-09-09 拍板:**拷贝,不链**)。
  * 包里的 agents/<name>.md 是出厂件;init 把它拷进 workspace 的 .claude/agents/<name>.md(这份是家长的,想改就改),
  * .qwen/agents/<name>.md 是指向它的相对链(一份真相两处可见,链在 workspace 内,不怕包搬家或 npx 缓存回收)。
  * 出厂时的内容 hash 记在 .cotutor/shipped.json(机器文件,家长不用管),据此分三种状态:
  *   latest     与本包一致
  *   upgradable 与记录的出厂 hash 一致(没改过,只是包更新了)→ cotutor upgrade 直接换新
  *   custom     改过 → upgrade 只报 diff,不动
- *   untracked  没有记录(旧工作区、或家长手写的老师)→ 当 custom 对待
+ *   untracked  没有记录(旧workspace、或家长手写的老师)→ 当 custom 对待
  */
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, readFile, readlink, rename, symlink, unlink, writeFile } from 'node:fs/promises';

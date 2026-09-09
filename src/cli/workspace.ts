@@ -1,5 +1,5 @@
 /**
- * 工作区解析:一孩一 workspace(`~/cotutor/<slug>/`,2026-09-08 拍板)。
+ * workspace解析:一孩一 workspace(`~/cotutor/<slug>/`,2026-09-08 拍板)。
  * 解析链(定根):`--workspace <dir>` → 环境变量 COTUTOR_WORKSPACE → cwd 或其祖先有 cotutor.json
  * (老师的 cwd 是 <ws>/agents/<name>/,从那里跑 doctor 也要找得到根)→ 用户配置
  * ~/.config/cotutor/config.json 的 workspace → ~/cotutor/ 下**唯一**的一个孩子目录 → 都没有就报错附修复指南。
@@ -184,6 +184,9 @@ export function parseConfig(raw: unknown, file: string): CotutorConfig {
     if ('teachers' in o && !('tutors' in o)) {
       throw new ConfigError(file, '  - teachers:这个键 2026-09-09 起叫 tutors(术语统一为 tutor / 老师);把 "teachers" 改成 "tutors",老师名 *-teacher 改成 *-tutor、homework-aide 改成 homework-tutor,.claude/agents/ 下的文件同名改,然后 cotutor init 补齐');
     }
+    if ('agents' in o && !('runtimes' in o)) {
+      throw new ConfigError(file, '  - agents:这个键 2026-09-09 起叫 runtimes(它是跑老师的运行时,与 .claude/agents/ 的 agent 文件、agents/<老师>/ 的老师目录是三回事);把 "agents" 改成 "runtimes" 即可,模板内容与占位 {agent} {agentBody} 不变');
+    }
     const tutors = o.tutors;
     if (tutors && typeof tutors === 'object') {
       const old = Object.keys(tutors as object).filter((k) => k.endsWith('-teacher') || k === 'homework-aide');
@@ -238,7 +241,7 @@ export function loadWorkspace(override?: string, opts: ResolveOptions = {}): Wor
   return assembleWorkspace(root, source, parseConfig(raw, file));
 }
 
-/** --json / 启动日志里回报工作区(脱敏) */
+/** --json / 启动日志里回报workspace(脱敏) */
 export function workspaceReport(ws: Workspace): Record<string, unknown> {
   return redactDeep({
     workspace: ws.root,
@@ -248,6 +251,6 @@ export function workspaceReport(ws: Workspace): Record<string, unknown> {
     port: ws.config.server.port,
     vault: ws.paths.vault,
     tutors: Object.keys(ws.config.tutors),
-    agent: ws.config.agents.default,
+    runtime: ws.config.runtimes.default,
   });
 }

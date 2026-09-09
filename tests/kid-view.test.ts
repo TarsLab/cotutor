@@ -1,4 +1,4 @@
-/** 精简视图:只看最终文本、剥段、截断;出错什么都没有。 */
+/** 孩子视图:只看最终文本、剥段、截断;出错什么都没有。 */
 import { deriveKidView, kidConversation, kidMessageCount, truncateReply } from '../src/lib/kid-view.ts';
 import { parseTranscript } from '../src/lib/transcript.ts';
 import { check, done } from './_check.ts';

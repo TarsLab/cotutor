@@ -20,8 +20,8 @@ try {
   check('health', (await get('/api/health')).status === 200 && ((await get('/api/health')).json as { ok: boolean }).ok);
   const rep = (await get('/api/workspace')).json as { workspace: string; tutors: string[] };
   check('工作区回报脱敏', rep.workspace.startsWith('$HOME') && rep.tutors.length === 5, JSON.stringify(rep));
-  const cfg = (await get('/api/config')).json as { title: string; presets: string[]; tutors: { name: string; policy: { replyMaxChars: number } }[]; tutorPatches: Record<string, unknown> };
-  check('配置接口带老师、政策、预设名', cfg.title === '小明的老师们' && cfg.tutors.length === 5 && cfg.tutors[0].policy.replyMaxChars === 60 && cfg.presets.join() === 'claude,qwen' && 'planner' in cfg.tutorPatches);
+  const cfg = (await get('/api/config')).json as { title: string; runtimes: string[]; tutors: { name: string; policy: { replyMaxChars: number } }[]; tutorPatches: Record<string, unknown> };
+  check('配置接口带老师、政策、运行时名', cfg.title === '小明的老师们' && cfg.tutors.length === 5 && cfg.tutors[0].policy.replyMaxChars === 60 && cfg.runtimes.join() === 'claude,qwen' && 'planner' in cfg.tutorPatches);
   check('孩子端老师列表不含 hidden', ((await get('/api/tutors?kid=1')).json as unknown[]).length === 4);
   check('首页 html 指向家长端', (await get('/')).html?.includes('/parent') === true);
   check('家长页', (await get('/parent')).html?.includes('对话') === true);

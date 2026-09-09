@@ -1,6 +1,6 @@
 /**
  * cotutor.json:每个 workspace 一份,一孩一 workspace。承接 drawtell.json 的做法——
- * `paths` 角色映射 + `agents` 的 {run, resume} 命令模板——再加老师表与政策。
+ * `paths` 角色映射 + `runtimes` 的 {run, resume} 命令模板——再加老师表与政策。
  * 字段归属铁律:老师的 .md 文件里只有 name / description / maxTurns / permissionMode / memory + 正文;
  * 人设(display / avatar / voice)、政策、开关全在这里。老师团页只改本文件,永不改链进来的定义文件。
  */
@@ -66,17 +66,17 @@ export const TutorSchema = z.object({
 export type Tutor = z.infer<typeof TutorSchema>;
 
 /**
- * 运行时预设:一个 CLI 一组 {run, resume} 命令模板。占位符:
+ * 运行时:一个 CLI 一组 {run, resume} 命令模板。占位符:
  * {agent} 老师名 / {agentBody} 老师文件正文(给没有 --agent 的 CLI 塞系统提示)/ {prompt} 消息 / {session} 会话 id。
- * 政策旋钮(预算、轮数、模型)写进模板,换 agent 只换预设。
+ * 政策旋钮(预算、轮数、模型)写进模板,换 agent 只换运行时。
  */
-export const AgentPresetSchema = z.object({ run: z.array(z.string()).min(1), resume: z.array(z.string()).min(1) });
-export type AgentPreset = z.infer<typeof AgentPresetSchema>;
+export const RuntimeSchema = z.object({ run: z.array(z.string()).min(1), resume: z.array(z.string()).min(1) });
+export type Runtime = z.infer<typeof RuntimeSchema>;
 
-export const AgentsSchema = z.object({ default: z.string().min(1) }).catchall(AgentPresetSchema);
+export const RuntimesSchema = z.object({ default: z.string().min(1) }).catchall(RuntimeSchema);
 
 /**
- * 配音预设:老师说完,应用把 kidText 合成一段音频给孩子端播。占位符 {text} {voice} {out}(输出文件路径)。
+ * 配音运行时:老师说完,应用把 kidText 合成一段音频给孩子端播。占位符 {text} {voice} {out}(输出文件路径)。
  * 命令要把音频写到 {out};没配、没装、失败 → 这条没有音频,孩子端退回浏览器自带的合成声。
  */
 export const TtsSchema = z.object({ say: z.array(z.string()).min(1) });
@@ -116,15 +116,15 @@ export const CotutorConfigSchema = z
     paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;photos / diary / plans / profile / timetable 相对 vault;不配 vault 就相对 workspace 根'),
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 30 条 / 3 次 / 验收关 / L0,L1,L3,L4 / 10,10)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
-    agents: AgentsSchema.describe('运行时预设:default 指一个键;每个预设 {run, resume} 命令模板,占位 {agent} {agentBody} {prompt} {session};模型、预算、时限写在这里'),
+    runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {prompt} {session};模型、预算、时限写在这里'),
     tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板,占位 {text} {voice} {out}'),
   })
   .superRefine((c, ctx) => {
-    if (!(c.agents.default in c.agents) || c.agents.default === 'default') {
+    if (!(c.runtimes.default in c.runtimes) || c.runtimes.default === 'default') {
       ctx.addIssue({
         code: 'custom',
-        path: ['agents', 'default'],
-        message: `预设 "${c.agents.default}" 不存在;agents 里要有同名的 {run, resume}`,
+        path: ['runtimes', 'default'],
+        message: `运行时 "${c.runtimes.default}" 不存在;runtimes 里要有同名的 {run, resume}`,
       });
     }
   });
@@ -173,8 +173,8 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
     }));
 }
 
-/** 预设模板填占位符;{agentBody} 只在给了正文时替换,否则原样留着(doctor 会报) */
-export function fillPreset(
+/** 运行时模板填占位符;{agentBody} 只在给了正文时替换,否则原样留着(doctor 会报) */
+export function fillRuntime(
   argv: readonly string[],
   vars: { agent: string; prompt: string; session?: string; agentBody?: string },
 ): string[] {

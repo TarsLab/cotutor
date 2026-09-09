@@ -1,5 +1,5 @@
-/** cotutor.json 契约:模板可解析、缺省与政策合并、错误即修复指南、预设占位填充。 */
-import { CotutorConfigSchema, explainIssues, fillPreset, listTutors, resolvePolicy } from '../src/schema/index.ts';
+/** cotutor.json 契约:模板可解析、缺省与政策合并、错误即修复指南、运行时占位填充。 */
+import { CotutorConfigSchema, explainIssues, fillRuntime, listTutors, resolvePolicy } from '../src/schema/index.ts';
 import { configTemplate, shippedAgents } from '../src/cli/skeleton.ts';
 import { check, done } from './_check.ts';
 
@@ -11,7 +11,7 @@ const cfg = CotutorConfigSchema.parse(raw);
 check('模板可解析', cfg.kid.slug === 'ming' && cfg.title === '小明的老师们' && cfg.server.port === 5181);
 check('老师表齐', Object.keys(cfg.tutors).length === 5 && cfg.tutors.planner.hidden === true);
 check('enabled 缺省 true', cfg.tutors['math-tutor'].enabled === true);
-check('预设 claude/qwen 都在', 'claude' in cfg.agents && 'qwen' in cfg.agents && cfg.agents.default === 'claude');
+check('运行时 claude/qwen 都在', 'claude' in cfg.runtimes && 'qwen' in cfg.runtimes && cfg.runtimes.default === 'claude');
 
 const pol = resolvePolicy(cfg, 'math-tutor');
 check('政策缺省 60/30/3/关/10/10', pol.replyMaxChars === 60 && pol.dailyMessages === 30 && pol.dailyRegen === 3 && pol.reviewGate === false && pol.contextPack.recent === 10 && pol.contextPack.planLines === 10);
@@ -29,18 +29,18 @@ const kidOnly = listTutors(cfg, { kidOnly: true });
 check('孩子端不见 hidden', kidOnly.length === 4 && !kidOnly.some((t) => t.name === 'planner'));
 check('列表带有效政策', listTutors(cfg)[0].policy.replyMaxChars === 60);
 
-const bad = CotutorConfigSchema.safeParse({ version: 2, kid: { slug: 'Bad Slug' }, tutors: { x: { display: '' } }, agents: { default: 'nope' } });
+const bad = CotutorConfigSchema.safeParse({ version: 2, kid: { slug: 'Bad Slug' }, tutors: { x: { display: '' } }, runtimes: { default: 'nope' } });
 check('坏配置不过', !bad.success);
 const lines = bad.success ? [] : explainIssues(bad.error.issues);
 check('指南点名 version', lines.some((l) => l.startsWith('version:')), lines.join(' | '));
 check('指南点名 slug 格式', lines.some((l) => l.startsWith('kid.slug:')), lines.join(' | '));
 check('指南点名空 display', lines.some((l) => l.startsWith('tutors.x.display:') && l.includes('不能为空')), lines.join(' | '));
-const bad2 = CotutorConfigSchema.safeParse({ ...raw, agents: { default: 'nope', claude: raw.agents.claude } });
-check('预设 default 不存在 → 指南', !bad2.success && explainIssues(bad2.error.issues).some((l) => l.includes('agents.default') && l.includes('nope')));
+const bad2 = CotutorConfigSchema.safeParse({ ...raw, runtimes: { default: 'nope', claude: raw.runtimes.claude } });
+check('运行时 default 不存在 → 指南', !bad2.success && explainIssues(bad2.error.issues).some((l) => l.includes('runtimes.default') && l.includes('nope')));
 
-const filled = fillPreset(cfg.agents.claude.resume, { agent: 'math-tutor', prompt: 'hi', session: 's-1' });
+const filled = fillRuntime(cfg.runtimes.claude.resume, { agent: 'math-tutor', prompt: 'hi', session: 's-1' });
 check('占位填充', filled.includes('math-tutor') && filled.includes('s-1') && filled.includes('hi') && !filled.some((a) => a.includes('{')));
-const q = fillPreset(cfg.agents.qwen.run, { agent: 'x', prompt: 'p' });
+const q = fillRuntime(cfg.runtimes.qwen.run, { agent: 'x', prompt: 'p' });
 check('没给 agentBody 就原样留着(doctor 会报)', q.includes('{agentBody}'));
 
 {

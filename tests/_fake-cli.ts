@@ -1,6 +1,6 @@
 /**
  * 假 CLI:模仿 claude / qwen 的 stream-json 无头输出,给 runner 测试用(不花钱、不联网)。
- * 用法(预设模板里):node --experimental-strip-types _fake-cli.ts [--resume <id>] [--agent <name>] [--fail] <prompt>
+ * 用法(运行时模板里):node --experimental-strip-types _fake-cli.ts [--resume <id>] [--agent <name>] [--fail] <prompt>
  * 行为:回显 prompt 的最后一行;prompt 含「拍板」就在最终文本前加一段待裁量;含「转交」就加转交段;
  * --resume 时 session_id 沿用给的 id,否则新造;--fail 出 error_max_turns。
  */

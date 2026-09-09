@@ -1,5 +1,5 @@
 /**
- * 精简视图(《cotutor契约草案.md》§4):孩子只看每次运行最终文本的**最后一段**(剥掉「待裁量」「转交」段之后,
+ * 孩子视图(《cotutor契约草案.md》§4):孩子只看每次运行最终文本的**最后一段**(剥掉「待裁量」「转交」段之后,
  * 以空行分段取最后一段——家规让老师把给孩子的话放最后一段,前面的话是给家长看的思路),再按 replyMaxChars 截断;
  * 出错什么都不出现。机械规则,不靠模型判断。
  */
@@ -70,7 +70,7 @@ export interface KidMessage {
 }
 
 /**
- * 会话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / holdup / handoff / 费用。
+ * 对话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / holdup / handoff / 费用。
  * 出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
  */
 export function kidConversation(index: { messages: readonly ConversationMessage[] }): KidMessage[] {

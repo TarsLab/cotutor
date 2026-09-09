@@ -20,7 +20,7 @@ try {
 
   // ---- JSON Schema ----
   const js = cotutorJsonSchema() as { properties: Record<string, { description?: string }>; required: string[] };
-  check('schema 有顶层字段与说明', ['$schema', 'version', 'tutors', 'agents', 'tts', 'paths', '_note'].every((k) => k in js.properties) && js.required.includes('agents') && String(js.properties.tutors.description).includes('老师表'));
+  check('schema 有顶层字段与说明', ['$schema', 'version', 'tutors', 'runtimes', 'tts', 'paths', '_note'].every((k) => k in js.properties) && js.required.includes('runtimes') && String(js.properties.tutors.description).includes('老师表'));
   const cfgRaw = JSON.parse(readFileSync(join(root, 'cotutor.json'), 'utf8')) as { $schema: string };
   check('模板首键 $schema 指向 workspace 里的 schema 文件', cfgRaw.$schema === '.cotutor/cotutor.schema.json' && existsSync(join(root, '.cotutor', 'cotutor.schema.json')));
   check('带 $schema 的配置照样过契约', CotutorConfigSchema.safeParse(cfgRaw).success);
@@ -71,16 +71,16 @@ try {
   // --live 走假 CLI(第一位开着的老师),看它能把结果摆出来
   const node = process.execPath;
   const fakeCli = new URL('./_fake-cli.ts', import.meta.url).pathname;
-  await route('PATCH', '/api/config', ctx, { agents: { default: 'claude' } });
+  await route('PATCH', '/api/config', ctx, { runtimes: { default: 'claude' } });
   const raw = JSON.parse(readFileSync(join(root, 'cotutor.json'), 'utf8')) as Record<string, unknown>;
-  (raw.agents as Record<string, unknown>).claude = { run: [node, '--experimental-strip-types', '--no-warnings', fakeCli, '--agent', '{agent}', '{prompt}'], resume: [node, fakeCli, '--resume', '{session}', '{prompt}'] };
-  (raw.agents as Record<string, unknown>).broken = { run: [node, '--experimental-strip-types', '--no-warnings', fakeCli, '--fail', '{prompt}'], resume: [node, fakeCli, '{prompt}'] };
+  (raw.runtimes as Record<string, unknown>).claude = { run: [node, '--experimental-strip-types', '--no-warnings', fakeCli, '--agent', '{agent}', '{prompt}'], resume: [node, fakeCli, '--resume', '{session}', '{prompt}'] };
+  (raw.runtimes as Record<string, unknown>).broken = { run: [node, '--experimental-strip-types', '--no-warnings', fakeCli, '--fail', '{prompt}'], resume: [node, fakeCli, '{prompt}'] };
   const { writeFileSync } = await import('node:fs');
   writeFileSync(join(root, 'cotutor.json'), JSON.stringify(raw, null, 2));
   const live = await doctorWorkspace(root, { probeEnv: false, env: {}, live: true });
   check('--live 起假 CLI 成功 → live.claude ✓', live.checks.some((c) => c.name === 'live.claude' && c.ok && c.detail.includes('回了')), JSON.stringify(live.checks.filter((c) => c.name.startsWith('live'))));
   check('没人配 voice → live.tts 跳过', live.checks.some((c) => c.name === 'live.tts' && c.ok && c.detail.includes('不探')));
-  (raw.agents as Record<string, unknown>).default = 'broken';
+  (raw.runtimes as Record<string, unknown>).default = 'broken';
   writeFileSync(join(root, 'cotutor.json'), JSON.stringify(raw, null, 2));
   const live2 = await doctorWorkspace(root, { probeEnv: false, env: {}, live: true });
   check('--live 失败 → 摆出原因与指南', live2.checks.some((c) => c.name === 'live.broken' && !c.ok && c.detail.includes('error_max_turns') && c.fix), JSON.stringify(live2.checks.filter((c) => c.name.startsWith('live'))));

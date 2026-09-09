@@ -1,5 +1,5 @@
 /**
- * 配音:老师说完,把 kidText 按 cotutor.json 的 tts 预设合成到 conversations/<老师>/<日期>.<job>.mp3。
+ * 配音:老师说完,把 kidText 按 cotutor.json 的 tts 运行时合成到 conversations/<老师>/<日期>.<job>.mp3。
  * 失败不响、不阻塞对话:这条没有音频,孩子端退回浏览器自带的声;原因写进 err.log 供家长看。
  * 音色是人设(tutors[].voice),没配就不合成——「无缺省音色」是 voxtell 的政策,这里照办。
  */

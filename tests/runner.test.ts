@@ -1,6 +1,6 @@
 /**
  * 发消息全流程(假 CLI,不花钱):拼上下文包 → spawn / resume → 日志落盘 → 索引物化;
- * 三轮 resume 同会话、换预设新开、跨天新开、忙时 409、出错标 error、待裁量物化、老师团补丁写回并热重载、关掉老师即消失。
+ * 三轮 resume 同会话、换运行时新开、跨天新开、忙时 409、出错标 error、待裁量物化、老师团补丁写回并热重载、关掉老师即消失。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -28,7 +28,7 @@ const fake = (extra: string[] = []): { run: string[]; resume: string[] } => ({
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
-cfg.agents = {
+cfg.runtimes = {
   default: 'fake',
   fake: fake(),
   fake2: { run: [...fake().run.slice(0, 4), '--body', '{agentBody}', ...fake().run.slice(4)], resume: [...fake().resume.slice(0, 4), '--body', '{agentBody}', ...fake().resume.slice(4)] },
@@ -50,7 +50,7 @@ let now = new Date(2026, 8, 8, 16, 20);
 const ctx = createContext(loadWorkspace(root), { now: () => now });
 const post = (tutor: string, body: unknown) => route('POST', `/api/conversations/${tutor}/messages`, ctx, body);
 const day = (tutor: string, date: string) => route('GET', `/api/conversations/${tutor}/${date}`, ctx);
-type Day = { index: { session: { id: string; agent: string } | null; messages: { job: string; result: string; kidText?: string | null; holdup?: { question: string; options: { label: string }[] } | null; handoff?: { to: string } | null; agent?: string; error?: string | null; audio?: string | null }[]; costUsd: number }; running: string | null; runs: Record<string, { kind: string; sub?: boolean; tools?: unknown[] }[]>; errors: Record<string, string> };
+type Day = { index: { session: { id: string; runtime: string } | null; messages: { job: string; result: string; kidText?: string | null; holdup?: { question: string; options: { label: string }[] } | null; handoff?: { to: string } | null; runtime?: string; error?: string | null; audio?: string | null }[]; costUsd: number }; running: string | null; runs: Record<string, { kind: string; sub?: boolean; tools?: unknown[] }[]>; errors: Record<string, string> };
 const wait = async (tutor: string): Promise<void> => {
   // runner 没暴露 done 给路由层,这里轮询 running 直到空
   for (let i = 0; i < 200 && ctx.runner.running(tutor); i++) await new Promise((r) => setTimeout(r, 25));
@@ -59,7 +59,7 @@ const wait = async (tutor: string): Promise<void> => {
 try {
   // ---- 第一轮:新开 ----
   const r1 = await post('math-tutor', { text: '妈妈我不懂这一步', from: 'kid' });
-  check('202 带 job 与预设,第一条不 resume', r1.status === 202 && (r1.json as { job: string; resume: boolean; preset: string }).resume === false && (r1.json as { preset: string }).preset === 'fake', JSON.stringify(r1.json));
+  check('202 带 job 与运行时,第一条不 resume', r1.status === 202 && (r1.json as { job: string; resume: boolean; runtime: string }).resume === false && (r1.json as { runtime: string }).runtime === 'fake', JSON.stringify(r1.json));
   const job1 = (r1.json as { job: string }).job;
   check('job 命名 HHMM-序号', job1 === '1620-1');
   const busy = await post('math-tutor', { text: '再问' });
@@ -69,8 +69,8 @@ try {
   await wait('math-tutor');
   const d1 = (await day('math-tutor', '2026-09-08')).json as Day;
   const m1 = d1.index.messages[0];
-  check('跑完:ok、kidText 物化、费用累计', m1.result === 'ok' && m1.kidText === '第一次说:妈妈我不懂这一步' && d1.index.costUsd === 0.05 && m1.agent === 'fake', JSON.stringify(m1));
-  check('会话记下', d1.index.session?.agent === 'fake' && d1.index.session.id.startsWith('fake-'));
+  check('跑完:ok、kidText 物化、费用累计', m1.result === 'ok' && m1.kidText === '第一次说:妈妈我不懂这一步' && d1.index.costUsd === 0.05 && m1.runtime === 'fake', JSON.stringify(m1));
+  check('会话记下', d1.index.session?.runtime === 'fake' && d1.index.session.id.startsWith('fake-'));
   const log = readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${job1}.log`), 'utf8');
   const init = JSON.parse(log.split('\n')[0]) as { cwd: string; agent: string };
   check('cwd 是老师目录、--agent 填了老师名', init.cwd === join(root, 'agents', 'math-tutor') && init.agent === 'math-tutor', JSON.stringify(init));
@@ -107,17 +107,17 @@ try {
   const dates = (await route('GET', '/api/conversations/math-tutor', ctx)).json as { dates: string[] };
   check('日期列表', dates.dates.join() === '2026-09-08');
 
-  // ---- 换预设 → 新开,索引会话换掉 ----
+  // ---- 换运行时 → 新开,索引会话换掉 ----
   now = new Date(2026, 8, 8, 16, 40);
-  const r4 = await post('math-tutor', { text: '换个 CLI', preset: 'fake2' });
-  check('换预设不 resume', (r4.json as { resume: boolean; preset: string }).resume === false && (r4.json as { preset: string }).preset === 'fake2', JSON.stringify(r4.json));
+  const r4 = await post('math-tutor', { text: '换个 CLI', runtime: 'fake2' });
+  check('换运行时不 resume', (r4.json as { resume: boolean; runtime: string }).resume === false && (r4.json as { runtime: string }).runtime === 'fake2', JSON.stringify(r4.json));
   await wait('math-tutor');
   const d4 = (await day('math-tutor', '2026-09-08')).json as Day;
-  check('换预设后会话换成新的', d4.index.session?.agent === 'fake2' && d4.index.session.id !== d1.index.session?.id);
+  check('换运行时后会话换成新的', d4.index.session?.runtime === 'fake2' && d4.index.session.id !== d1.index.session?.id);
   const log4 = readFileSync(join(root, 'conversations', 'math-tutor', '2026-09-08.1640-4.log'), 'utf8');
   check('{agentBody} 给了老师正文', (JSON.parse(log4.split('\n')[0]) as { bodyLen: number }).bodyLen > 100);
-  const bad = await post('math-tutor', { text: 'x', preset: 'gemini' });
-  check('不存在的预设 → 400', bad.status === 400 && String((bad.json as { message: string }).message).includes('gemini'));
+  const bad = await post('math-tutor', { text: 'x', runtime: 'gemini' });
+  check('不存在的运行时 → 400', bad.status === 400 && String((bad.json as { message: string }).message).includes('gemini'));
 
   // ---- 跨天新开 ----
   now = new Date(2026, 8, 9, 8, 0);
@@ -128,7 +128,7 @@ try {
   check('today 别名', ((await day('math-tutor', 'today')).json as Day).index !== undefined);
 
   // ---- 出错:CLI 报 error / 起不来 ----
-  await post('reading-tutor', { text: '会失败', preset: 'broken' });
+  await post('reading-tutor', { text: '会失败', runtime: 'broken' });
   await wait('reading-tutor');
   const dr = (await day('reading-tutor', '2026-09-09')).json as Day;
   check('CLI 报错 → error + 原因,孩子无话', dr.index.messages[0].result === 'error' && dr.index.messages[0].error === 'error_max_turns' && dr.index.messages[0].kidText === null, JSON.stringify(dr.index.messages[0]));
@@ -136,7 +136,7 @@ try {
   await wait('reading-tutor');
   const dr2 = (await day('reading-tutor', '2026-09-09')).json as Day & { index: { messages: { audio?: string | null }[] } };
   check('配音失败 → audio null、对话照常、原因进 err.log', dr2.index.messages[1].result === 'ok' && dr2.index.messages[1].audio === null && readFileSync(join(root, 'conversations', 'reading-tutor', `2026-09-09.${dr2.index.messages[1].job}.err.log`), 'utf8').includes('没合成'), JSON.stringify(dr2.index.messages[1]));
-  await post('chinese-tutor', { text: '起不来', preset: 'missing' });
+  await post('chinese-tutor', { text: '起不来', runtime: 'missing' });
   await wait('chinese-tutor');
   const dm = (await day('chinese-tutor', '2026-09-09')).json as Day;
   check('起不来 → error 指向 err.log,尾巴带原因', dm.index.messages[0].result === 'error' && String(dm.index.messages[0].error).startsWith('spawn:') && dm.errors[dm.index.messages[0].job]?.includes('起不来'), JSON.stringify({ m: dm.index.messages[0], e: dm.errors }));
@@ -179,15 +179,15 @@ try {
   // ---- 老师团:补丁写回、热重载、关掉老师即消失 ----
   const p1 = await route('PATCH', '/api/config', ctx, { tutors: { 'math-tutor': { enabled: false, policy: { replyMaxChars: 20 } } } });
   check('PATCH 写回并热重载', p1.status === 200 && ctx.ws.config.tutors['math-tutor'].enabled === false, JSON.stringify(p1.json));
-  const raw = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { enabled: boolean; display: string; policy: { replyMaxChars: number } }>; _note?: string; agents: { default: string } };
-  check('文件里只动了那几个字段,_note 与预设都在', raw.tutors['math-tutor'].enabled === false && raw.tutors['math-tutor'].display === '数学老师' && raw.tutors['math-tutor'].policy.replyMaxChars === 20 && typeof raw._note === 'string' && raw.agents.default === 'fake');
+  const raw = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { enabled: boolean; display: string; policy: { replyMaxChars: number } }>; _note?: string; runtimes: { default: string } };
+  check('文件里只动了那几个字段,_note 与运行时都在', raw.tutors['math-tutor'].enabled === false && raw.tutors['math-tutor'].display === '数学老师' && raw.tutors['math-tutor'].policy.replyMaxChars === 20 && typeof raw._note === 'string' && raw.runtimes.default === 'fake');
   const tutorsNow = (await route('GET', '/api/config', ctx)).json as { tutors: { name: string; enabled: boolean; policy: { replyMaxChars: number } }[] };
   check('接口回报关闭与有效政策', tutorsNow.tutors.find((t) => t.name === 'math-tutor')?.enabled === false && tutorsNow.tutors.find((t) => t.name === 'math-tutor')?.policy.replyMaxChars === 20);
   check('孩子端列表里没了', !((await route('GET', '/api/tutors?kid=1', ctx)).json as { name: string }[]).some((t) => t.name === 'math-tutor'));
   check('关掉的老师不收消息', (await post('math-tutor', { text: 'x' })).status === 400);
   const p2 = await route('PATCH', '/api/config', ctx, { tutors: { 'math-tutor': { display: '' } } });
   check('不合契约的补丁 422 且不落盘', p2.status === 422 && (JSON.parse(readFileSync(cfgFile, 'utf8')) as typeof raw).tutors['math-tutor'].display === '数学老师', JSON.stringify(p2.json));
-  check('改预设模板被拒', (await route('PATCH', '/api/config', ctx, { agents: { fake: { run: ['x'], resume: ['x'] } } })).status === 422);
+  check('改运行时模板被拒', (await route('PATCH', '/api/config', ctx, { runtimes: { fake: { run: ['x'], resume: ['x'] } } })).status === 422);
   check('改 kid 被拒', (await route('PATCH', '/api/config', ctx, { kid: { slug: 'x' } })).status === 422);
   const p3 = await route('PATCH', '/api/config', ctx, { tutors: { 'math-tutor': { enabled: true, policy: { replyMaxChars: null } } } });
   check('null 删键:政策覆盖撤掉回到继承', p3.status === 200 && ctx.ws.config.tutors['math-tutor'].policy?.replyMaxChars === undefined && ctx.ws.config.tutors['math-tutor'].enabled === true);

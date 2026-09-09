@@ -1,0 +1,140 @@
+/**
+ * 会话与配置的文件层:索引读写(坏索引响亮报错,不静默覆盖)、日期列表、转录读取、老师正文、cotutor.json 补丁写回。
+ * 纯函数在 lib/,这里只碰文件系统。
+ */
+import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { parseAgentFile } from '../lib/agent-file.ts';
+import { conversationFiles, emptyIndex } from '../lib/conversation.ts';
+import { parseTranscript, type Transcript } from '../lib/transcript.ts';
+import {
+  ConversationIndexSchema,
+  CotutorConfigSchema,
+  DATE_RE,
+  explainIssues,
+  type ConversationIndex,
+  type CotutorConfig,
+} from '../schema/index.ts';
+import { ConfigError, assembleWorkspace, parseConfig, readJson, redactHome, type Workspace } from '../cli/workspace.ts';
+
+export class IndexError extends Error {
+  constructor(file: string, cause: string) {
+    super(`会话索引用不了:${redactHome(file)}\n${cause}\n修好它或改名挪开(转录 .log 还在,能重建);不要删。`);
+  }
+}
+
+export async function readIndex(ws: Workspace, teacher: string, date: string): Promise<ConversationIndex> {
+  const file = conversationFiles(ws.dirs.conversations, teacher, date).index;
+  let text: string;
+  try {
+    text = await readFile(file, 'utf8');
+  } catch {
+    return emptyIndex(teacher, date);
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (err) {
+    throw new IndexError(file, `不是合法 JSON:${err instanceof Error ? err.message : String(err)}`);
+  }
+  const r = ConversationIndexSchema.safeParse(raw);
+  if (!r.success) throw new IndexError(file, explainIssues(r.error.issues).map((l) => `  - ${l}`).join('\n'));
+  return r.data;
+}
+
+/** 先写 .tmp 再 rename:进程半路死掉不会留下半份索引 */
+export async function writeIndex(ws: Workspace, index: ConversationIndex): Promise<void> {
+  const { index: file } = conversationFiles(ws.dirs.conversations, index.teacher, index.date);
+  await mkdir(join(ws.dirs.conversations, index.teacher), { recursive: true });
+  const tmp = `${file}.tmp`;
+  await writeFile(tmp, `${JSON.stringify(index, null, 2)}\n`);
+  await rename(tmp, file);
+}
+
+/** 有过对话的日期,新的在前 */
+export async function listDates(ws: Workspace, teacher: string): Promise<string[]> {
+  try {
+    return (await readdir(join(ws.dirs.conversations, teacher)))
+      .filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f))
+      .map((f) => f.slice(0, 10))
+      .filter((d) => DATE_RE.test(d))
+      .sort()
+      .reverse();
+  } catch {
+    return [];
+  }
+}
+
+export async function readTranscript(ws: Workspace, teacher: string, date: string, job: string): Promise<Transcript | null> {
+  try {
+    return parseTranscript(await readFile(conversationFiles(ws.dirs.conversations, teacher, date).log(job), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+export async function readErrLog(ws: Workspace, teacher: string, date: string, job: string): Promise<string> {
+  try {
+    return await readFile(conversationFiles(ws.dirs.conversations, teacher, date).err(job), 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+/** 老师文件正文(系统提示),给 {agentBody};从 .claude/agents/ 读,那里的链是必需项 */
+export async function readAgentBody(ws: Workspace, name: string): Promise<string> {
+  for (const dir of [ws.dirs.claudeAgents, ws.dirs.qwenAgents]) {
+    try {
+      return parseAgentFile(await readFile(join(dir, `${name}.md`), 'utf8')).body;
+    } catch {
+      /* 试下一处 */
+    }
+  }
+  throw new ConfigError(join(ws.dirs.claudeAgents, `${name}.md`), '老师定义读不到(链断了或没建);cotutor init 重链');
+}
+
+/** PATCH 允许改的顶层键:助教团页只碰这些;paths / kid / server / version 走编辑器 */
+export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'teachers', 'agents'] as const;
+
+const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
+/** 深合并:对象递归、其余覆盖、null 删键(老师条目可整体删:teachers.x = null) */
+export function deepMerge(base: unknown, patch: unknown): unknown {
+  if (!isObj(base) || !isObj(patch)) return patch;
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) delete out[k];
+    else out[k] = deepMerge(out[k], v);
+  }
+  return out;
+}
+
+/**
+ * 补丁合到原始 JSON 上(保留 _note 等机器不认识的键),整份过契约再写;写坏了不落盘。
+ * 返回新配置;agents 只允许改 default(预设模板走编辑器,页面上改错一个引号就把老师全弄哑)。
+ */
+export async function patchConfig(ws: Workspace, patch: Record<string, unknown>): Promise<CotutorConfig> {
+  const unknown = Object.keys(patch).filter((k) => !(CONFIG_PATCH_KEYS as readonly string[]).includes(k));
+  if (unknown.length) throw new ConfigError(ws.files.config, `页面只能改 ${CONFIG_PATCH_KEYS.join(' / ')},不认识:${unknown.join(', ')};其余字段请直接编辑文件`);
+  if (isObj(patch.agents) && Object.keys(patch.agents).some((k) => k !== 'default')) {
+    throw new ConfigError(ws.files.config, 'agents 只能在页面上改 default;预设模板请直接编辑文件');
+  }
+  const raw = readJson(ws.files.config);
+  if (raw === null) throw new ConfigError(ws.files.config, '不存在');
+  const merged = deepMerge(raw, patch);
+  const r = CotutorConfigSchema.safeParse(merged);
+  if (!r.success) throw new ConfigError(ws.files.config, `补丁应用后不合契约,未写入:\n${explainIssues(r.error.issues).map((l) => `  - ${l}`).join('\n')}`);
+  const tmp = `${ws.files.config}.tmp`;
+  await writeFile(tmp, `${JSON.stringify(merged, null, 2)}\n`);
+  await rename(tmp, ws.files.config);
+  return r.data;
+}
+
+/** 文件改了(页面写的、或家长在编辑器改的)就重读;坏了抛 ConfigError,调用方决定是留旧的还是响 */
+export async function reloadIfChanged(ws: Workspace, lastMtime: number): Promise<{ ws: Workspace; mtime: number }> {
+  const st = await stat(ws.files.config);
+  if (st.mtimeMs === lastMtime) return { ws, mtime: lastMtime };
+  const raw = readJson(ws.files.config);
+  if (raw === null) throw new ConfigError(ws.files.config, '不存在了');
+  return { ws: assembleWorkspace(ws.root, ws.source, parseConfig(raw, ws.files.config)), mtime: st.mtimeMs };
+}

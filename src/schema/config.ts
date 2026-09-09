@@ -75,6 +75,14 @@ export type AgentPreset = z.infer<typeof AgentPresetSchema>;
 
 export const AgentsSchema = z.object({ default: z.string().min(1) }).catchall(AgentPresetSchema);
 
+/**
+ * 配音预设:老师说完,应用把 kidText 合成一段音频给孩子端播。占位符 {text} {voice} {out}(输出文件路径)。
+ * 命令要把音频写到 {out};没配、没装、失败 → 这条没有音频,孩子端退回浏览器自带的合成声。
+ */
+export const TtsSchema = z.object({ say: z.array(z.string()).min(1) });
+export type Tts = z.infer<typeof TtsSchema>;
+export const TTS_DEFAULT: Tts = { say: ['voxtell', 'say', '{text}', '--voice', '{voice}', '--json', '-o', '{out}'] };
+
 /** paths 里 CLI 认识的角色;其余角色原样保留给应用层。vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根 */
 export const PATH_ROLES = ['vault', 'photos', 'diary', 'plans', 'profile', 'timetable'] as const;
 export type PathRole = (typeof PATH_ROLES)[number];
@@ -98,11 +106,18 @@ export const CotutorConfigSchema = z
       name: z.string().optional(),
       grade: z.string().optional(),
     }),
-    server: z.object({ port: z.number().int().min(1).max(65535).default(5180) }).default({ port: 5180 }),
+    server: z
+      .object({
+        port: z.number().int().min(1).max(65535).default(5180),
+        /** 自签证书(iPad 上录音要 HTTPS);相对 workspace 根。不配则看 certs/cert.pem + certs/key.pem 在不在(cotutor cert 会建) */
+        https: z.object({ cert: z.string().min(1), key: z.string().min(1) }).optional(),
+      })
+      .default({ port: 5180 }),
     paths: z.record(z.string(), z.string()).default({}),
     policyDefaults: PolicyPatchSchema.default({}),
     teachers: z.record(z.string().regex(AGENT_NAME_RE), TeacherSchema).default({}),
     agents: AgentsSchema,
+    tts: TtsSchema.default(TTS_DEFAULT),
   })
   .superRefine((c, ctx) => {
     if (!(c.agents.default in c.agents) || c.agents.default === 'default') {
@@ -170,4 +185,8 @@ export function fillPreset(
       .replaceAll('{session}', vars.session ?? '')
       .replaceAll('{agentBody}', vars.agentBody ?? '{agentBody}'),
   );
+}
+
+export function fillTts(argv: readonly string[], vars: { text: string; voice: string; out: string }): string[] {
+  return argv.map((a) => a.replaceAll('{text}', vars.text).replaceAll('{voice}', vars.voice).replaceAll('{out}', vars.out));
 }

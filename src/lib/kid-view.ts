@@ -3,7 +3,7 @@
  * 以空行分段取最后一段——家规让老师把给孩子的话放最后一段,前面的话是给家长看的思路),再按 replyMaxChars 截断;
  * 出错什么都不出现。机械规则,不靠模型判断。
  */
-import type { Handoff, HoldupAsk } from '../schema/index.ts';
+import type { ConversationMessage, Handoff, HoldupAsk } from '../schema/index.ts';
 import { parseSections } from './sections.ts';
 import type { Transcript } from './transcript.ts';
 
@@ -51,4 +51,41 @@ export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }):
   if (!last) return { kidText: null, truncated: false, holdup, handoff, ok: true };
   const { text, truncated } = truncateReply(last, policy.replyMaxChars);
   return { kidText: text, truncated, holdup, handoff, ok: true };
+}
+
+/** 孩子端的一条:自己问的话(别人问的不显示)+ 老师给孩子的话 + 配音;出错的运行什么都不出现(问句还在) */
+export interface KidMessage {
+  job: string;
+  at: string;
+  /** 孩子自己说的;家长 / 系统发的不给孩子看,为 null */
+  question: string | null;
+  /** 老师给孩子的话;还在跑或这轮没有 = null */
+  reply: string | null;
+  /** 配音文件名(conversations/<老师>/ 下);没有 = 用浏览器自带的声 */
+  audio: string | null;
+  /** 老师还在想 */
+  pending: boolean;
+  /** 本次运行新增的产物 id */
+  artifacts: string[];
+}
+
+/**
+ * 会话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / holdup / handoff / 费用。
+ * 出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
+ */
+export function kidConversation(index: { messages: readonly ConversationMessage[] }): KidMessage[] {
+  const out: KidMessage[] = [];
+  for (const m of index.messages) {
+    const question = m.from === 'kid' ? m.text : null;
+    const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
+    const pending = m.result === 'running';
+    if (question === null && reply === null && !pending) continue;
+    out.push({ job: m.job, at: m.at, question, reply, audio: reply ? (m.audio ?? null) : null, pending, artifacts: reply ? [...m.artifacts] : [] });
+  }
+  return out;
+}
+
+/** 今天孩子已发的条数(每日上限按它算;家长发的不算) */
+export function kidMessageCount(index: { messages: readonly ConversationMessage[] }): number {
+  return index.messages.filter((m) => m.from === 'kid').length;
 }

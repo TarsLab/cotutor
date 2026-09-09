@@ -72,3 +72,13 @@ export function planLinesFor(plan: Plan, display: string, limit: number): string
   for (const s of plan.sections) if (s.title.trim() === want) out.push(...s.lines);
   return out.slice(0, limit);
 }
+
+/** ISO 周号 YYYY-Www(周一起,含 1 月 4 日的那周是第 1 周),计划文件按它命名 */
+export function isoWeek(d: Date): string {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const yearStart = Date.UTC(t.getUTCFullYear(), 0, 1);
+  const week = Math.ceil(((t.getTime() - yearStart) / 86400000 + 1) / 7);
+  return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}

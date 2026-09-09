@@ -6,13 +6,18 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
+import { makeCert } from './cert.ts';
 import { serveWorkspace } from './serve.ts';
-import { UsageError, redactDeep, redactHome, workspaceReport } from './workspace.ts';
+import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from './workspace.ts';
+import { createContext } from '../server/app.ts';
+import { MESSAGE_FROM, type MessageFrom } from '../schema/index.ts';
 
 const USAGE = `用法:
   cotutor init <slug> [--dir <path>] [--name <孩子名>] [--port <n>]   建 ~/cotutor/<slug>/ 骨架(幂等补缺)
   cotutor doctor [--workspace <dir>] [--json]                          逐项体检
-  cotutor serve [--workspace <dir>] [--port <n>]                        起服务(一 workspace 一进程)
+  cotutor serve [--workspace <dir>] [--port <n>] [--http]               起服务(一 workspace 一进程;certs/ 里有证书就走 HTTPS)
+  cotutor cert [--workspace <dir>] [--host <名或IP>]...                  用 mkcert 建自签证书到 certs/(iPad 上录音要 HTTPS)
+  cotutor send <老师> <消息> [--from parent|kid|system] [--preset <名>]   终端里发一条,等老师说完打印结果(与页面同一条路)
   cotutor --version | --help
 工作区解析:--workspace > COTUTOR_WORKSPACE > cwd 或祖先有 cotutor.json > ~/.config/cotutor/config.json > ~/cotutor/ 下唯一的孩子目录
 `;
@@ -51,7 +56,7 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'preset']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -94,10 +99,44 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'serve': {
         const port = typeof flags.port === 'string' ? Number(flags.port) : undefined;
-        const r = await serveWorkspace({ workspace, port });
+        const r = await serveWorkspace({ workspace, port, http: flags.http === true });
         process.stdout.write(`cotutor serve ${JSON.stringify(workspaceReport(r.ws))}\n`);
         for (const w of r.warnings) process.stdout.write(`  ! ${w}\n`);
-        process.stdout.write(`  ${r.url}\n`);
+        if (!r.https) process.stdout.write('  ! HTTP:iPad Safari 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
+        for (const u of r.urls) process.stdout.write(`  ${u}\n`);
+        process.stdout.write(`  孩子端 /,家长端 /parent\n`);
+        return;
+      }
+      case 'cert': {
+        const r = await makeCert(workspace, positionals.concat(typeof flags.host === 'string' ? [flags.host] : []));
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
+        else {
+          process.stdout.write(`证书:${redactHome(r.cert)}\n私钥:${redactHome(r.key)}\n主机:${r.hosts.join(' ')}\n`);
+          process.stdout.write(`iPad 要先信任这台机器的根证书:把 ${redactHome(r.caRoot)}/rootCA.pem 隔空投送到 iPad → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里打开;然后重启 cotutor serve,用 https 打开。\n`);
+        }
+        return;
+      }
+      case 'send': {
+        const [teacher, ...words] = positionals;
+        const text = words.join(' ');
+        if (!teacher || !text) throw new UsageError(`send 需要老师名和消息,如 cotutor send math-teacher "这一步为什么要借位"。\n${USAGE}`);
+        const from = typeof flags.from === 'string' ? flags.from : 'parent';
+        if (!(MESSAGE_FROM as readonly string[]).includes(from)) throw new UsageError(`--from 只能是 ${MESSAGE_FROM.join(' / ')}`);
+        const ctx = createContext(loadWorkspace(workspace));
+        const started = await ctx.runner.send(teacher, { from: from as MessageFrom, text, preset: typeof flags.preset === 'string' ? flags.preset : undefined });
+        if (!json) process.stdout.write(`→ ${teacher} ${started.date} ${started.job}(${started.plan.preset}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
+        const index = await started.done;
+        const m = index.messages.find((x) => x.job === started.job);
+        if (json) process.stdout.write(`${JSON.stringify({ teacher, date: started.date, job: started.job, preset: started.plan.preset, resume: started.plan.resume, message: m, session: index.session, costUsd: index.costUsd }, null, 2)}\n`);
+        else if (!m || m.result !== 'ok') {
+          process.stdout.write(`本轮出错:${m?.error ?? '未知'};看 conversations/${teacher}/${started.date}.${started.job}.err.log\n`);
+          process.exitCode = 1;
+        } else {
+          process.stdout.write(`孩子看到:${m.kidText ?? '(没有给孩子的话)'}\n`);
+          if (m.holdup) process.stdout.write(`待裁量:${m.holdup.question}${m.holdup.options.length ? ' → ' + m.holdup.options.map((o) => o.label).join(' / ') : ''}\n`);
+          if (m.handoff) process.stdout.write(`转交:${m.handoff.to}${m.handoff.why ? ' — ' + m.handoff.why : ''}\n`);
+          process.stdout.write(`会话 ${index.session?.id ?? '?'} · 本轮 $${(m.costUsd ?? 0).toFixed(2)} · 今日 $${index.costUsd.toFixed(2)}\n`);
+        }
         return;
       }
       default:

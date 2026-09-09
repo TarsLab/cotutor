@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { FocusSchema, MESSAGE_FROM } from './context-pack.ts';
+import { HandoffSchema, HoldupAskSchema } from './sections.ts';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -21,6 +22,16 @@ export const ConversationMessageSchema = z.object({
   kidText: z.string().nullable().optional(),
   /** 本次运行新增的产物 id */
   artifacts: z.array(z.string()).default([]),
+  /** 跑这条用的预设名(agents 里的键);换预设时新开会话 */
+  agent: z.string().optional(),
+  /** 最终文本里剥出来的「待裁量」段:家长视图渲染成选项按钮(R2 物化,免得页面再解析日志) */
+  holdup: HoldupAskSchema.nullable().optional(),
+  /** 最终文本里剥出来的「转交」段:R5 起应用据此 resume 目标老师 */
+  handoff: HandoffSchema.nullable().optional(),
+  /** 不 ok 时的原因(subtype / terminal_reason),家长视图红条 */
+  error: z.string().nullable().optional(),
+  /** kidText 的配音文件名(conversations/<老师>/ 下,如 2026-09-09.1620-1.mp3);null = 没合成(老师没配音色、tts 预设没配或失败) */
+  audio: z.string().nullable().optional(),
 });
 export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 

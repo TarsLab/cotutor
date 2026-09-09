@@ -101,3 +101,12 @@ export function nextObservationId(date: string, existing: Iterable<string>): str
   }
   return `o-${day}-${String(n + 1).padStart(3, '0')}`;
 }
+
+/** 上下文包的 recent:未撤回、本学科(没配 subject 就全量)的最近 n 条,按日期与出现顺序,只带 date + claim */
+export function recentObservations(obs: Observation[], opts: { subject?: string; n: number }): { date: string; claim: string }[] {
+  return obs
+    .filter((o) => !o.retracted && (!opts.subject || o.subject === opts.subject))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+    .slice(-opts.n)
+    .map((o) => ({ date: o.date, claim: o.claim }));
+}

@@ -9,6 +9,8 @@ import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { parseArtifactEvents, parseObservations } from '../lib/ledger.ts';
+import { parseTimetable } from '../lib/timetable.ts';
+import { httpsFiles } from './serve.ts';
 import { DIRS } from './skeleton.ts';
 import {
   CONFIG_FILE,
@@ -188,8 +190,33 @@ export async function doctorWorkspace(
       }
     }
 
+    // ---- 课程表:有就要能解析(孩子端首页与上下文包的 slot 靠它;没有不算错)----
+    try {
+      const tt = parseTimetable(await readFile(ws.paths.timetable, 'utf8'));
+      push({
+        name: 'timetable',
+        ok: tt.found && tt.errors.length === 0,
+        required: false,
+        detail: tt.found ? (tt.errors.length ? tt.errors.slice(0, 3).join(';') : `${tt.entries.length} 个时段`) : tt.errors[0],
+        fix: tt.found && !tt.errors.length ? undefined : `改 ${redactHome(ws.paths.timetable)}:表头 星期/时间/学科(孩子列可选),时间形如 19:00–19:40`,
+      });
+    } catch {
+      push({ name: 'timetable', ok: true, required: false, detail: `没有课程表(${redactHome(ws.paths.timetable)});孩子端「今天」只画老师,不画时段` });
+    }
+
+    // ---- HTTPS:iPad 上录音要;没有只提醒 ----
+    const tls = httpsFiles(ws);
+    push({ name: 'https', ok: tls !== null, required: false, detail: tls ? `${redactHome(tls.cert)}` : '没有证书,serve 走 HTTP(iPad Safari 上按住说话不可用)', fix: tls ? undefined : 'cotutor cert(需要 mkcert:brew install mkcert && mkcert -install)' });
+
     // ---- 预设的 CLI 在不在 ----
     if (probeEnv) {
+      const ttsBin = presetCli(ws.config.tts.say);
+      try {
+        await execFileP(ttsBin, ['--version'], { timeout: 8000 });
+        push({ name: 'tts', ok: true, required: false, detail: `${ttsBin} 在;老师配了 voice 的回复会配音` });
+      } catch {
+        push({ name: 'tts', ok: false, required: false, detail: `PATH 里没有 ${ttsBin},回复不配音(孩子端用浏览器的声)`, fix: `装 ${ttsBin},或改 cotutor.json 的 tts.say` });
+      }
       for (const [preset, p] of Object.entries(ws.config.agents)) {
         if (preset === 'default' || typeof p === 'string') continue;
         const bin = presetCli(p.run);

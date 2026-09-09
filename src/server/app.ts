@@ -1,57 +1,323 @@
 /**
- * 服务的路由层:纯函数 route(method, path, ws) → {status, json|html},测试不用起端口。
- * R1 只有查询接口;发消息 / 会话 / 页面在 R2。
+ * 服务的路由层:route(method, path, ctx, body) → {status, json|html},测试不用起端口。
+ * R1 的查询接口照旧;R2 加:会话(列日期、看一天的原始视图、发消息)、cotutor.json 补丁(助教团页)、家长页 /parent。
+ * R3 加:孩子端 `/`(KID_PAGE)与 /api/kid/*(首页:课程表 + 老师 + 今天的产物叠;会话:服务端过滤后的孩子视图;发消息:from 固定 kid、每日上限 429)、配音文件 /api/audio。
+ * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
+import { createReadStream } from 'node:fs';
+import { readFile, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { listTeachers } from '../schema/index.ts';
-import { workspaceReport, type Workspace } from '../cli/workspace.ts';
+import { join } from 'node:path';
+import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
+import { PresetError } from '../lib/run-plan.ts';
+import { localDate } from '../lib/conversation.ts';
+import { kidConversation, kidMessageCount, type KidMessage } from '../lib/kid-view.ts';
+import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
+import { currentSlot, dayOf, parseTimetable, slotLabel } from '../lib/timetable.ts';
+import { DATE_RE, FocusSchema, MESSAGE_FROM, listTeachers, resolvePolicy, type Artifact, type ConversationIndex, type TimetableEntry } from '../schema/index.ts';
+import { ConfigError, UsageError, workspaceReport, type Workspace } from '../cli/workspace.ts';
+import { KID_PAGE } from './kid-page.ts';
+import { PARENT_PAGE } from './parent-page.ts';
+import { BusyError, Runner } from './runner.ts';
+import { IndexError, listDates, patchConfig, readErrLog, readIndex, readTranscript, reloadIfChanged } from './store.ts';
 
 export interface RouteResult {
   status: number;
   json?: unknown;
   html?: string;
+  /** 静态文件(配音);handler 流式发 */
+  file?: string;
+  contentType?: string;
+}
+
+export interface AppContext {
+  ws: Workspace;
+  runner: Runner;
+  /** 当前时间(测试可注入;孩子端「今天」与 today 别名都按它) */
+  now: () => Date;
+  /** 上次重载失败的原因(配置改坏了),健康接口回报 */
+  configError: string | null;
+  /** 重读 cotutor.json(改了才读) */
+  reload(): Promise<void>;
+}
+
+export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv } = {}): AppContext {
+  let mtime = -1;
+  const ctx: AppContext = {
+    ws,
+    runner: new Runner(() => ctx.ws, opts),
+    now: opts.now ?? (() => new Date()),
+    configError: null,
+    async reload() {
+      try {
+        const r = await reloadIfChanged(ctx.ws, mtime);
+        ctx.ws = r.ws;
+        mtime = r.mtime;
+        ctx.configError = null;
+      } catch (err) {
+        if (!(err instanceof ConfigError)) throw err;
+        ctx.configError = err.message;
+      }
+    },
+  };
+  return ctx;
 }
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
 
-export function route(method: string, path: string, ws: Workspace): RouteResult {
-  if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
-  const url = new URL(path, 'http://x');
-  switch (url.pathname) {
-    case '/api/health':
-      return { status: 200, json: { ok: true } };
-    case '/api/workspace':
-      return { status: 200, json: workspaceReport(ws) };
-    case '/api/config':
-      return {
-        status: 200,
-        json: { title: ws.config.title, kid: ws.config.kid, server: ws.config.server, agent: ws.config.agents.default, teachers: listTeachers(ws.config) },
-      };
-    case '/api/teachers':
-      return { status: 200, json: listTeachers(ws.config, { kidOnly: url.searchParams.get('kid') === '1' }) };
-    case '/': {
-      const teachers = listTeachers(ws.config, { kidOnly: true })
-        .map((t) => `<li>${esc(t.avatar ?? '')} ${esc(t.display)}${t.subject ? `<small> · ${esc(t.subject)}</small>` : ''}</li>`)
-        .join('');
-      return {
-        status: 200,
-        html: `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(ws.config.title)}</title><h1>${esc(ws.config.title)}</h1><p>R1 骨架:老师们已就位,对话页在 R2。</p><ul>${teachers}</ul>`,
-      };
+/** 一天的原始视图:索引 + 每条消息的转录行(主线 + 子代理折叠)+ 出错时的 err.log 尾巴 */
+export interface DayView {
+  index: ConversationIndex;
+  running: string | null;
+  runs: Record<string, TranscriptRow[]>;
+  errors: Record<string, string>;
+}
+
+export async function dayView(ctx: AppContext, teacher: string, date: string): Promise<DayView> {
+  const index = await readIndex(ctx.ws, teacher, date);
+  const runs: Record<string, TranscriptRow[]> = {};
+  const errors: Record<string, string> = {};
+  for (const m of index.messages) {
+    const t = await readTranscript(ctx.ws, teacher, date, m.job);
+    runs[m.job] = t ? foldRuns(t.items) : [];
+    if (m.result === 'error') {
+      const tail = (await readErrLog(ctx.ws, teacher, date, m.job)).trim().split('\n').slice(-5).join('\n');
+      if (tail) errors[m.job] = tail;
     }
-    default:
-      return { status: 404, json: { error: 'not_found', path: url.pathname } };
+  }
+  const active = ctx.runner.running(teacher);
+  return { index, running: active && active.date === date ? active.job : null, runs, errors };
+}
+
+const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
+/** 孩子端看到的老师:enabled 且不 hidden;每日上限用完 available = false(头像灰) */
+export interface KidTeacher {
+  name: string;
+  display: string;
+  avatar: string | null;
+  subject: string | null;
+  hasVoice: boolean;
+  remaining: number;
+  available: boolean;
+}
+
+export async function kidTeachers(ctx: AppContext, date: string): Promise<KidTeacher[]> {
+  const out: KidTeacher[] = [];
+  for (const t of listTeachers(ctx.ws.config, { kidOnly: true })) {
+    const used = kidMessageCount(await readIndex(ctx.ws, t.name, date));
+    const remaining = Math.max(0, t.policy.dailyMessages - used);
+    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, hasVoice: Boolean(t.voice), remaining, available: remaining > 0 });
+  }
+  return out;
+}
+
+export interface KidHome {
+  title: string;
+  date: string;
+  /** 1–7 */
+  day: number;
+  timetable: TimetableEntry[];
+  slot: string | null;
+  teachers: KidTeacher[];
+  /** 今天的产物,按学科(老师的 subject)分叠;验收开关开着的老师只给 accepted 的 */
+  stacks: { subject: string; teacher: string | null; items: Artifact[] }[];
+}
+
+export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
+  const ws = ctx.ws;
+  const date = localDate(now);
+  let timetable: TimetableEntry[] = [];
+  try {
+    timetable = parseTimetable(await readFile(ws.paths.timetable, 'utf8')).entries;
+  } catch {
+    /* 没课程表:今天照画 */
+  }
+  const slot = currentSlot(timetable, now);
+  let artifacts: Artifact[] = [];
+  try {
+    artifacts = mergeArtifacts(parseArtifactEvents(await readFile(ws.files.artifacts, 'utf8')).rows).artifacts;
+  } catch {
+    /* 账本还没有 */
+  }
+  const bySubject = new Map<string, { subject: string; teacher: string | null; items: Artifact[] }>();
+  for (const a of artifacts) {
+    if (!a.at.startsWith(date) || a.status === 'draft' || a.status === 'retired') continue;
+    const teacher = ws.config.teachers[a.by];
+    if (teacher && resolvePolicy(ws.config, a.by).reviewGate && a.status !== 'accepted') continue;
+    const subject = teacher?.subject ?? teacher?.display ?? a.by;
+    const stack = bySubject.get(subject) ?? { subject, teacher: teacher ? a.by : null, items: [] };
+    stack.items.push(a);
+    bySubject.set(subject, stack);
+  }
+  return { title: ws.config.title, date, day: dayOf(now), timetable, slot: slot ? slotLabel(slot) : null, teachers: await kidTeachers(ctx, date), stacks: [...bySubject.values()] };
+}
+
+export interface KidDay {
+  teacher: string;
+  date: string;
+  messages: KidMessage[];
+  remaining: number;
+  /** 老师正在回的那条 job */
+  pending: string | null;
+}
+
+export async function kidDay(ctx: AppContext, teacher: string, date: string): Promise<KidDay> {
+  const index = await readIndex(ctx.ws, teacher, date);
+  const policy = resolvePolicy(ctx.ws.config, teacher);
+  const active = ctx.runner.running(teacher);
+  return { teacher, date, messages: kidConversation(index), remaining: Math.max(0, policy.dailyMessages - kidMessageCount(index)), pending: active && active.date === date ? active.job : null };
+}
+
+const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.mp3$/;
+
+export async function route(method: string, path: string, ctx: AppContext, body?: unknown): Promise<RouteResult> {
+  await ctx.reload();
+  const ws = ctx.ws;
+  const url = new URL(path, 'http://x');
+  const p = url.pathname;
+  try {
+    if (p === '/api/health') return { status: 200, json: { ok: true, configError: ctx.configError } };
+    if (p === '/api/workspace' && method === 'GET') return { status: 200, json: workspaceReport(ws) };
+    if (p === '/api/config') {
+      if (method === 'GET') {
+        return {
+          status: 200,
+          json: {
+            title: ws.config.title,
+            kid: ws.config.kid,
+            server: ws.config.server,
+            agent: ws.config.agents.default,
+            presets: Object.keys(ws.config.agents).filter((k) => k !== 'default'),
+            policyDefaults: ws.config.policyDefaults,
+            teachers: listTeachers(ws.config),
+            /** 老师条目的原始政策补丁(页面区分「继承」与「覆盖」) */
+            teacherPatches: Object.fromEntries(Object.entries(ws.config.teachers).map(([k, t]) => [k, t.policy ?? {}])),
+          },
+        };
+      }
+      if (method === 'PATCH') {
+        if (!isObj(body)) return { status: 400, json: { error: 'bad_request', message: '要一个 JSON 对象' } };
+        await patchConfig(ws, body);
+        await ctx.reload();
+        return { status: 200, json: { ok: true, teachers: listTeachers(ctx.ws.config), agent: ctx.ws.config.agents.default } };
+      }
+      return { status: 405, json: { error: 'method_not_allowed' } };
+    }
+    if (p === '/api/teachers' && method === 'GET') {
+      return { status: 200, json: listTeachers(ws.config, { kidOnly: url.searchParams.get('kid') === '1' }) };
+    }
+
+    // ---- 孩子端:过滤在服务端做,永远不带工具 / 错误 / 评判 ----
+    if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: await kidHome(ctx, ctx.now()) };
+    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages)$/.exec(p);
+    if (kid) {
+      const [, teacher, tail] = kid;
+      const t = ws.config.teachers[teacher];
+      if (!t || !t.enabled || t.hidden) return { status: 404, json: { error: 'no_such_teacher' } };
+      const date = localDate(ctx.now());
+      if (tail === 'today' && method === 'GET') return { status: 200, json: await kidDay(ctx, teacher, date) };
+      if (tail === 'messages' && method === 'POST') {
+        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
+        const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
+        if (focus && !focus.success) return { status: 400, json: { error: 'bad_request' } };
+        const policy = resolvePolicy(ws.config, teacher);
+        if (kidMessageCount(await readIndex(ws, teacher, date)) >= policy.dailyMessages) return { status: 429, json: { error: 'limit', remaining: 0 } };
+        const started = await ctx.runner.send(teacher, { from: 'kid', text: body.text, focus: focus?.data });
+        return { status: 202, json: { teacher, date: started.date, job: started.job } };
+      }
+      return { status: 405, json: { error: 'method_not_allowed' } };
+    }
+    const audio = /^\/api\/audio\/([a-z0-9][a-z0-9-]*)\/([^/]+)$/.exec(p);
+    if (audio && method === 'GET') {
+      const [, teacher, name] = audio;
+      if (!ws.config.teachers[teacher] || !AUDIO_FILE_RE.test(name)) return { status: 404, json: { error: 'not_found' } };
+      const file = join(ws.dirs.conversations, teacher, name);
+      if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
+      return { status: 200, file, contentType: 'audio/mpeg' };
+    }
+
+    const conv = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)(?:\/([^/]+))?$/.exec(p);
+    if (conv) {
+      const [, teacher, tail] = conv;
+      if (!ws.config.teachers[teacher]) return { status: 404, json: { error: 'no_such_teacher', teacher } };
+      if (tail === undefined && method === 'GET') {
+        return { status: 200, json: { teacher, today: localDate(ctx.now()), dates: await listDates(ws, teacher), running: ctx.runner.running(teacher) } };
+      }
+      if (tail === 'messages' && method === 'POST') {
+        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, from?, focus?, preset?}' } };
+        const from = body.from ?? 'parent';
+        if (!(MESSAGE_FROM as readonly unknown[]).includes(from)) return { status: 400, json: { error: 'bad_request', message: `from 只能是 ${MESSAGE_FROM.join(' / ')}` } };
+        const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
+        if (focus && !focus.success) return { status: 400, json: { error: 'bad_request', message: 'focus 形状不对' } };
+        const started = await ctx.runner.send(teacher, {
+          from: from as (typeof MESSAGE_FROM)[number],
+          text: body.text,
+          focus: focus?.data,
+          preset: typeof body.preset === 'string' ? body.preset : undefined,
+        });
+        return { status: 202, json: { teacher, date: started.date, job: started.job, preset: started.plan.preset, resume: started.plan.resume } };
+      }
+      if (tail !== undefined && tail !== 'messages' && method === 'GET') {
+        const date = tail === 'today' ? localDate(ctx.now()) : tail;
+        if (!DATE_RE.test(date)) return { status: 400, json: { error: 'bad_request', message: '日期要是 YYYY-MM-DD 或 today' } };
+        return { status: 200, json: await dayView(ctx, teacher, date) };
+      }
+      return { status: 405, json: { error: 'method_not_allowed' } };
+    }
+
+    if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
+    if (p === '/parent') return { status: 200, html: PARENT_PAGE };
+    if (p === '/') return { status: 200, html: KID_PAGE.replace('__TITLE__', esc(ws.config.title)) };
+    return { status: 404, json: { error: 'not_found', path: p } };
+  } catch (err) {
+    if (err instanceof BusyError) return { status: 409, json: { error: 'busy', message: err.message } };
+    if (err instanceof PresetError) return { status: 400, json: { error: 'bad_preset', message: err.message } };
+    if (err instanceof ConfigError) return { status: 422, json: { error: 'config', message: err.message } };
+    if (err instanceof IndexError) return { status: 500, json: { error: 'index', message: err.message } };
+    if (err instanceof UsageError) return { status: 400, json: { error: 'usage', message: err.message } };
+    throw err;
   }
 }
 
-export function createHandler(ws: Workspace): (req: IncomingMessage, res: ServerResponse) => void {
+async function readBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const c of req) {
+    size += (c as Buffer).length;
+    if (size > 1_000_000) throw new UsageError('请求体超过 1MB');
+    chunks.push(c as Buffer);
+  }
+  const text = Buffer.concat(chunks).toString('utf8');
+  if (!text.trim()) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new UsageError('请求体不是合法 JSON');
+  }
+}
+
+export function createHandler(ctx: AppContext): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {
-    const r = route(req.method ?? 'GET', req.url ?? '/', ws);
-    if (r.html !== undefined) {
-      res.writeHead(r.status, { 'content-type': 'text/html; charset=utf-8' });
-      res.end(r.html);
-    } else {
-      res.writeHead(r.status, { 'content-type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify(r.json ?? null));
-    }
+    void (async () => {
+      let r: RouteResult;
+      try {
+        const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readBody(req);
+        r = await route(req.method ?? 'GET', req.url ?? '/', ctx, body);
+      } catch (err) {
+        r = err instanceof UsageError ? { status: 400, json: { error: 'usage', message: err.message } } : { status: 500, json: { error: 'internal', message: err instanceof Error ? err.message : String(err) } };
+        if (r.status === 500) console.error(err);
+      }
+      if (r.file !== undefined) {
+        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=86400' });
+        createReadStream(r.file).on('error', () => res.end()).pipe(res);
+      } else if (r.html !== undefined) {
+        res.writeHead(r.status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+        res.end(r.html);
+      } else {
+        res.writeHead(r.status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.end(JSON.stringify(r.json ?? null));
+      }
+    })();
   };
 }

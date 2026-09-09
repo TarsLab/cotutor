@@ -17,7 +17,7 @@
 - `pnpm typecheck`;`pnpm test`;`node bin/cotutor.js --help`(bin 直跑 src,Node ≥ 22.18)
 - 冒烟:`node bin/cotutor.js init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live`(真起一次老师)→ `serve --workspace <tmp>` → `curl /api/tutors?kid=1`;真跑老师:`cotutor send math-tutor "<消息>" --workspace <tmp>`(或页面 `/parent`)。手册两份:docs/家长手册.md(只用)、docs/开发者手册.md(改代码)
 - 在 Claude Code 会话里起 claude 子进程要 `env -u CLAUDECODE ...`(嵌套会拒);本机 claude 2.1.220 不认全局 settings 里的模型,运行时模板加 `--model sonnet` 才能跑(模型旋钮本来就在模板里)
-- voxtell 没发 npm、不在 PATH:冒烟时把 `tts.say[0..1]` 改成 `node ~/Projects/github-tarslab/voxtell/bin/voxtell.js`;iPad 真机要 `cotutor cert`(mkcert)+ 把根证书装到 iPad
+- voxtell 没发 npm:从 TarsLab/voxtell 检出后 `pnpm link --global` 进 PATH,`tts.say` 出厂值就能用;不链就把 `tts.say[0..1]` 改成 `node <voxtell 检出目录>/bin/voxtell.js`;iPad 真机要 `cotutor cert`(mkcert)+ 把根证书装到 iPad
 
 ## 约定
 

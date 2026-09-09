@@ -1,5 +1,5 @@
 /**
- * 会话与配置的文件层:索引读写(坏索引响亮报错,不静默覆盖)、日期列表、转录读取、老师正文、cotutor.json 补丁写回。
+ * 对话与配置的文件层:索引读写(坏索引响亮报错,不静默覆盖)、日期列表、转录读取、老师正文、cotutor.json 补丁写回。
  * 纯函数在 lib/,这里只碰文件系统。
  */
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
@@ -19,7 +19,7 @@ import { ConfigError, assembleWorkspace, parseConfig, readJson, redactHome, type
 
 export class IndexError extends Error {
   constructor(file: string, cause: string) {
-    super(`会话索引用不了:${redactHome(file)}\n${cause}\n修好它或改名挪开(转录 .log 还在,能重建);不要删。`);
+    super(`对话索引用不了:${redactHome(file)}\n${cause}\n修好它或改名挪开(转录 .log 还在,能重建);不要删。`);
   }
 }
 
@@ -90,7 +90,7 @@ export async function readAgentBody(ws: Workspace, name: string): Promise<string
       /* 试下一处 */
     }
   }
-  throw new ConfigError(join(ws.dirs.claudeAgents, `${name}.md`), '老师定义读不到(链断了或没建);cotutor init 重链');
+  throw new ConfigError(join(ws.dirs.claudeAgents, `${name}.md`), '老师文件读不到;cotutor init 补拷');
 }
 
 /** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 运行时模板走编辑器 */

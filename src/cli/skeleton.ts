@@ -49,12 +49,12 @@ node_modules/
 /** 家规:所有老师常驻(CLAUDE.md 与 QWEN.md 同一份)。故意短。 */
 export const RULES = `# 家规
 
-- 关于孩子的观察,写一条到 ledger/observations.jsonl(一行 JSON:id、date、author=你的名字、claim 一句话、evidence 指向会话或产物),别的老师和规划老师从那里读。
+- 关于孩子的观察,写一条到 ledger/observations.jsonl(一行 JSON:id、date、author=你的名字、claim 一句话、evidence 指向对话或产物),别的老师和规划老师从那里读。
 - 你自己的经验记进你的记忆目录(MEMORY.md 一行索引 + 主题文件)。
 - 你说给孩子听的话放在回复的**最后一段**,孩子只看得到最后一段;中间的话和工具过程只有家长看。
 - 需要家长拍板的事写成一段「## 待裁量」(question: 一句话;options: 列表),不要停下来等。
 - 要交给别的老师的事写成一段「## 转交」(to: 老师名;why: 一句话;refs: 相关文件),第一期只允许一跳。
-- 会话按天,明天从账本和你的记忆接着来,不要指望今天的对话还在。
+- 对话按天,明天从账本和你的记忆接着来,不要指望今天的对话还在。
 `;
 
 export interface TutorTemplateInput {

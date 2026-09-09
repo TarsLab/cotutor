@@ -24,7 +24,7 @@ cotutor serve                     # 孩子端 http://<ip>:5180/,家长端 /paren
 
 ## 老师是文件
 
-每位老师 = 一个 Markdown 文件(frontmatter + 正文即系统提示)+ cotutor.json 里的一条(显示名、头像、音色、开关、政策)+ 自己的目录与会话。出厂五位随包发布,init **拷贝**进你的老师们,改了就是你家的;`cotutor upgrade` 只换没改过的,改过的打印差异让你定。再加一位:
+每位老师 = 一个 Markdown 文件(frontmatter + 正文即系统提示)+ cotutor.json 里的一条(显示名、头像、音色、开关、政策)+ 自己的目录与对话。出厂五位随包发布,init **拷贝**进你的老师们,改了就是你家的;`cotutor upgrade` 只换没改过的,改过的打印差异让你定。再加一位:
 
 ```sh
 cotutor add science-tutor --display 科学老师 --subject 科学 --avatar 🔬
@@ -38,7 +38,7 @@ cotutor add science-tutor --display 科学老师 --subject 科学 --avatar 🔬
 
 ```ts
 import { CotutorConfigSchema, cotutorJsonSchema } from 'cotutor/schema';  // 契约(zod)与 JSON Schema
-import { deriveKidView, parseSections } from 'cotutor/lib';               // 转录、精简视图、账本等纯函数
+import { deriveKidView, parseSections } from 'cotutor/lib';               // 转录、孩子视图、账本等纯函数
 import { loadWorkspace } from 'cotutor/workspace';                        // 解析链 + 校验
 ```
 

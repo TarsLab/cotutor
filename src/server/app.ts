@@ -1,7 +1,7 @@
 /**
  * 服务的路由层:route(method, path, ctx, body) → {status, json|html},测试不用起端口。
- * R1 的查询接口照旧;R2 加:会话(列日期、看一天的原始视图、发消息)、cotutor.json 补丁(老师团页)、家长页 /parent。
- * R3 加:孩子端 `/`(KID_PAGE)与 /api/kid/*(首页:课程表 + 老师 + 今天的产物叠;会话:服务端过滤后的孩子视图;发消息:from 固定 kid、每日上限 429)、配音文件 /api/audio。
+ * R1 的查询接口照旧;R2 加:对话(列日期、看一天的家长视图、发消息)、cotutor.json 补丁(老师团页)、家长页 /parent。
+ * R3 加:孩子端 `/`(KID_PAGE)与 /api/kid/*(首页:课程表 + 老师 + 今天的产物叠;对话:服务端过滤后的孩子视图;发消息:from 固定 kid、每日上限 429)、配音文件 /api/audio。
  * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
 import { createReadStream } from 'node:fs';
@@ -67,7 +67,7 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
 
-/** 一天的原始视图:索引 + 每条消息的转录行(主线 + 子代理折叠)+ 出错时的 err.log 尾巴 */
+/** 一天的家长视图:索引 + 每条消息的转录行(主线 + 子代理折叠)+ 出错时的 err.log 尾巴 */
 export interface DayView {
   index: ConversationIndex;
   running: string | null;

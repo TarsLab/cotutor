@@ -76,7 +76,7 @@ try {
   check('cwd 是老师目录、--agent 填了老师名', init.cwd === join(root, 'agents', 'math-tutor') && init.agent === 'math-tutor', JSON.stringify(init));
   check('err.log 落了', readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${job1}.err.log`), 'utf8').includes('fake-cli done'));
   const rows = d1.runs[job1];
-  check('原始视图:主线说话 + 工具 + 子代理标 sub + 收尾', rows.some((r) => r.kind === 'text' && !r.sub) && rows.some((r) => r.kind === 'tool') && rows.some((r) => r.sub) && rows.some((r) => r.kind === 'done'), JSON.stringify(rows));
+  check('家长视图:主线说话 + 工具 + 子代理标 sub + 收尾', rows.some((r) => r.kind === 'text' && !r.sub) && rows.some((r) => r.kind === 'tool') && rows.some((r) => r.sub) && rows.some((r) => r.kind === 'done'), JSON.stringify(rows));
   const t1 = parseTranscript(log);
   check('上下文包:计划行只带本老师的、观察只带本学科', !t1.final?.text?.includes('背古诗'));
 

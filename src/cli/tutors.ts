@@ -290,7 +290,7 @@ export async function writeTutorFile(root: string, name: string, text: string): 
   return readTutorFile(root, name);
 }
 
-/** 删自家加的老师文件:改名成 .removed-<时间>(不真删;记忆目录与会话不动);出厂的不让删,用开关 */
+/** 删自家加的老师文件:改名成 .removed-<时间>(不真删;记忆目录与对话不动);出厂的不让删,用开关 */
 export async function removeTutorFile(root: string, name: string): Promise<{ moved: string | null }> {
   if ((await shippedAgents()).some((a) => a.name === name)) throw new UsageError(`${name} 是出厂老师,不删文件;不想用就在老师团页关掉`);
   const { claude, qwen } = tutorFiles(root, name);

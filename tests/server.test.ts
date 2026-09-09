@@ -1,4 +1,4 @@
-/** 路由层:健康、工作区回报(脱敏)、配置与老师列表、页面、404 / 405。不碰文件的部分;发消息与补丁在 runner.test.ts。 */
+/** 路由层:健康、workspace 回报(脱敏)、配置与老师列表、页面、404 / 405。不碰文件的部分;发消息与补丁在 runner.test.ts。 */
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,7 +19,7 @@ try {
 
   check('health', (await get('/api/health')).status === 200 && ((await get('/api/health')).json as { ok: boolean }).ok);
   const rep = (await get('/api/workspace')).json as { workspace: string; tutors: string[] };
-  check('工作区回报脱敏', rep.workspace.startsWith('$HOME') && rep.tutors.length === 5, JSON.stringify(rep));
+  check('workspace 回报脱敏', rep.workspace.startsWith('$HOME') && rep.tutors.length === 5, JSON.stringify(rep));
   const cfg = (await get('/api/config')).json as { title: string; runtimes: string[]; tutors: { name: string; policy: { replyMaxChars: number } }[]; tutorPatches: Record<string, unknown> };
   check('配置接口带老师、政策、运行时名', cfg.title === '小明的老师们' && cfg.tutors.length === 5 && cfg.tutors[0].policy.replyMaxChars === 60 && cfg.runtimes.join() === 'claude,qwen' && 'planner' in cfg.tutorPatches);
   check('孩子端老师列表不含 hidden', ((await get('/api/tutors?kid=1')).json as unknown[]).length === 4);

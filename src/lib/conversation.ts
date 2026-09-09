@@ -7,7 +7,7 @@ import type { Transcript } from './transcript.ts';
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 
-/** 本地日期 YYYY-MM-DD(会话按本地日切) */
+/** 本地日期 YYYY-MM-DD(对话按本地日切) */
 export function localDate(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }

@@ -109,7 +109,7 @@ export const CotutorConfigSchema = z
     server: z
       .object({
         port: z.number().int().min(1).max(65535).default(5180),
-        /** 自签证书(iPad 上录音要 HTTPS);相对 workspace 根。不配则看 certs/cert.pem + certs/key.pem 在不在(cotutor cert 会建) */
+        /** 只给这个 workspace 用的证书(相对 workspace 根),是例外;不配则用机器级 ~/.config/cotutor/certs/(cotutor cert 会建,所有 workspace 共用;iPad 上录音要 HTTPS) */
         https: z.object({ cert: z.string().min(1), key: z.string().min(1) }).optional(),
       })
       .default({ port: 5180 }),

@@ -40,8 +40,6 @@ export const GITIGNORE = `# 转录日志体积大、可从对话索引重建关�
 conversations/**/*.log
 # 配音可重新合成
 conversations/**/*.mp3
-# 自签证书与私钥(cotutor cert 建)
-certs/
 node_modules/
 .DS_Store
 `;
@@ -146,7 +144,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
       'paths = 角色映射:vault 指 Obsidian vault 根(一孩一 vault),photos/diary/plans/profile/timetable 相对 vault。' +
       'runtimes = 运行时,占位 {agent} {agentBody} {prompt} {session};政策旋钮(预算、时限、模型)写进模板。' +
       'tts = 配音命令,占位 {text} {voice} {out};老师没配 voice 就不合成,孩子端用浏览器的声。' +
-      'server.https = {cert, key} 自签证书路径(相对 workspace 根);不配则看 certs/cert.pem + key.pem(cotutor cert 用 mkcert 建)。',
+      'server.https = {cert, key} 只给这个 workspace 用的证书路径(相对 workspace 根);不配则用机器级 ~/.config/cotutor/certs/(cotutor cert 用 mkcert 建,所有 workspace 共用)。',
   };
   return `${JSON.stringify(cfg, null, 2)}\n`;
 }

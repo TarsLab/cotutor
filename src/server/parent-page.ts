@@ -353,8 +353,8 @@ export const PARENT_PAGE = `<!doctype html>
     const card = h('div', { class: 'card' }, h('h2', {}, '路径与服务'), h('div', { class: 'grid' },
       ...PATH_ROLES.map(([k, label]) => h('label', {}, label, h('input', { type: 'text', 'data-p': k, value: c.paths[k] || '', placeholder: c.resolvedPaths[k] || '' }))),
       h('label', {}, '端口(改了要重启 serve)', h('input', { type: 'number', id: 's-port', value: c.server.port })),
-      h('label', {}, 'HTTPS 证书(相对 workspace;空 = 看 certs/)', h('input', { type: 'text', id: 's-cert', value: c.https ? c.https.cert : '', placeholder: 'certs/cert.pem' })),
-      h('label', {}, 'HTTPS 私钥', h('input', { type: 'text', id: 's-key', value: c.https ? c.https.key : '', placeholder: 'certs/key.pem' }))),
+      h('label', {}, 'HTTPS 证书(相对 workspace;空 = 用机器级 ~/.config/cotutor/certs/)', h('input', { type: 'text', id: 's-cert', value: c.https ? c.https.cert : '', placeholder: '留空即用 cotutor cert 签的' })),
+      h('label', {}, 'HTTPS 私钥', h('input', { type: 'text', id: 's-key', value: c.https ? c.https.key : '', placeholder: '留空即用 cotutor cert 签的' }))),
       h('label', { style: 'display:block;margin-top:10px;font-size:12px;color:var(--dim)' }, '配音命令(JSON 数组;占位 {text} {voice} {out};voxtell 不在 PATH 就把第一项写成完整路径)', h('textarea', { id: 's-tts', style: 'min-height:60px' }, JSON.stringify(c.tts.say))),
       h('p', { class: 'hint' }, '写回 cotutor.json;kid、version、agents 的运行时模板请直接编辑文件。留空的路径角色用缺省;右侧灰字是现在解析到的绝对路径。'),
       h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button', on: { click: async () => {

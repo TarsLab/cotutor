@@ -32,6 +32,8 @@ export class ConfigError extends UsageError {
 
 export const CONFIG_FILE = 'cotutor.json';
 export const USER_CONFIG = join(homedir(), '.config', 'cotutor', 'config.json');
+/** 机器级自签证书目录(cotutor cert 写 cert.pem + key.pem):证书签的是本机名与局域网 IP,与孩子无关,所以不在 workspace 里(2026-09-09 拍板) */
+export const USER_CERT_DIR = join(homedir(), '.config', 'cotutor', 'certs');
 export const HOME_ROOT = join(homedir(), 'cotutor');
 
 export type RootSource = 'flag' | 'env' | 'cwd' | 'user-config' | 'home-single';

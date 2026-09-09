@@ -1,7 +1,7 @@
 /**
  * cotutor serve:一 workspace 一进程(2026-09-08 拍板),端口读 cotutor.json(--port 覆盖)。
  * 启动打印解析结果与体检警告(配置坏了直接不起,骨架缺失只警告)。
- * HTTPS(iPad 上录音要):server.https 指了证书就用它;没指就看 certs/cert.pem + certs/key.pem(cotutor cert 用 mkcert 建);都没有走 HTTP。
+ * HTTPS(iPad 上录音要):server.https 指了证书就用它(单个 workspace 的例外);没指就看机器级 ~/.config/cotutor/certs/(cotutor cert 用 mkcert 建);都没有走 HTTP。
  */
 import { readFileSync } from 'node:fs';
 import { createServer as createHttp, type Server } from 'node:http';
@@ -10,7 +10,7 @@ import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { doctorWorkspace } from './doctor.ts';
 import { createContext, createHandler, type AppContext } from '../server/app.ts';
-import { expandPath, loadWorkspace, type ResolveOptions, type Workspace } from './workspace.ts';
+import { USER_CERT_DIR, expandPath, loadWorkspace, type ResolveOptions, type Workspace } from './workspace.ts';
 
 export interface ServeOptions extends ResolveOptions {
   workspace?: string;
@@ -33,14 +33,12 @@ export interface ServeResult {
   warnings: string[];
 }
 
-export const CERT_DIR = 'certs';
-
-/** 证书路径:配置优先,否则约定目录;都没有 → null */
+/** 证书路径:cotutor.json 的 server.https 优先(相对 workspace 根),否则机器级 ~/.config/cotutor/certs/;都没有 → null */
 export function httpsFiles(ws: Workspace): { cert: string; key: string } | null {
   const h = ws.config.server.https;
   if (h) return { cert: expandPath(h.cert, ws.root), key: expandPath(h.key, ws.root) };
-  const cert = join(ws.root, CERT_DIR, 'cert.pem');
-  const key = join(ws.root, CERT_DIR, 'key.pem');
+  const cert = join(USER_CERT_DIR, 'cert.pem');
+  const key = join(USER_CERT_DIR, 'key.pem');
   try {
     readFileSync(cert);
     readFileSync(key);

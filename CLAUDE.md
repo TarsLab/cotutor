@@ -8,7 +8,7 @@
 - `src/schema/` — **契约**(zod,类型即文档;`explainIssues` 把 issue 变修复指南):config(cotutor.json,含 agents / tts 预设与 server.https)、context-pack、conversation、ledger、sections(待裁量 / 转交)、plan、timetable
 - `src/lib/` — **纯函数**(全部离屏可测):agent-file、sections、transcript(stream-json → 家长条目 + 最终文本,子代理事件标 sub)、kid-view(精简视图:只看最终文本、剥段、截断;`kidConversation` 把索引过滤成孩子端条目)、context-pack、plan、ledger、conversation、timetable(抄 growth-apps,孩子列可选)
 - `src/lib/run-plan.ts` — 一次运行的命令规划:同预设有会话 → resume,否则新开;`{agentBody}` 只给模板里用到它的预设
-- `src/cli/` — workspace(解析链 + 校验)、skeleton(骨架清单 + 模板,init 与 doctor 共用)、teachers(老师文件拷贝 / 状态 / upgrade)、init、doctor、upgrade、serve(certs/ 有证书就 HTTPS)、cert(mkcert 签到 certs/)、send(终端发一条,与页面同一条路)、main
+- `src/cli/` — workspace(解析链 + 校验)、skeleton(骨架清单 + 模板,init 与 doctor 共用)、teachers(老师文件拷贝 / 状态 / upgrade / add 模板)、init、doctor、upgrade、add、serve(certs/ 有证书就 HTTPS)、cert(mkcert 签到 certs/)、send(终端发一条,与页面同一条路)、main
 - `src/server/` — app(路由 `route()`,配置按 mtime 热重载;`/api/kid/*` 是服务端过滤后的孩子视图)、runner(发消息:拼上下文包 → spawn / resume → 日志落盘 → 配音 → 索引物化;一老师同时一条,忙则 409)、tts(按 `tts.say` 预设合成 kidText 到 `<日期>.<job>.mp3`,失败不响)、store(索引 / 转录 / cotutor.json 补丁的文件层)、parent-page(家长端 `/parent`)、kid-page(孩子端 `/`:一周小路、老师头像、聊天窗、按住说话走浏览器识别)——两页都是内联脚本,只走 `/api/*`
 - `tests/*.test.ts` — 每文件一子进程(`scripts/test.ts`),零依赖 `check()`;HOME 注入后动态 import 的手法同 drawtell。`tests/_fake-cli.ts` 是假 CLI(模仿 stream-json、认 `--resume`),`_fake-tts.ts` 是假配音命令,runner 全流程测试靠它们,不花钱
 
@@ -23,6 +23,7 @@
 
 - **workspace 解析链**:`--workspace` > `COTUTOR_WORKSPACE` > cwd 或祖先有 cotutor.json > `~/.config/cotutor/config.json` > `~/cotutor/` 下唯一的孩子目录 > 报错附修复指南。没有 cwd 兜底,cotutor.json 是必需的政策文件;在但坏了响亮报错
 - **init 幂等补缺**,已有文件一律不动;政策文件(cotutor.json)与家规(CLAUDE.md / QWEN.md)只在缺失时写模板。唯一例外:`.claude/agents/` 里指向包的旧链会被换成拷贝(链不是用户数据)
+- **老师按 cotutor.json 里有谁走,没有注册表**:init / doctor 对表里每一位补目录与 `.qwen` 链、查文件;出厂五位多一层 hash 与 upgrade,自家加的(`cotutor add <name> --display …`:出模板文件、`patchConfig` 进表、建目录)永远是 untracked,upgrade 不碰,doctor 的 origin 行写「自家加的老师」
 - **老师文件与 cotutor.json 的字段归属**:文件里只有运行字段 + 正文;display / avatar / voice / enabled / hidden / policy 全在 cotutor.json
 - **精简视图是机械规则**:孩子只看 `result.result` 剥掉「## 待裁量」「## 转交」段之后的**最后一段**(空行分段;家规让老师把给孩子的话放最后一段),按 replyMaxChars 截断;这两种固定段只吃字段行,遇空行后不是字段行就结束(老师把给孩子的话放最后一段不会被吞)
 - **账本追加式**,同 id 后者为准,retracted 用追加行;坏行 doctor 点行号,不删账本

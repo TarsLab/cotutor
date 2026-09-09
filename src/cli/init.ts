@@ -8,7 +8,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { DIRS, GITIGNORE, LEDGER_FILES, RULES, configTemplate, shippedAgents } from './skeleton.ts';
 import { installTeachers } from './teachers.ts';
-import { CONFIG_FILE, HOME_ROOT, USER_CONFIG, expandPath } from './workspace.ts';
+import { CONFIG_FILE, ConfigError, HOME_ROOT, USER_CONFIG, expandPath, parseConfig, readJson } from './workspace.ts';
 
 export interface InitStep {
   item: string;
@@ -52,17 +52,21 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
     steps.push({ item: `${dir}/`, action: 'created' });
   }
 
-  for (const a of agents) {
-    const home = join(root, 'agents', a.name);
-    if (await exists(home)) {
-      steps.push({ item: `agents/${a.name}/`, action: 'exists' });
-    } else {
-      await mkdir(home, { recursive: true });
-      await writeFile(join(home, '.gitkeep'), '');
-      steps.push({ item: `agents/${a.name}/`, action: 'created' });
-    }
+  const config = join(root, CONFIG_FILE);
+  if (await exists(config)) steps.push({ item: CONFIG_FILE, action: 'kept', note: '政策文件不覆盖(家长的决定)' });
+  else {
+    await writeFile(config, configTemplate({ slug: opts.slug, name: opts.name, port: opts.port, teachers: agents }));
+    steps.push({ item: CONFIG_FILE, action: 'created' });
   }
-  steps.push(...(await installTeachers(root)));
+  // 老师按 cotutor.json 里有谁走(家长自己加的也补目录与链);配置坏了就只管出厂的,doctor 去报
+  let teacherNames: string[] = [];
+  try {
+    const raw = readJson(config);
+    if (raw !== null) teacherNames = Object.keys(parseConfig(raw, config).teachers);
+  } catch (err) {
+    if (!(err instanceof ConfigError)) throw err;
+  }
+  steps.push(...(await installTeachers(root, teacherNames)));
 
   for (const f of LEDGER_FILES) {
     const p = join(root, f);
@@ -71,13 +75,6 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
       await writeFile(p, '');
       steps.push({ item: f, action: 'created' });
     }
-  }
-
-  const config = join(root, CONFIG_FILE);
-  if (await exists(config)) steps.push({ item: CONFIG_FILE, action: 'kept', note: '政策文件不覆盖(家长的决定)' });
-  else {
-    await writeFile(config, configTemplate({ slug: opts.slug, name: opts.name, port: opts.port, teachers: agents }));
-    steps.push({ item: CONFIG_FILE, action: 'created' });
   }
 
   for (const f of ['CLAUDE.md', 'QWEN.md']) {

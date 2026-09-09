@@ -21,7 +21,7 @@ cotutor send math-teacher "42-17 怎么讲?"   # 终端里发一条,与页面同
 
 孩子端要在 iPad 上听到老师的声音,再做两件事:`cotutor.json` 里给老师填 `voice`(voxtell 的音色 id,`voxtell voices` 可查),并把 `mkcert -CAROOT` 下的 rootCA.pem 装到 iPad 并信任。老师没配 voice 或 voxtell 没装时,孩子端用浏览器自带的合成声。课程表是 vault 里的 `课程表.md`(表头 星期 / 时间 / 学科,孩子列可选),没有也能用。
 
-老师定义随包发布(数学老师、语文老师、朗读老师、作业助教、规划老师),init 把它们**拷贝**进 workspace 的 `.claude/agents/`(`.qwen/agents/` 是指向它的链)。拷进来就是你家的:想让数学老师说话温柔点,直接改那个文件;`cotutor upgrade` 只换没改过的,改过的打印 diff 让你自己定,`--force <老师>` 才覆盖(原文留 `.bak`);`cotutor doctor` 显示每位老师是出厂件还是自定义。人设、音色、开关、政策不在老师文件里,在 workspace 的 `cotutor.json`。从老师目录起会话:
+老师定义随包发布(数学老师、语文老师、朗读老师、作业助教、规划老师),init 把它们**拷贝**进 workspace 的 `.claude/agents/`(`.qwen/agents/` 是指向它的链)。拷进来就是你家的:想让数学老师说话温柔点,直接改那个文件;`cotutor upgrade` 只换没改过的,改过的打印 diff 让你自己定,`--force <老师>` 才覆盖(原文留 `.bak`);`cotutor doctor` 显示每位老师是出厂件还是自定义。想再加一位:`cotutor add science-teacher --display 科学老师 --subject 科学 --avatar 🔬`,出一份带全部约定的模板文件、进 cotutor.json、建目录,打开文件把人设那句填上就能用;没有注册表,删掉文件与那条配置就是删老师。人设、音色、开关、政策不在老师文件里,在 workspace 的 `cotutor.json`。从老师目录起会话:
 
 ```sh
 cd ~/cotutor/ming/agents/math-teacher

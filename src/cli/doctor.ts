@@ -138,6 +138,7 @@ export async function doctorWorkspace(
     const defaultCli = presetCli(ws.config.agents[ws.config.agents.default]?.run ?? []);
     const statuses = new Map((await teacherStatuses(root)).map((s) => [s.name, s]));
     for (const name of Object.keys(ws.config.teachers)) {
+      const shipped = statuses.has(name);
       for (const [cli, dir] of [
         ['claude', ws.dirs.claudeAgents],
         ['qwen', ws.dirs.qwenAgents],
@@ -158,10 +159,17 @@ export async function doctorWorkspace(
           ok,
           required,
           detail,
-          fix: ok ? undefined : `cotutor init 补拷(拷自本包 agents/${name}.md),或把老师键改成文件里的 name`,
+          fix: ok
+            ? undefined
+            : shipped
+              ? `cotutor init 补拷(拷自本包 agents/${name}.md),或把老师键改成文件里的 name`
+              : cli === 'qwen'
+                ? 'cotutor init 补链(.qwen/agents/ 指向 .claude/agents/)'
+                : `这是自家加的老师:写 .claude/agents/${name}.md(frontmatter name: ${name}),cotutor add ${name} --display <显示名> 可出模板;或把 cotutor.json 里这条删掉`,
         });
       }
       const st = statuses.get(name);
+      if (!st) push({ name: `teacher.${name}.origin`, ok: true, required: false, detail: '自家加的老师(不是出厂件,upgrade 不碰)' });
       if (st) {
         const label: Record<string, string> = { latest: '出厂件,最新', upgradable: `出厂件,基于 ${st.basedOn},包已更新`, custom: `自定义(基于 ${st.basedOn})`, untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
         push({

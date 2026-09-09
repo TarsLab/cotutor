@@ -11,7 +11,9 @@
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, readFile, readlink, rename, symlink, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative } from 'node:path';
-import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION, shippedAgents, type ShippedAgent } from './skeleton.ts';
+import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION, shippedAgents, teacherTemplate, type ShippedAgent, type TeacherTemplateInput } from './skeleton.ts';
+import { AGENT_NAME_RE } from '../schema/index.ts';
+import { UsageError } from './workspace.ts';
 
 export const SHIPPED_FILE = '.cotutor/shipped.json';
 
@@ -123,12 +125,17 @@ export interface InstallStep {
   note?: string;
 }
 
-/** init 用:缺的拷,旧的包内链换成拷贝,家长的文件不动;总是补 .qwen 链 */
-export async function installTeachers(root: string): Promise<InstallStep[]> {
+/**
+ * init 用。出厂的:缺的拷,旧的包内链换成拷贝,家长的文件不动;
+ * cotutor.json 里的每一位(含家长自己加的):补老师目录 agents/<name>/ 与 .qwen 链——「加老师 = 加文件 + 目录,没有注册表」,
+ * 自己加的老师文件不在这里生成(cotutor add 生成模板),缺了由 doctor 点名。
+ */
+export async function installTeachers(root: string, configured: string[] = []): Promise<InstallStep[]> {
   const steps: InstallStep[] = [];
   const manifest = await readManifest(root);
   let touched = false;
-  for (const a of await shippedAgents()) {
+  const shipped = await shippedAgents();
+  for (const a of shipped) {
     const s = await readState(root, a, manifest);
     const item = `.claude/agents/${basename(a.file)}`;
     if (s.state === 'missing' || s.legacyLink || s.state === 'broken') {
@@ -144,8 +151,48 @@ export async function installTeachers(root: string): Promise<InstallStep[]> {
     const q = await ensureQwenLink(root, a.name);
     steps.push({ item: `.qwen/agents/${basename(a.file)}`, action: q, note: q === 'exists' ? undefined : '→ ../../.claude/agents/' });
   }
+  for (const name of configured.filter((n) => !shipped.some((a) => a.name === n))) {
+    const { claude } = teacherFiles(root, name);
+    if (await lstat(claude).catch(() => null)) {
+      const q = await ensureQwenLink(root, name);
+      steps.push({ item: `.qwen/agents/${name}.md`, action: q, note: q === 'exists' ? undefined : '→ ../../.claude/agents/(自家的老师)' });
+    } else steps.push({ item: `.claude/agents/${name}.md`, action: 'kept', note: `缺:cotutor.json 里有 ${name},文件还没写;cotutor add ${name} 出模板,或自己写(frontmatter name: ${name})` });
+  }
+  for (const name of [...new Set([...shipped.map((a) => a.name), ...configured])]) {
+    const home = join(root, 'agents', name);
+    if (await lstat(home).catch(() => null)) {
+      steps.push({ item: `agents/${name}/`, action: 'exists' });
+      continue;
+    }
+    await mkdir(home, { recursive: true });
+    await writeFile(join(home, '.gitkeep'), '');
+    steps.push({ item: `agents/${name}/`, action: 'created' });
+  }
   if (touched || !(await lstat(join(root, SHIPPED_FILE)).catch(() => null))) await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   return steps;
+}
+
+export interface AddResult {
+  name: string;
+  file: string;
+  home: string;
+}
+
+/**
+ * cotutor add <name>:按出厂老师的结构写一份模板(约定都带上,人设一句留给家长填)、建目录与 .qwen 链。
+ * 不动 cotutor.json——那是调用方(main / 页面)用 patchConfig 加的,同一条路。已有同名文件就拒,不覆盖。
+ */
+export async function addTeacherFile(root: string, input: TeacherTemplateInput): Promise<AddResult> {
+  if (!AGENT_NAME_RE.test(input.name)) throw new UsageError(`老师名 "${input.name}" 不合规:小写字母数字连字符,如 science-teacher`);
+  const { claude } = teacherFiles(root, input.name);
+  if (await lstat(claude).catch(() => null)) throw new UsageError(`${claude} 已经在了;要改就直接改它,要重来先把它挪开`);
+  await mkdir(dirname(claude), { recursive: true });
+  await writeFile(claude, teacherTemplate(input));
+  await ensureQwenLink(root, input.name);
+  const home = join(root, 'agents', input.name);
+  await mkdir(home, { recursive: true });
+  await writeFile(join(home, '.gitkeep'), '').catch(() => {});
+  return { name: input.name, file: claude, home };
 }
 
 export interface UpgradeStep {

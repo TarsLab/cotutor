@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
 import { makeCert } from './cert.ts';
-import { upgradeTeachers } from './teachers.ts';
+import { addTeacherFile, upgradeTeachers } from './teachers.ts';
+import { patchConfig } from '../server/store.ts';
 import { resolveRoot } from './workspace.ts';
 import { serveWorkspace } from './serve.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from './workspace.ts';
@@ -18,6 +19,7 @@ const USAGE = `用法:
   cotutor init <slug> [--dir <path>] [--name <孩子名>] [--port <n>]   建 ~/cotutor/<slug>/ 骨架(幂等补缺)
   cotutor doctor [--workspace <dir>] [--json]                          逐项体检
   cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件换新版:没改过的直接换,改过的只报 diff(--force 才覆盖,原文留 .bak)
+  cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录
   cotutor serve [--workspace <dir>] [--port <n>] [--http]               起服务(一 workspace 一进程;certs/ 里有证书就走 HTTPS)
   cotutor cert [--workspace <dir>] [--host <名或IP>]...                  用 mkcert 建自签证书到 certs/(iPad 上录音要 HTTPS)
   cotutor send <老师> <消息> [--from parent|kid|system] [--preset <名>]   终端里发一条,等老师说完打印结果(与页面同一条路)
@@ -59,7 +61,7 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'preset', 'force']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'preset', 'force', 'display', 'subject', 'avatar', 'description']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -108,6 +110,22 @@ export async function main(argv: string[]): Promise<void> {
         if (!r.https) process.stdout.write('  ! HTTP:iPad Safari 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write(`  孩子端 /,家长端 /parent\n`);
+        return;
+      }
+      case 'add': {
+        const name = positionals[0];
+        const display = typeof flags.display === 'string' ? flags.display : undefined;
+        if (!name || !display) throw new UsageError(`add 需要老师名和 --display 显示名,如 cotutor add science-teacher --display 科学老师 --subject 科学 --avatar 🔬。\n${USAGE}`);
+        const ws = loadWorkspace(workspace);
+        if (ws.config.teachers[name]) throw new UsageError(`cotutor.json 里已经有 ${name} 了;要改人设去助教团页或直接改文件`);
+        const subject = typeof flags.subject === 'string' ? flags.subject : undefined;
+        const r = await addTeacherFile(ws.root, { name, display, subject, description: typeof flags.description === 'string' ? flags.description : undefined });
+        await patchConfig(ws, { teachers: { [name]: { display, ...(subject ? { subject } : {}), ...(typeof flags.avatar === 'string' ? { avatar: flags.avatar } : {}), enabled: true, ...(flags.hidden === true ? { hidden: true } : {}) } } });
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
+        else {
+          process.stdout.write(`加了 ${display}(${name}):\n  ${redactHome(r.file)}  ← 老师文件,打开把括号里那句换成这位老师的性子\n  cotutor.json teachers.${name}  ← 人设与政策(助教团页也能改)\n  ${redactHome(r.home)}/  ← 它的家\n`);
+          process.stdout.write('服务不用重启;孩子端和家长端刷新就有。\n');
+        }
         return;
       }
       case 'upgrade': {

@@ -9,7 +9,8 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../lib/agent-file.ts';
-import { TTS_DEFAULT } from '../schema/index.ts';
+import { CONFIG_SCHEMA_FILE, TTS_DEFAULT, cotutorJsonSchema } from '../schema/index.ts';
+import { mkdir, writeFile } from 'node:fs/promises';
 
 export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents'] as const;
 export const LEDGER_FILES = ['ledger/observations.jsonl', 'ledger/artifacts.jsonl'] as const;
@@ -118,6 +119,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
       : { display: a.name, enabled: true };
   }
   const cfg = {
+    $schema: CONFIG_SCHEMA_FILE,
     version: 1,
     title: input.name ? `${input.name}的书房` : 'cotutor',
     kid: { slug: input.slug, ...(input.name ? { name: input.name } : {}) },
@@ -147,4 +149,12 @@ export function configTemplate(input: ConfigTemplateInput): string {
       'server.https = {cert, key} 自签证书路径(相对 workspace 根);不配则看 certs/cert.pem + key.pem(cotutor cert 用 mkcert 建)。',
   };
   return `${JSON.stringify(cfg, null, 2)}\n`;
+}
+
+/** 把 JSON Schema 写进 workspace(机器文件,每次 init / upgrade 都刷新) */
+export async function writeSchemaFile(root: string): Promise<string> {
+  const file = join(root, CONFIG_SCHEMA_FILE);
+  await mkdir(join(root, '.cotutor'), { recursive: true });
+  await writeFile(file, `${JSON.stringify(cotutorJsonSchema(), null, 2)}\n`);
+  return file;
 }

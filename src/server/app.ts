@@ -15,11 +15,13 @@ import { kidConversation, kidMessageCount, type KidMessage } from '../lib/kid-vi
 import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
 import { currentSlot, dayOf, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { DATE_RE, FocusSchema, MESSAGE_FROM, listTeachers, resolvePolicy, type Artifact, type ConversationIndex, type TimetableEntry } from '../schema/index.ts';
-import { ConfigError, UsageError, workspaceReport, type Workspace } from '../cli/workspace.ts';
+import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
+import { teacherStatuses } from '../cli/teachers.ts';
 import { KID_PAGE } from './kid-page.ts';
 import { PARENT_PAGE } from './parent-page.ts';
 import { BusyError, Runner } from './runner.ts';
 import { IndexError, listDates, patchConfig, readErrLog, readIndex, readTranscript, reloadIfChanged } from './store.ts';
+import { addTeacherFile, readTeacherFile, removeTeacherFile, writeTeacherFile } from '../cli/teachers.ts';
 
 export interface RouteResult {
   status: number;
@@ -190,6 +192,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             agent: ws.config.agents.default,
             presets: Object.keys(ws.config.agents).filter((k) => k !== 'default'),
             policyDefaults: ws.config.policyDefaults,
+            paths: ws.config.paths,
+            resolvedPaths: Object.fromEntries(Object.entries(ws.paths).map(([k, v]) => [k, redactHome(v)])),
+            tts: ws.config.tts,
+            https: ws.config.server.https ?? null,
+            shipped: (await teacherStatuses(ws.root)).map((s) => s.name),
             teachers: listTeachers(ws.config),
             /** 老师条目的原始政策补丁(页面区分「继承」与「覆盖」) */
             teacherPatches: Object.fromEntries(Object.entries(ws.config.teachers).map(([k, t]) => [k, t.policy ?? {}])),
@@ -206,6 +213,34 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     if (p === '/api/teachers' && method === 'GET') {
       return { status: 200, json: listTeachers(ws.config, { kidOnly: url.searchParams.get('kid') === '1' }) };
+    }
+    // ---- 加老师 / 老师文件 / 删老师:与 cotutor add 同一条路 ----
+    if (p === '/api/teachers' && method === 'POST') {
+      if (!isObj(body) || typeof body.name !== 'string' || typeof body.display !== 'string' || !body.display.trim()) return { status: 400, json: { error: 'bad_request', message: '要 {name, display, subject?, avatar?, hidden?, description?}' } };
+      const name = body.name.trim();
+      if (ws.config.teachers[name]) return { status: 409, json: { error: 'exists', message: `cotutor.json 里已经有 ${name}` } };
+      const str = (k: string): string | undefined => (typeof body[k] === 'string' && (body[k] as string).trim() ? (body[k] as string).trim() : undefined);
+      const r = await addTeacherFile(ws.root, { name, display: body.display.trim(), subject: str('subject'), description: str('description') });
+      await patchConfig(ws, { teachers: { [name]: { display: body.display.trim(), ...(str('subject') ? { subject: str('subject') } : {}), ...(str('avatar') ? { avatar: str('avatar') } : {}), enabled: true, ...(body.hidden === true ? { hidden: true } : {}) } } });
+      await ctx.reload();
+      return { status: 201, json: { ok: true, ...r, teachers: listTeachers(ctx.ws.config) } };
+    }
+    const tf = /^\/api\/teachers\/([a-z0-9][a-z0-9-]*)(\/file)?$/.exec(p);
+    if (tf) {
+      const [, name, isFile] = tf;
+      if (!ws.config.teachers[name]) return { status: 404, json: { error: 'no_such_teacher', teacher: name } };
+      if (isFile && method === 'GET') return { status: 200, json: await readTeacherFile(ws.root, name) };
+      if (isFile && method === 'PUT') {
+        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text}' } };
+        return { status: 200, json: await writeTeacherFile(ws.root, name, body.text) };
+      }
+      if (!isFile && method === 'DELETE') {
+        const r = await removeTeacherFile(ws.root, name);
+        await patchConfig(ws, { teachers: { [name]: null } });
+        await ctx.reload();
+        return { status: 200, json: { ok: true, ...r, teachers: listTeachers(ctx.ws.config) } };
+      }
+      return { status: 405, json: { error: 'method_not_allowed' } };
     }
 
     // ---- 孩子端:过滤在服务端做,永远不带工具 / 错误 / 评判 ----

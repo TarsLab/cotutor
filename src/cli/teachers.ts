@@ -11,7 +11,7 @@
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, readFile, readlink, rename, symlink, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative } from 'node:path';
-import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION, shippedAgents, teacherTemplate, type ShippedAgent, type TeacherTemplateInput } from './skeleton.ts';
+import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION, shippedAgents, teacherTemplate, writeSchemaFile, type ShippedAgent, type TeacherTemplateInput } from './skeleton.ts';
 import { AGENT_NAME_RE } from '../schema/index.ts';
 import { UsageError } from './workspace.ts';
 
@@ -256,5 +256,51 @@ export async function upgradeTeachers(root: string, opts: { force?: string[] } =
     await ensureQwenLink(root, a.name);
   }
   await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
+  await writeSchemaFile(root);
   return steps;
+}
+
+export interface TeacherFileView {
+  name: string;
+  text: string;
+  /** 出厂件的状态;自家加的是 own */
+  state: TeacherState | 'own';
+  basedOn?: string;
+}
+
+export async function readTeacherFile(root: string, name: string): Promise<TeacherFileView> {
+  const { claude } = teacherFiles(root, name);
+  const text = await readFile(claude, 'utf8').catch(() => null);
+  if (text === null) throw new UsageError(`老师文件不在:${claude};cotutor add ${name} --display <显示名> 可出模板`);
+  const st = (await teacherStatuses(root)).find((s) => s.name === name);
+  return { name, text, state: st?.state ?? 'own', basedOn: st?.basedOn };
+}
+
+/** 页面上改老师正文:frontmatter 的 name 必须还是它;写完 doctor 会把它标成自定义 */
+export async function writeTeacherFile(root: string, name: string, text: string): Promise<TeacherFileView> {
+  const { parseAgentFile } = await import('../lib/agent-file.ts');
+  const fm = parseAgentFile(text).frontmatter;
+  if (fm.name !== name) throw new UsageError(`frontmatter 的 name 要是 ${name}(现在是 "${fm.name ?? ''}"),老师键靠它对上`);
+  const { claude } = teacherFiles(root, name);
+  await mkdir(dirname(claude), { recursive: true });
+  const tmp = `${claude}.tmp`;
+  await writeFile(tmp, text.endsWith('\n') ? text : `${text}\n`);
+  await rename(tmp, claude);
+  await ensureQwenLink(root, name);
+  return readTeacherFile(root, name);
+}
+
+/** 删自家加的老师文件:改名成 .removed-<时间>(不真删;记忆目录与会话不动);出厂的不让删,用开关 */
+export async function removeTeacherFile(root: string, name: string): Promise<{ moved: string | null }> {
+  if ((await shippedAgents()).some((a) => a.name === name)) throw new UsageError(`${name} 是出厂老师,不删文件;不想用就在助教团页关掉`);
+  const { claude, qwen } = teacherFiles(root, name);
+  await unlink(qwen).catch(() => {});
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const moved = `${claude}.removed-${stamp}`;
+  try {
+    await rename(claude, moved);
+    return { moved };
+  } catch {
+    return { moved: null };
+  }
 }

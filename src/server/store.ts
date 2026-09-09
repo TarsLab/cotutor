@@ -93,8 +93,8 @@ export async function readAgentBody(ws: Workspace, name: string): Promise<string
   throw new ConfigError(join(ws.dirs.claudeAgents, `${name}.md`), '老师定义读不到(链断了或没建);cotutor init 重链');
 }
 
-/** PATCH 允许改的顶层键:助教团页只碰这些;paths / kid / server / version 走编辑器 */
-export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'teachers', 'agents'] as const;
+/** PATCH 允许改的顶层键(助教团页与设置页);kid / version / 预设模板走编辑器 */
+export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'teachers', 'agents', 'paths', 'server', 'tts'] as const;
 
 const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 

@@ -63,17 +63,109 @@ export function presetCli(run: readonly string[]): string {
   return basename(run[0] ?? '');
 }
 
+/** 已知的环境坑,从 CLI 的输出里认出来给修复命令(错误信息即修复指南) */
+export function explainLlmFailure(text: string, preset: readonly string[]): string {
+  const bin = presetCli(preset);
+  if (/does not support this model|version [\d.]+ or newer is required/i.test(text)) {
+    return `这版 ${bin} 不认全局 settings 里的模型:给 cotutor.json 的 ${bin} 预设 run / resume 末尾加 "--model", "sonnet"(或 ${bin} update 升级)`;
+  }
+  if (/nested|CLAUDECODE|already running inside/i.test(text)) return '在 Claude Code 会话里嵌套起 claude 被拒:换个普通终端,或 unset CLAUDECODE 及 CLAUDE_CODE_* 后再跑';
+  if (/not logged in|login|authentication|401|unauthorized/i.test(text)) return `${bin} 没登录或 key 失效:先在终端跑一次 ${bin} 登录`;
+  if (/ENOENT|command not found/i.test(text)) return `PATH 里没有 ${bin}`;
+  if (/budget|max_budget/i.test(text)) return '预算旗太小:调大预设模板里的 --max-budget-usd';
+  return `看上面的原文;不认识的错先在终端手跑一次同样的命令`;
+}
+
+/**
+ * --live:真起一次老师(预设的 run 模板,第一位开着的老师,只回一个字),把 API 层的坑(模型不认、没登录)摆到明面。
+ * 花一分钱级别的费用,所以缺省不跑。配音同理:老师配了 voice 就合成一句。
+ */
+async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: NodeJS.ProcessEnv): Promise<void> {
+  const { spawn } = await import('node:child_process');
+  const { fillPreset, fillTts, listTeachers } = await import('../schema/index.ts');
+  const { parseTranscript } = await import('../lib/transcript.ts');
+  const { parseAgentFile } = await import('../lib/agent-file.ts');
+  const { tmpdir } = await import('node:os');
+  const { mkdtemp, rm } = await import('node:fs/promises');
+  const teachers = listTeachers(ws.config).filter((t) => t.enabled);
+  const first = teachers[0];
+  if (!first) {
+    push({ name: 'live.agent', ok: false, required: false, detail: '没有开着的老师,没法探', fix: 'cotutor.json 里至少开一位' });
+    return;
+  }
+  const presetName = ws.config.agents.default;
+  const preset = ws.config.agents[presetName];
+  if (!preset || typeof preset === 'string') return;
+  let agentBody: string | undefined;
+  try {
+    agentBody = parseAgentFile(await readFile(join(ws.dirs.claudeAgents, `${first.name}.md`), 'utf8')).body;
+  } catch {
+    /* 上面 teacher.* 已报 */
+  }
+  const argv = fillPreset(preset.run, { agent: first.name, prompt: '只回一个字:好', agentBody });
+  const cwd = join(ws.dirs.agents, first.name);
+  const run = await new Promise<{ out: string; err: string; code: number | null; spawnErr?: string }>((resolveRun) => {
+    let out = '';
+    let err = '';
+    const child = spawn(argv[0], argv.slice(1), { cwd, env: { ...env, COTUTOR_WORKSPACE: ws.root }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const timer = setTimeout(() => child.kill(), 120_000);
+    child.stdout.on('data', (d: Buffer) => (out += d.toString()));
+    child.stderr.on('data', (d: Buffer) => (err += d.toString()));
+    child.once('error', (e) => {
+      clearTimeout(timer);
+      resolveRun({ out, err, code: null, spawnErr: e.message });
+    });
+    child.once('close', (code) => {
+      clearTimeout(timer);
+      resolveRun({ out, err, code });
+    });
+  });
+  const t = parseTranscript(run.out);
+  const said = t.items.filter((i) => i.kind === 'text' && !i.sub).map((i) => i.text).join(' ');
+  const ok = Boolean(t.final?.ok) && !run.spawnErr;
+  const raw = run.spawnErr ?? (t.final ? `${t.final.reason ?? ''} ${said}`.trim() : `没有 result 事件(exit ${run.code}):${run.err.trim().split('\n').slice(-3).join(' / ')}`);
+  push({
+    name: `live.${presetName}`,
+    ok,
+    required: false,
+    detail: ok ? `${first.display} 回了「${(t.final?.text ?? '').slice(0, 20)}」${t.final?.costUsd !== undefined ? ` · $${t.final.costUsd.toFixed(3)}` : ''}` : `起不来或没答上:${raw.slice(0, 300)}`,
+    fix: ok ? undefined : explainLlmFailure(raw, preset.run),
+  });
+
+  const voiced = teachers.find((x) => x.voice);
+  if (!voiced) {
+    push({ name: 'live.tts', ok: true, required: false, detail: '没有老师配 voice,不探配音(孩子端用浏览器的声)' });
+    return;
+  }
+  const dir = await mkdtemp(join(tmpdir(), 'cotutor-doctor-'));
+  const out = join(dir, 'probe.mp3');
+  const argvT = fillTts(ws.config.tts.say, { text: '你好', voice: voiced.voice as string, out });
+  const r = await new Promise<{ ok: boolean; msg: string }>((resolveTts) => {
+    execFile(argvT[0], argvT.slice(1), { env, timeout: 60_000 }, async (e, _o, se) => {
+      if (e) return resolveTts({ ok: false, msg: (e as NodeJS.ErrnoException).code === 'ENOENT' ? `PATH 里没有 ${argvT[0]}` : `${e.message} ${String(se).trim().slice(-200)}` });
+      const st = await stat(out).catch(() => null);
+      resolveTts(st?.isFile() && st.size > 0 ? { ok: true, msg: `${voiced.display} 的音色 ${voiced.voice} 能合成(${st.size} 字节)` } : { ok: false, msg: '命令跑完但没出文件' });
+    });
+  });
+  await rm(dir, { recursive: true, force: true });
+  push({ name: 'live.tts', ok: r.ok, required: false, detail: r.msg, fix: r.ok ? undefined : `改 cotutor.json 的 tts.say(voxtell 不在 PATH 就写完整路径),或查 voxtell doctor` });
+}
+
 export async function doctorWorkspace(
   override?: string,
-  opts: ResolveOptions & { probeEnv?: boolean } = {},
+  opts: ResolveOptions & { probeEnv?: boolean; live?: boolean } = {},
 ): Promise<DoctorReport> {
   const probeEnv = opts.probeEnv ?? true;
+  const env = opts.env ?? process.env;
   const checks: DoctorCheck[] = [];
   const push = (c: DoctorCheck): number => checks.push(c);
 
   const [maj, min] = process.versions.node.split('.').map(Number);
   const nodeOk = maj > 22 || (maj === 22 && min >= 18);
   push({ name: 'node', ok: nodeOk, required: true, detail: `node ${process.versions.node}`, fix: nodeOk ? undefined : '需要 Node ≥ 22.18' });
+  if (env.CLAUDECODE) {
+    push({ name: 'env.nested', ok: false, required: false, detail: '现在在 Claude Code 会话里(CLAUDECODE 已设),从这里起的 claude 老师会被当嵌套拒掉', fix: '换个普通终端跑 cotutor serve;或 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_SESSION_ID CLAUDE_CODE_CHILD_SESSION CLAUDE_PID CLAUDE_EFFORT' });
+  }
 
   let root: string | null = null;
   let source: RootSource | null = null;
@@ -251,6 +343,8 @@ export async function doctorWorkspace(
       }
     }
   }
+
+  if (ws && opts.live) await probeLive(ws, push, env);
 
   // ---- 用户配置 ----
   try {

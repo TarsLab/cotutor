@@ -188,7 +188,7 @@ try {
   const p2 = await route('PATCH', '/api/config', ctx, { teachers: { 'math-teacher': { display: '' } } });
   check('不合契约的补丁 422 且不落盘', p2.status === 422 && (JSON.parse(readFileSync(cfgFile, 'utf8')) as typeof raw).teachers['math-teacher'].display === '数学老师', JSON.stringify(p2.json));
   check('改预设模板被拒', (await route('PATCH', '/api/config', ctx, { agents: { fake: { run: ['x'], resume: ['x'] } } })).status === 422);
-  check('改 paths 被拒', (await route('PATCH', '/api/config', ctx, { paths: { vault: '/' } })).status === 422);
+  check('改 kid 被拒', (await route('PATCH', '/api/config', ctx, { kid: { slug: 'x' } })).status === 422);
   const p3 = await route('PATCH', '/api/config', ctx, { teachers: { 'math-teacher': { enabled: true, policy: { replyMaxChars: null } } } });
   check('null 删键:政策覆盖撤掉回到继承', p3.status === 200 && ctx.ws.config.teachers['math-teacher'].policy?.replyMaxChars === undefined && ctx.ws.config.teachers['math-teacher'].enabled === true);
 

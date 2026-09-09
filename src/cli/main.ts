@@ -17,7 +17,7 @@ import { MESSAGE_FROM, type MessageFrom } from '../schema/index.ts';
 
 const USAGE = `用法:
   cotutor init <slug> [--dir <path>] [--name <孩子名>] [--port <n>]   建 ~/cotutor/<slug>/ 骨架(幂等补缺)
-  cotutor doctor [--workspace <dir>] [--json]                          逐项体检
+  cotutor doctor [--workspace <dir>] [--json] [--live]                 逐项体检;--live 真起一次老师与配音(花一分钱)把 API 层的坑摆出来
   cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件换新版:没改过的直接换,改过的只报 diff(--force 才覆盖,原文留 .bak)
   cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录
   cotutor serve [--workspace <dir>] [--port <n>] [--http]               起服务(一 workspace 一进程;certs/ 里有证书就走 HTTPS)
@@ -90,7 +90,7 @@ export async function main(argv: string[]): Promise<void> {
         return;
       }
       case 'doctor': {
-        const r = await doctorWorkspace(workspace);
+        const r = await doctorWorkspace(workspace, { live: flags.live === true });
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
         else {
           for (const c of r.checks) {

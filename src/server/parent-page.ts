@@ -1,7 +1,8 @@
 /**
- * 家长端 /parent:一页两栏(对话 / 助教团),零依赖内联脚本,只走 /api/*。
+ * 家长端 /parent:三个标签(对话 / 助教团 / 设置),零依赖内联脚本,只走 /api/*。
  * 对话 = 原始视图:主线说话、工具行折叠、子代理折叠、待裁量按钮、孩子视图预览(kidText)、出错红条。
- * 助教团 = 老师卡片,只读写 cotutor.json(PATCH /api/config)。
+ * 助教团 = 老师卡片(人设与政策 → PATCH /api/config;老师文件正文 → /api/teachers/<name>/file;新老师 → POST /api/teachers;自家的能删)。
+ * 设置 = paths / 端口 / 证书 / 配音命令,同样只写 cotutor.json;kid、version、预设模板留给编辑器。
  * 放在 .ts 里而不是 .html,是因为 tsc 不拷贝静态文件,dist 里就少一份。
  */
 export const PARENT_PAGE = `<!doctype html>
@@ -62,7 +63,7 @@ export const PARENT_PAGE = `<!doctype html>
   #composer button:disabled { opacity:.5; cursor:default; }
   .empty { color:var(--dim); text-align:center; margin-top:60px; }
   /* 助教团 */
-  #team { padding:16px; max-width:1000px; margin:0 auto; }
+  #team, #settings { padding:16px; max-width:1000px; margin:0 auto; }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px; }
   .card h2 { font-size:15px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
   .card h2 .av { font-size:22px; }
@@ -77,11 +78,16 @@ export const PARENT_PAGE = `<!doctype html>
   .card .actions .msg-ok { color:var(--ok); font-size:13px; }
   .card .actions .msg-err { color:var(--err); font-size:13px; white-space:pre-wrap; }
   .hint { color:var(--dim); font-size:12px; }
+  .card textarea { width:100%; min-height:260px; font:13px/1.5 ui-monospace,Menlo,monospace; padding:8px; border:1px solid var(--line); border-radius:6px; resize:vertical; }
+  .card details { margin-top:10px; }
+  .card details summary { cursor:pointer; color:var(--dim); font-size:13px; }
+  .card .danger { color:var(--err); border-color:#f0c0c0 !important; }
+  .card .origin { font-size:12px; color:var(--dim); margin-left:auto; }
   @media (max-width:700px) { #chat { grid-template-columns:1fr; } aside { display:none; } }
 </style>
 <header>
   <h1 id="title">cotutor</h1>
-  <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">助教团</a></nav>
+  <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">助教团</a><a href="#settings" data-tab="settings">设置</a></nav>
   <span class="health" id="health"></span>
 </header>
 <main id="chat" class="on">
@@ -100,6 +106,7 @@ export const PARENT_PAGE = `<!doctype html>
   </section>
 </main>
 <main id="team"></main>
+<main id="settings"></main>
 <script>
 (() => {
   const $ = (s, el = document) => el.querySelector(s);
@@ -118,7 +125,7 @@ export const PARENT_PAGE = `<!doctype html>
     return j;
   };
 
-  const state = { config: null, teacher: null, date: null, dates: [], view: null, timer: null, tab: location.hash === '#team' ? 'team' : 'chat' };
+  const state = { config: null, teacher: null, date: null, dates: [], view: null, timer: null, tab: location.hash === '#team' ? 'team' : location.hash === '#settings' ? 'settings' : 'chat' };
 
   // ---- 顶栏与标签 ----
   const showTab = (tab) => {
@@ -126,6 +133,7 @@ export const PARENT_PAGE = `<!doctype html>
     for (const a of document.querySelectorAll('header nav a')) a.classList.toggle('on', a.dataset.tab === tab);
     for (const m of document.querySelectorAll('main')) m.classList.toggle('on', m.id === tab);
     if (tab === 'team') renderTeam();
+    if (tab === 'settings') renderSettings();
   };
   for (const a of document.querySelectorAll('header nav a')) a.addEventListener('click', (e) => { e.preventDefault(); location.hash = '#' + a.dataset.tab; showTab(a.dataset.tab); });
 
@@ -272,6 +280,35 @@ export const PARENT_PAGE = `<!doctype html>
     catch (e) { feedback(card, false, e.message); }
   };
 
+  const AVATARS = ['🧮', '📚', '📖', '🔬', '🎨', '🎵', '🌍', '💻', '🏃', '🧩', '📷', '🗓'];
+  const newTeacherCard = () => {
+    const card = h('div', { class: 'card' }, h('h2', {}, '➕ 新老师'), h('div', { class: 'grid' },
+      h('label', {}, '老师名(英文键,如 science-teacher)', h('input', { type: 'text', id: 'n-name', placeholder: 'science-teacher' })),
+      h('label', {}, '显示名', h('input', { type: 'text', id: 'n-display', placeholder: '科学老师' })),
+      h('label', {}, '学科(可空)', h('input', { type: 'text', id: 'n-subject', placeholder: '科学' })),
+      h('label', {}, '头像', h('select', { id: 'n-avatar' }, ...AVATARS.map((a) => h('option', { value: a }, a)))),
+      h('label', { class: 'chk' }, h('input', { type: 'checkbox', id: 'n-hidden' }), '孩子端不露')),
+      h('p', { class: 'hint' }, '会写一份带全部约定的老师文件、进 cotutor.json、建目录;之后在下面这位老师的卡里改「老师文件」把性子填上。与终端 cotutor add 同一条路。'),
+      h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button', on: { click: async () => {
+        const name = $('#n-name').value.trim(), display = $('#n-display').value.trim();
+        if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) return feedback(card, false, '老师名要小写字母数字连字符');
+        if (!display) return feedback(card, false, '显示名不能空');
+        try { await api('POST', '/api/teachers', { name, display, subject: $('#n-subject').value.trim(), avatar: $('#n-avatar').value, hidden: $('#n-hidden').checked }); await loadConfig(); renderTeam(); feedback($('#team .card'), true, '加了 ' + display); }
+        catch (e) { feedback(card, false, e.message); }
+      } } }, '加进来'), h('span', { class: 'fb' })));
+    return card;
+  };
+  const fileEditor = (t) => {
+    const box = h('details', {}, h('summary', {}, '老师文件(系统提示;改了就是你家的,升级不覆盖)'));
+    const ta = h('textarea', { spellcheck: 'false' });
+    const fb = h('span', { class: 'fb' });
+    const origin = h('span', { class: 'origin' });
+    const load = async () => { try { const f = await api('GET', '/api/teachers/' + t.name + '/file'); ta.value = f.text; origin.textContent = f.state === 'own' ? '自家加的' : f.state === 'latest' ? '出厂件,最新' : f.state === 'upgradable' ? '出厂件,可升级' : '自定义' + (f.basedOn ? '(基于 ' + f.basedOn + ')' : ''); } catch (e) { ta.value = ''; fb.className = 'fb msg-err'; fb.textContent = e.message; } };
+    box.addEventListener('toggle', () => { if (box.open && !ta.value) load(); });
+    box.append(ta, h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button', on: { click: async () => { try { const f = await api('PUT', '/api/teachers/' + t.name + '/file', { text: ta.value }); fb.className = 'fb msg-ok'; fb.textContent = '已写入'; origin.textContent = f.state === 'own' ? '自家加的' : '自定义'; } catch (e) { fb.className = 'fb msg-err'; fb.textContent = e.message; } } } }, '保存老师文件'), h('button', { type: 'button', on: { click: load } }, '重新读'), origin, fb));
+    return box;
+  };
+
   const renderTeam = () => {
     const c = state.config;
     if (!c) return;
@@ -294,7 +331,8 @@ export const PARENT_PAGE = `<!doctype html>
           h('label', { class: 'chk' }, h('input', { type: 'checkbox', 'data-f': 'enabled', checked: t.enabled ? '' : undefined }), '开启'),
           h('label', { class: 'chk' }, h('input', { type: 'checkbox', 'data-f': 'hidden', checked: t.hidden ? '' : undefined }), '孩子端不露'),
           ...policyInputs(patch, t.policy, { inherit: true })),
-        h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button' }, '保存'), h('span', { class: 'fb' })));
+        h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button' }, '保存'), h('span', { class: 'fb' }), c.shipped.includes(t.name) ? null : h('button', { type: 'button', class: 'danger', style: 'margin-left:auto', on: { click: async () => { if (!confirm('删掉 ' + t.display + '?老师文件改名保留,会话与记忆不动。')) return; try { await api('DELETE', '/api/teachers/' + t.name); await loadConfig(); renderTeam(); } catch (e) { feedback(card, false, e.message); } } } }, '删掉这位老师')),
+        fileEditor(t));
       $('.actions button', card).addEventListener('click', () => {
         try {
           const f = (name) => $('[data-f=' + name + ']', card);
@@ -304,7 +342,36 @@ export const PARENT_PAGE = `<!doctype html>
       });
       return card;
     });
-    root.replaceChildren(top, ...cards);
+    root.replaceChildren(top, newTeacherCard(), ...cards);
+  };
+
+  // ---- 设置:paths / 端口 / 证书 / 配音命令;文件仍是真相 ----
+  const PATH_ROLES = [['vault', 'vault 根(Obsidian 仓库;空 = workspace 根)'], ['timetable', '课程表文件(相对 vault)'], ['plans', '计划目录(相对 vault)'], ['diary', '日记目录'], ['photos', '照片目录'], ['profile', '孩子档案文件']];
+  const renderSettings = () => {
+    const c = state.config;
+    if (!c) return;
+    const card = h('div', { class: 'card' }, h('h2', {}, '路径与服务'), h('div', { class: 'grid' },
+      ...PATH_ROLES.map(([k, label]) => h('label', {}, label, h('input', { type: 'text', 'data-p': k, value: c.paths[k] || '', placeholder: c.resolvedPaths[k] || '' }))),
+      h('label', {}, '端口(改了要重启 serve)', h('input', { type: 'number', id: 's-port', value: c.server.port })),
+      h('label', {}, 'HTTPS 证书(相对 workspace;空 = 看 certs/)', h('input', { type: 'text', id: 's-cert', value: c.https ? c.https.cert : '', placeholder: 'certs/cert.pem' })),
+      h('label', {}, 'HTTPS 私钥', h('input', { type: 'text', id: 's-key', value: c.https ? c.https.key : '', placeholder: 'certs/key.pem' }))),
+      h('label', { style: 'display:block;margin-top:10px;font-size:12px;color:var(--dim)' }, '配音命令(JSON 数组;占位 {text} {voice} {out};voxtell 不在 PATH 就把第一项写成完整路径)', h('textarea', { id: 's-tts', style: 'min-height:60px' }, JSON.stringify(c.tts.say))),
+      h('p', { class: 'hint' }, '写回 cotutor.json;kid、version、agents 的预设模板请直接编辑文件。留空的路径角色用缺省;右侧灰字是现在解析到的绝对路径。'),
+      h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button', on: { click: async () => {
+        try {
+          const paths = {};
+          for (const el of card.querySelectorAll('[data-p]')) paths[el.dataset.p] = el.value.trim() || null;
+          const port = Number($('#s-port').value);
+          if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('端口要是 1–65535');
+          const cert = $('#s-cert').value.trim(), key = $('#s-key').value.trim();
+          let say;
+          try { say = JSON.parse($('#s-tts').value); } catch { throw new Error('配音命令要是 JSON 数组'); }
+          if (!Array.isArray(say) || !say.length || !say.every((x) => typeof x === 'string')) throw new Error('配音命令要是非空字符串数组');
+          await api('PATCH', '/api/config', { paths, server: { port, https: cert && key ? { cert, key } : null }, tts: { say } });
+          await loadConfig(); feedback(card, true, '已写入 cotutor.json' + (port !== c.server.port ? ';端口改了,重启 serve 才生效' : ''));
+        } catch (e) { feedback(card, false, e.message); }
+      } } }, '保存设置'), h('span', { class: 'fb' })));
+    $('#settings').replaceChildren(card);
   };
 
   // ---- 启动 ----

@@ -6,7 +6,7 @@
  */
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { DIRS, GITIGNORE, LEDGER_FILES, RULES, configTemplate, shippedAgents } from './skeleton.ts';
+import { DIRS, GITIGNORE, LEDGER_FILES, RULES, configTemplate, shippedAgents, writeSchemaFile } from './skeleton.ts';
 import { installTeachers } from './teachers.ts';
 import { CONFIG_FILE, ConfigError, HOME_ROOT, USER_CONFIG, expandPath, parseConfig, readJson } from './workspace.ts';
 
@@ -67,6 +67,9 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
     if (!(err instanceof ConfigError)) throw err;
   }
   steps.push(...(await installTeachers(root, teacherNames)));
+  const schemaThere = await exists(join(root, '.cotutor', 'cotutor.schema.json'));
+  await writeSchemaFile(root);
+  steps.push({ item: '.cotutor/cotutor.schema.json', action: schemaThere ? 'exists' : 'created', note: schemaThere ? '已按本包刷新(机器文件)' : 'cotutor.json 的 JSON Schema,编辑器补全用' });
 
   for (const f of LEDGER_FILES) {
     const p = join(root, f);

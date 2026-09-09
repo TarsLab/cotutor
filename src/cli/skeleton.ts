@@ -1,9 +1,10 @@
 /**
  * 工作区骨架清单:init 建、doctor 查,同一张清单(两边各写一遍必然漂移)。
  * 布局见《cotutor-agent层设计.md》§2:
- *   cotutor.json / CLAUDE.md QWEN.md(家规)/ .claude/agents .qwen/agents(老师定义链自本包 agents/)
+ *   cotutor.json / CLAUDE.md QWEN.md(家规)/ .claude/agents(老师定义,拷自本包 agents/,是家长的)/ .qwen/agents(相对链)/ .cotutor/shipped.json(出厂 hash)
  *   agents/<name>/(老师的家 = 会话 cwd)/ ledger/(两本账)/ conversations/(会话索引与转录)
  */
+import { readFileSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +16,8 @@ export const LEDGER_FILES = ['ledger/observations.jsonl', 'ledger/artifacts.json
 
 /** 本包自带的老师定义目录(仓库检出与 npm 安装都在包根 agents/) */
 export const PACKAGE_AGENTS_DIR = fileURLToPath(new URL('../../agents/', import.meta.url));
+/** 本包版本(出厂件的 hash 记录带它,升级时知道基于哪版) */
+export const PACKAGE_VERSION = (JSON.parse(readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8')) as { version: string }).version;
 
 export interface ShippedAgent {
   name: string;

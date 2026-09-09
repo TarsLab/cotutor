@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
 import { makeCert } from './cert.ts';
+import { upgradeTeachers } from './teachers.ts';
+import { resolveRoot } from './workspace.ts';
 import { serveWorkspace } from './serve.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from './workspace.ts';
 import { createContext } from '../server/app.ts';
@@ -15,6 +17,7 @@ import { MESSAGE_FROM, type MessageFrom } from '../schema/index.ts';
 const USAGE = `用法:
   cotutor init <slug> [--dir <path>] [--name <孩子名>] [--port <n>]   建 ~/cotutor/<slug>/ 骨架(幂等补缺)
   cotutor doctor [--workspace <dir>] [--json]                          逐项体检
+  cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件换新版:没改过的直接换,改过的只报 diff(--force 才覆盖,原文留 .bak)
   cotutor serve [--workspace <dir>] [--port <n>] [--http]               起服务(一 workspace 一进程;certs/ 里有证书就走 HTTPS)
   cotutor cert [--workspace <dir>] [--host <名或IP>]...                  用 mkcert 建自签证书到 certs/(iPad 上录音要 HTTPS)
   cotutor send <老师> <消息> [--from parent|kid|system] [--preset <名>]   终端里发一条,等老师说完打印结果(与页面同一条路)
@@ -56,7 +59,7 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'preset']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'preset', 'force']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -105,6 +108,24 @@ export async function main(argv: string[]): Promise<void> {
         if (!r.https) process.stdout.write('  ! HTTP:iPad Safari 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write(`  孩子端 /,家长端 /parent\n`);
+        return;
+      }
+      case 'upgrade': {
+        const { root } = resolveRoot(workspace);
+        const force = typeof flags.force === 'string' ? [flags.force, ...positionals] : positionals;
+        const steps = await upgradeTeachers(root, { force });
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps }), null, 2)}\n`);
+        else {
+          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了' };
+          for (const s of steps) {
+            process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
+            if (s.diff?.length) {
+              process.stdout.write(`    你的 vs 新版(- 你的 / + 新版),想用新版:cotutor upgrade --force ${s.name}\n`);
+              for (const l of s.diff.slice(0, 40)) process.stdout.write(`    ${l}\n`);
+              if (s.diff.length > 40) process.stdout.write(`    …还有 ${s.diff.length - 40} 行\n`);
+            }
+          }
+        }
         return;
       }
       case 'cert': {

@@ -1,16 +1,18 @@
 /**
  * cotutor init <slug>:建 ~/cotutor/<slug>/ 骨架。语义是**幂等补缺**——已有的文件与目录一律不动,缺什么补什么。
  * 三条边界(沿 drawtell init):政策文件只在缺失时写模板;用户配置只在还没指定 workspace 时补;不动 git。
- * 老师定义不拷贝,**链**到本包 agents/(共享的是定义,不共享记忆与账本);链已存在(哪怕是实体文件)就不动。
+ * 老师定义**拷贝**进 .claude/agents/(2026-09-09 拍板,原来是链):拷进来就是家长的,想改就改;出厂 hash 记 .cotutor/shipped.json,
+ * cotutor upgrade 据此换新或报 diff。旧工作区里指向包的链会被换成拷贝。.qwen/agents/ 是指向 .claude/agents/ 的相对链。
  */
-import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { DIRS, GITIGNORE, LEDGER_FILES, RULES, configTemplate, shippedAgents } from './skeleton.ts';
+import { installTeachers } from './teachers.ts';
 import { CONFIG_FILE, HOME_ROOT, USER_CONFIG, expandPath } from './workspace.ts';
 
 export interface InitStep {
   item: string;
-  action: 'created' | 'exists' | 'kept';
+  action: 'created' | 'exists' | 'kept' | 'replaced';
   note?: string;
 }
 
@@ -29,11 +31,6 @@ export interface InitOptions {
 
 async function exists(p: string): Promise<boolean> {
   return (await stat(p).catch(() => null)) !== null;
-}
-
-async function lexists(p: string): Promise<boolean> {
-  const { lstat } = await import('node:fs/promises');
-  return (await lstat(p).catch(() => null)) !== null;
 }
 
 export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
@@ -64,16 +61,8 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
       await writeFile(join(home, '.gitkeep'), '');
       steps.push({ item: `agents/${a.name}/`, action: 'created' });
     }
-    for (const sub of ['.claude/agents', '.qwen/agents']) {
-      const link = join(root, sub, basename(a.file));
-      if (await lexists(link)) {
-        steps.push({ item: `${sub}/${basename(a.file)}`, action: 'exists' });
-        continue;
-      }
-      await symlink(a.file, link);
-      steps.push({ item: `${sub}/${basename(a.file)}`, action: 'created', note: `→ ${a.file}` });
-    }
   }
+  steps.push(...(await installTeachers(root)));
 
   for (const f of LEDGER_FILES) {
     const p = join(root, f);

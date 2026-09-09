@@ -1,5 +1,5 @@
-/** init 幂等补缺、老师定义是链;doctor 把断链、坏配置、坏账本摆到明面。 */
-import { existsSync, lstatSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+/** init 幂等补缺、老师定义是拷贝(旧链自动换);doctor 把缺文件、坏配置、坏账本摆到明面。 */
+import { existsSync, lstatSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -20,8 +20,9 @@ try {
   check('骨架目录齐', ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents'].every((d) => existsSync(join(ws, d))));
   check('老师目录齐', ['math-teacher', 'chinese-teacher', 'reading-teacher', 'homework-aide', 'planner'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
   const link = join(ws, '.claude', 'agents', 'math-teacher.md');
-  check('老师定义是链,指向本包 agents/', lstatSync(link).isSymbolicLink() && readlinkSync(link) === join(PACKAGE_AGENTS_DIR, 'math-teacher.md'));
-  check('.qwen 同样链上', lstatSync(join(ws, '.qwen', 'agents', 'planner.md')).isSymbolicLink());
+  check('老师定义是拷贝,内容同本包', !lstatSync(link).isSymbolicLink() && readFileSync(link, 'utf8') === readFileSync(join(PACKAGE_AGENTS_DIR, 'math-teacher.md'), 'utf8'));
+  check('.qwen 是指向 .claude 的相对链', lstatSync(join(ws, '.qwen', 'agents', 'planner.md')).isSymbolicLink() && readlinkSync(join(ws, '.qwen', 'agents', 'planner.md')) === '../../.claude/agents/planner.md');
+  check('出厂 hash 记下', (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { teachers: Record<string, { hash: string }> }).teachers['math-teacher'].hash.startsWith('sha256:'));
   check('账本空文件在', existsSync(join(ws, 'ledger', 'observations.jsonl')) && existsSync(join(ws, 'ledger', 'artifacts.jsonl')));
   const cfg = JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { kid: { slug: string; name?: string } };
   check('cotutor.json 模板带 slug 与名', cfg.kid.slug === 'ming' && cfg.kid.name === '小明');
@@ -46,9 +47,21 @@ try {
 
   unlinkSync(link);
   const d2 = await doctorWorkspace(ws, { probeEnv: false });
-  check('链断 → 必需失败附 init', !d2.ok && d2.checks.some((c) => c.name === 'teacher.math-teacher.claude' && !c.ok && c.fix?.includes('init')));
+  check('文件没了 → 必需失败附 init', !d2.ok && d2.checks.some((c) => c.name === 'teacher.math-teacher.claude' && !c.ok && c.fix?.includes('init')));
   await initWorkspace({ slug: 'ming' });
-  check('init 重链', lstatSync(link).isSymbolicLink());
+  check('init 补拷', existsSync(link) && !lstatSync(link).isSymbolicLink());
+  // 旧工作区:指向包的链 → init 换成拷贝
+  unlinkSync(link);
+  symlinkSync(join(PACKAGE_AGENTS_DIR, 'math-teacher.md'), link);
+  const dLegacy = await doctorWorkspace(ws, { probeEnv: false });
+  check('旧的包内链 → doctor 提醒换拷贝', dLegacy.checks.some((c) => c.name === 'teacher.math-teacher.origin' && !c.ok && c.detail.includes('旧链')));
+  const rLegacy = await initWorkspace({ slug: 'ming' });
+  check('init 把旧链换成拷贝', !lstatSync(link).isSymbolicLink() && rLegacy.steps.some((s) => s.item === '.claude/agents/math-teacher.md' && s.action === 'replaced'));
+  // 家长改过的文件:init 不动,doctor 标自定义
+  writeFileSync(link, readFileSync(link, 'utf8') + '\n再温柔一点。\n');
+  await initWorkspace({ slug: 'ming' });
+  check('改过的老师文件 init 不动', readFileSync(link, 'utf8').includes('再温柔一点'));
+  check('doctor 标自定义', (await doctorWorkspace(ws, { probeEnv: false })).checks.some((c) => c.name === 'teacher.math-teacher.origin' && c.ok && c.detail.includes('自定义')));
 
   writeFileSync(join(ws, 'ledger', 'observations.jsonl'), '{"id":"o-1","date":"2026-09-08","author":"math-teacher","claim":"ok"}\n坏行\n');
   const d3 = await doctorWorkspace(ws, { probeEnv: false });

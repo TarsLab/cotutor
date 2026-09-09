@@ -11,7 +11,7 @@
 需要 Node ≥ 22.18,以及 `claude`(Claude Code)或 `qwen`(Qwen Code)至少一个。
 
 ```sh
-npm i -g cotutor          # 装全局,别用 npx:老师定义是链进 workspace 的,npx 缓存被回收链就断(doctor 会报断链)
+npm i -g cotutor          # 装全局;升级后跑 cotutor upgrade 换新版老师文件(改过的不覆盖)
 cotutor init ming --name 小明   # 建 ~/cotutor/ming/
 cotutor doctor                  # 逐项体检,不过的每条都带修复指南
 cotutor cert                    # 可选:mkcert 签自签证书到 certs/(iPad Safari 的按住说话要 HTTPS)
@@ -21,7 +21,7 @@ cotutor send math-teacher "42-17 怎么讲?"   # 终端里发一条,与页面同
 
 孩子端要在 iPad 上听到老师的声音,再做两件事:`cotutor.json` 里给老师填 `voice`(voxtell 的音色 id,`voxtell voices` 可查),并把 `mkcert -CAROOT` 下的 rootCA.pem 装到 iPad 并信任。老师没配 voice 或 voxtell 没装时,孩子端用浏览器自带的合成声。课程表是 vault 里的 `课程表.md`(表头 星期 / 时间 / 学科,孩子列可选),没有也能用。
 
-老师定义随包发布(数学老师、语文老师、朗读老师、作业助教、规划老师),init 把它们**链**进 workspace 的 `.claude/agents/` 与 `.qwen/agents/`——共享的是定义,不共享记忆与账本。人设、音色、开关、政策不在老师文件里,在 workspace 的 `cotutor.json`。从老师目录起会话:
+老师定义随包发布(数学老师、语文老师、朗读老师、作业助教、规划老师),init 把它们**拷贝**进 workspace 的 `.claude/agents/`(`.qwen/agents/` 是指向它的链)。拷进来就是你家的:想让数学老师说话温柔点,直接改那个文件;`cotutor upgrade` 只换没改过的,改过的打印 diff 让你自己定,`--force <老师>` 才覆盖(原文留 `.bak`);`cotutor doctor` 显示每位老师是出厂件还是自定义。人设、音色、开关、政策不在老师文件里,在 workspace 的 `cotutor.json`。从老师目录起会话:
 
 ```sh
 cd ~/cotutor/ming/agents/math-teacher

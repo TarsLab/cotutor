@@ -46,10 +46,11 @@
 ~/cotutor/<slug>/                        一个孩子一个 workspace(2026-09-08 拍板);git 仓(私有);slug 是短名不是真名
   cotutor.json                           老师人设与政策、agent 预设({run, resume} 模板)、paths 角色映射(vault 侧目录)
   CLAUDE.md   QWEN.md                    家规:账本在哪、记忆在哪、待裁量约定;所有老师常驻
-  .claude/agents/<name>.md               老师与帮手的定义(链到技能仓,或实体)
+  .claude/agents/<name>.md               老师与帮手的定义(**拷贝**自 cotutor 包的出厂件,是家长的;2026-09-09 改,原为链)
+  .cotutor/shipped.json                  出厂 hash(机器文件),cotutor upgrade 据此分辨没改过 / 改过
   .claude/skills/                        技能(链)
   .claude/settings.json                  记忆等开关
-  .qwen/agents/  .qwen/skills/           镜像(同一文件链两处);.qwen/team-memory/ 可选
+  .qwen/agents/  .qwen/skills/           指向 .claude/ 下同名文件的相对链(一份真相两处可见);.qwen/team-memory/ 可选
   agents/<name>/                         老师的家 = 会话 cwd
     CLAUDE.md                            这位老师的常驻补充(可选,叠在家规之后)
     .claude/agent-memory/<name>/         私有工作记忆(Claude 自动落这里 ✓)
@@ -174,6 +175,7 @@ memory: project
 4. `observations.jsonl` 字段定稿后进 @tarslab/schema
 5. 不设记忆的写入纪律(见文首)
 6. **一个 workspace 一个孩子**:`~/cotutor/<slug>/` 对一个 vault、一个服务进程(端口不同);路径用短名;跨孩子共享靠拷贝技能
+7. **老师文件拷贝不链**(2026-09-09):见《产品规划.md》拍板 8。「共享的是定义」改为「共享的是出厂件,拷进来就是这家的」;升级靠 hash 分辨
 
 ## 10. 待拍板
 

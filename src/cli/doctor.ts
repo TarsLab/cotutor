@@ -12,6 +12,7 @@ import { parseArtifactEvents, parseObservations } from '../lib/ledger.ts';
 import { parseTimetable } from '../lib/timetable.ts';
 import { httpsFiles } from './serve.ts';
 import { DIRS } from './skeleton.ts';
+import { teacherStatuses } from './teachers.ts';
 import {
   CONFIG_FILE,
   ConfigError,
@@ -133,8 +134,9 @@ export async function doctorWorkspace(
   });
 
   if (ws) {
-    // ---- 老师:定义链 + 名字一致 + 老师目录 ----
+    // ---- 老师:定义文件(拷贝)+ 名字一致 + 出厂 / 自定义状态 + 老师目录 ----
     const defaultCli = presetCli(ws.config.agents[ws.config.agents.default]?.run ?? []);
+    const statuses = new Map((await teacherStatuses(root)).map((s) => [s.name, s]));
     for (const name of Object.keys(ws.config.teachers)) {
       for (const [cli, dir] of [
         ['claude', ws.dirs.claudeAgents],
@@ -156,7 +158,18 @@ export async function doctorWorkspace(
           ok,
           required,
           detail,
-          fix: ok ? undefined : `cotutor init 重链(链到本包 agents/${name}.md),或把老师键改成文件里的 name`,
+          fix: ok ? undefined : `cotutor init 补拷(拷自本包 agents/${name}.md),或把老师键改成文件里的 name`,
+        });
+      }
+      const st = statuses.get(name);
+      if (st) {
+        const label: Record<string, string> = { latest: '出厂件,最新', upgradable: `出厂件,基于 ${st.basedOn},包已更新`, custom: `自定义(基于 ${st.basedOn})`, untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
+        push({
+          name: `teacher.${name}.origin`,
+          ok: st.state !== 'upgradable' && !st.legacyLink,
+          required: false,
+          detail: st.legacyLink ? '还是指向包的旧链(改它会改到包里)' : label[st.state],
+          fix: st.legacyLink ? 'cotutor init 换成拷贝' : st.state === 'upgradable' ? 'cotutor upgrade 换新版' : undefined,
         });
       }
       const home = join(ws.dirs.agents, name);

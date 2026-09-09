@@ -22,8 +22,8 @@ export function jobId(d: Date, seq: number): string {
   return `${pad(d.getHours())}${pad(d.getMinutes())}-${seq}`;
 }
 
-export function emptyIndex(teacher: string, date: string): ConversationIndex {
-  return ConversationIndexSchema.parse({ teacher, date });
+export function emptyIndex(tutor: string, date: string): ConversationIndex {
+  return ConversationIndexSchema.parse({ tutor, date });
 }
 
 export interface ConversationFiles {
@@ -33,9 +33,9 @@ export interface ConversationFiles {
   audio: (job: string) => string;
 }
 
-/** conversations/<teacher>/<date>.json 与 <date>.<job>.log / .err.log / .mp3(配音) */
-export function conversationFiles(conversationsDir: string, teacher: string, date: string): ConversationFiles {
-  const base = `${conversationsDir}/${teacher}/${date}`;
+/** conversations/<tutor>/<date>.json 与 <date>.<job>.log / .err.log / .mp3(配音) */
+export function conversationFiles(conversationsDir: string, tutor: string, date: string): ConversationFiles {
+  const base = `${conversationsDir}/${tutor}/${date}`;
   return { index: `${base}.json`, log: (job) => `${base}.${job}.log`, err: (job) => `${base}.${job}.err.log`, audio: (job) => `${base}.${job}.mp3` };
 }
 

@@ -104,7 +104,7 @@ vault(家长面,iCloud,不进 git,**一个孩子一个 vault**):孩子档案、�
 - **时间与纠错**:每条带日期;观察有 `retracted` 字段,错了标掉不删;Claude 私有记忆文件自动带 `modified`。
 - **触发**(2026-09-08 拍板):记账在**学习结束后由家长触发**,不自动跑。家长端一个「记账」按钮,应用对当天有对话的每位老师 resume 一次,消息是「学习结束,把今天的观察写进账本,给日记一段」;老师自己写,或 fork 一个记账员写。
 - **周汇总**:同样由家长触发(周末点一次),记账员把 `observations.jsonl` 汇成 `rollups/<周>.md`,并投影一段到 vault 周记;原条目保留。
-- **家长入口**:助教团页能看、能改任何老师的私有记忆与账本条目,全是文本。
+- **家长入口**:老师团页能看、能改任何老师的私有记忆与账本条目,全是文本。
 
 ## 6. 规划老师:跨老师的知识怎么流
 
@@ -157,7 +157,7 @@ vault(家长面,iCloud,不进 git,**一个孩子一个 vault**):孩子档案、�
 
 ```markdown
 ---
-name: math-teacher
+name: math-tutor
 description: 数学老师
 maxTurns: 40
 permissionMode: bypassPermissions
@@ -165,7 +165,7 @@ memory: project
 ---
 ```
 
-启动(Claude):`cd ~/cotutor/<slug>/agents/math-teacher && claude --agent math-teacher -p "<上下文包 + 消息>" --resume <会话id> --output-format stream-json`
+启动(Claude):`cd ~/cotutor/<slug>/agents/math-tutor && claude --agent math-tutor -p "<上下文包 + 消息>" --resume <会话id> --output-format stream-json`
 
 ## 9. 拍板记录(2026-09-08)
 

@@ -6,7 +6,7 @@ const TEXT = [
   '我看了照片,是数学第 3、5 题。',
   '',
   '## 转交',
-  'to: math-teacher',
+  'to: math-tutor',
   'why: 两位数退位减法错了两道',
   'refs: [captures/2026-09-08-abcd, photos/1.jpg]',
   '',
@@ -26,7 +26,7 @@ const TEXT = [
 
 {
   const p = parseSections(TEXT);
-  check('转交解析', p.handoff?.to === 'math-teacher' && p.handoff.refs.length === 2 && p.handoff.why?.includes('退位'), JSON.stringify(p.handoff));
+  check('转交解析', p.handoff?.to === 'math-tutor' && p.handoff.refs.length === 2 && p.handoff.why?.includes('退位'), JSON.stringify(p.handoff));
   check('待裁量解析', p.holdup?.question.includes('第 5 题') && p.holdup.options.length === 2 && p.holdup.options[0].recommended === true && p.holdup.options[1].note === '第 5 题晚点补', JSON.stringify(p.holdup));
   check('正文去掉两段、保留其它段', p.body.startsWith('我看了照片') && p.body.includes('## 备注') && p.body.endsWith('两道题都是退位没借。') && !p.body.includes('to:') && !p.body.includes('question:'), p.body);
 }

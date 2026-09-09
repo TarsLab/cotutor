@@ -18,14 +18,14 @@ try {
   const get = (p: string) => route('GET', p, ctx);
 
   check('health', (await get('/api/health')).status === 200 && ((await get('/api/health')).json as { ok: boolean }).ok);
-  const rep = (await get('/api/workspace')).json as { workspace: string; teachers: string[] };
-  check('工作区回报脱敏', rep.workspace.startsWith('$HOME') && rep.teachers.length === 5, JSON.stringify(rep));
-  const cfg = (await get('/api/config')).json as { title: string; presets: string[]; teachers: { name: string; policy: { replyMaxChars: number } }[]; teacherPatches: Record<string, unknown> };
-  check('配置接口带老师、政策、预设名', cfg.title === '小明的书房' && cfg.teachers.length === 5 && cfg.teachers[0].policy.replyMaxChars === 60 && cfg.presets.join() === 'claude,qwen' && 'planner' in cfg.teacherPatches);
-  check('孩子端老师列表不含 hidden', ((await get('/api/teachers?kid=1')).json as unknown[]).length === 4);
+  const rep = (await get('/api/workspace')).json as { workspace: string; tutors: string[] };
+  check('工作区回报脱敏', rep.workspace.startsWith('$HOME') && rep.tutors.length === 5, JSON.stringify(rep));
+  const cfg = (await get('/api/config')).json as { title: string; presets: string[]; tutors: { name: string; policy: { replyMaxChars: number } }[]; tutorPatches: Record<string, unknown> };
+  check('配置接口带老师、政策、预设名', cfg.title === '小明的老师们' && cfg.tutors.length === 5 && cfg.tutors[0].policy.replyMaxChars === 60 && cfg.presets.join() === 'claude,qwen' && 'planner' in cfg.tutorPatches);
+  check('孩子端老师列表不含 hidden', ((await get('/api/tutors?kid=1')).json as unknown[]).length === 4);
   check('首页 html 指向家长端', (await get('/')).html?.includes('/parent') === true);
   check('家长页', (await get('/parent')).html?.includes('对话') === true);
-  check('日期列表空', ((await get('/api/conversations/math-teacher')).json as { dates: string[] }).dates.length === 0);
+  check('日期列表空', ((await get('/api/conversations/math-tutor')).json as { dates: string[] }).dates.length === 0);
   check('没这位老师 404', (await get('/api/conversations/nobody')).status === 404);
   check('404 / 405', (await get('/nope')).status === 404 && (await route('POST', '/api/health', ctx)).status === 200 && (await route('POST', '/api/workspace', ctx)).status === 405 && (await route('PUT', '/api/config', ctx)).status === 405);
 } finally {

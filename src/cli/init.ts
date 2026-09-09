@@ -7,7 +7,7 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { DIRS, GITIGNORE, LEDGER_FILES, RULES, configTemplate, shippedAgents, writeSchemaFile } from './skeleton.ts';
-import { installTeachers } from './teachers.ts';
+import { installTutors } from './tutors.ts';
 import { CONFIG_FILE, ConfigError, HOME_ROOT, USER_CONFIG, expandPath, parseConfig, readJson } from './workspace.ts';
 
 export interface InitStep {
@@ -55,18 +55,18 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const config = join(root, CONFIG_FILE);
   if (await exists(config)) steps.push({ item: CONFIG_FILE, action: 'kept', note: '政策文件不覆盖(家长的决定)' });
   else {
-    await writeFile(config, configTemplate({ slug: opts.slug, name: opts.name, port: opts.port, teachers: agents }));
+    await writeFile(config, configTemplate({ slug: opts.slug, name: opts.name, port: opts.port, tutors: agents }));
     steps.push({ item: CONFIG_FILE, action: 'created' });
   }
   // 老师按 cotutor.json 里有谁走(家长自己加的也补目录与链);配置坏了就只管出厂的,doctor 去报
-  let teacherNames: string[] = [];
+  let tutorNames: string[] = [];
   try {
     const raw = readJson(config);
-    if (raw !== null) teacherNames = Object.keys(parseConfig(raw, config).teachers);
+    if (raw !== null) tutorNames = Object.keys(parseConfig(raw, config).tutors);
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
   }
-  steps.push(...(await installTeachers(root, teacherNames)));
+  steps.push(...(await installTutors(root, tutorNames)));
   const schemaThere = await exists(join(root, '.cotutor', 'cotutor.schema.json'));
   await writeSchemaFile(root);
   steps.push({ item: '.cotutor/cotutor.schema.json', action: schemaThere ? 'exists' : 'created', note: schemaThere ? '已按本包刷新(机器文件)' : 'cotutor.json 的 JSON Schema,编辑器补全用' });
@@ -120,7 +120,7 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
 
   const suggestions: string[] = [];
   if (!(await exists(join(root, '.git')))) suggestions.push('git init(建议:老师记忆、账本、政策都是不可再生状态,git 是破坏后的兜底)');
-  suggestions.push(`改 ${CONFIG_FILE}:paths.vault 指到孩子的 Obsidian vault,teachers.*.voice 填 voxtell 音色 id`);
+  suggestions.push(`改 ${CONFIG_FILE}:paths.vault 指到孩子的 Obsidian vault,tutors.*.voice 填 voxtell 音色 id`);
   suggestions.push('cotutor doctor 逐项体检;cotutor serve 起服务');
   return { root, steps, suggestions };
 }

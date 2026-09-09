@@ -12,7 +12,7 @@ export const KID_PAGE = `<!doctype html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>__TITLE__</title>
 <style>
-  :root { --paper:#f6f4ee; --ink:#2b2b2b; --dim:#8a8781; --line:#e2dfd6; --card:#fffdf8; --kid:#dbeeff; --teacher:#fff3d6; --accent:#e8743b; }
+  :root { --paper:#f6f4ee; --ink:#2b2b2b; --dim:#8a8781; --line:#e2dfd6; --card:#fffdf8; --kid:#dbeeff; --tutor:#fff3d6; --accent:#e8743b; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body { height:100%; }
   body { margin:0; background:var(--paper); color:var(--ink); font:18px/1.5 -apple-system,"PingFang SC","Helvetica Neue",sans-serif; -webkit-user-select:none; user-select:none; overscroll-behavior:none; }
@@ -38,14 +38,14 @@ export const KID_PAGE = `<!doctype html>
   .stack .name { font-weight:600; font-size:18px; }
   .stack .item { font-size:15px; color:var(--dim); margin-top:4px; }
   /* 老师 */
-  .teachers { display:flex; gap:22px; flex-wrap:wrap; justify-content:center; margin-top:10px; }
-  .teacher { display:flex; flex-direction:column; align-items:center; gap:8px; background:none; border:0; padding:8px; font:inherit; color:var(--ink); cursor:pointer; }
-  .teacher .av { width:104px; height:104px; border-radius:50%; background:var(--card); border:3px solid var(--line); display:grid; place-items:center; font-size:56px; box-shadow:0 4px 12px #0000000f; transition:transform .15s; }
-  .teacher:active .av { transform:scale(.94); }
-  .teacher .nm { font-size:16px; font-weight:600; }
-  .teacher.off { pointer-events:none; }
-  .teacher.off .av { filter:grayscale(1); opacity:.4; box-shadow:none; }
-  .teacher.off .nm { color:var(--dim); }
+  .tutors { display:flex; gap:22px; flex-wrap:wrap; justify-content:center; margin-top:10px; }
+  .tutor { display:flex; flex-direction:column; align-items:center; gap:8px; background:none; border:0; padding:8px; font:inherit; color:var(--ink); cursor:pointer; }
+  .tutor .av { width:104px; height:104px; border-radius:50%; background:var(--card); border:3px solid var(--line); display:grid; place-items:center; font-size:56px; box-shadow:0 4px 12px #0000000f; transition:transform .15s; }
+  .tutor:active .av { transform:scale(.94); }
+  .tutor .nm { font-size:16px; font-weight:600; }
+  .tutor.off { pointer-events:none; }
+  .tutor.off .av { filter:grayscale(1); opacity:.4; box-shadow:none; }
+  .tutor.off .nm { color:var(--dim); }
   /* 聊天窗 */
   #chat { position:fixed; inset:0; background:var(--paper); display:none; flex-direction:column; z-index:10; }
   #chat.on { display:flex; }
@@ -56,9 +56,9 @@ export const KID_PAGE = `<!doctype html>
   #log { flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:12px; -webkit-overflow-scrolling:touch; }
   .b { max-width:78%; padding:12px 16px; border-radius:20px; font-size:20px; line-height:1.5; word-break:break-word; -webkit-user-select:text; user-select:text; }
   .b.q { align-self:flex-end; background:var(--kid); border-bottom-right-radius:6px; }
-  .b.r { align-self:flex-start; background:var(--teacher); border-bottom-left-radius:6px; display:flex; gap:10px; align-items:flex-start; }
+  .b.r { align-self:flex-start; background:var(--tutor); border-bottom-left-radius:6px; display:flex; gap:10px; align-items:flex-start; }
   .b.r .play { flex:0 0 auto; width:36px; height:36px; border-radius:50%; border:0; background:#fff; font-size:18px; display:grid; place-items:center; cursor:pointer; }
-  .b.thinking { align-self:flex-start; background:var(--teacher); color:var(--dim); }
+  .b.thinking { align-self:flex-start; background:var(--tutor); color:var(--dim); }
   .b.thinking i { display:inline-block; width:8px; height:8px; margin:0 3px; border-radius:50%; background:var(--dim); animation:blink 1.2s infinite; }
   .b.thinking i:nth-child(2) { animation-delay:.2s; } .b.thinking i:nth-child(3) { animation-delay:.4s; }
   @keyframes blink { 0%,80%,100% { opacity:.2; } 40% { opacity:1; } }
@@ -76,14 +76,14 @@ export const KID_PAGE = `<!doctype html>
   #gate.hold { background:var(--line); }
   #rest { display:none; text-align:center; color:var(--dim); margin:40px 0; font-size:16px; }
   body.offline #rest { display:block; }
-  body.offline .teacher { pointer-events:none; }
-  body.offline .teacher .av { filter:grayscale(1); opacity:.4; box-shadow:none; }
+  body.offline .tutor { pointer-events:none; }
+  body.offline .tutor .av { filter:grayscale(1); opacity:.4; box-shadow:none; }
 </style>
 <div id="home">
   <h1 id="title">__TITLE__</h1>
   <div class="path" id="path"></div>
   <div class="today" id="today"></div>
-  <div class="teachers" id="teachers"></div>
+  <div class="tutors" id="tutors"></div>
   <p id="rest">老师们休息中</p>
 </div>
 <button id="gate" type="button">家长 · 长按</button>
@@ -118,7 +118,7 @@ export const KID_PAGE = `<!doctype html>
   const color = (s) => { if (FIXED[s]) return FIXED[s]; let x = 0; for (const ch of s) x = (x * 31 + ch.codePointAt(0)) >>> 0; return PALETTE[x % PALETTE.length]; };
   const DAYS = ['', '一', '二', '三', '四', '五', '六', '日'];
 
-  const state = { home: null, teacher: null, day: null, timer: null, offline: false, played: new Set(), sentJob: null };
+  const state = { home: null, tutor: null, day: null, timer: null, offline: false, played: new Set(), sentJob: null };
 
   // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音退回浏览器合成 ----
   const audioEl = new Audio();
@@ -127,7 +127,7 @@ export const KID_PAGE = `<!doctype html>
   const speak = (text) => { try { if (!('speechSynthesis' in window)) return; speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = 'zh-CN'; u.rate = 0.95; speechSynthesis.speak(u); } catch {} };
   const play = (m) => {
     try {
-      if (m.audio) { try { speechSynthesis && speechSynthesis.cancel(); } catch {} audioEl.pause(); audioEl.src = '/api/audio/' + state.teacher.name + '/' + encodeURIComponent(m.audio); audioEl.play().catch(() => speak(m.reply)); }
+      if (m.audio) { try { speechSynthesis && speechSynthesis.cancel(); } catch {} audioEl.pause(); audioEl.src = '/api/audio/' + state.tutor.name + '/' + encodeURIComponent(m.audio); audioEl.play().catch(() => speak(m.reply)); }
       else speak(m.reply);
     } catch {}
   };
@@ -157,7 +157,7 @@ export const KID_PAGE = `<!doctype html>
     const slots = H.timetable.filter((e) => e.day === H.day).map((e) => h('span', { class: 'slot' + (H.slot === e.subject + ' ' + e.start + '-' + e.end ? ' now' : '') }, h('span', { class: 'dot', style: 'background:' + color(e.subject) }), e.subject + ' ' + e.start + '–' + e.end));
     const stacks = H.stacks.map((s) => h('div', { class: 'stack', style: 'border-color:' + color(s.subject) }, h('div', { class: 'name' }, s.subject), ...s.items.map((a) => h('div', { class: 'item' }, a.id))));
     $('#today').replaceChildren(...slots, stacks.length ? h('div', { class: 'stacks' }, ...stacks) : null);
-    $('#teachers').replaceChildren(...H.teachers.map((t) => h('button', { type: 'button', class: 'teacher' + (t.available ? '' : ' off'), on: { click: () => openChat(t) } }, h('span', { class: 'av' }, t.avatar || '🙂'), h('span', { class: 'nm' }, t.display))));
+    $('#tutors').replaceChildren(...H.tutors.map((t) => h('button', { type: 'button', class: 'tutor' + (t.available ? '' : ' off'), on: { click: () => openChat(t) } }, h('span', { class: 'av' }, t.avatar || '🙂'), h('span', { class: 'nm' }, t.display))));
   };
   const loadHome = async () => {
     try { state.home = await api('GET', '/api/kid/home'); setOffline(false); renderHome(); }
@@ -167,19 +167,19 @@ export const KID_PAGE = `<!doctype html>
     if (state.offline === off) return;
     state.offline = off;
     document.body.classList.toggle('offline', off);
-    if (off && state.teacher) closeChat();
+    if (off && state.tutor) closeChat();
   };
 
   // ---- 聊天窗 ----
   const openChat = (t) => {
     unlock();
-    state.teacher = t; state.played = new Set(); state.sentJob = null;
+    state.tutor = t; state.played = new Set(); state.sentJob = null;
     $('#c-av').textContent = t.avatar || '🙂'; $('#c-nm').textContent = t.display;
     $('#log').replaceChildren(); $('#chat').classList.add('on');
     // 已经在页面上的旧回复不重播:第一次加载先把它们记为已播
     loadDay(true);
   };
-  const closeChat = () => { clearTimeout(state.timer); state.teacher = null; $('#chat').classList.remove('on'); try { audioEl.pause(); speechSynthesis && speechSynthesis.cancel(); } catch {} loadHome(); };
+  const closeChat = () => { clearTimeout(state.timer); state.tutor = null; $('#chat').classList.remove('on'); try { audioEl.pause(); speechSynthesis && speechSynthesis.cancel(); } catch {} loadHome(); };
   $('#back').addEventListener('click', closeChat);
 
   const renderDay = () => {
@@ -197,9 +197,9 @@ export const KID_PAGE = `<!doctype html>
     if (d.remaining <= 0) { bar.classList.add('full'); bar.replaceChildren('今天聊够啦,明天再来 🌙'); }
   };
   const loadDay = async (silent) => {
-    if (!state.teacher) return;
+    if (!state.tutor) return;
     try {
-      state.day = await api('GET', '/api/kid/conversations/' + state.teacher.name + '/today');
+      state.day = await api('GET', '/api/kid/conversations/' + state.tutor.name + '/today');
       setOffline(false);
       renderDay();
       for (const m of state.day.messages) {
@@ -216,11 +216,11 @@ export const KID_PAGE = `<!doctype html>
   };
   const send = async (text) => {
     text = (text || '').trim();
-    if (!text || !state.teacher) return;
+    if (!text || !state.tutor) return;
     unlock();
     $('#typed').value = '';
     try {
-      await api('POST', '/api/kid/conversations/' + state.teacher.name + '/messages', { text });
+      await api('POST', '/api/kid/conversations/' + state.tutor.name + '/messages', { text });
       loadDay(false);
     } catch (e) {
       // 忙 / 上限 / 不通:什么都不报;刷新一下让状态说话
@@ -267,8 +267,8 @@ export const KID_PAGE = `<!doctype html>
 
   // ---- 启动与心跳:不通就头像灰,什么都不报 ----
   loadHome();
-  setInterval(() => { if (state.teacher) { if (!state.day || !state.day.pending) loadDay(true); } else loadHome(); }, 5000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) (state.teacher ? loadDay(true) : loadHome()); });
+  setInterval(() => { if (state.tutor) { if (!state.day || !state.day.pending) loadDay(true); } else loadHome(); }, 5000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) (state.tutor ? loadDay(true) : loadHome()); });
 })();
 </script>
 </html>

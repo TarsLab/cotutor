@@ -14,8 +14,8 @@ const { configTemplate, shippedAgents } = await import('../src/cli/skeleton.ts')
 
 const agents = await shippedAgents();
 const mk = (dir: string, slug = 'k'): string => {
-  mkdirSync(join(dir, 'agents', 'math-teacher'), { recursive: true });
-  writeFileSync(join(dir, 'cotutor.json'), configTemplate({ slug, teachers: agents }));
+  mkdirSync(join(dir, 'agents', 'math-tutor'), { recursive: true });
+  writeFileSync(join(dir, 'cotutor.json'), configTemplate({ slug, tutors: agents }));
   return dir;
 };
 
@@ -35,7 +35,7 @@ try {
   check('flag 目录不存在 → 用法错误附修复', threw);
 
   check('env', resolveRoot(undefined, { cwd: empty, env: { COTUTOR_WORKSPACE: other } }).root === other);
-  const up = resolveRoot(undefined, { cwd: join(ws1, 'agents', 'math-teacher'), env: {} });
+  const up = resolveRoot(undefined, { cwd: join(ws1, 'agents', 'math-tutor'), env: {} });
   check('cwd 向上找到根(老师目录里跑)', up.root === ws1 && up.source === 'cwd', JSON.stringify(up));
 
   const single = resolveRoot(undefined, { cwd: empty, env: {}, homeRoot: join(home, 'cotutor') });

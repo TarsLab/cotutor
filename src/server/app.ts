@@ -1,6 +1,6 @@
 /**
  * 服务的路由层:route(method, path, ctx, body) → {status, json|html},测试不用起端口。
- * R1 的查询接口照旧;R2 加:会话(列日期、看一天的原始视图、发消息)、cotutor.json 补丁(助教团页)、家长页 /parent。
+ * R1 的查询接口照旧;R2 加:会话(列日期、看一天的原始视图、发消息)、cotutor.json 补丁(老师团页)、家长页 /parent。
  * R3 加:孩子端 `/`(KID_PAGE)与 /api/kid/*(首页:课程表 + 老师 + 今天的产物叠;会话:服务端过滤后的孩子视图;发消息:from 固定 kid、每日上限 429)、配音文件 /api/audio。
  * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
@@ -14,14 +14,14 @@ import { localDate } from '../lib/conversation.ts';
 import { kidConversation, kidMessageCount, type KidMessage } from '../lib/kid-view.ts';
 import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
 import { currentSlot, dayOf, parseTimetable, slotLabel } from '../lib/timetable.ts';
-import { DATE_RE, FocusSchema, MESSAGE_FROM, listTeachers, resolvePolicy, type Artifact, type ConversationIndex, type TimetableEntry } from '../schema/index.ts';
+import { DATE_RE, FocusSchema, MESSAGE_FROM, listTutors, resolvePolicy, type Artifact, type ConversationIndex, type TimetableEntry } from '../schema/index.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
-import { teacherStatuses } from '../cli/teachers.ts';
+import { tutorStatuses } from '../cli/tutors.ts';
 import { KID_PAGE } from './kid-page.ts';
 import { PARENT_PAGE } from './parent-page.ts';
 import { BusyError, Runner } from './runner.ts';
 import { IndexError, listDates, patchConfig, readErrLog, readIndex, readTranscript, reloadIfChanged } from './store.ts';
-import { addTeacherFile, readTeacherFile, removeTeacherFile, writeTeacherFile } from '../cli/teachers.ts';
+import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
 
 export interface RouteResult {
   status: number;
@@ -75,26 +75,26 @@ export interface DayView {
   errors: Record<string, string>;
 }
 
-export async function dayView(ctx: AppContext, teacher: string, date: string): Promise<DayView> {
-  const index = await readIndex(ctx.ws, teacher, date);
+export async function dayView(ctx: AppContext, tutor: string, date: string): Promise<DayView> {
+  const index = await readIndex(ctx.ws, tutor, date);
   const runs: Record<string, TranscriptRow[]> = {};
   const errors: Record<string, string> = {};
   for (const m of index.messages) {
-    const t = await readTranscript(ctx.ws, teacher, date, m.job);
+    const t = await readTranscript(ctx.ws, tutor, date, m.job);
     runs[m.job] = t ? foldRuns(t.items) : [];
     if (m.result === 'error') {
-      const tail = (await readErrLog(ctx.ws, teacher, date, m.job)).trim().split('\n').slice(-5).join('\n');
+      const tail = (await readErrLog(ctx.ws, tutor, date, m.job)).trim().split('\n').slice(-5).join('\n');
       if (tail) errors[m.job] = tail;
     }
   }
-  const active = ctx.runner.running(teacher);
+  const active = ctx.runner.running(tutor);
   return { index, running: active && active.date === date ? active.job : null, runs, errors };
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 
 /** 孩子端看到的老师:enabled 且不 hidden;每日上限用完 available = false(头像灰) */
-export interface KidTeacher {
+export interface KidTutor {
   name: string;
   display: string;
   avatar: string | null;
@@ -104,9 +104,9 @@ export interface KidTeacher {
   available: boolean;
 }
 
-export async function kidTeachers(ctx: AppContext, date: string): Promise<KidTeacher[]> {
-  const out: KidTeacher[] = [];
-  for (const t of listTeachers(ctx.ws.config, { kidOnly: true })) {
+export async function kidTutors(ctx: AppContext, date: string): Promise<KidTutor[]> {
+  const out: KidTutor[] = [];
+  for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
     const used = kidMessageCount(await readIndex(ctx.ws, t.name, date));
     const remaining = Math.max(0, t.policy.dailyMessages - used);
     out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, hasVoice: Boolean(t.voice), remaining, available: remaining > 0 });
@@ -121,9 +121,9 @@ export interface KidHome {
   day: number;
   timetable: TimetableEntry[];
   slot: string | null;
-  teachers: KidTeacher[];
+  tutors: KidTutor[];
   /** 今天的产物,按学科(老师的 subject)分叠;验收开关开着的老师只给 accepted 的 */
-  stacks: { subject: string; teacher: string | null; items: Artifact[] }[];
+  stacks: { subject: string; tutor: string | null; items: Artifact[] }[];
 }
 
 export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
@@ -142,21 +142,21 @@ export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
   } catch {
     /* 账本还没有 */
   }
-  const bySubject = new Map<string, { subject: string; teacher: string | null; items: Artifact[] }>();
+  const bySubject = new Map<string, { subject: string; tutor: string | null; items: Artifact[] }>();
   for (const a of artifacts) {
     if (!a.at.startsWith(date) || a.status === 'draft' || a.status === 'retired') continue;
-    const teacher = ws.config.teachers[a.by];
-    if (teacher && resolvePolicy(ws.config, a.by).reviewGate && a.status !== 'accepted') continue;
-    const subject = teacher?.subject ?? teacher?.display ?? a.by;
-    const stack = bySubject.get(subject) ?? { subject, teacher: teacher ? a.by : null, items: [] };
+    const tutor = ws.config.tutors[a.by];
+    if (tutor && resolvePolicy(ws.config, a.by).reviewGate && a.status !== 'accepted') continue;
+    const subject = tutor?.subject ?? tutor?.display ?? a.by;
+    const stack = bySubject.get(subject) ?? { subject, tutor: tutor ? a.by : null, items: [] };
     stack.items.push(a);
     bySubject.set(subject, stack);
   }
-  return { title: ws.config.title, date, day: dayOf(now), timetable, slot: slot ? slotLabel(slot) : null, teachers: await kidTeachers(ctx, date), stacks: [...bySubject.values()] };
+  return { title: ws.config.title, date, day: dayOf(now), timetable, slot: slot ? slotLabel(slot) : null, tutors: await kidTutors(ctx, date), stacks: [...bySubject.values()] };
 }
 
 export interface KidDay {
-  teacher: string;
+  tutor: string;
   date: string;
   messages: KidMessage[];
   remaining: number;
@@ -164,11 +164,11 @@ export interface KidDay {
   pending: string | null;
 }
 
-export async function kidDay(ctx: AppContext, teacher: string, date: string): Promise<KidDay> {
-  const index = await readIndex(ctx.ws, teacher, date);
-  const policy = resolvePolicy(ctx.ws.config, teacher);
-  const active = ctx.runner.running(teacher);
-  return { teacher, date, messages: kidConversation(index), remaining: Math.max(0, policy.dailyMessages - kidMessageCount(index)), pending: active && active.date === date ? active.job : null };
+export async function kidDay(ctx: AppContext, tutor: string, date: string): Promise<KidDay> {
+  const index = await readIndex(ctx.ws, tutor, date);
+  const policy = resolvePolicy(ctx.ws.config, tutor);
+  const active = ctx.runner.running(tutor);
+  return { tutor, date, messages: kidConversation(index), remaining: Math.max(0, policy.dailyMessages - kidMessageCount(index)), pending: active && active.date === date ? active.job : null };
 }
 
 const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.mp3$/;
@@ -196,10 +196,10 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             resolvedPaths: Object.fromEntries(Object.entries(ws.paths).map(([k, v]) => [k, redactHome(v)])),
             tts: ws.config.tts,
             https: ws.config.server.https ?? null,
-            shipped: (await teacherStatuses(ws.root)).map((s) => s.name),
-            teachers: listTeachers(ws.config),
+            shipped: (await tutorStatuses(ws.root)).map((s) => s.name),
+            tutors: listTutors(ws.config),
             /** 老师条目的原始政策补丁(页面区分「继承」与「覆盖」) */
-            teacherPatches: Object.fromEntries(Object.entries(ws.config.teachers).map(([k, t]) => [k, t.policy ?? {}])),
+            tutorPatches: Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, t.policy ?? {}])),
           },
         };
       }
@@ -207,38 +207,38 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (!isObj(body)) return { status: 400, json: { error: 'bad_request', message: '要一个 JSON 对象' } };
         await patchConfig(ws, body);
         await ctx.reload();
-        return { status: 200, json: { ok: true, teachers: listTeachers(ctx.ws.config), agent: ctx.ws.config.agents.default } };
+        return { status: 200, json: { ok: true, tutors: listTutors(ctx.ws.config), agent: ctx.ws.config.agents.default } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
-    if (p === '/api/teachers' && method === 'GET') {
-      return { status: 200, json: listTeachers(ws.config, { kidOnly: url.searchParams.get('kid') === '1' }) };
+    if (p === '/api/tutors' && method === 'GET') {
+      return { status: 200, json: listTutors(ws.config, { kidOnly: url.searchParams.get('kid') === '1' }) };
     }
     // ---- 加老师 / 老师文件 / 删老师:与 cotutor add 同一条路 ----
-    if (p === '/api/teachers' && method === 'POST') {
+    if (p === '/api/tutors' && method === 'POST') {
       if (!isObj(body) || typeof body.name !== 'string' || typeof body.display !== 'string' || !body.display.trim()) return { status: 400, json: { error: 'bad_request', message: '要 {name, display, subject?, avatar?, hidden?, description?}' } };
       const name = body.name.trim();
-      if (ws.config.teachers[name]) return { status: 409, json: { error: 'exists', message: `cotutor.json 里已经有 ${name}` } };
+      if (ws.config.tutors[name]) return { status: 409, json: { error: 'exists', message: `cotutor.json 里已经有 ${name}` } };
       const str = (k: string): string | undefined => (typeof body[k] === 'string' && (body[k] as string).trim() ? (body[k] as string).trim() : undefined);
-      const r = await addTeacherFile(ws.root, { name, display: body.display.trim(), subject: str('subject'), description: str('description') });
-      await patchConfig(ws, { teachers: { [name]: { display: body.display.trim(), ...(str('subject') ? { subject: str('subject') } : {}), ...(str('avatar') ? { avatar: str('avatar') } : {}), enabled: true, ...(body.hidden === true ? { hidden: true } : {}) } } });
+      const r = await addTutorFile(ws.root, { name, display: body.display.trim(), subject: str('subject'), description: str('description') });
+      await patchConfig(ws, { tutors: { [name]: { display: body.display.trim(), ...(str('subject') ? { subject: str('subject') } : {}), ...(str('avatar') ? { avatar: str('avatar') } : {}), enabled: true, ...(body.hidden === true ? { hidden: true } : {}) } } });
       await ctx.reload();
-      return { status: 201, json: { ok: true, ...r, teachers: listTeachers(ctx.ws.config) } };
+      return { status: 201, json: { ok: true, ...r, tutors: listTutors(ctx.ws.config) } };
     }
-    const tf = /^\/api\/teachers\/([a-z0-9][a-z0-9-]*)(\/file)?$/.exec(p);
+    const tf = /^\/api\/tutors\/([a-z0-9][a-z0-9-]*)(\/file)?$/.exec(p);
     if (tf) {
       const [, name, isFile] = tf;
-      if (!ws.config.teachers[name]) return { status: 404, json: { error: 'no_such_teacher', teacher: name } };
-      if (isFile && method === 'GET') return { status: 200, json: await readTeacherFile(ws.root, name) };
+      if (!ws.config.tutors[name]) return { status: 404, json: { error: 'no_such_tutor', tutor: name } };
+      if (isFile && method === 'GET') return { status: 200, json: await readTutorFile(ws.root, name) };
       if (isFile && method === 'PUT') {
         if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text}' } };
-        return { status: 200, json: await writeTeacherFile(ws.root, name, body.text) };
+        return { status: 200, json: await writeTutorFile(ws.root, name, body.text) };
       }
       if (!isFile && method === 'DELETE') {
-        const r = await removeTeacherFile(ws.root, name);
-        await patchConfig(ws, { teachers: { [name]: null } });
+        const r = await removeTutorFile(ws.root, name);
+        await patchConfig(ws, { tutors: { [name]: null } });
         await ctx.reload();
-        return { status: 200, json: { ok: true, ...r, teachers: listTeachers(ctx.ws.config) } };
+        return { status: 200, json: { ok: true, ...r, tutors: listTutors(ctx.ws.config) } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
@@ -247,37 +247,37 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: await kidHome(ctx, ctx.now()) };
     const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages)$/.exec(p);
     if (kid) {
-      const [, teacher, tail] = kid;
-      const t = ws.config.teachers[teacher];
-      if (!t || !t.enabled || t.hidden) return { status: 404, json: { error: 'no_such_teacher' } };
+      const [, tutor, tail] = kid;
+      const t = ws.config.tutors[tutor];
+      if (!t || !t.enabled || t.hidden) return { status: 404, json: { error: 'no_such_tutor' } };
       const date = localDate(ctx.now());
-      if (tail === 'today' && method === 'GET') return { status: 200, json: await kidDay(ctx, teacher, date) };
+      if (tail === 'today' && method === 'GET') return { status: 200, json: await kidDay(ctx, tutor, date) };
       if (tail === 'messages' && method === 'POST') {
         if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
         const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
         if (focus && !focus.success) return { status: 400, json: { error: 'bad_request' } };
-        const policy = resolvePolicy(ws.config, teacher);
-        if (kidMessageCount(await readIndex(ws, teacher, date)) >= policy.dailyMessages) return { status: 429, json: { error: 'limit', remaining: 0 } };
-        const started = await ctx.runner.send(teacher, { from: 'kid', text: body.text, focus: focus?.data });
-        return { status: 202, json: { teacher, date: started.date, job: started.job } };
+        const policy = resolvePolicy(ws.config, tutor);
+        if (kidMessageCount(await readIndex(ws, tutor, date)) >= policy.dailyMessages) return { status: 429, json: { error: 'limit', remaining: 0 } };
+        const started = await ctx.runner.send(tutor, { from: 'kid', text: body.text, focus: focus?.data });
+        return { status: 202, json: { tutor, date: started.date, job: started.job } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
     const audio = /^\/api\/audio\/([a-z0-9][a-z0-9-]*)\/([^/]+)$/.exec(p);
     if (audio && method === 'GET') {
-      const [, teacher, name] = audio;
-      if (!ws.config.teachers[teacher] || !AUDIO_FILE_RE.test(name)) return { status: 404, json: { error: 'not_found' } };
-      const file = join(ws.dirs.conversations, teacher, name);
+      const [, tutor, name] = audio;
+      if (!ws.config.tutors[tutor] || !AUDIO_FILE_RE.test(name)) return { status: 404, json: { error: 'not_found' } };
+      const file = join(ws.dirs.conversations, tutor, name);
       if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, file, contentType: 'audio/mpeg' };
     }
 
     const conv = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)(?:\/([^/]+))?$/.exec(p);
     if (conv) {
-      const [, teacher, tail] = conv;
-      if (!ws.config.teachers[teacher]) return { status: 404, json: { error: 'no_such_teacher', teacher } };
+      const [, tutor, tail] = conv;
+      if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
       if (tail === undefined && method === 'GET') {
-        return { status: 200, json: { teacher, today: localDate(ctx.now()), dates: await listDates(ws, teacher), running: ctx.runner.running(teacher) } };
+        return { status: 200, json: { tutor, today: localDate(ctx.now()), dates: await listDates(ws, tutor), running: ctx.runner.running(tutor) } };
       }
       if (tail === 'messages' && method === 'POST') {
         if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, from?, focus?, preset?}' } };
@@ -285,18 +285,18 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (!(MESSAGE_FROM as readonly unknown[]).includes(from)) return { status: 400, json: { error: 'bad_request', message: `from 只能是 ${MESSAGE_FROM.join(' / ')}` } };
         const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
         if (focus && !focus.success) return { status: 400, json: { error: 'bad_request', message: 'focus 形状不对' } };
-        const started = await ctx.runner.send(teacher, {
+        const started = await ctx.runner.send(tutor, {
           from: from as (typeof MESSAGE_FROM)[number],
           text: body.text,
           focus: focus?.data,
           preset: typeof body.preset === 'string' ? body.preset : undefined,
         });
-        return { status: 202, json: { teacher, date: started.date, job: started.job, preset: started.plan.preset, resume: started.plan.resume } };
+        return { status: 202, json: { tutor, date: started.date, job: started.job, preset: started.plan.preset, resume: started.plan.resume } };
       }
       if (tail !== undefined && tail !== 'messages' && method === 'GET') {
         const date = tail === 'today' ? localDate(ctx.now()) : tail;
         if (!DATE_RE.test(date)) return { status: 400, json: { error: 'bad_request', message: '日期要是 YYYY-MM-DD 或 today' } };
-        return { status: 200, json: await dayView(ctx, teacher, date) };
+        return { status: 200, json: await dayView(ctx, tutor, date) };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }

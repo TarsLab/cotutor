@@ -11,7 +11,7 @@
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, readFile, readlink, rename, symlink, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative } from 'node:path';
-import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION, shippedAgents, teacherTemplate, writeSchemaFile, type ShippedAgent, type TeacherTemplateInput } from './skeleton.ts';
+import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION, shippedAgents, tutorTemplate, writeSchemaFile, type ShippedAgent, type TutorTemplateInput } from './skeleton.ts';
 import { AGENT_NAME_RE } from '../schema/index.ts';
 import { UsageError } from './workspace.ts';
 
@@ -19,7 +19,7 @@ export const SHIPPED_FILE = '.cotutor/shipped.json';
 
 export interface ShippedManifest {
   version: string;
-  teachers: Record<string, { hash: string; version: string }>;
+  tutors: Record<string, { hash: string; version: string }>;
 }
 
 export const sha256 = (text: string): string => `sha256:${createHash('sha256').update(text).digest('hex')}`;
@@ -27,9 +27,9 @@ export const sha256 = (text: string): string => `sha256:${createHash('sha256').u
 export async function readManifest(root: string): Promise<ShippedManifest> {
   try {
     const raw = JSON.parse(await readFile(join(root, SHIPPED_FILE), 'utf8')) as Partial<ShippedManifest>;
-    return { version: raw.version ?? '0', teachers: raw.teachers ?? {} };
+    return { version: raw.version ?? '0', tutors: raw.tutors ?? {} };
   } catch {
-    return { version: '0', teachers: {} };
+    return { version: '0', tutors: {} };
   }
 }
 
@@ -41,11 +41,11 @@ export async function writeManifest(root: string, m: ShippedManifest): Promise<v
   await rename(tmp, file);
 }
 
-export type TeacherState = 'latest' | 'upgradable' | 'custom' | 'untracked' | 'missing' | 'broken';
+export type TutorState = 'latest' | 'upgradable' | 'custom' | 'untracked' | 'missing' | 'broken';
 
-export interface TeacherStatus {
+export interface TutorStatus {
   name: string;
-  state: TeacherState;
+  state: TutorState;
   /** workspace 里那份 */
   file: string;
   /** 记录的出厂版本(custom / upgradable 时有) */
@@ -55,12 +55,12 @@ export interface TeacherStatus {
 }
 
 /** 老师文件在 workspace 里的位置:.claude/agents/<name>.md 是真相,.qwen/agents/<name>.md 是相对链 */
-export function teacherFiles(root: string, name: string): { claude: string; qwen: string } {
+export function tutorFiles(root: string, name: string): { claude: string; qwen: string } {
   return { claude: join(root, '.claude', 'agents', `${name}.md`), qwen: join(root, '.qwen', 'agents', `${name}.md`) };
 }
 
-async function readState(root: string, a: ShippedAgent, manifest: ShippedManifest): Promise<TeacherStatus> {
-  const { claude } = teacherFiles(root, a.name);
+async function readState(root: string, a: ShippedAgent, manifest: ShippedManifest): Promise<TutorStatus> {
+  const { claude } = tutorFiles(root, a.name);
   const st = await lstat(claude).catch(() => null);
   if (!st) return { name: a.name, state: 'missing', file: claude };
   let legacyLink = false;
@@ -76,32 +76,32 @@ async function readState(root: string, a: ShippedAgent, manifest: ShippedManifes
   }
   const shipped = await readFile(a.file, 'utf8');
   const h = sha256(text);
-  const rec = manifest.teachers[a.name];
+  const rec = manifest.tutors[a.name];
   if (h === sha256(shipped)) return { name: a.name, state: 'latest', file: claude, basedOn: rec?.version, legacyLink };
   if (rec && rec.hash === h) return { name: a.name, state: 'upgradable', file: claude, basedOn: rec.version, legacyLink };
   return { name: a.name, state: rec ? 'custom' : 'untracked', file: claude, basedOn: rec?.version, legacyLink };
 }
 
-export async function teacherStatuses(root: string): Promise<TeacherStatus[]> {
+export async function tutorStatuses(root: string): Promise<TutorStatus[]> {
   const manifest = await readManifest(root);
-  const out: TeacherStatus[] = [];
+  const out: TutorStatus[] = [];
   for (const a of await shippedAgents()) out.push(await readState(root, a, manifest));
   return out;
 }
 
 /** 把出厂件写进 workspace(覆盖),并记 hash */
 async function installOne(root: string, a: ShippedAgent, manifest: ShippedManifest): Promise<void> {
-  const { claude } = teacherFiles(root, a.name);
+  const { claude } = tutorFiles(root, a.name);
   await mkdir(dirname(claude), { recursive: true });
   const text = await readFile(a.file, 'utf8');
   await unlink(claude).catch(() => {});
   await writeFile(claude, text);
-  manifest.teachers[a.name] = { hash: sha256(text), version: PACKAGE_VERSION };
+  manifest.tutors[a.name] = { hash: sha256(text), version: PACKAGE_VERSION };
 }
 
 /** .qwen/agents/<name>.md → ../../.claude/agents/<name>.md;已是这条链就不动;是旧的包内链或别的东西就换 */
 async function ensureQwenLink(root: string, name: string): Promise<'created' | 'exists' | 'replaced'> {
-  const { claude, qwen } = teacherFiles(root, name);
+  const { claude, qwen } = tutorFiles(root, name);
   await mkdir(dirname(qwen), { recursive: true });
   const want = relative(dirname(qwen), claude);
   const st = await lstat(qwen).catch(() => null);
@@ -130,7 +130,7 @@ export interface InstallStep {
  * cotutor.json 里的每一位(含家长自己加的):补老师目录 agents/<name>/ 与 .qwen 链——「加老师 = 加文件 + 目录,没有注册表」,
  * 自己加的老师文件不在这里生成(cotutor add 生成模板),缺了由 doctor 点名。
  */
-export async function installTeachers(root: string, configured: string[] = []): Promise<InstallStep[]> {
+export async function installTutors(root: string, configured: string[] = []): Promise<InstallStep[]> {
   const steps: InstallStep[] = [];
   const manifest = await readManifest(root);
   let touched = false;
@@ -152,7 +152,7 @@ export async function installTeachers(root: string, configured: string[] = []): 
     steps.push({ item: `.qwen/agents/${basename(a.file)}`, action: q, note: q === 'exists' ? undefined : '→ ../../.claude/agents/' });
   }
   for (const name of configured.filter((n) => !shipped.some((a) => a.name === n))) {
-    const { claude } = teacherFiles(root, name);
+    const { claude } = tutorFiles(root, name);
     if (await lstat(claude).catch(() => null)) {
       const q = await ensureQwenLink(root, name);
       steps.push({ item: `.qwen/agents/${name}.md`, action: q, note: q === 'exists' ? undefined : '→ ../../.claude/agents/(自家的老师)' });
@@ -182,12 +182,12 @@ export interface AddResult {
  * cotutor add <name>:按出厂老师的结构写一份模板(约定都带上,人设一句留给家长填)、建目录与 .qwen 链。
  * 不动 cotutor.json——那是调用方(main / 页面)用 patchConfig 加的,同一条路。已有同名文件就拒,不覆盖。
  */
-export async function addTeacherFile(root: string, input: TeacherTemplateInput): Promise<AddResult> {
-  if (!AGENT_NAME_RE.test(input.name)) throw new UsageError(`老师名 "${input.name}" 不合规:小写字母数字连字符,如 science-teacher`);
-  const { claude } = teacherFiles(root, input.name);
+export async function addTutorFile(root: string, input: TutorTemplateInput): Promise<AddResult> {
+  if (!AGENT_NAME_RE.test(input.name)) throw new UsageError(`老师名 "${input.name}" 不合规:小写字母数字连字符,如 science-tutor`);
+  const { claude } = tutorFiles(root, input.name);
   if (await lstat(claude).catch(() => null)) throw new UsageError(`${claude} 已经在了;要改就直接改它,要重来先把它挪开`);
   await mkdir(dirname(claude), { recursive: true });
-  await writeFile(claude, teacherTemplate(input));
+  await writeFile(claude, tutorTemplate(input));
   await ensureQwenLink(root, input.name);
   const home = join(root, 'agents', input.name);
   await mkdir(home, { recursive: true });
@@ -229,7 +229,7 @@ export function lineDiff(a: string, b: string): string[] {
 /**
  * cotutor upgrade:latest 跳过;upgradable 换新;custom / untracked 只报 diff 并保留(--force <name> 才覆盖,原文留 .bak);缺的补。
  */
-export async function upgradeTeachers(root: string, opts: { force?: string[] } = {}): Promise<UpgradeStep[]> {
+export async function upgradeTutors(root: string, opts: { force?: string[] } = {}): Promise<UpgradeStep[]> {
   const manifest = await readManifest(root);
   const steps: UpgradeStep[] = [];
   for (const a of await shippedAgents()) {
@@ -260,40 +260,40 @@ export async function upgradeTeachers(root: string, opts: { force?: string[] } =
   return steps;
 }
 
-export interface TeacherFileView {
+export interface TutorFileView {
   name: string;
   text: string;
   /** 出厂件的状态;自家加的是 own */
-  state: TeacherState | 'own';
+  state: TutorState | 'own';
   basedOn?: string;
 }
 
-export async function readTeacherFile(root: string, name: string): Promise<TeacherFileView> {
-  const { claude } = teacherFiles(root, name);
+export async function readTutorFile(root: string, name: string): Promise<TutorFileView> {
+  const { claude } = tutorFiles(root, name);
   const text = await readFile(claude, 'utf8').catch(() => null);
   if (text === null) throw new UsageError(`老师文件不在:${claude};cotutor add ${name} --display <显示名> 可出模板`);
-  const st = (await teacherStatuses(root)).find((s) => s.name === name);
+  const st = (await tutorStatuses(root)).find((s) => s.name === name);
   return { name, text, state: st?.state ?? 'own', basedOn: st?.basedOn };
 }
 
 /** 页面上改老师正文:frontmatter 的 name 必须还是它;写完 doctor 会把它标成自定义 */
-export async function writeTeacherFile(root: string, name: string, text: string): Promise<TeacherFileView> {
+export async function writeTutorFile(root: string, name: string, text: string): Promise<TutorFileView> {
   const { parseAgentFile } = await import('../lib/agent-file.ts');
   const fm = parseAgentFile(text).frontmatter;
   if (fm.name !== name) throw new UsageError(`frontmatter 的 name 要是 ${name}(现在是 "${fm.name ?? ''}"),老师键靠它对上`);
-  const { claude } = teacherFiles(root, name);
+  const { claude } = tutorFiles(root, name);
   await mkdir(dirname(claude), { recursive: true });
   const tmp = `${claude}.tmp`;
   await writeFile(tmp, text.endsWith('\n') ? text : `${text}\n`);
   await rename(tmp, claude);
   await ensureQwenLink(root, name);
-  return readTeacherFile(root, name);
+  return readTutorFile(root, name);
 }
 
 /** 删自家加的老师文件:改名成 .removed-<时间>(不真删;记忆目录与会话不动);出厂的不让删,用开关 */
-export async function removeTeacherFile(root: string, name: string): Promise<{ moved: string | null }> {
-  if ((await shippedAgents()).some((a) => a.name === name)) throw new UsageError(`${name} 是出厂老师,不删文件;不想用就在助教团页关掉`);
-  const { claude, qwen } = teacherFiles(root, name);
+export async function removeTutorFile(root: string, name: string): Promise<{ moved: string | null }> {
+  if ((await shippedAgents()).some((a) => a.name === name)) throw new UsageError(`${name} 是出厂老师,不删文件;不想用就在老师团页关掉`);
+  const { claude, qwen } = tutorFiles(root, name);
   await unlink(qwen).catch(() => {});
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const moved = `${claude}.removed-${stamp}`;

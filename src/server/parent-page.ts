@@ -1,7 +1,7 @@
 /**
- * 家长端 /parent:三个标签(对话 / 助教团 / 设置),零依赖内联脚本,只走 /api/*。
+ * 家长端 /parent:三个标签(对话 / 老师团 / 设置),零依赖内联脚本,只走 /api/*。
  * 对话 = 原始视图:主线说话、工具行折叠、子代理折叠、待裁量按钮、孩子视图预览(kidText)、出错红条。
- * 助教团 = 老师卡片(人设与政策 → PATCH /api/config;老师文件正文 → /api/teachers/<name>/file;新老师 → POST /api/teachers;自家的能删)。
+ * 老师团 = 老师卡片(人设与政策 → PATCH /api/config;老师文件正文 → /api/tutors/<name>/file;新老师 → POST /api/tutors;自家的能删)。
  * 设置 = paths / 端口 / 证书 / 配音命令,同样只写 cotutor.json;kid、version、预设模板留给编辑器。
  * 放在 .ts 里而不是 .html,是因为 tsc 不拷贝静态文件,dist 里就少一份。
  */
@@ -26,10 +26,10 @@ export const PARENT_PAGE = `<!doctype html>
   #chat { display:grid; grid-template-columns:220px 1fr; height:calc(100vh - 47px); }
   #chat.on { display:grid; }
   aside { border-right:1px solid var(--line); background:var(--panel); overflow:auto; }
-  aside .teacher { display:flex; gap:8px; align-items:center; padding:10px 12px; cursor:pointer; border-bottom:1px solid var(--line); }
-  aside .teacher.on { background:var(--kid); }
-  aside .teacher .av { font-size:22px; }
-  aside .teacher small { display:block; color:var(--dim); font-size:12px; }
+  aside .tutor { display:flex; gap:8px; align-items:center; padding:10px 12px; cursor:pointer; border-bottom:1px solid var(--line); }
+  aside .tutor.on { background:var(--kid); }
+  aside .tutor .av { font-size:22px; }
+  aside .tutor small { display:block; color:var(--dim); font-size:12px; }
   aside .dates { padding:8px 12px; }
   aside .dates select { width:100%; }
   #thread { display:flex; flex-direction:column; min-width:0; }
@@ -62,7 +62,7 @@ export const PARENT_PAGE = `<!doctype html>
   #composer button { background:var(--accent); color:#fff; border:0; border-radius:8px; cursor:pointer; }
   #composer button:disabled { opacity:.5; cursor:default; }
   .empty { color:var(--dim); text-align:center; margin-top:60px; }
-  /* 助教团 */
+  /* 老师团 */
   #team, #settings { padding:16px; max-width:1000px; margin:0 auto; }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px; }
   .card h2 { font-size:15px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
@@ -87,12 +87,12 @@ export const PARENT_PAGE = `<!doctype html>
 </style>
 <header>
   <h1 id="title">cotutor</h1>
-  <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">助教团</a><a href="#settings" data-tab="settings">设置</a></nav>
+  <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">老师团</a><a href="#settings" data-tab="settings">设置</a></nav>
   <span class="health" id="health"></span>
 </header>
 <main id="chat" class="on">
   <aside>
-    <div id="teachers"></div>
+    <div id="tutors"></div>
     <div class="dates"><select id="dates"></select></div>
   </aside>
   <section id="thread">
@@ -125,7 +125,7 @@ export const PARENT_PAGE = `<!doctype html>
     return j;
   };
 
-  const state = { config: null, teacher: null, date: null, dates: [], view: null, timer: null, tab: location.hash === '#team' ? 'team' : location.hash === '#settings' ? 'settings' : 'chat' };
+  const state = { config: null, tutor: null, date: null, dates: [], view: null, timer: null, tab: location.hash === '#team' ? 'team' : location.hash === '#settings' ? 'settings' : 'chat' };
 
   // ---- 顶栏与标签 ----
   const showTab = (tab) => {
@@ -152,21 +152,21 @@ export const PARENT_PAGE = `<!doctype html>
     document.title = state.config.title + ' · 家长端';
     const ps = $('#preset');
     ps.replaceChildren(...state.config.presets.map((p) => h('option', { value: p, selected: p === state.config.agent ? '' : undefined }, p === state.config.agent ? p + '(缺省)' : p)));
-    renderTeachers();
+    renderTutors();
   };
 
   // ---- 对话:老师列表(enabled 的才有,关掉即消失;hidden 的家长仍可见)----
-  const renderTeachers = () => {
-    const list = state.config.teachers.filter((t) => t.enabled);
-    if (state.teacher && !list.some((t) => t.name === state.teacher)) { state.teacher = null; state.view = null; $('#msgs').replaceChildren(h('p', { class: 'empty' }, '这位老师已关闭')); }
-    $('#teachers').replaceChildren(...list.map((t) => h('div', { class: 'teacher' + (t.name === state.teacher ? ' on' : ''), on: { click: () => pickTeacher(t.name) } },
+  const renderTutors = () => {
+    const list = state.config.tutors.filter((t) => t.enabled);
+    if (state.tutor && !list.some((t) => t.name === state.tutor)) { state.tutor = null; state.view = null; $('#msgs').replaceChildren(h('p', { class: 'empty' }, '这位老师已关闭')); }
+    $('#tutors').replaceChildren(...list.map((t) => h('div', { class: 'tutor' + (t.name === state.tutor ? ' on' : ''), on: { click: () => pickTutor(t.name) } },
       h('span', { class: 'av' }, t.avatar || '🙂'),
       h('div', {}, t.display, h('small', {}, t.name + (t.hidden ? ' · 孩子端不露' : '') + (t.subject ? ' · ' + t.subject : ''))))));
   };
 
-  const pickTeacher = async (name, date) => {
-    state.teacher = name;
-    renderTeachers();
+  const pickTutor = async (name, date) => {
+    state.tutor = name;
+    renderTutors();
     const d = await api('GET', '/api/conversations/' + name);
     state.dates = d.dates.includes(d.today) ? d.dates : [d.today, ...d.dates];
     state.date = date || d.today;
@@ -176,9 +176,9 @@ export const PARENT_PAGE = `<!doctype html>
   $('#dates').addEventListener('change', () => { state.date = $('#dates').value; loadDay(); });
 
   const loadDay = async () => {
-    if (!state.teacher || !state.date) return;
+    if (!state.tutor || !state.date) return;
     const stick = $('#msgs').scrollHeight - $('#msgs').scrollTop - $('#msgs').clientHeight < 40;
-    state.view = await api('GET', '/api/conversations/' + state.teacher + '/' + state.date);
+    state.view = await api('GET', '/api/conversations/' + state.tutor + '/' + state.date);
     renderDay();
     if (stick) $('#msgs').scrollTop = $('#msgs').scrollHeight;
     clearTimeout(state.timer);
@@ -206,7 +206,7 @@ export const PARENT_PAGE = `<!doctype html>
 
   const renderDay = () => {
     const v = state.view;
-    const t = state.config.teachers.find((x) => x.name === state.teacher) || { display: state.teacher };
+    const t = state.config.tutors.find((x) => x.name === state.tutor) || { display: state.tutor };
     if (!v.index.messages.length) { $('#msgs').replaceChildren(h('p', { class: 'empty' }, state.date + ' 还没和' + t.display + '说过话')); return; }
     const FROM = { kid: '孩子', parent: '家长', system: '系统' };
     const nodes = v.index.messages.map((m) => {
@@ -233,19 +233,19 @@ export const PARENT_PAGE = `<!doctype html>
   };
 
   const send = async (text, from) => {
-    if (!state.teacher) return alert('先选一位老师');
+    if (!state.tutor) return alert('先选一位老师');
     const today = state.dates[0];
     try {
       $('#send').disabled = true;
-      await api('POST', '/api/conversations/' + state.teacher + '/messages', { text, from: from || $('#from').value, preset: $('#preset').value });
+      await api('POST', '/api/conversations/' + state.tutor + '/messages', { text, from: from || $('#from').value, preset: $('#preset').value });
       $('#text').value = '';
-      if (state.date !== today) await pickTeacher(state.teacher, today); else await loadDay();
+      if (state.date !== today) await pickTutor(state.tutor, today); else await loadDay();
     } catch (e) { alert(e.message); $('#send').disabled = false; }
   };
   $('#composer').addEventListener('submit', (e) => { e.preventDefault(); const t = $('#text').value.trim(); if (t) send(t); });
   $('#text').addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); $('#composer').requestSubmit(); } });
 
-  // ---- 助教团:只读写 cotutor.json ----
+  // ---- 老师团:只读写 cotutor.json ----
   const POLICY_FIELDS = [['replyMaxChars', '单条回复字数上限', 'number'], ['dailyMessages', '每日消息上限', 'number'], ['dailyRegen', '每日重生上限', 'number'], ['reviewGate', '验收开关(先经家长)', 'bool'], ['forms', '回复形式(逗号分隔 L0-L4)', 'forms'], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number']];
   const getPath = (o, p) => p.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
   const setPath = (o, p, v) => { const ks = p.split('.'); let cur = o; for (const k of ks.slice(0, -1)) cur = cur[k] = cur[k] || {}; cur[ks[ks.length - 1]] = v; };
@@ -281,9 +281,9 @@ export const PARENT_PAGE = `<!doctype html>
   };
 
   const AVATARS = ['🧮', '📚', '📖', '🔬', '🎨', '🎵', '🌍', '💻', '🏃', '🧩', '📷', '🗓'];
-  const newTeacherCard = () => {
+  const newTutorCard = () => {
     const card = h('div', { class: 'card' }, h('h2', {}, '➕ 新老师'), h('div', { class: 'grid' },
-      h('label', {}, '老师名(英文键,如 science-teacher)', h('input', { type: 'text', id: 'n-name', placeholder: 'science-teacher' })),
+      h('label', {}, '老师名(英文键,如 science-tutor)', h('input', { type: 'text', id: 'n-name', placeholder: 'science-tutor' })),
       h('label', {}, '显示名', h('input', { type: 'text', id: 'n-display', placeholder: '科学老师' })),
       h('label', {}, '学科(可空)', h('input', { type: 'text', id: 'n-subject', placeholder: '科学' })),
       h('label', {}, '头像', h('select', { id: 'n-avatar' }, ...AVATARS.map((a) => h('option', { value: a }, a)))),
@@ -293,7 +293,7 @@ export const PARENT_PAGE = `<!doctype html>
         const name = $('#n-name').value.trim(), display = $('#n-display').value.trim();
         if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) return feedback(card, false, '老师名要小写字母数字连字符');
         if (!display) return feedback(card, false, '显示名不能空');
-        try { await api('POST', '/api/teachers', { name, display, subject: $('#n-subject').value.trim(), avatar: $('#n-avatar').value, hidden: $('#n-hidden').checked }); await loadConfig(); renderTeam(); feedback($('#team .card'), true, '加了 ' + display); }
+        try { await api('POST', '/api/tutors', { name, display, subject: $('#n-subject').value.trim(), avatar: $('#n-avatar').value, hidden: $('#n-hidden').checked }); await loadConfig(); renderTeam(); feedback($('#team .card'), true, '加了 ' + display); }
         catch (e) { feedback(card, false, e.message); }
       } } }, '加进来'), h('span', { class: 'fb' })));
     return card;
@@ -303,9 +303,9 @@ export const PARENT_PAGE = `<!doctype html>
     const ta = h('textarea', { spellcheck: 'false' });
     const fb = h('span', { class: 'fb' });
     const origin = h('span', { class: 'origin' });
-    const load = async () => { try { const f = await api('GET', '/api/teachers/' + t.name + '/file'); ta.value = f.text; origin.textContent = f.state === 'own' ? '自家加的' : f.state === 'latest' ? '出厂件,最新' : f.state === 'upgradable' ? '出厂件,可升级' : '自定义' + (f.basedOn ? '(基于 ' + f.basedOn + ')' : ''); } catch (e) { ta.value = ''; fb.className = 'fb msg-err'; fb.textContent = e.message; } };
+    const load = async () => { try { const f = await api('GET', '/api/tutors/' + t.name + '/file'); ta.value = f.text; origin.textContent = f.state === 'own' ? '自家加的' : f.state === 'latest' ? '出厂件,最新' : f.state === 'upgradable' ? '出厂件,可升级' : '自定义' + (f.basedOn ? '(基于 ' + f.basedOn + ')' : ''); } catch (e) { ta.value = ''; fb.className = 'fb msg-err'; fb.textContent = e.message; } };
     box.addEventListener('toggle', () => { if (box.open && !ta.value) load(); });
-    box.append(ta, h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button', on: { click: async () => { try { const f = await api('PUT', '/api/teachers/' + t.name + '/file', { text: ta.value }); fb.className = 'fb msg-ok'; fb.textContent = '已写入'; origin.textContent = f.state === 'own' ? '自家加的' : '自定义'; } catch (e) { fb.className = 'fb msg-err'; fb.textContent = e.message; } } } }, '保存老师文件'), h('button', { type: 'button', on: { click: load } }, '重新读'), origin, fb));
+    box.append(ta, h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button', on: { click: async () => { try { const f = await api('PUT', '/api/tutors/' + t.name + '/file', { text: ta.value }); fb.className = 'fb msg-ok'; fb.textContent = '已写入'; origin.textContent = f.state === 'own' ? '自家加的' : '自定义'; } catch (e) { fb.className = 'fb msg-err'; fb.textContent = e.message; } } } }, '保存老师文件'), h('button', { type: 'button', on: { click: load } }, '重新读'), origin, fb));
     return box;
   };
 
@@ -316,11 +316,11 @@ export const PARENT_PAGE = `<!doctype html>
     const top = h('div', { class: 'card' }, h('h2', {}, '全局'), h('div', { class: 'grid' },
       h('label', {}, '孩子端标题', h('input', { type: 'text', id: 'g-title', value: c.title })),
       h('label', {}, '缺省预设(agents.default)', h('select', { id: 'g-agent' }, ...c.presets.map((p) => h('option', { value: p, selected: p === c.agent ? '' : undefined }, p)))),
-      ...policyInputs(c.policyDefaults, c.teachers[0] ? Object.assign({}, c.teachers[0].policy, c.policyDefaults) : {}, { inherit: false })),
+      ...policyInputs(c.policyDefaults, c.tutors[0] ? Object.assign({}, c.tutors[0].policy, c.policyDefaults) : {}, { inherit: false })),
       h('p', { class: 'hint' }, 'policyDefaults 留空 = 用出厂缺省(60 字 / 30 条 / 3 次 / 验收关 / L0,L1,L3,L4 / 10,10)。预设模板、paths、端口请直接编辑 cotutor.json。'),
       h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button', on: { click: () => { try { patchAndReload(top, { title: $('#g-title').value, agents: { default: $('#g-agent').value }, policyDefaults: readPolicy(top) }); } catch (e) { feedback(top, false, e.message); } } } }, '保存全局'), h('span', { class: 'fb' })));
-    const cards = c.teachers.map((t) => {
-      const patch = c.teacherPatches[t.name] || {};
+    const cards = c.tutors.map((t) => {
+      const patch = c.tutorPatches[t.name] || {};
       const card = h('div', { class: 'card' },
         h('h2', {}, h('span', { class: 'av' }, t.avatar || '🙂'), t.display, h('span', { class: 'off' }, t.name + (t.enabled ? '' : ' · 已关闭') + (t.hidden ? ' · 孩子端不露' : ''))),
         h('div', { class: 'grid' },
@@ -331,18 +331,18 @@ export const PARENT_PAGE = `<!doctype html>
           h('label', { class: 'chk' }, h('input', { type: 'checkbox', 'data-f': 'enabled', checked: t.enabled ? '' : undefined }), '开启'),
           h('label', { class: 'chk' }, h('input', { type: 'checkbox', 'data-f': 'hidden', checked: t.hidden ? '' : undefined }), '孩子端不露'),
           ...policyInputs(patch, t.policy, { inherit: true })),
-        h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button' }, '保存'), h('span', { class: 'fb' }), c.shipped.includes(t.name) ? null : h('button', { type: 'button', class: 'danger', style: 'margin-left:auto', on: { click: async () => { if (!confirm('删掉 ' + t.display + '?老师文件改名保留,会话与记忆不动。')) return; try { await api('DELETE', '/api/teachers/' + t.name); await loadConfig(); renderTeam(); } catch (e) { feedback(card, false, e.message); } } } }, '删掉这位老师')),
+        h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button' }, '保存'), h('span', { class: 'fb' }), c.shipped.includes(t.name) ? null : h('button', { type: 'button', class: 'danger', style: 'margin-left:auto', on: { click: async () => { if (!confirm('删掉 ' + t.display + '?老师文件改名保留,会话与记忆不动。')) return; try { await api('DELETE', '/api/tutors/' + t.name); await loadConfig(); renderTeam(); } catch (e) { feedback(card, false, e.message); } } } }, '删掉这位老师')),
         fileEditor(t));
       $('.actions button', card).addEventListener('click', () => {
         try {
           const f = (name) => $('[data-f=' + name + ']', card);
           const entry = { display: f('display').value.trim(), subject: f('subject').value.trim() || null, avatar: f('avatar').value.trim() || null, voice: f('voice').value.trim() || null, enabled: f('enabled').checked, hidden: f('hidden').checked, policy: readPolicy(card) };
-          patchAndReload(card, { teachers: { [t.name]: entry } });
+          patchAndReload(card, { tutors: { [t.name]: entry } });
         } catch (e) { feedback(card, false, e.message); }
       });
       return card;
     });
-    root.replaceChildren(top, newTeacherCard(), ...cards);
+    root.replaceChildren(top, newTutorCard(), ...cards);
   };
 
   // ---- 设置:paths / 端口 / 证书 / 配音命令;文件仍是真相 ----
@@ -379,10 +379,10 @@ export const PARENT_PAGE = `<!doctype html>
     await refreshHealth();
     await loadConfig();
     showTab(state.tab);
-    const first = state.config.teachers.find((t) => t.enabled && !t.hidden) || state.config.teachers.find((t) => t.enabled);
-    if (first) pickTeacher(first.name);
+    const first = state.config.tutors.find((t) => t.enabled && !t.hidden) || state.config.tutors.find((t) => t.enabled);
+    if (first) pickTutor(first.name);
     setInterval(refreshHealth, 10000);
-    setInterval(async () => { const before = JSON.stringify(state.config && state.config.teachers); await loadConfig(); if (JSON.stringify(state.config.teachers) !== before && state.tab === 'team') renderTeam(); }, 10000);
+    setInterval(async () => { const before = JSON.stringify(state.config && state.config.tutors); await loadConfig(); if (JSON.stringify(state.config.tutors) !== before && state.tab === 'team') renderTeam(); }, 10000);
   })().catch((e) => { $('#msgs').replaceChildren(h('p', { class: 'empty' }, '加载失败:' + e.message)); });
 })();
 </script>

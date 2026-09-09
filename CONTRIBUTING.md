@@ -26,4 +26,4 @@ pnpm typecheck && pnpm test && pnpm build && pnpm smoke
 
 ## 加一位出厂老师
 
-在 `agents/<name>.md` 写文件(frontmatter:name / description / maxTurns / permissionMode / memory,正文即系统提示,约定照现有五位),`src/cli/skeleton.ts` 的 `TEACHER_PRESETS` 加人设缺省,`scripts/smoke.ts` 的老师数改一下。用户侧加老师不用改仓库:`cotutor add`。
+在 `agents/<name>.md` 写文件(frontmatter:name / description / maxTurns / permissionMode / memory,正文即系统提示,约定照现有五位),`src/cli/skeleton.ts` 的 `TUTOR_PRESETS` 加人设缺省,`scripts/smoke.ts` 的老师数改一下。用户侧加老师不用改仓库:`cotutor add`。

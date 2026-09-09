@@ -3,11 +3,11 @@ import { mergeArtifacts, mergeObservations, nextObservationId, parseArtifactEven
 import { check, done } from './_check.ts';
 
 const OBS = [
-  '{"id":"o-20260908-001","date":"2026-09-08","author":"math-teacher","subject":"数学","claim":"借位忘了","evidence":{"conversation":"math-teacher/2026-09-08","job":"1620-1"}}',
-  '{"id":"o-20260908-002","date":"2026-09-08","author":"reading-teacher","claim":"th 发音混"}',
+  '{"id":"o-20260908-001","date":"2026-09-08","author":"math-tutor","subject":"数学","claim":"借位忘了","evidence":{"conversation":"math-tutor/2026-09-08","job":"1620-1"}}',
+  '{"id":"o-20260908-002","date":"2026-09-08","author":"reading-tutor","claim":"th 发音混"}',
   '',
   '{"id":"o-20260908-001","retracted":true,"by":"parent","date":"2026-09-09"}',
-  '{"id":"o-20260908-003","date":"2026-09-08","author":"math-teacher"}',
+  '{"id":"o-20260908-003","date":"2026-09-08","author":"math-tutor"}',
 ].join('\n');
 {
   const p = parseObservations(OBS);
@@ -19,7 +19,7 @@ const OBS = [
   check('新的一天从 001', nextObservationId('2026-09-09', merged.map((o) => o.id)) === 'o-20260909-001');
 }
 const ART = [
-  '{"id":"2026-09-08-退位","kind":"课包","by":"math-teacher","at":"2026-09-08T16:30","status":"ready","path":"bundles/x","hash":"sha256:1"}',
+  '{"id":"2026-09-08-退位","kind":"课包","by":"math-tutor","at":"2026-09-08T16:30","status":"ready","path":"bundles/x","hash":"sha256:1"}',
   '{"id":"2026-09-08-退位","status":"accepted","by":"parent","at":"2026-09-08T20:00"}',
   '{"id":"孤儿","status":"ready","at":"2026-09-08T21:00"}',
 ].join('\n');

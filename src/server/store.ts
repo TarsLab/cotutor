@@ -23,13 +23,13 @@ export class IndexError extends Error {
   }
 }
 
-export async function readIndex(ws: Workspace, teacher: string, date: string): Promise<ConversationIndex> {
-  const file = conversationFiles(ws.dirs.conversations, teacher, date).index;
+export async function readIndex(ws: Workspace, tutor: string, date: string): Promise<ConversationIndex> {
+  const file = conversationFiles(ws.dirs.conversations, tutor, date).index;
   let text: string;
   try {
     text = await readFile(file, 'utf8');
   } catch {
-    return emptyIndex(teacher, date);
+    return emptyIndex(tutor, date);
   }
   let raw: unknown;
   try {
@@ -44,17 +44,17 @@ export async function readIndex(ws: Workspace, teacher: string, date: string): P
 
 /** 先写 .tmp 再 rename:进程半路死掉不会留下半份索引 */
 export async function writeIndex(ws: Workspace, index: ConversationIndex): Promise<void> {
-  const { index: file } = conversationFiles(ws.dirs.conversations, index.teacher, index.date);
-  await mkdir(join(ws.dirs.conversations, index.teacher), { recursive: true });
+  const { index: file } = conversationFiles(ws.dirs.conversations, index.tutor, index.date);
+  await mkdir(join(ws.dirs.conversations, index.tutor), { recursive: true });
   const tmp = `${file}.tmp`;
   await writeFile(tmp, `${JSON.stringify(index, null, 2)}\n`);
   await rename(tmp, file);
 }
 
 /** 有过对话的日期,新的在前 */
-export async function listDates(ws: Workspace, teacher: string): Promise<string[]> {
+export async function listDates(ws: Workspace, tutor: string): Promise<string[]> {
   try {
-    return (await readdir(join(ws.dirs.conversations, teacher)))
+    return (await readdir(join(ws.dirs.conversations, tutor)))
       .filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f))
       .map((f) => f.slice(0, 10))
       .filter((d) => DATE_RE.test(d))
@@ -65,17 +65,17 @@ export async function listDates(ws: Workspace, teacher: string): Promise<string[
   }
 }
 
-export async function readTranscript(ws: Workspace, teacher: string, date: string, job: string): Promise<Transcript | null> {
+export async function readTranscript(ws: Workspace, tutor: string, date: string, job: string): Promise<Transcript | null> {
   try {
-    return parseTranscript(await readFile(conversationFiles(ws.dirs.conversations, teacher, date).log(job), 'utf8'));
+    return parseTranscript(await readFile(conversationFiles(ws.dirs.conversations, tutor, date).log(job), 'utf8'));
   } catch {
     return null;
   }
 }
 
-export async function readErrLog(ws: Workspace, teacher: string, date: string, job: string): Promise<string> {
+export async function readErrLog(ws: Workspace, tutor: string, date: string, job: string): Promise<string> {
   try {
-    return await readFile(conversationFiles(ws.dirs.conversations, teacher, date).err(job), 'utf8');
+    return await readFile(conversationFiles(ws.dirs.conversations, tutor, date).err(job), 'utf8');
   } catch {
     return '';
   }
@@ -93,12 +93,12 @@ export async function readAgentBody(ws: Workspace, name: string): Promise<string
   throw new ConfigError(join(ws.dirs.claudeAgents, `${name}.md`), '老师定义读不到(链断了或没建);cotutor init 重链');
 }
 
-/** PATCH 允许改的顶层键(助教团页与设置页);kid / version / 预设模板走编辑器 */
-export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'teachers', 'agents', 'paths', 'server', 'tts'] as const;
+/** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 预设模板走编辑器 */
+export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'agents', 'paths', 'server', 'tts'] as const;
 
 const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 
-/** 深合并:对象递归、其余覆盖、null 删键(老师条目可整体删:teachers.x = null) */
+/** 深合并:对象递归、其余覆盖、null 删键(老师条目可整体删:tutors.x = null) */
 export function deepMerge(base: unknown, patch: unknown): unknown {
   if (!isObj(base) || !isObj(patch)) return patch;
   const out: Record<string, unknown> = { ...base };

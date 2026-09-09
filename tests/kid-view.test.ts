@@ -28,8 +28,8 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   check('出错 → 什么都没有', err.kidText === null && !err.ok);
   const running = deriveKidView(parseTranscript('{"type":"system","subtype":"init"}'), { replyMaxChars: 60 });
   check('还在跑 → 没有', running.kidText === null && !running.ok);
-  const onlySections = deriveKidView(okRun('## 转交\nto: math-teacher\nwhy: 数学'), { replyMaxChars: 60 });
-  check('只有转交段 → 孩子无话,转交在', onlySections.kidText === null && onlySections.handoff?.to === 'math-teacher' && onlySections.ok);
+  const onlySections = deriveKidView(okRun('## 转交\nto: math-tutor\nwhy: 数学'), { replyMaxChars: 60 });
+  check('只有转交段 → 孩子无话,转交在', onlySections.kidText === null && onlySections.handoff?.to === 'math-tutor' && onlySections.ok);
 }
 {
   // 孩子端条目:服务端过滤——孩子的问句 + 老师给孩子的话 + 配音;家长的问句不露;出错的运行不出现;不带 result / error / holdup / 费用

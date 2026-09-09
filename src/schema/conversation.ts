@@ -36,7 +36,7 @@ export const ConversationMessageSchema = z.object({
 export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 
 export const ConversationIndexSchema = z.object({
-  teacher: z.string().min(1),
+  tutor: z.string().min(1),
   date: z.string().regex(DATE_RE),
   /** 当天会话;首条消息跑完后写入,之后每条 --resume 它 */
   session: z.object({ id: z.string().min(1), agent: z.string().min(1) }).nullable().default(null),

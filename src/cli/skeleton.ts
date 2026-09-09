@@ -57,7 +57,7 @@ export const RULES = `# 家规
 - 会话按天,明天从账本和你的记忆接着来,不要指望今天的对话还在。
 `;
 
-export interface TeacherTemplateInput {
+export interface TutorTemplateInput {
   name: string;
   display: string;
   subject?: string;
@@ -68,7 +68,7 @@ export interface TeacherTemplateInput {
  * 家长自己加老师时的文件模板:与出厂老师同一套约定(cwd、账本、家规、上下文包、问答 / 任务两种回复、
  * 最后一段给孩子、不评判、R5 前不造课件、待裁量段),只有第一句人设是这位老师自己的。
  */
-export function teacherTemplate(t: TeacherTemplateInput): string {
+export function tutorTemplate(t: TutorTemplateInput): string {
   const what = t.subject ? `${t.subject}的事` : '孩子问的事';
   return `---
 name: ${t.name}
@@ -98,35 +98,35 @@ export interface ConfigTemplateInput {
   slug: string;
   name?: string;
   port?: number;
-  teachers: ShippedAgent[];
+  tutors: ShippedAgent[];
 }
 
-const TEACHER_PRESETS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean }> = {
-  'math-teacher': { display: '数学老师', subject: '数学', avatar: '🧮' },
-  'chinese-teacher': { display: '语文老师', subject: '语文', avatar: '📚' },
-  'reading-teacher': { display: '朗读老师', subject: '英语', avatar: '📖' },
-  'homework-aide': { display: '作业助教', avatar: '📷' },
+const TUTOR_PRESETS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean }> = {
+  'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮' },
+  'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚' },
+  'reading-tutor': { display: '朗读老师', subject: '英语', avatar: '📖' },
+  'homework-tutor': { display: '作业老师', avatar: '📷' },
   planner: { display: '规划老师', avatar: '🗓', hidden: true },
 };
 
 /** cotutor.json 模板:只在文件不存在时写入;政策文件永不自动重建或覆盖(家长的决定不由机器替她拍板)。 */
 export function configTemplate(input: ConfigTemplateInput): string {
-  const teachers: Record<string, unknown> = {};
-  for (const a of input.teachers) {
-    const p = TEACHER_PRESETS[a.name];
-    teachers[a.name] = p
+  const tutors: Record<string, unknown> = {};
+  for (const a of input.tutors) {
+    const p = TUTOR_PRESETS[a.name];
+    tutors[a.name] = p
       ? { display: p.display, ...(p.subject ? { subject: p.subject } : {}), avatar: p.avatar, enabled: true, ...(p.hidden ? { hidden: true } : {}) }
       : { display: a.name, enabled: true };
   }
   const cfg = {
     $schema: CONFIG_SCHEMA_FILE,
     version: 1,
-    title: input.name ? `${input.name}的书房` : 'cotutor',
+    title: input.name ? `${input.name}的老师们` : 'cotutor',
     kid: { slug: input.slug, ...(input.name ? { name: input.name } : {}) },
     server: { port: input.port ?? 5180 },
     paths: {},
     policyDefaults: {},
-    teachers,
+    tutors,
     agents: {
       default: 'claude',
       claude: {
@@ -141,7 +141,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
     tts: TTS_DEFAULT,
     _note:
       '一孩一 workspace 的政策文件,家长改这里;机器不会自动重建或覆盖,写坏了靠 git 回退,cotutor doctor 可体检。' +
-      'teachers = 老师表(key 与 .claude/agents/<key>.md 的 name 一致):display 显示名、avatar、voice 用 voxtell 音色 id、enabled 开关、hidden 孩子端不露、policy 覆盖 policyDefaults。' +
+      'tutors = 老师表(key 与 .claude/agents/<key>.md 的 name 一致):display 显示名、avatar、voice 用 voxtell 音色 id、enabled 开关、hidden 孩子端不露、policy 覆盖 policyDefaults。' +
       'policyDefaults 缺省:replyMaxChars 60、dailyMessages 30、dailyRegen 3、reviewGate false、contextPack {recent 10, planLines 10}。' +
       'paths = 角色映射:vault 指 Obsidian vault 根(一孩一 vault),photos/diary/plans/profile/timetable 相对 vault。' +
       'agents = 运行时预设,占位 {agent} {agentBody} {prompt} {session};政策旋钮(预算、时限、模型)写进模板。' +

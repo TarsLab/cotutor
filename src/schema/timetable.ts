@@ -13,7 +13,7 @@ export const TimetableEntrySchema = z.object({
   day: z.number().int().min(1).max(7),
   start: z.string().regex(TIME_RE),
   end: z.string().regex(TIME_RE),
-  /** 自由文本(语文 / 数学 / 英语……),与 teachers[].subject 对齐即归到那位老师 */
+  /** 自由文本(语文 / 数学 / 英语……),与 tutors[].subject 对齐即归到那位老师 */
   subject: z.string().min(1),
   kid: z.string().optional(),
 });

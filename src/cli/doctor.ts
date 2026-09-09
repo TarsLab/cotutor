@@ -12,7 +12,7 @@ import { parseArtifactEvents, parseObservations } from '../lib/ledger.ts';
 import { parseTimetable } from '../lib/timetable.ts';
 import { httpsFiles } from './serve.ts';
 import { DIRS } from './skeleton.ts';
-import { teacherStatuses } from './teachers.ts';
+import { tutorStatuses } from './tutors.ts';
 import {
   CONFIG_FILE,
   ConfigError,
@@ -82,13 +82,13 @@ export function explainLlmFailure(text: string, preset: readonly string[]): stri
  */
 async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: NodeJS.ProcessEnv): Promise<void> {
   const { spawn } = await import('node:child_process');
-  const { fillPreset, fillTts, listTeachers } = await import('../schema/index.ts');
+  const { fillPreset, fillTts, listTutors } = await import('../schema/index.ts');
   const { parseTranscript } = await import('../lib/transcript.ts');
   const { parseAgentFile } = await import('../lib/agent-file.ts');
   const { tmpdir } = await import('node:os');
   const { mkdtemp, rm } = await import('node:fs/promises');
-  const teachers = listTeachers(ws.config).filter((t) => t.enabled);
-  const first = teachers[0];
+  const tutors = listTutors(ws.config).filter((t) => t.enabled);
+  const first = tutors[0];
   if (!first) {
     push({ name: 'live.agent', ok: false, required: false, detail: '没有开着的老师,没法探', fix: 'cotutor.json 里至少开一位' });
     return;
@@ -100,7 +100,7 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
   try {
     agentBody = parseAgentFile(await readFile(join(ws.dirs.claudeAgents, `${first.name}.md`), 'utf8')).body;
   } catch {
-    /* 上面 teacher.* 已报 */
+    /* 上面 tutor.* 已报 */
   }
   const argv = fillPreset(preset.run, { agent: first.name, prompt: '只回一个字:好', agentBody });
   const cwd = join(ws.dirs.agents, first.name);
@@ -132,7 +132,7 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
     fix: ok ? undefined : explainLlmFailure(raw, preset.run),
   });
 
-  const voiced = teachers.find((x) => x.voice);
+  const voiced = tutors.find((x) => x.voice);
   if (!voiced) {
     push({ name: 'live.tts', ok: true, required: false, detail: '没有老师配 voice,不探配音(孩子端用浏览器的声)' });
     return;
@@ -198,7 +198,7 @@ export async function doctorWorkspace(
         name: CONFIG_FILE,
         ok: true,
         required: true,
-        detail: `kid ${config.kid.slug}、${Object.keys(config.teachers).length} 位老师、预设 ${config.agents.default}、端口 ${config.server.port}`,
+        detail: `kid ${config.kid.slug}、${Object.keys(config.tutors).length} 位老师、预设 ${config.agents.default}、端口 ${config.server.port}`,
       });
     }
   } catch (err) {
@@ -228,8 +228,8 @@ export async function doctorWorkspace(
   if (ws) {
     // ---- 老师:定义文件(拷贝)+ 名字一致 + 出厂 / 自定义状态 + 老师目录 ----
     const defaultCli = presetCli(ws.config.agents[ws.config.agents.default]?.run ?? []);
-    const statuses = new Map((await teacherStatuses(root)).map((s) => [s.name, s]));
-    for (const name of Object.keys(ws.config.teachers)) {
+    const statuses = new Map((await tutorStatuses(root)).map((s) => [s.name, s]));
+    for (const name of Object.keys(ws.config.tutors)) {
       const shipped = statuses.has(name);
       for (const [cli, dir] of [
         ['claude', ws.dirs.claudeAgents],
@@ -247,7 +247,7 @@ export async function doctorWorkspace(
           detail = `${redactHome(file)} 读不到(链断了或没建)`;
         }
         push({
-          name: `teacher.${name}.${cli}`,
+          name: `tutor.${name}.${cli}`,
           ok,
           required,
           detail,
@@ -261,11 +261,11 @@ export async function doctorWorkspace(
         });
       }
       const st = statuses.get(name);
-      if (!st) push({ name: `teacher.${name}.origin`, ok: true, required: false, detail: '自家加的老师(不是出厂件,upgrade 不碰)' });
+      if (!st) push({ name: `tutor.${name}.origin`, ok: true, required: false, detail: '自家加的老师(不是出厂件,upgrade 不碰)' });
       if (st) {
         const label: Record<string, string> = { latest: '出厂件,最新', upgradable: `出厂件,基于 ${st.basedOn},包已更新`, custom: `自定义(基于 ${st.basedOn})`, untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
         push({
-          name: `teacher.${name}.origin`,
+          name: `tutor.${name}.origin`,
           ok: st.state !== 'upgradable' && !st.legacyLink,
           required: false,
           detail: st.legacyLink ? '还是指向包的旧链(改它会改到包里)' : label[st.state],
@@ -274,7 +274,7 @@ export async function doctorWorkspace(
       }
       const home = join(ws.dirs.agents, name);
       const there = (await statOrNull(home))?.isDirectory() ?? false;
-      push({ name: `teacher.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建' });
+      push({ name: `tutor.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建' });
     }
 
     // ---- paths 角色指向:配了就该在 ----

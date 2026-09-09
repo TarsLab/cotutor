@@ -9,8 +9,8 @@ import { configTemplate, shippedAgents } from '../src/cli/skeleton.ts';
 import { parseConfig } from '../src/cli/workspace.ts';
 import { check, done } from './_check.ts';
 
-const config = parseConfig(JSON.parse(configTemplate({ slug: 'ming', teachers: await shippedAgents() })), 'x');
-const vars = { agent: 'math-teacher', prompt: 'cotutor:\n  from: kid\n---\n不懂\n', agentBody: '正文' };
+const config = parseConfig(JSON.parse(configTemplate({ slug: 'ming', tutors: await shippedAgents() })), 'x');
+const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\n', agentBody: '正文' };
 
 {
   const fresh = planRun(config, { session: null }, vars);
@@ -31,7 +31,7 @@ const vars = { agent: 'math-teacher', prompt: 'cotutor:\n  from: kid\n---\n不�
 }
 {
   // 换预设后 applyRun 要把索引里的会话换成新的(不然下一条又拿旧 id 去 resume)
-  let idx = emptyIndex('math-teacher', '2026-09-08');
+  let idx = emptyIndex('math-tutor', '2026-09-08');
   idx = { ...idx, session: { id: 'c-1', agent: 'claude' } };
   idx = addMessage(idx, { job: '1', at: 'x', from: 'parent', text: 'hi', result: 'running', artifacts: [] });
   const t = parseTranscript('{"type":"system","session_id":"q-1"}\n{"type":"result","subtype":"success","result":"好"}');

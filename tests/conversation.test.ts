@@ -6,10 +6,10 @@ import { check, done } from './_check.ts';
 
 const d = new Date(2026, 8, 8, 16, 20);
 check('本地日期与分钟', localDate(d) === '2026-09-08' && localMinute(d) === '2026-09-08T16:20' && jobId(d, 3) === '1620-3');
-const f = conversationFiles('/ws/conversations', 'math-teacher', '2026-09-08');
-check('文件命名', f.index === '/ws/conversations/math-teacher/2026-09-08.json' && f.log('1620-3') === '/ws/conversations/math-teacher/2026-09-08.1620-3.log');
+const f = conversationFiles('/ws/conversations', 'math-tutor', '2026-09-08');
+check('文件命名', f.index === '/ws/conversations/math-tutor/2026-09-08.json' && f.log('1620-3') === '/ws/conversations/math-tutor/2026-09-08.1620-3.log');
 
-let idx = emptyIndex('math-teacher', '2026-09-08');
+let idx = emptyIndex('math-tutor', '2026-09-08');
 check('空索引', idx.session === null && idx.messages.length === 0 && idx.costUsd === 0);
 idx = addMessage(idx, { job: '1620-1', at: '2026-09-08T16:20', from: 'kid', text: '不懂', result: 'running', artifacts: [] });
 const t = parseTranscript('{"type":"system","subtype":"init","session_id":"s-9"}\n{"type":"result","subtype":"success","result":"是借位。","total_cost_usd":0.12}');

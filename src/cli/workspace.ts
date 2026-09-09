@@ -178,6 +178,18 @@ export interface Workspace {
 
 /** 校验 cotutor.json 的形状;失败 → ConfigError,信息是逐条修复指南 */
 export function parseConfig(raw: unknown, file: string): CotutorConfig {
+  // 2026-09-09 术语统一(teacher → tutor,homework-aide → homework-tutor):旧键旧名响亮报,不静默变成零位老师
+  if (raw && typeof raw === 'object') {
+    const o = raw as Record<string, unknown>;
+    if ('teachers' in o && !('tutors' in o)) {
+      throw new ConfigError(file, '  - teachers:这个键 2026-09-09 起叫 tutors(术语统一为 tutor / 老师);把 "teachers" 改成 "tutors",老师名 *-teacher 改成 *-tutor、homework-aide 改成 homework-tutor,.claude/agents/ 下的文件同名改,然后 cotutor init 补齐');
+    }
+    const tutors = o.tutors;
+    if (tutors && typeof tutors === 'object') {
+      const old = Object.keys(tutors as object).filter((k) => k.endsWith('-teacher') || k === 'homework-aide');
+      if (old.length) throw new ConfigError(file, `  - tutors:${old.join('、')} 是旧名;2026-09-09 起叫 ${old.map((k) => (k === 'homework-aide' ? 'homework-tutor' : k.replace(/-teacher$/, '-tutor'))).join('、')}(文件名与 frontmatter name 一起改),然后 cotutor init 补齐`);
+    }
+  }
   const r = CotutorConfigSchema.safeParse(raw);
   if (r.success) return r.data;
   throw new ConfigError(file, explainIssues(r.error.issues).map((l) => `  - ${l}`).join('\n'));
@@ -235,7 +247,7 @@ export function workspaceReport(ws: Workspace): Record<string, unknown> {
     title: ws.config.title,
     port: ws.config.server.port,
     vault: ws.paths.vault,
-    teachers: Object.keys(ws.config.teachers),
+    tutors: Object.keys(ws.config.tutors),
     agent: ws.config.agents.default,
   });
 }

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
 import { makeCert } from './cert.ts';
-import { addTeacherFile, upgradeTeachers } from './teachers.ts';
+import { addTutorFile, upgradeTutors } from './tutors.ts';
 import { patchConfig } from '../server/store.ts';
 import { resolveRoot } from './workspace.ts';
 import { serveWorkspace } from './serve.ts';
@@ -115,15 +115,15 @@ export async function main(argv: string[]): Promise<void> {
       case 'add': {
         const name = positionals[0];
         const display = typeof flags.display === 'string' ? flags.display : undefined;
-        if (!name || !display) throw new UsageError(`add 需要老师名和 --display 显示名,如 cotutor add science-teacher --display 科学老师 --subject 科学 --avatar 🔬。\n${USAGE}`);
+        if (!name || !display) throw new UsageError(`add 需要老师名和 --display 显示名,如 cotutor add science-tutor --display 科学老师 --subject 科学 --avatar 🔬。\n${USAGE}`);
         const ws = loadWorkspace(workspace);
-        if (ws.config.teachers[name]) throw new UsageError(`cotutor.json 里已经有 ${name} 了;要改人设去助教团页或直接改文件`);
+        if (ws.config.tutors[name]) throw new UsageError(`cotutor.json 里已经有 ${name} 了;要改人设去老师团页或直接改文件`);
         const subject = typeof flags.subject === 'string' ? flags.subject : undefined;
-        const r = await addTeacherFile(ws.root, { name, display, subject, description: typeof flags.description === 'string' ? flags.description : undefined });
-        await patchConfig(ws, { teachers: { [name]: { display, ...(subject ? { subject } : {}), ...(typeof flags.avatar === 'string' ? { avatar: flags.avatar } : {}), enabled: true, ...(flags.hidden === true ? { hidden: true } : {}) } } });
+        const r = await addTutorFile(ws.root, { name, display, subject, description: typeof flags.description === 'string' ? flags.description : undefined });
+        await patchConfig(ws, { tutors: { [name]: { display, ...(subject ? { subject } : {}), ...(typeof flags.avatar === 'string' ? { avatar: flags.avatar } : {}), enabled: true, ...(flags.hidden === true ? { hidden: true } : {}) } } });
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
         else {
-          process.stdout.write(`加了 ${display}(${name}):\n  ${redactHome(r.file)}  ← 老师文件,打开把括号里那句换成这位老师的性子\n  cotutor.json teachers.${name}  ← 人设与政策(助教团页也能改)\n  ${redactHome(r.home)}/  ← 它的家\n`);
+          process.stdout.write(`加了 ${display}(${name}):\n  ${redactHome(r.file)}  ← 老师文件,打开把括号里那句换成这位老师的性子\n  cotutor.json tutors.${name}  ← 人设与政策(老师团页也能改)\n  ${redactHome(r.home)}/  ← 它的家\n`);
           process.stdout.write('服务不用重启;孩子端和家长端刷新就有。\n');
         }
         return;
@@ -131,7 +131,7 @@ export async function main(argv: string[]): Promise<void> {
       case 'upgrade': {
         const { root } = resolveRoot(workspace);
         const force = typeof flags.force === 'string' ? [flags.force, ...positionals] : positionals;
-        const steps = await upgradeTeachers(root, { force });
+        const steps = await upgradeTutors(root, { force });
         if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps }), null, 2)}\n`);
         else {
           const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了' };
@@ -156,19 +156,19 @@ export async function main(argv: string[]): Promise<void> {
         return;
       }
       case 'send': {
-        const [teacher, ...words] = positionals;
+        const [tutor, ...words] = positionals;
         const text = words.join(' ');
-        if (!teacher || !text) throw new UsageError(`send 需要老师名和消息,如 cotutor send math-teacher "这一步为什么要借位"。\n${USAGE}`);
+        if (!tutor || !text) throw new UsageError(`send 需要老师名和消息,如 cotutor send math-tutor "这一步为什么要借位"。\n${USAGE}`);
         const from = typeof flags.from === 'string' ? flags.from : 'parent';
         if (!(MESSAGE_FROM as readonly string[]).includes(from)) throw new UsageError(`--from 只能是 ${MESSAGE_FROM.join(' / ')}`);
         const ctx = createContext(loadWorkspace(workspace));
-        const started = await ctx.runner.send(teacher, { from: from as MessageFrom, text, preset: typeof flags.preset === 'string' ? flags.preset : undefined });
-        if (!json) process.stdout.write(`→ ${teacher} ${started.date} ${started.job}(${started.plan.preset}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
+        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, preset: typeof flags.preset === 'string' ? flags.preset : undefined });
+        if (!json) process.stdout.write(`→ ${tutor} ${started.date} ${started.job}(${started.plan.preset}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
         const index = await started.done;
         const m = index.messages.find((x) => x.job === started.job);
-        if (json) process.stdout.write(`${JSON.stringify({ teacher, date: started.date, job: started.job, preset: started.plan.preset, resume: started.plan.resume, message: m, session: index.session, costUsd: index.costUsd }, null, 2)}\n`);
+        if (json) process.stdout.write(`${JSON.stringify({ tutor, date: started.date, job: started.job, preset: started.plan.preset, resume: started.plan.resume, message: m, session: index.session, costUsd: index.costUsd }, null, 2)}\n`);
         else if (!m || m.result !== 'ok') {
-          process.stdout.write(`本轮出错:${m?.error ?? '未知'};看 conversations/${teacher}/${started.date}.${started.job}.err.log\n`);
+          process.stdout.write(`本轮出错:${m?.error ?? '未知'};看 conversations/${tutor}/${started.date}.${started.job}.err.log\n`);
           process.exitCode = 1;
         } else {
           process.stdout.write(`孩子看到:${m.kidText ?? '(没有给孩子的话)'}\n`);

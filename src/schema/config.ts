@@ -2,7 +2,7 @@
  * cotutor.json:每个 workspace 一份,一孩一 workspace。承接 drawtell.json 的做法——
  * `paths` 角色映射 + `agents` 的 {run, resume} 命令模板——再加老师表与政策。
  * 字段归属铁律:老师的 .md 文件里只有 name / description / maxTurns / permissionMode / memory + 正文;
- * 人设(display / avatar / voice)、政策、开关全在这里。助教团页只改本文件,永不改链进来的定义文件。
+ * 人设(display / avatar / voice)、政策、开关全在这里。老师团页只改本文件,永不改链进来的定义文件。
  */
 import { z } from 'zod';
 
@@ -50,7 +50,7 @@ export const POLICY_DEFAULTS: Policy = {
 /** agent 名:与 .claude/agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
-export const TeacherSchema = z.object({
+export const TutorSchema = z.object({
   /** 显示名(孩子端头像下的字、计划文件的 H2 标题) */
   display: z.string().min(1).describe('显示名:孩子端头像下的字,计划文件的 H2 标题'),
   subject: z.string().optional().describe('学科:与课程表的学科列、观察的 subject 对齐即归到这位老师'),
@@ -63,7 +63,7 @@ export const TeacherSchema = z.object({
   hidden: z.boolean().default(false).describe('孩子端不露(规划老师这类只和家长打交道的)'),
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
 });
-export type Teacher = z.infer<typeof TeacherSchema>;
+export type Tutor = z.infer<typeof TutorSchema>;
 
 /**
  * 运行时预设:一个 CLI 一组 {run, resume} 命令模板。占位符:
@@ -115,7 +115,7 @@ export const CotutorConfigSchema = z
       .default({ port: 5180 }),
     paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;photos / diary / plans / profile / timetable 相对 vault;不配 vault 就相对 workspace 根'),
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 30 条 / 3 次 / 验收关 / L0,L1,L3,L4 / 10,10)'),
-    teachers: z.record(z.string().regex(AGENT_NAME_RE), TeacherSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
+    tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
     agents: AgentsSchema.describe('运行时预设:default 指一个键;每个预设 {run, resume} 命令模板,占位 {agent} {agentBody} {prompt} {session};模型、预算、时限写在这里'),
     tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板,占位 {text} {voice} {out}'),
   })
@@ -130,9 +130,9 @@ export const CotutorConfigSchema = z
   });
 export type CotutorConfig = z.infer<typeof CotutorConfigSchema>;
 
-/** 老师的有效政策 = POLICY_DEFAULTS ← policyDefaults ← teachers[name].policy */
-export function resolvePolicy(config: CotutorConfig, teacher: string): Policy {
-  const layers = [config.policyDefaults, config.teachers[teacher]?.policy ?? {}];
+/** 老师的有效政策 = POLICY_DEFAULTS ← policyDefaults ← tutors[name].policy */
+export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
+  const layers = [config.policyDefaults, config.tutors[tutor]?.policy ?? {}];
   const out: Policy = { ...POLICY_DEFAULTS, contextPack: { ...POLICY_DEFAULTS.contextPack } };
   for (const p of layers) {
     if (p.replyMaxChars !== undefined) out.replyMaxChars = p.replyMaxChars;
@@ -146,7 +146,7 @@ export function resolvePolicy(config: CotutorConfig, teacher: string): Policy {
   return out;
 }
 
-export interface TeacherView {
+export interface TutorView {
   name: string;
   display: string;
   subject?: string;
@@ -158,8 +158,8 @@ export interface TeacherView {
 }
 
 /** 老师列表(带有效政策);kidOnly = 只要孩子端能看到的(enabled 且不 hidden) */
-export function listTeachers(config: CotutorConfig, opts: { kidOnly?: boolean } = {}): TeacherView[] {
-  return Object.entries(config.teachers)
+export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = {}): TutorView[] {
+  return Object.entries(config.tutors)
     .filter(([, t]) => !opts.kidOnly || (t.enabled && !t.hidden))
     .map(([name, t]) => ({
       name,

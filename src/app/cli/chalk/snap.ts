@@ -105,7 +105,7 @@ export async function snapScene({ scene, bundlesDir, outDir, step, cursor = true
   try {
     ({ chromium } = await import('playwright'));
   } catch {
-    throw new Error('snap 需要 playwright(devDependency):pnpm add -D playwright && npx playwright install chromium');
+    throw new Error('snap 需要 playwright(optionalDependency,npm 装时会带上;没装就 pnpm add playwright)');
   }
 
   const byId = new Map(scene.skeletons.map((e) => [e.id, e]));
@@ -113,7 +113,14 @@ export async function snapScene({ scene, bundlesDir, outDir, step, cursor = true
     n === 0 ? [] : scene.steps[n - 1].elementIds.map((id) => byId.get(id)).filter((e): e is ChalkSkeleton => !!e).map(describe);
 
   const { port, close } = await startServer({ port: 0, bundlesDir });
-  const browser = await chromium.launch();
+  // 先用 playwright 自带的 chromium(npx playwright install chromium);没下载过就退到本机装的 Chrome(channel: chrome),零下载
+  const browser = await chromium.launch().catch(async (err: unknown) => {
+    try {
+      return await chromium.launch({ channel: 'chrome' });
+    } catch {
+      throw new Error(`snap 起不来浏览器:${err instanceof Error ? err.message.split('\n')[0] : String(err)};装一个:npx playwright install chromium,或本机装 Google Chrome`);
+    }
+  });
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
     const stepNums = step != null ? [step] : Array.from({ length: scene.steps.length + 1 }, (_, i) => i);

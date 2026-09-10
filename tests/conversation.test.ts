@@ -1,5 +1,5 @@
 /** 对话索引纯函数:命名、并入运行结果、session 只记一次。 */
-import { addMessage, applyRun, conversationFiles, emptyIndex, jobId, localDate, localMinute } from '../src/lib/conversation.ts';
+import { addMessage, applyRun, cardAssetName, cardId, changedCards, conversationFiles, emptyIndex, jobId, localDate, localMinute } from '../src/lib/conversation.ts';
 import { deriveKidView } from '../src/lib/kid-view.ts';
 import { parseTranscript } from '../src/lib/transcript.ts';
 import { check, done } from './_check.ts';
@@ -19,4 +19,13 @@ check('session 记下', after.session?.id === 's-9' && after.session.runtime ===
 const t2 = parseTranscript('{"type":"system","subtype":"init","session_id":"s-9"}\n{"type":"result","subtype":"success","result":"再讲。","total_cost_usd":0.1}');
 const again = applyRun(addMessage(after, { job: '1630-2', at: '2026-09-08T16:30', from: 'kid', text: '再', result: 'running', artifacts: [] }), '1630-2', { transcript: t2, kidView: deriveKidView(t2, { replyMaxChars: 60 }), runtime: 'claude' });
 check('累计费用、旧对象不动', again.costUsd === 0.22 && idx.messages[0].result === 'running');
+check('卡的资产目录与文件、孩子端的名字', f.cardAssetsDir('1620-1', 2) === '/ws/conversations/math-tutor/2026-09-08.1620-1.cards/2' && f.cardAsset('1620-1', 2, '3.mp3') === '/ws/conversations/math-tutor/2026-09-08.1620-1.cards/2/3.mp3' && cardAssetName('2026-09-08', '1620-1', 2, '3.mp3') === '2026-09-08.1620-1.cards/2/3.mp3');
+check('卡的状态文件与 id', f.cardsDir('1620-1') === '/ws/conversations/math-tutor/2026-09-08.1620-1.cards' && f.card('1620-1', 2) === '/ws/conversations/math-tutor/2026-09-08.1620-1.cards/2.json' && cardId('1620-1', 2) === '1620-1/2');
+{
+  const idx = { messages: [{ job: '1' }, { job: '2' }, { job: '3' }] };
+  const st = (turn: string) => ({ at: 'x', turn, state: {} });
+  const got = changedCards(idx, { '1': { 1: st('3'), 0: st('2') }, '2': { 0: st('3') }, '9': { 0: st('3') } });
+  check('上一轮之后改过的卡:turn 等于末条 job 的才算,按 job、下标排;不在索引里的 job 不算', got.map((c) => `${c.job}/${c.n}`).join() === '1/1,2/0', JSON.stringify(got));
+  check('空索引没有', changedCards({ messages: [] }, { '1': { 0: st('1') } }).length === 0);
+}
 done();

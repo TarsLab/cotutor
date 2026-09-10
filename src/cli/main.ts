@@ -8,6 +8,7 @@ import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
 import { makeCert } from './cert.ts';
 import { addTutorFile, upgradeTutors } from './tutors.ts';
+import { upgradeSkills, writeToolShim } from './skills.ts';
 import { patchConfig } from '../server/store.ts';
 import { resolveRoot } from './workspace.ts';
 import { serveWorkspace } from './serve.ts';
@@ -148,9 +149,12 @@ export async function main(argv: string[]): Promise<void> {
         const { root } = resolveRoot(workspace);
         const force = typeof flags.force === 'string' ? [flags.force, ...positionals] : positionals;
         const steps = await upgradeTutors(root, { force });
-        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps }), null, 2)}\n`);
+        const skillSteps = await upgradeSkills(root);
+        await writeToolShim(root);
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps, skills: skillSteps }), null, 2)}\n`);
         else {
-          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了' };
+          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', unavailable: 'drawtell-skills 没装,没法换' };
+          for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' || s.action === 'unavailable' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
           for (const s of steps) {
             process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
             if (s.diff?.length) {

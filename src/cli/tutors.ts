@@ -11,13 +11,15 @@
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, readFile, readlink, rename, symlink, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative } from 'node:path';
-import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION, shippedAgents, tutorTemplate, writeSchemaFile, type ShippedAgent, type TutorTemplateInput } from './skeleton.ts';
+import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION, shippedAgents, tutorTemplate, writeSchemaFile, writeSyntaxFile, type ShippedAgent, type TutorTemplateInput } from './skeleton.ts';
 import { AGENT_NAME_RE } from '../schema/index.ts';
 import { UsageError } from './workspace.ts';
 
 export const SHIPPED_FILE = '.cotutor/shipped.json';
 
 export interface ShippedManifest {
+  /** 出厂 skill(drawtell-skills 的四个领域 skill)的 hash,与 tutors 同一套机制(src/cli/skills.ts) */
+  skills?: Record<string, { hash: string; version: string }>;
   version: string;
   tutors: Record<string, { hash: string; version: string }>;
 }
@@ -257,6 +259,7 @@ export async function upgradeTutors(root: string, opts: { force?: string[] } = {
   }
   await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   await writeSchemaFile(root);
+  await writeSyntaxFile(root);
   return steps;
 }
 

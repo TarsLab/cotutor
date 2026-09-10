@@ -1,0 +1,286 @@
+{
+  "schema": "chalk-scene",
+  "version": 1,
+  "id": "2026-09-04-guilv5",
+  "title": "找规律填数·递减(每次少 5)",
+  "problem": "找规律填数,递减规律:75、70、65、( )、( )、( )。",
+  "model": "交错数列·分行(单条等差数列)",
+  "template": "paper-strict",
+  "subject": "数学",
+  "skeletons": [
+    {
+      "type": "text",
+      "id": "n-75",
+      "x": 74.6,
+      "y": 155,
+      "animateDuration": 700,
+      "text": "75",
+      "fontSize": 28,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "n-70",
+      "x": 179.6,
+      "y": 155,
+      "animateDuration": 700,
+      "text": "70",
+      "fontSize": 28,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "n-65",
+      "x": 284.6,
+      "y": 155,
+      "animateDuration": 700,
+      "text": "65",
+      "fontSize": 28,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "blank-1",
+      "x": 375,
+      "y": 196,
+      "animateDuration": 400,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          60,
+          0
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "blank-2",
+      "x": 480,
+      "y": 196,
+      "animateDuration": 400,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          60,
+          0
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "blank-3",
+      "x": 585,
+      "y": 196,
+      "animateDuration": 400,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          60,
+          0
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "arrow",
+      "id": "hop-1",
+      "x": 108,
+      "y": 122,
+      "animateDuration": 1000,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          69,
+          0
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "d-1",
+      "x": 131.5,
+      "y": 90,
+      "animateDuration": 500,
+      "text": "-5",
+      "fontSize": 20,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "arrow",
+      "id": "hop-2",
+      "x": 213,
+      "y": 122,
+      "animateDuration": 1000,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          69,
+          0
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "d-2",
+      "x": 236.5,
+      "y": 90,
+      "animateDuration": 500,
+      "text": "-5",
+      "fontSize": 20,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "arrow",
+      "id": "hop-3",
+      "x": 318,
+      "y": 122,
+      "animateDuration": 1000,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          69,
+          0
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "d-3",
+      "x": 341.5,
+      "y": 90,
+      "animateDuration": 500,
+      "text": "-5",
+      "fontSize": 20,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "ans-60",
+      "x": 389.6,
+      "y": 155,
+      "animateDuration": 1400,
+      "text": "60",
+      "fontSize": 28,
+      "strokeColor": "#e03131"
+    },
+    {
+      "type": "arrow",
+      "id": "hop-4",
+      "x": 423,
+      "y": 122,
+      "animateDuration": 1000,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          69,
+          0
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "d-4",
+      "x": 446.5,
+      "y": 90,
+      "animateDuration": 500,
+      "text": "-5",
+      "fontSize": 20,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "ans-55",
+      "x": 494.6,
+      "y": 155,
+      "animateDuration": 1400,
+      "text": "55",
+      "fontSize": 28,
+      "strokeColor": "#e03131"
+    },
+    {
+      "type": "arrow",
+      "id": "hop-5",
+      "x": 528,
+      "y": 122,
+      "animateDuration": 1000,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          69,
+          0
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "d-5",
+      "x": 551.5,
+      "y": 90,
+      "animateDuration": 500,
+      "text": "-5",
+      "fontSize": 20,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "ans-50",
+      "x": 599.6,
+      "y": 155,
+      "animateDuration": 1400,
+      "text": "50",
+      "fontSize": 28,
+      "strokeColor": "#e03131"
+    },
+    {
+      "type": "rectangle",
+      "id": "ring",
+      "x": 358,
+      "y": 145,
+      "animateDuration": 1400,
+      "width": 304,
+      "height": 68,
+      "strokeColor": "#e03131"
+    },
+    {
+      "type": "text",
+      "id": "ans-line",
+      "x": 350,
+      "y": 228,
+      "animateDuration": 1300,
+      "text": "每次少 5:60、55、50。",
+      "fontSize": 24,
+      "strokeColor": "#e03131"
+    }
+  ]
+}

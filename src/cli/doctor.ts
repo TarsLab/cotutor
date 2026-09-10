@@ -277,6 +277,25 @@ export async function doctorWorkspace(
       push({ name: `tutor.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建' });
     }
 
+    // ---- 板书语法表:老师讲解前读它;机器文件,init / upgrade 刷新 ----
+    {
+      const { SYNTAX_FILE } = await import('./skeleton.ts');
+      const there = (await statOrNull(join(root, SYNTAX_FILE)))?.isFile() ?? false;
+      push({ name: 'board.syntax', ok: there, required: true, detail: there ? `${SYNTAX_FILE} 在(老师讲解前读的语法表)` : `${SYNTAX_FILE} 不在,老师不知道卡怎么写`, fix: there ? undefined : 'cotutor init 或 cotutor upgrade 生成' });
+      // 舞台包与 drawtell:场景卡 / 画板卡要它们;没有只是重卡打不开,轻卡与对话照常
+      const { stageBuilt } = await import('../server/stage.ts');
+      const built = stageBuilt();
+      push({ name: 'stage.bundle', ok: built, required: false, detail: built ? 'dist/stage/ 在(舞台包:场景卡与画板卡的播放器)' : 'dist/stage/ 不在,场景卡与画板卡的舞台打不开(轻卡照常)', fix: built ? undefined : '仓库根 pnpm run build:stage(npm 装的包自带)' });
+      const { TOOL_SHIM, drawtellBin, skillStatuses } = await import('./skills.ts');
+      const dt = drawtellBin();
+      const shim = (await statOrNull(join(root, TOOL_SHIM)))?.isFile() ?? false;
+      push({ name: 'drawtell', ok: dt !== null && shim, required: false, detail: !dt ? 'node_modules 里没有 drawtell,场景作业跑不了' : shim ? `${TOOL_SHIM} 在,指向本包的 drawtell(scene-maker 用它 check / build / dub / snap)` : `${TOOL_SHIM} 不在,scene-maker 找不到 drawtell`, fix: !dt ? '仓库根 pnpm install' : shim ? undefined : 'cotutor init 或 cotutor upgrade 生成' });
+      for (const sk of await skillStatuses(root)) {
+        const label: Record<string, string> = { latest: '出厂件,最新', upgradable: `出厂件,基于 ${sk.basedOn},包已更新`, custom: `自定义(基于 ${sk.basedOn})`, untracked: '自定义(没有出厂记录)', missing: '缺', unavailable: 'drawtell-skills 没装,没法拷' };
+        push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'unavailable' && sk.state !== 'upgradable', required: false, detail: `.claude/skills/${sk.name}/:${label[sk.state]}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor upgrade 换新版' : sk.state === 'unavailable' ? '仓库根 pnpm install' : undefined });
+      }
+    }
+
     // ---- paths 角色指向:配了就该在 ----
     for (const [role, value] of Object.entries(ws.config.paths)) {
       const target = ws.paths[role] ?? expandPath(value, ws.root);

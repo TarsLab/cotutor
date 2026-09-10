@@ -6,8 +6,9 @@
  */
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { DIRS, GITIGNORE, LEDGER_FILES, RULES, configTemplate, shippedAgents, writeSchemaFile } from './skeleton.ts';
+import { DIRS, GITIGNORE, LEDGER_FILES, RULES, SYNTAX_FILE, configTemplate, shippedAgents, writeSchemaFile, writeSyntaxFile } from './skeleton.ts';
 import { installTutors } from './tutors.ts';
+import { TOOL_SHIM, installSkills, writeToolShim } from './skills.ts';
 import { CONFIG_FILE, ConfigError, HOME_ROOT, USER_CONFIG, expandPath, parseConfig, readJson } from './workspace.ts';
 
 export interface InitStep {
@@ -70,6 +71,14 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const schemaThere = await exists(join(root, '.cotutor', 'cotutor.schema.json'));
   await writeSchemaFile(root);
   steps.push({ item: '.cotutor/cotutor.schema.json', action: schemaThere ? 'exists' : 'created', note: schemaThere ? '已按本包刷新(机器文件)' : 'cotutor.json 的 JSON Schema,编辑器补全用' });
+  const syntaxThere = await exists(join(root, SYNTAX_FILE));
+  await writeSyntaxFile(root);
+  steps.push({ item: SYNTAX_FILE, action: syntaxThere ? 'exists' : 'created', note: syntaxThere ? '已按本包刷新(机器文件)' : '给老师看的板书语法表,从卡的注册表生成' });
+  // 出厂 skill(scene-maker 的四个领域 skill)与 drawtell 壳脚本
+  steps.push(...(await installSkills(root)));
+  const shimThere = await exists(join(root, TOOL_SHIM));
+  const shim = await writeToolShim(root);
+  steps.push({ item: TOOL_SHIM, action: shimThere ? 'exists' : 'created', note: shim.available ? (shimThere ? '已按本包刷新(机器文件)' : 'drawtell CLI 的壳,scene-maker 用 ../../.cotutor/drawtell 跑它') : 'node_modules 里没有 drawtell,壳只会报错' });
 
   for (const f of LEDGER_FILES) {
     const p = join(root, f);

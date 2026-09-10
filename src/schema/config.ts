@@ -11,8 +11,8 @@ export const REPLY_FORMS = ['L0', 'L1', 'L2', 'L3', 'L4'] as const;
 export type ReplyForm = (typeof REPLY_FORMS)[number];
 
 export const PolicySchema = z.object({
-  /** 老师单条回复给孩子看的字数上限;超出截断并改走 L3(《cotutor契约草案.md》§4) */
-  replyMaxChars: z.number().int().positive().describe('老师单条回复给孩子看的字数上限;超出在句末截断'),
+  /** 老师说给孩子听的每一句的字数上限;超出在句末截断(《cotutor契约草案.md》§4;板书后按句算) */
+  replyMaxChars: z.number().int().positive().describe('老师说给孩子听的每一句的字数上限(板书讲稿一行一句,按句截);超出在句末截断'),
   /** 每孩每日消息上限;超限老师头像灰掉 */
   dailyMessages: z.number().int().nonnegative().describe('孩子每日可发消息条数(家长发的不算);到了头像灰'),
   /** 每日重生上限 */
@@ -23,6 +23,10 @@ export const PolicySchema = z.object({
   forms: z.array(z.enum(REPLY_FORMS)).describe('这位老师可用的回复形式:L0 确定性资源 / L1 口答 / L2 快卡 / L3 补讲 / L4 整包'),
   /** 上下文包的两个数:最近观察条数、计划行数 */
   contextPack: z.object({ recent: z.number().int().nonnegative(), planLines: z.number().int().nonnegative() }),
+  /** 板书开关:auto = 老师判断要不要出卡(缺省);off = 只说话不出卡 */
+  board: z.enum(['auto', 'off']).describe('板书:auto = 讲题讲概念时老师出卡(缺省);off = 只说话不出卡'),
+  /** 场景作业(scene-maker 做课包,$3–5 / 10–15 分钟一个):每天最多起几个;配在 scene-maker 身上或 policyDefaults */
+  scenes: z.object({ dailyMax: z.number().int().nonnegative().describe('每天最多起几个场景作业(一个 ≈ 一轮问答的 30 倍费用)') }),
 });
 export type Policy = z.infer<typeof PolicySchema>;
 
@@ -34,6 +38,8 @@ export const PolicyPatchSchema = z.object({
   reviewGate: PolicySchema.shape.reviewGate.optional(),
   forms: PolicySchema.shape.forms.optional(),
   contextPack: z.object({ recent: z.number().int().nonnegative().optional(), planLines: z.number().int().nonnegative().optional() }).optional(),
+  board: PolicySchema.shape.board.optional(),
+  scenes: z.object({ dailyMax: z.number().int().nonnegative().optional() }).optional(),
 });
 export type PolicyPatch = z.infer<typeof PolicyPatchSchema>;
 
@@ -45,6 +51,8 @@ export const POLICY_DEFAULTS: Policy = {
   reviewGate: false,
   forms: ['L0', 'L1', 'L3', 'L4'],
   contextPack: { recent: 10, planLines: 10 },
+  board: 'auto',
+  scenes: { dailyMax: 2 },
 };
 
 /** agent 名:与 .claude/agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
@@ -62,6 +70,8 @@ export const TutorSchema = z.object({
   /** 孩子端不露(规划老师、记账员这类) */
   hidden: z.boolean().default(false).describe('孩子端不露(规划老师这类只和家长打交道的)'),
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
+  /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。scene-maker 这种要更大预算与时限的配一个自己的 */
+  runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——预算、时限不同的老师配自己的'),
 });
 export type Tutor = z.infer<typeof TutorSchema>;
 
@@ -133,7 +143,7 @@ export type CotutorConfig = z.infer<typeof CotutorConfigSchema>;
 /** 老师的有效政策 = POLICY_DEFAULTS ← policyDefaults ← tutors[name].policy */
 export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
   const layers = [config.policyDefaults, config.tutors[tutor]?.policy ?? {}];
-  const out: Policy = { ...POLICY_DEFAULTS, contextPack: { ...POLICY_DEFAULTS.contextPack } };
+  const out: Policy = { ...POLICY_DEFAULTS, contextPack: { ...POLICY_DEFAULTS.contextPack }, scenes: { ...POLICY_DEFAULTS.scenes } };
   for (const p of layers) {
     if (p.replyMaxChars !== undefined) out.replyMaxChars = p.replyMaxChars;
     if (p.dailyMessages !== undefined) out.dailyMessages = p.dailyMessages;
@@ -142,6 +152,8 @@ export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
     if (p.forms !== undefined) out.forms = [...p.forms];
     if (p.contextPack?.recent !== undefined) out.contextPack.recent = p.contextPack.recent;
     if (p.contextPack?.planLines !== undefined) out.contextPack.planLines = p.contextPack.planLines;
+    if (p.board !== undefined) out.board = p.board;
+    if (p.scenes?.dailyMax !== undefined) out.scenes.dailyMax = p.scenes.dailyMax;
   }
   return out;
 }

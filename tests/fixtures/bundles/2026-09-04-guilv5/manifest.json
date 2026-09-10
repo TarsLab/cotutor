@@ -1,0 +1,69 @@
+{
+  "schema": "lesson-manifest",
+  "version": 2,
+  "steps": [
+    {
+      "step": 1,
+      "elementIds": [
+        "n-75",
+        "n-70",
+        "n-65",
+        "blank-1",
+        "blank-2",
+        "blank-3"
+      ],
+      "line": "先把这串数抄下来:75、70、65,后面三个空要我们填。",
+      "pauseAfter": true
+    },
+    {
+      "step": 2,
+      "elementIds": [
+        "hop-1",
+        "d-1",
+        "hop-2",
+        "d-2"
+      ],
+      "line": "从 75 到 70 少了 5,从 70 到 65 又少了 5——每次都少 5!",
+      "pauseAfter": true
+    },
+    {
+      "step": 3,
+      "elementIds": [
+        "hop-3",
+        "d-3",
+        "ans-60"
+      ],
+      "line": "65 再少 5 是几?减 5 等于 60,填进第一个空。",
+      "pauseAfter": true
+    },
+    {
+      "step": 4,
+      "elementIds": [
+        "hop-4",
+        "d-4",
+        "ans-55"
+      ],
+      "line": "60 再少 5,等于 55,填进第二个空。",
+      "pauseAfter": true
+    },
+    {
+      "step": 5,
+      "elementIds": [
+        "hop-5",
+        "d-5",
+        "ans-50"
+      ],
+      "line": "55 再少 5,等于 50,填进第三个空。",
+      "pauseAfter": true
+    },
+    {
+      "step": 6,
+      "elementIds": [
+        "ring",
+        "ans-line"
+      ],
+      "line": "圈出三个答案。倒着检查:50 加 5 是 55,加 5 是 60,再加 5 正好回到 65!",
+      "pauseAfter": true
+    }
+  ]
+}

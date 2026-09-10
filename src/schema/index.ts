@@ -15,6 +15,7 @@ export * from './context-pack.ts';
 export * from './conversation.ts';
 export * from './ledger.ts';
 export * from './sections.ts';
+export * from './board.ts';
 export * from './plan.ts';
 export * from './timetable.ts';
 export * from './json-schema.ts';

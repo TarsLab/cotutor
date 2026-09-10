@@ -8,7 +8,15 @@
  * 播到哪句就在卡上画标注、滚到那张卡;末句是问句就停下,暂停钮换成「继续」。
  * 输入条照豆包通用版:相机 | 发消息或按住说话 | 加号(相册)。平板横屏:板书两列(最宽 1040 居中),没有左栏。
  *
- * 交互逻辑在 ../lib/kid-board.ts(纯函数,有测试),这里把它剥掉类型内联进页面,两处一份源码。
+ * 交互逻辑在 ../lib/kid-board.ts(纯函数,有测试),这里把它剥掉类型内联进页面,两处一份源码。卡按 kind 渲染(text / read / choice / fill / code),
+ * 每种卡的紧凑态只读;点卡开舞台(盖住板书那块,顶栏是卡的名字 + 关闭,讲稿暂停):选择题在舞台里点大按钮,选了就 PUT 状态,
+ * 「交给老师」= 发一条 {text:'', action:'submit', focus:{card}};舞台开着时发的消息都带 focus.card。「继续」= {text:'', action:'continue'}。
+ * 状态存服务端,重开页面从 section.cards[n].state 读回;卡上永远不画对错。
+ * 重卡(scene / canvas)的舞台在 iframe 里装 /stage/?card=<id>(舞台包,src/stage/),postMessage 协议见 src/stage/protocol.ts:
+ * 页面发 card(props + state + 课包 URL),包回 phase / state / submit / close;场景在播时字幕行显示场景讲稿、按钮映射到播放器;
+ * 讲稿 [[play]] 锚到场景卡 → 念完那句把动画铺满播,done 了关舞台接着念。
+ * 点读段:card.assets 里有 <段号>.mp3 的放服务端配的,没有的浏览器合成;填空舞台逐空打字、「交给老师」;图片舞台双指缩放。
+ * 流式:老师还在说时 pending 条目带 partial 板书,卡按下标只追加不重画(先出的卡不闪),讲稿不播;整轮跑完那节换成正式的,声音从第一句起。
  * __TITLE__ 由路由替换。调试:`?step=<节>.<句>` 直接停在某句(标注画齐、不出声),截图与测试用。
  */
 import { readFileSync } from 'node:fs';
@@ -93,37 +101,71 @@ const PAGE = `<!doctype html>
   .who .nm { font-size:18px; font-weight:600; } .who .mo { font-size:13px; color:var(--dim); }
   .hb { width:40px; height:40px; display:grid; place-items:center; color:var(--dim); }
   .hb.on { color:var(--accent); }
+  #wrap { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
   #board { flex:1; min-height:0; overflow:auto; padding:14px 16px 24px; display:flex; flex-direction:column; gap:12px; -webkit-overflow-scrolling:touch; scroll-behavior:smooth; }
+  /* 舞台:盖住板书那块,留 8px 边;顶栏 = 卡的名字 + 关闭;字幕行与输入条还在下面 */
+  #stage { position:absolute; inset:8px; border-radius:20px; background:var(--card); box-shadow:0 8px 30px #00000029; display:none; flex-direction:column; z-index:5; overflow:hidden; }
+  #stage.on { display:flex; }
+  #stage .top { display:flex; align-items:center; gap:10px; padding:12px 14px 12px 20px; border-bottom:1px solid var(--line); }
+  #stage .top .ttl { flex:1; min-width:0; font-size:17px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #stage .top .kd { font-size:12px; color:var(--dim); border:1px solid var(--line); border-radius:10px; padding:1px 8px; }
+  #st-x { width:40px; height:40px; display:grid; place-items:center; color:var(--dim); }
+  #st-body { flex:1; min-height:0; overflow:auto; padding:20px; display:flex; flex-direction:column; gap:14px; -webkit-overflow-scrolling:touch; }
+  #st-body .c { font-size:20px; line-height:1.6; }
+  #st-body .c-cover { min-height:220px; } #st-body .c-cover .t { font-size:32px; } #st-body .c-cover .s { font-size:16px; }
+  #st-body .c-note { font-size:26px; } #st-body .c-formula { font-size:28px; } #st-body .rd { font-size:22px; }
+  #st-body .c-code { font-size:15px; }
+  .sq { font-size:22px; font-weight:600; line-height:1.5; }
+  .so { display:flex; align-items:center; gap:14px; padding:16px 18px; border-radius:16px; background:var(--paper); border:2px solid var(--line); font-size:20px; text-align:left; width:100%; transition:transform .1s; }
+  .so:active { transform:scale(.985); }
+  .so i { flex:0 0 auto; width:34px; height:34px; border-radius:50%; border:2px solid var(--line); background:#fff; display:grid; place-items:center; font-style:normal; font-size:15px; font-weight:700; color:var(--dim); }
+  .so.on { border-color:var(--purple-ink); background:var(--purple); }
+  .so.on i { background:var(--purple-ink); border-color:var(--purple-ink); color:#fff; }
+  .ch-o.on { border:2px solid var(--purple-ink); background:var(--purple); }
+  .ch-o.on i { background:var(--purple-ink); border-color:var(--purple-ink); color:#fff; }
+  #st-act { padding:12px 20px calc(16px); display:flex; justify-content:flex-end; border-top:1px solid var(--line); }
+  #st-act[hidden] { display:none; }
+  #st-go { padding:0 22px; height:48px; border-radius:24px; background:var(--accent); color:#fff; font-size:17px; font-weight:600; }
+  #st-go:disabled { opacity:.35; }
+  body.limit #st-go, body.pending #st-go { opacity:.35; pointer-events:none; }
   .sec { display:contents; }
   .c { border-radius:16px; padding:14px 16px; background:var(--card); font-size:16px; line-height:1.55; -webkit-user-select:text; user-select:text; }
   .c-cover { position:relative; min-height:150px; background:linear-gradient(135deg,#d9cfb8,#8e9c8a); color:#fff; display:flex; flex-direction:column; justify-content:flex-end; gap:2px; text-shadow:0 1px 6px #00000066; }
-  .c-cover .t { font-size:24px; font-weight:700; } .c-cover .s { font-size:13px; opacity:.9; }
-  .c-oneline { background:var(--blue); display:flex; flex-direction:column; gap:8px; align-items:center; }
-  .tag { display:inline-flex; align-items:center; gap:5px; padding:2px 10px; border-radius:12px; background:var(--tutor); font-size:12px; font-weight:600; }
-  .c-oneline .big { font-size:20px; font-weight:600; text-align:center; line-height:1.5; }
-  .c-section { background:none; padding:4px 0 0; font-size:18px; font-weight:700; }
-  .c-types { background:none; padding:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-  .tp { display:flex; flex-direction:column; align-items:center; gap:4px; padding:14px 10px; border-radius:14px; background:var(--blue); text-align:center; }
-  .tp-n { font-size:15px; font-weight:700; color:#2f5aa8; } .tp-s { font-size:12px; color:var(--dim); }
-  .c-fact { background:var(--blue); font-size:15px; }
-  .c-list { background:var(--cream); display:flex; flex-direction:column; gap:8px; font-size:15px; }
-  .c-image, .c-figure { background:none; padding:0; display:flex; flex-direction:column; align-items:center; gap:6px; }
-  .ph { width:100%; height:120px; border-radius:12px; background:var(--blue); display:grid; place-items:center; color:#8fa7cc; }
-  .cap { font-size:12px; color:var(--dim); }
+  .c-cover .t { font-size:24px; font-weight:700; } .c-cover .s { font-size:13px; opacity:.9; white-space:pre-line; }
+  .c-note { background:var(--blue); font-size:20px; font-weight:600; text-align:center; line-height:1.5; }
   .c-quote { background:var(--cream); font-style:italic; text-align:center; color:#5a5650; }
-  .c-check { background:none; padding:0; display:flex; flex-direction:column; gap:8px; }
-  .ck { display:flex; gap:10px; align-items:center; padding:10px 14px; border-radius:12px; background:var(--blue); font-size:15px; }
-  .ck-b { flex:0 0 auto; width:20px; height:20px; border-radius:5px; background:var(--ok-ink); color:#fff; display:grid; place-items:center; font-size:13px; font-weight:700; }
-  .c-think { background:var(--blue); display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; cursor:pointer; }
-  .th-l { font-size:13px; font-weight:700; color:#2f5aa8; } .th-q { font-size:17px; font-weight:600; padding:6px 4px; }
-  .th-b { display:none; font-size:16px; padding:6px 4px; }
-  .th-h { border-top:1px solid var(--line); width:100%; padding-top:8px; font-size:13px; color:var(--dim); }
-  .c-think.flip .th-q { display:none; } .c-think.flip .th-b { display:block; }
-  .c-problem { background:var(--grey); } .c-problem .pb-l { font-size:15px; font-weight:700; }
-  .c-core { background:var(--ok); } .co-t { font-size:15px; font-weight:700; color:var(--ok-ink); }
-  .c-formula { background:none; text-align:center; font-family:"Times New Roman","Songti SC",serif; font-size:18px; }
-  .c-calc { background:var(--purple); } .ca-t { font-size:15px; font-weight:700; color:var(--purple-ink); } .ca-f { text-align:center; font-family:"Times New Roman","Songti SC",serif; font-size:18px; }
-  .c-text { background:var(--tutor); font-size:18px; }
+  .c-formula { background:none; text-align:center; font-family:"Times New Roman","Songti SC",serif; font-size:20px; }
+  .c-step { background:var(--ok); white-space:pre-line; } .st-t { font-size:15px; font-weight:700; color:var(--ok-ink); }
+  .c-text { background:var(--tutor); font-size:18px; white-space:pre-line; }
+  .c-read { background:none; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .rd { padding:12px 16px; border-radius:12px; background:var(--cream); font-size:18px; line-height:1.6; cursor:pointer; }
+  .rd.on { background:var(--hi); }
+  .c-choice { background:var(--blue); display:flex; flex-direction:column; gap:8px; }
+  .ch-q { font-weight:600; }
+  .ch-o { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:12px; background:var(--card); font-size:16px; }
+  .ch-o i { flex:0 0 auto; width:24px; height:24px; border-radius:50%; border:2px solid var(--line); display:grid; place-items:center; font-style:normal; font-size:12px; font-weight:700; color:var(--dim); }
+  .c-fill { background:var(--cream); font-size:18px; line-height:2; white-space:pre-line; }
+  .bl { display:inline-block; min-width:64px; border-bottom:2px solid var(--ink); margin:0 4px; height:1.2em; vertical-align:bottom; }
+  .c-image { padding:0; overflow:hidden; background:var(--card); }
+  .c-image img { display:block; width:100%; max-height:320px; object-fit:cover; }
+  .c-image .cap { padding:10px 16px; font-size:15px; color:#5a5650; white-space:pre-line; }
+  .bl.f { border-bottom-color:var(--purple-ink); color:var(--purple-ink); font-weight:600; text-align:center; padding:0 6px; }
+  .fq { font-size:22px; line-height:2.2; }
+  .fi { display:inline-block; width:120px; margin:0 4px; padding:2px 8px; font:inherit; font-size:20px; font-weight:600; color:var(--purple-ink); text-align:center; background:var(--card); border:0; border-bottom:3px solid var(--purple-ink); border-radius:6px 6px 0 0; outline:0; -webkit-user-select:text; user-select:text; }
+  .zoom { flex:1; min-height:0; overflow:hidden; display:grid; place-items:center; touch-action:none; }
+  .zoom img { max-width:100%; max-height:100%; transform-origin:center; will-change:transform; }
+  .c-scene { background:var(--card); border:2px solid var(--line); display:flex; flex-direction:column; gap:8px; padding:12px 14px; }
+  .c-scene .sp { font-weight:600; }
+  .c-scene .th { position:relative; border-radius:12px; overflow:hidden; background:var(--grey); min-height:110px; display:grid; place-items:center; color:var(--dim); font-size:15px; }
+  .c-scene .th img { display:block; width:100%; max-height:220px; object-fit:contain; background:#fff; }
+  .c-scene .th .pl { position:absolute; right:10px; bottom:10px; background:#000000aa; color:#fff; border-radius:14px; padding:3px 10px; font-size:13px; }
+  .c-scene .tx { font-size:15px; color:#5a5650; }
+  .c-canvas { background:var(--purple); display:flex; flex-direction:column; gap:8px; }
+  .c-canvas .cp { font-weight:600; } .c-canvas .cb { border:2px dashed var(--purple-ink); border-radius:12px; padding:22px 12px; text-align:center; color:var(--purple-ink); background:#fff; }
+  #st-frame { flex:1; min-height:0; width:100%; border:0; display:block; background:var(--card); }
+  #st-frame[hidden] { display:none; }
+  .c-code { background:#2b2b2b; color:#f6f4ee; font-family:ui-monospace,Menlo,monospace; font-size:14px; white-space:pre-wrap; }
+  .c-code .lg { display:block; font-size:11px; color:#aaa; margin-bottom:6px; font-family:inherit; }
   /* 笔 */
   .mk-marker { background:var(--hi); padding:0 3px; border-radius:3px; }
   .mk-wave { text-decoration:underline wavy var(--accent); text-underline-offset:4px; }
@@ -171,8 +213,9 @@ const PAGE = `<!doctype html>
     #home .sug { grid-column:1; } #home .side { grid-column:2; grid-row:2 / span 3; display:flex; flex-direction:column; gap:14px; }
     #main header { padding-left:32px; padding-right:32px; }
     #board { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-content:start; width:100%; max-width:1040px; margin:0 auto; padding:16px 32px 24px; }
-    .c-cover, .c-section, .c-problem, .c-oneline, .c-types { grid-column:1 / -1; }
-    .c-figure { grid-row:span 3; }
+    .c-cover, .c-note, .c-choice, .c-read { grid-column:1 / -1; }
+    #stage { left:50%; transform:translateX(-50%); width:min(1040px, calc(100% - 16px)); }
+    #st-body { padding:28px 40px; }
     #sub, #bar { width:100%; max-width:760px; margin:0 auto; }
   }
 </style>
@@ -191,7 +234,10 @@ const PAGE = `<!doctype html>
       <div class="who"><span class="nm" id="c-nm"></span><span class="mo" id="c-mo"></span></div>
       <button class="hb on" id="spk" type="button"></button>
     </header>
-    <div id="board"></div>
+    <div id="wrap">
+      <div id="board"></div>
+      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><button id="st-go" type="button">交给老师</button></div></div>
+    </div>
     <div id="sub"><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
       <div id="pill">
@@ -236,6 +282,8 @@ __BOARD_JS__
     send: SVG('<path d="M12 19V5M5 12l7-7 7 7"></path>', 20, 2.4),
     image: SVG('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 16l5-5 4 4 3-3 6 6"></path><circle cx="16" cy="9" r="1.5"></circle>', 36, 1.6),
     album: SVG('<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 15l5-4 4 3 3-2 6 4"></path>', 28),
+    close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
+    check: SVG('<path d="M5 12l5 5 9-10"></path>', 16, 3),
   };
   const api = async (method, path, body) => {
     const r = await fetch(path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
@@ -255,7 +303,7 @@ __BOARD_JS__
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, echo: null, echoTimer: null, pending: false, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, echo: null, echoTimer: null, pending: false, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null };
   try { S.autoplay = localStorage.getItem('kid-autoplay') !== '0'; } catch {}
 
   // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音退回浏览器合成;都没有按字数计时 ----
@@ -272,7 +320,7 @@ __BOARD_JS__
     if (line.audio && S.tutor) {
       try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {}
       audioEl.onended = finish; audioEl.onerror = () => speak(plainLine(line.text), finish, fallback);
-      audioEl.src = '/api/audio/' + S.tutor.name + '/' + encodeURIComponent(line.audio);
+      audioEl.src = '/api/audio/' + S.tutor.name + '/' + line.audio.split('/').map(encodeURIComponent).join('/');
       audioEl.play().catch(() => speak(plainLine(line.text), finish, fallback));
     } else speak(plainLine(line.text), finish, fallback);
   };
@@ -321,7 +369,7 @@ __BOARD_JS__
   // ---- 老师页 ----
   const openTutor = (t, sendText) => {
     unlock();
-    S.tutor = t; S.sections = []; S.played = new Set(); S.state = { section: -1, line: -1, status: 'idle' }; S.echo = null; S.pending = false; S.limit = false;
+    S.tutor = t; S.sections = []; S.played = new Set(); S.state = { section: -1, line: -1, status: 'idle' }; S.echo = null; S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
     $('#c-nm').textContent = t.display;
     $('#c-mo').textContent = t.motto || '';
@@ -334,48 +382,195 @@ __BOARD_JS__
   $('#back').addEventListener('click', closeTutor);
   $('#back').innerHTML = ICON.back;
 
-  // 卡片
-  const renderCard = (c, idx) => {
-    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx }, ...kids);
-    switch (c.type) {
-      case 'cover': return box('cover', h('span', { class: 't' }, c.title), c.subtitle ? h('span', { class: 's' }, c.subtitle) : null);
-      case 'oneline': return box('oneline', h('span', { class: 'tag' }, '一句话看懂'), h('div', { class: 'big' }, c.text));
-      case 'section': return box('section', c.title);
-      case 'types': return box('types', ...c.items.map((i) => h('div', { class: 'tp' }, h('span', { class: 'tp-n' }, i.name), i.note ? h('span', { class: 'tp-s' }, i.note) : null)));
-      case 'fact': return box('fact', c.text);
-      case 'list': return box('list', ...c.items.map((i) => h('div', { class: 'li' }, h('b', {}, i.lead), i.text ? ':' + i.text : '')));
-      case 'image': return box('image', h('div', { class: 'ph', html: ICON.image }), h('span', { class: 'cap' }, c.caption));
-      case 'figure': return box('figure', h('div', { class: 'ph', style: 'height:220px', html: ICON.image }), c.caption ? h('span', { class: 'cap' }, c.caption) : null);
-      case 'quote': return box('quote', '「' + c.text + '」');
-      case 'checklist': return box('check', ...c.items.map((t) => h('div', { class: 'ck' }, h('span', { class: 'ck-b' }, '✓'), t)));
-      case 'think': { const el = box('think', h('span', { class: 'th-l' }, '想一想'), h('div', { class: 'th-q' }, c.question), h('div', { class: 'th-b' }, c.back || ''), h('div', { class: 'th-h' }, c.back ? '点一下翻面看' : '')); if (c.back) el.addEventListener('click', () => el.classList.toggle('flip')); return el; }
-      case 'problem': return box('problem', h('div', { class: 'pb-l' }, '题目:'), h('div', {}, c.text));
-      case 'core': return box('core', h('div', { class: 'co-t' }, c.title || '核心操作'), h('div', {}, c.text));
-      case 'formula': return box('formula', c.text);
-      case 'calc': return box('calc', h('div', { class: 'ca-t' }, c.title), h('div', { class: 'ca-f' }, c.text));
-      default: return box('text', c.text || '');
+  // 卡片:按 kind 分支(轻插件内联;不认识的 kind 把 props 里的字都显示出来)。紧凑态只读,点了开舞台;stage=true 是舞台里的画法
+  const renderCard = (c, idx, secIdx, stage) => {
+    const p = c.props || {};
+    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, on: stage ? {} : { click: () => openStage(secIdx, idx) } }, ...kids);
+    switch (c.kind) {
+      case 'text': {
+        const st = p.style;
+        if (st === 'cover') return box('cover', h('span', { class: 't' }, p.title || ''), p.text ? h('span', { class: 's' }, p.text) : null);
+        if (st === 'note') return box('note', p.text || '');
+        if (st === 'quote') return box('quote', '「' + (p.text || '') + '」');
+        if (st === 'formula') return box('formula', p.text || '');
+        if (st === 'step') return box('step', h('div', { class: 'st-t' }, p.title || ''), h('div', {}, p.text || ''));
+        return box('text', p.text || '');
+      }
+      case 'read':
+        return box('read', ...(p.segments || []).map((seg, k) => h('div', { class: 'rd', on: { click: (e) => { e.stopPropagation(); readSegment(e.currentTarget, c, k, seg); } } }, seg)));
+      case 'image': {
+        const src = /^https?:\\/\\//.test(p.src || '') ? p.src : '/api/kid/image?p=' + encodeURIComponent(p.src || '');
+        if (stage) { const el = box('image'); el.className = 'zoom'; el.append(h('img', { src, alt: p.caption || '' })); pinch(el); return el; }
+        return box('image', h('img', { src, alt: '', loading: 'lazy' }), p.caption ? h('div', { class: 'cap' }, p.caption) : null);
+      }
+      case 'choice': {
+        const picked = (c.state && Array.isArray(c.state.picked)) ? c.state.picked : [];
+        if (stage) return box('choice', h('div', { class: 'sq' }, p.question || ''), ...(p.options || []).map((o, i) => h('button', { type: 'button', class: 'so' + (picked.includes(i) ? ' on' : ''), on: { click: () => pick(secIdx, idx, i) } }, h('i', {}, picked.includes(i) ? h('span', { html: ICON.check }) : 'ABCDEFGH'[i] || ''), o)));
+        return box('choice', h('div', { class: 'ch-q' }, p.question || ''), ...(p.options || []).map((o, i) => h('div', { class: 'ch-o' + (picked.includes(i) ? ' on' : '') }, h('i', {}, 'ABCDEFGH'[i] || ''), o)));
+      }
+      case 'fill': {
+        const el = box('fill');
+        const parts = String(p.text || '').split(/_{2,}/);
+        const got = filledAnswers(c);
+        if (stage) {
+          el.classList.add('fq');
+          parts.forEach((t, i) => { el.append(t); if (i < parts.length - 1) el.append(h('input', { class: 'fi', type: 'text', value: got[i] || '', autocomplete: 'off', enterkeyhint: 'done', on: { input: (e) => fillIn(secIdx, idx, i, e.target.value), keydown: (e) => { if (e.key === 'Enter') e.target.blur(); }, click: (e) => e.stopPropagation() } })); });
+          return el;
+        }
+        parts.forEach((t, i) => { el.append(t); if (i < parts.length - 1) el.append(h('span', { class: 'bl' + (got[i] ? ' f' : '') }, got[i] || '')); });
+        return el;
+      }
+      case 'scene': {
+        const ready = sceneReady(c);
+        const n = Array.isArray(p.steps) ? p.steps.length : 0;
+        const thumb = ready && p.thumb ? h('img', { src: '/api/kid/image?p=' + encodeURIComponent(p.thumb), alt: '' }) : null;
+        return box('scene', p.problem ? h('div', { class: 'sp' }, p.problem) : (p.title ? h('div', { class: 'sp' }, p.title) : null), h('div', { class: 'th' }, thumb || (ready ? '' : '图还在路上'), ready ? h('span', { class: 'pl' }, (n ? n + ' 步 ' : '') + '▷') : null), p.text ? h('div', { class: 'tx' }, p.text) : null);
+      }
+      case 'canvas': {
+        const n = inkCount(c);
+        return box('canvas', h('div', { class: 'cp' }, p.prompt || '画一画'), h('div', { class: 'cb' }, n ? '已经画了 ' + n + ' 笔,点开接着画' : '点开画一画 ✎'));
+      }
+      case 'code':
+        return box('code', p.lang ? h('span', { class: 'lg' }, p.lang) : null, p.text || '');
+      default:
+        return box('text', cardTexts(c).filter(Boolean).join('\\n'));
     }
   };
-  const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i }, ...s.cards.map(renderCard));
+  /** 点读:点哪段念哪段——服务端配好的段(card.assets 里有 <段号>.mp3)放 mp3,没好的用浏览器合成声;讲稿在播就先停下 */
+  const readSegment = (el, card, k, seg) => {
+    stopVoice();
+    if (S.state.status === 'playing') { S.state = { ...S.state, status: 'paused' }; renderSubtitle(); }
+    for (const x of document.querySelectorAll('.rd.on')) x.classList.remove('on');
+    el.classList.add('on');
+    const off = () => el.classList.remove('on');
+    say({ text: seg, audio: segmentAudio(card, k) }, off);
+  };
+  /** 填空:改一个空 → 本地状态、紧凑态重画、400ms 后 PUT(打字中不刷舞台,免得输入框失焦) */
+  let fillTimer = null;
+  const fillIn = (secIdx, idx, i, value) => {
+    const card = S.sections[secIdx].cards[idx];
+    const answers = filledAnswers(card); answers[i] = value;
+    card.state = { answers };
+    $('#st-go').disabled = !stateSummary(card).length;
+    repaintCard(secIdx, idx);
+    clearTimeout(fillTimer);
+    fillTimer = setTimeout(() => saveState(S.sections[secIdx].job, idx, card.state), 400);
+  };
+  /** 图片舞台:双指缩放 + 单指拖,双击复位 */
+  const pinch = (el) => {
+    const img = el.querySelector('img');
+    const pts = new Map(); let scale = 1, tx = 0, ty = 0, start = null, lastTap = 0;
+    const apply = () => { img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; };
+    const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+    el.addEventListener('pointerdown', (e) => { pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); try { el.setPointerCapture(e.pointerId); } catch {} start = { scale, tx, ty, d: pts.size === 2 ? dist() : 0, x: e.clientX, y: e.clientY }; if (pts.size === 1) { const now = Date.now(); if (now - lastTap < 300) { scale = 1; tx = 0; ty = 0; apply(); } lastTap = now; } });
+    el.addEventListener('pointermove', (e) => { if (!pts.has(e.pointerId) || !start) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 2 && start.d) scale = Math.min(6, Math.max(1, start.scale * dist() / start.d)); else if (pts.size === 1 && scale > 1) { tx = start.tx + (e.clientX - start.x); ty = start.ty + (e.clientY - start.y); } apply(); });
+    const up = (e) => { pts.delete(e.pointerId); start = pts.size ? { scale, tx, ty, d: pts.size === 2 ? dist() : 0, x: [...pts.values()][0].x, y: [...pts.values()][0].y } : null; };
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  };
+  const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i }, ...s.cards.map((c, idx) => renderCard(c, idx, i, false)));
+  /** 老师还在说:这节的卡按下标只追加(下标 = 它跑完后会得到的节号,总是最后一节);讲稿不播,声音整轮跑完再从头起 */
+  const renderPartial = (e) => {
+    const idx = S.sections.length;
+    if (!S.partial || S.partial.job !== e.job) { if (S.partial) S.partial.el.remove(); S.partial = { job: e.job, el: h('div', { class: 'sec', 'data-sec': idx }) }; $('#board').append(S.partial.el); }
+    const el = S.partial.el;
+    for (let i = el.children.length; i < e.cards.length; i++) { const c = renderCard(e.cards[i], i, idx, false); el.append(c); c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  };
+  /** 一张卡的状态变了:紧凑态原地重画(标注会掉,重画本节已播到的) */
+  const repaintCard = (secIdx, idx) => {
+    const sec = $('#board').querySelector('[data-sec="' + secIdx + '"]');
+    const old = sec && sec.querySelector('[data-card="' + idx + '"]');
+    if (!old) return;
+    old.replaceWith(renderCard(S.sections[secIdx].cards[idx], idx, secIdx, false));
+    const upTo = S.state.section === secIdx ? S.state.line : S.state.section > secIdx ? undefined : -1;
+    if (upTo !== -1) for (const l of S.sections[secIdx].lines.slice(0, upTo === undefined ? undefined : upTo + 1)) for (const m of l.marks) if (m.card === idx) applyMark(secIdx, m);
+  };
+
+  // ---- 舞台:点卡放大,交互都在这里;开着时讲稿暂停,关了字幕行出「播放」 ----
+  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', scene: '讲解动画', canvas: '画一画', code: '' };
+  const GO_LABEL = { canvas: '给老师看' };
+  const openStage = (secIdx, idx, opts = {}) => {
+    const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];
+    if (!card) return;
+    if (isHeavy(card) && !sceneReady(card) && card.kind === 'scene') return; // 课包还没到:紧凑态写着「图还在路上」,不开
+    if (S.state.status === 'playing' && !opts.delegate) { stopVoice(); S.state = { ...S.state, status: 'paused' }; renderSubtitle(); }
+    S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, scene: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
+    $('#st-ttl').textContent = cardTitle(card);
+    $('#st-kd').textContent = KIND_NAME[card.kind] || card.kind;
+    $('#st-kd').hidden = !(KIND_NAME[card.kind] || card.kind);
+    renderStage();
+    $('#stage').classList.add('on');
+  };
+  const STAGE_SOURCE = 'cotutor-stage';
+  const frame = $('#st-frame');
+  const postStage = (m) => { try { frame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
+  const renderStage = () => {
+    if (!S.stage) return;
+    const card = S.sections[S.stage.section].cards[S.stage.card];
+    const heavy = isHeavy(card);
+    $('#st-body').hidden = heavy;
+    frame.hidden = !heavy;
+    if (heavy) { $('#st-body').replaceChildren(); frame.src = '/stage/?card=' + encodeURIComponent(S.stage.id); }
+    else { frame.src = 'about:blank'; $('#st-body').replaceChildren(renderCard(card, S.stage.card, S.stage.section, true)); }
+    const act = $('#st-act'); act.hidden = !hasState(card);
+    $('#st-go').textContent = GO_LABEL[card.kind] || '交给老师';
+    $('#st-go').disabled = !stateSummary(card).length;
+  };
+  /** 舞台包说话:ready → 把卡发过去;phase → 字幕行;state → 存;done 且是讲稿委托的 → 关舞台接着念 */
+  window.addEventListener('message', (e) => {
+    const m = e.data;
+    if (!m || m.source !== STAGE_SOURCE || !S.stage) return;
+    const card = S.sections[S.stage.section].cards[S.stage.card];
+    if (m.type === 'ready') { const b = card.kind === 'scene' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null; postStage({ type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? '/api/bundles/' + encodeURIComponent(b) + '/' : undefined, autoplay: S.stage.autoplay }); }
+    else if (m.type === 'phase') { S.stage.scene = { phase: m.phase, line: m.line, step: m.step, total: m.total }; renderSubtitle(); if (m.phase === 'done' && S.stage.delegate) { const d = S.stage; closeStage(); resumeAfter(d); } }
+    else if (m.type === 'state') { card.state = m.state; $('#st-go').disabled = !stateSummary(card).length; repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, m.state); }
+    else if (m.type === 'submit') { card.state = m.state; const id = S.stage.id; const job = S.sections[S.stage.section].job; const idx = S.stage.card; closeStage(); api('PUT', '/api/kid/conversations/' + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id }, echoText: '你:' + (stateSummary(card).join('、') || '给老师看') })); }
+    else if (m.type === 'close' || m.type === 'error') { const d = S.stage; closeStage(); if (d.delegate) resumeAfter(d); }
+  });
+  /** 讲稿委托给场景播完(或孩子关了)→ 接着念下一句 */
+  const resumeAfter = (d) => { if (S.state.status !== 'stage') return; S.state = advance({ ...S.state, status: 'playing' }, S.sections); if (S.state.status === 'playing') playLine(); else renderSubtitle(); };
+  const closeStage = () => { S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); };
+  $('#st-x').innerHTML = ICON.close;
+  $('#st-x').addEventListener('click', closeStage);
+  /** 选择题:点一项 → 本地改状态、重画、PUT 到服务端(失败不响,下次再点再存) */
+  const pick = (secIdx, idx, i) => {
+    const card = S.sections[secIdx].cards[idx];
+    const cur = (card.state && Array.isArray(card.state.picked)) ? card.state.picked : [];
+    card.state = { picked: togglePick(cur, i, Boolean(card.props.multi)) };
+    renderStage(); repaintCard(secIdx, idx);
+    saveState(S.sections[secIdx].job, idx, card.state);
+  };
+  const saveState = (job, idx, state) => { if (!S.tutor) return; api('PUT', '/api/kid/conversations/' + S.tutor.name + '/cards/' + job + '/' + idx, state).catch(() => {}); };
+  $('#st-go').addEventListener('click', () => {
+    if (!S.stage) return;
+    const card = S.sections[S.stage.section].cards[S.stage.card];
+    if (isHeavy(card)) { postStage({ type: 'control', action: 'submit' }); return; } // 画板:让舞台包导出 png 再交
+    const labels = stateSummary(card);
+    if (!labels.length) return;
+    const id = S.stage.id;
+    clearTimeout(fillTimer); if (card.kind === 'fill') saveState(S.sections[S.stage.section].job, S.stage.card, card.state);
+    closeStage();
+    send('', { action: 'submit', focus: { card: id }, echoText: '你:' + labels.join('、') });
+  });
   const applyMark = (secIdx, mark) => {
     const sec = $('#board').querySelector('[data-sec="' + secIdx + '"]');
     const card = sec && sec.querySelector('[data-card="' + mark.card + '"]');
     if (!card) return null;
-    const type = S.sections[secIdx].cards[mark.card].type;
+    const cardData = S.sections[secIdx].cards[mark.card];
     const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
     let n;
     while ((n = walker.nextNode())) {
       const i = n.nodeValue.indexOf(mark.phrase);
       if (i < 0 || n.parentElement.classList.contains('mk')) continue;
       const range = document.createRange(); range.setStart(n, i); range.setEnd(n, i + mark.phrase.length);
-      const span = document.createElement('span'); span.className = 'mk mk-' + markStyle(type);
+      const span = document.createElement('span'); span.className = 'mk mk-' + markStyle(cardData);
       range.surroundContents(span);
       return card;
     }
     return card;
   };
   const renderSubtitle = () => {
-    const v = subtitleFor({ state: S.state, sections: S.sections, echo: S.echo, pending: S.pending, thinking: (S.tutor && S.tutor.thinking) || '让我想想…', limit: S.limit });
+    let v = subtitleFor({ state: S.state, sections: S.sections, echo: S.echo, pending: S.pending, thinking: (S.tutor && S.tutor.thinking) || '让我想想…', limit: S.limit });
+    if (S.stage && S.stage.scene && !S.echo && !S.limit) v = sceneSubtitle(S.stage.scene.phase, S.stage.scene.line, S.stage.scene.step, S.stage.scene.total);
     const t = $('#sub-text'); t.textContent = v.text; t.className = v.kind;
     const b = $('#sub-btn');
     b.hidden = v.right === 'none';
@@ -385,9 +580,10 @@ __BOARD_JS__
     document.body.classList.toggle('limit', S.limit);
   };
   $('#sub-btn').addEventListener('click', () => {
+    if (S.stage && S.stage.scene) { postStage({ type: 'control', action: 'toggle' }); return; }
     if (S.state.status === 'playing') { stopVoice(); S.state = { ...S.state, status: 'paused' }; renderSubtitle(); }
     else if (S.state.status === 'paused') { S.state = { ...S.state, status: 'playing' }; playLine(); }
-    else if (S.state.status === 'waiting') send('继续', { echo: false });
+    else if (S.state.status === 'waiting') send('', { action: 'continue', echo: false });
   });
 
   // 播放:一句 = 字幕 + 标注 + 滚到那张卡 + 声音;播完往下走
@@ -397,9 +593,24 @@ __BOARD_JS__
     renderSubtitle();
     let target = null;
     for (const m of line.marks) target = applyMark(S.state.section, m) || target;
-    if (!target) target = $('#board').querySelector('[data-sec="' + S.state.section + '"] .c');
+    if (!target) { const at = lineTarget(line); target = $('#board').querySelector('[data-sec="' + S.state.section + '"] ' + (at === null ? '.c' : '[data-card="' + at + '"]')); }
     if (target) target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    say(line, () => { if (S.state.status !== 'playing') return; S.state = advance(S.state, S.sections); if (S.state.status === 'playing') playLine(); else renderSubtitle(); });
+    say(line, () => {
+      if (S.state.status !== 'playing') return;
+      // [[play]]:念完这句把场景铺满播,播完(done)再接着念
+      const play = line.cues.find((c) => c.name === 'play');
+      const target = play && S.sections[S.state.section].cards[play.card];
+      if (target && target.kind === 'scene' && sceneReady(target)) { S.state = { ...S.state, status: 'stage' }; openStage(S.state.section, play.card, { delegate: true, autoplay: true }); return; }
+      S.state = advance(S.state, S.sections);
+      if (S.state.status === 'playing') playLine();
+      else { renderSubtitle(); if (S.state.status === 'waiting') openAskCard(S.state.section, line); }
+    });
+  };
+  /** 末句问句停下时,锚点卡有交互(选择题)就把它推到舞台等答 */
+  const openAskCard = (secIdx, line) => {
+    const at = lineTarget(line);
+    const card = at !== null && S.sections[secIdx] && S.sections[secIdx].cards[at];
+    if (card && hasState(card) && !S.stage) openStage(secIdx, at);
   };
   /** 把一节的标注一次画齐(打开页面、不出声时) */
   const paintAll = (secIdx, upTo) => { const s = S.sections[secIdx]; if (!s) return; for (const l of s.lines.slice(0, upTo === undefined ? s.lines.length : upTo + 1)) for (const m of l.marks) applyMark(secIdx, m); };
@@ -413,7 +624,22 @@ __BOARD_JS__
       S.limit = d.remaining <= 0;
       const entries = sectionsFromMessages(d.messages);
       const fresh = [];
-      for (const e of entries) if (!S.played.has(e.job)) { S.played.add(e.job); S.sections.push(e); fresh.push(S.sections.length - 1); $('#board').append(renderSection(e, S.sections.length - 1)); }
+      for (const e of entries) {
+        if (S.played.has(e.job)) continue;
+        if (e.partial) { renderPartial(e); continue; }
+        S.played.add(e.job); S.sections.push(e); fresh.push(S.sections.length - 1);
+        const idx = S.sections.length - 1;
+        if (S.partial && S.partial.job === e.job) {
+          // 流式时先铺的卡留着,只补后面的;节的编号就是它现在的位置
+          const el = S.partial.el; S.partial = null;
+          for (let i = el.children.length; i < e.cards.length; i++) el.append(renderCard(e.cards[i], i, idx, false));
+          el.setAttribute('data-sec', idx);
+        } else $('#board').append(renderSection(e, idx));
+      }
+      if (S.partial && !entries.some((e) => e.partial && e.job === S.partial.job)) { S.partial.el.remove(); S.partial = null; }
+      // 服务端的状态是真相(别的设备上选的、重开页面):没在舞台里改着的卡照它画
+      entries.forEach((e) => { const i = S.sections.findIndex((x) => x.job === e.job); if (i < 0 || fresh.includes(i)) return; e.cards.forEach((c, idx) => { const mine = S.sections[i].cards[idx]; if (JSON.stringify(mine.state) !== JSON.stringify(c.state) && !(S.stage && S.stage.section === i && S.stage.card === idx)) { mine.state = c.state; repaintCard(i, idx); } }); });
+      if (fresh.length && S.stage) closeStage();
       const stillPending = Boolean(d.pending) || d.messages.some((m) => m.pending);
       S.pending = stillPending;
       if (fresh.length) {
@@ -421,7 +647,7 @@ __BOARD_JS__
         else { stopVoice(); S.state = startSection(fresh[0], S.sections); if (S.state.status === 'playing') playLine(); else renderSubtitle(); }
       } else renderSubtitle();
       clearTimeout(S.pollTimer);
-      if (stillPending) S.pollTimer = setTimeout(() => loadDay(false), 1500);
+      if (stillPending) S.pollTimer = setTimeout(() => loadDay(false), 1000);
     } catch (e) {
       if (e && e.status === 404) return closeTutor();
       setOffline(true);
@@ -430,14 +656,18 @@ __BOARD_JS__
   const showEcho = (text) => { clearTimeout(S.echoTimer); S.echo = text; renderSubtitle(); S.echoTimer = setTimeout(() => { S.echo = null; renderSubtitle(); }, 2500); };
   const send = async (text, opts = {}) => {
     text = (text || '').trim();
-    if (!text || !S.tutor || S.limit) return;
+    if ((!text && !opts.action) || !S.tutor || (S.limit && opts.action !== 'continue')) return;
     unlock();
     stopVoice();
-    if (S.state.status === 'playing' || S.state.status === 'paused') S.state = { ...S.state, status: 'done' };
-    if (opts.echo !== false) showEcho('你:' + text);
+    if (S.state.status === 'playing' || S.state.status === 'paused' || S.state.status === 'stage') S.state = { ...S.state, status: 'done' };
+    if (opts.echo !== false) showEcho(opts.echoText || ('你:' + text));
     S.pending = true; renderSubtitle();
+    const body = { text };
+    if (opts.action) body.action = opts.action;
+    const focus = opts.focus || (S.stage ? { card: S.stage.id } : null);
+    if (focus) body.focus = focus;
     try {
-      await api('POST', '/api/kid/conversations/' + S.tutor.name + '/messages', { text });
+      await api('POST', '/api/kid/conversations/' + S.tutor.name + '/messages', body);
       clearTimeout(S.pollTimer); S.pollTimer = setTimeout(() => loadDay(false), 1200);
     } catch (e) {
       // 忙 / 上限 / 不通:什么都不报;刷新一下让状态说话
@@ -507,8 +737,8 @@ __BOARD_JS__
   // ---- 调试:?step=<节>.<句> 停在某句(截图 / 测试用,不出声) ----
   const jumpTo = () => {
     const step = debug.get('step');
-    if (!step || !S.sections.length) return;
-    const [a, b] = step.split('.').map(Number);
+    if ((!step && !debug.get('stage')) || !S.sections.length) return;
+    const [a, b] = (step || '0.0').split('.').map(Number);
     stopVoice();
     const sec = Math.min(Math.max(a || 0, 0), S.sections.length - 1);
     const line = Math.min(Math.max(b || 0, 0), Math.max(S.sections[sec].lines.length - 1, 0));
@@ -517,9 +747,11 @@ __BOARD_JS__
     paintAll(sec, line);
     if (S.sections[sec].lines[line] && S.sections[sec].lines[line].ask && line === S.sections[sec].lines.length - 1 && sec === S.sections.length - 1) S.state.status = 'waiting';
     renderSubtitle();
-    const marks = (S.sections[sec].lines[line] || {}).marks || [];
-    const at = marks.length ? $('#board').querySelector('[data-sec="' + sec + '"] [data-card="' + marks[marks.length - 1].card + '"]') : $('#board').querySelector('[data-sec="' + sec + '"] .c');
+    const tgt = S.sections[sec].lines[line] ? lineTarget(S.sections[sec].lines[line]) : null;
+    const at = $('#board').querySelector('[data-sec="' + sec + '"] ' + (tgt === null ? '.c' : '[data-card="' + tgt + '"]'));
     if (at) at.scrollIntoView({ block: 'center' });
+    const st = debug.get('stage');
+    if (st) { const [x, y] = st.split('.').map(Number); openStage(x || 0, y || 0); }
   };
 
   // ---- 启动与心跳:不通就头像灰,什么都不报 ----

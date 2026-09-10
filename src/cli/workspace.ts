@@ -168,6 +168,12 @@ export interface Workspace {
     conversations: string;
     claudeAgents: string;
     qwenAgents: string;
+    /** 场景源(scene-maker 写的 scenes/<id>.ts 与说明文件) */
+    scenes: string;
+    /** 课包(drawtell build 的产物,场景卡从这里播;派生物,gitignore) */
+    bundles: string;
+    /** 关键帧截图(drawtell snap;派生物) */
+    snaps: string;
   };
   files: {
     config: string;
@@ -223,6 +229,9 @@ export function assembleWorkspace(root: string, source: RootSource, config: Cotu
       conversations: join(root, 'conversations'),
       claudeAgents: join(root, '.claude', 'agents'),
       qwenAgents: join(root, '.qwen', 'agents'),
+      scenes: join(root, 'scenes'),
+      bundles: join(root, 'bundles'),
+      snaps: join(root, 'snaps'),
     },
     files: {
       config: join(root, CONFIG_FILE),

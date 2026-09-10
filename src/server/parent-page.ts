@@ -211,21 +211,24 @@ export const PARENT_PAGE = `<!doctype html>
     const FROM = { kid: '孩子', parent: '家长', system: '系统' };
     const nodes = v.index.messages.map((m) => {
       const el = h('div', { class: 'msg from-' + m.from });
-      el.append(h('div', { class: 'meta' }, FROM[m.from] || m.from, ' · ', m.at, ' · ', m.job, m.runtime ? ' · ' + m.runtime : '', m.focus && m.focus.artifact ? ' · 看着 ' + m.focus.artifact + (m.focus.step !== undefined ? ' 第 ' + m.focus.step + ' 步' : '') : ''));
+      el.append(h('div', { class: 'meta' }, FROM[m.from] || m.from, ' · ', m.at, ' · ', m.job, m.runtime ? ' · ' + m.runtime : '', m.focus && m.focus.artifact ? ' · 看着 ' + m.focus.artifact + (m.focus.step !== undefined ? ' 第 ' + m.focus.step + ' 步' : '') : '', m.focus && m.focus.card ? ' · 开着卡 ' + m.focus.card : '', m.action === 'continue' ? ' · 继续' : m.action === 'submit' ? ' · 交给老师' : ''));
+      if (m.cards && m.cards.length) el.append(h('div', { class: 'kid' }, '孩子在板书上做的:', ...m.cards.map((c) => h('div', {}, h('b', {}, c.card + ' ' + c.text)))));
       el.append(h('div', { class: 'bubble in' }, m.text));
       const rows = v.runs[m.job] || [];
       const run = h('div', { class: 'run' }, h('div', { class: 'meta' }, (t.avatar || '') + ' ' + t.display), ...rowsEl(rows));
       if (m.result === 'running') run.append(h('div', { class: 'running' }, v.running === m.job ? '老师在想……' : '(没跑完:服务重启过或进程被杀,看 ' + m.job + '.err.log)'));
       el.append(run);
       if (m.result === 'error') el.append(h('div', { class: 'err' }, '本轮出错:' + (m.error || '未知') + (v.errors[m.job] ? '\\n' + v.errors[m.job] : '')));
-      if (m.result === 'ok') el.append(h('div', { class: 'kid' }, '孩子看到:', m.kidText ? h('b', {}, m.kidText) : h('span', { class: 'none' }, '(这轮没有给孩子的话)')));
+      if (m.result === 'ok') el.append(h('div', { class: 'kid' }, '孩子看到:', m.kidText ? h('b', {}, m.kidText) : h('span', { class: 'none' }, '(这轮没有给孩子的话)'), m.section && m.section.cards.length ? h('span', { class: 'none' }, ' · 板书 ' + m.section.cards.length + ' 张卡 ' + m.section.lines.length + ' 句') : null));
+      if (m.parentText) el.append(h('div', { class: 'kid' }, '给家长:', h('b', {}, m.parentText.replace(/^## 家长\s*/, ''))));
+      if (m.warnings && m.warnings.length) el.append(h('div', { class: 'kid' }, h('span', { class: 'none' }, m.warnings.join(';'))));
       if (m.holdup) {
         const card = h('div', { class: 'holdup' }, h('div', { class: 'q' }, '待裁量:' + m.holdup.question));
         for (const o of m.holdup.options) card.append(h('button', { type: 'button', on: { click: () => send('待裁量「' + m.holdup.question + '」:选「' + o.label + '」', 'parent') } }, o.label + (o.recommended ? ' ★' : '')), o.note ? h('small', {}, o.note + ' ') : null);
         if (!m.holdup.options.length) card.append(h('small', {}, '(没给选项,直接在下面回复)'));
         el.append(card);
       }
-      if (m.handoff) el.append(h('div', { class: 'kid' }, '转交 → ' + m.handoff.to + (m.handoff.why ? ':' + m.handoff.why : '') + '(自动转交在 R5)'));
+      if (m.handoff) el.append(h('div', { class: 'kid' }, '转交 → ' + m.handoff.to + (m.handoff.why ? ':' + m.handoff.why : ''), m.handoffJob ? h('span', { class: 'none' }, ' · 已起 ' + m.handoffJob.tutor + ' 的 ' + m.handoffJob.job) : h('span', { class: 'none' }, ' · 没起(见提醒)')));
       return el;
     });
     nodes.push(h('div', { class: 'meta', style: 'text-align:center' }, '今日费用 $' + v.index.costUsd.toFixed(2), v.index.session ? ' · 会话 ' + v.index.session.id.slice(0, 8) + '(' + v.index.session.runtime + ')' : ''));

@@ -20,7 +20,11 @@ import { tutorStatuses } from '../cli/tutors.ts';
 import { KID_PAGE } from './kid-page.ts';
 import { PARENT_PAGE } from './parent-page.ts';
 import { BusyError, Runner } from './runner.ts';
-import { IndexError, listDates, patchConfig, readErrLog, readIndex, readTranscript, reloadIfChanged } from './store.ts';
+import { IndexError, listDates, patchConfig, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCardImage, writeCardState } from './store.ts';
+import { IMAGE_EXT, parseCardState, stripSecrets } from '../cards/index.ts';
+import { resolve, sep } from 'node:path';
+import { bundleAsset, stageAsset } from './stage.ts';
+import { enrichScenes } from './scene-props.ts';
 import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
 
 export interface RouteResult {
@@ -168,10 +172,23 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
   const index = await readIndex(ctx.ws, tutor, date);
   const policy = resolvePolicy(ctx.ws.config, tutor);
   const active = ctx.runner.running(tutor);
-  return { tutor, date, messages: kidConversation(index), remaining: Math.max(0, policy.dailyMessages - kidMessageCount(index)), pending: active && active.date === date ? active.job : null };
+  const { states, assets } = await scanCards(ctx.ws, tutor, date);
+  const messages = kidConversation(index, states, assets);
+  // 流式:正在回的那条带上已经出来的板书(partial),卡随围栏闭合逐张出现;答案照样剥
+  const partial = active && active.date === date ? ctx.runner.partial(tutor) : null;
+  if (partial) {
+    const m = messages.find((x) => x.job === active!.job);
+    if (m) m.section = stripSecrets(partial);
+  }
+  // 场景卡:课包在不在、题面、步数、缩略图,每次现读(课包落地卡就变成可播)
+  const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
+  for (const m of messages) if (m.section) m.section = await enrichScenes(sceneDirs, m.section);
+  return { tutor, date, messages, remaining: Math.max(0, policy.dailyMessages - kidMessageCount(index)), pending: active && active.date === date ? active.job : null };
 }
 
-const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.mp3$/;
+/** <日期>.<job>.mp3(整段)/ .<n>.mp3(讲稿第 n 句)/ .cards/<n>/<k>.mp3(第 n 张卡的第 k 个资产) */
+const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+(?:\.\d+|\.cards\/\d+\/\d+)?\.mp3$/;
+const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
 
 export async function route(method: string, path: string, ctx: AppContext, body?: unknown): Promise<RouteResult> {
   await ctx.reload();
@@ -256,14 +273,55 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
         const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
         if (focus && !focus.success) return { status: 400, json: { error: 'bad_request' } };
+        const action = body.action === undefined ? undefined : body.action === 'continue' || body.action === 'submit' ? body.action : null;
+        if (action === null) return { status: 400, json: { error: 'bad_request' } };
+        if (!body.text.trim() && !action) return { status: 400, json: { error: 'bad_request' } };
         const policy = resolvePolicy(ws.config, tutor);
-        if (kidMessageCount(await readIndex(ws, tutor, date)) >= policy.dailyMessages) return { status: 429, json: { error: 'limit', remaining: 0 } };
-        const started = await ctx.runner.send(tutor, { from: 'kid', text: body.text, focus: focus?.data });
+        // 「继续」不计每日上限:到了上限也能把老师讲完的听完
+        if (action !== 'continue' && kidMessageCount(await readIndex(ws, tutor, date)) >= policy.dailyMessages) return { status: 429, json: { error: 'limit', remaining: 0 } };
+        const started = await ctx.runner.send(tutor, { from: 'kid', text: body.text, focus: focus?.data, action });
         return { status: 202, json: { tutor, date: started.date, job: started.job } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
-    const audio = /^\/api\/audio\/([a-z0-9][a-z0-9-]*)\/([^/]+)$/.exec(p);
+    // 卡的状态:孩子在舞台里选了、填了 → 存 <日期>.<job>.cards/<n>.json,不起老师;下一条消息带给老师
+    const card = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/cards\/(\d{4}-\d+)\/(\d+)$/.exec(p);
+    if (card) {
+      const [, tutor, job, nStr] = card;
+      const t = ws.config.tutors[tutor];
+      if (!t || !t.enabled || t.hidden) return { status: 404, json: { error: 'no_such_tutor' } };
+      if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
+      const date = localDate(ctx.now());
+      const index = await readIndex(ws, tutor, date);
+      const msg = index.messages.find((m) => m.job === job);
+      const n = Number(nStr);
+      const target = msg?.result === 'ok' ? msg.section?.cards[n] : undefined;
+      if (!target) return { status: 404, json: { error: 'no_such_card' } };
+      // 画板:body 里可以带 image(data:image/png;base64,…),存成 .cards/<n>.png,状态里只留路径(相对 workspace 根,老师 Read 看)
+      let state = body;
+      if (target.kind === 'canvas' && isObj(body) && typeof body.image === 'string') {
+        const { image, ...rest } = body;
+        const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(image);
+        if (!m || m[1].length > 8_000_000) return { status: 400, json: { error: 'bad_state' } };
+        const png = await writeCardImage(ws, tutor, date, job, n, Buffer.from(m[1], 'base64'));
+        state = { ...rest, image: `conversations/${tutor}/${png}` };
+      }
+      const r = parseCardState(target, state);
+      if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
+      const last = index.messages[index.messages.length - 1];
+      await writeCardState(ws, tutor, date, job, n, { at: ctx.now().toISOString(), turn: last.job, state: r.state });
+      return { status: 200, json: { ok: true, card: `${job}/${n}` } };
+    }
+    // 图片卡的图:只认 workspace 根以内的图片文件(产物、照片);越界、不是图、不存在都 404
+    if (p === '/api/kid/image' && method === 'GET') {
+      const rel = url.searchParams.get('p') ?? '';
+      const file = resolve(ws.root, rel);
+      const ext = IMAGE_EXT.exec(rel)?.[1]?.toLowerCase() ?? '';
+      if (!rel || rel.startsWith('/') || !file.startsWith(ws.root + sep) || !IMAGE_TYPES[ext]) return { status: 404, json: { error: 'not_found' } };
+      if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
+      return { status: 200, file, contentType: IMAGE_TYPES[ext] };
+    }
+    const audio = /^\/api\/audio\/([a-z0-9][a-z0-9-]*)\/(.+)$/.exec(p);
     if (audio && method === 'GET') {
       const [, tutor, name] = audio;
       if (!ws.config.tutors[tutor] || !AUDIO_FILE_RE.test(name)) return { status: 404, json: { error: 'not_found' } };
@@ -301,6 +359,15 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
 
+    // 舞台包(重卡在 iframe 里开)与课包文件:静态,越界 404
+    if (method === 'GET' && p.startsWith('/stage/')) {
+      const f = await stageAsset(p);
+      return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
+    }
+    if (method === 'GET' && p.startsWith('/api/bundles/')) {
+      const f = await bundleAsset(ws.dirs.bundles, p);
+      return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
+    }
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
     if (p === '/parent') return { status: 200, html: PARENT_PAGE };
     if (p === '/') return { status: 200, html: KID_PAGE.replace('__TITLE__', esc(ws.config.title)) };

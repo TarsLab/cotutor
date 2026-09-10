@@ -4,12 +4,12 @@ import { configTemplate, shippedAgents } from '../src/cli/skeleton.ts';
 import { check, done } from './_check.ts';
 
 const agents = await shippedAgents();
-check('本包带 5 位老师', agents.length === 5, agents.map((a) => a.name).join(','));
+check('本包带 6 位老师', agents.length === 6, agents.map((a) => a.name).join(','));
 
 const raw = JSON.parse(configTemplate({ slug: 'ming', name: '小明', port: 5181, tutors: agents }));
 const cfg = CotutorConfigSchema.parse(raw);
 check('模板可解析', cfg.kid.slug === 'ming' && cfg.title === '小明的老师们' && cfg.server.port === 5181);
-check('老师表齐', Object.keys(cfg.tutors).length === 5 && cfg.tutors.planner.hidden === true);
+check('老师表齐', Object.keys(cfg.tutors).length === 6 && cfg.tutors.planner.hidden === true && cfg.tutors['scene-maker'].hidden === true && cfg.tutors['scene-maker'].runtime === 'claude-scene');
 check('enabled 缺省 true', cfg.tutors['math-tutor'].enabled === true);
 check('运行时 claude/qwen 都在', 'claude' in cfg.runtimes && 'qwen' in cfg.runtimes && cfg.runtimes.default === 'claude');
 
@@ -64,5 +64,18 @@ check('没给 agentBody 就原样留着(doctor 会报)', q.includes('{agentBody}
     msg = e instanceof ConfigError ? e.message : '';
   }
   check('旧老师名 → 报错给新名', msg.includes('math-tutor') && msg.includes('homework-tutor'), msg);
+}
+{
+  const { resolvePolicy, POLICY_DEFAULTS } = await import('../src/schema/index.ts');
+  check('board 旋钮缺省 auto,老师条目可覆盖成 off', POLICY_DEFAULTS.board === 'auto' && resolvePolicy({ policyDefaults: {}, tutors: { t: { display: 't', enabled: true, policy: { board: 'off' } } } } as never, 't').board === 'off');
+}
+{
+  const { resolvePolicy } = await import('../src/schema/index.ts');
+  const { loadWorkspace: _lw } = await import('../src/cli/workspace.ts');
+  void _lw;
+  const base = { version: 1 as const, title: 'x', kid: { slug: 'x' }, server: { port: 1 }, paths: {}, policyDefaults: { scenes: { dailyMax: 3 } }, tutors: { 'scene-maker': { display: 'a', enabled: true, hidden: true, policy: { scenes: { dailyMax: 1 } } }, 'math-tutor': { display: 'b', enabled: true, hidden: false } }, runtimes: { default: 'c', c: { run: ['x'], resume: ['x'] } }, tts: { say: ['x'] } };
+  const { CotutorConfigSchema } = await import('../src/schema/index.ts');
+  const cfg2 = CotutorConfigSchema.parse(base);
+  check('scenes.dailyMax:缺省 2,policyDefaults 与老师条目逐层覆盖', resolvePolicy(cfg2, 'math-tutor').scenes.dailyMax === 3 && resolvePolicy(cfg2, 'scene-maker').scenes.dailyMax === 1 && resolvePolicy(CotutorConfigSchema.parse({ ...base, policyDefaults: {} }), 'math-tutor').scenes.dailyMax === 2);
 }
 done();

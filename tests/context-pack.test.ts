@@ -31,4 +31,8 @@ check('分隔与消息', text.endsWith('---\n妈妈我不懂这一步\n'), text)
 
 const minimal = renderContextPack({ from: 'system', at: '2026-09-08T20:00', plan: [], recent: [] });
 check('空项不写', minimal === 'cotutor:\n  from: system\n  at: 2026-09-08T20:00', minimal);
+check('board: off 才写进包,auto 不写', buildContextPack({ from: 'kid', at: '2026-09-10T16:00', plan: [], recent: [], board: 'off' }, 'x', { recent: 10, planLines: 10 }).includes('  board: off') && !buildContextPack({ from: 'kid', at: '2026-09-10T16:00', plan: [], recent: [], board: 'auto' }, 'x', { recent: 10, planLines: 10 }).includes('board'));
+const withCards = buildContextPack({ from: 'kid', at: '2026-09-10T16:00', focus: { card: '1620-1/1' }, plan: [], recent: [], cards: ['1620-1/1 choice「三角形有几个角?」 选了「A 三个」(答案:「A 三个」)'] }, '(交了答案,没说话)', { recent: 10, planLines: 10 });
+check('focus.card 与 cards 段:一张卡一行,引号包住', withCards.includes('  focus:\n    card: "1620-1/1"\n') && withCards.includes('  cards:\n    - "1620-1/1 choice「三角形有几个角?」 选了「A 三个」(答案:「A 三个」)"\n---\n(交了答案,没说话)'), withCards);
+check('没有改过的卡就没有 cards 段', !buildContextPack({ from: 'kid', at: '2026-09-10T16:00', plan: [], recent: [], cards: [] }, 'x', { recent: 10, planLines: 10 }).includes('cards'));
 done();

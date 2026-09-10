@@ -1,16 +1,26 @@
 /**
  * 模拟接口(`cotutor mock`):不经真实老师与配音,用固定的板书 JSON 把孩子端页面喂起来,
  * 专门测前端的交互逻辑与渲染效果(卡先铺、笔跟声、停下等、追问追加、上限、离线)。
- * 不需要 workspace。老师的每一轮从各自的脚本里按顺序取;脚本用完给一句收尾话。
+ * 不需要 workspace。老师的每一轮从各自的脚本里按顺序取(脚本就是老师会写的正文,过真解析器);脚本用完给一句收尾话。
  * 没有配音文件(/api/audio 一律 404),页面退回浏览器自带的合成声,所以逐句节奏是真的。
+ * 老师「想」的期间按流式模拟:卡在 delay 里一张张出现(pending 条目带 partial 板书),想完才有讲稿与声音。
+ * 卡的状态 PUT 假存在内存里(过真的 state 契约),today 里并回卡上;发消息接 {text, action, focus},「交给老师」后照常追加下一节。
  * 场景:normal(缺省)/ limit(每日上限已到)/ offline(接口全 500,页面该灰)。
  */
-import { readFileSync } from 'node:fs';
+import { createReadStream, readFileSync } from 'node:fs';
 import { createServer as createHttp, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttps } from 'node:https';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
-import { anchorMarks, isQuestion, phrasesIn, plainLine, type BoardCard, type BoardSection } from '../lib/kid-board.ts';
+import { parseBoard } from '../lib/board.ts';
+import { parseCardState, stripSecrets } from '../cards/index.ts';
+import { fileURLToPath } from 'node:url';
+import { bundleAsset, stageAsset } from './stage.ts';
+import { enrichScenes } from './scene-props.ts';
+
+/** mock 的课包目录:仓库里的样本(tests/fixtures/bundles/),场景卡从这里播 */
+export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bundles/', import.meta.url));
+import type { BoardSection } from '../lib/kid-board.ts';
 import { lanAddresses } from '../cli/serve.ts';
 import { USER_CERT_DIR } from '../cli/workspace.ts';
 import { KID_PAGE } from './kid-page.ts';
@@ -23,17 +33,17 @@ export interface MockTutor {
   subject: string;
   avatar: string;
   motto: string;
-  /** 每轮一节;讲稿一行一句,[词] 是标注 */
-  script: { cards: BoardCard[]; say: string[] }[];
+  /** 每轮一节:老师会写的那种正文(段落 = 讲稿,围栏 = 卡),与真老师的样本同一种写法(tests/fixtures/board/) */
+  script: string[];
   /** 打开页面时已经讲过的轮数(取脚本前几节) */
   preloaded: number;
   /** 首轮的那句问题(孩子问的;不上板,只进索引) */
   firstQuestion: string;
 }
 
-/** 脚本 → 板书节:句子里的 [词] 落到卡上,末句问句 → ask */
-export function sectionFromScript(s: { cards: BoardCard[]; say: string[] }): BoardSection {
-  return { cards: s.cards, lines: s.say.map((text) => ({ text: plainLine(text), audio: null, marks: anchorMarks(s.cards, phrasesIn(text)), ask: isQuestion(text) })) };
+/** 脚本 → 板书节:走真解析器(mock 也是解析器的一次演练) */
+export function sectionFromScript(md: string): BoardSection {
+  return parseBoard(md).section;
 }
 
 export const MOCK_TUTORS: MockTutor[] = [
@@ -46,48 +56,68 @@ export const MOCK_TUTORS: MockTutor[] = [
     preloaded: 1,
     firstQuestion: '画蛇添足是什么意思?',
     script: [
-      {
-        cards: [
-          { type: 'cover', title: '画蛇添足', subtitle: '一个成语,一杯酒的故事' },
-          { type: 'oneline', text: '画蛇添足 = 多做一步,反而坏事' },
-          { type: 'section', title: '这个成语从哪来' },
-          { type: 'types', items: [{ name: '出处', note: '《战国策》里的故事' }, { name: '用法', note: '批评人多此一举' }] },
-          { type: 'section', title: '故事是这样的' },
-          { type: 'fact', text: '几个人分一壶酒,酒不够,就比赛画蛇,先画完的喝。' },
-          { type: 'fact', text: '有个人先画完了,得意地给蛇添上脚;第二个画完的说:蛇没有脚,你画的不是蛇。' },
-          { type: 'quote', text: '为蛇足者,终亡其酒。' },
-          { type: 'think', question: '如果那个人不给蛇画脚,酒是谁的?', back: '当然是他的:他本来就是第一个画完的。' },
-        ],
-        say: [
-          '你有没有过这种事:本来做得好好的,又多加了一点,结果反而糟了?',
-          '这个成语说的就是:[画蛇添足 = 多做一步,反而坏事]。',
-          '它有两个来头:[出处]在《战国策》,[用法]是批评人多此一举。',
-          '故事是这样的:几个人分一壶酒,酒不够,就[比赛画蛇],先画完的喝。',
-          '有个人先画完了,得意地[给蛇添上脚];第二个画完的说,蛇没有脚,你画的不是蛇。',
-          '古人把这件事记成一句话:[为蛇足者,终亡其酒]。',
-          '最后我想问你一个问题:如果那个人不给蛇画脚,酒是谁的?',
-        ],
-      },
-      {
-        cards: [
-          { type: 'section', title: '酒到底归谁' },
-          { type: 'fact', text: '先画完的人本来赢了;他多画了脚,蛇就不是蛇了,酒归第二个画完的。' },
-          { type: 'list', items: [{ lead: '画完就停', text: '做到了,就别再动' }, { lead: '看清要求', text: '题目要的是蛇,不是有脚的蛇' }] },
-          { type: 'checklist', items: ['作文写完了,又硬加一段', '搭好的积木,再放一块就塌了'] },
-          { type: 'think', question: '你有没有画过「蛇脚」?想一件小事说说看。' },
-        ],
-        say: [
-          '这个问题问得好。先画完的人本来是赢了的。',
-          '他多画了脚,蛇就[不是蛇]了,所以酒归第二个画完的。',
-          '记住两件事:[画完就停],[看清要求]。',
-          '你有没有画过蛇脚?比如[作文写完了,又硬加一段]。',
-          '想一件自己的小事说说看?',
-        ],
-      },
-      {
-        cards: [{ type: 'oneline', text: '做到了,就停下来' }],
-        say: ['说得好,这就是画蛇添足要提醒我们的:[做到了,就停下来]。明天我们讲另一个成语,好不好?'],
-      },
+      `你有没有过这种事:本来做得好好的,又多加了一点,结果反而糟了?
+
+~~~text cover
+画蛇添足
+一个成语,一杯酒的故事
+~~~
+
+这个成语说的是:[多做一步,反而坏事]。
+
+~~~text note
+画蛇添足 = 多做一步,反而坏事
+~~~
+
+它出自《战国策》,原文是这样的。
+
+~~~read
+楚有祠者,赐其舍人卮酒。
+舍人相谓曰:数人饮之不足,一人饮之有余。
+请画地为蛇,先成者饮酒。
+~~~
+
+几个人分一壶酒,酒不够大家喝,一个人喝正好,就比赛画蛇,[先成者饮酒],谁先画完谁喝。
+
+~~~choice
+如果第一个画完蛇的人,不去给蛇添上脚,酒是谁的?
+- [x] 他自己的
+- [ ] 第二个画完的
+- [ ] 大家平分
+~~~
+
+我想问你:如果第一个画完蛇的人,不给蛇添脚,酒本来是谁的?`,
+      `你是这么想的:酒是他自己的。
+
+~~~text note
+先画完的人本来就赢了
+~~~
+
+他多画了脚,蛇就[不是蛇]了,第二个画完的说,你画的不是蛇。
+
+~~~text quote
+为蛇足者,终亡其酒。
+~~~
+
+古人把这件事记成一句话:[为蛇足者,终亡其酒]。
+
+~~~fill
+画蛇添足,就是做到了还要___,反而把事情弄糟。
+= 多做一步
+~~~
+
+你来填一填:画蛇添足,就是做到了还要什么?`,
+      `~~~text note
+做到了,就停下来
+~~~
+
+说得好,这就是画蛇添足要提醒我们的:[做到了,就停下来]。
+
+~~~canvas
+画一条蛇,不要给它添脚。
+~~~
+
+你来画一条蛇,画好了给我看看。`,
     ],
   },
   {
@@ -97,33 +127,57 @@ export const MOCK_TUTORS: MockTutor[] = [
     avatar: '数',
     motto: '不懂的都来问我',
     preloaded: 1,
-    firstQuestion: '长方形长6宽4,画一条对角线,阴影是多少?',
+    firstQuestion: '三角形的面积怎么算?',
     script: [
-      {
-        cards: [
-          { type: 'problem', text: '长方形长 6、宽 4,画一条对角线,求阴影部分的面积。' },
-          { type: 'figure', caption: '对角线把长方形分成两个三角形' },
-          { type: 'core', title: '核心操作', text: '对角线把长方形分成一样大的两半。' },
-          { type: 'formula', text: '阴影面积 = 长方形面积 ÷ 2' },
-          { type: 'calc', title: '算一算', text: '6 × 4 ÷ 2 = 12' },
-        ],
-        say: [
-          '你好呀,我们一起来看这道题。先把题目整理到黑板上:[长方形长 6、宽 4]。',
-          '画一条对角线,你看,两个三角形是不是一模一样?',
-          '所以关键一步是:[对角线把长方形分成一样大的两半]。',
-          '那阴影就是[长方形面积 ÷ 2]。',
-          '算一算:[6 × 4 ÷ 2 = 12]。',
-          '这一步明白吗?',
-        ],
-      },
-      {
-        cards: [
-          { type: 'section', title: '再来一道' },
-          { type: 'problem', text: '正方形边长 5,画一条对角线,阴影是其中一半,面积是多少?' },
-          { type: 'calc', title: '算一算', text: '5 × 5 ÷ 2 = 12.5' },
-        ],
-        say: ['太棒了。那换个正方形:[边长 5],对角线一画,阴影还是一半。', '所以是[5 × 5 ÷ 2 = 12.5]。', '你自己再出一道类似的题考考我?'],
-      },
+      `~~~text cover
+三角形的面积
+两个一样的三角形拼成一个平行四边形
+~~~
+
+我们先拿两个一模一样的三角形来拼一拼。
+
+~~~text step
+拼
+把两个一样的三角形,一个转过来,和另一个拼在一起
+~~~
+
+拼好以后,它们正好变成一个[平行四边形]。
+
+先记住一句话,[三角形的面积是平行四边形的一半]。
+
+你觉得,这个平行四边形的底和高,跟原来那个三角形的底和高,是一样的,还是不一样?`,
+      `你说得对,底和高都一样。
+
+~~~text formula
+平行四边形面积 = 底 × 高
+~~~
+
+三角形只占平行四边形的一半,所以要在后面除以 2。
+
+~~~text formula
+三角形面积 = 底 × 高 ÷ 2
+~~~
+
+~~~choice
+底 6 厘米、高 4 厘米的三角形,面积是多少?
+- [ ] 24 平方厘米
+- [x] 12 平方厘米
+- [ ] 10 平方厘米
+~~~
+
+你来试试,底 6 厘米、高 4 厘米,面积是多少?`,
+      `对,12 平方厘米。
+
+我们换一道找规律的题,我把它画出来看。
+
+~~~scene
+2026-09-04-guilv5
+75、70、65,后面三个空填什么?
+~~~
+
+看我一步一步画。[[play]]
+
+看完了,你自己说说,每次少几?`,
     ],
   },
   {
@@ -134,7 +188,29 @@ export const MOCK_TUTORS: MockTutor[] = [
     motto: '一起大声读',
     preloaded: 0,
     firstQuestion: '',
-    script: [],
+    script: [
+      `Today we learn three fruits. 今天学三种水果。
+
+~~~text cover
+Fruits
+水果
+~~~
+
+~~~read
+apple 苹果
+banana 香蕉
+orange 橘子
+~~~
+
+Listen and repeat: [apple], [banana], [orange]. 点一下听一下,跟着我读。
+
+~~~image
+vault/照片/fruits.png
+三种水果,你家有哪种?
+~~~
+
+Which one do you want to try first, [apple], [banana], or [orange]? 你先读哪一个?`,
+    ],
   },
 ];
 
@@ -147,12 +223,20 @@ interface MockMessage {
   pending: boolean;
   artifacts: string[];
   section: BoardSection | null;
+  /** 孩子端的动作(继续不计次数) */
+  action?: 'continue' | 'submit';
+  /** 卡下标 → 孩子做的事(PUT 进来的) */
+  states?: Record<number, unknown>;
 }
 
 export interface MockRouteResult {
   status: number;
   json?: unknown;
   html?: string;
+  /** 静态文件(舞台包、课包) */
+  file?: string;
+  /** html / file 的 content-type */
+  contentType?: string;
 }
 
 export interface MockOptions {
@@ -194,7 +278,13 @@ export function createMock(opts: MockOptions = {}): Mock {
     cursor.set(t.name, Math.min(t.preloaded, t.script.length));
   }
   const dailyLimit = 30;
-  const used = (name: string): number => (messages.get(name) ?? []).filter((m) => m.question !== null).length;
+  const used = (name: string): number => (messages.get(name) ?? []).filter((m) => m.question !== null && m.action !== 'continue').length;
+  /** 下发孩子端的形状:答案剥掉、状态并到卡上、场景卡补课包快照(样本课包在仓库里) */
+  const kidMessage = async (m: MockMessage) => {
+    const { states, action: _a, ...rest } = m;
+    const section = m.section ? await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, stripSecrets({ ...m.section, cards: m.section.cards.map((c, i) => (states && i in states ? { ...c, state: states[i] } : c)) })) : null;
+    return { ...rest, section };
+  };
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
   const tutorsJson = () => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, motto: t.motto, hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0 }));
   const timetable = [
@@ -210,18 +300,38 @@ export function createMock(opts: MockOptions = {}): Mock {
     const day = d.getDay() === 0 ? 7 : d.getDay();
     return { title, date: localDate(d), day, timetable, slot: null, tutors: tutorsJson(), stacks: [], suggestions: [{ tutor: 'chinese-tutor', text: '「静夜思」怎么背' }, { tutor: 'math-tutor', text: '25 加 17 怎么算' }, { tutor: 'reading-tutor', text: '再听一遍昨天的故事' }] };
   };
-  const answer = (t: MockTutor, m: MockMessage): void => {
+  const answer = (m: MockMessage, full: BoardSection | null): void => {
+    if (full) {
+      m.section = full;
+      m.reply = full.lines[full.lines.length - 1]?.text ?? null;
+    } else {
+      m.section = null;
+      m.reply = '这个我们明天接着说,好不好?';
+    }
+    m.pending = false;
+  };
+  /** 流式模拟:想的期间每隔一段露一张卡(讲稿句跟到那张卡为止),整段想完才定稿 */
+  const think = (t: MockTutor, m: MockMessage): Promise<void> => {
     const i = cursor.get(t.name) ?? 0;
     const step = t.script[i];
     cursor.set(t.name, i + 1);
-    if (step) {
-      m.section = sectionFromScript(step);
-      m.reply = m.section.lines[m.section.lines.length - 1]?.text ?? null;
-    } else {
-      m.section = null;
-      m.reply = t.script.length ? '这个我们明天接着说,好不好?' : `你说的是「${m.question ?? ''}」,我们一起大声读一遍?`;
-    }
-    m.pending = false;
+    const full = step ? sectionFromScript(step) : null;
+    const n = full ? full.cards.length : 0;
+    const tick = delay / (n + 1);
+    return new Promise<void>((resolve) => {
+      let k = 0;
+      const reveal = (): void => {
+        k++;
+        if (k <= n && full) {
+          m.section = { cards: full.cards.slice(0, k), lines: full.lines.filter((l) => l.anchor !== null && l.anchor < k - 1), partial: true };
+          setTimeout(reveal, tick);
+        } else {
+          answer(m, full);
+          resolve();
+        }
+      };
+      setTimeout(reveal, tick);
+    });
   };
   const route = async (method: string, path: string, body?: unknown): Promise<MockRouteResult> => {
     const url = new URL(path, 'http://x');
@@ -239,19 +349,48 @@ export function createMock(opts: MockOptions = {}): Mock {
       const date = localDate(now());
       if (tail === 'today' && method === 'GET') {
         const pending = list.find((m) => m.pending);
-        return { status: 200, json: { tutor: name, date, messages: list, remaining: remaining(name), pending: pending ? pending.job : null } };
+        return { status: 200, json: { tutor: name, date, messages: await Promise.all(list.map(kidMessage)), remaining: remaining(name), pending: pending ? pending.job : null } };
       }
       if (tail === 'messages' && method === 'POST') {
-        if (!isObj(body) || typeof body.text !== 'string' || !body.text.trim()) return { status: 400, json: { error: 'bad_request' } };
-        if (remaining(name) <= 0) return { status: 429, json: { error: 'limit', remaining: 0 } };
+        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
+        const action = body.action === 'continue' || body.action === 'submit' ? body.action : undefined;
+        if (!body.text.trim() && !action) return { status: 400, json: { error: 'bad_request' } };
+        if (action !== 'continue' && remaining(name) <= 0) return { status: 429, json: { error: 'limit', remaining: 0 } };
         if (list.some((m) => m.pending)) return { status: 409, json: { error: 'busy' } };
-        const m: MockMessage = { job: nextJob(), at: now().toISOString(), question: body.text, reply: null, audio: null, pending: true, artifacts: [], section: null };
+        const text = body.text.trim() || (action === 'continue' ? '继续' : '(交了答案,没说话)');
+        const m: MockMessage = { job: nextJob(), at: now().toISOString(), question: text, reply: null, audio: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}) };
         list.push(m);
-        const done = new Promise<void>((resolve) => setTimeout(() => { answer(t, m); inflight.delete(m.job); resolve(); }, delay));
+        const done = think(t, m).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);
         return { status: 202, json: { tutor: name, date, job: m.job } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
+    }
+    const card = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/cards\/([^/]+)\/(\d+)$/.exec(p);
+    if (card) {
+      const [, name, job, n] = card;
+      const m = (messages.get(name) ?? []).find((x) => x.job === job);
+      const target = m?.section?.cards[Number(n)];
+      if (!target) return { status: 404, json: { error: 'no_such_card' } };
+      if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
+      const r = parseCardState(target, body);
+      if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
+      (m!.states ??= {})[Number(n)] = r.state;
+      return { status: 200, json: { ok: true, card: `${job}/${n}` } };
+    }
+    if (p === '/api/kid/image') {
+      // 图片卡:任何路径都给一张占位 svg(写着路径),前端能看到版式
+      const rel = url.searchParams.get('p') ?? '';
+      const esc = rel.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
+      return { status: 200, contentType: 'image/svg+xml', html: `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7d9a8"/><stop offset="1" stop-color="#8fbf9f"/></linearGradient></defs><rect width="800" height="500" fill="url(#g)"/><circle cx="260" cy="250" r="90" fill="#e8743b"/><circle cx="420" cy="230" r="80" fill="#f4c542"/><circle cx="560" cy="270" r="85" fill="#e0508a"/><text x="400" y="460" font-size="22" text-anchor="middle" fill="#2b2b2b" font-family="sans-serif">${esc}</text></svg>` };
+    }
+    if (p.startsWith('/stage/') && method === 'GET') {
+      const f = await stageAsset(p);
+      return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
+    }
+    if (p.startsWith('/api/bundles/') && method === 'GET') {
+      const f = await bundleAsset(MOCK_BUNDLES_DIR, p);
+      return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
     if (p.startsWith('/api/audio/')) return { status: 404, json: { error: 'not_found' } };
     if (p.startsWith('/api/')) return { status: 404, json: { error: 'not_found', path: p } };
@@ -265,7 +404,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       let body: unknown;
       try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : undefined; } catch { body = undefined; }
       const r = await route(req.method ?? 'GET', req.url ?? '/', body);
-      if (r.html !== undefined) { res.writeHead(r.status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(r.html); }
+      if (r.file !== undefined) { res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=3600' }); createReadStream(r.file).on('error', () => res.end()).pipe(res); }
+      else if (r.html !== undefined) { res.writeHead(r.status, { 'content-type': r.contentType ?? 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(r.html); }
       else { res.writeHead(r.status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(r.json ?? null)); }
     })().catch((err) => { res.writeHead(500, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'internal', message: String(err) })); });
   };

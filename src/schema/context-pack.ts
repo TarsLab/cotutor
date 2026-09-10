@@ -14,6 +14,8 @@ export const FocusSchema = z.object({
   step: z.number().int().nonnegative().optional(),
   /** 圈了什么 */
   circled: z.array(z.string()).optional(),
+  /** 孩子发消息时正开着的那张卡(<job>/<n>) */
+  card: z.string().optional(),
 });
 export type Focus = z.infer<typeof FocusSchema>;
 
@@ -28,5 +30,9 @@ export const ContextPackSchema = z.object({
   plan: z.array(z.string()).default([]),
   /** 最近 N 条本学科观察(已按 recent 截) */
   recent: z.array(z.object({ date: z.string(), claim: z.string() })).default([]),
+  /** 政策旋钮 board = off 时带上,老师只说话不出卡;auto 不写 */
+  board: z.enum(['auto', 'off']).optional(),
+  /** 上一轮之后孩子改过状态的卡,每张一句(「<job>/<n> choice「问题」 选了「B …」(答案:「…」)」) */
+  cards: z.array(z.string()).optional(),
 });
 export type ContextPack = z.infer<typeof ContextPackSchema>;

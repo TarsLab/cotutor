@@ -1,21 +1,31 @@
 /**
- * 孩子视图(《cotutor契约草案.md》§4):孩子只看每次运行最终文本的**最后一段**(剥掉「待裁量」「转交」段之后,
- * 以空行分段取最后一段——家规让老师把给孩子的话放最后一段,前面的话是给家长看的思路),再按 replyMaxChars 截断;
- * 出错什么都不出现。机械规则,不靠模型判断。
+ * 孩子视图(《cotutor契约草案.md》§4,2026-09-10 改板书):最终文本剥掉「待裁量」「转交」段后,正文就是板书——
+ * 普通段落是讲稿(一行一句),围栏是卡(src/lib/board.ts 解析);kidText = 讲稿各句拼起来(家长视图的「孩子看到」摘要),
+ * 每句按 replyMaxChars 截;第一个 H2 起是给家长的尾巴(parentText),孩子看不到。出错什么都不出现。机械规则,不靠模型判断。
+ * 正文取自 kidSource:带卡 / 带固定段的顶层文本段 + 最后一段(老师板书之后又用了工具也不丢)。
  */
+import { stripSecrets } from '../cards/index.ts';
 import type { ConversationMessage, Handoff, HoldupAsk } from '../schema/index.ts';
+import { parseBoard } from './board.ts';
+import type { CardAssets, CardStates } from './conversation.ts';
 import type { BoardSection } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 import type { Transcript } from './transcript.ts';
 
 export interface KidView {
-  /** 给孩子的话;null = 这次运行没有(出错、还在跑、或最终文本剥完是空的) */
+  /** 给孩子的话(讲稿各句,换行分隔);null = 这次运行没有(出错、还在跑、或最终文本剥完是空的) */
   kidText: string | null;
   truncated: boolean;
   holdup: HoldupAsk | null;
   handoff: Handoff | null;
   /** 运行是否正常收尾 */
   ok: boolean;
+  /** 板书节(卡 + 讲稿);没有卡也没有讲稿 = null */
+  section: BoardSection | null;
+  /** 解析时的提醒(卡没解析成等),家长视图转录里显示 */
+  warnings: string[];
+  /** 第一个 H2 起给家长的尾巴(「## 家长」等);没有 = 空串 */
+  parentText: string;
 }
 
 const SENTENCE_END = new Set(['。', '!', '!', '?', '?', ';', ';', '\n']);
@@ -44,14 +54,39 @@ export function truncateReply(text: string, max: number): { text: string; trunca
   return { text: `${cps.slice(0, max).join('').trim()}…`, truncated: true };
 }
 
+const none = (ok: boolean, holdup: HoldupAsk | null = null, handoff: Handoff | null = null): KidView => ({ kidText: null, truncated: false, holdup, handoff, ok, section: null, warnings: [], parentText: '' });
+
+const FENCE_OR_H2 = /^\s*(?:```|~~~|## )/m;
+
+/**
+ * 孩子看的正文从哪来(2026-09-10 拍板,两次真跑的教训):`result.result` 只是这轮**最后一段**顶层文本——老师写完板书再用一次工具、再补一句,
+ * 板书和「## 转交」段就没了。所以正文 = 这轮里**带围栏(卡)或带 H2 固定段的顶层文本段** + **最后一段**(顺序不变,重复不算两次);
+ * 中间那些「我先看看账本」之类没卡没段的话不进。子代理的话本来就不在顶层。
+ */
+export function kidSource(t: Transcript): string | null {
+  if (!t.final?.text) return null;
+  const last = t.final.text.trim();
+  const blocks = t.items.filter((i) => i.kind === 'text' && !i.sub).map((i) => i.text.trim());
+  const kept = blocks.filter((b) => b !== last && FENCE_OR_H2.test(b));
+  return [...kept, last].join('\n\n');
+}
+
 export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }): KidView {
-  if (!t.final) return { kidText: null, truncated: false, holdup: null, handoff: null, ok: false };
-  if (!t.final.ok || !t.final.text) return { kidText: null, truncated: false, holdup: null, handoff: null, ok: t.final.ok };
-  const { body, holdup, handoff } = parseSections(t.final.text);
-  const last = lastParagraph(body);
-  if (!last) return { kidText: null, truncated: false, holdup, handoff, ok: true };
-  const { text, truncated } = truncateReply(last, policy.replyMaxChars);
-  return { kidText: text, truncated, holdup, handoff, ok: true };
+  if (!t.final) return none(false);
+  if (!t.final.ok || !t.final.text) return none(t.final.ok);
+  const { body, holdup, handoff } = parseSections(kidSource(t) ?? t.final.text);
+  const board = parseBoard(body);
+  const { cards, lines } = board.section;
+  if (!cards.length && !lines.length) return { ...none(true, holdup, handoff), warnings: board.warnings, parentText: board.tail };
+  let truncated = false;
+  const cut = lines.map((l) => {
+    const r = truncateReply(l.text, policy.replyMaxChars);
+    truncated = truncated || r.truncated;
+    return { ...l, text: r.text };
+  });
+  const section: BoardSection = { ...board.section, lines: cut };
+  const kidText = cut.map((l) => l.text).join('\n');
+  return { kidText: kidText || null, truncated, holdup, handoff, ok: true, section, warnings: board.warnings, parentText: board.tail };
 }
 
 /** 孩子端的一条:自己问的话(别人问的不显示)+ 老师给孩子的话 + 配音;出错的运行什么都不出现(问句还在) */
@@ -68,27 +103,31 @@ export interface KidMessage {
   pending: boolean;
   /** 本次运行新增的产物 id */
   artifacts: string[];
-  /** 板书节(卡 + 讲稿;见 kid-board.ts);没有 = 页面把 reply 当一张文字卡。服务端的解析器等小语法定稿后接上 */
+  /** 板书节(卡 + 讲稿;答案等秘密已剥);没有 = 页面把 reply 当一张文字卡 */
   section?: BoardSection | null;
 }
 
 /**
- * 对话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / holdup / handoff / 费用。
- * 出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
+ * 对话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / holdup / handoff / 费用 / 家长尾巴;
+ * 卡上的答案剥掉,孩子自己做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到卡上。出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
  */
-export function kidConversation(index: { messages: readonly ConversationMessage[] }): KidMessage[] {
+export function kidConversation(index: { messages: readonly ConversationMessage[] }, states: CardStates = {}, assets: CardAssets = {}): KidMessage[] {
   const out: KidMessage[] = [];
   for (const m of index.messages) {
     const question = m.from === 'kid' ? m.text : null;
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
     if (question === null && reply === null && !pending) continue;
-    out.push({ job: m.job, at: m.at, question, reply, audio: reply ? (m.audio ?? null) : null, pending, artifacts: reply ? [...m.artifacts] : [] });
+    const per = states[m.job];
+    const files = assets[m.job];
+    const withState = m.section && (per || files) ? { ...m.section, cards: m.section.cards.map((c, n) => ({ ...c, ...(per?.[n] ? { state: per[n].state } : {}), ...(files?.[n]?.length ? { assets: files[n] } : {}) })) } : m.section;
+    const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
+    out.push({ job: m.job, at: m.at, question, reply, audio: reply ? (m.audio ?? null) : null, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}) });
   }
   return out;
 }
 
-/** 今天孩子已发的条数(每日上限按它算;家长发的不算) */
+/** 今天孩子已发的条数(每日上限按它算;家长发的不算,「继续」不算,交答案算) */
 export function kidMessageCount(index: { messages: readonly ConversationMessage[] }): number {
-  return index.messages.filter((m) => m.from === 'kid').length;
+  return index.messages.filter((m) => m.from === 'kid' && m.action !== 'continue').length;
 }

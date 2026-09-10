@@ -61,7 +61,7 @@ try {
   // ---- 自家加老师:add 出模板 + 进 cotutor.json + 目录 + 链;doctor 认它;upgrade 不碰 ----
   const added = await addTutorFile(root, { name: 'science-tutor', display: '科学老师', subject: '科学' });
   const fm = parseAgentFile(readFileSync(added.file, 'utf8'));
-  check('模板:frontmatter name 一致、带约定', fm.frontmatter.name === 'science-tutor' && fm.frontmatter.memory === 'project' && fm.body.includes('科学老师') && fm.body.includes('最后一段') && fm.body.includes('待裁量'), fm.body.slice(0, 80));
+  check('模板:frontmatter name 一致、带约定', fm.frontmatter.name === 'science-tutor' && fm.frontmatter.memory === 'project' && fm.body.includes('科学老师') && fm.body.includes('板书') && fm.body.includes('待裁量'), fm.body.slice(0, 80));
   check('目录与 .qwen 链', existsSync(join(root, 'agents', 'science-tutor', '.gitkeep')) && readlinkSync(join(root, '.qwen', 'agents', 'science-tutor.md')) === '../../.claude/agents/science-tutor.md');
   let dup = '';
   try {

@@ -5,7 +5,7 @@
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseAgentFile } from '../lib/agent-file.ts';
-import { conversationFiles, emptyIndex } from '../lib/conversation.ts';
+import { cardAssetName, conversationFiles, emptyIndex, type CardAssets, type CardStateFile, type CardStates } from '../lib/conversation.ts';
 import { parseTranscript, type Transcript } from '../lib/transcript.ts';
 import {
   ConversationIndexSchema,
@@ -71,6 +71,76 @@ export async function readTranscript(ws: Workspace, tutor: string, date: string,
   } catch {
     return null;
   }
+}
+
+/**
+ * 一天里卡的目录 <date>.<job>.cards/ 全扫一遍:<n>.json 是孩子做的事(坏文件跳过,孩子端不报),<n>/<k>.mp3 是后台生成好的资产。
+ */
+export async function scanCards(ws: Workspace, tutor: string, date: string): Promise<{ states: CardStates; assets: CardAssets }> {
+  const dir = join(ws.dirs.conversations, tutor);
+  const states: CardStates = {};
+  const assets: CardAssets = {};
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return { states, assets };
+  }
+  for (const name of names) {
+    const m = new RegExp(`^${date}\\.(\\d{4}-\\d+)\\.cards$`).exec(name);
+    if (!m) continue;
+    const job = m[1];
+    let files: string[];
+    try {
+      files = await readdir(join(dir, name), { withFileTypes: true }).then((es) => es.map((e) => (e.isDirectory() ? `${e.name}/` : e.name)));
+    } catch {
+      continue;
+    }
+    for (const f of files) {
+      const n = /^(\d+)\.json$/.exec(f);
+      if (n) {
+        try {
+          const raw = JSON.parse(await readFile(join(dir, name, f), 'utf8')) as CardStateFile;
+          if (raw && typeof raw.at === 'string' && typeof raw.turn === 'string' && 'state' in raw) (states[job] ??= {})[Number(n[1])] = raw;
+        } catch {
+          /* 坏文件:当没做过 */
+        }
+        continue;
+      }
+      const d = /^(\d+)\/$/.exec(f);
+      if (!d) continue;
+      try {
+        const inner = (await readdir(join(dir, name, d[1]))).filter((x) => /^\d+\.mp3$/.test(x)).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+        if (inner.length) (assets[job] ??= {})[Number(d[1])] = inner.map((x) => cardAssetName(date, job, Number(d[1]), x));
+      } catch {
+        /* 目录没了:当没有 */
+      }
+    }
+  }
+  return { states, assets };
+}
+
+/** 只要孩子做的事(发消息时挑「上一轮之后改过的」) */
+export async function readCardStates(ws: Workspace, tutor: string, date: string): Promise<CardStates> {
+  return (await scanCards(ws, tutor, date)).states;
+}
+
+/** 存一张卡的状态(先 .tmp 再 rename);turn = 存的时候索引里最后一条的 job */
+export async function writeCardState(ws: Workspace, tutor: string, date: string, job: string, n: number, file: CardStateFile): Promise<void> {
+  const files = conversationFiles(ws.dirs.conversations, tutor, date);
+  await mkdir(files.cardsDir(job), { recursive: true });
+  const target = files.card(job, n);
+  await writeFile(`${target}.tmp`, `${JSON.stringify(file, null, 2)}\n`);
+  await rename(`${target}.tmp`, target);
+}
+
+/** 画板导出的 png:<date>.<job>.cards/<n>.png;返回相对 conversations/<老师>/ 的名字 */
+export async function writeCardImage(ws: Workspace, tutor: string, date: string, job: string, n: number, png: Buffer): Promise<string> {
+  const files = conversationFiles(ws.dirs.conversations, tutor, date);
+  await mkdir(files.cardsDir(job), { recursive: true });
+  const target = `${files.cardsDir(job)}/${n}.png`;
+  await writeFile(target, png);
+  return `${date}.${job}.cards/${n}.png`;
 }
 
 export async function readErrLog(ws: Workspace, tutor: string, date: string, job: string): Promise<string> {

@@ -4,6 +4,7 @@
  * 出错什么都不出现。机械规则,不靠模型判断。
  */
 import type { ConversationMessage, Handoff, HoldupAsk } from '../schema/index.ts';
+import type { BoardSection } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 import type { Transcript } from './transcript.ts';
 
@@ -67,6 +68,8 @@ export interface KidMessage {
   pending: boolean;
   /** 本次运行新增的产物 id */
   artifacts: string[];
+  /** 板书节(卡 + 讲稿;见 kid-board.ts);没有 = 页面把 reply 当一张文字卡。服务端的解析器等小语法定稿后接上 */
+  section?: BoardSection | null;
 }
 
 /**

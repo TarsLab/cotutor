@@ -11,6 +11,7 @@ import { addTutorFile, upgradeTutors } from './tutors.ts';
 import { patchConfig } from '../server/store.ts';
 import { resolveRoot } from './workspace.ts';
 import { serveWorkspace } from './serve.ts';
+import { serveMock, type MockScenario } from '../server/mock.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from './workspace.ts';
 import { createContext } from '../server/app.ts';
 import { MESSAGE_FROM, type MessageFrom } from '../schema/index.ts';
@@ -23,6 +24,7 @@ const USAGE = `用法:
   cotutor serve [--workspace <dir>] [--port <n>] [--http]               起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS)
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad 上录音要 HTTPS;所有 workspace 共用)
   cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>]   终端里发一条,等老师说完打印结果(与页面同一条路)
+  cotutor mock [--port <n>] [--scenario normal|limit|offline] [--delay <ms>] [--http]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace)
   cotutor --version | --help
 workspace解析:--workspace > COTUTOR_WORKSPACE > cwd 或祖先有 cotutor.json > ~/.config/cotutor/config.json > ~/cotutor/ 下唯一的孩子目录
 `;
@@ -61,7 +63,7 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -110,6 +112,20 @@ export async function main(argv: string[]): Promise<void> {
         if (!r.https) process.stdout.write('  ! HTTP:iPad Safari 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write(`  孩子端 /,家长端 /parent\n`);
+        return;
+      }
+      case 'mock': {
+        const port = typeof flags.port === 'string' ? Number(flags.port) : undefined;
+        if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) throw new UsageError('--port 要是 1–65535 的整数');
+        const scenario = typeof flags.scenario === 'string' ? flags.scenario : 'normal';
+        if (!['normal', 'limit', 'offline'].includes(scenario)) throw new UsageError('--scenario 只能是 normal / limit / offline');
+        const delayMs = typeof flags.delay === 'string' ? Number(flags.delay) : undefined;
+        if (delayMs !== undefined && !(Number.isInteger(delayMs) && delayMs >= 0)) throw new UsageError('--delay 要是非负整数(毫秒)');
+        const r = await serveMock({ port, scenario: scenario as MockScenario, delayMs, http: flags.http === true });
+        process.stdout.write(`cotutor mock 场景 ${scenario}(不经真实老师与配音;配音退回浏览器合成声)\n`);
+        if (!r.https) process.stdout.write('  ! HTTP:iPad Safari 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
+        for (const u of r.urls) process.stdout.write(`  ${u}\n`);
+        process.stdout.write('  孩子端 /;直接开某位老师并停在某句:/?tutor=chinese-tutor&step=0.3\n');
         return;
       }
       case 'add': {

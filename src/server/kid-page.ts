@@ -145,11 +145,11 @@ const PAGE = `<!doctype html>
   .ch-o { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:12px; background:var(--card); font-size:16px; }
   .ch-o i { flex:0 0 auto; width:24px; height:24px; border-radius:50%; border:2px solid var(--line); display:grid; place-items:center; font-style:normal; font-size:12px; font-weight:700; color:var(--dim); }
   .c-fill { background:var(--cream); font-size:18px; line-height:2; white-space:pre-line; }
-  .bl { display:inline-block; min-width:64px; border-bottom:2px solid var(--ink); margin:0 4px; height:1.2em; vertical-align:bottom; }
+  .bl { display:inline-block; min-width:64px; border-bottom:2px solid var(--ink); margin:0 4px; padding:0 6px; line-height:1.3; vertical-align:baseline; }
   .c-image { padding:0; overflow:hidden; background:var(--card); }
   .c-image img { display:block; width:100%; max-height:320px; object-fit:cover; }
   .c-image .cap { padding:10px 16px; font-size:15px; color:#5a5650; white-space:pre-line; }
-  .bl.f { border-bottom-color:var(--purple-ink); color:var(--purple-ink); font-weight:600; text-align:center; padding:0 6px; }
+  .bl.f { border-bottom-color:var(--purple-ink); color:var(--purple-ink); font-weight:600; text-align:center; }
   .fq { font-size:22px; line-height:2.2; }
   .fi { display:inline-block; width:120px; margin:0 4px; padding:2px 8px; font:inherit; font-size:20px; font-weight:600; color:var(--purple-ink); text-align:center; background:var(--card); border:0; border-bottom:3px solid var(--purple-ink); border-radius:6px 6px 0 0; outline:0; -webkit-user-select:text; user-select:text; }
   .zoom { flex:1; min-height:0; overflow:hidden; display:grid; place-items:center; touch-action:none; }
@@ -417,7 +417,7 @@ __BOARD_JS__
           parts.forEach((t, i) => { el.append(t); if (i < parts.length - 1) el.append(h('input', { class: 'fi', type: 'text', value: got[i] || '', autocomplete: 'off', enterkeyhint: 'done', on: { input: (e) => fillIn(secIdx, idx, i, e.target.value), keydown: (e) => { if (e.key === 'Enter') e.target.blur(); }, click: (e) => e.stopPropagation() } })); });
           return el;
         }
-        parts.forEach((t, i) => { el.append(t); if (i < parts.length - 1) el.append(h('span', { class: 'bl' + (got[i] ? ' f' : '') }, got[i] || '')); });
+        parts.forEach((t, i) => { el.append(t); if (i < parts.length - 1) el.append(h('span', { class: 'bl' + (got[i] ? ' f' : '') }, got[i] || '\\u200b')); });
         return el;
       }
       case 'scene': {

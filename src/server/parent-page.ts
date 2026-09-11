@@ -14,15 +14,15 @@ export const PARENT_PAGE = `<!doctype html>
 <title>cotutor 家长端</title>
 <style>
   :root {
-    --ground:#F1F4F0; --surface:#fff; --surface-2:#F7F9F5; --sunk:#EAEEE7;
-    --line:#DCE2D9; --line-soft:#E9EDE6;
-    --ink:#18201B; --ink-2:#3D4A42; --muted:#6C786F;
-    --accent:#2F5D50; --accent-2:#4B8674; --accent-soft:#DCE8E2;
-    --kid:#2B6B9C; --kid-soft:#DEEBF5;
-    --parent:#8A5A1E; --parent-soft:#F6EBD8;
-    --warn:#9E6A14; --warn-soft:#FAEFD6;
-    --err:#AC382B; --err-soft:#F8E3E0;
-    --ok:#3A7A4A;
+    --ground:#fff; --surface:#fff; --surface-2:#F7F9FC; --sunk:#F4F7FB;
+    --line:#E3E9F2; --line-soft:#EDF1F7;
+    --ink:#1C2430; --ink-2:#45505F; --muted:#6B7686;
+    --accent:#2D6FE0; --accent-2:#5B93EA; --accent-soft:#E6EFFC;
+    --kid:#2D6FE0; --kid-soft:#E6EFFC;
+    --parent:#C77A16; --parent-soft:#FCEFDC;
+    --warn:#A9690F; --warn-soft:#FCF0D9;
+    --err:#D4503E; --err-soft:#FCEAE7;
+    --ok:#2E9E5B; --ok-soft:#E4F3EA;
     --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
   }
   * { box-sizing:border-box; }
@@ -55,7 +55,7 @@ export const PARENT_PAGE = `<!doctype html>
   aside .tutor .who b { display:block; font-size:15px; font-weight:500; }
   aside .tutor .who span { display:block; font:400 12.5px/1.4 var(--mono); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   aside .tutor .bead { width:6px; height:6px; border-radius:50%; background:var(--accent-2); flex:none; }
-  aside .tutor .bead.off { background:var(--line); }
+  aside .tutor .bead.off { background:#C3CEDD; }
   aside .foot { margin-top:auto; padding:12px 16px; font-size:13px; color:var(--muted); line-height:1.5; }
 
   #thread { display:grid; grid-template-rows:auto minmax(0,1fr) auto; min-height:0; min-width:0; }
@@ -70,7 +70,7 @@ export const PARENT_PAGE = `<!doctype html>
   .stream { max-width:940px; margin:0 auto; display:flex; flex-direction:column; gap:22px; }
   .sep { text-align:center; font:500 13px/1 var(--mono); color:var(--muted); }
   .turn { background:var(--surface); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
-  .turn.bad { border-color:#e9c2bc; }
+  .turn.bad { border-color:#F2C6BF; }
   .ask { display:flex; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line-soft); align-items:flex-start; }
   .ask .tag { font:500 12.5px/1.7 var(--mono); letter-spacing:.06em; padding:1px 7px; border-radius:5px; flex:none; background:var(--sunk); color:var(--muted); }
   .ask.from-kid .tag { background:var(--kid-soft); color:var(--kid); }
@@ -102,7 +102,7 @@ export const PARENT_PAGE = `<!doctype html>
   .opt { display:flex; align-items:center; gap:9px; padding:6px 9px; border:1px solid var(--line); border-radius:7px; margin-top:6px; font-size:15px; background:var(--surface); }
   .opt .k { font:500 13px/1 var(--mono); color:var(--muted); width:14px; flex:none; }
   .opt.right { border-color:var(--ok); }
-  .opt .ans { margin-left:auto; font:500 12px/1 var(--mono); color:var(--ok); background:#e6f0e6; padding:3px 6px; border-radius:4px; flex:none; }
+  .opt .ans { margin-left:auto; font:500 12px/1 var(--mono); color:var(--ok); background:var(--ok-soft); padding:3px 6px; border-radius:4px; flex:none; }
   .seg { display:inline-block; border:1px solid var(--line); background:var(--surface); border-radius:6px; padding:3px 8px; margin:0 6px 6px 0; font-size:14.5px; }
   .fillline { font-size:15.5px; }
   .fillline u { text-decoration:none; border-bottom:1.5px solid var(--accent-2); color:var(--accent); padding:0 10px; }
@@ -160,7 +160,7 @@ export const PARENT_PAGE = `<!doctype html>
   #composer .row .hint { margin-left:auto; font:400 13px/1 var(--mono); color:var(--muted); }
 
   /* ---------- 看原文抽屉 ---------- */
-  #drawer { position:fixed; top:0; right:0; bottom:0; width:min(760px,100vw); background:var(--surface); border-left:1px solid var(--line); box-shadow:-12px 0 40px -24px rgba(24,32,27,.5); display:none; grid-template-rows:auto minmax(0,1fr); z-index:20; }
+  #drawer { position:fixed; top:0; right:0; bottom:0; width:min(760px,100vw); background:var(--surface); border-left:1px solid var(--line); box-shadow:-14px 0 44px -26px rgba(28,36,48,.35); display:none; grid-template-rows:auto minmax(0,1fr); z-index:20; }
   #drawer.on { display:grid; }
   .dhead { display:flex; align-items:center; gap:9px; padding:10px 14px; background:var(--surface-2); border-bottom:1px solid var(--line); flex-wrap:wrap; }
   .dhead b { font-size:15.5px; }
@@ -174,7 +174,7 @@ export const PARENT_PAGE = `<!doctype html>
   .rail button.on { background:var(--surface); box-shadow:inset 0 0 0 1px var(--line); }
   .rail .st { width:7px; height:7px; border-radius:50%; background:var(--ok); margin-top:7px; flex:none; }
   .rail .st.warn { background:var(--warn); }
-  .rail .st.none { background:var(--line); }
+  .rail .st.none { background:#C3CEDD; }
   .rail .lab b { display:block; font-size:14.5px; font-weight:500; }
   .rail .lab span { display:block; font:400 12.5px/1.5 var(--mono); color:var(--muted); }
   .dcontent { min-width:0; overflow:auto; }
@@ -199,9 +199,9 @@ export const PARENT_PAGE = `<!doctype html>
   .dsec details summary { cursor:pointer; font-size:13.5px; color:var(--muted); }
   .dline { display:grid; grid-template-columns:16px minmax(0,1fr); gap:8px; font:400 14px/1.8 var(--mono); }
   .dline .s { text-align:center; font-weight:600; }
-  .dline.add { background:#e9f2e9; } .dline.add .s { color:var(--ok); }
-  .dline.del { background:#fbeae7; } .dline.del .s { color:var(--err); }
-  .dline.same .s { color:var(--line); }
+  .dline.add { background:var(--ok-soft); } .dline.add .s { color:var(--ok); }
+  .dline.del { background:var(--err-soft); } .dline.del .s { color:var(--err); }
+  .dline.same .s { color:#C3CEDD; }
   .kline { display:flex; gap:9px; align-items:baseline; font-size:15px; padding:5px 0; border-bottom:1px solid var(--line-soft); }
   .kline .n2 { font:400 12.5px/1.6 var(--mono); color:var(--muted); width:17px; flex:none; }
   .kline .cut { color:var(--muted); text-decoration:line-through; text-decoration-color:var(--err); }
@@ -221,7 +221,7 @@ export const PARENT_PAGE = `<!doctype html>
   .btn { font-size:14px; padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:var(--surface); cursor:pointer; }
   .btn:hover { border-color:var(--accent-2); }
   .btn.primary { border-color:var(--accent); background:var(--accent); color:#fff; }
-  .btn.danger { border-color:#e3bdb7; color:var(--err); }
+  .btn.danger { border-color:#F2C6BF; color:var(--err); }
   .fb { font-size:14px; color:var(--ok); white-space:pre-wrap; }
   .fb.bad { color:var(--err); }
   .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(184px,1fr)); gap:12px 18px; padding:15px 16px; }

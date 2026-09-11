@@ -3,7 +3,7 @@
  * bin 在仓库内优先走 src,所以 dist 的坏掉在本地跑不出来;prepublishOnly 在 build 之后跑这个。
  * 跑法:pnpm build && node --experimental-strip-types scripts/smoke.ts
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,9 +42,35 @@ need(PACKAGE_AGENTS_DIR === join(root, 'agents/'), `dist 算出的 agents 目录
 const shipped = existsSync(PACKAGE_AGENTS_DIR) ? readdirSync(PACKAGE_AGENTS_DIR).filter((f) => f.endsWith('.md')) : [];
 need(shipped.length >= 5, `agents/ 里只有 ${shipped.length} 份老师定义`);
 
+// 4. 舞台包打过了(dist/stage 不在 git 里;没打的话孩子端重卡舞台开不了)
+const { STAGE_DIR, FONTS_DIR } = await import(new URL('../dist/server/stage.js', import.meta.url).href) as { STAGE_DIR: string; FONTS_DIR: string };
+const stageFiles = ['index.html', 'stage.js', 'stage.css'];
+for (const f of stageFiles) need(existsSync(join(STAGE_DIR, f)), `舞台包缺 dist/stage/${f}(pnpm run build:stage)`);
+const stageKb = existsSync(join(STAGE_DIR, 'stage.js')) ? Math.round(statSync(join(STAGE_DIR, 'stage.js')).size / 1024) : 0;
+need(stageKb > 500, `dist/stage/stage.js 只有 ${stageKb} KB,不像打全了`);
+
+// 5. 运行期要的两个外部件:drawtell CLI(壳脚本 .cotutor/drawtell 指过去)与 excalidraw 字体(/stage/fonts/ 现取,不进包)
+const { drawtellBin, packageSkillsDir, SHIPPED_SKILLS } = await import(new URL('../dist/cli/skills.js', import.meta.url).href) as {
+  drawtellBin: () => string | null;
+  packageSkillsDir: () => string | null;
+  SHIPPED_SKILLS: readonly string[];
+};
+const bin = drawtellBin();
+need(bin && existsSync(bin), `node_modules 里没有 drawtell 的 bin(${bin ?? '解析不到包'});场景作业跑不了`);
+const skillsDir = packageSkillsDir();
+need(skillsDir && existsSync(skillsDir), `node_modules 里没有 drawtell-skills 的 skills/(${skillsDir ?? '解析不到包'})`);
+if (skillsDir) for (const s of SHIPPED_SKILLS) need(existsSync(join(skillsDir, s, 'SKILL.md')), `drawtell-skills 缺 ${s}/SKILL.md`);
+need(existsSync(FONTS_DIR), `node_modules 里没有 excalidraw 的字体目录(${FONTS_DIR});/stage/fonts/ 会 404,舞台里中文字形回退`);
+
+// 6. 依赖不能带 link:(link 的包发出去装不上)
+const deps = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }).dependencies;
+for (const [name, range] of Object.entries(deps)) {
+  need(!/^(link|file|workspace):/.test(range), `dependencies 里 ${name} 还是 ${range},发版前要换成版本号`);
+}
+
 if (problems.length) {
   for (const p of problems) console.error(`✗ ${p}`);
   console.error('出厂检查不过,别发');
   process.exit(1);
 }
-console.log(`出厂检查通过:cotutor ${pkg.version},${shipped.length} 位老师,${Object.keys(pkg.exports).length} 个 export`);
+console.log(`出厂检查通过:cotutor ${pkg.version},${shipped.length} 位老师,${Object.keys(pkg.exports).length} 个 export,舞台包 ${stageKb} KB`);

@@ -4,11 +4,25 @@
  */
 import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { createRequire } from 'node:module';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const STAGE_DIR = fileURLToPath(new URL('../../dist/stage/', import.meta.url));
-export const FONTS_DIR = fileURLToPath(new URL('../../node_modules/@excalidraw/excalidraw/dist/prod/fonts/', import.meta.url));
+
+/**
+ * excalidraw 的字体目录(dist/prod/fonts/):从包入口现解析,不写死 `../../node_modules/`——
+ * npm 扁平安装时依赖在消费者的 node_modules 里,不在本包下,写死的话装出来的 /stage/fonts/ 全 404。
+ */
+function excalidrawFontsDir(): string {
+  try {
+    return join(dirname(createRequire(import.meta.url).resolve('@excalidraw/excalidraw')), 'fonts') + sep;
+  } catch {
+    return fileURLToPath(new URL('../../node_modules/@excalidraw/excalidraw/dist/prod/fonts/', import.meta.url));
+  }
+}
+
+export const FONTS_DIR = excalidrawFontsDir();
 
 export const MIME: Record<string, string> = {
   html: 'text/html; charset=utf-8',

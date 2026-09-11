@@ -1,6 +1,6 @@
 {
   "name": "cotutor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "家里的 AI 老师团,和家长一起教:老师 = 可直接对话的 agent 文件 + 自己的会话;一孩一 workspace",
   "type": "module",
   "license": "MIT",
@@ -55,8 +55,8 @@
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.1",
-    "drawtell": "link:../drawtell",
-    "drawtell-skills": "link:../drawtell-skills",
+    "drawtell": "^0.6.1",
+    "drawtell-skills": "^0.1.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

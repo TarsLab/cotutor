@@ -18,6 +18,7 @@ import { DATE_RE, FocusSchema, MESSAGE_FROM, listTutors, resolvePolicy, type Art
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
 import { tutorStatuses } from '../cli/tutors.ts';
 import { configGapsOf, upgradeConfig } from '../cli/migrate.ts';
+import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { KID_PAGE } from './kid-page.ts';
 import { PARENT_PAGE } from './parent-page.ts';
 import { BusyError, Runner } from './runner.ts';
@@ -34,6 +35,8 @@ export interface RouteResult {
   html?: string;
   /** 静态文件(配音);handler 流式发 */
   file?: string;
+  /** 现生成的二进制(主屏幕图标) */
+  body?: Uint8Array;
   contentType?: string;
 }
 
@@ -416,7 +419,15 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
     if (p === '/parent') return { status: 200, html: PARENT_PAGE };
-    if (p === '/') return { status: 200, html: KID_PAGE.replace('__TITLE__', esc(ws.config.title)) };
+    // 主屏幕(iPad「添加到主屏幕」):清单与图标都按标题现生成,没有静态资源
+    if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(ws.config.title), contentType: 'application/manifest+json; charset=utf-8' };
+    const icon = /^\/icon-(\d{2,4})\.png$/.exec(p);
+    if (icon) {
+      const n = Number(icon[1]);
+      if (!(ICON_SIZES as readonly number[]).includes(n)) return { status: 404, json: { error: 'not_found' } };
+      return { status: 200, body: appIconPng(n), contentType: 'image/png' };
+    }
+    if (p === '/') return { status: 200, html: KID_PAGE.replaceAll('__TITLE__', esc(ws.config.title)).replace('__SHORT__', esc(ws.config.title)) };
     return { status: 404, json: { error: 'not_found', path: p } };
   } catch (err) {
     if (err instanceof BusyError) return { status: 409, json: { error: 'busy', message: err.message } };
@@ -459,11 +470,14 @@ export function createHandler(ctx: AppContext): (req: IncomingMessage, res: Serv
       if (r.file !== undefined) {
         res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=86400' });
         createReadStream(r.file).on('error', () => res.end()).pipe(res);
+      } else if (r.body !== undefined) {
+        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=86400' });
+        res.end(Buffer.from(r.body));
       } else if (r.html !== undefined) {
         res.writeHead(r.status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
         res.end(r.html);
       } else {
-        res.writeHead(r.status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': 'no-store' });
         res.end(JSON.stringify(r.json ?? null));
       }
     })();

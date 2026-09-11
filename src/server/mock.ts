@@ -24,6 +24,7 @@ import type { BoardSection } from '../lib/kid-board.ts';
 import { lanAddresses } from '../cli/serve.ts';
 import { USER_CERT_DIR } from '../cli/workspace.ts';
 import { kidThreads } from '../lib/kid-view.ts';
+import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { KID_PAGE } from './kid-page.ts';
 
 export type MockScenario = 'normal' | 'limit' | 'offline';
@@ -238,7 +239,9 @@ export interface MockRouteResult {
   html?: string;
   /** 静态文件(舞台包、课包) */
   file?: string;
-  /** html / file 的 content-type */
+  /** 现生成的二进制(主屏幕图标) */
+  body?: Uint8Array;
+  /** html / file / body / json 的 content-type */
   contentType?: string;
 }
 
@@ -348,7 +351,13 @@ export function createMock(opts: MockOptions = {}): Mock {
   const route = async (method: string, path: string, body?: unknown): Promise<MockRouteResult> => {
     const url = new URL(path, 'http://x');
     const p = url.pathname;
-    if (p === '/') return { status: 200, html: KID_PAGE.replace('__TITLE__', title) };
+    if (p === '/') return { status: 200, html: KID_PAGE.replaceAll('__TITLE__', title).replace('__SHORT__', title) };
+    if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
+    const icon = /^\/icon-(\d{2,4})\.png$/.exec(p);
+    if (icon) {
+      const n = Number(icon[1]);
+      return (ICON_SIZES as readonly number[]).includes(n) ? { status: 200, body: appIconPng(n), contentType: 'image/png' } : { status: 404, json: { error: 'not_found' } };
+    }
     if (p === '/api/health') return { status: 200, json: { ok: scenario !== 'offline', mock: true, scenario } };
     if (scenario === 'offline' && p.startsWith('/api/')) return { status: 500, json: { error: 'mock_offline' } };
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: home() };
@@ -439,8 +448,9 @@ export function createMock(opts: MockOptions = {}): Mock {
       try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : undefined; } catch { body = undefined; }
       const r = await route(req.method ?? 'GET', req.url ?? '/', body);
       if (r.file !== undefined) { res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=3600' }); createReadStream(r.file).on('error', () => res.end()).pipe(res); }
+      else if (r.body !== undefined) { res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=3600' }); res.end(Buffer.from(r.body)); }
       else if (r.html !== undefined) { res.writeHead(r.status, { 'content-type': r.contentType ?? 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(r.html); }
-      else { res.writeHead(r.status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(r.json ?? null)); }
+      else { res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(r.json ?? null)); }
     })().catch((err) => { res.writeHead(500, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'internal', message: String(err) })); });
   };
   return { route, settle, handler };

@@ -17,7 +17,7 @@
  * 讲稿 [[play]] 锚到场景卡 → 念完那句把动画铺满播,done 了关舞台接着念。
  * 点读段:card.assets 里有 <段号>.mp3 的放服务端配的,没有的浏览器合成;填空舞台逐空打字、「交给老师」;图片舞台双指缩放。
  * 流式:老师还在说时 pending 条目带 partial 板书,卡按下标只追加不重画(先出的卡不闪),讲稿不播;整轮跑完那节换成正式的,声音从第一句起。
- * __TITLE__ 由路由替换。调试:`?step=<节>.<句>` 直接停在某句(标注画齐、不出声),截图与测试用。
+ * __TITLE__ / __SHORT__(主屏幕图标下的名字)由路由替换。调试:`?step=<节>.<句>` 直接停在某句(标注画齐、不出声),截图与测试用。
  */
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -49,6 +49,12 @@ const PAGE = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="__SHORT__">
+<meta name="theme-color" content="#f6f4ee">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" href="/icon-192.png">
 <title>__TITLE__</title>
 <style>
   :root { --paper:#f6f4ee; --ink:#2b2b2b; --dim:#8a8781; --line:#e2dfd6; --card:#fffdf8; --kid:#dbeeff; --tutor:#fff3d6; --accent:#e8743b; --hi:#ffe3a8; --blue:#eef4ff; --cream:#f7f1e3; --ok:#e8f6ee; --ok-ink:#1f8a4c; --purple:#efe9fb; --purple-ink:#7a4fc9; --grey:#eeece6; }

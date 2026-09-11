@@ -77,7 +77,7 @@ export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }):
   const { body, holdup, handoff } = parseSections(kidSource(t) ?? t.final.text);
   const board = parseBoard(body);
   const { cards, lines } = board.section;
-  if (!cards.length && !lines.length) return { ...none(true, holdup, handoff), warnings: board.warnings, parentText: board.tail };
+  if (!cards.length && !lines.length) return { ...none(true, holdup, handoff), warnings: board.warnings.map((w) => w.text), parentText: board.tail };
   let truncated = false;
   const cut = lines.map((l) => {
     const r = truncateReply(l.text, policy.replyMaxChars);
@@ -86,7 +86,7 @@ export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }):
   });
   const section: BoardSection = { ...board.section, lines: cut };
   const kidText = cut.map((l) => l.text).join('\n');
-  return { kidText: kidText || null, truncated, holdup, handoff, ok: true, section, warnings: board.warnings, parentText: board.tail };
+  return { kidText: kidText || null, truncated, holdup, handoff, ok: true, section, warnings: board.warnings.map((w) => w.text), parentText: board.tail };
 }
 
 /** 孩子端的一条:自己问的话(别人问的不显示)+ 老师给孩子的话 + 配音;出错的运行什么都不出现(问句还在) */

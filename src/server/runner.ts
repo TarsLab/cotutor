@@ -32,7 +32,7 @@ import { parseTranscript } from '../lib/transcript.ts';
 import { resolvePolicy, type ArtifactEvent, type ContextPack, type ConversationIndex, type Focus, type Handoff, type MessageFrom, type Timing } from '../schema/index.ts';
 import type { Transcript } from '../lib/transcript.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
-import { readAgentBody, readCardStates, readIndex, writeIndex } from './store.ts';
+import { readAgentBody, readCardStates, readIndex, writeIndex, writeRunFile } from './store.ts';
 import { DubQueue, LineDubber, dubReply } from './tts.ts';
 
 export class BusyError extends Error {
@@ -168,6 +168,7 @@ export class Runner {
 
     const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
+    await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined });
 
     const active: Active = { job, date, partial: null, done: Promise.resolve(started) };
     active.done = this.spawn(ws, tutor, date, job, plan, policy.replyMaxChars, active).finally(() => this.active.delete(tutor));

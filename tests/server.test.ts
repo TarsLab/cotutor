@@ -39,7 +39,16 @@ try {
     check('POST /api/config/migrate 补上并热重载', done.status === 200 && (done.json as { applied: boolean }).applied && ((await get('/api/config')).json as { migrate: unknown[] }).migrate.length === 0 && 'qwen-scene' in (JSON.parse(readFileSync(cfgFile, 'utf8')) as { runtimes: Record<string, unknown> }).runtimes);
   }
   check('首页 html 是板书页,没有家长入口', (await get('/')).html?.includes('发消息或按住说话') === true && (await get('/')).html?.includes('/parent') === false);
-  check('家长页', (await get('/parent')).html?.includes('对话') === true);
+  const parent = (await get('/parent')).html ?? '';
+  check('家长页', parent.includes('对话') && parent.includes('看原文'));
+  {
+    // 家长页的内联脚本:模板里的转义没把 JS 写断(\\n 写成 \n、正则里的 \\/ 被吃掉都在这里现形)
+    const js = parent.slice(parent.indexOf('<script>') + 8, parent.lastIndexOf('</script>'));
+    let parses = true;
+    try { new Function(js); } catch (e) { parses = false; console.error(String(e)); }
+    check('家长页内联脚本能解析', parses);
+    check('模板的换行转义没被吃掉(\\\\n 少写一层就变成真换行,字符串断在这里)', js.includes('replace(/\\n/g') && js.includes("split('\\n')"));
+  }
   // 舞台包与课包:静态文件;越界、不存在 404;dist/stage 没打包时 /stage/ 404(doctor 点名)
   const { stageBuilt, STAGE_DIR } = await import('../src/server/stage.ts');
   const st = await get('/stage/');

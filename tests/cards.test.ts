@@ -94,6 +94,6 @@ function parseBoard_ok(doc: string): boolean {
 }
 function parseBoardSync(b: string): { warnings: string[]; cards: number } {
   const r = parseBoard(`${b}\n`);
-  return { warnings: r.warnings, cards: r.section.cards.length };
+  return { warnings: r.warnings.map((w) => w.text), cards: r.section.cards.length };
 }
 done();

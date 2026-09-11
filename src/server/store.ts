@@ -143,6 +143,50 @@ export async function writeCardImage(ws: Workspace, tutor: string, date: string,
   return `${date}.${job}.cards/${n}.png`;
 }
 
+/**
+ * 这一轮真发出去的东西(<date>.<job>.run.json):上下文包与完整命令行。
+ * 跑完就丢的话「老师为什么没看见孩子选了 C」永远查不了,所以落一份;只有家长端「看原文」读它。
+ */
+export interface RunFile {
+  at: string;
+  /** 拼好的上下文包(消息正文在最后) */
+  prompt: string;
+  runtime: string;
+  /** 完整命令行,argv[0] 是可执行文件 */
+  argv: string[];
+  resume: boolean;
+  session: string | null;
+  /** 这个运行时把老师正文塞进了命令行({agentBody};claude 走 --agent 就没有) */
+  agentBody: boolean;
+}
+
+export async function writeRunFile(
+  ws: Workspace,
+  tutor: string,
+  date: string,
+  job: string,
+  r: { at: string; prompt: string; plan: { runtime: string; argv: string[]; resume: boolean; session: string | null }; agentBody: boolean },
+): Promise<void> {
+  const file = conversationFiles(ws.dirs.conversations, tutor, date).run(job);
+  const row: RunFile = { at: r.at, prompt: r.prompt, runtime: r.plan.runtime, argv: r.plan.argv, resume: r.plan.resume, session: r.plan.session, agentBody: r.agentBody };
+  try {
+    await mkdir(join(ws.dirs.conversations, tutor), { recursive: true });
+    await writeFile(file, `${JSON.stringify(row, null, 2)}\n`);
+  } catch {
+    /* 落不下就算了:这只是给「看原文」看的,不能拦着老师说话 */
+  }
+}
+
+export async function readRunFile(ws: Workspace, tutor: string, date: string, job: string): Promise<RunFile | null> {
+  try {
+    const text = await readFile(conversationFiles(ws.dirs.conversations, tutor, date).run(job), 'utf8');
+    const v = JSON.parse(text) as RunFile;
+    return typeof v?.prompt === 'string' && Array.isArray(v.argv) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function readErrLog(ws: Workspace, tutor: string, date: string, job: string): Promise<string> {
   try {
     return await readFile(conversationFiles(ws.dirs.conversations, tutor, date).err(job), 'utf8');

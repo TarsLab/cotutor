@@ -5,7 +5,7 @@
  * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
 import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
@@ -27,6 +27,8 @@ import { IMAGE_EXT, parseCardState, stripSecrets } from '../cards/index.ts';
 import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset } from './stage.ts';
 import { enrichScenes } from './scene-props.ts';
+import { fixtureOf, rawView } from './raw-view.ts';
+import { synthesize } from './tts.ts';
 import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
 
 export interface RouteResult {
@@ -375,6 +377,30 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const file = join(ws.dirs.conversations, tutor, name);
       if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, file, contentType: 'audio/mpeg' };
+    }
+
+    // 看原文(2026-09-11):一轮拆成六站,一个接口给全;/fixture 是原文原样一份,开发者放进 tests/fixtures/board/
+    const rawRe = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2}|today)\/raw\/(\d{4}-\d+)(\/fixture)?$/.exec(p);
+    if (rawRe) {
+      const [, tutor, d, job, fixture] = rawRe;
+      if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
+      if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
+      const view = await rawView(ws, tutor, d === 'today' ? localDate(ctx.now()) : d, job);
+      if (!view) return { status: 404, json: { error: 'not_found', message: `${d} 没有 ${job} 这一轮` } };
+      return { status: 200, json: fixture ? fixtureOf(view) : view };
+    }
+    // 试一句配音:设置页按一下就知道 tts.say 配没配对(最常见的坏法是等孩子那边没声音才发现)
+    if (p === '/api/tts/try' && method === 'POST') {
+      const text = isObj(body) && typeof body.text === 'string' && body.text.trim() ? body.text.trim() : '今天我们讲勾股定理';
+      const voice = isObj(body) && typeof body.voice === 'string' && body.voice.trim() ? body.voice.trim() : Object.values(ws.config.tutors).find((t) => t.voice)?.voice;
+      if (!voice) return { status: 400, json: { error: 'no_voice', message: '没有老师配了音色(cotutor.json tutors.<名>.voice),先配一个再试' } };
+      const out = join(ws.root, '.cotutor', 'tts-try.mp3');
+      await mkdir(join(ws.root, '.cotutor'), { recursive: true });
+      const t0 = Date.now();
+      const r = await synthesize(ws.config.tts, { text, voice, out }, { env: process.env });
+      if (!r.file) return { status: 200, json: { ok: false, ms: Date.now() - t0, voice, error: r.error } };
+      const mp3 = await readFile(out).catch(() => null);
+      return { status: 200, json: { ok: true, ms: Date.now() - t0, voice, bytes: mp3?.length ?? 0, audio: mp3 ? `data:audio/mpeg;base64,${mp3.toString('base64')}` : null } };
     }
 
     const conv = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)(?:\/([^/]+))?$/.exec(p);

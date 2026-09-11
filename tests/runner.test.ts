@@ -95,6 +95,29 @@ try {
   const m1s = m1 as typeof m1 & { section?: { lines: { audio: string | null }[] } };
   check('配音:老师配了 voice → 讲稿逐句 mp3 落会话目录(一句话也是一句),索引的整段 audio 不用了', m1.audio === null && m1s.section?.lines[0].audio === `2026-09-08.${job1}.1.mp3` && readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${job1}.1.mp3`), 'utf8').startsWith('fake-mp3:v-math:'), JSON.stringify(m1s.section));
 
+  // ---- 看原文:一轮拆成六站,一个接口给全(2026-09-11) ----
+  type Raw = {
+    stations: { id: string; state: string; note: string }[];
+    pack: { prompt: string; argv: string[]; resume: boolean; session: string | null } | null;
+    source: { text: string; rows: { role: string; label?: string }[]; warnings: { text: string; line?: number }[] };
+    fresh: { same: boolean; diff: { s: string }[] };
+    kid: { lines: { text: string; cut: string; audio: string | null; audioOk: boolean }[]; cards: unknown[] };
+    trace: unknown[];
+    stored: { kidText: string | null };
+  };
+  const rawR = await route('GET', `/api/conversations/math-tutor/2026-09-08/raw/${job1}`, ctx);
+  const rawView1 = rawR.json as Raw;
+  check('看原文:六站都在', rawR.status === 200 && rawView1.stations.map((x) => x.id).join() === 'pack,source,parse,kid,audio,trace', JSON.stringify(rawView1.stations?.map((x) => x.id)));
+  check('看原文:上下文包落了盘,消息正文与完整命令行都在', rawView1.pack?.prompt.includes('妈妈我不懂这一步') === true && rawView1.pack.argv.includes('--agent') && rawView1.pack.resume === false, JSON.stringify(rawView1.pack?.argv));
+  check('看原文:原文逐行标了角色', rawView1.source.text.includes('第一次说') && rawView1.source.rows.some((r) => r.role === 'say' && r.label?.startsWith('讲稿') === true), JSON.stringify(rawView1.source.rows));
+  check('看原文:当前解析器重解 = 索引里存的(同一版解析器,不该有差异)', rawView1.fresh.same === true && rawView1.fresh.diff.every((d) => d.s === '·'), JSON.stringify(rawView1.fresh.diff));
+  check('看原文:下发给孩子那一站带配音文件名与在不在', rawView1.kid.lines[0].audio === `2026-09-08.${job1}.1.mp3` && rawView1.kid.lines[0].audioOk === true && rawView1.kid.lines[0].cut === '', JSON.stringify(rawView1.kid.lines));
+  const fx = (await route('GET', `/api/conversations/math-tutor/2026-09-08/raw/${job1}/fixture`, ctx)).json as { name: string; text: string };
+  check('看原文:fixture 是原文原样一份', fx.name === `math-tutor-2026-09-08-${job1}.md` && fx.text.includes('第一次说') && fx.text.endsWith('\n'), JSON.stringify(fx));
+  check('看原文:没有这一轮 → 404', (await route('GET', '/api/conversations/math-tutor/2026-09-08/raw/9999-9', ctx)).status === 404);
+  const tryR = (await route('POST', '/api/tts/try', ctx, { text: '试一句' })).json as { ok: boolean; voice: string; ms: number; audio: string };
+  check('设置页试一句:真跑一次 tts.say,回音色 / 耗时 / 音频', tryR.ok === true && tryR.voice === 'v-math' && typeof tryR.ms === 'number' && tryR.audio.startsWith('data:audio/mpeg;base64,'), JSON.stringify({ ok: tryR.ok, voice: tryR.voice }));
+
   // ---- 第二、三轮:resume 同会话 ----
   now = new Date(2026, 8, 8, 16, 25);
   const r2 = await post('math-tutor', { text: '再讲一遍,要拍板', from: 'parent' });

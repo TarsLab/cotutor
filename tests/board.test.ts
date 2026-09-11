@@ -1,7 +1,7 @@
 /** 板书解析器:真跑样本逐个过 + 围栏 / 段落 / cue / 锚点 / 未知标签 / 解析失败 / partial / H2 尾巴。 */
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { cleanSpeech, parseBoard } from '../src/lib/board.ts';
+import { annotateSource, cleanSpeech, parseBoard } from '../src/lib/board.ts';
 import { check, done } from './_check.ts';
 
 const KNOWN = ['text', 'read', 'choice', 'fill'];
@@ -11,7 +11,7 @@ check('有真跑样本', fixtures.length >= 6, String(fixtures.length));
 for (const f of fixtures) {
   const r = parseBoard(readFileSync(dir + f, 'utf8'));
   const { cards, lines } = r.section;
-  check(`${f}:没有 warning`, r.warnings.length === 0, r.warnings.join(';'));
+  check(`${f}:没有 warning`, r.warnings.length === 0, r.warnings.map((w) => w.text).join(';'));
   check(`${f}:卡都是认识的种类`, cards.every((c) => KNOWN.includes(c.kind)), JSON.stringify(cards.map((c) => c.kind)));
   check(`${f}:有讲稿、末句问句`, lines.length >= 1 && lines[lines.length - 1].ask, JSON.stringify(lines.map((l) => l.text)));
   check(`${f}:念的句子没有方括号、没有注释、没有空句`, lines.every((l) => l.text && !/[\[\]]/.test(l.text) && !l.text.includes('<!--')), JSON.stringify(lines.map((l) => l.text)));
@@ -35,15 +35,15 @@ for (const f of fixtures) {
   check('[词] → 标注落到含它的卡;念的时候去括号', lines[1].marks[0]?.card === 0 && lines[1].marks[0]?.phrase === '三角形' && lines[1].text === '讲三角形这张卡。');
   check('[[cue]] → 对上一张卡的动作,句子里不留痕', lines[1].cues[0]?.name === 'open' && lines[1].cues[0]?.card === 0 && lines[2].cues[0]?.name === 'step' && lines[2].cues[0]?.arg === '3' && lines[2].cues[0]?.card === 2 && lines[2].text === '看代码 吧?'.replace(' ', ' '), JSON.stringify(lines.map((l) => [l.text, l.cues])));
   check('锚点:开场句 null,之后是上一张卡', lines[0].anchor === null && lines[1].anchor === 0 && lines[2].anchor === 2);
-  check('没有 warning', r.warnings.length === 0, r.warnings.join());
+  check('没有 warning', r.warnings.length === 0, r.warnings.map((w) => w.text).join());
 }
 {
   const r = parseBoard('先说这个词:[平行四边形]。\n\n```text note\n平行四边形\n```\n');
   check('卡写在句子后面,标注也认(整节找)', r.section.lines[0].marks[0]?.card === 0 && r.section.lines[0].anchor === null);
   const bad = parseBoard('```choice\n只有问题没有选项?\n```\n\n```text\n\n```\n\n一句。\n');
-  check('解析不出的卡退成文字卡显示原文 + warning;孩子端什么都不报', bad.section.cards.length === 2 && bad.section.cards[0].kind === 'text' && bad.section.cards[0].props.text === '只有问题没有选项?' && bad.section.cards[1].kind === 'text' && bad.warnings.length === 2 && bad.warnings[0].includes('choice') && bad.warnings[1].includes('text'), JSON.stringify(bad));
+  check('解析不出的卡退成文字卡显示原文 + warning;孩子端什么都不报', bad.section.cards.length === 2 && bad.section.cards[0].kind === 'text' && bad.section.cards[0].props.text === '只有问题没有选项?' && bad.section.cards[1].kind === 'text' && bad.warnings.length === 2 && bad.warnings[0].text.includes('choice') && bad.warnings[1].text.includes('text'), JSON.stringify(bad));
   const open = parseBoard('一句。\n```choice\n问?\n- [x] 对\n');
-  check('围栏没闭合(最终文本):当到文末成卡,记一句 warning', open.section.cards.length === 1 && open.section.cards[0].kind === 'choice' && open.warnings[0].includes('没闭合'), JSON.stringify(open));
+  check('围栏没闭合(最终文本):当到文末成卡,记一句 warning', open.section.cards.length === 1 && open.section.cards[0].kind === 'choice' && open.warnings[0].text.includes('没闭合'), JSON.stringify(open));
 }
 {
   const p1 = parseBoard('一句。\n```choice\n问?\n- [x] 对', { partial: true });
@@ -65,5 +65,45 @@ for (const f of fixtures) {
   check('讲稿清洗:标题号、列表号、引用号、粗体号去掉;整行注释不算话', cleanSpeech('# 标题一句') === '标题一句' && cleanSpeech('- 列表一句') === '列表一句' && cleanSpeech('1. 编号一句') === '编号一句' && cleanSpeech('> 引用一句') === '引用一句' && cleanSpeech('**粗体**的话') === '粗体的话' && cleanSpeech('<!-- 注释 -->') === '' && cleanSpeech('   ') === '');
   const r = parseBoard('~~~read\napple 苹果\nbanana 香蕉\n~~~\n\n~~~fill\n三角形面积 = 底 × 高 ÷ ___,记住了___?\n= 2\n= 记住了\n~~~\n');
   check('~~~ 围栏也认;read 一行一段;fill 数空、收答案', r.section.cards[0].kind === 'read' && (r.section.cards[0].props.segments as string[]).length === 2 && r.section.cards[1].kind === 'fill' && r.section.cards[1].props.blanks === 2 && JSON.stringify(r.section.cards[1].props.answers) === '["2","记住了"]', JSON.stringify(r.section.cards));
+}
+{
+  // spans:卡与句在原文里的行号(家长端「看原文」靠它在原文旁边标解析结果)
+  const r = parseBoard('第一句。\n\n```text note\n记住\n```\n\n第二句?\n');
+  check(
+    'spans:卡是围栏起止行,句是自己那行',
+    JSON.stringify(r.spans.cards) === '[[2,4]]' && JSON.stringify(r.spans.lines) === '[[0,0],[6,6]]' && r.spans.tail === null,
+    JSON.stringify(r.spans),
+  );
+  const t = parseBoard('一句。\n## 家长\n悄悄话。\n');
+  check('spans:尾巴从第一个 H2 到文末', JSON.stringify(t.spans.tail) === '[1,2]', JSON.stringify(t.spans));
+}
+{
+  // annotateSource:每一行标上解析器怎么读的;行号是原文的(固定段剥掉之后也不错位)
+  const src = [
+    '先看这张卡。',
+    '',
+    '```text step',
+    '认边',
+    '```',
+    '',
+    '会了吗?',
+    '',
+    '## 转交',
+    'to: scene-maker',
+    'why: 适合做动画',
+    '',
+    '## 家长',
+    '他今天卡在斜边。',
+  ].join('\n');
+  const a = annotateSource(src);
+  const role = (n: number): string => a.rows[n].role;
+  check('annotate:讲稿 / 卡 / 空行各归各位', role(0) === 'say' && role(1) === 'blank' && role(2) === 'card' && role(3) === 'card' && role(4) === 'card' && role(6) === 'say', JSON.stringify(a.rows.map((x) => x.role)));
+  check('annotate:围栏开头行标卡号、kind 与修饰', a.rows[2].open === true && a.rows[2].label === '卡 1 · text step', JSON.stringify(a.rows[2]));
+  check('annotate:末句问句标出来', a.rows[6].label === '讲稿 2 · 问句,停下等', a.rows[6].label);
+  check('annotate:转交段不进板书,标出段名', role(8) === 'section' && role(9) === 'section' && a.rows[9].label?.includes('转交') === true, JSON.stringify(a.rows.slice(8, 11)));
+  check('annotate:家长尾巴标出来,行号没错位', role(12) === 'tail' && role(13) === 'tail' && a.rows[12].label === '家长尾巴 · 孩子看不到', JSON.stringify(a.rows.slice(12)));
+  check('annotate:顺带把转交单交出来(不用再解析一遍)', a.handoff?.to === 'scene-maker' && a.section.cards.length === 1 && a.section.lines.length === 2);
+  const bad = annotateSource('一句。\n\n```choice\n只有问题没有选项?\n```\n');
+  check('annotate:warning 的行号是原文的那一行', bad.warnings.length === 1 && bad.warnings[0].line === 2, JSON.stringify(bad.warnings));
 }
 done();

@@ -351,7 +351,7 @@ export async function doctorWorkspace(
 
     // ---- HTTPS:iPad 上录音要;没有只提醒 ----
     const tls = httpsFiles(ws);
-    push({ name: 'https', ok: tls !== null, required: false, detail: tls ? `${redactHome(tls.cert)}` : '没有证书,serve 走 HTTP(iPad Safari 上按住说话不可用)', fix: tls ? undefined : 'cotutor cert(需要 mkcert:brew install mkcert && mkcert -install)' });
+    push({ name: 'https', ok: tls !== null, required: false, detail: tls ? `${redactHome(tls.cert)}` : '没有证书,serve 走 HTTP(iPad / iPhone 上按住说话不可用)', fix: tls ? undefined : 'cotutor cert(需要 mkcert:brew install mkcert && mkcert -install)' });
 
     // ---- 运行时的 CLI 在不在 ----
     if (probeEnv) {

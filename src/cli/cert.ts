@@ -26,7 +26,7 @@ export async function makeCert(extraHosts: string[] = []): Promise<CertResult> {
   try {
     caRoot = (await execFileP('mkcert', ['-CAROOT'], { timeout: 8000 })).stdout.trim();
   } catch {
-    throw new UsageError('PATH 里没有 mkcert。装:brew install mkcert && mkcert -install(在 Mac 上信任一次根证书);iPad 端见 cert 命令输出的提示。');
+    throw new UsageError('PATH 里没有 mkcert。装:brew install mkcert && mkcert -install(在 Mac 上信任一次根证书);iPad / iPhone 端见 cert 命令输出的提示与 docs/iPad与iPhone.md。');
   }
   const host = hostname();
   const hosts = [...new Set([host, host.endsWith('.local') ? host : `${host}.local`, ...lanAddresses(), 'localhost', '127.0.0.1', ...extraHosts])];

@@ -20,7 +20,7 @@
 - 改解析器或卡先过 `tests/board.test.ts`(真跑样本在 `tests/fixtures/board/`);改页面模板注意反斜杠要写成 `\\n`、正则里的 `\/` 要写成 `\\/`(模板字符串会吃一层;`\/` 变 `/` 会把那行变成 `//` 注释而脚本照样能解析),mock.test 有「内联脚本能解析」「正则斜杠没被吃掉」兜着
 - 舞台里的东西(播放器、excalidraw)用 Chrome DevTools 协议驱动最可靠(`--remote-debugging-port` + WebSocket,Runtime.evaluate 进 iframe 的 contentDocument;画板用 iframe 内的 PointerEvent 画,顶层 Input.dispatchMouseEvent 画不上);`Page.captureScreenshot` 在这种无头模式下会卡,截图用 CLI `--screenshot`
 - 前端单测不花钱:`node bin/cotutor.js mock`(或 `--scenario limit|offline`)起模拟接口,浏览器开 `/?tutor=chinese-tutor&step=0.3`;无头 Chrome 截图手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`(窗口最小宽约 500,直接 390 会被裁),平板 `--window-size=1180,820`
-- 冒烟:`node bin/cotutor.js init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live`(真起一次老师)→ `serve --workspace <tmp>` → `curl /api/tutors?kid=1`;真跑老师:`cotutor send math-tutor "<消息>" --workspace <tmp>`(或页面 `/parent`)。手册两份:docs/家长手册.md(只用)、docs/开发者手册.md(改代码)
+- 冒烟:`node bin/cotutor.js init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live`(真起一次老师)→ `serve --workspace <tmp>` → `curl /api/tutors?kid=1`;真跑老师:`cotutor send math-tutor "<消息>" --workspace <tmp>`(或页面 `/parent`)。手册三份:docs/家长手册.md(只用)、docs/开发者手册.md(改代码)、docs/iPad与iPhone.md(证书 / 信任开关 / 用 IP 不用 .local / 加到主屏幕,分设备各做一次)
 - 在 Claude Code 会话里起 claude 子进程要 `env -u CLAUDECODE ...`(嵌套会拒);本机 claude 2.1.220 不认全局 settings 里的模型,运行时模板加 `--model sonnet` 才能跑(模型旋钮本来就在模板里);流式靠模板里的 `--include-partial-messages`(出厂模板有,老 workspace 的 cotutor.json 要自己加,不加就整块出),qwen 0.21.13 没有对应开关
 - voxtell 没发 npm:从 TarsLab/voxtell 检出后 `pnpm add -g .` 进 PATH(pnpm ≥ 10 没有 `link --global`;首次先 `pnpm setup` 把 `~/Library/pnpm/bin` 加进 PATH 并重开终端),`tts.say` 出厂值就能用;不链就把 `tts.say[0..1]` 改成 `node <voxtell 检出目录>/bin/voxtell.js`;iPad 真机要 `cotutor cert`(mkcert)+ 把根证书装到 iPad
 

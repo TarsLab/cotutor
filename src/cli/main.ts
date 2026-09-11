@@ -25,7 +25,7 @@ const USAGE = `用法:
   cotutor upgrade --config [--dry-run] [--workspace <dir>]              cotutor.json 补缺:新出厂老师 / 运行时 / 命令模板旗标(只加缺的,你改过的值不动)
   cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录
   cotutor serve [--workspace <dir>] [--port <n>] [--http]               起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS)
-  cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad 上录音要 HTTPS;所有 workspace 共用)
+  cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad / iPhone 上录音要 HTTPS;所有 workspace 共用)
   cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>] [--new]   终端里发一条,等老师说完打印结果(与页面同一条路;--new 开新话题)
   cotutor mock [--port <n>] [--scenario normal|limit|offline] [--delay <ms>] [--http]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace)
   cotutor --version | --help
@@ -112,7 +112,7 @@ export async function main(argv: string[]): Promise<void> {
         const r = await serveWorkspace({ workspace, port, http: flags.http === true });
         process.stdout.write(`cotutor serve ${JSON.stringify(workspaceReport(r.ws))}\n`);
         for (const w of r.warnings) process.stdout.write(`  ! ${w}\n`);
-        if (!r.https) process.stdout.write('  ! HTTP:iPad Safari 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
+        if (!r.https) process.stdout.write('  ! HTTP:iPad / iPhone 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write(`  孩子端 /,家长端 /parent\n`);
         return;
@@ -126,7 +126,7 @@ export async function main(argv: string[]): Promise<void> {
         if (delayMs !== undefined && !(Number.isInteger(delayMs) && delayMs >= 0)) throw new UsageError('--delay 要是非负整数(毫秒)');
         const r = await serveMock({ port, scenario: scenario as MockScenario, delayMs, http: flags.http === true });
         process.stdout.write(`cotutor mock 场景 ${scenario}(不经真实老师与配音;配音退回浏览器合成声)\n`);
-        if (!r.https) process.stdout.write('  ! HTTP:iPad Safari 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
+        if (!r.https) process.stdout.write('  ! HTTP:iPad / iPhone 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write('  孩子端 /;直接开某位老师并停在某句:/?tutor=chinese-tutor&step=0.3\n');
         return;
@@ -193,7 +193,7 @@ export async function main(argv: string[]): Promise<void> {
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
         else {
           process.stdout.write(`证书:${redactHome(r.cert)}\n私钥:${redactHome(r.key)}\n主机:${r.hosts.join(' ')}\n`);
-          process.stdout.write(`iPad 要先信任这台机器的根证书:把 ${redactHome(r.caRoot)}/rootCA.pem 隔空投送到 iPad → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里打开;然后重启 cotutor serve,用 https 打开。\n`);
+          process.stdout.write(`iPad / iPhone 要先信任这台机器的根证书:把 ${redactHome(r.caRoot)}/rootCA.pem 隔空投送过去 → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里**把开关打开**(装了不等于信任,每台设备各做一次);然后重启 cotutor serve,用打印的 https://<局域网 IP>:<端口>/ 打开(用 IP,主机名在有些设备上会走到不通的 IPv6)。详见 docs/iPad与iPhone.md\n`);
         }
         return;
       }

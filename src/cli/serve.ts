@@ -48,7 +48,7 @@ export function httpsFiles(ws: Workspace): { cert: string; key: string } | null 
   }
 }
 
-/** 局域网 IPv4(iPad 用它访问;.local 名不一定解析得到) */
+/** 局域网 IPv4(iPad / iPhone 用它访问;.local 名不一定解析得到,有些设备还会挑中走不通的 IPv6) */
 export function lanAddresses(): string[] {
   const out: string[] = [];
   for (const list of Object.values(networkInterfaces())) for (const i of list ?? []) if (i.family === 'IPv4' && !i.internal) out.push(i.address);

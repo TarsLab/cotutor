@@ -252,14 +252,19 @@ export const PARENT_PAGE = `<!doctype html>
   $('#text').addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); $('#composer').requestSubmit(); } });
 
   // ---- 老师团:只读写 cotutor.json ----
-  const POLICY_FIELDS = [['replyMaxChars', '单条回复字数上限', 'number'], ['dailyMessages', '每日消息上限', 'number'], ['dailyRegen', '每日重生上限', 'number'], ['reviewGate', '验收开关(先经家长)', 'bool'], ['forms', '回复形式(逗号分隔 L0-L4)', 'forms'], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number']];
+  const POLICY_FIELDS = [['replyMaxChars', '单条回复字数上限(每句)', 'number'], ['dailyMessages', '每日消息上限', 'number'], ['board', '板书(auto = 老师判断要不要出卡;off = 只说话)', 'enum', ['auto', 'off']], ['scenes.dailyMax', '每天最多几个讲解动画(配在画图老师身上)', 'number'], ['dailyRegen', '每日重生上限(还没接上)', 'number'], ['reviewGate', '验收开关(先经家长)', 'bool'], ['forms', '回复形式(逗号分隔 L0-L4)', 'forms'], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number']];
   const getPath = (o, p) => p.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
   const setPath = (o, p, v) => { const ks = p.split('.'); let cur = o; for (const k of ks.slice(0, -1)) cur = cur[k] = cur[k] || {}; cur[ks[ks.length - 1]] = v; };
 
-  const policyInputs = (patch, effective, opts) => POLICY_FIELDS.map(([key, label, type]) => {
+  const policyInputs = (patch, effective, opts) => POLICY_FIELDS.map(([key, label, type, choices]) => {
     const cur = getPath(patch, key);
     const eff = getPath(effective, key);
     const inherit = opts.inherit && cur === undefined;
+    if (type === 'enum') {
+      // 空选项 = 不写这一项(老师卡上是「继承」,全局卡上是「缺省」),免得一保存就把缺省值写死进文件
+      const sel = h('select', { 'data-key': key }, h('option', { value: '', selected: cur === undefined ? '' : undefined }, (opts.inherit ? '继承(' : '缺省(') + eff + ')'), ...choices.map((o) => h('option', { value: o, selected: cur === o ? '' : undefined }, o)));
+      return h('label', {}, label, sel);
+    }
     if (type === 'bool') {
       const sel = h('select', { 'data-key': key }, opts.inherit ? h('option', { value: '', selected: inherit ? '' : undefined }, '继承(' + (eff ? '开' : '关') + ')') : null, h('option', { value: 'true', selected: cur === true ? '' : undefined }, '开'), h('option', { value: 'false', selected: cur === false || (!opts.inherit && cur === undefined && eff === false) ? '' : undefined }, '关'));
       return h('label', {}, label, sel);
@@ -276,6 +281,7 @@ export const PARENT_PAGE = `<!doctype html>
       if (raw === '') { setPath(out, key, null); continue; }
       if (type === 'number') { const n = Number(raw); if (!Number.isInteger(n)) throw new Error(key + ' 要是整数'); setPath(out, key, n); }
       else if (type === 'bool') setPath(out, key, raw === 'true');
+      else if (type === 'enum') setPath(out, key, raw);
       else setPath(out, key, raw.split(/[,,\\s]+/).filter(Boolean));
     }
     return out;

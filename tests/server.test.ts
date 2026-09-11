@@ -67,6 +67,16 @@ try {
   check('机器级证书目录被认', httpsFiles(ctx.ws)?.cert === join(certDir, 'cert.pem'));
   const patched = await route('PATCH', '/api/config', ctx, { server: { https: { cert: 'my/cert.pem', key: 'my/key.pem' } } });
   check('server.https 覆盖机器级,相对 workspace 根', patched.status === 200 && httpsFiles(ctx.ws)?.cert === join(root, 'my', 'cert.pem'), JSON.stringify(patched.json));
+  // 老师条目本来没有 policy 键(出厂六位都是),页面把留空的字段发成 null:
+  // 深合并要先剥 null 再落,否则写出 policy: {replyMaxChars: null, …},整份过不了契约、一保存就报错
+  {
+    const { deepMerge } = await import('../src/server/store.ts');
+    check('深合并:底下没这个对象时也剥 null、不留空对象', JSON.stringify(deepMerge({}, { policy: { board: 'off', replyMaxChars: null, contextPack: { recent: null } } })) === '{"policy":{"board":"off"}}', JSON.stringify(deepMerge({}, { policy: { board: 'off', replyMaxChars: null, contextPack: { recent: null } } })));
+    check('深合并:原有的键该删还是删', JSON.stringify(deepMerge({ a: { x: 1, y: 2 } }, { a: { x: null } })) === '{"a":{"y":2}}');
+    const r = await route('PATCH', '/api/config', ctx, { tutors: { 'scene-maker': { policy: { board: 'off', scenes: { dailyMax: 1 }, replyMaxChars: null, contextPack: { recent: null, planLines: null } } } } });
+    const saved = (JSON.parse(readFileSync(join(root, 'cotutor.json'), 'utf8')) as { tutors: Record<string, { policy?: unknown }> }).tutors['scene-maker'].policy;
+    check('板书与讲解动画个数这两个旋钮存得进老师条目,留空的字段不落盘', r.status === 200 && JSON.stringify(saved) === '{"board":"off","scenes":{"dailyMax":1}}', JSON.stringify(saved));
+  }
   check('404 / 405', (await get('/nope')).status === 404 && (await route('POST', '/api/health', ctx)).status === 200 && (await route('POST', '/api/workspace', ctx)).status === 405 && (await route('PUT', '/api/config', ctx)).status === 405);
 } finally {
   rmSync(home, { recursive: true, force: true });

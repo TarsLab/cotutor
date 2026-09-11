@@ -168,13 +168,25 @@ export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'agents',
 
 const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 
-/** 深合并:对象递归、其余覆盖、null 删键(老师条目可整体删:tutors.x = null) */
+/**
+ * 深合并:对象递归、其余覆盖、null 删键(老师条目可整体删:tutors.x = null)。
+ * 底下没有这个对象时也要**先剥掉 null 再放**——页面上留空的字段发的就是 null,
+ * 直接把补丁原样放进去会写出 `policy: {replyMaxChars: null, …}`,整份过不了契约、一保存就报错
+ * (2026-09-11:老师条目本来没有 policy 键时必然撞上,出厂六位都是这样)。
+ */
 export function deepMerge(base: unknown, patch: unknown): unknown {
-  if (!isObj(base) || !isObj(patch)) return patch;
-  const out: Record<string, unknown> = { ...base };
+  if (!isObj(patch)) return patch;
+  const out: Record<string, unknown> = isObj(base) ? { ...base } : {};
   for (const [k, v] of Object.entries(patch)) {
-    if (v === null) delete out[k];
-    else out[k] = deepMerge(out[k], v);
+    if (v === null) {
+      delete out[k];
+      continue;
+    }
+    const had = k in out;
+    const merged = deepMerge(out[k], v);
+    // 补丁里一组字段全留空(全是 null)时别凭空造个空对象出来:policy: {contextPack: {}} 这种噪音不该进政策文件
+    if (!had && isObj(merged) && !Object.keys(merged).length) continue;
+    out[k] = merged;
   }
   return out;
 }

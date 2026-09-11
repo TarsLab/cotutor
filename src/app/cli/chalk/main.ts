@@ -80,9 +80,9 @@ const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的
       解析到了哪个工作区(workspace / workspaceSource:flag / cwd / user-config / default)
       与各目录角色,路径一律脱敏成 $HOME。
       drawtell.json 的 paths 段可以把**派生物**挪出工作区(课包与截图 build/snap 都能重来):
-        {"paths": {"bundles": "~/.cache/drawtell/<ws>/bundles", "snaps": "~/.cache/drawtell/<ws>/snaps"},
+        {"paths": {"bundles": "<别处>/bundles", "snaps": "<别处>/snaps"},
          "dub": {"voice": "…"}}
-      缺省仍是工作区下的 bundles/ 与 snaps/;--out / --bundles 优先级最高。
+      缺省(也是建议)是工作区下的 bundles/ 与 snaps/,.gitignore 排除即可;--out / --bundles 优先级最高。
 
 exit code:0 通过 · 1 场景有问题(findings 里有修复指引)· 2 用法错误 · 3 已规划未实现(预留,当前无命令返回)· 4 内部错误
 

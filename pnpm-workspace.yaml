@@ -1,2 +1,10 @@
+# esbuild 的 postinstall 装平台二进制,scripts/build-stage.mjs 靠它打舞台包,必须放行。
+# allowBuilds 是 pnpm 11 新加的闸门,onlyBuiltDependencies 是 pnpm 10 的,两个都要有。
+allowBuilds:
+  esbuild: true
 onlyBuiltDependencies:
   - esbuild
+# 本机 pnpm 配了 minimumReleaseAge(刚发布的包先不装),这两个是我们自己刚发的,放行。
+minimumReleaseAgeExclude:
+  - drawtell@0.6.1
+  - drawtell-skills@0.1.0

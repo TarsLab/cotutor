@@ -12,11 +12,11 @@ importers:
         specifier: 0.18.1
         version: 0.18.1(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       drawtell:
-        specifier: link:../drawtell
-        version: link:../drawtell
+        specifier: ^0.6.1
+        version: 0.6.1(@excalidraw/excalidraw@0.18.1(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       drawtell-skills:
-        specifier: link:../drawtell-skills
-        version: link:../drawtell-skills
+        specifier: ^0.1.0
+        version: 0.1.0
       zod:
         specifier: ^4.4.3
         version: 4.5.4
@@ -912,6 +912,26 @@ packages:
   dompurify@3.4.15:
     resolution: {integrity: sha512-EUBjM+B+lkDE41iE82DDSCfkoPGfXx8IxFxPMjNzm/Uk4xDet77rTN9wqlxlVg71kK7XGuUMv6wUxJUwwv+Xyw==}
 
+  drawtell-skills@0.1.0:
+    resolution: {integrity: sha512-EsvZVPySuVFJ4EW0ER34Bl9kTDZwufcDtV2znTQJ2bMuyP7jAwdGhm6ocLqSEV0ql6TwEs4IZX54KOy55bmfDg==}
+    engines: {node: '>=22'}
+
+  drawtell@0.6.1:
+    resolution: {integrity: sha512-vbjcSEUBzZvESX9WoIB9fTnXJ2E7fxbvIUHwvI5zfezwpgu3s8/vIfYe1XUshVq/krnGA8DXnPNoDQt4+taprA==}
+    engines: {node: '>=22.18'}
+    hasBin: true
+    peerDependencies:
+      '@excalidraw/excalidraw': 0.18.1
+      react: ^18.3.1
+      react-dom: ^18.3.1
+    peerDependenciesMeta:
+      '@excalidraw/excalidraw':
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
   es-toolkit@1.52.0:
     resolution: {integrity: sha512-XTNEJQh1tY1ZJVcf6ayP/2n4ZPyaHlW2FWs7xvw5ddPuhUVjLD3olQVQS7kf58JbAB48iL0uL/jerTrjtV3lDA==}
 
@@ -923,6 +943,9 @@ packages:
     resolution: {integrity: sha512-HKVLS8dvII+xoKW9kmqxbRKrnWEXfJJr/FZhhJmiqIB0e053QNYFqOBouTMO/k5sID4MvCiUCvv8b9M4h32wIA==}
     engines: {node: '>=18'}
     hasBin: true
+
+  excalidraw-animate@0.7.2:
+    resolution: {integrity: sha512-HvMX8TIG5SILZwm1F8fcK60f8oUxC8d9dyHnTwe1eaIWr9ILYOf/qzq7jI6fVjUedgXBxzRIfnfDvdIBP6VY+g==}
 
   fastdom@1.0.12:
     resolution: {integrity: sha512-LB+xjSTEbjHE1cWsxu+tN2Xqr1kpi+V9aADI7sVM5ZMaXyYGPHULQMzpJMYqOTULK/73pUkWVzzObFRBkPr+hg==}
@@ -1092,6 +1115,9 @@ packages:
   pako@2.0.3:
     resolution: {integrity: sha512-WjR1hOeg+kki3ZIOjaf4b5WVcay1jaliKSYiEaB1XzwhMQZJxRdQRv0V31EKBYlxb4T7SK3hjfc/jxyU64BoSw==}
 
+  pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
+
   path-data-parser@0.1.0:
     resolution: {integrity: sha512-NOnmBpt5Y2RWbuv0LMzsayp3lVylAHLPUTut412ZA3l+C4uw4ZVkQbjShYCQ8TCpUMdPapr4YjUqLYD6v68j+w==}
 
@@ -1108,6 +1134,16 @@ packages:
   picomatch@2.3.2:
     resolution: {integrity: sha512-V7+vQEJ06Z+c5tSye8S+nHUfI51xoXIXjHQ99cQtKUkQqqO1kO/KCJUfZXuB47h/YBlDhah2H3hdUGXn8ie0oA==}
     engines: {node: '>=8.6'}
+
+  playwright-core@1.63.0:
+    resolution: {integrity: sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.63.0:
+    resolution: {integrity: sha512-+7ziBLidS4NaNCdt57SUDT+wYmmd5fmiQejUic/kb+YsYSCPyOOE9sebzMjNmQrsnNpDJqd4WHvV/8lfKfUDUg==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   png-chunk-text@1.0.0:
     resolution: {integrity: sha512-DEROKU3SkkLGWNMzru3xPVgxyd48UGuMSZvioErCure6yhOc/pRH2ZV+SEn7nmaf7WNf3NdIpH+UTrRdKyq9Lw==}
@@ -2206,6 +2242,23 @@ snapshots:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
+  drawtell-skills@0.1.0: {}
+
+  drawtell@0.6.1(@excalidraw/excalidraw@0.18.1(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+    dependencies:
+      excalidraw-animate: 0.7.2(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      typescript: 5.9.3
+      zod: 4.5.4
+    optionalDependencies:
+      '@excalidraw/excalidraw': 0.18.1(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      playwright: 1.63.0
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+    transitivePeerDependencies:
+      - '@types/react'
+      - '@types/react-dom'
+      - immer
+
   es-toolkit@1.52.0: {}
 
   es6-promise-pool@2.5.0: {}
@@ -2238,6 +2291,17 @@ snapshots:
       '@esbuild/win32-arm64': 0.28.2
       '@esbuild/win32-ia32': 0.28.2
       '@esbuild/win32-x64': 0.28.2
+
+  excalidraw-animate@0.7.2(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+    dependencies:
+      '@excalidraw/excalidraw': 0.18.1(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      pako: 2.1.0
+    transitivePeerDependencies:
+      - '@types/react'
+      - '@types/react-dom'
+      - immer
+      - react
+      - react-dom
 
   fastdom@1.0.12:
     dependencies:
@@ -2384,6 +2448,8 @@ snapshots:
 
   pako@2.0.3: {}
 
+  pako@2.1.0: {}
+
   path-data-parser@0.1.0: {}
 
   path-key@3.1.1: {}
@@ -2399,6 +2465,14 @@ snapshots:
       webworkify: 1.5.0
 
   picomatch@2.3.2: {}
+
+  playwright-core@1.63.0:
+    optional: true
+
+  playwright@1.63.0:
+    dependencies:
+      playwright-core: 1.63.0
+    optional: true
 
   png-chunk-text@1.0.0: {}
 

@@ -1,5 +1,5 @@
 /** 路由层:健康、workspace 回报(脱敏)、配置与老师列表、页面、404 / 405。不碰文件的部分;发消息与补丁在 runner.test.ts。 */
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -45,6 +45,12 @@ try {
   const st = await get('/stage/');
   check('舞台包:打了包就给 index.html,没打就 404', stageBuilt() ? st.status === 200 && st.file === join(STAGE_DIR, 'index.html') && st.contentType?.startsWith('text/html') === true : st.status === 404, JSON.stringify(st));
   if (stageBuilt()) check('舞台包 js / css 能取', (await get('/stage/stage.js')).contentType?.startsWith('text/javascript') === true && (await get('/stage/stage.css')).status === 200);
+  // 舞台包是拆开的(esbuild splitting):stage.js 只是入口,肉在同目录的 chunk-*.js 里,按需取;整目录都要能给
+  if (stageBuilt()) {
+    const chunks = readdirSync(STAGE_DIR).filter((f) => f.startsWith('chunk-') && f.endsWith('.js'));
+    const one = chunks[0] ? await get(`/stage/${chunks[0]}`) : null;
+    check('按需 chunk 也从 dist/stage 给', chunks.length > 10 && one?.status === 200 && one.contentType?.startsWith('text/javascript') === true, `${chunks.length} 个 chunk`);
+  }
   const font = await get('/stage/fonts/Xiaolai/Xiaolai-Regular-019d66dcad46dc156b162d267f981c20.woff2');
   // 字体目录是从 @excalidraw/excalidraw 的包入口**现解析**的,不是写死的 `<包根>/node_modules/`——
   // npm 扁平安装时依赖不在本包下,写死的话装出来的 /stage/fonts/ 全 404(2026-09-11 发版前用 tgz 装出来撞见)

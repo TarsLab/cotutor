@@ -3,14 +3,20 @@
  * 场景卡 = ChalkPlayer;画板卡 = excalidraw 编辑器(步 10)。所有对外说话都走 postMessage(protocol.ts)。
  * 界面上没有错误文案:装不上就发 error,页面关掉舞台、什么都不显示。
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import 'drawtell/player/chalk-player.css';
 import { SceneStage, type SceneStageHandle } from './scene.tsx';
-import { CanvasStage, type CanvasStageHandle } from './canvas.tsx';
+import type { CanvasStageHandle } from './canvas.tsx';
 import '@excalidraw/excalidraw/dist/prod/index.css';
 import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
 import './stage.css';
+
+/**
+ * 画板的编辑器按需装(esbuild splitting 把它单独成块):八张卡里只有画板卡要它,
+ * 场景卡与轻卡的舞台不该为它等。装载中显示一句「画板准备中」——这不是错误文案,是等待。
+ */
+const CanvasStage = lazy(async () => ({ default: (await import('./canvas.tsx')).CanvasStage }));
 
 type Card = Extract<ToStage, { type: 'card' }>;
 type Outgoing = FromStage extends infer U ? (U extends FromStage ? Omit<U, 'source'> : never) : never;
@@ -51,7 +57,11 @@ function App(): JSX.Element {
   if (card.kind === 'canvas') {
     const st = (card.state ?? {}) as { ink?: Record<string, unknown>[] };
     const base = (card.props.base ?? null) as { bundle: string } | { skeletons: Record<string, unknown>[] } | null;
-    return <CanvasStage ref={canvas} base={base} bundleUrl={card.bundleUrl} prompt={typeof card.props.prompt === 'string' ? card.props.prompt : undefined} ink={Array.isArray(st.ink) ? st.ink : []} onState={onInk} onSubmit={onSubmit} onError={onError} />;
+    return (
+      <Suspense fallback={<div className="stage-wait">画板准备中…</div>}>
+        <CanvasStage ref={canvas} base={base} bundleUrl={card.bundleUrl} prompt={typeof card.props.prompt === 'string' ? card.props.prompt : undefined} ink={Array.isArray(st.ink) ? st.ink : []} onState={onInk} onSubmit={onSubmit} onError={onError} />
+      </Suspense>
+    );
   }
   return <div className="stage-wait">{String(card.props.title ?? card.props.text ?? '')}</div>;
 }

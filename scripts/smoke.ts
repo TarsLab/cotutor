@@ -46,8 +46,12 @@ need(shipped.length >= 5, `agents/ 里只有 ${shipped.length} 份老师定义`)
 const { STAGE_DIR, FONTS_DIR } = await import(new URL('../dist/server/stage.js', import.meta.url).href) as { STAGE_DIR: string; FONTS_DIR: string };
 const stageFiles = ['index.html', 'stage.js', 'stage.css'];
 for (const f of stageFiles) need(existsSync(join(STAGE_DIR, f)), `舞台包缺 dist/stage/${f}(pnpm run build:stage)`);
-const stageKb = existsSync(join(STAGE_DIR, 'stage.js')) ? Math.round(statSync(join(STAGE_DIR, 'stage.js')).size / 1024) : 0;
-need(stageKb > 500, `dist/stage/stage.js 只有 ${stageKb} KB,不像打全了`);
+// 2026-09-11 起舞台包是拆开的:stage.js 只有二十来 K,肉在 chunk-*.js 里(excalidraw 的懒加载块),
+// 所以按整包大小与 chunk 个数判断「打全了没有」,不看入口文件本身
+const stageJs = existsSync(STAGE_DIR) ? readdirSync(STAGE_DIR).filter((f) => f.endsWith('.js')) : [];
+const stageKb = Math.round(stageJs.reduce((n, f) => n + statSync(join(STAGE_DIR, f)).size, 0) / 1024);
+need(stageJs.length > 10, `dist/stage 里只有 ${stageJs.length} 个 js,拆包后应该有上百个 chunk(pnpm run build:stage)`);
+need(stageKb > 3000, `dist/stage 的 js 合计只有 ${stageKb} KB,不像打全了`);
 
 // 5. 运行期要的两个外部件:drawtell CLI(壳脚本 .cotutor/drawtell 指过去)与 excalidraw 字体(/stage/fonts/ 现取,不进包)
 const { drawtellBin, packageSkillsDir, SHIPPED_SKILLS } = await import(new URL('../dist/cli/skills.js', import.meta.url).href) as {

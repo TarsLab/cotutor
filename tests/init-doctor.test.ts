@@ -92,4 +92,69 @@ try {
   const tplS = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: Record<string, { run: string[] }> };
   check('普通老师的 claude 模板禁掉 Agent(不派子代理);claude-scene 不禁(scene-maker 要派检验)', tplS.runtimes.claude.run.join(' ').includes('--disallowedTools Agent') && !tplS.runtimes['claude-scene'].run.includes('--disallowedTools'));
 }
+// ---- 老 workspace 迁移(步 2):cotutor.json 是政策文件,机器不自动改,所以要算差异 + 只补缺 ----
+{
+  const { configGaps, insertMissingFlags, upgradeConfig } = await import('../src/cli/migrate.ts');
+
+  // 旗标插的位置照出厂模板:排在它前面、我这份也有的那个旗标之后;已有的旗标与值不碰
+  const factory = ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--disallowedTools', 'Agent', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'];
+  const mine = ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '5', '--model', 'sonnet'];
+  const ins = insertMissingFlags(mine, factory);
+  check('缺的旗标插到出厂模板里的位置,家长改过的预算与自己加的 --model 都留着',
+    ins.argv.join(' ') === 'claude --agent {agent} -p {prompt} --dangerously-skip-permissions --disallowedTools Agent --output-format stream-json --verbose --include-partial-messages --max-budget-usd 5 --model sonnet' && ins.added.join(' ') === '--disallowedTools Agent --include-partial-messages',
+    ins.argv.join(' '));
+  check('已经齐了就没有 added', insertMissingFlags(factory, factory).added.length === 0);
+
+  // 2026-09-09 那版的 cotutor.json:五位老师、两个运行时、claude 模板没有那两个旗标
+  const home2 = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-migrate-')));
+  try {
+    const r = await initWorkspace({ slug: 'ming', name: '小明', dir: join(home2, 'ws') });
+    const ws = r.root;
+    const cfgFile = join(ws, 'cotutor.json');
+    const old = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
+    delete old.tutors['scene-maker'];
+    delete old.runtimes['claude-scene'];
+    delete old.runtimes['qwen-scene'];
+    for (const k of ['run', 'resume'] as const) {
+      old.runtimes.claude[k] = (old.runtimes.claude[k] as string[]).filter((a: string, i: number, arr: string[]) => a !== '--disallowedTools' && a !== '--include-partial-messages' && !(a === 'Agent' && arr[i - 1] === '--disallowedTools'));
+      old.runtimes.claude[k].push('--model', 'sonnet');
+    }
+    old.policyDefaults = { replyMaxChars: 40 };
+    old.runtimes.default = 'qwen';
+    old.tutors['reading-tutor'].enabled = false;
+    old._note = '家长自己写的说明';
+    writeFileSync(cfgFile, `${JSON.stringify(old, null, 2)}\n`);
+    // 那会儿画图老师还不存在:文件、链、家、出厂记录都没有
+    unlinkSync(join(ws, '.claude', 'agents', 'scene-maker.md'));
+    unlinkSync(join(ws, '.qwen', 'agents', 'scene-maker.md'));
+    rmSync(join(ws, 'agents', 'scene-maker'), { recursive: true, force: true });
+    const shipped = JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { tutors: Record<string, unknown> };
+    delete shipped.tutors['scene-maker'];
+    writeFileSync(join(ws, '.cotutor', 'shipped.json'), `${JSON.stringify(shipped, null, 2)}\n`);
+
+    const gaps = await configGaps(old);
+    check('差异五项:新老师 + 两个运行时 + run / resume 各一条', gaps.map((g) => g.path).join(' ') === 'tutors.scene-maker runtimes.claude-scene runtimes.qwen-scene runtimes.claude.run runtimes.claude.resume', JSON.stringify(gaps.map((g) => g.path)));
+
+    const d = await doctorWorkspace(ws, { probeEnv: false });
+    const mig = d.checks.find((c) => c.name === 'config.migrate');
+    check('doctor 点名 config.migrate,不是必需项(点名不拦体检)', mig !== undefined && !mig.ok && !mig.required && mig.detail.includes('scene-maker') && (mig.fix ?? '').includes('cotutor upgrade --config'), JSON.stringify(mig));
+
+    const before = readFileSync(cfgFile, 'utf8');
+    const dry = await upgradeConfig(ws, { dryRun: true });
+    check('--dry-run 列差异但不动文件', dry.gaps.length === 5 && !dry.applied && readFileSync(cfgFile, 'utf8') === before);
+
+    const applied = await upgradeConfig(ws);
+    const after = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
+    check('补上之后:新老师、新运行时、旗标都在', applied.applied && after.tutors['scene-maker'].runtime === 'claude-scene' && 'qwen-scene' in after.runtimes && (after.runtimes.claude.run as string[]).join(' ').includes('--disallowedTools Agent') && (after.runtimes.claude.resume as string[]).includes('--include-partial-messages'));
+    check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['reading-tutor'].enabled === false && (after.runtimes.claude.run as string[]).slice(-2).join(' ') === '--model sonnet' && after._note === '家长自己写的说明' && after.$schema === old.$schema);
+    check('新老师的文件、.qwen 链、家跟着补上', existsSync(join(ws, '.claude', 'agents', 'scene-maker.md')) && lstatSync(join(ws, '.qwen', 'agents', 'scene-maker.md')).isSymbolicLink() && existsSync(join(ws, 'agents', 'scene-maker', '.gitkeep')) && applied.installed.length > 0);
+
+    const d2 = await doctorWorkspace(ws, { probeEnv: false });
+    check('补完 doctor 的 config.migrate 与 scene-maker 都绿', d2.checks.find((c) => c.name === 'config.migrate')?.ok === true && d2.checks.filter((c) => c.name.startsWith('tutor.scene-maker')).every((c) => c.ok));
+    check('再补一次是空操作', (await upgradeConfig(ws)).gaps.length === 0);
+  } finally {
+    rmSync(home2, { recursive: true, force: true });
+  }
+}
+
 done();

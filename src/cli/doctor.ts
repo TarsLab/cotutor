@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { parseArtifactEvents, parseObservations } from '../lib/ledger.ts';
 import { parseTimetable } from '../lib/timetable.ts';
+import { configGapsOf } from './migrate.ts';
 import { httpsFiles } from './serve.ts';
 import { DIRS } from './skeleton.ts';
 import { tutorStatuses } from './tutors.ts';
@@ -204,6 +205,18 @@ export async function doctorWorkspace(
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
     push({ name: CONFIG_FILE, ok: false, required: true, detail: err.message, fix: '按上面逐条修;政策文件机器不重建,改坏了靠 git 回退' });
+  }
+
+  // ---- 配置迁移:包更新带来的新出厂件(老师 / 运行时 / 命令模板旗标)不会自己进政策文件,缺了是静默的 ----
+  {
+    const gaps = await configGapsOf(root);
+    push({
+      name: 'config.migrate',
+      ok: gaps.length === 0,
+      required: false,
+      detail: gaps.length ? `${gaps.length} 项可补:${gaps.map((g) => g.detail).join(';')}` : 'cotutor.json 有出厂模板里的全部老师、运行时与旗标',
+      fix: gaps.length ? 'cotutor upgrade --config --dry-run 先看,再 cotutor upgrade --config 补(只加缺的,你改过的值不动)' : undefined,
+    });
   }
 
   // ---- 骨架 ----

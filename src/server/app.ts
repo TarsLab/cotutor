@@ -17,6 +17,7 @@ import { currentSlot, dayOf, parseTimetable, slotLabel } from '../lib/timetable.
 import { DATE_RE, FocusSchema, MESSAGE_FROM, listTutors, resolvePolicy, type Artifact, type ConversationIndex, type TimetableEntry } from '../schema/index.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
 import { tutorStatuses } from '../cli/tutors.ts';
+import { configGapsOf, upgradeConfig } from '../cli/migrate.ts';
 import { KID_PAGE } from './kid-page.ts';
 import { PARENT_PAGE } from './parent-page.ts';
 import { BusyError, Runner } from './runner.ts';
@@ -214,6 +215,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             tts: ws.config.tts,
             https: ws.config.server.https ?? null,
             shipped: (await tutorStatuses(ws.root)).map((s) => s.name),
+            /** 老 workspace 的政策文件缺的出厂件(新老师 / 新运行时 / 模板里的新旗标);设置页据此提示一行 */
+            migrate: await configGapsOf(ws.root),
             tutors: listTutors(ws.config),
             /** 老师条目的原始政策补丁(页面区分「继承」与「覆盖」) */
             tutorPatches: Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, t.policy ?? {}])),
@@ -227,6 +230,12 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         return { status: 200, json: { ok: true, tutors: listTutors(ctx.ws.config), runtime: ctx.ws.config.runtimes.default } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
+    }
+    // 政策文件补缺(与 cotutor upgrade --config 同一条路):只加缺的出厂件,家长写过的值不动
+    if (p === '/api/config/migrate' && method === 'POST') {
+      const r = await upgradeConfig(ws.root);
+      await ctx.reload();
+      return { status: 200, json: { ok: true, gaps: r.gaps, applied: r.applied, installed: r.installed } };
     }
     if (p === '/api/tutors' && method === 'GET') {
       return { status: 200, json: listTutors(ws.config, { kidOnly: url.searchParams.get('kid') === '1' }) };

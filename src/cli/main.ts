@@ -8,6 +8,7 @@ import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
 import { makeCert } from './cert.ts';
 import { addTutorFile, upgradeTutors } from './tutors.ts';
+import { configGapsOf, upgradeConfig } from './migrate.ts';
 import { upgradeSkills, writeToolShim } from './skills.ts';
 import { patchConfig } from '../server/store.ts';
 import { resolveRoot } from './workspace.ts';
@@ -20,7 +21,8 @@ import { MESSAGE_FROM, type MessageFrom } from '../schema/index.ts';
 const USAGE = `用法:
   cotutor init <slug> [--dir <path>] [--name <孩子名>] [--port <n>]   建 ~/cotutor/<slug>/ 骨架(幂等补缺)
   cotutor doctor [--workspace <dir>] [--json] [--live]                 逐项体检;--live 真起一次老师与配音(花一分钱)把 API 层的坑摆出来
-  cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件换新版:没改过的直接换,改过的只报 diff(--force 才覆盖,原文留 .bak)
+  cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件与 skill 换新版:没改过的直接换,改过的只报 diff(--force 才覆盖,原文留 .bak)
+  cotutor upgrade --config [--dry-run] [--workspace <dir>]              cotutor.json 补缺:新出厂老师 / 运行时 / 命令模板旗标(只加缺的,你改过的值不动)
   cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录
   cotutor serve [--workspace <dir>] [--port <n>] [--http]               起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS)
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad 上录音要 HTTPS;所有 workspace 共用)
@@ -147,11 +149,30 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'upgrade': {
         const { root } = resolveRoot(workspace);
+        // --config 是另一件事:政策文件补缺(老师文件与 skill 不碰)
+        if (flags.config === true) {
+          const dryRun = flags['dry-run'] === true;
+          const r = await upgradeConfig(root, { dryRun });
+          if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
+          else if (!r.gaps.length) process.stdout.write(`cotutor.json 不缺什么:出厂模板里的老师、运行时、命令模板旗标都有。\n`);
+          else {
+            for (const g of r.gaps) process.stdout.write(`${dryRun ? '·' : '✓'} ${g.path.padEnd(24)} ${g.detail}\n`);
+            for (const st of r.installed) process.stdout.write(`✓ ${st.item.padEnd(24)} ${st.note ?? '建好了'}\n`);
+            process.stdout.write(
+              dryRun
+                ? `\n${r.gaps.length} 项可补,还没动文件:cotutor upgrade --config 真补(只加上面这些,你改过的值不动)\n`
+                : `\n补了 ${r.gaps.length} 项到 ${redactHome(r.file)};服务在跑的话不用重启(按 mtime 热重载)。\n`,
+            );
+          }
+          return;
+        }
         const force = typeof flags.force === 'string' ? [flags.force, ...positionals] : positionals;
         const steps = await upgradeTutors(root, { force });
         const skillSteps = await upgradeSkills(root);
         await writeToolShim(root);
-        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps, skills: skillSteps }), null, 2)}\n`);
+        // 老师文件换新了,政策文件却不会自动多出新老师与新运行时(cotutor.json 是家长的),提一句
+        const gaps = await configGapsOf(root);
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps, skills: skillSteps, configGaps: gaps }), null, 2)}\n`);
         else {
           const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', unavailable: 'drawtell-skills 没装,没法换' };
           for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' || s.action === 'unavailable' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
@@ -163,6 +184,7 @@ export async function main(argv: string[]): Promise<void> {
               if (s.diff.length > 40) process.stdout.write(`    …还有 ${s.diff.length - 40} 行\n`);
             }
           }
+          if (gaps.length) process.stdout.write(`! 配置有 ${gaps.length} 项可补(新出厂老师 / 运行时 / 命令模板旗标):cotutor upgrade --config --dry-run 先看\n`);
         }
         return;
       }

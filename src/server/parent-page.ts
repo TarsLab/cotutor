@@ -23,7 +23,8 @@ export const PARENT_PAGE = `<!doctype html>
   main { display:none; }
   main.on { display:block; }
   /* 对话 */
-  #chat { display:grid; grid-template-columns:220px 1fr; height:calc(100vh - 47px); }
+  /* display 只由 .on 给(下面这条别写 display:grid——#chat 的特指度盖过 main{display:none},对话面板就永远关不掉了) */
+  #chat { grid-template-columns:220px 1fr; height:calc(100vh - 47px); }
   #chat.on { display:grid; }
   aside { border-right:1px solid var(--line); background:var(--panel); overflow:auto; }
   aside .tutor { display:flex; gap:8px; align-items:center; padding:10px 12px; cursor:pointer; border-bottom:1px solid var(--line); }
@@ -78,6 +79,8 @@ export const PARENT_PAGE = `<!doctype html>
   .card .actions .msg-ok { color:var(--ok); font-size:13px; }
   .card .actions .msg-err { color:var(--err); font-size:13px; white-space:pre-wrap; }
   .hint { color:var(--dim); font-size:12px; }
+  .card ul.gaps { margin:0 0 8px; padding-left:20px; font-size:13px; }
+  .card ul.gaps li { margin:2px 0; }
   .card textarea { width:100%; min-height:260px; font:13px/1.5 ui-monospace,Menlo,monospace; padding:8px; border:1px solid var(--line); border-radius:6px; resize:vertical; }
   .card details { margin-top:10px; }
   .card details summary { cursor:pointer; color:var(--dim); font-size:13px; }
@@ -350,6 +353,20 @@ export const PARENT_PAGE = `<!doctype html>
 
   // ---- 设置:paths / 端口 / 证书 / 配音命令;文件仍是真相 ----
   const PATH_ROLES = [['vault', 'vault 根(Obsidian 仓库;空 = workspace 根)'], ['timetable', '课程表文件(相对 vault)'], ['plans', '计划目录(相对 vault)'], ['diary', '日记目录'], ['photos', '照片目录'], ['profile', '孩子档案文件']];
+  // 政策文件里缺的出厂件(装了新版 cotutor 的老 workspace):cotutor.json 机器不自动改,所以在这里说清楚缺什么、一键补
+  const migrateCard = () => {
+    const gaps = (state.config && state.config.migrate) || [];
+    if (!gaps.length) return null;
+    const card = h('div', { class: 'card' }, h('h2', {}, '⬆ 这份 cotutor.json 缺 ' + gaps.length + ' 项出厂件'),
+      h('ul', { class: 'gaps' }, ...gaps.map((g) => h('li', {}, g.detail))),
+      h('p', { class: 'hint' }, '新版 cotutor 带来的新老师、新运行时、命令模板里的新旗标。cotutor.json 是你的政策文件,机器不会自己改它,所以要你点一下。只加上面这些,你改过的值(预算、缺省运行时、每句字数)一个都不动;终端里等同于 cotutor upgrade --config。'),
+      h('div', { class: 'actions' }, h('button', { class: 'primary', type: 'button', on: { click: async () => {
+        try { const r = await api('POST', '/api/config/migrate', {}); await loadConfig(); renderSettings(); feedback($('#settings .card'), true, '补了 ' + r.gaps.length + ' 项' + (r.installed.length ? ',顺带建了 ' + r.installed.length + ' 个文件与目录' : '')); }
+        catch (e) { feedback(card, false, e.message); }
+      } } }, '补上'), h('span', { class: 'fb' })));
+    return card;
+  };
+
   const renderSettings = () => {
     const c = state.config;
     if (!c) return;
@@ -374,7 +391,8 @@ export const PARENT_PAGE = `<!doctype html>
           await loadConfig(); feedback(card, true, '已写入 cotutor.json' + (port !== c.server.port ? ';端口改了,重启 serve 才生效' : ''));
         } catch (e) { feedback(card, false, e.message); }
       } } }, '保存设置'), h('span', { class: 'fb' })));
-    $('#settings').replaceChildren(card);
+    const mig = migrateCard();
+    $('#settings').replaceChildren(...(mig ? [mig, card] : [card]));
   };
 
   // ---- 启动 ----

@@ -1,7 +1,7 @@
 /**
  * 对话索引的纯函数:日期与 job 命名、空索引、把一次运行的结果并进索引(不改旧对象)。
  */
-import { ConversationIndexSchema, type ConversationIndex, type ConversationMessage, type Timing } from '../schema/index.ts';
+import { ConversationIndexSchema, type ConversationIndex, type ConversationMessage, type Session, type Timing } from '../schema/index.ts';
 import type { KidView } from './kid-view.ts';
 import type { Transcript } from './transcript.ts';
 
@@ -83,17 +83,46 @@ export type CardStates = Record<string, Record<number, CardStateFile>>;
 /** job → 卡下标 → 已生成好的资产名(相对 conversations/<老师>/) */
 export type CardAssets = Record<string, Record<number, string[]>>;
 
-/** 上一轮之后改过状态的卡(按 job、下标排):发消息时逐张 describe 进上下文包 */
-export function changedCards(index: { messages: readonly { job: string }[] }, states: CardStates): { job: string; n: number; file: CardStateFile }[] {
-  const last = index.messages[index.messages.length - 1]?.job;
+/** 一个话题里上一轮之后改过状态的卡(按 job、下标排):发消息时逐张 describe 进上下文包。turn 是存卡时那个话题的末条 job */
+export function changedCards(index: { messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread'>[] }, states: CardStates, thread: string): { job: string; n: number; file: CardStateFile }[] {
+  const last = lastJobOf(index, thread);
   if (!last) return [];
+  const t = threads(index.messages);
   const out: { job: string; n: number; file: CardStateFile }[] = [];
-  for (const m of index.messages) {
+  index.messages.forEach((m, i) => {
     const per = states[m.job];
-    if (!per) continue;
+    if (!per || t[i] !== thread) return;
     for (const n of Object.keys(per).map(Number).sort((a, b) => a - b)) if (per[n].turn === last) out.push({ job: m.job, n, file: per[n] });
-  }
+  });
   return out;
+}
+
+/**
+ * 每条消息的话题 id(与 messages 对齐)。有 thread 字段照它;没有(旧索引)按规则现算:第一条 = 自己的 job,
+ * from: system 的(转交起的)永远开新话题,其余跟前一条。写新消息时 runner 已经填了 thread,这里只是兜底。
+ */
+export function threads(messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread'>[]): string[] {
+  const out: string[] = [];
+  messages.forEach((m, i) => out.push(m.thread ?? (i === 0 || m.from === 'system' ? m.job : out[i - 1])));
+  return out;
+}
+
+/** 当前话题 = 末条消息的;空索引 null */
+export function currentThread(index: { messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread'>[] }): string | null {
+  const t = threads(index.messages);
+  return t.length ? t[t.length - 1] : null;
+}
+
+/** 某个话题的会话:sessions 里有就它;旧索引(sessions 空)只有顶层 session,只对当前话题有效 */
+export function sessionFor(index: { session: Session | null; sessions: Record<string, Session>; messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread'>[] }, thread: string): Session | null {
+  return index.sessions[thread] ?? (!Object.keys(index.sessions).length && thread === currentThread(index) ? index.session : null);
+}
+
+/** 某个话题里最后一条消息的 job(卡的状态文件 turn 记它;没有这个话题 → null) */
+export function lastJobOf(index: { messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread'>[] }, thread: string): string | null {
+  const t = threads(index.messages);
+  for (let i = t.length - 1; i >= 0; i--) if (t[i] === thread) return index.messages[i].job;
+  return null;
 }
 
 export function addMessage(index: ConversationIndex, msg: ConversationMessage): ConversationIndex {
@@ -127,9 +156,16 @@ export function applyRun(
         }
       : m,
   );
-  // 会话:首次拿到就记;换了运行时(agent 不同)就以这次的为准——跨 CLI 不能 resume,索引要跟着换
-  const keep = index.session && index.session.runtime === run.runtime ? index.session : null;
-  const session = keep ?? (transcript.sessionId ? { id: transcript.sessionId, runtime: run.runtime } : index.session);
+  // 会话按话题记:这个话题首次拿到就记;换了运行时(agent 不同)就以这次的为准——跨 CLI 不能 resume。顶层 session = 当前话题的
+  const i = index.messages.findIndex((m) => m.job === job);
+  const thread = i >= 0 ? threads(index.messages)[i] : job;
+  // 话题第一条(thread === job)一律新会话,不继承任何旧的(旧索引的顶层 session 是上一个话题的)
+  const prev = thread === job ? null : sessionFor(index, thread);
+  const keep = prev && prev.runtime === run.runtime ? prev : null;
+  const mine = keep ?? (transcript.sessionId ? { id: transcript.sessionId, runtime: run.runtime } : prev);
+  const sessions = mine ? { ...index.sessions, [thread]: mine } : index.sessions;
+  const cur = currentThread(index);
+  const session = cur ? (sessions[cur] ?? (cur === thread ? mine : index.session)) : index.session;
   const costUsd = messages.reduce((s, m) => s + (m.costUsd ?? 0), 0);
-  return { ...index, session, messages, costUsd: Math.round(costUsd * 1e4) / 1e4 };
+  return { ...index, session, sessions, messages, costUsd: Math.round(costUsd * 1e4) / 1e4 };
 }

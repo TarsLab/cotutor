@@ -26,7 +26,7 @@ const USAGE = `用法:
   cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录
   cotutor serve [--workspace <dir>] [--port <n>] [--http]               起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS)
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad 上录音要 HTTPS;所有 workspace 共用)
-  cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>]   终端里发一条,等老师说完打印结果(与页面同一条路)
+  cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>] [--new]   终端里发一条,等老师说完打印结果(与页面同一条路;--new 开新话题)
   cotutor mock [--port <n>] [--scenario normal|limit|offline] [--delay <ms>] [--http]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace)
   cotutor --version | --help
 workspace解析:--workspace > COTUTOR_WORKSPACE > cwd 或祖先有 cotutor.json > ~/.config/cotutor/config.json > ~/cotutor/ 下唯一的孩子目录
@@ -204,8 +204,8 @@ export async function main(argv: string[]): Promise<void> {
         const from = typeof flags.from === 'string' ? flags.from : 'parent';
         if (!(MESSAGE_FROM as readonly string[]).includes(from)) throw new UsageError(`--from 只能是 ${MESSAGE_FROM.join(' / ')}`);
         const ctx = createContext(loadWorkspace(workspace));
-        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined });
-        if (!json) process.stdout.write(`→ ${tutor} ${started.date} ${started.job}(${started.plan.runtime}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
+        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, newThread: flags.new === true });
+        if (!json) process.stdout.write(`→ ${tutor} ${started.date} ${started.job} 话题 ${started.thread}(${started.plan.runtime}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
         const index = await started.done;
         const m = index.messages.find((x) => x.job === started.job);
         if (json) process.stdout.write(`${JSON.stringify({ tutor, date: started.date, job: started.job, runtime: started.plan.runtime, resume: started.plan.resume, message: m, session: index.session, costUsd: index.costUsd }, null, 2)}\n`);

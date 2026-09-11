@@ -60,6 +60,7 @@ export const PARENT_PAGE = `<!doctype html>
   #composer { border-top:1px solid var(--line); background:var(--panel); padding:10px 16px; display:flex; gap:8px; align-items:flex-end; }
   #composer textarea { flex:1; min-height:44px; max-height:160px; font:inherit; padding:8px; border:1px solid var(--line); border-radius:8px; resize:vertical; }
   #composer select, #composer button { font:inherit; padding:8px 10px; }
+  #composer .nt { display:flex; align-items:center; gap:4px; font-size:13px; color:var(--dim); padding-bottom:10px; white-space:nowrap; }
   #composer button { background:var(--accent); color:#fff; border:0; border-radius:8px; cursor:pointer; }
   #composer button:disabled { opacity:.5; cursor:default; }
   .empty { color:var(--dim); text-align:center; margin-top:60px; }
@@ -103,6 +104,7 @@ export const PARENT_PAGE = `<!doctype html>
     <form id="composer">
       <select id="from" title="以谁的身份说"><option value="parent">家长</option><option value="kid">孩子(模拟)</option><option value="system">系统</option></select>
       <select id="runtime" title="运行时"></select>
+      <label class="nt" title="不接着上文,老师新开一个会话"><input type="checkbox" id="newthread">新话题</label>
       <textarea id="text" placeholder="对老师说……(⌘/Ctrl+Enter 发送)"></textarea>
       <button type="submit" id="send">发送</button>
     </form>
@@ -234,9 +236,14 @@ export const PARENT_PAGE = `<!doctype html>
     if (!v.index.messages.length) { $('#msgs').replaceChildren(h('p', { class: 'empty' }, state.date + ' 还没和' + t.display + '说过话')); return; }
     const FROM = { kid: '孩子', parent: '家长', system: '系统' };
     const nodes = [h('div', { class: 'meta', style: 'text-align:center' }, daySummary(v.index))];
+    // 话题:一天多个话题时每条标「话题 <id>」,话题第一条前插一条分隔
+    const threadIds = v.index.messages.map((m) => m.thread).filter(Boolean);
+    const multi = new Set(threadIds).size > 1;
+    const seen = new Set();
     nodes.push(...v.index.messages.map((m) => {
       const el = h('div', { class: 'msg from-' + m.from });
-      el.append(h('div', { class: 'meta' }, FROM[m.from] || m.from, ' · ', m.at, ' · ', m.job, m.runtime ? ' · ' + m.runtime : '', m.focus && m.focus.artifact ? ' · 看着 ' + m.focus.artifact + (m.focus.step !== undefined ? ' 第 ' + m.focus.step + ' 步' : '') : '', m.focus && m.focus.card ? ' · 开着卡 ' + m.focus.card : '', m.action === 'continue' ? ' · 继续' : m.action === 'submit' ? ' · 交给老师' : ''));
+      if (multi && m.thread && !seen.has(m.thread)) { seen.add(m.thread); el.append(h('div', { class: 'meta', style: 'text-align:center;margin:12px 0 4px' }, '—— ' + (seen.size === 1 ? '第一个话题' : '新话题') + ' ' + m.at.slice(11, 16) + ' ——')); }
+      el.append(h('div', { class: 'meta' }, FROM[m.from] || m.from, ' · ', m.at, ' · ', m.job, multi && m.thread ? ' · 话题 ' + m.thread : '', m.runtime ? ' · ' + m.runtime : '', m.focus && m.focus.artifact ? ' · 看着 ' + m.focus.artifact + (m.focus.step !== undefined ? ' 第 ' + m.focus.step + ' 步' : '') : '', m.focus && m.focus.card ? ' · 开着卡 ' + m.focus.card : '', m.action === 'continue' ? ' · 继续' : m.action === 'submit' ? ' · 交给老师' : ''));
       if (m.cards && m.cards.length) el.append(h('div', { class: 'kid' }, '孩子在板书上做的:', ...m.cards.map((c) => h('div', {}, h('b', {}, c.card + ' ' + c.text)))));
       el.append(h('div', { class: 'bubble in' }, m.text));
       const rows = v.runs[m.job] || [];
@@ -265,8 +272,8 @@ export const PARENT_PAGE = `<!doctype html>
     const today = state.dates[0];
     try {
       $('#send').disabled = true;
-      await api('POST', '/api/conversations/' + state.tutor + '/messages', { text, from: from || $('#from').value, runtime: $('#runtime').value });
-      $('#text').value = '';
+      await api('POST', '/api/conversations/' + state.tutor + '/messages', { text, from: from || $('#from').value, runtime: $('#runtime').value, newThread: $('#newthread').checked });
+      $('#text').value = ''; $('#newthread').checked = false;
       if (state.date !== today) await pickTutor(state.tutor, today); else await loadDay();
     } catch (e) { alert(e.message); $('#send').disabled = false; }
   };

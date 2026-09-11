@@ -7,6 +7,8 @@
  * 「## 转交」自动起目标老师的一轮(from: system,转交单 = 谁转的、why、refs、孩子的话、voice):目标老师不在 / 关着 / 忙 / 场景作业到了 dailyMax
  * 都不起,原因进这条消息的 warnings;起了记 handoffJob。目标老师用自己的 runtime(cotutor.json tutors.<name>.runtime)。
  * 一老师同时只跑一条(老师还在回上一条就 409),跨天自动新开(索引按本地日期分文件,新文件没 session 就不带 --resume)。
+ * 话题(2026-09-11):一天可多个,每个话题自己的会话(index.sessions[thread]);newThread / 系统消息 / 今天第一条开新话题(不 resume、不带旧卡),
+ * 指定 thread 接着今天的旧话题(resume 它的会话),缺省接当前话题。
  * 埋点(2026-09-11):每轮记 timing(进程起的时刻、首卡、进程退出、配音收尾,毫秒),家长视图每轮一行;scene-maker 那轮收尾
  * 把课包的费用与时长追加进 artifacts.jsonl(老师自己只记 ready / retired 那行;它忘了记就由应用补一整行),消息的 artifacts 记课包 id。
  * 进程 cwd 是老师目录 agents/<name>/(《agent层设计.md》拍板)。
@@ -16,7 +18,7 @@ import { closeSync, createWriteStream, existsSync, openSync } from 'node:fs';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
-import { addMessage, applyRun, cardId, changedCards, conversationFiles, jobId, localDate, localMinute } from '../lib/conversation.ts';
+import { addMessage, applyRun, cardId, changedCards, conversationFiles, jobId, localDate, localMinute, sessionFor, threads } from '../lib/conversation.ts';
 import { BUNDLE_ID_RE, cardAssets, describeCard } from '../cards/index.ts';
 import { parseBoard } from '../lib/board.ts';
 import type { BoardSection } from '../lib/kid-board.ts';
@@ -48,12 +50,18 @@ export interface SendInput {
   action?: 'continue' | 'submit';
   /** 运行时名,缺省 cotutor.json 的 runtimes.default */
   runtime?: string;
+  /** 开新话题:不 resume、不带旧话题卡上的状态;话题 id = 这条的 job */
+  newThread?: boolean;
+  /** 接着今天的某个话题聊(话题 id);缺省 = 当前(末条所在的)话题。from: system 的永远开新话题 */
+  thread?: string;
 }
 
 export interface SendStarted {
   tutor: string;
   date: string;
   job: string;
+  /** 这条消息所在的话题 */
+  thread: string;
   plan: RunPlan;
   /** 老师说完(进程退出、索引写好)后 resolve */
   done: Promise<ConversationIndex>;
@@ -133,28 +141,38 @@ export class Runner {
     const date = localDate(now);
     const index = await readIndex(ws, tutor, date);
     const job = jobId(now, index.messages.length + 1);
+    // 话题:新开(newThread / 系统消息 / 今天第一条)= 自己的 job;指定的要在今天的索引里;缺省接当前话题。会话按话题 resume
+    const known = threads(index.messages);
+    let thread: string;
+    if (input.newThread || input.from === 'system' || !known.length) thread = job;
+    else if (input.thread) {
+      if (!known.includes(input.thread)) throw new UsageError(`今天没有话题 ${input.thread};有:${[...new Set(known)].join('、')}`);
+      thread = input.thread;
+    } else thread = known[known.length - 1];
+    const fresh = thread === job;
+    const session = fresh ? null : sessionFor(index, thread);
     const { runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
     const agentBody = runtimeUses(runtime, '{agentBody}') ? await readAgentBody(ws, tutor) : undefined;
     const pack = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus });
     const policy = resolvePolicy(ws.config, tutor);
     if (policy.board === 'off') pack.board = 'off';
-    // 上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」)
-    const cards = changedCards(index, await readCardStates(ws, tutor, date)).map((c) => {
+    // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
+    const cards = fresh ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread).map((c) => {
       const card = index.messages.find((m) => m.job === c.job)?.section?.cards[c.n];
       const id = cardId(c.job, c.n);
       return { card: id, text: card ? describeCard(card, c.file.state) : JSON.stringify(c.file.state) };
     });
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
     const prompt = buildContextPack(pack, text, policy.contextPack);
-    const plan = planRun(ws.config, index, { agent: tutor, prompt, agentBody, runtime: input.runtime ?? t.runtime });
+    const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, runtime: input.runtime ?? t.runtime });
 
-    const started = addMessage(index, { job, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
 
     const active: Active = { job, date, partial: null, done: Promise.resolve(started) };
     active.done = this.spawn(ws, tutor, date, job, plan, policy.replyMaxChars, active).finally(() => this.active.delete(tutor));
     this.active.set(tutor, active);
-    return { tutor, date, job, plan, done: active.done };
+    return { tutor, date, job, thread, plan, done: active.done };
   }
 
   /**

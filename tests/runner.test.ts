@@ -327,6 +327,43 @@ try {
   check('老师记了账 → 应用只追加一行费用(没有 kind / status),折叠后 ready + costUsd + durationMs,不报没记账', ledger2.errors.length === 0 && rows2.length === 2 && rows2[1].kind === undefined && rows2[1].status === undefined && rows2[1].costUsd === 0.05 && art2?.status === 'ready' && art2.path === 'bundles/2026-09-09-guilv-2' && art2.costUsd === 0.05 && typeof art2.durationMs === 'number' && JSON.stringify(sm4.artifacts) === '["2026-09-09-guilv-2"]' && !sm4.warnings?.some((w) => w.includes('没往账本记')), JSON.stringify({ rows2, art2, sm4 }));
   check('sceneJobId:refs 优先,没 refs 从收尾句取,都没有 → null', (() => { const R = ctx.runner.constructor as unknown as { sceneJobId: (h: string, f: string | null) => string | null }; return R.sceneJobId('转交自 x\nwhy: y\nrefs: 2026-09-09-guilv-2, 别的', null) === '2026-09-09-guilv-2' && R.sceneJobId('why: 没 refs', '课包 2026-09-10-abc 做好了,6 步') === '2026-09-10-abc' && R.sceneJobId('why: 没 refs', '课包 2026-09-10-abc 没做成:check 过不了') === '2026-09-10-abc' && R.sceneJobId('why: 没', '什么都没说') === null; })());
 
+  // ---- 话题:新话题不 resume 且不带旧卡;缺省接当前话题;指定今天的旧话题 resume 它自己的会话;history / 日期路由;卡的 turn 按话题 ----
+  now = new Date(2026, 8, 9, 10, 20);
+  type TMsg = { job: string; thread?: string; cards?: unknown[]; kidText?: string | null };
+  type TDay = { index: { session: { id: string } | null; sessions: Record<string, { id: string }>; messages: TMsg[] } };
+  const before = ((await day('math-tutor', '2026-09-09')).json as TDay).index;
+  const oldThread = before.messages[0].job;
+  const oldSession = before.session!.id;
+  // 旧话题的一张卡先改一下(turn = 旧话题末条),新话题第一条不该带它
+  const boardJob = before.messages.find((m) => m.job === jobS2)!.job;
+  check('PUT 旧话题的卡', (await route('PUT', `/api/kid/conversations/math-tutor/cards/${boardJob}/1`, ctx, { picked: [0] })).status === 200);
+  const rn = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '换个话题 板书', newThread: true });
+  const newThread = (rn.json as { job: string; thread: string }).thread;
+  check('新话题:202,thread = 自己的 job', rn.status === 202 && newThread === (rn.json as { job: string }).job, JSON.stringify(rn.json));
+  await wait('math-tutor');
+  let dT = ((await day('math-tutor', '2026-09-09')).json as TDay).index;
+  const mN = dT.messages.find((m) => m.job === newThread)!;
+  const logN = readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${newThread}.log`), 'utf8');
+  check('新话题不 resume(假 CLI 新造 session)、不带旧话题的卡;sessions 里两条,顶层 = 新话题的', mN.thread === newThread && mN.cards === undefined && !logN.includes(oldSession) && mN.kidText?.includes('第一次说') === true && dT.sessions[oldThread]?.id === oldSession && dT.sessions[newThread] && dT.sessions[newThread].id !== oldSession && dT.session?.id === dT.sessions[newThread].id, JSON.stringify({ mN, sessions: dT.sessions }));
+  const rT2 = await post('math-tutor', { text: '再说一句', from: 'parent' });
+  await wait('math-tutor');
+  check('缺省接当前(新)话题并 resume 它', (rT2.json as { thread: string; resume: boolean }).thread === newThread && (rT2.json as { resume: boolean }).resume === true);
+  const r3 = await post('math-tutor', { text: '回到旧话题', from: 'parent', thread: oldThread });
+  const j3 = (r3.json as { job: string; thread: string; resume: boolean });
+  await wait('math-tutor');
+  dT = ((await day('math-tutor', '2026-09-09')).json as TDay).index;
+  const m3 = dT.messages.find((m) => m.job === j3.job)!;
+  const log3 = readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${j3.job}.log`), 'utf8');
+  check('指定旧话题:resume 旧话题自己的会话,带上旧话题里改过的卡,顶层 session 换回旧的', j3.thread === oldThread && j3.resume === true && log3.includes(oldSession) && m3.thread === oldThread && m3.cards?.length === 1 && m3.kidText?.includes('接着说') === true && dT.session?.id === oldSession, JSON.stringify({ j3, cards: m3.cards, log: log3.slice(0, 200) }));
+  check('不存在的话题 → 4xx', (await post('math-tutor', { text: 'x', thread: '0000-9' })).status >= 400 && (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: 'x', thread: 'bad' })).status === 400);
+  const smDay = ((await day('scene-maker', '2026-09-09')).json as TDay).index;
+  check('系统消息(转交)每条各开一个话题', smDay.messages.length >= 2 && smDay.messages.every((m) => m.thread === m.job));
+  const hist = (await route('GET', '/api/kid/conversations/math-tutor/history?days=30', ctx)).json as { today: string; days: { date: string; threads: { thread: string; title: string; sections: number; cards: number }[] }[] };
+  const todayH = hist.days.find((d) => d.date === '2026-09-09')!;
+  check('history:按天(新的在前),今天两个话题(新的在前),名字是孩子第一句、节数与卡数', hist.today === '2026-09-09' && hist.days[0].date === '2026-09-09' && hist.days.some((d) => d.date === '2026-09-08') && todayH.threads[0].thread === newThread && todayH.threads[0].title === '换个话题 板书' && todayH.threads[0].sections === 2 && todayH.threads[0].cards === 2 && todayH.threads[1].thread === oldThread && todayH.threads[1].sections > 2, JSON.stringify(hist.days.map((d) => ({ date: d.date, n: d.threads.length, t: d.threads.map((t) => t.title) }))));
+  const kdOld = (await route('GET', '/api/kid/conversations/math-tutor/2026-09-08', ctx)).json as { date: string; thread: string | null; messages: { thread: string }[] };
+  check('日期路由给那天的孩子视图(带 thread);未来 / 坏日期 400;today 也带 thread', kdOld.date === '2026-09-08' && kdOld.messages.length > 0 && kdOld.messages.every((m) => typeof m.thread === 'string') && kdOld.thread === kdOld.messages[kdOld.messages.length - 1].thread && (await route('GET', '/api/kid/conversations/math-tutor/2027-01-01', ctx)).status === 400 && (await route('GET', '/api/kid/conversations/math-tutor/2026-13-01', ctx)).status === 400 && ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { thread: string }).thread === oldThread);
+
   // ---- 参数校验 ----
   check('空消息 400', (await post('math-tutor', { text: '   ' })).status === 400);
   check('坏 from 400', (await post('math-tutor', { text: 'x', from: 'dog' })).status === 400);

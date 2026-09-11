@@ -21,9 +21,14 @@ export const TimingSchema = z.object({
 });
 export type Timing = z.infer<typeof TimingSchema>;
 
+export const SessionSchema = z.object({ id: z.string().min(1), runtime: z.string().min(1) });
+export type Session = z.infer<typeof SessionSchema>;
+
 export const ConversationMessageSchema = z.object({
   /** 一轮的 id(job),也是转录文件名的一段:<date>.<job>.log */
   job: z.string().min(1),
+  /** 话题 id = 话题第一条消息的 job(2026-09-11 拍板:一个话题 = 一段连续问答 = 老师的一个会话;一天可多个)。旧索引没有:读时按 threadOf 现算 */
+  thread: z.string().optional(),
   at: z.string().min(1),
   from: z.enum(MESSAGE_FROM),
   /** 消息原文(不含上下文包) */
@@ -65,8 +70,10 @@ export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 export const ConversationIndexSchema = z.object({
   tutor: z.string().min(1),
   date: z.string().regex(DATE_RE),
-  /** 当天会话;首条消息跑完后写入,之后每条 --resume 它 */
-  session: z.object({ id: z.string().min(1), runtime: z.string().min(1) }).nullable().default(null),
+  /** 当前话题(末条消息所在)的会话;首条消息跑完后写入。每个话题自己的会话在 sessions 里,这里只是最新那条(旧索引只有它) */
+  session: SessionSchema.nullable().default(null),
+  /** 话题 id → 那个话题的会话;今天的旧话题接着聊就 resume 它(2026-09-11 拍板) */
+  sessions: z.record(z.string(), SessionSchema).default({}),
   messages: z.array(ConversationMessageSchema).default([]),
   costUsd: z.number().default(0),
 });

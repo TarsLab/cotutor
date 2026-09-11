@@ -1,5 +1,5 @@
 /** 孩子视图:最终文本剥段后正文即板书(段落 = 讲稿,围栏 = 卡),每句按上限截;家长尾巴不进;答案剥掉;出错什么都没有。 */
-import { deriveKidView, kidConversation, kidMessageCount, kidSource, truncateReply } from '../src/lib/kid-view.ts';
+import { deriveKidView, kidConversation, kidMessageCount, kidSource, kidThreads, truncateReply } from '../src/lib/kid-view.ts';
 import { parseTranscript } from '../src/lib/transcript.ts';
 import { check, done } from './_check.ts';
 
@@ -78,5 +78,16 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   const withAssets = kidConversation(idx, {}, { '7': { 1: ['2026-09-09.7.cards/1/1.mp3'] } });
   check('生成好的资产并到卡上;没资产的卡没有 assets', JSON.stringify(withAssets[4].section?.cards[1].assets) === '["2026-09-09.7.cards/1/1.mp3"]' && !('assets' in withAssets[4].section!.cards[0]) && !('state' in withAssets[4].section!.cards[1]));
   check('「继续」不计每日上限,交答案计', kidMessageCount({ messages: [{ ...base, job: 'a', from: 'kid' as const, text: '继续', action: 'continue' as const, result: 'ok' as const }, { ...base, job: 'b', from: 'kid' as const, text: '(交了答案,没说话)', action: 'submit' as const, result: 'ok' as const }] }) === 1);
+}
+{
+  // 「以前的」分组:按 thread 聚,名字 = 孩子第一句截 20 字;没有孩子问过的话题不列;pending / 出错的不算节
+  const sec = (n: number) => ({ cards: Array.from({ length: n }, () => ({ kind: 'text', props: {} })), lines: [] });
+  const list = kidThreads([
+    { job: '1', thread: '1', at: '2026-09-09T10:00', question: '这道题怎么做我完全不懂啊老师请你讲讲好不好', reply: '好', audio: null, pending: false, artifacts: [], section: sec(3) },
+    { job: '2', thread: '1', at: '2026-09-09T10:05', question: '继续', reply: '再', audio: null, pending: false, artifacts: [], section: sec(2) },
+    { job: '3', thread: '3', at: '2026-09-09T10:10', question: null, reply: '课包好了', audio: null, pending: false, artifacts: [] },
+    { job: '4', thread: '4', at: '2026-09-09T10:20', question: '换个', reply: null, audio: null, pending: true, artifacts: [] },
+  ]);
+  check('分组:两个话题(系统起的没孩子问 → 不列),名字截 20 字,节数与卡数,pending 不算节', list.length === 2 && list[0].thread === '1' && list[0].title === '这道题怎么做我完全不懂啊老师请你讲讲好不' && list[0].title.length === 20 && list[0].sections === 2 && list[0].cards === 5 && list[1].thread === '4' && list[1].sections === 0, JSON.stringify(list));
 }
 done();

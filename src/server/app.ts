@@ -10,8 +10,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
-import { localDate } from '../lib/conversation.ts';
-import { kidConversation, kidMessageCount, type KidMessage } from '../lib/kid-view.ts';
+import { currentThread, lastJobOf, localDate, threads } from '../lib/conversation.ts';
+import { kidConversation, kidMessageCount, kidThreads, type KidMessage, type KidThread } from '../lib/kid-view.ts';
 import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
 import { currentSlot, dayOf, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { DATE_RE, FocusSchema, MESSAGE_FROM, listTutors, resolvePolicy, type Artifact, type ConversationIndex, type TimetableEntry } from '../schema/index.ts';
@@ -167,6 +167,28 @@ export interface KidDay {
   remaining: number;
   /** 老师正在回的那条 job */
   pending: string | null;
+  /** 当前话题(末条消息所在);还没说过话 → null */
+  thread: string | null;
+}
+
+/** 「以前的」:最近 days 天每天的话题列表(今天也在),新的在前;没有孩子问过的话题不列 */
+export interface KidHistory {
+  tutor: string;
+  today: string;
+  days: { date: string; threads: KidThread[] }[];
+}
+
+export async function kidHistory(ctx: AppContext, tutor: string, days: number): Promise<KidHistory> {
+  const today = localDate(ctx.now());
+  const floor = localDate(new Date(ctx.now().getTime() - (days - 1) * 86400000));
+  const dates = (await listDates(ctx.ws, tutor)).filter((d) => d >= floor && d <= today).sort().reverse();
+  const out: KidHistory['days'] = [];
+  for (const date of dates) {
+    const index = await readIndex(ctx.ws, tutor, date);
+    const list = kidThreads(kidConversation(index)).reverse();
+    if (list.length) out.push({ date, threads: list });
+  }
+  return { tutor, today, days: out };
 }
 
 export async function kidDay(ctx: AppContext, tutor: string, date: string): Promise<KidDay> {
@@ -184,7 +206,7 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
   // 场景卡:课包在不在、题面、步数、缩略图,每次现读(课包落地卡就变成可播)
   const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
   for (const m of messages) if (m.section) m.section = await enrichScenes(sceneDirs, m.section);
-  return { tutor, date, messages, remaining: Math.max(0, policy.dailyMessages - kidMessageCount(index)), pending: active && active.date === date ? active.job : null };
+  return { tutor, date, messages, remaining: Math.max(0, policy.dailyMessages - kidMessageCount(index)), pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
 }
 
 /** <日期>.<job>.mp3(整段)/ .<n>.mp3(讲稿第 n 句)/ .cards/<n>/<k>.mp3(第 n 张卡的第 k 个资产) */
@@ -271,13 +293,22 @@ export async function route(method: string, path: string, ctx: AppContext, body?
 
     // ---- 孩子端:过滤在服务端做,永远不带工具 / 错误 / 评判 ----
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: await kidHome(ctx, ctx.now()) };
-    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages)$/.exec(p);
+    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (kid) {
       const [, tutor, tail] = kid;
       const t = ws.config.tutors[tutor];
       if (!t || !t.enabled || t.hidden) return { status: 404, json: { error: 'no_such_tutor' } };
       const date = localDate(ctx.now());
       if (tail === 'today' && method === 'GET') return { status: 200, json: await kidDay(ctx, tutor, date) };
+      // 以前的某一天(只读回放;未来的日期与坏日期 400)
+      if (DATE_RE.test(tail) && method === 'GET') {
+        if (tail > date || Number.isNaN(Date.parse(tail))) return { status: 400, json: { error: 'bad_request' } };
+        return { status: 200, json: await kidDay(ctx, tutor, tail) };
+      }
+      if (tail === 'history' && method === 'GET') {
+        const days = Math.min(365, Math.max(1, Number(url.searchParams.get('days') ?? 30) || 30));
+        return { status: 200, json: await kidHistory(ctx, tutor, days) };
+      }
       if (tail === 'messages' && method === 'POST') {
         if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
         const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
@@ -288,8 +319,10 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         const policy = resolvePolicy(ws.config, tutor);
         // 「继续」不计每日上限:到了上限也能把老师讲完的听完
         if (action !== 'continue' && kidMessageCount(await readIndex(ws, tutor, date)) >= policy.dailyMessages) return { status: 429, json: { error: 'limit', remaining: 0 } };
-        const started = await ctx.runner.send(tutor, { from: 'kid', text: body.text, focus: focus?.data, action });
-        return { status: 202, json: { tutor, date: started.date, job: started.job } };
+        const thread = body.thread === undefined ? undefined : typeof body.thread === 'string' && /^\d{4}-\d+$/.test(body.thread) ? body.thread : null;
+        if (thread === null) return { status: 400, json: { error: 'bad_request' } };
+        const started = await ctx.runner.send(tutor, { from: 'kid', text: body.text, focus: focus?.data, action, newThread: body.newThread === true, thread });
+        return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
@@ -318,7 +351,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const r = parseCardState(target, state);
       if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
       const last = index.messages[index.messages.length - 1];
-      await writeCardState(ws, tutor, date, job, n, { at: ctx.now().toISOString(), turn: last.job, state: r.state });
+      // turn = 这张卡所在话题的末条 job:下一条发给同一话题时才算「上一轮之后改过的」
+      const mine = threads(index.messages)[index.messages.findIndex((m) => m.job === job)];
+      await writeCardState(ws, tutor, date, job, n, { at: ctx.now().toISOString(), turn: lastJobOf(index, mine) ?? last.job, state: r.state });
       return { status: 200, json: { ok: true, card: `${job}/${n}` } };
     }
     // 图片卡的图:只认 workspace 根以内的图片文件(产物、照片);越界、不是图、不存在都 404
@@ -357,8 +392,10 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           text: body.text,
           focus: focus?.data,
           runtime: typeof body.runtime === 'string' ? body.runtime : undefined,
+          newThread: body.newThread === true,
+          thread: typeof body.thread === 'string' ? body.thread : undefined,
         });
-        return { status: 202, json: { tutor, date: started.date, job: started.job, runtime: started.plan.runtime, resume: started.plan.resume } };
+        return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread, runtime: started.plan.runtime, resume: started.plan.resume } };
       }
       if (tail !== undefined && tail !== 'messages' && method === 'GET') {
         const date = tail === 'today' ? localDate(ctx.now()) : tail;

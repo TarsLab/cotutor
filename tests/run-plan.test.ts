@@ -37,8 +37,10 @@ const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\
   const t = parseTranscript('{"type":"system","session_id":"q-1"}\n{"type":"result","subtype":"success","result":"好"}');
   const after = applyRun(idx, '1', { transcript: t, kidView: deriveKidView(t, { replyMaxChars: 60 }), runtime: 'qwen' });
   check('换运行时后索引会话换成新家的', after.session?.id === 'q-1' && after.session.runtime === 'qwen' && after.messages[0].runtime === 'qwen', JSON.stringify(after.session));
-  const same = applyRun({ ...idx, session: { id: 'q-0', runtime: 'qwen' } }, '1', { transcript: t, kidView: deriveKidView(t, { replyMaxChars: 60 }), runtime: 'qwen' });
-  check('同运行时保留原会话', same.session?.id === 'q-0');
+  // 话题第一条永远拿新会话(它本来就是新开的);同话题第二条、同运行时才保留原会话
+  const idx2 = addMessage({ ...idx, session: { id: 'q-0', runtime: 'qwen' } }, { job: '2', at: 'x', from: 'parent', text: '再', result: 'running', artifacts: [] });
+  const same = applyRun(idx2, '2', { transcript: t, kidView: deriveKidView(t, { replyMaxChars: 60 }), runtime: 'qwen' });
+  check('同话题同运行时保留原会话;话题首条拿新的', same.session?.id === 'q-0' && same.sessions['1']?.id === 'q-0' && after.sessions['1']?.id === 'q-1');
   const failed = parseTranscript('{"type":"result","subtype":"error_max_turns","is_error":true}');
   const bad = applyRun(idx, '1', { transcript: failed, kidView: deriveKidView(failed, { replyMaxChars: 60 }), runtime: 'claude' });
   check('出错写 error 原因', bad.messages[0].result === 'error' && bad.messages[0].error === 'error_max_turns');

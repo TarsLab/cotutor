@@ -101,6 +101,26 @@ const PAGE = `<!doctype html>
   .who .nm { font-size:18px; font-weight:600; } .who .mo { font-size:13px; color:var(--dim); }
   .hb { width:40px; height:40px; display:grid; place-items:center; color:var(--dim); }
   .hb.on { color:var(--accent); }
+  .hb.dim { opacity:.3; pointer-events:none; }
+  .hb[hidden] { display:none; }
+  .blank { flex:1; grid-column:1 / -1; min-height:50vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; padding:40px 20px; color:var(--dim); }
+  .blank b { font-size:22px; font-weight:600; color:var(--ink); }
+  .blank small { font-size:15px; }
+  #hist { position:absolute; inset:0; display:none; z-index:30; }
+  #hist.on { display:block; }
+  #hist .dimmer { position:absolute; inset:0; background:#00000033; }
+  #hist .panel { position:absolute; top:0; right:0; bottom:0; width:100%; max-width:380px; background:var(--card); display:flex; flex-direction:column; box-shadow:-4px 0 20px #00000018; }
+  #hist .hd { display:flex; align-items:center; justify-content:space-between; padding:calc(env(safe-area-inset-top) + 12px) 12px 12px 20px; font-size:18px; font-weight:600; border-bottom:1px solid var(--line); }
+  #hist .ls { flex:1; overflow:auto; padding:8px 12px calc(env(safe-area-inset-bottom) + 24px); }
+  #hist .dt { font-size:13px; color:var(--dim); padding:14px 6px 6px; }
+  #hist .tr { display:flex; flex-direction:column; gap:4px; padding:12px 14px; border-radius:14px; background:var(--paper); margin-bottom:8px; cursor:pointer; border:2px solid transparent; }
+  #hist .tr.on { border-color:var(--accent); }
+  #hist .tr b { font-size:16px; font-weight:600; }
+  #hist .tr small { font-size:13px; color:var(--dim); }
+  #hist .empty { padding:40px 16px; text-align:center; color:var(--dim); }
+  #pill[hidden] { display:none; }
+  #back-today { width:100%; height:56px; border-radius:28px; background:#fff; border:1px solid var(--line); box-shadow:0 2px 10px #00000010; font-size:17px; font-weight:600; color:var(--ink); }
+  #back-today[hidden] { display:none; }
   #wrap { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
   #board { flex:1; min-height:0; overflow:auto; padding:14px 16px 24px; display:flex; flex-direction:column; gap:12px; -webkit-overflow-scrolling:touch; scroll-behavior:smooth; }
   /* 舞台:盖住板书那块,留 8px 边;顶栏 = 卡的名字 + 关闭;字幕行与输入条还在下面 */
@@ -232,6 +252,8 @@ const PAGE = `<!doctype html>
       <button class="hb" id="back" type="button"></button>
       <span class="av" id="c-av"></span>
       <div class="who"><span class="nm" id="c-nm"></span><span class="mo" id="c-mo"></span></div>
+      <button class="hb" id="hist-btn" type="button" title="以前的"></button>
+      <button class="hb" id="new-btn" type="button" title="新话题" hidden></button>
       <button class="hb on" id="spk" type="button"></button>
     </header>
     <div id="wrap">
@@ -246,9 +268,11 @@ const PAGE = `<!doctype html>
         <button id="go" type="button" hidden></button>
         <button class="ic" id="plus" type="button"></button>
       </div>
+      <button id="back-today" type="button" hidden>回到今天</button>
     </div>
     <div id="hold"><span>松手发送,上移取消</span><div class="w"></div></div>
   </div>
+  <div id="hist"><div class="dimmer"></div><div class="panel"><div class="hd"><span>以前的</span><button class="hb" id="hist-x" type="button"></button></div><div class="ls"></div></div></div>
   <div id="sheet"><div class="dimmer"></div><div class="panel"><div class="grab"></div><div class="opts">
     <label><span class="ic" id="ic-album"></span>相册<input type="file" accept="image/*"></label>
     <label><span class="ic" id="ic-cam2"></span>拍照<input type="file" accept="image/*" capture="environment"></label>
@@ -284,6 +308,8 @@ __BOARD_JS__
     album: SVG('<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 15l5-4 4 3 3-2 6 4"></path>', 28),
     close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
     check: SVG('<path d="M5 12l5 5 9-10"></path>', 16, 3),
+    history: SVG('<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path>', 24),
+    spark: SVG('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"></path>', 24, 1.8),
   };
   const api = async (method, path, body) => {
     const r = await fetch(path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
@@ -303,7 +329,7 @@ __BOARD_JS__
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, echo: null, echoTimer: null, pending: false, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, echo: null, echoTimer: null, pending: false, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false };
   try { S.autoplay = localStorage.getItem('kid-autoplay') !== '0'; } catch {}
 
   // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音退回浏览器合成;都没有按字数计时 ----
@@ -370,6 +396,7 @@ __BOARD_JS__
   const openTutor = (t, sendText) => {
     unlock();
     S.tutor = t; S.sections = []; S.played = new Set(); S.state = { section: -1, line: -1, status: 'idle' }; S.echo = null; S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
+    S.thread = null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = false; $('#hist').classList.remove('on'); renderBar(); renderHeader();
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
     $('#c-nm').textContent = t.display;
     $('#c-mo').textContent = t.motto || '';
@@ -492,6 +519,7 @@ __BOARD_JS__
     const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];
     if (!card) return;
     if (isHeavy(card) && !sceneReady(card) && card.kind === 'scene') return; // 课包还没到:紧凑态写着「图还在路上」,不开
+    if (S.readonly && hasState(card) && !opts.delegate) return; // 以前的只能看:选择 / 填空 / 画板不开,免得改了当时的答案
     if (S.state.status === 'playing' && !opts.delegate) { stopVoice(); S.state = { ...S.state, status: 'paused' }; renderSubtitle(); }
     S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, scene: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
     $('#st-ttl').textContent = cardTitle(card);
@@ -539,7 +567,7 @@ __BOARD_JS__
     renderStage(); repaintCard(secIdx, idx);
     saveState(S.sections[secIdx].job, idx, card.state);
   };
-  const saveState = (job, idx, state) => { if (!S.tutor) return; api('PUT', '/api/kid/conversations/' + S.tutor.name + '/cards/' + job + '/' + idx, state).catch(() => {}); };
+  const saveState = (job, idx, state) => { if (!S.tutor || S.readonly) return; api('PUT', '/api/kid/conversations/' + S.tutor.name + '/cards/' + job + '/' + idx, state).catch(() => {}); };
   $('#st-go').addEventListener('click', () => {
     if (!S.stage) return;
     const card = S.sections[S.stage.section].cards[S.stage.card];
@@ -573,6 +601,7 @@ __BOARD_JS__
     if (S.stage && S.stage.scene && !S.echo && !S.limit) v = sceneSubtitle(S.stage.scene.phase, S.stage.scene.line, S.stage.scene.step, S.stage.scene.total);
     const t = $('#sub-text'); t.textContent = v.text; t.className = v.kind;
     const b = $('#sub-btn');
+    if (S.readonly && v.right === 'continue') v.right = 'none';
     b.hidden = v.right === 'none';
     b.className = v.right === 'continue' ? 'cont' : '';
     b.innerHTML = v.right === 'pause' ? ICON.pause : v.right === 'play' ? ICON.play : v.right === 'continue' ? ICON.play + '<span>继续</span>' : '';
@@ -602,6 +631,7 @@ __BOARD_JS__
       const target = play && S.sections[S.state.section].cards[play.card];
       if (target && target.kind === 'scene' && sceneReady(target)) { S.state = { ...S.state, status: 'stage' }; openStage(S.state.section, play.card, { delegate: true, autoplay: true }); return; }
       S.state = advance(S.state, S.sections);
+      if (S.readonly && S.state.status === 'waiting') S.state = { ...S.state, status: 'done' };
       if (S.state.status === 'playing') playLine();
       else { renderSubtitle(); if (S.state.status === 'waiting') openAskCard(S.state.section, line); }
     });
@@ -618,11 +648,16 @@ __BOARD_JS__
   const loadDay = async (silent) => {
     if (!S.tutor) return;
     try {
-      const d = await api('GET', '/api/kid/conversations/' + S.tutor.name + '/today');
+      const d = await api('GET', '/api/kid/conversations/' + S.tutor.name + '/' + (S.hist || 'today'));
       setOffline(false);
       S.day = d;
       S.limit = d.remaining <= 0;
-      const entries = sectionsFromMessages(d.messages);
+      // 话题:没选过就是当前(末条所在)的;板书只铺这个话题的节。新话题空白态什么都不铺,发出第一句才有话题
+      if (!S.thread && !S.newThread) S.thread = d.thread;
+      const mine = S.newThread ? [] : d.messages.filter((m) => m.thread === S.thread);
+      const first = mine.find((m) => m.question !== null) || mine[0];
+      S.threadAt = first ? first.at : null;
+      const entries = sectionsFromMessages(mine);
       const fresh = [];
       for (const e of entries) {
         if (S.played.has(e.job)) continue;
@@ -646,6 +681,7 @@ __BOARD_JS__
         if (silent || !S.autoplay) { for (const i of fresh) paintAll(i); S.state = playerAtEnd(S.sections); renderSubtitle(); const last = $('#board').querySelector('[data-sec="' + (S.sections.length - 1) + '"] .c'); if (last) last.scrollIntoView({ block: 'start' }); }
         else { stopVoice(); S.state = startSection(fresh[0], S.sections); if (S.state.status === 'playing') playLine(); else renderSubtitle(); }
       } else renderSubtitle();
+      renderHeader();
       clearTimeout(S.pollTimer);
       if (stillPending) S.pollTimer = setTimeout(() => loadDay(false), 1000);
     } catch (e) {
@@ -653,10 +689,71 @@ __BOARD_JS__
       setOffline(true);
     }
   };
+  // ---- 话题:头部「以前的」「新话题」、空白态、只读回放 ----
+  const dateLabel = (date, today) => {
+    if (date === today) return '今天';
+    const [y, mo, da] = date.split('-').map(Number);
+    const t = today.split('-').map(Number);
+    const diff = Math.round((new Date(t[0], t[1] - 1, t[2]) - new Date(y, mo - 1, da)) / 86400000);
+    return diff === 1 ? '昨天' : mo + ' 月 ' + da + ' 日';
+  };
+  const clock = (at) => (at && at.length >= 16 ? at.slice(11, 16) : '');
+  const renderHeader = () => {
+    if (!S.tutor) return;
+    const today = S.day ? S.day.date : null;
+    let mo = S.tutor.motto || '';
+    if (S.hist && today) mo = '以前的 · ' + dateLabel(S.hist, S.hist === today ? '' : today) + ' ' + clock(S.threadAt);
+    else if (S.newThread) mo = '新话题';
+    else if (S.thread && S.day && S.thread !== S.day.thread) mo = '今天的话题 · ' + clock(S.threadAt);
+    $('#c-mo').textContent = mo;
+    const nb = $('#new-btn');
+    nb.hidden = S.newThread || S.readonly || (!S.sections.length && !S.pending && !S.partial);
+    nb.classList.toggle('dim', S.pending);
+  };
+  const renderBar = () => { $('#pill').hidden = S.readonly; $('#back-today').hidden = !S.readonly; };
+  const resetBoard = () => { stopVoice(); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); S.state = { section: -1, line: -1, status: 'idle' }; S.partial = null; S.echo = null; $('#board').replaceChildren(); };
+  /** 换到某天的某个话题:今天的能接着聊;以前的只读回放(从第一句播) */
+  const switchThread = (date, thread) => {
+    resetBoard();
+    S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null;
+    renderBar(); renderSubtitle(); renderHeader();
+    loadDay(!S.readonly);
+  };
+  $('#back-today').addEventListener('click', () => switchThread(null, null));
+  $('#new-btn').innerHTML = ICON.spark;
+  $('#new-btn').addEventListener('click', () => {
+    if (S.pending || S.readonly) return;
+    resetBoard();
+    S.newThread = true; S.thread = null; S.threadAt = null;
+    $('#board').append(h('div', { class: 'blank' }, h('b', {}, '换个话题吧,想问什么?'), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null));
+    setBar('idle'); renderSubtitle(); renderHeader();
+  });
+  $('#hist-btn').innerHTML = ICON.history;
+  $('#hist-x').innerHTML = ICON.close;
+  const closeHist = () => $('#hist').classList.remove('on');
+  $('#hist-x').addEventListener('click', closeHist);
+  $('#hist .dimmer').addEventListener('click', closeHist);
+  $('#hist-btn').addEventListener('click', async () => {
+    if (!S.tutor) return;
+    const ls = $('#hist .ls'); ls.replaceChildren();
+    $('#hist').classList.add('on');
+    try {
+      const hst = await api('GET', '/api/kid/conversations/' + S.tutor.name + '/history?days=30');
+      const nodes = [];
+      for (const dd of hst.days) {
+        nodes.push(h('div', { class: 'dt' }, dateLabel(dd.date, hst.today)));
+        for (const t of dd.threads) {
+          const open = t.thread === S.thread && (dd.date === hst.today ? !S.hist : S.hist === dd.date);
+          nodes.push(h('div', { class: 'tr' + (open ? ' on' : ''), on: { click: () => { closeHist(); if (!open) switchThread(dd.date === hst.today ? null : dd.date, t.thread); } } }, h('b', {}, t.title), h('small', {}, clock(t.at) + ' · ' + t.sections + ' 节 · ' + t.cards + ' 张卡' + (open ? ' · 正在看' : ''))));
+        }
+      }
+      ls.replaceChildren(...(nodes.length ? nodes : [h('div', { class: 'empty' }, '还没有以前的')]));
+    } catch { ls.replaceChildren(); }
+  });
   const showEcho = (text) => { clearTimeout(S.echoTimer); S.echo = text; renderSubtitle(); S.echoTimer = setTimeout(() => { S.echo = null; renderSubtitle(); }, 2500); };
   const send = async (text, opts = {}) => {
     text = (text || '').trim();
-    if ((!text && !opts.action) || !S.tutor || (S.limit && opts.action !== 'continue')) return;
+    if ((!text && !opts.action) || !S.tutor || S.readonly || (S.limit && opts.action !== 'continue')) return;
     unlock();
     stopVoice();
     if (S.state.status === 'playing' || S.state.status === 'paused' || S.state.status === 'stage') S.state = { ...S.state, status: 'done' };
@@ -666,8 +763,12 @@ __BOARD_JS__
     if (opts.action) body.action = opts.action;
     const focus = opts.focus || (S.stage ? { card: S.stage.id } : null);
     if (focus) body.focus = focus;
+    if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
     try {
-      await api('POST', '/api/kid/conversations/' + S.tutor.name + '/messages', body);
+      const r = await api('POST', '/api/kid/conversations/' + S.tutor.name + '/messages', body);
+      if (r && r.thread) S.thread = r.thread;
+      if (S.newThread) { S.newThread = false; const blank = $('#board .blank'); if (blank) blank.remove(); }
+      renderHeader();
       clearTimeout(S.pollTimer); S.pollTimer = setTimeout(() => loadDay(false), 1200);
     } catch (e) {
       // 忙 / 上限 / 不通:什么都不报;刷新一下让状态说话
@@ -757,7 +858,20 @@ __BOARD_JS__
   // ---- 启动与心跳:不通就头像灰,什么都不报 ----
   loadHome().then(() => {
     const open = debug.get('tutor');
-    if (open && S.home) { const t = S.home.tutors.find((x) => x.name === open); if (t) { openTutor(t); setTimeout(jumpTo, 400); } }
+    if (open && S.home) {
+      const t = S.home.tutors.find((x) => x.name === open);
+      if (t) {
+        openTutor(t);
+        // 调试:&new=1 新话题空白态;&hist=<日期>.<话题> 只读回放以前的;&panel=1 打开「以前的」面板
+        setTimeout(() => {
+          if (debug.get('new')) $('#new-btn').click();
+          const hv = debug.get('hist');
+          if (hv) { const [d, th] = hv.split('.'); switchThread(d, th); }
+          if (debug.get('panel')) $('#hist-btn').click();
+          jumpTo();
+        }, 400);
+      }
+    }
   });
   setInterval(() => { if (S.tutor) { if (!S.pending) loadDay(true); } else loadHome(); }, 5000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) (S.tutor ? loadDay(true) : loadHome()); });

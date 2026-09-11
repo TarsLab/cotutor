@@ -7,7 +7,7 @@
 import { stripSecrets } from '../cards/index.ts';
 import type { ConversationMessage, Handoff, HoldupAsk } from '../schema/index.ts';
 import { parseBoard } from './board.ts';
-import type { CardAssets, CardStates } from './conversation.ts';
+import { threads, type CardAssets, type CardStates } from './conversation.ts';
 import type { BoardSection } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 import type { Transcript } from './transcript.ts';
@@ -92,6 +92,8 @@ export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }):
 /** 孩子端的一条:自己问的话(别人问的不显示)+ 老师给孩子的话 + 配音;出错的运行什么都不出现(问句还在) */
 export interface KidMessage {
   job: string;
+  /** 话题 id(话题第一条的 job) */
+  thread: string;
   at: string;
   /** 孩子自己说的;家长 / 系统发的不给孩子看,为 null */
   question: string | null;
@@ -113,7 +115,8 @@ export interface KidMessage {
  */
 export function kidConversation(index: { messages: readonly ConversationMessage[] }, states: CardStates = {}, assets: CardAssets = {}): KidMessage[] {
   const out: KidMessage[] = [];
-  for (const m of index.messages) {
+  const ths = threads(index.messages);
+  for (const [i, m] of index.messages.entries()) {
     const question = m.from === 'kid' ? m.text : null;
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
@@ -122,9 +125,35 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     const files = assets[m.job];
     const withState = m.section && (per || files) ? { ...m.section, cards: m.section.cards.map((c, n) => ({ ...c, ...(per?.[n] ? { state: per[n].state } : {}), ...(files?.[n]?.length ? { assets: files[n] } : {}) })) } : m.section;
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
-    out.push({ job: m.job, at: m.at, question, reply, audio: reply ? (m.audio ?? null) : null, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}) });
+    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, audio: reply ? (m.audio ?? null) : null, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}) });
   }
   return out;
+}
+
+export interface KidThread {
+  thread: string;
+  /** 话题第一条的时间 */
+  at: string;
+  /** 话题名:孩子的第一句话截 20 字;没有孩子的话 → 「老师主动说的」 */
+  title: string;
+  /** 老师讲了几节 */
+  sections: number;
+  /** 一共几张卡 */
+  cards: number;
+}
+
+/**
+ * 「以前的」列表:一天的孩子端条目按话题分组。一句孩子的话都没有的话题不列;还在跑的、出错的轮不算节。
+ */
+export function kidThreads(messages: readonly KidMessage[]): KidThread[] {
+  const by = new Map<string, KidThread & { asked: boolean }>();
+  for (const m of messages) {
+    const t = by.get(m.thread) ?? { thread: m.thread, at: m.at, title: '', sections: 0, cards: 0, asked: false };
+    if (m.question && !t.asked) { t.asked = true; t.title = m.question.trim().slice(0, 20); }
+    if (m.reply !== null || (m.section && !m.pending)) { t.sections++; t.cards += m.section?.cards.length ?? 0; }
+    by.set(m.thread, t);
+  }
+  return [...by.values()].filter((t) => t.asked).map(({ asked: _a, ...t }) => t);
 }
 
 /** 今天孩子已发的条数(每日上限按它算;家长发的不算,「继续」不算,交答案算) */

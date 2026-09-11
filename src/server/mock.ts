@@ -23,6 +23,7 @@ export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bund
 import type { BoardSection } from '../lib/kid-board.ts';
 import { lanAddresses } from '../cli/serve.ts';
 import { USER_CERT_DIR } from '../cli/workspace.ts';
+import { kidThreads } from '../lib/kid-view.ts';
 import { KID_PAGE } from './kid-page.ts';
 
 export type MockScenario = 'normal' | 'limit' | 'offline';
@@ -216,6 +217,8 @@ Which one do you want to try first, [apple], [banana], or [orange]? 你先读哪
 
 interface MockMessage {
   job: string;
+  /** 话题 id(话题第一条的 job) */
+  thread: string;
   at: string;
   question: string | null;
   reply: string | null;
@@ -262,8 +265,11 @@ export function createMock(opts: MockOptions = {}): Mock {
   const scenario = opts.scenario ?? 'normal';
   const delay = opts.delayMs ?? 1800;
   const now = opts.now ?? (() => new Date());
+  const yesterday = (): string => localDate(new Date(now().getTime() - 86400000));
   const title = opts.title ?? '小明的老师们';
   const messages = new Map<string, MockMessage[]>();
+  /** 以前的:昨天每位讲过课的老师有一个话题(拿脚本最后一节充数),只读回放用 */
+  const past = new Map<string, MockMessage[]>();
   const cursor = new Map<string, number>();
   const inflight = new Map<string, Promise<void>>();
   let seq = 0;
@@ -272,10 +278,16 @@ export function createMock(opts: MockOptions = {}): Mock {
     const list: MockMessage[] = [];
     for (let i = 0; i < t.preloaded && i < t.script.length; i++) {
       const section = sectionFromScript(t.script[i]);
-      list.push({ job: nextJob(), at: now().toISOString(), question: i === 0 ? t.firstQuestion : '继续', reply: section.lines[section.lines.length - 1]?.text ?? null, audio: null, pending: false, artifacts: [], section });
+      const job = nextJob();
+      list.push({ job, thread: list[0]?.thread ?? job, at: now().toISOString(), question: i === 0 ? t.firstQuestion : '继续', reply: section.lines[section.lines.length - 1]?.text ?? null, audio: null, pending: false, artifacts: [], section });
     }
     messages.set(t.name, list);
     cursor.set(t.name, Math.min(t.preloaded, t.script.length));
+    if (t.preloaded && t.script.length) {
+      const section = sectionFromScript(t.script[t.script.length - 1]);
+      const job = `0930-${t.name.length}`;
+      past.set(t.name, [{ job, thread: job, at: `${yesterday()}T09:30`, question: '昨天问的:' + t.firstQuestion, reply: section.lines[section.lines.length - 1]?.text ?? null, audio: null, pending: false, artifacts: [], section }]);
+    }
   }
   const dailyLimit = 30;
   const used = (name: string): number => (messages.get(name) ?? []).filter((m) => m.question !== null && m.action !== 'continue').length;
@@ -340,7 +352,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p === '/api/health') return { status: 200, json: { ok: scenario !== 'offline', mock: true, scenario } };
     if (scenario === 'offline' && p.startsWith('/api/')) return { status: 500, json: { error: 'mock_offline' } };
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: home() };
-    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages)$/.exec(p);
+    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (kid) {
       const [, name, tail] = kid;
       const t = MOCK_TUTORS.find((x) => x.name === name);
@@ -349,7 +361,20 @@ export function createMock(opts: MockOptions = {}): Mock {
       const date = localDate(now());
       if (tail === 'today' && method === 'GET') {
         const pending = list.find((m) => m.pending);
-        return { status: 200, json: { tutor: name, date, messages: await Promise.all(list.map(kidMessage)), remaining: remaining(name), pending: pending ? pending.job : null } };
+        return { status: 200, json: { tutor: name, date, messages: await Promise.all(list.map(kidMessage)), remaining: remaining(name), pending: pending ? pending.job : null, thread: list.length ? list[list.length - 1].thread : null } };
+      }
+      if (tail === 'history' && method === 'GET') {
+        const days: { date: string; threads: unknown[] }[] = [];
+        const todayThreads = kidThreads(list).reverse();
+        if (todayThreads.length) days.push({ date, threads: todayThreads });
+        const old = past.get(name) ?? [];
+        if (old.length) days.push({ date: yesterday(), threads: kidThreads(old) });
+        return { status: 200, json: { tutor: name, today: date, days } };
+      }
+      if (/^\d{4}-/.test(tail) && method === 'GET') {
+        if (tail > date) return { status: 400, json: { error: 'bad_request' } };
+        const old = tail === yesterday() ? (past.get(name) ?? []) : [];
+        return { status: 200, json: { tutor: name, date: tail, messages: await Promise.all(old.map(kidMessage)), remaining: remaining(name), pending: null, thread: old.length ? old[old.length - 1].thread : null } };
       }
       if (tail === 'messages' && method === 'POST') {
         if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
@@ -358,11 +383,20 @@ export function createMock(opts: MockOptions = {}): Mock {
         if (action !== 'continue' && remaining(name) <= 0) return { status: 429, json: { error: 'limit', remaining: 0 } };
         if (list.some((m) => m.pending)) return { status: 409, json: { error: 'busy' } };
         const text = body.text.trim() || (action === 'continue' ? '继续' : '(交了答案,没说话)');
-        const m: MockMessage = { job: nextJob(), at: now().toISOString(), question: text, reply: null, audio: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}) };
+        const job = nextJob();
+        // 话题:newThread → 自己的 job;指定的要在今天的列表里;缺省接当前(末条)的
+        let thread = job;
+        if (body.newThread !== true && list.length) {
+          if (body.thread !== undefined) {
+            if (typeof body.thread !== 'string' || !list.some((x) => x.thread === body.thread)) return { status: 400, json: { error: 'bad_request' } };
+            thread = body.thread;
+          } else thread = list[list.length - 1].thread;
+        }
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, audio: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}) };
         list.push(m);
         const done = think(t, m).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);
-        return { status: 202, json: { tutor: name, date, job: m.job } };
+        return { status: 202, json: { tutor: name, date, job: m.job, thread } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }

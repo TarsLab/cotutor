@@ -684,7 +684,7 @@ __BOARD_JS__
       const stillPending = Boolean(d.pending) || d.messages.some((m) => m.pending);
       S.pending = stillPending;
       if (fresh.length) {
-        if (silent || !S.autoplay) { for (const i of fresh) paintAll(i); S.state = playerAtEnd(S.sections); renderSubtitle(); const last = $('#board').querySelector('[data-sec="' + (S.sections.length - 1) + '"] .c'); if (last) last.scrollIntoView({ block: 'start' }); }
+        if (silent || !S.autoplay) { for (const i of fresh) paintAll(i); S.state = playerAtEnd(S.sections); renderSubtitle(); const last = $('#board').querySelector('[data-sec="' + (S.sections.length - 1) + '"] .c'); if (last) last.scrollIntoView({ block: 'start', behavior: 'instant' }); }
         else { stopVoice(); S.state = startSection(fresh[0], S.sections); if (S.state.status === 'playing') playLine(); else renderSubtitle(); }
       } else renderSubtitle();
       renderHeader();
@@ -856,7 +856,7 @@ __BOARD_JS__
     renderSubtitle();
     const tgt = S.sections[sec].lines[line] ? lineTarget(S.sections[sec].lines[line]) : null;
     const at = $('#board').querySelector('[data-sec="' + sec + '"] ' + (tgt === null ? '.c' : '[data-card="' + tgt + '"]'));
-    if (at) at.scrollIntoView({ block: 'center' });
+    if (at) at.scrollIntoView({ block: 'center', behavior: 'instant' });
     const st = debug.get('stage');
     if (st) { const [x, y] = st.split('.').map(Number); openStage(x || 0, y || 0); }
   };

@@ -7,11 +7,13 @@
  * 「## 转交」自动起目标老师的一轮(from: system,转交单 = 谁转的、why、refs、孩子的话、voice):目标老师不在 / 关着 / 忙 / 场景作业到了 dailyMax
  * 都不起,原因进这条消息的 warnings;起了记 handoffJob。目标老师用自己的 runtime(cotutor.json tutors.<name>.runtime)。
  * 一老师同时只跑一条(老师还在回上一条就 409),跨天自动新开(索引按本地日期分文件,新文件没 session 就不带 --resume)。
+ * 埋点(2026-09-11):每轮记 timing(进程起的时刻、首卡、进程退出、配音收尾,毫秒),家长视图每轮一行;scene-maker 那轮收尾
+ * 把课包的费用与时长追加进 artifacts.jsonl(老师自己只记 ready / retired 那行;它忘了记就由应用补一整行),消息的 artifacts 记课包 id。
  * 进程 cwd 是老师目录 agents/<name>/(《agent层设计.md》拍板)。
  */
 import { spawn } from 'node:child_process';
 import { closeSync, createWriteStream, existsSync, openSync } from 'node:fs';
-import { mkdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
 import { addMessage, applyRun, cardId, changedCards, conversationFiles, jobId, localDate, localMinute } from '../lib/conversation.ts';
@@ -20,12 +22,13 @@ import { parseBoard } from '../lib/board.ts';
 import type { BoardSection } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
 import { createPartialReader } from '../lib/stream.ts';
-import { mergeObservations, parseObservations, recentObservations } from '../lib/ledger.ts';
+import { mergeArtifacts, mergeObservations, parseArtifactEvents, parseObservations, recentObservations } from '../lib/ledger.ts';
 import { isoWeek, parsePlan, planLinesFor } from '../lib/plan.ts';
 import { getRuntime, planRun, runtimeUses, type RunPlan } from '../lib/run-plan.ts';
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript } from '../lib/transcript.ts';
-import { resolvePolicy, type ContextPack, type ConversationIndex, type Focus, type Handoff, type MessageFrom } from '../schema/index.ts';
+import { resolvePolicy, type ArtifactEvent, type ContextPack, type ConversationIndex, type Focus, type Handoff, type MessageFrom, type Timing } from '../schema/index.ts';
+import type { Transcript } from '../lib/transcript.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { readAgentBody, readCardStates, readIndex, writeIndex } from './store.ts';
 import { DubQueue, LineDubber, dubReply } from './tts.ts';
@@ -203,6 +206,36 @@ export class Runner {
     }
   }
 
+  /** 转交单里的课包 id(refs 第一个合法 id);没有就从收尾那句「课包 x 做好了 / 没做成」取 */
+  static sceneJobId(handoffText: string, finalText: string | null): string | null {
+    const refs = /^refs:\s*(.+)$/m.exec(handoffText)?.[1]?.split(/[,,]\s*/) ?? [];
+    return refs.find((r) => BUNDLE_ID_RE.test(r.trim()))?.trim() ?? /课包\s+(\S+?)\s*(?:做好了|没做成)/.exec(finalText ?? '')?.[1] ?? null;
+  }
+
+  /**
+   * scene-maker 那轮收尾:往 artifacts.jsonl 追加这个课包的 costUsd / durationMs(一行,同 id 后者为准,老师文件那行不用改)。
+   * 老师忘了记账(账本里没这个 id)就由应用补一整行:bundles/<id>/manifest.json 在 → ready,不在 → retired。
+   */
+  private async settleSceneLedger(ws: Workspace, tutor: string, date: string, job: string, handoffText: string, transcript: Transcript, timing: Timing): Promise<{ id: string | null; warnings: string[] }> {
+    const id = Runner.sceneJobId(handoffText, transcript.final?.text ?? null);
+    if (!id) return { id: null, warnings: ['转交单没有课包 id,收尾那句也没写「课包 x 做好了」,这轮的费用没记进账本'] };
+    const warnings: string[] = [];
+    const known = mergeArtifacts(parseArtifactEvents(await readFile(ws.files.artifacts, 'utf8').catch(() => '')).rows).artifacts.some((a) => a.id === id);
+    const row: ArtifactEvent = { id, at: new Date().toISOString(), source: { conversation: `${tutor}/${date}`, job }, ...(transcript.final?.costUsd !== undefined ? { costUsd: transcript.final.costUsd } : {}), ...(timing.doneMs !== undefined ? { durationMs: timing.doneMs } : {}) };
+    if (!known) {
+      const ready = existsSync(join(ws.dirs.bundles, id, 'manifest.json'));
+      Object.assign(row, { kind: '课包', by: tutor, status: ready ? 'ready' : 'retired', ...(ready ? { path: `bundles/${id}` } : {}) });
+      warnings.push(`画图老师没往账本记 ${id},应用补了一行(${ready ? 'ready' : 'retired:bundles/' + id + '/manifest.json 不在'})`);
+    }
+    try {
+      await mkdir(ws.dirs.ledger, { recursive: true });
+      await appendFile(ws.files.artifacts, `${JSON.stringify(row)}\n`);
+    } catch (err) {
+      warnings.push(`账本写不进:${err instanceof Error ? err.message : String(err)}`);
+    }
+    return { id, warnings };
+  }
+
   private async spawn(ws: Workspace, tutor: string, date: string, job: string, plan: RunPlan, replyMaxChars: number, active: Active): Promise<ConversationIndex> {
     const files = conversationFiles(ws.dirs.conversations, tutor, date);
     const cwd = join(ws.dirs.agents, tutor);
@@ -212,6 +245,10 @@ export class Runner {
     const voice = ws.config.tutors[tutor]?.voice;
     const queue = voice ? new DubQueue(ws.config.tts, voice, files.err(job), this.opts.env) : null;
     const dubber = queue ? new LineDubber(queue, (n) => files.lineAudio(job, n)) : null;
+    // 埋点:从进程起来那一刻算,首卡 = partial 板书第一次有卡(孩子端第一次看到东西),done = 进程退出,dubbed = 配音收尾
+    const t0 = Date.now();
+    const timing: Timing = { startedAt: new Date(t0).toISOString() };
+    const since = (): number => Date.now() - t0;
     // 流式:stdout 的每一块先落盘再喂读取器;正文变了就(节流 150ms)重解析成 partial 板书,定稿的句子交去配音
     const reader = createPartialReader();
     let dirty = false;
@@ -223,6 +260,7 @@ export class Runner {
       const { section } = parseBoard(reader.text(), { partial: true });
       const lines = section.lines.map((l) => ({ ...l, text: truncateReply(l.text, replyMaxChars).text }));
       active.partial = section.cards.length || lines.length ? { cards: section.cards, lines, partial: true } : null;
+      if (section.cards.length && timing.firstCardMs === undefined) timing.firstCardMs = since();
       if (dubber) lines.forEach((l, i) => dubber.add(i, l.text));
     };
     const exit = await new Promise<{ code: number | null; spawnError?: Error }>((resolveExit) => {
@@ -241,13 +279,11 @@ export class Runner {
       child.once('error', (e) => resolveExit({ code: null, spawnError: e }));
       child.once('close', (code) => resolveExit({ code }));
     });
+    timing.doneMs = since();
     if (timer) clearTimeout(timer);
     await new Promise<void>((r) => out.end(r));
     closeSync(err);
-    if (exit.spawnError) {
-      const { appendFile } = await import('node:fs/promises');
-      await appendFile(files.err(job), `cotutor: 起不来 ${plan.argv[0]}:${exit.spawnError.message}\n`);
-    }
+    if (exit.spawnError) await appendFile(files.err(job), `cotutor: 起不来 ${plan.argv[0]}:${exit.spawnError.message}\n`);
     const transcript = parseTranscript(await readFile(files.log(job), 'utf8').catch(() => ''));
     if (!transcript.final) {
       // 进程退了但没有 result 事件:起不来、被杀、或 CLI 崩了;标 error,原因指向 err.log
@@ -261,10 +297,19 @@ export class Runner {
     if (dubber && voice && kidView.section?.lines.length) {
       const names = await dubber.finish(kidView.section.lines);
       kidView.section.lines.forEach((l, i) => { l.audio = names[i]; });
-    } else if (voice && kidView.kidText) audio = await dubReply(ws.config.tts, kidView.kidText, voice, { audio: files.audio(job), err: files.err(job) }, this.opts.env);
+      timing.dubbedMs = since();
+    } else if (voice && kidView.kidText) {
+      audio = await dubReply(ws.config.tts, kidView.kidText, voice, { audio: files.audio(job), err: files.err(job) }, this.opts.env);
+      timing.dubbedMs = since();
+    }
     // 重新读索引再并入:跑的这段时间里别的字段(比如家长改了别的)不被旧对象盖掉
     const latest = await readIndex(ws, tutor, date);
-    let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, audio });
+    let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, audio, timing });
+    // 场景作业收尾:课包的费用与时长进账本,消息的 artifacts 记课包 id
+    if (tutor === 'scene-maker') {
+      const r = await this.settleSceneLedger(ws, tutor, date, job, latest.messages.find((m) => m.job === job)?.text ?? '', transcript, timing);
+      if (r.id || r.warnings.length) next = { ...next, messages: next.messages.map((m) => (m.job === job ? { ...m, ...(r.id ? { artifacts: [r.id] } : {}), ...(r.warnings.length ? { warnings: [...(m.warnings ?? []), ...r.warnings] } : {}) } : m)) };
+    }
     // 转交:自动起目标老师的一轮;起不了的原因记进 warnings。给 scene-maker 的先把课包 id 理顺(refs 没写对就取卡上的;已占用就改成 -2,卡与 refs 一起改)
     if (kidView.handoff) {
       const fixed = kidView.handoff.to === 'scene-maker' ? this.settleBundleId(ws, kidView.handoff, kidView.section) : { handoff: kidView.handoff, section: kidView.section, warnings: [] as string[] };

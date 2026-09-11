@@ -1,7 +1,7 @@
 /**
  * 对话索引的纯函数:日期与 job 命名、空索引、把一次运行的结果并进索引(不改旧对象)。
  */
-import { ConversationIndexSchema, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
+import { ConversationIndexSchema, type ConversationIndex, type ConversationMessage, type Timing } from '../schema/index.ts';
 import type { KidView } from './kid-view.ts';
 import type { Transcript } from './transcript.ts';
 
@@ -100,11 +100,11 @@ export function addMessage(index: ConversationIndex, msg: ConversationMessage): 
   return { ...index, messages: [...index.messages, msg] };
 }
 
-/** 一次运行收尾:写 result / cost / kidText / artifacts,首次拿到 session 就记下 */
+/** 一次运行收尾:写 result / cost / kidText / artifacts / timing,首次拿到 session 就记下 */
 export function applyRun(
   index: ConversationIndex,
   job: string,
-  run: { transcript: Transcript; kidView: KidView; runtime: string; artifacts?: string[]; audio?: string | null },
+  run: { transcript: Transcript; kidView: KidView; runtime: string; artifacts?: string[]; audio?: string | null; timing?: Timing },
 ): ConversationIndex {
   const { transcript, kidView } = run;
   const messages = index.messages.map((m) =>
@@ -123,6 +123,7 @@ export function applyRun(
           ...(kidView.warnings.length ? { warnings: kidView.warnings } : {}),
           error: transcript.final?.ok === false ? transcript.final.reason : null,
           audio: run.audio ?? null,
+          ...(run.timing ? { timing: run.timing } : {}),
         }
       : m,
   );

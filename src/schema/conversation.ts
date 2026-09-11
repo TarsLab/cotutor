@@ -9,6 +9,18 @@ import { HandoffSchema, HoldupAskSchema } from './sections.ts';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+export const TimingSchema = z.object({
+  /** 进程起来的时刻(ISO,精确到毫秒;消息的 at 只到分钟) */
+  startedAt: z.string().min(1),
+  /** 流式时第一张卡闭合(孩子端第一次看到东西);整块出的运行时没有 */
+  firstCardMs: z.number().int().nonnegative().optional(),
+  /** 老师进程退出 */
+  doneMs: z.number().int().nonnegative().optional(),
+  /** 讲稿配音收尾(索引写好、孩子端能播的那一刻);没配音就没有 */
+  dubbedMs: z.number().int().nonnegative().optional(),
+});
+export type Timing = z.infer<typeof TimingSchema>;
+
 export const ConversationMessageSchema = z.object({
   /** 一轮的 id(job),也是转录文件名的一段:<date>.<job>.log */
   job: z.string().min(1),
@@ -45,6 +57,8 @@ export const ConversationMessageSchema = z.object({
   cards: z.array(z.object({ card: z.string().min(1), text: z.string() })).optional(),
   /** kidText 的配音文件名(conversations/<老师>/ 下,如 2026-09-09.1620-1.mp3);null = 没合成(老师没配音色、tts 运行时没配或失败) */
   audio: z.string().nullable().optional(),
+  /** 这轮的用时(埋点,2026-09-11):都是从 startedAt 起的毫秒数;家长视图每轮一行「首卡 10s · 整轮 23s」 */
+  timing: TimingSchema.optional(),
 });
 export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 

@@ -207,18 +207,40 @@ export const PARENT_PAGE = `<!doctype html>
     return out;
   };
 
+  // 用时:10 秒内带一位小数,两分钟内整秒,再长按分钟
+  const secs = (ms) => (ms < 10000 ? (ms / 1000).toFixed(1) + 's' : ms < 120000 ? Math.round(ms / 1000) + 's' : Math.round(ms / 6000) / 10 + 'min');
+  const timingText = (m) => {
+    const parts = [];
+    if (m.timing) {
+      if (m.timing.firstCardMs !== undefined) parts.push('首卡 ' + secs(m.timing.firstCardMs));
+      if (m.timing.doneMs !== undefined) parts.push('整轮 ' + secs(m.timing.doneMs));
+      if (m.timing.dubbedMs !== undefined) parts.push('配音 ' + secs(m.timing.dubbedMs));
+    }
+    if (m.costUsd !== undefined) parts.push('$' + m.costUsd.toFixed(2));
+    if (m.artifacts && m.artifacts.length) parts.push('课包 ' + m.artifacts.join(', '));
+    return parts.length ? ' · ' + parts.join(' · ') : '';
+  };
+  const median = (xs) => { const a = xs.slice().sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : null; };
+  const daySummary = (index) => {
+    const done = index.messages.filter((m) => m.result !== 'running');
+    const first = median(done.map((m) => m.timing && m.timing.firstCardMs).filter((x) => x !== undefined && x !== null));
+    const whole = median(done.map((m) => m.timing && m.timing.doneMs).filter((x) => x !== undefined && x !== null));
+    return ['今日 ' + index.messages.length + ' 轮', '费用 $' + index.costUsd.toFixed(2), first !== null ? '首卡中位 ' + secs(first) : null, whole !== null ? '整轮中位 ' + secs(whole) : null].filter(Boolean).join(' · ');
+  };
+
   const renderDay = () => {
     const v = state.view;
     const t = state.config.tutors.find((x) => x.name === state.tutor) || { display: state.tutor };
     if (!v.index.messages.length) { $('#msgs').replaceChildren(h('p', { class: 'empty' }, state.date + ' 还没和' + t.display + '说过话')); return; }
     const FROM = { kid: '孩子', parent: '家长', system: '系统' };
-    const nodes = v.index.messages.map((m) => {
+    const nodes = [h('div', { class: 'meta', style: 'text-align:center' }, daySummary(v.index))];
+    nodes.push(...v.index.messages.map((m) => {
       const el = h('div', { class: 'msg from-' + m.from });
       el.append(h('div', { class: 'meta' }, FROM[m.from] || m.from, ' · ', m.at, ' · ', m.job, m.runtime ? ' · ' + m.runtime : '', m.focus && m.focus.artifact ? ' · 看着 ' + m.focus.artifact + (m.focus.step !== undefined ? ' 第 ' + m.focus.step + ' 步' : '') : '', m.focus && m.focus.card ? ' · 开着卡 ' + m.focus.card : '', m.action === 'continue' ? ' · 继续' : m.action === 'submit' ? ' · 交给老师' : ''));
       if (m.cards && m.cards.length) el.append(h('div', { class: 'kid' }, '孩子在板书上做的:', ...m.cards.map((c) => h('div', {}, h('b', {}, c.card + ' ' + c.text)))));
       el.append(h('div', { class: 'bubble in' }, m.text));
       const rows = v.runs[m.job] || [];
-      const run = h('div', { class: 'run' }, h('div', { class: 'meta' }, (t.avatar || '') + ' ' + t.display), ...rowsEl(rows));
+      const run = h('div', { class: 'run' }, h('div', { class: 'meta' }, (t.avatar || '') + ' ' + t.display + timingText(m)), ...rowsEl(rows));
       if (m.result === 'running') run.append(h('div', { class: 'running' }, v.running === m.job ? '老师在想……' : '(没跑完:服务重启过或进程被杀,看 ' + m.job + '.err.log)'));
       el.append(run);
       if (m.result === 'error') el.append(h('div', { class: 'err' }, '本轮出错:' + (m.error || '未知') + (v.errors[m.job] ? '\\n' + v.errors[m.job] : '')));
@@ -233,8 +255,8 @@ export const PARENT_PAGE = `<!doctype html>
       }
       if (m.handoff) el.append(h('div', { class: 'kid' }, '转交 → ' + m.handoff.to + (m.handoff.why ? ':' + m.handoff.why : ''), m.handoffJob ? h('span', { class: 'none' }, ' · 已起 ' + m.handoffJob.tutor + ' 的 ' + m.handoffJob.job) : h('span', { class: 'none' }, ' · 没起(见提醒)')));
       return el;
-    });
-    nodes.push(h('div', { class: 'meta', style: 'text-align:center' }, '今日费用 $' + v.index.costUsd.toFixed(2), v.index.session ? ' · 会话 ' + v.index.session.id.slice(0, 8) + '(' + v.index.session.runtime + ')' : ''));
+    }));
+    nodes.push(h('div', { class: 'meta', style: 'text-align:center' }, daySummary(v.index), v.index.session ? ' · 会话 ' + v.index.session.id.slice(0, 8) + '(' + v.index.session.runtime + ')' : ''));
     $('#msgs').replaceChildren(...nodes);
   };
 

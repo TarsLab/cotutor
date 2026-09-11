@@ -52,6 +52,9 @@ export const ArtifactEventSchema = z.object({
   source: z.object({ conversation: z.string().min(1), job: z.string().optional() }).optional(),
   /** manifest 指纹,同内容重出验收延续;验收开关关掉时可以没有 accepted 行 */
   hash: z.string().optional(),
+  /** 做这个产物花的钱与时长(应用在 scene-maker 那轮收尾时追加,老师自己不写) */
+  costUsd: z.number().nonnegative().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
 });
 export type ArtifactEvent = z.infer<typeof ArtifactEventSchema>;
 
@@ -65,6 +68,8 @@ export interface Artifact {
   path?: string;
   source?: ArtifactEvent['source'];
   hash?: string;
+  costUsd?: number;
+  durationMs?: number;
   /** 最后一次事件时间 */
   updatedAt: string;
 }

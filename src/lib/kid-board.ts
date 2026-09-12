@@ -78,13 +78,35 @@ export function cardTexts(card: BoardCard): string[] {
   }
 }
 
-/** 讲稿里方括号的词落到哪张卡:第一张含这个词的卡;找不到的词丢掉(只出字幕,不报错) */
+const ALNUM = /[0-9A-Za-z]/;
+
+/**
+ * 词在一段字里的位置,数字与拉丁词按整词算(「5」不落在「25」里、「an」不落在「and」里),中文照子串;没有 → -1。
+ * 标注锚点(anchorMarks)与页面画笔的落点都用它,两处一条规则。
+ */
+export function findPhrase(text: string, phrase: string): number {
+  if (!phrase) return -1;
+  const headWord = ALNUM.test(phrase[0]);
+  const tailWord = ALNUM.test(phrase[phrase.length - 1]);
+  let from = 0;
+  while (from <= text.length) {
+    const i = text.indexOf(phrase, from);
+    if (i < 0) return -1;
+    const before = i > 0 ? text[i - 1] : '';
+    const after = i + phrase.length < text.length ? text[i + phrase.length] : '';
+    if (!(headWord && ALNUM.test(before)) && !(tailWord && ALNUM.test(after))) return i;
+    from = i + 1;
+  }
+  return -1;
+}
+
+/** 讲稿里方括号的词落到哪张卡:第一张含这个词(整词,见 findPhrase)的卡;找不到的词丢掉(只出字幕,不报错) */
 export function anchorMarks(cards: readonly BoardCard[], phrases: readonly string[]): BoardMark[] {
   const out: BoardMark[] = [];
   for (const raw of phrases) {
     const phrase = raw.trim();
     if (!phrase) continue;
-    const card = cards.findIndex((c) => cardTexts(c).some((t) => t.includes(phrase)));
+    const card = cards.findIndex((c) => cardTexts(c).some((t) => findPhrase(t, phrase) >= 0));
     if (card >= 0) out.push({ card, phrase });
   }
   return out;

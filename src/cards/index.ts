@@ -31,6 +31,19 @@ export function cardKind(name: string): CardKind | undefined {
   return CARD_KINDS.find((k) => k.name === name) as CardKind | undefined;
 }
 
+/** 正文是「字」的卡:老师把讲稿的 [词] 标注语法写进这些卡时,把括号剥掉(2026-09-11 真跑:孩子看到了「[直角边]」);choice 的 - [ ] / - [x] 不动 */
+const TEXTUAL = new Set(['text', 'read', 'choice', 'fill', 'image']);
+const MARK_IN_CARD = /\[([^\[\]\n]+)\]/g;
+function unmark(body: string): { body: string; had: boolean } {
+  let had = false;
+  const out = body.replace(MARK_IN_CARD, (m, inner: string) => {
+    if (/^[ xX]$/.test(inner)) return m;
+    had = true;
+    return inner;
+  });
+  return { body: out, had };
+}
+
 export interface ParsedCard {
   card: BoardCard;
   /** 没解析成时的一句(家长视图转录里显示);孩子端什么也不报 */
@@ -46,9 +59,10 @@ export function parseCard(tag: string, body: string): ParsedCard {
   if (!name) return { card: { kind: 'code', props: code.parse(body, []) } };
   const kind = cardKind(name.toLowerCase());
   if (!kind) return { card: { kind: 'code', props: code.parse(body, [name]) } };
+  const um = TEXTUAL.has(kind.name) ? unmark(body) : { body, had: false };
   try {
-    const props = kind.props.parse(kind.parse(body, mods)) as Record<string, unknown>;
-    return { card: { kind: kind.name, props } };
+    const props = kind.props.parse(kind.parse(um.body, mods)) as Record<string, unknown>;
+    return { card: { kind: kind.name, props }, ...(um.had ? { warning: `卡里的方括号去掉了:${name} — [词] 标注只写在讲稿句里,不写在卡里` } : {}) };
   } catch (err) {
     const why = err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join('.')}:${i.message}`).join(';') : err instanceof Error ? err.message : String(err);
     return { card: { kind: 'text', props: { text: body.trim() || name } }, warning: `卡片没解析成:${name} — ${why}` };

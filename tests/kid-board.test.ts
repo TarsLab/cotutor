@@ -6,6 +6,7 @@ import {
   cardTexts,
   cardTitle,
   filledAnswers,
+  findPhrase,
   hasState,
   isHeavy,
   sceneReady,
@@ -48,6 +49,9 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   check('卡上的字都能被找到;不认识的 kind 拿 props 里的字符串', cardTexts(cards[2]).join('|') === '楚有祠者|先成者饮酒' && cardTexts(cards[3]).join('|') === '酒是谁的?|他自己的|第二个画完的' && cardTexts(cards[5]).join('|') === 'x|场景' && cardTexts(cards[0])[0] === '画蛇添足');
   const marks = anchorMarks(cards, ['多做一步,反而坏事', '先成者饮酒', '第二个画完的', '不存在的词', '  ']);
   check('方括号的词落到第一张含它的卡;找不到的丢掉', JSON.stringify(marks.map((m) => m.card)) === '[1,2,3]', JSON.stringify(marks));
+  check('整词匹配:数字 / 拉丁词不落在别的数字 / 词里,中文照子串', findPhrase('9 加 16 等于 25', '5') === -1 && findPhrase('选 5 个', '5') === 2 && findPhrase('25 和 5', '5') === 5 && findPhrase('and an', 'an') === 4 && findPhrase('三角形的面积', '面积') === 4 && findPhrase('x', '') === -1 && findPhrase('5', '5') === 0);
+  const numCards: BoardCard[] = [{ kind: 'text', props: { text: '9 加 16 等于 25' } }, { kind: 'choice', props: { question: '斜边是多少?', options: ['6', '7', '5'] } }];
+  check('讲稿 [5] 落到选项 5 的卡,不落在「25」里', anchorMarks(numCards, ['5'])[0].card === 1 && anchorMarks(numCards, ['25'])[0].card === 0);
   check('画蛇添足 落到封面(第一张含它的)', anchorMarks(cards, ['画蛇添足'])[0].card === 0);
   check('讲稿里的 [词] 按顺序取出,念的时候去括号', phrasesIn('它有两个来头:[出处]在《战国策》,[用法]是批评人。').join() === '出处,用法' && plainLine('[画蛇添足]是成语') === '画蛇添足是成语');
   check('笔的样子按卡定', markStyle(cards[0]) === 'marker' && markStyle(cards[1]) === 'marker' && markStyle(cards[2]) === 'marker' && markStyle(cards[3]) === 'box' && markStyle(cards[4]) === 'box' && markStyle({ kind: 'text', props: { style: 'formula', text: 'x' } }) === 'green' && markStyle({ kind: 'text', props: { text: 'x' } }) === 'wave' && markStyle(cards[5]) === 'wave');

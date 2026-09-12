@@ -168,10 +168,13 @@ const PAGE = `<!doctype html>
   .rd.on { background:var(--hi); }
   .c-choice { background:var(--blue); display:flex; flex-direction:column; gap:8px; }
   .ch-q { font-weight:600; }
+  .ch-os { display:flex; flex-direction:column; gap:8px; }
+  .ch-os.short { flex-direction:row; flex-wrap:wrap; }
+  .ch-os.short .ch-o { flex:1 1 auto; min-width:88px; }
   .ch-o { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:12px; background:var(--card); font-size:16px; }
   .ch-o i { flex:0 0 auto; width:24px; height:24px; border-radius:50%; border:2px solid var(--line); display:grid; place-items:center; font-style:normal; font-size:12px; font-weight:700; color:var(--dim); }
   .c-fill { background:var(--cream); font-size:18px; line-height:2; white-space:pre-line; }
-  .bl { display:inline-block; min-width:64px; border-bottom:2px solid var(--ink); margin:0 4px; padding:0 6px; line-height:1.3; vertical-align:baseline; }
+  .bl { display:inline-block; min-width:4em; border-bottom:2px solid var(--ink); margin:0 4px; padding:0 6px; line-height:1.3; vertical-align:baseline; }
   .c-image { padding:0; overflow:hidden; background:var(--card); }
   .c-image img { display:block; width:100%; max-height:320px; object-fit:cover; }
   .c-image .cap { padding:10px 16px; font-size:15px; color:#5a5650; white-space:pre-line; }
@@ -439,7 +442,9 @@ __BOARD_JS__
       case 'choice': {
         const picked = (c.state && Array.isArray(c.state.picked)) ? c.state.picked : [];
         if (stage) return box('choice', h('div', { class: 'sq' }, p.question || ''), ...(p.options || []).map((o, i) => h('button', { type: 'button', class: 'so' + (picked.includes(i) ? ' on' : ''), on: { click: () => pick(secIdx, idx, i) } }, h('i', {}, picked.includes(i) ? h('span', { html: ICON.check }) : 'ABCDEFGH'[i] || ''), o)));
-        return box('choice', h('div', { class: 'ch-q' }, p.question || ''), ...(p.options || []).map((o, i) => h('div', { class: 'ch-o' + (picked.includes(i) ? ' on' : '') }, h('i', {}, 'ABCDEFGH'[i] || ''), o)));
+        // 选项都短(≤ 4 个字)就横排成一行胶囊,不然三个一位数的答案各占一整行(2026-09-11 截图)
+        const short = (p.options || []).length > 0 && (p.options || []).every((o) => Array.from(String(o)).length <= 4);
+        return box('choice', h('div', { class: 'ch-q' }, p.question || ''), h('div', { class: 'ch-os' + (short ? ' short' : '') }, ...(p.options || []).map((o, i) => h('div', { class: 'ch-o' + (picked.includes(i) ? ' on' : '') }, h('i', {}, 'ABCDEFGH'[i] || ''), o))));
       }
       case 'fill': {
         const el = box('fill');
@@ -593,7 +598,7 @@ __BOARD_JS__
     const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
     let n;
     while ((n = walker.nextNode())) {
-      const i = n.nodeValue.indexOf(mark.phrase);
+      const i = findPhrase(n.nodeValue, mark.phrase);
       if (i < 0 || n.parentElement.classList.contains('mk')) continue;
       const range = document.createRange(); range.setStart(n, i); range.setEnd(n, i + mark.phrase.length);
       const span = document.createElement('span'); span.className = 'mk mk-' + markStyle(cardData);

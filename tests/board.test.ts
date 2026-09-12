@@ -32,6 +32,8 @@ for (const f of fixtures) {
   const { cards, lines } = r.section;
   check('围栏 = 卡:text cover 拆标题副标题;不认识的标签当代码卡(lang = 标签);没标签的围栏也是代码卡', cards.length === 3 && cards[0].kind === 'text' && cards[0].props.style === 'cover' && cards[0].props.title === '三角形' && cards[0].props.text === '拼一拼' && cards[1].kind === 'code' && cards[1].props.lang === 'python' && cards[1].props.text === 'print(1)' && cards[2].kind === 'code' && cards[2].props.lang === null, JSON.stringify(cards));
   check('段落 = 讲稿:三句,末句问句', lines.length === 3 && lines[0].text === '开场一句。' && lines[2].ask && !lines[1].ask, JSON.stringify(lines.map((l) => l.text)));
+  const hb = parseBoard('```text\n# 两大类型\n```\n\n```text\n# 认边\n两条短边叫直角边\n```\n\n讲[直角边]。\n\n```text\n# 小结\n```\n\n再讲一句。\n');
+  check('小节标题行是 heading 卡:句子锚到它前面 / 后面的真卡,标注不落在它上面', hb.section.cards[0].props.heading === true && hb.section.cards[2].props.heading === true && hb.section.lines[0].anchor === 1 && hb.section.lines[1].anchor === 1 && hb.section.lines[0].marks[0]?.card === 1 && hb.warnings.length === 0, JSON.stringify(hb.section.lines));
   check('[词] → 标注落到含它的卡;念的时候去括号', lines[1].marks[0]?.card === 0 && lines[1].marks[0]?.phrase === '三角形' && lines[1].text === '讲三角形这张卡。');
   check('[[cue]] → 对上一张卡的动作,句子里不留痕', lines[1].cues[0]?.name === 'open' && lines[1].cues[0]?.card === 0 && lines[2].cues[0]?.name === 'step' && lines[2].cues[0]?.arg === '3' && lines[2].cues[0]?.card === 2 && lines[2].text === '看代码 吧?'.replace(' ', ' '), JSON.stringify(lines.map((l) => [l.text, l.cues])));
   check('锚点:开场句 null,之后是上一张卡', lines[0].anchor === null && lines[1].anchor === 0 && lines[2].anchor === 2);

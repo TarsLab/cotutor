@@ -51,7 +51,7 @@ const PAGE = `<!doctype html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="__SHORT__">
-<meta name="theme-color" content="#f6f4ee">
+<meta name="theme-color" content="#faf9f4">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="icon" href="/icon-192.png">
@@ -166,8 +166,8 @@ const PAGE = `<!doctype html>
     #home .tutors { gap:40px; } #home .tutor { width:140px; } #home .tutor .av { width:120px; height:120px; font-size:56px; }
     #home .sug { grid-column:1; } #home .side { grid-column:2; grid-row:2 / span 3; display:flex; flex-direction:column; gap:14px; }
     #main header { padding-left:32px; padding-right:32px; }
-    #board { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-content:start; width:100%; max-width:1040px; margin:0 auto; padding:16px 32px 24px; }
-    #sub, #bar { width:100%; max-width:760px; margin:0 auto; }
+    #board { width:100%; max-width:1040px; margin:0 auto; padding:16px 32px 24px; }
+    #sub, #bar { width:100%; max-width:1040px; margin:0 auto; padding-left:32px; padding-right:32px; }
   }
 </style>
 <div id="home">
@@ -260,7 +260,7 @@ __BOARD_JS__
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, echo: null, echoTimer: null, pending: false, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, echo: null, echoTimer: null, pending: false, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone' };
   try { S.autoplay = localStorage.getItem('kid-autoplay') !== '0'; } catch {}
 
   // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音退回浏览器合成;都没有按字数计时 ----
@@ -343,16 +343,17 @@ __BOARD_JS__
   // 卡片:按 kind 分支(轻插件内联;不认识的 kind 把 props 里的字都显示出来)。紧凑态只读,点了开舞台;stage=true 是舞台里的画法
   const renderCard = (c, idx, secIdx, stage) => {
     const p = c.props || {};
-    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, on: stage ? {} : { click: () => openStage(secIdx, idx) } }, ...kids);
+    // 每张卡带底色槽与字形槽(后期定的 look,没有就机械规则);名字对不上主题的,CSS 落回 paper / plain
+    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), on: stage ? {} : { click: () => openStage(secIdx, idx) } }, ...kids);
     switch (c.kind) {
       case 'text': {
+        if (isHeading(c)) return h('div', { class: 'heading', 'data-card': idx }, p.title || '');
         const st = p.style;
-        if (st === 'cover') return box('cover', h('span', { class: 't' }, p.title || ''), p.text ? h('span', { class: 's' }, p.text) : null);
-        if (st === 'note') return box('note', p.text || '');
-        if (st === 'quote') return box('quote', '「' + (p.text || '') + '」');
-        if (st === 'formula') return box('formula', p.text || '');
-        if (st === 'step') return box('step', h('div', { class: 'st-t' }, p.title || ''), h('div', {}, p.text || ''));
-        return box('text', p.text || '');
+        const emoji = c.look && c.look.emoji ? c.look.emoji + ' ' : '';
+        const title = p.title ? h('div', { class: 'ct' }, emoji + p.title) : null;
+        const text = st === 'quote' ? '「' + (p.text || '') + '」' : (p.text || '');
+        const body = text ? h('div', { class: 'cb' }, text) : null;
+        return box(st === 'cover' ? 'cover' : 'text', title, body);
       }
       case 'read':
         return box('read', ...(p.segments || []).map((seg, k) => h('div', { class: 'rd', on: { click: (e) => { e.stopPropagation(); readSegment(e.currentTarget, c, k, seg); } } }, seg)));
@@ -369,15 +370,17 @@ __BOARD_JS__
         return box('choice', h('div', { class: 'ch-q' }, p.question || ''), h('div', { class: 'ch-os' + (short ? ' short' : '') }, ...(p.options || []).map((o, i) => h('div', { class: 'ch-o' + (picked.includes(i) ? ' on' : '') }, h('i', {}, 'ABCDEFGH'[i] || ''), o))));
       }
       case 'fill': {
-        const el = box('fill');
+        // 句子与空放在一个 .cb 里(卡本身是 flex 列,直接塞文字节点会一段一行)
+        const body = h('div', { class: 'cb' });
+        const el = box('fill', body);
         const parts = String(p.text || '').split(/_{2,}/);
         const got = filledAnswers(c);
         if (stage) {
-          el.classList.add('fq');
-          parts.forEach((t, i) => { el.append(t); if (i < parts.length - 1) el.append(h('input', { class: 'fi', type: 'text', value: got[i] || '', autocomplete: 'off', enterkeyhint: 'done', on: { input: (e) => fillIn(secIdx, idx, i, e.target.value), keydown: (e) => { if (e.key === 'Enter') e.target.blur(); }, click: (e) => e.stopPropagation() } })); });
+          body.classList.add('fq');
+          parts.forEach((t, i) => { body.append(t); if (i < parts.length - 1) body.append(h('input', { class: 'fi', type: 'text', value: got[i] || '', autocomplete: 'off', enterkeyhint: 'done', on: { input: (e) => fillIn(secIdx, idx, i, e.target.value), keydown: (e) => { if (e.key === 'Enter') e.target.blur(); }, click: (e) => e.stopPropagation() } })); });
           return el;
         }
-        parts.forEach((t, i) => { el.append(t); if (i < parts.length - 1) el.append(h('span', { class: 'bl' + (got[i] ? ' f' : '') }, got[i] || '\\u200b')); });
+        parts.forEach((t, i) => { body.append(t); if (i < parts.length - 1) body.append(h('span', { class: 'bl' + (got[i] ? ' f' : '') }, got[i] || '\\u200b')); });
         return el;
       }
       case 'scene': {
@@ -391,9 +394,9 @@ __BOARD_JS__
         return box('canvas', h('div', { class: 'cp' }, p.prompt || '画一画'), h('div', { class: 'cb' }, n ? '已经画了 ' + n + ' 笔,点开接着画' : '点开画一画 ✎'));
       }
       case 'code':
-        return box('code', p.lang ? h('span', { class: 'lg' }, p.lang) : null, p.text || '');
+        return box('code', p.lang ? h('span', { class: 'lg' }, p.lang) : null, h('div', { class: 'cb' }, p.text || ''));
       default:
-        return box('text', cardTexts(c).filter(Boolean).join('\\n'));
+        return box('text', h('div', { class: 'cb' }, cardTexts(c).filter(Boolean).join('\\n')));
     }
   };
   /** 点读:点哪段念哪段——服务端配好的段(card.assets 里有 <段号>.mp3)放 mp3,没好的用浏览器合成声;讲稿在播就先停下 */
@@ -427,23 +430,48 @@ __BOARD_JS__
     const up = (e) => { pts.delete(e.pointerId); start = pts.size ? { scale, tx, ty, d: pts.size === 2 ? dist() : 0, x: [...pts.values()][0].x, y: [...pts.values()][0].y } : null; };
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   };
-  const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i }, ...s.cards.map((c, idx) => renderCard(c, idx, i, false)));
-  /** 老师还在说:这节的卡按下标只追加(下标 = 它跑完后会得到的节号,总是最后一节);讲稿不播,声音整轮跑完再从头起 */
+  const sectionHead = (s) => h('div', { class: 'sh' }, (s.at ? clock(s.at) + ' · ' : '') + sectionTitle(s));
+  const rowEl = (n, ...kids) => h('div', { class: 'row', style: 'grid-template-columns:repeat(' + n + ',minmax(0,1fr))' }, ...kids);
+  /** 一节 = 头一行(时间 · 节名)+ 若干行;行是后期为某个端分的,渲染器按当前端折(rowsFor) */
+  const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i }, sectionHead(s), ...rowsFor(s, S.device).map((row) => rowEl(row.length, ...row.map((idx) => renderCard(s.cards[idx], idx, i, false)))));
+  /** 老师还在说:这节的卡按下标只追加、一行一张(没有排版);讲稿不播,声音整轮跑完再从头起 */
   const renderPartial = (e) => {
     const idx = S.sections.length;
-    if (!S.partial || S.partial.job !== e.job) { if (S.partial) S.partial.el.remove(); S.partial = { job: e.job, el: h('div', { class: 'sec', 'data-sec': idx }) }; $('#board').append(S.partial.el); }
+    if (!S.partial || S.partial.job !== e.job) { if (S.partial) S.partial.el.remove(); S.partial = { job: e.job, el: h('div', { class: 'sec', 'data-sec': idx }, sectionHead(e)) }; $('#board').append(S.partial.el); }
     const el = S.partial.el;
-    for (let i = el.children.length; i < e.cards.length; i++) { const c = renderCard(e.cards[i], i, idx, false); el.append(c); c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    for (let i = el.children.length - 1; i < e.cards.length; i++) { const c = renderCard(e.cards[i], i, idx, false); el.append(rowEl(1, c)); c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
   };
-  /** 一张卡的状态变了:紧凑态原地重画(标注会掉,重画本节已播到的) */
+  /** 一张卡的状态变了:紧凑态原地重画(标注会掉,重画本节已播到的;选中态照旧) */
   const repaintCard = (secIdx, idx) => {
     const sec = $('#board').querySelector('[data-sec="' + secIdx + '"]');
     const old = sec && sec.querySelector('[data-card="' + idx + '"]');
     if (!old) return;
-    old.replaceWith(renderCard(S.sections[secIdx].cards[idx], idx, secIdx, false));
+    const fresh = renderCard(S.sections[secIdx].cards[idx], idx, secIdx, false);
+    if (old.classList.contains('now')) fresh.classList.add('now');
+    old.replaceWith(fresh);
     const upTo = S.state.section === secIdx ? S.state.line : S.state.section > secIdx ? undefined : -1;
-    if (upTo !== -1) for (const l of S.sections[secIdx].lines.slice(0, upTo === undefined ? undefined : upTo + 1)) for (const m of l.marks) if (m.card === idx) applyMark(secIdx, m);
+    if (upTo !== -1) for (const l of S.sections[secIdx].lines.slice(0, upTo === undefined ? undefined : upTo + 1)) for (const m of l.marks) if (m.card === idx) applyMark(secIdx, m, false);
   };
+  /** 选中态:一节里同一时刻只有一张(讲到哪张亮哪张;舞台开着时是舞台那张;停下等答停在末句的卡) */
+  const setNow = (secIdx, idx) => {
+    for (const x of document.querySelectorAll('#board .c.now')) x.classList.remove('now');
+    if (secIdx === null || idx === null) return;
+    const el = $('#board').querySelector('[data-sec="' + secIdx + '"] [data-card="' + idx + '"]');
+    if (el) el.classList.add('now');
+  };
+  const showNow = () => setNow(S.state.section, nowCard(S.sections, S.state));
+  /** 换端(转屏)或窗口变了:整节按新端重排,标注按已播到的画齐,选中态照旧 */
+  const relayout = () => {
+    const d = debug.get('device') || deviceFor(innerWidth, innerHeight);
+    if (d !== S.device) {
+      S.device = d;
+      S.sections.forEach((s, i) => { const old = $('#board').querySelector('[data-sec="' + i + '"]'); if (old && !(S.partial && S.partial.el === old)) { old.replaceWith(renderSection(s, i)); const upTo = S.state.section === i ? S.state.line : S.state.section > i ? undefined : -1; if (upTo !== -1) paintAll(i, upTo); } });
+      if (S.stage) setNow(S.stage.section, S.stage.card); else showNow();
+    } else for (const span of document.querySelectorAll('#board .mk[data-pen]')) { const card = span.closest('.c'); if (card && LINE_PENS.includes(span.dataset.pen)) drawPen(span, card, span.dataset.pen, false); }
+  };
+  let relayoutTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(relayoutTimer); relayoutTimer = setTimeout(relayout, 150); });
+  S.device = debug.get('device') || deviceFor(innerWidth, innerHeight);
 
   // ---- 舞台:点卡放大,交互都在这里;开着时讲稿暂停,关了字幕行出「播放」 ----
   const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', scene: '讲解动画', canvas: '画一画', code: '' };
@@ -460,6 +488,7 @@ __BOARD_JS__
     $('#st-kd').hidden = !(KIND_NAME[card.kind] || card.kind);
     renderStage();
     $('#stage').classList.add('on');
+    setNow(secIdx, idx);
   };
   const STAGE_SOURCE = 'cotutor-stage';
   const frame = $('#st-frame');
@@ -489,7 +518,7 @@ __BOARD_JS__
   });
   /** 讲稿委托给场景播完(或孩子关了)→ 接着念下一句 */
   const resumeAfter = (d) => { if (S.state.status !== 'stage') return; S.state = advance({ ...S.state, status: 'playing' }, S.sections); if (S.state.status === 'playing') playLine(); else renderSubtitle(); };
-  const closeStage = () => { S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); };
+  const closeStage = () => { S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); showNow(); };
   $('#st-x').innerHTML = ICON.close;
   $('#st-x').addEventListener('click', closeStage);
   /** 选择题:点一项 → 本地改状态、重画、PUT 到服务端(失败不响,下次再点再存) */
@@ -512,19 +541,43 @@ __BOARD_JS__
     closeStage();
     send('', { action: 'submit', focus: { card: id }, echoText: '你:' + labels.join('、') });
   });
-  const applyMark = (secIdx, mark) => {
+  const NS = 'http://www.w3.org/2000/svg';
+  /** 线条类的笔:被标注的字每一行一段 SVG 路径,贴在卡上(卡是 position:relative);animate = 描出来(dashoffset 从全长到 0) */
+  const drawPen = (span, card, pen, animate) => {
+    for (const old of span._pens || []) old.remove();
+    span._pens = [];
+    const cr = card.getBoundingClientRect();
+    const rects = [...span.getClientRects()].filter((r) => r.width > 0);
+    rects.forEach((r, k) => {
+      const b = penBox(pen, r.width, r.height);
+      const svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('class', 'pen pen-' + pen);
+      svg.setAttribute('viewBox', '0 0 ' + b.w + ' ' + b.h);
+      svg.style.left = (r.left - cr.left - card.clientLeft + b.x) + 'px';
+      svg.style.top = (r.top - cr.top - card.clientTop + b.y) + 'px';
+      svg.style.width = b.w + 'px'; svg.style.height = b.h + 'px';
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', penPath(pen, b.w, b.h, span.dataset.phrase + ':' + k));
+      svg.append(path); card.append(svg); span._pens.push(svg);
+      if (animate) { const L = path.getTotalLength(); path.style.strokeDasharray = L; path.style.strokeDashoffset = L; requestAnimationFrame(() => { svg.classList.add('draw'); path.style.strokeDashoffset = 0; }); }
+    });
+  };
+  /** 一处标注落到卡上:找到词、包一个 span、按笔画;animate 缺省 true(播到这句时),画齐 / 重画时 false */
+  const applyMark = (secIdx, mark, animate) => {
     const sec = $('#board').querySelector('[data-sec="' + secIdx + '"]');
     const card = sec && sec.querySelector('[data-card="' + mark.card + '"]');
-    if (!card) return null;
+    if (!card || !card.classList.contains('c')) return null;
     const cardData = S.sections[secIdx].cards[mark.card];
     const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
     let n;
     while ((n = walker.nextNode())) {
       const i = findPhrase(n.nodeValue, mark.phrase);
-      if (i < 0 || n.parentElement.classList.contains('mk')) continue;
+      if (i < 0 || n.parentElement.closest('.mk')) continue;
+      const pen = mark.pen || penFor(cardData, mark.phrase);
       const range = document.createRange(); range.setStart(n, i); range.setEnd(n, i + mark.phrase.length);
-      const span = document.createElement('span'); span.className = 'mk mk-' + markStyle(cardData);
+      const span = document.createElement('span'); span.className = 'mk mk-' + pen; span.dataset.pen = pen; span.dataset.phrase = mark.phrase;
       range.surroundContents(span);
+      if (LINE_PENS.includes(pen)) drawPen(span, card, pen, animate !== false);
       return card;
     }
     return card;
@@ -553,9 +606,10 @@ __BOARD_JS__
     const s = S.sections[S.state.section]; const line = s && s.lines[S.state.line];
     if (!line) { S.state = { ...S.state, status: 'done' }; renderSubtitle(); return; }
     renderSubtitle();
+    showNow();
     let target = null;
-    for (const m of line.marks) target = applyMark(S.state.section, m) || target;
-    if (!target) { const at = lineTarget(line); target = $('#board').querySelector('[data-sec="' + S.state.section + '"] ' + (at === null ? '.c' : '[data-card="' + at + '"]')); }
+    for (const m of line.marks) target = applyMark(S.state.section, m, true) || target;
+    if (!target) { const at = nowCard(S.sections, S.state); target = $('#board').querySelector('[data-sec="' + S.state.section + '"] ' + (at === null ? '.c' : '[data-card="' + at + '"]')); }
     if (target) target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     say(line, () => {
       if (S.state.status !== 'playing') return;
@@ -575,8 +629,8 @@ __BOARD_JS__
     const card = at !== null && S.sections[secIdx] && S.sections[secIdx].cards[at];
     if (card && hasState(card) && !S.stage) openStage(secIdx, at);
   };
-  /** 把一节的标注一次画齐(打开页面、不出声时) */
-  const paintAll = (secIdx, upTo) => { const s = S.sections[secIdx]; if (!s) return; for (const l of s.lines.slice(0, upTo === undefined ? s.lines.length : upTo + 1)) for (const m of l.marks) applyMark(secIdx, m); };
+  /** 把一节的标注一次画齐(打开页面、不出声时):不描,直接在 */
+  const paintAll = (secIdx, upTo) => { const s = S.sections[secIdx]; if (!s) return; for (const l of s.lines.slice(0, upTo === undefined ? s.lines.length : upTo + 1)) for (const m of l.marks) applyMark(secIdx, m, false); };
 
   const loadDay = async (silent) => {
     if (!S.tutor) return;
@@ -598,10 +652,9 @@ __BOARD_JS__
         S.played.add(e.job); S.sections.push(e); fresh.push(S.sections.length - 1);
         const idx = S.sections.length - 1;
         if (S.partial && S.partial.job === e.job) {
-          // 流式时先铺的卡留着,只补后面的;节的编号就是它现在的位置
+          // 流式时一行一张先铺着;跑完了按后期的行整节重画,节的编号就是它现在的位置
           const el = S.partial.el; S.partial = null;
-          for (let i = el.children.length; i < e.cards.length; i++) el.append(renderCard(e.cards[i], i, idx, false));
-          el.setAttribute('data-sec', idx);
+          el.replaceWith(renderSection(e, idx));
         } else $('#board').append(renderSection(e, idx));
       }
       if (S.partial && !entries.some((e) => e.partial && e.job === S.partial.job)) { S.partial.el.remove(); S.partial = null; }
@@ -611,7 +664,7 @@ __BOARD_JS__
       const stillPending = Boolean(d.pending) || d.messages.some((m) => m.pending);
       S.pending = stillPending;
       if (fresh.length) {
-        if (silent || !S.autoplay) { for (const i of fresh) paintAll(i); S.state = playerAtEnd(S.sections); renderSubtitle(); const last = $('#board').querySelector('[data-sec="' + (S.sections.length - 1) + '"] .c'); if (last) last.scrollIntoView({ block: 'start', behavior: 'instant' }); }
+        if (silent || !S.autoplay) { for (const i of fresh) paintAll(i); S.state = playerAtEnd(S.sections); renderSubtitle(); showNow(); const last = $('#board').querySelector('[data-sec="' + (S.sections.length - 1) + '"] .c'); if (last) last.scrollIntoView({ block: 'start', behavior: 'instant' }); }
         else { stopVoice(); S.state = startSection(fresh[0], S.sections); if (S.state.status === 'playing') playLine(); else renderSubtitle(); }
       } else renderSubtitle();
       renderHeader();
@@ -713,7 +766,7 @@ __BOARD_JS__
   // ---- 喇叭:自动朗读开关 ----
   const spk = $('#spk');
   const renderSpk = () => { spk.innerHTML = S.autoplay ? ICON.speaker : ICON.mute; spk.classList.toggle('on', S.autoplay); };
-  spk.addEventListener('click', () => { S.autoplay = !S.autoplay; try { localStorage.setItem('kid-autoplay', S.autoplay ? '1' : '0'); } catch {} renderSpk(); if (!S.autoplay && S.state.status === 'playing') { stopVoice(); paintAll(S.state.section); S.state = playerAtEnd(S.sections); renderSubtitle(); } });
+  spk.addEventListener('click', () => { S.autoplay = !S.autoplay; try { localStorage.setItem('kid-autoplay', S.autoplay ? '1' : '0'); } catch {} renderSpk(); if (!S.autoplay && S.state.status === 'playing') { stopVoice(); paintAll(S.state.section); S.state = playerAtEnd(S.sections); renderSubtitle(); showNow(); } });
   renderSpk();
 
   // ---- 输入条:相机 | 发消息或按住说话 | 加号 ----
@@ -781,7 +834,8 @@ __BOARD_JS__
     paintAll(sec, line);
     if (S.sections[sec].lines[line] && S.sections[sec].lines[line].ask && line === S.sections[sec].lines.length - 1 && sec === S.sections.length - 1) S.state.status = 'waiting';
     renderSubtitle();
-    const tgt = S.sections[sec].lines[line] ? lineTarget(S.sections[sec].lines[line]) : null;
+    showNow();
+    const tgt = nowCard(S.sections, S.state);
     const at = $('#board').querySelector('[data-sec="' + sec + '"] ' + (tgt === null ? '.c' : '[data-card="' + tgt + '"]'));
     if (at) at.scrollIntoView({ block: 'center', behavior: 'instant' });
     const st = debug.get('stage');

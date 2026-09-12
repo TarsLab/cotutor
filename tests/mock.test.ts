@@ -1,6 +1,6 @@
 /** 模拟接口:不经真实服务把孩子端喂起来——首页、板书节、发消息 → 想 → 追加一节、继续、脚本用完、上限、离线、页面。 */
 import { createMock } from '../src/server/mock.ts';
-import type { BoardSection } from '../src/lib/kid-board.ts';
+import { tintFor, type BoardSection } from '../src/lib/kid-board.ts';
 import { check, done } from './_check.ts';
 
 interface Msg { job: string; question: string | null; reply: string | null; pending: boolean; section: BoardSection | null; action?: string }
@@ -34,27 +34,23 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   // 卡的状态:数学老师首节有选择题 → PUT 状态假存、today 里并回卡上、答案仍剥;交给老师 → 下一节;「继续」不计次数
   const md = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   const mj = md.messages[0].job;
-  const ci = md.messages[0].section!.cards.findIndex((c) => c.kind === 'choice');
-  check('数学老师首节没有选择题?', ci < 0, String(ci));
-  await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '一样的' });
-  await m.settle();
-  const md2 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  const mj2 = md2.messages[1].job;
-  const ci2 = md2.messages[1].section!.cards.findIndex((c) => c.kind === 'choice');
-  check('第二节有选择题,答案剥掉,还没有状态', ci2 >= 0 && !('answer' in md2.messages[1].section!.cards[ci2].props) && !('state' in md2.messages[1].section!.cards[ci2]));
-  check('PUT 坏状态 400、没这张卡 404、text 卡 400', (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj2}/${ci2}`, { picked: 'x' })).status === 400 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj2}/99`, { picked: [0] })).status === 404 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/0`, { picked: [0] })).status === 400);
-  const put = await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj2}/${ci2}`, { picked: [1] });
+  const mc = md.messages[0].section!.cards;
+  const ci = mc.findIndex((c) => c.kind === 'choice');
+  check('数学老师首节(勾股定理,原型样张):封面 night、# 标题的 text 是 sky、公式 paper、选择题在末尾且答案剥掉、没有状态', ci === mc.length - 1 && tintFor(mc[0]) === 'night' && mc[1].props.title === '认边' && tintFor(mc[1]) === 'sky' && tintFor(mc[2]) === 'paper' && tintFor(mc[ci]) === 'plum' && !('answer' in mc[ci].props) && !('state' in mc[ci]), JSON.stringify(mc.map((c) => [c.kind, tintFor(c)])));
+  check('末句问句锚到选择题;[25] 落在「验证」卡不落在别处', md.messages[0].section!.lines[md.messages[0].section!.lines.length - 1].anchor === ci && md.messages[0].section!.lines.some((l) => l.marks.some((mk) => mk.phrase === '25' && mc[mk.card].props.title === '验证')));
+  check('PUT 坏状态 400、没这张卡 404、text 卡 400', (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: 'x' })).status === 400 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/99`, { picked: [0] })).status === 404 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/1`, { picked: [0] })).status === 400);
+  const put = await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: [0] });
   const md3 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  check('PUT 状态 → today 里卡上有 state,答案还是没有', put.status === 200 && JSON.stringify(md3.messages[1].section!.cards[ci2].state) === '{"picked":[1]}' && !('answer' in md3.messages[1].section!.cards[ci2].props), JSON.stringify(md3.messages[1].section!.cards[ci2]));
-  const sub = await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'submit', focus: { card: `${mj2}/${ci2}` } });
+  check('PUT 状态 → today 里卡上有 state,答案还是没有', put.status === 200 && JSON.stringify(md3.messages[0].section!.cards[ci].state) === '{"picked":[0]}' && !('answer' in md3.messages[0].section!.cards[ci].props), JSON.stringify(md3.messages[0].section!.cards[ci]));
+  const sub = await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'submit', focus: { card: `${mj}/${ci}` } });
   await m.settle();
   const md4 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  check('交给老师:空文本 + action 也 202,问句是「(交了答案,没说话)」,下一节追加(脚本用完就收尾话)', sub.status === 202 && md4.messages[2].question === '(交了答案,没说话)' && md4.messages[2].reply !== null && !('action' in md4.messages[2]), JSON.stringify(md4.messages[2]));
+  check('交给老师:空文本 + action 也 202,问句是「(交了答案,没说话)」,下一节追加(反过来想 + 填空)', sub.status === 202 && md4.messages[1].question === '(交了答案,没说话)' && md4.messages[1].reply !== null && !('action' in md4.messages[1]) && md4.messages[1].section?.cards.some((c) => c.kind === 'fill') === true, JSON.stringify(md4.messages[1]));
   const before = md4.remaining;
   await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'continue' });
   await m.settle();
   const md5 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  check('「继续」不计次数,空文本没 action 400', md5.remaining === before && md5.messages[3].question === '继续' && (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400, `${before} ${md5.remaining}`);
+  check('「继续」不计次数,空文本没 action 400;第三节有场景卡', md5.remaining === before && md5.messages[2].question === '继续' && md5.messages[2].section?.cards.some((c) => c.kind === 'scene') === true && (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400, `${before} ${md5.remaining}`);
   await m.route('POST', '/api/kid/conversations/reading-tutor/messages', { text: 'apple' });
   await m.settle();
   const rd = ((await get('/api/kid/conversations/reading-tutor/today')).json as Day).messages[0];

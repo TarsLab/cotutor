@@ -17,12 +17,35 @@ export interface BoardCard {
   props: Record<string, unknown>;
   state?: unknown;
   assets?: string[];
+  /** 样子(板书后期定的;没有就走机械规则 tintFor / lookFor):底色槽、字形槽、emoji,名字来自主题清单 */
+  look?: CardLook;
 }
 
-/** 一处敲黑板:第几张卡上的哪个词 */
+export interface CardLook {
+  tint?: string;
+  look?: string;
+  emoji?: string;
+}
+
+/** 五支笔(《卡片重设计评估.md》§三 C):面类 marker / tint 一下子涂上;线条类 underline / box / circle 是 SVG 路径,描出来 */
+export type PenName = 'marker' | 'tint' | 'underline' | 'box' | 'circle';
+export const PENS: readonly PenName[] = ['marker', 'tint', 'underline', 'box', 'circle'];
+export const LINE_PENS: readonly PenName[] = ['underline', 'box', 'circle'];
+
+/** 孩子端是什么端(发消息时带上,后期按它排版;渲染器按它折行) */
+export type Device = 'phone' | 'tablet-portrait' | 'tablet-landscape';
+
+/** 一节的排版:为哪个端排的、每行哪几张卡(下标;顺序 = 讲的顺序);没有 = 一行一张 */
+export interface BoardLayout {
+  for: Device;
+  rows: number[][];
+}
+
+/** 一处敲黑板:第几张卡上的哪个词;pen 没有就按 penFor 的机械规则 */
 export interface BoardMark {
   card: number;
   phrase: string;
+  pen?: PenName;
 }
 
 /** 讲到这句时对某张卡做的事(讲稿里 [[名 参数]]):open / close / play… 页面按卡的种类执行,不认识的忽略 */
@@ -48,6 +71,7 @@ export interface BoardSection {
   cards: BoardCard[];
   lines: BoardLine[];
   partial?: boolean;
+  layout?: BoardLayout;
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -58,7 +82,7 @@ export function cardTexts(card: BoardCard): string[] {
   const p = card.props || {};
   switch (card.kind) {
     case 'text':
-      return [str(p.title), str(p.text)];
+      return isHeading(card) ? [] : [str(p.title), str(p.text)];
     case 'read':
       return strs(p.segments);
     case 'choice':
@@ -126,22 +150,196 @@ export function plainLine(line: string): string {
   return line.replace(/\[([^\[\]]+)\]/g, '$1');
 }
 
-export type MarkStyle = 'marker' | 'circle' | 'wave' | 'box' | 'green';
+/** 小节标题(text 卡只有一行 `# 标题`):渲染成无底加粗一行,不算一张卡——不选中、不标注、不并排 */
+export function isHeading(card: BoardCard): boolean {
+  return card.kind === 'text' && (card.props || {}).heading === true;
+}
 
-/** 笔的样子按卡定:封面 / 要记住的话 / 点读段涂荧光笔,算式与步骤绿底,选项与填空加框,其余波浪线 */
-export function markStyle(card: BoardCard): MarkStyle {
-  const style = str((card.props || {}).style);
+/**
+ * 底色槽(机械规则;后期定了 look.tint 就用它):做题的卡紫(plum),定义 / 结论蓝(sky),方法绿(moss),事实 / 例子 / 引言米(sand),
+ * 封面深(night),公式 / 图 / 代码白(paper)。老板书的 style 修饰词照映。名字对不上主题清单的,CSS 落回 paper。
+ */
+export function tintFor(card: BoardCard): string {
+  const t = card.look?.tint;
+  if (t) return t;
+  const p = card.props || {};
+  const style = str(p.style);
   switch (card.kind) {
     case 'text':
-      return style === 'cover' || style === 'note' ? 'marker' : style === 'formula' || style === 'step' ? 'green' : 'wave';
-    case 'read':
-      return 'marker';
+      return style === 'cover' ? 'night' : style === 'formula' ? 'paper' : style === 'quote' ? 'sand' : style === 'step' ? 'moss' : style === 'note' ? 'sky' : str(p.title) ? 'sky' : 'sand';
     case 'choice':
     case 'fill':
-      return 'box';
+    case 'canvas':
+      return 'plum';
+    case 'read':
+      return 'sand';
     default:
-      return 'wave';
+      return 'paper';
   }
+}
+
+/** 字形槽(机械规则;后期定了 look.look 就用它):note → title(大字居中),formula → formula(衬线),quote → quote,其余 plain */
+export function lookFor(card: BoardCard): string {
+  const l = card.look?.look;
+  if (l) return l;
+  const style = str((card.props || {}).style);
+  return style === 'note' ? 'title' : style === 'formula' ? 'formula' : style === 'quote' ? 'quote' : 'plain';
+}
+
+const LATIN = /^[0-9A-Za-z.,%°²³+\-×÷=()\s]+$/;
+
+/**
+ * 笔(机械规则;后期定了 mark.pen 就用它):选项 → 方框;填空、数字与拉丁词 → 下划线;点读段、公式、大字、封面 → 荧光;
+ * 标题位上的词 → 圈;其余(正文里正在定义的词)→ 术语底。
+ */
+export function penFor(card: BoardCard, phrase: string): PenName {
+  const p = card.props || {};
+  switch (card.kind) {
+    case 'choice':
+      return strs(p.options).some((o) => findPhrase(o, phrase) >= 0) ? 'box' : 'underline';
+    case 'fill':
+      return 'underline';
+    case 'read':
+      return 'marker';
+    case 'text': {
+      const look = lookFor(card);
+      if (look === 'formula' || look === 'title' || str(p.style) === 'cover') return 'marker';
+      if (str(p.title) && findPhrase(str(p.title), phrase) >= 0) return 'circle';
+      return LATIN.test(phrase) ? 'underline' : 'tint';
+    }
+    default:
+      return 'underline';
+  }
+}
+
+/** 短卡(能与兄弟并排):没有选项的文字卡,字数 ≤ 20;标题行不算 */
+export function isShortCard(card: BoardCard): boolean {
+  if (card.kind !== 'text' || isHeading(card)) return false;
+  return Array.from(cardTexts(card).join('')).length <= 20;
+}
+
+/** 有 layout 时它必须恰好盖住全部卡各一次、顺序不变;否则不用它 */
+function validRows(rows: readonly (readonly number[])[], n: number): boolean {
+  const flat = rows.flat();
+  return flat.length === n && flat.every((v, i) => v === i);
+}
+
+/**
+ * 一节的行(《卡片重设计评估.md》§三 H):存的是「为某个端排的」,渲染永远能落地——
+ * 没 layout 一行一张;有 layout:同一个端照排;别的端按机械规则折:手机上一行 2 张且都短才并排、其余拆开、3 张拆开;
+ * 标题行、有状态的卡(choice / fill / canvas / scene)永远独占一行。
+ */
+export function rowsFor(section: BoardSection, device: Device): number[][] {
+  const n = section.cards.length;
+  const lay = section.layout;
+  let rows: number[][] = lay && validRows(lay.rows, n) ? lay.rows.map((r) => [...r]) : Array.from({ length: n }, (_, i) => [i]);
+  const alone = (i: number): boolean => {
+    const c = section.cards[i];
+    return !c || isHeading(c) || hasState(c) || c.kind === 'scene';
+  };
+  const fold = lay ? lay.for !== device && device === 'phone' : false;
+  const out: number[][] = [];
+  for (const row of rows) {
+    if (row.length === 1) {
+      out.push(row);
+      continue;
+    }
+    const split = row.some(alone) || (fold && (row.length > 2 || !row.every((i) => isShortCard(section.cards[i]))));
+    if (split) for (const i of row) out.push([i]);
+    else out.push(row);
+  }
+  return out;
+}
+
+/** 端:宽 ≥ 900 且横 → 平板横屏;短边 ≥ 600 → 平板竖屏;其余手机 */
+export function deviceFor(width: number, height: number): Device {
+  if (width >= 900 && width > height) return 'tablet-landscape';
+  if (Math.min(width, height) >= 600) return 'tablet-portrait';
+  return 'phone';
+}
+
+/** 当前卡(选中态):播到这句该在的那张(lineTarget);句子没锚就是本节第一张不是标题行的卡;没在播 → null */
+export function nowCard(sections: readonly BoardSection[], state: PlayerState): number | null {
+  const s = sections[state.section];
+  if (!s || state.line < 0) return null;
+  const line = s.lines[state.line];
+  if (!line) return null;
+  const t = lineTarget(line);
+  if (t !== null && s.cards[t] && !isHeading(s.cards[t])) return t;
+  const first = s.cards.findIndex((c) => !isHeading(c));
+  return first >= 0 ? first : null;
+}
+
+// ---- 线条类的笔:SVG 路径,手绘感(端点微抖),抖动的种子取词的 hash,同一个词每次画一样 ----
+
+function seedOf(s: string): number {
+  let h = 2166136261;
+  for (const ch of s) {
+    h ^= ch.codePointAt(0) ?? 0;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+
+function rng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export interface PenBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** 笔画的框:相对被标注文字的一行矩形(宽 w、高 h),笔要伸出去多少 */
+export function penBox(pen: PenName, w: number, h: number): PenBox {
+  switch (pen) {
+    case 'underline':
+      return { x: -3, y: h - 4, w: w + 6, h: 10 };
+    case 'box':
+      return { x: -4, y: -3, w: w + 8, h: h + 6 };
+    case 'circle':
+      return { x: -10, y: -7, w: w + 20, h: h + 14 };
+    default:
+      return { x: 0, y: 0, w, h };
+  }
+}
+
+const f1 = (n: number): string => (Math.round(n * 10) / 10).toString();
+
+/** 笔画的路径(viewBox 0 0 w h):下划线一笔、方框一圈、圈一圈多一点;seed 定抖动 */
+export function penPath(pen: PenName, w: number, h: number, seed: string): string {
+  const r = rng(seedOf(seed));
+  const j = (amp: number): number => (r() - 0.5) * 2 * amp;
+  if (pen === 'underline') {
+    const y = h * 0.5;
+    return `M2 ${f1(y + j(1.5))} C ${f1(w * 0.18)} ${f1(y + j(2.5))}, ${f1(w * 0.34)} ${f1(y + j(2.5))}, ${f1(w * 0.52)} ${f1(y + j(2))} S ${f1(w * 0.84)} ${f1(y + j(2.5))}, ${f1(w - 2)} ${f1(y + j(1.5))}`;
+  }
+  if (pen === 'box') {
+    const l = 3 + j(0.8), t = 3 + j(0.8), rt = w - 3 + j(0.8), b = h - 3 + j(0.8);
+    return `M${f1(l)} ${f1(t)} C ${f1(w * 0.3)} ${f1(t + j(1))}, ${f1(w * 0.7)} ${f1(t + j(1))}, ${f1(rt)} ${f1(t + j(0.8))} C ${f1(rt + j(1))} ${f1(h * 0.3)}, ${f1(rt + j(1))} ${f1(h * 0.7)}, ${f1(rt + j(0.8))} ${f1(b)} C ${f1(w * 0.7)} ${f1(b + j(1))}, ${f1(w * 0.3)} ${f1(b + j(1))}, ${f1(l + j(0.8))} ${f1(b + j(0.8))} C ${f1(l + j(1))} ${f1(h * 0.7)}, ${f1(l + j(1))} ${f1(h * 0.3)}, ${f1(l)} ${f1(t + 2)}`;
+  }
+  if (pen === 'circle') {
+    const cx = w / 2, cy = h / 2, rx = w / 2 - 2.5, ry = h / 2 - 2.5;
+    const n = 36;
+    const start = -1.1; // 从右上起笔,顺时针,多画一点收尾
+    const pts: string[] = [];
+    for (let k = 0; k <= n + 3; k++) {
+      const a = start + (k / n) * Math.PI * 2;
+      const wob = 1 + j(0.035);
+      pts.push(`${f1(cx + Math.cos(a) * rx * wob)} ${f1(cy + Math.sin(a) * ry * wob)}`);
+    }
+    return `M${pts[0]} L ${pts.slice(1).join(' L ')}`;
+  }
+  return '';
 }
 
 /** 有舞台交互(能改状态、能「交给老师」)的种类;其余点开只是放大看 */
@@ -239,6 +437,7 @@ export function isQuestion(text: string): boolean {
 /** 孩子端条目里页面用到的字段(与 kid-view 的 KidMessage 兼容) */
 export interface BoardMessage {
   job: string;
+  at?: string;
   question: string | null;
   reply: string | null;
   audio: string | null;
@@ -248,6 +447,7 @@ export interface BoardMessage {
 
 export interface BoardEntry extends BoardSection {
   job: string;
+  at?: string;
   /** 老师还在说:卡只增不改,讲稿不播;整轮跑完换成正式的一节 */
   partial?: boolean;
 }
@@ -263,14 +463,15 @@ function lineFrom(text: string, audio: string | null): BoardLine {
 export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEntry[] {
   const out: BoardEntry[] = [];
   for (const m of messages) {
+    const at = m.at ? { at: m.at } : {};
     if (m.pending) {
-      if (m.section && m.section.partial && m.section.cards.length) out.push({ job: m.job, cards: m.section.cards, lines: m.section.lines, partial: true });
+      if (m.section && m.section.partial && m.section.cards.length) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true });
       continue;
     }
     if (m.section && (m.section.cards.length || m.section.lines.length)) {
       const lines = m.section.lines.length ? m.section.lines : m.reply ? [lineFrom(m.reply, m.audio)] : [];
-      out.push({ job: m.job, cards: m.section.cards, lines });
-    } else if (m.reply) out.push({ job: m.job, cards: [{ kind: 'text', props: { text: m.reply } }], lines: [lineFrom(m.reply, m.audio)] });
+      out.push({ job: m.job, ...at, cards: m.section.cards, lines, ...(m.section.layout ? { layout: m.section.layout } : {}) });
+    } else if (m.reply) out.push({ job: m.job, ...at, cards: [{ kind: 'text', props: { text: m.reply } }], lines: [lineFrom(m.reply, m.audio)] });
   }
   return out;
 }
@@ -279,6 +480,7 @@ export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEn
 export function sectionTitle(s: BoardSection): string {
   const pick = (): string => {
     for (const c of s.cards) if (c.kind === 'text' && c.props.style === 'cover' && str(c.props.title)) return str(c.props.title);
+    for (const c of s.cards) if (isHeading(c) && str(c.props.title)) return str(c.props.title);
     for (const c of s.cards) if (c.kind === 'text' && str(c.props.title)) return str(c.props.title);
     for (const c of s.cards) {
       const t = cardTexts(c).find((x) => x.trim());
@@ -402,12 +604,7 @@ export function barNext(mode: BarMode, ev: BarEvent): BarMode {
   }
 }
 
-export type Layout = 'phone' | 'tablet';
 
-/** 平板横屏才用两列板书;竖屏与手机一律单列 */
-export function layoutFor(width: number, height: number): Layout {
-  return width >= 900 && width > height ? 'tablet' : 'phone';
-}
 
 /** 没配音也没浏览器合成时,一句停多久(毫秒):按字数估 */
 export function lineDurationMs(text: string): number {

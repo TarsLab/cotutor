@@ -15,12 +15,19 @@ import {
   stateSummary,
   pickedLabels,
   togglePick,
+  isHeading,
   isQuestion,
-  layoutFor,
+  deviceFor,
   lineDurationMs,
   lineTarget,
+  lookFor,
   marksUpTo,
-  markStyle,
+  nowCard,
+  penBox,
+  penFor,
+  penPath,
+  rowsFor,
+  tintFor,
   phrasesIn,
   plainLine,
   playerAtEnd,
@@ -54,7 +61,30 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   check('讲稿 [5] 落到选项 5 的卡,不落在「25」里', anchorMarks(numCards, ['5'])[0].card === 1 && anchorMarks(numCards, ['25'])[0].card === 0);
   check('画蛇添足 落到封面(第一张含它的)', anchorMarks(cards, ['画蛇添足'])[0].card === 0);
   check('讲稿里的 [词] 按顺序取出,念的时候去括号', phrasesIn('它有两个来头:[出处]在《战国策》,[用法]是批评人。').join() === '出处,用法' && plainLine('[画蛇添足]是成语') === '画蛇添足是成语');
-  check('笔的样子按卡定', markStyle(cards[0]) === 'marker' && markStyle(cards[1]) === 'marker' && markStyle(cards[2]) === 'marker' && markStyle(cards[3]) === 'box' && markStyle(cards[4]) === 'box' && markStyle({ kind: 'text', props: { style: 'formula', text: 'x' } }) === 'green' && markStyle({ kind: 'text', props: { text: 'x' } }) === 'wave' && markStyle(cards[5]) === 'wave');
+  // ---- 素版的机械规则:底色槽、字形槽、笔;后期定了 look / pen 就用它 ----
+  const def: BoardCard = { kind: 'text', props: { title: '认边', text: '两条短边叫直角边,最长的一条叫斜边' } };
+  const plain: BoardCard = { kind: 'text', props: { text: '一个直角三角形,斜边是 13' } };
+  const formula: BoardCard = { kind: 'text', props: { style: 'formula', text: '直角边² + 直角边² = 斜边²' } };
+  check('底色槽:封面 night、# 标题 sky、素文 sand、note sky、formula paper、quote sand、step moss、做题的紫、点读米、图 / 场景 / 代码白', tintFor(cards[0]) === 'night' && tintFor(def) === 'sky' && tintFor(plain) === 'sand' && tintFor(cards[1]) === 'sky' && tintFor(formula) === 'paper' && tintFor({ kind: 'text', props: { style: 'quote', text: 'x' } }) === 'sand' && tintFor({ kind: 'text', props: { style: 'step', title: 'x', text: 'y' } }) === 'moss' && tintFor(cards[3]) === 'plum' && tintFor(cards[4]) === 'plum' && tintFor({ kind: 'canvas', props: {} }) === 'plum' && tintFor(cards[2]) === 'sand' && tintFor(sceneCard) === 'paper' && tintFor({ kind: 'image', props: {} }) === 'paper');
+  check('后期定的 look 优先', tintFor({ ...plain, look: { tint: 'moss' } }) === 'moss' && lookFor({ ...plain, look: { look: 'quote' } }) === 'quote');
+  check('字形槽:note → title、formula → formula、quote → quote,其余 plain', lookFor(cards[1]) === 'title' && lookFor(formula) === 'formula' && lookFor({ kind: 'text', props: { style: 'quote', text: 'x' } }) === 'quote' && lookFor(def) === 'plain' && lookFor(cards[3]) === 'plain');
+  check('笔:选项 box、问题里的词 underline、填空 underline、点读 marker、公式 / 大字 / 封面 marker、标题位 circle、数字 underline、正文里的词 tint;后期定的 pen 页面直接用', penFor(cards[3], '他自己的') === 'box' && penFor(cards[3], '酒') === 'underline' && penFor(cards[4], '做到了') === 'underline' && penFor(cards[2], '楚有祠者') === 'marker' && penFor(formula, '斜边') === 'marker' && penFor(cards[1], '多做一步') === 'marker' && penFor(cards[0], '画蛇添足') === 'marker' && penFor(def, '认边') === 'circle' && penFor(def, '直角边') === 'tint' && penFor({ kind: 'text', props: { title: '验证', text: '9 加 16 等于 25' } }, '25') === 'underline' && penFor(sceneCard, '找规律') === 'underline');
+  const hd: BoardCard = { kind: 'text', props: { title: '两大类型', text: '', heading: true } };
+  check('小节标题不是卡:没有能标注的字,sectionTitle 优先拿它', isHeading(hd) && !isHeading(def) && cardTexts(hd).length === 0 && sectionTitle({ cards: [hd, def], lines: [] }) === '两大类型');
+  // ---- 行:没 layout 一行一张;有 layout 同端照排;手机上折;标题行与有状态的卡独占 ----
+  const sec: BoardSection = { cards: [cards[0], def, formula, cards[3], plain, hd, cards[1]], lines: [] };
+  check('没 layout:一行一张', JSON.stringify(rowsFor(sec, 'tablet-landscape')) === '[[0],[1],[2],[3],[4],[5],[6]]');
+  const laid: BoardSection = { ...sec, layout: { for: 'tablet-landscape', rows: [[0], [1, 2], [3, 4], [5, 6]] } };
+  check('同端照排;有状态的卡与标题行硬拆出来', JSON.stringify(rowsFor(laid, 'tablet-landscape')) === '[[0],[1,2],[3],[4],[5],[6]]');
+  check('手机上折:两张都短才并排(认边 17 字 + 公式 14 字 → 并排);别的端排的 3 张一行拆开', JSON.stringify(rowsFor(laid, 'phone')) === '[[0],[1,2],[3],[4],[5],[6]]' && JSON.stringify(rowsFor({ ...sec, layout: { for: 'tablet-landscape', rows: [[0, 1, 2], [3], [4], [5], [6]] } }, 'phone')) === '[[0],[1],[2],[3],[4],[5],[6]]' && JSON.stringify(rowsFor({ cards: [def, { kind: 'text', props: { text: '这一张卡的正文超过二十个字所以在手机上不能和别人并排' } }], lines: [], layout: { for: 'tablet-landscape', rows: [[0, 1]] } }, 'phone')) === '[[0],[1]]');
+  check('layout 没盖住全部卡 / 顺序乱了 → 不用它', JSON.stringify(rowsFor({ ...sec, layout: { for: 'phone', rows: [[0, 1]] } }, 'phone')) === '[[0],[1],[2],[3],[4],[5],[6]]' && JSON.stringify(rowsFor({ cards: [def, plain], lines: [], layout: { for: 'phone', rows: [[1, 0]] } }, 'phone')) === '[[0],[1]]');
+  // ---- 选中态:播到这句该在的卡;句子锚到标题行时退到本节第一张真卡 ----
+  const secL: BoardSection = { cards: [hd, def, formula], lines: [L('一', { anchor: 0 }), L('二', { anchor: 1, marks: [{ card: 2, phrase: '斜边' }] })] };
+  check('nowCard:标注卡优先、锚点其次、锚到标题行就退到第一张真卡;没在播 null', nowCard([secL], { section: 0, line: 1, status: 'playing' }) === 2 && nowCard([secL], { section: 0, line: 0, status: 'playing' }) === 1 && nowCard([secL], { section: 0, line: -1, status: 'idle' }) === null && nowCard([secL], { section: 3, line: 0, status: 'playing' }) === null);
+  // ---- 线条类的笔:框与路径,同一个种子每次一样 ----
+  check('笔画的框:下划线在字底下、方框包一圈、圈伸出去更多', penBox('underline', 50, 20).y === 16 && penBox('box', 50, 20).w === 58 && penBox('circle', 50, 20).x === -10 && penBox('marker', 50, 20).w === 50);
+  const p1 = penPath('circle', 70, 34, '斜边:0');
+  check('路径:圈是折线一圈多一点、方框四段曲线、下划线一笔;同种子同路径,换种子不同', p1.startsWith('M') && p1.split(' L ').length === 40 && p1 === penPath('circle', 70, 34, '斜边:0') && p1 !== penPath('circle', 70, 34, '斜边:1') && penPath('box', 60, 30, 'x').split(' C ').length === 5 && penPath('underline', 60, 10, 'x').includes(' S ') && penPath('marker', 10, 10, 'x') === '');
   check('问句', isQuestion('酒是谁的?') && isQuestion('明白吗?') && !isQuestion('明白了。'));
   check('有舞台交互的是选择题与填空', hasState(cards[3]) && hasState(cards[4]) && !hasState(cards[0]) && !hasState(cards[2]) && !hasState(cards[5]) && !hasState({ kind: 'image', props: { src: 'a.png' } }));
   check('点读段的配音:assets 里有 <段号>.mp3 才有', segmentAudio({ ...cards[2], assets: ['2026-09-10.1620-1.cards/2/2.mp3'] }, 1) === '2026-09-10.1620-1.cards/2/2.mp3' && segmentAudio({ ...cards[2], assets: ['2026-09-10.1620-1.cards/2/2.mp3'] }, 0) === null && segmentAudio(cards[2], 0) === null);
@@ -116,7 +146,7 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
 }
 {
   check('输入条:点 → 打字;按住 → 说话;松手 / 取消 / 发出 / 失焦 → 闲置', barNext('idle', 'tap') === 'typing' && barNext('idle', 'holdStart') === 'holding' && barNext('holding', 'holdEnd') === 'idle' && barNext('holding', 'holdCancel') === 'idle' && barNext('typing', 'sent') === 'idle' && barNext('typing', 'blur') === 'idle' && barNext('typing', 'tap') === 'typing' && barNext('typing', 'holdEnd') === 'typing');
-  check('平板横屏才两列', layoutFor(1180, 820) === 'tablet' && layoutFor(820, 1180) === 'phone' && layoutFor(390, 844) === 'phone' && layoutFor(899, 500) === 'phone');
+  check('端:宽 ≥ 900 且横 → 平板横屏;短边 ≥ 600 → 平板竖屏;其余手机', deviceFor(1180, 820) === 'tablet-landscape' && deviceFor(820, 1180) === 'tablet-portrait' && deviceFor(390, 844) === 'phone' && deviceFor(899, 500) === 'phone' && deviceFor(1024, 768) === 'tablet-landscape');
   check('没声音时按字数计时,至少 1.2 秒', lineDurationMs('短') === 1200 && lineDurationMs('[十个字十个字十个字十]') === 2600);
 }
 done();

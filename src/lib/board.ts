@@ -7,7 +7,7 @@
  * spans 是「这张卡 / 这句话是原文哪几行」,家长端「看原文」据此在原文旁边标出解析器怎么读的;孩子端的 BoardSection 不带它。
  */
 import { parseCard } from '../cards/index.ts';
-import { anchorMarks, isQuestion, phrasesIn, plainLine, type BoardCard, type BoardCue, type BoardLine, type BoardSection } from './kid-board.ts';
+import { anchorMarks, isHeading, isQuestion, phrasesIn, plainLine, type BoardCard, type BoardCue, type BoardLine, type BoardSection } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 import type { Handoff, HoldupAsk } from '../schema/index.ts';
 
@@ -78,8 +78,14 @@ interface RawLine {
   line: number;
 }
 
+/** 句子锚到上一张卡;小节标题行不算卡,跳过它 */
+function lastCard(cards: readonly BoardCard[]): number | null {
+  for (let k = cards.length - 1; k >= 0; k--) if (!isHeading(cards[k])) return k;
+  return null;
+}
+
 function rawLine(line: string, cards: readonly BoardCard[], at: number): RawLine {
-  const anchor = cards.length ? cards.length - 1 : null;
+  const anchor = lastCard(cards);
   const cues: BoardCue[] = [];
   const text = line
     .replace(CUE, (_, inner: string) => {

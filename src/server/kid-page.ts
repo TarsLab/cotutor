@@ -189,7 +189,7 @@ const PAGE = `<!doctype html>
     </header>
     <div id="wrap">
       <div id="board"></div>
-      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><button id="st-go" type="button">交给老师</button></div></div>
+      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
     </div>
     <div id="sub"><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
@@ -391,7 +391,10 @@ __BOARD_JS__
       }
       case 'canvas': {
         const n = inkCount(c);
-        return box('canvas', h('div', { class: 'cp' }, p.prompt || '画一画'), h('div', { class: 'cb' }, n ? '已经画了 ' + n + ' 笔,点开接着画' : '点开画一画 ✎'));
+        // 交过了:紧凑态是孩子画的那张图(真服务给 png 的相对路径,mock 存的是 data URL)
+        const img = c.state && typeof c.state.image === 'string' ? c.state.image : null;
+        const src = img ? (img.startsWith('data:') ? img : '/api/kid/image?p=' + encodeURIComponent(img)) : null;
+        return box('canvas', h('div', { class: 'cp' }, p.prompt || '画一画'), src ? h('div', { class: 'th' }, h('img', { src, alt: '', loading: 'lazy' }), n ? h('span', { class: 'pl' }, '画了 ' + n + ' 笔') : null) : h('div', { class: 'cb' }, n ? '已经画了 ' + n + ' 笔,点开接着画' : '点开画一画 ✎'));
       }
       case 'code':
         return box('code', p.lang ? h('span', { class: 'lg' }, p.lang) : null, h('div', { class: 'cb' }, p.text || ''));
@@ -483,9 +486,10 @@ __BOARD_JS__
     if (S.readonly && hasState(card) && !opts.delegate) return; // 以前的只能看:选择 / 填空 / 画板不开,免得改了当时的答案
     if (S.state.status === 'playing' && !opts.delegate) { stopVoice(); S.state = { ...S.state, status: 'paused' }; renderSubtitle(); }
     S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, scene: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
-    $('#st-ttl').textContent = cardTitle(card);
+    // 画板:题目在工作台自己的题目条上(可收起),顶栏只写「画一画」
+    $('#st-ttl').textContent = card.kind === 'canvas' ? '画一画' : cardTitle(card);
     $('#st-kd').textContent = KIND_NAME[card.kind] || card.kind;
-    $('#st-kd').hidden = !(KIND_NAME[card.kind] || card.kind);
+    $('#st-kd').hidden = card.kind === 'canvas' || !(KIND_NAME[card.kind] || card.kind);
     renderStage();
     $('#stage').classList.add('on');
     setNow(secIdx, idx);
@@ -504,6 +508,7 @@ __BOARD_JS__
     const act = $('#st-act'); act.hidden = !hasState(card);
     $('#st-go').textContent = GO_LABEL[card.kind] || '交给老师';
     $('#st-go').disabled = !stateSummary(card).length;
+    $('#st-note').textContent = card.kind === 'canvas' ? stateSummary(card).join('、') : '';
   };
   /** 舞台包说话:ready → 把卡发过去;phase → 字幕行;state → 存;done 且是讲稿委托的 → 关舞台接着念 */
   window.addEventListener('message', (e) => {
@@ -512,7 +517,7 @@ __BOARD_JS__
     const card = S.sections[S.stage.section].cards[S.stage.card];
     if (m.type === 'ready') { const b = card.kind === 'scene' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null; postStage({ type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? '/api/bundles/' + encodeURIComponent(b) + '/' : undefined, autoplay: S.stage.autoplay }); }
     else if (m.type === 'phase') { S.stage.scene = { phase: m.phase, line: m.line, step: m.step, total: m.total }; renderSubtitle(); if (m.phase === 'done' && S.stage.delegate) { const d = S.stage; closeStage(); resumeAfter(d); } }
-    else if (m.type === 'state') { card.state = m.state; $('#st-go').disabled = !stateSummary(card).length; repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, m.state); }
+    else if (m.type === 'state') { card.state = m.state; $('#st-go').disabled = !stateSummary(card).length; $('#st-note').textContent = stateSummary(card).join('、'); repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, m.state); }
     else if (m.type === 'submit') { card.state = m.state; const id = S.stage.id; const job = S.sections[S.stage.section].job; const idx = S.stage.card; closeStage(); api('PUT', '/api/kid/conversations/' + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id }, echoText: '你:' + (stateSummary(card).join('、') || '给老师看') })); }
     else if (m.type === 'close' || m.type === 'error') { const d = S.stage; closeStage(); if (d.delegate) resumeAfter(d); }
   });

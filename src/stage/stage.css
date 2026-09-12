@@ -2,7 +2,31 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 #root { display: flex; flex-direction: column; }
 .stage-wait { flex: 1; display: grid; place-items: center; color: #8a8781; font-size: 16px; }
 .chalk-player { flex: 1; min-height: 0; }
+/* ---- 画板工作台(《卡片重设计评估.md》§三 F):题目条 + 工具 + 画布;工具是自己的,excalidraw 的壳全藏 ---- */
 .canvas-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.canvas-prompt { padding: 10px 16px; font-size: 18px; font-weight: 600; border-bottom: 1px solid #e2dfd6; }
-.canvas-board { flex: 1; min-height: 0; }
+.canvas-prompt { display: flex; align-items: center; gap: 8px; padding: 10px 8px 10px 16px; font-size: 18px; font-weight: 600; border-bottom: 1px solid #e2dfd6; }
+.canvas-prompt-text { flex: 1; min-width: 0; }
+.canvas-prompt.closed .canvas-prompt-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 15px; font-weight: 500; color: #8a8781; }
+.canvas-prompt-toggle { width: 40px; height: 40px; border: 0; background: none; color: #8a8781; display: grid; place-items: center; cursor: pointer; transition: transform .2s; }
+.canvas-prompt.closed .canvas-prompt-toggle { transform: rotate(180deg); }
+.canvas-main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.canvas-tools { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #e2dfd6; }
+.ct-btn { width: 40px; height: 40px; border-radius: 50%; background: #ffffff; border: 2px solid #e2dfd6; color: #2b2b2b; display: grid; place-items: center; padding: 0; cursor: pointer; flex: 0 0 auto; -webkit-tap-highlight-color: transparent; }
+.ct-btn:active { transform: scale(.94); }
+.ct-btn.on { background: #2b2b2b; border-color: #2b2b2b; color: #ffffff; }
+.ct-btn.dot.on { background: #ffffff; border-color: #2b2b2b; }
+.ct-btn.danger { border-color: #d9482b; color: #d9482b; }
+.ct-btn .dot { width: 50%; height: 50%; border-radius: 50%; display: block; }
+.ct-btn svg { width: 22px; height: 22px; }
+.canvas-sep { width: 1px; height: 24px; background: #e2dfd6; }
+.canvas-board { flex: 1; min-height: 0; position: relative; }
 .canvas-board .excalidraw { --color-primary: #7a4fc9; }
+/* excalidraw 的壳:工具栏、菜单、缩放、撤销、帮助、右键菜单、提示——孩子只用上面那排钮 */
+.canvas-board .excalidraw .App-toolbar-container, .canvas-board .excalidraw .App-menu_top, .canvas-board .excalidraw .layer-ui__wrapper__top-right, .canvas-board .excalidraw .App-bottom-bar, .canvas-board .excalidraw .mobile-misc-tools-container, .canvas-board .excalidraw .undo-redo-buttons, .canvas-board .excalidraw .App-menu__left, .canvas-board .excalidraw .help-icon, .canvas-board .excalidraw .zoom-actions, .canvas-board .excalidraw .scroll-back-to-content, .canvas-board .excalidraw .context-menu, .canvas-board .excalidraw .excalidraw-tooltip, .canvas-board .excalidraw .layer-ui__wrapper__footer-left, .canvas-board .excalidraw .footer-center, .canvas-board .excalidraw .zen-mode-transition { display: none !important; }
+@media (orientation: landscape) and (min-width: 700px) {
+  .canvas-main { flex-direction: row; }
+  .canvas-tools { flex-direction: column; flex-wrap: nowrap; gap: 10px; padding: 14px 12px; border-bottom: 0; border-right: 1px solid #e2dfd6; align-self: stretch; justify-content: flex-start; overflow-y: auto; }
+  .ct-btn { width: 48px; height: 48px; }
+  .ct-btn svg { width: 24px; height: 24px; }
+  .canvas-sep { width: 28px; height: 1px; }
+}

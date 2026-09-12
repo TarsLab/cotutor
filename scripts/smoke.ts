@@ -42,6 +42,7 @@ need(PACKAGE_AGENTS_DIR === join(root, 'agents/'), `dist 算出的 agents 目录
 const shipped = existsSync(PACKAGE_AGENTS_DIR) ? readdirSync(PACKAGE_AGENTS_DIR).filter((f) => f.endsWith('.md')) : [];
 need(shipped.length >= 5, `agents/ 里只有 ${shipped.length} 份老师定义`);
 need(existsSync(join(root, 'themes', 'default', 'theme.json')) && existsSync(join(root, 'themes', 'default', 'kid.css')), 'themes/default/ 不全(出厂主题:theme.json + kid.css)');
+need(['text', 'read', 'choice', 'fill', 'image', 'scene', 'canvas', 'code'].every((k) => existsSync(join(root, 'cards', k, 'card.md')) && existsSync(join(root, 'cards', k, 'card.css'))), 'cards/<kind>/ 不全(每种卡的 card.md + card.css)');
 
 // 4. 舞台包打过了(dist/stage 不在 git 里;没打的话孩子端重卡舞台开不了)
 const { STAGE_DIR, FONTS_DIR } = await import(new URL('../dist/server/stage.js', import.meta.url).href) as { STAGE_DIR: string; FONTS_DIR: string };

@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { CONFIG_SCHEMA_FILE, TTS_DEFAULT, cotutorJsonSchema } from '../schema/index.ts';
-import { boardSyntaxDoc } from '../cards/index.ts';
+import { boardSyntaxDoc, cardDocs, cardsIndexDoc } from '../cards/docs.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'scenes', 'bundles', 'snaps'] as const;
@@ -205,10 +205,15 @@ export function configTemplate(input: ConfigTemplateInput): string {
 /** 给老师看的板书语法表:从卡的注册表现生成,机器文件,init / upgrade 每次刷新;老师文件正文让老师讲解前读它 */
 export const SYNTAX_FILE = '.cotutor/板书语法.md';
 
+export const CARDS_DOC_DIR = '.cotutor/cards';
+
+/** 语法表 + 逐张协议 .cotutor/cards/<kind>.md + README.md(索引):都是机器文件,init / upgrade 每次刷新;老师与 skill 按需 @ 单张 */
 export async function writeSyntaxFile(root: string): Promise<string> {
   const file = join(root, SYNTAX_FILE);
-  await mkdir(join(root, '.cotutor'), { recursive: true });
+  await mkdir(join(root, CARDS_DOC_DIR), { recursive: true });
   await writeFile(file, boardSyntaxDoc());
+  await writeFile(join(root, CARDS_DOC_DIR, 'README.md'), cardsIndexDoc());
+  for (const d of cardDocs()) await writeFile(join(root, CARDS_DOC_DIR, `${d.kind}.md`), d.md);
   return file;
 }
 

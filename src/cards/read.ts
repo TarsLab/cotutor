@@ -16,14 +16,4 @@ export const read: CardKind<ReadProps> = {
   assets(p) {
     return p.segments.map((text, k) => ({ file: `${k + 1}.mp3`, text }));
   },
-  doc: `### read — 点读
-
-一行一段(一句诗、一句课文、一个单词;英文后面可以跟中文),孩子点哪段听哪段。原文、古诗、生词、单词表用它。
-
-\`\`\`\`
-\`\`\`read
-床前明月光,疑是地上霜。
-举头望明月,低头思故乡。
-\`\`\`
-\`\`\`\``,
 };

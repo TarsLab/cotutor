@@ -1,0 +1,6 @@
+/* 文字卡(cards/text/card.md):标题 .ct + 正文 .cb 的样子在主题的 .c 里;这里只有封面。选择器写成 .c.c-<kind>,盖过主题的 .c 壳;主题要再盖就用同样的写法 */
+/* 封面:深底、大标题、副标题;不再用渐变图 */
+.c.c-cover { min-height:110px; justify-content:flex-end; gap:4px; padding:16px 18px; }
+.c.c-cover .ct { font-size:26px; font-weight:700; letter-spacing:0; }
+.c.c-cover .cb { font-size:14px; opacity:.8; }
+#st-body .c-cover { min-height:220px; } #st-body .c-cover .ct { font-size:32px; } #st-body .c-cover .cb { font-size:16px; }

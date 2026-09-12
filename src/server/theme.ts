@@ -7,6 +7,7 @@ import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { THEME_CSS_FILE, THEME_MANIFEST_FILE, type ThemeManifest } from '../schema/index.ts';
 import { packageTheme, readTheme, themeDir, type LoadedTheme } from '../cli/themes.ts';
+import { cardsCss } from '../cards/docs.ts';
 
 export interface ThemeFiles {
   css: string;
@@ -44,7 +45,8 @@ export async function themeFiles(root: string, name: string): Promise<ThemeFiles
     source = 'fallback';
     error = err instanceof Error ? err.message : String(err);
   }
-  cache = { key, css: loaded.css, manifest: loaded.manifest, source, ...(error ? { error } : {}) };
+  // 各种卡的结构样式(包里 cards/<kind>/card.css)在前,主题在后:主题写同名选择器就能盖
+  cache = { key, css: `${cardsCss()}\n\n/* ---- 主题 ${name} ---- */\n${loaded.css}`, manifest: loaded.manifest, source, ...(error ? { error } : {}) };
   return cache;
 }
 

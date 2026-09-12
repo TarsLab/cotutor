@@ -51,17 +51,4 @@ export const scene: CardKind<SceneProps, SceneState> = {
     if (s.step <= 0) return '还没开始看';
     return `看到第 ${s.step} 步(共 ${total} 步)停在气口`;
   },
-  doc: `### scene — 讲解动画(课包)
-
-正文第一行是课包 id(bundles/<id>/,由 scene-maker 作业做出来;id 形如 \`2026-09-10-guilv\`),第二行可以写一句给孩子的话。
-课包没做好之前孩子看到「图还在路上」,做好了卡自己变成可播,舞台里是逐笔画出来的讲解,自带讲稿与声音。
-讲作业题、要画图才讲得清的题用它:回复里放这张卡 + 一句「我去把图画出来」,同时「## 转交」给 scene-maker(to: scene-maker;why: 题面与讲法要点;refs: 课包 id)。
-讲稿里 \`[[play]]\` 锚到它,念到那句就把动画铺满播,播完接着念下一句。一天最多起两个作业(policy scenes.dailyMax)。
-
-\`\`\`\`
-\`\`\`scene
-2026-09-10-guilv
-我去把这道题画出来,画好了我们一起看。
-\`\`\`
-\`\`\`\``,
 };

@@ -1,0 +1,5 @@
+/* 代码(cards/code/card.md):深底等宽,原样 */
+/* 代码 */
+.c.c-code { background:#2b2b2b; border-color:#2b2b2b; color:#f6f4ee; font-family:ui-monospace,Menlo,monospace; font-size:14px; white-space:pre-wrap; }
+.c.c-code .lg { display:block; font-size:11px; color:#aaa; margin-bottom:6px; font-family:inherit; }
+#st-body .c-code { font-size:15px; }

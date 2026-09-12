@@ -1,0 +1,8 @@
+/* 填空(cards/fill/card.md):空 .bl 至少 4 个字宽,填了的紫;舞台里逐空输入框 .fi */
+/* 填空:空至少 4 个字宽;填了的紫 */
+.c.c-fill .cb { line-height:2; }
+.bl { display:inline-block; min-width:4em; border-bottom:2px solid var(--ink); margin:0 4px; padding:0 6px; line-height:1.3; vertical-align:baseline; }
+.bl.f { border-bottom-color:var(--tint-plum-head); color:var(--tint-plum-head); font-weight:600; text-align:center; }
+/* 舞台 */
+.fq { font-size:22px; line-height:2.2; }
+.fi { display:inline-block; width:6em; margin:0 4px; padding:2px 8px; font:inherit; font-size:20px; font-weight:600; color:var(--tint-plum-head); text-align:center; background:#ffffff; border:0; border-bottom:3px solid var(--tint-plum-head); border-radius:6px 6px 0 0; outline:0; -webkit-user-select:text; user-select:text; }

@@ -1,0 +1,6 @@
+/* 点读卡(cards/read/card.md):一段一行,点了念,念的那段亮 */
+/* 点读:一段一行 */
+.c.c-read { gap:8px; }
+.rd { padding:12px 16px; border-radius:12px; background:#ffffff; border:1px solid var(--tint-sand-line); font-size:18px; line-height:1.6; cursor:pointer; }
+.rd.on { background:var(--hi); }
+#st-body .rd { font-size:22px; }

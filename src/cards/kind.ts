@@ -1,5 +1,5 @@
 /**
- * 一种卡的服务端定义(《板书卡片设计.md》§1):props 契约、围栏正文怎么解析、哪些字段不下发孩子端、给老师看的写法;
+ * 一种卡的服务端定义(《板书卡片设计.md》§1):props 契约、围栏正文怎么解析、哪些字段不下发孩子端;给老师看的写法在包根 cards/<kind>/card.md(src/cards/docs.ts 读它);
  * 有交互的卡再加 state 契约(孩子在卡上做的事,PUT 进来先过它)与 describe(把 props + state 说成给老师看的一句,进上下文包)。
  * 页面那一半(紧凑态怎么画、舞台里怎么交互、标注落在哪些字上)在 kid-page.ts / kid-board.ts;两边靠 kind 名对上。
  */
@@ -18,8 +18,6 @@ export interface CardKind<P = Record<string, unknown>, S = unknown> {
   describe?(props: P, state: S): string;
   /** 这张卡要在后台预生成的配音资产(点读的段):文件名相对这张卡的资产目录 <日期>.<job>.cards/<n>/,text 是要念的字 */
   assets?(props: P): { file: string; text: string }[];
-  /** 语法表里的一段:写法 + 例子(给老师看),由 boardSyntaxDoc 拼成 .cotutor/板书语法.md */
-  doc: string;
 }
 
 /** 围栏正文 → 非空行(各自 trim) */

@@ -42,19 +42,4 @@ export const text: CardKind<TextProps> = {
     }
     return { ...(style ? { style } : {}), text: trimmed.trim() };
   },
-  doc: `### text — 一段字
-
-正文第一行以 \`# \` 开头就是这张卡的标题(定义、方法的名字),下面是正文;只写一行 \`# 标题\` 不写正文,就是一个小节标题(板上无底的一行,不算卡)。样子(底色、字号)不用你管。
-老写法 \`text cover\`(封面:第一行标题,第二行副标题)、\`text formula\`(算式)、\`text note\`(一句要记住的话)、\`text quote\`(引一句原文)、\`text step\` 仍然认。
-
-\`\`\`\`
-\`\`\`text
-# 认边
-两条短边叫直角边,最长的一条叫斜边
-\`\`\`
-
-\`\`\`text formula
-三角形面积 = 底 × 高 ÷ 2
-\`\`\`
-\`\`\`\``,
 };

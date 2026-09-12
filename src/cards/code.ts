@@ -11,7 +11,4 @@ export const code: CardKind<CodeProps> = {
   parse(body, mods) {
     return { lang: mods[0] ?? null, text: body.replace(/\s+$/, '') };
   },
-  doc: `### code — 代码或原样的文字
-
-围栏标签写语言名(\`\`\`python)就是代码卡,原样显示,不念。`,
 };

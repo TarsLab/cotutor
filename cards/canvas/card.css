@@ -1,0 +1,7 @@
+/* 画板(cards/canvas/card.md):题目 + 「点开画一画」;交过之后是缩略图;舞台是 iframe 里的工作台 */
+/* 画板 */
+.c.c-canvas { gap:8px; }
+.c.c-canvas .cp { font-weight:600; } .c.c-canvas .cb { border:2px dashed var(--tint-plum-head); border-radius:12px; padding:22px 12px; text-align:center; color:var(--tint-plum-head); background:#fff; white-space:normal; }
+.c.c-canvas .th { position:relative; border-radius:12px; overflow:hidden; background:#fff; border:1px solid var(--tint-plum-line); }
+.c.c-canvas .th img { display:block; width:100%; max-height:240px; object-fit:contain; }
+.c.c-canvas .th .pl { position:absolute; right:10px; bottom:10px; background:#000000aa; color:#fff; border-radius:14px; padding:3px 10px; font-size:13px; }

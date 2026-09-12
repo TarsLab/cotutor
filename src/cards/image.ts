@@ -24,14 +24,4 @@ export const image: CardKind<ImageProps> = {
     const caption = rest.join('\n');
     return { src, ...(caption ? { caption } : {}) };
   },
-  doc: `### image — 图片
-
-第一行是图:workspace 里的相对路径(产物、孩子拍的照片,如 \`vault/照片/2026-09-10-作业.jpg\`)或 http(s) 地址;后面几行是图注。孩子点开能放大。
-
-\`\`\`\`
-\`\`\`image
-vault/照片/2026-09-10-作业.jpg
-你昨天写的这道题,看第二行。
-\`\`\`
-\`\`\`\``,
 };

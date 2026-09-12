@@ -1,6 +1,6 @@
 /** 卡的注册表:每种卡的解析 / 剥秘密 / 语法表;不认识的标签;解析失败的退路。 */
-import { CARD_KINDS, boardSyntaxDoc, cardAssets, cardKind, cardLabel, describeCard, parseCard, parseCardState, stripSecrets } from '../src/cards/index.ts';
-import { parseBoard } from '../src/lib/board.ts';
+import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, parseCard, parseCardState, stripSecrets } from '../src/cards/index.ts';
+import { boardSyntaxDoc } from '../src/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 {
@@ -90,20 +90,6 @@ import { check, done } from './_check.ts';
 }
 {
   const doc = boardSyntaxDoc();
-  check('语法表:两种东西 + 每种卡一段 + 家长段', doc.includes('普通段落 = 你说的话') && doc.includes('围栏 = 板上的卡') && CARD_KINDS.every((k) => doc.includes(`### ${k.name}`)) && doc.includes('## 家长'), doc.slice(0, 200));
-  check('语法表里的例子自己能解析', parseBoard_ok(doc));
-}
-function parseBoard_ok(doc: string): boolean {
-  // 语法表里 ```` 包着的例子块:取出来过一遍解析器,不该有 warning
-  const blocks = [...doc.matchAll(/````\n([\s\S]*?)\n````/g)].map((m) => m[1]);
-  if (!blocks.length) return false;
-  return blocks.every((b) => {
-    const r = parseBoardSync(b);
-    return r.warnings.length === 0 && r.cards > 0;
-  });
-}
-function parseBoardSync(b: string): { warnings: string[]; cards: number } {
-  const r = parseBoard(`${b}\n`);
-  return { warnings: r.warnings.map((w) => w.text), cards: r.section.cards.length };
+  check('语法表:两种东西 + 每种卡一段(从 cards/<kind>/card.md 拼)+ 家长段;例子的 expect 注释去掉了', doc.includes('普通段落 = 你说的话') && doc.includes('围栏 = 板上的卡') && CARD_KINDS.every((k) => doc.includes(`### ${k.name} — `)) && doc.includes('## 家长') && !doc.includes('<!-- expect') && doc.includes('.cotutor/cards/'), doc.slice(0, 200));
 }
 done();

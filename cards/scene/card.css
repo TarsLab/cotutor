@@ -1,0 +1,8 @@
+/* 讲解动画(cards/scene/card.md):题面 + 缩略图 + 「N 步 ▷」;舞台是 iframe 里的播放器 */
+/* 讲解动画 */
+.c.c-scene { gap:8px; padding:12px 14px; }
+.c.c-scene .sp { font-weight:600; }
+.c.c-scene .th { position:relative; border-radius:12px; overflow:hidden; background:var(--grey); min-height:110px; display:grid; place-items:center; color:var(--dim); font-size:15px; }
+.c.c-scene .th img { display:block; width:100%; max-height:220px; object-fit:contain; background:#fff; }
+.c.c-scene .th .pl { position:absolute; right:10px; bottom:10px; background:#000000aa; color:#fff; border-radius:14px; padding:3px 10px; font-size:13px; }
+.c.c-scene .tx { font-size:15px; color:#5a5650; }

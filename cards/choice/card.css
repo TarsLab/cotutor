@@ -1,0 +1,18 @@
+/* 选择题(cards/choice/card.md):紧凑态只读的选项行;舞台里的大按钮 .so */
+/* 选择:问题 + 选项;短选项横排成胶囊;选了的紫 */
+.c.c-choice { gap:8px; }
+.ch-q { font-weight:600; }
+.ch-os { display:flex; flex-direction:column; gap:8px; }
+.ch-os.short { flex-direction:row; flex-wrap:wrap; }
+.ch-os.short .ch-o { flex:1 1 auto; min-width:88px; }
+.ch-o { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:12px; background:#ffffff; border:2px solid #ece8de; font-size:16px; }
+.ch-o i { flex:0 0 auto; width:24px; height:24px; border-radius:50%; border:2px solid #d8d3c6; background:#fff; display:grid; place-items:center; font-style:normal; font-size:12px; font-weight:700; color:var(--dim); }
+.ch-o.on { border-color:var(--tint-plum-head); background:var(--tint-plum-bg); }
+.ch-o.on i { background:var(--tint-plum-head); border-color:var(--tint-plum-head); color:#fff; }
+/* 舞台 */
+.sq { font-size:22px; font-weight:600; line-height:1.5; }
+.so { display:flex; align-items:center; gap:14px; padding:16px 18px; border-radius:16px; background:#ffffff; border:2px solid #ece8de; font-size:20px; text-align:left; width:100%; transition:transform .1s; }
+.so:active { transform:scale(.985); }
+.so i { flex:0 0 auto; width:34px; height:34px; border-radius:50%; border:2px solid #d8d3c6; background:#fff; display:grid; place-items:center; font-style:normal; font-size:15px; font-weight:700; color:var(--dim); }
+.so.on { border-color:var(--tint-plum-head); background:var(--tint-plum-bg); }
+.so.on i { background:var(--tint-plum-head); border-color:var(--tint-plum-head); color:#fff; }

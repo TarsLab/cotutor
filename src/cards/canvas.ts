@@ -53,13 +53,4 @@ export const canvas: CardKind<CanvasProps, CanvasState> = {
     if (!n) return '还没画';
     return `画了 ${n} 笔${s.image ? `,图:${s.image}(用 Read 看)` : ''}`;
   },
-  doc: `### canvas — 画板
-
-孩子在上面画,画完「给老师看」你会收到笔数与一张 png 的路径(用 Read 看图)。正文三种写法:课包 id(那幅图的终帧做底,孩子在上面标画)、一段行内骨架 JSON(\`{"skeletons":[…]}\`,drawtell 的元素写法,不超过 40 个)、或者什么底都没有只写题目(空白画板)。标签后面的词是题目。
-
-\`\`\`\`
-\`\`\`canvas
-画一个三角形,标出它的一条高。
-\`\`\`
-\`\`\`\``,
 };

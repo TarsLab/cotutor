@@ -63,16 +63,4 @@ export const choice: CardKind<ChoiceProps, ChoiceState> = {
     const key = p.answer?.length ? `(答案:${p.answer.map((i) => `「${optionLabel(p.options, i)}」`).join('')})` : '';
     return `选了${chosen}${key}`;
   },
-  doc: `### choice — 选择题
-
-第一行是问题,后面每行 \`- [ ] 选项\`,对的那项写 \`- [x]\`(标了多个就是多选)。答案孩子看不到,只有你知道;孩子选了、交给你,上下文包的 cards 段会写「选了「B …」(答案:「…」)」,对错由你口头说。
-
-\`\`\`\`
-\`\`\`choice
-底 6 厘米、高 4 厘米的三角形,面积是多少?
-- [ ] 24 平方厘米
-- [x] 12 平方厘米
-- [ ] 10 平方厘米
-\`\`\`
-\`\`\`\``,
 };

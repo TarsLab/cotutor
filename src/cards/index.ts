@@ -1,6 +1,6 @@
 /**
  * 卡的注册表:加一种卡 = 加一个文件 + 这里一行;解析器、语法表、孩子端剥秘密都从这里走。
- * 页面那一半在 kid-page.ts(渲染)与 kid-board.ts(标注落点),按 kind 名对上。
+ * 页面那一半在 kid-page.ts(渲染)与 kid-board.ts(标注落点),按 kind 名对上。协议文档与结构样式在包根 cards/<kind>/(src/cards/docs.ts)。
  */
 import { z } from 'zod';
 import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
@@ -118,26 +118,4 @@ export function describeCard(card: BoardCard, state: unknown): string {
   if (!k?.describe || !k.state) return `${head} ${JSON.stringify(state)}`;
   const r = k.state.safeParse(state);
   return `${head} ${r.success ? k.describe(card.props, r.data) : JSON.stringify(state)}`;
-}
-
-/** 给老师看的语法表(出厂到 workspace 的 .cotutor/板书语法.md;从各种卡的 doc 拼出来,不手写) */
-export function boardSyntaxDoc(): string {
-  const kinds = CARD_KINDS.map((k) => k.doc.trim()).join('\n\n');
-  return `# 板书怎么写
-
-回复正文就是孩子看到的板书,只有两种东西:
-
-- **普通段落 = 你说的话。** 一行一句,每句会被念出来、显示在字幕行,所以不要写标题、列表、粗体、括号注释。句子里用方括号标出要在板上敲的词,如「这叫[底]」,那个词要在某张卡上出现。末句写成问句就停下等孩子。
-- **围栏 = 板上的卡。** 围栏的语言标签是卡的种类,后面的词是修饰;正文按各种卡的写法。卡写在讲它的那句话前面,卡与话交错。不认识的标签当代码卡原样显示;正文写得不对的卡退成一段文字,孩子端不会报错。
-
-一节 4–8 张卡、6–12 句话;一次只讲一个想法,讲完就问。随口问答就一两句话,没有卡。**板书写完就停**:最后一个字是问孩子的那句,后面不要再补总结、不要再用工具——孩子看到的是你这轮最后一段话,再补一句板书就丢了。
-
-孩子在卡上做的事(选了、填了)会在下一条消息的上下文包里以 \`cards:\` 段告诉你,一张卡一行(卡的编号、种类、标题、做了什么、答案);孩子只交答案没说话时消息正文是「(交了答案,没说话)」。孩子看到的卡上没有对错,对错由你口头说。上下文包里 \`focus.card\` 是孩子发消息时正开着的那张卡。
-
-对家长说的话、要拍板的事、要转交的事,用「## 家长」「## 待裁量」(question: 一句话;options: 列表)「## 转交」三个段放在正文末尾,孩子看不到;板书到第一个「## 」为止。
-
-## 卡的种类
-
-${kinds}
-`;
 }

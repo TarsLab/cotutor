@@ -27,6 +27,12 @@ export const PolicySchema = z.object({
   board: z.enum(['auto', 'off']).describe('板书:auto = 讲题讲概念时老师出卡(缺省);off = 只说话不出卡'),
   /** 场景作业(scene-maker 做课包,$3–5 / 10–15 分钟一个):每天最多起几个;配在 scene-maker 身上或 policyDefaults */
   scenes: z.object({ dailyMax: z.number().int().nonnegative().describe('每天最多起几个场景作业(一个 ≈ 一轮问答的 30 倍费用)') }),
+  /** 板书后期(《卡片重设计评估.md》§五 §六):一节跑完,快模型定标注 / 排版 / 样子;off = 素版(机械规则) */
+  post: z.object({
+    mode: z.enum(['auto', 'off']).describe('板书后期:auto = 有卡就让快模型划重点、排版、定样子(缺省);off = 素版'),
+    runtime: z.string().min(1).describe('后期用的运行时(runtimes 里的键,缺省 claude-fast:haiku、无工具)'),
+    timeoutMs: z.number().int().positive().describe('等后期最多几毫秒(缺省 4000),超时先出素版'),
+  }),
 });
 export type Policy = z.infer<typeof PolicySchema>;
 
@@ -40,6 +46,7 @@ export const PolicyPatchSchema = z.object({
   contextPack: z.object({ recent: z.number().int().nonnegative().optional(), planLines: z.number().int().nonnegative().optional() }).optional(),
   board: PolicySchema.shape.board.optional(),
   scenes: z.object({ dailyMax: z.number().int().nonnegative().optional() }).optional(),
+  post: z.object({ mode: z.enum(['auto', 'off']).optional(), runtime: z.string().min(1).optional(), timeoutMs: z.number().int().positive().optional() }).optional(),
 });
 export type PolicyPatch = z.infer<typeof PolicyPatchSchema>;
 
@@ -53,6 +60,7 @@ export const POLICY_DEFAULTS: Policy = {
   contextPack: { recent: 10, planLines: 10 },
   board: 'auto',
   scenes: { dailyMax: 2 },
+  post: { mode: 'auto', runtime: 'claude-fast', timeoutMs: 4000 },
 };
 
 /** agent 名:与 .claude/agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
@@ -145,7 +153,7 @@ export type CotutorConfig = z.infer<typeof CotutorConfigSchema>;
 /** 老师的有效政策 = POLICY_DEFAULTS ← policyDefaults ← tutors[name].policy */
 export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
   const layers = [config.policyDefaults, config.tutors[tutor]?.policy ?? {}];
-  const out: Policy = { ...POLICY_DEFAULTS, contextPack: { ...POLICY_DEFAULTS.contextPack }, scenes: { ...POLICY_DEFAULTS.scenes } };
+  const out: Policy = { ...POLICY_DEFAULTS, contextPack: { ...POLICY_DEFAULTS.contextPack }, scenes: { ...POLICY_DEFAULTS.scenes }, post: { ...POLICY_DEFAULTS.post } };
   for (const p of layers) {
     if (p.replyMaxChars !== undefined) out.replyMaxChars = p.replyMaxChars;
     if (p.dailyMessages !== undefined) out.dailyMessages = p.dailyMessages;
@@ -156,6 +164,9 @@ export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
     if (p.contextPack?.planLines !== undefined) out.contextPack.planLines = p.contextPack.planLines;
     if (p.board !== undefined) out.board = p.board;
     if (p.scenes?.dailyMax !== undefined) out.scenes.dailyMax = p.scenes.dailyMax;
+    if (p.post?.mode !== undefined) out.post.mode = p.post.mode;
+    if (p.post?.runtime !== undefined) out.post.runtime = p.post.runtime;
+    if (p.post?.timeoutMs !== undefined) out.post.timeoutMs = p.post.timeoutMs;
   }
   return out;
 }

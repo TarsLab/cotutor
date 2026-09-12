@@ -32,6 +32,7 @@ export interface ConversationFiles {
   err: (job: string) => string;
   /** 这一轮真发出去的东西:上下文包 + 完整命令行(家长端「看原文」第一站;跑完就丢的话,「老师为什么没看见」永远查不了) */
   run: (job: string) => string;
+  post: (job: string) => string;
   audio: (job: string) => string;
   /** 板书讲稿第 n 句的配音(n 从 1 起) */
   lineAudio: (job: string, n: number) => string;
@@ -53,6 +54,7 @@ export function conversationFiles(conversationsDir: string, tutor: string, date:
     log: (job) => `${base}.${job}.log`,
     err: (job) => `${base}.${job}.err.log`,
     run: (job) => `${base}.${job}.run.json`,
+    post: (job) => `${base}.${job}.post.json`,
     audio: (job) => `${base}.${job}.mp3`,
     lineAudio: (job, n) => `${base}.${job}.${n}.mp3`,
     cardsDir: (job) => `${base}.${job}.cards`,
@@ -136,7 +138,7 @@ export function addMessage(index: ConversationIndex, msg: ConversationMessage): 
 export function applyRun(
   index: ConversationIndex,
   job: string,
-  run: { transcript: Transcript; kidView: KidView; runtime: string; artifacts?: string[]; audio?: string | null; timing?: Timing },
+  run: { transcript: Transcript; kidView: KidView; runtime: string; artifacts?: string[]; audio?: string | null; timing?: Timing; post?: ConversationMessage['post'] },
 ): ConversationIndex {
   const { transcript, kidView } = run;
   const messages = index.messages.map((m) =>
@@ -156,6 +158,7 @@ export function applyRun(
           error: transcript.final?.ok === false ? transcript.final.reason : null,
           audio: run.audio ?? null,
           ...(run.timing ? { timing: run.timing } : {}),
+          ...(run.post ? { post: run.post } : {}),
         }
       : m,
   );

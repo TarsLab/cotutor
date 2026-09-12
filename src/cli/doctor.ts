@@ -133,6 +133,19 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
     fix: ok ? undefined : explainLlmFailure(raw, runtime.run),
   });
 
+  // 板书后期:给一节固定样本,真起一次快模型,校验能过就算通
+  {
+    const { resolvePolicy } = await import('../schema/index.ts');
+    const { runPost } = await import('../server/post.ts');
+    const { parseBoard } = await import('../lib/board.ts');
+    const policy = resolvePolicy(ws.config, first.name);
+    if (policy.post.mode === 'off') push({ name: 'live.post', ok: true, required: false, detail: '板书后期关着(post.mode = off),不探' });
+    else {
+      const sample = parseBoard('```text cover\n勾股定理\n直角三角形三条边的关系\n```\n\n先认边。\n\n```text\n# 认边\n两条短边叫直角边,最长的一条叫斜边\n```\n\n两条短边叫直角边,最长的一条叫斜边。\n\n```text formula\n直角边² + 直角边² = 斜边²\n```\n\n记住这个公式。\n\n```choice\n两条直角边是 3 和 4,斜边是多少?\n- [ ] 6\n- [x] 5\n```\n\n斜边是多少?\n').section;
+      const r = await runPost(ws, first.name, sample, { policy, env });
+      push({ name: 'live.post', ok: r.summary.ok, required: false, detail: r.summary.ok ? `${policy.post.runtime} ${r.summary.ms}ms${r.summary.costUsd !== undefined ? ` · $${r.summary.costUsd.toFixed(4)}` : ''} · 收下 标注 ${r.file.kept?.marks ?? 0} 锚点 ${r.file.kept?.anchors ?? 0} ${r.file.kept?.layout ? '排了行' : '没排行'} 样子 ${r.file.kept?.looks ?? 0}${r.file.dropped.length ? ` · 丢 ${r.file.dropped.length}` : ''}` : `没成:${r.summary.error ?? '?'}`, fix: r.summary.ok ? undefined : `每轮会退素版;查 ${policy.post.runtime} 的模板(${(ws.config.runtimes[policy.post.runtime] as { run?: string[] } | undefined)?.run?.[0] ?? '?'} 在不在 PATH、模型名对不对),或 post.timeoutMs 放宽` });
+    }
+  }
   const voiced = tutors.find((x) => x.voice);
   if (!voiced) {
     push({ name: 'live.tts', ok: true, required: false, detail: '没有老师配 voice,不探配音(孩子端用浏览器的声)' });
@@ -295,6 +308,19 @@ export async function doctorWorkspace(
       const { SYNTAX_FILE } = await import('./skeleton.ts');
       const there = (await statOrNull(join(root, SYNTAX_FILE)))?.isFile() ?? false;
       push({ name: 'board.syntax', ok: there, required: true, detail: there ? `${SYNTAX_FILE} 在(老师讲解前读的语法表)` : `${SYNTAX_FILE} 不在,老师不知道卡怎么写`, fix: there ? undefined : 'cotutor init 或 cotutor upgrade 生成' });
+      // 板书后期:policy post.runtime 指的运行时要在;不在 = 每轮都素版(不报错,静默)
+      {
+        const { resolvePolicy } = await import('../schema/index.ts');
+        const seen = new Set<string>();
+        for (const name of Object.keys(ws.config.tutors)) {
+          const p = resolvePolicy(ws.config, name);
+          if (p.post.mode === 'off' || seen.has(p.post.runtime)) continue;
+          seen.add(p.post.runtime);
+          const rt = ws.config.runtimes[p.post.runtime];
+          const okRt = Boolean(rt) && typeof rt !== 'string';
+          push({ name: `post.runtime.${p.post.runtime}`, ok: okRt, required: false, detail: okRt ? `板书后期用 ${p.post.runtime}(${(rt as { run: string[] }).run.slice(0, 4).join(' ')} …),等 ${p.post.timeoutMs}ms` : `板书后期的运行时 ${p.post.runtime} 不在 runtimes 里,每轮都是素版(没有划重点与排版)`, fix: okRt ? undefined : 'cotutor upgrade --config 补出厂的 claude-fast,或把 policyDefaults.post.runtime 改成有的运行时(post.mode = off 关掉)' });
+        }
+      }
       // 舞台包与 drawtell:场景卡 / 画板卡要它们;没有只是重卡打不开,轻卡与对话照常
       const { stageBuilt } = await import('../server/stage.ts');
       const built = stageBuilt();

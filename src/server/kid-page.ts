@@ -750,7 +750,7 @@ __BOARD_JS__
     if (S.state.status === 'playing' || S.state.status === 'paused' || S.state.status === 'stage') S.state = { ...S.state, status: 'done' };
     if (opts.echo !== false) showEcho(opts.echoText || ('你:' + text));
     S.pending = true; renderSubtitle();
-    const body = { text };
+    const body = { text, device: S.device };
     if (opts.action) body.action = opts.action;
     const focus = opts.focus || (S.stage ? { card: S.stage.id } : null);
     if (focus) body.focus = focus;

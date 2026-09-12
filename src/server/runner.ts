@@ -21,7 +21,7 @@ import { buildContextPack } from '../lib/context-pack.ts';
 import { addMessage, applyRun, cardId, changedCards, conversationFiles, jobId, localDate, localMinute, sessionFor, threads } from '../lib/conversation.ts';
 import { BUNDLE_ID_RE, cardAssets, describeCard } from '../cards/index.ts';
 import { parseBoard } from '../lib/board.ts';
-import type { BoardSection } from '../lib/kid-board.ts';
+import type { BoardSection, Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
 import { createPartialReader } from '../lib/stream.ts';
 import { mergeArtifacts, mergeObservations, parseArtifactEvents, parseObservations, recentObservations } from '../lib/ledger.ts';
@@ -29,7 +29,8 @@ import { isoWeek, parsePlan, planLinesFor } from '../lib/plan.ts';
 import { getRuntime, planRun, runtimeUses, type RunPlan } from '../lib/run-plan.ts';
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript } from '../lib/transcript.ts';
-import { resolvePolicy, type ArtifactEvent, type ContextPack, type ConversationIndex, type Focus, type Handoff, type MessageFrom, type Timing } from '../schema/index.ts';
+import { resolvePolicy, type ArtifactEvent, type ContextPack, type ConversationIndex, type Focus, type Handoff, type MessageFrom, type Policy, type Timing } from '../schema/index.ts';
+import { DEFAULT_DEVICE, runPost, writePostFile, type PostResult } from './post.ts';
 import type { Transcript } from '../lib/transcript.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { readAgentBody, readCardStates, readIndex, writeIndex, writeRunFile } from './store.ts';
@@ -54,6 +55,8 @@ export interface SendInput {
   newThread?: boolean;
   /** 接着今天的某个话题聊(话题 id);缺省 = 当前(末条所在的)话题。from: system 的永远开新话题 */
   thread?: string;
+  /** 孩子端是什么端(板书后期按它排版);缺省当平板横屏 */
+  device?: Device;
 }
 
 export interface SendStarted {
@@ -107,6 +110,10 @@ export class Runner {
   private readonly background = new Set<Promise<void>>();
   private readonly getWs: () => Workspace;
   private readonly opts: { now?: () => Date; env?: NodeJS.ProcessEnv };
+  /** 起子进程用的环境(测试注入;repost 用同一份) */
+  get env(): NodeJS.ProcessEnv | undefined {
+    return this.opts.env;
+  }
   constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv } = {}) {
     this.getWs = getWs;
     this.opts = opts;
@@ -166,12 +173,12 @@ export class Runner {
     const prompt = buildContextPack(pack, text, policy.contextPack);
     const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, runtime: input.runtime ?? t.runtime });
 
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(input.device ? { device: input.device } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined });
 
     const active: Active = { job, date, partial: null, done: Promise.resolve(started) };
-    active.done = this.spawn(ws, tutor, date, job, plan, policy.replyMaxChars, active).finally(() => this.active.delete(tutor));
+    active.done = this.spawn(ws, tutor, date, job, plan, policy, input.device ?? DEFAULT_DEVICE, active).finally(() => this.active.delete(tutor));
     this.active.set(tutor, active);
     return { tutor, date, job, thread, plan, done: active.done };
   }
@@ -255,7 +262,8 @@ export class Runner {
     return { id, warnings };
   }
 
-  private async spawn(ws: Workspace, tutor: string, date: string, job: string, plan: RunPlan, replyMaxChars: number, active: Active): Promise<ConversationIndex> {
+  private async spawn(ws: Workspace, tutor: string, date: string, job: string, plan: RunPlan, policy: Policy, device: Device, active: Active): Promise<ConversationIndex> {
+    const replyMaxChars = policy.replyMaxChars;
     const files = conversationFiles(ws.dirs.conversations, tutor, date);
     const cwd = join(ws.dirs.agents, tutor);
     await mkdir(cwd, { recursive: true });
@@ -310,6 +318,8 @@ export class Runner {
       transcript.items.push({ kind: 'done', text: `本轮没有收尾(${transcript.final.reason}),看 ${date}.${job}.err.log` });
     }
     const kidView = deriveKidView(transcript, { replyMaxChars });
+    // 板书后期(有卡就起,与配音收尾并行;等到 policy.post.timeoutMs,超时先出素版):标注 / 排版 / 样子回来套在这节上
+    const postP: Promise<PostResult> | null = policy.post.mode !== 'off' && kidView.section?.cards.length ? runPost(ws, tutor, kidView.section, { device, policy, env: this.opts.env, cwd }) : null;
     // 配音:老师配了音色才合成;失败不响,孩子端用浏览器的声。
     // 有板书讲稿就逐句配(流式时大多已在路上,这里只等没配完的);没有讲稿只有一段话(老形状)才整段配。
     let audio: string | null = null;
@@ -321,9 +331,21 @@ export class Runner {
       audio = await dubReply(ws.config.tts, kidView.kidText, voice, { audio: files.audio(job), err: files.err(job) }, this.opts.env);
       timing.dubbedMs = since();
     }
+    let post: PostResult['summary'] | undefined;
+    if (postP) {
+      try {
+        const r = await postP;
+        if (kidView.section) kidView.section = { ...r.section, lines: r.section.lines.map((l, i) => ({ ...l, audio: kidView.section?.lines[i]?.audio ?? null })) };
+        post = r.summary;
+        timing.postMs = since();
+        await writePostFile(ws, tutor, date, job, r.file);
+      } catch (err) {
+        post = { ok: false, ms: since(), dropped: 0, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
     // 重新读索引再并入:跑的这段时间里别的字段(比如家长改了别的)不被旧对象盖掉
     const latest = await readIndex(ws, tutor, date);
-    let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, audio, timing });
+    let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, audio, timing, post });
     // 场景作业收尾:课包的费用与时长进账本,消息的 artifacts 记课包 id
     if (tutor === 'scene-maker') {
       const r = await this.settleSceneLedger(ws, tutor, date, job, latest.messages.find((m) => m.job === job)?.text ?? '', transcript, timing);

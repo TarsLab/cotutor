@@ -732,6 +732,24 @@ export const PARENT_PAGE = `<!doctype html>
       }
       return box;
     }
+    if (s === 'post') {
+      const box = h('div', { class: 'dsec' });
+      const p = raw.post, sm = raw.postSummary;
+      const redo = h('button', { class: 'btn', type: 'button', on: { click: async (e) => { e.target.disabled = true; e.target.textContent = '在做…'; try { await api('POST', '/api/conversations/' + raw.tutor + '/' + raw.date + '/raw/' + raw.job + '/repost'); } catch (err) { alert('没成:' + err.message); } openRaw(raw.job); } } }, '再做一次后期');
+      box.append(h('h5', {}, '板书后期:快模型定的标注 / 锚点 / 排版 / 样子;老师原文与配音不动,校验不过的提案丢掉,页面走机械规则'));
+      if (!p && !sm) { box.append(h('p', { class: 'hintline' }, raw.stations.find((x) => x.id === 'post')?.note || '这轮没跑过后期。'), h('p', {}, redo)); return box; }
+      box.append(h('div', { class: 'kline' }, h('span', { class: 'n2' }, '·'), h('span', {}, (sm && sm.ok ? '收到' : '没成') + (p ? ' · ' + p.runtime + ' · ' + (raw.device || '端未知,按平板横屏') + ' · 主题 ' + p.theme : '') + (sm ? ' · ' + sm.ms + 'ms' + (sm.costUsd !== undefined ? ' · $' + sm.costUsd.toFixed(4) : '') : '')), h('span', {}, redo)));
+      if (sm && sm.error) box.append(h('p', { class: 'hintline' }, '原因:' + sm.error));
+      if (p && p.kept) box.append(h('p', { class: 'hintline' }, '收下:标注 ' + p.kept.marks + ' · 锚点 ' + p.kept.anchors + ' · ' + (p.kept.layout ? '排了行' : '没排行(一行一张)') + ' · 样子 ' + p.kept.looks));
+      if (p && p.dropped.length) { box.append(h('h5', {}, '丢掉的提案 ' + p.dropped.length + ' 条(模型只是提案,契约说了算)')); for (const d of p.dropped) box.append(h('p', { class: 'hintline' }, d)); }
+      if (p) {
+        box.append(h('details', {}, h('summary', {}, '提示词(' + p.prompt.length + ' 字)'), h('pre', {}, p.prompt)));
+        box.append(h('details', {}, h('summary', {}, '模型原始输出'), h('pre', {}, p.raw || '(空)')));
+        if (p.output) box.append(h('details', {}, h('summary', {}, '解析出的提案'), h('pre', {}, JSON.stringify(p.output, null, 2))));
+        box.append(h('details', {}, h('summary', {}, '命令行'), h('pre', {}, p.argv.join(' '))));
+      }
+      return box;
+    }
     if (s === 'trace') {
       const box = h('div', { class: 'dsec' });
       box.append(h('h5', {}, '转录 ' + raw.trace.length + ' 条'), h('div', { class: 'trace' }, ...rowsEl(raw.trace)));

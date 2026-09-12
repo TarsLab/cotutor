@@ -26,9 +26,14 @@ import { USER_CERT_DIR } from '../cli/workspace.ts';
 import { kidThreads } from '../lib/kid-view.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { KID_PAGE } from './kid-page.ts';
-import { packageTheme } from '../cli/themes.ts';
+import { PACKAGE_THEMES_DIR, packageTheme } from '../cli/themes.ts';
+import { validatePost, type PostOutput } from '../lib/postprocess.ts';
+import { ThemeManifestSchema, type ThemeManifest } from '../schema/index.ts';
 
-export type MockScenario = 'normal' | 'limit' | 'offline';
+/** 出厂主题的清单(假后期校验槽名用;同步读,预装的节也要带后期) */
+const MOCK_THEME: ThemeManifest = ThemeManifestSchema.parse(JSON.parse(readFileSync(join(PACKAGE_THEMES_DIR, 'default', 'theme.json'), 'utf8')));
+
+export type MockScenario = 'normal' | 'limit' | 'offline' | 'nopost';
 
 export interface MockTutor {
   name: string;
@@ -47,6 +52,28 @@ export interface MockTutor {
 /** 脚本 → 板书节:走真解析器(mock 也是解析器的一次演练) */
 export function sectionFromScript(md: string): BoardSection {
   return parseBoard(md).section;
+}
+
+/**
+ * 假后期:真服务里这是快模型出的提案(src/lib/postprocess.ts 校验后套上);mock 没有模型,给几节写死的提案,
+ * 过同一个 validatePost——页面走的是同一条渲染路(layout 的行、look 的槽、带 pen 的标注)。键 = 老师名:脚本序号。
+ */
+export const MOCK_POST: Record<string, PostOutput> = {
+  // 勾股定理:封面独占,认边与公式并排,验证与一句话并排,选择题独占;验证是方法卡(moss),标题「认边」画圈、16 下划线(老师自己标的 直角边 / 斜边 / 25 保留,不重复)
+  'math-tutor:0': {
+    marks: [{ line: 0, card: 1, phrase: '认边', pen: 'circle' }, { line: 3, card: 3, phrase: '16', pen: 'underline' }],
+    anchors: [],
+    layout: { rows: [[0], [1, 2], [3, 4], [5]] },
+    look: { '3': { tint: 'moss' }, '4': { emoji: '💡' } },
+  },
+  'math-tutor:1': { marks: [], anchors: [], layout: { rows: [[0, 1], [2]] }, look: { '0': { tint: 'moss' } } },
+  'chinese-tutor:0': { marks: [{ line: 1, card: 1, phrase: '多做一步', pen: 'marker' }], anchors: [], layout: { rows: [[0], [1], [2], [3]] }, look: { '1': { emoji: '💡' } } },
+};
+
+function withMockPost(section: BoardSection, tutor: string, i: number, device: 'phone' | 'tablet-portrait' | 'tablet-landscape' = 'tablet-landscape'): BoardSection {
+  const out = MOCK_POST[`${tutor}:${i}`];
+  if (!out) return section;
+  return validatePost(section, MOCK_THEME, device, out).section;
 }
 
 export const MOCK_TUTORS: MockTutor[] = [
@@ -291,6 +318,8 @@ const localDate = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 
 export function createMock(opts: MockOptions = {}): Mock {
+  // 假后期:nopost 场景看素版
+  const withPost = (section: BoardSection, tutor: string, i: number): BoardSection => (opts.scenario === 'nopost' ? section : withMockPost(section, tutor, i));
   const scenario = opts.scenario ?? 'normal';
   const delay = opts.delayMs ?? 1800;
   const now = opts.now ?? (() => new Date());
@@ -306,7 +335,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   for (const t of MOCK_TUTORS) {
     const list: MockMessage[] = [];
     for (let i = 0; i < t.preloaded && i < t.script.length; i++) {
-      const section = sectionFromScript(t.script[i]);
+      const section = withPost(sectionFromScript(t.script[i]), t.name, i);
       const job = nextJob();
       list.push({ job, thread: list[0]?.thread ?? job, at: now().toISOString(), question: i === 0 ? t.firstQuestion : '继续', reply: section.lines[section.lines.length - 1]?.text ?? null, audio: null, pending: false, artifacts: [], section });
     }
@@ -356,7 +385,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     const i = cursor.get(t.name) ?? 0;
     const step = t.script[i];
     cursor.set(t.name, i + 1);
-    const full = step ? sectionFromScript(step) : null;
+    const full = step ? withPost(sectionFromScript(step), t.name, i) : null;
     const n = full ? full.cards.length : 0;
     const tick = delay / (n + 1);
     return new Promise<void>((resolve) => {
@@ -364,7 +393,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const reveal = (): void => {
         k++;
         if (k <= n && full) {
-          m.section = { cards: full.cards.slice(0, k), lines: full.lines.filter((l) => l.anchor !== null && l.anchor < k - 1), partial: true };
+          m.section = { cards: full.cards.slice(0, k).map((c) => { const { look: _l, ...rest } = c; return rest; }), lines: full.lines.filter((l) => l.anchor !== null && l.anchor < k - 1), partial: true };
           setTimeout(reveal, tick);
         } else {
           answer(m, full);

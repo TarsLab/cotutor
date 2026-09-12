@@ -182,12 +182,17 @@ export function configTemplate(input: ConfigTemplateInput): string {
         run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '25m'],
         resume: ['qwen', '-p', '{prompt}', '--resume', '{session}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '25m'],
       },
+      // 板书后期(policy post.runtime):快模型、无工具、整块 JSON 出,几秒几厘;没有 resume 的事,写同一条
+      'claude-fast': {
+        run: ['claude', '-p', '{prompt}', '--model', 'haiku', '--output-format', 'json', '--disallowedTools', 'Agent,Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit', '--max-budget-usd', '0.2'],
+        resume: ['claude', '-p', '{prompt}', '--model', 'haiku', '--output-format', 'json', '--disallowedTools', 'Agent,Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit', '--max-budget-usd', '0.2'],
+      },
     },
     tts: TTS_DEFAULT,
     _note:
       '一孩一 workspace 的政策文件,家长改这里;机器不会自动重建或覆盖,写坏了靠 git 回退,cotutor doctor 可体检。' +
       'tutors = 老师表(key 与 .claude/agents/<key>.md 的 name 一致):display 显示名、avatar、voice 用 voxtell 音色 id、enabled 开关、hidden 孩子端不露、policy 覆盖 policyDefaults。' +
-      'policyDefaults 缺省:replyMaxChars 60(每句)、dailyMessages 30、dailyRegen 3、reviewGate false、contextPack {recent 10, planLines 10}、board auto(off = 只说话不出卡)。' +
+      'policyDefaults 缺省:replyMaxChars 60(每句)、dailyMessages 30、dailyRegen 3、reviewGate false、contextPack {recent 10, planLines 10}、board auto(off = 只说话不出卡)、post {mode auto, runtime claude-fast, timeoutMs 4000}(板书后期:快模型划重点 / 排版 / 定样子;off = 素版)。' +
       'paths = 角色映射:vault 指 Obsidian vault 根(一孩一 vault),photos/diary/plans/profile/timetable 相对 vault。' +
       'runtimes = 运行时,占位 {agent} {agentBody} {prompt} {session};政策旋钮(预算、时限、模型)写进模板;老师条目的 runtime 可指定用哪个(scene-maker 用 claude-scene:预算 8 美元)。scenes.dailyMax(缺省 2)= 每天最多起几个场景作业。' +
       'tts = 配音命令,占位 {text} {voice} {out};老师没配 voice 就不合成,孩子端用浏览器的声。' +

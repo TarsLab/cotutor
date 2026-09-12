@@ -48,6 +48,7 @@ try {
   check('健康workspace体检通过', d1.ok, JSON.stringify(d1.checks.filter((c) => c.required && !c.ok)));
   check('doctor 查板书语法表', d1.checks.some((c) => c.name === 'board.syntax' && c.ok && c.required));
   check('老师链都查了(六位:含 scene-maker)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 6);
+  check('doctor 查板书后期的运行时:出厂 claude-fast 在模板里', d1.checks.some((c) => c.name === 'post.runtime.claude-fast' && c.ok && !c.required));
   check('doctor 查主题:清单过契约、出厂件最新', d1.checks.some((c) => c.name === 'theme.manifest' && c.ok) && d1.checks.some((c) => c.name === 'theme.default.origin' && c.ok));
   check('doctor 查 skill 与 drawtell 壳', d1.checks.filter((c) => c.name.startsWith('skill.') && c.ok).length === 4 && d1.checks.some((c) => c.name === 'drawtell' && c.ok && !c.required));
   check('默认运行时是 claude → .claude 链必需、.qwen 链非必需', d1.checks.some((c) => c.name === 'tutor.math-tutor.claude' && c.required) && d1.checks.some((c) => c.name === 'tutor.math-tutor.qwen' && !c.required));

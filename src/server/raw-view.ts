@@ -15,9 +15,10 @@ import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { resolvePolicy, type ConversationMessage } from '../schema/index.ts';
 import type { Workspace } from '../cli/workspace.ts';
 import { readErrLog, readIndex, readRunFile, readTranscript, scanCards } from './store.ts';
+import { readPostFile, type PostFile } from './post.ts';
 
 export interface RawStation {
-  id: 'pack' | 'source' | 'parse' | 'kid' | 'audio' | 'trace' | 'ledger';
+  id: 'pack' | 'source' | 'parse' | 'kid' | 'audio' | 'trace' | 'post' | 'ledger';
   title: string;
   /** 体量那行小字 */
   note: string;
@@ -77,6 +78,10 @@ export interface RawView {
   kid: { lines: RawKidLine[]; cards: RawCard[] };
   /** 转录(工具行、子代理),与家长视图同一套折叠 */
   trace: TranscriptRow[];
+  /** 第七站:板书后期的输入 / 原始输出 / 校验(<日期>.<job>.post.json);没跑过 → null */
+  post: PostFile | null;
+  postSummary: { ok: boolean; ms: number; costUsd?: number; dropped: number; error?: string } | null;
+  device: string | null;
   /** stderr 尾巴 */
   err: string;
   files: { log: string; run: string | null };
@@ -169,6 +174,15 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     { id: 'audio', title: '配音与资产', note: !lines.length ? '这轮没有讲稿' : !lines.some((l) => l.audio) ? '没配音 · 孩子端用浏览器的声' : `${dubbed} / ${lines.length} 句${m.timing?.dubbedMs !== undefined ? ` · ${secs(m.timing.dubbedMs)}` : ''}`, state: !lines.length || !lines.some((l) => l.audio) ? 'none' : dubbed === lines.length ? 'ok' : 'warn' },
     { id: 'trace', title: '转录与报错', note: `${transcript?.items.length ?? 0} 条${err ? ' · stderr 有东西' : ''}`, state: m.result === 'error' || err ? 'warn' : 'ok' },
   ];
+  // 第七站:板书后期(有卡的轮次才有;关着 / 老板书没跑过 → none)
+  const postFile: PostFile | null = await readPostFile(ws, tutor, date, job);
+  if (m.post || postFile) {
+    const kept = postFile?.kept;
+    const note = m.post?.ok
+      ? `${secs(m.post.ms)}${m.post.costUsd !== undefined ? ` · $${m.post.costUsd.toFixed(3)}` : ''} · 标注 ${kept?.marks ?? '?'} 锚点 ${kept?.anchors ?? '?'} ${kept?.layout ? '排了行' : '没排行'} 样子 ${kept?.looks ?? '?'}${m.post.dropped ? ` · 丢 ${m.post.dropped}` : ''}`
+      : `没成:${m.post?.error ?? postFile?.error ?? '?'}(素版)`;
+    stations.push({ id: 'post', title: '板书后期', note, state: m.post?.ok ? (m.post.dropped ? 'warn' : 'ok') : 'warn' });
+  } else if (stored?.cards.length) stations.push({ id: 'post', title: '板书后期', note: policy.post.mode === 'off' ? '关着(policy post.mode = off),素版' : '这轮没跑过(老板书);可以「再做一次」', state: 'none' });
   if (m.artifacts.length) stations.push({ id: 'ledger', title: '账本', note: `产物 ${m.artifacts.join('、')}`, state: 'ok' });
 
   return {
@@ -193,6 +207,9 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     kid: { lines, cards },
     trace: foldRuns(transcript?.items ?? []),
     err: err.slice(-4000),
+    post: postFile ? { ...postFile, raw: postFile.raw.slice(0, 20000) } : null,
+    postSummary: m.post ?? null,
+    device: m.device ?? null,
     files: { log: `${date}.${job}.log`, run: pack ? `${date}.${job}.run.json` : null },
   };
 }

@@ -12,6 +12,7 @@ let fail = false;
 let stream = false;
 let agent = '';
 let body = '';
+let outputFormat = 'stream-json';
 const rest: string[] = [];
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--resume') session = argv[++i];
@@ -19,12 +20,28 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === '--body') body = argv[++i];
   else if (argv[i] === '--fail') fail = true;
   else if (argv[i] === '--stream') stream = true;
+  else if (argv[i] === '--output-format') outputFormat = argv[++i];
+  else if (argv[i] === '--model' || argv[i] === '--disallowedTools' || argv[i] === '--max-budget-usd') i++;
   else rest.push(argv[i]);
 }
 const prompt = rest.join(' ');
 const sid = session ?? `fake-${process.pid}-${Date.now()}`;
 const emit = (o: unknown): void => void process.stdout.write(`${JSON.stringify(o)}\n`);
 const lastLine = prompt.trim().split('\n').filter(Boolean).pop() ?? '';
+
+// 板书后期(--output-format json):模仿 claude 的整块 JSON 壳,正文是一份提案——第一张卡标一个词、有 ≥ 3 张卡就把 1、2 并排、给第 0 张卡 sky + emoji;
+// 提示词里有「后期慢」就拖 1.2 秒(测超时),有「后期坏」就吐不是 JSON 的话(测解析失败)
+if (outputFormat === 'json') {
+  const cardLines = prompt.split('\n## 卡\n')[1]?.split('\n## ')[0]?.split('\n').filter((l) => /^\d+\. /.test(l)) ?? [];
+  const n = cardLines.length;
+  const firstWord = /^0\. text[^:]*:(?:标题「[^」]*」;)?(\S{2,4})/.exec(cardLines[0] ?? '')?.[1] ?? '三角形';
+  const rows = n >= 3 ? [[0], [1, 2], ...Array.from({ length: n - 3 }, (_, i) => [i + 3])] : Array.from({ length: n }, (_, i) => [i]);
+  const proposal = { marks: [{ line: 0, card: 0, phrase: firstWord, pen: 'circle' }, { line: 0, card: 99, phrase: '越界', pen: 'box' }], anchors: [], layout: { rows }, look: { '0': { tint: 'sky', emoji: '📐' }, '1': { tint: 'nope' } } };
+  const text = prompt.includes('后期坏') ? '我觉得这节挺好的,不用改。' : JSON.stringify(proposal);
+  if (prompt.includes('后期慢')) await new Promise((r) => setTimeout(r, 3000));
+  emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.0021, duration_ms: 900, result: text });
+  process.exit(0);
+}
 
 emit({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), agent: agent || undefined, bodyLen: body.length });
 emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'text', text: '我先看看上下文包' }] } });

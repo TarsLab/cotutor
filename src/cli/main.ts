@@ -29,7 +29,8 @@ const USAGE = `用法:
   cotutor serve [--workspace <dir>] [--port <n>] [--http]               起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS)
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad / iPhone 上录音要 HTTPS;所有 workspace 共用)
   cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>] [--new]   终端里发一条,等老师说完打印结果(与页面同一条路;--new 开新话题)
-  cotutor mock [--port <n>] [--scenario normal|limit|offline] [--delay <ms>] [--http]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace)
+  cotutor mock [--port <n>] [--scenario normal|limit|offline|nopost] [--delay <ms>] [--http]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace;nopost = 没有后期的素版)
+  cotutor repost <老师> [<日期>] [--job <job>] [--workspace <dir>]      板书后期再做一次:老师原文重解 → 快模型重新划重点 / 排版 / 定样子 → 改写索引(老师原文与配音不动;调提示词时旧板书全部能重来)
   cotutor --version | --help
 workspace解析:--workspace > COTUTOR_WORKSPACE > cwd 或祖先有 cotutor.json > ~/.config/cotutor/config.json > ~/cotutor/ 下唯一的孩子目录
 `;
@@ -123,7 +124,7 @@ export async function main(argv: string[]): Promise<void> {
         const port = typeof flags.port === 'string' ? Number(flags.port) : undefined;
         if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) throw new UsageError('--port 要是 1–65535 的整数');
         const scenario = typeof flags.scenario === 'string' ? flags.scenario : 'normal';
-        if (!['normal', 'limit', 'offline'].includes(scenario)) throw new UsageError('--scenario 只能是 normal / limit / offline');
+        if (!['normal', 'limit', 'offline', 'nopost'].includes(scenario)) throw new UsageError('--scenario 只能是 normal / limit / offline / nopost');
         const delayMs = typeof flags.delay === 'string' ? Number(flags.delay) : undefined;
         if (delayMs !== undefined && !(Number.isInteger(delayMs) && delayMs >= 0)) throw new UsageError('--delay 要是非负整数(毫秒)');
         const r = await serveMock({ port, scenario: scenario as MockScenario, delayMs, http: flags.http === true });
@@ -208,6 +209,27 @@ export async function main(argv: string[]): Promise<void> {
           process.stdout.write(`证书:${redactHome(r.cert)}\n私钥:${redactHome(r.key)}\n主机:${r.hosts.join(' ')}\n`);
           process.stdout.write(`iPad / iPhone 要先信任这台机器的根证书:把 ${redactHome(r.caRoot)}/rootCA.pem 隔空投送过去 → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里**把开关打开**(装了不等于信任,每台设备各做一次);然后重启 cotutor serve,用打印的 https://<局域网 IP>:<端口>/ 打开(用 IP,主机名在有些设备上会走到不通的 IPv6)。详见 docs/iPad与iPhone.md\n`);
         }
+        return;
+      }
+      case 'repost': {
+        const [tutor, dateArg] = positionals;
+        if (!tutor) throw new UsageError(`repost 需要老师名,如 cotutor repost math-tutor 2026-09-12 --job 1620-1。\n${USAGE}`);
+        const ws = loadWorkspace(workspace);
+        const { repost } = await import('../server/post.ts');
+        const { readIndex } = await import('../server/store.ts');
+        const { localDate } = await import('../lib/conversation.ts');
+        const date = dateArg ?? localDate(new Date());
+        const index = await readIndex(ws, tutor, date);
+        const jobs = typeof flags.job === 'string' ? [flags.job] : index.messages.filter((m) => m.result === 'ok' && m.section?.cards.length).map((m) => m.job);
+        if (!jobs.length) throw new UsageError(`${tutor} ${date} 没有带卡的轮次`);
+        const results = [];
+        for (const job of jobs) {
+          const r = await repost(ws, tutor, date, job);
+          results.push({ job, ...r });
+          if (!json) process.stdout.write(`${r.ok ? '✓' : '!'} ${job}  ${r.message?.post ? `${r.message.post.ms}ms${r.message.post.costUsd !== undefined ? ` $${r.message.post.costUsd.toFixed(4)}` : ''} · 丢 ${r.message.post.dropped}${r.message.post.error ? ` · ${r.message.post.error}` : ''}` : r.error ?? ''}\n`);
+        }
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep(results.map((r) => ({ job: r.job, ok: r.ok, post: r.message?.post ?? null, error: r.error ?? null }))), null, 2)}\n`);
+        else process.stdout.write(`索引已改写;孩子端刷新就是新的排版。细节在家长端「看原文」第七站,或 conversations/${tutor}/${date}.<job>.post.json\n`);
         return;
       }
       case 'send': {

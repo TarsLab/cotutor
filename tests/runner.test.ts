@@ -34,9 +34,12 @@ cfg.runtimes = {
   fake2: { run: [...fake().run.slice(0, 4), '--body', '{agentBody}', ...fake().run.slice(4)], resume: [...fake().resume.slice(0, 4), '--body', '{agentBody}', ...fake().resume.slice(4)] },
   broken: fake(['--fail']),
   stream: fake(['--stream']),
+  fast: fake(['--output-format', 'json']),
   missing: { run: ['/nonexistent/cli', '{prompt}'], resume: ['/nonexistent/cli', '{prompt}'] },
 };
 cfg.paths = { vault: 'vault', plans: '计划', timetable: '课程表.md' };
+// 板书后期走假 CLI 的 json 模式;等 1500ms(假 CLI 见「后期慢」拖 3 秒 → 超时)
+cfg.policyDefaults = { post: { runtime: 'fast', timeoutMs: 1500 } };
 cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'] };
 (cfg.tutors as Record<string, Record<string, unknown>>)['math-tutor'].voice = 'v-math';
 (cfg.tutors as Record<string, Record<string, unknown>>)['reading-tutor'].voice = 'fail';
@@ -272,6 +275,33 @@ try {
   const dS = (await day('math-tutor', '2026-09-09')).json as { index: { messages: BoardMsg[] } };
   const mS = dS.index.messages.find((m) => m.job === jobS2)!;
   check('跑完:正式一节(不带 partial)、2 张卡 3 句、每句 mp3(流式时已在路上)、子代理的增量没混进来', mS.section?.cards.length === 2 && !('partial' in mS.section) && mS.section.lines.length === 3 && mS.section.lines.every((l, i) => l.audio === `2026-09-09.${jobS2}.${i + 1}.mp3`) && !mS.kidText?.includes('子代理') && mS.kidText?.includes('第一次说:流式 板书') === true, JSON.stringify(mS));
+  // ---- 板书后期:有卡就起,与配音并行;假 CLI 的提案里一半是坏的(卡 99、老师已标的、槽名 nope),校验丢掉,剩下的套上 ----
+  type Post = { ok: boolean; ms: number; costUsd?: number; dropped: number; error?: string };
+  type PostMsg = { result: string; post?: Post; device?: string; timing?: { postMs?: number }; section?: { layout?: { for: string; rows: number[][] }; cards: { look?: { tint?: string; emoji?: string } }[]; lines: { marks: { phrase: string; pen?: string }[] }[] } };
+  const mP = mS as unknown as PostMsg;
+  check('后期:收到、记了费用与丢的条数;layout 一行一张(两张卡)、for 缺省平板横屏;卡 0 的样子进了;老师的标注没 pen、模型重复的丢了', mP.post?.ok === true && mP.post.costUsd === 0.0021 && mP.post.dropped === 3 && mP.section?.layout?.for === 'tablet-landscape' && JSON.stringify(mP.section.layout.rows) === '[[0],[1]]' && mP.section.cards[0].look?.tint === 'sky' && mP.section.cards[0].look?.emoji === '📐' && mP.section.cards[1].look === undefined && mP.section.lines[0].marks.length === 1 && mP.section.lines[0].marks[0].pen === undefined && typeof mP.timing?.postMs === 'number', JSON.stringify([mP.post, mP.section?.layout, mP.section?.cards.map((c) => c.look)]));
+  check('后期文件落了盘:提示词、原始输出、丢掉的三条', existsSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobS2}.post.json`)) && (JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobS2}.post.json`), 'utf8')) as { dropped: string[]; prompt: string; raw: string }).dropped.length === 3);
+  const rawS = (await route('GET', `/api/conversations/math-tutor/2026-09-09/raw/${jobS2}`, ctx)).json as Raw & { post: { kept: { marks: number; layout: boolean } } | null };
+  check('看原文:有卡的轮次多第七站「板书后期」,warn(有丢的);带提示词与校验结果', rawS.stations.map((x) => x.id).join() === 'pack,source,parse,kid,audio,trace,post' && rawS.stations.find((x) => x.id === 'post')?.state === 'warn' && rawS.post?.kept.layout === true && rawS.post.kept.marks === 0, JSON.stringify(rawS.stations));
+  // 超时 → 素版(没有 layout、没有 look),post.ok false 带原因;坏输出 → 同样素版
+  const rSlow = await post('math-tutor', { text: '板书 后期慢', from: 'kid' });
+  await wait('math-tutor');
+  const mSlow = (await day('math-tutor', '2026-09-09')).json as Day;
+  const slow = mSlow.index.messages.find((m) => m.job === (rSlow.json as { job: string }).job) as unknown as PostMsg | undefined;
+  check('后期超时 → 素版:卡还在、没有 layout、post.ok false 说超时', slow?.result === 'ok' && slow.section?.cards.length === 2 && slow.section.layout === undefined && slow.post?.ok === false && slow.post.error?.includes('超时') === true, JSON.stringify(slow?.post));
+  const rBad = await post('math-tutor', { text: '板书 后期坏', from: 'kid' });
+  await wait('math-tutor');
+  const badP = ((await day('math-tutor', '2026-09-09')).json as Day).index.messages.find((m) => m.job === (rBad.json as { job: string }).job) as unknown as PostMsg | undefined;
+  check('后期输出不是 JSON → 素版,post.error 说不合形状', badP?.section?.layout === undefined && badP?.post?.ok === false && badP.post.error?.includes('不合形状') === true, JSON.stringify(badP?.post));
+  // 再做一次后期(家长端第七站的按钮):老师原文重解 → 再跑 → 改写索引
+  const re = await route('POST', `/api/conversations/math-tutor/2026-09-09/raw/${(rBad.json as { job: string }).job}/repost`, ctx);
+  const redone = ((await day('math-tutor', '2026-09-09')).json as Day).index.messages.find((m) => m.job === (rBad.json as { job: string }).job) as unknown as PostMsg | undefined;
+  check('repost:这轮原文里还是「后期坏」→ 仍素版但重新跑过(post 换了新的);没这轮 → 404', re.status === 200 && (re.json as { ok: boolean }).ok === false && redone?.post?.ok === false && (await route('POST', '/api/conversations/math-tutor/2026-09-09/raw/9999-9/repost', ctx)).status === 404, JSON.stringify(re.json));
+  // 孩子端发消息带端:后期按它排;坏的端 400
+  const rPhone = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '板书 手机', device: 'phone' });
+  await wait('math-tutor');
+  const phone = ((await day('math-tutor', '2026-09-09')).json as Day).index.messages.find((m) => m.job === (rPhone.json as { job: string }).job) as unknown as PostMsg | undefined;
+  check('孩子端带 device=phone → 消息记了端,layout.for 是 phone;坏的端 400', rPhone.status === 202 && phone?.device === 'phone' && phone.section?.layout?.for === 'phone' && (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: 'x', device: 'watch' })).status === 400, JSON.stringify([phone?.device, phone?.section?.layout]));
   const tS = (mS as unknown as { timing?: Timing }).timing;
   check('埋点:流式轮记了首卡,首卡 ≤ 整轮 ≤ 配音收尾', typeof tS?.firstCardMs === 'number' && tS.firstCardMs >= 0 && typeof tS.doneMs === 'number' && tS.firstCardMs <= tS.doneMs && typeof tS.dubbedMs === 'number' && tS.dubbedMs >= tS.doneMs, JSON.stringify(tS));
   check('跑完后 partial 没了', ctx.runner.partial('math-tutor') === null && !(((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; section?: { partial?: boolean } }[] }).messages.find((m) => m.job === jobS2)?.section?.partial));

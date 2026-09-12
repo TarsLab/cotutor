@@ -20,6 +20,8 @@ export const SHIPPED_FILE = '.cotutor/shipped.json';
 export interface ShippedManifest {
   /** 出厂 skill(drawtell-skills 的四个领域 skill)的 hash,与 tutors 同一套机制(src/cli/skills.ts) */
   skills?: Record<string, { hash: string; version: string }>;
+  /** 出厂主题(themes/<name>/)的目录 hash,同一套机制(src/cli/themes.ts) */
+  themes?: Record<string, { hash: string; version: string }>;
   version: string;
   tutors: Record<string, { hash: string; version: string }>;
 }
@@ -29,7 +31,8 @@ export const sha256 = (text: string): string => `sha256:${createHash('sha256').u
 export async function readManifest(root: string): Promise<ShippedManifest> {
   try {
     const raw = JSON.parse(await readFile(join(root, SHIPPED_FILE), 'utf8')) as Partial<ShippedManifest>;
-    return { version: raw.version ?? '0', tutors: raw.tutors ?? {} };
+    // skills / themes 也要带回来,不然 tutors 这边一写就把它们抹了
+    return { version: raw.version ?? '0', tutors: raw.tutors ?? {}, ...(raw.skills ? { skills: raw.skills } : {}), ...(raw.themes ? { themes: raw.themes } : {}) };
   } catch {
     return { version: '0', tutors: {} };
   }

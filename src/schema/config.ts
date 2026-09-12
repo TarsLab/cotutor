@@ -115,6 +115,8 @@ export const CotutorConfigSchema = z
       slug: z.string().regex(AGENT_NAME_RE),
       name: z.string().optional(),
       grade: z.string().optional(),
+      /** 孩子端用哪个主题(themes/<name>/);缺省 default(出厂主题,init 拷进 workspace) */
+      theme: z.string().regex(AGENT_NAME_RE).default('default').describe('孩子端的主题:themes/<名字>/(theme.json + kid.css);cotutor add-theme <名字> 拷一份出厂的来改'),
     }),
     server: z
       .object({

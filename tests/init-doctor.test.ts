@@ -26,6 +26,7 @@ try {
   check('账本空文件在', existsSync(join(ws, 'ledger', 'observations.jsonl')) && existsSync(join(ws, 'ledger', 'artifacts.jsonl')));
   check('板书语法表出厂(从卡的注册表生成)', readFileSync(join(ws, '.cotutor', '板书语法.md'), 'utf8').includes('### choice'));
   check('四个领域 skill 拷进 .claude/skills/,.qwen/skills/ 是相对链,hash 记下', existsSync(join(ws, '.claude', 'skills', 'drawtell-scene', 'SKILL.md')) && existsSync(join(ws, '.claude', 'skills', 'drawtell-teaching', 'models-index.md')) && lstatSync(join(ws, '.qwen', 'skills', 'drawtell-cli')).isSymbolicLink() && readlinkSync(join(ws, '.qwen', 'skills', 'drawtell-cli')) === '../../.claude/skills/drawtell-cli' && (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { skills: Record<string, { hash: string }> }).skills['drawtell-verify'].hash.startsWith('sha256:'));
+  check('出厂主题拷进 themes/default/,hash 记下', existsSync(join(ws, 'themes', 'default', 'theme.json')) && existsSync(join(ws, 'themes', 'default', 'kid.css')) && (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { themes: Record<string, { hash: string }> }).themes.default.hash.startsWith('sha256:'));
   check('drawtell 壳脚本在,可执行,指向本包的 drawtell', readFileSync(join(ws, '.cotutor', 'drawtell'), 'utf8').includes('drawtell.js') && (statSync(join(ws, '.cotutor', 'drawtell')).mode & 0o100) !== 0);
   check('scene-maker 在老师表里:hidden、runtime claude-scene;模板有 claude-scene 运行时', (JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { tutors: Record<string, { hidden?: boolean; runtime?: string }>; runtimes: Record<string, unknown> }).tutors['scene-maker'].runtime === 'claude-scene' && 'claude-scene' in (JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { runtimes: Record<string, unknown> }).runtimes);
   const cfg = JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { kid: { slug: string; name?: string } };
@@ -47,6 +48,7 @@ try {
   check('健康workspace体检通过', d1.ok, JSON.stringify(d1.checks.filter((c) => c.required && !c.ok)));
   check('doctor 查板书语法表', d1.checks.some((c) => c.name === 'board.syntax' && c.ok && c.required));
   check('老师链都查了(六位:含 scene-maker)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 6);
+  check('doctor 查主题:清单过契约、出厂件最新', d1.checks.some((c) => c.name === 'theme.manifest' && c.ok) && d1.checks.some((c) => c.name === 'theme.default.origin' && c.ok));
   check('doctor 查 skill 与 drawtell 壳', d1.checks.filter((c) => c.name.startsWith('skill.') && c.ok).length === 4 && d1.checks.some((c) => c.name === 'drawtell' && c.ok && !c.required));
   check('默认运行时是 claude → .claude 链必需、.qwen 链非必需', d1.checks.some((c) => c.name === 'tutor.math-tutor.claude' && c.required) && d1.checks.some((c) => c.name === 'tutor.math-tutor.qwen' && !c.required));
   check('git 是建议', d1.checks.some((c) => c.name === 'git' && !c.ok && !c.required));

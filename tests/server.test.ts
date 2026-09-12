@@ -39,6 +39,19 @@ try {
     check('POST /api/config/migrate 补上并热重载', done.status === 200 && (done.json as { applied: boolean }).applied && ((await get('/api/config')).json as { migrate: unknown[] }).migrate.length === 0 && 'qwen-scene' in (JSON.parse(readFileSync(cfgFile, 'utf8')) as { runtimes: Record<string, unknown> }).runtimes);
   }
   check('首页 html 是板书页,没有家长入口', (await get('/')).html?.includes('发消息或按住说话') === true && (await get('/')).html?.includes('/parent') === false);
+  // 主题:页面 link /kid/theme.css;css 与清单从 workspace 的 themes/default/ 现读;改了 css 不重起就换
+  check('板书页 link 主题 css,卡的样式不再内联', (await get('/')).html?.includes('href="/kid/theme.css"') === true && (await get('/')).html?.includes('.mk-marker') === false);
+  {
+    const css = await get('/kid/theme.css');
+    check('/kid/theme.css 是 text/css,含卡与笔的样式', css.status === 200 && css.contentType?.startsWith('text/css') === true && css.html?.includes('.mk-marker') === true && css.html?.includes(':root') === true);
+    const tj = (await get('/kid/theme.json')).json as { theme: string; source: string; default: string; tints: Record<string, unknown> };
+    check('/kid/theme.json 带清单与来源', tj.theme === 'default' && tj.source === 'workspace' && tj.default === 'paper' && 'sky' in tj.tints);
+    const cssFile = join(root, 'themes', 'default', 'kid.css');
+    writeFileSync(cssFile, readFileSync(cssFile, 'utf8') + '\n/* 家长改的 */ .c { outline: 1px solid red; }\n');
+    await new Promise((r) => setTimeout(r, 10));
+    check('改了主题 css 刷新就有(按 mtime 现读)', (await get('/kid/theme.css')).html?.includes('家长改的') === true);
+    check('/api/config 报当前主题', ((await get('/api/config')).json as { theme: string }).theme === 'default');
+  }
   const parent = (await get('/parent')).html ?? '';
   check('家长页', parent.includes('对话') && parent.includes('看原文'));
   {

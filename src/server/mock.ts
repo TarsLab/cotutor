@@ -26,6 +26,7 @@ import { USER_CERT_DIR } from '../cli/workspace.ts';
 import { kidThreads } from '../lib/kid-view.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { KID_PAGE } from './kid-page.ts';
+import { packageTheme } from '../cli/themes.ts';
 
 export type MockScenario = 'normal' | 'limit' | 'offline';
 
@@ -353,6 +354,9 @@ export function createMock(opts: MockOptions = {}): Mock {
     const p = url.pathname;
     if (p === '/') return { status: 200, html: KID_PAGE.replaceAll('__TITLE__', title).replace('__SHORT__', title) };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
+    // 主题:mock 没有 workspace,直接给包里的出厂 default
+    if (p === '/kid/theme.css') return { status: 200, html: (await packageTheme()).css, contentType: 'text/css; charset=utf-8' };
+    if (p === '/kid/theme.json') return { status: 200, json: (await packageTheme()).manifest };
     const icon = /^\/icon-(\d{2,4})\.png$/.exec(p);
     if (icon) {
       const n = Number(icon[1]);

@@ -75,6 +75,8 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   let parses = true;
   try { new Function(js); } catch (e) { parses = false; console.error(String(e)); }
   check('内联脚本本身能解析(模板里的转义没把 JS 字符串写断)', parses);
+  const css = await m.route('GET', '/kid/theme.css');
+  check('mock 也给主题 css(包里的出厂 default)', css.status === 200 && css.html?.includes('.mk-marker') === true && (await m.route('GET', '/kid/theme.json')).status === 200);
   // 场景卡:数学老师第三节;课包样本在仓库里,下发时补快照(ready / steps / problem);舞台包与课包路由
   const md6 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   const sc = md6.messages.map((x) => x.section).find((x) => x && x.cards.some((c) => c.kind === 'scene'))!;

@@ -47,6 +47,7 @@ await writeFile(
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>stage</title>
 <script>window.EXCALIDRAW_ASSET_PATH = '/stage/';</script>
+<link rel="stylesheet" href="/kid/theme.css">
 <link rel="stylesheet" href="/stage/stage.css">
 <div id="root"></div>
 <script type="module" src="/stage/stage.js"></script>

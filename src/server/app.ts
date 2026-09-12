@@ -26,6 +26,7 @@ import { IndexError, listDates, patchConfig, readErrLog, readIndex, readTranscri
 import { IMAGE_EXT, parseCardState, stripSecrets } from '../cards/index.ts';
 import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset } from './stage.ts';
+import { themeFiles } from './theme.ts';
 import { enrichScenes } from './scene-props.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
 import { synthesize } from './tts.ts';
@@ -240,6 +241,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             paths: ws.config.paths,
             resolvedPaths: Object.fromEntries(Object.entries(ws.paths).map(([k, v]) => [k, redactHome(v)])),
             tts: ws.config.tts,
+            theme: ws.config.kid.theme,
             https: ws.config.server.https ?? null,
             shipped: (await tutorStatuses(ws.root)).map((s) => s.name),
             /** 老 workspace 的政策文件缺的出厂件(新老师 / 新运行时 / 模板里的新旗标);设置页据此提示一行 */
@@ -434,6 +436,12 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
 
+    // 孩子端的主题(themes/<kid.theme>/):css 与清单现读,mtime 缓存;坏了退出厂 default(孩子端永远有样子)
+    if (method === 'GET' && (p === '/kid/theme.css' || p === '/kid/theme.json')) {
+      const t = await themeFiles(ws.root, ws.config.kid.theme);
+      if (p === '/kid/theme.css') return { status: 200, html: t.css, contentType: 'text/css; charset=utf-8' };
+      return { status: 200, json: { ...t.manifest, theme: ws.config.kid.theme, source: t.source, ...(t.error ? { error: t.error } : {}) } };
+    }
     // 舞台包(重卡在 iframe 里开)与课包文件:静态,越界 404
     if (method === 'GET' && p.startsWith('/stage/')) {
       const f = await stageAsset(p);
@@ -500,7 +508,7 @@ export function createHandler(ctx: AppContext): (req: IncomingMessage, res: Serv
         res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=86400' });
         res.end(Buffer.from(r.body));
       } else if (r.html !== undefined) {
-        res.writeHead(r.status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+        res.writeHead(r.status, { 'content-type': r.contentType ?? 'text/html; charset=utf-8', 'cache-control': 'no-store' });
         res.end(r.html);
       } else {
         res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': 'no-store' });

@@ -10,6 +10,7 @@ import { makeCert } from './cert.ts';
 import { addTutorFile, upgradeTutors } from './tutors.ts';
 import { configGapsOf, upgradeConfig } from './migrate.ts';
 import { upgradeSkills, writeToolShim } from './skills.ts';
+import { addTheme, upgradeThemes } from './themes.ts';
 import { patchConfig } from '../server/store.ts';
 import { resolveRoot } from './workspace.ts';
 import { serveWorkspace } from './serve.ts';
@@ -24,6 +25,7 @@ const USAGE = `用法:
   cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件与 skill 换新版:没改过的直接换,改过的只报 diff(--force 才覆盖,原文留 .bak)
   cotutor upgrade --config [--dry-run] [--workspace <dir>]              cotutor.json 补缺:新出厂老师 / 运行时 / 命令模板旗标(只加缺的,你改过的值不动)
   cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录
+  cotutor add-theme <主题名> [--from <主题>] [--workspace <dir>]       加一个自家的主题:拷一份(缺省出厂的 default)到 themes/<主题名>/,改 cotutor.json 的 kid.theme 换过去
   cotutor serve [--workspace <dir>] [--port <n>] [--http]               起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS)
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad / iPhone 上录音要 HTTPS;所有 workspace 共用)
   cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>] [--new]   终端里发一条,等老师说完打印结果(与页面同一条路;--new 开新话题)
@@ -147,6 +149,15 @@ export async function main(argv: string[]): Promise<void> {
         }
         return;
       }
+      case 'add-theme': {
+        const name = positionals[0];
+        if (!name) throw new UsageError(`add-theme 需要主题名,如 cotutor add-theme dark。\n${USAGE}`);
+        const { root } = resolveRoot(workspace);
+        const r = await addTheme(root, name, typeof flags.from === 'string' ? flags.from : 'default');
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
+        else process.stdout.write(`加了主题 ${name}(拷自 ${r.from}):\n  ${redactHome(r.dir)}/theme.json  ← 槽的清单(名字 + 给什么用)\n  ${redactHome(r.dir)}/kid.css     ← 样式,改了刷新就有\n把 cotutor.json 的 kid.theme 改成 "${name}" 就换过去了(服务不用重启)。\n`);
+        return;
+      }
       case 'upgrade': {
         const { root } = resolveRoot(workspace);
         // --config 是另一件事:政策文件补缺(老师文件与 skill 不碰)
@@ -169,13 +180,15 @@ export async function main(argv: string[]): Promise<void> {
         const force = typeof flags.force === 'string' ? [flags.force, ...positionals] : positionals;
         const steps = await upgradeTutors(root, { force });
         const skillSteps = await upgradeSkills(root);
+        const themeSteps = await upgradeThemes(root);
         await writeToolShim(root);
         // 老师文件换新了,政策文件却不会自动多出新老师与新运行时(cotutor.json 是家长的),提一句
         const gaps = await configGapsOf(root);
-        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps, skills: skillSteps, configGaps: gaps }), null, 2)}\n`);
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps, skills: skillSteps, themes: themeSteps, configGaps: gaps }), null, 2)}\n`);
         else {
           const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', unavailable: 'drawtell-skills 没装,没法换' };
           for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' || s.action === 'unavailable' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
+          for (const s of themeSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} theme ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.action === 'kept-custom' ? '(themes/ 里改过的主题不动)' : ''}\n`);
           for (const s of steps) {
             process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
             if (s.diff?.length) {

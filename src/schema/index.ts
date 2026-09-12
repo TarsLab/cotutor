@@ -7,6 +7,7 @@
  *  sections      最终文本里的「待裁量」「转交」段
  *  plan          计划文件
  *  timetable     课程表(vault 里的 markdown 表)
+ *  theme         主题清单(themes/<name>/theme.json:底色槽、字形槽、笔)
  * 运行时校验用 zod,失败信息经 explainIssues 变成修复指南。
  */
 export * from './issues.ts';
@@ -19,3 +20,4 @@ export * from './board.ts';
 export * from './plan.ts';
 export * from './timetable.ts';
 export * from './json-schema.ts';
+export * from './theme.ts';

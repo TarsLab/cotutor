@@ -85,7 +85,7 @@ const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n)}
 const blocks = (c: unknown): Block[] => (Array.isArray(c) ? (c as Block[]) : []);
 const blockText = (c: unknown): string => (typeof c === 'string' ? c : blocks(c).map((b) => b.text ?? '').join(''));
 
-function toolSummary(name: string, input: Record<string, unknown> | undefined): string {
+export function toolSummary(name: string, input: Record<string, unknown> | undefined): string {
   for (const k of ['description', 'command', 'file_path', 'skill', 'pattern', 'prompt', 'url']) {
     const v = input?.[k];
     if (typeof v === 'string' && v.trim()) return `${name} · ${clip(v.trim(), 120)}`;

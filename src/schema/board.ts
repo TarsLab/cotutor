@@ -17,7 +17,7 @@ export const BoardCardSchema = z.object({
 });
 export const PenSchema = z.enum(['marker', 'tint', 'underline', 'box', 'circle']);
 export const DeviceSchema = z.enum(['phone', 'tablet-portrait', 'tablet-landscape']);
-export const BoardMarkSchema = z.object({ card: z.number().int().nonnegative(), phrase: z.string().min(1), pen: PenSchema.optional() });
+export const BoardMarkSchema = z.object({ card: z.number().int().nonnegative(), phrase: z.string().min(1), pen: PenSchema.optional(), said: z.string().min(1).optional() });
 export const BoardLayoutSchema = z.object({ for: DeviceSchema, rows: z.array(z.array(z.number().int().nonnegative())) });
 export const BoardCueSchema = z.object({ card: z.number().int().nonnegative(), name: z.string().min(1), arg: z.string().optional() });
 export const BoardLineSchema = z.object({
@@ -32,6 +32,7 @@ export const BoardSectionSchema = z.object({
   cards: z.array(BoardCardSchema),
   lines: z.array(BoardLineSchema),
   partial: z.boolean().optional(),
+  ready: z.number().int().nonnegative().optional(),
   /** 排版(板书后期为某个端排的行);没有 = 一行一张 */
   layout: BoardLayoutSchema.optional(),
 });

@@ -5,13 +5,15 @@
  */
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { THEME_CSS_FILE, THEME_MANIFEST_FILE, type ThemeManifest } from '../schema/index.ts';
+import { THEME_CSS_FILE, THEME_MANIFEST_FILE, THEME_POST_FILE, type ThemeManifest } from '../schema/index.ts';
 import { packageTheme, readTheme, themeDir, type LoadedTheme } from '../cli/themes.ts';
 import { cardsCss } from '../cards/docs.ts';
 
 export interface ThemeFiles {
   css: string;
   manifest: ThemeManifest;
+  /** 后期提示词骨架(themes/<主题>/post.md);主题没有就是包里出厂的那份;两处都读不到 → null(代码里的兜底) */
+  post: string | null;
   /** 用的是哪份:workspace 里的,还是退回了包里的出厂件(读不到 / 坏了) */
   source: 'workspace' | 'fallback';
   /** 退回时的原因 */
@@ -27,7 +29,8 @@ let cache: Cached | null = null;
 async function mtimeKey(dir: string): Promise<string> {
   const a = await stat(join(dir, THEME_MANIFEST_FILE)).catch(() => null);
   const b = await stat(join(dir, THEME_CSS_FILE)).catch(() => null);
-  return `${dir}|${a?.mtimeMs ?? 'x'}|${b?.mtimeMs ?? 'x'}`;
+  const c = await stat(join(dir, THEME_POST_FILE)).catch(() => null);
+  return `${dir}|${a?.mtimeMs ?? 'x'}|${b?.mtimeMs ?? 'x'}|${c?.mtimeMs ?? 'x'}`;
 }
 
 /** workspace 根 + 主题名 → css 与清单;缓存按两个文件的 mtime */
@@ -46,7 +49,8 @@ export async function themeFiles(root: string, name: string): Promise<ThemeFiles
     error = err instanceof Error ? err.message : String(err);
   }
   // 各种卡的结构样式(包里 cards/<kind>/card.css)在前,主题在后:主题写同名选择器就能盖
-  cache = { key, css: `${cardsCss()}\n\n/* ---- 主题 ${name} ---- */\n${loaded.css}`, manifest: loaded.manifest, source, ...(error ? { error } : {}) };
+  const post = loaded.post ?? (await packageTheme('default').then((t) => t.post).catch(() => null));
+  cache = { key, css: `${cardsCss()}\n\n/* ---- 主题 ${name} ---- */\n${loaded.css}`, manifest: loaded.manifest, post, source, ...(error ? { error } : {}) };
   return cache;
 }
 

@@ -301,6 +301,9 @@ export async function doctorWorkspace(
       const home = join(ws.dirs.agents, name);
       const there = (await statOrNull(home))?.isDirectory() ?? false;
       push({ name: `tutor.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建' });
+      // 音色:一老师一音色走 API 是正路(《工作流程.md》§四);没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师(planner / scene-maker)不对孩子说话,不用音色
+      const tc = ws.config.tutors[name];
+      if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),孩子端用浏览器合成声——只适合测试`, fix: 'voxtell voices --grep <关键词> 挑一个,voxtell preview <voice> 试听,填进 voice;家长端老师团那页也能改' });
     }
 
     // ---- 板书语法表:老师讲解前读它;机器文件,init / upgrade 刷新 ----
@@ -341,6 +344,10 @@ export async function doctorWorkspace(
         try {
           const t = await readTheme(dir);
           push({ name: 'theme.manifest', ok: true, required: false, detail: `themes/${name}/:${Object.keys(t.manifest.tints).length} 个底色槽、${Object.keys(t.manifest.looks).length} 个字形槽、${Object.keys(t.manifest.pens).length} 支笔,default = ${t.manifest.default}` });
+          const { missingSlots } = await import('../lib/postprocess.ts');
+          if (t.post === null) push({ name: 'theme.post', ok: true, required: false, detail: `themes/${name}/post.md 不在,后期提示词用包里出厂的骨架`, fix: 'cotutor upgrade 会把出厂的 post.md 拷进来;想改口味就改它' });
+          else if (missingSlots(t.post).length) push({ name: 'theme.post', ok: false, required: false, detail: `themes/${name}/post.md 缺必需占位符 ${missingSlots(t.post).map((s) => `{${s}}`).join(' ')},后期退出厂骨架`, fix: '把缺的占位符加回去(cards / lines / rules / output 是代码生成的部分,不能少)' });
+          else push({ name: 'theme.post', ok: true, required: false, detail: `themes/${name}/post.md:后期提示词骨架 ${t.post.length} 字` });
         } catch (err) {
           push({ name: 'theme.manifest', ok: false, required: false, detail: `themes/${name}/ 用不了(服务退回出厂 default):${err instanceof Error ? err.message : String(err)}`, fix: name === 'default' ? 'cotutor init 补拷(已有的不动)或 cotutor upgrade' : `修 themes/${name}/theme.json 与 kid.css,或把 cotutor.json 的 kid.theme 改回 default` });
         }

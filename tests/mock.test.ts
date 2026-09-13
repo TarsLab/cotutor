@@ -38,7 +38,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const ci = mc.findIndex((c) => c.kind === 'choice');
   check('数学老师首节(勾股定理,原型样张):封面 night、# 标题的 text 是 sky、公式 paper、选择题在末尾且答案剥掉、没有状态', ci === mc.length - 1 && tintFor(mc[0]) === 'night' && mc[1].props.title === '认边' && tintFor(mc[1]) === 'sky' && tintFor(mc[2]) === 'paper' && tintFor(mc[ci]) === 'plum' && !('answer' in mc[ci].props) && !('state' in mc[ci]), JSON.stringify(mc.map((c) => [c.kind, tintFor(c)])));
   const lay = md.messages[0].section as BoardSection & { layout?: { for: string; rows: number[][] } };
-  check('假后期套上了:平板横屏四行(认边 + 公式并排、验证 + 一句话并排、选择题独占)、验证成 moss、一句话带 emoji、斜边画圈(带 pen)', lay.layout?.for === 'tablet-landscape' && JSON.stringify(lay.layout.rows) === '[[0],[1,2],[3,4],[5]]' && lay.cards[3].look?.tint === 'moss' && lay.cards[4].look?.emoji === '💡' && lay.lines[0].marks.some((mk) => mk.phrase === '认边' && mk.pen === 'circle') && lay.lines[1].marks.some((mk) => mk.phrase === '斜边' && mk.pen === undefined) && lay.cards[1].look === undefined, JSON.stringify([lay.layout, lay.cards.map((c) => c.look)]));
+  check('假后期套上了:平板横屏四行(认边 + 公式并排、验证 + 一句话并排、选择题独占)、验证成 moss、一句话带 emoji、三条边画圈(带 pen)', lay.layout?.for === 'tablet-landscape' && JSON.stringify(lay.layout.rows) === '[[0],[1,2],[3,4],[5]]' && lay.cards[3].look?.tint === 'moss' && lay.cards[4].look?.emoji === '💡' && lay.lines[0].marks.some((mk) => mk.phrase === '三条边' && mk.pen === 'circle') && lay.lines[1].marks.some((mk) => mk.phrase === '斜边' && mk.pen === undefined) && lay.cards[1].look === undefined, JSON.stringify([lay.layout, lay.cards.map((c) => c.look)]));
   {
     const plain = createMock({ delayMs: 0, scenario: 'nopost', now: () => new Date('2026-09-10T16:30:00') });
     const pd = (await plain.route('GET', '/api/kid/conversations/math-tutor/today')).json as Day;
@@ -100,7 +100,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
     const d = (await m.route('GET', '/api/kid/conversations/math-tutor/today')).json as Day;
     const p = d.messages[1];
     if (!p.pending) break;
-    if (p.section) { seen.push(p.section.cards.length); if (!p.section.partial || p.section.cards.some((c) => 'answer' in c.props)) partialOk = false; }
+    if (p.section) { seen.push(p.section.cards.length); if (!p.section.partial || typeof (p.section as { ready?: number }).ready !== 'number' || p.section.cards.some((c) => 'answer' in c.props)) partialOk = false; }
     await new Promise((r) => setTimeout(r, 15));
   }
   await m.settle();

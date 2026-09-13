@@ -196,6 +196,13 @@ export const PARENT_PAGE = `<!doctype html>
   .dsec h5 { margin:0; font-size:14px; font-weight:600; color:var(--ink-2); }
   .dsec pre { margin:0; font:400 13.5px/1.7 var(--mono); background:var(--sunk); border:1px solid var(--line-soft); border-radius:8px; padding:11px 12px; white-space:pre-wrap; word-break:break-word; color:var(--ink-2); max-height:340px; overflow:auto; }
   .dsec .hintline { font-size:13.5px; color:var(--muted); margin:0; }
+  .gantt { display:grid; grid-template-columns:64px 1fr; row-gap:6px; align-items:center; font-size:12.5px; }
+  .gantt .ln { color:var(--muted); font-family:var(--mono); }
+  .gantt .tr { position:relative; height:18px; background:var(--sunk); border-radius:4px; }
+  .gantt .sp { position:absolute; top:3px; height:12px; min-width:3px; border-radius:3px; background:var(--accent, #4a7); opacity:.85; cursor:pointer; }
+  .gantt .sp.warn { background:#d9a53a; } .gantt .sp.fail { background:#d64545; } .gantt .sp.tick { width:3px; }
+  .gantt .sp.on { outline:2px solid var(--ink); }
+  .gantt .ax { grid-column:2; display:flex; justify-content:space-between; color:var(--muted); font-family:var(--mono); font-size:11px; }
   .dsec details summary { cursor:pointer; font-size:13.5px; color:var(--muted); }
   .dline { display:grid; grid-template-columns:16px minmax(0,1fr); gap:8px; font:400 14px/1.8 var(--mono); }
   .dline .s { text-align:center; font-weight:600; }
@@ -553,10 +560,12 @@ export const PARENT_PAGE = `<!doctype html>
 
     const foot = h('div', { class: 'turn-foot' }, h('span', { class: 'chip' }, (t.avatar || '') + ' ' + t.display));
     if (m.timing) {
+      if (m.timing.firstReadyMs !== undefined) foot.append(h('span', { class: 'chip' + (m.timing.firstReadyMs > SLOW_FIRST ? ' slow' : '') }, '首拍就绪 ', h('b', {}, secs(m.timing.firstReadyMs))));
       if (m.timing.firstCardMs !== undefined) foot.append(h('span', { class: 'chip' + (m.timing.firstCardMs > SLOW_FIRST ? ' slow' : '') }, '首卡 ', h('b', {}, secs(m.timing.firstCardMs))));
       if (m.timing.doneMs !== undefined) foot.append(h('span', { class: 'chip' }, '整轮 ', h('b', {}, secs(m.timing.doneMs))));
       if (m.timing.dubbedMs !== undefined) foot.append(h('span', { class: 'chip' }, '配音 ', h('b', {}, secs(m.timing.dubbedMs))));
     }
+    if (m.post && m.post.beats !== undefined) foot.append(h('span', { class: 'chip' + (m.post.failed ? ' slow' : '') }, '后期 ', h('b', {}, m.post.beats + ' 拍' + (m.post.failed ? ' · ' + m.post.failed + ' 拍没成' : ''))));
     if (m.costUsd !== undefined) foot.append(h('span', { class: 'chip money' }, '$', h('b', {}, m.costUsd.toFixed(2))));
     if (m.artifacts && m.artifacts.length) foot.append(h('span', { class: 'chip' }, '课包 ' + m.artifacts.join(', ')));
     const rows = v.runs[m.job] || [];
@@ -680,6 +689,30 @@ export const PARENT_PAGE = `<!doctype html>
           ' ',
           h('button', { class: 'btn', type: 'button', on: { click: (e) => copy(cmd, e.target) } }, '复制命令行')));
     }
+    if (s === 'timeline') {
+      const box = h('div', { class: 'dsec' });
+      const ev = raw.events || [];
+      if (!ev.length) { box.append(h('p', { class: 'hintline' }, raw.stations.find((x) => x.id === 'timeline')?.note || '这轮没有事件。')); return box; }
+      const spans = raw.timeline.spans;
+      const total = raw.timeline.total;
+      const lanes = ['main', 'tts', 'post', 'ready', 'index', 'handoff', 'ledger'].filter((l) => spans.some((x) => x.lane === l));
+      const detail = h('p', { class: 'hintline' }, '点一段看它是什么');
+      const g = h('div', { class: 'gantt' });
+      for (const l of lanes) {
+        const tr = h('div', { class: 'tr' });
+        for (const x of spans.filter((x) => x.lane === l)) {
+          const left = (x.from / total) * 100, w = Math.max(0.4, ((x.to - x.from) / total) * 100);
+          const el = h('div', { class: 'sp ' + x.state + (x.to === x.from ? ' tick' : ''), style: 'left:' + left.toFixed(2) + '%;width:' + w.toFixed(2) + '%', title: (x.from / 1000).toFixed(2) + 's ' + x.label, on: { click: () => { for (const o of g.querySelectorAll('.sp.on')) o.classList.remove('on'); el.classList.add('on'); detail.textContent = (x.from / 1000).toFixed(2) + 's → ' + (x.to / 1000).toFixed(2) + 's · ' + l + ' · ' + x.label; } } });
+          tr.append(el);
+        }
+        g.append(h('div', { class: 'ln' }, l), tr);
+      }
+      g.append(h('div', { class: 'ax' }, h('span', {}, '0s'), h('span', {}, (total / 2000).toFixed(1) + 's'), h('span', {}, (total / 1000).toFixed(1) + 's')));
+      box.append(h('h5', {}, '时间线:每道工序什么时候起、什么时候回(从老师进程起算)'), g, detail);
+      if (raw.timing && raw.timing.beats && raw.timing.beats.length) box.append(h('h5', {}, '每拍'), h('pre', {}, raw.timing.beats.map((b, i) => '拍 ' + i + (b.card === null ? '(没有卡)' : '(卡 ' + b.card + ')') + ':关 ' + (b.closedMs !== undefined ? (b.closedMs / 1000).toFixed(2) + 's' : '-') + ' · 配音齐 ' + (b.dubbedMs !== undefined ? (b.dubbedMs / 1000).toFixed(2) + 's' : '-') + ' · 后期 ' + (b.postMs !== undefined ? (b.postMs / 1000).toFixed(2) + 's' : '-') + ' · 就绪 ' + (b.readyMs !== undefined ? (b.readyMs / 1000).toFixed(2) + 's' : '-')).join('\\n')));
+      box.append(h('details', {}, h('summary', {}, '全部事件 ' + ev.length + ' 条'), h('pre', {}, raw.timeline.lines.join('\\n'))));
+      return box;
+    }
     if (s === 'source') {
       const box = h('div', {});
       box.append(h('div', { class: 'ctop' },
@@ -736,17 +769,20 @@ export const PARENT_PAGE = `<!doctype html>
       const box = h('div', { class: 'dsec' });
       const p = raw.post, sm = raw.postSummary;
       const redo = h('button', { class: 'btn', type: 'button', on: { click: async (e) => { e.target.disabled = true; e.target.textContent = '在做…'; try { await api('POST', '/api/conversations/' + raw.tutor + '/' + raw.date + '/raw/' + raw.job + '/repost'); } catch (err) { alert('没成:' + err.message); } openRaw(raw.job); } } }, '再做一次后期');
-      box.append(h('h5', {}, '板书后期:快模型定的标注 / 锚点 / 排版 / 样子;老师原文与配音不动,校验不过的提案丢掉,页面走机械规则'));
+      box.append(h('h5', {}, '板书后期:一拍(一张卡 + 跟着它的讲稿)一次,快模型定这张卡接不接上一行、样子、讲到每句时标哪个词;带前面几张已定的卡;老师原文与配音不动,校验不过的提案丢掉,页面走机械规则'));
       if (!p && !sm) { box.append(h('p', { class: 'hintline' }, raw.stations.find((x) => x.id === 'post')?.note || '这轮没跑过后期。'), h('p', {}, redo)); return box; }
-      box.append(h('div', { class: 'kline' }, h('span', { class: 'n2' }, '·'), h('span', {}, (sm && sm.ok ? '收到' : '没成') + (p ? ' · ' + p.runtime + ' · ' + (raw.device || '端未知,按平板横屏') + ' · 主题 ' + p.theme : '') + (sm ? ' · ' + sm.ms + 'ms' + (sm.costUsd !== undefined ? ' · $' + sm.costUsd.toFixed(4) : '') : '')), h('span', {}, redo)));
+      box.append(h('div', { class: 'kline' }, h('span', { class: 'n2' }, '·'), h('span', {}, (sm && sm.ok ? '收到' : '没成') + (sm && sm.beats !== undefined ? ' · ' + sm.beats + ' 拍' + (sm.failed ? '(' + sm.failed + ' 拍没成)' : '') : '') + (p ? ' · ' + p.runtime + ' · ' + (raw.device || '端未知,按平板横屏') + ' · 主题 ' + p.theme + (p.template === 'theme' ? '(骨架 post.md)' : '(出厂骨架)') : '') + (sm ? ' · ' + sm.ms + 'ms' + (sm.costUsd !== undefined ? ' · $' + sm.costUsd.toFixed(4) : '') : '')), h('span', {}, redo)));
       if (sm && sm.error) box.append(h('p', { class: 'hintline' }, '原因:' + sm.error));
-      if (p && p.kept) box.append(h('p', { class: 'hintline' }, '收下:标注 ' + p.kept.marks + ' · 锚点 ' + p.kept.anchors + ' · ' + (p.kept.layout ? '排了行' : '没排行(一行一张)') + ' · 样子 ' + p.kept.looks));
+      if (p && p.kept) box.append(h('p', { class: 'hintline' }, '收下:标注 ' + p.kept.marks + ' · 锚点 ' + p.kept.anchors + ' · ' + (p.kept.layout ? '有并排' : '一行一张') + ' · 样子 ' + p.kept.looks));
       if (p && p.dropped.length) { box.append(h('h5', {}, '丢掉的提案 ' + p.dropped.length + ' 条(模型只是提案,契约说了算)')); for (const d of p.dropped) box.append(h('p', { class: 'hintline' }, d)); }
-      if (p) {
-        box.append(h('details', {}, h('summary', {}, '提示词(' + p.prompt.length + ' 字)'), h('pre', {}, p.prompt)));
-        box.append(h('details', {}, h('summary', {}, '模型原始输出'), h('pre', {}, p.raw || '(空)')));
-        if (p.output) box.append(h('details', {}, h('summary', {}, '解析出的提案'), h('pre', {}, JSON.stringify(p.output, null, 2))));
-        box.append(h('details', {}, h('summary', {}, '命令行'), h('pre', {}, p.argv.join(' '))));
+      if (p) for (const b of p.beats) {
+        const bk = b.kept ? '标 ' + b.kept.marks + ' · 锚 ' + b.kept.anchors + ' · ' + (b.kept.row === 'same' ? '接上一行' : '另起一行') + (b.kept.look ? ' · 有样子' : '') : '';
+        const det = h('details', {}, h('summary', {}, '拍 ' + b.beat + '(卡 ' + b.card + ')' + (b.ok ? ' ✓ ' + b.ms + 'ms · ' + bk + (b.dropped.length ? ' · 丢 ' + b.dropped.length : '') : ' ✗ ' + (b.error || '?'))));
+        det.append(h('details', {}, h('summary', {}, '提示词(' + b.prompt.length + ' 字)'), h('pre', {}, b.prompt)));
+        det.append(h('details', {}, h('summary', {}, '模型原始输出'), h('pre', {}, b.raw || '(空)')));
+        if (b.output) det.append(h('details', {}, h('summary', {}, '解析出的提案'), h('pre', {}, JSON.stringify(b.output, null, 2))));
+        det.append(h('details', {}, h('summary', {}, '命令行'), h('pre', {}, b.argv.join(' '))));
+        box.append(det);
       }
       return box;
     }

@@ -46,6 +46,8 @@ export interface BoardMark {
   card: number;
   phrase: string;
   pen?: PenName;
+  /** 讲稿里念到它的那个词(卡上写「三个角」、讲稿说「几个角」时后期填);没有 = 用 phrase 在讲稿里找。只用来定时,不影响标在卡上哪个词 */
+  said?: string;
 }
 
 /** 讲到这句时对某张卡做的事(讲稿里 [[名 参数]]):open / close / play… 页面按卡的种类执行,不认识的忽略 */
@@ -71,7 +73,55 @@ export interface BoardSection {
   cards: BoardCard[];
   lines: BoardLine[];
   partial?: boolean;
+  /** 流式时:前几拍已经就绪(配音齐;以后加后期回)——页面就绪一拍播一拍;定稿的节没有这个字段(全部就绪) */
+  ready?: number;
   layout?: BoardLayout;
+}
+
+/**
+ * 拍(2026-09-13,《工作流程.md》§二):一张卡 + 它后面直到下一张卡之前的讲稿句;第一张卡之前的句子是没有卡的一拍。
+ * 不进契约,从卡与句的顺序现算——句子锚到上一张卡(anchor),所以按 anchor 分组;后期改过锚点的定稿节不用它(全部就绪,拍无所谓)。
+ */
+export interface Beat {
+  card: number | null;
+  lines: number[];
+}
+export function beatsOf(section: Pick<BoardSection, 'cards' | 'lines'>): Beat[] {
+  const beats: Beat[] = [];
+  const byCard = new Map<number | null, Beat>();
+  const get = (card: number | null): Beat => {
+    let b = byCard.get(card);
+    if (!b) { b = { card, lines: [] }; byCard.set(card, b); beats.push(b); }
+    return b;
+  };
+  section.lines.forEach((l, i) => { if (l.anchor === null) get(null).lines.push(i); });
+  section.cards.forEach((_c, k) => get(k));
+  section.lines.forEach((l, i) => { if (l.anchor !== null) get(Math.min(l.anchor, section.cards.length - 1)).lines.push(i); });
+  return beats;
+}
+
+/**
+ * 流式时前几拍就绪了:一拍要「关了」(后面已经有下一张卡,或老师写完了)且它的每句配音都落了盘(老师没配音色 = 不等配音)。
+ * 返回就绪的拍数(前缀:第 k 拍就绪的前提是前面都就绪,播放本来就是顺着来的)。
+ */
+export function readyBeats(section: Pick<BoardSection, 'cards' | 'lines'>, opts: { voiced: boolean; done: boolean; settled?: (k: number, beat: Beat) => boolean }): number {
+  const beats = beatsOf(section);
+  let n = 0;
+  for (let k = 0; k < beats.length; k++) {
+    const closed = opts.done || k < beats.length - 1;
+    const dubbed = !opts.voiced || beats[k].lines.every((i) => section.lines[i].audio !== null);
+    const posted = opts.settled ? opts.settled(k, beats[k]) : true;
+    if (!closed || !dubbed || !posted) break;
+    n++;
+  }
+  return n;
+}
+
+/** 流式的节:前 ready 拍里的句子能播;定稿的节:全部 */
+export function playableLines(section: BoardSection): number {
+  if (!section.partial) return section.lines.length;
+  const beats = beatsOf(section).slice(0, section.ready ?? 0);
+  return beats.reduce((n, b) => Math.max(n, b.lines.length ? b.lines[b.lines.length - 1] + 1 : n), 0);
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -232,7 +282,9 @@ function validRows(rows: readonly (readonly number[])[], n: number): boolean {
 export function rowsFor(section: BoardSection, device: Device): number[][] {
   const n = section.cards.length;
   const lay = section.layout;
-  let rows: number[][] = lay && validRows(lay.rows, n) ? lay.rows.map((r) => [...r]) : Array.from({ length: n }, (_, i) => [i]);
+  // 流式的节:行只排到已定的那几张(前缀),后面的一行一张
+  const prefix = section.partial && lay && !validRows(lay.rows, n) && validRows(lay.rows, lay.rows.flat().length) && lay.rows.flat().length <= n;
+  let rows: number[][] = lay && validRows(lay.rows, n) ? lay.rows.map((r) => [...r]) : prefix ? [...lay!.rows.map((r) => [...r]), ...Array.from({ length: n - lay!.rows.flat().length }, (_, i) => [lay!.rows.flat().length + i])] : Array.from({ length: n }, (_, i) => [i]);
   const alone = (i: number): boolean => {
     const c = section.cards[i];
     return !c || isHeading(c) || hasState(c) || c.kind === 'scene';
@@ -448,7 +500,7 @@ export interface BoardMessage {
 export interface BoardEntry extends BoardSection {
   job: string;
   at?: string;
-  /** 老师还在说:卡只增不改,讲稿不播;整轮跑完换成正式的一节 */
+  /** 老师还在说:卡只增不改;前 ready 拍就绪了就能播(2026-09-13 之前是整轮跑完才播);整轮跑完换成正式的一节 */
   partial?: boolean;
 }
 
@@ -465,7 +517,7 @@ export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEn
   for (const m of messages) {
     const at = m.at ? { at: m.at } : {};
     if (m.pending) {
-      if (m.section && m.section.partial && m.section.cards.length) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true });
+      if (m.section && m.section.partial && m.section.cards.length) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;
     }
     if (m.section && (m.section.cards.length || m.section.lines.length)) {
@@ -493,7 +545,8 @@ export function sectionTitle(s: BoardSection): string {
 }
 
 /** stage = 讲稿把这句交给了场景卡的舞台([[play]]),等它 done */
-export type PlayStatus = 'idle' | 'playing' | 'paused' | 'waiting' | 'done' | 'stage';
+/** thinking = 老师还在写,已就绪的句子播完了,等下一拍(字幕行是老师的「让我想想…」,不出错、不响) */
+export type PlayStatus = 'idle' | 'playing' | 'paused' | 'waiting' | 'done' | 'stage' | 'thinking';
 
 export interface PlayerState {
   section: number;
@@ -513,7 +566,8 @@ export function playerAtEnd(sections: readonly BoardSection[]): PlayerState {
 /** 新来一节:从它第一句开始播;没讲稿就直接算完 */
 export function startSection(index: number, sections: readonly BoardSection[]): PlayerState {
   const s = sections[index];
-  if (!s || !s.lines.length) return { section: index, line: -1, status: 'done' };
+  if (!s || !s.lines.length) return { section: index, line: -1, status: s && s.partial ? 'thinking' : 'done' };
+  if (!playableLines(s)) return { section: index, line: -1, status: 'thinking' };
   return { section: index, line: 0, status: 'playing' };
 }
 
@@ -524,7 +578,9 @@ export function startSection(index: number, sections: readonly BoardSection[]): 
 export function advance(state: PlayerState, sections: readonly BoardSection[]): PlayerState {
   const s = sections[state.section];
   if (!s) return { ...state, status: 'done' };
-  if (state.line < s.lines.length - 1) return { section: state.section, line: state.line + 1, status: 'playing' };
+  if (state.line < playableLines(s) - 1) return { section: state.section, line: state.line + 1, status: 'playing' };
+  // 老师还在写这节:就绪的播完了就等着,下一拍就绪再从这里接上(advance 会再被叫)
+  if (s.partial) return { ...state, status: 'thinking' };
   if (state.section < sections.length - 1) return startSection(state.section + 1, sections);
   const last = s.lines[state.line];
   return { ...state, status: last && last.ask ? 'waiting' : 'done' };
@@ -564,7 +620,8 @@ export interface SubtitleView {
 export function subtitleFor(i: SubtitleInput): SubtitleView {
   if (i.limit) return { text: '今天聊够啦,明天再来', kind: 'limit', right: 'none' };
   if (i.echo) return { text: i.echo, kind: 'echo', right: 'none' };
-  if (i.pending) return { text: i.thinking, kind: 'thinking', right: 'none' };
+  // 老师还在写:正在播已就绪的句子就照常出字幕;没在播(等下一拍、上一节播完了)才是「让我想想…」
+  if (i.state.status === 'thinking' || (i.pending && i.state.status !== 'playing' && i.state.status !== 'paused' && i.state.status !== 'stage')) return { text: i.thinking, kind: 'thinking', right: 'none' };
   const line = i.sections[i.state.section]?.lines[i.state.line];
   const text = line ? plainLine(line.text) : '';
   switch (i.state.status) {
@@ -609,4 +666,20 @@ export function barNext(mode: BarMode, ev: BarEvent): BarMode {
 /** 没配音也没浏览器合成时,一句停多久(毫秒):按字数估 */
 export function lineDurationMs(text: string): number {
   return Math.max(1200, Array.from(plainLine(text)).length * 260);
+}
+
+/**
+ * 一处标注在这句里什么时候画(2026-09-13):没有字级时间戳(voxtell align 还是规划),按字数比例估——中文每字语速很均匀,
+ * 20 字一句误差两三百毫秒。词取 said(后期填的讲稿里的词),没有就拿 phrase 在讲稿里找;讲稿里没这个词 → null(句首就画,同以前)。
+ * totalMs = 这句声音的总时长(mp3 的 duration,或没声音时的 lineDurationMs)。dur 最短 350ms,描线不至于一闪。
+ */
+export function markTiming(line: BoardLine, mark: BoardMark, totalMs: number): { at: number; dur: number } | null {
+  const text = plainLine(line.text);
+  const word = mark.said || mark.phrase;
+  const i = findPhrase(text, word);
+  if (i < 0 || !text.length || !(totalMs > 0)) return null;
+  const chars = Array.from(text).length;
+  const before = Array.from(text.slice(0, i)).length;
+  const len = Array.from(word).length;
+  return { at: Math.round((totalMs * before) / chars), dur: Math.max(350, Math.round((totalMs * len) / chars)) };
 }

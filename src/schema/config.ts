@@ -31,7 +31,7 @@ export const PolicySchema = z.object({
   post: z.object({
     mode: z.enum(['auto', 'off']).describe('板书后期:auto = 有卡就让快模型划重点、排版、定样子(缺省);off = 素版'),
     runtime: z.string().min(1).describe('后期用的运行时(runtimes 里的键,缺省 claude-fast:haiku、无工具)'),
-    timeoutMs: z.number().int().positive().describe('等后期最多几毫秒(缺省 4000),超时先出素版'),
+    timeoutMs: z.number().int().positive().describe('等一拍的后期最多几毫秒(缺省 10000;只有第一拍在关键路径上,后面的拍在前一拍播的时候跑),超时这拍素版、不重来'),
   }),
 });
 export type Policy = z.infer<typeof PolicySchema>;
@@ -60,7 +60,7 @@ export const POLICY_DEFAULTS: Policy = {
   contextPack: { recent: 10, planLines: 10 },
   board: 'auto',
   scenes: { dailyMax: 2 },
-  post: { mode: 'auto', runtime: 'claude-fast', timeoutMs: 4000 },
+  post: { mode: 'auto', runtime: 'claude-fast', timeoutMs: 10000 },
 };
 
 /** agent 名:与 .claude/agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */

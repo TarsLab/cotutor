@@ -47,6 +47,8 @@ export class DubQueue {
   private readonly voice: string;
   private readonly err: string;
   private readonly env?: NodeJS.ProcessEnv;
+  /** 每条的进展(排队 / 完成 / 失败)报给谁:runner 把它变成 tts 道的事件 */
+  report?: (e: { kind: 'queued' | 'done' | 'failed'; label: string; ms: number; file?: string; error?: string }) => void;
   constructor(tts: Tts, voice: string, err: string, env?: NodeJS.ProcessEnv) {
     this.tts = tts;
     this.voice = voice;
@@ -57,10 +59,15 @@ export class DubQueue {
   /** 合成 text 到 out;resolve 成文件名(最后一段)或 null;label 是 err.log 里的称呼 */
   add(out: string, text: string, label: string): Promise<string | null> {
     return new Promise((resolve) => {
+      this.report?.({ kind: 'queued', label, ms: 0 });
+      const t0 = Date.now();
       this.queue.push(async () => {
         const r = await synthesize(this.tts, { text, voice: this.voice, out }, { env: this.env });
         if (r.error) await appendFile(this.err, `cotutor tts: ${label}没合成(${r.error});用浏览器的声\n`).catch(() => {});
-        resolve(r.error ? null : out.slice(out.lastIndexOf('/') + 1));
+        const file = out.slice(out.lastIndexOf('/') + 1);
+        if (r.error) this.report?.({ kind: 'failed', label, ms: Date.now() - t0, error: r.error });
+        else this.report?.({ kind: 'done', label, ms: Date.now() - t0, file });
+        resolve(r.error ? null : file);
       });
       this.pump();
     });
@@ -92,13 +99,15 @@ export class LineDubber {
   }
 
   /** 第 i 句(0 起)定稿了;同下标同文本不重配 */
-  add(i: number, text: string): void {
+  add(i: number, text: string): Promise<string | null> | null {
     const t = text.trim();
     const had = this.jobs.get(i);
-    if (!t || (had && had.text === t)) return;
+    if (!t) return null;
+    if (had && had.text === t) return had.done;
     const after = had ? had.done.catch(() => null) : Promise.resolve(null);
     const done = after.then(() => this.q.add(this.lineAudio(i + 1), t, `第 ${i + 1} 句`));
     this.jobs.set(i, { text: t, done });
+    return done;
   }
 
   /** 最终讲稿:每句拿文件名(已配的直接用,没配的现配) */

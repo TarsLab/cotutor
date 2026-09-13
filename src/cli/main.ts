@@ -18,6 +18,7 @@ import { serveMock, type MockScenario } from '../server/mock.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from './workspace.ts';
 import { createContext } from '../server/app.ts';
 import { MESSAGE_FROM, type MessageFrom } from '../schema/index.ts';
+import { formatEvent, laneFilter, parseEvents } from '../lib/events.ts';
 
 const USAGE = `用法:
   cotutor init <slug> [--dir <path>] [--name <孩子名>] [--port <n>]   建 ~/cotutor/<slug>/ 骨架(幂等补缺)
@@ -26,9 +27,10 @@ const USAGE = `用法:
   cotutor upgrade --config [--dry-run] [--workspace <dir>]              cotutor.json 补缺:新出厂老师 / 运行时 / 命令模板旗标(只加缺的,你改过的值不动)
   cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录
   cotutor add-theme <主题名> [--from <主题>] [--workspace <dir>]       加一个自家的主题:拷一份(缺省出厂的 default)到 themes/<主题名>/,改 cotutor.json 的 kid.theme 换过去
-  cotutor serve [--workspace <dir>] [--port <n>] [--http]               起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS)
+  cotutor serve [--workspace <dir>] [--port <n>] [--http] [--trace]     起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS;--trace 每一轮的事件按道打印)
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad / iPhone 上录音要 HTTPS;所有 workspace 共用)
-  cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>] [--new]   终端里发一条,等老师说完打印结果(与页面同一条路;--new 开新话题)
+  cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>] [--new] [--lane main,tts,post] [--quiet]   终端里发一条,现场按道打印每道工序的事件,说完打印结果(与页面同一条路;--new 开新话题;--quiet 只要结果)
+  cotutor trace <老师> <job> [<日期>] [--lane …] [--workspace <dir>]     回放一轮的事件(<日期>.<job>.events.jsonl;排查昨天那轮用)
   cotutor mock [--port <n>] [--scenario normal|limit|offline|nopost] [--delay <ms>] [--http]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace;nopost = 没有后期的素版)
   cotutor repost <老师> [<日期>] [--job <job>] [--workspace <dir>]      板书后期再做一次:老师原文重解 → 快模型重新划重点 / 排版 / 定样子 → 改写索引(老师原文与配音不动;调提示词时旧板书全部能重来)
   cotutor --version | --help
@@ -69,7 +71,7 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -113,6 +115,10 @@ export async function main(argv: string[]): Promise<void> {
       case 'serve': {
         const port = typeof flags.port === 'string' ? Number(flags.port) : undefined;
         const r = await serveWorkspace({ workspace, port, http: flags.http === true });
+        if (flags.trace === true) {
+          const keep = laneFilter(typeof flags.lane === 'string' ? flags.lane : undefined);
+          r.ctx.runner.onEvent((e) => { if (keep(e.event)) process.stdout.write(`${e.tutor} ${e.job} ${formatEvent(e.event)}\n`); });
+        }
         process.stdout.write(`cotutor serve ${JSON.stringify(workspaceReport(r.ws))}\n`);
         for (const w of r.warnings) process.stdout.write(`  ! ${w}\n`);
         if (!r.https) process.stdout.write('  ! HTTP:iPad / iPhone 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
@@ -211,6 +217,24 @@ export async function main(argv: string[]): Promise<void> {
         }
         return;
       }
+      case 'trace': {
+        const [tutor, jobArg, dateArg] = positionals;
+        if (!tutor || !jobArg) throw new UsageError(`trace 需要老师名和 job,如 cotutor trace math-tutor 1620-1 2026-09-12(日期缺省今天)。\n${USAGE}`);
+        const ws = loadWorkspace(workspace);
+        const { conversationFiles, localDate } = await import('../lib/conversation.ts');
+        const date = dateArg ?? localDate(new Date());
+        const file = conversationFiles(ws.dirs.conversations, tutor, date).events(jobArg);
+        let text: string;
+        try {
+          text = readFileSync(file, 'utf8');
+        } catch {
+          throw new UsageError(`没有这轮的事件文件:${redactHome(file)}(2026-09-13 之前的轮次没有事件;job 与日期对不对?)`);
+        }
+        const events = parseEvents(text).filter(laneFilter(typeof flags.lane === 'string' ? flags.lane : undefined));
+        if (json) process.stdout.write(`${JSON.stringify(events, null, 2)}\n`);
+        else for (const e of events) process.stdout.write(`${formatEvent(e)}\n`);
+        return;
+      }
       case 'repost': {
         const [tutor, dateArg] = positionals;
         if (!tutor) throw new UsageError(`repost 需要老师名,如 cotutor repost math-tutor 2026-09-12 --job 1620-1。\n${USAGE}`);
@@ -239,6 +263,11 @@ export async function main(argv: string[]): Promise<void> {
         const from = typeof flags.from === 'string' ? flags.from : 'parent';
         if (!(MESSAGE_FROM as readonly string[]).includes(from)) throw new UsageError(`--from 只能是 ${MESSAGE_FROM.join(' / ')}`);
         const ctx = createContext(loadWorkspace(workspace));
+        // 现场打印每道工序的事件(--quiet / --json 不打);事件同时落在 events.jsonl,事后 cotutor trace 能回放
+        if (!json && flags.quiet !== true) {
+          const keep = laneFilter(typeof flags.lane === 'string' ? flags.lane : undefined);
+          ctx.runner.onEvent((e) => { if (e.tutor === tutor && keep(e.event)) process.stdout.write(`${formatEvent(e.event)}\n`); });
+        }
         const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, newThread: flags.new === true });
         if (!json) process.stdout.write(`→ ${tutor} ${started.date} ${started.job} 话题 ${started.thread}(${started.plan.runtime}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
         const index = await started.done;
@@ -252,7 +281,7 @@ export async function main(argv: string[]): Promise<void> {
           if (m.holdup) process.stdout.write(`待裁量:${m.holdup.question}${m.holdup.options.length ? ' → ' + m.holdup.options.map((o) => o.label).join(' / ') : ''}\n`);
           if (m.handoff) process.stdout.write(`转交:${m.handoff.to}${m.handoff.why ? ' — ' + m.handoff.why : ''}\n`);
           const secs = (ms: number): string => (ms < 120000 ? `${Math.round(ms / 100) / 10}s` : `${Math.round(ms / 6000) / 10}min`);
-          const timing = [m.timing?.firstCardMs !== undefined ? `首卡 ${secs(m.timing.firstCardMs)}` : null, m.timing?.doneMs !== undefined ? `整轮 ${secs(m.timing.doneMs)}` : null, m.timing?.dubbedMs !== undefined ? `配音 ${secs(m.timing.dubbedMs)}` : null].filter(Boolean);
+          const timing = [m.timing?.firstReadyMs !== undefined ? `首拍就绪 ${secs(m.timing.firstReadyMs)}` : null, m.timing?.firstCardMs !== undefined ? `首卡 ${secs(m.timing.firstCardMs)}` : null, m.timing?.doneMs !== undefined ? `整轮 ${secs(m.timing.doneMs)}` : null, m.timing?.dubbedMs !== undefined ? `配音 ${secs(m.timing.dubbedMs)}` : null].filter(Boolean);
           if (m.artifacts.length) process.stdout.write(`课包:${m.artifacts.join(', ')}\n`);
           process.stdout.write(`会话 ${index.session?.id ?? '?'}${timing.length ? ' · ' + timing.join(' · ') : ''} · 本轮 $${(m.costUsd ?? 0).toFixed(2)} · 今日 $${index.costUsd.toFixed(2)}\n`);
         }

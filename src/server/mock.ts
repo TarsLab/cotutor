@@ -20,7 +20,7 @@ import { enrichScenes } from './scene-props.ts';
 
 /** mock 的课包目录:仓库里的样本(tests/fixtures/bundles/),场景卡从这里播 */
 export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bundles/', import.meta.url));
-import type { BoardSection } from '../lib/kid-board.ts';
+import { readyBeats, type BoardSection } from '../lib/kid-board.ts';
 import { lanAddresses } from '../cli/serve.ts';
 import { USER_CERT_DIR } from '../cli/workspace.ts';
 import { kidThreads } from '../lib/kid-view.ts';
@@ -60,9 +60,9 @@ export function sectionFromScript(md: string): BoardSection {
  * 过同一个 validatePost——页面走的是同一条渲染路(layout 的行、look 的槽、带 pen 的标注)。键 = 老师名:脚本序号。
  */
 export const MOCK_POST: Record<string, PostOutput> = {
-  // 勾股定理:封面独占,认边与公式并排,验证与一句话并排,选择题独占;验证是方法卡(moss),标题「认边」画圈、16 下划线(老师自己标的 直角边 / 斜边 / 25 保留,不重复)
+  // 勾股定理:封面独占,认边与公式并排,验证与一句话并排,选择题独占;验证是方法卡(moss),封面的「三条边」画圈(讲到第一句时)、16 下划线(老师自己标的 直角边 / 斜边 / 25 保留,不重复)
   'math-tutor:0': {
-    marks: [{ line: 0, card: 1, phrase: '认边', pen: 'circle' }, { line: 3, card: 3, phrase: '16', pen: 'underline' }],
+    marks: [{ line: 0, card: 0, phrase: '三条边', pen: 'circle' }, { line: 3, card: 3, phrase: '16', pen: 'underline' }],
     anchors: [],
     layout: { rows: [[0], [1, 2], [3, 4], [5]] },
     look: { '3': { tint: 'moss' }, '4': { emoji: '💡' } },
@@ -394,7 +394,11 @@ export function createMock(opts: MockOptions = {}): Mock {
       const reveal = (): void => {
         k++;
         if (k <= n && full) {
-          m.section = { cards: full.cards.slice(0, k).map((c) => { const { look: _l, ...rest } = c; return rest; }), lines: full.lines.filter((l) => l.anchor !== null && l.anchor < k - 1), partial: true };
+          // 拍的就绪同真服务一个规则(readyBeats;mock 没配音 = 不等配音):露到第 k 张卡时前 k-1 拍关了 → 页面就绪一拍播一拍;卡前的句(锚 null)也在,和真 runner 一样
+          // 后期按拍:铺到第 k 张时前 k-1 张的样子与行都已定(卡带 look,layout 只到已定的那几张)
+          const part = { cards: full.cards.slice(0, k).map((c, i) => (i < k - 1 ? c : (({ look: _l, ...rest }) => rest)(c))), lines: full.lines.filter((l) => l.anchor === null || l.anchor < k - 1) };
+          const rows = full.layout ? full.layout.rows.map((r) => r.filter((i) => i < k - 1)).filter((r) => r.length) : [];
+          m.section = { ...part, ...(full.layout && rows.length ? { layout: { for: full.layout.for, rows } } : {}), partial: true, ready: readyBeats(part, { voiced: false, done: false }) };
           setTimeout(reveal, tick);
         } else {
           answer(m, full);

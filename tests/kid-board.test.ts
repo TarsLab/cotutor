@@ -19,6 +19,10 @@ import {
   isQuestion,
   deviceFor,
   lineDurationMs,
+  markTiming,
+  beatsOf,
+  readyBeats,
+  playableLines,
   lineTarget,
   lookFor,
   marksUpTo,
@@ -37,6 +41,7 @@ import {
   subtitleFor,
   type BoardCard,
   type BoardLine,
+  type PlayerState,
   type BoardSection,
 } from '../src/lib/kid-board.ts';
 import { check, done } from './_check.ts';
@@ -130,6 +135,16 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   st = advance(st, [s1]);
   check('同节下一句', st.line === 1 && st.status === 'playing');
   check('末句问句且没下一节 → 停下等', advance(st, [s1]).status === 'waiting');
+  // 拍:卡前的句是没有卡的一拍;每张卡一拍,后面的句跟它;就绪 = 关了(后面有卡 / 写完了)且每句配音齐
+  const ln = (anchor: number | null, audio: string | null = null): BoardLine => ({ text: '句', audio, marks: [], ask: false, anchor, cues: [] });
+  const cd: BoardCard = { kind: 'text', props: {} };
+  const bsec = { cards: [cd, cd, cd], lines: [ln(null, 'z'), ln(0, 'a'), ln(0, 'b'), ln(1), ln(2, 'c')] };
+  check('拍:按锚点分组、顺序对', JSON.stringify(beatsOf(bsec)) === '[{"card":null,"lines":[0]},{"card":0,"lines":[1,2]},{"card":1,"lines":[3]},{"card":2,"lines":[4]}]', JSON.stringify(beatsOf(bsec)));
+  check('就绪:前两拍配音齐 → 2;第三拍缺配音卡住;末拍没写完不算;写完了才算;没配音色不等配音', readyBeats(bsec, { voiced: true, done: false }) === 2 && readyBeats({ ...bsec, lines: [ln(null, 'z'), ln(0, 'a'), ln(0, 'b'), ln(1, 'x'), ln(2, 'c')] }, { voiced: true, done: false }) === 3 && readyBeats({ ...bsec, lines: [ln(null, 'z'), ln(0, 'a'), ln(0, 'b'), ln(1, 'x'), ln(2, 'c')] }, { voiced: true, done: true }) === 4 && readyBeats(bsec, { voiced: false, done: false }) === 3);
+  const lv = { ...bsec, partial: true, ready: 2 };
+  check('流式的节:能播的句 = 前 ready 拍的;播到头 → thinking;定稿后照常', playableLines(lv) === 3 && playableLines({ ...bsec }) === 5 && advance({ section: 0, line: 2, status: 'playing' }, [lv]).status === 'thinking' && advance({ section: 0, line: 1, status: 'playing' }, [lv]).line === 2 && advance({ section: 0, line: 2, status: 'thinking' }, [{ ...bsec }]).line === 3 && startSection(0, [{ ...bsec, partial: true, ready: 0 }]).status === 'thinking');
+  const subOf = (state: PlayerState, pending: boolean) => subtitleFor({ state, sections: [lv], echo: null, pending, thinking: '想想…', limit: false });
+  check('字幕:thinking 出老师的「想想」;pending 时正在播照常出字幕,没在播才是「想想」', subOf({ section: 0, line: 0, status: 'thinking' }, true).kind === 'thinking' && subOf({ section: 0, line: 0, status: 'playing' }, true).kind === 'line' && subOf({ section: 0, line: 0, status: 'done' }, true).kind === 'thinking' && subOf({ section: 0, line: 0, status: 'playing' }, true).right === 'pause');
   check('末句问句但已有下一节 → 直接进下一节(孩子答过了)', JSON.stringify(advance(st, [s1, s2])) === '{"section":1,"line":0,"status":"playing"}');
   check('末句不是问句 → 完', advance({ section: 1, line: 0, status: 'playing' }, [s1, s2]).status === 'done');
   check('没讲稿的节直接完', startSection(0, [{ cards: [], lines: [] }]).status === 'done');
@@ -148,5 +163,10 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   check('输入条:点 → 打字;按住 → 说话;松手 / 取消 / 发出 / 失焦 → 闲置', barNext('idle', 'tap') === 'typing' && barNext('idle', 'holdStart') === 'holding' && barNext('holding', 'holdEnd') === 'idle' && barNext('holding', 'holdCancel') === 'idle' && barNext('typing', 'sent') === 'idle' && barNext('typing', 'blur') === 'idle' && barNext('typing', 'tap') === 'typing' && barNext('typing', 'holdEnd') === 'typing');
   check('端:宽 ≥ 900 且横 → 平板横屏;短边 ≥ 600 → 平板竖屏;其余手机', deviceFor(1180, 820) === 'tablet-landscape' && deviceFor(820, 1180) === 'tablet-portrait' && deviceFor(390, 844) === 'phone' && deviceFor(899, 500) === 'phone' && deviceFor(1024, 768) === 'tablet-landscape');
   check('没声音时按字数计时,至少 1.2 秒', lineDurationMs('短') === 1200 && lineDurationMs('[十个字十个字十个字十]') === 2600);
+  // 标注定时:按字数比例估——10 字一句 5 秒,「三角形」在第 3 字起 → 1.5s 起、描 1.5s;said 优先;讲稿里没这个词 → null;方括号不算字
+  const ln = { text: '先看这[三角形]有几个角', audio: null, marks: [], ask: false, anchor: 0, cues: [] };
+  const t1 = markTiming(ln, { card: 0, phrase: '三角形' }, 5000);
+  const t2 = markTiming(ln, { card: 0, phrase: '三个角', said: '几个角' }, 5000);
+  check('标注定时:按字数比例,方括号不算,said 优先,找不到 → null,短词至少 350ms', t1 !== null && t1.at === 1500 && t1.dur === 1500 && t2 !== null && t2.at === 3500 && t2.dur === 1500 && markTiming(ln, { card: 0, phrase: '三个角' }, 5000) === null && markTiming(ln, { card: 0, phrase: '角' }, 1000)?.dur === 350 && markTiming(ln, { card: 0, phrase: '角' }, 0) === null, JSON.stringify([t1, t2]));
 }
 done();

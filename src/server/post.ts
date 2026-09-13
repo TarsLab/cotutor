@@ -1,16 +1,18 @@
 /**
- * 板书后期的进程侧:按 policy.post.runtime 起快模型(claude -p --model haiku --output-format json …),等到 timeoutMs,
- * 解析 + 校验(src/lib/postprocess.ts,纯函数)→ 套用到这节;输入、原始输出、丢掉的、耗时、费用落 <日期>.<job>.post.json
- * (家长端「看原文」第七站)。坏了 = 没有:任何失败都回素版,孩子端不知道这道工序存在。
- * repost:拿老师原文重解出这节(不动老师原文与配音),再跑一遍后期,改写索引——调提示词时旧板书全部能「再做一次」。
+ * 板书后期的进程侧(2026-09-13 起按拍,《工作流程.md》§三):一拍关了就按 policy.post.runtime 起一次快模型
+ * (claude -p --model haiku --output-format json …),等到 timeoutMs,解析 + 校验(src/lib/postprocess.ts,纯函数)→ 套到这节;
+ * 每拍的输入、原始输出、丢掉的、耗时、费用攒成一份 <日期>.<job>.post.json(version 2:beats[] + 汇总;家长端「看原文」第七站)。
+ * 坏了 = 没有:哪一拍失败哪一拍素版(另起一行、机械规则选笔),不重来,孩子端不知道这道工序存在。
+ * runPost:整节一次(整块出的运行时、repost):各拍并行起(前文只有老师的东西,没有已定的样子),回来按顺序套。
+ * repost:拿老师原文重解出这节(不动老师原文与配音),再跑一遍后期,改写索引——调提示词 / 骨架时旧板书全部能「再做一次」。
  */
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { conversationFiles } from '../lib/conversation.ts';
-import type { BoardSection, Device } from '../lib/kid-board.ts';
+import { beatsOf, type Beat, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView } from '../lib/kid-view.ts';
-import { parsePost, postPrompt, validatePost, type PostOutput } from '../lib/postprocess.ts';
+import { beatPrompt, parseBeatPost, validateBeatPost, type BeatKept, type BeatPostOutput } from '../lib/postprocess.ts';
 import { fillRuntime, resolvePolicy, type ConversationMessage, type Policy, type ThemeManifest } from '../schema/index.ts';
 import type { Workspace } from '../cli/workspace.ts';
 import { readIndex, readTranscript, writeIndex } from './store.ts';
@@ -19,21 +21,40 @@ import { themeFiles } from './theme.ts';
 /** 没带端就当平板横屏(iPad 是主要的端;手机打开时 rowsFor 会折) */
 export const DEFAULT_DEVICE: Device = 'tablet-landscape';
 
-export interface PostFile {
+/** 一拍的后期:输入、原样输出、校验 */
+export interface PostBeatFile {
+  beat: number;
+  card: number;
   at: string;
-  runtime: string;
   argv: string[];
-  device: Device;
-  theme: string;
   prompt: string;
   /** 进程 stdout 原样(截到 64K) */
   raw: string;
   /** 解析出的提案(解析不了就没有) */
-  output?: PostOutput;
+  output?: BeatPostOutput;
   ok: boolean;
   error?: string;
   dropped: string[];
-  kept?: { marks: number; anchors: number; layout: boolean; looks: number };
+  kept?: BeatKept;
+  ms: number;
+  costUsd?: number;
+}
+
+export interface PostFile {
+  version: 2;
+  at: string;
+  runtime: string;
+  device: Device;
+  theme: string;
+  /** 提示词骨架用的是主题的还是出厂的 */
+  template: 'theme' | 'fallback';
+  beats: PostBeatFile[];
+  /** 至少一拍收到了 */
+  ok: boolean;
+  error?: string;
+  dropped: string[];
+  kept: { marks: number; anchors: number; layout: boolean; looks: number };
+  /** 从第一拍起到最后一拍回,毫秒 */
   ms: number;
   costUsd?: number;
 }
@@ -43,6 +64,14 @@ export interface PostResult {
   file: PostFile;
   /** 索引消息上的摘要 */
   summary: NonNullable<ConversationMessage['post']>;
+}
+
+export interface PostOpts {
+  device?: Device;
+  policy?: Policy;
+  env?: NodeJS.ProcessEnv;
+  now?: Date;
+  cwd?: string;
 }
 
 /** claude --output-format json 的 stdout:一个对象,正文在 result,费用在 total_cost_usd;别的运行时直接把 stdout 当正文 */
@@ -72,7 +101,7 @@ async function spawnPost(argv: string[], cwd: string, env: NodeJS.ProcessEnv, ti
     const child = spawn(argv[0], argv.slice(1), { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
     const timer = setTimeout(() => {
       child.kill();
-      finish({ out, code: null, error: `超时(${timeoutMs}ms),先出素版` });
+      finish({ out, code: null, error: `超时(${timeoutMs}ms),这拍素版` });
     }, timeoutMs);
     child.stdout.on('data', (d: Buffer) => { if (out.length < 200_000) out += d.toString(); });
     child.stderr.on('data', (d: Buffer) => { if (err.length < 8000) err += d.toString(); });
@@ -81,40 +110,75 @@ async function spawnPost(argv: string[], cwd: string, env: NodeJS.ProcessEnv, ti
   });
 }
 
-/**
- * 跑一次后期。runtime 不存在 → 直接算失败(素版);超时 / 起不来 / 输出不是 JSON / 校验全丢 → ok=false 但校验收下的部分照用。
- */
-export async function runPost(ws: Workspace, tutor: string, section: BoardSection, opts: { device?: Device; policy?: Policy; env?: NodeJS.ProcessEnv; now?: Date; cwd?: string }): Promise<PostResult> {
+/** 这个 workspace 的后期环境:主题清单 + 骨架 + 运行时;运行时不在 → null(每拍直接算失败) */
+export async function postEnv(ws: Workspace, tutor: string, opts: PostOpts): Promise<{ policy: Policy; device: Device; theme: ThemeManifest; themeName: string; template: string | null; templateSource: 'theme' | 'fallback'; run: string[] | null }> {
   const policy = opts.policy ?? resolvePolicy(ws.config, tutor);
   const device = opts.device ?? DEFAULT_DEVICE;
-  const theme = await themeFiles(ws.root, ws.config.kid.theme);
-  const manifest: ThemeManifest = theme.manifest;
-  const prompt = postPrompt(section, device, manifest);
-  const t0 = Date.now();
-  const at = (opts.now ?? new Date()).toISOString();
+  const t = await themeFiles(ws.root, ws.config.kid.theme);
   const rt = ws.config.runtimes[policy.post.runtime];
-  const base = { at, device, theme: ws.config.kid.theme, prompt, dropped: [] as string[] };
-  if (!rt || typeof rt === 'string') {
-    const file: PostFile = { ...base, runtime: policy.post.runtime, argv: [], raw: '', ok: false, error: `运行时 ${policy.post.runtime} 不在 cotutor.json 的 runtimes 里(cotutor upgrade --config 可补)`, ms: 0 };
-    return { section, file, summary: { ok: false, ms: 0, dropped: 0, error: file.error } };
-  }
-  const argv = fillRuntime(rt.run, { agent: tutor, prompt });
-  const r = await spawnPost(argv, opts.cwd ?? ws.root, { ...(opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, policy.post.timeoutMs);
+  return { policy, device, theme: t.manifest, themeName: ws.config.kid.theme, template: t.post, templateSource: t.post && t.source === 'workspace' ? 'theme' : 'fallback', run: rt && typeof rt !== 'string' ? rt.run : null };
+}
+export type PostEnv = Awaited<ReturnType<typeof postEnv>>;
+
+/**
+ * 跑一拍:section 是拍关的那一刻的节(前面的拍已套上,作前文)。回来的提案经校验套在 section 上;失败(超时 / 起不来 / 不是 JSON)→ section 原样、file.ok false。
+ * 没有卡的拍不会被叫到(没有可标的东西)。
+ */
+export async function runBeatPost(ws: Workspace, tutor: string, section: BoardSection, beat: Beat, env: PostEnv, opts: PostOpts): Promise<{ section: BoardSection; file: PostBeatFile }> {
+  const card = beat.card ?? -1;
+  const beatNo = beatsOf(section).findIndex((b) => b.card === beat.card);
+  const prompt = beatPrompt(section, beat, env.device, env.theme, env.template);
+  const at = (opts.now ?? new Date()).toISOString();
+  const base = { beat: beatNo, card, at, prompt, dropped: [] as string[] };
+  if (!env.run) return { section, file: { ...base, argv: [], raw: '', ok: false, error: `运行时 ${env.policy.post.runtime} 不在 cotutor.json 的 runtimes 里(cotutor upgrade --config 可补)`, ms: 0 } };
+  const t0 = Date.now();
+  const argv = fillRuntime(env.run, { agent: tutor, prompt });
+  const r = await spawnPost(argv, opts.cwd ?? ws.root, { ...(opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, env.policy.post.timeoutMs);
   const ms = Date.now() - t0;
   const raw = r.out.slice(0, 65536);
-  if (r.error) {
-    const file: PostFile = { ...base, runtime: policy.post.runtime, argv, raw, ok: false, error: r.error, ms };
-    return { section, file, summary: { ok: false, ms, dropped: 0, error: r.error } };
-  }
+  if (r.error) return { section, file: { ...base, argv, raw, ok: false, error: r.error, ms } };
   const { text, costUsd } = unwrapJsonOutput(r.out);
-  const parsed = parsePost(text);
-  if (!parsed.ok) {
-    const file: PostFile = { ...base, runtime: policy.post.runtime, argv, raw, ok: false, error: `输出不合形状:${parsed.why}`, ms, ...(costUsd !== undefined ? { costUsd } : {}) };
-    return { section, file, summary: { ok: false, ms, dropped: 0, error: file.error, ...(costUsd !== undefined ? { costUsd } : {}) } };
-  }
-  const v = validatePost(section, manifest, device, parsed.out);
-  const file: PostFile = { ...base, runtime: policy.post.runtime, argv, raw, output: parsed.out, ok: true, dropped: v.dropped, kept: v.kept, ms, ...(costUsd !== undefined ? { costUsd } : {}) };
-  return { section: v.section, file, summary: { ok: true, ms, dropped: v.dropped.length, ...(costUsd !== undefined ? { costUsd } : {}) } };
+  const parsed = parseBeatPost(text);
+  if (!parsed.ok) return { section, file: { ...base, argv, raw, ok: false, error: `输出不合形状:${parsed.why}`, ms, ...(costUsd !== undefined ? { costUsd } : {}) } };
+  const v = validateBeatPost(section, beat, env.theme, env.device, parsed.out);
+  return { section: v.section, file: { ...base, argv, raw, output: parsed.out, ok: true, dropped: v.dropped, kept: v.kept, ms, ...(costUsd !== undefined ? { costUsd } : {}) } };
+}
+
+/** 各拍的文件 → 整份 .post.json + 索引摘要 */
+export function assemblePost(beats: PostBeatFile[], env: PostEnv, at: string, ms: number): { file: PostFile; summary: PostResult['summary'] } {
+  const okBeats = beats.filter((b) => b.ok);
+  const dropped = beats.flatMap((b) => b.dropped);
+  const kept = { marks: 0, anchors: 0, layout: false, looks: 0 };
+  for (const b of okBeats) { kept.marks += b.kept?.marks ?? 0; kept.anchors += b.kept?.anchors ?? 0; if (b.kept?.look) kept.looks++; if (b.kept?.row === 'same') kept.layout = true; }
+  const costs = beats.map((b) => b.costUsd).filter((c): c is number => typeof c === 'number');
+  const costUsd = costs.length ? costs.reduce((a, b) => a + b, 0) : undefined;
+  const failed = beats.filter((b) => !b.ok);
+  const ok = beats.length > 0 && okBeats.length > 0;
+  const error = !beats.length ? '这轮没有带卡的拍' : failed.length ? `${failed.length} 拍没成:${failed[0].error ?? '?'}` : undefined;
+  const file: PostFile = { version: 2, at, runtime: env.policy.post.runtime, device: env.device, theme: env.themeName, template: env.templateSource, beats, ok, ...(error ? { error } : {}), dropped, kept, ms, ...(costUsd !== undefined ? { costUsd } : {}) };
+  return { file, summary: { ok, ms, dropped: dropped.length, beats: beats.length, failed: failed.length, ...(error ? { error } : {}), ...(costUsd !== undefined ? { costUsd } : {}) } };
+}
+
+/**
+ * 整节一次:有卡的拍并行起(前文只有老师的东西),回来按拍的顺序套(行要顺着长)。给整块出的运行时、repost 用;流式那条路在 runner 里按拍起。
+ */
+export async function runPost(ws: Workspace, tutor: string, section: BoardSection, opts: PostOpts): Promise<PostResult> {
+  const env = await postEnv(ws, tutor, opts);
+  const t0 = Date.now();
+  const at = (opts.now ?? new Date()).toISOString();
+  const beats = beatsOf(section).filter((b) => b.card !== null);
+  const results = await Promise.all(beats.map((b) => runBeatPost(ws, tutor, section, b, env, opts)));
+  let cur: BoardSection = section;
+  const files: PostBeatFile[] = [];
+  results.forEach((r, i) => {
+    if (r.file.ok && r.file.output) {
+      const v = validateBeatPost(cur, beatsOf(cur).find((b) => b.card === beats[i].card)!, env.theme, env.device, r.file.output);
+      cur = v.section;
+      files.push({ ...r.file, dropped: v.dropped, kept: v.kept });
+    } else files.push(r.file);
+  });
+  const a = assemblePost(files, env, at, Date.now() - t0);
+  return { section: files.some((f) => f.ok) ? cur : section, file: a.file, summary: a.summary };
 }
 
 export async function writePostFile(ws: Workspace, tutor: string, date: string, job: string, file: PostFile): Promise<void> {
@@ -123,17 +187,21 @@ export async function writePostFile(ws: Workspace, tutor: string, date: string, 
   await writeFile(target, `${JSON.stringify(file, null, 2)}\n`);
 }
 
+/** 读 .post.json;老的(整节一次的 version 1)包成只有一拍的样子给页面看 */
 export async function readPostFile(ws: Workspace, tutor: string, date: string, job: string): Promise<PostFile | null> {
   try {
-    const v = JSON.parse(await readFile(conversationFiles(ws.dirs.conversations, tutor, date).post(job), 'utf8')) as PostFile;
-    return typeof v?.prompt === 'string' ? v : null;
+    const v = JSON.parse(await readFile(conversationFiles(ws.dirs.conversations, tutor, date).post(job), 'utf8')) as PostFile & { prompt?: string; raw?: string; argv?: string[]; output?: unknown };
+    if (Array.isArray(v?.beats)) return v;
+    if (typeof v?.prompt !== 'string') return null;
+    const one: PostBeatFile = { beat: 0, card: 0, at: v.at, argv: v.argv ?? [], prompt: v.prompt, raw: v.raw ?? '', ok: v.ok, ...(v.error ? { error: v.error } : {}), dropped: v.dropped ?? [], ms: v.ms, ...(v.costUsd !== undefined ? { costUsd: v.costUsd } : {}) };
+    return { version: 2, at: v.at, runtime: v.runtime, device: v.device, theme: v.theme, template: 'fallback', beats: [one], ok: v.ok, ...(v.error ? { error: v.error } : {}), dropped: v.dropped ?? [], kept: v.kept ?? { marks: 0, anchors: 0, layout: false, looks: 0 }, ms: v.ms, ...(v.costUsd !== undefined ? { costUsd: v.costUsd } : {}) };
   } catch {
     return null;
   }
 }
 
 /**
- * 再做一次后期:老师原文(.log)重解出这节 → 跑后期 → 改写索引里这条的 section 与 post。老师原文、配音、卡的状态都不动。
+ * 再做一次后期:老师原文(.log)重解出这节 → 跑后期(整节一次,各拍并行)→ 改写索引里这条的 section 与 post。老师原文、配音、卡的状态都不动。
  * 讲稿按 replyMaxChars 截(与当时下发一致);配音文件名沿用索引里的。
  */
 export async function repost(ws: Workspace, tutor: string, date: string, job: string, opts: { device?: Device; env?: NodeJS.ProcessEnv } = {}): Promise<{ ok: boolean; message?: ConversationMessage; error?: string; file?: PostFile }> {

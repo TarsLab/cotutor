@@ -7,7 +7,7 @@
 import { cp, lstat, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { THEME_CSS_FILE, THEME_MANIFEST_FILE, THEME_NAME_RE, THEMES_DIR, ThemeManifestSchema, explainIssues, type ThemeManifest } from '../schema/index.ts';
+import { THEME_CSS_FILE, THEME_MANIFEST_FILE, THEME_NAME_RE, THEME_POST_FILE, THEMES_DIR, ThemeManifestSchema, explainIssues, type ThemeManifest } from '../schema/index.ts';
 import { PACKAGE_VERSION } from './skeleton.ts';
 import { dirHash } from './skills.ts';
 import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
@@ -35,6 +35,8 @@ export interface LoadedTheme {
   dir: string;
   manifest: ThemeManifest;
   css: string;
+  /** 后期提示词骨架(post.md);没有这个文件 = null(服务退包里出厂的) */
+  post: string | null;
 }
 
 /** 读一个主题目录:清单过契约、css 在;坏了抛 ThemeError(消息就是修复指南) */
@@ -54,7 +56,8 @@ export async function readTheme(dir: string): Promise<LoadedTheme> {
   } catch {
     throw new ThemeError(dir, `${join(dir, THEME_CSS_FILE)} 不在(主题的样式文件)`);
   }
-  return { name: r.data.name, dir, manifest: r.data, css };
+  const post = await readFile(join(dir, THEME_POST_FILE), 'utf8').catch(() => null);
+  return { name: r.data.name, dir, manifest: r.data, css, post };
 }
 
 /** 出厂主题(包里那份);包坏了是开发错误,直接抛 */

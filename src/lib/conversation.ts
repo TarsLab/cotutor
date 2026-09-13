@@ -33,6 +33,8 @@ export interface ConversationFiles {
   /** 这一轮真发出去的东西:上下文包 + 完整命令行(家长端「看原文」第一站;跑完就丢的话,「老师为什么没看见」永远查不了) */
   run: (job: string) => string;
   post: (job: string) => string;
+  /** 这一轮的事件流 <date>.<job>.events.jsonl(lib/events.ts;控制台与时间线的唯一来源) */
+  events: (job: string) => string;
   audio: (job: string) => string;
   /** 板书讲稿第 n 句的配音(n 从 1 起) */
   lineAudio: (job: string, n: number) => string;
@@ -55,6 +57,7 @@ export function conversationFiles(conversationsDir: string, tutor: string, date:
     err: (job) => `${base}.${job}.err.log`,
     run: (job) => `${base}.${job}.run.json`,
     post: (job) => `${base}.${job}.post.json`,
+    events: (job) => `${base}.${job}.events.jsonl`,
     audio: (job) => `${base}.${job}.mp3`,
     lineAudio: (job, n) => `${base}.${job}.${n}.mp3`,
     cardsDir: (job) => `${base}.${job}.cards`,

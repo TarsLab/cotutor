@@ -9,6 +9,8 @@ import { z } from 'zod';
 export const THEME_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 export const THEME_MANIFEST_FILE = 'theme.json';
 export const THEME_CSS_FILE = 'kid.css';
+/** 板书后期(快模型)的提示词骨架,和 kid.css 同一套(出厂 / 拷贝 / hash / upgrade / 现读);可选,没有就用包里出厂的 */
+export const THEME_POST_FILE = 'post.md';
 export const THEMES_DIR = 'themes';
 export const DEFAULT_THEME = 'default';
 

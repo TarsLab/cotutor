@@ -1,0 +1,8 @@
+{
+  "_note": "画蛇添足:封面、结论、原文点读、选择题。结论卡该是 sky,题目该是 plum;封面标题不标;老师已标的整句不再标",
+  "device": "tablet-landscape",
+  "must": [],
+  "never": [{ "card": 0, "phrase": "画蛇添足" }, { "card": 1, "phrase": "多做一步,反而坏事" }, { "card": 2, "phrase": "先成者饮酒" }],
+  "look": { "1": ["sky"], "3": ["plum"] },
+  "maxDropped": 4
+}

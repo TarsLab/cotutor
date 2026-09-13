@@ -133,7 +133,8 @@ export async function runBeatPost(ws: Workspace, tutor: string, section: BoardSe
   if (!env.run) return { section, file: { ...base, argv: [], raw: '', ok: false, error: `运行时 ${env.policy.post.runtime} 不在 cotutor.json 的 runtimes 里(cotutor upgrade --config 可补)`, ms: 0 } };
   const t0 = Date.now();
   const argv = fillRuntime(env.run, { agent: tutor, prompt });
-  const r = await spawnPost(argv, opts.cwd ?? ws.root, { ...(opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, env.policy.post.timeoutMs);
+  // 后期是一问一答的 JSON,不要思考:claude CLI 缺省让 haiku 想 3–6K token,一拍 35–69 秒(2026-09-13 真跑三拍全超时);MAX_THINKING_TOKENS=0 → 4 秒。运行时模板里没有这一项,这里统一给
+  const r = await spawnPost(argv, opts.cwd ?? ws.root, { ...(opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root, MAX_THINKING_TOKENS: '0' }, env.policy.post.timeoutMs);
   const ms = Date.now() - t0;
   const raw = r.out.slice(0, 65536);
   if (r.error) return { section, file: { ...base, argv, raw, ok: false, error: r.error, ms } };

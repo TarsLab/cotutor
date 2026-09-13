@@ -1,0 +1,9 @@
+{
+  "_note": "三角形的面积:封面 + 一步。老师已标「平行四边形」,模型不该再标;封面标题不标;两张卡各占一行",
+  "device": "tablet-landscape",
+  "must": [],
+  "never": [{ "card": 0, "phrase": "平行四边形" }, { "card": 0, "phrase": "三角形的面积" }],
+  "rows": [[0], [1]],
+  "look": { "1": ["moss", "sand", "paper"] },
+  "maxDropped": 3
+}

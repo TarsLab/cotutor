@@ -1,0 +1,8 @@
+{
+  "_note": "水果单词:封面 + 点读卡。老师把三个单词都标了,模型不该重复;点读卡是列表,sand 或不给",
+  "device": "phone",
+  "must": [],
+  "never": [{ "card": 1, "phrase": "apple" }, { "card": 1, "phrase": "banana" }, { "card": 1, "phrase": "orange" }, { "card": 0, "phrase": "Fruits" }],
+  "look": { "1": ["sand", "paper"] },
+  "maxDropped": 3
+}

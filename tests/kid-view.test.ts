@@ -3,6 +3,16 @@ import { deriveKidView, kidConversation, kidMessageCount, kidSource, kidThreads,
 import { parseTranscript } from '../src/lib/transcript.ts';
 import { check, done } from './_check.ts';
 
+{
+  const base = { at: '2026-09-14T16:20', result: 'ok' as const, artifacts: [], kidText: '看到了', costUsd: 0 };
+  const list = kidConversation({ messages: [
+    { ...base, job: '1620-1', from: 'kid', text: '(拍了一张)', photos: ['captures/2026-09-14/1620-1.jpg'] },
+    { ...base, job: '1620-2', from: 'parent', text: '这道呢', photos: ['captures/2026-09-14/1620-2.jpg'] },
+    { ...base, job: '1620-3', from: 'kid', text: '再看' },
+  ] });
+  check('孩子端条目:孩子自己的问句带 photos,家长的问句不露(照片也不露),没照片的没有 photos 字段', list[0].photos?.join() === 'captures/2026-09-14/1620-1.jpg' && list[1].question === null && list[1].photos === undefined && list[2].photos === undefined, JSON.stringify(list));
+}
+
 const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   parseTranscript(`{"type":"assistant","message":{"content":[{"type":"text","text":"我先看看账本"}]}}\n{"type":"result","subtype":"success","result":${JSON.stringify(result)},"num_turns":2}`);
 

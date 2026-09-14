@@ -1,22 +1,11 @@
-/** 账本:逐行解析报行号、按 id 折叠后者为准、retracted 追加行、产物首行要全。 */
-import { mergeArtifacts, mergeObservations, nextObservationId, parseArtifactEvents, parseObservations } from '../src/lib/ledger.ts';
+/** 产物账本:逐行解析报行号、按 id 折叠后者为准、产物首行要全。(观察 2026-09-14 起在日记里,见 diary.test) */
+import { mergeArtifacts, parseArtifactEvents, parseJsonl } from '../src/lib/ledger.ts';
+import { ArtifactEventSchema } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
 
-const OBS = [
-  '{"id":"o-20260908-001","date":"2026-09-08","author":"math-tutor","subject":"数学","claim":"借位忘了","evidence":{"conversation":"math-tutor/2026-09-08","job":"1620-1"}}',
-  '{"id":"o-20260908-002","date":"2026-09-08","author":"reading-tutor","claim":"th 发音混"}',
-  '',
-  '{"id":"o-20260908-001","retracted":true,"by":"parent","date":"2026-09-09"}',
-  '{"id":"o-20260908-003","date":"2026-09-08","author":"math-tutor"}',
-].join('\n');
 {
-  const p = parseObservations(OBS);
-  check('三行好、一行坏且点名第 5 行', p.rows.length === 3 && p.errors.length === 1 && p.errors[0].includes('第 5 行') && p.errors[0].includes('claim'), p.errors.join(' | '));
-  const merged = mergeObservations(p.rows);
-  check('纠错行把 001 标 retracted', merged.find((o) => o.id === 'o-20260908-001')?.retracted === true && merged.find((o) => o.id === 'o-20260908-002')?.retracted === false);
-  check('顺序按首次出现', merged.map((o) => o.id).join(',') === 'o-20260908-001,o-20260908-002');
-  check('下一个 id 顺延', nextObservationId('2026-09-08', merged.map((o) => o.id)) === 'o-20260908-003');
-  check('新的一天从 001', nextObservationId('2026-09-09', merged.map((o) => o.id)) === 'o-20260909-001');
+  const p = parseJsonl('{"id":"a","kind":"课包","by":"x","at":"t"}\n\n坏行\n{"id":"b"}\n', ArtifactEventSchema, 'x.jsonl');
+  check('坏行点名行号、空行跳过、缺 at 的行也点名', p.rows.length === 1 && p.errors.length === 2 && p.errors[0].includes('第 3 行') && p.errors[1].includes('第 4 行'), p.errors.join(' | '));
 }
 const ART = [
   '{"id":"2026-09-08-退位","kind":"课包","by":"math-tutor","at":"2026-09-08T16:30","status":"ready","path":"bundles/x","hash":"sha256:1"}',

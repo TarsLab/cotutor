@@ -49,7 +49,11 @@ writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault', '计划'), { recursive: true });
 writeFileSync(join(root, 'vault', '课程表.md'), '| 星期 | 时间 | 学科 |\n|---|---|---|\n| 二 | 16:00–17:00 | 数学 |\n| 三 | 19:00–19:40 | 语文 |\n');
 writeFileSync(join(root, 'vault', '计划', '2026-W37.md'), '---\nweek: 2026-W37\nstatus: confirmed\n---\n## 数学老师\n- 周三前讲退位\n## 语文老师\n- 背古诗\n');
-writeFileSync(join(root, 'ledger', 'observations.jsonl'), '{"id":"o-1","date":"2026-09-06","author":"math-tutor","subject":"数学","claim":"借位忘了"}\n{"id":"o-2","date":"2026-09-07","author":"chinese-tutor","subject":"语文","claim":"错别字"}\n');
+// 观察的真相在日记(2026-09-14):上下文包的 recent 从最近 14 天日记的「- 观察:」行抽,按 H2 的学科过滤;档案「现在」callout 进 profile
+mkdirSync(join(root, 'vault', '日记'), { recursive: true });
+writeFileSync(join(root, 'vault', '日记', '2026-09-06.md'), '## 数学 · 退位\n\n- 观察:借位忘了\n');
+writeFileSync(join(root, 'vault', '日记', '2026-09-07.md'), '## 语文 · 生字\n\n- 观察:错别字\n- 家长:他自己改过来了\n');
+writeFileSync(join(root, 'vault', '孩子.md'), '# 小明\n\n> [!abstract] 现在\n> - 数学:人教数学一下 第 4 单元 在学\n> - 还没学、别用:竖式\n\n## 忌讳\n- 别催\n');
 
 let now = new Date(2026, 8, 8, 16, 20);
 const ctx = createContext(loadWorkspace(root), { now: () => now });
@@ -91,7 +95,7 @@ try {
   // 换个法子:再发一条让假 CLI 把整段 prompt 回显——它回显最后一行,而上下文包在前面。这里改为直接测 gatherContext。
   const { gatherContext } = await import('../src/server/runner.ts');
   const pack = await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: now });
-  check('gatherContext:本老师的计划行、本学科观察、at', pack.plan.join() === '周三前讲退位' && pack.recent.map((r) => r.claim).join() === '借位忘了' && pack.at === '2026-09-08T16:20', JSON.stringify(pack));
+  check('gatherContext:本老师的计划行、本学科观察(从日记抽)、档案两行、at', pack.plan.join() === '周三前讲退位' && pack.recent.map((r) => r.claim).join() === '借位忘了' && pack.profile.join('|') === '数学:人教数学一下 第 4 单元 在学|还没学、别用:竖式' && pack.at === '2026-09-08T16:20', JSON.stringify(pack));
   const packZh = await gatherContext(ctx.ws, 'chinese-tutor', { from: 'parent', at: now });
   check('语文老师拿到自己的', packZh.plan.join() === '背古诗' && packZh.recent.map((r) => r.claim).join() === '错别字');
   check('课程表命中 → slot(2026-09-08 是周二 16:20)', pack.slot === '数学 16:00-17:00', String(pack.slot));
@@ -174,7 +178,7 @@ try {
 
   // ---- 孩子端接口:首页、过滤后的会话、发消息、每日上限、配音文件 ----
   const home = (await route('GET', '/api/kid/home', ctx)).json as { title: string; timetable: unknown[]; tutors: { name: string; available: boolean; remaining: number; hasVoice: boolean }[]; stacks: unknown[] };
-  check('首页:标题、课程表、孩子端老师(无 planner)', home.title === '小明的老师们' && home.timetable.length === 2 && home.tutors.length === 4 && !home.tutors.some((t) => t.name === 'planner') && home.stacks.length === 0, JSON.stringify(home.tutors));
+  check('首页:标题、课程表、孩子端老师(无 planner)', home.title === '小明的老师们' && home.timetable.length === 2 && home.tutors.length === 3 && !home.tutors.some((t) => t.name === 'planner') && home.stacks.length === 0, JSON.stringify(home.tutors));
   check('老师带 hasVoice 与剩余条数(今天 09-09 孩子还没发过)', home.tutors.find((t) => t.name === 'math-tutor')?.hasVoice === true && home.tutors.find((t) => t.name === 'math-tutor')?.remaining === 30, JSON.stringify(home.tutors));
   const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null; reply: string | null; audio: string | null }[]; remaining: number; pending: string | null };
   check('孩子视图:家长发的只见回复,搜不到工具、错误、待裁量', kd.messages.length === 1 && kd.messages[0].question === null && kd.messages[0].reply === '第一次说:新的一天' && !/工具|error|holdup|handoff|costUsd|Read/.test(JSON.stringify(kd)), JSON.stringify(kd));
@@ -441,6 +445,64 @@ try {
   check('history:按天(新的在前),今天两个话题(新的在前),名字是孩子第一句、节数与卡数', hist.today === '2026-09-09' && hist.days[0].date === '2026-09-09' && hist.days.some((d) => d.date === '2026-09-08') && todayH.threads[0].thread === newThread && todayH.threads[0].title === '换个话题 板书' && todayH.threads[0].sections === 2 && todayH.threads[0].cards === 2 && todayH.threads[1].thread === oldThread && todayH.threads[1].sections > 2, JSON.stringify(hist.days.map((d) => ({ date: d.date, n: d.threads.length, t: d.threads.map((t) => t.title) }))));
   const kdOld = (await route('GET', '/api/kid/conversations/math-tutor/2026-09-08', ctx)).json as { date: string; thread: string | null; messages: { thread: string }[] };
   check('日期路由给那天的孩子视图(带 thread);未来 / 坏日期 400;today 也带 thread', kdOld.date === '2026-09-08' && kdOld.messages.length > 0 && kdOld.messages.every((m) => typeof m.thread === 'string') && kdOld.thread === kdOld.messages[kdOld.messages.length - 1].thread && (await route('GET', '/api/kid/conversations/math-tutor/2027-01-01', ctx)).status === 400 && (await route('GET', '/api/kid/conversations/math-tutor/2026-13-01', ctx)).status === 400 && ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { thread: string }).thread === oldThread);
+
+  // ---- 打分与记账(《obsidian仓库设计.md》§4 / §6):话题打星 → 记账 → 「## 记账」段落进 vault 的日记 ----
+  const rateUrl = (th: string) => `/api/conversations/math-tutor/2026-09-09/threads/${th}/rating`;
+  check('打星:1–5 之外 400、没这个话题 404、写回索引', (await route('PUT', rateUrl(newThread), ctx, { rating: 6 })).status === 400 && (await route('PUT', rateUrl('0000-9'), ctx, { rating: 3 })).status === 404 && (await route('PUT', rateUrl(newThread), ctx, { rating: 4 })).status === 200 && (await route('PUT', rateUrl(oldThread), ctx, { rating: 2 })).status === 200 && ((await day('math-tutor', '2026-09-09')).json as { index: { ratings: Record<string, number> } }).index.ratings[newThread] === 4);
+  const kidBefore = ((await route('GET', '/api/kid/conversations/math-tutor/2026-09-09', ctx)).json as { messages: unknown[] }).messages.length;
+  const bk = await route('POST', '/api/conversations/math-tutor/2026-09-09/bookkeep', ctx, {});
+  check('记账:两个话题都排上(都有孩子的话)', bk.status === 202 && ((bk.json as { queued: string[] }).queued.length === 2), JSON.stringify(bk.json));
+  await ctx.runner.flush();
+  const diary = readFileSync(join(root, 'vault', '日记', '2026-09-09.md'), 'utf8');
+  check('日记:两段同名 H2、孩子问的话、打分够的那段有摘要 / 星 / 教材链接 / 骨架,不够的没有', (diary.match(/^## 数学 · 三角形的角$/gm) ?? []).length === 2 && diary.includes('> [!question] 孩子问\n> 换个话题 板书') && (diary.match(/★★★★/g) ?? []).length === 1 && (diary.match(/讲了三角形有三个角/g) ?? []).length === 1 && diary.includes('→ [[人教数学一下#1 认识图形(二)]]') && diary.includes('骨架:看图 → 数角 → 选一选') && (diary.match(/- 观察:角和边会混/g) ?? []).length === 2, diary);
+  const booked = (await day('math-tutor', '2026-09-09')).json as { index: { booked: Record<string, string>; messages: { job: string; bookkeep?: { thread: string }; from: string; thread?: string; result: string; bookkeeping?: unknown }[] } };
+  const bkMsgs = booked.index.messages.filter((m) => m.bookkeep);
+  check('索引:booked 记了两个话题;记账那轮 from: system、落在原话题里、bookkeeping 物化', Object.keys(booked.index.booked).length === 2 && bkMsgs.length === 2 && bkMsgs.every((m) => m.from === 'system' && m.thread === m.bookkeep!.thread && m.result === 'ok' && m.bookkeeping), JSON.stringify(bkMsgs));
+  check('孩子端看不到记账那轮', ((await route('GET', '/api/kid/conversations/math-tutor/2026-09-09', ctx)).json as { messages: unknown[] }).messages.length === kidBefore);
+  const bkAgain = (await route('POST', '/api/conversations/math-tutor/2026-09-09/bookkeep', ctx, {})).json as { queued: string[]; skipped: { why: string }[] };
+  check('再记一次:都跳过(记过了)', bkAgain.queued.length === 0 && bkAgain.skipped.every((s) => s.why.includes('记过了')), JSON.stringify(bkAgain));
+  const bkEvents = parseEvents(readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${bkMsgs[0].job}.events.jsonl`), 'utf8'));
+  check('事件:ledger 道有日记那条', bkEvents.some((e) => e.lane === 'ledger' && e.kind === 'diary' && formatEvent(e).includes('2026-09-09.md')));
+  const { gatherContext: gather2 } = await import('../src/server/runner.ts');
+  check('上下文包里带着刚记的观察', (await gather2(ctx.ws, 'math-tutor', { from: 'kid', at: now })).recent.some((r) => r.claim === '角和边会混'));
+
+  // ---- 作业照片(R5):传图落 captures/ → 连 path 发消息 → 上下文包 photos: 段、老师 Read → 板书引用原图 → 孩子端问句带缩略图;记账提示词提到照片、日记不写路径 ----
+  const { localDate: ld } = await import('../src/lib/conversation.ts');
+  const phDate = ld(now);
+  const phHm = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+  const JPEG = 'data:image/jpeg;base64,' + Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0xff, 0xd9]).toString('base64');
+  const phUp1 = await route('POST', '/api/kid/conversations/math-tutor/photos', ctx, { image: JPEG });
+  const phOne = (phUp1.json as { path: string }).path;
+  const phUp2 = await route('POST', '/api/conversations/math-tutor/photos', ctx, { image: JPEG.replace('jpeg', 'png') });
+  const phTwo = (phUp2.json as { path: string }).path;
+  check('传图:201、captures/<日期>/<HHMM>-<n>.jpg 顺序编号、文件在;家长端同一条路(png 也认)', phUp1.status === 201 && phOne === `captures/${phDate}/${phHm}-1.jpg` && existsSync(join(root, phOne)) && phUp2.status === 201 && phTwo === `captures/${phDate}/${phHm}-2.png` && existsSync(join(root, phTwo)), JSON.stringify([phUp1.json, phUp2.json]));
+  check('传图校验:不是 data URL 400、太大 413、GET 405', (await route('POST', '/api/kid/conversations/math-tutor/photos', ctx, { image: 'x' })).status === 400 && (await route('POST', '/api/kid/conversations/math-tutor/photos', ctx, { image: 'data:image/jpeg;base64,' + 'A'.repeat(4_100_000) })).status === 413 && (await route('GET', '/api/kid/conversations/math-tutor/photos', ctx)).status === 405);
+  check('消息里的 photos 要在 captures/ 里:越界 / 不存在 / 不是数组都 400', (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '', photos: ['../x.jpg'] })).status === 400 && (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '', photos: [`captures/${phDate}/nope.jpg`] })).status === 400 && (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '', photos: 'x' })).status === 400 && (await post('math-tutor', { text: 'x', photos: ['conversations/x.png'] })).status === 400);
+  const phR = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '', photos: [phOne], newThread: true });
+  const phJ = phR.json as { job: string; thread: string };
+  check('只有照片没有字也能发(新话题)', phR.status === 202 && phJ.thread === phJ.job, JSON.stringify(phR.json));
+  await wait('math-tutor');
+  type PhotoDay = { index: { messages: { job: string; text: string; photos?: string[]; kidText?: string | null; section?: { cards: { kind: string; props: Record<string, unknown> }[] } | null; result: string }[] } };
+  const phM = ((await day('math-tutor', phDate)).json as PhotoDay).index.messages.find((m) => m.job === phJ.job)!;
+  const phRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phJ.job}.run.json`), 'utf8')) as { prompt: string };
+  check('消息:text「(拍了一张)」、photos 记下;上下文包 photos: 段一行一张;老师 Read 了那张', phM.result === 'ok' && phM.text === '(拍了一张)' && phM.photos?.join() === phOne && phRun.prompt.includes(`  photos:\n    - ${JSON.stringify(phOne)}\n---\n(拍了一张)`) && phM.kidText?.includes('看到照片:' + phOne) === true, JSON.stringify({ text: phM.text, photos: phM.photos, kid: phM.kidText, prompt: phRun.prompt.slice(-200) }));
+  const phCards: { kind: string; props: Record<string, unknown> }[] = phM.section?.cards ?? [];
+  check('板书:image 卡引用原图、canvas 卡照片做底(第三种底图)', phCards.some((c) => c.kind === 'image' && c.props.src === phOne) && phCards.some((c) => c.kind === 'canvas' && (c.props.base as { image?: string } | null)?.image === phOne), JSON.stringify(phCards));
+  const phRuns = ((await day('math-tutor', phDate)).json as Day).runs[phJ.job];
+  check('转录里能看到 Read 了哪张', phRuns.some((r) => r.kind === 'tool' && JSON.stringify(r).includes(phOne)), JSON.stringify(phRuns));
+  const phKid = ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; question: string | null; photos?: string[] }[] }).messages.find((m) => m.job === phJ.job)!;
+  check('孩子端:问句「(拍了一张)」带 photos;照片经 /api/kid/image 取得到', phKid.question === '(拍了一张)' && phKid.photos?.join() === phOne && (await route('GET', `/api/kid/image?p=${encodeURIComponent(phOne)}`, ctx)).status === 200, JSON.stringify(phKid));
+  const phR2 = await post('math-tutor', { text: '这道呢', from: 'parent', photos: [phTwo] });
+  await wait('math-tutor');
+  const phM2 = ((await day('math-tutor', phDate)).json as PhotoDay).index.messages.find((m) => m.job === (phR2.json as { job: string }).job)!;
+  check('家长端带字带图:text 照写、photos 记下,接着同一话题', phR2.status === 202 && phM2.text === '这道呢' && phM2.photos?.join() === phTwo && (phR2.json as { thread: string }).thread === phJ.thread, JSON.stringify(phM2));
+  await route('PUT', rateUrl(phJ.thread), ctx, { rating: 4 });
+  const phBk = await route('POST', `/api/conversations/math-tutor/${phDate}/bookkeep`, ctx, { threads: [phJ.thread] });
+  await ctx.runner.flush();
+  const phBkMsg = ((await day('math-tutor', phDate)).json as { index: { messages: { job: string; bookkeep?: { thread: string } }[] } }).index.messages.find((m) => m.bookkeep?.thread === phJ.thread)!;
+  const phBkRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phBkMsg.job}.run.json`), 'utf8')) as { prompt: string };
+  const phDiary = readFileSync(join(root, 'vault', '日记', `${phDate}.md`), 'utf8');
+  check('记账:提示词说这个话题有 2 张照片、要把图上的写成文字;日记里没有 captures/ 路径', phBk.status === 202 && phBkRun.prompt.includes('有 2 张作业照片') && !phDiary.includes('captures/') && phDiary.includes('(拍了一张)'), phBkRun.prompt.slice(0, 400));
 
   // ---- 参数校验 ----
   check('空消息 400', (await post('math-tutor', { text: '   ' })).status === 400);

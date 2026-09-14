@@ -56,10 +56,10 @@ function App(): JSX.Element {
   if (card.kind === 'scene' && card.bundleUrl) return <SceneStage ref={scene} bundleUrl={card.bundleUrl} autoplay={card.autoplay} onPhase={onPhase} onError={onError} />;
   if (card.kind === 'canvas') {
     const st = (card.state ?? {}) as { ink?: Record<string, unknown>[] };
-    const base = (card.props.base ?? null) as { bundle: string } | { skeletons: Record<string, unknown>[] } | null;
+    const base = (card.props.base ?? null) as { bundle: string } | { skeletons: Record<string, unknown>[] } | { image: string } | null;
     return (
       <Suspense fallback={<div className="stage-wait">画板准备中…</div>}>
-        <CanvasStage ref={canvas} base={base} bundleUrl={card.bundleUrl} prompt={typeof card.props.prompt === 'string' ? card.props.prompt : undefined} ink={Array.isArray(st.ink) ? st.ink : []} onState={onInk} onSubmit={onSubmit} onError={onError} />
+        <CanvasStage ref={canvas} base={base} bundleUrl={card.bundleUrl} imageUrl={card.imageUrl} prompt={typeof card.props.prompt === 'string' ? card.props.prompt : undefined} ink={Array.isArray(st.ink) ? st.ink : []} onState={onInk} onSubmit={onSubmit} onError={onError} />
       </Suspense>
     );
   }

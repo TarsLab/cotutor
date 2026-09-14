@@ -10,7 +10,7 @@ const raw = JSON.parse(configTemplate({ slug: 'ming', name: '小明', port: 5181
 const cfg = CotutorConfigSchema.parse(raw);
 check('模板可解析', cfg.kid.slug === 'ming' && cfg.title === '小明的老师们' && cfg.server.port === 5181);
 check('老师表齐', Object.keys(cfg.tutors).length === 6 && cfg.tutors.planner.hidden === true && cfg.tutors['scene-maker'].hidden === true && cfg.tutors['scene-maker'].runtime === 'claude-scene');
-check('enabled 缺省 true', cfg.tutors['math-tutor'].enabled === true);
+check('enabled 缺省 true;作业老师出厂关着(R5:照片在学科老师那里拍)', cfg.tutors['math-tutor'].enabled === true && cfg.tutors['homework-tutor'].enabled === false);
 check('运行时 claude/qwen 都在', 'claude' in cfg.runtimes && 'qwen' in cfg.runtimes && cfg.runtimes.default === 'claude');
 
 const pol = resolvePolicy(cfg, 'math-tutor');
@@ -26,7 +26,7 @@ check('政策逐层覆盖', p2.replyMaxChars === 80 && p2.contextPack.recent ===
 check('别的老师不受影响', resolvePolicy(layered, 'planner').reviewGate === false && resolvePolicy(layered, 'planner').replyMaxChars === 80);
 
 const kidOnly = listTutors(cfg, { kidOnly: true });
-check('孩子端不见 hidden', kidOnly.length === 4 && !kidOnly.some((t) => t.name === 'planner'));
+check('孩子端不见 hidden、不见关着的作业老师', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'planner' || t.name === 'homework-tutor'));
 check('列表带有效政策', listTutors(cfg)[0].policy.replyMaxChars === 60);
 
 const bad = CotutorConfigSchema.safeParse({ version: 2, kid: { slug: 'Bad Slug' }, tutors: { x: { display: '' } }, runtimes: { default: 'nope' } });

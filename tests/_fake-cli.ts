@@ -67,6 +67,13 @@ if (fail) {
   else if (prompt.includes('转交')) parts.push('## 转交\nto: planner\nwhy: 排进计划');
   if (prompt.startsWith('cotutor:') && /\n---\n转交自 /.test(prompt)) parts.push('课包 2026-09-09-guilv 做好了,6 步');
   if (prompt.includes('板书')) parts.push('```text cover\n三角形\n拼一拼\n```\n\n先看[三角形]。\n\n```choice\n三角形有几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n三角形有几个角?' + (prompt.includes('坏卡') ? '\n\n```choice\n没选项\n```' : '') + (prompt.includes('点读') ? '\n\n```read\napple 苹果\nbanana 香蕉\n```\n\n点一下听一下。' : '') + (prompt.includes('图片') ? '\n\n```image\nvault/pic.png\n看这张图\n```' : ''));
+  // 作业照片(R5):上下文包有 photos: 段就「看图」——回显看到了哪张,板书 image 卡引用原图、canvas 卡照片做底
+  const photosAt = prompt.indexOf('\n  photos:\n');
+  if (photosAt >= 0) {
+    const ps = prompt.slice(photosAt + 11).split('\n').filter((l) => l.startsWith('    - ')).map((l) => { const v = l.slice(6); return v.startsWith('"') ? (JSON.parse(v) as string) : v; });
+    emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: `../../${ps[0]}` } }] } });
+    parts.push(`看到照片:${ps.join(' | ')},是第 12 页第 3 题。\n\n\`\`\`image\n${ps[0]}\n你拍的作业\n\`\`\`\n\n\`\`\`canvas\n${ps[0]}\n把算错的那道圈出来。\n\`\`\`\n\n哪道算错了?`);
+  }
   const cardsAt = prompt.indexOf('\n  cards:\n');
   if (cardsAt >= 0) {
     const seen = prompt.slice(cardsAt + 10).split('\n').filter((l) => l.startsWith('    - ')).map((l) => { const v = l.slice(6); return v.startsWith('"') ? (JSON.parse(v) as string) : v; });
@@ -74,6 +81,9 @@ if (fail) {
   }
   parts.push(`${session ? '接着说:' : '第一次说:'}${lastLine}`);
   if (prompt.includes('家长段')) parts.push('## 家长\n他其实会了。');
+  // 记账任务(runner.bookkeep 发的):回一段固定形状的「## 记账」;prompt 里有「记账坏」就少写 name(应用该报 warning、日记不写)
+  const bk = /给刚才这个话题记账\(话题 (\S+?)[,,]/.exec(prompt);
+  if (bk) parts.push(prompt.includes('记账坏') ? `## 记账\n- thread: ${bk[1]}\n  summary: 没名字` : `## 记账\n- thread: ${bk[1]}\n  name: 三角形的角\n  textbook: 人教数学一下#1 认识图形(二)\n  summary: 讲了三角形有三个角,孩子一开始说四个。\n  steps: 看图 → 数角 → 选一选\n  observations:\n    - 角和边会混`);
   const result = parts.join('\n\n');
   if (stream) {
     const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));

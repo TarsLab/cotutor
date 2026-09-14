@@ -4,11 +4,13 @@
  * exit 约定同 drawtell / voxtell doctor:必需项全过 exit 0,否则 1;--json 带 ok 与整份 checks。
  */
 import { execFile } from 'node:child_process';
-import { readFile, readdir, stat } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { access, readFile, readdir, stat } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { parseAgentFile } from '../lib/agent-file.ts';
-import { parseArtifactEvents, parseObservations } from '../lib/ledger.ts';
+import { extractProfile } from '../lib/diary.ts';
+import { parseArtifactEvents } from '../lib/ledger.ts';
 import { parseTimetable } from '../lib/timetable.ts';
 import { configGapsOf } from './migrate.ts';
 import { httpsFiles } from './serve.ts';
@@ -375,17 +377,44 @@ export async function doctorWorkspace(
     }
 
     // ---- 账本:坏行必须响(不可再生,别删)----
-    for (const [name, file, parse] of [
-      ['observations', ws.files.observations, parseObservations],
-      ['artifacts', ws.files.artifacts, parseArtifactEvents],
-    ] as const) {
-      try {
-        const text = await readFile(file, 'utf8');
-        const { rows, errors } = parse(text);
-        push({ name: `ledger.${name}`, ok: errors.length === 0, required: true, detail: errors.length ? errors.slice(0, 3).join(';') : `${rows.length} 行`, fix: errors.length ? '修那几行,或 git checkout 回退;账本不可再生,不要删了重来' : undefined });
-      } catch {
-        push({ name: `ledger.${name}`, ok: true, required: false, detail: '没有(还没记过);cotutor init 会建空文件' });
-      }
+    try {
+      const { rows, errors } = parseArtifactEvents(await readFile(ws.files.artifacts, 'utf8'));
+      push({ name: 'ledger.artifacts', ok: errors.length === 0, required: true, detail: errors.length ? errors.slice(0, 3).join(';') : `${rows.length} 行`, fix: errors.length ? '修那几行,或 git checkout 回退;账本不可再生,不要删了重来' : undefined });
+    } catch {
+      push({ name: 'ledger.artifacts', ok: true, required: false, detail: '没有(还没记过);cotutor init 会建空文件' });
+    }
+    // 观察不在账本里了(2026-09-14):还留着 observations.jsonl 只提醒,不算错
+    if (await statOrNull(join(ws.dirs.ledger, 'observations.jsonl'))) {
+      push({ name: 'ledger.observations', ok: true, required: false, detail: 'ledger/observations.jsonl 已退役:观察的真相是 vault 的日记(「- 观察:」行),这个文件不再被读', fix: '内容有用就手抄进日记,然后删掉它' });
+    }
+
+    // ---- 作业照片(R5):paths.captures 要在 workspace 根以内(页面经 /api/kid/image 取图只认根以内)、能写;还没拍过就不存在,第一张时建 ----
+    {
+      const cap = ws.paths.captures;
+      const inside = cap === ws.root || cap.startsWith(ws.root + sep);
+      let dir = cap;
+      while (!(await stat(dir).catch(() => null))?.isDirectory() && dirname(dir) !== dir) dir = dirname(dir);
+      const writable = await access(dir, fsConstants.W_OK).then(() => true, () => false);
+      const there = dir === cap;
+      const n = there ? (await readdir(cap).catch(() => [] as string[])).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).length : 0;
+      push({ name: 'captures', ok: inside && writable, required: false, detail: !inside ? `${redactHome(cap)} 在 workspace 根以外,页面看不到照片(/api/kid/image 只给根以内的)` : !writable ? `${redactHome(cap)} 写不了(最近的已有目录 ${redactHome(dir)} 没有写权限)` : there ? `${redactHome(cap)}:${n} 天的作业照片` : `${redactHome(cap)} 还没有(第一张照片时建)`, fix: !inside ? '把 cotutor.json 的 paths.captures 改回根以内(缺省 captures)' : !writable ? '改目录权限,或换 paths.captures' : undefined });
+    }
+
+    // ---- vault(《obsidian仓库设计.md》):档案「现在」callout 进上下文包;日记目录要与 Obsidian 的 daily notes 设置一致 ----
+    try {
+      const lines = extractProfile(await readFile(ws.paths.profile, 'utf8'), 99);
+      push({ name: 'vault.profile', ok: lines.length > 0, required: false, detail: lines.length ? `${redactHome(ws.paths.profile)}:「现在」${lines.length} 行进上下文包` : `${redactHome(ws.paths.profile)} 里没有「> [!abstract] 现在」callout,上下文包不带档案`, fix: lines.length ? undefined : '在档案里写一个 callout:> [!abstract] 现在,下面每行一条(学到哪 / 会用的说法 / 还没学别用)' });
+    } catch {
+      push({ name: 'vault.profile', ok: true, required: false, detail: `没有档案(${redactHome(ws.paths.profile)});上下文包不带 profile`, fix: '写一个:# 名字,然后一个「> [!abstract] 现在」callout' });
+    }
+    try {
+      const dn = JSON.parse(await readFile(join(ws.paths.vault, '.obsidian', 'daily-notes.json'), 'utf8')) as { folder?: string; format?: string };
+      const want = relative(ws.paths.vault, ws.paths.diary).replaceAll('\\', '/');
+      const folderOk = (dn.folder ?? '').replace(/\/+$/, '') === want;
+      const formatOk = !dn.format || dn.format === 'YYYY-MM-DD';
+      push({ name: 'vault.diary', ok: folderOk && formatOk, required: false, detail: `Obsidian daily notes:folder=${dn.folder ?? '(未设)'} format=${dn.format ?? 'YYYY-MM-DD'};记账写 ${want}/<YYYY-MM-DD>.md`, fix: folderOk && formatOk ? undefined : `在 Obsidian 设置 → 日记 里把目录设成 ${want}、格式 YYYY-MM-DD(或改 cotutor.json 的 paths.diary),否则「今天」按钮开的不是机器追加的那篇` });
+    } catch {
+      /* 不是 Obsidian vault 或没设 daily notes:不查 */
     }
 
     // ---- 课程表:有就要能解析(孩子端首页与上下文包的 slot 靠它;没有不算错)----

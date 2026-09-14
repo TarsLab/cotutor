@@ -1,22 +1,27 @@
 /**
- * 最终文本里的「## 待裁量」「## 转交」段:剥出来给家长 / 应用,剩下的是给孩子的话。
+ * 最终文本里的「## 待裁量」「## 转交」「## 记账」段:剥出来给家长 / 应用,剩下的是给孩子的话。
  * 宽容解析:段在但解析不出(缺 question、to 不合法…)就整段留在正文里——格式是增强不是门槛。
  */
 import {
+  BOOKKEEPING_HEADING,
+  BookkeepingSchema,
   HANDOFF_HEADING,
   HOLDUP_HEADING,
   HandoffSchema,
   HoldupAskSchema,
+  type Bookkeeping,
   type Handoff,
   type HoldupAsk,
   type HoldupOption,
 } from '../schema/index.ts';
 
 export interface ParsedSections {
-  /** 去掉两种固定段后的正文 */
+  /** 去掉三种固定段后的正文 */
   body: string;
   holdup: HoldupAsk | null;
   handoff: Handoff | null;
+  /** 记账任务的回答(《obsidian仓库设计.md》§6);应用按它写日记 */
+  bookkeeping: Bookkeeping | null;
   /** body 第 k 行 = 原文第 lineMap[k] 行(家长端「看原文」把解析器的行号映回原文用) */
   lineMap: number[];
 }
@@ -40,7 +45,7 @@ interface Segment {
   lines: SrcLine[];
 }
 
-const SPECIAL = new Set([HOLDUP_HEADING, HANDOFF_HEADING]);
+const SPECIAL = new Set([HOLDUP_HEADING, HANDOFF_HEADING, BOOKKEEPING_HEADING]);
 /** 固定段里合法的行:key: value / 列表项 / 缩进的子键 */
 const FIELD_LINE = /^(?:[a-z]+:\s*.*|\s*-\s+.*|\s+[a-z]+:\s*.*)$/;
 
@@ -143,10 +148,53 @@ function parseHandoffBody(lines: string[]): Handoff | null {
   return r.success ? r.data : null;
 }
 
+/**
+ * 记账段:`- thread: x` 起一条,缩进的 `key: value` 是它的字段,`observations:` 后面缩进的 `- ` 是观察;
+ * 老师漏写 `- thread:` 直接写 `thread:`(或只写字段)也认——记账任务一次只记一个话题。
+ */
+function parseBookkeepingBody(lines: string[]): Bookkeeping | null {
+  type Draft = { thread?: string; name?: string; textbook?: string; summary?: string; steps?: string; observations: string[] };
+  const entries: Draft[] = [];
+  let cur: Draft | undefined;
+  let inObs = false;
+  const start = (): Draft => {
+    const d: Draft = { observations: [] };
+    entries.push(d);
+    return d;
+  };
+  for (const raw of lines) {
+    if (!raw.trim()) continue;
+    let m = /^-\s+thread:\s*(.*)$/.exec(raw);
+    if (m) {
+      cur = start();
+      cur.thread = unquote(m[1]);
+      inObs = false;
+      continue;
+    }
+    m = /^\s*-?\s*([a-z]+):\s*(.*)$/.exec(raw);
+    if (m && (!inObs || /^\s*[a-z]+:/.test(raw))) {
+      const c = cur ?? (cur = start());
+      const [, key, v] = m;
+      inObs = false;
+      if (key === 'observations') {
+        inObs = true;
+        const val = unquote(v);
+        if (val) c.observations.push(val);
+      } else if (key === 'thread' || key === 'name' || key === 'textbook' || key === 'summary' || key === 'steps') c[key] = unquote(v);
+      continue;
+    }
+    const li = /^\s*-\s+(.*)$/.exec(raw);
+    if (li && inObs && cur) cur.observations.push(unquote(li[1]));
+  }
+  const r = BookkeepingSchema.safeParse({ entries: entries.filter((e) => e.thread && e.name) });
+  return r.success ? r.data : null;
+}
+
 export function parseSections(text: string): ParsedSections {
   const segs = segments(text);
   let holdup: HoldupAsk | null = null;
   let handoff: Handoff | null = null;
+  let bookkeeping: Bookkeeping | null = null;
   const keep: string[] = [];
   const from: number[] = [];
   for (const seg of segs) {
@@ -165,6 +213,13 @@ export function parseSections(text: string): ParsedSections {
         continue;
       }
     }
+    if (seg.title === BOOKKEEPING_HEADING && !bookkeeping) {
+      const b = parseBookkeepingBody(body);
+      if (b) {
+        bookkeeping = b;
+        continue;
+      }
+    }
     if (seg.title !== null) {
       keep.push(`## ${seg.title}`);
       from.push(seg.titleLine);
@@ -179,5 +234,5 @@ export function parseSections(text: string): ParsedSections {
   let b = keep.length;
   while (a < b && !keep[a].trim()) a++;
   while (b > a && !keep[b - 1].trim()) b--;
-  return { body: keep.join('\n').trim(), holdup, handoff, lineMap: from.slice(a, b) };
+  return { body: keep.join('\n').trim(), holdup, handoff, bookkeeping, lineMap: from.slice(a, b) };
 }

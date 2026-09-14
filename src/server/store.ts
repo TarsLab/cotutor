@@ -3,9 +3,9 @@
  * 纯函数在 lib/,这里只碰文件系统。
  */
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join, relative, sep } from 'node:path';
 import { parseAgentFile } from '../lib/agent-file.ts';
-import { cardAssetName, conversationFiles, emptyIndex, type CardAssets, type CardStateFile, type CardStates } from '../lib/conversation.ts';
+import { cardAssetName, conversationFiles, emptyIndex, localDate, threads, type CardAssets, type CardStateFile, type CardStates } from '../lib/conversation.ts';
 import { parseTranscript, type Transcript } from '../lib/transcript.ts';
 import {
   ConversationIndexSchema,
@@ -144,6 +144,31 @@ export async function writeCardImage(ws: Workspace, tutor: string, date: string,
 }
 
 /**
+ * 作业照片(R5,2026-09-14,《产品规划.md》拍板 14):落 workspace 的 captures/<日期>/<HHMM>-<n>.<ext>(paths.captures,相对 workspace 根),
+ * 不落 vault。返回相对 workspace 根的路径(消息的 photos、上下文包的 photos: 段、/api/kid/image?p= 都用它)。
+ */
+export async function writeCapture(ws: Workspace, at: Date, data: Buffer, ext: 'jpg' | 'png'): Promise<string> {
+  const date = localDate(at);
+  const dir = join(ws.paths.captures, date);
+  await mkdir(dir, { recursive: true });
+  const hhmm = `${String(at.getHours()).padStart(2, '0')}${String(at.getMinutes()).padStart(2, '0')}`;
+  const taken = new Set(await readdir(dir).catch(() => [] as string[]));
+  let n = 1;
+  while (taken.has(`${hhmm}-${n}.jpg`) || taken.has(`${hhmm}-${n}.png`)) n++;
+  const file = join(dir, `${hhmm}-${n}.${ext}`);
+  await writeFile(file, data);
+  return relative(ws.root, file).split(sep).join('/');
+}
+
+/** 消息里的照片路径合不合法:相对 workspace 根、落在 paths.captures 里、文件在 */
+export async function capturePathOk(ws: Workspace, rel: string): Promise<boolean> {
+  if (!rel || rel.startsWith('/') || rel.includes('..') || rel.includes('\\')) return false;
+  const file = join(ws.root, rel);
+  if (!(file === ws.paths.captures || file.startsWith(ws.paths.captures + sep))) return false;
+  return (await stat(file).catch(() => null))?.isFile() ?? false;
+}
+
+/**
  * 这一轮真发出去的东西(<date>.<job>.run.json):上下文包与完整命令行。
  * 跑完就丢的话「老师为什么没看见孩子选了 C」永远查不了,所以落一份;只有家长端「看原文」读它。
  */
@@ -207,8 +232,65 @@ export async function readAgentBody(ws: Workspace, name: string): Promise<string
   throw new ConfigError(join(ws.dirs.claudeAgents, `${name}.md`), '老师文件读不到;cotutor init 补拷');
 }
 
+/** 给一个话题打星(1–5;null 清掉):话题要在这天的索引里;写回索引 */
+export async function rateThread(ws: Workspace, tutor: string, date: string, thread: string, rating: number | null): Promise<ConversationIndex> {
+  const index = await readIndex(ws, tutor, date);
+  if (!threads(index.messages).includes(thread)) throw new IndexError(conversationFiles(ws.dirs.conversations, tutor, date).index, `${date} 没有话题 ${thread}`);
+  const ratings = { ...index.ratings };
+  if (rating === null) delete ratings[thread];
+  else ratings[thread] = rating;
+  const next = { ...index, ratings };
+  await writeIndex(ws, next);
+  return next;
+}
+
+// ---- vault(《obsidian仓库设计.md》§6 的封闭清单:日记只追加;教材只读)----
+
+/** 这几天的日记(<日记目录>/<日期>.md);没有的跳过 */
+export async function readDiaries(ws: Workspace, dates: readonly string[]): Promise<{ date: string; text: string }[]> {
+  const out: { date: string; text: string }[] = [];
+  for (const date of dates) {
+    try {
+      out.push({ date, text: await readFile(join(ws.paths.diary, `${date}.md`), 'utf8') });
+    } catch {
+      /* 那天没写 */
+    }
+  }
+  return out;
+}
+
+/** 当天的日记:update 拿现有内容(没有 → null)回新内容;先 .tmp 再 rename。返回文件名(<日期>.md) */
+export async function writeDiary(ws: Workspace, date: string, update: (existing: string | null) => string): Promise<string> {
+  await mkdir(ws.paths.diary, { recursive: true });
+  const file = join(ws.paths.diary, `${date}.md`);
+  const existing = await readFile(file, 'utf8').catch(() => null);
+  const tmp = `${file}.tmp`;
+  await writeFile(tmp, update(existing));
+  await rename(tmp, file);
+  return basename(file);
+}
+
+/** 教材目录下的每册文件(<教材目录>/<册>.md),给 textbookHeadings;没有目录 → [] */
+export async function readTextbooks(ws: Workspace): Promise<{ name: string; text: string }[]> {
+  let names: string[];
+  try {
+    names = (await readdir(ws.paths.textbooks)).filter((f) => f.endsWith('.md') && !f.startsWith('.')).sort();
+  } catch {
+    return [];
+  }
+  const out: { name: string; text: string }[] = [];
+  for (const name of names) {
+    try {
+      out.push({ name, text: await readFile(join(ws.paths.textbooks, name), 'utf8') });
+    } catch {
+      /* 读不到就跳过 */
+    }
+  }
+  return out;
+}
+
 /** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 运行时模板走编辑器 */
-export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'agents', 'paths', 'server', 'tts'] as const;
+export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'agents', 'paths', 'server', 'tts', 'vault'] as const;
 
 const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 

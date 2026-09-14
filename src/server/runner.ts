@@ -19,24 +19,25 @@ import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
 import { addMessage, applyRun, cardId, changedCards, conversationFiles, jobId, localDate, localMinute, sessionFor, threads } from '../lib/conversation.ts';
+import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
+import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, extractProfile, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
 import { BUNDLE_ID_RE, cardAssets, cardLabel, describeCard } from '../cards/index.ts';
 import { parseBoard } from '../lib/board.ts';
 import { readyBeats, beatsOf, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
 import { createPartialReader } from '../lib/stream.ts';
 import { parseSections } from '../lib/sections.ts';
-import { mergeArtifacts, mergeObservations, parseArtifactEvents, parseObservations, recentObservations } from '../lib/ledger.ts';
 import { isoWeek, parsePlan, planLinesFor } from '../lib/plan.ts';
 import { getRuntime, planRun, runtimeUses, type RunPlan } from '../lib/run-plan.ts';
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { resolvePolicy, type ArtifactEvent, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type Handoff, type MessageFrom, type Policy, type Timing } from '../schema/index.ts';
+import { resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type Handoff, type MessageFrom, type Policy, type Timing } from '../schema/index.ts';
 import { DEFAULT_DEVICE, assemblePost, postEnv, runBeatPost, writePostFile, type PostBeatFile, type PostEnv } from './post.ts';
 import { validateBeatPost, type BeatPostOutput } from '../lib/postprocess.ts';
 import type { Transcript } from '../lib/transcript.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
-import { readAgentBody, readCardStates, readIndex, writeIndex, writeRunFile } from './store.ts';
+import { readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, writeDiary, writeIndex, writeRunFile } from './store.ts';
 import { DubQueue, LineDubber, dubReply } from './tts.ts';
 
 export class BusyError extends Error {
@@ -60,6 +61,12 @@ export interface SendInput {
   thread?: string;
   /** 孩子端是什么端(板书后期按它排版);缺省当平板横屏 */
   device?: Device;
+  /** 记到哪一天的索引(缺省今天);记账给昨天的话题用 */
+  date?: string;
+  /** 这轮是记账任务(《obsidian仓库设计.md》§6):resume 那个话题的会话,老师回「## 记账」段,应用写日记 */
+  bookkeep?: { thread: string };
+  /** 这条带的作业照片(相对 workspace 根,已由路由验过在 captures/ 里;R5):进上下文包 photos: 段,老师自己 Read 看图;文字可以空 */
+  photos?: string[];
 }
 
 export interface SendStarted {
@@ -81,11 +88,14 @@ interface Active {
   partial: BoardSection | null;
 }
 
-/** 上下文包的取材:课程表命中的时段 + 本周计划里本老师的行 + 本学科最近观察 */
+/**
+ * 上下文包的取材(《obsidian仓库设计.md》§7 每轮那行):课程表命中的时段 + 档案「现在」callout + 本周计划里本老师的行 +
+ * 最近 14 天日记里本学科的「- 观察:」行(观察的真相在日记;家长改一句、删一行,下一轮就变)
+ */
 export async function gatherContext(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; focus?: Focus }): Promise<ContextPack> {
   const t = ws.config.tutors[tutor];
   const policy = resolvePolicy(ws.config, tutor);
-  const pack: ContextPack = { from: input.from, at: localMinute(input.at), focus: input.focus, plan: [], recent: [] };
+  const pack: ContextPack = { from: input.from, at: localMinute(input.at), focus: input.focus, profile: [], plan: [], recent: [] };
   try {
     const slot = currentSlot(parseTimetable(await readFile(ws.paths.timetable, 'utf8')).entries, input.at);
     if (slot) pack.slot = slotLabel(slot);
@@ -93,17 +103,18 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
     /* 没有课程表:不带 slot */
   }
   try {
+    pack.profile = extractProfile(await readFile(ws.paths.profile, 'utf8'), policy.contextPack.profileLines);
+  } catch {
+    /* 没有档案:不带 profile */
+  }
+  try {
     const { plan } = parsePlan(await readFile(join(ws.paths.plans, `${isoWeek(input.at)}.md`), 'utf8'));
     if (plan && t) pack.plan = planLinesFor(plan, t.display, policy.contextPack.planLines);
   } catch {
     /* 没有本周计划,或读不到:上下文包不带 plan */
   }
-  try {
-    const { rows } = parseObservations(await readFile(ws.files.observations, 'utf8'));
-    pack.recent = recentObservations(mergeObservations(rows), { subject: t?.subject, n: policy.contextPack.recent });
-  } catch {
-    /* 账本还没有 */
-  }
+  const diaries = await readDiaries(ws, recentDiaryDates(localDate(input.at), 14));
+  pack.recent = extractObservations(diaries, { subject: t?.subject, n: policy.contextPack.recent });
   return pack;
 }
 
@@ -149,21 +160,22 @@ export class Runner {
     const t = ws.config.tutors[tutor];
     if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
     if (!t.enabled) throw new UsageError(`${t.display} 已关闭(cotutor.json tutors.${tutor}.enabled = false),打开再发`);
-    const text = input.text.trim() || (input.action === 'continue' ? '继续' : input.action === 'submit' ? '(交了答案,没说话)' : '');
+    const photos = input.photos?.filter(Boolean) ?? [];
+    const text = input.text.trim() || (input.action === 'continue' ? '继续' : input.action === 'submit' ? '(交了答案,没说话)' : photos.length ? (photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`) : '');
     if (!text) throw new UsageError('消息是空的');
     const busy = this.active.get(tutor);
     if (busy) throw new BusyError(tutor, busy.job);
 
     const now = (this.opts.now ?? (() => new Date()))();
-    const date = localDate(now);
+    const date = input.date ?? localDate(now);
     const index = await readIndex(ws, tutor, date);
     const job = jobId(now, index.messages.length + 1);
-    // 话题:新开(newThread / 系统消息 / 今天第一条)= 自己的 job;指定的要在今天的索引里;缺省接当前话题。会话按话题 resume
+    // 话题:新开(newThread / 没指定话题的系统消息 / 今天第一条)= 自己的 job;指定的要在这天的索引里;缺省接当前话题。会话按话题 resume
     const known = threads(index.messages);
     let thread: string;
-    if (input.newThread || input.from === 'system' || !known.length) thread = job;
+    if (input.newThread || (input.from === 'system' && !input.thread) || !known.length) thread = job;
     else if (input.thread) {
-      if (!known.includes(input.thread)) throw new UsageError(`今天没有话题 ${input.thread};有:${[...new Set(known)].join('、')}`);
+      if (!known.includes(input.thread)) throw new UsageError(`${date} 没有话题 ${input.thread};有:${[...new Set(known)].join('、')}`);
       thread = input.thread;
     } else thread = known[known.length - 1];
     const fresh = thread === job;
@@ -174,16 +186,17 @@ export class Runner {
     const policy = resolvePolicy(ws.config, tutor);
     if (policy.board === 'off') pack.board = 'off';
     // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
-    const cards = fresh ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread).map((c) => {
+    const cards = fresh || input.bookkeep ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread).map((c) => {
       const card = index.messages.find((m) => m.job === c.job)?.section?.cards[c.n];
       const id = cardId(c.job, c.n);
       return { card: id, text: card ? describeCard(card, c.file.state) : JSON.stringify(c.file.state) };
     });
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
+    if (photos.length) pack.photos = photos;
     const prompt = buildContextPack(pack, text, policy.contextPack);
     const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, runtime: input.runtime ?? t.runtime });
 
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(input.device ? { device: input.device } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined });
 
@@ -191,6 +204,61 @@ export class Runner {
     active.done = this.spawn(ws, tutor, date, job, plan, policy, input.device ?? DEFAULT_DEVICE, active).finally(() => this.active.delete(tutor));
     this.active.set(tutor, active);
     return { tutor, date, job, thread, plan, done: active.done };
+  }
+
+  /**
+   * 记账(《obsidian仓库设计.md》§4 / §6):家长晚上点一次。这天索引里每个还没记过、有孩子的话或打了分的话题,各起一轮记账任务
+   * (from: system、resume 那个话题的会话,消息正文是 bookkeepingPrompt),顺着跑,老师回的「## 记账」段由 settleDiary 落进日记。
+   * 立刻返回排了哪些、跳过哪些;链在后台跑(flush 会等)。老师正忙 → BusyError。
+   */
+  async bookkeep(tutor: string, date: string, only?: string[]): Promise<{ queued: string[]; skipped: { thread: string; why: string }[] }> {
+    const ws = this.getWs();
+    const t = ws.config.tutors[tutor];
+    if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
+    const index = await readIndex(ws, tutor, date);
+    const all = [...new Set(threads(index.messages))];
+    const queued: string[] = [];
+    const skipped: { thread: string; why: string }[] = [];
+    for (const th of only ?? all) {
+      if (!all.includes(th)) skipped.push({ thread: th, why: `${date} 没有这个话题` });
+      else if (index.booked[th]) skipped.push({ thread: th, why: `记过了(${index.booked[th]})` });
+      else if (!only && !kidQuestions(index.messages, th).length && index.ratings[th] === undefined) skipped.push({ thread: th, why: '没有孩子的话也没打分' });
+      else queued.push(th);
+    }
+    if (!queued.length) return { queued, skipped };
+    const busy = this.active.get(tutor);
+    if (busy) throw new BusyError(tutor, busy.job);
+    const headings = textbookHeadings(await readTextbooks(ws));
+    const chain = (async () => {
+      for (const th of queued) {
+        try {
+          const idx = await readIndex(ws, tutor, date);
+          // 话题里有照片:提示词多一句,让 summary 把册子 / 页 / 题号 / 题面写成文字(日记不存图,《obsidian仓库设计.md》§5)
+          const ths = threads(idx.messages);
+          const photos = idx.messages.reduce((n, m, i) => n + (ths[i] === th ? (m.photos?.length ?? 0) : 0), 0);
+          const started = await this.send(tutor, { from: 'system', text: bookkeepingPrompt({ thread: th, rating: idx.ratings[th], keepScore: ws.config.vault.keepScore, headings, photos }), thread: th, date, bookkeep: { thread: th } });
+          await started.done;
+        } catch {
+          /* 这条记不了(老师忙 / 起不来),下一条照记;索引里没记 booked,再点一次记账会重试 */
+        }
+      }
+    })();
+    this.background.add(chain);
+    void chain.finally(() => this.background.delete(chain));
+    return { queued, skipped };
+  }
+
+  /** 记账那轮收尾:「## 记账」段 → 这个话题在日记里的一段(打分不够只留孩子问与观察)→ 追加到 vault 的日记,索引记 booked */
+  private async settleDiary(ws: Workspace, tutor: string, date: string, job: string, index: ConversationIndex, thread: string, b: Bookkeeping | null): Promise<{ index: ConversationIndex; file: string | null; warnings: string[] }> {
+    if (!b) return { index, file: null, warnings: ['记账:老师没回「## 记账」段,日记没写;再点一次记账'] };
+    const entry = entryFor(b, thread);
+    if (!entry) return { index, file: null, warnings: [`记账:「## 记账」段里没有话题 ${thread} 的那条,日记没写`] };
+    const t = ws.config.tutors[tutor];
+    const topic = diaryTopic(index, entry, { subject: t?.subject ?? t?.display ?? tutor, keepScore: ws.config.vault.keepScore });
+    const block = renderDiaryBlock(topic);
+    if (!block) return { index, file: null, warnings: ['记账:这个话题没有孩子的话、摘要、观察,日记没写'] };
+    const file = await writeDiary(ws, date, (existing) => appendDiary(existing, block));
+    return { index: { ...index, booked: { ...index.booked, [thread]: job } }, file, warnings: [] };
   }
 
   /**
@@ -491,6 +559,13 @@ export class Runner {
       else emit({ lane: 'handoff', kind: 'skipped', to: fixed.handoff.to, why: r.warning ?? '?' });
       const warns = [...fixed.warnings, ...(r.warning ? [r.warning] : [])];
       next = { ...next, messages: next.messages.map((m) => (m.job === job ? { ...m, handoff: fixed.handoff, section: fixed.section, handoffJob: r.started, ...(warns.length ? { warnings: [...(m.warnings ?? []), ...warns] } : {}) } : m)) };
+    }
+    // 记账那轮:「## 记账」段落进日记(老师不直接写 vault;写了什么、没写成为什么都在这条的 warnings 里)
+    const mine = latest.messages.find((m) => m.job === job);
+    if (mine?.bookkeep) {
+      const r = await this.settleDiary(ws, tutor, date, job, next, mine.bookkeep.thread, kidView.bookkeeping);
+      next = r.warnings.length ? { ...r.index, messages: r.index.messages.map((m) => (m.job === job ? { ...m, warnings: [...(m.warnings ?? []), ...r.warnings] } : m)) } : r.index;
+      if (r.file) emit({ lane: 'ledger', kind: 'diary', thread: mine.bookkeep.thread, file: r.file });
     }
     await writeIndex(ws, next);
     emit({ lane: 'index', kind: 'written', warnings: next.messages.find((m) => m.job === job)?.warnings?.length ?? 0 });

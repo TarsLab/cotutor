@@ -75,9 +75,9 @@ try {
 
   const ws = loadWorkspace(ws1, { cwd: empty });
   check('loadWorkspace 读到配置', ws.config.kid.slug === 'ming' && ws.dirs.agents === join(ws1, 'agents'));
-  check('vault 未配 → 角色相对根', ws.paths.vault === ws1 && ws.paths.diary === join(ws1, 'diary') && ws.paths.profile === join(ws1, 'profile.md'));
-  const paths = resolvePaths(ws1, { vault: '~/vault', diary: '日记', extra: 'x' });
-  check('vault 配了 → 角色相对 vault,未知角色保留', paths.diary === join(home, 'vault', '日记') && paths.extra === join(home, 'vault', 'x'));
+  check('vault 未配 → 角色相对根,缺省中文名', ws.paths.vault === ws1 && ws.paths.diary === join(ws1, '日记') && ws.paths.profile === join(ws1, '孩子.md') && ws.paths.textbooks === join(ws1, '教材'));
+  const paths = resolvePaths(ws1, { vault: '~/vault', diary: 'diary', extra: 'x' });
+  check('vault 配了 → 角色相对 vault,未知角色保留,captures 相对 workspace 根', paths.diary === join(home, 'vault', 'diary') && paths.extra === join(home, 'vault', 'x') && paths.captures === join(ws1, 'captures'));
 
   writeFileSync(join(other, 'cotutor.json'), '{ 坏');
   threw = false;

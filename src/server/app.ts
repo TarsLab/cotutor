@@ -22,7 +22,7 @@ import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { KID_PAGE } from './kid-page.ts';
 import { PARENT_PAGE } from './parent-page.ts';
 import { BusyError, Runner } from './runner.ts';
-import { IndexError, listDates, patchConfig, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCardImage, writeCardState } from './store.ts';
+import { IndexError, capturePathOk, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardImage, writeCardState } from './store.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets } from '../cards/index.ts';
 import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset } from './stage.ts';
@@ -221,6 +221,31 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
 const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+(?:\.\d+|\.cards\/\d+\/\d+)?\.mp3$/;
 const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
 
+/** 作业照片一张最多这么大(解码后;页面先缩到长边 1600 的 jpeg,通常几百 KB) */
+const PHOTO_MAX_BYTES = 3_000_000;
+
+/**
+ * 上传作业照片(R5):body {image: "data:image/jpeg;base64,…"}(也认 png)→ 落 captures/<日期>/<HHMM>-<n>.jpg → {path}。
+ * 孩子端与家长端同一条路;照片只是落盘,发消息时把 path 放进 photos[] 才到老师那里。
+ */
+async function uploadPhoto(ws: Workspace, body: unknown, now: Date): Promise<RouteResult> {
+  if (!isObj(body) || typeof body.image !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {image: data:image/jpeg;base64,…}' } };
+  const m = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(body.image);
+  if (!m) return { status: 400, json: { error: 'bad_request', message: '只认 data:image/jpeg 或 image/png 的 base64' } };
+  const data = Buffer.from(m[2], 'base64');
+  if (!data.length || data.length > PHOTO_MAX_BYTES) return { status: 413, json: { error: 'too_large', message: `一张最多 ${PHOTO_MAX_BYTES / 1_000_000} MB,页面该先缩到长边 1600` } };
+  const path = await writeCapture(ws, now, data, m[1] === 'png' ? 'png' : 'jpg');
+  return { status: 201, json: { path } };
+}
+
+/** 消息里的 photos[]:都得是 captures/ 里在的文件(相对 workspace 根);不合法 → null */
+async function photosOf(ws: Workspace, v: unknown): Promise<string[] | null | undefined> {
+  if (v === undefined) return undefined;
+  if (!Array.isArray(v) || v.length > 9 || !v.every((p): p is string => typeof p === 'string')) return null;
+  for (const p of v) if (!(await capturePathOk(ws, p))) return null;
+  return v;
+}
+
 export async function route(method: string, path: string, ctx: AppContext, body?: unknown): Promise<RouteResult> {
   await ctx.reload();
   const ws = ctx.ws;
@@ -302,12 +327,14 @@ export async function route(method: string, path: string, ctx: AppContext, body?
 
     // ---- 孩子端:过滤在服务端做,永远不带工具 / 错误 / 评判 ----
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: await kidHome(ctx, ctx.now()) };
-    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|\d{4}-\d{2}-\d{2})$/.exec(p);
+    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (kid) {
       const [, tutor, tail] = kid;
       const t = ws.config.tutors[tutor];
       if (!t || !t.enabled || t.hidden) return { status: 404, json: { error: 'no_such_tutor' } };
       const date = localDate(ctx.now());
+      // 作业照片(R5):先传图拿 path,再连 path 一起发消息;不起老师、不计上限
+      if (tail === 'photos') return method === 'POST' ? uploadPhoto(ws, body, ctx.now()) : { status: 405, json: { error: 'method_not_allowed' } };
       if (tail === 'today' && method === 'GET') return { status: 200, json: await kidDay(ctx, tutor, date) };
       // 以前的某一天(只读回放;未来的日期与坏日期 400)
       if (DATE_RE.test(tail) && method === 'GET') {
@@ -324,7 +351,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (focus && !focus.success) return { status: 400, json: { error: 'bad_request' } };
         const action = body.action === undefined ? undefined : body.action === 'continue' || body.action === 'submit' ? body.action : null;
         if (action === null) return { status: 400, json: { error: 'bad_request' } };
-        if (!body.text.trim() && !action) return { status: 400, json: { error: 'bad_request' } };
+        const photos = await photosOf(ws, body.photos);
+        if (photos === null) return { status: 400, json: { error: 'bad_request' } };
+        if (!body.text.trim() && !action && !photos?.length) return { status: 400, json: { error: 'bad_request' } };
         const policy = resolvePolicy(ws.config, tutor);
         // 「继续」不计每日上限:到了上限也能把老师讲完的听完
         if (action !== 'continue' && kidMessageCount(await readIndex(ws, tutor, date)) >= policy.dailyMessages) return { status: 429, json: { error: 'limit', remaining: 0 } };
@@ -332,7 +361,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (thread === null) return { status: 400, json: { error: 'bad_request' } };
         const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
         if (device && !device.success) return { status: 400, json: { error: 'bad_request' } };
-        const started = await ctx.runner.send(tutor, { from: 'kid', text: body.text, focus: focus?.data, action, newThread: body.newThread === true, thread, device: device?.data });
+        const started = await ctx.runner.send(tutor, { from: 'kid', text: body.text, focus: focus?.data, action, newThread: body.newThread === true, thread, device: device?.data, photos });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
@@ -416,6 +445,29 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 200, json: { ok: true, ms: Date.now() - t0, voice, bytes: mp3?.length ?? 0, audio: mp3 ? `data:audio/mpeg;base64,${mp3.toString('base64')}` : null } };
     }
 
+    // 话题打星(《obsidian仓库设计.md》§4):PUT {rating: 1–5 | null};记账:POST {threads?: [..]} → 每个话题一轮记账任务,老师回「## 记账」段,应用写日记
+    const rate = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/rating$/.exec(p);
+    if (rate && method === 'PUT') {
+      const [, tutor, date, thread] = rate;
+      if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
+      const rating = isObj(body) ? body.rating : undefined;
+      if (!(rating === null || (typeof rating === 'number' && Number.isInteger(rating) && rating >= 1 && rating <= 5))) return { status: 400, json: { error: 'bad_request', message: '要 {rating: 1–5 或 null}' } };
+      try {
+        const index = await rateThread(ws, tutor, date, decodeURIComponent(thread), rating as number | null);
+        return { status: 200, json: { tutor, date, thread: decodeURIComponent(thread), rating: index.ratings[decodeURIComponent(thread)] ?? null, keepScore: ws.config.vault.keepScore } };
+      } catch (err) {
+        return { status: 404, json: { error: 'no_such_thread', message: err instanceof Error ? err.message : String(err) } };
+      }
+    }
+    const book = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/bookkeep$/.exec(p);
+    if (book && method === 'POST') {
+      const [, tutor, date] = book;
+      if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
+      const only = isObj(body) && Array.isArray(body.threads) ? (body.threads as unknown[]).filter((t): t is string => typeof t === 'string') : undefined;
+      const r = await ctx.runner.bookkeep(tutor, date, only);
+      return { status: 202, json: { tutor, date, ...r } };
+    }
+
     const conv = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)(?:\/([^/]+))?$/.exec(p);
     if (conv) {
       const [, tutor, tail] = conv;
@@ -423,12 +475,16 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (tail === undefined && method === 'GET') {
         return { status: 200, json: { tutor, today: localDate(ctx.now()), dates: await listDates(ws, tutor), running: ctx.runner.running(tutor) } };
       }
+      // 家长端传照片:与孩子端同一条路(落 captures/,回 {path})
+      if (tail === 'photos') return method === 'POST' ? uploadPhoto(ws, body, ctx.now()) : { status: 405, json: { error: 'method_not_allowed' } };
       if (tail === 'messages' && method === 'POST') {
-        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, from?, focus?, runtime?}' } };
+        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, from?, focus?, runtime?, photos?}' } };
         const from = body.from ?? 'parent';
         if (!(MESSAGE_FROM as readonly unknown[]).includes(from)) return { status: 400, json: { error: 'bad_request', message: `from 只能是 ${MESSAGE_FROM.join(' / ')}` } };
         const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
         if (focus && !focus.success) return { status: 400, json: { error: 'bad_request', message: 'focus 形状不对' } };
+        const photos = await photosOf(ws, body.photos);
+        if (photos === null) return { status: 400, json: { error: 'bad_request', message: 'photos 要是 captures/ 里在的文件(先 POST …/photos 传图拿 path)' } };
         const started = await ctx.runner.send(tutor, {
           from: from as (typeof MESSAGE_FROM)[number],
           text: body.text,
@@ -436,6 +492,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           runtime: typeof body.runtime === 'string' ? body.runtime : undefined,
           newThread: body.newThread === true,
           thread: typeof body.thread === 'string' ? body.thread : undefined,
+          photos,
         });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread, runtime: started.plan.runtime, resume: started.plan.resume } };
       }
@@ -489,7 +546,7 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   let size = 0;
   for await (const c of req) {
     size += (c as Buffer).length;
-    if (size > 1_000_000) throw new UsageError('请求体超过 1MB');
+    if (size > 6_000_000) throw new UsageError('请求体超过 6MB');
     chunks.push(c as Buffer);
   }
   const text = Buffer.concat(chunks).toString('utf8');

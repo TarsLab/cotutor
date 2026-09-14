@@ -19,6 +19,8 @@ import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } fr
 import { createContext } from '../server/app.ts';
 import { MESSAGE_FROM, type MessageFrom } from '../schema/index.ts';
 import { formatEvent, laneFilter, parseEvents } from '../lib/events.ts';
+import { localDate } from '../lib/conversation.ts';
+import { rateThread } from '../server/store.ts';
 
 const USAGE = `用法:
   cotutor init <slug> [--dir <path>] [--name <孩子名>] [--port <n>]   建 ~/cotutor/<slug>/ 骨架(幂等补缺)
@@ -31,6 +33,8 @@ const USAGE = `用法:
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad / iPhone 上录音要 HTTPS;所有 workspace 共用)
   cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>] [--new] [--lane main,tts,post] [--quiet]   终端里发一条,现场按道打印每道工序的事件,说完打印结果(与页面同一条路;--new 开新话题;--quiet 只要结果)
   cotutor trace <老师> <job> [<日期>] [--lane …] [--workspace <dir>]     回放一轮的事件(<日期>.<job>.events.jsonl;排查昨天那轮用)
+  cotutor rate <老师> <话题> <1-5> [--date <日期>]                       给一个话题打星(与家长端同一条路;≥ vault.keepScore 的话题记账时摘要才进日记)
+  cotutor bookkeep <老师> [--date <日期>] [--thread <话题>]...           记账:这天每个还没记过的话题各起一轮记账任务,老师回「## 记账」,应用写进 vault 的日记(话题名、孩子问、摘要、观察)
   cotutor mock [--port <n>] [--scenario normal|limit|offline|nopost] [--delay <ms>] [--http]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace;nopost = 没有后期的素版)
   cotutor repost <老师> [<日期>] [--job <job>] [--workspace <dir>]      板书后期再做一次:老师原文重解 → 快模型重新划重点 / 排版 / 定样子 → 改写索引(老师原文与配音不动;调提示词时旧板书全部能重来)
   cotutor --version | --help
@@ -71,7 +75,7 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -254,6 +258,40 @@ export async function main(argv: string[]): Promise<void> {
         }
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(results.map((r) => ({ job: r.job, ok: r.ok, post: r.message?.post ?? null, error: r.error ?? null }))), null, 2)}\n`);
         else process.stdout.write(`索引已改写;孩子端刷新就是新的排版。细节在家长端「看原文」第七站,或 conversations/${tutor}/${date}.<job>.post.json\n`);
+        return;
+      }
+      case 'rate': {
+        const [tutor, thread, score] = positionals;
+        const n = Number(score);
+        if (!tutor || !thread || !(n >= 1 && n <= 5 && Number.isInteger(n))) throw new UsageError(`rate 需要老师名、话题 id 和 1–5 的星,如 cotutor rate math-tutor 1620-1 4。\n${USAGE}`);
+        const ws = loadWorkspace(workspace);
+        const date = typeof flags.date === 'string' ? flags.date : localDate(new Date());
+        const index = await rateThread(ws, tutor, date, thread, n);
+        if (json) process.stdout.write(`${JSON.stringify({ tutor, date, thread, rating: index.ratings[thread] })}\n`);
+        else process.stdout.write(`${tutor} ${date} 话题 ${thread}:${'★'.repeat(n)}${n >= ws.config.vault.keepScore ? '(记账时摘要进日记)' : `(不到 ${ws.config.vault.keepScore} 星,记账只记孩子问的话与观察)`}\n`);
+        return;
+      }
+      case 'bookkeep': {
+        const [tutor] = positionals;
+        if (!tutor) throw new UsageError(`bookkeep 需要老师名,如 cotutor bookkeep math-tutor。\n${USAGE}`);
+        const ctx = createContext(loadWorkspace(workspace));
+        const date = typeof flags.date === 'string' ? flags.date : localDate(new Date());
+        const only = typeof flags.thread === 'string' ? [flags.thread] : undefined;
+        if (!json && flags.quiet !== true) ctx.runner.onEvent((e) => { if (e.tutor === tutor && (e.event.lane === 'ledger' || e.event.lane === 'main' || e.event.lane === 'index')) process.stdout.write(`${formatEvent(e.event)}\n`); });
+        const r = await ctx.runner.bookkeep(tutor, date, only);
+        if (!json) {
+          for (const sk of r.skipped) process.stdout.write(`话题 ${sk.thread} 跳过:${sk.why}\n`);
+          if (!r.queued.length) process.stdout.write('没有要记的话题\n');
+          else process.stdout.write(`记账 ${r.queued.length} 个话题:${r.queued.join('、')}…\n`);
+        }
+        await ctx.runner.flush();
+        const { readIndex } = await import('../server/store.ts');
+        const index = await readIndex(ctx.ws, tutor, date);
+        if (json) process.stdout.write(`${JSON.stringify({ tutor, date, queued: r.queued, skipped: r.skipped, booked: index.booked }, null, 2)}\n`);
+        else for (const th of r.queued) {
+          const m = index.messages.find((x) => x.bookkeep?.thread === th && x.result !== 'running');
+          process.stdout.write(`话题 ${th}:${index.booked[th] ? '记进日记了' : `没记成${m?.warnings?.length ? ' — ' + m.warnings.join(';') : m?.error ? ' — ' + m.error : ''}`}\n`);
+        }
         return;
       }
       case 'send': {

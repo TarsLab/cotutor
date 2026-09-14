@@ -22,6 +22,10 @@ export function renderContextPack(pack: ContextPack): string {
     if (p.focus.circled?.length) out.push(`    circled: [${p.focus.circled.map(yamlScalar).join(', ')}]`);
     if (p.focus.card) out.push(`    card: ${yamlScalar(p.focus.card)}`);
   }
+  if (p.profile.length) {
+    out.push('  profile:');
+    for (const l of p.profile) out.push(`    - ${yamlScalar(l)}`);
+  }
   if (p.plan.length) {
     out.push('  plan:');
     for (const l of p.plan) out.push(`    - ${yamlScalar(l)}`);
@@ -35,17 +39,22 @@ export function renderContextPack(pack: ContextPack): string {
     out.push('  cards:');
     for (const c of p.cards) out.push(`    - ${yamlScalar(c)}`);
   }
+  if (p.photos?.length) {
+    out.push('  photos:');
+    for (const c of p.photos) out.push(`    - ${yamlScalar(c)}`);
+  }
   return out.join('\n');
 }
 
-/** 按政策截 plan / recent,再拼成「YAML 块 --- 消息」 */
+/** 按政策截 profile / plan / recent,再拼成「YAML 块 --- 消息」 */
 export function buildContextPack(
   pack: ContextPack,
   message: string,
-  limits: { recent: number; planLines: number },
+  limits: { recent: number; planLines: number; profileLines?: number },
 ): string {
   const trimmed: ContextPack = {
     ...pack,
+    profile: (pack.profile ?? []).slice(0, limits.profileLines ?? 8),
     plan: (pack.plan ?? []).slice(0, limits.planLines),
     recent: (pack.recent ?? []).slice(-limits.recent),
   };

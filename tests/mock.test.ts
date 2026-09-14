@@ -15,6 +15,11 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   check('语文老师已讲过一节:卡 + 讲稿 + 标注 + 末句问句(脚本过真解析器)', d0.messages.length === 1 && d0.messages[0].section !== null && d0.messages[0].section.cards.map((c) => c.kind).join() === 'text,text,read,choice' && d0.messages[0].section.lines.length === 5 && d0.messages[0].section.lines[1].marks[0]?.card === 1 && d0.messages[0].section.lines[4].ask === true, JSON.stringify(d0.messages[0].section?.lines[1]));
   check('讲稿里念的句子不带方括号', !d0.messages[0].section!.lines.some((l) => l.text.includes('[')));
   check('朗读老师还没讲过', ((await get('/api/kid/conversations/reading-tutor/today')).json as Day).messages.length === 0);
+  const upM = await m.route('POST', '/api/kid/conversations/reading-tutor/photos', { image: 'data:image/jpeg;base64,AAAA' });
+  const pathM = (upM.json as { path: string }).path;
+  const photoMsg = await m.route('POST', '/api/kid/conversations/reading-tutor/messages', { text: '', photos: [pathM] });
+  const dM = (await get('/api/kid/conversations/reading-tutor/today')).json as { messages: (Msg & { photos?: string[] })[] };
+  check('mock 也收照片:传图回假路径、只带照片的消息成「(拍了一张)」、条目带 photos、占位图取得到', upM.status === 201 && pathM.startsWith('captures/2026-09-10/1630-') && photoMsg.status === 202 && dM.messages[0].question === '(拍了一张)' && dM.messages[0].photos?.join() === pathM && (await get('/api/kid/image?p=' + encodeURIComponent(pathM))).status === 200, JSON.stringify({ upM: upM.json, q: dM.messages[0]?.question }));
 
   const post = await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '不画脚呢?' });
   check('发消息 202', post.status === 202, JSON.stringify(post));

@@ -130,6 +130,7 @@ const PAGE = `<!doctype html>
   #wrap { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
   #board { flex:1; min-height:0; overflow:auto; padding:14px 16px 24px; display:flex; flex-direction:column; gap:12px; -webkit-overflow-scrolling:touch; scroll-behavior:smooth; }
   /* 字幕行 */
+  .sh .ph { display:inline-block; height:34px; width:auto; max-width:120px; border-radius:6px; object-fit:cover; border:1px solid var(--line); background:#fff; vertical-align:middle; }
   #sub { display:flex; align-items:center; gap:12px; padding:8px 16px 4px; min-height:52px; }
   #sub-text { flex:1; font-size:15px; line-height:1.45; color:#5a5650; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   #sub-text.echo, #sub-text.thinking { color:var(--dim); }
@@ -399,8 +400,10 @@ __BOARD_JS__
         const n = inkCount(c);
         // 交过了:紧凑态是孩子画的那张图(真服务给 png 的相对路径,mock 存的是 data URL)
         const img = c.state && typeof c.state.image === 'string' ? c.state.image : null;
-        const src = img ? (img.startsWith('data:') ? img : '/api/kid/image?p=' + encodeURIComponent(img)) : null;
-        return box('canvas', h('div', { class: 'cp' }, p.prompt || '画一画'), src ? h('div', { class: 'th' }, h('img', { src, alt: '', loading: 'lazy' }), n ? h('span', { class: 'pl' }, '画了 ' + n + ' 笔') : null) : h('div', { class: 'cb' }, n ? '已经画了 ' + n + ' 笔,点开接着画' : '点开画一画 ✎'));
+        // 照片做底、还没交过:卡上先是那张照片(淡一档)
+        const base = !img && p.base && typeof p.base.image === 'string' ? p.base.image : null;
+        const src = img ? (img.startsWith('data:') ? img : '/api/kid/image?p=' + encodeURIComponent(img)) : base ? '/api/kid/image?p=' + encodeURIComponent(base) : null;
+        return box('canvas', h('div', { class: 'cp' }, p.prompt || '画一画'), src ? h('div', { class: 'th' + (base ? ' base' : '') }, h('img', { src, alt: '', loading: 'lazy' }), h('span', { class: 'pl' }, n ? '画了 ' + n + ' 笔' : '点开画一画 ✎')) : h('div', { class: 'cb' }, n ? '已经画了 ' + n + ' 笔,点开接着画' : '点开画一画 ✎'));
       }
       case 'code':
         return box('code', p.lang ? h('span', { class: 'lg' }, p.lang) : null, h('div', { class: 'cb' }, p.text || ''));
@@ -439,7 +442,8 @@ __BOARD_JS__
     const up = (e) => { pts.delete(e.pointerId); start = pts.size ? { scale, tx, ty, d: pts.size === 2 ? dist() : 0, x: [...pts.values()][0].x, y: [...pts.values()][0].y } : null; };
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   };
-  const sectionHead = (s) => h('div', { class: 'sh' }, (s.at ? clock(s.at) + ' · ' : '') + sectionTitle(s));
+  // 节头:时间 · 节名;孩子问这节时拍的照片(R5)缩略图跟在后面
+  const sectionHead = (s) => h('div', { class: 'sh' }, (s.at ? clock(s.at) + ' · ' : '') + sectionTitle(s), ...((s.photos || []).map((p) => h('img', { class: 'ph', src: '/api/kid/image?p=' + encodeURIComponent(p), alt: '', loading: 'lazy' }))));
   const rowEl = (n, ...kids) => h('div', { class: 'row', style: 'grid-template-columns:repeat(' + n + ',minmax(0,1fr))' }, ...kids);
   /** 一节 = 头一行(时间 · 节名)+ 若干行;行是后期为某个端分的,渲染器按当前端折(rowsFor) */
   const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i }, sectionHead(s), ...rowsFor(s, S.device).map((row) => rowEl(row.length, ...row.map((idx) => renderCard(s.cards[idx], idx, i, false)))));
@@ -572,7 +576,7 @@ __BOARD_JS__
     const m = e.data;
     if (!m || m.source !== STAGE_SOURCE || !S.stage) return;
     const card = S.sections[S.stage.section].cards[S.stage.card];
-    if (m.type === 'ready') { const b = card.kind === 'scene' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null; postStage({ type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? '/api/bundles/' + encodeURIComponent(b) + '/' : undefined, autoplay: S.stage.autoplay }); }
+    if (m.type === 'ready') { const b = card.kind === 'scene' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null; const im = card.kind === 'canvas' && card.props.base && typeof card.props.base.image === 'string' ? card.props.base.image : null; postStage({ type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? '/api/bundles/' + encodeURIComponent(b) + '/' : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay }); }
     else if (m.type === 'phase') { S.stage.scene = { phase: m.phase, line: m.line, step: m.step, total: m.total }; renderSubtitle(); if (m.phase === 'done' && S.stage.delegate) { const d = S.stage; closeStage(); resumeAfter(d); } }
     else if (m.type === 'state') { card.state = m.state; $('#st-go').disabled = !stateSummary(card).length; $('#st-note').textContent = stateSummary(card).join('、'); repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, m.state); }
     else if (m.type === 'submit') { card.state = m.state; const id = S.stage.id; const job = S.sections[S.stage.section].job; const idx = S.stage.card; closeStage(); api('PUT', '/api/kid/conversations/' + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id }, echoText: '你:' + (stateSummary(card).join('、') || '给老师看') })); }
@@ -814,7 +818,7 @@ __BOARD_JS__
   const showEcho = (text) => { clearTimeout(S.echoTimer); S.echo = text; renderSubtitle(); S.echoTimer = setTimeout(() => { S.echo = null; renderSubtitle(); }, 2500); };
   const send = async (text, opts = {}) => {
     text = (text || '').trim();
-    if ((!text && !opts.action) || !S.tutor || S.readonly || (S.limit && opts.action !== 'continue')) return;
+    if ((!text && !opts.action && !(opts.photos && opts.photos.length)) || !S.tutor || S.readonly || (S.limit && opts.action !== 'continue')) return;
     unlock();
     stopVoice();
     if (S.state.status === 'playing' || S.state.status === 'paused' || S.state.status === 'stage') S.state = { ...S.state, status: 'done' };
@@ -822,6 +826,7 @@ __BOARD_JS__
     S.pending = true; renderSubtitle();
     const body = { text, device: S.device };
     if (opts.action) body.action = opts.action;
+    if (opts.photos && opts.photos.length) body.photos = opts.photos;
     const focus = opts.focus || (S.stage ? { card: S.stage.id } : null);
     if (focus) body.focus = focus;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
@@ -861,7 +866,24 @@ __BOARD_JS__
   typed.addEventListener('blur', () => { if (!typed.value.trim()) setBar(barNext(S.bar, 'blur')); });
   $('#plus').addEventListener('click', () => $('#sheet').classList.add('on'));
   $('#sheet .dimmer').addEventListener('click', () => $('#sheet').classList.remove('on'));
-  for (const f of document.querySelectorAll('input[type=file]')) f.addEventListener('change', () => { $('#sheet').classList.remove('on'); f.value = ''; /* 照片走 R5 作业线,现在只收下不发 */ });
+  // 作业照片(R5):相机 / 相册选了 → 浏览器里缩到长边 1600 的 jpeg → 传上去拿 path → 连 path 发一条(文字空,服务端记「(拍了一张)」);老师自己看图认题
+  const shrink = (file) => new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file); const im = new Image();
+    im.onload = () => { URL.revokeObjectURL(url); try { const k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight, 1)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); resolve(c.toDataURL('image/jpeg', 0.82)); } catch (e) { reject(e); } };
+    im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('图读不出')); };
+    im.src = url;
+  });
+  const sendPhoto = async (file) => {
+    if (!file || !S.tutor || S.readonly || S.limit || S.pending) return;
+    S.pending = true; renderSubtitle();
+    try {
+      const data = await shrink(file);
+      const r = await api('POST', '/api/kid/conversations/' + S.tutor.name + '/photos', { image: data });
+      S.pending = false;
+      await send('', { photos: [r.path], echoText: '你:(拍了一张)' });
+    } catch (e) { S.pending = false; renderSubtitle(); if (e && e.status === 404) closeTutor(); else if (!(e && e.status)) setOffline(true); }
+  };
+  for (const f of document.querySelectorAll('input[type=file]')) f.addEventListener('change', () => { $('#sheet').classList.remove('on'); const file = f.files && f.files[0]; f.value = ''; sendPhoto(file); });
   $('#hold .w').replaceChildren(...[6, 10, 16, 22, 12, 26, 18, 8, 14, 24, 20, 10, 16, 28, 12, 8, 18, 22, 10, 14, 6, 12, 20, 16, 8].map((v, i) => h('i', { style: 'height:' + v + 'px;animation-delay:' + (i * 37 % 400) + 'ms' })));
 
   // 中间那段:点 = 打字;按住 150ms = 说话(浏览器识别),松手发,上滑 60px 取消;没有识别就只有打字

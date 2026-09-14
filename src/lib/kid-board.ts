@@ -495,6 +495,8 @@ export interface BoardMessage {
   audio: string | null;
   pending: boolean;
   section?: BoardSection | null;
+  /** 孩子这条带的作业照片(相对 workspace 根;R5):节头上回显缩略图 */
+  photos?: string[];
 }
 
 export interface BoardEntry extends BoardSection {
@@ -502,6 +504,8 @@ export interface BoardEntry extends BoardSection {
   at?: string;
   /** 老师还在说:卡只增不改;前 ready 拍就绪了就能播(2026-09-13 之前是整轮跑完才播);整轮跑完换成正式的一节 */
   partial?: boolean;
+  /** 孩子问这节时拍的照片(节头上回显) */
+  photos?: string[];
 }
 
 function lineFrom(text: string, audio: string | null): BoardLine {
@@ -515,7 +519,7 @@ function lineFrom(text: string, audio: string | null): BoardLine {
 export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEntry[] {
   const out: BoardEntry[] = [];
   for (const m of messages) {
-    const at = m.at ? { at: m.at } : {};
+    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length ? { photos: m.photos } : {}) };
     if (m.pending) {
       if (m.section && m.section.partial && m.section.cards.length) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;

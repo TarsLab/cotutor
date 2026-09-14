@@ -21,8 +21,8 @@ export const PolicySchema = z.object({
   reviewGate: z.boolean().describe('验收开关:true = 产物先经家长验收才给孩子;false = 直接给(缺省)'),
   /** 这位老师可用的回复形式 */
   forms: z.array(z.enum(REPLY_FORMS)).describe('这位老师可用的回复形式:L0 确定性资源 / L1 口答 / L2 快卡 / L3 补讲 / L4 整包'),
-  /** 上下文包的两个数:最近观察条数、计划行数 */
-  contextPack: z.object({ recent: z.number().int().nonnegative(), planLines: z.number().int().nonnegative() }),
+  /** 上下文包的三个数:最近观察条数(从日记的「- 观察:」行抽,最近 14 天)、计划行数、档案「现在」callout 带几行 */
+  contextPack: z.object({ recent: z.number().int().nonnegative(), planLines: z.number().int().nonnegative(), profileLines: z.number().int().nonnegative() }),
   /** 板书开关:auto = 老师判断要不要出卡(缺省);off = 只说话不出卡 */
   board: z.enum(['auto', 'off']).describe('板书:auto = 讲题讲概念时老师出卡(缺省);off = 只说话不出卡'),
   /** 场景作业(scene-maker 做课包,$3–5 / 10–15 分钟一个):每天最多起几个;配在 scene-maker 身上或 policyDefaults */
@@ -43,21 +43,21 @@ export const PolicyPatchSchema = z.object({
   dailyRegen: PolicySchema.shape.dailyRegen.optional(),
   reviewGate: PolicySchema.shape.reviewGate.optional(),
   forms: PolicySchema.shape.forms.optional(),
-  contextPack: z.object({ recent: z.number().int().nonnegative().optional(), planLines: z.number().int().nonnegative().optional() }).optional(),
+  contextPack: z.object({ recent: z.number().int().nonnegative().optional(), planLines: z.number().int().nonnegative().optional(), profileLines: z.number().int().nonnegative().optional() }).optional(),
   board: PolicySchema.shape.board.optional(),
   scenes: z.object({ dailyMax: z.number().int().nonnegative().optional() }).optional(),
   post: z.object({ mode: z.enum(['auto', 'off']).optional(), runtime: z.string().min(1).optional(), timeoutMs: z.number().int().positive().optional() }).optional(),
 });
 export type PolicyPatch = z.infer<typeof PolicyPatchSchema>;
 
-/** 2026-09-08 拍板的缺省:60 字、30 条/日、3 次重生、验收关、上下文包各 10 */
+/** 2026-09-08 拍板的缺省:60 字、30 条/日、3 次重生、验收关、上下文包各 10(档案 8 行,2026-09-14) */
 export const POLICY_DEFAULTS: Policy = {
   replyMaxChars: 60,
   dailyMessages: 30,
   dailyRegen: 3,
   reviewGate: false,
   forms: ['L0', 'L1', 'L3', 'L4'],
-  contextPack: { recent: 10, planLines: 10 },
+  contextPack: { recent: 10, planLines: 10, profileLines: 8 },
   board: 'auto',
   scenes: { dailyMax: 2 },
   post: { mode: 'auto', runtime: 'claude-fast', timeoutMs: 10000 },
@@ -101,17 +101,31 @@ export const TtsSchema = z.object({ say: z.array(z.string()).min(1) });
 export type Tts = z.infer<typeof TtsSchema>;
 export const TTS_DEFAULT: Tts = { say: ['voxtell', 'say', '{text}', '--voice', '{voice}', '--json', '-o', '{out}'] };
 
-/** paths 里 CLI 认识的角色;其余角色原样保留给应用层。vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根 */
-export const PATH_ROLES = ['vault', 'photos', 'diary', 'plans', 'profile', 'timetable'] as const;
+/**
+ * paths 里 CLI 认识的角色;其余角色原样保留给应用层。vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根;
+ * captures(应用拍的作业照片)是 workspace 侧,相对 workspace 根(《obsidian仓库设计.md》§5:vault 里存文字不存图)。
+ * 缺省是中文名(2026-09-14):vault 是家长在 Obsidian 里看的,目录名要像人写的。
+ */
+export const PATH_ROLES = ['vault', 'diary', 'plans', 'profile', 'timetable', 'textbooks', 'reference', 'captures'] as const;
 export type PathRole = (typeof PATH_ROLES)[number];
+/** 相对 workspace 根(不是 vault)的角色 */
+export const WORKSPACE_ROLES: readonly PathRole[] = ['captures'];
 export const ROLE_DEFAULTS: Record<PathRole, string> = {
   vault: '.',
-  photos: 'photos',
-  diary: 'diary',
-  plans: 'plans',
-  profile: 'profile.md',
-  timetable: 'timetable.md',
+  diary: '日记',
+  plans: '计划',
+  profile: '孩子.md',
+  timetable: '课程表.md',
+  textbooks: '教材',
+  reference: '参考',
+  captures: 'captures',
 };
+
+/** vault 的写入政策(《obsidian仓库设计.md》§4):话题打分 ≥ keepScore 才把摘要与骨架沉淀进日记;孩子问的话总是记 */
+export const VaultPolicySchema = z.object({
+  keepScore: z.number().int().min(1).max(5).default(4).describe('话题打几星(1–5)起才值得记:记账时摘要与讲解骨架进日记;低于它只记孩子问的话'),
+});
+export type VaultPolicy = z.infer<typeof VaultPolicySchema>;
 
 export const CotutorConfigSchema = z
   .object({
@@ -133,8 +147,9 @@ export const CotutorConfigSchema = z
         https: z.object({ cert: z.string().min(1), key: z.string().min(1) }).optional(),
       })
       .default({ port: 5180 }),
-    paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;photos / diary / plans / profile / timetable 相对 vault;不配 vault 就相对 workspace 根'),
-    policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 30 条 / 3 次 / 验收关 / L0,L1,L3,L4 / 10,10)'),
+    paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;diary / plans / profile / timetable / textbooks / reference 相对 vault(缺省 日记 / 计划 / 孩子.md / 课程表.md / 教材 / 参考),不配 vault 就相对 workspace 根;captures(作业照片)相对 workspace 根'),
+    vault: VaultPolicySchema.default({ keepScore: 4 }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4)'),
+    policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 30 条 / 3 次 / 验收关 / L0,L1,L3,L4 / 10,10,8)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
     runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {prompt} {session};模型、预算、时限写在这里'),
     tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板,占位 {text} {voice} {out}'),
@@ -162,6 +177,7 @@ export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
     if (p.forms !== undefined) out.forms = [...p.forms];
     if (p.contextPack?.recent !== undefined) out.contextPack.recent = p.contextPack.recent;
     if (p.contextPack?.planLines !== undefined) out.contextPack.planLines = p.contextPack.planLines;
+    if (p.contextPack?.profileLines !== undefined) out.contextPack.profileLines = p.contextPack.profileLines;
     if (p.board !== undefined) out.board = p.board;
     if (p.scenes?.dailyMax !== undefined) out.scenes.dailyMax = p.scenes.dailyMax;
     if (p.post?.mode !== undefined) out.post.mode = p.post.mode;

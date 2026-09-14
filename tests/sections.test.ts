@@ -39,6 +39,12 @@ const TEXT = [
   check('refs 列表写法', r.handoff?.refs.join(',') === 'a.md,b.md' && r.body === '', JSON.stringify(r));
   const fence = parseSections('```\n## 转交\nto: x\n```\n好。');
   check('代码块里的 ## 不算标题', fence.handoff === null && fence.body.includes('## 转交'));
+  const bk = parseSections('记好了。\n\n## 记账\n- thread: 1620-1\n  name: 找规律填数(递减)\n  textbook: "人教数学一下#4 100以内数的认识"\n  summary: 讲了递减数列,难点在 80 减 2 过十。\n  steps: 抄数列 → 连箭头 → 一格一格减 → 倒着加回去检查\n  observations:\n    - 跨十会停一拍\n    - 两个两个倒着数能过去\n');
+  check('记账段:字段与观察列表', bk.bookkeeping?.entries.length === 1 && bk.bookkeeping.entries[0].thread === '1620-1' && bk.bookkeeping.entries[0].textbook === '人教数学一下#4 100以内数的认识' && bk.bookkeeping.entries[0].steps?.startsWith('抄数列') && bk.bookkeeping.entries[0].observations.join('|') === '跨十会停一拍|两个两个倒着数能过去' && bk.body === '记好了。', JSON.stringify(bk));
+  const bk2 = parseSections('## 记账\nthread: 1620-1\nname: 退位\nobservations:\n  - 借位忘了\n');
+  check('记账段漏写 - thread 也认', bk2.bookkeeping?.entries[0].name === '退位' && bk2.bookkeeping.entries[0].observations.join() === '借位忘了' && bk2.body === '', JSON.stringify(bk2));
+  const bk3 = parseSections('## 记账\n- thread: x\n  summary: 没有名字\n');
+  check('记账段缺 name → 整段留正文', bk3.bookkeeping === null && bk3.body.includes('## 记账'));
   const plain = parseSections('就一句话。');
   check('没有段', plain.holdup === null && plain.handoff === null && plain.body === '就一句话。');
 }

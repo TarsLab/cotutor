@@ -1,7 +1,6 @@
 /** 运行规划:同运行时有会话 → resume;跨运行时 / 无会话 → 新开;{agentBody} 只给用到它的运行时;ISO 周;recent 取材。 */
 import { getRuntime, planRun, runtimeUses } from '../src/lib/run-plan.ts';
 import { isoWeek } from '../src/lib/plan.ts';
-import { recentObservations } from '../src/lib/ledger.ts';
 import { applyRun, emptyIndex, addMessage } from '../src/lib/conversation.ts';
 import { deriveKidView } from '../src/lib/kid-view.ts';
 import { parseTranscript } from '../src/lib/transcript.ts';
@@ -47,13 +46,5 @@ const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\
 }
 {
   check('ISO 周', isoWeek(new Date(2026, 8, 8)) === '2026-W37' && isoWeek(new Date(2026, 0, 1)) === '2026-W01' && isoWeek(new Date(2027, 0, 1)) === '2026-W53', isoWeek(new Date(2026, 8, 8)));
-  const obs = [
-    { id: '1', date: '2026-09-06', author: 'a', subject: '数学', claim: '一', retracted: false },
-    { id: '2', date: '2026-09-07', author: 'a', subject: '语文', claim: '二', retracted: false },
-    { id: '3', date: '2026-09-05', author: 'a', subject: '数学', claim: '三', retracted: true },
-    { id: '4', date: '2026-09-08', author: 'a', subject: '数学', claim: '四', retracted: false },
-  ];
-  check('recent:本学科、未撤回、按日期、取最近 n', recentObservations(obs, { subject: '数学', n: 1 }).map((o) => o.claim).join() === '四' && recentObservations(obs, { subject: '数学', n: 5 }).map((o) => o.claim).join() === '一,四');
-  check('没配学科 → 全量', recentObservations(obs, { n: 5 }).length === 3);
 }
 done();

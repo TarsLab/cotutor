@@ -5,7 +5,7 @@
  * 正文取自 kidSource:带卡 / 带固定段的顶层文本段 + 最后一段(老师板书之后又用了工具也不丢)。
  */
 import { stripSecrets } from '../cards/index.ts';
-import type { ConversationMessage, Handoff, HoldupAsk } from '../schema/index.ts';
+import type { Bookkeeping, ConversationMessage, Handoff, HoldupAsk } from '../schema/index.ts';
 import { parseBoard } from './board.ts';
 import { threads, type CardAssets, type CardStates } from './conversation.ts';
 import type { BoardSection } from './kid-board.ts';
@@ -18,6 +18,8 @@ export interface KidView {
   truncated: boolean;
   holdup: HoldupAsk | null;
   handoff: Handoff | null;
+  /** 记账任务的回答(「## 记账」段);应用按它写日记 */
+  bookkeeping: Bookkeeping | null;
   /** 运行是否正常收尾 */
   ok: boolean;
   /** 板书节(卡 + 讲稿);没有卡也没有讲稿 = null */
@@ -54,7 +56,7 @@ export function truncateReply(text: string, max: number): { text: string; trunca
   return { text: `${cps.slice(0, max).join('').trim()}…`, truncated: true };
 }
 
-const none = (ok: boolean, holdup: HoldupAsk | null = null, handoff: Handoff | null = null): KidView => ({ kidText: null, truncated: false, holdup, handoff, ok, section: null, warnings: [], parentText: '' });
+const none = (ok: boolean, holdup: HoldupAsk | null = null, handoff: Handoff | null = null, bookkeeping: Bookkeeping | null = null): KidView => ({ kidText: null, truncated: false, holdup, handoff, bookkeeping, ok, section: null, warnings: [], parentText: '' });
 
 const FENCE_OR_H2 = /^\s*(?:```|~~~|## )/m;
 
@@ -74,10 +76,10 @@ export function kidSource(t: Transcript): string | null {
 export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }): KidView {
   if (!t.final) return none(false);
   if (!t.final.ok || !t.final.text) return none(t.final.ok);
-  const { body, holdup, handoff } = parseSections(kidSource(t) ?? t.final.text);
+  const { body, holdup, handoff, bookkeeping } = parseSections(kidSource(t) ?? t.final.text);
   const board = parseBoard(body);
   const { cards, lines } = board.section;
-  if (!cards.length && !lines.length) return { ...none(true, holdup, handoff), warnings: board.warnings.map((w) => w.text), parentText: board.tail };
+  if (!cards.length && !lines.length) return { ...none(true, holdup, handoff, bookkeeping), warnings: board.warnings.map((w) => w.text), parentText: board.tail };
   let truncated = false;
   const cut = lines.map((l) => {
     const r = truncateReply(l.text, policy.replyMaxChars);
@@ -86,7 +88,7 @@ export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }):
   });
   const section: BoardSection = { ...board.section, lines: cut };
   const kidText = cut.map((l) => l.text).join('\n');
-  return { kidText: kidText || null, truncated, holdup, handoff, ok: true, section, warnings: board.warnings.map((w) => w.text), parentText: board.tail };
+  return { kidText: kidText || null, truncated, holdup, handoff, bookkeeping, ok: true, section, warnings: board.warnings.map((w) => w.text), parentText: board.tail };
 }
 
 /** 孩子端的一条:自己问的话(别人问的不显示)+ 老师给孩子的话 + 配音;出错的运行什么都不出现(问句还在) */
@@ -107,6 +109,8 @@ export interface KidMessage {
   artifacts: string[];
   /** 板书节(卡 + 讲稿;答案等秘密已剥);没有 = 页面把 reply 当一张文字卡 */
   section?: BoardSection | null;
+  /** 孩子这条带的作业照片(相对 workspace 根;页面经 /api/kid/image?p= 取);只在孩子自己的问句上 */
+  photos?: string[];
 }
 
 /**
@@ -117,6 +121,8 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
   const out: KidMessage[] = [];
   const ths = threads(index.messages);
   for (const [i, m] of index.messages.entries()) {
+    // 记账那轮是家长晚上起的任务,老师回的「记好了」不是给孩子的话
+    if (m.bookkeep) continue;
     const question = m.from === 'kid' ? m.text : null;
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
@@ -125,7 +131,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     const files = assets[m.job];
     const withState = m.section && (per || files) ? { ...m.section, cards: m.section.cards.map((c, n) => ({ ...c, ...(per?.[n] ? { state: per[n].state } : {}), ...(files?.[n]?.length ? { assets: files[n] } : {}) })) } : m.section;
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
-    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, audio: reply ? (m.audio ?? null) : null, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}) });
+    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, audio: reply ? (m.audio ?? null) : null, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}) });
   }
   return out;
 }

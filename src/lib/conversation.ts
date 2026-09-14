@@ -155,6 +155,7 @@ export function applyRun(
           runtime: run.runtime,
           holdup: kidView.holdup,
           handoff: kidView.handoff,
+          ...(m.bookkeep || kidView.bookkeeping ? { bookkeeping: kidView.bookkeeping } : {}),
           section: kidView.section,
           ...(kidView.parentText ? { parentText: kidView.parentText } : {}),
           ...(kidView.warnings.length ? { warnings: kidView.warnings } : {}),

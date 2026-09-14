@@ -13,6 +13,7 @@ import {
   CotutorConfigSchema,
   PATH_ROLES,
   ROLE_DEFAULTS,
+  WORKSPACE_ROLES,
   explainIssues,
   type CotutorConfig,
   type PathRole,
@@ -160,7 +161,7 @@ export interface Workspace {
   root: string;
   source: RootSource;
   config: CotutorConfig;
-  /** 角色 → 绝对路径;vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根 */
+  /** 角色 → 绝对路径;vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根;captures 相对 workspace 根 */
   paths: Record<PathRole, string> & Record<string, string>;
   dirs: {
     agents: string;
@@ -177,7 +178,6 @@ export interface Workspace {
   };
   files: {
     config: string;
-    observations: string;
     artifacts: string;
     rulesClaude: string;
     rulesQwen: string;
@@ -211,7 +211,7 @@ export function resolvePaths(root: string, paths: Record<string, string>): Works
   const out: Record<string, string> = { vault };
   for (const role of PATH_ROLES) {
     if (role === 'vault') continue;
-    out[role] = expandPath(paths[role] ?? ROLE_DEFAULTS[role], vault);
+    out[role] = expandPath(paths[role] ?? ROLE_DEFAULTS[role], WORKSPACE_ROLES.includes(role) ? root : vault);
   }
   for (const [role, value] of Object.entries(paths)) if (!(role in out)) out[role] = expandPath(value, vault);
   return out as Workspace['paths'];
@@ -235,7 +235,6 @@ export function assembleWorkspace(root: string, source: RootSource, config: Cotu
     },
     files: {
       config: join(root, CONFIG_FILE),
-      observations: join(root, 'ledger', 'observations.jsonl'),
       artifacts: join(root, 'ledger', 'artifacts.jsonl'),
       rulesClaude: join(root, 'CLAUDE.md'),
       rulesQwen: join(root, 'QWEN.md'),

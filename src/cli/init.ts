@@ -6,11 +6,11 @@
  */
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { DIRS, GITIGNORE, LEDGER_FILES, RULES, SYNTAX_FILE, configTemplate, shippedAgents, writeSchemaFile, writeSyntaxFile } from './skeleton.ts';
+import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, RULES, SYNTAX_FILE, configTemplate, profileTemplate, shippedAgents, writeSchemaFile, writeSyntaxFile } from './skeleton.ts';
 import { installTutors } from './tutors.ts';
 import { TOOL_SHIM, installSkills, writeToolShim } from './skills.ts';
 import { installThemes } from './themes.ts';
-import { CONFIG_FILE, ConfigError, HOME_ROOT, USER_CONFIG, expandPath, parseConfig, readJson } from './workspace.ts';
+import { CONFIG_FILE, ConfigError, HOME_ROOT, USER_CONFIG, expandPath, loadWorkspace, parseConfig, readJson, redactHome } from './workspace.ts';
 
 export interface InitStep {
   item: string;
@@ -99,6 +99,27 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
       await writeFile(p, RULES);
       steps.push({ item: f, action: 'created' });
     }
+  }
+
+  // vault 侧(《obsidian仓库设计.md》§2):只补档案与参考 README,缺了才写;日记 / 教材 / 计划由记账与规划老师现建
+  try {
+    const ws = loadWorkspace(root);
+    const profile = ws.paths.profile;
+    if (await exists(profile)) steps.push({ item: redactHome(profile), action: 'exists' });
+    else {
+      await mkdir(dirname(profile), { recursive: true });
+      await writeFile(profile, profileTemplate(ws.config.kid.name ?? ws.config.kid.slug));
+      steps.push({ item: redactHome(profile), action: 'created', note: '档案:「现在」callout 整段进上下文包,按真的填' });
+    }
+    const readme = join(ws.paths.reference, 'README.md');
+    if (await exists(readme)) steps.push({ item: redactHome(readme), action: 'exists' });
+    else {
+      await mkdir(ws.paths.reference, { recursive: true });
+      await writeFile(readme, REFERENCE_README);
+      steps.push({ item: redactHome(readme), action: 'created' });
+    }
+  } catch {
+    /* 配置读不了(doctor 去体检):vault 侧不动 */
   }
 
   const gitignore = join(root, '.gitignore');

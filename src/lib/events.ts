@@ -26,6 +26,8 @@ export type RunEvent = { t: number } & (
   | { lane: 'handoff'; kind: 'started'; to: string; job: string }
   | { lane: 'handoff'; kind: 'skipped'; to: string; why: string }
   | { lane: 'ledger'; kind: 'artifact'; id: string; status: string }
+  /** 记账:话题的一段写进了 vault 的日记(file 是日记文件名) */
+  | { lane: 'ledger'; kind: 'diary'; thread: string; file: string }
 );
 
 /** 发事件时给的形状:少一个 t(runner 补);Omit 直接套在联合上会塌成公共键,所以逐个分发 */
@@ -67,7 +69,7 @@ export function describeEvent(e: RunEvent): string {
     case 'handoff':
       return e.kind === 'started' ? `${e.to} 起了 ${e.job}` : `${e.to} 没起:${e.why}`;
     case 'ledger':
-      return `课包 ${e.id} ${e.status}`;
+      return e.kind === 'diary' ? `日记 ${e.file} 记了话题 ${e.thread}` : `课包 ${e.id} ${e.status}`;
   }
 }
 

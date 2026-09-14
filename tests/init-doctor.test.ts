@@ -23,7 +23,7 @@ try {
   check('老师文件是拷贝,内容同本包', !lstatSync(link).isSymbolicLink() && readFileSync(link, 'utf8') === readFileSync(join(PACKAGE_AGENTS_DIR, 'math-tutor.md'), 'utf8'));
   check('.qwen 是指向 .claude 的相对链', lstatSync(join(ws, '.qwen', 'agents', 'planner.md')).isSymbolicLink() && readlinkSync(join(ws, '.qwen', 'agents', 'planner.md')) === '../../.claude/agents/planner.md');
   check('出厂 hash 记下', (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { tutors: Record<string, { hash: string }> }).tutors['math-tutor'].hash.startsWith('sha256:'));
-  check('账本空文件在', existsSync(join(ws, 'ledger', 'observations.jsonl')) && existsSync(join(ws, 'ledger', 'artifacts.jsonl')));
+  check('产物账本空文件在,观察账本不再建', !existsSync(join(ws, 'ledger', 'observations.jsonl')) && existsSync(join(ws, 'ledger', 'artifacts.jsonl')));
   check('板书语法表出厂(从卡的注册表生成)', readFileSync(join(ws, '.cotutor', '板书语法.md'), 'utf8').includes('### choice'));
   check('四个领域 skill 拷进 .claude/skills/,.qwen/skills/ 是相对链,hash 记下', existsSync(join(ws, '.claude', 'skills', 'drawtell-scene', 'SKILL.md')) && existsSync(join(ws, '.claude', 'skills', 'drawtell-teaching', 'models-index.md')) && lstatSync(join(ws, '.qwen', 'skills', 'drawtell-cli')).isSymbolicLink() && readlinkSync(join(ws, '.qwen', 'skills', 'drawtell-cli')) === '../../.claude/skills/drawtell-cli' && (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { skills: Record<string, { hash: string }> }).skills['drawtell-verify'].hash.startsWith('sha256:'));
   check('出厂主题拷进 themes/default/,hash 记下', existsSync(join(ws, 'themes', 'default', 'theme.json')) && existsSync(join(ws, 'themes', 'default', 'kid.css')) && (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { themes: Record<string, { hash: string }> }).themes.default.hash.startsWith('sha256:'));
@@ -72,10 +72,12 @@ try {
   check('改过的老师文件 init 不动', readFileSync(link, 'utf8').includes('再温柔一点'));
   check('doctor 标自定义', (await doctorWorkspace(ws, { probeEnv: false })).checks.some((c) => c.name === 'tutor.math-tutor.origin' && c.ok && c.detail.includes('自定义')));
 
-  writeFileSync(join(ws, 'ledger', 'observations.jsonl'), '{"id":"o-1","date":"2026-09-08","author":"math-tutor","claim":"ok"}\n坏行\n');
+  writeFileSync(join(ws, 'ledger', 'artifacts.jsonl'), '{"id":"a-1","kind":"课包","by":"scene-maker","at":"2026-09-08T16:30","status":"ready"}\n坏行\n');
   const d3 = await doctorWorkspace(ws, { probeEnv: false });
-  check('账本坏行 → 必需失败并点名行号', !d3.ok && d3.checks.some((c) => c.name === 'ledger.observations' && !c.ok && c.detail.includes('第 2 行')));
+  check('账本坏行 → 必需失败并点名行号', !d3.ok && d3.checks.some((c) => c.name === 'ledger.artifacts' && !c.ok && c.detail.includes('第 2 行')));
+  writeFileSync(join(ws, 'ledger', 'artifacts.jsonl'), '');
   writeFileSync(join(ws, 'ledger', 'observations.jsonl'), '');
+  check('还留着 observations.jsonl 只提醒不算错', (await doctorWorkspace(ws, { probeEnv: false })).checks.some((c) => c.name === 'ledger.observations' && c.ok && c.detail.includes('退役')));
 
   writeFileSync(join(ws, 'cotutor.json'), '{ 坏');
   const d4 = await doctorWorkspace(ws, { probeEnv: false });
@@ -139,6 +141,8 @@ try {
     check('差异五项:新老师 + 两个运行时 + run / resume 各一条', gaps.map((g) => g.path).join(' ') === 'tutors.scene-maker runtimes.claude-scene runtimes.qwen-scene runtimes.claude.run runtimes.claude.resume', JSON.stringify(gaps.map((g) => g.path)));
 
     const d = await doctorWorkspace(ws, { probeEnv: false });
+    const cap = d.checks.find((c) => c.name === 'captures');
+    check('doctor:captures 还没拍过也绿(第一张时建),不是必需项', cap?.ok === true && cap.required === false && cap.detail.includes('还没有'), JSON.stringify(cap));
     const mig = d.checks.find((c) => c.name === 'config.migrate');
     check('doctor 点名 config.migrate,不是必需项(点名不拦体检)', mig !== undefined && !mig.ok && !mig.required && mig.detail.includes('scene-maker') && (mig.fix ?? '').includes('cotutor upgrade --config'), JSON.stringify(mig));
 

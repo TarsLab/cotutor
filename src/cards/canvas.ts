@@ -1,15 +1,17 @@
 /**
- * 画板卡(《drawtell接入与场景卡.md》§5):孩子在上面画。底图三种——课包 id(整幅终帧做底层)、行内小骨架 JSON、空白 + 题目;
+ * 画板卡(《drawtell接入与场景卡.md》§5):孩子在上面画。底图四种——课包 id(整幅终帧做底层)、行内小骨架 JSON、一张图(孩子拍的作业
+ * captures/… 或别的 workspace 里的图片,R5:在自己的作业照片上圈错题、写答案)、空白 + 题目;
  * 舞台是舞台包里的 excalidraw 编辑器(底层锁定,孩子的笔打 customData.layer = 'ink');「给老师看」→ 导出 png 存 .cards/<n>.png,
  * 状态存 ink 元素;describe 给笔数与图的路径,老师 Read 看图(qwen 看不了图就靠笔数)。
  */
 import { z } from 'zod';
 import { bodyLines, type CardKind } from './kind.ts';
+import { IMAGE_EXT } from './image.ts';
 import { BUNDLE_ID_RE } from './scene.ts';
 
 export const CanvasPropsSchema = z.object({
-  /** 底图:课包 id / 行内骨架 / 没有(空白) */
-  base: z.union([z.object({ bundle: z.string().regex(BUNDLE_ID_RE) }), z.object({ skeletons: z.array(z.record(z.string(), z.unknown())).min(1).max(40) })]).nullable(),
+  /** 底图:课包 id / 行内骨架 / 一张图(相对 workspace 根,如 captures/2026-09-14/1620-1.jpg)/ 没有(空白) */
+  base: z.union([z.object({ bundle: z.string().regex(BUNDLE_ID_RE) }), z.object({ skeletons: z.array(z.record(z.string(), z.unknown())).min(1).max(40) }), z.object({ image: z.string().min(1) })]).nullable(),
   /** 题目(空白画板必须有;有底图时可选,画在顶栏) */
   prompt: z.string().optional(),
 });
@@ -42,6 +44,7 @@ export const canvas: CardKind<CanvasProps, CanvasState> = {
       if (!Array.isArray(sk) || !sk.length) throw new Error('行内骨架要有 skeletons 数组');
       return { base: { skeletons: sk as Record<string, unknown>[] }, ...(promptFromTag ? { prompt: promptFromTag } : {}) };
     }
+    if (first && IMAGE_EXT.test(first) && !/^https?:\/\//.test(first)) return { base: { image: first }, ...(rest || promptFromTag ? { prompt: rest || promptFromTag } : {}) };
     if (first && BUNDLE_ID_RE.test(first) && !/[一-鿿]/.test(first)) return { base: { bundle: first }, ...(rest || promptFromTag ? { prompt: rest || promptFromTag } : {}) };
     const prompt = [promptFromTag, ...lines].filter(Boolean).join(' ').trim();
     if (!prompt) throw new Error('空白画板要有题目(写在正文或标签后面)');

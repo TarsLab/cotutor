@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { FocusSchema, MESSAGE_FROM } from './context-pack.ts';
 import { BoardSectionSchema, DeviceSchema } from './board.ts';
-import { HandoffSchema, HoldupAskSchema } from './sections.ts';
+import { BookkeepingSchema, HandoffSchema, HoldupAskSchema } from './sections.ts';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -42,6 +42,8 @@ export const ConversationMessageSchema = z.object({
   focus: FocusSchema.optional(),
   /** 孩子端的两个不打字的动作:继续(不计每日上限)/ 交给老师(把卡上的状态交出去) */
   action: z.enum(['continue', 'submit']).optional(),
+  /** 这条消息带的作业照片(R5,2026-09-14):相对 workspace 根的路径(captures/<日期>/<HHMM>-<n>.jpg),上下文包 photos: 段原样给老师 Read;日记永不引用它 */
+  photos: z.array(z.string().min(1)).optional(),
   result: z.enum(['running', 'ok', 'error']).default('running'),
   costUsd: z.number().optional(),
   /** 孩子视图文本;null = 这次运行没有给孩子的话(出错或空) */
@@ -74,6 +76,10 @@ export const ConversationMessageSchema = z.object({
   device: DeviceSchema.optional(),
   /** 板书后期的结果:收没收到、用时、费用、丢了几条提案;没起(关了 / 没卡)就没有。细节在 <日期>.<job>.post.json */
   post: z.object({ ok: z.boolean(), ms: z.number().int().nonnegative(), costUsd: z.number().optional(), dropped: z.number().int().nonnegative(), error: z.string().optional(), beats: z.number().int().nonnegative().optional(), failed: z.number().int().nonnegative().optional() }).optional(),
+  /** 这轮是给某个话题记账的任务(from: system,resume 那个话题的会话);跑完老师回的「## 记账」段经应用落进日记 */
+  bookkeep: z.object({ thread: z.string().min(1) }).optional(),
+  /** 最终文本里剥出来的「## 记账」段(物化;日记已按它写好);null = 这轮没有 */
+  bookkeeping: BookkeepingSchema.nullable().optional(),
 });
 export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 
@@ -86,5 +92,9 @@ export const ConversationIndexSchema = z.object({
   sessions: z.record(z.string(), SessionSchema).default({}),
   messages: z.array(ConversationMessageSchema).default([]),
   costUsd: z.number().default(0),
+  /** 话题 id → 家长打的星(1–5;《obsidian仓库设计.md》§4:打分的单位是话题;≥ vault.keepScore 记账时才沉淀摘要) */
+  ratings: z.record(z.string(), z.number().int().min(1).max(5)).default({}),
+  /** 话题 id → 记账那轮的 job(记过的不再记;日记里已有这个话题的一段) */
+  booked: z.record(z.string(), z.string().min(1)).default({}),
 });
 export type ConversationIndex = z.infer<typeof ConversationIndexSchema>;

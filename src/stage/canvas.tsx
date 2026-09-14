@@ -2,12 +2,13 @@
  * 画板卡的舞台 = 孩子的工作台(《卡片重设计评估.md》§三 F,原型「画板工作台」):
  * 题目条在顶(可收起);工具是自己画的六个大钮——笔 / 橡皮 / 黑红蓝 / 撤销 / 清空(要点两下),竖屏一行、横屏一列;
  * excalidraw 只当画布,它的工具栏、菜单、缩放钮全藏掉(stage.css),禁选择 / 文字 / 形状,留双指缩放。
- * 底层(课包终帧 / 行内骨架)锁定、灰一档(opacity 45)、打 customData.layer = 'base';孩子画的全打 'ink',全黑(或红 / 蓝)。
+ * 底层(课包终帧 / 行内骨架 / 一张照片)锁定、灰一档(opacity 45)、打 customData.layer = 'base';孩子画的全打 'ink',全黑(或红 / 蓝)。
+ * 照片做底(R5):页面给 imageUrl,这里取回来当 excalidraw 的 image 元素(files 里一张),长边落到 1200,孩子在自己的作业上圈画。
  * 状态(ink 元素)改了就回页面(防抖);页面按「给老师看」→ control submit → 导出 png(底图恢复原色)连 ink 一起交回去。
  */
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react';
 import { Excalidraw, convertToExcalidrawElements, exportToBlob } from '@excalidraw/excalidraw';
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
+import type { BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 
 export interface CanvasStageHandle {
@@ -15,8 +16,10 @@ export interface CanvasStageHandle {
 }
 
 export interface CanvasStageProps {
-  base: { bundle: string } | { skeletons: Record<string, unknown>[] } | null;
+  base: { bundle: string } | { skeletons: Record<string, unknown>[] } | { image: string } | null;
   bundleUrl?: string;
+  /** base 是一张图时它的 URL(页面给;同源) */
+  imageUrl?: string;
   prompt?: string;
   ink: Record<string, unknown>[];
   onState(ink: Record<string, unknown>[]): void;
@@ -30,7 +33,33 @@ type Skeleton = NonNullable<Parameters<typeof convertToExcalidrawElements>[0]>[n
 const BASE_OPACITY = 45;
 const INK_COLORS = ['#2b2b2b', '#d9482b', '#2f6fd6'] as const;
 
-async function loadBase(base: CanvasStageProps['base'], bundleUrl?: string): Promise<ExcalidrawElement[]> {
+/** 照片底图的长边(画布坐标;导出时 maxWidthOrHeight 1600 再缩一次) */
+const PHOTO_LONG_EDGE = 1200;
+
+interface Base {
+  elements: ExcalidrawElement[];
+  files: BinaryFiles;
+}
+
+async function loadPhoto(url: string): Promise<Base> {
+  const r = await fetch(url, { cache: 'no-store' });
+  if (!r.ok) throw new Error('照片取不到');
+  const blob = await r.blob();
+  const dataURL = await new Promise<string>((resolve, reject) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result)); fr.onerror = () => reject(new Error('照片读不出')); fr.readAsDataURL(blob); });
+  const size = await new Promise<{ w: number; h: number }>((resolve, reject) => { const im = new Image(); im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight }); im.onerror = () => reject(new Error('照片解不开')); im.src = dataURL; });
+  const k = Math.min(1, PHOTO_LONG_EDGE / Math.max(size.w, size.h, 1));
+  const fileId = 'base-photo';
+  const mimeType = (blob.type || 'image/jpeg') as BinaryFiles[string]['mimeType'];
+  const files: BinaryFiles = { [fileId]: { id: fileId as BinaryFiles[string]['id'], dataURL: dataURL as BinaryFiles[string]['dataURL'], mimeType, created: Date.now() } };
+  const els = convertToExcalidrawElements([{ type: 'image', fileId, x: 0, y: 0, width: Math.round(size.w * k), height: Math.round(size.h * k), customData: { layer: 'base' }, locked: true, opacity: BASE_OPACITY } as unknown as Skeleton], { regenerateIds: false });
+  return { elements: els as unknown as ExcalidrawElement[], files };
+}
+
+async function loadBase(base: CanvasStageProps['base'], bundleUrl?: string, imageUrl?: string): Promise<Base> {
+  if (base && 'image' in base) {
+    if (!imageUrl) throw new Error('照片底图没有地址');
+    return loadPhoto(imageUrl);
+  }
   let skeletons: Record<string, unknown>[] = [];
   if (base && 'skeletons' in base) skeletons = base.skeletons;
   else if (base && 'bundle' in base && bundleUrl) {
@@ -38,9 +67,9 @@ async function loadBase(base: CanvasStageProps['base'], bundleUrl?: string): Pro
     if (!r.ok) throw new Error(`课包 ${base.bundle} 取不到`);
     skeletons = ((await r.json()) as { skeletons?: Record<string, unknown>[] }).skeletons ?? [];
   }
-  if (!skeletons.length) return [];
+  if (!skeletons.length) return { elements: [], files: {} };
   const els = convertToExcalidrawElements(skeletons.map((s) => ({ ...s, customData: { ...(s.customData as object | undefined), layer: 'base' }, locked: true, opacity: BASE_OPACITY })) as unknown as Skeleton[], { regenerateIds: false });
-  return els as unknown as ExcalidrawElement[];
+  return { elements: els as unknown as ExcalidrawElement[], files: {} };
 }
 
 const isBase = (el: ExcalidrawElement): boolean => (el.customData as { layer?: string } | undefined)?.layer === 'base';
@@ -57,8 +86,8 @@ const ICON = {
   chevron: '<path d="M6 9l6 6 6-6"></path>',
 };
 
-export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(function CanvasStage({ base, bundleUrl, prompt, ink, onState, onSubmit, onError }, ref) {
-  const [initial, setInitial] = useState<ExcalidrawElement[] | null>(null);
+export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(function CanvasStage({ base, bundleUrl, imageUrl, prompt, ink, onState, onSubmit, onError }, ref) {
+  const [initial, setInitial] = useState<Base | null>(null);
   const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
   const [color, setColor] = useState<string>(INK_COLORS[0]);
   const [count, setCount] = useState(ink.length);
@@ -70,13 +99,13 @@ export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(funct
 
   useEffect(() => {
     let cancelled = false;
-    loadBase(base, bundleUrl)
-      .then((els) => { if (!cancelled) setInitial([...els, ...(ink as unknown as ExcalidrawElement[])]); })
+    loadBase(base, bundleUrl, imageUrl)
+      .then((b) => { if (!cancelled) setInitial({ elements: [...b.elements, ...(ink as unknown as ExcalidrawElement[])], files: b.files }); })
       .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
     return () => { cancelled = true; };
     // 只在装载时取一次:ink 之后由编辑器自己管
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [base, bundleUrl]);
+  }, [base, bundleUrl, imageUrl]);
 
   const inkNow = useCallback((): Record<string, unknown>[] => {
     const els = api.current?.getSceneElements() ?? [];
@@ -164,8 +193,8 @@ export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(funct
         </div>
         <div className="canvas-board">
           <Excalidraw
-            excalidrawAPI={(a) => { api.current = a; }}
-            initialData={{ elements: initial, appState: { viewBackgroundColor: '#fffdf8', currentItemStrokeColor: color, currentItemStrokeWidth: 2, currentItemRoughness: 0, activeTool: { type: 'freedraw', customType: null, locked: true, lastActiveTool: null } }, scrollToContent: true }}
+            excalidrawAPI={(a) => { api.current = a; (window as unknown as { __excalidraw?: ExcalidrawImperativeAPI }).__excalidraw = a; /* 探针用(scripts/probe-photo.mjs 从 iframe 里查场景元素) */ }}
+            initialData={{ elements: initial.elements, files: initial.files, appState: { viewBackgroundColor: '#fffdf8', currentItemStrokeColor: color, currentItemStrokeWidth: 2, currentItemRoughness: 0, activeTool: { type: 'freedraw', customType: null, locked: true, lastActiveTool: null } }, scrollToContent: true }}
             onChange={onChange}
             zenModeEnabled
             gridModeEnabled={false}

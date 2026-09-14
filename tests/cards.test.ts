@@ -8,6 +8,7 @@ import { check, done } from './_check.ts';
   check('八种卡登记在册', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,scene,canvas,code' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
   const cv = parseCard('canvas', '画一个三角形,标出它的一条高。');
   check('canvas:只有题目 → 空白画板', cv.card.kind === 'canvas' && cv.card.props.base === null && cv.card.props.prompt === '画一个三角形,标出它的一条高。');
+  check('canvas:照片做底(第三种底图,R5):第一行是图片路径、后面是题目;http 地址不算', JSON.stringify(parseCard('canvas', 'captures/2026-09-14/1620-1.jpg\n把算错的那道圈出来。').card.props) === '{"base":{"image":"captures/2026-09-14/1620-1.jpg"},"prompt":"把算错的那道圈出来。"}' && parseCard('canvas', 'https://x/a.jpg\n题').card.props.base === null);
   check('canvas:课包 id 做底 + 后面的题目;标签后的词也是题目', JSON.stringify(parseCard('canvas', '2026-09-04-guilv5\n把第二个空圈出来').card.props) === '{"base":{"bundle":"2026-09-04-guilv5"},"prompt":"把第二个空圈出来"}' && parseCard('canvas 画蛇', '').card.props.prompt === '画蛇');
   const cvj = parseCard('canvas', '{"skeletons":[{"type":"rectangle","x":0,"y":0,"width":10,"height":10}]}');
   check('canvas:行内骨架 JSON 做底;坏 JSON / 没 skeletons / 全空 → 文字卡', (cvj.card.props.base as { skeletons: unknown[] }).skeletons.length === 1 && parseCard('canvas', '{bad').card.kind === 'text' && parseCard('canvas', '{"a":1}').card.kind === 'text' && parseCard('canvas', '').card.kind === 'text');

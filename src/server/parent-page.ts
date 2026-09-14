@@ -69,6 +69,12 @@ export const PARENT_PAGE = `<!doctype html>
   #msgs { overflow:auto; padding:18px; background:var(--sunk); }
   .stream { max-width:940px; margin:0 auto; display:flex; flex-direction:column; gap:22px; }
   .sep { text-align:center; font:500 13px/1 var(--mono); color:var(--muted); }
+  .thread-head { display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; font:500 13px/1 var(--mono); color:var(--muted); }
+  .stars { display:inline-flex; gap:1px; }
+  .stars .star { border:0; background:none; font-size:17px; line-height:1; padding:0 1px; color:#D5D0C4; cursor:pointer; }
+  .stars .star.on { color:#E0A526; }
+  .thread-head .booked { color:#2E7D4F; }
+  .thread-head .book { font:500 12px/1 var(--mono); border:1px solid var(--line); border-radius:999px; padding:4px 9px; background:var(--surface); cursor:pointer; }
   .turn { background:var(--surface); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
   .turn.bad { border-color:#F2C6BF; }
   .ask { display:flex; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line-soft); align-items:flex-start; }
@@ -158,6 +164,15 @@ export const PARENT_PAGE = `<!doctype html>
   #composer .row { display:flex; gap:7px; align-items:center; max-width:940px; margin:0 auto; width:100%; flex-wrap:wrap; }
   #composer .row select { font:500 13px/1 var(--mono); border:1px solid var(--line); border-radius:999px; padding:5px 9px; background:var(--sunk); max-width:250px; }
   #composer .row .hint { margin-left:auto; font:400 13px/1 var(--mono); color:var(--muted); }
+  #composer .photo-btn { font:500 13px/1 var(--mono); border:1px solid var(--line); border-radius:999px; padding:5px 10px; background:var(--sunk); cursor:pointer; }
+  #composer .photo-btn input { display:none; }
+  #photos { display:flex; gap:8px; flex-wrap:wrap; max-width:940px; margin:0 auto; width:100%; }
+  #photos:empty { display:none; }
+  #photos .p { position:relative; }
+  #photos img { height:64px; width:auto; border-radius:8px; border:1px solid var(--line); display:block; }
+  #photos .x { position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:10px; border:0; background:var(--text); color:var(--surface); font-size:13px; line-height:20px; padding:0; cursor:pointer; }
+  .ask .q .photos { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  .ask .q .photos img { height:96px; width:auto; border-radius:8px; border:1px solid var(--line); display:block; background:var(--surface); }
 
   /* ---------- 看原文抽屉 ---------- */
   #drawer { position:fixed; top:0; right:0; bottom:0; width:min(760px,100vw); background:var(--surface); border-left:1px solid var(--line); box-shadow:-14px 0 44px -26px rgba(28,36,48,.35); display:none; grid-template-rows:auto minmax(0,1fr); z-index:20; }
@@ -303,10 +318,12 @@ export const PARENT_PAGE = `<!doctype html>
         <textarea id="text" placeholder="对老师说……"></textarea>
         <button type="submit" class="send" id="send">发送</button>
       </div>
+      <div id="photos"></div>
       <div class="row">
         <select id="from" title="以谁的身份说"><option value="parent">身份 家长</option><option value="kid">身份 孩子(模拟)</option><option value="system">身份 系统</option></select>
         <select id="runtime" title="运行时"></select>
         <select id="thread-pick" title="接着哪个话题说"></select>
+        <label class="photo-btn" title="作业照片:落 captures/,老师自己看图认题">📷 照片<input id="photo-in" type="file" accept="image/*" multiple></label>
         <span class="hint">⌘/Ctrl + Enter 发送</span>
       </div>
     </form>
@@ -437,7 +454,31 @@ export const PARENT_PAGE = `<!doctype html>
         h('span', {}, '费用 ', h('b', {}, '$' + v.index.costUsd.toFixed(2))),
         first !== null ? h('span', {}, '首卡中位 ', h('b', {}, secs(first))) : null,
         whole !== null ? h('span', {}, '整轮中位 ', h('b', {}, secs(whole))) : null,
-        v.index.session ? h('span', {}, '会话 ' + v.index.session.id.slice(0, 8)) : null));
+        v.index.session ? h('span', {}, '会话 ' + v.index.session.id.slice(0, 8)) : null,
+        // 记账(《obsidian仓库设计.md》§4):这天每个还没记过的话题各起一轮,老师回「## 记账」,应用写进 vault 的日记
+        v.index.messages.length ? h('button', { class: 'book', type: 'button', title: '给这天还没记过的话题记账:话题名、孩子问的话、打分够的摘要、观察,写进 Obsidian 的日记', on: { click: bookkeep } }, '记账') : null));
+  };
+
+  const bookkeep = async () => {
+    try {
+      const r = await api('POST', '/api/conversations/' + state.tutor + '/' + state.date + '/bookkeep', {});
+      const lines = [];
+      if (r.queued.length) lines.push('记账 ' + r.queued.length + ' 个话题:' + r.queued.join('、') + '(老师在写,一会儿刷新看「已记进日记」)');
+      for (const s of r.skipped) lines.push('话题 ' + s.thread + ' 跳过:' + s.why);
+      alert(lines.join('\\n') || '没有要记的话题');
+      await loadDay();
+    } catch (e) { alert(e.message); }
+  };
+
+  // 话题打星:1–5,再点同一颗清掉;≥ keepScore 的话题记账时摘要与骨架才进日记,低的只记孩子问的话与观察
+  const starsEl = (id) => {
+    const cur = (state.view.index.ratings || {})[id] || 0;
+    const booked = (state.view.index.booked || {})[id];
+    const row = h('span', { class: 'stars', title: '这个话题值不值得记进日记:打分够了记账时摘要才进;再点同一颗清掉' });
+    for (let i = 1; i <= 5; i++) row.append(h('button', { type: 'button', class: 'star' + (i <= cur ? ' on' : ''), on: { click: async () => {
+      try { await api('PUT', '/api/conversations/' + state.tutor + '/' + state.date + '/threads/' + encodeURIComponent(id) + '/rating', { rating: i === cur ? null : i }); await loadDay(); } catch (e) { alert(e.message); }
+    } } }, '★'));
+    return h('span', { class: 'thread-head' }, row, booked ? h('span', { class: 'booked' }, '已记进日记') : null);
   };
 
   const renderThreadPick = () => {
@@ -550,6 +591,8 @@ export const PARENT_PAGE = `<!doctype html>
     const q = h('div', { class: 'q' }, m.text);
     if (m.cards && m.cards.length) q.append(h('span', { class: 'did' }, '板书上做的 · ', ...m.cards.map((c) => h('span', {}, c.card + ' ' + c.text + ' '))));
     if (m.focus && (m.focus.card || m.focus.artifact)) q.append(h('span', { class: 'did' }, '开着 ' + (m.focus.card || m.focus.artifact)));
+    // 作业照片(R5):缩略图,点开看原图(转录里能看到老师 Read 了哪张)
+    if (m.photos && m.photos.length) q.append(h('div', { class: 'photos' }, ...m.photos.map((p) => h('a', { href: '/api/kid/image?p=' + encodeURIComponent(p), target: '_blank', title: p }, h('img', { src: '/api/kid/image?p=' + encodeURIComponent(p), alt: p, loading: 'lazy' })))));
     el.append(h('div', { class: 'ask from-' + m.from },
       h('span', { class: 'tag' }, FROM[m.from] || m.from),
       q,
@@ -610,26 +653,43 @@ export const PARENT_PAGE = `<!doctype html>
     const v = state.view;
     const t = tutorOf(state.tutor);
     if (!v.index.messages.length) { $('#msgs').replaceChildren(h('p', { class: 'empty' }, state.date + ' 还没和' + t.display + '说过话')); return; }
-    // 话题:一天多个话题时在每个话题第一条前插一条分隔
+    // 话题:每个话题第一条前一行头(几点开的 + 打星 + 记没记进日记);一天多个话题时再写「新话题」
     const multi = new Set(v.index.messages.map((m) => m.thread || m.job)).size > 1;
     const seen = new Set();
     const nodes = [];
     for (const m of v.index.messages) {
       const id = m.thread || m.job;
-      if (multi && !seen.has(id)) { seen.add(id); nodes.push(h('div', { class: 'sep' }, '—— ' + (seen.size === 1 ? '第一个话题' : '新话题') + ' ' + m.at.slice(11, 16) + ' ——')); }
+      if (!seen.has(id)) { seen.add(id); nodes.push(h('div', { class: 'sep' }, '—— ' + (multi ? (seen.size === 1 ? '第一个话题' : '新话题') + ' ' : '话题 ') + m.at.slice(11, 16) + ' ——', h('br'), starsEl(id))); }
       nodes.push(turnEl(m));
     }
     $('#msgs').replaceChildren(h('div', { class: 'stream' }, ...nodes));
   };
 
+  // 作业照片(R5):选了先缩到长边 1600 传上去(与孩子端同一条路),path 攒在 state.photos,发消息时一起带上
+  state.photos = [];
+  const shrink = (file) => new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file); const im = new Image();
+    im.onload = () => { URL.revokeObjectURL(url); try { const k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight, 1)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); resolve(c.toDataURL('image/jpeg', 0.82)); } catch (e) { reject(e); } };
+    im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('图读不出')); };
+    im.src = url;
+  });
+  const renderPhotos = () => $('#photos').replaceChildren(...state.photos.map((p, i) => h('div', { class: 'p' }, h('img', { src: '/api/kid/image?p=' + encodeURIComponent(p), alt: p, title: p }), h('button', { class: 'x', type: 'button', title: '去掉', on: { click: () => { state.photos.splice(i, 1); renderPhotos(); } } }, '×'))));
+  $('#photo-in').addEventListener('change', async (e) => {
+    if (!state.tutor) { e.target.value = ''; return alert('先选一位老师'); }
+    const files = [...(e.target.files || [])]; e.target.value = '';
+    for (const f of files) {
+      try { const r = await api('POST', '/api/conversations/' + state.tutor + '/photos', { image: await shrink(f) }); state.photos.push(r.path); renderPhotos(); } catch (err) { alert('照片没传上:' + err.message); }
+    }
+  });
   const send = async (text, from, extra) => {
     if (!state.tutor) return alert('先选一位老师');
     const pick = $('#thread-pick').value;
-    const body = Object.assign({ text, from: from || $('#from').value, runtime: $('#runtime').value }, pick === 'new' ? { newThread: true } : pick ? { thread: pick } : {}, extra || {});
+    const body = Object.assign({ text, from: from || $('#from').value, runtime: $('#runtime').value }, pick === 'new' ? { newThread: true } : pick ? { thread: pick } : {}, state.photos.length ? { photos: state.photos.slice() } : {}, extra || {});
     try {
       $('#send').disabled = true;
       await api('POST', '/api/conversations/' + state.tutor + '/messages', body);
       $('#text').value = '';
+      state.photos = []; renderPhotos();
       if (state.date !== state.today) await pickTutor(state.tutor, state.today);
       else await loadDay();
     } catch (e) {
@@ -637,7 +697,7 @@ export const PARENT_PAGE = `<!doctype html>
       $('#send').disabled = false;
     }
   };
-  $('#composer').addEventListener('submit', (e) => { e.preventDefault(); const t = $('#text').value.trim(); if (t) send(t); });
+  $('#composer').addEventListener('submit', (e) => { e.preventDefault(); const t = $('#text').value.trim(); if (t || state.photos.length) send(t); });
   $('#text').addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); $('#composer').requestSubmit(); } });
 
   // ---- 看原文:一轮拆成六站 ----
@@ -989,7 +1049,7 @@ export const PARENT_PAGE = `<!doctype html>
   };
 
   // ---- 设置:路径 / 服务 / 配音;文件仍是真相 ----
-  const PATH_ROLES = [['vault', 'vault 根', 'Obsidian 仓库;空 = workspace 根'], ['timetable', '课程表', '相对 vault'], ['plans', '计划目录', ''], ['diary', '日记目录', ''], ['photos', '照片目录', ''], ['profile', '孩子档案', '']];
+  const PATH_ROLES = [['vault', 'vault 根', 'Obsidian 仓库;空 = workspace 根'], ['profile', '孩子档案', '相对 vault;「现在」callout 进上下文包'], ['timetable', '课程表', '相对 vault'], ['plans', '计划目录', ''], ['diary', '日记目录', '记账写这里'], ['textbooks', '教材目录', '一册一篇'], ['reference', '参考目录', '你自己的笔记'], ['captures', '作业照片', '相对 workspace 根(不进 vault)']];
 
   const migratePanel = () => {
     const gaps = (state.config && state.config.migrate) || [];

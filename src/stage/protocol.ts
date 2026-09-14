@@ -8,7 +8,7 @@ export const STAGE_SOURCE = 'cotutor-stage';
 
 /** 页面 → 舞台 */
 export type ToStage =
-  | { source: typeof STAGE_SOURCE; type: 'card'; id: string; kind: string; props: Record<string, unknown>; state: unknown; /** 课包目录 URL(场景卡),如 /api/bundles/<id>/ */ bundleUrl?: string; /** 装好就播(讲稿 [[play]] 委托) */ autoplay?: boolean }
+  | { source: typeof STAGE_SOURCE; type: 'card'; id: string; kind: string; props: Record<string, unknown>; state: unknown; /** 课包目录 URL(场景卡),如 /api/bundles/<id>/ */ bundleUrl?: string; /** 画板底图是一张图(照片)时它的 URL,如 /api/kid/image?p=captures/… */ imageUrl?: string; /** 装好就播(讲稿 [[play]] 委托) */ autoplay?: boolean }
   | { source: typeof STAGE_SOURCE; type: 'control'; action: 'toggle' | 'next' | 'prev' | 'play' | 'pause' | 'submit' };
 
 /** 舞台 → 页面 */

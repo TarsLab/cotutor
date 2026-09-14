@@ -285,6 +285,8 @@ interface MockMessage {
   action?: 'continue' | 'submit';
   /** 卡下标 → 孩子做的事(PUT 进来的) */
   states?: Record<number, unknown>;
+  /** 孩子这条带的照片(假路径;/api/kid/image 给占位图) */
+  photos?: string[];
 }
 
 export interface MockRouteResult {
@@ -424,13 +426,19 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p === '/api/health') return { status: 200, json: { ok: scenario !== 'offline', mock: true, scenario } };
     if (scenario === 'offline' && p.startsWith('/api/')) return { status: 500, json: { error: 'mock_offline' } };
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: home() };
-    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|\d{4}-\d{2}-\d{2})$/.exec(p);
+    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (kid) {
       const [, name, tail] = kid;
       const t = MOCK_TUTORS.find((x) => x.name === name);
       if (!t) return { status: 404, json: { error: 'no_such_tutor' } };
       const list = messages.get(name) ?? [];
       const date = localDate(now());
+      // 作业照片:不落盘,回一个像样的假路径(缩略图由 /api/kid/image 的占位 svg 顶)
+      if (tail === 'photos' && method === 'POST') {
+        if (!isObj(body) || typeof body.image !== 'string' || !body.image.startsWith('data:image/')) return { status: 400, json: { error: 'bad_request' } };
+        const d = now();
+        return { status: 201, json: { path: `captures/${date}/${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}-${list.length + 1}.jpg` } };
+      }
       if (tail === 'today' && method === 'GET') {
         const pending = list.find((m) => m.pending);
         return { status: 200, json: { tutor: name, date, messages: await Promise.all(list.map(kidMessage)), remaining: remaining(name), pending: pending ? pending.job : null, thread: list.length ? list[list.length - 1].thread : null } };
@@ -451,10 +459,11 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (tail === 'messages' && method === 'POST') {
         if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
         const action = body.action === 'continue' || body.action === 'submit' ? body.action : undefined;
-        if (!body.text.trim() && !action) return { status: 400, json: { error: 'bad_request' } };
+        const photos = Array.isArray(body.photos) ? (body.photos as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+        if (!body.text.trim() && !action && !photos.length) return { status: 400, json: { error: 'bad_request' } };
         if (action !== 'continue' && remaining(name) <= 0) return { status: 429, json: { error: 'limit', remaining: 0 } };
         if (list.some((m) => m.pending)) return { status: 409, json: { error: 'busy' } };
-        const text = body.text.trim() || (action === 'continue' ? '继续' : '(交了答案,没说话)');
+        const text = body.text.trim() || (action === 'continue' ? '继续' : action === 'submit' ? '(交了答案,没说话)' : photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`);
         const job = nextJob();
         // 话题:newThread → 自己的 job;指定的要在今天的列表里;缺省接当前(末条)的
         let thread = job;
@@ -464,7 +473,7 @@ export function createMock(opts: MockOptions = {}): Mock {
             thread = body.thread;
           } else thread = list[list.length - 1].thread;
         }
-        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, audio: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}) };
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, audio: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}) };
         list.push(m);
         const done = think(t, m).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);

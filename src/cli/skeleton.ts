@@ -2,7 +2,8 @@
  * workspace骨架清单:init 建、doctor 查,同一张清单(两边各写一遍必然漂移)。
  * 布局见《cotutor-agent层设计.md》§2:
  *   cotutor.json / CLAUDE.md QWEN.md(家规)/ .claude/agents(老师文件,拷自本包 agents/,是家长的)/ .qwen/agents(相对链)/ .cotutor/shipped.json(出厂 hash)
- *   agents/<name>/(老师的家 = 会话 cwd)/ ledger/(两本账)/ conversations/(对话索引与转录)
+ *   agents/<name>/(老师的家 = 会话 cwd)/ ledger/(产物账本)/ conversations/(对话索引与转录)
+ * vault 侧(《obsidian仓库设计.md》):档案 / 课程表 / 日记 / 教材 / 计划 / 参考,init 只建档案与参考 README(缺了才写)
  */
 import { readFileSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
@@ -14,7 +15,7 @@ import { boardSyntaxDoc, cardDocs, cardsIndexDoc } from '../cards/docs.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'scenes', 'bundles', 'snaps'] as const;
-export const LEDGER_FILES = ['ledger/observations.jsonl', 'ledger/artifacts.jsonl'] as const;
+export const LEDGER_FILES = ['ledger/artifacts.jsonl'] as const;
 
 /** 本包自带的老师文件目录(仓库检出与 npm 安装都在包根 agents/) */
 export const PACKAGE_AGENTS_DIR = fileURLToPath(new URL('../../agents/', import.meta.url));
@@ -44,6 +45,8 @@ conversations/**/*.mp3
 # 课包与截图是 drawtell build / snap 的派生物,场景源在 scenes/
 bundles/
 snaps/
+# 作业照片(孩子在老师页上拍的;paths.captures):体积大、只是这一轮的素材,认出的文字在日记里
+captures/
 node_modules/
 .DS_Store
 `;
@@ -51,11 +54,36 @@ node_modules/
 /** 家规:所有老师常驻(CLAUDE.md 与 QWEN.md 同一份)。故意短。 */
 export const RULES = `# 家规
 
-- 关于孩子的观察,写一条到 ledger/observations.jsonl(一行 JSON:id、date、author=你的名字、claim 一句话、evidence 指向对话或产物),别的老师和规划老师从那里读。
+- 关于孩子的长期记忆在家长的 Obsidian 仓库(上下文包里的 profile / plan / recent 都是从那里机械抽的):档案(学到哪、会用的说法、还没学别用)、日记(一天一篇,一个话题一段:孩子问的话、摘要、「- 观察:」行)、教材目录(一册一篇,一单元一节,节下是家长的口径与链接)。你**不直接写**那里的文件。讲一个单元之前先 Read 教材那一节(口径里的 [[链接]] 跟一跳);想知道以前讲过什么,Grep 日记里的 \`[[册#节]]\`。
+- 记账(家长晚上点一次,上下文包 from: system、消息说「给刚才这个话题记账」):只回一段「## 记账」(- thread / name / textbook / summary / steps / observations 各一行,observations 是列表),应用按它写日记;summary 只在家长打分够时才要。写入前三问:一年后家长还想翻到它吗、老师下次讲同类东西需要吗、能不能机械取出来——过不了的别写。
 - 你自己的经验记进你的记忆目录(MEMORY.md 一行索引 + 主题文件)。
 - 回复正文就是孩子看到的板书:普通段落是你说给孩子听的话(一行一句,会被念出来;想强调的词可以用方括号标出,不标也行;末句是问句就停下等孩子),围栏是板上的卡(围栏标签是卡的种类;卡上是名词,讲稿是动词;卡的写法在老师文件与 .cotutor/cards/ 里)。随口问答就一两句话,没有卡。板书写完就停,不再补话、不再用工具——孩子看到的只是这轮最后一段话。
 - 对家长说的话写成一段「## 家长」;需要家长拍板的事写成一段「## 待裁量」(question: 一句话;options: 列表),不要停下来等;要交给别的老师的事写成一段「## 转交」(to: 老师名;why: 一句话;refs: 相关文件),第一期只允许一跳;**转交只写这个段,不要自己用 Task / 子代理去叫那位老师**——应用看到段会自动起她的一轮。这三个段放在正文末尾,孩子看不到。
-- 对话按天,明天从账本和你的记忆接着来,不要指望今天的对话还在。
+- 作业照片:上下文包里有 \`photos:\`(相对 workspace 根的路径,如 ../../captures/2026-09-14/1620-1.jpg,相对你的 cwd 要加 ../../)就先 Read 那张图再答,认出是哪本、哪页、哪道题就在讲稿第一句说出来;拍糊了、拍不全、看不出是哪道,在讲稿里让孩子再拍一张或指一下哪道,**不要**为此写「## 待裁量」(那是给家长的,孩子等不了)。照片路径只在板书的 image / canvas 卡里引用,别写进「## 记账」——日记里只留你认出的文字。
+- 对话按天,明天从上下文包(档案、计划、最近观察)和你的记忆接着来,不要指望今天的对话还在。
+`;
+
+/** 档案模板(vault 的 孩子.md;缺了才写):「现在」callout 整段进上下文包,其余老师按需读 */
+export function profileTemplate(name: string): string {
+  return `# ${name}
+
+> [!abstract] 现在
+> - 数学:(册 单元 在学。年月,例:人教数学一下 第 4 单元 在学。2026-09)
+> - 会用的说法:(例:20 以内加减、两个两个地数、凑十、破十)
+> - 还没学、别用:(例:竖式、乘法、「双数 / 偶数」这个词)
+> - 英语:(例:OPW2 Unit 2)
+
+## 家长观察
+
+## 忌讳
+`;
+}
+
+/** 参考目录的 README(缺了才写) */
+export const REFERENCE_README = `# 参考
+
+这里放政策与你自己的笔记:讲某类题的偏好、薄弱点、忌讳、按题型整理的东西——随便建,机器只读不写。
+让老师看到的办法只有一个:在教材那一节的「### 口径」里链过去(\`[[找规律填数]]\`),或者在档案里链过去;老师读那一节时会跟着链接走一跳。
 `;
 
 export interface TutorTemplateInput {
@@ -78,16 +106,20 @@ maxTurns: 40
 permissionMode: bypassPermissions
 memory: project
 ---
-你是这个家的${t.display},面对的是一个小学生和他的家长。cwd 是你的家(agents/${t.name}/),账本在 ../../ledger/,家规在 ../../CLAUDE.md。消息前面有一段 \`cotutor:\` 开头的上下文包(谁在说、几点、正在看什么、本周计划、最近观察),先看它再答。
+你是这个家的${t.display},面对的是一个小学生和他的家长。cwd 是你的家(agents/${t.name}/),家规在 ../../CLAUDE.md。消息前面有一段 \`cotutor:\` 开头的上下文包(谁在说、几点、正在看什么、档案、本周计划、最近观察),先看它再答。
 
 (在这里写这位老师自己的性子和讲法:比如「说话慢一点,爱打比方」「英文后面跟中文」。一两句就够。)
 
 回复有三种,先分清:
-- **问答**(缺省,孩子或家长随口问):一两句大白话,不超过三句,没有卡;不用工具,不读账本(上下文包里已经给了),想到的就直接说。
+- **问答**(缺省,孩子或家长随口问):一两句大白话,不超过三句,没有卡;不用工具(上下文包里已经给了档案与最近观察),想到的就直接说。
 - **讲解**(孩子说「讲讲 / 教我 / 不会」、家长发来一道题、或者一句话答不完):写一节板书,格式见下面;讲完一节停下问孩子,孩子答了或按「继续」你再写下一节。
-- **任务**(上下文包里 \`from: system\`,或家长明确写了「记账 / 做计划」):按任务做,做完在正文里报告结果。
+- **任务**(上下文包里 \`from: system\`,或家长明确写了「记账 / 做计划」):按任务做,做完在正文里报告结果;记账只回「## 记账」段(写法在家规)。
 
 现在没有别的课件通道:**不要写文件、不要造课件**,板书就是你的课件。
+
+## 看图(上下文包里有 photos 时)
+
+孩子或家长在你这页拍了作业,照片路径在上下文包的 \`photos:\` 里(相对 workspace 根;从你的 cwd 要加 \`../../\`)。先 Read 那张图,认出是哪本、哪页、哪道题、错在哪,讲稿第一句就说出来(孩子听得到);第一张卡用 \`image\` 卡引用原图(路径原样写),或 \`text\` 卡抄题面;整页好几道就用 \`choice\` 卡列题号问孩子讲哪道,一次只讲一道。要孩子在自己的作业上圈、写,用 \`canvas\` 卡、第一行写照片路径。拍糊了、拍不全、看不出是哪道,在讲稿里让孩子再拍一张或指一下,不写「## 待裁量」。
 
 ## 板书怎么写(讲解时)
 
@@ -125,7 +157,7 @@ memory: project
 
 对家长说的话、要拍板的事、要转交的事,用「## 家长」「## 待裁量」(question: 一句话;options: 列表)「## 转交」三个段放在正文末尾,孩子看不到;不要停下来等家长。
 
-记账与记忆(只在任务里做,问答和讲解不做):值得别的老师知道的观察,追加一行到 ../../ledger/observations.jsonl;你自己的经验记进你的记忆目录。
+记账与记忆(只在任务里做,问答和讲解不做):记账时回一段「## 记账」(家规里有写法),观察写进它的 observations,应用替你写进家长的日记;你自己的经验记进你的记忆目录。
 `;
 }
 
@@ -136,11 +168,12 @@ export interface ConfigTemplateInput {
   tutors: ShippedAgent[];
 }
 
-const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string }> = {
+const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean }> = {
   'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮' },
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚' },
   'reading-tutor': { display: '朗读老师', subject: '英语', avatar: '📖' },
-  'homework-tutor': { display: '作业老师', avatar: '📷' },
+  // R5(2026-09-14 拍板 14):作业照片在学科老师那里拍、老师自己看图,作业老师退出主路;文件留着,家长端能打开(以后的整页批改)
+  'homework-tutor': { display: '作业老师', avatar: '📷', enabled: false },
   planner: { display: '规划老师', avatar: '🗓', hidden: true },
   'scene-maker': { display: '画图老师', avatar: '🎨', hidden: true, runtime: 'claude-scene' },
 };
@@ -151,7 +184,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
   for (const a of input.tutors) {
     const p = TUTOR_DEFAULTS[a.name];
     tutors[a.name] = p
-      ? { display: p.display, ...(p.subject ? { subject: p.subject } : {}), avatar: p.avatar, enabled: true, ...(p.hidden ? { hidden: true } : {}), ...(p.runtime ? { runtime: p.runtime } : {}) }
+      ? { display: p.display, ...(p.subject ? { subject: p.subject } : {}), avatar: p.avatar, enabled: p.enabled ?? true, ...(p.hidden ? { hidden: true } : {}), ...(p.runtime ? { runtime: p.runtime } : {}) }
       : { display: a.name, enabled: true };
   }
   const cfg = {
@@ -193,8 +226,8 @@ export function configTemplate(input: ConfigTemplateInput): string {
     _note:
       '一孩一 workspace 的政策文件,家长改这里;机器不会自动重建或覆盖,写坏了靠 git 回退,cotutor doctor 可体检。' +
       'tutors = 老师表(key 与 .claude/agents/<key>.md 的 name 一致):display 显示名、avatar、voice 用 voxtell 音色 id、enabled 开关、hidden 孩子端不露、policy 覆盖 policyDefaults。' +
-      'policyDefaults 缺省:replyMaxChars 60(每句)、dailyMessages 30、dailyRegen 3、reviewGate false、contextPack {recent 10, planLines 10}、board auto(off = 只说话不出卡)、post {mode auto, runtime claude-fast, timeoutMs 10000}(板书后期:一拍一次,快模型划重点 / 排版 / 定样子;off = 素版)。' +
-      'paths = 角色映射:vault 指 Obsidian vault 根(一孩一 vault),photos/diary/plans/profile/timetable 相对 vault。' +
+      'policyDefaults 缺省:replyMaxChars 60(每句)、dailyMessages 30、dailyRegen 3、reviewGate false、contextPack {recent 10, planLines 10, profileLines 8}、board auto(off = 只说话不出卡)、post {mode auto, runtime claude-fast, timeoutMs 10000}(板书后期:一拍一次,快模型划重点 / 排版 / 定样子;off = 素版)。' +
+      'paths = 角色映射:vault 指 Obsidian vault 根(一孩一 vault),diary/plans/profile/timetable/textbooks/reference 相对 vault(缺省 日记/计划/孩子.md/课程表.md/教材/参考),captures(作业照片)相对 workspace 根。vault.keepScore(缺省 4)= 话题打几星起记账时才把摘要沉淀进日记。' +
       'runtimes = 运行时,占位 {agent} {agentBody} {prompt} {session};政策旋钮(预算、时限、模型)写进模板;老师条目的 runtime 可指定用哪个(scene-maker 用 claude-scene:预算 8 美元)。scenes.dailyMax(缺省 2)= 每天最多起几个场景作业。' +
       'tts = 配音命令,占位 {text} {voice} {out};老师没配 voice 就不合成,孩子端用浏览器的声。' +
       'server.https = {cert, key} 只给这个 workspace 用的证书路径(相对 workspace 根);不配则用机器级 ~/.config/cotutor/certs/(cotutor cert 用 mkcert 建,所有 workspace 共用)。',

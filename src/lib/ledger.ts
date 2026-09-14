@@ -1,16 +1,9 @@
 /**
- * 账本读写的纯函数部分:逐行 JSON + zod,坏行报行号不中断;按 id 折叠,后者为准。
+ * 产物账本的纯函数部分:逐行 JSON + zod,坏行报行号不中断;按 id 折叠,后者为准。
+ * (观察不在账本里了,2026-09-14:真相在 vault 的日记,见 lib/diary.ts)
  */
 import type { z } from 'zod';
-import {
-  ArtifactEventSchema,
-  ObservationLineSchema,
-  type Artifact,
-  type ArtifactEvent,
-  type Observation,
-  type ObservationLine,
-  explainIssues,
-} from '../schema/index.ts';
+import { ArtifactEventSchema, type Artifact, type ArtifactEvent, explainIssues } from '../schema/index.ts';
 
 export interface JsonlParse<T> {
   rows: T[];
@@ -36,25 +29,8 @@ export function parseJsonl<T>(text: string, schema: z.ZodType<T>, file = 'jsonl'
   return { rows, errors };
 }
 
-export const parseObservations = (text: string): JsonlParse<ObservationLine> =>
-  parseJsonl(text, ObservationLineSchema, 'observations.jsonl');
 export const parseArtifactEvents = (text: string): JsonlParse<ArtifactEvent> =>
   parseJsonl(text, ArtifactEventSchema, 'artifacts.jsonl');
-
-/** 完整行建条目,纠错行改 retracted;顺序按首次出现 */
-export function mergeObservations(lines: ObservationLine[]): Observation[] {
-  const byId = new Map<string, Observation>();
-  for (const l of lines) {
-    if ('claim' in l) {
-      const prev = byId.get(l.id);
-      byId.set(l.id, prev ? { ...prev, ...l, retracted: prev.retracted || l.retracted } : { ...l });
-    } else {
-      const prev = byId.get(l.id);
-      if (prev) prev.retracted = true;
-    }
-  }
-  return [...byId.values()];
-}
 
 /** 折叠产物事件;首行缺 kind / by 的产物报错(不进结果) */
 export function mergeArtifacts(events: ArtifactEvent[]): { artifacts: Artifact[]; errors: string[] } {
@@ -93,24 +69,4 @@ export function mergeArtifacts(events: ArtifactEvent[]): { artifacts: Artifact[]
     prev.updatedAt = e.at;
   }
   return { artifacts: [...byId.values()], errors };
-}
-
-/** o-YYYYMMDD-NNN,同日顺延 */
-export function nextObservationId(date: string, existing: Iterable<string>): string {
-  const day = date.replaceAll('-', '').slice(0, 8);
-  let n = 0;
-  for (const id of existing) {
-    const m = new RegExp(`^o-${day}-(\\d{3,})$`).exec(id);
-    if (m) n = Math.max(n, Number(m[1]));
-  }
-  return `o-${day}-${String(n + 1).padStart(3, '0')}`;
-}
-
-/** 上下文包的 recent:未撤回、本学科(没配 subject 就全量)的最近 n 条,按日期与出现顺序,只带 date + claim */
-export function recentObservations(obs: Observation[], opts: { subject?: string; n: number }): { date: string; claim: string }[] {
-  return obs
-    .filter((o) => !o.retracted && (!opts.subject || o.subject === opts.subject))
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-    .slice(-opts.n)
-    .map((o) => ({ date: o.date, claim: o.claim }));
 }

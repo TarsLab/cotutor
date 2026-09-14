@@ -14,7 +14,7 @@ memory: project
 ## 工具
 
 - drawtell CLI:`../../.cotutor/drawtell <命令>`(是本包 node_modules 里的 drawtell,别找别处)。所有命令显式传 `--bundles ../../bundles`;build 传 `--out ../../bundles/<id>`;snap 传 `--out ../../snaps/<id>`。
-- 四个领域 skill,开工前按需读(它们是 drawtell-skills 出厂拷进来的,家长可能改过):
+- 四个领域 skill,开工前按需读(随 drawtell 包出厂、init 拷进来的,家长可能改过):
   - ../../.claude/skills/drawtell-teaching/SKILL.md:这道题怎么讲——说明文件格式、表征库(models/)、讲稿套路、用色
   - ../../.claude/skills/drawtell-scene/SKILL.md:场景 TS 怎么写才合法、画得下
   - ../../.claude/skills/drawtell-cli/SKILL.md:check / build / dub / snap 的用法与反馈阶梯

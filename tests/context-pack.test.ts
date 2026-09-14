@@ -33,6 +33,8 @@ check('分隔与消息', text.endsWith('---\n妈妈我不懂这一步\n'), text)
 
 const minimal = renderContextPack({ from: 'system', at: '2026-09-08T20:00', profile: [], plan: [], recent: [] });
 check('空项不写', minimal === 'cotutor:\n  from: system\n  at: 2026-09-08T20:00', minimal);
+const withVault = renderContextPack({ from: 'kid', at: '2026-09-08T20:00', profile: [], plan: [], recent: [], vault: { root: '/Users/x/Library/Mobile Documents/iCloud~md~obsidian/Documents/Ray', diary: '日记', textbooks: '教材', profile: '/elsewhere/Ray.md' } });
+check('vault 段:root 绝对路径含空格加引号,角色相对 root,在外面的是绝对路径,没配的不写', withVault.endsWith('  vault:\n    root: "/Users/x/Library/Mobile Documents/iCloud~md~obsidian/Documents/Ray"\n    diary: "日记"\n    profile: "/elsewhere/Ray.md"\n    textbooks: "教材"') && !withVault.includes('plans'), withVault);
 check('board: off 才写进包,auto 不写', buildContextPack({ from: 'kid', at: '2026-09-10T16:00', profile: [], plan: [], recent: [], board: 'off' }, 'x', { recent: 10, planLines: 10 }).includes('  board: off') && !buildContextPack({ from: 'kid', at: '2026-09-10T16:00', profile: [], plan: [], recent: [], board: 'auto' }, 'x', { recent: 10, planLines: 10 }).includes('board'));
 const withCards = buildContextPack({ from: 'kid', at: '2026-09-10T16:00', focus: { card: '1620-1/1' }, profile: [], plan: [], recent: [], cards: ['1620-1/1 choice「三角形有几个角?」 选了「A 三个」(答案:「A 三个」)'] }, '(交了答案,没说话)', { recent: 10, planLines: 10 });
 check('focus.card 与 cards 段:一张卡一行,引号包住', withCards.includes('  focus:\n    card: "1620-1/1"\n') && withCards.includes('  cards:\n    - "1620-1/1 choice「三角形有几个角?」 选了「A 三个」(答案:「A 三个」)"\n---\n(交了答案,没说话)'), withCards);

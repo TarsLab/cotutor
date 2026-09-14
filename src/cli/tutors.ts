@@ -18,7 +18,7 @@ import { UsageError } from './workspace.ts';
 export const SHIPPED_FILE = '.cotutor/shipped.json';
 
 export interface ShippedManifest {
-  /** 出厂 skill(drawtell-skills 的四个领域 skill)的 hash,与 tutors 同一套机制(src/cli/skills.ts) */
+  /** 出厂 skill(drawtell 的四个领域 skill + 本包的机器件)的 hash,与 tutors 同一套机制(src/cli/skills.ts) */
   skills?: Record<string, { hash: string; version: string }>;
   /** 出厂主题(themes/<name>/)的目录 hash,同一套机制(src/cli/themes.ts) */
   themes?: Record<string, { hash: string; version: string }>;

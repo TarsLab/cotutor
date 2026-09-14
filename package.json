@@ -59,8 +59,7 @@
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.1",
-    "drawtell": "^0.6.1",
-    "drawtell-skills": "^0.1.0",
+    "drawtell": "link:../drawtell",
     "zod": "^4.4.3"
   },
   "devDependencies": {

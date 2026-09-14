@@ -32,18 +32,12 @@ export type Handoff = z.infer<typeof HandoffSchema>;
 
 /** 记账段里的一个话题(《obsidian仓库设计.md》§6):只有 thread 与 name 必需;summary / steps 只在话题打分够时才要 */
 export const BookkeepingEntrySchema = z.object({
-  /** 话题 id(记账任务的上下文包里给了) */
-  thread: z.string().min(1),
-  /** 话题名,≤ 12 字,日记里的 H2 = 学科 · 话题名 */
-  name: z.string().min(1).max(24),
-  /** 属于哪册哪节,写成 wikilink 的目标「册#节标题」(教材目录的 H2);认不出就不写 */
-  textbook: z.string().optional(),
-  /** 1–3 句:讲了什么、难点在哪 */
-  summary: z.string().optional(),
-  /** 讲解的骨架,一行,步骤用 → 连 */
-  steps: z.string().optional(),
-  /** 关于孩子、值得别的老师知道的,0–3 条;进日记的「- 观察:」行,是上下文包「最近观察」的来源 */
-  observations: z.array(z.string().min(1)).default([]),
+  thread: z.string().min(1).describe('话题 id;记账任务的消息里给了,原样抄'),
+  name: z.string().min(1).max(24).describe('话题名,≤ 12 字;日记里的 H2 = 学科 · 话题名'),
+  textbook: z.string().optional().describe('属于哪册哪节,写成 wikilink 的目标「册#节标题」(教材目录的 H2,记账消息里列了可选项,原样抄一条);认不出就不写这行'),
+  summary: z.string().optional().describe('1–3 句:讲了什么、难点在哪、孩子哪里卡住;只在家长打分 ≥ keepScore 时才要(消息里要了才写),不够的应用会丢'),
+  steps: z.string().optional().describe('讲解的骨架,一行,步骤用 → 连;只在打分够时才要'),
+  observations: z.array(z.string().min(1)).default([]).describe('关于孩子、值得别的老师下次知道的,0–3 条;进日记的「- 观察:」行,是上下文包 recent 的来源;没有就不写'),
 });
 export type BookkeepingEntry = z.infer<typeof BookkeepingEntrySchema>;
 

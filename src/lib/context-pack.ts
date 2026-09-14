@@ -2,7 +2,7 @@
  * 上下文包序列化(《cotutor契约草案.md》§2):固定 YAML 块 + `---` + 消息原文。
  * 手写 YAML 子集:标量能裸写就裸写,其余 JSON 双引号(合法 YAML);空的 plan / recent 不写。
  */
-import { ContextPackSchema, type ContextPack } from '../schema/index.ts';
+import { ContextPackSchema, VAULT_PACK_ROLES, type ContextPack } from '../schema/index.ts';
 
 const BARE = /^[A-Za-z0-9_][A-Za-z0-9_\-.:T]*$/;
 
@@ -33,6 +33,11 @@ export function renderContextPack(pack: ContextPack): string {
   if (p.recent.length) {
     out.push('  recent:');
     for (const r of p.recent) out.push(`    - ${yamlScalar(`${r.date} ${r.claim}`)}`);
+  }
+  // vault 是 workspace 级的,放在每条消息才变的 board / cards / photos 前面
+  if (p.vault) {
+    out.push('  vault:', `    root: ${yamlScalar(p.vault.root)}`);
+    for (const r of VAULT_PACK_ROLES) if (p.vault[r]) out.push(`    ${r}: ${yamlScalar(p.vault[r] as string)}`);
   }
   if (p.board === 'off') out.push('  board: off');
   if (p.cards?.length) {

@@ -1,9 +1,10 @@
 /**
  * 出厂 skill:与老师文件同一套「拷不链」机制——init 拷进 workspace 的 .claude/skills/<name>/,hash 记 .cotutor/shipped.json 的 skills,
  * .qwen/skills/<name> 是相对链。出厂表 SHIPPED_SKILLS 每项带来源与 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录):
- * - 来源 cotutor = 本包根 skills/<name>/(进 npm files;cotutor-board 是 scripts/gen-skills.ts 从 cards/<kind>/card.md 生成后入库的,
- *   tests/skills.test.ts 断言一致),来源 drawtell-skills = 那个包的 skills/<name>/(没装 → unavailable,doctor 点名,init 跳过)
- * - machine: true 的是机器件(cotutor-board:它和解析器要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
+ * - 来源 cotutor = 本包根 skills/<name>/(进 npm files;cotutor-board 整个、cotutor-vault 的 references/ 是 scripts/gen-skills.ts 生成后入库的,
+ *   tests/skills.test.ts 断言一致),来源 drawtell = drawtell 包根 skills/<name>/(四个领域 skill,2026-09-15 从退役的 drawtell-skills 仓搬过去的;
+ *   没装 → unavailable,doctor 点名,init 跳过)
+ * - machine: true 的是机器件(cotutor-board / cotutor-vault:它们和解析器要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
  *   其余拷进来就是家长的:upgrade 没改过的换新、改过的报 diff 保留(custom / untracked)
  * 工作流 skill(math-explainer 等)不拷,scene-maker 的工作流写在它的老师文件正文里(《drawtell接入与场景卡.md》§3)。
  * 顺带一个机器文件 .cotutor/drawtell:指向本包 node_modules 里 drawtell CLI 的壳脚本,老师用相对路径就能跑它。
@@ -14,13 +15,14 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BOARD_SKILL } from '../cards/docs.ts';
-export { BOARD_SKILL };
+import { VAULT_SKILL } from '../lib/vault-doc.ts';
+export { BOARD_SKILL, VAULT_SKILL };
 import { PACKAGE_VERSION } from './skeleton.ts';
 import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
 
 export interface ShippedSkill {
   name: string;
-  source: 'cotutor' | 'drawtell-skills';
+  source: 'cotutor' | 'drawtell';
   /** 机器件:每次 init / upgrade 都按包里的覆盖,不认家长的改动 */
   machine?: boolean;
   /** 装它时顺手清掉的旧位置(相对 workspace 根;机器文件,没有用户数据) */
@@ -32,10 +34,11 @@ export const LEGACY_SYNTAX_PATHS = ['.cotutor/板书语法.md', '.cotutor/cards'
 
 export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
   { name: BOARD_SKILL, source: 'cotutor', machine: true, legacy: LEGACY_SYNTAX_PATHS },
-  { name: 'drawtell-scene', source: 'drawtell-skills' },
-  { name: 'drawtell-teaching', source: 'drawtell-skills' },
-  { name: 'drawtell-cli', source: 'drawtell-skills' },
-  { name: 'drawtell-verify', source: 'drawtell-skills' },
+  { name: VAULT_SKILL, source: 'cotutor', machine: true },
+  { name: 'drawtell-scene', source: 'drawtell' },
+  { name: 'drawtell-teaching', source: 'drawtell' },
+  { name: 'drawtell-cli', source: 'drawtell' },
+  { name: 'drawtell-verify', source: 'drawtell' },
 ];
 export type ShippedSkillName = string;
 
@@ -45,10 +48,10 @@ export const BOARD_SKILL_FILE = `${BOARD_SKILL_DIR}/SKILL.md`;
 /** 本包自带的技能目录(仓库检出与 npm 安装都在包根 skills/) */
 export const PACKAGE_SKILLS_DIR = fileURLToPath(new URL('../../skills/', import.meta.url));
 
-/** drawtell-skills 包的 skills/ 目录;包没装 → null(doctor 点名,init 跳过) */
-export function packageSkillsDir(): string | null {
+/** drawtell 包的 skills/ 目录(四个领域 skill 随它发,0.7.0 起);包没装 → null(doctor 点名,init 跳过) */
+export function drawtellSkillsDir(): string | null {
   try {
-    return join(dirname(createRequire(import.meta.url).resolve('drawtell-skills/package.json')), 'skills');
+    return join(dirname(createRequire(import.meta.url).resolve('drawtell/package.json')), 'skills');
   } catch {
     return null;
   }
@@ -56,7 +59,7 @@ export function packageSkillsDir(): string | null {
 
 /** 这个技能在包里的目录;来源没装 → null */
 export function skillSourceDir(skill: ShippedSkill): string | null {
-  const base = skill.source === 'cotutor' ? PACKAGE_SKILLS_DIR : packageSkillsDir();
+  const base = skill.source === 'cotutor' ? PACKAGE_SKILLS_DIR : drawtellSkillsDir();
   return base ? join(base, skill.name) : null;
 }
 /** drawtell CLI 的入口(本包 node_modules 里);没装 → null */

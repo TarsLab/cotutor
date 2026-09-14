@@ -1,15 +1,14 @@
 /**
  * 包根 skills/ 的两条纪律(2026-09-15,照 hyperframes 的 lint-skills):
- * 1. 生成的技能入库后要和生成器一致(cotutor-board ← cards/<kind>/card.md;UPDATE_SNAPSHOTS=1 或 pnpm run gen:skills 重写)
+ * 1. 生成的技能入库后要和生成器一致(cotutor-board 整个 ← cards/<kind>/card.md;cotutor-vault 的 references/记账.md ← 记账契约;UPDATE_SNAPSHOTS=1 或 pnpm run gen:skills 重写)
  * 2. 每个出厂 SKILL.md 的 frontmatter:能解析、只有 name / description(两 CLI 的公共子集)、name 等于目录名、description ≤ 1536 字;
  *    正文围栏外的行内反引号里不出现 `!` 与 `>字`(Claude Code 的 bash 权限检查会把它们当 history 展开 / 重定向,技能装不上——hyperframes 踩过)
- *    drawtell-skills 的四个也一起查(拷进 workspace 的是它们),没装就跳过
+ *    drawtell 的四个也一起查(拷进 workspace 的是它们),没装就跳过;它们的闸门在 drawtell 仓自己的 tests/skills.test.ts,这里只提醒
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { boardSkillFiles } from '../src/cards/docs.ts';
 import { SHIPPED_SKILLS, skillSourceDir } from '../src/cli/skills.ts';
-import { writeGeneratedSkills } from '../scripts/gen-skills.ts';
+import { GENERATED, writeGeneratedSkills } from '../scripts/gen-skills.ts';
 import { check, done } from './_check.ts';
 
 if (process.env.UPDATE_SNAPSHOTS === '1') writeGeneratedSkills();
@@ -24,15 +23,17 @@ function walk(dir: string, base = dir): string[] {
   return out;
 }
 
-// ---- 1. cotutor-board 入库的 == 生成的
-{
-  const skill = SHIPPED_SKILLS.find((s) => s.name === 'cotutor-board');
+// ---- 1. 入库的 == 生成的
+for (const [name, g] of Object.entries(GENERATED)) {
+  const skill = SHIPPED_SKILLS.find((s) => s.name === name);
   const dir = skill ? skillSourceDir(skill) : null;
-  const want = boardSkillFiles();
+  const want = g.files();
   const have = dir && statSync(dir, { throwIfNoEntry: false })?.isDirectory() ? walk(dir) : [];
-  const sameSet = have.length === Object.keys(want).length && have.every((f) => f in want);
-  const sameContent = sameSet && have.every((f) => readFileSync(join(dir as string, f), 'utf8') === want[f]);
-  check('skills/cotutor-board/ 和 cards/ 生成的一致(改了 card.md 就 pnpm run gen:skills)', sameSet && sameContent, `入库 ${have.join(',')} vs 生成 ${Object.keys(want).join(',')}`);
+  const listed = g.whole ? have : have.filter((f) => f in want);
+  const sameSet = listed.length === Object.keys(want).length && listed.every((f) => f in want);
+  const sameContent = sameSet && listed.every((f) => readFileSync(join(dir as string, f), 'utf8') === want[f]);
+  check(`skills/${name}/ 入库的和生成的一致${g.whole ? '(整个目录)' : '(生成的那几个文件)'}——改了源就 pnpm run gen:skills`, sameSet && sameContent, `入库 ${have.join(',')} vs 生成 ${Object.keys(want).join(',')}`);
+  if (!g.whole) check(`skills/${name}/SKILL.md 是手写的,在`, have.includes('SKILL.md'));
 }
 
 // ---- 2. lint
@@ -103,8 +104,8 @@ for (const skill of SHIPPED_SKILLS) {
     continue;
   }
   const problems = lintSkill(readFileSync(join(dir, 'SKILL.md'), 'utf8'), skill.name);
-  // 别的包的文件这里改不了:本包的判失败,drawtell-skills 的只打一行提醒(要去那个仓改)
+  // 别的包的文件这里改不了:本包的判失败,drawtell 的只打一行提醒(闸门在 drawtell 仓的 tests/skills.test.ts)
   if (skill.source === 'cotutor') check(`${skill.name}(${skill.source})SKILL.md 过 lint`, problems.length === 0, problems.join(' | '));
-  else check(`${skill.name}(${skill.source})SKILL.md 过 lint${problems.length ? `——没过,去 drawtell-skills 仓改:${problems.join(' | ')}` : ''}`, true);
+  else check(`${skill.name}(${skill.source})SKILL.md 过 lint${problems.length ? `——没过,去 drawtell 仓改:${problems.join(' | ')}` : ''}`, true);
 }
 done();

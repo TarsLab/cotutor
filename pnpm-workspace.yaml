@@ -7,4 +7,3 @@ onlyBuiltDependencies:
 # 本机 pnpm 配了 minimumReleaseAge(刚发布的包先不装),这两个是我们自己刚发的,放行。
 minimumReleaseAgeExclude:
   - drawtell@0.6.1
-  - drawtell-skills@0.1.0

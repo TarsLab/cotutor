@@ -38,5 +38,18 @@ export const ContextPackSchema = z.object({
   cards: z.array(z.string()).optional(),
   /** 这条消息带的作业照片(相对 workspace 根,一行一张;老师先 Read 再答;R5) */
   photos: z.array(z.string()).optional(),
+  /** 家长的 Obsidian 仓库在哪(《obsidian仓库设计.md》§7;cotutor-vault 技能按它拼路径):root 绝对路径,其余角色相对 root(在 root 外面就是绝对路径) */
+  vault: z
+    .object({
+      root: z.string().min(1),
+      diary: z.string().optional(),
+      plans: z.string().optional(),
+      profile: z.string().optional(),
+      timetable: z.string().optional(),
+      textbooks: z.string().optional(),
+      reference: z.string().optional(),
+    })
+    .optional(),
 });
+export const VAULT_PACK_ROLES = ['diary', 'plans', 'profile', 'timetable', 'textbooks', 'reference'] as const;
 export type ContextPack = z.infer<typeof ContextPackSchema>;

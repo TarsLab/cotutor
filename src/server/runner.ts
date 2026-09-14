@@ -16,7 +16,7 @@
 import { spawn } from 'node:child_process';
 import { closeSync, createWriteStream, existsSync, openSync } from 'node:fs';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
 import { addMessage, applyRun, cardId, changedCards, conversationFiles, jobId, localDate, localMinute, sessionFor, threads } from '../lib/conversation.ts';
 import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
@@ -32,7 +32,7 @@ import { getRuntime, planRun, runtimeUses, type RunPlan } from '../lib/run-plan.
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type Handoff, type MessageFrom, type Policy, type Timing } from '../schema/index.ts';
+import { VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type Handoff, type MessageFrom, type Policy, type Timing } from '../schema/index.ts';
 import { DEFAULT_DEVICE, assemblePost, postEnv, runBeatPost, writePostFile, type PostBeatFile, type PostEnv } from './post.ts';
 import { validateBeatPost, type BeatPostOutput } from '../lib/postprocess.ts';
 import type { Transcript } from '../lib/transcript.ts';
@@ -115,7 +115,21 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
   }
   const diaries = await readDiaries(ws, recentDiaryDates(localDate(input.at), 14));
   pack.recent = extractObservations(diaries, { subject: t?.subject, n: policy.contextPack.recent });
+  pack.vault = vaultPack(ws.paths);
   return pack;
+}
+
+/** 上下文包的 vault: 段:root 绝对,其余角色相对 root;在 root 外面(家长把日记指到别处)就给绝对路径 */
+export function vaultPack(paths: Workspace['paths']): NonNullable<ContextPack['vault']> {
+  const root = paths.vault;
+  const out: NonNullable<ContextPack['vault']> = { root };
+  for (const r of VAULT_PACK_ROLES) {
+    const p = paths[r];
+    if (!p) continue;
+    const rel = relative(root, p);
+    out[r] = !rel || rel.startsWith('..') || isAbsolute(rel) ? p : rel;
+  }
+  return out;
 }
 
 export class Runner {

@@ -167,6 +167,8 @@ Growth/                          Ray 的 vault(iCloud)
 
 ## 7. 老师读 vault 的路径(写在家规与老师文件里)
 
+> 2026-09-15:这一节的内容住在技能 `cotutor-vault`(仓库 `skills/cotutor-vault/SKILL.md`,init 拷进 workspace 的 `.claude/skills/`);家规只留一句指路,老师文件尾巴与 planner 点名它。路径从上下文包的 `vault:` 段取,老师不读 cotutor.json。
+
 | 何时 | 读什么 | 怎么读 |
 |---|---|---|
 | 每轮 | 档案「现在」、本周计划、最近观察、今天已有的话题名 | 应用拼进上下文包,老师不用工具 |

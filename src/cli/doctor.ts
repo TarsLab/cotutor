@@ -308,11 +308,12 @@ export async function doctorWorkspace(
       if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),孩子端用浏览器合成声——只适合测试`, fix: 'voxtell voices --grep <关键词> 挑一个,voxtell preview <voice> 试听,填进 voice;家长端老师团那页也能改' });
     }
 
-    // ---- 板书语法表:老师讲解前读它;机器文件,init / upgrade 刷新 ----
+    // ---- 板书语法表的旧位置(技能 cotutor-board 本身在下面 skill.* 里查) ----
     {
-      const { SYNTAX_FILE } = await import('./skeleton.ts');
-      const there = (await statOrNull(join(root, SYNTAX_FILE)))?.isFile() ?? false;
-      push({ name: 'board.syntax', ok: there, required: true, detail: there ? `${SYNTAX_FILE} 在(老师讲解前读的语法表)` : `${SYNTAX_FILE} 不在,老师不知道卡怎么写`, fix: there ? undefined : 'cotutor init 或 cotutor upgrade 生成' });
+      const { LEGACY_SYNTAX_PATHS } = await import('./skills.ts');
+      const legacy: string[] = [];
+      for (const p of LEGACY_SYNTAX_PATHS) if (await statOrNull(join(root, p))) legacy.push(p);
+      if (legacy.length) push({ name: 'board.legacy', ok: false, required: false, detail: `旧位置还在:${legacy.join('、')}(2026-09-14 起并进 cotutor-board 技能,老师文件里的旧路径也该换)`, fix: 'cotutor upgrade 清掉旧位置并换新老师文件' });
       // 板书后期:policy post.runtime 指的运行时要在;不在 = 每轮都素版(不报错,静默)
       {
         const { resolvePolicy } = await import('../schema/index.ts');
@@ -335,8 +336,9 @@ export async function doctorWorkspace(
       const shim = (await statOrNull(join(root, TOOL_SHIM)))?.isFile() ?? false;
       push({ name: 'drawtell', ok: dt !== null && shim, required: false, detail: !dt ? 'node_modules 里没有 drawtell,场景作业跑不了' : shim ? `${TOOL_SHIM} 在,指向本包的 drawtell(scene-maker 用它 check / build / dub / snap)` : `${TOOL_SHIM} 不在,scene-maker 找不到 drawtell`, fix: !dt ? '仓库根 pnpm install' : shim ? undefined : 'cotutor init 或 cotutor upgrade 生成' });
       for (const sk of await skillStatuses(root)) {
-        const label: Record<string, string> = { latest: '出厂件,最新', upgradable: `出厂件,基于 ${sk.basedOn},包已更新`, custom: `自定义(基于 ${sk.basedOn})`, untracked: '自定义(没有出厂记录)', missing: '缺', unavailable: 'drawtell-skills 没装,没法拷' };
-        push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'unavailable' && sk.state !== 'upgradable', required: false, detail: `.claude/skills/${sk.name}/:${label[sk.state]}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor upgrade 换新版' : sk.state === 'unavailable' ? '仓库根 pnpm install' : undefined });
+        const label: Record<string, string> = { latest: sk.machine ? '机器件,最新' : '出厂件,最新', upgradable: sk.machine ? '机器件,和包里不一样(改过或包已更新)' : `出厂件,基于 ${sk.basedOn},包已更新`, custom: `自定义(基于 ${sk.basedOn})`, untracked: '自定义(没有出厂记录)', missing: sk.machine ? '缺,老师不知道卡怎么写' : '缺', unavailable: `${sk.source} 没装,没法拷` };
+        const qwenOk = (await statOrNull(join(root, '.qwen', 'skills', sk.name)))?.isDirectory() ?? false;
+        push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'unavailable' && sk.state !== 'upgradable', required: Boolean(sk.machine), detail: `.claude/skills/${sk.name}/:${label[sk.state]}${qwenOk ? '' : ';.qwen/skills/ 链不通'}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor upgrade 换新版' : sk.state === 'unavailable' ? '仓库根 pnpm install' : qwenOk ? undefined : 'cotutor init 补链' });
       }
       // ---- 主题:孩子端板书的样子,themes/<kid.theme>/;清单要过契约、css 要在;坏了服务退回出厂 default,孩子端不会没样子 ----
       {

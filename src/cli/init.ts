@@ -6,7 +6,7 @@
  */
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, RULES, SYNTAX_FILE, configTemplate, profileTemplate, shippedAgents, writeSchemaFile, writeSyntaxFile } from './skeleton.ts';
+import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, RULES, configTemplate, profileTemplate, shippedAgents, writeSchemaFile } from './skeleton.ts';
 import { installTutors } from './tutors.ts';
 import { TOOL_SHIM, installSkills, writeToolShim } from './skills.ts';
 import { installThemes } from './themes.ts';
@@ -72,10 +72,7 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const schemaThere = await exists(join(root, '.cotutor', 'cotutor.schema.json'));
   await writeSchemaFile(root);
   steps.push({ item: '.cotutor/cotutor.schema.json', action: schemaThere ? 'exists' : 'created', note: schemaThere ? '已按本包刷新(机器文件)' : 'cotutor.json 的 JSON Schema,编辑器补全用' });
-  const syntaxThere = await exists(join(root, SYNTAX_FILE));
-  await writeSyntaxFile(root);
-  steps.push({ item: SYNTAX_FILE, action: syntaxThere ? 'exists' : 'created', note: syntaxThere ? '已按本包刷新(机器文件)' : '给老师看的板书语法表,从卡的注册表生成' });
-  // 出厂 skill(scene-maker 的四个领域 skill)与 drawtell 壳脚本
+  // 出厂 skill(机器件 cotutor-board + scene-maker 的四个领域 skill)与 drawtell 壳脚本
   steps.push(...(await installSkills(root)));
   // 出厂主题(孩子端板书的样子):拷进 themes/default/,是家长的
   steps.push(...(await installThemes(root)));

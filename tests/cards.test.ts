@@ -1,6 +1,6 @@
 /** 卡的注册表:每种卡的解析 / 剥秘密 / 语法表;不认识的标签;解析失败的退路。 */
 import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, parseCard, parseCardState, stripSecrets } from '../src/cards/index.ts';
-import { boardSyntaxDoc } from '../src/cards/docs.ts';
+import { boardSkillDoc, boardSyntaxDoc } from '../src/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 {
@@ -91,6 +91,9 @@ import { check, done } from './_check.ts';
 }
 {
   const doc = boardSyntaxDoc();
-  check('语法表:两种东西 + 每种卡一段(从 cards/<kind>/card.md 拼)+ 家长段;例子的 expect 注释去掉了', doc.includes('普通段落 = 你说的话') && doc.includes('围栏 = 板上的卡') && CARD_KINDS.every((k) => doc.includes(`### ${k.name} — `)) && doc.includes('## 家长') && !doc.includes('<!-- expect') && doc.includes('.cotutor/cards/'), doc.slice(0, 200));
+  check('语法表:两种东西 + 每种卡一段(从 cards/<kind>/card.md 拼)+ 家长段;例子的 expect 注释去掉了', doc.includes('普通段落 = 你说的话') && doc.includes('围栏 = 板上的卡') && CARD_KINDS.every((k) => doc.includes(`### ${k.name} — `)) && doc.includes('## 家长') && !doc.includes('<!-- expect') && doc.includes('references/<种类>.md'), doc.slice(0, 200));
+  const skill = boardSkillDoc();
+  const descLine = skill.split('\n')[2];
+  check('技能文件:frontmatter 的 name 与 description 各一行,description 列出全部种类、不超 1536 字,正文就是语法表', skill.startsWith('---\nname: cotutor-board\ndescription: ') && descLine.length < 1536 && CARD_KINDS.every((k) => descLine.includes(k.name)) && skill.endsWith(doc));
 }
 done();

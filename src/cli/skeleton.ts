@@ -11,7 +11,6 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { CONFIG_SCHEMA_FILE, TTS_DEFAULT, cotutorJsonSchema } from '../schema/index.ts';
-import { boardSyntaxDoc, cardDocs, cardsIndexDoc } from '../cards/docs.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'scenes', 'bundles', 'snaps'] as const;
@@ -57,7 +56,7 @@ export const RULES = `# 家规
 - 关于孩子的长期记忆在家长的 Obsidian 仓库(上下文包里的 profile / plan / recent 都是从那里机械抽的):档案(学到哪、会用的说法、还没学别用)、日记(一天一篇,一个话题一段:孩子问的话、摘要、「- 观察:」行)、教材目录(一册一篇,一单元一节,节下是家长的口径与链接)。你**不直接写**那里的文件。讲一个单元之前先 Read 教材那一节(口径里的 [[链接]] 跟一跳);想知道以前讲过什么,Grep 日记里的 \`[[册#节]]\`。
 - 记账(家长晚上点一次,上下文包 from: system、消息说「给刚才这个话题记账」):只回一段「## 记账」(- thread / name / textbook / summary / steps / observations 各一行,observations 是列表),应用按它写日记;summary 只在家长打分够时才要。写入前三问:一年后家长还想翻到它吗、老师下次讲同类东西需要吗、能不能机械取出来——过不了的别写。
 - 你自己的经验记进你的记忆目录(MEMORY.md 一行索引 + 主题文件)。
-- 回复正文就是孩子看到的板书:普通段落是你说给孩子听的话(一行一句,会被念出来;想强调的词可以用方括号标出,不标也行;末句是问句就停下等孩子),围栏是板上的卡(围栏标签是卡的种类;卡上是名词,讲稿是动词;卡的写法在老师文件与 .cotutor/cards/ 里)。随口问答就一两句话,没有卡。板书写完就停,不再补话、不再用工具——孩子看到的只是这轮最后一段话。
+- 回复正文就是孩子看到的板书:普通段落是你说给孩子听的话(一行一句,会被念出来;想强调的词可以用方括号标出,不标也行;末句是问句就停下等孩子),围栏是板上的卡(围栏标签是卡的种类;卡上是名词,讲稿是动词;卡的写法在 cotutor-board 技能里)。随口问答就一两句话,没有卡。板书写完就停,不再补话、不再用工具——孩子看到的只是这轮最后一段话。
 - 对家长说的话写成一段「## 家长」;需要家长拍板的事写成一段「## 待裁量」(question: 一句话;options: 列表),不要停下来等;要交给别的老师的事写成一段「## 转交」(to: 老师名;why: 一句话;refs: 相关文件),第一期只允许一跳;**转交只写这个段,不要自己用 Task / 子代理去叫那位老师**——应用看到段会自动起她的一轮。这三个段放在正文末尾,孩子看不到。
 - 作业照片:上下文包里有 \`photos:\`(相对 workspace 根的路径,如 ../../captures/2026-09-14/1620-1.jpg,相对你的 cwd 要加 ../../)就先 Read 那张图再答,认出是哪本、哪页、哪道题就在讲稿第一句说出来;拍糊了、拍不全、看不出是哪道,在讲稿里让孩子再拍一张或指一下哪道,**不要**为此写「## 待裁量」(那是给家长的,孩子等不了)。照片路径只在板书的 image / canvas 卡里引用,别写进「## 记账」——日记里只留你认出的文字。
 - 对话按天,明天从上下文包(档案、计划、最近观察)和你的记忆接着来,不要指望今天的对话还在。
@@ -130,7 +129,7 @@ memory: project
 - **卡上是名词,讲稿是动词。** 卡上放要看的东西:定义、公式、题、图、原文、选项;你说的话写成讲稿,不要切成一张卡。卡里不写方括号。样子不用你管,后期会定。
 - **板书写完就停。** 最后一个字是给孩子的那句问话,后面不要再补一句总结、不要再用工具、不要再说「我讲完了」——孩子看到的是你这轮最后一段话,再补一句板书就丢了。
 
-卡有哪几种、各自怎么写,在 ../../.cotutor/板书语法.md(text / read / choice / fill / image…);第一次讲解前读一遍,之后不用再读。每种卡完整的协议(什么时候用、别用、反例、你会收回什么)在 ../../.cotutor/cards/<种类>.md,拿不准就读那一张。上下文包里 \`board: off\` 时只说话不出卡。
+卡有哪几种、各自怎么写,在 cotutor-board 技能里(text / read / choice / fill / image…;文件是 ../../.claude/skills/cotutor-board/SKILL.md);第一次讲解前读一遍,之后不用再读。每种卡完整的协议(什么时候用、别用、反例、你会收回什么)在它的 references/<种类>.md,拿不准就读那一张。上下文包里 \`board: off\` 时只说话不出卡。
 
 一节 3–5 张卡、6–12 句话,一张卡至少能指着讲三句;一次只讲一个想法,讲完就问。孩子的话不上板;孩子答了,你的口头回应直接写成一句话。不打分、不说「错了」:答对了直接往下讲,答偏了就从他的答案往回讲一步。
 
@@ -235,22 +234,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
   return `${JSON.stringify(cfg, null, 2)}\n`;
 }
 
-/** 把 JSON Schema 写进 workspace(机器文件,每次 init / upgrade 都刷新) */
-/** 给老师看的板书语法表:从卡的注册表现生成,机器文件,init / upgrade 每次刷新;老师文件正文让老师讲解前读它 */
-export const SYNTAX_FILE = '.cotutor/板书语法.md';
-
-export const CARDS_DOC_DIR = '.cotutor/cards';
-
-/** 语法表 + 逐张协议 .cotutor/cards/<kind>.md + README.md(索引):都是机器文件,init / upgrade 每次刷新;老师与 skill 按需 @ 单张 */
-export async function writeSyntaxFile(root: string): Promise<string> {
-  const file = join(root, SYNTAX_FILE);
-  await mkdir(join(root, CARDS_DOC_DIR), { recursive: true });
-  await writeFile(file, boardSyntaxDoc());
-  await writeFile(join(root, CARDS_DOC_DIR, 'README.md'), cardsIndexDoc());
-  for (const d of cardDocs()) await writeFile(join(root, CARDS_DOC_DIR, `${d.kind}.md`), d.md);
-  return file;
-}
-
+/** 把 JSON Schema 写进 workspace(机器文件,每次 init / upgrade 都刷新);板书语法表出厂成技能 cotutor-board,见 skills.ts `writeBoardSkill` */
 export async function writeSchemaFile(root: string): Promise<string> {
   const file = join(root, CONFIG_SCHEMA_FILE);
   await mkdir(join(root, '.cotutor'), { recursive: true });

@@ -41,10 +41,12 @@
     "agents",
     "themes",
     "cards",
+    "skills",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
+    "gen:skills": "node --experimental-strip-types scripts/gen-skills.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types scripts/test.ts",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",

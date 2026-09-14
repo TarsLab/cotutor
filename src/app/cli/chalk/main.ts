@@ -70,9 +70,6 @@ const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的
   drawtell ls [--json]
       工作区现状:一行一个场景,五态一眼看全——源 / 课包 / 音频 / 截图 / 验收。
       agent 无记忆,进来先跑它。课包在但工作区没有源的标 orphan(多半是工具仓种子)。
-  drawtell tidy <dir> [--older-than <天>] [--delete] [--json]
-      清理 <dir> 下无笔记引用且超龄的文件:默认只列清单,--delete 才删,删除清单追加到工作区 tidy-log.md。
-      被任何 .md 以 ![[…]] / 文件名引用的永不进清单(宁可漏删)。
 
 工作区:优先级 --workspace <dir> > cwd 有 drawtell.json > ~/.config/drawtell/config.json 的
       workspace > 把 cwd 当工作区。--workspace 决定工作区与 paths 落点(bundles/snaps/attachments…);
@@ -137,9 +134,6 @@ export async function main(argv: string[]): Promise<void> {
       case 'build':
         await runBuild(args.slice(1), json, workspace);
         return;
-      case 'tidy':
-        await runTidy(args.slice(1), json, workspace);
-        return;
       case 'ls':
         await runLs(args.slice(1), json, workspace);
         return;
@@ -192,7 +186,6 @@ function jsonHelp(): string {
         dub: { usage: 'drawtell dub <scene.ts|bundle-id> [--voice <v>] [--instruction <s>] [--dry-run] [--force] [--json]', desc: '课包配音(voxtell 粘合)' },
         note: { usage: 'drawtell note <scene.ts|bundle-id> [--json]', desc: '课包档案段 → stdout(标题+题面+终帧 wikilink+每步讲稿),终帧拷到 <paths.attachments>/<id>-final.png;落进日记由调用方决定' },
         ls: { usage: 'drawtell ls [--json]', desc: '工作区现状:源 / 课包 / 音频 / 截图 / 验收' },
-        tidy: { usage: 'drawtell tidy <dir> [--older-than <天>] [--delete] [--json]', desc: '清理无引用的旧文件(默认只列不删)' },
         init: { usage: 'drawtell init [dir] [--json]', desc: '初始化/修补工作区骨架(幂等补缺,已有文件一律不动;政策文件永不覆盖)' },
         doctor: { usage: 'drawtell doctor [--json]', desc: '环境 + 工作区逐项体检,失败项附修复命令;exit 0/1' },
       },
@@ -486,38 +479,6 @@ async function runDoctor(rest: string[], json: boolean, workspace?: string): Pro
     console.log(r.ok ? '体检通过。' : '有必需项未通过,按 → 提示修复后重跑 drawtell doctor');
   }
   if (!r.ok) process.exitCode = 1;
-}
-
-async function runTidy(rest: string[], json: boolean, workspace?: string): Promise<void> {
-  const usage = 'drawtell tidy <dir> [--older-than <天>] [--delete] [--json]';
-  const { file: dir, flags } = parseCmdArgs(rest, usage, ['--older-than'], true, ['--delete']);
-  const olderThanDays = Number(flags.get('--older-than') ?? 90);
-  if (!Number.isInteger(olderThanDays) || olderThanDays < 0) {
-    throw new UsageError(`--older-than 需要非负整数天数,拿到 '${flags.get('--older-than')}'。用法:${usage}`);
-  }
-  const ws = await loadWorkspace(workspace);
-  const { tidy } = await import('./tidy.ts');
-  const r = await tidy(ws, dir, { olderThanDays, del: flags.has('--delete') });
-  if (json) {
-    console.log(JSON.stringify(redactDeep({ command: 'tidy', ...r, olderThanDays, deleted: r.deleted, ...workspaceReport(ws) }), null, 2));
-    return;
-  }
-  const mb = (n: number) => `${(n / 1048576).toFixed(1)}M`;
-  console.log(`${r.dir}:扫描 ${r.scanned} 个文件,${r.referenced} 个被笔记引用(永不清理)`);
-  if (!r.candidates.length) {
-    console.log(`  没有符合条件的:无引用 且 超过 ${olderThanDays} 天未改动。`);
-    return;
-  }
-  const total = r.candidates.reduce((a, c) => a + c.bytes, 0);
-  console.log(`  ${r.candidates.length} 个候选(${mb(total)}),无引用且超过 ${olderThanDays} 天:`);
-  for (const c of r.candidates.slice(0, 20)) console.log(`    ${c.path}  ${c.ageDays} 天  ${mb(c.bytes)}`);
-  if (r.candidates.length > 20) console.log(`    …还有 ${r.candidates.length - 20} 个(--json 看全量)`);
-  if (r.deleted.length) {
-    console.log(`  已删除 ${r.deleted.length} 个,清单追加到 ${r.logFile}`);
-  } else {
-    console.log('  以上只是清单,没有删任何东西。确认无误后加 --delete。');
-    console.log('  想留下某张图:在任何笔记里引用它(![[文件名]]),它就永远不会再进这个清单。');
-  }
 }
 
 async function runLs(rest: string[], json: boolean, workspace?: string): Promise<void> {

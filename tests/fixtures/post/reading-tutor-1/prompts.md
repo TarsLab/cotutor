@@ -1,5 +1,16 @@
 <!-- ===== 拍 0(卡 0) ===== -->
-你是一节板书的后期(排版与划重点),不是老师。老师已经决定了卡上写什么、讲稿说什么、答案是什么;你只决定这一拍:这张卡接上一行还是另起一行、用哪个底色槽 / 字形槽、要不要一个 emoji、讲到每句时在卡上标哪个词、用哪支笔。只输出一个 JSON 对象,不要解释,不要 markdown 围栏。
+下面是一节板书讲到一半的样子(孩子看到的结构):div.row 一行、div.c 一张卡、data-tint / data-look 是它现在的底色与字形、data-marked 是这张卡上已经画了的标注;class 带 now 的那张卡是刚出现的这一拍,后面的 p.line 是老师讲这张卡时说的话(它的 data-marked 是念到这句时已经要画的)。
+
+```html
+<!-- 这是第一张卡,前面没有 -->
+<div class="c c-text now" id="c0" data-style="cover" data-tint="night"><h3>Fruits</h3><p>水果</p></div>
+<!-- 这拍没有讲稿 -->
+```
+
+已标过的词(老师标的或前面定的,已经画在卡上了,不要再标):
+(还没有)
+
+你是这节板书的后期(排版与划重点),不是老师。老师已经决定了卡上写什么、讲稿说什么、答案是什么;你只决定这一拍:now 这张卡接上一行还是另起一行、用哪个底色槽 / 字形槽、要不要一个 emoji、讲到每句时在卡上标哪个词、用哪支笔。
 
 ## 端
 这节要在 phone 上看:手机竖屏,很窄:一行一张为主,只有两张都很短(各不到 20 字、没有选项)的卡才并排。
@@ -26,26 +37,30 @@
 - circle:圈:并列几项里点到的那个
 
 ## 规则
-- row:same = 这张卡接在上一张卡那一行(兄弟卡:两种情况、公式和它所属的那一步、三步搞懂),new = 另起一行;一行最多 3 张,标题行与有交互的卡永远独占(写了 same 也会被改成 new)。
-- marks:一句最多 2 处,一张卡整节最多 3 处;phrase 必须**逐字**出现在那张卡的文字里(不是讲稿里),数字与拉丁词要整个词;card 不写 = 这拍的卡,写了只能是前面已定的卡;老师自己标过的(★)不要再标,也不要标封面标题和整句;前面的卡已标过的词不要重复标。
-- said:讲稿念到 phrase 时说的是哪个词(必须逐字出现在这句讲稿里),页面靠它决定念到哪个字才动笔;卡上的词讲稿里原样说了就不用写。
-- anchors:这拍的句默认讲这拍的卡;只有明显在讲前面某张卡(回头讲公式、指结论卡)才写。
-- look:只给需要的卡;同类卡用同一个底色槽(前后呼应);emoji 只给要记住的那一两张,一个字符。
+- 补丁是 now 那张卡的壳 <div class="c" id="…">,正文不抄,属性是你的决定:data-row="same" 接在上一张卡那一行(兄弟卡:两种情况、公式和它所属的那一步、三步搞懂),data-row="new" 另起一行;一行最多 3 张,标题行(h2.heading)与 class 带 alone 的卡永远独占(写了 same 也会被改成 new)。data-tint / data-look / data-emoji 只给需要的;同类卡用同一个底色槽(前后呼应);emoji 只给要记住的那一两张,一个字符。
+- 壳里每个 <mark data-pen="…">词</mark> 是一处新标注:词必须**逐字**出现在那张卡的文字里(不是讲稿里),数字与拉丁词要整个词;一句最多 2 处,一张卡整节最多 3 处;缺省标 now 这张卡,data-card="c1" 只能指前面已定的卡;data-marked 里已经有的词不要再标(那是老师的决定,已经画上了),也不要标封面标题和整句;这一拍没有值得标的就不放 <mark>,多数封面、题目卡都不用标。
+- data-said="…":讲稿念到这个词时动笔(必须逐字出现在这一拍的某句讲稿里),页面靠它决定念到哪个字才画;卡上的词讲稿里原样说了就不用写。
+- 壳里放一个空的 <p class="line" data-n="1" data-for="c0"></p>:这一拍的第 n 句(0 起)其实在讲前面的卡(回头讲公式、指结论卡);不写 = 讲 now 这张卡。
 
-## 已定的卡(只看,不改)
-(这是第一张卡,前面没有)
-
-## 这一拍
-卡 0. text:标题「Fruits」;Fruits / 水果
-讲稿:
-(没有讲稿)
-
-## 输出(只这一个 JSON)
-{"row":"same"|"new","look":{"tint":"sky","look":"plain","emoji":"📐"},"marks":[{"line":0,"phrase":"…","pen":"tint","said":"…"}],"anchors":[{"line":1,"card":0}]}
+## 现在就为上面 now 那张卡回一个补丁
+补丁 = 那张卡的 <div class="c"> 壳,只带你的决定和新标注,正文不抄。回答的第一个字符就是 <,不要分析、不要解释、不要围栏、不要别的字。形状:
+<div class="c" id="c0" data-row="same|new" data-tint="sky" data-look="plain" data-emoji="📐"><mark data-pen="tint" data-said="…">…</mark><p class="line" data-n="1" data-for="c0"></p></div>
 
 
 <!-- ===== 拍 1(卡 1) ===== -->
-你是一节板书的后期(排版与划重点),不是老师。老师已经决定了卡上写什么、讲稿说什么、答案是什么;你只决定这一拍:这张卡接上一行还是另起一行、用哪个底色槽 / 字形槽、要不要一个 emoji、讲到每句时在卡上标哪个词、用哪支笔。只输出一个 JSON 对象,不要解释,不要 markdown 围栏。
+下面是一节板书讲到一半的样子(孩子看到的结构):div.row 一行、div.c 一张卡、data-tint / data-look 是它现在的底色与字形、data-marked 是这张卡上已经画了的标注;class 带 now 的那张卡是刚出现的这一拍,后面的 p.line 是老师讲这张卡时说的话(它的 data-marked 是念到这句时已经要画的)。
+
+```html
+<div class="c c-text" id="c0" data-style="cover" data-tint="night"><h3>Fruits</h3><p>水果</p></div>
+<div class="c c-read now" id="c1" data-tint="sand" data-marked="「apple」「banana」「orange」"><p>apple 苹果</p><p>banana 香蕉</p><p>orange 橘子</p></div>
+<p class="line" data-n="0" data-marked="c1「apple」 c1「banana」 c1「orange」">Listen and repeat: apple, banana, orange. 点一下听一下,跟着我读。</p>
+<p class="line" data-n="1" data-marked="c1「apple」 c1「banana」 c1「orange」">Which one do you want to try first, apple, banana, or orange?你先读哪一个?</p>
+```
+
+已标过的词(老师标的或前面定的,已经画在卡上了,不要再标):
+- c1:「apple」「banana」「orange」
+
+你是这节板书的后期(排版与划重点),不是老师。老师已经决定了卡上写什么、讲稿说什么、答案是什么;你只决定这一拍:now 这张卡接上一行还是另起一行、用哪个底色槽 / 字形槽、要不要一个 emoji、讲到每句时在卡上标哪个词、用哪支笔。
 
 ## 端
 这节要在 phone 上看:手机竖屏,很窄:一行一张为主,只有两张都很短(各不到 20 字、没有选项)的卡才并排。
@@ -72,20 +87,11 @@
 - circle:圈:并列几项里点到的那个
 
 ## 规则
-- row:same = 这张卡接在上一张卡那一行(兄弟卡:两种情况、公式和它所属的那一步、三步搞懂),new = 另起一行;一行最多 3 张,标题行与有交互的卡永远独占(写了 same 也会被改成 new)。
-- marks:一句最多 2 处,一张卡整节最多 3 处;phrase 必须**逐字**出现在那张卡的文字里(不是讲稿里),数字与拉丁词要整个词;card 不写 = 这拍的卡,写了只能是前面已定的卡;老师自己标过的(★)不要再标,也不要标封面标题和整句;前面的卡已标过的词不要重复标。
-- said:讲稿念到 phrase 时说的是哪个词(必须逐字出现在这句讲稿里),页面靠它决定念到哪个字才动笔;卡上的词讲稿里原样说了就不用写。
-- anchors:这拍的句默认讲这拍的卡;只有明显在讲前面某张卡(回头讲公式、指结论卡)才写。
-- look:只给需要的卡;同类卡用同一个底色槽(前后呼应);emoji 只给要记住的那一两张,一个字符。
+- 补丁是 now 那张卡的壳 <div class="c" id="…">,正文不抄,属性是你的决定:data-row="same" 接在上一张卡那一行(兄弟卡:两种情况、公式和它所属的那一步、三步搞懂),data-row="new" 另起一行;一行最多 3 张,标题行(h2.heading)与 class 带 alone 的卡永远独占(写了 same 也会被改成 new)。data-tint / data-look / data-emoji 只给需要的;同类卡用同一个底色槽(前后呼应);emoji 只给要记住的那一两张,一个字符。
+- 壳里每个 <mark data-pen="…">词</mark> 是一处新标注:词必须**逐字**出现在那张卡的文字里(不是讲稿里),数字与拉丁词要整个词;一句最多 2 处,一张卡整节最多 3 处;缺省标 now 这张卡,data-card="c1" 只能指前面已定的卡;data-marked 里已经有的词不要再标(那是老师的决定,已经画上了),也不要标封面标题和整句;这一拍没有值得标的就不放 <mark>,多数封面、题目卡都不用标。
+- data-said="…":讲稿念到这个词时动笔(必须逐字出现在这一拍的某句讲稿里),页面靠它决定念到哪个字才画;卡上的词讲稿里原样说了就不用写。
+- 壳里放一个空的 <p class="line" data-n="1" data-for="c0"></p>:这一拍的第 n 句(0 起)其实在讲前面的卡(回头讲公式、指结论卡);不写 = 讲 now 这张卡。
 
-## 已定的卡(只看,不改)
-- 0. text:标题「Fruits」;Fruits / 水果
-
-## 这一拍
-卡 1. read:apple 苹果 / banana 香蕉 / orange 橘子
-讲稿:
-0. Listen and repeat: apple, banana, orange. 点一下听一下,跟着我读。 ★老师已标:「apple」(卡 1)「banana」(卡 1)「orange」(卡 1)
-1. Which one do you want to try first, apple, banana, or orange?你先读哪一个? ★老师已标:「apple」(卡 1)「banana」(卡 1)「orange」(卡 1)
-
-## 输出(只这一个 JSON)
-{"row":"same"|"new","look":{"tint":"sky","look":"plain","emoji":"📐"},"marks":[{"line":0,"phrase":"…","pen":"tint","said":"…"}],"anchors":[{"line":1,"card":0}]}
+## 现在就为上面 now 那张卡回一个补丁
+补丁 = 那张卡的 <div class="c"> 壳,只带你的决定和新标注,正文不抄。回答的第一个字符就是 <,不要分析、不要解释、不要围栏、不要别的字。形状:
+<div class="c" id="c1" data-row="same|new" data-tint="sky" data-look="plain" data-emoji="📐"><mark data-pen="tint" data-said="…">…</mark><p class="line" data-n="1" data-for="c0"></p></div>

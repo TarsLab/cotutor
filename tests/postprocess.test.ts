@@ -1,6 +1,6 @@
 /** 板书后期的纯函数:提示词从主题清单现拼、输出解析(带围栏 / 多话也能取出 JSON)、校验的每条规则各一正一反、回退。 */
 import { parseBoard } from '../src/lib/board.ts';
-import { MAX_CARDS_PER_ROW, MAX_MARKS_PER_CARD, MAX_MARKS_PER_LINE, POST_TEMPLATE_FALLBACK, beatPrompt, fallbackPost, missingSlots, parsePost, validateBeatPost, validatePost } from '../src/lib/postprocess.ts';
+import { MAX_CARDS_PER_ROW, MAX_MARKS_PER_CARD, MAX_MARKS_PER_LINE, POST_TEMPLATE_FALLBACK, POST_TEMPLATE_JSON, beatPrompt, fallbackPost, missingSlots, parsePost, validateBeatPost, validatePost } from '../src/lib/postprocess.ts';
 import { beatsOf } from '../src/lib/kid-board.ts';
 import { readFileSync } from 'node:fs';
 import { unwrapJsonOutput } from '../src/server/post.ts';
@@ -12,15 +12,15 @@ const section = parseBoard('```text cover\n勾股定理\n直角三角形三条�
 
 {
   const beats = beatsOf(section);
-  const p = beatPrompt(section, beats.find((x) => x.card === 4)!, 'tablet-landscape', theme);
-  check('提示词(一拍):槽表从清单现拼(名字 + 给什么用)、端的说明、前文列出已定的卡、这拍的卡标出有交互、规则与输出形状、只要 JSON', p.includes('- sky:结论、定义') && p.includes('- circle:圈') && p.includes('平板横屏') && p.includes('- 0. text:标题「勾股定理」;') && p.includes('- 3. text(小节标题行') && p.includes('卡 4. choice(有交互,独占一行)') && p.includes('0. 斜边是多少?') && p.includes(`一句最多 ${MAX_MARKS_PER_LINE} 处`) && p.includes('"row":"same"|"new"') && p.includes('只输出一个 JSON'), p.slice(0, 400));
-  const p1 = beatPrompt(section, beats.find((x) => x.card === 1)!, 'phone', theme);
-  check('换端提示词跟着变;老师已标的带 ★;第一张卡的前文写「前面没有」', p1.includes('手机竖屏') && !p1.includes('平板横屏') && p1.includes('★老师已标:「直角边」(卡 1)') && beatPrompt(section, beats.find((x) => x.card === 0)!, 'phone', theme).includes('前面没有'));
+  const p = beatPrompt(section, beats.find((x) => x.card === 4)!, 'tablet-landscape', theme, POST_TEMPLATE_JSON);
+  check('提示词(一拍,JSON 方言):槽表从清单现拼(名字 + 给什么用)、端的说明、前文列出已定的卡、这拍的卡标出有交互、规则与输出形状、只要 JSON', p.includes('- sky:结论、定义') && p.includes('- circle:圈') && p.includes('平板横屏') && p.includes('- 0. text:标题「勾股定理」;') && p.includes('- 3. text(小节标题行') && p.includes('卡 4. choice(有交互,独占一行)') && p.includes('0. 斜边是多少?') && p.includes(`一句最多 ${MAX_MARKS_PER_LINE} 处`) && p.includes('"row":"same"|"new"') && p.includes('只输出一个 JSON'), p.slice(0, 400));
+  const p1 = beatPrompt(section, beats.find((x) => x.card === 1)!, 'phone', theme, POST_TEMPLATE_JSON);
+  check('换端提示词跟着变;老师已标的带 ★;第一张卡的前文写「前面没有」', p1.includes('手机竖屏') && !p1.includes('平板横屏') && p1.includes('★老师已标:「直角边」(卡 1)') && beatPrompt(section, beats.find((x) => x.card === 0)!, 'phone', theme, POST_TEMPLATE_JSON).includes('前面没有'));
   check('提示词讲了 said(讲稿里念到的词)', p.includes('- said:') && p.includes('"said":"…"'));
   // 骨架:主题的 post.md 与代码里的兜底同文;缺必需占位符就退兜底;不认识的占位符原样留
   const shipped = readFileSync(new URL('../themes/default/post.md', import.meta.url), 'utf8');
-  check('出厂 post.md 与 POST_TEMPLATE_FALLBACK 同文;必需占位符齐', shipped === POST_TEMPLATE_FALLBACK && missingSlots(shipped).length === 0 && JSON.stringify(missingSlots('只有 {cards} 和 {lines}')) === '["rules","output"]');
-  check('主题骨架可改:自己的一句话进了提示词;缺必需占位符 → 退出厂骨架', beatPrompt(section, beats[1], 'phone', theme, '我的口味:圈少一点。\n{rules}\n{cards}\n{lines}\n{output}\n{nope}').startsWith('我的口味:圈少一点。') && beatPrompt(section, beats[1], 'phone', theme, '我的口味\n{cards}\n{lines}\n{output}\n{nope}').includes('{nope}') === false && beatPrompt(section, beats[1], 'phone', theme, '坏骨架').startsWith('你是一节板书的后期'));
+  check('出厂 post.md 与 POST_TEMPLATE_FALLBACK 同文(HTML 方言);必需占位符齐;JSON 骨架也齐', shipped === POST_TEMPLATE_FALLBACK && shipped.includes('{board}') && missingSlots(shipped).length === 0 && missingSlots(POST_TEMPLATE_JSON).length === 0 && JSON.stringify(missingSlots('只有 {cards} 和 {lines}')) === '["rules","output"]');
+  check('主题骨架可改:自己的一句话进了提示词;缺必需占位符 → 退出厂骨架', beatPrompt(section, beats[1], 'phone', theme, '我的口味:圈少一点。\n{rules}\n{cards}\n{lines}\n{output}\n{nope}').startsWith('我的口味:圈少一点。') && beatPrompt(section, beats[1], 'phone', theme, '我的口味\n{cards}\n{lines}\n{output}\n{nope}').includes('{nope}') === false && beatPrompt(section, beats[1], 'phone', theme, '坏骨架').startsWith('下面是一节板书讲到一半的样子'));
 }
 {
   // 按拍校验:行二选一——same 接上一行要上一行还有位、两边都不是独占的卡;标注只能标这拍或前面的卡;look 进这拍的卡

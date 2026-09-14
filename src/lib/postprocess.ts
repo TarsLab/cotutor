@@ -6,7 +6,7 @@
  *
  * 提示词的骨架是主题的 post.md(themes/<主题>/post.md,和 kid.css 同一套:出厂 / 拷贝 / hash / upgrade / 按 mtime 现读),任何一句都能改;
  * 占位符是代码生成的部分:{rules} {output} 与校验器、schema 同源,{cards} {lines} {context} 是这一拍与前文,{tints} {looks} {pens} {defaultTint} 从槽表拼。
- * 缺必需占位符(cards / lines / rules / output)→ 整份退 POST_TEMPLATE_FALLBACK(与包里 themes/default/post.md 同文)。
+ * 缺必需占位符(按方言)→ 整份退 POST_TEMPLATE_FALLBACK(= HTML 方言的 POST_TEMPLATE_HTML,与包里 themes/default/post.md 同文;2026-09-14 晚拍板换的,JSON 方言的骨架留作 POST_TEMPLATE_JSON)。
  *
  * 这里全是纯函数:拼提示词、解析输出、**校验**(模型只是提案,契约说了算:词不在卡上、said 不在讲稿里、卡号越界、笔名不认识、
  * 槽名不在清单、超配额、并排会超 3 张或碰上独占的卡——一律丢,丢了什么记进 dropped)。校验不过的部分就当没有,页面走机械规则。
@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { beatsOf, cardTexts, findPhrase, hasState, isHeading, PENS, plainLine, type Beat, type BoardCard, type BoardLine, type BoardMark, type BoardSection, type Device, type PenName } from './kid-board.ts';
 import type { ThemeManifest } from '../schema/theme.ts';
+import { POST_TEMPLATE_HTML, boardHtml, htmlRulesBlock, markedBlock, parseBeatPatch, patchBlock } from './post-html.ts';
 
 const LookSchema = z.object({ tint: z.string().optional(), look: z.string().optional(), emoji: z.string().optional() });
 
@@ -108,8 +109,8 @@ export function outputBlock(): string {
 
 const slots = (t: Record<string, { use: string }>): string => Object.entries(t).map(([k, v]) => `- ${k}:${v.use}`).join('\n');
 
-/** 出厂骨架(与包里 themes/default/post.md 同文;主题的文件读不到 / 缺必需占位符时用它) */
-export const POST_TEMPLATE_FALLBACK = `你是一节板书的后期(排版与划重点),不是老师。老师已经决定了卡上写什么、讲稿说什么、答案是什么;你只决定这一拍:这张卡接上一行还是另起一行、用哪个底色槽 / 字形槽、要不要一个 emoji、讲到每句时在卡上标哪个词、用哪支笔。只输出一个 JSON 对象,不要解释,不要 markdown 围栏。
+/** JSON 方言的骨架(2026-09-14 晚以前的出厂骨架;评测 `--dialect json` 与老 workspace 的 post.md 还是它) */
+export const POST_TEMPLATE_JSON = `你是一节板书的后期(排版与划重点),不是老师。老师已经决定了卡上写什么、讲稿说什么、答案是什么;你只决定这一拍:这张卡接上一行还是另起一行、用哪个底色槽 / 字形槽、要不要一个 emoji、讲到每句时在卡上标哪个词、用哪支笔。只输出一个 JSON 对象,不要解释,不要 markdown 围栏。
 
 ## 端
 {device}
@@ -138,12 +139,23 @@ export const POST_TEMPLATE_FALLBACK = `你是一节板书的后期(排版与划�
 {output}
 `;
 
-export const REQUIRED_SLOTS = ['cards', 'lines', 'rules', 'output'] as const;
-export const ALL_SLOTS = ['device', 'defaultTint', 'tints', 'looks', 'pens', 'rules', 'context', 'cards', 'lines', 'output'] as const;
+/** 出厂骨架(与包里 themes/default/post.md 同文;主题的文件读不到 / 缺必需占位符时用它)。2026-09-14 晚拍板:HTML 方言 */
+export const POST_TEMPLATE_FALLBACK = POST_TEMPLATE_HTML;
 
-/** 骨架里缺的必需占位符;空 = 能用 */
+/**
+ * 两种方言(2026-09-14):json = 卡压成一行、下标指句、回 JSON;html = 板书按孩子看到的结构给、回一个 <c> 补丁(src/lib/post-html.ts)。
+ * 骨架用了 {board} 就是 html 方言(输出段是 {patch}),否则 json({cards} {lines} {context} {output})。规则段 {rules} 按方言渲染。出厂是 html。
+ */
+export type PostDialect = 'json' | 'html';
+export function dialectOf(template: string): PostDialect {
+  return template.includes('{board}') ? 'html' : 'json';
+}
+export const REQUIRED_SLOTS: Record<PostDialect, readonly string[]> = { json: ['cards', 'lines', 'rules', 'output'], html: ['board', 'rules', 'patch'] };
+export const ALL_SLOTS = ['device', 'defaultTint', 'tints', 'looks', 'pens', 'rules', 'context', 'cards', 'lines', 'output', 'board', 'marked', 'patch'] as const;
+
+/** 骨架里缺的必需占位符(按它自己的方言);空 = 能用 */
 export function missingSlots(template: string): string[] {
-  return REQUIRED_SLOTS.filter((s) => !template.includes(`{${s}}`));
+  return REQUIRED_SLOTS[dialectOf(template)].filter((s) => !template.includes(`{${s}}`));
 }
 
 /** 骨架 + 各段 → 提示词;不认识的 {名} 原样留着 */
@@ -156,17 +168,21 @@ export function beatPrompt(section: BoardSection, beat: Beat, device: Device, th
   const tpl = template && !missingSlots(template).length ? template : POST_TEMPLATE_FALLBACK;
   const pens = Object.keys(theme.pens).length ? theme.pens : Object.fromEntries(PENS.map((p) => [p, { use: p }]));
   const card = beat.card === null ? null : section.cards[beat.card];
+  const dialect = dialectOf(tpl);
   return renderPostPrompt(tpl, {
     device: `这节要在 ${device} 上看:${DEVICE_NOTE[device]}。`,
     defaultTint: theme.default,
     tints: slots(theme.tints),
     looks: slots(theme.looks),
     pens: slots(pens),
-    rules: rulesBlock(),
+    rules: dialect === 'html' ? htmlRulesBlock({ perLine: MAX_MARKS_PER_LINE, perCard: MAX_MARKS_PER_CARD, perRow: MAX_CARDS_PER_ROW }) : rulesBlock(),
     context: contextBlock(section, beat),
     cards: card && beat.card !== null ? `卡 ${cardLine(card, beat.card)}` : '(这拍没有卡,只有话)',
     lines: beat.lines.map((i, j) => lineLine(section.lines[i], j, beat.card ?? -1)).join('\n') || '(没有讲稿)',
     output: outputBlock(),
+    board: boardHtml(section, beat),
+    marked: markedBlock(section, beat),
+    patch: patchBlock(beat.card),
   });
 }
 
@@ -197,6 +213,11 @@ export function parseBeatPost(raw: string): ParsedPost<BeatPostOutput> {
   const r = BeatPostOutputSchema.safeParse(j.obj);
   if (!r.success) return { ok: false, why: r.error.issues.map((i) => `${i.path.join('.')}:${i.message}`).join(';') };
   return { ok: true, out: r.data };
+}
+
+/** 模型的原文 → 一拍的提案,按方言:json 取 JSON;html 取 <c> 补丁(词落在哪句靠 said / 词在这拍讲稿里找) */
+export function parseBeatOutput(raw: string, dialect: PostDialect, section: BoardSection, beat: Beat): ParsedPost<BeatPostOutput> {
+  return dialect === 'html' ? parseBeatPatch(raw, section, beat) : parseBeatPost(raw);
 }
 
 /** 整节提案的解析(mock / 老文件) */

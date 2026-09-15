@@ -67,6 +67,14 @@ const wait = async (tutor: string): Promise<void> => {
 };
 
 try {
+  // ---- 干跑上下文包(2026-09-15):不起模型,来源与截断算得出来 ----
+  {
+    const { packDryRun } = await import('../src/server/runner.ts');
+    const r = await packDryRun(loadWorkspace(root), 'math-tutor', { from: 'kid', at: now, text: '干跑一句' });
+    check('pack 干跑:prompt 带档案 / 计划 / 观察与消息', r.prompt.includes('人教数学一下') && r.prompt.includes('周三前讲退位') && r.prompt.includes('借位忘了') && r.prompt.endsWith('干跑一句\n'), r.prompt);
+    check('pack 干跑:来源清单', r.report.profile.found && r.report.profile.total === 2 && r.report.profile.kept === 2 && r.report.plan.found && r.report.plan.kept === 1 && r.report.recent.filesFound.join() === '2026-09-06,2026-09-07' && r.report.recent.total === 1 && r.report.recent.kept === 1 && r.report.recent.subject === '数学', JSON.stringify(r.report));
+    check('pack 干跑:不写盘', !existsSync(join(root, 'conversations', 'math-tutor')));
+  }
   // ---- 第一轮:新开 ----
   const r1 = await post('math-tutor', { text: '妈妈我不懂这一步', from: 'kid' });
   check('202 带 job 与运行时,第一条不 resume', r1.status === 202 && (r1.json as { job: string; resume: boolean; runtime: string }).resume === false && (r1.json as { runtime: string }).runtime === 'fake', JSON.stringify(r1.json));

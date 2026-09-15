@@ -92,31 +92,69 @@ interface Active {
  * 上下文包的取材(《obsidian仓库设计.md》§7 每轮那行):课程表命中的时段 + 档案「现在」callout + 本周计划里本老师的行 +
  * 最近 14 天日记里本学科的「- 观察:」行(观察的真相在日记;家长改一句、删一行,下一轮就变)
  */
-export async function gatherContext(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; focus?: Focus }): Promise<ContextPack> {
+/**
+ * 上下文包的来源清单(2026-09-15,`cotutor pack` 干跑用):每段来自哪个文件、那里一共有多少、按政策带了几条。
+ * 家长改了档案 / 日记 / 计划,不起模型就能看到老师下一轮会看见什么、什么被截掉了。
+ */
+export interface PackReport {
+  timetable: { file: string; found: boolean; slot: string | null };
+  profile: { file: string; found: boolean; total: number; kept: number; limit: number };
+  plan: { file: string; found: boolean; total: number; kept: number; limit: number };
+  recent: { dir: string; days: number; filesFound: string[]; total: number; kept: number; limit: number; subject: string | null };
+}
+
+const MANY = 100_000;
+
+export async function gatherContext(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; focus?: Focus }, report?: PackReport): Promise<ContextPack> {
   const t = ws.config.tutors[tutor];
   const policy = resolvePolicy(ws.config, tutor);
   const pack: ContextPack = { from: input.from, at: localMinute(input.at), focus: input.focus, profile: [], plan: [], recent: [] };
+  if (report) report.timetable = { file: ws.paths.timetable, found: false, slot: null };
   try {
     const slot = currentSlot(parseTimetable(await readFile(ws.paths.timetable, 'utf8')).entries, input.at);
+    if (report) report.timetable.found = true;
     if (slot) pack.slot = slotLabel(slot);
+    if (report) report.timetable.slot = pack.slot ?? null;
   } catch {
     /* 没有课程表:不带 slot */
   }
+  if (report) report.profile = { file: ws.paths.profile, found: false, total: 0, kept: 0, limit: policy.contextPack.profileLines };
   try {
-    pack.profile = extractProfile(await readFile(ws.paths.profile, 'utf8'), policy.contextPack.profileLines);
+    const md = await readFile(ws.paths.profile, 'utf8');
+    pack.profile = extractProfile(md, policy.contextPack.profileLines);
+    if (report) report.profile = { ...report.profile, found: true, total: extractProfile(md, MANY).length, kept: pack.profile.length };
   } catch {
     /* 没有档案:不带 profile */
   }
+  const planFile = join(ws.paths.plans, `${isoWeek(input.at)}.md`);
+  if (report) report.plan = { file: planFile, found: false, total: 0, kept: 0, limit: policy.contextPack.planLines };
   try {
-    const { plan } = parsePlan(await readFile(join(ws.paths.plans, `${isoWeek(input.at)}.md`), 'utf8'));
-    if (plan && t) pack.plan = planLinesFor(plan, t.display, policy.contextPack.planLines);
+    const { plan } = parsePlan(await readFile(planFile, 'utf8'));
+    if (report) report.plan.found = true;
+    if (plan && t) {
+      pack.plan = planLinesFor(plan, t.display, policy.contextPack.planLines);
+      if (report) report.plan = { ...report.plan, total: planLinesFor(plan, t.display, MANY).length, kept: pack.plan.length };
+    }
   } catch {
     /* 没有本周计划,或读不到:上下文包不带 plan */
   }
-  const diaries = await readDiaries(ws, recentDiaryDates(localDate(input.at), 14));
+  const dates = recentDiaryDates(localDate(input.at), 14);
+  const diaries = await readDiaries(ws, dates);
   pack.recent = extractObservations(diaries, { subject: t?.subject, n: policy.contextPack.recent });
+  if (report) report.recent = { dir: ws.paths.diary, days: dates.length, filesFound: diaries.map((d) => d.date).sort(), total: extractObservations(diaries, { subject: t?.subject, n: MANY }).length, kept: pack.recent.length, limit: policy.contextPack.recent, subject: t?.subject ?? null };
   pack.vault = vaultPack(ws.paths);
   return pack;
+}
+
+/** 干跑:现在给这位老师发这句话,上下文包会是什么样、每段从哪来、截了多少;不起模型、不写盘 */
+export async function packDryRun(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; text: string }): Promise<{ prompt: string; pack: ContextPack; report: PackReport }> {
+  const t = ws.config.tutors[tutor];
+  if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
+  const report = {} as PackReport;
+  const pack = await gatherContext(ws, tutor, { from: input.from, at: input.at }, report);
+  const policy = resolvePolicy(ws.config, tutor);
+  if (policy.board === 'off') pack.board = 'off';
+  return { prompt: buildContextPack(pack, input.text, policy.contextPack), pack, report };
 }
 
 /** 上下文包的 vault: 段:root 绝对,其余角色相对 root;在 root 外面(家长把日记指到别处)就给绝对路径 */

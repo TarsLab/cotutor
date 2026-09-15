@@ -32,6 +32,7 @@ const USAGE = `用法:
   cotutor serve [--workspace <dir>] [--port <n>] [--http] [--trace]     起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS;--trace 每一轮的事件按道打印)
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad / iPhone 上录音要 HTTPS;所有 workspace 共用)
   cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>] [--new] [--lane main,tts,post] [--quiet]   终端里发一条,现场按道打印每道工序的事件,说完打印结果(与页面同一条路;--new 开新话题;--quiet 只要结果)
+  cotutor pack <老师> [<消息>] [--from kid|parent|system] [--at <ISO时间>] [--json]   干跑上下文包:不起模型,打印现在会发给老师的那份 + 每段来自哪个文件、那里一共几条、按政策带了几条(改了档案 / 日记 / 计划立刻看效果)
   cotutor show <老师> <job> [<日期>] [--json] [--workspace <dir>]       看一轮:问了什么、上下文包、当时的老师文件与技能 hash、讲稿与卡、读了什么、费用与用时、给家长的尾巴;--json 是家长端「看原文」同一份数据,给 Claude Code 分析用
   cotutor trace <老师> <job> [<日期>] [--lane …] [--workspace <dir>]     回放一轮的事件(<日期>.<job>.events.jsonl;排查昨天那轮用)
   cotutor rate <老师> <话题> <1-5> [--date <日期>]                       给一个话题打星(与家长端同一条路;≥ vault.keepScore 的话题记账时摘要才进日记)
@@ -76,7 +77,7 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -220,6 +221,33 @@ export async function main(argv: string[]): Promise<void> {
           process.stdout.write(`证书:${redactHome(r.cert)}\n私钥:${redactHome(r.key)}\n主机:${r.hosts.join(' ')}\n`);
           process.stdout.write(`iPad / iPhone 要先信任这台机器的根证书:把 ${redactHome(r.caRoot)}/rootCA.pem 隔空投送过去 → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里**把开关打开**(装了不等于信任,每台设备各做一次);然后重启 cotutor serve,用打印的 https://<局域网 IP>:<端口>/ 打开(用 IP,主机名在有些设备上会走到不通的 IPv6)。详见 docs/iPad与iPhone.md\n`);
         }
+        return;
+      }
+      case 'pack': {
+        const [tutor, ...rest] = positionals;
+        if (!tutor) throw new UsageError(`pack 需要老师名,如 cotutor pack math-tutor "讲讲退位"。\n${USAGE}`);
+        const ws = loadWorkspace(workspace);
+        const { packDryRun } = await import('../server/runner.ts');
+        const from = typeof flags.from === 'string' ? flags.from : 'kid';
+        if (from !== 'kid' && from !== 'parent' && from !== 'system') throw new UsageError('--from 只能是 kid / parent / system');
+        const at = typeof flags.at === 'string' ? new Date(flags.at) : new Date();
+        if (Number.isNaN(at.getTime())) throw new UsageError(`--at 不是时间:${flags.at as string}`);
+        const r = await packDryRun(ws, tutor, { from, at, text: rest.join(' ') || '(干跑)' });
+        if (json) { process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`); return; }
+        const rel = (f: string): string => redactHome(f.startsWith(ws.root) ? f.slice(ws.root.length + 1) : f);
+        const rp = r.report;
+        const out: string[] = [];
+        out.push(`发给 ${tutor} 的上下文包(干跑,${r.prompt.length} 字):`);
+        out.push(...r.prompt.split('\n').map((l) => `  │ ${l}`));
+        out.push('来源:');
+        out.push(`  slot     ${rel(rp.timetable.file)} · ${rp.timetable.found ? (rp.timetable.slot ? `命中「${rp.timetable.slot}」` : '现在不在任何时段') : '课程表读不到'}`);
+        out.push(`  profile  ${rel(rp.profile.file)} · ${rp.profile.found ? `「现在」callout 共 ${rp.profile.total} 行,带了 ${rp.profile.kept}(上限 ${rp.profile.limit})` : '档案读不到'}`);
+        out.push(`  plan     ${rel(rp.plan.file)} · ${rp.plan.found ? `这位老师 ${rp.plan.total} 行,带了 ${rp.plan.kept}(上限 ${rp.plan.limit})` : '本周计划不在'}`);
+        out.push(`  recent   ${rel(rp.recent.dir)}/ 最近 ${rp.recent.days} 天 · 有 ${rp.recent.filesFound.length} 天的日记${rp.recent.filesFound.length ? `(${rp.recent.filesFound[0]} … ${rp.recent.filesFound[rp.recent.filesFound.length - 1]})` : ''} · ${rp.recent.subject ? `学科「${rp.recent.subject}」` : '不按学科过滤'}的观察行共 ${rp.recent.total},带了 ${rp.recent.kept}(上限 ${rp.recent.limit},取最新的)`);
+        const cut = [rp.profile.total > rp.profile.kept ? `档案截掉 ${rp.profile.total - rp.profile.kept} 行` : '', rp.plan.total > rp.plan.kept ? `计划截掉 ${rp.plan.total - rp.plan.kept} 行` : '', rp.recent.total > rp.recent.kept ? `观察截掉 ${rp.recent.total - rp.recent.kept} 条` : ''].filter(Boolean);
+        out.push(cut.length ? `截掉的:${cut.join(';')}(改 cotutor.json policyDefaults.contextPack 的 profileLines / planLines / recent)` : '没截掉什么。');
+        out.push('这份不进任何文件;老师真跑时还会多 cards:(孩子在卡上做的)与 photos: 两段。');
+        process.stdout.write(`${out.join('\n')}\n`);
         return;
       }
       case 'show': {

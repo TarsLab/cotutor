@@ -61,6 +61,8 @@ export function foldRuns(items: TranscriptItem[]): TranscriptRow[] {
 
 interface Block {
   type?: string;
+  id?: string;
+  tool_use_id?: string;
   text?: string;
   name?: string;
   input?: Record<string, unknown>;
@@ -91,6 +93,66 @@ export function toolSummary(name: string, input: Record<string, unknown> | undef
     if (typeof v === 'string' && v.trim()) return `${name} · ${clip(v.trim(), 120)}`;
   }
   return name;
+}
+
+/**
+ * 一轮里模型用了哪些工具、读了什么(2026-09-15,记录层):从 .log 的 stream-json 把 tool_use 与 tool_result 按 id 配对,
+ * 一条 = 工具名、最要紧的那个参数(路径 / 命令 / 模式)、成没成、结果多少字。events.jsonl 的工具事件只有一个 120 字的显示串;
+ * 这份物化进索引消息的 tools,回答「老师为什么没看见档案那一行」「这轮读了几个文件」。
+ */
+export interface ToolCall {
+  name: string;
+  /** 最要紧的参数:Read / Edit / Write 的 file_path、Bash 的 command、Grep 的 pattern in path、Skill 的 skill;没有就空串 */
+  arg: string;
+  /** true 成功 / false 报错 / null 没等到结果(被杀、还在跑、或 CLI 没回) */
+  ok: boolean | null;
+  /** 结果文本的字数 */
+  chars: number;
+  sub?: boolean;
+}
+
+const ARG_KEYS = ['file_path', 'command', 'pattern', 'path', 'skill', 'url', 'query', 'description', 'prompt'] as const;
+
+export function toolArg(input: Record<string, unknown> | undefined): string {
+  if (!input) return '';
+  if (typeof input.pattern === 'string' && typeof input.path === 'string') return clip(`${input.pattern} in ${input.path}`, 300);
+  for (const k of ARG_KEYS) {
+    const v = input[k];
+    if (typeof v === 'string' && v.trim()) return clip(v.trim(), 300);
+  }
+  return '';
+}
+
+export function toolCalls(text: string): ToolCall[] {
+  const calls: ToolCall[] = [];
+  const byId = new Map<string, ToolCall>();
+  for (const line of text.split('\n')) {
+    if (!line.includes('tool_use') && !line.includes('tool_result')) continue;
+    let e: Event;
+    try {
+      e = JSON.parse(line) as Event;
+    } catch {
+      continue;
+    }
+    const sub = typeof e.parent_tool_use_id === 'string' && e.parent_tool_use_id.length > 0 ? true : undefined;
+    if (e.type === 'assistant') {
+      for (const b of blocks(e.message?.content)) {
+        if (b.type !== 'tool_use' || !b.name) continue;
+        const c: ToolCall = { name: b.name, arg: toolArg(b.input), ok: null, chars: 0, ...(sub ? { sub } : {}) };
+        calls.push(c);
+        if (b.id) byId.set(b.id, c);
+      }
+    } else if (e.type === 'user') {
+      for (const b of blocks(e.message?.content)) {
+        if (b.type !== 'tool_result' || !b.tool_use_id) continue;
+        const c = byId.get(b.tool_use_id);
+        if (!c) continue;
+        c.ok = !b.is_error;
+        c.chars = blockText(b.content).length;
+      }
+    }
+  }
+  return calls;
 }
 
 export function parseTranscript(text: string): Transcript {

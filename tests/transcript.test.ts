@@ -44,4 +44,21 @@ const STREAM = [
   check('末尾留 2 条直播', kinds(foldRuns([T('text'), T('tool'), T('tool'), T('tool'), T('tool'), T('tool')])) === 'text,fold3,tool,tool');
   check('报错行永不折', kinds(foldRuns([T('tool'), T('tool'), T('tool'), T('tool-error'), T('tool'), T('done')])) === 'fold3,tool-error,tool,done');
 }
+{
+  const { toolCalls } = await import('../src/lib/transcript.ts');
+  const log = [
+    JSON.stringify({ type: 'assistant', session_id: 's', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 't1', name: 'Read', input: { file_path: '../../vault/孩子.md' } }] } }),
+    JSON.stringify({ type: 'user', session_id: 's', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: [{ type: 'text', text: '# 小明\n> 现在' }] }] } }),
+    JSON.stringify({ type: 'assistant', session_id: 's', parent_tool_use_id: 'toolu_sub', message: { content: [{ type: 'tool_use', id: 't2', name: 'Grep', input: { pattern: '退位', path: '../../vault/日记' } }] } }),
+    JSON.stringify({ type: 'user', session_id: 's', parent_tool_use_id: 'toolu_sub', message: { content: [{ type: 'tool_result', tool_use_id: 't2', is_error: true, content: 'no such dir' }] } }),
+    JSON.stringify({ type: 'assistant', session_id: 's', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 't3', name: 'Bash', input: { command: 'ls ../../captures', description: '看看照片' } }] } }),
+    '{"type":"result","subtype":"success","result":"好"}',
+  ].join('\n');
+  const calls = toolCalls(log);
+  check('toolCalls:三次调用按序', calls.map((c) => c.name).join() === 'Read,Grep,Bash', JSON.stringify(calls));
+  check('toolCalls:Read 配上结果(成功、字数)', calls[0].arg === '../../vault/孩子.md' && calls[0].ok === true && calls[0].chars === '# 小明\n> 现在'.length);
+  check('toolCalls:Grep 带 pattern in path、报错、子代理', calls[1].arg === '退位 in ../../vault/日记' && calls[1].ok === false && calls[1].sub === true);
+  check('toolCalls:Bash 取 command 不取 description;没结果 ok=null', calls[2].arg === 'ls ../../captures' && calls[2].ok === null && calls[2].chars === 0);
+  check('toolCalls:空日志', toolCalls('').length === 0);
+}
 done();

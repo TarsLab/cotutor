@@ -2,6 +2,7 @@
  * 对话与配置的文件层:索引读写(坏索引响亮报错,不静默覆盖)、日期列表、转录读取、老师正文、cotutor.json 补丁写回。
  * 纯函数在 lib/,这里只碰文件系统。
  */
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, join, relative, sep } from 'node:path';
 import { parseAgentFile } from '../lib/agent-file.ts';
@@ -172,6 +173,13 @@ export async function capturePathOk(ws: Workspace, rel: string): Promise<boolean
  * 这一轮真发出去的东西(<date>.<job>.run.json):上下文包与完整命令行。
  * 跑完就丢的话「老师为什么没看见孩子选了 C」永远查不了,所以落一份;只有家长端「看原文」读它。
  */
+/** 这轮用的老师文件与技能的快照(2026-09-15):claude 走 --agent 时正文不在命令行里,文件后来改了就查不回当时那份,所以记正文与 hash;技能只记 hash,变没变一眼看 */
+export interface RunSources {
+  agent: { file: string; hash: string; body: string } | null;
+  /** 技能名 → SKILL.md 的 hash(workspace .claude/skills/ 下有的全部) */
+  skills: Record<string, string>;
+}
+
 export interface RunFile {
   at: string;
   /** 拼好的上下文包(消息正文在最后) */
@@ -181,6 +189,8 @@ export interface RunFile {
   argv: string[];
   resume: boolean;
   session: string | null;
+  /** 老师文件与技能的快照;2026-09-15 之前的轮次没有 */
+  sources?: RunSources;
   /** 这个运行时把老师正文塞进了命令行({agentBody};claude 走 --agent 就没有) */
   agentBody: boolean;
 }
@@ -190,10 +200,10 @@ export async function writeRunFile(
   tutor: string,
   date: string,
   job: string,
-  r: { at: string; prompt: string; plan: { runtime: string; argv: string[]; resume: boolean; session: string | null }; agentBody: boolean },
+  r: { at: string; prompt: string; plan: { runtime: string; argv: string[]; resume: boolean; session: string | null }; agentBody: boolean; sources?: RunSources },
 ): Promise<void> {
   const file = conversationFiles(ws.dirs.conversations, tutor, date).run(job);
-  const row: RunFile = { at: r.at, prompt: r.prompt, runtime: r.plan.runtime, argv: r.plan.argv, resume: r.plan.resume, session: r.plan.session, agentBody: r.agentBody };
+  const row: RunFile = { at: r.at, prompt: r.prompt, runtime: r.plan.runtime, argv: r.plan.argv, resume: r.plan.resume, session: r.plan.session, agentBody: r.agentBody, ...(r.sources ? { sources: r.sources } : {}) };
   try {
     await mkdir(join(ws.dirs.conversations, tutor), { recursive: true });
     await writeFile(file, `${JSON.stringify(row, null, 2)}\n`);
@@ -218,6 +228,31 @@ export async function readErrLog(ws: Workspace, tutor: string, date: string, job
   } catch {
     return '';
   }
+}
+
+const sha = (text: string): string => `sha256:${createHash('sha256').update(text).digest('hex').slice(0, 16)}`;
+
+/** 这轮起跑时老师文件与技能长什么样(记进 run.json;读不到的就 null / 空,不拦这一轮) */
+export async function snapshotSources(ws: Workspace, name: string): Promise<RunSources> {
+  let agent: RunSources['agent'] = null;
+  for (const dir of [ws.dirs.claudeAgents, ws.dirs.qwenAgents]) {
+    const file = join(dir, `${name}.md`);
+    try {
+      const body = await readFile(file, 'utf8');
+      agent = { file: relative(ws.root, file), hash: sha(body), body };
+      break;
+    } catch {
+      /* 试下一处 */
+    }
+  }
+  const skills: Record<string, string> = {};
+  const skillsDir = join(ws.root, '.claude', 'skills');
+  for (const d of await readdir(skillsDir, { withFileTypes: true }).catch(() => [])) {
+    if (!d.isDirectory() && !d.isSymbolicLink()) continue;
+    const text = await readFile(join(skillsDir, d.name, 'SKILL.md'), 'utf8').catch(() => null);
+    if (text !== null) skills[d.name] = sha(text);
+  }
+  return { agent, skills };
 }
 
 /** 老师文件正文(系统提示),给 {agentBody};从 .claude/agents/ 读,那里的链是必需项 */

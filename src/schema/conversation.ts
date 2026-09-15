@@ -80,6 +80,8 @@ export const ConversationMessageSchema = z.object({
   bookkeep: z.object({ thread: z.string().min(1) }).optional(),
   /** 最终文本里剥出来的「## 记账」段(物化;日记已按它写好);null = 这轮没有 */
   bookkeeping: BookkeepingSchema.nullable().optional(),
+  /** 这轮模型用了哪些工具、读了什么(2026-09-15,从 .log 抽,lib/transcript.ts toolCalls):名字、最要紧的参数、成没成、结果多少字。家长端「看原文」的「读了什么」站;cotutor show 也吐 */
+  tools: z.array(z.object({ name: z.string().min(1), arg: z.string(), ok: z.boolean().nullable(), chars: z.number().int().nonnegative(), sub: z.boolean().optional() })).optional(),
 });
 export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 

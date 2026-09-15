@@ -115,7 +115,7 @@ try {
   };
   const rawR = await route('GET', `/api/conversations/math-tutor/2026-09-08/raw/${job1}`, ctx);
   const rawView1 = rawR.json as Raw;
-  check('看原文:六站都在', rawR.status === 200 && rawView1.stations.map((x) => x.id).join() === 'pack,timeline,source,parse,kid,audio,trace', JSON.stringify(rawView1.stations?.map((x) => x.id)));
+  check('看原文:七站都在(2026-09-15 加「读了什么」)', rawR.status === 200 && rawView1.stations.map((x) => x.id).join() === 'pack,timeline,source,parse,kid,audio,tools,trace', JSON.stringify(rawView1.stations?.map((x) => x.id)));
   check('看原文:上下文包落了盘,消息正文与完整命令行都在', rawView1.pack?.prompt.includes('妈妈我不懂这一步') === true && rawView1.pack.argv.includes('--agent') && rawView1.pack.resume === false, JSON.stringify(rawView1.pack?.argv));
   check('看原文:原文逐行标了角色', rawView1.source.text.includes('第一次说') && rawView1.source.rows.some((r) => r.role === 'say' && r.label?.startsWith('讲稿') === true), JSON.stringify(rawView1.source.rows));
   check('看原文:当前解析器重解 = 索引里存的(同一版解析器,不该有差异)', rawView1.fresh.same === true && rawView1.fresh.diff.every((d) => d.s === '·'), JSON.stringify(rawView1.fresh.diff));
@@ -310,7 +310,7 @@ try {
   check('后期:收到、记了费用与丢的条数;layout 一行一张(两张卡)、for 缺省平板横屏;卡 0 的样子进了;老师的标注没 pen、模型重复的丢了', mP.post?.ok === true && mP.post.costUsd === 0.0042 && mP.post.dropped === 4 && mP.section?.layout?.for === 'tablet-landscape' && JSON.stringify(mP.section.layout.rows) === '[[0],[1]]' && mP.section.cards[0].look?.tint === 'sky' && mP.section.cards[0].look?.emoji === '📐' && mP.section.cards[1].look === undefined && mP.section.lines[0].marks.length === 1 && mP.section.lines[0].marks[0].pen === undefined && typeof mP.timing?.postMs === 'number', JSON.stringify([mP.post, mP.section?.layout, mP.section?.cards.map((c) => c.look)]));
   check('后期文件落了盘:提示词、原始输出、丢掉的四条(两拍)', existsSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobS2}.post.json`)) && (JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobS2}.post.json`), 'utf8')) as { dropped: string[]; prompt: string; raw: string }).dropped.length === 4);
   const rawS = (await route('GET', `/api/conversations/math-tutor/2026-09-09/raw/${jobS2}`, ctx)).json as Raw & { post: { kept: { marks: number; layout: boolean } } | null };
-  check('看原文:有卡的轮次多第七站「板书后期」,warn(有丢的);带提示词与校验结果', rawS.stations.map((x) => x.id).join() === 'pack,timeline,source,parse,kid,audio,trace,post' && rawS.stations.find((x) => x.id === 'post')?.state === 'warn' && rawS.post?.kept.layout === false && rawS.post.kept.marks === 1 && (rawS.post as { beats?: unknown[] }).beats?.length === 2, JSON.stringify(rawS.stations));
+  check('看原文:有卡的轮次多第七站「板书后期」,warn(有丢的);带提示词与校验结果', rawS.stations.map((x) => x.id).join() === 'pack,timeline,source,parse,kid,audio,tools,trace,post' && rawS.stations.find((x) => x.id === 'post')?.state === 'warn' && rawS.post?.kept.layout === false && rawS.post.kept.marks === 1 && (rawS.post as { beats?: unknown[] }).beats?.length === 2, JSON.stringify(rawS.stations));
   check('看原文:时间线站有事件、甘特的段与一行一条', (rawS as unknown as { timeline: { spans: unknown[]; lines: string[] } }).timeline.spans.length > 5 && (rawS as unknown as { timeline: { lines: string[] } }).timeline.lines[0].includes('起 '), '');
   // 超时 → 素版(没有 layout、没有 look),post.ok false 带原因;坏输出 → 同样素版
   const rSlow = await post('math-tutor', { text: '板书 后期慢', from: 'kid' });
@@ -490,6 +490,13 @@ try {
   check('板书:image 卡引用原图、canvas 卡照片做底(第三种底图)', phCards.some((c) => c.kind === 'image' && c.props.src === phOne) && phCards.some((c) => c.kind === 'canvas' && (c.props.base as { image?: string } | null)?.image === phOne), JSON.stringify(phCards));
   const phRuns = ((await day('math-tutor', phDate)).json as Day).runs[phJ.job];
   check('转录里能看到 Read 了哪张', phRuns.some((r) => r.kind === 'tool' && JSON.stringify(r).includes(phOne)), JSON.stringify(phRuns));
+  // 记录层(2026-09-15):消息物化 tools(名字 / 路径 / 成没成 / 字数),run.json 记老师文件正文与 hash、技能 hash
+  const phTools = (phM as { tools?: { name: string; arg: string; ok: boolean | null; chars: number }[] }).tools ?? [];
+  check('消息 tools:Read 了那张照片,参数是路径', phTools.some((t) => t.name === 'Read' && t.arg.endsWith(phOne)), JSON.stringify(phTools));
+  const phSrc = (JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phJ.job}.run.json`), 'utf8')) as { sources?: { agent: { file: string; hash: string; body: string } | null; skills: Record<string, string> } }).sources;
+  check('run.json sources:老师文件正文与 hash、技能 hash', phSrc?.agent?.file === '.claude/agents/math-tutor.md' && phSrc.agent.hash.startsWith('sha256:') && phSrc.agent.body.includes('name: math-tutor') && typeof phSrc.skills === 'object' && 'cotutor-board' in phSrc.skills, JSON.stringify({ file: phSrc?.agent?.file, skills: Object.keys(phSrc?.skills ?? {}) }));
+  const rawPh = (await route('GET', `/api/conversations/math-tutor/${phDate}/raw/${phJ.job}`, ctx)).json as { tools: { name: string; ok: boolean | null; chars: number }[]; stations: { id: string; note: string }[]; pack: { sources: { agent: { hash: string } } | null } };
+  check('看原文「读了什么」:一站 + tools 数组 + 快照 hash', rawPh.stations.find((s) => s.id === 'tools')?.note.includes('Read') === true && rawPh.tools.length > 0 && rawPh.pack.sources?.agent.hash.startsWith('sha256:') === true, JSON.stringify(rawPh.stations.find((s) => s.id === 'tools')));
   const phKid = ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; question: string | null; photos?: string[] }[] }).messages.find((m) => m.job === phJ.job)!;
   check('孩子端:问句「(拍了一张)」带 photos;照片经 /api/kid/image 取得到', phKid.question === '(拍了一张)' && phKid.photos?.join() === phOne && (await route('GET', `/api/kid/image?p=${encodeURIComponent(phOne)}`, ctx)).status === 200, JSON.stringify(phKid));
   const phR2 = await post('math-tutor', { text: '这道呢', from: 'parent', photos: [phTwo] });

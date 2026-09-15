@@ -744,6 +744,7 @@ export const PARENT_PAGE = `<!doctype html>
         h('pre', {}, raw.pack.prompt),
         h('h5', {}, '命令行 · ' + raw.pack.runtime + (raw.pack.resume ? ' · resume ' + (raw.pack.session || '') : ' · 新开会话') + (raw.pack.agentBody ? ' · 老师正文塞在 {agentBody}' : '')),
         h('pre', {}, cmd),
+        raw.pack.sources ? h('p', { class: 'hintline' }, '当时的老师文件 ' + (raw.pack.sources.agent ? raw.pack.sources.agent.file + ' ' + raw.pack.sources.agent.hash.slice(7) : '(读不到)') + ' · 技能 ' + Object.entries(raw.pack.sources.skills).map(([k, v]) => k + ' ' + v.slice(7, 13)).join(' / ') + '(正文在 run.json 的 sources 里;cotutor show --json 吐)') : h('p', { class: 'hintline' }, '这轮没记老师文件与技能的快照(2026-09-15 之前跑的)'),
         h('div', {},
           h('button', { class: 'btn', type: 'button', on: { click: (e) => copy(raw.pack.prompt, e.target) } }, '复制上下文包'),
           ' ',
@@ -844,6 +845,18 @@ export const PARENT_PAGE = `<!doctype html>
         det.append(h('details', {}, h('summary', {}, '命令行'), h('pre', {}, b.argv.join(' '))));
         box.append(det);
       }
+      return box;
+    }
+    if (s === 'tools') {
+      // 读了什么(2026-09-15):一行一次工具调用——名字、路径 / 命令、成没成、结果多少字;答「老师为什么没看见档案那一行」
+      const box = h('div', { class: 'dsec' });
+      if (!raw.tools.length) { box.append(h('p', { class: 'hintline' }, '这轮没用工具:老师只凭上下文包答的(问答缺省就是这样)。')); return box; }
+      const files = [...new Set(raw.tools.filter((t) => t.name === 'Read' && t.arg).map((t) => t.arg))];
+      box.append(h('h5', {}, raw.tools.length + ' 次工具调用' + (files.length ? ' · Read 了 ' + files.length + ' 个文件' : '')));
+      for (const t of raw.tools) box.append(h('div', { class: 'dline ' + (t.ok === false ? 'del' : 'same') },
+        h('span', { class: 's' }, t.ok === false ? '✗' : t.ok === null ? '?' : '·'),
+        h('span', {}, t.name + (t.sub ? '(子代理)' : '') + '  ' + (t.arg || '') + (t.chars ? '  → ' + t.chars + ' 字' : ''))));
+      box.append(h('p', { class: 'hintline' }, '✗ 报错 · ? 没等到结果(被杀或还在跑)。完整的参数与结果在 conversations/ 的 .log 里;cotutor show <老师> <job> --json 一次吐这一轮全部。'));
       return box;
     }
     if (s === 'trace') {

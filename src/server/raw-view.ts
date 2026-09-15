@@ -11,15 +11,15 @@ import { annotateSource, type BoardWarning, type SourceRow } from '../lib/board.
 import { cardId, conversationFiles, type CardStateFile } from '../lib/conversation.ts';
 import { kidSource, truncateReply } from '../lib/kid-view.ts';
 import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
-import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
+import { foldRuns, toolCalls, type ToolCall, type TranscriptRow } from '../lib/transcript.ts';
 import { resolvePolicy, type ConversationMessage } from '../schema/index.ts';
 import type { Workspace } from '../cli/workspace.ts';
-import { readErrLog, readIndex, readRunFile, readTranscript, scanCards } from './store.ts';
+import { readErrLog, readIndex, readRunFile, readTranscript, scanCards, type RunSources } from './store.ts';
 import { readPostFile, type PostFile } from './post.ts';
 import { formatEvent, parseEvents, timelineSpans, type RunEvent, type TimelineSpan } from '../lib/events.ts';
 
 export interface RawStation {
-  id: 'pack' | 'timeline' | 'source' | 'parse' | 'kid' | 'audio' | 'trace' | 'post' | 'ledger';
+  id: 'pack' | 'timeline' | 'source' | 'parse' | 'kid' | 'audio' | 'tools' | 'trace' | 'post' | 'ledger';
   title: string;
   /** 体量那行小字 */
   note: string;
@@ -67,7 +67,7 @@ export interface RawView {
   error: string | null;
   stations: RawStation[];
   /** 发出去的:上下文包 + 完整命令行(老 workspace 没落过就是 null) */
-  pack: { prompt: string; argv: string[]; runtime: string; resume: boolean; session: string | null; agentBody: boolean } | null;
+  pack: { prompt: string; argv: string[]; runtime: string; resume: boolean; session: string | null; agentBody: boolean; sources: RunSources | null } | null;
   /** 老师原文(= 解析器真正吃的那一份)+ 逐行注解 */
   source: { text: string; rows: SourceRow[]; warnings: BoardWarning[] };
   /** 顶层文本块里没进板书正文的那些(「我先看看账本」之类) */
@@ -79,9 +79,11 @@ export interface RawView {
   kid: { lines: RawKidLine[]; cards: RawCard[] };
   /** 转录(工具行、子代理),与家长视图同一套折叠 */
   trace: TranscriptRow[];
+  /** 这轮用了哪些工具、读了什么(索引物化的;老轮次从 .log 现抽) */
+  tools: ToolCall[];
   /** 第七站:板书后期的输入 / 原始输出 / 校验(<日期>.<job>.post.json);没跑过 → null */
   post: PostFile | null;
-  postSummary: { ok: boolean; ms: number; costUsd?: number; dropped: number; error?: string } | null;
+  postSummary: ConversationMessage['post'] | null;
   /** 时间线:这轮的事件(<日期>.<job>.events.jsonl;2026-09-13 之前的轮次没有 → 空)+ 甘特的段 + 控制台那种一行一条 */
   events: RunEvent[];
   timeline: { spans: TimelineSpan[]; lines: string[]; total: number };
@@ -168,6 +170,10 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
   }));
 
   const err = await readErrLog(ws, tutor, date, job);
+  // 读了什么:索引里物化过的优先(和当时一致),没有(老轮次)就从 .log 现抽
+  const tools: ToolCall[] = m.tools ?? toolCalls(await readFile(files.log(job), 'utf8').catch(() => ''));
+  const toolFiles = new Set(tools.filter((t) => t.name === 'Read' && t.arg).map((t) => t.arg)).size;
+  const toolFailed = tools.filter((t) => t.ok === false).length;
   const events = parseEvents(await readFile(files.events(job), 'utf8').catch(() => ''));
   const warnCount = ann.warnings.length + (m.warnings?.length ?? 0);
   const dubbed = lines.filter((l) => l.audioOk).length;
@@ -178,6 +184,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     { id: 'parse', title: '解析结果', note: `${ann.section.cards.length} 卡 · ${ann.section.lines.length} 句${warnCount ? ` · ${warnCount} 提醒` : ''}${same ? '' : ' · 与索引不同'}`, state: warnCount || !same ? 'warn' : 'ok' },
     { id: 'kid', title: '下发给孩子', note: `${lines.length} 句${lines.some((l) => l.cut) ? ` · 截了 ${lines.filter((l) => l.cut).length} 句` : ''} · ${cards.length} 卡`, state: lines.length || cards.length ? 'ok' : 'none' },
     { id: 'audio', title: '配音与资产', note: !lines.length ? '这轮没有讲稿' : !lines.some((l) => l.audio) ? '没配音 · 孩子端用浏览器的声' : `${dubbed} / ${lines.length} 句${m.timing?.dubbedMs !== undefined ? ` · ${secs(m.timing.dubbedMs)}` : ''}`, state: !lines.length || !lines.some((l) => l.audio) ? 'none' : dubbed === lines.length ? 'ok' : 'warn' },
+    { id: 'tools', title: '读了什么', note: tools.length ? `${tools.length} 次工具${toolFiles ? ` · Read ${toolFiles} 个文件` : ''}${toolFailed ? ` · ${toolFailed} 次失败` : ''}${tools.some((t) => t.sub) ? ' · 有子代理' : ''}` : '没用工具(只凭上下文包答的)', state: toolFailed ? 'warn' : tools.length ? 'ok' : 'none' },
     { id: 'trace', title: '转录与报错', note: `${transcript?.items.length ?? 0} 条${err ? ' · stderr 有东西' : ''}`, state: m.result === 'error' || err ? 'warn' : 'ok' },
   ];
   // 第七站:板书后期(有卡的轮次才有;关着 / 老板书没跑过 → none)
@@ -206,13 +213,14 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     timing: m.timing ?? null,
     error: m.error ?? null,
     stations,
-    pack: pack ? { prompt: pack.prompt, argv: pack.argv, runtime: pack.runtime, resume: pack.resume, session: pack.session, agentBody: pack.agentBody } : null,
+    pack: pack ? { prompt: pack.prompt, argv: pack.argv, runtime: pack.runtime, resume: pack.resume, session: pack.session, agentBody: pack.agentBody, sources: pack.sources ?? null } : null,
     source: { text: src, rows: ann.rows, warnings: ann.warnings },
     dropped,
     stored: { section: stored, warnings: m.warnings ?? [], kidText: m.kidText ?? null, parentText: m.parentText ?? '' },
     fresh: { section: ann.section, warnings: ann.warnings, diff, same },
     kid: { lines, cards },
     trace: foldRuns(transcript?.items ?? []),
+    tools,
     err: err.slice(-4000),
     post: postFile ? { ...postFile, beats: postFile.beats.map((b) => ({ ...b, raw: b.raw.slice(0, 20000) })) } : null,
     postSummary: m.post ?? null,

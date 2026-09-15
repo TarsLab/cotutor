@@ -30,14 +30,14 @@ import { parseSections } from '../lib/sections.ts';
 import { isoWeek, parsePlan, planLinesFor } from '../lib/plan.ts';
 import { getRuntime, planRun, runtimeUses, type RunPlan } from '../lib/run-plan.ts';
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
-import { parseTranscript, toolSummary } from '../lib/transcript.ts';
+import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
 import { VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type Handoff, type MessageFrom, type Policy, type Timing } from '../schema/index.ts';
 import { DEFAULT_DEVICE, assemblePost, postEnv, runBeatPost, writePostFile, type PostBeatFile, type PostEnv } from './post.ts';
 import { validateBeatPost, type BeatPostOutput } from '../lib/postprocess.ts';
 import type { Transcript } from '../lib/transcript.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
-import { readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, writeDiary, writeIndex, writeRunFile } from './store.ts';
+import { readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
 import { DubQueue, LineDubber, dubReply } from './tts.ts';
 
 export class BusyError extends Error {
@@ -212,7 +212,7 @@ export class Runner {
 
     const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
-    await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined });
+    await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 
     const active: Active = { job, date, partial: null, done: Promise.resolve(started) };
     active.done = this.spawn(ws, tutor, date, job, plan, policy, input.device ?? DEFAULT_DEVICE, active).finally(() => this.active.delete(tutor));
@@ -494,7 +494,10 @@ export class Runner {
     await new Promise<void>((r) => out.end(r));
     closeSync(err);
     if (exit.spawnError) await appendFile(files.err(job), `cotutor: 起不来 ${plan.argv[0]}:${exit.spawnError.message}\n`);
-    const transcript = parseTranscript(await readFile(files.log(job), 'utf8').catch(() => ''));
+    const logText = await readFile(files.log(job), 'utf8').catch(() => '');
+    const transcript = parseTranscript(logText);
+    // 这轮用了哪些工具、读了什么:从 .log 抽出来物化(家长端「看原文」一站、cotutor show)
+    const tools = toolCalls(logText).slice(0, 200);
     if (!transcript.final) {
       // 进程退了但没有 result 事件:起不来、被杀、或 CLI 崩了;标 error,原因指向 err.log
       transcript.final = { text: null, ok: false, reason: exit.spawnError ? `spawn:${exit.spawnError.message}` : `exit:${exit.code ?? 'signal'}` };
@@ -558,7 +561,7 @@ export class Runner {
     if (kidView.section) timing.beats = beatTimings(events, beatsOf(kidView.section));
     // 重新读索引再并入:跑的这段时间里别的字段(比如家长改了别的)不被旧对象盖掉
     const latest = await readIndex(ws, tutor, date);
-    let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, audio, timing, post });
+    let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, audio, timing, post, tools });
     // 场景作业收尾:课包的费用与时长进账本,消息的 artifacts 记课包 id
     if (tutor === 'scene-maker') {
       const r = await this.settleSceneLedger(ws, tutor, date, job, latest.messages.find((m) => m.job === job)?.text ?? '', transcript, timing);

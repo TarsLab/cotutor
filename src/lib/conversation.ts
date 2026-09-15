@@ -141,7 +141,7 @@ export function addMessage(index: ConversationIndex, msg: ConversationMessage): 
 export function applyRun(
   index: ConversationIndex,
   job: string,
-  run: { transcript: Transcript; kidView: KidView; runtime: string; artifacts?: string[]; audio?: string | null; timing?: Timing; post?: ConversationMessage['post'] },
+  run: { transcript: Transcript; kidView: KidView; runtime: string; artifacts?: string[]; audio?: string | null; timing?: Timing; post?: ConversationMessage['post']; tools?: ConversationMessage['tools'] },
 ): ConversationIndex {
   const { transcript, kidView } = run;
   const messages = index.messages.map((m) =>
@@ -163,6 +163,7 @@ export function applyRun(
           audio: run.audio ?? null,
           ...(run.timing ? { timing: run.timing } : {}),
           ...(run.post ? { post: run.post } : {}),
+          ...(run.tools?.length ? { tools: run.tools } : {}),
         }
       : m,
   );

@@ -32,6 +32,7 @@ const USAGE = `用法:
   cotutor serve [--workspace <dir>] [--port <n>] [--http] [--trace]     起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS;--trace 每一轮的事件按道打印)
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad / iPhone 上录音要 HTTPS;所有 workspace 共用)
   cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>] [--new] [--lane main,tts,post] [--quiet]   终端里发一条,现场按道打印每道工序的事件,说完打印结果(与页面同一条路;--new 开新话题;--quiet 只要结果)
+  cotutor show <老师> <job> [<日期>] [--json] [--workspace <dir>]       看一轮:问了什么、上下文包、当时的老师文件与技能 hash、讲稿与卡、读了什么、费用与用时、给家长的尾巴;--json 是家长端「看原文」同一份数据,给 Claude Code 分析用
   cotutor trace <老师> <job> [<日期>] [--lane …] [--workspace <dir>]     回放一轮的事件(<日期>.<job>.events.jsonl;排查昨天那轮用)
   cotutor rate <老师> <话题> <1-5> [--date <日期>]                       给一个话题打星(与家长端同一条路;≥ vault.keepScore 的话题记账时摘要才进日记)
   cotutor bookkeep <老师> [--date <日期>] [--thread <话题>]...           记账:这天每个还没记过的话题各起一轮记账任务,老师回「## 记账」,应用写进 vault 的日记(话题名、孩子问、摘要、观察)
@@ -219,6 +220,35 @@ export async function main(argv: string[]): Promise<void> {
           process.stdout.write(`证书:${redactHome(r.cert)}\n私钥:${redactHome(r.key)}\n主机:${r.hosts.join(' ')}\n`);
           process.stdout.write(`iPad / iPhone 要先信任这台机器的根证书:把 ${redactHome(r.caRoot)}/rootCA.pem 隔空投送过去 → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里**把开关打开**(装了不等于信任,每台设备各做一次);然后重启 cotutor serve,用打印的 https://<局域网 IP>:<端口>/ 打开(用 IP,主机名在有些设备上会走到不通的 IPv6)。详见 docs/iPad与iPhone.md\n`);
         }
+        return;
+      }
+      case 'show': {
+        const [tutor, jobArg, dateArg] = positionals;
+        if (!tutor || !jobArg) throw new UsageError(`show 需要老师名和 job,如 cotutor show math-tutor 1620-1 2026-09-12(日期缺省今天)。\n${USAGE}`);
+        const ws = loadWorkspace(workspace);
+        const { rawView } = await import('../server/raw-view.ts');
+        const { localDate } = await import('../lib/conversation.ts');
+        const date = dateArg ?? localDate(new Date());
+        const v = await rawView(ws, tutor, date, jobArg);
+        if (!v) throw new UsageError(`${tutor} ${date} 没有 ${jobArg} 这一轮(cotutor show 的日期缺省今天;job 与日期对不对?)`);
+        if (json) { process.stdout.write(`${JSON.stringify(redactDeep(v), null, 2)}\n`); return; }
+        const secs = (ms?: number): string => (ms === undefined ? '?' : `${(ms / 1000).toFixed(1)}s`);
+        const out: string[] = [];
+        out.push(`${v.tutor} ${v.date} ${v.job} · ${v.from} 问 · ${v.result}${v.error ? ` · 出错 ${v.error}` : ''}${v.costUsd !== null ? ` · $${v.costUsd.toFixed(3)}` : ''}${v.timing ? ` · 首拍就绪 ${secs(v.timing.firstReadyMs)} 老师写完 ${secs(v.timing.doneMs)}` : ''}`);
+        out.push(`问:${v.text}`);
+        const src = v.pack?.sources;
+        out.push(`上下文包:${v.pack ? `${v.pack.prompt.length} 字 · ${v.pack.resume ? 'resume' : '新开'} · ${v.pack.runtime}` : '没落(老轮次)'}${src ? ` · 老师文件 ${src.agent ? `${src.agent.file} ${src.agent.hash.slice(7)}` : '读不到'} · 技能 ${Object.entries(src.skills).map(([k, h]) => `${k} ${h.slice(7, 13)}`).join(' / ') || '无'}` : ''}`);
+        if (v.pack) out.push(...v.pack.prompt.split('\n').map((l) => `  │ ${l}`));
+        out.push(`读了什么:${v.tools.length ? '' : '没用工具'}`);
+        for (const t of v.tools) out.push(`  ${t.ok === false ? '✗' : t.ok === null ? '?' : '·'} ${t.name}${t.sub ? '(子代理)' : ''} ${t.arg}${t.chars ? ` → ${t.chars} 字` : ''}`);
+        out.push(`卡 ${v.kid.cards.length}:${v.kid.cards.map((c) => `${c.kind} ${c.label}`.trim()).join(' | ')}`);
+        out.push(`讲稿 ${v.kid.lines.length}:`);
+        for (const l of v.kid.lines) out.push(`  ${l.text}${l.cut ? `〔截:${l.cut}〕` : ''}`);
+        if (v.stored.parentText) out.push(`给家长的尾巴:\n${v.stored.parentText.split('\n').map((l) => `  ${l}`).join('\n')}`);
+        if (v.stored.warnings.length) out.push(`提醒:${v.stored.warnings.join(';')}`);
+        if (v.postSummary) out.push(`后期:${v.postSummary.ok ? `${v.postSummary.beats ?? '?'} 拍 · ${secs(v.postSummary.ms)}${v.postSummary.costUsd !== undefined ? ` · $${v.postSummary.costUsd.toFixed(4)}` : ''} · 丢 ${v.postSummary.dropped}` : `没成 ${v.postSummary.error ?? ''}`}`);
+        out.push(`文件:conversations/${tutor}/${v.files.log}${v.files.run ? ` · ${v.files.run}` : ''}`);
+        process.stdout.write(`${out.join('\n')}\n`);
         return;
       }
       case 'trace': {

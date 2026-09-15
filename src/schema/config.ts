@@ -22,7 +22,11 @@ export const PolicySchema = z.object({
   /** 这位老师可用的回复形式 */
   forms: z.array(z.enum(REPLY_FORMS)).describe('这位老师可用的回复形式:L0 确定性资源 / L1 口答 / L2 快卡 / L3 补讲 / L4 整包'),
   /** 上下文包的三个数:最近观察条数(从日记的「- 观察:」行抽,最近 14 天)、计划行数、档案「现在」callout 带几行 */
-  contextPack: z.object({ recent: z.number().int().nonnegative(), planLines: z.number().int().nonnegative(), profileLines: z.number().int().nonnegative() }),
+  contextPack: z.object({
+    recent: z.number().int().nonnegative().describe('上下文包带最近几条观察(最近 14 天日记里本学科的「- 观察:」行,取最新的)'),
+    planLines: z.number().int().nonnegative().describe('上下文包带本周计划里这位老师的前几行'),
+    profileLines: z.number().int().nonnegative().describe('上下文包带档案「现在」callout 的前几行'),
+  }),
   /** 板书开关:auto = 老师判断要不要出卡(缺省);off = 只说话不出卡 */
   board: z.enum(['auto', 'off']).describe('板书:auto = 讲题讲概念时老师出卡(缺省);off = 只说话不出卡'),
   /** 场景作业(scene-maker 做课包,$3–5 / 10–15 分钟一个):每天最多起几个;配在 scene-maker 身上或 policyDefaults */

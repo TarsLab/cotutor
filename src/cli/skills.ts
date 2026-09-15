@@ -4,7 +4,7 @@
  * - 来源 cotutor = 本包根 skills/<name>/(进 npm files;cotutor-board 整个、cotutor-vault 的 references/ 是 scripts/gen-skills.ts 生成后入库的,
  *   tests/skills.test.ts 断言一致),来源 drawtell = drawtell 包根 skills/<name>/(四个领域 skill,2026-09-15 从退役的 drawtell-skills 仓搬过去的;
  *   没装 → unavailable,doctor 点名,init 跳过)
- * - machine: true 的是机器件(cotutor-board / cotutor-vault / cotutor-analyze:它们和解析器、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
+ * - machine: true 的是机器件(cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune:它们和解析器、契约、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
  *   其余拷进来就是家长的:upgrade 没改过的换新、改过的报 diff 保留(custom / untracked)
  * 工作流 skill(math-explainer 等)不拷,scene-maker 的工作流写在它的老师文件正文里(《drawtell接入与场景卡.md》§3)。
  * 顺带一个机器文件 .cotutor/drawtell:指向本包 node_modules 里 drawtell CLI 的壳脚本,老师用相对路径就能跑它。
@@ -17,7 +17,8 @@ import { fileURLToPath } from 'node:url';
 import { BOARD_SKILL } from '../cards/docs.ts';
 import { VAULT_SKILL } from '../lib/vault-doc.ts';
 import { ANALYZE_SKILL } from '../lib/analyze-doc.ts';
-export { ANALYZE_SKILL, BOARD_SKILL, VAULT_SKILL };
+import { TUNE_SKILL } from '../lib/tune-doc.ts';
+export { ANALYZE_SKILL, BOARD_SKILL, TUNE_SKILL, VAULT_SKILL };
 import { PACKAGE_VERSION } from './skeleton.ts';
 import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
 
@@ -37,6 +38,7 @@ export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
   { name: BOARD_SKILL, source: 'cotutor', machine: true, legacy: LEGACY_SYNTAX_PATHS },
   { name: VAULT_SKILL, source: 'cotutor', machine: true },
   { name: ANALYZE_SKILL, source: 'cotutor', machine: true },
+  { name: TUNE_SKILL, source: 'cotutor', machine: true },
   { name: 'drawtell-scene', source: 'drawtell' },
   { name: 'drawtell-teaching', source: 'drawtell' },
   { name: 'drawtell-cli', source: 'drawtell' },

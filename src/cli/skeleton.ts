@@ -192,10 +192,12 @@ export function configTemplate(input: ConfigTemplateInput): string {
     tutors,
     runtimes: {
       default: 'claude',
+      // --setting-sources project(2026-09-15):老师只读 workspace 的 .claude/,~/.claude 的技能(obsidian-cli 之类)/ hooks / additionalDirectories / 插件都不进老师会话;
+      // 代价是 ~/.claude/settings.json 的 env(代理)也不进,serve 要从有代理的 shell 起,doctor env.userSettings 点名
       // 普通老师不许派子代理(--disallowedTools Agent):claude 会把 .claude/agents/ 里的老师文件当可派的子代理,老师自己去叫 scene-maker 就把预算烧在自己这轮里;转交只写「## 转交」段
       claude: {
-        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--disallowedTools', 'Agent', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
-        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--disallowedTools', 'Agent', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
+        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--disallowedTools', 'Agent', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
+        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--disallowedTools', 'Agent', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
       },
       qwen: {
         run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],
@@ -203,17 +205,19 @@ export function configTemplate(input: ConfigTemplateInput): string {
       },
       // 场景作业(scene-maker):分钟级、几美元一个,预算与时限比问答大;老师条目 runtime 指到它
       'claude-scene': {
-        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '8'],
-        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '8'],
+        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '8'],
+        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '8'],
       },
       'qwen-scene': {
         run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '25m'],
         resume: ['qwen', '-p', '{prompt}', '--resume', '{session}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '25m'],
       },
-      // 板书后期(policy post.runtime):快模型、无工具、整块 JSON 出,几秒几厘;没有 resume 的事,写同一条
+      // 板书后期(policy post.runtime):快模型、无工具、整块 JSON 出,几秒几厘;没有 resume 的事,写同一条。
+      // 2026-09-15 量过:--disallowedTools 只禁调用、工具定义照发,一拍输入 27K;--tools "" 去工具定义(→ 6.7K)、--disable-slash-commands 去技能索引、
+      // --system-prompt 换掉 claude 自己的系统提示与子代理列表(→ 514,就是提示词本身)。样本 8 拍质量不变,p95 7.0s → 3.8s,费用 1/4
       'claude-fast': {
-        run: ['claude', '-p', '{prompt}', '--model', 'haiku', '--output-format', 'json', '--disallowedTools', 'Agent,Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit', '--max-budget-usd', '0.2'],
-        resume: ['claude', '-p', '{prompt}', '--model', 'haiku', '--output-format', 'json', '--disallowedTools', 'Agent,Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit', '--max-budget-usd', '0.2'],
+        run: ['claude', '-p', '{prompt}', '--model', 'haiku', '--setting-sources', 'project', '--output-format', 'json', '--tools', '', '--disable-slash-commands', '--system-prompt', '你是板书后期,只回补丁。', '--max-budget-usd', '0.2'],
+        resume: ['claude', '-p', '{prompt}', '--model', 'haiku', '--setting-sources', 'project', '--output-format', 'json', '--tools', '', '--disable-slash-commands', '--system-prompt', '你是板书后期,只回补丁。', '--max-budget-usd', '0.2'],
       },
     },
     tts: TTS_DEFAULT,

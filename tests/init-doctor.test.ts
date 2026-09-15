@@ -110,6 +110,11 @@ try {
   check('claude 模板带 --include-partial-messages(流式),qwen 没有这个开关', tpl.runtimes.claude.run.includes('--include-partial-messages') && tpl.runtimes.claude.resume.includes('--include-partial-messages') && !tpl.runtimes.qwen.run.includes('--include-partial-messages'));
   const tplS = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: Record<string, { run: string[] }> };
   check('普通老师的 claude 模板禁掉 Agent(不派子代理);claude-scene 不禁(scene-maker 要派检验)', tplS.runtimes.claude.run.join(' ').includes('--disallowedTools Agent') && !tplS.runtimes['claude-scene'].run.includes('--disallowedTools'));
+  const tplR = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: Record<string, string | { run: string[]; resume: string[] }> };
+  const claudeOnes = Object.entries(tplR.runtimes).filter((e): e is [string, { run: string[]; resume: string[] }] => typeof e[1] !== 'string' && e[1].run[0] === 'claude');
+  const fast = tplR.runtimes['claude-fast'] as { run: string[] };
+  check('claude-fast 不发工具定义 / 技能索引 / claude 的系统提示(--tools "" + --disable-slash-commands + --system-prompt),不再用 --disallowedTools', fast.run.includes('--tools') && fast.run[fast.run.indexOf('--tools') + 1] === '' && fast.run.includes('--disable-slash-commands') && fast.run.includes('--system-prompt') && !fast.run.includes('--disallowedTools'));
+  check('claude 的三个模板 run / resume 都带 --setting-sources project(只读 workspace 的 .claude/,用户级技能 / hooks / 额外目录不进老师);qwen 没有', claudeOnes.length === 3 && claudeOnes.every(([, r]) => r.run.join(' ').includes('--setting-sources project') && r.resume.join(' ').includes('--setting-sources project')) && !(tplR.runtimes.qwen as { run: string[] }).run.includes('--setting-sources'));
 }
 // ---- 老 workspace 迁移(步 2):cotutor.json 是政策文件,机器不自动改,所以要算差异 + 只补缺 ----
 {

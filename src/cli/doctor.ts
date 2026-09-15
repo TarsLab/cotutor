@@ -73,6 +73,7 @@ export function explainLlmFailure(text: string, runtime: readonly string[]): str
     return `这版 ${bin} 不认全局 settings 里的模型:给 cotutor.json 的 ${bin} 运行时 run / resume 末尾加 "--model", "sonnet"(或 ${bin} update 升级)`;
   }
   if (/nested|CLAUDECODE|already running inside/i.test(text)) return '在 Claude Code 会话里嵌套起 claude 被拒:换个普通终端,或 unset CLAUDECODE 及 CLAUDE_CODE_* 后再跑';
+  if (/403|request not allowed/i.test(text)) return `API 拒了(403):多半是老师会话没走代理——运行时模板带 --setting-sources project,${bin} 不再读 ~/.claude/settings.json 的 env,代理要在起 serve 的 shell 里 export HTTPS_PROXY`;
   if (/not logged in|login|authentication|401|unauthorized/i.test(text)) return `${bin} 没登录或 key 失效:先在终端跑一次 ${bin} 登录`;
   if (/ENOENT|command not found/i.test(text)) return `PATH 里没有 ${bin}`;
   if (/budget|max_budget/i.test(text)) return '预算旗太小:调大运行时模板里的 --max-budget-usd';
@@ -232,6 +233,22 @@ export async function doctorWorkspace(
       detail: gaps.length ? `${gaps.length} 项可补:${gaps.map((g) => g.detail).join(';')}` : 'cotutor.json 有出厂模板里的全部老师、运行时与旗标',
       fix: gaps.length ? 'cotutor upgrade --config --dry-run 先看,再 cotutor upgrade --config 补(只加缺的,你改过的值不动)' : undefined,
     });
+  }
+
+  // ---- 老师会话的隔离(2026-09-15):claude 模板带 --setting-sources project,只读 workspace 的 .claude/,~/.claude 的技能 / hooks / 额外目录都不进老师;
+  // 代价是 ~/.claude/settings.json 的 env(代理)也不进,得在起 serve 的 shell 里 export,不然老师 403 ----
+  if (ws) {
+    const isolated = Object.values(ws.config.runtimes).some((r) => typeof r !== 'string' && r.run.includes('--setting-sources'));
+    let userEnv: Record<string, string> = {};
+    try {
+      userEnv = (JSON.parse(await readFile(join(env.HOME ?? '', '.claude', 'settings.json'), 'utf8')) as { env?: Record<string, string> }).env ?? {};
+    } catch {
+      /* 没有用户级 settings 就没有这条 */
+    }
+    const lost = Object.keys(userEnv).filter((k) => !(k in env));
+    if (isolated && lost.length) {
+      push({ name: 'env.userSettings', ok: false, required: false, detail: `~/.claude/settings.json 的 env 有 ${lost.join(' ')},这个 shell 里没有;老师会话带 --setting-sources project 读不到它们(代理没了就 403)`, fix: `起 serve 前 export ${lost.map((k) => `${k}=…`).join(' ')}` });
+    }
   }
 
   // ---- 骨架 ----

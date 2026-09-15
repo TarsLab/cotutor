@@ -33,7 +33,9 @@ const USAGE = `用法:
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad / iPhone 上录音要 HTTPS;所有 workspace 共用)
   cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>] [--new] [--lane main,tts,post] [--quiet]   终端里发一条,现场按道打印每道工序的事件,说完打印结果(与页面同一条路;--new 开新话题;--quiet 只要结果)
   cotutor pack <老师> [<消息>] [--from kid|parent|system] [--at <ISO时间>] [--json]   干跑上下文包:不起模型,打印现在会发给老师的那份 + 每段来自哪个文件、那里一共几条、按政策带了几条(改了档案 / 日记 / 计划立刻看效果)
-  cotutor show <老师> <job> [<日期>] [--json] [--workspace <dir>]       看一轮:问了什么、上下文包、当时的老师文件与技能 hash、讲稿与卡、读了什么、费用与用时、给家长的尾巴;--json 是家长端「看原文」同一份数据,给 Claude Code 分析用
+  cotutor replay <老师> <job> [<日期>] [--runtime <名>] [--post] [--json]   回放一轮:同一问按现在的 vault 与提示词再跑一遍(落 evals/,不进孩子的对话、不配音、后期缺省关),跑完并排打印上下文包 / 讲稿 / 卡 / 读了什么的 diff
+  cotutor compare <老师> [<evalJob>] [<日期>] [--json]                   再看一次回放的对照(不给 evalJob 就列这天回放过哪些)
+  cotutor show <老师> <job> [<日期>] [--json] [--evals] [--workspace <dir>]   看一轮:问了什么、上下文包、当时的老师文件与技能 hash、讲稿与卡、读了什么、费用与用时、给家长的尾巴;--json 是家长端「看原文」同一份数据,给 Claude Code 分析用
   cotutor trace <老师> <job> [<日期>] [--lane …] [--workspace <dir>]     回放一轮的事件(<日期>.<job>.events.jsonl;排查昨天那轮用)
   cotutor rate <老师> <话题> <1-5> [--date <日期>]                       给一个话题打星(与家长端同一条路;≥ vault.keepScore 的话题记账时摘要才进日记)
   cotutor bookkeep <老师> [--date <日期>] [--thread <话题>]...           记账:这天每个还没记过的话题各起一轮记账任务,老师回「## 记账」,应用写进 vault 的日记(话题名、孩子问、摘要、观察)
@@ -257,8 +259,9 @@ export async function main(argv: string[]): Promise<void> {
         const { rawView } = await import('../server/raw-view.ts');
         const { localDate } = await import('../lib/conversation.ts');
         const date = dateArg ?? localDate(new Date());
-        const v = await rawView(ws, tutor, date, jobArg);
-        if (!v) throw new UsageError(`${tutor} ${date} 没有 ${jobArg} 这一轮(cotutor show 的日期缺省今天;job 与日期对不对?)`);
+        const { evalWorkspace } = await import('../server/replay.ts');
+        const v = await rawView(flags.evals === true ? evalWorkspace(ws) : ws, tutor, date, jobArg);
+        if (!v) throw new UsageError(`${tutor} ${date} 没有 ${jobArg} 这一轮(cotutor show 的日期缺省今天;job 与日期对不对?回放那轮要加 --evals)`);
         if (json) { process.stdout.write(`${JSON.stringify(redactDeep(v), null, 2)}\n`); return; }
         const secs = (ms?: number): string => (ms === undefined ? '?' : `${(ms / 1000).toFixed(1)}s`);
         const out: string[] = [];
@@ -277,6 +280,42 @@ export async function main(argv: string[]): Promise<void> {
         if (v.postSummary) out.push(`后期:${v.postSummary.ok ? `${v.postSummary.beats ?? '?'} 拍 · ${secs(v.postSummary.ms)}${v.postSummary.costUsd !== undefined ? ` · $${v.postSummary.costUsd.toFixed(4)}` : ''} · 丢 ${v.postSummary.dropped}` : `没成 ${v.postSummary.error ?? ''}`}`);
         out.push(`文件:conversations/${tutor}/${v.files.log}${v.files.run ? ` · ${v.files.run}` : ''}`);
         process.stdout.write(`${out.join('\n')}\n`);
+        return;
+      }
+      case 'replay': {
+        const [tutor, jobArg, dateArg] = positionals;
+        if (!tutor || !jobArg) throw new UsageError(`replay 需要老师名和 job,如 cotutor replay math-tutor 1620-1 2026-09-12(日期缺省今天)。\n${USAGE}`);
+        const ws = loadWorkspace(workspace);
+        const { compareReplay, formatCompare, startReplay } = await import('../server/replay.ts');
+        const { localDate } = await import('../lib/conversation.ts');
+        const date = dateArg ?? localDate(new Date());
+        const r = await startReplay(ws, tutor, date, jobArg, { runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, post: flags.post === true, env: process.env });
+        if (!json) process.stdout.write(`回放起了:evals/${tutor}/${date}.${r.evalJob}.*(原轮 ${jobArg}),等老师说完……\n`);
+        await r.done;
+        const c = await compareReplay(ws, tutor, date, r.evalJob);
+        if (!c) throw new UsageError(`回放跑完了但读不到结果:evals/${tutor}/${date}.json`);
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep(c), null, 2)}\n`);
+        else process.stdout.write(formatCompare(c));
+        return;
+      }
+      case 'compare': {
+        const [tutor, evalJobArg, dateArg] = positionals;
+        if (!tutor) throw new UsageError(`compare 需要老师名,如 cotutor compare math-tutor 1712-1 2026-09-12。\n${USAGE}`);
+        const ws = loadWorkspace(workspace);
+        const { compareReplay, formatCompare, listReplays } = await import('../server/replay.ts');
+        const { localDate } = await import('../lib/conversation.ts');
+        const date = dateArg ?? localDate(new Date());
+        if (!evalJobArg) {
+          const rows = await listReplays(ws, tutor, date);
+          if (json) process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
+          else if (!rows.length) process.stdout.write(`${tutor} ${date} 没有回放过(cotutor replay ${tutor} <job> ${date})\n`);
+          else for (const r of rows) process.stdout.write(`${r.evalJob}  ← ${r.replayOf}  ${r.at.slice(11)}  ${r.result}${r.costUsd !== null ? `  $${r.costUsd.toFixed(3)}` : ''}${r.runtime ? `  ${r.runtime}` : ''}\n`);
+          return;
+        }
+        const c = await compareReplay(ws, tutor, date, evalJobArg);
+        if (!c) throw new UsageError(`${tutor} ${date} 没有回放 ${evalJobArg}(cotutor compare ${tutor} ${date} 列这天的)`);
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep(c), null, 2)}\n`);
+        else process.stdout.write(formatCompare(c));
         return;
       }
       case 'trace': {

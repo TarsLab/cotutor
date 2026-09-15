@@ -41,6 +41,8 @@ export const GITIGNORE = `# 转录日志体积大、可从对话索引重建关�
 conversations/**/*.log
 # 配音可重新合成
 conversations/**/*.mp3
+# 回放(cotutor replay)是调提示词与 vault 时的对照,不是孩子的对话
+evals/
 # 课包与截图是 drawtell build / snap 的派生物,场景源在 scenes/
 bundles/
 snaps/

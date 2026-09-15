@@ -67,6 +67,8 @@ export interface SendInput {
   bookkeep?: { thread: string };
   /** 这条带的作业照片(相对 workspace 根,已由路由验过在 captures/ 里;R5):进上下文包 photos: 段,老师自己 Read 看图;文字可以空 */
   photos?: string[];
+  /** 这条是回放(server/replay.ts):原轮的 job,记进消息;调用方已经把 Runner 指到 evals/ */
+  replayOf?: string;
 }
 
 export interface SendStarted {
@@ -248,7 +250,7 @@ export class Runner {
     const prompt = buildContextPack(pack, text, policy.contextPack);
     const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, runtime: input.runtime ?? t.runtime });
 
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 

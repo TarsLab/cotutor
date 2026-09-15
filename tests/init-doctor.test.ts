@@ -37,14 +37,15 @@ try {
   check('scene-maker 在老师表里:hidden、runtime claude-scene;模板有 claude-scene 运行时', (JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { tutors: Record<string, { hidden?: boolean; runtime?: string }>; runtimes: Record<string, unknown> }).tutors['scene-maker'].runtime === 'claude-scene' && 'claude-scene' in (JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { runtimes: Record<string, unknown> }).runtimes);
   const cfg = JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { kid: { slug: string; name?: string } };
   check('cotutor.json 模板带 slug 与名', cfg.kid.slug === 'ming' && cfg.kid.name === '小明');
-  check('家规两份', readFileSync(join(ws, 'CLAUDE.md'), 'utf8').includes('家规') && existsSync(join(ws, 'QWEN.md')));
+  check('家规不再出厂(老师要知道的都在老师文件与技能里)', !existsSync(join(ws, 'CLAUDE.md')) && !existsSync(join(ws, 'QWEN.md')));
   check('用户配置指过来', (JSON.parse(readFileSync(join(home, '.config', 'cotutor', 'config.json'), 'utf8')) as { workspace: string }).workspace === ws);
   check('首跑全部 created', r1.steps.every((s) => s.action === 'created'), JSON.stringify(r1.steps.filter((s) => s.action !== 'created')));
 
   writeFileSync(join(ws, 'CLAUDE.md'), '# 我家的规矩');
   const r2 = await initWorkspace({ slug: 'ming' });
   check('重跑没有 created', r2.steps.every((s) => s.action !== 'created'), JSON.stringify(r2.steps.filter((s) => s.action === 'created')));
-  check('家规不覆盖', readFileSync(join(ws, 'CLAUDE.md'), 'utf8') === '# 我家的规矩');
+  check('家长自建的家规,init 不动', readFileSync(join(ws, 'CLAUDE.md'), 'utf8') === '# 我家的规矩');
+  unlinkSync(join(ws, 'CLAUDE.md'));
   mkdirSync(join(ws, '.cotutor', 'cards'), { recursive: true });
   writeFileSync(join(ws, '.cotutor', '板书语法.md'), '旧的');
   writeFileSync(join(ws, '.cotutor', 'cards', 'text.md'), '旧的');

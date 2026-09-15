@@ -1,7 +1,7 @@
 /**
  * workspace骨架清单:init 建、doctor 查,同一张清单(两边各写一遍必然漂移)。
  * 布局见《cotutor-agent层设计.md》§2:
- *   cotutor.json / CLAUDE.md QWEN.md(家规)/ .claude/agents(老师文件,拷自本包 agents/,是家长的)/ .qwen/agents(相对链)/ .cotutor/shipped.json(出厂 hash)
+ *   cotutor.json / .claude/agents(老师文件,拷自本包 agents/,是家长的)/ .qwen/agents(相对链)/ .cotutor/shipped.json(出厂 hash)
  *   agents/<name>/(老师的家 = 会话 cwd)/ ledger/(产物账本)/ conversations/(对话索引与转录)
  * vault 侧(《obsidian仓库设计.md》):档案 / 课程表 / 日记 / 教材 / 计划 / 参考,init 只建档案与参考 README(缺了才写)
  */
@@ -50,16 +50,11 @@ node_modules/
 .DS_Store
 `;
 
-/** 家规:所有老师常驻(CLAUDE.md 与 QWEN.md 同一份)。故意短。 */
-export const RULES = `# 家规
-
-- 关于孩子的长期记忆在家长的 Obsidian 仓库,上下文包里的 profile / plan / recent 都是从那里机械抽的;讲一个单元之前该读教材哪一节、以前讲过什么怎么查、记账时「## 记账」段怎么写,都在 cotutor-vault 技能里(../../.claude/skills/cotutor-vault/SKILL.md),讲解与任务前读它,问答不用。你**不直接写**那里的文件:记账只回「## 记账」段,应用按它写日记。
-- 你自己的经验记进你的记忆目录(MEMORY.md 一行索引 + 主题文件)。
-- 回复正文就是孩子看到的板书:普通段落是你说给孩子听的话(一行一句,会被念出来;想强调的词可以用方括号标出,不标也行;末句是问句就停下等孩子),围栏是板上的卡(围栏标签是卡的种类;卡上是名词,讲稿是动词;卡的写法在 cotutor-board 技能里)。随口问答就一两句话,没有卡。板书写完就停,不再补话、不再用工具——孩子看到的只是这轮最后一段话。
-- 对家长说的话写成一段「## 家长」;需要家长拍板的事写成一段「## 待裁量」(question: 一句话;options: 列表),不要停下来等;要交给别的老师的事写成一段「## 转交」(to: 老师名;why: 一句话;refs: 相关文件),第一期只允许一跳;**转交只写这个段,不要自己用 Task / 子代理去叫那位老师**——应用看到段会自动起她的一轮。这三个段放在正文末尾,孩子看不到。
-- 作业照片:上下文包里有 \`photos:\`(相对 workspace 根的路径,如 ../../captures/2026-09-14/1620-1.jpg,相对你的 cwd 要加 ../../)就先 Read 那张图再答,认出是哪本、哪页、哪道题就在讲稿第一句说出来;拍糊了、拍不全、看不出是哪道,在讲稿里让孩子再拍一张或指一下哪道,**不要**为此写「## 待裁量」(那是给家长的,孩子等不了)。照片路径只在板书的 image / canvas 卡里引用,别写进「## 记账」——日记里只留你认出的文字。
-- 对话按天,明天从上下文包(档案、计划、最近观察)和你的记忆接着来,不要指望今天的对话还在。
-`;
+/**
+ * 家规(workspace 根的 CLAUDE.md / QWEN.md)2026-09-15 起不再出厂:老师要知道的都在老师文件与技能里,机器不写、不查;
+ * 家长想给所有老师加一条共同规矩就自己在根建 CLAUDE.md(qwen 用 QWEN.md),两个 CLI 从 agents/<name>/ 向上都读得到。
+ * 删掉的另一个理由:板书后期的 claude -p 以 workspace 根为 cwd,家规会被塞进每一拍的提示词。
+ */
 
 /** 档案模板(vault 的 孩子.md;缺了才写):「现在」callout 整段进上下文包,其余老师按需读 */
 export function profileTemplate(name: string): string {
@@ -92,7 +87,7 @@ export interface TutorTemplateInput {
 }
 
 /**
- * 家长自己加老师时的文件模板:与出厂老师同一套约定(cwd、账本、家规、上下文包、问答 / 讲解 / 任务三种回复、
+ * 家长自己加老师时的文件模板:与出厂老师同一套约定(cwd、账本、上下文包、问答 / 讲解 / 任务三种回复、
  * 板书写法、不评判、不造课件、家长 / 待裁量 / 转交段),只有第一句人设是这位老师自己的。
  */
 export function tutorTemplate(t: TutorTemplateInput): string {
@@ -104,7 +99,7 @@ maxTurns: 40
 permissionMode: bypassPermissions
 memory: project
 ---
-你是这个家的${t.display},面对的是一个小学生和他的家长。cwd 是你的家(agents/${t.name}/),家规在 ../../CLAUDE.md。消息前面有一段 \`cotutor:\` 开头的上下文包(谁在说、几点、正在看什么、档案、本周计划、最近观察),先看它再答。
+你是这个家的${t.display},面对的是一个小学生和他的家长。cwd 是你的家(agents/${t.name}/)。消息前面有一段 \`cotutor:\` 开头的上下文包(谁在说、几点、正在看什么、档案、本周计划、最近观察),先看它再答。
 
 (在这里写这位老师自己的性子和讲法:比如「说话慢一点,爱打比方」「英文后面跟中文」。一两句就够。)
 
@@ -153,7 +148,8 @@ memory: project
 末句是问句?
 \`\`\`\`
 
-对家长说的话、要拍板的事、要转交的事,用「## 家长」「## 待裁量」(question: 一句话;options: 列表)「## 转交」三个段放在正文末尾,孩子看不到;不要停下来等家长。
+对家长说的话、要拍板的事、要转交的事,用「## 家长」「## 待裁量」(question: 一句话;options: 列表)「## 转交」(to: 老师名;why: 一句话;refs: 相关文件;第一期只允许一跳)三个段放在正文末尾,孩子看不到;不要停下来等家长。转交只写这个段,不要自己用 Task / 子代理去叫那位老师,应用看到段会自动起她的一轮。
+对话按天,明天从上下文包(档案、计划、最近观察)和你的记忆接着来,不要指望今天的对话还在。
 
 记账与记忆(只在任务里做,问答和讲解不做):记账时回一段「## 记账」(写法与例子在 cotutor-vault 技能;讲解前要读教材那一节也按它),观察写进它的 observations,应用替你写进家长的日记;你自己的经验记进你的记忆目录。
 `;
@@ -221,14 +217,8 @@ export function configTemplate(input: ConfigTemplateInput): string {
       },
     },
     tts: TTS_DEFAULT,
-    _note:
-      '一孩一 workspace 的政策文件,家长改这里;机器不会自动重建或覆盖,写坏了靠 git 回退,cotutor doctor 可体检。' +
-      'tutors = 老师表(key 与 .claude/agents/<key>.md 的 name 一致):display 显示名、avatar、voice 用 voxtell 音色 id、enabled 开关、hidden 孩子端不露、policy 覆盖 policyDefaults。' +
-      'policyDefaults 缺省:replyMaxChars 60(每句)、dailyMessages 30、dailyRegen 3、reviewGate false、contextPack {recent 10, planLines 10, profileLines 8}、board auto(off = 只说话不出卡)、post {mode auto, runtime claude-fast, timeoutMs 10000}(板书后期:一拍一次,快模型划重点 / 排版 / 定样子;off = 素版)。' +
-      'paths = 角色映射:vault 指 Obsidian vault 根(一孩一 vault),diary/plans/profile/timetable/textbooks/reference 相对 vault(缺省 日记/计划/孩子.md/课程表.md/教材/参考),captures(作业照片)相对 workspace 根。vault.keepScore(缺省 4)= 话题打几星起记账时才把摘要沉淀进日记。' +
-      'runtimes = 运行时,占位 {agent} {agentBody} {prompt} {session};政策旋钮(预算、时限、模型)写进模板;老师条目的 runtime 可指定用哪个(scene-maker 用 claude-scene:预算 8 美元)。scenes.dailyMax(缺省 2)= 每天最多起几个场景作业。' +
-      'tts = 配音命令,占位 {text} {voice} {out};老师没配 voice 就不合成,孩子端用浏览器的声。' +
-      'server.https = {cert, key} 只给这个 workspace 用的证书路径(相对 workspace 根);不配则用机器级 ~/.config/cotutor/certs/(cotutor cert 用 mkcert 建,所有 workspace 共用)。',
+    // 字段说明不写在这里:一写进去就冻住(政策文件永不覆盖),$schema 指的 schema 文件每次 init / upgrade 从 zod 的 .describe() 刷新
+    _note: '一孩一 workspace 的政策文件,家长改这里,机器不覆盖(写坏了靠 git 回退,cotutor doctor 可体检);每个字段的说明在 $schema 指的 .cotutor/cotutor.schema.json,编辑器里悬停就能看到。',
   };
   return `${JSON.stringify(cfg, null, 2)}\n`;
 }

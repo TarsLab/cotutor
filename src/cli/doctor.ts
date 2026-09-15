@@ -244,14 +244,9 @@ export async function doctorWorkspace(
     detail: missing.length ? `缺 ${missing.join(' ')}` : [...DIRS].map((d) => `${d}/`).join(' '),
     fix: missing.length ? `cotutor init <slug> --dir ${redactHome(root)}(幂等补缺)` : undefined,
   });
-  const rulesMissing = (await Promise.all(['CLAUDE.md', 'QWEN.md'].map(async (f) => ((await statOrNull(join(root, f))) ? null : f)))).filter(Boolean);
-  push({
-    name: 'rules',
-    ok: rulesMissing.length === 0,
-    required: false,
-    detail: rulesMissing.length ? `缺家规 ${rulesMissing.join(' ')}(老师少了常驻指令)` : '家规 CLAUDE.md QWEN.md 在',
-    fix: rulesMissing.length ? 'cotutor init 补上(已有的不动)' : undefined,
-  });
+  // 家规(根的 CLAUDE.md / QWEN.md)2026-09-15 起不出厂:有就是家长自建的共同规矩,提一句;没有不缺
+  const rulesThere = (await Promise.all(['CLAUDE.md', 'QWEN.md'].map(async (f) => ((await statOrNull(join(root, f))) ? f : null)))).filter(Boolean);
+  push({ name: 'rules', ok: true, required: false, detail: rulesThere.length ? `家长自建的家规 ${rulesThere.join(' ')} 在,所有老师每轮都读(板书后期的快模型也会读到)` : '没有根目录的 CLAUDE.md / QWEN.md(不需要:老师要知道的都在老师文件与技能里)' });
 
   if (ws) {
     // ---- 老师:定义文件(拷贝)+ 名字一致 + 出厂 / 自定义状态 + 老师目录 ----

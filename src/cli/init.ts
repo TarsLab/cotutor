@@ -6,7 +6,7 @@
  */
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, RULES, configTemplate, profileTemplate, shippedAgents, writeSchemaFile } from './skeleton.ts';
+import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, configTemplate, profileTemplate, shippedAgents, writeSchemaFile } from './skeleton.ts';
 import { installTutors } from './tutors.ts';
 import { TOOL_SHIM, installSkills, writeToolShim } from './skills.ts';
 import { installThemes } from './themes.ts';
@@ -85,15 +85,6 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
     if (await exists(p)) steps.push({ item: f, action: 'exists' });
     else {
       await writeFile(p, '');
-      steps.push({ item: f, action: 'created' });
-    }
-  }
-
-  for (const f of ['CLAUDE.md', 'QWEN.md']) {
-    const p = join(root, f);
-    if (await exists(p)) steps.push({ item: f, action: 'kept', note: '家规已有,不覆盖' });
-    else {
-      await writeFile(p, RULES);
       steps.push({ item: f, action: 'created' });
     }
   }

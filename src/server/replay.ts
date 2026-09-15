@@ -20,6 +20,14 @@ import { readIndex, readRunFile } from './store.ts';
 
 export const EVALS_DIR = 'evals';
 
+/** 在 Claude Code 会话里跑 cotutor replay(技能 cotutor-analyze 就是这么用的):claude 见到 CLAUDECODE 会当嵌套拒掉,起老师前把这几个去掉 */
+const NESTED_KEYS = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID', 'CLAUDE_EFFORT'];
+export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out = { ...env };
+  for (const k of NESTED_KEYS) delete out[k];
+  return out;
+}
+
 export interface ReplayOptions {
   /** 换个运行时跑(比模型 / 比 CLI);缺省老师自己的 */
   runtime?: string;

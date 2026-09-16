@@ -75,7 +75,7 @@ export const TutorSchema = z.object({
   display: z.string().min(1).describe('显示名:孩子端头像下的字,计划文件的 H2 标题'),
   subject: z.string().optional().describe('学科:与课程表的学科列、观察的 subject 对齐即归到这位老师'),
   /** 头像:一个 emoji 或图片相对路径 */
-  avatar: z.string().optional().describe('头像:一个 emoji'),
+  avatar: z.string().optional().describe('头像:一个 emoji,或 workspace 根以内的图片相对路径(如 avatars/math-tutor.png;figshot pick --workspace 会写这个)'),
   /** voxtell 音色 id(2026-09-08 拍板);没有 = 用 voxtell 缺省 */
   voice: z.string().optional().describe('voxtell 音色 id(voxtell voices 可查);不配就不配音,孩子端用浏览器的声'),
   enabled: z.boolean().default(true).describe('开关:false 时两端都不见'),

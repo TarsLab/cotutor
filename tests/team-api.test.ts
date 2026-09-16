@@ -1,5 +1,5 @@
 /** 家长页背后的接口:新老师 / 老师文件读写 / 删老师、设置页的 paths / server / tts 补丁、JSON Schema、doctor 认嵌套与 API 层错误。 */
-import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync as writeBytes } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -33,6 +33,25 @@ try {
   check('重名 409', (await route('POST', '/api/tutors', ctx, { name: 'science-tutor', display: 'x' })).status === 409);
   const cfg = (await route('GET', '/api/config', ctx)).json as { shipped: string[]; paths: Record<string, string>; resolvedPaths: Record<string, string>; tts: { say: string[] } };
   check('config 回报出厂名单与路径', cfg.shipped.length === 6 && !cfg.shipped.includes('science-tutor') && typeof cfg.resolvedPaths.vault === 'string' && cfg.tts.say[0] === 'voxtell');
+
+  // ---- 老师头像(R5b):avatar 是图片相对路径时 /api/kid/avatar/<老师> 给文件,no-cache;emoji / 越界 / 不是图 / 不存在 / 没这位都 404 ----
+  check('emoji 头像 404(孩子端自己显示 emoji)', (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
+  check('没这位老师 404', (await route('GET', '/api/kid/avatar/nobody-tutor', ctx)).status === 404);
+  const setAvatar = async (avatar: string) => { const r = await route('PATCH', '/api/config', ctx, { tutors: { 'math-tutor': { avatar } } }); return r.status; };
+  check('PATCH 头像成路径过契约', (await setAvatar('avatars/math-tutor.png')) === 200);
+  check('文件还没有 → 404', (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
+  const dr0 = await doctorWorkspace(root, { probeEnv: false, env: {} });
+  check('doctor:头像文件不在点名,不是必需项', dr0.checks.some((c) => c.name === 'tutor.math-tutor.avatar' && !c.ok && !c.required && c.fix?.includes('figshot pick')), JSON.stringify(dr0.checks.filter((c) => c.name.includes('avatar'))));
+  mkdirSync(join(root, 'avatars'), { recursive: true });
+  writeBytes(join(root, 'avatars', 'math-tutor.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  const avOk = await route('GET', '/api/kid/avatar/math-tutor', ctx);
+  check('文件在 → 200 image/png、no-cache', avOk.status === 200 && avOk.file === join(root, 'avatars', 'math-tutor.png') && avOk.contentType === 'image/png' && avOk.cacheControl === 'no-cache', JSON.stringify(avOk));
+  check('孩子端老师表里 avatar 原样是路径(页面按后缀判定)', ((await route('GET', '/api/kid/home', ctx)).json as { tutors: { name: string; avatar: string }[] }).tutors.find((t) => t.name === 'math-tutor')?.avatar === 'avatars/math-tutor.png');
+  check('doctor:头像文件在 → ok', (await doctorWorkspace(root, { probeEnv: false, env: {} })).checks.some((c) => c.name === 'tutor.math-tutor.avatar' && c.ok));
+  check('越界 404', (await setAvatar('../x.png')) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
+  check('绝对路径 404', (await setAvatar(join(root, 'avatars', 'math-tutor.png'))) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
+  check('不是图 404', (await setAvatar('cotutor.json')) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
+  check('换回 emoji', (await setAvatar('🧮')) === 200 && (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
 
   // ---- 老师文件读写 ----
   const f = (await route('GET', '/api/tutors/science-tutor/file', ctx)).json as { text: string; state: string };

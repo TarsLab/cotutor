@@ -43,6 +43,8 @@ export interface RouteResult {
   /** 现生成的二进制(主屏幕图标) */
   body?: Uint8Array;
   contentType?: string;
+  /** file 的缓存策略;不给 = 一天(配音、课包这些不会变);头像会被 figshot 换掉,给 no-cache */
+  cacheControl?: string;
 }
 
 export interface AppContext {
@@ -396,6 +398,17 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       await writeCardState(ws, tutor, date, job, n, { at: ctx.now().toISOString(), turn: lastJobOf(index, mine) ?? last.job, state: r.state });
       return { status: 200, json: { ok: true, card: `${job}/${n}` } };
     }
+    // 老师头像(R5b,2026-09-16):cotutor.json 里 avatar 是图片相对路径时(figshot 写的 avatars/<老师>.png)从这里取;
+    // emoji 头像、越界、不是图、不存在都 404(孩子端退回显示 emoji / 首字)。no-cache:figshot 换了脸孩子端要马上见到
+    const av = /^\/api\/kid\/avatar\/([a-z0-9][a-z0-9-]*)$/.exec(p);
+    if (av && method === 'GET') {
+      const rel = ws.config.tutors[av[1]]?.avatar ?? '';
+      const file = resolve(ws.root, rel);
+      const ext = IMAGE_EXT.exec(rel)?.[1]?.toLowerCase() ?? '';
+      if (!rel || rel.startsWith('/') || !file.startsWith(ws.root + sep) || !IMAGE_TYPES[ext]) return { status: 404, json: { error: 'not_found' } };
+      if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
+      return { status: 200, file, contentType: IMAGE_TYPES[ext], cacheControl: 'no-cache' };
+    }
     // 图片卡的图:只认 workspace 根以内的图片文件(产物、照片);越界、不是图、不存在都 404
     if (p === '/api/kid/image' && method === 'GET') {
       const rel = url.searchParams.get('p') ?? '';
@@ -570,7 +583,7 @@ export function createHandler(ctx: AppContext): (req: IncomingMessage, res: Serv
         if (r.status === 500) console.error(err);
       }
       if (r.file !== undefined) {
-        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=86400' });
+        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': r.cacheControl ?? 'private, max-age=86400' });
         createReadStream(r.file).on('error', () => res.end()).pipe(res);
       } else if (r.body !== undefined) {
         res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=86400' });

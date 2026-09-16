@@ -6,7 +6,7 @@
 import { execFile } from 'node:child_process';
 import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
-import { basename, dirname, join, relative, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { extractProfile } from '../lib/diary.ts';
@@ -318,6 +318,13 @@ export async function doctorWorkspace(
       // 音色:一老师一音色走 API 是正路(《工作流程.md》§四);没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师(planner / scene-maker)不对孩子说话,不用音色
       const tc = ws.config.tutors[name];
       if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),孩子端用浏览器合成声——只适合测试`, fix: 'voxtell voices --grep <关键词> 挑一个,voxtell preview <voice> 试听,填进 voice;家长端老师团那页也能改' });
+      // 头像是图片路径时(figshot 写的 avatars/<name>.png)查文件在不在、在不在根以内;emoji 不查
+      if (tc.avatar && /\.(png|jpe?g|webp|gif|svg)$/i.test(tc.avatar)) {
+        const file = resolve(root, tc.avatar);
+        const inside = !tc.avatar.startsWith('/') && file.startsWith(root + sep);
+        const there = inside && ((await statOrNull(file))?.isFile() ?? false);
+        push({ name: `tutor.${name}.avatar`, ok: there, required: false, detail: there ? `头像 ${tc.avatar}` : inside ? `头像 ${tc.avatar} 不在,孩子端退回显示首字` : `头像 ${tc.avatar} 在 workspace 根之外,页面不给`, fix: there ? undefined : `figshot pick --workspace ${redactHome(root)} 存一张,或把 cotutor.json 的 tutors.${name}.avatar 改回 emoji` });
+      }
     }
 
     // ---- 板书语法表的旧位置(技能 cotutor-board 本身在下面 skill.* 里查) ----

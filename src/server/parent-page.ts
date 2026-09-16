@@ -51,6 +51,8 @@ export const PARENT_PAGE = `<!doctype html>
   aside .tutor:hover { background:var(--sunk); }
   aside .tutor.on { background:var(--surface); box-shadow:inset 0 0 0 1px var(--line); }
   aside .tutor .av { font-size:21px; line-height:1; }
+  /* 图片头像(figshot 写的 avatars/<老师>.png):按孩子端的样子圆形裁切,大小跟着 emoji 的字号走 */
+  .av img { width:1.25em; height:1.25em; border-radius:50%; object-fit:cover; vertical-align:middle; display:inline-block; }
   aside .tutor .who { min-width:0; flex:1; }
   aside .tutor .who b { display:block; font-size:15px; font-weight:500; }
   aside .tutor .who span { display:block; font:400 12.5px/1.4 var(--mono); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -401,11 +403,14 @@ export const PARENT_PAGE = `<!doctype html>
   };
 
   // ---- 对话:左栏 ----
+  /** 头像:和孩子端同一条判定——是图片路径就走 /api/kid/avatar/<老师>(figshot 写的),否则当 emoji 显示 */
+  const isAvatarImage = (v) => Boolean(v) && /\.(png|jpe?g|webp|svg)$/i.test(v);
+  const avatarEl = (t) => h('span', { class: 'av' }, ...(isAvatarImage(t.avatar) ? [h('img', { src: '/api/kid/avatar/' + t.name + '?v=' + Date.now(), alt: '' })] : [t.avatar || '🙂']));
   const renderTutors = () => {
     const list = state.config.tutors.filter((t) => t.enabled);
     if (state.tutor && !list.some((t) => t.name === state.tutor)) { state.tutor = null; state.view = null; $('#msgs').replaceChildren(h('p', { class: 'empty' }, '这位老师已关闭')); }
     $('#tutors').replaceChildren(...list.map((t) => h('div', { class: 'tutor' + (t.name === state.tutor ? ' on' : ''), on: { click: () => pickTutor(t.name) } },
-      h('span', { class: 'av' }, t.avatar || '🙂'),
+      avatarEl(t),
       h('span', { class: 'who' }, h('b', {}, t.display), h('span', {}, t.name + (t.subject ? ' · ' + t.subject : ''))),
       h('span', { class: 'bead' + (t.hidden ? ' off' : '') }))));
   };
@@ -446,7 +451,7 @@ export const PARENT_PAGE = `<!doctype html>
     const first = median(done.map((m) => m.timing && m.timing.firstCardMs).filter((x) => x !== undefined && x !== null));
     const whole = median(done.map((m) => m.timing && m.timing.doneMs).filter((x) => x !== undefined && x !== null));
     $('#top').replaceChildren(
-      h('span', { class: 'who' }, h('span', { class: 'av' }, t.avatar || '🙂'), t.display),
+      h('span', { class: 'who' }, avatarEl(t), t.display),
       h('select', { title: '哪一天', on: { change: (e) => { state.date = e.target.value; loadDay(); } } },
         ...state.dates.map((x) => h('option', { value: x, selected: x === state.date }, x === state.today ? x + '(今天)' : x))),
       h('span', { class: 'today' },
@@ -601,7 +606,7 @@ export const PARENT_PAGE = `<!doctype html>
     if (m.section && (m.section.cards.length || m.section.lines.length)) el.append(boardEl(m.section));
     else if (m.result === 'ok' && m.kidText) el.append(h('div', { class: 'board' }, h('div', { class: 'line' }, h('span', { class: 'n' }, '1'), h('p', {}, m.kidText))));
 
-    const foot = h('div', { class: 'turn-foot' }, h('span', { class: 'chip' }, (t.avatar || '') + ' ' + t.display));
+    const foot = h('div', { class: 'turn-foot' }, h('span', { class: 'chip' }, (isAvatarImage(t.avatar) ? '' : (t.avatar || '') + ' ') + t.display));
     if (m.timing) {
       if (m.timing.firstReadyMs !== undefined) foot.append(h('span', { class: 'chip' + (m.timing.firstReadyMs > SLOW_FIRST ? ' slow' : '') }, '首拍就绪 ', h('b', {}, secs(m.timing.firstReadyMs))));
       if (m.timing.firstCardMs !== undefined) foot.append(h('span', { class: 'chip' + (m.timing.firstCardMs > SLOW_FIRST ? ' slow' : '') }, '首卡 ', h('b', {}, secs(m.timing.firstCardMs))));
@@ -1000,7 +1005,8 @@ export const PARENT_PAGE = `<!doctype html>
       h('div', { class: 'field' }, h('label', {}, '老师名(英文键)'), h('input', { type: 'text', id: 'n-name', placeholder: 'science-tutor' })),
       h('div', { class: 'field' }, h('label', {}, '显示名'), h('input', { type: 'text', id: 'n-display', placeholder: '科学老师' })),
       h('div', { class: 'field' }, h('label', {}, '学科(可空)'), h('input', { type: 'text', id: 'n-subject', placeholder: '科学' })),
-      h('div', { class: 'field' }, h('label', {}, '头像'), h('select', { id: 'n-avatar' }, ...['🧮', '📚', '📖', '🔬', '🎨', '🎵', '🌍', '💻', '🏃', '🧩', '📷', '🗓'].map((a) => h('option', { value: a }, a)))),
+      h('div', { class: 'field' }, h('label', {}, '头像(emoji,或图片路径)'), h('input', { type: 'text', id: 'n-avatar', value: '🔬', list: 'n-avatar-list', placeholder: '🔬 或 avatars/science-tutor.png' }),
+        h('datalist', { id: 'n-avatar-list' }, ...['🧮', '📚', '📖', '🔬', '🎨', '🎵', '🌍', '💻', '🏃', '🧩', '📷', '🗓'].map((a) => h('option', { value: a })))),
       h('div', { class: 'field chk' }, h('input', { type: 'checkbox', id: 'n-hidden' }), h('label', { for: 'n-hidden' }, '孩子端不露')),
       h('div', { class: 'full' },
         h('button', { class: 'btn primary', type: 'button', on: { click: async () => {
@@ -1008,7 +1014,7 @@ export const PARENT_PAGE = `<!doctype html>
           const display = $('#n-display').value.trim();
           if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) return feedback(roster, false, '老师名要小写字母数字连字符');
           if (!display) return feedback(roster, false, '显示名不能空');
-          try { await api('POST', '/api/tutors', { name, display, subject: $('#n-subject').value.trim(), avatar: $('#n-avatar').value, hidden: $('#n-hidden').checked }); await loadConfig(); renderTeam(); }
+          try { await api('POST', '/api/tutors', { name, display, subject: $('#n-subject').value.trim(), avatar: $('#n-avatar').value.trim(), hidden: $('#n-hidden').checked }); await loadConfig(); renderTeam(); }
           catch (e) { feedback(roster, false, e.message); }
         } } }, '加进来'),
         h('span', { class: 'hint', style: 'padding:0' }, '会写一份带全部约定的老师文件、进 cotutor.json、建目录;之后点开这位老师改「老师文件」把性子填上。与终端 cotutor add 同一条路。')));
@@ -1024,7 +1030,7 @@ export const PARENT_PAGE = `<!doctype html>
       body.append(
         h('div', { class: 'field' }, h('label', {}, '显示名'), h('input', { type: 'text', 'data-f': 'display', value: t.display })),
         h('div', { class: 'field' }, h('label', {}, '学科'), h('input', { type: 'text', 'data-f': 'subject', value: t.subject || '' })),
-        h('div', { class: 'field' }, h('label', {}, '头像(emoji)'), h('input', { type: 'text', 'data-f': 'avatar', value: t.avatar || '' })),
+        h('div', { class: 'field' }, h('label', {}, '头像(emoji,或图片路径如 avatars/' + t.name + '.png)'), h('input', { type: 'text', 'data-f': 'avatar', value: t.avatar || '' })),
         h('div', { class: 'field' }, h('label', {}, '音色(voxtell id)'), h('input', { type: 'text', 'data-f': 'voice', value: t.voice || '' })),
         h('div', { class: 'field chk' }, h('input', { type: 'checkbox', 'data-f': 'enabled', checked: t.enabled }), h('label', {}, '开启')),
         h('div', { class: 'field chk' }, h('input', { type: 'checkbox', 'data-f': 'hidden', checked: t.hidden }), h('label', {}, '孩子端不露')),
@@ -1051,7 +1057,7 @@ export const PARENT_PAGE = `<!doctype html>
         body.style.display = on ? 'grid' : 'none';
         caret.textContent = on ? '收起 ▴' : '▾';
       } } },
-        h('span', { class: 'av' }, t.avatar || '🙂'),
+        avatarEl(t),
         h('span', { class: 'name' }, h('b', {}, t.display), h('span', {}, t.name + (t.subject ? ' · ' + t.subject : ''))),
         h('span', { class: 'tags' }, ...tutorTags(t, patch)),
         caret);

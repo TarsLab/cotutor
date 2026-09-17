@@ -11,7 +11,7 @@ const STREAM = [
   '{"type":"assistant","session_id":"s-1","parent_tool_use_id":"t2","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"drawtell check x"}}]}}',
   '{"type":"user","session_id":"s-1","parent_tool_use_id":"t2","message":{"content":[{"type":"tool_result","tool_use_id":"t3","is_error":true,"content":[{"type":"text","text":"exit 1"}]}]}}',
   '{"type":"rate_limit_event","session_id":"s-1"}',
-  '{"type":"result","subtype":"success","is_error":false,"num_turns":6,"total_cost_usd":0.34,"session_id":"s-1","result":"## 待裁量\\nquestion: 要不要?\\n\\n这一步是借位。"}',
+  '{"type":"result","subtype":"success","is_error":false,"num_turns":6,"total_cost_usd":0.34,"session_id":"s-1","result":"## 家长\\n他会了。\\n\\n这一步是借位。"}',
 ].join('\n');
 
 {
@@ -19,7 +19,7 @@ const STREAM = [
   check('session', t.sessionId === 's-1');
   check('条目序列', t.items.map((i) => i.kind).join(',') === 'text,tool,tool,tool,tool-error,done', t.items.map((i) => i.kind).join(','));
   check('子代理事件标 sub', t.items[3].sub === true && t.items[4].sub === true && t.items[2].sub === undefined);
-  check('最终文本单独取出', t.final?.ok === true && t.final.text?.startsWith('## 待裁量') && t.final.costUsd === 0.34 && t.final.numTurns === 6);
+  check('最终文本单独取出', t.final?.ok === true && t.final.text?.startsWith('## 家长') && t.final.costUsd === 0.34 && t.final.numTurns === 6);
   check('已有主线说话则 result 不重复上墙', t.items.filter((i) => i.kind === 'text').length === 1);
   check('收尾行', t.items[5].text === '本轮结束 · 6 轮 · $0.34', t.items[5].text);
 }

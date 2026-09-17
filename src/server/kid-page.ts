@@ -407,9 +407,93 @@ __BOARD_JS__
       }
       case 'code':
         return box('code', p.lang ? h('span', { class: 'lg' }, p.lang) : null, h('div', { class: 'cb' }, p.text || ''));
+      case 'tianzige': {
+        // 轻卡,没有舞台:点字就写,不开舞台;讲到它时 setNow 写一遍
+        const el = h('div', { class: 'c c-tianzige', 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), 'data-ch': String(p.chars || '') });
+        for (const ch of Array.from(String(p.chars || ''))) el.append(tianzigeBox(ch));
+        return el;
+      }
       default:
         return box('text', h('div', { class: 'cb' }, cardTexts(c).filter(Boolean).join('\\n')));
     }
+  };
+  // ---- 田字格卡:每字一个格,笔顺数据 /api/kid/tianzige/<字>(1024 见方、y 向上,组上 scale(1,-1) translate(0,-900) 摆正);
+  // 写 = 每一笔的中线用粗线沿着描、外面套这一笔的轮廓做 clipPath,stroke-dashoffset 从头长到尾,和线条笔一个手法;数据没有的字只显示字形不动 ----
+  const HZ = new Map();
+  const tianzigeData = (ch) => { if (!HZ.has(ch)) HZ.set(ch, fetch('/api/kid/tianzige/' + encodeURIComponent(ch)).then((r) => (r.ok ? r.json() : null)).catch(() => null)); return HZ.get(ch); };
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const sv = (tag, attrs) => { const el = document.createElementNS(SVG_NS, tag); for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, String(v)); return el; };
+  const polyLen = (pts) => { let n = 0; for (let i = 1; i < pts.length; i++) n += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return n; };
+  const HZ_T = 'scale(1,-1) translate(0,-900)';
+  /** 一个格:田字格 + 字形(数据到了是淡灰的轮廓,写完变墨色;没数据是字体的字,不动)+ 右下角几画 */
+  const tianzigeBox = (ch) => {
+    const svg = sv('svg', { viewBox: '0 0 1024 1024' });
+    const grid = sv('g', { class: 'grid' });
+    grid.append(sv('rect', { x: 8, y: 8, width: 1008, height: 1008, rx: 36 }), sv('line', { class: 'mid', x1: 512, y1: 8, x2: 512, y2: 1016 }), sv('line', { class: 'mid', x1: 8, y1: 512, x2: 1016, y2: 512 }));
+    svg.append(grid);
+    const el = h('div', { class: 'hz', 'data-ch': ch, on: { click: (e) => { e.stopPropagation(); tianzigePlay(el.closest('.c'), el); } } }, svg);
+    tianzigeData(ch).then((d) => {
+      if (!d) { const t = sv('text', { x: 512, y: 512, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 720, class: 'ghost done' }); t.textContent = ch; svg.append(t); return; }
+      const g = sv('g', { class: 'ghost' + (el._want || el._queued ? '' : ' done'), transform: HZ_T }); // 排着队等写的,数据到了也先淡着
+      for (const st of d.strokes) g.append(sv('path', { d: st }));
+      svg.append(g);
+      el.append(h('span', { class: 'n' }, d.strokes.length + ' 画'));
+      el._hz = d;
+      if (el._want) tianzigeWrite(el);
+    });
+    return el;
+  };
+  /** 回到写完的样子(打断正在写的) */
+  const tianzigeReset = (el) => {
+    if (el._run) el._run.stop();
+    el._run = null; el._then = null; el._want = false; el._queued = false;
+    for (const x of el.querySelectorAll('.ink, .clip')) x.remove();
+    const ghost = el.querySelector('.ghost'); if (ghost) ghost.classList.add('done');
+  };
+  /** 写一个字:一笔接一笔,写完调 el._then;数据还没到就记着,到了再写 */
+  const tianzigeWrite = (el) => {
+    const d = el._hz;
+    if (!d) { el._want = true; return; }
+    const then = el._then; tianzigeReset(el); el._then = then;
+    const svg = el.querySelector('svg');
+    const ghost = svg.querySelector('.ghost'); ghost.classList.remove('done');
+    const id = 'hz' + Math.random().toString(36).slice(2, 8);
+    const defs = sv('defs', { class: 'clip' });
+    const ink = sv('g', { class: 'ink', transform: HZ_T });
+    const strokes = d.strokes.map((st, i) => {
+      const cp = sv('clipPath', { id: id + '-' + i }); cp.append(sv('path', { d: st })); defs.append(cp);
+      const pts = d.medians[i] || [];
+      const len = Math.round(polyLen(pts)) + 200; // 圆头两端各多出半个笔宽
+      const path = sv('path', { d: 'M' + pts.map((q) => q[0] + ' ' + q[1]).join(' L'), 'clip-path': 'url(#' + id + '-' + i + ')' });
+      path.style.strokeDasharray = String(len); path.style.strokeDashoffset = String(len);
+      ink.append(path);
+      return { path, len };
+    });
+    svg.append(defs, ink);
+    let i = 0, timer = null, alive = true;
+    el._run = { stop: () => { alive = false; clearTimeout(timer); } };
+    const step = () => {
+      if (!alive) return;
+      if (i >= strokes.length) { ghost.classList.add('done'); ink.remove(); defs.remove(); el._run = null; el._queued = false; const f = el._then; el._then = null; if (f) f(); return; }
+      const { path, len } = strokes[i++];
+      const ms = Math.max(240, Math.round(len * 0.8)); // 一横约 600 单位 → 半秒多
+      void path.getBoundingClientRect();
+      path.style.transition = 'stroke-dashoffset ' + ms + 'ms linear';
+      path.style.strokeDashoffset = '0';
+      timer = setTimeout(step, ms + 200);
+    };
+    step();
+  };
+  /** 写一张卡:按顺序一个字接一个字(鼓写完再写励);给了 only 就只写那个字,别的字回到写完的样子 */
+  const tianzigePlay = (cardEl, only) => {
+    if (!cardEl) return;
+    const all = [...cardEl.querySelectorAll('.hz')];
+    for (const b of all) tianzigeReset(b);
+    const boxes = only ? [only] : all;
+    // 排队要写的字先退成淡灰(鼓在写的时候励不该已经是墨色),轮到谁谁再写出来
+    for (const b of boxes) { b._queued = true; const g = b.querySelector('.ghost'); if (g && b._hz) g.classList.remove('done'); }
+    const go = (k) => { if (k >= boxes.length) return; const b = boxes[k]; b._then = () => setTimeout(() => go(k + 1), 320); tianzigeWrite(b); };
+    go(0);
   };
   /** 点读:点哪段念哪段——服务端配好的段(card.assets 里有 <段号>.mp3)放 mp3,没好的用浏览器合成声;讲稿在播就先停下 */
   const readSegment = (el, card, k, seg) => {
@@ -493,7 +577,7 @@ __BOARD_JS__
     const el = P.el;
     for (let k = 0; k < sec.cards.length; k++) {
       const old = k < P.shown ? el.querySelector('[data-card="' + k + '"]') : null;
-      if (old) { const fresh = renderCard(sec.cards[k], k, idx, false); if (old.classList.contains('now')) fresh.classList.add('now'); old.replaceWith(fresh); }
+      if (old) swapCard(old, renderCard(sec.cards[k], k, idx, false));
       else placeCard(P, sec, k, idx);
     }
     if (S.state.section === idx) {
@@ -510,18 +594,25 @@ __BOARD_JS__
     const sec = $('#board').querySelector('[data-sec="' + secIdx + '"]');
     const old = sec && sec.querySelector('[data-card="' + idx + '"]');
     if (!old) return;
-    const fresh = renderCard(S.sections[secIdx].cards[idx], idx, secIdx, false);
-    if (old.classList.contains('now')) fresh.classList.add('now');
-    old.replaceWith(fresh);
+    swapCard(old, renderCard(S.sections[secIdx].cards[idx], idx, secIdx, false));
     const upTo = S.state.section === secIdx ? S.state.line : S.state.section > secIdx ? undefined : -1;
     if (upTo !== -1) for (const l of S.sections[secIdx].lines.slice(0, upTo === undefined ? undefined : upTo + 1)) for (const m of l.marks) if (m.card === idx) applyMark(secIdx, m, false);
+  };
+  /** 一张卡换成新画的:选中态与「田字格写过了」跟着搬 */
+  const swapCard = (old, fresh) => {
+    // 田字格不换元素:老师写完那一刻它可能正在写,换了动画就断(mock 里 1.5 秒必现);同一个词只把后期定的样子搬过去
+    if (old.classList.contains('c-tianzige') && fresh.classList.contains('c-tianzige') && old.dataset.ch === fresh.dataset.ch) { old.dataset.tint = fresh.dataset.tint; old.dataset.look = fresh.dataset.look; old.dataset.card = fresh.dataset.card; return; }
+    if (old.classList.contains('now')) fresh.classList.add('now'); if (old.dataset.wrote) fresh.dataset.wrote = old.dataset.wrote; old.replaceWith(fresh);
   };
   /** 选中态:一节里同一时刻只有一张(讲到哪张亮哪张;舞台开着时是舞台那张;停下等答停在末句的卡) */
   const setNow = (secIdx, idx) => {
     for (const x of document.querySelectorAll('#board .c.now')) x.classList.remove('now');
     if (secIdx === null || idx === null) return;
     const el = $('#board').querySelector('[data-sec="' + secIdx + '"] [data-card="' + idx + '"]');
-    if (el) el.classList.add('now');
+    if (!el) return;
+    el.classList.add('now');
+    // 田字格卡:讲到它那一刻写一遍(这一页只写一次;换新元素时 wrote 跟着搬),之后孩子点了再写
+    if (el.classList.contains('c-tianzige') && !el.dataset.wrote && S.state.status === 'playing') { el.dataset.wrote = '1'; tianzigePlay(el); }
   };
   const showNow = () => setNow(S.state.section, nowCard(S.sections, S.state));
   /** 换端(转屏)或窗口变了:整节按新端重排,标注按已播到的画齐,选中态照旧 */
@@ -538,7 +629,7 @@ __BOARD_JS__
   S.device = debug.get('device') || deviceFor(innerWidth, innerHeight);
 
   // ---- 舞台:点卡放大,交互都在这里;开着时讲稿暂停,关了字幕行出「播放」 ----
-  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', scene: '讲解动画', canvas: '画一画', code: '' };
+  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', scene: '讲解动画', canvas: '画一画', code: '' };
   const GO_LABEL = { canvas: '给老师看' };
   const openStage = (secIdx, idx, opts = {}) => {
     const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];

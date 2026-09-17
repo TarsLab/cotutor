@@ -147,6 +147,8 @@ export function cardTexts(card: BoardCard): string[] {
       return [str(p.title), str(p.problem), str(p.text)];
     case 'canvas':
       return [str(p.prompt)];
+    case 'tianzige':
+      return []; // 田字格里是 SVG 路径不是文字,标注落不上;讲稿里的 [鼓] 去别的卡找
     default:
       return Object.values(p).flatMap((v) => (typeof v === 'string' ? [v] : strs(v)));
   }
@@ -460,7 +462,7 @@ export function stateSummary(card: BoardCard): string[] {
 /** 舞台顶栏的名字:文字卡的标题 / 正文、选择题的问题、其余第一段有字的;截 24 字 */
 export function cardTitle(card: BoardCard): string {
   const p = card.props || {};
-  const first = str(p.title) || str(p.question) || str(p.text) || str(p.caption) || str(p.prompt) || strs(p.segments)[0] || cardTexts(card).find((t) => t.trim()) || (card.kind === 'image' ? '图' : card.kind === 'canvas' ? '画一画' : '');
+  const first = str(p.title) || str(p.question) || str(p.text) || str(p.caption) || str(p.prompt) || strs(p.segments)[0] || cardTexts(card).find((t) => t.trim()) || (card.kind === 'image' ? '图' : card.kind === 'canvas' ? '画一画' : card.kind === 'tianzige' ? str(p.chars) : '');
   const cps = Array.from(first.trim().replace(/\s+/g, ' '));
   return cps.length > 24 ? `${cps.slice(0, 24).join('')}…` : cps.join('');
 }

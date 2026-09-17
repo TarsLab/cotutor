@@ -14,6 +14,9 @@ importers:
       drawtell:
         specifier: link:../drawtell
         version: link:../drawtell
+      hanzi-writer-data:
+        specifier: 2.0.1
+        version: 2.0.1
       zod:
         specifier: ^4.4.3
         version: 4.5.4
@@ -954,6 +957,9 @@ packages:
 
   hachure-fill@0.5.2:
     resolution: {integrity: sha512-3GKBOn+m2LX9iq+JC1064cSFprJY4jL1jCXTcpnfER5HYE2l/4EfWSGzkPa/ZDBmYI0ZOEj5VHV/eKnPGkHuOg==}
+
+  hanzi-writer-data@2.0.1:
+    resolution: {integrity: sha512-nbQwM+MaryGoq7pBMIZLCd3lFq03nXuJuwku1+6UbjL58uU+9OULVcMkoNvNuJSoIV7f1bbPRfD4D/LQa5S7qg==}
 
   iconv-lite@0.6.3:
     resolution: {integrity: sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw==}
@@ -2260,6 +2266,8 @@ snapshots:
   glur@1.1.2: {}
 
   hachure-fill@0.5.2: {}
+
+  hanzi-writer-data@2.0.1: {}
 
   iconv-lite@0.6.3:
     dependencies:

@@ -29,6 +29,7 @@ import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset } from './stage.ts';
 import { themeFiles } from './theme.ts';
 import { enrichScenes } from './scene-props.ts';
+import { tianzigeData } from './tianzige.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
 import { repost } from './post.ts';
 import { DeviceSchema } from '../schema/index.ts';
@@ -44,7 +45,7 @@ export interface RouteResult {
   /** 现生成的二进制(主屏幕图标) */
   body?: Uint8Array;
   contentType?: string;
-  /** file 的缓存策略;不给 = 一天(配音、课包这些不会变);头像会被 figshot 换掉,给 no-cache */
+  /** file 的缓存策略;不给 = 一天(配音、课包这些不会变);头像会被 figshot 换掉,给 no-cache。json 不给 = no-store(笔顺数据例外,给一天) */
   cacheControl?: string;
 }
 
@@ -415,6 +416,12 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, file, contentType: IMAGE_TYPES[ext], cacheControl: 'no-cache' };
     }
+    // 写字卡的笔顺:一个汉字一份 JSON,数据包里现读;不是汉字 / 没有这个字 404(页面只显示字形不动)
+    const hz = /^\/api\/kid\/tianzige\/([^/]+)$/.exec(p);
+    if (hz && method === 'GET') {
+      const d = await tianzigeData(decodeURIComponent(hz[1]));
+      return d ? { status: 200, json: d, cacheControl: 'max-age=86400' } : { status: 404, json: { error: 'not_found' } };
+    }
     // 图片卡的图:只认 workspace 根以内的图片文件(产物、照片);越界、不是图、不存在都 404
     if (p === '/api/kid/image' && method === 'GET') {
       const rel = url.searchParams.get('p') ?? '';
@@ -624,7 +631,7 @@ export function createHandler(ctx: AppContext): (req: IncomingMessage, res: Serv
         res.writeHead(r.status, { 'content-type': r.contentType ?? 'text/html; charset=utf-8', 'cache-control': 'no-store' });
         res.end(r.html);
       } else {
-        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': r.cacheControl ?? 'no-store' });
         res.end(JSON.stringify(r.json ?? null));
       }
     })();

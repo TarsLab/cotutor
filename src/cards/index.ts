@@ -8,6 +8,7 @@ import { canvas } from './canvas.ts';
 import { choice } from './choice.ts';
 import { code } from './code.ts';
 import { fill } from './fill.ts';
+import { tianzige } from './tianzige.ts';
 import { image } from './image.ts';
 import type { CardKind } from './kind.ts';
 import { read } from './read.ts';
@@ -23,9 +24,10 @@ export { code, type CodeProps } from './code.ts';
 export { image, IMAGE_EXT, type ImageProps } from './image.ts';
 export { scene, BUNDLE_ID_RE, type SceneProps, type SceneState } from './scene.ts';
 export { canvas, type CanvasProps, type CanvasState } from './canvas.ts';
+export { tianzige, HAN, TIANZIGE_MAX, type TianzigeProps } from './tianzige.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, scene, canvas, code];
+export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, scene, canvas, code];
 
 export function cardKind(name: string): CardKind | undefined {
   return CARD_KINDS.find((k) => k.name === name) as CardKind | undefined;

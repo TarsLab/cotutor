@@ -60,6 +60,7 @@
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.1",
     "drawtell": "link:../drawtell",
+    "hanzi-writer-data": "2.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

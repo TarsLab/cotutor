@@ -1,0 +1,13 @@
+/* 田字格(cards/tianzige/card.md):每字一个田字格,讲到时逐笔写,点了再写一遍 */
+.c.c-tianzige { flex-direction:row; flex-wrap:wrap; gap:10px; justify-content:center; align-items:flex-start; }
+.hz { position:relative; width:112px; height:112px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.hz svg { display:block; width:100%; height:100%; }
+.hz .grid { stroke:var(--tint-sand-line); stroke-width:6; fill:none; }
+.hz .grid .mid { stroke-dasharray:24 18; }
+.hz .ghost { fill:#d9d5cc; }
+.hz .ghost.done { fill:var(--ink); }
+.hz .ink { stroke:var(--ink); stroke-width:200; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+.hz .n { position:absolute; right:6px; bottom:2px; font-size:11px; color:#8a857c; line-height:1; }
+#st-body .hz { width:180px; height:180px; }
+#st-body .hz .n { font-size:13px; }
+@media (max-width: 480px) { .hz { width:96px; height:96px; } }

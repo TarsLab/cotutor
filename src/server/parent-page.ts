@@ -32,7 +32,7 @@ export const PARENT_PAGE = `<!doctype html>
   header h1 { font-size:16px; margin:0; font-weight:600; }
   header h1 small { color:var(--muted); font-weight:400; font-size:13.5px; margin-left:6px; }
   header nav { display:flex; gap:2px; margin-left:auto; }
-  header nav a { font-size:15px; color:var(--muted); text-decoration:none; padding:6px 13px; border-radius:8px; }
+  header nav a { font-size:15px; color:var(--muted); text-decoration:none; padding:6px 13px; border-radius:8px; white-space:nowrap; }
   header nav a:hover { color:var(--ink); background:var(--surface-2); }
   header nav a.on { color:var(--ink); background:var(--accent-soft); font-weight:500; }
   header .health { font:500 13px/1 var(--mono); color:var(--ok); display:flex; align-items:center; gap:6px; }
@@ -288,6 +288,34 @@ export const PARENT_PAGE = `<!doctype html>
   .ttsbox textarea { width:100%; min-height:56px; font:14px/1.6 var(--mono); padding:9px; border:1px solid var(--line); border-radius:8px; background:var(--surface); resize:vertical; }
   .ttsbox .try { display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
 
+  .field .withbtn { display:flex; gap:6px; align-items:center; }
+  .field .withbtn input { flex:1; min-width:0; }
+  .field .withbtn .btn { flex:none; padding:6px 10px; }
+  .voices header .for { display:flex; align-items:center; gap:6px; font-size:13.5px; color:var(--muted); white-space:nowrap; }
+  .voices header .for select { font-size:14px; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--surface); max-width:180px; }
+  .voices .now { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line-soft); font-size:15px; flex-wrap:wrap; }
+  .voices .now .av { font-size:22px; }
+  .voices .now .av img { width:28px; height:28px; border-radius:50%; object-fit:cover; vertical-align:middle; }
+  .voices .now small { font:400 12.5px/1.4 var(--mono); color:var(--muted); }
+  .voices .now .muted { color:var(--muted); }
+  .voices .filters { display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid var(--line-soft); flex-wrap:wrap; background:var(--surface-2); }
+  .voices .filters input, .voices .filters select { font-size:14.5px; padding:7px 9px; border:1px solid var(--line); border-radius:8px; background:var(--surface); }
+  .voices .filters input[type=search] { flex:1 1 220px; min-width:0; }
+  .voices .filters .sample { flex:1 1 100%; }
+  .voices .vlist { max-height:calc(100vh - 330px); overflow:auto; }
+  .vrow { display:grid; grid-template-columns:auto minmax(150px,1.3fr) 76px minmax(90px,1fr) minmax(80px,1fr) auto auto; align-items:center; gap:12px; padding:9px 16px; border-top:1px solid var(--line-soft); }
+  .vrow:first-child { border-top:0; }
+  .vrow.mine { background:var(--accent-soft); }
+  .vrow .play { min-width:78px; font:500 13px/1 var(--mono); white-space:nowrap; }
+  .vrow .play.on { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+  .vrow .vname { min-width:0; }
+  .vrow .vname b { display:block; font-size:15px; font-weight:600; }
+  .vrow .vname span { display:block; font:400 12px/1.5 var(--mono); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .vrow .vmeta, .vrow .vtrait, .vrow .vscene { font-size:13.5px; color:var(--muted); }
+  .vrow .vtrait { color:var(--ink); }
+  .vrow .tags { display:flex; gap:6px; flex-wrap:wrap; }
+  .vrow .pick { white-space:nowrap; font-size:13px; padding:5px 10px; }
+
   @media (max-width:760px) {
     #chat.on { grid-template-columns:1fr; }
     aside { display:none; }
@@ -299,11 +327,18 @@ export const PARENT_PAGE = `<!doctype html>
     .rl { grid-template-columns:34px minmax(0,1fr); }
     .rl .a { display:none; }
     .pathrow { grid-template-columns:1fr; gap:6px; }
+    .vrow { grid-template-columns:auto minmax(0,1fr) auto; row-gap:4px; }
+    .vrow .vmeta, .vrow .vscene { display:none; }
+    .vrow .vtrait { grid-column:2; }
+    .vrow .tags { grid-column:2; }
+    .voices .vlist { max-height:none; }
+    .voices header .sub .cmd { display:none; }
+    header nav a { padding:6px 8px; }
   }
 </style>
 <header>
   <h1 id="title">cotutor<small>家长端</small></h1>
-  <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">老师团</a><a href="#settings" data-tab="settings">设置</a></nav>
+  <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">老师团</a><a href="#voices" data-tab="voices">音色</a><a href="#settings" data-tab="settings">设置</a></nav>
   <span class="health" id="health"></span>
 </header>
 <main id="chat" class="on">
@@ -332,6 +367,7 @@ export const PARENT_PAGE = `<!doctype html>
   </section>
 </main>
 <main id="team"></main>
+<main id="voices"></main>
 <main id="settings"></main>
 <div id="drawer"></div>
 <script>
@@ -368,7 +404,7 @@ export const PARENT_PAGE = `<!doctype html>
   const hashState = () => {
     const parts = location.hash.split('?raw=');
     const tab = (parts[0] || '#chat').slice(1) || 'chat';
-    return { tab: ['chat', 'team', 'settings'].includes(tab) ? tab : 'chat', raw: parts[1] || null };
+    return { tab: ['chat', 'team', 'voices', 'settings'].includes(tab) ? tab : 'chat', raw: parts[1] || null };
   };
   const state = { config: null, tutor: null, date: null, today: null, dates: [], view: null, timer: null, tab: hashState().tab, raw: null, rawJob: null, station: 'source' };
 
@@ -378,7 +414,9 @@ export const PARENT_PAGE = `<!doctype html>
     for (const a of document.querySelectorAll('header nav a')) a.classList.toggle('on', a.dataset.tab === tab);
     for (const m of document.querySelectorAll('main')) m.classList.toggle('on', m.id === tab);
     if (tab === 'team') renderTeam();
+    if (tab === 'voices') renderVoices();
     if (tab === 'settings') renderSettings();
+    if (tab !== 'voices') stopPreview();
   };
   for (const a of document.querySelectorAll('header nav a')) a.addEventListener('click', (e) => { e.preventDefault(); location.hash = '#' + a.dataset.tab; showTab(a.dataset.tab); });
 
@@ -1031,7 +1069,8 @@ export const PARENT_PAGE = `<!doctype html>
         h('div', { class: 'field' }, h('label', {}, '显示名'), h('input', { type: 'text', 'data-f': 'display', value: t.display })),
         h('div', { class: 'field' }, h('label', {}, '学科'), h('input', { type: 'text', 'data-f': 'subject', value: t.subject || '' })),
         h('div', { class: 'field' }, h('label', {}, '头像(emoji,或图片路径如 avatars/' + t.name + '.png)'), h('input', { type: 'text', 'data-f': 'avatar', value: t.avatar || '' })),
-        h('div', { class: 'field' }, h('label', {}, '音色(voxtell id)'), h('input', { type: 'text', 'data-f': 'voice', value: t.voice || '' })),
+        h('div', { class: 'field' }, h('label', {}, '音色(voxtell id)'), h('div', { class: 'withbtn' }, h('input', { type: 'text', 'data-f': 'voice', value: t.voice || '' }),
+          h('button', { class: 'btn', type: 'button', title: '到音色页听着挑', on: { click: () => { voiceState.for = t.name; location.hash = '#voices'; showTab('voices'); } } }, '去挑'))),
         h('div', { class: 'field chk' }, h('input', { type: 'checkbox', 'data-f': 'enabled', checked: t.enabled }), h('label', {}, '开启')),
         h('div', { class: 'field chk' }, h('input', { type: 'checkbox', 'data-f': 'hidden', checked: t.hidden }), h('label', {}, '孩子端不露')),
         ...policyFields(patch, t.policy, { inherit: true }));
@@ -1065,6 +1104,116 @@ export const PARENT_PAGE = `<!doctype html>
     }
     roster.append(list);
     $('#team').replaceChildren(h('div', { class: 'wrap' }, top, roster));
+  };
+
+  // ---- 音色:tts.voices 列出全部音色,先听再挑;挑中的写进 cotutor.json 的 tutors.<名>.voice ----
+  const AGE_BANDS = [['', '全部年龄'], ['kid', '12 岁以下'], ['young', '13–25 岁'], ['adult', '26–40 岁'], ['senior', '41 岁以上']];
+  const inBand = (age, band) => !band || (typeof age === 'number' && (band === 'kid' ? age <= 12 : band === 'young' ? age >= 13 && age <= 25 : band === 'adult' ? age >= 26 && age <= 40 : age >= 41));
+  const voiceState = { list: null, error: null, sample: '', inUse: {}, q: '', gender: '', band: '', text: '', for: null, playing: null, audio: null, loading: false };
+  const stopPreview = () => {
+    if (voiceState.audio) { voiceState.audio.pause(); voiceState.audio = null; }
+    const b = voiceState.playing;
+    voiceState.playing = null;
+    if (b) { b.textContent = '▶ 试听'; b.classList.remove('on'); b.disabled = false; }
+  };
+  /** 点一下合成(服务端同句同音色只合成一次)并播;再点停;换一个点就切过去 */
+  const preview = async (btn, voice, panel) => {
+    if (voiceState.playing === btn) return stopPreview();
+    stopPreview();
+    voiceState.playing = btn;
+    btn.textContent = '合成中…';
+    btn.classList.add('on');
+    try {
+      const r = await fetch('/api/tts/preview?voice=' + encodeURIComponent(voice) + (voiceState.text ? '&text=' + encodeURIComponent(voiceState.text) : ''));
+      if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.message) || (r.status + ' ' + r.statusText)); }
+      const url = URL.createObjectURL(await r.blob());
+      if (voiceState.playing !== btn) { URL.revokeObjectURL(url); return; }
+      const a = new Audio(url);
+      voiceState.audio = a;
+      btn.textContent = '■ 停';
+      a.addEventListener('ended', () => { URL.revokeObjectURL(url); if (voiceState.audio === a) stopPreview(); });
+      await a.play();
+      feedback(panel, true, '');
+    } catch (e) {
+      if (voiceState.playing === btn) stopPreview();
+      feedback(panel, false, '没成:' + e.message);
+    }
+  };
+  const loadVoices = async (refresh) => {
+    voiceState.loading = true;
+    try {
+      const r = await api('GET', '/api/tts/voices' + (refresh ? '?refresh=1' : ''));
+      voiceState.list = r.voices;
+      voiceState.error = r.error;
+      voiceState.sample = r.sample;
+      voiceState.inUse = r.inUse || {};
+    } catch (e) {
+      voiceState.list = [];
+      voiceState.error = e.message;
+    }
+    voiceState.loading = false;
+  };
+  const voiceTutor = () => {
+    const c = state.config;
+    return c.tutors.find((t) => t.name === voiceState.for) || c.tutors.find((t) => t.enabled && !t.hidden) || c.tutors[0] || null;
+  };
+  const renderVoices = async () => {
+    const c = state.config;
+    if (!c) return;
+    if (!voiceState.list && !voiceState.loading) {
+      $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'panel' }, h('p', { class: 'hint', style: 'padding:14px 16px' }, '在列音色……'))));
+      await loadVoices(false);
+      if (state.tab !== 'voices') return;
+    }
+    if (voiceState.loading) return;
+    const who = voiceTutor();
+    if (who) voiceState.for = who.name;
+    const panel = h('div', { class: 'panel voices' });
+    const fb = h('span', { class: 'fb' });
+    const forSel = h('select', { id: 'v-for', title: '挑中的音色给谁', on: { change: (e) => { voiceState.for = e.target.value; renderVoices(); } } },
+      ...c.tutors.map((t) => h('option', { value: t.name, selected: who && t.name === who.name }, t.display + (t.enabled ? '' : '(已关闭)'))));
+    panel.append(h('header', {}, h('h4', {}, '音色'), h('span', { class: 'sub' }, (voiceState.list || []).length + ' 个', h('span', { class: 'cmd' }, ' · ' + (c.tts.voices || []).join(' '))),
+      h('span', { class: 'right' }, fb, h('label', { class: 'for' }, '给谁挑', forSel),
+        h('button', { class: 'btn', type: 'button', title: '重新跑一遍列音色的命令', on: { click: async () => { stopPreview(); await loadVoices(true); renderVoices(); } } }, '刷新'))));
+    if (who) {
+      const cur = (voiceState.list || []).find((v) => v.voice === who.voice);
+      panel.append(h('div', { class: 'now' }, avatarEl(who), h('b', {}, who.display),
+        who.voice ? h('span', {}, '现在用 ', h('b', {}, cur ? cur.name : who.voice), cur ? h('small', {}, ' ' + who.voice) : h('small', {}, '(列表里没有这个 id)')) : h('span', { class: 'muted' }, '还没配音色,孩子端用浏览器自带的声'),
+        who.voice ? h('button', { class: 'btn', type: 'button', on: { click: () => patchAndReload(panel, { tutors: { [who.name]: { voice: null } } }, renderVoices) } }, '清掉') : null));
+    }
+    if (voiceState.error) panel.append(h('p', { class: 'fb bad', style: 'padding:12px 16px 0' }, '列不出音色:' + voiceState.error), h('p', { class: 'hint' }, '设置页里 tts.voices 是列音色的命令(缺省 voxtell voices --json);voxtell 不在 PATH 就把第一项写成完整路径,或者先在终端跑 voxtell doctor。'));
+
+    const genders = [...new Set((voiceState.list || []).map((v) => v.gender).filter(Boolean))];
+    const filters = h('div', { class: 'filters' },
+      h('input', { type: 'search', placeholder: '搜名字 / 特质 / 场景,比如 少年、温柔、故事', value: voiceState.q, on: { input: (e) => { voiceState.q = e.target.value.trim().toLowerCase(); renderVoiceList(); } } }),
+      genders.length ? h('select', { on: { change: (e) => { voiceState.gender = e.target.value; renderVoiceList(); } } }, h('option', { value: '', selected: !voiceState.gender }, '全部性别'), ...genders.map((g) => h('option', { value: g, selected: voiceState.gender === g }, g))) : null,
+      h('select', { on: { change: (e) => { voiceState.band = e.target.value; renderVoiceList(); } } }, ...AGE_BANDS.map(([k, label]) => h('option', { value: k, selected: voiceState.band === k }, label))),
+      h('input', { type: 'text', class: 'sample', placeholder: '试听句:' + voiceState.sample, value: voiceState.text, title: '空 = 用缺省那句;每句每个音色只合成一次', on: { change: (e) => { voiceState.text = e.target.value.trim().slice(0, 200); stopPreview(); } } }));
+    const list = h('div', { class: 'vlist' });
+    const renderVoiceList = () => {
+      const rows = [];
+      const q = voiceState.q;
+      for (const v of voiceState.list || []) {
+        if (voiceState.gender && v.gender !== voiceState.gender) continue;
+        if (!inBand(v.age, voiceState.band)) continue;
+        if (q && ![v.name, v.voice, v.trait, v.scene, v.lang].some((x) => x && x.toLowerCase().includes(q))) continue;
+        const mine = who && who.voice === v.voice;
+        const users = (voiceState.inUse[v.voice] || []).map((n) => (c.tutors.find((t) => t.name === n) || { display: n }).display);
+        const play = h('button', { class: 'btn play', type: 'button', on: { click: () => preview(play, v.voice, panel) } }, '▶ 试听');
+        rows.push(h('div', { class: 'vrow' + (mine ? ' mine' : '') }, play,
+          h('span', { class: 'vname' }, h('b', {}, v.name), h('span', {}, v.voice)),
+          h('span', { class: 'vmeta' }, [v.gender, typeof v.age === 'number' ? v.age + ' 岁' : null].filter(Boolean).join(' · ')),
+          h('span', { class: 'vtrait' }, v.trait || ''),
+          h('span', { class: 'vscene' }, v.scene || ''),
+          h('span', { class: 'tags' }, ...users.map((d) => h('span', { class: 'tag' + (mine ? ' tuned' : '') }, d + ' 在用'))),
+          who ? (mine ? h('span', { class: 'tag tuned' }, '就是这个') : h('button', { class: 'btn primary pick', type: 'button', on: { click: () => { stopPreview(); patchAndReload(panel, { tutors: { [who.name]: { voice: v.voice } } }, renderVoices); } } }, '给' + who.display + '用')) : null));
+      }
+      list.replaceChildren(...(rows.length ? rows : [h('p', { class: 'hint', style: 'padding:14px 16px' }, voiceState.list && voiceState.list.length ? '没有匹配的音色,换个词' : '没有音色')]));
+    };
+    renderVoiceList();
+    panel.append(filters, list);
+    panel.append(h('p', { class: 'hint' }, '试听是真合成一次(voxtell 有缓存,同一句同一个音色以后不再花钱);挑中就写进 cotutor.json,老师下一句话起用新声音。'));
+    $('#voices').replaceChildren(h('div', { class: 'wrap' }, panel));
   };
 
   // ---- 设置:路径 / 服务 / 配音;文件仍是真相 ----

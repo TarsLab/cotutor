@@ -101,9 +101,14 @@ export const RuntimesSchema = z.object({ default: z.string().min(1) }).catchall(
  * 配音运行时:老师说完,应用把 kidText 合成一段音频给孩子端播。占位符 {text} {voice} {out}(输出文件路径)。
  * 命令要把音频写到 {out};没配、没装、失败 → 这条没有音频,孩子端退回浏览器自带的合成声。
  */
-export const TtsSchema = z.object({ say: z.array(z.string()).min(1) });
+export const TTS_VOICES_DEFAULT = ['voxtell', 'voices', '--json'];
+export const TtsSchema = z.object({
+  say: z.array(z.string()).min(1),
+  /** 列音色的命令(家长端音色页据此列表 + 试听);stdout 是 JSON:{voices: [{voice, name, gender?, age?, trait?, scene?, lang?}]} 或直接是数组 */
+  voices: z.array(z.string()).min(1).default(TTS_VOICES_DEFAULT),
+});
 export type Tts = z.infer<typeof TtsSchema>;
-export const TTS_DEFAULT: Tts = { say: ['voxtell', 'say', '{text}', '--voice', '{voice}', '--json', '-o', '{out}'] };
+export const TTS_DEFAULT: Tts = { say: ['voxtell', 'say', '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: TTS_VOICES_DEFAULT };
 
 /**
  * paths 里 CLI 认识的角色;其余角色原样保留给应用层。vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根;
@@ -156,7 +161,7 @@ export const CotutorConfigSchema = z
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 30 条 / 3 次 / 验收关 / L0,L1,L3,L4 / 10,10,8)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
     runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {prompt} {session};模型、预算、时限写在这里'),
-    tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板,占位 {text} {voice} {out}'),
+    tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板:say 合成一句(占位 {text} {voice} {out});voices 列音色(stdout JSON),家长端音色页据此列表与试听'),
   })
   .superRefine((c, ctx) => {
     if (!(c.runtimes.default in c.runtimes) || c.runtimes.default === 'default') {

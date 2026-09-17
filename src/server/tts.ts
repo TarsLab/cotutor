@@ -13,18 +13,77 @@ export interface TtsResult {
   error: string | null;
 }
 
+/** 子进程失败的原因:没装 / 退出码 + 它自己说的话(voxtell 带 --json 时错误是一份 JSON,在 stderr;只取它的 message) */
+function explainExec(argv: readonly string[], err: Error, stdout: unknown, stderr: unknown): string {
+  if ((err as NodeJS.ErrnoException).code === 'ENOENT') return `PATH 里没有 ${argv[0]}`;
+  const said = `${String(stderr ?? '').trim()}\n${String(stdout ?? '').trim()}`.trim().slice(-500);
+  let detail = said;
+  for (const chunk of [stdout, stderr]) {
+    try {
+      const j = JSON.parse(String(chunk ?? '')) as { message?: unknown; error?: unknown };
+      if (typeof j.message === 'string') detail = j.message;
+      else if (typeof j.error === 'string') detail = j.error;
+      else continue;
+      break;
+    } catch {
+      /* 不是 JSON 就原样 */
+    }
+  }
+  return `${argv[0]} ${argv[1] ?? ''} 失败${detail ? `:${detail}` : `(${err.message})`}`;
+}
+
 export function synthesize(tts: Tts, vars: { text: string; voice: string; out: string }, opts: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}): Promise<TtsResult> {
   const argv = fillTts(tts.say, vars);
   return new Promise((resolveResult) => {
-    execFile(argv[0], argv.slice(1), { env: opts.env ?? process.env, timeout: opts.timeoutMs ?? 60_000, maxBuffer: 1 << 20 }, async (err, _stdout, stderr) => {
-      if (err) {
-        const code = (err as NodeJS.ErrnoException).code;
-        const why = code === 'ENOENT' ? `PATH 里没有 ${argv[0]}` : `${err.message}${stderr ? `\n${String(stderr).trim().slice(-500)}` : ''}`;
-        return resolveResult({ file: null, error: why });
-      }
+    execFile(argv[0], argv.slice(1), { env: opts.env ?? process.env, timeout: opts.timeoutMs ?? 60_000, maxBuffer: 1 << 20 }, async (err, stdout, stderr) => {
+      if (err) return resolveResult({ file: null, error: explainExec(argv, err, stdout, stderr) });
       const st = await stat(vars.out).catch(() => null);
       if (!st?.isFile() || st.size === 0) return resolveResult({ file: null, error: `命令跑完了但 ${vars.out} 没有内容` });
       resolveResult({ file: vars.out, error: null });
+    });
+  });
+}
+
+/** 一个音色:voice 是 id(填进 tutors.*.voice 的),其余是给家长挑的时候看的 */
+export interface VoiceInfo {
+  voice: string;
+  name: string;
+  gender?: string;
+  age?: number;
+  trait?: string;
+  scene?: string;
+  lang?: string;
+}
+
+const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+
+/**
+ * 列音色:跑 tts.voices(缺省 voxtell voices --json),stdout 认两种形状——{voices: [...]} 或直接数组;
+ * 每项至少要有 voice(id),name 缺了用 id 顶。失败不抛,error 带原因给家长端显示。
+ */
+export function listVoices(tts: Tts, opts: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}): Promise<{ voices: VoiceInfo[]; error: string | null }> {
+  const argv = tts.voices;
+  return new Promise((resolveResult) => {
+    execFile(argv[0], argv.slice(1), { env: opts.env ?? process.env, timeout: opts.timeoutMs ?? 30_000, maxBuffer: 8 << 20 }, (err, stdout, stderr) => {
+      if (err) return resolveResult({ voices: [], error: explainExec(argv, err, stdout, stderr) });
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(String(stdout));
+      } catch {
+        return resolveResult({ voices: [], error: `${argv.join(' ')} 的输出不是 JSON` });
+      }
+      const raw = Array.isArray(parsed) ? parsed : parsed && typeof parsed === 'object' && Array.isArray((parsed as { voices?: unknown }).voices) ? ((parsed as { voices: unknown[] }).voices) : null;
+      if (!raw) return resolveResult({ voices: [], error: `${argv.join(' ')} 的输出里没有 voices 数组` });
+      const voices: VoiceInfo[] = [];
+      for (const item of raw) {
+        if (!item || typeof item !== 'object') continue;
+        const o = item as Record<string, unknown>;
+        const voice = str(o.voice) ?? str(o.id);
+        if (!voice) continue;
+        const age = typeof o.age === 'number' && Number.isFinite(o.age) ? o.age : undefined;
+        voices.push({ voice, name: str(o.name) ?? voice, gender: str(o.gender), age, trait: str(o.trait), scene: str(o.scene), lang: str(o.lang) });
+      }
+      resolveResult({ voices, error: null });
     });
   });
 }

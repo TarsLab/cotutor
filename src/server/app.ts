@@ -5,6 +5,7 @@
  * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
 import { createReadStream } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
@@ -31,7 +32,7 @@ import { enrichScenes } from './scene-props.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
 import { repost } from './post.ts';
 import { DeviceSchema } from '../schema/index.ts';
-import { synthesize } from './tts.ts';
+import { listVoices, synthesize, type VoiceInfo } from './tts.ts';
 import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
 
 export interface RouteResult {
@@ -225,6 +226,11 @@ const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg
 
 /** 作业照片一张最多这么大(解码后;页面先缩到长边 1600 的 jpeg,通常几百 KB) */
 const PHOTO_MAX_BYTES = 3_000_000;
+/** 音色页的试听句;与 tutors.*.voice 里合法的 id 形状(voxtell 的是 qwen-audio-3.0-tts-plus-xxx) */
+const PREVIEW_TEXT = '你好呀,我是你的老师。今天我们一起来学一个新东西,准备好了吗?';
+const VOICE_ID_RE = /^[A-Za-z0-9._:-]{1,120}$/;
+/** 音色列表按命令模板缓存(进程内):列一次要起子进程,列表本身不会变 */
+const voiceCache = new Map<string, { voices: VoiceInfo[]; error: string | null }>();
 
 /**
  * 上传作业照片(R5):body {image: "data:image/jpeg;base64,…"}(也认 png)→ 落 captures/<日期>/<HHMM>-<n>.jpg → {path}。
@@ -456,6 +462,32 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!r.file) return { status: 200, json: { ok: false, ms: Date.now() - t0, voice, error: r.error } };
       const mp3 = await readFile(out).catch(() => null);
       return { status: 200, json: { ok: true, ms: Date.now() - t0, voice, bytes: mp3?.length ?? 0, audio: mp3 ? `data:audio/mpeg;base64,${mp3.toString('base64')}` : null } };
+    }
+    // 音色页(2026-09-17):列出 tts.voices 给的全部音色,家长挑之前先听。列表按命令模板缓存在进程里(597 条不会变);?refresh=1 重跑
+    if (p === '/api/tts/voices' && method === 'GET') {
+      const key = JSON.stringify(ws.config.tts.voices);
+      let list = url.searchParams.get('refresh') ? undefined : voiceCache.get(key);
+      if (!list) {
+        list = await listVoices(ws.config.tts, { env: process.env });
+        if (!list.error) voiceCache.set(key, list);
+      }
+      const inUse: Record<string, string[]> = {};
+      for (const [name, t] of Object.entries(ws.config.tutors)) if (t.voice) (inUse[t.voice] ??= []).push(name);
+      return { status: 200, json: { ok: !list.error, error: list.error, count: list.voices.length, voices: list.voices, inUse, sample: PREVIEW_TEXT } };
+    }
+    // 试听一个音色:同一句同一音色合成一次就存在 .cotutor/tts-preview/,之后直接给文件;失败回 JSON 说原因(页面拿 message 显示)
+    if (p === '/api/tts/preview' && method === 'GET') {
+      const voice = url.searchParams.get('voice')?.trim() ?? '';
+      if (!VOICE_ID_RE.test(voice)) return { status: 400, json: { error: 'bad_voice', message: '音色 id 只能是字母数字与 . _ : -' } };
+      const text = url.searchParams.get('text')?.trim().slice(0, 200) || PREVIEW_TEXT;
+      const dir = join(ws.root, '.cotutor', 'tts-preview');
+      const file = join(dir, `${createHash('sha1').update(`${voice}\n${text}`).digest('hex').slice(0, 20)}.mp3`);
+      if (!(await stat(file).catch(() => null))?.isFile()) {
+        await mkdir(dir, { recursive: true });
+        const r = await synthesize(ws.config.tts, { text, voice, out: file }, { env: process.env });
+        if (!r.file) return { status: 502, json: { error: 'tts_failed', voice, message: r.error } };
+      }
+      return { status: 200, file, contentType: 'audio/mpeg' };
     }
 
     // 话题打星(《obsidian仓库设计.md》§4):PUT {rating: 1–5 | null};记账:POST {threads?: [..]} → 每个话题一轮记账任务,老师回「## 记账」段,应用写日记

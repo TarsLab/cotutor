@@ -32,7 +32,7 @@ import { getRuntime, planRun, runtimeUses, type RunPlan } from '../lib/run-plan.
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { MEMORY_MAX_PER_TURN, VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type Policy, type Timing } from '../schema/index.ts';
+import { MEMORY_MAX_PER_TURN, VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
 import { DEFAULT_DEVICE, assemblePost, postEnv, runBeatPost, writePostFile, type PostBeatFile, type PostEnv } from './post.ts';
 import { validateBeatPost, type BeatPostOutput } from '../lib/postprocess.ts';
 import type { Transcript } from '../lib/transcript.ts';
@@ -40,6 +40,7 @@ import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { appendVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
 import { missingEntry, pickNotes, textHash } from '../lib/vault-notes.ts';
 import { DubQueue, LineDubber } from './tts.ts';
+import { continueContext } from './home.ts';
 
 export class BusyError extends Error {
   constructor(tutor: string, job: string) {
@@ -70,6 +71,12 @@ export interface SendInput {
   photos?: string[];
   /** 这条是回放(server/replay.ts):原轮的 job,记进消息;调用方已经把 Runner 指到 evals/ */
   replayOf?: string;
+  /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2),记进消息 */
+  via?: MessageVia;
+  /** 按钮的字与家长备好的讲法(服务端从发布件查的),进上下文包 home: 段 */
+  home?: { button: string; brief?: string };
+  /** 接着以前哪天的哪个话题:这条开新话题时上下文包带那个话题的尾巴(continue: 段),消息记 continues;pack 给了就不现读(回放从原 workspace 读好的) */
+  continues?: { date: string; thread: string; pack?: NonNullable<ContextPack['continue']> };
 }
 
 export interface SendStarted {
@@ -285,10 +292,13 @@ export class Runner {
     });
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
     if (photos.length) pack.photos = photos;
+    if (input.home) pack.home = input.home;
+    const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
+    if (continued) pack.continue = continued;
     const prompt = buildContextPack(pack, text, policy.contextPack);
     const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, runtime: input.runtime ?? t.runtime });
 
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 

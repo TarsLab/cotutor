@@ -6,19 +6,23 @@
  * 永不抛错:围栏没闭合当到文末,卡解析不出退成文字卡并记一句 warning。
  * spans 是「这张卡 / 这句话是原文哪几行」,家长端「看原文」据此在原文旁边标出解析器怎么读的;孩子端的 BoardSection 不带它。
  */
-import { parseCard } from '../cards/index.ts';
+import { parseCard, type CardPlace } from '../cards/index.ts';
 import { anchorMarks, isHeading, isQuestion, phrasesIn, plainLine, type BoardCard, type BoardCue, type BoardLine, type BoardSection } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 
 export interface ParseBoardOptions {
   /** 文本还在长(流式):压住没闭合的围栏与没换行结束的最后一行 */
   partial?: boolean;
+  /** 卡用在哪(缺省板书);首页文件(《首页设计.md》)同一个解析器,place = home */
+  place?: CardPlace;
 }
 
 /** 解析提醒;line = 出问题的那一行(0 起,相对传进来的文本),没有行的就不带 */
 export interface BoardWarning {
   text: string;
   line?: number;
+  /** 这张卡没照标签解析成(退了文字卡 / 代码卡) */
+  fallback?: boolean;
 }
 
 /** 行区间 [起, 止],含两端,0 起 */
@@ -131,10 +135,10 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
       }
       if (!closed && partial) break;
       if (!closed) warnings.push({ text: `围栏没闭合(${tag || '无标签'}),当到文末`, line: i });
-      const r = parseCard(tag, body.join('\n'));
+      const r = parseCard(tag, body.join('\n'), opts.place);
       cards.push(r.card);
       cardSpans.push([i, closed ? j : Math.max(i, j - 1)]);
-      if (r.warning) warnings.push({ text: r.warning, line: i });
+      if (r.warning) warnings.push({ text: r.warning, line: i, ...(r.fallback ? { fallback: true } : {}) });
       i = closed ? j + 1 : j;
       continue;
     }

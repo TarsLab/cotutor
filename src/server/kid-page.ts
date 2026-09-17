@@ -1,5 +1,7 @@
 /**
- * 孩子端 `/`:首页(老师们 + 今天可以问 + 今天)与老师页(= 板书页)。零依赖内联脚本,只走 /api/kid/* 与 /api/audio。
+ * 孩子端 `/`:首页(老师卡 + 家长发布的首页卡 + 今天,《首页设计.md》)与老师页(= 板书页)。零依赖内联脚本,只走 /api/kid/* 与 /api/audio。
+ * 首页的老师卡上按钮决定进老师页之后的话题:新话题 / 接着某个话题 / 开场(按钮上的字立刻发出去);老师页不再自己猜话题。
+ * 家长预览(/parent/home-preview)是同一个页面:__PREVIEW__ 换成 "draft" / "published",数据走 /api/home/preview,按钮不真发。
  * 铁律(《产品规划.md》):界面上永远没有错误与评判——后端不通、老师出错、识别失败,都只是「什么都不出现」或头像灰;
  * 文字尽量少,语音优先。孩子设备上没有通往家长端的入口(2026-09-10 拍板)。
  *
@@ -66,20 +68,16 @@ const PAGE = `<!doctype html>
   /* ---- 首页 ---- */
   #home { min-height:100%; padding:calc(env(safe-area-inset-top) + 16px) 20px calc(env(safe-area-inset-bottom) + 40px); max-width:960px; margin:0 auto; display:flex; flex-direction:column; gap:18px; }
   h1 { font-size:20px; font-weight:600; margin:0; color:var(--dim); }
-  .tutors { display:flex; gap:16px; flex-wrap:wrap; justify-content:center; }
-  .tutor { display:flex; flex-direction:column; align-items:center; gap:8px; padding:4px; width:104px; }
+  .tutors { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
   .av { border-radius:50%; background:var(--card); border:3px solid var(--line); display:grid; place-items:center; font-weight:700; box-shadow:0 4px 12px #0000000f; flex:0 0 auto; overflow:hidden; }
   .av img { width:100%; height:100%; object-fit:cover; }
-  .tutor .av { width:104px; height:104px; font-size:48px; transition:transform .15s; }
-  .tutor:active .av { transform:scale(.94); }
-  .tutor .nm { font-size:16px; font-weight:600; }
-  .tutor.off { pointer-events:none; }
-  .tutor.off .av { filter:grayscale(1); opacity:.4; box-shadow:none; }
-  .tutor.off .nm { color:var(--dim); }
+  .hcards { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
+  .hcards:empty { display:none; }
   .lbl { font-size:14px; color:var(--dim); }
-  .sug, .today { display:flex; flex-direction:column; gap:8px; }
-  .chip { display:inline-flex; align-items:center; gap:10px; align-self:flex-start; padding:10px 16px; border-radius:22px; background:var(--card); border:1px solid var(--line); font-size:17px; text-align:left; }
-  .chip .dot, .slot .dot { width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+  .today { display:flex; flex-direction:column; gap:8px; }
+  .slot .dot { width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+  #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); max-width:min(560px,calc(100% - 32px)); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:15px; line-height:1.5; white-space:pre-line; z-index:50; display:none; }
+  #toast.on { display:block; }
   .slots { display:flex; gap:8px; flex-wrap:wrap; }
   .slot { display:inline-flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:6px 14px; font-size:15px; }
   .slot.now { border-color:var(--accent); box-shadow:0 0 0 3px #e8743b33; }
@@ -90,13 +88,11 @@ const PAGE = `<!doctype html>
   .station .d { font-size:12px; color:var(--dim); }
   .station.now .d { color:var(--ink); font-weight:600; }
   .station.past { opacity:.45; } .station.later { opacity:.7; }
-  .stacks { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
-  .stack { background:var(--card); border:2px solid var(--line); border-radius:18px; padding:14px 16px; }
-  .stack .name { font-weight:600; } .stack .item { font-size:15px; color:var(--dim); margin-top:4px; }
   #rest { display:none; text-align:center; color:var(--dim); font-size:16px; padding:12px 0; }
   body.offline #rest { display:block; }
-  body.offline .tutor { pointer-events:none; }
-  body.offline .tutor .av { filter:grayscale(1); opacity:.4; box-shadow:none; }
+  body.offline .c-tutor { pointer-events:none; }
+  body.offline .c-tutor .av { filter:grayscale(1); opacity:.4; box-shadow:none; }
+  body.offline .c-tutor .nm, body.offline .c-tutor .bt { color:var(--dim); }
   /* ---- 老师页 = 板书页 ---- */
   #tutor { position:fixed; inset:0; background:var(--paper); display:none; z-index:10; }
   #tutor.on { display:flex; }
@@ -164,8 +160,9 @@ const PAGE = `<!doctype html>
   @media (min-width:900px) and (orientation:landscape) {
     #home { max-width:none; display:grid; grid-template-columns:1fr 380px; gap:40px; padding:calc(env(safe-area-inset-top) + 40px) 48px 40px; align-content:start; }
     #home h1 { grid-column:1 / -1; font-size:22px; }
-    #home .tutors { gap:40px; } #home .tutor { width:140px; } #home .tutor .av { width:120px; height:120px; font-size:56px; }
-    #home .sug { grid-column:1; } #home .side { grid-column:2; grid-row:2 / span 3; display:flex; flex-direction:column; gap:14px; }
+    #home .tutors { grid-column:1; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; align-items:start; }
+    #home .hcards { grid-column:1; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
+    #home .side { grid-column:2; grid-row:2 / span 3; display:flex; flex-direction:column; gap:14px; }
     #main header { padding-left:32px; padding-right:32px; }
     #board { width:100%; max-width:1040px; margin:0 auto; padding:16px 32px 24px; }
     #sub, #bar { width:100%; max-width:1040px; margin:0 auto; padding-left:32px; padding-right:32px; }
@@ -175,9 +172,10 @@ const PAGE = `<!doctype html>
   <h1 id="title">__TITLE__</h1>
   <div class="tutors" id="tutors"></div>
   <p id="rest">老师们休息中</p>
-  <div class="sug" id="sug"></div>
+  <div class="hcards" id="hcards"></div>
   <div class="side" id="side"></div>
 </div>
+<div id="toast"></div>
 <section id="tutor">
   <div id="main">
     <header>
@@ -214,6 +212,8 @@ const PAGE = `<!doctype html>
 (() => {
 __BOARD_JS__
 
+  /** 家长端的首页预览:null = 孩子端;'draft' / 'published' = 预览里(数据走家长接口,按钮不真发) */
+  const PREVIEW = __PREVIEW__;
   const $ = (s) => document.querySelector(s);
   const h = (tag, attrs = {}, ...kids) => {
     const el = document.createElement(tag);
@@ -241,6 +241,8 @@ __BOARD_JS__
     close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
     check: SVG('<path d="M5 12l5 5 9-10"></path>', 16, 3),
     history: SVG('<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path>', 24),
+    again: SVG('<path d="M4 12a8 8 0 1 0 2.4-5.7"></path><path d="M4 4v4.5h4.5"></path>', 20, 2),
+    start: SVG('<path d="M8 5l11 7-11 7z" fill="currentColor"></path>', 18, 1.5),
     spark: SVG('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"></path>', 24, 1.8),
   };
   const api = async (method, path, body) => {
@@ -261,7 +263,7 @@ __BOARD_JS__
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, echo: null, echoTimer: null, pending: false, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone' };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, echo: null, echoTimer: null, pending: false, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null };
   try { S.autoplay = localStorage.getItem('kid-autoplay') !== '0'; } catch {}
 
   // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音退回浏览器合成;都没有按字数计时 ----
@@ -302,13 +304,33 @@ __BOARD_JS__
     } catch { onFail(); }
   };
 
-  // ---- 首页 ----
+  // ---- 首页(《首页设计.md》):老师卡在上,其余卡照发布的顺序;按钮决定进老师页之后的话题 ----
+  const BUTTON_ICON = { new: 'spark', start: 'start', continue: 'again' };
+  let toastTimer = null;
+  const toast = (text) => { const t = $('#toast'); t.textContent = text; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4000); };
+  const pickButton = (t, b) => {
+    if (PREVIEW) { toast(t.display + (b.kind === 'new' ? ':空白的老师页,等孩子开口' : b.id === 'recent' ? ':回到今天那个话题' : ' 会收到「' + b.label + '」' + (b.kind === 'continue' ? '(接着 ' + b.date + ' ' + b.thread + ')' : '') + (b.brief ? '\\n讲法:' + b.brief : '\\n(没写讲法)'))); return; }
+    const via = { home: S.home.home, button: b.id };
+    if (b.kind === 'new') openTutor(t, { kind: 'new', via });
+    else if (b.id === 'recent') openTutor(t, { kind: 'thread', thread: b.thread, via });
+    else if (b.kind === 'start') openTutor(t, { kind: 'new', via, send: b.label });
+    else if (b.date === S.home.date) openTutor(t, { kind: 'thread', thread: b.thread, via, send: b.label });
+    else openTutor(t, { kind: 'new', via, send: b.label, cont: b.date });
+  };
+  const tutorCard = (t, buttons) => {
+    const first = buttons.find((b) => b.kind === 'new');
+    return h('div', { class: 'c c-tutor' + (t.available ? '' : ' off'), 'data-tutor': t.name, style: 'border-color:' + color(t.subject || t.display) },
+      h('div', { class: 'tt', on: { click: () => { if (first) pickButton(t, first); } } }, avatarEl(t), h('span', { class: 'nm' }, t.display)),
+      h('div', { class: 'bts' }, ...buttons.map((b) => h('button', { type: 'button', class: 'bt bt-' + b.kind, on: { click: () => pickButton(t, b) } }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }), h('span', {}, b.label)))));
+  };
   const renderHome = () => {
     const H = S.home;
     document.title = H.title; $('#title').textContent = H.title;
-    $('#tutors').replaceChildren(...H.tutors.map((t) => h('button', { type: 'button', class: 'tutor' + (t.available ? '' : ' off'), on: { click: () => openTutor(t) } }, avatarEl(t), h('span', { class: 'nm' }, t.display))));
-    const sug = Array.isArray(H.suggestions) ? H.suggestions.filter((s) => s && s.text && H.tutors.some((t) => t.name === s.tutor && t.available)) : [];
-    $('#sug').replaceChildren(...(sug.length ? [h('span', { class: 'lbl' }, '今天可以问'), ...sug.map((s) => { const t = H.tutors.find((x) => x.name === s.tutor); return h('button', { type: 'button', class: 'chip', on: { click: () => openTutor(t, s.text) } }, h('span', { class: 'dot', style: 'background:' + color(t.subject || t.display) }), s.text); })] : []));
+    const byName = new Map(H.tutors.map((t) => [t.name, t]));
+    const cards = Array.isArray(H.cards) ? H.cards : [];
+    const tcards = cards.filter((c) => c.kind === 'tutor' && byName.has(c.props.tutor));
+    $('#tutors').replaceChildren(...tcards.map((c) => tutorCard(byName.get(c.props.tutor), Array.isArray(c.props.buttons) ? c.props.buttons : [])));
+    $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor').map((c, i) => renderCard(c, i, null, false)));
     const days = [...new Set([...H.timetable.map((e) => e.day), H.day])].sort((a, b) => a - b);
     const slots = H.timetable.filter((e) => e.day === H.day).map((e) => h('span', { class: 'slot' + (H.slot === e.subject + ' ' + e.start + '-' + e.end ? ' now' : '') }, h('span', { class: 'dot', style: 'background:' + color(e.subject) }), e.subject + ' ' + e.start + '–' + e.end));
     const path = h('div', { class: 'path' }, ...days.map((d) => {
@@ -316,11 +338,10 @@ __BOARD_JS__
       const when = d === H.day ? 'now' : d < H.day ? 'past' : 'later';
       return h('div', { class: 'station ' + when }, h('span', { class: 'ring', style: 'border-color:' + (subjects.length ? color(subjects[0]) : 'var(--line)') }), h('span', { class: 'd' }, d === H.day ? '今天' : '周' + DAYS[d]));
     }));
-    const stacks = (H.stacks || []).map((s) => h('div', { class: 'stack', style: 'border-color:' + color(s.subject) }, h('div', { class: 'name' }, s.subject), ...s.items.map((a) => h('div', { class: 'item' }, a.id))));
-    $('#side').replaceChildren(...[h('div', { class: 'today' }, h('span', { class: 'lbl' }, '今天'), slots.length ? h('div', { class: 'slots' }, ...slots) : null, path), stacks.length ? h('div', { class: 'stacks' }, ...stacks) : null].filter(Boolean));
+    $('#side').replaceChildren(h('div', { class: 'today' }, h('span', { class: 'lbl' }, '今天'), slots.length ? h('div', { class: 'slots' }, ...slots) : null, path));
   };
   const loadHome = async () => {
-    try { S.home = await api('GET', '/api/kid/home'); setOffline(false); renderHome(); }
+    try { S.home = await api('GET', PREVIEW ? '/api/home/preview?which=' + PREVIEW : '/api/kid/home'); setOffline(false); renderHome(); }
     catch { setOffline(true); }
   };
   const setOffline = (off) => {
@@ -331,19 +352,28 @@ __BOARD_JS__
   };
 
   // ---- 老师页 ----
-  const openTutor = (t, sendText) => {
+  /**
+   * intent(首页的按钮定的):new = 空白新话题;thread = 今天的那个话题;today = 今天的当前话题(调试入口 ?tutor=)。
+   * via = 哪个按钮(下一条消息带上);send = 打开就发出去的字(开场 / 接着按钮);cont = 接着的是哪天(头部写「接着 9 月 16 日」)
+   */
+  const openTutor = (t, intent) => {
     unlock();
+    intent = intent || { kind: 'new' };
     S.tutor = t; S.sections = []; S.played = new Set(); S.state = { section: -1, line: -1, status: 'idle' }; S.echo = null; S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
-    S.thread = null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = false; $('#hist').classList.remove('on'); renderBar(); renderHeader();
+    S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
+    S.via = intent.via || null; S.cont = intent.cont || null;
+    $('#hist').classList.remove('on'); renderBar(); renderHeader();
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
     $('#c-nm').textContent = t.display;
     $('#c-mo').textContent = t.motto || '';
     $('#board').replaceChildren();
+    if (S.newThread && !intent.send) $('#board').append(blankBoard('想问什么?'));
     $('#tutor').classList.add('on');
     setBar('idle');
-    loadDay(true).then(() => { if (sendText) send(sendText); });
+    loadDay(true).then(() => { if (intent.send) send(intent.send); });
   };
-  const closeTutor = () => { clearTimeout(S.pollTimer); stopVoice(); S.tutor = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit'); loadHome(); };
+  const blankBoard = (title) => h('div', { class: 'blank' }, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null);
+  const closeTutor = () => { clearTimeout(S.pollTimer); stopVoice(); S.tutor = null; S.via = null; S.cont = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit'); loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back').innerHTML = ICON.back;
 
@@ -351,7 +381,7 @@ __BOARD_JS__
   const renderCard = (c, idx, secIdx, stage) => {
     const p = c.props || {};
     // 每张卡带底色槽与字形槽(后期定的 look,没有就机械规则);名字对不上主题的,CSS 落回 paper / plain
-    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), on: stage ? {} : { click: () => openStage(secIdx, idx) } }, ...kids);
+    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), on: stage || secIdx === null ? {} : { click: () => openStage(secIdx, idx) } }, ...kids);
     switch (c.kind) {
       case 'text': {
         if (isHeading(c)) return h('div', { class: 'heading', 'data-card': idx }, p.title || '');
@@ -857,6 +887,7 @@ __BOARD_JS__
     const today = S.day ? S.day.date : null;
     let mo = S.tutor.motto || '';
     if (S.hist && today) mo = '以前的 · ' + dateLabel(S.hist, S.hist === today ? '' : today) + ' ' + clock(S.threadAt);
+    else if (S.cont && today) { const d = dateLabel(S.cont, today); mo = '接着' + (d === '昨天' ? d : ' ' + d + ' ') + '的话题'; }
     else if (S.newThread) mo = '新话题';
     else if (S.thread && S.day && S.thread !== S.day.thread) mo = '今天的话题 · ' + clock(S.threadAt);
     $('#c-mo').textContent = mo;
@@ -869,7 +900,7 @@ __BOARD_JS__
   /** 换到某天的某个话题:今天的能接着聊;以前的只读回放(从第一句播) */
   const switchThread = (date, thread) => {
     resetBoard();
-    S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null;
+    S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null; S.via = null; S.cont = null;
     renderBar(); renderSubtitle(); renderHeader();
     loadDay(!S.readonly);
   };
@@ -879,7 +910,8 @@ __BOARD_JS__
     if (S.pending || S.readonly) return;
     resetBoard();
     S.newThread = true; S.thread = null; S.threadAt = null;
-    $('#board').append(h('div', { class: 'blank' }, h('b', {}, '换个话题吧,想问什么?'), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null));
+    S.via = null; S.cont = null;
+    $('#board').append(blankBoard('换个话题吧,想问什么?'));
     setBar('idle'); renderSubtitle(); renderHeader();
   });
   $('#hist-btn').innerHTML = ICON.history;
@@ -919,8 +951,10 @@ __BOARD_JS__
     const focus = opts.focus || (S.stage ? { card: S.stage.id } : null);
     if (focus) body.focus = focus;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
+    if (S.via) body.via = S.via;
     try {
       const r = await api('POST', '/api/kid/conversations/' + S.tutor.name + '/messages', body);
+      S.via = null;
       if (r && r.thread) S.thread = r.thread;
       if (S.newThread) { S.newThread = false; const blank = $('#board .blank'); if (blank) blank.remove(); }
       renderHeader();
@@ -928,7 +962,7 @@ __BOARD_JS__
     } catch (e) {
       // 忙 / 上限 / 不通:什么都不报;刷新一下让状态说话
       S.pending = false;
-      if (e && e.status === 429) { S.limit = true; renderSubtitle(); } else if (e && e.status === 409) loadDay(true); else setOffline(true);
+      if (e && e.status === 429) { S.limit = true; renderSubtitle(); } else if (e && e.status === 409) loadDay(true); else if (e && e.status === 400 && S.via) { S.via = null; closeTutor(); } else setOffline(true);
     }
   };
 
@@ -1031,10 +1065,10 @@ __BOARD_JS__
   // ---- 启动与心跳:不通就头像灰,什么都不报 ----
   loadHome().then(() => {
     const open = debug.get('tutor');
-    if (open && S.home) {
+    if (open && S.home && !PREVIEW) {
       const t = S.home.tutors.find((x) => x.name === open);
       if (t) {
-        openTutor(t);
+        openTutor(t, { kind: 'today' });
         // 调试:&new=1 新话题空白态;&hist=<日期>.<话题> 只读回放以前的;&panel=1 打开「以前的」面板
         setTimeout(() => {
           if (debug.get('new')) $('#new-btn').click();
@@ -1046,7 +1080,7 @@ __BOARD_JS__
       }
     }
   });
-  setInterval(() => { if (S.tutor) { if (!S.pending) loadDay(true); } else loadHome(); }, 5000);
+  setInterval(() => { if (S.tutor) { if (!S.pending) loadDay(true); } else loadHome(); }, PREVIEW ? 2000 : 5000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) (S.tutor ? loadDay(true) : loadHome()); });
 })();
 </script>
@@ -1054,3 +1088,8 @@ __BOARD_JS__
 `;
 
 export const KID_PAGE = PAGE.replace('__BOARD_JS__', boardLibSource());
+
+/** 孩子端页面:标题(已转义)填进去;preview = 家长端「首页」页里的预览(草稿 / 已发布) */
+export function kidPage(title: string, preview: 'draft' | 'published' | null = null): string {
+  return KID_PAGE.replaceAll('__TITLE__', title).replace('__SHORT__', title).replace('__PREVIEW__', JSON.stringify(preview));
+}

@@ -231,8 +231,8 @@ try {
   check('起不来 → error 指向 err.log,尾巴带原因', dm.index.messages[0].result === 'error' && String(dm.index.messages[0].error).startsWith('spawn:') && dm.errors[dm.index.messages[0].job]?.includes('起不来'), JSON.stringify({ m: dm.index.messages[0], e: dm.errors }));
 
   // ---- 孩子端接口:首页、过滤后的会话、发消息、每日上限、配音文件 ----
-  const home = (await route('GET', '/api/kid/home', ctx)).json as { title: string; timetable: unknown[]; tutors: { name: string; available: boolean; remaining: number; hasVoice: boolean }[]; stacks: unknown[] };
-  check('首页:标题、课程表、孩子端老师(无 scene-maker)', home.title === '小明的老师们' && home.timetable.length === 2 && home.tutors.length === 3 && !home.tutors.some((t) => t.name === 'scene-maker') && home.stacks.length === 0, JSON.stringify(home.tutors));
+  const home = (await route('GET', '/api/kid/home', ctx)).json as { title: string; timetable: unknown[]; tutors: { name: string; available: boolean; remaining: number; hasVoice: boolean }[]; home: string | null; cards: { kind: string; props: { tutor?: string } }[] };
+  check('首页:标题、课程表、孩子端老师(无 scene-maker);没发布过 = 缺省首页(每位老师一张卡)', home.title === '小明的老师们' && home.timetable.length === 2 && home.tutors.length === 3 && !home.tutors.some((t) => t.name === 'scene-maker') && home.home === null && home.cards.map((c) => c.props.tutor).join() === 'chinese-tutor,math-tutor,reading-tutor', JSON.stringify(home.cards));
   check('老师带 hasVoice 与剩余条数(今天 09-09 孩子还没发过)', home.tutors.find((t) => t.name === 'math-tutor')?.hasVoice === true && home.tutors.find((t) => t.name === 'math-tutor')?.remaining === 30, JSON.stringify(home.tutors));
   const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null; reply: string | null; audio: string | null }[]; remaining: number; pending: string | null };
   check('孩子视图:家长发的只见回复,搜不到工具、错误、家长尾巴', kd.messages.length === 1 && kd.messages[0].question === null && kd.messages[0].reply === '第一次说:新的一天' && !/工具|error|holdup|handoff|costUsd|Read/.test(JSON.stringify(kd)), JSON.stringify(kd));

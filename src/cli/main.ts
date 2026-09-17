@@ -45,6 +45,11 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
       const key = a.slice(2);
       if (valued.includes(key)) {
         const next = argv[i + 1];
+        // --force 的值可省:upgrade --force <老师>,home publish --force
+        if ((next === undefined || next.startsWith('--')) && key === 'force') {
+          flags[key] = true;
+          continue;
+        }
         if (next === undefined || next.startsWith('--')) throw new UsageError(`选项 --${key} 需要一个值。\n${USAGE}`);
         flags[key] = next;
         i++;
@@ -257,7 +262,7 @@ export async function main(argv: string[]): Promise<void> {
         if (v.pack) out.push(...v.pack.prompt.split('\n').map((l) => `  │ ${l}`));
         out.push(`读了什么:${v.tools.length ? '' : '没用工具'}`);
         for (const t of v.tools) out.push(`  ${t.ok === false ? '✗' : t.ok === null ? '?' : '·'} ${t.name}${t.sub ? '(子代理)' : ''} ${t.arg}${t.chars ? ` → ${t.chars} 字` : ''}`);
-        out.push(`卡 ${v.kid.cards.length}:${v.kid.cards.map((c) => `${c.kind} ${c.label}`.trim()).join(' | ')}`);
+        out.push(`卡 ${v.kid.cards.length}:${v.kid.cards.map((c) => `${v.job}/${c.n} ${c.kind} ${c.label}`.trim()).join(' | ')}`);
         out.push(`讲稿 ${v.kid.lines.length}:`);
         for (const l of v.kid.lines) out.push(`  ${l.text}${l.cut ? `〔截:${l.cut}〕` : ''}`);
         if (v.stored.parentText) out.push(`给家长的尾巴:\n${v.stored.parentText.split('\n').map((l) => `  ${l}`).join('\n')}`);
@@ -374,6 +379,51 @@ export async function main(argv: string[]): Promise<void> {
           const m = index.messages.find((x) => x.bookkeep?.thread === th && x.result !== 'running');
           process.stdout.write(`话题 ${th}:${index.booked[th] ? '记进日记了' : `没记成${m?.warnings?.length ? ' — ' + m.warnings.join(';') : m?.error ? ' — ' + m.error : ''}`}\n`);
         }
+        return;
+      }
+      case 'home': {
+        const sub = positionals[0];
+        if (sub !== 'check' && sub !== 'publish' && sub !== 'show') throw new UsageError(`home 后面跟 check / publish / show,如 cotutor home check。\n${USAGE}`);
+        const ws = loadWorkspace(workspace);
+        const now = new Date();
+        const home = await import('../server/home.ts');
+        if (sub === 'show') {
+          const s = await home.homeStats(ws, now);
+          process.stdout.write(json ? `${JSON.stringify(s, null, 2)}\n` : `${home.formatStats(ws, s)}\n`);
+          return;
+        }
+        if (sub === 'check') {
+          const published = flags.published === true;
+          let md: string | null;
+          if (published) {
+            const { home: pub, error } = await home.readPublished(ws);
+            if (!pub) throw new UsageError(error ?? '还没发布过首页');
+            md = await home.publishedSource(ws, pub);
+            if (md === null) throw new UsageError(`已发布那份的原文 ${pub.source} 不在了`);
+          } else {
+            md = await home.readDraft(ws);
+            if (md === null) throw new UsageError('还没有草稿 home/draft.md(用 cotutor-home 技能写一份)');
+          }
+          const check = await home.checkHome(ws, md, now);
+          const kid = await home.kidHomeView(ws, now, { source: published ? 'published' : 'draft' });
+          if (json) process.stdout.write(`${JSON.stringify({ ok: check.fixes === 0, for: check.doc.for ?? null, issues: check.issues, cards: check.doc.cards, kid: kid.cards, note: check.doc.note }, null, 2)}\n`);
+          else process.stdout.write(`${home.formatCheck(ws, check, published ? '已发布的那份' : '草稿 home/draft.md', kid)}\n`);
+          if (check.fixes) process.exitCode = 1;
+          return;
+        }
+        const r = await home.publishHome(ws, { force: flags.force === true, from: typeof flags.from === 'string' ? flags.from : undefined, now });
+        if (json) process.stdout.write(`${JSON.stringify({ ok: r.ok, id: r.home?.id ?? null, source: r.source, issues: r.check.issues, dropped: r.dropped }, null, 2)}\n`);
+        else if (!r.ok) {
+          const kid = await home.kidHomeView(ws, now, { source: 'draft' });
+          process.stdout.write(`${home.formatCheck(ws, r.check, r.source, kid)}\n没发布:有 ${r.check.fixes} 条要改;改好再发,或 --force 丢掉那几张照发\n`);
+        } else {
+          const h = r.home!;
+          process.stdout.write(`发布了 ${h.id}(${r.source} → ${h.source},home/published.json)· ${h.cards.length} 张卡${h.for ? ` · for ${h.for}` : ''}\n`);
+          for (const d of r.dropped) process.stdout.write(`  丢掉:${d}\n`);
+          for (const w of h.warnings) process.stdout.write(`  提醒:${w}\n`);
+          process.stdout.write('孩子端刷新就是新首页(不用重起服务)\n');
+        }
+        if (!r.ok) process.exitCode = 1;
         return;
       }
       case 'send': {

@@ -4,7 +4,7 @@
 
 本文件只写怎么在这个仓干活,不记历史、不记拍板:
 
-- 设计在 `docs/`:《产品规划.md》定位、两个端、里程碑;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《快模型方案.md》板书后期;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡
+- 设计在 `docs/`:《产品规划.md》定位、两个端、里程碑;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《快模型方案.md》板书后期;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡;《首页设计.md》孩子端首页与 cotutor-home
 - 各设计文档末尾有「拍板记录」,带日期。**带日期的决定都是可推翻的**;一条约定要在两轮以上迭代里活下来才进本文件末尾的「约定」
 - 《开发者手册.md》怎么跑。模块的来龙去脉与真跑数据不另存,看 git log 与各设计文档
 - 草稿与随手记放 `docs/wip/`(gitignore)
@@ -12,7 +12,7 @@
 ## 目录
 
 - `agents/*.md` 出厂老师文件:frontmatter 取两 CLI 公共子集,正文即系统提示;init 拷进 workspace,hash 记 `.cotutor/shipped.json`
-- `skills/<name>/` 出厂技能:cotutor-board(由 `cards/*/card.md` 生成)、cotutor-vault、cotutor-analyze、cotutor-tune
+- `skills/<name>/` 出厂技能:cotutor-board(由 `cards/*/card.md` 生成)、cotutor-vault、cotutor-analyze、cotutor-tune、cotutor-home(家长在 workspace 里排首页)
 - `cards/<kind>/` 卡的协议:`card.md` 八栏(例子即测试)+ `card.css`
 - `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`、`post.md` 后期骨架
 - `src/schema/` 契约(zod,类型即文档);`src/lib/` 纯函数,离屏可测;`src/cards/` 卡的注册表

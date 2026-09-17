@@ -6,6 +6,8 @@
  * 老师「想」的期间按流式模拟:卡在 delay 里一张张出现(pending 条目带 partial 板书),想完才有讲稿与声音。
  * 卡的状态 PUT 假存在内存里(过真的 state 契约),today 里并回卡上;发消息接 {text, action, focus},「交给老师」后照常追加下一节。
  * 场景:normal(缺省)/ limit(每日上限已到)/ offline(接口全 500,页面该灰)。
+ * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有开场与接着昨天的按钮,数学老师有开场,朗读老师没写(补一张);
+ * 发消息带 via 时照真服务的规则换成按钮上的字、定话题。
  */
 import { createReadStream, readFileSync } from 'node:fs';
 import { createServer as createHttp, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
@@ -26,7 +28,9 @@ import { lanAddresses } from '../cli/serve.ts';
 import { USER_CERT_DIR } from '../cli/workspace.ts';
 import { kidThreads } from '../lib/kid-view.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
-import { KID_PAGE } from './kid-page.ts';
+import { kidPage } from './kid-page.ts';
+import { arrangeHome, kidButtons, parseHome } from '../lib/home.ts';
+import type { TutorButton } from '../cards/index.ts';
 import { PACKAGE_THEMES_DIR, packageTheme } from '../cli/themes.ts';
 import { validatePost, type PostOutput } from '../lib/postprocess.ts';
 import { cardsCss } from '../cards/docs.ts';
@@ -302,6 +306,39 @@ interface MockMessage {
   photos?: string[];
 }
 
+/** mock 的首页原文(昨晚 21:30 发布的那份;接着按钮指向 past 里昨天的话题,job = 0930-<老师名长度>) */
+export function mockHomeMd(today: string, yesterday: string): string {
+  return `---
+for: ${today}
+---
+
+\`\`\`tutor chinese-tutor
+我要预习小蝌蚪找妈妈
+讲法: 第 22 课。先带他把 1–3 自然段读顺,重点字 塘、脑、袋
+接着 ${yesterday} 0930-13 接着讲画蛇添足
+讲法: 昨天讲到第二节,先问他还记不记得那杯酒
+\`\`\`
+
+\`\`\`tutor math-tutor
+再练两道退位减法
+讲法: 出 52−7、80−3,先让他说怎么想
+\`\`\`
+
+\`\`\`text
+# 今晚
+先读课文,再练两道题
+\`\`\`
+
+\`\`\`tianzige
+塘脑袋
+\`\`\`
+
+## 为什么这么排
+
+- mock 的样例
+`;
+}
+
 export interface MockRouteResult {
   status: number;
   json?: unknown;
@@ -384,7 +421,25 @@ export function createMock(opts: MockOptions = {}): Mock {
   const home = () => {
     const d = now();
     const day = d.getDay() === 0 ? 7 : d.getDay();
-    return { title, date: localDate(d), day, timetable, slot: null, tutors: tutorsJson(), stacks: [], suggestions: [{ tutor: 'chinese-tutor', text: '「静夜思」怎么背' }, { tutor: 'math-tutor', text: '25 加 17 怎么算' }, { tutor: 'reading-tutor', text: '再听一遍昨天的故事' }] };
+    const cards = arrangeHome(parseHome(mockHomeMd(localDate(d), yesterday())).cards, MOCK_TUTORS.map((t) => t.name)).map((c) => {
+      if (c.kind !== 'tutor') return c;
+      const name = String(c.props.tutor);
+      const list = messages.get(name) ?? [];
+      const asked = list.find((m) => m.question !== null && m.thread === list[list.length - 1]?.thread);
+      const recent = asked ? { date: localDate(d), thread: asked.thread, title: asked.question ?? '' } : null;
+      const alive = (date: string, thread: string): boolean => date === yesterday() && (past.get(name) ?? []).some((m) => m.thread === thread);
+      return { kind: 'tutor', props: { tutor: name, buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { recent, alive }) } };
+    });
+    return { title, date: localDate(d), day, timetable, slot: null, tutors: tutorsJson(), home: mockHomeId(), cards };
+  };
+  const mockHomeId = (): string => `${yesterday()}-2130`;
+  /** via → 按钮(真服务在 server/home.ts resolveVia;mock 从同一份原文取) */
+  const mockButton = (name: string, via: unknown): TutorButton | 'new' | 'recent' | null => {
+    if (!isObj(via)) return null;
+    if (via.button === 'new' || via.button === 'recent') return via.button;
+    if (via.home !== mockHomeId() || typeof via.button !== 'number') return null;
+    const card = parseHome(mockHomeMd(localDate(now()), yesterday())).cards.find((c) => c.kind === 'tutor' && c.props.tutor === name);
+    return ((card?.props.buttons ?? []) as TutorButton[])[via.button] ?? null;
   };
   const answer = (m: MockMessage, full: BoardSection | null): void => {
     if (full) {
@@ -426,7 +481,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   const route = async (method: string, path: string, body?: unknown): Promise<MockRouteResult> => {
     const url = new URL(path, 'http://x');
     const p = url.pathname;
-    if (p === '/') return { status: 200, html: KID_PAGE.replaceAll('__TITLE__', title).replace('__SHORT__', title) };
+    if (p === '/') return { status: 200, html: kidPage(title) };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
     // 主题:mock 没有 workspace,直接给包里的出厂 default
     if (p === '/kid/theme.css') return { status: 200, html: `${cardsCss()}\n\n${(await packageTheme()).css}`, contentType: 'text/css; charset=utf-8' };
@@ -473,17 +528,27 @@ export function createMock(opts: MockOptions = {}): Mock {
         if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
         const action = body.action === 'continue' || body.action === 'submit' ? body.action : undefined;
         const photos = Array.isArray(body.photos) ? (body.photos as unknown[]).filter((x): x is string => typeof x === 'string') : [];
-        if (!body.text.trim() && !action && !photos.length) return { status: 400, json: { error: 'bad_request' } };
+        const button = body.via === undefined ? undefined : mockButton(name, body.via);
+        if (button === null) return { status: 400, json: { error: 'bad_via' } };
+        let said = body.text;
+        let newThread = body.newThread === true;
+        let wantThread = body.thread;
+        if (button && button !== 'new' && button !== 'recent') {
+          said = button.label;
+          if (button.kind === 'continue' && button.date === date) { wantThread = button.thread; newThread = false; }
+          else { newThread = true; wantThread = undefined; }
+        }
+        if (!said.trim() && !action && !photos.length) return { status: 400, json: { error: 'bad_request' } };
         if (action !== 'continue' && remaining(name) <= 0) return { status: 429, json: { error: 'limit', remaining: 0 } };
         if (list.some((m) => m.pending)) return { status: 409, json: { error: 'busy' } };
-        const text = body.text.trim() || (action === 'continue' ? '继续' : action === 'submit' ? '(交了答案,没说话)' : photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`);
+        const text = said.trim() || (action === 'continue' ? '继续' : action === 'submit' ? '(交了答案,没说话)' : photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`);
         const job = nextJob();
         // 话题:newThread → 自己的 job;指定的要在今天的列表里;缺省接当前(末条)的
         let thread = job;
-        if (body.newThread !== true && list.length) {
-          if (body.thread !== undefined) {
-            if (typeof body.thread !== 'string' || !list.some((x) => x.thread === body.thread)) return { status: 400, json: { error: 'bad_request' } };
-            thread = body.thread;
+        if (!newThread && list.length) {
+          if (wantThread !== undefined) {
+            if (typeof wantThread !== 'string' || !list.some((x) => x.thread === wantThread)) return { status: 400, json: { error: 'bad_request' } };
+            thread = wantThread;
           } else thread = list[list.length - 1].thread;
         }
         const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}) };

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { FocusSchema, MESSAGE_FROM } from './context-pack.ts';
 import { BoardSectionSchema, DeviceSchema } from './board.ts';
 import { BookkeepingSchema } from './sections.ts';
+import { MessageViaSchema } from './home.ts';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -82,6 +83,10 @@ export const ConversationMessageSchema = z.object({
   tools: z.array(z.object({ name: z.string().min(1), arg: z.string(), ok: z.boolean().nullable(), chars: z.number().int().nonnegative(), sub: z.boolean().optional() })).optional(),
   /** 这条是回放(cotutor replay,server/replay.ts):原轮的 job。回放落在 evals/ 里,不在 conversations/ */
   replayOf: z.string().min(1).optional(),
+  /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2);开场按钮的 text 就是按钮上的字,不是孩子说的 */
+  via: MessageViaSchema.optional(),
+  /** 这个话题接着以前哪天的哪个话题(首页的「接着」按钮;新会话,上下文包带那个话题的尾巴) */
+  continues: z.object({ date: z.string().regex(DATE_RE), thread: z.string().min(1) }).optional(),
 });
 export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 

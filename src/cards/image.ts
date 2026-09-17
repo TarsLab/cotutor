@@ -16,6 +16,7 @@ export const IMAGE_EXT = /\.(png|jpe?g|webp|gif|svg)$/i;
 
 export const image: CardKind<ImageProps> = {
   name: 'image',
+  where: ['board', 'home'],
   props: ImagePropsSchema,
   parse(body) {
     const [src, ...rest] = bodyLines(body);

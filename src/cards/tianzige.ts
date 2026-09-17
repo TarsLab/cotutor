@@ -16,6 +16,7 @@ export const TIANZIGE_MAX = 4;
 
 export const tianzige: CardKind<TianzigeProps> = {
   name: 'tianzige',
+  where: ['board', 'home'],
   props: TianzigePropsSchema,
   parse(body) {
     const chars = Array.from(body.replace(/\s+/g, ''));

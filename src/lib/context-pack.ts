@@ -38,6 +38,24 @@ export function renderContextPack(pack: ContextPack): string {
     for (const r of VAULT_PACK_ROLES) if (p.vault[r]) out.push(`    ${r}: ${yamlScalar(p.vault[r] as string)}`);
   }
   if (p.board === 'off') out.push('  board: off');
+  if (p.home) {
+    out.push('  home:', `    button: ${yamlScalar(p.home.button)}`);
+    if (p.home.brief) out.push(`    brief: ${yamlScalar(p.home.brief)}`);
+  }
+  if (p.continue) {
+    const c = p.continue;
+    out.push('  continue:', `    from: ${yamlScalar(c.from)}`);
+    if (c.title) out.push(`    title: ${yamlScalar(c.title)}`);
+    if (c.said.length) {
+      out.push('    said:');
+      for (const l of c.said) out.push(`      - ${yamlScalar(l)}`);
+    }
+    if (c.cards.length) {
+      out.push('    cards:');
+      for (const l of c.cards) out.push(`      - ${yamlScalar(l)}`);
+    }
+    out.push(`    index: ${yamlScalar(c.index)}`);
+  }
   if (p.cards?.length) {
     out.push('  cards:');
     for (const c of p.cards) out.push(`    - ${yamlScalar(c)}`);

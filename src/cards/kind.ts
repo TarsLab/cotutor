@@ -5,8 +5,13 @@
  */
 import type { z } from 'zod';
 
+/** 卡用在哪:板书(老师的回复)/ 首页(家长批准的那页,《首页设计.md》) */
+export type CardPlace = 'board' | 'home';
+
 export interface CardKind<P = Record<string, unknown>, S = unknown> {
   name: string;
+  /** 能用在哪;缺省只板书。首页专属的卡(tutor 等)不进 cotutor-board 技能,老师写了退文字卡 */
+  where?: readonly CardPlace[];
   props: z.ZodType<P>;
   /** 围栏正文 + 标签后的修饰词 → props;抛错 = 没解析成(退成文字卡显示原文,家长视图报一行) */
   parse(body: string, mods: readonly string[]): P;

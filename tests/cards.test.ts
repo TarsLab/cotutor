@@ -1,11 +1,18 @@
 /** 卡的注册表:每种卡的解析 / 剥秘密 / 语法表;不认识的标签;解析失败的退路。 */
-import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, parseCard, parseCardState, stripSecrets } from '../src/cards/index.ts';
+import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, kindsFor, parseCard, parseCardState, stripSecrets } from '../src/cards/index.ts';
 import { boardSkillDoc, boardSyntaxDoc } from '../src/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 {
   check('有状态的卡:choice / fill / scene / canvas;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,fill,scene,canvas');
-  check('九种卡登记在册', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,scene,canvas,code' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
+  check('十种卡登记在册:板书九种 + 首页的老师卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,scene,canvas,code,tutor' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
+  check('用在哪:板书九种;首页 = 老师卡 + 一段字 / 点读 / 图片 / 田字格', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,scene,canvas,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,tutor');
+  const tut = parseCard('tutor chinese-tutor', '- 我要预习小蝌蚪找妈妈\n讲法: 先读课文\n讲法: 再认字\n新话题\n接着 2026-09-16 1930-1 接着写看图写话', 'home');
+  check('老师卡:列表号去掉、讲法挂上一个按钮(多行拼起来)、「新话题」不算、接着带日期与话题', tut.card.kind === 'tutor' && JSON.stringify(tut.card.props) === JSON.stringify({ tutor: 'chinese-tutor', buttons: [{ kind: 'start', label: '我要预习小蝌蚪找妈妈', brief: '先读课文\n再认字' }, { kind: 'continue', label: '接着写看图写话', date: '2026-09-16', thread: '1930-1' }] }) && !tut.warning, JSON.stringify(tut));
+  check('老师卡剥讲法', JSON.stringify(stripSecrets({ cards: [tut.card], lines: [] }).cards[0].props.buttons) === '[{"kind":"start","label":"我要预习小蝌蚪找妈妈"},{"kind":"continue","label":"接着写看图写话","date":"2026-09-16","thread":"1930-1"}]');
+  const tooMany = parseCard('tutor math-tutor', 'a\nb\nc\nd\ne', 'home');
+  check('老师卡:5 个按钮、没写老师、两位老师、坏老师名 → 文字卡 + fallback', tooMany.fallback === true && tooMany.warning?.includes('最多 4 个') === true && parseCard('tutor', 'a', 'home').fallback === true && parseCard('tutor a-tutor b-tutor', 'a', 'home').fallback === true && parseCard('tutor 数学', 'a', 'home').fallback === true, JSON.stringify(tooMany));
+  check('老师卡写在板书里 → 文字卡 + warning;选择题写在首页 → 文字卡 + warning;首页里不认识的标签也退文字卡', parseCard('tutor math-tutor', 'a').card.kind === 'text' && parseCard('tutor math-tutor', 'a').warning?.includes('首页的卡') === true && parseCard('choice', '问?\n- [x] a', 'home').warning?.includes('首页放不了') === true && parseCard('widget', 'x', 'home').card.kind === 'text' && parseCard('widget', 'x', 'home').fallback === true && parseCard('widget', 'x').card.kind === 'code');
   const cv = parseCard('canvas', '画一个三角形,标出它的一条高。');
   check('canvas:只有题目 → 空白画板', cv.card.kind === 'canvas' && cv.card.props.base === null && cv.card.props.prompt === '画一个三角形,标出它的一条高。');
   check('canvas:照片做底(第三种底图,R5):第一行是图片路径、后面是题目;http 地址不算', JSON.stringify(parseCard('canvas', 'captures/2026-09-14/1620-1.jpg\n把算错的那道圈出来。').card.props) === '{"base":{"image":"captures/2026-09-14/1620-1.jpg"},"prompt":"把算错的那道圈出来。"}' && parseCard('canvas', 'https://x/a.jpg\n题').card.props.base === null);
@@ -88,9 +95,9 @@ import { check, done } from './_check.ts';
 }
 {
   const doc = boardSyntaxDoc();
-  check('语法表:两种东西 + 每种卡一段(从 cards/<kind>/card.md 拼)+ 板书到第一个 H2 为止;例子的 expect 注释去掉了', doc.includes('普通段落 = 你说的话') && doc.includes('围栏 = 板上的卡') && CARD_KINDS.every((k) => doc.includes(`### ${k.name} — `)) && doc.includes('板书到第一个「## 」为止') && !doc.includes('<!-- expect') && doc.includes('references/<种类>.md'), doc.slice(0, 200));
+  check('语法表:两种东西 + 每种卡一段(从 cards/<kind>/card.md 拼)+ 板书到第一个 H2 为止;例子的 expect 注释去掉了', doc.includes('普通段落 = 你说的话') && doc.includes('围栏 = 板上的卡') && kindsFor('board').every((k) => doc.includes(`### ${k.name} — `)) && !doc.includes('### tutor — ') && doc.includes('板书到第一个「## 」为止') && !doc.includes('<!-- expect') && doc.includes('references/<种类>.md'), doc.slice(0, 200));
   const skill = boardSkillDoc();
   const descLine = skill.split('\n')[2];
-  check('技能文件:frontmatter 的 name 与 description 各一行,description 列出全部种类、不超 1536 字,正文就是语法表', skill.startsWith('---\nname: cotutor-board\ndescription: ') && descLine.length < 1536 && CARD_KINDS.every((k) => descLine.includes(k.name)) && skill.endsWith(doc));
+  check('技能文件:frontmatter 的 name 与 description 各一行,description 列出全部种类、不超 1536 字,正文就是语法表', skill.startsWith('---\nname: cotutor-board\ndescription: ') && descLine.length < 1536 && kindsFor('board').every((k) => descLine.includes(k.name)) && !descLine.includes('/ tutor') && skill.endsWith(doc));
 }
 done();

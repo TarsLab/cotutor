@@ -9,7 +9,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CARD_KINDS } from './index.ts';
+import { CARD_KINDS, kindsFor, type CardPlace } from './index.ts';
 
 /** 本包自带的卡协议目录(仓库检出与 npm 安装都在包根 cards/) */
 export const PACKAGE_CARDS_DIR = fileURLToPath(new URL('../../cards/', import.meta.url));
@@ -54,9 +54,9 @@ export function readCardDoc(kind: string, dir = PACKAGE_CARDS_DIR): CardDoc {
   return { kind, md, sections, headline };
 }
 
-/** 全部(按注册表的顺序) */
-export function cardDocs(dir = PACKAGE_CARDS_DIR): CardDoc[] {
-  return CARD_KINDS.map((k) => readCardDoc(k.name, dir));
+/** 能用在某处的种类的协议(按注册表的顺序);缺省板书——cotutor-board 技能只列这些 */
+export function cardDocs(dir = PACKAGE_CARDS_DIR, place: CardPlace = 'board'): CardDoc[] {
+  return kindsFor(place).map((k) => readCardDoc(k.name, dir));
 }
 
 /** 例子里的 `<!-- expect {…} -->` 注释:给老师看的版本要去掉 */
@@ -143,7 +143,7 @@ export const BOARD_SKILL = 'cotutor-board';
 
 /** SKILL.md:frontmatter(两 CLI 都只认 name / description)+ 语法表;description 列出卡的种类,让模型不读正文也知道有哪几种 */
 export function boardSkillDoc(dir = PACKAGE_CARDS_DIR): string {
-  const kinds = CARD_KINDS.map((k) => k.name).join(' / ');
+  const kinds = kindsFor('board').map((k) => k.name).join(' / ');
   const description = `cotutor 的板书怎么写:回复正文就是孩子看到的板书,普通段落是讲稿(一行一句,会被念出来)、围栏是卡(标签 = 种类:${kinds}),各种卡的写法与例子都在这里。给孩子讲解、要出卡之前读一遍;每种卡完整的协议(何时用、别用、反例、你会收回什么)在 references/<种类>.md。含作业照片怎么接、一节的完整例子。不是:一道题怎么画成一步步的动画(那是画图老师的 drawtell-teaching / drawtell-scene)、vault 怎么读(→ cotutor-vault)。机器文件,从卡的注册表生成,cotutor init / upgrade 刷新,别改。`;
   return `---\nname: ${BOARD_SKILL}\ndescription: ${description}\n---\n\n${boardSyntaxDoc(dir)}`;
 }

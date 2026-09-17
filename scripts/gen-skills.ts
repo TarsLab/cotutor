@@ -1,7 +1,8 @@
 /**
  * 把生成的技能文件写进包根 skills/(入库):pnpm run gen:skills。
  * cotutor-board 整个目录生成(cards/<kind>/card.md → SKILL.md + references/,先清空 references/);
- * cotutor-vault 只生成 references/记账.md、cotutor-analyze 只生成 references/命令与文件.md、cotutor-tune 只生成 references/字段.md(SKILL.md 手写)。tests/skills.test.ts 断言入库的和生成的一致,改了源忘了跑,测试会红。
+ * cotutor-vault 只生成 references/记账.md、cotutor-analyze 只生成 references/命令与文件.md、cotutor-tune 只生成 references/字段.md、
+ * cotutor-home 只生成 references/ 下的首页语法.md / 命令.md / <首页卡>.md(SKILL.md 手写)。tests/skills.test.ts 断言入库的和生成的一致,改了源忘了跑,测试会红。
  */
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -9,6 +10,7 @@ import { BOARD_SKILL, boardSkillFiles } from '../src/cards/docs.ts';
 import { VAULT_SKILL, vaultSkillGeneratedFiles } from '../src/lib/vault-doc.ts';
 import { ANALYZE_SKILL, analyzeSkillGeneratedFiles } from '../src/lib/analyze-doc.ts';
 import { TUNE_SKILL, tuneSkillGeneratedFiles } from '../src/lib/tune-doc.ts';
+import { HOME_SKILL, homeSkillGeneratedFiles } from '../src/lib/home-doc.ts';
 import { PACKAGE_SKILLS_DIR } from '../src/cli/skills.ts';
 
 export interface GeneratedSkill {
@@ -22,6 +24,7 @@ export const GENERATED: Record<string, GeneratedSkill> = {
   [VAULT_SKILL]: { files: vaultSkillGeneratedFiles, whole: false },
   [ANALYZE_SKILL]: { files: analyzeSkillGeneratedFiles, whole: false },
   [TUNE_SKILL]: { files: tuneSkillGeneratedFiles, whole: false },
+  [HOME_SKILL]: { files: () => homeSkillGeneratedFiles(), whole: false },
 };
 
 export function writeGeneratedSkills(base = PACKAGE_SKILLS_DIR): string[] {

@@ -40,6 +40,18 @@ export const ContextPackSchema = z.object({
   board: z.enum(['auto', 'off']).optional(),
   /** 上一轮之后孩子改过状态的卡,每张一句(「<job>/<n> choice「问题」 选了「B …」(答案:「…」)」) */
   cards: z.array(z.string()).optional(),
+  /** 孩子从首页的按钮进来(《首页设计.md》§六):按钮上的字与家长备好的讲法;只在带按钮的那条 */
+  home: z.object({ button: z.string().min(1), brief: z.string().optional() }).optional(),
+  /** 接着以前的话题:那个话题是哪天哪个、叫什么、最后一节的讲稿与卡、索引在哪;只在新话题的第一条 */
+  continue: z
+    .object({
+      from: z.string().min(1),
+      title: z.string().optional(),
+      said: z.array(z.string()).default([]),
+      cards: z.array(z.string()).default([]),
+      index: z.string().min(1),
+    })
+    .optional(),
   /** 这条消息带的作业照片(相对 workspace 根,一行一张;老师先 Read 再答;R5) */
   photos: z.array(z.string()).optional(),
   /** 家长的 Obsidian 仓库在哪(《obsidian仓库设计.md》§7;cotutor-vault 技能按它拼路径):root 绝对路径,其余角色相对 root(在 root 外面就是绝对路径) */

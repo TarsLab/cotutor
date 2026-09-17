@@ -15,6 +15,7 @@ import { conversationFiles } from '../lib/conversation.ts';
 import { compactDiff, diffLines, type DiffRow } from '../lib/diff.ts';
 import { toolCalls, type ToolCall } from '../lib/transcript.ts';
 import type { ConversationMessage, Timing } from '../schema/index.ts';
+import { continueContext, homeButtonAt } from './home.ts';
 import { Runner } from './runner.ts';
 import { readIndex, readRunFile } from './store.ts';
 
@@ -69,6 +70,9 @@ export async function startReplay(ws: Workspace, tutor: string, date: string, jo
   if (m.bookkeep) throw new UsageError('记账那轮不回放(它 resume 话题的会话,单独跑没有意义)');
   const evalWs = evalWorkspace(ws, { post: opts.post });
   const runner = new Runner(() => evalWs, { now: opts.now, env: opts.env });
+  // 从首页按钮进来的那轮:讲法从当时发布的那份原文取,接着的话题从原 workspace 读(回放的 workspace 指到 evals/)
+  const button = m.via && typeof m.via.button === 'number' ? await homeButtonAt(ws, tutor, m.via) : null;
+  const continued = m.continues ? await continueContext(ws, tutor, m.continues.date, m.continues.thread) : null;
   const started = await runner.send(tutor, {
     from: m.from,
     text: m.text,
@@ -80,6 +84,9 @@ export async function startReplay(ws: Workspace, tutor: string, date: string, jo
     date,
     replayOf: job,
     runtime: opts.runtime,
+    ...(m.via ? { via: m.via } : {}),
+    ...(m.via && typeof m.via.button === 'number' ? { home: { button: m.via.label, ...(button?.brief ? { brief: button.brief } : {}) } } : {}),
+    ...(m.continues && continued ? { continues: { ...m.continues, pack: continued } } : {}),
   });
   return { tutor, date, job, evalJob: started.job, done: started.done.then(() => runner.flush()) };
 }

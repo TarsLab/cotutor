@@ -1,5 +1,6 @@
 /**
- * 家长端 /parent:三个标签(对话 / 老师团 / 设置)+「看原文」抽屉,零依赖内联脚本,只走 /api/*。
+ * 家长端 /parent:五个标签(对话 / 老师团 / 音色 / 设置 / 首页)+「看原文」抽屉,零依赖内联脚本,只走 /api/*。
+ * 首页页(《首页设计.md》§7.3):左边 iframe 是孩子端页面本身的预览(/parent/home-preview),右边是检查、按钮与讲法、发布、点击统计。
  * 2026-09-11 重做:一轮 = 一张卡(问句 → 板书 → 埋点 → 孩子看到 → 通知块),板书按 kind 渲染成卡片而不是把围栏原文倒给家长;
  * 顶栏与输入框各自钉死(grid-rows auto/1fr/auto + min-height:0,不再硬算 100vh - 47px:顶栏一换行就错位,composer 被顶出视口);
  * 老师团一位一行、九项政策折叠、改过的才亮;设置分路径 / 服务 / 配音三块,配音能当场试一句。
@@ -228,7 +229,26 @@ export const PARENT_PAGE = `<!doctype html>
   .kline .au.none { color:var(--muted); }
 
   /* ---------- 老师团 / 设置 ---------- */
-  #team, #settings { overflow:auto; background:var(--sunk); }
+  #team, #settings, #home { overflow:auto; background:var(--sunk); }
+  .homegrid { display:grid; grid-template-columns:auto minmax(0,1fr); gap:18px; max-width:1500px; margin:0 auto; padding:18px; align-items:start; }
+  .homegrid .wrap { padding:0; max-width:880px; margin:0; }
+  .pv { display:flex; flex-direction:column; gap:10px; position:sticky; top:0; }
+  .pv .segs { display:flex; gap:12px; flex-wrap:wrap; }
+  .seg { display:flex; gap:4px; }
+  .pv .frame { background:#fff; border:1px solid var(--line); border-radius:16px; overflow:hidden; }
+  .pv iframe { border:0; display:block; transform-origin:0 0; }
+  .issue { padding:7px 16px; font-size:14px; border-top:1px solid var(--line-soft); }
+  .issue.fix { color:var(--err); }
+  .issue.note { color:var(--muted); }
+  .issue .ln { font:500 12.5px/1 var(--mono); margin-right:8px; }
+  .hbtns { padding:8px 16px; border-top:1px solid var(--line-soft); }
+  .hbtns h5 { margin:0 0 4px; font-size:14.5px; }
+  .hbtn { font-size:14px; padding:3px 0 3px 4px; }
+  .hbtn .brief { display:block; color:var(--muted); font-size:13.5px; padding-left:22px; white-space:pre-wrap; }
+  .hbtn .ref { font:400 12.5px/1 var(--mono); color:var(--muted); margin-left:6px; }
+  .hnote { margin:0; padding:10px 16px; white-space:pre-wrap; font-size:14px; color:var(--ink-2); border-top:1px solid var(--line-soft); }
+  .hpub { display:flex; align-items:center; gap:12px; padding:10px 16px; border-top:1px solid var(--line-soft); flex-wrap:wrap; }
+  .hpub label { font-size:14px; color:var(--muted); display:flex; gap:6px; align-items:center; }
   .wrap { max-width:1000px; margin:0 auto; padding:18px; display:flex; flex-direction:column; gap:14px; }
   .panel { background:var(--surface); border:1px solid var(--line); border-radius:12px; }
   .panel > header { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line-soft); height:auto; background:none; }
@@ -320,6 +340,8 @@ export const PARENT_PAGE = `<!doctype html>
     .rl { grid-template-columns:34px minmax(0,1fr); }
     .rl .a { display:none; }
     .pathrow { grid-template-columns:1fr; gap:6px; }
+    .homegrid { grid-template-columns:1fr; }
+    .pv { position:static; }
     .vrow { grid-template-columns:auto minmax(0,1fr) auto; row-gap:4px; }
     .vrow .vmeta, .vrow .vscene { display:none; }
     .vrow .vtrait { grid-column:2; }
@@ -331,7 +353,7 @@ export const PARENT_PAGE = `<!doctype html>
 </style>
 <header>
   <h1 id="title">cotutor<small>家长端</small></h1>
-  <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">老师团</a><a href="#voices" data-tab="voices">音色</a><a href="#settings" data-tab="settings">设置</a></nav>
+  <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">老师团</a><a href="#voices" data-tab="voices">音色</a><a href="#settings" data-tab="settings">设置</a><a href="#home" data-tab="home">首页</a></nav>
   <span class="health" id="health"></span>
 </header>
 <main id="chat" class="on">
@@ -362,6 +384,7 @@ export const PARENT_PAGE = `<!doctype html>
 <main id="team"></main>
 <main id="voices"></main>
 <main id="settings"></main>
+<main id="home"></main>
 <div id="drawer"></div>
 <script>
 (() => {
@@ -397,7 +420,7 @@ export const PARENT_PAGE = `<!doctype html>
   const hashState = () => {
     const parts = location.hash.split('?raw=');
     const tab = (parts[0] || '#chat').slice(1) || 'chat';
-    return { tab: ['chat', 'team', 'voices', 'settings'].includes(tab) ? tab : 'chat', raw: parts[1] || null };
+    return { tab: ['chat', 'team', 'voices', 'settings', 'home'].includes(tab) ? tab : 'chat', raw: parts[1] || null };
   };
   const state = { config: null, tutor: null, date: null, today: null, dates: [], view: null, timer: null, tab: hashState().tab, raw: null, rawJob: null, station: 'source' };
 
@@ -409,6 +432,7 @@ export const PARENT_PAGE = `<!doctype html>
     if (tab === 'team') renderTeam();
     if (tab === 'voices') renderVoices();
     if (tab === 'settings') renderSettings();
+    if (tab === 'home') renderHomeTab(); else clearInterval(homeState.timer);
     if (tab !== 'voices') stopPreview();
   };
   for (const a of document.querySelectorAll('header nav a')) a.addEventListener('click', (e) => { e.preventDefault(); location.hash = '#' + a.dataset.tab; showTab(a.dataset.tab); });
@@ -630,7 +654,7 @@ export const PARENT_PAGE = `<!doctype html>
     el.append(h('div', { class: 'ask from-' + m.from },
       h('span', { class: 'tag' }, FROM[m.from] || m.from),
       q,
-      h('span', { class: 'when' }, m.at.slice(11) + ' · ' + m.job + (m.action === 'continue' ? ' · 继续' : m.action === 'submit' ? ' · 交答案' : ''))));
+      h('span', { class: 'when' }, m.at.slice(11) + ' · ' + m.job + (m.action === 'continue' ? ' · 继续' : m.action === 'submit' ? ' · 交答案' : '') + (m.via ? ' · 首页「' + m.via.label + '」' : '') + (m.continues ? ' · 接着 ' + m.continues.date + ' ' + m.continues.thread : ''))));
 
     if (m.section && (m.section.cards.length || m.section.lines.length)) el.append(boardEl(m.section));
     else if (m.result === 'ok' && m.kidText) el.append(h('div', { class: 'board' }, h('div', { class: 'line' }, h('span', { class: 'n' }, '1'), h('p', {}, m.kidText))));
@@ -1283,6 +1307,73 @@ export const PARENT_PAGE = `<!doctype html>
 
     const mig = migratePanel();
     $('#settings').replaceChildren(h('div', { class: 'wrap' }, ...(mig ? [mig] : []), paths, server, tts));
+  };
+
+  // ---- 首页(《首页设计.md》§7.3):左预览(孩子端页面本身),右检查 / 按钮与讲法 / 发布 / 点击 ----
+  const homeState = { which: 'draft', device: 'phone', key: null, timer: null };
+  const HOME_DEVICES = { phone: { w: 390, h: 780, k: 1 }, tablet: { w: 1180, h: 820, k: 0.55 } };
+  const BTN_ICON = { start: '▶', continue: '↻' };
+  const tutorName = (d, name) => (d.tutors && d.tutors[name]) || name;
+  const issueEl = (i) => h('div', { class: 'issue ' + i.level }, i.line ? h('span', { class: 'ln' }, '第 ' + i.line + ' 行') : null, (i.level === 'fix' ? '✗ ' : '· ') + i.text);
+  const buttonsEl = (d, cards) => cards.filter((c) => c.kind === 'tutor').map((c) => h('div', { class: 'hbtns' },
+    h('h5', {}, tutorName(d, c.props.tutor)),
+    h('div', { class: 'hbtn' }, '✨ 新话题'),
+    ...(c.props.buttons || []).map((b) => h('div', { class: 'hbtn' }, (BTN_ICON[b.kind] || '·') + ' ' + b.label, b.kind === 'continue' ? h('span', { class: 'ref' }, b.date + ' ' + b.thread) : null, h('span', { class: 'brief' }, b.brief ? '讲法:' + b.brief : '(没写讲法)')))));
+  const publishHome = async (panel, force) => {
+    const fb = $('.fb', panel);
+    fb.className = 'fb'; fb.textContent = '发布中……';
+    const r = await fetch('/api/home/publish', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ force }) });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && j.ok) { fb.textContent = '发布了 ' + j.id + (j.dropped.length ? ',丢掉 ' + j.dropped.length + ' 处' : '') + ';孩子端刷新就是新首页'; homeState.key = null; renderHomeTab(); }
+    else { fb.className = 'fb bad'; fb.textContent = j && j.issues ? '没发布:有 ' + j.issues.filter((i) => i.level === 'fix').length + ' 条要改' : '没发布:' + ((j && (j.message || j.error)) || r.status); }
+  };
+  const homePanels = (d) => {
+    const draft = h('div', { class: 'panel' });
+    draft.append(h('header', {}, h('h4', {}, '草稿'), h('span', { class: 'sub' }, 'home/draft.md' + (d.draft.exists && d.draft.for ? ' · for ' + d.draft.for : ''))));
+    if (!d.draft.exists) draft.append(h('p', { class: 'hint', style: 'padding-top:12px' }, '还没有草稿。孩子学完后在 workspace 根开 Claude Code,说「总结一下今天,排明天的首页」(cotutor-home 技能),它会写这份草稿。'));
+    else {
+      const fixes = d.draft.issues.filter((i) => i.level === 'fix');
+      draft.append(...(d.draft.issues.length ? d.draft.issues.map(issueEl) : [h('div', { class: 'issue note' }, '没有问题')]));
+      draft.append(...buttonsEl(d, d.draft.cards));
+      if (d.draft.note) draft.append(h('pre', { class: 'hnote' }, d.draft.note));
+      const force = h('input', { type: 'checkbox' });
+      const go = h('button', { class: 'btn primary', type: 'button', disabled: fixes.length ? true : null, on: { click: () => publishHome(draft, force.checked) } }, '发布');
+      force.addEventListener('change', () => { go.disabled = Boolean(fixes.length) && !force.checked; });
+      draft.append(h('div', { class: 'hpub' }, go, fixes.length ? h('label', {}, force, '丢掉要改的那几张照发') : null, h('span', { class: 'fb' })));
+    }
+    const pub = h('div', { class: 'panel' });
+    const P = d.published;
+    pub.append(h('header', {}, h('h4', {}, '已发布'), h('span', { class: 'sub' }, P ? P.id + ' · ' + (P.days === 0 ? '今天' : P.days + ' 天前') + (P.for ? ' · for ' + P.for : '') : '')));
+    if (!P) pub.append(h('p', { class: 'hint', style: 'padding-top:12px' }, d.publishedError ? '已发布的那份用不了,孩子端是缺省首页:' + d.publishedError : '还没发布过:孩子端是缺省首页(每位老师一张只有「新话题」的卡)。'));
+    else {
+      if (P.days > 3) pub.append(h('div', { class: 'issue fix' }, '首页是 ' + P.days + ' 天前发布的,该排一份新的了'));
+      pub.append(...P.broken.map(issueEl), ...P.warnings.map((w) => h('div', { class: 'issue note' }, '· ' + w)));
+      const rows = d.clicks.map((c) => h('div', { class: 'hbtn' }, tutorName(d, c.tutor) + ' ' + (c.button === 'new' ? '✨ ' : c.button === 'recent' ? '↻ ' : '· ') + c.label + ':' + (c.uses.length ? '点了 ' + c.uses.length + ' 次' : '没点过'), c.uses.length ? h('span', { class: 'ref' }, c.uses.map((u) => u.date + ' ' + u.thread).join('、')) : null));
+      pub.append(h('div', { class: 'hbtns' }, h('h5', {}, '孩子点了什么'), ...(rows.length ? rows : [h('div', { class: 'hbtn' }, '还没有按钮')])));
+      if (P.note) pub.append(h('pre', { class: 'hnote' }, P.note));
+    }
+    return [draft, pub];
+  };
+  const renderHomeTab = async () => {
+    clearInterval(homeState.timer);
+    let d;
+    try { d = await api('GET', '/api/home?which=' + homeState.which); }
+    catch (e) { $('#home').replaceChildren(h('div', { class: 'wrap' }, h('p', { class: 'empty' }, '加载失败:' + e.message))); return; }
+    const key = homeState.which + '/' + homeState.device;
+    if (homeState.key !== key || !$('#home .homegrid')) {
+      homeState.key = key;
+      const dev = HOME_DEVICES[homeState.device];
+      const seg = (k, opts) => h('div', { class: 'seg' }, ...opts.map(([v, label]) => h('button', { class: 'btn' + (homeState[k] === v ? ' primary' : ''), type: 'button', on: { click: () => { homeState[k] = v; renderHomeTab(); } } }, label)));
+      const frame = h('div', { class: 'frame', style: 'width:' + Math.round(dev.w * dev.k) + 'px;height:' + Math.round(dev.h * dev.k) + 'px' },
+        h('iframe', { src: '/parent/home-preview?which=' + homeState.which, title: '首页预览', style: 'width:' + dev.w + 'px;height:' + dev.h + 'px;transform:scale(' + dev.k + ')' }));
+      const pv = h('div', { class: 'pv' }, h('div', { class: 'segs' }, seg('which', [['draft', '草稿'], ['published', '已发布']]), seg('device', [['phone', '手机'], ['tablet', '平板']])), frame, h('p', { class: 'hint', style: 'padding:0' }, '孩子端同一个页面;点按钮不会真发,只显示会发给谁、讲法是什么。'));
+      $('#home').replaceChildren(h('div', { class: 'homegrid' }, pv, h('div', { class: 'wrap', id: 'home-side' })));
+    }
+    $('#home-side').replaceChildren(...homePanels(d));
+    homeState.timer = setInterval(async () => {
+      if (state.tab !== 'home') return clearInterval(homeState.timer);
+      try { const fresh = await api('GET', '/api/home?which=' + homeState.which); if ($('#home-side') && !$('#home-side .fb.bad') && !document.activeElement.closest('#home-side')) $('#home-side').replaceChildren(...homePanels(fresh)); } catch {}
+    }, 5000);
   };
 
   // ---- 启动 ----

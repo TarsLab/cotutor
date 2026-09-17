@@ -383,6 +383,21 @@ export async function doctorWorkspace(
       }
     }
 
+    // ---- 首页(《首页设计.md》):没发布 = 缺省首页;坏了孩子端退回缺省;超过 3 天提醒;引用坏了的按钮孩子端不出现 ----
+    {
+      const { daysSince, publishedIssues, readPublished } = await import('../server/home.ts');
+      const now = new Date();
+      const { home, error } = await readPublished(ws);
+      if (error) push({ name: 'home.published', ok: false, required: false, detail: `${error};孩子端退回缺省首页`, fix: '用 cotutor-home 技能排一份再 cotutor home publish,或删掉 home/published.json' });
+      else if (!home) push({ name: 'home.published', ok: true, required: false, detail: '没发布过首页:孩子端是缺省首页(每位老师一张只有「新话题」的卡)' });
+      else {
+        const days = daysSince(home, now);
+        push({ name: 'home.published', ok: days <= 3, required: false, detail: `已发布 ${home.id}(${days === 0 ? '今天' : `${days} 天前`})· ${home.cards.length} 张卡`, fix: days > 3 ? '首页是好几天前的:孩子学完后在 workspace 根开 Claude Code,用 cotutor-home 技能排一份新的' : undefined });
+        const broken = await publishedIssues(ws, home, now);
+        push({ name: 'home.refs', ok: !broken.length, required: false, detail: broken.length ? broken.map((i) => i.text).join(';') : '已发布那份里的老师与话题都在', fix: broken.length ? '坏了的按钮孩子端不出现;要补就改草稿重发(cotutor home check 看细节)' : undefined });
+      }
+    }
+
     // ---- paths 角色指向:配了就该在 ----
     for (const [role, value] of Object.entries(ws.config.paths)) {
       const target = ws.paths[role] ?? expandPath(value, ws.root);

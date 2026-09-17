@@ -175,6 +175,8 @@ export interface Workspace {
     bundles: string;
     /** 关键帧截图(drawtell snap;派生物) */
     snaps: string;
+    /** 首页(《首页设计.md》):草稿、已发布、历史;publish 时才建,不进骨架 */
+    home: string;
   };
   files: {
     config: string;
@@ -215,6 +217,7 @@ export function assembleWorkspace(root: string, source: RootSource, config: Cotu
       scenes: join(root, 'scenes'),
       bundles: join(root, 'bundles'),
       snaps: join(root, 'snaps'),
+      home: join(root, 'home'),
     },
     files: {
       config: join(root, CONFIG_FILE),

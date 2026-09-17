@@ -1,7 +1,7 @@
 /**
  * 服务的路由层:route(method, path, ctx, body) → {status, json|html},测试不用起端口。
  * R1 的查询接口照旧;R2 加:对话(列日期、看一天的家长视图、发消息)、cotutor.json 补丁(老师团页)、家长页 /parent。
- * R3 加:孩子端 `/`(KID_PAGE)与 /api/kid/*(首页:课程表 + 老师 + 今天的产物叠;对话:服务端过滤后的孩子视图;发消息:from 固定 kid、每日上限 429)、配音文件 /api/audio。
+ * R3 加:孩子端 `/`(kidPage)与 /api/kid/*(首页:课程表 + 老师卡 + 家长发布的首页卡;对话:服务端过滤后的孩子视图;发消息:from 固定 kid、每日上限 429)、配音文件 /api/audio。
  * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
 import { createReadStream } from 'node:fs';
@@ -13,14 +13,15 @@ import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
 import { currentThread, lastJobOf, localDate, threads } from '../lib/conversation.ts';
 import { kidConversation, kidMessageCount, kidThreads, type KidMessage, type KidThread } from '../lib/kid-view.ts';
-import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
 import { currentSlot, dayOf, parseTimetable, slotLabel } from '../lib/timetable.ts';
-import { DATE_RE, FocusSchema, MESSAGE_FROM, listTutors, resolvePolicy, type Artifact, type ConversationIndex, type TimetableEntry } from '../schema/index.ts';
+import { DATE_RE, FocusSchema, HOME_ID_RE, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type TimetableEntry } from '../schema/index.ts';
+import type { BoardCard } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
 import { tutorStatuses } from '../cli/tutors.ts';
 import { configGapsOf, upgradeConfig } from '../cli/migrate.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
-import { KID_PAGE } from './kid-page.ts';
+import { kidPage } from './kid-page.ts';
+import { checkHome, historyFile, homeStats, kidHomeView, messageVia, publishHome, publishedIssues, readDraft, resolveVia } from './home.ts';
 import { PARENT_PAGE } from './parent-page.ts';
 import { BusyError, Runner } from './runner.ts';
 import { IndexError, capturePathOk, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardImage, writeCardState } from './store.ts';
@@ -139,11 +140,15 @@ export interface KidHome {
   timetable: TimetableEntry[];
   slot: string | null;
   tutors: KidTutor[];
-  /** 今天的产物,按学科(老师的 subject)分叠;费用不给孩子端 */
-  stacks: { subject: string; tutor: string | null; items: Omit<Artifact, 'costUsd'>[] }[];
+  /** 发布的首页 id(孩子点按钮时带回来);缺省首页 / 预览 = null */
+  home: string | null;
+  /** 首页的卡(《首页设计.md》):老师卡在前,props.buttons 是孩子端的按钮;其余卡照文件顺序 */
+  cards: BoardCard[];
+  /** 家长预览(/parent/home-preview):草稿还是已发布的;孩子端没有 */
+  preview?: 'draft' | 'published';
 }
 
-export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
+export async function kidHome(ctx: AppContext, now: Date, opts: { preview?: 'draft' | 'published' } = {}): Promise<KidHome> {
   const ws = ctx.ws;
   const date = localDate(now);
   let timetable: TimetableEntry[] = [];
@@ -153,22 +158,8 @@ export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
     /* 没课程表:今天照画 */
   }
   const slot = currentSlot(timetable, now);
-  let artifacts: Artifact[] = [];
-  try {
-    artifacts = mergeArtifacts(parseArtifactEvents(await readFile(ws.files.artifacts, 'utf8')).rows).artifacts;
-  } catch {
-    /* 账本还没有 */
-  }
-  const bySubject = new Map<string, { subject: string; tutor: string | null; items: Omit<Artifact, 'costUsd'>[] }>();
-  for (const { costUsd: _cost, ...a } of artifacts) {
-    if (!a.at.startsWith(date) || a.status === 'draft' || a.status === 'retired') continue;
-    const tutor = ws.config.tutors[a.by];
-    const subject = tutor?.subject ?? tutor?.display ?? a.by;
-    const stack = bySubject.get(subject) ?? { subject, tutor: tutor ? a.by : null, items: [] };
-    stack.items.push(a);
-    bySubject.set(subject, stack);
-  }
-  return { title: ws.config.title, date, day: dayOf(now), timetable, slot: slot ? slotLabel(slot) : null, tutors: await kidTutors(ctx, date), stacks: [...bySubject.values()] };
+  const view = await kidHomeView(ws, now, opts.preview ? { source: opts.preview, keepBriefs: true } : {});
+  return { title: ws.config.title, date, day: dayOf(now), timetable, slot: slot ? slotLabel(slot) : null, tutors: await kidTutors(ctx, date), home: opts.preview ? null : view.home, cards: view.cards, ...(opts.preview ? { preview: opts.preview } : {}) };
 }
 
 export interface KidDay {
@@ -361,7 +352,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (action === null) return { status: 400, json: { error: 'bad_request' } };
         const photos = await photosOf(ws, body.photos);
         if (photos === null) return { status: 400, json: { error: 'bad_request' } };
-        if (!body.text.trim() && !action && !photos?.length) return { status: 400, json: { error: 'bad_request' } };
         const policy = resolvePolicy(ws.config, tutor);
         // 「继续」不计每日上限:到了上限也能把老师讲完的听完
         if (action !== 'continue' && kidMessageCount(await readIndex(ws, tutor, date)) >= policy.dailyMessages) return { status: 429, json: { error: 'limit', remaining: 0 } };
@@ -369,7 +359,30 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (thread === null) return { status: 400, json: { error: 'bad_request' } };
         const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
         if (device && !device.success) return { status: 400, json: { error: 'bad_request' } };
-        const started = await ctx.runner.send(tutor, { from: 'kid', text: body.text, focus: focus?.data, action, newThread: body.newThread === true, thread, device: device?.data, photos });
+        // 首页的按钮(《首页设计.md》§5.2):via 只带 id,按钮是什么、讲法是什么都从服务端的发布件查;对不上就 400(孩子端刷新首页)
+        const via = body.via === undefined ? undefined : HomeViaSchema.safeParse(body.via);
+        if (via && !via.success) return { status: 400, json: { error: 'bad_request' } };
+        const button = via ? await resolveVia(ws, tutor, via.data!) : null;
+        if (via && !button) return { status: 400, json: { error: 'bad_via' } };
+        let text = body.text;
+        let newThread = body.newThread === true;
+        let pick = thread;
+        let home: { button: string; brief?: string } | undefined;
+        let continues: { date: string; thread: string } | undefined;
+        if (button && (button.kind === 'start' || button.kind === 'continue')) {
+          text = button.label;
+          home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
+          if (button.kind === 'continue' && button.date === date) {
+            newThread = false;
+            pick = button.thread;
+          } else {
+            newThread = true;
+            pick = undefined;
+            if (button.kind === 'continue') continues = { date: button.date, thread: button.thread };
+          }
+        }
+        if (!text.trim() && !action && !photos?.length) return { status: 400, json: { error: 'bad_request' } };
+        const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}) });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
@@ -496,6 +509,38 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 200, file, contentType: 'audio/mpeg' };
     }
 
+    // ---- 首页(《首页设计.md》§七):家长端「首页」页;草稿与讲法只走这里,不经过孩子端接口 ----
+    if (p === '/api/home' && method === 'GET') {
+      const now = ctx.now();
+      const which = url.searchParams.get('which') === 'published' ? 'published' : 'draft';
+      const draft = await readDraft(ws);
+      const draftCheck = draft === null ? null : await checkHome(ws, draft, now);
+      const stats = await homeStats(ws, now);
+      const pub = stats.home;
+      return {
+        status: 200,
+        json: {
+          which,
+          draft: draftCheck ? { exists: true, for: draftCheck.doc.for ?? null, note: draftCheck.doc.note, issues: draftCheck.issues, fixes: draftCheck.fixes, cards: draftCheck.doc.cards } : { exists: false },
+          published: pub ? { id: pub.id, publishedAt: pub.publishedAt, for: pub.for ?? null, days: stats.days, source: pub.source, note: pub.note, warnings: pub.warnings, cards: pub.cards, broken: await publishedIssues(ws, pub, now) } : null,
+          publishedError: stats.error,
+          clicks: stats.clicks,
+          tutors: Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, t.display])),
+        },
+      };
+    }
+    if (p === '/api/home/preview' && method === 'GET') {
+      return { status: 200, json: await kidHome(ctx, ctx.now(), { preview: url.searchParams.get('which') === 'published' ? 'published' : 'draft' }) };
+    }
+    if (p === '/api/home/publish' && method === 'POST') {
+      const force = isObj(body) && body.force === true;
+      const fromId = isObj(body) && typeof body.from === 'string' ? body.from : undefined;
+      const from = fromId === undefined ? undefined : historyFile(ws, fromId);
+      if (from === null || (fromId !== undefined && !HOME_ID_RE.test(fromId))) return { status: 400, json: { error: 'bad_request', message: 'from 要是一份历史的 id(如 2026-09-17-2130)' } };
+      const r = await publishHome(ws, { force, from, now: ctx.now() });
+      return { status: r.ok ? 200 : 409, json: { ok: r.ok, id: r.home?.id ?? null, issues: r.check.issues, dropped: r.dropped } };
+    }
+
     // 话题打星(《obsidian仓库设计.md》§4):PUT {rating: 1–5 | null};记账:POST {threads?: [..]} → 每个话题一轮记账任务,老师回「## 记账」段,应用写日记
     const rate = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/rating$/.exec(p);
     if (rate && method === 'PUT') {
@@ -580,7 +625,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!(ICON_SIZES as readonly number[]).includes(n)) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, body: appIconPng(n), contentType: 'image/png' };
     }
-    if (p === '/') return { status: 200, html: KID_PAGE.replaceAll('__TITLE__', esc(ws.config.title)).replace('__SHORT__', esc(ws.config.title)) };
+    if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title)) };
+    // 家长端「首页」页的预览:就是孩子端页面本身,数据走家长接口(讲法在),按钮不真发
+    if (p === '/parent/home-preview') return { status: 200, html: kidPage(esc(ws.config.title), url.searchParams.get('which') === 'published' ? 'published' : 'draft') };
     return { status: 404, json: { error: 'not_found', path: p } };
   } catch (err) {
     if (err instanceof BusyError) return { status: 409, json: { error: 'busy', message: err.message } };

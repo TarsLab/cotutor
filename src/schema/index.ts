@@ -21,3 +21,4 @@ export * from './plan.ts';
 export * from './timetable.ts';
 export * from './json-schema.ts';
 export * from './theme.ts';
+export * from './home.ts';

@@ -10,12 +10,13 @@ import { code } from './code.ts';
 import { fill } from './fill.ts';
 import { tianzige } from './tianzige.ts';
 import { image } from './image.ts';
-import type { CardKind } from './kind.ts';
+import type { CardKind, CardPlace } from './kind.ts';
 import { read } from './read.ts';
 import { scene } from './scene.ts';
 import { text } from './text.ts';
+import { tutor } from './tutor.ts';
 
-export type { CardKind } from './kind.ts';
+export type { CardKind, CardPlace } from './kind.ts';
 export { text, TEXT_STYLES, type TextProps, type TextStyle } from './text.ts';
 export { read, type ReadProps } from './read.ts';
 export { choice, type ChoiceProps } from './choice.ts';
@@ -25,12 +26,25 @@ export { image, IMAGE_EXT, type ImageProps } from './image.ts';
 export { scene, BUNDLE_ID_RE, type SceneProps, type SceneState } from './scene.ts';
 export { canvas, type CanvasProps, type CanvasState } from './canvas.ts';
 export { tianzige, HAN, TIANZIGE_MAX, type TianzigeProps } from './tianzige.ts';
+export { tutor, BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, type TutorButton, type TutorProps } from './tutor.ts';
 
+/** 全部种类:先板书的九种(注册表顺序即技能里的顺序),再首页专属的 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, scene, canvas, code];
+export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, scene, canvas, code, tutor];
 
 export function cardKind(name: string): CardKind | undefined {
   return CARD_KINDS.find((k) => k.name === name) as CardKind | undefined;
+}
+
+/** 这种卡能不能用在这里(没写 where 的只板书) */
+export function usableIn(kind: Pick<CardKind, 'where'>, place: CardPlace): boolean {
+  return (kind.where ?? ['board']).includes(place);
+}
+
+/** 能用在某处的种类(注册表顺序) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function kindsFor(place: CardPlace): readonly CardKind<any>[] {
+  return CARD_KINDS.filter((k) => usableIn(k, place));
 }
 
 /** 正文是「字」的卡:老师把讲稿的 [词] 标注语法写进这些卡时,把括号剥掉(2026-09-11 真跑:孩子看到了「[直角边]」);choice 的 - [ ] / - [x] 不动 */
@@ -50,24 +64,28 @@ export interface ParsedCard {
   card: BoardCard;
   /** 没解析成时的一句(家长视图转录里显示);孩子端什么也不报 */
   warning?: string;
+  /** 没照标签解析成(退成了文字卡 / 代码卡);首页检查据此判「要改」 */
+  fallback?: boolean;
 }
 
 /**
- * 围栏 → 卡。标签第一个词是 kind,其余是修饰;不认识的标签当代码卡原样显示;
- * 认识但正文解析不出 → 文字卡显示原文 + warning。永不抛错。
+ * 围栏 → 卡。标签第一个词是 kind,其余是修饰;不认识的标签:板书里当代码卡原样显示,首页里退文字卡;
+ * 认识但正文解析不出、或这种卡不能用在这里(place)→ 文字卡显示原文 + warning。永不抛错。
  */
-export function parseCard(tag: string, body: string): ParsedCard {
+export function parseCard(tag: string, body: string, place: CardPlace = 'board'): ParsedCard {
   const [name, ...mods] = tag.trim().split(/\s+/).filter(Boolean);
-  if (!name) return { card: { kind: 'code', props: code.parse(body, []) } };
+  const asText = (why: string): ParsedCard => ({ card: { kind: 'text', props: { text: body.trim() || name || '…' } }, warning: why, fallback: true });
+  if (!name) return place === 'board' ? { card: { kind: 'code', props: code.parse(body, []) } } : asText('围栏没写种类');
   const kind = cardKind(name.toLowerCase());
-  if (!kind) return { card: { kind: 'code', props: code.parse(body, [name]) } };
+  if (!kind) return place === 'board' ? { card: { kind: 'code', props: code.parse(body, [name]) } } : asText(`不认识的卡:${name}`);
+  if (!usableIn(kind, place)) return asText(place === 'board' ? `${name} 是首页的卡,板书里不能用` : `首页放不了 ${name} 卡(它要交给某位老师,只能在板书里)`);
   const um = TEXTUAL.has(kind.name) ? unmark(body) : { body, had: false };
   try {
     const props = kind.props.parse(kind.parse(um.body, mods)) as Record<string, unknown>;
     return { card: { kind: kind.name, props }, ...(um.had ? { warning: `卡里的方括号去掉了:${name} — [词] 标注只写在讲稿句里,不写在卡里` } : {}) };
   } catch (err) {
     const why = err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join('.')}:${i.message}`).join(';') : err instanceof Error ? err.message : String(err);
-    return { card: { kind: 'text', props: { text: body.trim() || name } }, warning: `卡片没解析成:${name} — ${why}` };
+    return asText(`卡片没解析成:${name} — ${why}`);
   }
 }
 
@@ -82,11 +100,11 @@ export function stripSecrets(section: BoardSection): BoardSection {
   };
 }
 
-/** 一张卡的标题(舞台顶栏、给老师的描述里用):文字卡的 title / text,选择题的问题,其余第一段有字的 */
+/** 一张卡的标题(舞台顶栏、给老师的描述里用):文字卡的 title / text,选择题的问题,其余第一段有字的,田字格的字 */
 export function cardLabel(card: BoardCard): string {
   const p = card.props;
   const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
-  const first = s(p.title) || s(p.question) || s(p.text) || s(p.caption) || s(p.prompt) || (Array.isArray(p.segments) ? s(p.segments[0]) : '');
+  const first = s(p.title) || s(p.question) || s(p.text) || s(p.caption) || s(p.prompt) || (Array.isArray(p.segments) ? s(p.segments[0]) : '') || s(p.chars);
   const cps = Array.from(first.replace(/\s+/g, ' '));
   return cps.length > 40 ? `${cps.slice(0, 40).join('')}…` : cps.join('');
 }

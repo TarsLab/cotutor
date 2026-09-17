@@ -3,7 +3,7 @@
 
 ```html
 <!-- 这是第一张卡,前面没有 -->
-<div class="c c-text now" id="c0" data-style="cover" data-tint="night"><h3>Fruits</h3><p>水果</p></div>
+<div class="c c-text now" id="c0" data-tint="sky"><h3>Fruits</h3><p>水果</p></div>
 <!-- 这拍没有讲稿 -->
 ```
 
@@ -51,7 +51,7 @@
 下面是一节板书讲到一半的样子(孩子看到的结构):div.row 一行、div.c 一张卡、data-tint / data-look 是它现在的底色与字形、data-marked 是这张卡上已经画了的标注;class 带 now 的那张卡是刚出现的这一拍,后面的 p.line 是老师讲这张卡时说的话(它的 data-marked 是念到这句时已经要画的)。
 
 ```html
-<div class="c c-text" id="c0" data-style="cover" data-tint="night"><h3>Fruits</h3><p>水果</p></div>
+<div class="c c-text" id="c0" data-tint="sky"><h3>Fruits</h3><p>水果</p></div>
 <div class="c c-read now" id="c1" data-tint="sand" data-marked="「apple」「banana」「orange」"><p>apple 苹果</p><p>banana 香蕉</p><p>orange 橘子</p></div>
 <p class="line" data-n="0" data-marked="c1「apple」 c1「banana」 c1「orange」">Listen and repeat: apple, banana, orange. 点一下听一下,跟着我读。</p>
 <p class="line" data-n="1" data-marked="c1「apple」 c1「banana」 c1「orange」">Which one do you want to try first, apple, banana, or orange?你先读哪一个?</p>

@@ -147,7 +147,7 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
     const policy = resolvePolicy(ws.config, first.name);
     if (policy.post.mode === 'off') push({ name: 'live.post', ok: true, required: false, detail: '板书后期关着(post.mode = off),不探' });
     else {
-      const sample = parseBoard('```text cover\n勾股定理\n直角三角形三条边的关系\n```\n\n先认边。\n\n```text\n# 认边\n两条短边叫直角边,最长的一条叫斜边\n```\n\n两条短边叫直角边,最长的一条叫斜边。\n\n```text formula\n直角边² + 直角边² = 斜边²\n```\n\n记住这个公式。\n\n```choice\n两条直角边是 3 和 4,斜边是多少?\n- [ ] 6\n- [x] 5\n```\n\n斜边是多少?\n').section;
+      const sample = parseBoard('```text\n# 勾股定理\n直角三角形三条边的关系\n```\n\n先认边。\n\n```text\n# 认边\n两条短边叫直角边,最长的一条叫斜边\n```\n\n两条短边叫直角边,最长的一条叫斜边。\n\n```text formula\n直角边² + 直角边² = 斜边²\n```\n\n记住这个公式。\n\n```choice\n两条直角边是 3 和 4,斜边是多少?\n- [ ] 6\n- [x] 5\n```\n\n斜边是多少?\n').section;
       const r = await runPost(ws, first.name, sample, { policy, env });
       push({ name: 'live.post', ok: r.summary.ok, required: false, detail: r.summary.ok ? `${policy.post.runtime} ${r.summary.ms}ms${r.summary.costUsd !== undefined ? ` · $${r.summary.costUsd.toFixed(4)}` : ''} · 收下 标注 ${r.file.kept?.marks ?? 0} 锚点 ${r.file.kept?.anchors ?? 0} ${r.file.kept?.layout ? '排了行' : '没排行'} 样子 ${r.file.kept?.looks ?? 0}${r.file.dropped.length ? ` · 丢 ${r.file.dropped.length}` : ''}` : `没成:${r.summary.error ?? '?'}`, fix: r.summary.ok ? undefined : `每轮会退素版;查 ${policy.post.runtime} 的模板(${(ws.config.runtimes[policy.post.runtime] as { run?: string[] } | undefined)?.run?.[0] ?? '?'} 在不在 PATH、模型名对不对),或 post.timeoutMs 放宽` });
     }
@@ -309,10 +309,10 @@ export async function doctorWorkspace(
         const label: Record<string, string> = { latest: '出厂件,最新', upgradable: `出厂件,基于 ${st.basedOn},包已更新`, custom: `自定义(基于 ${st.basedOn})`, untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
         push({
           name: `tutor.${name}.origin`,
-          ok: st.state !== 'upgradable' && !st.legacyLink,
+          ok: st.state !== 'upgradable',
           required: false,
-          detail: st.legacyLink ? '还是指向包的旧链(改它会改到包里)' : label[st.state],
-          fix: st.legacyLink ? 'cotutor init 换成拷贝' : st.state === 'upgradable' ? 'cotutor upgrade 换新版' : undefined,
+          detail: label[st.state],
+          fix: st.state === 'upgradable' ? 'cotutor upgrade 换新版' : undefined,
         });
       }
       const home = join(ws.dirs.agents, name);
@@ -330,12 +330,7 @@ export async function doctorWorkspace(
       }
     }
 
-    // ---- 板书语法表的旧位置(技能 cotutor-board 本身在下面 skill.* 里查) ----
     {
-      const { LEGACY_SYNTAX_PATHS } = await import('./skills.ts');
-      const legacy: string[] = [];
-      for (const p of LEGACY_SYNTAX_PATHS) if (await statOrNull(join(root, p))) legacy.push(p);
-      if (legacy.length) push({ name: 'board.legacy', ok: false, required: false, detail: `旧位置还在:${legacy.join('、')}(2026-09-14 起并进 cotutor-board 技能,老师文件里的旧路径也该换)`, fix: 'cotutor upgrade 清掉旧位置并换新老师文件' });
       // 板书后期:policy post.runtime 指的运行时要在;不在 = 每轮都素版(不报错,静默)
       {
         const { resolvePolicy } = await import('../schema/index.ts');
@@ -406,10 +401,6 @@ export async function doctorWorkspace(
       push({ name: 'ledger.artifacts', ok: errors.length === 0, required: true, detail: errors.length ? errors.slice(0, 3).join(';') : `${rows.length} 行`, fix: errors.length ? '修那几行,或 git checkout 回退;账本不可再生,不要删了重来' : undefined });
     } catch {
       push({ name: 'ledger.artifacts', ok: true, required: false, detail: '没有(还没记过);cotutor init 会建空文件' });
-    }
-    // 观察不在账本里了(2026-09-14):还留着 observations.jsonl 只提醒,不算错
-    if (await statOrNull(join(ws.dirs.ledger, 'observations.jsonl'))) {
-      push({ name: 'ledger.observations', ok: true, required: false, detail: 'ledger/observations.jsonl 已退役:观察的真相是 vault 的日记(「- 观察:」行),这个文件不再被读', fix: '内容有用就手抄进日记,然后删掉它' });
     }
 
     // ---- 作业照片(R5):paths.captures 要在 workspace 根以内(页面经 /api/kid/image 取图只认根以内)、能写;还没拍过就不存在,第一张时建 ----

@@ -90,14 +90,14 @@ export const MOCK_TUTORS: MockTutor[] = [
     script: [
       `你有没有过这种事:本来做得好好的,又多加了一点,结果反而糟了?
 
-~~~text cover
-画蛇添足
+~~~text
+# 画蛇添足
 一个成语,一杯酒的故事
 ~~~
 
 这个成语说的是:[多做一步,反而坏事]。
 
-~~~text note
+~~~text
 画蛇添足 = 多做一步,反而坏事
 ~~~
 
@@ -121,13 +121,13 @@ export const MOCK_TUTORS: MockTutor[] = [
 我想问你:如果第一个画完蛇的人,不给蛇添脚,酒本来是谁的?`,
       `你是这么想的:酒是他自己的。
 
-~~~text note
+~~~text
 先画完的人本来就赢了
 ~~~
 
 他多画了脚,蛇就[不是蛇]了,第二个画完的说,你画的不是蛇。
 
-~~~text quote
+~~~text
 为蛇足者,终亡其酒。
 ~~~
 
@@ -139,7 +139,7 @@ export const MOCK_TUTORS: MockTutor[] = [
 ~~~
 
 你来填一填:画蛇添足,就是做到了还要什么?`,
-      `~~~text note
+      `~~~text
 做到了,就停下来
 ~~~
 
@@ -174,8 +174,8 @@ export const MOCK_TUTORS: MockTutor[] = [
     preloaded: 1,
     firstQuestion: '勾股定理是什么?',
     script: [
-      `~~~text cover
-勾股定理
+      `~~~text
+# 勾股定理
 直角三角形三条边的关系
 ~~~
 
@@ -201,7 +201,7 @@ export const MOCK_TUTORS: MockTutor[] = [
 
 拿 3 和 4 试试:9 加 16 等于 [25],正好是 5 的平方,所以斜边是 5。
 
-~~~text note
+~~~text
 知道两条直角边,平方相加再开方,就是斜边
 ~~~
 
@@ -234,7 +234,7 @@ export const MOCK_TUTORS: MockTutor[] = [
 你来填一填:斜边是 13,一条直角边是 5,另一条直角边是多少?`,
       `对,169 减 25 等于 144,12 的平方正好是 144。
 
-~~~text note
+~~~text
 3、4、5 和 5、12、13 都是常见的勾股数组
 ~~~
 
@@ -261,8 +261,8 @@ export const MOCK_TUTORS: MockTutor[] = [
     script: [
       `Today we learn three fruits. 今天学三种水果。
 
-~~~text cover
-Fruits
+~~~text
+# Fruits
 水果
 ~~~
 
@@ -291,7 +291,6 @@ interface MockMessage {
   at: string;
   question: string | null;
   reply: string | null;
-  audio: null;
   pending: boolean;
   artifacts: string[];
   section: BoardSection | null;
@@ -354,14 +353,14 @@ export function createMock(opts: MockOptions = {}): Mock {
     for (let i = 0; i < t.preloaded && i < t.script.length; i++) {
       const section = withPost(sectionFromScript(t.script[i]), t.name, i);
       const job = nextJob();
-      list.push({ job, thread: list[0]?.thread ?? job, at: now().toISOString(), question: i === 0 ? t.firstQuestion : '继续', reply: section.lines[section.lines.length - 1]?.text ?? null, audio: null, pending: false, artifacts: [], section });
+      list.push({ job, thread: list[0]?.thread ?? job, at: now().toISOString(), question: i === 0 ? t.firstQuestion : '继续', reply: section.lines[section.lines.length - 1]?.text ?? null, pending: false, artifacts: [], section });
     }
     messages.set(t.name, list);
     cursor.set(t.name, Math.min(t.preloaded, t.script.length));
     if (t.preloaded && t.script.length) {
       const section = sectionFromScript(t.script[t.script.length - 1]);
       const job = `0930-${t.name.length}`;
-      past.set(t.name, [{ job, thread: job, at: `${yesterday()}T09:30`, question: '昨天问的:' + t.firstQuestion, reply: section.lines[section.lines.length - 1]?.text ?? null, audio: null, pending: false, artifacts: [], section }]);
+      past.set(t.name, [{ job, thread: job, at: `${yesterday()}T09:30`, question: '昨天问的:' + t.firstQuestion, reply: section.lines[section.lines.length - 1]?.text ?? null, pending: false, artifacts: [], section }]);
     }
   }
   const dailyLimit = 30;
@@ -392,7 +391,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       m.section = full;
       m.reply = full.lines[full.lines.length - 1]?.text ?? null;
     } else {
-      m.section = null;
+      m.section = sectionFromScript('这个我们明天接着说,好不好?');
       m.reply = '这个我们明天接着说,好不好?';
     }
     m.pending = false;
@@ -487,7 +486,7 @@ export function createMock(opts: MockOptions = {}): Mock {
             thread = body.thread;
           } else thread = list[list.length - 1].thread;
         }
-        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, audio: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}) };
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}) };
         list.push(m);
         const done = think(t, m).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);

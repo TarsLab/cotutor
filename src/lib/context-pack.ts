@@ -15,13 +15,7 @@ export function renderContextPack(pack: ContextPack): string {
   const p = ContextPackSchema.parse(pack);
   const out: string[] = ['cotutor:', `  from: ${p.from}`, `  at: ${yamlScalar(p.at)}`];
   if (p.slot) out.push(`  slot: ${yamlScalar(p.slot)}`);
-  if (p.focus && (p.focus.artifact || p.focus.step !== undefined || p.focus.circled?.length || p.focus.card)) {
-    out.push('  focus:');
-    if (p.focus.artifact) out.push(`    artifact: ${yamlScalar(p.focus.artifact)}`);
-    if (p.focus.step !== undefined) out.push(`    step: ${p.focus.step}`);
-    if (p.focus.circled?.length) out.push(`    circled: [${p.focus.circled.map(yamlScalar).join(', ')}]`);
-    if (p.focus.card) out.push(`    card: ${yamlScalar(p.focus.card)}`);
-  }
+  if (p.focus?.card) out.push('  focus:', `    card: ${yamlScalar(p.focus.card)}`);
   if (p.semester) out.push(`  semester: ${yamlScalar(p.semester)}`);
   if (p.profile) out.push(`  profile: ${yamlScalar(p.profile)}`);
   if (p.entry) out.push(`  entry: ${yamlScalar(p.entry)}`);

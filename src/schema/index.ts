@@ -3,8 +3,8 @@
  *  config        cotutor.json(老师表、政策、运行时、paths 角色)
  *  context-pack  每条消息前的上下文包
  *  conversation  一老师一天一份的对话索引
- *  ledger        观察与产物两本追加式账本
- *  sections      最终文本里的「记账」段
+ *  ledger        产物账本(追加式)
+ *  sections      最终文本里的「记账」「记忆」段
  *  plan          计划文件
  *  timetable     课程表(vault 里的 markdown 表)
  *  theme         主题清单(themes/<name>/theme.json:底色槽、字形槽、笔)

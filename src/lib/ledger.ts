@@ -51,7 +51,6 @@ export function mergeArtifacts(events: ArtifactEvent[]): { artifacts: Artifact[]
         status: e.status ?? 'draft',
         path: e.path,
         source: e.source,
-        hash: e.hash,
         costUsd: e.costUsd,
         durationMs: e.durationMs,
         updatedAt: e.at,
@@ -63,7 +62,6 @@ export function mergeArtifacts(events: ArtifactEvent[]): { artifacts: Artifact[]
     if (e.status) prev.status = e.status;
     if (e.path) prev.path = e.path;
     if (e.source) prev.source = e.source;
-    if (e.hash) prev.hash = e.hash;
     if (e.costUsd !== undefined) prev.costUsd = e.costUsd;
     if (e.durationMs !== undefined) prev.durationMs = e.durationMs;
     prev.updatedAt = e.at;

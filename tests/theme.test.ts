@@ -8,7 +8,7 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-theme-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { ThemeManifestSchema, tintOrDefault } = await import('../src/schema/index.ts');
+const { ThemeManifestSchema } = await import('../src/schema/index.ts');
 const { initWorkspace } = await import('../src/cli/init.ts');
 const { addTheme, packageTheme, readTheme, themeDir, themeStatuses, upgradeThemes } = await import('../src/cli/themes.ts');
 const { readManifest, writeManifest } = await import('../src/cli/tutors.ts');
@@ -23,7 +23,6 @@ try {
   check('清单:槽任意多,looks / pens 可省', ok.success && Object.keys(ok.data.looks).length === 0 && Object.keys(ok.data.pens).length === 0, JSON.stringify(ok));
   check('清单:default 不在 tints 里 → 不过', !ThemeManifestSchema.safeParse({ name: 'x', default: 'zz', tints: { a: { use: '甲' } } }).success);
   check('清单:没有底色槽 → 不过;槽名只认小写连字符', !ThemeManifestSchema.safeParse({ name: 'x', default: 'a', tints: {} }).success && !ThemeManifestSchema.safeParse({ name: 'x', default: 'a', tints: { 'A B': { use: '甲' } } }).success);
-  check('槽名不在表里 → default', ok.success && tintOrDefault(ok.data, 'b') === 'b' && tintOrDefault(ok.data, 'nope') === 'a' && tintOrDefault(ok.data, undefined) === 'a');
 
   // ---- 出厂主题本身要过契约 ----
   const factory = await packageTheme();

@@ -12,7 +12,6 @@ export const THEME_CSS_FILE = 'kid.css';
 /** 板书后期(快模型)的提示词骨架,和 kid.css 同一套(出厂 / 拷贝 / hash / upgrade / 现读);可选,没有就用包里出厂的 */
 export const THEME_POST_FILE = 'post.md';
 export const THEMES_DIR = 'themes';
-export const DEFAULT_THEME = 'default';
 
 const SlotSchema = z.object({ use: z.string().min(1).describe('给什么用(板书后期照这句挑)') });
 const SlotTable = z.record(z.string().regex(THEME_NAME_RE), SlotSchema);
@@ -31,7 +30,3 @@ export const ThemeManifestSchema = z
   });
 export type ThemeManifest = z.infer<typeof ThemeManifestSchema>;
 
-/** 槽名不在表里 → default(素版与回退都走这里) */
-export function tintOrDefault(m: ThemeManifest, name: string | undefined): string {
-  return name && name in m.tints ? name : m.default;
-}

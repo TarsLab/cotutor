@@ -1,5 +1,5 @@
 /** 课程表解析(抄 growth-apps 的回归):好表、星期/时间各种写法、错误带行号、多表、忽略无关表、孩子列可选、时段命中。 */
-import { currentSlot, dayOf, parseTimetable, slotLabel, weekDate } from '../src/lib/timetable.ts';
+import { currentSlot, dayOf, parseTimetable, slotLabel } from '../src/lib/timetable.ts';
 import { check, done } from './_check.ts';
 
 const GOOD = `---
@@ -42,7 +42,5 @@ schema: timetable
   const slot = currentSlot(entries, mon);
   check('当前时段命中', slot?.subject === '语文' && slot && slotLabel(slot) === '语文 19:00-19:40');
   check('时段外为 null', currentSlot(entries, new Date('2026-08-24T20:00:00')) === null);
-  const wed = new Date(2026, 7, 26, 12, 0);
-  check('weekDate', weekDate(wed, 3) === '2026-08-26' && weekDate(wed, 1) === '2026-08-24' && weekDate(new Date(2026, 8, 1, 12), 1) === '2026-08-31');
 }
 done();

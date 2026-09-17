@@ -11,7 +11,7 @@
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, readFile, readlink, rename, symlink, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative } from 'node:path';
-import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION, shippedAgents, tutorTemplate, writeSchemaFile, type ShippedAgent, type TutorTemplateInput } from './skeleton.ts';
+import { PACKAGE_VERSION, shippedAgents, tutorTemplate, writeSchemaFile, type ShippedAgent, type TutorTemplateInput } from './skeleton.ts';
 import { AGENT_NAME_RE } from '../schema/index.ts';
 import { UsageError } from './workspace.ts';
 
@@ -55,8 +55,6 @@ export interface TutorStatus {
   file: string;
   /** 记录的出厂版本(custom / upgradable 时有) */
   basedOn?: string;
-  /** 是否还是指向包的旧链(init 会换成拷贝) */
-  legacyLink?: boolean;
 }
 
 /** 老师文件在 workspace 里的位置:.claude/agents/<name>.md 是真相,.qwen/agents/<name>.md 是相对链 */
@@ -68,23 +66,18 @@ async function readState(root: string, a: ShippedAgent, manifest: ShippedManifes
   const { claude } = tutorFiles(root, a.name);
   const st = await lstat(claude).catch(() => null);
   if (!st) return { name: a.name, state: 'missing', file: claude };
-  let legacyLink = false;
-  if (st.isSymbolicLink()) {
-    const target = await readlink(claude).catch(() => '');
-    legacyLink = target.startsWith(PACKAGE_AGENTS_DIR) || target === a.file;
-  }
   let text: string;
   try {
     text = await readFile(claude, 'utf8');
   } catch {
-    return { name: a.name, state: 'broken', file: claude, legacyLink };
+    return { name: a.name, state: 'broken', file: claude };
   }
   const shipped = await readFile(a.file, 'utf8');
   const h = sha256(text);
   const rec = manifest.tutors[a.name];
-  if (h === sha256(shipped)) return { name: a.name, state: 'latest', file: claude, basedOn: rec?.version, legacyLink };
-  if (rec && rec.hash === h) return { name: a.name, state: 'upgradable', file: claude, basedOn: rec.version, legacyLink };
-  return { name: a.name, state: rec ? 'custom' : 'untracked', file: claude, basedOn: rec?.version, legacyLink };
+  if (h === sha256(shipped)) return { name: a.name, state: 'latest', file: claude, basedOn: rec?.version };
+  if (rec && rec.hash === h) return { name: a.name, state: 'upgradable', file: claude, basedOn: rec.version };
+  return { name: a.name, state: rec ? 'custom' : 'untracked', file: claude, basedOn: rec?.version };
 }
 
 export async function tutorStatuses(root: string): Promise<TutorStatus[]> {
@@ -143,10 +136,10 @@ export async function installTutors(root: string, configured: string[] = []): Pr
   for (const a of shipped) {
     const s = await readState(root, a, manifest);
     const item = `.claude/agents/${basename(a.file)}`;
-    if (s.state === 'missing' || s.legacyLink || s.state === 'broken') {
+    if (s.state === 'missing' || s.state === 'broken') {
       await installOne(root, a, manifest);
       touched = true;
-      steps.push({ item, action: s.state === 'missing' ? 'created' : 'replaced', note: s.legacyLink ? '旧的包内链换成拷贝(2026-09-09 起老师文件是你的)' : s.state === 'broken' ? '读不到,重新拷贝' : `拷自本包 ${PACKAGE_VERSION}` });
+      steps.push({ item, action: s.state === 'missing' ? 'created' : 'replaced', note: s.state === 'broken' ? '读不到,重新拷贝' : `拷自本包 ${PACKAGE_VERSION}` });
     } else if (s.state === 'untracked') {
       // 没记录但内容在:当家长的,记一笔当前 hash 免得以后一直是 untracked?不记——记了就等于宣称它是出厂件。留 untracked。
       steps.push({ item, action: 'kept', note: '已有(不是出厂件,或没有记录);升级时当自定义对待' });
@@ -240,12 +233,12 @@ export async function upgradeTutors(root: string, opts: { force?: string[] } = {
   for (const a of await shippedAgents()) {
     const s = await readState(root, a, manifest);
     const force = opts.force?.includes(a.name) ?? false;
-    if (s.state === 'latest' && !s.legacyLink) {
+    if (s.state === 'latest') {
       steps.push({ name: a.name, action: 'latest', basedOn: s.basedOn });
     } else if (s.state === 'missing' || s.state === 'broken') {
       await installOne(root, a, manifest);
       steps.push({ name: a.name, action: 'installed' });
-    } else if (s.state === 'upgradable' || s.legacyLink || (s.state === 'latest' && s.legacyLink)) {
+    } else if (s.state === 'upgradable') {
       await installOne(root, a, manifest);
       steps.push({ name: a.name, action: 'upgraded', basedOn: s.basedOn });
     } else if (force) {

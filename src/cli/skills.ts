@@ -27,15 +27,10 @@ export interface ShippedSkill {
   source: 'cotutor' | 'drawtell';
   /** 机器件:每次 init / upgrade 都按包里的覆盖,不认家长的改动 */
   machine?: boolean;
-  /** 装它时顺手清掉的旧位置(相对 workspace 根;机器文件,没有用户数据) */
-  legacy?: readonly string[];
 }
 
-/** 2026-09-12 到 09-14 板书语法表的旧位置 .cotutor/板书语法.md + .cotutor/cards/ */
-export const LEGACY_SYNTAX_PATHS = ['.cotutor/板书语法.md', '.cotutor/cards'] as const;
-
 export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
-  { name: BOARD_SKILL, source: 'cotutor', machine: true, legacy: LEGACY_SYNTAX_PATHS },
+  { name: BOARD_SKILL, source: 'cotutor', machine: true },
   { name: VAULT_SKILL, source: 'cotutor', machine: true },
   { name: ANALYZE_SKILL, source: 'cotutor', machine: true },
   { name: TUNE_SKILL, source: 'cotutor', machine: true },
@@ -47,7 +42,6 @@ export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
 export type ShippedSkillName = string;
 
 export const BOARD_SKILL_DIR = `.claude/skills/${BOARD_SKILL}`;
-export const BOARD_SKILL_FILE = `${BOARD_SKILL_DIR}/SKILL.md`;
 
 /** 本包自带的技能目录(仓库检出与 npm 安装都在包根 skills/) */
 export const PACKAGE_SKILLS_DIR = fileURLToPath(new URL('../../skills/', import.meta.url));
@@ -138,21 +132,13 @@ export async function skillStatuses(root: string): Promise<SkillStatus[]> {
 }
 
 /** 整个目录换成包里的(先删再拷),hash 记进清单;顺手清旧位置 */
-async function installOne(root: string, skill: ShippedSkill, src: string, manifest: ShippedManifest): Promise<string[]> {
+async function installOne(root: string, skill: ShippedSkill, src: string, manifest: ShippedManifest): Promise<void> {
   const { claude } = skillDirs(root, skill.name);
   await rm(claude, { recursive: true, force: true });
   await mkdir(dirname(claude), { recursive: true });
   await cp(src, claude, { recursive: true });
   manifest.skills ??= {};
   manifest.skills[skill.name] = { hash: await dirHash(claude), version: PACKAGE_VERSION };
-  const removed: string[] = [];
-  for (const p of skill.legacy ?? []) {
-    if (await lstat(join(root, p)).catch(() => null)) {
-      await rm(join(root, p), { recursive: true, force: true });
-      removed.push(p);
-    }
-  }
-  return removed;
 }
 
 async function ensureQwenLink(root: string, name: string): Promise<'created' | 'exists' | 'replaced'> {
@@ -177,7 +163,7 @@ export interface SkillStep {
   note?: string;
 }
 
-/** init 用:缺的拷,有的不动;机器件每次按包里的刷;drawtell-skills 没装就那几项各报一行 */
+/** init 用:缺的拷,有的不动;机器件每次按包里的刷;drawtell 包没装就那几项各报一行 */
 export async function installSkills(root: string): Promise<SkillStep[]> {
   const steps: SkillStep[] = [];
   const manifest = await readManifest(root);
@@ -192,15 +178,13 @@ export async function installSkills(root: string): Promise<SkillStep[]> {
       continue;
     }
     if (s.state === 'missing') {
-      const removed = await installOne(root, skill, src, manifest);
+      await installOne(root, skill, src, manifest);
       touched = true;
       steps.push({ item, action: 'created', note: skill.machine ? '机器件,从包里生成的技能,别改' : `拷自 ${skill.source}` });
-      for (const p of removed) steps.push({ item: p, action: 'replaced', note: `旧位置的机器文件,已并进 ${name} 技能` });
     } else if (skill.machine) {
-      const removed = await installOne(root, skill, src, manifest);
+      await installOne(root, skill, src, manifest);
       touched = true;
       steps.push({ item, action: 'exists', note: s.state === 'latest' ? '已按本包刷新(机器件)' : '已按本包换新(机器件,不认改动)' });
-      for (const p of removed) steps.push({ item: p, action: 'replaced', note: `旧位置的机器文件,已并进 ${name} 技能` });
     } else steps.push({ item, action: 'exists', note: s.state === 'custom' ? `自定义(基于 ${s.basedOn})` : s.state === 'upgradable' ? '可升级(cotutor upgrade)' : s.state === 'untracked' ? '已有(没有出厂记录);升级时当自定义对待' : undefined });
     const q = await ensureQwenLink(root, name);
     steps.push({ item: `.qwen/skills/${name}`, action: q, note: q === 'exists' ? undefined : '→ ../../.claude/skills/' });
@@ -215,7 +199,6 @@ export interface SkillUpgradeStep {
   basedOn?: string;
   machine?: boolean;
   /** 顺手清掉的旧位置 */
-  removed?: string[];
 }
 
 /** upgrade 用:latest 跳过;upgradable 换新(机器件改过也换);custom / untracked 保留只报;缺的补;来源没装的报 unavailable */
@@ -232,8 +215,8 @@ export async function upgradeSkills(root: string): Promise<SkillUpgradeStep[]> {
       continue;
     }
     if (s.state === 'latest') steps.push({ name, action: 'latest', basedOn: s.basedOn, machine });
-    else if (s.state === 'missing') steps.push({ name, action: 'installed', machine, removed: await installOne(root, skill, src, manifest) });
-    else if (s.state === 'upgradable') steps.push({ name, action: 'upgraded', basedOn: s.basedOn, machine, removed: await installOne(root, skill, src, manifest) });
+    else if (s.state === 'missing') { await installOne(root, skill, src, manifest); steps.push({ name, action: 'installed', machine }); }
+    else if (s.state === 'upgradable') { await installOne(root, skill, src, manifest); steps.push({ name, action: 'upgraded', basedOn: s.basedOn, machine }); }
     else steps.push({ name, action: 'kept-custom', basedOn: s.basedOn, machine });
     await ensureQwenLink(root, name);
   }

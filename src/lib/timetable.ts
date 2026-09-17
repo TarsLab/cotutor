@@ -14,11 +14,6 @@ export interface TimetableParse {
 
 const REQUIRED = ['星期', '时间', '学科'] as const;
 const DAY_MAP: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7 };
-const DAY_NAMES = ['', '一', '二', '三', '四', '五', '六', '日'];
-
-export function dayName(day: number): string {
-  return `周${DAY_NAMES[day] ?? '?'}`;
-}
 
 const cells = (line: string): string[] =>
   line
@@ -101,14 +96,6 @@ export function parseTimetable(md: string): TimetableParse {
 export function dayOf(now: Date): number {
   const d = now.getDay();
   return d === 0 ? 7 : d;
-}
-
-/** 本周(周一起算)第 day 天的日期 YYYY-MM-DD */
-export function weekDate(now: Date, day: number): string {
-  const d = new Date(now);
-  d.setDate(d.getDate() + (day - dayOf(now)));
-  const p = (n: number): string => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 /** 当前正在进行的时段(第一条命中;不在任何时段 = null,不猜) */

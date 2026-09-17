@@ -32,15 +32,6 @@ export interface KidView {
 
 const SENTENCE_END = new Set(['。', '!', '!', '?', '?', ';', ';', '\n']);
 
-/** 以空行分段,取最后一个非空段(段内换行保留) */
-export function lastParagraph(text: string): string {
-  const paras = text
-    .split(/\n[ \t]*\n+/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return paras[paras.length - 1] ?? '';
-}
-
 /** 按码点数截断;能在句末断就在句末断(不加省略号),否则硬截加 … */
 export function truncateReply(text: string, max: number): { text: string; truncated: boolean } {
   const cps = Array.from(text);
@@ -101,13 +92,11 @@ export interface KidMessage {
   question: string | null;
   /** 老师给孩子的话;还在跑或这轮没有 = null */
   reply: string | null;
-  /** 配音文件名(conversations/<老师>/ 下);没有 = 用浏览器自带的声 */
-  audio: string | null;
   /** 老师还在想 */
   pending: boolean;
   /** 本次运行新增的产物 id */
   artifacts: string[];
-  /** 板书节(卡 + 讲稿;答案等秘密已剥);没有 = 页面把 reply 当一张文字卡 */
+  /** 板书节(卡 + 讲稿;答案等秘密已剥;配音在讲稿句上) */
   section?: BoardSection | null;
   /** 孩子这条带的作业照片(相对 workspace 根;页面经 /api/kid/image?p= 取);只在孩子自己的问句上 */
   photos?: string[];
@@ -131,7 +120,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     const files = assets[m.job];
     const withState = m.section && (per || files) ? { ...m.section, cards: m.section.cards.map((c, n) => ({ ...c, ...(per?.[n] ? { state: per[n].state } : {}), ...(files?.[n]?.length ? { assets: files[n] } : {}) })) } : m.section;
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
-    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, audio: reply ? (m.audio ?? null) : null, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}) });
+    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}) });
   }
   return out;
 }

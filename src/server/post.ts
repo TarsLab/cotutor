@@ -12,7 +12,8 @@ import { dirname } from 'node:path';
 import { conversationFiles } from '../lib/conversation.ts';
 import { beatsOf, type Beat, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView } from '../lib/kid-view.ts';
-import { POST_TEMPLATE_FALLBACK, beatPrompt, dialectOf, missingSlots, parseBeatOutput, validateBeatPost, type BeatKept, type BeatPostOutput, type PostDialect } from '../lib/postprocess.ts';
+import { beatPrompt, validateBeatPost, type BeatKept, type BeatPostOutput } from '../lib/postprocess.ts';
+import { parseBeatPatch } from '../lib/post-html.ts';
 import { fillRuntime, resolvePolicy, type ConversationMessage, type Policy, type ThemeManifest } from '../schema/index.ts';
 import type { Workspace } from '../cli/workspace.ts';
 import { readIndex, readTranscript, writeIndex } from './store.ts';
@@ -48,8 +49,6 @@ export interface PostFile {
   theme: string;
   /** 提示词骨架用的是主题的还是出厂的 */
   template: 'theme' | 'fallback';
-  /** 骨架的方言(2026-09-14 起;老文件没有 = json) */
-  dialect?: PostDialect;
   beats: PostBeatFile[];
   /** 至少一拍收到了 */
   ok: boolean;
@@ -119,16 +118,14 @@ async function spawnPost(argv: string[], cwd: string, env: NodeJS.ProcessEnv, ti
 }
 
 /** 这个 workspace 的后期环境:主题清单 + 骨架 + 运行时;运行时不在 → null(每拍直接算失败) */
-export async function postEnv(ws: Workspace, tutor: string, opts: PostOpts): Promise<{ policy: Policy; device: Device; theme: ThemeManifest; themeName: string; template: string | null; templateSource: 'theme' | 'fallback'; dialect: PostDialect; run: string[] | null }> {
+export async function postEnv(ws: Workspace, tutor: string, opts: PostOpts): Promise<{ policy: Policy; device: Device; theme: ThemeManifest; themeName: string; template: string | null; templateSource: 'theme' | 'fallback'; run: string[] | null }> {
   const policy = opts.policy ?? resolvePolicy(ws.config, tutor);
   const device = opts.device ?? DEFAULT_DEVICE;
   const t = await themeFiles(ws.root, ws.config.kid.theme);
   const rt = ws.config.runtimes[policy.post.runtime];
   const template = opts.template ?? t.post;
-  // 方言看真正会用的那份骨架:缺必需占位符的退出厂骨架(beatPrompt 里同一条规则)
-  const effective = template && !missingSlots(template).length ? template : POST_TEMPLATE_FALLBACK;
   const run = rt && typeof rt !== 'string' ? rt.run.map((a, i, xs) => (opts.model && i > 0 && xs[i - 1] === '--model' ? opts.model : a)) : null;
-  return { policy, device, theme: t.manifest, themeName: ws.config.kid.theme, template, templateSource: opts.template || (t.post && t.source === 'workspace') ? 'theme' : 'fallback', dialect: dialectOf(effective), run };
+  return { policy, device, theme: t.manifest, themeName: ws.config.kid.theme, template, templateSource: opts.template || (t.post && t.source === 'workspace') ? 'theme' : 'fallback', run };
 }
 export type PostEnv = Awaited<ReturnType<typeof postEnv>>;
 
@@ -151,7 +148,7 @@ export async function runBeatPost(ws: Workspace, tutor: string, section: BoardSe
   const raw = r.out.slice(0, 65536);
   if (r.error) return { section, file: { ...base, argv, raw, ok: false, error: r.error, ms } };
   const { text, costUsd } = unwrapJsonOutput(r.out);
-  const parsed = parseBeatOutput(text, env.dialect, section, beat);
+  const parsed = parseBeatPatch(text, section, beat);
   if (!parsed.ok) return { section, file: { ...base, argv, raw, ok: false, error: `输出不合形状:${parsed.why}`, ms, ...(costUsd !== undefined ? { costUsd } : {}) } };
   const v = validateBeatPost(section, beat, env.theme, env.device, parsed.out);
   return { section: v.section, file: { ...base, argv, raw, output: parsed.out, ok: true, dropped: v.dropped, kept: v.kept, ms, ...(costUsd !== undefined ? { costUsd } : {}) } };
@@ -168,7 +165,7 @@ export function assemblePost(beats: PostBeatFile[], env: PostEnv, at: string, ms
   const failed = beats.filter((b) => !b.ok);
   const ok = beats.length > 0 && okBeats.length > 0;
   const error = !beats.length ? '这轮没有带卡的拍' : failed.length ? `${failed.length} 拍没成:${failed[0].error ?? '?'}` : undefined;
-  const file: PostFile = { version: 2, at, runtime: env.policy.post.runtime, device: env.device, theme: env.themeName, template: env.templateSource, dialect: env.dialect, beats, ok, ...(error ? { error } : {}), dropped, kept, ms, ...(costUsd !== undefined ? { costUsd } : {}) };
+  const file: PostFile = { version: 2, at, runtime: env.policy.post.runtime, device: env.device, theme: env.themeName, template: env.templateSource, beats, ok, ...(error ? { error } : {}), dropped, kept, ms, ...(costUsd !== undefined ? { costUsd } : {}) };
   return { file, summary: { ok, ms, dropped: dropped.length, beats: beats.length, failed: failed.length, ...(error ? { error } : {}), ...(costUsd !== undefined ? { costUsd } : {}) } };
 }
 

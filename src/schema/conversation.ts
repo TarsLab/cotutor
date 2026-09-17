@@ -68,8 +68,6 @@ export const ConversationMessageSchema = z.object({
   notes: z.record(z.string(), z.string()).optional(),
   /** 这条消息带给老师的卡(上一轮之后孩子改过状态的):id 与 describe 出的那句;家长视图显示「孩子在板书上做的」 */
   cards: z.array(z.object({ card: z.string().min(1), text: z.string() })).optional(),
-  /** kidText 的配音文件名(conversations/<老师>/ 下,如 2026-09-09.1620-1.mp3);null = 没合成(老师没配音色、tts 运行时没配或失败) */
-  audio: z.string().nullable().optional(),
   /** 这轮的用时(埋点,2026-09-11):都是从 startedAt 起的毫秒数;家长视图每轮一行「首卡 10s · 整轮 23s」 */
   timing: TimingSchema.optional(),
   /** 发这条时孩子端是什么端(板书后期按它排版;缺省当平板横屏) */

@@ -139,7 +139,7 @@ export interface KidHome {
   timetable: TimetableEntry[];
   slot: string | null;
   tutors: KidTutor[];
-  /** 今天的产物,按学科(老师的 subject)分叠;验收开关开着的老师只给 accepted 的;费用不给孩子端 */
+  /** 今天的产物,按学科(老师的 subject)分叠;费用不给孩子端 */
   stacks: { subject: string; tutor: string | null; items: Omit<Artifact, 'costUsd'>[] }[];
 }
 
@@ -163,7 +163,6 @@ export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
   for (const { costUsd: _cost, ...a } of artifacts) {
     if (!a.at.startsWith(date) || a.status === 'draft' || a.status === 'retired') continue;
     const tutor = ws.config.tutors[a.by];
-    if (tutor && resolvePolicy(ws.config, a.by).reviewGate && a.status !== 'accepted') continue;
     const subject = tutor?.subject ?? tutor?.display ?? a.by;
     const stack = bySubject.get(subject) ?? { subject, tutor: tutor ? a.by : null, items: [] };
     stack.items.push(a);

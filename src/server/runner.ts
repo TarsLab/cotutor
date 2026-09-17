@@ -39,7 +39,7 @@ import type { Transcript } from '../lib/transcript.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { appendVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
 import { missingEntry, pickNotes, textHash } from '../lib/vault-notes.ts';
-import { DubQueue, LineDubber, dubReply } from './tts.ts';
+import { DubQueue, LineDubber } from './tts.ts';
 
 export class BusyError extends Error {
   constructor(tutor: string, job: string) {
@@ -621,16 +621,12 @@ export class Runner {
       })();
     }
     // 配音:老师配了音色才合成;失败不响,孩子端用浏览器的声。
-    // 有板书讲稿就逐句配(流式时大多已在路上,这里只等没配完的);没有讲稿只有一段话(老形状)才整段配。
-    let audio: string | null = null;
+    // 逐句配(流式时大多已在路上,这里只等没配完的)。
     if (dubber && voice && kidView.section?.lines.length) {
       const names = await dubber.finish(kidView.section.lines);
       kidView.section.lines.forEach((l, i) => { l.audio = names[i]; });
       timing.dubbedMs = since();
       if (timing.firstReadyMs === undefined) timing.firstReadyMs = since();
-    } else if (voice && kidView.kidText) {
-      audio = await dubReply(ws.config.tts, kidView.kidText, voice, { audio: files.audio(job), err: files.err(job) }, this.opts.env);
-      timing.dubbedMs = since();
     }
     if (timing.firstReadyMs === undefined && (kidView.section?.lines.length || kidView.kidText)) timing.firstReadyMs = since();
     let post: ConversationMessage['post'] | undefined;
@@ -658,7 +654,7 @@ export class Runner {
     if (kidView.section) timing.beats = beatTimings(events, beatsOf(kidView.section));
     // 重新读索引再并入:跑的这段时间里别的字段(比如家长改了别的)不被旧对象盖掉
     const latest = await readIndex(ws, tutor, date);
-    let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, audio, timing, post, tools });
+    let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, timing, post, tools });
     // 「## 记忆」段:追加进 vault 里这位 agent 的记忆文件(回放不写;家长视图看 remembered 与提醒)
     if (kidView.memory.length) {
       const asked = latest.messages.find((m) => m.job === job);

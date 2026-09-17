@@ -33,8 +33,7 @@ check('卡的状态文件与 id', f.cardsDir('1620-1') === '/ws/conversations/ma
   check('threads:旧索引现算,system 开新话题,带字段的照字段', threads(mixed).join() === 'a,a,c,c,e,e' && currentThread({ messages: mixed }) === 'e' && currentThread({ messages: [] }) === null);
   check('lastJobOf:话题末条;没有 → null', lastJobOf({ messages: mixed }, 'a') === 'b' && lastJobOf({ messages: mixed }, 'c') === 'd' && lastJobOf({ messages: mixed }, 'zz') === null);
   check('按话题挑卡:别的话题里改过的不算', changedCards({ messages: mixed }, { a: { 0: st('b') }, c: { 0: st('d') } }, 'a').map((c) => c.job).join() === 'a');
-  const s1 = { id: 's-old', runtime: 'claude' };
-  check('sessionFor:sessions 里的优先;旧索引顶层 session 只对当前话题有效', sessionFor({ session: s1, sessions: {}, messages: mixed }, 'e')?.id === 's-old' && sessionFor({ session: s1, sessions: {}, messages: mixed }, 'a') === null && sessionFor({ session: null, sessions: { a: { id: 's-a', runtime: 'claude' } }, messages: mixed }, 'a')?.id === 's-a');
+  check('sessionFor:话题有会话就是它,没有 → null', sessionFor({ sessions: {} }, 'e') === null && sessionFor({ sessions: { a: { id: 's-a', runtime: 'claude' } } }, 'a')?.id === 's-a');
 }
 {
   // applyRun 按话题记会话:新话题拿到新 id 记进 sessions,顶层 session = 当前话题的;接旧话题时 resume 它的

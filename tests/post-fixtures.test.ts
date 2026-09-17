@@ -1,5 +1,5 @@
 /**
- * 后期的样本即测试(离线,不花钱):每份样本 section.md 过解析器 → 各拍提示词 == prompts.md 快照(出厂骨架,HTML 方言;UPDATE_SNAPSHOTS=1 重写)、prompts-json.md(JSON 方言);
+ * 后期的样本即测试(离线,不花钱):每份样本 section.md 过解析器 → 各拍提示词 == prompts.md 快照(出厂骨架,HTML 方言;UPDATE_SNAPSHOTS=1 重写)；
  * 期望本身合法(must / never 的词在卡上、rows 盖住全部卡);must 的每条提给校验器都收得下;never 里老师已标的那些校验器会丢。
  * 真模型评测(花钱)在 scripts/post-eval.ts。
  */
@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beatsOf } from '../src/lib/kid-board.ts';
 import { expectProblems, loadPostFixture, renderFixturePrompts } from '../src/lib/post-fixtures.ts';
-import { POST_TEMPLATE_FALLBACK, POST_TEMPLATE_JSON, validateBeatPost } from '../src/lib/postprocess.ts';
+import { POST_TEMPLATE_FALLBACK, validateBeatPost } from '../src/lib/postprocess.ts';
 import { ThemeManifestSchema } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
 
@@ -35,15 +35,6 @@ for (const name of names) {
       console.log(`  · ${name} 第 ${i + 1} 行起不同:\n    快照:${a[i]}\n    现在:${b[i]}`);
     }
     check(`${name}:提示词快照没变(变了是有意的就 UPDATE_SNAPSHOTS=1 重写)`, same);
-  }
-  // JSON 方言的快照(prompts-json.md):同一份样本按老的 POST_TEMPLATE_JSON 渲染(评测 --dialect json 用它)
-  const promptsHtml = renderFixturePrompts(fx.section, fx.expect.device, theme, POST_TEMPLATE_JSON);
-  let oldHtml: string | null = null;
-  try { oldHtml = readFileSync(join(fx.dir, 'prompts-json.md'), 'utf8'); } catch { /* 还没生成 */ }
-  if (update || oldHtml === null) { writeFileSync(join(fx.dir, 'prompts-json.md'), promptsHtml); console.log(`  · ${name}:写了 prompts-json.md 快照(${promptsHtml.length} 字)`); }
-  else {
-    if (oldHtml !== promptsHtml) { const a = oldHtml.split('\n'), b = promptsHtml.split('\n'); const i = a.findIndex((l, k) => l !== b[k]); console.log(`  · ${name}(json)第 ${i + 1} 行起不同:\n    快照:${a[i]}\n    现在:${b[i]}`); }
-    check(`${name}:JSON 方言提示词快照没变`, oldHtml === promptsHtml);
   }
   // must 的每条:提给它所在那张卡的拍,校验器收下(不然评测永远命中不了)
   for (const m of fx.expect.must) {

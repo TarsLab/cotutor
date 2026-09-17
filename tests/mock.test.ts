@@ -28,7 +28,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   check('想的时候再发 → 409', (await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '再问' })).status === 409);
   await m.settle();
   const d2 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('想完 → 追加下一节(脚本第二节),孩子的话在 question 里不在卡上', d2.pending === null && d2.messages[1].section?.cards[0].kind === 'text' && d2.messages[1].section?.cards[0].props.style === 'note' && d2.messages[1].section?.cards[2].kind === 'fill' && d2.messages[1].question === '不画脚呢?' && d2.messages[1].reply === '你来填一填:画蛇添足,就是做到了还要什么?', JSON.stringify(d2.messages[1].section?.cards[0]));
+  check('想完 → 追加下一节(脚本第二节),孩子的话在 question 里不在卡上', d2.pending === null && d2.messages[1].section?.cards[0].kind === 'text' && d2.messages[1].section?.cards[0].props.text === '先画完的人本来就赢了' && d2.messages[1].section?.cards[2].kind === 'fill' && d2.messages[1].question === '不画脚呢?' && d2.messages[1].reply === '你来填一填:画蛇添足,就是做到了还要什么?', JSON.stringify(d2.messages[1].section?.cards[0]));
   await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '继续' });
   await m.settle();
   await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '鼓励怎么写' });
@@ -41,14 +41,14 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '还有吗' });
   await m.settle();
   const d3 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('脚本用完 → 只有一句收尾话,没有 section', d3.messages.length === 5 && d3.messages[2].section?.cards[0].props.style === 'note' && d3.messages[4].section === null && d3.messages[4].reply === '这个我们明天接着说,好不好?');
+  check('脚本用完 → 只有一句收尾话(一节只有讲稿,没有卡)', d3.messages.length === 5 && d3.messages[2].section?.cards[0].kind === 'text' && d3.messages[4].section?.cards.length === 0 && d3.messages[4].section?.lines.length === 1 && d3.messages[4].reply === '这个我们明天接着说,好不好?');
   check('剩余次数只数孩子发的', d3.remaining === 30 - 5);
   // 卡的状态:数学老师首节有选择题 → PUT 状态假存、today 里并回卡上、答案仍剥;交给老师 → 下一节;「继续」不计次数
   const md = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   const mj = md.messages[0].job;
   const mc = md.messages[0].section!.cards;
   const ci = mc.findIndex((c) => c.kind === 'choice');
-  check('数学老师首节(勾股定理,原型样张):封面 night、# 标题的 text 是 sky、公式 paper、选择题在末尾且答案剥掉、没有状态', ci === mc.length - 1 && tintFor(mc[0]) === 'night' && mc[1].props.title === '认边' && tintFor(mc[1]) === 'sky' && tintFor(mc[2]) === 'paper' && tintFor(mc[ci]) === 'plum' && !('answer' in mc[ci].props) && !('state' in mc[ci]), JSON.stringify(mc.map((c) => [c.kind, tintFor(c)])));
+  check('数学老师首节(勾股定理,原型样张):首张带标题、# 标题的 text 是 sky、公式 paper、选择题在末尾且答案剥掉、没有状态', ci === mc.length - 1 && mc[0].props.title === '勾股定理' && tintFor(mc[0]) === 'sky' && mc[1].props.title === '认边' && tintFor(mc[1]) === 'sky' && tintFor(mc[2]) === 'paper' && tintFor(mc[ci]) === 'plum' && !('answer' in mc[ci].props) && !('state' in mc[ci]), JSON.stringify(mc.map((c) => [c.kind, tintFor(c)])));
   const lay = md.messages[0].section as BoardSection & { layout?: { for: string; rows: number[][] } };
   check('假后期套上了:平板横屏四行(认边 + 公式并排、验证 + 一句话并排、选择题独占)、验证成 moss、一句话带 emoji、三条边画圈(带 pen)', lay.layout?.for === 'tablet-landscape' && JSON.stringify(lay.layout.rows) === '[[0],[1,2],[3,4],[5]]' && lay.cards[3].look?.tint === 'moss' && lay.cards[4].look?.emoji === '💡' && lay.lines[0].marks.some((mk) => mk.phrase === '三条边' && mk.pen === 'circle') && lay.lines[1].marks.some((mk) => mk.phrase === '斜边' && mk.pen === undefined) && lay.cards[1].look === undefined, JSON.stringify([lay.layout, lay.cards.map((c) => c.look)]));
   {

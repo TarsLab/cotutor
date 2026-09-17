@@ -119,7 +119,7 @@ try {
   check('课程表命中 → slot(2026-09-08 是周二 16:20)', pack.slot === '数学 16:00-17:00', String(pack.slot));
   check('时段外没有 slot', (await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: new Date(2026, 8, 8, 18, 0) })).slot === undefined);
   const m1s = m1 as typeof m1 & { section?: { lines: { audio: string | null }[] } };
-  check('配音:老师配了 voice → 讲稿逐句 mp3 落会话目录(一句话也是一句),索引的整段 audio 不用了', m1.audio === null && m1s.section?.lines[0].audio === `2026-09-08.${job1}.1.mp3` && readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${job1}.1.mp3`), 'utf8').startsWith('fake-mp3:v-math:'), JSON.stringify(m1s.section));
+  check('配音:老师配了 voice → 讲稿逐句 mp3 落会话目录(一句话也是一句),消息层没有整段 audio', (m1 as { audio?: unknown }).audio === undefined && m1s.section?.lines[0].audio === `2026-09-08.${job1}.1.mp3` && readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${job1}.1.mp3`), 'utf8').startsWith('fake-mp3:v-math:'), JSON.stringify(m1s.section));
 
   // ---- 看原文:一轮拆成六站,一个接口给全(2026-09-11) ----
   type Raw = {
@@ -224,7 +224,7 @@ try {
   await post('reading-tutor', { text: '配音会失败' });
   await wait('reading-tutor');
   const dr2 = (await day('reading-tutor', '2026-09-09')).json as Day & { index: { messages: { audio?: string | null }[] } };
-  check('配音失败 → audio null、对话照常、原因进 err.log', dr2.index.messages[1].result === 'ok' && dr2.index.messages[1].audio === null && readFileSync(join(root, 'conversations', 'reading-tutor', `2026-09-09.${dr2.index.messages[1].job}.err.log`), 'utf8').includes('没合成'), JSON.stringify(dr2.index.messages[1]));
+  check('配音失败 → 讲稿句 audio null、对话照常、原因进 err.log', dr2.index.messages[1].result === 'ok' && (dr2.index.messages[1] as { section?: { lines: { audio: string | null }[] } }).section?.lines.every((l) => l.audio === null) === true && readFileSync(join(root, 'conversations', 'reading-tutor', `2026-09-09.${dr2.index.messages[1].job}.err.log`), 'utf8').includes('没合成'), JSON.stringify(dr2.index.messages[1]));
   await post('chinese-tutor', { text: '起不来', runtime: 'missing' });
   await wait('chinese-tutor');
   const dm = (await day('chinese-tutor', '2026-09-09')).json as Day;
@@ -270,7 +270,7 @@ try {
   const db = (await day('math-tutor', '2026-09-09')).json as { index: { messages: BoardMsg[] } };
   const mb = db.index.messages.find((m) => m.job === jobB)!;
   check('板书:section 物化(2 张好卡 + 1 张退成文字的),讲稿 3 句,答案还在索引里', mb.section?.cards.map((c) => c.kind).join() === 'text,choice,text' && JSON.stringify(mb.section?.cards[1].props.answer) === '[0]' && mb.section?.lines.length === 3 && mb.kidText === '先看三角形。\n三角形有几个角?\n接着说:讲讲板书 坏卡 家长段', JSON.stringify(mb));
-  check('板书:逐句配音,每句一个 mp3,整段 audio 不再合成', mb.audio === null && mb.section?.lines.every((l, i) => l.audio === `2026-09-09.${jobB}.${i + 1}.mp3`) === true && existsSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobB}.2.mp3`)) && !existsSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobB}.mp3`)), JSON.stringify(mb.section?.lines.map((l) => l.audio)));
+  check('板书:逐句配音,每句一个 mp3,没有整段配音', (mb as { audio?: unknown }).audio === undefined && mb.section?.lines.every((l, i) => l.audio === `2026-09-09.${jobB}.${i + 1}.mp3`) === true && existsSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobB}.2.mp3`)) && !existsSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobB}.mp3`)), JSON.stringify(mb.section?.lines.map((l) => l.audio)));
   check('板书:家长尾巴与解析提醒进索引', mb.parentText === '## 家长\n他其实会了。' && mb.warnings?.length === 1 && mb.warnings[0].includes('choice'), JSON.stringify([mb.parentText, mb.warnings]));
   const kidB = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; section?: { cards: { props: Record<string, unknown> }[]; lines: { audio: string | null }[] } }[] };
   const kb = kidB.messages.find((m) => m.job === jobB)!;

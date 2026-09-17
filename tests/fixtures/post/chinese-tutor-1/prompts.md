@@ -3,7 +3,7 @@
 
 ```html
 <!-- 这是第一张卡,前面没有 -->
-<div class="c c-text now" id="c0" data-style="cover" data-tint="night"><h3>画蛇添足</h3><p>一个成语,一杯酒的故事</p></div>
+<div class="c c-text now" id="c0" data-tint="sky"><h3>画蛇添足</h3><p>一个成语,一杯酒的故事</p></div>
 <p class="line" data-n="0" data-marked="c1「多做一步,反而坏事」">这个成语说的是:多做一步,反而坏事。</p>
 ```
 
@@ -51,8 +51,8 @@
 下面是一节板书讲到一半的样子(孩子看到的结构):div.row 一行、div.c 一张卡、data-tint / data-look 是它现在的底色与字形、data-marked 是这张卡上已经画了的标注;class 带 now 的那张卡是刚出现的这一拍,后面的 p.line 是老师讲这张卡时说的话(它的 data-marked 是念到这句时已经要画的)。
 
 ```html
-<div class="c c-text" id="c0" data-style="cover" data-tint="night"><h3>画蛇添足</h3><p>一个成语,一杯酒的故事</p></div>
-<div class="c c-text now" id="c1" data-style="note" data-tint="sky" data-look="title" data-marked="「多做一步,反而坏事」"><p>画蛇添足 = 多做一步,反而坏事</p></div>
+<div class="c c-text" id="c0" data-tint="sky"><h3>画蛇添足</h3><p>一个成语,一杯酒的故事</p></div>
+<div class="c c-text now" id="c1" data-tint="sand" data-marked="「多做一步,反而坏事」"><p>画蛇添足 = 多做一步,反而坏事</p></div>
 <p class="line" data-n="0">它出自《战国策》,原文是这样的。</p>
 ```
 
@@ -100,8 +100,8 @@
 下面是一节板书讲到一半的样子(孩子看到的结构):div.row 一行、div.c 一张卡、data-tint / data-look 是它现在的底色与字形、data-marked 是这张卡上已经画了的标注;class 带 now 的那张卡是刚出现的这一拍,后面的 p.line 是老师讲这张卡时说的话(它的 data-marked 是念到这句时已经要画的)。
 
 ```html
-<div class="c c-text" id="c0" data-style="cover" data-tint="night"><h3>画蛇添足</h3><p>一个成语,一杯酒的故事</p></div>
-<div class="c c-text" id="c1" data-style="note" data-tint="sky" data-look="title" data-marked="「多做一步,反而坏事」"><p>画蛇添足 = 多做一步,反而坏事</p></div>
+<div class="c c-text" id="c0" data-tint="sky"><h3>画蛇添足</h3><p>一个成语,一杯酒的故事</p></div>
+<div class="c c-text" id="c1" data-tint="sand" data-marked="「多做一步,反而坏事」"><p>画蛇添足 = 多做一步,反而坏事</p></div>
 <div class="c c-read now" id="c2" data-tint="sand" data-marked="「先成者饮酒」"><p>楚有祠者,赐其舍人卮酒。</p><p>舍人相谓曰:数人饮之不足,一人饮之有余。</p><p>请画地为蛇,先成者饮酒。</p></div>
 <p class="line" data-n="0" data-marked="c2「先成者饮酒」">几个人分一壶酒,酒不够大家喝,一个人喝正好,就比赛画蛇,先成者饮酒,谁先画完谁喝。</p>
 ```
@@ -151,8 +151,8 @@
 下面是一节板书讲到一半的样子(孩子看到的结构):div.row 一行、div.c 一张卡、data-tint / data-look 是它现在的底色与字形、data-marked 是这张卡上已经画了的标注;class 带 now 的那张卡是刚出现的这一拍,后面的 p.line 是老师讲这张卡时说的话(它的 data-marked 是念到这句时已经要画的)。
 
 ```html
-<div class="c c-text" id="c0" data-style="cover" data-tint="night"><h3>画蛇添足</h3><p>一个成语,一杯酒的故事</p></div>
-<div class="c c-text" id="c1" data-style="note" data-tint="sky" data-look="title" data-marked="「多做一步,反而坏事」"><p>画蛇添足 = 多做一步,反而坏事</p></div>
+<div class="c c-text" id="c0" data-tint="sky"><h3>画蛇添足</h3><p>一个成语,一杯酒的故事</p></div>
+<div class="c c-text" id="c1" data-tint="sand" data-marked="「多做一步,反而坏事」"><p>画蛇添足 = 多做一步,反而坏事</p></div>
 <div class="c c-read" id="c2" data-tint="sand" data-marked="「先成者饮酒」"><p>楚有祠者,赐其舍人卮酒。</p><p>舍人相谓曰:数人饮之不足,一人饮之有余。</p><p>请画地为蛇,先成者饮酒。</p></div>
 <div class="c c-choice alone now" id="c3" data-tint="plum"><p>如果第一个画完蛇的人,不去给蛇添上脚,酒是谁的?</p><ul><li>大家平分</li><li>他自己的</li><li>没人能喝</li></ul></div>
 <p class="line" data-n="0">我想问你:如果第一个画完蛇的人,不给蛇添脚,酒本来是谁的?</p>

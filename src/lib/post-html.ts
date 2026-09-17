@@ -1,19 +1,19 @@
 /**
  * 板书后期的 HTML 方言(2026-09-14,《快模型方案.md》§二 E):**HTML 进、补丁出**。
- * JSON 方言把卡压成一行、用下标指句和卡,9-13 评测丢掉的 3 处标注全是「指错了」(词取自讲稿、拍内下标当节内下标)。
+ * (取代了 9-13 的 JSON 方言:卡压成一行、用下标指句和卡,评测丢掉的标注全是「指错了」。)
  * 这里把板书按孩子看到的结构给模型看(全是标准 HTML,自定义的都是 data-*,2026-09-14 改):`<div class="row">` 一行、
  * `<div class="c c-<kind>" id="cN" data-tint data-look>` 一张卡、这一拍的卡 class 带 now、讲稿 `<p class="line" data-n>`;
  * **已画的标注不画在卡上**,另给一行文字 `{marked}`(2026-09-14 四轮评测:原地 `<mark>` 每轮引模型再标同一个词 7–9/18,文字列表 0/18);模型回的补丁就是 now 那张卡的壳:
  * `<div class="c" id="cN" data-row data-tint data-look data-emoji>` 里面 `<mark data-pen data-said data-card data-line>词</mark>` 与 `<p class="line" data-n data-for></p>`,正文不抄。
- * 老的 `<c row tint><mark pen said><line n for/></c>` 形状解析器也认(主题里的旧骨架不坏)。
- * 补丁解析成 BeatPostOutput(词靠 said / 词本身在这拍的讲稿里找到是哪句,不用模型数下标),校验器与 JSON 方言同一个。
+ * 模型偶尔回老的 `<c row tint><mark pen said><line n for/></c>` 形状,解析器也认。
+ * 补丁解析成 BeatPostOutput(词靠 said / 词本身在这拍的讲稿里找到是哪句,不用模型数下标),再走 postprocess.ts 的校验器。
  * CSS 一行都不给模型:类名的含义就是主题的槽表。这里的类名与孩子端页面同一套(c-<kind> / data-tint / data-look / pen)。
- * 全是纯函数;模板由哪个方言,看骨架用了 {board} 还是 {cards}(postprocess.ts 的 dialectOf)。
+ * 全是纯函数。
  */
 import { cardTexts, findPhrase, hasState, isHeading, lookFor, plainLine, tintFor, type Beat, type BoardSection } from './kid-board.ts';
 import type { BeatPostOutput, ParsedPost } from './postprocess.ts';
 
-/** 前文带几张已定的卡(与 JSON 方言同) */
+/** 前文带几张已定的卡 */
 const CONTEXT_CARDS = 5;
 /** 前文的卡每段字最多给这么多(这一拍的卡不截) */
 const CONTEXT_TEXT_MAX = 300;
@@ -235,7 +235,7 @@ function cardNo(v: string | undefined): number | undefined {
 }
 
 /**
- * 模型回的补丁 → 一拍的提案(与 JSON 方言同一个形状,之后走同一个校验器)。
+ * 模型回的补丁 → 一拍的提案(之后走 validateBeatPost)。
  * 认两种壳:标准的 <div class="c" …>…</div>(属性 data-row / data-tint / data-look / data-emoji)与老的 <c row tint …>…</c>;
  * 里面 <mark data-pen data-said data-card data-line>词</mark>(老写法不带 data- 也认)是新标注,带 data-done 的是板上抄回来的不算;
  * 锚点是 <p class="line" data-n data-for></p> 或老的 <line n for/>。宽容:围栏、前后多话都行;几个候选壳取最后一个(模型先说话后给答案)。

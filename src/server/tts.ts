@@ -88,13 +88,6 @@ export function listVoices(tts: Tts, opts: { env?: NodeJS.ProcessEnv; timeoutMs?
   });
 }
 
-/** 合成一条并把失败原因追加到 err.log;返回文件名(相对 conversations/<老师>/)或 null */
-export async function dubReply(tts: Tts, text: string, voice: string, files: { audio: string; err: string }, env?: NodeJS.ProcessEnv): Promise<string | null> {
-  const r = await synthesize(tts, { text, voice, out: files.audio }, { env });
-  if (r.error) await appendFile(files.err, `cotutor tts: 没合成(${r.error});孩子端用浏览器的声\n`).catch(() => {});
-  return r.file ? files.audio.slice(files.audio.lastIndexOf('/') + 1) : null;
-}
-
 /**
  * 一轮的配音队列:讲稿句与点读段同一条队,三个并行,先进先出(讲稿句在流式时就进了,自然排在点读段前面)。
  * 每个文件一项;失败写 err.log、结果 null。

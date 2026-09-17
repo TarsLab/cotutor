@@ -35,7 +35,6 @@ export interface ConversationFiles {
   post: (job: string) => string;
   /** 这一轮的事件流 <date>.<job>.events.jsonl(lib/events.ts;控制台与时间线的唯一来源) */
   events: (job: string) => string;
-  audio: (job: string) => string;
   /** 板书讲稿第 n 句的配音(n 从 1 起) */
   lineAudio: (job: string, n: number) => string;
   /** 这一轮各张卡的状态目录 <date>.<job>.cards/ */
@@ -58,7 +57,6 @@ export function conversationFiles(conversationsDir: string, tutor: string, date:
     run: (job) => `${base}.${job}.run.json`,
     post: (job) => `${base}.${job}.post.json`,
     events: (job) => `${base}.${job}.events.jsonl`,
-    audio: (job) => `${base}.${job}.mp3`,
     lineAudio: (job, n) => `${base}.${job}.${n}.mp3`,
     cardsDir: (job) => `${base}.${job}.cards`,
     card: (job, n) => `${base}.${job}.cards/${n}.json`,
@@ -121,9 +119,9 @@ export function currentThread(index: { messages: readonly Pick<ConversationMessa
   return t.length ? t[t.length - 1] : null;
 }
 
-/** 某个话题的会话:sessions 里有就它;旧索引(sessions 空)只有顶层 session,只对当前话题有效 */
-export function sessionFor(index: { session: Session | null; sessions: Record<string, Session>; messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread'>[] }, thread: string): Session | null {
-  return index.sessions[thread] ?? (!Object.keys(index.sessions).length && thread === currentThread(index) ? index.session : null);
+/** 某个话题的会话(没有 = 新开) */
+export function sessionFor(index: { sessions: Record<string, Session> }, thread: string): Session | null {
+  return index.sessions[thread] ?? null;
 }
 
 /** 某个话题里最后一条消息的 job(卡的状态文件 turn 记它;没有这个话题 → null) */
@@ -141,7 +139,7 @@ export function addMessage(index: ConversationIndex, msg: ConversationMessage): 
 export function applyRun(
   index: ConversationIndex,
   job: string,
-  run: { transcript: Transcript; kidView: KidView; runtime: string; artifacts?: string[]; audio?: string | null; timing?: Timing; post?: ConversationMessage['post']; tools?: ConversationMessage['tools'] },
+  run: { transcript: Transcript; kidView: KidView; runtime: string; artifacts?: string[]; timing?: Timing; post?: ConversationMessage['post']; tools?: ConversationMessage['tools'] },
 ): ConversationIndex {
   const { transcript, kidView } = run;
   const messages = index.messages.map((m) =>
@@ -158,7 +156,6 @@ export function applyRun(
           ...(kidView.parentText ? { parentText: kidView.parentText } : {}),
           ...(kidView.warnings.length ? { warnings: [...(m.warnings ?? []), ...kidView.warnings] } : {}),
           error: transcript.final?.ok === false ? transcript.final.reason : null,
-          audio: run.audio ?? null,
           ...(run.timing ? { timing: run.timing } : {}),
           ...(run.post ? { post: run.post } : {}),
           ...(run.tools?.length ? { tools: run.tools } : {}),
@@ -168,13 +165,13 @@ export function applyRun(
   // 会话按话题记:这个话题首次拿到就记;换了运行时(agent 不同)就以这次的为准——跨 CLI 不能 resume。顶层 session = 当前话题的
   const i = index.messages.findIndex((m) => m.job === job);
   const thread = i >= 0 ? threads(index.messages)[i] : job;
-  // 话题第一条(thread === job)一律新会话,不继承任何旧的(旧索引的顶层 session 是上一个话题的)
+  // 话题第一条(thread === job)一律新会话
   const prev = thread === job ? null : sessionFor(index, thread);
   const keep = prev && prev.runtime === run.runtime ? prev : null;
   const mine = keep ?? (transcript.sessionId ? { id: transcript.sessionId, runtime: run.runtime } : prev);
   const sessions = mine ? { ...index.sessions, [thread]: mine } : index.sessions;
   const cur = currentThread(index);
-  const session = cur ? (sessions[cur] ?? (cur === thread ? mine : index.session)) : index.session;
+  const session = cur ? (sessions[cur] ?? null) : null;
   const costUsd = messages.reduce((s, m) => s + (m.costUsd ?? 0), 0);
   return { ...index, session, sessions, messages, costUsd: Math.round(costUsd * 1e4) / 1e4 };
 }

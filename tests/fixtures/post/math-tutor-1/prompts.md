@@ -3,7 +3,7 @@
 
 ```html
 <!-- 这是第一张卡,前面没有 -->
-<div class="c c-text now" id="c0" data-style="cover" data-tint="night" data-marked="「平行四边形」"><h3>三角形的面积</h3><p>两个一样的三角形拼成一个平行四边形</p></div>
+<div class="c c-text now" id="c0" data-tint="sky" data-marked="「平行四边形」"><h3>三角形的面积</h3><p>两个一样的三角形拼成一个平行四边形</p></div>
 <p class="line" data-n="0">我们先拿两个一模一样的三角形来拼一拼。</p>
 ```
 
@@ -51,8 +51,8 @@
 下面是一节板书讲到一半的样子(孩子看到的结构):div.row 一行、div.c 一张卡、data-tint / data-look 是它现在的底色与字形、data-marked 是这张卡上已经画了的标注;class 带 now 的那张卡是刚出现的这一拍,后面的 p.line 是老师讲这张卡时说的话(它的 data-marked 是念到这句时已经要画的)。
 
 ```html
-<div class="c c-text" id="c0" data-style="cover" data-tint="night" data-marked="「平行四边形」"><h3>三角形的面积</h3><p>两个一样的三角形拼成一个平行四边形</p></div>
-<div class="c c-text now" id="c1" data-style="step" data-tint="moss"><h3>拼</h3><p>把两个一样的三角形,一个转过来,和另一个拼在一起</p></div>
+<div class="c c-text" id="c0" data-tint="sky" data-marked="「平行四边形」"><h3>三角形的面积</h3><p>两个一样的三角形拼成一个平行四边形</p></div>
+<div class="c c-text now" id="c1" data-tint="sky"><h3>拼</h3><p>把两个一样的三角形,一个转过来,和另一个拼在一起</p></div>
 <p class="line" data-n="0" data-marked="c0「平行四边形」">拼好以后,它们正好变成一个平行四边形。</p>
 <p class="line" data-n="1">先记住一句话,三角形的面积是平行四边形的一半。</p>
 <p class="line" data-n="2">你觉得,这个平行四边形的底和高,跟原来那个三角形的底和高,是一样的,还是不一样?</p>

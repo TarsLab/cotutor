@@ -69,7 +69,7 @@ if (fail) {
   if (prompt.includes('放旧课包')) parts.push('```scene\n2026-09-09-guilv\n```\n\n我们再看一遍。');
   if (prompt.includes('旧转交')) parts.push('## 转交\nto: planner\nwhy: 排进计划');
   if (prompt.startsWith('cotutor:') && /\n---\n场景作业\(/.test(prompt)) parts.push('课包 2026-09-09-guilv 做好了,6 步');
-  if (prompt.includes('板书')) parts.push('```text cover\n三角形\n拼一拼\n```\n\n先看[三角形]。\n\n```choice\n三角形有几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n三角形有几个角?' + (prompt.includes('坏卡') ? '\n\n```choice\n没选项\n```' : '') + (prompt.includes('点读') ? '\n\n```read\napple 苹果\nbanana 香蕉\n```\n\n点一下听一下。' : '') + (prompt.includes('图片') ? '\n\n```image\nvault/pic.png\n看这张图\n```' : ''));
+  if (prompt.includes('板书')) parts.push('```text\n# 三角形\n拼一拼\n```\n\n先看[三角形]。\n\n```choice\n三角形有几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n三角形有几个角?' + (prompt.includes('坏卡') ? '\n\n```choice\n没选项\n```' : '') + (prompt.includes('点读') ? '\n\n```read\napple 苹果\nbanana 香蕉\n```\n\n点一下听一下。' : '') + (prompt.includes('图片') ? '\n\n```image\nvault/pic.png\n看这张图\n```' : ''));
   // 作业照片(R5):上下文包有 photos: 段就「看图」——回显看到了哪张,板书 image 卡引用原图、canvas 卡照片做底
   const photosAt = prompt.indexOf('\n  photos:\n');
   if (photosAt >= 0) {

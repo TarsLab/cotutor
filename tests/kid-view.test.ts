@@ -65,8 +65,8 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   const base = { at: 'x', artifacts: [] as string[] };
   const idx = {
     messages: [
-      { ...base, job: '1', from: 'kid' as const, text: '为什么', result: 'ok' as const, kidText: '因为借位', audio: '2026-09-09.1.mp3', costUsd: 0.1, error: null, parentText: '## 家长\n家长的话' },
-      { ...base, job: '2', from: 'parent' as const, text: '家长问的', result: 'ok' as const, kidText: '给孩子的话', audio: null },
+      { ...base, job: '1', from: 'kid' as const, text: '为什么', result: 'ok' as const, kidText: '因为借位', costUsd: 0.1, error: null, parentText: '## 家长\n家长的话' },
+      { ...base, job: '2', from: 'parent' as const, text: '家长问的', result: 'ok' as const, kidText: '给孩子的话' },
       { ...base, job: '3', from: 'parent' as const, text: '记账', result: 'ok' as const, kidText: null },
       { ...base, job: '4', from: 'kid' as const, text: '又问', result: 'error' as const, kidText: null, error: 'error_max_turns' },
       { ...base, job: '5', from: 'system' as const, text: 'sys', result: 'error' as const, kidText: null, error: 'boom' },
@@ -77,8 +77,8 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   const v = kidConversation(idx);
   check('条目数:家长无话的与系统出错的不出现', v.map((m) => m.job).join() === '1,2,4,6,7', JSON.stringify(v.map((m) => m.job)));
   check('板书节下发前剥答案;家长尾巴不下发', v[4].section?.cards.length === 2 && !('answer' in v[4].section.cards[0].props) && !('answers' in v[4].section.cards[1].props) && v[4].section.lines[0].ask && !JSON.stringify(v).includes('秘密'), JSON.stringify(v[4]));
-  check('孩子的问句 + 回复 + 配音', v[0].question === '为什么' && v[0].reply === '因为借位' && v[0].audio === '2026-09-09.1.mp3' && !v[0].pending);
-  check('家长的问句不露,只有给孩子的话', v[1].question === null && v[1].reply === '给孩子的话' && v[1].audio === null);
+  check('孩子的问句 + 回复,消息层不带配音', v[0].question === '为什么' && v[0].reply === '因为借位' && !('audio' in v[0]) && !v[0].pending);
+  check('家长的问句不露,只有给孩子的话', v[1].question === null && v[1].reply === '给孩子的话');
   check('出错:问句在、没有回复、没有原因', v[2].question === '又问' && v[2].reply === null && !('error' in v[2]) && !('result' in v[2]));
   check('还在跑 → pending', v[3].pending && v[3].reply === null);
   check('序列化后搜不到工具 / 错误 / 家长尾巴 / 费用 / 答案', !/工具|error|家长的话|costUsd|result|answer/.test(JSON.stringify(v)), JSON.stringify(v));
@@ -93,10 +93,10 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   // 「以前的」分组:按 thread 聚,名字 = 孩子第一句截 20 字;没有孩子问过的话题不列;pending / 出错的不算节
   const sec = (n: number) => ({ cards: Array.from({ length: n }, () => ({ kind: 'text', props: {} })), lines: [] });
   const list = kidThreads([
-    { job: '1', thread: '1', at: '2026-09-09T10:00', question: '这道题怎么做我完全不懂啊老师请你讲讲好不好', reply: '好', audio: null, pending: false, artifacts: [], section: sec(3) },
-    { job: '2', thread: '1', at: '2026-09-09T10:05', question: '继续', reply: '再', audio: null, pending: false, artifacts: [], section: sec(2) },
-    { job: '3', thread: '3', at: '2026-09-09T10:10', question: null, reply: '课包好了', audio: null, pending: false, artifacts: [] },
-    { job: '4', thread: '4', at: '2026-09-09T10:20', question: '换个', reply: null, audio: null, pending: true, artifacts: [] },
+    { job: '1', thread: '1', at: '2026-09-09T10:00', question: '这道题怎么做我完全不懂啊老师请你讲讲好不好', reply: '好', pending: false, artifacts: [], section: sec(3) },
+    { job: '2', thread: '1', at: '2026-09-09T10:05', question: '继续', reply: '再', pending: false, artifacts: [], section: sec(2) },
+    { job: '3', thread: '3', at: '2026-09-09T10:10', question: null, reply: '课包好了', pending: false, artifacts: [] },
+    { job: '4', thread: '4', at: '2026-09-09T10:20', question: '换个', reply: null, pending: true, artifacts: [] },
   ]);
   check('分组:两个话题(系统起的没孩子问 → 不列),名字截 20 字,节数与卡数,pending 不算节', list.length === 2 && list[0].thread === '1' && list[0].title === '这道题怎么做我完全不懂啊老师请你讲讲好不' && list[0].title.length === 20 && list[0].sections === 2 && list[0].cards === 5 && list[1].thread === '4' && list[1].sections === 0, JSON.stringify(list));
 }

@@ -25,7 +25,6 @@ import {
   playableLines,
   lineTarget,
   lookFor,
-  marksUpTo,
   nowCard,
   penBox,
   penFor,
@@ -70,10 +69,10 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   const def: BoardCard = { kind: 'text', props: { title: '认边', text: '两条短边叫直角边,最长的一条叫斜边' } };
   const plain: BoardCard = { kind: 'text', props: { text: '一个直角三角形,斜边是 13' } };
   const formula: BoardCard = { kind: 'text', props: { style: 'formula', text: '直角边² + 直角边² = 斜边²' } };
-  check('底色槽:封面 night、# 标题 sky、素文 sand、note sky、formula paper、quote sand、step moss、做题的紫、点读米、图 / 场景 / 代码白', tintFor(cards[0]) === 'night' && tintFor(def) === 'sky' && tintFor(plain) === 'sand' && tintFor(cards[1]) === 'sky' && tintFor(formula) === 'paper' && tintFor({ kind: 'text', props: { style: 'quote', text: 'x' } }) === 'sand' && tintFor({ kind: 'text', props: { style: 'step', title: 'x', text: 'y' } }) === 'moss' && tintFor(cards[3]) === 'plum' && tintFor(cards[4]) === 'plum' && tintFor({ kind: 'canvas', props: {} }) === 'plum' && tintFor(cards[2]) === 'sand' && tintFor(sceneCard) === 'paper' && tintFor({ kind: 'image', props: {} }) === 'paper');
+  check('底色槽:# 标题 sky、素文 sand、formula paper、后期定的优先、做题的紫、点读米、图 / 场景 / 代码白', tintFor(cards[0]) === 'sky' && tintFor(def) === 'sky' && tintFor(plain) === 'sand' && tintFor(cards[1]) === 'sand' && tintFor(formula) === 'paper' && tintFor({ kind: 'text', props: { text: 'x' }, look: { tint: 'night' } }) === 'night' && tintFor(cards[3]) === 'plum' && tintFor(cards[4]) === 'plum' && tintFor({ kind: 'canvas', props: {} }) === 'plum' && tintFor(cards[2]) === 'sand' && tintFor(sceneCard) === 'paper' && tintFor({ kind: 'image', props: {} }) === 'paper');
   check('后期定的 look 优先', tintFor({ ...plain, look: { tint: 'moss' } }) === 'moss' && lookFor({ ...plain, look: { look: 'quote' } }) === 'quote');
-  check('字形槽:note → title、formula → formula、quote → quote,其余 plain', lookFor(cards[1]) === 'title' && lookFor(formula) === 'formula' && lookFor({ kind: 'text', props: { style: 'quote', text: 'x' } }) === 'quote' && lookFor(def) === 'plain' && lookFor(cards[3]) === 'plain');
-  check('笔:选项 box、问题里的词 underline、填空 underline、点读 marker、公式 / 大字 / 封面 marker、标题位 circle、数字 underline、正文里的词 tint;后期定的 pen 页面直接用', penFor(cards[3], '他自己的') === 'box' && penFor(cards[3], '酒') === 'underline' && penFor(cards[4], '做到了') === 'underline' && penFor(cards[2], '楚有祠者') === 'marker' && penFor(formula, '斜边') === 'marker' && penFor(cards[1], '多做一步') === 'marker' && penFor(cards[0], '画蛇添足') === 'marker' && penFor(def, '认边') === 'circle' && penFor(def, '直角边') === 'tint' && penFor({ kind: 'text', props: { title: '验证', text: '9 加 16 等于 25' } }, '25') === 'underline' && penFor(sceneCard, '找规律') === 'underline');
+  check('字形槽:formula → formula、后期定的优先,其余 plain', lookFor(cards[1]) === 'plain' && lookFor(formula) === 'formula' && lookFor({ kind: 'text', props: { text: 'x' }, look: { look: 'title' } }) === 'title' && lookFor(def) === 'plain' && lookFor(cards[3]) === 'plain');
+  check('笔:选项 box、问题里的词 underline、填空 underline、点读 marker、公式 / 大字 marker、标题位 circle、数字 underline、正文里的词 tint;后期定的 pen 页面直接用', penFor(cards[3], '他自己的') === 'box' && penFor(cards[3], '酒') === 'underline' && penFor(cards[4], '做到了') === 'underline' && penFor(cards[2], '楚有祠者') === 'marker' && penFor(formula, '斜边') === 'marker' && penFor({ kind: 'text', props: { text: '多做一步' }, look: { look: 'title' } }, '多做一步') === 'marker' && penFor(cards[1], '多做一步') === 'tint' && penFor(cards[0], '画蛇添足') === 'circle' && penFor(def, '认边') === 'circle' && penFor(def, '直角边') === 'tint' && penFor({ kind: 'text', props: { title: '验证', text: '9 加 16 等于 25' } }, '25') === 'underline' && penFor(sceneCard, '找规律') === 'underline');
   const hd: BoardCard = { kind: 'text', props: { title: '两大类型', text: '', heading: true } };
   check('小节标题不是卡:没有能标注的字,sectionTitle 优先拿它', isHeading(hd) && !isHeading(def) && cardTexts(hd).length === 0 && sectionTitle({ cards: [hd, def], lines: [] }) === '两大类型');
   // ---- 行:没 layout 一行一张;有 layout 同端照排;手机上折;标题行与有状态的卡独占 ----
@@ -110,18 +109,17 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
 {
   const section: BoardSection = { cards, lines: [L('第一句', { marks: [{ card: 1, phrase: '多做一步' }], anchor: 0 }), L('酒是谁的?', { anchor: 3 })] };
   const entries = sectionsFromMessages([
-    { job: '1', question: '画蛇添足是什么?', reply: '酒是谁的?', audio: null, pending: false, section },
-    { job: '2', question: '不画脚呢?', reply: null, audio: null, pending: true },
-    { job: '3', question: '再说一遍', reply: '酒归第二个画完的。', audio: '2026-09-10.1.mp3', pending: false },
-    { job: '4', question: '出错的', reply: null, audio: null, pending: false },
-    { job: '5', question: '空节', reply: '只有一句', audio: null, pending: false, section: { cards: [{ kind: 'text', props: { text: '卡' } }], lines: [] } },
-    { job: '6', question: '只有讲稿', reply: '一句话', audio: null, pending: false, section: { cards: [], lines: [L('一句话')] } },
-    { job: '7', question: '还在说', reply: null, audio: null, pending: true, section: { cards: [{ kind: 'text', props: { text: '先出的卡' } }], lines: [L('第一句')], partial: true } },
-    { job: '8', question: '还在说但没卡', reply: null, audio: null, pending: true, section: { cards: [], lines: [L('只有句')], partial: true } },
+    { job: '1', question: '画蛇添足是什么?', reply: '酒是谁的?', pending: false, section },
+    { job: '2', question: '不画脚呢?', reply: null, pending: true },
+    { job: '3', question: '没有 section 的', reply: '酒归第二个画完的。', pending: false },
+    { job: '4', question: '出错的', reply: null, pending: false },
+    { job: '5', question: '空节', reply: '只有一句', pending: false, section: { cards: [{ kind: 'text', props: { text: '卡' } }], lines: [] } },
+    { job: '6', question: '只有讲稿', reply: '一句话', pending: false, section: { cards: [], lines: [L('一句话')] } },
+    { job: '7', question: '还在说', reply: null, pending: true, section: { cards: [{ kind: 'text', props: { text: '先出的卡' } }], lines: [L('第一句')], partial: true } },
+    { job: '8', question: '还在说但没卡', reply: null, pending: true, section: { cards: [], lines: [L('只有句')], partial: true } },
   ]);
-  check('有 section 用 section;还在跑 / 出错的不出节;流式已出卡的出 partial 节', entries.length === 5 && entries[0].job === '1' && entries[0].cards.length === 6 && entries[1].job === '3' && entries[4].job === '7' && entries[4].partial === true && entries[4].cards.length === 1 && !entries.slice(0, 4).some((e) => e.partial), JSON.stringify(entries.map((e) => e.job)));
-  check('只有 reply 的退成一张文字卡 + 一句讲稿(带配音)', entries[1].cards[0].kind === 'text' && entries[1].cards[0].props.text === '酒归第二个画完的。' && entries[1].lines[0].audio === '2026-09-10.1.mp3' && entries[1].lines[0].ask === false);
-  check('section 没讲稿时把 reply 当一句;只有讲稿没卡也成节', entries[2].lines.length === 1 && entries[2].lines[0].text === '只有一句' && entries[3].cards.length === 0 && entries[3].lines.length === 1);
+  check('有 section 用 section;没有 section / 还在跑 / 出错的不出节;流式已出卡的出 partial 节', entries.map((e) => e.job).join() === '1,5,6,7' && entries[0].cards.length === 6 && entries[3].partial === true && entries[3].cards.length === 1 && !entries.slice(0, 3).some((e) => e.partial), JSON.stringify(entries.map((e) => e.job)));
+  check('只有卡没讲稿、只有讲稿没卡都成节', entries[1].lines.length === 0 && entries[1].cards.length === 1 && entries[2].cards.length === 0 && entries[2].lines.length === 1);
   check('孩子的话不上板', !entries.some((e) => e.cards.some((c) => cardTexts(c).some((t) => t.includes('画蛇添足是什么')))));
   check('目录名:封面 > 有名字的文字卡 > 第一张有字的卡 > 第一句,截 14 字', sectionTitle(section) === '画蛇添足' && sectionTitle({ cards: [{ kind: 'text', props: { style: 'step', title: '拼', text: 'x' } }], lines: [] }) === '拼' && sectionTitle({ cards: [{ kind: 'text', props: { text: '一二三四五六七八九十一二三四五六' } }], lines: [] }) === '一二三四五六七八九十一二三四…' && sectionTitle({ cards: [], lines: [L('只有一句')] }) === '只有一句');
 }
@@ -148,7 +146,6 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   check('末句问句但已有下一节 → 直接进下一节(孩子答过了)', JSON.stringify(advance(st, [s1, s2])) === '{"section":1,"line":0,"status":"playing"}');
   check('末句不是问句 → 完', advance({ section: 1, line: 0, status: 'playing' }, [s1, s2]).status === 'done');
   check('没讲稿的节直接完', startSection(0, [{ cards: [], lines: [] }]).status === 'done');
-  check('播到这句为止的标注', marksUpTo([s1], { section: 0, line: 1, status: 'paused' }).length === 1 && marksUpTo([s1], { section: 0, line: 0, status: 'playing' }).length === 0 && marksUpTo([s1], { section: -1, line: -1, status: 'idle' }).length === 0);
   const base = { sections: [s1], echo: null, pending: false, thinking: '让我想想…', limit: false };
   check('字幕:播放中 → 当前句 + 暂停', JSON.stringify(subtitleFor({ ...base, state: { section: 0, line: 0, status: 'playing' } })) === '{"text":"一","kind":"line","right":"pause"}');
   check('字幕:暂停 → 播放钮', subtitleFor({ ...base, state: { section: 0, line: 0, status: 'paused' } }).right === 'play');

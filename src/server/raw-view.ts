@@ -8,7 +8,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { cardLabel, describeCard, stripSecrets } from '../cards/index.ts';
 import { annotateSource, type BoardWarning, type SourceRow } from '../lib/board.ts';
-import { cardId, conversationFiles, type CardStateFile } from '../lib/conversation.ts';
+import { conversationFiles, type CardStateFile } from '../lib/conversation.ts';
 import { kidSource, truncateReply } from '../lib/kid-view.ts';
 import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
 import { foldRuns, toolCalls, type ToolCall, type TranscriptRow } from '../lib/transcript.ts';
@@ -236,5 +236,3 @@ export function fixtureOf(view: RawView): { name: string; text: string } {
   return { name: `${view.tutor}-${view.date}-${view.job}.md`, text: view.source.text.endsWith('\n') ? view.source.text : `${view.source.text}\n` };
 }
 
-/** 卡 id(家长端显示「孩子在板书上做的」那套 id) */
-export const rawCardId = cardId;

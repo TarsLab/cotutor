@@ -8,12 +8,6 @@ export const MESSAGE_FROM = ['kid', 'parent', 'system'] as const;
 export type MessageFrom = (typeof MESSAGE_FROM)[number];
 
 export const FocusSchema = z.object({
-  /** 当前对象(产物 id) */
-  artifact: z.string().optional(),
-  /** 正在看的 step */
-  step: z.number().int().nonnegative().optional(),
-  /** 圈了什么 */
-  circled: z.array(z.string()).optional(),
   /** 孩子发消息时正开着的那张卡(<job>/<n>) */
   card: z.string().optional(),
 });

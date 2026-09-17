@@ -69,8 +69,7 @@
 #st-body { flex:1; min-height:0; overflow:auto; padding:20px; display:flex; flex-direction:column; gap:14px; -webkit-overflow-scrolling:touch; }
 #st-body[hidden] { display:none; }
 #st-body .c { font-size:20px; line-height:1.6; padding:18px 20px; }
-#st-body .c-cover { min-height:220px; }
-#st-body .c[data-look="title"] .cb { font-size:26px; } #st-body .c[data-look="formula"] .cb { font-size:28px; } #st-body .rd { font-size:22px; } #st-body .c-cover .ct { font-size:32px; } #st-body .c-cover .cb { font-size:16px; }
+#st-body .c[data-look="title"] .cb { font-size:26px; } #st-body .c[data-look="formula"] .cb { font-size:28px; } #st-body .rd { font-size:22px; }
 #st-act { padding:12px 20px 16px; display:flex; align-items:center; justify-content:flex-end; gap:12px; border-top:1px solid var(--line); }
 #st-act .note { flex:1; font-size:14px; color:var(--dim); text-align:right; }
 #st-act[hidden] { display:none; }

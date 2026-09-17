@@ -72,7 +72,7 @@ try {
   const evalIndex = await readIndex(evalWorkspace(ws), 'math-tutor', '2026-09-08');
   const next = evalIndex.messages.find((m) => m.job === rp.evalJob)!;
   check('回放落 evals/:索引在、消息带 replayOf、新会话、ok', existsSync(join(root, 'evals', 'math-tutor', '2026-09-08.json')) && next?.replayOf === orig.job && next.result === 'ok' && evalIndex.sessions[next.job] !== undefined, JSON.stringify({ replayOf: next?.replayOf, result: next?.result }));
-  check('回放不配音、不跑后期', next.section?.lines.every((l) => !l.audio) === true && next.post === undefined && next.audio === null, JSON.stringify({ audio: next.section?.lines.map((l) => l.audio), post: next.post }));
+  check('回放不配音、不跑后期', next.section?.lines.every((l) => !l.audio) === true && next.post === undefined, JSON.stringify({ audio: next.section?.lines.map((l) => l.audio), post: next.post }));
   check('回放的 log / run.json 落在 evals/', existsSync(join(root, 'evals', 'math-tutor', `2026-09-08.${next.job}.log`)) && existsSync(join(root, 'evals', 'math-tutor', `2026-09-08.${next.job}.run.json`)));
   const origIndex = await readIndex(ws, 'math-tutor', '2026-09-08');
   check('原索引没动:还是一条', origIndex.messages.length === 1 && origIndex.messages[0].job === orig.job && !existsSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${next.job}.log`)));

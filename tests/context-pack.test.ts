@@ -11,7 +11,7 @@ const text = buildContextPack(
     from: 'kid',
     at: '2026-09-08T16:20',
     slot: '数学 16:00-17:00',
-    focus: { artifact: '2026-09-08-两位数退位', step: 3, circled: ['借位那一步'] },
+    focus: { card: '1620-1/2' },
     semester: '二年级上',
     profile: 'profile.md',
     entry: '课程/二年级上/数学.md(未变,原文在本话题前面)',
@@ -29,7 +29,7 @@ const text = buildContextPack(
 );
 const lines = text.split('\n');
 check('头部固定', lines[0] === 'cotutor:' && lines[1] === '  from: kid' && lines[2] === '  at: 2026-09-08T16:20', text);
-check('focus 三项', text.includes('    artifact: "2026-09-08-两位数退位"') && text.includes('    step: 3') && text.includes('    circled: ["借位那一步"]'), text);
+check('focus 只有 card', text.includes('  focus:\n    card: "1620-1/2"\n'), text);
 check('学期、档案、入口、参考在 plan 前', text.includes('  semester: "二年级上"\n  profile: profile.md\n  entry: "课程/二年级上/数学.md(未变,原文在本话题前面)"\n  refs:\n    - "/v/教材/数学二年级上册.md"\n  plan:'), text);
 check('笔记原文接在 YAML 块后、--- 前,尾部空白去掉', text.includes('    - "2026-09-07 三"\n<vault-note role="profile" path="profile.md">\n---\ncotutor: profile\n---\n\n有阅读困难。\n</vault-note>\n---\n妈妈我不懂这一步\n'), text);
 check('plan 截到 2 行', text.includes('    - a\n    - b\n') && !text.includes('- c'), text);

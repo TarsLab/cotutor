@@ -14,16 +14,16 @@ check('enabled 缺省 true', cfg.tutors['math-tutor'].enabled === true && Object
 check('运行时 claude/qwen 都在', 'claude' in cfg.runtimes && 'qwen' in cfg.runtimes && cfg.runtimes.default === 'claude');
 
 const pol = resolvePolicy(cfg, 'math-tutor');
-check('政策缺省 60/30/3/关/10/10', pol.replyMaxChars === 60 && pol.dailyMessages === 30 && pol.dailyRegen === 3 && pol.reviewGate === false && pol.contextPack.recent === 10 && pol.contextPack.planLines === 10);
+check('政策缺省 60/30/10/10/4000', pol.replyMaxChars === 60 && pol.dailyMessages === 30 && pol.contextPack.recent === 10 && pol.contextPack.planLines === 10 && pol.contextPack.entryChars === 4000 && !('reviewGate' in pol) && !('forms' in pol));
 
 const layered = CotutorConfigSchema.parse({
   ...raw,
   policyDefaults: { replyMaxChars: 80, contextPack: { recent: 3 } },
-  tutors: { ...raw.tutors, 'math-tutor': { ...raw.tutors['math-tutor'], policy: { reviewGate: true, forms: ['L1'] } } },
+  tutors: { ...raw.tutors, 'math-tutor': { ...raw.tutors['math-tutor'], policy: { dailyMessages: 5, board: 'off' } } },
 });
 const p2 = resolvePolicy(layered, 'math-tutor');
-check('政策逐层覆盖', p2.replyMaxChars === 80 && p2.contextPack.recent === 3 && p2.contextPack.planLines === 10 && p2.reviewGate === true && p2.forms.join() === 'L1');
-check('别的老师不受影响', resolvePolicy(layered, 'scene-maker').reviewGate === false && resolvePolicy(layered, 'scene-maker').replyMaxChars === 80);
+check('政策逐层覆盖', p2.replyMaxChars === 80 && p2.contextPack.recent === 3 && p2.contextPack.planLines === 10 && p2.dailyMessages === 5 && p2.board === 'off');
+check('别的老师不受影响', resolvePolicy(layered, 'scene-maker').board === 'auto' && resolvePolicy(layered, 'scene-maker').replyMaxChars === 80);
 
 const kidOnly = listTutors(cfg, { kidOnly: true });
 check('孩子端不见 hidden', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'scene-maker'));
@@ -43,28 +43,6 @@ check('占位填充', filled.includes('math-tutor') && filled.includes('s-1') &&
 const q = fillRuntime(cfg.runtimes.qwen.run, { agent: 'x', prompt: 'p' });
 check('没给 agentBody 就原样留着(doctor 会报)', q.includes('{agentBody}'));
 
-{
-  // 2026-09-09 术语统一:旧键旧名响亮报,不静默变成零位老师
-  const { parseConfig, ConfigError } = await import('../src/cli/workspace.ts');
-  const base = JSON.parse(configTemplate({ slug: 'ming', tutors: agents })) as Record<string, unknown>;
-  const oldKey = { ...base, teachers: base.tutors };
-  delete (oldKey as Record<string, unknown>).tutors;
-  let msg = '';
-  try {
-    parseConfig(oldKey, 'x');
-  } catch (e) {
-    msg = e instanceof ConfigError ? e.message : '';
-  }
-  check('teachers 旧键 → 报错说改成 tutors', msg.includes('tutors') && msg.includes('homework-aide 整条删掉'), msg);
-  const oldName = { ...base, tutors: { 'math-teacher': { display: '数学老师' }, 'homework-aide': { display: '作业' } } };
-  msg = '';
-  try {
-    parseConfig(oldName, 'x');
-  } catch (e) {
-    msg = e instanceof ConfigError ? e.message : '';
-  }
-  check('旧老师名 → 报错给新名', msg.includes('math-tutor') && msg.includes('整条删掉'), msg);
-}
 {
   const { resolvePolicy, POLICY_DEFAULTS } = await import('../src/schema/index.ts');
   check('board 旋钮缺省 auto,老师条目可覆盖成 off', POLICY_DEFAULTS.board === 'auto' && resolvePolicy({ policyDefaults: {}, tutors: { t: { display: 't', enabled: true, policy: { board: 'off' } } } } as never, 't').board === 'off');

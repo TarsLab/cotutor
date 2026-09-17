@@ -187,7 +187,7 @@ export interface SourceRow {
   line: number;
   text: string;
   role: SourceRole;
-  /** 右边那句「卡 2 · text step」「讲稿 1 · 播」 */
+  /** 右边那句「卡 2 · text formula」「讲稿 1 · 播」 */
   label?: string;
   /** role=card 时是第几张卡(0 起);role=say 时是第几句 */
   index?: number;

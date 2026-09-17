@@ -98,9 +98,6 @@ export const PARENT_PAGE = `<!doctype html>
   .card .kindbar i { width:6px; height:6px; border-radius:2px; background:var(--accent-2); display:block; }
   .card .kindbar .more { margin-left:auto; }
   .card .body { padding:12px 14px; }
-  .card.cover .body { text-align:center; padding:18px 14px; background:linear-gradient(180deg,var(--accent-soft),transparent); }
-  .card.cover h4 { margin:0; font-size:22px; font-weight:600; }
-  .card.cover p { margin:5px 0 0; color:var(--muted); font-size:14.5px; }
   .card.step .body { display:flex; gap:11px; align-items:flex-start; }
   .card.step .idx { font:600 13px/22px var(--mono); width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff; text-align:center; flex:none; }
   .card.step b { font-size:15.5px; display:block; }
@@ -551,16 +548,14 @@ export const PARENT_PAGE = `<!doctype html>
     return el;
   };
 
-  const KIND_LABEL = { text: '文字', read: '点读', choice: '选择', fill: '填空', image: '图片', scene: '讲解动画', canvas: '画板', code: '原样' };
+  const KIND_LABEL = { text: '文字', read: '点读', choice: '选择', fill: '填空', image: '图片', tianzige: '田字格', scene: '讲解动画', canvas: '画板', code: '原样' };
   const cardEl = (card, n) => {
     const p = card.props || {};
     const style = card.kind === 'text' ? (p.style || 'plain') : '';
     const box = h('div', { class: 'card ' + card.kind + ' ' + style });
     box.append(h('div', { class: 'kindbar' }, h('i', {}), card.kind + (p.style ? ' · ' + p.style : ''), h('span', { class: 'more' }, '卡 ' + (n + 1) + ' · ' + (KIND_LABEL[card.kind] || card.kind))));
     const body = h('div', { class: 'body' });
-    if (card.kind === 'text' && p.style === 'cover') body.append(h('h4', {}, p.title || ''), p.text ? h('p', {}, p.text) : null);
-    else if (card.kind === 'text' && p.style === 'step') body.append(h('span', { class: 'idx' }, String(n + 1)), h('div', {}, h('b', {}, p.title || ''), p.text ? h('p', {}, p.text) : null));
-    else if (card.kind === 'text') body.append(h('p', { style: 'margin:0' }, p.text || ''));
+    if (card.kind === 'text') body.append(...(p.title ? [h('b', {}, p.title)] : []), h('p', { style: 'margin:0' }, p.text || ''));
     else if (card.kind === 'read') body.append(...(p.segments || []).map((s) => h('span', { class: 'seg' }, s)));
     else if (card.kind === 'choice') {
       const ans = p.answer || [];
@@ -629,7 +624,7 @@ export const PARENT_PAGE = `<!doctype html>
     const el = h('article', { class: 'turn' + (m.result === 'error' ? ' bad' : '') });
     const q = h('div', { class: 'q' }, m.text);
     if (m.cards && m.cards.length) q.append(h('span', { class: 'did' }, '板书上做的 · ', ...m.cards.map((c) => h('span', {}, c.card + ' ' + c.text + ' '))));
-    if (m.focus && (m.focus.card || m.focus.artifact)) q.append(h('span', { class: 'did' }, '开着 ' + (m.focus.card || m.focus.artifact)));
+    if (m.focus && m.focus.card) q.append(h('span', { class: 'did' }, '开着 ' + m.focus.card));
     // 作业照片(R5):缩略图,点开看原图(转录里能看到老师 Read 了哪张)
     if (m.photos && m.photos.length) q.append(h('div', { class: 'photos' }, ...m.photos.map((p) => h('a', { href: '/api/kid/image?p=' + encodeURIComponent(p), target: '_blank', title: p }, h('img', { src: '/api/kid/image?p=' + encodeURIComponent(p), alt: p, loading: 'lazy' })))));
     el.append(h('div', { class: 'ask from-' + m.from },
@@ -923,9 +918,9 @@ export const PARENT_PAGE = `<!doctype html>
         h('div', { class: 'dcontent' }, stationEl(raw))));
   };
 
-  // ---- 老师团:一位一行,九项政策折叠,改过的才亮 ----
-  const POLICY_FIELDS = [['replyMaxChars', '每句字数上限', 'number'], ['dailyMessages', '每日消息上限', 'number'], ['board', '板书(auto = 老师判断;off = 只说话)', 'enum', ['auto', 'off']], ['scenes.dailyMax', '每天讲解动画上限', 'number'], ['dailyRegen', '每日重生上限(还没接上)', 'number'], ['reviewGate', '验收开关(先经家长)', 'bool'], ['forms', '回复形式(逗号分隔 L0-L4)', 'forms'], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number']];
-  const SHORT = { replyMaxChars: '每句 ', dailyMessages: '每日 ', board: '板书 ', 'scenes.dailyMax': '动画 ', dailyRegen: '重生 ', reviewGate: '验收 ', forms: '形式 ', 'contextPack.recent': '观察 ', 'contextPack.planLines': '计划 ' };
+  // ---- 老师团:一位一行,政策折叠,改过的才亮 ----
+  const POLICY_FIELDS = [['replyMaxChars', '每句字数上限', 'number'], ['dailyMessages', '每日消息上限', 'number'], ['board', '板书(auto = 老师判断;off = 只说话)', 'enum', ['auto', 'off']], ['scenes.dailyMax', '每天讲解动画上限', 'number'], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number'], ['contextPack.entryChars', '上下文包:档案 / 入口文件 / 记忆各带多少字', 'number']];
+  const SHORT = { replyMaxChars: '每句 ', dailyMessages: '每日 ', board: '板书 ', 'scenes.dailyMax': '动画 ', 'contextPack.recent': '观察 ', 'contextPack.planLines': '计划 ', 'contextPack.entryChars': '原文 ' };
   const getPath = (o, p) => p.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
   const setPath = (o, p, v) => { const ks = p.split('.'); let cur = o; for (const k of ks.slice(0, -1)) cur = cur[k] = cur[k] || {}; cur[ks[ks.length - 1]] = v; };
 
@@ -937,16 +932,10 @@ export const PARENT_PAGE = `<!doctype html>
     if (type === 'enum') {
       // 空选项 = 不写这一项(老师行上是「继承」,全局是「缺省」),免得一保存就把缺省值写死进文件
       box.append(h('select', { 'data-key': key }, h('option', { value: '', selected: !changed }, (opts.inherit ? '继承(' : '缺省(') + eff + ')'), ...choices.map((o) => h('option', { value: o, selected: cur === o }, o))));
-    } else if (type === 'bool') {
-      box.append(h('select', { 'data-key': key },
-        opts.inherit ? h('option', { value: '', selected: !changed }, '继承(' + (eff ? '开' : '关') + ')') : null,
-        h('option', { value: 'true', selected: cur === true }, '开'),
-        h('option', { value: 'false', selected: cur === false || (!opts.inherit && !changed && eff === false) }, '关')));
     } else {
-      const val = cur === undefined ? '' : type === 'forms' ? cur.join(',') : String(cur);
-      box.append(h('input', { type: type === 'number' ? 'number' : 'text', 'data-key': key, value: val, placeholder: (opts.inherit ? '继承 ' : '') + (type === 'forms' ? (eff || []).join(',') : eff) }));
+      box.append(h('input', { type: 'number', 'data-key': key, value: cur === undefined ? '' : String(cur), placeholder: (opts.inherit ? '继承 ' : '') + eff }));
     }
-    if (changed && opts.inherit) box.append(h('span', { class: 'foot' }, '全局 ' + (type === 'forms' ? (eff || []).join(',') : String(eff)) + ' · 改过'));
+    if (changed && opts.inherit) box.append(h('span', { class: 'foot' }, '全局 ' + String(eff) + ' · 改过'));
     return box;
   });
   const readPolicy = (card) => {
@@ -957,9 +946,7 @@ export const PARENT_PAGE = `<!doctype html>
       const raw = el.value.trim();
       if (raw === '') { setPath(out, key, null); continue; }
       if (type === 'number') { const n = Number(raw); if (!Number.isInteger(n)) throw new Error(key + ' 要是整数'); setPath(out, key, n); }
-      else if (type === 'bool') setPath(out, key, raw === 'true');
-      else if (type === 'enum') setPath(out, key, raw);
-      else setPath(out, key, raw.split(/[,,\\s]+/).filter(Boolean));
+      else setPath(out, key, raw);
     }
     return out;
   };
@@ -1208,7 +1195,7 @@ export const PARENT_PAGE = `<!doctype html>
   };
 
   // ---- 设置:路径 / 服务 / 配音;文件仍是真相 ----
-  const PATH_ROLES = [['vault', 'vault 根', 'Obsidian 仓库;空 = workspace 根'], ['profile', '孩子档案', '相对 vault;「现在」callout 进上下文包'], ['timetable', '课程表', '相对 vault'], ['plans', '计划目录', ''], ['diary', '日记目录', '记账写这里'], ['textbooks', '教材目录', '一册一篇'], ['reference', '参考目录', '你自己的笔记'], ['captures', '作业照片', '相对 workspace 根(不进 vault)']];
+  const PATH_ROLES = [['vault', 'vault 根', 'Obsidian 仓库;空 = workspace 根'], ['profile', '新建档案的位置', '相对 vault;老师按 cotutor: profile 属性找档案'], ['timetable', '课程表', '相对 vault'], ['plans', '计划目录', ''], ['diary', '日记目录', '记账写这里'], ['textbooks', '教材目录', '记账列可选的册#节;上下文包按 cotutor: textbook 属性找'], ['reference', '参考目录', '你自己的笔记'], ['captures', '作业照片', '相对 workspace 根(不进 vault)']];
 
   const migratePanel = () => {
     const gaps = (state.config && state.config.migrate) || [];

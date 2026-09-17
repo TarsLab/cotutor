@@ -355,12 +355,10 @@ __BOARD_JS__
     switch (c.kind) {
       case 'text': {
         if (isHeading(c)) return h('div', { class: 'heading', 'data-card': idx }, p.title || '');
-        const st = p.style;
         const emoji = c.look && c.look.emoji ? c.look.emoji + ' ' : '';
         const title = p.title ? h('div', { class: 'ct' }, emoji + p.title) : null;
-        const text = st === 'quote' ? '「' + (p.text || '') + '」' : (p.text || '');
-        const body = text ? h('div', { class: 'cb' }, text) : null;
-        return box(st === 'cover' ? 'cover' : 'text', title, body);
+        const body = p.text ? h('div', { class: 'cb' }, p.text) : null;
+        return box('text', title, body);
       }
       case 'read':
         return box('read', ...(p.segments || []).map((seg, k) => h('div', { class: 'rd', on: { click: (e) => { e.stopPropagation(); readSegment(e.currentTarget, c, k, seg); } } }, seg)));

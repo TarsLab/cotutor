@@ -16,12 +16,12 @@ delete process.env.COTUTOR_WORKSPACE;
 const { parseBoard } = await import('../src/lib/board.ts');
 const { beatsOf } = await import('../src/lib/kid-board.ts');
 const { POST_TEMPLATE_HTML, boardHtml, cardHtml, lineHtml, markedBlock, markedText, parseBeatPatch } = await import('../src/lib/post-html.ts');
-const { POST_TEMPLATE_FALLBACK, POST_TEMPLATE_JSON, beatPrompt, dialectOf, missingSlots, parseBeatOutput, validateBeatPost } = await import('../src/lib/postprocess.ts');
+const { POST_TEMPLATE_FALLBACK, beatPrompt, missingSlots, validateBeatPost } = await import('../src/lib/postprocess.ts');
 const { ThemeManifestSchema } = await import('../src/schema/index.ts');
 
 const theme = ThemeManifestSchema.parse(JSON.parse(readFileSync(fileURLToPath(new URL('../themes/default/theme.json', import.meta.url)), 'utf8')));
 const section = parseBoard(
-  '```text cover\n勾股定理\n直角三角形三条边的关系\n```\n\n先认边。\n\n```text\n# 认边\n两条短边叫直角边,最长的一条叫斜边 a < b\n```\n\n两条短边叫[直角边],最长的一条叫斜边。\n\n```text formula\n直角边² + 直角边² = 斜边²\n```\n\n记住这个公式。\n\n```text\n# 小结\n```\n\n```choice\n两条直角边是 3 和 4,斜边是多少?\n- [ ] 6\n- [x] 5\n```\n\n斜边是多少?\n\n```read\napple 苹果\nbanana 香蕉\n```\n\n跟我读 [apple]。\n',
+  '```text\n# 勾股定理\n直角三角形三条边的关系\n```\n\n先认边。\n\n```text\n# 认边\n两条短边叫直角边,最长的一条叫斜边 a < b\n```\n\n两条短边叫[直角边],最长的一条叫斜边。\n\n```text formula\n直角边² + 直角边² = 斜边²\n```\n\n记住这个公式。\n\n```text\n# 小结\n```\n\n```choice\n两条直角边是 3 和 4,斜边是多少?\n- [ ] 6\n- [x] 5\n```\n\n斜边是多少?\n\n```read\napple 苹果\nbanana 香蕉\n```\n\n跟我读 [apple]。\n',
 ).section;
 const beats = beatsOf(section);
 const beatOf = (card: number) => beats.find((b) => b.card === card)!;
@@ -29,7 +29,7 @@ const beatOf = (card: number) => beats.find((b) => b.card === card)!;
 {
   // 卡 → HTML
   const c0 = cardHtml(section, 0);
-  check('封面:c-text + data-style cover、机械底色 night(字形 plain 不写)、标题 h3 + 正文 p', c0 === '<div class="c c-text" id="c0" data-style="cover" data-tint="night"><h3>勾股定理</h3><p>直角三角形三条边的关系</p></div>', c0);
+  check('带标题的文字卡:c-text、机械底色 sky(字形 plain 不写)、标题 h3 + 正文 p', c0 === '<div class="c c-text" id="c0" data-tint="sky"><h3>勾股定理</h3><p>直角三角形三条边的关系</p></div>', c0);
   const c1 = cardHtml(section, 1, { now: true });
   check('老师标过的词不画在卡上(在 {marked} 里);< 转义;now 进 class', c1.includes('class="c c-text now"') && c1.includes('<h3>认边</h3>') && c1.includes('两条短边叫直角边,最长的一条叫斜边 a &lt; b') && !c1.includes('<mark') && c1.includes(' data-marked="「直角边」"'), c1);
   check('标题行是 h2.heading,不是卡', cardHtml(section, 3) === '<h2 class="heading" id="c3">小结</h2>', cardHtml(section, 3));
@@ -66,15 +66,14 @@ const beatOf = (card: number) => beats.find((b) => b.card === card)!;
   check('没有壳 → 解析失败,原因说清', !p3.ok && p3.why.includes('壳'));
   const p4 = parseBeatPatch('<div class="c" data-row=new><mark>a &lt; b</mark><mark data-pen="tint" data-card="x">斜边</mark><mark data-pen="tint" data-done>直角边</mark><p class="line" data-n="1"></p></div>', section, beatOf(1));
   check('实体还原;pen 没写记「(没写)」让校验器丢;card 不像卡号当没写;抄回来的 done 不算;line 缺 for 跳过', p4.ok && p4.out.marks.length === 2 && p4.out.marks[0].phrase === 'a < b' && p4.out.marks[0].pen === '(没写)' && p4.out.marks[1].card === undefined && p4.out.anchors.length === 0, JSON.stringify(p4));
-  check('parseBeatOutput 按方言分派', parseBeatOutput('{"row":"new"}', 'json', section, b).ok && parseBeatOutput('<div class="c"></div>', 'html', section, b).ok && !parseBeatOutput('<div class="c"></div>', 'json', section, b).ok);
   // 补丁走同一个校验器
   const v = validateBeatPost(section, b, theme, 'tablet-landscape', p1.ok ? p1.out : { row: 'new', marks: [], anchors: [] });
   check('校验:5 在选项上收下(box, said 多少);斜边² 标到前面的卡 2 收下;锚点句 0 → 卡 1;same 接不上(选择题独占)→ new', v.kept.marks === 2 && v.kept.anchors === 1 && v.kept.row === 'new' && v.section.lines[b.lines[0]].marks.some((m) => m.phrase === '5' && m.pen === 'box' && m.said === '多少') && v.section.cards[4].look?.tint === 'plum', JSON.stringify([v.kept, v.dropped]));
 }
 {
-  // 骨架的方言
-  check('dialectOf:用了 {board} 就是 html;出厂兜底就是 HTML 骨架;老的 JSON 骨架是 json', dialectOf(POST_TEMPLATE_HTML) === 'html' && POST_TEMPLATE_FALLBACK === POST_TEMPLATE_HTML && dialectOf(POST_TEMPLATE_JSON) === 'json');
-  check('missingSlots 按方言:html 要 board / rules / patch', JSON.stringify(missingSlots('{board}')) === '["rules","patch"]' && missingSlots(POST_TEMPLATE_HTML).length === 0);
+  // 骨架
+  check('出厂兜底就是 HTML 骨架', POST_TEMPLATE_FALLBACK === POST_TEMPLATE_HTML);
+  check('missingSlots:要 board / rules / patch', JSON.stringify(missingSlots('{board}')) === '["rules","patch"]' && missingSlots(POST_TEMPLATE_HTML).length === 0);
   const p = beatPrompt(section, beatOf(4), 'phone', theme, POST_TEMPLATE_HTML);
   check('HTML 方言的提示词:板书段是 HTML、规则说 <c> / <mark> / <line>、输出段是补丁、只回 <c>、槽表照给', p.includes('<div class="c c-choice alone now" id="c4"') && p.includes('<p class="line" data-n="0">斜边是多少?</p>') && p.includes('data-row="same" 接在上一张卡那一行') && p.includes('<mark data-pen="…">词</mark>') && p.includes('<p class="line" data-n="1" data-for="c0"></p>') && p.includes('<div class="c" id="c4" data-row="same|new"') && p.includes('回一个补丁') && p.includes('已标过的词(老师标的或前面定的,已经画在卡上了,不要再标):\n- c1:「直角边」') && p.includes('- sky:') && p.includes('手机竖屏') && !p.includes('{board}') && !p.includes('{patch}'), p.slice(0, 300));
 }
@@ -91,12 +90,12 @@ const beatOf = (card: number) => beats.find((b) => b.card === card)!;
   cfg.policyDefaults = { post: { runtime: 'fast', timeoutMs: 5000 } };
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   const ws = loadWorkspace(root);
-  const sec = parseBoard('```text cover\n三角形\n三条边\n```\n\n先看。\n\n```text\n# 边\n三条边围起来\n```\n\n三条边。\n\n```text\n# 角\n三个角\n```\n\n三个角。\n').section;
+  const sec = parseBoard('```text\n# 三角形\n三条边\n```\n\n先看。\n\n```text\n# 边\n三条边围起来\n```\n\n三条边。\n\n```text\n# 角\n三个角\n```\n\n三个角。\n').section;
   const r = await runPost(ws, 'math-tutor', sec, { template: POST_TEMPLATE_HTML, serial: true, env: process.env });
   const files = r.file.beats;
-  check('三拍都收到;记了方言 html;每拍的 prompt 是 HTML 方言、raw 是 <c> 补丁', r.file.ok && r.file.dialect === 'html' && files.length === 3 && files.every((f) => f.ok && f.prompt.includes('```html') && f.raw.includes('data-row=')), JSON.stringify(files.map((f) => [f.ok, f.error])));
+  check('三拍都收到;每拍的 prompt 是 HTML、raw 是补丁', r.file.ok && files.length === 3 && files.every((f) => f.ok && f.prompt.includes('```html') && f.raw.includes('data-row=')), JSON.stringify(files.map((f) => [f.ok, f.error])));
   check('卡 0 的 sky + emoji 套上;卡 1 的 nope 槽丢了;越界的卡 99 每拍都丢;第一个词的圈收下', r.section.cards[0].look?.tint === 'sky' && r.section.cards[0].look?.emoji === '📐' && r.section.cards[1].look === undefined && r.file.dropped.filter((d) => d.includes('越界')).length === 3 && r.file.kept.marks === 3 && r.section.lines.every((l) => l.marks.some((m) => m.pen === 'circle')), JSON.stringify([r.file.dropped, r.file.kept, r.section.lines.map((l) => l.marks)]));
-  check('顺着起:第二拍的前文里卡 0 带第一拍定的 data-tint="sky" data-emoji;第三拍的前文两张都在 row 里', files[1].prompt.includes('id="c0" data-style="cover" data-tint="sky" data-emoji="📐" data-marked="「三角形」"><h3>三角形</h3>') && files[2].prompt.includes('<div class="row"><div class="c c-text" id="c0"') && files[2].prompt.includes('<div class="row"><div class="c c-text" id="c1"'), files[2].prompt.split('## 板书')[1]?.slice(0, 600));
+  check('顺着起:第二拍的前文里卡 0 带第一拍定的 data-tint="sky" data-emoji;第三拍的前文两张都在 row 里', files[1].prompt.includes('id="c0" data-tint="sky" data-emoji="📐" data-marked="「三角形」"><h3>三角形</h3>') && files[2].prompt.includes('<div class="row"><div class="c c-text" id="c0"') && files[2].prompt.includes('<div class="row"><div class="c c-text" id="c1"'), files[2].prompt.split('## 板书')[1]?.slice(0, 600));
   check('卡 2 写 same 接上一行成功(两张都不独占)', JSON.stringify(r.section.layout?.rows) === '[[0],[1,2]]' && files[2].kept?.row === 'same', JSON.stringify(r.section.layout));
 }
 done();

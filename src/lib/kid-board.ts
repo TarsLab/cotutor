@@ -209,7 +209,7 @@ export function isHeading(card: BoardCard): boolean {
 
 /**
  * 底色槽(机械规则;后期定了 look.tint 就用它):做题的卡紫(plum),定义 / 结论蓝(sky),方法绿(moss),事实 / 例子 / 引言米(sand),
- * 封面深(night),公式 / 图 / 代码白(paper)。老板书的 style 修饰词照映。名字对不上主题清单的,CSS 落回 paper。
+ * 公式 / 图 / 代码白(paper)。名字对不上主题清单的,CSS 落回 paper。
  */
 export function tintFor(card: BoardCard): string {
   const t = card.look?.tint;
@@ -218,7 +218,7 @@ export function tintFor(card: BoardCard): string {
   const style = str(p.style);
   switch (card.kind) {
     case 'text':
-      return style === 'cover' ? 'night' : style === 'formula' ? 'paper' : style === 'quote' ? 'sand' : style === 'step' ? 'moss' : style === 'note' ? 'sky' : str(p.title) ? 'sky' : 'sand';
+      return style === 'formula' ? 'paper' : str(p.title) ? 'sky' : 'sand';
     case 'choice':
     case 'fill':
     case 'canvas':
@@ -230,18 +230,18 @@ export function tintFor(card: BoardCard): string {
   }
 }
 
-/** 字形槽(机械规则;后期定了 look.look 就用它):note → title(大字居中),formula → formula(衬线),quote → quote,其余 plain */
+/** 字形槽(机械规则;后期定了 look.look 就用它):formula → formula(衬线),其余 plain */
 export function lookFor(card: BoardCard): string {
   const l = card.look?.look;
   if (l) return l;
   const style = str((card.props || {}).style);
-  return style === 'note' ? 'title' : style === 'formula' ? 'formula' : style === 'quote' ? 'quote' : 'plain';
+  return style === 'formula' ? 'formula' : 'plain';
 }
 
 const LATIN = /^[0-9A-Za-z.,%°²³+\-×÷=()\s]+$/;
 
 /**
- * 笔(机械规则;后期定了 mark.pen 就用它):选项 → 方框;填空、数字与拉丁词 → 下划线;点读段、公式、大字、封面 → 荧光;
+ * 笔(机械规则;后期定了 mark.pen 就用它):选项 → 方框;填空、数字与拉丁词 → 下划线;点读段、公式、大字 → 荧光;
  * 标题位上的词 → 圈;其余(正文里正在定义的词)→ 术语底。
  */
 export function penFor(card: BoardCard, phrase: string): PenName {
@@ -255,7 +255,7 @@ export function penFor(card: BoardCard, phrase: string): PenName {
       return 'marker';
     case 'text': {
       const look = lookFor(card);
-      if (look === 'formula' || look === 'title' || str(p.style) === 'cover') return 'marker';
+      if (look === 'formula' || look === 'title') return 'marker';
       if (str(p.title) && findPhrase(str(p.title), phrase) >= 0) return 'circle';
       return LATIN.test(phrase) ? 'underline' : 'tint';
     }
@@ -494,7 +494,6 @@ export interface BoardMessage {
   at?: string;
   question: string | null;
   reply: string | null;
-  audio: string | null;
   pending: boolean;
   section?: BoardSection | null;
   /** 孩子这条带的作业照片(相对 workspace 根;R5):节头上回显缩略图 */
@@ -510,12 +509,8 @@ export interface BoardEntry extends BoardSection {
   photos?: string[];
 }
 
-function lineFrom(text: string, audio: string | null): BoardLine {
-  return { text, audio, marks: [], ask: isQuestion(text), anchor: null, cues: [] };
-}
-
 /**
- * 孩子端条目 → 板书节。有 section 用 section(讲稿空就把 reply 当一句);只有 reply 的退成一张文字卡 + 一句讲稿;
+ * 孩子端条目 → 板书节(没有 section 的条目不出节);
  * 孩子的话不上板;还在跑的只有带 partial 板书(流式,已有卡)才出节且标 partial,其余不出。
  */
 export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEntry[] {
@@ -527,17 +522,15 @@ export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEn
       continue;
     }
     if (m.section && (m.section.cards.length || m.section.lines.length)) {
-      const lines = m.section.lines.length ? m.section.lines : m.reply ? [lineFrom(m.reply, m.audio)] : [];
-      out.push({ job: m.job, ...at, cards: m.section.cards, lines, ...(m.section.layout ? { layout: m.section.layout } : {}) });
-    } else if (m.reply) out.push({ job: m.job, ...at, cards: [{ kind: 'text', props: { text: m.reply } }], lines: [lineFrom(m.reply, m.audio)] });
+      out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, ...(m.section.layout ? { layout: m.section.layout } : {}) });
+    }
   }
   return out;
 }
 
-/** 一节在目录里的名字:封面标题 > 有名字的文字卡 > 第一张有字的卡 > 第一句讲稿;截到 14 个字 */
+/** 一节在目录里的名字:小节标题 > 有名字的文字卡 > 第一张有字的卡 > 第一句讲稿;截到 14 个字 */
 export function sectionTitle(s: BoardSection): string {
   const pick = (): string => {
-    for (const c of s.cards) if (c.kind === 'text' && c.props.style === 'cover' && str(c.props.title)) return str(c.props.title);
     for (const c of s.cards) if (isHeading(c) && str(c.props.title)) return str(c.props.title);
     for (const c of s.cards) if (c.kind === 'text' && str(c.props.title)) return str(c.props.title);
     for (const c of s.cards) {
@@ -590,13 +583,6 @@ export function advance(state: PlayerState, sections: readonly BoardSection[]): 
   if (state.section < sections.length - 1) return startSection(state.section + 1, sections);
   const last = s.lines[state.line];
   return { ...state, status: last && last.ask ? 'waiting' : 'done' };
-}
-
-/** 当前节里播到这句为止该画上的标注(打开页面或跳到某句时一次画齐) */
-export function marksUpTo(sections: readonly BoardSection[], state: PlayerState): BoardMark[] {
-  const s = sections[state.section];
-  if (!s || state.line < 0) return [];
-  return s.lines.slice(0, state.line + 1).flatMap((l) => l.marks);
 }
 
 /** 播到这句该滚到哪张卡:标注所在的卡优先,其次锚点卡,再没有就 null(页面滚到本节第一张) */

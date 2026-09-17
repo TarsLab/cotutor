@@ -5,8 +5,8 @@
  */
 import { z } from 'zod';
 
-export const ARTIFACT_KINDS = ['课包', '补讲', '批改', '计划', '其它'] as const;
-export const ARTIFACT_STATUS = ['draft', 'ready', 'accepted', 'retired'] as const;
+export const ARTIFACT_KINDS = ['课包', '其它'] as const;
+export const ARTIFACT_STATUS = ['draft', 'ready', 'retired'] as const;
 export type ArtifactStatus = (typeof ARTIFACT_STATUS)[number];
 
 /** 产物事件行:首行要带 kind / by / path,后续行只带变化的字段 */
@@ -18,8 +18,6 @@ export const ArtifactEventSchema = z.object({
   status: z.enum(ARTIFACT_STATUS).optional(),
   path: z.string().optional(),
   source: z.object({ conversation: z.string().min(1), job: z.string().optional() }).optional(),
-  /** manifest 指纹,同内容重出验收延续;验收开关关掉时可以没有 accepted 行 */
-  hash: z.string().optional(),
   /** 做这个产物花的钱与时长(应用在 scene-maker 那轮收尾时追加,老师自己不写) */
   costUsd: z.number().nonnegative().optional(),
   durationMs: z.number().int().nonnegative().optional(),
@@ -35,7 +33,6 @@ export interface Artifact {
   status: ArtifactStatus;
   path?: string;
   source?: ArtifactEvent['source'];
-  hash?: string;
   costUsd?: number;
   durationMs?: number;
   /** 最后一次事件时间 */

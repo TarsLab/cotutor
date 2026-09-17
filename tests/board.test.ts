@@ -19,7 +19,7 @@ for (const f of fixtures) {
 }
 {
   const r = parseBoard(readFileSync(`${dir}chinese-tutor-2.md`, 'utf8'));
-  check('静夜思:4 卡 5 句,cover / read / note / choice', r.section.cards.map((c) => c.kind + (c.props.style ? ':' + c.props.style : '')).join() === 'text:cover,read,text:note,choice' && r.section.lines.length === 5, JSON.stringify([r.section.cards.map((c) => c.kind + ':' + c.props.style), r.section.lines.length]));
+  check('静夜思:4 卡 5 句,带标题的 text / read / text / choice', r.section.cards.map((c) => c.kind + (c.props.title ? ':' + c.props.title : '')).join() === 'text:静夜思,read,text,choice' && r.section.lines.length === 5, JSON.stringify([r.section.cards.map((c) => c.kind + ':' + c.props.style), r.section.lines.length]));
   check('静夜思:[李白] 落到封面,[霜] 落到点读卡', r.section.lines[1].marks[0]?.card === 0 && r.section.lines[1].marks[0]?.phrase === '李白' && r.section.lines[2].marks[0]?.card === 1, JSON.stringify(r.section.lines.map((l) => l.marks)));
   check('静夜思:锚点 = 上一张卡,开场句没有锚点', JSON.stringify(r.section.lines.map((l) => l.anchor)) === '[null,0,1,2,3]', JSON.stringify(r.section.lines.map((l) => l.anchor)));
   const c = r.section.cards[3].props as { question: string; options: string[]; answer?: number[] };
@@ -28,9 +28,9 @@ for (const f of fixtures) {
   check('问答:没有卡,两句话', m.section.cards.length === 0 && m.section.lines.length === 2 && m.section.lines[0].text === '7乘8等于56。');
 }
 {
-  const r = parseBoard('开场一句。\n\n```text cover\n三角形\n拼一拼\n```\n\n讲[三角形]这张卡[[open]]。\n\n```python\nprint(1)\n```\n\n```\n原样\n```\n\n看代码 [[step 3]] 吧?\n');
+  const r = parseBoard('开场一句。\n\n```text\n# 三角形\n拼一拼\n```\n\n讲[三角形]这张卡[[open]]。\n\n```python\nprint(1)\n```\n\n```\n原样\n```\n\n看代码 [[step 3]] 吧?\n');
   const { cards, lines } = r.section;
-  check('围栏 = 卡:text cover 拆标题副标题;不认识的标签当代码卡(lang = 标签);没标签的围栏也是代码卡', cards.length === 3 && cards[0].kind === 'text' && cards[0].props.style === 'cover' && cards[0].props.title === '三角形' && cards[0].props.text === '拼一拼' && cards[1].kind === 'code' && cards[1].props.lang === 'python' && cards[1].props.text === 'print(1)' && cards[2].kind === 'code' && cards[2].props.lang === null, JSON.stringify(cards));
+  check('围栏 = 卡:text 的 # 行是标题;不认识的标签当代码卡(lang = 标签);没标签的围栏也是代码卡', cards.length === 3 && cards[0].kind === 'text' && cards[0].props.title === '三角形' && cards[0].props.text === '拼一拼' && cards[1].kind === 'code' && cards[1].props.lang === 'python' && cards[1].props.text === 'print(1)' && cards[2].kind === 'code' && cards[2].props.lang === null, JSON.stringify(cards));
   check('段落 = 讲稿:三句,末句问句', lines.length === 3 && lines[0].text === '开场一句。' && lines[2].ask && !lines[1].ask, JSON.stringify(lines.map((l) => l.text)));
   const hb = parseBoard('```text\n# 两大类型\n```\n\n```text\n# 认边\n两条短边叫直角边\n```\n\n讲[直角边]。\n\n```text\n# 小结\n```\n\n再讲一句。\n');
   check('小节标题行是 heading 卡:句子锚到它前面 / 后面的真卡,标注不落在它上面', hb.section.cards[0].props.heading === true && hb.section.cards[2].props.heading === true && hb.section.lines[0].anchor === 1 && hb.section.lines[1].anchor === 1 && hb.section.lines[0].marks[0]?.card === 1 && hb.warnings.length === 0, JSON.stringify(hb.section.lines));
@@ -40,7 +40,7 @@ for (const f of fixtures) {
   check('没有 warning', r.warnings.length === 0, r.warnings.map((w) => w.text).join());
 }
 {
-  const r = parseBoard('先说这个词:[平行四边形]。\n\n```text note\n平行四边形\n```\n');
+  const r = parseBoard('先说这个词:[平行四边形]。\n\n```text\n平行四边形\n```\n');
   check('卡写在句子后面,标注也认(整节找)', r.section.lines[0].marks[0]?.card === 0 && r.section.lines[0].anchor === null);
   const bad = parseBoard('```choice\n只有问题没有选项?\n```\n\n```text\n\n```\n\n一句。\n');
   check('解析不出的卡退成文字卡显示原文 + warning;孩子端什么都不报', bad.section.cards.length === 2 && bad.section.cards[0].kind === 'text' && bad.section.cards[0].props.text === '只有问题没有选项?' && bad.section.cards[1].kind === 'text' && bad.warnings.length === 2 && bad.warnings[0].text.includes('choice') && bad.warnings[1].text.includes('text'), JSON.stringify(bad));
@@ -70,7 +70,7 @@ for (const f of fixtures) {
 }
 {
   // spans:卡与句在原文里的行号(家长端「看原文」靠它在原文旁边标解析结果)
-  const r = parseBoard('第一句。\n\n```text note\n记住\n```\n\n第二句?\n');
+  const r = parseBoard('第一句。\n\n```text\n记住\n```\n\n第二句?\n');
   check(
     'spans:卡是围栏起止行,句是自己那行',
     JSON.stringify(r.spans.cards) === '[[2,4]]' && JSON.stringify(r.spans.lines) === '[[0,0],[6,6]]' && r.spans.tail === null,
@@ -84,8 +84,8 @@ for (const f of fixtures) {
   const src = [
     '先看这张卡。',
     '',
-    '```text step',
-    '认边',
+    '```text formula',
+    'a² + b² = c²',
     '```',
     '',
     '会了吗?',
@@ -100,7 +100,7 @@ for (const f of fixtures) {
   const a = annotateSource(src);
   const role = (n: number): string => a.rows[n].role;
   check('annotate:讲稿 / 卡 / 空行各归各位', role(0) === 'say' && role(1) === 'blank' && role(2) === 'card' && role(3) === 'card' && role(4) === 'card' && role(6) === 'say', JSON.stringify(a.rows.map((x) => x.role)));
-  check('annotate:围栏开头行标卡号、kind 与修饰', a.rows[2].open === true && a.rows[2].label === '卡 1 · text step', JSON.stringify(a.rows[2]));
+  check('annotate:围栏开头行标卡号、kind 与修饰', a.rows[2].open === true && a.rows[2].label === '卡 1 · text formula', JSON.stringify(a.rows[2]));
   check('annotate:末句问句标出来', a.rows[6].label === '讲稿 2 · 问句,停下等', a.rows[6].label);
   check('annotate:记账段不进板书,标出段名', role(8) === 'section' && role(9) === 'section' && role(10) === 'section' && a.rows[9].label?.includes('记账') === true, JSON.stringify(a.rows.slice(8, 11)));
   check('annotate:家长尾巴标出来,行号没错位', role(12) === 'tail' && role(13) === 'tail' && a.rows[12].label === '家长尾巴 · 孩子看不到', JSON.stringify(a.rows.slice(12)));

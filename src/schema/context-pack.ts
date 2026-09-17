@@ -1,5 +1,5 @@
 /**
- * 上下文包:应用在每条消息前拼的固定 YAML 块(《cotutor契约草案.md》§2)。老师不用自己找上下文。
+ * 上下文包:应用在每条消息前拼的固定 YAML 块(《cotutor契约草案.md》§2),后面接家长笔记的原文段。老师不用自己找上下文。
  * 孩子由 workspace 决定,不进包。
  */
 import { z } from 'zod';
@@ -26,8 +26,18 @@ export const ContextPackSchema = z.object({
   /** 课程表命中的时段,如「数学 16:00-17:00」 */
   slot: z.string().optional(),
   focus: FocusSchema.optional(),
-  /** 档案(孩子.md)「现在」callout 的几行:学到哪、会用的说法、还没学别用(已按 profileLines 截;《obsidian仓库设计.md》§3.1) */
-  profile: z.array(z.string()).default([]),
+  /** 当前学期(档案的 school_start 按日期算,或档案 semester 覆盖),如「二年级上」;算不出不写 */
+  semester: z.string().optional(),
+  /** 档案(vault 里 `cotutor: profile` 的那篇):相对 vault 根的路径 + 状态(未变 / 截断 / 缺);原文在 notes */
+  profile: z.string().optional(),
+  /** 这位老师的入口文件(`cotutor: subject`,subject 与学期对上的那篇):路径 + 状态;原文在 notes(《obsidian仓库设计.md》2026-09-17) */
+  entry: z.string().optional(),
+  /** 这位 agent 的记忆文件(`cotutor: memory`、`agent: <名>`):路径 + 状态,或「还没有」;原文在 notes */
+  memory: z.string().optional(),
+  /** 参考资料的绝对路径:这科这学期的教材 + 档案与入口文件里的 [[链接]];只给路径,老师要用自己 Read */
+  refs: z.array(z.string()).optional(),
+  /** 整篇带进来的家长笔记(话题第一条、或话题里改过了才带);接在 YAML 块后面,不进 YAML */
+  notes: z.array(z.object({ role: z.enum(['profile', 'entry', 'memory']), path: z.string().min(1), text: z.string() })).optional(),
   /** 本周计划里与本老师相关的行(已按 planLines 截) */
   plan: z.array(z.string()).default([]),
   /** 最近 N 条本学科观察(从日记的「- 观察:」行抽,最近 14 天,已按 recent 截) */
@@ -44,12 +54,10 @@ export const ContextPackSchema = z.object({
       root: z.string().min(1),
       diary: z.string().optional(),
       plans: z.string().optional(),
-      profile: z.string().optional(),
       timetable: z.string().optional(),
-      textbooks: z.string().optional(),
       reference: z.string().optional(),
     })
     .optional(),
 });
-export const VAULT_PACK_ROLES = ['diary', 'plans', 'profile', 'timetable', 'textbooks', 'reference'] as const;
+export const VAULT_PACK_ROLES = ['diary', 'plans', 'timetable', 'reference'] as const;
 export type ContextPack = z.infer<typeof ContextPackSchema>;

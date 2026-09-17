@@ -3,11 +3,13 @@
  * 纯函数在 lib/,这里只碰文件系统。
  */
 import { createHash } from 'node:crypto';
+import type { Dirent } from 'node:fs';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
-import { basename, join, relative, sep } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { cardAssetName, conversationFiles, emptyIndex, localDate, threads, type CardAssets, type CardStateFile, type CardStates } from '../lib/conversation.ts';
 import { parseTranscript, type Transcript } from '../lib/transcript.ts';
+import { appendMemory, frontmatter, memoryPath, memoryTemplate, type VaultNote } from '../lib/vault-notes.ts';
 import {
   ConversationIndexSchema,
   CotutorConfigSchema,
@@ -322,6 +324,70 @@ export async function readTextbooks(ws: Workspace): Promise<{ name: string; text
     }
   }
   return out;
+}
+
+/**
+ * 扫 vault:所有文件的相对路径(解析 [[链接]] 用)+ 带 `cotutor:` 属性的 md(按属性定位,《obsidian仓库设计.md》2026-09-17)。
+ * 跳过点开头的目录(.obsidian / .git)与日记、计划目录(机器写的,不带属性,越积越多)。读不到的文件跳过;vault 不在 → 全空。
+ */
+export async function scanVault(ws: Workspace): Promise<{ notes: VaultNote[]; files: string[] }> {
+  const root = ws.paths.vault;
+  const skip = new Set([ws.paths.diary, ws.paths.plans]);
+  const notes: VaultNote[] = [];
+  const files: string[] = [];
+  const walk = async (dir: string): Promise<void> => {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue;
+      const abs = join(dir, e.name);
+      if (e.isDirectory()) {
+        if (!skip.has(abs)) await walk(abs);
+        continue;
+      }
+      if (!e.isFile()) continue;
+      const rel = relative(root, abs).split(sep).join('/');
+      files.push(rel);
+      if (!e.name.endsWith('.md')) continue;
+      try {
+        const text = await readFile(abs, 'utf8');
+        const props = frontmatter(text);
+        if (props.cotutor) notes.push({ path: rel, props, text });
+      } catch {
+        /* 读不到(iCloud 占位)就跳过 */
+      }
+    }
+  };
+  await walk(root);
+  return { notes, files: files.sort() };
+}
+
+/**
+ * 把「## 记忆」段追加进这位 agent 的记忆文件(按 `cotutor: memory` + `agent:` 找;没有就建 记忆/<显示名>.md)。
+ * 只追加、不改已有的字;缺省位置已有一篇没属性的同名文件就不碰,进提醒。先 .tmp 再 rename。
+ */
+export async function appendVaultMemory(ws: Workspace, agent: string, display: string, items: readonly string[], date: string): Promise<{ file: string | null; added: string[]; warnings: string[] }> {
+  const found = (await scanVault(ws)).notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === agent);
+  let file: string;
+  let existing: string;
+  if (found) {
+    file = join(ws.paths.vault, found.path);
+    existing = found.text;
+  } else {
+    file = join(ws.paths.vault, memoryPath(display));
+    if ((await stat(file).catch(() => null)) !== null) return { file: null, added: [], warnings: [`记忆没写:${memoryPath(display)} 已经有了但没有 cotutor: memory / agent: ${agent} 属性;加上属性,或挪开它`] };
+    existing = memoryTemplate(agent, display);
+  }
+  const r = appendMemory(existing, items, date);
+  if (!r.added.length) return { file: null, added: [], warnings: [] };
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(`${file}.tmp`, r.text);
+  await rename(`${file}.tmp`, file);
+  return { file, added: r.added, warnings: [] };
 }
 
 /** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 运行时模板走编辑器 */

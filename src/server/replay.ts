@@ -98,7 +98,6 @@ export interface RunSide {
   cards: string[];
   tools: ToolCall[];
   parentText: string;
-  holdup: string | null;
   scenes: string | null;
   warnings: string[];
   /** 上下文包 + 消息(run.json 的 prompt);老 workspace 没落就 null */
@@ -142,7 +141,6 @@ export function sideOf(m: ConversationMessage, run: { prompt: string; sources?: 
     cards: m.section?.cards.map((c, i) => `卡 ${i + 1}　${c.kind} ${cardLabel(c)}`.trim()) ?? [],
     tools,
     parentText: m.parentText ?? '',
-    holdup: m.holdup ? m.holdup.question : null,
     scenes: m.scenes?.length ? m.scenes.map((s) => `${s.bundle}${s.job ? '' : '(没起)'}`).join('、') : null,
     warnings: m.warnings ?? [],
     prompt: run?.prompt ?? null,
@@ -224,7 +222,6 @@ export function formatCompare(c: Compare): string {
   section('卡', c.cards, '两边都没有卡');
   section('读了什么', c.tools, '两边都没用工具');
   if (c.orig.parentText || c.next.parentText) { out.push('\n## 给家长的尾巴'); out.push(`- ${c.orig.parentText || '(无)'}`); out.push(`+ ${c.next.parentText || '(无)'}`); }
-  if (c.orig.holdup || c.next.holdup) out.push(`\n待裁量:原轮 ${c.orig.holdup ?? '无'} / 回放 ${c.next.holdup ?? '无'}`);
   if (c.orig.scenes || c.next.scenes) out.push(`画图作业:原轮 ${c.orig.scenes ?? '无'} / 回放 ${c.next.scenes ?? '无'}`);
   if (c.orig.warnings.length || c.next.warnings.length) out.push(`提醒:原轮 ${c.orig.warnings.join(';') || '无'} / 回放 ${c.next.warnings.join(';') || '无'}`);
   out.push(`\n回放那轮自己的全部:cotutor show ${c.tutor} ${c.evalJob} ${c.date} --evals`);

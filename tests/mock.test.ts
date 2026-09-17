@@ -31,11 +31,18 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   check('想完 → 追加下一节(脚本第二节),孩子的话在 question 里不在卡上', d2.pending === null && d2.messages[1].section?.cards[0].kind === 'text' && d2.messages[1].section?.cards[0].props.style === 'note' && d2.messages[1].section?.cards[2].kind === 'fill' && d2.messages[1].question === '不画脚呢?' && d2.messages[1].reply === '你来填一填:画蛇添足,就是做到了还要什么?', JSON.stringify(d2.messages[1].section?.cards[0]));
   await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '继续' });
   await m.settle();
+  await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '鼓励怎么写' });
+  await m.settle();
+  const dh = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
+  check('田字格卡:第四节第一张是 tianzige「鼓励」,没有状态、不剥东西', dh.messages[3].section?.cards[0].kind === 'tianzige' && dh.messages[3].section?.cards[0].props.chars === '鼓励' && dh.messages[3].section?.cards[1].kind === 'text', JSON.stringify(dh.messages[3].section?.cards));
+  const hzOk = await get('/api/kid/tianzige/' + encodeURIComponent('鼓'));
+  const hzNo = await get('/api/kid/tianzige/' + encodeURIComponent('ab'));
+  check('笔顺数据:鼓 13 笔、每笔轮廓与中线成对;不是汉字 404', hzOk.status === 200 && (hzOk.json as { strokes: string[]; medians: number[][][] }).strokes.length === 13 && (hzOk.json as { medians: number[][][] }).medians.length === 13 && hzNo.status === 404, JSON.stringify(hzNo));
   await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '还有吗' });
   await m.settle();
   const d3 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('脚本用完 → 只有一句收尾话,没有 section', d3.messages.length === 4 && d3.messages[2].section?.cards[0].props.style === 'note' && d3.messages[3].section === null && d3.messages[3].reply === '这个我们明天接着说,好不好?');
-  check('剩余次数只数孩子发的', d3.remaining === 30 - 4);
+  check('脚本用完 → 只有一句收尾话,没有 section', d3.messages.length === 5 && d3.messages[2].section?.cards[0].props.style === 'note' && d3.messages[4].section === null && d3.messages[4].reply === '这个我们明天接着说,好不好?');
+  check('剩余次数只数孩子发的', d3.remaining === 30 - 5);
   // 卡的状态:数学老师首节有选择题 → PUT 状态假存、today 里并回卡上、答案仍剥;交给老师 → 下一节;「继续」不计次数
   const md = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   const mj = md.messages[0].job;
@@ -66,8 +73,8 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   await m.route('POST', '/api/kid/conversations/reading-tutor/messages', { text: 'apple' });
   await m.settle();
   const rd = ((await get('/api/kid/conversations/reading-tutor/today')).json as Day).messages[0];
-  check('朗读老师:点读卡 + 图片卡 + 末句问句', rd.section?.cards[1].kind === 'read' && rd.section?.cards[2].kind === 'image' && rd.section?.cards[2].props.src === 'vault/照片/fruits.png' && rd.reply?.includes('apple') === true && rd.section?.lines[1].marks.length === 3, JSON.stringify(rd.section?.lines));
-  const img = await get('/api/kid/image?p=vault%2F%E7%85%A7%E7%89%87%2Ffruits.png');
+  check('朗读老师:点读卡 + 图片卡 + 末句问句', rd.section?.cards[1].kind === 'read' && rd.section?.cards[2].kind === 'image' && rd.section?.cards[2].props.src === 'captures/2026-09-10/fruits.png' && rd.reply?.includes('apple') === true && rd.section?.lines[1].marks.length === 3, JSON.stringify(rd.section?.lines));
+  const img = await get('/api/kid/image?p=' + encodeURIComponent('captures/2026-09-10/fruits.png'));
   check('图片卡的图:mock 给占位 svg', img.status === 200 && img.contentType === 'image/svg+xml' && img.html?.includes('<svg') === true && img.html.includes('fruits.png'));
   const fillJob = d2.messages[1].job;
   const fi = d2.messages[1].section!.cards.findIndex((c) => c.kind === 'fill');

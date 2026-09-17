@@ -5,7 +5,7 @@ import { check, done } from './_check.ts';
 
 {
   check('有状态的卡:choice / fill / scene / canvas;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,fill,scene,canvas');
-  check('八种卡登记在册', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,scene,canvas,code' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
+  check('九种卡登记在册', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,scene,canvas,code' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
   const cv = parseCard('canvas', '画一个三角形,标出它的一条高。');
   check('canvas:只有题目 → 空白画板', cv.card.kind === 'canvas' && cv.card.props.base === null && cv.card.props.prompt === '画一个三角形,标出它的一条高。');
   check('canvas:照片做底(第三种底图,R5):第一行是图片路径、后面是题目;http 地址不算', JSON.stringify(parseCard('canvas', 'captures/2026-09-14/1620-1.jpg\n把算错的那道圈出来。').card.props) === '{"base":{"image":"captures/2026-09-14/1620-1.jpg"},"prompt":"把算错的那道圈出来。"}' && parseCard('canvas', 'https://x/a.jpg\n题').card.props.base === null);
@@ -25,10 +25,10 @@ import { check, done } from './_check.ts';
   check('要预生成资产的只有点读', CARD_KINDS.filter((k) => k.assets).map((k) => k.name).join() === 'read');
   const rd = parseCard('read', 'apple 苹果\nbanana 香蕉');
   check('read 资产:一段一个 <k>.mp3', JSON.stringify(cardAssets(rd.card)) === '[{"file":"1.mp3","text":"apple 苹果"},{"file":"2.mp3","text":"banana 香蕉"}]' && cardAssets({ kind: 'text', props: { text: 'x' } }).length === 0 && cardAssets({ kind: 'read', props: {} }).length === 0);
-  const im = parseCard('image', 'vault/照片/a.jpg\n看第二行\n那里错了');
-  check('image:第一行路径,后面图注', im.card.kind === 'image' && im.card.props.src === 'vault/照片/a.jpg' && im.card.props.caption === '看第二行\n那里错了' && !im.warning, JSON.stringify(im));
+  const im = parseCard('image', 'captures/2026-09-10/a.jpg\n看第二行\n那里错了');
+  check('image:第一行路径,后面图注', im.card.kind === 'image' && im.card.props.src === 'captures/2026-09-10/a.jpg' && im.card.props.caption === '看第二行\n那里错了' && !im.warning, JSON.stringify(im));
   check('image:http 地址也行;没图注就没有 caption', parseCard('image', 'https://x.test/a').card.props.src === 'https://x.test/a' && !('caption' in parseCard('image', 'a.png').card.props));
-  check('image:不是图片文件 / 空 → 文字卡 + warning', parseCard('image', 'vault/笔记.md').card.kind === 'text' && parseCard('image', '').warning?.includes('image') === true);
+  check('image:不是图片文件 / 空 → 文字卡 + warning', parseCard('image', 'captures/2026-09-10/笔记.md').card.kind === 'text' && parseCard('image', '').warning?.includes('image') === true);
   check('image 的标题是图注,没图注是「图」', cardLabel(im.card) === '看第二行 那里错了' && cardLabel(parseCard('image', 'a.png').card) === '');
   const t = parseCard('text', '就一段话。\n第二行。');
   check('text:普通一段,保留换行', t.card.kind === 'text' && t.card.props.text === '就一段话。\n第二行。' && t.card.props.style === undefined && !t.warning);
@@ -91,7 +91,7 @@ import { check, done } from './_check.ts';
 }
 {
   const doc = boardSyntaxDoc();
-  check('语法表:两种东西 + 每种卡一段(从 cards/<kind>/card.md 拼)+ 家长段;例子的 expect 注释去掉了', doc.includes('普通段落 = 你说的话') && doc.includes('围栏 = 板上的卡') && CARD_KINDS.every((k) => doc.includes(`### ${k.name} — `)) && doc.includes('## 家长') && !doc.includes('<!-- expect') && doc.includes('references/<种类>.md'), doc.slice(0, 200));
+  check('语法表:两种东西 + 每种卡一段(从 cards/<kind>/card.md 拼)+ 板书到第一个 H2 为止;例子的 expect 注释去掉了', doc.includes('普通段落 = 你说的话') && doc.includes('围栏 = 板上的卡') && CARD_KINDS.every((k) => doc.includes(`### ${k.name} — `)) && doc.includes('板书到第一个「## 」为止') && !doc.includes('<!-- expect') && doc.includes('references/<种类>.md'), doc.slice(0, 200));
   const skill = boardSkillDoc();
   const descLine = skill.split('\n')[2];
   check('技能文件:frontmatter 的 name 与 description 各一行,description 列出全部种类、不超 1536 字,正文就是语法表', skill.startsWith('---\nname: cotutor-board\ndescription: ') && descLine.length < 1536 && CARD_KINDS.every((k) => descLine.includes(k.name)) && skill.endsWith(doc));

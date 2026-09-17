@@ -17,6 +17,7 @@ import { parseCardState, stripSecrets } from '../cards/index.ts';
 import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset } from './stage.ts';
 import { enrichScenes } from './scene-props.ts';
+import { tianzigeData } from './tianzige.ts';
 
 /** mock 的课包目录:仓库里的样本(tests/fixtures/bundles/),场景卡从这里播 */
 export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bundles/', import.meta.url));
@@ -149,6 +150,19 @@ export const MOCK_TUTORS: MockTutor[] = [
 ~~~
 
 你来画一条蛇,画好了给我看看。`,
+      `~~~tianzige
+鼓励
+~~~
+
+你说的是加油打气的那个鼓励吧,看,鼓先写,励后写。
+
+~~~text
+鼓励:给人加油、打气
+~~~
+
+鼓是敲鼓的鼓,励是[努力]的力多一个厂字头,一个人在厂下面使劲。
+
+你想再看一遍哪个字?点一下它就再写一遍。`,
     ],
   },
   {
@@ -261,7 +275,7 @@ orange 橘子
 Listen and repeat: [apple], [banana], [orange]. 点一下听一下,跟着我读。
 
 ~~~image
-vault/照片/fruits.png
+captures/2026-09-10/fruits.png
 三种水果,你家有哪种?
 ~~~
 
@@ -492,6 +506,12 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
       (m!.states ??= {})[Number(n)] = r.state;
       return { status: 200, json: { ok: true, card: `${job}/${n}` } };
+    }
+    const hz = /^\/api\/kid\/tianzige\/([^/]+)$/.exec(p);
+    if (hz) {
+      // 田字格卡:数据包就在 node_modules 里,mock 也给真笔顺
+      const d = await tianzigeData(decodeURIComponent(hz[1]));
+      return d ? { status: 200, json: d } : { status: 404, json: { error: 'not_found' } };
     }
     if (p === '/api/kid/image') {
       // 图片卡:任何路径都给一张占位 svg(写着路径),前端能看到版式

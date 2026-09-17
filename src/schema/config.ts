@@ -21,11 +21,11 @@ export const PolicySchema = z.object({
   reviewGate: z.boolean().describe('验收开关:true = 产物先经家长验收才给孩子;false = 直接给(缺省)'),
   /** 这位老师可用的回复形式 */
   forms: z.array(z.enum(REPLY_FORMS)).describe('这位老师可用的回复形式:L0 确定性资源 / L1 口答 / L2 快卡 / L3 补讲 / L4 整包'),
-  /** 上下文包的三个数:最近观察条数(从日记的「- 观察:」行抽,最近 14 天)、计划行数、档案「现在」callout 带几行 */
+  /** 上下文包的三个数:最近观察条数(从日记的「- 观察:」行抽,最近 14 天)、计划行数、档案与入口文件原文各带多少字 */
   contextPack: z.object({
     recent: z.number().int().nonnegative().describe('上下文包带最近几条观察(最近 14 天日记里本学科的「- 观察:」行,取最新的)'),
     planLines: z.number().int().nonnegative().describe('上下文包带本周计划里这位老师的前几行'),
-    profileLines: z.number().int().nonnegative().describe('上下文包带档案「现在」callout 的前几行'),
+    entryChars: z.number().int().positive().describe('档案与这位老师的入口文件(vault 里 cotutor: subject 那篇)原文各最多带多少字;超出截断并在上下文包里注明'),
   }),
   /** 板书开关:auto = 老师判断要不要出卡(缺省);off = 只说话不出卡 */
   board: z.enum(['auto', 'off']).describe('板书:auto = 讲题讲概念时老师出卡(缺省);off = 只说话不出卡'),
@@ -47,21 +47,21 @@ export const PolicyPatchSchema = z.object({
   dailyRegen: PolicySchema.shape.dailyRegen.optional(),
   reviewGate: PolicySchema.shape.reviewGate.optional(),
   forms: PolicySchema.shape.forms.optional(),
-  contextPack: z.object({ recent: z.number().int().nonnegative().optional(), planLines: z.number().int().nonnegative().optional(), profileLines: z.number().int().nonnegative().optional() }).optional(),
+  contextPack: z.object({ recent: z.number().int().nonnegative().optional(), planLines: z.number().int().nonnegative().optional(), entryChars: z.number().int().positive().optional() }).optional(),
   board: PolicySchema.shape.board.optional(),
   scenes: z.object({ dailyMax: z.number().int().nonnegative().optional() }).optional(),
   post: z.object({ mode: z.enum(['auto', 'off']).optional(), runtime: z.string().min(1).optional(), timeoutMs: z.number().int().positive().optional() }).optional(),
 });
 export type PolicyPatch = z.infer<typeof PolicyPatchSchema>;
 
-/** 2026-09-08 拍板的缺省:60 字、30 条/日、3 次重生、验收关、上下文包各 10(档案 8 行,2026-09-14) */
+/** 2026-09-08 拍板的缺省:60 字、30 条/日、3 次重生、验收关、上下文包各 10(档案 / 入口文件原文各 4000 字,2026-09-17) */
 export const POLICY_DEFAULTS: Policy = {
   replyMaxChars: 60,
   dailyMessages: 30,
   dailyRegen: 3,
   reviewGate: false,
   forms: ['L0', 'L1', 'L3', 'L4'],
-  contextPack: { recent: 10, planLines: 10, profileLines: 8 },
+  contextPack: { recent: 10, planLines: 10, entryChars: 4000 },
   board: 'auto',
   scenes: { dailyMax: 2 },
   post: { mode: 'auto', runtime: 'claude-fast', timeoutMs: 10000 },
@@ -73,7 +73,7 @@ export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 export const TutorSchema = z.object({
   /** 显示名(孩子端头像下的字、计划文件的 H2 标题) */
   display: z.string().min(1).describe('显示名:孩子端头像下的字,计划文件的 H2 标题'),
-  subject: z.string().optional().describe('学科:与课程表的学科列、观察的 subject 对齐即归到这位老师'),
+  subject: z.string().optional().describe('学科:与课程表的学科列、观察的 subject、vault 入口文件的 subject 属性对齐即归到这位老师'),
   /** 头像:一个 emoji 或图片相对路径 */
   avatar: z.string().optional().describe('头像:一个 emoji,或 workspace 根以内的图片相对路径(如 avatars/math-tutor.png;figshot pick --workspace 会写这个)'),
   /** voxtell 音色 id(2026-09-08 拍板);没有 = 用 voxtell 缺省 */
@@ -156,7 +156,7 @@ export const CotutorConfigSchema = z
         https: z.object({ cert: z.string().min(1), key: z.string().min(1) }).optional(),
       })
       .default({ port: 5180 }),
-    paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;diary / plans / profile / timetable / textbooks / reference 相对 vault(缺省 日记 / 计划 / 孩子.md / 课程表.md / 教材 / 参考),不配 vault 就相对 workspace 根;captures(作业照片)相对 workspace 根'),
+    paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;diary / plans / profile / timetable / textbooks / reference 相对 vault(缺省 日记 / 计划 / 孩子.md / 课程表.md / 教材 / 参考),不配 vault 就相对 workspace 根;profile 只是 init 新建档案的位置,老师按 cotutor: profile 属性找;captures(作业照片)相对 workspace 根'),
     vault: VaultPolicySchema.default({ keepScore: 4 }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4)'),
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 30 条 / 3 次 / 验收关 / L0,L1,L3,L4 / 10,10,8)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
@@ -186,7 +186,7 @@ export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
     if (p.forms !== undefined) out.forms = [...p.forms];
     if (p.contextPack?.recent !== undefined) out.contextPack.recent = p.contextPack.recent;
     if (p.contextPack?.planLines !== undefined) out.contextPack.planLines = p.contextPack.planLines;
-    if (p.contextPack?.profileLines !== undefined) out.contextPack.profileLines = p.contextPack.profileLines;
+    if (p.contextPack?.entryChars !== undefined) out.contextPack.entryChars = p.contextPack.entryChars;
     if (p.board !== undefined) out.board = p.board;
     if (p.scenes?.dailyMax !== undefined) out.scenes.dailyMax = p.scenes.dailyMax;
     if (p.post?.mode !== undefined) out.post.mode = p.post.mode;

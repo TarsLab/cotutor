@@ -222,12 +222,18 @@ export async function main(argv: string[]): Promise<void> {
         out.push(...r.prompt.split('\n').map((l) => `  │ ${l}`));
         out.push('来源:');
         out.push(`  slot     ${rel(rp.timetable.file)} · ${rp.timetable.found ? (rp.timetable.slot ? `命中「${rp.timetable.slot}」` : '现在不在任何时段') : '课程表读不到'}`);
-        out.push(`  profile  ${rel(rp.profile.file)} · ${rp.profile.found ? `「现在」callout 共 ${rp.profile.total} 行,带了 ${rp.profile.kept}(上限 ${rp.profile.limit})` : '档案读不到'}`);
+        const v = rp.vault;
+        const chars = (n: number): string => (n > v.limit ? `${n} 字,截到 ${v.limit}` : `${n} 字`);
+        out.push(`  vault    ${redactHome(v.root)} · 学期 ${v.semester ?? '算不出'}`);
+        out.push(`  profile  ${v.profile ? `${v.profile}(${chars(v.chars.profile)})` : '没有 cotutor: profile 的笔记'}${v.extraProfiles.length ? ` · 另有 ${v.extraProfiles.join('、')} 没用` : ''}`);
+        out.push(`  entry    ${v.entry ? `${v.entry}(${chars(v.chars.entry)})` : v.subject ? `没有 subject: ${v.subject}、semester: ${v.semester ?? '?'} 的入口文件` : '这位老师没配 subject'}${v.extraEntries.length ? ` · 另有 ${v.extraEntries.join('、')} 没用` : ''}`);
+        out.push(`  memory   ${v.memory ? `${v.memory}(${chars(v.chars.memory)})` : '还没有(第一次写「## 记忆」时建)'}${v.extraMemories.length ? ` · 另有 ${v.extraMemories.join('、')} 没用` : ''}`);
+        if (v.refs.length) out.push(`  refs     ${v.refs.join('、')}(只给路径)`);
         out.push(`  plan     ${rel(rp.plan.file)} · ${rp.plan.found ? `这位老师 ${rp.plan.total} 行,带了 ${rp.plan.kept}(上限 ${rp.plan.limit})` : '本周计划不在'}`);
         out.push(`  recent   ${rel(rp.recent.dir)}/ 最近 ${rp.recent.days} 天 · 有 ${rp.recent.filesFound.length} 天的日记${rp.recent.filesFound.length ? `(${rp.recent.filesFound[0]} … ${rp.recent.filesFound[rp.recent.filesFound.length - 1]})` : ''} · ${rp.recent.subject ? `学科「${rp.recent.subject}」` : '不按学科过滤'}的观察行共 ${rp.recent.total},带了 ${rp.recent.kept}(上限 ${rp.recent.limit},取最新的)`);
-        const cut = [rp.profile.total > rp.profile.kept ? `档案截掉 ${rp.profile.total - rp.profile.kept} 行` : '', rp.plan.total > rp.plan.kept ? `计划截掉 ${rp.plan.total - rp.plan.kept} 行` : '', rp.recent.total > rp.recent.kept ? `观察截掉 ${rp.recent.total - rp.recent.kept} 条` : ''].filter(Boolean);
-        out.push(cut.length ? `截掉的:${cut.join(';')}(改 cotutor.json policyDefaults.contextPack 的 profileLines / planLines / recent)` : '没截掉什么。');
-        out.push('这份不进任何文件;老师真跑时还会多 cards:(孩子在卡上做的)与 photos: 两段。');
+        const cut = [v.chars.profile > v.limit ? '档案原文截了' : '', v.chars.entry > v.limit ? '入口文件原文截了' : '', v.chars.memory > v.limit ? '记忆原文截了' : '', rp.plan.total > rp.plan.kept ? `计划截掉 ${rp.plan.total - rp.plan.kept} 行` : '', rp.recent.total > rp.recent.kept ? `观察截掉 ${rp.recent.total - rp.recent.kept} 条` : ''].filter(Boolean);
+        out.push(cut.length ? `截掉的:${cut.join(';')}(改 cotutor.json policyDefaults.contextPack 的 entryChars / planLines / recent)` : '没截掉什么。');
+        out.push('这份不进任何文件;老师真跑时还会多 cards:(孩子在卡上做的)与 photos: 两段;同一话题续聊时没改过的笔记只写「未变」。');
         process.stdout.write(`${out.join('\n')}\n`);
         return;
       }
@@ -392,7 +398,6 @@ export async function main(argv: string[]): Promise<void> {
           process.exitCode = 1;
         } else {
           process.stdout.write(`孩子看到:${m.kidText ?? '(没有给孩子的话)'}\n`);
-          if (m.holdup) process.stdout.write(`待裁量:${m.holdup.question}${m.holdup.options.length ? ' → ' + m.holdup.options.map((o) => o.label).join(' / ') : ''}\n`);
           for (const s of m.scenes ?? []) process.stdout.write(`画图作业:课包 ${s.bundle} ${s.job ? `起了 scene-maker ${s.job}` : '没起(见提醒)'}\n`);
           const secs = (ms: number): string => (ms < 120000 ? `${Math.round(ms / 100) / 10}s` : `${Math.round(ms / 6000) / 10}min`);
           const timing = [m.timing?.firstReadyMs !== undefined ? `首拍就绪 ${secs(m.timing.firstReadyMs)}` : null, m.timing?.firstCardMs !== undefined ? `首卡 ${secs(m.timing.firstCardMs)}` : null, m.timing?.doneMs !== undefined ? `整轮 ${secs(m.timing.doneMs)}` : null, m.timing?.dubbedMs !== undefined ? `配音 ${secs(m.timing.dubbedMs)}` : null].filter(Boolean);

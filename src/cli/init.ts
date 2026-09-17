@@ -10,6 +10,7 @@ import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, configTemplate, profil
 import { installTutors } from './tutors.ts';
 import { TOOL_SHIM, installSkills, writeToolShim } from './skills.ts';
 import { installThemes } from './themes.ts';
+import { scanVault } from '../server/store.ts';
 import { CONFIG_FILE, ConfigError, HOME_ROOT, USER_CONFIG, expandPath, loadWorkspace, parseConfig, readJson, redactHome } from './workspace.ts';
 
 export interface InitStep {
@@ -89,15 +90,18 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
     }
   }
 
-  // vault 侧(《obsidian仓库设计.md》§2):只补档案与参考 README,缺了才写;日记 / 教材 / 计划由记账与规划老师现建
+  // vault 侧(《obsidian仓库设计.md》§2):只补档案与参考 README,缺了才写;档案按 cotutor: profile 找(2026-09-17),vault 里已有一篇就不补;
+  // 入口文件(每科每学期一篇)不自动建,doctor 提醒;日记 / 计划由记账与规划老师现建
   try {
     const ws = loadWorkspace(root);
     const profile = ws.paths.profile;
-    if (await exists(profile)) steps.push({ item: redactHome(profile), action: 'exists' });
+    const found = (await scanVault(ws)).notes.find((n) => n.props.cotutor === 'profile');
+    if (found) steps.push({ item: redactHome(join(ws.paths.vault, found.path)), action: 'exists' });
+    else if (await exists(profile)) steps.push({ item: redactHome(profile), action: 'kept', note: '没有 cotutor: profile 属性,老师读不到;在 frontmatter 加上(cotutor doctor 有写法)' });
     else {
       await mkdir(dirname(profile), { recursive: true });
       await writeFile(profile, profileTemplate(ws.config.kid.name ?? ws.config.kid.slug));
-      steps.push({ item: redactHome(profile), action: 'created', note: '档案:「现在」callout 整段进上下文包,按真的填' });
+      steps.push({ item: redactHome(profile), action: 'created', note: '档案:填 school_start 与孩子的情况,每个话题开头整篇进上下文包' });
     }
     const readme = join(ws.paths.reference, 'README.md');
     if (await exists(readme)) steps.push({ item: redactHome(readme), action: 'exists' });

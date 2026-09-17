@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { FocusSchema, MESSAGE_FROM } from './context-pack.ts';
 import { BoardSectionSchema, DeviceSchema } from './board.ts';
-import { BookkeepingSchema, HoldupAskSchema } from './sections.ts';
+import { BookkeepingSchema } from './sections.ts';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -52,18 +52,20 @@ export const ConversationMessageSchema = z.object({
   artifacts: z.array(z.string()).default([]),
   /** 跑这条用的运行时名(runtimes 里的键);换运行时时新开会话 */
   runtime: z.string().optional(),
-  /** 最终文本里剥出来的「待裁量」段:家长视图渲染成选项按钮(R2 物化,免得页面再解析日志) */
-  holdup: HoldupAskSchema.nullable().optional(),
   /** 这轮板书里的新场景卡起的画图作业(scene-maker 的 job;没起的 job 为 null,原因在 warnings) */
   scenes: z.array(z.object({ bundle: z.string().min(1), job: z.string().nullable() })).optional(),
   /** 不 ok 时的原因(subtype / terminal_reason),家长视图红条 */
   error: z.string().nullable().optional(),
   /** 最终文本解析出的板书节(卡 + 讲稿;孩子端下发前剥答案);null = 这轮没有 */
   section: BoardSectionSchema.nullable().optional(),
-  /** 最终文本里第一个 H2 起给家长的尾巴(「## 家长」等),孩子看不到 */
+  /** 最终文本里第一个 H2 起给家长的尾巴(老师写的任何标题段),孩子看不到 */
   parentText: z.string().optional(),
   /** 解析板书时的提醒(卡没解析成等),家长视图显示;孩子端不报 */
   warnings: z.array(z.string()).optional(),
+  /** 这轮「## 记忆」段真追加进 vault 记忆文件的行(带日期);家长视图显示 */
+  remembered: z.array(z.string()).optional(),
+  /** 这轮上下文包里家长笔记的版本:role(profile / entry)→ `路径@hash`;同一话题下一轮对得上就只写「未变」(2026-09-17) */
+  notes: z.record(z.string(), z.string()).optional(),
   /** 这条消息带给老师的卡(上一轮之后孩子改过状态的):id 与 describe 出的那句;家长视图显示「孩子在板书上做的」 */
   cards: z.array(z.object({ card: z.string().min(1), text: z.string() })).optional(),
   /** kidText 的配音文件名(conversations/<老师>/ 下,如 2026-09-09.1620-1.mp3);null = 没合成(老师没配音色、tts 运行时没配或失败) */

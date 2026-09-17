@@ -20,7 +20,7 @@ import { isAbsolute, join, relative } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
 import { addMessage, applyRun, cardId, changedCards, conversationFiles, jobId, localDate, localMinute, sessionFor, threads } from '../lib/conversation.ts';
 import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
-import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, extractProfile, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
+import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
 import { BUNDLE_ID_RE, cardAssets, cardLabel, describeCard } from '../cards/index.ts';
 import { parseBoard } from '../lib/board.ts';
 import { readyBeats, beatsOf, type BoardSection, type Device } from '../lib/kid-board.ts';
@@ -32,12 +32,13 @@ import { getRuntime, planRun, runtimeUses, type RunPlan } from '../lib/run-plan.
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type Policy, type Timing } from '../schema/index.ts';
+import { MEMORY_MAX_PER_TURN, VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type Policy, type Timing } from '../schema/index.ts';
 import { DEFAULT_DEVICE, assemblePost, postEnv, runBeatPost, writePostFile, type PostBeatFile, type PostEnv } from './post.ts';
 import { validateBeatPost, type BeatPostOutput } from '../lib/postprocess.ts';
 import type { Transcript } from '../lib/transcript.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
-import { readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
+import { appendVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
+import { missingEntry, pickNotes, textHash } from '../lib/vault-notes.ts';
 import { DubQueue, LineDubber, dubReply } from './tts.ts';
 
 export class BusyError extends Error {
@@ -91,26 +92,27 @@ interface Active {
 }
 
 /**
- * 上下文包的取材(《obsidian仓库设计.md》§7 每轮那行):课程表命中的时段 + 档案「现在」callout + 本周计划里本老师的行 +
- * 最近 14 天日记里本学科的「- 观察:」行(观察的真相在日记;家长改一句、删一行,下一轮就变)
- */
-/**
  * 上下文包的来源清单(2026-09-15,`cotutor pack` 干跑用):每段来自哪个文件、那里一共有多少、按政策带了几条。
- * 家长改了档案 / 日记 / 计划,不起模型就能看到老师下一轮会看见什么、什么被截掉了。
+ * 家长改了档案 / 入口文件 / 日记 / 计划,不起模型就能看到老师下一轮会看见什么、什么被截掉了。
  */
 export interface PackReport {
   timetable: { file: string; found: boolean; slot: string | null };
-  profile: { file: string; found: boolean; total: number; kept: number; limit: number };
+  vault: { root: string; semester: string | null; profile: string | null; extraProfiles: string[]; entry: string | null; extraEntries: string[]; memory: string | null; extraMemories: string[]; subject: string | null; refs: string[]; limit: number; chars: { profile: number; entry: number; memory: number } };
   plan: { file: string; found: boolean; total: number; kept: number; limit: number };
   recent: { dir: string; days: number; filesFound: string[]; total: number; kept: number; limit: number; subject: string | null };
 }
 
 const MANY = 100_000;
 
+/**
+ * 上下文包的取材(《obsidian仓库设计.md》§7 每轮那行,2026-09-17 改):课程表命中的时段 + 当前学期 + 档案与入口文件的原文(按 entryChars 截)
+ * + 参考路径 + 本周计划里本老师的行 + 最近 14 天日记里本学科的「- 观察:」行。
+ * 笔记原文总是带上;同一话题里没改过的由 send 换成「未变」。
+ */
 export async function gatherContext(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; focus?: Focus }, report?: PackReport): Promise<ContextPack> {
   const t = ws.config.tutors[tutor];
   const policy = resolvePolicy(ws.config, tutor);
-  const pack: ContextPack = { from: input.from, at: localMinute(input.at), focus: input.focus, profile: [], plan: [], recent: [] };
+  const pack: ContextPack = { from: input.from, at: localMinute(input.at), focus: input.focus, plan: [], recent: [] };
   if (report) report.timetable = { file: ws.paths.timetable, found: false, slot: null };
   try {
     const slot = currentSlot(parseTimetable(await readFile(ws.paths.timetable, 'utf8')).entries, input.at);
@@ -120,14 +122,22 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
   } catch {
     /* 没有课程表:不带 slot */
   }
-  if (report) report.profile = { file: ws.paths.profile, found: false, total: 0, kept: 0, limit: policy.contextPack.profileLines };
-  try {
-    const md = await readFile(ws.paths.profile, 'utf8');
-    pack.profile = extractProfile(md, policy.contextPack.profileLines);
-    if (report) report.profile = { ...report.profile, found: true, total: extractProfile(md, MANY).length, kept: pack.profile.length };
-  } catch {
-    /* 没有档案:不带 profile */
+  const { notes, files } = await scanVault(ws);
+  const pick = pickNotes(notes, files, { date: localDate(input.at), subject: t?.subject, agent: tutor });
+  const limit = policy.contextPack.entryChars;
+  if (pick.semester) pack.semester = pick.semester;
+  pack.notes = [];
+  for (const [role, n] of [['profile', pick.profile], ['entry', pick.entry], ['memory', pick.memory]] as const) {
+    if (!n) continue;
+    const cut = n.text.length > limit;
+    pack[role] = cut ? `${n.path}(原文 ${n.text.length} 字,截到 ${limit})` : n.path;
+    pack.notes.push({ role, path: n.path, text: cut ? `${n.text.slice(0, limit)}\n……(后面截掉了,要看全文自己 Read)` : n.text });
   }
+  if (!pick.profile) pack.profile = '缺:vault 里没有 cotutor: profile 的档案';
+  if (!pick.entry && t && tutor.endsWith('-tutor')) pack.entry = missingEntry(t.subject, pick);
+  if (!pick.memory) pack.memory = '还没有';
+  if (pick.refs.length) pack.refs = pick.refs.map((r) => join(ws.paths.vault, r));
+  if (report) report.vault = { root: ws.paths.vault, semester: pick.semester, profile: pick.profile?.path ?? null, extraProfiles: pick.extraProfiles, entry: pick.entry?.path ?? null, extraEntries: pick.extraEntries, memory: pick.memory?.path ?? null, extraMemories: pick.extraMemories, subject: t?.subject ?? null, refs: pick.refs, limit, chars: { profile: pick.profile?.text.length ?? 0, entry: pick.entry?.text.length ?? 0, memory: pick.memory?.text.length ?? 0 } };
   const planFile = join(ws.paths.plans, `${isoWeek(input.at)}.md`);
   if (report) report.plan = { file: planFile, found: false, total: 0, kept: 0, limit: policy.contextPack.planLines };
   try {
@@ -146,6 +156,27 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
   if (report) report.recent = { dir: ws.paths.diary, days: dates.length, filesFound: diaries.map((d) => d.date).sort(), total: extractObservations(diaries, { subject: t?.subject, n: MANY }).length, kept: pack.recent.length, limit: policy.contextPack.recent, subject: t?.subject ?? null };
   pack.vault = vaultPack(ws.paths);
   return pack;
+}
+
+/** 这轮带的笔记版本:role → `路径@hash`(记进消息;同一话题下一轮对得上就不再带原文) */
+export function noteVersions(pack: ContextPack): Record<string, string> {
+  return Object.fromEntries((pack.notes ?? []).map((n) => [n.role, `${n.path}@${textHash(n.text)}`]));
+}
+
+/** 续会话时:上一轮这个话题已经带过、版本没变的笔记去掉原文,YAML 里注明「未变」 */
+export function dropSeenNotes(pack: ContextPack, seen: Record<string, string>): ContextPack {
+  const now = noteVersions(pack);
+  const keep = (pack.notes ?? []).filter((n) => seen[n.role] !== now[n.role]);
+  const out: ContextPack = { ...pack, notes: keep };
+  for (const n of pack.notes ?? []) if (!keep.includes(n)) out[n.role] = `${pack[n.role]}(未变,原文在本话题前面)`;
+  return out;
+}
+
+/** 这个话题里最近一次记下的笔记版本(新话题、没记过 → {}) */
+export function seenNotes(messages: readonly ConversationMessage[], thread: string): Record<string, string> {
+  const ths = threads(messages);
+  for (let i = messages.length - 1; i >= 0; i--) if (ths[i] === thread && messages[i].notes) return messages[i].notes as Record<string, string>;
+  return {};
 }
 
 /** 干跑:现在给这位老师发这句话,上下文包会是什么样、每段从哪来、截了多少;不起模型、不写盘 */
@@ -239,7 +270,11 @@ export class Runner {
     const session = fresh ? null : sessionFor(index, thread);
     const { runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
     const agentBody = runtimeUses(runtime, '{agentBody}') ? await readAgentBody(ws, tutor) : undefined;
-    const pack = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus });
+    const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus });
+    // 家长笔记原文:新会话整篇带;续会话时这个话题带过、没改的只写「未变」
+    const notes = noteVersions(gathered);
+    const pack = session ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
+    const noteWarnings = pack.entry?.startsWith('缺:') && !input.bookkeep ? [`入口文件${pack.entry}——在 vault 里给这位老师建一篇(cotutor doctor 有写法)`] : [];
     const policy = resolvePolicy(ws.config, tutor);
     if (policy.board === 'off') pack.board = 'off';
     // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
@@ -253,7 +288,7 @@ export class Runner {
     const prompt = buildContextPack(pack, text, policy.contextPack);
     const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, runtime: input.runtime ?? t.runtime });
 
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 
@@ -303,6 +338,18 @@ export class Runner {
     this.background.add(chain);
     void chain.finally(() => this.background.delete(chain));
     return { queued, skipped };
+  }
+
+  /** 记忆段收尾:每轮最多 MEMORY_MAX_PER_TURN 条,多的丢;写不进(vault 不在、同名文件没属性)进提醒,不影响这轮 */
+  private async settleMemory(ws: Workspace, tutor: string, date: string, items: string[]): Promise<{ added: string[]; warnings: string[] }> {
+    const warnings: string[] = [];
+    if (items.length > MEMORY_MAX_PER_TURN) warnings.push(`记忆:一轮最多记 ${MEMORY_MAX_PER_TURN} 条,丢了 ${items.length - MEMORY_MAX_PER_TURN} 条:${items.slice(MEMORY_MAX_PER_TURN).join(';')}`);
+    try {
+      const r = await appendVaultMemory(ws, tutor, ws.config.tutors[tutor]?.display ?? tutor, items.slice(0, MEMORY_MAX_PER_TURN), date);
+      return { added: r.added, warnings: [...warnings, ...r.warnings] };
+    } catch (err) {
+      return { added: [], warnings: [...warnings, `记忆没写进去:${err instanceof Error ? err.message : String(err)}`] };
+    }
   }
 
   /** 记账那轮收尾:「## 记账」段 → 这个话题在日记里的一段(打分不够只留孩子问与观察)→ 追加到 vault 的日记,索引记 booked */
@@ -510,7 +557,7 @@ export class Runner {
       timer = null;
       if (!dirty) return;
       dirty = false;
-      // 先剥「## 待裁量」「## 记账」再解析,和定稿的 deriveKidView 同一条路;不剥的话固定段写在前面的那轮流式时一张卡都出不来(2026-09-13 控制台里看见的)
+      // 先剥「## 记账」再解析,和定稿的 deriveKidView 同一条路;不剥的话固定段写在前面的那轮流式时一张卡都出不来(2026-09-13 控制台里看见的)
       const { section } = parseBoard(parseSections(reader.text()).body, { partial: true });
       const lines = section.lines.map((l, i) => ({ ...l, text: truncateReply(l.text, replyMaxChars).text, audio: lineAudio.get(i) ?? null }));
       active.partial = section.cards.length || lines.length ? { ...applyDecisions({ cards: section.cards, lines }, envNow), partial: true, ready: readySeen } : null;
@@ -612,6 +659,12 @@ export class Runner {
     // 重新读索引再并入:跑的这段时间里别的字段(比如家长改了别的)不被旧对象盖掉
     const latest = await readIndex(ws, tutor, date);
     let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, audio, timing, post, tools });
+    // 「## 记忆」段:追加进 vault 里这位 agent 的记忆文件(回放不写;家长视图看 remembered 与提醒)
+    if (kidView.memory.length) {
+      const asked = latest.messages.find((m) => m.job === job);
+      const r = asked?.replayOf ? { added: [] as string[], warnings: ['回放不写记忆'] } : await this.settleMemory(ws, tutor, date, kidView.memory);
+      if (r.added.length || r.warnings.length) next = { ...next, messages: next.messages.map((m) => (m.job === job ? { ...m, ...(r.added.length ? { remembered: r.added } : {}), ...(r.warnings.length ? { warnings: [...(m.warnings ?? []), ...r.warnings] } : {}) } : m)) };
+    }
     // 场景作业收尾:课包的费用与时长进账本,消息的 artifacts 记课包 id
     if (tutor === SCENE_MAKER) {
       const r = await this.settleSceneLedger(ws, tutor, date, job, latest.messages.find((m) => m.job === job)?.text ?? '', transcript, timing);

@@ -198,12 +198,32 @@ Growth/                          Ray 的 vault(iCloud)
 5. 旧照片与终帧:**移出 vault**。
 6. 周记:**并进 `计划/<周>.md` 的「## 上周」**。
 
+**2026-09-17 状态**:第 4 条(代码不认题型、教材单元标题是唯一锚点)与第 2 条(观察的真相在日记)**重评中**:教材缺失是常态,长期记忆的单位改按「学科 × 时期」在 docs/wip/agent设计.md 讨论,定了再回来改本文 §1–§3 与 cotutor-vault 技能。第 1、3、5、6 条照旧。这条链(打星 → 记账 → 日记)在 ray 的 workspace 上还没真跑过一次。
+
+**2026-09-17 拍板**(样本在 ray-vault,属性表在它的 `AGENTS.md`):文件按 frontmatter `cotutor: profile | subject | textbook` 定位,不认文件名与目录;属性键**程序读的用英文、只给人看的用中文**;学期取值写 `二年级上` 这种(另有 `N年级寒假` / `N年级暑假`);教材带 `subject` + `semester`,课程文件**不**链教材,按属性查;当前学期由 profile 的 `school_start` 按日期算,不存。
+
+**2026-09-17 拍板(入口文件)**:
+1. 每位有脸的老师在 vault 里有一篇**入口文件** = `cotutor: subject` 且 subject(cotutor.json 里这位老师的)与当前学期都对上的那篇,家长习惯放 `课程/<学期>/<学科>.md`。它和档案(`cotutor: profile`)的**原文整篇**进上下文包,接在 YAML 块后面的 `<vault-note>` 里;其余资料(这科这学期的教材、两篇里的 `[[链接]]`)只给路径,在 `refs:`。取代 §3.1 的「现在」callout 与 `profileLines`。
+2. 只在一个话题的第一条带原文;续会话时版本(路径 + hash,记在消息的 `notes`)没变就写「未变」,家长中途改了再带一次。
+3. 学期取值:9–1 月上、2 月寒假、3–6 月下、7–8 月暑假;档案可写 `semester` 覆盖。这学期的入口文件没有就**不沿用上学期的**:上下文包写「缺:…」,这条消息带提醒(家长端),doctor 报该建哪、写什么属性;init 不自动建。
+4. 冲突时:入口文件的讲法偏好优先于老师文件;孩子端不说对错、不写文件、不派子代理不让。
+5. 原文各按 `policy.contextPack.entryChars`(缺省 4000 字)截,超了注明、doctor 报。
+6. ~~有脸的老师关掉私有记忆,planner / scene-maker 暂留~~(同日改为下一条)。
+
+**2026-09-17 拍板(记忆进 vault)**:
+1. 五个 agent 都有记忆,都不用 CLI 自带的 `memory: project`(家长看不到、qwen 不支持、格式管不住)。
+2. 一个 agent 一篇记忆文件,按 `cotutor: memory` + `agent: <名>` 找;没有就由应用建在 `记忆/<显示名>.md`。机器写 vault 的封闭清单多这一项:只追加、不改已有的字。
+3. 写:老师在任何一轮的回复末尾写「## 记忆」段(一行一条 `- …`),孩子看不到;应用加日期、去重后追加,每轮最多 2 条,多的丢并提醒;回放不写。家长端这条消息显示「记住了」。老师仍不直接写文件。
+4. 读:和档案、入口文件一样,话题第一条带原文 `<vault-note role="memory">`,续聊没改写「未变」,按 entryChars 截,doctor 报 `vault.memory.<名>`。
+5. 家长在 Obsidian 里随便改、删、分小节,下个话题生效。家长删掉的,应用分不出来,靠老师文件里「别再记回去」一句约束。
+6. 与日记「- 观察:」行重叠,并到观察那条的重评里一起定。
+
 ## 10. 要改的文档与代码(2026-09-14 当天全部落地;Growth 按 §8 原地迁完,Ray 的 workspace `paths.vault` 已指过去,`cotutor doctor` 全绿)
 
 - 文档:《agent层设计.md》§1 表格(账本一行改成「日记是观察的真相」)与 §5 记账;《契约草案.md》加「日记 / 记账段」两个形状、删 observations;《产品规划.md》R4 验收改成「日记多一段、上下文包里带着昨天的观察」,待拍板 5 划掉;《家长手册.md》§5 加「你的 Obsidian 仓库:哪些是你写的、哪些是老师写的、怎么打分」。
 - 代码:
   - `src/schema/config.ts`:`paths` 加 `textbooks` / `reference`,`photos` 改 workspace 侧;`vault.keepScore`;`contextPack.profileLines`
-  - `src/schema/conversation.ts`:`threads[thread].rating`;`src/schema/sections.ts`:「## 记账」段的解析(同待裁量的写法,`lineMap` 照用);`src/schema/ledger.ts` 删 observations
+  - `src/schema/conversation.ts`:`threads[thread].rating`;`src/schema/sections.ts`:「## 记账」段的解析(固定段写法,`lineMap` 照用);`src/schema/ledger.ts` 删 observations
   - `src/lib/diary.ts`(新,纯函数):`renderDiaryDay(threads, ratings, bookkeeping)` 出追加块、`extractObservations(diaryText, days)` 给上下文包、`extractProfile(RayMd)`
   - `src/server/store.ts`:`appendDiary`;`src/server/runner.ts`:记账任务(resume 当天每个话题的老师,`from: system`)
   - `src/server/parent-page.ts`:话题头部五星;`PUT /api/conversations/<老师>/<日期>/threads/<thread>/rating`;`cotutor rate` `cotutor bookkeep`

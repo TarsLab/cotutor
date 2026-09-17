@@ -1,5 +1,5 @@
 /** 日记与档案的纯函数(《obsidian仓库设计.md》):记账段 → 日记一段的形状、打分门槛、观察与档案的抽取、记账提示词。 */
-import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, extractProfile, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings, threadBundles } from '../src/lib/diary.ts';
+import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings, threadBundles } from '../src/lib/diary.ts';
 import { check, done } from './_check.ts';
 
 const msgs = [
@@ -48,11 +48,6 @@ check('追加:空文件就是这一段;有内容空一行接上,尾巴的空白�
   const math = extractObservations(diaries, { subject: '数学', n: 10 });
   check('按学科过滤、按日期升序、文件头的总算、围栏里的不算、中英文冒号都认', math.map((o) => `${o.date} ${o.claim}`).join('|') === '2026-09-06 凑十会了|2026-09-07 文件头的一条|2026-09-07 借位忘了', JSON.stringify(math));
   check('没配学科 → 全量;n 取最后几条', extractObservations(diaries, { n: 10 }).length === 4 && extractObservations(diaries, { subject: '数学', n: 1 })[0].claim === '借位忘了');
-}
-{
-  const md = '# Ray\n\n> [!abstract] 现在\n> - 数学:人教数学一下 第 4 单元 在学\n> - 会用的说法:凑十、破十\n>\n> - 还没学、别用:竖式\n\n## 忌讳\n- 别催\n';
-  check('档案「现在」callout:去掉 > 与列表点,空行跳过', extractProfile(md, 8).join('|') === '数学:人教数学一下 第 4 单元 在学|会用的说法:凑十、破十|还没学、别用:竖式');
-  check('按行数截;别的 callout 类型也认;没有 → []', extractProfile(md, 1).length === 1 && extractProfile('> [!note]- 现在\n> 一行\n', 5).join() === '一行' && extractProfile('# 没有\n', 5).length === 0);
 }
 check('教材目录:册#节', textbookHeadings([{ name: '人教数学一下.md', text: '# 册\n## 1 认识图形\n```\n## 围栏\n```\n## 2 退位\n' }, { name: 'opw2', text: '## Unit 2\n' }]).join('|') === '人教数学一下#1 认识图形|人教数学一下#2 退位|opw2#Unit 2');
 check('最近几天(含今天,跨月)', recentDiaryDates('2026-09-02', 3).join() === '2026-09-02,2026-09-01,2026-08-31');

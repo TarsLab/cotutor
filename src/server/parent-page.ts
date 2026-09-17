@@ -139,14 +139,10 @@ export const PARENT_PAGE = `<!doctype html>
   .notice .ico { font:600 13px/20px var(--mono); width:20px; height:20px; border-radius:5px; text-align:center; flex:none; color:#fff; }
   .notice h5 { margin:0 0 3px; font-size:15px; font-weight:600; }
   .notice p { margin:0; font-size:14px; color:var(--ink-2); white-space:pre-wrap; }
-  .notice.hold { background:var(--warn-soft); } .notice.hold .ico { background:var(--warn); }
   .notice.scene { background:var(--accent-soft); } .notice.scene .ico { background:var(--accent); }
   .notice.err { background:var(--err-soft); } .notice.err .ico { background:var(--err); }
   .notice.err p { font:400 13.5px/1.6 var(--mono); color:var(--err); }
   .notice.warn { background:var(--surface-2); } .notice.warn .ico { background:var(--muted); }
-  .notice .btns { display:flex; gap:7px; margin-top:9px; flex-wrap:wrap; }
-  .notice .btns button { font-size:14px; padding:5px 11px; border-radius:7px; border:1px solid var(--line); background:var(--surface); cursor:pointer; }
-  .notice .btns button.rec { border-color:var(--accent); background:var(--accent); color:#fff; }
   .running { padding:10px 16px; border-top:1px solid var(--line-soft); color:var(--accent); font-size:14.5px; }
   .trace { padding:0 16px 12px; }
   .trace .tool, .trace .done { font:400 13px/1.6 var(--mono); color:var(--muted); white-space:pre-wrap; word-break:break-word; }
@@ -675,18 +671,13 @@ export const PARENT_PAGE = `<!doctype html>
     }
     if (m.parentText) el.append(h('div', { class: 'kidview parent' }, h('span', { class: 'lab' }, '给家长'), h('p', {}, m.parentText.replace(/^## 家长\\s*/, ''))));
 
-    if (m.holdup) {
-      const btns = h('div', { class: 'btns' });
-      for (const o of m.holdup.options) btns.append(h('button', { type: 'button', class: o.recommended ? 'rec' : '', title: o.note || '', on: { click: () => send('待裁量「' + m.holdup.question + '」:选「' + o.label + '」', 'parent') } }, o.label + (o.recommended ? ' ★' : '')));
-      if (!m.holdup.options.length) btns.append(h('span', { class: 'hint', style: 'padding:0' }, '(没给选项,直接在下面回复)'));
-      el.append(h('div', { class: 'notice hold' }, h('span', { class: 'ico' }, '?'), h('div', {}, h('h5', {}, '待裁量:' + m.holdup.question), btns)));
-    }
     for (const s of m.scenes || []) {
       el.append(h('div', { class: 'notice scene' }, h('span', { class: 'ico' }, '→'), h('div', {},
         h('h5', {}, '画图作业 · 课包 ' + s.bundle),
         h('p', {}, s.job ? '已起 ' + (tutorOf('scene-maker').display || 'scene-maker') + ' 的 ' + s.job : '没起(见下面的提醒)'))));
     }
     if (m.result === 'error') el.append(h('div', { class: 'notice err' }, h('span', { class: 'ico' }, '!'), h('div', {}, h('h5', {}, '本轮出错:' + (m.error || '未知')), h('p', {}, v.errors[m.job] || ''))));
+    if (m.remembered && m.remembered.length) el.append(h('div', { class: 'notice scene' }, h('span', { class: 'ico' }, '✎'), h('div', {}, h('h5', {}, '记住了(追加到 vault 里' + t.display + '的记忆文件,在 Obsidian 里可以改、删)'), h('p', {}, m.remembered.join('\\n')))));
     if (m.warnings && m.warnings.length) el.append(h('div', { class: 'notice warn' }, h('span', { class: 'ico' }, 'i'), h('div', {}, h('h5', {}, '提醒'), h('p', {}, m.warnings.join('\\n')))));
     if (m.result === 'running') el.append(h('div', { class: 'running' }, v.running === m.job ? '老师在想……' : '(没跑完:服务重启过或进程被杀,看原文里的转录)'));
     return el;

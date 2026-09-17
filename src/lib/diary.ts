@@ -3,7 +3,7 @@
  *  - 记账:老师回「## 记账」段(sections.ts 解析),应用按话题渲染成日记里的一段 `## 学科 · 话题名`:
  *    孩子问的话总是记(callout,一行一问);摘要 + 星 + 教材单元链接 + 课包 id、`骨架:` 行只在话题打分 ≥ keepScore 时有;
  *    `- 观察:` 行是上下文包「最近观察」的来源——家长在 Obsidian 里改一句、删一行,下次对话就变(观察的真相在日记,账本 jsonl 退役)。
- *  - 抽取:`extractObservations` 从最近几天的日记抽「- 观察:」行(按 H2 的学科过滤);`extractProfile` 取档案「现在」callout 的几行进上下文包。
+ *  - 抽取:`extractObservations` 从最近几天的日记抽「- 观察:」行(按 H2 的学科过滤)。
  *  - 老师(LLM)不直接写 vault 文件;`bookkeepingPrompt` 是记账任务的消息正文,教材目录(册#节)列在里面让它原样挑。
  */
 import type { Bookkeeping, BookkeepingEntry, ConversationMessage } from '../schema/index.ts';
@@ -121,21 +121,6 @@ export function extractObservations(diaries: readonly { date: string; text: stri
     }
   }
   return out.slice(-opts.n);
-}
-
-/** 档案(孩子.md)「现在」callout 的几行(去掉 `> ` 与列表点),最多 max 行;没有这个 callout → [] */
-export function extractProfile(md: string, max: number): string[] {
-  const lines = md.split('\n');
-  const start = lines.findIndex((l) => /^>\s*\[![\w-]+\][-+]?\s*现在\s*$/.test(l));
-  if (start < 0 || max <= 0) return [];
-  const out: string[] = [];
-  for (let i = start + 1; i < lines.length && out.length < max; i++) {
-    const l = lines[i];
-    if (!/^>/.test(l)) break;
-    const text = l.replace(/^>\s?/, '').replace(/^[-*]\s+/, '').trim();
-    if (text) out.push(text);
-  }
-  return out;
 }
 
 /** 教材目录的可引用条目:每册文件的每个 H2 → 「册#节标题」(wikilink 的目标;文件名不带 .md) */

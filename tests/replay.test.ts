@@ -46,7 +46,7 @@ cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS,
 (cfg.tutors as Record<string, Record<string, unknown>>)['math-tutor'].voice = 'v-math';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault', '日记'), { recursive: true });
-writeFileSync(join(root, 'vault', '孩子.md'), '# 小明\n\n> [!abstract] 现在\n> - 数学:人教数学一下 第 4 单元 在学\n');
+writeFileSync(join(root, 'vault', '孩子.md'), '---\ncotutor: profile\nschool_start: 2025-09\n---\n\n数学:人教数学一下 第 4 单元 在学\n');
 
 let now = new Date(2026, 8, 8, 16, 20);
 const ws = loadWorkspace(root);
@@ -61,7 +61,7 @@ try {
   check('原轮 ok、有卡、配了音', orig.result === 'ok' && (orig.section?.cards.length ?? 0) > 0 && orig.section?.lines.some((l) => l.audio) === true, JSON.stringify({ result: orig.result, cards: orig.section?.cards.length, audio: orig.section?.lines.map((l) => l.audio) }));
 
   // 改 vault 与老师文件后回放
-  writeFileSync(join(root, 'vault', '孩子.md'), '# 小明\n\n> [!abstract] 现在\n> - 数学:人教数学一下 第 5 单元 在学\n> - 还没学、别用:竖式\n');
+  writeFileSync(join(root, 'vault', '孩子.md'), '---\ncotutor: profile\nschool_start: 2025-09\n---\n\n数学:人教数学一下 第 5 单元 在学\n还没学、别用:竖式\n');
   const agentFile = join(root, '.claude', 'agents', 'math-tutor.md');
   writeFileSync(agentFile, `${readFileSync(agentFile, 'utf8')}\n改了一句。\n`);
   now = new Date(2026, 8, 8, 17, 12);

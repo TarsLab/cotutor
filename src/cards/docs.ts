@@ -81,7 +81,41 @@ export function boardSyntaxDoc(dir = PACKAGE_CARDS_DIR): string {
 
 孩子在卡上做的事(选了、填了、画了)会在下一条消息的上下文包里以 \`cards:\` 段告诉你,一张卡一行(卡的编号、种类、标题、做了什么、答案);孩子只交答案没说话时消息正文是「(交了答案,没说话)」。孩子看到的卡上没有对错,对错由你口头说。上下文包里 \`focus.card\` 是孩子发消息时正开着的那张卡。每种卡完整的协议(何时用、别用、反例、你会收回什么)在本技能目录下的 references/<种类>.md,索引在 references/README.md。
 
-对家长说的话、要拍板的事,用「## 家长」「## 待裁量」(question: 一句话;options: 列表)两个段放在正文末尾,孩子看不到;板书到第一个「## 」为止。
+板书到第一个「## 」为止,后面的孩子看不到。
+
+## 一节长什么样
+
+讲三角形面积的第一节(卡与话交错,卡在讲它的那句前面,最后一句是问孩子的):
+
+\`\`\`\`
+我们拿两个一样的三角形拼一拼。
+
+\`\`\`text
+# 拼
+把两个一样的三角形倒过来拼在一起,得到一个平行四边形
+\`\`\`
+
+两个一样的三角形一拼,就是一个[平行四边形],它的底和高没变。
+
+\`\`\`text formula
+三角形面积 = 底 × 高 ÷ 2
+\`\`\`
+
+所以三角形的面积就是[底]乘[高],再除以 2。
+
+\`\`\`choice
+底 6 厘米、高 4 厘米的三角形,面积是多少?
+- [ ] 24 平方厘米
+- [x] 12 平方厘米
+- [ ] 10 平方厘米
+\`\`\`
+
+你来算算:底 6 厘米、高 4 厘米,面积是多少?
+\`\`\`\`
+
+## 作业照片(上下文包里有 photos: 时)
+
+照片路径相对 workspace 根;从你的 cwd(agents/<你>/)Read 要加 \`../../\`。先看图,认出是哪本、哪页、哪道题、卡在哪,讲稿第一句就说出来。第一张卡用 \`image\` 引原图(路径照 photos: 原样写)或 \`text\` 抄题面;一页好几道就用 \`choice\` 列题号问讲哪道,一次只讲一道;要孩子在作业上圈、写,用 \`canvas\`、第一行写照片路径。拍糊了、拍不全、认不出,讲稿里请孩子再拍一张或指一下。
 
 ## 卡的种类
 
@@ -110,7 +144,7 @@ export const BOARD_SKILL = 'cotutor-board';
 /** SKILL.md:frontmatter(两 CLI 都只认 name / description)+ 语法表;description 列出卡的种类,让模型不读正文也知道有哪几种 */
 export function boardSkillDoc(dir = PACKAGE_CARDS_DIR): string {
   const kinds = CARD_KINDS.map((k) => k.name).join(' / ');
-  const description = `cotutor 的板书怎么写:回复正文就是孩子看到的板书,普通段落是讲稿(一行一句,会被念出来)、围栏是卡(标签 = 种类:${kinds}),各种卡的写法与例子都在这里。给孩子讲解、要出卡之前读一遍;每种卡完整的协议(何时用、别用、反例、你会收回什么)在 references/<种类>.md。不是:一道题怎么画成一步步的动画(那是画图老师的 drawtell-teaching / drawtell-scene)、作业照片怎么看(老师文件的「看图」一节)。机器文件,从卡的注册表生成,cotutor init / upgrade 刷新,别改。`;
+  const description = `cotutor 的板书怎么写:回复正文就是孩子看到的板书,普通段落是讲稿(一行一句,会被念出来)、围栏是卡(标签 = 种类:${kinds}),各种卡的写法与例子都在这里。给孩子讲解、要出卡之前读一遍;每种卡完整的协议(何时用、别用、反例、你会收回什么)在 references/<种类>.md。含作业照片怎么接、一节的完整例子。不是:一道题怎么画成一步步的动画(那是画图老师的 drawtell-teaching / drawtell-scene)、vault 怎么读(→ cotutor-vault)。机器文件,从卡的注册表生成,cotutor init / upgrade 刷新,别改。`;
   return `---\nname: ${BOARD_SKILL}\ndescription: ${description}\n---\n\n${boardSyntaxDoc(dir)}`;
 }
 

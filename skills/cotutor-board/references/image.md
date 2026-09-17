@@ -6,20 +6,20 @@
 
 ## 什么时候用 / 别用
 
-- 用:讲孩子拍来的题(上下文包 `focus.artifact` 或家长发来的照片路径),指着图讲。
+- 用:讲孩子拍来的作业(上下文包 `photos:` 里的路径),指着图讲。
 - 用:一张现成的插图能说清的概念。
 - 别用:要画出来才讲得清的题 → `scene`(画图老师做课包);要孩子自己画 → `canvas`。
 - 别用:路径不存在的图(孩子端只会空一块)。
 
 ## 写法
 
-第一行是图:workspace 里的相对路径(`vault/照片/2026-09-10-作业.jpg`)或 http(s) 地址,只认图片后缀;后面几行是图注。
+第一行是图:workspace 里的相对路径(作业照片照 `photos:` 原样写,如 `captures/2026-09-10/1620-1.jpg`)或 http(s) 地址,只认图片后缀;后面几行是图注。照片在 workspace,不在 vault。
 
 ## 例子
 
-<!-- expect {"kind":"image","props":{"src":"vault/照片/2026-09-10-作业.jpg","caption":"你昨天写的这道题,看第二行。"}} -->
+<!-- expect {"kind":"image","props":{"src":"captures/2026-09-10/1620-1.jpg","caption":"你昨天写的这道题,看第二行。"}} -->
 ```image
-vault/照片/2026-09-10-作业.jpg
+captures/2026-09-10/1620-1.jpg
 你昨天写的这道题,看第二行。
 ```
 
@@ -34,7 +34,7 @@ https://example.com/brain.png
 
 <!-- expect {"kind":"text","warning":true} -->
 ```image
-vault/笔记.md
+captures/2026-09-10/笔记.md
 ```
 
 ## 孩子看到什么

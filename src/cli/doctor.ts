@@ -9,7 +9,10 @@ import { constants as fsConstants } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { parseAgentFile } from '../lib/agent-file.ts';
-import { extractProfile } from '../lib/diary.ts';
+import { localDate } from '../lib/conversation.ts';
+import { memoryPath, missingEntry, pickNotes } from '../lib/vault-notes.ts';
+import { listTutors, resolvePolicy } from '../schema/index.ts';
+import { scanVault } from '../server/store.ts';
 import { parseArtifactEvents } from '../lib/ledger.ts';
 import { parseTimetable } from '../lib/timetable.ts';
 import { configGapsOf } from './migrate.ts';
@@ -421,12 +424,42 @@ export async function doctorWorkspace(
       push({ name: 'captures', ok: inside && writable, required: false, detail: !inside ? `${redactHome(cap)} 在 workspace 根以外,页面看不到照片(/api/kid/image 只给根以内的)` : !writable ? `${redactHome(cap)} 写不了(最近的已有目录 ${redactHome(dir)} 没有写权限)` : there ? `${redactHome(cap)}:${n} 天的作业照片` : `${redactHome(cap)} 还没有(第一张照片时建)`, fix: !inside ? '把 cotutor.json 的 paths.captures 改回根以内(缺省 captures)' : !writable ? '改目录权限,或换 paths.captures' : undefined });
     }
 
-    // ---- vault(《obsidian仓库设计.md》):档案「现在」callout 进上下文包;日记目录要与 Obsidian 的 daily notes 设置一致 ----
-    try {
-      const lines = extractProfile(await readFile(ws.paths.profile, 'utf8'), 99);
-      push({ name: 'vault.profile', ok: lines.length > 0, required: false, detail: lines.length ? `${redactHome(ws.paths.profile)}:「现在」${lines.length} 行进上下文包` : `${redactHome(ws.paths.profile)} 里没有「> [!abstract] 现在」callout,上下文包不带档案`, fix: lines.length ? undefined : '在档案里写一个 callout:> [!abstract] 现在,下面每行一条(学到哪 / 会用的说法 / 还没学别用)' });
-    } catch {
-      push({ name: 'vault.profile', ok: true, required: false, detail: `没有档案(${redactHome(ws.paths.profile)});上下文包不带 profile`, fix: '写一个:# 名字,然后一个「> [!abstract] 现在」callout' });
+    // ---- vault(《obsidian仓库设计.md》2026-09-17):档案与每位老师的入口文件按 frontmatter 找,原文整篇进上下文包 ----
+    {
+      const { notes, files } = await scanVault(ws);
+      const today = localDate(new Date());
+      const base = pickNotes(notes, files, { date: today });
+      const limit = resolvePolicy(ws.config, '').contextPack.entryChars;
+      push({
+        name: 'vault.profile',
+        ok: !!base.profile && !!base.semester && !base.extraProfiles.length,
+        required: false,
+        detail: !base.profile ? `${redactHome(ws.paths.vault)} 里没有 cotutor: profile 的档案;老师不知道孩子是谁、几年级` : `${base.profile.path} · 学期 ${base.semester ?? '算不出'}${base.extraProfiles.length ? ` · 另有 ${base.extraProfiles.join('、')} 也是 profile,没用` : ''}`,
+        fix: !base.profile ? '建一篇(文件名随意),frontmatter 写 cotutor: profile、nickname、birthday、school_start: 2025-09(读一年级的年月),正文写孩子的情况;或 cotutor init 补一篇' : !base.semester ? `在 ${base.profile.path} 的 frontmatter 加 school_start: YYYY-MM(读一年级的年月);特殊情况直接写 semester: 二年级上` : base.extraProfiles.length ? '只留一篇 cotutor: profile' : undefined,
+      });
+      for (const t of listTutors(ws.config).filter((x) => x.enabled)) {
+        const m = pickNotes(notes, files, { date: today, agent: t.name });
+        const big = !!m.memory && m.memory.text.length > limit;
+        push({
+          name: `vault.memory.${t.name}`,
+          ok: !big && !m.extraMemories.length,
+          required: false,
+          detail: m.memory ? `${m.memory.path}(${m.memory.text.length} 字${big ? `,超过 ${limit},会截断` : ''})${m.extraMemories.length ? ` · 另有 ${m.extraMemories.join('、')} 没用` : ''}` : `还没有;${t.display}第一次记东西时建 ${memoryPath(t.display)}`,
+          fix: big ? '在 Obsidian 里把记忆文件理一理:合并重复的、删过时的;或调 policy.contextPack.entryChars' : m.extraMemories.length ? `agent: ${t.name} 的记忆文件只留一篇` : undefined,
+        });
+      }
+      for (const t of listTutors(ws.config).filter((x) => x.enabled && x.name.endsWith('-tutor'))) {
+        const p = pickNotes(notes, files, { date: today, subject: t.subject });
+        const big = p.entry && p.entry.text.length > limit;
+        const where = t.subject && p.semester ? `课程/${p.semester}/${t.subject}.md` : null;
+        push({
+          name: `vault.entry.${t.name}`,
+          ok: !!p.entry && !big && !p.extraEntries.length,
+          required: false,
+          detail: p.entry ? `${p.entry.path}(${p.entry.text.length} 字${big ? `,超过 ${limit},会截断` : ''})${p.refs.length ? ` · 参考 ${p.refs.length} 篇` : ''}${p.extraEntries.length ? ` · 另有 ${p.extraEntries.join('、')} 没用` : ''}` : missingEntry(t.subject, p),
+          fix: !t.subject ? `在 cotutor.json 的 tutors.${t.name} 里配 subject` : !p.semester ? '先让档案算得出学期(见 vault.profile)' : !p.entry && where ? `建 ${where}(路径随意),frontmatter 写 cotutor: subject、subject: ${t.subject}、semester: ${p.semester};正文写这学期这科的情况,${t.display}每个话题开头整篇读到` : big ? '长的内容挪到别的笔记,入口文件里 [[链过去]](老师只拿到路径,要用时自己读);或调 policy.contextPack.entryChars' : p.extraEntries.length ? '同一科同一学期只留一篇' : undefined,
+        });
+      }
     }
     try {
       const dn = JSON.parse(await readFile(join(ws.paths.vault, '.obsidian', 'daily-notes.json'), 'utf8')) as { folder?: string; format?: string };

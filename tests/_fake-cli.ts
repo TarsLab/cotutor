@@ -2,7 +2,7 @@
  * 假 CLI:模仿 claude / qwen 的 stream-json 无头输出,给 runner 测试用(不花钱、不联网)。
  * 用法(运行时模板里):node --experimental-strip-types _fake-cli.ts [--resume <id>] [--agent <name>] [--fail] [--stream] <prompt>
  * --stream:最终文本先按行以 stream_event(content_block_delta)吐出来,每行歇 80ms(模仿 claude --include-partial-messages),再发 assistant 与 result。
- * 行为:回显 prompt 的最后一行;上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);prompt 含「拍板」就在最终文本前加一段待裁量;含「画场景」出一张带题面 / 讲法的新场景卡,「放旧课包」出一张只有 id 的场景卡,「旧转交」加一段老写法的「## 转交」;含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);含「家长段」加「## 家长」;
+ * 行为:回显 prompt 的最后一行;上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);prompt 含「段在前」就在最终文本前加一段「## 记账」;含「画场景」出一张带题面 / 讲法的新场景卡,「放旧课包」出一张只有 id 的场景卡,「旧转交」加一段老写法的「## 转交」;含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);含「家长段」加「## 家长」;
  * --resume 时 session_id 沿用给的 id,否则新造;--fail 出 error_max_turns。
  */
 export {};
@@ -64,7 +64,7 @@ if (fail) {
   emit({ type: 'result', subtype: 'error_max_turns', is_error: true, session_id: sid, num_turns: 3 });
 } else {
   const parts: string[] = [];
-  if (prompt.includes('拍板')) parts.push('## 待裁量\nquestion: 要不要重讲?\noptions:\n  - label: 重讲\n    recommended: true\n  - label: 先放着');
+  if (prompt.includes('段在前')) parts.push('## 记账\nthread: 0000-1\nname: 重讲');
   if (prompt.includes('画场景')) parts.push('```scene\n2026-09-09-guilv\n我去把这道题画出来。\n题面:找规律填数 75、70、65、__\n讲法:每次少 5;用交错数列分行讲\n```\n\n等我画好。');
   if (prompt.includes('放旧课包')) parts.push('```scene\n2026-09-09-guilv\n```\n\n我们再看一遍。');
   if (prompt.includes('旧转交')) parts.push('## 转交\nto: planner\nwhy: 排进计划');
@@ -84,6 +84,7 @@ if (fail) {
   }
   parts.push(`${session ? '接着说:' : '第一次说:'}${lastLine}`);
   if (prompt.includes('家长段')) parts.push('## 家长\n他其实会了。');
+  if (prompt.includes('记住它')) parts.push('## 记忆\n- 讲角用手指比划他马上懂\n- 家长说别出选择题\n- 第三条会被丢掉');
   // 记账任务(runner.bookkeep 发的):回一段固定形状的「## 记账」;prompt 里有「记账坏」就少写 name(应用该报 warning、日记不写)
   const bk = /给刚才这个话题记账\(话题 (\S+?)[,,]/.exec(prompt);
   if (bk) parts.push(prompt.includes('记账坏') ? `## 记账\n- thread: ${bk[1]}\n  summary: 没名字` : `## 记账\n- thread: ${bk[1]}\n  name: 三角形的角\n  textbook: 人教数学一下#1 认识图形(二)\n  summary: 讲了三角形有三个角,孩子一开始说四个。\n  steps: 看图 → 数角 → 选一选\n  observations:\n    - 角和边会混`);

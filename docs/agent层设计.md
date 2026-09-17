@@ -32,7 +32,7 @@
 |---|---|---|---|---|---|
 | **长期记忆(vault)** | 关于孩子与这个家的**事实**:档案、课程表、日记(孩子问的话、打分够的摘要、观察)、教材目录与口径、计划 | 家长手写;机器只按封闭清单新建或追加(日记、计划),且老师不直接写——记账时回「## 记账」段,应用渲染(2026-09-14,《obsidian仓库设计.md》) | 所有老师(上下文包机械抽 profile / plan / recent;讲解前 Read 教材那一节、Grep 日记)、规划老师、家长 | 文件形状由 lib/diary.ts 保证 | **无**,是普通文件 |
 | **产物账本(ledger)** | 课包等产物的索引与费用 | scene-maker 与应用(追加式) | 应用、家长端 | artifacts.jsonl 契约 | 无 |
-| **私有工作记忆** | 老师**自己怎么干活**:讲法偏好、踩坑、工具用法、上次做到哪 | 该老师 | 只有它自己 | 缓存,丢了不坏事 | Claude `memory: project` → `agents/<name>/.claude/agent-memory/<name>/`;Qwen 无,退化为 `agents/<name>/NOTES.md` 由指令维护 |
+| **私有工作记忆** | 老师**自己怎么干活**:讲法偏好、踩坑、工具用法、上次做到哪 | 该老师 | 只有它自己 | 缓存,丢了不坏事 | Claude `memory: project` → `agents/<name>/.claude/agent-memory/<name>/`;Qwen 无,退化为 `agents/<name>/NOTES.md` 由指令维护 (2026-09-17:不用 `memory: project` 了;每个 agent 的记忆是 vault 里一篇 `cotutor: memory` 笔记,老师写「## 记忆」段、应用追加,家长可读可改,见《obsidian仓库设计.md》§9)|
 | **会话记忆** | 当天这一段对话 | CLI | 该会话 `--resume` | 转录 NDJSON 落 `conversations/` | `--resume <id>`;按天切,跨天不 resume |
 
 三条约定(讲归属,不讲禁令):
@@ -46,7 +46,7 @@
 ```
 ~/cotutor/<slug>/                        一个孩子一个 workspace(2026-09-08 拍板);git 仓(私有);slug 是短名不是真名
   cotutor.json                           老师人设与政策、agent 预设({run, resume} 模板)、paths 角色映射(vault 侧目录)
-  CLAUDE.md   QWEN.md                    家规:账本在哪、记忆在哪、待裁量约定;所有老师常驻
+  CLAUDE.md   QWEN.md                    家规:账本在哪、记忆在哪;所有老师常驻
   .claude/agents/<name>.md               老师与帮手的定义(**拷贝**自 cotutor 包的出厂件,是家长的;2026-09-09 改,原为链)
   .cotutor/shipped.json                  出厂 hash(机器文件),cotutor upgrade 据此分辨没改过 / 改过
   .claude/skills/                        技能(链)
@@ -93,7 +93,7 @@ vault(家长面,iCloud,不进 git,**一个孩子一个 vault**,《obsidian仓库
 | **记账员**:学习结束后由家长触发,抽当天观察写账本、投影到日记 | **fork**(或老师自己写) | 需要整段对话上下文;fork 两边都继承对话,Qwen 还共享缓存前缀 | 都有;Qwen fork 不能再起子代理 |
 | **规划老师扇出**:按学科并行读账本切片做摘要 | 命名子代理 × N | 并行 | 都有 |
 
-两边共有的约束:子代理不能向人提问 → 报告里带「待裁量」段由老师落盘;命名子代理不继承对话与老师记忆,要上下文就 fork;子代理各有自己的记忆目录(Claude);并发有上限;Qwen 的 `--max-tool-calls` 不算子代理内部调用,预算用 `--max-wall-time`。
+两边共有的约束:子代理不能向人提问 → 有疑问写进报告,由老师自己定;命名子代理不继承对话与老师记忆,要上下文就 fork;子代理各有自己的记忆目录(Claude);并发有上限;Qwen 的 `--max-tool-calls` 不算子代理内部调用,预算用 `--max-wall-time`。
 
 ## 5. 记忆的维护
 
@@ -149,7 +149,6 @@ vault(家长面,iCloud,不进 git,**一个孩子一个 vault**,《obsidian仓库
 # 家规
 - 关于孩子的观察,写一条到 ledger/observations.jsonl(一句 claim + evidence + 你的名字和日期),别的老师和规划老师从那里读。
 - 你自己的经验记进你的记忆目录(MEMORY.md 一行索引 + 主题文件)。
-- 需要家长拍板的事写「待裁量」段,不要停下来等。
 - 会话按天,明天从账本和你的记忆接着来,不要指望今天的对话还在。
 ```
 
@@ -176,6 +175,8 @@ memory: project
 5. 不设记忆的写入纪律(见文首)
 6. **一个 workspace 一个孩子**:`~/cotutor/<slug>/` 对一个 vault、一个服务进程(端口不同);路径用短名;跨孩子共享靠拷贝技能
 7. **老师文件拷贝不链**(2026-09-09):见《产品规划.md》拍板 8。「共享的是定义」改为「共享的是出厂件,拷进来就是这家的」;升级靠 hash 分辨
+
+**2026-09-17 状态**:1、2、6、7 在多轮真跑里站住了,收进根目录 CLAUDE.md 的「约定」;3 的记账链在 ray 上还没跑过一次;4 已退役(observations.jsonl,见《obsidian仓库设计.md》§9);5 照旧。
 
 ## 10. 待拍板
 

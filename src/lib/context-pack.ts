@@ -1,5 +1,5 @@
 /**
- * 上下文包序列化(《cotutor契约草案.md》§2):固定 YAML 块 + `---` + 消息原文。
+ * 上下文包序列化(《cotutor契约草案.md》§2):固定 YAML 块 + 家长笔记原文段(<vault-note>)+ `---` + 消息原文。
  * 手写 YAML 子集:标量能裸写就裸写,其余 JSON 双引号(合法 YAML);空的 plan / recent 不写。
  */
 import { ContextPackSchema, VAULT_PACK_ROLES, type ContextPack } from '../schema/index.ts';
@@ -22,9 +22,13 @@ export function renderContextPack(pack: ContextPack): string {
     if (p.focus.circled?.length) out.push(`    circled: [${p.focus.circled.map(yamlScalar).join(', ')}]`);
     if (p.focus.card) out.push(`    card: ${yamlScalar(p.focus.card)}`);
   }
-  if (p.profile.length) {
-    out.push('  profile:');
-    for (const l of p.profile) out.push(`    - ${yamlScalar(l)}`);
+  if (p.semester) out.push(`  semester: ${yamlScalar(p.semester)}`);
+  if (p.profile) out.push(`  profile: ${yamlScalar(p.profile)}`);
+  if (p.entry) out.push(`  entry: ${yamlScalar(p.entry)}`);
+  if (p.memory) out.push(`  memory: ${yamlScalar(p.memory)}`);
+  if (p.refs?.length) {
+    out.push('  refs:');
+    for (const r of p.refs) out.push(`    - ${yamlScalar(r)}`);
   }
   if (p.plan.length) {
     out.push('  plan:');
@@ -48,18 +52,18 @@ export function renderContextPack(pack: ContextPack): string {
     out.push('  photos:');
     for (const c of p.photos) out.push(`    - ${yamlScalar(c)}`);
   }
+  for (const n of p.notes ?? []) out.push(`<vault-note role="${n.role}" path=${JSON.stringify(n.path)}>`, n.text.replace(/\s+$/, ''), '</vault-note>');
   return out.join('\n');
 }
 
-/** 按政策截 profile / plan / recent,再拼成「YAML 块 --- 消息」 */
+/** 按政策截 plan / recent,再拼成「YAML 块 + 笔记原文 --- 消息」(笔记原文已在取材时按 entryChars 截) */
 export function buildContextPack(
   pack: ContextPack,
   message: string,
-  limits: { recent: number; planLines: number; profileLines?: number },
+  limits: { recent: number; planLines: number },
 ): string {
   const trimmed: ContextPack = {
     ...pack,
-    profile: (pack.profile ?? []).slice(0, limits.profileLines ?? 8),
     plan: (pack.plan ?? []).slice(0, limits.planLines),
     recent: (pack.recent ?? []).slice(-limits.recent),
   };

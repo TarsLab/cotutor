@@ -32,7 +32,7 @@ try {
   const analyzeMd = readFileSync(join(ws, '.claude', 'skills', 'cotutor-analyze', 'SKILL.md'), 'utf8');
   check('analyze 技能出厂(2026-09-15):手写 SKILL.md + 生成的 references/命令与文件.md(命令行从 usage 取、文件名从 conversationFiles 取)', analyzeMd.startsWith('---\nname: cotutor-analyze\ndescription: ') && readFileSync(join(ws, '.claude', 'skills', 'cotutor-analyze', 'references', '命令与文件.md'), 'utf8').includes('cotutor replay <老师> <job>') && readFileSync(join(ws, '.claude', 'skills', 'cotutor-analyze', 'references', '命令与文件.md'), 'utf8').includes('<日期>.<job>.run.json'));
   const tuneRef = readFileSync(join(ws, '.claude', 'skills', 'cotutor-tune', 'references', '字段.md'), 'utf8');
-  check('tune 技能出厂(2026-09-15):手写 SKILL.md + 生成的 references/字段.md(tutors 字段与政策缺省从契约取、frontmatter 键从 agent-file 取)', readFileSync(join(ws, '.claude', 'skills', 'cotutor-tune', 'SKILL.md'), 'utf8').startsWith('---\nname: cotutor-tune\ndescription: ') && tuneRef.includes('| `display` | 必需 |') && tuneRef.includes('| `contextPack.profileLines` | 必需 | 8 |') && tuneRef.includes('`permissionMode`') && tuneRef.includes('cotutor add <老师名>'));
+  check('tune 技能出厂(2026-09-15):手写 SKILL.md + 生成的 references/字段.md(tutors 字段与政策缺省从契约取、frontmatter 键从 agent-file 取)', readFileSync(join(ws, '.claude', 'skills', 'cotutor-tune', 'SKILL.md'), 'utf8').startsWith('---\nname: cotutor-tune\ndescription: ') && tuneRef.includes('| `display` | 必需 |') && tuneRef.includes('| `contextPack.entryChars` | 必需 | 4000 |') && tuneRef.includes('`permissionMode`') && tuneRef.includes('cotutor add <老师名>'));
   const vaultMd = readFileSync(join(ws, '.claude', 'skills', 'cotutor-vault', 'SKILL.md'), 'utf8');
   check('vault 技能出厂:手写 SKILL.md + 生成的 references/记账.md,和包里一致,.qwen 相对链', vaultMd.startsWith('---\nname: cotutor-vault\ndescription: ') && vaultMd === readFileSync(join(PACKAGE_SKILLS_DIR, 'cotutor-vault', 'SKILL.md'), 'utf8') && readFileSync(join(ws, '.claude', 'skills', 'cotutor-vault', 'references', '记账.md'), 'utf8').includes('## 字段') && readlinkSync(join(ws, '.qwen', 'skills', 'cotutor-vault')) === '../../.claude/skills/cotutor-vault');
   check('四个领域 skill 拷进 .claude/skills/,.qwen/skills/ 是相对链,hash 记下', existsSync(join(ws, '.claude', 'skills', 'drawtell-scene', 'SKILL.md')) && existsSync(join(ws, '.claude', 'skills', 'drawtell-teaching', 'models-index.md')) && lstatSync(join(ws, '.qwen', 'skills', 'drawtell-cli')).isSymbolicLink() && readlinkSync(join(ws, '.qwen', 'skills', 'drawtell-cli')) === '../../.claude/skills/drawtell-cli' && (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { skills: Record<string, { hash: string }> }).skills['drawtell-verify'].hash.startsWith('sha256:'));
@@ -64,6 +64,19 @@ try {
 
   const d1 = await doctorWorkspace(ws, { probeEnv: false });
   check('健康workspace体检通过', d1.ok, JSON.stringify(d1.checks.filter((c) => c.required && !c.ok)));
+  // vault(2026-09-17):档案与入口文件按属性找;init 补的档案模板带 cotutor: profile,学期没填 doctor 提醒
+  check('init 补的档案带 cotutor: profile', readFileSync(join(ws, '孩子.md'), 'utf8').startsWith('---\ncotutor: profile\n'));
+  const vp = d1.checks.find((c) => c.name === 'vault.profile');
+  check('doctor:档案在但算不出学期 → 提醒写 school_start;入口文件先指回档案', vp?.ok === false && vp.fix?.includes('school_start') === true && d1.checks.find((c) => c.name === 'vault.entry.math-tutor')?.fix === '先让档案算得出学期(见 vault.profile)', JSON.stringify(vp));
+  writeFileSync(join(ws, '孩子.md'), '---\ncotutor: profile\nsemester: 二年级上\n---\n\n小明\n');
+  mkdirSync(join(ws, '课程', '二年级上'), { recursive: true });
+  writeFileSync(join(ws, '课程', '二年级上', '数学.md'), '---\ncotutor: subject\nsubject: 数学\nsemester: 二年级上\n---\n\n会凑十\n');
+  const dv = await doctorWorkspace(ws, { probeEnv: false });
+  const zhEntry = dv.checks.find((c) => c.name === 'vault.entry.chinese-tutor');
+  check('doctor:档案齐了;数学有入口文件,语文没有 → 说建哪、写什么属性;工具人不查', dv.checks.find((c) => c.name === 'vault.profile')?.ok === true && dv.checks.find((c) => c.name === 'vault.entry.math-tutor')?.ok === true && zhEntry?.ok === false && zhEntry.fix?.includes('课程/二年级上/语文.md') === true && zhEntry.fix.includes('subject: 语文') && !dv.checks.some((c) => c.name === 'vault.entry.planner'), JSON.stringify(zhEntry));
+  check('doctor:每个 agent 查记忆文件,还没有不算错、说会建在哪', ['math-tutor', 'planner', 'scene-maker'].every((n) => dv.checks.some((c) => c.name === `vault.memory.${n}` && c.ok)) && dv.checks.find((c) => c.name === 'vault.memory.planner')?.detail.includes('记忆/规划老师.md') === true);
+  const again = await initWorkspace({ slug: 'ming' });
+  check('init 再跑:档案按属性认出来,不再补', again.steps.some((x) => x.item.endsWith('孩子.md') && x.action === 'exists'), JSON.stringify(again.steps.filter((x) => x.item.includes('孩子'))));
   check('doctor 查板书技能(机器件,必需),旧位置没了不报', d1.checks.some((c) => c.name === 'skill.cotutor-board' && c.ok && c.required) && !d1.checks.some((c) => c.name === 'board.legacy'));
   check('老师链都查了(五位:含 scene-maker)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 5);
   check('doctor 查板书后期的运行时:出厂 claude-fast 在模板里', d1.checks.some((c) => c.name === 'post.runtime.claude-fast' && c.ok && !c.required));

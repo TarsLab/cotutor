@@ -1,23 +1,16 @@
 /**
- * 最终文本里的「## 待裁量」「## 记账」段:剥出来给家长 / 应用,剩下的是给孩子的话。
- * 宽容解析:段在但解析不出(缺 question、没有 thread…)就整段留在正文里——格式是增强不是门槛。
+ * 最终文本里的「## 记账」「## 记忆」段:剥出来给应用,剩下的是给孩子的话。
+ * 宽容解析:段在但解析不出(没有 thread、没有 name…)就整段留在正文里——格式是增强不是门槛。
  */
-import {
-  BOOKKEEPING_HEADING,
-  BookkeepingSchema,
-  HOLDUP_HEADING,
-  HoldupAskSchema,
-  type Bookkeeping,
-  type HoldupAsk,
-  type HoldupOption,
-} from '../schema/index.ts';
+import { BOOKKEEPING_HEADING, BookkeepingSchema, MEMORY_HEADING, type Bookkeeping } from '../schema/index.ts';
 
 export interface ParsedSections {
   /** 去掉固定段后的正文 */
   body: string;
-  holdup: HoldupAsk | null;
   /** 记账任务的回答(《obsidian仓库设计.md》§6);应用按它写日记 */
   bookkeeping: Bookkeeping | null;
+  /** 「## 记忆」段的条目(原话,去掉列表点);没有这段 = [] */
+  memory: string[];
   /** body 第 k 行 = 原文第 lineMap[k] 行(家长端「看原文」把解析器的行号映回原文用) */
   lineMap: number[];
 }
@@ -41,12 +34,12 @@ interface Segment {
   lines: SrcLine[];
 }
 
-const SPECIAL = new Set([HOLDUP_HEADING, BOOKKEEPING_HEADING]);
+const SPECIAL = new Set([BOOKKEEPING_HEADING, MEMORY_HEADING]);
 /** 固定段里合法的行:key: value / 列表项 / 缩进的子键 */
 const FIELD_LINE = /^(?:[a-z]+:\s*.*|\s*-\s+.*|\s+[a-z]+:\s*.*)$/;
 
 /**
- * 切段。普通 H2 段到下一个 H2 为止;「待裁量」「记账」这两种固定段只吃字段行——
+ * 切段。普通 H2 段到下一个 H2 为止;「记账」这种固定段只吃字段行——
  * 遇到空行且下一非空行不是字段行,段就结束,后面的话回到正文(老师把给孩子的话放最后一段时不能被吞掉)。
  */
 function segments(text: string): Segment[] {
@@ -74,49 +67,6 @@ function segments(text: string): Segment[] {
     cur.lines.push({ i, text: line });
   }
   return out;
-}
-
-function parseHoldupBody(lines: string[]): HoldupAsk | null {
-  let question = '';
-  const options: HoldupOption[] = [];
-  let inOptions = false;
-  for (const raw of lines) {
-    if (!raw.trim()) continue;
-    let m = /^question:\s*(.*)$/.exec(raw);
-    if (m) {
-      question = unquote(m[1]);
-      inOptions = false;
-      continue;
-    }
-    if (/^options:\s*$/.test(raw)) {
-      inOptions = true;
-      continue;
-    }
-    if (!inOptions) continue;
-    if (/^\S/.test(raw) && !raw.trimStart().startsWith('-')) {
-      inOptions = false;
-      continue;
-    }
-    m = /^\s*-\s+label:\s*(.*)$/.exec(raw);
-    if (m) {
-      options.push({ label: unquote(m[1]) });
-      continue;
-    }
-    m = /^\s*-\s+(.*)$/.exec(raw);
-    if (m) {
-      options.push({ label: unquote(m[1]) });
-      continue;
-    }
-    const cur = options[options.length - 1];
-    if (!cur) continue;
-    m = /^\s+(label|note|recommended):\s*(.*)$/.exec(raw);
-    if (!m) continue;
-    if (m[1] === 'label') cur.label = unquote(m[2]);
-    else if (m[1] === 'note') cur.note = unquote(m[2]);
-    else cur.recommended = /^true$/i.test(m[2].trim());
-  }
-  const r = HoldupAskSchema.safeParse({ question, options: options.filter((o) => o.label) });
-  return r.success ? r.data : null;
 }
 
 /**
@@ -163,23 +113,23 @@ function parseBookkeepingBody(lines: string[]): Bookkeeping | null {
 
 export function parseSections(text: string): ParsedSections {
   const segs = segments(text);
-  let holdup: HoldupAsk | null = null;
   let bookkeeping: Bookkeeping | null = null;
+  const memory: string[] = [];
   const keep: string[] = [];
   const from: number[] = [];
   for (const seg of segs) {
     const body = seg.lines.map((l) => l.text);
-    if (seg.title === HOLDUP_HEADING && !holdup) {
-      const h = parseHoldupBody(body);
-      if (h) {
-        holdup = h;
-        continue;
-      }
-    }
     if (seg.title === BOOKKEEPING_HEADING && !bookkeeping) {
       const b = parseBookkeepingBody(body);
       if (b) {
         bookkeeping = b;
+        continue;
+      }
+    }
+    if (seg.title === MEMORY_HEADING) {
+      const items = body.map((l) => /^\s*[-*]\s+(.*)$/.exec(l)?.[1].trim() ?? '').filter(Boolean);
+      if (items.length) {
+        memory.push(...items);
         continue;
       }
     }
@@ -197,5 +147,5 @@ export function parseSections(text: string): ParsedSections {
   let b = keep.length;
   while (a < b && !keep[a].trim()) a++;
   while (b > a && !keep[b - 1].trim()) b--;
-  return { body: keep.join('\n').trim(), holdup, bookkeeping, lineMap: from.slice(a, b) };
+  return { body: keep.join('\n').trim(), bookkeeping, memory, lineMap: from.slice(a, b) };
 }

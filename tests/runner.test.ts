@@ -1,6 +1,6 @@
 /**
  * 发消息全流程(假 CLI,不花钱):拼上下文包 → spawn / resume → 日志落盘 → 索引物化;
- * 三轮 resume 同会话、换运行时新开、跨天新开、忙时 409、出错标 error、待裁量物化、老师团补丁写回并热重载、关掉老师即消失。
+ * 三轮 resume 同会话、换运行时新开、跨天新开、忙时 409、出错标 error、固定段剥掉、老师团补丁写回并热重载、关掉老师即消失。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -49,18 +49,25 @@ writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault', '计划'), { recursive: true });
 writeFileSync(join(root, 'vault', '课程表.md'), '| 星期 | 时间 | 学科 |\n|---|---|---|\n| 二 | 16:00–17:00 | 数学 |\n| 三 | 19:00–19:40 | 语文 |\n');
 writeFileSync(join(root, 'vault', '计划', '2026-W37.md'), '---\nweek: 2026-W37\nstatus: confirmed\n---\n## 数学老师\n- 周三前讲退位\n## 语文老师\n- 背古诗\n');
-// 观察的真相在日记(2026-09-14):上下文包的 recent 从最近 14 天日记的「- 观察:」行抽,按 H2 的学科过滤;档案「现在」callout 进 profile
+// 观察的真相在日记(2026-09-14):上下文包的 recent 从最近 14 天日记的「- 观察:」行抽,按 H2 的学科过滤
+// 档案与入口文件按属性找(2026-09-17):档案 school_start 2025-09 → 2026-09-08 是二年级上;数学有入口文件(链一篇参考)与教材,语文没有
 mkdirSync(join(root, 'vault', '日记'), { recursive: true });
 writeFileSync(join(root, 'vault', '日记', '2026-09-06.md'), '## 数学 · 退位\n\n- 观察:借位忘了\n');
 writeFileSync(join(root, 'vault', '日记', '2026-09-07.md'), '## 语文 · 生字\n\n- 观察:错别字\n- 家长:他自己改过来了\n');
-writeFileSync(join(root, 'vault', '孩子.md'), '# 小明\n\n> [!abstract] 现在\n> - 数学:人教数学一下 第 4 单元 在学\n> - 还没学、别用:竖式\n\n## 忌讳\n- 别催\n');
+mkdirSync(join(root, 'vault', '随便', '二上'), { recursive: true });
+mkdirSync(join(root, 'vault', '参考'), { recursive: true });
+writeFileSync(join(root, 'vault', '档案.md'), '---\ncotutor: profile\nnickname: 小明\nschool_start: 2025-09\n---\n\n有阅读困难,别催。\n');
+writeFileSync(join(root, 'vault', '随便', '二上', '数学.md'), '---\ncotutor: subject\nsubject: 数学\nsemester: 二年级上\n---\n\n会凑十,还没学竖式。讲法见 [[跨十]]。\n');
+writeFileSync(join(root, 'vault', '随便', '数学二上课本.md'), '---\ncotutor: textbook\nsubject: 数学\nsemester: 二年级上\n---\n\n# 第一单元\n');
+writeFileSync(join(root, 'vault', '随便', '一下数学.md'), '---\ncotutor: subject\nsubject: 数学\nsemester: 一年级下\n---\n\n上学期的,不该带。\n');
+writeFileSync(join(root, 'vault', '参考', '跨十.md'), '慢一拍\n');
 
 let now = new Date(2026, 8, 8, 16, 20);
 const ctx = createContext(loadWorkspace(root), { now: () => now });
 const post = (tutor: string, body: unknown) => route('POST', `/api/conversations/${tutor}/messages`, ctx, body);
 const day = (tutor: string, date: string) => route('GET', `/api/conversations/${tutor}/${date}`, ctx);
 type Timing = { startedAt: string; firstCardMs?: number; doneMs?: number; dubbedMs?: number };
-type Day = { index: { session: { id: string; runtime: string } | null; messages: { job: string; result: string; kidText?: string | null; timing?: Timing; artifacts?: string[]; holdup?: { question: string; options: { label: string }[] } | null; handoff?: { to: string } | null; runtime?: string; error?: string | null; audio?: string | null }[]; costUsd: number }; running: string | null; runs: Record<string, { kind: string; sub?: boolean; tools?: unknown[] }[]>; errors: Record<string, string> };
+type Day = { index: { session: { id: string; runtime: string } | null; messages: { job: string; result: string; kidText?: string | null; timing?: Timing; artifacts?: string[]; bookkeeping?: { entries: { name: string }[] } | null; handoff?: { to: string } | null; runtime?: string; error?: string | null; audio?: string | null }[]; costUsd: number }; running: string | null; runs: Record<string, { kind: string; sub?: boolean; tools?: unknown[] }[]>; errors: Record<string, string> };
 const wait = async (tutor: string): Promise<void> => {
   // runner 没暴露 done 给路由层,这里轮询 running 直到空
   for (let i = 0; i < 200 && ctx.runner.running(tutor); i++) await new Promise((r) => setTimeout(r, 25));
@@ -71,8 +78,8 @@ try {
   {
     const { packDryRun } = await import('../src/server/runner.ts');
     const r = await packDryRun(loadWorkspace(root), 'math-tutor', { from: 'kid', at: now, text: '干跑一句' });
-    check('pack 干跑:prompt 带档案 / 计划 / 观察与消息', r.prompt.includes('人教数学一下') && r.prompt.includes('周三前讲退位') && r.prompt.includes('借位忘了') && r.prompt.endsWith('干跑一句\n'), r.prompt);
-    check('pack 干跑:来源清单', r.report.profile.found && r.report.profile.total === 2 && r.report.profile.kept === 2 && r.report.plan.found && r.report.plan.kept === 1 && r.report.recent.filesFound.join() === '2026-09-06,2026-09-07' && r.report.recent.total === 1 && r.report.recent.kept === 1 && r.report.recent.subject === '数学', JSON.stringify(r.report));
+    check('pack 干跑:prompt 带档案与入口文件原文 / 计划 / 观察与消息', r.prompt.includes('有阅读困难') && r.prompt.includes('<vault-note role="entry" path="随便/二上/数学.md">') && !r.prompt.includes('上学期的') && r.prompt.includes('周三前讲退位') && r.prompt.includes('借位忘了') && r.prompt.endsWith('干跑一句\n'), r.prompt);
+    check('pack 干跑:来源清单', r.report.vault.semester === '二年级上' && r.report.vault.profile === '档案.md' && r.report.vault.entry === '随便/二上/数学.md' && r.report.vault.refs.join() === '随便/数学二上课本.md,参考/跨十.md' && r.report.plan.found && r.report.plan.kept === 1 && r.report.recent.filesFound.join() === '2026-09-06,2026-09-07' && r.report.recent.total === 1 && r.report.recent.kept === 1 && r.report.recent.subject === '数学', JSON.stringify(r.report));
     check('pack 干跑:不写盘', !existsSync(join(root, 'conversations', 'math-tutor')));
   }
   // ---- 第一轮:新开 ----
@@ -103,9 +110,12 @@ try {
   // 换个法子:再发一条让假 CLI 把整段 prompt 回显——它回显最后一行,而上下文包在前面。这里改为直接测 gatherContext。
   const { gatherContext } = await import('../src/server/runner.ts');
   const pack = await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: now });
-  check('gatherContext:本老师的计划行、本学科观察(从日记抽)、档案两行、at', pack.plan.join() === '周三前讲退位' && pack.recent.map((r) => r.claim).join() === '借位忘了' && pack.profile.join('|') === '数学:人教数学一下 第 4 单元 在学|还没学、别用:竖式' && pack.at === '2026-09-08T16:20', JSON.stringify(pack));
+  check('gatherContext:本老师的计划行、本学科观察(从日记抽)、学期、档案与入口、参考给绝对路径、at', pack.plan.join() === '周三前讲退位' && pack.recent.map((r) => r.claim).join() === '借位忘了' && pack.semester === '二年级上' && pack.profile === '档案.md' && pack.entry === '随便/二上/数学.md' && pack.notes?.map((n) => n.role).join() === 'profile,entry' && pack.refs?.join() === [join(root, 'vault', '随便', '数学二上课本.md'), join(root, 'vault', '参考', '跨十.md')].join() && pack.at === '2026-09-08T16:20', JSON.stringify(pack));
   const packZh = await gatherContext(ctx.ws, 'chinese-tutor', { from: 'parent', at: now });
-  check('语文老师拿到自己的', packZh.plan.join() === '背古诗' && packZh.recent.map((r) => r.claim).join() === '错别字');
+  check('语文老师拿到自己的;没有入口文件 → entry 写缺了什么,只带档案', packZh.plan.join() === '背古诗' && packZh.recent.map((r) => r.claim).join() === '错别字' && packZh.entry === '缺:vault 里没有 cotutor: subject、subject: 语文、semester: 二年级上 的文件' && packZh.notes?.map((n) => n.role).join() === 'profile' && !packZh.refs, JSON.stringify(packZh));
+  const packTight = await gatherContext({ ...ctx.ws, config: { ...ctx.ws.config, policyDefaults: { ...ctx.ws.config.policyDefaults, contextPack: { entryChars: 20 } } } }, 'math-tutor', { from: 'kid', at: now });
+  check('entryChars:原文截断,YAML 里注明', packTight.entry?.startsWith('随便/二上/数学.md(原文 ') === true && packTight.notes?.[1].text.includes('后面截掉了') === true, JSON.stringify(packTight));
+  check('寒假:2 月 → 二年级寒假,数学没有入口文件', (await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: new Date(2027, 1, 3, 10, 0) })).semester === '二年级寒假');
   check('课程表命中 → slot(2026-09-08 是周二 16:20)', pack.slot === '数学 16:00-17:00', String(pack.slot));
   check('时段外没有 slot', (await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: new Date(2026, 8, 8, 18, 0) })).slot === undefined);
   const m1s = m1 as typeof m1 & { section?: { lines: { audio: string | null }[] } };
@@ -147,17 +157,42 @@ try {
 
   // ---- 第二、三轮:resume 同会话 ----
   now = new Date(2026, 8, 8, 16, 25);
-  const r2 = await post('math-tutor', { text: '再讲一遍,要拍板', from: 'parent' });
+  const r2 = await post('math-tutor', { text: '再讲一遍,段在前', from: 'parent' });
   check('第二条 resume', (r2.json as { resume: boolean }).resume === true, JSON.stringify(r2.json));
   await wait('math-tutor');
   now = new Date(2026, 8, 8, 16, 30);
+  writeFileSync(join(root, 'vault', '随便', '二上', '数学.md'), '---\ncotutor: subject\nsubject: 数学\nsemester: 二年级上\n---\n\n家长刚改了:会竖式了。\n');
   await post('math-tutor', { text: '第三条,旧转交' });
   await wait('math-tutor');
   const d3 = (await day('math-tutor', '2026-09-08')).json as Day;
+  const promptOf = async (job: string): Promise<string> => ((await route('GET', `/api/conversations/math-tutor/2026-09-08/raw/${job}`, ctx)).json as { pack: { prompt: string } }).pack.prompt;
+  const pr1 = await promptOf(d3.index.messages[0].job);
+  const pr2 = await promptOf(d3.index.messages[1].job);
+  const pr3 = await promptOf(d3.index.messages[2].job);
+  check('笔记原文:新会话整篇带,消息记下版本', pr1.includes('<vault-note role="profile"') && pr1.includes('<vault-note role="entry"') && /^随便\/二上\/数学\.md@[0-9a-f]{8}$/.test((d3.index.messages[0] as { notes?: Record<string, string> }).notes?.entry ?? ''), pr1);
+  check('笔记原文:续会话没改过 → 只写「未变」', !pr2.includes('<vault-note') && pr2.includes('entry: "随便/二上/数学.md(未变,原文在本话题前面)"') && pr2.includes('profile: "档案.md(未变'), pr2);
+  check('笔记原文:话题里家长改了入口文件 → 再带一次新的,档案仍未变', pr3.includes('<vault-note role="entry"') && pr3.includes('会竖式了') && !pr3.includes('<vault-note role="profile"') && pr3.includes('profile: "档案.md(未变'), pr3);
   check('三轮同一会话,费用累计', d3.index.messages.length === 3 && d3.index.session?.id === d1.index.session?.id && d3.index.costUsd === 0.15, JSON.stringify(d3.index));
-  check('resume 的回复接着说', d3.index.messages[1].kidText === '接着说:再讲一遍,要拍板');
-  check('待裁量物化成问题 + 选项,孩子视图剥掉', d3.index.messages[1].holdup?.question === '要不要重讲?' && d3.index.messages[1].holdup?.options.length === 2 && !d3.index.messages[1].kidText?.includes('待裁量'), JSON.stringify(d3.index.messages[1]));
+  check('resume 的回复接着说', d3.index.messages[1].kidText === '接着说:再讲一遍,段在前');
+  check('写在前面的记账段剥掉并物化,孩子视图没有它', d3.index.messages[1].bookkeeping?.entries[0].name === '重讲' && !d3.index.messages[1].kidText?.includes('记账'), JSON.stringify(d3.index.messages[1]));
   check('老写法的「## 转交」只是家长尾巴(第一个 H2 起):不起谁、孩子看不到', !('handoff' in d3.index.messages[2]) && !('scenes' in d3.index.messages[2]) && (d3.index.messages[2] as { parentText?: string }).parentText?.startsWith('## 转交\nto: planner') === true && !ctx.runner.running('planner'), JSON.stringify(d3.index.messages[2]));
+  // ---- 记忆(2026-09-17):「## 记忆」段追加进 vault 的记忆文件,每轮最多两条;下个话题原文进上下文包 ----
+  {
+    const memFile = join(root, 'vault', '记忆', '规划老师.md');
+    const s1 = await ctx.runner.send('planner', { from: 'parent', text: '记住它', newThread: true });
+    const i1 = await s1.done;
+    const mm = i1.messages.find((m) => m.job === s1.job)!;
+    const text1 = readFileSync(memFile, 'utf8');
+    check('记忆:没有就建 记忆/<显示名>.md,带属性,两条带日期,第三条丢掉并提醒', text1.startsWith('---\ncotutor: memory\nagent: planner\n---\n') && text1.endsWith('- 2026-09-08 讲角用手指比划他马上懂\n- 2026-09-08 家长说别出选择题\n') && !text1.includes('第三条') && mm.remembered?.length === 2 && mm.warnings?.some((w) => w.includes('丢了 1 条')) === true && !mm.parentText?.includes('记忆'), JSON.stringify({ text1, mm }));
+    writeFileSync(memFile, text1.replace('- 2026-09-08 家长说别出选择题\n', '- 家长改过:可以出选择题\n'));
+    const s2 = await ctx.runner.send('planner', { from: 'parent', text: '记住它', newThread: true });
+    const i2 = await s2.done;
+    const text2 = readFileSync(memFile, 'utf8');
+    const run2 = JSON.parse(readFileSync(join(root, 'conversations', 'planner', `2026-09-08.${s2.job}.run.json`), 'utf8')) as { prompt: string };
+    check('记忆:新话题带原文(家长改过的样子);已有的不重复记,家长删掉的那条会被记回来', run2.prompt.includes('  memory: "记忆/规划老师.md"') && run2.prompt.includes('<vault-note role="memory" path="记忆/规划老师.md">') && run2.prompt.includes('家长改过:可以出选择题') && text2.endsWith('- 家长改过:可以出选择题\n- 2026-09-08 家长说别出选择题\n') && i2.messages.find((m) => m.job === s2.job)?.remembered?.join() === '- 2026-09-08 家长说别出选择题', JSON.stringify({ text2 }));
+    const mp = await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: now });
+    check('记忆按 agent 分:数学老师还没有', mp.memory === '还没有' && !mp.notes?.some((n) => n.role === 'memory'), JSON.stringify(mp.memory));
+  }
   const dates = (await route('GET', '/api/conversations/math-tutor', ctx)).json as { dates: string[] };
   check('日期列表', dates.dates.join() === '2026-09-08');
 
@@ -193,6 +228,7 @@ try {
   await post('chinese-tutor', { text: '起不来', runtime: 'missing' });
   await wait('chinese-tutor');
   const dm = (await day('chinese-tutor', '2026-09-09')).json as Day;
+  check('没有入口文件:这条消息带提醒(家长端看得到),起不来的尾巴没把它盖掉', (dm.index.messages[0] as { warnings?: string[] }).warnings?.[0]?.startsWith('入口文件缺:vault 里没有 cotutor: subject、subject: 语文') === true, JSON.stringify(dm.index.messages[0]));
   check('起不来 → error 指向 err.log,尾巴带原因', dm.index.messages[0].result === 'error' && String(dm.index.messages[0].error).startsWith('spawn:') && dm.errors[dm.index.messages[0].job]?.includes('起不来'), JSON.stringify({ m: dm.index.messages[0], e: dm.errors }));
 
   // ---- 孩子端接口:首页、过滤后的会话、发消息、每日上限、配音文件 ----
@@ -200,7 +236,7 @@ try {
   check('首页:标题、课程表、孩子端老师(无 planner)', home.title === '小明的老师们' && home.timetable.length === 2 && home.tutors.length === 3 && !home.tutors.some((t) => t.name === 'planner') && home.stacks.length === 0, JSON.stringify(home.tutors));
   check('老师带 hasVoice 与剩余条数(今天 09-09 孩子还没发过)', home.tutors.find((t) => t.name === 'math-tutor')?.hasVoice === true && home.tutors.find((t) => t.name === 'math-tutor')?.remaining === 30, JSON.stringify(home.tutors));
   const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null; reply: string | null; audio: string | null }[]; remaining: number; pending: string | null };
-  check('孩子视图:家长发的只见回复,搜不到工具、错误、待裁量', kd.messages.length === 1 && kd.messages[0].question === null && kd.messages[0].reply === '第一次说:新的一天' && !/工具|error|holdup|handoff|costUsd|Read/.test(JSON.stringify(kd)), JSON.stringify(kd));
+  check('孩子视图:家长发的只见回复,搜不到工具、错误、家长尾巴', kd.messages.length === 1 && kd.messages[0].question === null && kd.messages[0].reply === '第一次说:新的一天' && !/工具|error|holdup|handoff|costUsd|Read/.test(JSON.stringify(kd)), JSON.stringify(kd));
   check('planner 对孩子端不存在', (await route('GET', '/api/kid/conversations/planner/today', ctx)).status === 404);
   const kp = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '孩子问的' });
   check('孩子发消息 202', kp.status === 202, JSON.stringify(kp.json));
@@ -310,15 +346,15 @@ try {
   check('事件:start 第一条;流式时卡与句在 exit 之前;2 张卡 3 句;工具调用与子代理各一条', kinds[0] === 'main:start' && kinds.filter((k) => k === 'main:card').length === 2 && kinds.filter((k) => k === 'main:line').length === 3 && at('main:card') < at('main:exit') && at('main:line') < at('main:exit') && evFile.some((e) => e.lane === 'main' && e.kind === 'tool' && !e.sub) && evFile.filter((e) => e.lane === 'main' && e.kind === 'tool').length === 1, kinds.join(' '));
   check('一拍一就绪:跑到一半 partial 带 ready(只增)、就绪的句带配音名;第一拍就绪在 exit 之前;timing 记了 firstReadyMs', seen.some((x) => x.ready > 0) && seen.every((x, i) => i === 0 || x.ready >= seen[i - 1].ready) && seen.some((x) => x.audio > 0) && at('ready:beat') >= 0 && at('ready:beat') < at('main:exit') && evFile.some((e) => e.lane === 'ready' && e.kind === 'beat' && e.first) && typeof (mS as { timing?: { firstReadyMs?: number } }).timing?.firstReadyMs === 'number', JSON.stringify(seen.slice(-3)) + ' ' + kinds.join(' '));
   check('事件:配音每句 排队 + 完成;后期按拍:第一拍在 exit 之前就起、两拍都回;全部就绪在 exit 之后、写入之前;时间单调不减', kinds.filter((k) => k === 'tts:queued').length === 3 && kinds.filter((k) => k === 'tts:done').length === 3 && at('post:start') >= 0 && at('post:start') < at('main:exit') && at('post:done') > at('post:start') && kinds.filter((k) => k === 'post:done').length === 2 && at('ready:all') > at('main:exit') && at('index:written') === kinds.length - 1 && evFile.every((e, i) => i === 0 || e.t >= evFile[i - 1].t), kinds.join(' '));
-  // 老师先写「## 待裁量」再板书:流式时固定段先剥再解析,卡照样在 exit 之前露出来(以前整段被当家长尾巴,一张卡都没有)
+  // 老师先写固定段(「## 记账」)再板书:流式时固定段先剥再解析,卡照样在 exit 之前露出来(以前整段被当家长尾巴,一张卡都没有)
   const live2: { job: string; lane: string; kind: string }[] = [];
   const off2 = ctx.runner.onEvent((e) => live2.push({ job: e.job, lane: e.event.lane, kind: e.event.kind }));
-  const rs2 = await post('math-tutor', { text: '流式 板书 拍板', from: 'kid', runtime: 'stream' });
+  const rs2 = await post('math-tutor', { text: '流式 板书 段在前', from: 'kid', runtime: 'stream' });
   const jobS3 = (rs2.json as { job: string }).job;
   await wait('math-tutor');
   off2();
   const k2 = live2.filter((e) => e.job === jobS3).map((e) => `${e.lane}:${e.kind}`);
-  check('流式 + 固定段在前:卡与句仍在 exit 之前出现;待裁量照样进索引', k2.indexOf('main:card') >= 0 && k2.indexOf('main:card') < k2.indexOf('main:exit') && ((await day('math-tutor', '2026-09-09')).json as Day).index.messages.find((m) => m.job === jobS3)?.holdup?.question === '要不要重讲?', k2.join(' '));
+  check('流式 + 固定段在前:卡与句仍在 exit 之前出现;记账段照样进索引', k2.indexOf('main:card') >= 0 && k2.indexOf('main:card') < k2.indexOf('main:exit') && ((await day('math-tutor', '2026-09-09')).json as Day).index.messages.find((m) => m.job === jobS3)?.bookkeeping?.entries[0].name === '重讲', k2.join(' '));
   check('埋点:每拍的关 / 配音齐 / 后期 / 就绪从事件推出来,首拍就绪 = 拍 0 的就绪', (() => { const bs = (mS as { timing?: { beats?: { card: number | null; readyMs?: number; dubbedMs?: number; postMs?: number }[] } }).timing?.beats; return Array.isArray(bs) && bs.length === 2 && bs.every((b) => typeof b.readyMs === 'number' && typeof b.dubbedMs === 'number') && bs.filter((b) => b.card !== null).every((b) => typeof b.postMs === 'number'); })(), JSON.stringify((mS as { timing?: { beats?: unknown } }).timing?.beats));
   check('事件:格式化成一行(相对秒 · 道 · 一句话)', /^\s*\d+\.\d\d main\s+起 .*(新会话|resume)/.test(formatEvent(evFile[0])) && formatEvent(evFile.find((e) => e.kind === 'card')!).includes('卡 0 text'), formatEvent(evFile[0]));
   check('跑完:正式一节(不带 partial)、2 张卡 3 句、每句 mp3(流式时已在路上)、子代理的增量没混进来', mS.section?.cards.length === 2 && !('partial' in mS.section) && mS.section.lines.length === 3 && mS.section.lines.every((l, i) => l.audio === `2026-09-09.${jobS2}.${i + 1}.mp3`) && !mS.kidText?.includes('子代理') && mS.kidText?.includes('第一次说:流式 板书') === true, JSON.stringify(mS));
@@ -505,7 +541,7 @@ try {
   type PhotoDay = { index: { messages: { job: string; text: string; photos?: string[]; kidText?: string | null; section?: { cards: { kind: string; props: Record<string, unknown> }[] } | null; result: string }[] } };
   const phM = ((await day('math-tutor', phDate)).json as PhotoDay).index.messages.find((m) => m.job === phJ.job)!;
   const phRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phJ.job}.run.json`), 'utf8')) as { prompt: string };
-  check('消息:text「(拍了一张)」、photos 记下;上下文包 photos: 段一行一张;老师 Read 了那张', phM.result === 'ok' && phM.text === '(拍了一张)' && phM.photos?.join() === phOne && phRun.prompt.includes(`  photos:\n    - ${JSON.stringify(phOne)}\n---\n(拍了一张)`) && phM.kidText?.includes('看到照片:' + phOne) === true, JSON.stringify({ text: phM.text, photos: phM.photos, kid: phM.kidText, prompt: phRun.prompt.slice(-200) }));
+  check('消息:text「(拍了一张)」、photos 记下;上下文包 photos: 段一行一张;老师 Read 了那张', phM.result === 'ok' && phM.text === '(拍了一张)' && phM.photos?.join() === phOne && phRun.prompt.includes(`  photos:\n    - ${JSON.stringify(phOne)}\n<vault-note`) && phRun.prompt.endsWith('</vault-note>\n---\n(拍了一张)\n') && phM.kidText?.includes('看到照片:' + phOne) === true, JSON.stringify({ text: phM.text, photos: phM.photos, kid: phM.kidText, prompt: phRun.prompt.slice(-200) }));
   const phCards: { kind: string; props: Record<string, unknown> }[] = phM.section?.cards ?? [];
   check('板书:image 卡引用原图、canvas 卡照片做底(第三种底图)', phCards.some((c) => c.kind === 'image' && c.props.src === phOne) && phCards.some((c) => c.kind === 'canvas' && (c.props.base as { image?: string } | null)?.image === phOne), JSON.stringify(phCards));
   const phRuns = ((await day('math-tutor', phDate)).json as Day).runs[phJ.job];

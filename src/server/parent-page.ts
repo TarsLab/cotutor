@@ -1014,7 +1014,7 @@ export const PARENT_PAGE = `<!doctype html>
       h('div', { class: 'field' }, h('label', {}, '孩子端标题'), h('input', { type: 'text', id: 'g-title', value: c.title })),
       h('div', { class: 'field' }, h('label', {}, '缺省运行时'), h('select', { id: 'g-agent' }, ...c.runtimes.map((p) => h('option', { value: p, selected: p === c.runtime }, p)))),
       ...policyFields(c.policyDefaults, c.tutors[0] ? Object.assign({}, c.tutors[0].policy, c.policyDefaults) : {}, { inherit: false })));
-    top.append(h('p', { class: 'hint' }, '留空 = 出厂缺省(60 字 / 30 条 / 3 次 / 验收关 / L0,L1,L3,L4 / 10,10)。运行时模板在 cotutor.json 里,路径与端口在设置页。'));
+    top.append(h('p', { class: 'hint' }, '留空 = 出厂缺省(每句 60 字 / 每天 30 条 / 观察 10 条、计划 10 行、原文 4000 字)。运行时模板在 cotutor.json 里,路径与端口在设置页。'));
 
     const roster = h('div', { class: 'panel' });
     const addBox = h('div', { class: 'rowbody', style: 'display:none' },

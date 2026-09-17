@@ -9,7 +9,7 @@ check('本包带 4 位老师', agents.length === 4, agents.map((a) => a.name).jo
 const raw = JSON.parse(configTemplate({ slug: 'ming', name: '小明', port: 5181, tutors: agents }));
 const cfg = CotutorConfigSchema.parse(raw);
 check('模板可解析', cfg.kid.slug === 'ming' && cfg.title === '小明的老师们' && cfg.server.port === 5181);
-check('老师表齐', Object.keys(cfg.tutors).length === 4 && !('homework-tutor' in cfg.tutors) && !('planner' in cfg.tutors) && cfg.tutors['scene-maker'].hidden === true && cfg.tutors['scene-maker'].runtime === 'claude-scene');
+check('老师表齐', Object.keys(cfg.tutors).length === 4 && cfg.tutors['scene-maker'].hidden === true && cfg.tutors['scene-maker'].runtime === 'claude-scene');
 check('enabled 缺省 true', cfg.tutors['math-tutor'].enabled === true && Object.values(cfg.tutors).every((t) => t.enabled));
 check('运行时 claude/qwen 都在', 'claude' in cfg.runtimes && 'qwen' in cfg.runtimes && cfg.runtimes.default === 'claude');
 

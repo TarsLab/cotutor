@@ -52,13 +52,7 @@ node_modules/
 .DS_Store
 `;
 
-/**
- * 家规(workspace 根的 CLAUDE.md / QWEN.md)2026-09-15 起不再出厂:老师要知道的都在老师文件与技能里,机器不写、不查;
- * 家长想给所有老师加一条共同规矩就自己在根建 CLAUDE.md(qwen 用 QWEN.md),两个 CLI 从 agents/<name>/ 向上都读得到。
- * 删掉的另一个理由:板书后期的 claude -p 以 workspace 根为 cwd,家规会被塞进每一拍的提示词。
- */
-
-/** 档案模板(vault 的 孩子.md;缺了才写):「现在」callout 整段进上下文包,其余老师按需读 */
+/** 档案模板(paths.profile,缺了才写):cotutor: profile 的那篇,原文整篇进每个话题的第一条 */
 export function profileTemplate(name: string): string {
   return `---
 cotutor: profile

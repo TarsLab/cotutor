@@ -1,5 +1,5 @@
 /**
- * 舞台包与孩子端页面之间的 postMessage 协议(《drawtell接入与场景卡.md》§1):页面在 iframe 里装 /stage/?card=<id>,
+ * 舞台包与孩子端页面之间的 postMessage 协议:页面在 iframe 里装 /stage/?card=<id>,
  * 重卡(scene / canvas)的交互都在包里做,页面只管顶栏、字幕行与输入条。两边都只认带 source 的消息。
  * 这份文件不能有运行时 import(页面那边不用它,只照着写;这里是包的真相)。
  */

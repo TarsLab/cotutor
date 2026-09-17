@@ -1,5 +1,5 @@
 /**
- * 板书后期的进程侧(2026-09-13 起按拍,《工作流程.md》§三):一拍关了就按 policy.post.runtime 起一次快模型
+ * 板书后期的进程侧(按拍,《工作流程.md》§二):一拍关了就按 policy.post.runtime 起一次快模型
  * (claude -p --model haiku --output-format json …),等到 timeoutMs,解析 + 校验(src/lib/postprocess.ts,纯函数)→ 套到这节;
  * 每拍的输入、原始输出、丢掉的、耗时、费用攒成一份 <日期>.<job>.post.json(version 2:beats[] + 汇总;家长端「看原文」第七站)。
  * 坏了 = 没有:哪一拍失败哪一拍素版(另起一行、机械规则选笔),不重来,孩子端不知道这道工序存在。

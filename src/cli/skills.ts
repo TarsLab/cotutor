@@ -6,7 +6,7 @@
  *   没装 → unavailable,doctor 点名,init 跳过)
  * - machine: true 的是机器件(cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune:它们和解析器、契约、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
  *   其余拷进来就是家长的:upgrade 没改过的换新、改过的报 diff 保留(custom / untracked)
- * 工作流 skill(math-explainer 等)不拷,scene-maker 的工作流写在它的老师文件正文里(《drawtell接入与场景卡.md》§3)。
+ * 工作流 skill(math-explainer 等)不拷,scene-maker 的工作流写在它的老师文件正文里。
  * 顺带一个机器文件 .cotutor/drawtell:指向本包 node_modules 里 drawtell CLI 的壳脚本,老师用相对路径就能跑它。
  */
 import { createHash } from 'node:crypto';
@@ -40,8 +40,6 @@ export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
   { name: 'drawtell-verify', source: 'drawtell' },
 ];
 export type ShippedSkillName = string;
-
-export const BOARD_SKILL_DIR = `.claude/skills/${BOARD_SKILL}`;
 
 /** 本包自带的技能目录(仓库检出与 npm 安装都在包根 skills/) */
 export const PACKAGE_SKILLS_DIR = fileURLToPath(new URL('../../skills/', import.meta.url));

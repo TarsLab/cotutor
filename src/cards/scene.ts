@@ -1,5 +1,5 @@
 /**
- * 场景卡(《drawtell接入与场景卡.md》§2):正文是课包 id,课包在 workspace 的 bundles/<id>/(drawtell build 的产物,scene-maker 作业出)。
+ * 场景卡:正文是课包 id,课包在 workspace 的 bundles/<id>/(drawtell build 的产物,scene-maker 作业出)。
  * 新 id 的卡就是画图作业的单子:「题面:」「讲法:」行是给画图老师的(brief,孩子端剥掉),应用看到卡就起 scene-maker 的一轮。
  * 解析器只认 id 与这两行;题面、步数、有没有做好(ready)、缩略图是服务端下发时从课包现读的快照(src/server/scene-props.ts),
  * 所以课包落地后卡自己变成可播,不用老师再说一遍。状态 = 孩子看到第几步、看完没;紧凑态「N 步 ▷」,舞台是 drawtell 播放器。

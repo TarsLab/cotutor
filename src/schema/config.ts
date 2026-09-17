@@ -21,7 +21,7 @@ export const PolicySchema = z.object({
   board: z.enum(['auto', 'off']).describe('板书:auto = 讲题讲概念时老师出卡(缺省);off = 只说话不出卡'),
   /** 场景作业(scene-maker 做课包,$3–5 / 10–15 分钟一个):每天最多起几个;配在 scene-maker 身上或 policyDefaults */
   scenes: z.object({ dailyMax: z.number().int().nonnegative().describe('每天最多起几个场景作业(一个 ≈ 一轮问答的 30 倍费用)') }),
-  /** 板书后期(《卡片重设计评估.md》§五 §六):一节跑完,快模型定标注 / 排版 / 样子;off = 素版(机械规则) */
+  /** 板书后期:一节跑完,快模型定标注 / 排版 / 样子;off = 素版(机械规则) */
   post: z.object({
     mode: z.enum(['auto', 'off']).describe('板书后期:auto = 有卡就让快模型划重点、排版、定样子(缺省);off = 素版'),
     runtime: z.string().min(1).describe('后期用的运行时(runtimes 里的键,缺省 claude-fast:haiku、无工具)'),

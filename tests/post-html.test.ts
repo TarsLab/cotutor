@@ -1,7 +1,7 @@
 /**
  * 后期的 HTML 方言(HTML 进、补丁出):卡按 kind 渲染成孩子看到的结构、已画的标注原地、讲稿的 [词] 原地、前文按行包;
  * 补丁解析宽容(围栏 / 单引号 / 无引号 / 自闭合 / 实体)、词落在哪句靠 said 或词本身找、卡号 c1 / 1 都认;骨架按占位符定方言;
- * 解析出的提案与 JSON 方言走同一个校验器;runPost 走假 CLI 的 HTML 分支全流程(顺着起,前文带已定的样子)。
+ * 解析出的提案走同一个校验器;runPost 走假 CLI 的 HTML 分支全流程(顺着起,前文带已定的样子)。
  */
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

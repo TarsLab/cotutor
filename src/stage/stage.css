@@ -2,7 +2,7 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 #root { display: flex; flex-direction: column; }
 .stage-wait { flex: 1; display: grid; place-items: center; color: #8a8781; font-size: 16px; }
 .chalk-player { flex: 1; min-height: 0; }
-/* ---- 画板工作台(《卡片重设计评估.md》§三 F):题目条 + 工具 + 画布;工具是自己的,excalidraw 的壳全藏 ---- */
+/* ---- 画板工作台:题目条 + 工具 + 画布;工具是自己的,excalidraw 的壳全藏 ---- */
 .canvas-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .canvas-prompt { display: flex; align-items: center; gap: 8px; padding: 10px 8px 10px 16px; font-size: 18px; font-weight: 600; border-bottom: 1px solid #e2dfd6; }
 .canvas-prompt-text { flex: 1; min-width: 0; }

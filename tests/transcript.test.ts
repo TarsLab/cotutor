@@ -5,7 +5,7 @@ import { check, done } from './_check.ts';
 const STREAM = [
   '{"type":"system","subtype":"init","session_id":"s-1","model":"claude-fable-5"}',
   '{"type":"assistant","session_id":"s-1","parent_tool_use_id":null,"message":{"content":[{"type":"thinking","thinking":"内心戏"}]}}',
-  '{"type":"assistant","session_id":"s-1","parent_tool_use_id":null,"message":{"content":[{"type":"text","text":"先看账本。"},{"type":"tool_use","name":"Read","input":{"file_path":"ledger/observations.jsonl"}}]}}',
+  '{"type":"assistant","session_id":"s-1","parent_tool_use_id":null,"message":{"content":[{"type":"text","text":"先看账本。"},{"type":"tool_use","name":"Read","input":{"file_path":"ledger/artifacts.jsonl"}}]}}',
   '{"type":"user","session_id":"s-1","parent_tool_use_id":null,"message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}',
   '{"type":"assistant","session_id":"s-1","parent_tool_use_id":null,"message":{"content":[{"type":"tool_use","name":"Agent","input":{"description":"出课包"}}]}}',
   '{"type":"assistant","session_id":"s-1","parent_tool_use_id":"t2","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"drawtell check x"}}]}}',

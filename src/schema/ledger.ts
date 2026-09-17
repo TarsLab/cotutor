@@ -1,7 +1,6 @@
 /**
  * 产物账本(《cotutor契约草案.md》§5):artifacts.jsonl,追加式、一行一条、id 唯一;改状态追加新行,同 id 后者为准,不改历史。
- * 观察不在这里(2026-09-14 拍板,《obsidian仓库设计.md》§1):观察的真相是 vault 的日记,老师记账时回「## 记账」段、应用写日记;
- * observations.jsonl 退役。
+ * 观察不在这里:观察的真相是 vault 的日记(《obsidian仓库设计.md》§1),老师记账时回「## 记账」段、应用写日记。
  */
 import { z } from 'zod';
 

@@ -1,4 +1,4 @@
-/** 最终文本里的「## 记账」段:剥出来、正文干净;解析不出整段留正文;「## 转交」「## 待裁量」已不是固定段。 */
+/** 最终文本里的「## 记账」「## 记忆」段:剥出来、正文干净;解析不出整段留正文;别的 H2 都是普通段。 */
 import { parseSections } from '../src/lib/sections.ts';
 import { check, done } from './_check.ts';
 
@@ -23,10 +23,8 @@ const TEXT = [
   check('正文去掉记账段、保留其它段;固定段后的空行接回正文', p.body.startsWith('我看了照片') && p.body.includes('## 备注') && p.body.endsWith('两道题都是退位没借。') && !p.body.includes('thread:') && !p.body.includes('看不清'), p.body);
 }
 {
-  const p = parseSections('## 转交\nto: scene-maker\nwhy: 画图');
-  check('「## 转交」是普通段 → 整段留正文', p.body === '## 转交\nto: scene-maker\nwhy: 画图' && !('handoff' in p), JSON.stringify(p));
-  const q = parseSections('## 待裁量\nquestion: 要不要重讲?');
-  check('「## 待裁量」是普通段 → 整段留正文', q.body === '## 待裁量\nquestion: 要不要重讲?' && !('holdup' in q), JSON.stringify(q));
+  const p = parseSections('## 备注\nto: scene-maker\nwhy: 画图');
+  check('不认识的 H2 是普通段 → 整段留正文', p.body === '## 备注\nto: scene-maker\nwhy: 画图' && p.bookkeeping === null && p.memory.length === 0, JSON.stringify(p));
   const fence = parseSections('```\n## 记账\nthread: x\nname: y\n```\n好。');
   check('代码块里的 ## 不算标题', fence.bookkeeping === null && fence.body.includes('## 记账'));
   const bk = parseSections('记好了。\n\n## 记账\n- thread: 1620-1\n  name: 找规律填数(递减)\n  textbook: "人教数学一下#4 100以内数的认识"\n  summary: 讲了递减数列,难点在 80 减 2 过十。\n  steps: 抄数列 → 连箭头 → 一格一格减 → 倒着加回去检查\n  observations:\n    - 跨十会停一拍\n    - 两个两个倒着数能过去\n');

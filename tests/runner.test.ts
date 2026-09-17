@@ -162,7 +162,7 @@ try {
   await wait('math-tutor');
   now = new Date(2026, 8, 8, 16, 30);
   writeFileSync(join(root, 'vault', '随便', '二上', '数学.md'), '---\ncotutor: subject\nsubject: 数学\nsemester: 二年级上\n---\n\n家长刚改了:会竖式了。\n');
-  await post('math-tutor', { text: '第三条,旧转交' });
+  await post('math-tutor', { text: '第三条' });
   await wait('math-tutor');
   const d3 = (await day('math-tutor', '2026-09-08')).json as Day;
   const promptOf = async (job: string): Promise<string> => ((await route('GET', `/api/conversations/math-tutor/2026-09-08/raw/${job}`, ctx)).json as { pack: { prompt: string } }).pack.prompt;
@@ -175,7 +175,6 @@ try {
   check('三轮同一会话,费用累计', d3.index.messages.length === 3 && d3.index.session?.id === d1.index.session?.id && d3.index.costUsd === 0.15, JSON.stringify(d3.index));
   check('resume 的回复接着说', d3.index.messages[1].kidText === '接着说:再讲一遍,段在前');
   check('写在前面的记账段剥掉并物化,孩子视图没有它', d3.index.messages[1].bookkeeping?.entries[0].name === '重讲' && !d3.index.messages[1].kidText?.includes('记账'), JSON.stringify(d3.index.messages[1]));
-  check('老写法的「## 转交」只是家长尾巴(第一个 H2 起):不起谁、孩子看不到', !('handoff' in d3.index.messages[2]) && !('scenes' in d3.index.messages[2]) && (d3.index.messages[2] as { parentText?: string }).parentText?.startsWith('## 转交\nto: planner') === true && !ctx.runner.running('planner'), JSON.stringify(d3.index.messages[2]));
   // ---- 记忆(2026-09-17):「## 记忆」段追加进 vault 的记忆文件,每轮最多两条;下个话题原文进上下文包 ----
   {
     const memFile = join(root, 'vault', '记忆', '画图老师.md');

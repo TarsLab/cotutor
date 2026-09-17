@@ -1,5 +1,5 @@
 /**
- * 一轮运行的事件(2026-09-13,《工作流程.md》§五):runner 在每道工序的关键点发一条,追加到 <日期>.<job>.events.jsonl,
+ * 一轮运行的事件(《工作流程.md》§四):runner 在每道工序的关键点发一条,追加到 <日期>.<job>.events.jsonl,
  * 也给内存里的订阅者(cotutor send 现场打印、serve --trace、以后的时间线站)。三个消费者共用一份事件,不各自再算。
  * 道(lane):main 老师 / tts 配音 / post 板书后期 / ready 就绪 / index 索引 / scene 画图作业 / ledger 账本。t = 从老师进程起算的毫秒。
  * 这里只有形状与格式化,纯函数;发事件的在 server/runner.ts。

@@ -27,7 +27,7 @@ export interface CardLook {
   emoji?: string;
 }
 
-/** 五支笔(《卡片重设计评估.md》§三 C):面类 marker / tint 一下子涂上;线条类 underline / box / circle 是 SVG 路径,描出来 */
+/** 五支笔:面类 marker / tint 一下子涂上;线条类 underline / box / circle 是 SVG 路径,描出来 */
 export type PenName = 'marker' | 'tint' | 'underline' | 'box' | 'circle';
 export const PENS: readonly PenName[] = ['marker', 'tint', 'underline', 'box', 'circle'];
 export const LINE_PENS: readonly PenName[] = ['underline', 'box', 'circle'];
@@ -277,7 +277,7 @@ function validRows(rows: readonly (readonly number[])[], n: number): boolean {
 }
 
 /**
- * 一节的行(《卡片重设计评估.md》§三 H):存的是「为某个端排的」,渲染永远能落地——
+ * 一节的行:存的是「为某个端排的」,渲染永远能落地——
  * 没 layout 一行一张;有 layout:同一个端照排;别的端按机械规则折:手机上一行 2 张且都短才并排、其余拆开、3 张拆开;
  * 标题行、有状态的卡(choice / fill / canvas / scene)永远独占一行。
  */

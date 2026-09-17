@@ -1,5 +1,5 @@
 /**
- * 卡的协议文件(《卡片重设计评估.md》§三 D):每种能力型卡在包根 cards/<kind>/ 下有 card.md(协议:是什么 / 何时用 / 写法 / 例子 / 反例 /
+ * 卡的协议文件:每种能力型卡在包根 cards/<kind>/ 下有 card.md(协议:是什么 / 何时用 / 写法 / 例子 / 反例 /
  * 孩子看到什么 / 你会收回什么 / 状态的形状)与 card.css(这种卡的结构样式,只用主题变量)。
  * md 是可以单独 @ 的文件:init / upgrade 出厂成 workspace 里的**一个技能** .claude/skills/cotutor-board/(2026-09-14 拍板,原来是
  * .cotutor/板书语法.md + .cotutor/cards/):SKILL.md = 语法表(frontmatter + 各 md 的「是什么 / 写法 / 例子」拼),references/<kind>.md 逐张协议,

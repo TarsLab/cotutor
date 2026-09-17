@@ -1,5 +1,5 @@
 /**
- * 后期的样本(《快模型方案.md》§二 B / C):tests/fixtures/post/<名>/ = section.md(老师原文,与 fixtures/board 同一种写法)+ expect.json
+ * 后期的样本(《快模型方案.md》§一 B / C):tests/fixtures/post/<名>/ = section.md(老师原文,与 fixtures/board 同一种写法)+ expect.json
  * (部分匹配:must 该标的、never 不该提的、rows 行、look 底色槽的允许集、maxDropped)+ prompts.md(各拍提示词的渲染快照,测试生成入库;
  * 改骨架 diff 里一眼看到提示词变了什么)+ runs/(真模型评测的留档,gitignore)。
  * 这里是纯函数:读样本、渲染快照、给一次后期结果打分。离线测试在 tests/post-fixtures.test.ts,真模型评测在 scripts/post-eval.ts。

@@ -5,7 +5,7 @@
  * 代价是包更新带来的新出厂件不会自己出现在老 workspace 里,而且「没有」的表现是**静默**的——
  * 2026-09-10 板书那一期加了 scene-maker(画图老师)、claude-scene / qwen-scene 运行时、
  * claude 模板的 `--disallowedTools Agent` 与 `--include-partial-messages`;老 workspace 缺了它们的表现是
- * 「画图老师不存在」「转交起不来」「老师自己派子代理烧预算」「回复整块出不流式」,没有一条会报错。
+ * 「画图老师不存在」「场景作业起不来」「老师自己派子代理烧预算」「回复整块出不流式」,没有一条会报错。
  *
  * 所以有这一层:把「出厂模板有、你这份没有」算出来(doctor 的 `config.migrate` 点名、家长端设置页顶部提示),
  * `cotutor upgrade --config` 只**补缺**——加缺的键、往命令模板里插缺的旗标;家长写过的值一个都不动

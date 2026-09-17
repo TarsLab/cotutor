@@ -186,11 +186,11 @@ export interface Workspace {
 
 /** 校验 cotutor.json 的形状;失败 → ConfigError,信息是逐条修复指南 */
 export function parseConfig(raw: unknown, file: string): CotutorConfig {
-  // 2026-09-09 术语统一(teacher → tutor,homework-aide → homework-tutor):旧键旧名响亮报,不静默变成零位老师
+  // 2026-09-09 术语统一(teacher → tutor;homework-aide 后来的 homework-tutor 已删):旧键旧名响亮报,不静默变成零位老师
   if (raw && typeof raw === 'object') {
     const o = raw as Record<string, unknown>;
     if ('teachers' in o && !('tutors' in o)) {
-      throw new ConfigError(file, '  - teachers:这个键 2026-09-09 起叫 tutors(术语统一为 tutor / 老师);把 "teachers" 改成 "tutors",老师名 *-teacher 改成 *-tutor、homework-aide 改成 homework-tutor,.claude/agents/ 下的文件同名改,然后 cotutor init 补齐');
+      throw new ConfigError(file, '  - teachers:这个键 2026-09-09 起叫 tutors(术语统一为 tutor / 老师);把 "teachers" 改成 "tutors",老师名 *-teacher 改成 *-tutor、homework-aide 整条删掉(作业老师没有了),.claude/agents/ 下的文件同名改,然后 cotutor init 补齐');
     }
     if ('agents' in o && !('runtimes' in o)) {
       throw new ConfigError(file, '  - agents:这个键 2026-09-09 起叫 runtimes(它是跑老师的运行时,与 .claude/agents/ 的 agent 文件、agents/<老师>/ 的老师目录是三回事);把 "agents" 改成 "runtimes" 即可,模板内容与占位 {agent} {agentBody} 不变');
@@ -198,7 +198,7 @@ export function parseConfig(raw: unknown, file: string): CotutorConfig {
     const tutors = o.tutors;
     if (tutors && typeof tutors === 'object') {
       const old = Object.keys(tutors as object).filter((k) => k.endsWith('-teacher') || k === 'homework-aide');
-      if (old.length) throw new ConfigError(file, `  - tutors:${old.join('、')} 是旧名;2026-09-09 起叫 ${old.map((k) => (k === 'homework-aide' ? 'homework-tutor' : k.replace(/-teacher$/, '-tutor'))).join('、')}(文件名与 frontmatter name 一起改),然后 cotutor init 补齐`);
+      if (old.length) throw new ConfigError(file, `  - tutors:${old.join('、')} 是旧名;2026-09-09 起叫 ${old.map((k) => (k === 'homework-aide' ? '(作业老师没有了,整条删掉)' : k.replace(/-teacher$/, '-tutor'))).join('、')}(文件名与 frontmatter name 一起改),然后 cotutor init 补齐`);
     }
   }
   const r = CotutorConfigSchema.safeParse(raw);

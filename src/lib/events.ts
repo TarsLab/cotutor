@@ -1,12 +1,12 @@
 /**
  * 一轮运行的事件(2026-09-13,《工作流程.md》§五):runner 在每道工序的关键点发一条,追加到 <日期>.<job>.events.jsonl,
  * 也给内存里的订阅者(cotutor send 现场打印、serve --trace、以后的时间线站)。三个消费者共用一份事件,不各自再算。
- * 道(lane):main 老师 / tts 配音 / post 板书后期 / ready 就绪 / index 索引 / handoff 转交 / ledger 账本。t = 从老师进程起算的毫秒。
+ * 道(lane):main 老师 / tts 配音 / post 板书后期 / ready 就绪 / index 索引 / scene 画图作业 / ledger 账本。t = 从老师进程起算的毫秒。
  * 这里只有形状与格式化,纯函数;发事件的在 server/runner.ts。
  */
 
-export type Lane = 'main' | 'tts' | 'post' | 'ready' | 'index' | 'handoff' | 'ledger';
-export const LANES: readonly Lane[] = ['main', 'tts', 'post', 'ready', 'index', 'handoff', 'ledger'];
+export type Lane = 'main' | 'tts' | 'post' | 'ready' | 'index' | 'scene' | 'ledger';
+export const LANES: readonly Lane[] = ['main', 'tts', 'post', 'ready', 'index', 'scene', 'ledger'];
 
 export type RunEvent = { t: number } & (
   | { lane: 'main'; kind: 'start'; cli: string; runtime: string; resume: boolean }
@@ -23,8 +23,9 @@ export type RunEvent = { t: number } & (
   | { lane: 'ready'; kind: 'beat'; beat: number; card: number | null; first: boolean }
   | { lane: 'ready'; kind: 'all'; cards: number; lines: number }
   | { lane: 'index'; kind: 'written'; warnings: number }
-  | { lane: 'handoff'; kind: 'started'; to: string; job: string }
-  | { lane: 'handoff'; kind: 'skipped'; to: string; why: string }
+  /** 场景卡起了 scene-maker 的一轮 / 没起 */
+  | { lane: 'scene'; kind: 'started'; bundle: string; job: string }
+  | { lane: 'scene'; kind: 'skipped'; bundle: string; why: string }
   | { lane: 'ledger'; kind: 'artifact'; id: string; status: string }
   /** 记账:话题的一段写进了 vault 的日记(file 是日记文件名) */
   | { lane: 'ledger'; kind: 'diary'; thread: string; file: string }
@@ -66,8 +67,8 @@ export function describeEvent(e: RunEvent): string {
       return `全部就绪(${e.cards} 张卡 ${e.lines} 句)`;
     case 'index':
       return `写入${e.warnings ? ` · 提醒 ${e.warnings}` : ''}`;
-    case 'handoff':
-      return e.kind === 'started' ? `${e.to} 起了 ${e.job}` : `${e.to} 没起:${e.why}`;
+    case 'scene':
+      return e.kind === 'started' ? `课包 ${e.bundle} 起了 scene-maker ${e.job}` : `课包 ${e.bundle} 没起:${e.why}`;
     case 'ledger':
       return e.kind === 'diary' ? `日记 ${e.file} 记了话题 ${e.thread}` : `课包 ${e.id} ${e.status}`;
   }
@@ -156,7 +157,7 @@ export function timelineSpans(events: readonly RunEvent[]): TimelineSpan[] {
     else if (e.lane === 'tts' && (e.kind === 'done' || e.kind === 'failed')) { const o = open.get(`tts:${e.label}`); out.push({ lane: 'tts', from: o?.from ?? e.t, to: e.t, label: describeEvent(e), state: e.kind === 'done' ? 'ok' : 'fail' }); open.delete(`tts:${e.label}`); }
     else if (e.lane === 'post' && e.kind === 'start') open.set(`post:${e.beat}`, { from: e.t, label: describeEvent(e) });
     else if (e.lane === 'post' && (e.kind === 'done' || e.kind === 'failed')) { const o = open.get(`post:${e.beat}`); out.push({ lane: 'post', from: o?.from ?? e.t, to: e.t, label: describeEvent(e), state: e.kind === 'failed' ? 'fail' : e.dropped ? 'warn' : 'ok' }); open.delete(`post:${e.beat}`); }
-    else out.push({ lane: e.lane, from: e.t, to: e.t, label: describeEvent(e), state: (e.lane === 'handoff' && e.kind === 'skipped') || (e.lane === 'index' && e.warnings) ? 'warn' : 'ok' });
+    else out.push({ lane: e.lane, from: e.t, to: e.t, label: describeEvent(e), state: (e.lane === 'scene' && e.kind === 'skipped') || (e.lane === 'index' && e.warnings) ? 'warn' : 'ok' });
   }
   // 没收尾的(进程还在、或被杀):画到最后一条事件
   const last = events.length ? events[events.length - 1].t : 0;

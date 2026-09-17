@@ -1,18 +1,22 @@
 /**
  * 场景卡(《drawtell接入与场景卡.md》§2):正文是课包 id,课包在 workspace 的 bundles/<id>/(drawtell build 的产物,scene-maker 作业出)。
- * 解析器只认 id;题面、步数、有没有做好(ready)、缩略图是服务端下发时从课包现读的快照(src/server/scene-props.ts),
+ * 新 id 的卡就是画图作业的单子:「题面:」「讲法:」行是给画图老师的(brief,孩子端剥掉),应用看到卡就起 scene-maker 的一轮。
+ * 解析器只认 id 与这两行;题面、步数、有没有做好(ready)、缩略图是服务端下发时从课包现读的快照(src/server/scene-props.ts),
  * 所以课包落地后卡自己变成可播,不用老师再说一遍。状态 = 孩子看到第几步、看完没;紧凑态「N 步 ▷」,舞台是 drawtell 播放器。
  */
 import { z } from 'zod';
 import { bodyLines, type CardKind } from './kind.ts';
 
 export const BUNDLE_ID_RE = /^[a-z0-9][a-z0-9-]{0,80}$/;
+const BRIEF_LINE = /^(?:题面|讲法)\s*[:：]/;
 
 export const ScenePropsSchema = z.object({
   /** 课包 id(bundles/<id>/) */
   bundle: z.string().regex(BUNDLE_ID_RE),
   /** 老师在 id 后面写的一句(课包还没到时孩子看到它) */
   text: z.string().optional(),
+  /** 给画图老师的「题面:」「讲法:」行,原样一行一条;下发孩子前剥掉 */
+  brief: z.string().optional(),
   /** 以下是下发时从课包读的快照;没到就没有 */
   title: z.string().optional(),
   problem: z.string().optional(),
@@ -40,8 +44,13 @@ export const scene: CardKind<SceneProps, SceneState> = {
     if (!first) throw new Error('第一行要是课包 id');
     if (first.startsWith('{')) throw new Error('行内 JSON 场景还没接(下一步);先写课包 id');
     if (!BUNDLE_ID_RE.test(first)) throw new Error(`课包 id 只能是小写字母、数字、连字符:${first}`);
-    const text = rest.join(' ').trim();
-    return { bundle: first, ...(text ? { text } : {}) };
+    const brief = rest.filter((l) => BRIEF_LINE.test(l));
+    const text = rest.filter((l) => !BRIEF_LINE.test(l)).join(' ').trim();
+    return { bundle: first, ...(text ? { text } : {}), ...(brief.length ? { brief: brief.join('\n') } : {}) };
+  },
+  strip(p) {
+    const { brief: _drop, ...rest } = p;
+    return rest;
   },
   state: SceneStateSchema,
   describe(p, s) {

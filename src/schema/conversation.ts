@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { FocusSchema, MESSAGE_FROM } from './context-pack.ts';
 import { BoardSectionSchema, DeviceSchema } from './board.ts';
-import { BookkeepingSchema, HandoffSchema, HoldupAskSchema } from './sections.ts';
+import { BookkeepingSchema, HoldupAskSchema } from './sections.ts';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -54,10 +54,8 @@ export const ConversationMessageSchema = z.object({
   runtime: z.string().optional(),
   /** 最终文本里剥出来的「待裁量」段:家长视图渲染成选项按钮(R2 物化,免得页面再解析日志) */
   holdup: HoldupAskSchema.nullable().optional(),
-  /** 最终文本里剥出来的「转交」段:应用据此自动起目标老师的一轮(from: system) */
-  handoff: HandoffSchema.nullable().optional(),
-  /** 自动转交起的那一轮:目标老师与 job;没起(上限、忙、老师不在)的原因在 warnings */
-  handoffJob: z.object({ tutor: z.string(), job: z.string() }).nullable().optional(),
+  /** 这轮板书里的新场景卡起的画图作业(scene-maker 的 job;没起的 job 为 null,原因在 warnings) */
+  scenes: z.array(z.object({ bundle: z.string().min(1), job: z.string().nullable() })).optional(),
   /** 不 ok 时的原因(subtype / terminal_reason),家长视图红条 */
   error: z.string().nullable().optional(),
   /** 最终文本解析出的板书节(卡 + 讲稿;孩子端下发前剥答案);null = 这轮没有 */

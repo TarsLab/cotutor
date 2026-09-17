@@ -203,7 +203,7 @@ Growth/                          Ray 的 vault(iCloud)
 - 文档:《agent层设计.md》§1 表格(账本一行改成「日记是观察的真相」)与 §5 记账;《契约草案.md》加「日记 / 记账段」两个形状、删 observations;《产品规划.md》R4 验收改成「日记多一段、上下文包里带着昨天的观察」,待拍板 5 划掉;《家长手册.md》§5 加「你的 Obsidian 仓库:哪些是你写的、哪些是老师写的、怎么打分」。
 - 代码:
   - `src/schema/config.ts`:`paths` 加 `textbooks` / `reference`,`photos` 改 workspace 侧;`vault.keepScore`;`contextPack.profileLines`
-  - `src/schema/conversation.ts`:`threads[thread].rating`;`src/schema/sections.ts`:「## 记账」段的解析(同待裁量 / 转交的写法,`lineMap` 照用);`src/schema/ledger.ts` 删 observations
+  - `src/schema/conversation.ts`:`threads[thread].rating`;`src/schema/sections.ts`:「## 记账」段的解析(同待裁量的写法,`lineMap` 照用);`src/schema/ledger.ts` 删 observations
   - `src/lib/diary.ts`(新,纯函数):`renderDiaryDay(threads, ratings, bookkeeping)` 出追加块、`extractObservations(diaryText, days)` 给上下文包、`extractProfile(RayMd)`
   - `src/server/store.ts`:`appendDiary`;`src/server/runner.ts`:记账任务(resume 当天每个话题的老师,`from: system`)
   - `src/server/parent-page.ts`:话题头部五星;`PUT /api/conversations/<老师>/<日期>/threads/<thread>/rating`;`cotutor rate` `cotutor bookkeep`

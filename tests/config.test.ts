@@ -4,13 +4,13 @@ import { configTemplate, shippedAgents } from '../src/cli/skeleton.ts';
 import { check, done } from './_check.ts';
 
 const agents = await shippedAgents();
-check('本包带 6 位老师', agents.length === 6, agents.map((a) => a.name).join(','));
+check('本包带 5 位老师', agents.length === 5, agents.map((a) => a.name).join(','));
 
 const raw = JSON.parse(configTemplate({ slug: 'ming', name: '小明', port: 5181, tutors: agents }));
 const cfg = CotutorConfigSchema.parse(raw);
 check('模板可解析', cfg.kid.slug === 'ming' && cfg.title === '小明的老师们' && cfg.server.port === 5181);
-check('老师表齐', Object.keys(cfg.tutors).length === 6 && cfg.tutors.planner.hidden === true && cfg.tutors['scene-maker'].hidden === true && cfg.tutors['scene-maker'].runtime === 'claude-scene');
-check('enabled 缺省 true;作业老师出厂关着(R5:照片在学科老师那里拍)', cfg.tutors['math-tutor'].enabled === true && cfg.tutors['homework-tutor'].enabled === false);
+check('老师表齐', Object.keys(cfg.tutors).length === 5 && !('homework-tutor' in cfg.tutors) && cfg.tutors.planner.hidden === true && cfg.tutors['scene-maker'].hidden === true && cfg.tutors['scene-maker'].runtime === 'claude-scene');
+check('enabled 缺省 true', cfg.tutors['math-tutor'].enabled === true && Object.values(cfg.tutors).every((t) => t.enabled));
 check('运行时 claude/qwen 都在', 'claude' in cfg.runtimes && 'qwen' in cfg.runtimes && cfg.runtimes.default === 'claude');
 
 const pol = resolvePolicy(cfg, 'math-tutor');
@@ -26,7 +26,7 @@ check('政策逐层覆盖', p2.replyMaxChars === 80 && p2.contextPack.recent ===
 check('别的老师不受影响', resolvePolicy(layered, 'planner').reviewGate === false && resolvePolicy(layered, 'planner').replyMaxChars === 80);
 
 const kidOnly = listTutors(cfg, { kidOnly: true });
-check('孩子端不见 hidden、不见关着的作业老师', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'planner' || t.name === 'homework-tutor'));
+check('孩子端不见 hidden', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'planner' || t.name === 'scene-maker'));
 check('列表带有效政策', listTutors(cfg)[0].policy.replyMaxChars === 60);
 
 const bad = CotutorConfigSchema.safeParse({ version: 2, kid: { slug: 'Bad Slug' }, tutors: { x: { display: '' } }, runtimes: { default: 'nope' } });
@@ -55,7 +55,7 @@ check('没给 agentBody 就原样留着(doctor 会报)', q.includes('{agentBody}
   } catch (e) {
     msg = e instanceof ConfigError ? e.message : '';
   }
-  check('teachers 旧键 → 报错说改成 tutors', msg.includes('tutors') && msg.includes('homework-tutor'), msg);
+  check('teachers 旧键 → 报错说改成 tutors', msg.includes('tutors') && msg.includes('homework-aide 整条删掉'), msg);
   const oldName = { ...base, tutors: { 'math-teacher': { display: '数学老师' }, 'homework-aide': { display: '作业' } } };
   msg = '';
   try {
@@ -63,7 +63,7 @@ check('没给 agentBody 就原样留着(doctor 会报)', q.includes('{agentBody}
   } catch (e) {
     msg = e instanceof ConfigError ? e.message : '';
   }
-  check('旧老师名 → 报错给新名', msg.includes('math-tutor') && msg.includes('homework-tutor'), msg);
+  check('旧老师名 → 报错给新名', msg.includes('math-tutor') && msg.includes('整条删掉'), msg);
 }
 {
   const { resolvePolicy, POLICY_DEFAULTS } = await import('../src/schema/index.ts');

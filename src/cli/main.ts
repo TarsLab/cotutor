@@ -393,7 +393,7 @@ export async function main(argv: string[]): Promise<void> {
         } else {
           process.stdout.write(`孩子看到:${m.kidText ?? '(没有给孩子的话)'}\n`);
           if (m.holdup) process.stdout.write(`待裁量:${m.holdup.question}${m.holdup.options.length ? ' → ' + m.holdup.options.map((o) => o.label).join(' / ') : ''}\n`);
-          if (m.handoff) process.stdout.write(`转交:${m.handoff.to}${m.handoff.why ? ' — ' + m.handoff.why : ''}\n`);
+          for (const s of m.scenes ?? []) process.stdout.write(`画图作业:课包 ${s.bundle} ${s.job ? `起了 scene-maker ${s.job}` : '没起(见提醒)'}\n`);
           const secs = (ms: number): string => (ms < 120000 ? `${Math.round(ms / 100) / 10}s` : `${Math.round(ms / 6000) / 10}min`);
           const timing = [m.timing?.firstReadyMs !== undefined ? `首拍就绪 ${secs(m.timing.firstReadyMs)}` : null, m.timing?.firstCardMs !== undefined ? `首卡 ${secs(m.timing.firstCardMs)}` : null, m.timing?.doneMs !== undefined ? `整轮 ${secs(m.timing.doneMs)}` : null, m.timing?.dubbedMs !== undefined ? `配音 ${secs(m.timing.dubbedMs)}` : null].filter(Boolean);
           if (m.artifacts.length) process.stdout.write(`课包:${m.artifacts.join(', ')}\n`);

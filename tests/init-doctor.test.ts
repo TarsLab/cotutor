@@ -20,7 +20,7 @@ try {
   const ws = join(home, 'cotutor', 'ming');
   check('缺省建在 ~/cotutor/<slug>', r1.root === ws && existsSync(ws), r1.root);
   check('骨架目录齐', ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'scenes', 'bundles', 'snaps'].every((d) => existsSync(join(ws, d))));
-  check('老师目录齐', ['math-tutor', 'chinese-tutor', 'reading-tutor', 'homework-tutor', 'planner'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
+  check('老师目录齐', ['math-tutor', 'chinese-tutor', 'reading-tutor', 'planner', 'scene-maker'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
   const link = join(ws, '.claude', 'agents', 'math-tutor.md');
   check('老师文件是拷贝,内容同本包', !lstatSync(link).isSymbolicLink() && readFileSync(link, 'utf8') === readFileSync(join(PACKAGE_AGENTS_DIR, 'math-tutor.md'), 'utf8'));
   check('.qwen 是指向 .claude 的相对链', lstatSync(join(ws, '.qwen', 'agents', 'planner.md')).isSymbolicLink() && readlinkSync(join(ws, '.qwen', 'agents', 'planner.md')) === '../../.claude/agents/planner.md');
@@ -65,7 +65,7 @@ try {
   const d1 = await doctorWorkspace(ws, { probeEnv: false });
   check('健康workspace体检通过', d1.ok, JSON.stringify(d1.checks.filter((c) => c.required && !c.ok)));
   check('doctor 查板书技能(机器件,必需),旧位置没了不报', d1.checks.some((c) => c.name === 'skill.cotutor-board' && c.ok && c.required) && !d1.checks.some((c) => c.name === 'board.legacy'));
-  check('老师链都查了(六位:含 scene-maker)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 6);
+  check('老师链都查了(五位:含 scene-maker)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 5);
   check('doctor 查板书后期的运行时:出厂 claude-fast 在模板里', d1.checks.some((c) => c.name === 'post.runtime.claude-fast' && c.ok && !c.required));
   check('doctor 查主题:清单过契约、出厂件最新', d1.checks.some((c) => c.name === 'theme.manifest' && c.ok) && d1.checks.some((c) => c.name === 'theme.default.origin' && c.ok));
   check('doctor 查 skill 与 drawtell 壳', d1.checks.filter((c) => c.name.startsWith('skill.') && c.ok).length === 8 && d1.checks.some((c) => c.name === 'skill.cotutor-vault' && c.required) && d1.checks.filter((c) => c.name.startsWith('skill.drawtell') && !c.required).length === 4 && d1.checks.some((c) => c.name === 'drawtell' && c.ok && !c.required));

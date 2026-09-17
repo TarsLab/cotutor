@@ -1,11 +1,11 @@
 /**
- * 孩子视图(《cotutor契约草案.md》§4,2026-09-10 改板书):最终文本剥掉「待裁量」「转交」段后,正文就是板书——
+ * 孩子视图(《cotutor契约草案.md》§4,2026-09-10 改板书):最终文本剥掉「待裁量」「记账」段后,正文就是板书——
  * 普通段落是讲稿(一行一句),围栏是卡(src/lib/board.ts 解析);kidText = 讲稿各句拼起来(家长视图的「孩子看到」摘要),
  * 每句按 replyMaxChars 截;第一个 H2 起是给家长的尾巴(parentText),孩子看不到。出错什么都不出现。机械规则,不靠模型判断。
  * 正文取自 kidSource:带卡 / 带固定段的顶层文本段 + 最后一段(老师板书之后又用了工具也不丢)。
  */
 import { stripSecrets } from '../cards/index.ts';
-import type { Bookkeeping, ConversationMessage, Handoff, HoldupAsk } from '../schema/index.ts';
+import type { Bookkeeping, ConversationMessage, HoldupAsk } from '../schema/index.ts';
 import { parseBoard } from './board.ts';
 import { threads, type CardAssets, type CardStates } from './conversation.ts';
 import type { BoardSection } from './kid-board.ts';
@@ -17,7 +17,6 @@ export interface KidView {
   kidText: string | null;
   truncated: boolean;
   holdup: HoldupAsk | null;
-  handoff: Handoff | null;
   /** 记账任务的回答(「## 记账」段);应用按它写日记 */
   bookkeeping: Bookkeeping | null;
   /** 运行是否正常收尾 */
@@ -56,13 +55,13 @@ export function truncateReply(text: string, max: number): { text: string; trunca
   return { text: `${cps.slice(0, max).join('').trim()}…`, truncated: true };
 }
 
-const none = (ok: boolean, holdup: HoldupAsk | null = null, handoff: Handoff | null = null, bookkeeping: Bookkeeping | null = null): KidView => ({ kidText: null, truncated: false, holdup, handoff, bookkeeping, ok, section: null, warnings: [], parentText: '' });
+const none = (ok: boolean, holdup: HoldupAsk | null = null, bookkeeping: Bookkeeping | null = null): KidView => ({ kidText: null, truncated: false, holdup, bookkeeping, ok, section: null, warnings: [], parentText: '' });
 
 const FENCE_OR_H2 = /^\s*(?:```|~~~|## )/m;
 
 /**
  * 孩子看的正文从哪来(2026-09-10 拍板,两次真跑的教训):`result.result` 只是这轮**最后一段**顶层文本——老师写完板书再用一次工具、再补一句,
- * 板书和「## 转交」段就没了。所以正文 = 这轮里**带围栏(卡)或带 H2 固定段的顶层文本段** + **最后一段**(顺序不变,重复不算两次);
+ * 板书和「## 待裁量」段就没了。所以正文 = 这轮里**带围栏(卡)或带 H2 固定段的顶层文本段** + **最后一段**(顺序不变,重复不算两次);
  * 中间那些「我先看看账本」之类没卡没段的话不进。子代理的话本来就不在顶层。
  */
 export function kidSource(t: Transcript): string | null {
@@ -76,10 +75,10 @@ export function kidSource(t: Transcript): string | null {
 export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }): KidView {
   if (!t.final) return none(false);
   if (!t.final.ok || !t.final.text) return none(t.final.ok);
-  const { body, holdup, handoff, bookkeeping } = parseSections(kidSource(t) ?? t.final.text);
+  const { body, holdup, bookkeeping } = parseSections(kidSource(t) ?? t.final.text);
   const board = parseBoard(body);
   const { cards, lines } = board.section;
-  if (!cards.length && !lines.length) return { ...none(true, holdup, handoff, bookkeeping), warnings: board.warnings.map((w) => w.text), parentText: board.tail };
+  if (!cards.length && !lines.length) return { ...none(true, holdup, bookkeeping), warnings: board.warnings.map((w) => w.text), parentText: board.tail };
   let truncated = false;
   const cut = lines.map((l) => {
     const r = truncateReply(l.text, policy.replyMaxChars);
@@ -88,7 +87,7 @@ export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }):
   });
   const section: BoardSection = { ...board.section, lines: cut };
   const kidText = cut.map((l) => l.text).join('\n');
-  return { kidText: kidText || null, truncated, holdup, handoff, bookkeeping, ok: true, section, warnings: board.warnings.map((w) => w.text), parentText: board.tail };
+  return { kidText: kidText || null, truncated, holdup, bookkeeping, ok: true, section, warnings: board.warnings.map((w) => w.text), parentText: board.tail };
 }
 
 /** 孩子端的一条:自己问的话(别人问的不显示)+ 老师给孩子的话 + 配音;出错的运行什么都不出现(问句还在) */
@@ -114,7 +113,7 @@ export interface KidMessage {
 }
 
 /**
- * 对话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / holdup / handoff / 费用 / 家长尾巴;
+ * 对话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / holdup / 费用 / 家长尾巴;
  * 卡上的答案剥掉,孩子自己做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到卡上。出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
  */
 export function kidConversation(index: { messages: readonly ConversationMessage[] }, states: CardStates = {}, assets: CardAssets = {}): KidMessage[] {

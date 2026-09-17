@@ -90,9 +90,9 @@ for (const f of fixtures) {
     '',
     '会了吗?',
     '',
-    '## 转交',
-    'to: scene-maker',
-    'why: 适合做动画',
+    '## 待裁量',
+    'question: 要不要做成动画?',
+    'options: [做, 不做]',
     '',
     '## 家长',
     '他今天卡在斜边。',
@@ -102,9 +102,9 @@ for (const f of fixtures) {
   check('annotate:讲稿 / 卡 / 空行各归各位', role(0) === 'say' && role(1) === 'blank' && role(2) === 'card' && role(3) === 'card' && role(4) === 'card' && role(6) === 'say', JSON.stringify(a.rows.map((x) => x.role)));
   check('annotate:围栏开头行标卡号、kind 与修饰', a.rows[2].open === true && a.rows[2].label === '卡 1 · text step', JSON.stringify(a.rows[2]));
   check('annotate:末句问句标出来', a.rows[6].label === '讲稿 2 · 问句,停下等', a.rows[6].label);
-  check('annotate:转交段不进板书,标出段名', role(8) === 'section' && role(9) === 'section' && a.rows[9].label?.includes('转交') === true, JSON.stringify(a.rows.slice(8, 11)));
+  check('annotate:待裁量段不进板书,标出段名', role(8) === 'section' && role(9) === 'section' && role(10) === 'section' && a.rows[9].label?.includes('待裁量') === true, JSON.stringify(a.rows.slice(8, 11)));
   check('annotate:家长尾巴标出来,行号没错位', role(12) === 'tail' && role(13) === 'tail' && a.rows[12].label === '家长尾巴 · 孩子看不到', JSON.stringify(a.rows.slice(12)));
-  check('annotate:顺带把转交单交出来(不用再解析一遍)', a.handoff?.to === 'scene-maker' && a.section.cards.length === 1 && a.section.lines.length === 2);
+  check('annotate:顺带把待裁量交出来(不用再解析一遍)', a.holdup?.question === '要不要做成动画?' && a.section.cards.length === 1 && a.section.lines.length === 2);
   const bad = annotateSource('一句。\n\n```choice\n只有问题没有选项?\n```\n');
   check('annotate:warning 的行号是原文的那一行', bad.warnings.length === 1 && bad.warnings[0].line === 2, JSON.stringify(bad.warnings));
 }

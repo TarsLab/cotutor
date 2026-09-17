@@ -140,13 +140,13 @@ try {
   check('第二条 resume', (r2.json as { resume: boolean }).resume === true, JSON.stringify(r2.json));
   await wait('math-tutor');
   now = new Date(2026, 8, 8, 16, 30);
-  await post('math-tutor', { text: '第三条,顺便转交' });
+  await post('math-tutor', { text: '第三条,旧转交' });
   await wait('math-tutor');
   const d3 = (await day('math-tutor', '2026-09-08')).json as Day;
   check('三轮同一会话,费用累计', d3.index.messages.length === 3 && d3.index.session?.id === d1.index.session?.id && d3.index.costUsd === 0.15, JSON.stringify(d3.index));
   check('resume 的回复接着说', d3.index.messages[1].kidText === '接着说:再讲一遍,要拍板');
   check('待裁量物化成问题 + 选项,孩子视图剥掉', d3.index.messages[1].holdup?.question === '要不要重讲?' && d3.index.messages[1].holdup?.options.length === 2 && !d3.index.messages[1].kidText?.includes('待裁量'), JSON.stringify(d3.index.messages[1]));
-  check('转交段物化', d3.index.messages[2].handoff?.to === 'planner' && d3.index.messages[2].kidText === '接着说:第三条,顺便转交');
+  check('老写法的「## 转交」只是家长尾巴(第一个 H2 起):不起谁、孩子看不到', !('handoff' in d3.index.messages[2]) && !('scenes' in d3.index.messages[2]) && (d3.index.messages[2] as { parentText?: string }).parentText?.startsWith('## 转交\nto: planner') === true && !ctx.runner.running('planner'), JSON.stringify(d3.index.messages[2]));
   const dates = (await route('GET', '/api/conversations/math-tutor', ctx)).json as { dates: string[] };
   check('日期列表', dates.dates.join() === '2026-09-08');
 
@@ -362,39 +362,40 @@ try {
   check('图片:workspace 内的图能取', im.status === 200 && im.contentType === 'image/png' && im.file === join(root, 'vault', 'pic.png'));
   check('图片:越界 / 不是图 / 不存在 / 绝对路径都 404', (await route('GET', '/api/kid/image?p=..%2Fx.png', ctx)).status === 404 && (await route('GET', '/api/kid/image?p=cotutor.json', ctx)).status === 404 && (await route('GET', '/api/kid/image?p=vault%2Fnope.png', ctx)).status === 404 && (await route('GET', `/api/kid/image?p=${encodeURIComponent(join(root, 'vault', 'pic.png'))}`, ctx)).status === 404);
 
-  // ---- 转交自动起一轮:数学老师「## 转交」给 scene-maker → 系统消息进 scene-maker 的索引(转交单:why / refs / 孩子的话 / voice),用它自己的 runtime;到了 scenes.dailyMax 不起,原因进 warnings ----
+  // ---- 场景卡起画图作业:数学老师放一张新课包的 scene 卡 → 系统消息进 scene-maker 的索引(作业单:课包 / 题面 / 讲法 / 讲稿 / 孩子的话 / voice),用它自己的 runtime;到了 scenes.dailyMax 不起,原因进 warnings ----
   now = new Date(2026, 8, 9, 10, 0);
   const cfgNow = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
   (cfgNow.tutors as Record<string, Record<string, unknown>>)['scene-maker'] = { display: '画图老师', avatar: '🎨', enabled: true, hidden: true, runtime: 'fake2', policy: { scenes: { dailyMax: 1 } } };
   writeFileSync(cfgFile, JSON.stringify(cfgNow, null, 2));
-  const rh = await post('math-tutor', { text: '这题要画图,转交场景', from: 'kid' });
+  const rh = await post('math-tutor', { text: '这题要画图,画场景', from: 'kid' });
   const jobH = (rh.json as { job: string }).job;
   await wait('math-tutor');
   for (let i = 0; i < 200 && !ctx.runner.running('scene-maker') && i < 8; i++) await new Promise((r) => setTimeout(r, 25));
   await wait('scene-maker');
-  type HMsg = { job: string; handoff?: { to: string } | null; handoffJob?: { tutor: string; job: string } | null; warnings?: string[]; text: string; from: string; runtime?: string; kidText?: string | null; artifacts?: string[]; timing?: Timing; costUsd?: number };
+  type HMsg = { job: string; scenes?: { bundle: string; job: string | null }[]; warnings?: string[]; text: string; from: string; runtime?: string; kidText?: string | null; artifacts?: string[]; timing?: Timing; costUsd?: number };
   const dh = (await day('math-tutor', '2026-09-09')).json as { index: { messages: HMsg[] } };
   const mh = dh.index.messages.find((m) => m.job === jobH)!;
-  check('转交段解析、自动起了 scene-maker 的一轮', mh.handoff?.to === 'scene-maker' && mh.handoffJob?.tutor === 'scene-maker' && typeof mh.handoffJob.job === 'string' && !mh.warnings?.some((w) => w.includes('转交没起')), JSON.stringify(mh));
+  check('新课包的场景卡自动起了 scene-maker 的一轮', mh.scenes?.length === 1 && mh.scenes[0].bundle === '2026-09-09-guilv' && typeof mh.scenes[0].job === 'string' && !mh.warnings?.length, JSON.stringify(mh));
   const dsm = (await day('scene-maker', '2026-09-09')).json as { index: { messages: HMsg[] } };
-  const sm = dsm.index.messages.find((m) => m.job === mh.handoffJob!.job)!;
-  check('scene-maker 收到系统消息:转交单带 why / refs / 孩子的话 / voice,用自己的 runtime,回了「做好了」', sm.from === 'system' && sm.text.startsWith('转交自 数学老师(math-tutor') && sm.text.includes('why: 找规律填数') && sm.text.includes('refs: 2026-09-09-guilv') && sm.text.includes('孩子刚才说的:这题要画图,转交场景') && sm.text.includes('voice: v-math') && sm.runtime === 'fake2' && sm.kidText?.includes('课包 2026-09-09-guilv 做好了') === true, JSON.stringify(sm));
+  const sm = dsm.index.messages.find((m) => m.job === mh.scenes![0].job)!;
+  check('scene-maker 收到系统消息:作业单带课包 / 题面 / 讲法 / 讲稿 / 孩子的话 / voice,用自己的 runtime,回了「做好了」', sm.from === 'system' && sm.text.startsWith('场景作业(数学老师 math-tutor') && sm.text.includes('\n课包: 2026-09-09-guilv\n') && sm.text.includes('题面:找规律填数') && sm.text.includes('讲法:每次少 5') && sm.text.includes('老师这节的讲稿:等我画好。') && sm.text.includes('孩子刚才说的:这题要画图,画场景') && sm.text.includes('voice: v-math') && sm.runtime === 'fake2' && sm.kidText?.includes('课包 2026-09-09-guilv 做好了') === true, JSON.stringify(sm));
   const { mergeArtifacts, parseArtifactEvents } = await import('../src/lib/ledger.ts');
   const ledger1 = parseArtifactEvents(readFileSync(join(root, 'ledger', 'artifacts.jsonl'), 'utf8'));
   const art1 = mergeArtifacts(ledger1.rows).artifacts.find((a) => a.id === '2026-09-09-guilv');
   check('场景作业收尾:假老师没记账 → 应用补一整行(retired,没有 manifest)带 costUsd / durationMs / source,消息的 artifacts 记 id,warnings 说明', ledger1.errors.length === 0 && art1?.kind === '课包' && art1.by === 'scene-maker' && art1.status === 'retired' && art1.costUsd === 0.05 && typeof art1.durationMs === 'number' && art1.durationMs === sm.timing?.doneMs && art1.source?.conversation === 'scene-maker/2026-09-09' && art1.source.job === sm.job && JSON.stringify(sm.artifacts) === '["2026-09-09-guilv"]' && sm.warnings?.some((w) => w.includes('没往账本记')) === true, JSON.stringify({ art1, errors: ledger1.errors, sm }));
   now = new Date(2026, 8, 9, 10, 5);
-  const rh2 = await post('math-tutor', { text: '再画一题,转交场景', from: 'kid' });
+  const rh2 = await post('math-tutor', { text: '再画一题,画场景', from: 'kid' });
   await wait('math-tutor');
   const mh2 = ((await day('math-tutor', '2026-09-09')).json as { index: { messages: HMsg[] } }).index.messages.find((m) => m.job === (rh2.json as { job: string }).job)!;
-  check('场景作业到了 dailyMax(1)→ 不起,原因进 warnings', mh2.handoff?.to === 'scene-maker' && mh2.handoffJob === null && mh2.warnings?.some((w) => w.includes('上限 1')) === true, JSON.stringify(mh2));
+  check('场景作业到了 dailyMax(1)→ 不起,原因进 warnings', mh2.scenes?.[0]?.job === null && mh2.warnings?.some((w) => w.includes('上限 1')) === true, JSON.stringify(mh2));
+  check('孩子端的场景卡不带题面 / 讲法', !JSON.stringify((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json).includes('题面'));
   now = new Date(2026, 8, 9, 10, 6);
-  const rh3 = await post('math-tutor', { text: '转交', from: 'parent' });
+  mkdirSync(join(root, 'bundles', '2026-09-09-guilv'), { recursive: true });
+  const rh3 = await post('math-tutor', { text: '放旧课包', from: 'parent' });
   await wait('math-tutor');
-  await wait('planner');
   const mh3 = ((await day('math-tutor', '2026-09-09')).json as { index: { messages: HMsg[] } }).index.messages.find((m) => m.job === (rh3.json as { job: string }).job)!;
-  check('转交给 planner 也自动起(planner 在表里)', mh3.handoffJob?.tutor === 'planner', JSON.stringify(mh3));
-  // 课包 id 撞了:scenes/<id>.ts 已有 → 改成 <id>-2,卡上的 bundle 与转交单的 refs 一起改,warnings 说明
+  check('放已有的课包(卡上没题面)→ 不起作业、不报', !mh3.scenes && !mh3.warnings?.length && !ctx.runner.running('scene-maker'), JSON.stringify(mh3));
+  // 课包 id 撞了(卡上写了题面,但 scenes/<id>.ts 已有)→ 改成 <id>-2,卡上的 bundle 与作业单一起改,warnings 说明
   const cfg3 = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
   ((cfg3.tutors as Record<string, Record<string, unknown>>)['scene-maker'].policy as Record<string, unknown>) = { scenes: { dailyMax: 5 } };
   writeFileSync(cfgFile, JSON.stringify(cfg3, null, 2));
@@ -403,19 +404,19 @@ try {
   // 这次让「老师自己记了账」:先写好 ready 行(-2 是必然的 id),应用收尾只该追加费用行,不报没记账
   writeFileSync(join(root, 'ledger', 'artifacts.jsonl'), readFileSync(join(root, 'ledger', 'artifacts.jsonl'), 'utf8') + '{"id":"2026-09-09-guilv-2","at":"2026-09-09T10:08:00","by":"scene-maker","kind":"课包","status":"ready","path":"bundles/2026-09-09-guilv-2"}\n');
   now = new Date(2026, 8, 9, 10, 8);
-  const rh4 = await post('math-tutor', { text: '同名的题,转交场景', from: 'kid' });
+  const rh4 = await post('math-tutor', { text: '同名的题,画场景', from: 'kid' });
   await wait('math-tutor');
   await wait('scene-maker');
-  type SceneMsg = HMsg & { section?: { cards: { kind: string; props: Record<string, unknown> }[] } | null; handoff?: { to: string; refs: string[] } | null };
+  type SceneMsg = HMsg & { section?: { cards: { kind: string; props: Record<string, unknown> }[] } | null };
   const mh4 = ((await day('math-tutor', '2026-09-09')).json as { index: { messages: SceneMsg[] } }).index.messages.find((m) => m.job === (rh4.json as { job: string }).job)!;
-  check('id 撞了 → 卡上 bundle 与 refs 都改成 -2,warnings 说明,作业照起', mh4.section?.cards.find((c) => c.kind === 'scene')?.props.bundle === '2026-09-09-guilv-2' && mh4.handoff?.refs[0] === '2026-09-09-guilv-2' && mh4.warnings?.some((w) => w.includes('已占用')) === true && mh4.handoffJob?.tutor === 'scene-maker', JSON.stringify(mh4));
-  const sm4 = ((await day('scene-maker', '2026-09-09')).json as { index: { messages: HMsg[] } }).index.messages.find((m) => m.job === mh4.handoffJob!.job)!;
-  check('转交单里的 refs 也是新 id', sm4.text.includes('refs: 2026-09-09-guilv-2'), sm4.text);
+  check('id 撞了 → 卡上 bundle 改成 -2,warnings 说明,作业照起', mh4.section?.cards.find((c) => c.kind === 'scene')?.props.bundle === '2026-09-09-guilv-2' && mh4.scenes?.[0]?.bundle === '2026-09-09-guilv-2' && typeof mh4.scenes[0].job === 'string' && mh4.warnings?.some((w) => w.includes('已占用')) === true, JSON.stringify(mh4));
+  const sm4 = ((await day('scene-maker', '2026-09-09')).json as { index: { messages: HMsg[] } }).index.messages.find((m) => m.job === mh4.scenes![0].job)!;
+  check('作业单里的课包也是新 id', sm4.text.includes('课包: 2026-09-09-guilv-2\n'), sm4.text);
   const ledger2 = parseArtifactEvents(readFileSync(join(root, 'ledger', 'artifacts.jsonl'), 'utf8'));
   const rows2 = ledger2.rows.filter((r) => r.id === '2026-09-09-guilv-2');
   const art2 = mergeArtifacts(ledger2.rows).artifacts.find((a) => a.id === '2026-09-09-guilv-2');
   check('老师记了账 → 应用只追加一行费用(没有 kind / status),折叠后 ready + costUsd + durationMs,不报没记账', ledger2.errors.length === 0 && rows2.length === 2 && rows2[1].kind === undefined && rows2[1].status === undefined && rows2[1].costUsd === 0.05 && art2?.status === 'ready' && art2.path === 'bundles/2026-09-09-guilv-2' && art2.costUsd === 0.05 && typeof art2.durationMs === 'number' && JSON.stringify(sm4.artifacts) === '["2026-09-09-guilv-2"]' && !sm4.warnings?.some((w) => w.includes('没往账本记')), JSON.stringify({ rows2, art2, sm4 }));
-  check('sceneJobId:refs 优先,没 refs 从收尾句取,都没有 → null', (() => { const R = ctx.runner.constructor as unknown as { sceneJobId: (h: string, f: string | null) => string | null }; return R.sceneJobId('转交自 x\nwhy: y\nrefs: 2026-09-09-guilv-2, 别的', null) === '2026-09-09-guilv-2' && R.sceneJobId('why: 没 refs', '课包 2026-09-10-abc 做好了,6 步') === '2026-09-10-abc' && R.sceneJobId('why: 没 refs', '课包 2026-09-10-abc 没做成:check 过不了') === '2026-09-10-abc' && R.sceneJobId('why: 没', '什么都没说') === null; })());
+  check('sceneJobId:「课包:」行优先,没有从收尾句取,都没有 → null', (() => { const R = ctx.runner.constructor as unknown as { sceneJobId: (h: string, f: string | null) => string | null }; return R.sceneJobId('场景作业(x):\n课包: 2026-09-09-guilv-2\n题面:y', '课包 别的 做好了') === '2026-09-09-guilv-2' && R.sceneJobId('why: 没 refs', '课包 2026-09-10-abc 做好了,6 步') === '2026-09-10-abc' && R.sceneJobId('why: 没 refs', '课包 2026-09-10-abc 没做成:check 过不了') === '2026-09-10-abc' && R.sceneJobId('why: 没', '什么都没说') === null; })());
 
   // ---- 话题:新话题不 resume 且不带旧卡;缺省接当前话题;指定今天的旧话题 resume 它自己的会话;history / 日期路由;卡的 turn 按话题 ----
   now = new Date(2026, 8, 9, 10, 20);
@@ -447,7 +448,7 @@ try {
   check('指定旧话题:resume 旧话题自己的会话,带上旧话题里改过的卡,顶层 session 换回旧的', j3.thread === oldThread && j3.resume === true && log3.includes(oldSession) && m3.thread === oldThread && m3.cards?.length === 1 && m3.kidText?.includes('接着说') === true && dT.session?.id === oldSession, JSON.stringify({ j3, cards: m3.cards, log: log3.slice(0, 200) }));
   check('不存在的话题 → 4xx', (await post('math-tutor', { text: 'x', thread: '0000-9' })).status >= 400 && (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: 'x', thread: 'bad' })).status === 400);
   const smDay = ((await day('scene-maker', '2026-09-09')).json as TDay).index;
-  check('系统消息(转交)每条各开一个话题', smDay.messages.length >= 2 && smDay.messages.every((m) => m.thread === m.job));
+  check('系统消息(场景作业)每条各开一个话题', smDay.messages.length >= 2 && smDay.messages.every((m) => m.thread === m.job));
   const hist = (await route('GET', '/api/kid/conversations/math-tutor/history?days=30', ctx)).json as { today: string; days: { date: string; threads: { thread: string; title: string; sections: number; cards: number }[] }[] };
   const todayH = hist.days.find((d) => d.date === '2026-09-09')!;
   check('history:按天(新的在前),今天两个话题(新的在前),名字是孩子第一句、节数与卡数', hist.today === '2026-09-09' && hist.days[0].date === '2026-09-09' && hist.days.some((d) => d.date === '2026-09-08') && todayH.threads[0].thread === newThread && todayH.threads[0].title === '换个话题 板书' && todayH.threads[0].sections === 2 && todayH.threads[0].cards === 2 && todayH.threads[1].thread === oldThread && todayH.threads[1].sections > 2, JSON.stringify(hist.days.map((d) => ({ date: d.date, n: d.threads.length, t: d.threads.map((t) => t.title) }))));

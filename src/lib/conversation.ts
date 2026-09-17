@@ -107,7 +107,7 @@ export function changedCards(index: { messages: readonly Pick<ConversationMessag
 
 /**
  * 每条消息的话题 id(与 messages 对齐)。有 thread 字段照它;没有(旧索引)按规则现算:第一条 = 自己的 job,
- * from: system 的(转交起的)永远开新话题,其余跟前一条。写新消息时 runner 已经填了 thread,这里只是兜底。
+ * from: system 的(场景作业起的)永远开新话题,其余跟前一条。写新消息时 runner 已经填了 thread,这里只是兜底。
  */
 export function threads(messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread'>[]): string[] {
   const out: string[] = [];
@@ -154,7 +154,6 @@ export function applyRun(
           artifacts: run.artifacts ?? m.artifacts,
           runtime: run.runtime,
           holdup: kidView.holdup,
-          handoff: kidView.handoff,
           ...(m.bookkeep || kidView.bookkeeping ? { bookkeeping: kidView.bookkeeping } : {}),
           section: kidView.section,
           ...(kidView.parentText ? { parentText: kidView.parentText } : {}),

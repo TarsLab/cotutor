@@ -90,7 +90,7 @@ export interface TutorTemplateInput {
 
 /**
  * 家长自己加老师时的文件模板:与出厂老师同一套约定(cwd、账本、上下文包、问答 / 讲解 / 任务三种回复、
- * 板书写法、不评判、不造课件、家长 / 待裁量 / 转交段),只有第一句人设是这位老师自己的。
+ * 板书写法、不评判、不造课件、家长 / 待裁量段),只有第一句人设是这位老师自己的。
  */
 export function tutorTemplate(t: TutorTemplateInput): string {
   const what = t.subject ? `${t.subject}的事` : '孩子问的事';
@@ -150,7 +150,7 @@ memory: project
 末句是问句?
 \`\`\`\`
 
-对家长说的话、要拍板的事、要转交的事,用「## 家长」「## 待裁量」(question: 一句话;options: 列表)「## 转交」(to: 老师名;why: 一句话;refs: 相关文件;第一期只允许一跳)三个段放在正文末尾,孩子看不到;不要停下来等家长。转交只写这个段,不要自己用 Task / 子代理去叫那位老师,应用看到段会自动起她的一轮。
+对家长说的话、要拍板的事,用「## 家长」「## 待裁量」(question: 一句话;options: 列表)两个段放在正文末尾,孩子看不到;不要停下来等家长。不要用 Task / 子代理去叫别的老师,这一轮就你自己讲。
 对话按天,明天从上下文包(档案、计划、最近观察)和你的记忆接着来,不要指望今天的对话还在。
 
 记账与记忆(只在任务里做,问答和讲解不做):记账时回一段「## 记账」(写法与例子在 cotutor-vault 技能;讲解前要读教材那一节也按它),观察写进它的 observations,应用替你写进家长的日记;你自己的经验记进你的记忆目录。
@@ -168,8 +168,6 @@ const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar
   'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮' },
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚' },
   'reading-tutor': { display: '朗读老师', subject: '英语', avatar: '📖' },
-  // R5(2026-09-14 拍板 14):作业照片在学科老师那里拍、老师自己看图,作业老师退出主路;文件留着,家长端能打开(以后的整页批改)
-  'homework-tutor': { display: '作业老师', avatar: '📷', enabled: false },
   planner: { display: '规划老师', avatar: '🗓', hidden: true },
   'scene-maker': { display: '画图老师', avatar: '🎨', hidden: true, runtime: 'claude-scene' },
 };
@@ -196,7 +194,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
       default: 'claude',
       // --setting-sources project(2026-09-15):老师只读 workspace 的 .claude/,~/.claude 的技能(obsidian-cli 之类)/ hooks / additionalDirectories / 插件都不进老师会话;
       // 代价是 ~/.claude/settings.json 的 env(代理)也不进,serve 要从有代理的 shell 起,doctor env.userSettings 点名
-      // 普通老师不许派子代理(--disallowedTools Agent):claude 会把 .claude/agents/ 里的老师文件当可派的子代理,老师自己去叫 scene-maker 就把预算烧在自己这轮里;转交只写「## 转交」段
+      // 普通老师不许派子代理(--disallowedTools Agent):claude 会把 .claude/agents/ 里的老师文件当可派的子代理,老师自己去叫 scene-maker 就把预算烧在自己这轮里;画图作业由场景卡起
       claude: {
         run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--disallowedTools', 'Agent', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
         resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--disallowedTools', 'Agent', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],

@@ -1,12 +1,11 @@
 /**
- * 老师最终文本里的三种固定段(《cotutor契约草案.md》§4 / §6;《obsidian仓库设计.md》§6):
+ * 老师最终文本里的两种固定段(《cotutor契约草案.md》§4 / §6;《obsidian仓库设计.md》§6):
  *  - 「## 待裁量」需要家长拍板的问题 + 选项(HoldupAskV0,沿用 growth-apps 的形状);
- *  - 「## 转交」交给另一位老师(HandoffV0,第一期只允许一跳);
  *  - 「## 记账」记账任务的回答:话题叫什么、属于哪册哪节、摘要、讲解骨架、观察——老师不直接写 vault,应用按它渲染日记。
- * 孩子视图剥掉它们;家长视图渲染成按钮;应用按转交 resume 目标老师。解析不出整段当正文——格式是增强不是门槛。
+ * 孩子视图剥掉它们;家长视图渲染成按钮。解析不出整段当正文——格式是增强不是门槛。
+ * 「## 转交」段 2026-09-17 删了:画图作业由场景卡自己起(server/runner.ts),老师之间不再互相交活;旧回复里的这段落进家长尾巴。
  */
 import { z } from 'zod';
-import { AGENT_NAME_RE } from './config.ts';
 
 export const HoldupOptionSchema = z.object({
   label: z.string().min(1),
@@ -20,15 +19,6 @@ export const HoldupAskSchema = z.object({
   options: z.array(HoldupOptionSchema).default([]),
 });
 export type HoldupAsk = z.infer<typeof HoldupAskSchema>;
-
-export const HandoffSchema = z.object({
-  /** 目标老师(agent 名) */
-  to: z.string().regex(AGENT_NAME_RE),
-  why: z.string().optional(),
-  /** 相关文件或产物引用 */
-  refs: z.array(z.string()).default([]),
-});
-export type Handoff = z.infer<typeof HandoffSchema>;
 
 /** 记账段里的一个话题(《obsidian仓库设计.md》§6):只有 thread 与 name 必需;summary / steps 只在话题打分够时才要 */
 export const BookkeepingEntrySchema = z.object({
@@ -45,5 +35,4 @@ export const BookkeepingSchema = z.object({ entries: z.array(BookkeepingEntrySch
 export type Bookkeeping = z.infer<typeof BookkeepingSchema>;
 
 export const HOLDUP_HEADING = '待裁量';
-export const HANDOFF_HEADING = '转交';
 export const BOOKKEEPING_HEADING = '记账';

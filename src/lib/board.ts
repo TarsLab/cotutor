@@ -1,5 +1,5 @@
 /**
- * 板书解析器:老师的回复正文(已剥掉「待裁量」「转交」段)→ 一节 BoardSection。
+ * 板书解析器:老师的回复正文(已剥掉「待裁量」「记账」段)→ 一节 BoardSection。
  * 三条规则(《板书卡片设计.md》§2):围栏 = 卡(标签第一个词是 kind),普通行 = 讲稿一句,第一个 H2 起是给家长的尾巴。
  * 讲稿句里 [词] 是标注(落到第一张含这个词的卡,整节找,卡在前在后都行),[[名 参数]] 是对上一张卡的动作(cue)。
  * partial 模式给流式用:没闭合的围栏和没换行结束的最后一行压着不算,下次整段重解析自然补上。
@@ -9,7 +9,7 @@
 import { parseCard } from '../cards/index.ts';
 import { anchorMarks, isHeading, isQuestion, phrasesIn, plainLine, type BoardCard, type BoardCue, type BoardLine, type BoardSection } from './kid-board.ts';
 import { parseSections } from './sections.ts';
-import type { Handoff, HoldupAsk } from '../schema/index.ts';
+import type { HoldupAsk } from '../schema/index.ts';
 
 export interface ParseBoardOptions {
   /** 文本还在长(流式):压住没闭合的围栏与没换行结束的最后一行 */
@@ -176,7 +176,7 @@ export type SourceRole =
   | 'card'
   /** 第一个 H2 起给家长的尾巴 */
   | 'tail'
-  /** 被「## 待裁量」「## 转交」吃掉,不进板书 */
+  /** 被「## 待裁量」「## 记账」吃掉,不进板书 */
   | 'section'
   /** 空行 */
   | 'blank'
@@ -202,7 +202,6 @@ export interface AnnotatedSource {
   warnings: BoardWarning[];
   section: BoardSection;
   holdup: HoldupAsk | null;
-  handoff: Handoff | null;
   tail: string;
 }
 
@@ -214,7 +213,7 @@ const SECTION_HEAD = /^##\s+(.+?)\s*$/;
  */
 export function annotateSource(text: string): AnnotatedSource {
   const src = text.split('\n');
-  const { body, holdup, handoff, lineMap } = parseSections(text);
+  const { body, holdup, lineMap } = parseSections(text);
   const board = parseBoard(body);
   const rows: SourceRow[] = src.map((t, line) => ({ line, text: t, role: t.trim() ? 'drop' : 'blank' }));
   // 固定段吃掉的行:不在 lineMap 里的非空行,标题从上面最近的那个 H2 取
@@ -263,7 +262,6 @@ export function annotateSource(text: string): AnnotatedSource {
     warnings: board.warnings.map((w) => ({ text: w.text, ...(w.line !== undefined && at(w.line) !== undefined ? { line: at(w.line) } : {}) })),
     section: board.section,
     holdup,
-    handoff,
     tail: board.tail,
   };
 }

@@ -20,8 +20,8 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   const v = deriveKidView(okRun('## 待裁量\nquestion: 要重拍吗?\n\n这一步是借位,个位不够先向十位借一。'), { replyMaxChars: 60 });
   check('孩子只见剥段后的最终文本', v.kidText === '这一步是借位,个位不够先向十位借一。' && v.holdup?.question === '要重拍吗?' && v.ok, JSON.stringify(v));
   check('中间说话不进孩子视图', !v.kidText?.includes('账本'));
-  const multi = deriveKidView(okRun('这是问答,直接答。\n\n先想一下:9/6 那次也是借位。\n\n## 转交\nto: planner\n\n因为个位不够减,要向十位借一。'), { replyMaxChars: 60 });
-  check('正文全是讲稿:三句都给孩子(一行一句),转交段剥掉', multi.kidText === '这是问答,直接答。\n先想一下:9/6 那次也是借位。\n因为个位不够减,要向十位借一。' && multi.section?.lines.length === 3 && multi.section.cards.length === 0 && multi.handoff?.to === 'planner', JSON.stringify(multi));
+  const multi = deriveKidView(okRun('这是问答,直接答。\n\n先想一下:9/6 那次也是借位。\n\n## 待裁量\nquestion: 排进计划吗?\n\n因为个位不够减,要向十位借一。'), { replyMaxChars: 60 });
+  check('正文全是讲稿:三句都给孩子(一行一句),待裁量段剥掉', multi.kidText === '这是问答,直接答。\n先想一下:9/6 那次也是借位。\n因为个位不够减,要向十位借一。' && multi.section?.lines.length === 3 && multi.section.cards.length === 0 && multi.holdup?.question === '排进计划吗?', JSON.stringify(multi));
   const board = deriveKidView(okRun('开场。\n\n```choice\n酒是谁的?\n- [x] 他自己的\n- [ ] 平分\n```\n\n酒是谁的?\n\n## 家长\n他其实会了。'), { replyMaxChars: 60 });
   check('围栏成卡、H2 起是家长尾巴、答案还在(下发时才剥)', board.section?.cards[0].kind === 'choice' && JSON.stringify(board.section?.cards[0].props.answer) === '[0]' && board.kidText === '开场。\n酒是谁的?' && board.parentText === '## 家长\n他其实会了。' && board.warnings.length === 0, JSON.stringify(board));
   const warn = deriveKidView(okRun('```choice\n没选项\n```\n一句。'), { replyMaxChars: 60 });
@@ -30,15 +30,15 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   check('固定段在末尾也不影响取最后一段正文', tail.kidText === '给孩子的话。' && tail.holdup?.question === '要重拍吗?', JSON.stringify(tail));
 }
 {
-  // 正文来源:板书在前一段、之后用了工具、最后只补一句 → 板书留下 + 最后一句;中间闲话不进;转交段在中间也认;最后一段自己有卡不重复
+  // 正文来源:板书在前一段、之后用了工具、最后只补一句 → 板书留下 + 最后一句;中间闲话不进;固定段在中间也认;最后一段自己有卡不重复
   const ev = (o: unknown) => JSON.stringify(o);
   const text = (t: string, sub = false) => ev({ type: 'assistant', parent_tool_use_id: sub ? 'toolu_x' : null, message: { content: [{ type: 'text', text: t }] } });
   const tool = ev({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'ls' } }] } });
   const board = '开场。\n\n```choice\n几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n几个角?';
-  const lost = parseTranscript([text('我先看看账本'), tool, text(board), tool, text('## 转交\nto: scene-maker\nwhy: 画图\nrefs: 2026-09-10-guilv'), tool, text('子代理的话', true), text('画好了,点开看。'), ev({ type: 'result', subtype: 'success', result: '画好了,点开看。' })].join('\n'));
-  check('kidSource:带卡的段 + 转交段 + 最后一句;闲话与子代理不进', kidSource(lost) === `${board}\n\n## 转交\nto: scene-maker\nwhy: 画图\nrefs: 2026-09-10-guilv\n\n画好了,点开看。`, String(kidSource(lost)));
+  const lost = parseTranscript([text('我先看看账本'), tool, text(board), tool, text('## 待裁量\nquestion: 画成动画吗?'), tool, text('子代理的话', true), text('画好了,点开看。'), ev({ type: 'result', subtype: 'success', result: '画好了,点开看。' })].join('\n'));
+  check('kidSource:带卡的段 + 固定段 + 最后一句;闲话与子代理不进', kidSource(lost) === `${board}\n\n## 待裁量\nquestion: 画成动画吗?\n\n画好了,点开看。`, String(kidSource(lost)));
   const lv = deriveKidView(lost, { replyMaxChars: 60 });
-  check('板书之后用了工具再补一句:卡还在,补的那句成最后一句讲稿,转交段认出来', lv.section?.cards[0].kind === 'choice' && lv.kidText === '开场。\n几个角?\n画好了,点开看。' && lv.handoff?.to === 'scene-maker' && lv.handoff.refs[0] === '2026-09-10-guilv', JSON.stringify(lv));
+  check('板书之后用了工具再补一句:卡还在,补的那句成最后一句讲稿,待裁量段认出来', lv.section?.cards[0].kind === 'choice' && lv.kidText === '开场。\n几个角?\n画好了,点开看。' && lv.holdup?.question === '画成动画吗?', JSON.stringify(lv));
   const same = parseTranscript([text('闲话'), tool, text(board), ev({ type: 'result', subtype: 'success', result: board })].join('\n'));
   check('最后一段自己就是板书 → 不重复', kidSource(same) === board && deriveKidView(same, { replyMaxChars: 60 }).section?.cards.length === 1);
   const plain = parseTranscript([text('闲话'), tool, text('只是答一句。'), ev({ type: 'result', subtype: 'success', result: '只是答一句。' })].join('\n'));
@@ -57,8 +57,8 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   check('出错 → 什么都没有', err.kidText === null && !err.ok);
   const running = deriveKidView(parseTranscript('{"type":"system","subtype":"init"}'), { replyMaxChars: 60 });
   check('还在跑 → 没有', running.kidText === null && !running.ok);
-  const onlySections = deriveKidView(okRun('## 转交\nto: math-tutor\nwhy: 数学'), { replyMaxChars: 60 });
-  check('只有转交段 → 孩子无话,转交在', onlySections.kidText === null && onlySections.handoff?.to === 'math-tutor' && onlySections.ok);
+  const onlySections = deriveKidView(okRun('## 待裁量\nquestion: 先讲哪题?'), { replyMaxChars: 60 });
+  check('只有固定段 → 孩子无话,待裁量在', onlySections.kidText === null && onlySections.holdup?.question === '先讲哪题?' && onlySections.ok);
 }
 {
   // 孩子端条目:服务端过滤——孩子的问句 + 老师给孩子的话 + 配音;家长的问句不露;出错的运行不出现;不带 result / error / holdup / 费用

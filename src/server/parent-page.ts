@@ -140,7 +140,7 @@ export const PARENT_PAGE = `<!doctype html>
   .notice h5 { margin:0 0 3px; font-size:15px; font-weight:600; }
   .notice p { margin:0; font-size:14px; color:var(--ink-2); white-space:pre-wrap; }
   .notice.hold { background:var(--warn-soft); } .notice.hold .ico { background:var(--warn); }
-  .notice.hand { background:var(--accent-soft); } .notice.hand .ico { background:var(--accent); }
+  .notice.scene { background:var(--accent-soft); } .notice.scene .ico { background:var(--accent); }
   .notice.err { background:var(--err-soft); } .notice.err .ico { background:var(--err); }
   .notice.err p { font:400 13.5px/1.6 var(--mono); color:var(--err); }
   .notice.warn { background:var(--surface-2); } .notice.warn .ico { background:var(--muted); }
@@ -643,10 +643,10 @@ export const PARENT_PAGE = `<!doctype html>
       if (!m.holdup.options.length) btns.append(h('span', { class: 'hint', style: 'padding:0' }, '(没给选项,直接在下面回复)'));
       el.append(h('div', { class: 'notice hold' }, h('span', { class: 'ico' }, '?'), h('div', {}, h('h5', {}, '待裁量:' + m.holdup.question), btns)));
     }
-    if (m.handoff) {
-      el.append(h('div', { class: 'notice hand' }, h('span', { class: 'ico' }, '→'), h('div', {},
-        h('h5', {}, '转交 ' + (tutorOf(m.handoff.to).display || m.handoff.to) + (m.handoff.refs && m.handoff.refs.length ? ' · ' + m.handoff.refs.join(', ') : '')),
-        h('p', {}, (m.handoff.why || '') + (m.handoffJob ? ' · 已起 ' + m.handoffJob.tutor + ' 的 ' + m.handoffJob.job : ' · 没起(见下面的提醒)')))));
+    for (const s of m.scenes || []) {
+      el.append(h('div', { class: 'notice scene' }, h('span', { class: 'ico' }, '→'), h('div', {},
+        h('h5', {}, '画图作业 · 课包 ' + s.bundle),
+        h('p', {}, s.job ? '已起 ' + (tutorOf('scene-maker').display || 'scene-maker') + ' 的 ' + s.job : '没起(见下面的提醒)'))));
     }
     if (m.result === 'error') el.append(h('div', { class: 'notice err' }, h('span', { class: 'ico' }, '!'), h('div', {}, h('h5', {}, '本轮出错:' + (m.error || '未知')), h('p', {}, v.errors[m.job] || ''))));
     if (m.warnings && m.warnings.length) el.append(h('div', { class: 'notice warn' }, h('span', { class: 'ico' }, 'i'), h('div', {}, h('h5', {}, '提醒'), h('p', {}, m.warnings.join('\\n')))));
@@ -761,7 +761,7 @@ export const PARENT_PAGE = `<!doctype html>
       if (!ev.length) { box.append(h('p', { class: 'hintline' }, raw.stations.find((x) => x.id === 'timeline')?.note || '这轮没有事件。')); return box; }
       const spans = raw.timeline.spans;
       const total = raw.timeline.total;
-      const lanes = ['main', 'tts', 'post', 'ready', 'index', 'handoff', 'ledger'].filter((l) => spans.some((x) => x.lane === l));
+      const lanes = ['main', 'tts', 'post', 'ready', 'index', 'scene', 'ledger'].filter((l) => spans.some((x) => x.lane === l));
       const detail = h('p', { class: 'hintline' }, '点一段看它是什么');
       const g = h('div', { class: 'gantt' });
       for (const l of lanes) {

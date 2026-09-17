@@ -32,7 +32,7 @@ try {
   check('POST 201,进表、文件、目录', added.status === 201 && ctx.ws.config.tutors['science-tutor']?.subject === '科学' && existsSync(join(root, '.claude', 'agents', 'science-tutor.md')) && existsSync(join(root, 'agents', 'science-tutor')), JSON.stringify(added.json));
   check('重名 409', (await route('POST', '/api/tutors', ctx, { name: 'science-tutor', display: 'x' })).status === 409);
   const cfg = (await route('GET', '/api/config', ctx)).json as { shipped: string[]; paths: Record<string, string>; resolvedPaths: Record<string, string>; tts: { say: string[] } };
-  check('config 回报出厂名单与路径', cfg.shipped.length === 5 && !cfg.shipped.includes('science-tutor') && typeof cfg.resolvedPaths.vault === 'string' && cfg.tts.say[0] === 'voxtell');
+  check('config 回报出厂名单与路径', cfg.shipped.length === 4 && !cfg.shipped.includes('planner') && !cfg.shipped.includes('science-tutor') && typeof cfg.resolvedPaths.vault === 'string' && cfg.tts.say[0] === 'voxtell');
 
   // ---- 老师头像(R5b):avatar 是图片相对路径时 /api/kid/avatar/<老师> 给文件,no-cache;emoji / 越界 / 不是图 / 不存在 / 没这位都 404 ----
   check('emoji 头像 404(孩子端自己显示 emoji)', (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);

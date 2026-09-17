@@ -178,18 +178,18 @@ try {
   check('老写法的「## 转交」只是家长尾巴(第一个 H2 起):不起谁、孩子看不到', !('handoff' in d3.index.messages[2]) && !('scenes' in d3.index.messages[2]) && (d3.index.messages[2] as { parentText?: string }).parentText?.startsWith('## 转交\nto: planner') === true && !ctx.runner.running('planner'), JSON.stringify(d3.index.messages[2]));
   // ---- 记忆(2026-09-17):「## 记忆」段追加进 vault 的记忆文件,每轮最多两条;下个话题原文进上下文包 ----
   {
-    const memFile = join(root, 'vault', '记忆', '规划老师.md');
-    const s1 = await ctx.runner.send('planner', { from: 'parent', text: '记住它', newThread: true });
+    const memFile = join(root, 'vault', '记忆', '画图老师.md');
+    const s1 = await ctx.runner.send('scene-maker', { from: 'system', text: '记住它', newThread: true, runtime: 'fake' });
     const i1 = await s1.done;
     const mm = i1.messages.find((m) => m.job === s1.job)!;
     const text1 = readFileSync(memFile, 'utf8');
-    check('记忆:没有就建 记忆/<显示名>.md,带属性,两条带日期,第三条丢掉并提醒', text1.startsWith('---\ncotutor: memory\nagent: planner\n---\n') && text1.endsWith('- 2026-09-08 讲角用手指比划他马上懂\n- 2026-09-08 家长说别出选择题\n') && !text1.includes('第三条') && mm.remembered?.length === 2 && mm.warnings?.some((w) => w.includes('丢了 1 条')) === true && !mm.parentText?.includes('记忆'), JSON.stringify({ text1, mm }));
+    check('记忆:没有就建 记忆/<显示名>.md,带属性,两条带日期,第三条丢掉并提醒', text1.startsWith('---\ncotutor: memory\nagent: scene-maker\n---\n') && text1.endsWith('- 2026-09-08 讲角用手指比划他马上懂\n- 2026-09-08 家长说别出选择题\n') && !text1.includes('第三条') && mm.remembered?.length === 2 && mm.warnings?.some((w) => w.includes('丢了 1 条')) === true && !mm.parentText?.includes('记忆'), JSON.stringify({ text1, mm }));
     writeFileSync(memFile, text1.replace('- 2026-09-08 家长说别出选择题\n', '- 家长改过:可以出选择题\n'));
-    const s2 = await ctx.runner.send('planner', { from: 'parent', text: '记住它', newThread: true });
+    const s2 = await ctx.runner.send('scene-maker', { from: 'system', text: '记住它', newThread: true, runtime: 'fake' });
     const i2 = await s2.done;
     const text2 = readFileSync(memFile, 'utf8');
-    const run2 = JSON.parse(readFileSync(join(root, 'conversations', 'planner', `2026-09-08.${s2.job}.run.json`), 'utf8')) as { prompt: string };
-    check('记忆:新话题带原文(家长改过的样子);已有的不重复记,家长删掉的那条会被记回来', run2.prompt.includes('  memory: "记忆/规划老师.md"') && run2.prompt.includes('<vault-note role="memory" path="记忆/规划老师.md">') && run2.prompt.includes('家长改过:可以出选择题') && text2.endsWith('- 家长改过:可以出选择题\n- 2026-09-08 家长说别出选择题\n') && i2.messages.find((m) => m.job === s2.job)?.remembered?.join() === '- 2026-09-08 家长说别出选择题', JSON.stringify({ text2 }));
+    const run2 = JSON.parse(readFileSync(join(root, 'conversations', 'scene-maker', `2026-09-08.${s2.job}.run.json`), 'utf8')) as { prompt: string };
+    check('记忆:新话题带原文(家长改过的样子);已有的不重复记,家长删掉的那条会被记回来', run2.prompt.includes('  memory: "记忆/画图老师.md"') && run2.prompt.includes('<vault-note role="memory" path="记忆/画图老师.md">') && run2.prompt.includes('家长改过:可以出选择题') && text2.endsWith('- 家长改过:可以出选择题\n- 2026-09-08 家长说别出选择题\n') && i2.messages.find((m) => m.job === s2.job)?.remembered?.join() === '- 2026-09-08 家长说别出选择题', JSON.stringify({ text2 }));
     const mp = await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: now });
     check('记忆按 agent 分:数学老师还没有', mp.memory === '还没有' && !mp.notes?.some((n) => n.role === 'memory'), JSON.stringify(mp.memory));
   }
@@ -233,11 +233,11 @@ try {
 
   // ---- 孩子端接口:首页、过滤后的会话、发消息、每日上限、配音文件 ----
   const home = (await route('GET', '/api/kid/home', ctx)).json as { title: string; timetable: unknown[]; tutors: { name: string; available: boolean; remaining: number; hasVoice: boolean }[]; stacks: unknown[] };
-  check('首页:标题、课程表、孩子端老师(无 planner)', home.title === '小明的老师们' && home.timetable.length === 2 && home.tutors.length === 3 && !home.tutors.some((t) => t.name === 'planner') && home.stacks.length === 0, JSON.stringify(home.tutors));
+  check('首页:标题、课程表、孩子端老师(无 scene-maker)', home.title === '小明的老师们' && home.timetable.length === 2 && home.tutors.length === 3 && !home.tutors.some((t) => t.name === 'scene-maker') && home.stacks.length === 0, JSON.stringify(home.tutors));
   check('老师带 hasVoice 与剩余条数(今天 09-09 孩子还没发过)', home.tutors.find((t) => t.name === 'math-tutor')?.hasVoice === true && home.tutors.find((t) => t.name === 'math-tutor')?.remaining === 30, JSON.stringify(home.tutors));
   const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null; reply: string | null; audio: string | null }[]; remaining: number; pending: string | null };
   check('孩子视图:家长发的只见回复,搜不到工具、错误、家长尾巴', kd.messages.length === 1 && kd.messages[0].question === null && kd.messages[0].reply === '第一次说:新的一天' && !/工具|error|holdup|handoff|costUsd|Read/.test(JSON.stringify(kd)), JSON.stringify(kd));
-  check('planner 对孩子端不存在', (await route('GET', '/api/kid/conversations/planner/today', ctx)).status === 404);
+  check('hidden 的 scene-maker 对孩子端不存在', (await route('GET', '/api/kid/conversations/scene-maker/today', ctx)).status === 404);
   const kp = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '孩子问的' });
   check('孩子发消息 202', kp.status === 202, JSON.stringify(kp.json));
   const kdMid = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { pending: string | null; messages: { pending: boolean }[] };

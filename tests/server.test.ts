@@ -22,9 +22,9 @@ try {
 
   check('health', (await get('/api/health')).status === 200 && ((await get('/api/health')).json as { ok: boolean }).ok);
   const rep = (await get('/api/workspace')).json as { workspace: string; tutors: string[] };
-  check('workspace 回报脱敏', rep.workspace.startsWith('$HOME') && rep.tutors.length === 5, JSON.stringify(rep));
+  check('workspace 回报脱敏', rep.workspace.startsWith('$HOME') && rep.tutors.length === 4, JSON.stringify(rep));
   const cfg = (await get('/api/config')).json as { title: string; runtimes: string[]; tutors: { name: string; policy: { replyMaxChars: number } }[]; tutorPatches: Record<string, unknown> };
-  check('配置接口带老师、政策、运行时名', cfg.title === '小明的老师们' && cfg.tutors.length === 5 && cfg.tutors[0].policy.replyMaxChars === 60 && cfg.runtimes.join() === 'claude,qwen,claude-scene,qwen-scene,claude-fast' && 'planner' in cfg.tutorPatches);
+  check('配置接口带老师、政策、运行时名', cfg.title === '小明的老师们' && cfg.tutors.length === 4 && cfg.tutors[0].policy.replyMaxChars === 60 && cfg.runtimes.join() === 'claude,qwen,claude-scene,qwen-scene,claude-fast' && 'scene-maker' in cfg.tutorPatches);
   check('孩子端老师列表不含 hidden', ((await get('/api/tutors?kid=1')).json as unknown[]).length === 3);
   // 政策文件补缺:新 workspace 没有差异;老 workspace 的差异由 /api/config 带给设置页,POST 补(与 cotutor upgrade --config 同一条路)
   check('新 workspace 没有可补的出厂件', ((await get('/api/config')).json as { migrate: unknown[] }).migrate.length === 0);

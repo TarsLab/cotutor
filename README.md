@@ -35,7 +35,7 @@ cotutor serve                     # 孩子端 http://<ip>:5180/,家长端 /paren
 cotutor add science-tutor --display 科学老师 --subject 科学 --avatar 🔬
 ```
 
-名字以 `-tutor` 结尾的是老师(有脸),planner / scene-maker 是工具人。头像可以是 emoji,也可以是
+名字以 `-tutor` 结尾的是老师(有脸),scene-maker 是工具人。头像可以是 emoji,也可以是
 workspace 里的一张图(`avatars/<老师>.png`):用 [figshot](https://github.com/tarslab/figshot)
 `figshot pick --workspace ~/cotutor/<孩子>` 让孩子自己搭一个乐高人仔当老师,存盘直接落到这里。
 

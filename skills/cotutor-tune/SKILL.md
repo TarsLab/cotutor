@@ -46,7 +46,7 @@ vault 是 Obsidian 仓库,可能在 iCloud 里:只改文本,不加标签,不放�
 
 1. 用 cotutor add <name> --display <显示名> --subject <学科> [--avatar emoji] [--hidden],不手建文件:它出模板、进 cotutor.json、建目录。name 小写英文加连字符,一旦定了不改。
 2. subject 要和课程表的学科列、日记 H2 的学科、入口文件的 subject 属性**一个字不差**,不然观察归不到它、课程表命不中、入口文件找不到。建这一科这学期的入口文件(doctor 会说该叫什么、写什么属性)。
-3. 模板正文照出厂老师改人设与学科做法(路子同第一节);hidden 是只和家长打交道的(规划老师那种),enabled: false 是先建好不上线;费用或时限要不一样的配自己的 runtime。
+3. 模板正文照出厂老师改人设与学科做法(路子同第一节);hidden 是孩子端不露的(画图老师那种),enabled: false 是先建好不上线;费用或时限要不一样的配自己的 runtime。
 4. 验:cotutor doctor(它会查文件、目录、链),再 cotutor pack <name> "你好" 看它拿到的上下文包(学期、档案、入口文件、这学科的观察、计划里它那段)对不对;要试真回答就 cotutor send <name> "<一句>"(花钱,先问)。
 5. 自家加的老师 upgrade 永远不碰;要删就在 cotutor.json 里删条目,文件改名留着。
 

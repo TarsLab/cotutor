@@ -4,12 +4,12 @@ import { configTemplate, shippedAgents } from '../src/cli/skeleton.ts';
 import { check, done } from './_check.ts';
 
 const agents = await shippedAgents();
-check('本包带 5 位老师', agents.length === 5, agents.map((a) => a.name).join(','));
+check('本包带 4 位老师', agents.length === 4, agents.map((a) => a.name).join(','));
 
 const raw = JSON.parse(configTemplate({ slug: 'ming', name: '小明', port: 5181, tutors: agents }));
 const cfg = CotutorConfigSchema.parse(raw);
 check('模板可解析', cfg.kid.slug === 'ming' && cfg.title === '小明的老师们' && cfg.server.port === 5181);
-check('老师表齐', Object.keys(cfg.tutors).length === 5 && !('homework-tutor' in cfg.tutors) && cfg.tutors.planner.hidden === true && cfg.tutors['scene-maker'].hidden === true && cfg.tutors['scene-maker'].runtime === 'claude-scene');
+check('老师表齐', Object.keys(cfg.tutors).length === 4 && !('homework-tutor' in cfg.tutors) && !('planner' in cfg.tutors) && cfg.tutors['scene-maker'].hidden === true && cfg.tutors['scene-maker'].runtime === 'claude-scene');
 check('enabled 缺省 true', cfg.tutors['math-tutor'].enabled === true && Object.values(cfg.tutors).every((t) => t.enabled));
 check('运行时 claude/qwen 都在', 'claude' in cfg.runtimes && 'qwen' in cfg.runtimes && cfg.runtimes.default === 'claude');
 
@@ -23,10 +23,10 @@ const layered = CotutorConfigSchema.parse({
 });
 const p2 = resolvePolicy(layered, 'math-tutor');
 check('政策逐层覆盖', p2.replyMaxChars === 80 && p2.contextPack.recent === 3 && p2.contextPack.planLines === 10 && p2.reviewGate === true && p2.forms.join() === 'L1');
-check('别的老师不受影响', resolvePolicy(layered, 'planner').reviewGate === false && resolvePolicy(layered, 'planner').replyMaxChars === 80);
+check('别的老师不受影响', resolvePolicy(layered, 'scene-maker').reviewGate === false && resolvePolicy(layered, 'scene-maker').replyMaxChars === 80);
 
 const kidOnly = listTutors(cfg, { kidOnly: true });
-check('孩子端不见 hidden', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'planner' || t.name === 'scene-maker'));
+check('孩子端不见 hidden', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'scene-maker'));
 check('列表带有效政策', listTutors(cfg)[0].policy.replyMaxChars === 60);
 
 const bad = CotutorConfigSchema.safeParse({ version: 2, kid: { slug: 'Bad Slug' }, tutors: { x: { display: '' } }, runtimes: { default: 'nope' } });

@@ -53,8 +53,8 @@ try {
   check('untracked 也不覆盖', (await upgradeTutors(root)).find((s) => s.name === 'reading-tutor')?.action === 'kept-custom' && readFileSync(file('reading-tutor'), 'utf8').includes('手写'));
 
   // 缺的补
-  unlinkSync(file('planner'));
-  check('缺 → installed', (await upgradeTutors(root)).find((s) => s.name === 'planner')?.action === 'installed' && existsSync(file('planner')));
+  unlinkSync(file('scene-maker'));
+  check('缺 → installed', (await upgradeTutors(root)).find((s) => s.name === 'scene-maker')?.action === 'installed' && existsSync(file('scene-maker')));
 
   check('lineDiff', lineDiff('a\nb\nc', 'a\nx\nc').join('|') === '- b|+ x' && lineDiff('a', 'a').length === 0 && lineDiff('a\nb', 'a').join('|') === '- b');
 

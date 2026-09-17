@@ -91,7 +91,7 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   }
 
   // vault 侧(《obsidian仓库设计.md》§2):只补档案与参考 README,缺了才写;档案按 cotutor: profile 找(2026-09-17),vault 里已有一篇就不补;
-  // 入口文件(每科每学期一篇)不自动建,doctor 提醒;日记 / 计划由记账与规划老师现建
+  // 入口文件(每科每学期一篇)不自动建,doctor 提醒;日记由记账现建,计划家长自己写
   try {
     const ws = loadWorkspace(root);
     const profile = ws.paths.profile;

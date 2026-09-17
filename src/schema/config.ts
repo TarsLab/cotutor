@@ -79,8 +79,8 @@ export const TutorSchema = z.object({
   /** voxtell 音色 id(2026-09-08 拍板);没有 = 用 voxtell 缺省 */
   voice: z.string().optional().describe('voxtell 音色 id(voxtell voices 可查);不配就不配音,孩子端用浏览器的声'),
   enabled: z.boolean().default(true).describe('开关:false 时两端都不见'),
-  /** 孩子端不露(规划老师、记账员这类) */
-  hidden: z.boolean().default(false).describe('孩子端不露(规划老师这类只和家长打交道的)'),
+  /** 孩子端不露(画图老师这类工具人) */
+  hidden: z.boolean().default(false).describe('孩子端不露(画图老师这类只和系统、家长打交道的)'),
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
   /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。scene-maker 这种要更大预算与时限的配一个自己的 */
   runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——预算、时限不同的老师配自己的'),

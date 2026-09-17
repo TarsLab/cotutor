@@ -20,10 +20,10 @@ try {
   const ws = join(home, 'cotutor', 'ming');
   check('缺省建在 ~/cotutor/<slug>', r1.root === ws && existsSync(ws), r1.root);
   check('骨架目录齐', ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'scenes', 'bundles', 'snaps'].every((d) => existsSync(join(ws, d))));
-  check('老师目录齐', ['math-tutor', 'chinese-tutor', 'reading-tutor', 'planner', 'scene-maker'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
+  check('老师目录齐', ['math-tutor', 'chinese-tutor', 'reading-tutor', 'scene-maker'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
   const link = join(ws, '.claude', 'agents', 'math-tutor.md');
   check('老师文件是拷贝,内容同本包', !lstatSync(link).isSymbolicLink() && readFileSync(link, 'utf8') === readFileSync(join(PACKAGE_AGENTS_DIR, 'math-tutor.md'), 'utf8'));
-  check('.qwen 是指向 .claude 的相对链', lstatSync(join(ws, '.qwen', 'agents', 'planner.md')).isSymbolicLink() && readlinkSync(join(ws, '.qwen', 'agents', 'planner.md')) === '../../.claude/agents/planner.md');
+  check('.qwen 是指向 .claude 的相对链', lstatSync(join(ws, '.qwen', 'agents', 'scene-maker.md')).isSymbolicLink() && readlinkSync(join(ws, '.qwen', 'agents', 'scene-maker.md')) === '../../.claude/agents/scene-maker.md');
   check('出厂 hash 记下', (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { tutors: Record<string, { hash: string }> }).tutors['math-tutor'].hash.startsWith('sha256:'));
   check('产物账本空文件在,观察账本不再建', !existsSync(join(ws, 'ledger', 'observations.jsonl')) && existsSync(join(ws, 'ledger', 'artifacts.jsonl')));
   const skillMd = readFileSync(join(ws, '.claude', 'skills', 'cotutor-board', 'SKILL.md'), 'utf8');
@@ -73,12 +73,12 @@ try {
   writeFileSync(join(ws, '课程', '二年级上', '数学.md'), '---\ncotutor: subject\nsubject: 数学\nsemester: 二年级上\n---\n\n会凑十\n');
   const dv = await doctorWorkspace(ws, { probeEnv: false });
   const zhEntry = dv.checks.find((c) => c.name === 'vault.entry.chinese-tutor');
-  check('doctor:档案齐了;数学有入口文件,语文没有 → 说建哪、写什么属性;工具人不查', dv.checks.find((c) => c.name === 'vault.profile')?.ok === true && dv.checks.find((c) => c.name === 'vault.entry.math-tutor')?.ok === true && zhEntry?.ok === false && zhEntry.fix?.includes('课程/二年级上/语文.md') === true && zhEntry.fix.includes('subject: 语文') && !dv.checks.some((c) => c.name === 'vault.entry.planner'), JSON.stringify(zhEntry));
-  check('doctor:每个 agent 查记忆文件,还没有不算错、说会建在哪', ['math-tutor', 'planner', 'scene-maker'].every((n) => dv.checks.some((c) => c.name === `vault.memory.${n}` && c.ok)) && dv.checks.find((c) => c.name === 'vault.memory.planner')?.detail.includes('记忆/规划老师.md') === true);
+  check('doctor:档案齐了;数学有入口文件,语文没有 → 说建哪、写什么属性;工具人不查', dv.checks.find((c) => c.name === 'vault.profile')?.ok === true && dv.checks.find((c) => c.name === 'vault.entry.math-tutor')?.ok === true && zhEntry?.ok === false && zhEntry.fix?.includes('课程/二年级上/语文.md') === true && zhEntry.fix.includes('subject: 语文') && !dv.checks.some((c) => c.name === 'vault.entry.scene-maker'), JSON.stringify(zhEntry));
+  check('doctor:每个 agent 查记忆文件,还没有不算错、说会建在哪', ['math-tutor', 'scene-maker'].every((n) => dv.checks.some((c) => c.name === `vault.memory.${n}` && c.ok)) && dv.checks.find((c) => c.name === 'vault.memory.scene-maker')?.detail.includes('记忆/画图老师.md') === true);
   const again = await initWorkspace({ slug: 'ming' });
   check('init 再跑:档案按属性认出来,不再补', again.steps.some((x) => x.item.endsWith('孩子.md') && x.action === 'exists'), JSON.stringify(again.steps.filter((x) => x.item.includes('孩子'))));
   check('doctor 查板书技能(机器件,必需),旧位置没了不报', d1.checks.some((c) => c.name === 'skill.cotutor-board' && c.ok && c.required) && !d1.checks.some((c) => c.name === 'board.legacy'));
-  check('老师链都查了(五位:含 scene-maker)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 5);
+  check('老师链都查了(四位:含 scene-maker)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 4);
   check('doctor 查板书后期的运行时:出厂 claude-fast 在模板里', d1.checks.some((c) => c.name === 'post.runtime.claude-fast' && c.ok && !c.required));
   check('doctor 查主题:清单过契约、出厂件最新', d1.checks.some((c) => c.name === 'theme.manifest' && c.ok) && d1.checks.some((c) => c.name === 'theme.default.origin' && c.ok));
   check('doctor 查 skill 与 drawtell 壳', d1.checks.filter((c) => c.name.startsWith('skill.') && c.ok).length === 8 && d1.checks.some((c) => c.name === 'skill.cotutor-vault' && c.required) && d1.checks.filter((c) => c.name.startsWith('skill.drawtell') && !c.required).length === 4 && d1.checks.some((c) => c.name === 'drawtell' && c.ok && !c.required));
@@ -114,7 +114,7 @@ try {
   const d4 = await doctorWorkspace(ws, { probeEnv: false });
   check('配置坏 → 必需失败,不死', !d4.ok && d4.checks.some((c) => c.name === 'cotutor.json' && !c.ok && c.required));
 
-  process.chdir(join(ws, 'agents', 'planner'));
+  process.chdir(join(ws, 'agents', 'scene-maker'));
   const d5 = await doctorWorkspace(undefined, { probeEnv: false, env: {} });
   check('老师目录里跑 doctor 找到根', d5.root === ws && d5.source === 'cwd', JSON.stringify({ root: d5.root, source: d5.source }));
 } finally {

@@ -833,8 +833,8 @@ __BOARD_JS__
       }
       // 这条既不 pending 也没定稿(运行出错了):撤掉;live 的那节也撤(孩子端出错的运行不出现)
       if (S.partial && !entries.some((e) => e.job === S.partial.job)) { const P = S.partial; S.partial = null; P.el.remove(); if (P.live) { stopVoice(); S.sections.splice(P.idx, 1); S.state = playerAtEnd(S.sections); renderSubtitle(); } }
-      // 服务端的状态是真相(别的设备上选的、重开页面):没在舞台里改着的卡照它画
-      entries.forEach((e) => { const i = S.sections.findIndex((x) => x.job === e.job); if (i < 0 || fresh.includes(i)) return; e.cards.forEach((c, idx) => { const mine = S.sections[i].cards[idx]; if (JSON.stringify(mine.state) !== JSON.stringify(c.state) && !(S.stage && S.stage.section === i && S.stage.card === idx)) { mine.state = c.state; repaintCard(i, idx); } }); });
+      // 服务端的状态是真相(别的设备上选的、重开页面):没在舞台里改着的卡照它画;props 也跟(场景卡的课包晚到,ready / 缩略图是服务端现读的)
+      entries.forEach((e) => { const i = S.sections.findIndex((x) => x.job === e.job); if (i < 0 || fresh.includes(i)) return; e.cards.forEach((c, idx) => { const mine = S.sections[i].cards[idx]; if (!mine || (S.stage && S.stage.section === i && S.stage.card === idx)) return; const ds = JSON.stringify(mine.state) !== JSON.stringify(c.state), dp = JSON.stringify(mine.props) !== JSON.stringify(c.props); if (ds || dp) { mine.state = c.state; mine.props = c.props; repaintCard(i, idx); } }); });
       if (fresh.length && S.stage) closeStage();
       const stillPending = Boolean(d.pending) || d.messages.some((m) => m.pending);
       S.pending = stillPending;

@@ -18,17 +18,18 @@
  * 页面发 card(props + state + 课包 URL),包回 phase / state / submit / close;场景在播时字幕行显示场景讲稿、按钮映射到播放器;
  * 讲稿 [[play]] 锚到场景卡 → 念完那句把动画铺满播,done 了关舞台接着念。
  * 点读段:card.assets 里有 <段号>.mp3 的放服务端配的,没有的浏览器合成;填空舞台逐空打字、「交给老师」;图片舞台双指缩放。
+ * 作业照片(《作业照片设计.md》):相机 / 相册先进发照片屏(裁剪、圈画、转 90°、配一句话,坐标在 src/lib/photo-edit.ts),再一条 {text, photos};节头小图点开看大图。
  * 流式:老师还在说时 pending 条目带 partial 板书,卡按下标只追加不重画(先出的卡不闪),讲稿不播;整轮跑完那节换成正式的,声音从第一句起。
  * __TITLE__ / __SHORT__(主屏幕图标下的名字)由路由替换。调试:`?step=<节>.<句>` 直接停在某句(标注画齐、不出声),截图与测试用。
  */
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 
-/** 读 kid-board 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
-function boardLibSource(): string {
+/** 读 src/lib/<name> 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
+function libSource(name: 'kid-board' | 'photo-edit'): string {
   let src: string;
   try {
-    const ts = readFileSync(new URL('../lib/kid-board.ts', import.meta.url), 'utf8');
+    const ts = readFileSync(new URL(`../lib/${name}.ts`, import.meta.url), 'utf8');
     // stripTypeScriptTypes 会发一条 ExperimentalWarning;这里只剥自己的文件,警告对用户没有信息量,压掉
     const warn = process.emitWarning;
     process.emitWarning = () => {};
@@ -38,7 +39,7 @@ function boardLibSource(): string {
       process.emitWarning = warn;
     }
   } catch {
-    src = readFileSync(new URL('../lib/kid-board.js', import.meta.url), 'utf8');
+    src = readFileSync(new URL(`../lib/${name}.js`, import.meta.url), 'utf8');
   }
   return src
     .replace(/^export (?=(?:async )?(?:function|const|let|class) )/gm, '')
@@ -173,6 +174,62 @@ const PAGE = `<!doctype html>
   #sheet .opts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
   #sheet label { display:flex; flex-direction:column; align-items:center; gap:8px; padding:18px 0; border-radius:16px; background:var(--paper); font-size:15px; font-weight:600; }
   input[type=file] { display:none; }
+  /* 发照片屏(《作业照片设计.md》):看一眼、裁剪 / 圈画 / 转 90°、配一句话,再发 */
+  #ps { position:absolute; inset:0; z-index:40; background:#1d1c1a; color:#fff; display:none; flex-direction:column; }
+  #ps.on { display:flex; }
+  #ps .view { position:relative; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:calc(env(safe-area-inset-top) + 12px) 16px 8px; }
+  #ps .cv { position:relative; }
+  #ps canvas { display:block; touch-action:none; }
+  #ps.pen canvas { cursor:crosshair; }
+  #ps-crop { position:absolute; inset:0; touch-action:none; }
+  #ps-crop[hidden] { display:none; }
+  #ps-crop .dim { position:absolute; background:#000000a0; pointer-events:none; }
+  #ps-crop .fr { position:absolute; border:2px solid #fff; box-shadow:0 0 0 1px #0006; }
+  #ps-crop .g { position:absolute; width:44px; height:44px; margin:-22px 0 0 -22px; }
+  #ps-crop .g::after { content:""; position:absolute; left:13px; top:13px; width:18px; height:18px; border:0 solid #fff; }
+  #ps-crop .nw { left:0; top:0; } #ps-crop .nw::after { border-width:4px 0 0 4px; left:20px; top:20px; }
+  #ps-crop .ne { left:100%; top:0; } #ps-crop .ne::after { border-width:4px 4px 0 0; left:6px; top:20px; }
+  #ps-crop .sw { left:0; top:100%; } #ps-crop .sw::after { border-width:0 0 4px 4px; left:20px; top:6px; }
+  #ps-crop .se { left:100%; top:100%; } #ps-crop .se::after { border-width:0 4px 4px 0; left:6px; top:6px; }
+  #ps-strip { display:flex; gap:10px; justify-content:center; padding:6px 16px; }
+  #ps-strip:empty { display:none; }
+  #ps-strip .t { position:relative; width:56px; height:56px; border-radius:10px; border:2px solid transparent; }
+  #ps-strip .t.on { border-color:#fff; }
+  #ps-strip .t img { width:100%; height:100%; object-fit:cover; border-radius:8px; display:block; }
+  #ps-strip .x { position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:12px; background:#fff; color:#1d1c1a; display:grid; place-items:center; }
+  #ps-strip .x::before { content:""; position:absolute; inset:-8px; }
+  #ps .tools { display:flex; gap:10px; justify-content:center; padding:8px 16px; }
+  #ps .tools[hidden] { display:none; }
+  #ps .tools button { min-width:76px; height:48px; padding:0 14px; border-radius:24px; background:#ffffff1f; color:#fff; font-size:16px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+  #ps .tools button.ok { background:#fff; color:#1d1c1a; }
+  #ps .tools button:disabled { opacity:.35; }
+  #ps-say { display:flex; align-items:center; gap:10px; margin:6px 16px 0; min-height:52px; padding:0 8px 0 18px; border-radius:26px; background:#fff; color:var(--ink); touch-action:none; }
+  #ps-say[hidden] { display:none; }
+  #ps-say.rec { background:#3b82e8; color:#fff; }
+  #ps-said { flex:1; min-width:0; font-size:17px; line-height:1.4; padding:12px 0; }
+  #ps-said.ph { color:var(--dim); }
+  #ps-say.rec #ps-said { color:#fff; }
+  #ps-typed { flex:1; min-width:0; font:inherit; font-size:18px; color:var(--ink); border:0; outline:0; background:none; -webkit-user-select:text; user-select:text; }
+  #ps-typed[hidden], #ps-clear[hidden] { display:none; }
+  #ps-clear { width:36px; height:36px; display:grid; place-items:center; color:var(--dim); }
+  #ps .foot { display:flex; gap:12px; padding:12px 16px calc(env(safe-area-inset-bottom) + 14px); }
+  #ps .foot[hidden] { display:none; }
+  #ps .foot button { flex:1; height:54px; border-radius:27px; font-size:17px; font-weight:600; }
+  #ps-cancel { background:#ffffff1f; color:#fff; }
+  #ps-go { background:var(--accent); color:#fff; }
+  #ps-go:disabled { opacity:.5; }
+  /* 看大图:节头的小图点开;双指缩放、双击复位 */
+  #lb { position:absolute; inset:0; z-index:40; background:#111; display:none; }
+  #lb.on { display:block; }
+  #lb .zoom { position:absolute; inset:0; overflow:hidden; display:flex; align-items:center; justify-content:center; touch-action:none; }
+  #lb .zoom img { max-width:100%; max-height:100%; transform-origin:center; }
+  #lb .x, #lb .nav { position:absolute; width:48px; height:48px; border-radius:24px; background:#ffffff26; color:#fff; display:grid; place-items:center; z-index:2; }
+  #lb .x { top:calc(env(safe-area-inset-top) + 12px); right:16px; }
+  #lb .nav { top:50%; margin-top:-24px; font-size:26px; line-height:1; }
+  #lb .nav.l { left:12px; } #lb .nav.r { right:12px; }
+  #lb .nav[hidden] { display:none; }
+  #lb .n { position:absolute; left:0; right:0; bottom:calc(env(safe-area-inset-bottom) + 18px); text-align:center; color:#fffc; font-size:15px; z-index:2; pointer-events:none; }
+  .sh .ph { cursor:zoom-in; }
   /* ---- 平板横屏 ---- */
   @media (min-width:900px) and (orientation:landscape) {
     #home { max-width:1040px; padding:calc(env(safe-area-inset-top) + 40px) 48px 40px; gap:24px; }
@@ -219,13 +276,24 @@ const PAGE = `<!doctype html>
   </div>
   <div id="hist"><div class="dimmer"></div><div class="panel"><div class="hd"><span>以前的</span><button class="hb" id="hist-x" type="button"></button></div><div class="ls"></div></div></div>
   <div id="sheet"><div class="dimmer"></div><div class="panel"><div class="grab"></div><div class="opts">
-    <label><span class="ic" id="ic-album"></span>相册<input type="file" accept="image/*"></label>
+    <label><span class="ic" id="ic-album"></span>相册<input type="file" accept="image/*" multiple></label>
     <label><span class="ic" id="ic-cam2"></span>拍照<input type="file" accept="image/*" capture="environment"></label>
   </div></div></div>
+  <div id="ps">
+    <div class="view"><div class="cv"><canvas id="ps-cv"></canvas><div id="ps-crop" hidden><div class="dim"></div><div class="dim"></div><div class="dim"></div><div class="dim"></div><div class="fr" data-g="move"><span class="g nw" data-g="nw"></span><span class="g ne" data-g="ne"></span><span class="g sw" data-g="sw"></span><span class="g se" data-g="se"></span></div></div></div></div>
+    <div id="ps-strip"></div>
+    <div class="tools" id="ps-tools"><button type="button" id="ps-t-crop">裁剪</button><button type="button" id="ps-t-pen">圈画</button><button type="button" id="ps-t-rot">转 90°</button></div>
+    <div class="tools" id="ps-crop-bar" hidden><button type="button" id="ps-c-full">整张</button><button type="button" class="ok" id="ps-c-ok">好了</button></div>
+    <div class="tools" id="ps-pen-bar" hidden><button type="button" id="ps-p-undo">撤销</button><button type="button" id="ps-p-clear">清空</button><button type="button" class="ok" id="ps-p-ok">好了</button></div>
+    <div id="ps-say"><span id="ps-said"></span><input id="ps-typed" type="text" autocomplete="off" enterkeyhint="done" hidden><button type="button" id="ps-clear" hidden></button></div>
+    <div class="foot" id="ps-foot"><button type="button" id="ps-cancel">取消</button><button type="button" id="ps-go">发给老师</button></div>
+  </div>
+  <div id="lb"><div class="zoom"><img alt=""></div><button type="button" class="x" id="lb-x"></button><button type="button" class="nav l" id="lb-l">‹</button><button type="button" class="nav r" id="lb-r">›</button><div class="n" id="lb-n"></div></div>
 </section>
 <script>
 (() => {
 __BOARD_JS__
+__PHOTO_JS__
 
   /** 家长端的首页预览:null = 孩子端;'draft' / 'published' = 预览里(数据走家长接口,按钮不真发) */
   const PREVIEW = __PREVIEW__;
@@ -256,6 +324,7 @@ __BOARD_JS__
     image: SVG('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 16l5-5 4 4 3-3 6 6"></path><circle cx="16" cy="9" r="1.5"></circle>', 36, 1.6),
     album: SVG('<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 15l5-4 4 3 3-2 6 4"></path>', 28),
     close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
+    closeSm: SVG('<path d="M7 7l10 10M17 7L7 17"></path>', 14, 2.8),
     check: SVG('<path d="M5 12l5 5 9-10"></path>', 16, 3),
     history: SVG('<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path>', 24),
     again: SVG('<path d="M4 12a8 8 0 1 0 2.4-5.7"></path><path d="M4 4v4.5h4.5"></path>', 20, 2),
@@ -383,7 +452,7 @@ __BOARD_JS__
     loadDay(true).then(() => { if (intent.send) send(intent.send); });
   };
   const blankBoard = (title) => h('div', { class: 'blank' }, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null);
-  const closeTutor = () => { clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); S.tutor = null; S.via = null; S.cont = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit'); loadHome(); };
+  const closeTutor = () => { clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit'); loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back').innerHTML = ICON.back;
 
@@ -565,8 +634,8 @@ __BOARD_JS__
     const up = (e) => { pts.delete(e.pointerId); start = pts.size ? { scale, tx, ty, d: pts.size === 2 ? dist() : 0, x: [...pts.values()][0].x, y: [...pts.values()][0].y } : null; };
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   };
-  // 节头:时间 · 节名;孩子问这节时拍的照片(R5)缩略图跟在后面
-  const sectionHead = (s) => h('div', { class: 'sh', on: { click: (e) => againAt(e.currentTarget, 'all') } }, (s.at ? clock(s.at) + ' · ' : '') + sectionTitle(s), ...((s.photos || []).map((p) => h('img', { class: 'ph', src: '/api/kid/image?p=' + encodeURIComponent(p), alt: '', loading: 'lazy' }))), h('button', { type: 'button', class: 'again', 'aria-label': '再听这一节', html: ICON.replay }));
+  // 节头:时间 · 节名;孩子问这节时拍的照片(R5)缩略图跟在后面,点小图看大图(不是再听)
+  const sectionHead = (s) => h('div', { class: 'sh', on: { click: (e) => againAt(e.currentTarget, 'all') } }, (s.at ? clock(s.at) + ' · ' : '') + sectionTitle(s), ...((s.photos || []).map((p, k) => h('img', { class: 'ph', src: '/api/kid/image?p=' + encodeURIComponent(p), alt: '', loading: 'lazy', on: { click: (e) => { e.stopPropagation(); openLb(s.photos, k); } } }))), h('button', { type: 'button', class: 'again', 'aria-label': '再听这一节', html: ICON.replay }));
   const rowEl = (n, ...kids) => h('div', { class: 'row', style: 'grid-template-columns:repeat(' + n + ',minmax(0,1fr))' }, ...kids);
   /** 一节 = 头一行(时间 · 节名)+ 若干行;行是后期为某个端分的,渲染器按当前端折(rowsFor) */
   const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i }, sectionHead(s), ...rowsFor(s, S.device).map((row) => rowEl(row.length, ...row.map((idx) => renderCard(s.cards[idx], idx, i, false)))));
@@ -1064,38 +1133,25 @@ __BOARD_JS__
   typed.addEventListener('blur', () => { if (!typed.value.trim()) setBar(barNext(S.bar, 'blur')); });
   $('#plus').addEventListener('click', () => $('#sheet').classList.add('on'));
   $('#sheet .dimmer').addEventListener('click', () => $('#sheet').classList.remove('on'));
-  // 作业照片(R5):相机 / 相册选了 → 浏览器里缩到长边 1600 的 jpeg → 传上去拿 path → 连 path 发一条(文字空,服务端记「(拍了一张)」);老师自己看图认题
-  const shrink = (file) => new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file); const im = new Image();
-    im.onload = () => { URL.revokeObjectURL(url); try { const k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight, 1)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); resolve(c.toDataURL('image/jpeg', 0.82)); } catch (e) { reject(e); } };
-    im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('图读不出')); };
-    im.src = url;
-  });
-  const sendPhoto = async (file) => {
-    if (!file || !S.tutor || S.readonly || S.limit || S.pending) return;
-    S.pending = true; S.waitSince = Date.now(); renderSubtitle();
-    try {
-      const data = await shrink(file);
-      const r = await api('POST', '/api/kid/conversations/' + S.tutor.name + '/photos', { image: data });
-      S.pending = false;
-      await send('', { photos: [r.path] });
-    } catch (e) { S.pending = false; renderSubtitle(); if (e && e.status === 404) closeTutor(); else if (!(e && e.status)) setOffline(true); }
-  };
-  for (const f of document.querySelectorAll('input[type=file]')) f.addEventListener('change', () => { $('#sheet').classList.remove('on'); const file = f.files && f.files[0]; f.value = ''; sendPhoto(file); });
   $('#hold .w').replaceChildren(...[6, 10, 16, 22, 12, 26, 18, 8, 14, 24, 20, 10, 16, 28, 12, 8, 18, 22, 10, 14, 6, 12, 20, 16, 8].map((v, i) => h('i', { style: 'height:' + v + 'px;animation-delay:' + (i * 37 % 400) + 'ms' })));
 
   // 中间那段:点 = 打字;按住 150ms = 说话(浏览器识别),松手发,上滑 60px 取消;没有识别就只有打字
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let press = null, rec = null, finalText = '';
+  /** 起一次浏览器识别:onText(到目前认出的整句),onEnd(停了);起不来 → null */
+  const listen = (onText, onEnd) => {
+    try {
+      const r = new SR(); r.lang = 'zh-CN'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+      r.onresult = (ev) => { let s = ''; for (const x of ev.results) s += x[0].transcript; onText(s); };
+      r.onerror = () => {};
+      r.onend = onEnd;
+      r.start();
+      return r;
+    } catch { return null; }
+  };
   const startRec = () => {
     finalText = '';
-    try {
-      rec = new SR(); rec.lang = 'zh-CN'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
-      rec.onresult = (ev) => { let s = ''; for (const r of ev.results) s += r[0].transcript; finalText = s; };
-      rec.onerror = () => {};
-      rec.onend = () => { const cancelled = press && press.cancelled; const t = finalText; rec = null; if (!cancelled && t.trim()) send(t); };
-      rec.start();
-    } catch { rec = null; }
+    rec = listen((t) => { finalText = t; }, () => { const cancelled = press && press.cancelled; const t = finalText; rec = null; if (!cancelled && t.trim()) send(t); });
   };
   mid.addEventListener('pointerdown', (e) => {
     if (S.bar === 'typing') return;
@@ -1115,6 +1171,223 @@ __BOARD_JS__
   mid.addEventListener('pointerup', release);
   mid.addEventListener('pointercancel', release);
   mid.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // ---- 发照片屏(《作业照片设计.md》):拍 / 选了先到这里——看一眼、裁剪 / 圈画 / 转 90°、配一句话,再一条消息发出去 ----
+  // 坐标都在 photo-edit(内联在上面),这里只管画和点。原图只留 objectURL,导出时再解一次(几张 12MP 常驻内存 iPad 吃不消)
+  const PS = { items: [], at: 0, mode: 'view', text: '', busy: false, work: null, drag: null, pen: null, sc: 1, R: null, raf: 0 };
+  const psEl = $('#ps'), cv = $('#ps-cv'), cropEl = $('#ps-crop'), sayEl = $('#ps-say'), psTyped = $('#ps-typed');
+  const loadImg = (url) => new Promise((resolve, reject) => { const im = new Image(); im.onload = () => resolve(im); im.onerror = () => reject(new Error('图读不出')); im.src = url; });
+  /** 一张:解一次拿宽高,留一张长边 ≤ 2048 的显示用底图;解不出 → null(不进缩略图条,不当成不通) */
+  const psItem = async (file) => {
+    const url = URL.createObjectURL(file);
+    try {
+      const im = await loadImg(url);
+      const w = im.naturalWidth, hh = im.naturalHeight;
+      if (!w || !hh) throw new Error('空图');
+      const k = Math.min(1, 2048 / Math.max(w, hh));
+      const disp = document.createElement('canvas'); disp.width = Math.max(1, Math.round(w * k)); disp.height = Math.max(1, Math.round(hh * k));
+      disp.getContext('2d').drawImage(im, 0, 0, disp.width, disp.height);
+      return { url, disp, edit: newEdit(w, hh), path: null };
+    } catch { URL.revokeObjectURL(url); return null; }
+  };
+  const drawStrokes = (ctx, strokes) => {
+    ctx.strokeStyle = PEN_COLOR; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const st of strokes) {
+      ctx.lineWidth = st.width; ctx.beginPath(); ctx.moveTo(st.pts[0].x, st.pts[0].y);
+      for (const p of st.pts.slice(1)) ctx.lineTo(p.x, p.y);
+      if (st.pts.length === 1) ctx.lineTo(st.pts[0].x + 0.01, st.pts[0].y);
+      ctx.stroke();
+    }
+  };
+  /** 把编辑后的图里 R 那块画上去:图坐标 × sc = 画布 px;src 是原图或显示底图(都按原图宽高铺) */
+  const paintEdit = (ctx, src, e, R, sc) => {
+    ctx.setTransform(sc, 0, 0, sc, -R.x * sc, -R.y * sc);
+    const m = rotMatrix(e); ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
+    ctx.drawImage(src, 0, 0, e.w, e.h);
+    ctx.setTransform(sc, 0, 0, sc, -R.x * sc, -R.y * sc);
+    drawStrokes(ctx, e.strokes);
+  };
+  const psExport = async (it) => {
+    const im = await loadImg(it.url);
+    const plan = exportPlan(it.edit);
+    const c = document.createElement('canvas'); c.width = plan.w; c.height = plan.h;
+    paintEdit(c.getContext('2d'), im, it.edit, plan.src, plan.scale);
+    return c.toDataURL('image/jpeg', 0.82);
+  };
+  const psCur = () => PS.items[PS.at];
+  const psCropFrame = () => {
+    const r = PS.work, sc = PS.sc, W = PS.R.w * sc, H = PS.R.h * sc;
+    const x = r.x * sc, y = r.y * sc, w = r.w * sc, hh = r.h * sc;
+    const put = (el, l, t, ww, h2) => { el.style.left = l + 'px'; el.style.top = t + 'px'; el.style.width = Math.max(0, ww) + 'px'; el.style.height = Math.max(0, h2) + 'px'; };
+    const d = cropEl.querySelectorAll('.dim');
+    put(d[0], 0, 0, W, y); put(d[1], 0, y + hh, W, H - y - hh); put(d[2], 0, y, x, hh); put(d[3], x + w, y, W - x - w, hh);
+    put(cropEl.querySelector('.fr'), x, y, w, hh);
+  };
+  /** 画当前那张:裁剪时看整张 + 框,其余时候看裁好的那块 + 笔画 */
+  const psRender = () => {
+    const it = psCur(); if (!it) return;
+    const e = it.edit, full = rotatedSize(e);
+    const R = PS.mode === 'crop' ? { x: 0, y: 0, w: full.w, h: full.h } : region(e);
+    const box = $('#ps .view'), cs = getComputedStyle(box);
+    const bw = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), bh = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const sc = fitScale(R.w, R.h, Math.max(bw, 40), Math.max(bh, 40));
+    PS.sc = sc; PS.R = R;
+    const dw = Math.round(R.w * sc), dh = Math.round(R.h * sc), dpr = window.devicePixelRatio || 1;
+    cv.style.width = dw + 'px'; cv.style.height = dh + 'px';
+    const pw = Math.round(dw * dpr), ph = Math.round(dh * dpr);
+    if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
+    const ctx = cv.getContext('2d'); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, pw, ph);
+    paintEdit(ctx, it.disp, e, R, sc * dpr);
+    if (PS.mode === 'crop') psCropFrame();
+  };
+  const psDraw = () => { if (!PS.raf) PS.raf = requestAnimationFrame(() => { PS.raf = 0; psRender(); }); };
+  const psUi = () => {
+    const strip = $('#ps-strip');
+    strip.replaceChildren(...(PS.items.length > 1 ? PS.items.map((it, i) => h('div', { class: 't' + (i === PS.at ? ' on' : ''), on: { click: () => { if (PS.busy || i === PS.at) return; PS.at = i; psUi(); psRender(); } } }, h('img', { src: it.url, alt: '' }), h('button', { type: 'button', class: 'x', 'aria-label': '去掉这张', html: ICON.closeSm, on: { click: (e) => { e.stopPropagation(); psDrop(i); } } }))) : []));
+    strip.style.display = PS.mode === 'view' && PS.items.length > 1 ? '' : 'none';
+    const said = $('#ps-said');
+    said.textContent = PS.text || (SR ? '按住说一句,或点一下打字' : '点这里打一句');
+    said.classList.toggle('ph', !PS.text);
+    said.hidden = !psTyped.hidden;
+    $('#ps-clear').hidden = !PS.text || !psTyped.hidden;
+    $('#ps-go').disabled = PS.busy;
+    const n = psCur() ? psCur().edit.strokes.length : 0;
+    $('#ps-p-undo').disabled = !n; $('#ps-p-clear').disabled = !n;
+  };
+  const psMode = (mode) => {
+    const it = psCur(); if (!it) return;
+    if (mode === 'crop') { const f = rotatedSize(it.edit); PS.work = it.edit.crop || { x: 0, y: 0, w: f.w, h: f.h }; }
+    PS.mode = mode; PS.drag = null; PS.pen = null;
+    psEl.classList.toggle('pen', mode === 'pen');
+    cropEl.hidden = mode !== 'crop';
+    $('#ps-tools').hidden = mode !== 'view'; $('#ps-crop-bar').hidden = mode !== 'crop'; $('#ps-pen-bar').hidden = mode !== 'pen';
+    sayEl.hidden = mode !== 'view'; $('#ps-foot').hidden = mode !== 'view';
+    psUi(); psRender();
+  };
+  /** 改了这张:之前传上去的不作数 */
+  const psEdit = (e) => { const it = psCur(); it.edit = e; it.path = null; };
+  const psReset = () => {
+    for (const it of PS.items) URL.revokeObjectURL(it.url);
+    if (psRec) { try { psRec.onend = null; psRec.abort(); } catch {} psRec = null; }
+    Object.assign(PS, { items: [], at: 0, mode: 'view', text: '', busy: false, work: null, drag: null, pen: null });
+    psTyped.value = ''; psTyped.hidden = true; sayEl.classList.remove('rec');
+  };
+  const psClose = () => { psReset(); psEl.classList.remove('on'); };
+  const psDrop = (i) => {
+    if (PS.busy) return;
+    URL.revokeObjectURL(PS.items[i].url);
+    PS.items.splice(i, 1);
+    if (!PS.items.length) { psClose(); return; }
+    PS.at = Math.min(PS.at > i ? PS.at - 1 : PS.at, PS.items.length - 1);
+    psUi(); psRender();
+  };
+  const psOpen = async (files) => {
+    if (!files.length || !S.tutor || S.readonly || S.limit || S.pending) return;
+    dispatch({ type: 'stageOpen' });
+    const items = (await Promise.all(files.map(psItem))).filter(Boolean);
+    if (!items.length || !S.tutor) return;
+    psReset(); PS.items = items;
+    psEl.classList.add('on');
+    psMode('view');
+  };
+  // 拿起相机老师就停(同点卡开舞台);拍完 / 选完进发照片屏。相册最多 4 张,多的只取前 4 张
+  for (const f of document.querySelectorAll('input[type=file]')) {
+    f.addEventListener('click', () => dispatch({ type: 'stageOpen' }));
+    f.addEventListener('change', () => { $('#sheet').classList.remove('on'); const files = Array.from(f.files || []).slice(0, f.multiple ? PHOTO_ALBUM_MAX : 1); f.value = ''; psOpen(files); });
+  }
+  $('#ps-t-crop').addEventListener('click', () => psMode('crop'));
+  $('#ps-t-pen').addEventListener('click', () => psMode('pen'));
+  $('#ps-t-rot').addEventListener('click', () => { psEdit(rotateEdit(psCur().edit)); psRender(); });
+  $('#ps-c-full').addEventListener('click', () => { PS.work = { x: 0, y: 0, w: PS.R.w, h: PS.R.h }; psCropFrame(); });
+  $('#ps-c-ok').addEventListener('click', () => { const e = setCrop(psCur().edit, PS.work); if (JSON.stringify(e.crop) !== JSON.stringify(psCur().edit.crop)) psEdit(e); psMode('view'); });
+  $('#ps-p-undo').addEventListener('click', () => { const e = psCur().edit; psEdit({ ...e, strokes: e.strokes.slice(0, -1) }); psUi(); psRender(); });
+  $('#ps-p-clear').addEventListener('click', () => { psEdit({ ...psCur().edit, strokes: [] }); psUi(); psRender(); });
+  $('#ps-p-ok').addEventListener('click', () => psMode('view'));
+  // 裁剪框:四角改大小、框里平移;显示 px 换成图坐标交给 dragCrop
+  cropEl.addEventListener('pointerdown', (e) => {
+    const g = e.target.closest('[data-g]'); if (!g || PS.drag) return;
+    e.preventDefault(); try { cropEl.setPointerCapture(e.pointerId); } catch {}
+    PS.drag = { id: e.pointerId, g: g.dataset.g, x: e.clientX, y: e.clientY, from: PS.work };
+  });
+  cropEl.addEventListener('pointermove', (e) => {
+    const d = PS.drag; if (!d || d.id !== e.pointerId) return;
+    PS.work = dragCrop(d.from, d.g, (e.clientX - d.x) / PS.sc, (e.clientY - d.y) / PS.sc, PS.R.w, PS.R.h, CROP_MIN_PX / PS.sc);
+    psCropFrame();
+  });
+  const cropUp = (e) => { if (PS.drag && PS.drag.id === e.pointerId) PS.drag = null; };
+  cropEl.addEventListener('pointerup', cropUp); cropEl.addEventListener('pointercancel', cropUp);
+  // 红笔:一次只认一根手指(手掌压着屏不算第二笔)
+  const toImg = (e) => { const b = cv.getBoundingClientRect(); return { x: PS.R.x + (e.clientX - b.left) / PS.sc, y: PS.R.y + (e.clientY - b.top) / PS.sc }; };
+  cv.addEventListener('pointerdown', (e) => {
+    if (PS.mode !== 'pen' || PS.pen) return;
+    e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch {}
+    const st = newStroke(psCur().edit, toImg(e));
+    psEdit({ ...psCur().edit, strokes: [...psCur().edit.strokes, st] });
+    PS.pen = { id: e.pointerId, st }; psUi(); psDraw();
+  });
+  cv.addEventListener('pointermove', (e) => { if (!PS.pen || PS.pen.id !== e.pointerId) return; PS.pen.st.pts.push(toImg(e)); psDraw(); });
+  const penUp = (e) => { if (PS.pen && PS.pen.id === e.pointerId) PS.pen = null; };
+  cv.addEventListener('pointerup', penUp); cv.addEventListener('pointercancel', penUp);
+  window.addEventListener('resize', () => { if (psEl.classList.contains('on')) psRender(); });
+  // 配一句话:按住说(认出的字替换原来的),点一下打字,× 清掉
+  let psPress = null, psRec = null;
+  sayEl.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#ps-clear') || !psTyped.hidden || PS.busy) return;
+    e.preventDefault(); unlock();
+    psPress = { held: false, timer: setTimeout(() => {
+      if (!psPress || !SR) return;
+      psPress.held = true; sayEl.classList.add('rec');
+      psRec = listen((t) => { PS.text = t.trim(); psUi(); }, () => { psRec = null; sayEl.classList.remove('rec'); psUi(); });
+      if (!psRec) sayEl.classList.remove('rec');
+    }, 150) };
+    try { sayEl.setPointerCapture(e.pointerId); } catch {}
+  });
+  const psRelease = () => {
+    if (!psPress) return;
+    clearTimeout(psPress.timer);
+    const held = psPress.held; psPress = null;
+    if (held) { if (psRec) { try { psRec.stop(); } catch {} } return; }
+    psTyped.value = PS.text; psTyped.hidden = false; psUi(); psTyped.focus();
+  };
+  sayEl.addEventListener('pointerup', psRelease);
+  sayEl.addEventListener('pointercancel', psRelease);
+  sayEl.addEventListener('contextmenu', (e) => e.preventDefault());
+  psTyped.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); psTyped.blur(); } });
+  psTyped.addEventListener('blur', () => { PS.text = psTyped.value.trim(); psTyped.hidden = true; psUi(); });
+  $('#ps-clear').addEventListener('click', () => { PS.text = ''; psUi(); });
+  $('#ps-cancel').addEventListener('click', () => { if (!PS.busy) psClose(); });
+  // 发:逐张导出(转 → 裁 → 画 → 缩到 1600)上传拿 path,全拿到再发一条 {text, photos};传不上去屏不关、编辑留着,再点一次只传没传上的
+  $('#ps-go').addEventListener('click', async () => {
+    if (PS.busy || !PS.items.length) return;
+    if (!psTyped.hidden) psTyped.blur();
+    if (!S.tutor || S.readonly || S.limit || S.pending) return;
+    PS.busy = true; psUi();
+    const name = S.tutor.name;
+    try {
+      for (const it of PS.items) if (!it.path) { const data = await psExport(it); const r = await api('POST', '/api/kid/conversations/' + name + '/photos', { image: data }); it.path = r.path; }
+    } catch (e) {
+      PS.busy = false; psUi();
+      if (e && e.status === 404) { psClose(); closeTutor(); }
+      return;
+    }
+    const photos = PS.items.map((it) => it.path), text = PS.text;
+    psClose();
+    if (S.tutor && S.tutor.name === name) send(text, { photos });
+  });
+
+  // ---- 看大图:节头的小图点开;双指缩放、双击复位;几张就左右翻。不碰播放 ----
+  const LB = { list: [], at: 0 };
+  const lbShow = () => {
+    const z = h('div', { class: 'zoom' }, h('img', { src: '/api/kid/image?p=' + encodeURIComponent(LB.list[LB.at]), alt: '' }));
+    $('#lb .zoom').replaceWith(z); pinch(z);
+    $('#lb-l').hidden = LB.at <= 0; $('#lb-r').hidden = LB.at >= LB.list.length - 1;
+    $('#lb-n').textContent = LB.list.length > 1 ? (LB.at + 1) + ' / ' + LB.list.length : '';
+  };
+  const openLb = (list, at) => { LB.list = list; LB.at = at; $('#lb').classList.add('on'); lbShow(); };
+  $('#lb-x').innerHTML = ICON.close; $('#ps-clear').innerHTML = ICON.closeSm;
+  $('#lb-x').addEventListener('click', () => $('#lb').classList.remove('on'));
+  $('#lb-l').addEventListener('click', () => { if (LB.at > 0) { LB.at--; lbShow(); } });
+  $('#lb-r').addEventListener('click', () => { if (LB.at < LB.list.length - 1) { LB.at++; lbShow(); } });
 
   // ---- 调试:?step=<节>.<句> 停在某句(截图 / 测试用,不出声) ----
   const jumpTo = () => {
@@ -1156,7 +1429,7 @@ __BOARD_JS__
 </html>
 `;
 
-export const KID_PAGE = PAGE.replace('__BOARD_JS__', boardLibSource());
+export const KID_PAGE = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__PHOTO_JS__', () => libSource('photo-edit'));
 
 /** 孩子端页面:标题(已转义)填进去;preview = 家长端「首页」页里的预览(草稿 / 已发布) */
 export function kidPage(title: string, preview: 'draft' | 'published' | null = null): string {

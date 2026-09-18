@@ -67,6 +67,7 @@ const rows: Row[] = [
   { name: '在念 + [[play]] 那句念完 → 交给场景', model: M({ section: 0, line: 0, status: 'playing' }), sections: [withScene], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'stage' && kinds(fx) === 'openStage' },
   { name: '交给场景 + 场景播完 → 接着念', model: M({ section: 0, line: 0, status: 'stage' }), sections: [withScene], ev: { type: 'stageDone' }, want: (m, fx) => m.state.status === 'playing' && m.state.line === 1 && kinds(fx) === 'play' },
   { name: '在念 + 点卡开舞台 → 暂停', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'stageOpen' }, want: (m) => m.state.status === 'paused' },
+  { name: '在念 + 拿起相机(同开舞台)→ 暂停,不算念完', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'stageOpen' }, want: (m) => m.state.status === 'paused' && m.state.line === 0 },
   { name: '在念 + 点读 → 暂停', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'segment' }, want: (m) => m.state.status === 'paused' },
   { name: '在念 + 孩子说话 → 完、停声音', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'send' }, want: (m, fx) => m.state.status === 'done' && kinds(fx) === 'stop' },
   // 再听中
@@ -78,6 +79,7 @@ const rows: Row[] = [
   { name: '再听 + 孩子说话 → 再听停、完', model: replayingW, sections: [done0, last], ev: { type: 'send' }, want: (m) => !m.state.replay && m.state.status === 'waiting' },
   { name: '再听 + 整节新回答到了 → 再听让路,念新的', model: replayingW, sections: [done0, last, last], ev: { type: 'fresh', sections: [2], silent: false }, want: (m, fx) => !m.state.replay && m.state.section === 2 && m.state.status === 'playing' && fx.at(-1)?.kind === 'play' },
   { name: '再听 + 开舞台 → 再听停', model: replayingW, sections: [done0, last], ev: { type: 'stageOpen' }, want: (m) => !m.state.replay },
+  { name: '再听 + 拿起相机(同开舞台)→ 再听停', model: replayingW, sections: [done0, last], ev: { type: 'stageOpen' }, want: (m) => !m.state.replay },
   // 老师的新内容
   { name: '等下一拍 + 新的一拍就绪 → 接着念', model: M({ section: 1, line: 0, status: 'thinking' }), sections: [done0, { ...live, ready: 2 }], ctx: { pending: true }, ev: { type: 'liveBeat', section: 1 }, want: (m, fx) => m.state.status === 'playing' && m.state.line === 1 && kinds(fx) === 'play' },
   // 防御:再听只在安静时开始,等下一拍时本来进不了再听;真进了(以后改了安静规则),新的一拍照样抢回来

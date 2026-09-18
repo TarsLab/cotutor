@@ -629,6 +629,15 @@ export function replayLines(sections: readonly BoardSection[], state: PlayerStat
   return lines;
 }
 
+/**
+ * 这会儿能不能再听:板上安静才行——停下等答、念完、孩子自己暂停。老师在想、正在念(包括等下一拍、交给场景)都不行:
+ * 再听会打断正在念的回答,同一个声音念旧内容听着像答非所问(2026-09-18 真机:念到一半点了田字格的喇叭)。再听中按回放前的位置算
+ */
+export function replayQuiet(state: PlayerState, pending: boolean): boolean {
+  const at = state.replay ? state.replay.back : state;
+  return !pending && (at.status === 'waiting' || at.status === 'done' || at.status === 'paused');
+}
+
 /** 开始再听:从第一句念起;念完回到原来的位置——在念的变暂停(孩子点播放接着念),等答的还等着。重念中再点别的,回的还是最初的位置 */
 export function startReplay(state: PlayerState, secIdx: number, lines: readonly number[]): PlayerState {
   if (!lines.length) return state;
@@ -654,9 +663,10 @@ export interface SubtitleInput {
 
 export interface SubtitleView {
   text: string;
-  /** wait = 第一拍前(板上有占位卡);gap = 拍与拍之间(留着刚念那句,变暗加点) */
-  kind: 'line' | 'wait' | 'gap' | 'limit' | 'empty';
-  right: 'pause' | 'play' | 'continue' | 'none';
+  /** wait = 第一拍前(板上有占位卡);gap = 拍与拍之间(留着刚念那句,变暗加点);replay = 再听(淡一档、前面一个小喇叭,和老师正在说的分开) */
+  kind: 'line' | 'wait' | 'gap' | 'replay' | 'limit' | 'empty';
+  /** stop = 再听时的钮(停,回原位置),和暂停 / 播放 / 继续长得不一样 */
+  right: 'pause' | 'play' | 'continue' | 'stop' | 'none';
 }
 
 /** 第一拍前等过这么久,字幕从「我写给你看」换成「再等我一下下」 */
@@ -670,6 +680,7 @@ export function subtitleFor(i: SubtitleInput): SubtitleView {
   // 老师还在写:正在播已就绪的句子就照常出字幕;这节念过几句了就留着刚念那句等下一拍;一句还没念(第一拍前)才出等的话
   if (i.state.status === 'thinking' && text) return { text, kind: 'gap', right: 'none' };
   if (i.state.status === 'thinking' || (i.pending && i.state.status !== 'playing' && i.state.status !== 'paused' && i.state.status !== 'stage')) return { text: i.waitedMs < WAIT_LONG_MS ? '我写给你看' : '再等我一下下', kind: 'wait', right: 'none' };
+  if (i.state.replay) return { text, kind: 'replay', right: 'stop' };
   switch (i.state.status) {
     case 'playing':
       return { text, kind: 'line', right: 'pause' };

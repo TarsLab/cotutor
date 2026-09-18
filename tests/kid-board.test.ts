@@ -34,6 +34,7 @@ import {
   phrasesIn,
   plainLine,
   playerAtEnd,
+  replayQuiet,
   replayLines,
   spokenLines,
   startReplay,
@@ -178,6 +179,9 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   check('再听往下走:按下标跳(1 → 4),念完回到原来的位置,不串到下一节', r2.line === 4 && r2.status === 'playing' && Boolean(r2.replay) && JSON.stringify(advance(r2, [sec, sec])) === '{"section":0,"line":3,"status":"paused"}');
   const w: PlayerState = { section: 0, line: 4, status: 'waiting' };
   check('等答时再听,念完还等着;重念中再点别的,回的还是最初的位置;没句子不动', JSON.stringify(advance(startReplay(w, 0, [4]), secs)) === JSON.stringify(w) && JSON.stringify(startReplay(startReplay(w, 0, [1]), 0, [2]).replay?.back) === JSON.stringify(w) && startReplay(w, 0, []) === w);
+  check('能不能再听:等答 / 念完 / 暂停且老师没在想才行;在念、等下一拍、交给场景、老师在想都不行;再听中看回放前的位置', replayQuiet(w, false) && replayQuiet(done, false) && replayQuiet({ ...playing3, status: 'paused' }, false) && !replayQuiet(playing3, false) && !replayQuiet({ ...playing3, status: 'thinking' }, false) && !replayQuiet({ ...playing3, status: 'stage' }, false) && !replayQuiet(done, true) && replayQuiet(startReplay(w, 0, [1]), false));
+  const rs = subtitleFor({ state: startReplay(w, 0, [1]), sections: secs, pending: false, waitedMs: 0, limit: false });
+  check('再听时字幕:kind replay、钮是停(不是暂停,停了变「继续」的那个位置不再是同一个样子)', rs.kind === 'replay' && rs.right === 'stop' && rs.text === '句');
   check('再听不改「念到哪」:重念前面的,后面的卡照样算讲过', spokenLines(startReplay(done, 0, [1]), secs, 0) === 5);
 }
 {

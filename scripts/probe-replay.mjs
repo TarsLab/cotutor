@@ -3,6 +3,7 @@
  * 再听(2026-09-18)的手动验收(不进 pnpm test,要本机 Chrome;走 cotutor mock,不花钱,配音退回合成声 / 按字数计时):
  * 停在第一节第二句 → 只有讲完的卡露喇叭、节头没有;点喇叭 → 字幕念那张卡的句、喇叭变橙,念完回到原来那句(暂停);
  * 整页念完 → 节头露喇叭,点节头从第一句念;点字幕上的字重念这句;手机尺寸截一张。
+ * 板上不安静(正在念)喇叭全藏;再听时字幕淡一档带小喇叭、钮是停;停了「继续」晚 0.8 秒才能点(误点不发)。
  *
  * 用法:node scripts/probe-replay.mjs [--out <截图目录>]
  */
@@ -50,6 +51,11 @@ try {
   const early = await evaluate(`(() => { const s = document.querySelector('#board .sec[data-sec="0"]'); const cards = [...s.querySelectorAll('.c[data-card]')]; return { heard: cards.filter((c) => c.classList.contains('heard')).map((c) => c.dataset.card), total: cards.length, head: s.classList.contains('heard'), shown: cards.filter((c) => getComputedStyle(c.querySelector(':scope > .again')).display !== 'none').length }; })()`);
   ok('停在第二句:节头没喇叭,不是每张卡都有', !early.head && early.heard.length < early.total, JSON.stringify(early));
   ok('喇叭只在讲完的卡上露', early.shown === early.heard.length);
+  // 点播放接着念:正在念 → 喇叭全藏(不打断正在念的)
+  await evaluate(`document.querySelector('#sub-btn').click()`);
+  await sleep(300);
+  const busy = await evaluate(`({ heard: document.querySelectorAll('#board .heard').length, pause: document.querySelector('#sub-btn').innerHTML.includes('M8 5v14') })`);
+  ok('正在念:喇叭全藏', busy.pause && busy.heard === 0, JSON.stringify(busy));
 
   // ---- 整页念完(不出声打开):全部讲过 ----
   await open('&device=phone');
@@ -61,8 +67,8 @@ try {
   const before = all.sub;
   const clicked = await evaluate(`(() => { const c = document.querySelector('#board .sec[data-sec="0"] .c.heard'); c.querySelector(':scope > .again').click(); return c.dataset.card; })()`);
   await sleep(300);
-  const during = await evaluate(`(() => ({ replaying: [...document.querySelectorAll('#board .c.replaying')].map((c) => c.dataset.card), sub: document.querySelector('#sub-text').textContent, btn: !document.querySelector('#sub-btn').hidden, stage: document.querySelector('#stage').classList.contains('on') }))()`);
-  ok('点喇叭:那张卡在重念、字幕换成它的句、有暂停钮、没开舞台', during.replaying.join() === clicked && during.sub !== '' && during.btn && !during.stage, JSON.stringify(during));
+  const during = await evaluate(`(() => ({ replaying: [...document.querySelectorAll('#board .c.replaying')].map((c) => c.dataset.card), sub: document.querySelector('#sub-text').textContent, kind: document.querySelector('#sub-text').className, icon: !!document.querySelector('#sub-text .rp'), stop: !document.querySelector('#sub-btn').hidden && document.querySelector('#sub-btn').innerHTML.includes('rect'), stage: document.querySelector('#stage').classList.contains('on') }))()`);
+  ok('点喇叭:那张卡在重念、字幕淡一档带小喇叭、钮是停、没开舞台', during.replaying.join() === clicked && during.sub !== '' && during.kind === 'replay' && during.icon && during.stop && !during.stage, JSON.stringify(during));
   await shot('replay-card-phone.png');
   // 亮的那张就是点的那张:每张讲过的卡点一遍,念的每句都亮它(按亮哪张分组)
   const lit = await evaluate(`(async () => { document.querySelector('#sub-btn').click(); await new Promise((r) => setTimeout(r, 200)); const bad = []; for (const c of [...document.querySelectorAll('#board .sec[data-sec="0"] .c.heard')]) { c.querySelector(':scope > .again').click(); for (let t = 0; t < 60 && c.classList.contains('replaying'); t++) { const now = document.querySelector('#board .c.now'); if (now && now !== c) bad.push(c.dataset.card + '→' + now.dataset.card); await new Promise((r) => setTimeout(r, 250)); } } return bad; })()`);
@@ -76,6 +82,12 @@ try {
   await sleep(200);
   ok('重念中再点一下就停', await evaluate(`!document.querySelector('#board .replaying') && document.querySelector('#sub-text').textContent === ${JSON.stringify(before)}`));
 
+  // ---- 停了再听,「继续」先灰 0.8 秒,这时点了不发 ----
+  await evaluate(`document.querySelector('#board .sec[data-sec="0"] .c.heard > .again').click()`);
+  await sleep(300);
+  const guard = await evaluate(`(async () => { document.querySelector('#sub-btn').click(); await new Promise((r) => setTimeout(r, 50)); const b = document.querySelector('#sub-btn'); const r = { cont: b.classList.contains('cont'), disabled: b.disabled }; b.disabled = false; b.click(); await new Promise((r) => setTimeout(r, 200)); r.pending = document.body.classList.contains('pending'); await new Promise((r) => setTimeout(r, 800)); r.later = document.querySelector('#sub-btn').disabled; return r; })()`);
+  ok('停了再听:「继续」先灰着,这时点了不发给老师,0.8 秒后能点', guard.cont && guard.disabled && !guard.pending && !guard.later, JSON.stringify(guard));
+
   // ---- 节头:整节从第一句 ----
   await evaluate(`document.querySelector('#board .sec[data-sec="0"] > .sh').click()`);
   await sleep(300);
@@ -88,8 +100,8 @@ try {
   // ---- 点字幕:重念这一句 ----
   await evaluate(`document.querySelector('#sub-text').click()`);
   await sleep(200);
-  const line = await evaluate(`({ btn: document.querySelector('#sub-btn').innerHTML.includes('path'), sub: document.querySelector('#sub-text').textContent })`);
-  ok('点字幕上的字:重念这句(出暂停钮)', line.btn && line.sub === before, JSON.stringify(line));
+  const line = await evaluate(`({ btn: document.querySelector('#sub-btn').innerHTML.includes('rect'), sub: document.querySelector('#sub-text').textContent })`);
+  ok('点字幕上的字:重念这句(出停钮)', line.btn && line.sub === before, JSON.stringify(line));
   ok('这句念完回到原来的位置', await until(`document.querySelector('#sub-btn').hidden || document.querySelector('#sub-btn').classList.contains('cont')`));
   console.log(`截图在 ${shots}`);
 } finally {

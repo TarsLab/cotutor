@@ -142,6 +142,9 @@ const PAGE = `<!doctype html>
   .sec.heard > .sh { cursor:pointer; }
   .sec.heard > .sh .again { display:inline-flex; }
   #sub-text.line { cursor:pointer; }
+  #sub-text.replay { color:var(--dim); }
+  #sub-text .rp { display:inline-flex; vertical-align:-2px; margin-right:6px; color:var(--accent); }
+  #sub-btn:disabled { opacity:.35; }
   @keyframes again { 0%,100% { transform:scale(1); } 50% { transform:scale(1.12); } }
   @media (prefers-reduced-motion:reduce) { .c.replaying > .again, .sec.replaying > .sh .again { animation:none; } }
   #sub-btn { flex:0 0 auto; height:36px; min-width:36px; border-radius:18px; background:#fff; display:inline-flex; align-items:center; justify-content:center; gap:4px; padding:0; font-size:15px; font-weight:600; }
@@ -247,6 +250,7 @@ __BOARD_JS__
     pause: SVG('<path d="M8 5v14M16 5v14"></path>', 16, 2.6),
     speaker: SVG('<path d="M4 10v4h4l5 4V6L8 10z"></path><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path>', 24),
     replay: SVG('<path d="M4 10v4h4l5 4V6L8 10z"></path><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path>', 16, 2),
+    stop: SVG('<rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor"></rect>', 16, 1.5),
     mute: SVG('<path d="M4 10v4h4l5 4V6L8 10z"></path><path d="M17 9l4 6M21 9l-4 6"></path>', 24),
     send: SVG('<path d="M12 19V5M5 12l7-7 7 7"></path>', 20, 2.4),
     image: SVG('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 16l5-5 4 4 3-3 6 6"></path><circle cx="16" cy="9" r="1.5"></circle>', 36, 1.6),
@@ -283,6 +287,8 @@ __BOARD_JS__
   let unlocked = false;
   const unlock = () => { if (unlocked) return; try { audioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='; audioEl.play().then(() => { unlocked = true; }).catch(() => {}); } catch {} };
   let voiceToken = 0;
+  let contGuard = 0, guardTimer = null; // 再听停下后这个时刻之前「继续」不响应(见 renderSubtitle)
+  const CONT_GUARD_MS = 800;
   const stopVoice = () => { voiceToken++; try { audioEl.pause(); } catch {} try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {} if (S.state.replay) leaveReplay(); };
   /** 念一句;念完调 onEnd(被打断不调);声音真开始时调 onStart(总时长毫秒:mp3 取 duration,合成声与没声音按字数估),给标注定时用 */
   const say = (line, onEnd, onStart) => {
@@ -797,6 +803,7 @@ __BOARD_JS__
     const dots = () => h('span', { class: 'dots' }, h('i'), h('i'), h('i'));
     if (v.kind === 'wait') t.replaceChildren(avatarEl(S.tutor), v.text, dots());
     else if (v.kind === 'gap') t.replaceChildren(v.text, dots());
+    else if (v.kind === 'replay') t.replaceChildren(h('span', { class: 'rp', html: ICON.replay }), v.text);
     else t.textContent = v.text;
     clearTimeout(S.waitTimer);
     if (v.kind === 'wait' && waited < WAIT_LONG_MS) S.waitTimer = setTimeout(renderSubtitle, WAIT_LONG_MS - waited);
@@ -808,7 +815,12 @@ __BOARD_JS__
     if (S.readonly && v.right === 'continue') v.right = 'none';
     b.hidden = v.right === 'none';
     b.className = v.right === 'continue' ? 'cont' : '';
-    b.innerHTML = v.right === 'pause' ? ICON.pause : v.right === 'play' ? ICON.play : v.right === 'continue' ? ICON.play + '<span>继续</span>' : '';
+    b.innerHTML = v.right === 'pause' ? ICON.pause : v.right === 'play' ? ICON.play : v.right === 'stop' ? ICON.stop : v.right === 'continue' ? ICON.play + '<span>继续</span>' : '';
+    // 再听刚停,「继续」晚一会儿才能点:停钮与继续钮在同一个位置,想停再听的那一下别变成「继续」发给老师
+    const guard = v.right === 'continue' ? contGuard - Date.now() : 0;
+    b.disabled = guard > 0;
+    clearTimeout(guardTimer);
+    if (guard > 0) guardTimer = setTimeout(renderSubtitle, guard);
     document.body.classList.toggle('pending', S.pending);
     document.body.classList.toggle('limit', S.limit);
     markHeard();
@@ -818,7 +830,7 @@ __BOARD_JS__
     if (S.state.replay) { stopVoice(); renderSubtitle(); return; } // 再听时的暂停 = 不听了,回到原来的位置
     if (S.state.status === 'playing') { stopVoice(); S.state = { ...S.state, status: 'paused' }; renderSubtitle(); }
     else if (S.state.status === 'paused') { S.state = { ...S.state, status: 'playing' }; playLine(); }
-    else if (S.state.status === 'waiting') send('', { action: 'continue' });
+    else if (S.state.status === 'waiting' && Date.now() >= contGuard) send('', { action: 'continue' });
   });
 
   // 播放:一句 = 字幕 + 标注 + 滚到那张卡 + 声音;播完往下走
@@ -877,7 +889,7 @@ __BOARD_JS__
     replayFrom(secIdx, replayLines(S.sections, S.state, secIdx, target), target);
   };
   const replayFrom = (secIdx, lines, target) => {
-    if (!lines.length || S.stage) return;
+    if (!lines.length || S.stage || !replayQuiet(S.state, S.pending)) return;
     unlock();
     stopVoice();
     unpaintLines(secIdx, lines);
@@ -902,20 +914,21 @@ __BOARD_JS__
   /** 再听停了(念完或被打断):回到原来的位置,念过的标注补齐(被打断时后几句还没描) */
   const leaveReplay = () => {
     const sec = S.state.section;
-    S.state = S.state.replay.back; replayOf = null;
+    S.state = S.state.replay.back; replayOf = null; contGuard = Date.now() + CONT_GUARD_MS;
     const n = spokenLines(S.state, S.sections, sec);
     if (n > 0) paintAll(sec, n - 1);
     showNow();
   };
-  /** 讲完的卡与节挂上 heard(喇叭露出来);念着的挂 replaying。老师还在写的节不挂 */
+  /** 讲完的卡与节挂上 heard(喇叭露出来);念着的挂 replaying。老师还在写的节不挂;板上不安静(老师在想、正在念)全都不挂 */
   const markHeard = () => {
+    const quiet = replayQuiet(S.state, S.pending);
     for (const secEl of $('#board').querySelectorAll(':scope > .sec[data-sec]')) {
       const i = Number(secEl.dataset.sec);
-      secEl.classList.toggle('heard', replayLines(S.sections, S.state, i, 'all').length > 0);
+      secEl.classList.toggle('heard', quiet && replayLines(S.sections, S.state, i, 'all').length > 0);
       secEl.classList.toggle('replaying', Boolean(S.state.replay && replayOf && replayOf.section === i && replayOf.card === 'all'));
       for (const c of secEl.querySelectorAll('.c[data-card]')) {
         const k = Number(c.dataset.card);
-        c.classList.toggle('heard', replayLines(S.sections, S.state, i, k).length > 0);
+        c.classList.toggle('heard', quiet && replayLines(S.sections, S.state, i, k).length > 0);
         c.classList.toggle('replaying', Boolean(S.state.replay && replayOf && replayOf.section === i && replayOf.card === k));
       }
     }
@@ -923,7 +936,7 @@ __BOARD_JS__
   // 点字幕上的字 = 再听这一句(在念的时候不算;老师还在写的节不算)
   $('#sub-text').addEventListener('click', () => {
     const s = S.sections[S.state.section];
-    if (S.stage || !s || s.partial || S.state.line < 0 || S.state.replay || !['paused', 'waiting', 'done'].includes(S.state.status) || $('#sub-text').className !== 'line') return;
+    if (S.stage || S.pending || !s || s.partial || S.state.line < 0 || S.state.replay || !['paused', 'waiting', 'done'].includes(S.state.status) || $('#sub-text').className !== 'line') return;
     replayFrom(S.state.section, [S.state.line], 'line');
   });
 

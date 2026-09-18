@@ -34,6 +34,9 @@ import {
   phrasesIn,
   plainLine,
   playerAtEnd,
+  replayLines,
+  spokenLines,
+  startReplay,
   sectionTitle,
   sectionsFromMessages,
   startSection,
@@ -155,6 +158,27 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   check('字幕:等老师', subtitleFor({ ...base, pending: true, state: { section: 0, line: 1, status: 'done' } }).text === '我写给你看');
   check('字幕:上限压过一切', subtitleFor({ ...base, limit: true, pending: true, state: { section: 0, line: 0, status: 'playing' } }).kind === 'limit');
   check('字幕:什么都没有', subtitleFor({ ...base, sections: [], state: { section: -1, line: -1, status: 'idle' } }).kind === 'empty');
+}
+{
+  // 再听(2026-09-18):后期改过锚点,卡 1 的句在最后(一张卡的句不连着);卡前那句亮的是第一张卡,算它的
+  const cd: BoardCard = { kind: 'text', props: { text: 'x' } };
+  const ln = (anchor: number | null): BoardLine => ({ text: '句', audio: null, marks: [], ask: false, anchor, cues: [] });
+  const sec: BoardSection = { cards: [cd, cd, cd], lines: [ln(null), ln(0), ln(0), ln(2), ln(1)] };
+  const secs = [sec];
+  const playing3: PlayerState = { section: 0, line: 3, status: 'playing' };
+  const done: PlayerState = { section: 0, line: 4, status: 'done' };
+  check('念完几句:在念的那句不算,等下一拍 / 交给场景的算,等答 / 完 = 全部;前面的节全念完,后面的一句没念', spokenLines(playing3, secs, 0) === 3 && spokenLines({ ...playing3, status: 'paused' }, secs, 0) === 3 && spokenLines({ ...playing3, status: 'thinking' }, secs, 0) === 4 && spokenLines({ ...playing3, status: 'stage' }, secs, 0) === 4 && spokenLines(done, secs, 0) === 5 && spokenLines({ section: 1, line: 0, status: 'playing' }, [sec, sec], 0) === 5 && spokenLines(playing3, [sec, sec], 1) === 0 && spokenLines({ section: -1, line: -1, status: 'idle' }, secs, 0) === 0);
+  check('再听一张卡:讲完了才行(卡 0 的三句念过了,卡 2 那句正在念、卡 1 还没念);整节要全念完', JSON.stringify(replayLines(secs, playing3, 0, 0)) === '[0,1,2]' && replayLines(secs, playing3, 0, 2).length === 0 && replayLines(secs, playing3, 0, 1).length === 0 && replayLines(secs, playing3, 0, 'all').length === 0);
+  check('再听:念完之后卡 1 是它那一句(不连着);整节是全部句;老师还在写的节、没讲稿的节、没有的卡都不行', JSON.stringify(replayLines(secs, done, 0, 1)) === '[4]' && JSON.stringify(replayLines(secs, done, 0, 'all')) === '[0,1,2,3,4]' && replayLines([{ ...sec, partial: true, ready: 3 }], done, 0, 0).length === 0 && replayLines([{ cards: [cd], lines: [] }], done, 0, 0).length === 0 && replayLines(secs, done, 0, 7).length === 0);
+  const marked: BoardSection = { cards: [cd, { kind: 'text', props: { text: '多做一步' } }], lines: [{ ...ln(0), marks: [{ card: 1, phrase: '多做一步' }] }, ln(1)] };
+  check('再听按亮哪张分:锚在卡 0、标注在卡 1 的那句归卡 1;卡 0 一句不剩就没喇叭', JSON.stringify(replayLines([marked], { section: 0, line: 1, status: 'done' }, 0, 1)) === '[0,1]' && replayLines([marked], { section: 0, line: 1, status: 'done' }, 0, 0).length === 0);
+  const r = startReplay(playing3, 0, [1, 4]);
+  check('开始再听:从第一句念,在念的回来变暂停', r.line === 1 && r.status === 'playing' && JSON.stringify(r.replay?.back) === '{"section":0,"line":3,"status":"paused"}');
+  const r2 = advance(r, secs);
+  check('再听往下走:按下标跳(1 → 4),念完回到原来的位置,不串到下一节', r2.line === 4 && r2.status === 'playing' && Boolean(r2.replay) && JSON.stringify(advance(r2, [sec, sec])) === '{"section":0,"line":3,"status":"paused"}');
+  const w: PlayerState = { section: 0, line: 4, status: 'waiting' };
+  check('等答时再听,念完还等着;重念中再点别的,回的还是最初的位置;没句子不动', JSON.stringify(advance(startReplay(w, 0, [4]), secs)) === JSON.stringify(w) && JSON.stringify(startReplay(startReplay(w, 0, [1]), 0, [2]).replay?.back) === JSON.stringify(w) && startReplay(w, 0, []) === w);
+  check('再听不改「念到哪」:重念前面的,后面的卡照样算讲过', spokenLines(startReplay(done, 0, [1]), secs, 0) === 5);
 }
 {
   check('输入条:点 → 打字;按住 → 说话;松手 / 取消 / 发出 / 失焦 → 闲置', barNext('idle', 'tap') === 'typing' && barNext('idle', 'holdStart') === 'holding' && barNext('holding', 'holdEnd') === 'idle' && barNext('holding', 'holdCancel') === 'idle' && barNext('typing', 'sent') === 'idle' && barNext('typing', 'blur') === 'idle' && barNext('typing', 'tap') === 'typing' && barNext('typing', 'holdEnd') === 'typing');

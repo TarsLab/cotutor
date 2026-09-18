@@ -2,11 +2,11 @@
 import { parsePlan, planLinesFor } from '../src/lib/plan.ts';
 import { check, done } from './_check.ts';
 
-const GOOD = ['---', 'week: 2026-W37', 'status: draft', 'author: 妈妈', '---', '# 下周', '## 数学老师', '- 周三前把两位数退位讲一遍', '- 周五出两道类似题', '', '## 朗读老师', '1. 继续 U3', '', '## 家长', '- 周六一起复述'].join('\n');
+const GOOD = ['---', 'week: 2026-W37', 'status: draft', 'author: 妈妈', '---', '# 下周', '## 数学老师', '- 周三前把两位数退位讲一遍', '- 周五出两道类似题', '', '## 英语老师', '1. 继续 U3', '', '## 家长', '- 周六一起复述'].join('\n');
 {
   const p = parsePlan(GOOD);
   check('解析成功', p.errors.length === 0 && p.plan?.week === '2026-W37' && p.plan.status === 'draft' && p.plan.author === '妈妈', JSON.stringify(p));
-  check('三段', p.plan?.sections.map((s) => s.title).join(',') === '数学老师,朗读老师,家长');
+  check('三段', p.plan?.sections.map((s) => s.title).join(',') === '数学老师,英语老师,家长');
   check('列表符号去掉', p.plan?.sections[1].lines[0] === '继续 U3');
   check('抽本老师的行并限行数', p.plan && planLinesFor(p.plan, '数学老师', 1).join() === '周三前把两位数退位讲一遍');
   check('对不上的老师是空', p.plan && planLinesFor(p.plan, '语文老师', 5).length === 0);

@@ -20,7 +20,7 @@ try {
   const ws = join(home, 'cotutor', 'ming');
   check('缺省建在 ~/cotutor/<slug>', r1.root === ws && existsSync(ws), r1.root);
   check('骨架目录齐', ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'scenes', 'bundles', 'snaps'].every((d) => existsSync(join(ws, d))));
-  check('老师目录齐', ['math-tutor', 'chinese-tutor', 'reading-tutor', 'scene-maker'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
+  check('老师目录齐', ['math-tutor', 'chinese-tutor', 'english-tutor', 'scene-maker'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
   const link = join(ws, '.claude', 'agents', 'math-tutor.md');
   check('老师文件是拷贝,内容同本包', !lstatSync(link).isSymbolicLink() && readFileSync(link, 'utf8') === readFileSync(join(PACKAGE_AGENTS_DIR, 'math-tutor.md'), 'utf8'));
   check('.qwen 是指向 .claude 的相对链', lstatSync(join(ws, '.qwen', 'agents', 'scene-maker.md')).isSymbolicLink() && readlinkSync(join(ws, '.qwen', 'agents', 'scene-maker.md')) === '../../.claude/agents/scene-maker.md');
@@ -149,7 +149,7 @@ try {
     }
     old.policyDefaults = { replyMaxChars: 40 };
     old.runtimes.default = 'qwen';
-    old.tutors['reading-tutor'].enabled = false;
+    old.tutors['english-tutor'].enabled = false;
     old._note = '家长自己写的说明';
     writeFileSync(cfgFile, `${JSON.stringify(old, null, 2)}\n`);
     // 那会儿画图老师还不存在:文件、链、家、出厂记录都没有
@@ -176,7 +176,7 @@ try {
     const applied = await upgradeConfig(ws);
     const after = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
     check('补上之后:新老师、新运行时、旗标都在', applied.applied && after.tutors['scene-maker'].runtime === 'claude-scene' && 'qwen-scene' in after.runtimes && (after.runtimes.claude.run as string[]).join(' ').includes('--disallowedTools Agent') && (after.runtimes.claude.resume as string[]).includes('--include-partial-messages'));
-    check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['reading-tutor'].enabled === false && (after.runtimes.claude.run as string[]).slice(-2).join(' ') === '--model sonnet' && after._note === '家长自己写的说明' && after.$schema === old.$schema);
+    check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['english-tutor'].enabled === false && (after.runtimes.claude.run as string[]).slice(-2).join(' ') === '--model sonnet' && after._note === '家长自己写的说明' && after.$schema === old.$schema);
     check('新老师的文件、.qwen 链、家跟着补上', existsSync(join(ws, '.claude', 'agents', 'scene-maker.md')) && lstatSync(join(ws, '.qwen', 'agents', 'scene-maker.md')).isSymbolicLink() && existsSync(join(ws, 'agents', 'scene-maker', '.gitkeep')) && applied.installed.length > 0);
 
     const d2 = await doctorWorkspace(ws, { probeEnv: false });

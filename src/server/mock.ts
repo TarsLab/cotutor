@@ -6,7 +6,7 @@
  * 老师「想」的期间按流式模拟:卡在 delay 里一张张出现(pending 条目带 partial 板书),想完才有讲稿与声音。
  * 卡的状态 PUT 假存在内存里(过真的 state 契约),today 里并回卡上;发消息接 {text, action, focus},「交给老师」后照常追加下一节。
  * 场景:normal(缺省)/ limit(每日上限已到)/ offline(接口全 500,页面该灰)。
- * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有开场与接着昨天的按钮,数学老师有开场,朗读老师没写(补一张);
+ * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有开场与接着昨天的按钮,数学老师有开场,英语老师没写(补一张);
  * 发消息带 via 时照真服务的规则换成按钮上的字、定话题。
  */
 import { createReadStream, readFileSync } from 'node:fs';
@@ -255,10 +255,10 @@ export const MOCK_TUTORS: MockTutor[] = [
     ],
   },
   {
-    name: 'reading-tutor',
-    display: '朗读老师',
+    name: 'english-tutor',
+    display: '英语老师',
     subject: '英语',
-    avatar: '读',
+    avatar: '英',
     motto: '一起大声读',
     preloaded: 0,
     firstQuestion: '',

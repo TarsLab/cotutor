@@ -43,7 +43,7 @@ cfg.paths = { vault: 'vault', plans: '计划', timetable: '课程表.md' };
 cfg.policyDefaults = { post: { runtime: 'fast', timeoutMs: 1500 } };
 cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, 'voices', '--json'] };
 (cfg.tutors as Record<string, Record<string, unknown>>)['math-tutor'].voice = 'v-math';
-(cfg.tutors as Record<string, Record<string, unknown>>)['reading-tutor'].voice = 'fail';
+(cfg.tutors as Record<string, Record<string, unknown>>)['english-tutor'].voice = 'fail';
 (cfg.tutors as Record<string, Record<string, unknown>>)['chinese-tutor'].policy = { dailyMessages: 1 };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault', '计划'), { recursive: true });
@@ -151,11 +151,11 @@ try {
   const fx = (await route('GET', `/api/conversations/math-tutor/2026-09-08/raw/${job1}/fixture`, ctx)).json as { name: string; text: string };
   check('看原文:fixture 是原文原样一份', fx.name === `math-tutor-2026-09-08-${job1}.md` && fx.text.includes('第一次说') && fx.text.endsWith('\n'), JSON.stringify(fx));
   check('看原文:没有这一轮 → 404', (await route('GET', '/api/conversations/math-tutor/2026-09-08/raw/9999-9', ctx)).status === 404);
-  const tryR = (await route('POST', '/api/tts/try', ctx, { text: '试一句' })).json as { ok: boolean; voice: string; ms: number; audio: string };
+  const tryR = (await route('POST', '/api/tts/try', ctx, { text: '试一句', voice: 'v-math' })).json as { ok: boolean; voice: string; ms: number; audio: string };
   check('设置页试一句:真跑一次 tts.say,回音色 / 耗时 / 音频', tryR.ok === true && tryR.voice === 'v-math' && typeof tryR.ms === 'number' && tryR.audio.startsWith('data:audio/mpeg;base64,'), JSON.stringify({ ok: tryR.ok, voice: tryR.voice }));
   // 音色页:列表来自 tts.voices;试听同句同音色只合成一次;坏 id 400、合成失败 502 带原因
   const vl = (await route('GET', '/api/tts/voices', ctx)).json as { ok: boolean; count: number; voices: { voice: string; name: string; gender?: string; age?: number }[]; inUse: Record<string, string[]>; sample: string };
-  check('音色列表:三个音色、字段齐、谁在用谁', vl.ok && vl.count === 3 && vl.voices[1].name === '假少年' && vl.voices[1].gender === '男' && vl.voices[1].age === 10 && vl.inUse['v-math']?.[0] === 'math-tutor' && vl.inUse.fail?.[0] === 'reading-tutor' && vl.sample.length > 5, JSON.stringify(vl));
+  check('音色列表:三个音色、字段齐、谁在用谁', vl.ok && vl.count === 3 && vl.voices[1].name === '假少年' && vl.voices[1].gender === '男' && vl.voices[1].age === 10 && vl.inUse['v-math']?.[0] === 'math-tutor' && vl.inUse.fail?.[0] === 'english-tutor' && vl.sample.length > 5, JSON.stringify(vl));
   const pv = await route('GET', '/api/tts/preview?voice=v-kid', ctx);
   check('试听:合成到 .cotutor/tts-preview/ 并给 mp3 文件', pv.status === 200 && pv.contentType === 'audio/mpeg' && typeof pv.file === 'string' && pv.file.includes('/.cotutor/tts-preview/') && readFileSync(pv.file, 'utf8') === 'fake-mp3:v-kid:你好呀,我是你的老师。今天我们一起来学一个新东西,准备好了吗?', JSON.stringify(pv));
   const pvAgain = await route('GET', '/api/tts/preview?voice=v-kid', ctx);
@@ -227,14 +227,14 @@ try {
   check('today 别名', ((await day('math-tutor', 'today')).json as Day).index !== undefined);
 
   // ---- 出错:CLI 报 error / 起不来 ----
-  await post('reading-tutor', { text: '会失败', runtime: 'broken' });
-  await wait('reading-tutor');
-  const dr = (await day('reading-tutor', '2026-09-09')).json as Day;
+  await post('english-tutor', { text: '会失败', runtime: 'broken' });
+  await wait('english-tutor');
+  const dr = (await day('english-tutor', '2026-09-09')).json as Day;
   check('CLI 报错 → error + 原因,孩子无话', dr.index.messages[0].result === 'error' && dr.index.messages[0].error === 'error_max_turns' && dr.index.messages[0].kidText === null, JSON.stringify(dr.index.messages[0]));
-  await post('reading-tutor', { text: '配音会失败' });
-  await wait('reading-tutor');
-  const dr2 = (await day('reading-tutor', '2026-09-09')).json as Day & { index: { messages: { audio?: string | null }[] } };
-  check('配音失败 → 讲稿句 audio null、对话照常、原因进 err.log', dr2.index.messages[1].result === 'ok' && (dr2.index.messages[1] as { section?: { lines: { audio: string | null }[] } }).section?.lines.every((l) => l.audio === null) === true && readFileSync(join(root, 'conversations', 'reading-tutor', `2026-09-09.${dr2.index.messages[1].job}.err.log`), 'utf8').includes('没合成'), JSON.stringify(dr2.index.messages[1]));
+  await post('english-tutor', { text: '配音会失败' });
+  await wait('english-tutor');
+  const dr2 = (await day('english-tutor', '2026-09-09')).json as Day & { index: { messages: { audio?: string | null }[] } };
+  check('配音失败 → 讲稿句 audio null、对话照常、原因进 err.log', dr2.index.messages[1].result === 'ok' && (dr2.index.messages[1] as { section?: { lines: { audio: string | null }[] } }).section?.lines.every((l) => l.audio === null) === true && readFileSync(join(root, 'conversations', 'english-tutor', `2026-09-09.${dr2.index.messages[1].job}.err.log`), 'utf8').includes('没合成'), JSON.stringify(dr2.index.messages[1]));
   await post('chinese-tutor', { text: '起不来', runtime: 'missing' });
   await wait('chinese-tutor');
   const dm = (await day('chinese-tutor', '2026-09-09')).json as Day;
@@ -243,7 +243,7 @@ try {
 
   // ---- 孩子端接口:首页、过滤后的会话、发消息、每日上限、配音文件 ----
   const home = (await route('GET', '/api/kid/home', ctx)).json as { title: string; tutors: { name: string; available: boolean; remaining: number; hasVoice: boolean }[]; home: string | null; cards: { kind: string; props: { tutor?: string } }[] };
-  check('首页:标题、孩子端老师(无 scene-maker)、没有课程表那一栏;没发布过 = 缺省首页(每位老师一张卡)', home.title === '小明的老师们' && !('timetable' in home) && home.tutors.length === 3 && !home.tutors.some((t) => t.name === 'scene-maker') && home.home === null && home.cards.map((c) => c.props.tutor).join() === 'chinese-tutor,math-tutor,reading-tutor', JSON.stringify(home.cards));
+  check('首页:标题、孩子端老师(无 scene-maker)、没有课程表那一栏;没发布过 = 缺省首页(每位老师一张卡)', home.title === '小明的老师们' && !('timetable' in home) && home.tutors.length === 3 && !home.tutors.some((t) => t.name === 'scene-maker') && home.home === null && home.cards.map((c) => c.props.tutor).join() === 'chinese-tutor,english-tutor,math-tutor', JSON.stringify(home.cards));
   check('老师带 hasVoice 与剩余条数(今天 09-09 孩子还没发过)', home.tutors.find((t) => t.name === 'math-tutor')?.hasVoice === true && home.tutors.find((t) => t.name === 'math-tutor')?.remaining === 30, JSON.stringify(home.tutors));
   const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null; reply: string | null; audio: string | null }[]; remaining: number; pending: string | null };
   check('孩子视图:家长发的只见回复,搜不到工具、错误、家长尾巴', kd.messages.length === 1 && kd.messages[0].question === null && kd.messages[0].reply === '第一次说:新的一天' && !/工具|error|holdup|handoff|costUsd|Read/.test(JSON.stringify(kd)), JSON.stringify(kd));

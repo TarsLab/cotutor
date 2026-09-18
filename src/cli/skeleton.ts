@@ -115,7 +115,7 @@ export interface ConfigTemplateInput {
 const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean }> = {
   'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮' },
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚' },
-  'reading-tutor': { display: '朗读老师', subject: '英语', avatar: '📖' },
+  'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤' },
   'scene-maker': { display: '画图老师', avatar: '🎨', hidden: true, runtime: 'claude-scene' },
 };
 

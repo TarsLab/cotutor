@@ -81,3 +81,4 @@ vault(家长面,**一个孩子一个 vault**,如 ray-vault,自己是 git 仓;文
 6. 老师文件拷贝不链(2026-09-09,约定):共享的是出厂件,拷进来就是这家的;升级靠 hash 分辨。
 7. 删掉规划老师,周计划由家长写;跨老师只能走 vault 文件(2026-09-17)。
 8. 有脸的老师共同的段落挪进机器技能 cotutor-tutor,应用在话题第一条注入上下文包;老师文件只留人设与学科(2026-09-18)。代价:改过老师文件的老 workspace 会同时有旧正文和守则,内容重复但不冲突,家长想清爽就 `cotutor upgrade --force <老师>`。
+9. 朗读老师改成英语老师,键 `reading-tutor` → `english-tutor`(2026-09-18)。键是数据的钥匙(会话 cwd、对话目录、记忆笔记的 `agent:`、首页的 tutor 卡),老 workspace 由 `cotutor upgrade --config` 连设置带文件一起挪(`src/cli/rename.ts` 的改名表);要停服务,当天没聊完的旧话题续不上。

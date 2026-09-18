@@ -9,6 +9,7 @@ import { initWorkspace } from './init.ts';
 import { makeCert } from './cert.ts';
 import { addTutorFile, upgradeTutors } from './tutors.ts';
 import { configGapsOf, upgradeConfig } from './migrate.ts';
+import { portBusy } from './rename.ts';
 import { upgradeSkills, writeToolShim } from './skills.ts';
 import { addTheme, upgradeThemes } from './themes.ts';
 import { patchConfig } from '../server/store.ts';
@@ -162,16 +163,22 @@ export async function main(argv: string[]): Promise<void> {
         // --config 是另一件事:政策文件补缺(老师文件与 skill 不碰)
         if (flags.config === true) {
           const dryRun = flags['dry-run'] === true;
+          // 改名要挪会话目录与对话:服务在跑就不动(它还认着旧名,当天的会话也在旧 cwd 里)
+          if (!dryRun && (await configGapsOf(root)).some((g) => g.kind === 'rename')) {
+            const port = loadWorkspace(root).config.server.port;
+            if (await portBusy(port)) throw new UsageError(`有老师改了名,要挪会话目录与对话,可服务还在跑(端口 ${port}):先停了 cotutor serve 再跑 cotutor upgrade --config`);
+          }
           const r = await upgradeConfig(root, { dryRun });
           if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
           else if (!r.gaps.length) process.stdout.write(`cotutor.json 不缺什么:出厂模板里的老师、运行时、命令模板旗标都有。\n`);
           else {
             for (const g of r.gaps) process.stdout.write(`${dryRun ? '·' : '✓'} ${g.path.padEnd(24)} ${g.detail}\n`);
+            for (const m of r.moved) process.stdout.write(`  ${dryRun ? '·' : '✓'} ${m.item.padEnd(22)} ${m.note}\n`);
             for (const st of r.installed) process.stdout.write(`✓ ${st.item.padEnd(24)} ${st.note ?? '建好了'}\n`);
             process.stdout.write(
               dryRun
                 ? `\n${r.gaps.length} 项可补,还没动文件:cotutor upgrade --config 真补(只加上面这些,你改过的值不动)\n`
-                : `\n补了 ${r.gaps.length} 项到 ${redactHome(r.file)};服务在跑的话不用重启(按 mtime 热重载)。\n`,
+                : `\n补了 ${r.gaps.length} 项到 ${redactHome(r.file)};${r.moved.length ? '有老师改了名,起 cotutor serve 就是新名字。' : '服务在跑的话不用重启(按 mtime 热重载)。'}\n`,
             );
           }
           return;

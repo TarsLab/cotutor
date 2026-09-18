@@ -33,8 +33,8 @@
 
 只要「新话题」的老师,正文空着(也可以不写这张卡):
 
-<!-- expect {"kind":"tutor","props":{"tutor":"reading-tutor","buttons":[]}} -->
-```tutor reading-tutor
+<!-- expect {"kind":"tutor","props":{"tutor":"english-tutor","buttons":[]}} -->
+```tutor english-tutor
 ```
 
 ## 反例

@@ -551,6 +551,8 @@ export interface PlayerState {
   section: number;
   line: number;
   status: PlayStatus;
+  /** 再听(2026-09-18):正在重念的句子(下标,不一定连着——后期可能改过锚点)与念完回到哪里 */
+  replay?: { lines: number[]; back: PlayerState };
 }
 
 /** 打开页面时的位置:停在最后一节末尾;末句是问句就等着(继续钮在) */
@@ -575,6 +577,10 @@ export function startSection(index: number, sections: readonly BoardSection[]): 
  * 没下一节且末句是问句 → 停下等;否则完。
  */
 export function advance(state: PlayerState, sections: readonly BoardSection[]): PlayerState {
+  if (state.replay) {
+    const next = state.replay.lines[state.replay.lines.indexOf(state.line) + 1];
+    return next === undefined ? state.replay.back : { ...state, line: next, status: 'playing' };
+  }
   const s = sections[state.section];
   if (!s) return { ...state, status: 'done' };
   if (state.line < playableLines(s) - 1) return { section: state.section, line: state.line + 1, status: 'playing' };
@@ -583,6 +589,52 @@ export function advance(state: PlayerState, sections: readonly BoardSection[]): 
   if (state.section < sections.length - 1) return startSection(state.section + 1, sections);
   const last = s.lines[state.line];
   return { ...state, status: last && last.ask ? 'waiting' : 'done' };
+}
+
+/**
+ * 这节念完了几句(前缀):前面的节全念完,后面的节一句没念;本节看播放器——在念 / 暂停的那句不算,等下一拍 / 交给场景的那句算。
+ * 再听时按回放前的位置算(重念不改「念到哪」)
+ */
+export function spokenLines(state: PlayerState, sections: readonly BoardSection[], secIdx: number): number {
+  const at = state.replay ? state.replay.back : state;
+  const s = sections[secIdx];
+  if (!s || secIdx > at.section) return 0;
+  if (secIdx < at.section) return s.lines.length;
+  switch (at.status) {
+    case 'waiting':
+    case 'done':
+      return s.lines.length;
+    case 'thinking':
+    case 'stage':
+      return Math.max(0, at.line + 1);
+    case 'playing':
+    case 'paused':
+      return Math.max(0, at.line);
+    default:
+      return 0;
+  }
+}
+
+/**
+ * 再听哪几句:卡 = 第一遍念时让它亮起来的句(nowCard:标注落在哪张算哪张,没标注看锚点,标题行与卡前的句算本节第一张)——
+ * 不按锚点分拍:「这个成语说的是:[多做一步]」写在卡 0 后面、标注却在卡 1,按拍算会点卡 0 的喇叭亮卡 1。
+ * 'all' = 整节。讲完之后才能再听(那几句都念过了);老师还在写的节不能([] = 不能)
+ */
+export function replayLines(sections: readonly BoardSection[], state: PlayerState, secIdx: number, target: number | 'all'): number[] {
+  const s = sections[secIdx];
+  if (!s || s.partial || !s.lines.length) return [];
+  const all = s.lines.map((_l, i) => i);
+  const lines = target === 'all' ? all : all.filter((i) => nowCard(sections, { section: secIdx, line: i, status: 'playing' }) === target);
+  if (!lines.length || spokenLines(state, sections, secIdx) < lines[lines.length - 1] + 1) return [];
+  return lines;
+}
+
+/** 开始再听:从第一句念起;念完回到原来的位置——在念的变暂停(孩子点播放接着念),等答的还等着。重念中再点别的,回的还是最初的位置 */
+export function startReplay(state: PlayerState, secIdx: number, lines: readonly number[]): PlayerState {
+  if (!lines.length) return state;
+  const at = state.replay ? state.replay.back : state;
+  const back: PlayerState = at.status === 'playing' ? { ...at, status: 'paused' } : at;
+  return { section: secIdx, line: lines[0], status: 'playing', replay: { lines: [...lines], back } };
 }
 
 /** 播到这句该滚到哪张卡:标注所在的卡优先,其次锚点卡,再没有就 null(页面滚到本节第一张) */

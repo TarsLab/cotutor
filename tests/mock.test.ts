@@ -12,16 +12,16 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   type HomeCard = { kind: string; props: { tutor?: string; buttons?: { id: string | number; kind: string; label: string; date?: string; thread?: string }[] } };
   const home = (await get('/api/kid/home')).json as { title: string; home: string; tutors: { name: string; available: boolean; motto: string }[]; cards: HomeCard[] };
   const tc = home.cards.filter((c) => c.kind === 'tutor');
-  check('首页:三位老师、口号;老师卡置顶(语文、数学照原文,朗读补一张),其余卡照原文顺序', home.title === '小明的老师们' && home.tutors.length === 3 && home.tutors.every((t) => t.available) && home.tutors[0].motto === '故事里都有道理' && home.home === '2026-09-09-2130' && tc.map((c) => c.props.tutor).join() === 'chinese-tutor,math-tutor,reading-tutor' && home.cards.slice(3).map((c) => c.kind).join() === 'text,tianzige', JSON.stringify(home.cards.map((c) => c.kind)));
+  check('首页:三位老师、口号;老师卡置顶(语文、数学照原文,英语补一张),其余卡照原文顺序', home.title === '小明的老师们' && home.tutors.length === 3 && home.tutors.every((t) => t.available) && home.tutors[0].motto === '故事里都有道理' && home.home === '2026-09-09-2130' && tc.map((c) => c.props.tutor).join() === 'chinese-tutor,math-tutor,english-tutor' && home.cards.slice(3).map((c) => c.kind).join() === 'text,tianzige', JSON.stringify(home.cards.map((c) => c.kind)));
   check('老师卡的按钮:新话题第一、今天聊过的「接着刚才的」第二、然后是原文的开场与接着;没写的只有新话题;讲法不下发', tc[0].props.buttons?.map((b) => b.id).join() === 'new,recent,0,1' && tc[0].props.buttons?.[1].label === '接着刚才的:画蛇添足是什么意思?' && tc[0].props.buttons?.[3].kind === 'continue' && tc[0].props.buttons?.[3].date === '2026-09-09' && tc[2].props.buttons?.map((b) => b.id).join() === 'new' && !JSON.stringify(home).includes('第 22 课') && !JSON.stringify(home).includes('brief'), JSON.stringify(tc[0].props.buttons));
   const d0 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
   check('语文老师已讲过一节:卡 + 讲稿 + 标注 + 末句问句(脚本过真解析器)', d0.messages.length === 1 && d0.messages[0].section !== null && d0.messages[0].section.cards.map((c) => c.kind).join() === 'text,text,read,choice' && d0.messages[0].section.lines.length === 5 && d0.messages[0].section.lines[1].marks[0]?.card === 1 && d0.messages[0].section.lines[4].ask === true, JSON.stringify(d0.messages[0].section?.lines[1]));
   check('讲稿里念的句子不带方括号', !d0.messages[0].section!.lines.some((l) => l.text.includes('[')));
-  check('朗读老师还没讲过', ((await get('/api/kid/conversations/reading-tutor/today')).json as Day).messages.length === 0);
-  const upM = await m.route('POST', '/api/kid/conversations/reading-tutor/photos', { image: 'data:image/jpeg;base64,AAAA' });
+  check('英语老师还没讲过', ((await get('/api/kid/conversations/english-tutor/today')).json as Day).messages.length === 0);
+  const upM = await m.route('POST', '/api/kid/conversations/english-tutor/photos', { image: 'data:image/jpeg;base64,AAAA' });
   const pathM = (upM.json as { path: string }).path;
-  const photoMsg = await m.route('POST', '/api/kid/conversations/reading-tutor/messages', { text: '', photos: [pathM] });
-  const dM = (await get('/api/kid/conversations/reading-tutor/today')).json as { messages: (Msg & { photos?: string[] })[] };
+  const photoMsg = await m.route('POST', '/api/kid/conversations/english-tutor/messages', { text: '', photos: [pathM] });
+  const dM = (await get('/api/kid/conversations/english-tutor/today')).json as { messages: (Msg & { photos?: string[] })[] };
   check('mock 也收照片:传图回假路径、只带照片的消息成「(拍了一张)」、条目带 photos、占位图取得到', upM.status === 201 && pathM.startsWith('captures/2026-09-10/1630-') && photoMsg.status === 202 && dM.messages[0].question === '(拍了一张)' && dM.messages[0].photos?.join() === pathM && (await get('/api/kid/image?p=' + encodeURIComponent(pathM))).status === 200, JSON.stringify({ upM: upM.json, q: dM.messages[0]?.question }));
 
   const post = await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '不画脚呢?' });
@@ -73,10 +73,10 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   await m.settle();
   const md5 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   check('「继续」不计次数,空文本没 action 400;第三节有场景卡', md5.remaining === before && md5.messages[2].question === '继续' && md5.messages[2].section?.cards.some((c) => c.kind === 'scene') === true && (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400, `${before} ${md5.remaining}`);
-  await m.route('POST', '/api/kid/conversations/reading-tutor/messages', { text: 'apple' });
+  await m.route('POST', '/api/kid/conversations/english-tutor/messages', { text: 'apple' });
   await m.settle();
-  const rd = ((await get('/api/kid/conversations/reading-tutor/today')).json as Day).messages[0];
-  check('朗读老师:点读卡 + 图片卡 + 末句问句', rd.section?.cards[1].kind === 'read' && rd.section?.cards[2].kind === 'image' && rd.section?.cards[2].props.src === 'captures/2026-09-10/fruits.png' && rd.reply?.includes('apple') === true && rd.section?.lines[1].marks.length === 3, JSON.stringify(rd.section?.lines));
+  const rd = ((await get('/api/kid/conversations/english-tutor/today')).json as Day).messages[0];
+  check('英语老师:点读卡 + 图片卡 + 末句问句', rd.section?.cards[1].kind === 'read' && rd.section?.cards[2].kind === 'image' && rd.section?.cards[2].props.src === 'captures/2026-09-10/fruits.png' && rd.reply?.includes('apple') === true && rd.section?.lines[1].marks.length === 3, JSON.stringify(rd.section?.lines));
   const img = await get('/api/kid/image?p=' + encodeURIComponent('captures/2026-09-10/fruits.png'));
   check('图片卡的图:mock 给占位 svg', img.status === 200 && img.contentType === 'image/svg+xml' && img.html?.includes('<svg') === true && img.html.includes('fruits.png'));
   const fillJob = d2.messages[1].job;

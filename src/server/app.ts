@@ -276,7 +276,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     // 政策文件补缺(与 cotutor upgrade --config 同一条路):只加缺的出厂件,家长写过的值不动
     if (p === '/api/config/migrate' && method === 'POST') {
-      const r = await upgradeConfig(ws.root);
+      const r = await upgradeConfig(ws.root, { renames: false });
       await ctx.reload();
       return { status: 200, json: { ok: true, gaps: r.gaps, applied: r.applied, installed: r.installed } };
     }

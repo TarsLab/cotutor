@@ -1,6 +1,6 @@
 ---
 name: cotutor-tutor
-description: cotutor 有脸的老师(数学、语文、朗读,和家长加的)共同的守则:上下文包怎么看、问答 / 讲解 / 任务三种回复、记忆段怎么写、几条不变的规矩。应用在每个话题的第一条把本文原文放进上下文包(<cotutor-rules>),老师不用自己读;家长或开发者在 workspace 根开 Claude Code 时不是给你用的,改老师的做法走 cotutor-tune。机器件,cotutor init / upgrade 刷新,别改;某位老师要不一样的做法,写在那位老师文件里这一科的那一节,它优先。
+description: cotutor 有脸的老师(数学、语文、英语,和家长加的)共同的守则:上下文包怎么看、问答 / 讲解 / 任务三种回复、记忆段怎么写、几条不变的规矩。应用在每个话题的第一条把本文原文放进上下文包(<cotutor-rules>),老师不用自己读;家长或开发者在 workspace 根开 Claude Code 时不是给你用的,改老师的做法走 cotutor-tune。机器件,cotutor init / upgrade 刷新,别改;某位老师要不一样的做法,写在那位老师文件里这一科的那一节,它优先。
 ---
 
 # 老师守则

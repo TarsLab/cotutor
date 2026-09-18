@@ -46,11 +46,11 @@ try {
 
   // 没有记录的手写文件:untracked,当 custom
   const m2 = await readManifest(root);
-  delete m2.tutors['reading-tutor'];
+  delete m2.tutors['english-tutor'];
   await writeManifest(root, m2);
-  writeFileSync(file('reading-tutor'), '---\nname: reading-tutor\n---\n手写的');
-  check('无记录 → untracked', (await states())['reading-tutor'] === 'untracked');
-  check('untracked 也不覆盖', (await upgradeTutors(root)).find((s) => s.name === 'reading-tutor')?.action === 'kept-custom' && readFileSync(file('reading-tutor'), 'utf8').includes('手写'));
+  writeFileSync(file('english-tutor'), '---\nname: english-tutor\n---\n手写的');
+  check('无记录 → untracked', (await states())['english-tutor'] === 'untracked');
+  check('untracked 也不覆盖', (await upgradeTutors(root)).find((s) => s.name === 'english-tutor')?.action === 'kept-custom' && readFileSync(file('english-tutor'), 'utf8').includes('手写'));
 
   // 缺的补
   unlinkSync(file('scene-maker'));

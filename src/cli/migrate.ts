@@ -19,9 +19,11 @@ import { join } from 'node:path';
 import { CotutorConfigSchema, explainIssues } from '../schema/index.ts';
 import { configTemplate, shippedAgents } from './skeleton.ts';
 import { installTutors, type InstallStep } from './tutors.ts';
-import { CONFIG_FILE, ConfigError, readJson } from './workspace.ts';
+import { RENAMED_TUTORS, renameTutorData, renamedEntry, type RenameOp } from './rename.ts';
+import { CONFIG_FILE, ConfigError, readJson, resolvePaths } from './workspace.ts';
 
-export type GapKind = 'tutor' | 'runtime' | 'flag';
+/** rename:出厂老师改了键名(rename.ts),值原样搬到新键下,连带文件与目录 */
+export type GapKind = 'tutor' | 'rename' | 'runtime' | 'flag';
 
 export interface ConfigGap {
   kind: GapKind;
@@ -94,8 +96,16 @@ export async function configGaps(raw: unknown): Promise<ConfigGap[]> {
   const gaps: ConfigGap[] = [];
 
   const mineTutors = isObj(raw.tutors) ? raw.tutors : {};
-  for (const [name, entry] of Object.entries(isObj(factory.tutors) ? factory.tutors : {})) {
-    if (name in mineTutors) continue;
+  const factoryTutors = isObj(factory.tutors) ? factory.tutors : {};
+  const renamedTo = new Set<string>();
+  for (const r of RENAMED_TUTORS) {
+    const mine = mineTutors[r.from];
+    if (!isObj(mine) || r.to in mineTutors || !isObj(factoryTutors[r.to])) continue;
+    renamedTo.add(r.to);
+    gaps.push({ kind: 'rename', path: `tutors.${r.from}`, detail: `出厂老师改名 ${r.from} → ${r.to}:设置、老师文件、对话、记忆笔记、首页一起挪(要先停服务,终端里跑 cotutor upgrade --config)`, value: renamedEntry(mine, r, factoryTutors[r.to] as Record<string, unknown>) });
+  }
+  for (const [name, entry] of Object.entries(factoryTutors)) {
+    if (name in mineTutors || renamedTo.has(name)) continue;
     const display = isObj(entry) && typeof entry.display === 'string' ? entry.display : name;
     gaps.push({ kind: 'tutor', path: `tutors.${name}`, detail: `出厂老师 ${display}(${name})不在 tutors 里`, value: entry });
   }
@@ -139,36 +149,56 @@ export interface UpgradeConfigResult {
   applied: boolean;
   /** 新老师进了表之后顺带补的文件与目录(老师文件、.qwen 链、agents/<name>/) */
   installed: InstallStep[];
+  /** 改名挪了(--dry-run:要挪)的文件与目录 */
+  moved: RenameOp[];
+}
+
+const renameOf = (g: ConfigGap) => RENAMED_TUTORS.find((r) => `tutors.${r.from}` === g.path);
+
+/** 改名:键换掉、位置不变(老师在首页的顺序就是 tutors 的顺序) */
+function renameKey(tutors: Record<string, unknown>, from: string, to: string, value: unknown): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(tutors).map(([k, v]) => (k === from ? [to, value] : [k, v])));
 }
 
 /**
  * 补缺并落盘:补丁打在**原始 JSON** 上(`$schema` `_note` 这些机器不认识的键原样留着),
  * 整份过契约才写;不过就抛,原文件不动。
  */
-export async function upgradeConfig(root: string, opts: { dryRun?: boolean } = {}): Promise<UpgradeConfigResult> {
+export async function upgradeConfig(root: string, opts: { dryRun?: boolean; renames?: boolean } = {}): Promise<UpgradeConfigResult> {
   const file = join(root, CONFIG_FILE);
   const raw = readJson(file);
   if (raw === null) throw new ConfigError(file, '不存在:先 cotutor init <slug> 建 workspace');
   if (!isObj(raw)) throw new ConfigError(file, '顶层不是一个 JSON 对象');
-  const gaps = await configGaps(raw);
-  if (opts.dryRun || !gaps.length) return { file, gaps, applied: false, installed: [] };
+  // 服务里点「补上」不做改名(renames: false):服务自己还认着旧名,改名要停了服务在终端里跑
+  const gaps = (await configGaps(raw)).filter((g) => g.kind !== 'rename' || opts.renames !== false);
+  const vault = resolvePaths(root, isObj(raw.paths) ? (raw.paths as Record<string, string>) : {}).vault;
+  // 先把改名要挪的全算出来,冲突在这里就抛,还没动任何文件
+  const renames = gaps.flatMap((g) => (g.kind === 'rename' && renameOf(g) ? [renameOf(g)!] : []));
+  const moved: RenameOp[] = [];
+  for (const rn of renames) moved.push(...(await renameTutorData(root, vault, rn, false)));
+  if (opts.dryRun || !gaps.length) return { file, gaps, applied: false, installed: [], moved };
 
   const merged = JSON.parse(JSON.stringify(raw)) as Record<string, unknown>;
-  for (const g of gaps) setAt(merged, g.path, g.value);
+  for (const g of gaps) {
+    const rn = g.kind === 'rename' ? renameOf(g) : undefined;
+    if (rn) merged.tutors = renameKey(merged.tutors as Record<string, unknown>, rn.from, rn.to, g.value);
+    else setAt(merged, g.path, g.value);
+  }
   const r = CotutorConfigSchema.safeParse(merged);
   if (!r.success) {
     throw new ConfigError(file, `补完之后不合契约,没有写入:\n${explainIssues(r.error.issues).map((l) => `  - ${l}`).join('\n')}`);
   }
+  for (const rn of renames) await renameTutorData(root, vault, rn, true);
   const tmp = `${file}.tmp`;
   await writeFile(tmp, `${JSON.stringify(merged, null, 2)}\n`);
   await rename(tmp, file);
 
   // 新老师进了表,她的文件与家还得在,否则 doctor 立刻报「老师文件读不到」——
   // 补缺就补到底(installTutors 是 init 用的同一条路:缺的拷、有的不动)
-  const installed = gaps.some((g) => g.kind === 'tutor')
+  const installed = gaps.some((g) => g.kind === 'tutor' || g.kind === 'rename')
     ? (await installTutors(root, Object.keys(r.data.tutors))).filter((s) => s.action === 'created' || s.action === 'replaced')
     : [];
-  return { file, gaps, applied: true, installed };
+  return { file, gaps, applied: true, installed, moved };
 }
 
 /** doctor 与家长端都要:读文件算差异;文件读不到 / 坏了就当没有差异(那边有别的检查在报) */

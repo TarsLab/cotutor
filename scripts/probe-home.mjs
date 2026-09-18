@@ -104,7 +104,7 @@ for: ${day}
   await device(390, 844, 2, true);
   await open(`${base}/`);
   const view = await evaluate(`(() => ({ tutors: [...document.querySelectorAll('.c-tutor')].map((c) => ({ who: c.dataset.tutor, buttons: [...c.querySelectorAll('.bt')].map((b) => b.textContent) })), cards: [...document.querySelectorAll('#hcards > *')].map((c) => c.className), html: document.body.innerHTML.includes('重点字') }))()`);
-  ok('老师卡置顶:语文 / 数学 / 朗读(补的),按钮齐(接着的就是今天那个话题,不再加「接着刚才的」)', view.tutors.map((t) => t.who).join() === 'chinese-tutor,math-tutor,reading-tutor' && view.tutors[0].buttons.join('|') === '新话题|我要预习小蝌蚪找妈妈|接着讲刚才的板书' && view.tutors[2].buttons.join('|') === '新话题', JSON.stringify(view.tutors));
+  ok('老师卡置顶:语文 / 数学 / 英语(补的),按钮齐(接着的就是今天那个话题,不再加「接着刚才的」)', view.tutors.map((t) => t.who).join() === 'chinese-tutor,math-tutor,english-tutor' && view.tutors[0].buttons.join('|') === '新话题|我要预习小蝌蚪找妈妈|接着讲刚才的板书' && view.tutors[2].buttons.join('|') === '新话题', JSON.stringify(view.tutors));
   ok('其余卡:一段字、田字格;讲法不在页面里', view.cards.length === 2 && view.cards[0].includes('c-text') && view.cards[1].includes('c-tianzige') && !view.html, JSON.stringify(view.cards));
   console.log('  ', await shot('home-phone.png'));
   await device(1180, 820, 1, false);

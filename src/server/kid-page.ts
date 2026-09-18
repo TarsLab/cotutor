@@ -133,6 +133,17 @@ const PAGE = `<!doctype html>
   @keyframes write { 0% { stroke-dashoffset:260; opacity:1; } 65% { stroke-dashoffset:0; opacity:1; } 88% { stroke-dashoffset:0; opacity:0; } 100% { stroke-dashoffset:260; opacity:0; } }
   @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-3px); } }
   @media (prefers-reduced-motion:reduce) { .wait-card path { animation:none; stroke-dashoffset:0; } .wait-card .av, .dots i { animation:none; opacity:.6; } }
+  /* 再听(2026-09-18):讲完的卡右上角一个小喇叭,节头念完也有;点了重念,念着的那张喇叭变橙、轻轻跳 */
+  .c > .again { position:absolute; top:-9px; right:-9px; z-index:2; width:30px; height:30px; padding:0; border-radius:50%; border:1px solid var(--line); background:#fff; color:var(--dim); display:none; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .c > .again::before { content:""; position:absolute; inset:-7px; }
+  .c.heard > .again { display:inline-flex; }
+  .c.replaying > .again, .sec.replaying > .sh .again { color:var(--accent); border-color:var(--accent); animation:again 1s ease-in-out infinite; }
+  .sh .again { flex:0 0 auto; width:26px; height:26px; padding:0; border-radius:50%; border:1px solid var(--line); background:#fff; color:var(--dim); display:none; align-items:center; justify-content:center; }
+  .sec.heard > .sh { cursor:pointer; }
+  .sec.heard > .sh .again { display:inline-flex; }
+  #sub-text.line { cursor:pointer; }
+  @keyframes again { 0%,100% { transform:scale(1); } 50% { transform:scale(1.12); } }
+  @media (prefers-reduced-motion:reduce) { .c.replaying > .again, .sec.replaying > .sh .again { animation:none; } }
   #sub-btn { flex:0 0 auto; height:36px; min-width:36px; border-radius:18px; background:#fff; display:inline-flex; align-items:center; justify-content:center; gap:4px; padding:0; font-size:15px; font-weight:600; }
   #sub-btn.cont { padding:0 14px; border:1px solid var(--line); }
   #sub-btn[hidden] { display:none; }
@@ -235,6 +246,7 @@ __BOARD_JS__
     play: SVG('<path d="M8 5l11 7-11 7z" fill="currentColor"></path>', 16, 1.5),
     pause: SVG('<path d="M8 5v14M16 5v14"></path>', 16, 2.6),
     speaker: SVG('<path d="M4 10v4h4l5 4V6L8 10z"></path><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path>', 24),
+    replay: SVG('<path d="M4 10v4h4l5 4V6L8 10z"></path><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path>', 16, 2),
     mute: SVG('<path d="M4 10v4h4l5 4V6L8 10z"></path><path d="M17 9l4 6M21 9l-4 6"></path>', 24),
     send: SVG('<path d="M12 19V5M5 12l7-7 7 7"></path>', 20, 2.4),
     image: SVG('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 16l5-5 4 4 3-3 6 6"></path><circle cx="16" cy="9" r="1.5"></circle>', 36, 1.6),
@@ -271,7 +283,7 @@ __BOARD_JS__
   let unlocked = false;
   const unlock = () => { if (unlocked) return; try { audioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='; audioEl.play().then(() => { unlocked = true; }).catch(() => {}); } catch {} };
   let voiceToken = 0;
-  const stopVoice = () => { voiceToken++; try { audioEl.pause(); } catch {} try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {} };
+  const stopVoice = () => { voiceToken++; try { audioEl.pause(); } catch {} try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {} if (S.state.replay) leaveReplay(); };
   /** 念一句;念完调 onEnd(被打断不调);声音真开始时调 onStart(总时长毫秒:mp3 取 duration,合成声与没声音按字数估),给标注定时用 */
   const say = (line, onEnd, onStart) => {
     const token = ++voiceToken;
@@ -373,7 +385,8 @@ __BOARD_JS__
   const renderCard = (c, idx, secIdx, stage) => {
     const p = c.props || {};
     // 每张卡带底色槽与字形槽(后期定的 look,没有就机械规则);名字对不上主题的,CSS 落回 paper / plain
-    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), on: stage || secIdx === null ? {} : { click: () => openStage(secIdx, idx) } }, ...kids);
+    const board = !stage && secIdx !== null;
+    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), on: board ? { click: () => openStage(secIdx, idx) } : {} }, ...kids, board ? againBtn() : null);
     switch (c.kind) {
       case 'text': {
         if (isHeading(c)) return h('div', { class: 'heading', 'data-card': idx }, p.title || '');
@@ -431,6 +444,7 @@ __BOARD_JS__
         // 轻卡,没有舞台:点字就写,不开舞台;讲到它时 setNow 写一遍
         const el = h('div', { class: 'c c-tianzige', 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), 'data-ch': String(p.chars || '') });
         for (const ch of Array.from(String(p.chars || ''))) el.append(tianzigeBox(ch));
+        if (board) el.append(againBtn());
         return el;
       }
       default:
@@ -547,7 +561,7 @@ __BOARD_JS__
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   };
   // 节头:时间 · 节名;孩子问这节时拍的照片(R5)缩略图跟在后面
-  const sectionHead = (s) => h('div', { class: 'sh' }, (s.at ? clock(s.at) + ' · ' : '') + sectionTitle(s), ...((s.photos || []).map((p) => h('img', { class: 'ph', src: '/api/kid/image?p=' + encodeURIComponent(p), alt: '', loading: 'lazy' }))));
+  const sectionHead = (s) => h('div', { class: 'sh', on: { click: (e) => againAt(e.currentTarget, 'all') } }, (s.at ? clock(s.at) + ' · ' : '') + sectionTitle(s), ...((s.photos || []).map((p) => h('img', { class: 'ph', src: '/api/kid/image?p=' + encodeURIComponent(p), alt: '', loading: 'lazy' }))), h('button', { type: 'button', class: 'again', 'aria-label': '再听这一节', html: ICON.replay }));
   const rowEl = (n, ...kids) => h('div', { class: 'row', style: 'grid-template-columns:repeat(' + n + ',minmax(0,1fr))' }, ...kids);
   /** 一节 = 头一行(时间 · 节名)+ 若干行;行是后期为某个端分的,渲染器按当前端折(rowsFor) */
   const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i }, sectionHead(s), ...rowsFor(s, S.device).map((row) => rowEl(row.length, ...row.map((idx) => renderCard(s.cards[idx], idx, i, false)))));
@@ -580,8 +594,13 @@ __BOARD_JS__
     for (; P.shown < n; P.shown++) { const c = placeCard(P, sec, P.shown, idx); c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     if (!wasLive) {
       if (S.autoplay) { stopVoice(); S.state = startSection(idx, S.sections); if (S.state.status === 'playing') playLine(); else renderSubtitle(); }
-      else { paintAll(idx); S.state = { section: idx, line: playableLines(sec) - 1, status: 'thinking' }; renderSubtitle(); showNow(); }
-    } else if (S.state.section === idx && S.state.status === 'thinking') {
+      else { if (S.state.replay) stopVoice(); paintAll(idx); S.state = { section: idx, line: playableLines(sec) - 1, status: 'thinking' }; renderSubtitle(); showNow(); }
+    } else {
+      // 等下一拍时孩子在再听前面的,新的一拍到了:让给老师
+      const B = S.state.replay && S.state.replay.back;
+      if (B && B.section === idx && B.status === 'thinking' && playableLines(sec) > B.line + 1) stopVoice();
+    }
+    if (wasLive && S.state.section === idx && S.state.status === 'thinking') {
       if (S.autoplay) { S.state = advance(S.state, S.sections); if (S.state.status === 'playing') playLine(); else renderSubtitle(); }
       else { paintAll(idx); S.state = { ...S.state, line: playableLines(sec) - 1 }; renderSubtitle(); }
     }
@@ -590,6 +609,7 @@ __BOARD_JS__
   const finalizeLive = (e) => {
     const P = S.partial; S.partial = null;
     const idx = P.idx;
+    if (S.state.replay && S.state.replay.back.section === idx) stopVoice(); // 老师写完了,再听让给它接着念
     const prev = S.sections[idx];
     const sec = { ...e };
     S.sections[idx] = sec;
@@ -618,6 +638,7 @@ __BOARD_JS__
     swapCard(old, renderCard(S.sections[secIdx].cards[idx], idx, secIdx, false));
     const upTo = S.state.section === secIdx ? S.state.line : S.state.section > secIdx ? undefined : -1;
     if (upTo !== -1) for (const l of S.sections[secIdx].lines.slice(0, upTo === undefined ? undefined : upTo + 1)) for (const m of l.marks) if (m.card === idx) applyMark(secIdx, m, false);
+    markHeard();
   };
   /** 一张卡换成新画的:选中态与「田字格写过了」跟着搬 */
   const swapCard = (old, fresh) => {
@@ -633,7 +654,8 @@ __BOARD_JS__
     if (!el) return;
     el.classList.add('now');
     // 田字格卡:讲到它那一刻写一遍(这一页只写一次;换新元素时 wrote 跟着搬),之后孩子点了再写
-    if (el.classList.contains('c-tianzige') && !el.dataset.wrote && S.state.status === 'playing') { el.dataset.wrote = '1'; tianzigePlay(el); }
+    // 再听时再写一遍(这一趟再听只写一次)
+    if (el.classList.contains('c-tianzige') && S.state.status === 'playing' && (S.state.replay ? !replayWrote.has(el) : !el.dataset.wrote)) { el.dataset.wrote = '1'; if (S.state.replay) replayWrote.add(el); tianzigePlay(el); }
   };
   const showNow = () => setNow(S.state.section, nowCard(S.sections, S.state));
   /** 换端(转屏)或窗口变了:整节按新端重排,标注按已播到的画齐,选中态照旧 */
@@ -643,6 +665,7 @@ __BOARD_JS__
       S.device = d;
       S.sections.forEach((s, i) => { const old = $('#board').querySelector('[data-sec="' + i + '"]'); if (old && !(S.partial && S.partial.el === old)) { old.replaceWith(renderSection(s, i)); const upTo = S.state.section === i ? S.state.line : S.state.section > i ? undefined : -1; if (upTo !== -1) paintAll(i, upTo); } });
       if (S.stage) setNow(S.stage.section, S.stage.card); else showNow();
+      markHeard();
     } else for (const span of document.querySelectorAll('#board .mk[data-pen]')) { const card = span.closest('.c'); if (card && LINE_PENS.includes(span.dataset.pen)) drawPen(span, card, span.dataset.pen, false); }
   };
   let relayoutTimer = null;
@@ -657,6 +680,7 @@ __BOARD_JS__
     if (!card) return;
     if (isHeavy(card) && !sceneReady(card) && card.kind === 'scene') return; // 课包还没到:紧凑态写着「图还在路上」,不开
     if (S.readonly && hasState(card) && !opts.delegate) return; // 以前的只能看:选择 / 填空 / 画板不开,免得改了当时的答案
+    if (S.state.replay) stopVoice();
     if (S.state.status === 'playing' && !opts.delegate) { stopVoice(); S.state = { ...S.state, status: 'paused' }; renderSubtitle(); }
     S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, scene: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
     // 画板:题目在工作台自己的题目条上(可收起),顶栏只写「画一画」
@@ -787,9 +811,11 @@ __BOARD_JS__
     b.innerHTML = v.right === 'pause' ? ICON.pause : v.right === 'play' ? ICON.play : v.right === 'continue' ? ICON.play + '<span>继续</span>' : '';
     document.body.classList.toggle('pending', S.pending);
     document.body.classList.toggle('limit', S.limit);
+    markHeard();
   };
   $('#sub-btn').addEventListener('click', () => {
     if (S.stage && S.stage.scene) { postStage({ type: 'control', action: 'toggle' }); return; }
+    if (S.state.replay) { stopVoice(); renderSubtitle(); return; } // 再听时的暂停 = 不听了,回到原来的位置
     if (S.state.status === 'playing') { stopVoice(); S.state = { ...S.state, status: 'paused' }; renderSubtitle(); }
     else if (S.state.status === 'paused') { S.state = { ...S.state, status: 'playing' }; playLine(); }
     else if (S.state.status === 'waiting') send('', { action: 'continue' });
@@ -818,6 +844,8 @@ __BOARD_JS__
       if (S.state.status !== 'playing') return;
       // 句尾的标注可能还没轮到(声音比估的短一点):念完先把没画的补上,再往下走
       for (const m of timed) if (!done.has(m)) { done.add(m); applyMark(secIdx, m, false); }
+      // 再听:只念句子,不执行 cue、不推答题卡;念完回到原来的位置
+      if (S.state.replay) { const a = advance(S.state, S.sections); if (a.replay) { S.state = a; playLine(); } else { leaveReplay(); renderSubtitle(); } return; }
       // [[play]]:念完这句把场景铺满播,播完(done)再接着念
       const play = line.cues.find((c) => c.name === 'play');
       const target = play && S.sections[S.state.section].cards[play.card];
@@ -836,6 +864,68 @@ __BOARD_JS__
   };
   /** 把一节的标注一次画齐(打开页面、不出声时):不描,直接在 */
   const paintAll = (secIdx, upTo) => { const s = S.sections[secIdx]; if (!s) return; for (const l of s.lines.slice(0, upTo === undefined ? s.lines.length : upTo + 1)) for (const m of l.marks) applyMark(secIdx, m, false); };
+
+  // ---- 再听(2026-09-18):卡角喇叭 = 这张卡那一拍,节头 = 整节,点字幕 = 这一句;讲完之后才有;声音就是当时的配音,不花钱 ----
+  let replayOf = null; // { section, card: 下标 | 'all' | 'line' }:念着的是哪个,喇叭变橙、再点一下停
+  const replayWrote = new Set();
+  const againBtn = () => h('button', { type: 'button', class: 'again', 'aria-label': '再听', html: ICON.replay, on: { click: (e) => { e.stopPropagation(); const c = e.currentTarget.closest('.c'); if (c) againAt(c, Number(c.dataset.card)); } } });
+  const againAt = (el, target) => {
+    const secEl = el.closest('.sec');
+    if (!secEl || !(target === 'all' ? secEl : el).classList.contains('heard')) return;
+    const secIdx = Number(secEl.dataset.sec);
+    if (S.state.replay && replayOf && replayOf.section === secIdx && replayOf.card === target) { stopVoice(); renderSubtitle(); return; }
+    replayFrom(secIdx, replayLines(S.sections, S.state, secIdx, target), target);
+  };
+  const replayFrom = (secIdx, lines, target) => {
+    if (!lines.length || S.stage) return;
+    unlock();
+    stopVoice();
+    unpaintLines(secIdx, lines);
+    replayOf = { section: secIdx, card: target }; replayWrote.clear();
+    S.state = startReplay(S.state, secIdx, lines);
+    playLine();
+  };
+  /** 撤掉这几句画过的标注,重念时跟着声音再描一遍(applyMark 不碰已经包过的字) */
+  const unpaintLines = (secIdx, lines) => {
+    const sec = $('#board').querySelector('[data-sec="' + secIdx + '"]');
+    if (!sec) return;
+    for (const i of lines) for (const m of S.sections[secIdx].lines[i].marks) {
+      const card = sec.querySelector('[data-card="' + m.card + '"]');
+      if (!card) continue;
+      for (const span of [...card.querySelectorAll('.mk')]) {
+        if (span.dataset.phrase !== m.phrase) continue;
+        for (const pen of span._pens || []) pen.remove();
+        const parent = span.parentNode; span.replaceWith(...span.childNodes); parent.normalize();
+      }
+    }
+  };
+  /** 再听停了(念完或被打断):回到原来的位置,念过的标注补齐(被打断时后几句还没描) */
+  const leaveReplay = () => {
+    const sec = S.state.section;
+    S.state = S.state.replay.back; replayOf = null;
+    const n = spokenLines(S.state, S.sections, sec);
+    if (n > 0) paintAll(sec, n - 1);
+    showNow();
+  };
+  /** 讲完的卡与节挂上 heard(喇叭露出来);念着的挂 replaying。老师还在写的节不挂 */
+  const markHeard = () => {
+    for (const secEl of $('#board').querySelectorAll(':scope > .sec[data-sec]')) {
+      const i = Number(secEl.dataset.sec);
+      secEl.classList.toggle('heard', replayLines(S.sections, S.state, i, 'all').length > 0);
+      secEl.classList.toggle('replaying', Boolean(S.state.replay && replayOf && replayOf.section === i && replayOf.card === 'all'));
+      for (const c of secEl.querySelectorAll('.c[data-card]')) {
+        const k = Number(c.dataset.card);
+        c.classList.toggle('heard', replayLines(S.sections, S.state, i, k).length > 0);
+        c.classList.toggle('replaying', Boolean(S.state.replay && replayOf && replayOf.section === i && replayOf.card === k));
+      }
+    }
+  };
+  // 点字幕上的字 = 再听这一句(在念的时候不算;老师还在写的节不算)
+  $('#sub-text').addEventListener('click', () => {
+    const s = S.sections[S.state.section];
+    if (S.stage || !s || s.partial || S.state.line < 0 || S.state.replay || !['paused', 'waiting', 'done'].includes(S.state.status) || $('#sub-text').className !== 'line') return;
+    replayFrom(S.state.section, [S.state.line], 'line');
+  });
 
   const loadDay = async (silent) => {
     if (!S.tutor) return;
@@ -871,6 +961,7 @@ __BOARD_JS__
       const stillPending = Boolean(d.pending) || d.messages.some((m) => m.pending);
       S.pending = stillPending;
       if (stillPending && !S.waitSince) S.waitSince = Date.now();
+      if (fresh.length && S.state.replay) stopVoice(); // 新的一节来了,再听停下
       if (fresh.length) {
         if (silent || !S.autoplay) { for (const i of fresh) paintAll(i); S.state = playerAtEnd(S.sections); renderSubtitle(); showNow(); const last = $('#board').querySelector('[data-sec="' + (S.sections.length - 1) + '"] .c'); if (last) last.scrollIntoView({ block: 'start', behavior: 'instant' }); }
         else { stopVoice(); S.state = startSection(fresh[0], S.sections); if (S.state.status === 'playing') playLine(); else renderSubtitle(); }

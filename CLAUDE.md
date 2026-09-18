@@ -24,6 +24,7 @@
 - `pnpm typecheck`;`pnpm test`;`node bin/cotutor.js --help`(bin 直跑 src,Node ≥ 22.18)
 - 改了 `cards/*/card.md` 跑 `pnpm run gen:skills`(不跑 skills.test 会红);改了 `src/stage/` 跑 `pnpm run build:stage`(dist 不在 git,没打包时舞台开不了)
 - 改解析器或卡先过 `tests/board.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」
+- 改孩子端播放(谁念、谁停、谁打断谁)先改《工作流程.md》的仲裁表,再改 `tests/player.test.ts`,最后改 `kid-board.ts` 的 `step`;页面只 `dispatch`
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`
 - 手动验收走 `scripts/probe-*.mjs`(CDP);舞台里的东西用 CDP 驱动,截图用 CLI `--screenshot`,手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`
 - 手册:《家长手册.md》《开发者手册.md》《iPad与iPhone.md》

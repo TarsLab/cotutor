@@ -111,7 +111,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
   const ths = threads(index.messages);
   for (const [i, m] of index.messages.entries()) {
     // 记账那轮是家长晚上起的任务,老师回的「记好了」不是给孩子的话
-    if (m.bookkeep) continue;
+    if (m.bookkeep || m.tidy) continue;
     const question = m.from === 'kid' ? m.text : null;
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';

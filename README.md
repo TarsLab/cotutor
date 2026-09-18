@@ -10,12 +10,12 @@
 
 ```sh
 npm i -g cotutor
-cotutor init ming --name 小明     # 建 ~/cotutor/ming/:四位老师、八个 skill、账本、对话目录、cotutor.json
+cotutor init ming --name 小明     # 建 ~/cotutor/ming/:四位老师、十个 skill、账本、对话目录、cotutor.json
 cotutor doctor                    # 逐项体检,不过的每条都带修复命令;--live 真起一次老师
 cotutor serve                     # 孩子端 http://<ip>:5180/,家长端 /parent
 ```
 
-`init` 把出厂老师(含画图老师)拷进 `.claude/agents/`,把画图用的四个领域 skill(随 drawtell 包来)和四个机器件 cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune 拷进 `.claude/skills/`;
+`init` 把出厂老师(含画图老师)拷进 `.claude/agents/`,把画图用的四个领域 skill(随 drawtell 包来)和六个机器件 cotutor-tutor / cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.claude/skills/`;
 画图老师跑的 drawtell 随包装好,不用另外装。要在 iPad 上用(按住说话要 HTTPS):`cotutor cert` 签一张
 自签证书,把根证书装到 iPad,重启 `serve`。
 

@@ -21,8 +21,10 @@ export type Bookkeeping = z.infer<typeof BookkeepingSchema>;
 export const BOOKKEEPING_HEADING = '记账';
 
 /**
- * 「## 记忆」段(2026-09-17):任何一轮都能写,一行一条 `- …`,应用加日期追加到 vault 里这位 agent 的记忆文件(`cotutor: memory`),
- * 家长在 Obsidian 里读、改、删;每轮最多 MEMORY_MAX_PER_TURN 条,多的丢并提醒。老师不直接写文件。
+ * 「## 记忆」段(2026-09-17;2026-09-18 起能改能删):任何一轮都能写,一行一条 `- …`:缺省新增(应用加日期追加),
+ * `- 改:原话 → 新的` 改一行,`- 删:原话` 删一行(按原话找,任何一行都能动);落进 vault 里这位 agent 的记忆文件(`cotutor: memory`),
+ * 家长在 Obsidian 里读、改、删。讲课的轮每轮最多 MEMORY_MAX_PER_TURN 条,多的丢并提醒;记账后的整理轮不限,整理完不超过 MEMORY_TIDY_CAP 条。老师不直接写文件。
  */
 export const MEMORY_HEADING = '记忆';
 export const MEMORY_MAX_PER_TURN = 2;
+export const MEMORY_TIDY_CAP = 30;

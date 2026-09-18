@@ -696,7 +696,7 @@ export const PARENT_PAGE = `<!doctype html>
         h('p', {}, s.job ? '已起 ' + (tutorOf('scene-maker').display || 'scene-maker') + ' 的 ' + s.job : '没起(见下面的提醒)'))));
     }
     if (m.result === 'error') el.append(h('div', { class: 'notice err' }, h('span', { class: 'ico' }, '!'), h('div', {}, h('h5', {}, '本轮出错:' + (m.error || '未知')), h('p', {}, v.errors[m.job] || ''))));
-    if (m.remembered && m.remembered.length) el.append(h('div', { class: 'notice scene' }, h('span', { class: 'ico' }, '✎'), h('div', {}, h('h5', {}, '记住了(追加到 vault 里' + t.display + '的记忆文件,在 Obsidian 里可以改、删)'), h('p', {}, m.remembered.join('\\n')))));
+    if (m.remembered && m.remembered.length) el.append(h('div', { class: 'notice scene' }, h('span', { class: 'ico' }, '✎'), h('div', {}, h('h5', {}, (m.tidy ? '整理了记忆' : '记住了') + '(vault 里' + t.display + '的记忆文件,在 Obsidian 里可以改、删)'), h('p', {}, m.remembered.join('\\n')))));
     if (m.warnings && m.warnings.length) el.append(h('div', { class: 'notice warn' }, h('span', { class: 'ico' }, 'i'), h('div', {}, h('h5', {}, '提醒'), h('p', {}, m.warnings.join('\\n')))));
     if (m.result === 'running') el.append(h('div', { class: 'running' }, v.running === m.job ? '老师在想……' : '(没跑完:服务重启过或进程被杀,看原文里的转录)'));
     return el;

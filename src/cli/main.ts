@@ -228,11 +228,11 @@ export async function main(argv: string[]): Promise<void> {
         out.push('来源:');
         out.push(`  slot     ${rel(rp.timetable.file)} · ${rp.timetable.found ? (rp.timetable.slot ? `命中「${rp.timetable.slot}」` : '现在不在任何时段') : '课程表读不到'}`);
         const v = rp.vault;
-        const chars = (n: number): string => (n > v.limit ? `${n} 字,截到 ${v.limit}` : `${n} 字`);
+        const chars = (n: number, tail = false): string => (n > v.limit ? `${n} 字,${tail ? `只带最近 ${v.limit}` : `截到 ${v.limit}`}` : `${n} 字`);
         out.push(`  vault    ${redactHome(v.root)} · 学期 ${v.semester ?? '算不出'}`);
         out.push(`  profile  ${v.profile ? `${v.profile}(${chars(v.chars.profile)})` : '没有 cotutor: profile 的笔记'}${v.extraProfiles.length ? ` · 另有 ${v.extraProfiles.join('、')} 没用` : ''}`);
         out.push(`  entry    ${v.entry ? `${v.entry}(${chars(v.chars.entry)})` : v.subject ? `没有 subject: ${v.subject}、semester: ${v.semester ?? '?'} 的入口文件` : '这位老师没配 subject'}${v.extraEntries.length ? ` · 另有 ${v.extraEntries.join('、')} 没用` : ''}`);
-        out.push(`  memory   ${v.memory ? `${v.memory}(${chars(v.chars.memory)})` : '还没有(第一次写「## 记忆」时建)'}${v.extraMemories.length ? ` · 另有 ${v.extraMemories.join('、')} 没用` : ''}`);
+        out.push(`  memory   ${v.memory ? `${v.memory}(${chars(v.chars.memory, true)})` : '还没有(第一次写「## 记忆」时建)'}${v.extraMemories.length ? ` · 另有 ${v.extraMemories.join('、')} 没用` : ''}`);
         if (v.refs.length) out.push(`  refs     ${v.refs.join('、')}(只给路径)`);
         out.push(`  plan     ${rel(rp.plan.file)} · ${rp.plan.found ? `这位老师 ${rp.plan.total} 行,带了 ${rp.plan.kept}(上限 ${rp.plan.limit})` : '本周计划不在'}`);
         out.push(`  recent   ${rel(rp.recent.dir)}/ 最近 ${rp.recent.days} 天 · 有 ${rp.recent.filesFound.length} 天的日记${rp.recent.filesFound.length ? `(${rp.recent.filesFound[0]} … ${rp.recent.filesFound[rp.recent.filesFound.length - 1]})` : ''} · ${rp.recent.subject ? `学科「${rp.recent.subject}」` : '不按学科过滤'}的观察行共 ${rp.recent.total},带了 ${rp.recent.kept}(上限 ${rp.recent.limit},取最新的)`);

@@ -63,7 +63,7 @@ export const ConversationMessageSchema = z.object({
   parentText: z.string().optional(),
   /** 解析板书时的提醒(卡没解析成等),家长视图显示;孩子端不报 */
   warnings: z.array(z.string()).optional(),
-  /** 这轮「## 记忆」段真追加进 vault 记忆文件的行(带日期);家长视图显示 */
+  /** 这轮「## 记忆」段真落进 vault 记忆文件的改动:新增的行(带日期)、「改:旧 → 新」、「删:旧」;家长视图显示 */
   remembered: z.array(z.string()).optional(),
   /** 这轮上下文包里家长笔记的版本:role(profile / entry)→ `路径@hash`;同一话题下一轮对得上就只写「未变」(2026-09-17) */
   notes: z.record(z.string(), z.string()).optional(),
@@ -77,6 +77,8 @@ export const ConversationMessageSchema = z.object({
   post: z.object({ ok: z.boolean(), ms: z.number().int().nonnegative(), costUsd: z.number().optional(), dropped: z.number().int().nonnegative(), error: z.string().optional(), beats: z.number().int().nonnegative().optional(), failed: z.number().int().nonnegative().optional() }).optional(),
   /** 这轮是给某个话题记账的任务(from: system,resume 那个话题的会话);跑完老师回的「## 记账」段经应用落进日记 */
   bookkeep: z.object({ thread: z.string().min(1) }).optional(),
+  /** 这轮是记账后整理记忆的任务(from: system,新会话;2026-09-18):老师回「## 记忆」段的一串增 / 改 / 删,不受每轮条数上限;孩子端看不到 */
+  tidy: z.literal(true).optional(),
   /** 最终文本里剥出来的「## 记账」段(物化;日记已按它写好);null = 这轮没有 */
   bookkeeping: BookkeepingSchema.nullable().optional(),
   /** 这轮模型用了哪些工具、读了什么(2026-09-15,从 .log 抽,lib/transcript.ts toolCalls):名字、最要紧的参数、成没成、结果多少字。家长端「看原文」的「读了什么」站;cotutor show 也吐 */

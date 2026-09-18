@@ -7,6 +7,7 @@ export * from './kid-board.ts';
 export * from './board.ts';
 export * from './context-pack.ts';
 export * from './vault-doc.ts';
+export * from './tutor-rules.ts';
 export * from './plan.ts';
 export * from './ledger.ts';
 export * from './conversation.ts';

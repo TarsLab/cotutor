@@ -25,7 +25,8 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === '--disable-slash-commands') continue;
   else rest.push(argv[i]);
 }
-const prompt = rest.join(' ');
+// 出厂的老师守则(<cotutor-rules>)是固定文字,里头的「板书」「## 记忆」不该触发下面的关键词:先剥掉
+const prompt = rest.join(' ').replace(/<cotutor-rules[^>]*>[\s\S]*?<\/cotutor-rules>\n?/g, '');
 const sid = session ?? `fake-${process.pid}-${Date.now()}`;
 const emit = (o: unknown): void => void process.stdout.write(`${JSON.stringify(o)}\n`);
 const lastLine = prompt.trim().split('\n').filter(Boolean).pop() ?? '';
@@ -83,6 +84,8 @@ if (fail) {
   }
   parts.push(`${session ? '接着说:' : '第一次说:'}${lastLine}`);
   if (prompt.includes('家长段')) parts.push('## 家长\n他其实会了。');
+  // 记账后整理记忆(runner.tidyMemory 发的):改一条、删一条(家长手写的)、加一条、再删一条找不到的
+  if (prompt.includes('把你的记忆整理一遍')) parts.push('## 记忆\n- 改:凑十他懂 → 凑十熟练了\n- 删:家长写的别出选择题\n- 整理时新记的\n- 删:没有这句话');
   if (prompt.includes('记住它')) parts.push('## 记忆\n- 讲角用手指比划他马上懂\n- 家长说别出选择题\n- 第三条会被丢掉');
   // 记账任务(runner.bookkeep 发的):回一段固定形状的「## 记账」;prompt 里有「记账坏」就少写 name(应用该报 warning、日记不写)
   const bk = /给刚才这个话题记账\(话题 (\S+?)[,,]/.exec(prompt);

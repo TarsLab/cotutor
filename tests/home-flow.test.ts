@@ -148,7 +148,7 @@ for: 2026-09-18
   const m0 = idx17.messages.find((m) => m.job === j0)!;
   const run0 = await readRunFile(ctx.ws, 'chinese-tutor', '2026-09-17', j0);
   check('开场按钮:发的是按钮上的字、新话题、消息记 via', m0.text === '我要预习小蝌蚪找妈妈' && m0.thread === j0 && JSON.stringify(m0.via) === JSON.stringify({ home: h1.home, button: 0, label: '我要预习小蝌蚪找妈妈' }) && !m0.continues, JSON.stringify(m0));
-  check('开场按钮:上下文包带 home 段(按钮字与讲法),不带 continue', run0?.prompt.includes('  home:\n    button: "我要预习小蝌蚪找妈妈"\n    brief: "第 22 课,先读顺 1–3 段"') === true && !run0.prompt.includes('continue:'), run0?.prompt);
+  check('开场按钮:上下文包带 home 段(按钮字与讲法),不带 continue', run0?.prompt.includes('  home:\n    button: "我要预习小蝌蚪找妈妈"\n    brief: "第 22 课,先读顺 1–3 段"') === true && !run0.prompt.includes('\n  continue:'), run0?.prompt);
 
   const s1 = await kidSend('chinese-tutor', { text: '', thread: j0, via: { home: h1.home, button: 1 } });
   await wait('chinese-tutor');
@@ -163,7 +163,7 @@ for: 2026-09-18
   await wait('math-tutor');
   const m2 = (await readIndex(ctx.ws, 'math-tutor', '2026-09-17')).messages[0];
   const run2 = await readRunFile(ctx.ws, 'math-tutor', '2026-09-17', (s2.json as { job: string }).job);
-  check('新话题按钮:孩子自己的话、记 via、上下文包没有 home 段', m2.text === '我想问个别的' && m2.via?.button === 'new' && !run2?.prompt.includes('home:'), JSON.stringify(m2));
+  check('新话题按钮:孩子自己的话、记 via、上下文包没有 home 段', m2.text === '我想问个别的' && m2.via?.button === 'new' && !run2?.prompt.includes('\n  home:'), JSON.stringify(m2));
 
   const h2 = await kidHome();
   const zh2 = buttonsOf(h2, 'chinese-tutor');

@@ -32,13 +32,14 @@ import { getRuntime, planRun, runtimeUses, type RunPlan } from '../lib/run-plan.
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { MEMORY_MAX_PER_TURN, VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
+import { MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
 import { DEFAULT_DEVICE, assemblePost, postEnv, runBeatPost, writePostFile, type PostBeatFile, type PostEnv } from './post.ts';
 import { validateBeatPost, type BeatPostOutput } from '../lib/postprocess.ts';
 import type { Transcript } from '../lib/transcript.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
-import { appendVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
-import { missingEntry, pickNotes, textHash } from '../lib/vault-notes.ts';
+import { updateVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
+import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPrompt } from '../lib/vault-notes.ts';
+import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody } from '../lib/tutor-rules.ts';
 import { DubQueue, LineDubber } from './tts.ts';
 import { continueContext } from './home.ts';
 
@@ -67,6 +68,8 @@ export interface SendInput {
   date?: string;
   /** 这轮是记账任务(《obsidian仓库设计.md》§6):resume 那个话题的会话,老师回「## 记账」段,应用写日记 */
   bookkeep?: { thread: string };
+  /** 这轮是记账后整理记忆(2026-09-18):新会话,「## 记忆」段不受每轮条数上限,孩子端看不到 */
+  tidy?: boolean;
   /** 这条带的作业照片(相对 workspace 根,已由路由验过在 captures/ 里;R5):进上下文包 photos: 段,老师自己 Read 看图;文字可以空 */
   photos?: string[];
   /** 这条是回放(server/replay.ts):原轮的 job,记进消息;调用方已经把 Runner 指到 evals/ */
@@ -112,9 +115,9 @@ export interface PackReport {
 const MANY = 100_000;
 
 /**
- * 上下文包的取材(《obsidian仓库设计.md》§7 每轮那行,2026-09-17 改):课程表命中的时段 + 当前学期 + 档案与入口文件的原文(按 entryChars 截)
+ * 上下文包的取材(《obsidian仓库设计.md》§7 每轮那行,2026-09-17 改):课程表命中的时段 + 老师守则(有脸的老师)+ 当前学期 + 档案与入口文件的原文(按 entryChars 截)
  * + 参考路径 + 本周计划里本老师的行 + 最近 14 天日记里本学科的「- 观察:」行。
- * 笔记原文总是带上;同一话题里没改过的由 send 换成「未变」。
+ * 守则与笔记原文总是带上;同一话题里没改过的由 send 换成「未变」。
  */
 export async function gatherContext(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; focus?: Focus }, report?: PackReport): Promise<ContextPack> {
   const t = ws.config.tutors[tutor];
@@ -134,11 +137,20 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
   const limit = policy.contextPack.entryChars;
   if (pick.semester) pack.semester = pick.semester;
   pack.notes = [];
+  // 有脸的老师的公共守则:机器技能 cotutor-tutor 的原文,排在家长笔记前面(不截;同一话题没改过由 send 换成「未变」)
+  if (takesTutorRules(tutor)) {
+    try {
+      pack.notes.push({ role: 'rules', path: TUTOR_RULES_PATH, text: tutorRulesBody(await readFile(join(ws.root, TUTOR_RULES_PATH), 'utf8')) });
+      pack.rules = TUTOR_RULES_PATH;
+    } catch {
+      pack.rules = `缺:${TUTOR_RULES_PATH} 不在(cotutor upgrade 补),照你老师文件里的做`;
+    }
+  }
   for (const [role, n] of [['profile', pick.profile], ['entry', pick.entry], ['memory', pick.memory]] as const) {
     if (!n) continue;
-    const cut = n.text.length > limit;
-    pack[role] = cut ? `${n.path}(原文 ${n.text.length} 字,截到 ${limit})` : n.path;
-    pack.notes.push({ role, path: n.path, text: cut ? `${n.text.slice(0, limit)}\n……(后面截掉了,要看全文自己 Read)` : n.text });
+    const clip = clipNote(n.text, limit, role === 'memory' ? 'tail' : 'head');
+    pack[role] = clip.cut ? `${n.path}(原文 ${n.text.length} 字,${role === 'memory' ? `只带最近 ${limit}` : `截到 ${limit}`})` : n.path;
+    pack.notes.push({ role, path: n.path, text: clip.text });
   }
   if (!pick.profile) pack.profile = '缺:vault 里没有 cotutor: profile 的档案';
   if (!pick.entry && t && tutor.endsWith('-tutor')) pack.entry = missingEntry(t.subject, pick);
@@ -298,7 +310,7 @@ export class Runner {
     const prompt = buildContextPack(pack, text, policy.contextPack);
     const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, runtime: input.runtime ?? t.runtime });
 
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 
@@ -318,7 +330,8 @@ export class Runner {
     const t = ws.config.tutors[tutor];
     if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
     const index = await readIndex(ws, tutor, date);
-    const all = [...new Set(threads(index.messages))];
+    // 整理记忆那轮自成一个话题,不是学的东西,不记账
+    const all = [...new Set(threads(index.messages).filter((_, i) => !index.messages[i].tidy))];
     const queued: string[] = [];
     const skipped: { thread: string; why: string }[] = [];
     for (const th of only ?? all) {
@@ -344,21 +357,40 @@ export class Runner {
           /* 这条记不了(老师忙 / 起不来),下一条照记;索引里没记 booked,再点一次记账会重试 */
         }
       }
+      // 账记完,这位老师整理一遍自己的记忆(新会话,结果直接落盘;《obsidian仓库设计.md》§8 2026-09-18)
+      try {
+        const tidy = await this.tidyMemory(tutor, date);
+        if (tidy) await tidy.done;
+      } catch {
+        /* 整理不了(老师忙 / 起不来)不影响记账;下次记账再整理 */
+      }
     })();
     this.background.add(chain);
     void chain.finally(() => this.background.delete(chain));
     return { queued, skipped };
   }
 
-  /** 记忆段收尾:每轮最多 MEMORY_MAX_PER_TURN 条,多的丢;写不进(vault 不在、同名文件没属性)进提醒,不影响这轮 */
-  private async settleMemory(ws: Workspace, tutor: string, date: string, items: string[]): Promise<{ added: string[]; warnings: string[] }> {
+  /**
+   * 记账后整理记忆:这位老师有记忆文件、里面有条目才起一轮(新会话、from: system、tidy);没有就返回 null。
+   * 老师回的「## 记忆」段照单落盘(settleMemory 不限条数)。
+   */
+  async tidyMemory(tutor: string, date: string): Promise<SendStarted | null> {
+    const ws = this.getWs();
+    const memory = (await scanVault(ws)).notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === tutor);
+    const count = memory ? memoryCount(memory.text) : 0;
+    if (!count) return null;
+    return this.send(tutor, { from: 'system', text: tidyMemoryPrompt({ date, count, cap: MEMORY_TIDY_CAP, diaryFile: join(ws.paths.diary, `${date}.md`) }), date, tidy: true });
+  }
+
+  /** 记忆段收尾:讲课的轮每轮最多 MEMORY_MAX_PER_TURN 条,多的丢(整理轮 max = null 不限);写不进(vault 不在、同名文件没属性)进提醒,不影响这轮 */
+  private async settleMemory(ws: Workspace, tutor: string, date: string, items: string[], max: number | null): Promise<{ changes: string[]; warnings: string[] }> {
     const warnings: string[] = [];
-    if (items.length > MEMORY_MAX_PER_TURN) warnings.push(`记忆:一轮最多记 ${MEMORY_MAX_PER_TURN} 条,丢了 ${items.length - MEMORY_MAX_PER_TURN} 条:${items.slice(MEMORY_MAX_PER_TURN).join(';')}`);
+    if (max !== null && items.length > max) warnings.push(`记忆:一轮最多记 ${max} 条,丢了 ${items.length - max} 条:${items.slice(max).join(';')}`);
     try {
-      const r = await appendVaultMemory(ws, tutor, ws.config.tutors[tutor]?.display ?? tutor, items.slice(0, MEMORY_MAX_PER_TURN), date);
-      return { added: r.added, warnings: [...warnings, ...r.warnings] };
+      const r = await updateVaultMemory(ws, tutor, ws.config.tutors[tutor]?.display ?? tutor, max === null ? items : items.slice(0, max), date);
+      return { changes: r.changes, warnings: [...warnings, ...r.warnings] };
     } catch (err) {
-      return { added: [], warnings: [...warnings, `记忆没写进去:${err instanceof Error ? err.message : String(err)}`] };
+      return { changes: [], warnings: [...warnings, `记忆没写进去:${err instanceof Error ? err.message : String(err)}`] };
     }
   }
 
@@ -665,11 +697,11 @@ export class Runner {
     // 重新读索引再并入:跑的这段时间里别的字段(比如家长改了别的)不被旧对象盖掉
     const latest = await readIndex(ws, tutor, date);
     let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, timing, post, tools });
-    // 「## 记忆」段:追加进 vault 里这位 agent 的记忆文件(回放不写;家长视图看 remembered 与提醒)
+    // 「## 记忆」段:增 / 改 / 删落进 vault 里这位 agent 的记忆文件(回放不写;整理轮不限条数;家长视图看 remembered 与提醒)
     if (kidView.memory.length) {
       const asked = latest.messages.find((m) => m.job === job);
-      const r = asked?.replayOf ? { added: [] as string[], warnings: ['回放不写记忆'] } : await this.settleMemory(ws, tutor, date, kidView.memory);
-      if (r.added.length || r.warnings.length) next = { ...next, messages: next.messages.map((m) => (m.job === job ? { ...m, ...(r.added.length ? { remembered: r.added } : {}), ...(r.warnings.length ? { warnings: [...(m.warnings ?? []), ...r.warnings] } : {}) } : m)) };
+      const r = asked?.replayOf ? { changes: [] as string[], warnings: ['回放不写记忆'] } : await this.settleMemory(ws, tutor, date, kidView.memory, asked?.tidy ? null : MEMORY_MAX_PER_TURN);
+      if (r.changes.length || r.warnings.length) next = { ...next, messages: next.messages.map((m) => (m.job === job ? { ...m, ...(r.changes.length ? { remembered: r.changes } : {}), ...(r.warnings.length ? { warnings: [...(m.warnings ?? []), ...r.warnings] } : {}) } : m)) };
     }
     // 场景作业收尾:课包的费用与时长进账本,消息的 artifacts 记课包 id
     if (tutor === SCENE_MAKER) {

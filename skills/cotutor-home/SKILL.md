@@ -24,7 +24,7 @@ description: 排 cotutor 孩子端的首页。孩子学完之后,家长在 works
 
 ## 二、记账
 
-要留下来的走记账:家长给值得记的话题打星(cotutor rate <老师> <话题> <1-5>,到 vault.keepScore 摘要才进日记),再 cotutor bookkeep <老师>。记账每个话题起老师一轮,**花钱,先问**;家长说不记就跳过。记完读当天日记核对一眼(日记在哪见 cotutor-vault 技能)。
+要留下来的走记账:家长给值得记的话题打星(cotutor rate <老师> <话题> <1-5>,到 vault.keepScore 摘要才进日记),再 cotutor bookkeep <老师>。记账每个话题起老师一轮,记完每位有记忆的老师再整理一轮记忆(结果直接落进记忆文件),**花钱,先问**;家长说不记就跳过。记完读当天日记核对一眼(日记在哪见 cotutor-vault 技能)。
 
 ## 三、商量下次
 

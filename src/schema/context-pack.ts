@@ -20,6 +20,8 @@ export const ContextPackSchema = z.object({
   /** 课程表命中的时段,如「数学 16:00-17:00」 */
   slot: z.string().optional(),
   focus: FocusSchema.optional(),
+  /** 老师守则(机器技能 cotutor-tutor 的 SKILL.md,有脸的老师才带):相对 workspace 根的路径 + 状态(未变 / 缺);原文在 notes */
+  rules: z.string().optional(),
   /** 当前学期(档案的 school_start 按日期算,或档案 semester 覆盖),如「二年级上」;算不出不写 */
   semester: z.string().optional(),
   /** 档案(vault 里 `cotutor: profile` 的那篇):相对 vault 根的路径 + 状态(未变 / 截断 / 缺);原文在 notes */
@@ -30,8 +32,8 @@ export const ContextPackSchema = z.object({
   memory: z.string().optional(),
   /** 参考资料的绝对路径:这科这学期的教材 + 档案与入口文件里的 [[链接]];只给路径,老师要用自己 Read */
   refs: z.array(z.string()).optional(),
-  /** 整篇带进来的家长笔记(话题第一条、或话题里改过了才带);接在 YAML 块后面,不进 YAML */
-  notes: z.array(z.object({ role: z.enum(['profile', 'entry', 'memory']), path: z.string().min(1), text: z.string() })).optional(),
+  /** 整篇带进来的原文(话题第一条、或话题里改过了才带):老师守则(rules)与家长笔记;接在 YAML 块后面,不进 YAML */
+  notes: z.array(z.object({ role: z.enum(['rules', 'profile', 'entry', 'memory']), path: z.string().min(1), text: z.string() })).optional(),
   /** 本周计划里与本老师相关的行(已按 planLines 截) */
   plan: z.array(z.string()).default([]),
   /** 最近 N 条本学科观察(从日记的「- 观察:」行抽,最近 14 天,已按 recent 截) */

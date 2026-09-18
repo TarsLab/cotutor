@@ -157,7 +157,7 @@ cotutor: memory
 agent: ${agent}
 ---
 
-${display}自己记下的,每个话题开头会整篇读到。你可以随便改、删、分小节;它只往末尾加。
+${display}自己记下的,每个话题开头会整篇读到。你可以随便改、删、分小节;新的加在末尾,老师也会改、删这里的任何一行(记账后整理一次)。
 
 `;
 }
@@ -178,6 +178,119 @@ export function appendMemory(existing: string, items: readonly string[], date: s
   if (!added.length) return { text: existing, added };
   const base = existing.replace(/\s*$/, '');
   return { text: `${base}\n${/^\s*[-*]\s/.test(base.split('\n').at(-1) ?? '') ? '' : '\n'}${added.join('\n')}\n`, added };
+}
+
+/**
+ * 「## 记忆」段的一条(2026-09-18):缺省是新增;`改:原话 → 新的` 改一行;`删:原话` 删一行。
+ * 冒号全角半角都认,箭头认 → 与 ->。
+ */
+export type MemoryOp = { op: 'add'; text: string } | { op: 'change'; from: string; to: string } | { op: 'delete'; from: string };
+
+export function parseMemoryOp(item: string): MemoryOp {
+  const s = item.replace(/\s+/g, ' ').trim();
+  const del = /^删[::]\s*(.+)$/.exec(s);
+  if (del) return { op: 'delete', from: del[1].trim() };
+  const chg = /^改[::]\s*(.+?)\s*(?:→|->)\s*(.+)$/.exec(s);
+  if (chg) return { op: 'change', from: chg[1].trim(), to: chg[2].trim() };
+  return { op: 'add', text: s };
+}
+
+/** 一行记忆去掉列表点与日期前缀后的原话(比对用) */
+const bareLine = (l: string): string => l.replace(/^\s*[-*]\s+/, '').replace(/^\d{4}-\d{2}-\d{2}\s+/, '').replace(/\s+/g, ' ').trim();
+
+/**
+ * 按原话找一行:正文(frontmatter 之后)里原话一字不差的那行;没有就找唯一一行包含它的(原话至少 4 个字);都不是 → -1。
+ * 不分老师写的、家长写的(2026-09-18 定:机器一律可以改)。
+ */
+export function findMemoryLine(lines: readonly string[], from: string, bodyStart: number): number {
+  const want = bareLine(from);
+  if (!want) return -1;
+  const exact = lines.findIndex((l, i) => i >= bodyStart && bareLine(l) === want);
+  if (exact >= 0) return exact;
+  if (Array.from(want).length < 4) return -1;
+  const hits = lines.map((l, i) => (i >= bodyStart && l.trim() && bareLine(l).includes(want) ? i : -1)).filter((i) => i >= 0);
+  return hits.length === 1 ? hits[0] : -1;
+}
+
+export interface MemoryApplied {
+  text: string;
+  /** 给家长看的改动,一条一行:新增的原样(`- <日期> …`),改的「改:旧 → 新」,删的「删:旧」 */
+  changes: string[];
+  /** 找不到原话的改 / 删 */
+  misses: string[];
+}
+
+/**
+ * 把一串操作落到记忆全文上:先改、删(按原话找行,见 findMemoryLine),再把新增的追加到末尾(appendMemory,去重)。
+ * 改过的列表行换成 `- <今天> 新的`;不是列表的行整行换成新的。
+ */
+export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date: string): MemoryApplied {
+  const lines = existing.split('\n');
+  const fm = /^\uFEFF?---\s*$/.test(lines[0] ?? '') ? lines.findIndex((l, i) => i > 0 && /^---\s*$/.test(l)) : -1;
+  const bodyStart = fm > 0 ? fm + 1 : 0;
+  const changes: string[] = [];
+  const misses: string[] = [];
+  const gone = new Set<number>();
+  for (const o of ops) {
+    if (o.op === 'add') continue;
+    const i = findMemoryLine(lines, o.from, bodyStart);
+    if (i < 0 || gone.has(i)) {
+      misses.push(o.op === 'change' ? `改:${o.from}` : `删:${o.from}`);
+      continue;
+    }
+    const old = bareLine(lines[i]);
+    if (o.op === 'delete') {
+      gone.add(i);
+      changes.push(`删:${old}`);
+    } else {
+      const bullet = /^(\s*[-*]\s+)/.exec(lines[i]);
+      lines[i] = bullet ? `${bullet[1]}${date} ${o.to}` : o.to;
+      changes.push(`改:${old} → ${o.to}`);
+    }
+  }
+  const kept = lines.filter((_, i) => !gone.has(i)).join('\n');
+  const adds = ops.flatMap((o) => (o.op === 'add' ? [o.text] : []));
+  const r = appendMemory(kept, adds, date);
+  return { text: r.text, changes: [...changes, ...r.added], misses };
+}
+
+/** 记忆文件里有几条(frontmatter 之后的列表行) */
+export function memoryCount(text: string): number {
+  const body = text.replace(/^\uFEFF?---\s*\n[\s\S]*?\n---\s*(\n|$)/, '');
+  return body.split('\n').filter((l) => /^\s*[-*]\s+\S/.test(l)).length;
+}
+
+/**
+ * 记账后整理记忆那轮的消息正文(2026-09-18):新会话、from: system;记忆原文在上下文包的 <vault-note role="memory">。
+ * 回的「## 记忆」段不受每轮条数上限,应用照单落盘、不问家长(家长在 Obsidian 里兜底)。
+ */
+export function tidyMemoryPrompt(opts: { date: string; count: number; cap: number; diaryFile: string }): string {
+  return [
+    `学习结束、账记完了,把你的记忆整理一遍。记忆文件的原文在上下文包的 <vault-note role="memory">(现在 ${opts.count} 条;截了就自己 Read 全文),今天(${opts.date})的日记在 ${opts.diaryFile},读你这一科的几段对照一下。`,
+    '',
+    '只回一段「## 记忆」,一行一条,别的一个字都不用写:',
+    '',
+    '## 记忆',
+    '- 删:原话(过时的、今天看出来不对的、和别的重复的)',
+    '- 改:原话 → 新的(要更新的,比如「还没学竖式 → 9 月中学会了两位数竖式」;几条说一件事就改成一条、删掉其余)',
+    '- 新的一条(今天日记里看出来、以后还用得上、记忆里还没有的)',
+    '',
+    `原话照记忆文件里那一行抄,日期可以不抄;谁写的行都可以改、删。整理完不超过 ${opts.cap} 条。都不用动就只回一句「记忆不用整理」,不写「## 记忆」段。`,
+  ].join('\n');
+}
+
+/**
+ * 按 entryChars 截一篇笔记带进上下文包。档案、入口文件留开头(家长写在前面的最要紧);
+ * 记忆留末尾——应用往末尾追加,最新的在后面,截开头丢的是旧的(2026-09-18 之前留的是开头,越记越看不到新的)。
+ * 末尾那头从一行的开头起,不截半行。
+ */
+export function clipNote(text: string, limit: number, keep: 'head' | 'tail'): { text: string; cut: boolean } {
+  if (text.length <= limit) return { text, cut: false };
+  if (keep === 'head') return { text: `${text.slice(0, limit)}\n……(后面截掉了,要看全文自己 Read)`, cut: true };
+  const tail = text.slice(-limit);
+  const nl = tail.indexOf('\n');
+  const aligned = text.at(-limit - 1) === '\n' || nl < 0 ? tail : tail.slice(nl + 1);
+  return { text: `……(前面旧的截掉了,下面是最近的;要看全文自己 Read)\n${aligned}`, cut: true };
 }
 
 /** 短 hash(FNV-1a 32 位):同一话题里判断「这篇上次带过、没改」 */

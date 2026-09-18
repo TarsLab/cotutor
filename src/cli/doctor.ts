@@ -353,7 +353,7 @@ export async function doctorWorkspace(
       const shim = (await statOrNull(join(root, TOOL_SHIM)))?.isFile() ?? false;
       push({ name: 'drawtell', ok: dt !== null && shim, required: false, detail: !dt ? 'node_modules 里没有 drawtell,场景作业跑不了' : shim ? `${TOOL_SHIM} 在,指向本包的 drawtell(scene-maker 用它 check / build / dub / snap)` : `${TOOL_SHIM} 不在,scene-maker 找不到 drawtell`, fix: !dt ? '仓库根 pnpm install' : shim ? undefined : 'cotutor init 或 cotutor upgrade 生成' });
       for (const sk of await skillStatuses(root)) {
-        const label: Record<string, string> = { latest: sk.machine ? '机器件,最新' : '出厂件,最新', upgradable: sk.machine ? '机器件,和包里不一样(改过或包已更新)' : `出厂件,基于 ${sk.basedOn},包已更新`, custom: `自定义(基于 ${sk.basedOn})`, untracked: '自定义(没有出厂记录)', missing: sk.machine ? '缺,老师不知道卡怎么写' : '缺', unavailable: `${sk.source} 没装,没法拷` };
+        const label: Record<string, string> = { latest: sk.machine ? '机器件,最新' : '出厂件,最新', upgradable: sk.machine ? '机器件,和包里不一样(改过或包已更新)' : `出厂件,基于 ${sk.basedOn},包已更新`, custom: `自定义(基于 ${sk.basedOn})`, untracked: '自定义(没有出厂记录)', missing: sk.machine ? '缺(机器件,老师或家长的技能靠它)' : '缺', unavailable: `${sk.source} 没装,没法拷` };
         const qwenOk = (await statOrNull(join(root, '.qwen', 'skills', sk.name)))?.isDirectory() ?? false;
         push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'unavailable' && sk.state !== 'upgradable', required: Boolean(sk.machine), detail: `.claude/skills/${sk.name}/:${label[sk.state]}${qwenOk ? '' : ';.qwen/skills/ 链不通'}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor upgrade 换新版' : sk.state === 'unavailable' ? '仓库根 pnpm install' : qwenOk ? undefined : 'cotutor init 补链' });
       }

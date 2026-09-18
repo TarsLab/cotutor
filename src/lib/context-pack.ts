@@ -1,5 +1,5 @@
 /**
- * 上下文包序列化(《cotutor契约草案.md》§2):固定 YAML 块 + 家长笔记原文段(<vault-note>)+ `---` + 消息原文。
+ * 上下文包序列化(《cotutor契约草案.md》§2):固定 YAML 块 + 老师守则原文(<cotutor-rules>)与家长笔记原文段(<vault-note>)+ `---` + 消息原文。
  * 手写 YAML 子集:标量能裸写就裸写,其余 JSON 双引号(合法 YAML);空的 plan / recent 不写。
  */
 import { ContextPackSchema, VAULT_PACK_ROLES, type ContextPack } from '../schema/index.ts';
@@ -16,6 +16,7 @@ export function renderContextPack(pack: ContextPack): string {
   const out: string[] = ['cotutor:', `  from: ${p.from}`, `  at: ${yamlScalar(p.at)}`];
   if (p.slot) out.push(`  slot: ${yamlScalar(p.slot)}`);
   if (p.focus?.card) out.push('  focus:', `    card: ${yamlScalar(p.focus.card)}`);
+  if (p.rules) out.push(`  rules: ${yamlScalar(p.rules)}`);
   if (p.semester) out.push(`  semester: ${yamlScalar(p.semester)}`);
   if (p.profile) out.push(`  profile: ${yamlScalar(p.profile)}`);
   if (p.entry) out.push(`  entry: ${yamlScalar(p.entry)}`);
@@ -64,7 +65,11 @@ export function renderContextPack(pack: ContextPack): string {
     out.push('  photos:');
     for (const c of p.photos) out.push(`    - ${yamlScalar(c)}`);
   }
-  for (const n of p.notes ?? []) out.push(`<vault-note role="${n.role}" path=${JSON.stringify(n.path)}>`, n.text.replace(/\s+$/, ''), '</vault-note>');
+  // 守则是出厂的,不是家长的笔记,换个标签;路径相对 workspace 根(家长笔记的相对 vault 根)
+  for (const n of p.notes ?? []) {
+    const tag = n.role === 'rules' ? 'cotutor-rules' : 'vault-note';
+    out.push(n.role === 'rules' ? `<${tag} path=${JSON.stringify(n.path)}>` : `<${tag} role="${n.role}" path=${JSON.stringify(n.path)}>`, n.text.replace(/\s+$/, ''), `</${tag}>`);
+  }
   return out.join('\n');
 }
 

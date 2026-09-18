@@ -410,17 +410,8 @@ export function createMock(opts: MockOptions = {}): Mock {
   };
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
   const tutorsJson = () => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, motto: t.motto, hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0 }));
-  const timetable = [
-    { day: 1, subject: '数学', start: '17:00', end: '17:20' },
-    { day: 2, subject: '语文', start: '16:00', end: '16:30' },
-    { day: 3, subject: '语文', start: '16:00', end: '16:30' },
-    { day: 3, subject: '数学', start: '17:00', end: '17:20' },
-    { day: 4, subject: '英语', start: '16:30', end: '16:50' },
-    { day: 5, subject: '数学', start: '17:00', end: '17:20' },
-  ];
   const home = () => {
     const d = now();
-    const day = d.getDay() === 0 ? 7 : d.getDay();
     const cards = arrangeHome(parseHome(mockHomeMd(localDate(d), yesterday())).cards, MOCK_TUTORS.map((t) => t.name)).map((c) => {
       if (c.kind !== 'tutor') return c;
       const name = String(c.props.tutor);
@@ -430,7 +421,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const alive = (date: string, thread: string): boolean => date === yesterday() && (past.get(name) ?? []).some((m) => m.thread === thread);
       return { kind: 'tutor', props: { tutor: name, buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { recent, alive }) } };
     });
-    return { title, date: localDate(d), day, timetable, slot: null, tutors: tutorsJson(), home: mockHomeId(), cards };
+    return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards };
   };
   const mockHomeId = (): string => `${yesterday()}-2130`;
   /** via → 按钮(真服务在 server/home.ts resolveVia;mock 从同一份原文取) */

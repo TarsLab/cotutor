@@ -13,8 +13,7 @@ import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
 import { currentThread, lastJobOf, localDate, threads } from '../lib/conversation.ts';
 import { kidConversation, kidMessageCount, kidThreads, type KidMessage, type KidThread } from '../lib/kid-view.ts';
-import { currentSlot, dayOf, parseTimetable, slotLabel } from '../lib/timetable.ts';
-import { DATE_RE, FocusSchema, HOME_ID_RE, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type TimetableEntry } from '../schema/index.ts';
+import { DATE_RE, FocusSchema, HOME_ID_RE, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex } from '../schema/index.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
 import { tutorStatuses } from '../cli/tutors.ts';
@@ -135,10 +134,6 @@ export async function kidTutors(ctx: AppContext, date: string): Promise<KidTutor
 export interface KidHome {
   title: string;
   date: string;
-  /** 1–7 */
-  day: number;
-  timetable: TimetableEntry[];
-  slot: string | null;
   tutors: KidTutor[];
   /** 发布的首页 id(孩子点按钮时带回来);缺省首页 / 预览 = null */
   home: string | null;
@@ -151,15 +146,8 @@ export interface KidHome {
 export async function kidHome(ctx: AppContext, now: Date, opts: { preview?: 'draft' | 'published' } = {}): Promise<KidHome> {
   const ws = ctx.ws;
   const date = localDate(now);
-  let timetable: TimetableEntry[] = [];
-  try {
-    timetable = parseTimetable(await readFile(ws.paths.timetable, 'utf8')).entries;
-  } catch {
-    /* 没课程表:今天照画 */
-  }
-  const slot = currentSlot(timetable, now);
   const view = await kidHomeView(ws, now, opts.preview ? { source: opts.preview, keepBriefs: true } : {});
-  return { title: ws.config.title, date, day: dayOf(now), timetable, slot: slot ? slotLabel(slot) : null, tutors: await kidTutors(ctx, date), home: opts.preview ? null : view.home, cards: view.cards, ...(opts.preview ? { preview: opts.preview } : {}) };
+  return { title: ws.config.title, date, tutors: await kidTutors(ctx, date), home: opts.preview ? null : view.home, cards: view.cards, ...(opts.preview ? { preview: opts.preview } : {}) };
 }
 
 export interface KidDay {

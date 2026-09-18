@@ -1,5 +1,5 @@
 /**
- * 孩子端 `/`:首页(老师卡 + 家长发布的首页卡 + 今天,《首页设计.md》)与老师页(= 板书页)。零依赖内联脚本,只走 /api/kid/* 与 /api/audio。
+ * 孩子端 `/`:首页(老师卡 + 家长发布的首页卡,《首页设计.md》)与老师页(= 板书页)。零依赖内联脚本,只走 /api/kid/* 与 /api/audio。
  * 首页的老师卡上按钮决定进老师页之后的话题:新话题 / 接着某个话题 / 开场(按钮上的字立刻发出去);老师页不再自己猜话题。
  * 家长预览(/parent/home-preview)是同一个页面:__PREVIEW__ 换成 "draft" / "published",数据走 /api/home/preview,按钮不真发。
  * 铁律(《产品规划.md》):界面上永远没有错误与评判——后端不通、老师出错、识别失败,都只是「什么都不出现」或头像灰;
@@ -74,20 +74,8 @@ const PAGE = `<!doctype html>
   .hcards { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
   .hcards:empty { display:none; }
   .lbl { font-size:14px; color:var(--dim); }
-  .today { display:flex; flex-direction:column; gap:8px; }
-  .slot .dot { width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
   #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); max-width:min(560px,calc(100% - 32px)); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:15px; line-height:1.5; white-space:pre-line; z-index:50; display:none; }
   #toast.on { display:block; }
-  .slots { display:flex; gap:8px; flex-wrap:wrap; }
-  .slot { display:inline-flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:6px 14px; font-size:15px; }
-  .slot.now { border-color:var(--accent); box-shadow:0 0 0 3px #e8743b33; }
-  .path { display:flex; align-items:flex-end; gap:10px; padding:6px 0 0; }
-  .station { display:flex; flex-direction:column; align-items:center; gap:4px; flex:1; }
-  .station .ring { width:30px; height:30px; border-radius:50%; border:4px solid var(--line); background:var(--card); }
-  .station.now .ring { width:44px; height:44px; border-width:6px; }
-  .station .d { font-size:12px; color:var(--dim); }
-  .station.now .d { color:var(--ink); font-weight:600; }
-  .station.past { opacity:.45; } .station.later { opacity:.7; }
   #rest { display:none; text-align:center; color:var(--dim); font-size:16px; padding:12px 0; }
   body.offline #rest { display:block; }
   body.offline .c-tutor { pointer-events:none; }
@@ -158,11 +146,10 @@ const PAGE = `<!doctype html>
   input[type=file] { display:none; }
   /* ---- 平板横屏 ---- */
   @media (min-width:900px) and (orientation:landscape) {
-    #home { max-width:none; display:grid; grid-template-columns:1fr 380px; gap:40px; padding:calc(env(safe-area-inset-top) + 40px) 48px 40px; align-content:start; }
-    #home h1 { grid-column:1 / -1; font-size:22px; }
-    #home .tutors { grid-column:1; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; align-items:start; }
-    #home .hcards { grid-column:1; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
-    #home .side { grid-column:2; grid-row:2 / span 3; display:flex; flex-direction:column; gap:14px; }
+    #home { max-width:1040px; padding:calc(env(safe-area-inset-top) + 40px) 48px 40px; gap:24px; }
+    #home h1 { font-size:22px; }
+    #home .tutors { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; align-items:start; }
+    #home .hcards { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
     #main header { padding-left:32px; padding-right:32px; }
     #board { width:100%; max-width:1040px; margin:0 auto; padding:16px 32px 24px; }
     #sub, #bar { width:100%; max-width:1040px; margin:0 auto; padding-left:32px; padding-right:32px; }
@@ -173,7 +160,6 @@ const PAGE = `<!doctype html>
   <div class="tutors" id="tutors"></div>
   <p id="rest">老师们休息中</p>
   <div class="hcards" id="hcards"></div>
-  <div class="side" id="side"></div>
 </div>
 <div id="toast"></div>
 <section id="tutor">
@@ -253,7 +239,6 @@ __BOARD_JS__
   const PALETTE = ['#e8743b', '#3b82e8', '#2fa36b', '#b45fd1', '#d9a520', '#e0508a'];
   const FIXED = { '语文': '#e0508a', '数学': '#3b82e8', '英语': '#2fa36b' };
   const color = (s) => { if (FIXED[s]) return FIXED[s]; let x = 0; for (const ch of s || '') x = (x * 31 + ch.codePointAt(0)) >>> 0; return PALETTE[x % PALETTE.length]; };
-  const DAYS = ['', '一', '二', '三', '四', '五', '六', '日'];
   const avatarEl = (t, cls) => {
     const el = h('span', { class: 'av ' + (cls || ''), style: 'border-color:' + color(t.subject || t.display) + ';color:' + color(t.subject || t.display) });
     if (t.avatar && /\.(png|jpe?g|webp|svg)$/i.test(t.avatar)) el.append(h('img', { src: '/api/kid/avatar/' + t.name, alt: '' }));
@@ -331,14 +316,6 @@ __BOARD_JS__
     const tcards = cards.filter((c) => c.kind === 'tutor' && byName.has(c.props.tutor));
     $('#tutors').replaceChildren(...tcards.map((c) => tutorCard(byName.get(c.props.tutor), Array.isArray(c.props.buttons) ? c.props.buttons : [])));
     $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor').map((c, i) => renderCard(c, i, null, false)));
-    const days = [...new Set([...H.timetable.map((e) => e.day), H.day])].sort((a, b) => a - b);
-    const slots = H.timetable.filter((e) => e.day === H.day).map((e) => h('span', { class: 'slot' + (H.slot === e.subject + ' ' + e.start + '-' + e.end ? ' now' : '') }, h('span', { class: 'dot', style: 'background:' + color(e.subject) }), e.subject + ' ' + e.start + '–' + e.end));
-    const path = h('div', { class: 'path' }, ...days.map((d) => {
-      const subjects = [...new Set(H.timetable.filter((e) => e.day === d).map((e) => e.subject))];
-      const when = d === H.day ? 'now' : d < H.day ? 'past' : 'later';
-      return h('div', { class: 'station ' + when }, h('span', { class: 'ring', style: 'border-color:' + (subjects.length ? color(subjects[0]) : 'var(--line)') }), h('span', { class: 'd' }, d === H.day ? '今天' : '周' + DAYS[d]));
-    }));
-    $('#side').replaceChildren(h('div', { class: 'today' }, h('span', { class: 'lbl' }, '今天'), slots.length ? h('div', { class: 'slots' }, ...slots) : null, path));
   };
   const loadHome = async () => {
     try { S.home = await api('GET', PREVIEW ? '/api/home/preview?which=' + PREVIEW : '/api/kid/home'); setOffline(false); renderHome(); }

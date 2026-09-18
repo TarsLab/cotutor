@@ -5,7 +5,7 @@
  * 铁律(《产品规划.md》):界面上永远没有错误与评判——后端不通、老师出错、识别失败,都只是「什么都不出现」或头像灰;
  * 文字尽量少,语音优先。孩子设备上没有通往家长端的入口(2026-09-10 拍板)。
  *
- * 老师页照豆包爱学的形态(《豆包录屏分析.md》):板书是一天一份、越讲越长的文档,孩子的话不上板,只在字幕行回显一下;
+ * 老师页照豆包爱学的形态(《豆包录屏分析.md》):板书是一天一份、越讲越长的文档,孩子的话不上板,也不在字幕行回显;
  * 一轮回复 = 一节:卡整块铺出,讲稿逐句播(有 mp3 放 mp3,没有用浏览器合成,再没有按字数计时),
  * 播到哪句就在卡上画标注、滚到那张卡;末句是问句就停下,暂停钮换成「继续」。
  * 输入条照豆包通用版:相机 | 发消息或按住说话 | 加号(相册)。平板横屏:板书两列(最宽 1040 居中),没有左栏。
@@ -117,7 +117,22 @@ const PAGE = `<!doctype html>
   .sh .ph { display:inline-block; height:34px; width:auto; max-width:120px; border-radius:6px; object-fit:cover; border:1px solid var(--line); background:#fff; vertical-align:middle; }
   #sub { display:flex; align-items:center; gap:12px; padding:8px 16px 4px; min-height:52px; }
   #sub-text { flex:1; font-size:15px; line-height:1.45; color:#5a5650; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-  #sub-text.echo, #sub-text.thinking { color:var(--dim); }
+  #sub-text.wait, #sub-text.gap { color:var(--dim); }
+  #sub-text .av { display:inline-grid; width:22px; height:22px; font-size:12px; border-width:2px; box-shadow:none; vertical-align:middle; margin-right:8px; }
+  .dots { display:inline-flex; gap:4px; margin-left:6px; vertical-align:middle; }
+  .dots i { width:5px; height:5px; border-radius:50%; background:var(--accent); opacity:.3; animation:dot 1.2s ease-in-out infinite; }
+  .dots i:nth-child(2) { animation-delay:.2s; } .dots i:nth-child(3) { animation-delay:.4s; }
+  @keyframes dot { 0%,100% { opacity:.25; transform:translateY(0); } 40% { opacity:1; transform:translateY(-3px); } }
+  /* 第一拍前板上的占位卡:老师头像轻轻浮,一支笔慢慢地写;第一拍就绪就撤,真卡落在同一个位置 */
+  .wait-card { flex:0 0 auto; height:118px; border-radius:16px; border:1.5px dashed var(--line); background:var(--card); display:flex; align-items:center; justify-content:center; gap:14px; }
+  .wait-card .av { width:36px; height:36px; font-size:18px; border-width:2px; box-shadow:none; animation:float 3s ease-in-out infinite; }
+  .wait-card svg { width:120px; height:34px; overflow:visible; }
+  .wait-card path { fill:none; stroke:var(--accent); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:260; stroke-dashoffset:260; animation:write 5s ease-in-out infinite; }
+  .wait-card path + path { stroke-width:2.5; opacity:.55; animation-delay:.6s; }
+  .blank ~ .wait-card { display:none; }
+  @keyframes write { 0% { stroke-dashoffset:260; opacity:1; } 65% { stroke-dashoffset:0; opacity:1; } 88% { stroke-dashoffset:0; opacity:0; } 100% { stroke-dashoffset:260; opacity:0; } }
+  @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-3px); } }
+  @media (prefers-reduced-motion:reduce) { .wait-card path { animation:none; stroke-dashoffset:0; } .wait-card .av, .dots i { animation:none; opacity:.6; } }
   #sub-btn { flex:0 0 auto; height:36px; min-width:36px; border-radius:18px; background:#fff; display:inline-flex; align-items:center; justify-content:center; gap:4px; padding:0; font-size:15px; font-weight:600; }
   #sub-btn.cont { padding:0 14px; border:1px solid var(--line); }
   #sub-btn[hidden] { display:none; }
@@ -248,7 +263,7 @@ __BOARD_JS__
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, echo: null, echoTimer: null, pending: false, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null };
   try { S.autoplay = localStorage.getItem('kid-autoplay') !== '0'; } catch {}
 
   // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音退回浏览器合成;都没有按字数计时 ----
@@ -336,7 +351,7 @@ __BOARD_JS__
   const openTutor = (t, intent) => {
     unlock();
     intent = intent || { kind: 'new' };
-    S.tutor = t; S.sections = []; S.played = new Set(); S.state = { section: -1, line: -1, status: 'idle' }; S.echo = null; S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
+    S.tutor = t; S.sections = []; S.played = new Set(); S.state = { section: -1, line: -1, status: 'idle' }; S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null;
     $('#hist').classList.remove('on'); renderBar(); renderHeader();
@@ -537,7 +552,7 @@ __BOARD_JS__
   /** 一节 = 头一行(时间 · 节名)+ 若干行;行是后期为某个端分的,渲染器按当前端折(rowsFor) */
   const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i }, sectionHead(s), ...rowsFor(s, S.device).map((row) => rowEl(row.length, ...row.map((idx) => renderCard(s.cards[idx], idx, i, false)))));
   /**
-   * 老师还在说(2026-09-13,一拍一就绪):第一拍就绪前什么都不铺(字幕行「让我想想…」);就绪了就把这条转成 S.sections 里的一节(live)开播,
+   * 老师还在说(2026-09-13,一拍一就绪):第一拍就绪前板上只有占位卡(字幕行「我写给你看」,见 renderSubtitle);就绪了就把这条转成 S.sections 里的一节(live)开播,
    * 之后每次 poll 只铺新就绪的拍的卡(一行一张,没有排版)、把 lines 换成最新的(配音名填进来),播到头等着(thinking)的就接上。
    * 铺卡在拍就绪时而不是围栏闭合时:铺的时候声音已齐,不会先素后彩地闪
    */
@@ -561,6 +576,7 @@ __BOARD_JS__
     if (!wasLive) { P.live = true; S.played.add(e.job); S.sections.push(sec); }
     else S.sections[idx] = sec;
     const n = liveCardsOf(sec);
+    if (n > P.shown) { const g = $('#board > .wait-card'); if (g) g.remove(); }
     for (; P.shown < n; P.shown++) { const c = placeCard(P, sec, P.shown, idx); c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     if (!wasLive) {
       if (S.autoplay) { stopVoice(); S.state = startSection(idx, S.sections); if (S.state.status === 'playing') playLine(); else renderSubtitle(); }
@@ -675,7 +691,7 @@ __BOARD_JS__
     if (m.type === 'ready') { const b = card.kind === 'scene' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null; const im = card.kind === 'canvas' && card.props.base && typeof card.props.base.image === 'string' ? card.props.base.image : null; postStage({ type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? '/api/bundles/' + encodeURIComponent(b) + '/' : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay }); }
     else if (m.type === 'phase') { S.stage.scene = { phase: m.phase, line: m.line, step: m.step, total: m.total }; renderSubtitle(); if (m.phase === 'done' && S.stage.delegate) { const d = S.stage; closeStage(); resumeAfter(d); } }
     else if (m.type === 'state') { card.state = m.state; $('#st-go').disabled = !stateSummary(card).length; $('#st-note').textContent = stateSummary(card).join('、'); repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, m.state); }
-    else if (m.type === 'submit') { card.state = m.state; const id = S.stage.id; const job = S.sections[S.stage.section].job; const idx = S.stage.card; closeStage(); api('PUT', '/api/kid/conversations/' + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id }, echoText: '你:' + (stateSummary(card).join('、') || '给老师看') })); }
+    else if (m.type === 'submit') { card.state = m.state; const id = S.stage.id; const job = S.sections[S.stage.section].job; const idx = S.stage.card; closeStage(); api('PUT', '/api/kid/conversations/' + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id } })); }
     else if (m.type === 'close' || m.type === 'error') { const d = S.stage; closeStage(); if (d.delegate) resumeAfter(d); }
   });
   /** 讲稿委托给场景播完(或孩子关了)→ 接着念下一句 */
@@ -696,12 +712,11 @@ __BOARD_JS__
     if (!S.stage) return;
     const card = S.sections[S.stage.section].cards[S.stage.card];
     if (isHeavy(card)) { postStage({ type: 'control', action: 'submit' }); return; } // 画板:让舞台包导出 png 再交
-    const labels = stateSummary(card);
-    if (!labels.length) return;
+    if (!stateSummary(card).length) return;
     const id = S.stage.id;
     clearTimeout(fillTimer); if (card.kind === 'fill') saveState(S.sections[S.stage.section].job, S.stage.card, card.state);
     closeStage();
-    send('', { action: 'submit', focus: { card: id }, echoText: '你:' + labels.join('、') });
+    send('', { action: 'submit', focus: { card: id } });
   });
   const NS = 'http://www.w3.org/2000/svg';
   /** 线条类的笔:被标注的字每一行一段 SVG 路径,贴在卡上(卡是 position:relative);animate = 描出来(dashoffset 从全长到 0) */
@@ -744,10 +759,27 @@ __BOARD_JS__
     }
     return card;
   };
+  const waitCardEl = () => {
+    const g = h('div', { class: 'wait-card' }, avatarEl(S.tutor));
+    g.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 120 34"><path d="M4 22 C 14 6, 22 30, 32 16 S 48 6, 56 20 S 72 30, 80 14 S 98 8, 112 18"/><path d="M10 30 L 70 30"/></svg>');
+    return g;
+  };
   const renderSubtitle = () => {
-    let v = subtitleFor({ state: S.state, sections: S.sections, echo: S.echo, pending: S.pending, thinking: (S.tutor && S.tutor.thinking) || '让我想想…', limit: S.limit });
-    if (S.stage && S.stage.scene && !S.echo && !S.limit) v = sceneSubtitle(S.stage.scene.phase, S.stage.scene.line, S.stage.scene.step, S.stage.scene.total);
-    const t = $('#sub-text'); t.textContent = v.text; t.className = v.kind;
+    if (!S.pending) S.waitSince = null;
+    const waited = S.waitSince ? Date.now() - S.waitSince : 0;
+    let v = subtitleFor({ state: S.state, sections: S.sections, pending: S.pending, waitedMs: waited, limit: S.limit });
+    if (S.stage && S.stage.scene && !S.limit) v = sceneSubtitle(S.stage.scene.phase, S.stage.scene.line, S.stage.scene.step, S.stage.scene.total);
+    const t = $('#sub-text'); t.className = v.kind;
+    const dots = () => h('span', { class: 'dots' }, h('i'), h('i'), h('i'));
+    if (v.kind === 'wait') t.replaceChildren(avatarEl(S.tutor), v.text, dots());
+    else if (v.kind === 'gap') t.replaceChildren(v.text, dots());
+    else t.textContent = v.text;
+    clearTimeout(S.waitTimer);
+    if (v.kind === 'wait' && waited < WAIT_LONG_MS) S.waitTimer = setTimeout(renderSubtitle, WAIT_LONG_MS - waited);
+    // 占位卡:第一拍前、以及念着没卡的开头句时都在(第一张卡落下才撤),总在板的最后
+    const board = $('#board'); let g = board.querySelector(':scope > .wait-card');
+    if (v.kind === 'wait' || (S.partial && S.partial.live && !S.partial.shown)) { if (!g) { g = waitCardEl(); board.append(g); g.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } else if (g !== board.lastElementChild) board.append(g); }
+    else if (g) g.remove();
     const b = $('#sub-btn');
     if (S.readonly && v.right === 'continue') v.right = 'none';
     b.hidden = v.right === 'none';
@@ -760,7 +792,7 @@ __BOARD_JS__
     if (S.stage && S.stage.scene) { postStage({ type: 'control', action: 'toggle' }); return; }
     if (S.state.status === 'playing') { stopVoice(); S.state = { ...S.state, status: 'paused' }; renderSubtitle(); }
     else if (S.state.status === 'paused') { S.state = { ...S.state, status: 'playing' }; playLine(); }
-    else if (S.state.status === 'waiting') send('', { action: 'continue', echo: false });
+    else if (S.state.status === 'waiting') send('', { action: 'continue' });
   });
 
   // 播放:一句 = 字幕 + 标注 + 滚到那张卡 + 声音;播完往下走
@@ -838,6 +870,7 @@ __BOARD_JS__
       if (fresh.length && S.stage) closeStage();
       const stillPending = Boolean(d.pending) || d.messages.some((m) => m.pending);
       S.pending = stillPending;
+      if (stillPending && !S.waitSince) S.waitSince = Date.now();
       if (fresh.length) {
         if (silent || !S.autoplay) { for (const i of fresh) paintAll(i); S.state = playerAtEnd(S.sections); renderSubtitle(); showNow(); const last = $('#board').querySelector('[data-sec="' + (S.sections.length - 1) + '"] .c'); if (last) last.scrollIntoView({ block: 'start', behavior: 'instant' }); }
         else { stopVoice(); S.state = startSection(fresh[0], S.sections); if (S.state.status === 'playing') playLine(); else renderSubtitle(); }
@@ -873,7 +906,7 @@ __BOARD_JS__
     nb.classList.toggle('dim', S.pending);
   };
   const renderBar = () => { $('#pill').hidden = S.readonly; $('#back-today').hidden = !S.readonly; };
-  const resetBoard = () => { stopVoice(); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); S.state = { section: -1, line: -1, status: 'idle' }; S.partial = null; S.echo = null; $('#board').replaceChildren(); };
+  const resetBoard = () => { stopVoice(); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); S.state = { section: -1, line: -1, status: 'idle' }; S.partial = null; $('#board').replaceChildren(); };
   /** 换到某天的某个话题:今天的能接着聊;以前的只读回放(从第一句播) */
   const switchThread = (date, thread) => {
     resetBoard();
@@ -913,15 +946,13 @@ __BOARD_JS__
       ls.replaceChildren(...(nodes.length ? nodes : [h('div', { class: 'empty' }, '还没有以前的')]));
     } catch { ls.replaceChildren(); }
   });
-  const showEcho = (text) => { clearTimeout(S.echoTimer); S.echo = text; renderSubtitle(); S.echoTimer = setTimeout(() => { S.echo = null; renderSubtitle(); }, 2500); };
   const send = async (text, opts = {}) => {
     text = (text || '').trim();
     if ((!text && !opts.action && !(opts.photos && opts.photos.length)) || !S.tutor || S.readonly || (S.limit && opts.action !== 'continue')) return;
     unlock();
     stopVoice();
     if (S.state.status === 'playing' || S.state.status === 'paused' || S.state.status === 'stage') S.state = { ...S.state, status: 'done' };
-    if (opts.echo !== false) showEcho(opts.echoText || ('你:' + text));
-    S.pending = true; renderSubtitle();
+    S.pending = true; S.waitSince = Date.now(); renderSubtitle();
     const body = { text, device: S.device };
     if (opts.action) body.action = opts.action;
     if (opts.photos && opts.photos.length) body.photos = opts.photos;
@@ -975,12 +1006,12 @@ __BOARD_JS__
   });
   const sendPhoto = async (file) => {
     if (!file || !S.tutor || S.readonly || S.limit || S.pending) return;
-    S.pending = true; renderSubtitle();
+    S.pending = true; S.waitSince = Date.now(); renderSubtitle();
     try {
       const data = await shrink(file);
       const r = await api('POST', '/api/kid/conversations/' + S.tutor.name + '/photos', { image: data });
       S.pending = false;
-      await send('', { photos: [r.path], echoText: '你:(拍了一张)' });
+      await send('', { photos: [r.path] });
     } catch (e) { S.pending = false; renderSubtitle(); if (e && e.status === 404) closeTutor(); else if (!(e && e.status)) setOffline(true); }
   };
   for (const f of document.querySelectorAll('input[type=file]')) f.addEventListener('change', () => { $('#sheet').classList.remove('on'); const file = f.files && f.files[0]; f.value = ''; sendPhoto(file); });

@@ -451,7 +451,7 @@ export function filledAnswers(card: BoardCard): string[] {
   return Array.from({ length: blanks }, (_, i) => got[i] ?? '');
 }
 
-/** 孩子在这张卡上做了什么(「交给老师」能不能按、字幕行回显用):选择题是选项,填空是填的字;没做 → [] */
+/** 孩子在这张卡上做了什么(「交给老师」能不能按):选择题是选项,填空是填的字;没做 → [] */
 export function stateSummary(card: BoardCard): string[] {
   if (card.kind === 'choice') return pickedLabels(card);
   if (card.kind === 'fill') return filledAnswers(card).filter(Boolean);
@@ -544,7 +544,7 @@ export function sectionTitle(s: BoardSection): string {
 }
 
 /** stage = 讲稿把这句交给了场景卡的舞台([[play]]),等它 done */
-/** thinking = 老师还在写,已就绪的句子播完了,等下一拍(字幕行是老师的「让我想想…」,不出错、不响) */
+/** thinking = 老师还在写,已就绪的句子播完了,等下一拍(字幕行见 subtitleFor 的 wait / gap,不出错、不响) */
 export type PlayStatus = 'idle' | 'playing' | 'paused' | 'waiting' | 'done' | 'stage' | 'thinking';
 
 export interface PlayerState {
@@ -594,28 +594,30 @@ export function lineTarget(line: BoardLine): number | null {
 export interface SubtitleInput {
   state: PlayerState;
   sections: readonly BoardSection[];
-  /** 孩子刚说的话,短暂回显(拍板 2026-09-10) */
-  echo: string | null;
   pending: boolean;
-  /** 等老师时那句人设话 */
-  thinking: string;
+  /** 孩子发出后等了多久(毫秒):第一拍前等久了换一句 */
+  waitedMs: number;
   limit: boolean;
 }
 
 export interface SubtitleView {
   text: string;
-  kind: 'line' | 'echo' | 'thinking' | 'limit' | 'empty';
+  /** wait = 第一拍前(板上有占位卡);gap = 拍与拍之间(留着刚念那句,变暗加点) */
+  kind: 'line' | 'wait' | 'gap' | 'limit' | 'empty';
   right: 'pause' | 'play' | 'continue' | 'none';
 }
 
-/** 字幕行:上限 > 回显孩子的话 > 等老师 > 当前句(按播放状态定右侧的钮) */
+/** 第一拍前等过这么久,字幕从「我写给你看」换成「再等我一下下」 */
+export const WAIT_LONG_MS = 8000;
+
+/** 字幕行:上限 > 等老师 > 当前句(按播放状态定右侧的钮) */
 export function subtitleFor(i: SubtitleInput): SubtitleView {
   if (i.limit) return { text: '今天聊够啦,明天再来', kind: 'limit', right: 'none' };
-  if (i.echo) return { text: i.echo, kind: 'echo', right: 'none' };
-  // 老师还在写:正在播已就绪的句子就照常出字幕;没在播(等下一拍、上一节播完了)才是「让我想想…」
-  if (i.state.status === 'thinking' || (i.pending && i.state.status !== 'playing' && i.state.status !== 'paused' && i.state.status !== 'stage')) return { text: i.thinking, kind: 'thinking', right: 'none' };
   const line = i.sections[i.state.section]?.lines[i.state.line];
   const text = line ? plainLine(line.text) : '';
+  // 老师还在写:正在播已就绪的句子就照常出字幕;这节念过几句了就留着刚念那句等下一拍;一句还没念(第一拍前)才出等的话
+  if (i.state.status === 'thinking' && text) return { text, kind: 'gap', right: 'none' };
+  if (i.state.status === 'thinking' || (i.pending && i.state.status !== 'playing' && i.state.status !== 'paused' && i.state.status !== 'stage')) return { text: i.waitedMs < WAIT_LONG_MS ? '我写给你看' : '再等我一下下', kind: 'wait', right: 'none' };
   switch (i.state.status) {
     case 'playing':
       return { text, kind: 'line', right: 'pause' };

@@ -99,7 +99,7 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   check('重卡:scene / canvas 在舞台包里开;场景卡课包到了才 ready', isHeavy(sceneCard) && isHeavy({ kind: 'canvas', props: {} }) && !isHeavy(cards[3]) && sceneReady(sceneCard) && !sceneReady({ kind: 'scene', props: { bundle: 'x' } }) && !sceneReady(cards[0]));
   check('场景卡:能标注题面 / 标题 / 那句话;标题是 title;没有「交给老师」', cardTexts(sceneCard).join('|') === '找规律|75、70、65 后面填什么?|我去画' && cardTitle(sceneCard) === '找规律' && !hasState(sceneCard) && stateSummary({ ...sceneCard, state: { step: 2, done: false } }).length === 0);
   check('场景在播时的字幕行:drawing 暂停、gap 继续(末步没钮)、ready / paused 播放、done 没钮、loading 空', sceneSubtitle('drawing', '一', 1, 3).right === 'pause' && sceneSubtitle('gap', '一', 1, 3).right === 'continue' && sceneSubtitle('gap', '三', 3, 3).right === 'none' && sceneSubtitle('ready', '题', 0, 3).right === 'play' && sceneSubtitle('paused', '一', 1, 3).right === 'play' && JSON.stringify(sceneSubtitle('done', '三', 3, 3)) === '{"text":"三","kind":"line","right":"none"}' && sceneSubtitle('loading', '', 0, 3).kind === 'empty');
-  check('讲稿交给场景时(stage)字幕留那句、没钮', subtitleFor({ state: { section: 0, line: 0, status: 'stage' }, sections: [{ cards: [], lines: [L('看我画')] }], echo: null, pending: false, thinking: 'x', limit: false }).right === 'none');
+  check('讲稿交给场景时(stage)字幕留那句、没钮', subtitleFor({ state: { section: 0, line: 0, status: 'stage' }, sections: [{ cards: [], lines: [L('看我画')] }], pending: false, waitedMs: 0, limit: false }).right === 'none');
   check('图片卡:能标注的是图注,标题是图注 / 「图」', cardTexts({ kind: 'image', props: { src: 'a.png', caption: '看这里' } }).join() === '看这里' && cardTitle({ kind: 'image', props: { src: 'a.png', caption: '看这里' } }) === '看这里' && cardTitle({ kind: 'image', props: { src: 'a.png' } }) === '图');
   check('舞台顶栏的名字:标题 > 问题 > 正文 > 第一段;截 24 字', cardTitle(cards[0]) === '画蛇添足' && cardTitle(cards[3]) === '酒是谁的?' && cardTitle(cards[2]) === '楚有祠者' && cardTitle(cards[1]) === '画蛇添足 = 多做一步,反而坏事' && cardTitle({ kind: 'text', props: { text: '字'.repeat(30) } }).length === 25 && cardTitle({ kind: 'gizmo', props: { bundle: 'x' } }) === 'x');
   check('单选:点了换成它,再点取消;多选:切换', JSON.stringify(togglePick([], 1, false)) === '[1]' && JSON.stringify(togglePick([1], 2, false)) === '[2]' && JSON.stringify(togglePick([1], 1, false)) === '[]' && JSON.stringify(togglePick([0], 2, true)) === '[0,2]' && JSON.stringify(togglePick([0, 2], 0, true)) === '[2]');
@@ -141,19 +141,19 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   check('就绪:前两拍配音齐 → 2;第三拍缺配音卡住;末拍没写完不算;写完了才算;没配音色不等配音', readyBeats(bsec, { voiced: true, done: false }) === 2 && readyBeats({ ...bsec, lines: [ln(null, 'z'), ln(0, 'a'), ln(0, 'b'), ln(1, 'x'), ln(2, 'c')] }, { voiced: true, done: false }) === 3 && readyBeats({ ...bsec, lines: [ln(null, 'z'), ln(0, 'a'), ln(0, 'b'), ln(1, 'x'), ln(2, 'c')] }, { voiced: true, done: true }) === 4 && readyBeats(bsec, { voiced: false, done: false }) === 3);
   const lv = { ...bsec, partial: true, ready: 2 };
   check('流式的节:能播的句 = 前 ready 拍的;播到头 → thinking;定稿后照常', playableLines(lv) === 3 && playableLines({ ...bsec }) === 5 && advance({ section: 0, line: 2, status: 'playing' }, [lv]).status === 'thinking' && advance({ section: 0, line: 1, status: 'playing' }, [lv]).line === 2 && advance({ section: 0, line: 2, status: 'thinking' }, [{ ...bsec }]).line === 3 && startSection(0, [{ ...bsec, partial: true, ready: 0 }]).status === 'thinking');
-  const subOf = (state: PlayerState, pending: boolean) => subtitleFor({ state, sections: [lv], echo: null, pending, thinking: '想想…', limit: false });
-  check('字幕:thinking 出老师的「想想」;pending 时正在播照常出字幕,没在播才是「想想」', subOf({ section: 0, line: 0, status: 'thinking' }, true).kind === 'thinking' && subOf({ section: 0, line: 0, status: 'playing' }, true).kind === 'line' && subOf({ section: 0, line: 0, status: 'done' }, true).kind === 'thinking' && subOf({ section: 0, line: 0, status: 'playing' }, true).right === 'pause');
+  const subOf = (state: PlayerState, pending: boolean, waitedMs = 0) => subtitleFor({ state, sections: [lv], pending, waitedMs, limit: false });
+  check('字幕:念过几句再等下一拍 → gap 留着刚念那句;一句没念 → wait;pending 时正在播照常出字幕', JSON.stringify(subOf({ section: 0, line: 0, status: 'thinking' }, true)) === '{"text":"句","kind":"gap","right":"none"}' && subOf({ section: 0, line: -1, status: 'thinking' }, true).kind === 'wait' && subOf({ section: 0, line: 0, status: 'playing' }, true).kind === 'line' && subOf({ section: 0, line: 0, status: 'done' }, true).kind === 'wait' && subOf({ section: 0, line: 0, status: 'playing' }, true).right === 'pause');
+  check('字幕:第一拍前等过 8 秒换一句', subOf({ section: 0, line: -1, status: 'thinking' }, true, 7999).text === '我写给你看' && subOf({ section: 0, line: -1, status: 'thinking' }, true, 8000).text === '再等我一下下');
   check('末句问句但已有下一节 → 直接进下一节(孩子答过了)', JSON.stringify(advance(st, [s1, s2])) === '{"section":1,"line":0,"status":"playing"}');
   check('末句不是问句 → 完', advance({ section: 1, line: 0, status: 'playing' }, [s1, s2]).status === 'done');
   check('没讲稿的节直接完', startSection(0, [{ cards: [], lines: [] }]).status === 'done');
-  const base = { sections: [s1], echo: null, pending: false, thinking: '让我想想…', limit: false };
+  const base = { sections: [s1], pending: false, waitedMs: 0, limit: false };
   check('字幕:播放中 → 当前句 + 暂停', JSON.stringify(subtitleFor({ ...base, state: { section: 0, line: 0, status: 'playing' } })) === '{"text":"一","kind":"line","right":"pause"}');
   check('字幕:暂停 → 播放钮', subtitleFor({ ...base, state: { section: 0, line: 0, status: 'paused' } }).right === 'play');
   check('字幕:停下等 → 继续', subtitleFor({ ...base, state: { section: 0, line: 1, status: 'waiting' } }).right === 'continue');
   check('字幕:完 → 留末句、没钮', JSON.stringify(subtitleFor({ ...base, state: { section: 0, line: 1, status: 'done' } })) === '{"text":"二?","kind":"line","right":"none"}');
-  check('字幕:回显孩子的话优先于播放', subtitleFor({ ...base, echo: '你:不画脚呢?', state: { section: 0, line: 0, status: 'playing' } }).kind === 'echo');
-  check('字幕:等老师', subtitleFor({ ...base, pending: true, state: { section: 0, line: 1, status: 'done' } }).text === '让我想想…');
-  check('字幕:上限压过一切', subtitleFor({ ...base, limit: true, pending: true, echo: 'x', state: { section: 0, line: 0, status: 'playing' } }).kind === 'limit');
+  check('字幕:等老师', subtitleFor({ ...base, pending: true, state: { section: 0, line: 1, status: 'done' } }).text === '我写给你看');
+  check('字幕:上限压过一切', subtitleFor({ ...base, limit: true, pending: true, state: { section: 0, line: 0, status: 'playing' } }).kind === 'limit');
   check('字幕:什么都没有', subtitleFor({ ...base, sections: [], state: { section: -1, line: -1, status: 'idle' } }).kind === 'empty');
 }
 {

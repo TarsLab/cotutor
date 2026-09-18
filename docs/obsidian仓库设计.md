@@ -118,7 +118,7 @@ vault 里不存照片(落 workspace `captures/`)、不存课包终帧、不设�
 
 ## 5. 图片:存文字,不存图
 
-- 照片(作业页)落 workspace `captures/<日期>-<job>-<n>.jpg`,`/api/kid/image` 从那里给;vault 不存照片。
+- 照片(作业页)落 workspace `captures/<日期>/<HHMM>-<n>.jpg`,`/api/kid/image` 从那里给;vault 不存照片。
 - 老师看过照片后**认出来的东西**才进 vault:日记摘要里写「人教一下每日一练 3.1 第 1 小题(88、86、84)」——册子、页、题号、题目文字。这些是将来能 Grep 到的;jpg 不能。
 - 课包终帧同理(§3.2)。
 

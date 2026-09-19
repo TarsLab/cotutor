@@ -33,17 +33,25 @@ export function runtimeUses(runtime: Runtime, placeholder: string): boolean {
   return [...runtime.run, ...runtime.resume].some((a) => a.includes(placeholder));
 }
 
+/**
+ * 这个运行时把板书写法预载进系统提示了吗:模板用了 {boardFile} / {systemBody},或者(2026-09-19 头一版)写死了 cotutor-board/SKILL.md 的路径。
+ * 没有 → 应用在话题第一条注入 <cotutor-board>。
+ */
+export function boardPreloaded(runtime: Runtime): boolean {
+  return runtimeUses(runtime, '{boardFile}') || runtimeUses(runtime, '{systemBody}') || runtimeUses(runtime, 'cotutor-board/SKILL.md');
+}
+
 export function planRun(
   config: CotutorConfig,
   index: Pick<ConversationIndex, 'session'>,
-  vars: { agent: string; prompt: string; agentBody?: string; runtime?: string },
+  vars: { agent: string; prompt: string; agentBody?: string; systemBody?: string; boardFile?: string; runtime?: string },
 ): RunPlan {
   const { name, runtime } = getRuntime(config, vars.runtime);
   const session = index.session && index.session.runtime === name ? index.session.id : null;
   const template = session ? runtime.resume : runtime.run;
   return {
     runtime: name,
-    argv: fillRuntime(template, { agent: vars.agent, prompt: vars.prompt, session: session ?? undefined, agentBody: vars.agentBody }),
+    argv: fillRuntime(template, { agent: vars.agent, prompt: vars.prompt, session: session ?? undefined, agentBody: vars.agentBody, systemBody: vars.systemBody, boardFile: vars.boardFile }),
     resume: session !== null,
     session,
   };

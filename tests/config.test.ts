@@ -38,10 +38,10 @@ check('指南点名空 display', lines.some((l) => l.startsWith('tutors.x.displa
 const bad2 = CotutorConfigSchema.safeParse({ ...raw, runtimes: { default: 'nope', claude: raw.runtimes.claude } });
 check('运行时 default 不存在 → 指南', !bad2.success && explainIssues(bad2.error.issues).some((l) => l.includes('runtimes.default') && l.includes('nope')));
 
-const filled = fillRuntime(cfg.runtimes.claude.resume, { agent: 'math-tutor', prompt: 'hi', session: 's-1' });
+const filled = fillRuntime(cfg.runtimes.claude.resume, { agent: 'math-tutor', prompt: 'hi', session: 's-1', boardFile: '/ws/.claude/skills/cotutor-board/SKILL.md' });
 check('占位填充', filled.includes('math-tutor') && filled.includes('s-1') && filled.includes('hi') && !filled.some((a) => a.includes('{')));
 const q = fillRuntime(cfg.runtimes.qwen.run, { agent: 'x', prompt: 'p' });
-check('没给 agentBody 就原样留着(doctor 会报)', q.includes('{agentBody}'));
+check('没给 systemBody / boardFile 就原样留着(doctor 会报)', q.includes('{systemBody}') && fillRuntime(cfg.runtimes.claude.run, { agent: 'x', prompt: 'p' }).includes('{boardFile}'));
 
 {
   const { resolvePolicy, POLICY_DEFAULTS } = await import('../src/schema/index.ts');

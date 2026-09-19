@@ -18,3 +18,22 @@ export function tutorRulesBody(skillMd: string): string {
 export function takesTutorRules(agent: string): boolean {
   return agent.endsWith('-tutor');
 }
+
+/** 板书写法(机器技能 cotutor-board 的 SKILL.md),相对 workspace 根。由应用递给老师:运行时能预载就进系统提示,否则进话题第一条的 <cotutor-board> */
+export const BOARD_GUIDE_PATH = '.claude/skills/cotutor-board/SKILL.md';
+
+/** 递给老师的正文:去掉 frontmatter */
+export function boardGuideBody(skillMd: string): string {
+  return parseAgentFile(skillMd).body;
+}
+
+/** 上下文包 boardGuide: 行在预载时写的话(事实陈述,不让老师自查) */
+export const BOARD_GUIDE_IN_SYSTEM = '已在你的系统提示里(「# 板书怎么写」),不用读';
+
+/**
+ * 回归检查(与 CLI 无关):板书写法已经递到手里,老师这轮还用工具去读它 → 预载没起作用(换模型 / 换 CLI / 升版本后最先坏的地方)。
+ * 认两种:Skill 工具点名 cotutor-board;任何工具的参数里带 cotutor-board/SKILL.md(Read、cat、别家 CLI 的读文件工具)。references/<种类>.md 是按需读的,不算。
+ */
+export function boardGuideReads(tools: readonly { name: string; arg: string }[]): string[] {
+  return tools.filter((t) => (t.name === 'Skill' && t.arg.trim() === 'cotutor-board') || t.arg.includes('cotutor-board/SKILL.md')).map((t) => `${t.name} ${t.arg}`.trim());
+}

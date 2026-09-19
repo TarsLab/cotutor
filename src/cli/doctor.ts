@@ -8,6 +8,8 @@ import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
+import { boardPreloaded, runtimeUses } from '../lib/run-plan.ts';
+import { BOARD_GUIDE_PATH, boardGuideBody, takesTutorRules } from '../lib/tutor-rules.ts';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { localDate } from '../lib/conversation.ts';
 import { memoryPath, missingEntry, pickNotes } from '../lib/vault-notes.ts';
@@ -109,7 +111,14 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
   } catch {
     /* 上面 tutor.* 已报 */
   }
-  const argv = fillRuntime(runtime.run, { agent: first.name, prompt: '只回一个字:好', agentBody });
+  let boardBody: string | undefined;
+  try {
+    boardBody = boardGuideBody(await readFile(join(ws.root, BOARD_GUIDE_PATH), 'utf8'));
+  } catch {
+    /* skills.* 已报 */
+  }
+  const systemBody = agentBody !== undefined ? (boardBody && takesTutorRules(first.name) ? `${agentBody}\n\n${boardBody}` : agentBody) : undefined;
+  const argv = fillRuntime(runtime.run, { agent: first.name, prompt: '只回一个字:好', agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH) });
   const cwd = join(ws.dirs.agents, first.name);
   const run = await new Promise<{ out: string; err: string; code: number | null; spawnErr?: string }>((resolveRun) => {
     let out = '';
@@ -494,6 +503,21 @@ export async function doctorWorkspace(
     // ---- HTTPS:iPad 上录音要;没有只提醒 ----
     const tls = httpsFiles(ws);
     push({ name: 'https', ok: tls !== null, required: false, detail: tls ? `${redactHome(tls.cert)}` : '没有证书,serve 走 HTTP(iPad / iPhone 上按住说话不可用)', fix: tls ? undefined : 'cotutor cert(需要 mkcert:brew install mkcert && mkcert -install)' });
+
+    // ---- 板书写法怎么递给老师(《agent层设计.md》拍板 11):有脸的老师用到的运行时逐个说清,run / resume 不一致点名 ----
+    {
+      const used = new Set<string>();
+      for (const [name, t] of Object.entries(ws.config.tutors)) if (takesTutorRules(name) && t.enabled !== false) used.add(t.runtime ?? ws.config.runtimes.default);
+      for (const name of used) {
+        const rt = ws.config.runtimes[name];
+        if (!rt || typeof rt === 'string') continue;
+        const inRun = boardPreloaded({ run: rt.run, resume: rt.run });
+        const inResume = boardPreloaded({ run: rt.resume, resume: rt.resume });
+        const how = runtimeUses(rt, '{boardFile}') ? '{boardFile} 追加进系统提示' : runtimeUses(rt, '{systemBody}') ? '{systemBody} 连老师正文一起进系统提示' : '模板里写死的 SKILL.md 路径';
+        if (inRun !== inResume) push({ name: `runtime.${name}.board`, ok: false, required: false, detail: `板书写法的预载只在 ${inRun ? 'run' : 'resume'} 模板里,两边不一致(压缩后系统提示按 resume 的旗标重建)`, fix: 'cotutor upgrade --config 补旗标,或手改 cotutor.json 让两条模板一致' });
+        else push({ name: `runtime.${name}.board`, ok: true, required: false, detail: inRun ? `板书写法预载进系统提示(${how}),各话题共享缓存` : '板书写法由应用放进每个话题第一条(<cotutor-board>);这个 CLI 能从文件或参数收系统提示的话,模板里用 {boardFile} / {systemBody} 更省' });
+      }
+    }
 
     // ---- 运行时的 CLI 在不在 ----
     if (probeEnv) {

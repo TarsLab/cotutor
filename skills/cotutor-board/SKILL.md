@@ -1,6 +1,7 @@
 ---
 name: cotutor-board
-description: cotutor 的板书怎么写:回复正文就是孩子看到的板书,普通段落是讲稿(一行一句,会被念出来)、围栏是卡(标签 = 种类:text / read / choice / fill / image / tianzige / scene / canvas / code),各种卡的写法与例子都在这里。给孩子讲解、要出卡之前读一遍;每种卡完整的协议(何时用、别用、反例、你会收回什么)在 references/<种类>.md。含作业照片怎么接、一节的完整例子。不是:一道题怎么画成一步步的动画(那是画图老师的 drawtell-teaching / drawtell-scene)、vault 怎么读(→ cotutor-vault)。机器文件,从卡的注册表生成,cotutor init / upgrade 刷新,别改。
+description: cotutor 的板书怎么写:回复正文就是孩子看到的板书,普通段落是讲稿(一行一句,会被念出来)、围栏是卡(标签 = 种类:text / read / choice / fill / image / tianzige / scene / canvas / code),各种卡的写法与例子都在这里。老师不用读这篇:应用已经把它递给老师了(系统提示里,或话题第一条的 <cotutor-board>);这里是给家长和调教老师时查的。每种卡完整的协议(何时用、别用、反例、你会收回什么)在 references/<种类>.md。含作业照片怎么接、一节的完整例子。不是:一道题怎么画成一步步的动画(那是画图老师的 drawtell-teaching / drawtell-scene)、vault 怎么读(→ cotutor-vault)。机器文件,从卡的注册表生成,cotutor init / upgrade 刷新,别改。
+disable-model-invocation: true
 ---
 
 # 板书怎么写

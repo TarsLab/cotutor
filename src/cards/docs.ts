@@ -141,11 +141,12 @@ ${rows.join('\n')}
 /** 技能名;目录 .claude/skills/cotutor-board/,Qwen 那边 .qwen/skills/cotutor-board 是相对链 */
 export const BOARD_SKILL = 'cotutor-board';
 
-/** SKILL.md:frontmatter(两 CLI 都只认 name / description)+ 语法表;description 列出卡的种类,让模型不读正文也知道有哪几种 */
+/** SKILL.md:frontmatter(两 CLI 都认 name / description;disable-model-invocation 只有 claude 认)+ 语法表;description 列出卡的种类,让模型不读正文也知道有哪几种 */
 export function boardSkillDoc(dir = PACKAGE_CARDS_DIR): string {
   const kinds = kindsFor('board').map((k) => k.name).join(' / ');
-  const description = `cotutor 的板书怎么写:回复正文就是孩子看到的板书,普通段落是讲稿(一行一句,会被念出来)、围栏是卡(标签 = 种类:${kinds}),各种卡的写法与例子都在这里。给孩子讲解、要出卡之前读一遍;每种卡完整的协议(何时用、别用、反例、你会收回什么)在 references/<种类>.md。含作业照片怎么接、一节的完整例子。不是:一道题怎么画成一步步的动画(那是画图老师的 drawtell-teaching / drawtell-scene)、vault 怎么读(→ cotutor-vault)。机器文件,从卡的注册表生成,cotutor init / upgrade 刷新,别改。`;
-  return `---\nname: ${BOARD_SKILL}\ndescription: ${description}\n---\n\n${boardSyntaxDoc(dir)}`;
+  const description = `cotutor 的板书怎么写:回复正文就是孩子看到的板书,普通段落是讲稿(一行一句,会被念出来)、围栏是卡(标签 = 种类:${kinds}),各种卡的写法与例子都在这里。老师不用读这篇:应用已经把它递给老师了(系统提示里,或话题第一条的 <cotutor-board>);这里是给家长和调教老师时查的。每种卡完整的协议(何时用、别用、反例、你会收回什么)在 references/<种类>.md。含作业照片怎么接、一节的完整例子。不是:一道题怎么画成一步步的动画(那是画图老师的 drawtell-teaching / drawtell-scene)、vault 怎么读(→ cotutor-vault)。机器文件,从卡的注册表生成,cotutor init / upgrade 刷新,别改。`;
+  // disable-model-invocation:claude 不再主动用 Skill 工具调它(正文由应用递,再调一次就是白跑一个来回);家长仍可手动 /cotutor-board;别的 CLI 不认这个键,无害
+  return `---\nname: ${BOARD_SKILL}\ndescription: ${description}\ndisable-model-invocation: true\n---\n\n${boardSyntaxDoc(dir)}`;
 }
 
 /** 技能目录的全部文件(相对技能根):SKILL.md + references/README.md + references/<kind>.md;scripts/gen-skills.ts 写进包根 skills/cotutor-board/,tests/skills.test.ts 断言入库的和它一致 */

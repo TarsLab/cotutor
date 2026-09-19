@@ -74,6 +74,8 @@ export type Tutor = z.infer<typeof TutorSchema>;
 /**
  * 运行时:一个 CLI 一组 {run, resume} 命令模板。占位符:
  * {agent} 老师名 / {agentBody} 老师文件正文(给没有 --agent 的 CLI 塞系统提示)/ {prompt} 消息 / {session} 会话 id。
+ * 板书写法的两种预载({boardFile} 板书技能 SKILL.md 的绝对路径,给能从文件追加系统提示的 CLI;{systemBody} 老师正文 + 板书写法,给只收一段系统提示文字的 CLI):
+ * 模板里用了其中一个,应用就当板书写法已在系统提示里;都没用,应用在话题第一条消息里注入 <cotutor-board>(任何 CLI 都成立的退路)。
  * 政策旋钮(预算、轮数、模型)写进模板,换 agent 只换运行时。
  */
 export const RuntimeSchema = z.object({ run: z.array(z.string()).min(1), resume: z.array(z.string()).min(1) });
@@ -144,7 +146,7 @@ export const CotutorConfigSchema = z
     vault: VaultPolicySchema.default({ keepScore: 4 }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4)'),
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 30 条 / 板书 auto / 每天 2 个动画 / 观察 10 条、计划 10 行、原文 4000 字)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
-    runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {prompt} {session};模型、预算、时限写在这里'),
+    runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {systemBody} {boardFile} {prompt} {session};模型、预算、时限写在这里'),
     tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板:say 合成一句(占位 {text} {voice} {out});voices 列音色(stdout JSON),家长端音色页据此列表与试听'),
   })
   .superRefine((c, ctx) => {
@@ -204,17 +206,19 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
     }));
 }
 
-/** 运行时模板填占位符;{agentBody} 只在给了正文时替换,否则原样留着(doctor 会报) */
+/** 运行时模板填占位符;{agentBody} / {systemBody} / {boardFile} 只在给了值时替换,否则原样留着(doctor 会报) */
 export function fillRuntime(
   argv: readonly string[],
-  vars: { agent: string; prompt: string; session?: string; agentBody?: string },
+  vars: { agent: string; prompt: string; session?: string; agentBody?: string; systemBody?: string; boardFile?: string },
 ): string[] {
   return argv.map((a) =>
     a
       .replaceAll('{agent}', vars.agent)
       .replaceAll('{prompt}', vars.prompt)
       .replaceAll('{session}', vars.session ?? '')
-      .replaceAll('{agentBody}', vars.agentBody ?? '{agentBody}'),
+      .replaceAll('{agentBody}', vars.agentBody ?? '{agentBody}')
+      .replaceAll('{systemBody}', vars.systemBody ?? '{systemBody}')
+      .replaceAll('{boardFile}', vars.boardFile ?? '{boardFile}'),
   );
 }
 

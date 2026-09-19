@@ -181,6 +181,16 @@ try {
   const pr3 = await promptOf(d3.index.messages[2].job);
   check('笔记原文:新会话整篇带,消息记下版本', pr1.includes('<vault-note role="profile"') && pr1.includes('<vault-note role="entry"') && /^随便\/二上\/数学\.md@[0-9a-f]{8}$/.test((d3.index.messages[0] as { notes?: Record<string, string> }).notes?.entry ?? ''), pr1);
   check('守则:新会话整篇带在笔记前面,续会话没改过 → 只写「未变」', pr1.includes('\n  rules: ".claude/skills/cotutor-tutor/SKILL.md"\n') && pr1.indexOf('<cotutor-rules') < pr1.indexOf('<vault-note') && !pr1.includes('name: cotutor-tutor') && !pr2.includes('<cotutor-rules') && pr2.includes('rules: ".claude/skills/cotutor-tutor/SKILL.md(未变,原文在本话题前面)"'), pr2);
+  check('板书写法:fake 运行时没有预载占位符 → 话题第一条注入 <cotutor-board>(在守则后、家长笔记前,不带 frontmatter),续会话「未变」', pr1.includes('\n  boardGuide: ".claude/skills/cotutor-board/SKILL.md"\n') && pr1.indexOf('<cotutor-rules path=') < pr1.indexOf('<cotutor-board path=') && pr1.indexOf('<cotutor-board path=') > 0 && pr1.indexOf('<cotutor-board path=') < pr1.indexOf('<vault-note role=') && pr1.includes('# 板书怎么写') && !pr1.includes('disable-model-invocation') && !pr2.includes('<cotutor-board path=') && pr2.includes('boardGuide: ".claude/skills/cotutor-board/SKILL.md(未变,原文在本话题前面)"'), JSON.stringify({ line: pr1.split('\n').filter((l) => l.includes('boardGuide')), tag1: pr1.indexOf('<cotutor-board'), rules1: pr1.indexOf('<cotutor-rules'), note1: pr1.indexOf('<vault-note'), title: pr1.includes('# 板书怎么写'), fm: pr1.includes('disable-model-invocation'), tag2: pr2.includes('<cotutor-board'), line2: pr2.split('\n').filter((l) => l.includes('boardGuide')) }));
+  {
+    // 换语文老师跑:数学老师这一天的消息序号后面的断言写死了,不往里插
+    const rr = await post('chinese-tutor', { text: '回读板书', from: 'parent' });
+    await wait('chinese-tutor');
+    const rrDay = (await day('chinese-tutor', '2026-09-08')).json as Day;
+    const rrMsg = rrDay.index.messages.find((m) => m.job === (rr.json as { job: string }).job) as { warnings?: string[] } | undefined;
+    const calm = d3.index.messages[0] as { warnings?: string[] };
+    check('回读检查:板书写法已递到手里、老师还用 Skill 去读 → 这轮挂提醒;没读的轮次不挂', rr.status === 202 && (rrMsg?.warnings ?? []).some((w) => w.includes('板书写法已经递给老师了') && w.includes('Skill cotutor-board')) && !(calm.warnings ?? []).some((w) => w.includes('板书写法')), JSON.stringify({ rr: rrMsg?.warnings, calm: calm.warnings }));
+  }
   check('笔记原文:续会话没改过 → 只写「未变」', !pr2.includes('<vault-note') && pr2.includes('entry: "随便/二上/数学.md(未变,原文在本话题前面)"') && pr2.includes('profile: "档案.md(未变'), pr2);
   check('笔记原文:话题里家长改了入口文件 → 再带一次新的,档案仍未变', pr3.includes('<vault-note role="entry"') && pr3.includes('会竖式了') && !pr3.includes('<vault-note role="profile"') && pr3.includes('profile: "档案.md(未变'), pr3);
   check('三轮同一会话,费用累计', d3.index.messages.length === 3 && d3.index.session?.id === d1.index.session?.id && d3.index.costUsd === 0.15, JSON.stringify(d3.index));

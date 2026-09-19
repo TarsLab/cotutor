@@ -82,4 +82,12 @@ vault(家长面,**一个孩子一个 vault**,如 ray-vault,自己是 git 仓;文
 7. 删掉规划老师,周计划由家长写;跨老师只能走 vault 文件(2026-09-17)。
 8. 有脸的老师共同的段落挪进机器技能 cotutor-tutor,应用在话题第一条注入上下文包;老师文件只留人设与学科(2026-09-18)。代价:改过老师文件的老 workspace 会同时有旧正文和守则,内容重复但不冲突,家长想清爽就 `cotutor upgrade --force <老师>`。
 9. 朗读老师改成英语老师,键 `reading-tutor` → `english-tutor`(2026-09-18)。键是数据的钥匙(会话 cwd、对话目录、记忆笔记的 `agent:`、首页的 tutor 卡),老 workspace 由 `cotutor upgrade --config` 连设置带文件一起挪(`src/cli/rename.ts` 的改名表);要停服务,当天没聊完的旧话题续不上。
-10. 板书技能预载进系统提示(2026-09-19):普通老师的 claude 模板加 `--append-system-prompt-file ../../.claude/skills/cotutor-board/SKILL.md`(run / resume 一致)。原来每个要讲解的话题老师都用 Skill 工具读一遍 cotutor-board,多一个模型来回,正文落在消息里、每个话题各写一遍缓存;追加进系统提示后它在「工具 → 系统」这段前缀里,同一位老师的各话题共享缓存。实测(claude 2.1.275,旗标相同的两组新会话):不追加时第二个新会话缓存读 23,120,追加后 26,886,多出的 3,766 就是整篇技能;frontmatter 的 `skills:` 对 `--agent` 主线程不生效。代价:随口问答的话题也带着这 3.8K(热的时候按缓存读计,约 0.1 倍价);qwen 没有对应旗标,守则里留了「不在才读」的退路;claude-scene 不带。老 workspace 由 `cotutor upgrade --config` 补旗标。
+10. 板书技能预载进系统提示(2026-09-19;递法当天由第 11 条改写):普通老师的 claude 模板加 `--append-system-prompt-file`(run / resume 都带)。原来每个要讲解的话题老师都用 Skill 工具读一遍 cotutor-board,多一个模型来回,正文落在消息里、每个话题各写一遍缓存;追加进系统提示后它在「工具 → 系统」这段前缀里,同一位老师的各话题共享缓存。实测(claude 2.1.275,旗标相同的两组新会话):不追加时第二个新会话缓存读 23,120,追加后 26,886,多出的 3,766 就是整篇技能;frontmatter 的 `skills:` 对 `--agent` 主线程不生效。代价:随口问答的话题也带着这 3.8K(热的时候按缓存读计,约 0.1 倍价);qwen 没有对应旗标,守则里留了「不在才读」的退路;claude-scene 不带。老 workspace 由 `cotutor upgrade --config` 补旗标。
+11. 板书写法由应用递给老师,递法按运行时分,老师不自查(2026-09-19)。起因:第 10 条上线当天实测,默认 effort 那次老师没再调 Skill,low / medium 两次照调——技能索引里 cotutor-board 的描述还写着「要出卡之前读一遍」,守则写的是「在系统提示里就照着写、不在才读」的条件句,三处文字打架,而且整套机制(Skill 工具、技能索引、追加系统提示的旗标)只有 claude 有。改成五条:
+    - **内容一份**:板书写法仍由 `src/cards/docs.ts` 生成;各种卡的 references 照旧按需读(读文件哪个 CLI 都会)。
+    - **递法看模板**:`{boardFile}`(SKILL.md 的绝对路径,claude 用 `--append-system-prompt-file`)或 `{systemBody}`(老师正文 + 板书写法,给只收一段系统提示文字的 CLI,出厂 qwen 模板用它)算预载;两个都没用的运行时(以后的 codex 之类),应用在话题第一条注入 `<cotutor-board>`,与守则同一套「未变」去重。头一版写死路径的模板也认作预载。
+    - **应用说事实**:上下文包多一行 `boardGuide:`——「已在你的系统提示里」,或路径(原文就在下面);守则改成无条件的「应用已经递给你了,不要再去读」。
+    - **拔掉竞争的触发点**:技能描述去掉「要出卡之前读一遍」;frontmatter 加 `disable-model-invocation: true`(只有 claude 认,别的 CLI 忽略;家长仍可手动调)。
+    - **回归检查**:每轮跑完查工具调用,板书写法递到了手里还用 Skill / Read / cat 去读 SKILL.md 的,这轮挂一条提醒;`cotutor doctor` 的 `runtime.<名>.board` 说清每个运行时走哪条递法、run 与 resume 是否一致。
+    顺带更正第 10 条里的一个理由:resume 的会话沿用它开始时记录的系统提示(官方文档 + 实测:resume 不带旗标,热缓存照样整段读中),run / resume 都带旗标不是为了「前缀对得上」,而是压缩之后系统提示按当时的旗标重建。所以改老师文件、改模板不会让当天旧话题的缓存失效,只是旧话题要到压缩或新话题才看到改动。
+    没验证的:本机 qwen 0.21.13 的帮助里已经看不到 `--append-system-prompt` / `--yolo` / `--max-wall-time`,模板可能过时,要 `doctor --live` 在 qwen 上真跑一次才知道;codex 本机没装,「走话题第一条」是按它没有系统提示旗标推的。

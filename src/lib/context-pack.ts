@@ -17,6 +17,7 @@ export function renderContextPack(pack: ContextPack): string {
   if (p.slot) out.push(`  slot: ${yamlScalar(p.slot)}`);
   if (p.focus?.card) out.push('  focus:', `    card: ${yamlScalar(p.focus.card)}`);
   if (p.rules) out.push(`  rules: ${yamlScalar(p.rules)}`);
+  if (p.boardGuide) out.push(`  boardGuide: ${yamlScalar(p.boardGuide)}`);
   if (p.semester) out.push(`  semester: ${yamlScalar(p.semester)}`);
   if (p.profile) out.push(`  profile: ${yamlScalar(p.profile)}`);
   if (p.entry) out.push(`  entry: ${yamlScalar(p.entry)}`);
@@ -71,8 +72,9 @@ export function renderContextPack(pack: ContextPack): string {
   }
   // 守则是出厂的,不是家长的笔记,换个标签;路径相对 workspace 根(家长笔记的相对 vault 根)
   for (const n of p.notes ?? []) {
-    const tag = n.role === 'rules' ? 'cotutor-rules' : 'vault-note';
-    out.push(n.role === 'rules' ? `<${tag} path=${JSON.stringify(n.path)}>` : `<${tag} role="${n.role}" path=${JSON.stringify(n.path)}>`, n.text.replace(/\s+$/, ''), `</${tag}>`);
+    const shipped = n.role === 'rules' || n.role === 'boardGuide';
+    const tag = n.role === 'rules' ? 'cotutor-rules' : n.role === 'boardGuide' ? 'cotutor-board' : 'vault-note';
+    out.push(shipped ? `<${tag} path=${JSON.stringify(n.path)}>` : `<${tag} role="${n.role}" path=${JSON.stringify(n.path)}>`, n.text.replace(/\s+$/, ''), `</${tag}>`);
   }
   return out.join('\n');
 }

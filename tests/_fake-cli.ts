@@ -65,11 +65,16 @@ if (fail) {
   emit({ type: 'result', subtype: 'error_max_turns', is_error: true, session_id: sid, num_turns: 3 });
 } else {
   const parts: string[] = [];
-  if (prompt.includes('段在前')) parts.push('## 记账\nthread: 0000-1\nname: 重讲');
-  if (prompt.includes('画场景')) parts.push('```scene\n2026-09-09-guilv\n我去把这道题画出来。\n题面:找规律填数 75、70、65、__\n讲法:每次少 5;用交错数列分行讲\n```\n\n等我画好。');
-  if (prompt.includes('放旧课包')) parts.push('```scene\n2026-09-09-guilv\n```\n\n我们再看一遍。');
+  // 触发词只看消息正文(最后一个 --- 之后):上下文包里现在可能带着整篇「板书怎么写」(<cotutor-board>),在整个提示词里找「板书」会条条命中
+  const cut = prompt.lastIndexOf('\n---\n');
+  const msg = cut >= 0 ? prompt.slice(cut + 5) : prompt;
+  // 回读检查:模拟老师不听劝、又用 Skill 工具读了一遍板书写法
+  if (msg.includes('回读板书')) emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 'toolu_skill1', name: 'Skill', input: { skill: 'cotutor-board' } }] } });
+  if (msg.includes('段在前')) parts.push('## 记账\nthread: 0000-1\nname: 重讲');
+  if (msg.includes('画场景')) parts.push('```scene\n2026-09-09-guilv\n我去把这道题画出来。\n题面:找规律填数 75、70、65、__\n讲法:每次少 5;用交错数列分行讲\n```\n\n等我画好。');
+  if (msg.includes('放旧课包')) parts.push('```scene\n2026-09-09-guilv\n```\n\n我们再看一遍。');
   if (prompt.startsWith('cotutor:') && /\n---\n场景作业\(/.test(prompt)) parts.push('课包 2026-09-09-guilv 做好了,6 步');
-  if (prompt.includes('板书')) parts.push('```text\n# 三角形\n拼一拼\n```\n\n先看[三角形]。\n\n```choice\n三角形有几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n三角形有几个角?' + (prompt.includes('坏卡') ? '\n\n```choice\n没选项\n```' : '') + (prompt.includes('点读') ? '\n\n```read\napple 苹果\nbanana 香蕉\n```\n\n点一下听一下。' : '') + (prompt.includes('图片') ? '\n\n```image\nvault/pic.png\n看这张图\n```' : ''));
+  if (msg.includes('板书')) parts.push('```text\n# 三角形\n拼一拼\n```\n\n先看[三角形]。\n\n```choice\n三角形有几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n三角形有几个角?' + (msg.includes('坏卡') ? '\n\n```choice\n没选项\n```' : '') + (msg.includes('点读') ? '\n\n```read\napple 苹果\nbanana 香蕉\n```\n\n点一下听一下。' : '') + (msg.includes('图片') ? '\n\n```image\nvault/pic.png\n看这张图\n```' : ''));
   // 作业照片(R5):上下文包有 photos: 段就「看图」——回显看到了哪张,板书 image 卡引用原图、canvas 卡照片做底
   const photosAt = prompt.indexOf('\n  photos:\n');
   if (photosAt >= 0) {
@@ -96,13 +101,13 @@ if (fail) {
     parts.push(`看到卡:${seen.join(' | ')}`);
   }
   parts.push(`${session ? '接着说:' : '第一次说:'}${lastLine}`);
-  if (prompt.includes('家长段')) parts.push('## 家长\n他其实会了。');
+  if (msg.includes('家长段')) parts.push('## 家长\n他其实会了。');
   // 记账后整理记忆(runner.tidyMemory 发的):改一条、删一条(家长手写的)、加一条、再删一条找不到的
-  if (prompt.includes('把你的记忆整理一遍')) parts.push('## 记忆\n- 改:凑十他懂 → 凑十熟练了\n- 删:家长写的别出选择题\n- 整理时新记的\n- 删:没有这句话');
-  if (prompt.includes('记住它')) parts.push('## 记忆\n- 讲角用手指比划他马上懂\n- 家长说别出选择题\n- 第三条会被丢掉');
+  if (msg.includes('把你的记忆整理一遍')) parts.push('## 记忆\n- 改:凑十他懂 → 凑十熟练了\n- 删:家长写的别出选择题\n- 整理时新记的\n- 删:没有这句话');
+  if (msg.includes('记住它')) parts.push('## 记忆\n- 讲角用手指比划他马上懂\n- 家长说别出选择题\n- 第三条会被丢掉');
   // 记账任务(runner.bookkeep 发的):回一段固定形状的「## 记账」;prompt 里有「记账坏」就少写 name(应用该报 warning、日记不写)
   const bk = /给刚才这个话题记账\(话题 (\S+?)[,,]/.exec(prompt);
-  if (bk) parts.push(prompt.includes('记账坏') ? `## 记账\n- thread: ${bk[1]}\n  summary: 没名字` : `## 记账\n- thread: ${bk[1]}\n  name: 三角形的角\n  textbook: 人教数学一下#1 认识图形(二)\n  summary: 讲了三角形有三个角,孩子一开始说四个。\n  steps: 看图 → 数角 → 选一选\n  observations:\n    - 角和边会混`);
+  if (bk) parts.push(msg.includes('记账坏') ? `## 记账\n- thread: ${bk[1]}\n  summary: 没名字` : `## 记账\n- thread: ${bk[1]}\n  name: 三角形的角\n  textbook: 人教数学一下#1 认识图形(二)\n  summary: 讲了三角形有三个角,孩子一开始说四个。\n  steps: 看图 → 数角 → 选一选\n  observations:\n    - 角和边会混`);
   const result = parts.join('\n\n');
   if (stream) {
     const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));

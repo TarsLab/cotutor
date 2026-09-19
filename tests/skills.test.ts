@@ -62,14 +62,15 @@ export function parseFrontmatter(md: string): Frontmatter {
   return { keys };
 }
 
-const ALLOWED = new Set(['name', 'description']);
+// disable-model-invocation 只有 claude 认(不让模型主动用 Skill 工具调这篇),别的 CLI 忽略,无害;cotutor-board 由应用递给老师,用它拔掉「再读一遍」的触发点
+const ALLOWED = new Set(['name', 'description', 'disable-model-invocation']);
 const INLINE = /`[^`\n]*`/g;
 
 export function lintSkill(md: string, dirName: string): string[] {
   const problems: string[] = [];
   const fm = parseFrontmatter(md);
   if (fm.error) problems.push(`frontmatter:${fm.error}`);
-  for (const k of Object.keys(fm.keys)) if (!ALLOWED.has(k)) problems.push(`frontmatter 多了键 ${k}(两 CLI 公共子集只有 name / description)`);
+  for (const k of Object.keys(fm.keys)) if (!ALLOWED.has(k)) problems.push(`frontmatter 多了键 ${k}(两 CLI 公共子集只有 name / description,外加 claude 专用的 disable-model-invocation)`);
   if (!fm.keys.name) problems.push('缺 name');
   else if (fm.keys.name !== dirName) problems.push(`name(${fm.keys.name})不等于目录名(${dirName})`);
   if (!fm.keys.description) problems.push('缺 description');

@@ -164,6 +164,9 @@ const PAGE = `<!doctype html>
   #hold { position:absolute; left:0; right:0; bottom:0; height:300px; background:linear-gradient(180deg,#3b82e800 0%,#3b82e8cc 45%,#2f6fd6 100%); display:none; flex-direction:column; align-items:center; justify-content:flex-end; gap:22px; padding-bottom:calc(env(safe-area-inset-bottom) + 70px); color:#fff; pointer-events:none; z-index:20; }
   #hold.on { display:flex; }
   #hold .w { display:flex; align-items:center; gap:3px; height:28px; }
+  #hold.real .w i { animation:none; }
+  #hold.wait .w { opacity:.3; }
+  #hold.wait .w i { animation-play-state:paused; }
   #hold .w i { width:3px; border-radius:2px; background:#ffffffdd; animation:wave .8s ease-in-out infinite alternate; }
   @keyframes wave { from { transform:scaleY(.4); } to { transform:scaleY(1); } }
   #sheet { position:absolute; inset:0; display:none; z-index:30; }
@@ -333,9 +336,13 @@ __PHOTO_JS__
   };
   const api = async (method, path, body) => {
     const r = await fetch(path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
+    // 服务重起过(启动号变了)→ 记下,空下来自己重载(见 staleReload)
+    const boot = r.headers.get('x-cotutor-boot');
+    if (boot) { if (!bootId) bootId = boot; else if (boot !== bootId) stale = true; }
     if (!r.ok) { const e = new Error('http ' + r.status); e.status = r.status; throw e; }
     return r.json();
   };
+  let bootId = null, stale = false;
   const PALETTE = ['#e8743b', '#3b82e8', '#2fa36b', '#b45fd1', '#d9a520', '#e0508a'];
   const FIXED = { '语文': '#e0508a', '数学': '#3b82e8', '英语': '#2fa36b' };
   const color = (s) => { if (FIXED[s]) return FIXED[s]; let x = 0; for (const ch of s || '') x = (x * 31 + ch.codePointAt(0)) >>> 0; return PALETTE[x % PALETTE.length]; };
@@ -438,7 +445,7 @@ __PHOTO_JS__
   const openTutor = (t, intent) => {
     unlock();
     intent = intent || { kind: 'new' };
-    S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
+    S.tutor = t; micWarm(); S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null;
     $('#hist').classList.remove('on'); renderBar(); renderHeader();
@@ -1138,35 +1145,163 @@ __PHOTO_JS__
   // 中间那段:点 = 打字;按住 150ms = 说话(浏览器识别),松手发,上滑 60px 取消;没有识别就只有打字
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let press = null, rec = null, finalText = '';
-  /** 起一次浏览器识别:onText(到目前认出的整句),onEnd(停了);起不来 → null */
-  const listen = (onText, onEnd) => {
-    try {
-      const r = new SR(); r.lang = 'zh-CN'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
-      r.onresult = (ev) => { let s = ''; for (const x of ev.results) s += x[0].transcript; onText(s); };
-      r.onerror = () => {};
-      r.onend = onEnd;
-      r.start();
-      return r;
-    } catch { return null; }
+  // 麦克风常开(真机诊断 2026-09-19,/voice-test)。这台 iPad 上的三条事实:
+  // ① Safari 的识别每次自己开关话筒,常交来一路纯静音,一个字不出、一停就 aborted;页面自己先 getUserMedia 留一路,识别再起就有声(先麦克风、后识别)
+  // ② 麦克风关了再开,也常开到哑的 → 开了就不关(只有页面退到后台才放,那时系统本来也会掐);开完自检 600ms,纯 0 就拆掉重开,最多 3 回
+  // ③ 冷开要 1 秒多,这段时间说的字进不去 → 给过权限之后,进老师页就先开好(micWarm)
+  // 这一路只用来画音量条,不录、不出页面。每次开麦克风也记一行诊断(where: 'mic')
+  const mic = { stream: null, ac: null, an: null, buf: null, opening: null, ok: true };
+  const micLive = () => { const t = mic.stream && mic.stream.getAudioTracks()[0]; return Boolean(t && t.readyState === 'live' && !t.muted && mic.ok); };
+  const micDrop = () => { if (mic.stream) { for (const t of mic.stream.getTracks()) t.stop(); } if (mic.ac) { try { mic.ac.close(); } catch {} } mic.stream = mic.ac = mic.an = mic.buf = null; };
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  /** 这一路有没有声:600ms 里采样全是 0 = 哑的(安静也有底噪);没有分析器就当它有 */
+  const micProbe = async () => {
+    if (!mic.an || mic.ac.state !== 'running') return true; // 分析器没在跑(没有手势时会被挂起)读出来也全是 0,不能当哑的
+    const an = mic.an, buf = mic.buf, t1 = Date.now();
+    while (Date.now() - t1 < 600) {
+      an.getFloatTimeDomainData(buf);
+      for (let i = 0; i < buf.length; i++) if (buf[i] !== 0) return true;
+      await wait(50);
+    }
+    return false;
   };
+  const micOpenOnce = async () => {
+    const st = await new Promise((resolve, reject) => {
+      let late = false; const timer = setTimeout(() => { late = true; reject(new Error('timeout')); }, 6000);
+      navigator.mediaDevices.getUserMedia({ audio: true }).then((x) => { clearTimeout(timer); if (late) { for (const t of x.getTracks()) t.stop(); } else resolve(x); }, (e) => { clearTimeout(timer); reject(e); });
+    });
+    mic.stream = st;
+    try { localStorage.setItem('kid-mic-ok', '1'); } catch {}
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      mic.ac = new AC(); mic.an = mic.ac.createAnalyser(); mic.an.fftSize = 512; mic.buf = new Float32Array(512);
+      mic.ac.createMediaStreamSource(st).connect(mic.an);
+      if (mic.ac.state === 'suspended') await mic.ac.resume().catch(() => {});
+    } catch { mic.an = null; }
+  };
+  /** 要一路有声的麦克风:hot(本来就开着)/ open(新开的,自检过)/ dead(重开 3 回还是哑的)/ none(浏览器没有);同时只开一次 */
+  const micOpen = () => {
+    if (micLive()) return Promise.resolve('hot');
+    if (mic.opening) return mic.opening;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.resolve('none');
+    const t0 = Date.now(), ev = [], mark = (k, v) => ev.push(v === undefined ? [k, Date.now() - t0] : [k, Date.now() - t0, v]);
+    const job = (async () => {
+      for (let i = 0; i < 4; i++) {
+        micDrop(); if (i) { mark('retry', i); await wait(400 * i); }
+        await micOpenOnce(); mark('open');
+        mic.ok = await micProbe(); mark(mic.ok ? 'alive' : 'dead');
+        if (mic.ok) return 'open';
+      }
+      return 'dead';
+    })();
+    mic.opening = job;
+    const fin = (tail) => { if (mic.opening === job) mic.opening = null; if (tail) mark(tail[0], tail[1]); try { fetch('/api/kid/voice-diag', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ where: 'mic', ua: navigator.userAgent, ev }), keepalive: true }).catch(() => {}); } catch {} };
+    job.then(() => fin(null), (e) => fin(['fail', String(e && (e.name || e.message))]));
+    return job;
+  };
+  const micWarm = () => {
+    let ok = false; try { ok = localStorage.getItem('kid-mic-ok') === '1'; } catch {}
+    if (!ok || !SR || !S.tutor || S.readonly || document.hidden || micLive()) return;
+    micOpen().catch(() => {});
+  };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { if (!mic.opening) micDrop(); } else micWarm(); });
+  document.addEventListener('pointerdown', micWarm, true);
+  /** 起一次浏览器识别:onText(到目前认出的整句),onEnd(停了),onAudio(话筒真的开了),onLevel(这一帧的音量 0–1);没有识别 → null。
+   *  回来的是个把手(识别要等麦克风开了才起):live / diagMark / stop() / abort()(不回 onEnd) */
+  const listen = (onText, onEnd, where, onAudio, onLevel) => {
+    if (!SR) return null;
+    // 诊断:每次按住记一行事件码 + 距按下的毫秒(不记字、不记声音),停了发给 /api/kid/voice-diag;真机上出错是静默的,只有这份能说清哪一步断了
+    const t0 = Date.now(), ev = [], mark = (k, v) => ev.push(v === undefined ? [k, Date.now() - t0] : [k, Date.now() - t0, v]);
+    const diag = { where, standalone: Boolean(navigator.standalone), wasPlaying: !audioEl.paused, ua: navigator.userAgent, peak: -1, ev };
+    const report = () => { try { fetch('/api/kid/voice-diag', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(diag), keepalive: true }).catch(() => {}); } catch {} };
+    const hd = { live: { len: 0, lastAt: 0, done: false }, diagMark: mark, r: null };
+    let raf = 0, round = 0;
+    const close = () => { hd.live.done = true; cancelAnimationFrame(raf); report(); };
+    const done = () => { if (hd.live.done) return; mark('end', hd.live.len); close(); onEnd(); };
+    hd.stop = () => { if (hd.r) { try { hd.r.stop(); } catch {} } else done(); };
+    hd.abort = () => { if (hd.live.done) return; mark('abort()'); if (hd.r) { try { hd.r.onend = null; hd.r.abort(); } catch {} } close(); };
+    const meter = () => {
+      const t1 = Date.now(), an = mic.an, buf = mic.buf; let maxAbs = 0, checked = false;
+      const loop = () => {
+        if (hd.live.done || mic.an !== an) return;
+        an.getFloatTimeDomainData(buf);
+        let sum = 0; for (let i = 0; i < buf.length; i++) { const v = buf[i]; sum += v * v; if (v > maxAbs) maxAbs = v; else if (-v > maxAbs) maxAbs = -v; }
+        const rms = Math.min(1, Math.sqrt(sum / buf.length) * 4);
+        if (rms > diag.peak) diag.peak = rms;
+        if (onLevel) onLevel(rms);
+        // 按住 600ms 采样还是纯 0:开着的这一路半道哑了 → 识别和麦克风都拆掉重来(还没出字才重来,最多 2 回)
+        if (!checked && Date.now() - t1 > 600) {
+          checked = true; mark(maxAbs === 0 ? 'dead' : 'alive', mic.ac.state);
+          if (maxAbs === 0 && mic.ac.state === 'running' && !hd.live.len && round < 2) { round++; mark('retry', round); mic.ok = false; if (hd.r) { try { hd.r.onend = null; hd.r.abort(); } catch {} hd.r = null; } start(); return; }
+        }
+        raf = requestAnimationFrame(loop);
+      };
+      loop();
+    };
+    const start = () => micOpen().then((how) => mark('mic', how), (e) => mark('mic-fail', String(e && (e.name || e.message)))).then(() => {
+      if (hd.live.done) return;
+      try {
+        const r = new SR(); r.lang = 'zh-CN'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+        for (const k of ['start', 'audiostart', 'soundstart', 'speechstart', 'speechend', 'soundend', 'audioend', 'nomatch']) r.addEventListener(k, () => mark(k));
+        r.addEventListener('audiostart', () => { if (onAudio) onAudio(); });
+        r.onresult = (e) => { let s = ''; for (const x of e.results) s += x[0].transcript; hd.live.len = s.length; hd.live.lastAt = Date.now(); mark('result', s.length); onText(s); };
+        r.onerror = (e) => mark('error', String(e && e.error));
+        r.onend = done;
+        r.start(); mark('start()'); hd.r = r;
+        if (mic.an) meter();
+      } catch (e) { mark('throw', String(e && e.name)); done(); }
+    });
+    start();
+    return hd;
+  };
+  /** 松手后的收尾:不立刻 stop。iPad 上第一段字要按下 1 秒多才出来,字还没出就 stop,Safari 回 aborted、整句作废(真机诊断 2026-09-19);
+   *  等到「有字且 500ms 没再变」或满 2.5 秒再 stop,它自己先停了就不管 */
+  const settle = (r) => {
+    const t1 = Date.now();
+    if (!r.r) { r.stop(); return; } // 麦克风还没开就松手了:什么也没听到
+    const tick = () => {
+      if (r.live.done) return;
+      if ((r.live.len && Date.now() - r.live.lastAt > 500) || Date.now() - t1 > 2500) { try { r.diagMark('stop()'); r.stop(); } catch {} return; }
+      setTimeout(tick, 100);
+    };
+    tick();
+  };
+  // 按住时那行字:话筒还没开 → 等一下(这时说的话进不去);开了 → 松手发送;松手后收尾 → 正在听清
+  const hold = { audio: false, tail: false };
+  const renderHold = () => {
+    $('#hold').classList.toggle('wait', !hold.audio || hold.tail);
+    $('#hold span').textContent = hold.tail ? '正在听清…' : press && press.cancelled ? '松手取消' : hold.audio ? '松手发送,上移取消' : '等一下…';
+  };
+  let phTimer = 0;
+  // 真音量:25 根条往左滚;没有麦克风那一路(老浏览器、没授权)就还是原来的假波形
+  const holdBars = [...document.querySelectorAll('#hold .w i')], holdLv = new Array(25).fill(0);
+  const holdLevel = (v) => { $('#hold').classList.add('real'); holdLv.shift(); holdLv.push(v); for (let i = 0; i < 25; i++) holdBars[i].style.height = Math.round(4 + holdLv[i] * 24) + 'px'; };
   const startRec = () => {
-    finalText = '';
-    rec = listen((t) => { finalText = t; }, () => { const cancelled = press && press.cancelled; const t = finalText; rec = null; if (!cancelled && t.trim()) send(t); });
+    finalText = ''; hold.audio = false; hold.tail = false; renderHold();
+    rec = listen((t) => { finalText = t; }, () => {
+      const t = finalText; rec = null; hold.tail = false;
+      setBar(barNext(S.bar, 'holdEnd'));
+      if (t.trim()) send(t);
+      else { $('#ph').textContent = '没听清,再按住说一次'; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = '发消息或按住说话…'; }, 2500); }
+    }, 'bar', () => { hold.audio = true; renderHold(); }, holdLevel);
+    if (!rec) setBar(barNext(S.bar, 'holdEnd'));
   };
   mid.addEventListener('pointerdown', (e) => {
     if (S.bar === 'typing') return;
     e.preventDefault(); unlock();
+    if (rec) return; // 上一句还在收尾
     press = { y: e.clientY, cancelled: false, held: false, timer: setTimeout(() => { if (!press || !SR) return; press.held = true; setBar(barNext(S.bar, 'holdStart')); dispatch({ type: 'halt' }); startRec(); }, 150) };
     try { mid.setPointerCapture(e.pointerId); } catch {}
   });
-  mid.addEventListener('pointermove', (e) => { if (press && press.held) { const up = press.y - e.clientY > 60; if (up !== press.cancelled) { press.cancelled = up; $('#hold span').textContent = up ? '松手取消' : '松手发送,上移取消'; } } });
+  mid.addEventListener('pointermove', (e) => { if (press && press.held) { const up = press.y - e.clientY > 60; if (up !== press.cancelled) { press.cancelled = up; renderHold(); } } });
   const release = () => {
     if (!press) return;
     clearTimeout(press.timer);
-    if (press.held) { setBar(barNext(S.bar, press.cancelled ? 'holdCancel' : 'holdEnd')); if (rec) { try { rec.stop(); } catch {} } }
-    else setBar(barNext(S.bar, 'tap'));
     const p = press; press = null;
-    if (rec && p.cancelled) { const r = rec; rec = null; try { r.onend = null; r.abort(); } catch {} }
+    if (!p.held) { setBar(barNext(S.bar, 'tap')); return; }
+    if (p.cancelled || !rec) { setBar(barNext(S.bar, 'holdCancel')); if (rec) { const r = rec; rec = null; r.abort(); } return; }
+    // 松手发送:浮层留到识别停下(onEnd 里收),这段时间在收尾
+    hold.tail = true; renderHold(); settle(rec);
   };
   mid.addEventListener('pointerup', release);
   mid.addEventListener('pointercancel', release);
@@ -1332,12 +1467,12 @@ __PHOTO_JS__
   // 配一句话:按住说(认出的字替换原来的),点一下打字,× 清掉
   let psPress = null, psRec = null;
   sayEl.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('#ps-clear') || !psTyped.hidden || PS.busy) return;
+    if (e.target.closest('#ps-clear') || !psTyped.hidden || PS.busy || psRec) return;
     e.preventDefault(); unlock();
     psPress = { held: false, timer: setTimeout(() => {
       if (!psPress || !SR) return;
       psPress.held = true; sayEl.classList.add('rec');
-      psRec = listen((t) => { PS.text = t.trim(); psUi(); }, () => { psRec = null; sayEl.classList.remove('rec'); psUi(); });
+      psRec = listen((t) => { PS.text = t.trim(); psUi(); }, () => { psRec = null; sayEl.classList.remove('rec'); psUi(); }, 'photo');
       if (!psRec) sayEl.classList.remove('rec');
     }, 150) };
     try { sayEl.setPointerCapture(e.pointerId); } catch {}
@@ -1346,7 +1481,7 @@ __PHOTO_JS__
     if (!psPress) return;
     clearTimeout(psPress.timer);
     const held = psPress.held; psPress = null;
-    if (held) { if (psRec) { try { psRec.stop(); } catch {} } return; }
+    if (held) { if (psRec) settle(psRec); return; }
     psTyped.value = PS.text; psTyped.hidden = false; psUi(); psTyped.focus();
   };
   sayEl.addEventListener('pointerup', psRelease);
@@ -1406,7 +1541,8 @@ __PHOTO_JS__
 
   // ---- 启动与心跳:不通就头像灰,什么都不报 ----
   loadHome().then(() => {
-    const open = debug.get('tutor');
+    let resume = null; try { resume = sessionStorage.getItem('kid-resume'); sessionStorage.removeItem('kid-resume'); } catch {}
+    const open = debug.get('tutor') || resume;
     if (open && S.home && !PREVIEW) {
       const t = S.home.tutors.find((x) => x.name === open);
       if (t) {
@@ -1422,7 +1558,14 @@ __PHOTO_JS__
       }
     }
   });
-  setInterval(() => { if (S.tutor) { if (!S.pending) loadDay(true); } else loadHome(); }, PREVIEW ? 2000 : 5000);
+  /** 服务换了新代码:孩子手上没事时重载,回到原来那位老师。正按着、在打字、在等老师、老师正在念、舞台或发照片屏开着,都先不动 */
+  const staleReload = () => {
+    if (!stale || PREVIEW || document.hidden) return;
+    if (press || rec || psRec || S.pending || S.stage || S.bar !== 'idle' || S.state.status === 'playing' || psEl.classList.contains('on')) return;
+    try { if (S.tutor && !S.readonly) sessionStorage.setItem('kid-resume', S.tutor.name); } catch {}
+    location.reload();
+  };
+  setInterval(() => { staleReload(); if (S.tutor) { if (!S.pending) loadDay(true); } else loadHome(); }, PREVIEW ? 2000 : 5000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) (S.tutor ? loadDay(true) : loadHome()); });
 })();
 </script>

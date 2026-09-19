@@ -6,7 +6,7 @@
  */
 import { createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, stat } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
@@ -23,6 +23,7 @@ import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { kidPage } from './kid-page.ts';
 import { checkHome, historyFile, homeStats, kidHomeView, messageVia, publishHome, publishedIssues, readDraft, resolveVia } from './home.ts';
 import { PARENT_PAGE } from './parent-page.ts';
+import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
 import { IndexError, capturePathOk, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardImage, writeCardState } from './store.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets } from '../cards/index.ts';
@@ -315,7 +316,15 @@ export async function route(method: string, path: string, ctx: AppContext, body?
 
     // ---- 孩子端:过滤在服务端做,永远不带工具 / 错误 / 评判 ----
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: await kidHome(ctx, ctx.now()) };
-    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|\d{4}-\d{2}-\d{2})$/.exec(p);
+    // 按住说话的诊断:识别全在浏览器里、出错静默,真机上哪一步断了只有它自己知道;只收事件码与毫秒,不收字也不收声音
+    if (p === '/api/kid/voice-diag' && method === 'POST') {
+      if (!isObj(body) || JSON.stringify(body).length > 4000) return { status: 400, json: { error: 'bad_request' } };
+      const row = { at: ctx.now().toISOString(), ...body };
+      await mkdir(join(ws.root, '.cotutor'), { recursive: true });
+      await appendFile(join(ws.root, '.cotutor', 'voice-diag.jsonl'), `${JSON.stringify(row)}\n`).catch(() => {});
+      return { status: 200, json: { ok: true } };
+    }
+    const kid =/^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (kid) {
       const [, tutor, tail] = kid;
       const t = ws.config.tutors[tutor];
@@ -606,6 +615,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
     if (p === '/parent') return { status: 200, html: PARENT_PAGE };
+    // 按住说话的试验页(真机上比策略用;不在孩子端与家长端的入口里)
+    if (p === '/voice-test') return { status: 200, html: VOICE_TEST_PAGE };
     // 主屏幕(iPad「添加到主屏幕」):清单与图标都按标题现生成,没有静态资源
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(ws.config.title), contentType: 'application/manifest+json; charset=utf-8' };
     const icon = /^\/icon-(\d{2,4})\.png$/.exec(p);
@@ -645,6 +656,9 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
+/** 这个进程的启动号:每个 JSON 响应都带(x-cotutor-boot)。页面轮询时见它变了 = 服务重起过(多半是换了新代码),空下来就自己重载——iPad 上下拉刷新常拉不到位 */
+const BOOT = Date.now().toString(36);
+
 export function createHandler(ctx: AppContext): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {
     void (async () => {
@@ -666,7 +680,7 @@ export function createHandler(ctx: AppContext): (req: IncomingMessage, res: Serv
         res.writeHead(r.status, { 'content-type': r.contentType ?? 'text/html; charset=utf-8', 'cache-control': 'no-store' });
         res.end(r.html);
       } else {
-        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': r.cacheControl ?? 'no-store' });
+        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': r.cacheControl ?? 'no-store', 'x-cotutor-boot': BOOT });
         res.end(JSON.stringify(r.json ?? null));
       }
     })();

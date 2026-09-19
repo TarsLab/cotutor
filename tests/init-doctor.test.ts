@@ -114,6 +114,12 @@ try {
   check('claude 模板带 --include-partial-messages(流式),qwen 没有这个开关', tpl.runtimes.claude.run.includes('--include-partial-messages') && tpl.runtimes.claude.resume.includes('--include-partial-messages') && !tpl.runtimes.qwen.run.includes('--include-partial-messages'));
   const tplS = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: Record<string, { run: string[] }> };
   check('普通老师的 claude 模板禁掉 Agent(不派子代理);claude-scene 不禁(scene-maker 要派检验)', tplS.runtimes.claude.run.join(' ').includes('--disallowedTools Agent') && !tplS.runtimes['claude-scene'].run.includes('--disallowedTools'));
+  {
+    const { BOARD_SKILL_FROM_CWD } = await import('../src/cli/skeleton.ts');
+    const want = `--append-system-prompt-file ${BOARD_SKILL_FROM_CWD}`;
+    const c = tplS.runtimes.claude as { run: string[]; resume?: string[] };
+    check('普通老师的 claude 模板把板书技能追加进系统提示(run / resume 一致,缓存前缀才对得上);claude-scene 不带(画图老师不写板书)', c.run.join(' ').includes(want) && (c.resume ?? []).join(' ').includes(want) && !tplS.runtimes['claude-scene'].run.includes('--append-system-prompt-file'));
+  }
   const tplR = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: Record<string, string | { run: string[]; resume: string[] }> };
   const claudeOnes = Object.entries(tplR.runtimes).filter((e): e is [string, { run: string[]; resume: string[] }] => typeof e[1] !== 'string' && e[1].run[0] === 'claude');
   const fast = tplR.runtimes['claude-fast'] as { run: string[] };

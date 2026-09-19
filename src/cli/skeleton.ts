@@ -15,6 +15,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 
 export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'scenes', 'bundles', 'snaps'] as const;
 export const LEDGER_FILES = ['ledger/artifacts.jsonl'] as const;
+/** 板书技能相对老师会话 cwd(agents/<name>/)的路径:claude 模板用它把技能正文追加进系统提示;与 cotutor-tutor 守则里写给老师的是同一条 */
+export const BOARD_SKILL_FROM_CWD = '../../.claude/skills/cotutor-board/SKILL.md';
 
 /** 本包自带的老师文件目录(仓库检出与 npm 安装都在包根 agents/) */
 export const PACKAGE_AGENTS_DIR = fileURLToPath(new URL('../../agents/', import.meta.url));
@@ -142,9 +144,11 @@ export function configTemplate(input: ConfigTemplateInput): string {
       // --setting-sources project(2026-09-15):老师只读 workspace 的 .claude/,~/.claude 的技能(obsidian-cli 之类)/ hooks / additionalDirectories / 插件都不进老师会话;
       // 代价是 ~/.claude/settings.json 的 env(代理)也不进,serve 要从有代理的 shell 起,doctor env.userSettings 点名
       // 普通老师不许派子代理(--disallowedTools Agent):claude 会把 .claude/agents/ 里的老师文件当可派的子代理,老师自己去叫 scene-maker 就把预算烧在自己这轮里;画图作业由场景卡起
+      // 板书技能预载进系统提示(--append-system-prompt-file):老师每个要讲解的话题都得读 cotutor-board,走 Skill 工具是多一个模型来回、正文落在消息里每个话题重写一遍缓存;
+      // 追加到系统提示后它在「工具 → 系统」这段前缀里,同一位老师的各话题共享缓存。frontmatter 的 skills: 对 --agent 主线程不生效(claude 2.1.275 实测)。run / resume 必须一致,否则 resume 的前缀对不上
       claude: {
-        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--disallowedTools', 'Agent', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
-        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--disallowedTools', 'Agent', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
+        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--disallowedTools', 'Agent', '--append-system-prompt-file', BOARD_SKILL_FROM_CWD, '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
+        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--disallowedTools', 'Agent', '--append-system-prompt-file', BOARD_SKILL_FROM_CWD, '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
       },
       qwen: {
         run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],

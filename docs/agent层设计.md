@@ -82,3 +82,4 @@ vault(家长面,**一个孩子一个 vault**,如 ray-vault,自己是 git 仓;文
 7. 删掉规划老师,周计划由家长写;跨老师只能走 vault 文件(2026-09-17)。
 8. 有脸的老师共同的段落挪进机器技能 cotutor-tutor,应用在话题第一条注入上下文包;老师文件只留人设与学科(2026-09-18)。代价:改过老师文件的老 workspace 会同时有旧正文和守则,内容重复但不冲突,家长想清爽就 `cotutor upgrade --force <老师>`。
 9. 朗读老师改成英语老师,键 `reading-tutor` → `english-tutor`(2026-09-18)。键是数据的钥匙(会话 cwd、对话目录、记忆笔记的 `agent:`、首页的 tutor 卡),老 workspace 由 `cotutor upgrade --config` 连设置带文件一起挪(`src/cli/rename.ts` 的改名表);要停服务,当天没聊完的旧话题续不上。
+10. 板书技能预载进系统提示(2026-09-19):普通老师的 claude 模板加 `--append-system-prompt-file ../../.claude/skills/cotutor-board/SKILL.md`(run / resume 一致)。原来每个要讲解的话题老师都用 Skill 工具读一遍 cotutor-board,多一个模型来回,正文落在消息里、每个话题各写一遍缓存;追加进系统提示后它在「工具 → 系统」这段前缀里,同一位老师的各话题共享缓存。实测(claude 2.1.275,旗标相同的两组新会话):不追加时第二个新会话缓存读 23,120,追加后 26,886,多出的 3,766 就是整篇技能;frontmatter 的 `skills:` 对 `--agent` 主线程不生效。代价:随口问答的话题也带着这 3.8K(热的时候按缓存读计,约 0.1 倍价);qwen 没有对应旗标,守则里留了「不在才读」的退路;claude-scene 不带。老 workspace 由 `cotutor upgrade --config` 补旗标。

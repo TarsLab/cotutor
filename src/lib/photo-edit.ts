@@ -38,8 +38,11 @@ export interface PhotoEdit {
   strokes: Stroke[];
 }
 
-/** 上传前长边缩到这么长 */
-export const PHOTO_MAX_SIDE = 1600;
+/**
+ * 上传前长边缩到这么长。2000 是 claude CLI 的 Read 工具给模型的上限(2.1.275 实测:2200 / 2560 的图到模型手里都是 2000×1500),再大白传;
+ * 原来的 1600 下一页六道题、每个手写数字只有二三十像素高,老师认不准就自己裁图放大再读(一轮 16 次模型来回)。2000×1500 约 3,900 视觉 token
+ */
+export const PHOTO_MAX_SIDE = 2000;
 /** 相册一次最多选几张(服务端上限 9 不变) */
 export const PHOTO_ALBUM_MAX = 4;
 /** 红笔:半透明,孩子圈的圈不把字盖死 */

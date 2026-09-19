@@ -65,6 +65,10 @@ export function renderContextPack(pack: ContextPack): string {
     out.push('  photos:');
     for (const c of p.photos) out.push(`    - ${yamlScalar(c)}`);
   }
+  if (p.photoFiles?.length) {
+    out.push('  photoFiles:');
+    for (const c of p.photoFiles) out.push(`    - ${yamlScalar(c)}`);
+  }
   // 守则是出厂的,不是家长的笔记,换个标签;路径相对 workspace 根(家长笔记的相对 vault 根)
   for (const n of p.notes ?? []) {
     const tag = n.role === 'rules' ? 'cotutor-rules' : 'vault-note';

@@ -46,4 +46,6 @@ check('focus.card 与 cards 段:一张卡一行,引号包住', withCards.include
 check('没有改过的卡就没有 cards 段', !buildContextPack({ from: 'kid', at: '2026-09-10T16:00', plan: [], recent: [], cards: [] }, 'x', { recent: 10, planLines: 10 }).includes('cards'));
 const withPhotos = buildContextPack({ from: 'kid', at: '2026-09-14T16:20', plan: [], recent: [], photos: ['captures/2026-09-14/1620-1.jpg', 'captures/2026-09-14/1620-2.jpg'] }, '(拍了 2 张)', { recent: 10, planLines: 10 });
 check('photos 段:一行一张(带斜杠所以引号包住),在 cards 后', withPhotos.endsWith('  photos:\n    - "captures/2026-09-14/1620-1.jpg"\n    - "captures/2026-09-14/1620-2.jpg"\n---\n(拍了 2 张)\n') && !buildContextPack({ from: 'kid', at: '2026-09-14T16:20', plan: [], recent: [], photos: [] }, 'x', { recent: 10, planLines: 10 }).includes('photos'), withPhotos);
+const withFiles = buildContextPack({ from: 'kid', at: '2026-09-14T16:20', plan: [], recent: [], photos: ['captures/2026-09-14/1620-1.jpg'], photoFiles: ['/ws/captures/2026-09-14/1620-1.jpg'] }, '(拍了一张)', { recent: 10, planLines: 10 });
+check('photoFiles 段:紧跟 photos,同一张的绝对路径;没有就不写', withFiles.endsWith('  photos:\n    - "captures/2026-09-14/1620-1.jpg"\n  photoFiles:\n    - "/ws/captures/2026-09-14/1620-1.jpg"\n---\n(拍了一张)\n') && !withPhotos.includes('photoFiles'), withFiles);
 done();

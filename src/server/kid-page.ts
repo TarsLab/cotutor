@@ -1356,7 +1356,7 @@ __PHOTO_JS__
   psTyped.addEventListener('blur', () => { PS.text = psTyped.value.trim(); psTyped.hidden = true; psUi(); });
   $('#ps-clear').addEventListener('click', () => { PS.text = ''; psUi(); });
   $('#ps-cancel').addEventListener('click', () => { if (!PS.busy) psClose(); });
-  // 发:逐张导出(转 → 裁 → 画 → 缩到 1600)上传拿 path,全拿到再发一条 {text, photos};传不上去屏不关、编辑留着,再点一次只传没传上的
+  // 发:逐张导出(转 → 裁 → 画 → 缩到长边 PHOTO_MAX_SIDE)上传拿 path,全拿到再发一条 {text, photos};传不上去屏不关、编辑留着,再点一次只传没传上的
   $('#ps-go').addEventListener('click', async () => {
     if (PS.busy || !PS.items.length) return;
     if (!psTyped.hidden) psTyped.blur();

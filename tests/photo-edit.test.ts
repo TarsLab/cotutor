@@ -2,8 +2,9 @@
  * 作业照片编辑的坐标(photo-edit.ts):拖框夹边、转 90° 框与笔画跟着走、转四次回原样、导出缩放。
  * 《作业照片设计.md》§六。
  */
-import { dragCrop, edited, exportPlan, newEdit, newStroke, region, rotMatrix, rotateEdit, rotatedSize, setCrop, type PhotoEdit, type Pt } from '../src/lib/photo-edit.ts';
+import { PHOTO_MAX_SIDE, dragCrop, edited, exportPlan, newEdit, newStroke, region, rotMatrix, rotateEdit, rotatedSize, setCrop, type PhotoEdit, type Pt } from '../src/lib/photo-edit.ts';
 import { check, done } from './_check.ts';
+import { PARENT_PAGE } from '../src/server/parent-page.ts';
 
 const eq = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 /** rotMatrix 作用在原图的点上 */
@@ -63,13 +64,14 @@ const apply = (e: PhotoEdit, p: Pt): Pt => {
 // ---- 导出 ----
 {
   const big = exportPlan(newEdit(4032, 3024));
-  check('长边缩到 1600', big.w === 1600 && big.h === 1200, JSON.stringify(big));
+  check('长边缩到 2000(CLI 的 Read 给模型的上限)', big.w === 2000 && big.h === 1500, JSON.stringify(big));
+  check('家长端页面里写死的长边与 PHOTO_MAX_SIDE 一致(页面脚本不能插值)', PARENT_PAGE.includes(`Math.min(1, ${PHOTO_MAX_SIDE} / Math.max(im.naturalWidth`));
   const small = exportPlan(newEdit(800, 600));
   check('小图不放大', small.w === 800 && small.h === 600 && small.scale === 1);
   const cropped = exportPlan(setCrop(newEdit(4032, 3024), { x: 1000, y: 1000, w: 1200, h: 600 }));
   check('裁一小块:按原分辨率取,不再缩', cropped.w === 1200 && cropped.h === 600 && cropped.src.x === 1000);
   const tall = exportPlan(rotateEdit(newEdit(4032, 3024)));
-  check('转过之后竖着导出', tall.w === 1200 && tall.h === 1600, JSON.stringify(tall));
+  check('转过之后竖着导出', tall.w === 1500 && tall.h === 2000, JSON.stringify(tall));
 }
 
 // ---- 线宽跟着看到的那块 ----

@@ -56,6 +56,8 @@ export const ContextPackSchema = z.object({
     .optional(),
   /** 这条消息带的作业照片(相对 workspace 根,一行一张;老师先 Read 再答;R5) */
   photos: z.array(z.string()).optional(),
+  /** photos 里同一批照片的绝对路径,顺序一一对应:Read 工具只认绝对路径,老师的 cwd 在 agents/<名>/,不给就得先 find 一轮(2026-09-18 真跑) */
+  photoFiles: z.array(z.string()).optional(),
   /** 家长的 Obsidian 仓库在哪(《obsidian仓库设计.md》§7;cotutor-vault 技能按它拼路径):root 绝对路径,其余角色相对 root(在 root 外面就是绝对路径) */
   vault: z
     .object({

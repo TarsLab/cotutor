@@ -73,8 +73,21 @@ if (fail) {
   // 作业照片(R5):上下文包有 photos: 段就「看图」——回显看到了哪张,板书 image 卡引用原图、canvas 卡照片做底
   const photosAt = prompt.indexOf('\n  photos:\n');
   if (photosAt >= 0) {
-    const ps = prompt.slice(photosAt + 11).split('\n').filter((l) => l.startsWith('    - ')).map((l) => { const v = l.slice(6); return v.startsWith('"') ? (JSON.parse(v) as string) : v; });
-    emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: `../../${ps[0]}` } }] } });
+    // 只取紧跟在键后面的那一段列表(后面还有 photoFiles: 的列表,别吞进来);Read 像真老师一样用 photoFiles 的绝对路径
+    const listAfter = (key: string): string[] => {
+      const at = prompt.indexOf(`\n  ${key}:\n`);
+      if (at < 0) return [];
+      const out: string[] = [];
+      for (const l of prompt.slice(at + key.length + 5).split('\n')) {
+        if (!l.startsWith('    - ')) break;
+        const v = l.slice(6);
+        out.push(v.startsWith('"') ? (JSON.parse(v) as string) : v);
+      }
+      return out;
+    };
+    const ps = listAfter('photos');
+    const files = listAfter('photoFiles');
+    emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: files[0] ?? `../../${ps[0]}` } }] } });
     parts.push(`看到照片:${ps.join(' | ')},是第 12 页第 3 题。\n\n\`\`\`image\n${ps[0]}\n你拍的作业\n\`\`\`\n\n\`\`\`canvas\n${ps[0]}\n把算错的那道圈出来。\n\`\`\`\n\n哪道算错了?`);
   }
   const cardsAt = prompt.indexOf('\n  cards:\n');

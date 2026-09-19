@@ -303,7 +303,7 @@ export class Runner {
       return { card: id, text: card ? describeCard(card, c.file.state) : JSON.stringify(c.file.state) };
     });
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
-    if (photos.length) pack.photos = photos;
+    if (photos.length) { pack.photos = photos; pack.photoFiles = photos.map((p) => join(ws.root, p)); }
     if (input.home) pack.home = input.home;
     const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
     if (continued) pack.continue = continued;

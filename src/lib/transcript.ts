@@ -84,13 +84,15 @@ interface Event {
 }
 
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n)}…` : s);
+/** 路径截头留尾:要紧的是文件名(作业照片的绝对路径在 workspace 深的机器上会超长) */
+const clipPath = (s: string, n: number): string => (s.length > n ? `…${s.slice(-n)}` : s);
 const blocks = (c: unknown): Block[] => (Array.isArray(c) ? (c as Block[]) : []);
 const blockText = (c: unknown): string => (typeof c === 'string' ? c : blocks(c).map((b) => b.text ?? '').join(''));
 
 export function toolSummary(name: string, input: Record<string, unknown> | undefined): string {
   for (const k of ['description', 'command', 'file_path', 'skill', 'pattern', 'prompt', 'url']) {
     const v = input?.[k];
-    if (typeof v === 'string' && v.trim()) return `${name} · ${clip(v.trim(), 120)}`;
+    if (typeof v === 'string' && v.trim()) return `${name} · ${k === 'file_path' ? clipPath(v.trim(), 120) : clip(v.trim(), 120)}`;
   }
   return name;
 }

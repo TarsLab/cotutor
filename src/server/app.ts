@@ -11,6 +11,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
+import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
 import { currentThread, lastJobOf, localDate, threads } from '../lib/conversation.ts';
 import { kidConversation, kidMessageCount, kidThreads, type KidMessage, type KidThread } from '../lib/kid-view.ts';
 import { DATE_RE, FocusSchema, HOME_ID_RE, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex } from '../schema/index.ts';
@@ -203,7 +204,7 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
 const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+(?:\.\d+|\.cards\/\d+\/\d+)?\.mp3$/;
 const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
 
-/** 作业照片一张最多这么大(解码后;页面先缩到长边 1600 的 jpeg,通常几百 KB) */
+/** 作业照片一张最多这么大(解码后;页面先缩到长边 PHOTO_MAX_SIDE 的 jpeg,通常几百 KB) */
 const PHOTO_MAX_BYTES = 3_000_000;
 /** 音色页的试听句;与 tutors.*.voice 里合法的 id 形状(voxtell 的是 qwen-audio-3.0-tts-plus-xxx) */
 const PREVIEW_TEXT = '你好呀,我是你的老师。今天我们一起来学一个新东西,准备好了吗?';
@@ -220,7 +221,7 @@ async function uploadPhoto(ws: Workspace, body: unknown, now: Date): Promise<Rou
   const m = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(body.image);
   if (!m) return { status: 400, json: { error: 'bad_request', message: '只认 data:image/jpeg 或 image/png 的 base64' } };
   const data = Buffer.from(m[2], 'base64');
-  if (!data.length || data.length > PHOTO_MAX_BYTES) return { status: 413, json: { error: 'too_large', message: `一张最多 ${PHOTO_MAX_BYTES / 1_000_000} MB,页面该先缩到长边 1600` } };
+  if (!data.length || data.length > PHOTO_MAX_BYTES) return { status: 413, json: { error: 'too_large', message: `一张最多 ${PHOTO_MAX_BYTES / 1_000_000} MB,页面该先缩到长边 ${PHOTO_MAX_SIDE}` } };
   const path = await writeCapture(ws, now, data, m[1] === 'png' ? 'png' : 'jpg');
   return { status: 201, json: { path } };
 }

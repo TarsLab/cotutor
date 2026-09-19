@@ -718,11 +718,11 @@ export const PARENT_PAGE = `<!doctype html>
     $('#msgs').replaceChildren(h('div', { class: 'stream' }, ...nodes));
   };
 
-  // 作业照片(R5):选了先缩到长边 1600 传上去(与孩子端同一条路),path 攒在 state.photos,发消息时一起带上
+  // 作业照片(R5):选了先缩到长边 2000 传上去(与孩子端同一条路;数字同 photo-edit.ts 的 PHOTO_MAX_SIDE,页面脚本里不能插值,photo-edit.test 盯着两边一致),path 攒在 state.photos,发消息时一起带上
   state.photos = [];
   const shrink = (file) => new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file); const im = new Image();
-    im.onload = () => { URL.revokeObjectURL(url); try { const k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight, 1)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); resolve(c.toDataURL('image/jpeg', 0.82)); } catch (e) { reject(e); } };
+    im.onload = () => { URL.revokeObjectURL(url); try { const k = Math.min(1, 2000 / Math.max(im.naturalWidth, im.naturalHeight, 1)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); resolve(c.toDataURL('image/jpeg', 0.82)); } catch (e) { reject(e); } };
     im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('图读不出')); };
     im.src = url;
   });

@@ -17,6 +17,12 @@ export const PolicySchema = z.object({
     planLines: z.number().int().nonnegative().describe('上下文包带本周计划里这位老师的前几行'),
     entryChars: z.number().int().positive().describe('档案与这位老师的入口文件(vault 里 cotutor: subject 那篇)原文各最多带多少字;超出截断并在上下文包里注明'),
   }),
+  /**
+   * 老师动笔前想多久(2026-09-20):填进运行时模板的 {effort}(claude 的 --effort)。孩子在等第一个字:9 月 18–19 日真跑,输出 token 的 60–95% 是思考,
+   * 用工具的轮次首拍就绪 38–50 秒;low 把思考从 1000–1900 token 压到几十、来回从 5–6 个变 2 个,首拍 11–16 秒。
+   * 不用 MAX_THINKING_TOKENS=0:同日真跑,思考归零后老师把盘算写进了讲稿(会念给孩子听)、字源开始编
+   */
+  effort: z.enum(['low', 'medium', 'high']).describe('老师动笔前想多久:low = 想得少、开口快(缺省,孩子等 10–15 秒);medium = 多想一会儿(算题的老师);high = 最慢最细。填进运行时模板的 {effort};模板里没有 {effort} 的运行时不受影响'),
   /** 板书开关:auto = 老师判断要不要出卡(缺省);off = 只说话不出卡 */
   board: z.enum(['auto', 'off']).describe('板书:auto = 讲题讲概念时老师出卡(缺省);off = 只说话不出卡'),
   /** 场景作业(scene-maker 做课包,$3–5 / 10–15 分钟一个):每天最多起几个;配在 scene-maker 身上或 policyDefaults */
@@ -35,6 +41,7 @@ export const PolicyPatchSchema = z.object({
   replyMaxChars: PolicySchema.shape.replyMaxChars.optional(),
   dailyMessages: PolicySchema.shape.dailyMessages.optional(),
   contextPack: z.object({ recent: z.number().int().nonnegative().optional(), planLines: z.number().int().nonnegative().optional(), entryChars: z.number().int().positive().optional() }).optional(),
+  effort: PolicySchema.shape.effort.optional(),
   board: PolicySchema.shape.board.optional(),
   scenes: z.object({ dailyMax: z.number().int().nonnegative().optional() }).optional(),
   post: z.object({ mode: z.enum(['auto', 'off']).optional(), runtime: z.string().min(1).optional(), timeoutMs: z.number().int().positive().optional() }).optional(),
@@ -46,6 +53,7 @@ export const POLICY_DEFAULTS: Policy = {
   replyMaxChars: 60,
   dailyMessages: 30,
   contextPack: { recent: 10, planLines: 10, entryChars: 4000 },
+  effort: 'low',
   board: 'auto',
   scenes: { dailyMax: 2 },
   post: { mode: 'auto', runtime: 'claude-fast', timeoutMs: 10000 },
@@ -76,7 +84,8 @@ export type Tutor = z.infer<typeof TutorSchema>;
  * {agent} 老师名 / {agentBody} 老师文件正文(给没有 --agent 的 CLI 塞系统提示)/ {prompt} 消息 / {session} 会话 id。
  * 板书写法的两种预载({boardFile} 板书技能 SKILL.md 的绝对路径,给能从文件追加系统提示的 CLI;{systemBody} 老师正文 + 板书写法,给只收一段系统提示文字的 CLI):
  * 模板里用了其中一个,应用就当板书写法已在系统提示里;都没用,应用在话题第一条消息里注入 <cotutor-board>(任何 CLI 都成立的退路)。
- * 政策旋钮(预算、轮数、模型)写进模板,换 agent 只换运行时。
+ * {effort} 这位老师的政策 effort(low / medium / high),claude 模板里是 `--effort {effort}`。
+ * 政策旋钮(预算、轮数、模型、工具白名单)写进模板,换 agent 只换运行时。
  */
 export const RuntimeSchema = z.object({ run: z.array(z.string()).min(1), resume: z.array(z.string()).min(1) });
 export type Runtime = z.infer<typeof RuntimeSchema>;
@@ -170,6 +179,7 @@ export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
     if (p.contextPack?.recent !== undefined) out.contextPack.recent = p.contextPack.recent;
     if (p.contextPack?.planLines !== undefined) out.contextPack.planLines = p.contextPack.planLines;
     if (p.contextPack?.entryChars !== undefined) out.contextPack.entryChars = p.contextPack.entryChars;
+    if (p.effort !== undefined) out.effort = p.effort;
     if (p.board !== undefined) out.board = p.board;
     if (p.scenes?.dailyMax !== undefined) out.scenes.dailyMax = p.scenes.dailyMax;
     if (p.post?.mode !== undefined) out.post.mode = p.post.mode;
@@ -206,10 +216,10 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
     }));
 }
 
-/** 运行时模板填占位符;{agentBody} / {systemBody} / {boardFile} 只在给了值时替换,否则原样留着(doctor 会报) */
+/** 运行时模板填占位符;{agentBody} / {systemBody} / {boardFile} 只在给了值时替换,否则原样留着(doctor 会报);{effort} 没给用出厂缺省(后期这类不认老师政策的调用) */
 export function fillRuntime(
   argv: readonly string[],
-  vars: { agent: string; prompt: string; session?: string; agentBody?: string; systemBody?: string; boardFile?: string },
+  vars: { agent: string; prompt: string; session?: string; agentBody?: string; systemBody?: string; boardFile?: string; effort?: Policy['effort'] },
 ): string[] {
   return argv.map((a) =>
     a
@@ -218,7 +228,8 @@ export function fillRuntime(
       .replaceAll('{session}', vars.session ?? '')
       .replaceAll('{agentBody}', vars.agentBody ?? '{agentBody}')
       .replaceAll('{systemBody}', vars.systemBody ?? '{systemBody}')
-      .replaceAll('{boardFile}', vars.boardFile ?? '{boardFile}'),
+      .replaceAll('{boardFile}', vars.boardFile ?? '{boardFile}')
+      .replaceAll('{effort}', vars.effort ?? POLICY_DEFAULTS.effort),
   );
 }
 

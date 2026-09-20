@@ -15,6 +15,8 @@ const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\
 {
   const fresh = planRun(config, { session: null }, vars);
   check('无会话 → run,缺省 claude', fresh.runtime === 'claude' && !fresh.resume && fresh.argv[0] === 'claude' && !fresh.argv.includes('--resume') && fresh.argv.includes(vars.prompt), fresh.argv.join(' '));
+  const eff = (argv: string[]): string => argv[argv.indexOf('--effort') + 1];
+  check('老师政策的 effort 进命令行(run 与 resume 都带);工具是白名单', eff(planRun(config, { session: null }, { ...vars, effort: 'medium' }).argv) === 'medium' && eff(planRun(config, { session: { id: 's-1', runtime: 'claude' } }, { ...vars, effort: 'high' }).argv) === 'high' && fresh.argv[fresh.argv.indexOf('--tools') + 1] === 'Bash,Read,Grep,Glob' && !fresh.argv.includes('--disallowedTools'));
   const again = planRun(config, { session: { id: 's-1', runtime: 'claude' } }, vars);
   check('同运行时有会话 → resume 带 id', again.resume && again.session === 's-1' && again.argv.includes('--resume') && again.argv[again.argv.indexOf('--resume') + 1] === 's-1');
   const switched = planRun(config, { session: { id: 's-1', runtime: 'claude' } }, { ...vars, systemBody: '正文\n\n板书写法', runtime: 'qwen' });

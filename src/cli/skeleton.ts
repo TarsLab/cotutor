@@ -13,6 +13,9 @@ import { parseAgentFile } from '../lib/agent-file.ts';
 import { CONFIG_SCHEMA_FILE, TTS_DEFAULT, cotutorJsonSchema } from '../schema/index.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 
+
+/** 普通老师的工具白名单(claude 的 --tools):Bash 查教材、裁作业照片;Read / Grep / Glob 读 vault 与技能文件 */
+export const TUTOR_TOOLS = 'Bash,Read,Grep,Glob';
 export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'scenes', 'bundles', 'snaps'] as const;
 export const LEDGER_FILES = ['ledger/artifacts.jsonl'] as const;
 
@@ -112,8 +115,9 @@ export interface ConfigTemplateInput {
   tutors: ShippedAgent[];
 }
 
-const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean }> = {
-  'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮' },
+const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean; policy?: { effort?: 'low' | 'medium' | 'high' } }> = {
+  // 数学多想一会儿:算错的代价大(别的老师用缺省 low)
+  'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮', policy: { effort: 'medium' } },
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚' },
   'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤' },
   'scene-maker': { display: '画图老师', avatar: '🎨', hidden: true, runtime: 'claude-scene' },
@@ -125,7 +129,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
   for (const a of input.tutors) {
     const p = TUTOR_DEFAULTS[a.name];
     tutors[a.name] = p
-      ? { display: p.display, ...(p.subject ? { subject: p.subject } : {}), avatar: p.avatar, enabled: p.enabled ?? true, ...(p.hidden ? { hidden: true } : {}), ...(p.runtime ? { runtime: p.runtime } : {}) }
+      ? { display: p.display, ...(p.subject ? { subject: p.subject } : {}), avatar: p.avatar, enabled: p.enabled ?? true, ...(p.hidden ? { hidden: true } : {}), ...(p.runtime ? { runtime: p.runtime } : {}), ...(p.policy ? { policy: p.policy } : {}) }
       : { display: a.name, enabled: true };
   }
   const cfg = {
@@ -141,13 +145,16 @@ export function configTemplate(input: ConfigTemplateInput): string {
       default: 'claude',
       // --setting-sources project(2026-09-15):老师只读 workspace 的 .claude/,~/.claude 的技能(obsidian-cli 之类)/ hooks / additionalDirectories / 插件都不进老师会话;
       // 代价是 ~/.claude/settings.json 的 env(代理)也不进,serve 要从有代理的 shell 起,doctor env.userSettings 点名
-      // 普通老师不许派子代理(--disallowedTools Agent):claude 会把 .claude/agents/ 里的老师文件当可派的子代理,老师自己去叫 scene-maker 就把预算烧在自己这轮里;画图作业由场景卡起
+      // 普通老师的工具是白名单(--tools,2026-09-20;之前是 --disallowedTools Agent 黑名单):只有查教材、读文件、裁作业照片用得上的那几个。
+      // 不在名单里的连工具定义都不发(黑名单只禁调用、定义照发)。由来:claude 会把 .claude/agents/ 里的老师文件当可派的子代理,老师自己去叫 scene-maker 就把预算烧在自己这轮里(画图作业由场景卡起);
+      // CLI 升版本还会带进新工具——2.1.275 真跑里老师去调了 Artifact、ToolSearch,每次白花一个来回。Skill 也不给:板书写法与守则由应用递,别的技能按路径 Read
+      // --effort {effort}:老师政策里的 effort(缺省 low),见 schema 的 PolicySchema.effort
       // 板书写法由应用递给老师,递法看模板(《agent层设计.md》拍板 11):{boardFile} = 板书技能 SKILL.md 的绝对路径,claude 用 --append-system-prompt-file 追加进系统提示
       // (落在「工具 → 系统」这段缓存前缀里,同一位老师的各话题共享);{systemBody} = 老师正文 + 板书写法,给只收一段系统提示文字的 CLI;
       // 两个都没用的运行时(以后的 codex 之类),应用在话题第一条注入 <cotutor-board>。frontmatter 的 skills: 对 --agent 主线程不生效(claude 2.1.275 实测)
       claude: {
-        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--disallowedTools', 'Agent', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
-        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--disallowedTools', 'Agent', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
+        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--tools', TUTOR_TOOLS, '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
+        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--tools', TUTOR_TOOLS, '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
       },
       qwen: {
         run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{systemBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],

@@ -112,8 +112,9 @@ try {
   const { configTemplate } = await import('../src/cli/skeleton.ts');
   const tpl = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: { claude: { run: string[]; resume: string[] }; qwen: { run: string[] } } };
   check('claude 模板带 --include-partial-messages(流式),qwen 没有这个开关', tpl.runtimes.claude.run.includes('--include-partial-messages') && tpl.runtimes.claude.resume.includes('--include-partial-messages') && !tpl.runtimes.qwen.run.includes('--include-partial-messages'));
-  const tplS = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: Record<string, { run: string[] }> };
-  check('普通老师的 claude 模板禁掉 Agent(不派子代理);claude-scene 不禁(scene-maker 要派检验)', tplS.runtimes.claude.run.join(' ').includes('--disallowedTools Agent') && !tplS.runtimes['claude-scene'].run.includes('--disallowedTools'));
+  const tplS = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [{ name: 'math-tutor' }, { name: 'chinese-tutor' }] as never })) as { runtimes: Record<string, { run: string[]; resume: string[] }>; tutors: Record<string, { policy?: { effort?: string } }> };
+  check('普通老师的 claude 模板是工具白名单(--tools,没有 Agent / Skill / Artifact,不派子代理)+ --effort {effort};run 与 resume 一样;claude-scene 不限(scene-maker 要派检验)', (['run', 'resume'] as const).every((k) => tplS.runtimes.claude[k].join(' ').includes('--tools Bash,Read,Grep,Glob --effort {effort}')) && !tplS.runtimes.claude.run.includes('--disallowedTools') && !tplS.runtimes['claude-scene'].run.includes('--tools') && !tplS.runtimes['claude-scene'].run.includes('--effort'));
+  check('数学老师出厂多想一会儿(effort medium),别的老师用缺省 low', tplS.tutors['math-tutor'].policy?.effort === 'medium' && tplS.tutors['chinese-tutor'].policy === undefined);
   {
     const want = '--append-system-prompt-file {boardFile}';
     const c = tplS.runtimes.claude as { run: string[]; resume?: string[] };
@@ -151,7 +152,8 @@ try {
     delete old.runtimes['claude-scene'];
     delete old.runtimes['qwen-scene'];
     for (const k of ['run', 'resume'] as const) {
-      old.runtimes.claude[k] = (old.runtimes.claude[k] as string[]).filter((a: string, i: number, arr: string[]) => a !== '--disallowedTools' && a !== '--include-partial-messages' && !(a === 'Agent' && arr[i - 1] === '--disallowedTools'));
+      // 老 workspace 的样子:没有流式旗标;工具是黑名单(--disallowedTools Agent)、没有白名单与 --effort(2026-09-20 之前)
+      old.runtimes.claude[k] = (old.runtimes.claude[k] as string[]).flatMap((a: string, i: number, arr: string[]) => (a === '--include-partial-messages' || a === '--effort' || arr[i - 1] === '--effort' || arr[i - 1] === '--tools' ? [] : a === '--tools' ? ['--disallowedTools', 'Agent'] : [a]));
       old.runtimes.claude[k].push('--model', 'sonnet');
     }
     old.policyDefaults = { replyMaxChars: 40 };
@@ -182,7 +184,7 @@ try {
 
     const applied = await upgradeConfig(ws);
     const after = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
-    check('补上之后:新老师、新运行时、旗标都在', applied.applied && after.tutors['scene-maker'].runtime === 'claude-scene' && 'qwen-scene' in after.runtimes && (after.runtimes.claude.run as string[]).join(' ').includes('--disallowedTools Agent') && (after.runtimes.claude.resume as string[]).includes('--include-partial-messages'));
+    check('补上之后:新老师、新运行时、旗标都在', applied.applied && after.tutors['scene-maker'].runtime === 'claude-scene' && 'qwen-scene' in after.runtimes && (after.runtimes.claude.run as string[]).join(' ').includes('--tools Bash,Read,Grep,Glob --effort {effort}') && (after.runtimes.claude.run as string[]).join(' ').includes('--disallowedTools Agent') && (after.runtimes.claude.resume as string[]).join(' ').includes('--effort {effort}') && (after.runtimes.claude.resume as string[]).includes('--include-partial-messages'));
     check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['english-tutor'].enabled === false && (after.runtimes.claude.run as string[]).slice(-2).join(' ') === '--model sonnet' && after._note === '家长自己写的说明' && after.$schema === old.$schema);
     check('新老师的文件、.qwen 链、家跟着补上', existsSync(join(ws, '.claude', 'agents', 'scene-maker.md')) && lstatSync(join(ws, '.qwen', 'agents', 'scene-maker.md')).isSymbolicLink() && existsSync(join(ws, 'agents', 'scene-maker', '.gitkeep')) && applied.installed.length > 0);
 

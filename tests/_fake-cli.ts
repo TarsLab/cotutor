@@ -21,7 +21,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === '--fail') fail = true;
   else if (argv[i] === '--stream') stream = true;
   else if (argv[i] === '--output-format') outputFormat = argv[++i];
-  else if (argv[i] === '--model' || argv[i] === '--disallowedTools' || argv[i] === '--max-budget-usd' || argv[i] === '--setting-sources' || argv[i] === '--tools' || argv[i] === '--system-prompt' || argv[i] === '--append-system-prompt-file') i++;
+  else if (argv[i] === '--model' || argv[i] === '--disallowedTools' || argv[i] === '--max-budget-usd' || argv[i] === '--setting-sources' || argv[i] === '--tools' || argv[i] === '--effort' || argv[i] === '--system-prompt' || argv[i] === '--append-system-prompt-file') i++;
   else if (argv[i] === '--disable-slash-commands') continue;
   else rest.push(argv[i]);
 }

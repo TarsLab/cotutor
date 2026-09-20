@@ -943,8 +943,8 @@ export const PARENT_PAGE = `<!doctype html>
   };
 
   // ---- 老师团:一位一行,政策折叠,改过的才亮 ----
-  const POLICY_FIELDS = [['replyMaxChars', '每句字数上限', 'number'], ['dailyMessages', '每日消息上限', 'number'], ['board', '板书(auto = 老师判断;off = 只说话)', 'enum', ['auto', 'off']], ['scenes.dailyMax', '每天讲解动画上限', 'number'], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number'], ['contextPack.entryChars', '上下文包:档案 / 入口文件 / 记忆各带多少字', 'number']];
-  const SHORT = { replyMaxChars: '每句 ', dailyMessages: '每日 ', board: '板书 ', 'scenes.dailyMax': '动画 ', 'contextPack.recent': '观察 ', 'contextPack.planLines': '计划 ', 'contextPack.entryChars': '原文 ' };
+  const POLICY_FIELDS = [['replyMaxChars', '每句字数上限', 'number'], ['dailyMessages', '每日消息上限', 'number'], ['effort', '动笔前想多久(low = 开口快;medium = 多想一会儿,算题用;high = 最慢最细)', 'enum', ['low', 'medium', 'high']], ['board', '板书(auto = 老师判断;off = 只说话)', 'enum', ['auto', 'off']], ['scenes.dailyMax', '每天讲解动画上限', 'number'], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number'], ['contextPack.entryChars', '上下文包:档案 / 入口文件 / 记忆各带多少字', 'number']];
+  const SHORT = { replyMaxChars: '每句 ', dailyMessages: '每日 ', effort: '思考 ', board: '板书 ', 'scenes.dailyMax': '动画 ', 'contextPack.recent': '观察 ', 'contextPack.planLines': '计划 ', 'contextPack.entryChars': '原文 ' };
   const getPath = (o, p) => p.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
   const setPath = (o, p, v) => { const ks = p.split('.'); let cur = o; for (const k of ks.slice(0, -1)) cur = cur[k] = cur[k] || {}; cur[ks[ks.length - 1]] = v; };
 

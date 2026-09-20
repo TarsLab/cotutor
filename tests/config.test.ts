@@ -40,6 +40,11 @@ check('运行时 default 不存在 → 指南', !bad2.success && explainIssues(b
 
 const filled = fillRuntime(cfg.runtimes.claude.resume, { agent: 'math-tutor', prompt: 'hi', session: 's-1', boardFile: '/ws/.claude/skills/cotutor-board/SKILL.md' });
 check('占位填充', filled.includes('math-tutor') && filled.includes('s-1') && filled.includes('hi') && !filled.some((a) => a.includes('{')));
+// 思考深浅(2026-09-20):政策 effort 三层覆盖,填进模板的 {effort};模板里没有 {effort} 的运行时(qwen、claude-scene)不受影响
+const effortOf = (argv: string[]): string | undefined => argv[argv.indexOf('--effort') + 1];
+check('effort:出厂缺省 low,数学老师 medium;policyDefaults 与老师条目逐层盖', resolvePolicy(cfg, 'chinese-tutor').effort === 'low' && resolvePolicy(cfg, 'math-tutor').effort === 'medium' && resolvePolicy(CotutorConfigSchema.parse({ ...raw, policyDefaults: { effort: 'high' } }), 'chinese-tutor').effort === 'high' && resolvePolicy(CotutorConfigSchema.parse({ ...raw, policyDefaults: { effort: 'high' } }), 'math-tutor').effort === 'medium');
+check('effort:不认的档位过不了契约', !CotutorConfigSchema.safeParse({ ...raw, policyDefaults: { effort: 'max' } }).success);
+check('{effort} 填进 claude 模板;没给用出厂缺省;qwen 模板没有这个占位', effortOf(fillRuntime(cfg.runtimes.claude.run, { agent: 'x', prompt: 'p', effort: 'medium' })) === 'medium' && effortOf(fillRuntime(cfg.runtimes.claude.resume, { agent: 'x', prompt: 'p', session: 's' })) === 'low' && !cfg.runtimes.qwen.run.join(' ').includes('effort'));
 const q = fillRuntime(cfg.runtimes.qwen.run, { agent: 'x', prompt: 'p' });
 check('没给 systemBody / boardFile 就原样留着(doctor 会报)', q.includes('{systemBody}') && fillRuntime(cfg.runtimes.claude.run, { agent: 'x', prompt: 'p' }).includes('{boardFile}'));
 

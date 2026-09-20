@@ -338,7 +338,7 @@ export class Runner {
     const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
     if (continued) pack.continue = continued;
     const prompt = buildContextPack(pack, text, policy.contextPack);
-    const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: input.runtime ?? t.runtime });
+    const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: input.runtime ?? t.runtime, effort: policy.effort });
 
     const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);

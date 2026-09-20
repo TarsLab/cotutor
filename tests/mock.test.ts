@@ -87,6 +87,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   check('空消息 400;没这位老师 404;配音 404', (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400 && (await get('/api/kid/conversations/nobody/today')).status === 404 && (await get('/api/audio/math-tutor/x.mp3')).status === 404);
   const page = await get('/');
   check('页面:标题、按住说话、内联了板书逻辑、舞台、没有家长入口、没有「错误」', page.html?.includes('小明的老师们') === true && page.html?.includes('发消息或按住说话') === true && page.html?.includes('function subtitleFor(') === true && page.html?.includes('id="stage"') === true && page.html?.includes('交给老师') === true && !page.html?.includes('export ') && !page.html?.includes('/parent') && !page.html?.includes('错误'), String(page.html?.length));
+  check('舞台有遮罩:紧跟在舞台后面(靠 #stage.on ~ #st-dim 显示),点它走 closeStage', /id="st-act"[^\n]*<\/div><\/div>\s*<div id="st-dim"><\/div>/.test(page.html ?? '') && page.html?.includes("$('#st-dim').addEventListener('click', closeStage)") === true);
   check('内联的逻辑没有残留类型标注', !/function anchorMarks\(cards: /.test(page.html ?? ''));
   const html = page.html ?? '';
   const js = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'));
@@ -95,6 +96,11 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   check('内联脚本本身能解析(模板里的转义没把 JS 字符串写断)', parses);
   const css = await m.route('GET', '/kid/theme.css');
   check('mock 也给主题 css(包里的出厂 default)', css.status === 200 && css.html?.includes('.mk-marker') === true && (await m.route('GET', '/kid/theme.json')).status === 200);
+  // 主题里改定位 / 关触摸的裸类名(.pen { pointer-events:none } 是板书笔迹的)会打到页面任何同名元素上:页面自己挂的状态类不能与它们撞名(发照片屏圈画曾挂 pen,整屏不收触摸)
+  const bare = new Set([...(css.html ?? '').replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(?:^|})\s*([^{}]+)\{([^}]*)\}/g)].filter((x) => /pointer-events\s*:\s*none|position\s*:\s*(?:absolute|fixed)/.test(x[2])).flatMap((x) => x[1].split(',').map((t) => t.trim())).filter((t) => /^\.[\w-]+$/.test(t)).map((t) => t.slice(1)));
+  const toggled = [...js.matchAll(/classList\.(?:add|toggle|remove)\('([\w-]+)'/g)].map((x) => x[1]);
+  const clash = [...new Set(toggled.filter((c) => bare.has(c)))];
+  check('页面挂的状态类不与主题的裸类名撞(主题认得 .pen)', bare.has('pen') && toggled.length > 10 && clash.length === 0, clash.join());
   // 场景卡:数学老师第三节;课包样本在仓库里,下发时补快照(ready / steps / problem);舞台包与课包路由
   const md6 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   const sc = md6.messages.map((x) => x.section).find((x) => x && x.cards.some((c) => c.kind === 'scene'))!;

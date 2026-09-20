@@ -86,15 +86,35 @@ const PAGE = `<!doctype html>
   #tutor { position:fixed; inset:0; background:var(--paper); display:none; z-index:10; }
   #tutor.on { display:flex; }
   #main { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
-  #main header { display:flex; align-items:center; gap:12px; padding:calc(env(safe-area-inset-top) + 10px) 16px 10px; background:var(--card); border-bottom:1px solid var(--line); }
-  #main header .av { width:44px; height:44px; font-size:20px; }
-  .who { flex:1; display:flex; flex-direction:column; min-width:0; }
-  .who .nm { font-size:18px; font-weight:600; } .who .mo { font-size:13px; color:var(--dim); }
+  /* 没有顶栏:左上角老师头像(点了回首页,带个小箭头),右上角喇叭 + 更多;浮在板书上面、舞台遮罩(z 4)下面,舞台开了就被压暗盖住 */
+  .tb { position:absolute; top:calc(env(safe-area-inset-top) + 10px); z-index:3; display:flex; align-items:center; gap:10px; }
+  .tb.l { left:calc(env(safe-area-inset-left) + 12px); } .tb.r { right:calc(env(safe-area-inset-right) + 12px); }
+  #back { position:relative; padding:0; border-radius:50%; }
+  #back .av { width:48px; height:48px; font-size:22px; box-shadow:0 2px 10px #00000024; }
+  #back-ic { position:absolute; left:-4px; bottom:-4px; width:22px; height:22px; border-radius:50%; background:#fff; border:1px solid var(--line); color:var(--dim); display:grid; place-items:center; box-shadow:0 1px 3px #00000014; }
+  #back-ic svg { width:14px; height:14px; }
+  #c-mo { font-size:13px; color:var(--dim); background:#fffffff0; border:1px solid var(--line); border-radius:14px; padding:4px 12px; box-shadow:0 2px 10px #00000010; white-space:nowrap; }
+  #c-mo[hidden] { display:none; }
+  .tb .hb { width:44px; height:44px; border-radius:50%; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; }
+  #menu { position:absolute; inset:0; display:none; z-index:30; }
+  #menu.on { display:block; }
+  #menu .dimmer { position:absolute; inset:0; background:#00000073; }
+  #menu .panel { position:absolute; top:calc(env(safe-area-inset-top) + 62px); right:calc(env(safe-area-inset-right) + 12px); width:min(320px, calc(100% - 24px)); background:var(--card); border-radius:20px; padding:8px; display:flex; flex-direction:column; gap:4px; box-shadow:0 8px 30px #00000033; }
+  #menu .panel button { display:flex; align-items:center; gap:14px; padding:14px; border-radius:14px; text-align:left; width:100%; }
+  #menu .panel button:active { background:var(--paper); }
+  #menu .panel button[hidden] { display:none; }
+  #menu .panel button.dim { opacity:.3; pointer-events:none; }
+  #menu .ic { flex:0 0 auto; width:44px; height:44px; border-radius:50%; background:var(--paper); color:var(--dim); display:grid; place-items:center; }
+  #menu .tx { display:flex; flex-direction:column; gap:2px; min-width:0; }
+  #menu .tx b { font-size:17px; font-weight:600; color:var(--ink); } #menu .tx small { font-size:13px; color:var(--dim); }
   .hb { width:40px; height:40px; display:grid; place-items:center; color:var(--dim); }
   .hb.on { color:var(--accent); }
   .hb.dim { opacity:.3; pointer-events:none; }
   .hb[hidden] { display:none; }
   .blank { flex:1; grid-column:1 / -1; min-height:50vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; padding:40px 20px; color:var(--dim); }
+  .blank .av { width:96px; height:96px; font-size:44px; margin-bottom:4px; }
+  .blank .nm { font-size:26px; font-weight:700; color:var(--ink); }
+  .blank .mo { font-size:15px; margin-bottom:14px; }
   .blank b { font-size:22px; font-weight:600; color:var(--ink); }
   .blank small { font-size:15px; }
   #hist { position:absolute; inset:0; display:none; z-index:30; }
@@ -113,7 +133,10 @@ const PAGE = `<!doctype html>
   #back-today { width:100%; height:56px; border-radius:28px; background:#fff; border:1px solid var(--line); box-shadow:0 2px 10px #00000010; font-size:17px; font-weight:600; color:var(--ink); }
   #back-today[hidden] { display:none; }
   #wrap { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
-  #board { flex:1; min-height:0; overflow:auto; padding:14px 16px 24px; display:flex; flex-direction:column; gap:12px; -webkit-overflow-scrolling:touch; scroll-behavior:smooth; }
+  /* 舞台的遮罩:板书与顶栏压暗,点一下 = 点 ×;字幕行与输入条不盖(舞台开着孩子照样能说话) */
+  #st-dim { position:absolute; left:0; right:0; bottom:0; top:-100vh; z-index:4; background:#00000073; display:none; }
+  #stage.on ~ #st-dim { display:block; }
+  #board { flex:1; min-height:0; overflow:auto; padding:calc(env(safe-area-inset-top) + 68px) 16px 24px; display:flex; flex-direction:column; gap:12px; -webkit-overflow-scrolling:touch; scroll-behavior:smooth; }
   /* 字幕行 */
   .sh .ph { display:inline-block; height:34px; width:auto; max-width:120px; border-radius:6px; object-fit:cover; border:1px solid var(--line); background:#fff; vertical-align:middle; }
   #sub { display:flex; align-items:center; gap:12px; padding:8px 16px 4px; min-height:52px; }
@@ -183,7 +206,7 @@ const PAGE = `<!doctype html>
   #ps .view { position:relative; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:calc(env(safe-area-inset-top) + 12px) 16px 8px; }
   #ps .cv { position:relative; }
   #ps canvas { display:block; touch-action:none; }
-  #ps.pen canvas { cursor:crosshair; }
+  #ps.ps-drawing canvas { cursor:crosshair; }
   #ps-crop { position:absolute; inset:0; touch-action:none; }
   #ps-crop[hidden] { display:none; }
   #ps-crop .dim { position:absolute; background:#000000a0; pointer-events:none; }
@@ -239,8 +262,9 @@ const PAGE = `<!doctype html>
     #home h1 { font-size:22px; }
     #home .tutors { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; align-items:start; }
     #home .hcards { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
-    #main header { padding-left:32px; padding-right:32px; }
-    #board { width:100%; max-width:1040px; margin:0 auto; padding:16px 32px 24px; }
+    .tb.l { left:calc(env(safe-area-inset-left) + 20px); } .tb.r { right:calc(env(safe-area-inset-right) + 20px); }
+    #menu .panel { right:calc(env(safe-area-inset-right) + 20px); }
+    #board { width:100%; max-width:1040px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 68px) 32px 24px; }
     #sub, #bar { width:100%; max-width:1040px; margin:0 auto; padding-left:32px; padding-right:32px; }
   }
 </style>
@@ -253,17 +277,12 @@ const PAGE = `<!doctype html>
 <div id="toast"></div>
 <section id="tutor">
   <div id="main">
-    <header>
-      <button class="hb" id="back" type="button"></button>
-      <span class="av" id="c-av"></span>
-      <div class="who"><span class="nm" id="c-nm"></span><span class="mo" id="c-mo"></span></div>
-      <button class="hb" id="hist-btn" type="button" title="以前的"></button>
-      <button class="hb" id="new-btn" type="button" title="新话题" hidden></button>
-      <button class="hb on" id="spk" type="button"></button>
-    </header>
+    <div class="tb l"><button id="back" type="button" aria-label="回首页"><span class="av" id="c-av"></span><i id="back-ic"></i></button><span id="c-mo" hidden></span></div>
+    <div class="tb r"><button class="hb on" id="spk" type="button" aria-label="老师念不念"></button><button class="hb" id="more-btn" type="button" aria-label="更多"></button></div>
     <div id="wrap">
       <div id="board"></div>
       <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
+      <div id="st-dim"></div>
     </div>
     <div id="sub"><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
@@ -278,6 +297,10 @@ const PAGE = `<!doctype html>
     <div id="hold"><span>松手发送,上移取消</span><div class="w"></div></div>
   </div>
   <div id="hist"><div class="dimmer"></div><div class="panel"><div class="hd"><span>以前的</span><button class="hb" id="hist-x" type="button"></button></div><div class="ls"></div></div></div>
+  <div id="menu"><div class="dimmer"></div><div class="panel">
+    <button type="button" id="hist-btn"><span class="ic"></span><span class="tx"><b>以前的</b><small>看看以前聊过的话题</small></span></button>
+    <button type="button" id="new-btn" hidden><span class="ic"></span><span class="tx"><b>新话题</b><small>这个聊完了,换一个问</small></span></button>
+  </div></div>
   <div id="sheet"><div class="dimmer"></div><div class="panel"><div class="grab"></div><div class="opts">
     <label><span class="ic" id="ic-album"></span>相册<input type="file" accept="image/*" multiple></label>
     <label><span class="ic" id="ic-cam2"></span>拍照<input type="file" accept="image/*" capture="environment"></label>
@@ -329,6 +352,7 @@ __PHOTO_JS__
     close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
     closeSm: SVG('<path d="M7 7l10 10M17 7L7 17"></path>', 14, 2.8),
     check: SVG('<path d="M5 12l5 5 9-10"></path>', 16, 3),
+    more: SVG('<circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle>', 24),
     history: SVG('<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path>', 24),
     again: SVG('<path d="M4 12a8 8 0 1 0 2.4-5.7"></path><path d="M4 4v4.5h4.5"></path>', 20, 2),
     start: SVG('<path d="M8 5l11 7-11 7z" fill="currentColor"></path>', 18, 1.5),
@@ -448,20 +472,19 @@ __PHOTO_JS__
     S.tutor = t; micWarm(); S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null;
-    $('#hist').classList.remove('on'); renderBar(); renderHeader();
+    $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
-    $('#c-nm').textContent = t.display;
-    $('#c-mo').textContent = t.motto || '';
     $('#board').replaceChildren();
     if (S.newThread && !intent.send) $('#board').append(blankBoard('想问什么?'));
     $('#tutor').classList.add('on');
     setBar('idle');
     loadDay(true).then(() => { if (intent.send) send(intent.send); });
   };
-  const blankBoard = (title) => h('div', { class: 'blank' }, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null);
-  const closeTutor = () => { clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit'); loadHome(); };
+  /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」 */
+  const blankBoard = (title) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor) : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, S.tutor && S.tutor.motto ? h('span', { class: 'mo' }, S.tutor.motto) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null);
+  const closeTutor = () => { clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit'); loadHome(); };
   $('#back').addEventListener('click', closeTutor);
-  $('#back').innerHTML = ICON.back;
+  $('#back-ic').innerHTML = ICON.back;
 
   // 卡片:按 kind 分支(轻插件内联;不认识的 kind 把 props 里的字都显示出来)。紧凑态只读,点了开舞台;stage=true 是舞台里的画法
   const renderCard = (c, idx, secIdx, stage) => {
@@ -783,6 +806,7 @@ __PHOTO_JS__
   const closeStage = () => { S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); showNow(); };
   $('#st-x').innerHTML = ICON.close;
   $('#st-x').addEventListener('click', closeStage);
+  $('#st-dim').addEventListener('click', closeStage);
   /** 选择题:点一项 → 本地改状态、重画、PUT 到服务端(失败不响,下次再点再存) */
   const pick = (secIdx, idx, i) => {
     const card = S.sections[secIdx].cards[idx];
@@ -1019,6 +1043,7 @@ __PHOTO_JS__
       if (stillPending && !S.waitSince) S.waitSince = Date.now();
       if (fresh.length) dispatch({ type: 'fresh', sections: fresh, silent: Boolean(silent) });
       else renderSubtitle();
+      if (!S.sections.length && !S.partial && !stillPending && !S.readonly && !$('#board .blank')) $('#board').append(blankBoard('想问什么?'));
       renderHeader();
       clearTimeout(S.pollTimer);
       if (stillPending) S.pollTimer = setTimeout(() => loadDay(false), 1000);
@@ -1027,7 +1052,7 @@ __PHOTO_JS__
       setOffline(true);
     }
   };
-  // ---- 话题:头部「以前的」「新话题」、空白态、只读回放 ----
+  // ---- 话题:右上角「更多」里的「以前的」「新话题」、空白态、只读回放;话题状态是头像旁的小标签 ----
   const dateLabel = (date, today) => {
     if (date === today) return '今天';
     const [y, mo, da] = date.split('-').map(Number);
@@ -1039,12 +1064,12 @@ __PHOTO_JS__
   const renderHeader = () => {
     if (!S.tutor) return;
     const today = S.day ? S.day.date : null;
-    let mo = S.tutor.motto || '';
+    let mo = '';
     if (S.hist && today) mo = '以前的 · ' + dateLabel(S.hist, S.hist === today ? '' : today) + ' ' + clock(S.threadAt);
     else if (S.cont && today) { const d = dateLabel(S.cont, today); mo = '接着' + (d === '昨天' ? d : ' ' + d + ' ') + '的话题'; }
     else if (S.newThread) mo = '新话题';
     else if (S.thread && S.day && S.thread !== S.day.thread) mo = '今天的话题 · ' + clock(S.threadAt);
-    $('#c-mo').textContent = mo;
+    $('#c-mo').textContent = mo; $('#c-mo').hidden = !mo;
     const nb = $('#new-btn');
     nb.hidden = S.newThread || S.readonly || (!S.sections.length && !S.pending && !S.partial);
     nb.classList.toggle('dim', S.pending);
@@ -1059,8 +1084,13 @@ __PHOTO_JS__
     loadDay(!S.readonly);
   };
   $('#back-today').addEventListener('click', () => switchThread(null, null));
-  $('#new-btn').innerHTML = ICON.spark;
+  $('#more-btn').innerHTML = ICON.more;
+  const closeMenu = () => $('#menu').classList.remove('on');
+  $('#more-btn').addEventListener('click', () => $('#menu').classList.add('on'));
+  $('#menu .dimmer').addEventListener('click', closeMenu);
+  $('#new-btn .ic').innerHTML = ICON.spark;
   $('#new-btn').addEventListener('click', () => {
+    closeMenu();
     if (S.pending || S.readonly) return;
     resetBoard();
     S.newThread = true; S.thread = null; S.threadAt = null;
@@ -1068,12 +1098,13 @@ __PHOTO_JS__
     $('#board').append(blankBoard('换个话题吧,想问什么?'));
     setBar('idle'); renderSubtitle(); renderHeader();
   });
-  $('#hist-btn').innerHTML = ICON.history;
+  $('#hist-btn .ic').innerHTML = ICON.history;
   $('#hist-x').innerHTML = ICON.close;
   const closeHist = () => $('#hist').classList.remove('on');
   $('#hist-x').addEventListener('click', closeHist);
   $('#hist .dimmer').addEventListener('click', closeHist);
   $('#hist-btn').addEventListener('click', async () => {
+    closeMenu();
     if (!S.tutor) return;
     const ls = $('#hist .ls'); ls.replaceChildren();
     $('#hist').classList.add('on');
@@ -1107,7 +1138,7 @@ __PHOTO_JS__
       const r = await api('POST', '/api/kid/conversations/' + S.tutor.name + '/messages', body);
       S.via = null;
       if (r && r.thread) S.thread = r.thread;
-      if (S.newThread) { S.newThread = false; const blank = $('#board .blank'); if (blank) blank.remove(); }
+      S.newThread = false; { const blank = $('#board .blank'); if (blank) blank.remove(); }
       renderHeader();
       clearTimeout(S.pollTimer); S.pollTimer = setTimeout(() => loadDay(false), 1200);
     } catch (e) {
@@ -1393,7 +1424,7 @@ __PHOTO_JS__
     const it = psCur(); if (!it) return;
     if (mode === 'crop') { const f = rotatedSize(it.edit); PS.work = it.edit.crop || { x: 0, y: 0, w: f.w, h: f.h }; }
     PS.mode = mode; PS.drag = null; PS.pen = null;
-    psEl.classList.toggle('pen', mode === 'pen');
+    psEl.classList.toggle('ps-drawing', mode === 'pen');
     cropEl.hidden = mode !== 'crop';
     $('#ps-tools').hidden = mode !== 'view'; $('#ps-crop-bar').hidden = mode !== 'crop'; $('#ps-pen-bar').hidden = mode !== 'pen';
     sayEl.hidden = mode !== 'view'; $('#ps-foot').hidden = mode !== 'view';

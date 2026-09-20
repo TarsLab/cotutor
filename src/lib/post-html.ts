@@ -68,6 +68,7 @@ function paragraphs(texts: readonly string[], tag: string, max: number): string 
 
 /**
  * 一张卡 → 精简 HTML(孩子看到的结构,不带交互):c-<kind> / data-style / data-tint / data-look / data-emoji;有交互与场景的 class 带 alone;
+ * 田字格卡里面是一句注释:写的是哪几个字、没有可标的文字(2026-09-20 真跑:原先是空壳,模型从讲稿里取词来标;字放 data-chars 属性上它照标那几个字,放注释里 4 轮 0 处);
  * now = 这一拍的卡。小节标题行不是卡:<h2 class="heading">。
  */
 export function cardHtml(section: BoardSection, idx: number, opts: { now?: boolean; max?: number } = {}): string {
@@ -99,6 +100,8 @@ export function cardHtml(section: BoardSection, idx: number, opts: { now?: boole
         return paragraphs([str(p.prompt)], 'p', max);
       case 'code':
         return `<code>${markedText(str(p.text), [], max)}</code>`;
+      case 'tianzige':
+        return `<!-- 田字格:「${escapeHtml(str(p.chars))}」的笔顺动画,没有可标的文字 -->`;
       default:
         return paragraphs(cardTexts(c), 'p', max);
     }
@@ -167,17 +170,21 @@ export function boardHtml(section: BoardSection, beat: Beat): string {
 /** 规则段(HTML 方言):与校验器同一组常量 */
 export function htmlRulesBlock(limits: { perLine: number; perCard: number; perRow: number }): string {
   return [
-    `- 补丁是 now 那张卡的壳 <div class="c" id="…">,正文不抄,属性是你的决定:data-row="same" 接在上一张卡那一行(兄弟卡:两种情况、公式和它所属的那一步、三步搞懂),data-row="new" 另起一行;一行最多 ${limits.perRow} 张,标题行(h2.heading)与 class 带 alone 的卡永远独占(写了 same 也会被改成 new)。data-tint / data-look / data-emoji 只给需要的;同类卡用同一个底色槽(前后呼应);emoji 只给要记住的那一两张,一个字符。`,
-    `- 壳里每个 <mark data-pen="…">词</mark> 是一处新标注:词必须**逐字**出现在那张卡的文字里(不是讲稿里),数字与拉丁词要整个词;一句最多 ${limits.perLine} 处,一张卡整节最多 ${limits.perCard} 处;缺省标 now 这张卡,data-card="c1" 只能指前面已定的卡;data-marked 里已经有的词不要再标(那是老师的决定,已经画上了),也不要标封面标题和整句;这一拍没有值得标的就不放 <mark>,多数封面、题目卡都不用标。`,
-    '- data-said="…":讲稿念到这个词时动笔(必须逐字出现在这一拍的某句讲稿里),页面靠它决定念到哪个字才画;卡上的词讲稿里原样说了就不用写。',
+    '- **标注的词只从卡上取,不从讲稿里取**:<mark> 里的词必须**逐字**出现在那张卡自己的文字里(上面 HTML 里那张卡的 h3 / p / li / code 里的字)。p.line 是老师嘴里说的话,孩子看不到,讲稿里有、卡上没有的词标不上,会被整处丢掉。反例:卡上写「14 − 8 = 6」,讲稿说「14减8,先看个位」,标「14减8」✗(卡上没有这几个字),标「14」✓;卡上没有合适的词就不标。',
+    '- class 带 c-tianzige 的卡(田字格)格里是笔顺动画不是文字,注释只是告诉你写的是哪几个字:**不要给它放任何 <mark>**,只定 data-row / data-tint / data-emoji。',
+    `- 补丁是 now 那张卡的壳 <div class="c" id="…">(class 就写 "c",别的类名不抄),正文不抄,属性是你的决定:data-row="same" 接在上一张卡那一行(兄弟卡:两种情况、公式和它所属的那一步、三步搞懂),data-row="new" 另起一行;一行最多 ${limits.perRow} 张,标题行(h2.heading)与 class 带 alone 的卡永远独占(写了 same 也会被改成 new)。data-tint / data-look / data-emoji 只给需要的;同类卡用同一个底色槽(前后呼应);emoji 只给要记住的那一两张,单个 emoji(📐 🌙 这种;不要 👨‍🏫 👩‍👧 这类几个拼成的组合,不要带肤色、不要文字)。`,
+    `- 壳里每个 <mark data-pen="…">词</mark> 是一处新标注:词取自卡上(见第一条),数字与拉丁词要整个词;一句最多 ${limits.perLine} 处,一张卡整节最多 ${limits.perCard} 处;缺省标 now 这张卡,data-card="c1" 只能指前面已定的卡;data-marked 里已经有的词不要再标(那是老师的决定,已经画上了),也不要标封面标题和整句;这一拍没有值得标的就不放 <mark>,多数封面、题目卡都不用标。`,
+    '- data-said="…":讲稿念到这个词时动笔,页面靠它决定念到哪个字才画;**只有 said 从讲稿里取**(必须逐字出现在这一拍的某句 p.line 里,一字不差),卡上的词讲稿里原样说了就不用写,拿不准就不写。',
     '- 壳里放一个空的 <p class="line" data-n="1" data-for="c0"></p>:这一拍的第 n 句(0 起)其实在讲前面的卡(回头讲公式、指结论卡);不写 = 讲 now 这张卡。',
   ].join('\n');
 }
 
-/** 输出段:补丁的形状(带 now 那张卡的 id) */
-export function patchBlock(card: number | null = null): string {
+/** 输出段:补丁的形状(带 now 那张卡的 id);now 是田字格卡时形状里没有 <mark>(模型照着形状抄:2026-09-20 真跑,只在规则里写「不标」它照标) */
+export function patchBlock(card: number | null = null, opts: { noMarks?: boolean } = {}): string {
   const id = card === null ? 'c?' : `c${card}`;
-  return `<div class="c" id="${id}" data-row="same|new" data-tint="sky" data-look="plain" data-emoji="📐"><mark data-pen="tint" data-said="…">…</mark><p class="line" data-n="1" data-for="c0"></p></div>`;
+  const anchor = '<p class="line" data-n="1" data-for="c0"></p>';
+  if (opts.noMarks) return `<div class="c" id="${id}" data-row="same|new" data-tint="sky" data-emoji="📐">${anchor}</div>\n(这张是田字格卡,标不上:壳里不放 <mark>)`;
+  return `<div class="c" id="${id}" data-row="same|new" data-tint="sky" data-look="plain" data-emoji="📐"><mark data-pen="tint" data-said="…">…</mark>${anchor}</div>`;
 }
 
 /**
@@ -212,7 +219,7 @@ export const POST_TEMPLATE_HTML = `下面是一节板书讲到一半的样子(�
 {rules}
 
 ## 现在就为上面 now 那张卡回一个补丁
-补丁 = 那张卡的 <div class="c"> 壳,只带你的决定和新标注,正文不抄。回答的第一个字符就是 <,不要分析、不要解释、不要围栏、不要别的字。形状:
+补丁 = 那张卡的 <div class="c" id="…"> 壳(class 就写 "c",id 照抄 now 那张卡的),只带你的决定和新标注,正文不抄。<mark> 里的词只从卡上的字里取,不从 p.line 讲稿里取;卡上没有合适的词、或者是田字格卡,就一个 <mark> 都不放。回答的第一个字符就是 <,不要分析、不要解释、不要围栏、不要别的字。形状:
 {patch}
 `;
 
@@ -235,33 +242,36 @@ function cardNo(v: string | undefined): number | undefined {
 
 /**
  * 模型回的补丁 → 一拍的提案(之后走 validateBeatPost)。
- * 认两种壳:标准的 <div class="c" …>…</div>(属性 data-row / data-tint / data-look / data-emoji)与老的 <c row tint …>…</c>;
+ * 认两种壳:标准的 <div class="c" …>…</div>(属性 data-row / data-tint / data-look / data-emoji;class 照抄成 "c c-tianzige now" 也认,按 id 挑 now 那张卡的)与老的 <c row tint …>…</c>;
  * 里面 <mark data-pen data-said data-card data-line>词</mark>(老写法不带 data- 也认)是新标注,带 data-done 的是板上抄回来的不算;
  * 锚点是 <p class="line" data-n data-for></p> 或老的 <line n for/>。宽容:围栏、前后多话都行;几个候选壳取最后一个(模型先说话后给答案)。
  * 标注落在哪句:line 属性 > said 在哪句讲稿里 > 词本身在哪句讲稿里 > 这拍第一句。
  */
 export function parseBeatPatch(raw: string, section: BoardSection, beat: Beat): ParsedPost<BeatPostOutput> {
   const text = raw.replace(/```[a-zA-Z]*\n?/g, '');
-  const cand: { open: number; headEnd: number; close: string }[] = [];
+  const cand: { open: number; headEnd: number; close: string; id?: number; now: boolean }[] = [];
   const re = /<(div|c)\b([^>]*)>/g;
   let mm: RegExpExecArray | null;
   while ((mm = re.exec(text))) {
     const attrs = mm[2];
     if (mm[1] === 'div') {
-      // 卡的壳:class 里有 c 这个词;板书里 class 带 row / now 的是抄回来的输入,不算
+      // 卡的壳:class 里有 c 这个词,别的词(c-tianzige / alone / now)照抄了也认;是不是这一拍的壳下面按 id 挑
       const cls = /class\s*=\s*"([^"]*)"|class\s*=\s*'([^']*)'/.exec(attrs);
       const words = (cls?.[1] ?? cls?.[2] ?? '').split(/\s+/);
-      if (!words.includes('c') || words.includes('now')) continue;
-      cand.push({ open: mm.index, headEnd: mm.index + mm[0].length - 1, close: '</div>' });
+      if (!words.includes('c')) continue;
+      cand.push({ open: mm.index, headEnd: mm.index + mm[0].length - 1, close: '</div>', id: cardNo(attrsOf(attrs).id), now: words.includes('now') });
     } else {
       // 老写法:<c 带属性,或紧跟 <mark / <line / </c>;正文里提到的「<c> 补丁」不算
       const hasAttr = /\s[a-zA-Z][\w-]*\s*=/.test(attrs);
       const next = text.slice(mm.index + mm[0].length).replace(/^\s+/, '');
-      if (hasAttr || /\/\s*$/.test(attrs) || /^<(mark|line)\b|^<\/c>/.test(next)) cand.push({ open: mm.index, headEnd: mm.index + mm[0].length - 1, close: '</c>' });
+      if (hasAttr || /\/\s*$/.test(attrs) || /^<(mark|line)\b|^<\/c>/.test(next)) cand.push({ open: mm.index, headEnd: mm.index + mm[0].length - 1, close: '</c>', id: cardNo(attrsOf(attrs).id), now: false });
     }
   }
-  if (!cand.length) return { ok: false, why: '输出里没有补丁(<div class="c"> 壳)' };
-  const { open, headEnd, close } = cand[cand.length - 1];
+  // 按 id 挑 now 那张卡的壳(没写 id 的也算;抄回来的前文卡 id 对不上);一个都对不上退回老办法:不带 now 的最后一个
+  const mine = cand.filter((c) => c.id === undefined || beat.card === null || c.id === beat.card);
+  const pool = mine.length ? mine : cand.filter((c) => !c.now);
+  if (!pool.length) return { ok: false, why: '输出里没有补丁(<div class="c"> 壳)' };
+  const { open, headEnd, close } = pool[pool.length - 1];
   const head = text.slice(open, headEnd + 1);
   const selfClosed = /\/>$/.test(head);
   const end = text.lastIndexOf(close);

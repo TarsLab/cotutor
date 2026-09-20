@@ -83,7 +83,7 @@ export function beatPrompt(section: BoardSection, beat: Beat, device: Device, th
     rules: htmlRulesBlock({ perLine: MAX_MARKS_PER_LINE, perCard: MAX_MARKS_PER_CARD, perRow: MAX_CARDS_PER_ROW }),
     board: boardHtml(section, beat),
     marked: markedBlock(section, beat),
-    patch: patchBlock(beat.card),
+    patch: patchBlock(beat.card, { noMarks: beat.card !== null && section.cards[beat.card]?.kind === 'tianzige' }),
   });
 }
 
@@ -129,6 +129,7 @@ export function validateBeatPost(section: BoardSection, beat: Beat, theme: Theme
     if (!line) { dropped.push(`${where}:这拍没有这句`); continue; }
     if (ci === null || !card || isHeading(card)) { dropped.push(`${where}:没有这张卡(或是标题行)`); continue; }
     if (bc !== null && ci > bc) { dropped.push(`${where}:只能标这拍的卡或前面已定的卡`); continue; }
+    if (card.kind === 'tianzige') { dropped.push(`${where}:田字格卡标不上(格里是笔顺,不是文字)`); continue; }
     if (!cardTexts(card).some((t) => findPhrase(t, m.phrase) >= 0)) { dropped.push(`${where}:这个词不在卡上`); continue; }
     if (!isPen(m.pen)) { dropped.push(`${where}:不认识的笔 ${m.pen}`); continue; }
     if (lines.some((x) => x.marks.some((y) => y.card === ci && y.phrase === m.phrase))) { dropped.push(`${where}:${line.marks.some((y) => y.card === ci && y.phrase === m.phrase) ? '老师已经标过' : '这个词在这张卡上已经标过'}`); continue; }

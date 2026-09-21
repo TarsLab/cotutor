@@ -1,7 +1,9 @@
 /* 图片(cards/image/card.md):图铺满 + 图注;舞台里双指缩放 .zoom */
 /* 图 */
-.c.c-image { padding:0; overflow:hidden; gap:0; }
-.c.c-image img { display:block; width:100%; max-height:320px; object-fit:cover; }
+/* 卡自己不裁(overflow:hidden 会把右上角探出去的「再听」喇叭裁掉一半);圆角落在图上:卡圆角 16 减边 1.5 */
+.c.c-image { padding:0; gap:0; }
+.c.c-image img { display:block; width:100%; max-height:320px; object-fit:cover; border-radius:14.5px 14.5px 0 0; }
+.c.c-image:not(:has(.cap)) img { border-radius:14.5px; }
 .c.c-image .cap { padding:10px 16px; font-size:15px; color:#5a5650; white-space:pre-line; }
 /* 舞台 */
 .zoom { flex:1; min-height:0; overflow:hidden; display:grid; place-items:center; touch-action:none; }

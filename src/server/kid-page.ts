@@ -86,13 +86,12 @@ const PAGE = `<!doctype html>
   #tutor { position:fixed; inset:0; background:var(--paper); display:none; z-index:10; }
   #tutor.on { display:flex; }
   #main { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
-  /* 没有顶栏:左上角老师头像(点了回首页,带个小箭头),右上角喇叭 + 更多;浮在板书上面、舞台遮罩(z 4)下面,舞台开了就被压暗盖住 */
+  /* 没有顶栏:左上角一颗胶囊「‹ 头像」(整颗点了回首页),右上角喇叭 + 更多;浮在板书上面、舞台遮罩(z 4)下面,舞台开了就被压暗盖住 */
   .tb { position:absolute; top:calc(env(safe-area-inset-top) + 10px); z-index:3; display:flex; align-items:center; gap:10px; }
   .tb.l { left:calc(env(safe-area-inset-left) + 12px); } .tb.r { right:calc(env(safe-area-inset-right) + 12px); }
-  #back { position:relative; padding:0; border-radius:50%; }
-  #back .av { width:48px; height:48px; font-size:22px; box-shadow:0 2px 10px #00000024; }
-  #back-ic { position:absolute; left:-4px; bottom:-4px; width:22px; height:22px; border-radius:50%; background:#fff; border:1px solid var(--line); color:var(--dim); display:grid; place-items:center; box-shadow:0 1px 3px #00000014; }
-  #back-ic svg { width:14px; height:14px; }
+  #back { display:flex; align-items:center; gap:2px; height:48px; padding:0 4px 0 8px; border-radius:24px; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; }
+  #back .av { width:40px; height:40px; font-size:19px; box-shadow:none; }
+  #back-ic { width:24px; height:24px; color:var(--dim); display:grid; place-items:center; }
   #c-mo { font-size:13px; color:var(--dim); background:#fffffff0; border:1px solid var(--line); border-radius:14px; padding:4px 12px; box-shadow:0 2px 10px #00000010; white-space:nowrap; }
   #c-mo[hidden] { display:none; }
   .tb .hb { width:44px; height:44px; border-radius:50%; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; }
@@ -101,15 +100,14 @@ const PAGE = `<!doctype html>
   #menu .dimmer { position:absolute; inset:0; background:#00000073; }
   #menu .panel { position:absolute; top:calc(env(safe-area-inset-top) + 62px); right:calc(env(safe-area-inset-right) + 12px); width:min(320px, calc(100% - 24px)); background:var(--card); border-radius:20px; padding:8px; display:flex; flex-direction:column; gap:4px; box-shadow:0 8px 30px #00000033; }
   #menu .panel button { display:flex; align-items:center; gap:14px; padding:14px; border-radius:14px; text-align:left; width:100%; }
-  #menu .panel button:active { background:var(--paper); }
   #menu .panel button[hidden] { display:none; }
-  #menu .panel button.dim { opacity:.3; pointer-events:none; }
+  #menu .panel button.dim { opacity:.35; pointer-events:none; }
   #menu .ic { flex:0 0 auto; width:44px; height:44px; border-radius:50%; background:var(--paper); color:var(--dim); display:grid; place-items:center; }
   #menu .tx { display:flex; flex-direction:column; gap:2px; min-width:0; }
   #menu .tx b { font-size:17px; font-weight:600; color:var(--ink); } #menu .tx small { font-size:13px; color:var(--dim); }
   .hb { width:40px; height:40px; display:grid; place-items:center; color:var(--dim); }
   .hb.on { color:var(--accent); }
-  .hb.dim { opacity:.3; pointer-events:none; }
+  .hb.dim { opacity:.35; pointer-events:none; }
   .hb[hidden] { display:none; }
   .blank { flex:1; grid-column:1 / -1; min-height:50vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; padding:40px 20px; color:var(--dim); }
   .blank .av { width:96px; height:96px; font-size:44px; margin-bottom:4px; }
@@ -243,7 +241,7 @@ const PAGE = `<!doctype html>
   #ps .foot button { flex:1; height:54px; border-radius:27px; font-size:17px; font-weight:600; }
   #ps-cancel { background:#ffffff1f; color:#fff; }
   #ps-go { background:var(--accent); color:#fff; }
-  #ps-go:disabled { opacity:.5; }
+  #ps-go:disabled { opacity:.35; }
   /* 看大图:节头的小图点开;双指缩放、双击复位 */
   #lb { position:absolute; inset:0; z-index:40; background:#111; display:none; }
   #lb.on { display:block; }
@@ -256,6 +254,53 @@ const PAGE = `<!doctype html>
   #lb .nav[hidden] { display:none; }
   #lb .n { position:absolute; left:0; right:0; bottom:calc(env(safe-area-inset-bottom) + 18px); text-align:center; color:#fffc; font-size:15px; z-index:2; pointer-events:none; }
   .sh .ph { cursor:zoom-in; }
+  /* ---- 按压反馈(全局关了系统的点击高亮,这里统一补):三种手感,按下快(60ms)、松开慢(200ms)。
+     圆钮与胶囊:缩到 94% + 暗一档;深色屏上的钮:缩 + 变淡;大块面:缩到 98.5% + 暗一点;行内文字:变淡。
+     板书里的卡在滚动容器里,按下延迟 80ms 才显(不然一滑整屏都在闪);卡里的小钮按着时卡自己不动。交互不是皮肤,写在页面里,主题不用跟 ---- */
+  #back, .tb .hb, #hist-x, #st-x, #st-go, #sub-btn, #pill .ic, #go, #back-today, .again, #ps-clear, .c-tutor .bt,
+  #ps .tools button, #ps .foot button, #ps-strip .x, #lb .x, #lb .nav,
+  #menu .panel button, #sheet label, #hist .tr, .so, .rd, .hz, .c-tutor .tt, #ps-strip .t,
+  .sec.heard > .sh, #sub-text.line { transition:transform .2s ease-out, filter .2s ease-out, opacity .2s ease-out, background-color .2s ease-out; }
+  #board .c { transition:transform .2s ease-out, filter .2s ease-out, border-color .2s, box-shadow .2s; }
+  /* ---- 弹层进出场:遮罩淡入,面板按来的方向动(菜单从右上角放大、相册面板从底下滑上来、以前的从右边滑进、卡的弹窗与看大图轻轻放大、发照片屏上浮)。
+     进场靠 @starting-style,退场靠 display 的 allow-discrete 过渡(Safari 18 起);不认的浏览器就是瞬间出现 / 消失,和以前一样。
+     用 scale / translate 独立属性,不碰 transform(横屏的舞台已经用 transform 居中了)。关着的时候不收触摸,退场那 200ms 里点得到后面 ---- */
+  #menu, #sheet, #hist, #ps, #lb, #stage, #st-dim { transition:opacity .2s ease-out, scale .24s cubic-bezier(.2,.8,.2,1), translate .24s cubic-bezier(.2,.8,.2,1), display .24s allow-discrete; }
+  #menu:not(.on), #sheet:not(.on), #hist:not(.on), #ps:not(.on), #lb:not(.on), #stage:not(.on), #stage:not(.on) ~ #st-dim { pointer-events:none; }
+  #menu .dimmer, #sheet .dimmer, #hist .dimmer { opacity:0; transition:opacity .2s ease-out; }
+  #menu.on .dimmer, #sheet.on .dimmer, #hist.on .dimmer { opacity:1; }
+  #menu .panel { opacity:0; scale:.9; transform-origin:top right; transition:opacity .16s ease-out, scale .24s cubic-bezier(.2,.8,.2,1); }
+  #menu.on .panel { opacity:1; scale:1; }
+  #sheet .panel { translate:0 100%; transition:translate .28s cubic-bezier(.2,.8,.2,1); }
+  #sheet.on .panel { translate:0 0; }
+  #hist .panel { translate:100% 0; transition:translate .28s cubic-bezier(.2,.8,.2,1); }
+  #hist.on .panel { translate:0 0; }
+  #stage, #lb { opacity:0; scale:.96; }
+  #stage.on, #lb.on { opacity:1; scale:1; }
+  #ps { opacity:0; translate:0 24px; }
+  #ps.on { opacity:1; translate:0 0; }
+  #st-dim { opacity:0; }
+  #stage.on ~ #st-dim { opacity:1; }
+  @starting-style {
+    #menu.on .dimmer, #sheet.on .dimmer, #hist.on .dimmer, #stage.on ~ #st-dim { opacity:0; }
+    #menu.on .panel { opacity:0; scale:.9; }
+    #sheet.on .panel { translate:0 100%; }
+    #hist.on .panel { translate:100% 0; }
+    #stage.on, #lb.on { opacity:0; scale:.96; }
+    #ps.on { opacity:0; translate:0 24px; }
+  }
+  @media (prefers-reduced-motion:reduce) { #menu, #sheet, #hist, #ps, #lb, #stage, #st-dim, #menu .dimmer, #sheet .dimmer, #hist .dimmer, #menu .panel, #sheet .panel, #hist .panel { transition:none; } }
+  @media (hover:hover) {
+    #back:hover, .tb .hb:hover, #hist-x:hover, #st-x:hover, #sub-btn:hover, #pill .ic:hover, #back-today:hover, .again:hover, #menu .panel button:hover, #sheet label:hover, #hist .tr:hover, .so:hover, .rd:hover, .c-tutor .bt:hover, #board .c:not(.c-tianzige):hover { filter:brightness(.97); }
+  }
+  #back:active, .tb .hb:active, #hist-x:active, #st-x:active, #st-go:active, #sub-btn:active, #pill .ic:active, #go:active, #back-today:active, .again:active, #ps-clear:active, .c-tutor .bt:active { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
+  #ps .tools button:active, #ps .foot button:active, #ps-strip .x:active, #lb .x:active, #lb .nav:active { transform:scale(.94); opacity:.65; transition-duration:.06s; }
+  #menu .panel button:active, #sheet label:active, #hist .tr:active, .so:active, .rd:active, .hz:active, .c-tutor .tt:active, #ps-strip .t:active { transform:scale(.985); filter:brightness(.95); transition-duration:.06s; }
+  #board .c:not(.c-tianzige):active:not(:has(button:active, .hz:active)) { transform:scale(.985); filter:brightness(.96); transition-duration:.06s; transition-delay:.08s; }
+  .sec.heard > .sh:active:not(:has(button:active, .ph:active)), #sub-text.line:active { opacity:.55; transition-duration:.06s; }
+  button:disabled, .hb.dim { opacity:.35; }
+  button:disabled:active { transform:none; filter:none; }
+  @media (prefers-reduced-motion:reduce) { #back, .tb .hb, .again, .so, .rd, .hz, #board .c, #hist .tr, #sheet label, #menu .panel button, #ps .tools button, #ps .foot button, .c-tutor .bt, .c-tutor .tt { transition:none; } *:active { transform:none !important; } }
   /* ---- 平板横屏 ---- */
   @media (min-width:900px) and (orientation:landscape) {
     #home { max-width:1040px; padding:calc(env(safe-area-inset-top) + 40px) 48px 40px; gap:24px; }
@@ -277,7 +322,7 @@ const PAGE = `<!doctype html>
 <div id="toast"></div>
 <section id="tutor">
   <div id="main">
-    <div class="tb l"><button id="back" type="button" aria-label="回首页"><span class="av" id="c-av"></span><i id="back-ic"></i></button><span id="c-mo" hidden></span></div>
+    <div class="tb l"><button id="back" type="button" aria-label="回首页"><i id="back-ic"></i><span class="av" id="c-av"></span></button><span id="c-mo" hidden></span></div>
     <div class="tb r"><button class="hb on" id="spk" type="button" aria-label="老师念不念"></button><button class="hb" id="more-btn" type="button" aria-label="更多"></button></div>
     <div id="wrap">
       <div id="board"></div>
@@ -1237,6 +1282,7 @@ __PHOTO_JS__
   };
   document.addEventListener('visibilitychange', () => { if (document.hidden) { if (!mic.opening) micDrop(); } else micWarm(); });
   document.addEventListener('pointerdown', micWarm, true);
+  document.addEventListener('touchstart', () => {}, { passive: true }); // iOS Safari:没有触摸监听时 :active 不一定触发,按压反馈靠它
   /** 起一次浏览器识别:onText(到目前认出的整句),onEnd(停了),onAudio(话筒真的开了),onLevel(这一帧的音量 0–1);没有识别 → null。
    *  回来的是个把手(识别要等麦克风开了才起):live / diagMark / stop() / abort()(不回 onEnd) */
   const listen = (onText, onEnd, where, onAudio, onLevel) => {

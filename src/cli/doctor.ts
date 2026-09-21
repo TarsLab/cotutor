@@ -182,7 +182,7 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
 
 export async function doctorWorkspace(
   override?: string,
-  opts: ResolveOptions & { probeEnv?: boolean; live?: boolean } = {},
+  opts: ResolveOptions & { probeEnv?: boolean; live?: boolean; /** 测试钉时间用:首页「几天前发布的」按它算 */ now?: Date } = {},
 ): Promise<DoctorReport> {
   const probeEnv = opts.probeEnv ?? true;
   const env = opts.env ?? process.env;
@@ -395,7 +395,7 @@ export async function doctorWorkspace(
     // ---- 首页(《首页设计.md》):没发布 = 缺省首页;坏了孩子端退回缺省;超过 3 天提醒;引用坏了的按钮孩子端不出现 ----
     {
       const { daysSince, publishedIssues, readPublished } = await import('../server/home.ts');
-      const now = new Date();
+      const now = opts.now ?? new Date();
       const { home, error } = await readPublished(ws);
       if (error) push({ name: 'home.published', ok: false, required: false, detail: `${error};孩子端退回缺省首页`, fix: '用 cotutor-home 技能排一份再 cotutor home publish,或删掉 home/published.json' });
       else if (!home) push({ name: 'home.published', ok: true, required: false, detail: '没发布过首页:孩子端是缺省首页(每位老师一张只有「新话题」的卡)' });

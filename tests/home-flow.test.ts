@@ -193,16 +193,16 @@ for: 2026-09-18
   check('回放接着那轮:上下文包照样有 continue 段', evalRun(rp1.evalJob).includes(`from: "2026-09-16 ${t16}"`));
 
   // ---- doctor 与坏了的时候 ----
-  const d1 = await doctorWorkspace(root, { probeEnv: false });
+  const d1 = await doctorWorkspace(root, { probeEnv: false, now });
   check('doctor:已发布今天的、引用都在', d1.checks.some((c) => c.name === 'home.published' && c.ok && c.detail.includes(h1.home!)) && d1.checks.some((c) => c.name === 'home.refs' && c.ok), JSON.stringify(d1.checks.filter((c) => c.name.startsWith('home.'))));
   const pubFile = join(root, 'home', 'published.json');
   const good = readFileSync(pubFile, 'utf8');
   writeFileSync(pubFile, good.replace(`"thread": "${t16}"`, '"thread": "0000-9"'));
-  const d2 = await doctorWorkspace(root, { probeEnv: false });
+  const d2 = await doctorWorkspace(root, { probeEnv: false, now });
   check('doctor:引用坏了报出来;孩子端那个按钮不出现', d2.checks.some((c) => c.name === 'home.refs' && !c.ok && c.detail.includes('0000-9')) && buttonsOf(await kidHome(), 'chinese-tutor').every((b) => b.id !== 1));
   writeFileSync(pubFile, '{坏');
   const h3 = await kidHome();
-  const d3 = await doctorWorkspace(root, { probeEnv: false });
+  const d3 = await doctorWorkspace(root, { probeEnv: false, now });
   check('发布件坏了:孩子端退回缺省首页,doctor 报', h3.home === null && buttonsOf(h3, 'math-tutor').every((b) => b.id !== 0) && d3.checks.some((c) => c.name === 'home.published' && !c.ok && c.detail.includes('不是合法 JSON')));
   writeFileSync(pubFile, good);
 

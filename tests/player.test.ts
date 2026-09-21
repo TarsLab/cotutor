@@ -60,6 +60,9 @@ const rows: Row[] = [
   // 在念
   { name: '在念 + 点暂停 → 暂停', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'tapButton' }, want: (m, fx) => m.state.status === 'paused' && kinds(fx) === 'stop,render' },
   { name: '暂停 + 点播放 → 接着念', model: M({ section: 1, line: 0, status: 'paused' }), sections: [done0, last], ev: { type: 'tapButton' }, want: (m, fx) => m.state.status === 'playing' && kinds(fx) === 'play' },
+  { name: '暂停在第一张卡的第一句 + 点这张卡的喇叭 → 照样再听(2026-09-21:不看念没念过),念完回暂停在原来那句', model: M({ section: 0, line: 0, status: 'paused' }), sections: [done0, last], ev: { type: 'tapAgain', section: 0, target: 0 }, want: (m, fx) => fx.at(-1)?.kind === 'play' && (m.state.replay?.lines.length ?? 0) > 0 && m.state.replay?.back.status === 'paused' && m.state.replay?.back.line === 0 },
+  { name: '暂停在第一节 + 点还没念到的那一节的节头 → 也能再听', model: M({ section: 0, line: 0, status: 'paused' }), sections: [done0, last], ev: { type: 'tapAgain', section: 1, target: 'all' }, want: (m) => (m.state.replay?.lines.length ?? 0) > 0 && m.state.section === 1 },
+  { name: '正在念 + 点喇叭 → 不响(这条规则留着)', model: M({ section: 0, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'tapAgain', section: 0, target: 0 }, want: (m, fx) => fx.length === 0 && !m.state.replay },
   { name: '暂停 + 点喇叭 → 再听,念完回暂停', model: M({ section: 1, line: 0, status: 'paused' }), sections: [done0, last], ev: { type: 'tapAgain', section: 0, target: 0 }, want: (m) => m.state.replay?.back.status === 'paused' },
   { name: '在念 + 一句念完 → 下一句', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.line === 1 && kinds(fx) === 'play' },
   { name: '在念 + 末句问句念完 → 等答、推答题卡', model: M({ section: 1, line: 1, status: 'playing' }), sections: [done0, last], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'waiting' && kinds(fx) === 'render,openAsk' },

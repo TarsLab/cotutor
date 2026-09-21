@@ -966,17 +966,17 @@ __PHOTO_JS__
       }
     }
   };
-  /** 讲完的卡与节挂上 heard(喇叭露出来);念着的挂 replaying。老师还在写的节不挂;板上不安静(老师在想、正在念)全都不挂 */
+  /** 板上安静时,有讲稿的卡与节都挂上 heard(喇叭露出来,不看念没念过);念着的挂 replaying。老师还在写的节不挂;板上不安静(老师在想、正在念)全都不挂 */
   const markHeard = () => {
     const quiet = replayQuiet(S.state, S.pending);
     const R = S.state.replay ? S.replayOf : null;
     for (const secEl of $('#board').querySelectorAll(':scope > .sec[data-sec]')) {
       const i = Number(secEl.dataset.sec);
-      secEl.classList.toggle('heard', quiet && replayLines(S.sections, S.state, i, 'all').length > 0);
+      secEl.classList.toggle('heard', quiet && replayLines(S.sections, i, 'all').length > 0);
       secEl.classList.toggle('replaying', Boolean(R && R.section === i && R.card === 'all'));
       for (const c of secEl.querySelectorAll('.c[data-card]')) {
         const k = Number(c.dataset.card);
-        c.classList.toggle('heard', quiet && replayLines(S.sections, S.state, i, k).length > 0);
+        c.classList.toggle('heard', quiet && replayLines(S.sections, i, k).length > 0);
         c.classList.toggle('replaying', Boolean(R && R.section === i && R.card === k));
       }
     }

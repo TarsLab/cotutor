@@ -618,15 +618,14 @@ export function spokenLines(state: PlayerState, sections: readonly BoardSection[
 /**
  * 再听哪几句:卡 = 第一遍念时让它亮起来的句(nowCard:标注落在哪张算哪张,没标注看锚点,标题行与卡前的句算本节第一张)——
  * 不按锚点分拍:「这个成语说的是:[多做一步]」写在卡 0 后面、标注却在卡 1,按拍算会点卡 0 的喇叭亮卡 1。
- * 'all' = 整节。讲完之后才能再听(那几句都念过了);老师还在写的节不能([] = 不能)
+ * 'all' = 整节。不看念到哪(2026-09-21:原来要那几句都念过才行,孩子在第一张卡念到一半点暂停,整屏一个喇叭都没有);
+ * 能不能再听只看板上安不安静(replayQuiet)。老师还在写的节、没讲稿的卡不能([] = 不能)
  */
-export function replayLines(sections: readonly BoardSection[], state: PlayerState, secIdx: number, target: number | 'all'): number[] {
+export function replayLines(sections: readonly BoardSection[], secIdx: number, target: number | 'all'): number[] {
   const s = sections[secIdx];
   if (!s || s.partial || !s.lines.length) return [];
   const all = s.lines.map((_l, i) => i);
-  const lines = target === 'all' ? all : all.filter((i) => nowCard(sections, { section: secIdx, line: i, status: 'playing' }) === target);
-  if (!lines.length || spokenLines(state, sections, secIdx) < lines[lines.length - 1] + 1) return [];
-  return lines;
+  return target === 'all' ? all : all.filter((i) => nowCard(sections, { section: secIdx, line: i, status: 'playing' }) === target);
 }
 
 /**
@@ -838,7 +837,7 @@ export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { mod
     case 'tapAgain': {
       const r = m.replayOf;
       if (m.state.replay && r && r.section === ev.section && r.card === ev.target) { m = halt(m, ctx, fx); fx.push({ kind: 'render' }); break; }
-      m = beginReplay(m, ctx, fx, ev.section, replayLines(secs, m.state, ev.section, ev.target), ev.target);
+      m = beginReplay(m, ctx, fx, ev.section, replayLines(secs, ev.section, ev.target), ev.target);
       break;
     }
     case 'tapSubtitle': {

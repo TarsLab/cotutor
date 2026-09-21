@@ -1224,6 +1224,13 @@ __PHOTO_JS__
 
   // 中间那段:点 = 打字;按住 150ms = 说话(浏览器识别),松手发,上滑 60px 取消;没有识别就只有打字
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  // 识别一起就断(2026-09-21 真机:iPad 从主屏幕图标打开时 SR 在、麦克风也有声,但 start 后 15ms 必回 aborted,26 次 25 次;Safari 里 50 次 0 次):
+  // 认出来一次,这次打开就当没有识别——按住 = 点一下打字(键盘上的听写照样能说),不再闪一下浮层。不看 navigator.standalone:哪天系统修了自然就好
+  let srDead = false; try { srDead = sessionStorage.getItem('kid-sr-dead') === '1'; } catch {}
+  const srOk = () => Boolean(SR) && !srDead;
+  const srDied = () => { srDead = true; try { sessionStorage.setItem('kid-sr-dead', '1'); } catch {} const ph = $('#ph'); if (ph) ph.textContent = PH_IDLE(); };
+  const PH_IDLE = () => (srOk() ? '发消息或按住说话…' : '发消息…');
+  $('#ph').textContent = PH_IDLE();
   let press = null, rec = null, finalText = '';
   // 麦克风常开(真机诊断 2026-09-19,/voice-test)。这台 iPad 上的三条事实:
   // ① Safari 的识别每次自己开关话筒,常交来一路纯静音,一个字不出、一停就 aborted;页面自己先 getUserMedia 留一路,识别再起就有声(先麦克风、后识别)
@@ -1281,7 +1288,7 @@ __PHOTO_JS__
   };
   const micWarm = () => {
     let ok = false; try { ok = localStorage.getItem('kid-mic-ok') === '1'; } catch {}
-    if (!ok || !SR || !S.tutor || S.readonly || document.hidden || micLive()) return;
+    if (!ok || !srOk() || !S.tutor || S.readonly || document.hidden || micLive()) return;
     micOpen().catch(() => {});
   };
   document.addEventListener('visibilitychange', () => { if (document.hidden) { if (!mic.opening) micDrop(); } else micWarm(); });
@@ -1290,15 +1297,15 @@ __PHOTO_JS__
   /** 起一次浏览器识别:onText(到目前认出的整句),onEnd(停了),onAudio(话筒真的开了),onLevel(这一帧的音量 0–1);没有识别 → null。
    *  回来的是个把手(识别要等麦克风开了才起):live / diagMark / stop() / abort()(不回 onEnd) */
   const listen = (onText, onEnd, where, onAudio, onLevel) => {
-    if (!SR) return null;
+    if (!srOk()) return null;
     // 诊断:每次按住记一行事件码 + 距按下的毫秒(不记字、不记声音),停了发给 /api/kid/voice-diag;真机上出错是静默的,只有这份能说清哪一步断了
     const t0 = Date.now(), ev = [], mark = (k, v) => ev.push(v === undefined ? [k, Date.now() - t0] : [k, Date.now() - t0, v]);
     const diag = { where, standalone: Boolean(navigator.standalone), wasPlaying: !audioEl.paused, ua: navigator.userAgent, peak: -1, ev };
     const report = () => { try { fetch('/api/kid/voice-diag', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(diag), keepalive: true }).catch(() => {}); } catch {} };
     const hd = { live: { len: 0, lastAt: 0, done: false }, diagMark: mark, r: null };
-    let raf = 0, round = 0;
+    let raf = 0, round = 0, startedAt = 0, errored = '';
     const close = () => { hd.live.done = true; cancelAnimationFrame(raf); report(); };
-    const done = () => { if (hd.live.done) return; mark('end', hd.live.len); close(); onEnd(); };
+    const done = () => { if (hd.live.done) return; mark('end', hd.live.len); close(); const dead = Boolean(errored) && errored !== 'no-speech' && !hd.live.len && Date.now() - startedAt < 500; if (dead) { mark('sr-dead'); srDied(); } onEnd(dead); };
     hd.stop = () => { if (hd.r) { try { hd.r.stop(); } catch {} } else done(); };
     hd.abort = () => { if (hd.live.done) return; mark('abort()'); if (hd.r) { try { hd.r.onend = null; hd.r.abort(); } catch {} } close(); };
     const meter = () => {
@@ -1326,9 +1333,9 @@ __PHOTO_JS__
         for (const k of ['start', 'audiostart', 'soundstart', 'speechstart', 'speechend', 'soundend', 'audioend', 'nomatch']) r.addEventListener(k, () => mark(k));
         r.addEventListener('audiostart', () => { if (onAudio) onAudio(); });
         r.onresult = (e) => { let s = ''; for (const x of e.results) s += x[0].transcript; hd.live.len = s.length; hd.live.lastAt = Date.now(); mark('result', s.length); onText(s); };
-        r.onerror = (e) => mark('error', String(e && e.error));
+        r.onerror = (e) => { errored = String(e && e.error) || 'error'; mark('error', errored); };
         r.onend = done;
-        r.start(); mark('start()'); hd.r = r;
+        startedAt = Date.now(); r.start(); mark('start()'); hd.r = r;
         if (mic.an) meter();
       } catch (e) { mark('throw', String(e && e.name)); done(); }
     });
@@ -1359,11 +1366,13 @@ __PHOTO_JS__
   const holdLevel = (v) => { $('#hold').classList.add('real'); holdLv.shift(); holdLv.push(v); for (let i = 0; i < 25; i++) holdBars[i].style.height = Math.round(4 + holdLv[i] * 24) + 'px'; };
   const startRec = () => {
     finalText = ''; hold.audio = false; hold.tail = false; renderHold();
-    rec = listen((t) => { finalText = t; }, () => {
+    rec = listen((t) => { finalText = t; }, (dead) => {
       const t = finalText; rec = null; hold.tail = false;
       setBar(barNext(S.bar, 'holdEnd'));
+      // 识别一起就断:这一下当成点了一下,直接打字
+      if (dead) { if (press) { clearTimeout(press.timer); press = null; } setBar(barNext(S.bar, 'tap')); return; }
       if (t.trim()) send(t);
-      else { $('#ph').textContent = '没听清,再按住说一次'; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = '发消息或按住说话…'; }, 2500); }
+      else { $('#ph').textContent = '没听清,再按住说一次'; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = PH_IDLE(); }, 2500); }
     }, 'bar', () => { hold.audio = true; renderHold(); }, holdLevel);
     if (!rec) setBar(barNext(S.bar, 'holdEnd'));
   };
@@ -1371,7 +1380,7 @@ __PHOTO_JS__
     if (S.bar === 'typing') return;
     e.preventDefault(); unlock();
     if (rec) return; // 上一句还在收尾
-    press = { y: e.clientY, cancelled: false, held: false, timer: setTimeout(() => { if (!press || !SR) return; press.held = true; setBar(barNext(S.bar, 'holdStart')); dispatch({ type: 'halt' }); startRec(); }, 150) };
+    press = { y: e.clientY, cancelled: false, held: false, timer: setTimeout(() => { if (!press || !srOk()) return; press.held = true; setBar(barNext(S.bar, 'holdStart')); dispatch({ type: 'halt' }); startRec(); }, 150) };
     try { mid.setPointerCapture(e.pointerId); } catch {}
   });
   mid.addEventListener('pointermove', (e) => { if (press && press.held) { const up = press.y - e.clientY > 60; if (up !== press.cancelled) { press.cancelled = up; renderHold(); } } });
@@ -1462,7 +1471,7 @@ __PHOTO_JS__
     strip.replaceChildren(...(PS.items.length > 1 ? PS.items.map((it, i) => h('div', { class: 't' + (i === PS.at ? ' on' : ''), on: { click: () => { if (PS.busy || i === PS.at) return; PS.at = i; psUi(); psRender(); } } }, h('img', { src: it.url, alt: '' }), h('button', { type: 'button', class: 'x', 'aria-label': '去掉这张', html: ICON.closeSm, on: { click: (e) => { e.stopPropagation(); psDrop(i); } } }))) : []));
     strip.style.display = PS.mode === 'view' && PS.items.length > 1 ? '' : 'none';
     const said = $('#ps-said');
-    said.textContent = PS.text || (SR ? '按住说一句,或点一下打字' : '点这里打一句');
+    said.textContent = PS.text || (srOk() ? '按住说一句,或点一下打字' : '点这里打一句');
     said.classList.toggle('ph', !PS.text);
     said.hidden = !psTyped.hidden;
     $('#ps-clear').hidden = !PS.text || !psTyped.hidden;
@@ -1551,7 +1560,7 @@ __PHOTO_JS__
     if (e.target.closest('#ps-clear') || !psTyped.hidden || PS.busy || psRec) return;
     e.preventDefault(); unlock();
     psPress = { held: false, timer: setTimeout(() => {
-      if (!psPress || !SR) return;
+      if (!psPress || !srOk()) return;
       psPress.held = true; sayEl.classList.add('rec');
       psRec = listen((t) => { PS.text = t.trim(); psUi(); }, () => { psRec = null; sayEl.classList.remove('rec'); psUi(); }, 'photo');
       if (!psRec) sayEl.classList.remove('rec');

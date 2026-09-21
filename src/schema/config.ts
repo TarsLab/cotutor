@@ -33,6 +33,14 @@ export const PolicySchema = z.object({
     runtime: z.string().min(1).describe('后期用的运行时(runtimes 里的键,缺省 claude-fast:haiku、无工具)'),
     timeoutMs: z.number().int().positive().describe('等一拍的后期最多几毫秒(缺省 10000;只有第一拍在关键路径上,后面的拍在前一拍播的时候跑),超时这拍素版、不重来'),
   }),
+  /**
+   * 断流看门狗(2026-09-21):老师进程多久一个字节都不吐(工具在跑时不算)就当 API 流断了,杀掉、resume 同一个会话接着写。
+   * claude CLI 自己要等约 180 秒才认断流再重试,9 月 21 日真跑连断两次,「讲个故事」一轮等了 6 分钟,模型真干活不到 10 秒
+   */
+  stall: z.object({
+    ms: z.number().int().nonnegative().describe('老师进程多少毫秒没有任何输出就当断流(缺省 30000;工具在跑时不算;0 = 不看,交给 CLI 自己约 180 秒的重试)'),
+    retries: z.number().int().nonnegative().describe('一轮里断流后最多接着跑几次(缺省 2);用完还断,这轮按出错收尾'),
+  }),
 });
 export type Policy = z.infer<typeof PolicySchema>;
 
@@ -45,10 +53,11 @@ export const PolicyPatchSchema = z.object({
   board: PolicySchema.shape.board.optional(),
   scenes: z.object({ dailyMax: z.number().int().nonnegative().optional() }).optional(),
   post: z.object({ mode: z.enum(['auto', 'off']).optional(), runtime: z.string().min(1).optional(), timeoutMs: z.number().int().positive().optional() }).optional(),
+  stall: z.object({ ms: z.number().int().nonnegative().optional(), retries: z.number().int().nonnegative().optional() }).optional(),
 });
 export type PolicyPatch = z.infer<typeof PolicyPatchSchema>;
 
-/** 缺省:60 字、30 条/日、上下文包观察与计划各 10、原文各 4000 字 */
+/** 缺省:60 字、30 条/日、上下文包观察与计划各 10、原文各 4000 字、30 秒没动静算断流 */
 export const POLICY_DEFAULTS: Policy = {
   replyMaxChars: 60,
   dailyMessages: 30,
@@ -57,6 +66,7 @@ export const POLICY_DEFAULTS: Policy = {
   board: 'auto',
   scenes: { dailyMax: 2 },
   post: { mode: 'auto', runtime: 'claude-fast', timeoutMs: 10000 },
+  stall: { ms: 30000, retries: 2 },
 };
 
 /** agent 名:与 .claude/agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
@@ -172,7 +182,7 @@ export type CotutorConfig = z.infer<typeof CotutorConfigSchema>;
 /** 老师的有效政策 = POLICY_DEFAULTS ← policyDefaults ← tutors[name].policy */
 export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
   const layers = [config.policyDefaults, config.tutors[tutor]?.policy ?? {}];
-  const out: Policy = { ...POLICY_DEFAULTS, contextPack: { ...POLICY_DEFAULTS.contextPack }, scenes: { ...POLICY_DEFAULTS.scenes }, post: { ...POLICY_DEFAULTS.post } };
+  const out: Policy = { ...POLICY_DEFAULTS, contextPack: { ...POLICY_DEFAULTS.contextPack }, scenes: { ...POLICY_DEFAULTS.scenes }, post: { ...POLICY_DEFAULTS.post }, stall: { ...POLICY_DEFAULTS.stall } };
   for (const p of layers) {
     if (p.replyMaxChars !== undefined) out.replyMaxChars = p.replyMaxChars;
     if (p.dailyMessages !== undefined) out.dailyMessages = p.dailyMessages;
@@ -185,6 +195,8 @@ export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
     if (p.post?.mode !== undefined) out.post.mode = p.post.mode;
     if (p.post?.runtime !== undefined) out.post.runtime = p.post.runtime;
     if (p.post?.timeoutMs !== undefined) out.post.timeoutMs = p.post.timeoutMs;
+    if (p.stall?.ms !== undefined) out.stall.ms = p.stall.ms;
+    if (p.stall?.retries !== undefined) out.stall.retries = p.stall.retries;
   }
   return out;
 }

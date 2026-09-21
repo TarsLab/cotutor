@@ -19,6 +19,8 @@ export interface PartialReader {
   feed(chunk: string): boolean;
   /** 当前这条顶层回复的正文(还在长) */
   text(): string;
+  /** 只要当前这段(还没收到整条 assistant 的那段;断流时它没进会话,要递回给老师) */
+  current(): string;
 }
 
 const KEEP = /^\s*(?:```|~~~|## )/m;
@@ -26,6 +28,8 @@ const KEEP = /^\s*(?:```|~~~|## )/m;
 export function createPartialReader(): PartialReader {
   let rest = '';
   let text = '';
+  // 当前段收到过整条 assistant 了(已进会话,不算「断在半截」)
+  let sealed = false;
   const kept: string[] = [];
   const apply = (line: string): boolean => {
     if (!line.trim()) return false;
@@ -42,10 +46,12 @@ export function createPartialReader(): PartialReader {
         if (!text) return false;
         if (KEEP.test(text)) kept.push(text.trim());
         text = '';
+        sealed = false;
         return true;
       }
       if (ev?.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && typeof ev.delta.text === 'string' && ev.delta.text) {
         text += ev.delta.text;
+        sealed = false;
         return true;
       }
       return false;
@@ -55,6 +61,7 @@ export function createPartialReader(): PartialReader {
         .filter((b) => b.type === 'text' && typeof b.text === 'string')
         .map((b) => b.text)
         .join('');
+      if (t) sealed = true;
       if (t && t !== text) {
         text = t;
         return true;
@@ -75,5 +82,6 @@ export function createPartialReader(): PartialReader {
       return changed;
     },
     text: () => [...kept, text].filter(Boolean).join('\n\n'),
+    current: () => (sealed ? '' : text),
   };
 }

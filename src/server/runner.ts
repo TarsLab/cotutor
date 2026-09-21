@@ -28,7 +28,7 @@ import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
 import { createPartialReader } from '../lib/stream.ts';
 import { parseSections } from '../lib/sections.ts';
 import { isoWeek, parsePlan, planLinesFor } from '../lib/plan.ts';
-import { getRuntime, planRun, runtimeUses, type RunPlan, boardPreloaded } from '../lib/run-plan.ts';
+import { getRuntime, planRun, runtimeUses, stallPrompt, type RunPlan, boardPreloaded } from '../lib/run-plan.ts';
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
@@ -345,7 +345,9 @@ export class Runner {
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 
     const active: Active = { job, date, partial: null, done: Promise.resolve(started) };
-    active.done = this.spawn(ws, tutor, date, job, plan, policy, input.device ?? DEFAULT_DEVICE, active).finally(() => this.active.delete(tutor));
+    // 断流后接着跑:同一运行时 resume 这个会话,消息换成 stallPrompt
+    const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent: tutor, prompt: stallPrompt(open), agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: plan.runtime, effort: policy.effort });
+    active.done = this.spawn(ws, tutor, date, job, plan, policy, input.device ?? DEFAULT_DEVICE, active, resumePlan).finally(() => this.active.delete(tutor));
     this.active.set(tutor, active);
     return { tutor, date, job, thread, plan, done: active.done };
   }
@@ -523,7 +525,7 @@ export class Runner {
     return { id, warnings };
   }
 
-  private async spawn(ws: Workspace, tutor: string, date: string, job: string, plan: RunPlan, policy: Policy, device: Device, active: Active): Promise<ConversationIndex> {
+  private async spawn(ws: Workspace, tutor: string, date: string, job: string, plan: RunPlan, policy: Policy, device: Device, active: Active, resumePlan: (session: string, open: string) => RunPlan): Promise<ConversationIndex> {
     const replyMaxChars = policy.replyMaxChars;
     const files = conversationFiles(ws.dirs.conversations, tutor, date);
     const cwd = join(ws.dirs.agents, tutor);
@@ -554,18 +556,27 @@ export class Runner {
     const queue = voice ? new DubQueue(ws.config.tts, voice, files.err(job), this.opts.env) : null;
     if (queue) queue.report = (e) => emit(e.kind === 'queued' ? { lane: 'tts', kind: 'queued', label: e.label } : e.kind === 'done' ? { lane: 'tts', kind: 'done', label: e.label, ms: e.ms, file: e.file ?? '' } : { lane: 'tts', kind: 'failed', label: e.label, ms: e.ms, error: e.error ?? '?' });
     const dubber = queue ? new LineDubber(queue, (n) => files.lineAudio(job, n)) : null;
-    // 工具调用:stdout 的 assistant 事件里有 tool_use 就发一条(子代理的标 sub);只对含 tool_use 的行 JSON.parse
+    // 工具调用:stdout 的 assistant 事件里有 tool_use 就发一条(子代理的标 sub);只对含 tool_use / tool_result 的行 JSON.parse。
+    // 顺手记哪些顶层工具还没回 tool_result:工具在跑时进程不吐字是正常的,断流看门狗不算这段
     let toolBuf = '';
+    const toolsRunning = new Set<string>();
     const scanTools = (chunk: string): void => {
       toolBuf += chunk;
       const parts = toolBuf.split('\n');
       toolBuf = parts.pop() ?? '';
       for (const line of parts) {
-        if (!line.includes('"tool_use"')) continue;
+        if (!line.includes('"tool_use"') && !line.includes('"tool_result"')) continue;
         try {
-          const e = JSON.parse(line) as { type?: string; parent_tool_use_id?: string | null; message?: { content?: { type?: string; name?: string; input?: Record<string, unknown> }[] } };
-          if (e.type !== 'assistant' || !Array.isArray(e.message?.content)) continue;
-          for (const b of e.message.content) if (b.type === 'tool_use' && b.name) emit({ lane: 'main', kind: 'tool', name: toolSummary(b.name, b.input), sub: Boolean(e.parent_tool_use_id) });
+          const e = JSON.parse(line) as { type?: string; parent_tool_use_id?: string | null; message?: { content?: { type?: string; id?: string; tool_use_id?: string; name?: string; input?: Record<string, unknown> }[] } };
+          if (!Array.isArray(e.message?.content)) continue;
+          const top = !e.parent_tool_use_id;
+          if (e.type === 'user') { if (top) for (const b of e.message.content) if (b.type === 'tool_result' && b.tool_use_id) toolsRunning.delete(b.tool_use_id); continue; }
+          if (e.type !== 'assistant') continue;
+          for (const b of e.message.content) {
+            if (b.type !== 'tool_use' || !b.name) continue;
+            if (top && b.id) toolsRunning.add(b.id);
+            emit({ lane: 'main', kind: 'tool', name: toolSummary(b.name, b.input), sub: !top });
+          }
         } catch {
           /* 不是一行完整 JSON:跳过 */
         }
@@ -624,7 +635,12 @@ export class Runner {
       active.partial = { ...active.partial, ready: n };
     };
     // 流式:stdout 的每一块先落盘再喂读取器;正文变了就(节流 150ms)重解析成 partial 板书,定稿的句子交去配音
-    const reader = createPartialReader();
+    let reader = createPartialReader();
+    // 断流接着跑(policy.stall):carried = 被杀那次已经拼出的正文(接着跑的那次换新读取器,正文 = carried + 新的);
+    // open = 断在半截、没进会话的那段(递回给老师,收尾时拼在最后一段前面)
+    let carried = '';
+    let open = '';
+    const liveText = (): string => { const t = reader.text(); return !carried ? t : !t ? carried : open ? carried + t : `${carried}\n\n${t}`; };
     let dirty = false;
     let timer: NodeJS.Timeout | null = null;
     const reparse = (): void => {
@@ -632,7 +648,7 @@ export class Runner {
       if (!dirty) return;
       dirty = false;
       // 先剥「## 记账」再解析,和定稿的 deriveKidView 同一条路;不剥的话固定段写在前面的那轮流式时一张卡都出不来(2026-09-13 控制台里看见的)
-      const { section } = parseBoard(parseSections(reader.text()).body, { partial: true });
+      const { section } = parseBoard(parseSections(liveText()).body, { partial: true });
       const lines = section.lines.map((l, i) => ({ ...l, text: truncateReply(l.text, replyMaxChars).text, audio: lineAudio.get(i) ?? null }));
       active.partial = section.cards.length || lines.length ? { ...applyDecisions({ cards: section.cards, lines }, envNow), partial: true, ready: readySeen } : null;
       if (postOn && active.partial) { const bs = beatsOf(active.partial); bs.forEach((b, k) => { if (k < bs.length - 1) startBeatPost(active.partial!, b, k); }); }
@@ -642,24 +658,70 @@ export class Runner {
       if (dubber) lines.forEach((l, i) => { const p = dubber.add(i, l.text); if (p) void p.then((name) => { if (name && active.partial && active.partial.lines[i]) { lineAudio.set(i, name); active.partial.lines[i].audio = name; settleReady(); } }, () => {}); });
       settleReady();
     };
-    const exit = await new Promise<{ code: number | null; spawnError?: Error }>((resolveExit) => {
-      const child = spawn(plan.argv[0], plan.argv.slice(1), {
+    // 断流看门狗:进程 stall.ms 没吐一个字节、也没有工具在跑 → 杀掉,resume 同一个会话接着写(最多 stall.retries 次)。
+    // claude CLI 自己要等约 180 秒才认断流(2026-09-21 真跑一轮连断两次,等了 6 分钟)
+    let session = plan.session;
+    // 新会话要等模型开始回了(第一条 stream_event / assistant)才在盘上、才 resume 得了
+    // (2026-09-22 真跑:init 吐了会话 id 就被杀,resume 报 No conversation found;吐过三个字再杀,盘上有这条用户消息)
+    let persisted = plan.resume;
+    let stalls = 0;
+    const runOnce = (p: RunPlan): Promise<{ code: number | null; spawnError?: Error; stalled?: boolean }> => new Promise((resolveExit) => {
+      const child = spawn(p.argv[0], p.argv.slice(1), {
         cwd,
         env: { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root },
         stdio: ['ignore', 'pipe', err],
       });
+      let stalled = false;
+      let idle: NodeJS.Timeout | null = null;
+      let lastByte = Date.now();
+      const arm = (): void => {
+        if (idle) clearTimeout(idle);
+        if (!policy.stall.ms) return;
+        idle = setTimeout(() => {
+          idle = null;
+          if (toolsRunning.size) return arm();
+          stalled = true;
+          child.kill('SIGTERM');
+          setTimeout(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); }, 2000).unref();
+        }, policy.stall.ms);
+      };
+      arm();
       child.stdout?.on('data', (chunk: Buffer) => {
+        lastByte = Date.now();
+        arm();
         out.write(chunk);
         const s = chunk.toString('utf8');
+        if (!session) session = /"session_id":"([^"]+)"/.exec(s)?.[1] ?? null;
+        if (!persisted && (s.includes('"type":"stream_event"') || s.includes('"type":"assistant"'))) persisted = true;
         scanTools(s);
         if (reader.feed(s)) {
           dirty = true;
           if (!timer) timer = setTimeout(reparse, 150);
         }
       });
-      child.once('error', (e) => resolveExit({ code: null, spawnError: e }));
-      child.once('close', (code) => resolveExit({ code }));
+      const done = (r: { code: number | null; spawnError?: Error }): void => {
+        if (idle) clearTimeout(idle);
+        resolveExit({ ...r, ...(stalled ? { stalled: true } : {}) });
+      };
+      child.once('error', (e) => done({ code: null, spawnError: e }));
+      child.once('close', (code) => { if (stalled) void appendFile(files.err(job), `cotutor: ${Date.now() - lastByte}ms 没有输出,当断流杀掉\n`).catch(() => {}); done({ code }); });
     });
+    let exit = await runOnce(plan);
+    while (exit.stalled) {
+      stalls++;
+      if (persisted) open += reader.current();
+      else { session = plan.session; open = ''; }
+      const retry = stalls <= policy.stall.retries ? stalls : 0;
+      emit({ lane: 'main', kind: 'stall', idleMs: policy.stall.ms, retry, kept: Array.from(open).length });
+      if (!retry) break;
+      carried = persisted ? liveText() : '';
+      reader = createPartialReader();
+      toolsRunning.clear();
+      // 会话还没落盘(进程起来就卡住、一条整的回复都没有):原样从头再起一次;落了盘就 resume 接着写
+      const next = persisted && session ? resumePlan(session, open) : plan;
+      emit({ lane: 'main', kind: 'start', cli: next.argv[0].slice(next.argv[0].lastIndexOf('/') + 1), runtime: next.runtime, resume: next.resume });
+      exit = await runOnce(next);
+    }
     timing.doneMs = since();
     if (timer) clearTimeout(timer);
     await new Promise<void>((r) => out.end(r));
@@ -667,6 +729,10 @@ export class Runner {
     if (exit.spawnError) await appendFile(files.err(job), `cotutor: 起不来 ${plan.argv[0]}:${exit.spawnError.message}\n`);
     const logText = await readFile(files.log(job), 'utf8').catch(() => '');
     const transcript = parseTranscript(logText);
+    // 断流接着跑的:断在半截的那段没进会话、也不在最后的 result 里,拼回最后一段前面(老师是从断处接着写的)
+    // (result 的正文被 trim 过,断在句末 / 围栏上的补回换行,免得两句粘成一行)
+    if (open && transcript.final?.text) transcript.final.text = open + (/[。!!??;;`\n]\s*$/.test(open) ? '\n' : '') + transcript.final.text;
+    if (exit.stalled && !transcript.final) transcript.final = { text: null, ok: false, reason: `stalled:${stalls} 次断流(每次 ${policy.stall.ms}ms 没输出),接着跑的次数用完了` };
     // 这轮用了哪些工具、读了什么:从 .log 抽出来物化(家长端「看原文」一站、cotutor show)
     const tools = toolCalls(logText).slice(0, 200);
     if (!transcript.final) {
@@ -676,6 +742,7 @@ export class Runner {
     }
     emit({ lane: 'main', kind: 'exit', ok: transcript.final.ok, ...(transcript.final.reason ? { reason: transcript.final.reason } : {}), ...(transcript.final.costUsd !== undefined ? { costUsd: transcript.final.costUsd } : {}), ...(transcript.final.numTurns !== undefined ? { turns: transcript.final.numTurns } : {}) });
     const kidView = deriveKidView(transcript, { replyMaxChars });
+    if (stalls) kidView.warnings.push(`API 流断了 ${stalls} 次(每次 ${policy.stall.ms / 1000} 秒没动静),应用杀掉进程、resume 会话接着写的${exit.stalled ? ';次数用完还断,这轮没收尾' : ''}`);
     // 整块出的(没走流式):卡与句这时才第一次见到,也发一遍
     if (kidView.section) {
       for (; cardsSeen < kidView.section.cards.length; cardsSeen++) emit({ lane: 'main', kind: 'card', card: cardsSeen, label: `${kidView.section.cards[cardsSeen].kind} ${cardLabel(kidView.section.cards[cardsSeen])}`.trim() });

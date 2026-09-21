@@ -4,6 +4,7 @@
  * --stream:最终文本先按行以 stream_event(content_block_delta)吐出来,每行歇 80ms(模仿 claude --include-partial-messages),再发 assistant 与 result。
  * 行为:回显 prompt 的最后一行;上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);prompt 含「段在前」就在最终文本前加一段「## 记账」;含「画场景」出一张带题面 / 讲法的新场景卡,「放旧课包」出一张只有 id 的场景卡;含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);含「家长段」加「## 家长」;
  * --resume 时 session_id 沿用给的 id,否则新造;--fail 出 error_max_turns。
+ * 含「断流」/「一直断」/「工具慢」的见下面断流那段(stall.test)。
  */
 export {};
 const argv = process.argv.slice(2);
@@ -57,6 +58,34 @@ if (outputFormat === 'json') {
 }
 
 emit({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), agent: agent || undefined, bodyLen: body.length });
+// 「起就卡」:头一次吐了 init(带会话 id)就挂住,模型一个事件没回(会话没落盘,resume 不了);第二次起(cwd 里有记号)照常回
+if (prompt.includes('起就卡')) {
+  const { existsSync, writeFileSync } = await import('node:fs');
+  if (session) { emit({ type: 'result', subtype: 'error_during_execution', is_error: true, session_id: sid, num_turns: 0 }); process.exit(1); }
+  if (!existsSync('.stalled-once')) { writeFileSync('.stalled-once', ''); await new Promise(() => void setInterval(() => {}, 1 << 30)); }
+}
+// 断流(policy.stall):消息里有「断流」就吐半句后一声不吭(挂着不退),等 runner 杀掉再 resume;resume 来的「(应用注)」带着那半句就接上收尾。
+// 「一直断」每次都挂(次数用完);「工具慢」是工具在跑时静默 1 秒(不该当断流)
+{
+  const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+  const hang = (): Promise<never> => new Promise(() => void setInterval(() => {}, 1 << 30));
+  const delta = (text: string): void => emit({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } }, session_id: sid, parent_tool_use_id: null });
+  const start = (): void => emit({ type: 'stream_event', event: { type: 'message_start', message: { role: 'assistant', content: [] } }, session_id: sid, parent_tool_use_id: null });
+  if (prompt.includes('(应用注)') && prompt.includes('总断')) { start(); delta('总断'); await hang(); }
+  if (prompt.includes('(应用注)') && prompt.includes('半截')) {
+    const text = '句话接上了。';
+    start(); delta(text);
+    emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'text', text }] } });
+    emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.01, result: text });
+    process.exit(0);
+  }
+  if (prompt.includes('工具慢')) {
+    emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 'toolu_slow', name: 'Bash', input: { command: 'sleep 1' } }] } });
+    await sleep(1000);
+    emit({ type: 'user', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_slow', content: 'ok' }] } });
+  } else if (prompt.includes('一直断')) { start(); delta('总断。\n'); await hang(); }
+  else if (prompt.includes('断流')) { start(); delta('断流前这句。\n'); delta('半截'); await hang(); }
+}
 emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'text', text: '我先看看上下文包' }] } });
 emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 'toolu_read1', name: 'Read', input: { file_path: '../../ledger/artifacts.jsonl' } }] } });
 emit({ type: 'user', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_read1', content: '{"kind":"observation"}\n' }] } });

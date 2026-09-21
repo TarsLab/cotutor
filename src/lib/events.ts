@@ -14,6 +14,8 @@ export type RunEvent = { t: number } & (
   | { lane: 'main'; kind: 'line'; line: number; text: string }
   | { lane: 'main'; kind: 'tool'; name: string; sub: boolean }
   | { lane: 'main'; kind: 'exit'; ok: boolean; reason?: string; costUsd?: number; turns?: number }
+  /** 断流:老师进程 idleMs 没吐一个字节(工具不在跑),杀掉;retry = 接着跑第几次(0 = 次数用完,不再跑),kept = 断前已写出的正文字数 */
+  | { lane: 'main'; kind: 'stall'; idleMs: number; retry: number; kept: number }
   | { lane: 'tts'; kind: 'queued'; label: string }
   | { lane: 'tts'; kind: 'done'; label: string; ms: number; file: string }
   | { lane: 'tts'; kind: 'failed'; label: string; ms: number; error: string }
@@ -53,6 +55,7 @@ export function describeEvent(e: RunEvent): string {
       if (e.kind === 'card') return `卡 ${e.card} ${e.label}`;
       if (e.kind === 'line') return `句 ${e.line}「${e.text}」`;
       if (e.kind === 'tool') return `${e.sub ? '子代理 ' : ''}工具 ${e.name}`;
+      if (e.kind === 'stall') return `断流:${secs(e.idleMs)}s 没动静,杀掉${e.retry ? `,resume 接着写(第 ${e.retry} 次${e.kept ? `,已写 ${e.kept} 字` : ''})` : ',接着跑的次数用完了'}`;
       return e.ok ? `退出 ok${e.turns !== undefined ? ` · ${e.turns} turns` : ''}${money(e.costUsd)}` : `退出 出错(${e.reason ?? '?'})${money(e.costUsd)}`;
     case 'tts':
       if (e.kind === 'queued') return `${e.label}排队`;

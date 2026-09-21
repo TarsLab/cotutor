@@ -34,6 +34,7 @@ export const PARENT_PAGE = `<!doctype html>
   header h1 small { color:var(--muted); font-weight:400; font-size:13.5px; margin-left:6px; }
   header nav { display:flex; gap:2px; margin-left:auto; }
   header nav a { font-size:15px; color:var(--muted); text-decoration:none; padding:6px 13px; border-radius:8px; white-space:nowrap; }
+  header .qrlink { font-size:13px; color:var(--muted); white-space:nowrap; }
   header nav a:hover { color:var(--ink); background:var(--surface-2); }
   header nav a.on { color:var(--ink); background:var(--accent-soft); font-weight:500; }
   header .health { font:500 13px/1 var(--mono); color:var(--ok); display:flex; align-items:center; gap:6px; }
@@ -355,6 +356,7 @@ export const PARENT_PAGE = `<!doctype html>
   <h1 id="title">cotutor<small>家长端</small></h1>
   <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">老师团</a><a href="#voices" data-tab="voices">音色</a><a href="#settings" data-tab="settings">设置</a><a href="#home" data-tab="home">首页</a></nav>
   <span class="health" id="health"></span>
+  <a class="qrlink" href="/qr" target="_blank" title="iPad / iPhone 用相机扫,不用输地址">扫码打开</a>
 </header>
 <main id="chat" class="on">
   <aside>

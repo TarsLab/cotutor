@@ -1,14 +1,17 @@
 /**
  * cotutor serve:一 workspace 一进程(2026-09-08 拍板),端口读 cotutor.json(--port 覆盖)。
  * 启动打印解析结果与体检警告(配置坏了直接不起,骨架缺失只警告)。
+ * 扫码页:/qr 现画一张二维码(编 <本机名>.local 那条,不随 Wi-Fi 变),iPad 用相机扫;listen 之后把真端口交给 ctx.listen。
  * HTTPS(iPad 上录音要):server.https 指了证书就用它(单个 workspace 的例外);没指就看机器级 ~/.config/cotutor/certs/(cotutor cert 用 mkcert 建);都没有走 HTTP。
  */
+import { X509Certificate } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer as createHttp, type Server } from 'node:http';
 import { createServer as createHttps } from 'node:https';
 import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { doctorWorkspace } from './doctor.ts';
+import type { ListenInfo } from '../server/qr-page.ts';
 import { createContext, createHandler, type AppContext } from '../server/app.ts';
 import { USER_CERT_DIR, expandPath, loadWorkspace, type ResolveOptions, type Workspace } from './workspace.ts';
 
@@ -30,6 +33,8 @@ export interface ServeResult {
   urls: string[];
   /** 兼容:urls[0] */
   url: string;
+  /** 扫码页:在这台电脑上打开的那条(localhost,证书里签了) */
+  qrPage: string;
   warnings: string[];
 }
 
@@ -55,6 +60,27 @@ export function lanAddresses(): string[] {
   return out;
 }
 
+/** 本机的 mDNS 名(与 cotutor cert 签的那条同一个写法) */
+export function localName(host: string = hostname()): string {
+  return host.endsWith('.local') ? host : `${host}.local`;
+}
+
+/** 证书认不认这个主机名;读不了当作不认 */
+export function certCovers(certFile: string, host: string): boolean {
+  try {
+    return new X509Certificate(readFileSync(certFile)).checkHost(host) !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+/** 扫码页要的三样;listen 之后才知道真端口 */
+export function listenInfo(https: boolean, port: number): ListenInfo {
+  const scheme = https ? 'https' : 'http';
+  const ip = lanAddresses()[0];
+  return { name: `${scheme}://${localName()}:${port}/`, ip: ip ? `${scheme}://${ip}:${port}/` : null, https };
+}
+
 export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResult> {
   const ws = loadWorkspace(opts.workspace, opts);
   const report = await doctorWorkspace(ws.root, { ...opts, probeEnv: false });
@@ -71,5 +97,7 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
   const actual = (server.address() as { port: number }).port;
   const scheme = tls ? 'https' : 'http';
   const urls = [hostname(), ...lanAddresses()].map((h) => `${scheme}://${h}:${actual}/`);
-  return { server, ctx, ws, port: actual, https: Boolean(tls), urls, url: urls[0], warnings };
+  ctx.listen = () => listenInfo(Boolean(tls), actual);
+  if (tls && !certCovers(tls.cert, localName())) warnings.push(`证书不含 ${localName()}:扫码打开会报「不安全」(重跑 cotutor cert,再重启 serve)`);
+  return { server, ctx, ws, port: actual, https: Boolean(tls), urls, url: urls[0], qrPage: `${scheme}://localhost:${actual}/qr`, warnings };
 }

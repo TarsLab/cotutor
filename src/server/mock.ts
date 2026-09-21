@@ -24,7 +24,8 @@ import { tianzigeData } from './tianzige.ts';
 /** mock 的课包目录:仓库里的样本(tests/fixtures/bundles/),场景卡从这里播 */
 export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bundles/', import.meta.url));
 import { readyBeats, type BoardSection } from '../lib/kid-board.ts';
-import { lanAddresses } from '../cli/serve.ts';
+import { lanAddresses, listenInfo } from '../cli/serve.ts';
+import { qrPage, type ListenInfo } from './qr-page.ts';
 import { USER_CERT_DIR } from '../cli/workspace.ts';
 import { kidThreads } from '../lib/kid-view.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
@@ -364,6 +365,8 @@ export interface Mock {
   /** 等所有还在「想」的老师答完(测试用) */
   settle(): Promise<void>;
   handler(req: IncomingMessage, res: ServerResponse): void;
+  /** 在哪个地址上听着(serveMock 在 listen 之后填;扫码页 /qr 每次现问) */
+  listen: (() => ListenInfo) | null;
 }
 
 const pad = (n: number): string => String(n).padStart(2, '0');
@@ -473,6 +476,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     const url = new URL(path, 'http://x');
     const p = url.pathname;
     if (p === '/') return { status: 200, html: kidPage(title) };
+    if (p === '/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name') } : { status: 404, json: { error: 'not_listening' } };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
     // 主题:mock 没有 workspace,直接给包里的出厂 default
     if (p === '/kid/theme.css') return { status: 200, html: `${cardsCss()}\n\n${(await packageTheme()).css}`, contentType: 'text/css; charset=utf-8' };
@@ -600,7 +604,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       else { res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(r.json ?? null)); }
     })().catch((err) => { res.writeHead(500, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'internal', message: String(err) })); });
   };
-  return { route, settle, handler };
+  const mock: Mock = { route, settle, handler, listen: null };
+  return mock;
 }
 
 export interface ServeMockOptions extends MockOptions {
@@ -616,6 +621,8 @@ export interface ServeMockResult {
   port: number;
   https: boolean;
   urls: string[];
+  /** 扫码页:在这台电脑上打开的那条 */
+  qrPage: string;
 }
 
 export async function serveMock(opts: ServeMockOptions = {}): Promise<ServeMockResult> {
@@ -636,5 +643,6 @@ export async function serveMock(opts: ServeMockOptions = {}): Promise<ServeMockR
   const port = (server.address() as { port: number }).port;
   const scheme = tls ? 'https' : 'http';
   const urls = [hostname(), ...lanAddresses()].map((h) => `${scheme}://${h}:${port}/`);
-  return { server, mock, port, https: Boolean(tls), urls };
+  mock.listen = () => listenInfo(Boolean(tls), port);
+  return { server, mock, port, https: Boolean(tls), urls, qrPage: `${scheme}://localhost:${port}/qr` };
 }

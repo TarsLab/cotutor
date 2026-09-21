@@ -20,6 +20,7 @@ import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } 
 import { tutorStatuses } from '../cli/tutors.ts';
 import { configGapsOf, upgradeConfig } from '../cli/migrate.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
+import { qrPage, type ListenInfo } from './qr-page.ts';
 import { kidPage } from './kid-page.ts';
 import { checkHome, historyFile, homeStats, kidHomeView, messageVia, publishHome, publishedIssues, readDraft, resolveVia } from './home.ts';
 import { PARENT_PAGE } from './parent-page.ts';
@@ -58,6 +59,8 @@ export interface AppContext {
   now: () => Date;
   /** 上次重载失败的原因(配置改坏了),健康接口回报 */
   configError: string | null;
+  /** 在哪个地址上听着(serve 在 listen 之后填;扫码页 /qr 每次现问——局域网 IP 会在服务跑着的时候变)。没起端口(测试走 route)→ null */
+  listen: (() => ListenInfo) | null;
   /** 重读 cotutor.json(改了才读) */
   reload(): Promise<void>;
 }
@@ -69,6 +72,7 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
     runner: new Runner(() => ctx.ws, opts),
     now: opts.now ?? (() => new Date()),
     configError: null,
+    listen: null,
     async reload() {
       try {
         const r = await reloadIfChanged(ctx.ws, mtime);
@@ -615,6 +619,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
     if (p === '/parent') return { status: 200, html: PARENT_PAGE };
+    // 扫码页:在电脑上打开,iPad 用相机扫(不在孩子端的入口里)
+    if (p === '/qr') return ctx.listen ? { status: 200, html: qrPage(ws.config.title, ctx.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name') } : { status: 404, json: { error: 'not_listening' } };
     // 按住说话的试验页(真机上比策略用;不在孩子端与家长端的入口里)
     if (p === '/voice-test') return { status: 200, html: VOICE_TEST_PAGE };
     // 主屏幕(iPad「添加到主屏幕」):清单与图标都按标题现生成,没有静态资源

@@ -61,6 +61,15 @@ function parseArgs(argv: string[], valued: string[]): Parsed {
   return { cmd, positionals, flags };
 }
 
+/** 扫码页那一行(地址独占行尾:后面紧跟全角括号的话,终端不把它认成链接);--open-qr 顺手用默认浏览器打开(各系统各自的打开命令,失败不吭声) */
+async function printQr(page: string, open: boolean): Promise<void> {
+  process.stdout.write(`  扫码页 ${page}\n         在这台电脑上打开,iPad / iPhone 用相机扫;--open-qr 顺手打开\n`);
+  if (!open) return;
+  const { spawn } = await import('node:child_process');
+  const [cmd, args] = process.platform === 'darwin' ? ['open', [page]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', page]] : ['xdg-open', [page]];
+  spawn(cmd, args, { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
+}
+
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
@@ -117,6 +126,7 @@ export async function main(argv: string[]): Promise<void> {
         if (!r.https) process.stdout.write('  ! HTTP:iPad / iPhone 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write(`  孩子端 /,家长端 /parent\n`);
+        await printQr(r.qrPage, flags['open-qr'] === true);
         return;
       }
       case 'mock': {
@@ -131,6 +141,7 @@ export async function main(argv: string[]): Promise<void> {
         if (!r.https) process.stdout.write('  ! HTTP:iPad / iPhone 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write('  孩子端 /;直接开某位老师并停在某句:/?tutor=chinese-tutor&step=0.3\n');
+        await printQr(r.qrPage, flags['open-qr'] === true);
         return;
       }
       case 'add': {
@@ -212,7 +223,7 @@ export async function main(argv: string[]): Promise<void> {
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
         else {
           process.stdout.write(`证书:${redactHome(r.cert)}\n私钥:${redactHome(r.key)}\n主机:${r.hosts.join(' ')}\n`);
-          process.stdout.write(`iPad / iPhone 要先信任这台机器的根证书:把 ${redactHome(r.caRoot)}/rootCA.pem 隔空投送过去 → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里**把开关打开**(装了不等于信任,每台设备各做一次);然后重启 cotutor serve,用打印的 https://<局域网 IP>:<端口>/ 打开(用 IP,主机名在有些设备上会走到不通的 IPv6)。详见 docs/iPad与iPhone.md\n`);
+          process.stdout.write(`iPad / iPhone 要先信任这台机器的根证书:把 ${redactHome(r.caRoot)}/rootCA.pem 隔空投送过去 → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里**把开关打开**(装了不等于信任,每台设备各做一次);然后重启 cotutor serve,在这台电脑上打开它打印的扫码页,用相机扫(个别设备扫完一直转圈,就改手输打印的 https://<局域网 IP>:<端口>/)。详见 docs/iPad与iPhone.md\n`);
         }
         return;
       }

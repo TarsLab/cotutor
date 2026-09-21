@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { parseBoard } from './board.ts';
-import { beatsOf, cardTexts, findPhrase, type BoardSection, type Device } from './kid-board.ts';
+import { beatsOf, cardTexts, findPhrase, isAskCard, type BoardSection, type Device } from './kid-board.ts';
 import { beatPrompt } from './postprocess.ts';
 import { parseSections } from './sections.ts';
 import { DeviceSchema, type ThemeManifest } from '../schema/index.ts';
@@ -57,7 +57,8 @@ export function loadPostFixture(dir: string, name: string): PostFixture {
 
 /** 各拍提示词的快照(有卡的拍,顺序;提示词用样本自己的端与给定的主题 / 骨架) */
 export function renderFixturePrompts(section: BoardSection, device: Device, theme: ThemeManifest, template: string | null): string {
-  const beats = beatsOf(section).filter((b) => b.card !== null);
+  // 提问卡的拍不过后期(runner 的 startBeatPost 同一条)
+  const beats = beatsOf(section).filter((b) => b.card !== null && !isAskCard(section.cards[b.card]));
   return beats.map((b, k) => `<!-- ===== 拍 ${k}(卡 ${b.card}) ===== -->\n${beatPrompt(section, b, device, theme, template)}`).join('\n\n');
 }
 
@@ -71,7 +72,9 @@ export function expectProblems(section: BoardSection, expect: PostExpect): strin
   }
   if (expect.rows) {
     const flat = expect.rows.flat();
-    if (flat.length !== section.cards.length || !flat.every((v, i) => v === i)) out.push(`rows 没有恰好盖住 ${section.cards.length} 张卡各一次`);
+    // 提问卡不过后期、独占节尾一行,期望里不写它
+    const n = section.cards.filter((c) => !isAskCard(c)).length;
+    if (flat.length !== n || !flat.every((v, i) => v === i)) out.push(`rows 没有恰好盖住 ${n} 张卡各一次`);
   }
   for (const k of Object.keys(expect.look)) if (!section.cards[Number(k)]) out.push(`look 的卡 ${k} 不在`);
   return out;

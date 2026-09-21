@@ -207,6 +207,11 @@ export function isHeading(card: BoardCard): boolean {
   return card.kind === 'text' && (card.props || {}).heading === true;
 }
 
+/** 提问卡:末句问句没配能答的卡时解析器补的那张文字卡(《卡片协议.md》);字就是那句问话,不过后期、独占一行 */
+export function isAskCard(card: BoardCard): boolean {
+  return card.kind === 'text' && (card.props || {}).ask === true;
+}
+
 /**
  * 底色槽(机械规则;后期定了 look.tint 就用它):做题的卡紫(plum),定义 / 结论蓝(sky),方法绿(moss),事实 / 例子 / 引言米(sand),
  * 公式 / 图 / 代码白(paper)。名字对不上主题清单的,CSS 落回 paper。
@@ -218,7 +223,7 @@ export function tintFor(card: BoardCard): string {
   const style = str(p.style);
   switch (card.kind) {
     case 'text':
-      return style === 'formula' ? 'paper' : str(p.title) ? 'sky' : 'sand';
+      return isAskCard(card) ? 'plum' : style === 'formula' ? 'paper' : str(p.title) ? 'sky' : 'sand';
     case 'choice':
     case 'fill':
     case 'canvas':
@@ -284,12 +289,13 @@ function validRows(rows: readonly (readonly number[])[], n: number): boolean {
 export function rowsFor(section: BoardSection, device: Device): number[][] {
   const n = section.cards.length;
   const lay = section.layout;
-  // 流式的节:行只排到已定的那几张(前缀),后面的一行一张
-  const prefix = section.partial && lay && !validRows(lay.rows, n) && validRows(lay.rows, lay.rows.flat().length) && lay.rows.flat().length <= n;
+  // 行只排到已定的那几张(前缀),后面的一行一张:流式的节,和定稿后不过后期的提问卡
+  const last = section.cards[n - 1];
+  const prefix = (section.partial || (last && isAskCard(last))) && lay && !validRows(lay.rows, n) && validRows(lay.rows, lay.rows.flat().length) && lay.rows.flat().length <= n;
   let rows: number[][] = lay && validRows(lay.rows, n) ? lay.rows.map((r) => [...r]) : prefix ? [...lay!.rows.map((r) => [...r]), ...Array.from({ length: n - lay!.rows.flat().length }, (_, i) => [lay!.rows.flat().length + i])] : Array.from({ length: n }, (_, i) => [i]);
   const alone = (i: number): boolean => {
     const c = section.cards[i];
-    return !c || isHeading(c) || hasState(c) || c.kind === 'scene';
+    return !c || isHeading(c) || isAskCard(c) || hasState(c) || c.kind === 'scene';
   };
   const fold = lay ? lay.for !== device && device === 'phone' : false;
   const out: number[][] = [];
@@ -318,6 +324,9 @@ export function nowCard(sections: readonly BoardSection[], state: PlayerState): 
   if (!s || state.line < 0) return null;
   const line = s.lines[state.line];
   if (!line) return null;
+  // 停下等答:亮的是提问卡(有的话)——孩子要答的那句在它上面
+  const askAt = s.cards.length - 1;
+  if (state.status === 'waiting' && !state.replay && state.line === s.lines.length - 1 && askAt >= 0 && isAskCard(s.cards[askAt])) return askAt;
   const t = lineTarget(line);
   if (t !== null && s.cards[t] && !isHeading(s.cards[t])) return t;
   const first = s.cards.findIndex((c) => !isHeading(c));
@@ -625,6 +634,8 @@ export function replayLines(sections: readonly BoardSection[], secIdx: number, t
   const s = sections[secIdx];
   if (!s || s.partial || !s.lines.length) return [];
   const all = s.lines.map((_l, i) => i);
+  // 提问卡的喇叭 = 再听末句那一问(它自己一拍、没有讲稿)
+  if (target !== 'all' && s.cards[target] && isAskCard(s.cards[target])) return all.slice(-1);
   return target === 'all' ? all : all.filter((i) => nowCard(sections, { section: secIdx, line: i, status: 'playing' }) === target);
 }
 

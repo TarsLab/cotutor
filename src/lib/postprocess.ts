@@ -13,7 +13,7 @@
  * 整节一次的 validatePost 保留:把整节提案拆成各拍再走同一个校验器(mock 的写死提案、repost 都走它)。起进程、落盘在 src/server/post.ts。
  */
 import { z } from 'zod';
-import { beatsOf, cardTexts, findPhrase, hasState, isHeading, PENS, plainLine, type Beat, type BoardCard, type BoardMark, type BoardSection, type Device, type PenName } from './kid-board.ts';
+import { beatsOf, cardTexts, findPhrase, hasState, isAskCard, isHeading, PENS, plainLine, type Beat, type BoardCard, type BoardMark, type BoardSection, type Device, type PenName } from './kid-board.ts';
 import type { ThemeManifest } from '../schema/theme.ts';
 import { POST_TEMPLATE_HTML, boardHtml, htmlRulesBlock, markedBlock, patchBlock } from './post-html.ts';
 
@@ -49,7 +49,7 @@ const DEVICE_NOTE: Record<Device, string> = {
 
 /** 独占一行的卡:标题行、有交互的、场景 */
 export function standsAlone(card: BoardCard): boolean {
-  return isHeading(card) || hasState(card) || card.kind === 'scene';
+  return isHeading(card) || isAskCard(card) || hasState(card) || card.kind === 'scene';
 }
 
 const slots = (t: Record<string, { use: string }>): string => Object.entries(t).map(([k, v]) => `- ${k}:${v.use}`).join('\n');

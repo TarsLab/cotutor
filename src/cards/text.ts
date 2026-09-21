@@ -17,6 +17,8 @@ export const TextPropsSchema = z.object({
   text: z.string(),
   /** 小节标题行(只有 `# 标题`):不算卡 */
   heading: z.boolean().optional(),
+  /** 提问卡:解析器在末句问句没配能答的卡时补的(老师写不出来),text 就是那句问话 */
+  ask: z.boolean().optional(),
 });
 export type TextProps = z.infer<typeof TextPropsSchema>;
 

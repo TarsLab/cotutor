@@ -23,7 +23,7 @@ import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
 import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
 import { BUNDLE_ID_RE, cardAssets, cardLabel, describeCard } from '../cards/index.ts';
 import { parseBoard } from '../lib/board.ts';
-import { readyBeats, beatsOf, type BoardSection, type Device } from '../lib/kid-board.ts';
+import { readyBeats, beatsOf, isAskCard, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
 import { createPartialReader } from '../lib/stream.ts';
 import { parseSections } from '../lib/sections.ts';
@@ -594,6 +594,8 @@ export class Runner {
     let envNow: PostEnv | null = null;
     const startBeatPost = (section: BoardSection, beat: { card: number | null; lines: number[] }, k: number): void => {
       if (beat.card === null || beatPosts.has(beat.card)) return;
+      // 提问卡不过后期:字就是末句那句话,样子是机械规则定的,省一趟
+      if (section.cards[beat.card] && isAskCard(section.cards[beat.card])) return;
       const card = beat.card;
       postT0 ??= Date.now();
       emit({ lane: 'post', kind: 'start', beat: k, card, context: Math.min(card, 5) });
@@ -688,7 +690,7 @@ export class Runner {
         envNow = env;
         const bs = beatsOf(finalSection);
         bs.forEach((b, k) => startBeatPost(finalSection, b, k));
-        const files = await Promise.all(bs.filter((b) => b.card !== null).map((b) => beatPosts.get(b.card as number)!));
+        const files = await Promise.all(bs.flatMap((b) => { const p = b.card === null ? undefined : beatPosts.get(b.card); return p ? [p] : []; }));
         return { files, env, t0: postT0 ?? Date.now() };
       })();
     }

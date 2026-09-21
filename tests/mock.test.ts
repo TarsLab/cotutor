@@ -44,7 +44,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '还有吗' });
   await m.settle();
   const d3 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('脚本用完 → 只有一句收尾话(一节只有讲稿,没有卡)', d3.messages.length === 5 && d3.messages[2].section?.cards[0].kind === 'text' && d3.messages[4].section?.cards.length === 0 && d3.messages[4].section?.lines.length === 1 && d3.messages[4].reply === '这个我们明天接着说,好不好?');
+  check('脚本用完 → 只有一句收尾话(一节只有讲稿;末句是问句,补了提问卡)', d3.messages.length === 5 && d3.messages[2].section?.cards[0].kind === 'text' && d3.messages[4].section?.cards.length === 1 && d3.messages[4].section?.cards[0].props.ask === true && d3.messages[4].section?.lines.length === 1 && d3.messages[4].reply === '这个我们明天接着说,好不好?');
   check('剩余次数只数孩子发的', d3.remaining === 30 - 5);
   // 卡的状态:数学老师首节有选择题 → PUT 状态假存、today 里并回卡上、答案仍剥;交给老师 → 下一节;「继续」不计次数
   const md = (await get('/api/kid/conversations/math-tutor/today')).json as Day;

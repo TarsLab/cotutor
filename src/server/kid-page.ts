@@ -546,7 +546,8 @@ __PHOTO_JS__
         const emoji = c.look && c.look.emoji ? c.look.emoji + ' ' : '';
         const title = p.title ? h('div', { class: 'ct' }, emoji + p.title) : null;
         const body = p.text ? h('div', { class: 'cb' }, p.text) : null;
-        return box('text', title, body);
+        // 提问卡:末句那一问(解析器补的),和选择题的问题一个字重
+        return box(isAskCard(c) ? 'text c-ask' : 'text', title, body);
       }
       case 'read':
         return box('read', ...(p.segments || []).map((seg, k) => h('div', { class: 'rd', on: { click: (e) => { e.stopPropagation(); readSegment(e.currentTarget, c, k, seg); } } }, seg)));

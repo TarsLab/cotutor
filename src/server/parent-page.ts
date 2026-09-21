@@ -577,7 +577,7 @@ export const PARENT_PAGE = `<!doctype html>
     const p = card.props || {};
     const style = card.kind === 'text' ? (p.style || 'plain') : '';
     const box = h('div', { class: 'card ' + card.kind + ' ' + style });
-    box.append(h('div', { class: 'kindbar' }, h('i', {}), card.kind + (p.style ? ' · ' + p.style : ''), h('span', { class: 'more' }, '卡 ' + (n + 1) + ' · ' + (KIND_LABEL[card.kind] || card.kind))));
+    box.append(h('div', { class: 'kindbar' }, h('i', {}), card.kind + (p.style ? ' · ' + p.style : ''), h('span', { class: 'more' }, '卡 ' + (n + 1) + ' · ' + (p.ask === true ? '提问(应用补的)' : KIND_LABEL[card.kind] || card.kind))));
     const body = h('div', { class: 'body' });
     if (card.kind === 'text') body.append(...(p.title ? [h('b', {}, p.title)] : []), h('p', { style: 'margin:0' }, p.text || ''));
     else if (card.kind === 'read') body.append(...(p.segments || []).map((s) => h('span', { class: 'seg' }, s)));
@@ -614,7 +614,9 @@ export const PARENT_PAGE = `<!doctype html>
     const flush = (upto) => { while (put <= upto && put < section.cards.length) { box.append(cardEl(section.cards[put], put)); put++; } };
     section.lines.forEach((l, i) => {
       flush(l.anchor === null || l.anchor === undefined ? -1 : l.anchor);
-      box.append(h('div', { class: 'line' + (l.ask ? ' ask-line' : '') }, h('span', { class: 'n' }, String(i + 1)), marked(l)));
+      // 孩子端只在末句问句停下(kid-board 的 advance);中间的问句念完就接下一句,不缀
+      const waits = l.ask && i === section.lines.length - 1;
+      box.append(h('div', { class: 'line' + (waits ? ' ask-line' : '') }, h('span', { class: 'n' }, String(i + 1)), marked(l)));
     });
     flush(section.cards.length - 1);
     return box;

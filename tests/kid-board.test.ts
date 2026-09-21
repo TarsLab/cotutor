@@ -25,6 +25,7 @@ import {
   playableLines,
   lineTarget,
   lookFor,
+  isAskCard,
   nowCard,
   penBox,
   penFor,
@@ -173,6 +174,13 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   check('再听:念完之后卡 1 是它那一句(不连着);整节是全部句;老师还在写的节、没讲稿的节、没有的卡都不行', JSON.stringify(replayLines(secs, 0, 1)) === '[4]' && JSON.stringify(replayLines(secs, 0, 'all')) === '[0,1,2,3,4]' && replayLines([{ ...sec, partial: true, ready: 3 }], 0, 0).length === 0 && replayLines([{ cards: [cd], lines: [] }], 0, 0).length === 0 && replayLines(secs, 0, 7).length === 0);
   const marked: BoardSection = { cards: [cd, { kind: 'text', props: { text: '多做一步' } }], lines: [{ ...ln(0), marks: [{ card: 1, phrase: '多做一步' }] }, ln(1)] };
   check('再听按亮哪张分:锚在卡 0、标注在卡 1 的那句归卡 1;卡 0 一句不剩就没喇叭', JSON.stringify(replayLines([marked], 0, 1)) === '[0,1]' && replayLines([marked], 0, 0).length === 0);
+  {
+    // 提问卡(2026-09-21):解析器补在节尾,自己一拍、没有讲稿;末句还锚在它讲的那张卡上
+    const askSec: BoardSection = { cards: [cd, { kind: 'text', props: { text: '这是要堆什么?', ask: true } }], lines: [ln(0), { ...ln(0), text: '这是要堆什么?', ask: true }], layout: { for: 'tablet-landscape', rows: [[0]] } };
+    check('提问卡:念末句时亮的还是它讲的那张卡;停下等答亮提问卡;再听时不抢', nowCard([askSec], { section: 0, line: 1, status: 'playing' }) === 0 && nowCard([askSec], { section: 0, line: 1, status: 'waiting' }) === 1 && nowCard([askSec], { section: 0, line: 0, status: 'playing', replay: { lines: [0], back: { section: 0, line: 1, status: 'waiting' } } }) === 0);
+    check('提问卡:喇叭 = 再听末句那一问;末句也还算在它讲的那张卡里', JSON.stringify(replayLines([askSec], 0, 1)) === '[1]' && JSON.stringify(replayLines([askSec], 0, 0)) === '[0,1]');
+    check('提问卡:不过后期,layout 没盖到它也不作废——前面照排,它独占节尾一行;底色紫', JSON.stringify(rowsFor(askSec, 'tablet-landscape')) === '[[0],[1]]' && tintFor(askSec.cards[1]) === 'plum' && isAskCard(askSec.cards[1]) && !isAskCard(cd));
+  }
   const r = startReplay(playing3, 0, [1, 4]);
   check('开始再听:从第一句念,在念的回来变暂停', r.line === 1 && r.status === 'playing' && JSON.stringify(r.replay?.back) === '{"section":0,"line":3,"status":"paused"}');
   const r2 = advance(r, secs);

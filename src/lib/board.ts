@@ -7,7 +7,7 @@
  * spans 是「这张卡 / 这句话是原文哪几行」,家长端「看原文」据此在原文旁边标出解析器怎么读的;孩子端的 BoardSection 不带它。
  */
 import { parseCard, type CardPlace } from '../cards/index.ts';
-import { anchorMarks, isHeading, isQuestion, phrasesIn, plainLine, type BoardCard, type BoardCue, type BoardLine, type BoardSection } from './kid-board.ts';
+import { anchorMarks, hasState, isAskCard, isHeading, isQuestion, lineTarget, phrasesIn, plainLine, type BoardCard, type BoardCue, type BoardLine, type BoardSection } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 
 export interface ParseBoardOptions {
@@ -159,6 +159,18 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
     const plain = plainLine(r.text);
     return { text: plain, audio: null, marks, ask: isQuestion(plain), anchor: r.anchor, cues: r.cues };
   });
+  // 提问卡(2026-09-21):末句问句是孩子要答的那句,念完不能只剩字幕——没配能答的卡(choice / fill / canvas)就在节尾补一张文字卡写着这句。
+  // 末句的锚点不动(还在它讲的那张卡的拍里,后期照样能把问句里的词标到那张卡上);提问卡自己一拍、没有讲稿。
+  // 老师还在写(partial)时不补:这时的末句不一定是最后一句。首页没有讲稿,不管
+  const lastLine = out[out.length - 1];
+  if (!partial && (opts.place ?? 'board') === 'board' && lastLine?.ask && !lastLine.cues.length) {
+    const t = lineTarget(lastLine);
+    const answerable = (c: BoardCard | undefined): boolean => Boolean(c && hasState(c));
+    if (!answerable(t === null ? undefined : cards[t]) && !answerable(cards[cards.length - 1])) {
+      cards.push({ kind: 'text', props: { text: lastLine.text, ask: true } });
+      cardSpans.push([kept[kept.length - 1].line, kept[kept.length - 1].line]);
+    }
+  }
   return {
     section: { cards, lines: out, ...(partial ? { partial: true } : {}) },
     warnings,
@@ -231,6 +243,8 @@ export function annotateSource(text: string): AnnotatedSource {
   const at = (bodyLine: number): number | undefined => lineMap[bodyLine];
   board.spans.cards.forEach((span, n) => {
     const card = board.section.cards[n];
+    // 提问卡是解析器补的,原文里没有它的围栏
+    if (isAskCard(card)) return;
     for (let b = span[0]; b <= span[1]; b++) {
       const i = at(b);
       if (i === undefined) continue;
@@ -249,7 +263,9 @@ export function annotateSource(text: string): AnnotatedSource {
     rows[i].role = 'say';
     rows[i].index = n;
     const l = board.section.lines[n];
-    rows[i].label = `讲稿 ${n + 1}${l.ask ? ' · 问句,停下等' : ' · 播'}`;
+    const waits = l.ask && n === board.section.lines.length - 1;
+    const asked = waits && board.section.cards.some(isAskCard);
+    rows[i].label = `讲稿 ${n + 1}${waits ? ` · 问句,停下等${asked ? '(补提问卡)' : ''}` : ' · 播'}`;
   });
   if (board.spans.tail) {
     for (let b = board.spans.tail[0]; b <= board.spans.tail[1]; b++) {

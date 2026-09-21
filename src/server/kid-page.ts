@@ -131,6 +131,9 @@ const PAGE = `<!doctype html>
   #back-today { width:100%; height:56px; border-radius:28px; background:#fff; border:1px solid var(--line); box-shadow:0 2px 10px #00000010; font-size:17px; font-weight:600; color:var(--ink); }
   #back-today[hidden] { display:none; }
   #wrap { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
+  /* 板书顶上一条渐隐:滚上去的内容在两角按钮那一带淡成纸色,不和胶囊、话题标签叠字。只是盖一层颜色,不占位置、不收触摸;
+     夹在板书(卡上的「再听」z 1)与两角按钮(z 3)之间。滚到顶时第一节在 68px 以下,基本碰不到它 */
+  #wrap::before { content:""; position:absolute; left:0; right:0; top:0; height:calc(env(safe-area-inset-top) + 72px); z-index:2; pointer-events:none; background:linear-gradient(var(--paper) calc(env(safe-area-inset-top) + 16px), transparent); }
   /* 舞台的遮罩:板书与顶栏压暗,点一下 = 点 ×;字幕行与输入条不盖(舞台开着孩子照样能说话) */
   #st-dim { position:absolute; left:0; right:0; bottom:0; top:-100vh; z-index:4; background:#00000073; display:none; }
   #stage.on ~ #st-dim { display:block; }
@@ -156,7 +159,7 @@ const PAGE = `<!doctype html>
   @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-3px); } }
   @media (prefers-reduced-motion:reduce) { .wait-card path { animation:none; stroke-dashoffset:0; } .wait-card .av, .dots i { animation:none; opacity:.6; } }
   /* 再听(2026-09-18):讲完的卡右上角一个小喇叭,节头念完也有;点了重念,念着的那张喇叭变橙、轻轻跳 */
-  .c > .again { position:absolute; top:-9px; right:-9px; z-index:2; width:30px; height:30px; padding:0; border-radius:50%; border:1px solid var(--line); background:#fff; color:var(--dim); display:none; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .c > .again { position:absolute; top:-9px; right:-9px; z-index:1; width:30px; height:30px; padding:0; border-radius:50%; border:1px solid var(--line); background:#fff; color:var(--dim); display:none; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.08); }
   .c > .again::before { content:""; position:absolute; inset:-7px; }
   .c.heard > .again { display:inline-flex; }
   .c.replaying > .again, .sec.replaying > .sh .again { color:var(--accent); border-color:var(--accent); animation:again 1s ease-in-out infinite; }

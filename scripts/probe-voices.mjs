@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 家长端音色页的手动验收(不进 pnpm test,要本机 Chrome 与一个跑着的 serve,试听会真跑一次 voxtell say):
- * 用 Chrome DevTools 协议开 /parent#voices → 列表来了(条数与 /api/tts/voices 一致)→ 搜一个词列表缩短 →
+ * 用 Chrome DevTools 协议开 /dev#voices → 列表来了(条数与 /api/tts/voices 一致)→ 搜一个词列表缩短 →
  * 点第一行「试听」等它变成「■ 停」(合成完开播)→ 给选中的老师点「给 X 用」→ /api/config 里那位老师的 voice 变了 →
  * 改回原来的 → 桌面与手机两种尺寸各截一张图。
  *
@@ -20,7 +20,7 @@ const port = 9336;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ok = (name, cond, detail = '') => { console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`); if (!cond) process.exitCode = 1; };
 
-const proc = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${port}`, '--window-size=1280,900', '--user-data-dir=/tmp/cotutor-probe-voices-profile', `${base}/parent#voices`], { stdio: 'ignore' });
+const proc = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${port}`, '--window-size=1280,900', '--user-data-dir=/tmp/cotutor-probe-voices-profile', `${base}/dev#voices`], { stdio: 'ignore' });
 
 async function target() {
   for (let i = 0; i < 40; i++) {

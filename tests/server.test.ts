@@ -52,8 +52,8 @@ try {
     check('改了主题 css 刷新就有(按 mtime 现读)', (await get('/kid/theme.css')).html?.includes('家长改的') === true);
     check('/api/config 报当前主题', ((await get('/api/config')).json as { theme: string }).theme === 'default');
   }
-  const parent = (await get('/parent')).html ?? '';
-  check('家长页', parent.includes('对话') && parent.includes('看原文'));
+  const parent = (await get('/dev')).html ?? '';
+  check('工作台 /dev(原家长页)', parent.includes('对话') && parent.includes('看原文') && parent.includes('工作台') && parent.includes('href="/parent"'));
   {
     // 家长页的内联脚本:模板里的转义没把 JS 写断(\\n 写成 \n、正则里的 \\/ 被吃掉都在这里现形)
     const js = parent.slice(parent.indexOf('<script>') + 8, parent.lastIndexOf('</script>'));
@@ -130,8 +130,8 @@ try {
     // 卡数 2:选择题一张,第二节末句问句没配能答的卡、解析器补的提问卡一张
     check('清单:三位有脸的老师;数学老师 3 轮、两个话题;第一个话题的题、节数、卡数、停在末句问句、星;出错的话题 0 节', ov.date === today && ov.tutors.length === 3 && mt?.turns === 3 && mt.costUsd === 0.12 && mt.threads.length === 2 && mt.threads[0].title === '7 减 9 怎么算' && mt.threads[0].sections === 2 && mt.threads[0].cards === 2 && mt.threads[0].stoppedAt === 'ask' && mt.threads[0].rating === 4 && !mt.threads[0].booked && mt.threads[1].sections === 0 && mt.threads[1].stoppedAt === null, JSON.stringify(ov));
     check('清单与板书接口:未来的日期 400,没这位老师 404', (await get('/api/overview/2099-01-01')).status === 400 && (await get('/api/conversations/math-tutor/2099-01-01/board')).status === 400 && (await get('/api/conversations/nobody/today/board')).status === 404);
-    const page = (await get('/parent/board')).html ?? '';
-    check('家长板书页:孩子端页面带家长标记、自己的 manifest;manifest 从这页起', page.includes('const MODE = {"parent":true};') && page.includes('href="/parent/manifest.webmanifest"') && page.includes('· 家长</title>') && ((await get('/parent/manifest.webmanifest')).json as { start_url: string; scope: string }).start_url === '/parent/board' && ((await get('/manifest.webmanifest')).json as { start_url: string }).start_url === '/');
+    const page = (await get('/parent')).html ?? '';
+    check('家长端 /parent:孩子端页面带家长标记、自己的 manifest;manifest 从这页起;工作台在 /dev,/parent/board 没了', page.includes('const MODE = {"parent":true};') && page.includes('href="/parent/manifest.webmanifest"') && page.includes('· 家长</title>') && ((await get('/parent/manifest.webmanifest')).json as { start_url: string; scope: string }).start_url === '/parent' && ((await get('/manifest.webmanifest')).json as { start_url: string }).start_url === '/' && ((await get('/dev')).html ?? '').includes('老师团') && (await get('/parent/board')).status === 404);
   }
   check('404 / 405', (await get('/nope')).status === 404 && (await route('POST', '/api/health', ctx)).status === 200 && (await route('POST', '/api/workspace', ctx)).status === 405 && (await route('PUT', '/api/config', ctx)).status === 405);
 } finally {

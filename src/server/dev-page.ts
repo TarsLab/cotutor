@@ -1,6 +1,7 @@
 /**
- * 家长端 /parent:五个标签(对话 / 老师团 / 音色 / 设置 / 首页)+「看原文」抽屉,零依赖内联脚本,只走 /api/*。
- * 首页页(《首页设计.md》§7.3):左边 iframe 是孩子端页面本身的预览(/parent/home-preview),右边是检查、按钮与讲法、发布、点击统计。
+ * 工作台 /dev(2026-09-22 之前叫家长端 /parent;现在家长端是 /parent = 家长板书页,给不懂技术的家长日常用,这页给有技术背景的家长与开发者):
+ * 五个标签(对话 / 老师团 / 音色 / 设置 / 首页)+「看原文」抽屉,零依赖内联脚本,只走 /api/*。
+ * 首页页(《首页设计.md》§7.3):左边 iframe 是孩子端页面本身的预览(/dev/home-preview),右边是检查、按钮与讲法、发布、点击统计。
  * 2026-09-11 重做:一轮 = 一张卡(问句 → 板书 → 埋点 → 孩子看到 → 通知块),板书按 kind 渲染成卡片而不是把围栏原文倒给家长;
  * 顶栏与输入框各自钉死(grid-rows auto/1fr/auto + min-height:0,不再硬算 100vh - 47px:顶栏一换行就错位,composer 被顶出视口);
  * 老师团一位一行、九项政策折叠、改过的才亮;设置分路径 / 服务 / 配音三块,配音能当场试一句。
@@ -8,11 +9,11 @@
  * 放在 .ts 里而不是 .html,是因为 tsc 不拷贝静态文件,dist 里就少一份。
  * 改这里注意:整份是模板字符串——页面脚本里不要用反引号与 ${},换行写 \\n,正则里别写 \\/。
  */
-export const PARENT_PAGE = `<!doctype html>
+export const DEV_PAGE = `<!doctype html>
 <html lang="zh-CN">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>cotutor 家长端</title>
+<title>cotutor 工作台</title>
 <style>
   :root {
     --ground:#fff; --surface:#fff; --surface-2:#F7F9FC; --sunk:#F4F7FB;
@@ -353,10 +354,10 @@ export const PARENT_PAGE = `<!doctype html>
   }
 </style>
 <header>
-  <h1 id="title">cotutor<small>家长端</small></h1>
+  <h1 id="title">cotutor<small>工作台</small></h1>
   <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">老师团</a><a href="#voices" data-tab="voices">音色</a><a href="#settings" data-tab="settings">设置</a><a href="#home" data-tab="home">首页</a></nav>
   <span class="health" id="health"></span>
-  <a class="qrlink" href="/parent/board" target="_blank" title="家长板书页:在这台电脑或 iPad 上看孩子的板书,答案与给家长的话都在,只读">看板书</a>
+  <a class="qrlink" href="/parent" target="_blank" title="家长端:日常看孩子的板书、发消息、拍作业、打星、试用;iPad 上扫码进的就是它">家长端</a>
   <a class="qrlink" href="/qr" target="_blank" title="iPad / iPhone 用相机扫,不用输地址">扫码打开</a>
 </header>
 <main id="chat" class="on">
@@ -454,8 +455,8 @@ export const PARENT_PAGE = `<!doctype html>
 
   const loadConfig = async () => {
     state.config = await api('GET', '/api/config');
-    $('#title').replaceChildren(state.config.title, h('small', {}, '家长端'));
-    document.title = state.config.title + ' · 家长端';
+    $('#title').replaceChildren(state.config.title, h('small', {}, '工作台'));
+    document.title = state.config.title + ' · 工作台';
     $('#runtime').replaceChildren(...state.config.runtimes.map((p) => h('option', { value: p, selected: p === state.config.runtime }, p === state.config.runtime ? p + '(缺省)' : p)));
     renderTutors();
   };
@@ -1370,7 +1371,7 @@ export const PARENT_PAGE = `<!doctype html>
       const dev = HOME_DEVICES[homeState.device];
       const seg = (k, opts) => h('div', { class: 'seg' }, ...opts.map(([v, label]) => h('button', { class: 'btn' + (homeState[k] === v ? ' primary' : ''), type: 'button', on: { click: () => { homeState[k] = v; renderHomeTab(); } } }, label)));
       const frame = h('div', { class: 'frame', style: 'width:' + Math.round(dev.w * dev.k) + 'px;height:' + Math.round(dev.h * dev.k) + 'px' },
-        h('iframe', { src: '/parent/home-preview?which=' + homeState.which, title: '首页预览', style: 'width:' + dev.w + 'px;height:' + dev.h + 'px;transform:scale(' + dev.k + ')' }));
+        h('iframe', { src: '/dev/home-preview?which=' + homeState.which, title: '首页预览', style: 'width:' + dev.w + 'px;height:' + dev.h + 'px;transform:scale(' + dev.k + ')' }));
       const pv = h('div', { class: 'pv' }, h('div', { class: 'segs' }, seg('which', [['draft', '草稿'], ['published', '已发布']]), seg('device', [['phone', '手机'], ['tablet', '平板']])), frame, h('p', { class: 'hint', style: 'padding:0' }, '孩子端同一个页面;点按钮不会真发,只显示会发给谁、讲法是什么。'));
       $('#home').replaceChildren(h('div', { class: 'homegrid' }, pv, h('div', { class: 'wrap', id: 'home-side' })));
     }

@@ -116,7 +116,7 @@ for: 2026-09-18
   check('家长接口:草稿两条要改、还没发布', api0.draft.exists && api0.draft.fixes === 2 && api0.published === null);
   const pv = (await route('GET', '/api/home/preview?which=draft', ctx)).json as KidHome & { preview: string };
   check('预览草稿:讲法留着(家长看的)、坏卡按文字卡显示', pv.preview === 'draft' && buttonsOf(pv, 'chinese-tutor').find((b) => b.id === 0)?.brief === '第 22 课,先读顺 1–3 段' && pv.cards.some((c) => c.kind === 'text'), JSON.stringify(pv.cards));
-  check('预览页是孩子端页面带预览标记', ((await route('GET', '/parent/home-preview?which=draft', ctx)).html ?? '').includes('const MODE = {"preview":"draft"};'));
+  check('预览页是孩子端页面带预览标记', ((await route('GET', '/dev/home-preview?which=draft', ctx)).html ?? '').includes('const MODE = {"preview":"draft"};'));
 
   const f1 = await route('POST', '/api/home/publish', ctx, { force: true });
   const f1j = f1.json as { ok: boolean; id: string; dropped: string[] };
@@ -181,7 +181,7 @@ for: 2026-09-18
   check('cotutor home show', sh.code === 0 && sh.out.includes(`已发布 ${h1.home}`) && sh.out.includes('语文老师 · 我要预习小蝌蚪找妈妈:点了 1 次') && sh.out.includes('数学老师 · 再练两道退位减法:没点过'), sh.out);
   const api1 = (await route('GET', '/api/home', ctx)).json as { published: { id: string; broken: unknown[] }; clicks: unknown[] };
   check('家长接口:已发布、引用都在、点击', api1.published.id === h1.home && api1.published.broken.length === 0 && api1.clicks.length === 5);
-  check('家长页有「首页」标签', ((await route('GET', '/parent', ctx)).html ?? '').includes('data-tab="home"'));
+  check('工作台 /dev 有「首页」标签', ((await route('GET', '/dev', ctx)).html ?? '').includes('data-tab="home"'));
 
   // ---- 回放:讲法从当时发布的那份原文取,continue 从原 workspace 读 ----
   const rp0 = await startReplay(ctx.ws, 'chinese-tutor', '2026-09-17', j0, { now: () => now });
@@ -246,6 +246,20 @@ for: 2026-09-18
     const pfk = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null }[] };
     const pfi = await readIndex(ctx.ws, 'math-tutor', day);
     check('家长真发:202、消息记 device: phone、板书接口 from parent、孩子接口问句 null;坏 device 400', pf.status === 202 && pfi.messages[pfi.messages.length - 1].device === 'phone' && pfi.messages[pfi.messages.length - 1].from === 'parent' && pfb.messages[pfb.messages.length - 1].from === 'parent' && pfb.messages[pfb.messages.length - 1].question === '家长补一句' && pfk.messages[pfk.messages.length - 1].question === null && (await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: 'x', device: 'tv' })).status === 400, JSON.stringify({ pf: pf.json, last: pfi.messages[pfi.messages.length - 1] }));
+    // 删话题(清单上的「删」):试用的从 evals/ 删,文件按 <日期>.<job>.* 整个没;孩子的从 conversations/ 删,孩子接口不再列;再删 404;记忆文件本来没建、也不碰
+    const evDir = join(root, 'evals', 'math-tutor');
+    const d1 = await route('DELETE', `/api/tryouts/math-tutor/${day}/threads/${td.thread}`, ctx);
+    const evLeft = readdirSync(evDir).filter((f) => f.startsWith(`${day}.${job1}.`) || f.startsWith(`${day}.${td2.messages[1].job}.`));
+    const tdAfter = (await route('GET', '/api/tryouts/math-tutor/today', ctx)).json as { messages: unknown[] };
+    check('删试用话题:200、索引里没了、那两轮的文件全没了、以前试过的空;再删 404', d1.status === 200 && tdAfter.messages.length === 0 && evLeft.length === 0 && ((await route('GET', '/api/tryouts/math-tutor/history', ctx)).json as { days: unknown[] }).days.length === 0 && (await route('DELETE', `/api/tryouts/math-tutor/${day}/threads/${td.thread}`, ctx)).status === 404, JSON.stringify({ d1: d1.json, evLeft }));
+    const kidThreadsBefore = new Set(pfi.messages.map((m) => m.thread));
+    const victim = pfi.messages[pfi.messages.length - 1].thread!;
+    const victimJobs = pfi.messages.filter((m) => m.thread === victim).map((m) => m.job);
+    const d2 = await route('DELETE', `/api/conversations/math-tutor/${day}/threads/${encodeURIComponent(victim)}`, ctx);
+    const after = await readIndex(ctx.ws, 'math-tutor', day);
+    const left = readdirSync(convDir).filter((f) => victimJobs.some((j) => f.startsWith(`${day}.${j}.`)));
+    const kidAfter = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { thread: string }[] };
+    check('删孩子的话题:200、索引只剩别的话题、会话与星跟着没、文件没了、孩子接口不再列它;没这个话题 404', d2.status === 200 && (d2.json as { threadsLeft: number }).threadsLeft === kidThreadsBefore.size - 1 && !after.messages.some((m) => m.thread === victim) && !(victim in after.sessions) && !(victim in after.ratings) && left.length === 0 && !kidAfter.messages.some((m) => m.thread === victim) && (await route('DELETE', `/api/conversations/math-tutor/${day}/threads/0000-0`, ctx)).status === 404, JSON.stringify({ d2: d2.json, left, sessions: Object.keys(after.sessions) }));
     check('试用:没这位老师 404、画图老师(hidden)404、空消息 400、坏话题 400', (await route('GET', '/api/tryouts/nobody/today', ctx)).status === 404 && (await route('GET', '/api/tryouts/scene-maker/today', ctx)).status === 404 && (await route('POST', '/api/tryouts/math-tutor/messages', ctx, { text: ' ' })).status === 400 && (await route('POST', '/api/tryouts/math-tutor/messages', ctx, { text: 'x', thread: 'bad' })).status === 400);
   }
 } finally {

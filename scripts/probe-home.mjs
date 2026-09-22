@@ -136,11 +136,11 @@ for: ${day}
 
   // ---- 家长端「首页」页 ----
   await device(1440, 900, 1, false);
-  await send('Page.navigate', { url: `${base}/parent#home` });
+  await send('Page.navigate', { url: `${base}/dev#home` });
   for (let i = 0; i < 40; i++) { if (await evaluate(`!!document.querySelector('#home-side .panel')`)) break; await sleep(250); }
   await sleep(2500);
   const parent = await evaluate(`({ frame: document.querySelector('#home iframe')?.getAttribute('src'), panels: [...document.querySelectorAll('#home-side .panel h4')].map((x) => x.textContent), clicks: document.querySelector('#home-side')?.textContent.includes('点了 1 次'), briefs: document.querySelector('#home-side')?.textContent.includes('讲法:第 22 课') })`);
-  ok('家长端首页页:预览 iframe、草稿与已发布两块、讲法与点击', parent.frame === '/parent/home-preview?which=draft' && parent.panels.join() === '草稿,已发布' && parent.clicks && parent.briefs, JSON.stringify(parent));
+  ok('工作台首页页:预览 iframe、草稿与已发布两块、讲法与点击', parent.frame === '/dev/home-preview?which=draft' && parent.panels.join() === '草稿,已发布' && parent.clicks && parent.briefs, JSON.stringify(parent));
   console.log('  ', await shot('parent-home.png'));
   ws.close();
 } finally {

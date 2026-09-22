@@ -2,7 +2,7 @@
  * 扫码页 /qr:在这台电脑上打开,iPad / iPhone 用相机扫,不用输地址。每次请求现画,不落文件。
  * 编什么由服务端定(ListenInfo,listen 之后才知道真端口),不看请求的 Host——家长多半是从 localhost 打开这一页的,照抄就编成了 localhost。
  * 默认编 <本机名>.local(不随 Wi-Fi 变);个别设备会把它解析到走不通的 IPv6(一直转圈),页脚有一条换成局域网 IP 的退路(?via=ip)。
- * 两张码:孩子端 `/`(缺省)与家长板书页 `/parent/board`(?to=parent,《家长板书页设计.md》§2.1),页脚互相换。
+ * 两张码:孩子端 `/`(缺省)与家长端 `/parent`(?to=parent,《家长板书页设计.md》§2.1),页脚互相换。
  * 没有脚本;打印(⌘P)只留卡面,可以贴书桌。不在孩子端的入口里。
  */
 import { qrNotes, qrSvg } from '../lib/qr-svg.ts';
@@ -20,7 +20,7 @@ const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;'
 export function qrPage(title: string, info: ListenInfo, via: 'name' | 'ip' = 'name', to: 'kid' | 'parent' = 'kid'): string {
   const useIp = via === 'ip' && info.ip !== null;
   const base = useIp ? (info.ip as string) : info.name;
-  const url = to === 'parent' ? `${base}parent/board` : base;
+  const url = to === 'parent' ? `${base}parent` : base;
   const svg = qrSvg(url) ?? '<p>地址太长,编不进二维码</p>';
   const q = (v: 'name' | 'ip', t: 'kid' | 'parent'): string => `/qr${v === 'ip' ? '?via=ip' : ''}${t === 'parent' ? (v === 'ip' ? '&' : '?') + 'to=parent' : ''}`;
   const other = useIp

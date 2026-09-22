@@ -412,8 +412,9 @@ export function createMock(opts: MockOptions = {}): Mock {
   }
   const dailyLimit = 30;
   const used = (name: string): number => (messages.get(name) ?? []).filter((m) => m.question !== null && m.action !== 'continue' && m.from !== 'parent').length;
-  /** 话题打星(家长板书页清单上):<老师>/<话题> → 1–5 */
+  /** 话题打星(家长端清单上):<老师>/<话题> → 1–5;记过账的话题(同样的键) */
   const ratings = new Map<string, number>();
+  const booked = new Set<string>();
   /** 下发孩子端的形状:答案剥掉、状态并到卡上、场景卡补课包快照(样本课包在仓库里);家长发的问句不露 */
   const kidMessage = async (m: MockMessage) => {
     const { states, action: _a, from: _f, ...rest } = m;
@@ -493,9 +494,9 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p === '/') return { status: 200, html: kidPage(title) };
     if (p === '/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
-    // 家长板书页(《家长板书页设计.md》):同一个页面,家长模式;清单与一天的板书(答案不剥,第一节带一条给家长的尾巴与记忆,看旁注的样子)
-    if (p === '/parent/board') return { status: 200, html: kidPage(title, { parent: true }) };
-    if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${title} · 家长`, { startUrl: '/parent/board', scope: '/parent/' }), contentType: 'application/manifest+json; charset=utf-8' };
+    // 家长端(《家长板书页设计.md》):同一个页面,家长模式;清单与一天的板书(答案不剥,第一节带一条给家长的尾巴与记忆,看旁注的样子)。mock 没有工作台 /dev
+    if (p === '/parent') return { status: 200, html: kidPage(title, { parent: true }) };
+    if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };
     // 主题:mock 没有 workspace,直接给包里的出厂 default
     if (p === '/kid/theme.css') return { status: 200, html: `${cardsCss()}\n\n${(await packageTheme()).css}`, contentType: 'text/css; charset=utf-8' };
     if (p === '/kid/theme.json') return { status: 200, json: (await packageTheme()).manifest };
@@ -515,14 +516,14 @@ export function createMock(opts: MockOptions = {}): Mock {
       const listOf = (name: string): MockMessage[] => (date === today ? messages.get(name) : date === yesterday() ? past.get(name) : undefined) ?? [];
       const tutors = MOCK_TUTORS.map((t) => {
         const list = listOf(t.name);
-        const by = new Map<string, { thread: string; at: string; title: string; from: 'kid' | 'parent'; via: null; sections: number; cards: number; stoppedAt: 'writing' | 'ask' | null; rating: number | null; booked: false }>();
+        const by = new Map<string, { thread: string; at: string; title: string; from: 'kid' | 'parent'; via: null; sections: number; cards: number; stoppedAt: 'writing' | 'ask' | null; rating: number | null; booked: boolean }>();
         for (const m of list) {
           let th = by.get(m.thread);
-          if (!th) { th = { thread: m.thread, at: m.at, title: Array.from((m.question ?? '').trim()).slice(0, 20).join(''), from: m.from ?? 'kid', via: null, sections: 0, cards: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: false }; by.set(m.thread, th); }
+          if (!th) { th = { thread: m.thread, at: m.at, title: Array.from((m.question ?? '').trim()).slice(0, 20).join(''), from: m.from ?? 'kid', via: null, sections: 0, cards: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: booked.has(`${t.name}/${m.thread}`) }; by.set(m.thread, th); }
           if (m.pending) th.stoppedAt = 'writing';
           else if (m.section && (m.section.cards.length || m.section.lines.length)) { th.sections++; th.cards += m.section.cards.length; th.stoppedAt = m.section.lines[m.section.lines.length - 1]?.ask ? 'ask' : null; }
         }
-        return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], tryouts: date === today ? kidThreads(tryMsgs.get(t.name) ?? []) : [] };
+        return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], tryouts: date === today ? kidThreads(tryMsgs.get(t.name) ?? []) : [], booking: false };
       });
       return { status: 200, json: { title, date, today, tutors } };
     }
@@ -574,6 +575,28 @@ export function createMock(opts: MockOptions = {}): Mock {
       const done = think(t, m).then(() => { inflight.delete(m.job); });
       inflight.set(m.job, done);
       return { status: 202, json: { tutor: name, date, job, thread } };
+    }
+    // 记账(家长端清单上的「记账」):这天还没记过的话题都算记了(真服务是每个话题起一轮老师;mock 立刻记上)
+    const bk = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/bookkeep$/.exec(p);
+    if (bk && method === 'POST') {
+      const [, name] = bk;
+      const list = messages.get(name);
+      if (!list) return { status: 404, json: { error: 'no_such_tutor' } };
+      const queued = [...new Set(list.filter((m) => m.section && !m.pending).map((m) => m.thread))].filter((th) => !booked.has(`${name}/${th}`));
+      for (const th of queued) booked.add(`${name}/${th}`);
+      return { status: 202, json: { tutor: name, queued, skipped: [] } };
+    }
+    // 删掉一个话题(孩子的 / 试用的):列表里去掉;还在想的 409
+    const del = /^\/api\/(conversations|tryouts)\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)$/.exec(p);
+    if (del && method === 'DELETE') {
+      const [, kind, name, , thread] = del;
+      const store = kind === 'tryouts' ? tryMsgs : messages;
+      const list = store.get(name);
+      if (!list || !list.some((m) => m.thread === thread)) return { status: 404, json: { error: 'no_such_thread' } };
+      if (list.some((m) => m.thread === thread && m.pending)) return { status: 409, json: { error: 'busy' } };
+      store.set(name, list.filter((m) => m.thread !== thread));
+      ratings.delete(`${name}/${thread}`);
+      return { status: 200, json: { tutor: name, thread } };
     }
     const rate = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/rating$/.exec(p);
     if (rate && method === 'PUT') {

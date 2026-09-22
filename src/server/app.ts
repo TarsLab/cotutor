@@ -1,6 +1,7 @@
 /**
  * 服务的路由层:route(method, path, ctx, body) → {status, json|html},测试不用起端口。
- * R1 的查询接口照旧;R2 加:对话(列日期、看一天的家长视图、发消息)、cotutor.json 补丁(老师团页)、家长页 /parent。
+ * R1 的查询接口照旧;R2 加:对话(列日期、看一天的家长视图、发消息)、cotutor.json 补丁(老师团页)、工作台 /dev(2026-09-22 之前叫家长页 /parent;
+ * 现在 /parent 是家长端 = 家长板书页,给不懂技术的家长日常用,《家长板书页设计.md》拍板 13)。
  * R3 加:孩子端 `/`(kidPage)与 /api/kid/*(首页:课程表 + 老师卡 + 家长发布的首页卡;对话:服务端过滤后的孩子视图;发消息:from 固定 kid、每日上限 429)、配音文件 /api/audio。
  * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
@@ -23,11 +24,11 @@ import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { kidPage } from './kid-page.ts';
 import { checkHome, historyFile, homeStats, kidHomeView, messageVia, publishHome, publishedIssues, readDraft, resolveVia } from './home.ts';
-import { PARENT_PAGE } from './parent-page.ts';
+import { DEV_PAGE } from './dev-page.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
 import { evalWorkspace } from './replay.ts';
-import { IndexError, capturePathOk, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardImage, writeCardState } from './store.ts';
+import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardImage, writeCardState } from './store.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets } from '../cards/index.ts';
 import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset } from './stage.ts';
@@ -160,7 +161,7 @@ export interface KidHome {
   home: string | null;
   /** 首页的卡(《首页设计.md》):老师卡在前,props.buttons 是孩子端的按钮;其余卡照文件顺序 */
   cards: BoardCard[];
-  /** 家长预览(/parent/home-preview):草稿还是已发布的;孩子端没有 */
+  /** 工作台「首页」页里的预览(/dev/home-preview):草稿还是已发布的;孩子端没有 */
   preview?: 'draft' | 'published';
 }
 
@@ -270,6 +271,8 @@ export interface OverviewTutor {
   threads: OverviewThread[];
   /** 这天家长试过的话题(evals/ 里 tryout 的轮;《家长板书页设计.md》§5.2) */
   tryouts: KidThread[];
+  /** 正在记账(记账或整理记忆的轮还在跑):家长端清单上的「记账」灰掉、行上写「记账中」 */
+  booking: boolean;
 }
 
 /** 「以前试过的」:形状同孩子端的 history,读 evals/ 里 tryout 的轮 */
@@ -319,7 +322,8 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
         th.stoppedAt = last?.ask ? 'ask' : null;
       }
     }
-    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], tryouts });
+    const booking = index.messages.some((m) => (m.bookkeep || m.tidy) && m.result === 'running');
+    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], tryouts, booking });
   }
   return { title: ctx.ws.config.title, date, today: localDate(ctx.now()), tutors };
 }
@@ -733,6 +737,27 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         return { status: 404, json: { error: 'no_such_thread', message: err instanceof Error ? err.message : String(err) } };
       }
     }
+    // 删掉一个话题(家长板书页清单上的「删」,2026-09-22):孩子的在 conversations/、试用的在 evals/;那个话题还有轮在跑就 409;记忆与日记不动(store.deleteThread)
+    const del = /^\/api\/(conversations|tryouts)\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)$/.exec(p);
+    if (del && method === 'DELETE') {
+      const [, kind, tutor, date, raw] = del;
+      const thread = decodeURIComponent(raw);
+      if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
+      const target = kind === 'tryouts' ? tryoutWorkspace(ws) : ws;
+      const active = (kind === 'tryouts' ? ctx.tryRunner : ctx.runner).running(tutor);
+      if (active && active.date === date) {
+        const idx = await readIndex(target, tutor, date);
+        const i = idx.messages.findIndex((m) => m.job === active.job);
+        if (i >= 0 && threads(idx.messages)[i] === thread) return { status: 409, json: { error: 'busy', message: '老师还在写这个话题,等它写完再删' } };
+      }
+      try {
+        const index = await deleteThread(target, tutor, date, thread);
+        return { status: 200, json: { tutor, date, thread, threadsLeft: new Set(threads(index.messages)).size } };
+      } catch (err) {
+        if (err instanceof IndexError) return { status: 404, json: { error: 'no_such_thread', message: err.message } };
+        throw err;
+      }
+    }
     const book = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/bookkeep$/.exec(p);
     if (book && method === 'POST') {
       const [, tutor, date] = book;
@@ -775,7 +800,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (focus && !focus.success) return { status: 400, json: { error: 'bad_request', message: 'focus 形状不对' } };
         const photos = await photosOf(ws, body.photos);
         if (photos === null) return { status: 400, json: { error: 'bad_request', message: 'photos 要是 captures/ 里在的文件(先 POST …/photos 传图拿 path)' } };
-        // 家长板书页在 iPad 上真发(《家长板书页设计.md》第六节 3)带 device,板书后期按它排版;/parent 不带,缺省当平板横屏
+        // 家长端在 iPad 上真发(《家长板书页设计.md》第六节 3)带 device,板书后期按它排版;工作台 /dev 不带,缺省当平板横屏
         const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
         if (device && !device.success) return { status: 400, json: { error: 'bad_request', message: 'device 只能是 phone / tablet' } };
         const started = await ctx.runner.send(tutor, {
@@ -814,7 +839,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
-    if (p === '/parent') return { status: 200, html: PARENT_PAGE };
+    // 工作台:对话原始视图、看原文、老师团、音色、设置、首页排版——给有技术背景的家长与开发者;家长端在 /parent
+    if (p === '/dev') return { status: 200, html: DEV_PAGE };
     // 扫码页:在电脑上打开,iPad 用相机扫(不在孩子端的入口里)
     if (p === '/qr') return ctx.listen ? { status: 200, html: qrPage(ws.config.title, ctx.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     // 按住说话的试验页(真机上比策略用;不在孩子端与家长端的入口里)
@@ -828,11 +854,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 200, body: appIconPng(n), contentType: 'image/png' };
     }
     if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title)) };
-    // 家长端「首页」页的预览:就是孩子端页面本身,数据走家长接口(讲法在),按钮不真发
-    if (p === '/parent/home-preview') return { status: 200, html: kidPage(esc(ws.config.title), { preview: url.searchParams.get('which') === 'published' ? 'published' : 'draft' }) };
-    // 家长板书页:也是孩子端页面本身,数据走家长接口(答案在、家长的话在),只读;自己的清单,加到主屏幕才不会拿到孩子端那份
-    if (p === '/parent/board') return { status: 200, html: kidPage(esc(ws.config.title), { parent: true }) };
-    if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${ws.config.title} · 家长`, { startUrl: '/parent/board', scope: '/parent/' }), contentType: 'application/manifest+json; charset=utf-8' };
+    // 工作台「首页」页的预览:就是孩子端页面本身,数据走家长接口(讲法在),按钮不真发
+    if (p === '/dev/home-preview') return { status: 200, html: kidPage(esc(ws.config.title), { preview: url.searchParams.get('which') === 'published' ? 'published' : 'draft' }) };
+    // 家长端(《家长板书页设计.md》):也是孩子端页面本身,数据走家长接口(答案在、家长的话在),卡锁着;自己的清单,加到主屏幕才不会拿到孩子端那份
+    if (p === '/parent') return { status: 200, html: kidPage(esc(ws.config.title), { parent: true }) };
+    if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${ws.config.title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };
     return { status: 404, json: { error: 'not_found', path: p } };
   } catch (err) {
     if (err instanceof BusyError) return { status: 409, json: { error: 'busy', message: err.message } };

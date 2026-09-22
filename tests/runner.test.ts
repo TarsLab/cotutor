@@ -628,7 +628,7 @@ try {
   writeFileSync(cfgFile, '{ 坏');
   const hh = (await route('GET', '/api/health', ctx)).json as { ok: boolean; configError: string | null };
   check('改坏了 → 留旧配置,health 报错', hh.configError !== null && ctx.ws.config.title === '改过的标题', JSON.stringify(hh));
-  check('家长页在', ((await route('GET', '/parent', ctx)).html ?? '').includes('老师团'));
+  check('工作台 /dev 在', ((await route('GET', '/dev', ctx)).html ?? '').includes('老师团'));
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 家长板书页(《家长板书页设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
- * 起 cotutor mock → Chrome 开 /parent/board:清单(每位老师一块、语文老师一个话题、英语老师「今天没聊」)→
+ * 起 cotutor mock → Chrome 开 /parent:清单(每位老师一块、语文老师一个话题、英语老师「今天没聊」)→
  * 点话题进板书:卡锁着、没有「更多」、喇叭缺省关、节前有「孩子」旁注、节尾有「给家长」「记住了」、选择题下面有答案 →
  * 家长真发一条(输入条在,进孩子的对话,节前「家长」)→ 回清单打星 → 昨天的清单 → 手机与平板各截一张 →
  * 试用(清单上「试一试」→ 发一条 → 节尾有费用与「本来会记住的」→ 回清单「试过的」)。孩子端 `/` 上没有旁注、没有答案(护栏)。
@@ -33,7 +33,7 @@ for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok)
 
 let browser = null;
 try {
-  browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(tmp, 'chrome')}`, `${base}/parent/board`], { stdio: 'ignore' });
+  browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(tmp, 'chrome')}`, `${base}/parent`], { stdio: 'ignore' });
   let wsUrl = null;
   for (let i = 0; i < 40 && !wsUrl; i++) { try { const list = await (await fetch(`http://127.0.0.1:${cdp}/json`)).json(); wsUrl = list.find((t) => t.type === 'page' && t.url.startsWith('http'))?.webSocketDebuggerUrl ?? null; } catch {} if (!wsUrl) await sleep(250); }
   if (!wsUrl) throw new Error('Chrome 没起来');
@@ -51,7 +51,7 @@ try {
 
   // ---- 清单 ----
   await device(390, 844, 2, true);
-  await open(`${base}/parent/board`, `document.querySelectorAll('.pt').length > 0`);
+  await open(`${base}/parent`, `document.querySelectorAll('.pt').length > 0`);
   const list = await evaluate(`(() => ({ title: document.title, date: document.querySelector('#pdate b')?.textContent, tutors: [...document.querySelectorAll('.pt')].map((b) => ({ who: b.dataset.tutor, rows: [...b.querySelectorAll('.tr')].map((r) => r.querySelector('small').textContent), none: b.querySelector('.none')?.textContent })), more: document.querySelector('#more-btn').hidden }))()`);
   ok('清单:标题带「家长」、今天;三位老师;语文老师一个话题停在末句问句;英语老师今天没聊', list.title.endsWith('· 家长') && list.date === '今天' && list.tutors.length === 3 && list.tutors[0].rows.length === 1 && list.tutors[0].rows[0].includes('停下等孩子') && list.tutors[2].none === '今天没聊', JSON.stringify(list));
   console.log('  ', await shot('parent-list-phone.png'));
@@ -96,17 +96,29 @@ try {
   await evaluate(`document.querySelector('.pt[data-tutor="chinese-tutor"] .stars .st:nth-child(4)').click()`);
   for (let i = 0; i < 20; i++) { if (await evaluate(`document.querySelectorAll('.pt[data-tutor="chinese-tutor"] .stars .st.on').length === 4`)) break; await sleep(250); }
   ok('清单上打星:点第四颗 → 亮四颗', await evaluate(`document.querySelectorAll('.pt[data-tutor="chinese-tutor"] .stars .st.on').length === 4`));
+  // 记账:顶上的「记账」两下确认 → 每位老师 POST bookkeep(mock 立刻记上)→ 行上「已记账」、按钮灰
+  const bk0 = await evaluate(`(() => { const b = document.querySelector('#pdate .book'); b.click(); return { text: b.textContent, disabled: b.disabled }; })()`);
+  await evaluate(`document.querySelector('#pdate .book').click()`);
+  for (let i = 0; i < 20; i++) { if (await evaluate(`[...document.querySelectorAll('.pt .tr small')].some((s) => s.textContent.includes('已记账'))`)) break; await sleep(250); }
+  const bk1 = await evaluate(`({ booked: [...document.querySelectorAll('.pt .tr small')].filter((s) => s.textContent.includes('已记账')).length, disabled: document.querySelector('#pdate .book').disabled })`);
+  ok('记账:第一下「确定记?要花钱」,第二下记上 → 两个话题「已记账」,按钮灰(没有要记的了)', bk0.text === '确定记?要花钱' && !bk0.disabled && bk1.booked === 2 && bk1.disabled, JSON.stringify({ bk0, bk1 }));
+  // 删话题:点一下只是变「确定删?」,再点才删;删完那位老师块下「今天没聊」
+  const armed = await evaluate(`(() => { const b = document.querySelector('.pt[data-tutor="math-tutor"] .tr .del'); b.click(); return { text: b.textContent, rows: document.querySelectorAll('.pt[data-tutor="math-tutor"] .tr').length }; })()`);
+  await evaluate(`document.querySelector('.pt[data-tutor="math-tutor"] .tr .del').click()`);
+  for (let i = 0; i < 20; i++) { if (await evaluate(`document.querySelector('.pt[data-tutor="math-tutor"] .none') !== null`)) break; await sleep(250); }
+  const gone = await evaluate(`({ rows: document.querySelectorAll('.pt[data-tutor="math-tutor"] .tr').length, none: document.querySelector('.pt[data-tutor="math-tutor"] .none')?.textContent })`);
+  ok('删话题:第一下只是「确定删?」、行还在;第二下删掉,数学老师块「今天没聊」', armed.text === '确定删?' && armed.rows === 1 && gone.rows === 0 && gone.none === '今天没聊', JSON.stringify({ armed, gone }));
   await evaluate(`document.querySelector('#pdate button').click()`);
   for (let i = 0; i < 20; i++) { if (await evaluate(`document.querySelector('#pdate b')?.textContent.startsWith('昨天')`)) break; await sleep(250); }
   const y = await evaluate(`(() => ({ date: document.querySelector('#pdate b')?.textContent, rows: [...document.querySelectorAll('.pt .tr b')].map((b) => b.textContent), next: document.querySelector('#pdate button:last-child').disabled }))()`);
   ok('昨天的清单:以前的话题在,「后一天」能点', y.date.startsWith('昨天') && y.rows.some((r) => r.startsWith('昨天问的')) && !y.next, JSON.stringify(y));
 
   // ---- 直接开在某个话题上(重载回来靠它) ----
-  await open(`${base}/parent/board?tutor=math-tutor`, `document.querySelector('#tutor').classList.contains('on') && document.querySelectorAll('#board .notes.pre').length > 0`);
+  await open(`${base}/parent?tutor=math-tutor`, `document.querySelector('#tutor').classList.contains('on') && document.querySelectorAll('#board .notes.pre').length > 0`);
   ok('?tutor= 直接开在那位老师今天的话题上', await evaluate(`document.querySelector('#tutor').classList.contains('on') && document.querySelector('#c-av').textContent.length > 0`));
 
   // ---- 试用(§5):清单上「试一试」→ try=1:输入条在、没有相机、「更多」在;发一条(直接打接口)→ 板书出来、头上亮「试用」、节尾有费用与「本来会记住的」;清单里「试过的」 ----
-  await open(`${base}/parent/board`, `document.querySelectorAll('.pt').length > 0`);
+  await open(`${base}/parent`, `document.querySelectorAll('.pt').length > 0`);
   await evaluate(`document.querySelector('.pt[data-tutor="english-tutor"] .try').click()`);
   for (let i = 0; i < 40; i++) { if (await evaluate(`location.search.includes('try=1') && document.querySelector('#tutor')?.classList.contains('on')`)) break; await sleep(250); }
   await sleep(300);

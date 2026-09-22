@@ -4,7 +4,7 @@
  */
 import { createHash } from 'node:crypto';
 import type { Dirent } from 'node:fs';
-import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { cardAssetName, conversationFiles, emptyIndex, localDate, threads, type CardAssets, type CardStateFile, type CardStates } from '../lib/conversation.ts';
@@ -284,6 +284,33 @@ export async function rateThread(ws: Workspace, tutor: string, date: string, thr
 // ---- vault(《obsidian仓库设计.md》§6 的封闭清单:日记只追加;教材只读)----
 
 /** 这几天的日记(<日记目录>/<日期>.md);没有的跳过 */
+/**
+ * 删掉一天里的一个话题(家长板书页清单上的「删」,2026-09-22):索引里它的消息、会话、星、记账标记都去掉,
+ * 这些轮的文件(转录、run、事件、后期、配音、卡的状态与资产)按 <日期>.<job>.* 整个删。
+ * 不动的:已写进 vault 的记忆与日记(那是家长的,在 Obsidian 里改)、captures/ 里的照片。跑着的轮由路由先挡(409)。
+ */
+export async function deleteThread(ws: Workspace, tutor: string, date: string, thread: string): Promise<ConversationIndex> {
+  const index = await readIndex(ws, tutor, date);
+  const ths = threads(index.messages);
+  if (!ths.includes(thread)) throw new IndexError(conversationFiles(ws.dirs.conversations, tutor, date).index, `${date} 没有话题 ${thread}`);
+  const gone = index.messages.filter((_, i) => ths[i] === thread);
+  const kept = index.messages.filter((_, i) => ths[i] !== thread);
+  const dir = join(ws.dirs.conversations, tutor);
+  const prefixes = gone.map((m) => `${date}.${m.job}.`);
+  for (const e of await readdir(dir).catch(() => [] as string[])) if (prefixes.some((p) => e.startsWith(p))) await rm(join(dir, e), { recursive: true, force: true });
+  const { [thread]: _s, ...sessions } = index.sessions;
+  const { [thread]: _r, ...ratings } = index.ratings;
+  const { [thread]: _b, ...booked } = index.booked;
+  // 当前话题(末条所在)的会话:删的正是它就换成剩下的末条那个;不是就不动
+  const keptThreads = threads(kept);
+  const last = keptThreads[keptThreads.length - 1];
+  const session = ths[ths.length - 1] === thread ? (last ? (sessions[last] ?? null) : null) : index.session;
+  const cost = Math.max(0, index.costUsd - gone.reduce((s, m) => s + (m.costUsd ?? 0), 0));
+  const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, session, costUsd: Math.round(cost * 1e6) / 1e6 };
+  await writeIndex(ws, next);
+  return next;
+}
+
 export async function readDiaries(ws: Workspace, dates: readonly string[]): Promise<{ date: string; text: string }[]> {
   const out: { date: string; text: string }[] = [];
   for (const date of dates) {

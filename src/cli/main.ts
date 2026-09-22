@@ -125,7 +125,7 @@ export async function main(argv: string[]): Promise<void> {
         for (const w of r.warnings) process.stdout.write(`  ! ${w}\n`);
         if (!r.https) process.stdout.write('  ! HTTP:iPad / iPhone 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
-        process.stdout.write(`  孩子端 /,家长端 /parent\n`);
+        process.stdout.write(`  孩子端 /,家长端 /parent,工作台 /dev(设置、老师团、看原文)\n`);
         await printQr(r.qrPage, flags['open-qr'] === true);
         return;
       }
@@ -140,7 +140,7 @@ export async function main(argv: string[]): Promise<void> {
         process.stdout.write(`cotutor mock 场景 ${scenario}(不经真实老师与配音;配音退回浏览器合成声)\n`);
         if (!r.https) process.stdout.write('  ! HTTP:iPad / iPhone 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
-        process.stdout.write('  孩子端 /;直接开某位老师并停在某句:/?tutor=chinese-tutor&step=0.3\n');
+        process.stdout.write('  孩子端 /,家长端 /parent;直接开某位老师并停在某句:/?tutor=chinese-tutor&step=0.3\n');
         await printQr(r.qrPage, flags['open-qr'] === true);
         return;
       }
@@ -362,7 +362,7 @@ export async function main(argv: string[]): Promise<void> {
           if (!json) process.stdout.write(`${r.ok ? '✓' : '!'} ${job}  ${r.message?.post ? `${r.message.post.ms}ms${r.message.post.costUsd !== undefined ? ` $${r.message.post.costUsd.toFixed(4)}` : ''} · 丢 ${r.message.post.dropped}${r.message.post.error ? ` · ${r.message.post.error}` : ''}` : r.error ?? ''}\n`);
         }
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(results.map((r) => ({ job: r.job, ok: r.ok, post: r.message?.post ?? null, error: r.error ?? null }))), null, 2)}\n`);
-        else process.stdout.write(`索引已改写;孩子端刷新就是新的排版。细节在家长端「看原文」第七站,或 conversations/${tutor}/${date}.<job>.post.json\n`);
+        else process.stdout.write(`索引已改写;孩子端刷新就是新的排版。细节在工作台 /dev「看原文」第七站,或 conversations/${tutor}/${date}.<job>.post.json\n`);
         return;
       }
       case 'rate': {

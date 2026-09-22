@@ -1,8 +1,8 @@
 /**
  * 孩子端 `/`:首页(老师卡 + 家长发布的首页卡,《首页设计.md》)与老师页(= 板书页)。零依赖内联脚本,只走 /api/kid/* 与 /api/audio。
  * 首页的老师卡上按钮决定进老师页之后的话题:新话题 / 接着某个话题 / 开场(按钮上的字立刻发出去);老师页不再自己猜话题。
- * 家长预览(/parent/home-preview)是同一个页面:__MODE__ 里 preview = "draft" / "published",数据走 /api/home/preview,按钮不真发。
- * 家长板书页(/parent/board,《家长板书页设计.md》)也是同一个页面:__MODE__ 里 parent = true——数据走家长接口(答案在、家长的话在)、只读、
+ * 工作台的首页预览(/dev/home-preview)是同一个页面:__MODE__ 里 preview = "draft" / "published",数据走 /api/home/preview,按钮不真发。
+ * 家长端(/parent,《家长板书页设计.md》)也是同一个页面:__MODE__ 里 parent = true——数据走家长接口(答案在、家长的话在)、卡锁着、
  * 首页换成今天的清单、节前后插旁注(旁注不是卡)。PARENT 的分支只准出现在四处:数据源、chrome、旁注、readonly;别处看到 PARENT 就是写错了。
  * 铁律(《产品规划.md》):界面上永远没有错误与评判——后端不通、老师出错、识别失败,都只是「什么都不出现」或头像灰;
  * 文字尽量少,语音优先。孩子设备上没有通往家长端的入口(2026-09-10 拍板)。
@@ -137,13 +137,18 @@ const PAGE = `<!doctype html>
   #pdate b { font-weight:600; color:var(--ink); min-width:5em; text-align:center; }
   #pdate button { width:36px; height:36px; border-radius:50%; background:var(--card); border:1px solid var(--line); font-size:18px; display:grid; place-items:center; }
   #pdate button:disabled { opacity:.3; }
+  #pdate .book { width:auto; margin-left:auto; padding:0 14px; border-radius:18px; font-size:14px; font-weight:600; color:var(--ink); }
+  #pdate .book.arm { background:#b3541e; color:#fff; border-color:#b3541e; }
   .pt { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 16px; display:flex; flex-direction:column; gap:8px; }
   .pt .hd { display:flex; align-items:center; gap:12px; }
   .pt .hd .av { width:44px; height:44px; font-size:20px; }
   .pt .hd .nm { font-size:18px; font-weight:600; }
   .pt .hd small { color:var(--dim); font-size:13px; margin-left:auto; white-space:nowrap; }
-  .pt .tr { display:flex; flex-direction:column; gap:3px; padding:10px 12px; border-radius:12px; background:var(--paper); cursor:pointer; }
-  .pt .tr b { font-size:16px; font-weight:600; }
+  .pt .tr { position:relative; display:flex; flex-direction:column; gap:3px; padding:10px 12px; border-radius:12px; background:var(--paper); cursor:pointer; }
+  .pt .tr b { font-size:16px; font-weight:600; padding-right:56px; }
+  .pt .tr .del { position:absolute; right:8px; top:8px; font-size:13px; color:var(--dim); padding:5px 9px; border-radius:8px; }
+  .pt .tr .del.arm { color:#fff; background:#b3541e; }
+  .pt .tr .del:disabled { opacity:.35; }
   .pt .tr small { font-size:13px; color:var(--dim); }
   .pt .none { color:var(--dim); font-size:14px; padding:2px 0; }
   .pt .hd .try { flex:none; font-size:14px; font-weight:600; color:var(--accent); border:1.5px solid var(--accent); border-radius:999px; padding:5px 12px; }
@@ -550,22 +555,54 @@ __PHOTO_JS__
   const renderOverview = () => {
     const H = S.home;
     document.title = H.title + ' · 家长'; $('#title').textContent = H.title;
+    // 有按钮正在「确定?」那一下(删、记账),这一轮心跳先不重画,免得把它抹掉
+    if ($('#home .arm')) return;
     let bar = $('#pdate');
     if (!bar) { bar = h('div', { id: 'pdate' }); $('#title').after(bar); }
     const go = (n) => { S.pdate = shiftDate(H.date, n); if (S.pdate === H.today) S.pdate = null; loadHome(); };
-    bar.replaceChildren(h('button', { type: 'button', 'aria-label': '前一天', on: { click: () => go(-1) } }, '‹'), h('b', {}, dateLabel(H.date, H.today) + (H.date === H.today ? '' : ' ' + H.date.slice(5).replace('-', '/'))), h('button', { type: 'button', 'aria-label': '后一天', disabled: H.date >= H.today ? '' : null, on: { click: () => go(1) } }, '›'));
+    // 记账(《obsidian仓库设计.md》§4,原来只在工作台):这天每位老师还没记过的话题各起一轮,老师回「## 记账」段,应用写日记。花钱,所以两下确认;老师在写或在记就灰
+    const booking = H.tutors.some((t) => t.booking);
+    const writing = H.tutors.some((t) => t.threads.some((th) => th.stoppedAt === 'writing'));
+    const bookable = H.tutors.some((t) => t.threads.some((th) => !th.booked && th.sections > 0));
+    const bookBtn = h('button', { type: 'button', class: 'book', disabled: booking || writing || !bookable ? '' : null }, booking ? '记账中…' : '记账');
+    let bookTimer = null;
+    bookBtn.addEventListener('click', async () => {
+      if (!bookBtn.classList.contains('arm')) { bookBtn.classList.add('arm'); bookBtn.textContent = '确定记?要花钱'; bookTimer = setTimeout(() => { bookBtn.classList.remove('arm'); bookBtn.textContent = '记账'; }, 4000); return; }
+      clearTimeout(bookTimer); bookBtn.classList.remove('arm'); bookBtn.disabled = true; bookBtn.textContent = '记账中…';
+      let n = 0;
+      for (const t of H.tutors) {
+        if (!t.threads.some((th) => !th.booked && th.sections > 0)) continue;
+        try { const r = await api('POST', '/api/conversations/' + encodeURIComponent(t.name) + '/' + H.date + '/bookkeep', {}); n += (r.queued || []).length; } catch {}
+      }
+      toast(n ? '记 ' + n + ' 个话题,老师在写;记好了行上会亮「已记账」' : '没有要记的话题');
+      loadHome();
+    });
+    bar.replaceChildren(h('button', { type: 'button', 'aria-label': '前一天', on: { click: () => go(-1) } }, '‹'), h('b', {}, dateLabel(H.date, H.today) + (H.date === H.today ? '' : ' ' + H.date.slice(5).replace('-', '/'))), h('button', { type: 'button', 'aria-label': '后一天', disabled: H.date >= H.today ? '' : null, on: { click: () => go(1) } }, '›'), bookBtn);
     const stopped = (t) => (t.stoppedAt === 'writing' ? ' · 老师在写' : t.stoppedAt === 'ask' ? ' · 停下等孩子' : '');
     // 打星(《obsidian仓库设计.md》§4:单位是话题,够 keepScore 记账时才沉淀摘要):行尾五颗,点同一颗取消;记账仍在家长端(这段注释也在孩子端的 html 里,别写家长端的路径)
     const rate = async (t, th, i) => { try { await api('PUT', '/api/conversations/' + encodeURIComponent(t.name) + '/' + H.date + '/threads/' + encodeURIComponent(th.thread) + '/rating', { rating: th.rating === i ? null : i }); } catch {} loadHome(); };
     const stars = (t, th) => h('div', { class: 'stars', 'aria-label': '打星' }, ...[1, 2, 3, 4, 5].map((i) => h('span', { class: 'st' + (th.rating && i <= th.rating ? ' on' : ''), on: { click: (e) => { e.stopPropagation(); rate(t, th, i); } } }, '★')));
+    // 删掉一个话题:行角上一个「删」,点一下变「确定删?」(3 秒内再点才真删,没有弹窗);老师还在写的服务端会 409,行留着。已记进日记和记忆的不会跟着没
+    const delBtn = (kind, t, th) => {
+      const b = h('button', { type: 'button', class: 'del', 'aria-label': '删掉这个话题' }, '删');
+      let timer = null;
+      b.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = '确定删?'; timer = setTimeout(() => { b.classList.remove('arm'); b.textContent = '删'; }, 3000); return; }
+        clearTimeout(timer); b.classList.remove('arm'); b.disabled = true; // 先摘掉 arm:renderOverview 见到 .arm 会跳过重画
+        try { await api('DELETE', '/api/' + kind + '/' + encodeURIComponent(t.name) + '/' + H.date + '/threads/' + encodeURIComponent(th.thread)); } catch {}
+        loadHome();
+      });
+      return b;
+    };
     const row = (t, th) => h('div', { class: 'tr', on: { click: () => openTutor(t, { kind: 'thread', thread: th.thread, date: H.date }) } },
       h('b', {}, th.title || '(没有话)'),
-      h('small', {}, clock(th.at) + ' · ' + th.sections + ' 节 · ' + th.cards + ' 张卡' + stopped(th) + (th.booked ? ' · 已记账' : '')),
-      stars(t, th));
+      h('small', {}, clock(th.at) + ' · ' + th.sections + ' 节 · ' + th.cards + ' 张卡' + stopped(th) + (th.booked ? ' · 已记账' : t.booking && th.sections > 0 ? ' · 记账中' : '')),
+      stars(t, th), th.stoppedAt === 'writing' ? null : delBtn('conversations', t, th));
     // 试一试 / 试过的(《家长板书页设计.md》§5.2):都是换个 URL 进试用模式(try=1),这页自己不切模式
     // 用 location.pathname 而不写死路径:这段代码也在孩子端页面里,孩子端的 html 里不能出现家长端的路径(mock.test 与 server.test 守着)
     const tryUrl = (t, th) => location.pathname + '?tutor=' + encodeURIComponent(t.name) + '&try=1' + (th ? '&date=' + H.date + '&thread=' + encodeURIComponent(th.thread) : '');
-    const tried = (t, th) => h('div', { class: 'tr tried', on: { click: () => location.assign(tryUrl(t, th)) } }, h('b', {}, th.title || '(没有话)'), h('small', {}, clock(th.at) + ' · ' + th.sections + ' 节 · ' + th.cards + ' 张卡'));
+    const tried = (t, th) => h('div', { class: 'tr tried', on: { click: () => location.assign(tryUrl(t, th)) } }, h('b', {}, th.title || '(没有话)'), h('small', {}, clock(th.at) + ' · ' + th.sections + ' 节 · ' + th.cards + ' 张卡'), delBtn('tryouts', t, th));
     $('#tutors').replaceChildren(...H.tutors.map((t) => h('div', { class: 'pt', 'data-tutor': t.name },
       h('div', { class: 'hd' }, avatarEl(t), h('span', { class: 'nm' }, t.display), h('small', {}, t.turns ? t.turns + ' 轮 · $' + t.costUsd.toFixed(2) : ''), h('button', { type: 'button', class: 'try', title: '改了老师文件或 vault,试试老师现在怎么讲;不进孩子的对话', on: { click: () => location.assign(tryUrl(t, null)) } }, '试一试')),
       ...(t.threads.length ? t.threads.map((th) => row(t, th)) : [h('div', { class: 'none' }, H.date === H.today ? '今天没聊' : '这天没聊')]),

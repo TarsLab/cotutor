@@ -4,7 +4,7 @@
  */
 import { PHOTO_MAX_SIDE, dragCrop, edited, exportPlan, newEdit, newStroke, region, rotMatrix, rotateEdit, rotatedSize, setCrop, type PhotoEdit, type Pt } from '../src/lib/photo-edit.ts';
 import { check, done } from './_check.ts';
-import { PARENT_PAGE } from '../src/server/parent-page.ts';
+import { DEV_PAGE } from '../src/server/dev-page.ts';
 
 const eq = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 /** rotMatrix 作用在原图的点上 */
@@ -65,7 +65,7 @@ const apply = (e: PhotoEdit, p: Pt): Pt => {
 {
   const big = exportPlan(newEdit(4032, 3024));
   check('长边缩到 2000(CLI 的 Read 给模型的上限)', big.w === 2000 && big.h === 1500, JSON.stringify(big));
-  check('家长端页面里写死的长边与 PHOTO_MAX_SIDE 一致(页面脚本不能插值)', PARENT_PAGE.includes(`Math.min(1, ${PHOTO_MAX_SIDE} / Math.max(im.naturalWidth`));
+  check('工作台页面里写死的长边与 PHOTO_MAX_SIDE 一致(页面脚本不能插值)', DEV_PAGE.includes(`Math.min(1, ${PHOTO_MAX_SIDE} / Math.max(im.naturalWidth`));
   const small = exportPlan(newEdit(800, 600));
   check('小图不放大', small.w === 800 && small.h === 600 && small.scale === 1);
   const cropped = exportPlan(setCrop(newEdit(4032, 3024), { x: 1000, y: 1000, w: 1200, h: 600 }));

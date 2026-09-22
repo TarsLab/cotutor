@@ -97,7 +97,7 @@ try {
   const submitted = await evaluate(`(async () => { document.querySelector('#st-go').click(); for (let i = 0; i < 60; i++) { await new Promise((r) => setTimeout(r, 250)); const img = document.querySelector('#board .c-canvas .th:not(.base) img'); if (img) return img.getAttribute('src'); } return null; })()`);
   const pngFile = join(root, 'conversations', 'math-tutor', `${today.date}.${sent.json.job}.cards`, `${canvasIdx}.png`);
   ok('给老师看 → .cards/<n>.png 落盘(底图恢复原色一起导出)、紧凑态换成孩子画的', typeof submitted === 'string' && submitted.includes('.cards') && existsSync(pngFile) && readFileSync(pngFile).length > 2000, JSON.stringify({ submitted, size: existsSync(pngFile) ? readFileSync(pngFile).length : 0 }));
-  await send('Page.navigate', { url: `${base}/parent?tutor=math-tutor` });
+  await send('Page.navigate', { url: `${base}/dev?tutor=math-tutor` });
   let thumbs = null;
   for (let i = 0; i < 40 && !thumbs; i++) { thumbs = await evaluate(`(() => { const im = document.querySelector('.ask .q .photos img'); return im ? im.getAttribute('src') : null; })()`); if (!thumbs) await sleep(250); }
   ok('家长端那轮的问句下有缩略图', typeof thumbs === 'string' && thumbs.includes('/api/kid/image?p='), String(thumbs));

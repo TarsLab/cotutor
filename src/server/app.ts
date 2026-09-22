@@ -13,8 +13,8 @@ import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
 import { currentThread, lastJobOf, localDate, threads } from '../lib/conversation.ts';
-import { kidConversation, kidMessageCount, kidThreads, type KidMessage, type KidThread } from '../lib/kid-view.ts';
-import { DATE_RE, FocusSchema, HOME_ID_RE, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex } from '../schema/index.ts';
+import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
+import { DATE_RE, FocusSchema, HOME_ID_RE, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
 import { tutorStatuses } from '../cli/tutors.ts';
@@ -26,6 +26,7 @@ import { checkHome, historyFile, homeStats, kidHomeView, messageVia, publishHome
 import { PARENT_PAGE } from './parent-page.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
+import { evalWorkspace } from './replay.ts';
 import { IndexError, capturePathOk, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardImage, writeCardState } from './store.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets } from '../cards/index.ts';
 import { resolve, sep } from 'node:path';
@@ -55,6 +56,8 @@ export interface RouteResult {
 export interface AppContext {
   ws: Workspace;
   runner: Runner;
+  /** 试用(《家长板书页设计.md》§5)的 runner:Workspace 指到 evals/、配音与后期都开;忙不忙按实例算,试用与孩子互不挡 409 */
+  tryRunner: Runner;
   /** 当前时间(测试可注入;孩子端「今天」与 today 别名都按它) */
   now: () => Date;
   /** 上次重载失败的原因(配置改坏了),健康接口回报 */
@@ -70,6 +73,7 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
   const ctx: AppContext = {
     ws,
     runner: new Runner(() => ctx.ws, opts),
+    tryRunner: new Runner(() => tryoutWorkspace(ctx.ws), opts),
     now: opts.now ?? (() => new Date()),
     configError: null,
     listen: null,
@@ -89,6 +93,17 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
 }
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
+
+/** 试用的 Workspace:和 replay 同一个 evals/,只是配音与后期都开(要听、要看真实的样子) */
+export const tryoutWorkspace = (ws: Workspace): Workspace => evalWorkspace(ws, { post: true, voice: true });
+
+/** 一天的板书从哪读:缺省 conversations/ 与孩子的 runner;试用是 evals/ 与 tryRunner,且只看 tryout 的轮(evals/ 里还有回放) */
+export interface DaySource {
+  ws: Workspace;
+  runner: Runner;
+  only?: (m: ConversationMessage) => boolean;
+}
+const tryoutSource = (ctx: AppContext): DaySource => ({ ws: tryoutWorkspace(ctx.ws), runner: ctx.tryRunner, only: (m) => m.tryout === true });
 
 /** 一天的家长视图:索引 + 每条消息的转录行(主线 + 子代理折叠)+ 出错时的 err.log 尾巴 */
 export interface DayView {
@@ -203,6 +218,137 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
   const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
   for (const m of messages) if (m.section) m.section = await enrichScenes(sceneDirs, m.section);
   return { tutor, date, messages, remaining: Math.max(0, policy.dailyMessages - kidMessageCount(index)), pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
+}
+
+/** 家长板书页的一天(《家长板书页设计.md》§4.1):形状同 KidDay 少 remaining;答案不剥,家长 / 系统发的也在 */
+export interface ParentDay {
+  tutor: string;
+  date: string;
+  messages: ParentMessage[];
+  pending: string | null;
+  thread: string | null;
+}
+
+export async function parentDay(ctx: AppContext, tutor: string, date: string, src: DaySource = { ws: ctx.ws, runner: ctx.runner }): Promise<ParentDay> {
+  const raw = await readIndex(src.ws, tutor, date);
+  const index = src.only ? { ...raw, messages: raw.messages.filter(src.only) } : raw;
+  const active = src.runner.running(tutor);
+  const { states, assets } = await scanCards(src.ws, tutor, date);
+  const messages = parentConversation(index, states, assets);
+  const partial = active && active.date === date ? src.runner.partial(tutor) : null;
+  if (partial) {
+    const m = messages.find((x) => x.job === active!.job);
+    if (m) m.section = partial;
+  }
+  const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
+  for (const m of messages) if (m.section) m.section = await enrichScenes(sceneDirs, m.section);
+  return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
+}
+
+/** 家长板书页的清单(《家长板书页设计.md》§2.2):这一天每位有脸的老师几轮、几个话题、停在哪 */
+export interface OverviewThread {
+  thread: string;
+  at: string;
+  /** 第一句:孩子的话截 20 字;首页按钮进来的是「首页 · 按钮字」;家长 / 系统起的话题标出来 */
+  title: string;
+  from: ConversationMessage['from'];
+  via: string | null;
+  sections: number;
+  cards: number;
+  /** 老师还在写 / 末句问句停下等孩子 / 没停 */
+  stoppedAt: 'writing' | 'ask' | null;
+  rating: number | null;
+  booked: boolean;
+}
+export interface OverviewTutor {
+  name: string;
+  display: string;
+  avatar: string | null;
+  subject: string | null;
+  turns: number;
+  costUsd: number;
+  threads: OverviewThread[];
+  /** 这天家长试过的话题(evals/ 里 tryout 的轮;《家长板书页设计.md》§5.2) */
+  tryouts: KidThread[];
+}
+
+/** 「以前试过的」:形状同孩子端的 history,读 evals/ 里 tryout 的轮 */
+export async function tryoutHistory(ctx: AppContext, tutor: string, days: number): Promise<KidHistory> {
+  const src = tryoutSource(ctx);
+  const today = localDate(ctx.now());
+  const floor = localDate(new Date(ctx.now().getTime() - (days - 1) * 86400000));
+  const dates = (await listDates(src.ws, tutor)).filter((d) => d >= floor && d <= today).sort().reverse();
+  const out: KidHistory['days'] = [];
+  for (const date of dates) {
+    const index = await readIndex(src.ws, tutor, date);
+    const list = kidThreads(parentConversation({ messages: index.messages.filter(src.only!) })).reverse();
+    if (list.length) out.push({ date, threads: list });
+  }
+  return { tutor, today, days: out };
+}
+export interface Overview {
+  title: string;
+  date: string;
+  today: string;
+  tutors: OverviewTutor[];
+}
+
+export async function overview(ctx: AppContext, date: string): Promise<Overview> {
+  const tutors: OverviewTutor[] = [];
+  const tryWs = tryoutWorkspace(ctx.ws);
+  for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
+    const index = await readIndex(ctx.ws, t.name, date);
+    const tryouts = kidThreads(parentConversation({ messages: (await readIndex(tryWs, t.name, date)).messages.filter((m) => m.tryout === true) }));
+    const ths = threads(index.messages);
+    const by = new Map<string, OverviewThread>();
+    for (const [i, m] of index.messages.entries()) {
+      if (m.bookkeep || m.tidy) continue;
+      const id = ths[i];
+      let th = by.get(id);
+      if (!th) {
+        const via = m.via?.label ?? null;
+        const raw = via ? `首页 · ${via}` : m.from === 'kid' ? m.text : `${m.from === 'parent' ? '家长' : '系统'}:${m.text}`;
+        th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, sections: 0, cards: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked };
+        by.set(id, th);
+      }
+      if (m.result === 'running') th.stoppedAt = 'writing';
+      else if (m.result === 'ok' && m.section && (m.section.cards.length || m.section.lines.length)) {
+        th.sections++;
+        th.cards += m.section.cards.length;
+        const last = m.section.lines[m.section.lines.length - 1];
+        th.stoppedAt = last?.ask ? 'ask' : null;
+      }
+    }
+    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], tryouts });
+  }
+  return { title: ctx.ws.config.title, date, today: localDate(ctx.now()), tutors };
+}
+
+/**
+ * 卡的状态:孩子在舞台里选了、填了(家长试用时做的也一样)→ 存 <日期>.<job>.cards/<n>.json,不起老师;下一条消息带给老师。
+ * 画板:body 里可以带 image(data:image/png;base64,…),存成 .cards/<n>.png,状态里只留路径(相对 workspace 根,老师 Read 看);imagePrefix 是对话目录名(conversations / evals)
+ */
+async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: string, n: number, body: unknown, imagePrefix: 'conversations' | 'evals'): Promise<RouteResult> {
+  const date = localDate(ctx.now());
+  const index = await readIndex(ws, tutor, date);
+  const msg = index.messages.find((m) => m.job === job);
+  const target = msg?.result === 'ok' ? msg.section?.cards[n] : undefined;
+  if (!target) return { status: 404, json: { error: 'no_such_card' } };
+  let state = body;
+  if (target.kind === 'canvas' && isObj(body) && typeof body.image === 'string') {
+    const { image, ...rest } = body;
+    const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(image);
+    if (!m || m[1].length > 8_000_000) return { status: 400, json: { error: 'bad_state' } };
+    const png = await writeCardImage(ws, tutor, date, job, n, Buffer.from(m[1], 'base64'));
+    state = { ...rest, image: `${imagePrefix}/${tutor}/${png}` };
+  }
+  const r = parseCardState(target, state);
+  if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
+  const last = index.messages[index.messages.length - 1];
+  // turn = 这张卡所在话题的末条 job:下一条发给同一话题时才算「上一轮之后改过的」
+  const mine = threads(index.messages)[index.messages.findIndex((m) => m.job === job)];
+  await writeCardState(ws, tutor, date, job, n, { at: ctx.now().toISOString(), turn: lastJobOf(index, mine) ?? last.job, state: r.state });
+  return { status: 200, json: { ok: true, card: `${job}/${n}` } };
 }
 
 /** <日期>.<job>.mp3(整段)/ .<n>.mp3(讲稿第 n 句)/ .cards/<n>/<k>.mp3(第 n 张卡的第 k 个资产) */
@@ -396,28 +542,58 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const t = ws.config.tutors[tutor];
       if (!t || !t.enabled || t.hidden) return { status: 404, json: { error: 'no_such_tutor' } };
       if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
+      return putCardState(ctx, ws, tutor, job, Number(nStr), body, 'conversations');
+    }
+    // 试用(《家长板书页设计.md》§5):/api/tryouts/<老师>/… 形状同 /api/kid/conversations/<老师>/…(页面只换一个前缀),
+    // 数据在 evals/、跑在 tryRunner 上;from: parent、消息带 tryout(runner 见它就不写记忆);不算每日上限、不记账;孩子端读不到 evals/
+    const tr = /^\/api\/tryouts\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|\d{4}-\d{2}-\d{2})$/.exec(p);
+    if (tr) {
+      const [, tutor, tail] = tr;
+      const t = ws.config.tutors[tutor];
+      if (!t || t.hidden) return { status: 404, json: { error: 'no_such_tutor' } };
+      const src = tryoutSource(ctx);
       const date = localDate(ctx.now());
-      const index = await readIndex(ws, tutor, date);
-      const msg = index.messages.find((m) => m.job === job);
-      const n = Number(nStr);
-      const target = msg?.result === 'ok' ? msg.section?.cards[n] : undefined;
-      if (!target) return { status: 404, json: { error: 'no_such_card' } };
-      // 画板:body 里可以带 image(data:image/png;base64,…),存成 .cards/<n>.png,状态里只留路径(相对 workspace 根,老师 Read 看)
-      let state = body;
-      if (target.kind === 'canvas' && isObj(body) && typeof body.image === 'string') {
-        const { image, ...rest } = body;
-        const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(image);
-        if (!m || m[1].length > 8_000_000) return { status: 400, json: { error: 'bad_state' } };
-        const png = await writeCardImage(ws, tutor, date, job, n, Buffer.from(m[1], 'base64'));
-        state = { ...rest, image: `conversations/${tutor}/${png}` };
+      if (tail === 'today' && method === 'GET') return { status: 200, json: await parentDay(ctx, tutor, date, src) };
+      if (DATE_RE.test(tail) && method === 'GET') {
+        if (tail > date || Number.isNaN(Date.parse(tail))) return { status: 400, json: { error: 'bad_request' } };
+        return { status: 200, json: await parentDay(ctx, tutor, tail, src) };
       }
-      const r = parseCardState(target, state);
-      if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
-      const last = index.messages[index.messages.length - 1];
-      // turn = 这张卡所在话题的末条 job:下一条发给同一话题时才算「上一轮之后改过的」
-      const mine = threads(index.messages)[index.messages.findIndex((m) => m.job === job)];
-      await writeCardState(ws, tutor, date, job, n, { at: ctx.now().toISOString(), turn: lastJobOf(index, mine) ?? last.job, state: r.state });
-      return { status: 200, json: { ok: true, card: `${job}/${n}` } };
+      if (tail === 'history' && method === 'GET') {
+        const days = Math.min(365, Math.max(1, Number(url.searchParams.get('days') ?? 30) || 30));
+        return { status: 200, json: await tryoutHistory(ctx, tutor, days) };
+      }
+      if (tail === 'messages' && method === 'POST') {
+        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
+        const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
+        if (focus && !focus.success) return { status: 400, json: { error: 'bad_request' } };
+        const action = body.action === undefined ? undefined : body.action === 'continue' || body.action === 'submit' ? body.action : null;
+        if (action === null) return { status: 400, json: { error: 'bad_request' } };
+        const thread = body.thread === undefined ? undefined : typeof body.thread === 'string' && /^\d{4}-\d+$/.test(body.thread) ? body.thread : null;
+        if (thread === null) return { status: 400, json: { error: 'bad_request' } };
+        const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
+        if (device && !device.success) return { status: 400, json: { error: 'bad_request' } };
+        if (!body.text.trim() && !action) return { status: 400, json: { error: 'bad_request' } };
+        const started = await ctx.tryRunner.send(tutor, { from: 'parent', text: body.text, focus: focus?.data, action, newThread: body.newThread === true, thread, device: device?.data, tryout: true });
+        return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
+      }
+      return { status: 405, json: { error: 'method_not_allowed' } };
+    }
+    const trCard = /^\/api\/tryouts\/([a-z0-9][a-z0-9-]*)\/cards\/(\d{4}-\d+)\/(\d+)$/.exec(p);
+    if (trCard) {
+      const [, tutor, job, nStr] = trCard;
+      const t = ws.config.tutors[tutor];
+      if (!t || t.hidden) return { status: 404, json: { error: 'no_such_tutor' } };
+      if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
+      return putCardState(ctx, tryoutWorkspace(ws), tutor, job, Number(nStr), body, 'evals');
+    }
+    // 试用的配音:文件在 evals/<老师>/ 下
+    const trAudio = /^\/api\/tryouts\/audio\/([a-z0-9][a-z0-9-]*)\/(.+)$/.exec(p);
+    if (trAudio && method === 'GET') {
+      const [, tutor, name] = trAudio;
+      if (!ws.config.tutors[tutor] || !AUDIO_FILE_RE.test(name)) return { status: 404, json: { error: 'not_found' } };
+      const file = join(tryoutWorkspace(ws).dirs.conversations, tutor, name);
+      if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
+      return { status: 200, file, contentType: 'audio/mpeg' };
     }
     // 老师头像(R5b,2026-09-16):cotutor.json 里 avatar 是图片相对路径时(figshot 写的 avatars/<老师>.png)从这里取;
     // emoji 头像、越界、不是图、不存在都 404(孩子端退回显示 emoji / 首字)。no-cache:figshot 换了脸孩子端要马上见到
@@ -566,6 +742,22 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 202, json: { tutor, date, ...r } };
     }
 
+    // 家长板书页(《家长板书页设计.md》):清单与一天的板书,都在家长命名空间下;/api/kid/* 不动
+    const ov = /^\/api\/overview\/(today|\d{4}-\d{2}-\d{2})$/.exec(p);
+    if (ov && method === 'GET') {
+      const date = ov[1] === 'today' ? localDate(ctx.now()) : ov[1];
+      if (date > localDate(ctx.now()) || Number.isNaN(Date.parse(date))) return { status: 400, json: { error: 'bad_request', message: '日期要是今天或以前' } };
+      return { status: 200, json: await overview(ctx, date) };
+    }
+    const pb = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|\d{4}-\d{2}-\d{2})\/board$/.exec(p);
+    if (pb && method === 'GET') {
+      const [, tutor, tail] = pb;
+      if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
+      const date = tail === 'today' ? localDate(ctx.now()) : tail;
+      if (date > localDate(ctx.now()) || Number.isNaN(Date.parse(date))) return { status: 400, json: { error: 'bad_request', message: '日期要是今天或以前' } };
+      return { status: 200, json: await parentDay(ctx, tutor, date) };
+    }
+
     const conv = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)(?:\/([^/]+))?$/.exec(p);
     if (conv) {
       const [, tutor, tail] = conv;
@@ -583,6 +775,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (focus && !focus.success) return { status: 400, json: { error: 'bad_request', message: 'focus 形状不对' } };
         const photos = await photosOf(ws, body.photos);
         if (photos === null) return { status: 400, json: { error: 'bad_request', message: 'photos 要是 captures/ 里在的文件(先 POST …/photos 传图拿 path)' } };
+        // 家长板书页在 iPad 上真发(《家长板书页设计.md》第六节 3)带 device,板书后期按它排版;/parent 不带,缺省当平板横屏
+        const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
+        if (device && !device.success) return { status: 400, json: { error: 'bad_request', message: 'device 只能是 phone / tablet' } };
         const started = await ctx.runner.send(tutor, {
           from: from as (typeof MESSAGE_FROM)[number],
           text: body.text,
@@ -591,6 +786,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           newThread: body.newThread === true,
           thread: typeof body.thread === 'string' ? body.thread : undefined,
           photos,
+          device: device?.data,
         });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread, runtime: started.plan.runtime, resume: started.plan.resume } };
       }
@@ -620,7 +816,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
     if (p === '/parent') return { status: 200, html: PARENT_PAGE };
     // 扫码页:在电脑上打开,iPad 用相机扫(不在孩子端的入口里)
-    if (p === '/qr') return ctx.listen ? { status: 200, html: qrPage(ws.config.title, ctx.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name') } : { status: 404, json: { error: 'not_listening' } };
+    if (p === '/qr') return ctx.listen ? { status: 200, html: qrPage(ws.config.title, ctx.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     // 按住说话的试验页(真机上比策略用;不在孩子端与家长端的入口里)
     if (p === '/voice-test') return { status: 200, html: VOICE_TEST_PAGE };
     // 主屏幕(iPad「添加到主屏幕」):清单与图标都按标题现生成,没有静态资源
@@ -633,7 +829,10 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title)) };
     // 家长端「首页」页的预览:就是孩子端页面本身,数据走家长接口(讲法在),按钮不真发
-    if (p === '/parent/home-preview') return { status: 200, html: kidPage(esc(ws.config.title), url.searchParams.get('which') === 'published' ? 'published' : 'draft') };
+    if (p === '/parent/home-preview') return { status: 200, html: kidPage(esc(ws.config.title), { preview: url.searchParams.get('which') === 'published' ? 'published' : 'draft' }) };
+    // 家长板书页:也是孩子端页面本身,数据走家长接口(答案在、家长的话在),只读;自己的清单,加到主屏幕才不会拿到孩子端那份
+    if (p === '/parent/board') return { status: 200, html: kidPage(esc(ws.config.title), { parent: true }) };
+    if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${ws.config.title} · 家长`, { startUrl: '/parent/board', scope: '/parent/' }), contentType: 'application/manifest+json; charset=utf-8' };
     return { status: 404, json: { error: 'not_found', path: p } };
   } catch (err) {
     if (err instanceof BusyError) return { status: 409, json: { error: 'busy', message: err.message } };

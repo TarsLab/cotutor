@@ -177,4 +177,51 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const l2 = await last('math-tutor');
   check('新话题按钮:孩子自己的话,新话题', s2.status === 202 && l2.question === '再讲一遍' && l2.thread === l2.job);
 }
+
+// 家长板书页(《家长板书页设计.md》):mock 也起——页面能解析、板书接口答案在、第一节带给家长的尾巴、清单今天与昨天
+{
+  const m = createMock({ delayMs: 0, now: () => new Date('2026-09-10T16:30:00') });
+  const get = (p: string) => m.route('GET', p);
+  const page = (await get('/parent/board')).html ?? '';
+  const js = page.slice(page.indexOf('<script>') + 8, page.lastIndexOf('</script>'));
+  let parses = true;
+  try { new Function(js); } catch (e) { parses = false; console.error(String(e)); }
+  check('家长板书页:带家长标记、自己的 manifest、内联脚本能解析', page.includes('const MODE = {"parent":true};') && page.includes('/parent/manifest.webmanifest') && parses && ((await get('/parent/manifest.webmanifest')).json as { start_url: string }).start_url === '/parent/board');
+  type PMsg = Msg & { from: string; parentText?: string; remembered?: string[] };
+  const pb = (await get('/api/conversations/chinese-tutor/today/board')).json as { messages: PMsg[] };
+  const ch = pb.messages[0].section!.cards.find((c) => c.kind === 'choice');
+  check('板书接口:答案不剥、from、第一节带给家长的尾巴与记忆', pb.messages.length === 1 && pb.messages[0].from === 'kid' && Array.isArray(ch?.props.answer) && pb.messages[0].parentText?.startsWith('## 家长') === true && pb.messages[0].remembered?.length === 1, JSON.stringify(pb.messages[0].parentText));
+  check('孩子接口照旧剥答案', !('answer' in ((await get('/api/kid/conversations/chinese-tutor/today')).json as Day).messages[0].section!.cards.find((c) => c.kind === 'choice')!.props));
+  type Ov = { date: string; today: string; tutors: { name: string; threads: { title: string; sections: number; stoppedAt: string | null }[] }[] };
+  const ov = (await get('/api/overview/today')).json as Ov;
+  const oy = (await get('/api/overview/2026-09-09')).json as Ov;
+  check('清单:今天三位老师,语文老师一个话题停在末句问句,英语老师没聊;昨天有以前的话题;未来 400', ov.tutors.length === 3 && ov.tutors[0].threads.length === 1 && ov.tutors[0].threads[0].stoppedAt === 'ask' && ov.tutors[0].threads[0].title.length > 0 && ov.tutors[2].threads.length === 0 && oy.date === '2026-09-09' && oy.tutors[0].threads[0].title.startsWith('昨天问的') && (await get('/api/overview/2027-01-01')).status === 400, JSON.stringify(ov.tutors[0]));
+
+  // 试用(§5):/api/tryouts/<老师>/… 形状同孩子端的;另一份列表,孩子端那份不变;下发带 from / tryout / 费用 / 本来会记住的、答案不剥;清单里「试过的」
+  const t0 = await m.route('POST', '/api/tryouts/english-tutor/messages', { text: '试试新讲法', newThread: true });
+  await m.settle();
+  type TMsg = Msg & { from: string; tryout?: boolean; costUsd?: number; memoryDraft?: string[]; thread: string };
+  const td = (await get('/api/tryouts/english-tutor/today')).json as { messages: TMsg[]; thread: string | null };
+  const kd = (await get('/api/kid/conversations/english-tutor/today')).json as Day;
+  const ov2 = (await get('/api/overview/today')).json as { tutors: { name: string; tryouts: { title: string; sections: number }[] }[] };
+  check('试用:202、一轮从脚本第一节起;from parent、tryout、费用、本来会记住的;英语老师孩子端那份还是空的;清单「试过的」一条', t0.status === 202 && td.messages.length === 1 && td.messages[0].from === 'parent' && td.messages[0].tryout === true && td.messages[0].costUsd === 0.03 && td.messages[0].memoryDraft?.length === 1 && td.messages[0].section !== null && td.messages[0].question === '试试新讲法' && kd.messages.length === 0 && ov2.tutors[2].tryouts.length === 1 && ov2.tutors[2].tryouts[0].title === '试试新讲法' && ov2.tutors[2].tryouts[0].sections === 1, JSON.stringify({ t0: t0.json, td: td.messages[0]?.question, kd: kd.messages.length, tr: ov2.tutors[2].tryouts }));
+  const t1 = await m.route('POST', '/api/tryouts/english-tutor/messages', { text: '再来', thread: td.thread });
+  await m.settle();
+  const td2 = (await get('/api/tryouts/english-tutor/today')).json as { messages: TMsg[] };
+  const th = (await get('/api/tryouts/english-tutor/history')).json as { days: { date: string; threads: { sections: number }[] }[] };
+  check('试用:接着同一话题;以前试过的列出今天一个话题两节;没这位老师 404;配音 404', t1.status === 202 && td2.messages.length === 2 && td2.messages[1].thread === td.thread && th.days.length === 1 && th.days[0].threads[0].sections === 2 && (await get('/api/tryouts/nobody/today')).status === 404 && (await get('/api/tryouts/audio/english-tutor/x.mp3')).status === 404, JSON.stringify(th));
+
+  // 家长真发(第六节 3):进孩子那份列表,from parent;孩子端 today 里问句为 null、不算上限;打星在清单上
+  const before = ((await get('/api/kid/conversations/chinese-tutor/today')).json as Day).remaining;
+  const p0 = await m.route('POST', '/api/conversations/chinese-tutor/messages', { text: '家长补一句', device: 'phone' });
+  await m.settle();
+  const kd2 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
+  const pb2 = (await get('/api/conversations/chinese-tutor/today/board')).json as { messages: (Msg & { from: string })[] };
+  const last2 = pb2.messages[pb2.messages.length - 1];
+  check('家长真发:202,接当前话题;孩子端那条问句 null、剩余条数不变;板书接口 from parent', p0.status === 202 && kd2.messages[kd2.messages.length - 1].question === null && kd2.remaining === before && last2.from === 'parent' && last2.question === '家长补一句' && last2.section !== null, JSON.stringify({ p0: p0.json, q: kd2.messages[kd2.messages.length - 1]?.question, from: last2.from }));
+  const th0 = (pb2.messages[0] as unknown as { thread: string }).thread;
+  const r1 = await m.route('PUT', `/api/conversations/chinese-tutor/2026-09-10/threads/${th0}/rating`, { rating: 4 });
+  const ov3 = (await get('/api/overview/today')).json as { tutors: { threads: { thread: string; rating: number | null }[] }[] };
+  check('打星:PUT 后清单上那个话题 4 星;坏值 400;null 取消', r1.status === 200 && ov3.tutors[0].threads.find((t) => t.thread === th0)?.rating === 4 && (await m.route('PUT', `/api/conversations/chinese-tutor/2026-09-10/threads/${th0}/rating`, { rating: 9 })).status === 400 && (await m.route('PUT', `/api/conversations/chinese-tutor/2026-09-10/threads/${th0}/rating`, { rating: null })).status === 200 && ((await get('/api/overview/today')).json as typeof ov3).tutors[0].threads[0].rating === null, JSON.stringify(ov3.tutors[0].threads));
+}
 done();

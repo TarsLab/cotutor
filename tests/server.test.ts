@@ -105,6 +105,34 @@ try {
     const saved = (JSON.parse(readFileSync(join(root, 'cotutor.json'), 'utf8')) as { tutors: Record<string, { policy?: unknown }> }).tutors['scene-maker'].policy;
     check('板书与讲解动画个数这两个旋钮存得进老师条目,留空的字段不落盘', r.status === 200 && JSON.stringify(saved) === '{"board":"off","scenes":{"dailyMax":1}}', JSON.stringify(saved));
   }
+  // 家长板书页(《家长板书页设计.md》§4.3):板书接口答案在、家长的话在、出错的轮有 error;同一份索引下孩子接口的输出不变(护栏);清单;页面与 manifest
+  {
+    const { emptyIndex, addMessage, localDate } = await import('../src/lib/conversation.ts');
+    const { writeIndex } = await import('../src/server/store.ts');
+    const { parseBoard } = await import('../src/lib/board.ts');
+    const today = localDate(new Date());
+    const b1 = parseBoard('开场。\n\n```choice\n酒是谁的?\n- [x] 他自己的\n- [ ] 平分\n```\n\n酒是谁的?').section;
+    const b2 = parseBoard('再想想,借一个够不够?').section;
+    let idx = emptyIndex('math-tutor', today);
+    idx = addMessage(idx, { job: '1620-1', thread: '1620-1', at: `${today}T16:20`, from: 'kid', text: '7 减 9 怎么算', result: 'ok', artifacts: [], kidText: '开场。\n酒是谁的?', section: b1, parentText: '## 家长\n他其实会了。', remembered: [`${today} 减法爱跳步`] });
+    idx = addMessage(idx, { job: '1625-2', thread: '1620-1', at: `${today}T16:25`, from: 'parent', text: '换个说法', result: 'ok', artifacts: [], kidText: '再想想,借一个够不够?', section: b2 });
+    idx = addMessage(idx, { job: '1630-3', thread: '1630-3', at: `${today}T16:30`, from: 'kid', text: '再来', result: 'error', artifacts: [], error: 'timeout' });
+    idx = { ...idx, ratings: { '1620-1': 4 }, costUsd: 0.12 };
+    await writeIndex(ctx.ws, idx);
+    type PMsg = { from: string; question: string | null; section?: { cards: { props: Record<string, unknown> }[] }; parentText?: string; remembered?: string[]; error?: string };
+    const pb = (await get('/api/conversations/math-tutor/today/board')).json as { messages: PMsg[]; thread: string | null };
+    check('板书接口:三条都在,答案不剥、给家长的尾巴与记忆在、家长的话有 from、出错的轮有 error', pb.messages.length === 3 && JSON.stringify(pb.messages[0].section?.cards[0].props.answer) === '[0]' && pb.messages[0].parentText === '## 家长\n他其实会了。' && pb.messages[0].remembered?.length === 1 && pb.messages[1].from === 'parent' && pb.messages[1].question === '换个说法' && pb.messages[2].error === 'timeout' && pb.thread === '1630-3', JSON.stringify(pb));
+    const kb = (await get('/api/kid/conversations/math-tutor/today')).json as { messages: PMsg[] };
+    check('护栏:同一份索引,孩子接口答案剥掉、没有家长尾巴与记忆、家长的话没有问句、没有 error', kb.messages.length === 3 && !('answer' in (kb.messages[0].section?.cards[0].props ?? {})) && !('parentText' in kb.messages[0]) && !('remembered' in kb.messages[0]) && kb.messages[1].question === null && !('from' in kb.messages[1]) && !('error' in kb.messages[2]), JSON.stringify(kb));
+    type OvTutor = { name: string; turns: number; costUsd: number; threads: { thread: string; title: string; from: string; sections: number; cards: number; stoppedAt: string | null; rating: number | null; booked: boolean }[] };
+    const ov = (await get('/api/overview/today')).json as { date: string; today: string; tutors: OvTutor[] };
+    const mt = ov.tutors.find((t) => t.name === 'math-tutor');
+    // 卡数 2:选择题一张,第二节末句问句没配能答的卡、解析器补的提问卡一张
+    check('清单:三位有脸的老师;数学老师 3 轮、两个话题;第一个话题的题、节数、卡数、停在末句问句、星;出错的话题 0 节', ov.date === today && ov.tutors.length === 3 && mt?.turns === 3 && mt.costUsd === 0.12 && mt.threads.length === 2 && mt.threads[0].title === '7 减 9 怎么算' && mt.threads[0].sections === 2 && mt.threads[0].cards === 2 && mt.threads[0].stoppedAt === 'ask' && mt.threads[0].rating === 4 && !mt.threads[0].booked && mt.threads[1].sections === 0 && mt.threads[1].stoppedAt === null, JSON.stringify(ov));
+    check('清单与板书接口:未来的日期 400,没这位老师 404', (await get('/api/overview/2099-01-01')).status === 400 && (await get('/api/conversations/math-tutor/2099-01-01/board')).status === 400 && (await get('/api/conversations/nobody/today/board')).status === 404);
+    const page = (await get('/parent/board')).html ?? '';
+    check('家长板书页:孩子端页面带家长标记、自己的 manifest;manifest 从这页起', page.includes('const MODE = {"parent":true};') && page.includes('href="/parent/manifest.webmanifest"') && page.includes('· 家长</title>') && ((await get('/parent/manifest.webmanifest')).json as { start_url: string; scope: string }).start_url === '/parent/board' && ((await get('/manifest.webmanifest')).json as { start_url: string }).start_url === '/');
+  }
   check('404 / 405', (await get('/nope')).status === 404 && (await route('POST', '/api/health', ctx)).status === 200 && (await route('POST', '/api/workspace', ctx)).status === 405 && (await route('PUT', '/api/config', ctx)).status === 405);
 } finally {
   rmSync(home, { recursive: true, force: true });

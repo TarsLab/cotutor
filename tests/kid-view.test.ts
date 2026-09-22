@@ -1,5 +1,6 @@
 /** 孩子视图:最终文本剥段后正文即板书(段落 = 讲稿,围栏 = 卡),每句按上限截;家长尾巴不进;答案剥掉;出错什么都没有。 */
-import { deriveKidView, kidConversation, kidMessageCount, kidSource, kidThreads, truncateReply } from '../src/lib/kid-view.ts';
+import { deriveKidView, kidConversation, kidMessageCount, kidSource, kidThreads, parentConversation, truncateReply } from '../src/lib/kid-view.ts';
+import { parseBoard } from '../src/lib/board.ts';
 import { parseTranscript } from '../src/lib/transcript.ts';
 import { check, done } from './_check.ts';
 
@@ -99,5 +100,28 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
     { job: '4', thread: '4', at: '2026-09-09T10:20', question: '换个', reply: null, pending: true, artifacts: [] },
   ]);
   check('分组:两个话题(系统起的没孩子问 → 不列),名字截 20 字,节数与卡数,pending 不算节', list.length === 2 && list[0].thread === '1' && list[0].title === '这道题怎么做我完全不懂啊老师请你讲讲好不' && list[0].title.length === 20 && list[0].sections === 2 && list[0].cards === 5 && list[1].thread === '4' && list[1].sections === 0, JSON.stringify(list));
+}
+
+// 家长板书页的条目(《家长板书页设计.md》§4.2):和 kidConversation 对同一份索引,差集恰好是那几个字段与「答案不剥」
+{
+  const board = parseBoard('开场。\n\n```choice\n酒是谁的?\n- [x] 他自己的\n- [ ] 平分\n```\n\n酒是谁的?').section;
+  const base = { at: '2026-09-14T16:20', artifacts: [] as string[] };
+  const index = { messages: [
+    { ...base, job: '1', thread: '1', from: 'kid' as const, text: '讲讲', result: 'ok' as const, kidText: '开场。\n酒是谁的?', section: board, parentText: '## 家长\n他会了。', remembered: ['2026-09-14 爱抢答'], warnings: ['一句太长'], via: { home: 'h', button: 0, label: '我要预习' } },
+    { ...base, job: '2', thread: '1', from: 'parent' as const, text: '换个说法', result: 'ok' as const, kidText: '好。', section: parseBoard('好。').section, cards: [{ card: '1/0', text: '选了「A 他自己的」' }] },
+    { ...base, job: '3', thread: '3', from: 'kid' as const, text: '再来', result: 'error' as const, error: 'timeout' },
+    { ...base, job: '4', thread: '1', from: 'system' as const, text: '记账', result: 'ok' as const, kidText: '记好了', bookkeep: { thread: '1' } },
+    { ...base, job: '5', thread: '5', from: 'system' as const, text: '整理', result: 'ok' as const, kidText: null, tidy: true as const, remembered: ['改:爱抢答 → 会先想'] },
+  ] };
+  const states = { '1': { 0: { at: '2026-09-14T16:21', turn: '1', state: { picked: [1] } } } };
+  const kid = kidConversation(index, states);
+  const par = parentConversation(index, states);
+  check('家长条目:五条都在(记账、整理也在);孩子端三条(记账、整理不进)', par.length === 5 && kid.length === 3, `${par.length} ${kid.length}`);
+  check('答案不剥,孩子做的状态照样并到卡上;孩子端剥了', JSON.stringify(par[0].section?.cards[0].props.answer) === '[0]' && JSON.stringify(par[0].section?.cards[0].state) === '{"picked":[1]}' && !('answer' in (kid[0].section?.cards[0].props ?? {})) && JSON.stringify(kid[0].section?.cards[0].state) === '{"picked":[1]}');
+  check('多出的字段:from、via、parentText、remembered、warnings、cards、error、bookkeep、tidy', par[0].from === 'kid' && par[0].via?.label === '我要预习' && par[0].parentText === '## 家长\n他会了。' && par[0].remembered?.join() === '2026-09-14 爱抢答' && par[0].warnings?.join() === '一句太长' && par[1].from === 'parent' && par[1].question === '换个说法' && par[1].cards?.[0].text === '选了「A 他自己的」' && par[2].error === 'timeout' && par[3].bookkeep?.thread === '1' && par[4].tidy === true && par[4].remembered?.length === 1, JSON.stringify(par));
+  check('孩子端那份没有这些字段,家长的问句是 null', !('from' in kid[0]) && !('parentText' in kid[0]) && !('remembered' in kid[0]) && !('warnings' in kid[0]) && kid[1].question === null && !('error' in kid[2]));
+  const strip = (m: object) => { const { from: _f, via: _v, parentText: _p, remembered: _r, warnings: _w, cards: _c, error: _e, action: _a, bookkeep: _b, tidy: _t, ...rest } = m as Record<string, unknown>; return rest; };
+  const noAnswer = (m: ReturnType<typeof parentConversation>[number]) => ({ ...strip(m), ...(m.section ? { section: { ...m.section, cards: m.section.cards.map((c) => { const { answer: _x, ...p } = c.props as Record<string, unknown>; return { ...c, props: p }; }) } } : {}), question: m.from === 'kid' ? m.question : null });
+  check('剥掉多出的字段与答案、家长的问句归 null 之后,孩子端能看到的那三条与 kidConversation 一字不差', JSON.stringify([par[0], par[1], par[2]].map(noAnswer)) === JSON.stringify(kid), JSON.stringify([par[0], par[1], par[2]].map(noAnswer)));
 }
 done();

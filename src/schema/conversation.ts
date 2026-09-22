@@ -85,6 +85,10 @@ export const ConversationMessageSchema = z.object({
   tools: z.array(z.object({ name: z.string().min(1), arg: z.string(), ok: z.boolean().nullable(), chars: z.number().int().nonnegative(), sub: z.boolean().optional() })).optional(),
   /** 这条是回放(cotutor replay,server/replay.ts):原轮的 job。回放落在 evals/ 里,不在 conversations/ */
   replayOf: z.string().min(1).optional(),
+  /** 这轮是试用(《家长板书页设计.md》§5,2026-09-22):家长改了提示词 / vault 想看效果。落在 evals/,记忆段不写 vault、不算上限、不记账、孩子端看不到 */
+  tryout: z.literal(true).optional(),
+  /** 试用那轮「## 记忆」段的原文(没写进 vault;家长板书页旁注「本来会记住的」) */
+  memoryDraft: z.array(z.string()).optional(),
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2);开场按钮的 text 就是按钮上的字,不是孩子说的 */
   via: MessageViaSchema.optional(),
   /** 这个话题接着以前哪天的哪个话题(首页的「接着」按钮;新会话,上下文包带那个话题的尾巴) */

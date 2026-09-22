@@ -76,14 +76,14 @@ export function appIconPng(size: number): Buffer {
   return out;
 }
 
-/** manifest:iOS 16.4+ 与安卓都按它装;apple-* meta 留着给老系统 */
-export function webManifest(title: string): Record<string, unknown> {
+/** manifest:iOS 16.4+ 与安卓都按它装;apple-* meta 留着给老系统。家长板书页有自己的一份(start_url / scope 不同,加到主屏幕才分得开) */
+export function webManifest(title: string, opts: { startUrl?: string; scope?: string } = {}): Record<string, unknown> {
   const name = title.trim() || 'cotutor';
   return {
     name,
     short_name: name,
-    start_url: '/',
-    scope: '/',
+    start_url: opts.startUrl ?? '/',
+    scope: opts.scope ?? '/',
     display: 'standalone',
     orientation: 'any',
     background_color: '#f6f4ee',

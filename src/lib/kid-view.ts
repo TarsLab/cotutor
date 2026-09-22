@@ -102,6 +102,13 @@ export interface KidMessage {
   photos?: string[];
 }
 
+/** 孩子做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到这轮的卡上;都没有就原样 */
+function cardsWithState(m: ConversationMessage, states: CardStates, assets: CardAssets): BoardSection | null | undefined {
+  const per = states[m.job];
+  const files = assets[m.job];
+  return m.section && (per || files) ? { ...m.section, cards: m.section.cards.map((c, n) => ({ ...c, ...(per?.[n] ? { state: per[n].state } : {}), ...(files?.[n]?.length ? { assets: files[n] } : {}) })) } : m.section;
+}
+
 /**
  * 对话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / 费用 / 家长尾巴;
  * 卡上的答案剥掉,孩子自己做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到卡上。出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
@@ -116,11 +123,62 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
     if (question === null && reply === null && !pending) continue;
-    const per = states[m.job];
-    const files = assets[m.job];
-    const withState = m.section && (per || files) ? { ...m.section, cards: m.section.cards.map((c, n) => ({ ...c, ...(per?.[n] ? { state: per[n].state } : {}), ...(files?.[n]?.length ? { assets: files[n] } : {}) })) } : m.section;
+    const withState = cardsWithState(m, states, assets);
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
     out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}) });
+  }
+  return out;
+}
+
+/**
+ * 家长板书页的一条(《家长板书页设计.md》§3、§4.1):形状同 KidMessage,家长多看到的都是可选字段;
+ * `section` **不剥答案**;`question` 不管谁发的都给;记账 / 整理记忆那两种轮也在(旁注写「已记进日记」「整理了记忆」)。
+ */
+export interface ParentMessage extends KidMessage {
+  from: ConversationMessage['from'];
+  via?: ConversationMessage['via'];
+  action?: ConversationMessage['action'];
+  /** 这条带给老师的卡(上一轮之后孩子改过状态的):「孩子在板书上做的」 */
+  cards?: ConversationMessage['cards'];
+  parentText?: string;
+  remembered?: string[];
+  warnings?: string[];
+  /** 不 ok 时的原因;孩子端什么都不出现,家长页出一行 */
+  error?: string;
+  bookkeep?: ConversationMessage['bookkeep'];
+  tidy?: true;
+  /** 试用那轮(《家长板书页设计.md》§5):费用给家长看(只这一处),记忆段原文是「本来会记住的」 */
+  tryout?: true;
+  memoryDraft?: string[];
+  costUsd?: number;
+}
+
+/** 对话索引 → 家长板书页条目:和 kidConversation 同一个循环,差集恰好是 ParentMessage 里多出的字段与「答案不剥」 */
+export function parentConversation(index: { messages: readonly ConversationMessage[] }, states: CardStates = {}, assets: CardAssets = {}): ParentMessage[] {
+  const out: ParentMessage[] = [];
+  const ths = threads(index.messages);
+  for (const [i, m] of index.messages.entries()) {
+    const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
+    const pending = m.result === 'running';
+    const withState = cardsWithState(m, states, assets);
+    const section = m.result === 'ok' && withState ? withState : undefined;
+    out.push({
+      job: m.job, thread: ths[i], at: m.at, from: m.from, question: m.text, reply, pending, artifacts: reply ? [...m.artifacts] : [],
+      ...(section ? { section } : {}),
+      ...(m.photos?.length ? { photos: [...m.photos] } : {}),
+      ...(m.via ? { via: m.via } : {}),
+      ...(m.action ? { action: m.action } : {}),
+      ...(m.cards?.length ? { cards: m.cards } : {}),
+      ...(m.parentText ? { parentText: m.parentText } : {}),
+      ...(m.remembered?.length ? { remembered: m.remembered } : {}),
+      ...(m.warnings?.length ? { warnings: m.warnings } : {}),
+      ...(m.result === 'error' ? { error: m.error ?? '没成' } : {}),
+      ...(m.bookkeep ? { bookkeep: m.bookkeep } : {}),
+      ...(m.tidy ? { tidy: true as const } : {}),
+      ...(m.tryout ? { tryout: true as const } : {}),
+      ...(m.memoryDraft?.length ? { memoryDraft: m.memoryDraft } : {}),
+      ...(typeof m.costUsd === 'number' ? { costUsd: m.costUsd } : {}),
+    });
   }
   return out;
 }

@@ -356,6 +356,7 @@ export const PARENT_PAGE = `<!doctype html>
   <h1 id="title">cotutor<small>家长端</small></h1>
   <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">老师团</a><a href="#voices" data-tab="voices">音色</a><a href="#settings" data-tab="settings">设置</a><a href="#home" data-tab="home">首页</a></nav>
   <span class="health" id="health"></span>
+  <a class="qrlink" href="/parent/board" target="_blank" title="家长板书页:在这台电脑或 iPad 上看孩子的板书,答案与给家长的话都在,只读">看板书</a>
   <a class="qrlink" href="/qr" target="_blank" title="iPad / iPhone 用相机扫,不用输地址">扫码打开</a>
 </header>
 <main id="chat" class="on">

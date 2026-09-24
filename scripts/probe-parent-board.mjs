@@ -130,6 +130,14 @@ try {
   const prepBoard = await evaluate(`({ secs: document.querySelectorAll('#board .sec').length, pre: [...document.querySelectorAll('#board .notes.pre .note')].map((n) => n.querySelector('.tg').textContent + ':' + n.querySelector('.tx').textContent), post: [...document.querySelectorAll('#board .notes.post .note .tg')].map((t) => t.textContent), mo: document.querySelector('#c-mo').textContent })`);
   ok('发了一条 → 一节板书,节前「家长」,节尾「本来会记住的」「费用」「从这里给孩子」,头上仍是备课', prepBoard.secs === 1 && prepBoard.pre[0] === '家长:试试新讲法' && prepBoard.post.includes('本来会记住的') && prepBoard.post.includes('费用') && prepBoard.post.includes('从这里给孩子') && prepBoard.mo === '备课 · 孩子看不到', JSON.stringify(prepBoard));
   console.log('  ', await shot('parent-prep.png'));
+  // 按继续多一节,再把它对孩子藏起来(《备课设计.md》§4.5):那一节变淡、节前「藏起来了」;交给孩子后孩子端没有它
+  await evaluate(`document.querySelector('#sub-btn')?.click()`);
+  for (let i = 0; i < 60; i++) { if (await evaluate(`document.querySelectorAll('#board .sec').length === 2 && [...document.querySelectorAll('#board .notes.post')].length === 2 && [...document.querySelectorAll('#board .notes.post')][1].querySelector('.note.hand')`)) break; await sleep(250); }
+  await evaluate(`[...[...document.querySelectorAll('#board .notes.post')][1].querySelectorAll('.note.hand')].find((n) => n.querySelector('.tg').textContent === '对孩子藏起来').click()`);
+  for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelector('#board .sec.hid')`)) break; await sleep(250); }
+  const hid = await evaluate(`({ hid: document.querySelectorAll('#board .sec.hid').length, pre: [...document.querySelectorAll('#board .notes.pre .note .tg')].map((t) => t.textContent), undo: [...document.querySelectorAll('#board .note.hand .tg')].map((t) => t.textContent) })`);
+  ok('继续 → 两节;藏第二节:它变淡、节前「藏起来了」、节尾换成「放出来」', hid.hid === 1 && hid.pre.includes('藏起来了') && hid.undo.includes('放出来'), JSON.stringify(hid));
+  console.log('  ', await shot('parent-hidden.png'));
   await evaluate(`document.querySelector('#board .note.hand').click()`);
   await sleep(300);
   const pre = await evaluate(`({ on: document.querySelector('#hand').classList.contains('on'), label: document.querySelector('#hd-label').value })`);

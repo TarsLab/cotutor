@@ -296,7 +296,17 @@ export async function setOpening(ws: Workspace, tutor: string, date: string, thr
     const dir = files.cardsDir(m.job);
     for (const e of await readdir(dir).catch(() => [] as string[])) if (/^\d+\.(json|png)$/.test(e)) await rm(join(dir, e), { force: true });
   }
-  const next: ConversationIndex = { ...index, openings: { ...index.openings, [thread]: job } };
+  // 开场那一轮本身不能藏着:藏过就放出来
+  const next: ConversationIndex = { ...index, openings: { ...index.openings, [thread]: job }, hidden: index.hidden.filter((j) => j !== job) };
+  await writeIndex(ws, next);
+  return next;
+}
+
+/** 备课话题里对孩子藏起 / 放出一轮(《备课设计.md》§4.5);能不能藏(备课轮、不是开场、孩子没开口)由路由查 */
+export async function setHidden(ws: Workspace, tutor: string, date: string, job: string, hide: boolean): Promise<ConversationIndex> {
+  const index = await readIndex(ws, tutor, date);
+  const rest = index.hidden.filter((j) => j !== job);
+  const next: ConversationIndex = { ...index, hidden: hide ? [...rest, job] : rest };
   await writeIndex(ws, next);
   return next;
 }
@@ -327,7 +337,8 @@ export async function deleteThread(ws: Workspace, tutor: string, date: string, t
   const last = keptThreads[keptThreads.length - 1];
   const session = ths[ths.length - 1] === thread ? (last ? (sessions[last] ?? null) : null) : index.session;
   const cost = Math.max(0, index.costUsd - gone.reduce((s, m) => s + (m.costUsd ?? 0), 0));
-  const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, openings, session, costUsd: Math.round(cost * 1e6) / 1e6 };
+  const hidden = index.hidden.filter((j) => !gone.some((m) => m.job === j));
+  const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, openings, hidden, session, costUsd: Math.round(cost * 1e6) / 1e6 };
   await writeIndex(ws, next);
   return next;
 }

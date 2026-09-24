@@ -27,7 +27,7 @@ import { appendContinue, checkHome, historyFile, homeStats, kidHomeView, message
 import { DEV_PAGE } from './dev-page.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
-import { IndexError, capturePathOk, deleteThread, setOpening, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardImage, writeCardState } from './store.ts';
+import { IndexError, capturePathOk, deleteThread, setHidden, setOpening, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardImage, writeCardState } from './store.ts';
 import { BUTTON_LABEL_MAX, IMAGE_EXT, parseCardState, stripSecrets, type TutorButton } from '../cards/index.ts';
 import { faceTutor } from '../lib/home.ts';
 import { resolve, sep } from 'node:path';
@@ -718,6 +718,25 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       await setOpening(ws, tutor, date, thread, job);
       const r = await appendContinue(ws, tutor, date, thread, label, ctx.now());
       return { status: 200, json: { ok: r.ok, label, issues: r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text) } };
+    }
+    // 对孩子藏起 / 放出一节(《备课设计.md》§4.5):家长让老师重写过的旧版之类。只认备课话题里孩子开口之前的轮;开场那一轮不能藏
+    const hid = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/hidden$/.exec(p);
+    if (hid && method === 'PUT') {
+      const [, tutor, date, raw] = hid;
+      const thread = decodeURIComponent(raw);
+      if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
+      const job = isObj(body) && typeof body.job === 'string' ? body.job : '';
+      const hide = isObj(body) ? body.hidden : undefined;
+      if (typeof hide !== 'boolean') return { status: 400, json: { error: 'bad_request', message: '要 {job, hidden: true | false}' } };
+      const index = await readIndex(ws, tutor, date);
+      const ths = threads(index.messages);
+      if (!ths.includes(thread)) return { status: 404, json: { error: 'no_such_thread' } };
+      if (!index.messages.some((m, i) => ths[i] === thread && m.job === job)) return { status: 400, json: { error: 'bad_request', message: `话题 ${thread} 里没有 ${job} 这一轮` } };
+      if (!isPrepThread(index.messages, thread)) return { status: 409, json: { error: 'not_prep', message: '只有家长开的备课话题能藏' } };
+      if (!prepJobs(index.messages).has(job)) return { status: 409, json: { error: 'kid_spoke', message: '孩子已经看过这一节了' } };
+      if (hide && index.openings[thread] === job) return { status: 400, json: { error: 'bad_request', message: '开场那一节不能藏;要换开场,在另一节尾点「改开场」' } };
+      const next = await setHidden(ws, tutor, date, job, hide);
+      return { status: 200, json: { tutor, date, thread, job, hidden: next.hidden.includes(job) } };
     }
     // 家长在备课话题里做卡(看效果;《备课设计.md》§3.2):只认备课轮的卡;孩子的话题里家长不替孩子答
     const pcard = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/cards\/(\d{4}-\d+)\/(\d+)$/.exec(p);

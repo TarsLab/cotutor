@@ -239,6 +239,11 @@ for: 2026-09-18
     check('家长在备课话题里做卡(存在 conversations/)、按继续:resume 同一会话,带上做过的卡;第二轮也是 prep', put.status === 200 && exists(join(convDir, `${day}.${job1}.cards`, `${ci}.json`)) && s2.status === 202 && b2.length === 2 && b2[1].prep === true && b2[1].reply?.includes('接着说') === true && b2[1].reply.includes('看到卡'), JSON.stringify({ put: put.json, s2: s2.json, r: b2[1]?.reply }));
     const bk = (await route('POST', `/api/conversations/math-tutor/${day}/bookkeep`, ctx, { threads: [prepTh] })).json as { queued: string[]; skipped: { thread: string; why: string }[] };
     check('记账不起备课话题', bk.queued.length === 0 && bk.skipped[0]?.why.includes('备课'), JSON.stringify(bk));
+    // 藏第二节(《备课设计.md》§4.5):板书接口标 hidden / unseen;坏参数 400
+    const job2 = b2[1].job;
+    const hide = await route('PUT', `/api/conversations/math-tutor/${day}/threads/${prepTh}/hidden`, ctx, { job: job2, hidden: true });
+    const b3 = (await board()) as (PMsg & { hidden?: true; unseen?: true })[];
+    check('藏一节:200、索引 hidden 有它、家长接口标 hidden 与 unseen;没说藏不藏 400', hide.status === 200 && (await readIndex(ctx.ws, 'math-tutor', day)).hidden.includes(job2) && b3[1].hidden === true && b3[1].unseen === true && b3[0].hidden === undefined && (await route('PUT', `/api/conversations/math-tutor/${day}/threads/${prepTh}/hidden`, ctx, { job: job2 })).status === 400, JSON.stringify(hide.json));
     // 交给孩子:从第一节起;卡的状态清掉;首页多一个「接着」,孩子端 JSON 带 open
     const hand = await route('POST', `/api/conversations/math-tutor/${day}/threads/${prepTh}/opening`, ctx, { job: job1, label: '我们来切披萨' });
     const i2 = await readIndex(ctx.ws, 'math-tutor', day);
@@ -247,7 +252,7 @@ for: 2026-09-18
     check('交给孩子:200 ok、openings 写上、卡状态文件没了、首页有「接着」且只打开', hand.status === 200 && (hand.json as { ok: boolean }).ok === true && i2.openings[prepTh] === job1 && !exists(join(convDir, `${day}.${job1}.cards`, `${ci}.json`)) && hb?.kind === 'continue' && hb.label === '我们来切披萨' && hb.open === true && readFileSync(join(root, 'home', 'draft.md'), 'utf8').includes(`接着 ${day} ${prepTh} 我们来切披萨`), JSON.stringify({ hand: hand.json, hb }));
     const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; thread: string; question: string | null; section?: { cards: { state?: unknown; props: Record<string, unknown> }[] } }[]; thread: string | null };
     const kmine = kd.messages.filter((m) => m.thread === prepTh);
-    check('孩子端:两节都在、问句都是 null、卡没状态、没答案;当前话题是它', kmine.length === 2 && kmine.every((m) => m.question === null) && kmine[0].section?.cards.every((c) => c.state === undefined && c.props.answer === undefined) === true && kd.thread === prepTh, JSON.stringify(kmine));
+    check('孩子端:开场那节在、藏起来的第二节不在、问句 null、卡没状态、没答案;当前话题是它;开场那节藏不了', kmine.length === 1 && kmine[0].job === job1 && (await route('PUT', `/api/conversations/math-tutor/${day}/threads/${prepTh}/hidden`, ctx, { job: job1, hidden: true })).status === 400 && kmine.every((m) => m.question === null) && kmine[0].section?.cards.every((c) => c.state === undefined && c.props.answer === undefined) === true && kd.thread === prepTh, JSON.stringify(kmine));
     const ks = await kidSend('math-tutor', { text: '记住它 我选 B', thread: prepTh, via: { home: kh.home, button: hb!.id } });
     await wait('math-tutor');
     const i3 = await readIndex(ctx.ws, 'math-tutor', day);
@@ -256,7 +261,7 @@ for: 2026-09-18
     const again = await route('POST', `/api/conversations/math-tutor/${day}/threads/${prepTh}/opening`, ctx, { job: job1, label: '再交一次' });
     const ov2 = (await route('GET', '/api/overview/today', ctx)).json as typeof ov;
     const ovTh2 = ov2.tutors.find((t) => t.name === 'math-tutor')!.threads.find((t) => t.thread === prepTh);
-    check('孩子开口后:再交 409、清单不再标备课', again.status === 409 && ovTh2?.prep === false, JSON.stringify({ again: again.json, ovTh2 }));
+    check('孩子开口后:再交 409、藏 / 放都 409(孩子答的那轮不是备课轮)、清单不再标备课', again.status === 409 && (await route('PUT', `/api/conversations/math-tutor/${day}/threads/${prepTh}/hidden`, ctx, { job: last.job, hidden: true })).status === 409 && ovTh2?.prep === false, JSON.stringify({ again: again.json, ovTh2 }));
     // 家长真发(第六节 3):家长板书页在 iPad 上发进孩子的对话,带 device;板书接口 from parent;孩子接口那条问句 null
     const pf = await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: '家长补一句', device: 'phone' });
     await wait('math-tutor');

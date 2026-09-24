@@ -184,6 +184,7 @@ const PAGE = `<!doctype html>
   #hand #hd-go:disabled { opacity:.5; }
   #hd-msg { font-size:13px; color:var(--dim); white-space:pre-wrap; min-height:1em; }
   #hd-msg.err { color:#b3541e; }
+  #board .sec.hid { opacity:.4; }
   #board .c .note-ans { font-size:13px; color:var(--dim); margin-top:6px; }
   #wrap { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
   /* 板书顶上一条渐隐:滚上去的内容在两角按钮那一带淡成纸色,不和胶囊、话题标签叠字。只是盖一层颜色,不占位置、不收触摸;
@@ -1367,7 +1368,8 @@ __PHOTO_JS__
     if (m.cards && m.cards.length) out.push(noteEl('did', '做了', m.cards.map((c) => c.text).join('\\n')));
     // 备课话题交给了孩子:开场那一节前标出来,之前的几节孩子看不到
     if (m.opening) out.push(noteEl('handed', '交给了孩子', '孩子按首页上的按钮,从这一节看起'));
-    else if (m.kidHidden && S.prep === 'handed') out.push(noteEl('sys', '备课', '孩子看不到这一节'));
+    else if (m.hidden) out.push(noteEl('sys', '藏起来了', '孩子看不到这一节'));
+    else if (m.unseen && S.prep === 'handed') out.push(noteEl('sys', '备课', '孩子看不到这一节'));
     return out;
   };
   const postNotes = (m) => {
@@ -1380,7 +1382,10 @@ __PHOTO_JS__
     // 备课轮:记忆段没写进 vault,给家长看老师想记什么;费用只在备课轮上(家长在花钱)
     if (m.memoryDraft && m.memoryDraft.length) out.push(noteEl('mem', '本来会记住的', m.memoryDraft.join('\\n')));
     if (m.prep && typeof m.costUsd === 'number' && !m.pending) out.push(noteEl('cost', '费用', '$' + m.costUsd.toFixed(3)));
-    if (m.prep && S.prep && !m.pending && !m.error && m.section && canSend()) out.push(handNote(m));
+    if (m.prep && S.prep && !m.pending && !m.error && m.section && canSend()) {
+      if (!m.hidden) out.push(handNote(m));
+      if (!m.opening) out.push(hideNote(m));
+    }
     return out;
   };
   // ---- 备课(《备课设计.md》§4):家长自己开的话题,孩子开口之前;某一节尾点「从这里给孩子」→ 首页多一个「接着」按钮,孩子从这一节看起 ----
@@ -1388,13 +1393,17 @@ __PHOTO_JS__
   const syncPrep = (mine) => {
     const last = mine[mine.length - 1];
     const prep = S.newThread && !mine.length ? 'prep' : last && last.prep ? (mine.some((m) => m.opening) ? 'handed' : 'prep') : null;
-    let reached = false;
-    for (const m of mine) { if (m.opening) reached = true; m.kidHidden = Boolean(m.prep) && !reached; }
     S.prep = prep;
     const ro = !(prep && canSend());
     if (S.readonly !== ro) { S.readonly = ro; renderBar(); }
   };
   const handNote = (m) => h('div', { class: 'note hand', role: 'button', on: { click: () => openHand(m) } }, h('span', { class: 'tg' }, m.opening ? '改开场' : '从这里给孩子'), h('span', { class: 'tx' }, m.opening ? '孩子从这一节看起;换一节就在那一节尾点' : '孩子从这一节看起,之前的看不到'));
+  // 对孩子藏起 / 放出这一节(《备课设计.md》§4.5):重写前的旧版之类;开场那一节不能藏
+  const hideNote = (m) => h('div', { class: 'note hand', role: 'button', on: { click: () => toggleHidden(m) } }, h('span', { class: 'tg' }, m.hidden ? '放出来' : '对孩子藏起来'), h('span', { class: 'tx' }, m.hidden ? '交给孩子后这一节照常出现' : '交给孩子后也不出现;老师还记得它'));
+  const toggleHidden = async (m) => {
+    try { await api('PUT', '/api/conversations/' + S.tutor.name + '/' + S.home.today + '/threads/' + encodeURIComponent(S.thread) + '/hidden', { job: m.job, hidden: !m.hidden }); } catch (e) { if (!(e && (e.status === 409 || e.status === 400))) setOffline(true); }
+    loadDay(true);
+  };
   const openHand = (m) => {
     if (!S.thread || S.pending) return;
     S.handJob = m.job;
@@ -1450,7 +1459,7 @@ __PHOTO_JS__
       if (!post) { post = h('div', { class: 'notes post', 'data-job': m.job }); (sec || pre).after(post); }
       else if ((sec || pre).nextElementSibling !== post) (sec || pre).after(post);
       post.replaceChildren(...postNotes(m));
-      if (sec) answerNotes(sec, m);
+      if (sec) { answerNotes(sec, m); sec.classList.toggle('hid', Boolean(m.hidden)); }
       prev = post;
     }
   };

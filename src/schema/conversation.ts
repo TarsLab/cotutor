@@ -111,5 +111,7 @@ export const ConversationIndexSchema = z.object({
   booked: z.record(z.string(), z.string().min(1)).default({}),
   /** 话题 id → 开场那一轮的 job(《备课设计.md》§4:家长把备课话题交给孩子,孩子端从这一轮看起) */
   openings: z.record(z.string(), z.string().min(1)).default({}),
+  /** 家长在备课话题里对孩子藏起来的轮(job;《备课设计.md》§4.5):重写前的旧版之类,交给孩子后也不下发 */
+  hidden: z.array(z.string().min(1)).default([]),
 });
 export type ConversationIndex = z.infer<typeof ConversationIndexSchema>;

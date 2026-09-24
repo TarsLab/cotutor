@@ -393,10 +393,12 @@ export function createMock(opts: MockOptions = {}): Mock {
   /** 家长交给孩子的备课话题(《备课设计.md》§4):老师 → 话题 → 开场那一轮;首页上多一个「接着」按钮(字在 handedLabel) */
   const openings = new Map<string, Map<string, string>>();
   const handedLabel = new Map<string, { thread: string; label: string }>();
+  /** 家长在备课话题里对孩子藏起来的轮(《备课设计.md》§4.5):老师 → job */
+  const hiddenJobs = new Map<string, Set<string>>();
   /** 备课轮与孩子看不到的轮:和真服务同一组函数(lib/conversation.ts) */
   const asIndex = (name: string) => {
     const list = messages.get(name) ?? [];
-    return { messages: list.map((m) => ({ job: m.job, thread: m.thread, from: m.from ?? ('kid' as const), prepThread: m.prepThread })), openings: Object.fromEntries(openings.get(name) ?? []) };
+    return { messages: list.map((m) => ({ job: m.job, thread: m.thread, from: m.from ?? ('kid' as const), prepThread: m.prepThread })), openings: Object.fromEntries(openings.get(name) ?? []), hidden: [...(hiddenJobs.get(name) ?? [])] };
   };
   const kidVisible = (name: string): MockMessage[] => {
     const hidden = kidHiddenJobs(asIndex(name));
@@ -554,12 +556,14 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (date > today) return { status: 400, json: { error: 'bad_request' } };
       const list = (date === today ? messages.get(name) : date === yesterday() ? past.get(name) : undefined) ?? [];
       const prep = date === today ? prepJobs(asIndex(name).messages) : new Set<string>();
+      const unseen = date === today ? kidHiddenJobs(asIndex(name)) : new Set<string>();
+      const hid = date === today ? (hiddenJobs.get(name) ?? new Set<string>()) : new Set<string>();
       const ops = date === today ? (openings.get(name) ?? new Map<string, string>()) : new Map<string, string>();
       const out = await Promise.all(list.map(async (m, i) => {
         const { states, ...rest } = m;
         const section = m.section ? await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, { ...m.section, cards: m.section.cards.map((c, k) => (states && k in states ? { ...c, state: states[k] } : c)) }) : null;
         // 备课轮(《备课设计.md》):标 prep、带费用;第一轮带一条「本来会记住的」看旁注的样子
-        if (prep.has(m.job)) return { ...rest, from: m.from ?? 'kid', section, prep: true, ...(ops.get(m.thread) === m.job ? { opening: true } : {}), ...(m.pending ? {} : { costUsd: 0.03 }), ...(m.job === m.thread && !m.pending ? { memoryDraft: ['分数刚起步,1/4 还会和 1/3 混'] } : {}) };
+        if (prep.has(m.job)) return { ...rest, from: m.from ?? 'kid', section, prep: true, ...(ops.get(m.thread) === m.job ? { opening: true } : {}), ...(unseen.has(m.job) ? { unseen: true } : {}), ...(hid.has(m.job) ? { hidden: true } : {}), ...(m.pending ? {} : { costUsd: 0.03 }), ...(m.job === m.thread && !m.pending ? { memoryDraft: ['分数刚起步,1/4 还会和 1/3 混'] } : {}) };
         return { ...rest, from: m.from ?? 'kid', section, ...(ops.get(m.thread) === m.job ? { opening: true } : {}), ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };
       }));
       const pending = list.find((m) => m.pending);
@@ -624,9 +628,25 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (!label || Array.from(label).length > 16 || !turn || turn.pending || !turn.section) return { status: 400, json: { error: 'bad_request' } };
       if (!openings.has(name)) openings.set(name, new Map());
       openings.get(name)!.set(thread, job);
+      hiddenJobs.get(name)?.delete(job);
       handedLabel.set(name, { thread, label });
       for (const m of list) if (m.thread === thread) delete m.states;
       return { status: 200, json: { ok: true, label, issues: [] } };
+    }
+    // 对孩子藏起 / 放出一节(《备课设计.md》§4.5):只认备课轮;开场那一节不能藏
+    const hd = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/hidden$/.exec(p);
+    if (hd && method === 'PUT') {
+      const [, name, , thread] = hd;
+      const list = messages.get(name);
+      if (!list || !list.some((m) => m.thread === thread)) return { status: 404, json: { error: 'no_such_thread' } };
+      const job = isObj(body) && typeof body.job === 'string' ? body.job : '';
+      const hide = isObj(body) ? body.hidden : undefined;
+      if (typeof hide !== 'boolean' || !list.some((m) => m.thread === thread && m.job === job)) return { status: 400, json: { error: 'bad_request' } };
+      if (!prepJobs(asIndex(name).messages).has(job)) return { status: 409, json: { error: 'not_prep' } };
+      if (hide && openings.get(name)?.get(thread) === job) return { status: 400, json: { error: 'bad_request' } };
+      if (!hiddenJobs.has(name)) hiddenJobs.set(name, new Set());
+      if (hide) hiddenJobs.get(name)!.add(job); else hiddenJobs.get(name)!.delete(job);
+      return { status: 200, json: { tutor: name, thread, job, hidden: hide } };
     }
     // 删掉一个话题(孩子的 / 家长开的):列表里去掉;还在想的 409
     const del = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)$/.exec(p);

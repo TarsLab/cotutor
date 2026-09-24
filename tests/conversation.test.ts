@@ -65,6 +65,7 @@ check('卡的状态文件与 id', f.cardsDir('1620-1') === '/ws/conversations/ma
   check('没交:备课话题整个看不到;孩子的当前话题落在孩子看得到的末条', [...kidHiddenJobs({ messages: msgs })].join() === '2000-3,2001-4,2002-5,2100-6' && kidCurrentThread({ messages: msgs }) === '1910-2');
   const openings = { '2000-3': '2001-4' };
   check('交了(开场 2001-4):开场之前的看不到,开场及以后的看得到;没交的那个仍看不到', [...kidHiddenJobs({ messages: msgs, openings })].join() === '2000-3,2100-6' && kidCurrentThread({ messages: msgs, openings }) === '2000-3');
+  check('家长藏起来的(《备课设计.md》§4.5):开场之后的那轮也看不到;开场之前的本来就看不到', [...kidHiddenJobs({ messages: msgs, openings, hidden: ['2002-5'] })].join() === '2000-3,2002-5,2100-6');
   const spoke: M[] = [...msgs, { job: '2003-7', thread: '2000-3', from: 'kid' }, { job: '2004-8', thread: '2000-3', from: 'parent' }];
   check('孩子开口后:那一条起不是备课轮(家长再发也不是);kidSpoke', !prepJobs(spoke).has('2003-7') && !prepJobs(spoke).has('2004-8') && prepJobs(spoke).has('2002-5') && kidSpoke(spoke, '2000-3') && !kidSpoke(spoke, '2100-6'));
 }

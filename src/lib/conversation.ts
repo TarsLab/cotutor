@@ -113,6 +113,56 @@ export function threads(messages: readonly Pick<ConversationMessage, 'job' | 'fr
   return out;
 }
 
+/**
+ * 备课轮(《备课设计.md》§3.2):家长在家长端开的话题(第一条带 prepThread)里,孩子开口(第一条 from: kid)之前的每一轮。
+ * 这些轮不写记忆、不记账;孩子端只看得到交给孩子之后开场及以后的那几轮(kidHiddenJobs)
+ */
+export function prepJobs(messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'prepThread'>[]): Set<string> {
+  const t = threads(messages);
+  const prep = new Map<string, boolean>();
+  const spoke = new Set<string>();
+  const out = new Set<string>();
+  messages.forEach((m, i) => {
+    if (!prep.has(t[i])) prep.set(t[i], m.prepThread === true);
+    if (m.from === 'kid') spoke.add(t[i]);
+    if (prep.get(t[i]) && !spoke.has(t[i])) out.add(m.job);
+  });
+  return out;
+}
+
+/** 某个话题是不是备课话题(家长在家长端开的);孩子开没开口看 kidSpoke */
+export function isPrepThread(messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'prepThread'>[], thread: string): boolean {
+  const t = threads(messages);
+  const i = t.indexOf(thread);
+  return i >= 0 && messages[i].prepThread === true;
+}
+
+export function kidSpoke(messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread'>[], thread: string): boolean {
+  const t = threads(messages);
+  return messages.some((m, i) => t[i] === thread && m.from === 'kid');
+}
+
+/** 孩子端看不到的轮:备课轮里没交给孩子的话题整个,交了的开场之前的那几轮(《备课设计.md》§3.2) */
+export function kidHiddenJobs(index: { messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'prepThread'>[]; openings?: Record<string, string> }): Set<string> {
+  const prep = prepJobs(index.messages);
+  const t = threads(index.messages);
+  const reached = new Set<string>();
+  const out = new Set<string>();
+  index.messages.forEach((m, i) => {
+    if (index.openings?.[t[i]] === m.job) reached.add(t[i]);
+    if (prep.has(m.job) && !reached.has(t[i])) out.add(m.job);
+  });
+  return out;
+}
+
+/** 孩子端的当前话题:孩子看得到的末条消息所在的(家长还没交的备课话题不算);没有 null */
+export function kidCurrentThread(index: { messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'prepThread'>[]; openings?: Record<string, string> }): string | null {
+  const hidden = kidHiddenJobs(index);
+  const t = threads(index.messages);
+  for (let i = index.messages.length - 1; i >= 0; i--) if (!hidden.has(index.messages[i].job)) return t[i];
+  return null;
+}
+
 /** 当前话题 = 末条消息的;空索引 null */
 export function currentThread(index: { messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread'>[] }): string | null {
   const t = threads(index.messages);

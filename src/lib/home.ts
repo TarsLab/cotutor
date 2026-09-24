@@ -90,6 +90,8 @@ export interface HomeCheckContext {
   tutors: Record<string, HomeTutorInfo>;
   /** 查得到的话题:`<老师> <日期> <话题>` */
   threads: ReadonlySet<string>;
+  /** 引用里是家长备课话题、孩子还没开口的(《备课设计.md》§4.1):`<老师> <日期> <话题>` → 交给孩子没有 */
+  prep?: ReadonlyMap<string, 'handed' | 'unhanded'>;
   today: string;
 }
 
@@ -138,6 +140,11 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
       if (b.kind !== 'continue') return;
       if (b.date > ctx.today) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${b.date} 还没到` });
       else if (!ctx.threads.has(threadKey(name, b.date, b.thread))) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${b.date} 没有话题 ${b.thread}(cotutor show ${name} <job> ${b.date} 或 conversations/${name}/${b.date}.json 里找话题 id)` });
+      else {
+        const prep = ctx.prep?.get(threadKey(name, b.date, b.thread));
+        if (prep === 'unhanded') out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${b.thread} 是家长的备课话题,还没交给孩子(在家长端那个话题某一节尾点「从这里给孩子」)` });
+        else if (prep && b.date !== ctx.today) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${b.date} 的备课话题孩子还没开口,隔天接不上开场(只能交当天的;今天在家长端重新备一次)` });
+      }
     });
   });
   const missing = homeTutors(ctx.tutors).filter((name) => !seen.has(name));
@@ -193,7 +200,7 @@ export type KidHomeButton =
   | { id: 'new'; kind: 'new'; label: string }
   | { id: 'recent'; kind: 'continue'; label: string; date: string; thread: string }
   | { id: number; kind: 'start'; label: string; brief?: string }
-  | { id: number; kind: 'continue'; label: string; date: string; thread: string; brief?: string };
+  | { id: number; kind: 'continue'; label: string; date: string; thread: string; brief?: string; open?: true };
 
 export const NEW_THREAD_LABEL = '新话题';
 const RECENT_MAX = 10;
@@ -202,7 +209,7 @@ const RECENT_MAX = 10;
  * 一张老师卡的按钮:新话题第一;今天有话题(recent)第二,字 = 「接着刚才的:」+ 那个话题第一句孩子的话(文件里有接着它的按钮就不加);然后是文件里的。
  * 接着按钮指的话题现在找不到(alive 说没有)就不出现。keepBriefs = 家长预览(讲法留着)。
  */
-export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { date: string; thread: string; title: string } | null; alive: (date: string, thread: string) => boolean; keepBriefs?: boolean }): KidHomeButton[] {
+export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { date: string; thread: string; title: string } | null; alive: (date: string, thread: string) => boolean; handed?: (date: string, thread: string) => boolean; keepBriefs?: boolean }): KidHomeButton[] {
   const out: KidHomeButton[] = [{ id: 'new', kind: 'new', label: NEW_THREAD_LABEL }];
   // 文件里已经有接着这个话题的按钮(字与讲法是家长定的),就不再加一个「接着刚才的」
   const covered = opts.recent && buttons.some((b) => b.kind === 'continue' && b.date === opts.recent!.date && b.thread === opts.recent!.thread);
@@ -214,7 +221,8 @@ export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { da
   buttons.forEach((b, k) => {
     const brief = opts.keepBriefs && b.brief ? { brief: b.brief } : {};
     if (b.kind === 'start') out.push({ id: k, kind: 'start', label: b.label, ...brief });
-    else if (opts.alive(b.date, b.thread)) out.push({ id: k, kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...brief });
+    // 指向家长交给孩子的备课话题(《备课设计.md》§4.2):open = 只打开、不把按钮字发出去,孩子从开场看起
+    else if (opts.alive(b.date, b.thread)) out.push({ id: k, kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...brief, ...(opts.handed?.(b.date, b.thread) ? { open: true as const } : {}) });
   });
   return out;
 }

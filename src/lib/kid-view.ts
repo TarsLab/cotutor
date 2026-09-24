@@ -7,7 +7,7 @@
 import { stripSecrets } from '../cards/index.ts';
 import type { Bookkeeping, ConversationMessage } from '../schema/index.ts';
 import { parseBoard } from './board.ts';
-import { threads, type CardAssets, type CardStates } from './conversation.ts';
+import { kidHiddenJobs, prepJobs, threads, type CardAssets, type CardStates } from './conversation.ts';
 import type { BoardSection } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 import type { Transcript } from './transcript.ts';
@@ -112,13 +112,15 @@ function cardsWithState(m: ConversationMessage, states: CardStates, assets: Card
 /**
  * 对话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / 费用 / 家长尾巴;
  * 卡上的答案剥掉,孩子自己做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到卡上。出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
+ * 家长的备课话题(《备课设计.md》§3.2):没交给孩子的整个不出现,交了的从开场那一轮起出现。
  */
-export function kidConversation(index: { messages: readonly ConversationMessage[] }, states: CardStates = {}, assets: CardAssets = {}): KidMessage[] {
+export function kidConversation(index: { messages: readonly ConversationMessage[]; openings?: Record<string, string> }, states: CardStates = {}, assets: CardAssets = {}): KidMessage[] {
   const out: KidMessage[] = [];
   const ths = threads(index.messages);
+  const hidden = kidHiddenJobs(index);
   for (const [i, m] of index.messages.entries()) {
     // 记账那轮是家长晚上起的任务,老师回的「记好了」不是给孩子的话
-    if (m.bookkeep || m.tidy) continue;
+    if (m.bookkeep || m.tidy || hidden.has(m.job)) continue;
     const question = m.from === 'kid' ? m.text : null;
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
@@ -147,16 +149,19 @@ export interface ParentMessage extends KidMessage {
   error?: string;
   bookkeep?: ConversationMessage['bookkeep'];
   tidy?: true;
-  /** 试用那轮(《家长板书页设计.md》§5):费用给家长看(只这一处),记忆段原文是「本来会记住的」 */
-  tryout?: true;
+  /** 备课轮(《备课设计.md》§3.2):家长开的话题里孩子开口之前;费用给家长看(只这一处),记忆段原文是「本来会记住的」 */
+  prep?: true;
+  /** 这一轮是开场:家长从这里把话题交给了孩子 */
+  opening?: true;
   memoryDraft?: string[];
   costUsd?: number;
 }
 
 /** 对话索引 → 家长板书页条目:和 kidConversation 同一个循环,差集恰好是 ParentMessage 里多出的字段与「答案不剥」 */
-export function parentConversation(index: { messages: readonly ConversationMessage[] }, states: CardStates = {}, assets: CardAssets = {}): ParentMessage[] {
+export function parentConversation(index: { messages: readonly ConversationMessage[]; openings?: Record<string, string> }, states: CardStates = {}, assets: CardAssets = {}): ParentMessage[] {
   const out: ParentMessage[] = [];
   const ths = threads(index.messages);
+  const prep = prepJobs(index.messages);
   for (const [i, m] of index.messages.entries()) {
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
@@ -175,7 +180,8 @@ export function parentConversation(index: { messages: readonly ConversationMessa
       ...(m.result === 'error' ? { error: m.error ?? '没成' } : {}),
       ...(m.bookkeep ? { bookkeep: m.bookkeep } : {}),
       ...(m.tidy ? { tidy: true as const } : {}),
-      ...(m.tryout ? { tryout: true as const } : {}),
+      ...(prep.has(m.job) ? { prep: true as const } : {}),
+      ...(index.openings?.[ths[i]] === m.job ? { opening: true as const } : {}),
       ...(m.memoryDraft?.length ? { memoryDraft: m.memoryDraft } : {}),
       ...(typeof m.costUsd === 'number' ? { costUsd: m.costUsd } : {}),
     });

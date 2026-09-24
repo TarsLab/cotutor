@@ -38,13 +38,12 @@ export interface ReplayOptions {
   env?: NodeJS.ProcessEnv;
 }
 
-/** 回放用的 Workspace:对话目录换成 evals/、老师全部开着、不配音(voice: true 留着——试用要听)、后期按 opts */
-export function evalWorkspace(ws: Workspace, opts: { post?: boolean; voice?: boolean } = {}): Workspace {
+/** 回放用的 Workspace:对话目录换成 evals/、老师全部开着、不配音、后期按 opts */
+export function evalWorkspace(ws: Workspace, opts: { post?: boolean } = {}): Workspace {
   const tutors = Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => {
     const { voice: _voice, ...rest } = t;
-    const kept = opts.voice ? t : rest;
-    const policy = opts.post ? kept.policy : { ...(kept.policy ?? {}), post: { ...(kept.policy?.post ?? {}), mode: 'off' as const } };
-    return [k, { ...kept, enabled: true, ...(policy ? { policy } : {}) }];
+    const policy = opts.post ? rest.policy : { ...(rest.policy ?? {}), post: { ...(rest.policy?.post ?? {}), mode: 'off' as const } };
+    return [k, { ...rest, enabled: true, ...(policy ? { policy } : {}) }];
   }));
   return { ...ws, config: { ...ws.config, tutors }, dirs: { ...ws.dirs, conversations: join(ws.root, EVALS_DIR) } };
 }

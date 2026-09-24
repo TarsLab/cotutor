@@ -1,5 +1,5 @@
 /** 对话索引纯函数:命名、并入运行结果、session 只记一次。 */
-import { addMessage, applyRun, cardAssetName, cardId, changedCards, conversationFiles, currentThread, emptyIndex, jobId, lastJobOf, localDate, localMinute, sessionFor, threads } from '../src/lib/conversation.ts';
+import { addMessage, applyRun, cardAssetName, cardId, changedCards, conversationFiles, currentThread, emptyIndex, isPrepThread, jobId, kidCurrentThread, kidHiddenJobs, kidSpoke, prepJobs, lastJobOf, localDate, localMinute, sessionFor, threads } from '../src/lib/conversation.ts';
 import { deriveKidView } from '../src/lib/kid-view.ts';
 import { parseTranscript } from '../src/lib/transcript.ts';
 import { ConversationIndexSchema } from '../src/schema/index.ts';
@@ -50,4 +50,23 @@ check('卡的状态文件与 id', f.cardsDir('1620-1') === '/ws/conversations/ma
   const parsed = ConversationIndexSchema.safeParse({ tutor: 'x', date: '2026-09-08', session: { id: 's', runtime: 'claude' }, messages: [] });
   check('旧索引没有 sessions 也过契约(缺省空)', parsed.success && Object.keys(parsed.data.sessions).length === 0);
 }
+// 备课(《备课设计.md》§3.2):家长端开的话题(第一条 prepThread)孩子开口前是备课轮;没交整个看不到,交了从开场起看得到
+{
+  type M = { job: string; thread: string; from: 'kid' | 'parent' | 'system'; prepThread?: true };
+  const msgs: M[] = [
+    { job: '1900-1', thread: '1900-1', from: 'kid' },
+    { job: '1910-2', thread: '1910-2', from: 'parent' },
+    { job: '2000-3', thread: '2000-3', from: 'parent', prepThread: true },
+    { job: '2001-4', thread: '2000-3', from: 'parent' },
+    { job: '2002-5', thread: '2000-3', from: 'parent' },
+    { job: '2100-6', thread: '2100-6', from: 'parent', prepThread: true },
+  ];
+  check('备课轮:只认 prepThread 开的话题;工作台开的(from parent 不带)不算', [...prepJobs(msgs)].join() === '2000-3,2001-4,2002-5,2100-6' && isPrepThread(msgs, '2000-3') && !isPrepThread(msgs, '1910-2'));
+  check('没交:备课话题整个看不到;孩子的当前话题落在孩子看得到的末条', [...kidHiddenJobs({ messages: msgs })].join() === '2000-3,2001-4,2002-5,2100-6' && kidCurrentThread({ messages: msgs }) === '1910-2');
+  const openings = { '2000-3': '2001-4' };
+  check('交了(开场 2001-4):开场之前的看不到,开场及以后的看得到;没交的那个仍看不到', [...kidHiddenJobs({ messages: msgs, openings })].join() === '2000-3,2100-6' && kidCurrentThread({ messages: msgs, openings }) === '2000-3');
+  const spoke: M[] = [...msgs, { job: '2003-7', thread: '2000-3', from: 'kid' }, { job: '2004-8', thread: '2000-3', from: 'parent' }];
+  check('孩子开口后:那一条起不是备课轮(家长再发也不是);kidSpoke', !prepJobs(spoke).has('2003-7') && !prepJobs(spoke).has('2004-8') && prepJobs(spoke).has('2002-5') && kidSpoke(spoke, '2000-3') && !kidSpoke(spoke, '2100-6'));
+}
+
 done();

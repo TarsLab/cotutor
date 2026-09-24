@@ -166,6 +166,24 @@ const PAGE = `<!doctype html>
   .note.said .tx { color:var(--ink); font-size:16px; }
   .note.said.kid .tg { color:var(--accent); border-color:var(--accent); }
   .note.err .tg { color:#b3541e; border-color:#b3541e; }
+  .pt .tr .pin { font-size:12px; font-weight:500; color:var(--accent); border:1px solid var(--accent); border-radius:6px; padding:0 6px; margin-left:6px; vertical-align:middle; }
+  .note.hand { cursor:pointer; border-radius:10px; }
+  .note.hand .tg, .note.handed .tg { color:var(--accent); border-color:var(--accent); }
+  .note.hand:active { background:var(--card); }
+  #hand { position:absolute; inset:0; display:none; z-index:31; }
+  #hand.on { display:block; }
+  #hand .dimmer { position:absolute; inset:0; background:#00000073; }
+  #hand .panel { position:absolute; left:50%; top:calc(env(safe-area-inset-top) + 72px); translate:-50% 0; width:min(440px, calc(100% - 32px)); background:var(--card); border-radius:20px; padding:18px; display:flex; flex-direction:column; gap:10px; box-shadow:0 8px 30px #00000033; }
+  #hand .panel > b { font-size:18px; color:var(--ink); }
+  #hand .panel > small { font-size:13px; color:var(--dim); line-height:1.5; }
+  #hand label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--dim); }
+  #hand input { font:inherit; font-size:16px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:var(--paper); color:var(--ink); }
+  #hand .row { display:flex; gap:8px; justify-content:flex-end; }
+  #hand .row button { padding:10px 18px; border-radius:12px; background:var(--paper); color:var(--ink); font-size:16px; }
+  #hand #hd-go { background:var(--accent); color:#fff; }
+  #hand #hd-go:disabled { opacity:.5; }
+  #hd-msg { font-size:13px; color:var(--dim); white-space:pre-wrap; min-height:1em; }
+  #hd-msg.err { color:#b3541e; }
   #board .c .note-ans { font-size:13px; color:var(--dim); margin-top:6px; }
   #wrap { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
   /* 板书顶上一条渐隐:滚上去的内容在两角按钮那一带淡成纸色,不和胶囊、话题标签叠字。只是盖一层颜色,不占位置、不收触摸;
@@ -386,6 +404,13 @@ const PAGE = `<!doctype html>
     <button type="button" id="hist-btn"><span class="ic"></span><span class="tx"><b>以前的</b><small>看看以前聊过的话题</small></span></button>
     <button type="button" id="new-btn" hidden><span class="ic"></span><span class="tx"><b>新话题</b><small>这个聊完了,换一个问</small></span></button>
   </div></div>
+  <div id="hand"><div class="dimmer"></div><div class="panel">
+    <b>从这里给孩子</b>
+    <small>孩子的首页上这位老师多一个按钮,按下去从这一节看起,原样、不花钱;孩子答了老师接着讲。这一节之前的孩子看不到</small>
+    <label>按钮上的字(孩子看的,最多 16 个字)<input id="hd-label" maxlength="16" autocomplete="off"></label>
+    <div id="hd-msg"></div>
+    <div class="row"><button type="button" id="hd-cancel">算了</button><button type="button" id="hd-go">交给孩子</button></div>
+  </div></div>
   <div id="sheet"><div class="dimmer"></div><div class="panel"><div class="grab"></div><div class="opts">
     <label><span class="ic" id="ic-album"></span>相册<input type="file" accept="image/*" multiple></label>
     <label><span class="ic" id="ic-cam2"></span>拍照<input type="file" accept="image/*" capture="environment"></label>
@@ -410,12 +435,10 @@ __PHOTO_JS__
   const MODE = __MODE__;
   const PREVIEW = MODE.preview || null;
   const PARENT = MODE.parent === true;
-  /** 试用(《家长板书页设计.md》§5):家长板书页带 ?try=1——不只读,像孩子端一样聊,只是接口换成 /api/tryouts/(落 evals/,孩子看不到);头上一直亮着「试用」 */
-  const TRY = PARENT && new URLSearchParams(location.search).get('try') === '1';
-  /** 对话接口的前缀(messages / photos / cards / history):孩子端与试用同一个形状;家长板书页看的模式发真消息走家长接口(from: parent),一天的板书另有自己的路 */
-  const CONV = TRY ? '/api/tryouts/' : PARENT ? '/api/conversations/' : '/api/kid/conversations/';
-  const AUDIO = TRY ? '/api/tryouts/audio/' : '/api/audio/';
-  const AUTOPLAY_KEY = TRY ? 'try-autoplay' : PARENT ? 'parent-autoplay' : 'kid-autoplay';
+  /** 对话接口的前缀(messages / photos / cards / history):家长端发的走家长接口(from: parent),一天的板书另有自己的路 */
+  const CONV = PARENT ? '/api/conversations/' : '/api/kid/conversations/';
+  const AUDIO = '/api/audio/';
+  const AUTOPLAY_KEY = PARENT ? 'parent-autoplay' : 'kid-autoplay';
   const $ = (s) => document.querySelector(s);
   const h = (tag, attrs = {}, ...kids) => {
     const el = document.createElement(tag);
@@ -456,7 +479,7 @@ __PHOTO_JS__
     // 服务重起过(启动号变了)→ 记下,空下来自己重载(见 staleReload)
     const boot = r.headers.get('x-cotutor-boot');
     if (boot) { if (!bootId) bootId = boot; else if (boot !== bootId) stale = true; }
-    if (!r.ok) { const e = new Error('http ' + r.status); e.status = r.status; throw e; }
+    if (!r.ok) { const e = new Error('http ' + r.status); e.status = r.status; try { e.body = await r.json(); } catch { e.body = null; } throw e; }
     return r.json();
   };
   let bootId = null, stale = false;
@@ -474,7 +497,7 @@ __PHOTO_JS__
   // ---- 状态 ----
   const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, contGuard: 0, pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null };
   // 家长板书页看的模式缺省不念(家长想听哪句点哪句);试用缺省念(要听效果);开关各记一个键,不和孩子的搅
-  try { S.autoplay = PARENT && !TRY ? localStorage.getItem(AUTOPLAY_KEY) === '1' : localStorage.getItem(AUTOPLAY_KEY) !== '0'; } catch { S.autoplay = !PARENT || TRY; }
+  try { S.autoplay = PARENT ? localStorage.getItem(AUTOPLAY_KEY) === '1' : localStorage.getItem(AUTOPLAY_KEY) !== '0'; } catch { S.autoplay = !PARENT; }
   /** 家长板书页:清单的日期(null = 今天) */
   S.pdate = null;
 
@@ -523,11 +546,13 @@ __PHOTO_JS__
   let toastTimer = null;
   const toast = (text) => { const t = $('#toast'); t.textContent = text; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4000); };
   const pickButton = (t, b) => {
-    if (PREVIEW) { toast(t.display + (b.kind === 'new' ? ':空白的老师页,等孩子开口' : b.id === 'recent' ? ':回到今天那个话题' : ' 会收到「' + b.label + '」' + (b.kind === 'continue' ? '(接着 ' + b.date + ' ' + b.thread + ')' : '') + (b.brief ? '\\n讲法:' + b.brief : '\\n(没写讲法)'))); return; }
+    if (PREVIEW) { toast(t.display + (b.kind === 'new' ? ':空白的老师页,等孩子开口' : b.id === 'recent' ? ':回到今天那个话题' : ' 会收到「' + b.label + '」' + (b.kind === 'continue' ? '(接着 ' + b.date + ' ' + b.thread + ')' : '') + (b.open ? '(家长备好的:只打开,从交给孩子的那一节播)' : '') + (b.brief ? '\\n讲法:' + b.brief : '\\n(没写讲法)'))); return; }
     const via = { home: S.home.home, button: b.id };
     if (b.kind === 'new') openTutor(t, { kind: 'new', via });
     else if (b.id === 'recent') openTutor(t, { kind: 'thread', thread: b.thread, via });
     else if (b.kind === 'start') openTutor(t, { kind: 'new', via, send: b.label });
+    // 家长交给孩子的备课话题(《备课设计.md》§4.2):只打开、不发字,从开场第一句播,末句问句停;孩子自己说的才是第一句
+    else if (b.open) openTutor(t, { kind: 'thread', thread: b.thread, via, play: true });
     else if (b.date === S.home.date) openTutor(t, { kind: 'thread', thread: b.thread, via, send: b.label });
     else openTutor(t, { kind: 'new', via, send: b.label, cont: b.date });
   };
@@ -595,18 +620,17 @@ __PHOTO_JS__
       });
       return b;
     };
+    // 家长自己开的话题(备课,《备课设计.md》):孩子开口前标「备课」,交了标「已交给孩子」
+    const prepTag = (th) => (!th.prep ? null : h('span', { class: 'pin' }, th.handedAs !== null ? '已交给孩子' + (th.handedAs ? ':' + th.handedAs : '') : '备课 · 孩子看不到'));
     const row = (t, th) => h('div', { class: 'tr', on: { click: () => openTutor(t, { kind: 'thread', thread: th.thread, date: H.date }) } },
-      h('b', {}, th.title || '(没有话)'),
+      h('b', {}, th.title || '(没有话)', prepTag(th)),
       h('small', {}, clock(th.at) + ' · ' + th.sections + ' 节 · ' + th.cards + ' 张卡' + stopped(th) + (th.booked ? ' · 已记账' : t.booking && th.sections > 0 ? ' · 记账中' : '')),
       stars(t, th), th.stoppedAt === 'writing' ? null : delBtn('conversations', t, th));
-    // 试一试 / 试过的(《家长板书页设计.md》§5.2):都是换个 URL 进试用模式(try=1),这页自己不切模式
-    // 用 location.pathname 而不写死路径:这段代码也在孩子端页面里,孩子端的 html 里不能出现家长端的路径(mock.test 与 server.test 守着)
-    const tryUrl = (t, th) => location.pathname + '?tutor=' + encodeURIComponent(t.name) + '&try=1' + (th ? '&date=' + H.date + '&thread=' + encodeURIComponent(th.thread) : '');
-    const tried = (t, th) => h('div', { class: 'tr tried', on: { click: () => location.assign(tryUrl(t, th)) } }, h('b', {}, th.title || '(没有话)'), h('small', {}, clock(th.at) + ' · ' + th.sections + ' 节 · ' + th.cards + ' 张卡'), delBtn('tryouts', t, th));
+    // 新话题(《备课设计.md》§3.1):家长自己和老师聊——试改过的老师文件与 vault、备今天的课;孩子开口前孩子看不到、不写记忆
+    const newBtn = (t) => (H.date !== H.today ? null : h('button', { type: 'button', class: 'try', title: '和老师备课、试试改过的老师文件;孩子看不到,满意了在某一节尾点「从这里给孩子」', on: { click: () => openTutor(t, { kind: 'new' }) } }, '新话题'));
     $('#tutors').replaceChildren(...H.tutors.map((t) => h('div', { class: 'pt', 'data-tutor': t.name },
-      h('div', { class: 'hd' }, avatarEl(t), h('span', { class: 'nm' }, t.display), h('small', {}, t.turns ? t.turns + ' 轮 · $' + t.costUsd.toFixed(2) : ''), h('button', { type: 'button', class: 'try', title: '改了老师文件或 vault,试试老师现在怎么讲;不进孩子的对话', on: { click: () => location.assign(tryUrl(t, null)) } }, '试一试')),
-      ...(t.threads.length ? t.threads.map((th) => row(t, th)) : [h('div', { class: 'none' }, H.date === H.today ? '今天没聊' : '这天没聊')]),
-      ...(t.tryouts && t.tryouts.length ? [h('div', { class: 'tt' }, '试过的'), ...t.tryouts.map((th) => tried(t, th))] : []))));
+      h('div', { class: 'hd' }, avatarEl(t), h('span', { class: 'nm' }, t.display), h('small', {}, t.turns ? t.turns + ' 轮 · $' + t.costUsd.toFixed(2) : ''), newBtn(t)),
+      ...(t.threads.length ? t.threads.map((th) => row(t, th)) : [h('div', { class: 'none' }, H.date === H.today ? '今天没聊' : '这天没聊')]))));
     $('#hcards').replaceChildren();
   };
   const setOffline = (off) => {
@@ -624,14 +648,15 @@ __PHOTO_JS__
   const openTutor = (t, intent) => {
     unlock();
     intent = intent || { kind: 'new' };
-    S.tutor = t; if (!PARENT || TRY) micWarm(); S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
+    S.tutor = t; if (!PARENT || intent.kind === 'new') micWarm(); S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null;
-    // 家长板书页:只读(选择 / 填空 / 画板不开、不发消息),看的是清单上那天的;试用:今天的照孩子端聊,以前试过的只读
+    // 家长端:孩子的话题卡锁着(选择 / 填空 / 画板不开、没有「继续」),看的是清单上那天的;
+    // 家长自己开的备课话题(新话题、或孩子还没开口的)像孩子端一样能做卡、按继续——哪个话题是,loadDay 按接口的 prep 定
     if (PARENT) {
-      const past = Boolean(intent.date && S.home && intent.date !== S.home.today);
-      if (TRY) { S.hist = past ? intent.date : null; S.readonly = past; }
+      if (intent.kind === 'new') { S.readonly = false; S.hist = null; }
       else { S.readonly = true; S.newThread = false; S.hist = intent.date || S.pdate || null; }
+      S.prep = null; S.handLabel = null;
     }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
@@ -639,7 +664,7 @@ __PHOTO_JS__
     if (S.newThread && !intent.send) $('#board').append(blankBoard('想问什么?'));
     $('#tutor').classList.add('on');
     setBar('idle');
-    loadDay(true).then(() => { if (intent.send) send(intent.send); });
+    loadDay(!intent.play).then(() => { if (intent.send) send(intent.send); });
   };
   /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」 */
   const blankBoard = (title) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor) : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, S.tutor && S.tutor.motto ? h('span', { class: 'mo' }, S.tutor.motto) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null);
@@ -1172,13 +1197,14 @@ __PHOTO_JS__
   const loadDay = async (silent) => {
     if (!S.tutor) return;
     try {
-      const d = await api('GET', PARENT && !TRY ? '/api/conversations/' + S.tutor.name + '/' + (S.hist || 'today') + '/board' : CONV + S.tutor.name + '/' + (S.hist || 'today'));
+      const d = await api('GET', PARENT ? '/api/conversations/' + S.tutor.name + '/' + (S.hist || 'today') + '/board' : CONV + S.tutor.name + '/' + (S.hist || 'today'));
       setOffline(false);
       S.day = d;
       S.limit = typeof d.remaining === 'number' && d.remaining <= 0;
       // 话题:没选过就是当前(末条所在)的;板书只铺这个话题的节。新话题空白态什么都不铺,发出第一句才有话题
       if (!S.thread && !S.newThread) S.thread = d.thread;
       const mine = S.newThread ? [] : d.messages.filter((m) => m.thread === S.thread);
+      if (PARENT) syncPrep(mine);
       const first = mine.find((m) => m.question !== null) || mine[0];
       S.threadAt = first ? first.at : null;
       const entries = sectionsFromMessages(mine);
@@ -1205,7 +1231,7 @@ __PHOTO_JS__
       if (stillPending && !S.waitSince) S.waitSince = Date.now();
       if (fresh.length) dispatch({ type: 'fresh', sections: fresh, silent: Boolean(silent) });
       else renderSubtitle();
-      if (PARENT) syncNotes(mine);
+      if (PARENT) { S.msgs = mine; syncNotes(mine); }
       if (!S.sections.length && !S.partial && !stillPending && !S.readonly && !$('#board .blank')) $('#board').append(blankBoard('想问什么?'));
       renderHeader();
       clearTimeout(S.pollTimer);
@@ -1228,8 +1254,8 @@ __PHOTO_JS__
     if (!S.tutor) return;
     const today = S.day ? S.day.date : null;
     let mo = '';
-    // 试用的标签不带时间(节头有;手机宽度下带了就顶到右上角的喇叭底下);看以前试过的换成日期
-    if (TRY) mo = S.hist && S.home ? '试用 · ' + dateLabel(S.hist, S.home.today) : '试用 · 不进孩子的对话';
+    // 家长的备课话题一直亮着「孩子看不到」,交了就是「已交给孩子」(节头有时间,这里不带,手机宽度下带了就顶到右上角的喇叭底下)
+    if (PARENT && (S.newThread || S.prep)) mo = S.prep === 'handed' ? '备课 · 已交给孩子' : '备课 · 孩子看不到';
     else if (PARENT) mo = [S.hist && S.home ? dateLabel(S.hist, S.home.today) : '', clock(S.threadAt)].filter(Boolean).join(' · ');
     else if (S.hist && today) mo = '以前的 · ' + dateLabel(S.hist, S.hist === today ? '' : today) + ' ' + clock(S.threadAt);
     else if (S.cont && today) { const d = dateLabel(S.cont, today); mo = '接着' + (d === '昨天' ? d : ' ' + d + ' ') + '的话题'; }
@@ -1240,17 +1266,12 @@ __PHOTO_JS__
     nb.hidden = S.newThread || S.readonly || (!S.sections.length && !S.pending && !S.partial);
     nb.classList.toggle('dim', S.pending);
   };
-  // 家长板书页看的模式的 chrome:卡锁着(S.readonly:选择 / 填空 / 画板不开、没有「继续」)、没有「回到今天」(回清单走左上角)、没有「更多」;
-  // 今天的那页输入条在——家长真发(《家长板书页设计.md》第六节 3):打字 / 按住说话 / 拍作业照片,进孩子的对话,from: parent。试用:都回来,只是没有相机与相册,「更多」里是「重来」「以前试过的」
-  /** 能不能发消息:孩子端与试用 = 不只读;家长看的模式 = 今天 */
-  const canSend = () => (PARENT && !TRY ? !S.hist || Boolean(S.home && S.hist === S.home.today) : !S.readonly);
-  const renderBar = () => { $('#pill').hidden = !canSend(); $('#back-today').hidden = !S.readonly || (PARENT && !TRY); };
-  $('#more-btn').hidden = PARENT && !TRY;
-  if (TRY) {
-    $('#cam').hidden = true; $('#plus').hidden = true;
-    $('#new-btn .tx b').textContent = '重来'; $('#new-btn .tx small').textContent = '新话题新会话,改过的老师文件与 vault 一定生效';
-    $('#hist-btn .tx b').textContent = '以前试过的'; $('#hist-btn .tx small').textContent = '都在 evals/ 里,孩子看不到';
-  }
+  // 家长端的 chrome:孩子的话题卡锁着(S.readonly:选择 / 填空 / 画板不开、没有「继续」)、没有「回到今天」(回清单走左上角)、没有「更多」;
+  // 今天的那页输入条在——家长真发(《家长板书页设计.md》第六节 3):打字 / 按住说话 / 拍作业照片,from: parent。家长自己开的备课话题卡与「继续」也开着
+  /** 能不能发消息:孩子端 = 不只读;家长端 = 今天 */
+  const canSend = () => (PARENT ? !S.hist || Boolean(S.home && S.hist === S.home.today) : !S.readonly);
+  const renderBar = () => { $('#pill').hidden = !canSend(); $('#back-today').hidden = !S.readonly || PARENT; };
+  $('#more-btn').hidden = PARENT;
   const resetBoard = () => { dispatch({ type: 'halt' }); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.partial = null; $('#board').replaceChildren(); };
   /** 换到某天的某个话题:今天的能接着聊;以前的只读回放(从第一句播) */
   const switchThread = (date, thread) => {
@@ -1309,6 +1330,7 @@ __PHOTO_JS__
     const focus = opts.focus || (S.stage ? { card: S.stage.id } : null);
     if (focus) body.focus = focus;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
+    if (PARENT && S.newThread) body.prep = true;
     if (S.via) body.via = S.via;
     try {
       const r = await api('POST', CONV + S.tutor.name + '/messages', body);
@@ -1343,6 +1365,9 @@ __PHOTO_JS__
       if (said || m.from === 'kid') out.push(noteEl('said ' + (m.from || ''), m.via ? '首页' : (NOTE_FROM[m.from] || m.from || ''), said));
     }
     if (m.cards && m.cards.length) out.push(noteEl('did', '做了', m.cards.map((c) => c.text).join('\\n')));
+    // 备课话题交给了孩子:开场那一节前标出来,之前的几节孩子看不到
+    if (m.opening) out.push(noteEl('handed', '交给了孩子', '孩子按首页上的按钮,从这一节看起'));
+    else if (m.kidHidden && S.prep === 'handed') out.push(noteEl('sys', '备课', '孩子看不到这一节'));
     return out;
   };
   const postNotes = (m) => {
@@ -1352,11 +1377,52 @@ __PHOTO_JS__
     if (m.remembered && m.remembered.length) out.push(noteEl('mem', m.tidy ? '整理了记忆' : '记住了', m.remembered.join('\\n')));
     if (m.bookkeep && !m.pending && !m.error) out.push(noteEl('sys', '记账', '已记进日记'));
     if (m.warnings && m.warnings.length) out.push(noteEl('warn', '提醒', m.warnings.join('\\n')));
-    // 试用:记忆段没写进 vault,给家长看老师想记什么;费用只在试用的板书上(家长在花钱)
+    // 备课轮:记忆段没写进 vault,给家长看老师想记什么;费用只在备课轮上(家长在花钱)
     if (m.memoryDraft && m.memoryDraft.length) out.push(noteEl('mem', '本来会记住的', m.memoryDraft.join('\\n')));
-    if (TRY && typeof m.costUsd === 'number' && !m.pending) out.push(noteEl('cost', '费用', '$' + m.costUsd.toFixed(3)));
+    if (m.prep && typeof m.costUsd === 'number' && !m.pending) out.push(noteEl('cost', '费用', '$' + m.costUsd.toFixed(3)));
+    if (m.prep && S.prep && !m.pending && !m.error && m.section && canSend()) out.push(handNote(m));
     return out;
   };
+  // ---- 备课(《备课设计.md》§4):家长自己开的话题,孩子开口之前;某一节尾点「从这里给孩子」→ 首页多一个「接着」按钮,孩子从这一节看起 ----
+  /** 这个话题是不是家长的备课话题、交了没有(S.prep = null / 'prep' / 'handed');每条记下孩子看不看得到;卡与「继续」只在备课话题里开 */
+  const syncPrep = (mine) => {
+    const last = mine[mine.length - 1];
+    const prep = S.newThread && !mine.length ? 'prep' : last && last.prep ? (mine.some((m) => m.opening) ? 'handed' : 'prep') : null;
+    let reached = false;
+    for (const m of mine) { if (m.opening) reached = true; m.kidHidden = Boolean(m.prep) && !reached; }
+    S.prep = prep;
+    const ro = !(prep && canSend());
+    if (S.readonly !== ro) { S.readonly = ro; renderBar(); }
+  };
+  const handNote = (m) => h('div', { class: 'note hand', role: 'button', on: { click: () => openHand(m) } }, h('span', { class: 'tg' }, m.opening ? '改开场' : '从这里给孩子'), h('span', { class: 'tx' }, m.opening ? '孩子从这一节看起;换一节就在那一节尾点' : '孩子从这一节看起,之前的看不到'));
+  const openHand = (m) => {
+    if (!S.thread || S.pending) return;
+    S.handJob = m.job;
+    const line = m.section && m.section.lines && m.section.lines[0];
+    $('#hd-label').value = S.handLabel || (line ? Array.from(line.text.replace(/[。!?!?,,、:;\\s]+$/, '')).slice(0, 16).join('') : '');
+    const msg = $('#hd-msg'); msg.textContent = ''; msg.classList.remove('err');
+    $('#hd-go').disabled = false;
+    $('#hand').classList.add('on');
+    setTimeout(() => $('#hd-label').focus(), 50);
+  };
+  const closeHand = () => $('#hand').classList.remove('on');
+  $('#hd-cancel').addEventListener('click', closeHand);
+  $('#hand .dimmer').addEventListener('click', closeHand);
+  $('#hd-go').addEventListener('click', async () => {
+    const label = $('#hd-label').value.trim(); const msg = $('#hd-msg');
+    if (!label) { msg.textContent = '按钮上要有字'; msg.classList.add('err'); return; }
+    $('#hd-go').disabled = true; msg.classList.remove('err'); msg.textContent = '交着…';
+    try {
+      const r = await api('POST', '/api/conversations/' + S.tutor.name + '/' + S.home.today + '/threads/' + encodeURIComponent(S.thread) + '/opening', { job: S.handJob, label });
+      S.handLabel = label;
+      if (r.ok) { msg.textContent = '首页上有了:' + r.label; setTimeout(closeHand, 1500); }
+      else { msg.classList.add('err'); msg.textContent = '草稿里加上了,但首页有别处要改,这次没发:\\n' + r.issues.join('\\n') + '\\n去工作台或 Claude Code 改好再发'; }
+      loadDay(true);
+    } catch (e) {
+      msg.classList.add('err'); $('#hd-go').disabled = false;
+      msg.textContent = e && e.status === 409 ? '孩子已经开口了,或者老师还在写' : e && e.body && e.body.message ? e.body.message : '没交上,再试一次';
+    }
+  });
   const answerOf = (c) => {
     const p = c.props || {};
     if (c.kind === 'choice' && Array.isArray(p.answer) && p.answer.length) return p.answer.map((i) => ('ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i] || String(i + 1)) + (p.options && p.options[i] ? ' ' + p.options[i] : '')).join('、');
@@ -1823,7 +1889,7 @@ __PHOTO_JS__
     // 家长板书页:?tutor=&date=&thread= 直接开在那个话题上(服务换了代码重载回来也靠它);没有 thread 就是那天的当前话题
     if (PARENT) {
       const t = open && S.home ? S.home.tutors.find((x) => x.name === open) : null;
-      if (t) { const th = debug.get('thread'); openTutor(t, th ? { kind: 'thread', thread: th, date: S.home.date } : TRY ? { kind: 'new' } : { kind: 'today', date: S.home.date }); setTimeout(jumpTo, 400); }
+      if (t) { const th = debug.get('thread'); openTutor(t, th ? { kind: 'thread', thread: th, date: S.home.date } : { kind: 'today', date: S.home.date }); setTimeout(jumpTo, 400); }
       return;
     }
     if (open && S.home && !PREVIEW) {
@@ -1845,7 +1911,7 @@ __PHOTO_JS__
   const staleReload = () => {
     if (!stale || PREVIEW || document.hidden) return;
     if (press || rec || psRec || S.pending || S.stage || S.bar !== 'idle' || S.state.status === 'playing' || psEl.classList.contains('on')) return;
-    if (PARENT) { if (S.tutor) { const q = new URLSearchParams({ tutor: S.tutor.name }); if (TRY) q.set('try', '1'); if (S.hist) q.set('date', S.hist); if (S.thread) q.set('thread', S.thread); location.replace(location.pathname + '?' + q); } else location.reload(); return; }
+    if (PARENT) { if (S.tutor) { const q = new URLSearchParams({ tutor: S.tutor.name }); if (S.hist) q.set('date', S.hist); if (S.thread) q.set('thread', S.thread); location.replace(location.pathname + '?' + q); } else location.reload(); return; }
     try { if (S.tutor && !S.readonly) sessionStorage.setItem('kid-resume', S.tutor.name); } catch {}
     location.reload();
   };

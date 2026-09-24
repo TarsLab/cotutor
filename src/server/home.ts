@@ -7,12 +7,12 @@ import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { cardLabel, describeCard, stripSecrets, type TutorButton } from '../cards/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
-import { conversationFiles, localDate, threads } from '../lib/conversation.ts';
+import { conversationFiles, isPrepThread, kidSpoke, localDate, threads } from '../lib/conversation.ts';
 import { kidQuestions } from '../lib/diary.ts';
-import { arrangeHome, dropFixes, faceTutor, homeId, homeIssues, homeRefs, homeTutors, kidButtons, parseHome, threadKey, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
+import { arrangeHome, dropFixes, faceTutor, homeId, homeIssues, homeRefs, homeTutors, kidButtons, parseHome, threadKey, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
 import { kidConversation, kidThreads } from '../lib/kid-view.ts';
-import { HOME_ID_RE, PublishedHomeSchema, type ContextPack, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
+import { HOME_ID_RE, PublishedHomeSchema, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
 import { listDates, readCardStates, readIndex } from './store.ts';
 
 export function homeFiles(ws: Pick<Workspace, 'dirs'>): { dir: string; draft: string; published: string; history: string } {
@@ -45,25 +45,27 @@ function tutorInfos(ws: Workspace): Record<string, HomeTutorInfo> {
   return Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, { display: t.display, enabled: t.enabled, hidden: t.hidden }]));
 }
 
-async function threadsOf(ws: Workspace, tutor: string, date: string): Promise<string[]> {
-  try {
-    return threads((await readIndex(ws, tutor, date)).messages);
-  } catch {
-    return [];
-  }
-}
-
-/** 这些引用里真在的话题 */
-async function liveThreads(ws: Workspace, refs: readonly { tutor: string; date: string; thread: string }[]): Promise<Set<string>> {
-  const out = new Set<string>();
-  const cache = new Map<string, string[]>();
+/** 这些引用里真在的话题;其中家长备课、孩子还没开口的另列(交没交给孩子;《备课设计.md》§4.1) */
+async function liveThreads(ws: Workspace, refs: readonly { tutor: string; date: string; thread: string }[]): Promise<{ alive: Set<string>; prep: Map<string, 'handed' | 'unhanded'> }> {
+  const alive = new Set<string>();
+  const prep = new Map<string, 'handed' | 'unhanded'>();
+  const cache = new Map<string, ConversationIndex | null>();
   for (const r of refs) {
     if (!ws.config.tutors[r.tutor]) continue;
     const key = `${r.tutor} ${r.date}`;
-    if (!cache.has(key)) cache.set(key, await threadsOf(ws, r.tutor, r.date));
-    if (cache.get(key)!.includes(r.thread)) out.add(threadKey(r.tutor, r.date, r.thread));
+    if (!cache.has(key)) cache.set(key, await readIndex(ws, r.tutor, r.date).catch(() => null));
+    const index = cache.get(key);
+    if (!index || !threads(index.messages).includes(r.thread)) continue;
+    const k = threadKey(r.tutor, r.date, r.thread);
+    alive.add(k);
+    if (isPrepThread(index.messages, r.thread) && !kidSpoke(index.messages, r.thread)) prep.set(k, index.openings[r.thread] ? 'handed' : 'unhanded');
   }
-  return out;
+  return { alive, prep };
+}
+
+async function checkContext(ws: Workspace, doc: Pick<HomeDoc, 'cards'>, now: Date): Promise<HomeCheckContext> {
+  const { alive, prep } = await liveThreads(ws, homeRefs(doc));
+  return { tutors: tutorInfos(ws), threads: alive, prep, today: localDate(now) };
 }
 
 export interface HomeCheck {
@@ -74,14 +76,14 @@ export interface HomeCheck {
 
 export async function checkHome(ws: Workspace, md: string, now: Date): Promise<HomeCheck> {
   const doc = parseHome(md);
-  const issues = homeIssues(doc, { tutors: tutorInfos(ws), threads: await liveThreads(ws, homeRefs(doc)), today: localDate(now) });
+  const issues = homeIssues(doc, await checkContext(ws, doc, now));
   return { doc, issues, fixes: issues.filter((i) => i.level === 'fix').length };
 }
 
 /** 已发布那份里现在还坏着的引用(doctor 与家长端用) */
 export async function publishedIssues(ws: Workspace, home: PublishedHome, now: Date): Promise<HomeIssue[]> {
   const doc: HomeDoc = { cards: home.cards, cardLines: [], note: home.note, issues: [] };
-  return homeIssues(doc, { tutors: tutorInfos(ws), threads: await liveThreads(ws, homeRefs(doc)), today: localDate(now) }).filter((i) => i.level === 'fix');
+  return homeIssues(doc, await checkContext(ws, doc, now)).filter((i) => i.level === 'fix');
 }
 
 export interface PublishResult {
@@ -126,6 +128,37 @@ export async function publishHome(ws: Workspace, opts: { force?: boolean; from?:
   await writeFile(tmp, `${JSON.stringify(home, null, 2)}\n`);
   await rename(tmp, f.published);
   return { ok: true, check, home, dropped, source: shown };
+}
+
+/**
+ * 家长把备课话题交给孩子(《备课设计.md》§4.1):往草稿里这位老师的老师卡追加一行「接着 <日期> <话题> <字>」,再发布。
+ * 没有草稿就从已发布那份的原文起;没有这张卡就补一张;卡里已经有指这个话题的「接着」行就换字,不加第二行。
+ * 检查有「要改」就不发(草稿里追加的那行留着),调用方把 issues 列给家长
+ */
+export async function appendContinue(ws: Workspace, tutor: string, date: string, thread: string, label: string, now: Date): Promise<PublishResult> {
+  const f = homeFiles(ws);
+  let md = await readDraft(ws);
+  if (md === null) {
+    const { home } = await readPublished(ws);
+    md = home ? ((await publishedSource(ws, home)) ?? '') : '';
+  }
+  const line = `接着 ${date} ${thread} ${label}`;
+  const lines = md.split('\n');
+  const open = new RegExp(`^\`\`\`tutor\\s+${tutor}\\s*$`);
+  const start = lines.findIndex((l) => open.test(l.trim()));
+  if (start < 0) md = `${md.trimEnd()}${md.trim() ? '\n\n' : ''}\`\`\`tutor ${tutor}\n${line}\n\`\`\`\n`;
+  else {
+    let end = lines.findIndex((l, i) => i > start && /^```\s*$/.test(l.trim()));
+    if (end < 0) end = lines.length;
+    const same = new RegExp(`^(?:[-*+]\\s+)?接着\\s+${date}\\s+${thread}\\s`);
+    const k = lines.findIndex((l, i) => i > start && i < end && same.test(l.trim()));
+    if (k >= 0) lines[k] = line;
+    else lines.splice(end, 0, line);
+    md = lines.join('\n');
+  }
+  await mkdir(f.dir, { recursive: true });
+  await writeFile(f.draft, md);
+  return publishHome(ws, { now });
 }
 
 /** 已发布那份的原文(home/history/<id>.md);不在了 → null */
@@ -176,8 +209,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     }
   }
   const tutors = homeTutors(tutorInfos(ws));
-  const refs = homeRefs({ cards });
-  const alive = await liveThreads(ws, refs);
+  const { alive, prep } = await liveThreads(ws, homeRefs({ cards }));
   const out: BoardCard[] = [];
   for (const c of arrangeHome(cards, tutors)) {
     if (c.kind !== 'tutor') {
@@ -188,6 +220,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     const buttons = kidButtons((c.props.buttons ?? []) as TutorButton[], {
       recent: await recentThread(ws, name, today),
       alive: (date, thread) => alive.has(threadKey(name, date, thread)),
+      handed: (date, thread) => prep.get(threadKey(name, date, thread)) === 'handed',
       keepBriefs: opts.keepBriefs,
     });
     out.push({ kind: 'tutor', props: { tutor: name, buttons } });

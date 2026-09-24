@@ -85,9 +85,9 @@ export const ConversationMessageSchema = z.object({
   tools: z.array(z.object({ name: z.string().min(1), arg: z.string(), ok: z.boolean().nullable(), chars: z.number().int().nonnegative(), sub: z.boolean().optional() })).optional(),
   /** 这条是回放(cotutor replay,server/replay.ts):原轮的 job。回放落在 evals/ 里,不在 conversations/ */
   replayOf: z.string().min(1).optional(),
-  /** 这轮是试用(《家长板书页设计.md》§5,2026-09-22):家长改了提示词 / vault 想看效果。落在 evals/,记忆段不写 vault、不算上限、不记账、孩子端看不到 */
-  tryout: z.literal(true).optional(),
-  /** 试用那轮「## 记忆」段的原文(没写进 vault;家长板书页旁注「本来会记住的」) */
+  /** 这条开了一个备课话题(《备课设计.md》:家长在家长端 /parent 点「新话题」开的;只在话题第一条)。工作台与 cotutor send 开的不算 */
+  prepThread: z.literal(true).optional(),
+  /** 备课轮(《备课设计.md》:家长开的话题里孩子开口之前)「## 记忆」段的原文(没写进 vault;家长端旁注「本来会记住的」) */
   memoryDraft: z.array(z.string()).optional(),
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2);开场按钮的 text 就是按钮上的字,不是孩子说的 */
   via: MessageViaSchema.optional(),
@@ -109,5 +109,7 @@ export const ConversationIndexSchema = z.object({
   ratings: z.record(z.string(), z.number().int().min(1).max(5)).default({}),
   /** 话题 id → 记账那轮的 job(记过的不再记;日记里已有这个话题的一段) */
   booked: z.record(z.string(), z.string().min(1)).default({}),
+  /** 话题 id → 开场那一轮的 job(《备课设计.md》§4:家长把备课话题交给孩子,孩子端从这一轮看起) */
+  openings: z.record(z.string(), z.string().min(1)).default({}),
 });
 export type ConversationIndex = z.infer<typeof ConversationIndexSchema>;

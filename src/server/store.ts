@@ -281,6 +281,26 @@ export async function rateThread(ws: Workspace, tutor: string, date: string, thr
   return next;
 }
 
+/**
+ * 家长把备课话题交给孩子(《备课设计.md》§4.1):openings[话题] = 开场那一轮;开场及以后各轮的卡的状态删掉
+ * (家长备课时做过的,孩子要自己做;卡的资产——场景图、卡上的音——留着)。能不能交(备课话题、孩子没开口)由路由查
+ */
+export async function setOpening(ws: Workspace, tutor: string, date: string, thread: string, job: string): Promise<ConversationIndex> {
+  const index = await readIndex(ws, tutor, date);
+  const ths = threads(index.messages);
+  const mine = index.messages.filter((_, i) => ths[i] === thread);
+  const k = mine.findIndex((m) => m.job === job);
+  if (k < 0) throw new IndexError(conversationFiles(ws.dirs.conversations, tutor, date).index, `${date} 的话题 ${thread} 里没有 ${job} 这一轮`);
+  const files = conversationFiles(ws.dirs.conversations, tutor, date);
+  for (const m of mine.slice(k)) {
+    const dir = files.cardsDir(m.job);
+    for (const e of await readdir(dir).catch(() => [] as string[])) if (/^\d+\.(json|png)$/.test(e)) await rm(join(dir, e), { force: true });
+  }
+  const next: ConversationIndex = { ...index, openings: { ...index.openings, [thread]: job } };
+  await writeIndex(ws, next);
+  return next;
+}
+
 // ---- vault(《obsidian仓库设计.md》§6 的封闭清单:日记只追加;教材只读)----
 
 /** 这几天的日记(<日记目录>/<日期>.md);没有的跳过 */
@@ -301,12 +321,13 @@ export async function deleteThread(ws: Workspace, tutor: string, date: string, t
   const { [thread]: _s, ...sessions } = index.sessions;
   const { [thread]: _r, ...ratings } = index.ratings;
   const { [thread]: _b, ...booked } = index.booked;
+  const { [thread]: _o, ...openings } = index.openings;
   // 当前话题(末条所在)的会话:删的正是它就换成剩下的末条那个;不是就不动
   const keptThreads = threads(kept);
   const last = keptThreads[keptThreads.length - 1];
   const session = ths[ths.length - 1] === thread ? (last ? (sessions[last] ?? null) : null) : index.session;
   const cost = Math.max(0, index.costUsd - gone.reduce((s, m) => s + (m.costUsd ?? 0), 0));
-  const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, session, costUsd: Math.round(cost * 1e6) / 1e6 };
+  const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, openings, session, costUsd: Math.round(cost * 1e6) / 1e6 };
   await writeIndex(ws, next);
   return next;
 }

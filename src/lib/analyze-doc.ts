@@ -44,7 +44,7 @@ job 形如 1620-1(时分-当天序号)。
 |---|---|
 ${rows.map(([p, d]) => `| \`${p}\` | ${d} |`).join('\n')}
 
-上下文包里老师能看到的只有:rules(有脸的老师共同的守则:机器技能 cotutor-tutor 的原文,接在 YAML 块后面的 <cotutor-rules> 里;同一话题续聊没改过的只写「未变」)、semester(当前学期)、profile、entry 与 memory(档案、这位老师的入口文件、它自己的记忆:vault 里按 cotutor: profile / subject / memory 属性找,原文接在 YAML 块后面的 <vault-note> 里,按 entryChars 截;同一话题续聊时没改过的只写「未变」)、refs(这科这学期的教材与两篇里 [[链接]] 的路径,只给路径)、plan(本周计划里这位老师的行,按 planLines 截)、recent(最近 14 天日记里本学科的「- 观察:」行,按 recent 取最新的)、slot(课程表命中的时段)、vault(路径)、cards(孩子上一轮在卡上做的)、photos(这条的作业照片)。别的它都看不到,除非自己 Read。
+上下文包里每一行是什么、路径后面的状态怎么看,见 \`.claude/skills/cotutor-tutor/references/上下文包.md\`;截断的上限是哪个政策旋钮,见 cotutor-tune 的 references/字段.md。
 `;
 }
 

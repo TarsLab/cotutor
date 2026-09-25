@@ -33,7 +33,8 @@ description: cotutor 有脸的老师共同的守则:上下文包怎么看、三�
 - 孩子是谁、学到哪、常问什么、哪些方法还没学别用、家长想怎么讲,以档案和入口文件为准。
 - 入口文件里的讲法偏好,优先于你老师文件里的。
 - 记忆是你以前记下的。家长可能改过、删过,以现在的为准。
-- 每一行的细节、`refs:` 里的路径什么时候读,见 cotutor-vault 技能(`../../.claude/skills/cotutor-vault/SKILL.md`)。
+- 每一行是什么、路径后面的状态怎么看,见 `../../.claude/skills/cotutor-tutor/references/上下文包.md`。
+- vault 里的东西什么时候读,见 cotutor-vault 技能(`../../.claude/skills/cotutor-vault/SKILL.md`)。
 
 ### 家长备好的课
 

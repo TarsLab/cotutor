@@ -10,6 +10,7 @@ import { join, relative } from 'node:path';
 import { SHIPPED_SKILLS, skillSourceDir } from '../src/cli/skills.ts';
 import { GENERATED, writeGeneratedSkills } from '../scripts/gen-skills.ts';
 import { check, done } from './_check.ts';
+import { ContextPackSchema } from '../src/schema/context-pack.ts';
 
 if (process.env.UPDATE_SNAPSHOTS === '1') writeGeneratedSkills();
 
@@ -108,5 +109,13 @@ for (const skill of SHIPPED_SKILLS) {
   // 别的包的文件这里改不了:本包的判失败,drawtell 的只打一行提醒(闸门在 drawtell 仓的 tests/skills.test.ts)
   if (skill.source === 'cotutor') check(`${skill.name}(${skill.source})SKILL.md 过 lint`, problems.length === 0, problems.join(' | '));
   else check(`${skill.name}(${skill.source})SKILL.md 过 lint${problems.length ? `——没过,去 drawtell 仓改:${problems.join(' | ')}` : ''}`, true);
+}
+{
+  // 上下文包每一行的说明是手写的 markdown(人改得动),和 schema 靠这条对上:加了字段忘了写,这里红
+  const doc = readFileSync(join(skillSourceDir(SHIPPED_SKILLS.find((s) => s.name === 'cotutor-tutor')!)!, 'references', '上下文包.md'), 'utf8');
+  const keys = Object.keys(ContextPackSchema.shape).filter((k) => k !== 'notes');
+  const missing = keys.filter((k) => !doc.includes(`| \`${k}\` |`));
+  const extra = [...doc.matchAll(/^\| `(\w+)` \|/gm)].map((m) => m[1]).filter((k) => !keys.includes(k) && !['rules', 'boardGuide', 'profile', 'entry', 'memory'].includes(k));
+  check('cotutor-tutor/references/上下文包.md:schema 的每个字段(notes 除外)一行,没有 schema 里不存在的行', missing.length === 0 && extra.length === 0, JSON.stringify({ missing, extra }));
 }
 done();

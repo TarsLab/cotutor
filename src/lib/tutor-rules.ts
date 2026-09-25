@@ -4,18 +4,11 @@
  * 由应用在每个话题第一条把原文放进上下文包(<cotutor-rules>,同一话题没改过的写「未变」),不靠老师自己去 Read。
  */
 import { parseAgentFile } from './agent-file.ts';
+import { stripHumanNotes } from './human-notes.ts';
 
 export const TUTOR_SKILL = 'cotutor-tutor';
 /** 相对 workspace 根 */
 export const TUTOR_RULES_PATH = `.claude/skills/${TUTOR_SKILL}/SKILL.md`;
-
-/**
- * 独占一行(或几行)的 `<!-- … -->` 是给人看的(谁读、为什么,《写提示词.md》§二、§四),递给老师前剥掉;
- * 连同它前面那个换行一起去掉,规矩下面紧跟的注释剥完不留空行。行内的注释不动。
- */
-export function stripHumanNotes(body: string): string {
-  return body.replace(/(^|\n)[ \t]*<!--[\s\S]*?-->[ \t]*(?=\n|$)/g, '').trim();
-}
 
 /** 放进上下文包的正文:去掉 frontmatter(那是给 CLI 的技能索引看的)与给人看的注释 */
 export function tutorRulesBody(skillMd: string): string {

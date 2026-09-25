@@ -96,6 +96,7 @@ import { check, done } from './_check.ts';
 {
   const doc = boardSyntaxDoc();
   check('语法表:两种东西 + 每种卡一段(从 cards/<kind>/card.md 拼)+ 板书到第一个 H2 为止;例子的 expect 注释去掉了', doc.includes('普通段落 = 你说的话') && doc.includes('围栏 = 板上的卡') && kindsFor('board').every((k) => doc.includes(`### ${k.name} — `)) && !doc.includes('### tutor — ') && doc.includes('板书到第一个「## 」为止') && !doc.includes('<!-- expect') && doc.includes('references/<种类>.md'), doc.slice(0, 200));
+  check('语法表的手写部分在 cards/板书怎么写.md:给人看的注释剥掉,{{卡的种类}} 换成各种卡', doc.startsWith('# 板书怎么写\n') && !doc.includes('<!--') && !doc.includes('{{') && doc.indexOf('## 作业照片') < doc.indexOf('## 卡的种类') && doc.indexOf('## 卡的种类') < doc.indexOf('### text — '), doc.slice(0, 200));
   const skill = boardSkillDoc();
   const descLine = skill.split('\n')[2];
   check('技能文件:frontmatter 的 name 与 description 各一行,description 列出全部种类、不超 1536 字,正文就是语法表', skill.startsWith('---\nname: cotutor-board\ndescription: ') && descLine.length < 1536 && kindsFor('board').every((k) => descLine.includes(k.name)) && !descLine.includes('/ tutor') && skill.endsWith(doc));

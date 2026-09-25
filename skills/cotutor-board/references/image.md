@@ -13,7 +13,9 @@
 
 ## 写法
 
-第一行是图:workspace 里的相对路径(作业照片照 `photos:` 原样写,如 `captures/2026-09-10/1620-1.jpg`)或 http(s) 地址,只认图片后缀;后面几行是图注。照片在 workspace,不在 vault。
+- 第一行是图:workspace 里的相对路径,或 http(s) 地址。只认图片后缀。
+- 作业照片照 `photos:` 原样写,如 `captures/2026-09-10/1620-1.jpg`。照片在 workspace,不在 vault。
+- 后面几行是图注。
 
 ## 例子
 

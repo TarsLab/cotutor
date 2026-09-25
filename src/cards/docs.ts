@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CARD_KINDS, kindsFor, type CardPlace } from './index.ts';
+import { stripHumanNotes } from '../lib/human-notes.ts';
 
 /** 本包自带的卡协议目录(仓库检出与 npm 安装都在包根 cards/) */
 export const PACKAGE_CARDS_DIR = fileURLToPath(new URL('../../cards/', import.meta.url));
@@ -62,7 +63,11 @@ export function cardDocs(dir = PACKAGE_CARDS_DIR, place: CardPlace = 'board'): C
 /** 例子里的 `<!-- expect {…} -->` 注释:给老师看的版本要去掉 */
 const EXPECT_RE = /^\s*<!--\s*expect\b.*?-->\s*\n?/gm;
 
-/** 给老师看的语法表(SKILL.md 的正文):从各 card.md 的「是什么 / 写法 / 例子」拼,不手写 */
+/** 板书写法的手写部分(开头的规矩、一节的例子、作业照片),人改的就是这一篇;`{{卡的种类}}` 那一行由下面拼的各种卡替换 */
+export const BOARD_GUIDE_SOURCE = '板书怎么写.md';
+const KINDS_SLOT = /^\{\{卡的种类\}\}$/m;
+
+/** 给老师看的语法表(SKILL.md 的正文):cards/板书怎么写.md(剥掉给人看的注释)+ 各 card.md 的「是什么 / 写法 / 例子」 */
 export function boardSyntaxDoc(dir = PACKAGE_CARDS_DIR): string {
   const kinds = cardDocs(dir)
     .map((d) => {
@@ -70,57 +75,9 @@ export function boardSyntaxDoc(dir = PACKAGE_CARDS_DIR): string {
       return parts.join('\n\n').trim();
     })
     .join('\n\n');
-  return `# 板书怎么写
-
-回复正文就是孩子看到的板书,只有两种东西:
-
-- **普通段落 = 你说的话。** 一行一句,每句会被念出来、显示在字幕行,所以不要写标题、列表、粗体、括号注释。想强调某个词,用方括号标出来(如「这叫[底]」,那个词要在某张卡上出现);不标也行,后期会挑。末句写成问句就停下等孩子——**只有末句会停**:中间的问句念完就接着念下一句,不等孩子。末句这一问能选就配 choice 卡、能填就配 fill 卡(卡在前,问句在后);开放的问题不用配,应用会把末句那一问补成板上的一张提问卡,你别自己再写一张。
-- **围栏 = 板上的卡。** 围栏的语言标签是卡的种类;正文按各种卡的写法。卡写在讲它的那句话前面,卡与话交错。卡上是**名词**(定义、公式、题、图、选项),讲稿是**动词**(你说的话);别把一句话切成一张卡。不认识的标签当代码卡原样显示;正文写得不对的卡退成一段文字,孩子端不会报错。
-
-一节 3–5 张卡、6–12 句话,一张卡至少能指着讲三句;一次只讲一个想法,讲完就问。随口问答就一两句话,没有卡。**板书写完就停**:最后一个字是问孩子的那句,后面不要再补总结、不要再用工具——孩子看到的是你这轮最后一段话,再补一句板书就丢了。
-
-孩子在卡上做的事(选了、填了、画了)会在下一条消息的上下文包里以 \`cards:\` 段告诉你,一张卡一行(卡的编号、种类、标题、做了什么、答案);孩子只交答案没说话时消息正文是「(交了答案,没说话)」。孩子看到的卡上没有对错,对错由你口头说。上下文包里 \`focus.card\` 是孩子发消息时正开着的那张卡。每种卡完整的协议(何时用、别用、反例、你会收回什么)在本技能目录下的 references/<种类>.md,索引在 references/README.md。
-
-板书到第一个「## 」为止,后面的孩子看不到。
-
-## 一节长什么样
-
-讲三角形面积的第一节(卡与话交错,卡在讲它的那句前面,最后一句是问孩子的):
-
-\`\`\`\`
-我们拿两个一样的三角形拼一拼。
-
-\`\`\`text
-# 拼
-把两个一样的三角形倒过来拼在一起,得到一个平行四边形
-\`\`\`
-
-两个一样的三角形一拼,就是一个[平行四边形],它的底和高没变。
-
-\`\`\`text formula
-三角形面积 = 底 × 高 ÷ 2
-\`\`\`
-
-所以三角形的面积就是[底]乘[高],再除以 2。
-
-\`\`\`choice
-底 6 厘米、高 4 厘米的三角形,面积是多少?
-- [ ] 24 平方厘米
-- [x] 12 平方厘米
-- [ ] 10 平方厘米
-\`\`\`
-
-你来算算:底 6 厘米、高 4 厘米,面积是多少?
-\`\`\`\`
-
-## 作业照片(上下文包里有 photos: 时)
-
-\`photos:\` 是写在卡上的路径(相对 workspace 根,照原样抄进 \`image\` / \`canvas\` 卡);\`photoFiles:\` 是同一批照片的绝对路径,顺序一一对应,**Read 用它**,不用 find、不用自己拼。**原图读一次**,认出是哪本、哪页、哪道题、卡在哪,讲稿第一句就说出来。孩子写的字认不清:只放大**一次**,只放大孩子圈住的那块(没圈就是你要讲的那道题),裁出来的图存到 \`/tmp\`、别写进 captures/;放大了还认不清就别再裁了,讲稿里请孩子指一下、念出来或再拍近一点。不要为了逐题核对答案把整页一块块裁开看——一次只讲一道,其余的轮到了再看。第一张卡用 \`image\` 引原图(路径照 photos: 原样写)或 \`text\` 抄题面;一页好几道就用 \`choice\` 列题号问讲哪道,一次只讲一道;要孩子在作业上圈、写,用 \`canvas\`、第一行写照片路径。拍糊了、拍不全、认不出,讲稿里请孩子再拍一张或指一下。孩子发之前可以裁剪、圈画:照片上半透明的红线是孩子自己圈的,先讲圈住的那道;消息里的字是孩子对这几张照片说的话(没说话就是「(拍了 N 张)」);几张一起来的多半是同一份作业的几页。
-
-## 卡的种类
-
-${kinds}
-`;
+  const guide = stripHumanNotes(readFileSync(join(dir, BOARD_GUIDE_SOURCE), 'utf8'));
+  if (!KINDS_SLOT.test(guide)) throw new Error(`cards/${BOARD_GUIDE_SOURCE} 里没有「{{卡的种类}}」那一行`);
+  return `${guide.replace(KINDS_SLOT, () => kinds)}\n`;
 }
 
 /** references/README.md:一行一种——名字、一句是什么、何时用;老师按需 @ 单张 */
@@ -144,7 +101,7 @@ export const BOARD_SKILL = 'cotutor-board';
 /** SKILL.md:frontmatter(两 CLI 都认 name / description;disable-model-invocation 只有 claude 认)+ 语法表;description 列出卡的种类,让模型不读正文也知道有哪几种 */
 export function boardSkillDoc(dir = PACKAGE_CARDS_DIR): string {
   const kinds = kindsFor('board').map((k) => k.name).join(' / ');
-  const description = `cotutor 的板书怎么写:回复正文就是孩子看到的板书,普通段落是讲稿(一行一句,会被念出来)、围栏是卡(标签 = 种类:${kinds}),各种卡的写法与例子都在这里。老师不用读这篇:应用已经把它递给老师了(系统提示里,或话题第一条的 <cotutor-board>);这里是给家长和调教老师时查的。每种卡完整的协议(何时用、别用、反例、你会收回什么)在 references/<种类>.md。含作业照片怎么接、一节的完整例子。不是:一道题怎么画成一步步的动画(那是画图老师的 drawtell-teaching / drawtell-scene)、vault 怎么读(→ cotutor-vault)。机器文件,从卡的注册表生成,cotutor init / upgrade 刷新,别改。`;
+  const description = `cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:${kinds})。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。`;
   // disable-model-invocation:claude 不再主动用 Skill 工具调它(正文由应用递,再调一次就是白跑一个来回);家长仍可手动 /cotutor-board;别的 CLI 不认这个键,无害
   return `---\nname: ${BOARD_SKILL}\ndescription: ${description}\ndisable-model-invocation: true\n---\n\n${boardSyntaxDoc(dir)}`;
 }

@@ -127,8 +127,8 @@ ${kinds}
 export function cardsIndexDoc(dir = PACKAGE_CARDS_DIR): string {
   const rows = cardDocs(dir).map((d) => {
     const what = (d.sections['是什么'] ?? '').split('\n').find((l) => l.trim()) ?? '';
-    const when = (d.sections['什么时候用 / 别用'] ?? '').split('\n').filter((l) => l.startsWith('- 用:')).map((l) => l.slice(4).trim()).join(';');
-    return `- **${d.kind}**(${d.kind}.md)—— ${what}${when ? `\n  用在:${when}` : ''}`;
+    const when = (d.sections['什么时候用 / 别用'] ?? '').split('\n').filter((l) => l.startsWith('- 用:')).map((l) => `\n  - 用在:${l.slice(4).trim()}`).join('');
+    return `- **${d.kind}**(${d.kind}.md)—— ${what}${when}`;
   });
   return `# 卡的种类(索引)
 

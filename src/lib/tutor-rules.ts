@@ -9,9 +9,17 @@ export const TUTOR_SKILL = 'cotutor-tutor';
 /** 相对 workspace 根 */
 export const TUTOR_RULES_PATH = `.claude/skills/${TUTOR_SKILL}/SKILL.md`;
 
-/** 放进上下文包的正文:去掉 frontmatter(那是给 CLI 的技能索引看的) */
+/**
+ * 独占一行(或几行)的 `<!-- … -->` 是给人看的(谁读、为什么,《写提示词.md》§二、§四),递给老师前剥掉;
+ * 连同它前面那个换行一起去掉,规矩下面紧跟的注释剥完不留空行。行内的注释不动。
+ */
+export function stripHumanNotes(body: string): string {
+  return body.replace(/(^|\n)[ \t]*<!--[\s\S]*?-->[ \t]*(?=\n|$)/g, '').trim();
+}
+
+/** 放进上下文包的正文:去掉 frontmatter(那是给 CLI 的技能索引看的)与给人看的注释 */
 export function tutorRulesBody(skillMd: string): string {
-  return parseAgentFile(skillMd).body;
+  return stripHumanNotes(parseAgentFile(skillMd).body);
 }
 
 /** 谁拿守则:有脸的老师(键以 -tutor 结尾);scene-maker 这类工具人的工作流写在自己文件里 */
@@ -22,9 +30,9 @@ export function takesTutorRules(agent: string): boolean {
 /** 板书写法(机器技能 cotutor-board 的 SKILL.md),相对 workspace 根。由应用递给老师:运行时能预载就进系统提示,否则进话题第一条的 <cotutor-board> */
 export const BOARD_GUIDE_PATH = '.claude/skills/cotutor-board/SKILL.md';
 
-/** 递给老师的正文:去掉 frontmatter */
+/** 递给老师的正文:去掉 frontmatter 与给人看的注释 */
 export function boardGuideBody(skillMd: string): string {
-  return parseAgentFile(skillMd).body;
+  return stripHumanNotes(parseAgentFile(skillMd).body);
 }
 
 /** 上下文包 boardGuide: 行在预载时写的话(事实陈述,不让老师自查) */

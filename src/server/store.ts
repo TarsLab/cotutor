@@ -281,32 +281,30 @@ export async function rateThread(ws: Workspace, tutor: string, date: string, thr
   return next;
 }
 
-/**
- * 家长把备课话题交给孩子(《备课设计.md》§4.1):openings[话题] = 开场那一轮;开场及以后各轮的卡的状态删掉
- * (家长备课时做过的,孩子要自己做;卡的资产——场景图、卡上的音——留着)。能不能交(备课话题、孩子没开口)由路由查
- */
-export async function setOpening(ws: Workspace, tutor: string, date: string, thread: string, job: string): Promise<ConversationIndex> {
+/** 这节课里点灰 / 点亮几张卡(《备课设计.md》§4.2;cards 是 `<job>/<n>`,单张与整节同一个);能不能改(备课轮、孩子没开口)由路由查 */
+export async function setLessonOff(ws: Workspace, tutor: string, date: string, thread: string, cards: readonly string[], off: boolean): Promise<ConversationIndex> {
   const index = await readIndex(ws, tutor, date);
-  const ths = threads(index.messages);
-  const mine = index.messages.filter((_, i) => ths[i] === thread);
-  const k = mine.findIndex((m) => m.job === job);
-  if (k < 0) throw new IndexError(conversationFiles(ws.dirs.conversations, tutor, date).index, `${date} 的话题 ${thread} 里没有 ${job} 这一轮`);
-  const files = conversationFiles(ws.dirs.conversations, tutor, date);
-  for (const m of mine.slice(k)) {
-    const dir = files.cardsDir(m.job);
-    for (const e of await readdir(dir).catch(() => [] as string[])) if (/^\d+\.(json|png)$/.test(e)) await rm(join(dir, e), { force: true });
-  }
-  // 开场那一轮本身不能藏着:藏过就放出来
-  const next: ConversationIndex = { ...index, openings: { ...index.openings, [thread]: job }, hidden: index.hidden.filter((j) => j !== job) };
+  const cur = index.lessons[thread] ?? { handedAt: null, off: [] };
+  const rest = cur.off.filter((c) => !cards.includes(c));
+  const next: ConversationIndex = { ...index, lessons: { ...index.lessons, [thread]: { ...cur, off: off ? [...rest, ...cards] : rest } } };
   await writeIndex(ws, next);
   return next;
 }
 
-/** 备课话题里对孩子藏起 / 放出一轮(《备课设计.md》§4.5);能不能藏(备课轮、不是开场、孩子没开口)由路由查 */
-export async function setHidden(ws: Workspace, tutor: string, date: string, job: string, hide: boolean): Promise<ConversationIndex> {
+/**
+ * 把这节课交给孩子(《备课设计.md》§4.3):记下 handedAt;这节课那几张卡上家长做过的状态删掉(孩子要自己做;卡的资产——场景图、卡上的音——留着)。
+ * 首页按钮由调用方追加发布;能不能交(备课话题、孩子没开口、有卡)由路由查
+ */
+export async function handLesson(ws: Workspace, tutor: string, date: string, thread: string, cards: readonly string[], now: Date): Promise<ConversationIndex> {
   const index = await readIndex(ws, tutor, date);
-  const rest = index.hidden.filter((j) => j !== job);
-  const next: ConversationIndex = { ...index, hidden: hide ? [...rest, job] : rest };
+  const files = conversationFiles(ws.dirs.conversations, tutor, date);
+  for (const c of cards) {
+    const [job, n] = c.split('/');
+    await rm(join(files.cardsDir(job), `${n}.json`), { force: true });
+    await rm(join(files.cardsDir(job), `${n}.png`), { force: true });
+  }
+  const cur = index.lessons[thread] ?? { handedAt: null, off: [] };
+  const next: ConversationIndex = { ...index, lessons: { ...index.lessons, [thread]: { ...cur, handedAt: cur.handedAt ?? now.toISOString() } } };
   await writeIndex(ws, next);
   return next;
 }
@@ -331,14 +329,13 @@ export async function deleteThread(ws: Workspace, tutor: string, date: string, t
   const { [thread]: _s, ...sessions } = index.sessions;
   const { [thread]: _r, ...ratings } = index.ratings;
   const { [thread]: _b, ...booked } = index.booked;
-  const { [thread]: _o, ...openings } = index.openings;
+  const { [thread]: _o, ...lessons } = index.lessons;
   // 当前话题(末条所在)的会话:删的正是它就换成剩下的末条那个;不是就不动
   const keptThreads = threads(kept);
   const last = keptThreads[keptThreads.length - 1];
   const session = ths[ths.length - 1] === thread ? (last ? (sessions[last] ?? null) : null) : index.session;
   const cost = Math.max(0, index.costUsd - gone.reduce((s, m) => s + (m.costUsd ?? 0), 0));
-  const hidden = index.hidden.filter((j) => !gone.some((m) => m.job === j));
-  const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, openings, hidden, session, costUsd: Math.round(cost * 1e6) / 1e6 };
+  const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, lessons, session, costUsd: Math.round(cost * 1e6) / 1e6 };
   await writeIndex(ws, next);
   return next;
 }

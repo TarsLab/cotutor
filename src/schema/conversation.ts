@@ -109,9 +109,10 @@ export const ConversationIndexSchema = z.object({
   ratings: z.record(z.string(), z.number().int().min(1).max(5)).default({}),
   /** 话题 id → 记账那轮的 job(记过的不再记;日记里已有这个话题的一段) */
   booked: z.record(z.string(), z.string().min(1)).default({}),
-  /** 话题 id → 开场那一轮的 job(《备课设计.md》§4:家长把备课话题交给孩子,孩子端从这一轮看起) */
-  openings: z.record(z.string(), z.string().min(1)).default({}),
-  /** 家长在备课话题里对孩子藏起来的轮(job;《备课设计.md》§4.5):重写前的旧版之类,交给孩子后也不下发 */
-  hidden: z.array(z.string().min(1)).default([]),
+  /**
+   * 话题 id → 这节课(《备课设计.md》§4):备课话题里的卡默认进课,off = 家长点灰的(`<job>/<n>`,存排除的,新卡不用写盘);
+   * handedAt = 交给孩子的时刻(没交 = null,孩子端整个话题不下发)
+   */
+  lessons: z.record(z.string(), z.object({ handedAt: z.string().nullable().default(null), off: z.array(z.string().min(1)).default([]) })).default({}),
 });
 export type ConversationIndex = z.infer<typeof ConversationIndexSchema>;

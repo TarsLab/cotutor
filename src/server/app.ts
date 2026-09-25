@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
-import { currentThread, isPrepThread, kidCurrentThread, kidSpoke, lastJobOf, localDate, prepJobs, threads } from '../lib/conversation.ts';
+import { currentThread, isPrepThread, kidCurrentThread, kidSpoke, lastJobOf, lessonCards, localDate, prepJobs, threads } from '../lib/conversation.ts';
 import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { DATE_RE, FocusSchema, HOME_ID_RE, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
@@ -27,7 +27,7 @@ import { appendContinue, checkHome, historyFile, homeStats, kidHomeView, message
 import { DEV_PAGE } from './dev-page.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
-import { IndexError, capturePathOk, deleteThread, setHidden, setOpening, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardImage, writeCardState } from './store.ts';
+import { IndexError, capturePathOk, deleteThread, handLesson, setLessonOff, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardImage, writeCardState } from './store.ts';
 import { BUTTON_LABEL_MAX, IMAGE_EXT, parseCardState, stripSecrets, type TutorButton } from '../cards/index.ts';
 import { faceTutor } from '../lib/home.ts';
 import { resolve, sep } from 'node:path';
@@ -215,6 +215,16 @@ export interface ParentDay {
   messages: ParentMessage[];
   pending: string | null;
   thread: string | null;
+  /** 备课话题的这节课(《备课设计.md》§4.3,家长端底部那一条):几张卡、交了没有、首页按钮上的字 */
+  lessons: Record<string, { cards: string[]; handed: boolean; label: string | null }>;
+}
+
+/** 已发布首页上「接着」按钮的字:`<老师> <日期> <话题>` → 字(交给孩子的备课话题在首页上叫什么) */
+async function continueLabels(ws: Workspace): Promise<Map<string, string>> {
+  const { home } = await readPublished(ws);
+  const out = new Map<string, string>();
+  for (const c of home?.cards ?? []) if (c.kind === 'tutor') for (const b of (c.props.buttons ?? []) as TutorButton[]) if (b.kind === 'continue') out.set(`${String(c.props.tutor)} ${b.date} ${b.thread}`, b.label);
+  return out;
 }
 
 export async function parentDay(ctx: AppContext, tutor: string, date: string): Promise<ParentDay> {
@@ -229,7 +239,11 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
   }
   const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
   for (const m of messages) if (m.section) m.section = await enrichScenes(sceneDirs, m.section);
-  return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
+  const labels = await continueLabels(ctx.ws);
+  const ths = threads(index.messages);
+  const lessons: ParentDay['lessons'] = {};
+  for (const th of new Set(ths)) if (isPrepThread(index.messages, th)) lessons[th] = { cards: lessonCards(index, th), handed: Boolean(index.lessons[th]?.handedAt), label: labels.get(`${tutor} ${date} ${th}`) ?? null };
+  return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index), lessons };
 }
 
 /** 家长板书页的清单(《家长板书页设计.md》§2.2):这一天每位有脸的老师几轮、几个话题、停在哪 */
@@ -249,6 +263,8 @@ export interface OverviewThread {
   /** 家长开的备课话题、孩子还没开口(《备课设计.md》):孩子端看不到;handedAs = 交给孩子了,首页按钮上的字 */
   prep: boolean;
   handedAs: string | null;
+  /** 这节课几张卡(备课话题;《备课设计.md》§4.3) */
+  lessonCards: number;
 }
 export interface OverviewTutor {
   name: string;
@@ -272,9 +288,7 @@ export interface Overview {
 export async function overview(ctx: AppContext, date: string): Promise<Overview> {
   const tutors: OverviewTutor[] = [];
   // 交给孩子的备课话题在首页上叫什么:已发布那份里指向它的「接着」按钮的字
-  const { home } = await readPublished(ctx.ws);
-  const handed = new Map<string, string>();
-  for (const c of home?.cards ?? []) if (c.kind === 'tutor') for (const b of (c.props.buttons ?? []) as TutorButton[]) if (b.kind === 'continue') handed.set(`${String(c.props.tutor)} ${b.date} ${b.thread}`, b.label);
+  const handed = await continueLabels(ctx.ws);
   for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
     const index = await readIndex(ctx.ws, t.name, date);
     const ths = threads(index.messages);
@@ -288,10 +302,10 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
         const via = m.via?.label ?? null;
         const raw = via ? `首页 · ${via}` : m.from === 'kid' ? m.text : `${m.from === 'parent' ? '家长' : '系统'}:${m.text}`;
         const isPrep = prep.has(m.job);
-        th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, sections: 0, cards: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked, prep: isPrep, handedAs: isPrep && index.openings[id] ? (handed.get(`${t.name} ${date} ${id}`) ?? '') : null };
+        th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, sections: 0, cards: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked, prep: isPrep, handedAs: isPrep && index.lessons[id]?.handedAt ? (handed.get(`${t.name} ${date} ${id}`) ?? '') : null, lessonCards: isPrep ? lessonCards(index, id).length : 0 };
         by.set(id, th);
       }
-      if (m.from === 'kid') { th.prep = false; th.handedAs = null; }
+      if (m.from === 'kid') { th.prep = false; th.handedAs = null; th.lessonCards = 0; }
       if (m.result === 'running') th.stoppedAt = 'writing';
       else if (m.result === 'ok' && m.section && (m.section.cards.length || m.section.lines.length)) {
         th.sections++;
@@ -500,7 +514,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         let home: { button: string; brief?: string } | undefined;
         let continues: { date: string; thread: string } | undefined;
         // 家长交给孩子的备课话题(《备课设计.md》§4.2):按钮只打开那个话题,孩子自己说的才是第一句;不改字、不带 home:,老师 resume 原会话
-        const handed = button?.kind === 'continue' && button.date === date && Boolean((await readIndex(ws, tutor, date)).openings[button.thread]);
+        const handed = button?.kind === 'continue' && button.date === date && Boolean((await readIndex(ws, tutor, date)).lessons[button.thread]?.handedAt);
         if (button && handed && button.kind === 'continue') {
           newThread = false;
           pick = button.thread;
@@ -520,7 +534,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         // 家长还没交给孩子的备课话题,孩子端发不进去(孩子本来也看不到它)
         if (pick && !newThread) {
           const idx = await readIndex(ws, tutor, date);
-          if (isPrepThread(idx.messages, pick) && !idx.openings[pick]) return { status: 400, json: { error: 'bad_request' } };
+          if (isPrepThread(idx.messages, pick) && !idx.lessons[pick]?.handedAt) return { status: 400, json: { error: 'bad_request' } };
         }
         const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}) });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
@@ -695,48 +709,42 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         throw err;
       }
     }
-    // 交给孩子(《备课设计.md》§4.1):家长开的备课话题,从 job 那一节起孩子看得到;首页草稿追加一行「接着」再发布。
-    // 只交今天的;不是备课话题 / 孩子已经开口 409;检查有「要改」200 { ok: false, issues }(草稿里那行已追加,发布件没动)
-    const op = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/opening$/.exec(p);
-    if (op && method === 'POST') {
-      const [, tutor, date, raw] = op;
+    // 这节课(《备课设计.md》§4):备课话题里的卡默认进课;PUT …/lesson {cards: ["job/n"], off} 点灰 / 点亮(单张与整节同一个);
+    // POST …/lesson/hand {label} 交给孩子:记下交了、清掉这节课的卡状态、首页草稿追加一行「接着」再发布(检查有「要改」200 { ok: false, issues })。
+    // 都只认今天的备课话题、孩子没开口(409)
+    const lsn = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/lesson(\/hand)?$/.exec(p);
+    if (lsn && ((method === 'PUT' && !lsn[4]) || (method === 'POST' && lsn[4]))) {
+      const [, tutor, date, raw, hand] = lsn;
       const thread = decodeURIComponent(raw);
       if (!faceTutor(tutor, ws.config.tutors[tutor])) return { status: 404, json: { error: 'no_such_tutor', tutor } };
-      const job = isObj(body) && typeof body.job === 'string' ? body.job : '';
-      const label = isObj(body) && typeof body.label === 'string' ? body.label.replace(/\s+/g, ' ').trim() : '';
-      if (!label || Array.from(label).length > BUTTON_LABEL_MAX) return { status: 400, json: { error: 'bad_request', message: `按钮上的字 1–${BUTTON_LABEL_MAX} 个` } };
-      if (date !== localDate(ctx.now())) return { status: 400, json: { error: 'bad_request', message: '只能把今天的备课话题交给孩子' } };
       const index = await readIndex(ws, tutor, date);
       const ths = threads(index.messages);
       if (!ths.includes(thread)) return { status: 404, json: { error: 'no_such_thread' } };
-      if (!isPrepThread(index.messages, thread)) return { status: 409, json: { error: 'not_prep', message: '这不是家长开的话题' } };
+      if (!isPrepThread(index.messages, thread)) return { status: 409, json: { error: 'not_prep', message: '这不是家长开的备课话题' } };
       if (kidSpoke(index.messages, thread)) return { status: 409, json: { error: 'kid_spoke', message: '孩子已经在这个话题里说过话了' } };
-      const turn = index.messages.find((m, i) => ths[i] === thread && m.job === job);
-      if (!turn || turn.result !== 'ok' || !turn.section) return { status: 400, json: { error: 'bad_request', message: '要交的那一节还没写好' } };
+      if (date !== localDate(ctx.now())) return { status: 400, json: { error: 'bad_request', message: '只能改今天的备课话题' } };
       const active = ctx.runner.running(tutor);
       if (active && active.date === date && ths[index.messages.findIndex((m) => m.job === active.job)] === thread) return { status: 409, json: { error: 'busy', message: '老师还在写这个话题' } };
-      await setOpening(ws, tutor, date, thread, job);
+      if (!hand) {
+        const off = isObj(body) ? body.off : undefined;
+        const cards = isObj(body) && Array.isArray(body.cards) ? (body.cards as unknown[]).filter((c): c is string => typeof c === 'string') : [];
+        const prep = prepJobs(index.messages);
+        const ok = (c: string): boolean => {
+          const [job, n] = c.split('/');
+          const m = index.messages.find((x, i) => x.job === job && ths[i] === thread);
+          return Boolean(m && prep.has(m.job) && m.section && /^\d+$/.test(n ?? '') && Number(n) < m.section.cards.length);
+        };
+        if (typeof off !== 'boolean' || !cards.length || !cards.every(ok)) return { status: 400, json: { error: 'bad_request', message: '要 {cards: ["<job>/<n>"], off: true | false},卡要在这个备课话题里' } };
+        const next = await setLessonOff(ws, tutor, date, thread, cards, off);
+        return { status: 200, json: { tutor, date, thread, cards: lessonCards(next, thread) } };
+      }
+      const label = isObj(body) && typeof body.label === 'string' ? body.label.replace(/\s+/g, ' ').trim() : '';
+      if (!label || Array.from(label).length > BUTTON_LABEL_MAX) return { status: 400, json: { error: 'bad_request', message: `按钮上的字 1–${BUTTON_LABEL_MAX} 个` } };
+      const cards = lessonCards(index, thread);
+      if (!cards.length) return { status: 400, json: { error: 'bad_request', message: '这节课还没有卡' } };
+      await handLesson(ws, tutor, date, thread, cards, ctx.now());
       const r = await appendContinue(ws, tutor, date, thread, label, ctx.now());
-      return { status: 200, json: { ok: r.ok, label, issues: r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text) } };
-    }
-    // 对孩子藏起 / 放出一节(《备课设计.md》§4.5):家长让老师重写过的旧版之类。只认备课话题里孩子开口之前的轮;开场那一轮不能藏
-    const hid = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/hidden$/.exec(p);
-    if (hid && method === 'PUT') {
-      const [, tutor, date, raw] = hid;
-      const thread = decodeURIComponent(raw);
-      if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
-      const job = isObj(body) && typeof body.job === 'string' ? body.job : '';
-      const hide = isObj(body) ? body.hidden : undefined;
-      if (typeof hide !== 'boolean') return { status: 400, json: { error: 'bad_request', message: '要 {job, hidden: true | false}' } };
-      const index = await readIndex(ws, tutor, date);
-      const ths = threads(index.messages);
-      if (!ths.includes(thread)) return { status: 404, json: { error: 'no_such_thread' } };
-      if (!index.messages.some((m, i) => ths[i] === thread && m.job === job)) return { status: 400, json: { error: 'bad_request', message: `话题 ${thread} 里没有 ${job} 这一轮` } };
-      if (!isPrepThread(index.messages, thread)) return { status: 409, json: { error: 'not_prep', message: '只有家长开的备课话题能藏' } };
-      if (!prepJobs(index.messages).has(job)) return { status: 409, json: { error: 'kid_spoke', message: '孩子已经看过这一节了' } };
-      if (hide && index.openings[thread] === job) return { status: 400, json: { error: 'bad_request', message: '开场那一节不能藏;要换开场,在另一节尾点「改开场」' } };
-      const next = await setHidden(ws, tutor, date, job, hide);
-      return { status: 200, json: { tutor, date, thread, job, hidden: next.hidden.includes(job) } };
+      return { status: 200, json: { ok: r.ok, label, cards: cards.length, issues: r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text) } };
     }
     // 家长在备课话题里做卡(看效果;《备课设计.md》§3.2):只认备课轮的卡;孩子的话题里家长不替孩子答
     const pcard = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/cards\/(\d{4}-\d+)\/(\d+)$/.exec(p);

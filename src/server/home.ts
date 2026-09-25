@@ -58,7 +58,7 @@ async function liveThreads(ws: Workspace, refs: readonly { tutor: string; date: 
     if (!index || !threads(index.messages).includes(r.thread)) continue;
     const k = threadKey(r.tutor, r.date, r.thread);
     alive.add(k);
-    if (isPrepThread(index.messages, r.thread) && !kidSpoke(index.messages, r.thread)) prep.set(k, index.openings[r.thread] ? 'handed' : 'unhanded');
+    if (isPrepThread(index.messages, r.thread) && !kidSpoke(index.messages, r.thread)) prep.set(k, index.lessons[r.thread]?.handedAt ? 'handed' : 'unhanded');
   }
   return { alive, prep };
 }

@@ -142,22 +142,43 @@ export function kidSpoke(messages: readonly Pick<ConversationMessage, 'job' | 'f
   return messages.some((m, i) => t[i] === thread && m.from === 'kid');
 }
 
-/** 孩子端看不到的轮:备课轮里没交给孩子的话题整个,交了的开场之前的那几轮、家长藏起来的那几轮(《备课设计.md》§3.2、§4.5) */
-export function kidHiddenJobs(index: { messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'prepThread'>[]; openings?: Record<string, string>; hidden?: readonly string[] }): Set<string> {
+/** 这节课(《备课设计.md》§4):off = 家长点灰的卡,handedAt = 交给孩子的时刻 */
+export interface Lesson {
+  handedAt: string | null;
+  off: string[];
+}
+type LessonMsg = Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'prepThread' | 'result' | 'section'>;
+type LessonIndex = { messages: readonly LessonMsg[]; lessons?: Record<string, Lesson> };
+
+/** 一轮里进这节课的卡的下标(备课轮、跑成了、没被点灰的) */
+export function lessonKeep(m: Pick<ConversationMessage, 'job' | 'result' | 'section'>, lesson: Lesson | undefined): number[] {
+  if (m.result !== 'ok' || !m.section) return [];
+  return m.section.cards.map((_, n) => n).filter((n) => !lesson?.off.includes(cardId(m.job, n)));
+}
+
+/** 这节课的卡(`<job>/<n>`,按生成的顺序):备课话题里孩子开口之前各轮没被点灰的卡 */
+export function lessonCards(index: LessonIndex, thread: string): string[] {
+  const t = threads(index.messages);
+  const prep = prepJobs(index.messages);
+  const lesson = index.lessons?.[thread];
+  return index.messages.flatMap((m, i) => (t[i] === thread && prep.has(m.job) ? lessonKeep(m, lesson).map((n) => cardId(m.job, n)) : []));
+}
+
+/** 孩子端看不到的轮:备课轮里没交给孩子的话题整个,交了的一张卡都没进课的那几轮(《备课设计.md》§3.2、§4.4) */
+export function kidHiddenJobs(index: LessonIndex): Set<string> {
   const prep = prepJobs(index.messages);
   const t = threads(index.messages);
-  const reached = new Set<string>();
   const out = new Set<string>();
   index.messages.forEach((m, i) => {
-    if (index.openings?.[t[i]] === m.job) reached.add(t[i]);
-    // 开场之前的备课轮、家长藏起来的备课轮(孩子开口之后的轮藏不了:孩子已经看过了)
-    if (prep.has(m.job) && (!reached.has(t[i]) || index.hidden?.includes(m.job))) out.add(m.job);
+    if (!prep.has(m.job)) return;
+    const lesson = index.lessons?.[t[i]];
+    if (!lesson?.handedAt || !lessonKeep(m, lesson).length) out.add(m.job);
   });
   return out;
 }
 
 /** 孩子端的当前话题:孩子看得到的末条消息所在的(家长还没交的备课话题不算);没有 null */
-export function kidCurrentThread(index: { messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'prepThread'>[]; openings?: Record<string, string>; hidden?: readonly string[] }): string | null {
+export function kidCurrentThread(index: LessonIndex): string | null {
   const hidden = kidHiddenJobs(index);
   const t = threads(index.messages);
   for (let i = index.messages.length - 1; i >= 0; i--) if (!hidden.has(index.messages[i].job)) return t[i];

@@ -76,6 +76,8 @@ export interface BoardSection {
   /** 流式时:前几拍已经就绪(配音齐;以后加后期回)——页面就绪一拍播一拍;定稿的节没有这个字段(全部就绪) */
   ready?: number;
   layout?: BoardLayout;
+  /** 孩子端下发的这节课(《备课设计.md》§4.4):挑过卡的节,第 i 张卡在原节里是第几张;存卡的状态、卡的 id 用它 */
+  orig?: number[];
 }
 
 /**
@@ -531,7 +533,7 @@ export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEn
       continue;
     }
     if (m.section && (m.section.cards.length || m.section.lines.length)) {
-      out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, ...(m.section.layout ? { layout: m.section.layout } : {}) });
+      out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, ...(m.section.layout ? { layout: m.section.layout } : {}), ...(m.section.orig ? { orig: m.section.orig } : {}) });
     }
   }
   return out;

@@ -7,7 +7,7 @@
 import { stripSecrets } from '../cards/index.ts';
 import type { Bookkeeping, ConversationMessage } from '../schema/index.ts';
 import { parseBoard } from './board.ts';
-import { kidHiddenJobs, prepJobs, threads, type CardAssets, type CardStates } from './conversation.ts';
+import { cardId, kidHiddenJobs, lessonKeep, prepJobs, threads, type CardAssets, type CardStates, type Lesson } from './conversation.ts';
 import type { BoardSection } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 import type { Transcript } from './transcript.ts';
@@ -110,14 +110,30 @@ function cardsWithState(m: ConversationMessage, states: CardStates, assets: Card
 }
 
 /**
+ * 这节课里的一节(《备课设计.md》§4.4):只留 keep 那几张卡,重新编号;讲稿只留锚在留下的卡上的句(和卡前锚为空的开场白),
+ * 句里的标注与动作、后期的排版行跟着换下标、指到拿掉的卡的去掉;orig = 第 i 张卡在原节里是第几张(存卡的状态、卡的 id 用它)
+ */
+export function lessonSection(section: BoardSection, keep: readonly number[]): BoardSection {
+  if (keep.length === section.cards.length) return section;
+  const to = new Map(keep.map((n, i) => [n, i]));
+  const lines = section.lines
+    .filter((l) => l.anchor === null || to.has(l.anchor))
+    .map((l) => ({ ...l, anchor: l.anchor === null ? null : to.get(l.anchor)!, marks: l.marks.filter((k) => to.has(k.card)).map((k) => ({ ...k, card: to.get(k.card)! })), cues: l.cues.filter((c) => to.has(c.card)).map((c) => ({ ...c, card: to.get(c.card)! })) }));
+  const rows = section.layout ? section.layout.rows.map((r) => r.filter((n) => to.has(n)).map((n) => to.get(n)!)).filter((r) => r.length) : [];
+  const { layout: _l, ...rest } = section;
+  return { ...rest, cards: keep.map((n) => section.cards[n]), lines, ...(section.layout && rows.length ? { layout: { for: section.layout.for, rows } } : {}), orig: [...keep] };
+}
+
+/**
  * 对话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / 费用 / 家长尾巴;
  * 卡上的答案剥掉,孩子自己做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到卡上。出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
- * 家长的备课话题(《备课设计.md》§3.2):没交给孩子的整个不出现,交了的从开场那一轮起出现。
+ * 家长的备课话题(《备课设计.md》§3.2、§4.4):没交给孩子的整个不出现,交了的只出现这节课的卡与挂在上面的讲稿。
  */
-export function kidConversation(index: { messages: readonly ConversationMessage[]; openings?: Record<string, string>; hidden?: readonly string[] }, states: CardStates = {}, assets: CardAssets = {}): KidMessage[] {
+export function kidConversation(index: { messages: readonly ConversationMessage[]; lessons?: Record<string, Lesson> }, states: CardStates = {}, assets: CardAssets = {}): KidMessage[] {
   const out: KidMessage[] = [];
   const ths = threads(index.messages);
   const hidden = kidHiddenJobs(index);
+  const prep = prepJobs(index.messages);
   for (const [i, m] of index.messages.entries()) {
     // 记账那轮是家长晚上起的任务,老师回的「记好了」不是给孩子的话
     if (m.bookkeep || m.tidy || hidden.has(m.job)) continue;
@@ -126,7 +142,8 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     const pending = m.result === 'running';
     if (question === null && reply === null && !pending) continue;
     const withState = cardsWithState(m, states, assets);
-    const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
+    const lessonOnly = withState && prep.has(m.job) ? lessonSection(withState, lessonKeep(m, index.lessons?.[ths[i]])) : withState;
+    const section = m.result === 'ok' && lessonOnly ? stripSecrets(lessonOnly) : undefined;
     out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}) });
   }
   return out;
@@ -151,21 +168,19 @@ export interface ParentMessage extends KidMessage {
   tidy?: true;
   /** 备课轮(《备课设计.md》§3.2):家长开的话题里孩子开口之前;费用给家长看(只这一处),记忆段原文是「本来会记住的」 */
   prep?: true;
-  /** 这一轮是开场:家长从这里把话题交给了孩子 */
-  opening?: true;
-  /** 备课轮里孩子端看不到的(没交、开场之前、家长藏的);hidden = 家长藏的(《备课设计.md》§4.5) */
-  unseen?: true;
-  hidden?: true;
+  /** 这节课里点灰的卡(下标;《备课设计.md》§4.1);只在备课轮 */
+  off?: number[];
+  /** 这个话题的课交给孩子了 */
+  handed?: true;
   memoryDraft?: string[];
   costUsd?: number;
 }
 
 /** 对话索引 → 家长板书页条目:和 kidConversation 同一个循环,差集恰好是 ParentMessage 里多出的字段与「答案不剥」 */
-export function parentConversation(index: { messages: readonly ConversationMessage[]; openings?: Record<string, string>; hidden?: readonly string[] }, states: CardStates = {}, assets: CardAssets = {}): ParentMessage[] {
+export function parentConversation(index: { messages: readonly ConversationMessage[]; lessons?: Record<string, Lesson> }, states: CardStates = {}, assets: CardAssets = {}): ParentMessage[] {
   const out: ParentMessage[] = [];
   const ths = threads(index.messages);
   const prep = prepJobs(index.messages);
-  const unseen = kidHiddenJobs(index);
   for (const [i, m] of index.messages.entries()) {
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
@@ -185,9 +200,8 @@ export function parentConversation(index: { messages: readonly ConversationMessa
       ...(m.bookkeep ? { bookkeep: m.bookkeep } : {}),
       ...(m.tidy ? { tidy: true as const } : {}),
       ...(prep.has(m.job) ? { prep: true as const } : {}),
-      ...(index.openings?.[ths[i]] === m.job ? { opening: true as const } : {}),
-      ...(prep.has(m.job) && unseen.has(m.job) ? { unseen: true as const } : {}),
-      ...(prep.has(m.job) && index.hidden?.includes(m.job) ? { hidden: true as const } : {}),
+      ...(prep.has(m.job) && m.section ? { off: m.section.cards.map((_, n) => n).filter((n) => index.lessons?.[ths[i]]?.off.includes(cardId(m.job, n))) } : {}),
+      ...(prep.has(m.job) && index.lessons?.[ths[i]]?.handedAt ? { handed: true as const } : {}),
       ...(m.memoryDraft?.length ? { memoryDraft: m.memoryDraft } : {}),
       ...(typeof m.costUsd === 'number' ? { costUsd: m.costUsd } : {}),
     });

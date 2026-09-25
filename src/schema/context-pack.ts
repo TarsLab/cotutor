@@ -44,6 +44,8 @@ export const ContextPackSchema = z.object({
   board: z.enum(['auto', 'off']).optional(),
   /** 上一轮之后孩子改过状态的卡,每张一句(「<job>/<n> choice「问题」 选了「B …」(答案:「…」)」) */
   cards: z.array(z.string()).optional(),
+  /** 家长备好、交给孩子的这节课(《备课设计.md》§4.4):孩子看到的那几张卡,一张一行;只在孩子在这个话题里的第一条 */
+  lesson: z.array(z.string()).optional(),
   /** 孩子从首页的按钮进来(《首页设计.md》§六):按钮上的字与家长备好的讲法;只在带按钮的那条 */
   home: z.object({ button: z.string().min(1), brief: z.string().optional() }).optional(),
   /** 接着以前的话题:那个话题是哪天哪个、叫什么、最后一节的讲稿与卡、索引在哪;只在新话题的第一条 */

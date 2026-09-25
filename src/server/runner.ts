@@ -18,7 +18,7 @@ import { closeSync, createWriteStream, existsSync, openSync } from 'node:fs';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
-import { addMessage, applyRun, cardId, changedCards, conversationFiles, isPrepThread, jobId, kidSpoke, localDate, localMinute, prepJobs, sessionFor, threads } from '../lib/conversation.ts';
+import { addMessage, applyRun, cardId, changedCards, conversationFiles, isPrepThread, jobId, kidSpoke, lessonCards, localDate, localMinute, prepJobs, sessionFor, threads } from '../lib/conversation.ts';
 import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
 import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
 import { BUNDLE_ID_RE, cardAssets, cardLabel, describeCard } from '../cards/index.ts';
@@ -335,6 +335,14 @@ export class Runner {
       return { card: id, text: card ? describeCard(card, c.file.state) : JSON.stringify(c.file.state) };
     });
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
+    // 孩子在家长交给他的备课话题里的第一条(《备课设计.md》§4.4):孩子看到的是这节课那几张卡,老师照它接,不用猜哪些版本孩子没看过
+    if (input.from === 'kid' && thread !== job && index.lessons[thread]?.handedAt && isPrepThread(index.messages, thread) && !kidSpoke(index.messages, thread)) {
+      pack.lesson = lessonCards(index, thread).map((id) => {
+        const [j, n] = id.split('/');
+        const c = index.messages.find((m) => m.job === j)?.section?.cards[Number(n)];
+        return c ? `${id} ${c.kind}「${cardLabel(c)}」` : id;
+      });
+    }
     if (photos.length) { pack.photos = photos; pack.photoFiles = photos.map((p) => join(ws.root, p)); }
     if (input.home) pack.home = input.home;
     const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;

@@ -211,18 +211,24 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const t1 = await m.route('POST', '/api/conversations/english-tutor/messages', { text: '', action: 'continue', thread: prepTh });
   await m.settle();
   const td2 = await eb();
-  const hd = await m.route('PUT', `/api/conversations/english-tutor/2026-09-10/threads/${prepTh}/hidden`, { job: td2[1]?.job, hidden: true });
-  const hand = await m.route('POST', `/api/conversations/english-tutor/2026-09-10/threads/${prepTh}/opening`, { job: td2[0]?.job, label: '我们来读水果' });
-  const kd3 = (await get('/api/kid/conversations/english-tutor/today')).json as Day;
+  const lp = `/api/conversations/english-tutor/2026-09-10/threads/${prepTh}/lesson`;
+  const c0 = td2[0]?.section?.cards.length ?? 0;
+  const c1 = td2[1]?.section?.cards.length ?? 0;
+  const offA = await m.route('PUT', lp, { cards: Array.from({ length: c1 }, (_, k) => `${td2[1]?.job}/${k}`), off: true });
+  const offB = await m.route('PUT', lp, { cards: [`${td2[0]?.job}/0`], off: true });
+  type LBoard = { messages: (PrepMsg & { off?: number[]; handed?: boolean })[]; lessons: Record<string, { cards: string[]; handed: boolean; label: string | null }> };
+  const lb = (await get('/api/conversations/english-tutor/today/board')).json as LBoard;
+  const hand = await m.route('POST', `${lp}/hand`, { label: '我们来读水果' });
+  const kd3 = (await get('/api/kid/conversations/english-tutor/today')).json as Day & { messages: { section: { cards: unknown[]; orig?: number[] } | null }[] };
   const kh = (await get('/api/kid/home')).json as { home: string; cards: { kind: string; props: { tutor?: string; buttons?: { id: number | string; label: string; open?: boolean }[] } }[] };
   const hb = kh.cards.find((c) => c.props.tutor === 'english-tutor')?.props.buttons?.find((x) => x.label === '我们来读水果');
   const ov4 = (await get('/api/overview/today')).json as OvT;
-  const eb2 = (await eb()) as (PrepMsg & { hidden?: boolean })[];
-  check('继续同一话题;藏第二节、从第一节交给孩子:孩子端只见第一节、问句 null;首页有只打开的按钮;清单标已交', t1.status === 202 && td2.length === 2 && td2[1].thread === prepTh && hd.status === 200 && hand.status === 200 && kd3.messages.length === 1 && kd3.messages[0].question === null && hb?.open === true && ov4.tutors[2].threads[0].handedAs === '我们来读水果' && eb2[0].opening === true && eb2[1].hidden === true, JSON.stringify({ hand: hand.json, kd3: kd3.messages.length, hb }));
+  const lb2 = (await get('/api/conversations/english-tutor/today/board')).json as LBoard;
+  check('继续同一话题;第二节整节不要、第一节拿掉第一张:这节课少这几张;交给孩子:孩子端只见第一节、没有第一张(orig 从 1 起)、问句 null;首页有只打开的按钮;清单标已交', t1.status === 202 && td2.length === 2 && td2[1].thread === prepTh && c0 > 1 && offA.status === 200 && offB.status === 200 && lb.lessons[prepTh].cards.length === c0 - 1 && lb.messages[1].off?.length === c1 && lb.messages[0].off?.join() === '0' && hand.status === 200 && kd3.messages.length === 1 && kd3.messages[0].question === null && kd3.messages[0].section?.cards.length === c0 - 1 && kd3.messages[0].section?.orig?.[0] === 1 && hb?.open === true && ov4.tutors[2].threads[0].handedAs === '我们来读水果' && lb2.lessons[prepTh].handed === true && lb2.lessons[prepTh].label === '我们来读水果', JSON.stringify({ lb: lb.lessons, hand: hand.json, kd3: kd3.messages.length, hb }));
   const ks = await m.route('POST', '/api/kid/conversations/english-tutor/messages', { text: '我读 apple', thread: prepTh, via: { home: kh.home, button: hb!.id } });
   await m.settle();
   const kd4 = (await get('/api/kid/conversations/english-tutor/today')).json as Day;
-  check('孩子按按钮后自己说的是第一句、进同一话题;再交 409', ks.status === 202 && kd4.messages[kd4.messages.length - 1].question === '我读 apple' && (await m.route('POST', `/api/conversations/english-tutor/2026-09-10/threads/${prepTh}/opening`, { job: td2[0]?.job, label: '再交' })).status === 409, JSON.stringify(kd4.messages.map((x) => x.question)));
+  check('孩子按按钮后自己说的是第一句、进同一话题;再交 409', ks.status === 202 && kd4.messages[kd4.messages.length - 1].question === '我读 apple' && (await m.route('POST', `${lp}/hand`, { label: '再交' })).status === 409, JSON.stringify(kd4.messages.map((x) => x.question)));
 
   // 家长真发(第六节 3):进孩子那份列表,from parent;孩子端 today 里问句为 null、不算上限;打星在清单上
   const before = ((await get('/api/kid/conversations/chinese-tutor/today')).json as Day).remaining;

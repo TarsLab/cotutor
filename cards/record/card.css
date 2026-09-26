@@ -12,22 +12,25 @@
 .rc-lk { display:inline-flex; align-items:center; gap:4px; font-size:14px; color:var(--dim); }
 .c.c-record.locked { opacity:.62; }
 /* 舞台 */
-#st-body .c.c-record { gap:14px; align-items:stretch; background:transparent; border:0; box-shadow:none; padding:8px 0 0; min-height:100%; }
-#st-body .rc-t { font-size:32px; letter-spacing:4px; text-align:center; }
+#st-body .c.c-record { flex:1 0 auto; gap:12px; align-items:stretch; background:var(--tint-plum-bg); border:0; box-shadow:none; border-radius:16px; padding:16px 16px 10px; min-height:100%; box-sizing:border-box; }
+#st-body .rc-t { font-size:30px; letter-spacing:4px; text-align:center; }
 #st-body .rc-t .rk { border-bottom-width:4px; }
+/* 长句(绕口令)小一档,免得最后一两个字掉到下一行 */
+.rc-t.long { font-size:21px; letter-spacing:2px; }
+#st-body .rc-t.long { font-size:25px; letter-spacing:2px; }
 #st-body .rc-py { font-size:17px; letter-spacing:1.5px; text-align:center; margin-top:-6px; }
 .rc-top { display:flex; justify-content:center; gap:10px; min-height:52px; align-items:center; }
 .rc-top .rc-pl { height:52px; padding:0 20px; border-radius:26px; font-size:17px; }
 .rc-top .rc-pl svg { width:22px; height:22px; }
 .rc-tm { display:none; align-items:center; justify-content:center; gap:8px; font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; min-height:52px; }
 .rc-tm::before { content:""; width:10px; height:10px; border-radius:50%; background:#d64545; }
-.rc-mid { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:16px 0 8px; min-height:220px; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
-.rc-hint { display:flex; align-items:center; gap:6px; font-size:14px; color:var(--dim); visibility:hidden; margin-bottom:22px; }
+.rc-mid { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:4px 0 0; min-height:0; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+.rc-hint { display:flex; align-items:center; gap:6px; font-size:14px; color:var(--dim); visibility:hidden; margin-bottom:14px; }
 .rc-hint svg { width:18px; height:18px; }
 .rc-hint.cancel { color:#b3261e; font-weight:600; }
-.rc-mic { width:112px; height:112px; border-radius:50%; border:0; background:var(--tint-plum-head); color:#ffffff; display:grid; place-items:center; box-shadow:0 6px 18px rgba(122,79,201,.35); touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; transition:transform .12s, box-shadow .2s, width .12s, height .12s; }
-.rc-mic svg { width:44px; height:44px; }
-.rc-mic.again { width:76px; height:76px; background:#ffffff; border:2px solid var(--tint-plum-line); color:var(--tint-plum-head); box-shadow:none; }
+.rc-mic { width:100px; height:100px; border-radius:50%; border:0; background:var(--tint-plum-head); color:#ffffff; display:grid; place-items:center; box-shadow:0 6px 18px rgba(122,79,201,.35); touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; transition:transform .12s, box-shadow .2s, width .12s, height .12s; }
+.rc-mic svg { width:40px; height:40px; }
+.rc-mic.again { width:72px; height:72px; background:#ffffff; border:2px solid var(--tint-plum-line); color:var(--tint-plum-head); box-shadow:none; }
 .rc-mic.again svg { width:30px; height:30px; }
 .rc-lb { font-size:17px; font-weight:600; color:var(--tint-plum-head); padding-top:6px; }
 .rc-mid.locked .rc-mic, .rc-mid.locked .rc-lb { display:none; }
@@ -35,7 +38,7 @@
 .c-record.rec .rc-top { display:none; }
 .c-record.rec .rc-tm { display:flex; }
 .c-record.rec .rc-hint { visibility:visible; }
-.c-record.rec .rc-mic { width:128px; height:128px; background:var(--tint-plum-head); color:#ffffff; border:0; box-shadow:0 0 0 14px rgba(122,79,201,.18), 0 0 0 30px rgba(122,79,201,.08); }
-.c-record.rec .rc-mic svg { width:48px; height:48px; }
-.c-record.rec .rc-lb { padding-top:18px; }
+.c-record.rec .rc-mic { width:112px; height:112px; background:var(--tint-plum-head); color:#ffffff; border:0; box-shadow:0 0 0 14px rgba(122,79,201,.18), 0 0 0 30px rgba(122,79,201,.08); }
+.c-record.rec .rc-mic svg { width:44px; height:44px; }
+.c-record.rec .rc-lb { padding-top:14px; }
 .c-record.rec.cancel .rc-mic { background:#b3261e; box-shadow:0 0 0 14px rgba(179,38,30,.15); }

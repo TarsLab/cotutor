@@ -288,6 +288,61 @@ captures/2026-09-10/fruits.png
 Which one do you want to try first, [apple], [banana], or [orange]? 你先读哪一个?`,
     ],
   },
+  {
+    // 口播老师(《口播老师设计.md》):一节三张录音卡;交了之后只盯一个字。mock 不起 koubo,老师的第二节就是按「山」重录写的
+    name: 'koubo-tutor',
+    display: '口播老师',
+    subject: '口播',
+    avatar: '播',
+    motto: '一个字一个字来',
+    preloaded: 0,
+    firstQuestion: '',
+    script: [
+      `今天练 [sh] 和 s。上周 sh 的中位数是 58,还差一点。
+
+~~~text
+# 今天练什么
+sh 舌尖翘起来往后,s 舌尖平放抵住下牙。
+~~~
+
+~~~record pinyin focus=sh_s
+shi2 si4 shi4 shi2 si4
+【十】四【是】【十】四
+~~~
+
+~~~record focus=sh_s
+老师上【山】看【树】
+~~~
+
+~~~record focus=sh_s
+四是四,十是十,十四是十四
+~~~
+
+三句,一句一句来:点开听我念一遍,再按住录。三句都录完交给我。`,
+      `十四是十四,读得很准。[山] 这个字舌尖再往后一点,我们先只盯这一个字。
+
+~~~text
+# 口型
+「山」的 sh:舌尖翘起来,往后缩一点,不碰牙齿,气从舌尖上面出来。
+~~~
+
+~~~read
+山
+上山
+老师上山看树
+~~~
+
+~~~record focus=sh_s
+上【山】
+~~~
+
+~~~record focus=sh_s
+老师上【山】看树
+~~~
+
+先由字到句听一遍,再录这两句。`,
+    ],
+  },
 ];
 
 interface MockMessage {
@@ -426,6 +481,8 @@ export function createMock(opts: MockOptions = {}): Mock {
   const used = (name: string): number => (messages.get(name) ?? []).filter((m) => m.question !== null && m.action !== 'continue' && m.from !== 'parent').length;
   /** 话题打星(家长端清单上):<老师>/<话题> → 1–5;记过账的话题(同样的键) */
   const ratings = new Map<string, number>();
+  /** 录音卡的录音(<老师>/<日期>.<job>.cards/<n>/rec-<k>.<ext> → 字节),只在内存里 */
+  const recordings = new Map<string, { type: string; data: Buffer }>();
   const booked = new Set<string>();
   /** 下发孩子端的形状:答案剥掉、状态并到卡上、场景卡补课包快照(样本课包在仓库里);家长发的问句不露 */
   const kidMessage = async (m: MockMessage & { keep?: number[] }) => {
@@ -745,10 +802,21 @@ export function createMock(opts: MockOptions = {}): Mock {
       const target = m?.section?.cards[Number(n)];
       if (!target) return { status: 404, json: { error: 'no_such_card' } };
       if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
-      const r = parseCardState(target, body);
+      // 录音卡:data:audio 存在内存里,状态换成真服务那样的路径(/api/audio 从内存回放);mock 不评测
+      let raw = body;
+      if (target.kind === 'record' && isObj(body) && typeof body.audio === 'string' && body.audio.startsWith('data:')) {
+        const am = /^data:(audio\/[a-z0-9.+-]+)(?:;[^,]*)?;base64,([A-Za-z0-9+/=]+)$/.exec(body.audio);
+        if (!am) return { status: 400, json: { error: 'bad_state' } };
+        const k = [...recordings.keys()].filter((x) => x.startsWith(`${name}/${localDate(now())}.${job}.cards/${n}/`)).length + 1;
+        const ext = am[1].includes('mp4') ? 'm4a' : 'webm';
+        const rel = `${localDate(now())}.${job}.cards/${n}/rec-${k}.${ext}`;
+        recordings.set(`${name}/${rel}`, { type: am[1], data: Buffer.from(am[2], 'base64') });
+        raw = { ...body, audio: `conversations/${name}/${rel}` };
+      }
+      const r = parseCardState(target, raw);
       if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
       (m!.states ??= {})[Number(n)] = r.state;
-      return { status: 200, json: { ok: true, card: `${job}/${n}` } };
+      return { status: 200, json: { ok: true, card: `${job}/${n}`, state: r.state } };
     }
     const hz = /^\/api\/kid\/tianzige\/([^/]+)$/.exec(p);
     if (hz) {
@@ -770,7 +838,10 @@ export function createMock(opts: MockOptions = {}): Mock {
       const f = await bundleAsset(MOCK_BUNDLES_DIR, p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
-    if (p.startsWith('/api/audio/')) return { status: 404, json: { error: 'not_found' } };
+    if (p.startsWith('/api/audio/')) {
+      const rec = recordings.get(decodeURIComponent(p.slice('/api/audio/'.length)));
+      return rec ? { status: 200, contentType: rec.type, body: rec.data } : { status: 404, json: { error: 'not_found' } };
+    }
     if (p.startsWith('/api/')) return { status: 404, json: { error: 'not_found', path: p } };
     return { status: 404, json: { error: 'not_found', path: p } };
   };

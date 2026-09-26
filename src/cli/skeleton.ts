@@ -137,6 +137,8 @@ const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚' },
   'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤' },
   'scene-maker': { display: '画图老师', avatar: '🎨', hidden: true, runtime: 'claude-scene' },
+  // 口播老师(《口播老师设计.md》§6):要 koubo 才有用,出厂关着;在要练的那个 workspace 里打开,upgrade 再装 koubo 的技能
+  'koubo-tutor': { display: '口播老师', subject: '口播', avatar: '🎙️', enabled: false },
 };
 
 /** cotutor.json 模板:只在文件不存在时写入;政策文件永不自动重建或覆盖(家长的决定不由机器替她拍板)。 */

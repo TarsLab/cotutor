@@ -4,13 +4,13 @@ import { configTemplate, shippedAgents } from '../src/cli/skeleton.ts';
 import { check, done } from './_check.ts';
 
 const agents = await shippedAgents();
-check('本包带 4 位老师', agents.length === 4, agents.map((a) => a.name).join(','));
+check('本包带 5 位老师(口播老师出厂关着)', agents.length === 5, agents.map((a) => a.name).join(','));
 
 const raw = JSON.parse(configTemplate({ slug: 'ming', name: '小明', port: 5181, tutors: agents }));
 const cfg = CotutorConfigSchema.parse(raw);
 check('模板可解析', cfg.kid.slug === 'ming' && cfg.title === '小明的老师们' && cfg.server.port === 5181);
-check('老师表齐', Object.keys(cfg.tutors).length === 4 && cfg.tutors['scene-maker'].hidden === true && cfg.tutors['scene-maker'].runtime === 'claude-scene');
-check('enabled 缺省 true', cfg.tutors['math-tutor'].enabled === true && Object.values(cfg.tutors).every((t) => t.enabled));
+check('老师表齐', Object.keys(cfg.tutors).length === 5 && cfg.tutors['scene-maker'].hidden === true && cfg.tutors['scene-maker'].runtime === 'claude-scene');
+check('enabled 缺省 true;口播老师出厂关着(要 koubo)', cfg.tutors['math-tutor'].enabled === true && Object.entries(cfg.tutors).every(([k, t]) => t.enabled === (k !== 'koubo-tutor')));
 check('运行时 claude/qwen 都在', 'claude' in cfg.runtimes && 'qwen' in cfg.runtimes && cfg.runtimes.default === 'claude');
 
 const pol = resolvePolicy(cfg, 'math-tutor');

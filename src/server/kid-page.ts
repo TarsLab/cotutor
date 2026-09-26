@@ -766,7 +766,7 @@ __PHOTO_JS__
         const pinyin = p.mode === 'pinyin';
         const shown = p.show || (pinyin ? toneMarks(p.text || '') : p.text || '');
         const risk = new Set(p.risk || []);
-        const t = h('div', { class: 'rc-t' }, ...Array.from(shown).map((ch, i) => (risk.has(i) ? h('span', { class: 'rk' }, ch) : ch)));
+        const t = h('div', { class: 'rc-t' + (Array.from(shown).length > 10 ? ' long' : '') }, ...Array.from(shown).map((ch, i) => (risk.has(i) ? h('span', { class: 'rk' }, ch) : ch)));
         const py = pinyin && p.show ? h('div', { class: 'rc-py' }, toneMarks(p.text || '')) : null;
         const sec = recordSeconds(c);
         const locked = S.readonly || (secIdx !== null && recordLocked(S.sections, secIdx, S.submitted));
@@ -1152,8 +1152,9 @@ __PHOTO_JS__
       const sec = S.sections[S.stage.section];
       const left = sec.cards.filter((c) => c.kind === 'record' && !recordSeconds(c)).length;
       const done = recordSeconds(card) > 0;
+      const others = left - (done ? 0 : 1);
       act.hidden = S.readonly || recordLocked(S.sections, S.stage.section, S.submitted);
-      $('#st-go').textContent = done && left ? '下一句' : '交给老师';
+      $('#st-go').textContent = others > 0 ? '下一句' : '交给老师';
       $('#st-go').disabled = !done || Boolean(S.rec);
       $('#st-note').textContent = !done ? '先听,再按住录。' : left ? '录好了。还有 ' + left + ' 句没录。' : '都录好了。';
     }

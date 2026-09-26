@@ -68,7 +68,7 @@ try {
 
   const r = await upgradeConfig(root);
   const cfg = cfgOf(root);
-  check('设置:键换了、位置不变、值留着;出厂显示名与头像跟着换', r.applied && Object.keys(cfg.tutors).join() === 'chinese-tutor,english-tutor,math-tutor,scene-maker' && cfg.tutors[NEW].display === '英语老师' && cfg.tutors[NEW].avatar === '🔤' && cfg.tutors[NEW].voice === 'v-en', JSON.stringify(cfg.tutors));
+  check('设置:键换了、位置不变、值留着;出厂显示名与头像跟着换', r.applied && Object.keys(cfg.tutors).join() === 'chinese-tutor,english-tutor,koubo-tutor,math-tutor,scene-maker' && cfg.tutors[NEW].display === '英语老师' && cfg.tutors[NEW].avatar === '🔤' && cfg.tutors[NEW].voice === 'v-en', JSON.stringify(cfg.tutors));
   const status = Object.fromEntries((await tutorStatuses(root)).map((s) => [s.name, s.state]));
   const man = await readManifest(root);
   check('老师文件:旧的删了,新的是出厂原样,记录换了', !existsSync(join(root, '.claude/agents', `${OLD}.md`)) && status[NEW] === 'latest' && !(OLD in man.tutors) && NEW in man.tutors, JSON.stringify(status));

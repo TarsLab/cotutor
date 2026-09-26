@@ -12,7 +12,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   type HomeCard = { kind: string; props: { tutor?: string; buttons?: { id: string | number; kind: string; label: string; date?: string; thread?: string }[] } };
   const home = (await get('/api/kid/home')).json as { title: string; home: string; tutors: { name: string; available: boolean; motto: string }[]; cards: HomeCard[] };
   const tc = home.cards.filter((c) => c.kind === 'tutor');
-  check('首页:三位老师、口号;老师卡置顶(语文、数学照原文,英语补一张),其余卡照原文顺序', home.title === '小明的老师们' && home.tutors.length === 3 && home.tutors.every((t) => t.available) && home.tutors[0].motto === '故事里都有道理' && home.home === '2026-09-09-2130' && tc.map((c) => c.props.tutor).join() === 'chinese-tutor,math-tutor,english-tutor' && home.cards.slice(3).map((c) => c.kind).join() === 'text,tianzige', JSON.stringify(home.cards.map((c) => c.kind)));
+  check('首页:四位老师(含口播)、口号;老师卡置顶(语文、数学照原文,英语、口播各补一张),其余卡照原文顺序', home.title === '小明的老师们' && home.tutors.length === 4 && home.tutors.every((t) => t.available) && home.tutors[0].motto === '故事里都有道理' && home.home === '2026-09-09-2130' && tc.map((c) => c.props.tutor).join() === 'chinese-tutor,math-tutor,english-tutor,koubo-tutor' && home.cards.slice(4).map((c) => c.kind).join() === 'text,tianzige', JSON.stringify(home.cards.map((c) => c.kind)));
   check('老师卡的按钮:新话题第一、今天聊过的「接着刚才的」第二、然后是原文的开场与接着;没写的只有新话题;讲法不下发', tc[0].props.buttons?.map((b) => b.id).join() === 'new,recent,0,1' && tc[0].props.buttons?.[1].label === '接着刚才的:画蛇添足是什么意思?' && tc[0].props.buttons?.[3].kind === 'continue' && tc[0].props.buttons?.[3].date === '2026-09-09' && tc[2].props.buttons?.map((b) => b.id).join() === 'new' && !JSON.stringify(home).includes('第 22 课') && !JSON.stringify(home).includes('brief'), JSON.stringify(tc[0].props.buttons));
   const d0 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
   check('语文老师已讲过一节:卡 + 讲稿 + 标注 + 末句问句(脚本过真解析器)', d0.messages.length === 1 && d0.messages[0].section !== null && d0.messages[0].section.cards.map((c) => c.kind).join() === 'text,text,read,choice' && d0.messages[0].section.lines.length === 5 && d0.messages[0].section.lines[1].marks[0]?.card === 1 && d0.messages[0].section.lines[4].ask === true, JSON.stringify(d0.messages[0].section?.lines[1]));
@@ -196,7 +196,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   type Ov = { date: string; today: string; tutors: { name: string; threads: { title: string; sections: number; stoppedAt: string | null }[] }[] };
   const ov = (await get('/api/overview/today')).json as Ov;
   const oy = (await get('/api/overview/2026-09-09')).json as Ov;
-  check('清单:今天三位老师,语文老师一个话题停在末句问句,英语老师没聊;昨天有以前的话题;未来 400', ov.tutors.length === 3 && ov.tutors[0].threads.length === 1 && ov.tutors[0].threads[0].stoppedAt === 'ask' && ov.tutors[0].threads[0].title.length > 0 && ov.tutors[2].threads.length === 0 && oy.date === '2026-09-09' && oy.tutors[0].threads[0].title.startsWith('昨天问的') && (await get('/api/overview/2027-01-01')).status === 400, JSON.stringify(ov.tutors[0]));
+  check('清单:今天四位老师,语文老师一个话题停在末句问句,英语老师没聊;昨天有以前的话题;未来 400', ov.tutors.length === 4 && ov.tutors[0].threads.length === 1 && ov.tutors[0].threads[0].stoppedAt === 'ask' && ov.tutors[0].threads[0].title.length > 0 && ov.tutors[2].threads.length === 0 && oy.date === '2026-09-09' && oy.tutors[0].threads[0].title.startsWith('昨天问的') && (await get('/api/overview/2027-01-01')).status === 400, JSON.stringify(ov.tutors[0]));
 
   // 备课(《备课设计.md》):家长端「新话题」开的话题在孩子那份列表里,孩子端看不到;家长能按继续、做卡;从第一节交给孩子 → 首页多一个只打开的「接着」,孩子端从开场看起
   const t0 = await m.route('POST', '/api/conversations/english-tutor/messages', { text: '试试新讲法', newThread: true, prep: true });
@@ -252,4 +252,31 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const dt = await m.route('DELETE', `/api/conversations/english-tutor/2026-09-10/threads/${prepTh}`);
   check('删话题:孩子的删了清单上没了、孩子端 today 空;备课的删了清单空、首页那个按钮没了;再删 404', dl.status === 200 && ((await get('/api/overview/today')).json as { tutors: { threads: unknown[] }[] }).tutors[0].threads.length === 0 && ((await get('/api/kid/conversations/chinese-tutor/today')).json as Day).messages.length === 0 && dt.status === 200 && ((await get('/api/overview/today')).json as { tutors: { threads: unknown[] }[] }).tutors[2].threads.length === 0 && !JSON.stringify((await get('/api/kid/home')).json).includes('我们来读水果') && (await m.route('DELETE', `/api/conversations/chinese-tutor/2026-09-10/threads/${th0}`)).status === 404, JSON.stringify({ dl: dl.json, dt: dt.json }));
 }
+// ---- 口播老师(《口播老师设计.md》):三张录音卡 → PUT 录音(data:audio)换成路径、/api/audio 取得回 → 交给老师追加下一节 ----
+{
+  const m = createMock({ delayMs: 0, now: () => new Date('2026-09-10T16:30:00') });
+  type RDay = { messages: { job: string; section: { cards: { kind: string; props: Record<string, unknown>; state?: { audio: string; seconds: number } }[] } | null }[] };
+  await m.route('POST', '/api/kid/conversations/koubo-tutor/messages', { text: '今天练什么' });
+  await m.settle();
+  const d1 = (await m.route('GET', '/api/kid/conversations/koubo-tutor/today')).json as RDay;
+  const sec1 = d1.messages[0].section!;
+  const recs = sec1.cards.map((c, i) => (c.kind === 'record' ? i : -1)).filter((i) => i >= 0);
+  check('口播:一节三张录音卡,拼音题有给人看的字,风险字有下标', recs.length === 3 && sec1.cards[recs[0]].props.mode === 'pinyin' && sec1.cards[recs[0]].props.show === '十四是十四' && JSON.stringify(sec1.cards[recs[1]].props.risk) === '[3,5]', JSON.stringify(sec1.cards));
+  const job = d1.messages[0].job;
+  const audio = 'data:audio/webm;codecs=opus;base64,' + Buffer.from('fake-opus').toString('base64');
+  const put = await m.route('PUT', `/api/kid/conversations/koubo-tutor/cards/${job}/${recs[1]}`, { audio, seconds: 7.1 });
+  const st = (put.json as { state: { audio: string; seconds: number } }).state;
+  check('口播:PUT 录音 → 状态换成资产目录下的路径,回给页面', put.status === 200 && st.audio === `conversations/koubo-tutor/2026-09-10.${job}.cards/${recs[1]}/rec-1.webm` && st.seconds === 7.1, JSON.stringify(put.json));
+  const back = await m.route('GET', '/api/audio/koubo-tutor/' + st.audio.replace('conversations/koubo-tutor/', ''));
+  check('口播:/api/audio 取得回刚录的', back.status === 200 && back.contentType === 'audio/webm' && Buffer.from(back.body ?? []).toString() === 'fake-opus');
+  const again = await m.route('PUT', `/api/kid/conversations/koubo-tutor/cards/${job}/${recs[1]}`, { audio, seconds: 6 });
+  check('口播:重录是 rec-2,旧的留着', ((again.json as { state: { audio: string } }).state.audio.endsWith('/rec-2.webm')));
+  check('口播:不是音频的 data → 400;塞判进状态存不进去', (await m.route('PUT', `/api/kid/conversations/koubo-tutor/cards/${job}/${recs[0]}`, { audio: 'data:text/plain;base64,eA==', seconds: 1 })).status === 400);
+  await m.route('POST', '/api/kid/conversations/koubo-tutor/messages', { text: '', action: 'submit', focus: { card: `${job}/${recs[2]}` } });
+  await m.settle();
+  const d2 = (await m.route('GET', '/api/kid/conversations/koubo-tutor/today')).json as RDay;
+  const c1 = d2.messages[0].section!.cards[recs[1]];
+  check('口播:交了追加下一节(口型 + 由字到句 + 两张录音卡);孩子端的状态里没有判', d2.messages.length === 2 && d2.messages[1].section!.cards.filter((c) => c.kind === 'record').length === 2 && c1.state?.seconds === 6 && !('verdict' in (c1.state ?? {})), JSON.stringify(d2.messages[1].section?.cards.map((c) => c.kind)));
+}
+
 done();

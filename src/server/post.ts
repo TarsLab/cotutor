@@ -6,6 +6,7 @@
  * runPost:整节一次(整块出的运行时、repost):各拍并行起(前文只有老师的东西,没有已定的样子),回来按顺序套。
  * repost:拿老师原文重解出这节(不动老师原文与配音),再跑一遍后期,改写索引——调提示词 / 骨架时旧板书全部能「再做一次」。
  */
+import { withProxy } from '../lib/proxy.ts';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -143,7 +144,7 @@ export async function runBeatPost(ws: Workspace, tutor: string, section: BoardSe
   const t0 = Date.now();
   const argv = fillRuntime(env.run, { agent: tutor, prompt });
   // 后期是一问一答的 JSON,不要思考:claude CLI 缺省让 haiku 想 3–6K token,一拍 35–69 秒(2026-09-13 真跑三拍全超时);MAX_THINKING_TOKENS=0 → 4 秒。运行时模板里没有这一项,这里统一给
-  const r = await spawnPost(argv, opts.cwd ?? ws.root, { ...(opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root, MAX_THINKING_TOKENS: '0' }, env.policy.post.timeoutMs);
+  const r = await spawnPost(argv, opts.cwd ?? ws.root, withProxy(argv, { ...(opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root, MAX_THINKING_TOKENS: '0' }, ws.config.proxy), env.policy.post.timeoutMs);
   const ms = Date.now() - t0;
   const raw = r.out.slice(0, 65536);
   if (r.error) return { section, file: { ...base, argv, raw, ok: false, error: r.error, ms } };

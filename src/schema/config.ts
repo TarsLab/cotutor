@@ -184,6 +184,10 @@ export const CotutorConfigSchema = z
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 30 条 / 板书 auto / 每天 2 个动画 / 观察 10 条、计划 10 行、原文 4000 字)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
     runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {systemBody} {boardFile} {prompt} {session};模型、预算、时限写在这里'),
+    proxy: z
+      .union([z.string().regex(/^(https?|socks5h?):\/\/\S+$/), z.literal(false)])
+      .optional()
+      .describe('老师进程(claude)走的代理,如 http://127.0.0.1:32769:起 claude 时注进 HTTP(S)_PROXY,不靠 serve 从哪个终端起;false = 选了不走代理;不写 = 还没选(init / cotutor proxy 会问)'),
     tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板:say 合成一句(占位 {text} {voice} {out});voices 列音色(stdout JSON),家长端音色页据此列表与试听'),
     koubo: KouboSchema.default(KOUBO_DEFAULT).describe('录音卡的评测命令模板(口播老师):card 一条龙评一条录音(占位 {audio} {text} {mode} {pairs}),timeoutMs 一条最多等多久;门槛与花费上限在 workspace 根的 koubo.json'),
   })

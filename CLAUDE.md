@@ -35,7 +35,7 @@
 - 页面模板是模板字符串:反斜杠写 `\\n`,正则里 `\/` 写 `\\/`,吃掉一层那行就成了注释而脚本照样能解析
 - 后期子进程带 `MAX_THINKING_TOKENS=0`,否则 haiku 一拍 35–69 秒
 - Claude Code 会话里起 claude 子进程要 `env -u CLAUDECODE`;本机 claude 要 `--model sonnet`
-- claude 运行时模板带 `--setting-sources project` 隔离本机配置,代价是 `~/.claude/settings.json` 的代理 env 也不进:serve 要从 export 了代理的 shell 起
+- claude 运行时模板带 `--setting-sources project` 隔离本机配置,代价是 `~/.claude/settings.json` 的代理 env 也不进:cotutor.json 的 `proxy`(init 会问,`cotutor proxy on`)起 claude 时注进去;没设就得从 export 了代理的 shell 起 serve。workspace 的 `.claude/settings.local.json` 那条旧路还要 `--setting-sources` 含 local 且 workspace 是 git 仓(claude 以 git 根为项目根)
 - serve 只热重载 cotutor.json;改 `src/` 要重起
 - voxtell 没发 npm,检出后 `pnpm add -g .` 进 PATH;iPad 真机要 `cotutor cert`
 - 提交按文件名 stage,仓里常有并行的未提交改动

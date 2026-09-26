@@ -23,6 +23,7 @@ import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
 import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
 import { BUNDLE_ID_RE, cardAssets, cardLabel, describeCard, type RecordProps } from '../cards/index.ts';
 import { KouboQueue } from './koubo.ts';
+import { withProxy } from '../lib/proxy.ts';
 import { parseBoard } from '../lib/board.ts';
 import { readyBeats, beatsOf, isAskCard, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
@@ -695,7 +696,7 @@ export class Runner {
     const runOnce = (p: RunPlan): Promise<{ code: number | null; spawnError?: Error; stalled?: boolean }> => new Promise((resolveExit) => {
       const child = spawn(p.argv[0], p.argv.slice(1), {
         cwd,
-        env: { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root },
+        env: withProxy(p.argv, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, ws.config.proxy),
         stdio: ['ignore', 'pipe', err],
       });
       let stalled = false;

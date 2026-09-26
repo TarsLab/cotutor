@@ -57,7 +57,7 @@ if (outputFormat === 'json') {
   process.exit(0);
 }
 
-emit({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), agent: agent || undefined, bodyLen: body.length });
+emit({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), agent: agent || undefined, bodyLen: body.length, proxy: process.env.HTTPS_PROXY });
 // 「起就卡」:头一次吐了 init(带会话 id)就挂住,模型一个事件没回(会话没落盘,resume 不了);第二次起(cwd 里有记号)照常回
 if (prompt.includes('起就卡')) {
   const { existsSync, writeFileSync } = await import('node:fs');

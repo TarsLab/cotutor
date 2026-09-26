@@ -3,6 +3,7 @@
  * 静默失败摆到明面:配置坏了、老师链断了、账本有坏行、角色指向踩空。
  * exit 约定同 drawtell / voxtell doctor:必需项全过 exit 0,否则 1;--json 带 ok 与整份 checks。
  */
+import { detectProxy, withProxy } from '../lib/proxy.ts';
 import { execFile } from 'node:child_process';
 import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
@@ -123,7 +124,7 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
   const run = await new Promise<{ out: string; err: string; code: number | null; spawnErr?: string }>((resolveRun) => {
     let out = '';
     let err = '';
-    const child = spawn(argv[0], argv.slice(1), { cwd, env: { ...env, COTUTOR_WORKSPACE: ws.root }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(argv[0], argv.slice(1), { cwd, env: withProxy(argv, { ...env, COTUTOR_WORKSPACE: ws.root }, ws.config.proxy), stdio: ['ignore', 'pipe', 'pipe'] });
     const timer = setTimeout(() => child.kill(), 120_000);
     child.stdout.on('data', (d: Buffer) => (out += d.toString()));
     child.stderr.on('data', (d: Buffer) => (err += d.toString()));
@@ -257,7 +258,8 @@ export async function doctorWorkspace(
     } catch {
       /* 没有用户级 settings 就没有这条 */
     }
-    const lost = Object.keys(userEnv).filter((k) => !(k in env));
+    // cotutor.json 设了 proxy:代理那几个键由应用注进 claude,不算丢
+    const lost = Object.keys(userEnv).filter((k) => !(k in env) && !(typeof ws.config.proxy === 'string' && /^(https?|all)_proxy$/i.test(k)));
     if (isolated && lost.length) {
       push({ name: 'env.userSettings', ok: false, required: false, detail: `~/.claude/settings.json 的 env 有 ${lost.join(' ')},这个 shell 里没有;老师会话带 --setting-sources project 读不到它们(代理没了就 403)`, fix: `起 serve 前 export ${lost.map((k) => `${k}=…`).join(' ')}` });
     }
@@ -565,6 +567,29 @@ export async function doctorWorkspace(
           push({ name: `runtime.${runtime}`, ok: false, required, detail: `PATH 里没有 ${bin}`, fix: required ? `装 ${bin},或把 runtimes.default 改成装了的那个运行时` : undefined });
         }
       }
+    }
+  }
+
+  // ---- 代理(2026-09-26):本机的 claude 走代理时,老师进程要拿得到它,不然 403;cotutor.json 的 proxy 记家长的选择,起 claude 时注进环境 ----
+  if (ws && Object.entries(ws.config.runtimes).some(([k, r]) => k !== 'default' && typeof r !== 'string' && runtimeCli(r.run) === 'claude')) {
+    const found = detectProxy({ env });
+    const set = ws.config.proxy;
+    const fixOn = `cotutor proxy on --workspace ${redactHome(root)}`;
+    if (typeof set === 'string') {
+      const same = !found || found.url === set;
+      push({ name: 'proxy', ok: same, required: false, detail: same ? `老师(claude)走 ${set}(cotutor.json 的 proxy)` : `cotutor.json 写的是 ${set},本机现在是 ${found!.url}(${found!.source})`, fix: same ? undefined : `${fixOn}(换成本机现在的)` });
+    } else if (set === false) push({ name: 'proxy', ok: true, required: false, detail: `选了不走代理(cotutor.json 的 proxy 是 false)${found ? `;本机有 ${found.url},要用就 ${fixOn}` : ''}` });
+    else if (found) {
+      // 旧法(ray 那样手补的):.claude/settings.local.json 写了代理、运行时读 local、workspace 是 git 仓(claude 以 git 根为项目根),三样齐了也拿得到
+      let local = false;
+      try {
+        const s = JSON.parse(await readFile(join(root, '.claude', 'settings.local.json'), 'utf8')) as { env?: Record<string, unknown> };
+        const readsLocal = Object.values(ws.config.runtimes).some((r) => { if (typeof r === 'string') return false; const i = r.run.indexOf('--setting-sources'); return i >= 0 && (r.run[i + 1] ?? '').split(',').includes('local'); });
+        local = Boolean(s.env && (s.env.HTTPS_PROXY || s.env.HTTP_PROXY)) && readsLocal && (await statOrNull(join(root, '.git'))) !== null;
+      } catch {
+        /* 没有 settings.local.json */
+      }
+      push({ name: 'proxy', ok: local, required: false, detail: local ? `靠 .claude/settings.local.json 走代理(旧法);本机是 ${found.url}` : `本机有代理 ${found.url}(${found.source}),老师进程拿不拿得到要看 serve 从哪个终端起;拿不到 claude 会 403`, fix: local ? `可以换成 ${fixOn}(不靠 git 与 --setting-sources)` : `${fixOn};不用代理就 cotutor proxy off` });
     }
   }
 

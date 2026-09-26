@@ -4,6 +4,8 @@
  * 老师文件**拷贝**进 .claude/agents/(2026-09-09 拍板,原来是链):拷进来就是家长的,想改就改;出厂 hash 记 .cotutor/shipped.json,
  * cotutor upgrade 据此换新或报 diff。旧workspace里指向包的链会被换成拷贝。.qwen/agents/ 是指向 .claude/agents/ 的相对链。
  */
+import { chooseProxyOnInit, type ProxyChoice } from './proxy.ts';
+import type { DetectedProxy } from '../lib/proxy.ts';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, configTemplate, profileTemplate, shippedAgents, writeSchemaFile } from './skeleton.ts';
@@ -31,6 +33,9 @@ export interface InitOptions {
   dir?: string;
   name?: string;
   port?: number;
+  /** 老师进程的代理:命令行给的(--proxy <url> 是地址,--no-proxy 是 false);没给就探本机,有 askProxy 就问 */
+  proxy?: ProxyChoice;
+  askProxy?: (d: DetectedProxy) => Promise<boolean | null>;
 }
 
 async function exists(p: string): Promise<boolean> {
@@ -71,6 +76,15 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
     if (!(err instanceof ConfigError)) throw err;
   }
   steps.push(...(await installTutors(root, tutorNames)));
+  // 本机有代理、还没选过:问一句(老师进程拿不到代理 claude 会 403;src/lib/proxy.ts);没问成只是提示,进「下一步」
+  let proxyHint: string | null = null;
+  try {
+    const p = await chooseProxyOnInit(root, { given: opts.proxy, ask: opts.askProxy });
+    if (p && p.action === 'kept') proxyHint = p.note ?? null;
+    else if (p) steps.push(p);
+  } catch (err) {
+    proxyHint = (err as Error).message;
+  }
   const schemaThere = await exists(join(root, '.cotutor', 'cotutor.schema.json'));
   await writeSchemaFile(root);
   steps.push({ item: '.cotutor/cotutor.schema.json', action: schemaThere ? 'exists' : 'created', note: schemaThere ? '已按本包刷新(机器文件)' : 'cotutor.json 的 JSON Schema,编辑器补全用' });
@@ -152,6 +166,7 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const suggestions: string[] = [];
   if (!(await exists(join(root, '.git')))) suggestions.push('git init(建议:老师记忆、账本、政策都是不可再生状态,git 是破坏后的兜底)');
   suggestions.push(`改 ${CONFIG_FILE}:paths.vault 指到孩子的 Obsidian vault,tutors.*.voice 填 voxtell 音色 id`);
+  if (proxyHint) suggestions.push(proxyHint);
   suggestions.push('cotutor doctor 逐项体检;cotutor serve 起服务');
   return { root, steps, suggestions };
 }

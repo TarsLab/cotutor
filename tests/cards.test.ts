@@ -4,9 +4,9 @@ import { boardSkillDoc, boardSyntaxDoc } from '../src/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 {
-  check('有状态的卡:choice / fill / scene / canvas;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,fill,scene,canvas');
-  check('十种卡登记在册:板书九种 + 首页的老师卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,scene,canvas,code,tutor' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
-  check('用在哪:板书九种;首页 = 老师卡 + 一段字 / 点读 / 图片 / 田字格', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,scene,canvas,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,tutor');
+  check('有状态的卡:choice / fill / scene / canvas / record;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,fill,scene,canvas,record');
+  check('十一种卡登记在册:板书十种 + 首页的老师卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,scene,canvas,record,code,tutor' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
+  check('用在哪:板书十种;首页 = 老师卡 + 一段字 / 点读 / 图片 / 田字格', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,scene,canvas,record,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,tutor');
   const tut = parseCard('tutor chinese-tutor', '- 我要预习小蝌蚪找妈妈\n讲法: 先读课文\n讲法: 再认字\n新话题\n接着 2026-09-16 1930-1 接着写看图写话', 'home');
   check('老师卡:列表号去掉、讲法挂上一个按钮(多行拼起来)、「新话题」不算、接着带日期与话题', tut.card.kind === 'tutor' && JSON.stringify(tut.card.props) === JSON.stringify({ tutor: 'chinese-tutor', buttons: [{ kind: 'start', label: '我要预习小蝌蚪找妈妈', brief: '先读课文\n再认字' }, { kind: 'continue', label: '接着写看图写话', date: '2026-09-16', thread: '1930-1' }] }) && !tut.warning, JSON.stringify(tut));
   check('老师卡剥讲法', JSON.stringify(stripSecrets({ cards: [tut.card], lines: [] }).cards[0].props.buttons) === '[{"kind":"start","label":"我要预习小蝌蚪找妈妈"},{"kind":"continue","label":"接着写看图写话","date":"2026-09-16","thread":"1930-1"}]');
@@ -29,7 +29,7 @@ import { check, done } from './_check.ts';
   const brc = parseCard('choice', '[斜边]是多少?\n- [ ] 6\n- [x] 5');
   check('choice 的 - [ ] / - [x] 不被当成标注剥掉;问题里的括号剥', brc.card.props.question === '斜边是多少?' && JSON.stringify(brc.card.props.answer) === '[1]' && (brc.card.props.options as string[]).join() === '6,5', JSON.stringify(brc));
   check('code / canvas 的正文不动方括号(JSON 里有 [ ])', parseCard('python', 'a = [1, 2]').card.props.text === 'a = [1, 2]' && !parseCard('canvas', '{"skeletons":[{"type":"rectangle","x":0,"y":0,"width":10,"height":10}]}').warning && parseCard('text', '一段没有括号的话').warning === undefined);
-  check('要预生成资产的只有点读', CARD_KINDS.filter((k) => k.assets).map((k) => k.name).join() === 'read');
+  check('要预生成资产的:点读、录音卡(示范音)', CARD_KINDS.filter((k) => k.assets).map((k) => k.name).join() === 'read,record');
   const rd = parseCard('read', 'apple 苹果\nbanana 香蕉');
   check('read 资产:一段一个 <k>.mp3', JSON.stringify(cardAssets(rd.card)) === '[{"file":"1.mp3","text":"apple 苹果"},{"file":"2.mp3","text":"banana 香蕉"}]' && cardAssets({ kind: 'text', props: { text: 'x' } }).length === 0 && cardAssets({ kind: 'read', props: {} }).length === 0);
   const im = parseCard('image', 'captures/2026-09-10/a.jpg\n看第二行\n那里错了');

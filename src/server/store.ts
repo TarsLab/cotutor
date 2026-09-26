@@ -146,6 +146,17 @@ export async function writeCardImage(ws: Workspace, tutor: string, date: string,
   return `${date}.${job}.cards/${n}.png`;
 }
 
+/** 录音卡的录音(《口播老师设计.md》§2):<date>.<job>.cards/<n>/rec-<k>.<ext>,k 从 1 起、重录加一(旧的留着);返回相对 conversations/<老师>/ 的名字 */
+export async function writeCardAudio(ws: Workspace, tutor: string, date: string, job: string, n: number, data: Buffer, ext: string): Promise<string> {
+  const files = conversationFiles(ws.dirs.conversations, tutor, date);
+  const dir = `${files.cardsDir(job)}/${n}`;
+  await mkdir(dir, { recursive: true });
+  const taken = (await readdir(dir).catch(() => [] as string[])).map((f) => /^rec-(\d+)\./.exec(f)?.[1]).filter(Boolean).map(Number);
+  const k = taken.length ? Math.max(...taken) + 1 : 1;
+  await writeFile(`${dir}/rec-${k}.${ext}`, data);
+  return `${date}.${job}.cards/${n}/rec-${k}.${ext}`;
+}
+
 /**
  * 作业照片(R5,2026-09-14,《产品规划.md》拍板 14):落 workspace 的 captures/<日期>/<HHMM>-<n>.<ext>(paths.captures,相对 workspace 根),
  * 不落 vault。返回相对 workspace 根的路径(消息的 photos、上下文包的 photos: 段、/api/kid/image?p= 都用它)。

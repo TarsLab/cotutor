@@ -96,8 +96,9 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   check('内联脚本本身能解析(模板里的转义没把 JS 字符串写断)', parses);
   const css = await m.route('GET', '/kid/theme.css');
   check('mock 也给主题 css(包里的出厂 default)', css.status === 200 && css.html?.includes('.mk-marker') === true && (await m.route('GET', '/kid/theme.json')).status === 200);
+  // 规则按「前一条的 } 之后」切(后行断言,不吃掉 },否则只认得隔一条的规则)
   // 主题里改定位 / 关触摸的裸类名(.pen { pointer-events:none } 是板书笔迹的)会打到页面任何同名元素上:页面自己挂的状态类不能与它们撞名(发照片屏圈画曾挂 pen,整屏不收触摸)
-  const bare = new Set([...(css.html ?? '').replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(?:^|})\s*([^{}]+)\{([^}]*)\}/g)].filter((x) => /pointer-events\s*:\s*none|position\s*:\s*(?:absolute|fixed)/.test(x[2])).flatMap((x) => x[1].split(',').map((t) => t.trim())).filter((t) => /^\.[\w-]+$/.test(t)).map((t) => t.slice(1)));
+  const bare = new Set([...(css.html ?? '').replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(?:^|(?<=\}))\s*([^{}]+)\{([^}]*)\}/g)].filter((x) => /pointer-events\s*:\s*none|position\s*:\s*(?:absolute|fixed)/.test(x[2])).flatMap((x) => x[1].split(',').map((t) => t.trim())).filter((t) => /^\.[\w-]+$/.test(t)).map((t) => t.slice(1)));
   const toggled = [...js.matchAll(/classList\.(?:add|toggle|remove)\('([\w-]+)'/g)].map((x) => x[1]);
   const clash = [...new Set(toggled.filter((c) => bare.has(c)))];
   check('页面挂的状态类不与主题的裸类名撞(主题认得 .pen)', bare.has('pen') && toggled.length > 10 && clash.length === 0, clash.join());

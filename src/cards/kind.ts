@@ -19,8 +19,8 @@ export interface CardKind<P = Record<string, unknown>, S = unknown> {
   strip?(props: P): P;
   /** 孩子在卡上做的事的形状;没有 = 这种卡没有状态,PUT 一律 400 */
   state?: z.ZodType<S>;
-  /** props + state → 给老师看的一句(不含卡的标题,那句由注册表拼);没有 = 状态原样 JSON */
-  describe?(props: P, state: S): string;
+  /** props + state → 给老师看的一句(不含卡的标题,那句由注册表拼);没有 = 状态原样 JSON。extra = 服务端另备的(录音卡的评测结果),孩子端没有 */
+  describe?(props: P, state: S, extra?: unknown): string;
   /** 这张卡要在后台预生成的配音资产(点读的段):文件名相对这张卡的资产目录 <日期>.<job>.cards/<n>/,text 是要念的字 */
   assets?(props: P): { file: string; text: string }[];
 }

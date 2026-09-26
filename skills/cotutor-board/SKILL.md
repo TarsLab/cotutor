@@ -1,6 +1,6 @@
 ---
 name: cotutor-board
-description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / scene / canvas / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
+description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / scene / canvas / record / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
 disable-model-invocation: true
 ---
 
@@ -249,6 +249,26 @@ https://example.com/brain.png
 ```canvas
 captures/2026-09-14/1620-1.jpg
 把算错的那道圈出来。
+```
+
+### record — 录音卡
+
+一句要读的话。孩子点开卡,先听示范音,再按住录;交给老师后,koubo 会给你一条判(过 / 可救 / 重录)和原因。
+
+- 正文一句,最多 30 个字。要读几句就放几张卡。
+- 容易读错的字用【】括出来,孩子看到的是红字。
+- 标签后写 `focus=sh_s`,只查这一组;不写就按混淆表全查。几组用逗号隔开。
+- 拼音题在标签后写 `pinyin`:第一行是带调号数字的拼音,第二行是给孩子看的字。
+
+```record focus=sh_s
+老师上【山】看【树】
+```
+```record pinyin
+shi2 si4 shi4 shi2 si4
+【十】四【是】【十】四
+```
+```record
+四是四,十是十,十四是十四
 ```
 
 ### code — 代码或原样的文字

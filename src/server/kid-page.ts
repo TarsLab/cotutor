@@ -496,6 +496,9 @@ __PHOTO_JS__
     close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
     closeSm: SVG('<path d="M7 7l10 10M17 7L7 17"></path>', 14, 2.8),
     check: SVG('<path d="M5 12l5 5 9-10"></path>', 16, 3),
+    mic: SVG('<rect x="9" y="3" width="6" height="12" rx="3"></rect><path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6"></path>', 44),
+    lock: SVG('<rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path>', 14, 2.2),
+    up: SVG('<path d="M12 19V5M6 11l6-6 6 6"></path>', 18, 2.4),
     more: SVG('<circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle>', 24),
     history: SVG('<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path>', 24),
     again: SVG('<path d="M4 12a8 8 0 1 0 2.4-5.7"></path><path d="M4 4v4.5h4.5"></path>', 20, 2),
@@ -523,7 +526,7 @@ __PHOTO_JS__
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, contGuard: 0, held: false, rec: null, pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, contGuard: 0, held: false, rec: null, submitted: new Set(), pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null };
   // 家长板书页看的模式缺省不念(家长想听哪句点哪句);试用缺省念(要听效果);开关各记一个键,不和孩子的搅
   try { S.autoplay = PARENT ? localStorage.getItem(AUTOPLAY_KEY) === '1' : localStorage.getItem(AUTOPLAY_KEY) !== '0'; } catch { S.autoplay = !PARENT; }
   /** 家长板书页:清单的日期(null = 今天) */
@@ -758,6 +761,22 @@ __PHOTO_JS__
         const src = img ? (img.startsWith('data:') ? img : '/api/kid/image?p=' + encodeURIComponent(img)) : base ? '/api/kid/image?p=' + encodeURIComponent(base) : null;
         return box('canvas', h('div', { class: 'cp' }, p.prompt || '画一画'), src ? h('div', { class: 'th' + (base ? ' base' : '') }, h('img', { src, alt: '', loading: 'lazy' }), h('span', { class: 'pl' }, n ? '画了 ' + n + ' 笔' : '点开画一画 ✎')) : h('div', { class: 'cb' }, n ? '已经画了 ' + n + ' 笔,点开接着画' : '点开画一画 ✎'));
       }
+      case 'record': {
+        // 录音卡(《口播老师设计.md》§2–3):紧凑态只读(句子、风险字、听、录没录);舞台里按住录。卡上永远没有分数、没有判
+        const pinyin = p.mode === 'pinyin';
+        const shown = p.show || (pinyin ? toneMarks(p.text || '') : p.text || '');
+        const risk = new Set(p.risk || []);
+        const t = h('div', { class: 'rc-t' }, ...Array.from(shown).map((ch, i) => (risk.has(i) ? h('span', { class: 'rk' }, ch) : ch)));
+        const py = pinyin && p.show ? h('div', { class: 'rc-py' }, toneMarks(p.text || '')) : null;
+        const sec = recordSeconds(c);
+        const locked = S.readonly || (secIdx !== null && recordLocked(S.sections, secIdx, S.submitted));
+        if (stage) return recordStage(c, idx, secIdx, t, py, sec, locked);
+        const demo = locked ? null : recPill(ICON.speaker, '听', (e) => playDemo(c, e.currentTarget));
+        const mine = sec ? recPill(ICON.play, '我的 · ' + sec.toFixed(1) + ' 秒', (e) => playMine(c, e.currentTarget)) : h('span', { class: 'rc-no' }, '没录 · 点开来录');
+        const el = box('record', t, py, h('div', { class: 'rc-row' }, demo, mine, locked && sec ? h('span', { class: 'rc-lk', html: ICON.lock + '交给老师了' }) : null));
+        if (locked) el.classList.add('locked');
+        return el;
+      }
       case 'code':
         return box('code', p.lang ? h('span', { class: 'lg' }, p.lang) : null, h('div', { class: 'cb' }, p.text || ''));
       case 'tianzige': {
@@ -868,6 +887,127 @@ __PHOTO_JS__
     clearTimeout(fillTimer);
     fillTimer = setTimeout(() => saveState(S.sections[secIdx].job, idx, card.state), 400);
   };
+  // ---- 录音卡:示范音、回放、舞台里按住录(《口播老师设计.md》§3;仲裁走 dispatch 的 recStart / recEnd) ----
+  const REC_MAX_MS = 60000, REC_MIN_MS = 500, REC_CANCEL_PX = 60;
+  const recPill = (icon, label, onClick) => h('button', { type: 'button', class: 'rc-pl', html: icon, on: { click: (e) => { e.stopPropagation(); onClick(e); } } }, label);
+  /** 放一段声音(示范音的 mp3、自己的录音);被别的声音打断不回调 */
+  const playClip = (src, btn, fallbackText) => {
+    if (S.rec) return;
+    dispatch({ type: 'segment' });
+    const token = ++voiceToken;
+    const off = () => { if (btn) btn.classList.remove('on'); };
+    if (btn) btn.classList.add('on');
+    if (!src) { if (fallbackText) speak(fallbackText, off, off); else off(); return; }
+    audioEl.onplaying = null;
+    audioEl.onended = () => { if (token === voiceToken) off(); };
+    audioEl.onerror = () => { if (token === voiceToken) { if (fallbackText) speak(fallbackText, off, off); else off(); } };
+    audioEl.src = src;
+    audioEl.play().catch(() => { if (token === voiceToken) off(); });
+  };
+  /** 示范音:服务端配好的 1.mp3(老师的音色),没好就浏览器合成声念给人看的字 */
+  const playDemo = (card, btn) => {
+    const a = segmentAudio(card, 0);
+    const say = card.props.show || (card.props.mode === 'pinyin' ? '' : card.props.text || '');
+    playClip(a && S.tutor ? AUDIO + S.tutor.name + '/' + a.split('/').map(encodeURIComponent).join('/') : '', btn, say);
+  };
+  /** 自己的录音:刚录的放本地那份,刷新后从服务端取 */
+  const playMine = (card, btn) => {
+    const st = card.state || {};
+    const rel = typeof st.audio === 'string' && S.tutor ? st.audio.replace(/^conversations\\/[^\\/]+\\//, '') : '';
+    playClip(card._blob || (rel ? AUDIO + S.tutor.name + '/' + rel.split('/').map(encodeURIComponent).join('/') : ''), btn, '');
+  };
+  /** 舞台里的录音卡:句子、上排(先听 / 听我的 + 示范 / 计时)、中间的大圆键(按住录,往上滑松手取消) */
+  const recordStage = (card, idx, secIdx, t, py, sec, locked) => {
+    const top = h('div', { class: 'rc-top' });
+    if (sec) top.append(recPill(ICON.play, '听我的 · ' + sec.toFixed(1) + ' 秒', (e) => playMine(card, e.currentTarget)), recPill(ICON.speaker, '示范', (e) => playDemo(card, e.currentTarget)));
+    else top.append(recPill(ICON.speaker, '先听我念', (e) => playDemo(card, e.currentTarget)));
+    const tm = h('div', { class: 'rc-tm' }, '0:00');
+    const hint = h('div', { class: 'rc-hint', html: ICON.up }, h('span', {}, '往上滑,松手就取消'));
+    const btn = h('button', { type: 'button', class: 'rc-mic' + (sec ? ' again' : ''), 'aria-label': sec ? '按住再录' : '按住录', html: ICON.mic });
+    const lb = h('div', { class: 'rc-lb' }, sec ? '按住再录' : '按住录');
+    const mid = h('div', { class: 'rc-mid' + (locked ? ' locked' : '') }, hint, btn, lb);
+    const el = h('div', { class: 'c c-record', 'data-card': idx, 'data-tint': tintFor(card), 'data-look': lookFor(card) }, t, py, top, tm, mid);
+    let y0 = 0;
+    btn.addEventListener('contextmenu', (e) => e.preventDefault());
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (locked || S.rec) return;
+      try { btn.setPointerCapture(e.pointerId); } catch {}
+      y0 = e.clientY;
+      recStart({ secIdx, idx, el, tm, lb, hint });
+    });
+    btn.addEventListener('pointermove', (e) => {
+      const r = S.rec;
+      if (!r || r.el !== el) return;
+      const c = e.clientY < y0 - REC_CANCEL_PX;
+      if (c === r.cancel) return;
+      r.cancel = c; el.classList.toggle('cancel', c);
+      hint.lastChild.textContent = c ? '松手就取消' : '往上滑,松手就取消';
+      hint.classList.toggle('cancel', c);
+    });
+    btn.addEventListener('pointerup', () => recStop(true));
+    btn.addEventListener('pointercancel', () => recStop(false));
+    return el;
+  };
+  const recMime = () => {
+    for (const t of ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg']) { try { if (MediaRecorder.isTypeSupported(t)) return t; } catch {} }
+    return '';
+  };
+  const recClock = (ms) => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  /** 按下:停声音(dispatch recStart),要一路麦克风(常开的那路),起 MediaRecorder;60 秒到了自己停 */
+  const recStart = async (r) => {
+    if (!window.MediaRecorder) return;
+    Object.assign(r, { chunks: [], t0: Date.now(), cancel: false, mr: null, timer: 0, stopped: false, keep: false, ms: 0 });
+    S.rec = r;
+    dispatch({ type: 'recStart' });
+    r.el.classList.add('rec'); r.lb.textContent = '松手就停'; r.tm.textContent = '0:00';
+    r.timer = setInterval(() => { const ms = Date.now() - r.t0; r.tm.textContent = recClock(ms); if (ms >= REC_MAX_MS) recStop(true); }, 200);
+    let ok = true;
+    try { ok = ['hot', 'open'].includes(await micOpen()); } catch { ok = false; }
+    if (r.stopped) return;
+    if (!ok || !mic.stream) { recStop(false); return; }
+    try {
+      const mime = recMime();
+      const mr = mime ? new MediaRecorder(mic.stream, { mimeType: mime }) : new MediaRecorder(mic.stream);
+      r.mr = mr;
+      mr.ondataavailable = (e) => { if (e.data && e.data.size) r.chunks.push(e.data); };
+      mr.onstop = () => recDone(r);
+      r.t0 = Date.now();
+      mr.start();
+    } catch { recStop(false); }
+  };
+  /** 松手(keep)/ 上滑松手、关舞台、切后台(不 keep):停录;真停在 MediaRecorder 的 onstop 里收尾 */
+  const recStop = (keep) => {
+    const r = S.rec;
+    if (!r || r.stopped) return;
+    r.stopped = true; r.keep = keep && !r.cancel; r.ms = Date.now() - r.t0;
+    clearInterval(r.timer);
+    if (r.mr && r.mr.state !== 'inactive') { try { r.mr.stop(); return; } catch {} }
+    recDone(r);
+  };
+  /** 收尾:dispatch recEnd(压住的接着念);够长就存——本地先有回放,PUT 上去服务端落盘、换成路径、起评测 */
+  const recDone = (r) => {
+    if (S.rec === r) { S.rec = null; dispatch({ type: 'recEnd' }); }
+    const sec = S.sections[r.secIdx];
+    const card = sec && sec.cards[r.idx];
+    if (card && r.keep && r.ms >= REC_MIN_MS && r.chunks.length) {
+      const blob = new Blob(r.chunks, { type: (r.mr && r.mr.mimeType) || 'audio/webm' });
+      const seconds = Math.round(Math.min(r.ms, REC_MAX_MS) / 100) / 10;
+      if (card._blob) URL.revokeObjectURL(card._blob);
+      card._blob = URL.createObjectURL(blob);
+      card.state = { audio: '', seconds };
+      const job = sec.job;
+      const fr = new FileReader();
+      fr.onload = () => {
+        if (!S.tutor || S.readonly) return;
+        api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + origN(job, r.idx), { audio: fr.result, seconds }).then((res) => { if (res && res.state) { card.state = res.state; repaintCard(r.secIdx, r.idx); } }).catch(() => {});
+      };
+      fr.readAsDataURL(blob);
+      repaintCard(r.secIdx, r.idx);
+    }
+    if (S.stage && S.stage.section === r.secIdx && S.stage.card === r.idx) renderStage();
+  };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) recStop(false); });
   /** 图片舞台:双指缩放 + 单指拖,双击复位 */
   const pinch = (el) => {
     const img = el.querySelector('img');
@@ -972,7 +1112,7 @@ __PHOTO_JS__
   S.device = debug.get('device') || deviceFor(innerWidth, innerHeight);
 
   // ---- 舞台:点卡放大,交互都在这里;开着时讲稿暂停,关了字幕行出「播放」 ----
-  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', scene: '讲解动画', canvas: '画一画', code: '' };
+  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', scene: '讲解动画', canvas: '画一画', record: '录音', code: '' };
   const GO_LABEL = { canvas: '给老师看' };
   /** 这节课里挑过卡的节(《备课设计.md》§4.4):第 idx 张在原节里是第几张;存卡的状态、卡的 id 用它 */
   const origN = (job, idx) => { const sec = S.sections.find((x) => x.job === job); return sec && sec.orig ? sec.orig[idx] : idx; };
@@ -1007,6 +1147,16 @@ __PHOTO_JS__
     $('#st-go').textContent = GO_LABEL[card.kind] || '交给老师';
     $('#st-go').disabled = !stateSummary(card).length;
     $('#st-note').textContent = card.kind === 'canvas' ? stateSummary(card).join('、') : '';
+    if (card.kind === 'record') {
+      // 这一节还有没录的:「下一句」;都录了:「交给老师」;交了就锁住,只剩回放
+      const sec = S.sections[S.stage.section];
+      const left = sec.cards.filter((c) => c.kind === 'record' && !recordSeconds(c)).length;
+      const done = recordSeconds(card) > 0;
+      act.hidden = S.readonly || recordLocked(S.sections, S.stage.section, S.submitted);
+      $('#st-go').textContent = done && left ? '下一句' : '交给老师';
+      $('#st-go').disabled = !done || Boolean(S.rec);
+      $('#st-note').textContent = !done ? '先听,再按住录。' : left ? '录好了。还有 ' + left + ' 句没录。' : '都录好了。';
+    }
   };
   /** 舞台包说话:ready → 把卡发过去;phase → 字幕行;state → 存;done 且是讲稿委托的 → 关舞台接着念 */
   window.addEventListener('message', (e) => {
@@ -1021,7 +1171,7 @@ __PHOTO_JS__
   });
   /** 讲稿委托给场景播完(或孩子关了)→ 接着念下一句 */
   const resumeAfter = () => dispatch({ type: 'stageDone' });
-  const closeStage = () => { S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); showNow(); };
+  const closeStage = () => { recStop(false); S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); showNow(); };
   $('#st-x').innerHTML = ICON.close;
   $('#st-x').addEventListener('click', closeStage);
   $('#st-dim').addEventListener('click', closeStage);
@@ -1039,6 +1189,18 @@ __PHOTO_JS__
     const card = S.sections[S.stage.section].cards[S.stage.card];
     if (isHeavy(card)) { postStage({ type: 'control', action: 'submit' }); return; } // 画板:让舞台包导出 png 再交
     if (!stateSummary(card).length) return;
+    if (card.kind === 'record') {
+      const secIdx = S.stage.section, sec = S.sections[secIdx];
+      const next = nextUnrecorded(sec, S.stage.card);
+      if (next >= 0) { openStage(secIdx, next); return; }
+      // 交了:这一节的录音卡都锁住(老师回来之前也锁),焦点给最后录的这张
+      S.submitted.add(sec.job);
+      const id = S.stage.id;
+      closeStage();
+      sec.cards.forEach((c, i) => { if (c.kind === 'record') repaintCard(secIdx, i); });
+      send('', { action: 'submit', focus: { card: id } });
+      return;
+    }
     const id = S.stage.id;
     clearTimeout(fillTimer); if (card.kind === 'fill') saveState(S.sections[S.stage.section].job, S.stage.card, card.state);
     closeStage();

@@ -151,6 +151,8 @@ export function cardTexts(card: BoardCard): string[] {
       return [str(p.prompt)];
     case 'tianzige':
       return []; // 田字格里是 SVG 路径不是文字,标注落不上;讲稿里的 [鼓] 去别的卡找
+    case 'record':
+      return [str(p.show) || (p.mode === 'pinyin' ? '' : str(p.text))];
     default:
       return Object.values(p).flatMap((v) => (typeof v === 'string' ? [v] : strs(v)));
   }
@@ -229,6 +231,7 @@ export function tintFor(card: BoardCard): string {
     case 'choice':
     case 'fill':
     case 'canvas':
+    case 'record':
       return 'plum';
     case 'read':
       return 'sand';
@@ -409,7 +412,7 @@ export function penPath(pen: PenName, w: number, h: number, seed: string): strin
 
 /** 有舞台交互(能改状态、能「交给老师」)的种类;其余点开只是放大看 */
 export function hasState(card: BoardCard): boolean {
-  return card.kind === 'choice' || card.kind === 'fill' || card.kind === 'canvas';
+  return card.kind === 'choice' || card.kind === 'fill' || card.kind === 'canvas' || card.kind === 'record';
 }
 
 /** 画板上画了几笔(状态里的 ink 元素数) */
@@ -467,13 +470,59 @@ export function stateSummary(card: BoardCard): string[] {
   if (card.kind === 'choice') return pickedLabels(card);
   if (card.kind === 'fill') return filledAnswers(card).filter(Boolean);
   if (card.kind === 'canvas') return inkCount(card) ? [`画了 ${inkCount(card)} 笔`] : [];
+  if (card.kind === 'record') { const sec = recordSeconds(card); return sec ? [`录了 ${sec.toFixed(1)} 秒`] : []; }
   return [];
+}
+
+// ---- 录音卡(《口播老师设计.md》§2–3) ----
+
+/** 录了几秒;没录 → 0 */
+export function recordSeconds(card: BoardCard): number {
+  const st = card.state as { audio?: unknown; seconds?: unknown } | undefined;
+  return typeof st?.audio === 'string' && typeof st.seconds === 'number' ? st.seconds : 0;
+}
+
+const TONE_MARKS: Record<string, string> = { a: 'āáǎà', e: 'ēéěè', i: 'īíǐì', o: 'ōóǒò', u: 'ūúǔù', ü: 'ǖǘǚǜ' };
+
+/** shi4 → shì:调号标在 a / e 上,ou 标在 o 上,否则标在最后一个元音上;5 是轻声不标;认不出的原样 */
+export function toneMark(syl: string): string {
+  const m = /^([a-zü]+)([1-5])$/.exec(syl.toLowerCase().replace(/v/g, 'ü'));
+  if (!m) return syl;
+  const [, base, t] = m;
+  if (t === '5') return base;
+  let at = base.search(/[ae]/);
+  if (at < 0) at = base.includes('ou') ? base.indexOf('o') : Math.max(...Array.from(base).map((c, i) => (TONE_MARKS[c] ? i : -1)));
+  if (at < 0) return base;
+  return base.slice(0, at) + TONE_MARKS[base[at]][Number(t) - 1] + base.slice(at + 1);
+}
+
+/** 一串拼音(shi4 si4)→ 带调号的(shì sì) */
+export function toneMarks(ref: string): string {
+  return ref.split(/\s+/).filter(Boolean).map(toneMark).join(' ');
+}
+
+/** 这一节里 idx 之后(转一圈)下一张还没录的录音卡;都录了 → -1 */
+export function nextUnrecorded(section: BoardSection, idx: number): number {
+  const n = section.cards.length;
+  for (let k = 1; k <= n; k++) {
+    const j = (idx + k) % n;
+    const c = section.cards[j];
+    if (c && c.kind === 'record' && !recordSeconds(c)) return j;
+  }
+  return -1;
+}
+
+/** 这一节的录音卡锁没锁:交给老师了(这一节的 job 在 submitted 里),或者后面老师又出了一节 */
+export function recordLocked(sections: readonly BoardSection[], secIdx: number, submitted: ReadonlySet<string>): boolean {
+  const s = sections[secIdx] as (BoardSection & { job?: string }) | undefined;
+  if (!s) return true;
+  return secIdx < sections.length - 1 || Boolean(s.job && submitted.has(s.job));
 }
 
 /** 舞台顶栏的名字:文字卡的标题 / 正文、选择题的问题、其余第一段有字的;截 24 字 */
 export function cardTitle(card: BoardCard): string {
   const p = card.props || {};
-  const first = str(p.title) || str(p.question) || str(p.text) || str(p.caption) || str(p.prompt) || strs(p.segments)[0] || cardTexts(card).find((t) => t.trim()) || (card.kind === 'image' ? '图' : card.kind === 'canvas' ? '画一画' : card.kind === 'tianzige' ? str(p.chars) : '');
+  const first = str(p.title) || str(p.question) || str(p.show) || str(p.text) || str(p.caption) || str(p.prompt) || strs(p.segments)[0] || cardTexts(card).find((t) => t.trim()) || (card.kind === 'image' ? '图' : card.kind === 'canvas' ? '画一画' : card.kind === 'tianzige' ? str(p.chars) : '');
   const cps = Array.from(first.trim().replace(/\s+/g, ' '));
   return cps.length > 24 ? `${cps.slice(0, 24).join('')}…` : cps.join('');
 }

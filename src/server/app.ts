@@ -27,7 +27,7 @@ import { appendContinue, checkHome, historyFile, homeStats, kidHomeView, message
 import { DEV_PAGE } from './dev-page.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
-import { IndexError, capturePathOk, deleteThread, handLesson, setLessonOff, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardImage, writeCardState } from './store.ts';
+import { IndexError, capturePathOk, deleteThread, handLesson, setLessonOff, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
 import { BUTTON_LABEL_MAX, IMAGE_EXT, parseCardState, stripSecrets, type TutorButton } from '../cards/index.ts';
 import { faceTutor } from '../lib/home.ts';
 import { resolve, sep } from 'node:path';
@@ -323,6 +323,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
 /**
  * 卡的状态:孩子在舞台里选了、填了(家长备课时做的也一样,交给孩子时清掉)→ 存 <日期>.<job>.cards/<n>.json,不起老师;下一条消息带给老师。
  * 画板:body 里可以带 image(data:image/png;base64,…),存成 .cards/<n>.png,状态里只留路径(相对 workspace 根,老师 Read 看)
+ * 录音卡:body 的 audio 可以是 data:audio/…;base64,…,存成 .cards/<n>/rec-<k>.<ext>,状态里换成路径(《口播老师设计.md》§2)
  */
 async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: string, n: number, body: unknown): Promise<RouteResult> {
   const date = localDate(ctx.now());
@@ -338,17 +339,31 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
     const png = await writeCardImage(ws, tutor, date, job, n, Buffer.from(m[1], 'base64'));
     state = { ...rest, image: `conversations/${tutor}/${png}` };
   }
+  if (target.kind === 'record' && isObj(body) && typeof body.audio === 'string' && body.audio.startsWith('data:')) {
+    const m = /^data:audio\/([a-z0-9.+-]+)(?:;[^,]*)?;base64,([A-Za-z0-9+/=]+)$/.exec(body.audio);
+    const ext = m ? RECORD_EXT[m[1]] : undefined;
+    if (!m || !ext || m[2].length > RECORD_MAX_B64) return { status: 400, json: { error: 'bad_state' } };
+    const rel = await writeCardAudio(ws, tutor, date, job, n, Buffer.from(m[2], 'base64'), ext);
+    state = { ...body, audio: `conversations/${tutor}/${rel}` };
+  }
   const r = parseCardState(target, state);
   if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
   const last = index.messages[index.messages.length - 1];
   // turn = 这张卡所在话题的末条 job:下一条发给同一话题时才算「上一轮之后改过的」
   const mine = threads(index.messages)[index.messages.findIndex((m) => m.job === job)];
   await writeCardState(ws, tutor, date, job, n, { at: ctx.now().toISOString(), turn: lastJobOf(index, mine) ?? last.job, state: r.state });
-  return { status: 200, json: { ok: true, card: `${job}/${n}` } };
+  return { status: 200, json: { ok: true, card: `${job}/${n}`, state: r.state } };
 }
 
 /** <日期>.<job>.mp3(整段)/ .<n>.mp3(讲稿第 n 句)/ .cards/<n>/<k>.mp3(第 n 张卡的第 k 个资产) */
 const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+(?:\.\d+|\.cards\/\d+\/\d+)?\.mp3$/;
+/** 录音卡的录音(回放):<日期>.<job>.cards/<n>/rec-<k>.<ext> */
+const REC_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.cards\/\d+\/rec-\d+\.(webm|m4a|ogg|wav)$/;
+const REC_TYPES: Record<string, string> = { webm: 'audio/webm', m4a: 'audio/mp4', ogg: 'audio/ogg', wav: 'audio/wav' };
+/** 浏览器录音的 MIME 子类型 → 落盘扩展名(Safari 录 mp4/aac,Chrome 录 webm/opus) */
+const RECORD_EXT: Record<string, string> = { webm: 'webm', mp4: 'm4a', 'x-m4a': 'm4a', aac: 'm4a', ogg: 'ogg', wav: 'wav', 'x-wav': 'wav' };
+/** 一条录音的 base64 最多这么长(60 秒 opus 约 0.5 MB,aac 约 1 MB;留足余量) */
+const RECORD_MAX_B64 = 4_000_000;
 const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
 
 /** 作业照片一张最多这么大(解码后;页面先缩到长边 PHOTO_MAX_SIDE 的 jpeg,通常几百 KB) */
@@ -579,10 +594,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     const audio = /^\/api\/audio\/([a-z0-9][a-z0-9-]*)\/(.+)$/.exec(p);
     if (audio && method === 'GET') {
       const [, tutor, name] = audio;
-      if (!ws.config.tutors[tutor] || !AUDIO_FILE_RE.test(name)) return { status: 404, json: { error: 'not_found' } };
+      const rec = REC_FILE_RE.exec(name);
+      if (!ws.config.tutors[tutor] || (!AUDIO_FILE_RE.test(name) && !rec)) return { status: 404, json: { error: 'not_found' } };
       const file = join(ws.dirs.conversations, tutor, name);
       if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
-      return { status: 200, file, contentType: 'audio/mpeg' };
+      return { status: 200, file, contentType: rec ? REC_TYPES[rec[1]] : 'audio/mpeg' };
     }
 
     // 看原文(2026-09-11):一轮拆成六站,一个接口给全;/fixture 是原文原样一份,开发者放进 tests/fixtures/board/

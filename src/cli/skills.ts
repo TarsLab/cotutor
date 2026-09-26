@@ -6,8 +6,9 @@
  *   没装 → unavailable,doctor 点名,init 跳过)
  * - machine: true 的是机器件(cotutor-tutor / cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune / cotutor-home:它们和解析器、契约、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
  *   其余拷进来就是家长的:upgrade 没改过的换新、改过的报 diff 保留(custom / untracked)
+ *   来源 koubo = koubo 包根 skills/<name>/(koubo-cli、koubo-coach;《口播老师设计.md》§8):带 onlyWith,口播老师在 cotutor.json 里开着才装、才查
  * 工作流 skill(math-explainer 等)不拷,scene-maker 的工作流写在它的老师文件正文里。
- * 顺带一个机器文件 .cotutor/drawtell:指向本包 node_modules 里 drawtell CLI 的壳脚本,老师用相对路径就能跑它。
+ * 顺带两个机器文件 .cotutor/drawtell、.cotutor/koubo:指向本包 node_modules 里 CLI 的壳脚本,老师与应用用相对路径就能跑它们。
  */
 import { createHash } from 'node:crypto';
 import { chmod, cp, lstat, mkdir, readFile, readdir, readlink, rm, symlink, unlink, writeFile } from 'node:fs/promises';
@@ -26,9 +27,11 @@ import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
 
 export interface ShippedSkill {
   name: string;
-  source: 'cotutor' | 'drawtell';
+  source: 'cotutor' | 'drawtell' | 'koubo';
   /** 机器件:每次 init / upgrade 都按包里的覆盖,不认家长的改动 */
   machine?: boolean;
+  /** 只在这位老师开着时装(cotutor.json tutors.<键>.enabled);关着就不拷、不查 */
+  onlyWith?: string;
 }
 
 export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
@@ -42,26 +45,53 @@ export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
   { name: 'drawtell-teaching', source: 'drawtell' },
   { name: 'drawtell-cli', source: 'drawtell' },
   { name: 'drawtell-verify', source: 'drawtell' },
+  { name: 'koubo-cli', source: 'koubo', onlyWith: 'koubo-tutor' },
+  { name: 'koubo-coach', source: 'koubo', onlyWith: 'koubo-tutor' },
 ];
+
+/** 这个 workspace 该有的出厂技能:onlyWith 的那位老师关着(或 cotutor.json 读不了)就不算 */
+export async function activeSkills(root: string): Promise<ShippedSkill[]> {
+  let tutors: Record<string, { enabled?: unknown }> = {};
+  try {
+    tutors = (JSON.parse(await readFile(join(root, 'cotutor.json'), 'utf8')) as { tutors?: typeof tutors }).tutors ?? {};
+  } catch {
+    /* 配置坏了:只算不挑老师的 */
+  }
+  return SHIPPED_SKILLS.filter((sk) => !sk.onlyWith || tutors[sk.onlyWith]?.enabled === true);
+}
 export type ShippedSkillName = string;
 
 /** 本包自带的技能目录(仓库检出与 npm 安装都在包根 skills/) */
 export const PACKAGE_SKILLS_DIR = fileURLToPath(new URL('../../skills/', import.meta.url));
 
-/** drawtell 包的 skills/ 目录(四个领域 skill 随它发,0.7.0 起);包没装 → null(doctor 点名,init 跳过) */
-export function drawtellSkillsDir(): string | null {
+/** 本包 node_modules 里某个依赖的包根;没装 → null */
+function depDir(name: 'drawtell' | 'koubo'): string | null {
   try {
-    return join(dirname(createRequire(import.meta.url).resolve('drawtell/package.json')), 'skills');
+    return dirname(createRequire(import.meta.url).resolve(`${name}/package.json`));
   } catch {
     return null;
   }
 }
 
+/** drawtell 包的 skills/ 目录(四个领域 skill 随它发,0.7.0 起);包没装 → null(doctor 点名,init 跳过) */
+export function drawtellSkillsDir(): string | null {
+  const d = depDir('drawtell');
+  return d ? join(d, 'skills') : null;
+}
+
 /** 这个技能在包里的目录;来源没装 → null */
 export function skillSourceDir(skill: ShippedSkill): string | null {
-  const base = skill.source === 'cotutor' ? PACKAGE_SKILLS_DIR : drawtellSkillsDir();
+  const base = skill.source === 'cotutor' ? PACKAGE_SKILLS_DIR : skill.source === 'drawtell' ? drawtellSkillsDir() : (depDir('koubo') && join(depDir('koubo')!, 'skills'));
   return base ? join(base, skill.name) : null;
 }
+
+/** koubo CLI 的入口(本包 node_modules 里);没装 → null */
+export function kouboBin(): string | null {
+  const d = depDir('koubo');
+  return d ? join(d, 'bin', 'koubo.js') : null;
+}
+
+export const KOUBO_SHIM = '.cotutor/koubo';
 /** drawtell CLI 的入口(本包 node_modules 里);没装 → null */
 export function drawtellBin(): string | null {
   try {
@@ -129,7 +159,7 @@ async function readState(root: string, skill: ShippedSkill, manifest: ShippedMan
 export async function skillStatuses(root: string): Promise<SkillStatus[]> {
   const manifest = await readManifest(root);
   const out: SkillStatus[] = [];
-  for (const skill of SHIPPED_SKILLS) out.push(await readState(root, skill, manifest));
+  for (const skill of await activeSkills(root)) out.push(await readState(root, skill, manifest));
   return out;
 }
 
@@ -170,13 +200,13 @@ export async function installSkills(root: string): Promise<SkillStep[]> {
   const steps: SkillStep[] = [];
   const manifest = await readManifest(root);
   let touched = false;
-  for (const skill of SHIPPED_SKILLS) {
+  for (const skill of await activeSkills(root)) {
     const { name } = skill;
     const s = await readState(root, skill, manifest);
     const src = skillSourceDir(skill);
     const item = `.claude/skills/${name}/`;
     if (s.state === 'unavailable' || !src) {
-      steps.push({ item, action: 'kept', note: `${skill.source} 没装,没拷(scene-maker 作业要它);仓库根 pnpm install` });
+      steps.push({ item, action: 'kept', note: `${skill.source} 没装,没拷(${skill.source === 'koubo' ? '口播老师' : 'scene-maker 作业'}要它);仓库根 pnpm install` });
       continue;
     }
     if (s.state === 'missing') {
@@ -207,7 +237,7 @@ export interface SkillUpgradeStep {
 export async function upgradeSkills(root: string): Promise<SkillUpgradeStep[]> {
   const steps: SkillUpgradeStep[] = [];
   const manifest = await readManifest(root);
-  for (const skill of SHIPPED_SKILLS) {
+  for (const skill of await activeSkills(root)) {
     const { name } = skill;
     const machine = Boolean(skill.machine);
     const s = await readState(root, skill, manifest);
@@ -224,6 +254,19 @@ export async function upgradeSkills(root: string): Promise<SkillUpgradeStep[]> {
   }
   await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   return steps;
+}
+
+/** .cotutor/koubo:壳脚本,口播老师在 agents/<name>/ 里用 ../../.cotutor/koubo、应用的评测模板用 .cotutor/koubo 跑 koubo CLI;机器文件,init / upgrade 每次刷新 */
+export async function writeKouboShim(root: string): Promise<{ file: string; available: boolean }> {
+  const file = join(root, KOUBO_SHIM);
+  const bin = kouboBin();
+  await mkdir(dirname(file), { recursive: true });
+  const body = bin
+    ? `#!/bin/sh\n# cotutor 生成的机器文件:koubo CLI 的壳,指向本包 node_modules 里的 koubo;init / upgrade 会刷新\nexec node "${bin}" "$@"\n`
+    : `#!/bin/sh\necho '{"error":"no_koubo","message":"cotutor: node_modules 里没有 koubo(仓库根 pnpm install),录音卡评不了"}' >&2\nexit 1\n`;
+  await writeFile(file, body);
+  await chmod(file, 0o755);
+  return { file, available: bin !== null };
 }
 
 /** .cotutor/drawtell:壳脚本,老师在 agents/<name>/ 里用 ../../.cotutor/drawtell 跑 drawtell CLI;机器文件,init / upgrade 每次刷新 */

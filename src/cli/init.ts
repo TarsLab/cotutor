@@ -8,7 +8,8 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, configTemplate, profileTemplate, shippedAgents, writeSchemaFile } from './skeleton.ts';
 import { installTutors } from './tutors.ts';
-import { TOOL_SHIM, installSkills, writeToolShim } from './skills.ts';
+import { KOUBO_SHIM, TOOL_SHIM, installSkills, writeKouboShim, writeToolShim } from './skills.ts';
+import { setupKoubo } from './koubo-setup.ts';
 import { installThemes } from './themes.ts';
 import { scanVault } from '../server/store.ts';
 import { CONFIG_FILE, ConfigError, HOME_ROOT, USER_CONFIG, expandPath, loadWorkspace, parseConfig, readJson, redactHome } from './workspace.ts';
@@ -80,6 +81,9 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const shimThere = await exists(join(root, TOOL_SHIM));
   const shim = await writeToolShim(root);
   steps.push({ item: TOOL_SHIM, action: shimThere ? 'exists' : 'created', note: shim.available ? (shimThere ? '已按本包刷新(机器文件)' : 'drawtell CLI 的壳,scene-maker 用 ../../.cotutor/drawtell 跑它') : 'node_modules 里没有 drawtell,壳只会报错' });
+  const kShimThere = await exists(join(root, KOUBO_SHIM));
+  const kShim = await writeKouboShim(root);
+  steps.push({ item: KOUBO_SHIM, action: kShimThere ? 'exists' : 'created', note: kShim.available ? (kShimThere ? '已按本包刷新(机器文件)' : 'koubo CLI 的壳,口播老师与录音卡的评测用它') : 'node_modules 里没有 koubo,壳只会报错' });
 
   for (const f of LEDGER_FILES) {
     const p = join(root, f);
@@ -120,6 +124,8 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
     await writeFile(gitignore, GITIGNORE);
     steps.push({ item: '.gitignore', action: 'created' });
   }
+  // 口播老师开着:koubo 工作区(koubo init)与 .gitignore 那一行
+  steps.push(...(await setupKoubo(root)));
 
   // 用户配置:补缺不改向;解析不了也不动(doctor 去体检)
   let user: Record<string, unknown> | null = null;

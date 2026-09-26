@@ -10,7 +10,8 @@ import { makeCert } from './cert.ts';
 import { addTutorFile, upgradeTutors } from './tutors.ts';
 import { configGapsOf, upgradeConfig } from './migrate.ts';
 import { portBusy } from './rename.ts';
-import { upgradeSkills, writeToolShim } from './skills.ts';
+import { upgradeSkills, writeKouboShim, writeToolShim } from './skills.ts';
+import { setupKoubo } from './koubo-setup.ts';
 import { addTheme, upgradeThemes } from './themes.ts';
 import { patchConfig } from '../server/store.ts';
 import { resolveRoot } from './workspace.ts';
@@ -199,12 +200,15 @@ export async function main(argv: string[]): Promise<void> {
         const skillSteps = await upgradeSkills(root);
         const themeSteps = await upgradeThemes(root);
         await writeToolShim(root);
+        await writeKouboShim(root);
+        const kouboSteps = await setupKoubo(root);
         // 老师文件换新了,政策文件却不会自动多出新老师与新运行时(cotutor.json 是家长的),提一句
         const gaps = await configGapsOf(root);
-        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps, skills: skillSteps, themes: themeSteps, configGaps: gaps }), null, 2)}\n`);
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps, skills: skillSteps, themes: themeSteps, koubo: kouboSteps, configGaps: gaps }), null, 2)}\n`);
         else {
           const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', unavailable: '来源的包没装,没法换' };
           for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' || s.action === 'unavailable' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.machine ? '(机器件)' : ''}\n`);
+          for (const s of kouboSteps) process.stdout.write(`${s.action === 'kept' ? '!' : '✓'} ${s.item.padEnd(24)} ${s.note ?? ''}\n`);
           for (const s of themeSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} theme ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.action === 'kept-custom' ? '(themes/ 里改过的主题不动)' : ''}\n`);
           for (const s of steps) {
             process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);

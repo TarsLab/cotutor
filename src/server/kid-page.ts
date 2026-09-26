@@ -142,8 +142,10 @@ const PAGE = `<!doctype html>
   .pt { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 16px; display:flex; flex-direction:column; gap:8px; }
   .pt .hd { display:flex; align-items:center; gap:12px; }
   .pt .hd .av { width:44px; height:44px; font-size:20px; }
-  .pt .hd .nm { font-size:18px; font-weight:600; }
-  .pt .hd small { color:var(--dim); font-size:13px; margin-left:auto; white-space:nowrap; }
+  .pt .hd .who { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+  .pt .hd .nm { font-size:18px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pt .hd small { color:var(--dim); font-size:13px; line-height:1.45; }
+  .pt .hd small span { white-space:nowrap; }
   .pt .tr { position:relative; display:flex; flex-direction:column; gap:3px; padding:10px 12px; border-radius:12px; background:var(--paper); cursor:pointer; }
   .pt .tr b { font-size:16px; font-weight:600; padding-right:56px; }
   .pt .tr .del { position:absolute; right:8px; top:8px; font-size:13px; color:var(--dim); padding:5px 9px; border-radius:8px; }
@@ -660,7 +662,7 @@ __PHOTO_JS__
     // 新话题(《备课设计.md》§3.1):家长自己和老师聊——试改过的老师文件与 vault、备今天的课;孩子开口前孩子看不到、不写记忆
     const newBtn = (t) => (H.date !== H.today ? null : h('button', { type: 'button', class: 'try', title: '和老师备课、试试改过的老师文件;孩子看不到,满意了在某一节尾点「从这里给孩子」', on: { click: () => openTutor(t, { kind: 'new' }) } }, '新话题'));
     $('#tutors').replaceChildren(...H.tutors.map((t) => h('div', { class: 'pt', 'data-tutor': t.name },
-      h('div', { class: 'hd' }, avatarEl(t), h('span', { class: 'nm' }, t.display), h('small', {}, t.turns ? t.turns + ' 轮 · $' + t.costUsd.toFixed(2) + (t.kouboYuan ? ' · koubo ¥' + t.kouboYuan.toFixed(2) : '') : ''), newBtn(t)),
+      h('div', { class: 'hd' }, avatarEl(t), h('div', { class: 'who' }, h('span', { class: 'nm' }, t.display), t.turns ? h('small', {}, h('span', {}, t.turns + ' 轮 · $' + t.costUsd.toFixed(2)), ...(t.kouboYuan ? [' ', h('span', {}, '· koubo ¥' + t.kouboYuan.toFixed(2))] : [])) : null), newBtn(t)),
       ...(t.threads.length ? t.threads.map((th) => row(t, th)) : [h('div', { class: 'none' }, H.date === H.today ? '今天没聊' : '这天没聊')]))));
     $('#hcards').replaceChildren();
   };

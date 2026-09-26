@@ -21,7 +21,8 @@ import { buildContextPack } from '../lib/context-pack.ts';
 import { addMessage, applyRun, cardId, changedCards, conversationFiles, isPrepThread, jobId, kidSpoke, lessonCards, localDate, localMinute, prepJobs, sessionFor, threads } from '../lib/conversation.ts';
 import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
 import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
-import { BUNDLE_ID_RE, cardAssets, cardLabel, describeCard } from '../cards/index.ts';
+import { BUNDLE_ID_RE, cardAssets, cardLabel, describeCard, type RecordProps } from '../cards/index.ts';
+import { KouboQueue } from './koubo.ts';
 import { parseBoard } from '../lib/board.ts';
 import { readyBeats, beatsOf, isAskCard, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
@@ -264,9 +265,20 @@ export class Runner {
   get env(): NodeJS.ProcessEnv | undefined {
     return this.opts.env;
   }
+  /** 录音卡的评测队列(《口播老师设计.md》§4) */
+  readonly koubo: KouboQueue;
   constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv } = {}) {
     this.getWs = getWs;
     this.opts = opts;
+    this.koubo = new KouboQueue(opts.env);
+  }
+
+  /** 录音卡存了一条新录音:后台起评测(结果落录音旁边的 heard.json,交给老师时取) */
+  assessRecording(audio: string, props: RecordProps): void {
+    const ws = this.getWs();
+    const p = this.koubo.start(ws.root, ws.config.koubo, join(ws.root, audio), props).then(() => {});
+    this.background.add(p);
+    void p.finally(() => this.background.delete(p));
   }
 
   running(tutor: string): { job: string; date: string } | null {
@@ -329,11 +341,15 @@ export class Runner {
     const noteWarnings = pack.entry?.startsWith('缺:') && !input.bookkeep ? [`入口文件${pack.entry}——在 vault 里给这位老师建一篇(cotutor doctor 有写法)`] : [];
     if (policy.board === 'off') pack.board = 'off';
     // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
-    const cards = fresh || input.bookkeep ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread).map((c) => {
+    // 录音卡:评测结果接在那一行后面(存录音时就起了,这里取;还在跑就等,最多等到存录音之后 timeoutMs;回放不起新的)
+    const changed = fresh || input.bookkeep ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread);
+    const cards = await Promise.all(changed.map(async (c) => {
       const card = index.messages.find((m) => m.job === c.job)?.section?.cards[c.n];
       const id = cardId(c.job, c.n);
-      return { card: id, text: card ? describeCard(card, c.file.state) : JSON.stringify(c.file.state) };
-    });
+      const audio = (c.file.state as { audio?: unknown } | null)?.audio;
+      const extra = card?.kind === 'record' && typeof audio === 'string' ? await this.koubo.take(ws.root, ws.config.koubo, join(ws.root, audio), card.props as RecordProps, { noStart: Boolean(input.replayOf) }) : undefined;
+      return { card: id, text: card ? describeCard(card, c.file.state, extra) : JSON.stringify(c.file.state) };
+    }));
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
     // 孩子在家长交给他的备课话题里的第一条(《备课设计.md》§4.4):孩子看到的是这节课那几张卡,老师照它接,不用猜哪些版本孩子没看过
     if (input.from === 'kid' && thread !== job && index.lessons[thread]?.handedAt && isPrepThread(index.messages, thread) && !kidSpoke(index.messages, thread)) {

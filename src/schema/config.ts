@@ -116,6 +116,24 @@ export type Tts = z.infer<typeof TtsSchema>;
 export const TTS_DEFAULT: Tts = { say: ['voxtell', 'say', '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: TTS_VOICES_DEFAULT };
 
 /**
+ * 录音卡的评测(《口播老师设计.md》§4、§8):存录音时后台起一条 koubo card,结果落在录音旁边的 heard.json。
+ * 占位 {audio}(录音的绝对路径){text}(送评的参考文本){mode}(1 句子 / 8 拼音){pairs}(风险组,逗号隔开;没有是 auto)。
+ * 第一个词是相对路径就相对 workspace 根(.cotutor/koubo 是 init 生成的壳脚本);子进程的 cwd 是 workspace 根(koubo 的工作区就是它)。
+ * 门槛、上不上云、每日上限不在这里,在 workspace 根的 koubo.json(koubo 自己的政策文件)。
+ */
+export const KOUBO_DEFAULT = { card: ['.cotutor/koubo', 'card', '--audio', '{audio}', '--text', '{text}', '--mode', '{mode}', '--pairs', '{pairs}', '--json'], timeoutMs: 20_000 };
+export const KouboSchema = z.object({
+  card: z.array(z.string()).min(1).default(KOUBO_DEFAULT.card),
+  /** 一条最多等多久(子进程超时;交给老师时从存录音那一刻算起也最多等这么久) */
+  timeoutMs: z.number().int().positive().default(KOUBO_DEFAULT.timeoutMs),
+});
+export type Koubo = z.infer<typeof KouboSchema>;
+
+export function fillKouboCard(argv: readonly string[], vars: { audio: string; text: string; mode: string; pairs: string }): string[] {
+  return argv.map((a) => a.replaceAll('{audio}', vars.audio).replaceAll('{text}', vars.text).replaceAll('{mode}', vars.mode).replaceAll('{pairs}', vars.pairs));
+}
+
+/**
  * paths 里 CLI 认识的角色;其余角色原样保留给应用层。vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根;
  * captures(应用拍的作业照片)是 workspace 侧,相对 workspace 根(《obsidian仓库设计.md》§5:vault 里存文字不存图)。
  * 缺省是中文名(2026-09-14):vault 是家长在 Obsidian 里看的,目录名要像人写的。
@@ -167,6 +185,7 @@ export const CotutorConfigSchema = z
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
     runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {systemBody} {boardFile} {prompt} {session};模型、预算、时限写在这里'),
     tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板:say 合成一句(占位 {text} {voice} {out});voices 列音色(stdout JSON),家长端音色页据此列表与试听'),
+    koubo: KouboSchema.default(KOUBO_DEFAULT).describe('录音卡的评测命令模板(口播老师):card 一条龙评一条录音(占位 {audio} {text} {mode} {pairs}),timeoutMs 一条最多等多久;门槛与花费上限在 workspace 根的 koubo.json'),
   })
   .superRefine((c, ctx) => {
     if (!(c.runtimes.default in c.runtimes) || c.runtimes.default === 'default') {

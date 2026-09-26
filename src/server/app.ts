@@ -28,7 +28,7 @@ import { DEV_PAGE } from './dev-page.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
 import { IndexError, capturePathOk, deleteThread, handLesson, setLessonOff, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
-import { BUTTON_LABEL_MAX, IMAGE_EXT, parseCardState, stripSecrets, type TutorButton } from '../cards/index.ts';
+import { BUTTON_LABEL_MAX, IMAGE_EXT, parseCardState, stripSecrets, type RecordProps, type TutorButton } from '../cards/index.ts';
 import { faceTutor } from '../lib/home.ts';
 import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset } from './stage.ts';
@@ -332,6 +332,8 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
   const target = msg?.result === 'ok' ? msg.section?.cards[n] : undefined;
   if (!target) return { status: 404, json: { error: 'no_such_card' } };
   let state = body;
+  /** 录音卡这次带来的新录音(相对 workspace 根):存好状态后起评测 */
+  let fresh: string | null = null;
   if (target.kind === 'canvas' && isObj(body) && typeof body.image === 'string') {
     const { image, ...rest } = body;
     const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(image);
@@ -345,6 +347,7 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
     if (!m || !ext || m[2].length > RECORD_MAX_B64) return { status: 400, json: { error: 'bad_state' } };
     const rel = await writeCardAudio(ws, tutor, date, job, n, Buffer.from(m[2], 'base64'), ext);
     state = { ...body, audio: `conversations/${tutor}/${rel}` };
+    fresh = `conversations/${tutor}/${rel}`;
   }
   const r = parseCardState(target, state);
   if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
@@ -352,6 +355,7 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
   // turn = 这张卡所在话题的末条 job:下一条发给同一话题时才算「上一轮之后改过的」
   const mine = threads(index.messages)[index.messages.findIndex((m) => m.job === job)];
   await writeCardState(ws, tutor, date, job, n, { at: ctx.now().toISOString(), turn: lastJobOf(index, mine) ?? last.job, state: r.state });
+  if (fresh && target.kind === 'record') ctx.runner.assessRecording(fresh, target.props as RecordProps);
   return { status: 200, json: { ok: true, card: `${job}/${n}`, state: r.state } };
 }
 

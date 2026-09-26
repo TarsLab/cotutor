@@ -2,7 +2,7 @@
  * 假 CLI:模仿 claude / qwen 的 stream-json 无头输出,给 runner 测试用(不花钱、不联网)。
  * 用法(运行时模板里):node --experimental-strip-types _fake-cli.ts [--resume <id>] [--agent <name>] [--fail] [--stream] <prompt>
  * --stream:最终文本先按行以 stream_event(content_block_delta)吐出来,每行歇 80ms(模仿 claude --include-partial-messages),再发 assistant 与 result。
- * 行为:回显 prompt 的最后一行;上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);prompt 含「段在前」就在最终文本前加一段「## 记账」;含「画场景」出一张带题面 / 讲法的新场景卡,「放旧课包」出一张只有 id 的场景卡;含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);含「家长段」加「## 家长」;
+ * 行为:回显 prompt 的最后一行;含「录音卡」出三张录音卡(第二张的句子带「慢」);上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);prompt 含「段在前」就在最终文本前加一段「## 记账」;含「画场景」出一张带题面 / 讲法的新场景卡,「放旧课包」出一张只有 id 的场景卡;含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);含「家长段」加「## 家长」;
  * --resume 时 session_id 沿用给的 id,否则新造;--fail 出 error_max_turns。
  * 含「断流」/「一直断」/「工具慢」的见下面断流那段(stall.test)。
  */
@@ -103,6 +103,8 @@ if (fail) {
   if (msg.includes('画场景')) parts.push('```scene\n2026-09-09-guilv\n我去把这道题画出来。\n题面:找规律填数 75、70、65、__\n讲法:每次少 5;用交错数列分行讲\n```\n\n等我画好。');
   if (msg.includes('放旧课包')) parts.push('```scene\n2026-09-09-guilv\n```\n\n我们再看一遍。');
   if (prompt.startsWith('cotutor:') && /\n---\n场景作业\(/.test(prompt)) parts.push('课包 2026-09-09-guilv 做好了,6 步');
+  // 录音卡(口播老师):三张;第二张的句子带「慢」,假 koubo 会拖过超时
+  if (msg.includes('录音卡')) parts.push('```record focus=sh_s\n老师上【山】看【树】\n```\n\n```record\n慢慢读这一句\n```\n\n```record pinyin\nshi2 si4\n【十】四\n```\n\n一句一句录,录完交给我。');
   if (msg.includes('板书')) parts.push('```text\n# 三角形\n拼一拼\n```\n\n先看[三角形]。\n\n```choice\n三角形有几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n三角形有几个角?' + (msg.includes('坏卡') ? '\n\n```choice\n没选项\n```' : '') + (msg.includes('点读') ? '\n\n```read\napple 苹果\nbanana 香蕉\n```\n\n点一下听一下。' : '') + (msg.includes('图片') ? '\n\n```image\nvault/pic.png\n看这张图\n```' : ''));
   // 作业照片(R5):上下文包有 photos: 段就「看图」——回显看到了哪张,板书 image 卡引用原图、canvas 卡照片做底
   const photosAt = prompt.indexOf('\n  photos:\n');

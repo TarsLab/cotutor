@@ -714,11 +714,13 @@ export function subtitleFor(i: SubtitleInput): SubtitleView {
 // 再听加进来漏了两处就是真机事故(新回答被打断、「继续」被误点)。仲裁表在《工作流程.md》§孩子端「播放器」,
 // 每一格在 tests/player.test.ts 里有一条;不变式用随机事件序列跑。
 
-/** 播放器的全部状态:播到哪、在再听哪个(喇叭变橙、再点一下停)、「继续」在这之前不响应(毫秒时刻) */
+/** 播放器的全部状态:播到哪、在再听哪个(喇叭变橙、再点一下停)、「继续」在这之前不响应(毫秒时刻)、在录时被压住的(录完接着念) */
 export interface PlayerModel {
   state: PlayerState;
   replayOf: { section: number; card: number | 'all' | 'line' } | null;
   contGuardUntil: number;
+  /** 录音卡(《口播老师设计.md》§3):按下录音键时老师在念、或在录时新的一拍到了,念的那句停成暂停;松手后接着念 */
+  held: boolean;
 }
 
 /** step 要读的页面状态(只读) */
@@ -731,6 +733,8 @@ export interface PlayerCtx {
   readonly: boolean;
   /** 舞台开着 */
   stage: boolean;
+  /** 录音卡的舞台里正按着录音键:这时不出任何声音、不推答题卡 */
+  recording?: boolean;
   limit: boolean;
   now: number;
 }
@@ -738,7 +742,8 @@ export interface PlayerCtx {
 /**
  * 事件:孩子做的(tap*、segment 点读、stageOpen 点卡、send 发话)、声音的(lineEnded 一句念完、lineMissing 那句不在了)、
  * 老师的(liveStart 第一拍就绪、liveBeat 又一拍、liveFinal 写完了、liveDropped 出错撤掉、fresh 整节到了)、舞台的(stageDone 场景播完或关了)、
- * 页面的(reset 换老师、halt 只停声音:关老师页 / 按住说话 / 清板、autoplayOff 关自动念、jump 调试跳句)
+ * 页面的(reset 换老师、halt 只停声音:关老师页 / 按住说话 / 清板、autoplayOff 关自动念、jump 调试跳句)、
+ * 录音卡的(recStart 按下录音键、recEnd 松手 / 上滑取消 / 关舞台 / 切后台:停录)
  */
 export type PlayerEvent =
   | { type: 'reset' }
@@ -758,7 +763,9 @@ export type PlayerEvent =
   | { type: 'liveFinal'; section: number; prevLines: string[] }
   | { type: 'liveDropped' }
   | { type: 'fresh'; sections: number[]; silent: boolean }
-  | { type: 'jump'; section: number; line: number };
+  | { type: 'jump'; section: number; line: number }
+  | { type: 'recStart' }
+  | { type: 'recEnd' };
 
 /**
  * 要做的事,按顺序执行。play / send / openStage / openAsk 会让页面再 dispatch,所以最多一个、且在最后(不变式,测试兜)。
@@ -782,7 +789,7 @@ export type PlayerEffect =
 export const CONT_GUARD_MS = 800;
 
 export function initialPlayer(): PlayerModel {
-  return { state: { section: -1, line: -1, status: 'idle' }, replayOf: null, contGuardUntil: 0 };
+  return { state: { section: -1, line: -1, status: 'idle' }, replayOf: null, contGuardUntil: 0, held: false };
 }
 
 /** 停声音;在再听就回到再听前的位置,念过的标注补齐,「继续」防误点 */
@@ -794,7 +801,7 @@ function halt(m: PlayerModel, ctx: PlayerCtx, fx: PlayerEffect[], stopAudio = tr
   const n = spokenLines(r.back, ctx.sections, sec);
   if (n > 0) fx.push({ kind: 'paint', section: sec, upTo: n - 1 });
   fx.push({ kind: 'showNow' });
-  return { state: r.back, replayOf: null, contGuardUntil: ctx.now + CONT_GUARD_MS };
+  return { ...m, state: r.back, replayOf: null, contGuardUntil: ctx.now + CONT_GUARD_MS };
 }
 
 /** 开始再听:板上要安静、舞台没开;先停掉在念的(包括别的再听) */
@@ -817,7 +824,18 @@ export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { mod
   let m = model;
   const secs = ctx.sections;
   const put = (state: PlayerState): void => { m = { ...m, state }; };
+  // 在录:孩子这边能出声的都不响(喇叭、点读、回放、暂停 / 继续钮;会录进去)
+  if (ctx.recording && (ev.type === 'tapButton' || ev.type === 'tapAgain' || ev.type === 'tapSubtitle' || ev.type === 'segment')) return { model: m, effects: fx };
   switch (ev.type) {
+    case 'recStart':
+      m = halt(m, ctx, fx);
+      if (m.state.status === 'playing') { put({ ...m.state, status: 'paused' }); m = { ...m, held: true }; }
+      fx.push({ kind: 'render' });
+      break;
+    case 'recEnd':
+      if (m.held && !m.state.replay && m.state.status === 'paused') { put({ ...m.state, status: 'playing' }); fx.push({ kind: 'play' }); }
+      m = { ...m, held: false };
+      break;
     case 'reset':
       m = initialPlayer();
       break;
@@ -966,6 +984,14 @@ export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { mod
       fx.push({ kind: 'render' }, { kind: 'showNow' });
       break;
     }
+  }
+  // 在录时老师那边来的(新的一拍、整节、写完、场景该播了、推答题卡)也不响:该念的那句停成暂停,松手后接着念
+  if (ctx.recording && ev.type !== 'recEnd' && fx.some((f) => f.kind === 'play' || f.kind === 'openStage' || f.kind === 'openAsk')) {
+    const kept = fx.filter((f) => f.kind !== 'play' && f.kind !== 'openStage' && f.kind !== 'openAsk');
+    if (m.state.replay) m = halt(m, ctx, kept);
+    else if (m.state.status === 'playing' || m.state.status === 'stage') { put({ ...m.state, status: 'paused' }); m = { ...m, held: true }; }
+    kept.push({ kind: 'render' });
+    return { model: m, effects: kept };
   }
   return { model: m, effects: fx };
 }

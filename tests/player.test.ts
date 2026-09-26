@@ -91,6 +91,17 @@ const rows: Row[] = [
   { name: '第一拍就绪 → 从第一句念', model: M({ section: 0, line: 2, status: 'done' }), sections: [done0, live], ctx: { pending: true }, ev: { type: 'liveStart', section: 1 }, want: (m, fx) => m.state.section === 1 && m.state.status === 'playing' && fx.at(-1)?.kind === 'play' },
   { name: '等下一拍 + 老师写完(末句问句)→ 接着念', model: M({ section: 1, line: 0, status: 'thinking' }), sections: [done0, { cards: live.cards, lines: [L('六', 0), L('七?', 1)] }], ev: { type: 'liveFinal', section: 1, prevLines: ['六'] }, want: (m, fx) => m.state.status === 'playing' && m.state.line === 1 && fx.at(-1)?.kind === 'play' },
   { name: '老师写完、定稿多了一句 → 按文字找回位置,不念两遍', model: M({ section: 1, line: 0, status: 'paused' }), sections: [done0, { cards: live.cards, lines: [L('零', null), L('六', 0), L('七', 1)] }], ev: { type: 'liveFinal', section: 1, prevLines: ['六', '七'] }, want: (m) => m.state.line === 1 && m.state.status === 'paused' },
+  // 录音卡(《口播老师设计.md》§3):在录时不出任何声音
+  { name: '在念 + 按下录音键 → 停声音、暂停,记着录完接着念', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ctx: { stage: true }, ev: { type: 'recStart' }, want: (m, fx) => m.state.status === 'paused' && m.held && kinds(fx) === 'stop,render' },
+  { name: '再听 + 按下录音键 → 再听停、回原位置', model: replayingW, sections: [done0, last], ctx: { stage: true }, ev: { type: 'recStart' }, want: (m, fx) => !m.state.replay && m.state.status === 'waiting' && !m.held && fx[0].kind === 'stop' },
+  { name: '在录 + 点读 / 点回放 → 不响', model: M({ section: 1, line: 0, status: 'paused' }), sections: [done0, last], ctx: { stage: true, recording: true }, ev: { type: 'segment' }, want: (_m, fx) => fx.length === 0 },
+  { name: '在录 + 点暂停 / 继续 → 不响', model: M(W), sections: [done0, last], ctx: { stage: true, recording: true }, ev: { type: 'tapButton' }, want: (_m, fx) => fx.length === 0 },
+  { name: '在录 + 点字幕 → 不响', model: M(W), sections: [done0, last], ctx: { stage: true, recording: true }, ev: { type: 'tapSubtitle' }, want: (_m, fx) => fx.length === 0 },
+  { name: '在录 + 新的一拍就绪 → 不念,停在那句(暂停),录完接着念', model: M({ section: 1, line: 0, status: 'thinking' }), sections: [done0, { ...live, ready: 2 }], ctx: { pending: true, stage: true, recording: true }, ev: { type: 'liveBeat', section: 1 }, want: (m, fx) => m.state.status === 'paused' && m.state.line === 1 && m.held && !fx.some((f) => f.kind === 'play') },
+  { name: '在录 + 整节到了 → 不念', model: M({ section: 0, line: 2, status: 'done' }), sections: [done0, last], ctx: { stage: true, recording: true }, ev: { type: 'fresh', sections: [1], silent: false }, want: (m, fx) => m.state.status === 'paused' && m.held && !fx.some((f) => f.kind === 'play') },
+  { name: '在录 + 老师写完、末句问句 → 不推答题卡', model: M({ section: 1, line: 1, status: 'thinking' }), sections: [done0, { cards: live.cards, lines: [L('六', 0), L('七?', 1)] }], ctx: { autoplay: false, stage: true, recording: true }, ev: { type: 'liveFinal', section: 1, prevLines: ['六', '七?'] }, want: (_m, fx) => !fx.some((f) => f.kind === 'openAsk' || f.kind === 'play') },
+  { name: '在录压住的 + 松手 → 接着念', model: M({ section: 1, line: 0, status: 'paused' }, { held: true }), sections: [done0, last], ctx: { stage: true }, ev: { type: 'recEnd' }, want: (m, fx) => m.state.status === 'playing' && !m.held && kinds(fx) === 'play' },
+  { name: '孩子自己暂停的 + 松手 → 还暂停着', model: M({ section: 1, line: 0, status: 'paused' }), sections: [done0, last], ctx: { stage: true }, ev: { type: 'recEnd' }, want: (m, fx) => m.state.status === 'paused' && fx.length === 0 },
   { name: '不自动念 + 整节到了 → 标注画齐、停在末尾', model: M({ section: 0, line: 2, status: 'done' }), sections: [done0, last], ctx: { autoplay: false }, ev: { type: 'fresh', sections: [1], silent: false }, want: (m, fx) => m.state.status === 'waiting' && !fx.some((f) => f.kind === 'play') },
 ];
 for (const r of rows) {
@@ -105,7 +116,7 @@ function rng(seed: number): () => number {
 }
 const NESTED = new Set(['play', 'send', 'openStage', 'openAsk']);
 
-interface World { m: PlayerModel; sections: BoardSection[]; pending: boolean; autoplay: boolean; stage: boolean; now: number; log: string[] }
+interface World { m: PlayerModel; sections: BoardSection[]; pending: boolean; autoplay: boolean; stage: boolean; recording: boolean; now: number; log: string[] }
 
 /** 一次完整的老师回复(有卡、末句可能是问句、可能带场景) */
 function reply(r: () => number, n: number): BoardSection {
@@ -116,10 +127,10 @@ function reply(r: () => number, n: number): BoardSection {
 
 function run(seed: number, steps: number): string | null {
   const r = rng(seed);
-  const w: World = { m: initialPlayer(), sections: [], pending: false, autoplay: r() < 0.8, stage: false, now: 1_000, log: [] };
+  const w: World = { m: initialPlayer(), sections: [], pending: false, autoplay: r() < 0.8, stage: false, recording: false, now: 1_000, log: [] };
   let target: BoardSection | null = null; // 老师在写的这一节(写完的样子)
   let nth = 0;
-  const ctx = (): PlayerCtx => ({ sections: w.sections, pending: w.pending, autoplay: w.autoplay, readonly: false, stage: w.stage, limit: false, now: w.now });
+  const ctx = (): PlayerCtx => ({ sections: w.sections, pending: w.pending, autoplay: w.autoplay, readonly: false, stage: w.stage, recording: w.recording, limit: false, now: w.now });
   // 开头:已经有一两节(打开页面、不出声)
   w.sections.push(reply(r, nth++));
   if (r() < 0.5) w.sections.push(reply(r, nth++));
@@ -145,6 +156,8 @@ function run(seed: number, steps: number): string | null {
     if ((before.state.replay || model.state.replay) && ev.type !== 'fresh' && ev.type !== 'liveStart' && ev.type !== 'liveBeat' && ev.type !== 'liveFinal' && ev.type !== 'liveDropped' && ev.type !== 'jump' && ev.type !== 'send' && ev.type !== 'reset' && ev.type !== 'autoplayOff') {
       for (let i = 0; i < w.sections.length; i++) if (spokenLines(before.state, w.sections, i) !== spokenLines(model.state, w.sections, i) && before.state.status !== 'playing') return `再听改了第 ${i} 节念到哪`;
     }
+    // 不变式 8:在录时不出声、不推卡(松手那一下 recording 已经是 false)
+    if (c.recording && effects.some((f) => f.kind === 'play' || f.kind === 'openStage' || f.kind === 'openAsk')) return '在录时出了声或推了卡';
     // 不变式 6:位置合法
     const s = model.state;
     if (s.section >= w.sections.length || (s.section >= 0 && s.line >= w.sections[s.section].lines.length)) return '位置越界';
@@ -188,7 +201,9 @@ function run(seed: number, steps: number): string | null {
         const y = r();
         const sec = Math.floor(r() * Math.max(1, w.sections.length));
         const tgt: number | 'all' = r() < 0.3 ? 'all' : Math.floor(r() * 2);
-        if (w.stage && y < 0.3) { w.stage = false; q.push({ type: 'stageDone' }); }
+        if (w.recording && y < 0.45) { w.recording = false; q.push({ type: 'recEnd' }); }
+        else if (w.stage && !w.recording && y < 0.12) { w.recording = true; q.push({ type: 'recStart' }); }
+        else if (w.stage && y < 0.3) { if (w.recording) { w.recording = false; q.push({ type: 'recEnd' }); } w.stage = false; q.push({ type: 'stageDone' }); }
         else if (y < 0.3) q.push({ type: 'tapButton' });
         else if (y < 0.55) q.push({ type: 'tapAgain', section: sec, target: tgt });
         else if (y < 0.65) q.push({ type: 'tapSubtitle' });
@@ -214,7 +229,7 @@ check('随机事件序列 3000 条 × 120 步:不变式都成立', failures.leng
 // ---- 页面不绕过 step:播放状态只在 dispatch 里写,停声音只剩 silence ----
 const page = readFileSync(new URL('../src/server/kid-page.ts', import.meta.url), 'utf8');
 const count = (re: RegExp) => (page.match(re) ?? []).length;
-check('页面:S.state / S.replayOf / S.contGuard 只在 dispatch 里写一次', count(/S\.state = /g) === 1 && count(/S\.replayOf = /g) === 1 && count(/S\.contGuard = /g) === 1 && count(/S\.state\.\w+ = /g) === 0, `${count(/S\.state = /g)} ${count(/S\.replayOf = /g)} ${count(/S\.contGuard = /g)} ${count(/S\.state\.\w+ = /g)}`);
+check('页面:S.state / S.replayOf / S.contGuard / S.held 只在 dispatch 里写一次', count(/S\.state = /g) === 1 && count(/S\.replayOf = /g) === 1 && count(/S\.contGuard = /g) === 1 && count(/S\.held = /g) === 1 && count(/S\.state\.\w+ = /g) === 0, `${count(/S\.state = /g)} ${count(/S\.replayOf = /g)} ${count(/S\.contGuard = /g)} ${count(/S\.state\.\w+ = /g)}`);
 check('页面:没有会顺手改状态的 stopVoice;advance / startSection / startReplay 不在页面里直接调', !/stopVoice\(/.test(page) && !/\badvance\(/.test(page) && !/\bstartSection\(/.test(page) && !/\bstartReplay\(/.test(page) && !/\bplayerAtEnd\(/.test(page));
 
 done();

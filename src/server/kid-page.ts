@@ -523,7 +523,7 @@ __PHOTO_JS__
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, contGuard: 0, pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, contGuard: 0, held: false, rec: null, pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null };
   // 家长板书页看的模式缺省不念(家长想听哪句点哪句);试用缺省念(要听效果);开关各记一个键,不和孩子的搅
   try { S.autoplay = PARENT ? localStorage.getItem(AUTOPLAY_KEY) === '1' : localStorage.getItem(AUTOPLAY_KEY) !== '0'; } catch { S.autoplay = !PARENT; }
   /** 家长板书页:清单的日期(null = 今天) */
@@ -1203,7 +1203,7 @@ __PHOTO_JS__
   $('#sub-text').addEventListener('click', () => dispatch({ type: 'tapSubtitle' }));
 
   // ---- 播放器:改播放状态的事都走 dispatch → step(kid-board.ts,纯函数,仲裁表见《工作流程.md》),这里只照单执行它回的事。
-  // 页面里不许再直接改 S.state / S.replayOf / S.contGuard(tests/player.test.ts 数着) ----
+  // 页面里不许再直接改 S.state / S.replayOf / S.contGuard / S.held(tests/player.test.ts 数着) ----
   const runEffect = (f) => {
     switch (f.kind) {
       case 'stop': silence(); break;
@@ -1220,8 +1220,8 @@ __PHOTO_JS__
     }
   };
   const dispatch = (ev) => {
-    const r = step({ state: S.state, replayOf: S.replayOf, contGuardUntil: S.contGuard }, ev, { sections: S.sections, pending: S.pending, autoplay: S.autoplay, readonly: S.readonly, stage: Boolean(S.stage), limit: S.limit, now: Date.now() });
-    S.state = r.model.state; S.replayOf = r.model.replayOf; S.contGuard = r.model.contGuardUntil;
+    const r = step({ state: S.state, replayOf: S.replayOf, contGuardUntil: S.contGuard, held: S.held }, ev, { sections: S.sections, pending: S.pending, autoplay: S.autoplay, readonly: S.readonly, stage: Boolean(S.stage), recording: Boolean(S.rec), limit: S.limit, now: Date.now() });
+    S.state = r.model.state; S.replayOf = r.model.replayOf; S.contGuard = r.model.contGuardUntil; S.held = r.model.held;
     for (const f of r.effects) runEffect(f);
   };
 

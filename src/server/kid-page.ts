@@ -660,7 +660,7 @@ __PHOTO_JS__
     // 新话题(《备课设计.md》§3.1):家长自己和老师聊——试改过的老师文件与 vault、备今天的课;孩子开口前孩子看不到、不写记忆
     const newBtn = (t) => (H.date !== H.today ? null : h('button', { type: 'button', class: 'try', title: '和老师备课、试试改过的老师文件;孩子看不到,满意了在某一节尾点「从这里给孩子」', on: { click: () => openTutor(t, { kind: 'new' }) } }, '新话题'));
     $('#tutors').replaceChildren(...H.tutors.map((t) => h('div', { class: 'pt', 'data-tutor': t.name },
-      h('div', { class: 'hd' }, avatarEl(t), h('span', { class: 'nm' }, t.display), h('small', {}, t.turns ? t.turns + ' 轮 · $' + t.costUsd.toFixed(2) : ''), newBtn(t)),
+      h('div', { class: 'hd' }, avatarEl(t), h('span', { class: 'nm' }, t.display), h('small', {}, t.turns ? t.turns + ' 轮 · $' + t.costUsd.toFixed(2) + (t.kouboYuan ? ' · koubo ¥' + t.kouboYuan.toFixed(2) : '') : ''), newBtn(t)),
       ...(t.threads.length ? t.threads.map((th) => row(t, th)) : [h('div', { class: 'none' }, H.date === H.today ? '今天没聊' : '这天没聊')]))));
     $('#hcards').replaceChildren();
   };
@@ -769,12 +769,15 @@ __PHOTO_JS__
         const t = h('div', { class: 'rc-t' + (Array.from(shown).length > 10 ? ' long' : '') }, ...Array.from(shown).map((ch, i) => (risk.has(i) ? h('span', { class: 'rk' }, ch) : ch)));
         const py = pinyin && p.show ? h('div', { class: 'rc-py' }, toneMarks(p.text || '')) : null;
         const sec = recordSeconds(c);
-        const locked = S.readonly || (secIdx !== null && recordLocked(S.sections, secIdx, S.submitted));
-        if (stage) return recordStage(c, idx, secIdx, t, py, sec, locked);
+        // 锁住 = 交了或后面又有一节(压淡、不能再录);只读(以前的、家长端)只是不能录,不画成锁住
+        const locked = secIdx !== null && recordLocked(S.sections, secIdx, S.submitted);
+        if (stage) return recordStage(c, idx, secIdx, t, py, sec, locked || S.readonly);
         const demo = locked ? null : recPill(ICON.speaker, '听', (e) => playDemo(c, e.currentTarget));
-        const mine = sec ? recPill(ICON.play, '我的 · ' + sec.toFixed(1) + ' 秒', (e) => playMine(c, e.currentTarget)) : h('span', { class: 'rc-no' }, '没录 · 点开来录');
+        const mine = sec ? recPill(ICON.play, '我的 · ' + sec.toFixed(1) + ' 秒', (e) => playMine(c, e.currentTarget)) : h('span', { class: 'rc-no' }, S.readonly ? '没录' : '没录 · 点开来录');
         const el = box('record', t, py, h('div', { class: 'rc-row' }, demo, mine, locked && sec ? h('span', { class: 'rc-lk', html: ICON.lock + '交给老师了' }) : null));
-        if (locked) el.classList.add('locked');
+        if (locked && !PARENT) el.classList.add('locked');
+        // 家长端:评测全量挂在卡里(只读的虚线框);孩子端拿不到 heard,永远画不出来
+        if (PARENT && c.heard) el.append(heardBox(c.heard));
         return el;
       }
       case 'code':
@@ -948,6 +951,15 @@ __PHOTO_JS__
     btn.addEventListener('pointerup', () => recStop(true));
     btn.addEventListener('pointercancel', () => recStop(false));
     return el;
+  };
+  /** 家长端的评测旁注:档 · 句分 · 语速;逐字分(不过的红,读成什么带问号);take、评了多久、花了多少 */
+  const heardBox = (hd) => {
+    const head = (v, cls, stats) => h('div', { class: 'rc-hh' }, h('span', { class: 'k' }, 'koubo'), h('span', { class: 'v ' + cls }, v), h('span', { class: 's' }, stats));
+    if (!hd.ok) return h('div', { class: 'rc-hd' }, head('没评上', 'none', hd.error || ''));
+    const stats = ['句 ' + Math.round(hd.accuracy || 0)].concat(hd.charsPerMin ? [hd.charsPerMin + ' 字/分'] : []).join(' · ');
+    const chips = h('div', { class: 'rc-chs' }, ...(hd.chars || []).map((x) => h('span', { class: 'rc-ch' + (x.ok ? '' : ' bad') }, x.ch + ' ' + (x.risk && x.risk.length ? x.phone + ' ' : '') + Math.round(x.score) + (x.readAs ? ' · 读成 ' + x.readAs + '?' : ''))));
+    const meta = ['take ' + hd.take].concat(hd.ms ? ['评 ' + (hd.ms / 1000).toFixed(1) + ' 秒'] : [], hd.cached ? ['缓存'] : hd.costYuan ? ['¥' + hd.costYuan.toFixed(3)] : []).join(' · ');
+    return h('div', { class: 'rc-hd' }, head(hd.verdict, { '过': 'ok', '可救': 'mid', '重录': 'bad' }[hd.verdict] || '', stats), chips, h('div', { class: 'rc-mt' }, meta));
   };
   const recMime = () => {
     for (const t of ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg']) { try { if (MediaRecorder.isTypeSupported(t)) return t; } catch {} }
@@ -1420,6 +1432,8 @@ __PHOTO_JS__
       // 服务端的状态是真相(别的设备上选的、重开页面):没在舞台里改着的卡照它画;props 也跟(场景卡的课包晚到,ready / 缩略图是服务端现读的)
       entries.forEach((e) => { const i = S.sections.findIndex((x) => x.job === e.job); if (i < 0 || fresh.includes(i)) return; e.cards.forEach((c, idx) => { const mine = S.sections[i].cards[idx]; if (!mine || (S.stage && S.stage.section === i && S.stage.card === idx)) return; const ds = JSON.stringify(mine.state) !== JSON.stringify(c.state), dp = JSON.stringify(mine.props) !== JSON.stringify(c.props); if (ds || dp) { mine.state = c.state; mine.props = c.props; repaintCard(i, idx); } }); });
       if (fresh.length && S.stage) closeStage();
+      // 录音卡:后面又来了一节,前面各节的录音卡就锁住(一节一节铺的时候前面那节还不知道后面有)
+      if (fresh.length) S.sections.forEach((sec, i) => { if (i < S.sections.length - 1) sec.cards.forEach((c, k) => { if (c.kind === 'record') repaintCard(i, k); }); });
       const stillPending = Boolean(d.pending) || d.messages.some((m) => m.pending);
       S.pending = stillPending;
       if (stillPending && !S.waitSince) S.waitSince = Date.now();

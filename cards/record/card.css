@@ -42,3 +42,16 @@
 .c-record.rec .rc-mic svg { width:44px; height:44px; }
 .c-record.rec .rc-lb { padding-top:14px; }
 .c-record.rec.cancel .rc-mic { background:#b3261e; box-shadow:0 0 0 14px rgba(179,38,30,.15); }
+/* 家长端的评测旁注(只读,孩子端没有) */
+.rc-hd { display:flex; flex-direction:column; gap:8px; margin-top:6px; padding:10px 12px; border-radius:12px; background:#ffffff; border:1px dashed var(--line); }
+.rc-hh { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.rc-hh .k { font-size:11px; font-weight:700; color:var(--dim); letter-spacing:1px; text-transform:uppercase; }
+.rc-hh .v { padding:1px 10px; border-radius:10px; font-size:14px; font-weight:700; background:#efede7; color:var(--dim); }
+.rc-hh .v.ok { background:#e5f4ea; color:#1f8a4c; }
+.rc-hh .v.mid { background:#fdf0d8; color:#8a5a12; }
+.rc-hh .v.bad { background:#fbe4e1; color:#b3261e; }
+.rc-hh .s { font-size:13px; color:#5a5650; }
+.rc-chs { display:flex; flex-wrap:wrap; gap:6px; }
+.rc-ch { display:inline-flex; align-items:center; height:26px; padding:0 9px; border-radius:13px; font-size:13px; background:#f1efe9; color:#5a5650; white-space:nowrap; }
+.rc-ch.bad { background:#fbe4e1; color:#b3261e; font-weight:600; }
+.rc-mt { font-size:12px; color:var(--dim); }

@@ -28,7 +28,8 @@ import { DEV_PAGE } from './dev-page.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
 import { IndexError, capturePathOk, deleteThread, handLesson, setLessonOff, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
-import { BUTTON_LABEL_MAX, IMAGE_EXT, parseCardState, stripSecrets, type RecordProps, type TutorButton } from '../cards/index.ts';
+import { BUTTON_LABEL_MAX, IMAGE_EXT, parseCardState, stripSecrets, type Heard, type RecordProps, type TutorButton } from '../cards/index.ts';
+import { kouboYuanOfDay, readHeard } from './koubo.ts';
 import { faceTutor } from '../lib/home.ts';
 import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset } from './stage.ts';
@@ -239,6 +240,17 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
   }
   const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
   for (const m of messages) if (m.section) m.section = await enrichScenes(sceneDirs, m.section);
+  // 录音卡:家长端旁注要评测全量(档、逐字分、花费),从录音旁边的 heard.json 读;孩子端不走这里。
+  // 挂在新的卡对象上:索引有进程内缓存,改原对象判就漏到孩子端了
+  for (const m of messages) {
+    if (!m.section?.cards.some((c) => c.kind === 'record')) continue;
+    const cards = await Promise.all(m.section.cards.map(async (c) => {
+      const audio = c.kind === 'record' ? (c.state as { audio?: unknown } | undefined)?.audio : undefined;
+      const heard = typeof audio === 'string' && audio ? await readHeard(join(ctx.ws.root, audio)) : null;
+      return heard ? ({ ...c, heard } as BoardCard & { heard: Heard }) : c;
+    }));
+    m.section = { ...m.section, cards };
+  }
   const labels = await continueLabels(ctx.ws);
   const ths = threads(index.messages);
   const lessons: ParentDay['lessons'] = {};
@@ -276,6 +288,8 @@ export interface OverviewTutor {
   threads: OverviewThread[];
   /** 正在记账(记账或整理记忆的轮还在跑):家长端清单上的「记账」灰掉、行上写「记账中」 */
   booking: boolean;
+  /** 这天录音卡在 koubo 上花的钱(元,heard.json 加总);没花就没有 */
+  kouboYuan?: number;
 }
 
 export interface Overview {
@@ -315,7 +329,8 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       }
     }
     const booking = index.messages.some((m) => (m.bookkeep || m.tidy) && m.result === 'running');
-    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], booking });
+    const kouboYuan = await kouboYuanOfDay(join(ctx.ws.dirs.conversations, t.name), date);
+    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], booking, ...(kouboYuan > 0 ? { kouboYuan } : {}) });
   }
   return { title: ctx.ws.config.title, date, today: localDate(ctx.now()), tutors };
 }

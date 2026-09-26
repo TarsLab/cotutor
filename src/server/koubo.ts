@@ -4,7 +4,7 @@
  * 失败 = 没有:koubo 不在 / 退出码非 0 / 超时 / JSON 不对 → {ok: false, error},孩子端什么都不显示。花费与账本归 koubo(它的 ledger/assess.jsonl)。
  */
 import { execFile } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { HeardSchema, type Heard, type RecordProps } from '../cards/index.ts';
 import { fillKouboCard, type Koubo } from '../schema/index.ts';
@@ -14,9 +14,14 @@ export function heardFile(audio: string): string {
   return audio.replace(/\.[a-z0-9]+$/i, '.heard.json');
 }
 
-export async function readHeard(audio: string): Promise<Heard | null> {
+/** 这条录音的评测结果;没有、坏了 → null */
+export function readHeard(audio: string): Promise<Heard | null> {
+  return readHeardFile(heardFile(audio));
+}
+
+async function readHeardFile(file: string): Promise<Heard | null> {
   try {
-    const r = HeardSchema.safeParse(JSON.parse(await readFile(heardFile(audio), 'utf8')));
+    const r = HeardSchema.safeParse(JSON.parse(await readFile(file, 'utf8')));
     return r.success ? r.data : null;
   } catch {
     return null;
@@ -104,4 +109,20 @@ export class KouboQueue {
   async flush(): Promise<void> {
     while (this.jobs.size) await Promise.all([...this.jobs.values()].map((j) => j.done.catch(() => {})));
   }
+}
+
+/** 一位老师一天在 koubo 上花了多少元:那天所有录音(重录的也算)的 heard.json 里 costYuan 加总;家长端清单上显示 */
+export async function kouboYuanOfDay(dir: string, date: string): Promise<number> {
+  let sum = 0;
+  const days = (await readdir(dir).catch(() => [] as string[])).filter((f) => f.startsWith(`${date}.`) && f.endsWith('.cards'));
+  for (const d of days) {
+    for (const n of await readdir(join(dir, d)).catch(() => [] as string[])) {
+      for (const f of await readdir(join(dir, d, n)).catch(() => [] as string[])) {
+        if (!/^rec-\d+\.heard\.json$/.test(f)) continue;
+        const h = await readHeardFile(join(dir, d, n, f));
+        if (h?.ok) sum += h.costYuan;
+      }
+    }
+  }
+  return Math.round(sum * 1000) / 1000;
 }

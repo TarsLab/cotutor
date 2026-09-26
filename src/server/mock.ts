@@ -78,6 +78,13 @@ export const MOCK_POST: Record<string, PostOutput> = {
   'chinese-tutor:0': { marks: [{ line: 1, card: 1, phrase: '多做一步', pen: 'marker' }], anchors: [], layout: { rows: [[0], [1], [2], [3]] }, look: { '1': { emoji: '💡' } } },
 };
 
+/** mock 家长端的录音卡评测(真服务从 heard.json 读):过、重录、没评上各一份 */
+const MOCK_HEARD = [
+  { ok: true, take: '20260926-162103-a1b2c3', verdict: '过', reasons: ['全部过线'], accuracy: 91, chars: ['十', '四', '是', '十', '四'].map((ch, i) => ({ ch, phone: i % 2 ? 's' : 'sh', score: [88, 90, 84, 86, 92][i], ok: true, risk: ['sh_s'] })), costYuan: 0.01, ms: 1100 },
+  { ok: true, take: '20260926-162203-b7a1c2', verdict: '重录', reasons: ['句准确度 36 < 80', '山 的 sh 19 < 65,读成 s', '树 的 sh 20 < 65', '语速 92 字/分 < 160,太慢'], accuracy: 36, charsPerMin: 92, chars: [{ ch: '老', phone: 'l', score: 43, ok: true }, { ch: '师', phone: 'sh', score: 74, ok: true, risk: ['sh_s'] }, { ch: '上', phone: 'sh', score: 71, ok: true, risk: ['sh_s'] }, { ch: '山', phone: 'sh', score: 19, ok: false, risk: ['sh_s'], readAs: 's' }, { ch: '看', phone: 'an4', score: 88, ok: true }, { ch: '树', phone: 'sh', score: 20, ok: false, risk: ['sh_s'] }], costYuan: 0.02, ms: 1400 },
+  { ok: false, error: 'timeout', ms: 20000 },
+];
+
 function withMockPost(section: BoardSection, tutor: string, i: number, device: 'phone' | 'tablet-portrait' | 'tablet-landscape' = 'tablet-landscape'): BoardSection {
   const out = MOCK_POST[`${tutor}:${i}`];
   if (!out) return section;
@@ -600,7 +607,8 @@ export function createMock(opts: MockOptions = {}): Mock {
           if (m.pending) th.stoppedAt = 'writing';
           else if (m.section && (m.section.cards.length || m.section.lines.length)) { th.sections++; th.cards += m.section.cards.length; th.stoppedAt = m.section.lines[m.section.lines.length - 1]?.ask ? 'ask' : null; }
         }
-        return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], booking: false };
+        const recorded = list.reduce((n, m) => n + Object.keys(m.states ?? {}).filter((k) => m.section?.cards[Number(k)]?.kind === 'record').length, 0);
+        return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], booking: false, ...(recorded ? { kouboYuan: recorded * 0.015 } : {}) };
       });
       return { status: 200, json: { title, date, today, tutors } };
     }
@@ -617,7 +625,16 @@ export function createMock(opts: MockOptions = {}): Mock {
       const ls = date === today ? (lessons.get(name) ?? new Map<string, Lesson>()) : new Map<string, Lesson>();
       const out = await Promise.all(list.map(async (m, i) => {
         const { states, ...rest } = m;
-        const section = m.section ? await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, { ...m.section, cards: m.section.cards.map((c, k) => (states && k in states ? { ...c, state: states[k] } : c)) }) : null;
+        // 录音卡录过的:家长端旁注给一份写死的评测(mock 不起 koubo),按这一节里第几张录音卡轮着给 过 / 重录 / 没评上
+        let rec = 0;
+        const withHeard = (c: BoardSection['cards'][number], k: number) => {
+          const st = states && k in states ? states[k] : undefined;
+          if (c.kind !== 'record') return st === undefined ? c : { ...c, state: st };
+          const h = st === undefined ? undefined : MOCK_HEARD[rec % MOCK_HEARD.length];
+          rec++;
+          return st === undefined ? c : { ...c, state: st, ...(h ? { heard: h } : {}) };
+        };
+        const section = m.section ? await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, { ...m.section, cards: m.section.cards.map(withHeard) }) : null;
         // 备课轮(《备课设计.md》):标 prep、带费用;第一轮带一条「本来会记住的」看旁注的样子
         if (prep.has(m.job)) return { ...rest, from: m.from ?? 'kid', section, prep: true, off: (m.section?.cards ?? []).map((_, n) => n).filter((n) => ls.get(m.thread)?.off.includes(`${m.job}/${n}`)), ...(ls.get(m.thread)?.handedAt ? { handed: true } : {}), ...(m.pending ? {} : { costUsd: 0.03 }), ...(m.job === m.thread && !m.pending ? { memoryDraft: ['分数刚起步,1/4 还会和 1/3 混'] } : {}) };
         return { ...rest, from: m.from ?? 'kid', section, ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };

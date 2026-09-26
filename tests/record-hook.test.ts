@@ -99,6 +99,14 @@ try {
   const hb = await readHeard(join(root, sb.audio));
   check('晚到的结果照样落盘(超时 → 没评上)', hb?.ok === false && hb.error === 'timeout', JSON.stringify(hb));
 
+  // ---- 家长端:录音卡带评测全量(旁注从 heard.json 来);清单上有当天 koubo 花了多少 ----
+  const pb2 = (await route('GET', '/api/conversations/koubo-tutor/2026-09-26/board', ctx)).json as { messages: { section?: { cards: (Card & { heard?: { ok: boolean; verdict?: string; chars?: unknown[] } })[] } }[] };
+  const pa2 = pb2.messages[0].section!.cards[a];
+  check('家长端:录音卡带 heard(判、逐字分);超时那张是没评上', pa2.heard?.ok === true && pa2.heard.verdict === '重录' && (pa2.heard.chars?.length ?? 0) > 0 && pb2.messages[0].section!.cards[b].heard?.ok === false, JSON.stringify(pa2));
+  check('孩子端同一张卡没有 heard', !('heard' in (await kidDay()).messages[0].section!.cards[a]));
+  const ov = (await route('GET', '/api/overview/2026-09-26', ctx)).json as { tutors: { name: string; kouboYuan?: number }[] };
+  check('清单:koubo 花费 = 当天 heard 的 costYuan 加总(两条各 0.02,超时的不算)', ov.tutors.find((t) => t.name === 'koubo-tutor')?.kouboYuan === 0.04 && ov.tutors.every((t) => t.name === 'koubo-tutor' || t.kouboYuan === undefined), JSON.stringify(ov.tutors.map((t) => [t.name, t.kouboYuan])));
+
   // ---- runKoubo 与队列的单测 ----
   const kcfg = { card: koubo, timeoutMs: 1500 };
   const f = (name: string, body: string) => { const p = join(home, name); writeFileSync(p, body); return p; };

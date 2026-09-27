@@ -110,9 +110,10 @@ export const ConversationIndexSchema = z.object({
   /** 话题 id → 记账那轮的 job(记过的不再记;日记里已有这个话题的一段) */
   booked: z.record(z.string(), z.string().min(1)).default({}),
   /**
-   * 话题 id → 这节课(《备课设计.md》§4):备课话题里的卡默认进课,off = 家长点灰的(`<job>/<n>`,存排除的,新卡不用写盘);
-   * handedAt = 交给孩子的时刻(没交 = null,孩子端整个话题不下发)
+   * 话题 id → 这节课(《备课设计.md》§十):handedAt = 交给孩子的时刻(没交 = null,孩子端整个话题不下发);
+   * source = 交出去的课文件(相对 workspace 根,如 lessons/分数.md);从课文件建的话题没有会话,孩子第一条新会话、上下文包带文件。
+   * 旧索引的 off(点灰的卡,2026-09-25 那版)读时丢掉
    */
-  lessons: z.record(z.string(), z.object({ handedAt: z.string().nullable().default(null), off: z.array(z.string().min(1)).default([]) })).default({}),
+  lessons: z.record(z.string(), z.object({ handedAt: z.string().nullable().default(null), source: z.string().min(1).optional() })).default({}),
 });
 export type ConversationIndex = z.infer<typeof ConversationIndexSchema>;

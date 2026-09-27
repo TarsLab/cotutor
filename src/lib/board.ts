@@ -7,7 +7,7 @@
  * spans 是「这张卡 / 这句话是原文哪几行」,家长端「看原文」据此在原文旁边标出解析器怎么读的;孩子端的 BoardSection 不带它。
  */
 import { parseCard, type CardPlace } from '../cards/index.ts';
-import { anchorMarks, hasState, isAskCard, isHeading, isQuestion, lineTarget, phrasesIn, plainLine, type BoardCard, type BoardCue, type BoardLine, type BoardSection } from './kid-board.ts';
+import { anchorMarks, hasState, isAskCard, isHeading, isQuestion, lineTarget, phrasesIn, plainLine, type BoardCard, type BoardCue, type BoardLine, type BoardSection, type Device } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 
 export interface ParseBoardOptions {
@@ -15,7 +15,50 @@ export interface ParseBoardOptions {
   partial?: boolean;
   /** 卡用在哪(缺省板书);首页文件(《首页设计.md》)同一个解析器,place = home */
   place?: CardPlace;
+  /** 围栏行上写了排版修饰词(same)时,排出来的行是给哪个端的(layout.for);缺省平板横屏 */
+  device?: Device;
 }
+
+/**
+ * 排版修饰词(《备课设计.md》§10.2):写在围栏标签里种类后面,哪种卡都认,解析器先摘掉再按种类解析——
+ * `same` 接上一行(没写 = 另起一行)、`tint=<底色槽>`、`look=<字形槽>`、`emoji=<一个>`。槽名对不对主题由课文件的 check 查(解析器不认识主题)。
+ * 老师也写得出来:cotutor-board 技能不教,写了就当已定(拍板 27)
+ */
+export interface CardMods {
+  same?: true;
+  tint?: string;
+  look?: string;
+  emoji?: string;
+}
+const MOD_RE = /^(tint|look|emoji)=(.+)$/i;
+export function splitMods(tag: string): { rest: string; mods: CardMods; warnings: string[] } {
+  const mods: CardMods = {};
+  const warnings: string[] = [];
+  const rest: string[] = [];
+  for (const w of tag.trim().split(/\s+/).filter(Boolean)) {
+    if (w.toLowerCase() === 'same') { mods.same = true; continue; }
+    const m = MOD_RE.exec(w);
+    if (!m) { rest.push(w); continue; }
+    const key = m[1].toLowerCase() as 'tint' | 'look' | 'emoji';
+    const v = m[2];
+    if (key === 'emoji' && (Array.from(v).length > 2 || /[A-Za-z0-9]/.test(v))) { warnings.push(`emoji=${v} 不像一个 emoji,不要了`); continue; }
+    mods[key] = v;
+  }
+  return { rest: rest.join(' '), mods, warnings };
+}
+
+/** 围栏行:把修饰词重新写上去(课文件回写后期的提案用);原有的排版修饰词换掉,种类与卡自己的修饰词照旧 */
+export function withMods(fenceLine: string, mods: CardMods): string {
+  const m = FENCE_OPEN.exec(fenceLine);
+  if (!m) return fenceLine;
+  const { rest } = splitMods(m[2]);
+  const words = [rest, mods.same ? 'same' : '', mods.tint ? `tint=${mods.tint}` : '', mods.look ? `look=${mods.look}` : '', mods.emoji ? `emoji=${mods.emoji}` : ''].filter(Boolean);
+  return `${fenceLine.slice(0, fenceLine.indexOf(m[1]))}${m[1]}${words.join(' ')}`;
+}
+
+const MAX_ROW = 3;
+/** 独占一行的卡(和后期 standsAlone 同一条规则,这里不引 postprocess 免得绕圈):标题行、提问卡、有交互的、场景 */
+const alone = (c: BoardCard): boolean => isHeading(c) || isAskCard(c) || hasState(c) || c.kind === 'scene';
 
 /** 解析提醒;line = 出问题的那一行(0 起,相对传进来的文本),没有行的就不带 */
 export interface BoardWarning {
@@ -107,6 +150,8 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
   const lines = partial && !text.endsWith('\n') ? all.slice(0, -1) : all;
   const cards: BoardCard[] = [];
   const cardSpans: LineSpan[] = [];
+  /** 每张卡围栏行上的排版修饰词(与 cards 同序;没写就是空对象) */
+  const mods: CardMods[] = [];
   const raws: RawLine[] = [];
   const warnings: BoardWarning[] = [];
   let tail: string[] | null = null;
@@ -135,9 +180,13 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
       }
       if (!closed && partial) break;
       if (!closed) warnings.push({ text: `围栏没闭合(${tag || '无标签'}),当到文末`, line: i });
-      const r = parseCard(tag, body.join('\n'), opts.place);
-      cards.push(r.card);
+      const sm = splitMods(tag);
+      const r = parseCard(sm.rest, body.join('\n'), opts.place);
+      const look = { ...(sm.mods.tint ? { tint: sm.mods.tint } : {}), ...(sm.mods.look ? { look: sm.mods.look } : {}), ...(sm.mods.emoji ? { emoji: sm.mods.emoji } : {}) };
+      cards.push(Object.keys(look).length && !isHeading(r.card) ? { ...r.card, look } : r.card);
+      mods.push(sm.mods);
       cardSpans.push([i, closed ? j : Math.max(i, j - 1)]);
+      for (const w of sm.warnings) warnings.push({ text: w, line: i });
       if (r.warning) warnings.push({ text: r.warning, line: i, ...(r.fallback ? { fallback: true } : {}) });
       i = closed ? j + 1 : j;
       continue;
@@ -159,6 +208,19 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
     const plain = plainLine(r.text);
     return { text: plain, audio: null, marks, ask: isQuestion(plain), anchor: r.anchor, cues: r.cues };
   });
+  // 排版(《备课设计.md》§10.2):有卡写了 same 才排行;接不上(上一行满了、有独占一行的卡)就另起一行并提醒。提问卡(下面补的)不在行里,rowsFor 认前缀
+  let layout: BoardSection['layout'];
+  if (mods.some((m) => m.same)) {
+    const rows: number[][] = [];
+    cards.forEach((c, n) => {
+      const last = rows[rows.length - 1];
+      const join = mods[n].same && last !== undefined && last.length < MAX_ROW && !alone(c) && !last.some((i) => alone(cards[i]));
+      if (mods[n].same && !join) warnings.push({ text: `卡 ${n + 1} 写了 same,接不上上一行(${last === undefined ? '它是第一张' : last.length >= MAX_ROW ? `上一行已有 ${MAX_ROW} 张` : '有独占一行的卡'}),另起一行`, line: cardSpans[n][0] });
+      if (join) last!.push(n);
+      else rows.push([n]);
+    });
+    layout = { for: opts.device ?? 'tablet-landscape', rows };
+  }
   // 提问卡(2026-09-21):末句问句是孩子要答的那句,念完不能只剩字幕——没配能答的卡(choice / fill / canvas)就在节尾补一张文字卡写着这句。
   // 末句的锚点不动(还在它讲的那张卡的拍里,后期照样能把问句里的词标到那张卡上);提问卡自己一拍、没有讲稿。
   // 老师还在写(partial)时不补:这时的末句不一定是最后一句。首页没有讲稿,不管
@@ -172,7 +234,7 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
     }
   }
   return {
-    section: { cards, lines: out, ...(partial ? { partial: true } : {}) },
+    section: { cards, lines: out, ...(partial ? { partial: true } : {}), ...(layout ? { layout } : {}) },
     warnings,
     tail: tail ? tail.join('\n').trim() : '',
     spans: {

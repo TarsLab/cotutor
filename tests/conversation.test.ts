@@ -1,6 +1,6 @@
 /** 对话索引纯函数:命名、并入运行结果、session 只记一次。 */
 import { addMessage, applyRun, cardAssetName, cardId, changedCards, conversationFiles, currentThread, emptyIndex, isPrepThread, jobId, kidCurrentThread, kidHiddenJobs, kidSpoke, lessonCards, prepJobs, lastJobOf, localDate, localMinute, sessionFor, threads } from '../src/lib/conversation.ts';
-import { deriveKidView, lessonSection } from '../src/lib/kid-view.ts';
+import { deriveKidView } from '../src/lib/kid-view.ts';
 import { parseTranscript } from '../src/lib/transcript.ts';
 import { ConversationIndexSchema } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
@@ -67,10 +67,8 @@ check('卡的状态文件与 id', f.cardsDir('1620-1') === '/ws/conversations/ma
   check('备课轮:只认 prepThread 开的话题;工作台开的(from parent 不带)不算', [...prepJobs(msgs)].join() === '2000-3,2001-4,2002-5,2100-6' && isPrepThread(msgs, '2000-3') && !isPrepThread(msgs, '1910-2'));
   check('没交:备课话题整个看不到;孩子的当前话题落在孩子看得到的末条', [...kidHiddenJobs({ messages: msgs })].join() === '2000-3,2001-4,2002-5,2100-6' && kidCurrentThread({ messages: msgs }) === '1910-2');
   check('这节课:新卡默认都在,按生成的顺序', lessonCards({ messages: msgs }, '2000-3').join() === '2000-3/0,2000-3/1,2000-3/2,2001-4/0,2001-4/1,2002-5/0,2002-5/1');
-  const lessons = { '2000-3': { handedAt: '2026-09-25T13:00:00Z', off: ['2001-4/0', '2001-4/1', '2000-3/1'] } };
-  check('交了、第二节整节不要、第一节拿掉一张:这节课 4 张;整节不要的那轮孩子看不到;没交的仍看不到', lessonCards({ messages: msgs, lessons }, '2000-3').join() === '2000-3/0,2000-3/2,2002-5/0,2002-5/1' && [...kidHiddenJobs({ messages: msgs, lessons })].join() === '2001-4,2100-6' && kidCurrentThread({ messages: msgs, lessons }) === '2000-3');
-  const cut = lessonSection(sec(3) as never, [0, 2]);
-  check('lessonSection:卡重新编号、orig 记原下标;讲稿只留开场白与留下的卡上的句,锚与标注换成新下标;排版行跟着换、空行去掉', cut.cards.length === 2 && cut.orig?.join() === '0,2' && cut.lines.map((l) => `${l.text}@${l.anchor}`).join() === '开场白@null,说卡0@0,说卡2@1' && cut.lines[2].marks[0].card === 1 && JSON.stringify(cut.layout?.rows) === '[[0],[1]]' && lessonSection(sec(2) as never, [0, 1]).orig === undefined, JSON.stringify({ lines: cut.lines.map((l) => [l.text, l.anchor]), rows: cut.layout?.rows }));
+  const lessons = { '2000-3': { handedAt: '2026-09-25T13:00:00Z', source: 'lessons/2026-09-25-2000-3.md' } };
+  check('交了:这节课全部的卡;那个话题的轮孩子都看得到;没交的仍看不到;旧索引的 off 读时丢掉', lessonCards({ messages: msgs, lessons }, '2000-3').length === 7 && [...kidHiddenJobs({ messages: msgs, lessons })].join() === '2100-6' && kidCurrentThread({ messages: msgs, lessons }) === '2000-3' && !('off' in (ConversationIndexSchema.parse({ tutor: 'x', date: '2026-09-08', lessons: { a: { handedAt: null, off: ['1/0'] } } }).lessons.a as object)));
   const spoke: M[] = [...msgs, { job: '2003-7', thread: '2000-3', from: 'kid', result: 'ok' }, { job: '2004-8', thread: '2000-3', from: 'parent', result: 'ok', section: sec(1) }];
   check('孩子开口后:那一条起不是备课轮(家长再发也不是,也不进这节课);kidSpoke', !prepJobs(spoke).has('2003-7') && !prepJobs(spoke).has('2004-8') && prepJobs(spoke).has('2002-5') && kidSpoke(spoke, '2000-3') && !kidSpoke(spoke, '2100-6') && !lessonCards({ messages: spoke }, '2000-3').includes('2004-8/0'));
 }

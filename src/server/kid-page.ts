@@ -1,7 +1,6 @@
 /**
  * 孩子端 `/`:首页(老师卡 + 家长发布的首页卡,《首页设计.md》)与老师页(= 板书页)。零依赖内联脚本,只走 /api/kid/* 与 /api/audio。
  * 首页的老师卡上按钮决定进老师页之后的话题:新话题 / 接着某个话题 / 开场(按钮上的字立刻发出去);老师页不再自己猜话题。
- * 工作台的首页预览(/dev/home-preview)是同一个页面:__MODE__ 里 preview = "draft" / "published",数据走 /api/home/preview,按钮不真发。
  * 家长端(/parent,《家长板书页设计.md》)也是同一个页面:__MODE__ 里 parent = true——数据走家长接口(答案在、家长的话在)、卡锁着、
  * 首页换成今天的清单、节前后插旁注(旁注不是卡)。PARENT 的分支只准出现在四处:数据源、chrome、旁注、readonly;别处看到 PARENT 就是写错了。
  * 铁律(《产品规划.md》):界面上永远没有错误与评判——后端不通、老师出错、识别失败,都只是「什么都不出现」或头像灰;
@@ -169,16 +168,20 @@ const PAGE = `<!doctype html>
   .note.said.kid .tg { color:var(--accent); border-color:var(--accent); }
   .note.err .tg { color:#b3541e; border-color:#b3541e; }
   .pt .tr .pin { font-size:12px; font-weight:500; color:var(--accent); border:1px solid var(--accent); border-radius:6px; padding:0 6px; margin-left:6px; vertical-align:middle; }
-  /* 这节课(《备课设计.md》§4):不给孩子的卡整张变淡去色;节头「整节不要 / 整节要」;舞台顶栏「给孩子」开关;底部「这节课」条;看孩子会看到什么 */
-  #board .c.off { opacity:.5; filter:grayscale(1); }
-  .sh .shp { flex:none; order:2; font-size:12px; color:var(--accent); border:1px solid var(--accent); border-radius:999px; padding:1px 9px; background:var(--card); }
-  #st-give { display:flex; align-items:center; gap:8px; height:40px; padding:0 6px 0 12px; border-radius:20px; background:var(--paper); border:1px solid var(--line); font-size:14px; font-weight:600; color:var(--ink); }
-  #st-give[hidden] { display:none; }
-  #st-give.no { color:var(--dim); }
-  #st-give .tog { width:40px; height:24px; border-radius:12px; background:var(--line); position:relative; flex:none; }
-  #st-give .tog::after { content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 3px #0003; transition:left .15s; }
-  #st-give:not(.no) .tog { background:var(--accent); }
-  #st-give:not(.no) .tog::after { left:19px; }
+  /* 课文件(《备课设计.md》§10.6):清单里老师块下面一栏,点进去整份铺开——讲稿是「说」旁注、要改的钉在卡下、末尾是讲法 */
+  .pt .tr.lsn { border:1px solid var(--line); background:var(--card); }
+  .pt .tr .pin.bad { color:#b3541e; border-color:#b3541e; }
+  .pt .tr .pin.ok { color:#2f6b3a; border-color:#2f6b3a; }
+  .sec.lsn > .note { margin:0 6px; }
+  .note.brief { background:#fffbef; border:1px dashed #d9c98f; border-radius:14px; padding:10px 12px; }
+  .note.brief .tg { color:#8a6d1a; border-color:#c9b56a; }
+  .note.brief .tx { color:var(--ink); }
+  .note.fix .tg, .note.fix .tx { color:#b3541e; } .note.fix .tg { border-color:#b3541e; }
+  .note.warn .tg { color:#8a6d1a; border-color:#c9b56a; }
+  .note .pin.ask { flex:none; align-self:center; font-size:12px; color:#5b3d86; border:1px solid #5b3d86; border-radius:6px; padding:0 6px; white-space:nowrap; }
+  .note mark { background:#fff0a3; color:inherit; border-radius:4px; padding:0 2px; box-shadow:inset 0 -2px 0 #e6c93b; }
+  #ls-post.arm { color:#fff; background:#b3541e; border-color:#b3541e; }
+  /* 这节课(《备课设计.md》§十):底部「这节课」条——交给孩子(先写成课文件再交);交了写着课文件在哪 */
   #lesson { display:flex; align-items:center; gap:12px; margin:4px 16px 0; padding:10px 12px 10px 14px; border-radius:18px; background:var(--card); border:1.5px solid var(--accent); }
   #lesson[hidden] { display:none; }
   #lesson.empty { border-color:var(--line); }
@@ -189,15 +192,6 @@ const PAGE = `<!doctype html>
   #lesson #ls-hand { background:var(--accent); border-color:var(--accent); color:#fff; }
   #lesson button:disabled, #lesson button[hidden] { opacity:.4; }
   #lesson button[hidden] { display:none; }
-  #pv { position:absolute; inset:0; display:none; z-index:31; }
-  #pv.on { display:block; }
-  #pv .dimmer { position:absolute; inset:0; background:#00000073; }
-  #pv .panel { position:absolute; inset:calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 10px); background:var(--paper); border-radius:22px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 8px 30px #00000055; }
-  #pv .hd { display:flex; align-items:center; gap:10px; padding:10px 12px 10px 20px; background:var(--card); border-bottom:1px solid var(--line); }
-  #pv .hd b { flex:1; font-size:17px; }
-  #pv .hd small { font-size:13px; color:var(--dim); }
-  #pv .ls { flex:1; overflow:auto; padding:16px 20px 32px; display:flex; flex-direction:column; gap:12px; }
-  #pv .said { font-size:14px; color:var(--dim); line-height:1.6; padding:0 4px; }
   #hand { position:absolute; inset:0; display:none; z-index:31; }
   #hand.on { display:block; }
   #hand .dimmer { position:absolute; inset:0; background:#00000073; }
@@ -412,10 +406,10 @@ const PAGE = `<!doctype html>
     <div class="tb r"><button class="hb on" id="spk" type="button" aria-label="老师念不念"></button><button class="hb" id="more-btn" type="button" aria-label="更多"></button></div>
     <div id="wrap">
       <div id="board"></div>
-      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-give" type="button" hidden aria-pressed="true">给孩子<span class="tog"></span></button><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
+      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
       <div id="st-dim"></div>
     </div>
-    <div id="lesson" hidden><div class="tx2"><b id="ls-n"></b><small id="ls-names"></small></div><button type="button" id="ls-pv">看孩子会看到什么</button><button type="button" id="ls-hand">交给孩子</button></div>
+    <div id="lesson" hidden><div class="tx2"><b id="ls-n"></b><small id="ls-names"></small></div><button type="button" id="ls-post" hidden>让后期排一版</button><button type="button" id="ls-hand">交给孩子</button></div>
     <div id="sub"><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
       <div id="pill">
@@ -433,10 +427,9 @@ const PAGE = `<!doctype html>
     <button type="button" id="hist-btn"><span class="ic"></span><span class="tx"><b>以前的</b><small>看看以前聊过的话题</small></span></button>
     <button type="button" id="new-btn" hidden><span class="ic"></span><span class="tx"><b>新话题</b><small>这个聊完了,换一个问</small></span></button>
   </div></div>
-  <div id="pv"><div class="dimmer"></div><div class="panel"><div class="hd"><b id="pv-n"></b><small>答案不显示,讲稿照念</small><button class="hb" id="pv-x" type="button" aria-label="关"></button></div><div class="ls"></div></div></div>
   <div id="hand"><div class="dimmer"></div><div class="panel">
     <b id="hd-ttl">交给孩子</b>
-    <small>孩子的首页上这位老师多一个按钮,按下去看到的就是这节课的卡,原样、不花钱;孩子答了老师接着讲。交了之后,孩子开口前还能改</small>
+    <small>老师写的这几节先写成一份课文件(lessons/ 里),再交给孩子:首页上这位老师多一个按钮,按下去看到的就是这几节,原样、不花钱。要挑卡、改字,去课文件里改,再交一次就覆盖</small>
     <label>按钮上的字(孩子看的,最多 16 个字)<input id="hd-label" maxlength="16" autocomplete="off"></label>
     <div id="hd-msg"></div>
     <div class="row"><button type="button" id="hd-cancel">算了</button><button type="button" id="hd-go">交给孩子</button></div>
@@ -461,9 +454,8 @@ const PAGE = `<!doctype html>
 __BOARD_JS__
 __PHOTO_JS__
 
-  /** 页面的模式:{} = 孩子端;preview = 'draft' / 'published' = 家长端「首页」页里的预览(数据走家长接口,按钮不真发);parent = 家长板书页(数据走家长接口,只读,节间插旁注) */
+  /** 页面的模式:{} = 孩子端;parent = 家长板书页(数据走家长接口,只读,节间插旁注) */
   const MODE = __MODE__;
-  const PREVIEW = MODE.preview || null;
   const PARENT = MODE.parent === true;
   /** 对话接口的前缀(messages / photos / cards / history):家长端发的走家长接口(from: parent),一天的板书另有自己的路 */
   const CONV = PARENT ? '/api/conversations/' : '/api/kid/conversations/';
@@ -579,7 +571,6 @@ __PHOTO_JS__
   let toastTimer = null;
   const toast = (text) => { const t = $('#toast'); t.textContent = text; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4000); };
   const pickButton = (t, b) => {
-    if (PREVIEW) { toast(t.display + (b.kind === 'new' ? ':空白的老师页,等孩子开口' : b.id === 'recent' ? ':回到今天那个话题' : ' 会收到「' + b.label + '」' + (b.kind === 'continue' ? '(接着 ' + b.date + ' ' + b.thread + ')' : '') + (b.open ? '(家长备好的:只打开,从交给孩子的那一节播)' : '') + (b.brief ? '\\n讲法:' + b.brief : '\\n(没写讲法)'))); return; }
     const via = { home: S.home.home, button: b.id };
     if (b.kind === 'new') openTutor(t, { kind: 'new', via });
     else if (b.id === 'recent') openTutor(t, { kind: 'thread', thread: b.thread, via });
@@ -605,7 +596,7 @@ __PHOTO_JS__
     $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor').map((c, i) => renderCard(c, i, null, false)));
   };
   const loadHome = async () => {
-    try { S.home = await api('GET', PARENT ? '/api/overview/' + (S.pdate || 'today') : PREVIEW ? '/api/home/preview?which=' + PREVIEW : '/api/kid/home'); setOffline(false); if (PARENT) renderOverview(); else renderHome(); }
+    try { S.home = await api('GET', PARENT ? '/api/overview/' + (S.pdate || 'today') : '/api/kid/home'); setOffline(false); if (PARENT) renderOverview(); else renderHome(); }
     catch { setOffline(true); }
   };
   // ---- 家长板书页的清单(《家长板书页设计.md》§2.2):日期、每位老师一块、一行一个话题,点了进板书 ----
@@ -661,9 +652,15 @@ __PHOTO_JS__
       stars(t, th), th.stoppedAt === 'writing' ? null : delBtn('conversations', t, th));
     // 新话题(《备课设计.md》§3.1):家长自己和老师聊——试改过的老师文件与 vault、备今天的课;孩子开口前孩子看不到、不写记忆
     const newBtn = (t) => (H.date !== H.today ? null : h('button', { type: 'button', class: 'try', title: '和老师备课、试试改过的老师文件;孩子看不到,满意了在某一节尾点「从这里给孩子」', on: { click: () => openTutor(t, { kind: 'new' }) } }, '新话题'));
+    // 课文件(《备课设计.md》§10.6):今天这位老师的每一份一行,点了整份铺开看
+    const ago = (iso) => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return !isFinite(m) ? '' : m < 1 ? '刚改的' : m < 60 ? m + ' 分钟前改的' : m < 1440 ? Math.round(m / 60) + ' 小时前改的' : Math.round(m / 1440) + ' 天前改的'; };
+    const lsnRow = (t, l) => h('div', { class: 'tr lsn', on: { click: () => openLesson(t, l.name) } },
+      h('b', {}, l.name, h('span', { class: 'pin' + (l.fixes ? ' bad' : l.handedAs !== null ? ' ok' : '') }, l.fixes ? l.fixes + ' 条要改' : l.handedAs !== null ? '已交给孩子' + (l.handedAs ? ':' + l.handedAs : '') : '还没交')),
+      h('small', {}, l.sections + ' 节 · ' + l.cards + ' 张卡' + (l.fromThread ? ' · 从备课话题写出来的' : '') + (l.mtime ? ' · ' + ago(l.mtime) : '')));
     $('#tutors').replaceChildren(...H.tutors.map((t) => h('div', { class: 'pt', 'data-tutor': t.name },
       h('div', { class: 'hd' }, avatarEl(t), h('div', { class: 'who' }, h('span', { class: 'nm' }, t.display), t.turns ? h('small', {}, h('span', {}, t.turns + ' 轮 · $' + t.costUsd.toFixed(2)), ...(t.kouboYuan ? [' ', h('span', {}, '· koubo ¥' + t.kouboYuan.toFixed(2))] : [])) : null), newBtn(t)),
-      ...(t.threads.length ? t.threads.map((th) => row(t, th)) : [h('div', { class: 'none' }, H.date === H.today ? '今天没聊' : '这天没聊')]))));
+      ...(t.threads.length ? t.threads.map((th) => row(t, th)) : [h('div', { class: 'none' }, H.date === H.today ? '今天没聊' : '这天没聊')]),
+      ...(t.lessons && t.lessons.length ? [h('div', { class: 'tt' }, '课文件 · lessons/'), ...t.lessons.map((l) => lsnRow(t, l))] : []))));
     $('#hcards').replaceChildren();
   };
   const setOffline = (off) => {
@@ -701,7 +698,7 @@ __PHOTO_JS__
   };
   /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」 */
   const blankBoard = (title) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor) : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, S.tutor && S.tutor.motto ? h('span', { class: 'mo' }, S.tutor.motto) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null);
-  const closeTutor = () => { clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit'); loadHome(); };
+  const closeTutor = () => { clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); S.lsn = null; stopListen(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit'); loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -1014,7 +1011,7 @@ __PHOTO_JS__
       const fr = new FileReader();
       fr.onload = () => {
         if (!S.tutor || S.readonly) return;
-        api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + origN(job, r.idx), { audio: fr.result, seconds }).then((res) => { if (res && res.state) { card.state = res.state; repaintCard(r.secIdx, r.idx); } }).catch(() => {});
+        api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + r.idx, { audio: fr.result, seconds }).then((res) => { if (res && res.state) { card.state = res.state; repaintCard(r.secIdx, r.idx); } }).catch(() => {});
       };
       fr.readAsDataURL(blob);
       repaintCard(r.secIdx, r.idx);
@@ -1128,19 +1125,16 @@ __PHOTO_JS__
   // ---- 舞台:点卡放大,交互都在这里;开着时讲稿暂停,关了字幕行出「播放」 ----
   const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', scene: '讲解动画', canvas: '画一画', record: '录音', code: '' };
   const GO_LABEL = { canvas: '给老师看' };
-  /** 这节课里挑过卡的节(《备课设计.md》§4.4):第 idx 张在原节里是第几张;存卡的状态、卡的 id 用它 */
-  const origN = (job, idx) => { const sec = S.sections.find((x) => x.job === job); return sec && sec.orig ? sec.orig[idx] : idx; };
   const openStage = (secIdx, idx, opts = {}) => {
     const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];
     if (!card) return;
     if (isHeavy(card) && !sceneReady(card) && card.kind === 'scene') return; // 课包还没到:紧凑态写着「图还在路上」,不开
     if (S.readonly && hasState(card) && !opts.delegate) return; // 以前的只能看:选择 / 填空 / 画板不开,免得改了当时的答案
     if (!opts.delegate) dispatch({ type: 'stageOpen' });
-    S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + origN(S.sections[secIdx].job, idx), scene: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
+    S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, scene: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
     // 画板:题目在工作台自己的题目条上(可收起),顶栏只写「画一画」
     $('#st-ttl').textContent = card.kind === 'canvas' ? '画一画' : cardTitle(card);
     $('#st-kd').textContent = KIND_NAME[card.kind] || card.kind;
-    if (PARENT) syncGive();
     $('#st-kd').hidden = card.kind === 'canvas' || !(KIND_NAME[card.kind] || card.kind);
     renderStage();
     $('#stage').classList.add('on');
@@ -1181,7 +1175,7 @@ __PHOTO_JS__
     if (m.type === 'ready') { const b = card.kind === 'scene' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null; const im = card.kind === 'canvas' && card.props.base && typeof card.props.base.image === 'string' ? card.props.base.image : null; postStage({ type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? '/api/bundles/' + encodeURIComponent(b) + '/' : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay }); }
     else if (m.type === 'phase') { S.stage.scene = { phase: m.phase, line: m.line, step: m.step, total: m.total }; renderSubtitle(); if (m.phase === 'done' && S.stage.delegate) { const d = S.stage; closeStage(); resumeAfter(d); } }
     else if (m.type === 'state') { card.state = m.state; $('#st-go').disabled = !stateSummary(card).length; $('#st-note').textContent = stateSummary(card).join('、'); repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, m.state); }
-    else if (m.type === 'submit') { card.state = m.state; const id = S.stage.id; const job = S.sections[S.stage.section].job; const idx = origN(job, S.stage.card); closeStage(); api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id } })); }
+    else if (m.type === 'submit') { card.state = m.state; const id = S.stage.id; const job = S.sections[S.stage.section].job; const idx = S.stage.card; closeStage(); api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id } })); }
     else if (m.type === 'close' || m.type === 'error') { const d = S.stage; closeStage(); if (d.delegate) resumeAfter(d); }
   });
   /** 讲稿委托给场景播完(或孩子关了)→ 接着念下一句 */
@@ -1198,7 +1192,7 @@ __PHOTO_JS__
     renderStage(); repaintCard(secIdx, idx);
     saveState(S.sections[secIdx].job, idx, card.state);
   };
-  const saveState = (job, idx, state) => { if (!S.tutor || S.readonly) return; api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + origN(job, idx), state).catch(() => {}); };
+  const saveState = (job, idx, state) => { if (!S.tutor || S.readonly) return; api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, state).catch(() => {}); };
   $('#st-go').addEventListener('click', () => {
     if (!S.stage) return;
     const card = S.sections[S.stage.section].cards[S.stage.card];
@@ -1404,6 +1398,7 @@ __PHOTO_JS__
 
   const loadDay = async (silent) => {
     if (!S.tutor) return;
+    if (S.lsn) return loadLesson();
     try {
       const d = await api('GET', PARENT ? '/api/conversations/' + S.tutor.name + '/' + (S.hist || 'today') + '/board' : CONV + S.tutor.name + '/' + (S.hist || 'today'));
       setOffline(false);
@@ -1441,7 +1436,7 @@ __PHOTO_JS__
       if (stillPending && !S.waitSince) S.waitSince = Date.now();
       if (fresh.length) dispatch({ type: 'fresh', sections: fresh, silent: Boolean(silent) });
       else renderSubtitle();
-      if (PARENT) { S.msgs = mine; syncNotes(mine); renderLesson(); if (S.stage) syncGive(); }
+      if (PARENT) { S.msgs = mine; syncNotes(mine); renderLesson(); }
       if (!S.sections.length && !S.partial && !stillPending && !S.readonly && !$('#board .blank')) $('#board').append(blankBoard('想问什么?'));
       renderHeader();
       clearTimeout(S.pollTimer);
@@ -1465,7 +1460,8 @@ __PHOTO_JS__
     const today = S.day ? S.day.date : null;
     let mo = '';
     // 家长的备课话题一直亮着「孩子看不到」,交了就是「已交给孩子」(节头有时间,这里不带,手机宽度下带了就顶到右上角的喇叭底下)
-    if (PARENT && (S.newThread || S.prep)) mo = S.prep === 'handed' ? '备课 · 已交给孩子' : '备课 · 孩子看不到';
+    if (PARENT && S.lsn) mo = '课文件「' + S.lsn.name + '」 · ' + (S.lsn.page && S.lsn.page.handed ? '已交给孩子' : '孩子看不到');
+    else if (PARENT && (S.newThread || S.prep)) mo = S.prep === 'handed' ? '备课 · 已交给孩子' : '备课 · 孩子看不到';
     else if (PARENT) mo = [S.hist && S.home ? dateLabel(S.hist, S.home.today) : '', clock(S.threadAt)].filter(Boolean).join(' · ');
     else if (S.hist && today) mo = '以前的 · ' + dateLabel(S.hist, S.hist === today ? '' : today) + ' ' + clock(S.threadAt);
     else if (S.cont && today) { const d = dateLabel(S.cont, today); mo = '接着' + (d === '昨天' ? d : ' ' + d + ' ') + '的话题'; }
@@ -1479,7 +1475,7 @@ __PHOTO_JS__
   // 家长端的 chrome:孩子的话题卡锁着(S.readonly:选择 / 填空 / 画板不开、没有「继续」)、没有「回到今天」(回清单走左上角)、没有「更多」;
   // 今天的那页输入条在——家长真发(《家长板书页设计.md》第六节 3):打字 / 按住说话 / 拍作业照片,from: parent。家长自己开的备课话题卡与「继续」也开着
   /** 能不能发消息:孩子端 = 不只读;家长端 = 今天 */
-  const canSend = () => (PARENT ? !S.hist || Boolean(S.home && S.hist === S.home.today) : !S.readonly);
+  const canSend = () => (PARENT ? !S.lsn && (!S.hist || Boolean(S.home && S.hist === S.home.today)) : !S.readonly);
   const renderBar = () => { $('#pill').hidden = !canSend(); $('#back-today').hidden = !S.readonly || PARENT; };
   $('#more-btn').hidden = PARENT;
   const resetBoard = () => { dispatch({ type: 'halt' }); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.partial = null; $('#board').replaceChildren(); };
@@ -1590,8 +1586,8 @@ __PHOTO_JS__
     if (m.prep && typeof m.costUsd === 'number' && !m.pending) out.push(noteEl('cost', '费用', '$' + m.costUsd.toFixed(3)));
     return out;
   };
-  // ---- 这节课(《备课设计.md》§4):备课话题里老师写的卡默认给孩子;不给的整张变淡去色(卡上不放控件)。
-  //      整节在节头「整节不要 / 整节要」,单张在舞台顶栏「给孩子」开关;底部「这节课」条:张数、卡名、看孩子会看到什么、交给孩子 ----
+  // ---- 这节课(《备课设计.md》§十):备课话题里老师写的几节,「交给孩子」先写成课文件(lessons/<日期>-<话题>.md)再从文件建给孩子的话题;
+  //      挑卡、改字在文件里做(工作台「备课」页或 Claude Code),底部「这节课」条只有张数与「交给孩子」 ----
   /** 这个话题是不是家长的备课话题、交了没有(S.prep = null / 'prep' / 'handed');S.lesson = 接口的这节课;卡与「继续」只在备课话题里开 */
   const syncPrep = (mine) => {
     const last = mine[mine.length - 1];
@@ -1600,71 +1596,48 @@ __PHOTO_JS__
     const ro = !(S.prep && canSend());
     if (S.readonly !== ro) { S.readonly = ro; renderBar(); }
   };
-  /** 能不能改这节课:今天的、孩子还没开口的备课话题 */
+  /** 能不能交:今天的、孩子还没开口的备课话题 */
   const lessonEditable = () => Boolean(S.prep && canSend() && !S.pending);
-  const lessonApi = (path, body) => api(path === 'hand' ? 'POST' : 'PUT', '/api/conversations/' + S.tutor.name + '/' + S.home.today + '/threads/' + encodeURIComponent(S.thread) + '/lesson' + (path === 'hand' ? '/hand' : ''), body);
-  const setOff = async (cards, off) => {
-    try { await lessonApi('', { cards, off }); } catch (e) { if (!(e && (e.status === 409 || e.status === 400))) setOffline(true); }
-    loadDay(true);
-  };
-  /** 节头按钮与灰卡:每次 loadDay 之后按接口的 off 重画 */
-  const syncLesson = (secEl, m) => {
-    const cards = (m.section && m.section.cards) || [];
-    const off = m.off || [];
-    cards.forEach((_, k) => { const el = secEl.querySelector('.c[data-card="' + k + '"]'); if (el) el.classList.toggle('off', off.includes(k)); });
-    const sh = secEl.querySelector(':scope > .sh');
-    let b = sh && sh.querySelector('.shp');
-    if (!m.prep || !cards.length || !lessonEditable()) { if (b) b.remove(); return; }
-    const allOff = off.length === cards.length;
-    if (!b) { b = h('button', { type: 'button', class: 'shp' }); sh.append(b); }
-    b.textContent = allOff ? '整节要' : '整节不要';
-    b.onclick = (e) => { e.stopPropagation(); setOff(cards.map((_, k) => m.job + '/' + k), !allOff); };
-  };
+  const lessonApi = (body) => api('POST', '/api/conversations/' + S.tutor.name + '/' + S.home.today + '/threads/' + encodeURIComponent(S.thread) + '/lesson/hand', body);
   const renderLesson = () => {
     const bar = $('#lesson');
+    if (PARENT && S.lsn) {
+      const P = S.lsn.page;
+      bar.hidden = !P; if (!P) return;
+      const hd = P.handed;
+      bar.classList.toggle('empty', !P.cards);
+      $('#ls-n').textContent = '这节课 · ' + P.cards + ' 张卡' + (hd ? ' · 已交给孩子' + (hd.kidSpoke ? ' · 孩子答过了' : '') : P.fixes ? ' · ' + P.fixes + ' 条要改' : ' · 还没交');
+      $('#ls-names').textContent = hd ? '首页上是「' + (hd.label || '…') + '」' + (hd.kidSpoke ? ';再交是新话题' : ';改了文件再交就覆盖') : P.fixes ? '改好文件再交;这页一两秒后跟上' : '要挑卡、改字,在电脑上改 ' + P.source + ',或在 Claude Code 里说「把这节课改改」';
+      $('#ls-post').hidden = false; $('#ls-post').disabled = !P.cards || Boolean(S.lsnBusy);
+      $('#ls-hand').hidden = false; $('#ls-hand').disabled = !P.cards || P.fixes > 0 || Boolean(S.lsnBusy);
+      return;
+    }
+    $('#ls-post').hidden = true;
     if (!PARENT || !S.prep) { bar.hidden = true; return; }
     bar.hidden = false;
     const ids = (S.lesson && S.lesson.cards) || [];
     const names = ids.map((id) => { const [j, n] = id.split('/'); const m = (S.msgs || []).find((x) => x.job === j); const c = m && m.section && m.section.cards[Number(n)]; return c ? cardTitle(c) : ''; }).filter(Boolean);
     bar.classList.toggle('empty', !ids.length);
     const handed = S.prep === 'handed';
-    $('#ls-n').textContent = !ids.length ? '这节课 · 还没有卡' : '这节课 · ' + ids.length + ' 张卡' + (handed ? ' · 已交给孩子' : '');
-    $('#ls-names').textContent = handed ? '首页上是「' + ((S.lesson && S.lesson.label) || '…') + '」;孩子开口前还能改' : ids.length ? names.join(' · ') : '点开一张卡,顶上可以改给不给孩子';
-    $('#ls-pv').disabled = !ids.length;
+    const src = S.lesson && S.lesson.source;
+    $('#ls-n').textContent = !ids.length ? '这节课 · 还没有卡' : '这节课 · ' + ids.length + ' 张卡' + (handed ? ' · 已交给孩子' : src ? ' · 已写成课文件' : '');
+    $('#ls-names').textContent = handed ? '首页上是「' + ((S.lesson && S.lesson.label) || '…') + '」' + (src ? ' · ' + src : '') : src ? src + ' · 要挑卡、改字去文件里改,再交一次就覆盖' : ids.length ? names.join(' · ') : '和老师聊出几节,满意了交给孩子';
     $('#ls-hand').disabled = !ids.length || !lessonEditable();
     $('#ls-hand').hidden = handed;
   };
-  // 舞台顶栏「给孩子」开关:只在能改的备课话题里
-  const syncGive = () => {
-    const g = $('#st-give');
-    const sec = S.stage && S.sections[S.stage.section];
-    const m = sec && (S.msgs || []).find((x) => x.job === sec.job);
-    if (!PARENT || !m || !m.prep || !lessonEditable()) { g.hidden = true; return; }
-    const off = (m.off || []).includes(S.stage.card);
-    g.hidden = false; g.classList.toggle('no', off); g.setAttribute('aria-pressed', String(!off));
-    g.firstChild.textContent = off ? '不给孩子' : '给孩子';
-  };
-  $('#st-give').addEventListener('click', () => { const sec = S.sections[S.stage.section]; const m = (S.msgs || []).find((x) => x.job === sec.job); const off = (m.off || []).includes(S.stage.card); setOff([sec.job + '/' + S.stage.card], !off).then(syncGive); });
-  // 看孩子会看到什么:孩子端的样子,只有这节课的卡(答案不显示),每节下面是会念的讲稿
-  $('#ls-pv').addEventListener('click', () => {
-    const ids = (S.lesson && S.lesson.cards) || [];
-    const nodes = [];
-    for (const m of S.msgs || []) {
-      const keep = ids.filter((id) => id.startsWith(m.job + '/')).map((id) => Number(id.split('/')[1]));
-      if (!keep.length || !m.section) continue;
-      nodes.push(h('div', { class: 'sh' }, clock(m.at) + ' · ' + sectionTitle(m.section)));
-      for (const k of keep) nodes.push(renderCard(m.section.cards[k], k, null, false));
-      const said = m.section.lines.filter((l) => l.anchor === null || keep.includes(l.anchor)).map((l) => l.text).join(' ');
-      if (said) nodes.push(h('div', { class: 'said' }, said));
-    }
-    $('#pv-n').textContent = '孩子会看到 · ' + ids.length + ' 张卡';
-    $('#pv .ls').replaceChildren(...nodes);
-    $('#pv').classList.add('on');
-  });
-  const closePv = () => $('#pv').classList.remove('on');
-  $('#pv-x').innerHTML = ICON.close || '×'; $('#pv-x').addEventListener('click', closePv); $('#pv .dimmer').addEventListener('click', closePv);
   // 交给孩子:只填按钮字(预填这节课第一张卡上的第一句)
   $('#ls-hand').addEventListener('click', () => {
+    if (S.lsn) {
+      const P = S.lsn.page; if (!P || P.fixes || !P.cards) return;
+      const line = P.sections[0] && P.sections[0].section.lines[0];
+      $('#hd-ttl').textContent = '交给孩子 · ' + P.cards + ' 张卡';
+      $('#hd-label').value = (P.handed && P.handed.label) || (line ? Array.from(line.text.replace(/[。!?!?,,、:;\\s]+$/, '')).slice(0, 16).join('') : '');
+      const msg = $('#hd-msg'); msg.textContent = ''; msg.classList.remove('err');
+      $('#hd-go').disabled = false;
+      $('#hand').classList.add('on');
+      setTimeout(() => $('#hd-label').focus(), 50);
+      return;
+    }
     if (!S.thread || !lessonEditable()) return;
     const first = (S.lesson && S.lesson.cards[0]) || '';
     const m = (S.msgs || []).find((x) => x.job === first.split('/')[0]);
@@ -1684,14 +1657,105 @@ __PHOTO_JS__
     if (!label) { msg.textContent = '按钮上要有字'; msg.classList.add('err'); return; }
     $('#hd-go').disabled = true; msg.classList.remove('err'); msg.textContent = '交着…';
     try {
-      const r = await lessonApi('hand', { label });
-      if (r.ok) { msg.textContent = '首页上有了:' + r.label; setTimeout(closeHand, 1500); }
-      else { msg.classList.add('err'); msg.textContent = '草稿里加上了,但首页有别处要改,这次没发:\\n' + r.issues.join('\\n') + '\\n去工作台或 Claude Code 改好再发'; }
-      loadDay(true);
+      if (S.lsn) {
+        const r = await api('POST', lsnUrl('/hand'), { label });
+        if (r.ok) { msg.textContent = '首页上有了:' + r.label; setTimeout(closeHand, 1500); }
+        else { msg.classList.add('err'); msg.textContent = '没交成:\\n' + r.issues.join('\\n'); }
+        S.lsn.key = null; loadLesson();
+      } else {
+        const r = await lessonApi('hand', { label });
+        if (r.ok) { msg.textContent = '写成了 ' + r.source + ',首页上有了:' + r.label; setTimeout(closeHand, 2000); }
+        else { msg.classList.add('err'); msg.textContent = '课文件写了(' + r.source + '),但没交成:\\n' + r.issues.join('\\n') + '\\n改好文件再交'; }
+        loadDay(true);
+      }
     } catch (e) {
       msg.classList.add('err'); $('#hd-go').disabled = false;
-      msg.textContent = e && e.status === 409 ? '孩子已经开口了,或者老师还在写' : e && e.body && e.body.message ? e.body.message : '没交上,再试一次';
+      msg.textContent = e && e.status === 409 && e.body && e.body.issues ? '没交成:\\n' + e.body.issues.join('\\n') : e && e.status === 409 ? '孩子已经开口了,或者老师还在写' : e && e.body && e.body.message ? e.body.message : '没交上,再试一次';
     }
+  });
+  // ---- 课文件页(《备课设计.md》§10.6):清单里点一份课文件进来,整份铺开——节头、卡按行(和孩子端同一套画法)、讲稿以「说」旁注插在它讲的那张卡后面、
+  //      要改的钉在那张卡下面、末尾是讲法;不走播放器,每节一个喇叭想听才听(浏览器的声);文件一改一两秒后重铺(节的 job 带内容 hash) ----
+  const lsnUrl = (tail) => '/api/lessons/' + encodeURIComponent(S.lsn.name) + tail;
+  const openLesson = (t, name) => {
+    unlock();
+    S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
+    S.thread = null; S.threadAt = null; S.hist = null; S.readonly = true; S.newThread = false; S.via = null; S.cont = null; S.prep = null; S.lesson = null;
+    S.lsn = { name, key: null, page: null };
+    $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader(); renderLesson();
+    $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
+    $('#board').replaceChildren();
+    $('#tutor').classList.add('on');
+    setBar('idle');
+    loadLesson();
+  };
+  /** 讲稿一句:标过的词(后期的 said,或老师的 [词])高亮 */
+  const markedText = (l) => {
+    const text = l.text; const parts = [];
+    const spots = (l.marks || []).map((m) => { const w = m.said || m.phrase; const i = w ? text.indexOf(w) : -1; return i < 0 ? null : { i, w }; }).filter(Boolean).sort((a, b) => a.i - b.i);
+    let pos = 0;
+    for (const sp of spots) { if (sp.i < pos) continue; parts.push(text.slice(pos, sp.i), h('mark', {}, sp.w)); pos = sp.i + sp.w.length; }
+    parts.push(text.slice(pos));
+    return parts;
+  };
+  const saidNote = (lines, ask) => { const tx = h('span', { class: 'tx' }); lines.forEach((l, i) => { if (i) tx.append('\\n'); tx.append(...markedText(l)); }); return h('div', { class: 'note said' }, h('span', { class: 'tg' }, '说'), tx, ask ? h('span', { class: 'pin ask' }, '停下等答') : null); };
+  const issueNote = (x) => noteEl(x.level === 'fix' ? 'fix' : 'warn', x.level === 'fix' ? '要改' : '提醒', (x.line ? '第 ' + x.line + ' 行:' : '') + x.text);
+  const renderLessonSection = (e, i, page) => {
+    const s = e.section;
+    const mine = (page.issues || []).filter((x) => x.section === i);
+    const sec = h('div', { class: 'sec lsn heard', 'data-sec': i, 'data-job': e.job });
+    sec.append(h('div', { class: 'sh' }, '第 ' + (i + 1) + ' 节 · ' + s.cards.length + ' 张卡 · ' + s.lines.length + ' 句' + (e.from ? ' · 第 ' + e.from + ' 行起' : ''), h('button', { type: 'button', class: 'again', 'aria-label': '听这节', html: ICON.replay, on: { click: (ev) => { ev.stopPropagation(); listenSection(i); } } })));
+    const last = s.lines[s.lines.length - 1];
+    const opening = s.lines.filter((l) => l.anchor === null);
+    if (opening.length) sec.append(saidNote(opening, opening[opening.length - 1] === last && last.ask));
+    rowsFor(s, S.device).forEach((row) => {
+      sec.append(rowEl(row.length, ...row.map((idx) => renderCard(s.cards[idx], idx, i, false))));
+      for (const x of mine) if (x.card !== undefined && row.includes(x.card)) sec.append(issueNote(x));
+      const said = s.lines.filter((l) => l.anchor !== null && row.includes(l.anchor));
+      if (said.length) sec.append(saidNote(said, said[said.length - 1] === last && last.ask));
+    });
+    for (const x of mine) if (x.card === undefined) sec.append(issueNote(x));
+    answerNotes(sec, { section: s });
+    return sec;
+  };
+  const renderLessonBoard = (page) => {
+    const board = $('#board'); board.replaceChildren();
+    S.sections = page.sections.map((e) => ({ job: e.job, at: e.at, cards: e.section.cards, lines: e.section.lines, layout: e.section.layout }));
+    const global = (page.issues || []).filter((x) => x.section === undefined);
+    if (global.length) board.append(h('div', { class: 'notes' }, ...global.map(issueNote)));
+    page.sections.forEach((e, i) => board.append(renderLessonSection(e, i, page)));
+    if (page.brief) board.append(h('div', { class: 'notes' }, noteEl('brief', '讲法', page.brief.replace(/^##\\s+\\S.*\\n?/, '').trim() + '\\n\\n给老师的,孩子看不到;孩子答第一句时老师照它接')));
+    if (!page.sections.length) board.append(blankBoard('这份课文件还是空的'));
+  };
+  const loadLesson = async () => {
+    if (!S.lsn || !S.tutor) return;
+    const L = S.lsn;
+    try {
+      const page = await api('GET', lsnUrl('/page'));
+      if (S.lsn !== L) return;
+      setOffline(false);
+      const key = (page.mtime || '') + '|' + page.sections.map((e) => e.job).join() + '|' + page.fixes + '|' + JSON.stringify(page.handed) + '|' + page.issues.length;
+      if (L.key !== key) { L.key = key; L.page = page; if (S.stage) closeStage(); stopListen(); renderLessonBoard(page); renderHeader(); renderLesson(); }
+    } catch (e) { if (e && e.status === 404) return closeTutor(); setOffline(true); }
+  };
+  let lsnSpeak = null;
+  const stopListen = () => { if (lsnSpeak === null) return; lsnSpeak = null; voiceToken++; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {} };
+  const listenSection = (i) => {
+    const s = S.sections[i]; if (!s) return;
+    if (lsnSpeak === i) return stopListen();
+    stopListen(); lsnSpeak = i;
+    let k = 0;
+    const next = () => { if (lsnSpeak !== i) return; if (k >= s.lines.length) { lsnSpeak = null; return; } const l = s.lines[k++]; say({ text: l.text, audio: null }, next); };
+    next();
+  };
+  $('#ls-post').addEventListener('click', async () => {
+    if (!S.lsn || S.lsnBusy) return;
+    const b = $('#ls-post');
+    if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = '确定?要花钱'; setTimeout(() => { b.classList.remove('arm'); b.textContent = '让后期排一版'; }, 4000); return; }
+    b.classList.remove('arm'); b.textContent = '排着…'; S.lsnBusy = true; renderLesson();
+    try { const r = await api('POST', lsnUrl('/post'), {}); toast((r.ok ? '排好了' : '有 ' + r.failed + ' 拍没成') + ':改了 ' + r.fences + ' 处围栏行、' + r.marks + ' 处标注 · $' + Number(r.costUsd || 0).toFixed(3)); }
+    catch (e) { toast('没排成' + (e && e.body && e.body.message ? ':' + e.body.message : '')); }
+    S.lsnBusy = false; b.textContent = '让后期排一版';
+    if (S.lsn) { S.lsn.key = null; loadLesson(); }
   });
   const answerOf = (c) => {
     const p = c.props || {};
@@ -1720,7 +1784,7 @@ __PHOTO_JS__
       if (!post) { post = h('div', { class: 'notes post', 'data-job': m.job }); (sec || pre).after(post); }
       else if ((sec || pre).nextElementSibling !== post) (sec || pre).after(post);
       post.replaceChildren(...postNotes(m));
-      if (sec) { answerNotes(sec, m); syncLesson(sec, m); }
+      if (sec) answerNotes(sec, m);
       prev = post;
     }
   };
@@ -2162,7 +2226,7 @@ __PHOTO_JS__
       if (t) { const th = debug.get('thread'); openTutor(t, th ? { kind: 'thread', thread: th, date: S.home.date } : { kind: 'today', date: S.home.date }); setTimeout(jumpTo, 400); }
       return;
     }
-    if (open && S.home && !PREVIEW) {
+    if (open && S.home) {
       const t = S.home.tutors.find((x) => x.name === open);
       if (t) {
         openTutor(t, { kind: 'today' });
@@ -2179,13 +2243,13 @@ __PHOTO_JS__
   });
   /** 服务换了新代码:孩子手上没事时重载,回到原来那位老师。正按着、在打字、在等老师、老师正在念、舞台或发照片屏开着,都先不动 */
   const staleReload = () => {
-    if (!stale || PREVIEW || document.hidden) return;
+    if (!stale || document.hidden) return;
     if (press || rec || psRec || S.pending || S.stage || S.bar !== 'idle' || S.state.status === 'playing' || psEl.classList.contains('on')) return;
     if (PARENT) { if (S.tutor) { const q = new URLSearchParams({ tutor: S.tutor.name }); if (S.hist) q.set('date', S.hist); if (S.thread) q.set('thread', S.thread); location.replace(location.pathname + '?' + q); } else location.reload(); return; }
     try { if (S.tutor && !S.readonly) sessionStorage.setItem('kid-resume', S.tutor.name); } catch {}
     location.reload();
   };
-  setInterval(() => { staleReload(); if (S.tutor) { if (!S.pending) loadDay(true); } else loadHome(); }, PREVIEW ? 2000 : 5000);
+  setInterval(() => { staleReload(); if (S.tutor) { if (!S.pending) loadDay(true); } else loadHome(); }, 5000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) (S.tutor ? loadDay(true) : loadHome()); });
 })();
 </script>
@@ -2195,8 +2259,6 @@ __PHOTO_JS__
 export const KID_PAGE = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__PHOTO_JS__', () => libSource('photo-edit'));
 
 export interface KidPageMode {
-  /** 家长端「首页」页里的预览(草稿 / 已发布) */
-  preview?: 'draft' | 'published';
   /** 家长板书页(《家长板书页设计.md》):数据走家长接口、只读、旁注;自己的 manifest */
   parent?: boolean;
 }

@@ -20,6 +20,10 @@ export const USAGE = `用法:
   cotutor home check [--published] [--json]                           检查首页草稿 home/draft.md(或已发布的那份):孩子会看到哪几张卡、每位老师的按钮、要改的与提醒(带行号);不花钱
   cotutor home publish [--force] [--from <文件>] [--json]              发布首页:检查 → 留历史 home/history/<id>.md → 写 home/published.json(孩子端只读它);有要改的不发,--force 丢掉那几张照发;--from 发另一份(如历史)
   cotutor home show [--json]                                          现在发布的是哪份、几天前、每个按钮被点了几次(哪天、哪个话题)
+  cotutor lesson check <课名> [--json]                                 检查课文件 lessons/<课名>.md:老师、几节几张卡、排版行、要改的与提醒(带行号);不花钱
+  cotutor lesson post <课名> [--write] [--model <名>] [--json]         让板书后期给课文件排一版(每节按拍起快模型,花钱):--write 把它定的 same / tint= / look= / emoji= 回写到围栏行、标注写成讲稿里的 [词];你手写过的当已定
+  cotutor lesson hand <课名> [--label <按钮字>] [--json]               交给孩子:检查 → 配音 → 建一个给孩子的话题(一节一轮,没有会话)→ 首页多一个只打开的「接着」;同一文件孩子没开口再交是覆盖
+  cotutor lesson list [--json]                                        列 lessons/ 下的课文件:老师、几节几张卡、有没有要改的
   cotutor mock [--port <n>] [--scenario normal|limit|offline|nopost] [--delay <ms>] [--http]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace;nopost = 没有后期的素版)
   cotutor repost <老师> [<日期>] [--job <job>] [--workspace <dir>]      板书后期再做一次:老师原文重解 → 快模型重新划重点 / 排版 / 定样子 → 改写索引(老师原文与配音不动;调提示词时旧板书全部能重来)
   cotutor --version | --help

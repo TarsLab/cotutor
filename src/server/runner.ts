@@ -43,6 +43,7 @@ import { updateVaultMemory, readAgentBody, readCardStates, readDiaries, readInde
 import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPrompt } from '../lib/vault-notes.ts';
 import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTEM, BOARD_GUIDE_PATH, boardGuideBody, boardGuideReads } from '../lib/tutor-rules.ts';
 import { DubQueue, LineDubber } from './tts.ts';
+import { handedLessonOf } from './lesson.ts';
 import { continueContext } from './home.ts';
 
 export class BusyError extends Error {
@@ -352,13 +353,16 @@ export class Runner {
       return { card: id, text: card ? describeCard(card, c.file.state, extra) : JSON.stringify(c.file.state) };
     }));
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
-    // 孩子在家长交给他的备课话题里的第一条(《备课设计.md》§4.4):孩子看到的是这节课那几张卡,老师照它接,不用猜哪些版本孩子没看过
+    // 孩子在家长交给他的备课话题里的第一条(《备课设计.md》§十):孩子看到的是这节课那几张卡,老师照它接;从课文件建的话题没有会话,这条是新会话,
+    // 上下文包另带课文件的路径(老师要看原文自己 Read)与文件尾巴里家长的讲法
     if (input.from === 'kid' && thread !== job && index.lessons[thread]?.handedAt && isPrepThread(index.messages, thread) && !kidSpoke(index.messages, thread)) {
       pack.lesson = lessonCards(index, thread).map((id) => {
         const [j, n] = id.split('/');
         const c = index.messages.find((m) => m.job === j)?.section?.cards[Number(n)];
         return c ? `${id} ${c.kind}「${cardLabel(c)}」` : id;
       });
+      const handed = await handedLessonOf(ws, index, thread);
+      if (handed) { pack.lessonFile = handed.file; if (handed.brief.trim()) pack.lessonBrief = handed.brief.replace(/^##\s+\S.*\n?/, '').trim(); }
     }
     if (photos.length) { pack.photos = photos; pack.photoFiles = photos.map((p) => join(ws.root, p)); }
     if (input.home) pack.home = input.home;

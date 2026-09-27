@@ -292,21 +292,11 @@ export async function rateThread(ws: Workspace, tutor: string, date: string, thr
   return next;
 }
 
-/** 这节课里点灰 / 点亮几张卡(《备课设计.md》§4.2;cards 是 `<job>/<n>`,单张与整节同一个);能不能改(备课轮、孩子没开口)由路由查 */
-export async function setLessonOff(ws: Workspace, tutor: string, date: string, thread: string, cards: readonly string[], off: boolean): Promise<ConversationIndex> {
-  const index = await readIndex(ws, tutor, date);
-  const cur = index.lessons[thread] ?? { handedAt: null, off: [] };
-  const rest = cur.off.filter((c) => !cards.includes(c));
-  const next: ConversationIndex = { ...index, lessons: { ...index.lessons, [thread]: { ...cur, off: off ? [...rest, ...cards] : rest } } };
-  await writeIndex(ws, next);
-  return next;
-}
-
 /**
- * 把这节课交给孩子(《备课设计.md》§4.3):记下 handedAt;这节课那几张卡上家长做过的状态删掉(孩子要自己做;卡的资产——场景图、卡上的音——留着)。
+ * 把这节课交给孩子(《备课设计.md》§十):记下 handedAt 与课文件;这节课那几张卡上家长做过的状态删掉(孩子要自己做;卡的资产——场景图、卡上的音——留着)。
  * 首页按钮由调用方追加发布;能不能交(备课话题、孩子没开口、有卡)由路由查
  */
-export async function handLesson(ws: Workspace, tutor: string, date: string, thread: string, cards: readonly string[], now: Date): Promise<ConversationIndex> {
+export async function handLesson(ws: Workspace, tutor: string, date: string, thread: string, cards: readonly string[], now: Date, source?: string): Promise<ConversationIndex> {
   const index = await readIndex(ws, tutor, date);
   const files = conversationFiles(ws.dirs.conversations, tutor, date);
   for (const c of cards) {
@@ -314,8 +304,8 @@ export async function handLesson(ws: Workspace, tutor: string, date: string, thr
     await rm(join(files.cardsDir(job), `${n}.json`), { force: true });
     await rm(join(files.cardsDir(job), `${n}.png`), { force: true });
   }
-  const cur = index.lessons[thread] ?? { handedAt: null, off: [] };
-  const next: ConversationIndex = { ...index, lessons: { ...index.lessons, [thread]: { ...cur, handedAt: cur.handedAt ?? now.toISOString() } } };
+  const cur = index.lessons[thread] ?? { handedAt: null };
+  const next: ConversationIndex = { ...index, lessons: { ...index.lessons, [thread]: { ...cur, handedAt: cur.handedAt ?? now.toISOString(), ...(source ? { source } : {}) } } };
   await writeIndex(ws, next);
   return next;
 }

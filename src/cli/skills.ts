@@ -4,7 +4,7 @@
  * - 来源 cotutor = 本包根 skills/<name>/(进 npm files;cotutor-board 整个、cotutor-vault 的 references/ 是 scripts/gen-skills.ts 生成后入库的,
  *   tests/skills.test.ts 断言一致),来源 drawtell = drawtell 包根 skills/<name>/(四个领域 skill,2026-09-15 从退役的 drawtell-skills 仓搬过去的;
  *   没装 → unavailable,doctor 点名,init 跳过)
- * - machine: true 的是机器件(cotutor-tutor / cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune / cotutor-home:它们和解析器、契约、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
+ * - machine: true 的是机器件(cotutor-tutor / cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune / cotutor-home / cotutor-prep:它们和解析器、契约、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
  *   其余拷进来就是家长的:upgrade 没改过的换新、改过的报 diff 保留(custom / untracked)
  *   来源 koubo = koubo 包根 skills/<name>/(koubo-cli、koubo-coach;《口播老师设计.md》§8):带 onlyWith,口播老师在 cotutor.json 里开着才装、才查
  * 工作流 skill(math-explainer 等)不拷,scene-maker 的工作流写在它的老师文件正文里。
@@ -20,8 +20,9 @@ import { VAULT_SKILL } from '../lib/vault-doc.ts';
 import { ANALYZE_SKILL } from '../lib/analyze-doc.ts';
 import { TUNE_SKILL } from '../lib/tune-doc.ts';
 import { HOME_SKILL } from '../lib/home-doc.ts';
+import { PREP_SKILL } from '../lib/prep-doc.ts';
 import { TUTOR_SKILL } from '../lib/tutor-rules.ts';
-export { ANALYZE_SKILL, BOARD_SKILL, HOME_SKILL, TUNE_SKILL, TUTOR_SKILL, VAULT_SKILL };
+export { ANALYZE_SKILL, BOARD_SKILL, HOME_SKILL, PREP_SKILL, TUNE_SKILL, TUTOR_SKILL, VAULT_SKILL };
 import { PACKAGE_VERSION } from './skeleton.ts';
 import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
 
@@ -41,6 +42,7 @@ export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
   { name: ANALYZE_SKILL, source: 'cotutor', machine: true },
   { name: TUNE_SKILL, source: 'cotutor', machine: true },
   { name: HOME_SKILL, source: 'cotutor', machine: true },
+  { name: PREP_SKILL, source: 'cotutor', machine: true },
   { name: 'drawtell-scene', source: 'drawtell' },
   { name: 'drawtell-teaching', source: 'drawtell' },
   { name: 'drawtell-cli', source: 'drawtell' },

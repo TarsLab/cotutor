@@ -15,7 +15,7 @@ import { RuntimeError } from '../lib/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
 import { currentThread, isPrepThread, kidCurrentThread, kidSpoke, lastJobOf, lessonCards, localDate, prepJobs, threads } from '../lib/conversation.ts';
 import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
-import { DATE_RE, FocusSchema, HOME_ID_RE, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
+import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
 import { tutorStatuses } from '../cli/tutors.ts';
@@ -23,11 +23,11 @@ import { configGapsOf, upgradeConfig } from '../cli/migrate.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { kidPage } from './kid-page.ts';
-import { appendContinue, checkHome, historyFile, homeStats, kidHomeView, messageVia, publishHome, publishedIssues, readDraft, readPublished, resolveVia } from './home.ts';
+import { kidHomeView, messageVia, readPublished, resolveVia } from './home.ts';
 import { DEV_PAGE } from './dev-page.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
-import { IndexError, capturePathOk, deleteThread, handLesson, setLessonOff, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
+import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
 import { BUTTON_LABEL_MAX, IMAGE_EXT, parseCardState, stripSecrets, type Heard, type RecordProps, type TutorButton } from '../cards/index.ts';
 import { kouboYuanOfDay, readHeard } from './koubo.ts';
 import { faceTutor } from '../lib/home.ts';
@@ -38,6 +38,7 @@ import { enrichScenes } from './scene-props.ts';
 import { tianzigeData } from './tianzige.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
 import { repost } from './post.ts';
+import { checkLesson, exportThread, handLessonFile, lessonName, lessonPage, lessonThreads, listLessons, postLesson, readLesson, type LessonPage } from './lesson.ts';
 import { DeviceSchema } from '../schema/index.ts';
 import { listVoices, synthesize, type VoiceInfo } from './tts.ts';
 import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
@@ -148,15 +149,13 @@ export interface KidHome {
   home: string | null;
   /** 首页的卡(《首页设计.md》):老师卡在前,props.buttons 是孩子端的按钮;其余卡照文件顺序 */
   cards: BoardCard[];
-  /** 工作台「首页」页里的预览(/dev/home-preview):草稿还是已发布的;孩子端没有 */
-  preview?: 'draft' | 'published';
 }
 
-export async function kidHome(ctx: AppContext, now: Date, opts: { preview?: 'draft' | 'published' } = {}): Promise<KidHome> {
+export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
   const ws = ctx.ws;
   const date = localDate(now);
-  const view = await kidHomeView(ws, now, opts.preview ? { source: opts.preview, keepBriefs: true } : {});
-  return { title: ws.config.title, date, tutors: await kidTutors(ctx, date), home: opts.preview ? null : view.home, cards: view.cards, ...(opts.preview ? { preview: opts.preview } : {}) };
+  const view = await kidHomeView(ws, now);
+  return { title: ws.config.title, date, tutors: await kidTutors(ctx, date), home: view.home, cards: view.cards };
 }
 
 export interface KidDay {
@@ -216,8 +215,8 @@ export interface ParentDay {
   messages: ParentMessage[];
   pending: string | null;
   thread: string | null;
-  /** 备课话题的这节课(《备课设计.md》§4.3,家长端底部那一条):几张卡、交了没有、首页按钮上的字 */
-  lessons: Record<string, { cards: string[]; handed: boolean; label: string | null }>;
+  /** 备课话题的这节课(《备课设计.md》§十,家长端底部那一条):几张卡、交了没有、首页按钮上的字、写成了哪个课文件 */
+  lessons: Record<string, { cards: string[]; handed: boolean; label: string | null; source: string | null }>;
 }
 
 /** 已发布首页上「接着」按钮的字:`<老师> <日期> <话题>` → 字(交给孩子的备课话题在首页上叫什么) */
@@ -254,7 +253,7 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
   const labels = await continueLabels(ctx.ws);
   const ths = threads(index.messages);
   const lessons: ParentDay['lessons'] = {};
-  for (const th of new Set(ths)) if (isPrepThread(index.messages, th)) lessons[th] = { cards: lessonCards(index, th), handed: Boolean(index.lessons[th]?.handedAt), label: labels.get(`${tutor} ${date} ${th}`) ?? null };
+  for (const th of new Set(ths)) if (isPrepThread(index.messages, th)) lessons[th] = { cards: lessonCards(index, th), handed: Boolean(index.lessons[th]?.handedAt), label: labels.get(`${tutor} ${date} ${th}`) ?? null, source: index.lessons[th]?.source ?? null };
   return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index), lessons };
 }
 
@@ -290,6 +289,8 @@ export interface OverviewTutor {
   booking: boolean;
   /** 这天录音卡在 koubo 上花的钱(元,heard.json 加总);没花就没有 */
   kouboYuan?: number;
+  /** 这位老师的课文件(《备课设计.md》§十;只在今天):几节几张卡、有没有要改的、交了没有(首页按钮上的字)、从哪个备课话题写出来的 */
+  lessons: { name: string; source: string; sections: number; cards: number; fixes: number; mtime: string; handedAs: string | null; handedThread: string | null; fromThread: string | null }[];
 }
 
 export interface Overview {
@@ -303,8 +304,14 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
   const tutors: OverviewTutor[] = [];
   // 交给孩子的备课话题在首页上叫什么:已发布那份里指向它的「接着」按钮的字
   const handed = await continueLabels(ctx.ws);
+  const today = localDate(ctx.now());
+  const files = date === today ? await listLessons(ctx.ws, ctx.now()) : [];
   for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
     const index = await readIndex(ctx.ws, t.name, date);
+    const lessons: OverviewTutor['lessons'] = files.filter((f) => f.tutor === t.name).map((f) => {
+      const lt = lessonThreads(index, f.source);
+      return { name: f.name, source: f.source, sections: f.sections, cards: f.cards, fixes: f.fixes, mtime: f.mtime, handedAs: lt.handed ? (handed.get(`${t.name} ${date} ${lt.handed}`) ?? '') : null, handedThread: lt.handed, fromThread: lt.from };
+    });
     const ths = threads(index.messages);
     const prep = prepJobs(index.messages);
     const by = new Map<string, OverviewThread>();
@@ -330,7 +337,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
     }
     const booking = index.messages.some((m) => (m.bookkeep || m.tidy) && m.result === 'running');
     const kouboYuan = await kouboYuanOfDay(join(ctx.ws.dirs.conversations, t.name), date);
-    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], booking, ...(kouboYuan > 0 ? { kouboYuan } : {}) });
+    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], booking, ...(kouboYuan > 0 ? { kouboYuan } : {}), lessons });
   }
   return { title: ctx.ws.config.title, date, today: localDate(ctx.now()), tutors };
 }
@@ -677,37 +684,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 200, file, contentType: 'audio/mpeg' };
     }
 
-    // ---- 首页(《首页设计.md》§七):家长端「首页」页;草稿与讲法只走这里,不经过孩子端接口 ----
-    if (p === '/api/home' && method === 'GET') {
-      const now = ctx.now();
-      const which = url.searchParams.get('which') === 'published' ? 'published' : 'draft';
-      const draft = await readDraft(ws);
-      const draftCheck = draft === null ? null : await checkHome(ws, draft, now);
-      const stats = await homeStats(ws, now);
-      const pub = stats.home;
-      return {
-        status: 200,
-        json: {
-          which,
-          draft: draftCheck ? { exists: true, for: draftCheck.doc.for ?? null, note: draftCheck.doc.note, issues: draftCheck.issues, fixes: draftCheck.fixes, cards: draftCheck.doc.cards } : { exists: false },
-          published: pub ? { id: pub.id, publishedAt: pub.publishedAt, for: pub.for ?? null, days: stats.days, source: pub.source, note: pub.note, warnings: pub.warnings, cards: pub.cards, broken: await publishedIssues(ws, pub, now) } : null,
-          publishedError: stats.error,
-          clicks: stats.clicks,
-          tutors: Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, t.display])),
-        },
-      };
-    }
-    if (p === '/api/home/preview' && method === 'GET') {
-      return { status: 200, json: await kidHome(ctx, ctx.now(), { preview: url.searchParams.get('which') === 'published' ? 'published' : 'draft' }) };
-    }
-    if (p === '/api/home/publish' && method === 'POST') {
-      const force = isObj(body) && body.force === true;
-      const fromId = isObj(body) && typeof body.from === 'string' ? body.from : undefined;
-      const from = fromId === undefined ? undefined : historyFile(ws, fromId);
-      if (from === null || (fromId !== undefined && !HOME_ID_RE.test(fromId))) return { status: 400, json: { error: 'bad_request', message: 'from 要是一份历史的 id(如 2026-09-17-2130)' } };
-      const r = await publishHome(ws, { force, from, now: ctx.now() });
-      return { status: r.ok ? 200 : 409, json: { ok: r.ok, id: r.home?.id ?? null, issues: r.check.issues, dropped: r.dropped } };
-    }
 
     // 话题打星(《obsidian仓库设计.md》§4):PUT {rating: 1–5 | null};记账:POST {threads?: [..]} → 每个话题一轮记账任务,老师回「## 记账」段,应用写日记
     const rate = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/rating$/.exec(p);
@@ -744,12 +720,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         throw err;
       }
     }
-    // 这节课(《备课设计.md》§4):备课话题里的卡默认进课;PUT …/lesson {cards: ["job/n"], off} 点灰 / 点亮(单张与整节同一个);
-    // POST …/lesson/hand {label} 交给孩子:记下交了、清掉这节课的卡状态、首页草稿追加一行「接着」再发布(检查有「要改」200 { ok: false, issues })。
-    // 都只认今天的备课话题、孩子没开口(409)
-    const lsn = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/lesson(\/hand)?$/.exec(p);
-    if (lsn && ((method === 'PUT' && !lsn[4]) || (method === 'POST' && lsn[4]))) {
-      const [, tutor, date, raw, hand] = lsn;
+    // 家长端备课话题的「交给孩子」(《备课设计.md》§10.3 第 3 条):POST …/lesson/hand {label}——老师写的那几节先写成课文件 lessons/<日期>-<话题>.md,
+    // 再从文件建一个给孩子的话题、首页草稿追加一行「接着」再发布(检查有「要改」200 { ok: false, issues })。只认今天的备课话题、孩子没开口(409)
+    const lsn = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/lesson\/hand$/.exec(p);
+    if (lsn && method === 'POST') {
+      const [, tutor, date, raw] = lsn;
       const thread = decodeURIComponent(raw);
       if (!faceTutor(tutor, ws.config.tutors[tutor])) return { status: 404, json: { error: 'no_such_tutor', tutor } };
       const index = await readIndex(ws, tutor, date);
@@ -757,29 +732,57 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!ths.includes(thread)) return { status: 404, json: { error: 'no_such_thread' } };
       if (!isPrepThread(index.messages, thread)) return { status: 409, json: { error: 'not_prep', message: '这不是家长开的备课话题' } };
       if (kidSpoke(index.messages, thread)) return { status: 409, json: { error: 'kid_spoke', message: '孩子已经在这个话题里说过话了' } };
-      if (date !== localDate(ctx.now())) return { status: 400, json: { error: 'bad_request', message: '只能改今天的备课话题' } };
+      if (date !== localDate(ctx.now())) return { status: 400, json: { error: 'bad_request', message: '只能交今天的备课话题' } };
       const active = ctx.runner.running(tutor);
       if (active && active.date === date && ths[index.messages.findIndex((m) => m.job === active.job)] === thread) return { status: 409, json: { error: 'busy', message: '老师还在写这个话题' } };
-      if (!hand) {
-        const off = isObj(body) ? body.off : undefined;
-        const cards = isObj(body) && Array.isArray(body.cards) ? (body.cards as unknown[]).filter((c): c is string => typeof c === 'string') : [];
-        const prep = prepJobs(index.messages);
-        const ok = (c: string): boolean => {
-          const [job, n] = c.split('/');
-          const m = index.messages.find((x, i) => x.job === job && ths[i] === thread);
-          return Boolean(m && prep.has(m.job) && m.section && /^\d+$/.test(n ?? '') && Number(n) < m.section.cards.length);
-        };
-        if (typeof off !== 'boolean' || !cards.length || !cards.every(ok)) return { status: 400, json: { error: 'bad_request', message: '要 {cards: ["<job>/<n>"], off: true | false},卡要在这个备课话题里' } };
-        const next = await setLessonOff(ws, tutor, date, thread, cards, off);
-        return { status: 200, json: { tutor, date, thread, cards: lessonCards(next, thread) } };
-      }
       const label = isObj(body) && typeof body.label === 'string' ? body.label.replace(/\s+/g, ' ').trim() : '';
       if (!label || Array.from(label).length > BUTTON_LABEL_MAX) return { status: 400, json: { error: 'bad_request', message: `按钮上的字 1–${BUTTON_LABEL_MAX} 个` } };
-      const cards = lessonCards(index, thread);
-      if (!cards.length) return { status: 400, json: { error: 'bad_request', message: '这节课还没有卡' } };
-      await handLesson(ws, tutor, date, thread, cards, ctx.now());
-      const r = await appendContinue(ws, tutor, date, thread, label, ctx.now());
-      return { status: 200, json: { ok: r.ok, label, cards: cards.length, issues: r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text) } };
+      if (!lessonCards(index, thread).length) return { status: 400, json: { error: 'bad_request', message: '这节课还没有卡' } };
+      // 从课文件建的话题(已交):再交就是把那份文件再交一次(它没有转录,没法导出);聊天的备课话题才导出成文件
+      const fileName = index.lessons[thread]?.handedAt && index.lessons[thread]?.source ? lessonName(index.lessons[thread].source!) : null;
+      const ex = fileName ? { name: fileName, source: index.lessons[thread]!.source!, skipped: [] as string[] } : await exportThread(ws, tutor, date, thread);
+      const r = await handLessonFile(ws, ex.name, { label, now: ctx.now() });
+      return { status: 200, json: { ok: r.ok && Boolean(r.home?.ok), label, cards: r.cards, source: ex.source, thread: r.thread, issues: [...r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text), ...(r.home?.check.issues.filter((i) => i.level === 'fix').map((i) => i.text) ?? []), ...ex.skipped] } };
+    }
+    // 课文件(《备课设计.md》§十):清单、检查 + 预览、让后期排一版(花钱)、交给孩子;工作台「备课」页与 CLI 都走这里
+    if (p === '/api/lessons' && method === 'GET') return { status: 200, json: { lessons: await listLessons(ws, ctx.now()), tutors: Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, t.display])) } };
+    const lf = /^\/api\/lessons\/([^/]+)(\/page|\/post|\/hand)?$/.exec(p);
+    if (lf) {
+      const name = lessonName(decodeURIComponent(lf[1]));
+      if (!name) return { status: 400, json: { error: 'bad_request', message: '课文件的名字只能是中英文、数字、- 与 _' } };
+      const md = await readLesson(ws, name);
+      if (md === null) return { status: 404, json: { error: 'no_such_lesson', name } };
+      const now = ctx.now();
+      if (!lf[2] && method === 'GET') {
+        const c = await checkLesson(ws, md, now);
+        return { status: 200, json: { name, source: `lessons/${name}.md`, tutor: c.doc.tutor, device: c.doc.device, for: c.doc.for ?? null, brief: c.doc.brief, issues: c.issues, fixes: c.fixes, sections: c.doc.sections.map((s) => ({ cards: s.section.cards.map((x) => ({ kind: x.kind, look: x.look ?? null })), lines: s.section.lines.length, rows: s.section.layout?.rows ?? null })) } };
+      }
+      // 家长端课文件页(《备课设计.md》§10.6):整份铺开看,答案在;交没交、从哪个备课话题来的一起给
+      if (lf[2] === '/page' && method === 'GET') {
+        const c = await checkLesson(ws, md, now);
+        const st = await stat(join(ws.root, 'lessons', `${name}.md`)).catch(() => null);
+        let handed: LessonPage['handed'] = null;
+        let fromThread: string | null = null;
+        if (c.doc.tutor && ws.config.tutors[c.doc.tutor]) {
+          const date = localDate(now);
+          const index = await readIndex(ws, c.doc.tutor, date);
+          const lt = lessonThreads(index, `lessons/${name}.md`);
+          fromThread = lt.from;
+          if (lt.handed) handed = { thread: lt.handed, date, label: (await continueLabels(ws)).get(`${c.doc.tutor} ${date} ${lt.handed}`) ?? null, kidSpoke: kidSpoke(index.messages, lt.handed) };
+        }
+        return { status: 200, json: lessonPage(name, c, st?.mtime.toISOString() ?? null, handed, fromThread, now) };
+      }
+      if (lf[2] === '/post' && method === 'POST') {
+        const r = await postLesson(ws, name, { write: !(isObj(body) && body.write === false), now });
+        return { status: 200, json: { ok: r.ok, fences: r.fences, marks: r.marks, costUsd: r.costUsd, ms: r.ms, beats: r.results.reduce((s, x) => s + (x.summary.beats ?? 0), 0), failed: r.results.reduce((s, x) => s + (x.summary.failed ?? 0), 0), dropped: r.results.flatMap((x) => x.file.dropped) } };
+      }
+      if (lf[2] === '/hand' && method === 'POST') {
+        const label = isObj(body) && typeof body.label === 'string' ? body.label : undefined;
+        if (label !== undefined && Array.from(label.trim()).length > BUTTON_LABEL_MAX) return { status: 400, json: { error: 'bad_request', message: `按钮上的字 1–${BUTTON_LABEL_MAX} 个` } };
+        const r = await handLessonFile(ws, name, { label, now });
+        return { status: r.ok ? 200 : 409, json: { ok: r.ok && Boolean(r.home?.ok), tutor: r.tutor, thread: r.thread, label: r.label, cards: r.cards, issues: [...r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text), ...(r.home?.check.issues.filter((i) => i.level === 'fix').map((i) => i.text) ?? [])] } };
+      }
+      return { status: 405, json: { error: 'method_not_allowed' } };
     }
     // 家长在备课话题里做卡(看效果;《备课设计.md》§3.2):只认备课轮的卡;孩子的话题里家长不替孩子答
     const pcard = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/cards\/(\d{4}-\d+)\/(\d+)$/.exec(p);
@@ -893,8 +896,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 200, body: appIconPng(n), contentType: 'image/png' };
     }
     if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title)) };
-    // 工作台「首页」页的预览:就是孩子端页面本身,数据走家长接口(讲法在),按钮不真发
-    if (p === '/dev/home-preview') return { status: 200, html: kidPage(esc(ws.config.title), { preview: url.searchParams.get('which') === 'published' ? 'published' : 'draft' }) };
     // 家长端(《家长板书页设计.md》):也是孩子端页面本身,数据走家长接口(答案在、家长的话在),卡锁着;自己的清单,加到主屏幕才不会拿到孩子端那份
     if (p === '/parent') return { status: 200, html: kidPage(esc(ws.config.title), { parent: true }) };
     if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${ws.config.title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };

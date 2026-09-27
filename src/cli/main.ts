@@ -491,6 +491,51 @@ export async function main(argv: string[]): Promise<void> {
         if (!r.ok) process.exitCode = 1;
         return;
       }
+      case 'lesson': {
+        const sub = positionals[0];
+        if (sub !== 'check' && sub !== 'post' && sub !== 'hand' && sub !== 'list') throw new UsageError(`lesson 后面跟 check / post / hand / list,如 cotutor lesson check 分数。\n${USAGE}`);
+        const ws = loadWorkspace(workspace);
+        const now = new Date();
+        const L = await import('../server/lesson.ts');
+        if (sub === 'list') {
+          const rows = await L.listLessons(ws, now);
+          if (json) process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
+          else if (!rows.length) process.stdout.write('lessons/ 下还没有课文件(用 cotutor-prep 技能写一份,或在家长端备课话题里点「交给孩子」)\n');
+          else for (const r of rows) process.stdout.write(`${r.name}  ${r.tutor ?? '(没写 tutor)'}  ${r.sections} 节 ${r.cards} 张卡${r.fixes ? `  ✗ ${r.fixes} 条要改` : ''}\n`);
+          return;
+        }
+        const name = positionals[1] ? L.lessonName(positionals[1]) : null;
+        if (!name) throw new UsageError(`${sub} 要课文件的名字(lessons/<课名>.md 的 <课名>,中英文、数字、- 与 _),如 cotutor lesson ${sub} 分数`);
+        if (sub === 'check') {
+          const md = await L.readLesson(ws, name);
+          if (md === null) throw new UsageError(`没有 lessons/${name}.md`);
+          const c = await L.checkLesson(ws, md, now);
+          if (json) process.stdout.write(`${JSON.stringify({ ok: c.fixes === 0, tutor: c.doc.tutor, device: c.doc.device, for: c.doc.for ?? null, issues: c.issues, sections: c.doc.sections.map((s) => s.section), brief: c.doc.brief }, null, 2)}\n`);
+          else process.stdout.write(`${L.formatCheck(c, `lessons/${name}.md`)}\n`);
+          if (c.fixes) process.exitCode = 1;
+          return;
+        }
+        if (sub === 'post') {
+          const r = await L.postLesson(ws, name, { write: flags.write === true, now, model: typeof flags.model === 'string' ? flags.model : undefined });
+          if (json) process.stdout.write(`${JSON.stringify({ ok: r.ok, fences: r.fences, marks: r.marks, costUsd: r.costUsd, ms: r.ms, results: r.results.map((x) => x.summary), md: r.md }, null, 2)}\n`);
+          else {
+            process.stdout.write(`后期排了 ${r.results.length} 节(${r.results.reduce((s, x) => s + (x.summary.beats ?? 0), 0)} 拍,${r.results.reduce((s, x) => s + (x.summary.failed ?? 0), 0)} 拍没成)· ${(r.ms / 1000).toFixed(1)}s · $${r.costUsd.toFixed(3)}\n`);
+            process.stdout.write(flags.write === true ? `回写 lessons/${name}.md:${r.fences} 处围栏行、${r.marks} 处 [词]\n` : `会改 ${r.fences} 处围栏行、${r.marks} 处 [词];加 --write 才写进文件\n`);
+            for (const d of r.results.flatMap((x) => x.file.dropped)) process.stdout.write(`  丢掉:${d}\n`);
+          }
+          if (!r.ok) process.exitCode = 1;
+          return;
+        }
+        const r = await L.handLessonFile(ws, name, { label: typeof flags.label === 'string' ? flags.label : undefined, now });
+        if (json) process.stdout.write(`${JSON.stringify({ ok: r.ok && Boolean(r.home?.ok), tutor: r.tutor, thread: r.thread, label: r.label, cards: r.cards, issues: r.check.issues, home: r.home ? { ok: r.home.ok, issues: r.home.check.issues } : null }, null, 2)}\n`);
+        else if (!r.ok) process.stdout.write(`${L.formatCheck(r.check, `lessons/${name}.md`)}\n没交:有 ${r.check.fixes} 条要改\n`);
+        else {
+          process.stdout.write(`交给孩子了:${r.tutor} ${r.date} 话题 ${r.thread} · ${r.cards} 张卡 · 首页按钮「${r.label}」\n`);
+          if (r.home && !r.home.ok) process.stdout.write(`首页草稿里加上了那行,但首页有别处要改,这次没发:\n${r.home.check.issues.filter((i) => i.level === 'fix').map((i) => `  ✗ ${i.text}`).join('\n')}\n`);
+        }
+        if (!r.ok || (r.home && !r.home.ok)) process.exitCode = 1;
+        return;
+      }
       case 'send': {
         const [tutor, ...words] = positionals;
         const text = words.join(' ');

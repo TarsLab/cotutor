@@ -62,6 +62,8 @@ export function renderContextPack(pack: ContextPack): string {
     out.push('  lesson:');
     for (const c of p.lesson) out.push(`    - ${yamlScalar(c)}`);
   }
+  if (p.lessonFile) out.push(`  lessonFile: ${yamlScalar(p.lessonFile)}`);
+  if (p.lessonBrief) out.push(`  lessonBrief: ${yamlScalar(p.lessonBrief)}`);
   if (p.cards?.length) {
     out.push('  cards:');
     for (const c of p.cards) out.push(`    - ${yamlScalar(c)}`);

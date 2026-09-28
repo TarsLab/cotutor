@@ -657,7 +657,7 @@ __PHOTO_JS__
       h('b', {}, l.name, h('span', { class: 'pin' + (l.fixes ? ' bad' : l.handedAs !== null ? ' ok' : '') }, l.fixes ? l.fixes + ' 条要改' : l.handedAs !== null ? '已交给孩子' + (l.handedAs ? ':' + l.handedAs : '') : '还没交')),
       h('small', {}, l.sections + ' 节 · ' + l.cards + ' 张卡' + (l.fromThread ? ' · 从备课话题写出来的' : '') + (l.mtime ? ' · ' + ago(l.mtime) : '')));
     $('#tutors').replaceChildren(...H.tutors.map((t) => h('div', { class: 'pt', 'data-tutor': t.name },
-      h('div', { class: 'hd' }, avatarEl(t), h('div', { class: 'who' }, h('span', { class: 'nm' }, t.display), t.turns ? h('small', {}, h('span', {}, t.turns + ' 轮 · $' + t.costUsd.toFixed(2)), ...(t.kouboYuan ? [' ', h('span', {}, '· koubo ¥' + t.kouboYuan.toFixed(2))] : [])) : null), newBtn(t)),
+      h('div', { class: 'hd' }, avatarEl(t), h('div', { class: 'who' }, h('span', { class: 'nm' }, t.display), t.turns ? h('small', {}, h('span', {}, t.turns + ' 轮'), ...(t.kouboYuan ? [' ', h('span', {}, '· koubo ¥' + t.kouboYuan.toFixed(2))] : [])) : null), newBtn(t)),
       ...(t.threads.length ? t.threads.map((th) => row(t, th)) : [h('div', { class: 'none' }, H.date === H.today ? '今天没聊' : '这天没聊')]),
       ...(t.lessons && t.lessons.length ? [h('div', { class: 'tt' }, '课文件 · lessons/'), ...t.lessons.map((l) => lsnRow(t, l))] : []))));
     $('#hcards').replaceChildren();
@@ -1566,6 +1566,8 @@ __PHOTO_JS__
     const out = [];
     if (m.bookkeep) out.push(noteEl('sys', '记账', '给这个话题记账'));
     else if (m.tidy) out.push(noteEl('sys', '整理', '记账后整理记忆'));
+    // 从课文件建的轮(《备课设计.md》§10.5):不是谁说的话——第一节前一条「课文件 <名> · N 节」,后面的节前不出
+    else if (typeof m.lessonSection === 'number') { if (m.lessonSection === 0) out.push(noteEl('sys', '课文件', (m.question || '').replace(/^课文件\\s*/, '') + ' · ' + (S.msgs || []).filter((x) => x.thread === m.thread && typeof x.lessonSection === 'number').length + ' 节' + (S.lesson && S.lesson.source ? ' · ' + S.lesson.source : ''))); }
     else {
       const said = m.via ? m.via.label : m.action === 'continue' ? '继续' : m.action === 'submit' ? '交给老师' : (m.question || '');
       if (said || m.from === 'kid') out.push(noteEl('said ' + (m.from || ''), m.via ? '首页' : (NOTE_FROM[m.from] || m.from || ''), said));
@@ -1583,7 +1585,6 @@ __PHOTO_JS__
     if (m.warnings && m.warnings.length) out.push(noteEl('warn', '提醒', m.warnings.join('\\n')));
     // 备课轮:记忆段没写进 vault,给家长看老师想记什么;费用只在备课轮上(家长在花钱)
     if (m.memoryDraft && m.memoryDraft.length) out.push(noteEl('mem', '本来会记住的', m.memoryDraft.join('\\n')));
-    if (m.prep && typeof m.costUsd === 'number' && !m.pending) out.push(noteEl('cost', '费用', '$' + m.costUsd.toFixed(3)));
     return out;
   };
   // ---- 这节课(《备课设计.md》§十):备课话题里老师写的几节,「交给孩子」先写成课文件(lessons/<日期>-<话题>.md)再从文件建给孩子的话题;

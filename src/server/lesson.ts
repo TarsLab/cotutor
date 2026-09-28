@@ -187,7 +187,7 @@ export async function handLessonFile(ws: Workspace, name: string, opts: { label?
   for (const [k, s] of check.doc.sections.entries()) {
     const job = k === 0 ? thread : jobId(opts.now, ++seq);
     const section = withAudio(s.section, s.section.lines.map(() => null));
-    messages.push({ job, thread, at, from: 'parent', text: k === 0 ? `课文件 ${name}` : `课文件 ${name} · 第 ${k + 1} 节`, result: 'ok', costUsd: 0, kidText: section.lines.map((l) => l.text).join('\n') || null, artifacts: [], section, device: check.doc.device, ...(k === 0 ? { prepThread: true as const } : {}) });
+    messages.push({ job, thread, at, from: 'parent', text: k === 0 ? `课文件 ${name}` : `课文件 ${name} · 第 ${k + 1} 节`, result: 'ok', costUsd: 0, kidText: section.lines.map((l) => l.text).join('\n') || null, artifacts: [], section, device: check.doc.device, lessonSection: k, ...(k === 0 ? { prepThread: true as const } : {}) });
   }
   const next: ConversationIndex = { ...index, messages: [...index.messages, ...messages], lessons: { ...index.lessons, [thread]: { handedAt: opts.now.toISOString(), source } } };
   await writeIndex(ws, next);

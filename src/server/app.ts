@@ -340,7 +340,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       let th = by.get(id);
       if (!th) {
         const via = m.via?.label ?? null;
-        const raw = via ? `首页 · ${via}` : m.from === 'kid' ? m.text : `${m.from === 'parent' ? '家长' : '系统'}:${m.text}`;
+        const raw = via ? `首页 · ${via}` : m.from === 'kid' || typeof m.lessonSection === 'number' ? m.text : `${m.from === 'parent' ? '家长' : '系统'}:${m.text}`;
         const isPrep = prep.has(m.job);
         th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, sections: 0, cards: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked, prep: isPrep, handedAs: isPrep && index.lessons[id]?.handedAt ? (handed.get(`${t.name} ${date} ${id}`) ?? '') : null, lessonCards: isPrep ? lessonCards(index, id).length : 0 };
         by.set(id, th);

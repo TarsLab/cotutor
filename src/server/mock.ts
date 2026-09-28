@@ -634,7 +634,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         };
         const section = m.section ? await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, { ...m.section, cards: m.section.cards.map(withHeard) }) : null;
         // 备课轮(《备课设计.md》):标 prep、带费用;第一轮带一条「本来会记住的」看旁注的样子
-        if (prep.has(m.job)) return { ...rest, from: m.from ?? 'kid', section, prep: true, ...(ls.get(m.thread)?.handedAt ? { handed: true } : {}), ...(m.pending ? {} : { costUsd: 0.03 }), ...(m.job === m.thread && !m.pending ? { memoryDraft: ['分数刚起步,1/4 还会和 1/3 混'] } : {}) };
+        if (prep.has(m.job)) return { ...rest, from: m.from ?? 'kid', section, prep: true, ...(ls.get(m.thread)?.handedAt ? { handed: true } : {}), ...(m.job === m.thread && !m.pending ? { memoryDraft: ['分数刚起步,1/4 还会和 1/3 混'] } : {}) };
         return { ...rest, from: m.from ?? 'kid', section, ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };
       }));
       const pending = list.find((m) => m.pending);

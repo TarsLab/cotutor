@@ -149,12 +149,13 @@ export interface ParentMessage extends KidMessage {
   error?: string;
   bookkeep?: ConversationMessage['bookkeep'];
   tidy?: true;
-  /** 备课轮(《备课设计.md》§3.2):家长开的话题里孩子开口之前;费用给家长看(只这一处),记忆段原文是「本来会记住的」 */
+  /** 备课轮(《备课设计.md》§3.2):家长开的话题里孩子开口之前;记忆段原文是「本来会记住的」(费用不给家长看,2026-09-28:订阅之下那个数没有参考价值) */
   prep?: true;
+  /** 从课文件建的第几节(0 起):不是谁说的话,页面不出「家长」旁注 */
+  lessonSection?: number;
   /** 这个话题的课交给孩子了 */
   handed?: true;
   memoryDraft?: string[];
-  costUsd?: number;
 }
 
 /** 对话索引 → 家长板书页条目:和 kidConversation 同一个循环,差集恰好是 ParentMessage 里多出的字段与「答案不剥」 */
@@ -183,7 +184,7 @@ export function parentConversation(index: { messages: readonly ConversationMessa
       ...(prep.has(m.job) ? { prep: true as const } : {}),
       ...(prep.has(m.job) && index.lessons?.[ths[i]]?.handedAt ? { handed: true as const } : {}),
       ...(m.memoryDraft?.length ? { memoryDraft: m.memoryDraft } : {}),
-      ...(typeof m.costUsd === 'number' ? { costUsd: m.costUsd } : {}),
+      ...(typeof m.lessonSection === 'number' ? { lessonSection: m.lessonSection } : {}),
     });
   }
   return out;

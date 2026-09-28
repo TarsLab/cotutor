@@ -208,7 +208,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   type OvT = { tutors: { name: string; threads: { thread: string; prep: boolean; handedAs: string | null }[] }[] };
   const ov2 = (await get('/api/overview/today')).json as OvT;
   const prepTh = td[0]?.thread;
-  check('备课:202;板书接口 from parent、prep、费用、本来会记住的;英语老师孩子端还是空的;清单上标备课', t0.status === 202 && td.length === 1 && td[0].from === 'parent' && td[0].prep === true && td[0].costUsd === 0.03 && td[0].memoryDraft?.length === 1 && td[0].section !== null && kd.messages.length === 0 && kd.thread === null && ov2.tutors[2].threads[0]?.prep === true && ov2.tutors[2].threads[0].handedAs === null, JSON.stringify({ t0: t0.json, td: td[0], kd: kd.messages.length, ov: ov2.tutors[2].threads }));
+  check('备课:202;板书接口 from parent、prep、不给费用、本来会记住的;英语老师孩子端还是空的;清单上标备课', t0.status === 202 && td.length === 1 && td[0].from === 'parent' && td[0].prep === true && !('costUsd' in td[0]) && td[0].memoryDraft?.length === 1 && td[0].section !== null && kd.messages.length === 0 && kd.thread === null && ov2.tutors[2].threads[0]?.prep === true && ov2.tutors[2].threads[0].handedAs === null, JSON.stringify({ t0: t0.json, td: td[0], kd: kd.messages.length, ov: ov2.tutors[2].threads }));
   const t1 = await m.route('POST', '/api/conversations/english-tutor/messages', { text: '', action: 'continue', thread: prepTh });
   await m.settle();
   const td2 = await eb();

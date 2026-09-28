@@ -23,6 +23,7 @@ const { doctorWorkspace } = await import('../src/cli/doctor.ts');
 const { main } = await import('../src/cli/main.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
+const FAKE_TTS = fileURLToPath(new URL('./_fake-tts.ts', import.meta.url));
 const node = process.execPath;
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
@@ -275,6 +276,22 @@ for: 2026-09-18
     const ov2 = (await route('GET', '/api/overview/today', ctx)).json as typeof ov;
     const ovTh2 = ov2.tutors.find((t) => t.name === 'math-tutor')!.threads.find((t) => t.thread === hj.thread);
     check('孩子开口后:那个话题再交 409、清单不再标备课;同一文件再交是新话题', again.status === 409 && ovTh2?.prep === false && re2.status === 200 && (re2.json as { thread: string }).thread !== hj.thread, JSON.stringify({ again: again.json, ovTh2, re2: re2.json }));
+    // 配音在后台(拍板 32):给数学老师配上假音色再交一次——接口立刻回、带句数;板书接口的 lessons[].dubbing 有进度或已经齐;齐了索引里每句都有 audio
+    {
+      const cfgNow = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tts?: unknown; tutors: Record<string, Record<string, unknown>> };
+      cfgNow.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, 'voices', '--json'] };
+      cfgNow.tutors['math-tutor'].voice = 'v-math';
+      writeFileSync(cfgFile, JSON.stringify(cfgNow, null, 2));
+      const t0 = Date.now();
+      const re3 = await route('POST', `/api/lessons/${lessonName}/hand`, ctx, { label: '配音的' });
+      const j3 = re3.json as { thread: string; lines: number; handed: boolean };
+      const tookMs = Date.now() - t0;
+      const b0 = ((await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as { lessons: Record<string, { dubbing: { done: number; total: number } | null }> }).lessons[j3.thread];
+      let allAudio = false;
+      for (let k = 0; k < 100 && !allAudio; k++) { await new Promise((r) => setTimeout(r, 50)); const ix = await readIndex(ctx.ws, 'math-tutor', day); allAudio = ix.messages.filter((m) => m.thread === j3.thread).every((m) => m.section?.lines.every((l) => !l.text.trim() || l.audio)); }
+      const b1 = ((await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as { lessons: Record<string, { dubbing: unknown }> }).lessons[j3.thread];
+      check('交给孩子不等配音:立刻回、带句数;进度形状对(或已齐);配齐了索引每句有 audio、进度没了', re3.status === 200 && j3.handed && j3.lines === 6 && tookMs < 2000 && (b0?.dubbing === null || (b0?.dubbing?.total === 6 && b0.dubbing.done <= 6)) && allAudio && b1?.dubbing === null, JSON.stringify({ j3, tookMs, b0, b1 }));
+    }
     // 家长真发(第六节 3):家长板书页在 iPad 上发进孩子的对话,带 device;板书接口 from parent;孩子接口那条问句 null
     const pf = await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: '家长补一句', device: 'phone' });
     await wait('math-tutor');

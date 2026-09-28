@@ -527,10 +527,12 @@ export async function main(argv: string[]): Promise<void> {
           return;
         }
         const r = await L.handLessonFile(ws, name, { label: typeof flags.label === 'string' ? flags.label : undefined, now });
+        if (r.ok && r.lines && !json) process.stdout.write(`交给孩子了:${r.tutor} ${r.date} 话题 ${r.thread} · ${r.cards} 张卡 · 首页按钮「${r.label}」;配音 ${r.lines} 句……\n`);
+        await r.dubbing;
         if (json) process.stdout.write(`${JSON.stringify({ ok: r.ok && Boolean(r.home?.ok), tutor: r.tutor, thread: r.thread, label: r.label, cards: r.cards, issues: r.check.issues, home: r.home ? { ok: r.home.ok, issues: r.home.check.issues } : null }, null, 2)}\n`);
         else if (!r.ok) process.stdout.write(`${L.formatCheck(r.check, `lessons/${name}.md`)}\n没交:有 ${r.check.fixes} 条要改\n`);
         else {
-          process.stdout.write(`交给孩子了:${r.tutor} ${r.date} 话题 ${r.thread} · ${r.cards} 张卡 · 首页按钮「${r.label}」\n`);
+          process.stdout.write(r.lines ? '配音齐了\n' : `交给孩子了:${r.tutor} ${r.date} 话题 ${r.thread} · ${r.cards} 张卡 · 首页按钮「${r.label}」\n`);
           if (r.home && !r.home.ok) process.stdout.write(`首页草稿里加上了那行,但首页有别处要改,这次没发:\n${r.home.check.issues.filter((i) => i.level === 'fix').map((i) => `  ✗ ${i.text}`).join('\n')}\n`);
         }
         if (!r.ok || (r.home && !r.home.ok)) process.exitCode = 1;

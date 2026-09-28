@@ -142,12 +142,16 @@ export interface HandResult {
   /** 首页发布的结果(话题建好了才有;首页有「要改」时 ok=false,草稿里那行留着) */
   home: PublishResult | null;
   source: string;
+  /** 配音在后台跑(话题与首页先就绪,孩子这时按按钮没配到的句走浏览器的声);配齐了把文件名写进索引。CLI 等它,路由不等;几句 */
+  dubbing: Promise<void>;
+  lines: number;
 }
 
 const seqOf = (job: string): number => Number(job.split('-')[1] ?? 0);
 
 /**
- * 交给孩子:检查 → 配音 → 建话题(或覆盖同一课文件、孩子没开口的那个)→ lessons[thread] → 首页追加「接着」再发布。
+ * 交给孩子:检查 → 建话题(或覆盖同一课文件、孩子没开口的那个)→ lessons[thread] → 首页追加「接着」再发布 → 配音在后台跑(每句、点读卡每段),配齐了把文件名写进索引。
+ * 2026-09-28 拍板 32:原来同步等配音(14 张卡 20 秒),页面上只有一行「交着…」;现在不到一秒就回,家长端跳到交出去的话题看着配音进度。
  * label 是首页按钮上的字(≤ 16 字;不给就取第一节第一句截 16 字)
  */
 export async function handLessonFile(ws: Workspace, name: string, opts: { label?: string; now: Date; env?: NodeJS.ProcessEnv }): Promise<HandResult> {
@@ -158,7 +162,7 @@ export async function handLessonFile(ws: Workspace, name: string, opts: { label?
   const source = f.rel(name);
   const firstLine = check.doc.sections[0]?.section.lines[0]?.text ?? '';
   const label = (opts.label ?? '').replace(/\s+/g, ' ').trim() || Array.from(firstLine.replace(/[。!?!?,,、:;\s]+$/, '')).slice(0, 16).join('') || name;
-  const base: HandResult = { ok: false, check, tutor: check.doc.tutor, date: localDate(opts.now), thread: null, label, cards: 0, home: null, source };
+  const base: HandResult = { ok: false, check, tutor: check.doc.tutor, date: localDate(opts.now), thread: null, label, cards: 0, home: null, source, dubbing: Promise.resolve(), lines: 0 };
   if (check.fixes || !check.doc.tutor) return base;
   const tutor = check.doc.tutor;
   const t = ws.config.tutors[tutor];
@@ -179,26 +183,37 @@ export async function handLessonFile(ws: Workspace, name: string, opts: { label?
   let seq = Math.max(index.messages.reduce((s, m) => Math.max(s, seqOf(m.job)), 0), old ? seqOf(old) : 0);
   const thread = old ?? jobId(opts.now, ++seq);
   const at = localMinute(opts.now);
-  const queue = t.voice ? new DubQueue(ws.config.tts, t.voice, files.err(thread), opts.env) : null;
   const messages: ConversationMessage[] = [];
   for (const [k, s] of check.doc.sections.entries()) {
     const job = k === 0 ? thread : jobId(opts.now, ++seq);
-    const audio = queue ? await Promise.all(s.section.lines.map((l, i) => (l.text.trim() ? queue.add(files.lineAudio(job, i + 1), l.text, `第 ${k + 1} 节第 ${i + 1} 句`) : Promise.resolve(null)))) : s.section.lines.map(() => null);
-    if (queue) {
-      await Promise.all(s.section.cards.map(async (c, n) => {
-        const list = cardAssets(c);
-        if (!list.length) return;
-        await mkdir(files.cardAssetsDir(job, n), { recursive: true });
-        await Promise.all(list.map((a) => queue.add(files.cardAsset(job, n, a.file), a.text, `第 ${k + 1} 节第 ${n + 1} 张卡的 ${a.file} `)));
-      }));
-    }
-    const section = withAudio(s.section, audio);
+    const section = withAudio(s.section, s.section.lines.map(() => null));
     messages.push({ job, thread, at, from: 'parent', text: k === 0 ? `课文件 ${name}` : `课文件 ${name} · 第 ${k + 1} 节`, result: 'ok', costUsd: 0, kidText: section.lines.map((l) => l.text).join('\n') || null, artifacts: [], section, device: check.doc.device, ...(k === 0 ? { prepThread: true as const } : {}) });
   }
   const next: ConversationIndex = { ...index, messages: [...index.messages, ...messages], lessons: { ...index.lessons, [thread]: { handedAt: opts.now.toISOString(), source } } };
   await writeIndex(ws, next);
   const home = await appendContinue(ws, tutor, date, thread, label, opts.now);
-  return { ...base, ok: true, thread, cards: messages.reduce((s, m) => s + (m.section?.cards.length ?? 0), 0), home };
+  const lines = messages.reduce((n, m) => n + (m.section?.lines.filter((l) => l.text.trim()).length ?? 0), 0);
+  // 配音在后台:每句一个文件,点读卡每段一个;都落盘了再把文件名写进索引(重读一遍,只改这几轮的 audio,免得盖掉这期间孩子那边写的)
+  const dubbing = (async () => {
+    if (!t.voice) return;
+    const queue = new DubQueue(ws.config.tts, t.voice, files.err(thread), opts.env);
+    const got = new Map<string, (string | null)[]>();
+    await Promise.all(messages.map(async (m) => {
+      const sec = m.section!;
+      const audio = await Promise.all(sec.lines.map((l, i) => (l.text.trim() ? queue.add(files.lineAudio(m.job, i + 1), l.text, `第 ${m.job} 轮第 ${i + 1} 句`) : Promise.resolve(null))));
+      got.set(m.job, audio);
+      await Promise.all(sec.cards.map(async (c, n) => {
+        const list = cardAssets(c);
+        if (!list.length) return;
+        await mkdir(files.cardAssetsDir(m.job, n), { recursive: true });
+        await Promise.all(list.map((a) => queue.add(files.cardAsset(m.job, n, a.file), a.text, `${m.job} 第 ${n + 1} 张卡的 ${a.file} `)));
+      }));
+    }));
+    const latest = await readIndex(ws, tutor, date);
+    const patched = { ...latest, messages: latest.messages.map((m) => (got.has(m.job) && m.section ? { ...m, section: withAudio(m.section, got.get(m.job)!) } : m)) };
+    await writeIndex(ws, patched);
+  })();
+  return { ...base, ok: true, thread, cards: messages.reduce((s, m) => s + (m.section?.cards.length ?? 0), 0), home, dubbing, lines };
 }
 
 /**

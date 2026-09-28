@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
-import { currentThread, isPrepThread, kidCurrentThread, kidSpoke, lastJobOf, lessonCards, localDate, prepJobs, threads } from '../lib/conversation.ts';
+import { conversationFiles, currentThread, isPrepThread, kidCurrentThread, kidSpoke, lastJobOf, lessonCards, localDate, prepJobs, threads } from '../lib/conversation.ts';
 import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
@@ -215,8 +215,8 @@ export interface ParentDay {
   messages: ParentMessage[];
   pending: string | null;
   thread: string | null;
-  /** 备课话题的这节课(《备课设计.md》§十,家长端底部那一条):几张卡、交了没有、首页按钮上的字、写成了哪个课文件 */
-  lessons: Record<string, { cards: string[]; handed: boolean; label: string | null; source: string | null }>;
+  /** 备课话题的这节课(《备课设计.md》§十,家长端底部那一条):几张卡、交了没有、首页按钮上的字、写成了哪个课文件;从课文件交出去的还在配音时带进度(配齐 / 老师没音色 = null) */
+  lessons: Record<string, { cards: string[]; handed: boolean; label: string | null; source: string | null; dubbing: { done: number; total: number } | null }>;
 }
 
 /** 已发布首页上「接着」按钮的字:`<老师> <日期> <话题>` → 字(交给孩子的备课话题在首页上叫什么) */
@@ -253,7 +253,26 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
   const labels = await continueLabels(ctx.ws);
   const ths = threads(index.messages);
   const lessons: ParentDay['lessons'] = {};
-  for (const th of new Set(ths)) if (isPrepThread(index.messages, th)) lessons[th] = { cards: lessonCards(index, th), handed: Boolean(index.lessons[th]?.handedAt), label: labels.get(`${tutor} ${date} ${th}`) ?? null, source: index.lessons[th]?.source ?? null };
+  const files = conversationFiles(ctx.ws.dirs.conversations, tutor, date);
+  for (const th of new Set(ths)) {
+    if (!isPrepThread(index.messages, th)) continue;
+    const l = index.lessons[th];
+    // 从课文件交出去的话题(有 source、有 handedAt、没有会话):配音在后台,索引里 audio 还空着的句看盘上文件到了没
+    let dubbing: { done: number; total: number } | null = null;
+    if (l?.handedAt && l.source && !index.sessions[th] && ctx.ws.config.tutors[tutor]?.voice) {
+      let done = 0; let total = 0;
+      for (const [i, m] of index.messages.entries()) {
+        if (ths[i] !== th || !m.section) continue;
+        for (const [n, line] of m.section.lines.entries()) {
+          if (!line.text.trim()) continue;
+          total++;
+          if (line.audio || (await stat(files.lineAudio(m.job, n + 1)).catch(() => null))?.isFile()) done++;
+        }
+      }
+      if (done < total) dubbing = { done, total };
+    }
+    lessons[th] = { cards: lessonCards(index, th), handed: Boolean(l?.handedAt), label: labels.get(`${tutor} ${date} ${th}`) ?? null, source: l?.source ?? null, dubbing };
+  }
   return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index), lessons };
 }
 
@@ -742,6 +761,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const fileName = index.lessons[thread]?.handedAt && index.lessons[thread]?.source ? lessonName(index.lessons[thread].source!) : null;
       const ex = fileName ? { name: fileName, source: index.lessons[thread]!.source!, skipped: [] as string[] } : await exportThread(ws, tutor, date, thread);
       const r = await handLessonFile(ws, ex.name, { label, now: ctx.now() });
+      void r.dubbing.catch(() => {});
       return { status: 200, json: { ok: r.ok && Boolean(r.home?.ok), label, cards: r.cards, source: ex.source, thread: r.thread, issues: [...r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text), ...(r.home?.check.issues.filter((i) => i.level === 'fix').map((i) => i.text) ?? []), ...ex.skipped] } };
     }
     // 课文件(《备课设计.md》§十):清单、检查、家长端课文件页、交给孩子;排版在写的时候做(cotutor-prep 技能)或 CLI cotutor lesson post
@@ -794,7 +814,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         const label = isObj(body) && typeof body.label === 'string' ? body.label : undefined;
         if (label !== undefined && Array.from(label.trim()).length > BUTTON_LABEL_MAX) return { status: 400, json: { error: 'bad_request', message: `按钮上的字 1–${BUTTON_LABEL_MAX} 个` } };
         const r = await handLessonFile(ws, name, { label, now });
-        return { status: r.ok ? 200 : 409, json: { ok: r.ok && Boolean(r.home?.ok), tutor: r.tutor, thread: r.thread, label: r.label, cards: r.cards, issues: [...r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text), ...(r.home?.check.issues.filter((i) => i.level === 'fix').map((i) => i.text) ?? [])] } };
+        void r.dubbing.catch(() => {});
+        return { status: r.ok ? 200 : 409, json: { ok: r.ok && Boolean(r.home?.ok), handed: r.ok, homeOk: Boolean(r.home?.ok), date: r.date, tutor: r.tutor, thread: r.thread, label: r.label, cards: r.cards, lines: r.lines, issues: [...r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text), ...(r.home?.check.issues.filter((i) => i.level === 'fix').map((i) => i.text) ?? [])] } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }

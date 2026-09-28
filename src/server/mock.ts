@@ -639,8 +639,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       }));
       const pending = list.find((m) => m.pending);
       const idx = asIndex(name);
-      const lessonsOut: Record<string, { cards: string[]; handed: boolean; label: string | null }> = {};
-      if (date === today) for (const th of new Set(list.map((m) => m.thread))) if (isPrepThread(idx.messages, th)) lessonsOut[th] = { cards: lessonCards(idx, th), handed: Boolean(ls.get(th)?.handedAt), label: handedLabel.get(name)?.thread === th ? handedLabel.get(name)!.label : null };
+      const lessonsOut: Record<string, { cards: string[]; handed: boolean; label: string | null; source: string | null; dubbing: null }> = {};
+      if (date === today) for (const th of new Set(list.map((m) => m.thread))) if (isPrepThread(idx.messages, th)) lessonsOut[th] = { cards: lessonCards(idx, th), handed: Boolean(ls.get(th)?.handedAt), label: handedLabel.get(name)?.thread === th ? handedLabel.get(name)!.label : null, source: ls.get(th)?.source ?? null, dubbing: null };
       return { status: 200, json: { tutor: name, date, messages: out, pending: pending ? pending.job : null, thread: list.length ? list[list.length - 1].thread : null, lessons: lessonsOut } };
     }
     // 家长真发(《家长板书页设计.md》第六节 3):/api/conversations/<老师>/messages|photos 与打星——进孩子那份列表,from: parent;不算上限、不看 via

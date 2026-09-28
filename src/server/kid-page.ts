@@ -677,6 +677,7 @@ __PHOTO_JS__
   const openTutor = (t, intent) => {
     unlock();
     intent = intent || { kind: 'new' };
+    S.lsn = null; stopListen();
     S.tutor = t; if (!PARENT || intent.kind === 'new') micWarm(); S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null;
@@ -1617,8 +1618,9 @@ __PHOTO_JS__
     bar.classList.toggle('empty', !ids.length);
     const handed = S.prep === 'handed';
     const src = S.lesson && S.lesson.source;
-    $('#ls-n').textContent = !ids.length ? '这节课 · 还没有卡' : '这节课 · ' + ids.length + ' 张卡' + (handed ? ' · 已交给孩子' : src ? ' · 已写成课文件' : '');
-    $('#ls-names').textContent = handed ? '首页上是「' + ((S.lesson && S.lesson.label) || '…') + '」' + (src ? ' · ' + src : '') : src ? src + ' · 要挑卡、改字去文件里改,再交一次就覆盖' : ids.length ? names.join(' · ') : '和老师聊出几节,满意了交给孩子';
+    const dub = S.lesson && S.lesson.dubbing;
+    $('#ls-n').textContent = !ids.length ? '这节课 · 还没有卡' : '这节课 · ' + ids.length + ' 张卡' + (handed ? ' · 已交给孩子' + (dub ? ' · 配音 ' + dub.done + ' / ' + dub.total + ' 句' : '') : src ? ' · 已写成课文件' : '');
+    $('#ls-names').textContent = handed ? '首页上是「' + ((S.lesson && S.lesson.label) || '…') + '」' + (dub ? ' · 孩子这时按按钮,没配到的句先用浏览器的声' : '') + (src ? ' · 改 ' + src + ' 再交就覆盖' : '') : src ? src + ' · 要挑卡、改字去文件里改,再交一次就覆盖' : ids.length ? names.join(' · ') : '和老师聊出几节,满意了交给孩子';
     $('#ls-hand').disabled = !ids.length || !lessonEditable();
     $('#ls-hand').hidden = handed;
   };
@@ -1655,10 +1657,13 @@ __PHOTO_JS__
     $('#hd-go').disabled = true; msg.classList.remove('err'); msg.textContent = '交着…';
     try {
       if (S.lsn) {
+        // 交给孩子(《备课设计.md》拍板 32):不到一秒就回(配音在后台),直接跳到交出去的那个话题——孩子会看到的样子,底部条上看配音进度
         const r = await api('POST', lsnUrl('/hand'), { label });
-        if (r.ok) { msg.textContent = '首页上有了:' + r.label; setTimeout(closeHand, 1500); }
-        else { msg.classList.add('err'); msg.textContent = '没交成:\\n' + r.issues.join('\\n'); }
-        S.lsn.key = null; loadLesson();
+        if (!r.handed) { msg.classList.add('err'); msg.textContent = '没交成:\\n' + r.issues.join('\\n'); $('#hd-go').disabled = false; return; }
+        closeHand();
+        const t = S.tutor;
+        openTutor(t, { kind: 'thread', thread: r.thread, date: r.date });
+        toast(r.homeOk ? '交给孩子了,首页上是「' + r.label + '」' + (r.lines ? ';正在配音' : '') : '交了,但首页那行没发出去:' + r.issues.join(';'));
       } else {
         const r = await lessonApi('hand', { label });
         if (r.ok) { msg.textContent = '写成了 ' + r.source + ',首页上有了:' + r.label; setTimeout(closeHand, 2000); }

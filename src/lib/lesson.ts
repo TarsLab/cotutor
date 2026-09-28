@@ -245,27 +245,54 @@ export function applyPostToLesson(md: string, doc: LessonDoc, posted: readonly B
   return { md: all.join('\n'), fences, marks };
 }
 
-/** 把文件里写了的排版盖回后期跑出来的节(手写的当已定):same 强制接上(接得上的话)、样子逐项盖 */
-export function keepWritten(written: BoardSection, posted: BoardSection): BoardSection {
-  const cards = posted.cards.map((c, n) => {
-    const w = written.cards[n]?.look;
-    return w ? { ...c, look: { ...(c.look ?? {}), ...w } } : c;
-  });
-  const wrote = new Set((written.layout?.rows ?? []).flatMap((r) => r.slice(1)));
-  let layout = posted.layout;
-  if (wrote.size) {
-    const rows: number[][] = [];
-    const pRows = posted.layout?.rows ?? cards.map((_, n) => [n]);
-    const sameIn = new Set(pRows.flatMap((r) => r.slice(1)));
-    cards.forEach((_, n) => {
-      const last = rows[rows.length - 1];
-      const want = wrote.has(n) || sameIn.has(n);
-      if (want && last && last.length < 3) last.push(n);
-      else rows.push([n]);
-    });
-    layout = { for: written.layout?.for ?? posted.layout?.for ?? DEFAULT_LESSON_DEVICE, rows };
+
+/** 全文剥掉排版:围栏行去掉排版修饰词、围栏外的行去掉方括号(标注);比对两份文件「除了排版一个字没动」用 */
+export function stripLayout(md: string): string {
+  const out: string[] = [];
+  let fence: string | null = null;
+  for (const raw of md.replace(/\r\n/g, '\n').split('\n')) {
+    const line = raw.replace(/\s+$/, '');
+    if (fence) {
+      out.push(line);
+      const m = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line);
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length) fence = null;
+      continue;
+    }
+    const open = FENCE.exec(line);
+    if (open) { fence = open[1]; out.push(withMods(line, {}).replace(/\s+$/, '')); continue; }
+    out.push(line.replace(/[[\]]/g, ''));
   }
-  return { ...posted, cards, ...(layout ? { layout } : {}) };
+  return out.join('\n').trim();
+}
+
+/**
+ * 整份排版的回复(模型回的整份文件)套回原文(《备课设计.md》§10.4,拍板 31):正文必须一个字没动(剥掉排版后逐字相同),否则整份不要;
+ * 围栏行上你手写过的修饰词当已定(same、tint、look、emoji 逐项盖回去),模型只填你没写的;讲稿里的 [词] 收模型的。返回新全文与改了几处
+ */
+export function applyLayoutReply(md: string, reply: string): { ok: true; md: string; fences: number; marks: number } | { ok: false; why: string } {
+  const text = reply.replace(/^\s*```(?:markdown|md)?\s*\n([\s\S]*?)\n\s*```\s*$/, '$1');
+  if (stripLayout(md) !== stripLayout(text)) return { ok: false, why: '回来的文件正文和原文对不上(不只改了排版),整份不要' };
+  const orig = parseLesson(md);
+  const next = parseLesson(text);
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const origLines = md.replace(/\r\n/g, '\n').split('\n');
+  let fences = 0;
+  next.sections.forEach((s, k) => {
+    const o = orig.sections[k];
+    s.section.cards.forEach((c, n) => {
+      const line = s.cardLines[n];
+      if (!line || isHeading(c)) return;
+      const mine = o ? modsOf(o.section, n) : {};
+      const theirs = modsOf(s.section, n);
+      const merged: CardMods = { ...theirs, ...mine };
+      const built = withMods(lines[line - 1], merged);
+      const before = o?.cardLines[n] ? origLines[o.cardLines[n] - 1] : '';
+      if (built !== before) fences++;
+      lines[line - 1] = built;
+    });
+  });
+  const marks = (text.match(/\[[^[\]\n]+\]/g) ?? []).length - (md.match(/\[[^[\]\n]+\]/g) ?? []).length;
+  return { ok: true, md: lines.join('\n'), fences, marks: Math.max(0, marks) };
 }
 
 /** 给孩子端的节:讲稿句配好音的文件名并进去(与 runner 的做法同:audio = 相对 conversations/<老师>/ 的文件名) */

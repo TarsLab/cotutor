@@ -517,11 +517,11 @@ export async function main(argv: string[]): Promise<void> {
         }
         if (sub === 'post') {
           const r = await L.postLesson(ws, name, { write: flags.write === true, now, model: typeof flags.model === 'string' ? flags.model : undefined });
-          if (json) process.stdout.write(`${JSON.stringify({ ok: r.ok, fences: r.fences, marks: r.marks, costUsd: r.costUsd, ms: r.ms, results: r.results.map((x) => x.summary), md: r.md }, null, 2)}\n`);
+          if (json) process.stdout.write(`${JSON.stringify({ ok: r.ok, fences: r.fences, marks: r.marks, costUsd: r.costUsd, ms: r.ms, error: r.error ?? null, md: r.md }, null, 2)}\n`);
+          else if (!r.ok) process.stdout.write(`没排成:${r.error}(${(r.ms / 1000).toFixed(1)}s)\n`);
           else {
-            process.stdout.write(`后期排了 ${r.results.length} 节(${r.results.reduce((s, x) => s + (x.summary.beats ?? 0), 0)} 拍,${r.results.reduce((s, x) => s + (x.summary.failed ?? 0), 0)} 拍没成)· ${(r.ms / 1000).toFixed(1)}s · $${r.costUsd.toFixed(3)}\n`);
+            process.stdout.write(`整份排了一遍 · ${(r.ms / 1000).toFixed(1)}s · $${r.costUsd.toFixed(3)}\n`);
             process.stdout.write(flags.write === true ? `回写 lessons/${name}.md:${r.fences} 处围栏行、${r.marks} 处 [词]\n` : `会改 ${r.fences} 处围栏行、${r.marks} 处 [词];加 --write 才写进文件\n`);
-            for (const d of r.results.flatMap((x) => x.file.dropped)) process.stdout.write(`  丢掉:${d}\n`);
           }
           if (!r.ok) process.exitCode = 1;
           return;

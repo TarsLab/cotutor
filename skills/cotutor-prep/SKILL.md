@@ -41,7 +41,7 @@ description: 给 cotutor 的孩子备一节课,写成课文件 lessons/<课名>.
 
 1. 家长点头后写 lessons/<课名>.md(目录没有就建)。课名:中英文、数字、- 与 _,如 `分数-比大小`、`2026-09-28-小蝌蚪`。
 2. `cotutor lesson check <课名>`。「要改」的改到没有;「提醒」的跟家长说一声。
-3. 排版:要自己排就在围栏行上写 same / tint= / look= / emoji=;想让后期排,`cotutor lesson post <课名> --write`(花钱,先问)。
+3. 排版是写的一部分:写卡的时候就按 references/排版.md 排好(围栏行上的 same / tint= / look= / emoji=,讲稿里的 [词]),不另起一步。家长手写的文件没排版,可以你自己按规则改,或 `cotutor lesson post <课名> --write`(花钱,先问)。
 4. 服务开着,请家长在 iPad 或电脑上开家长端 /parent:清单里这位老师块下面「课文件」一栏点进这份,整份铺开(卡、老师会说的话、要改的、讲法),文件一改几秒后自己跟上。
 5. 家长要改就改文件,再 check。
 

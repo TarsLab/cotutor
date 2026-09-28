@@ -1,6 +1,6 @@
 /** 课文件(《备课设计.md》§十):排版修饰词 → layout / look;`---` 分节;frontmatter 与讲法;check 两级;后期提案回写(围栏行、[词]);手写的当已定。 */
 import { parseBoard, splitMods, withMods } from '../src/lib/board.ts';
-import { applyPostToLesson, keepWritten, lessonIssues, modsOf, parseLesson } from '../src/lib/lesson.ts';
+import { applyLayoutReply, applyPostToLesson, lessonIssues, modsOf, parseLesson, stripLayout } from '../src/lib/lesson.ts';
 import type { BoardSection } from '../src/lib/kid-board.ts';
 import { check, done } from './_check.ts';
 
@@ -77,20 +77,33 @@ for: 2026-09-28
   check('围栏里的 --- 不分节;讲法没有', inFence.sections.length === 1 && inFence.sections[0].section.cards.length === 1 && inFence.brief === '');
 }
 
-// ---- 后期提案回写
+// ---- 备课话题导出时把后期的决定写进文件(applyPostToLesson)
 {
   const doc = parseLesson(FILE);
   const s0 = doc.sections[0].section;
-  // 后期跑出来的:第二张另起一行(和文件的 same 矛盾)、给了底色、标了「平行四边形」(老师已标)与「底」(讲稿第 3 句里有)
-  const posted: BoardSection = { ...s0, layout: { for: 'tablet-landscape', rows: [[0], [1]] }, cards: s0.cards.map((c, n) => (n === 1 ? { ...c, look: { tint: 'mint', emoji: '📐' } } : { ...c, look: { ...(c.look ?? {}), look: 'big' } })), lines: s0.lines.map((l, i) => (i === 2 ? { ...l, marks: [...l.marks, { card: 1, phrase: '底', pen: 'marker' as const, said: '底' }, { card: 1, phrase: '不在这句', pen: 'marker' as const }] } : l)) };
-  const kept = keepWritten(s0, posted);
-  check('手写的当已定:same 盖回(两张一行)、tint=sky 留着,后期填的 look / 第二张的样子收下', JSON.stringify(kept.layout?.rows) === '[[0,1]]' && kept.cards[0].look?.tint === 'sky' && kept.cards[0].look?.look === 'big' && kept.cards[1].look?.tint === 'mint' && kept.cards[1].look?.emoji === '📐', JSON.stringify({ rows: kept.layout, looks: kept.cards.map((c) => c.look) }));
-  check('modsOf:第二张 same、样子齐', JSON.stringify(modsOf(kept, 1)) === JSON.stringify({ same: true, tint: 'mint', emoji: '📐' }));
-  const r = applyPostToLesson(FILE, doc, [kept, doc.sections[1].section]);
+  const posted: BoardSection = { ...s0, layout: { for: 'tablet-landscape', rows: [[0, 1]] }, cards: s0.cards.map((c, n) => (n === 1 ? { ...c, look: { tint: 'mint', emoji: '📐' } } : { ...c, look: { ...(c.look ?? {}), look: 'big' } })), lines: s0.lines.map((l, i) => (i === 2 ? { ...l, marks: [...l.marks, { card: 1, phrase: '底', pen: 'marker' as const, said: '底' }, { card: 1, phrase: '不在这句', pen: 'marker' as const }] } : l)) };
+  check('modsOf:第二张 same、样子齐', JSON.stringify(modsOf(posted, 1)) === JSON.stringify({ same: true, tint: 'mint', emoji: '📐' }));
+  const r = applyPostToLesson(FILE, doc, [posted, doc.sections[1].section]);
   const lines = r.md.split('\n');
   check('回写围栏行:两处;讲稿里多了 [底],已标的、不在这句的不写', r.fences === 2 && lines[8] === '```text tint=sky look=big' && lines[15] === '```text formula same tint=mint emoji=📐' && r.marks === 1 && lines[19] === '所以三角形的面积就是[底]乘高,再除以 2。', JSON.stringify({ r: [r.fences, r.marks], l8: lines[8], l15: lines[15], l19: lines[19] }));
   const again = parseLesson(r.md);
   check('回写后的文件再解析:行与样子都在', JSON.stringify(again.sections[0].section.layout?.rows) === '[[0,1]]' && again.sections[0].section.cards[1].look?.emoji === '📐' && again.sections[0].section.lines[2].marks.some((m) => m.phrase === '底'));
+}
+
+// ---- 整份排版的回复套回原文(applyLayoutReply;cotutor lesson post 用)
+{
+  check('stripLayout:围栏行去排版词、讲稿去方括号、围栏里不动', stripLayout('```text same tint=sky\n# 甲\n[一]\n```\n说[甲]。') === '```text\n# 甲\n[一]\n```\n说甲。');
+  // 模型回的:第一张改了底色(手写的 sky 要赢)、第二张去掉 same 加 look(same 手写的要赢、look 收下)、讲稿多标一个词
+  const reply = FILE.replace('```text tint=sky', '```text tint=mint emoji=📐').replace('```text formula same', '```text formula look=formula').replace('所以三角形的面积就是底乘高', '所以三角形的面积就是[底]乘高');
+  const r = applyLayoutReply(FILE, reply);
+  const lines = r.ok ? r.md.split('\n') : [];
+  check('正文没动就收:手写的 tint=sky 与 same 盖回去,模型给的 emoji / look 收下,方括号收下', r.ok && lines[8] === '```text tint=sky emoji=📐' && lines[15] === '```text formula same look=formula' && lines[19] === '所以三角形的面积就是[底]乘高,再除以 2。' && r.fences === 2 && r.marks === 1, JSON.stringify(r.ok ? { l8: lines[8], l15: lines[15], l19: lines[19], f: r.fences, m: r.marks } : r));
+  const wrapped = applyLayoutReply(FILE, '```markdown\n' + reply + '\n```');
+  check('用围栏包起来的回复也认', wrapped.ok);
+  const bad = applyLayoutReply(FILE, reply.replace('把两个一样的三角形倒过来拼在一起', '把两个三角形拼起来'));
+  check('改了正文的整份不要', !bad.ok && !('md' in bad));
+  const same = applyLayoutReply(FILE, FILE);
+  check('原样回来:零改动', same.ok && same.fences === 0 && same.marks === 0);
 }
 
 done();

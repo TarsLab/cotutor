@@ -13,11 +13,13 @@ import { conversationFiles, isPrepThread, jobId, kidSpoke, localDate, localMinut
 import type { HomeTutorInfo } from '../lib/home.ts';
 import type { BoardSection, Device } from '../lib/kid-board.ts';
 import { kidSource } from '../lib/kid-view.ts';
-import { LESSONS_DIR, LESSON_NAME_RE, applyPostToLesson, cardBrief, keepWritten, lessonIssues, parseLesson, withAudio, type LessonDoc, type LessonIssue } from '../lib/lesson.ts';
+import { LESSONS_DIR, LESSON_NAME_RE, applyLayoutReply, applyPostToLesson, cardBrief, lessonIssues, parseLesson, withAudio, type LessonDoc, type LessonIssue } from '../lib/lesson.ts';
+import { layoutPrompt } from '../lib/prep-doc.ts';
+import { withProxy } from '../lib/proxy.ts';
 import { parseSections } from '../lib/sections.ts';
-import { resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
+import { fillRuntime, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
 import { appendContinue, type PublishResult } from './home.ts';
-import { runPost, type PostResult } from './post.ts';
+import { spawnPost, unwrapJsonOutput } from './post.ts';
 import { readIndex, readTranscript, writeIndex } from './store.ts';
 import { themeFiles } from './theme.ts';
 import { DubQueue } from './tts.ts';
@@ -90,20 +92,19 @@ export function formatCheck(check: LessonCheck, shown: string): string {
 
 export interface PostLessonResult {
   ok: boolean;
-  /** 跑完后期、盖回手写的之后的各节 */
-  sections: BoardSection[];
-  results: PostResult[];
   /** --write 之后的全文(没写就是原文) */
   md: string;
   fences: number;
   marks: number;
   costUsd: number;
   ms: number;
+  error?: string;
 }
 
 /**
- * 让后期给课文件排一版(拍板 26):每节按拍顺着起快模型(和线上一样),文件里写了的 same / tint / look / emoji 当已定盖回去;
- * write = true 把提案回写进文件(围栏行上的修饰词、讲稿里的 [词])
+ * 整份排一版(《备课设计.md》§10.4,拍板 31):课文件全文 + 排版规则(和 cotutor-prep 技能 references/排版.md 同一份,带这个主题的槽表)一次交给模型
+ * (policy.post.runtime 那条运行时,缺省 haiku;--model 可换),它回整份文件;正文剥掉排版后必须逐字相同,否则整份不要;
+ * 你手写过的修饰词当已定。给家长手写的文件用;技能写的文件写的时候就排好了
  */
 export async function postLesson(ws: Workspace, name: string, opts: { write?: boolean; env?: NodeJS.ProcessEnv; now?: Date; model?: string }): Promise<PostLessonResult> {
   const md = await readLesson(ws, name);
@@ -111,21 +112,22 @@ export async function postLesson(ws: Workspace, name: string, opts: { write?: bo
   const doc = parseLesson(md);
   if (!doc.tutor || !ws.config.tutors[doc.tutor]) throw new UsageError(`${name}:frontmatter 的 tutor 要是 cotutor.json 里的老师(现在是 ${doc.tutor ?? '没写'})`);
   const policy = resolvePolicy(ws.config, doc.tutor);
+  const theme = await themeFiles(ws.root, ws.config.kid.theme);
+  const rt = ws.config.runtimes[policy.post.runtime];
+  if (!rt || typeof rt === 'string') throw new UsageError(`运行时 ${policy.post.runtime} 不在 cotutor.json 的 runtimes 里(cotutor upgrade --config 可补)`);
+  const run = rt.run.map((a, i, xs) => (opts.model && i > 0 && xs[i - 1] === '--model' ? opts.model : a));
+  const prompt = layoutPrompt(md, theme.manifest);
   const t0 = Date.now();
-  const results: PostResult[] = [];
-  const sections: BoardSection[] = [];
-  for (const s of doc.sections) {
-    if (!s.section.cards.some((c) => !c.props.ask)) { sections.push(s.section); continue; }
-    // 后期看到的节不带文件的行(它自己决定每张接不接),样子带着(它会照顾前后呼应);跑完再把手写的盖回去
-    const { layout: _l, ...bare } = s.section;
-    const r = await runPost(ws, doc.tutor, bare, { device: doc.device, policy: { ...policy, post: { ...policy.post, mode: 'auto' } }, env: opts.env, now: opts.now, serial: true, model: opts.model });
-    results.push(r);
-    sections.push(keepWritten(s.section, r.section));
-  }
-  const applied = applyPostToLesson(md, doc, sections);
+  const argv = fillRuntime(run, { agent: doc.tutor, prompt });
+  // 一问一答,不要思考(同板书后期:haiku 一想就是几十秒)
+  const r = await spawnPost(argv, ws.root, withProxy(argv, { ...(opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root, MAX_THINKING_TOKENS: '0' }, ws.config.proxy), 180_000);
+  const ms = Date.now() - t0;
+  if (r.error) return { ok: false, md, fences: 0, marks: 0, costUsd: 0, ms, error: r.error };
+  const { text, costUsd } = unwrapJsonOutput(r.out);
+  const applied = applyLayoutReply(md, text);
+  if (!applied.ok) return { ok: false, md, fences: 0, marks: 0, costUsd: costUsd ?? 0, ms, error: applied.why };
   if (opts.write && applied.md !== md) await writeFile(lessonFiles(ws).file(name), applied.md);
-  const costUsd = results.reduce((s, r) => s + (r.summary.costUsd ?? 0), 0);
-  return { ok: results.length > 0 && results.every((r) => r.summary.ok), sections, results, md: opts.write ? applied.md : md, fences: applied.fences, marks: applied.marks, costUsd: Math.round(costUsd * 1e4) / 1e4, ms: Date.now() - t0 };
+  return { ok: true, md: opts.write ? applied.md : md, fences: applied.fences, marks: applied.marks, costUsd: Math.round((costUsd ?? 0) * 1e4) / 1e4, ms };
 }
 
 export interface HandResult {

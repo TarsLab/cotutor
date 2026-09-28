@@ -96,7 +96,7 @@ export function unwrapJsonOutput(stdout: string): { text: string; costUsd?: numb
   return { text: stdout };
 }
 
-async function spawnPost(argv: string[], cwd: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<{ out: string; code: number | null; error?: string }> {
+export async function spawnPost(argv: string[], cwd: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<{ out: string; code: number | null; error?: string }> {
   return new Promise((resolve) => {
     let out = '';
     let err = '';

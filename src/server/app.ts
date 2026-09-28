@@ -38,7 +38,7 @@ import { enrichScenes } from './scene-props.ts';
 import { tianzigeData } from './tianzige.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
 import { repost } from './post.ts';
-import { checkLesson, exportThread, handLessonFile, lessonName, lessonPage, lessonThreads, listLessons, postLesson, readLesson, type LessonPage } from './lesson.ts';
+import { checkLesson, exportThread, handLessonFile, lessonName, lessonPage, lessonThreads, listLessons, readLesson, type LessonPage } from './lesson.ts';
 import { DeviceSchema } from '../schema/index.ts';
 import { listVoices, synthesize, type VoiceInfo } from './tts.ts';
 import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
@@ -744,9 +744,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const r = await handLessonFile(ws, ex.name, { label, now: ctx.now() });
       return { status: 200, json: { ok: r.ok && Boolean(r.home?.ok), label, cards: r.cards, source: ex.source, thread: r.thread, issues: [...r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text), ...(r.home?.check.issues.filter((i) => i.level === 'fix').map((i) => i.text) ?? []), ...ex.skipped] } };
     }
-    // 课文件(《备课设计.md》§十):清单、检查 + 预览、让后期排一版(花钱)、交给孩子;工作台「备课」页与 CLI 都走这里
+    // 课文件(《备课设计.md》§十):清单、检查、家长端课文件页、交给孩子;排版在写的时候做(cotutor-prep 技能)或 CLI cotutor lesson post
     if (p === '/api/lessons' && method === 'GET') return { status: 200, json: { lessons: await listLessons(ws, ctx.now()), tutors: Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, t.display])) } };
-    const lf = /^\/api\/lessons\/([^/]+)(\/page|\/post|\/hand)?$/.exec(p);
+    const lf = /^\/api\/lessons\/([^/]+)(\/page|\/hand)?$/.exec(p);
     if (lf) {
       const name = lessonName(decodeURIComponent(lf[1]));
       if (!name) return { status: 400, json: { error: 'bad_request', message: '课文件的名字只能是中英文、数字、- 与 _' } };
@@ -771,10 +771,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           if (lt.handed) handed = { thread: lt.handed, date, label: (await continueLabels(ws)).get(`${c.doc.tutor} ${date} ${lt.handed}`) ?? null, kidSpoke: kidSpoke(index.messages, lt.handed) };
         }
         return { status: 200, json: lessonPage(name, c, st?.mtime.toISOString() ?? null, handed, fromThread, now) };
-      }
-      if (lf[2] === '/post' && method === 'POST') {
-        const r = await postLesson(ws, name, { write: !(isObj(body) && body.write === false), now });
-        return { status: 200, json: { ok: r.ok, fences: r.fences, marks: r.marks, costUsd: r.costUsd, ms: r.ms, beats: r.results.reduce((s, x) => s + (x.summary.beats ?? 0), 0), failed: r.results.reduce((s, x) => s + (x.summary.failed ?? 0), 0), dropped: r.results.flatMap((x) => x.file.dropped) } };
       }
       if (lf[2] === '/hand' && method === 'POST') {
         const label = isObj(body) && typeof body.label === 'string' ? body.label : undefined;

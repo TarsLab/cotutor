@@ -180,7 +180,6 @@ const PAGE = `<!doctype html>
   .note.warn .tg { color:#8a6d1a; border-color:#c9b56a; }
   .note .pin.ask { flex:none; align-self:center; font-size:12px; color:#5b3d86; border:1px solid #5b3d86; border-radius:6px; padding:0 6px; white-space:nowrap; }
   .note mark { background:#fff0a3; color:inherit; border-radius:4px; padding:0 2px; box-shadow:inset 0 -2px 0 #e6c93b; }
-  #ls-post.arm { color:#fff; background:#b3541e; border-color:#b3541e; }
   /* 这节课(《备课设计.md》§十):底部「这节课」条——交给孩子(先写成课文件再交);交了写着课文件在哪 */
   #lesson { display:flex; align-items:center; gap:12px; margin:4px 16px 0; padding:10px 12px 10px 14px; border-radius:18px; background:var(--card); border:1.5px solid var(--accent); }
   #lesson[hidden] { display:none; }
@@ -409,7 +408,7 @@ const PAGE = `<!doctype html>
       <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
       <div id="st-dim"></div>
     </div>
-    <div id="lesson" hidden><div class="tx2"><b id="ls-n"></b><small id="ls-names"></small></div><button type="button" id="ls-post" hidden>让后期排一版</button><button type="button" id="ls-hand">交给孩子</button></div>
+    <div id="lesson" hidden><div class="tx2"><b id="ls-n"></b><small id="ls-names"></small></div><button type="button" id="ls-hand">交给孩子</button></div>
     <div id="sub"><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
       <div id="pill">
@@ -1607,12 +1606,10 @@ __PHOTO_JS__
       const hd = P.handed;
       bar.classList.toggle('empty', !P.cards);
       $('#ls-n').textContent = '这节课 · ' + P.cards + ' 张卡' + (hd ? ' · 已交给孩子' + (hd.kidSpoke ? ' · 孩子答过了' : '') : P.fixes ? ' · ' + P.fixes + ' 条要改' : ' · 还没交');
-      $('#ls-names').textContent = hd ? '首页上是「' + (hd.label || '…') + '」' + (hd.kidSpoke ? ';再交是新话题' : ';改了文件再交就覆盖') : P.fixes ? '改好文件再交;这页一两秒后跟上' : '要挑卡、改字,在电脑上改 ' + P.source + ',或在 Claude Code 里说「把这节课改改」';
-      $('#ls-post').hidden = false; $('#ls-post').disabled = !P.cards || Boolean(S.lsnBusy);
-      $('#ls-hand').hidden = false; $('#ls-hand').disabled = !P.cards || P.fixes > 0 || Boolean(S.lsnBusy);
+      $('#ls-names').textContent = hd ? '首页上是「' + (hd.label || '…') + '」' + (hd.kidSpoke ? ';再交是新话题' : ';改了文件再交就覆盖') : P.fixes ? '改好文件再交;这页几秒后跟上' : '要挑卡、改字、排版,在电脑上改 ' + P.source + ',或在 Claude Code 里说「把这节课改改」';
+      $('#ls-hand').hidden = false; $('#ls-hand').disabled = !P.cards || P.fixes > 0;
       return;
     }
-    $('#ls-post').hidden = true;
     if (!PARENT || !S.prep) { bar.hidden = true; return; }
     bar.hidden = false;
     const ids = (S.lesson && S.lesson.cards) || [];
@@ -1747,16 +1744,6 @@ __PHOTO_JS__
     const next = () => { if (lsnSpeak !== i) return; if (k >= s.lines.length) { lsnSpeak = null; return; } const l = s.lines[k++]; say({ text: l.text, audio: null }, next); };
     next();
   };
-  $('#ls-post').addEventListener('click', async () => {
-    if (!S.lsn || S.lsnBusy) return;
-    const b = $('#ls-post');
-    if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = '确定?要花钱'; setTimeout(() => { b.classList.remove('arm'); b.textContent = '让后期排一版'; }, 4000); return; }
-    b.classList.remove('arm'); b.textContent = '排着…'; S.lsnBusy = true; renderLesson();
-    try { const r = await api('POST', lsnUrl('/post'), {}); toast((r.ok ? '排好了' : '有 ' + r.failed + ' 拍没成') + ':改了 ' + r.fences + ' 处围栏行、' + r.marks + ' 处标注 · $' + Number(r.costUsd || 0).toFixed(3)); }
-    catch (e) { toast('没排成' + (e && e.body && e.body.message ? ':' + e.body.message : '')); }
-    S.lsnBusy = false; b.textContent = '让后期排一版';
-    if (S.lsn) { S.lsn.key = null; loadLesson(); }
-  });
   const answerOf = (c) => {
     const p = c.props || {};
     if (c.kind === 'choice' && Array.isArray(p.answer) && p.answer.length) return p.answer.map((i) => ('ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i] || String(i + 1)) + (p.options && p.options[i] ? ' ' + p.options[i] : '')).join('、');

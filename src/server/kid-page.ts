@@ -1735,13 +1735,23 @@ __PHOTO_JS__
     } catch (e) { if (e && e.status === 404) return closeTutor(); setOffline(true); }
   };
   let lsnSpeak = null;
-  const stopListen = () => { if (lsnSpeak === null) return; lsnSpeak = null; voiceToken++; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {} };
+  const stopListen = () => { if (lsnSpeak === null) return; lsnSpeak = null; voiceToken++; try { audioEl.pause(); } catch {} try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {} };
+  /** 课文件的一句用老师的音色念(服务端现合成、有缓存);老师没配音色或合成失败退回浏览器的声。token 同 say:停了就不接着 */
+  const sayLesson = (sec, k, text, onEnd) => {
+    const token = ++voiceToken;
+    const finish = () => { if (token === voiceToken) onEnd(); };
+    const fallback = () => { if (token === voiceToken) speak(plainLine(text), finish, () => setTimeout(finish, lineDurationMs(text))); };
+    try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {}
+    audioEl.onended = finish; audioEl.onerror = fallback; audioEl.onplaying = null;
+    audioEl.src = lsnUrl('/say?s=' + sec + '&i=' + k);
+    audioEl.play().catch(fallback);
+  };
   const listenSection = (i) => {
     const s = S.sections[i]; if (!s) return;
     if (lsnSpeak === i) return stopListen();
     stopListen(); lsnSpeak = i;
     let k = 0;
-    const next = () => { if (lsnSpeak !== i) return; if (k >= s.lines.length) { lsnSpeak = null; return; } const l = s.lines[k++]; say({ text: l.text, audio: null }, next); };
+    const next = () => { if (lsnSpeak !== i) return; if (k >= s.lines.length) { lsnSpeak = null; return; } const n = k++; sayLesson(i, n, s.lines[n].text, next); };
     next();
   };
   const answerOf = (c) => {

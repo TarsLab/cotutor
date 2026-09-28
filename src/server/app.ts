@@ -746,7 +746,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     // 课文件(《备课设计.md》§十):清单、检查、家长端课文件页、交给孩子;排版在写的时候做(cotutor-prep 技能)或 CLI cotutor lesson post
     if (p === '/api/lessons' && method === 'GET') return { status: 200, json: { lessons: await listLessons(ws, ctx.now()), tutors: Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, t.display])) } };
-    const lf = /^\/api\/lessons\/([^/]+)(\/page|\/hand)?$/.exec(p);
+    const lf = /^\/api\/lessons\/([^/]+)(\/page|\/hand|\/say)?$/.exec(p);
     if (lf) {
       const name = lessonName(decodeURIComponent(lf[1]));
       if (!name) return { status: 400, json: { error: 'bad_request', message: '课文件的名字只能是中英文、数字、- 与 _' } };
@@ -771,6 +771,24 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           if (lt.handed) handed = { thread: lt.handed, date, label: (await continueLabels(ws)).get(`${c.doc.tutor} ${date} ${lt.handed}`) ?? null, kidSpoke: kidSpoke(index.messages, lt.handed) };
         }
         return { status: 200, json: lessonPage(name, c, st?.mtime.toISOString() ?? null, handed, fromThread, now) };
+      }
+      // 课文件页上「听这节」:讲稿一句用这位老师的音色现合成(同一句同一音色一次,存 .cotutor/tts-preview/,和试听音色同一个缓存);老师没配音色 404,页面退回浏览器的声
+      if (lf[2] === '/say' && method === 'GET') {
+        const c = await checkLesson(ws, md, now);
+        const k = Number(url.searchParams.get('s')); const i = Number(url.searchParams.get('i'));
+        const line = Number.isInteger(k) && Number.isInteger(i) ? c.doc.sections[k]?.section.lines[i] : undefined;
+        if (!line) return { status: 400, json: { error: 'bad_request', message: 's = 第几节,i = 第几句(都从 0 起)' } };
+        const voice = c.doc.tutor ? ws.config.tutors[c.doc.tutor]?.voice : undefined;
+        if (!voice) return { status: 404, json: { error: 'no_voice', message: '这位老师没配音色' } };
+        const text = line.text.trim().slice(0, 200);
+        const dir = join(ws.root, '.cotutor', 'tts-preview');
+        const file = join(dir, `${createHash('sha1').update(`${voice}\n${text}`).digest('hex').slice(0, 20)}.mp3`);
+        if (!(await stat(file).catch(() => null))?.isFile()) {
+          await mkdir(dir, { recursive: true });
+          const r = await synthesize(ws.config.tts, { text, voice, out: file }, { env: process.env });
+          if (!r.file) return { status: 502, json: { error: 'tts_failed', voice, message: r.error } };
+        }
+        return { status: 200, file, contentType: 'audio/mpeg' };
       }
       if (lf[2] === '/hand' && method === 'POST') {
         const label = isObj(body) && typeof body.label === 'string' ? body.label : undefined;

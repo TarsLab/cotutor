@@ -14,7 +14,7 @@
  * 进程 cwd 是老师目录 agents/<name>/(《agent层设计.md》拍板)。
  */
 import { spawn } from 'node:child_process';
-import { closeSync, createWriteStream, existsSync, openSync } from 'node:fs';
+import { closeSync, createWriteStream, existsSync, openSync, writeSync } from 'node:fs';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
@@ -34,7 +34,7 @@ import { getRuntime, planRun, runtimeUses, stallPrompt, type RunPlan, boardPrelo
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Timing } from '../schema/index.ts';
+import { MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
 import { DEFAULT_DEVICE, assemblePost, postEnv, runBeatPost, writePostFile, type PostBeatFile, type PostEnv } from './post.ts';
 import { validateBeatPost, type BeatPostOutput } from '../lib/postprocess.ts';
 import type { Transcript } from '../lib/transcript.ts';
@@ -44,6 +44,7 @@ import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPro
 import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTEM, BOARD_GUIDE_PATH, boardGuideBody, boardGuideReads } from '../lib/tutor-rules.ts';
 import { DubQueue, LineDubber } from './tts.ts';
 import { handedLessonOf } from './lesson.ts';
+import { WarmPool, type Spare } from './warm.ts';
 import { continueContext } from './home.ts';
 
 export class BusyError extends Error {
@@ -209,6 +210,18 @@ export async function attachBoardGuide(ws: Workspace, tutor: string, pack: Conte
   return body;
 }
 
+/**
+ * 老师正文({agentBody})与系统提示({systemBody} = 正文 + 板书写法):模板用到才读。send 与预热同一份,预热起的进程 argv 才对得上。
+ * 顺手把板书写法挂到上下文包上(attachBoardGuide)。
+ */
+async function systemParts(ws: Workspace, tutor: string, runtime: Runtime, policy: Policy, pack: ContextPack): Promise<{ agentBody?: string; systemBody?: string }> {
+  const wantsSystemBody = runtimeUses(runtime, '{systemBody}');
+  const agentBody = runtimeUses(runtime, '{agentBody}') || wantsSystemBody ? await readAgentBody(ws, tutor) : undefined;
+  const boardBody = await attachBoardGuide(ws, tutor, pack, { preloaded: boardPreloaded(runtime), boardOff: policy.board === 'off' });
+  const systemBody = wantsSystemBody && agentBody !== undefined ? (boardBody ? `${agentBody}\n\n${boardBody}` : agentBody) : undefined;
+  return { agentBody, systemBody };
+}
+
 /** 这轮带的笔记版本:role → `路径@hash`(记进消息;同一话题下一轮对得上就不再带原文) */
 export function noteVersions(pack: ContextPack): Record<string, string> {
   return Object.fromEntries((pack.notes ?? []).map((n) => [n.role, `${n.path}@${textHash(n.text)}`]));
@@ -263,18 +276,23 @@ export class Runner {
   /** 还在后台跑的资产生成(测试与关服前 flush) */
   private readonly background = new Set<Promise<void>>();
   private readonly getWs: () => Workspace;
-  private readonly opts: { now?: () => Date; env?: NodeJS.ProcessEnv };
+  private readonly opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number };
   private readonly listeners = new Set<(e: RunEventEnvelope) => void>();
+  /** 预热的老师进程(《工作流程.md》§四「预热」):一位老师最多一个 */
+  readonly spares: WarmPool;
+  /** 孩子端拉今天时的预热:每位老师上次看的时刻 */
+  private readonly prewarmedAt = new Map<string, number>();
   /** 起子进程用的环境(测试注入;repost 用同一份) */
   get env(): NodeJS.ProcessEnv | undefined {
     return this.opts.env;
   }
   /** 录音卡的评测队列(《口播老师设计.md》§4) */
   readonly koubo: KouboQueue;
-  constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv } = {}) {
+  constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number } = {}) {
     this.getWs = getWs;
     this.opts = opts;
     this.koubo = new KouboQueue(opts.env);
+    this.spares = new WarmPool({ idleMs: opts.warmIdleMs });
   }
 
   /** 录音卡存了一条新录音:后台起评测(结果落录音旁边的 heard.json,交给老师时取) */
@@ -299,6 +317,41 @@ export class Runner {
   onEvent(fn: (e: RunEventEnvelope) => void): () => void {
     this.listeners.add(fn);
     return () => void this.listeners.delete(fn);
+  }
+
+  /** 杀掉所有预热的进程(测试收尾;服务退出时它们的 stdin 断了会自己退) */
+  close(): void {
+    this.spares.dropAll();
+  }
+
+  /**
+   * 预热(《工作流程.md》§四「预热」):给这位老师起好下一轮的进程。孩子下一句缺省落在当天末条所在的话题:
+   * 它有会话就 resume 那个,没有(今天还没说过、课文件交出去的话题)就新开——和 send 缺省的算法一样,argv 才对得上。
+   * 只给有脸的、开着的、运行时 stdin: "stream-json"、这会儿没在跑的老师起;throttleMs 内看过就不再看(孩子端轮询今天)。
+   * 起了返回 true;起不了不报错,下一轮冷起。
+   */
+  async prewarm(tutor: string, opts: { throttleMs?: number } = {}): Promise<boolean> {
+    const t0 = Date.now();
+    if (opts.throttleMs && t0 - (this.prewarmedAt.get(tutor) ?? -Infinity) < opts.throttleMs) return false;
+    this.prewarmedAt.set(tutor, t0);
+    const ws = this.getWs();
+    const t = ws.config.tutors[tutor];
+    if (!t?.enabled || !takesTutorRules(tutor) || this.active.has(tutor)) return false;
+    const { runtime } = getRuntime(ws.config, t.runtime);
+    if (!runtime.stdin) return false;
+    const date = localDate((this.opts.now ?? (() => new Date()))());
+    const index = await readIndex(ws, tutor, date);
+    const known = threads(index.messages);
+    const session = known.length ? sessionFor(index, known[known.length - 1]) : null;
+    const policy = resolvePolicy(ws.config, tutor);
+    const parts = await systemParts(ws, tutor, runtime, policy, { from: 'kid', at: '', plan: [], recent: [] });
+    const plan = planRun(ws.config, { session }, { agent: tutor, prompt: '', ...parts, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: t.runtime, effort: policy.effort });
+    const cwd = join(ws.dirs.agents, tutor);
+    await mkdir(cwd, { recursive: true });
+    // 读索引这会儿孩子可能已经开口了:这轮在跑就不起(它收尾时会再起)
+    if (this.active.has(tutor)) return false;
+    this.spares.warm(tutor, { argv: plan.argv, cwd, date, lastJob: index.messages.at(-1)?.job ?? null }, withProxy(plan.argv, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, ws.config.proxy));
+    return true;
   }
 
   /** 正在回的那条已经出来的板书(流式);没在跑或还没出卡 → null */
@@ -332,13 +385,9 @@ export class Runner {
     const fresh = thread === job;
     const session = fresh ? null : sessionFor(index, thread);
     const { runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
-    const wantsSystemBody = runtimeUses(runtime, '{systemBody}');
-    const agentBody = runtimeUses(runtime, '{agentBody}') || wantsSystemBody ? await readAgentBody(ws, tutor) : undefined;
     const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus });
     const policy = resolvePolicy(ws.config, tutor);
-    const preloaded = boardPreloaded(runtime);
-    const boardBody = await attachBoardGuide(ws, tutor, gathered, { preloaded, boardOff: policy.board === 'off' });
-    const systemBody = wantsSystemBody && agentBody !== undefined ? (boardBody ? `${agentBody}\n\n${boardBody}` : agentBody) : undefined;
+    const { agentBody, systemBody } = await systemParts(ws, tutor, runtime, policy, gathered);
     // 家长笔记原文:新会话整篇带;续会话时这个话题带过、没改的只写「未变」
     const notes = noteVersions(gathered);
     const pack = session ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
@@ -379,10 +428,16 @@ export class Runner {
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 
+    // 预热的进程:对得上就接过来;对不上(或这轮不走 stdin)就杀掉——它读的会话马上要被这一轮写,留着就旧了
+    const spare = this.spares.claim(tutor, { argv: plan.argv, cwd: join(ws.dirs.agents, tutor), date, lastJob: index.messages.at(-1)?.job ?? null });
     const active: Active = { job, date, partial: null, done: Promise.resolve(started) };
     // 断流后接着跑:同一运行时 resume 这个会话,消息换成 stallPrompt
     const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent: tutor, prompt: stallPrompt(open), agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: plan.runtime, effort: policy.effort });
-    active.done = this.spawn(ws, tutor, date, job, plan, policy, input.device ?? DEFAULT_DEVICE, active, resumePlan).finally(() => this.active.delete(tutor));
+    active.done = this.spawn(ws, tutor, date, job, plan, policy, input.device ?? DEFAULT_DEVICE, active, resumePlan, spare).finally(() => {
+      this.active.delete(tutor);
+      // 孩子 / 家长这轮完了,马上起好下一轮的进程;系统轮(记账、整理记忆、画图作业)之后孩子多半不在,不起
+      if (input.from !== 'system' && !input.replayOf) void this.prewarm(tutor).catch(() => {});
+    });
     this.active.set(tutor, active);
     return { tutor, date, job, thread, plan, done: active.done };
   }
@@ -561,7 +616,7 @@ export class Runner {
     return { id, warnings };
   }
 
-  private async spawn(ws: Workspace, tutor: string, date: string, job: string, plan: RunPlan, policy: Policy, device: Device, active: Active, resumePlan: (session: string, open: string) => RunPlan): Promise<ConversationIndex> {
+  private async spawn(ws: Workspace, tutor: string, date: string, job: string, plan: RunPlan, policy: Policy, device: Device, active: Active, resumePlan: (session: string, open: string) => RunPlan, spare: Spare | null = null): Promise<ConversationIndex> {
     const replyMaxChars = policy.replyMaxChars;
     const files = conversationFiles(ws.dirs.conversations, tutor, date);
     const cwd = join(ws.dirs.agents, tutor);
@@ -570,7 +625,7 @@ export class Runner {
     const err = openSync(files.err(job), 'w');
     // 埋点:从进程起来那一刻算,首卡 = partial 板书第一次有卡(孩子端第一次看到东西),done = 进程退出,dubbed = 配音收尾
     const t0 = Date.now();
-    const timing: Timing = { startedAt: new Date(t0).toISOString() };
+    const timing: Timing = { startedAt: new Date(t0).toISOString(), ...(spare ? { warm: true as const } : {}) };
     const since = (): number => Date.now() - t0;
     // 事件:每道工序的关键点发一条,追加到 events.jsonl(按序),同时给内存里的订阅者;写盘失败不影响这一轮
     let eventsChain: Promise<void> = Promise.resolve();
@@ -587,7 +642,7 @@ export class Runner {
         }
       }
     };
-    emit({ lane: 'main', kind: 'start', cli: plan.argv[0].slice(plan.argv[0].lastIndexOf('/') + 1), runtime: plan.runtime, resume: plan.resume });
+    emit({ lane: 'main', kind: 'start', cli: plan.argv[0].slice(plan.argv[0].lastIndexOf('/') + 1), runtime: plan.runtime, resume: plan.resume, ...(spare ? { warmMs: t0 - spare.bornAt } : {}) });
     const voice = ws.config.tutors[tutor]?.voice;
     const queue = voice ? new DubQueue(ws.config.tts, voice, files.err(job), this.opts.env) : null;
     if (queue) queue.report = (e) => emit(e.kind === 'queued' ? { lane: 'tts', kind: 'queued', label: e.label } : e.kind === 'done' ? { lane: 'tts', kind: 'done', label: e.label, ms: e.ms, file: e.file ?? '' } : { lane: 'tts', kind: 'failed', label: e.label, ms: e.ms, error: e.error ?? '?' });
@@ -596,11 +651,14 @@ export class Runner {
     // 顺手记哪些顶层工具还没回 tool_result:工具在跑时进程不吐字是正常的,断流看门狗不算这段
     let toolBuf = '';
     const toolsRunning = new Set<string>();
+    // 消息走 stdin 的运行时:看到 result 就关 stdin,进程自己退(每次 runOnce 换一个)
+    let onResult: (() => void) | null = null;
     const scanTools = (chunk: string): void => {
       toolBuf += chunk;
       const parts = toolBuf.split('\n');
       toolBuf = parts.pop() ?? '';
       for (const line of parts) {
+        if (onResult && line.includes('"type":"result"')) onResult();
         if (!line.includes('"tool_use"') && !line.includes('"tool_result"')) continue;
         try {
           const e = JSON.parse(line) as { type?: string; parent_tool_use_id?: string | null; message?: { content?: { type?: string; id?: string; tool_use_id?: string; name?: string; input?: Record<string, unknown> }[] } };
@@ -701,12 +759,25 @@ export class Runner {
     // (2026-09-22 真跑:init 吐了会话 id 就被杀,resume 报 No conversation found;吐过三个字再杀,盘上有这条用户消息)
     let persisted = plan.resume;
     let stalls = 0;
-    const runOnce = (p: RunPlan): Promise<{ code: number | null; spawnError?: Error; stalled?: boolean }> => new Promise((resolveExit) => {
-      const child = spawn(p.argv[0], p.argv.slice(1), {
+    // warm:预热好的进程(只给第一次;断流接着跑的那次照旧冷起)
+    const runOnce = (p: RunPlan, warm: Spare | null = null): Promise<{ code: number | null; spawnError?: Error; stalled?: boolean }> => new Promise((resolveExit) => {
+      const child = warm?.child ?? spawn(p.argv[0], p.argv.slice(1), {
         cwd,
         env: withProxy(p.argv, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, ws.config.proxy),
-        stdio: ['ignore', 'pipe', err],
+        stdio: [p.stdin ? 'pipe' : 'ignore', 'pipe', err],
       });
+      if (warm) {
+        // 预热的进程 stderr 是管道(起它时还没有这轮的 err.log):攒下的和之后的都写进来(池子交出来时暂停着,这里 resume)
+        const toErr = (c: Buffer): void => { try { writeSync(err, c); } catch { /* err.log 已关 */ } };
+        warm.stderr.forEach(toErr);
+        child.stderr?.on('data', toErr);
+        child.stderr?.resume();
+      }
+      if (p.stdin) {
+        child.stdin?.on('error', () => {});
+        child.stdin?.write(p.stdin);
+        onResult = () => { onResult = null; child.stdin?.end(); };
+      } else onResult = null;
       let stalled = false;
       let idle: NodeJS.Timeout | null = null;
       let lastByte = Date.now();
@@ -741,8 +812,14 @@ export class Runner {
       };
       child.once('error', (e) => done({ code: null, spawnError: e }));
       child.once('close', (code) => { if (stalled) void appendFile(files.err(job), `cotutor: ${Date.now() - lastByte}ms 没有输出,当断流杀掉\n`).catch(() => {}); done({ code }); });
+      if (warm) {
+        // 开口前吐的(claude 实测一个字节都没有)按顺序补喂,再放开暂停;接手之前就退了的,close 已经错过,直接收尾
+        for (const c of warm.stdout) child.stdout?.emit('data', c);
+        child.stdout?.resume();
+        if (warm.closed()) done({ code: child.exitCode });
+      }
     });
-    let exit = await runOnce(plan);
+    let exit = await runOnce(plan, spare);
     while (exit.stalled) {
       stalls++;
       if (persisted) open += reader.current();

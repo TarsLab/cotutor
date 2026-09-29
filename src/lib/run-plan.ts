@@ -14,6 +14,8 @@ export interface RunPlan {
   resume: boolean;
   /** resume 的会话 id */
   session: string | null;
+  /** 运行时 stdin: "stream-json":要写进 stdin 的那一行(用户消息,带换行);消息不在 argv 里 */
+  stdin?: string;
 }
 
 export class RuntimeError extends Error {}
@@ -54,7 +56,13 @@ export function planRun(
     argv: fillRuntime(template, { agent: vars.agent, prompt: vars.prompt, session: session ?? undefined, agentBody: vars.agentBody, systemBody: vars.systemBody, boardFile: vars.boardFile, effort: vars.effort }),
     resume: session !== null,
     session,
+    ...(runtime.stdin ? { stdin: stdinMessage(vars.prompt) } : {}),
   };
+}
+
+/** stream-json 输入的一条用户消息(claude `--input-format stream-json` 一行一条) */
+export function stdinMessage(prompt: string): string {
+  return `${JSON.stringify({ type: 'user', message: { role: 'user', content: prompt } })}\n`;
 }
 
 /**

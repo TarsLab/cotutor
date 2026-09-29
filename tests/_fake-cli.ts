@@ -4,6 +4,8 @@
  * --stream:最终文本先按行以 stream_event(content_block_delta)吐出来,每行歇 80ms(模仿 claude --include-partial-messages),再发 assistant 与 result。
  * 行为:回显 prompt 的最后一行;含「录音卡」出三张录音卡(第二张的句子带「慢」);上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);prompt 含「段在前」就在最终文本前加一段「## 记账」;含「画场景」出一张带题面 / 讲法的新场景卡,「放旧课包」出一张只有 id 的场景卡;含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);含「家长段」加「## 家长」;
  * --resume 时 session_id 沿用给的 id,否则新造;--fail 出 error_max_turns。
+ * --input-format stream-json(预热,2026-09-29):消息不在 argv,从 stdin 读第一行 {"type":"user","message":{"content":…}};读到之前一个字节不吐(同真 claude),
+ * init 带 waitedMs(起来到收到消息等了多久);回完 result 等 stdin 关了才退。
  * 含「断流」/「一直断」/「工具慢」的见下面断流那段(stall.test)。
  */
 export {};
@@ -14,6 +16,7 @@ let stream = false;
 let agent = '';
 let body = '';
 let outputFormat = 'stream-json';
+let inputFormat = 'text';
 const rest: string[] = [];
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--resume') session = argv[++i];
@@ -22,12 +25,30 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === '--fail') fail = true;
   else if (argv[i] === '--stream') stream = true;
   else if (argv[i] === '--output-format') outputFormat = argv[++i];
+  else if (argv[i] === '--input-format') inputFormat = argv[++i];
   else if (argv[i] === '--model' || argv[i] === '--disallowedTools' || argv[i] === '--max-budget-usd' || argv[i] === '--setting-sources' || argv[i] === '--tools' || argv[i] === '--effort' || argv[i] === '--system-prompt' || argv[i] === '--append-system-prompt-file') i++;
   else if (argv[i] === '--disable-slash-commands') continue;
   else rest.push(argv[i]);
 }
+const bornAt = Date.now();
+const viaStdin = inputFormat === 'stream-json';
+const stdinPrompt = viaStdin
+  ? await new Promise<string>((res) => {
+      let buf = '';
+      const onData = (c: Buffer): void => {
+        buf += c.toString('utf8');
+        const at = buf.indexOf('\n');
+        if (at < 0) return;
+        process.stdin.off('data', onData);
+        process.stdin.pause();
+        res((JSON.parse(buf.slice(0, at)) as { message: { content: string } }).message.content);
+      };
+      process.stdin.on('data', onData);
+    })
+  : null;
+const waitedMs = Date.now() - bornAt;
 // 出厂的老师守则(<cotutor-rules>)是固定文字,里头的「板书」「## 记忆」不该触发下面的关键词:先剥掉
-const prompt = rest.join(' ').replace(/<cotutor-rules[^>]*>[\s\S]*?<\/cotutor-rules>\n?/g, '');
+const prompt = (stdinPrompt ?? rest.join(' ')).replace(/<cotutor-rules[^>]*>[\s\S]*?<\/cotutor-rules>\n?/g, '');
 const sid = session ?? `fake-${process.pid}-${Date.now()}`;
 const emit = (o: unknown): void => void process.stdout.write(`${JSON.stringify(o)}\n`);
 const lastLine = prompt.trim().split('\n').filter(Boolean).pop() ?? '';
@@ -57,7 +78,7 @@ if (outputFormat === 'json') {
   process.exit(0);
 }
 
-emit({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), agent: agent || undefined, bodyLen: body.length, proxy: process.env.HTTPS_PROXY });
+emit({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), agent: agent || undefined, bodyLen: body.length, proxy: process.env.HTTPS_PROXY, ...(viaStdin ? { waitedMs } : {}) });
 // 「起就卡」:头一次吐了 init(带会话 id)就挂住,模型一个事件没回(会话没落盘,resume 不了);第二次起(cwd 里有记号)照常回
 if (prompt.includes('起就卡')) {
   const { existsSync, writeFileSync } = await import('node:fs');
@@ -157,3 +178,8 @@ if (fail) {
   emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 2, total_cost_usd: 0.05, result });
 }
 process.stderr.write('fake-cli done\n');
+// 消息走 stdin 的:同真 claude,回完还等下一条,stdin 关了才退
+if (viaStdin) {
+  process.stdin.resume();
+  await new Promise((r) => process.stdin.once('end', r));
+}

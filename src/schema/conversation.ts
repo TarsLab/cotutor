@@ -13,6 +13,8 @@ export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const TimingSchema = z.object({
   /** 进程起来的时刻(ISO,精确到毫秒;消息的 at 只到分钟) */
   startedAt: z.string().min(1),
+  /** 这轮用的是提前起好的老师进程(预热,2026-09-29);startedAt 仍是孩子开口那刻 */
+  warm: z.literal(true).optional(),
   /** 流式时第一张卡闭合(孩子端第一次看到东西);整块出的运行时没有 */
   firstCardMs: z.number().int().nonnegative().optional(),
   /** 首拍就绪:第一拍配音齐(以后加后期回),孩子端能开播的那一刻(2026-09-13,头号埋点) */

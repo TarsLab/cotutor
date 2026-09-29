@@ -9,7 +9,8 @@ export type Lane = 'main' | 'tts' | 'post' | 'ready' | 'index' | 'scene' | 'ledg
 export const LANES: readonly Lane[] = ['main', 'tts', 'post', 'ready', 'index', 'scene', 'ledger'];
 
 export type RunEvent = { t: number } & (
-  | { lane: 'main'; kind: 'start'; cli: string; runtime: string; resume: boolean }
+  /** warmMs:用的是提前起好的进程(预热),它等了多久 */
+  | { lane: 'main'; kind: 'start'; cli: string; runtime: string; resume: boolean; warmMs?: number }
   | { lane: 'main'; kind: 'card'; card: number; label: string }
   | { lane: 'main'; kind: 'line'; line: number; text: string }
   | { lane: 'main'; kind: 'tool'; name: string; sub: boolean }
@@ -51,7 +52,7 @@ const money = (v: number | undefined): string => (v === undefined ? '' : ` · $$
 export function describeEvent(e: RunEvent): string {
   switch (e.lane) {
     case 'main':
-      if (e.kind === 'start') return `起 ${e.cli}(${e.runtime},${e.resume ? 'resume' : '新会话'})`;
+      if (e.kind === 'start') return `起 ${e.cli}(${e.runtime},${e.resume ? 'resume' : '新会话'}${e.warmMs !== undefined ? `,预热 ${(e.warmMs / 1000).toFixed(1)}s 前起好` : ''})`;
       if (e.kind === 'card') return `卡 ${e.card} ${e.label}`;
       if (e.kind === 'line') return `句 ${e.line}「${e.text}」`;
       if (e.kind === 'tool') return `${e.sub ? '子代理 ' : ''}工具 ${e.name}`;

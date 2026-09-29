@@ -9,7 +9,7 @@ import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
-import { boardPreloaded, runtimeUses } from '../lib/run-plan.ts';
+import { boardPreloaded, runtimeUses, stdinMessage } from '../lib/run-plan.ts';
 import { BOARD_GUIDE_PATH, boardGuideBody, takesTutorRules } from '../lib/tutor-rules.ts';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { localDate } from '../lib/conversation.ts';
@@ -54,6 +54,8 @@ export interface DoctorReport {
 }
 
 const execFileP = promisify(execFile);
+/** doctor --live 发给老师的那句 */
+const LIVE_PROMPT = '只回一个字:好';
 
 async function statOrNull(p: string): Promise<import('node:fs').Stats | null> {
   return stat(p).catch(() => null);
@@ -119,15 +121,23 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
     /* skills.* 已报 */
   }
   const systemBody = agentBody !== undefined ? (boardBody && takesTutorRules(first.name) ? `${agentBody}\n\n${boardBody}` : agentBody) : undefined;
-  const argv = fillRuntime(runtime.run, { agent: first.name, prompt: '只回一个字:好', agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH) });
+  const argv = fillRuntime(runtime.run, { agent: first.name, prompt: LIVE_PROMPT, agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH) });
   const cwd = join(ws.dirs.agents, first.name);
   const run = await new Promise<{ out: string; err: string; code: number | null; spawnErr?: string }>((resolveRun) => {
     let out = '';
     let err = '';
-    const child = spawn(argv[0], argv.slice(1), { cwd, env: withProxy(argv, { ...env, COTUTOR_WORKSPACE: ws.root }, ws.config.proxy), stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(argv[0], argv.slice(1), { cwd, env: withProxy(argv, { ...env, COTUTOR_WORKSPACE: ws.root }, ws.config.proxy), stdio: [runtime.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
     const timer = setTimeout(() => child.kill(), 120_000);
-    child.stdout.on('data', (d: Buffer) => (out += d.toString()));
-    child.stderr.on('data', (d: Buffer) => (err += d.toString()));
+    // 消息走 stdin 的运行时:写一条,看到 result 就关 stdin
+    if (runtime.stdin) {
+      child.stdin?.on('error', () => {});
+      child.stdin?.write(stdinMessage(LIVE_PROMPT));
+    }
+    child.stdout?.on('data', (d: Buffer) => {
+      out += d.toString();
+      if (runtime.stdin && out.includes('"type":"result"')) child.stdin?.end();
+    });
+    child.stderr?.on('data', (d: Buffer) => (err += d.toString()));
     child.once('error', (e) => {
       clearTimeout(timer);
       resolveRun({ out, err, code: null, spawnErr: e.message });

@@ -96,8 +96,14 @@ export type Tutor = z.infer<typeof TutorSchema>;
  * 模板里用了其中一个,应用就当板书写法已在系统提示里;都没用,应用在话题第一条消息里注入 <cotutor-board>(任何 CLI 都成立的退路)。
  * {effort} 这位老师的政策 effort(low / medium / high),claude 模板里是 `--effort {effort}`。
  * 政策旋钮(预算、轮数、模型、工具白名单)写进模板,换 agent 只换运行时。
+ * stdin: "stream-json"(2026-09-29,《工作流程.md》§四「预热」):消息不进命令行,写进 stdin(claude 的 `--input-format stream-json`),
+ * 模板里就不写 {prompt};argv 与消息无关,应用把下一轮的进程提前起好等着。
  */
-export const RuntimeSchema = z.object({ run: z.array(z.string()).min(1), resume: z.array(z.string()).min(1) });
+export const RuntimeSchema = z.object({
+  run: z.array(z.string()).min(1),
+  resume: z.array(z.string()).min(1),
+  stdin: z.literal('stream-json').optional().describe('消息写进 stdin(模板带 --input-format stream-json、不写 {prompt});这样的运行时,应用提前把下一轮的老师进程起好等着(预热)'),
+});
 export type Runtime = z.infer<typeof RuntimeSchema>;
 
 export const RuntimesSchema = z.object({ default: z.string().min(1) }).catchall(RuntimeSchema);
@@ -198,6 +204,16 @@ export const CotutorConfigSchema = z
         path: ['runtimes', 'default'],
         message: `运行时 "${c.runtimes.default}" 不存在;runtimes 里要有同名的 {run, resume}`,
       });
+    }
+    for (const [name, r] of Object.entries(c.runtimes)) {
+      if (typeof r === 'string' || !r.stdin) continue;
+      for (const key of ['run', 'resume'] as const) {
+        const argv = r[key];
+        const at = argv.indexOf('--input-format');
+        if (argv.some((a) => a.includes('{prompt}')) || at < 0 || argv[at + 1] !== 'stream-json') {
+          ctx.addIssue({ code: 'custom', path: ['runtimes', name, key], message: `运行时 "${name}" 设了 stdin: "stream-json",${key} 模板要带 --input-format stream-json、不写 {prompt}` });
+        }
+      }
     }
   });
 export type CotutorConfig = z.infer<typeof CotutorConfigSchema>;

@@ -550,7 +550,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const date = localDate(ctx.now());
       // 作业照片(R5):先传图拿 path,再连 path 一起发消息;不起老师、不计上限
       if (tail === 'photos') return method === 'POST' ? uploadPhoto(ws, body, ctx.now()) : { status: 405, json: { error: 'method_not_allowed' } };
-      if (tail === 'today' && method === 'GET') return { status: 200, json: await kidDay(ctx, tutor, date) };
+      if (tail === 'today' && method === 'GET') {
+        // 孩子点进这位老师(页面轮询也走这里,30 秒看一次):把下一轮的老师进程提前起好(《工作流程.md》§四「预热」)
+        void ctx.runner.prewarm(tutor, { throttleMs: 30_000 }).catch(() => {});
+        return { status: 200, json: await kidDay(ctx, tutor, date) };
+      }
       // 以前的某一天(只读回放;未来的日期与坏日期 400)
       if (DATE_RE.test(tail) && method === 'GET') {
         if (tail > date || Number.isNaN(Date.parse(tail))) return { status: 400, json: { error: 'bad_request' } };

@@ -1442,7 +1442,9 @@ __PHOTO_JS__
     if (!S.tutor) return;
     if (S.lsn) return loadLesson();
     try {
-      const d = await api('GET', PARENT ? '/api/conversations/' + S.tutor.name + '/' + (S.hist || 'today') + '/board' : CONV + S.tutor.name + '/' + (S.hist || 'today'));
+      // 今天、选了话题:带上它,服务端把 resume 那个预热进程换成这个话题的(《工作流程.md》§四「预热」)
+      const warmHint = !S.hist && S.thread ? '?thread=' + encodeURIComponent(S.thread) : '';
+      const d = await api('GET', (PARENT ? '/api/conversations/' + S.tutor.name + '/' + (S.hist || 'today') + '/board' : CONV + S.tutor.name + '/' + (S.hist || 'today')) + warmHint);
       setOffline(false);
       S.day = d;
       S.limit = typeof d.remaining === 'number' && d.remaining <= 0;

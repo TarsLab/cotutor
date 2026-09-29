@@ -18,7 +18,7 @@ import { closeSync, createWriteStream, existsSync, openSync, writeSync } from 'n
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
-import { addMessage, applyRun, cardId, changedCards, conversationFiles, isPrepThread, jobId, kidSpoke, lessonCards, localDate, localMinute, prepJobs, sessionFor, threads } from '../lib/conversation.ts';
+import { addMessage, applyRun, cardId, lastJobOf, changedCards, conversationFiles, isPrepThread, jobId, kidSpoke, lessonCards, localDate, localMinute, prepJobs, sessionFor, threads } from '../lib/conversation.ts';
 import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
 import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
 import { BUNDLE_ID_RE, cardAssets, cardLabel, describeCard, type RecordProps } from '../cards/index.ts';
@@ -280,7 +280,7 @@ export class Runner {
   private readonly listeners = new Set<(e: RunEventEnvelope) => void>();
   /** 预热的老师进程(《工作流程.md》§四「预热」):一位老师最多一个 */
   readonly spares: WarmPool;
-  /** 孩子端拉今天时的预热:每位老师上次看的时刻 */
+  /** 页面拉今天时的预热:每位老师(与带的话题)上次看的时刻 */
   private readonly prewarmedAt = new Map<string, number>();
   /** 起子进程用的环境(测试注入;repost 用同一份) */
   get env(): NodeJS.ProcessEnv | undefined {
@@ -325,15 +325,17 @@ export class Runner {
   }
 
   /**
-   * 预热(《工作流程.md》§四「预热」):给这位老师起好下一轮的进程。孩子下一句缺省落在当天末条所在的话题:
-   * 它有会话就 resume 那个,没有(今天还没说过、课文件交出去的话题)就新开——和 send 缺省的算法一样,argv 才对得上。
-   * 只给有脸的、开着的、运行时 stdin: "stream-json"、这会儿没在跑的老师起;throttleMs 内看过就不再看(孩子端轮询今天)。
+   * 预热(《工作流程.md》§四「预热」):给这位老师起好下一轮的进程,两个位置都补齐——
+   * fresh:新开会话(新话题、备课话题、接着上次、课文件交出去后的第一句都用它);
+   * resume:接 thread(页面选着的话题;不给或今天没有 = 当天末条所在的话题,和 send 缺省一样)的会话,它没有会话就不留。
+   * 只给有脸的、开着的、运行时 stdin: "stream-json"、这会儿没在跑的老师起;throttleMs 内同一话题看过就不再看(页面轮询今天)。
    * 起了返回 true;起不了不报错,下一轮冷起。
    */
-  async prewarm(tutor: string, opts: { throttleMs?: number } = {}): Promise<boolean> {
+  async prewarm(tutor: string, opts: { throttleMs?: number; thread?: string } = {}): Promise<boolean> {
     const t0 = Date.now();
-    if (opts.throttleMs && t0 - (this.prewarmedAt.get(tutor) ?? -Infinity) < opts.throttleMs) return false;
-    this.prewarmedAt.set(tutor, t0);
+    const seen = `${tutor}\n${opts.thread ?? ''}`;
+    if (opts.throttleMs && t0 - (this.prewarmedAt.get(seen) ?? -Infinity) < opts.throttleMs) return false;
+    this.prewarmedAt.set(seen, t0);
     const ws = this.getWs();
     const t = ws.config.tutors[tutor];
     if (!t?.enabled || !takesTutorRules(tutor) || this.active.has(tutor)) return false;
@@ -342,15 +344,21 @@ export class Runner {
     const date = localDate((this.opts.now ?? (() => new Date()))());
     const index = await readIndex(ws, tutor, date);
     const known = threads(index.messages);
-    const session = known.length ? sessionFor(index, known[known.length - 1]) : null;
+    const thread = opts.thread && known.includes(opts.thread) ? opts.thread : known.at(-1);
+    const session = thread ? sessionFor(index, thread) : null;
     const policy = resolvePolicy(ws.config, tutor);
     const parts = await systemParts(ws, tutor, runtime, policy, { from: 'kid', at: '', plan: [], recent: [] });
-    const plan = planRun(ws.config, { session }, { agent: tutor, prompt: '', ...parts, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: t.runtime, effort: policy.effort });
+    const vars = { agent: tutor, prompt: '', ...parts, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: t.runtime, effort: policy.effort };
+    const fresh = planRun(ws.config, { session: null }, vars);
+    const resume = session ? planRun(ws.config, { session }, vars) : null;
     const cwd = join(ws.dirs.agents, tutor);
     await mkdir(cwd, { recursive: true });
     // 读索引这会儿孩子可能已经开口了:这轮在跑就不起(它收尾时会再起)
     if (this.active.has(tutor)) return false;
-    this.spares.warm(tutor, { argv: plan.argv, cwd, date, lastJob: index.messages.at(-1)?.job ?? null }, withProxy(plan.argv, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, ws.config.proxy));
+    const env = (p: RunPlan): NodeJS.ProcessEnv => withProxy(p.argv, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, ws.config.proxy);
+    this.spares.warm(tutor, 'fresh', { argv: fresh.argv, cwd, date, lastJob: null }, env(fresh));
+    if (resume?.resume && thread) this.spares.warm(tutor, 'resume', { argv: resume.argv, cwd, date, lastJob: lastJobOf(index, thread) }, env(resume));
+    else this.spares.drop(tutor, 'resume');
     return true;
   }
 
@@ -428,8 +436,8 @@ export class Runner {
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 
-    // 预热的进程:对得上就接过来;对不上(或这轮不走 stdin)就杀掉——它读的会话马上要被这一轮写,留着就旧了
-    const spare = this.spares.claim(tutor, { argv: plan.argv, cwd: join(ws.dirs.agents, tutor), date, lastJob: index.messages.at(-1)?.job ?? null });
+    // 预热的进程:resume 的接那个位置(对得上 = 这个话题从它起来之后没人写过),新开的接 fresh;对不上(或这轮不走 stdin)就杀掉
+    const spare = this.spares.claim(tutor, plan.resume ? 'resume' : 'fresh', { argv: plan.argv, cwd: join(ws.dirs.agents, tutor), date, lastJob: plan.resume ? lastJobOf(index, thread) : null });
     const active: Active = { job, date, partial: null, done: Promise.resolve(started) };
     // 断流后接着跑:同一运行时 resume 这个会话,消息换成 stallPrompt
     const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent: tutor, prompt: stallPrompt(open), agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: plan.runtime, effort: policy.effort });

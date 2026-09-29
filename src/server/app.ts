@@ -453,6 +453,12 @@ function lessonSaidOf(v: unknown): { section: number; text: string }[] | null | 
   return out.length ? out : undefined;
 }
 
+/** 页面拉今天时的预热参数:?thread= 是页面选着的话题;同一话题 30 秒看一次 */
+function warmOpts(url: URL): { throttleMs: number; thread?: string } {
+  const thread = url.searchParams.get('thread');
+  return { throttleMs: 30_000, ...(thread ? { thread } : {}) };
+}
+
 export async function route(method: string, path: string, ctx: AppContext, body?: unknown): Promise<RouteResult> {
   await ctx.reload();
   const ws = ctx.ws;
@@ -551,8 +557,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       // 作业照片(R5):先传图拿 path,再连 path 一起发消息;不起老师、不计上限
       if (tail === 'photos') return method === 'POST' ? uploadPhoto(ws, body, ctx.now()) : { status: 405, json: { error: 'method_not_allowed' } };
       if (tail === 'today' && method === 'GET') {
-        // 孩子点进这位老师(页面轮询也走这里,30 秒看一次):把下一轮的老师进程提前起好(《工作流程.md》§四「预热」)
-        void ctx.runner.prewarm(tutor, { throttleMs: 30_000 }).catch(() => {});
+        // 孩子点进这位老师 / 选了话题(页面轮询也走这里,同一话题 30 秒看一次):把下一轮的老师进程提前起好(《工作流程.md》§四「预热」)
+        void ctx.runner.prewarm(tutor, warmOpts(url)).catch(() => {});
         return { status: 200, json: await kidDay(ctx, tutor, date) };
       }
       // 以前的某一天(只读回放;未来的日期与坏日期 400)
@@ -868,6 +874,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
       const date = tail === 'today' ? localDate(ctx.now()) : tail;
       if (date > localDate(ctx.now()) || Number.isNaN(Date.parse(date))) return { status: 400, json: { error: 'bad_request', message: '日期要是今天或以前' } };
+      // 家长试用和孩子端一样预热(同上)
+      if (tail === 'today') void ctx.runner.prewarm(tutor, warmOpts(url)).catch(() => {});
       return { status: 200, json: await parentDay(ctx, tutor, date) };
     }
 

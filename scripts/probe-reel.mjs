@@ -90,10 +90,10 @@ try {
   ok('拖回开头:板上又空了,只剩第一句的旁注', s3.secs === 0 && s3.notes === 1, JSON.stringify(s3));
 
   // ---- 跳过空白、倍速、点标记 ----
-  const m0 = await evaluate(`({ max: Number(document.querySelector('#rl-seek').max), on: document.querySelector('#rl-skip').classList.contains('on'), label: document.querySelector('#rl-skip').textContent })`);
+  const m0 = await evaluate(`({ max: Number(document.querySelector('#rl-seek').max), on: document.querySelector('#rl-skip').checked, label: document.querySelector('#rl-skip').closest('label').textContent, sw: document.querySelector('#rl-skip').getAttribute('role') })`);
   await evaluate(`document.querySelector('#rl-skip').click()`);
-  const m1 = await evaluate(`({ max: Number(document.querySelector('#rl-seek').max), on: document.querySelector('#rl-skip').classList.contains('on') })`);
-  ok('「跳过空白」缺省开着;关掉变长(按真实时间放)', m0.on && m0.label === '跳过空白' && !m1.on && m1.max > m0.max + 10000, `${JSON.stringify(m0)} → ${JSON.stringify(m1)}`);
+  const m1 = await evaluate(`({ max: Number(document.querySelector('#rl-seek').max), on: document.querySelector('#rl-skip').checked })`);
+  ok('「跳过空白」是个开关(role=switch),缺省开着;关掉变长(按真实时间放)', m0.on && m0.label === '跳过空白' && m0.sw === 'switch' && !m1.on && m1.max > m0.max + 10000, `${JSON.stringify(m0)} → ${JSON.stringify(m1)}`);
   await evaluate(`document.querySelector('#rl-skip').click()`);
   await evaluate(`document.querySelector('#rl-speed').click()`);
   ok('倍速 1× → 1.5×', (await evaluate(`document.querySelector('#rl-speed').textContent`)) === '1.5×');
@@ -128,6 +128,32 @@ try {
   console.log('  ', await shot('reel-phone.png'));
   const narrow = await evaluate(`({ w: document.documentElement.scrollWidth, vw: innerWidth, row: document.querySelector('.rl-row').scrollWidth <= document.querySelector('.rl-row').clientWidth + 1 })`);
   ok('手机宽度:控制条不撑出横向滚动', narrow.w <= narrow.vw && narrow.row, JSON.stringify(narrow));
+
+  // ---- 录像里的弹窗(实录,《家长录像设计.md》§4.7):mock 的录像是推算的,这里在页面上把 /reel 的回包加一段实录——
+  //      第一节念完 0.5 秒后孩子打开选择题的弹窗,4 秒时选 B、6 秒时改成 A、8 秒关上。关掉「跳过空白」按真实时间逐个时刻拖过去看 ----
+  await device(1180, 820, 1, false);
+  await evaluate(`document.querySelector('#rl-x').click()`);
+  await until(`!document.body.classList.contains('reel') && document.querySelectorAll('#board .sec').length === 2`);
+  await evaluate(`(() => { const f0 = window.fetch; window.fetch = async (url, init) => { const r = await f0(url, init); if (!String(url).endsWith('/reel')) return r; const d = await r.json(); const R = d.reel; const tr = R.tracks[0]; const e = d.messages.find((m) => m.job === tr.job); const k = e.section.cards.findIndex((c) => c.kind === 'choice'); const X = tr.doneAt + 500; R.stages = [{ job: tr.job, card: k, from: X, to: X + 8000 }]; R.cards = [{ job: tr.job, card: k, at: X + 4000, state: { picked: [1] } }, { job: tr.job, card: k, at: X + 6000, state: { picked: [0] } }]; window.__X = X - R.startAt; return new Response(JSON.stringify(d), { status: 200, headers: { 'content-type': 'application/json' } }); }; })()`);
+  await evaluate(`document.querySelector('#reel-btn').click()`);
+  await until(`document.body.classList.contains('reel') && window.__X !== undefined`);
+  await evaluate(`document.querySelector('#rl-play').click()`);
+  await evaluate(`document.querySelector('#rl-skip').click()`);
+  const X = await evaluate(`window.__X`);
+  const at = async (ms) => { await seek(X + ms); await sleep(350); return evaluate(`({ on: document.querySelector('#stage').classList.contains('on'), picked: [...document.querySelectorAll('#st-body .so')].map((b) => b.classList.contains('on') ? 1 : 0).join(''), sub: document.querySelector('#sub-text').textContent, x: getComputedStyle(document.querySelector('#st-x')).display, pe: getComputedStyle(document.querySelector('#st-body')).pointerEvents, board: [...document.querySelectorAll('#board .c-choice .ch-o')].map((o) => o.classList.contains('on') ? 1 : 0).join('') })`); };
+  const b0 = await at(-300);
+  ok('弹窗打开之前:没开', !b0.on, JSON.stringify(b0));
+  const b1 = await at(2000);
+  ok('打开了、孩子还没动:弹窗是那张选择题、一项都没选、字幕「⏱ 想了 2 秒」;没有关闭钮、点不动', b1.on && b1.picked === '000' && b1.sub === '⏱ 想了 2 秒' && b1.x === 'none' && b1.pe === 'none', JSON.stringify(b1));
+  console.log('  ', await shot('reel-stage.png'));
+  const b2 = await at(4500);
+  ok('4 秒时选了 B:弹窗里 B 亮,板上那张卡也是', b2.on && b2.picked === '010' && b2.board === '010', JSON.stringify(b2));
+  const b3 = await at(6500);
+  ok('6 秒时改成 A', b3.on && b3.picked === '100', JSON.stringify(b3));
+  const b4 = await at(8500);
+  ok('8 秒关上了', !b4.on && b4.board === '100', JSON.stringify(b4));
+  const back = await at(4500);
+  ok('往回拖:弹窗重新开、回到选 B 的样子', back.on && back.picked === '010', JSON.stringify(back));
 
   // ---- 退出 ----
   await evaluate(`document.querySelector('#rl-x').click()`);

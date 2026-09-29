@@ -266,6 +266,9 @@ const PAGE = `<!doctype html>
   #reel { padding:2px 16px calc(env(safe-area-inset-bottom) + 12px); display:flex; flex-direction:column; gap:4px; }
   #reel[hidden] { display:none; }
   body.reel #bar, body.reel #lesson, body.reel #sub-btn { display:none; }
+  /* 录像里的弹窗是孩子当时的样子:只看,点不动,没有关闭钮,跟着实录关 */
+  body.reel #st-x, body.reel #st-act { display:none; }
+  body.reel #st-body, body.reel #st-frame, body.reel #st-dim { pointer-events:none; }
   .rl-track { position:relative; height:34px; }
   #rl-seek { position:absolute; left:0; right:0; bottom:0; width:100%; height:24px; margin:0; accent-color:var(--accent); background:none; }
   #rl-marks { position:absolute; left:8px; right:8px; top:0; height:10px; }
@@ -283,7 +286,14 @@ const PAGE = `<!doctype html>
   #rl-tag[hidden] { display:none; }
   .rl-sp { flex:1; }
   .rl-row .tx { flex:none; height:34px; padding:0 11px; border-radius:17px; white-space:nowrap; border:1px solid var(--line); background:#fff; font-size:14px; color:var(--ink); }
-  .rl-row .tx.on { border-color:var(--accent); color:var(--accent); }
+  /* 「跳过空白」是个开关(主流播放器的「跳过静音」都这样):滑块在右、底色填满 = 开着 */
+  .rl-sw { flex:none; display:inline-flex; align-items:center; gap:6px; height:34px; font-size:14px; color:var(--ink); cursor:pointer; white-space:nowrap; }
+  .rl-sw input { position:absolute; opacity:0; width:1px; height:1px; pointer-events:none; }
+  .rl-sw i { position:relative; flex:none; width:36px; height:22px; border-radius:11px; background:var(--line); transition:background .15s; }
+  .rl-sw i::after { content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 3px #00000033; transition:transform .15s; }
+  .rl-sw input:checked + i { background:var(--accent); }
+  .rl-sw input:checked + i::after { transform:translateX(14px); }
+  .rl-sw input:focus-visible + i { outline:2px solid var(--accent); outline-offset:2px; }
   body.limit #pill, body.pending #pill { opacity:.45; pointer-events:none; }
   #hold { position:absolute; left:0; right:0; bottom:0; height:300px; background:linear-gradient(180deg,#3b82e800 0%,#3b82e8cc 45%,#2f6fd6 100%); display:none; flex-direction:column; align-items:center; justify-content:flex-end; gap:22px; padding-bottom:calc(env(safe-area-inset-bottom) + 70px); color:#fff; pointer-events:none; z-index:20; }
   #hold.on { display:flex; }
@@ -446,7 +456,7 @@ const PAGE = `<!doctype html>
     </div>
     <div id="reel" hidden>
       <div class="rl-track"><div id="rl-marks"></div><input id="rl-seek" type="range" min="0" max="1000" step="100" value="0" aria-label="录像进度"></div>
-      <div class="rl-row"><button id="rl-play" type="button" aria-label="播放"></button><span class="rl-when"><span id="rl-clock"></span><button id="rl-tag" type="button">推算</button></span><span class="rl-sp"></span><button class="tx" id="rl-skip" type="button" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就按真实时间放">跳过空白</button><button class="tx" id="rl-speed" type="button">1×</button><button class="tx" id="rl-x" type="button">退出</button></div>
+      <div class="rl-row"><button id="rl-play" type="button" aria-label="播放"></button><span class="rl-when"><span id="rl-clock"></span><button id="rl-tag" type="button">推算</button></span><span class="rl-sp"></span><label class="rl-sw" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就按真实时间放"><input type="checkbox" id="rl-skip" role="switch" checked><i></i>跳过空白</label><button class="tx" id="rl-speed" type="button">1×</button><button class="tx" id="rl-x" type="button">退出</button></div>
     </div>
     <div id="hold"><span>松手发送,上移取消</span><div class="w"></div></div>
   </div>
@@ -1165,6 +1175,7 @@ __REEL_JS__
     if (S.readonly && hasState(card) && !opts.delegate) return; // 以前的只能看:选择 / 填空 / 画板不开,免得改了当时的答案
     if (!opts.delegate) dispatch({ type: 'stageOpen' });
     S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, scene: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
+    playRec({ k: 'stage', job: S.sections[secIdx].job, card: idx, open: true });
     // 画板:题目在工作台自己的题目条上(可收起),顶栏只写「画一画」
     $('#st-ttl').textContent = card.kind === 'canvas' ? '画一画' : cardTitle(card);
     $('#st-kd').textContent = KIND_NAME[card.kind] || card.kind;
@@ -1200,12 +1211,18 @@ __REEL_JS__
       $('#st-note').textContent = !done ? '先听,再按住录。' : left ? '录好了。还有 ' + left + ' 句没录。' : '都录好了。';
     }
   };
+  /** 发给舞台包的这张卡(ready 时发;看录像时孩子改了卡再发一次,包按新状态重画) */
+  const stageCard = (card) => {
+    const b = card.kind === 'scene' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null;
+    const im = card.kind === 'canvas' && card.props.base && typeof card.props.base.image === 'string' ? card.props.base.image : null;
+    return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? '/api/bundles/' + encodeURIComponent(b) + '/' : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
+  };
   /** 舞台包说话:ready → 把卡发过去;phase → 字幕行;state → 存;done 且是讲稿委托的 → 关舞台接着念 */
   window.addEventListener('message', (e) => {
     const m = e.data;
     if (!m || m.source !== STAGE_SOURCE || !S.stage) return;
     const card = S.sections[S.stage.section].cards[S.stage.card];
-    if (m.type === 'ready') { const b = card.kind === 'scene' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null; const im = card.kind === 'canvas' && card.props.base && typeof card.props.base.image === 'string' ? card.props.base.image : null; postStage({ type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? '/api/bundles/' + encodeURIComponent(b) + '/' : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay }); }
+    if (m.type === 'ready') postStage(stageCard(card));
     else if (m.type === 'phase') { S.stage.scene = { phase: m.phase, line: m.line, step: m.step, total: m.total }; renderSubtitle(); if (m.phase === 'done' && S.stage.delegate) { const d = S.stage; closeStage(); resumeAfter(d); } }
     else if (m.type === 'state') { card.state = m.state; $('#st-go').disabled = !stateSummary(card).length; $('#st-note').textContent = stateSummary(card).join('、'); repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, m.state); }
     else if (m.type === 'submit') { card.state = m.state; const id = S.stage.id; const job = S.sections[S.stage.section].job; const idx = S.stage.card; closeStage(); api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id } })); }
@@ -1213,7 +1230,7 @@ __REEL_JS__
   });
   /** 讲稿委托给场景播完(或孩子关了)→ 接着念下一句 */
   const resumeAfter = () => dispatch({ type: 'stageDone' });
-  const closeStage = () => { recStop(false); S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); showNow(); };
+  const closeStage = () => { if (S.stage && S.sections[S.stage.section]) playRec({ k: 'stage', job: S.sections[S.stage.section].job, card: S.stage.card, open: false }); recStop(false); S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); showNow(); };
   $('#st-x').innerHTML = ICON.close;
   $('#st-x').addEventListener('click', closeStage);
   $('#st-dim').addEventListener('click', closeStage);
@@ -1463,9 +1480,50 @@ __REEL_JS__
     dispatch({ type: 'fresh', sections: [idx], silent: false });
     renderHeader();
   };
+  // ---- 录像的实录(《家长录像设计.md》§4,只在孩子端):孩子看到、听到、做了什么,攒着每 10 秒一批发给服务端(页面退到后台时 sendBeacon)。
+  //      只记今天、能发消息的话题(以前的只读回放不记);卡的每次改动服务端在存卡时自己记。发不出去就丢,不重试 ----
+  const PLAY = { buf: [], last: '' };
+  const playRec = (r) => {
+    if (PARENT || !S.tutor || S.readonly || S.hist) return;
+    PLAY.buf.push({ tutor: S.tutor.name, thread: S.newThread ? null : S.thread, rec: { at: Date.now(), ...r } });
+    if (PLAY.buf.length > 600) PLAY.buf.splice(0, PLAY.buf.length - 600);
+  };
+  /** 播放器的位置变了才记(哪一节 · 第几句 · 在念 / 暂停 / 等答 …) */
+  const playNote = () => {
+    const st = S.state, sec = S.sections[st.section];
+    const key = [sec ? sec.job : '', st.line, st.status, st.replay ? 1 : 0].join('|');
+    if (key === PLAY.last) return;
+    PLAY.last = key;
+    playRec({ k: 'play', job: sec ? sec.job : null, line: st.line, status: st.status, ...(st.replay ? { replay: true } : {}) });
+  };
+  const playFlush = (beacon) => {
+    if (!PLAY.buf.length) return;
+    const groups = new Map(), keep = [];
+    for (const x of PLAY.buf) {
+      // 新话题发出第一句之前还没有话题 id:等有了再发
+      const th = x.thread || (S.tutor && S.tutor.name === x.tutor && !S.newThread ? S.thread : null);
+      if (!th) { keep.push(x); continue; }
+      const k = x.tutor + ' ' + th;
+      if (!groups.has(k)) groups.set(k, { tutor: x.tutor, thread: th, records: [] });
+      groups.get(k).records.push(x.rec);
+    }
+    PLAY.buf = keep.slice(-200);
+    for (const g of groups.values()) {
+      const url = '/api/kid/conversations/' + g.tutor + '/play';
+      for (let i = 0; i < g.records.length; i += 400) {
+        const body = JSON.stringify({ thread: g.thread, sentAt: Date.now(), records: g.records.slice(i, i + 400) });
+        if (beacon && navigator.sendBeacon) { try { if (navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }))) continue; } catch {} }
+        try { fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {}); } catch {}
+      }
+    }
+  };
+  setInterval(() => playFlush(false), 10000);
+  window.addEventListener('pagehide', () => playFlush(true));
+  document.addEventListener('visibilitychange', () => { playRec({ k: 'visible', on: !document.hidden }); if (document.hidden) playFlush(true); });
   const dispatch = (ev) => {
     const r = step({ state: S.state, replayOf: S.replayOf, contGuardUntil: S.contGuard, held: S.held }, ev, { sections: S.sections, pending: S.pending, autoplay: S.autoplay, readonly: S.readonly, stage: Boolean(S.stage), recording: Boolean(S.rec), limit: S.limit, now: Date.now() });
     S.state = r.model.state; S.replayOf = r.model.replayOf; S.contGuard = r.model.contGuardUntil; S.held = r.model.held;
+    playNote();
     syncUnfold();
     for (const f of r.effects) runEffect(f);
   };
@@ -1646,7 +1704,7 @@ __REEL_JS__
   // ---- 喇叭:自动朗读开关 ----
   const spk = $('#spk');
   const renderSpk = () => { spk.innerHTML = S.autoplay ? ICON.speaker : ICON.mute; spk.classList.toggle('on', S.autoplay); };
-  spk.addEventListener('click', () => { S.autoplay = !S.autoplay; try { localStorage.setItem(AUTOPLAY_KEY, S.autoplay ? '1' : '0'); } catch {} renderSpk(); if (!S.autoplay) dispatch({ type: 'autoplayOff' }); });
+  spk.addEventListener('click', () => { S.autoplay = !S.autoplay; try { localStorage.setItem(AUTOPLAY_KEY, S.autoplay ? '1' : '0'); } catch {} renderSpk(); playRec({ k: 'autoplay', on: S.autoplay }); if (!S.autoplay) dispatch({ type: 'autoplayOff' }); });
   renderSpk();
 
   // ---- 旁注(《家长板书页设计.md》§3,只在家长板书页):不是卡,只读块。节前是谁说的(首页按钮字不算孩子说的)、孩子在板书上做的;
@@ -1674,7 +1732,9 @@ __REEL_JS__
       const said = m.via ? m.via.label : m.action === 'continue' ? '继续' : m.action === 'submit' ? '交给老师' : (m.question || '');
       if (said || m.from === 'kid') { const n = noteEl('said ' + (m.from || ''), m.via ? '首页' : (NOTE_FROM[m.from] || m.from || ''), said); if (m.voice) n.append(voiceBtn(m.voice)); out.push(n); }
     }
-    if (m.cards && m.cards.length) out.push(noteEl('did', '做了', m.cards.map((c) => c.text).join('\\n')));
+    // 在弹窗里想了多久、改过几次(《家长录像设计.md》§4.7,有实录才有)
+    const took = (t) => !t ? '' : [t.think !== null ? '想了 ' + reelDuration(t.think) : '', t.changes > 1 ? '改过 ' + (t.changes - 1) + ' 次' : ''].filter(Boolean).map((x) => ' · ' + x).join('');
+    if (m.cards && m.cards.length) out.push(noteEl('did', '做了', m.cards.map((c) => c.text + took(c.took)).join('\\n')));
     // 备课话题交给了孩子:开场那一节前标出来,之前的几节孩子看不到
     return out;
   };
@@ -1912,9 +1972,23 @@ __REEL_JS__
     $('#rl-seek').max = String(Math.max(1, Math.round(R.clock.total)));
     $('#rl-marks').replaceChildren(...R.d.reel.marks.map((m) => h('i', { class: m.kind, title: reelHms(m.at) + ' ' + m.label, style: 'left:' + (100 * R.clock.toPlay(m.at) / Math.max(1, R.clock.total)).toFixed(2) + '%', on: { click: () => reelSeek(R.clock.toPlay(m.at)) } })));
     // 「跳过空白」缺省开着(压缩);关掉 = 按真实时间放
-    $('#rl-skip').classList.toggle('on', !R.real); $('#rl-skip').setAttribute('aria-pressed', String(!R.real));
+    $('#rl-skip').checked = !R.real;
   };
   /** 板书:哪几节、卡的状态、旁注变了就整块重画(往回拖也是);露几张卡、标注画到哪每次对一下 */
+  /** 弹窗(实录):孩子开着哪张就只读地开哪张,改了就重画(重卡重发一次 card);关了就关。弹窗里点不动、没有关闭钮(见 CSS body.reel) */
+  const reelStage = (f, rebuilt) => {
+    const R = S.reel;
+    const i = f.stage ? S.sections.findIndex((x) => x.job === f.stage.job) : -1;
+    const want = i >= 0 && S.sections[i].cards[f.stage.card] ? f.stage.job + '/' + f.stage.card : '';
+    if (!want) { if (S.stage) { closeStage(); R.now = ''; } R.stageKey = ''; return; }
+    const card = S.sections[i].cards[f.stage.card];
+    const sk = JSON.stringify(card.state === undefined ? null : card.state);
+    if (R.stageKey !== want || !S.stage) { if (S.stage) closeStage(); openStage(i, f.stage.card, { delegate: true }); R.stageKey = want; R.stageState = sk; return; }
+    S.stage.section = i;
+    if (sk === R.stageState && !rebuilt) return;
+    R.stageState = sk;
+    if (isHeavy(card)) postStage(stageCard(card)); else renderStage();
+  };
   const reelDraw = (f) => {
     const R = S.reel;
     const shown = f.sections.filter((fs) => R.entries.some((e) => e.job === fs.job));
@@ -1926,6 +2000,7 @@ __REEL_JS__
       board.replaceChildren(...S.sections.map((sec, i) => renderSection(sec, i)));
       syncNotes(reelMsgs(f));
       board.scrollTop = top;
+      R.rebuilt = true;
     }
     let fresh = null;
     shown.forEach((fs, i) => {
@@ -1951,6 +2026,7 @@ __REEL_JS__
       if (tail) tail.scrollIntoView({ block: 'end', behavior: R.follow ? 'instant' : 'smooth' });
     } else if (fresh) fresh.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     R.seen = seen; R.follow = false;
+    reelStage(f, R.rebuilt); R.rebuilt = false;
   };
   /** 声音:换了一句(或孩子的一段录音、原声)就从这一刻的偏移放那个文件;没配音的句不出声(字幕照出) */
   const reelVoice = (f) => {
@@ -1976,7 +2052,9 @@ __REEL_JS__
     else if (f.clip) { text = '🎙 孩子的录音'; cls = 'replay'; }
     else if (f.gap && f.gap.kind === 'wait') { text = '⏳ 等老师 ' + reelDuration(f.gap.ms); cls = 'gap'; }
     else if (f.wait) { text = '⏳ 等老师 ' + reelDuration(f.wait.ms); cls = 'gap'; }
-    else if (f.gap) { text = '⏩ 孩子想了 ' + reelDuration(f.gap.ms); cls = 'gap'; }
+    else if (f.away) { text = '📴 孩子切到别处了'; cls = 'gap'; }
+    else if (f.thinking) { text = '⏱ 想了 ' + reelDuration(f.thinking.ms); cls = 'gap'; }
+    else if (f.gap) { text = (f.gap.cont ? '⏩ 又过了 ' : '⏩ 孩子想了 ') + reelDuration(f.gap.ms); cls = 'gap'; }
     else if (f.last) { text = lineOf(f.last) + (f.asking ? '  ⏸ 等孩子' : ''); cls = 'gap'; }
     el.className = cls; el.textContent = text;
   };
@@ -2005,7 +2083,7 @@ __REEL_JS__
   /** 只收拾录像自己的东西(关老师页时也调);不重开话题 */
   const reelStop = () => {
     const R = S.reel; if (!R) return;
-    clearInterval(R.timer); S.reel = null; silence();
+    clearInterval(R.timer); S.reel = null; silence(); if (S.stage) closeStage();
     document.body.classList.remove('reel'); $('#reel').hidden = true;
   };
   const reelOpen = async () => {
@@ -2034,7 +2112,7 @@ __REEL_JS__
   $('#rl-play').addEventListener('click', () => { if (S.reel) reelPlay(!S.reel.playing); });
   $('#rl-x').addEventListener('click', reelClose);
   $('#rl-tag').addEventListener('click', () => toast(REEL_HINT));
-  $('#rl-skip').addEventListener('click', () => { const R = S.reel; if (!R) return; R.real = !R.real; reelSetClock(); R.voice = null; reelTick(); });
+  $('#rl-skip').addEventListener('change', (e) => { const R = S.reel; if (!R) return; R.real = !e.target.checked; reelSetClock(); R.voice = null; reelTick(); });
   $('#rl-speed').addEventListener('click', (e) => { const R = S.reel; if (!R) return; R.speed = REEL_SPEEDS[(REEL_SPEEDS.indexOf(R.speed) + 1) % REEL_SPEEDS.length]; e.currentTarget.textContent = R.speed + '×'; audioEl.defaultPlaybackRate = R.speed; audioEl.playbackRate = R.speed; });
   // 拖的时候不出声,松手从那一刻接着放
   $('#rl-seek').addEventListener('input', (e) => { const R = S.reel; if (!R) return; R.seeking = true; R.p = Number(e.target.value); R.voice = null; R.follow = true; reelTick(); });

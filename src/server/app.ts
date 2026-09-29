@@ -7,7 +7,7 @@
  */
 import { createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { appendFile, mkdir, readFile, stat } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
@@ -17,7 +17,7 @@ import { conversationFiles, currentThread, isPrepThread, kidCurrentThread, kidSp
 import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
-import { buildReel, type Reel } from '../lib/reel.ts';
+import { buildReel, playRecordOk, reelCardTook, type PlayRecord, type Reel } from '../lib/reel.ts';
 import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
@@ -253,6 +253,20 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
     }));
     m.section = { ...m.section, cards };
   }
+  // 「做了」旁注带上孩子在弹窗里想了多久、改过几次(《家长录像设计.md》§4.7;有实录才有):这张卡从同一话题上一条消息到这条之间的弹窗
+  const plays = await readPlays(ctx.ws, tutor, date);
+  if (plays.length) {
+    const th = threads(index.messages);
+    const at = (m: ConversationMessage): number => Date.parse(m.timing?.startedAt ?? '') || Date.parse(m.at);
+    for (const pm of messages) {
+      if (!pm.cards?.length) continue;
+      const i = index.messages.findIndex((x) => x.job === pm.job);
+      if (i < 0) continue;
+      const prev = index.messages.slice(0, i).reverse().find((_x, k) => th[i - 1 - k] === th[i]);
+      const [from, to] = [prev ? at(prev) : -Infinity, at(index.messages[i])];
+      pm.cards = pm.cards.map((c) => { const [job, n] = c.card.split('/'); const took = reelCardTook(plays, job, Number(n), from, to); return took ? { ...c, took } : c; });
+    }
+  }
   const labels = await continueLabels(ctx.ws);
   const ths = threads(index.messages);
   const lessons: ParentDay['lessons'] = {};
@@ -277,6 +291,23 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
     lessons[th] = { cards: lessonCards(index, th), handed: Boolean(l?.handedAt), label: labels.get(`${tutor} ${date} ${th}`) ?? null, source: l?.source ?? null, dubbing };
   }
   return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index), lessons };
+}
+
+/** 一天里各轮的实录(<日期>.<job>.play.jsonl;jobs 给了就只读这几轮),合在一起按时刻排;坏行丢掉 */
+async function readPlays(ws: Workspace, tutor: string, date: string, jobs?: ReadonlySet<string>): Promise<PlayRecord[]> {
+  const dir = join(ws.dirs.conversations, tutor);
+  const out: PlayRecord[] = [];
+  const names = await readdir(dir).catch(() => [] as string[]);
+  for (const name of names) {
+    const m = new RegExp(`^${date}\\.(\\d{4}-\\d+)\\.play\\.jsonl$`).exec(name);
+    if (!m || (jobs && !jobs.has(m[1]))) continue;
+    const text = await readFile(join(dir, name), 'utf8').catch(() => '');
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue;
+      try { const r = JSON.parse(line) as unknown; if (playRecordOk(r)) out.push(r); } catch { /* 坏行丢掉 */ }
+    }
+  }
+  return out.sort((a, b) => a.at - b.at);
 }
 
 /** mp3 时长(毫秒)按绝对路径缓存:配好的配音不会再变;还没落盘、读不出的不缓存,下次再读 */
@@ -318,7 +349,8 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const { states } = await scanCards(ctx.ws, tutor, date);
   const jobs = new Set(mine.map((m) => m.job));
   const cards = Object.fromEntries(Object.entries(states).filter(([job]) => jobs.has(job)));
-  const reel = buildReel({ messages: mine, events, cards, durations, tutor, now: ctx.now().getTime() });
+  const plays = await readPlays(ctx.ws, tutor, date, jobs);
+  const reel = buildReel({ messages: mine, events, cards, durations, tutor, now: ctx.now().getTime(), plays });
   if (!reel) return null;
   const day = await parentDay(ctx, tutor, date);
   return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread) };
@@ -414,7 +446,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
  * 画板:body 里可以带 image(data:image/png;base64,…),存成 .cards/<n>.png,状态里只留路径(相对 workspace 根,老师 Read 看)
  * 录音卡:body 的 audio 可以是 data:audio/…;base64,…,存成 .cards/<n>/rec-<k>.<ext>,状态里换成路径(《口播老师设计.md》§2)
  */
-async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: string, n: number, body: unknown): Promise<RouteResult> {
+async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: string, n: number, body: unknown, who: 'kid' | 'parent'): Promise<RouteResult> {
   const date = localDate(ctx.now());
   const index = await readIndex(ws, tutor, date);
   const msg = index.messages.find((m) => m.job === job);
@@ -444,6 +476,8 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
   // turn = 这张卡所在话题的末条 job:下一条发给同一话题时才算「上一轮之后改过的」
   const mine = threads(index.messages)[index.messages.findIndex((m) => m.job === job)];
   await writeCardState(ws, tutor, date, job, n, { at: ctx.now().toISOString(), turn: lastJobOf(index, mine) ?? last.job, state: r.state });
+  // 录像的实录:孩子的每一次存都记一条(选了又改、填空的过程、画板一笔一笔);家长在备课话题里做的不记
+  if (who === 'kid') await appendFile(conversationFiles(ws.dirs.conversations, tutor, date).play(job), `${JSON.stringify({ at: ctx.now().getTime(), k: 'card', job, card: n, state: r.state })}\n`).catch(() => {});
   if (fresh && target.kind === 'record') ctx.runner.assessRecording(fresh, target.props as RecordProps);
   return { status: 200, json: { ok: true, card: `${job}/${n}`, state: r.state } };
 }
@@ -605,12 +639,34 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       await appendFile(join(ws.root, '.cotutor', 'voice-diag.jsonl'), `${JSON.stringify(row)}\n`).catch(() => {});
       return { status: 200, json: { ok: true } };
     }
-    const kid =/^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|\d{4}-\d{2}-\d{2})$/.exec(p);
+    const kid =/^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|play|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (kid) {
       const [, tutor, tail] = kid;
       const t = ws.config.tutors[tutor];
       if (!t || !t.enabled || t.hidden) return { status: 404, json: { error: 'no_such_tutor' } };
       const date = localDate(ctx.now());
+      // 录像的实录(《家长录像设计.md》§4):孩子端每 10 秒一批 {thread, sentAt, records};时刻按 sentAt 把两边的钟差校到服务端;
+      // 形状不对的、不是这个话题的、太旧太新的丢掉,卡的改动只认服务端自己记的;不回错(孩子端不报错)。记在话题当时的末条 job 上,删话题一起删
+      if (tail === 'play' && method === 'POST') {
+        if (!isObj(body) || typeof body.thread !== 'string' || !Array.isArray(body.records) || body.records.length > 400) return { status: 400, json: { error: 'bad_request' } };
+        const index = await readIndex(ws, tutor, date);
+        const ths = threads(index.messages);
+        const jobs = new Set(index.messages.filter((_m, i) => ths[i] === body.thread).map((m) => m.job));
+        const last = jobs.size ? lastJobOf(index, body.thread) : null;
+        if (!last) return { status: 200, json: { kept: 0 } };
+        const now = ctx.now().getTime();
+        const skew = typeof body.sentAt === 'number' && Math.abs(now - body.sentAt) < 86_400_000 ? now - body.sentAt : 0;
+        const rows: string[] = [];
+        for (const x of body.records as unknown[]) {
+          if (!playRecordOk(x) || x.k === 'card') continue;
+          const at = Math.round(x.at + skew);
+          if (at > now + 60_000 || at < now - 86_400_000) continue;
+          if ((x.k === 'play' && x.job !== null && !jobs.has(x.job)) || (x.k === 'stage' && !jobs.has(x.job))) continue;
+          rows.push(JSON.stringify({ ...x, at }));
+        }
+        if (rows.length) await appendFile(conversationFiles(ws.dirs.conversations, tutor, date).play(last), `${rows.join('\n')}\n`).catch(() => {});
+        return { status: 200, json: { kept: rows.length } };
+      }
       // 作业照片(R5):先传图拿 path,再连 path 一起发消息;不起老师、不计上限
       if (tail === 'photos') return method === 'POST' ? uploadPhoto(ws, body, ctx.now()) : { status: 405, json: { error: 'method_not_allowed' } };
       if (tail === 'today' && method === 'GET') {
@@ -689,7 +745,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const t = ws.config.tutors[tutor];
       if (!t || !t.enabled || t.hidden) return { status: 404, json: { error: 'no_such_tutor' } };
       if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
-      return putCardState(ctx, ws, tutor, job, Number(nStr), body);
+      return putCardState(ctx, ws, tutor, job, Number(nStr), body, 'kid');
     }
     // 老师头像(R5b,2026-09-16):cotutor.json 里 avatar 是图片相对路径时(figshot 写的 avatars/<老师>.png)从这里取;
     // emoji 头像、越界、不是图、不存在都 404(孩子端退回显示 emoji / 首字)。no-cache:figshot 换了脸孩子端要马上见到
@@ -917,7 +973,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
       if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
       if (!prepJobs((await readIndex(ws, tutor, localDate(ctx.now()))).messages).has(job)) return { status: 409, json: { error: 'not_prep', message: '家长只在自己开的备课话题里做卡' } };
-      return putCardState(ctx, ws, tutor, job, Number(nStr), body);
+      return putCardState(ctx, ws, tutor, job, Number(nStr), body, 'parent');
     }
     const book = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/bookkeep$/.exec(p);
     if (book && method === 'POST') {

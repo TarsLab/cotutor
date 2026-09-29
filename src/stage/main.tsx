@@ -59,7 +59,8 @@ function App(): JSX.Element {
     const base = (card.props.base ?? null) as { bundle: string } | { skeletons: Record<string, unknown>[] } | { image: string } | null;
     return (
       <Suspense fallback={<div className="stage-wait">画板准备中…</div>}>
-        <CanvasStage ref={canvas} base={base} bundleUrl={card.bundleUrl} imageUrl={card.imageUrl} prompt={typeof card.props.prompt === 'string' ? card.props.prompt : undefined} ink={Array.isArray(st.ink) ? st.ink : []} onState={onInk} onSubmit={onSubmit} onError={onError} />
+        {/* key 跟着笔数:页面重发 card(家长看录像时孩子又画了一笔)就按新笔迹重装;孩子端平时只在 ready 发一次,不受影响 */}
+        <CanvasStage key={Array.isArray(st.ink) ? st.ink.length : 0} ref={canvas} base={base} bundleUrl={card.bundleUrl} imageUrl={card.imageUrl} prompt={typeof card.props.prompt === 'string' ? card.props.prompt : undefined} ink={Array.isArray(st.ink) ? st.ink : []} onState={onInk} onSubmit={onSubmit} onError={onError} />
       </Suspense>
     );
   }

@@ -1,5 +1,5 @@
 /** 录像(《家长录像设计.md》):推算轨道、某一刻的样子、空白压缩与播放时钟。纯函数,手搭的节,时刻都算得准。 */
-import { buildReel, reelClock, reelDuration, reelFrameAt, reelSaid, REEL_GAP_PLAY_MS, type ReelInput } from '../src/lib/reel.ts';
+import { buildReel, playRecordOk, reelCardTook, reelClock, reelDuration, reelFrameAt, reelSaid, REEL_GAP_PLAY_MS, type PlayRecord, type ReelInput } from '../src/lib/reel.ts';
 import type { BoardSection } from '../src/lib/kid-board.ts';
 import type { RunEvent } from '../src/lib/events.ts';
 import type { ConversationMessage } from '../src/schema/conversation.ts';
@@ -40,7 +40,7 @@ check('话题里孩子一句都没说(没交出去的备课)→ 没有录像', b
   check('流式的轮一拍铺一拍的卡,写完整节都在;末句问句 → 停下等孩子', t1.at === T + 3000 && t1.cards.map((c) => `${c.at - T}=${c.n}`).join() === '3000=0,4000=1,9000=2,9500=2' && t1.ask && t1.doneAt === T + 10500, JSON.stringify(t1));
   check('记账的轮不进录像(晚上的系统轮)', r.tracks.length === 2 && !r.marks.some((m) => m.job === '3') && r.endAt === T + 81000 + 1500);
   check('进度条上的点:两次开口(交卡写「交给老师」)、改卡、停下等孩子', r.marks.map((m) => `${m.kind}@${m.at - T}:${m.label}`).join(' ') === 'said@0:7 减 9 ask@10500:B 呢? card@30000:A said@60000:交给老师', r.marks.map((m) => `${m.kind}@${m.at - T}:${m.label}`).join(' '));
-  check('空白:老师说完到下一次开口 49.5 秒(think);等老师 20 秒,前 10 秒照放、其余压(wait)', r.gaps.map((g) => `${g.kind}:${g.from - T}-${g.to - T}:${g.ms}`).join(' ') === 'think:10500-60000:49500 wait:70000-80000:20000', JSON.stringify(r.gaps));
+  check('空白:老师说完到下一次开口的 49.5 秒被 30 秒那次改卡切开(改卡前后各 1 秒照放),后一段是「又过了」;等老师 20 秒,前 10 秒照放、其余压', r.gaps.map((g) => `${g.kind}:${g.from - T}-${g.to - T}:${g.ms}${g.cont ? ':cont' : ''}`).join(' ') === 'think:10500-29000:18500 think:31000-60000:29000:cont wait:70000-80000:20000', JSON.stringify(r.gaps));
   check('等老师:两轮各从开口到第一声', r.waits.map((w) => `${w.job}:${w.to - w.from}`).join() === '1:3000,2:20000');
 
   // 某一刻
@@ -61,8 +61,8 @@ check('话题里孩子一句都没说(没交出去的备课)→ 没有录像', b
 
   // 播放时钟:压过的空白各放 1.5 秒
   const c = reelClock(r, false);
-  check('压缩:82.5 秒的话题,49.5 秒的想与 10 秒的多等各压成 1.5 秒', c.total === 82500 - 49500 - 10000 + 2 * REEL_GAP_PLAY_MS, String(c.total));
-  check('播放 ↔ 墙钟:空白前照常、空白里线性、空白后平移', c.toWall(10500) === T + 10500 && c.toWall(10500 + 750) === T + 10500 + 49500 / 2 && c.toWall(12000) === T + 60000 && c.toPlay(T + 65000) === 17000 && c.toPlay(c.toWall(5000)) === 5000 && c.toWall(c.total + 999) === r.endAt);
+  check('压缩:82.5 秒的话题,三段空白(18.5 秒、29 秒、多等的 10 秒)各压成 1.5 秒', c.total === 82500 - 18500 - 29000 - 10000 + 3 * REEL_GAP_PLAY_MS, String(c.total));
+  check('播放 ↔ 墙钟:空白前照常、空白里线性、改卡那 2 秒照常、空白后平移', c.toWall(10500) === T + 10500 && c.toWall(10500 + 750) === T + 10500 + 18500 / 2 && c.toWall(12000) === T + 29000 && c.toWall(13000) === T + 30000 && c.toWall(15500) === T + 60000 && c.toPlay(T + 65000) === 20500 && c.toPlay(c.toWall(5000)) === 5000 && c.toWall(c.total + 999) === r.endAt);
   const real = reelClock(r, true);
   check('关掉「跳过空白」(按真实时间):不压', real.total === r.endAt - r.startAt && real.toWall(40000) === T + 40000);
 }
@@ -98,7 +98,7 @@ check('话题里孩子一句都没说(没交出去的备课)→ 没有录像', b
   const flat = buildReel(input([p0, p1, k]))!;
   check('课的几节一节接一节、正好在孩子开口时念完', flat.tracks.map((t) => `${t.job}:${t.at - T}`).join() === 'p0:-4600,p1:-2200,k:2000' && flat.says[0].from === T - 4600 && flat.says[2].to === T - 200, JSON.stringify(flat.tracks));
   const moved = buildReel(input([p0, p1, k], { cards: { p0: { 0: { at: iso(T - 10000), turn: 'p1', state: { x: 1 } } } } }))!;
-  check('第一节的卡 10 秒前就有状态:第一节挪到那一刻前念完,中间空出来的算孩子在想', moved.tracks[0].at === T - 12400 && moved.tracks[0].doneAt === T - 10200 && moved.gaps.some((g) => g.kind === 'think' && g.from === T - 10200 && g.to === T - 2200), JSON.stringify({ t: moved.tracks[0], g: moved.gaps }));
+  check('第一节的卡 10 秒前就有状态:第一节挪到那一刻前念完,中间空出来的算孩子在想', moved.tracks[0].at === T - 12400 && moved.tracks[0].doneAt === T - 10200 && moved.gaps.some((g) => g.kind === 'think' && g.from === T - 9000 && g.to === T - 2200), JSON.stringify({ t: moved.tracks[0], g: moved.gaps }));
   check('课的节没有「开口」的点,末句问句有「停下等孩子」', !moved.marks.some((m) => m.kind === 'said' && m.job.startsWith('p')) && moved.marks.some((m) => m.kind === 'ask' && m.job === 'p0'));
 }
 
@@ -116,6 +116,45 @@ check('话题里孩子一句都没说(没交出去的备课)→ 没有录像', b
   check('录音卡:孩子的录音排在存下来之前 3 秒,路径去掉 conversations/<老师>/;这 3 秒不被压', rr.clips.length === 1 && rr.clips[0].from === T + 27000 && rr.clips[0].audio === '2026-09-28.1.cards/0/rec-1.webm' && reelFrameAt(rr, T + 28000).clip?.offset === 1000 && !rr.gaps.some((g) => g.from < T + 30000 && g.to > T + 27000), JSON.stringify(rr.gaps));
 }
 
+{
+  // 实录(第二期):S2 念一句(卡 C 是选择题);孩子暂停过、再听过一次;弹窗开着想了 9 秒(中间切到后台 3 秒)选了 A 又改 B;有记录的节用记录,不推算
+  const CH: BoardSection = { cards: [card('几个角?', 'choice')], lines: [line('数一数。', 0, 'd.mp3'), line('有几个角?', 0, 'a.mp3', true)] };
+  const m1 = msg('1', { text: '三角形', timing: { startedAt: iso(T), dubbedMs: 2000 }, section: CH });
+  const m2 = msg('2', { action: 'submit', timing: { startedAt: iso(T + 40000), dubbedMs: 2000 }, section: S2 });
+  const plays: PlayRecord[] = [
+    { at: T + 2500, k: 'play', job: '1', line: 0, status: 'playing' },
+    { at: T + 3000, k: 'play', job: '1', line: 0, status: 'paused' },
+    { at: T + 8000, k: 'play', job: '1', line: 0, status: 'playing' },
+    { at: T + 9100, k: 'play', job: '1', line: 1, status: 'playing' },
+    { at: T + 10200, k: 'play', job: '1', line: 1, status: 'waiting' },
+    { at: T + 10200, k: 'stage', job: '1', card: 0, open: true },
+    { at: T + 13000, k: 'visible', on: false },
+    { at: T + 16000, k: 'visible', on: true },
+    { at: T + 19200, k: 'card', job: '1', card: 0, state: { picked: [0] } },
+    { at: T + 25000, k: 'card', job: '1', card: 0, state: { picked: [1] } },
+    { at: T + 26000, k: 'stage', job: '1', card: 0, open: false },
+    { at: T + 30000, k: 'play', job: '1', line: 1, status: 'playing', replay: true },
+    { at: T + 31000, k: 'play', job: '1', line: 1, status: 'waiting' },
+  ];
+  const r = buildReel(input([m1, m2], { plays, cards: { 1: { 0: { at: iso(T + 25000), turn: '1', state: { picked: [1] } } } } }))!;
+  const s1 = r.says.filter((x) => x.job === '1').map((x) => `${x.line}:${x.from - T}-${x.to - T}${x.replay ? 'r' : ''}`).join(' ');
+  check('实录的念句:暂停那段不出声、接着念从头念那句、到 mp3 念完为止、再听标 replay;这节不用推算的', s1 === '0:2500-3000 0:8000-9000 1:9100-10100 1:30000-31000r', s1);
+  check('有记录的节:出来的时刻、念完(第一次停下等孩子)、停下等孩子的点都照记录', r.tracks[0].at === T + 2500 && r.tracks[0].doneAt === T + 10200 && r.tracks[0].ask && r.marks.some((x) => x.kind === 'ask' && x.at === T + 10200));
+  check('第二节没有记录:照推算;所以不算全程实录', r.says.some((x) => x.job === '2') && !r.precise);
+  check('弹窗开着的一段、切到后台的一段', r.stages.length === 1 && r.stages[0].from === T + 10200 && r.stages[0].to === T + 26000 && r.aways.length === 1 && r.aways[0].to - r.aways[0].from === 3000);
+  check('选了 A 又改 B:两次改动都在(状态文件那一份不重复算)', r.cards.map((c) => JSON.stringify(c.state)).join() === '{"picked":[0]},{"picked":[1]}', JSON.stringify(r.cards));
+  const f1 = reelFrameAt(r, T + 18000);
+  check('弹窗开着、还没动:想了 7.8 秒 − 切到后台的 3 秒 = 4.8 秒', f1.stage?.card === 0 && f1.thinking?.ms === 4800 && !f1.away, JSON.stringify(f1.thinking));
+  check('切到后台那几秒:away', reelFrameAt(r, T + 14000).away);
+  const f2 = reelFrameAt(r, T + 20000);
+  check('动过了就不再算「想了」;弹窗照开着,卡是选 A 的样子', f2.stage !== null && f2.thinking === null && JSON.stringify(f2.cards['1/0']) === '{"picked":[0]}');
+  check('再听那句不算「念过几句」', reelFrameAt(r, T + 30500).sections[0].spoken === 2 && reelFrameAt(r, T + 30500).saying?.line === 1);
+  check('弹窗关了:frame 里没有 stage', reelFrameAt(r, T + 27000).stage === null);
+  check('想了多久、改过几次:打开到第一次改动减去切到后台的;改了两次', JSON.stringify(reelCardTook(plays, '1', 0, -Infinity, T + 40000)) === '{"think":6000,"changes":2}' && reelCardTook(plays, '1', 0, T + 27000, T + 40000) === null && reelCardTook(plays, '2', 0, -Infinity, Infinity) === null);
+  const all = buildReel(input([m1], { plays }))!;
+  check('每一轮有讲稿的节都有记录:实录', all.precise);
+}
+check('实录的形状:好的收、坏的丢', playRecordOk({ at: 1, k: 'play', job: '1620-1', line: 0, status: 'playing' }) && playRecordOk({ at: 1, k: 'play', job: null, line: -1, status: 'idle' }) && playRecordOk({ at: 1, k: 'stage', job: '1620-1', card: 2, open: true }) && !playRecordOk({ at: 1, k: 'stage', job: '../x', card: 2, open: true }) && !playRecordOk({ at: 'x', k: 'visible', on: true }) && !playRecordOk({ at: 1, k: 'eval', on: true }) && !playRecordOk(null));
 check('进度条上怎么写孩子这句', reelSaid({ text: 'x', action: 'continue' }) === '继续' && reelSaid({ text: '', action: 'submit', via: { home: 'h', button: 'new', label: '6 的口诀' } }) === '交给老师' && reelSaid({ text: 'x', via: { home: 'h', button: 0, label: '开场' } }) === '开场' && reelSaid({ text: '原话' }) === '原话');
 check('时长的写法', reelDuration(23400) === '23 秒' && reelDuration(130000) === '2 分 10 秒' && reelDuration(120000) === '2 分' && reelDuration(3_900_000) === '1 小时 5 分');
 

@@ -142,8 +142,8 @@ export interface ParentMessage extends KidMessage {
   from: ConversationMessage['from'];
   via?: ConversationMessage['via'];
   action?: ConversationMessage['action'];
-  /** 这条带给老师的卡(上一轮之后孩子改过状态的):「孩子在板书上做的」 */
-  cards?: ConversationMessage['cards'];
+  /** 这条带给老师的卡(上一轮之后孩子改过状态的):「孩子在板书上做的」;took = 在弹窗里想了多久(毫秒,没改过 = null)、改过几次(有实录才有,app.ts parentDay 挂上) */
+  cards?: (NonNullable<ConversationMessage['cards']>[number] & { took?: { think: number | null; changes: number } })[];
   parentText?: string;
   remembered?: string[];
   warnings?: string[];

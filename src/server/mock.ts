@@ -757,13 +757,15 @@ export function createMock(opts: MockOptions = {}): Mock {
       return { status: 200, json: { tutor: name, thread, rating } };
     }
     const pk = p;
-    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|\d{4}-\d{2}-\d{2})$/.exec(pk);
+    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|play|\d{4}-\d{2}-\d{2})$/.exec(pk);
     if (kid) {
       const [, name, tail] = kid;
       const t = MOCK_TUTORS.find((x) => x.name === name);
       if (!t) return { status: 404, json: { error: 'no_such_tutor' } };
       const list = messages.get(name) ?? [];
       const date = localDate(now());
+      // 录像的实录:收下就丢(mock 的录像按固定节奏排,不用它);不收的话页面每 10 秒撞一个 404
+      if (tail === 'play' && method === 'POST') return { status: 200, json: { kept: isObj(body) && Array.isArray(body.records) ? body.records.length : 0 } };
       // 作业照片:不落盘,回一个像样的假路径(缩略图由 /api/kid/image 的占位 svg 顶)
       if (tail === 'photos' && method === 'POST') {
         if (!isObj(body) || typeof body.image !== 'string' || !body.image.startsWith('data:image/')) return { status: 400, json: { error: 'bad_request' } };

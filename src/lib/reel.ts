@@ -13,13 +13,52 @@ import type { RunEvent } from './events.ts';
 import type { CardStates } from './conversation.ts';
 import type { ConversationMessage } from '../schema/conversation.ts';
 
-/** 一句念的时段;audio 相对 conversations/<老师>/(没配音 = null,页面只出字幕不出声) */
+/** 一句念的时段;audio 相对 conversations/<老师>/(没配音 = null,页面只出字幕不出声);replay = 孩子点了「再听」重念的 */
 export interface ReelSay {
   job: string;
   line: number;
   from: number;
   to: number;
   audio: string | null;
+  replay?: true;
+}
+
+/**
+ * 实录(第二期,《家长录像设计.md》§4):孩子端记下的一条,落 <日期>.<job>.play.jsonl。at 是服务端的墙钟(路由按发来时两边的钟差校过)。
+ * play = 播放器的位置变了(job = 那一节的 job;status 同 PlayerState;replay = 在再听);stage = 弹窗开 / 关;autoplay = 喇叭;
+ * visible = 页面切到后台 / 回来;card = 卡的一次存(服务端在 putCardState 里记,孩子端不发)
+ */
+export type PlayRecord = { at: number } & (
+  | { k: 'play'; job: string | null; line: number; status: string; replay?: true }
+  | { k: 'stage'; job: string; card: number; open: boolean }
+  | { k: 'autoplay'; on: boolean }
+  | { k: 'visible'; on: boolean }
+  | { k: 'card'; job: string; card: number; state: unknown }
+);
+
+/** 一条实录的形状对不对(服务端收、读 play.jsonl 时用;坏的丢掉) */
+export function playRecordOk(x: unknown): x is PlayRecord {
+  if (!x || typeof x !== 'object') return false;
+  const r = x as Record<string, unknown>;
+  const job = (v: unknown): boolean => typeof v === 'string' && /^\d{4}-\d+$/.test(v);
+  const int = (v: unknown): boolean => typeof v === 'number' && Number.isInteger(v) && v >= -1 && v < 1000;
+  if (typeof r.at !== 'number' || !Number.isFinite(r.at)) return false;
+  switch (r.k) {
+    case 'play': return (r.job === null || job(r.job)) && int(r.line) && typeof r.status === 'string' && r.status.length < 16 && (r.replay === undefined || r.replay === true);
+    case 'stage': return job(r.job) && int(r.card) && typeof r.open === 'boolean';
+    case 'autoplay':
+    case 'visible': return typeof r.on === 'boolean';
+    case 'card': return job(r.job) && int(r.card) && 'state' in r;
+    default: return false;
+  }
+}
+
+/** 弹窗开着的一段(实录) */
+export interface ReelStage {
+  job: string;
+  card: number;
+  from: number;
+  to: number;
 }
 
 /**
@@ -37,10 +76,11 @@ export interface ReelClip {
   text?: string;
 }
 
-/** 一节:什么时候出来、露几张卡的台阶(at 升序)、讲稿什么时候念完、末句是不是问句 */
+/** 一节:什么时候出来、露几张卡的台阶(at 升序)、讲稿什么时候念完、末句是不是问句;streamed = 老师现讲(一拍一拍铺卡) */
 export interface ReelTrack {
   job: string;
   at: number;
+  streamed: boolean;
   cards: { at: number; n: number }[];
   doneAt: number;
   ask: boolean;
@@ -66,6 +106,8 @@ export interface ReelGap {
   from: number;
   to: number;
   ms: number;
+  /** think 被孩子中途的动作(改卡、开关弹窗)切开的后一段:字幕写「又过了」,不是又想了一回 */
+  cont?: true;
 }
 
 /** 进度条上的点:said 孩子 / 家长开口、card 孩子改了一张卡、ask 老师停下等孩子、error 这轮没成 */
@@ -90,6 +132,9 @@ export interface Reel {
   waits: { job: string; from: number; to: number }[];
   gaps: ReelGap[];
   marks: ReelMark[];
+  /** 实录:弹窗开着的段、页面切到后台的段 */
+  stages: ReelStage[];
+  aways: { from: number; to: number }[];
 }
 
 /** 开口后老师多久没出声以内照真实时间放(这就是孩子感受到的慢) */
@@ -114,6 +159,8 @@ export interface ReelInput {
   /** 老师文件的 key(录音卡的路径去掉 conversations/<老师>/ 用) */
   tutor: string;
   now: number;
+  /** 实录(第二期):这个话题各轮的 play.jsonl 合在一起;没有 = 全靠推算 */
+  plays?: readonly PlayRecord[];
 }
 
 /** 念到第 upTo 句(含)时露到第几张卡:锚到的、标到的、[[play]] 到的最后一张(同 kid-board 的 shownCards) */
@@ -163,8 +210,6 @@ export function buildReel(input: ReelInput): Reel | null {
   const waits: Reel['waits'] = [];
   const marks: ReelMark[] = [];
   const clips: ReelClip[] = [];
-  /** 忙的时段(有人在说、老师在写):两段之间超过 REEL_THINK_MIN_MS 的空当压成 think */
-  const busy: [number, number][] = [];
   const sectionOf = (m: ConversationMessage): BoardSection | null => (m.result === 'ok' && m.section && (m.section.cards.length || m.section.lines.length) ? m.section : null);
   const startOf = (m: ConversationMessage): number => {
     const t = reelParse(m.timing?.startedAt);
@@ -203,7 +248,6 @@ export function buildReel(input: ReelInput): Reel | null {
       marks.push({ kind: 'error', at: exitAt, job: m.job, label: m.error ?? '没成' });
       notes.push({ job: m.job, at: t0, postAt: exitAt });
       if (exitAt > t0) waits.push({ job: m.job, from: t0, to: exitAt });
-      busy.push([t0, exitAt]);
       continue;
     }
     const s = sectionOf(m);
@@ -211,7 +255,6 @@ export function buildReel(input: ReelInput): Reel | null {
       const end = m.result === 'running' ? input.now : exitAt;
       notes.push({ job: m.job, at: t0, postAt: end });
       if (end > t0) waits.push({ job: m.job, from: t0, to: end });
-      busy.push([t0, end]);
       continue;
     }
     // 整节就绪:ready all → 索引写入 → timing 的配音 / 退出 → 开口那一刻
@@ -226,7 +269,7 @@ export function buildReel(input: ReelInput): Reel | null {
     const beatOfLine = new Map<number, number>();
     beats.forEach((b, k2) => { for (const i of b.lines) beatOfLine.set(i, k2); });
     const appear = Math.min(streaming ? beatReady[0] : allAt, next);
-    const track: ReelTrack = { job: m.job, at: appear, cards: [], doneAt: appear, ask: false };
+    const track: ReelTrack = { job: m.job, at: appear, streamed: streaming, cards: [], doneAt: appear, ask: false };
     if (streaming) {
       // 老师现讲:一拍就绪铺这拍的卡(一行一张),写完了整节都在
       let n = 0;
@@ -244,7 +287,6 @@ export function buildReel(input: ReelInput): Reel | null {
     if (first > t0) waits.push({ job: m.job, from: t0, to: first });
     notes.push({ job: m.job, at: t0, postAt: track.doneAt });
     if (track.ask) marks.push({ kind: 'ask', at: track.doneAt, job: m.job, label: s.lines[s.lines.length - 1].text });
-    busy.push([t0, Math.max(track.doneAt, first)]);
   }
 
   // ---- 孩子开口之前的轮:从第一次开口往前倒推 ----
@@ -262,7 +304,7 @@ export function buildReel(input: ReelInput): Reel | null {
       const at = reelParse(f.at);
       if (!Number.isNaN(at) && at < bound) start = Math.min(start, at - need);
     }
-    const track: ReelTrack = { job: m.job, at: start, cards: [{ at: start, n: s.lines.length ? 0 : s.cards.length }], doneAt: start, ask: false };
+    const track: ReelTrack = { job: m.job, at: start, streamed: false, cards: [{ at: start, n: s.lines.length ? 0 : s.cards.length }], doneAt: start, ask: false };
     const before = says.length;
     const end = narrate(m.job, s, start, bound, () => start, true, track);
     const mine = says.splice(before);
@@ -273,55 +315,141 @@ export function buildReel(input: ReelInput): Reel | null {
     preTracks.unshift(track);
     notes.push({ job: m.job, at: start, postAt: track.doneAt });
     if (track.ask) marks.push({ kind: 'ask', at: track.doneAt, job: m.job, label: s.lines[s.lines.length - 1].text });
-    busy.push([start, track.doneAt]);
     bound = start;
   }
   tracks.unshift(...preTracks);
   says.unshift(...preSays);
   says.sort((a, b) => a.from - b.from);
 
-  // ---- 卡的状态:状态文件的 at 起生效;录音卡把孩子的录音也排进来 ----
-  const cards: ReelCardChange[] = [];
   const secByJob = new Map(turns.map((m) => [m.job, sectionOf(m)]));
+
+  // ---- 实录(第二期):有 play 记录的节,念句换成记录的(孩子暂停、再听、关了自动念都在里面);没记录的节照推算 ----
+  const plays = [...(input.plays ?? [])].sort((a, b) => a.at - b.at);
+  const pl = plays.filter((r): r is Extract<PlayRecord, { k: 'play' }> => r.k === 'play');
+  const recorded = new Set(pl.map((r) => r.job).filter((j): j is string => Boolean(j) && Boolean(secByJob.get(j!))));
+  if (recorded.size) {
+    const recSays: ReelSay[] = [];
+    pl.forEach((r, i) => {
+      const sec = r.job ? secByJob.get(r.job) : null;
+      const line = sec?.lines[r.line];
+      if (r.status !== 'playing' || !r.job || !sec || !line) return;
+      const nextAt = i + 1 < pl.length ? pl[i + 1].at : Infinity;
+      recSays.push({ job: r.job, line: r.line, from: r.at, to: Math.min(nextAt, r.at + reelLineMs(sec, r.line, input.durations)), audio: line.audio, ...(r.replay ? { replay: true as const } : {}) });
+    });
+    for (let i = says.length - 1; i >= 0; i--) if (recorded.has(says[i].job)) says.splice(i, 1);
+    says.push(...recSays);
+    says.sort((a, b) => a.from - b.from);
+    for (let i = marks.length - 1; i >= 0; i--) if (marks[i].kind === 'ask' && recorded.has(marks[i].job)) marks.splice(i, 1);
+    for (const t of tracks) {
+      if (!recorded.has(t.job)) continue;
+      const sec = secByJob.get(t.job)!;
+      const mine = recSays.filter((x) => x.job === t.job && !x.replay);
+      const firstRec = pl.find((r) => r.job === t.job)!.at;
+      // 念完:第一次停下等孩子 / 念完了的那一刻(孩子端这时整节都在)
+      const settled = pl.find((r) => r.job === t.job && (r.status === 'waiting' || r.status === 'done'));
+      if (!t.streamed) {
+        t.at = Math.min(firstRec, mine[0]?.from ?? firstRec);
+        t.cards = [{ at: t.at, n: sec.lines.length ? 0 : sec.cards.length }, ...mine.map((x) => ({ at: x.from, n: reelUnfold(sec, x.line) }))];
+        if (settled) t.cards.push({ at: settled.at, n: sec.cards.length });
+      }
+      t.doneAt = settled ? settled.at : mine.length ? mine[mine.length - 1].to : t.at;
+      t.ask = Boolean(pl.find((r) => r.job === t.job && r.status === 'waiting'));
+      if (t.ask) marks.push({ kind: 'ask', at: t.doneAt, job: t.job, label: sec.lines[sec.lines.length - 1]?.text ?? '' });
+      const n = notes.find((x) => x.job === t.job);
+      if (n) { if (!t.streamed && !live.some((m) => m.job === t.job)) n.at = t.at; n.postAt = t.doneAt; }
+      const w = waits.find((x) => x.job === t.job);
+      if (w && mine[0] && mine[0].from > w.from) w.to = mine[0].from;
+    }
+  }
+  // 弹窗开着的段:开 → 同一张的关(没关的到下一次开弹窗 / 下一次开口 / 最后一条记录)
+  const stages: ReelStage[] = [];
+  const opens = plays.filter((r): r is Extract<PlayRecord, { k: 'stage' }> => r.k === 'stage');
+  opens.forEach((r, i) => {
+    if (!r.open || !secByJob.get(r.job)) return;
+    const close = opens.slice(i + 1).find((x) => !x.open || x.job !== r.job || x.card !== r.card);
+    const nextSpeak = speakAt.find((x) => x > r.at);
+    const to = Math.min(close ? close.at : Infinity, nextSpeak ?? Infinity, plays.length ? Math.max(plays[plays.length - 1].at, r.at) : r.at);
+    if (to > r.at) stages.push({ job: r.job, card: r.card, from: r.at, to });
+  });
+  const aways: Reel['aways'] = [];
+  plays.forEach((r, i) => {
+    if (r.k !== 'visible' || r.on) return;
+    const back = plays.slice(i + 1).find((x) => x.k === 'visible' && x.on);
+    aways.push({ from: r.at, to: back ? back.at : Math.max(r.at, plays[plays.length - 1].at) });
+  });
+
+  // ---- 卡的状态:有实录的卡用每一次存(选了又改都在);没有的用状态文件(at 起生效,只有最后一次)。录音卡把孩子的录音也排进来 ----
+  const cards: ReelCardChange[] = [];
   const recPrefix = `conversations/${input.tutor}/`;
+  const seenCard = new Set<string>();
+  for (const r of plays) if (r.k === 'card' && secByJob.get(r.job)?.cards[r.card]) { cards.push({ job: r.job, card: r.card, at: r.at, state: r.state }); seenCard.add(`${r.job}/${r.card}`); }
   for (const [job, per] of Object.entries(input.cards)) {
-    const s = secByJob.get(job);
-    if (!s) continue;
+    const sec = secByJob.get(job);
+    if (!sec) continue;
     for (const [nStr, f] of Object.entries(per)) {
       const n = Number(nStr);
       const at = reelParse(f.at);
-      if (Number.isNaN(at) || !s.cards[n]) continue;
+      if (Number.isNaN(at) || !sec.cards[n] || seenCard.has(`${job}/${n}`)) continue;
       cards.push({ job, card: n, at, state: f.state });
-      marks.push({ kind: 'card', at, job, label: cardTitle(s.cards[n]) });
-      const st = f.state as { audio?: unknown; seconds?: unknown } | null;
-      if (s.cards[n].kind === 'record' && st && typeof st.audio === 'string' && st.audio.startsWith(recPrefix) && typeof st.seconds === 'number' && st.seconds > 0) {
-        clips.push({ kind: 'rec', job, card: n, from: at - Math.round(st.seconds * 1000), to: at, audio: st.audio.slice(recPrefix.length) });
-      }
     }
   }
   cards.sort((a, b) => a.at - b.at);
-  // 孩子的录音照真实时间放,不被压掉
-  for (const c of clips) busy.push([c.from, c.to]);
+  const lastMark = new Map<string, number>();
+  for (const c of cards) {
+    const sec = secByJob.get(c.job)!;
+    const key = `${c.job}/${c.card}`;
+    // 进度条上的点:同一张卡 3 秒内连着改的只点一个(填空打字、画板连着画)
+    if ((lastMark.get(key) ?? -Infinity) < c.at - 3000) marks.push({ kind: 'card', at: c.at, job: c.job, label: cardTitle(sec.cards[c.card]) });
+    lastMark.set(key, c.at);
+    const st = c.state as { audio?: unknown; seconds?: unknown } | null;
+    if (sec.cards[c.card].kind === 'record' && st && typeof st.audio === 'string' && st.audio.startsWith(recPrefix) && typeof st.seconds === 'number' && st.seconds > 0 && !clips.some((x) => x.kind === 'rec' && x.audio === st.audio!.toString().slice(recPrefix.length))) {
+      clips.push({ kind: 'rec', job: c.job, card: c.card, from: c.at - Math.round(st.seconds * 1000), to: c.at, audio: st.audio.slice(recPrefix.length) });
+    }
+  }
   clips.sort((a, b) => a.from - b.from);
   marks.sort((a, b) => a.at - b.at);
   notes.sort((a, b) => a.at - b.at);
 
   // ---- 起止与空白 ----
-  const points = [...tracks.map((t) => t.at), ...speakAt, ...clips.map((c) => c.from)].filter((x) => Number.isFinite(x));
+  const points = [...tracks.map((t) => t.at), ...speakAt, ...clips.map((c) => c.from), ...stages.map((x) => x.from)].filter((x) => Number.isFinite(x));
   const startAt = Math.min(...points);
   const running = live.some((m) => m.result === 'running');
-  const lastAt = Math.max(...tracks.map((t) => t.doneAt), ...liveStarts, ...cards.map((c) => c.at), ...clips.map((c) => c.to), ...notes.map((n) => n.postAt));
+  const lastAt = Math.max(...tracks.map((t) => t.doneAt), ...liveStarts, ...cards.map((c) => c.at), ...clips.map((c) => c.to), ...notes.map((n) => n.postAt), ...says.map((x) => x.to), ...stages.map((x) => x.to));
   const endAt = running ? Math.max(input.now, lastAt) : lastAt + REEL_TAIL_MS;
   const gaps: ReelGap[] = [];
   for (const w of waits) if (w.to - w.from > REEL_WAIT_KEEP_MS) gaps.push({ kind: 'wait', from: w.from + REEL_WAIT_KEEP_MS, to: w.to, ms: w.to - w.from });
+  // 忙的时段(有人在说、老师在写、孩子在录):两段之间超过 REEL_THINK_MIN_MS 的空当压成 think。
+  // 空当里孩子改了卡、开关了弹窗:前后各留 1 秒照真实时间放(压缩时不会一闪而过),空当被切开,后一段标 cont
+  const busy: [number, number][] = [
+    ...waits.map((w): [number, number] => [w.from, w.to]),
+    ...tracks.map((t): [number, number] => [t.at, t.doneAt]),
+    ...says.map((x): [number, number] => [x.from, x.to]),
+    ...clips.map((c): [number, number] => [c.from, c.to]),
+  ];
+  const acts: [number, number][] = [
+    ...cards.map((c): [number, number] => [c.at - 1000, c.at + 1000]),
+    ...stages.flatMap((x): [number, number][] => [[x.from - 1000, x.from + 1000], [x.to - 1000, x.to + 1000]]),
+  ];
   busy.sort((a, b) => a[0] - b[0]);
+  acts.sort((a, b) => a[0] - b[0]);
+  const think = (from: number, to: number): void => {
+    let cur = from;
+    for (const [a, b] of acts) {
+      if (b <= cur || a >= to) continue;
+      if (a - cur > REEL_THINK_MIN_MS) gaps.push({ kind: 'think', from: cur, to: a, ms: a - cur, ...(cur > from ? { cont: true as const } : {}) });
+      cur = Math.max(cur, b);
+    }
+    if (to - cur > REEL_THINK_MIN_MS) gaps.push({ kind: 'think', from: cur, to, ms: to - cur, ...(cur > from ? { cont: true as const } : {}) });
+  };
   let reach = startAt;
   for (const [from, to] of busy) {
-    if (from - reach > REEL_THINK_MIN_MS) gaps.push({ kind: 'think', from: reach, to: from, ms: from - reach });
+    if (from - reach > REEL_THINK_MIN_MS) think(reach, from);
     reach = Math.max(reach, to);
   }
   gaps.sort((a, b) => a.from - b.from);
-  return { startAt, endAt, precise: false, tracks, says, clips, cards, notes, waits, gaps, marks };
+  // 实录:每一轮孩子开口之后、有讲稿的节都有 play 记录
+  const precise = recorded.size > 0 && live.every((m) => !sectionOf(m)?.lines.length || recorded.has(m.job));
+  return { startAt, endAt, precise, tracks, says, clips, cards, notes, waits, gaps, marks, stages, aways };
 }
 
 /** 播放时钟:压过的空白各放 REEL_GAP_PLAY_MS,其余 1:1。real = 按真实时间(不压)。p = 从 0 起的播放毫秒 */
@@ -373,6 +501,12 @@ export interface ReelFrame {
   gap: ReelGap | null;
   /** 老师停下等孩子(末句问句念完了) */
   asking: boolean;
+  /** 弹窗开着(实录):哪一张 */
+  stage: { job: string; card: number } | null;
+  /** 弹窗开着、这张卡孩子还没动:想了多久(切到后台的时间不算) */
+  thinking: { job: string; card: number; ms: number } | null;
+  /** 孩子切到别处了(页面在后台) */
+  away: boolean;
 }
 
 export function reelFrameAt(reel: Reel, t: number): ReelFrame {
@@ -381,7 +515,10 @@ export function reelFrameAt(reel: Reel, t: number): ReelFrame {
     if (tr.at > t) continue;
     let n = 0;
     for (const c of tr.cards) if (c.at <= t) n = c.n;
-    sections.push({ job: tr.job, cards: n, spoken: reel.says.filter((x) => x.job === tr.job && x.from <= t).length });
+    // 念过几句 = 念到的最远那句 + 1(暂停后接着念同一句会有两段,再听的不算)
+    let spoken = 0;
+    for (const x of reel.says) if (x.job === tr.job && x.from <= t && !x.replay) spoken = Math.max(spoken, x.line + 1);
+    sections.push({ job: tr.job, cards: n, spoken });
   }
   let saying: ReelFrame['saying'] = null;
   let last: ReelFrame['last'] = null;
@@ -400,7 +537,33 @@ export function reelFrameAt(reel: Reel, t: number): ReelFrame {
   const gap = reel.gaps.find((g) => g.from <= t && t < g.to) ?? null;
   const tr = last ? reel.tracks.find((x) => x.job === last!.job) : undefined;
   const asking = !saying && !w && Boolean(tr && tr.ask && tr.doneAt <= t);
-  return { sections, saying, clip, last, cards, notes, wait: w ? { job: w.job, ms: t - w.from } : null, gap, asking };
+  const st = reel.stages.find((x) => x.from <= t && t < x.to) ?? null;
+  const touched = st ? reel.cards.some((c) => c.job === st.job && c.card === st.card && c.at >= st.from && c.at <= t) : true;
+  const thinking = st && !touched ? { job: st.job, card: st.card, ms: t - st.from - reelAwayMs(reel.aways, st.from, t) } : null;
+  const away = reel.aways.some((a) => a.from <= t && t < a.to);
+  return { sections, saying, clip, last, cards, notes, wait: w ? { job: w.job, ms: t - w.from } : null, gap, asking, stage: st ? { job: st.job, card: st.card } : null, thinking, away };
+}
+
+/** [from, to) 里切到后台了多久 */
+function reelAwayMs(aways: readonly { from: number; to: number }[], from: number, to: number): number {
+  let ms = 0;
+  for (const a of aways) ms += Math.max(0, Math.min(a.to, to) - Math.max(a.from, from));
+  return ms;
+}
+
+/**
+ * 一张卡孩子在弹窗里想了多久、改了几次(《家长录像设计.md》§4.7):[after, before) 里这张卡的弹窗加在一起——
+ * 第一次打开到第一次改动(切到后台的不算)= 想了多久;改动的次数。没打开过弹窗 → null;打开了没改 → think = null
+ */
+export function reelCardTook(plays: readonly PlayRecord[], job: string, card: number, after: number, before: number): { think: number | null; changes: number } | null {
+  const sorted = [...plays].sort((a, b) => a.at - b.at).filter((r) => r.at >= after && r.at < before);
+  const open = sorted.find((r) => r.k === 'stage' && r.open && r.job === job && r.card === card);
+  if (!open) return null;
+  const changes = sorted.filter((r) => r.k === 'card' && r.job === job && r.card === card && r.at >= open.at);
+  const aways: { from: number; to: number }[] = [];
+  sorted.forEach((r, i) => { if (r.k === 'visible' && !r.on) { const back = sorted.slice(i + 1).find((x) => x.k === 'visible' && x.on); aways.push({ from: r.at, to: back ? back.at : before }); } });
+  const first = changes[0];
+  return { think: first ? Math.max(0, first.at - open.at - reelAwayMs(aways, open.at, first.at)) : null, changes: changes.length };
 }
 
 /** 「2 分 10 秒」「23 秒」「1 小时 5 分」 */

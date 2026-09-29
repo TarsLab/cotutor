@@ -1942,18 +1942,30 @@ __PHOTO_JS__
   document.addEventListener('pointerdown', micWarm, true);
   document.addEventListener('touchstart', () => {}, { passive: true }); // iOS Safari:没有触摸监听时 :active 不一定触发,按压反馈靠它
   /** 起一次浏览器识别:onText(到目前认出的整句),onEnd(停了),onAudio(话筒真的开了),onLevel(这一帧的音量 0–1);没有识别 → null。
-   *  回来的是个把手(识别要等麦克风开了才起):live / diagMark / stop() / abort()(不回 onEnd) */
+   *  回来的是个把手(识别要等麦克风开了才起):live / held / diagMark / stop() / abort()(不回 onEnd)。
+   *  识别是单句的(continuous 关):Safari 听到停顿 1.5 秒左右就自己停(2026-09-28 真机:孩子说到 12 秒想了一下,话被截走发了)。
+   *  所以手还按着(held)它自己停了,就再起一段接着认、字拼在后面;松手(settle 把 held 置假)之后停了才算完 */
   const listen = (onText, onEnd, where, onAudio, onLevel) => {
     if (!srOk()) return null;
     // 诊断:每次按住记一行事件码 + 距按下的毫秒(不记字、不记声音),停了发给 /api/kid/voice-diag;真机上出错是静默的,只有这份能说清哪一步断了
     const t0 = Date.now(), ev = [], mark = (k, v) => ev.push(v === undefined ? [k, Date.now() - t0] : [k, Date.now() - t0, v]);
     const diag = { where, standalone: Boolean(navigator.standalone), wasPlaying: !audioEl.paused, ua: navigator.userAgent, peak: -1, ev };
     const report = () => { try { fetch('/api/kid/voice-diag', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(diag), keepalive: true }).catch(() => {}); } catch {} };
-    const hd = { live: { len: 0, lastAt: 0, done: false }, diagMark: mark, r: null };
-    let raf = 0, round = 0, startedAt = 0, errored = '';
+    const hd = { live: { len: 0, lastAt: 0, done: false }, held: true, diagMark: mark, r: null };
+    // again:手按着接着认了几段;prev:前几段认出的字;cur:这一段的;active:这一段还在认(停了、下一段还没起时 stop 直接收尾)
+    let raf = 0, round = 0, again = 0, startedAt = 0, errored = '', prev = '', cur = '', active = false;
     const close = () => { hd.live.done = true; cancelAnimationFrame(raf); report(); };
-    const done = () => { if (hd.live.done) return; mark('end', hd.live.len); close(); const dead = Boolean(errored) && errored !== 'no-speech' && !hd.live.len && Date.now() - startedAt < 500; if (dead) { mark('sr-dead'); srDied(); } onEnd(dead); };
-    hd.stop = () => { if (hd.r) { try { hd.r.stop(); } catch {} } else done(); };
+    const done = () => { if (hd.live.done) return; mark('end', hd.live.len); close(); const dead = !again && Boolean(errored) && errored !== 'no-speech' && !hd.live.len && Date.now() - startedAt < 500; if (dead) { mark('sr-dead'); srDied(); } onEnd(dead); };
+    // 这一段停了:手还按着就接着认,除非这段一起就断(不是没听到声音、没出字、不到 500ms)、页面退到了后台或已经接了 40 段
+    const ended = () => {
+      active = false;
+      if (hd.live.done) return;
+      const broke = Boolean(errored) && errored !== 'no-speech' && !cur && Date.now() - startedAt < 500;
+      if (!hd.held || broke || document.hidden || again >= 40) { done(); return; }
+      prev += cur; cur = ''; again++; mark('again', again);
+      listenOnce();
+    };
+    hd.stop = () => { hd.held = false; if (hd.r && active) { try { hd.r.stop(); } catch {} } else done(); };
     hd.abort = () => { if (hd.live.done) return; mark('abort()'); if (hd.r) { try { hd.r.onend = null; hd.r.abort(); } catch {} } close(); };
     const meter = () => {
       const t1 = Date.now(), an = mic.an, buf = mic.buf; let maxAbs = 0, checked = false;
@@ -1967,32 +1979,37 @@ __PHOTO_JS__
         // 按住 600ms 采样还是纯 0:开着的这一路半道哑了 → 识别和麦克风都拆掉重来(还没出字才重来,最多 2 回)
         if (!checked && Date.now() - t1 > 600) {
           checked = true; mark(maxAbs === 0 ? 'dead' : 'alive', mic.ac.state);
-          if (maxAbs === 0 && mic.ac.state === 'running' && !hd.live.len && round < 2) { round++; mark('retry', round); mic.ok = false; if (hd.r) { try { hd.r.onend = null; hd.r.abort(); } catch {} hd.r = null; } start(); return; }
+          if (maxAbs === 0 && mic.ac.state === 'running' && !hd.live.len && round < 2) { round++; mark('retry', round); mic.ok = false; if (hd.r) { try { hd.r.onend = null; hd.r.abort(); } catch {} hd.r = null; } active = false; start(); return; }
         }
         raf = requestAnimationFrame(loop);
       };
       loop();
     };
-    const start = () => micOpen().then((how) => mark('mic', how), (e) => mark('mic-fail', String(e && (e.name || e.message)))).then(() => {
-      if (hd.live.done) return;
+    /** 起一段识别(麦克风已经要过了) */
+    const listenOnce = () => {
       try {
         const r = new SR(); r.lang = 'zh-CN'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
         for (const k of ['start', 'audiostart', 'soundstart', 'speechstart', 'speechend', 'soundend', 'audioend', 'nomatch']) r.addEventListener(k, () => mark(k));
-        r.addEventListener('audiostart', () => { if (onAudio) onAudio(); });
-        r.onresult = (e) => { let s = ''; for (const x of e.results) s += x[0].transcript; hd.live.len = s.length; hd.live.lastAt = Date.now(); mark('result', s.length); onText(s); };
+        if (!again) r.addEventListener('audiostart', () => { if (onAudio) onAudio(); });
+        r.onresult = (e) => { let s = ''; for (const x of e.results) s += x[0].transcript; cur = s; hd.live.len = prev.length + s.length; hd.live.lastAt = Date.now(); mark('result', hd.live.len); onText(prev + s); };
         r.onerror = (e) => { errored = String(e && e.error) || 'error'; mark('error', errored); };
-        r.onend = done;
-        startedAt = Date.now(); r.start(); mark('start()'); hd.r = r;
-        if (mic.an) meter();
-      } catch (e) { mark('throw', String(e && e.name)); done(); }
+        r.onend = ended;
+        errored = ''; startedAt = Date.now(); hd.r = r; r.start(); active = true; mark('start()');
+      } catch (e) { mark('throw', String(e && e.name)); active = false; done(); }
+    };
+    const start = () => micOpen().then((how) => mark('mic', how), (e) => mark('mic-fail', String(e && (e.name || e.message)))).then(() => {
+      if (hd.live.done) return;
+      listenOnce();
+      if (!hd.live.done && mic.an) meter();
     });
     start();
     return hd;
   };
   /** 松手后的收尾:不立刻 stop。iPad 上第一段字要按下 1 秒多才出来,字还没出就 stop,Safari 回 aborted、整句作废(真机诊断 2026-09-19);
-   *  等到「有字且 500ms 没再变」或满 2.5 秒再 stop,它自己先停了就不管 */
+   *  等到「有字且 500ms 没再变」或满 2.5 秒再 stop,它自己先停了就不管(松了手,停了就不再接着认) */
   const settle = (r) => {
     const t1 = Date.now();
+    r.held = false;
     if (!r.r) { r.stop(); return; } // 麦克风还没开就松手了:什么也没听到
     const tick = () => {
       if (r.live.done) return;

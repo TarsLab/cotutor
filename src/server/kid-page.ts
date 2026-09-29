@@ -262,7 +262,7 @@ const PAGE = `<!doctype html>
   #typed[hidden] { display:none; }
   #go { width:36px; height:36px; border-radius:50%; background:var(--ink); color:#fff; display:grid; place-items:center; }
   #go[hidden] { display:none; }
-  /* 看录像(《家长录像设计.md》,只在家长端):底部换成控制条——进度条上一排点(开口 / 改卡 / 停下等孩子 / 没成),下面播放、钟点、推算、按真实时间、倍速、退出 */
+  /* 看录像(《家长录像设计.md》,只在家长端):底部换成控制条——进度条上一排点(开口 / 改卡 / 停下等孩子 / 没成),下面播放、钟点、推算、跳过空白、倍速、退出 */
   #reel { padding:2px 16px calc(env(safe-area-inset-bottom) + 12px); display:flex; flex-direction:column; gap:4px; }
   #reel[hidden] { display:none; }
   body.reel #bar, body.reel #lesson, body.reel #sub-btn { display:none; }
@@ -446,7 +446,7 @@ const PAGE = `<!doctype html>
     </div>
     <div id="reel" hidden>
       <div class="rl-track"><div id="rl-marks"></div><input id="rl-seek" type="range" min="0" max="1000" step="100" value="0" aria-label="录像进度"></div>
-      <div class="rl-row"><button id="rl-play" type="button" aria-label="播放"></button><span class="rl-when"><span id="rl-clock"></span><button id="rl-tag" type="button">推算</button></span><span class="rl-sp"></span><button class="tx" id="rl-real" type="button">按真实时间</button><button class="tx" id="rl-speed" type="button">1×</button><button class="tx" id="rl-x" type="button">退出</button></div>
+      <div class="rl-row"><button id="rl-play" type="button" aria-label="播放"></button><span class="rl-when"><span id="rl-clock"></span><button id="rl-tag" type="button">推算</button></span><span class="rl-sp"></span><button class="tx" id="rl-skip" type="button" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就按真实时间放">跳过空白</button><button class="tx" id="rl-speed" type="button">1×</button><button class="tx" id="rl-x" type="button">退出</button></div>
     </div>
     <div id="hold"><span>松手发送,上移取消</span><div class="w"></div></div>
   </div>
@@ -1911,7 +1911,8 @@ __REEL_JS__
     R.p = R.clock.toPlay(w);
     $('#rl-seek').max = String(Math.max(1, Math.round(R.clock.total)));
     $('#rl-marks').replaceChildren(...R.d.reel.marks.map((m) => h('i', { class: m.kind, title: reelHms(m.at) + ' ' + m.label, style: 'left:' + (100 * R.clock.toPlay(m.at) / Math.max(1, R.clock.total)).toFixed(2) + '%', on: { click: () => reelSeek(R.clock.toPlay(m.at)) } })));
-    $('#rl-real').classList.toggle('on', R.real);
+    // 「跳过空白」缺省开着(压缩);关掉 = 按真实时间放
+    $('#rl-skip').classList.toggle('on', !R.real); $('#rl-skip').setAttribute('aria-pressed', String(!R.real));
   };
   /** 板书:哪几节、卡的状态、旁注变了就整块重画(往回拖也是);露几张卡、标注画到哪每次对一下 */
   const reelDraw = (f) => {
@@ -2033,7 +2034,7 @@ __REEL_JS__
   $('#rl-play').addEventListener('click', () => { if (S.reel) reelPlay(!S.reel.playing); });
   $('#rl-x').addEventListener('click', reelClose);
   $('#rl-tag').addEventListener('click', () => toast(REEL_HINT));
-  $('#rl-real').addEventListener('click', () => { const R = S.reel; if (!R) return; R.real = !R.real; reelSetClock(); R.voice = null; reelTick(); });
+  $('#rl-skip').addEventListener('click', () => { const R = S.reel; if (!R) return; R.real = !R.real; reelSetClock(); R.voice = null; reelTick(); });
   $('#rl-speed').addEventListener('click', (e) => { const R = S.reel; if (!R) return; R.speed = REEL_SPEEDS[(REEL_SPEEDS.indexOf(R.speed) + 1) % REEL_SPEEDS.length]; e.currentTarget.textContent = R.speed + '×'; audioEl.defaultPlaybackRate = R.speed; audioEl.playbackRate = R.speed; });
   // 拖的时候不出声,松手从那一刻接着放
   $('#rl-seek').addEventListener('input', (e) => { const R = S.reel; if (!R) return; R.seeking = true; R.p = Number(e.target.value); R.voice = null; R.follow = true; reelTick(); });

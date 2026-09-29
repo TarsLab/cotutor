@@ -3,7 +3,7 @@
  * 看录像(《家长录像设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock,孩子端再发一条「继续」(话题里两轮)→ Chrome 开 /parent,点语文老师的话题 → 顶上「看录像」→
  * 控制条在、输入条不在;一开始是「等老师」、板上空的;播着进度往前走;拖到头两节都在、节尾旁注出来;拖回开头板上又空了;
- * 按真实时间变长;倍速;点进度条上的点跳过去;退出后原样重开这个话题。iPad 横屏与手机各截一张。
+ * 关掉「跳过空白」变长;倍速;点进度条上的点跳过去;退出后原样重开这个话题。iPad 横屏与手机各截一张。
  *
  * 用法:node scripts/probe-reel.mjs [--out <截图目录>] [--keep](留下 mock)
  */
@@ -89,12 +89,12 @@ try {
   const s3 = await evaluate(`({ secs: document.querySelectorAll('#board .sec').length, notes: document.querySelectorAll('#board .notes .note').length })`);
   ok('拖回开头:板上又空了,只剩第一句的旁注', s3.secs === 0 && s3.notes === 1, JSON.stringify(s3));
 
-  // ---- 按真实时间、倍速、点标记 ----
-  const m0 = await evaluate(`Number(document.querySelector('#rl-seek').max)`);
-  await evaluate(`document.querySelector('#rl-real').click()`);
-  const m1 = await evaluate(`({ max: Number(document.querySelector('#rl-seek').max), on: document.querySelector('#rl-real').classList.contains('on') })`);
-  ok('按真实时间:变长(空白不压了)', m1.on && m1.max > m0 + 10000, `${m0} → ${m1.max}`);
-  await evaluate(`document.querySelector('#rl-real').click()`);
+  // ---- 跳过空白、倍速、点标记 ----
+  const m0 = await evaluate(`({ max: Number(document.querySelector('#rl-seek').max), on: document.querySelector('#rl-skip').classList.contains('on'), label: document.querySelector('#rl-skip').textContent })`);
+  await evaluate(`document.querySelector('#rl-skip').click()`);
+  const m1 = await evaluate(`({ max: Number(document.querySelector('#rl-seek').max), on: document.querySelector('#rl-skip').classList.contains('on') })`);
+  ok('「跳过空白」缺省开着;关掉变长(按真实时间放)', m0.on && m0.label === '跳过空白' && !m1.on && m1.max > m0.max + 10000, `${JSON.stringify(m0)} → ${JSON.stringify(m1)}`);
+  await evaluate(`document.querySelector('#rl-skip').click()`);
   await evaluate(`document.querySelector('#rl-speed').click()`);
   ok('倍速 1× → 1.5×', (await evaluate(`document.querySelector('#rl-speed').textContent`)) === '1.5×');
   await evaluate(`[...document.querySelectorAll('#rl-marks i.said')][1].click()`);

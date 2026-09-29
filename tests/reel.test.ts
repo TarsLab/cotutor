@@ -64,7 +64,7 @@ check('话题里孩子一句都没说(没交出去的备课)→ 没有录像', b
   check('压缩:82.5 秒的话题,49.5 秒的想与 10 秒的多等各压成 1.5 秒', c.total === 82500 - 49500 - 10000 + 2 * REEL_GAP_PLAY_MS, String(c.total));
   check('播放 ↔ 墙钟:空白前照常、空白里线性、空白后平移', c.toWall(10500) === T + 10500 && c.toWall(10500 + 750) === T + 10500 + 49500 / 2 && c.toWall(12000) === T + 60000 && c.toPlay(T + 65000) === 17000 && c.toPlay(c.toWall(5000)) === 5000 && c.toWall(c.total + 999) === r.endAt);
   const real = reelClock(r, true);
-  check('按真实时间:不压', real.total === r.endAt - r.startAt && real.toWall(40000) === T + 40000);
+  check('关掉「跳过空白」(按真实时间):不压', real.total === r.endAt - r.startAt && real.toWall(40000) === T + 40000);
 }
 
 {

@@ -45,6 +45,9 @@ export const ConversationMessageSchema = z.object({
   focus: FocusSchema.optional(),
   /** 孩子端的两个不打字的动作:继续(不计每日上限)/ 交给老师(把卡上的状态交出去) */
   action: z.enum(['continue', 'submit']).optional(),
+  /** 按住说话时的原声(2026-09-29,《家长录像设计.md》拍板 4):audio = 相对 conversations/<老师>/ 的 <日期>.<job>.voice.<ext>,seconds = 按住多久。
+   *  只给家长端(录像里在开口那一刻放、旁注上能听,看识别认得对不对);孩子端、老师、上下文包都不给 */
+  voice: z.object({ audio: z.string().min(1), seconds: z.number().positive() }).optional(),
   /** 这条消息带的作业照片(R5,2026-09-14):相对 workspace 根的路径(captures/<日期>/<HHMM>-<n>.jpg),上下文包 photos: 段原样给老师 Read;日记永不引用它 */
   photos: z.array(z.string().min(1)).optional(),
   result: z.enum(['running', 'ok', 'error']).default('running'),

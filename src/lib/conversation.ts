@@ -35,6 +35,8 @@ export interface ConversationFiles {
   post: (job: string) => string;
   /** 这一轮的事件流 <date>.<job>.events.jsonl(lib/events.ts;控制台与时间线的唯一来源) */
   events: (job: string) => string;
+  /** 孩子按住说话的原声 <date>.<job>.voice.<ext>(《家长录像设计.md》拍板 4;删话题时按 <date>.<job>.* 一起删) */
+  voice: (job: string, ext: string) => string;
   /** 板书讲稿第 n 句的配音(n 从 1 起) */
   lineAudio: (job: string, n: number) => string;
   /** 这一轮各张卡的状态目录 <date>.<job>.cards/ */
@@ -57,6 +59,7 @@ export function conversationFiles(conversationsDir: string, tutor: string, date:
     run: (job) => `${base}.${job}.run.json`,
     post: (job) => `${base}.${job}.post.json`,
     events: (job) => `${base}.${job}.events.jsonl`,
+    voice: (job, ext) => `${base}.${job}.voice.${ext}`,
     lineAudio: (job, n) => `${base}.${job}.${n}.mp3`,
     cardsDir: (job) => `${base}.${job}.cards`,
     card: (job, n) => `${base}.${job}.cards/${n}.json`,

@@ -15,6 +15,9 @@ import { RuntimeError } from '../lib/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
 import { conversationFiles, currentThread, isPrepThread, kidCurrentThread, kidSpoke, lastJobOf, lessonCards, localDate, prepJobs, threads } from '../lib/conversation.ts';
 import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
+import { parseEvents, type RunEvent } from '../lib/events.ts';
+import { mp3DurationMs } from '../lib/mp3.ts';
+import { buildReel, type Reel } from '../lib/reel.ts';
 import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
@@ -276,6 +279,51 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
   return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index), lessons };
 }
 
+/** mp3 时长(毫秒)按绝对路径缓存:配好的配音不会再变;还没落盘、读不出的不缓存,下次再读 */
+const mp3Ms = new Map<string, number>();
+async function audioMs(file: string): Promise<number | null> {
+  const hit = mp3Ms.get(file);
+  if (hit !== undefined) return hit;
+  const ms = await readFile(file).then((b) => mp3DurationMs(b), () => null);
+  if (ms !== null) mp3Ms.set(file, ms);
+  return ms;
+}
+
+/** 家长端看录像(《家长录像设计.md》):这个话题的轨道(lib/reel.ts 推算)+ 这个话题的家长条目(页面照 /board 渲染)。没有孩子开口的话题 → null */
+export interface ParentReel {
+  tutor: string;
+  date: string;
+  thread: string;
+  reel: Reel;
+  messages: ParentMessage[];
+}
+export async function parentReel(ctx: AppContext, tutor: string, date: string, thread: string): Promise<ParentReel | null> {
+  const index = await readIndex(ctx.ws, tutor, date);
+  const ths = threads(index.messages);
+  const mine = index.messages.filter((_m, i) => ths[i] === thread);
+  if (!mine.length) return null;
+  const files = conversationFiles(ctx.ws.dirs.conversations, tutor, date);
+  const dir = join(ctx.ws.dirs.conversations, tutor);
+  const events: Record<string, RunEvent[]> = {};
+  const durations: Record<string, number> = {};
+  for (const m of mine) {
+    const text = await readFile(files.events(m.job), 'utf8').catch(() => null);
+    if (text !== null) events[m.job] = parseEvents(text);
+    for (const l of m.section?.lines ?? []) {
+      if (!l.audio || durations[l.audio] !== undefined) continue;
+      const ms = await audioMs(join(dir, l.audio));
+      if (ms !== null) durations[l.audio] = ms;
+    }
+  }
+  const { states } = await scanCards(ctx.ws, tutor, date);
+  const jobs = new Set(mine.map((m) => m.job));
+  const cards = Object.fromEntries(Object.entries(states).filter(([job]) => jobs.has(job)));
+  const reel = buildReel({ messages: mine, events, cards, durations, tutor, now: ctx.now().getTime() });
+  if (!reel) return null;
+  const day = await parentDay(ctx, tutor, date);
+  return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread) };
+}
+
 /** 家长板书页的清单(《家长板书页设计.md》§2.2):这一天每位有脸的老师几轮、几个话题、停在哪 */
 export interface OverviewThread {
   thread: string;
@@ -402,8 +450,8 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
 
 /** <日期>.<job>.mp3(整段)/ .<n>.mp3(讲稿第 n 句)/ .cards/<n>/<k>.mp3(第 n 张卡的第 k 个资产) */
 const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+(?:\.\d+|\.cards\/\d+\/\d+)?\.mp3$/;
-/** 录音卡的录音(回放):<日期>.<job>.cards/<n>/rec-<k>.<ext> */
-const REC_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.cards\/\d+\/rec-\d+\.(webm|m4a|ogg|wav)$/;
+/** 录音卡的录音(回放):<日期>.<job>.cards/<n>/rec-<k>.<ext>;按住说话的原声:<日期>.<job>.voice.<ext>(《家长录像设计.md》拍板 4) */
+const REC_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.(?:cards\/\d+\/rec-\d+|voice)\.(webm|m4a|ogg|wav)$/;
 const REC_TYPES: Record<string, string> = { webm: 'audio/webm', m4a: 'audio/mp4', ogg: 'audio/ogg', wav: 'audio/wav' };
 /** 浏览器录音的 MIME 子类型 → 落盘扩展名(Safari 录 mp4/aac,Chrome 录 webm/opus) */
 const RECORD_EXT: Record<string, string> = { webm: 'webm', mp4: 'm4a', 'x-m4a': 'm4a', aac: 'm4a', ogg: 'ogg', wav: 'wav', 'x-wav': 'wav' };
@@ -442,6 +490,15 @@ async function photosOf(ws: Workspace, v: unknown): Promise<string[] | null | un
 }
 
 /** 课文件念的时候孩子在各节后说的(拍板 34,页面攒着随第一条带来):最多 20 句、一句 500 字 */
+/** 按住说话的原声(《家长录像设计.md》拍板 4):{audio: data:audio/…;base64,…, seconds};形状不对、太大就当没带——不回 400,认出的字照发 */
+function voiceOf(v: unknown): { data: Buffer; ext: string; seconds: number } | undefined {
+  if (!isObj(v) || typeof v.audio !== 'string' || typeof v.seconds !== 'number' || !(v.seconds > 0) || v.seconds > 600) return undefined;
+  const m = /^data:audio\/([a-z0-9.+-]+)(?:;[^,]*)?;base64,([A-Za-z0-9+/=]+)$/.exec(v.audio);
+  const ext = m ? RECORD_EXT[m[1]] : undefined;
+  if (!m || !ext || m[2].length > RECORD_MAX_B64) return undefined;
+  return { data: Buffer.from(m[2], 'base64'), ext, seconds: v.seconds };
+}
+
 function lessonSaidOf(v: unknown): { section: number; text: string }[] | null | undefined {
   if (v === undefined) return undefined;
   if (!Array.isArray(v) || v.length > 20) return null;
@@ -620,7 +677,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           const idx = await readIndex(ws, tutor, date);
           if (isPrepThread(idx.messages, pick) && !idx.lessons[pick]?.handedAt) return { status: 400, json: { error: 'bad_request' } };
         }
-        const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(lessonSaid ? { lessonSaid } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}) });
+        const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(lessonSaid ? { lessonSaid } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}) });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
@@ -741,6 +798,16 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       } catch (err) {
         return { status: 404, json: { error: 'no_such_thread', message: err instanceof Error ? err.message : String(err) } };
       }
+    }
+    // 看录像(《家长录像设计.md》):一个话题按时间排好的轨道;没有孩子开口的话题(没交出去的备课)404
+    const reel = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/reel$/.exec(p);
+    if (reel && method === 'GET') {
+      const [, tutor, tail, raw] = reel;
+      if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
+      const date = tail === 'today' ? localDate(ctx.now()) : tail;
+      if (date > localDate(ctx.now()) || Number.isNaN(Date.parse(date))) return { status: 400, json: { error: 'bad_request', message: '日期要是今天或以前' } };
+      const r = await parentReel(ctx, tutor, date, decodeURIComponent(raw));
+      return r ? { status: 200, json: r } : { status: 404, json: { error: 'no_reel', message: '这个话题孩子没开过口,没有录像' } };
     }
     // 删掉一个话题(家长板书页清单上的「删」,2026-09-22):孩子的与家长开的都能删;那个话题还有轮在跑就 409;记忆与日记不动(store.deleteThread)
     const del = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)$/.exec(p);
@@ -915,6 +982,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           thread: typeof body.thread === 'string' ? body.thread : undefined,
           photos,
           device: device?.data,
+          voice: voiceOf(body.voice),
         });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread, runtime: started.plan.runtime, resume: started.plan.resume } };
       }

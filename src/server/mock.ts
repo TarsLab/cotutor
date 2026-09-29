@@ -23,7 +23,9 @@ import { tianzigeData } from './tianzige.ts';
 
 /** mock 的课包目录:仓库里的样本(tests/fixtures/bundles/),场景卡从这里播 */
 export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bundles/', import.meta.url));
-import { readyBeats, type BoardSection } from '../lib/kid-board.ts';
+import { lineDurationMs, readyBeats, type BoardSection } from '../lib/kid-board.ts';
+import { REEL_LINE_GAP_MS, buildReel } from '../lib/reel.ts';
+import type { CardStates } from '../lib/conversation.ts';
 import { lanAddresses, listenInfo } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { USER_CERT_DIR } from '../cli/workspace.ts';
@@ -642,6 +644,30 @@ export function createMock(opts: MockOptions = {}): Mock {
       const lessonsOut: Record<string, { cards: string[]; handed: boolean; label: string | null; source: string | null; dubbing: null }> = {};
       if (date === today) for (const th of new Set(list.map((m) => m.thread))) if (isPrepThread(idx.messages, th)) lessonsOut[th] = { cards: lessonCards(idx, th), handed: Boolean(ls.get(th)?.handedAt), label: handedLabel.get(name)?.thread === th ? handedLabel.get(name)!.label : null, source: ls.get(th)?.source ?? null, dubbing: null };
       return { status: 200, json: { tutor: name, date, messages: out, pending: pending ? pending.job : null, thread: list.length ? list[list.length - 1].thread : null, lessons: lessonsOut } };
+    }
+    // 看录像(《家长录像设计.md》):mock 的消息没有真时刻(种子全是同一刻),照一个固定节奏排——
+    // 等老师 3 秒(第二轮 14 秒,看「等老师」的压缩)、念完孩子想 8 秒(第一轮 40 秒,看「孩子想了」);卡的状态算在下一轮开口前 5 秒
+    const rl = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/reel$/.exec(p);
+    if (rl && method === 'GET') {
+      const [, name, tail, raw] = rl;
+      const board = await route('GET', `/api/conversations/${name}/${tail}/board`);
+      if (board.status !== 200) return board;
+      const day = board.json as { date: string; messages: (Record<string, unknown> & { job: string; thread: string; from: 'kid' | 'parent'; question: string | null; pending: boolean; section: BoardSection | null; action?: 'continue' | 'submit' })[] };
+      const thread = decodeURIComponent(raw);
+      const mine = day.messages.filter((m) => m.thread === thread);
+      let t = now().getTime() - 10 * 60000;
+      const starts: number[] = [];
+      const conv = mine.map((m, k) => {
+        const wait = k === 1 ? 14000 : 3000;
+        starts.push(t);
+        const startedAt = new Date(t).toISOString();
+        t += wait + (m.section?.lines ?? []).reduce((n, l) => n + lineDurationMs(l.text) + REEL_LINE_GAP_MS, 0) + (k === 0 ? 40000 : 8000);
+        return { job: m.job, thread, at: startedAt, from: m.from, text: m.question ?? '', result: m.pending ? ('running' as const) : ('ok' as const), artifacts: [], section: m.section, timing: { startedAt, doneMs: wait, dubbedMs: wait }, ...(m.action ? { action: m.action } : {}) };
+      });
+      const cards: CardStates = {};
+      mine.forEach((m, k) => (m.section?.cards ?? []).forEach((c, n) => { if (c.state !== undefined) (cards[m.job] ??= {})[n] = { at: new Date((starts[k + 1] ?? t) - 5000).toISOString(), turn: m.job, state: c.state }; }));
+      const reel = buildReel({ messages: conv, events: {}, cards, durations: {}, tutor: name, now: now().getTime() });
+      return reel ? { status: 200, json: { tutor: name, date: day.date, thread, reel, messages: mine } } : { status: 404, json: { error: 'no_reel' } };
     }
     // 家长真发(《家长板书页设计.md》第六节 3):/api/conversations/<老师>/messages|photos 与打星——进孩子那份列表,from: parent;不算上限、不看 via
     const pm = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(messages|photos)$/.exec(p);

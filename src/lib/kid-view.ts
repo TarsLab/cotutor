@@ -157,6 +157,8 @@ export interface ParentMessage extends KidMessage {
   lessonSection?: number;
   /** 念课文件的时候孩子在各节后说过的(随孩子第一条带来) */
   lessonSaid?: ConversationMessage['lessonSaid'];
+  /** 按住说话的原声(只在家长端;孩子端条目没有这个字段) */
+  voice?: ConversationMessage['voice'];
   /** 这个话题的课交给孩子了 */
   handed?: true;
   memoryDraft?: string[];
@@ -190,6 +192,7 @@ export function parentConversation(index: { messages: readonly ConversationMessa
       ...(m.memoryDraft?.length ? { memoryDraft: m.memoryDraft } : {}),
       ...(typeof m.lessonSection === 'number' ? { lessonSection: m.lessonSection } : {}),
       ...(m.lessonSaid?.length ? { lessonSaid: m.lessonSaid } : {}),
+      ...(m.voice ? { voice: m.voice } : {}),
     });
   }
   return out;

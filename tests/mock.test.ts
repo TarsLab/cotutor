@@ -193,6 +193,12 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const ch = pb.messages[0].section!.cards.find((c) => c.kind === 'choice');
   check('板书接口:答案不剥、from、第一节带给家长的尾巴与记忆', pb.messages.length === 1 && pb.messages[0].from === 'kid' && Array.isArray(ch?.props.answer) && pb.messages[0].parentText?.startsWith('## 家长') === true && pb.messages[0].remembered?.length === 1, JSON.stringify(pb.messages[0].parentText));
   check('孩子接口照旧剥答案', !('answer' in ((await get('/api/kid/conversations/chinese-tutor/today')).json as Day).messages[0].section!.cards.find((c) => c.kind === 'choice')!.props));
+  // 看录像(《家长录像设计.md》):页面内联了录像的纯函数、有入口与控制条;mock 按固定节奏排时刻
+  check('家长端:内联了录像(buildReel / reelFrameAt / reelClock)、顶上有「看录像」、底部有控制条', page.includes('function reelFrameAt(') && page.includes('function reelClock(') && page.includes('id="reel-btn"') && page.includes('id="rl-seek"') && !/^import /m.test(js));
+  const rl = await get(`/api/conversations/chinese-tutor/today/threads/${(pb.messages[0] as PMsg & { thread: string }).thread}/reel`);
+  const rj = rl.json as { reel: { tracks: unknown[]; says: unknown[]; marks: { kind: string }[]; startAt: number; endAt: number }; messages: unknown[] };
+  check('mock 的录像:一节、念了句、有开口的点、条目一条', rl.status === 200 && rj.reel.tracks.length === 1 && rj.reel.says.length > 0 && rj.reel.marks[0].kind === 'said' && rj.messages.length === 1 && rj.reel.endAt > rj.reel.startAt, JSON.stringify(rj.reel.marks));
+  check('mock 的录像:没这个话题 404', (await get('/api/conversations/chinese-tutor/today/threads/nope/reel')).status === 404);
   type Ov = { date: string; today: string; tutors: { name: string; threads: { title: string; sections: number; stoppedAt: string | null }[] }[] };
   const ov = (await get('/api/overview/today')).json as Ov;
   const oy = (await get('/api/overview/2026-09-09')).json as Ov;

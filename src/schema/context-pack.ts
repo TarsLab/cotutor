@@ -49,6 +49,8 @@ export const ContextPackSchema = z.object({
   /** 这节课的课文件(绝对路径,老师要看原文自己 Read;同 photoFiles 的做法)与文件尾巴里家长写给老师的讲法 */
   lessonFile: z.string().optional(),
   lessonBrief: z.string().optional(),
+  /** 念这节课的时候孩子在各节后说过的(当时没交给老师),一句一行「第 N 节后:…」 */
+  lessonSaid: z.array(z.string()).optional(),
   /** 孩子从首页的按钮进来(《首页设计.md》§六):按钮上的字与家长备好的讲法;只在带按钮的那条 */
   home: z.object({ button: z.string().min(1), brief: z.string().optional() }).optional(),
   /** 接着以前的话题:那个话题是哪天哪个、叫什么、最后一节的讲稿与卡、索引在哪;只在新话题的第一条 */

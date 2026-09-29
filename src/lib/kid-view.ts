@@ -100,6 +100,8 @@ export interface KidMessage {
   section?: BoardSection | null;
   /** 孩子这条带的作业照片(相对 workspace 根;页面经 /api/kid/image?p= 取);只在孩子自己的问句上 */
   photos?: string[];
+  /** 从课文件建的第几节(0 起):孩子还没开口时页面一节一节念、念到哪露到哪(《备课设计.md》拍板 34) */
+  lessonSection?: number;
 }
 
 /** 孩子做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到这轮的卡上;都没有就原样 */
@@ -127,7 +129,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     if (question === null && reply === null && !pending) continue;
     const withState = cardsWithState(m, states, assets);
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
-    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}) });
+    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(typeof m.lessonSection === 'number' ? { lessonSection: m.lessonSection } : {}) });
   }
   return out;
 }
@@ -153,6 +155,8 @@ export interface ParentMessage extends KidMessage {
   prep?: true;
   /** 从课文件建的第几节(0 起):不是谁说的话,页面不出「家长」旁注 */
   lessonSection?: number;
+  /** 念课文件的时候孩子在各节后说过的(随孩子第一条带来) */
+  lessonSaid?: ConversationMessage['lessonSaid'];
   /** 这个话题的课交给孩子了 */
   handed?: true;
   memoryDraft?: string[];
@@ -185,6 +189,7 @@ export function parentConversation(index: { messages: readonly ConversationMessa
       ...(prep.has(m.job) && index.lessons?.[ths[i]]?.handedAt ? { handed: true as const } : {}),
       ...(m.memoryDraft?.length ? { memoryDraft: m.memoryDraft } : {}),
       ...(typeof m.lessonSection === 'number' ? { lessonSection: m.lessonSection } : {}),
+      ...(m.lessonSaid?.length ? { lessonSaid: m.lessonSaid } : {}),
     });
   }
   return out;

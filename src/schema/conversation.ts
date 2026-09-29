@@ -89,6 +89,8 @@ export const ConversationMessageSchema = z.object({
   prepThread: z.literal(true).optional(),
   /** 这轮是从课文件建的第几节(0 起;《备课设计.md》§10.5,交给孩子时 handLessonFile 写的):不是谁说的话,家长端不出「家长」旁注,话题头一条「课文件」 */
   lessonSection: z.number().int().nonnegative().optional(),
+  /** 孩子在课文件交出去的话题里的第一条(拍板 34):前面几节念的时候孩子说过的(当时没发给老师,页面攒着,这条一起带来);section = 第几节后(1 起) */
+  lessonSaid: z.array(z.object({ section: z.number().int().positive(), text: z.string().min(1) })).optional(),
   /** 备课轮(《备课设计.md》:家长开的话题里孩子开口之前)「## 记忆」段的原文(没写进 vault;家长端旁注「本来会记住的」) */
   memoryDraft: z.array(z.string()).optional(),
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2);开场按钮的 text 就是按钮上的字,不是孩子说的 */

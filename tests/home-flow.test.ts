@@ -254,6 +254,7 @@ for: 2026-09-18
     const pfile = (await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as { messages: { thread: string; lessonSection?: number }[] };
     check('文件建的轮带 lessonSection 0、1(家长端据此不出「家长」旁注);清单标题不带「家长:」', pfile.messages.filter((m) => m.thread === hj.thread).map((m) => m.lessonSection).join() === '0,1' && i2.messages.filter((m) => m.thread === hj.thread).every((m) => typeof m.lessonSection === 'number'), JSON.stringify(pfile.messages.filter((m) => m.thread === hj.thread)));
     check('孩子端:文件的两节在、问句 null、卡没状态、没答案;聊天的备课话题不在;当前话题是文件的', kmine.length === 2 && kmine.every((m) => m.question === null) && kmine.every((m) => m.section?.cards.every((c) => c.state === undefined && c.props.answer === undefined)) && !kd.messages.some((m) => m.thread === prepTh) && kd.thread === hj.thread, JSON.stringify(kmine.map((m) => m.job)));
+    check('孩子端:文件建的轮带 lessonSection 0、1(页面据此一节一节念,拍板 34)', kmine.map((m) => (m as { lessonSection?: number }).lessonSection).join() === '0,1', JSON.stringify(kmine.map((m) => m.job)));
     // 课文件接口:清单、检查、预览、再交(同一文件、孩子没开口 → 覆盖同一个话题)
     const ll = (await route('GET', '/api/lessons', ctx)).json as { lessons: { name: string; fixes: number; sections: number }[] };
     const lc = (await route('GET', `/api/lessons/${lessonName}`, ctx)).json as { fixes: number; sections: unknown[]; brief: string };
@@ -267,12 +268,16 @@ for: 2026-09-18
     check('cotutor lesson check:exit 0、列出两节', cl.code === 0 && cl.out.includes('第 2 节'), cl.out);
     const kh2 = await kidHome();
     const hb2 = buttonsOf(kh2, 'math-tutor').find((b) => b.thread === hj.thread)!;
-    const ks = await kidSend('math-tutor', { text: '记住它 我选 B', thread: hj.thread, via: { home: kh2.home, button: hb2.id } });
+    const badSaid = await kidSend('math-tutor', { text: 'x', thread: hj.thread, lessonSaid: [{ section: 0, text: 'y' }] });
+    check('lessonSaid 坏的 400(节号从 1 起)', badSaid.status === 400);
+    const ks = await kidSend('math-tutor', { text: '记住它 我选 B', thread: hj.thread, via: { home: kh2.home, button: hb2.id }, lessonSaid: [{ section: 1, text: '一样大' }, { section: 1, text: '  ' }] });
     await wait('math-tutor');
     const i3 = await readIndex(ctx.ws, 'math-tutor', day);
     const last = i3.messages[i3.messages.length - 1];
     const runKid = await readRunFile(ctx.ws, 'math-tutor', day, last.job);
     check('孩子答了:字是孩子说的、同一话题、新会话(不 resume)、带 via;这轮写了记忆;上下文包有 lesson:(文件的卡)、lessonFile:、lessonBrief:(家长的话)', ks.status === 202 && last.from === 'kid' && last.text === '记住它 我选 B' && last.thread === hj.thread && last.via?.label === '再来一次' && runKid?.resume === false && !runKid.argv.includes('--resume') && exists(memFile) && runKid?.prompt.includes('lesson:') === true && runKid.prompt.split(`${hj.thread}/0 `).length === 2 && i3.messages.filter((m) => m.thread === hj.thread).length === 3 && new Set(i3.messages.map((m) => m.job)).size === i3.messages.length && runKid.prompt.includes(`lessonFile: ${JSON.stringify(lessonFile)}`) && runKid.prompt.includes('lessonBrief:') && runKid.prompt.includes('第二节重写'), JSON.stringify({ ks: ks.json, argv: runKid?.argv, prompt: runKid?.prompt.split('\n').filter((l) => l.includes('lesson')) }));
+    const pSaid = ((await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as { messages: { job: string; lessonSaid?: { section: number; text: string }[] }[] }).messages.find((m) => m.job === last.job);
+    check('念课文件时孩子在节后说的:上下文包 lessonSaid:(空的丢掉)、记进消息、家长接口给', runKid?.prompt.includes('lessonSaid:\n    - "第 1 节后:一样大"') === true && !runKid.prompt.includes('第 1 节后:  ') && JSON.stringify(last.lessonSaid) === '[{"section":1,"text":"一样大"}]' && pSaid?.lessonSaid?.[0]?.text === '一样大', JSON.stringify({ said: last.lessonSaid, prompt: runKid?.prompt.split('\n').filter((l) => l.includes('节后')) }));
     const again = await route('POST', `/api/conversations/math-tutor/${day}/threads/${hj.thread}/lesson/hand`, ctx, { label: '再交一次' });
     const re2 = await route('POST', `/api/lessons/${lessonName}/hand`, ctx, { label: '第三次' });
     const ov2 = (await route('GET', '/api/overview/today', ctx)).json as typeof ov;

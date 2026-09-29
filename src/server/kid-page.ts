@@ -340,6 +340,7 @@ const PAGE = `<!doctype html>
   #ps .tools button, #ps .foot button, #ps-strip .x, #lb .x, #lb .nav,
   #menu .panel button, #sheet label, #hist .tr, .so, .rd, .hz, .c-tutor .tt, #ps-strip .t,
   .sec.heard > .sh, #sub-text.line { transition:transform .2s ease-out, filter .2s ease-out, opacity .2s ease-out, background-color .2s ease-out; }
+  #board .pend { display:none; }
   #board .c { transition:transform .2s ease-out, filter .2s ease-out, border-color .2s, box-shadow .2s; }
   /* ---- 弹层进出场:遮罩淡入,面板按来的方向动(菜单从右上角放大、相册面板从底下滑上来、以前的从右边滑进、卡的弹窗与看大图轻轻放大、发照片屏上浮)。
      进场靠 @starting-style,退场靠 display 的 allow-discrete 过渡(Safari 18 起);不认的浏览器就是瞬间出现 / 消失,和以前一样。
@@ -519,7 +520,7 @@ __PHOTO_JS__
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, contGuard: 0, held: false, rec: null, submitted: new Set(), pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), unfold: new Set(), lq: null, state: { section: -1, line: -1, status: 'idle' }, replayOf: null, contGuard: 0, held: false, rec: null, submitted: new Set(), pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null };
   // 家长板书页看的模式缺省不念(家长想听哪句点哪句);试用缺省念(要听效果);开关各记一个键,不和孩子的搅
   try { S.autoplay = PARENT ? localStorage.getItem(AUTOPLAY_KEY) === '1' : localStorage.getItem(AUTOPLAY_KEY) !== '0'; } catch { S.autoplay = !PARENT; }
   /** 家长板书页:清单的日期(null = 今天) */
@@ -678,7 +679,7 @@ __PHOTO_JS__
     unlock();
     intent = intent || { kind: 'new' };
     S.lsn = null; stopListen();
-    S.tutor = t; if (!PARENT || intent.kind === 'new') micWarm(); S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
+    S.tutor = t; if (!PARENT || intent.kind === 'new') micWarm(); S.sections = []; S.played = new Set(); S.unfold = new Set(); S.lq = null; dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null;
     // 家长端:孩子的话题卡锁着(选择 / 填空 / 画板不开、没有「继续」),看的是清单上那天的;
@@ -1094,7 +1095,7 @@ __PHOTO_JS__
   const swapCard = (old, fresh) => {
     // 田字格不换元素:老师写完那一刻它可能正在写,换了动画就断(mock 里 1.5 秒必现);同一个词只把后期定的样子搬过去
     if (old.classList.contains('c-tianzige') && fresh.classList.contains('c-tianzige') && old.dataset.ch === fresh.dataset.ch) { old.dataset.tint = fresh.dataset.tint; old.dataset.look = fresh.dataset.look; old.dataset.card = fresh.dataset.card; return; }
-    if (old.classList.contains('now')) fresh.classList.add('now'); if (old.dataset.wrote) fresh.dataset.wrote = old.dataset.wrote; old.replaceWith(fresh);
+    if (old.classList.contains('now')) fresh.classList.add('now'); if (old.classList.contains('pend')) fresh.classList.add('pend'); if (old.dataset.wrote) fresh.dataset.wrote = old.dataset.wrote; old.replaceWith(fresh);
   };
   /** 选中态:一节里同一时刻只有一张(讲到哪张亮哪张;舞台开着时是舞台那张;停下等答停在末句的卡) */
   const setNow = (secIdx, idx) => {
@@ -1390,9 +1391,50 @@ __PHOTO_JS__
       case 'scrollLast': { const last = $('#board').querySelector('[data-sec="' + (S.sections.length - 1) + '"] .c'); if (last) last.scrollIntoView({ block: 'start', behavior: 'instant' }); break; }
     }
   };
+  // ---- 第一遍念的整节(《备课设计.md》拍板 34):念到哪露到哪,卡一张一张出来,和老师现讲时一样;停下等答、念完、孩子开口就整节在(shownCards) ----
+  const syncUnfold = () => {
+    let fresh = null;
+    for (const i of [...S.unfold]) {
+      const el = $('#board').querySelector(':scope > .sec[data-sec="' + i + '"]');
+      if (!el || !S.sections[i]) { S.unfold.delete(i); continue; }
+      const n = shownCards(S.state, S.sections, i);
+      el.classList.toggle('pend', n < 0);
+      for (const row of el.querySelectorAll(':scope > .row')) {
+        let any = false;
+        for (const c of row.querySelectorAll(':scope > [data-card]')) {
+          const hide = n < 0 || Number(c.dataset.card) >= n;
+          if (!hide && c.classList.contains('pend')) fresh = c;
+          c.classList.toggle('pend', hide); any = any || !hide;
+        }
+        row.classList.toggle('pend', !any);
+      }
+      if (n === S.sections[i].cards.length) S.unfold.delete(i);
+    }
+    if (fresh) fresh.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+  /**
+   * 课文件交出去的话题、孩子还没开口(拍板 34):后面的节攒在 S.lq.queue,一节一节念。这时孩子说的、打的、拍的、交的卡都不发给老师——
+   * 话攒在 said(第几节后说的)、照片攒在 photos,接着念下一节;最后一节之后孩子再开口才真发,攒着的一起带上(lessonSaid)
+   */
+  const nextLesson = (text, photos) => {
+    const L = S.lq;
+    if (text) L.said.push({ section: S.sections.length, text });
+    if (photos && photos.length) L.photos.push(...photos);
+    unlock();
+    dispatch({ type: 'send' });
+    if (S.stage) closeStage();
+    const e = L.queue.shift();
+    S.sections.push(e);
+    const idx = S.sections.length - 1;
+    $('#board').append(renderSection(e, idx));
+    if (S.autoplay) S.unfold.add(idx);
+    dispatch({ type: 'fresh', sections: [idx], silent: false });
+    renderHeader();
+  };
   const dispatch = (ev) => {
     const r = step({ state: S.state, replayOf: S.replayOf, contGuardUntil: S.contGuard, held: S.held }, ev, { sections: S.sections, pending: S.pending, autoplay: S.autoplay, readonly: S.readonly, stage: Boolean(S.stage), recording: Boolean(S.rec), limit: S.limit, now: Date.now() });
     S.state = r.model.state; S.replayOf = r.model.replayOf; S.contGuard = r.model.contGuardUntil; S.held = r.model.held;
+    syncUnfold();
     for (const f of r.effects) runEffect(f);
   };
 
@@ -1411,6 +1453,11 @@ __PHOTO_JS__
       const first = mine.find((m) => m.question !== null) || mine[0];
       S.threadAt = first ? first.at : null;
       const entries = sectionsFromMessages(mine);
+      // 课文件交出去、孩子还没开口的话题,第一次铺:从第一节念起,后面的节攒着(拍板 34;家长端照孩子会看到的样子播)
+      if (!S.sections.length && !S.played.size && !S.partial && canSend() && entries.length && entries.every((e) => typeof e.lessonSection === 'number') && !mine.some((m) => (PARENT ? m.from === 'kid' : m.question !== null))) {
+        silent = false;
+        if (entries.length > 1) { S.lq = { queue: entries.slice(1), said: [], photos: [] }; for (const e of S.lq.queue) S.played.add(e.job); }
+      }
       const fresh = [];
       for (const e of entries) {
         if (S.partial && S.partial.job === e.job && S.partial.live) { if (e.partial) renderLive(e); else finalizeLive(e); continue; }
@@ -1418,6 +1465,7 @@ __PHOTO_JS__
         if (e.partial) { renderLive(e); continue; }
         S.played.add(e.job); S.sections.push(e); fresh.push(S.sections.length - 1);
         const idx = S.sections.length - 1;
+        if (!silent && S.autoplay) S.unfold.add(idx);
         if (S.partial && S.partial.job === e.job) {
           // 流式时一行一张先铺着;跑完了按后期的行整节重画,节的编号就是它现在的位置
           const el = S.partial.el; S.partial = null;
@@ -1478,7 +1526,7 @@ __PHOTO_JS__
   const canSend = () => (PARENT ? !S.lsn && (!S.hist || Boolean(S.home && S.hist === S.home.today)) : !S.readonly);
   const renderBar = () => { $('#pill').hidden = !canSend(); $('#back-today').hidden = !S.readonly || PARENT; };
   $('#more-btn').hidden = PARENT;
-  const resetBoard = () => { dispatch({ type: 'halt' }); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.partial = null; $('#board').replaceChildren(); };
+  const resetBoard = () => { dispatch({ type: 'halt' }); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); S.unfold = new Set(); S.lq = null; dispatch({ type: 'reset' }); S.partial = null; $('#board').replaceChildren(); };
   /** 换到某天的某个话题:今天的能接着聊;以前的只读回放(从第一句播) */
   const switchThread = (date, thread) => {
     resetBoard();
@@ -1526,13 +1574,19 @@ __PHOTO_JS__
   });
   const send = async (text, opts = {}) => {
     text = (text || '').trim();
-    if ((!text && !opts.action && !(opts.photos && opts.photos.length)) || !S.tutor || !canSend() || (S.limit && opts.action !== 'continue')) return;
+    if (!text && !opts.action && !(opts.photos && opts.photos.length)) return;
+    if (S.lq && S.lq.queue.length && S.tutor) return nextLesson(text, opts.photos);
+    if (!S.tutor || !canSend() || (S.limit && opts.action !== 'continue')) return;
     unlock();
     dispatch({ type: 'send' });
     S.pending = true; S.waitSince = Date.now(); renderSubtitle();
     const body = { text, device: S.device };
     if (opts.action) body.action = opts.action;
     if (opts.photos && opts.photos.length) body.photos = opts.photos;
+    // 课文件念完了,孩子这才开口:前面几节后攒着的话与照片一起带上
+    const L = S.lq;
+    if (L && L.said.length) body.lessonSaid = L.said;
+    if (L && L.photos.length) body.photos = [...L.photos, ...(body.photos || [])].slice(0, 9);
     const focus = opts.focus || (S.stage ? { card: S.stage.id } : null);
     if (focus) body.focus = focus;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
@@ -1540,7 +1594,7 @@ __PHOTO_JS__
     if (S.via) body.via = S.via;
     try {
       const r = await api('POST', CONV + S.tutor.name + '/messages', body);
-      S.via = null;
+      S.via = null; if (L && S.lq === L) S.lq = null;
       if (r && r.thread) S.thread = r.thread;
       S.newThread = false; { const blank = $('#board .blank'); if (blank) blank.remove(); }
       renderHeader();
@@ -1569,6 +1623,8 @@ __PHOTO_JS__
     // 从课文件建的轮(《备课设计.md》§10.5):不是谁说的话——第一节前一条「课文件 <名> · N 节」,后面的节前不出
     else if (typeof m.lessonSection === 'number') { if (m.lessonSection === 0) out.push(noteEl('sys', '课文件', (m.question || '').replace(/^课文件\\s*/, '') + ' · ' + (S.msgs || []).filter((x) => x.thread === m.thread && typeof x.lessonSection === 'number').length + ' 节' + (S.lesson && S.lesson.source ? ' · ' + S.lesson.source : ''))); }
     else {
+      // 念课文件时孩子在各节后说的(当时没发,这一条带来)
+      if (m.lessonSaid && m.lessonSaid.length) out.push(noteEl('said kid', '课上说的', m.lessonSaid.map((x) => '第 ' + x.section + ' 节后:' + x.text).join('\\n')));
       const said = m.via ? m.via.label : m.action === 'continue' ? '继续' : m.action === 'submit' ? '交给老师' : (m.question || '');
       if (said || m.from === 'kid') out.push(noteEl('said ' + (m.from || ''), m.via ? '首页' : (NOTE_FROM[m.from] || m.from || ''), said));
     }
@@ -1681,7 +1737,7 @@ __PHOTO_JS__
   const lsnUrl = (tail) => '/api/lessons/' + encodeURIComponent(S.lsn.name) + tail;
   const openLesson = (t, name) => {
     unlock();
-    S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
+    S.tutor = t; S.sections = []; S.played = new Set(); S.unfold = new Set(); S.lq = null; dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = null; S.threadAt = null; S.hist = null; S.readonly = true; S.newThread = false; S.via = null; S.cont = null; S.prep = null; S.lesson = null;
     S.lsn = { name, key: null, page: null };
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader(); renderLesson();

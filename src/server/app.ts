@@ -441,6 +441,18 @@ async function photosOf(ws: Workspace, v: unknown): Promise<string[] | null | un
   return v;
 }
 
+/** 课文件念的时候孩子在各节后说的(拍板 34,页面攒着随第一条带来):最多 20 句、一句 500 字 */
+function lessonSaidOf(v: unknown): { section: number; text: string }[] | null | undefined {
+  if (v === undefined) return undefined;
+  if (!Array.isArray(v) || v.length > 20) return null;
+  const out: { section: number; text: string }[] = [];
+  for (const x of v) {
+    if (!isObj(x) || !Number.isInteger(x.section) || (x.section as number) < 1 || typeof x.text !== 'string' || x.text.length > 500) return null;
+    if (x.text.trim()) out.push({ section: x.section as number, text: x.text.trim() });
+  }
+  return out.length ? out : undefined;
+}
+
 export async function route(method: string, path: string, ctx: AppContext, body?: unknown): Promise<RouteResult> {
   await ctx.reload();
   const ws = ctx.ws;
@@ -556,6 +568,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (action === null) return { status: 400, json: { error: 'bad_request' } };
         const photos = await photosOf(ws, body.photos);
         if (photos === null) return { status: 400, json: { error: 'bad_request' } };
+        const lessonSaid = lessonSaidOf(body.lessonSaid);
+        if (lessonSaid === null) return { status: 400, json: { error: 'bad_request' } };
         const policy = resolvePolicy(ws.config, tutor);
         // 「继续」不计每日上限:到了上限也能把老师讲完的听完
         if (action !== 'continue' && kidMessageCount(await readIndex(ws, tutor, date)) >= policy.dailyMessages) return { status: 429, json: { error: 'limit', remaining: 0 } };
@@ -596,7 +610,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           const idx = await readIndex(ws, tutor, date);
           if (isPrepThread(idx.messages, pick) && !idx.lessons[pick]?.handedAt) return { status: 400, json: { error: 'bad_request' } };
         }
-        const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}) });
+        const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(lessonSaid ? { lessonSaid } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}) });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };

@@ -556,6 +556,8 @@ export interface BoardMessage {
   section?: BoardSection | null;
   /** 孩子这条带的作业照片(相对 workspace 根;R5):节头上回显缩略图 */
   photos?: string[];
+  /** 从课文件建的第几节 */
+  lessonSection?: number;
 }
 
 export interface BoardEntry extends BoardSection {
@@ -565,6 +567,8 @@ export interface BoardEntry extends BoardSection {
   partial?: boolean;
   /** 孩子问这节时拍的照片(节头上回显) */
   photos?: string[];
+  /** 从课文件建的第几节:孩子还没开口时页面把后面的节攒着,一节一节念 */
+  lessonSection?: number;
 }
 
 /**
@@ -574,7 +578,7 @@ export interface BoardEntry extends BoardSection {
 export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEntry[] {
   const out: BoardEntry[] = [];
   for (const m of messages) {
-    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length ? { photos: m.photos } : {}) };
+    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length ? { photos: m.photos } : {}), ...(typeof m.lessonSection === 'number' ? { lessonSection: m.lessonSection } : {}) };
     if (m.pending) {
       if (m.section && m.section.partial && m.section.cards.length) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;
@@ -671,6 +675,27 @@ export function spokenLines(state: PlayerState, sections: readonly BoardSection[
     default:
       return 0;
   }
+}
+
+/**
+ * 第一遍念的整节(2026-09-28,《备课设计.md》拍板 34):念到哪露到哪——露前几张卡(前缀)。
+ * 念到第 i 句时,露到前 i 句里锚到、标到、[[play]] 到的最后一张;标题行这类没有讲稿的卡跟着后面第一张有讲稿的卡露;
+ * 停下等答、念完 = 整节(推答题卡、节尾的提问卡这时才露)。-1 = 还没念到这节,整节不露。再听按回放前的位置算
+ */
+export function shownCards(state: PlayerState, sections: readonly BoardSection[], secIdx: number): number {
+  const at = state.replay ? state.replay.back : state;
+  const s = sections[secIdx];
+  if (!s) return 0;
+  if (at.status === 'waiting' || at.status === 'done' || secIdx < at.section) return s.cards.length;
+  if (secIdx > at.section || at.status === 'idle') return -1;
+  if (at.line < 0) return s.lines.length ? 0 : s.cards.length;
+  let n = 0;
+  for (const l of s.lines.slice(0, at.line + 1)) {
+    n = Math.max(n, (l.anchor ?? -1) + 1);
+    for (const m of l.marks) n = Math.max(n, m.card + 1);
+    for (const c of l.cues) n = Math.max(n, c.card + 1);
+  }
+  return Math.min(n, s.cards.length);
 }
 
 /**

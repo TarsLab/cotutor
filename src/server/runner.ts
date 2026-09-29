@@ -73,6 +73,8 @@ export interface SendInput {
   bookkeep?: { thread: string };
   /** 这轮是记账后整理记忆(2026-09-18):新会话,「## 记忆」段不受每轮条数上限,孩子端看不到 */
   tidy?: boolean;
+  /** 课文件交出去的话题里孩子的第一条(拍板 34):前面几节后孩子说过的,进上下文包 lessonSaid:、记进消息 */
+  lessonSaid?: { section: number; text: string }[];
   /** 这条带的作业照片(相对 workspace 根,已由路由验过在 captures/ 里;R5):进上下文包 photos: 段,老师自己 Read 看图;文字可以空 */
   photos?: string[];
   /** 这条是回放(server/replay.ts):原轮的 job,记进消息;调用方已经把 Runner 指到 evals/ */
@@ -363,7 +365,9 @@ export class Runner {
       });
       const handed = await handedLessonOf(ws, index, thread);
       if (handed) { pack.lessonFile = handed.file; if (handed.brief.trim()) pack.lessonBrief = handed.brief.replace(/^##\s+\S.*\n?/, '').trim(); }
+      if (input.lessonSaid?.length) pack.lessonSaid = input.lessonSaid.map((x) => `第 ${x.section} 节后:${x.text}`);
     }
+    const lessonSaid = pack.lessonSaid ? input.lessonSaid : undefined;
     if (photos.length) { pack.photos = photos; pack.photoFiles = photos.map((p) => join(ws.root, p)); }
     if (input.home) pack.home = input.home;
     const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
@@ -371,7 +375,7 @@ export class Runner {
     const prompt = buildContextPack(pack, text, policy.contextPack);
     const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: input.runtime ?? t.runtime, effort: policy.effort });
 
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(input.prepThread && thread === job ? { prepThread: true as const } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(lessonSaid?.length ? { lessonSaid } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(input.prepThread && thread === job ? { prepThread: true as const } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 

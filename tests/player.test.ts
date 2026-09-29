@@ -9,6 +9,7 @@ import {
   isQuestion,
   playableLines,
   replayQuiet,
+  shownCards,
   spokenLines,
   startReplay,
   step,
@@ -107,6 +108,24 @@ const rows: Row[] = [
 for (const r of rows) {
   const out = step(r.model, r.ev, ctxOf(r.sections, r.ctx));
   check(`仲裁表:${r.name}`, r.want(out.model, out.effects), `${JSON.stringify(out.model)} | ${kinds(out.effects)}`);
+}
+
+// ---- 第一遍念的整节:念到哪露到哪(shownCards,《备课设计.md》拍板 34)----
+{
+  const heading: BoardCard = { kind: 'text', props: { title: '拼' } };
+  // 卡 0 标题行没讲稿;卡 1 两句;第三句锚在卡 1、标注落在卡 2;卡 3 是节尾补的提问卡(没讲稿)
+  const sec: BoardSection = { cards: [heading, text('a'), text('b'), text('问')], lines: [L('开场', null), L('一', 1), L('二', 1, { marks: [{ card: 2, phrase: 'b' }] }), L('三?', 2)] };
+  const at = (line: number, status: PlayerState['status'] = 'playing') => shownCards({ section: 0, line, status }, [sec], 0);
+  check('露:卡前的开场白 → 一张都不露', at(0) === 0);
+  check('露:念到锚在卡 1 的句 → 标题行跟着一起露', at(1) === 2);
+  check('露:标注落在后面那张 → 那张也露', at(2) === 3);
+  check('露:暂停 / 交给场景同在念', at(2, 'paused') === 3 && at(2, 'stage') === 3);
+  check('露:停下等答 → 整节(提问卡这时才露)', at(3, 'waiting') === 4);
+  check('露:念完 → 整节', at(3, 'done') === 4);
+  check('露:前面的节整节、后面没念到的节 -1', shownCards({ section: 1, line: 0, status: 'playing' }, [sec, sec], 0) === 4 && shownCards({ section: 0, line: 0, status: 'playing' }, [sec, sec], 1) === -1);
+  check('露:孩子开口(算念完)后面的节也整节', shownCards({ section: 0, line: 1, status: 'done' }, [sec, sec], 1) === 4);
+  check('露:再听按回放前的位置算', shownCards(startReplay({ section: 0, line: 1, status: 'paused' }, 0, [3]), [sec], 0) === 2);
+  check('露:[[play]] 到的场景卡跟着露', shownCards({ section: 0, line: 0, status: 'playing' }, [withScene], 0) === 1);
 }
 
 // ---- 随机事件序列:模拟页面、声音与老师,每一步查不变式 ----

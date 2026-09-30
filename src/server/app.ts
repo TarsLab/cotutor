@@ -152,13 +152,16 @@ export interface KidHome {
   home: string | null;
   /** 首页的卡(《首页设计.md》):老师卡在前,props.buttons 是孩子端的按钮;其余卡照文件顺序 */
   cards: BoardCard[];
+  /** 「给老师们换个样子」的入口(figshot pick 在这台电脑的哪个端口);cotutor.json 没配 figshot 就是 null */
+  figshot: { port: number } | null;
 }
 
 export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
   const ws = ctx.ws;
   const date = localDate(now);
   const view = await kidHomeView(ws, now);
-  return { title: ws.config.title, date, tutors: await kidTutors(ctx, date), home: view.home, cards: view.cards };
+  const figshot = ws.config.figshot ? { port: ws.config.figshot.port } : null;
+  return { title: ws.config.title, date, tutors: await kidTutors(ctx, date), home: view.home, cards: view.cards, figshot };
 }
 
 export interface KidDay {

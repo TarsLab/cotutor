@@ -195,6 +195,10 @@ export const CotutorConfigSchema = z
       .optional()
       .describe('老师进程(claude)走的代理,如 http://127.0.0.1:32769:起 claude 时注进 HTTP(S)_PROXY,不靠 serve 从哪个终端起;false = 选了不走代理;不写 = 还没选(init / cotutor proxy 会问)'),
     tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板:say 合成一句(占位 {text} {voice} {out});voices 列音色(stdout JSON),家长端音色页据此列表与试听'),
+    figshot: z
+      .object({ port: z.number().int().min(1).max(65535).default(8477) })
+      .optional()
+      .describe('给老师换样子(figshot pick):它在这台电脑的哪个端口(缺省 8477)。配了孩子端首页多一张「给老师们换个样子」,figshot 没开着就不出现;不配就没有这张卡'),
     koubo: KouboSchema.default(KOUBO_DEFAULT).describe('录音卡的评测命令模板(口播老师):card 一条龙评一条录音(占位 {audio} {text} {mode} {pairs}),timeoutMs 一条最多等多久;门槛与花费上限在 workspace 根的 koubo.json'),
   })
   .superRefine((c, ctx) => {

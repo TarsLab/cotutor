@@ -3,7 +3,7 @@
  * 孩子端首页(老师卡置顶、讲法不下发、接着刚才的)→ 按钮发来的 via(开场 = 按钮字 + 讲法进上下文包;接着以前 = 新话题 + continue 段)→
  * 点击统计 → 回放带上讲法与 continue → 家长接口与预览页 → doctor → 发布件坏了退回缺省。
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,7 +59,7 @@ const wait = async (tutor: string): Promise<void> => {
 };
 const kidSend = (tutor: string, body: unknown) => route('POST', `/api/kid/conversations/${tutor}/messages`, ctx, body);
 type Btn = { id: string | number; kind: string; label: string; date?: string; thread?: string; brief?: string };
-type KidHome = { home: string | null; cards: { kind: string; props: { tutor?: string; buttons?: Btn[]; chars?: string } }[] };
+type KidHome = { home: string | null; cards: { kind: string; props: { tutor?: string; buttons?: Btn[]; chars?: string } }[]; figshot: { port: number } | null };
 const kidHome = async (): Promise<KidHome> => (await route('GET', '/api/kid/home', ctx)).json as KidHome;
 const buttonsOf = (h: KidHome, tutor: string): Btn[] => h.cards.find((c) => c.kind === 'tutor' && c.props.tutor === tutor)?.props.buttons ?? [];
 const draft = (text: string): void => {
@@ -78,6 +78,24 @@ try {
   const h0 = await kidHome();
   check('没发布过:缺省首页,每位老师一张只有「新话题」的卡', h0.home === null && h0.cards.map((c) => c.props.tutor).join() === 'chinese-tutor,english-tutor,math-tutor' && h0.cards.every((c) => buttonsOf(h0, c.props.tutor!).map((b) => b.id).join() === 'new'), JSON.stringify(h0.cards));
   check('孩子端页面:不是预览', ((await route('GET', '/', ctx)).html ?? '').includes('const MODE = {};'));
+
+  // 给老师换样子(figshot):cotutor.json 没配就没有入口;配了首页带端口(缺省 8477),页面自己探它开没开
+  check('没配 figshot:首页不带入口', h0.figshot === null, JSON.stringify(h0.figshot));
+  const withFigshot = (patch: unknown): void => {
+    const c = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
+    if (patch === undefined) delete c.figshot;
+    else c.figshot = patch;
+    writeFileSync(cfgFile, JSON.stringify(c, null, 2));
+    const t = new Date(Date.now() + 2000 + Math.random() * 1000);
+    utimesSync(cfgFile, t, t);   // 热重载按 mtime,同一毫秒里连写两次会被当成没改
+  };
+  withFigshot({});
+  check('配了 figshot 没写端口:缺省 8477', (await kidHome()).figshot?.port === 8477);
+  withFigshot({ port: 8490 });
+  check('配了端口就用那个', (await kidHome()).figshot?.port === 8490);
+  check('孩子端页面有入口卡,缺省藏着(探到 figshot 开着才露)', /<a class="c c-figshot" id="figshot" hidden>/.test((await route('GET', '/', ctx)).html ?? ''));
+  withFigshot(undefined);
+  check('去掉配置入口就没了', (await kidHome()).figshot === null);
 
   const BAD = `---
 for: 2026-09-18

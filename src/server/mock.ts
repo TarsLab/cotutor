@@ -512,7 +512,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       const handed = (date: string, thread: string): boolean => date === localDate(d) && Boolean(lessons.get(name)?.get(thread)?.handedAt) && !list.some((m) => m.thread === thread && m.from !== 'parent' && m.question !== null);
       return { kind: 'tutor', props: { tutor: name, buttons: kidButtons(mockCardButtons(name, c.props.buttons), { recent, alive, handed }) } };
     });
-    return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards };
+    // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
+    return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 } };
   };
   const mockHomeId = (): string => `${yesterday()}-2130`;
   /** 老师卡上的按钮:原文里的,加上家长交给孩子的那个「接着」(真服务是追加进草稿再发布) */

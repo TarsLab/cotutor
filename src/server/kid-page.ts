@@ -79,6 +79,16 @@ const PAGE = `<!doctype html>
   #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); max-width:min(560px,calc(100% - 32px)); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:15px; line-height:1.5; white-space:pre-line; z-index:50; display:none; }
   #toast.on { display:block; }
   #rest { display:none; text-align:center; color:var(--dim); font-size:16px; padding:12px 0; }
+  /* 给老师换样子(figshot):不是首页发布的卡,是 cotutor.json 配了 figshot 就有的固定入口;figshot 没开着就不出现 */
+  .c.c-figshot { flex-direction:row; align-items:center; gap:16px; text-decoration:none; color:var(--ink); background:#fff3e8; border-color:var(--accent); }
+  .c-figshot[hidden] { display:none; }
+  .c-figshot .avs { display:flex; flex:none; }
+  .c-figshot .avs .av { width:52px; height:52px; font-size:24px; border-color:#fff3e8; }
+  .c-figshot .avs .av + .av { margin-left:-14px; }
+  .c-figshot .tx { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .c-figshot .tx b { font-size:19px; }
+  .c-figshot .tx span { font-size:15px; color:var(--dim); }
+  .c-figshot .go { flex:none; height:48px; padding:0 22px; border-radius:24px; background:#c95a22; color:#fff; font-size:17px; font-weight:600; display:flex; align-items:center; }
   body.offline #rest { display:block; }
   body.offline .c-tutor { pointer-events:none; }
   body.offline .c-tutor .av { filter:grayscale(1); opacity:.4; box-shadow:none; }
@@ -431,6 +441,7 @@ const PAGE = `<!doctype html>
   <h1 id="title">__TITLE__</h1>
   <div class="tutors" id="tutors"></div>
   <p id="rest">老师们休息中</p>
+  <a class="c c-figshot" id="figshot" hidden><span class="avs"></span><span class="tx"><b>给老师们换个样子</b><span>帽子、脸、衣服,都由你来挑</span></span><span class="go">去搭</span></a>
   <div class="hcards" id="hcards"></div>
 </div>
 <div id="toast"></div>
@@ -634,6 +645,17 @@ __REEL_JS__
     const tcards = cards.filter((c) => c.kind === 'tutor' && byName.has(c.props.tutor));
     $('#tutors').replaceChildren(...tcards.map((c) => tutorCard(byName.get(c.props.tutor), Array.isArray(c.props.buttons) ? c.props.buttons : [])));
     $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor').map((c, i) => renderCard(c, i, null, false)));
+    renderFigshot(H);
+  };
+  // 给老师换样子(figshot pick):同一台电脑、同一张证书,所以协议和主机跟着本页走,只换端口。
+  // 先探一下它开没开 —— 没开时点进去是 Safari 的「无法连接」,孩子不该看到;no-cors 只看连不连得上
+  const renderFigshot = (H) => {
+    const el = $('#figshot');
+    if (!H.figshot) { el.hidden = true; return; }
+    const url = location.protocol + '//' + location.hostname + ':' + H.figshot.port + '/';
+    el.href = url;
+    el.querySelector('.avs').replaceChildren(...H.tutors.slice(0, 3).map((t) => avatarEl(t)));
+    fetch(url + 'api/health', { mode: 'no-cors', cache: 'no-store' }).then(() => { el.hidden = false; }, () => { el.hidden = true; });
   };
   const loadHome = async () => {
     try { S.home = await api('GET', PARENT ? '/api/overview/' + (S.pdate || 'today') : '/api/kid/home'); setOffline(false); if (PARENT) renderOverview(); else renderHome(); }

@@ -20,7 +20,7 @@ import type { Workspace } from '../cli/workspace.ts';
 import { readIndex, readTranscript, writeIndex } from './store.ts';
 import { themeFiles } from './theme.ts';
 
-/** 没带端就当平板横屏(iPad 是主要的端;手机打开时 rowsFor 会折) */
+/** 没带端就当平板横屏(iPad 是主要的端);后期只记下来,行由孩子端按卡的宽度排 */
 export const DEFAULT_DEVICE: Device = 'tablet-landscape';
 
 /** 一拍的后期:输入、原样输出、校验 */
@@ -55,7 +55,7 @@ export interface PostFile {
   ok: boolean;
   error?: string;
   dropped: string[];
-  kept: { marks: number; anchors: number; layout: boolean; looks: number };
+  kept: { marks: number; anchors: number; looks: number };
   /** 从第一拍起到最后一拍回,毫秒 */
   ms: number;
   costUsd?: number;
@@ -151,7 +151,7 @@ export async function runBeatPost(ws: Workspace, tutor: string, section: BoardSe
   const { text, costUsd } = unwrapJsonOutput(r.out);
   const parsed = parseBeatPatch(text, section, beat);
   if (!parsed.ok) return { section, file: { ...base, argv, raw, ok: false, error: `输出不合形状:${parsed.why}`, ms, ...(costUsd !== undefined ? { costUsd } : {}) } };
-  const v = validateBeatPost(section, beat, env.theme, env.device, parsed.out);
+  const v = validateBeatPost(section, beat, env.theme, parsed.out);
   return { section: v.section, file: { ...base, argv, raw, output: parsed.out, ok: true, dropped: v.dropped, kept: v.kept, ms, ...(costUsd !== undefined ? { costUsd } : {}) } };
 }
 
@@ -159,8 +159,8 @@ export async function runBeatPost(ws: Workspace, tutor: string, section: BoardSe
 export function assemblePost(beats: PostBeatFile[], env: PostEnv, at: string, ms: number): { file: PostFile; summary: PostResult['summary'] } {
   const okBeats = beats.filter((b) => b.ok);
   const dropped = beats.flatMap((b) => b.dropped);
-  const kept = { marks: 0, anchors: 0, layout: false, looks: 0 };
-  for (const b of okBeats) { kept.marks += b.kept?.marks ?? 0; kept.anchors += b.kept?.anchors ?? 0; if (b.kept?.look) kept.looks++; if (b.kept?.row === 'same') kept.layout = true; }
+  const kept = { marks: 0, anchors: 0, looks: 0 };
+  for (const b of okBeats) { kept.marks += b.kept?.marks ?? 0; kept.anchors += b.kept?.anchors ?? 0; if (b.kept?.look) kept.looks++; }
   const costs = beats.map((b) => b.costUsd).filter((c): c is number => typeof c === 'number');
   const costUsd = costs.length ? costs.reduce((a, b) => a + b, 0) : undefined;
   const failed = beats.filter((b) => !b.ok);
@@ -191,7 +191,7 @@ export async function runPost(ws: Workspace, tutor: string, section: BoardSectio
     const results = await Promise.all(beats.map((b) => runBeatPost(ws, tutor, section, b, env, opts)));
     results.forEach((r, i) => {
       if (r.file.ok && r.file.output) {
-        const v = validateBeatPost(cur, beatsOf(cur).find((b) => b.card === beats[i].card)!, env.theme, env.device, r.file.output);
+        const v = validateBeatPost(cur, beatsOf(cur).find((b) => b.card === beats[i].card)!, env.theme, r.file.output);
         cur = v.section;
         files.push({ ...r.file, dropped: v.dropped, kept: v.kept });
       } else files.push(r.file);
@@ -214,7 +214,7 @@ export async function readPostFile(ws: Workspace, tutor: string, date: string, j
     if (Array.isArray(v?.beats)) return v;
     if (typeof v?.prompt !== 'string') return null;
     const one: PostBeatFile = { beat: 0, card: 0, at: v.at, argv: v.argv ?? [], prompt: v.prompt, raw: v.raw ?? '', ok: v.ok, ...(v.error ? { error: v.error } : {}), dropped: v.dropped ?? [], ms: v.ms, ...(v.costUsd !== undefined ? { costUsd: v.costUsd } : {}) };
-    return { version: 2, at: v.at, runtime: v.runtime, device: v.device, theme: v.theme, template: 'fallback', beats: [one], ok: v.ok, ...(v.error ? { error: v.error } : {}), dropped: v.dropped ?? [], kept: v.kept ?? { marks: 0, anchors: 0, layout: false, looks: 0 }, ms: v.ms, ...(v.costUsd !== undefined ? { costUsd: v.costUsd } : {}) };
+    return { version: 2, at: v.at, runtime: v.runtime, device: v.device, theme: v.theme, template: 'fallback', beats: [one], ok: v.ok, ...(v.error ? { error: v.error } : {}), dropped: v.dropped ?? [], kept: v.kept ?? { marks: 0, anchors: 0, looks: 0 }, ms: v.ms, ...(v.costUsd !== undefined ? { costUsd: v.costUsd } : {}) };
   } catch {
     return null;
   }

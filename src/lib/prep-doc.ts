@@ -5,7 +5,8 @@
 import { USAGE } from '../cli/usage.ts';
 import { kindsFor } from '../cards/index.ts';
 import type { ThemeManifest } from '../schema/theme.ts';
-import { MAX_CARDS_PER_ROW, MAX_MARKS_PER_CARD, MAX_MARKS_PER_LINE } from './postprocess.ts';
+import { MAX_CARDS_PER_ROW } from './kid-board.ts';
+import { MAX_MARKS_PER_CARD, MAX_MARKS_PER_LINE } from './postprocess.ts';
 
 export const PREP_SKILL = 'cotutor-prep';
 
@@ -53,7 +54,7 @@ for: 2026-09-28            # 可省:给哪天用的
 
 | 写 | 意思 |
 |---|---|
-| \`same\` | 这张卡接上一行(不写 = 另起一行)。一行最多 ${MAX_CARDS_PER_ROW} 张;标题行、答题卡(choice / fill / canvas / record)、讲解动画永远独占一行,写了 same 也接不上(检查会提醒) |
+| \`same\` | 这张卡和上一张并排(不写 = 孩子端按卡的宽度排:字少的两张自动并排)。一行最多 ${MAX_CARDS_PER_ROW} 张;标题行、答题卡(choice / fill / canvas / record)、讲解动画永远独占一行,写了 same 也接不上(检查会提醒) |
 | \`tint=<槽>\` | 底色槽,名字在主题的 theme.json 的 tints 里(cotutor lesson check 会告诉你有哪些) |
 | \`look=<槽>\` | 字形槽,名字在 theme.json 的 looks 里 |
 | \`emoji=<一个>\` | 卡标题前的一个 emoji |
@@ -90,9 +91,11 @@ export function layoutRules(theme?: ThemeManifest): string {
   const looks = theme ? (Object.keys(theme.looks).length ? slots(theme.looks) : '(这个主题没有字形槽,别写 look=)') : '同上,看 theme.json 的 looks';
   return `## 行
 
-- 一行最多 ${MAX_CARDS_PER_ROW} 张。并排的是「兄弟卡」:两种情况、公式和它所属的那一步、三步搞懂;不相干的别硬凑一行。
+- 不写 \`same\`,孩子端按卡的宽度排:字少的卡半宽,相邻两张半宽的自动并排。多数卡不用管。
+- 只有一定要并排对照的「兄弟卡」才写 \`same\`:两种情况、公式和它所属的那一步。
+- 一行最多 ${MAX_CARDS_PER_ROW} 张;不相干的别硬凑一行。
 - 标题行(只有 \`# 标题\` 的 text)、答题卡(choice / fill / canvas / record)、讲解动画(scene)永远独占一行,写了 \`same\` 也接不上。
-- 排的是平板横屏(frontmatter 的 device 不写就是它);手机上应用自己折成一行一张,不用管。
+- 排的是平板横屏(frontmatter 的 device 不写就是它);手机上应用自己折,不用管。
 
 ## 底色槽 tint(一张卡一个;不写 = 缺省)
 
@@ -123,19 +126,19 @@ ${looks}
 export function layoutDoc(): string {
   return `# 课文件怎么排版(机器生成,别改)
 
-排版是写课文件的一部分:写卡的时候就把它排好,不另起一步。写法是围栏行上的修饰词(\`same\` 接上一行、\`tint=<槽>\`、\`look=<槽>\`、\`emoji=<一个>\`)和讲稿里的 \`[词]\`,见 课文件语法.md。
+排版是写课文件的一部分:写卡的时候就把它排好,不另起一步。写法是围栏行上的修饰词(\`same\` 和上一张并排、\`tint=<槽>\`、\`look=<槽>\`、\`emoji=<一个>\`)和讲稿里的 \`[词]\`,见 课文件语法.md。
 
 ${layoutRules()}
 
 ## 家长手写的文件
 
-家长自己写的课文件多半没排版(一行一张、缺省底色,照样能交)。想排:\`cotutor lesson post <课名> --write\`,用上面这份规则让模型整份排一遍回写进文件——正文一个字不动(不一样就整份不要),手写过的修饰词当已定。花钱(一次几分到一毛钱),先问家长。你自己在会话里按规则改文件也一样,不花第二份钱。
+家长自己写的课文件多半没排版(按卡的宽度排、缺省底色,照样能交)。想排:\`cotutor lesson post <课名> --write\`,用上面这份规则让模型整份排一遍回写进文件——正文一个字不动(不一样就整份不要),手写过的修饰词当已定。花钱(一次几分到一毛钱),先问家长。你自己在会话里按规则改文件也一样,不花第二份钱。
 `;
 }
 
 /** cotutor lesson post 的提示词:规则(带这个主题的槽表)+ 全文 + 回什么 */
 export function layoutPrompt(md: string, theme: ThemeManifest): string {
-  return `你是一份课文件的排版:课文件是给孩子看的板书,围栏是卡、普通行是老师念的话。老师已经决定了卡上写什么、讲稿说什么;你只决定每张卡接不接上一行、用哪个底色槽 / 字形槽、要不要一个 emoji、讲到每句时在卡上标哪个词。
+  return `你是一份课文件的排版:课文件是给孩子看的板书,围栏是卡、普通行是老师念的话。老师已经决定了卡上写什么、讲稿说什么;你只决定哪几张卡一定要并排、用哪个底色槽 / 字形槽、要不要一个 emoji、讲到每句时在卡上标哪个词。
 
 ${layoutRules(theme)}
 

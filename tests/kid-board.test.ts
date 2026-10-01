@@ -31,6 +31,10 @@ import {
   penFor,
   penPath,
   rowsFor,
+  rowCols,
+  canHalf,
+  fitsHalf,
+  type CardFit,
   tintFor,
   phrasesIn,
   plainLine,
@@ -81,13 +85,33 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   check('笔:选项 box、问题里的词 underline、填空 underline、点读 marker、公式 / 大字 marker、标题位 circle、数字 underline、正文里的词 tint;后期定的 pen 页面直接用', penFor(cards[3], '他自己的') === 'box' && penFor(cards[3], '酒') === 'underline' && penFor(cards[4], '做到了') === 'underline' && penFor(cards[2], '楚有祠者') === 'marker' && penFor(formula, '斜边') === 'marker' && penFor({ kind: 'text', props: { text: '多做一步' }, look: { look: 'title' } }, '多做一步') === 'marker' && penFor(cards[1], '多做一步') === 'tint' && penFor(cards[0], '画蛇添足') === 'circle' && penFor(def, '认边') === 'circle' && penFor(def, '直角边') === 'tint' && penFor({ kind: 'text', props: { title: '验证', text: '9 加 16 等于 25' } }, '25') === 'underline' && penFor(sceneCard, '找规律') === 'underline');
   const hd: BoardCard = { kind: 'text', props: { title: '两大类型', text: '', heading: true } };
   check('小节标题不是卡:没有能标注的字,sectionTitle 优先拿它', isHeading(hd) && !isHeading(def) && cardTexts(hd).length === 0 && sectionTitle({ cards: [hd, def], lines: [] }) === '两大类型');
-  // ---- 行:没 layout 一行一张;有 layout 同端照排;手机上折;标题行与有状态的卡独占 ----
+  // ---- 行(2026-10-01 排版归代码):每张卡半宽或全宽,相邻两张半宽并一行;明写的并排照办;手机上折;标题行与有状态的卡独占 ----
   const sec: BoardSection = { cards: [cards[0], def, formula, cards[3], plain, hd, cards[1]], lines: [] };
-  check('没 layout:一行一张', JSON.stringify(rowsFor(sec, 'tablet-landscape')) === '[[0],[1],[2],[3],[4],[5],[6]]');
+  check('没量过就按字数估:字少的文字卡半宽,两两并一行;选择题、标题行独占', JSON.stringify(rowsFor(sec, 'tablet-landscape')) === '[[0,1],[2],[3],[4],[5],[6]]');
+  check('一行几列:两张并排两列;落单的半宽卡两列(占左半);全宽一列', rowCols(sec, [0, 1]) === 2 && rowCols(sec, [2]) === 2 && rowCols(sec, [3]) === 1 && rowCols(sec, [5]) === 1);
+  const measured = (i: number): boolean => i === 1 || i === 2 || i === 3;
+  check('量出来的优先;不能半宽的种类(选择题)量成半宽也不算', JSON.stringify(rowsFor(sec, 'tablet-landscape', measured)) === '[[0],[1,2],[3],[4],[5],[6]]' && rowCols(sec, [0], measured) === 1 && rowCols(sec, [3], () => true) === 1);
   const laid: BoardSection = { ...sec, layout: { for: 'tablet-landscape', rows: [[0], [1, 2], [3, 4], [5, 6]] } };
-  check('同端照排;有状态的卡与标题行硬拆出来', JSON.stringify(rowsFor(laid, 'tablet-landscape')) === '[[0],[1,2],[3],[4],[5],[6]]');
-  check('手机上折:两张都短才并排(认边 17 字 + 公式 14 字 → 并排);别的端排的 3 张一行拆开', JSON.stringify(rowsFor(laid, 'phone')) === '[[0],[1,2],[3],[4],[5],[6]]' && JSON.stringify(rowsFor({ ...sec, layout: { for: 'tablet-landscape', rows: [[0, 1, 2], [3], [4], [5], [6]] } }, 'phone')) === '[[0],[1],[2],[3],[4],[5],[6]]' && JSON.stringify(rowsFor({ cards: [def, { kind: 'text', props: { text: '这一张卡的正文超过二十个字所以在手机上不能和别人并排' } }], lines: [], layout: { for: 'tablet-landscape', rows: [[0, 1]] } }, 'phone')) === '[[0],[1]]');
-  check('layout 没盖住全部卡 / 顺序乱了 → 不用它', JSON.stringify(rowsFor({ ...sec, layout: { for: 'phone', rows: [[0, 1]] } }, 'phone')) === '[[0],[1],[2],[3],[4],[5],[6]]' && JSON.stringify(rowsFor({ cards: [def, plain], lines: [], layout: { for: 'phone', rows: [[1, 0]] } }, 'phone')) === '[[0],[1]]');
+  check('明写的并排同端照办(量成全宽也并);碰上有状态的卡与标题行拆开,拆出来的按宽度排', JSON.stringify(rowsFor(laid, 'tablet-landscape', () => false)) === '[[0],[1,2],[3],[4],[5],[6]]' && JSON.stringify(rowsFor(laid, 'tablet-landscape')) === '[[0],[1,2],[3],[4],[5],[6]]');
+  const three: BoardSection = { ...sec, layout: { for: 'tablet-landscape', rows: [[0, 1, 2], [3], [4], [5], [6]] } };
+  check('明写 3 张一行:同端照办;到手机上拆开再按宽度排;明写的两张有长卡,手机上也拆', JSON.stringify(rowsFor(three, 'tablet-landscape')) === '[[0,1,2],[3],[4],[5],[6]]' && JSON.stringify(rowsFor(three, 'phone')) === '[[0,1],[2],[3],[4],[5],[6]]' && JSON.stringify(rowsFor({ cards: [def, { kind: 'text', props: { text: '这一张卡的正文超过二十个字所以在手机上不能和别人并排' } }], lines: [], layout: { for: 'tablet-landscape', rows: [[0, 1]] } }, 'phone')) === '[[0],[1]]');
+  check('layout 没盖住全部卡 / 顺序乱了 → 不用它,全按宽度排', JSON.stringify(rowsFor({ ...sec, layout: { for: 'phone', rows: [[0, 1]] } }, 'phone', () => false)) === '[[0],[1],[2],[3],[4],[5],[6]]' && JSON.stringify(rowsFor({ cards: [def, plain], lines: [], layout: { for: 'phone', rows: [[1, 0]] } }, 'phone')) === '[[0,1]]');
+  {
+    // 流式一张张来:第 k 张来时前面的行不变(只看前面的卡)
+    const full = rowsFor(sec, 'tablet-landscape', measured);
+    const stable = sec.cards.every((_c, k) => {
+      const part = rowsFor({ ...sec, cards: sec.cards.slice(0, k + 1), partial: true }, 'tablet-landscape', measured);
+      return JSON.stringify(part.slice(0, -1)) === JSON.stringify(full.filter((r) => r[r.length - 1] < k).slice(0, part.length - 1)) && part[part.length - 1].includes(k);
+    });
+    check('流式:每来一张,前面的行和整节排出来的一样', stable);
+  }
+  {
+    const fit = (lines: number, extra: Partial<CardFit> = {}): CardFit => ({ half: 100, full: 80, lines, overflow: false, ...extra });
+    const code: BoardCard = { kind: 'code', props: { text: '🟧🟧🟧' } };
+    check('能半宽的种类:文字、点读、代码、田字格、单词卡;标题行、提问卡、做题的、场景、图、大字的不行', canHalf(def) && canHalf(cards[2]) && canHalf(code) && canHalf({ kind: 'tianzige', props: { chars: '鼓' } }) && canHalf({ kind: 'word', props: { word: 'apple' } }) && !canHalf(hd) && !canHalf({ kind: 'text', props: { text: '?', ask: true } }) && !canHalf(cards[3]) && !canHalf(sceneCard) && !canHalf({ kind: 'image', props: { src: 'a.png' } }) && !canHalf({ ...def, look: { look: 'title' } }));
+    check('文字卡看半宽时几行:平板 ≤ 4、手机 ≤ 2;横着溢出不行', fitsHalf(def, 'tablet-landscape', fit(4)) && !fitsHalf(def, 'tablet-landscape', fit(5)) && fitsHalf(def, 'phone', fit(2)) && !fitsHalf(def, 'phone', fit(3)) && !fitsHalf(def, 'tablet-portrait', fit(1, { overflow: true })));
+    check('公式 / 代码 / 田字格 / 单词卡:半宽时不比全宽高(没折行)才行;选择题量成什么都不行', fitsHalf(formula, 'tablet-landscape', fit(1, { half: 60, full: 60 })) && !fitsHalf(formula, 'phone', fit(2, { half: 90, full: 60 })) && fitsHalf(code, 'tablet-landscape', fit(0, { half: 80 })) && fitsHalf(code, 'tablet-landscape', fit(0, { half: 81 })) && !fitsHalf(code, 'tablet-landscape', fit(0, { half: 120 })) && !fitsHalf(cards[3], 'tablet-landscape', fit(1, { half: 80 })));
+  }
   // ---- 选中态:播到这句该在的卡;句子锚到标题行时退到本节第一张真卡 ----
   const secL: BoardSection = { cards: [hd, def, formula], lines: [L('一', { anchor: 0 }), L('二', { anchor: 1, marks: [{ card: 2, phrase: '斜边' }] })] };
   check('nowCard:标注卡优先、锚点其次、锚到标题行就退到第一张真卡;没在播 null', nowCard([secL], { section: 0, line: 1, status: 'playing' }) === 2 && nowCard([secL], { section: 0, line: 0, status: 'playing' }) === 1 && nowCard([secL], { section: 0, line: -1, status: 'idle' }) === null && nowCard([secL], { section: 3, line: 0, status: 'playing' }) === null);

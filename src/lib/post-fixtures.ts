@@ -1,6 +1,6 @@
 /**
  * 后期的样本(《快模型方案.md》§一 B / C):tests/fixtures/post/<名>/ = section.md(老师原文,与 fixtures/board 同一种写法)+ expect.json
- * (部分匹配:must 该标的、never 不该提的、rows 行、look 底色槽的允许集、maxDropped)+ prompts.md(各拍提示词的渲染快照,测试生成入库;
+ * (部分匹配:must 该标的、never 不该提的、look 底色槽的允许集、maxDropped)+ prompts.md(各拍提示词的渲染快照,测试生成入库;
  * 改骨架 diff 里一眼看到提示词变了什么)+ runs/(真模型评测的留档,gitignore)。
  * 这里是纯函数:读样本、渲染快照、给一次后期结果打分。离线测试在 tests/post-fixtures.test.ts,真模型评测在 scripts/post-eval.ts。
  */
@@ -21,8 +21,6 @@ export const PostExpectSchema = z.object({
   must: z.array(z.object({ card: z.number().int().nonnegative(), phrase: z.string().min(1) })).default([]),
   /** 不该提的:模型提了就算失手(校验丢不丢都算) */
   never: z.array(z.object({ card: z.number().int().nonnegative(), phrase: z.string().min(1) })).default([]),
-  /** 行:给了就要一模一样 */
-  rows: z.array(z.array(z.number().int().nonnegative())).optional(),
   /** 底色槽:卡号 → 允许的槽名;没给的卡不看 */
   look: z.record(z.string(), z.array(z.string().min(1))).default({}),
   maxDropped: z.number().int().nonnegative().optional(),
@@ -62,19 +60,13 @@ export function renderFixturePrompts(section: BoardSection, device: Device, them
   return beats.map((b, k) => `<!-- ===== 拍 ${k}(卡 ${b.card}) ===== -->\n${beatPrompt(section, b, device, theme, template)}`).join('\n\n');
 }
 
-/** 期望本身合法:must 的词要在那张卡上、卡号要在;rows 要恰好盖住全部卡 */
+/** 期望本身合法:must 的词要在那张卡上、卡号要在 */
 export function expectProblems(section: BoardSection, expect: PostExpect): string[] {
   const out: string[] = [];
   for (const m of [...expect.must, ...expect.never]) {
     const c = section.cards[m.card];
     if (!c) out.push(`卡 ${m.card} 不在(只有 ${section.cards.length} 张)`);
     else if (!cardTexts(c).some((t) => findPhrase(t, m.phrase) >= 0)) out.push(`「${m.phrase}」不在卡 ${m.card} 上`);
-  }
-  if (expect.rows) {
-    const flat = expect.rows.flat();
-    // 提问卡不过后期、独占节尾一行,期望里不写它
-    const n = section.cards.filter((c) => !isAskCard(c)).length;
-    if (flat.length !== n || !flat.every((v, i) => v === i)) out.push(`rows 没有恰好盖住 ${n} 张卡各一次`);
   }
   for (const k of Object.keys(expect.look)) if (!section.cards[Number(k)]) out.push(`look 的卡 ${k} 不在`);
   return out;
@@ -89,7 +81,6 @@ export interface FixtureScore {
   /** 模型提了不该提的几条 */
   neverHit: number;
   neverTotal: number;
-  rowsOk: boolean | null;
   lookOk: number;
   lookTotal: number;
   dropped: number;
@@ -104,7 +95,6 @@ export function scoreFixture(section: BoardSection, file: PostFile, expect: Post
   const mustHit = expect.must.filter((m) => marks.some((x) => x.card === m.card && x.phrase === m.phrase)).length;
   const proposed = file.beats.flatMap((b) => (b.output?.marks ?? []).map((m) => ({ card: m.card ?? b.card, phrase: m.phrase })));
   const neverHit = expect.never.filter((n) => proposed.some((p) => p.card === n.card && p.phrase === n.phrase)).length;
-  const rowsOk = expect.rows ? JSON.stringify(section.layout?.rows ?? section.cards.map((_c, i) => [i])) === JSON.stringify(expect.rows) : null;
   const lookKeys = Object.keys(expect.look);
   const lookOk = lookKeys.filter((k) => { const tint = section.cards[Number(k)]?.look?.tint; return tint !== undefined && expect.look[k].includes(tint); }).length;
   return {
@@ -114,7 +104,6 @@ export function scoreFixture(section: BoardSection, file: PostFile, expect: Post
     mustTotal: expect.must.length,
     neverHit,
     neverTotal: expect.never.length,
-    rowsOk,
     lookOk,
     lookTotal: lookKeys.length,
     dropped: file.dropped.length,

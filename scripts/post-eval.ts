@@ -48,7 +48,7 @@ for (const name of names) {
     all.push({ name, score, beatMs });
     mkdirSync(join(fx.dir, 'runs'), { recursive: true });
     writeFileSync(join(fx.dir, 'runs', `${stamp}-${policy.post.runtime}${model ? `-${model}` : ''}-html${serial ? '-serial' : ''}${repeat > 1 ? `-${i + 1}` : ''}.json`), `${JSON.stringify({ at: new Date().toISOString(), runtime: policy.post.runtime, score, file: r.file, section: r.section }, null, 2)}\n`);
-    console.log(`  ${name.padEnd(18)} 拍 ${pct(score.okBeats, score.beats)}  must ${pct(score.mustHit, score.mustTotal)}  never 失手 ${pct(score.neverHit, score.neverTotal)}  行 ${score.rowsOk === null ? '-' : score.rowsOk ? '✓' : '✗'}  底色 ${pct(score.lookOk, score.lookTotal)}  丢 ${score.dropped}${score.droppedOk === false ? '(超)' : ''}  每拍 p50 ${q(beatMs, 0.5)}ms  ${score.costUsd !== undefined ? `$${score.costUsd.toFixed(3)}` : ''}`);
+    console.log(`  ${name.padEnd(18)} 拍 ${pct(score.okBeats, score.beats)}  must ${pct(score.mustHit, score.mustTotal)}  never 失手 ${pct(score.neverHit, score.neverTotal)}  底色 ${pct(score.lookOk, score.lookTotal)}  丢 ${score.dropped}${score.droppedOk === false ? '(超)' : ''}  每拍 p50 ${q(beatMs, 0.5)}ms  ${score.costUsd !== undefined ? `$${score.costUsd.toFixed(3)}` : ''}`);
     for (const b of r.file.beats) for (const d of b.dropped) console.log(`      丢:${d}`);
     for (const b of r.file.beats) if (!b.ok) console.log(`      拍 ${b.beat} 没成:${b.error}`);
   }

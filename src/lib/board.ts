@@ -7,7 +7,7 @@
  * spans 是「这张卡 / 这句话是原文哪几行」,家长端「看原文」据此在原文旁边标出解析器怎么读的;孩子端的 BoardSection 不带它。
  */
 import { parseCard, type CardPlace } from '../cards/index.ts';
-import { anchorMarks, hasState, isAskCard, isHeading, isQuestion, lineTarget, phrasesIn, plainLine, type BoardCard, type BoardCue, type BoardLine, type BoardSection, type Device } from './kid-board.ts';
+import { anchorMarks, hasState, isAskCard, isHeading, isQuestion, lineTarget, MAX_CARDS_PER_ROW, phrasesIn, plainLine, standsAlone, type BoardCard, type BoardCue, type BoardLine, type BoardSection, type Device } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 
 export interface ParseBoardOptions {
@@ -21,7 +21,7 @@ export interface ParseBoardOptions {
 
 /**
  * 排版修饰词(《备课设计.md》§10.2):写在围栏标签里种类后面,哪种卡都认,解析器先摘掉再按种类解析——
- * `same` 接上一行(没写 = 另起一行)、`tint=<底色槽>`、`look=<字形槽>`、`emoji=<一个>`。槽名对不对主题由课文件的 check 查(解析器不认识主题)。
+ * `same` 和上一张并排(没写 = 孩子端按卡的宽度排,kid-board.ts 的 rowsFor)、`tint=<底色槽>`、`look=<字形槽>`、`emoji=<一个>`。槽名对不对主题由课文件的 check 查(解析器不认识主题)。
  * 老师也写得出来:cotutor-board 技能不教,写了就当已定(拍板 27)
  */
 export interface CardMods {
@@ -56,9 +56,6 @@ export function withMods(fenceLine: string, mods: CardMods): string {
   return `${fenceLine.slice(0, fenceLine.indexOf(m[1]))}${m[1]}${words.join(' ')}`;
 }
 
-const MAX_ROW = 3;
-/** 独占一行的卡(和后期 standsAlone 同一条规则,这里不引 postprocess 免得绕圈):标题行、提问卡、有交互的、场景 */
-const alone = (c: BoardCard): boolean => isHeading(c) || isAskCard(c) || hasState(c) || c.kind === 'scene';
 
 /** 解析提醒;line = 出问题的那一行(0 起,相对传进来的文本),没有行的就不带 */
 export interface BoardWarning {
@@ -208,14 +205,14 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
     const plain = plainLine(r.text);
     return { text: plain, audio: null, marks, ask: isQuestion(plain), anchor: r.anchor, cues: r.cues };
   });
-  // 排版(《备课设计.md》§10.2):有卡写了 same 才排行;接不上(上一行满了、有独占一行的卡)就另起一行并提醒。提问卡(下面补的)不在行里,rowsFor 认前缀
+  // 排版(《备课设计.md》§10.2):有卡写了 same 才排行(明写的并排,其余孩子端按宽度排);接不上(上一行满了、有独占一行的卡)就另起一行并提醒。提问卡(下面补的)不在行里,rowsFor 认前缀
   let layout: BoardSection['layout'];
   if (mods.some((m) => m.same)) {
     const rows: number[][] = [];
     cards.forEach((c, n) => {
       const last = rows[rows.length - 1];
-      const join = mods[n].same && last !== undefined && last.length < MAX_ROW && !alone(c) && !last.some((i) => alone(cards[i]));
-      if (mods[n].same && !join) warnings.push({ text: `卡 ${n + 1} 写了 same,接不上上一行(${last === undefined ? '它是第一张' : last.length >= MAX_ROW ? `上一行已有 ${MAX_ROW} 张` : '有独占一行的卡'}),另起一行`, line: cardSpans[n][0] });
+      const join = mods[n].same && last !== undefined && last.length < MAX_CARDS_PER_ROW && !standsAlone(c) && !last.some((i) => standsAlone(cards[i]));
+      if (mods[n].same && !join) warnings.push({ text: `卡 ${n + 1} 写了 same,接不上上一行(${last === undefined ? '它是第一张' : last.length >= MAX_CARDS_PER_ROW ? `上一行已有 ${MAX_CARDS_PER_ROW} 张` : '有独占一行的卡'}),另起一行`, line: cardSpans[n][0] });
       if (join) last!.push(n);
       else rows.push([n]);
     });

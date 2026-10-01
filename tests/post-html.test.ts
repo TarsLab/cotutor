@@ -34,7 +34,7 @@ const beatOf = (card: number) => beats.find((b) => b.card === card)!;
   check('老师标过的词不画在卡上(在 {marked} 里);< 转义;now 进 class', c1.includes('class="c c-text now"') && c1.includes('<h3>认边</h3>') && c1.includes('两条短边叫直角边,最长的一条叫斜边 a &lt; b') && !c1.includes('<mark') && c1.includes(' data-marked="「直角边」"'), c1);
   check('标题行是 h2.heading,不是卡', cardHtml(section, 3) === '<h2 class="heading" id="c3">小结</h2>', cardHtml(section, 3));
   const c4 = cardHtml(section, 4);
-  check('选择题:alone、问题 p + 选项 ul li、不带答案', c4.startsWith('<div class="c c-choice alone" id="c4" data-tint="plum">') && c4.includes('<ul><li>6</li><li>5</li></ul>') && !c4.includes('[x]'), c4);
+  check('选择题:问题 p + 选项 ul li、不带答案', c4.startsWith('<div class="c c-choice" id="c4" data-tint="plum">') && c4.includes('<ul><li>6</li><li>5</li></ul>') && !c4.includes('[x]'), c4);
   check('点读卡:一段一个 p', cardHtml(section, 5).includes('<p>apple 苹果</p><p>banana 香蕉</p>'), cardHtml(section, 5));
   check('前文截长:每段最多 max 字,末尾 …', cardHtml(section, 1, { max: 5 }).includes('<p>两条短边叫…</p>'), cardHtml(section, 1, { max: 5 }));
   check('markedText:同一个词只包第一次、重叠的丢、其余转义', markedText('a<b 直角边 直角边', [{ phrase: '直角边', attrs: 'data-pen="tint"' }, { phrase: '角边 直', attrs: '' }]) === 'a&lt;b <mark data-pen="tint">直角边</mark> 直角边');
@@ -48,18 +48,18 @@ const beatOf = (card: number) => beats.find((b) => b.card === card)!;
   check('第一张卡:注释「前面没有」+ now 卡 + 这拍的讲稿;没有讲稿的拍写注释', b0.startsWith('<!-- 这是第一张卡,前面没有 -->\n<div class="c c-text now"') && b0.endsWith('<p class="line" data-n="0">先认边。</p>') && boardHtml(section, { card: 0, lines: [] }).endsWith('<!-- 这拍没有讲稿 -->'), b0);
   const laid = { ...section, layout: { for: 'tablet-landscape' as const, rows: [[0], [1, 2]] }, cards: section.cards.map((c, i) => (i === 1 ? { ...c, look: { tint: 'sky', emoji: '📐' } } : c)) };
   const b4 = boardHtml(laid, beatOf(4));
-  check('前文按已定的行包 <div class="row">,并排的两张在一个 row 里;已定的样子进 data-tint / data-emoji;没排到行的卡不包;now 卡不包行', b4.includes('<div class="row"><div class="c c-text" id="c0"') && b4.includes('<div class="row"><div class="c c-text" id="c1" data-tint="sky" data-emoji="📐" data-marked="「直角边」"><h3>认边</h3>') && /<\/div><div class="c c-text" id="c2" data-style="formula"[^>]*><p>直角边² \+ 直角边² = 斜边²<\/p><\/div><\/div>\n<h2 class="heading" id="c3">/.test(b4) && b4.includes('\n<div class="c c-choice alone now" id="c4"'), b4);
+  check('前文一张一行,不包行(排版不归后期,有 layout 也不包);已定的样子进 data-tint / data-emoji;选择题不带 alone', !b4.includes('class="row"') && b4.startsWith('<div class="c c-text" id="c0"') && b4.includes('\n<div class="c c-text" id="c1" data-tint="sky" data-emoji="📐" data-marked="「直角边」"><h3>认边</h3>') && b4.includes('\n<div class="c c-choice now" id="c4"'), b4);
   check('前文只带最近 5 张:更前面的写注释', boardHtml({ ...section, cards: [...section.cards, ...section.cards] }, { card: 8, lines: [] }).startsWith('<!-- 更前面还有 3 张'));
 }
 {
   // 补丁 → 提案
   const b = beatOf(4);
   const p1 = parseBeatPatch('```html\n<div class="c" id="c4" data-row="same" data-tint="plum" data-look=\'plain\' data-emoji=🧮>\n  <mark data-pen="box" data-said="多少">5</mark>\n  <mark data-pen="underline" data-card="c2" data-line="0">斜边²</mark>\n  <p class="line" data-n="0" data-for="c1"></p>\n</div>\n```\n好了。', section, b);
-  check('补丁(div 壳,data-*):围栏 / 双引号 / 单引号 / 无引号都认;mark 的词落到 said 所在的句;card c2 → 2;line 显式给了就用;p.line data-n data-for → 锚点', p1.ok && JSON.stringify(p1.out) === JSON.stringify({ row: 'same', look: { tint: 'plum', look: 'plain', emoji: '🧮' }, marks: [{ line: 0, phrase: '5', pen: 'box', said: '多少' }, { line: 0, card: 2, phrase: '斜边²', pen: 'underline' }], anchors: [{ line: 0, card: 1 }] }), JSON.stringify(p1));
+  check('补丁(div 壳,data-*):围栏 / 双引号 / 单引号 / 无引号都认;mark 的词落到 said 所在的句;card c2 → 2;line 显式给了就用;p.line data-n data-for → 锚点;老骨架的 data-row 不认', p1.ok && JSON.stringify(p1.out) === JSON.stringify({ look: { tint: 'plum', look: 'plain', emoji: '🧮' }, marks: [{ line: 0, phrase: '5', pen: 'box', said: '多少' }, { line: 0, card: 2, phrase: '斜边²', pen: 'underline' }], anchors: [{ line: 0, card: 1 }] }), JSON.stringify(p1));
   const p2 = parseBeatPatch('<div class="c" id="c4"></div>', section, b);
-  check('空壳:什么都不标,row 缺省 new', p2.ok && JSON.stringify(p2.out) === '{"row":"new","marks":[],"anchors":[]}', JSON.stringify(p2));
+  check('空壳:什么都不标', p2.ok && JSON.stringify(p2.out) === '{"marks":[],"anchors":[]}', JSON.stringify(p2));
   const legacy = parseBeatPatch('<c row="same" tint="plum"><mark pen="box" said="多少">5</mark><line n="0" for="c1"/></c>', section, b);
-  check('老写法 <c row><mark pen><line n for/> 照认', legacy.ok && JSON.stringify(legacy.out) === JSON.stringify({ row: 'same', look: { tint: 'plum' }, marks: [{ line: 0, phrase: '5', pen: 'box', said: '多少' }], anchors: [{ line: 0, card: 1 }] }), JSON.stringify(legacy));
+  check('老写法 <c row><mark pen><line n for/> 照认', legacy.ok && JSON.stringify(legacy.out) === JSON.stringify({ look: { tint: 'plum' }, marks: [{ line: 0, phrase: '5', pen: 'box', said: '多少' }], anchors: [{ line: 0, card: 1 }] }), JSON.stringify(legacy));
   const echo = parseBeatPatch('<div class="row"><div class="c c-text" id="c0" data-tint="night"><h3>勾股定理</h3></div></div>\n<div class="c c-choice alone now" id="c4"><p>x</p></div>\n<div class="c" id="c4" data-row="new" data-tint="plum"><mark data-pen="box">6</mark></div>', section, b);
   check('模型把板书抄了一遍再给补丁:带 now 的输入卡不算壳,取最后那个补丁', echo.ok && echo.out.look?.tint === 'plum' && echo.out.marks.length === 1 && echo.out.marks[0].phrase === '6', JSON.stringify(echo));
   const p3 = parseBeatPatch('我觉得挺好,不用改。', section, b);
@@ -72,25 +72,25 @@ const beatOf = (card: number) => beats.find((b) => b.card === card)!;
   const tzHtml = cardHtml(tz, 1, { now: true });
   check('田字格卡不再是空壳:里面一句注释说写的是哪几个字、没有可标的文字(字不放属性上)', tzHtml === '<div class="c c-tianzige now" id="c1" data-tint="paper"><!-- 田字格:「说话」的笔顺动画,没有可标的文字 --></div>', tzHtml);
   const tp = beatPrompt(tz, tb, 'phone', theme, POST_TEMPLATE_HTML);
-  check('田字格那一拍要回的形状里没有 <mark>,并说明标不上;别的拍照旧', tp.endsWith('<div class="c" id="c1" data-row="same|new" data-tint="sky" data-emoji="📐"><p class="line" data-n="1" data-for="c0"></p></div>\n(这张是田字格卡,标不上:壳里不放 <mark>)\n') && beatPrompt(tz, beatsOf(tz)[0], 'phone', theme, POST_TEMPLATE_HTML).includes('<mark data-pen="tint" data-said="…">…</mark>'), tp.slice(-200));
+  check('田字格那一拍要回的形状里没有 <mark>,并说明标不上;别的拍照旧', tp.endsWith('<div class="c" id="c1" data-tint="sky" data-emoji="📐"><p class="line" data-n="1" data-for="c0"></p></div>\n(这张是田字格卡,标不上:壳里不放 <mark>)\n') && beatPrompt(tz, beatsOf(tz)[0], 'phone', theme, POST_TEMPLATE_HTML).includes('<mark data-pen="tint" data-said="…">…</mark>'), tp.slice(-200));
   const copied = parseBeatPatch('```html\n<div class="c c-tianzige now" id="c1" data-row="new" data-tint="paper"><mark data-pen="underline" data-said="说">说</mark><mark data-pen="underline" data-said="话">话</mark></div>\n```', tz, tb);
-  check('壳的 class 照抄成 "c c-tianzige now":按 id 认成这一拍的壳,不再整拍作废', copied.ok && copied.out.row === 'new' && copied.out.look?.tint === 'paper' && copied.out.marks.length === 2, JSON.stringify(copied));
-  const tv = validateBeatPost(tz, tb, theme, 'tablet-landscape', copied.ok ? copied.out : { row: 'new', marks: [], anchors: [] });
-  check('田字格卡上的标注一律丢(原因说是田字格),样子与行照收', tv.kept.marks === 0 && tv.kept.look && tv.dropped.length === 2 && tv.dropped.every((d) => d.includes('田字格卡标不上')), JSON.stringify([tv.kept, tv.dropped]));
+  check('壳的 class 照抄成 "c c-tianzige now":按 id 认成这一拍的壳,不再整拍作废', copied.ok && copied.out.look?.tint === 'paper' && copied.out.marks.length === 2, JSON.stringify(copied));
+  const tv = validateBeatPost(tz, tb, theme, copied.ok ? copied.out : { marks: [], anchors: [] });
+  check('田字格卡上的标注一律丢(原因说是田字格),样子照收', tv.kept.marks === 0 && tv.kept.look && tv.dropped.length === 2 && tv.dropped.every((d) => d.includes('田字格卡标不上')), JSON.stringify([tv.kept, tv.dropped]));
   const echoNow = parseBeatPatch('<div class="c c-text" id="c0" data-tint="sky"><h3>言字旁</h3></div>\n<div class="c c-tianzige now" id="c1" data-tint="paper"></div>\n<div class="c c-tianzige" id="c1" data-row="new" data-tint="sky" data-emoji="✍"></div>', tz, tb);
   check('抄了前文再给补丁:前文卡 id 对不上不算,同 id 的取最后一个', echoNow.ok && echoNow.out.look?.tint === 'sky' && echoNow.out.look?.emoji === '✍', JSON.stringify(echoNow));
   const wrongId = parseBeatPatch('<div class="c" id="c9" data-row="new" data-tint="sky"></div>', tz, tb);
   check('id 写错了:退回老办法,不带 now 的最后一个壳', wrongId.ok && wrongId.out.look?.tint === 'sky', JSON.stringify(wrongId));
   // 补丁走同一个校验器
-  const v = validateBeatPost(section, b, theme, 'tablet-landscape', p1.ok ? p1.out : { row: 'new', marks: [], anchors: [] });
-  check('校验:5 在选项上收下(box, said 多少);斜边² 标到前面的卡 2 收下;锚点句 0 → 卡 1;same 接不上(选择题独占)→ new', v.kept.marks === 2 && v.kept.anchors === 1 && v.kept.row === 'new' && v.section.lines[b.lines[0]].marks.some((m) => m.phrase === '5' && m.pen === 'box' && m.said === '多少') && v.section.cards[4].look?.tint === 'plum', JSON.stringify([v.kept, v.dropped]));
+  const v = validateBeatPost(section, b, theme, p1.ok ? p1.out : { marks: [], anchors: [] });
+  check('校验:5 在选项上收下(box, said 多少);斜边² 标到前面的卡 2 收下;锚点句 0 → 卡 1', v.kept.marks === 2 && v.kept.anchors === 1 && v.section.lines[b.lines[0]].marks.some((m) => m.phrase === '5' && m.pen === 'box' && m.said === '多少') && v.section.cards[4].look?.tint === 'plum', JSON.stringify([v.kept, v.dropped]));
 }
 {
   // 骨架
   check('出厂兜底就是 HTML 骨架', POST_TEMPLATE_FALLBACK === POST_TEMPLATE_HTML);
   check('missingSlots:要 board / rules / patch', JSON.stringify(missingSlots('{board}')) === '["rules","patch"]' && missingSlots(POST_TEMPLATE_HTML).length === 0);
   const p = beatPrompt(section, beatOf(4), 'phone', theme, POST_TEMPLATE_HTML);
-  check('HTML 方言的提示词:板书段是 HTML、规则说 <c> / <mark> / <line>、输出段是补丁、只回 <c>、槽表照给', p.includes('<div class="c c-choice alone now" id="c4"') && p.includes('<p class="line" data-n="0">斜边是多少?</p>') && p.includes('data-row="same" 接在上一张卡那一行') && p.includes('<mark data-pen="…">词</mark>') && p.includes('<p class="line" data-n="1" data-for="c0"></p>') && p.includes('<div class="c" id="c4" data-row="same|new"') && p.includes('回一个补丁') && p.includes('已标过的词(老师标的或前面定的,已经画在卡上了,不要再标):\n- c1:「直角边」') && p.includes('- sky:') && p.includes('手机竖屏') && p.indexOf('标注的词只从卡上取') < p.indexOf('补丁是 now 那张卡的壳') && p.includes('c-tianzige') && p.includes('几个拼成的组合') && !p.includes('{board}') && !p.includes('{patch}'), p.slice(0, 300));
+  check('HTML 方言的提示词:板书段是 HTML、规则说 <c> / <mark> / <line>、输出段是补丁、只回 <c>、槽表照给', p.includes('<div class="c c-choice now" id="c4"') && p.includes('<p class="line" data-n="0">斜边是多少?</p>') && !p.includes('data-row') && p.includes('<mark data-pen="…">词</mark>') && p.includes('<p class="line" data-n="1" data-for="c0"></p>') && p.includes('<div class="c" id="c4" data-tint="sky"') && p.includes('回一个补丁') && p.includes('已标过的词(老师标的或前面定的,已经画在卡上了,不要再标):\n- c1:「直角边」') && p.includes('- sky:') && !p.includes('{device}') && p.indexOf('标注的词只从卡上取') < p.indexOf('补丁是 now 那张卡的壳') && p.includes('c-tianzige') && p.includes('几个拼成的组合') && !p.includes('{board}') && !p.includes('{patch}'), p.slice(0, 300));
 }
 {
   // runPost 全流程:假 CLI 见「## 板书」就回补丁;顺着起,第二拍的前文带第一拍定的样子
@@ -108,9 +108,9 @@ const beatOf = (card: number) => beats.find((b) => b.card === card)!;
   const sec = parseBoard('```text\n# 三角形\n三条边\n```\n\n先看。\n\n```text\n# 边\n三条边围起来\n```\n\n三条边。\n\n```text\n# 角\n三个角\n```\n\n三个角。\n').section;
   const r = await runPost(ws, 'math-tutor', sec, { template: POST_TEMPLATE_HTML, serial: true, env: process.env });
   const files = r.file.beats;
-  check('三拍都收到;每拍的 prompt 是 HTML、raw 是补丁', r.file.ok && files.length === 3 && files.every((f) => f.ok && f.prompt.includes('```html') && f.raw.includes('data-row=')), JSON.stringify(files.map((f) => [f.ok, f.error])));
+  check('三拍都收到;每拍的 prompt 是 HTML、raw 是补丁(假模型照老骨架写了 data-row)', r.file.ok && files.length === 3 && files.every((f) => f.ok && f.prompt.includes('```html') && f.raw.includes('data-row=')), JSON.stringify(files.map((f) => [f.ok, f.error])));
   check('卡 0 的 sky + emoji 套上;卡 1 的 nope 槽丢了;越界的卡 99 每拍都丢;第一个词的圈收下', r.section.cards[0].look?.tint === 'sky' && r.section.cards[0].look?.emoji === '📐' && r.section.cards[1].look === undefined && r.file.dropped.filter((d) => d.includes('越界')).length === 3 && r.file.kept.marks === 3 && r.section.lines.every((l) => l.marks.some((m) => m.pen === 'circle')), JSON.stringify([r.file.dropped, r.file.kept, r.section.lines.map((l) => l.marks)]));
-  check('顺着起:第二拍的前文里卡 0 带第一拍定的 data-tint="sky" data-emoji;第三拍的前文两张都在 row 里', files[1].prompt.includes('id="c0" data-tint="sky" data-emoji="📐" data-marked="「三角形」"><h3>三角形</h3>') && files[2].prompt.includes('<div class="row"><div class="c c-text" id="c0"') && files[2].prompt.includes('<div class="row"><div class="c c-text" id="c1"'), files[2].prompt.split('## 板书')[1]?.slice(0, 600));
-  check('卡 2 写 same 接上一行成功(两张都不独占)', JSON.stringify(r.section.layout?.rows) === '[[0],[1,2]]' && files[2].kept?.row === 'same', JSON.stringify(r.section.layout));
+  check('顺着起:第二拍的前文里卡 0 带第一拍定的 data-tint="sky" data-emoji;第三拍的前文两张都在', files[1].prompt.includes('id="c0" data-tint="sky" data-emoji="📐" data-marked="「三角形」"><h3>三角形</h3>') && files[2].prompt.includes('<div class="c c-text" id="c0"') && files[2].prompt.includes('<div class="c c-text" id="c1"'), files[2].prompt.split('## 板书')[1]?.slice(0, 600));
+  check('假模型写的 data-row="same" 不认:后期不排行,节上没有 layout', r.section.layout === undefined, JSON.stringify(r.section.layout));
 }
 done();

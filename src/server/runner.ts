@@ -708,7 +708,7 @@ export class Runner {
       let cur = section;
       for (const b of beatsOf(cur)) {
         const out = b.card === null ? undefined : decisions.get(b.card);
-        if (out) cur = validateBeatPost(cur, b, env.theme, env.device, out).section;
+        if (out) cur = validateBeatPost(cur, b, env.theme, out).section;
       }
       return cur;
     };
@@ -903,12 +903,12 @@ export class Runner {
     if (postP && kidView.section) {
       try {
         const r = await postP;
-        // 按拍的顺序套到定稿的节上(行顺着长);每拍的 dropped / kept 以套到定稿节上的为准
+        // 按拍的顺序套到定稿的节上;每拍的 dropped / kept 以套到定稿节上的为准
         let cur: BoardSection = kidView.section;
         const files: PostBeatFile[] = [];
         for (const f of r.files) {
           const b = beatsOf(cur).find((x) => x.card === f.card);
-          if (f.ok && f.output && b) { const v = validateBeatPost(cur, b, r.env.theme, r.env.device, f.output); cur = v.section; files.push({ ...f, dropped: v.dropped, kept: v.kept }); } else files.push(f);
+          if (f.ok && f.output && b) { const v = validateBeatPost(cur, b, r.env.theme, f.output); cur = v.section; files.push({ ...f, dropped: v.dropped, kept: v.kept }); } else files.push(f);
         }
         const a = assemblePost(files, r.env, timing.startedAt, Date.now() - r.t0);
         if (files.some((f) => f.ok)) kidView.section = { ...cur, lines: cur.lines.map((l, i) => ({ ...l, audio: kidView.section?.lines[i]?.audio ?? null })) };

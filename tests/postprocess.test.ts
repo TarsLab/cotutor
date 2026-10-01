@@ -1,6 +1,6 @@
 /** 板书后期的纯函数:提示词从主题清单现拼、校验的每条规则各一正一反。补丁的解析在 post-html.test。 */
 import { parseBoard } from '../src/lib/board.ts';
-import { MAX_CARDS_PER_ROW, MAX_MARKS_PER_CARD, MAX_MARKS_PER_LINE, POST_TEMPLATE_FALLBACK, PostOutputSchema, beatPrompt, missingSlots, validateBeatPost, validatePost } from '../src/lib/postprocess.ts';
+import { MAX_MARKS_PER_CARD, MAX_MARKS_PER_LINE, POST_TEMPLATE_FALLBACK, PostOutputSchema, beatPrompt, missingSlots, validateBeatPost, validatePost } from '../src/lib/postprocess.ts';
 import { beatsOf } from '../src/lib/kid-board.ts';
 import { readFileSync } from 'node:fs';
 import { unwrapJsonOutput } from '../src/server/post.ts';
@@ -13,9 +13,9 @@ const section = parseBoard('```text\n# 勾股定理\n直角三角形三条边的
 {
   const beats = beatsOf(section);
   const p = beatPrompt(section, beats.find((x) => x.card === 4)!, 'tablet-landscape', theme);
-  check('提示词(一拍):槽表从清单现拼(名字 + 给什么用)、端的说明、前文是已定的卡、这拍的卡带 now 与 alone、规则与配额同源', p.includes('- sky:结论、定义') && p.includes('- circle:圈') && p.includes('平板横屏') && p.includes('id="c0"') && p.includes('c-choice alone now') && p.includes(`一句最多 ${MAX_MARKS_PER_LINE} 处`) && p.includes(`一张卡整节最多 ${MAX_MARKS_PER_CARD} 处`) && p.includes(`一行最多 ${MAX_CARDS_PER_ROW} 张`), p.slice(0, 400));
+  check('提示词(一拍):槽表从清单现拼(名字 + 给什么用)、前文是已定的卡、这拍的卡带 now、规则与配额同源;不讲排版(行归孩子端)', p.includes('- sky:结论、定义') && p.includes('- circle:圈') && p.includes('id="c0"') && p.includes('c-choice now') && p.includes(`一句最多 ${MAX_MARKS_PER_LINE} 处`) && p.includes(`一张卡整节最多 ${MAX_MARKS_PER_CARD} 处`) && !p.includes('data-row') && !p.includes('另起一行') && !p.includes('div class="row"'), p.slice(0, 400));
   const p1 = beatPrompt(section, beats.find((x) => x.card === 1)!, 'phone', theme);
-  check('换端提示词跟着变;老师已标的列在「已标过的词」;第一张卡的前文写「前面没有」', p1.includes('手机竖屏') && !p1.includes('平板横屏') && p1.includes('c1:「直角边」') && beatPrompt(section, beats.find((x) => x.card === 0)!, 'phone', theme).includes('前面没有'));
+  check('老师已标的列在「已标过的词」;第一张卡的前文写「前面没有」;老骨架的 {device} 还填得上', p1.includes('c1:「直角边」') && beatPrompt(section, beats.find((x) => x.card === 0)!, 'phone', theme).includes('前面没有') && beatPrompt(section, beats[1], 'phone', theme, '{device}\n{board}\n{rules}\n{patch}').startsWith('这节要在 phone 上看。'));
   check('提示词讲了 said(讲稿里念到的词)', p.includes('data-said'));
   // 骨架:主题的 post.md 与代码里的兜底同文;缺必需占位符就退兜底;不认识的占位符原样留
   const shipped = readFileSync(new URL('../themes/default/post.md', import.meta.url), 'utf8');
@@ -23,26 +23,26 @@ const section = parseBoard('```text\n# 勾股定理\n直角三角形三条边的
   check('主题骨架可改:自己的一句话进了提示词;缺必需占位符 → 退出厂骨架', beatPrompt(section, beats[1], 'phone', theme, '我的口味:圈少一点。\n{board}\n{rules}\n{patch}\n{nope}').startsWith('我的口味:圈少一点。') && beatPrompt(section, beats[1], 'phone', theme, '我的口味:圈少一点。\n{board}\n{rules}\n{patch}\n{nope}').includes('{nope}') && beatPrompt(section, beats[1], 'phone', theme, '我的口味\n{board}\n{nope}').includes('{nope}') === false && beatPrompt(section, beats[1], 'phone', theme, '坏骨架').startsWith('下面是一节板书讲到一半的样子'));
 }
 {
-  // 按拍校验:行二选一——same 接上一行要上一行还有位、两边都不是独占的卡;标注只能标这拍或前面的卡;look 进这拍的卡
+  // 按拍校验:标注只能标这拍或前面的卡;look 进这拍的卡;行不动(明写的 layout 原样带过去)
   const beats = beatsOf(section);
   const b1 = beats.find((x) => x.card === 1)!, b2 = beats.find((x) => x.card === 2)!, b3 = beats.find((x) => x.card === 3)!, b4 = beats.find((x) => x.card === 4)!;
-  let cur = validateBeatPost(section, beats.find((x) => x.card === 0)!, theme, 'tablet-landscape', { row: 'same', marks: [], anchors: [] }).section;
-  check('第一张卡写 same 也另起一行(前面没有行)', JSON.stringify(cur.layout?.rows) === '[[0]]');
-  const v1 = validateBeatPost(cur, b1, theme, 'tablet-landscape', { row: 'new', look: { tint: 'sky' }, marks: [{ line: 0, phrase: '斜边', pen: 'circle' }, { line: 0, card: 2, phrase: '斜边²', pen: 'marker' }], anchors: [] });
+  let cur = validateBeatPost(section, beats.find((x) => x.card === 0)!, theme, { marks: [], anchors: [] }).section;
+  check('后期不排行:没有 layout 就还是没有;明写的 layout 原样带过去', cur.layout === undefined && JSON.stringify(validateBeatPost({ ...section, layout: { for: 'phone', rows: [[0], [1, 2], [3], [4]] } }, b1, theme, { marks: [], anchors: [] }).section.layout) === '{"for":"phone","rows":[[0],[1,2],[3],[4]]}');
+  const v1 = validateBeatPost(cur, b1, theme, { look: { tint: 'sky' }, marks: [{ line: 0, phrase: '斜边', pen: 'circle' }, { line: 0, card: 2, phrase: '斜边²', pen: 'marker' }], anchors: [] });
   cur = v1.section;
-  check('拍 1:另起一行、样子进卡 1、标这拍的卡收下、标后面的卡丢掉(只能前面已定的)', JSON.stringify(cur.layout?.rows) === '[[0],[1]]' && cur.cards[1].look?.tint === 'sky' && v1.kept.marks === 1 && cur.lines[1].marks.length === 2 && v1.dropped.length === 1 && v1.dropped[0].includes('只能标这拍的卡或前面已定的卡'), JSON.stringify(v1.dropped));
-  const v2 = validateBeatPost(cur, b2, theme, 'tablet-landscape', { row: 'same', marks: [{ line: 0, card: 1, phrase: '斜边', pen: 'marker' }], anchors: [{ line: 0, card: 1 }] });
+  check('拍 1:样子进卡 1、标这拍的卡收下、标后面的卡丢掉(只能前面已定的)', cur.cards[1].look?.tint === 'sky' && v1.kept.marks === 1 && cur.lines[1].marks.length === 2 && v1.dropped.length === 1 && v1.dropped[0].includes('只能标这拍的卡或前面已定的卡'), JSON.stringify(v1.dropped));
+  const v2 = validateBeatPost(cur, b2, theme, { marks: [{ line: 0, card: 1, phrase: '斜边', pen: 'marker' }], anchors: [{ line: 0, card: 1 }] });
   cur = v2.section;
-  check('拍 2:接上一行(与卡 1 并排);标前面的卡但这个词那张卡上已标过 → 丢;锚点指前面的卡收下', JSON.stringify(cur.layout?.rows) === '[[0],[1,2]]' && v2.kept.row === 'same' && v2.kept.marks === 0 && v2.dropped[0].includes('已经标过') && cur.lines[2].anchor === 1 && v2.kept.anchors === 1, JSON.stringify(v2.dropped));
-  const v3 = validateBeatPost(cur, b3, theme, 'tablet-landscape', { row: 'same', look: { tint: 'sky' }, marks: [], anchors: [] });
+  check('拍 2:标前面的卡但这个词那张卡上已标过 → 丢;锚点指前面的卡收下', v2.kept.marks === 0 && v2.dropped[0].includes('已经标过') && cur.lines[2].anchor === 1 && v2.kept.anchors === 1, JSON.stringify(v2.dropped));
+  const v3 = validateBeatPost(cur, b3, theme, { look: { tint: 'sky' }, marks: [], anchors: [] });
   cur = v3.section;
-  check('拍 3(标题行):same 改成 new(独占)、样子丢掉', JSON.stringify(cur.layout?.rows) === '[[0],[1,2],[3]]' && v3.kept.row === 'new' && v3.dropped.some((d) => d.includes('有独占一行的卡')) && v3.dropped.some((d) => d.includes('标题行没有样子')), JSON.stringify(v3.dropped));
-  const v4 = validateBeatPost(cur, b4, theme, 'phone', { row: 'same', marks: [{ line: 0, phrase: '5', pen: 'box', said: '多少' }], anchors: [] });
-  check('拍 4(选择题):独占;标注带 said;行为哪个端排的记在 layout.for', JSON.stringify(v4.section.layout?.rows) === '[[0],[1,2],[3],[4]]' && v4.section.layout?.for === 'phone' && v4.section.lines[3].marks[0].said === '多少' && v4.kept.marks === 1, JSON.stringify(v4.dropped));
+  check('拍 3(标题行):样子丢掉', v3.dropped.some((d) => d.includes('标题行没有样子')), JSON.stringify(v3.dropped));
+  const v4 = validateBeatPost(cur, b4, theme, { marks: [{ line: 0, phrase: '5', pen: 'box', said: '多少' }], anchors: [] });
+  check('拍 4(选择题):标注带 said', v4.section.layout === undefined && v4.section.lines[3].marks[0].said === '多少' && v4.kept.marks === 1, JSON.stringify(v4.dropped));
 }
 {
   // said:讲稿第 3 句「记住这个公式。」——卡 2 上的「斜边²」讲稿没说,said 填「公式」能定时;said 不在讲稿里只丢 said,标注留下
-  const v = validatePost(section, theme, 'phone', { marks: [{ line: 2, card: 2, phrase: '斜边²', pen: 'marker', said: '公式' }, { line: 2, card: 2, phrase: '直角边²', pen: 'circle', said: '没说过' }], anchors: [], look: {} });
+  const v = validatePost(section, theme, { marks: [{ line: 2, card: 2, phrase: '斜边²', pen: 'marker', said: '公式' }, { line: 2, card: 2, phrase: '直角边²', pen: 'circle', said: '没说过' }], anchors: [], look: {} });
   const ms = v.section.lines[2].marks;
   check('said:在讲稿里 → 存进标注;不在 → 只丢 said、标注照收', v.kept.marks === 2 && ms.length === 2 && ms[0].said === '公式' && ms[1].said === undefined && v.dropped.length === 1 && v.dropped[0].includes('只丢 said'), JSON.stringify({ ms, dropped: v.dropped }));
 }
@@ -50,11 +50,11 @@ const section = parseBoard('```text\n# 勾股定理\n直角三角形三条边的
   check('claude --output-format json 的壳:正文在 result、费用在 total_cost_usd;别的原样', unwrapJsonOutput('{"type":"result","result":"{\\"marks\\":[]}","total_cost_usd":0.002}').text === '{"marks":[]}' && unwrapJsonOutput('{"type":"result","result":"x","total_cost_usd":0.002}').costUsd === 0.002 && unwrapJsonOutput('{"marks":[]}').text === '{"marks":[]}' && unwrapJsonOutput('纯文字').costUsd === undefined);
 }
 {
-  const good = PostOutputSchema.safeParse(({ marks: [{ line: 2, card: 2, phrase: '斜边²', pen: 'marker' }, { line: 1, card: 1, phrase: '斜边', pen: 'circle' }], anchors: [{ line: 2, card: 2 }], layout: { rows: [[0], [1, 2], [3], [4]] }, look: { '1': { tint: 'sky', emoji: '📐' }, '2': { look: 'title' } } }));
-  const v = validatePost(section, theme, 'tablet-landscape', good.success ? good.data : { marks: [], anchors: [], look: {} });
-  check('校验通过:模型的标注带 pen 加在老师的后面,老师的没 pen;锚点改了;行收下(for = 端);样子进卡', v.dropped.length === 0 && v.kept.marks === 2 && v.section.lines[1].marks.length === 2 && v.section.lines[1].marks[0].pen === undefined && v.section.lines[1].marks[1].pen === 'circle' && v.section.lines[2].anchor === 2 && v.kept.anchors === 0 && v.section.layout?.for === 'tablet-landscape' && v.section.layout.rows.length === 4 && v.section.cards[1].look?.tint === 'sky' && v.section.cards[1].look?.emoji === '📐' && v.section.cards[2].look?.look === 'title' && v.kept.looks === 2, JSON.stringify([v.dropped, v.kept, v.section.lines[1].marks]));
+  const good = PostOutputSchema.safeParse(({ marks: [{ line: 2, card: 2, phrase: '斜边²', pen: 'marker' }, { line: 1, card: 1, phrase: '斜边', pen: 'circle' }], anchors: [{ line: 2, card: 2 }], look: { '1': { tint: 'sky', emoji: '📐' }, '2': { look: 'title' } } }));
+  const v = validatePost(section, theme, good.success ? good.data : { marks: [], anchors: [], look: {} });
+  check('校验通过:模型的标注带 pen 加在老师的后面,老师的没 pen;锚点改了;不排行;样子进卡', v.dropped.length === 0 && v.kept.marks === 2 && v.section.lines[1].marks.length === 2 && v.section.lines[1].marks[0].pen === undefined && v.section.lines[1].marks[1].pen === 'circle' && v.section.lines[2].anchor === 2 && v.kept.anchors === 0 && v.section.layout === undefined && v.section.cards[1].look?.tint === 'sky' && v.section.cards[1].look?.emoji === '📐' && v.section.cards[2].look?.look === 'title' && v.kept.looks === 2, JSON.stringify([v.dropped, v.kept, v.section.lines[1].marks]));
   check('老师那句原来的锚点就是 2 → 锚点没算改动;输入的 section 没被改(纯函数)', section.lines[1].marks.length === 1 && section.cards[1].look === undefined && section.layout === undefined);
-  const bad = validatePost(section, theme, 'phone', {
+  const bad = validatePost(section, theme, {
     marks: [
       { line: 9, card: 0, phrase: '勾股定理', pen: 'marker' },
       { line: 0, card: 9, phrase: '勾股定理', pen: 'marker' },
@@ -70,14 +70,11 @@ const section = parseBoard('```text\n# 勾股定理\n直角三角形三条边的
       { line: 3, card: 4, phrase: '5', pen: 'marker' },
     ],
     anchors: [{ line: 0, card: 3 }, { line: 7, card: 0 }],
-    layout: { rows: [[0, 1, 2, 3], [4]] },
     look: { '3': { tint: 'sky' }, '1': { tint: 'nope', look: 'huge', emoji: 'abc' }, x: { tint: 'sky' } },
   });
   const why = bad.dropped.join('\n');
   check('校验丢:没这句、没这张卡、标题行、词不在卡上、不认识的笔、老师已标、一句超 2、一张卡超 3', why.includes('没有这句') && why.includes('没有这张卡') && why.includes('这个词不在卡上') && why.includes('不认识的笔 crayon') && why.includes('老师已经标过') && why.includes(`这句已有 ${MAX_MARKS_PER_LINE} 处`) && why.includes(`这张卡已有 ${MAX_MARKS_PER_CARD} 处`), why);
-  check('校验丢:锚到标题行 / 没这句;一行超 3 张整个排版不要;槽名不在清单、字形不在、emoji 不像;标题行与坏卡号的样子', why.includes('锚点') && why.includes(`超过 ${MAX_CARDS_PER_ROW} 张`) && JSON.stringify(bad.section.layout?.rows) === '[[0],[1],[2],[3],[4]]' && why.includes('底色槽 nope 不在主题里') && why.includes('字形槽 huge') && why.includes('emoji 不像') && why.includes('样子 卡 3') && why.includes('样子 卡 x'), why);
+  check('校验丢:锚到标题行 / 没这句;槽名不在清单、字形不在、emoji 不像;标题行与坏卡号的样子', why.includes('锚点') && why.includes('底色槽 nope 不在主题里') && why.includes('字形槽 huge') && why.includes('emoji 不像') && why.includes('样子 卡 3') && why.includes('样子 卡 x'), why);
   check('校验丢完剩下的照用:封面两处 + 第三句一处 + 选项 5(整词)', bad.kept.marks === 4 && bad.section.lines[3].marks.some((m) => m.phrase === '5' && m.pen === 'marker') && bad.section.lines[0].marks.length === 2, JSON.stringify(bad.kept));
-  const cover = validatePost(section, theme, 'phone', { marks: [], anchors: [], layout: { rows: [[0], [2, 1], [3], [4]] }, look: {} });
-  check('行的顺序变了 / 没盖住全部 → 整个不要,一行一张', JSON.stringify(cover.section.layout?.rows) === '[[0],[1],[2],[3],[4]]' && cover.dropped[0].includes('恰好盖住') && validatePost(section, theme, 'phone', { marks: [], anchors: [], layout: { rows: [[0, 1]] }, look: {} }).dropped[0].includes('恰好盖住'));
 }
 done();

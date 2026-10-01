@@ -67,18 +67,17 @@ export function sectionFromScript(md: string): BoardSection {
 
 /**
  * 假后期:真服务里这是快模型出的提案(src/lib/postprocess.ts 校验后套上);mock 没有模型,给几节写死的提案,
- * 过同一个 validatePost——页面走的是同一条渲染路(layout 的行、look 的槽、带 pen 的标注)。键 = 老师名:脚本序号。
+ * 过同一个 validatePost——页面走的是同一条渲染路(look 的槽、带 pen 的标注;行由页面按卡的宽度排)。键 = 老师名:脚本序号。
  */
 export const MOCK_POST: Record<string, PostOutput> = {
-  // 勾股定理:封面独占,认边与公式并排,验证与一句话并排,选择题独占;验证是方法卡(moss),封面的「三条边」画圈(讲到第一句时)、16 下划线(老师自己标的 直角边 / 斜边 / 25 保留,不重复)
+  // 勾股定理:验证是方法卡(moss),封面的「三条边」画圈(讲到第一句时)、16 下划线(老师自己标的 直角边 / 斜边 / 25 保留,不重复)
   'math-tutor:0': {
     marks: [{ line: 0, card: 0, phrase: '三条边', pen: 'circle' }, { line: 3, card: 3, phrase: '16', pen: 'underline' }],
     anchors: [],
-    layout: { rows: [[0], [1, 2], [3, 4], [5]] },
     look: { '3': { tint: 'moss' }, '4': { emoji: '💡' } },
   },
-  'math-tutor:1': { marks: [], anchors: [], layout: { rows: [[0, 1], [2]] }, look: { '0': { tint: 'moss' } } },
-  'chinese-tutor:0': { marks: [{ line: 1, card: 1, phrase: '多做一步', pen: 'marker' }], anchors: [], layout: { rows: [[0], [1], [2], [3]] }, look: { '1': { emoji: '💡' } } },
+  'math-tutor:1': { marks: [], anchors: [], look: { '0': { tint: 'moss' } } },
+  'chinese-tutor:0': { marks: [{ line: 1, card: 1, phrase: '多做一步', pen: 'marker' }], anchors: [], look: { '1': { emoji: '💡' } } },
 };
 
 /** mock 家长端的录音卡评测(真服务从 heard.json 读):过、重录、没评上各一份 */
@@ -88,10 +87,10 @@ const MOCK_HEARD = [
   { ok: false, error: 'timeout', ms: 20000 },
 ];
 
-function withMockPost(section: BoardSection, tutor: string, i: number, device: 'phone' | 'tablet-portrait' | 'tablet-landscape' = 'tablet-landscape'): BoardSection {
+function withMockPost(section: BoardSection, tutor: string, i: number): BoardSection {
   const out = MOCK_POST[`${tutor}:${i}`];
   if (!out) return section;
-  return validatePost(section, MOCK_THEME, device, out).section;
+  return validatePost(section, MOCK_THEME, out).section;
 }
 
 export const MOCK_TUTORS: MockTutor[] = [

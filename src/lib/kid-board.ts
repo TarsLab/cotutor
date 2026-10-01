@@ -32,10 +32,10 @@ export type PenName = 'marker' | 'tint' | 'underline' | 'box' | 'circle';
 export const PENS: readonly PenName[] = ['marker', 'tint', 'underline', 'box', 'circle'];
 export const LINE_PENS: readonly PenName[] = ['underline', 'box', 'circle'];
 
-/** 孩子端是什么端(发消息时带上,后期按它排版;渲染器按它折行) */
+/** 孩子端是什么端(发消息时带上;渲染器按它量卡、排行) */
 export type Device = 'phone' | 'tablet-portrait' | 'tablet-landscape';
 
-/** 一节的排版:为哪个端排的、每行哪几张卡(下标;顺序 = 讲的顺序);没有 = 一行一张 */
+/** 一节明写的并排(课文件 / 老师的 same):为哪个端排的、每行哪几张卡(下标;顺序 = 讲的顺序);没有 = 全按宽度排(rowsFor) */
 export interface BoardLayout {
   for: Device;
   rows: number[][];
@@ -274,9 +274,45 @@ export function penFor(card: BoardCard, phrase: string): PenName {
   }
 }
 
-/** 短卡(能与兄弟并排):没有选项的文字卡,字数 ≤ 20;标题行不算 */
+/** 一行最多几张:明写的并排(课文件 / 老师的 same)能到 3 张;按宽度排的最多 2 张(半宽 + 半宽) */
+export const MAX_CARDS_PER_ROW = 3;
+
+/** 独占一行的卡:标题行、提问卡、有交互的、场景 */
+export function standsAlone(card: BoardCard): boolean {
+  return isHeading(card) || isAskCard(card) || hasState(card) || card.kind === 'scene';
+}
+
+const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word'];
+
+/** 能半宽的种类:文字、点读、代码、田字格、单词卡;字形是 title(一句话看懂、大字居中)的占满一行 */
+export function canHalf(card: BoardCard): boolean {
+  return !standsAlone(card) && HALF_KINDS.includes(card.kind) && card.look?.look !== 'title';
+}
+
+/** 半宽时文字卡与点读最多几行(小标题也算一行);手机的半宽只有 170 来像素,一行七八个字,只放得下标题加一行 */
+export const HALF_LINES: Record<Device, number> = { phone: 2, 'tablet-portrait': 4, 'tablet-landscape': 4 };
+
+/** 页面把卡放进量具量出来的数:半宽 / 全宽时卡的高(像素)、半宽时文字有几行、半宽时有没有横着溢出 */
+export interface CardFit {
+  half: number;
+  full: number;
+  lines: number;
+  overflow: boolean;
+}
+
+/**
+ * 量出来的卡能不能半宽:文字卡与点读看行数,不超过 HALF_LINES;
+ * 公式、代码、田字格、单词卡半宽时不能比全宽高(折了行就是挤了,公式从中间断开没法看)。横着溢出的都不行
+ */
+export function fitsHalf(card: BoardCard, device: Device, m: CardFit): boolean {
+  if (!canHalf(card) || m.overflow) return false;
+  if ((card.kind === 'text' && lookFor(card) !== 'formula') || card.kind === 'read') return m.lines <= HALF_LINES[device];
+  return m.half <= m.full + 2;
+}
+
+/** 量不了时的估计(测试;页面还没有宽度时):文字卡,字数 ≤ 20 */
 export function isShortCard(card: BoardCard): boolean {
-  if (card.kind !== 'text' || isHeading(card)) return false;
+  if (card.kind !== 'text' || !canHalf(card)) return false;
   return Array.from(cardTexts(card).join('')).length <= 20;
 }
 
@@ -287,33 +323,54 @@ function validRows(rows: readonly (readonly number[])[], n: number): boolean {
 }
 
 /**
- * 一节的行:存的是「为某个端排的」,渲染永远能落地——
- * 没 layout 一行一张;有 layout:同一个端照排;别的端按机械规则折:手机上一行 2 张且都短才并排、其余拆开、3 张拆开;
- * 标题行、有状态的卡(choice / fill / canvas / scene)永远独占一行。
+ * 一节的行(2026-10-01 起排版归代码,《工作流程.md》§二「排版」):每张卡半宽还是全宽,看它自己量出来的样子
+ * (half(i),页面在量具里量;没给就按 isShortCard 估)。从左往右排,只看前面的卡:
+ * - 相邻两张半宽的并一行;一张半宽后面跟的不是半宽,它自己一行、占左半(右边空着)
+ * - 全宽的一行一张;标题行、提问卡、有交互的、场景永远独占
+ * - 明写的并排(section.layout 里不止一张的行:课文件 / 老师写的 same)照办,最多 3 张;
+ *   别的端排的到了手机上,超过 2 张或有不能半宽的就拆开,再按宽度排
+ * 流式一张张来时,前面的行不会因为后来的卡变。
  */
-export function rowsFor(section: BoardSection, device: Device): number[][] {
+export function rowsFor(section: BoardSection, device: Device, half?: (i: number) => boolean): number[][] {
   const n = section.cards.length;
+  const isHalf = (i: number): boolean => canHalf(section.cards[i]) && (half ? half(i) : isShortCard(section.cards[i]));
   const lay = section.layout;
-  // 行只排到已定的那几张(前缀),后面的一行一张:流式的节,和定稿后不过后期的提问卡
+  // layout 只盖住前几张也认:流式的节,和定稿后不过后期的提问卡
   const last = section.cards[n - 1];
-  const prefix = (section.partial || (last && isAskCard(last))) && lay && !validRows(lay.rows, n) && validRows(lay.rows, lay.rows.flat().length) && lay.rows.flat().length <= n;
-  let rows: number[][] = lay && validRows(lay.rows, n) ? lay.rows.map((r) => [...r]) : prefix ? [...lay!.rows.map((r) => [...r]), ...Array.from({ length: n - lay!.rows.flat().length }, (_, i) => [lay!.rows.flat().length + i])] : Array.from({ length: n }, (_, i) => [i]);
-  const alone = (i: number): boolean => {
-    const c = section.cards[i];
-    return !c || isHeading(c) || isAskCard(c) || hasState(c) || c.kind === 'scene';
-  };
+  const covered = lay ? lay.rows.flat().length : 0;
+  const prefix = Boolean((section.partial || (last && isAskCard(last))) && lay && validRows(lay.rows, covered) && covered <= n);
+  const explicit = lay && (validRows(lay.rows, n) || prefix) ? lay.rows : [];
   const fold = lay ? lay.for !== device && device === 'phone' : false;
+  const joined = new Map<number, number[]>();
+  for (const row of explicit) {
+    if (row.length < 2 || row.some((i) => standsAlone(section.cards[i]))) continue;
+    if (fold && (row.length > 2 || !row.every(isHalf))) continue;
+    joined.set(row[0], [...row]);
+  }
   const out: number[][] = [];
-  for (const row of rows) {
-    if (row.length === 1) {
+  let open: number[] | null = null;
+  for (let i = 0; i < n; i++) {
+    const row = joined.get(i);
+    if (row) {
       out.push(row);
-      continue;
+      open = null;
+      i = row[row.length - 1];
+    } else if (isHalf(i)) {
+      if (open) { open.push(i); open = null; }
+      else { open = [i]; out.push(open); }
+    } else {
+      out.push([i]);
+      open = null;
     }
-    const split = row.some(alone) || (fold && (row.length > 2 || !row.every((i) => isShortCard(section.cards[i]))));
-    if (split) for (const i of row) out.push([i]);
-    else out.push(row);
   }
   return out;
+}
+
+/** 一行几列:并排几张就几列;只有一张时,半宽的两列(占左半),全宽的一列 */
+export function rowCols(section: BoardSection, row: readonly number[], half?: (i: number) => boolean): number {
+  if (row.length > 1) return row.length;
+  const c = section.cards[row[0]];
+  return c && canHalf(c) && (half ? half(row[0]) : isShortCard(c)) ? 2 : 1;
 }
 
 /** 端:宽 ≥ 900 且横 → 平板横屏;短边 ≥ 600 → 平板竖屏;其余手机 */

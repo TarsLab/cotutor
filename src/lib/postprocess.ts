@@ -1,19 +1,20 @@
 /**
  * 板书后期(按拍,《工作流程.md》§二):一拍 = 一张卡 + 跟着它的讲稿句,拍关了就让快模型
- * 拿这拍的卡 + 讲稿、前面 3–5 张已定的卡(只读)、端、主题槽表,出 {row, look, marks, anchors}——这张卡接上一行还是另起一行、
+ * 拿这拍的卡 + 讲稿、前面 3–5 张已定的卡(只读)、主题槽表,出 {look, marks, anchors}——这张卡
  * 用哪个底色 / 字形 / emoji、讲到每句时在卡上标哪个词(said = 讲稿里念到的词)、哪句其实在讲前面的卡。
- * 老师决定什么上板、什么要孩子做、答案是什么;后期决定长什么样、放哪、标哪;主题决定取值;渲染器按端折行。
+ * 老师决定什么上板、什么要孩子做、答案是什么;后期决定长什么样、标哪;主题决定取值;
+ * 一行几张不归后期(2026-10-01):孩子端按每张卡量出来的宽度排(kid-board.ts 的 rowsFor)。
  *
  * 提示词的骨架是主题的 post.md(themes/<主题>/post.md,和 kid.css 同一套:出厂 / 拷贝 / hash / upgrade / 按 mtime 现读),任何一句都能改;
  * 占位符是代码生成的部分(HTML 方言,src/lib/post-html.ts):{board} 这一拍与前文、{marked} 已标的词、{patch} 要回的补丁、{rules} 与校验器同源,{tints} {looks} {pens} {defaultTint} 从槽表拼。
  * 缺必需占位符 → 整份退 POST_TEMPLATE_FALLBACK(= POST_TEMPLATE_HTML,与包里 themes/default/post.md 同文)。
  *
  * 这里全是纯函数:拼提示词、解析输出、**校验**(模型只是提案,契约说了算:词不在卡上、said 不在讲稿里、卡号越界、笔名不认识、
- * 槽名不在清单、超配额、并排会超 3 张或碰上独占的卡——一律丢,丢了什么记进 dropped)。校验不过的部分就当没有,页面走机械规则。
+ * 槽名不在清单、超配额——一律丢,丢了什么记进 dropped)。校验不过的部分就当没有,页面走机械规则。
  * 整节一次的 validatePost 保留:把整节提案拆成各拍再走同一个校验器(mock 的写死提案、repost 都走它)。起进程、落盘在 src/server/post.ts。
  */
 import { z } from 'zod';
-import { beatsOf, cardTexts, findPhrase, hasState, isAskCard, isHeading, PENS, plainLine, type Beat, type BoardCard, type BoardMark, type BoardSection, type Device, type PenName } from './kid-board.ts';
+import { beatsOf, cardTexts, findPhrase, isHeading, PENS, plainLine, type Beat, type BoardCard, type BoardMark, type BoardSection, type Device, type PenName } from './kid-board.ts';
 import type { ThemeManifest } from '../schema/theme.ts';
 import { POST_TEMPLATE_HTML, boardHtml, htmlRulesBlock, markedBlock, patchBlock } from './post-html.ts';
 
@@ -21,7 +22,6 @@ const LookSchema = z.object({ tint: z.string().optional(), look: z.string().opti
 
 /** 一拍的提案(parseBeatPatch 从模型的补丁解析出来):line 是拍内下标(0 起);card 缺省 = 这拍的卡,写了只能是前面已定的卡 */
 export const BeatPostOutputSchema = z.object({
-  row: z.enum(['same', 'new']).default('new'),
   look: LookSchema.nullable().optional(),
   marks: z.array(z.object({ line: z.number().int().nonnegative(), card: z.number().int().nonnegative().optional(), phrase: z.string().min(1), pen: z.string().min(1), said: z.string().optional() })).default([]),
   anchors: z.array(z.object({ line: z.number().int().nonnegative(), card: z.number().int().nonnegative() })).default([]),
@@ -32,25 +32,12 @@ export type BeatPostOutput = z.infer<typeof BeatPostOutputSchema>;
 export const PostOutputSchema = z.object({
   marks: z.array(z.object({ line: z.number().int().nonnegative(), card: z.number().int().nonnegative(), phrase: z.string().min(1), pen: z.string().min(1), said: z.string().optional() })).default([]),
   anchors: z.array(z.object({ line: z.number().int().nonnegative(), card: z.number().int().nonnegative() })).default([]),
-  layout: z.object({ rows: z.array(z.array(z.number().int().nonnegative())) }).nullable().optional(),
   look: z.record(z.string(), LookSchema).default({}),
 });
 export type PostOutput = z.infer<typeof PostOutputSchema>;
 
 export const MAX_MARKS_PER_LINE = 2;
 export const MAX_MARKS_PER_CARD = 3;
-export const MAX_CARDS_PER_ROW = 3;
-
-const DEVICE_NOTE: Record<Device, string> = {
-  phone: '手机竖屏,很窄:一行一张为主,只有两张都很短(各不到 20 字、没有选项)的卡才并排',
-  'tablet-portrait': '平板竖屏:一行可以两张(兄弟卡并排:两种情况、公式和它所属的那一步),长卡独占一行',
-  'tablet-landscape': '平板横屏,很宽:一行可以两三张(兄弟卡并排:两种情况、公式和它所属的那一步、三步搞懂),别浪费宽度,也别把不相干的硬凑一行',
-};
-
-/** 独占一行的卡:标题行、有交互的、场景 */
-export function standsAlone(card: BoardCard): boolean {
-  return isHeading(card) || isAskCard(card) || hasState(card) || card.kind === 'scene';
-}
 
 const slots = (t: Record<string, { use: string }>): string => Object.entries(t).map(([k, v]) => `- ${k}:${v.use}`).join('\n');
 
@@ -70,17 +57,17 @@ export function renderPostPrompt(template: string, values: Record<string, string
   return template.replace(/\{([a-zA-Z]+)\}/g, (m, k: string) => (k in values ? values[k] : m));
 }
 
-/** 一拍的提示词:骨架取主题的 post.md(template),缺必需占位符退出厂骨架 */
+/** 一拍的提示词:骨架取主题的 post.md(template),缺必需占位符退出厂骨架。{device} 只为 2026-10-01 以前的骨架留着(那时后期还排行) */
 export function beatPrompt(section: BoardSection, beat: Beat, device: Device, theme: ThemeManifest, template?: string | null): string {
   const tpl = template && !missingSlots(template).length ? template : POST_TEMPLATE_FALLBACK;
   const pens = Object.keys(theme.pens).length ? theme.pens : Object.fromEntries(PENS.map((p) => [p, { use: p }]));
   return renderPostPrompt(tpl, {
-    device: `这节要在 ${device} 上看:${DEVICE_NOTE[device]}。`,
+    device: `这节要在 ${device} 上看。`,
     defaultTint: theme.default,
     tints: slots(theme.tints),
     looks: slots(theme.looks),
     pens: slots(pens),
-    rules: htmlRulesBlock({ perLine: MAX_MARKS_PER_LINE, perCard: MAX_MARKS_PER_CARD, perRow: MAX_CARDS_PER_ROW }),
+    rules: htmlRulesBlock({ perLine: MAX_MARKS_PER_LINE, perCard: MAX_MARKS_PER_CARD }),
     board: boardHtml(section, beat),
     marked: markedBlock(section, beat),
     patch: patchBlock(beat.card, { noMarks: beat.card !== null && section.cards[beat.card]?.kind === 'tianzige' }),
@@ -93,7 +80,6 @@ export interface BeatKept {
   marks: number;
   anchors: number;
   look: boolean;
-  row: 'same' | 'new';
 }
 export interface ValidatedBeat {
   section: BoardSection;
@@ -109,9 +95,9 @@ const emojiOk = (e: string): boolean => Array.from(e).length <= 2 && !/[A-Za-z0-
  * - 标注加在老师的后面(老师的没 pen);词要在卡上、said 要在讲稿里、配额不超、老师没标过
  * - 锚点只能指前面已定的卡
  * - 样子:槽名在主题里才收;emoji 要像一个 emoji
- * - 行:same 接上一行,前提是上一行还有位、两边都不是独占的卡;不行就 new。行永远有(素版的拍 = 另起一行),所以 layout 每拍都在长
+ * 行不动:section.layout 原样带过去(明写的并排),其余孩子端按宽度排
  */
-export function validateBeatPost(section: BoardSection, beat: Beat, theme: ThemeManifest, device: Device, out: BeatPostOutput): ValidatedBeat {
+export function validateBeatPost(section: BoardSection, beat: Beat, theme: ThemeManifest, out: BeatPostOutput): ValidatedBeat {
   const dropped: string[] = [];
   const cards = section.cards.map((c) => ({ ...c }));
   const lines = section.lines.map((l) => ({ ...l, marks: [...l.marks] }));
@@ -174,66 +160,40 @@ export function validateBeatPost(section: BoardSection, beat: Beat, theme: Theme
       if (Object.keys(look).length) { card.look = { ...(card.look ?? {}), ...look }; lookKept = true; }
     }
   }
-  // 行:接着已定的行往下长
-  let layout = section.layout;
-  let row: 'same' | 'new' = 'new';
-  if (bc !== null) {
-    const rows = (layout?.rows ?? []).map((r) => [...r]).filter((r) => r.every((i) => i < bc));
-    const last = rows[rows.length - 1];
-    const canJoin = out.row === 'same' && last !== undefined && last.length < MAX_CARDS_PER_ROW && last[last.length - 1] === bc - 1 && !standsAlone(cards[bc]) && !last.some((i) => standsAlone(cards[i]));
-    if (out.row === 'same' && !canJoin) dropped.push(`行 ${tag}:接不上上一行(${last === undefined ? '前面没有行' : last.length >= MAX_CARDS_PER_ROW ? `已有 ${MAX_CARDS_PER_ROW} 张` : standsAlone(cards[bc]) || last.some((i) => standsAlone(cards[i])) ? '有独占一行的卡' : '上一张卡不在上一行'}),另起一行`);
-    if (canJoin) { last!.push(bc); row = 'same'; } else rows.push([bc]);
-    layout = { for: device, rows };
-  }
-  return { section: { ...section, cards, lines, ...(layout ? { layout } : {}) }, dropped, kept: { marks: marksKept, anchors: anchorsKept, look: lookKept, row } };
+  return { section: { ...section, cards, lines }, dropped, kept: { marks: marksKept, anchors: anchorsKept, look: lookKept } };
 }
 
 export interface ValidatedPost {
   section: BoardSection;
   dropped: string[];
-  kept: { marks: number; anchors: number; layout: boolean; looks: number };
+  kept: { marks: number; anchors: number; looks: number };
 }
 
 /**
  * 整节一次的提案 → 拆成各拍走 validateBeatPost(mock 的写死提案、repost)。
- * 行:rows 要恰好盖住全部卡、顺序不变、一行不超 3 张,否则整个不要(一行一张);合法的转成每张卡 same / new。
  */
-export function validatePost(section: BoardSection, theme: ThemeManifest, device: Device, out: PostOutput): ValidatedPost {
+export function validatePost(section: BoardSection, theme: ThemeManifest, out: PostOutput): ValidatedPost {
   const dropped: string[] = [];
-  const n = section.cards.length;
-  let rowsOk = false;
-  if (out.layout && out.layout.rows.length) {
-    const flat = out.layout.rows.flat();
-    const inOrder = flat.length === n && flat.every((v, i) => v === i);
-    const rowOk = out.layout.rows.every((r) => r.length >= 1 && r.length <= MAX_CARDS_PER_ROW);
-    if (!inOrder) dropped.push(`排版:行没有恰好盖住 ${n} 张卡各一次(或顺序变了),整个不要`);
-    else if (!rowOk) dropped.push(`排版:有一行超过 ${MAX_CARDS_PER_ROW} 张(或空行),整个不要`);
-    else rowsOk = true;
-  }
-  const sameAs = (card: number): 'same' | 'new' => (rowsOk && out.layout!.rows.some((r) => r.includes(card) && r[0] !== card) ? 'same' : 'new');
   const beats = beatsOf(section);
   const lineBeat = new Map<number, { beat: Beat; j: number }>();
   beats.forEach((b) => b.lines.forEach((li, j) => lineBeat.set(li, { beat: b, j })));
   for (const m of out.marks) if (!lineBeat.has(m.line)) dropped.push(`第 ${m.line + 1} 句「${m.phrase}」→ 卡 ${m.card}:没有这句`);
   for (const a of out.anchors) if (!lineBeat.has(a.line)) dropped.push(`锚点 第 ${a.line + 1} 句 → 卡 ${a.card}:没有这句`);
   for (const k of Object.keys(out.look)) { const i = Number(k); if (!Number.isInteger(i) || !section.cards[i]) dropped.push(`样子 卡 ${k}:没有这张卡`); }
-  let cur: BoardSection = { ...section, layout: undefined };
-  const kept = { marks: 0, anchors: 0, layout: false, looks: 0 };
+  let cur: BoardSection = section;
+  const kept = { marks: 0, anchors: 0, looks: 0 };
   for (const b of beats) {
     const bo: BeatPostOutput = {
-      row: b.card === null ? 'new' : sameAs(b.card),
       look: b.card !== null && out.look[String(b.card)] ? out.look[String(b.card)] : undefined,
       marks: out.marks.filter((m) => lineBeat.get(m.line)?.beat === b).map((m) => ({ line: lineBeat.get(m.line)!.j, card: m.card, phrase: m.phrase, pen: m.pen, ...(m.said ? { said: m.said } : {}) })),
       anchors: out.anchors.filter((a) => lineBeat.get(a.line)?.beat === b).map((a) => ({ line: lineBeat.get(a.line)!.j, card: a.card })),
     };
-    const v = validateBeatPost(cur, b, theme, device, bo);
+    const v = validateBeatPost(cur, b, theme, bo);
     cur = v.section;
     dropped.push(...v.dropped);
     kept.marks += v.kept.marks;
     kept.anchors += v.kept.anchors;
     if (v.kept.look) kept.looks++;
-    if (v.kept.row === 'same') kept.layout = true;
   }
-  if (rowsOk) kept.layout = true;
   return { section: cur, dropped, kept };
 }

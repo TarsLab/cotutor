@@ -385,6 +385,7 @@ const PAGE = `<!doctype html>
   #menu .panel button, #sheet label, #hist .tr, .so, .rd, .hz, .c-tutor .tt, #ps-strip .t,
   .sec.heard > .sh, #sub-text.line { transition:transform .2s ease-out, filter .2s ease-out, opacity .2s ease-out, background-color .2s ease-out; }
   #board .pend { display:none; }
+  #lay-probe { position:fixed; left:-10000px; top:0; visibility:hidden; pointer-events:none; }
   #board .c { transition:transform .2s ease-out, filter .2s ease-out, border-color .2s, box-shadow .2s; }
   /* ---- 弹层进出场:遮罩淡入,面板按来的方向动(菜单从右上角放大、相册面板从底下滑上来、以前的从右边滑进、卡的弹窗与看大图轻轻放大、发照片屏上浮)。
      进场靠 @starting-style,退场靠 display 的 allow-discrete 过渡(Safari 18 起);不认的浏览器就是瞬间出现 / 消失,和以前一样。
@@ -1248,26 +1249,70 @@ __REEL_JS__
   // 节头:时间 · 节名;孩子问这节时拍的照片(R5)缩略图跟在后面,点小图看大图(不是再听)
   const sectionHead = (s) => h('div', { class: 'sh', on: { click: (e) => againAt(e.currentTarget, 'all') } }, (s.at ? clock(s.at) + ' · ' : '') + sectionTitle(s), ...((s.photos || []).map((p, k) => h('img', { class: 'ph', src: '/api/kid/image?p=' + encodeURIComponent(p), alt: '', loading: 'lazy', on: { click: (e) => { e.stopPropagation(); openLb(s.photos, k); } } }))), h('button', { type: 'button', class: 'again', 'aria-label': '再听这一节', html: ICON.replay }));
   const rowEl = (n, ...kids) => h('div', { class: 'row', style: 'grid-template-columns:repeat(' + n + ',minmax(0,1fr))' }, ...kids);
-  /** 一节 = 头一行(时间 · 节名)+ 若干行;行是后期为某个端分的,渲染器按当前端折(rowsFor) */
-  const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i, 'data-job': s.job }, sectionHead(s), ...rowsFor(s, S.device).map((row) => rowEl(row.length, ...row.map((idx) => renderCard(s.cards[idx], idx, i, false)))));
+  // ---- 排版(2026-10-01,《工作流程.md》§二「排版」):每张卡放进量具量一次,半宽放得下(fitsHalf)就半宽,相邻两张半宽的并一行(rowsFor) ----
+  // 量具在 body 下、屏幕外:板书藏着(首页开着)时也量得出;按 端 + 半宽像素 + 卡的内容缓存,看录像每次重画不再量
+  const fitCache = new Map();
+  const ROW_GAP = 12;
+  const boardWidth = () => {
+    const b = $('#board');
+    if (b && b.clientWidth > 0) { const cs = getComputedStyle(b); return b.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); }
+    return S.device === 'tablet-landscape' ? Math.min(innerWidth, 1040) - 64 : innerWidth - 32;
+  };
+  const halfWidth = () => Math.floor((boardWidth() - ROW_GAP) / 2);
+  const linesOf = (el) => {
+    const cs = getComputedStyle(el);
+    const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.4;
+    return Math.round((el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)) / lh);
+  };
+  /** 这张卡能不能半宽;el 是画好的卡(没给就现画一张不带交互的) */
+  const halfOf = (card, el) => {
+    if (!card || !canHalf(card)) return false;
+    const W = boardWidth(), hw = Math.floor((W - ROW_GAP) / 2);
+    if (!(hw > 80)) return isShortCard(card);
+    const key = S.device + '|' + hw + '|' + card.kind + '|' + JSON.stringify(card.props || {}) + '|' + JSON.stringify(card.look || null);
+    if (fitCache.has(key)) return fitCache.get(key);
+    let probe = document.getElementById('lay-probe');
+    if (!probe) { probe = h('div', { id: 'lay-probe', 'aria-hidden': 'true' }); document.body.append(probe); }
+    const c = el || renderCard(card, 0, null, false);
+    const home = c.parentNode, next = c.nextSibling;
+    probe.style.width = hw + 'px'; probe.append(c);
+    const half = c.offsetHeight, box = c.getBoundingClientRect();
+    // 横着溢出:卡里哪块内容伸出卡外(右上角的「再听」钮本来就伸出去,不算)
+    const overflow = [...c.children].some((x) => !x.classList.contains('again') && (x.scrollWidth > x.clientWidth + 1 || x.getBoundingClientRect().right > box.right + 1));
+    const lines = [...c.querySelectorAll(':scope > .ct, :scope > .cb, :scope > .rd')].reduce((n, x) => n + linesOf(x), 0);
+    probe.style.width = W + 'px';
+    const full = c.offsetHeight;
+    if (home) home.insertBefore(c, next); else c.remove();
+    const ok = fitsHalf(card, S.device, { half, full, lines, overflow });
+    fitCache.set(key, ok);
+    return ok;
+  };
+  /** 一节的行元素:els[k] 是画好的第 k 张卡 */
+  const rowEls = (s, els) => {
+    const half = (k) => halfOf(s.cards[k], els[k]);
+    return rowsFor(s, S.device, half).map((row) => ({ row, el: rowEl(rowCols(s, row, half), ...row.map((k) => els[k])) }));
+  };
+  /** 一节 = 头一行(时间 · 节名)+ 若干行;行按卡量出来的宽度排(rowsFor) */
+  const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i, 'data-job': s.job }, sectionHead(s), ...rowEls(s, s.cards.map((c, k) => renderCard(c, k, i, false))).map((r) => r.el));
   /**
    * 老师还在说(2026-09-13,一拍一就绪):第一拍就绪前板上只有占位卡(字幕行「我写给你看」,见 renderSubtitle);就绪了就把这条转成 S.sections 里的一节(live)开播,
    * 之后每次 poll 只铺新就绪的拍的卡(一行一张,没有排版)、把 lines 换成最新的(配音名填进来),播到头等着(thinking)的就接上。
    * 铺卡在拍就绪时而不是围栏闭合时:铺的时候声音已齐,不会先素后彩地闪
    */
   const liveCardsOf = (e) => { const bs = beatsOf(e).slice(0, e.ready || 0); let n = 0; for (const b of bs) if (b.card !== null) n = Math.max(n, b.card + 1); return n; };
-  /** 一张卡落到行里:后期定了「接上一行」的就进上一行的格子(行的列数按最终几张定,后面的位子先空着),否则新起一行 */
+  /** 一张卡落到行里:和前面的卡并一行(半宽 + 半宽,或明写的并排)就进那一行,否则新起一行;只看这张和前面的,后面的卡不影响前面的行 */
   const placeCard = (P, sec, k, idx) => {
-    const rows = rowsFor(sec, S.device);
-    const r = rows.findIndex((row) => row.includes(k));
     const c = renderCard(sec.cards[k], k, idx, false);
-    let el = r >= 0 ? P.rowEls[r] : null;
-    if (el) { el.style.gridTemplateColumns = 'repeat(' + rows[r].length + ',minmax(0,1fr))'; el.append(c); }
-    else { el = rowEl(r >= 0 ? rows[r].length : 1, c); if (r >= 0) P.rowEls[r] = el; P.el.append(el); }
+    const half = (j) => j <= k && halfOf(sec.cards[j], j === k ? c : null);
+    const row = rowsFor(sec, S.device, half).find((r) => r.includes(k)) || [k];
+    const first = row[0] !== k ? P.el.querySelector('[data-card="' + row[0] + '"]') : null;
+    const el = first && first.parentNode && first.parentNode.classList.contains('row') ? first.parentNode : null;
+    if (el) { el.style.gridTemplateColumns = 'repeat(' + rowCols(sec, row, half) + ',minmax(0,1fr))'; el.append(c); }
+    else P.el.append(rowEl(rowCols(sec, row, half), c));
     return c;
   };
   const renderLive = (e) => {
-    if (!S.partial || S.partial.job !== e.job) { if (S.partial) S.partial.el.remove(); const idx = S.sections.length; S.partial = { job: e.job, idx, live: false, shown: 0, rowEls: {}, el: h('div', { class: 'sec', 'data-sec': idx, 'data-job': e.job }, sectionHead(e)) }; $('#board').append(S.partial.el); }
+    if (!S.partial || S.partial.job !== e.job) { if (S.partial) S.partial.el.remove(); const idx = S.sections.length; S.partial = { job: e.job, idx, live: false, shown: 0, el: h('div', { class: 'sec', 'data-sec': idx, 'data-job': e.job }, sectionHead(e)) }; $('#board').append(S.partial.el); }
     const P = S.partial, idx = P.idx;
     if (!(e.ready > 0)) return;
     const sec = { ...e, partial: true };
@@ -1331,13 +1376,14 @@ __REEL_JS__
     if ((el.classList.contains('c-tianzige') || el.classList.contains('c-word')) && S.state.status === 'playing' && (S.state.replay ? !replayWrote.has(el) : !el.dataset.wrote)) { el.dataset.wrote = '1'; if (S.state.replay) replayWrote.add(el); if (el.classList.contains('c-word')) wordWrite(el.querySelector('.wg'), false, null); else tianzigePlay(el); }
   };
   const showNow = () => setNow(S.state.section, nowCard(S.sections, S.state));
-  /** 换端(转屏)或窗口变了:整节按新端重排,标注按已播到的画齐,选中态照旧 */
+  /** 换端(转屏)或窗口变了:端或半宽变了就整节重排(卡重新量),标注按已播到的画齐,选中态照旧 */
   const relayout = () => {
     const d = debug.get('device') || deviceFor(innerWidth, innerHeight);
     // 看录像时板书是录像画的:换了端让它按新端整块重画
     if (S.reel) { S.device = d; S.reel.key = ''; reelTick(); return; }
-    if (d !== S.device) {
-      S.device = d;
+    const hw = halfWidth();
+    if (d !== S.device || hw !== S.layHalf) {
+      S.device = d; S.layHalf = hw;
       S.sections.forEach((s, i) => { const old = $('#board').querySelector('[data-sec="' + i + '"]'); if (old && !(S.partial && S.partial.el === old)) { old.replaceWith(renderSection(s, i)); const upTo = S.state.section === i ? S.state.line : S.state.section > i ? undefined : -1; if (upTo !== -1) paintAll(i, upTo); } });
       if (S.stage) setNow(S.stage.section, S.stage.card); else showNow();
       markHeard();
@@ -1346,6 +1392,7 @@ __REEL_JS__
   let relayoutTimer = null;
   window.addEventListener('resize', () => { clearTimeout(relayoutTimer); relayoutTimer = setTimeout(relayout, 150); });
   S.device = debug.get('device') || deviceFor(innerWidth, innerHeight);
+  S.layHalf = halfWidth();
 
   // ---- 舞台:点卡放大,交互都在这里;开着时讲稿暂停,关了字幕行出「播放」 ----
   const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', word: '单词', scene: '讲解动画', canvas: '画一画', record: '录音', code: '' };
@@ -2059,8 +2106,8 @@ __REEL_JS__
     const last = s.lines[s.lines.length - 1];
     const opening = s.lines.filter((l) => l.anchor === null);
     if (opening.length) sec.append(saidNote(opening, opening[opening.length - 1] === last && last.ask));
-    rowsFor(s, S.device).forEach((row) => {
-      sec.append(rowEl(row.length, ...row.map((idx) => renderCard(s.cards[idx], idx, i, false))));
+    rowEls(s, s.cards.map((c, k) => renderCard(c, k, i, false))).forEach(({ row, el }) => {
+      sec.append(el);
       for (const x of mine) if (x.card !== undefined && row.includes(x.card)) sec.append(issueNote(x));
       const said = s.lines.filter((l) => l.anchor !== null && row.includes(l.anchor));
       if (said.length) sec.append(saidNote(said, said[said.length - 1] === last && last.ask));

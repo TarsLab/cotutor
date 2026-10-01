@@ -21,7 +21,7 @@ export type RunEvent = { t: number } & (
   | { lane: 'tts'; kind: 'done'; label: string; ms: number; file: string }
   | { lane: 'tts'; kind: 'failed'; label: string; ms: number; error: string }
   | { lane: 'post'; kind: 'start'; beat: number; card: number; context: number }
-  | { lane: 'post'; kind: 'done'; beat: number; ms: number; kept: { marks: number; anchors: number; look: boolean; row: 'same' | 'new' }; dropped: number; costUsd?: number }
+  | { lane: 'post'; kind: 'done'; beat: number; ms: number; kept: { marks: number; anchors: number; look: boolean }; dropped: number; costUsd?: number }
   | { lane: 'post'; kind: 'failed'; beat: number; ms: number; error: string }
   | { lane: 'ready'; kind: 'beat'; beat: number; card: number | null; first: boolean }
   | { lane: 'ready'; kind: 'all'; cards: number; lines: number }
@@ -64,7 +64,7 @@ export function describeEvent(e: RunEvent): string {
       return `${e.label}✗ ${secs(e.ms)}s ${e.error}`;
     case 'post':
       if (e.kind === 'start') return `拍 ${e.beat} 起(卡 ${e.card},前文 ${e.context} 张)`;
-      if (e.kind === 'done') return `拍 ${e.beat} ✓ ${secs(e.ms)}s 标 ${e.kept.marks} 锚 ${e.kept.anchors} ${e.kept.row === 'same' ? '接上一行' : '另起一行'}${e.kept.look ? ' 有样子' : ''} 丢 ${e.dropped}${money(e.costUsd)}`;
+      if (e.kind === 'done') return `拍 ${e.beat} ✓ ${secs(e.ms)}s 标 ${e.kept.marks} 锚 ${e.kept.anchors}${e.kept.look ? ' 有样子' : ''} 丢 ${e.dropped}${money(e.costUsd)}`;
       return `拍 ${e.beat} ✗ ${secs(e.ms)}s ${e.error}`;
     case 'ready':
       if (e.kind === 'beat') return `拍 ${e.beat} ✓${e.card === null ? '(没有卡)' : `(卡 ${e.card})`}${e.first ? ' ← 首拍就绪' : ''}`;

@@ -193,7 +193,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     const kept = postFile?.kept;
     const beats = m.post?.beats !== undefined ? `${m.post.beats} 拍${m.post.failed ? `(${m.post.failed} 拍没成,素版)` : ''} · ` : '';
     const note = m.post?.ok
-      ? `${beats}${secs(m.post.ms)}${m.post.costUsd !== undefined ? ` · $${m.post.costUsd.toFixed(3)}` : ''} · 标注 ${kept?.marks ?? '?'} 锚点 ${kept?.anchors ?? '?'} ${kept?.layout ? '有并排' : '一行一张'} 样子 ${kept?.looks ?? '?'}${m.post.dropped ? ` · 丢 ${m.post.dropped}` : ''}`
+      ? `${beats}${secs(m.post.ms)}${m.post.costUsd !== undefined ? ` · $${m.post.costUsd.toFixed(3)}` : ''} · 标注 ${kept?.marks ?? '?'} 锚点 ${kept?.anchors ?? '?'} 样子 ${kept?.looks ?? '?'}${m.post.dropped ? ` · 丢 ${m.post.dropped}` : ''}`
       : `没成:${m.post?.error ?? postFile?.error ?? '?'}(素版)`;
     stations.push({ id: 'post', title: '板书后期', note, state: m.post?.ok ? (m.post.dropped || m.post.failed ? 'warn' : 'ok') : 'warn' });
   } else if (stored?.cards.length) stations.push({ id: 'post', title: '板书后期', note: policy.post.mode === 'off' ? '关着(policy post.mode = off),素版' : '这轮没跑过(老板书);可以「再做一次」', state: 'none' });

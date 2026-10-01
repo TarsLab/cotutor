@@ -40,7 +40,7 @@ for (const name of names) {
   for (const m of fx.expect.must) {
     const b = beats.find((x) => x.card === m.card);
     const line = b && b.lines.length ? 0 : -1;
-    const v = b && line >= 0 ? validateBeatPost(fx.section, b, theme, fx.expect.device, { row: 'new', marks: [{ line, phrase: m.phrase, pen: 'marker' }], anchors: [] }) : null;
+    const v = b && line >= 0 ? validateBeatPost(fx.section, b, theme, { marks: [{ line, phrase: m.phrase, pen: 'marker' }], anchors: [] }) : null;
     check(`${name}:must「${m.phrase}」@卡 ${m.card} 校验器收得下`, v !== null && v.kept.marks === 1, v ? v.dropped.join(';') : '这拍没有讲稿');
   }
   // never 里老师已标过的:提了校验器会丢(契约挡得住;没标过的只有评测能看)
@@ -49,7 +49,7 @@ for (const name of names) {
     if (!already) continue;
     const b = beats.find((x) => x.card === n.card);
     if (!b || !b.lines.length) continue;
-    const v = validateBeatPost(fx.section, b, theme, fx.expect.device, { row: 'new', marks: [{ line: 0, phrase: n.phrase, pen: 'marker' }], anchors: [] });
+    const v = validateBeatPost(fx.section, b, theme, { marks: [{ line: 0, phrase: n.phrase, pen: 'marker' }], anchors: [] });
     check(`${name}:never「${n.phrase}」老师已标,校验器会丢`, v.kept.marks === 0 && v.dropped.some((d) => d.includes('已经标过')), v.dropped.join(';'));
   }
 }

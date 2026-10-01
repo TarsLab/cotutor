@@ -39,6 +39,17 @@ function glyphOf(ch: string): LetterGlyph | null {
   return out;
 }
 
+/**
+ * 每个字母的宽(x 高为 1)与字间距、空格宽:拼进孩子端页面(__WORD_ADV__),单词卡同步就排得出、画出准确的大小,
+ * 笔画数据(/api/kid/letters/<词>)晚到只往里填——排版的量具量的是终态(《卡片协议.md》「单词卡」)
+ */
+export function letterAdvances(): { adv: Record<string, number>; gap: number; space: number } {
+  const adv: Record<string, number> = {};
+  for (const [ch, g] of GLYPHS) adv[ch] = g.advance;
+  for (const [ch, g] of Object.entries(EXTRA)) adv[ch] = g.advance;
+  return { adv, gap: GAP, space: SPACE_ADVANCE };
+}
+
 /** 一个词里用到的字形;不是单词卡写得出的词 → null */
 export function lettersData(word: string): LettersData | null {
   if (!WORD_RE.test(word) || word.length > WORD_MAX) return null;

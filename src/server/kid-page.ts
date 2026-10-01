@@ -24,6 +24,7 @@
  * __TITLE__ / __SHORT__(主屏幕图标下的名字)由路由替换。调试:`?step=<节>.<句>` 直接停在某句(标注画齐、不出声),截图与测试用。
  */
 import { readFileSync } from 'node:fs';
+import { letterAdvances } from './letters.ts';
 import { stripTypeScriptTypes } from 'node:module';
 
 /** 读 src/lib/<name> 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
@@ -955,34 +956,37 @@ __REEL_JS__
   const WORD_SPEED = { ms: 120, pause: 50, chunk: 0 };
   const WORD_SLOW = { ms: 190, pause: 110, chunk: 320, rate: 0.7 };
   /** 一个词的四线三格:chunks 给了(舞台)就按段上两色、先分开摆,wordMerge 合拢;fresh = 先淡着等写 */
+  /** 每个字母的宽、字间距、空格宽(服务端从 drawtell/glyphs 拼进来):格子同步就排好、画出准确大小,排版量的是终态;笔画晚到只往里填 */
+  const WORD_ADV = __WORD_ADV__;
+  const WORD_G = Object.fromEntries(Object.entries(WORD_ADV.adv).map(([ch, a]) => [ch, { advance: a }]));
   const wordGrid = (w, chunks, opts = {}) => {
     const xh = opts.stage ? 50 : 22;
-    const el = h('div', { class: 'wg' });
-    el.style.height = (4 * xh) + 'px';
+    const base = { gap: WORD_ADV.gap, space: WORD_ADV.space, chunks: chunks || undefined };
+    const merged = wordLayout(w, WORD_G, base);
+    const split = chunks ? wordLayout(w, WORD_G, { ...base, split: true }) : merged;
+    const pad = 0.5, W = split.width + pad * 2, off = (split.width - merged.width) / 2;
+    const svg = sv('svg', { viewBox: [-pad * WU, -2.5 * WU, W * WU, 4 * WU].join(' '), width: Math.round(W * xh) });
+    svg.style.aspectRatio = W + ' / 4';
+    const grid = sv('g', { class: 'grid' });
+    for (const [k, y] of [['top', -2], ['mid', -1], ['base', 0], ['bot', 1]]) grid.append(sv('line', { class: k, x1: -pad * WU, x2: (split.width + pad) * WU, y1: y * WU, y2: y * WU }));
+    svg.append(grid);
+    const lts = merged.slots.map((slot, i) => {
+      const lt = sv('g', { class: 'lt k' + (chunks ? slot.chunk % 2 : 0) + (opts.fresh ? '' : ' done'), 'data-k': slot.chunk });
+      lt._x = [(slot.x + off) * WU, split.slots[i].x * WU];
+      lt.style.transform = 'translate(' + lt._x[chunks ? 1 : 0] + 'px, 0px)';
+      lt.append(sv('rect', { class: 'hit', x: -0.1 * WU, y: -2.3 * WU, width: ((WORD_G[slot.ch] ? WORD_G[slot.ch].advance : 0.8) + 0.2) * WU, height: 3.6 * WU }));
+      svg.append(lt);
+      return lt;
+    });
+    const el = h('div', { class: 'wg' }, svg);
+    el._split = Boolean(chunks);
+    // 笔画到了:每个字母填进淡淡的字形;数据里没有的字母(或整个没拿到)退成字体的字,不动
     lettersFor(w).then((d) => {
-      const glyphs = d ? d.glyphs : {};
-      const base = { gap: d ? d.gap : 0.35, space: d ? d.space : 0.55, chunks: chunks || undefined };
-      const merged = wordLayout(w, glyphs, base);
-      const split = chunks ? wordLayout(w, glyphs, { ...base, split: true }) : merged;
-      const pad = 0.5, W = split.width + pad * 2, off = (split.width - merged.width) / 2;
-      const svg = sv('svg', { viewBox: [-pad * WU, -2.5 * WU, W * WU, 4 * WU].join(' '), width: Math.round(W * xh) });
-      svg.style.aspectRatio = W + ' / 4';
-      const grid = sv('g', { class: 'grid' });
-      for (const [k, y] of [['top', -2], ['mid', -1], ['base', 0], ['bot', 1]]) grid.append(sv('line', { class: k, x1: -pad * WU, x2: (split.width + pad) * WU, y1: y * WU, y2: y * WU }));
-      svg.append(grid);
       merged.slots.forEach((slot, i) => {
-        const g = glyphs[slot.ch];
-        const lt = sv('g', { class: 'lt k' + (chunks ? slot.chunk % 2 : 0) + (opts.fresh && g ? '' : ' done'), 'data-k': slot.chunk });
-        lt._x = [(slot.x + off) * WU, split.slots[i].x * WU];
-        lt.style.transform = 'translate(' + lt._x[chunks ? 1 : 0] + 'px, 0px)';
-        lt.append(sv('rect', { class: 'hit', x: -0.1 * WU, y: -2.3 * WU, width: ((g ? g.advance : 0.8) + 0.2) * WU, height: 3.6 * WU }));
+        const g = d && d.glyphs[slot.ch], lt = lts[i];
         if (g) for (const st of g.strokes) lt.append(sv('path', { class: 'gh', d: 'M' + st.map((q) => q[0] * WU + ' ' + q[1] * WU).join(' L') }));
-        else { const t = sv('text', { class: 'ft', x: 0, y: 0, 'font-size': 190 }); t.textContent = slot.ch; lt.append(t); }
-        svg.append(lt);
+        else { const t = sv('text', { class: 'ft', x: 0, y: 0, 'font-size': 190 }); t.textContent = slot.ch; lt.append(t); lt.classList.add('done'); }
       });
-      el._split = Boolean(chunks);
-      el.replaceChildren(svg);
-      el.style.height = '';
       el._ready = true;
       const want = el._want; el._want = null;
       if (want) wordWrite(el, want.slow, want.only, want.then);
@@ -1055,32 +1059,32 @@ __REEL_JS__
     audioRate(rate);
     audioEl.play().catch(synth);
   };
-  /** 舞台里的单词卡:emoji、分段两色的四线三格、「再听一遍」(慢);打开就走一遍:慢念 → 一段一段慢写 → 合拢 → 再慢念。点一段,那段慢写一遍 */
+  /** 舞台里的单词卡:emoji、分段两色的四线三格、「再听一遍」(慢);打开就走一遍:慢念与一段一段慢写同时开始 → 写完合拢 → 再慢念。点一段,那段慢写一遍 */
   let wordRun = 0;
   const wordStage = (card, idx) => {
     const p = card.props || {};
     const em = p.emoji || (card.look && card.look.emoji) || '';
     const chunks = Array.isArray(p.chunks) && p.chunks.join('') === p.word ? p.chunks : null;
     const grid = wordGrid(String(p.word || ''), chunks, { stage: true, fresh: !S.reel });
-    const btn = recPill(ICON.speaker, '再听一遍', (e) => { wordRun++; wordSay(card, e.currentTarget, WORD_SLOW.rate); });
+    // 再听只念、不打断写;点一段打断自动那一遍,写完那段照样合拢(不然字母一直分开摆着)
+    const btn = recPill(ICON.speaker, '再听一遍', (e) => wordSay(card, e.currentTarget, WORD_SLOW.rate));
     grid.addEventListener('click', (e) => {
       const l = e.target.closest && e.target.closest('.lt');
       if (!l || S.reel) return;
       e.stopPropagation(); wordRun++;
-      wordWrite(grid, true, chunks ? Number(l.dataset.k) : null);
+      wordWrite(grid, true, chunks ? Number(l.dataset.k) : null, () => wordMerge(grid, true));
     });
     const el = h('div', { class: 'c c-word', 'data-card': idx, 'data-tint': tintFor(card), 'data-look': lookFor(card) }, em ? h('span', { class: 'we' }, em) : null, grid, h('div', { class: 'wd-row' }, btn));
     // 看录像时只读地开:不出声、不写,停在写完的样子
     if (!S.reel) {
       const run = ++wordRun;
       const live = () => run === wordRun && S.stage;
-      wordSay(card, btn, WORD_SLOW.rate, () => {
+      // 念和写同时开始(2026-10-01:念完再写,孩子听的时候格子是空的,对不上)
+      wordSay(card, btn, WORD_SLOW.rate);
+      wordWrite(grid, true, null, () => {
         if (!live()) return;
-        wordWrite(grid, true, null, () => {
-          if (!live()) return;
-          const again = () => { if (live()) wordSay(card, btn, WORD_SLOW.rate); };
-          if (chunks) { wordMerge(grid, true); setTimeout(again, 600); } else setTimeout(again, 300);
-        });
+        const again = () => { if (live()) wordSay(card, btn, WORD_SLOW.rate); };
+        if (chunks) { wordMerge(grid, true); setTimeout(again, 600); } else setTimeout(again, 300);
       });
     }
     return el;
@@ -2859,7 +2863,7 @@ __REEL_JS__
 </html>
 `;
 
-export const KID_PAGE = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel'));
+export const KID_PAGE = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_ADV__', () => JSON.stringify(letterAdvances())).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel'));
 
 export interface KidPageMode {
   /** 家长板书页(《家长板书页设计.md》):数据走家长接口、只读、旁注;自己的 manifest */

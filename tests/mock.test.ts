@@ -84,6 +84,10 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   type Lt = { glyphs: Record<string, { advance: number; strokes: number[][][] }>; gap: number; space: number };
   const lj = ltOk.json as Lt;
   check('字母笔顺:apple 用到 a p l e 四个字形,a 两笔(圈 + 竖)、点在四线三格里;写不出的词 404', ltOk.status === 200 && Object.keys(lj.glyphs).join() === 'a,p,l,e' && lj.glyphs.a.strokes.length === 2 && lj.glyphs.a.strokes.flat().every(([x, y]) => x >= -0.1 && x <= 1.1 && y >= -2 && y <= 1) && ltNo.status === 404, JSON.stringify(ltNo));
+  const pg = (await get('/')).html ?? '';
+  const adv = /const WORD_ADV = (\{.*?\});/.exec(pg);
+  const advJ = adv ? (JSON.parse(adv[1]) as { adv: Record<string, number>; gap: number; space: number }) : null;
+  check('孩子端页面拼进了字母宽表(52 个字母 + 连字符、撇号)、字间距与接口一致:单词卡同步排得出大小', !pg.includes('__WORD_ADV__') && advJ !== null && Object.keys(advJ.adv).length === 54 && advJ.adv.a === lj.glyphs.a.advance && advJ.gap === lj.gap && advJ.space === lj.space, adv?.[1].slice(0, 120));
   const img = await get('/api/kid/image?p=' + encodeURIComponent('captures/2026-09-10/fruits.png'));
   check('图片卡的图:mock 给占位 svg', img.status === 200 && img.contentType === 'image/svg+xml' && img.html?.includes('<svg') === true && img.html.includes('fruits.png'));
   const fillJob = d2.messages[1].job;

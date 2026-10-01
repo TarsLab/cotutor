@@ -952,8 +952,8 @@ __REEL_JS__
   /** 一个 x 高 = 100 个 viewBox 单位;紧凑态一个 x 高 22px、舞台 50px */
   const WU = 100;
   /** 正常:讲到时、紧凑态;慢:舞台里(写字每 x 高毫秒数、笔间停顿、段间停顿、念的倍速) */
-  const WORD_SPEED = { ms: 170, pause: 90, chunk: 0 };
-  const WORD_SLOW = { ms: 300, pause: 200, chunk: 500, rate: 0.7 };
+  const WORD_SPEED = { ms: 120, pause: 50, chunk: 0 };
+  const WORD_SLOW = { ms: 190, pause: 110, chunk: 320, rate: 0.7 };
   /** 一个词的四线三格:chunks 给了(舞台)就按段上两色、先分开摆,wordMerge 合拢;fresh = 先淡着等写 */
   const wordGrid = (w, chunks, opts = {}) => {
     const xh = opts.stage ? 50 : 22;
@@ -967,7 +967,6 @@ __REEL_JS__
       const pad = 0.5, W = split.width + pad * 2, off = (split.width - merged.width) / 2;
       const svg = sv('svg', { viewBox: [-pad * WU, -2.5 * WU, W * WU, 4 * WU].join(' '), width: Math.round(W * xh) });
       svg.style.aspectRatio = W + ' / 4';
-      svg.append(sv('rect', { class: 'hl', x: (off - 0.2) * WU, y: -1.2 * WU, width: (merged.width + 0.4) * WU, height: 1.35 * WU, rx: 24 }));
       const grid = sv('g', { class: 'grid' });
       for (const [k, y] of [['top', -2], ['mid', -1], ['base', 0], ['bot', 1]]) grid.append(sv('line', { class: k, x1: -pad * WU, x2: (split.width + pad) * WU, y1: y * WU, y2: y * WU }));
       svg.append(grid);
@@ -1031,9 +1030,10 @@ __REEL_JS__
     };
     step();
   };
-  /** 舞台里分开写的段合拢成整词(merged = true)或再分开 */
+  /** 舞台里分开写的段合拢成整词(merged = true)或再分开;合拢时分段的两色一起退掉(颜色只为分开时看出哪里是一段,不表示什么) */
   const wordMerge = (grid, merged) => {
     if (!grid._split) return;
+    grid.classList.toggle('merged', merged);
     for (const l of grid.querySelectorAll('.lt')) l.style.transform = 'translate(' + l._x[merged ? 0 : 1] + 'px, 0px)';
   };
   /** 念这个词:服务端配好的 1.mp3(老师的音色)按 rate 倍速放(音高不变),没好就浏览器的英文合成声;念完调 then(被打断不调) */
@@ -1079,7 +1079,7 @@ __REEL_JS__
         wordWrite(grid, true, null, () => {
           if (!live()) return;
           const again = () => { if (live()) wordSay(card, btn, WORD_SLOW.rate); };
-          if (chunks) { wordMerge(grid, true); setTimeout(again, 900); } else setTimeout(again, 400);
+          if (chunks) { wordMerge(grid, true); setTimeout(again, 600); } else setTimeout(again, 300);
         });
       });
     }
@@ -1522,8 +1522,8 @@ __REEL_JS__
     const sec = $('#board').querySelector('[data-sec="' + secIdx + '"]');
     const card = sec && sec.querySelector('[data-card="' + mark.card + '"]');
     if (!card || !card.classList.contains('c')) return null;
-    // 单词卡格里是笔顺不是文字:标到这个词就把整个词涂一道荧光
-    if (card.classList.contains('c-word')) { card.classList.add('marked'); return card; }
+    // 单词卡格里是笔顺不是文字、卡上只有这一个词:标注只管讲到哪张亮哪张,不画(涂荧光盖住字形,2026-10-01 真机看着难看)
+    if (card.classList.contains('c-word')) return card;
     const cardData = S.sections[secIdx].cards[mark.card];
     const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
     let n;
@@ -1631,7 +1631,6 @@ __REEL_JS__
     for (const i of lines) for (const m of S.sections[secIdx].lines[i].marks) {
       const card = sec.querySelector('[data-card="' + m.card + '"]');
       if (!card) continue;
-      card.classList.remove('marked');
       for (const span of [...card.querySelectorAll('.mk')]) {
         if (span.dataset.phrase !== m.phrase) continue;
         for (const pen of span._pens || []) pen.remove();

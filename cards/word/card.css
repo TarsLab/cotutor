@@ -6,8 +6,6 @@
 .c-word .wd-row { margin-left:auto; }
 .wg .grid line { stroke:var(--tint-sand-line); stroke-width:1.2; vector-effect:non-scaling-stroke; }
 .wg .grid .base { stroke:#b0a89a; }
-.wg .hl { fill:var(--pen-marker); opacity:0; transition:opacity .3s; }
-.c-word.marked .wg .hl { opacity:.8; }
 .wg .hit { fill:transparent; }
 .wg .gh, .wg .ink { fill:none; stroke-width:21; stroke-linecap:round; stroke-linejoin:round; }
 .wg .gh { stroke:#d9d5cc; }
@@ -16,6 +14,7 @@
 #st-body .c-word { flex-direction:column; justify-content:center; gap:18px; padding:24px 16px; }
 #st-body .c-word .we { font-size:72px; }
 #st-body .c-word .wd-row { margin-left:0; }
-#st-body .c-word .lt { cursor:pointer; transition:transform .6s ease; }
-#st-body .c-word .lt.k1.done .gh, #st-body .c-word .lt.k1 .ink { stroke:var(--accent); }
+#st-body .c-word .lt { cursor:pointer; transition:transform .45s ease; }
+#st-body .c-word .gh { transition:stroke .45s; }
+#st-body .c-word .wg:not(.merged) .lt.k1.done .gh, #st-body .c-word .wg:not(.merged) .lt.k1 .ink { stroke:var(--accent); }
 @media (max-width: 480px) { .c-word .we { font-size:36px; } }

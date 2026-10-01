@@ -2,7 +2,7 @@
 /**
  * 单词卡(cards/word/card.md)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock,Chrome 开孩子端英语老师,孩子说 apple → 老师那节里有单词卡:四线三格、五个字母、卡上没有中文、右边「听」;
- * 念到它那句时一笔一笔写;点「听」按正常速度念(mock 没配音,走浏览器英文合成声);点卡开舞台:自动慢念(0.7 倍)→ 分段两色分开慢写 → 合拢 → 再慢念;
+ * 念到它那句时一笔一笔写;点「听」按正常速度念(mock 没配音,走浏览器英文合成声);点卡开舞台:自动慢念(0.7 倍)→ 分段两色分开慢写 → 合拢、颜色退掉 → 再慢念;
  * 点第二段只写那一段;关舞台慢念停。iPad 横屏、手机各截一张。
  *
  * 用法:node scripts/probe-word.mjs [--out <截图目录>] [--keep](留下 mock)
@@ -83,16 +83,18 @@ try {
   await until(`document.querySelector('#stage').classList.contains('on') && Boolean(document.querySelector('#st-body .c-word .wg svg'))`);
   const st0 = await evaluate(`(() => { const ls = [...document.querySelectorAll('#st-body .lt')]; return { kd: document.querySelector('#st-kd').textContent, ttl: document.querySelector('#st-ttl').textContent, k: ls.map((l) => l.dataset.k).join(''), faint: ls.filter((l) => !l.classList.contains('done')).length, x: ls.map((l) => l.style.transform), said: __said.slice() }; })()`);
   ok('舞台:顶栏「apple · 单词」;分段 ap|ple;字先淡着;一打开就慢念(0.7 倍)', st0.kd === '单词' && st0.ttl === 'apple' && st0.k === '00111' && st0.faint === 5 && st0.said.length === 1 && st0.said[0].rate === 0.63, JSON.stringify(st0));
-  await until(`Boolean(document.querySelector('#st-body .ink'))`);
-  await sleep(1200);
-  console.log('  ', await shot('word-stage-writing.png'));
+  await until(`Boolean(document.querySelector('#st-body .ink'))`, 200);
   const t0 = Date.now();
-  await until(`document.querySelectorAll('#st-body .lt.done').length === 5 && !document.querySelector('#st-body .ink')`, 80);
-  const writeMs = Date.now() - t0 + 1200;
-  await sleep(1400);
+  await until(`Boolean(document.querySelector('#st-body .lt.k1 .ink'))`, 200);
+  const split = await evaluate(`(() => { const ls = [...document.querySelectorAll('#st-body .lt')]; return { k0: getComputedStyle(ls[0].querySelector('.ink')).stroke, k1: getComputedStyle(document.querySelector('#st-body .lt.k1 .ink')).stroke }; })()`);
+  ok('分开写时两段两个颜色', split.k0 !== split.k1, JSON.stringify(split));
+  console.log('  ', await shot('word-stage-writing.png'));
+  await until(`document.querySelectorAll('#st-body .lt.done').length === 5 && !document.querySelector('#st-body .ink')`, 200);
+  const writeMs = Date.now() - t0;
+  await sleep(1000);
   const st1 = await evaluate(`(() => { const ls = [...document.querySelectorAll('#st-body .lt')]; return { x: ls.map((l) => l.style.transform), said: __said.slice(), k1: getComputedStyle(ls[4].querySelector('.gh')).stroke, k0: getComputedStyle(ls[0].querySelector('.gh')).stroke }; })()`);
-  ok('写完合拢(第三个字母往回挪了)、再慢念一遍;两段两个颜色', st1.x[2] !== st0.x[2] && st1.said.length === 2 && st1.said[1].rate === 0.63 && st1.k0 !== st1.k1, JSON.stringify({ ...st1, writeMs }));
-  ok(`慢写有分量:整词写了 ${(writeMs / 1000).toFixed(1)} 秒`, writeMs > 4000, String(writeMs));
+  ok('写完合拢(第三个字母往回挪了)、颜色退成一色、再慢念一遍', st1.x[2] !== st0.x[2] && st1.said.length === 2 && st1.said[1].rate === 0.63 && st1.k0 === st1.k1, JSON.stringify({ ...st1, writeMs }));
+  ok(`慢写:整词写了 ${(writeMs / 1000).toFixed(1)} 秒(比讲到时的正常速度慢、又不拖)`, writeMs > 2500 && writeMs < 7000, String(writeMs));
   console.log('  ', await shot('word-stage-done.png'));
 
   // 点第二段:只写那一段

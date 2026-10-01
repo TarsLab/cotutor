@@ -150,7 +150,7 @@ export function cardTexts(card: BoardCard): string[] {
     case 'tianzige':
       return []; // 田字格里是 SVG 路径不是文字,标注落不上;讲稿里的 [鼓] 去别的卡找
     case 'word':
-      return [str(p.word)]; // 格里是笔顺不是文字:[apple] 落到这张卡上,页面把整个词涂一道荧光
+      return [str(p.word)]; // [apple] 落到这张卡上(讲到时亮这张);格里是笔顺不是文字,页面不画标注
     case 'record':
       return [str(p.show) || (p.mode === 'pinyin' ? '' : str(p.text))];
     default:

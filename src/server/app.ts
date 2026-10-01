@@ -39,6 +39,7 @@ import { bundleAsset, stageAsset } from './stage.ts';
 import { themeFiles } from './theme.ts';
 import { enrichScenes } from './scene-props.ts';
 import { tianzigeData } from './tianzige.ts';
+import { lettersData } from './letters.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
 import { repost } from './post.ts';
 import { checkLesson, exportThread, handLessonFile, lessonName, lessonPage, lessonThreads, listLessons, readLesson, type LessonPage } from './lesson.ts';
@@ -765,6 +766,12 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     const hz = /^\/api\/kid\/tianzige\/([^/]+)$/.exec(p);
     if (hz && method === 'GET') {
       const d = await tianzigeData(decodeURIComponent(hz[1]));
+      return d ? { status: 200, json: d, cacheControl: 'max-age=86400' } : { status: 404, json: { error: 'not_found' } };
+    }
+    // 单词卡的笔顺:词里每个字母的点序列(drawtell/glyphs 现采);写不出的词 404(页面退成字体的字)
+    const lt = /^\/api\/kid\/letters\/([^/]+)$/.exec(p);
+    if (lt && method === 'GET') {
+      const d = lettersData(decodeURIComponent(lt[1]));
       return d ? { status: 200, json: d, cacheControl: 'max-age=86400' } : { status: 404, json: { error: 'not_found' } };
     }
     // 图片卡的图:只认 workspace 根以内的图片文件(产物、照片);越界、不是图、不存在都 404

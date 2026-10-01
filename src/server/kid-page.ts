@@ -583,6 +583,8 @@ __REEL_JS__
   const unlock = () => { if (unlocked) return; try { audioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='; audioEl.play().then(() => { unlocked = true; }).catch(() => {}); } catch {} };
   let voiceToken = 0;
   let guardTimer = null;
+  /** 换了音源后定倍速(单词卡舞台慢放;看录像另有倍速):换 src 会把 playbackRate 重置成 defaultPlaybackRate,两个一起设;音高不变 */
+  const audioRate = (r) => { audioEl.defaultPlaybackRate = r; audioEl.playbackRate = r; try { audioEl.preservesPitch = true; audioEl.webkitPreservesPitch = true; } catch {} };
   /** 只停声音。播放状态不在这里改——那走 dispatch(见下面「播放器」) */
   const silence = () => { voiceToken++; try { audioEl.pause(); } catch {} try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {} };
   /** 念一句;念完调 onEnd(被打断不调);声音真开始时调 onStart(总时长毫秒:mp3 取 duration,合成声与没声音按字数估),给标注定时用 */
@@ -599,14 +601,15 @@ __REEL_JS__
       audioEl.onended = finish; audioEl.onerror = fallbackVoice;
       audioEl.onplaying = () => start(isFinite(audioEl.duration) && audioEl.duration > 0 ? audioEl.duration * 1000 : lineDurationMs(line.text));
       audioEl.src = AUDIO + S.tutor.name + '/' + line.audio.split('/').map(encodeURIComponent).join('/');
+      audioRate(1);
       audioEl.play().catch(fallbackVoice);
     } else speak(plainLine(line.text), finish, fallback, start);
   };
-  const speak = (text, onEnd, onFail, onStart) => {
+  const speak = (text, onEnd, onFail, onStart, opts) => {
     try {
       if (!('speechSynthesis' in window)) return onFail();
       speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text); u.lang = 'zh-CN'; u.rate = 0.95;
+      const u = new SpeechSynthesisUtterance(text); u.lang = (opts && opts.lang) || 'zh-CN'; u.rate = (opts && opts.rate) || 0.95;
       let ended = false;
       u.onstart = () => { if (onStart) onStart(lineDurationMs(text)); };
       u.onend = () => { if (!ended) { ended = true; onEnd(); } };
@@ -851,6 +854,14 @@ __REEL_JS__
         if (board) el.append(againBtn());
         return el;
       }
+      case 'word': {
+        // 单词卡:四线三格里写这个词,卡上没有中文;点卡开舞台(慢念、分段慢写),「听」按正常速度念;讲到它时 setNow 写一遍
+        if (stage) return wordStage(c, idx);
+        const em = p.emoji || (c.look && c.look.emoji) || '';
+        const el = box('word', em ? h('span', { class: 'we' }, em) : null, wordGrid(String(p.word || ''), null), h('div', { class: 'wd-row' }, recPill(ICON.speaker, '听', (e) => wordSay(c, e.currentTarget, 1))));
+        el.dataset.w = String(p.word || '');
+        return el;
+      }
       default:
         return box('text', h('div', { class: 'cb' }, cardTexts(c).filter(Boolean).join('\\n')));
     }
@@ -933,6 +944,146 @@ __REEL_JS__
     const go = (k) => { if (k >= boxes.length) return; const b = boxes[k]; b._then = () => setTimeout(() => go(k + 1), 320); tianzigeWrite(b); };
     go(0);
   };
+  // ---- 单词卡:四线三格(x 高为 1:升部 / 大写顶 -2、x 高顶 -1、基线 0、降部 +1),笔顺 /api/kid/letters/<词>(drawtell/glyphs 采好的中线点);
+  // 写 = 每一笔一条粗线,stroke-dashoffset 从头长到尾,和田字格一个手法;数据没有(写不出的词)退成字体的字、不动 ----
+  const WL = new Map();
+  const lettersFor = (w) => { if (!WL.has(w)) WL.set(w, fetch('/api/kid/letters/' + encodeURIComponent(w)).then((r) => (r.ok ? r.json() : null)).catch(() => null)); return WL.get(w); };
+  /** 一个 x 高 = 100 个 viewBox 单位;紧凑态一个 x 高 22px、舞台 50px */
+  const WU = 100;
+  /** 正常:讲到时、紧凑态;慢:舞台里(写字每 x 高毫秒数、笔间停顿、段间停顿、念的倍速) */
+  const WORD_SPEED = { ms: 170, pause: 90, chunk: 0 };
+  const WORD_SLOW = { ms: 300, pause: 200, chunk: 500, rate: 0.7 };
+  /** 一个词的四线三格:chunks 给了(舞台)就按段上两色、先分开摆,wordMerge 合拢;fresh = 先淡着等写 */
+  const wordGrid = (w, chunks, opts = {}) => {
+    const xh = opts.stage ? 50 : 22;
+    const el = h('div', { class: 'wg' });
+    el.style.height = (4 * xh) + 'px';
+    lettersFor(w).then((d) => {
+      const glyphs = d ? d.glyphs : {};
+      const base = { gap: d ? d.gap : 0.35, space: d ? d.space : 0.55, chunks: chunks || undefined };
+      const merged = wordLayout(w, glyphs, base);
+      const split = chunks ? wordLayout(w, glyphs, { ...base, split: true }) : merged;
+      const pad = 0.5, W = split.width + pad * 2, off = (split.width - merged.width) / 2;
+      const svg = sv('svg', { viewBox: [-pad * WU, -2.5 * WU, W * WU, 4 * WU].join(' '), width: Math.round(W * xh) });
+      svg.style.aspectRatio = W + ' / 4';
+      svg.append(sv('rect', { class: 'hl', x: (off - 0.2) * WU, y: -1.2 * WU, width: (merged.width + 0.4) * WU, height: 1.35 * WU, rx: 24 }));
+      const grid = sv('g', { class: 'grid' });
+      for (const [k, y] of [['top', -2], ['mid', -1], ['base', 0], ['bot', 1]]) grid.append(sv('line', { class: k, x1: -pad * WU, x2: (split.width + pad) * WU, y1: y * WU, y2: y * WU }));
+      svg.append(grid);
+      merged.slots.forEach((slot, i) => {
+        const g = glyphs[slot.ch];
+        const lt = sv('g', { class: 'lt k' + (chunks ? slot.chunk % 2 : 0) + (opts.fresh && g ? '' : ' done'), 'data-k': slot.chunk });
+        lt._x = [(slot.x + off) * WU, split.slots[i].x * WU];
+        lt.style.transform = 'translate(' + lt._x[chunks ? 1 : 0] + 'px, 0px)';
+        lt.append(sv('rect', { class: 'hit', x: -0.1 * WU, y: -2.3 * WU, width: ((g ? g.advance : 0.8) + 0.2) * WU, height: 3.6 * WU }));
+        if (g) for (const st of g.strokes) lt.append(sv('path', { class: 'gh', d: 'M' + st.map((q) => q[0] * WU + ' ' + q[1] * WU).join(' L') }));
+        else { const t = sv('text', { class: 'ft', x: 0, y: 0, 'font-size': 190 }); t.textContent = slot.ch; lt.append(t); }
+        svg.append(lt);
+      });
+      el._split = Boolean(chunks);
+      el.replaceChildren(svg);
+      el.style.height = '';
+      el._ready = true;
+      const want = el._want; el._want = null;
+      if (want) wordWrite(el, want.slow, want.only, want.then);
+    });
+    return el;
+  };
+  /** 回到写完的样子(打断正在写的) */
+  const wordReset = (grid) => {
+    if (grid._run) grid._run.stop();
+    grid._run = null;
+    for (const x of grid.querySelectorAll('.ink')) x.remove();
+    for (const l of grid.querySelectorAll('.lt')) l.classList.add('done');
+  };
+  /** 写这个词(only = 只写第几段):一笔接一笔,段与段之间多停一会儿;写完调 then。数据还没到就记着,到了再写 */
+  const wordWrite = (grid, slow, only, then) => {
+    if (!grid) return;
+    if (!grid._ready) { grid._want = { slow, only, then }; return; }
+    wordReset(grid);
+    const sp = slow ? WORD_SLOW : WORD_SPEED;
+    const lts = [...grid.querySelectorAll('.lt')].filter((l) => only == null || Number(l.dataset.k) === only);
+    const jobs = [];
+    let prevK = null;
+    for (const l of lts) {
+      const k = Number(l.dataset.k);
+      const gs = [...l.querySelectorAll('.gh')];
+      if (gs.length) l.classList.remove('done');
+      gs.forEach((g, n) => { jobs.push({ g, wait: n === 0 && prevK !== null && k !== prevK ? sp.chunk : 0 }); });
+      if (gs.length) prevK = k;
+    }
+    let i = 0, timer = null, alive = true;
+    grid._run = { stop: () => { alive = false; clearTimeout(timer); } };
+    const step = () => {
+      if (!alive) return;
+      if (i >= jobs.length) { grid._run = null; for (const x of grid.querySelectorAll('.ink')) x.remove(); for (const l of lts) l.classList.add('done'); if (then) then(); return; }
+      const g = jobs[i++].g;
+      const len = Math.max(1, g.getTotalLength());
+      const ink = sv('path', { class: 'ink', d: g.getAttribute('d') });
+      ink.style.strokeDasharray = String(len + 40); ink.style.strokeDashoffset = String(len + 40);
+      g.parentNode.append(ink);
+      const ms = Math.max(90, Math.round(len / WU * sp.ms));
+      void ink.getBoundingClientRect();
+      ink.style.transition = 'stroke-dashoffset ' + ms + 'ms linear';
+      ink.style.strokeDashoffset = '0';
+      timer = setTimeout(step, ms + sp.pause + (i < jobs.length ? jobs[i].wait : 0));
+    };
+    step();
+  };
+  /** 舞台里分开写的段合拢成整词(merged = true)或再分开 */
+  const wordMerge = (grid, merged) => {
+    if (!grid._split) return;
+    for (const l of grid.querySelectorAll('.lt')) l.style.transform = 'translate(' + l._x[merged ? 0 : 1] + 'px, 0px)';
+  };
+  /** 念这个词:服务端配好的 1.mp3(老师的音色)按 rate 倍速放(音高不变),没好就浏览器的英文合成声;念完调 then(被打断不调) */
+  const wordSay = (card, btn, rate, then) => {
+    if (S.rec) return;
+    dispatch({ type: 'segment' });
+    const token = ++voiceToken;
+    for (const x of document.querySelectorAll('.c-word .rc-pl.on')) x.classList.remove('on');
+    if (btn) btn.classList.add('on');
+    const done = () => { if (btn) btn.classList.remove('on'); if (token === voiceToken && then) then(); };
+    const w = String((card.props || {}).word || '');
+    const synth = () => { if (token === voiceToken) speak(w, done, done, null, { lang: 'en-US', rate: 0.9 * rate }); };
+    const a = segmentAudio(card, 0);
+    if (!a || !S.tutor) { synth(); return; }
+    audioEl.onplaying = null;
+    audioEl.onended = () => { if (token === voiceToken) done(); };
+    audioEl.onerror = synth;
+    audioEl.src = AUDIO + S.tutor.name + '/' + a.split('/').map(encodeURIComponent).join('/');
+    audioRate(rate);
+    audioEl.play().catch(synth);
+  };
+  /** 舞台里的单词卡:emoji、分段两色的四线三格、「再听一遍」(慢);打开就走一遍:慢念 → 一段一段慢写 → 合拢 → 再慢念。点一段,那段慢写一遍 */
+  let wordRun = 0;
+  const wordStage = (card, idx) => {
+    const p = card.props || {};
+    const em = p.emoji || (card.look && card.look.emoji) || '';
+    const chunks = Array.isArray(p.chunks) && p.chunks.join('') === p.word ? p.chunks : null;
+    const grid = wordGrid(String(p.word || ''), chunks, { stage: true, fresh: !S.reel });
+    const btn = recPill(ICON.speaker, '再听一遍', (e) => { wordRun++; wordSay(card, e.currentTarget, WORD_SLOW.rate); });
+    grid.addEventListener('click', (e) => {
+      const l = e.target.closest && e.target.closest('.lt');
+      if (!l || S.reel) return;
+      e.stopPropagation(); wordRun++;
+      wordWrite(grid, true, chunks ? Number(l.dataset.k) : null);
+    });
+    const el = h('div', { class: 'c c-word', 'data-card': idx, 'data-tint': tintFor(card), 'data-look': lookFor(card) }, em ? h('span', { class: 'we' }, em) : null, grid, h('div', { class: 'wd-row' }, btn));
+    // 看录像时只读地开:不出声、不写,停在写完的样子
+    if (!S.reel) {
+      const run = ++wordRun;
+      const live = () => run === wordRun && S.stage;
+      wordSay(card, btn, WORD_SLOW.rate, () => {
+        if (!live()) return;
+        wordWrite(grid, true, null, () => {
+          if (!live()) return;
+          const again = () => { if (live()) wordSay(card, btn, WORD_SLOW.rate); };
+          if (chunks) { wordMerge(grid, true); setTimeout(again, 900); } else setTimeout(again, 400);
+        });
+      });
+    }
+    return el;
+  };
   /** 点读:点哪段念哪段——服务端配好的段(card.assets 里有 <段号>.mp3)放 mp3,没好的用浏览器合成声;讲稿在播就先停下 */
   const readSegment = (el, card, k, seg) => {
     dispatch({ type: 'segment' });
@@ -967,6 +1118,7 @@ __REEL_JS__
     audioEl.onended = () => { if (token === voiceToken) off(); };
     audioEl.onerror = () => { if (token === voiceToken) { if (fallbackText) speak(fallbackText, off, off); else off(); } };
     audioEl.src = src;
+    audioRate(1);
     audioEl.play().catch(() => { if (token === voiceToken) off(); });
   };
   /** 示范音:服务端配好的 1.mp3(老师的音色),没好就浏览器合成声念给人看的字 */
@@ -1157,6 +1309,13 @@ __REEL_JS__
   const swapCard = (old, fresh) => {
     // 田字格不换元素:老师写完那一刻它可能正在写,换了动画就断(mock 里 1.5 秒必现);同一个词只把后期定的样子搬过去
     if (old.classList.contains('c-tianzige') && fresh.classList.contains('c-tianzige') && old.dataset.ch === fresh.dataset.ch) { old.dataset.tint = fresh.dataset.tint; old.dataset.look = fresh.dataset.look; old.dataset.card = fresh.dataset.card; return; }
+    // 单词卡同理;后期晚到的 emoji 搬过去
+    if (old.classList.contains('c-word') && fresh.classList.contains('c-word') && old.dataset.w === fresh.dataset.w) {
+      old.dataset.tint = fresh.dataset.tint; old.dataset.look = fresh.dataset.look; old.dataset.card = fresh.dataset.card;
+      const fe = fresh.querySelector('.we'), oe = old.querySelector('.we');
+      if (fe && oe) oe.textContent = fe.textContent; else if (fe) old.prepend(fe);
+      return;
+    }
     if (old.classList.contains('now')) fresh.classList.add('now'); if (old.classList.contains('pend')) fresh.classList.add('pend'); if (old.dataset.wrote) fresh.dataset.wrote = old.dataset.wrote; old.replaceWith(fresh);
   };
   /** 选中态:一节里同一时刻只有一张(讲到哪张亮哪张;舞台开着时是舞台那张;停下等答停在末句的卡) */
@@ -1168,7 +1327,8 @@ __REEL_JS__
     el.classList.add('now');
     // 田字格卡:讲到它那一刻写一遍(这一页只写一次;换新元素时 wrote 跟着搬),之后孩子点了再写
     // 再听时再写一遍(这一趟再听只写一次)
-    if (el.classList.contains('c-tianzige') && S.state.status === 'playing' && (S.state.replay ? !replayWrote.has(el) : !el.dataset.wrote)) { el.dataset.wrote = '1'; if (S.state.replay) replayWrote.add(el); tianzigePlay(el); }
+    // 单词卡同样:讲到它时在四线三格里按正常速度写一遍
+    if ((el.classList.contains('c-tianzige') || el.classList.contains('c-word')) && S.state.status === 'playing' && (S.state.replay ? !replayWrote.has(el) : !el.dataset.wrote)) { el.dataset.wrote = '1'; if (S.state.replay) replayWrote.add(el); if (el.classList.contains('c-word')) wordWrite(el.querySelector('.wg'), false, null); else tianzigePlay(el); }
   };
   const showNow = () => setNow(S.state.section, nowCard(S.sections, S.state));
   /** 换端(转屏)或窗口变了:整节按新端重排,标注按已播到的画齐,选中态照旧 */
@@ -1188,7 +1348,7 @@ __REEL_JS__
   S.device = debug.get('device') || deviceFor(innerWidth, innerHeight);
 
   // ---- 舞台:点卡放大,交互都在这里;开着时讲稿暂停,关了字幕行出「播放」 ----
-  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', scene: '讲解动画', canvas: '画一画', record: '录音', code: '' };
+  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', word: '单词', scene: '讲解动画', canvas: '画一画', record: '录音', code: '' };
   const GO_LABEL = { canvas: '给老师看' };
   const openStage = (secIdx, idx, opts = {}) => {
     const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];
@@ -1252,7 +1412,9 @@ __REEL_JS__
   });
   /** 讲稿委托给场景播完(或孩子关了)→ 接着念下一句 */
   const resumeAfter = () => dispatch({ type: 'stageDone' });
-  const closeStage = () => { if (S.stage && S.sections[S.stage.section]) playRec({ k: 'stage', job: S.sections[S.stage.section].job, card: S.stage.card, open: false }); recStop(false); S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); showNow(); };
+  const closeStage = () => { if (S.stage && S.sections[S.stage.section]) playRec({ k: 'stage', job: S.sections[S.stage.section].job, card: S.stage.card, open: false }); recStop(false);
+    // 单词卡舞台:自动那一遍停下,慢念也停
+    wordRun++; if (S.stage && !S.reel && S.sections[S.stage.section] && (S.sections[S.stage.section].cards[S.stage.card] || {}).kind === 'word') silence(); S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); showNow(); };
   $('#st-x').innerHTML = ICON.close;
   $('#st-x').addEventListener('click', closeStage);
   $('#st-dim').addEventListener('click', closeStage);
@@ -1313,6 +1475,8 @@ __REEL_JS__
     const sec = $('#board').querySelector('[data-sec="' + secIdx + '"]');
     const card = sec && sec.querySelector('[data-card="' + mark.card + '"]');
     if (!card || !card.classList.contains('c')) return null;
+    // 单词卡格里是笔顺不是文字:标到这个词就把整个词涂一道荧光
+    if (card.classList.contains('c-word')) { card.classList.add('marked'); return card; }
     const cardData = S.sections[secIdx].cards[mark.card];
     const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
     let n;
@@ -1420,6 +1584,7 @@ __REEL_JS__
     for (const i of lines) for (const m of S.sections[secIdx].lines[i].marks) {
       const card = sec.querySelector('[data-card="' + m.card + '"]');
       if (!card) continue;
+      card.classList.remove('marked');
       for (const span of [...card.querySelectorAll('.mk')]) {
         if (span.dataset.phrase !== m.phrase) continue;
         for (const pen of span._pens || []) pen.remove();
@@ -1739,7 +1904,7 @@ __REEL_JS__
     dispatch({ type: 'halt' }); if (on) return;
     b.classList.add('on'); const tok = voiceToken;
     audioEl.onended = audioEl.onerror = () => { if (tok === voiceToken) b.classList.remove('on'); }; audioEl.onplaying = null;
-    audioEl.src = AUDIO + S.tutor.name + '/' + v.audio.split('/').map(encodeURIComponent).join('/'); audioEl.playbackRate = 1; audioEl.play().catch(() => b.classList.remove('on'));
+    audioEl.src = AUDIO + S.tutor.name + '/' + v.audio.split('/').map(encodeURIComponent).join('/'); audioRate(1); audioEl.play().catch(() => b.classList.remove('on'));
   } } }, '▶ 原声 ' + (Math.round(v.seconds * 10) / 10) + ' 秒');
   const noteEl = (cls, tag, text) => h('div', { class: 'note ' + cls }, h('span', { class: 'tg' }, tag), h('span', { class: 'tx' }, text));
   const preNotes = (m) => {
@@ -1934,6 +2099,7 @@ __REEL_JS__
     try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {}
     audioEl.onended = finish; audioEl.onerror = fallback; audioEl.onplaying = null;
     audioEl.src = lsnUrl('/say?s=' + sec + '&i=' + k);
+    audioRate(1);
     audioEl.play().catch(fallback);
   };
   const listenSection = (i) => {

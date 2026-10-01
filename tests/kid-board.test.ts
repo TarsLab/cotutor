@@ -47,6 +47,7 @@ import {
   type BoardLine,
   type PlayerState,
   type BoardSection,
+  wordLayout,
 } from '../src/lib/kid-board.ts';
 import { check, done } from './_check.ts';
 
@@ -201,5 +202,12 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   const t1 = markTiming(ln, { card: 0, phrase: '三角形' }, 5000);
   const t2 = markTiming(ln, { card: 0, phrase: '三个角', said: '几个角' }, 5000);
   check('标注定时:按字数比例,方括号不算,said 优先,找不到 → null,短词至少 350ms', t1 !== null && t1.at === 1500 && t1.dur === 1500 && t2 !== null && t2.at === 3500 && t2.dur === 1500 && markTiming(ln, { card: 0, phrase: '三个角' }, 5000) === null && markTiming(ln, { card: 0, phrase: '角' }, 1000)?.dur === 350 && markTiming(ln, { card: 0, phrase: '角' }, 0) === null, JSON.stringify([t1, t2]));
+  // 单词卡:格里是笔顺,标注只让整个词亮;排版按 advance + 字间距,舞台里段与段之间再空开
+  const wcard: BoardCard = { kind: 'word', props: { word: 'apple', chunks: ['ap', 'ple'] } };
+  const G = { a: { advance: 1 }, p: { advance: 1 }, l: { advance: 0.2 }, e: { advance: 0.95 } };
+  const lay = wordLayout('apple', G, { gap: 0.2, space: 0.5 });
+  const lsp = wordLayout('apple', G, { gap: 0.2, space: 0.5, chunks: ['ap', 'ple'], split: true });
+  const two = wordLayout('ice cream', { i: { advance: 0.2 }, c: { advance: 0.8 }, e: { advance: 0.95 }, r: { advance: 0.6 }, a: { advance: 1 }, m: { advance: 1.4 } }, { gap: 0.2, space: 0.5 });
+  check('单词卡:[apple] 落到这张卡、标题是词;排版逐字前进,分开写时第二段整体右移 0.8,空格只前进', anchorMarks([wcard], ['apple'])[0]?.card === 0 && cardTitle(wcard) === 'apple' && lay.slots.map((x) => +x.x.toFixed(2)).join() === '0,1.2,2.4,3.6,4' && +lay.width.toFixed(2) === 4.95 && lsp.slots.map((x) => x.chunk).join() === '0,0,1,1,1' && +(lsp.slots[2].x - lay.slots[2].x).toFixed(2) === 0.8 && +(lsp.slots[4].x - lay.slots[4].x).toFixed(2) === 0.8 && two.slots.length === 8 && +(two.slots[3].x - two.slots[2].x).toFixed(2) === 1.85, JSON.stringify([lay, lsp.slots]));
 }
 done();

@@ -77,6 +77,13 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   await m.settle();
   const rd = ((await get('/api/kid/conversations/english-tutor/today')).json as Day).messages[0];
   check('英语老师:点读卡 + 图片卡 + 末句问句', rd.section?.cards[1].kind === 'read' && rd.section?.cards[2].kind === 'image' && rd.section?.cards[2].props.src === 'captures/2026-09-10/fruits.png' && rd.reply?.includes('apple') === true && rd.section?.lines[1].marks.length === 3, JSON.stringify(rd.section?.lines));
+  const wc = rd.section?.cards[3];
+  check('英语老师:第四张是单词卡 apple(分段、emoji),卡上没有中文', wc?.kind === 'word' && wc.props.word === 'apple' && JSON.stringify(wc.props.chunks) === '["ap","ple"]' && wc.props.emoji === '🍎' && !JSON.stringify(wc.props).includes('苹果'), JSON.stringify(wc));
+  const ltOk = await get('/api/kid/letters/' + encodeURIComponent('apple'));
+  const ltNo = await get('/api/kid/letters/' + encodeURIComponent('ab1'));
+  type Lt = { glyphs: Record<string, { advance: number; strokes: number[][][] }>; gap: number; space: number };
+  const lj = ltOk.json as Lt;
+  check('字母笔顺:apple 用到 a p l e 四个字形,a 两笔(圈 + 竖)、点在四线三格里;写不出的词 404', ltOk.status === 200 && Object.keys(lj.glyphs).join() === 'a,p,l,e' && lj.glyphs.a.strokes.length === 2 && lj.glyphs.a.strokes.flat().every(([x, y]) => x >= -0.1 && x <= 1.1 && y >= -2 && y <= 1) && ltNo.status === 404, JSON.stringify(ltNo));
   const img = await get('/api/kid/image?p=' + encodeURIComponent('captures/2026-09-10/fruits.png'));
   check('图片卡的图:mock 给占位 svg', img.status === 200 && img.contentType === 'image/svg+xml' && img.html?.includes('<svg') === true && img.html.includes('fruits.png'));
   const fillJob = d2.messages[1].job;

@@ -1,12 +1,12 @@
 /** 卡的注册表:每种卡的解析 / 剥秘密 / 语法表;不认识的标签;解析失败的退路。 */
-import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, kindsFor, parseCard, parseCardState, stripSecrets } from '../src/cards/index.ts';
+import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, kindsFor, parseCard, parseCardState, stripSecrets, wordChunks } from '../src/cards/index.ts';
 import { boardSkillDoc, boardSyntaxDoc } from '../src/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 {
   check('有状态的卡:choice / fill / scene / canvas / record;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,fill,scene,canvas,record');
-  check('十一种卡登记在册:板书十种 + 首页的老师卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,scene,canvas,record,code,tutor' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
-  check('用在哪:板书十种;首页 = 老师卡 + 一段字 / 点读 / 图片 / 田字格', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,scene,canvas,record,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,tutor');
+  check('十二种卡登记在册:板书十一种 + 首页的老师卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,word,scene,canvas,record,code,tutor' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
+  check('用在哪:板书十一种;首页 = 老师卡 + 一段字 / 点读 / 图片 / 田字格 / 单词', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,word,scene,canvas,record,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,word,tutor');
   const tut = parseCard('tutor chinese-tutor', '- 我要预习小蝌蚪找妈妈\n讲法: 先读课文\n讲法: 再认字\n新话题\n接着 2026-09-16 1930-1 接着写看图写话', 'home');
   check('老师卡:列表号去掉、讲法挂上一个按钮(多行拼起来)、「新话题」不算、接着带日期与话题', tut.card.kind === 'tutor' && JSON.stringify(tut.card.props) === JSON.stringify({ tutor: 'chinese-tutor', buttons: [{ kind: 'start', label: '我要预习小蝌蚪找妈妈', brief: '先读课文\n再认字' }, { kind: 'continue', label: '接着写看图写话', date: '2026-09-16', thread: '1930-1' }] }) && !tut.warning, JSON.stringify(tut));
   check('老师卡剥讲法', JSON.stringify(stripSecrets({ cards: [tut.card], lines: [] }).cards[0].props.buttons) === '[{"kind":"start","label":"我要预习小蝌蚪找妈妈"},{"kind":"continue","label":"接着写看图写话","date":"2026-09-16","thread":"1930-1"}]');
@@ -29,7 +29,11 @@ import { check, done } from './_check.ts';
   const brc = parseCard('choice', '[斜边]是多少?\n- [ ] 6\n- [x] 5');
   check('choice 的 - [ ] / - [x] 不被当成标注剥掉;问题里的括号剥', brc.card.props.question === '斜边是多少?' && JSON.stringify(brc.card.props.answer) === '[1]' && (brc.card.props.options as string[]).join() === '6,5', JSON.stringify(brc));
   check('code / canvas 的正文不动方括号(JSON 里有 [ ])', parseCard('python', 'a = [1, 2]').card.props.text === 'a = [1, 2]' && !parseCard('canvas', '{"skeletons":[{"type":"rectangle","x":0,"y":0,"width":10,"height":10}]}').warning && parseCard('text', '一段没有括号的话').warning === undefined);
-  check('要预生成资产的:点读、录音卡(示范音)', CARD_KINDS.filter((k) => k.assets).map((k) => k.name).join() === 'read,record');
+  check('要预生成资产的:点读、单词卡(这个词)、录音卡(示范音)', CARD_KINDS.filter((k) => k.assets).map((k) => k.name).join() === 'read,word,record');
+  const wd = parseCard('word', '🍎 apple 苹果\nap-ple');
+  check('word:emoji、词、分段;中文悄悄去掉不报;资产一段 1.mp3 念这个词;标题是词', wd.card.kind === 'word' && JSON.stringify(wd.card.props) === '{"word":"apple","chunks":["ap","ple"],"emoji":"🍎"}' && !wd.warning && JSON.stringify(cardAssets(wd.card)) === '[{"file":"1.mp3","text":"apple"}]' && cardLabel(wd.card) === 'apple', JSON.stringify(wd));
+  check('word 分段:空格、连字符跟前一段;拼不回这个词 / 只有一段就不要分段', JSON.stringify(wordChunks('ice cream', 'ice cr-ea-m')) === '["ice ","cr","ea","m"]' && JSON.stringify(wordChunks('T-shirt', 'T-sh-ir-t')) === '["T-","sh","ir","t"]' && wordChunks('apple', 'a-pl') === undefined && wordChunks('apple', 'apple') === undefined && wordChunks('apple', '苹-果') === undefined && !('chunks' in parseCard('word', 'apple\na-pl').card.props));
+  check('word 退文字卡:只有中文、整句、数字、太长', ['苹果', 'I like apples very much', 'room 101', 'supercalifragilistic'].every((b) => parseCard('word', b).card.kind === 'text' && parseCard('word', b).warning?.includes('word') === true) && parseCard('word', "don't").card.props.word === "don't" && parseCard('word', 'apple (苹果)').card.props.word === 'apple');
   const rd = parseCard('read', 'apple 苹果\nbanana 香蕉');
   check('read 资产:一段一个 <k>.mp3', JSON.stringify(cardAssets(rd.card)) === '[{"file":"1.mp3","text":"apple 苹果"},{"file":"2.mp3","text":"banana 香蕉"}]' && cardAssets({ kind: 'text', props: { text: 'x' } }).length === 0 && cardAssets({ kind: 'read', props: {} }).length === 0);
   const im = parseCard('image', 'captures/2026-09-10/a.jpg\n看第二行\n那里错了');

@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset } from './stage.ts';
 import { enrichScenes } from './scene-props.ts';
 import { tianzigeData } from './tianzige.ts';
+import { lettersData } from './letters.ts';
 
 /** mock 的课包目录:仓库里的样本(tests/fixtures/bundles/),场景卡从这里播 */
 export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bundles/', import.meta.url));
@@ -293,6 +294,13 @@ Listen and repeat: [apple], [banana], [orange]. 点一下听一下,跟着我读�
 captures/2026-09-10/fruits.png
 三种水果,你家有哪种?
 ~~~
+
+~~~word
+🍎 apple
+ap-ple
+~~~
+
+This is how we write it: a, p, p, l, e. 看我写一遍。
 
 Which one do you want to try first, [apple], [banana], or [orange]? 你先读哪一个?`,
     ],
@@ -859,6 +867,12 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (hz) {
       // 田字格卡:数据包就在 node_modules 里,mock 也给真笔顺
       const d = await tianzigeData(decodeURIComponent(hz[1]));
+      return d ? { status: 200, json: d } : { status: 404, json: { error: 'not_found' } };
+    }
+    const lt = /^\/api\/kid\/letters\/([^/]+)$/.exec(p);
+    if (lt) {
+      // 单词卡:字形包就在 node_modules 里,mock 也给真笔顺
+      const d = lettersData(decodeURIComponent(lt[1]));
       return d ? { status: 200, json: d } : { status: 404, json: { error: 'not_found' } };
     }
     if (p === '/api/kid/image') {

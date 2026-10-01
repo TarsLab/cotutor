@@ -9,6 +9,7 @@ import { choice } from './choice.ts';
 import { code } from './code.ts';
 import { fill } from './fill.ts';
 import { tianzige } from './tianzige.ts';
+import { word } from './word.ts';
 import { image } from './image.ts';
 import type { CardKind, CardPlace } from './kind.ts';
 import { read } from './read.ts';
@@ -28,11 +29,12 @@ export { scene, BUNDLE_ID_RE, type SceneProps, type SceneState } from './scene.t
 export { canvas, type CanvasProps, type CanvasState } from './canvas.ts';
 export { record, HeardSchema, RECORD_AUDIO_RE, RECORD_MAX_SECONDS, heardTail, type Heard, type RecordExtra, type RecordProps, type RecordState } from './record.ts';
 export { tianzige, HAN, TIANZIGE_MAX, type TianzigeProps } from './tianzige.ts';
+export { word, wordChunks, WORD_MAX, WORD_MAX_WORDS, WORD_RE, type WordProps } from './word.ts';
 export { tutor, BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, type TutorButton, type TutorProps } from './tutor.ts';
 
-/** 全部种类:先板书的十种(注册表顺序即技能里的顺序),再首页专属的 */
+/** 全部种类:先板书的十一种(注册表顺序即技能里的顺序),再首页专属的 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, scene, canvas, record, code, tutor];
+export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, word, scene, canvas, record, code, tutor];
 
 export function cardKind(name: string): CardKind | undefined {
   return CARD_KINDS.find((k) => k.name === name) as CardKind | undefined;
@@ -50,7 +52,7 @@ export function kindsFor(place: CardPlace): readonly CardKind<any>[] {
 }
 
 /** 正文是「字」的卡:老师把讲稿的 [词] 标注语法写进这些卡时,把括号剥掉(2026-09-11 真跑:孩子看到了「[直角边]」);choice 的 - [ ] / - [x] 不动 */
-const TEXTUAL = new Set(['text', 'read', 'choice', 'fill', 'image']);
+const TEXTUAL = new Set(['text', 'read', 'choice', 'fill', 'image', 'word']);
 const MARK_IN_CARD = /\[([^\[\]\n]+)\]/g;
 function unmark(body: string): { body: string; had: boolean } {
   let had = false;
@@ -102,11 +104,11 @@ export function stripSecrets(section: BoardSection): BoardSection {
   };
 }
 
-/** 一张卡的标题(舞台顶栏、给老师的描述里用):文字卡的 title / text,选择题的问题,其余第一段有字的,田字格的字 */
+/** 一张卡的标题(舞台顶栏、给老师的描述里用):文字卡的 title / text,选择题的问题,其余第一段有字的,田字格的字,单词卡的词 */
 export function cardLabel(card: BoardCard): string {
   const p = card.props;
   const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
-  const first = s(p.title) || s(p.question) || s(p.show) || s(p.text) || s(p.caption) || s(p.prompt) || (Array.isArray(p.segments) ? s(p.segments[0]) : '') || s(p.chars);
+  const first = s(p.title) || s(p.question) || s(p.show) || s(p.text) || s(p.caption) || s(p.prompt) || (Array.isArray(p.segments) ? s(p.segments[0]) : '') || s(p.chars) || s(p.word);
   const cps = Array.from(first.replace(/\s+/g, ' '));
   return cps.length > 40 ? `${cps.slice(0, 40).join('')}…` : cps.join('');
 }

@@ -1,6 +1,6 @@
 ---
 name: cotutor-board
-description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / scene / canvas / record / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
+description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / word / scene / canvas / record / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
 disable-model-invocation: true
 ---
 
@@ -209,6 +209,33 @@ https://example.com/brain.png
 ```
 ```tianzige
 鼓
+```
+
+### word — 单词卡
+
+单词卡:孩子问「X 英语怎么说」、一节里教新词时用的卡。一张卡一个英文单词,写在四线三格里,讲到这张卡时一笔一笔写一遍。卡上没有中文。点开是慢速:慢念,再按自然拼读一段一段慢写。
+
+- 第一行:emoji 和英文单词,如 `🍎 apple`。
+- 能画出来的东西配一个 emoji。抽象的词(like、the)不用配。
+- 第二行:自然拼读分段,用 `-` 隔开,如 `ap-ple`、`sh-ee-p`。
+- 分段拼起来要和单词一模一样。一个字母一段也行,如 `c-a-t`。
+- 一张卡一个词,最多三个词、16 个字母。
+- 只写字母、空格、撇号和连字符。不写音标,不写中文谐音。
+
+```word
+🍎 apple
+ap-ple
+```
+```word
+🐑 sheep
+sh-ee-p
+```
+```word
+🍦 ice cream
+ice cr-ea-m
+```
+```word
+like
 ```
 
 ### scene — 讲解动画(课包)

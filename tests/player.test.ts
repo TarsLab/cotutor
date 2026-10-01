@@ -73,6 +73,7 @@ const rows: Row[] = [
   { name: '在念 + 点卡开舞台 → 暂停', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'stageOpen' }, want: (m) => m.state.status === 'paused' },
   { name: '在念 + 拿起相机(同开舞台)→ 暂停,不算念完', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'stageOpen' }, want: (m) => m.state.status === 'paused' && m.state.line === 0 },
   { name: '在念 + 点读 → 暂停', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'segment' }, want: (m) => m.state.status === 'paused' },
+  { name: '舞台开着、讲稿暂停 + 单词卡慢念(同点读)→ 还暂停着,不接着念', model: M({ section: 1, line: 0, status: 'paused' }), sections: [done0, last], ctx: { stage: true }, ev: { type: 'segment' }, want: (m, fx) => m.state.status === 'paused' && !fx.some((f) => f.kind === 'play') },
   { name: '在念 + 孩子说话 → 完、停声音', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'send' }, want: (m, fx) => m.state.status === 'done' && kinds(fx) === 'stop' },
   // 再听中
   { name: '再听 + 点停 → 回等答,「继续」防误点', model: replayingW, sections: [done0, last], ev: { type: 'tapButton' }, want: (m, fx) => m.state.status === 'waiting' && !m.state.replay && m.replayOf === null && m.contGuardUntil === 10_000 + CONT_GUARD_MS && fx[0].kind === 'stop' && !fx.some((f) => f.kind === 'send') },

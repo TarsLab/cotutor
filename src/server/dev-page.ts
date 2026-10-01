@@ -555,7 +555,7 @@ export const DEV_PAGE = `<!doctype html>
     return el;
   };
 
-  const KIND_LABEL = { text: '文字', read: '点读', choice: '选择', fill: '填空', image: '图片', tianzige: '田字格', scene: '讲解动画', canvas: '画板', code: '原样' };
+  const KIND_LABEL = { text: '文字', read: '点读', choice: '选择', fill: '填空', image: '图片', tianzige: '田字格', word: '单词', scene: '讲解动画', canvas: '画板', code: '原样' };
   const cardEl = (card, n) => {
     const p = card.props || {};
     const style = card.kind === 'text' ? (p.style || 'plain') : '';

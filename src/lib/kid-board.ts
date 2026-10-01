@@ -277,16 +277,16 @@ export function penFor(card: BoardCard, phrase: string): PenName {
 /** 一行最多几张:明写的并排(课文件 / 老师的 same)能到 3 张;按宽度排的最多 2 张(半宽 + 半宽) */
 export const MAX_CARDS_PER_ROW = 3;
 
-/** 独占一行的卡:标题行、提问卡、有交互的、场景 */
+/** 独占一行的卡:标题行、提问卡、画板、录音卡、场景(选择题、填空题量得下就能半宽,2026-10-01) */
 export function standsAlone(card: BoardCard): boolean {
-  return isHeading(card) || isAskCard(card) || hasState(card) || card.kind === 'scene';
+  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'record' || card.kind === 'scene';
 }
 
-const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word'];
+const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice', 'fill'];
 
-/** 能半宽的种类:文字、点读、代码、田字格、单词卡;字形是 title(一句话看懂、大字居中)的占满一行 */
+/** 能半宽的种类:文字、点读、代码、田字格、单词卡、选择题、填空题。字形(后期挑的大字等)不算:字大放不下,量出来自然是全宽 */
 export function canHalf(card: BoardCard): boolean {
-  return !standsAlone(card) && HALF_KINDS.includes(card.kind) && card.look?.look !== 'title';
+  return !standsAlone(card) && HALF_KINDS.includes(card.kind);
 }
 
 /** 半宽时文字卡与点读最多几行(小标题也算一行);手机的半宽只有 170 来像素,一行七八个字,只放得下标题加一行 */
@@ -302,7 +302,7 @@ export interface CardFit {
 
 /**
  * 量出来的卡能不能半宽:文字卡与点读看行数,不超过 HALF_LINES;
- * 公式、代码、田字格、单词卡半宽时不能比全宽高(折了行就是挤了,公式从中间断开没法看)。横着溢出的都不行
+ * 公式、代码、田字格、单词卡、选择题、填空题半宽时不能比全宽高(折了行就是挤了:公式从中间断开没法看,选项挤成两行)。横着溢出的都不行
  */
 export function fitsHalf(card: BoardCard, device: Device, m: CardFit): boolean {
   if (!canHalf(card) || m.overflow) return false;
@@ -326,7 +326,7 @@ function validRows(rows: readonly (readonly number[])[], n: number): boolean {
  * 一节的行(2026-10-01 起排版归代码,《工作流程.md》§二「排版」):每张卡半宽还是全宽,看它自己量出来的样子
  * (half(i),页面在量具里量;没给就按 isShortCard 估)。从左往右排,只看前面的卡:
  * - 相邻两张半宽的并一行;一张半宽后面跟的不是半宽,它自己一行、占左半(右边空着)
- * - 全宽的一行一张;标题行、提问卡、有交互的、场景永远独占
+ * - 全宽的一行一张;标题行、提问卡、画板、录音卡、场景永远独占
  * - 明写的并排(section.layout 里不止一张的行:课文件 / 老师写的 same)照办,最多 3 张;
  *   别的端排的到了手机上,超过 2 张或有不能半宽的就拆开,再按宽度排
  * 流式一张张来时,前面的行不会因为后来的卡变。

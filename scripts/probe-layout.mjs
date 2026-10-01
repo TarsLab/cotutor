@@ -2,7 +2,7 @@
 /**
  * 排版(《工作流程.md》§二「排版」,2026-10-01 归代码)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock,Chrome 开孩子端数学老师。iPad 横屏、竖屏、手机各看一遍预载的那节(勾股定理):
- * 字少的卡半宽、相邻两张半宽并一行、落单的半宽卡占左半、选择题占满、页面不横滚、半宽卡里的字不溢出;
+ * 字少的卡半宽、相邻两张半宽并一行、落单的半宽卡占左半、短选项的选择题也能并排、页面不横滚、半宽卡里的字不溢出;
  * 再从输入条发一句,老师一张张出卡时,已经出来的卡不挪(位置、宽度都不变)。每种尺寸截一张。
  *
  * 用法:node scripts/probe-layout.mjs [--out <截图目录>] [--keep](留下 mock)
@@ -83,7 +83,7 @@ try {
     const choice = rows.flatMap((r) => r.cards).find((c) => c.kind === 'c-choice');
     console.log(`  ${label}:板宽 ${L.W},半宽 ${L.half};行 ${rows.map((r) => `[${r.cards.map((c) => c.k).join(',')}]${r.cols === 2 && r.cards.length === 1 ? '½' : ''}`).join(' ')}`);
     ok(`${label}:半宽的卡都是半宽(两张并一行的、落单占左半的)`, halves.every((c) => near(c.w, L.half)), JSON.stringify(halves));
-    ok(`${label}:选择题占满一行`, choice !== undefined && near(choice.w, L.W), JSON.stringify(choice));
+    ok(`${label}:选择题半宽或全宽,不溢出`, choice !== undefined && (near(choice.w, L.W) || near(choice.w, L.half)) && !choice.over, JSON.stringify(choice));
     ok(`${label}:不横滚、半宽卡里不溢出`, !L.pageOver && !L.boardOver && rows.every((r) => r.cards.every((c) => !c.over)), JSON.stringify({ pageOver: L.pageOver, boardOver: L.boardOver }));
     console.log('  ', await shot(file));
     return { L, rows, pairs, lone };
@@ -91,6 +91,7 @@ try {
 
   const ipad = await look('iPad 横屏', 1180, 820, 1, false, 'layout-ipad.png');
   ok('iPad 横屏:有两张并一行的(字少的兄弟卡)', ipad.pairs.length >= 1, JSON.stringify(ipad.pairs.map((r) => r.cards.map((c) => c.k))));
+  ok('iPad 横屏:三个短选项的选择题和前面落单的半宽卡并一行(右边不空着)', ipad.pairs.some((r) => r.cards.some((c) => c.kind === 'c-choice')), JSON.stringify(ipad.rows.map((r) => r.cards.map((c) => c.k))));
   const portrait = await look('iPad 竖屏', 820, 1180, 1, false, 'layout-portrait.png');
   ok('iPad 竖屏:有两张并一行的', portrait.pairs.length >= 1);
   const phone = await look('手机', 390, 844, 2, true, 'layout-phone.png');

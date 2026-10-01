@@ -54,7 +54,7 @@ for: 2026-09-28            # 可省:给哪天用的
 
 | 写 | 意思 |
 |---|---|
-| \`same\` | 这张卡和上一张并排(不写 = 孩子端按卡的宽度排:字少的两张自动并排)。一行最多 ${MAX_CARDS_PER_ROW} 张;标题行、答题卡(choice / fill / canvas / record)、讲解动画永远独占一行,写了 same 也接不上(检查会提醒) |
+| \`same\` | 这张卡和上一张并排(不写 = 孩子端按卡的宽度排:字少的两张自动并排)。一行最多 ${MAX_CARDS_PER_ROW} 张;标题行、画板(canvas)、录音卡(record)、讲解动画永远独占一行,写了 same 也接不上(检查会提醒) |
 | \`tint=<槽>\` | 底色槽,名字在主题的 theme.json 的 tints 里(cotutor lesson check 会告诉你有哪些) |
 | \`look=<槽>\` | 字形槽,名字在 theme.json 的 looks 里 |
 | \`emoji=<一个>\` | 卡标题前的一个 emoji |
@@ -94,7 +94,8 @@ export function layoutRules(theme?: ThemeManifest): string {
 - 不写 \`same\`,孩子端按卡的宽度排:字少的卡半宽,相邻两张半宽的自动并排。多数卡不用管。
 - 只有一定要并排对照的「兄弟卡」才写 \`same\`:两种情况、公式和它所属的那一步。
 - 一行最多 ${MAX_CARDS_PER_ROW} 张;不相干的别硬凑一行。
-- 标题行(只有 \`# 标题\` 的 text)、答题卡(choice / fill / canvas / record)、讲解动画(scene)永远独占一行,写了 \`same\` 也接不上。
+- 标题行(只有 \`# 标题\` 的 text)、画板(canvas)、录音卡(record)、讲解动画(scene)永远独占一行,写了 \`same\` 也接不上。
+- 选择题、填空题能并排:短的题和它讲的那段原文并一行,孩子不用来回翻。
 - 排的是平板横屏(frontmatter 的 device 不写就是它);手机上应用自己折,不用管。
 
 ## 底色槽 tint(一张卡一个;不写 = 缺省)

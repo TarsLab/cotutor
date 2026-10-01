@@ -309,6 +309,8 @@ const PAGE = `<!doctype html>
   #hold { position:absolute; left:0; right:0; bottom:0; height:300px; background:linear-gradient(180deg,#3b82e800 0%,#3b82e8cc 45%,#2f6fd6 100%); display:none; flex-direction:column; align-items:center; justify-content:flex-end; gap:22px; padding-bottom:calc(env(safe-area-inset-bottom) + 70px); color:#fff; pointer-events:none; z-index:20; }
   #hold.on { display:flex; }
   #hold .w { display:flex; align-items:center; gap:3px; height:28px; }
+  #hold .t { max-width:min(640px, 88%); font-size:20px; line-height:1.45; text-align:center; text-shadow:0 1px 2px #0003; }
+  #hold .t:empty { display:none; }
   #hold.real .w i { animation:none; }
   #hold.wait .w { opacity:.3; }
   #hold.wait .w i { animation-play-state:paused; }
@@ -471,7 +473,7 @@ const PAGE = `<!doctype html>
       <div class="rl-track"><div id="rl-marks"></div><input id="rl-seek" type="range" min="0" max="1000" step="100" value="0" aria-label="录像进度"></div>
       <div class="rl-row"><button id="rl-play" type="button" aria-label="播放"></button><span class="rl-when"><span id="rl-clock"></span><button id="rl-tag" type="button">推算</button></span><span class="rl-sp"></span><label class="rl-sw" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就按真实时间放"><input type="checkbox" id="rl-skip" role="switch" checked><i></i>跳过空白</label><button class="tx" id="rl-speed" type="button">1×</button><button class="tx" id="rl-x" type="button">退出</button></div>
     </div>
-    <div id="hold"><span>松手发送,上移取消</span><div class="w"></div></div>
+    <div id="hold"><div class="t"></div><span>松手发送,上移取消</span><div class="w"></div></div>
   </div>
   <div id="hist"><div class="dimmer"></div><div class="panel"><div class="hd"><span>以前的</span><button class="hb" id="hist-x" type="button"></button></div><div class="ls"></div></div></div>
   <div id="menu"><div class="dimmer"></div><div class="panel">
@@ -2450,7 +2452,8 @@ __REEL_JS__
   /** 起一次浏览器识别:onText(到目前认出的整句),onEnd(停了),onAudio(话筒真的开了),onLevel(这一帧的音量 0–1);没有识别 → null。
    *  回来的是个把手(识别要等麦克风开了才起):live / held / diagMark / stop() / abort()(不回 onEnd)。
    *  识别是单句的(continuous 关):Safari 听到停顿 1.5 秒左右就自己停(2026-09-28 真机:孩子说到 12 秒想了一下,话被截走发了)。
-   *  所以手还按着(held)它自己停了,就再起一段接着认、字拼在后面;松手(settle 把 held 置假)之后停了才算完 */
+   *  所以手还按着(held)它自己停了,就再起一段接着认、字拼在后面;松手(settle 把 held 置假)之后停了才算完。
+   *  段与段之间补一个逗号:Safari 认中文不带标点,停顿是唯一的断句,不补老师收到的是一口气连着的一串(2026-10-01 真机) */
   const listen = (onText, onEnd, where, onAudio, onLevel) => {
     if (!srOk()) return null;
     // 诊断:每次按住记一行事件码 + 距按下的毫秒(不记字、不记声音),停了发给 /api/kid/voice-diag;真机上出错是静默的,只有这份能说清哪一步断了
@@ -2479,8 +2482,9 @@ __REEL_JS__
       r.onstop = () => vdone(keep && vchunks.length ? { blob: new Blob(vchunks, { type: r.mimeType || 'audio/webm' }), seconds } : null);
       try { r.stop(); } catch { vdone(null); }
     };
-    // again:手按着接着认了几段;prev:前几段认出的字;cur:这一段的;active:这一段还在认(停了、下一段还没起时 stop 直接收尾)
+    // again:手按着接着认了几段;prev:前几段认出的字(带着断句的逗号);cur:这一段的;active:这一段还在认(停了、下一段还没起时 stop 直接收尾)
     let raf = 0, round = 0, again = 0, startedAt = 0, errored = '', prev = '', cur = '', active = false;
+    const joined = (s) => (prev && s && !/[，。！？、,.!?…]$/.test(prev) ? prev + '，' + s : prev + s);
     const close = (keep) => { hd.live.done = true; cancelAnimationFrame(raf); voiceEnd(keep); report(); };
     const done = () => { if (hd.live.done) return; mark('end', hd.live.len); close(true); const dead = !again && Boolean(errored) && errored !== 'no-speech' && !hd.live.len && Date.now() - startedAt < 500; if (dead) { mark('sr-dead'); srDied(); } onEnd(dead); };
     // 这一段停了:手还按着就接着认,除非这段一起就断(不是没听到声音、没出字、不到 500ms)、页面退到了后台或已经接了 40 段
@@ -2489,7 +2493,7 @@ __REEL_JS__
       if (hd.live.done) return;
       const broke = Boolean(errored) && errored !== 'no-speech' && !cur && Date.now() - startedAt < 500;
       if (!hd.held || broke || document.hidden || again >= 40) { done(); return; }
-      prev += cur; cur = ''; again++; mark('again', again);
+      prev = joined(cur); cur = ''; again++; mark('again', again);
       listenOnce();
     };
     hd.stop = () => { hd.held = false; if (hd.r && active) { try { hd.r.stop(); } catch {} } else done(); };
@@ -2518,7 +2522,7 @@ __REEL_JS__
         const r = new SR(); r.lang = 'zh-CN'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
         for (const k of ['start', 'audiostart', 'soundstart', 'speechstart', 'speechend', 'soundend', 'audioend', 'nomatch']) r.addEventListener(k, () => mark(k));
         if (!again) r.addEventListener('audiostart', () => { if (onAudio) onAudio(); });
-        r.onresult = (e) => { let s = ''; for (const x of e.results) s += x[0].transcript; cur = s; hd.live.len = prev.length + s.length; hd.live.lastAt = Date.now(); mark('result', hd.live.len); onText(prev + s); };
+        r.onresult = (e) => { let s = ''; for (const x of e.results) s += x[0].transcript; cur = s; const t = joined(s); hd.live.len = t.length; hd.live.lastAt = Date.now(); mark('result', hd.live.len); onText(t); };
         r.onerror = (e) => { errored = String(e && e.error) || 'error'; mark('error', errored); };
         r.onend = ended;
         errored = ''; startedAt = Date.now(); hd.r = r; r.start(); active = true; mark('start()');
@@ -2556,10 +2560,12 @@ __REEL_JS__
   // 真音量:25 根条往左滚;没有麦克风那一路(老浏览器、没授权)就还是原来的假波形
   const holdBars = [...document.querySelectorAll('#hold .w i')], holdLv = new Array(25).fill(0);
   const holdLevel = (v) => { $('#hold').classList.add('real'); holdLv.shift(); holdLv.push(v); for (let i = 0; i < 25; i++) holdBars[i].style.height = Math.round(4 + holdLv[i] * 24) + 'px'; };
+  // 按住时认出的字:浮层上跟着出,太长只留最后 60 个字
+  const holdText = (t) => { $('#hold .t').textContent = t.length > 60 ? '…' + t.slice(-60) : t; };
   const startRec = () => {
-    finalText = ''; hold.audio = false; hold.tail = false; renderHold();
-    rec = listen((t) => { finalText = t; }, (dead) => {
-      const t = finalText; const voice = rec ? rec.voice : null; rec = null; hold.tail = false;
+    finalText = ''; hold.audio = false; hold.tail = false; renderHold(); holdText('');
+    rec = listen((t) => { finalText = t; holdText(t); }, (dead) => {
+      const t = finalText; const voice = rec ? rec.voice : null; rec = null; hold.tail = false; holdText('');
       setBar(barNext(S.bar, 'holdEnd'));
       // 识别一起就断:这一下当成点了一下,直接打字
       if (dead) { if (press) { clearTimeout(press.timer); press = null; } setBar(barNext(S.bar, 'tap')); return; }

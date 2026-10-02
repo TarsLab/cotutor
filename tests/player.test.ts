@@ -35,6 +35,11 @@ const last: BoardSection = { cards: [text('c')], lines: [L('四', 0), L('五?', 
 const live: BoardSection = { cards: [text('d'), text('e')], lines: [L('六', 0), L('七', 1)], partial: true, ready: 1 };
 /** 念完这句交给场景 */
 const withScene: BoardSection = { cards: [scene], lines: [L('看我画', 0, { cues: [{ card: 0, name: 'play' }] }), L('画完了', 0)] };
+/** 素材卡(《备课设计.md》§11.3):[[play 2]] 播第 2 段;[[play]] 从头播完;有要改的(ready 不是 true)不停 */
+const material: BoardCard = { kind: 'material', props: { id: 'pingjunfen', ready: true, segments: 3 } };
+const withMaterial: BoardSection = { cards: [material], lines: [L('看三个人怎么分', 0, { cues: [{ card: 0, name: 'play', arg: '2' }] }), L('每人几块?', 0)] };
+const withMaterialAll: BoardSection = { cards: [material], lines: [L('看一遍', 0, { cues: [{ card: 0, name: 'play' }] }), L('看完了', 0)] };
+const withMaterialOff: BoardSection = { cards: [{ kind: 'material', props: { id: 'x' } }], lines: [L('看看', 0, { cues: [{ card: 0, name: 'play', arg: '1' }] }), L('接着说', 0)] };
 
 const ctxOf = (sections: BoardSection[], over: Partial<PlayerCtx> = {}): PlayerCtx => ({ sections, pending: false, autoplay: true, readonly: false, stage: false, limit: false, now: 10_000, ...over });
 const M = (state: PlayerState, over: Partial<PlayerModel> = {}): PlayerModel => ({ ...initialPlayer(), state, ...over });
@@ -69,6 +74,10 @@ const rows: Row[] = [
   { name: '在念 + 末句问句念完 → 等答、推答题卡', model: M({ section: 1, line: 1, status: 'playing' }), sections: [done0, last], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'waiting' && kinds(fx) === 'render,openAsk' },
   { name: '以前的话题 + 末句问句念完 → 完(不等答)', model: M({ section: 1, line: 1, status: 'playing' }), sections: [done0, last], ctx: { readonly: true }, ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'done' && kinds(fx) === 'render' },
   { name: '在念 + [[play]] 那句念完 → 交给场景', model: M({ section: 0, line: 0, status: 'playing' }), sections: [withScene], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'stage' && kinds(fx) === 'openStage' },
+  { name: '在念 + 锚到素材卡的 [[play 2]] 那句念完 → 交给素材,只播第 2 段', model: M({ section: 0, line: 0, status: 'playing' }), sections: [withMaterial], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'stage' && kinds(fx) === 'openStage' && JSON.stringify(fx[0]) === '{"kind":"openStage","section":0,"card":0,"segment":2}' },
+  { name: '在念 + 素材卡的 [[play]](没写段)念完 → 交给素材,从头播完(不带 segment)', model: M({ section: 0, line: 0, status: 'playing' }), sections: [withMaterialAll], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'stage' && JSON.stringify(fx[0]) === '{"kind":"openStage","section":0,"card":0}' },
+  { name: '在念 + 素材有要改的(没 ready)→ 不停,念下一句', model: M({ section: 0, line: 0, status: 'playing' }), sections: [withMaterialOff], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'playing' && m.state.line === 1 && kinds(fx) === 'play' },
+  { name: '交给素材 + 那段播完(舞台还开着)→ 接着念下一句', model: M({ section: 0, line: 0, status: 'stage' }), sections: [withMaterial], ctx: { stage: true }, ev: { type: 'stageDone' }, want: (m, fx) => m.state.status === 'playing' && m.state.line === 1 && kinds(fx) === 'play' },
   { name: '交给场景 + 场景播完 → 接着念', model: M({ section: 0, line: 0, status: 'stage' }), sections: [withScene], ev: { type: 'stageDone' }, want: (m, fx) => m.state.status === 'playing' && m.state.line === 1 && kinds(fx) === 'play' },
   { name: '在念 + 点卡开舞台 → 暂停', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'stageOpen' }, want: (m) => m.state.status === 'paused' },
   { name: '在念 + 拿起相机(同开舞台)→ 暂停,不算念完', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'stageOpen' }, want: (m) => m.state.status === 'paused' && m.state.line === 0 },

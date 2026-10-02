@@ -5,6 +5,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Workspace } from '../cli/workspace.ts';
+import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
 import type { LessonIssue } from '../lib/lesson.ts';
 import { MATERIAL_FILE, MATERIAL_ID_RE, MATERIALS_DIR, materialIssues, materialLine, parseMaterial, type MaterialDoc } from '../lib/material.ts';
 
@@ -71,4 +72,25 @@ export function formatMaterialCheck(c: MaterialCheck): string {
   for (const i of c.issues) out.push(`  ${i.level === 'fix' ? '✗ 要改' : '· 提醒'}${i.line ? ` 第 ${i.line} 行` : ''}:${i.text}`);
   if (!c.issues.length) out.push(`  没有问题;上下文包里是:${materialLine(c.id, c.doc)}`);
   return out.join('\n');
+}
+
+/** 素材卡下发前的快照(src/cards/material.ts):标题、段数、能不能播;素材不在 / 有要改的 / 不是 clips → ready: false */
+export async function materialSnapshot(ws: Workspace, id: string): Promise<{ title?: string; segments?: number; ready: boolean }> {
+  const c = await checkMaterial(ws, id);
+  if (!c) return { ready: false };
+  const ok = !c.fixes && c.doc.media === 'clips' && c.doc.segments.length > 0;
+  return { ...(c.doc.title ? { title: c.doc.title } : {}), ...(ok ? { segments: c.doc.segments.length } : {}), ready: ok };
+}
+
+/** 一节里的素材卡全部补上快照(别的卡原样;同一节同一份素材只读一次) */
+export async function enrichMaterials(ws: Workspace, section: BoardSection): Promise<BoardSection> {
+  if (!section.cards.some((c) => c.kind === 'material')) return section;
+  const seen = new Map<string, Awaited<ReturnType<typeof materialSnapshot>>>();
+  const cards: BoardCard[] = [];
+  for (const c of section.cards) {
+    if (c.kind !== 'material' || typeof c.props.id !== 'string') { cards.push(c); continue; }
+    if (!seen.has(c.props.id)) seen.set(c.props.id, await materialSnapshot(ws, c.props.id));
+    cards.push({ ...c, props: { ...c.props, ...seen.get(c.props.id)! } });
+  }
+  return { ...section, cards };
 }

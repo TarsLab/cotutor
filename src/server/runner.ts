@@ -14,6 +14,7 @@
  * 进程 cwd 是老师目录 agents/<name>/(《agent层设计.md》拍板)。
  */
 import { spawn } from 'node:child_process';
+import { materialsFor } from './material.ts';
 import { closeSync, createWriteStream, existsSync, openSync, writeSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative } from 'node:path';
@@ -405,6 +406,11 @@ export class Runner {
     const pack = session ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
     const noteWarnings = pack.entry?.startsWith('缺:') && !input.bookkeep ? [`入口文件${pack.entry}——在 vault 里给这位老师建一篇(cotutor doctor 有写法)`] : [];
     if (policy.board === 'off') pack.board = 'off';
+    // 家长备好的素材(《备课设计.md》§11.3):有脸的老师、新会话的第一条、板书没关;一行一个,细节老师自己 Read <materialsDir>/<id>/material.md
+    if (!session && tutor.endsWith('-tutor') && policy.board !== 'off' && !input.bookkeep && !input.tidy) {
+      const materials = await materialsFor(ws, tutor);
+      if (materials.length) { pack.materials = materials; pack.materialsDir = ws.dirs.materials; }
+    }
     // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
     // 录音卡:评测结果接在那一行后面(存录音时就起了,这里取;还在跑就等,最多等到存录音之后 timeoutMs;回放不起新的)
     const changed = fresh || input.bookkeep ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread);

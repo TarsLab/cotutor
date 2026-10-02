@@ -58,6 +58,11 @@ export function renderContextPack(pack: ContextPack): string {
     }
     out.push(`    index: ${yamlScalar(c.index)}`);
   }
+  if (p.materials?.length) {
+    out.push('  materials:');
+    for (const c of p.materials) out.push(`    - ${yamlScalar(c)}`);
+    if (p.materialsDir) out.push(`  materialsDir: ${yamlScalar(p.materialsDir)}`);
+  }
   if (p.lesson?.length) {
     out.push('  lesson:');
     for (const c of p.lesson) out.push(`    - ${yamlScalar(c)}`);

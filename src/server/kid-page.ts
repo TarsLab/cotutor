@@ -830,6 +830,22 @@ __REEL_JS__
         const thumb = ready && p.thumb ? h('img', { src: '/api/kid/image?p=' + encodeURIComponent(p.thumb), alt: '' }) : null;
         return box('scene', p.problem ? h('div', { class: 'sp' }, p.problem) : (p.title ? h('div', { class: 'sp' }, p.title) : null), h('div', { class: 'th' }, thumb || (ready ? '' : '图还在路上'), ready ? h('span', { class: 'pl' }, (n ? n + ' 步 ' : '') + '▷') : null), p.text ? h('div', { class: 'tx' }, p.text) : null);
       }
+      case 'material': {
+        // 素材卡(《备课设计.md》§11.3):家长备好的现成动画,一段一个 mp4、不出声;舞台里播完停在末帧,下面一排段号
+        const ready = materialReady(c);
+        const n = ready ? p.segments : 0;
+        if (stage) {
+          if (!ready) return h('div', { class: 'c c-material mt-stage', 'data-card': idx }, h('div', { class: 'th' }, '动画还没放进来'));
+          const v = h('video', { playsinline: '', 'webkit-playsinline': '', preload: 'auto' });
+          v.muted = true;
+          v.addEventListener('ended', materialEnded);
+          const segs = n > 1 ? h('div', { class: 'segs' }, ...Array.from({ length: n }, (_, k) => h('button', { type: 'button', 'data-seg': String(k + 1), on: { click: () => playMaterial(k + 1, true) } }, String(k + 1)))) : null;
+          return h('div', { class: 'c c-material mt-stage', 'data-card': idx }, v, segs, p.text ? h('div', { class: 'tx' }, p.text) : null);
+        }
+        const thumb = ready ? h('video', { src: materialSrc(p.id, 1) + '#t=0.1', playsinline: '', preload: 'metadata' }) : null;
+        if (thumb) thumb.muted = true;
+        return box('material', h('div', { class: 'sp' }, p.title || p.id || ''), p.text ? h('div', { class: 'tx' }, p.text) : null, h('div', { class: 'th' }, thumb || '动画还没放进来', ready ? h('span', { class: 'pl' }, n + ' 段 ▷') : null));
+      }
       case 'canvas': {
         const n = inkCount(c);
         // 交过了:紧凑态是孩子画的那张图(真服务给 png 的相对路径,mock 存的是 data URL)
@@ -1410,7 +1426,7 @@ __REEL_JS__
   S.layHalf = halfWidth();
 
   // ---- 舞台:点卡放大,交互都在这里;开着时讲稿暂停,关了字幕行出「播放」 ----
-  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', word: '单词', scene: '讲解动画', canvas: '画一画', record: '录音', code: '' };
+  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', word: '单词', scene: '讲解动画', material: '动画', canvas: '画一画', record: '录音', code: '' };
   const GO_LABEL = { canvas: '给老师看' };
   const openStage = (secIdx, idx, opts = {}) => {
     const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];
@@ -1427,6 +1443,33 @@ __REEL_JS__
     renderStage();
     $('#stage').classList.add('on');
     setNow(secIdx, idx);
+    // 素材卡:讲稿 [[play N]] 只播第 N 段;[[play]] 从头播完;孩子点开的从第 1 段起、一段一停
+    if (card.kind === 'material' && materialReady(card)) playMaterial(opts.segment || 1, Boolean(opts.segment) || !opts.delegate);
+  };
+  // ---- 素材卡的舞台(《备课设计.md》§11.3;仲裁表「交给素材」):一段播完停在末帧;讲稿交来的,播完 stageDone 接着念、舞台不关 ----
+  const materialSrc = (id, k) => '/api/kid/material/' + encodeURIComponent(id || '') + '/' + k + '.mp4';
+  const playMaterial = (k, only) => {
+    if (!S.stage) return;
+    const card = S.sections[S.stage.section].cards[S.stage.card];
+    const v = $('#st-body video');
+    if (!card || card.kind !== 'material' || !v) return;
+    S.stage.mat = { seg: k, only };
+    for (const b of document.querySelectorAll('#st-body .segs button')) b.classList.toggle('on', b.dataset.seg === String(k));
+    v.src = materialSrc(card.props.id, k);
+    v.play().catch(() => {});
+  };
+  const materialEnded = () => {
+    const st = S.stage;
+    if (!st || !st.mat) return;
+    const card = S.sections[st.section].cards[st.card];
+    const n = card.props.segments || 0;
+    const prev = card.state || { segment: 0, done: false };
+    card.state = { segment: Math.max(prev.segment || 0, st.mat.seg), done: Boolean(prev.done) || st.mat.seg >= n };
+    saveState(S.sections[st.section].job, st.card, card.state);
+    repaintCard(st.section, st.card);
+    if (!st.mat.only && st.mat.seg < n) { playMaterial(st.mat.seg + 1, false); return; }
+    // 讲稿交来的:播完接着念,舞台留着停在末帧(老师对着这一帧往下说)
+    if (st.delegate) { st.delegate = false; resumeAfter(); }
   };
   const STAGE_SOURCE = 'cotutor-stage';
   const frame = $('#st-frame');
@@ -1476,10 +1519,13 @@ __REEL_JS__
   const resumeAfter = () => dispatch({ type: 'stageDone' });
   const closeStage = () => { if (S.stage && S.sections[S.stage.section]) playRec({ k: 'stage', job: S.sections[S.stage.section].job, card: S.stage.card, open: false }); recStop(false);
     // 单词卡舞台:自动那一遍停下,慢念也停
+    for (const v of document.querySelectorAll('#st-body video')) { try { v.pause(); } catch {} }
     wordRun++; if (S.stage && !S.reel && S.sections[S.stage.section] && (S.sections[S.stage.section].cards[S.stage.card] || {}).kind === 'word') silence(); S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); showNow(); };
   $('#st-x').innerHTML = ICON.close;
-  $('#st-x').addEventListener('click', closeStage);
-  $('#st-dim').addEventListener('click', closeStage);
+  // 孩子关:讲稿交给素材、还没播完的,关了接着念(场景卡的关在舞台包里,走上面的 close 消息)
+  const closeByKid = () => { const d = S.stage; const card = d && S.sections[d.section] ? S.sections[d.section].cards[d.card] : null; closeStage(); if (d && d.delegate && card && !isHeavy(card)) resumeAfter(); };
+  $('#st-x').addEventListener('click', closeByKid);
+  $('#st-dim').addEventListener('click', closeByKid);
   /** 选择题:点一项 → 本地改状态、重画、PUT 到服务端(失败不响,下次再点再存) */
   const pick = (secIdx, idx, i) => {
     const card = S.sections[secIdx].cards[idx];
@@ -1682,7 +1728,7 @@ __REEL_JS__
       case 'paint': paintAll(f.section, f.upTo); break;
       case 'unpaint': unpaintLines(f.section, f.lines); break;
       case 'replayStart': unlock(); replayWrote.clear(); break;
-      case 'openStage': openStage(f.section, f.card, { delegate: true, autoplay: true }); break;
+      case 'openStage': openStage(f.section, f.card, { delegate: true, autoplay: true, segment: f.segment }); break;
       case 'openAsk': { const s = S.sections[f.section]; if (s && s.lines[f.line]) openAskCard(f.section, s.lines[f.line]); break; }
       case 'send': send('', { action: f.action }); break;
       case 'scrollLast': { const last = $('#board').querySelector('[data-sec="' + (S.sections.length - 1) + '"] .c'); if (last) last.scrollIntoView({ block: 'start', behavior: 'instant' }); break; }

@@ -1,6 +1,6 @@
 ---
 name: cotutor-board
-description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / word / scene / canvas / record / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
+description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / word / scene / material / canvas / record / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
 disable-model-invocation: true
 ---
 
@@ -253,6 +253,31 @@ like
 我去把这道题画出来,画好了我们一起看。
 题面:找规律填数 75、70、65、__、55
 讲法:每次少 5;先圈出相邻两个数,再一格一格往后推
+```
+
+### material — 素材动画
+
+家长备课时做好的一段现成动画,分几段、不出声。上下文包 `materials:` 里列的就是有的,放出来不用等。
+
+- 第一行是素材 id,照 `materials:` 那一行开头抄。
+- 第二行可以写一句给孩子的话,写在卡上。
+- 放之前先 Read `<materialsDir>/<id>/material.md`(上下文包给的绝对路径):画面里有什么、每段讲什么、停在哪。
+- 讲稿里写 `[[play 2]]`:念完这句,铺满播第 2 段,接着念下一句。
+- `[[play]]` 不写段号:从第 1 段起,一段段播完。
+- 播完画面停在末帧,不关。这句之后的话,对着末帧说。
+- 画面不出声,也没有字。画面里没有的,别说成有。
+
+```material
+pingjunfen
+看看三个小朋友怎么分。
+```
+
+卡后面的讲稿这样写:
+
+> 你说每人 6 块。我们看三个人轮着分是什么样。[[play 2]]
+> 三座塔一样高吗?
+```material
+pingjunfen
 ```
 
 ### canvas — 画板

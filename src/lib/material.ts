@@ -7,8 +7,8 @@
 import type { HomeTutorInfo } from './home.ts';
 import { readFrontmatter, type LessonIssue } from './lesson.ts';
 
-/** 素材的目录名:小写字母、数字、连字符(同课包 id;拼进路径与路由) */
-export const MATERIAL_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+/** 素材的目录名(卡种那边定义:卡 → 这里 → board → 卡注册表会成环) */
+export { MATERIAL_ID_RE } from '../cards/material.ts';
 /** 素材放 workspace 的这个目录(不进骨架) */
 export const MATERIALS_DIR = 'materials';
 export const MATERIAL_FILE = 'material.md';

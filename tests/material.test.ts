@@ -17,6 +17,9 @@ const { initWorkspace } = await import('../src/cli/init.ts');
 const { loadWorkspace } = await import('../src/cli/workspace.ts');
 const { checkMaterial, listMaterials, materialsFor, MATERIALS_IN_PACK } = await import('../src/server/material.ts');
 const { main } = await import('../src/cli/main.ts');
+const { createContext, route } = await import('../src/server/app.ts');
+const { readRunFile } = await import('../src/server/store.ts');
+const { yamlScalar } = await import('../src/lib/context-pack.ts');
 
 const FIXTURE = fileURLToPath(new URL('./fixtures/materials/pingjunfen', import.meta.url));
 const md = readFileSync(join(FIXTURE, 'material.md'), 'utf8');
@@ -25,7 +28,7 @@ const tutors = { 'math-tutor': { display: '数学老师', enabled: true, hidden:
 // ---- 解析定本
 {
   const d = parseMaterial(md);
-  check('定本:老师、clips、标题、能讲三条、不能讲三条、三段(几秒、停在)、没有问题', d.tutor === 'math-tutor' && d.media === 'clips' && d.title === '平均分:分的人越多,每人越少' && d.can.length === 3 && d.cannot.length === 3 && d.segments.length === 3 && d.segments.every((s) => s.seconds === 7 && s.stop?.includes('举手欢呼')) && d.segments[0].stop!.startsWith('两座塔各 9 块高') && d.issues.length === 0, JSON.stringify(d));
+  check('定本:老师、clips、标题、能讲三条、不能讲三条、三段(几秒、停在)、没有问题', d.tutor === 'math-tutor' && d.media === 'clips' && d.title === '平均分:分的人越多,每人越少' && d.can.length === 3 && d.cannot.length === 3 && d.segments.length === 3 && d.segments.every((s) => s.seconds === 7 && s.stop?.includes('站在塔边')) && d.segments[0].stop!.startsWith('两座塔各 9 块高') && d.issues.length === 0, JSON.stringify(d));
   check('给人看的注释不当正文:标题不是注释里的字、行号照原文', !d.can.some((x) => x.includes('figshot')) && d.segments[0].line === md.split('\n').findIndex((l) => l.startsWith('1. 分给 2 个人')) + 1);
   check('上下文包那一行:id · 标题 · 能讲第一条', materialLine('pingjunfen', d) === 'pingjunfen · 平均分:分的人越多,每人越少 · 能讲:平均分:一个一个轮着分,每人分到的一样多。');
   check('三个 mp4 对上:没有问题', materialIssues(d, { tutors, clips: [1, 2, 3] }).length === 0);
@@ -97,6 +100,37 @@ try {
   const ls = await run(['material', 'list']);
   check('cotutor material check:没问题 exit 0、列三段与上下文包那一行;缺 mp4 exit 1', ok.code === 0 && ok.out.includes('第 3 段:分给 6 个人') && ok.out.includes('上下文包里是:pingjunfen') && bad.code === 1 && bad.out.includes('缺 1.mp4'), ok.out + bad.out);
   check('cotutor material list:每份一行,要改的标出来', ls.out.includes('pingjunfen  math-tutor') && ls.out.includes('qiang') && ls.out.includes('✗ 1 条要改'), ls.out);
+
+  // ---- 接进老师(假 CLI):新会话的第一条带 materials: 与 materialsDir;老师回素材卡 → 孩子端下发带快照;孩子看到第 2 段 → 下一条 cards: 里说
+  const cfgFile = join(root, 'cotutor.json');
+  const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
+  const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
+  const node = process.execPath;
+  cfg.runtimes = { default: 'fake', fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] } };
+  cfg.policyDefaults = { post: { mode: 'off' } };
+  writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
+  // 只留平均分一份给数学老师(m0…、xiangyu 删掉,免得挤掉它)
+  for (const d of ['xiangyu', ...Array.from({ length: MATERIALS_IN_PACK + 3 }, (_, k) => `m${k}`)]) rmSync(join(ws.dirs.materials, d), { recursive: true, force: true });
+  const now = new Date(2026, 9, 2, 19, 0);
+  const ctx = createContext(loadWorkspace(root), { now: () => now });
+  const wait = async (): Promise<void> => { for (let i = 0; i < 200 && ctx.runner.running('math-tutor'); i++) await new Promise((r) => setTimeout(r, 25)); };
+  const s1 = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '放素材 我分好了', newThread: true });
+  await wait();
+  const job1 = (s1.json as { job: string }).job;
+  const run1 = await readRunFile(ctx.ws, 'math-tutor', '2026-10-02', job1);
+  check('新会话的第一条:上下文包有 materials:(这位老师的那份)与 materialsDir(绝对路径)', run1?.prompt.includes(`  materials:\n    - ${yamlScalar('pingjunfen · 平均分:分的人越多,每人越少 · 能讲:平均分:一个一个轮着分,每人分到的一样多。')}\n  materialsDir: ${yamlScalar(ctx.ws.dirs.materials)}\n`) === true, run1?.prompt.slice(0, 1200));
+  const kid = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; section?: { cards: { kind: string; props: Record<string, unknown> }[]; lines: { cues: { name: string; arg?: string }[] }[] } }[] };
+  const card = kid.messages.find((m) => m.job === job1)?.section?.cards[0];
+  check('老师回的素材卡:孩子端下发带快照(标题、3 段、ready);讲稿的 [[play 2]] 解析成 cue', card?.kind === 'material' && card.props.id === 'pingjunfen' && card.props.ready === true && card.props.segments === 3 && card.props.title === '平均分:分的人越多,每人越少' && kid.messages.find((m) => m.job === job1)?.section?.lines.some((l) => l.cues.some((c) => c.name === 'play' && c.arg === '2')) === true, JSON.stringify(card));
+  const put1 = await route('PUT', `/api/kid/conversations/math-tutor/cards/${job1}/0`, ctx, { segment: 2, done: false });
+  const s2 = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '一样高', thread: job1 });
+  await wait();
+  const run2 = await readRunFile(ctx.ws, 'math-tutor', '2026-10-02', (s2.json as { job: string }).job);
+  check('孩子看到第 2 段 → 下一条 cards: 里说;接着聊的会话不再带 materials:', put1.status === 200 && run2?.prompt.includes('material') === true && run2.prompt.includes('看到第 2 段') && !run2.prompt.includes('  materials:'), run2?.prompt.slice(0, 900));
+  const eng = await route('POST', '/api/kid/conversations/english-tutor/messages', ctx, { text: '你好', newThread: true });
+  for (let i = 0; i < 200 && ctx.runner.running('english-tutor'); i++) await new Promise((r) => setTimeout(r, 25));
+  const runE = await readRunFile(ctx.ws, 'english-tutor', '2026-10-02', (eng.json as { job: string }).job);
+  check('别的老师只拿自己的(英语老师的那份「词」)', runE?.prompt.includes(`  materials:\n    - ${yamlScalar('ci · 词 · 能讲:词的道理')}\n`) === true, runE?.prompt.slice(0, 900));
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

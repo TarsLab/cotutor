@@ -40,6 +40,7 @@ import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset } from './stage.ts';
 import { themeFiles } from './theme.ts';
 import { enrichScenes } from './scene-props.ts';
+import { enrichMaterials } from './material.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
@@ -227,7 +228,7 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string, opts:
   }
   // 场景卡:课包在不在、题面、步数、缩略图,每次现读(课包落地卡就变成可播)
   const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
-  for (const m of messages) if (m.section) m.section = await enrichScenes(sceneDirs, m.section);
+  for (const m of messages) if (m.section) m.section = await enrichMaterials(ctx.ws, await enrichScenes(sceneDirs, m.section));
   // 当前话题只算孩子看得到的:家长还没交的备课话题排在最后也不算(《备课设计.md》§3.2)
   const remaining = opts.tryThread ? policy.dailyMessages : Math.max(0, policy.dailyMessages - kidMessageCount(index));
   return { tutor, date, messages, remaining, pending: active && active.date === date ? active.job : null, thread: opts.tryThread ?? kidCurrentThread(index) };
@@ -263,7 +264,7 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
     if (m) m.section = partial;
   }
   const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
-  for (const m of messages) if (m.section) m.section = await enrichScenes(sceneDirs, m.section);
+  for (const m of messages) if (m.section) m.section = await enrichMaterials(ctx.ws, await enrichScenes(sceneDirs, m.section));
   // 录音卡:家长端旁注要评测全量(档、逐字分、花费),从录音旁边的 heard.json 读;孩子端不走这里。
   // 挂在新的卡对象上:索引有进程内缓存,改原对象判就漏到孩子端了
   for (const m of messages) {
@@ -989,7 +990,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           fromThread = lt.from;
           if (lt.handed) handed = { thread: lt.handed, date, label: (await continueLabels(ws)).get(`${c.doc.tutor} ${date} ${lt.handed}`) ?? null, kidSpoke: kidSpoke(index.messages, lt.handed) };
         }
-        return { status: 200, json: lessonPage(name, c, st?.mtime.toISOString() ?? null, handed, fromThread, now) };
+        const page = lessonPage(name, c, st?.mtime.toISOString() ?? null, handed, fromThread, now);
+        for (const x of page.sections) x.section = await enrichMaterials(ws, x.section);
+        return { status: 200, json: page };
       }
       // 课文件页上「听这节」:讲稿一句用这位老师的音色现合成(同一句同一音色一次,存 .cotutor/tts-preview/,和试听音色同一个缓存);老师没配音色 404,页面退回浏览器的声
       if (lf[2] === '/say' && method === 'GET') {

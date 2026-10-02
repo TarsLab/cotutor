@@ -31,6 +31,7 @@ import { DEV_PAGE } from './dev-page.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
 import { sweepTryouts, type SweptThread } from './tryout.ts';
+import { parseRange } from '../lib/range.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
 import { BUTTON_LABEL_MAX, IMAGE_EXT, parseCardState, stripSecrets, type Heard, type RecordProps, type TutorButton } from '../cards/index.ts';
 import { kouboYuanOfDay, readHeard } from './koubo.ts';
@@ -807,6 +808,13 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const d = lettersData(decodeURIComponent(lt[1]));
       return d ? { status: 200, json: d, cacheControl: 'max-age=86400' } : { status: 404, json: { error: 'not_found' } };
     }
+    // 素材的一段视频(《备课设计.md》§11.2):materials/<id>/<n>.mp4。分段取(Range)由 sendFile 管;家长重渲了同名文件要马上见到,no-cache
+    const mat = /^\/api\/kid\/material\/([a-z0-9][a-z0-9-]*)\/(\d{1,3})\.mp4$/.exec(p);
+    if (mat && method === 'GET') {
+      const file = join(ws.dirs.materials, mat[1], `${Number(mat[2])}.mp4`);
+      if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
+      return { status: 200, file, contentType: 'video/mp4', cacheControl: 'no-cache' };
+    }
     // 图片卡的图:只认 workspace 根以内的图片文件(产物、照片);越界、不是图、不存在都 404
     if (p === '/api/kid/image' && method === 'GET') {
       const rel = url.searchParams.get('p') ?? '';
@@ -1164,6 +1172,31 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
+/**
+ * 发文件(配音、图、素材视频……):都带 accept-ranges 与长度;GET 带单段 Range → 206 只发那一段(iPad Safari 放视频非这样不可,
+ * 先要 bytes=0-1,拿不到 206 就不放;音频拖动也靠它),起点越界 416;HEAD 只发头。文件读之前没了 → 404
+ */
+async function sendFile(req: IncomingMessage, res: ServerResponse, r: RouteResult & { file: string }): Promise<void> {
+  const st = await stat(r.file).catch(() => null);
+  if (!st?.isFile()) {
+    res.writeHead(404, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ error: 'not_found' }));
+    return;
+  }
+  const head = { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': r.cacheControl ?? 'private, max-age=86400', 'accept-ranges': 'bytes' };
+  const range = r.status === 200 ? parseRange(req.headers.range, st.size) : null;
+  if (range === 'unsatisfiable') {
+    res.writeHead(416, { ...head, 'content-range': `bytes */${st.size}` });
+    res.end();
+    return;
+  }
+  const start = range ? range.start : 0;
+  const end = range ? range.end : st.size - 1;
+  res.writeHead(range ? 206 : r.status, { ...head, 'content-length': String(st.size ? end - start + 1 : 0), ...(range ? { 'content-range': `bytes ${start}-${end}/${st.size}` } : {}) });
+  if (req.method === 'HEAD' || !st.size) { res.end(); return; }
+  createReadStream(r.file, { start, end }).on('error', () => res.end()).pipe(res);
+}
+
 /** 这个进程的启动号:每个 JSON 响应都带(x-cotutor-boot)。页面轮询时见它变了 = 服务重起过(多半是换了新代码),空下来就自己重载——iPad 上下拉刷新常拉不到位 */
 const BOOT = Date.now().toString(36);
 
@@ -1173,15 +1206,14 @@ export function createHandler(ctx: AppContext): (req: IncomingMessage, res: Serv
       let r: RouteResult;
       try {
         const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readBody(req);
-        r = await route(req.method ?? 'GET', req.url ?? '/', ctx, body);
+        // HEAD 照 GET 走路由;Node 对 HEAD 的响应本来就不发正文
+        r = await route(req.method === 'HEAD' ? 'GET' : (req.method ?? 'GET'), req.url ?? '/', ctx, body);
       } catch (err) {
         r = err instanceof UsageError ? { status: 400, json: { error: 'usage', message: err.message } } : { status: 500, json: { error: 'internal', message: err instanceof Error ? err.message : String(err) } };
         if (r.status === 500) console.error(err);
       }
-      if (r.file !== undefined) {
-        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': r.cacheControl ?? 'private, max-age=86400' });
-        createReadStream(r.file).on('error', () => res.end()).pipe(res);
-      } else if (r.body !== undefined) {
+      if (r.file !== undefined) await sendFile(req, res, r as RouteResult & { file: string });
+      else if (r.body !== undefined) {
         res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=86400' });
         res.end(Buffer.from(r.body));
       } else if (r.html !== undefined) {

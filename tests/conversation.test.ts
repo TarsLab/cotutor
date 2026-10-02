@@ -1,5 +1,5 @@
 /** 对话索引纯函数:命名、并入运行结果、session 只记一次。 */
-import { addMessage, applyRun, cardAssetName, cardId, changedCards, conversationFiles, currentThread, emptyIndex, isPrepThread, jobId, kidCurrentThread, kidHiddenJobs, kidSpoke, lessonCards, prepJobs, lastJobOf, localDate, localMinute, sessionFor, threads } from '../src/lib/conversation.ts';
+import { addMessage, applyRun, cardAssetName, cardId, changedCards, conversationFiles, currentThread, emptyIndex, isPrepThread, isTryThread, asKid, triedAsKid, jobId, kidCurrentThread, kidHiddenJobs, kidSpoke, lessonCards, prepJobs, lastJobOf, localDate, localMinute, sessionFor, threads } from '../src/lib/conversation.ts';
 import { deriveKidView } from '../src/lib/kid-view.ts';
 import { parseTranscript } from '../src/lib/transcript.ts';
 import { ConversationIndexSchema } from '../src/schema/index.ts';
@@ -71,6 +71,20 @@ check('卡的状态文件与 id', f.cardsDir('1620-1') === '/ws/conversations/ma
   check('交了:这节课全部的卡;那个话题的轮孩子都看得到;没交的仍看不到;旧索引的 off 读时丢掉', lessonCards({ messages: msgs, lessons }, '2000-3').length === 7 && [...kidHiddenJobs({ messages: msgs, lessons })].join() === '2100-6' && kidCurrentThread({ messages: msgs, lessons }) === '2000-3' && !('off' in (ConversationIndexSchema.parse({ tutor: 'x', date: '2026-09-08', lessons: { a: { handedAt: null, off: ['1/0'] } } }).lessons.a as object)));
   const spoke: M[] = [...msgs, { job: '2003-7', thread: '2000-3', from: 'kid', result: 'ok' }, { job: '2004-8', thread: '2000-3', from: 'parent', result: 'ok', section: sec(1) }];
   check('孩子开口后:那一条起不是备课轮(家长再发也不是,也不进这节课);kidSpoke', !prepJobs(spoke).has('2003-7') && !prepJobs(spoke).has('2004-8') && prepJobs(spoke).has('2002-5') && kidSpoke(spoke, '2000-3') && !kidSpoke(spoke, '2100-6') && !lessonCards({ messages: spoke }, '2000-3').includes('2004-8/0'));
+}
+
+// 试用(《备课设计.md》§十二):第一条带 tryThread(和 prepThread 一起);孩子端永远看不到,点名 show 的才露;家长扮孩子说的(不是课文件建的轮)算孩子开口
+{
+  type M = { job: string; thread: string; from: 'kid' | 'parent' | 'system'; prepThread?: true; tryThread?: true; lessonSection?: number; result: 'ok' };
+  const msgs: M[] = [
+    { job: '1900-1', thread: '1900-1', from: 'kid', result: 'ok' },
+    { job: '2000-2', thread: '2000-2', from: 'parent', prepThread: true, tryThread: true, lessonSection: 0, result: 'ok' },
+    { job: '2000-3', thread: '2000-2', from: 'parent', lessonSection: 1, result: 'ok' },
+  ];
+  const lessons = { '2000-2': { handedAt: '2026-10-02T12:00:00Z' } };
+  check('试用:isTryThread 只认第一条带的;孩子端看不到(就算有 handedAt 也看不到);点名的才露', isTryThread(msgs, '2000-2') && !isTryThread(msgs, '1900-1') && [...kidHiddenJobs({ messages: msgs, lessons })].join() === '2000-2,2000-3' && kidHiddenJobs({ messages: msgs }, '2000-2').size === 0 && kidCurrentThread({ messages: msgs, lessons }) === '1900-1');
+  const said: M[] = [...msgs, { job: '2001-4', thread: '2000-2', from: 'parent', result: 'ok' }];
+  check('asKid / triedAsKid:课文件建的轮不算,家长扮孩子说的算;不是试用的话题里家长说的不算;kidSpoke 不受影响', !triedAsKid(msgs, '2000-2') && triedAsKid(said, '2000-2') && asKid(said[3], true) && !asKid(said[3], false) && !asKid(said[1], true) && !kidSpoke(said, '2000-2') && prepJobs(said).has('2001-4'));
 }
 
 done();

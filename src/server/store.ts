@@ -318,7 +318,7 @@ export async function handLesson(ws: Workspace, tutor: string, date: string, thr
  * 这些轮的文件(转录、run、事件、后期、配音、卡的状态与资产)按 <日期>.<job>.* 整个删。
  * 不动的:已写进 vault 的记忆与日记(那是家长的,在 Obsidian 里改)、captures/ 里的照片。跑着的轮由路由先挡(409)。
  */
-export async function deleteThread(ws: Workspace, tutor: string, date: string, thread: string): Promise<ConversationIndex> {
+export async function deleteThread(ws: Workspace, tutor: string, date: string, thread: string, opts: { keepCost?: boolean } = {}): Promise<ConversationIndex> {
   const index = await readIndex(ws, tutor, date);
   const ths = threads(index.messages);
   if (!ths.includes(thread)) throw new IndexError(conversationFiles(ws.dirs.conversations, tutor, date).index, `${date} 没有话题 ${thread}`);
@@ -335,7 +335,8 @@ export async function deleteThread(ws: Workspace, tutor: string, date: string, t
   const keptThreads = threads(kept);
   const last = keptThreads[keptThreads.length - 1];
   const session = ths[ths.length - 1] === thread ? (last ? (sessions[last] ?? null) : null) : index.session;
-  const cost = Math.max(0, index.costUsd - gone.reduce((s, m) => s + (m.costUsd ?? 0), 0));
+  // keepCost:试用话题第二天删(server/tryout.ts),钱是真花了的,这天的合计不减
+  const cost = opts.keepCost ? index.costUsd : Math.max(0, index.costUsd - gone.reduce((s, m) => s + (m.costUsd ?? 0), 0));
   const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, lessons, session, costUsd: Math.round(cost * 1e6) / 1e6 };
   await writeIndex(ws, next);
   return next;

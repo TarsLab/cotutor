@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { cardAssets } from '../cards/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { parseBoard } from '../lib/board.ts';
-import { conversationFiles, isPrepThread, jobId, kidSpoke, localDate, localMinute, prepJobs, threads } from '../lib/conversation.ts';
+import { conversationFiles, isPrepThread, isTryThread, jobId, kidSpoke, localDate, localMinute, prepJobs, threads } from '../lib/conversation.ts';
 import type { HomeTutorInfo } from '../lib/home.ts';
 import type { BoardSection, Device } from '../lib/kid-board.ts';
 import { kidSource } from '../lib/kid-view.ts';
@@ -153,8 +153,9 @@ const seqOf = (job: string): number => Number(job.split('-')[1] ?? 0);
  * 交给孩子:检查 → 建话题(或覆盖同一课文件、孩子没开口的那个)→ lessons[thread] → 首页追加「接着」再发布 → 配音在后台跑(每句、点读卡每段),配齐了把文件名写进索引。
  * 2026-09-28 拍板 32:原来同步等配音(14 张卡 20 秒),页面上只有一行「交着…」;现在不到一秒就回,家长端跳到交出去的话题看着配音进度。
  * label 是首页按钮上的字(≤ 16 字;不给就取第一节第一句截 16 字)
+ * tryout = 试用(《备课设计.md》§十二):同样建话题、配音,第一条另带 tryThread;不记 handedAt、不碰首页,第二天由 server/tryout.ts 删
  */
-export async function handLessonFile(ws: Workspace, name: string, opts: { label?: string; now: Date; env?: NodeJS.ProcessEnv }): Promise<HandResult> {
+export async function handLessonFile(ws: Workspace, name: string, opts: { label?: string; now: Date; env?: NodeJS.ProcessEnv; tryout?: boolean }): Promise<HandResult> {
   const f = lessonFiles(ws);
   const md = await readLesson(ws, name);
   if (md === null) throw new UsageError(`没有 ${f.rel(name)}`);
@@ -169,9 +170,9 @@ export async function handLessonFile(ws: Workspace, name: string, opts: { label?
   const date = localDate(opts.now);
   let index = await readIndex(ws, tutor, date);
   const files = conversationFiles(ws.dirs.conversations, tutor, date);
-  // 同一课文件、孩子还没开口的话题:覆盖它(话题 id 不变),旧的几轮的文件删掉
+  // 同一课文件、孩子还没开口的话题:覆盖它(话题 id 不变),旧的几轮的文件删掉。试用(《备课设计.md》§十二)每次一个新话题,不覆盖、也不被覆盖(它没有 handedAt)
   const ths = threads(index.messages);
-  const old = Object.entries(index.lessons).find(([th, l]) => l.source === source && l.handedAt && ths.includes(th) && isPrepThread(index.messages, th) && !kidSpoke(index.messages, th))?.[0] ?? null;
+  const old = opts.tryout ? null : (Object.entries(index.lessons).find(([th, l]) => l.source === source && l.handedAt && ths.includes(th) && isPrepThread(index.messages, th) && !kidSpoke(index.messages, th))?.[0] ?? null);
   if (old) {
     const gone = index.messages.filter((_, i) => ths[i] === old);
     const dir = join(ws.dirs.conversations, tutor);
@@ -187,11 +188,12 @@ export async function handLessonFile(ws: Workspace, name: string, opts: { label?
   for (const [k, s] of check.doc.sections.entries()) {
     const job = k === 0 ? thread : jobId(opts.now, ++seq);
     const section = withAudio(s.section, s.section.lines.map(() => null));
-    messages.push({ job, thread, at, from: 'parent', text: k === 0 ? `课文件 ${name}` : `课文件 ${name} · 第 ${k + 1} 节`, result: 'ok', costUsd: 0, kidText: section.lines.map((l) => l.text).join('\n') || null, artifacts: [], section, device: check.doc.device, lessonSection: k, ...(k === 0 ? { prepThread: true as const } : {}) });
+    messages.push({ job, thread, at, from: 'parent', text: k === 0 ? `课文件 ${name}` : `课文件 ${name} · 第 ${k + 1} 节`, result: 'ok', costUsd: 0, kidText: section.lines.map((l) => l.text).join('\n') || null, artifacts: [], section, device: check.doc.device, lessonSection: k, ...(k === 0 ? { prepThread: true as const, ...(opts.tryout ? { tryThread: true as const } : {}) } : {}) });
   }
-  const next: ConversationIndex = { ...index, messages: [...index.messages, ...messages], lessons: { ...index.lessons, [thread]: { handedAt: opts.now.toISOString(), source } } };
+  // 试用:不记 handedAt(孩子端、首页、「已交给孩子」都认它),source 照记(老师的上下文包要课文件的路径与讲法);不追加首页
+  const next: ConversationIndex = { ...index, messages: [...index.messages, ...messages], lessons: { ...index.lessons, [thread]: { handedAt: opts.tryout ? null : opts.now.toISOString(), source } } };
   await writeIndex(ws, next);
-  const home = await appendContinue(ws, tutor, date, thread, label, opts.now);
+  const home = opts.tryout ? null : await appendContinue(ws, tutor, date, thread, label, opts.now);
   const lines = messages.reduce((n, m) => n + (m.section?.lines.filter((l) => l.text.trim()).length ?? 0), 0);
   // 配音在后台:每句一个文件,点读卡每段一个;都落盘了再把文件名写进索引(重读一遍,只改这几轮的 audio,免得盖掉这期间孩子那边写的)
   const dubbing = (async () => {
@@ -282,13 +284,13 @@ export function lessonPage(name: string, check: LessonCheck, mtime: string | nul
   return { name, source: lessonFiles({ root: '' }).rel(name), tutor: check.doc.tutor, device: check.doc.device, for: check.doc.for ?? null, brief: check.doc.brief, mtime, issues: check.issues, fixes: check.fixes, cards: sections.reduce((n, s) => n + s.section.cards.length, 0), sections, handed, fromThread };
 }
 
-/** 某份课文件在这位老师今天的索引里的下落:交出去的话题(handedAt)、从哪个备课话题写出来的 */
+/** 某份课文件在这位老师今天的索引里的下落:交出去的话题(handedAt)、从哪个备课话题写出来的;试用话题不算 */
 export function lessonThreads(index: ConversationIndex, source: string): { handed: string | null; from: string | null } {
   const ths = threads(index.messages);
   let handed: string | null = null;
   let from: string | null = null;
   for (const [th, l] of Object.entries(index.lessons)) {
-    if (l.source !== source || !ths.includes(th)) continue;
+    if (l.source !== source || !ths.includes(th) || isTryThread(index.messages, th)) continue;
     if (l.handedAt) handed = th;
     else from = th;
   }

@@ -18,7 +18,7 @@ import { closeSync, createWriteStream, existsSync, openSync, writeSync } from 'n
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
-import { addMessage, applyRun, cardId, lastJobOf, changedCards, conversationFiles, isPrepThread, jobId, kidSpoke, lessonCards, localDate, localMinute, prepJobs, sessionFor, threads } from '../lib/conversation.ts';
+import { addMessage, applyRun, cardId, lastJobOf, changedCards, conversationFiles, isPrepThread, isTryThread, triedAsKid, jobId, kidSpoke, lessonCards, localDate, localMinute, prepJobs, sessionFor, threads } from '../lib/conversation.ts';
 import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
 import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
 import { BUNDLE_ID_RE, cardAssets, cardLabel, describeCard, type RecordProps } from '../cards/index.ts';
@@ -391,11 +391,13 @@ export class Runner {
     else if (input.thread) {
       if (!known.includes(input.thread)) throw new UsageError(`${date} 没有话题 ${input.thread};有:${[...new Set(known)].join('、')}`);
       thread = input.thread;
-    } else thread = known[known.length - 1];
+    } else thread = [...known].reverse().find((th) => !isTryThread(index.messages, th)) ?? job; // 缺省接当前话题,试用话题不接(工作台、cotutor send 不该落进家长的试用里)
     const fresh = thread === job;
+    // 试用话题(《备课设计.md》§十二):家长在孩子端扮孩子,老师拿到的是孩子的上下文包;消息照旧记 from: parent
+    const tryout = !fresh && isTryThread(index.messages, thread);
     const session = fresh ? null : sessionFor(index, thread);
     const { runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
-    const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus });
+    const gathered = await gatherContext(ws, tutor, { from: tryout ? 'kid' : input.from, at: now, focus: input.focus });
     const policy = resolvePolicy(ws.config, tutor);
     const { agentBody, systemBody } = await systemParts(ws, tutor, runtime, policy, gathered);
     // 家长笔记原文:新会话整篇带;续会话时这个话题带过、没改的只写「未变」
@@ -416,7 +418,9 @@ export class Runner {
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
     // 孩子在家长交给他的备课话题里的第一条(《备课设计.md》§十):孩子看到的是这节课那几张卡,老师照它接;从课文件建的话题没有会话,这条是新会话,
     // 上下文包另带课文件的路径(老师要看原文自己 Read)与文件尾巴里家长的讲法
-    if (input.from === 'kid' && thread !== job && index.lessons[thread]?.handedAt && isPrepThread(index.messages, thread) && !kidSpoke(index.messages, thread)) {
+    // 试用的从课文件建,没有 handedAt;家长扮孩子第一次开口时一样带
+    const firstWord = tryout ? input.from === 'parent' && !triedAsKid(index.messages, thread) : input.from === 'kid' && Boolean(index.lessons[thread]?.handedAt) && !kidSpoke(index.messages, thread);
+    if (firstWord && thread !== job && isPrepThread(index.messages, thread)) {
       pack.lesson = lessonCards(index, thread).map((id) => {
         const [j, n] = id.split('/');
         const c = index.messages.find((m) => m.job === j)?.section?.cards[Number(n)];
@@ -475,6 +479,7 @@ export class Runner {
     for (const th of only ?? all) {
       if (!all.includes(th)) skipped.push({ thread: th, why: `${date} 没有这个话题` });
       else if (index.booked[th]) skipped.push({ thread: th, why: `记过了(${index.booked[th]})` });
+      else if (isTryThread(index.messages, th)) skipped.push({ thread: th, why: '家长的试用话题' });
       else if (isPrepThread(index.messages, th) && !kidSpoke(index.messages, th)) skipped.push({ thread: th, why: '家长的备课话题,孩子还没开口' });
       else if (!only && !kidQuestions(index.messages, th).length && index.ratings[th] === undefined) skipped.push({ thread: th, why: '没有孩子的话也没打分' });
       else queued.push(th);

@@ -148,12 +148,33 @@ export function kidSpoke(messages: readonly Pick<ConversationMessage, 'job' | 'f
   return messages.some((m, i) => t[i] === thread && m.from === 'kid');
 }
 
+/** 某个话题是不是试用话题(《备课设计.md》§十二:第一条带 tryThread;家长在孩子端扮孩子,第二天删) */
+export function isTryThread(messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'tryThread'>[], thread: string): boolean {
+  const t = threads(messages);
+  const i = t.indexOf(thread);
+  return i >= 0 && messages[i].tryThread === true;
+}
+
+/**
+ * 这条在孩子端算不算孩子说的:孩子真说的,或试用话题里家长扮孩子说的(from parent、不是课文件建的轮)。
+ * 只给拼上下文包、孩子端怎么画用;日记、记忆、每日上限、记账照旧只认 from: kid,试用漏了哪处也碰不到孩子的记录
+ */
+export function asKid(m: Pick<ConversationMessage, 'from' | 'lessonSection'>, tryout: boolean): boolean {
+  return m.from === 'kid' || (tryout && m.from === 'parent' && m.lessonSection === undefined);
+}
+
+/** kidSpoke 的试用版:试用话题里家长扮孩子开过口没有(课文件建的那几轮不算) */
+export function triedAsKid(messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'lessonSection'>[], thread: string): boolean {
+  const t = threads(messages);
+  return messages.some((m, i) => t[i] === thread && asKid(m, true));
+}
+
 /** 这节课(《备课设计.md》§十):handedAt = 交给孩子的时刻;source = 交出去的课文件(相对 workspace 根) */
 export interface Lesson {
   handedAt: string | null;
   source?: string;
 }
-type LessonMsg = Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'prepThread' | 'result' | 'section'>;
+type LessonMsg = Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'prepThread' | 'tryThread' | 'result' | 'section'>;
 type LessonIndex = { messages: readonly LessonMsg[]; lessons?: Record<string, Lesson> };
 
 /** 这节课的卡(`<job>/<n>`,按生成的顺序):备课话题里孩子开口之前各轮跑成了的卡 */
@@ -163,13 +184,16 @@ export function lessonCards(index: LessonIndex, thread: string): string[] {
   return index.messages.flatMap((m, i) => (t[i] === thread && prep.has(m.job) && m.result === 'ok' && m.section ? m.section.cards.map((_, n) => cardId(m.job, n)) : []));
 }
 
-/** 孩子端看不到的轮:备课轮里没交给孩子的话题整个(《备课设计.md》§3.2) */
-export function kidHiddenJobs(index: LessonIndex): Set<string> {
+/**
+ * 孩子端看不到的轮:备课轮里没交给孩子的话题整个(《备课设计.md》§3.2);试用话题整个(§十二),只有点名的那个(show,试用页自己)露出来
+ */
+export function kidHiddenJobs(index: LessonIndex, show?: string): Set<string> {
   const prep = prepJobs(index.messages);
   const t = threads(index.messages);
+  const tries = new Set(index.messages.filter((m, i) => m.tryThread && t[i] === m.job).map((m) => m.job));
   const out = new Set<string>();
   index.messages.forEach((m, i) => {
-    if (prep.has(m.job) && !index.lessons?.[t[i]]?.handedAt) out.add(m.job);
+    if (tries.has(t[i]) ? t[i] !== show : prep.has(m.job) && !index.lessons?.[t[i]]?.handedAt) out.add(m.job);
   });
   return out;
 }

@@ -92,6 +92,9 @@ export const ConversationMessageSchema = z.object({
   replayOf: z.string().min(1).optional(),
   /** 这条开了一个备课话题(《备课设计.md》:家长在家长端 /parent 点「新话题」开的;只在话题第一条)。工作台与 cotutor send 开的不算 */
   prepThread: z.literal(true).optional(),
+  /** 这条开了一个试用话题(《备课设计.md》§十二:家长在家长端课文件页点「试用」,在孩子端扮孩子跑一遍;只在话题第一条,和 prepThread 一起带)。
+   *  老师拿到孩子的上下文包;消息仍记 from: parent,不写记忆、不记账、不算上限、孩子看不到;第二天整个删掉(server/tryout.ts) */
+  tryThread: z.literal(true).optional(),
   /** 这轮是从课文件建的第几节(0 起;《备课设计.md》§10.5,交给孩子时 handLessonFile 写的):不是谁说的话,家长端不出「家长」旁注,话题头一条「课文件」 */
   lessonSection: z.number().int().nonnegative().optional(),
   /** 孩子在课文件交出去的话题里的第一条(拍板 34):前面几节念的时候孩子说过的(当时没发给老师,页面攒着,这条一起带来);section = 第几节后(1 起) */

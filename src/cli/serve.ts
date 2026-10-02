@@ -12,7 +12,7 @@ import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { doctorWorkspace } from './doctor.ts';
 import type { ListenInfo } from '../server/qr-page.ts';
-import { createContext, createHandler, type AppContext } from '../server/app.ts';
+import { createContext, createHandler, sweepDaily, type AppContext } from '../server/app.ts';
 import { USER_CERT_DIR, expandPath, loadWorkspace, type ResolveOptions, type Workspace } from './workspace.ts';
 
 export interface ServeOptions extends ResolveOptions {
@@ -87,6 +87,8 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
   const warnings = report.checks.filter((c) => !c.ok).map((c) => `${c.name}:${c.detail}${c.fix ? `(${c.fix})` : ''}`);
   const port = opts.port ?? ws.config.server.port;
   const ctx = createContext(ws);
+  // 昨天以前的试用话题(《备课设计.md》§12.3)
+  await sweepDaily(ctx);
   const handler = createHandler(ctx);
   const tls = opts.http ? null : httpsFiles(ws);
   const server = tls ? createHttps({ cert: readFileSync(tls.cert), key: readFileSync(tls.key) }, handler) : createHttp(handler);

@@ -7,7 +7,7 @@
 import { stripSecrets } from '../cards/index.ts';
 import type { Bookkeeping, ConversationMessage } from '../schema/index.ts';
 import { parseBoard } from './board.ts';
-import { kidHiddenJobs, prepJobs, threads, type CardAssets, type CardStates, type Lesson } from './conversation.ts';
+import { asKid, kidHiddenJobs, prepJobs, threads, type CardAssets, type CardStates, type Lesson } from './conversation.ts';
 import type { BoardSection } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 import type { Transcript } from './transcript.ts';
@@ -115,15 +115,17 @@ function cardsWithState(m: ConversationMessage, states: CardStates, assets: Card
  * 对话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / 费用 / 家长尾巴;
  * 卡上的答案剥掉,孩子自己做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到卡上。出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
  * 家长的备课话题(《备课设计.md》§3.2、§十):没交给孩子的整个不出现,交了的整段出现(课文件里的几节就是几轮)。
+ * 试用话题(§十二)永远不出现;试用页给 tryThread,就只出那一个话题,家长扮孩子说的当孩子的问句。
  */
-export function kidConversation(index: { messages: readonly ConversationMessage[]; lessons?: Record<string, Lesson> }, states: CardStates = {}, assets: CardAssets = {}): KidMessage[] {
+export function kidConversation(index: { messages: readonly ConversationMessage[]; lessons?: Record<string, Lesson> }, states: CardStates = {}, assets: CardAssets = {}, opts: { tryThread?: string } = {}): KidMessage[] {
   const out: KidMessage[] = [];
   const ths = threads(index.messages);
-  const hidden = kidHiddenJobs(index);
+  const hidden = kidHiddenJobs(index, opts.tryThread);
   for (const [i, m] of index.messages.entries()) {
     // 记账那轮是家长晚上起的任务,老师回的「记好了」不是给孩子的话
     if (m.bookkeep || m.tidy || hidden.has(m.job)) continue;
-    const question = m.from === 'kid' ? m.text : null;
+    if (opts.tryThread !== undefined && ths[i] !== opts.tryThread) continue;
+    const question = asKid(m, opts.tryThread !== undefined) ? m.text : null;
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
     if (question === null && reply === null && !pending) continue;
@@ -161,6 +163,8 @@ export interface ParentMessage extends KidMessage {
   voice?: ConversationMessage['voice'];
   /** 这个话题的课交给孩子了 */
   handed?: true;
+  /** 试用话题(《备课设计.md》§十二):家长在孩子端扮孩子跑的,第二天删 */
+  tryout?: true;
   memoryDraft?: string[];
 }
 
@@ -169,6 +173,7 @@ export function parentConversation(index: { messages: readonly ConversationMessa
   const out: ParentMessage[] = [];
   const ths = threads(index.messages);
   const prep = prepJobs(index.messages);
+  const tries = new Set(index.messages.filter((m, i) => m.tryThread && ths[i] === m.job).map((m) => m.job));
   for (const [i, m] of index.messages.entries()) {
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
@@ -189,6 +194,7 @@ export function parentConversation(index: { messages: readonly ConversationMessa
       ...(m.tidy ? { tidy: true as const } : {}),
       ...(prep.has(m.job) ? { prep: true as const } : {}),
       ...(prep.has(m.job) && index.lessons?.[ths[i]]?.handedAt ? { handed: true as const } : {}),
+      ...(tries.has(ths[i]) ? { tryout: true as const } : {}),
       ...(m.memoryDraft?.length ? { memoryDraft: m.memoryDraft } : {}),
       ...(typeof m.lessonSection === 'number' ? { lessonSection: m.lessonSection } : {}),
       ...(m.lessonSaid?.length ? { lessonSaid: m.lessonSaid } : {}),

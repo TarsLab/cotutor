@@ -51,14 +51,14 @@ export interface LessonDoc {
   issues: LessonIssue[];
 }
 
-interface Frontmatter {
+export interface Frontmatter {
   keys: Record<string, { value: string; line: number }>;
   /** 正文从第几行起(0 起) */
   start: number;
   issues: LessonIssue[];
 }
 
-function readFrontmatter(all: readonly string[]): Frontmatter {
+export function readFrontmatter(all: readonly string[]): Frontmatter {
   const out: Frontmatter = { keys: {}, start: 0, issues: [] };
   if (!/^---\s*$/.test(all[0] ?? '')) return out;
   const close = all.findIndex((l, i) => i > 0 && /^---\s*$/.test(l));

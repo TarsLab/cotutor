@@ -85,6 +85,8 @@ export interface SendInput {
   replayOf?: string;
   /** 这条开一个备课话题(家长端「新话题」,《备课设计.md》):只在新话题的第一条记进消息 */
   prepThread?: boolean;
+  /** 这条开一个试用话题(《备课设计.md》§十二,老师块的「试用」:没备课,家长在孩子端扮孩子直接问);只在新话题的第一条,和 prepThread 一起记 */
+  tryThread?: boolean;
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2),记进消息 */
   via?: MessageVia;
   /** 按钮的字与家长备好的讲法(服务端从发布件查的),进上下文包 home: 段 */
@@ -395,7 +397,7 @@ export class Runner {
     } else thread = [...known].reverse().find((th) => !isTryThread(index.messages, th)) ?? job; // 缺省接当前话题,试用话题不接(工作台、cotutor send 不该落进家长的试用里)
     const fresh = thread === job;
     // 试用话题(《备课设计.md》§十二):家长在孩子端扮孩子,老师拿到的是孩子的上下文包;消息照旧记 from: parent
-    const tryout = !fresh && isTryThread(index.messages, thread);
+    const tryout = fresh ? input.tryThread === true : isTryThread(index.messages, thread);
     const session = fresh ? null : sessionFor(index, thread);
     const { runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
     const gathered = await gatherContext(ws, tutor, { from: tryout ? 'kid' : input.from, at: now, focus: input.focus });
@@ -434,6 +436,8 @@ export class Runner {
       });
       const handed = await handedLessonOf(ws, index, thread);
       if (handed) { pack.lessonFile = handed.file; if (handed.brief.trim()) pack.lessonBrief = handed.brief.replace(/^##\s+\S.*\n?/, '').trim(); }
+      // 课文件尾巴「## 素材」列的排在 materials: 最前面(§11.4);这条是新会话的第一条,上面已经按改动时间拼过一遍
+      if (handed?.materials.length && pack.materials) pack.materials = await materialsFor(ws, tutor, handed.materials);
       if (input.lessonSaid?.length) pack.lessonSaid = input.lessonSaid.map((x) => `第 ${x.section} 节后:${x.text}`);
     }
     const lessonSaid = pack.lessonSaid ? input.lessonSaid : undefined;
@@ -450,7 +454,7 @@ export class Runner {
       const file = conversationFiles(ws.dirs.conversations, tutor, date).voice(job, input.voice.ext);
       if (await mkdir(join(ws.dirs.conversations, tutor), { recursive: true }).then(() => writeFile(file, input.voice!.data)).then(() => true, () => false)) voice = { audio: basename(file), seconds: Math.round(input.voice.seconds * 10) / 10 };
     }
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(lessonSaid?.length ? { lessonSaid } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(input.prepThread && thread === job ? { prepThread: true as const } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(lessonSaid?.length ? { lessonSaid } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(input.prepThread && thread === job ? { prepThread: true as const } : {}), ...(input.tryThread && input.prepThread && thread === job ? { tryThread: true as const } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 

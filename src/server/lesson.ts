@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { cardAssets } from '../cards/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { parseBoard } from '../lib/board.ts';
+import { listMaterials } from './material.ts';
 import { conversationFiles, isPrepThread, isTryThread, jobId, kidSpoke, localDate, localMinute, prepJobs, threads } from '../lib/conversation.ts';
 import type { HomeTutorInfo } from '../lib/home.ts';
 import type { BoardSection, Device } from '../lib/kid-board.ts';
@@ -76,7 +77,8 @@ function tutorInfos(ws: Workspace): Record<string, HomeTutorInfo> {
 export async function checkLesson(ws: Workspace, md: string, now: Date): Promise<LessonCheck> {
   const doc = parseLesson(md);
   const theme = await themeFiles(ws.root, ws.config.kid.theme);
-  const issues = lessonIssues(doc, { tutors: tutorInfos(ws), tints: Object.keys(theme.manifest.tints), looks: Object.keys(theme.manifest.looks), today: localDate(now) });
+  const materials = doc.materials.length ? Object.fromEntries((await listMaterials(ws)).map((c) => [c.id, { tutor: c.doc.tutor, fixes: c.fixes }])) : undefined;
+  const issues = lessonIssues(doc, { tutors: tutorInfos(ws), tints: Object.keys(theme.manifest.tints), looks: Object.keys(theme.manifest.looks), today: localDate(now), ...(materials ? { materials } : {}) });
   return { doc, issues, fixes: issues.filter((i) => i.level === 'fix').length };
 }
 
@@ -276,12 +278,14 @@ export interface LessonPage {
   handed: { thread: string; date: string; label: string | null; kidSpoke: boolean } | null;
   /** 从家长端哪个备课话题写出来的(那个话题的 lessons[].source 指着这份、没交);没有 null */
   fromThread: string | null;
+  /** 尾巴「## 素材」列的(§11.4):标题、放不放得出来;路由读盘后填 */
+  materials: { id: string; title: string | null; ok: boolean; why: string | null }[];
 }
 export function lessonPage(name: string, check: LessonCheck, mtime: string | null, handed: LessonPage['handed'], fromThread: string | null, now: Date): LessonPage {
   const at = localMinute(now);
   const hash = (s: string): string => { let h = 0; for (const ch of s) h = (h * 31 + ch.codePointAt(0)!) >>> 0; return h.toString(36); };
   const sections = check.doc.sections.map((s, k) => ({ job: `L${k + 1}-${hash(JSON.stringify(s.section))}`, at, from: s.cardLines.find((l) => l > 0) ?? s.lineLines[0] ?? 0, section: s.section }));
-  return { name, source: lessonFiles({ root: '' }).rel(name), tutor: check.doc.tutor, device: check.doc.device, for: check.doc.for ?? null, brief: check.doc.brief, mtime, issues: check.issues, fixes: check.fixes, cards: sections.reduce((n, s) => n + s.section.cards.length, 0), sections, handed, fromThread };
+  return { name, source: lessonFiles({ root: '' }).rel(name), tutor: check.doc.tutor, device: check.doc.device, for: check.doc.for ?? null, brief: check.doc.brief, mtime, issues: check.issues, fixes: check.fixes, cards: sections.reduce((n, s) => n + s.section.cards.length, 0), sections, handed, fromThread, materials: check.doc.materials.map((m) => ({ id: m.id, title: null, ok: true, why: null })) };
 }
 
 /** 某份课文件在这位老师今天的索引里的下落:交出去的话题(handedAt)、从哪个备课话题写出来的;试用话题不算 */
@@ -298,11 +302,12 @@ export function lessonThreads(index: ConversationIndex, source: string): { hande
 }
 
 /** 某个话题交出去的课文件(runner 拼孩子第一条的上下文包用):文件路径与讲法;没有 / 读不到 → null */
-export async function handedLessonOf(ws: Workspace, index: ConversationIndex, thread: string): Promise<{ file: string; brief: string } | null> {
+export async function handedLessonOf(ws: Workspace, index: ConversationIndex, thread: string): Promise<{ file: string; brief: string; materials: string[] } | null> {
   const src = index.lessons[thread]?.source;
   if (!src) return null;
   const md = await readFile(join(ws.root, src), 'utf8').catch(() => null);
   if (md === null) return null;
-  return { file: join(ws.root, src), brief: parseLesson(md).brief };
+  const doc = parseLesson(md);
+  return { file: join(ws.root, src), brief: doc.brief, materials: doc.materials.map((m) => m.id) };
 }
 

@@ -106,4 +106,21 @@ for: 2026-09-28
   check('原样回来:零改动', same.ok && same.fences === 0 && same.marks === 0);
 }
 
+// ---- 尾巴「## 素材」(《备课设计.md》§11.4):摘出来不进讲法,id 带行号;查在不在、是不是这位老师的、有没有要改的;超过两节提醒
+{
+  const md = '---\ntutor: math-tutor\n---\n\n```choice\n18 个分给 3 人?\n- [x] 6\n- [ ] 9\n```\n\n每人几个?\n\n## 素材\n\n- pingjunfen · 平均分\n- xiangyu\n这行不是\n\n## 讲法\n\n先让他说。\n';
+  const d = parseLesson(md);
+  check('「## 素材」:两份 id 带行号;不认的行提醒;讲法里没有素材那段', JSON.stringify(d.materials) === JSON.stringify([{ id: 'pingjunfen', line: 15 }, { id: 'xiangyu', line: 16 }]) && d.issues.some((i) => i.level === 'note' && i.line === 17) && d.brief.startsWith('## 讲法') && !d.brief.includes('pingjunfen'), JSON.stringify({ m: d.materials, brief: d.brief, issues: d.issues }));
+  const tutors = { 'math-tutor': { display: '数学老师', enabled: true, hidden: false } };
+  const base = { tutors, tints: ['paper', 'sky', 'sand', 'plum'], looks: [], today: '2026-10-02' };
+  const ok = lessonIssues(d, { ...base, materials: { pingjunfen: { tutor: 'math-tutor', fixes: 0 }, xiangyu: { tutor: 'math-tutor', fixes: 0 } } });
+  check('素材都在、都是这位老师的、没要改的:不报要改', !ok.some((i) => i.level === 'fix'), JSON.stringify(ok));
+  const bad = lessonIssues(d, { ...base, materials: { pingjunfen: { tutor: 'english-tutor', fixes: 0 } } }).filter((i) => i.level === 'fix');
+  check('不在、别的老师的:各一条要改,带行号', bad.length === 2 && bad.some((i) => i.line === 15 && i.text.includes('english-tutor')) && bad.some((i) => i.line === 16 && i.text.includes('不在')), JSON.stringify(bad));
+  check('有要改的素材:要改;不给 materials 就不查', lessonIssues(d, { ...base, materials: { pingjunfen: { tutor: 'math-tutor', fixes: 2 }, xiangyu: { tutor: 'math-tutor', fixes: 0 } } }).some((i) => i.level === 'fix' && i.text.includes('2 条要改')) && !lessonIssues(d, base).some((i) => i.level === 'fix'));
+  const three = parseLesson('---\ntutor: math-tutor\n---\n说一。\n\n---\n\n说二。\n\n---\n\n说三。\n');
+  check('超过两节提醒(孩子要听完才能打断);两节不提醒', three.issues.some((i) => i.level === 'note' && i.text.includes('3 节')) && !parseLesson('---\ntutor: math-tutor\n---\n说一。\n\n---\n\n说二。\n').issues.some((i) => i.text.includes('节:孩子要听完')));
+  check('没有「## 素材」:materials 空', parseLesson(md.replace(/## 素材[\s\S]*?## 讲法/, '## 讲法')).materials.length === 0);
+}
+
 done();

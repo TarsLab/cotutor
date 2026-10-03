@@ -20,6 +20,7 @@ const { main } = await import('../src/cli/main.ts');
 const { createContext, route } = await import('../src/server/app.ts');
 const { readRunFile } = await import('../src/server/store.ts');
 const { yamlScalar } = await import('../src/lib/context-pack.ts');
+const { handLessonFile, checkLesson } = await import('../src/server/lesson.ts');
 
 const FIXTURE = fileURLToPath(new URL('./fixtures/materials/pingjunfen', import.meta.url));
 const md = readFileSync(join(FIXTURE, 'material.md'), 'utf8');
@@ -35,6 +36,13 @@ const tutors = { 'math-tutor': { display: '数学老师', enabled: true, hidden:
   const off = materialIssues(d, { tutors, clips: [1, 3, 4] });
   check('缺 2.mp4、多 4.mp4:各一条要改', off.filter((i) => i.level === 'fix').length === 2 && off.some((i) => i.text.includes('缺 2.mp4')) && off.some((i) => i.text.includes('多了 4.mp4')), JSON.stringify(off));
   check('老师不在 / 是工具人:要改', materialIssues(parseMaterial(md.replace('tutor: math-tutor', 'tutor: art-tutor')), { tutors, clips: [1, 2, 3] }).some((i) => i.level === 'fix' && i.text.includes('没有这位老师')) && materialIssues(parseMaterial(md.replace('tutor: math-tutor', 'tutor: scene-maker')), { tutors, clips: [1, 2, 3] }).some((i) => i.level === 'fix' && i.text.includes('工具人')));
+}
+
+// ---- 定本只有一份:cotutor-prep 的 references/素材.md 里「一份完整的」就是这个文件(技能教 Claude Code 照它写)
+{
+  const ref = readFileSync(fileURLToPath(new URL('../skills/cotutor-prep/references/素材.md', import.meta.url)), 'utf8');
+  const shown = /\n````markdown\n([\s\S]*?)\n````\n/.exec(ref)?.[1];
+  check('references/素材.md 的例子 = 定本 material.md(一字不差)', shown === md.replace(/\n$/, ''), shown?.slice(0, 80));
 }
 
 // ---- 写坏的
@@ -131,6 +139,22 @@ try {
   for (let i = 0; i < 200 && ctx.runner.running('english-tutor'); i++) await new Promise((r) => setTimeout(r, 25));
   const runE = await readRunFile(ctx.ws, 'english-tutor', '2026-10-02', (eng.json as { job: string }).job);
   check('别的老师只拿自己的(英语老师的那份「词」)', runE?.prompt.includes(`  materials:\n    - ${yamlScalar('ci · 词 · 能讲:词的道理')}\n`) === true, runE?.prompt.slice(0, 900));
+
+  // ---- 课文件尾巴「## 素材」(§11.4):列了的排在 materials: 最前面,哪怕有更新的;check 认得出不在的
+  put('xin', one('新的'), [1], new Date(2026, 9, 5));
+  mkdirSync(join(root, 'lessons'), { recursive: true });
+  const lessonMd = '---\ntutor: math-tutor\n---\n\n```choice\n18 个分给 3 人,每人几个?\n- [x] 6\n- [ ] 9\n```\n\n每人几个?\n\n## 素材\n\n- pingjunfen\n\n## 讲法\n\n先让他说怎么分的。\n';
+  writeFileSync(join(root, 'lessons', '分贴纸.md'), lessonMd);
+  check('课文件 check:列的素材在 → 没有要改;写个不在的 → 要改', (await checkLesson(ctx.ws, lessonMd, now)).fixes === 0 && (await checkLesson(ctx.ws, lessonMd.replace('- pingjunfen', '- nope'), now)).issues.some((i) => i.level === 'fix' && i.text.includes('nope')));
+  const lp = (await route('GET', '/api/lessons/分贴纸/page', ctx)).json as { materials: { id: string; title: string | null; ok: boolean; why: string | null }[]; brief: string };
+  check('课文件页接口:materials 带标题、放得出来;讲法里没有素材那段', JSON.stringify(lp.materials) === JSON.stringify([{ id: 'pingjunfen', title: '平均分:分的人越多,每人越少', ok: true, why: null }]) && !lp.brief.includes('pingjunfen'), JSON.stringify(lp.materials));
+  const hand = await handLessonFile(ctx.ws, '分贴纸', { label: '分贴纸', now });
+  await hand.dubbing;
+  const s3 = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '每人 6 个', thread: hand.thread });
+  await wait();
+  const run3 = await readRunFile(ctx.ws, 'math-tutor', '2026-10-02', (s3.json as { job: string }).job);
+  const mats = run3?.prompt.split('\n  materials:\n')[1]?.split('\n').filter((l) => l.startsWith('    - ')) ?? [];
+  check('交出去的课,孩子第一次开口:materials: 第一行是课文件列的 pingjunfen,更新的 xin 排后面;讲法里没有素材那段', mats[0]?.includes('pingjunfen') === true && mats.some((l) => l.includes('xin')) && run3?.prompt.includes('lessonBrief: "先让他说怎么分的。"') === true, JSON.stringify(mats));
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

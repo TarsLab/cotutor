@@ -164,6 +164,8 @@ const PAGE = `<!doctype html>
   .pt .tr small { font-size:13px; color:var(--dim); }
   .pt .none { color:var(--dim); font-size:14px; padding:2px 0; }
   .pt .hd .try { flex:none; font-size:14px; font-weight:600; color:var(--accent); border:1.5px solid var(--accent); border-radius:999px; padding:5px 12px; }
+  /* 老师块的「试用」是次要的:不带框、灰字,别把老师的名字挤没 */
+  .pt .hd .try.lite { border-color:transparent; color:var(--dim); padding:5px 4px; margin-right:2px; }
   .pt .tt { font-size:13px; color:var(--dim); padding:6px 2px 0; }
   .pt .tr.tried { background:transparent; border:1px dashed var(--line); }
   .pt .stars { display:flex; gap:2px; margin-top:2px; }
@@ -728,6 +730,8 @@ __REEL_JS__
       h('small', {}, clock(th.at) + ' · ' + th.sections + ' 节 · ' + th.cards + ' 张卡' + stopped(th) + (th.booked ? ' · 已记账' : t.booking && th.sections > 0 ? ' · 记账中' : '')),
       th.tryout ? null : stars(t, th), th.stoppedAt === 'writing' ? null : delBtn('conversations', t, th));
     // 新话题(《备课设计.md》§3.1):家长自己和老师聊——试改过的老师文件与 vault、备今天的课;孩子开口前孩子看不到、不写记忆
+    // 试用(《备课设计.md》§十二):没备课,家长到孩子端当一回孩子直接问;孩子看不到,明天删。课文件的试用在课文件页
+    const tryBtn = (t) => (H.date !== H.today ? null : h('button', { type: 'button', class: 'try lite', title: '当一回孩子:没备课直接问,看老师怎么接;孩子看不到,明天删', on: { click: () => { location.href = '/?try=' + encodeURIComponent(t.name) + '/new'; } } }, '试用'));
     const newBtn = (t) => (H.date !== H.today ? null : h('button', { type: 'button', class: 'try', title: '和老师备课、试试改过的老师文件;孩子看不到,满意了在某一节尾点「从这里给孩子」', on: { click: () => openTutor(t, { kind: 'new' }) } }, '新话题'));
     // 课文件(《备课设计.md》§10.6):今天这位老师的每一份一行,点了整份铺开看
     const ago = (iso) => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return !isFinite(m) ? '' : m < 1 ? '刚改的' : m < 60 ? m + ' 分钟前改的' : m < 1440 ? Math.round(m / 60) + ' 小时前改的' : Math.round(m / 1440) + ' 天前改的'; };
@@ -735,7 +739,7 @@ __REEL_JS__
       h('b', {}, l.name, h('span', { class: 'pin' + (l.fixes ? ' bad' : l.handedAs !== null ? ' ok' : '') }, l.fixes ? l.fixes + ' 条要改' : l.handedAs !== null ? '已交给孩子' + (l.handedAs ? ':' + l.handedAs : '') : '还没交')),
       h('small', {}, l.sections + ' 节 · ' + l.cards + ' 张卡' + (l.fromThread ? ' · 从备课话题写出来的' : '') + (l.mtime ? ' · ' + ago(l.mtime) : '')));
     $('#tutors').replaceChildren(...H.tutors.map((t) => h('div', { class: 'pt', 'data-tutor': t.name },
-      h('div', { class: 'hd' }, avatarEl(t), h('div', { class: 'who' }, h('span', { class: 'nm' }, t.display), t.turns ? h('small', {}, h('span', {}, t.turns + ' 轮'), ...(t.kouboYuan ? [' ', h('span', {}, '· koubo ¥' + t.kouboYuan.toFixed(2))] : [])) : null), newBtn(t)),
+      h('div', { class: 'hd' }, avatarEl(t), h('div', { class: 'who' }, h('span', { class: 'nm' }, t.display), t.turns ? h('small', {}, h('span', {}, t.turns + ' 轮'), ...(t.kouboYuan ? [' ', h('span', {}, '· koubo ¥' + t.kouboYuan.toFixed(2))] : [])) : null), tryBtn(t), newBtn(t)),
       ...(t.threads.length ? t.threads.map((th) => row(t, th)) : [h('div', { class: 'none' }, H.date === H.today ? '今天没聊' : '这天没聊')]),
       ...(t.lessons && t.lessons.length ? [h('div', { class: 'tt' }, '课文件 · lessons/'), ...t.lessons.map((l) => lsnRow(t, l))] : []))));
     $('#hcards').replaceChildren();
@@ -1827,7 +1831,7 @@ __REEL_JS__
     if (S.lsn) return loadLesson();
     try {
       // 今天、选了话题:带上它,服务端把 resume 那个预热进程换成这个话题的(《工作流程.md》§四「预热」)
-      const warmHint = (!S.hist && S.thread ? '?thread=' + encodeURIComponent(S.thread) : '') + (TRY ? (S.thread ? '&' : '?') + 'try=' + encodeURIComponent(TRY.thread) : '');
+      const warmHint = (!S.hist && S.thread ? '?thread=' + encodeURIComponent(S.thread) : '') + (TRY && TRY.thread !== 'new' ? (S.thread ? '&' : '?') + 'try=' + encodeURIComponent(TRY.thread) : '');
       const d = await api('GET', (PARENT ? '/api/conversations/' + S.tutor.name + '/' + (S.hist || 'today') + '/board' : CONV + S.tutor.name + '/' + (S.hist || 'today')) + warmHint);
       setOffline(false);
       S.day = d;
@@ -1987,6 +1991,8 @@ __REEL_JS__
       const r = await api('POST', CONV + S.tutor.name + '/messages', body);
       S.via = null; if (L && S.lq === L) S.lq = null;
       if (r && r.thread) S.thread = r.thread;
+      // 老师块的试用:第一句开了试用话题,之后都进它;地址换成真的话题,刷新还回这里
+      if (TRY && TRY.thread === 'new' && r && r.thread) { TRY.thread = r.thread; try { history.replaceState(null, '', '?try=' + encodeURIComponent(TRY.tutor) + '/' + encodeURIComponent(r.thread)); } catch {} }
       S.newThread = false; { const blank = $('#board .blank'); if (blank) blank.remove(); }
       renderHeader();
       clearTimeout(S.pollTimer); S.pollTimer = setTimeout(() => loadDay(false), 1200);
@@ -2198,6 +2204,8 @@ __REEL_JS__
     const global = (page.issues || []).filter((x) => x.section === undefined);
     if (global.length) board.append(h('div', { class: 'notes' }, ...global.map(issueNote)));
     page.sections.forEach((e, i) => board.append(renderLessonSection(e, i, page)));
+    // 「## 素材」(《备课设计.md》§11.4):不铺在板上,孩子开口后老师拿;一行一份,带标题
+    if (page.materials && page.materials.length) board.append(h('div', { class: 'notes' }, noteEl('brief', '素材', page.materials.map((m) => m.id + (m.title ? ' · ' + m.title : '') + (m.ok ? '' : '(放不出来:' + m.why + ')')).join('\\n') + '\\n\\n不铺在板上;孩子开口后老师需要时拿出来放')));
     if (page.brief) board.append(h('div', { class: 'notes' }, noteEl('brief', '讲法', page.brief.replace(/^##\\s+\\S.*\\n?/, '').trim() + '\\n\\n给老师的,孩子看不到;孩子答第一句时老师照它接')));
     if (!page.sections.length) board.append(blankBoard('这份课文件还是空的'));
   };
@@ -2906,7 +2914,7 @@ __REEL_JS__
     // 试用页:直接开在那个试用话题上,从第一节念起
     if (TRY) {
       const t = S.home ? S.home.tutors.find((x) => x.name === TRY.tutor) : null;
-      if (t) openTutor(t, { kind: 'thread', thread: TRY.thread, play: true });
+      if (t) openTutor(t, TRY.thread === 'new' ? { kind: 'new' } : { kind: 'thread', thread: TRY.thread, play: true });
       return;
     }
     const open = debug.get('tutor') || resume;

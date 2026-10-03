@@ -40,7 +40,7 @@ import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset } from './stage.ts';
 import { themeFiles } from './theme.ts';
 import { enrichScenes } from './scene-props.ts';
-import { enrichMaterials } from './material.ts';
+import { checkMaterial, enrichMaterials } from './material.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
@@ -725,11 +725,13 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         const device0 = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
         if (device0 && !device0.success) return { status: 400, json: { error: 'bad_request' } };
         // 试用页(《备课设计.md》§十二):家长扮孩子,只进点名的试用话题;记 from: parent(日记、记忆、上限都不碰),runner 按孩子拼上下文包
+        // try: 'new' = 老师块的「试用」:没备课,这一条开一个新的试用话题(第一条带 prepThread + tryThread)
         if (body.try !== undefined) {
           const tryThread = typeof body.try === 'string' ? body.try : '';
-          if (!isTryThread((await readIndex(ws, tutor, date)).messages, tryThread)) return { status: 404, json: { error: 'no_such_thread' } };
+          const fresh = tryThread === 'new';
+          if (!fresh && !isTryThread((await readIndex(ws, tutor, date)).messages, tryThread)) return { status: 404, json: { error: 'no_such_thread' } };
           if (!body.text.trim() && !action && !photos?.length) return { status: 400, json: { error: 'bad_request' } };
-          const started = await ctx.runner.send(tutor, { from: 'parent', text: body.text, focus: focus?.data, action, newThread: false, thread: tryThread, device: device0?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(lessonSaid ? { lessonSaid } : {}) });
+          const started = await ctx.runner.send(tutor, { from: 'parent', text: body.text, focus: focus?.data, action, newThread: fresh, ...(fresh ? { prepThread: true, tryThread: true } : { thread: tryThread }), device: device0?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(lessonSaid ? { lessonSaid } : {}) });
           return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
         }
         const policy = resolvePolicy(ws.config, tutor);
@@ -992,6 +994,12 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         }
         const page = lessonPage(name, c, st?.mtime.toISOString() ?? null, handed, fromThread, now);
         for (const x of page.sections) x.section = await enrichMaterials(ws, x.section);
+        for (const m of page.materials) {
+          const c = await checkMaterial(ws, m.id);
+          m.title = c?.doc.title || null;
+          m.ok = Boolean(c && !c.fixes && c.doc.tutor === page.tutor);
+          m.why = !c ? '不在' : c.doc.tutor !== page.tutor ? `是 ${c.doc.tutor ?? '没写老师'} 的` : c.fixes ? `${c.fixes} 条要改` : null;
+        }
         return { status: 200, json: page };
       }
       // 课文件页上「听这节」:讲稿一句用这位老师的音色现合成(同一句同一音色一次,存 .cotutor/tts-preview/,和试听音色同一个缓存);老师没配音色 404,页面退回浏览器的声

@@ -108,6 +108,19 @@ try {
   await sleep(500);
   const pb = await evaluate(`({ mo: document.querySelector('#c-mo').textContent, lesson: document.querySelector('#lesson').hidden })`);
   ok('点进去:头上「试用 · 明天删」、底部「这节课」条不出', pb.mo === '试用 · 明天删' && pb.lesson === true, JSON.stringify(pb));
+
+  // ---- 老师块的「试用」:没备课,空板直接问;第一句开试用话题、地址换成真的话题 ----
+  await send('Page.navigate', { url: `${base}/parent` });
+  await until(`[...document.querySelectorAll('.pt[data-tutor="math-tutor"] .hd .try')].some((b) => b.textContent === '试用')`);
+  await evaluate(`[...document.querySelectorAll('.pt[data-tutor="math-tutor"] .hd .try')].find((b) => b.textContent === '试用').click()`);
+  const blank = await until(`location.search === '?try=math-tutor/new' && document.querySelector('#tutor').classList.contains('on') && Boolean(document.querySelector('#board .blank'))`);
+  ok('老师块「试用」→ 孩子端空板(?try=math-tutor/new)、顶上「试用 · 明天删」', blank && (await evaluate(`getComputedStyle(document.querySelector('#trytag')).display`)) !== 'none', await evaluate('location.href'));
+  await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = '三加五等于几'; document.querySelector('#go').click(); return true; })()`);
+  const swapped = await until(`/^\\?try=math-tutor\\/\\d{4}-\\d+$/.test(location.search) && document.querySelector('#board').textContent.includes('三加五等于几')`, 80);
+  const bt = decodeURIComponent((await evaluate('location.search')).split('/')[1] ?? '');
+  const ix = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${day}.json`), 'utf8'));
+  ok('第一句开了试用话题:地址换成真的话题号;索引第一条带 tryThread、记 from parent', swapped && ix.messages.find((m) => m.job === bt)?.tryThread === true && ix.messages.find((m) => m.job === bt)?.from === 'parent', bt);
+  await shot('tryout-blank.png');
   ws.close();
 } catch (err) {
   console.error('✗ 探针出错:', err instanceof Error ? err.message : err);

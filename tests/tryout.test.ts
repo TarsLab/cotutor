@@ -126,18 +126,33 @@ try {
   const i3 = await readIndex(ctx.ws, 'math-tutor', day);
   check('同一份课文件交给孩子:新话题,试用话题原样还在', hand.status === 200 && hj.handed && hj.thread !== th && i3.messages.some((m) => m.thread === th) && i3.lessons[hj.thread]?.handedAt !== null, JSON.stringify(hj));
 
+  // 老师块的试用(try: 'new'):没备课,第一句开一个新的试用话题;老师拿孩子的上下文包、不带 lesson:;孩子端看不到
+  const b1 = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '记住它 三加五等于几', try: 'new', newThread: true });
+  await wait('math-tutor');
+  const bj = b1.json as { job: string; thread: string };
+  const ib = await readIndex(ctx.ws, 'math-tutor', day);
+  const bm = ib.messages.find((m) => m.job === bj.job);
+  const runB = await readRunFile(ctx.ws, 'math-tutor', day, bj.job);
+  check('老师块的试用:新话题、第一条带 tryThread 与 prepThread、记 from parent;上下文包 from: kid、没有 lesson:;不写记忆', b1.status === 202 && bj.thread === bj.job && bm?.tryThread === true && bm.prepThread === true && bm.from === 'parent' && runB?.prompt.includes('  from: kid') === true && !runB.prompt.includes('  lesson:') && !bm.remembered?.length && (bm.memoryDraft?.length ?? 0) > 0, JSON.stringify(bm));
+  const b2 = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '八', try: bj.thread });
+  await wait('math-tutor');
+  const runB2 = await readRunFile(ctx.ws, 'math-tutor', day, (b2.json as { job: string }).job);
+  const kb = await kidToday(`?try=${bj.thread}`);
+  check('接着说进同一个试用话题、resume;试用页上两句都是问句;孩子端照样看不到', (b2.json as { thread: string }).thread === bj.thread && runB2?.resume === true && kb.json.messages.filter((m) => m.question).length === 2 && !(await kidToday()).json.messages.some((m) => m.thread === bj.thread), JSON.stringify(kb.json.messages.map((m) => m.question)));
+
   // 当天不清;第二天清:消息、文件、照片、claude 会话没了;别的话题与钱不动
   check('当天不清', (await sweepTryouts(ctx.ws, now, { claudeProjects: projects })).length === 0);
   const tryJobs = i3.messages.filter((m) => m.thread === th).map((m) => m.job);
   const sid = i3.sessions[th]?.id ?? '';
   writeFileSync(join(projects, '-ws-agents-math-tutor', `${sid}.jsonl`), '{}\n');
-  const costBefore = i3.costUsd;
+  const costBefore = (await readIndex(ctx.ws, 'math-tutor', day)).costUsd;
   const filesBefore = readdirSync(convDir).filter((f) => tryJobs.some((j) => f.startsWith(`${day}.${j}.`))).length;
   now = new Date(2026, 9, 3, 8, 0);
   await route('GET', '/api/overview/today', ctx);
   const i4 = await readIndex(ctx.ws, 'math-tutor', day);
   const left = readdirSync(convDir).filter((f) => tryJobs.some((j) => f.startsWith(`${day}.${j}.`)));
   check('第二天打开清单就清掉:索引没有这个话题与它的会话、lessons;这几轮的文件没了;别的话题在;钱不减', filesBefore > 0 && !i4.messages.some((m) => m.thread === th) && !(th in i4.sessions) && !(th in i4.lessons) && left.length === 0 && i4.messages.some((m) => m.thread === hj.thread) && i4.costUsd === costBefore, JSON.stringify({ left, cost: [costBefore, i4.costUsd] }));
+  check('老师块的试用话题也清掉了', !i4.messages.some((m) => m.thread === bj.thread));
   check('照片与 claude 会话文件没了', sid !== '' && !existsSync(join(root, photo)) && !existsSync(join(projects, '-ws-agents-math-tutor', `${sid}.jsonl`)), JSON.stringify({ photo, sid }));
   check('一天只扫一次', (await sweepDaily(ctx)).length === 0);
 } finally {

@@ -45,8 +45,10 @@ export interface LessonDoc {
   device: Device;
   for?: string;
   sections: LessonSectionDoc[];
-  /** 第一个 H2 起给老师的讲法(原文含标题行);没有 = 空串 */
+  /** 第一个 H2 起给老师的讲法(原文含标题行;「## 素材」那段摘掉了);没有 = 空串 */
   brief: string;
+  /** 尾巴「## 素材」列的素材 id(§11.4):不铺在板上,孩子开口后排在上下文包 materials: 最前面 */
+  materials: { id: string; line: number }[];
   /** 解析时就能看出来的问题 */
   issues: LessonIssue[];
 }
@@ -78,7 +80,7 @@ export function readFrontmatter(all: readonly string[]): Frontmatter {
 }
 
 /** 正文按 `---` 分节(围栏里的不算),第一个 H2(围栏外)起是讲法 */
-function splitBody(body: readonly string[], offset: number): { chunks: { lines: string[]; from: number }[]; brief: string } {
+function splitBody(body: readonly string[], offset: number): { chunks: { lines: string[]; from: number }[]; brief: string; briefFrom: number } {
   const chunks: { lines: string[]; from: number }[] = [];
   let cur: { lines: string[]; from: number } = { lines: [], from: offset };
   let fence: string | null = null;
@@ -98,7 +100,7 @@ function splitBody(body: readonly string[], offset: number): { chunks: { lines: 
     }
     if (H2.test(line)) {
       chunks.push(cur);
-      return { chunks, brief: body.slice(i).join('\n').trim() };
+      return { chunks, brief: body.slice(i).join('\n').trim(), briefFrom: offset + i };
     }
     if (RULE.test(line)) {
       chunks.push(cur);
@@ -108,7 +110,28 @@ function splitBody(body: readonly string[], offset: number): { chunks: { lines: 
     cur.lines.push(line);
   }
   chunks.push(cur);
-  return { chunks, brief: '' };
+  return { chunks, brief: '', briefFrom: -1 };
+}
+
+/** 尾巴里的「## 素材」(《备课设计.md》§11.4):一行一个素材 id(后面可以跟 · 说明),不铺在板上,孩子开口后进老师的上下文包;摘出来,剩下的照旧是讲法 */
+const MATERIALS_H2 = /^##\s+素材\s*$/;
+function takeMaterials(brief: string, from: number): { brief: string; materials: { id: string; line: number }[]; issues: LessonIssue[] } {
+  const lines = brief.split('\n');
+  const at = lines.findIndex((l) => MATERIALS_H2.test(l.trim()));
+  if (at < 0) return { brief, materials: [], issues: [] };
+  let end = lines.findIndex((l, i) => i > at && H2.test(l));
+  if (end < 0) end = lines.length;
+  const materials: { id: string; line: number }[] = [];
+  const issues: LessonIssue[] = [];
+  for (let i = at + 1; i < end; i++) {
+    const l = lines[i].trim();
+    if (!l) continue;
+    const m = /^[-*]\s+([a-z0-9][a-z0-9-]*)(?:\s|$)/.exec(l);
+    if (m) materials.push({ id: m[1], line: from + i + 1 });
+    else issues.push({ level: 'note', line: from + i + 1, text: `「## 素材」下面一行一个素材 id(- pingjunfen),这行不认:${l}` });
+  }
+  if (!materials.length) issues.push({ level: 'note', line: from + at + 1, text: '「## 素材」下面没有素材 id' });
+  return { brief: [...lines.slice(0, at), ...lines.slice(end)].join('\n').trim(), materials, issues };
 }
 
 export function parseLesson(md: string): LessonDoc {
@@ -130,7 +153,11 @@ export function parseLesson(md: string): LessonDoc {
   }
   if (!tutor) issues.push({ level: 'fix', line: fm.start ? 1 : undefined, text: 'frontmatter 要写 tutor: <老师的键>(cotutor.json 里以 -tutor 结尾的,如 math-tutor)' });
   const body = all.slice(fm.start);
-  const { chunks, brief } = splitBody(body, fm.start);
+  const split = splitBody(body, fm.start);
+  const { chunks } = split;
+  const took = takeMaterials(split.brief, split.briefFrom);
+  const brief = took.brief;
+  issues.push(...took.issues);
   const sections: LessonSectionDoc[] = [];
   for (const ch of chunks) {
     if (!ch.lines.some((l) => l.trim())) continue;
@@ -163,7 +190,8 @@ export function parseLesson(md: string): LessonDoc {
     });
   }
   if (!sections.length) issues.push({ level: 'fix', text: '正文是空的:至少写一节(几张卡加讲稿,末句问孩子)' });
-  return { tutor, device, ...(forDay ? { for: forDay } : {}), sections, brief, issues };
+  if (sections.length > 2) issues.push({ level: 'note', text: `${sections.length} 节:孩子要听完 ${sections.length} 节才能开口打断(拍板 34)。备好的课缺省一节,讲的话让老师当场说` });
+  return { tutor, device, ...(forDay ? { for: forDay } : {}), sections, brief, materials: took.materials, issues };
 }
 
 export interface LessonCheckContext {
@@ -172,6 +200,8 @@ export interface LessonCheckContext {
   tints: readonly string[];
   looks: readonly string[];
   today: string;
+  /** workspace 里的素材(§11.4 查「## 素材」用):id → 哪位老师的、几条要改;不给就不查 */
+  materials?: Record<string, { tutor: string | null; fixes: number }>;
 }
 
 /** 解析的问题 + 老师在不在 + 槽名对不对 + 没讲法;按行号排 */
@@ -192,6 +222,12 @@ export function lessonIssues(doc: LessonDoc, ctx: LessonCheckContext): LessonIss
       if (c.look?.look && !ctx.looks.includes(c.look.look)) out.push({ level: 'fix', line, section: k, card: n, text: `look=${c.look.look} 不在主题的字形槽里(有:${ctx.looks.join('、') || '一个都没有'})` });
     });
   });
+  for (const m of ctx.materials ? doc.materials : []) {
+    const x = ctx.materials![m.id];
+    if (!x) out.push({ level: 'fix', line: m.line, text: `素材 ${m.id} 不在(workspace 的 materials/ 下没有这个目录)` });
+    else if (doc.tutor && x.tutor !== doc.tutor) out.push({ level: 'fix', line: m.line, text: `素材 ${m.id} 是 ${x.tutor ?? '(没写 tutor)'} 的,这节课是 ${doc.tutor} 的:老师拿不到它` });
+    else if (x.fixes) out.push({ level: 'fix', line: m.line, text: `素材 ${m.id} 有 ${x.fixes} 条要改,老师拿不到它(cotutor material check ${m.id})` });
+  }
   if (doc.for && doc.for < ctx.today) out.push({ level: 'note', text: `for 是 ${doc.for},已经过去了(交给孩子照样能交)` });
   if (!doc.brief.trim()) out.push({ level: 'note', text: '没有给老师的讲法(「## 讲法」):孩子答了之后老师只知道孩子看过这几节,不知道你想怎么接' });
   return out.sort((a, b) => (a.line ?? Infinity) - (b.line ?? Infinity));

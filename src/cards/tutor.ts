@@ -13,7 +13,7 @@ const NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const THREAD_RE = /^\d{4}-\d+$/;
 const LIST_PREFIX = /^(?:[-*+]|\d+[.)])\s+/;
-const BRIEF_LINE = /^讲法\s*[::]\s*(.*)$/;
+const BRIEF_LINE = /^讲法\s*[:：]\s*(.*)$/;
 const CONTINUE_LINE = /^接着\s+/;
 
 const label = z.string().min(1).refine((s) => Array.from(s).length <= BUTTON_LABEL_MAX, `按钮的字最多 ${BUTTON_LABEL_MAX} 个`);

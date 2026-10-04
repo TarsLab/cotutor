@@ -158,4 +158,10 @@ try {
 } finally {
   rmSync(home, { recursive: true, force: true });
 }
+// 家长手写多半是全角冒号:「能讲：」「停在：」照样认
+{
+  const fw = parseMaterial('---\ntutor: math-tutor\n---\n# 全角\n能讲：一件事\n不能讲：别的\n\n## 一段一段\n\n1. 一段,5 秒。\n   - 停在：那样\n');
+  check('material.md 认全角冒号', fw.can.join() === '一件事' && fw.cannot.join() === '别的' && fw.segments[0]?.stop === '那样' && fw.issues.length === 0, JSON.stringify(fw.issues));
+}
+
 done();

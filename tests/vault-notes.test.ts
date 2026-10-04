@@ -70,4 +70,7 @@ check('hash:稳定、8 位、内容变就变', textHash('a') === textHash('a') &
   const tp = tidyMemoryPrompt({ date: '2026-09-18', count: 3, cap: 30, diaryFile: '/v/日记/2026-09-18.md' });
   check('tidyMemoryPrompt:带条数、上限、日记路径与三种写法', tp.includes('现在 3 条') && tp.includes('不超过 30 条') && tp.includes('/v/日记/2026-09-18.md') && tp.includes('- 删:') && tp.includes('- 改:') && tp.includes('记忆不用整理'));
 }
+// 老师常写全角冒号(「删：…」「改：… → …」):照样认成删、改,不当新记忆记进去
+check('parseMemoryOp 认全角冒号', parseMemoryOp('删：家长写的别出选择题').op === 'delete' && parseMemoryOp('改：凑十他懂 → 凑十熟练了').op === 'change');
+
 done();

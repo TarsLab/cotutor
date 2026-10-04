@@ -639,7 +639,7 @@ export function pickedLabels(card: BoardCard): string[] {
 
 export function isQuestion(text: string): boolean {
   const t = text.trim();
-  return t.endsWith('?') || t.endsWith('?');
+  return t.endsWith('?') || t.endsWith('？');
 }
 
 /** 孩子端条目里页面用到的字段(与 kid-view 的 KidMessage 兼容) */

@@ -235,4 +235,7 @@ const sceneCard: BoardCard = { kind: 'scene', props: { bundle: '2026-09-04-guilv
   const two = wordLayout('ice cream', { i: { advance: 0.2 }, c: { advance: 0.8 }, e: { advance: 0.95 }, r: { advance: 0.6 }, a: { advance: 1 }, m: { advance: 1.4 } }, { gap: 0.2, space: 0.5 });
   check('单词卡:[apple] 落到这张卡、标题是词;排版逐字前进,分开写时第二段整体右移 0.8,空格只前进', anchorMarks([wcard], ['apple'])[0]?.card === 0 && cardTitle(wcard) === 'apple' && lay.slots.map((x) => +x.x.toFixed(2)).join() === '0,1.2,2.4,3.6,4' && +lay.width.toFixed(2) === 4.95 && lsp.slots.map((x) => x.chunk).join() === '0,0,1,1,1' && +(lsp.slots[2].x - lay.slots[2].x).toFixed(2) === 0.8 && +(lsp.slots[4].x - lay.slots[4].x).toFixed(2) === 0.8 && two.slots.length === 8 && +(two.slots[3].x - two.slots[2].x).toFixed(2) === 1.85, JSON.stringify([lay, lsp.slots]));
 }
+// 问句认半角与全角问号(2026-10-04:真老师写「你想问什么呀？」,原来只认半角,孩子端念完不停)
+check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人几块?') && isQuestion('每人几块？') && isQuestion(' 好吗？ ') && !isQuestion('好的。'));
+
 done();

@@ -188,9 +188,9 @@ export type MemoryOp = { op: 'add'; text: string } | { op: 'change'; from: strin
 
 export function parseMemoryOp(item: string): MemoryOp {
   const s = item.replace(/\s+/g, ' ').trim();
-  const del = /^删[::]\s*(.+)$/.exec(s);
+  const del = /^删[:：]\s*(.+)$/.exec(s);
   if (del) return { op: 'delete', from: del[1].trim() };
-  const chg = /^改[::]\s*(.+?)\s*(?:→|->)\s*(.+)$/.exec(s);
+  const chg = /^改[:：]\s*(.+?)\s*(?:→|->)\s*(.+)$/.exec(s);
   if (chg) return { op: 'change', from: chg[1].trim(), to: chg[2].trim() };
   return { op: 'add', text: s };
 }

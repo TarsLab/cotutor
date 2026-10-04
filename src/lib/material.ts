@@ -48,7 +48,7 @@ function blankComments(md: string): string[] {
 
 /** 「能讲:」这种行起的列表:冒号后面写了字算一条,接着的 `- ` 行各一条(中间可以空行),遇到别的行就停 */
 function listAfter(lines: readonly string[], label: string): { items: string[]; line: number } | null {
-  const re = new RegExp(`^${label}\\s*[::]\\s*(.*)$`);
+  const re = new RegExp(`^${label}\\s*[:：]\\s*(.*)$`);
   const at = lines.findIndex((l) => re.test(l.trim()));
   if (at < 0) return null;
   const items: string[] = [];
@@ -115,7 +115,7 @@ export function parseMaterial(md: string): MaterialDoc {
         continue;
       }
       const item = LIST_ITEM.exec(l);
-      const stop = item && /^停在\s*[::]\s*(.+)$/.exec(item[1].trim());
+      const stop = item && /^停在\s*[:：]\s*(.+)$/.exec(item[1].trim());
       if (cur && stop) cur.stop = stop[1].trim();
     }
     if (!segments.length) issues.push({ level: 'fix', line: segFrom + 1, text: `「## ${SEGMENTS_H2}」下面没有编号的段(1. 2. 3. …)` });

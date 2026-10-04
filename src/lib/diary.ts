@@ -96,7 +96,7 @@ export function appendDiary(existing: string | null, block: string): string {
 }
 
 const H2 = /^##\s+(.+?)\s*$/;
-const OBS = /^-\s*观察[::]\s*(.+?)\s*$/;
+const OBS = /^-\s*观察[:：]\s*(.+?)\s*$/;
 
 /**
  * 上下文包的 recent:最近几天日记里的「- 观察:」行,按日期升序取最后 n 条。

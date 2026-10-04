@@ -20,6 +20,7 @@ const { readIndex, readRunFile } = await import('../src/server/store.ts');
 const { sweepTryouts } = await import('../src/server/tryout.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
+const FAKE_TTS = fileURLToPath(new URL('./_fake-tts.ts', import.meta.url));
 const node = process.execPath;
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
@@ -139,6 +140,20 @@ try {
   const runB2 = await readRunFile(ctx.ws, 'math-tutor', day, (b2.json as { job: string }).job);
   const kb = await kidToday(`?try=${bj.thread}`);
   check('接着说进同一个试用话题、resume;试用页上两句都是问句;孩子端照样看不到', (b2.json as { thread: string }).thread === bj.thread && runB2?.resume === true && kb.json.messages.filter((m) => m.question).length === 2 && !(await kidToday()).json.messages.some((m) => m.thread === bj.thread), JSON.stringify(kb.json.messages.map((m) => m.question)));
+
+  // 配了音色:试用接口配完音才回(试用时听到的是老师的声,不是浏览器的)
+  {
+    const cfgNow = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tts?: unknown; tutors: Record<string, Record<string, unknown>> };
+    cfgNow.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, 'voices', '--json'] };
+    cfgNow.tutors['math-tutor'].voice = 'v-math';
+    writeFileSync(cfgFile, JSON.stringify(cfgNow, null, 2));
+    await ctx.reload();
+    const tv = await route('POST', '/api/lessons/分披萨/try', ctx, {});
+    const tvj = tv.json as { thread: string; dubbed: boolean; lines: number };
+    const iv = await readIndex(ctx.ws, 'math-tutor', day);
+    const lines = iv.messages.filter((m) => m.thread === tvj.thread).flatMap((m) => m.section?.lines ?? []).filter((l) => l.text.trim());
+    check('配了音色的试用:回的时候已经配好(dubbed),索引里每句都有 mp3', tv.status === 200 && tvj.dubbed === true && lines.length === tvj.lines && lines.length > 0 && lines.every((l) => l.audio), JSON.stringify({ tvj, lines }));
+  }
 
   // 当天不清;第二天清:消息、文件、照片、claude 会话没了;别的话题与钱不动
   check('当天不清', (await sweepTryouts(ctx.ws, now, { claudeProjects: projects })).length === 0);

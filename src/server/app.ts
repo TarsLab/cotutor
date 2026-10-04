@@ -1030,9 +1030,10 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       // 试用(《备课设计.md》§十二):照交给孩子的路子从文件建一个试用话题(配音在后台),不碰首页;页面拿 url 在孩子端打开
       if (lf[2] === '/try' && method === 'POST') {
         const r = await handLessonFile(ws, name, { now, tryout: true });
-        void r.dubbing.catch(() => {});
+        // 试用要贴近真实使用:配完音再回,孩子端一打开念的就是老师的声(交给孩子不等,孩子多半过一阵才按;最多等半分钟)
+        const dubbed = await Promise.race([r.dubbing.then(() => true, () => false), new Promise<boolean>((res) => setTimeout(() => res(false), 30_000))]);
         const url = r.ok && r.tutor && r.thread ? `/?try=${encodeURIComponent(r.tutor)}/${encodeURIComponent(r.thread)}` : null;
-        return { status: r.ok ? 200 : 409, json: { ok: r.ok, date: r.date, tutor: r.tutor, thread: r.thread, url, cards: r.cards, lines: r.lines, issues: r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text) } };
+        return { status: r.ok ? 200 : 409, json: { ok: r.ok, date: r.date, tutor: r.tutor, thread: r.thread, url, dubbed, cards: r.cards, lines: r.lines, issues: r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text) } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }

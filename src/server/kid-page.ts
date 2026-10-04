@@ -208,6 +208,9 @@ const PAGE = `<!doctype html>
   #trytag { display:none; position:fixed; top:calc(env(safe-area-inset-top) + 6px); left:50%; transform:translateX(-50%); z-index:60; font-size:12px; color:#5b3d86; background:#f3edfb; border:1px solid #5b3d86; border-radius:10px; padding:1px 10px; pointer-events:none; white-space:nowrap; }
   body.tryout #trytag { display:block; }
   body.tryout #hist-btn, body.tryout #new-btn { display:none; }
+  #trygo { position:fixed; inset:0; z-index:70; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:var(--paper); }
+  #trygo button { height:56px; padding:0 32px; border-radius:28px; border:none; background:var(--accent); color:#fff; font-size:20px; font-weight:700; }
+  #trygo small { font-size:14px; color:var(--dim); }
   #lesson button:disabled, #lesson button[hidden] { opacity:.4; }
   #lesson button[hidden] { display:none; }
   #hand { position:absolute; inset:0; display:none; z-index:31; }
@@ -594,7 +597,13 @@ __REEL_JS__
   // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音退回浏览器合成;都没有按字数计时 ----
   const audioEl = new Audio();
   let unlocked = false;
-  const unlock = () => { if (unlocked) return; try { audioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='; audioEl.play().then(() => { unlocked = true; }).catch(() => {}); } catch {} };
+  // 老师的声已经放过(元素早解锁了)就不再放静音:换 src 会抢走正在念的那句,触发它的 onerror 退成浏览器的声重念(2026-10-04 真机:试用时点输入框,当前那句被浏览器重念一遍)。
+  // 静音这一下被下一句的 src 打断(AbortError)也算解锁:手势里调过 play() 就够了;原来不算,之后每点一下输入框都会再抢一次
+  const unlock = () => {
+    if (unlocked) return;
+    if (audioEl.src && !audioEl.src.startsWith('data:')) { unlocked = true; return; }
+    try { audioEl.onended = audioEl.onerror = audioEl.onplaying = null; audioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='; audioEl.play().then(() => { unlocked = true; }, (e) => { if (e && e.name === 'AbortError') unlocked = true; }); } catch {}
+  };
   let voiceToken = 0;
   let guardTimer = null;
   /** 换了音源后定倍速(单词卡舞台慢放;看录像另有倍速):换 src 会把 playbackRate 重置成 defaultPlaybackRate,两个一起设;音高不变 */
@@ -1843,6 +1852,9 @@ __REEL_JS__
       const first = mine.find((m) => m.question !== null) || mine[0];
       S.threadAt = first ? first.at : null;
       const entries = sectionsFromMessages(mine);
+      // 配音晚到(课文件交出去后配音在后台):已经拿到手的节(铺上的、课文件排着队的),句子的 mp3 到了就补上,还没念到的句用老师的声
+      const held = [...S.sections, ...(S.lq ? S.lq.queue : [])];
+      for (const e of entries) { const s = held.find((x) => x.job === e.job); if (s && s !== e) e.lines.forEach((l, i) => { const t = s.lines[i]; if (l.audio && t && !t.audio && t.text === l.text) t.audio = l.audio; }); }
       // 课文件交出去、孩子还没开口的话题,第一次铺:从第一节念起,后面的节攒着(拍板 34;家长端照孩子会看到的样子播)
       if (!S.sections.length && !S.played.size && !S.partial && canSend() && entries.length && entries.every((e) => typeof e.lessonSection === 'number') && !mine.some((m) => (PARENT ? m.from === 'kid' : m.question !== null))) {
         silent = false;
@@ -2120,12 +2132,13 @@ __REEL_JS__
   // 试用(《备课设计.md》§十二):从这份课文件建一个试用话题(配音在后台),跳到孩子端扮孩子跑一遍;老师拿到的是孩子的上下文包,明天删
   $('#ls-try').addEventListener('click', async () => {
     const P = S.lsn && S.lsn.page; if (!P || P.fixes || !P.cards) return;
-    const b = $('#ls-try'); b.disabled = true;
+    const b = $('#ls-try'); b.disabled = true; b.textContent = '配音中…';
     try {
+      // 服务端配完音才回(最多半分钟):试用时听到的就是老师的声,不是浏览器的
       const r = await api('POST', lsnUrl('/try'), {});
       if (r.url) { location.href = r.url; return; }
-      toast('没试成:' + (r.issues || []).join(';')); b.disabled = false;
-    } catch (e) { b.disabled = false; toast(e && e.body && e.body.issues && e.body.issues.length ? '没试成:' + e.body.issues.join(';') : '没试成,再点一次'); }
+      toast('没试成:' + (r.issues || []).join(';')); b.disabled = false; b.textContent = '试用';
+    } catch (e) { b.disabled = false; b.textContent = '试用'; toast(e && e.body && e.body.issues && e.body.issues.length ? '没试成:' + e.body.issues.join(';') : '没试成,再点一次'); }
   });
   const closeHand = () => $('#hand').classList.remove('on');
   $('#hd-cancel').addEventListener('click', closeHand);
@@ -2911,10 +2924,13 @@ __REEL_JS__
   if (PARENT && debug.get('date')) S.pdate = debug.get('date');
   loadHome().then(() => {
     let resume = null; try { resume = sessionStorage.getItem('kid-resume'); sessionStorage.removeItem('kid-resume'); } catch {}
-    // 试用页:直接开在那个试用话题上,从第一节念起
+    // 试用页:先点「开始试用」再开那个试用话题、从第一节念起。真孩子是点首页的按钮进来的,那一下解锁了声音;
+    // 试用是从家长端跳过来的,没人点过,iPad Safari 不让放老师的 mp3,会退成浏览器的声(2026-10-04 真机)
     if (TRY) {
       const t = S.home ? S.home.tutors.find((x) => x.name === TRY.tutor) : null;
-      if (t) openTutor(t, TRY.thread === 'new' ? { kind: 'new' } : { kind: 'thread', thread: TRY.thread, play: true });
+      if (!t) return;
+      const gate = h('div', { id: 'trygo' }, h('button', { type: 'button', on: { click: () => { unlock(); gate.remove(); openTutor(t, TRY.thread === 'new' ? { kind: 'new' } : { kind: 'thread', thread: TRY.thread, play: true }); } } }, '开始试用'), h('small', {}, '像孩子点首页的按钮:点了才开始念'));
+      document.body.append(gate);
       return;
     }
     const open = debug.get('tutor') || resume;

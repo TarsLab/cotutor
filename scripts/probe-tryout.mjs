@@ -76,6 +76,9 @@ try {
   ok('点「试用」跳到孩子端 /?try=math-tutor/<话题>', jumped && /^\d{4}-\d+$/.test(thread), await evaluate('location.href'));
 
   // ---- 孩子端试用页 ----
+  const gated = await until(`document.querySelector('#trygo button')?.textContent === '开始试用' && !document.querySelector('#tutor').classList.contains('on')`);
+  ok('试用页先出「开始试用」(点一下才念:iPad Safari 要先点过才放老师的 mp3),还没开老师页', gated);
+  await evaluate(`document.querySelector('#trygo button').click()`);
   const played = await until(`document.querySelectorAll('#board .sec').length === 1 && document.querySelectorAll('#board .c-choice').length === 1`);
   const page = await evaluate(`({
     tag: getComputedStyle(document.querySelector('#trytag')).display !== 'none' ? document.querySelector('#trytag').textContent : null,
@@ -113,6 +116,8 @@ try {
   await send('Page.navigate', { url: `${base}/parent` });
   await until(`[...document.querySelectorAll('.pt[data-tutor="math-tutor"] .hd .try')].some((b) => b.textContent === '试用')`);
   await evaluate(`[...document.querySelectorAll('.pt[data-tutor="math-tutor"] .hd .try')].find((b) => b.textContent === '试用').click()`);
+  await until(`Boolean(document.querySelector('#trygo button'))`);
+  await evaluate(`document.querySelector('#trygo button').click()`);
   const blank = await until(`location.search === '?try=math-tutor/new' && document.querySelector('#tutor').classList.contains('on') && Boolean(document.querySelector('#board .blank'))`);
   ok('老师块「试用」→ 孩子端空板(?try=math-tutor/new)、顶上「试用 · 明天删」', blank && (await evaluate(`getComputedStyle(document.querySelector('#trytag')).display`)) !== 'none', await evaluate('location.href'));
   await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = '三加五等于几'; document.querySelector('#go').click(); return true; })()`);

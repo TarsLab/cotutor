@@ -3,8 +3,8 @@
  * 手改了提示词或 vault 之后「效果好不好」不靠打分,靠人眼看 diff:上下文包哪几行变了、讲稿哪几句变了、卡变没变、
  * 读了什么文件、费用与用时。只有 CLI(`cotutor replay` / `cotutor compare`),家长端不露;给在 workspace 里开 Claude Code 分析用。
  *
- * 落在 workspace 的 evals/(和 conversations/ 同一套文件:索引 / run.json / log / events / post.json),不进孩子的对话、
- * 不算每日上限;永远新话题新会话;不配音;板书后期缺省关(post: true 才开)。做法是给 Runner 一个改了目录与配置的 Workspace,
+ * 落在 workspace 的 evals/(和 conversations/ 同一套文件:索引 / run.json / log / events),不进孩子的对话、
+ * 不算每日上限;永远新话题新会话;不配音。做法是给 Runner 一个改了目录与配置的 Workspace,
  * 跑的仍是同一条路(gatherContext → buildContextPack → spawn → 解析 → 物化),所以看到的就是真跑会看到的。
  */
 import { readFile } from 'node:fs/promises';
@@ -32,18 +32,15 @@ export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 export interface ReplayOptions {
   /** 换个运行时跑(比模型 / 比 CLI);缺省老师自己的 */
   runtime?: string;
-  /** 开板书后期(缺省关:回放看的是老师) */
-  post?: boolean;
   now?: () => Date;
   env?: NodeJS.ProcessEnv;
 }
 
-/** 回放用的 Workspace:对话目录换成 evals/、老师全部开着、不配音、后期按 opts */
-export function evalWorkspace(ws: Workspace, opts: { post?: boolean } = {}): Workspace {
+/** 回放用的 Workspace:对话目录换成 evals/、老师全部开着、不配音 */
+export function evalWorkspace(ws: Workspace): Workspace {
   const tutors = Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => {
     const { voice: _voice, ...rest } = t;
-    const policy = opts.post ? rest.policy : { ...(rest.policy ?? {}), post: { ...(rest.policy?.post ?? {}), mode: 'off' as const } };
-    return [k, { ...rest, enabled: true, ...(policy ? { policy } : {}) }];
+    return [k, { ...rest, enabled: true }];
   }));
   return { ...ws, config: { ...ws.config, tutors }, dirs: { ...ws.dirs, conversations: join(ws.root, EVALS_DIR) } };
 }
@@ -68,7 +65,7 @@ export async function startReplay(ws: Workspace, tutor: string, date: string, jo
   const m = index.messages.find((x) => x.job === job);
   if (!m) throw new UsageError(`${tutor} ${date} 没有 ${job} 这一轮(日期缺省今天;job 与日期对不对?)`);
   if (m.bookkeep) throw new UsageError('记账那轮不回放(它 resume 话题的会话,单独跑没有意义)');
-  const evalWs = evalWorkspace(ws, { post: opts.post });
+  const evalWs = evalWorkspace(ws);
   const runner = new Runner(() => evalWs, { now: opts.now, env: opts.env });
   // 从首页按钮进来的那轮:讲法从当时发布的那份原文取,接着的话题从原 workspace 读(回放的 workspace 指到 evals/)
   const button = m.via && typeof m.via.button === 'number' ? await homeButtonAt(ws, tutor, m.via) : null;

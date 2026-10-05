@@ -159,19 +159,6 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
     fix: ok ? undefined : explainLlmFailure(raw, runtime.run),
   });
 
-  // 板书后期:给一节固定样本,真起一次快模型,校验能过就算通
-  {
-    const { resolvePolicy } = await import('../schema/index.ts');
-    const { runPost } = await import('../server/post.ts');
-    const { parseBoard } = await import('../lib/board.ts');
-    const policy = resolvePolicy(ws.config, first.name);
-    if (policy.post.mode === 'off') push({ name: 'live.post', ok: true, required: false, detail: '板书后期关着(post.mode = off),不探' });
-    else {
-      const sample = parseBoard('```text\n# 勾股定理\n直角三角形三条边的关系\n```\n\n先认边。\n\n```text\n# 认边\n两条短边叫直角边,最长的一条叫斜边\n```\n\n两条短边叫直角边,最长的一条叫斜边。\n\n```text formula\n直角边² + 直角边² = 斜边²\n```\n\n记住这个公式。\n\n```choice\n两条直角边是 3 和 4,斜边是多少?\n- [ ] 6\n- [x] 5\n```\n\n斜边是多少?\n').section;
-      const r = await runPost(ws, first.name, sample, { policy, env });
-      push({ name: 'live.post', ok: r.summary.ok, required: false, detail: r.summary.ok ? `${policy.post.runtime} ${r.summary.ms}ms${r.summary.costUsd !== undefined ? ` · $${r.summary.costUsd.toFixed(4)}` : ''} · 收下 标注 ${r.file.kept?.marks ?? 0} 锚点 ${r.file.kept?.anchors ?? 0} 样子 ${r.file.kept?.looks ?? 0}${r.file.dropped.length ? ` · 丢 ${r.file.dropped.length}` : ''}` : `没成:${r.summary.error ?? '?'}`, fix: r.summary.ok ? undefined : `每轮会退素版;查 ${policy.post.runtime} 的模板(${(ws.config.runtimes[policy.post.runtime] as { run?: string[] } | undefined)?.run?.[0] ?? '?'} 在不在 PATH、模型名对不对),或 post.timeoutMs 放宽` });
-    }
-  }
   const voiced = tutors.find((x) => x.voice);
   if (!voiced) {
     push({ name: 'live.tts', ok: true, required: false, detail: '没有老师配 voice,不探配音(孩子端用浏览器的声)' });
@@ -287,7 +274,7 @@ export async function doctorWorkspace(
   });
   // 家规(根的 CLAUDE.md / QWEN.md)2026-09-15 起不出厂:有就是家长自建的共同规矩,提一句;没有不缺
   const rulesThere = (await Promise.all(['CLAUDE.md', 'QWEN.md'].map(async (f) => ((await statOrNull(join(root, f))) ? f : null)))).filter(Boolean);
-  push({ name: 'rules', ok: true, required: false, detail: rulesThere.length ? `家长自建的家规 ${rulesThere.join(' ')} 在,所有老师每轮都读(板书后期的快模型也会读到)` : '没有根目录的 CLAUDE.md / QWEN.md(不需要:老师要知道的都在老师文件与技能里)' });
+  push({ name: 'rules', ok: true, required: false, detail: rulesThere.length ? `家长自建的家规 ${rulesThere.join(' ')} 在,所有老师每轮都读` : '没有根目录的 CLAUDE.md / QWEN.md(不需要:老师要知道的都在老师文件与技能里)' });
 
   if (ws) {
     // ---- 老师:定义文件(拷贝)+ 名字一致 + 出厂 / 自定义状态 + 老师目录 ----
@@ -352,19 +339,6 @@ export async function doctorWorkspace(
     }
 
     {
-      // 板书后期:policy post.runtime 指的运行时要在;不在 = 每轮都素版(不报错,静默)
-      {
-        const { resolvePolicy } = await import('../schema/index.ts');
-        const seen = new Set<string>();
-        for (const name of Object.keys(ws.config.tutors)) {
-          const p = resolvePolicy(ws.config, name);
-          if (p.post.mode === 'off' || seen.has(p.post.runtime)) continue;
-          seen.add(p.post.runtime);
-          const rt = ws.config.runtimes[p.post.runtime];
-          const okRt = Boolean(rt) && typeof rt !== 'string';
-          push({ name: `post.runtime.${p.post.runtime}`, ok: okRt, required: false, detail: okRt ? `板书后期用 ${p.post.runtime}(${(rt as { run: string[] }).run.slice(0, 4).join(' ')} …),等 ${p.post.timeoutMs}ms` : `板书后期的运行时 ${p.post.runtime} 不在 runtimes 里,每轮都是素版(没有划重点与排版)`, fix: okRt ? undefined : 'cotutor upgrade --config 补出厂的 claude-fast,或把 policyDefaults.post.runtime 改成有的运行时(post.mode = off 关掉)' });
-        }
-      }
       // 舞台包与 drawtell:场景卡 / 画板卡要它们;没有只是重卡打不开,轻卡与对话照常
       const { stageBuilt } = await import('../server/stage.ts');
       const built = stageBuilt();
@@ -412,10 +386,6 @@ export async function doctorWorkspace(
         try {
           const t = await readTheme(dir);
           push({ name: 'theme.manifest', ok: true, required: false, detail: `themes/${name}/:${Object.keys(t.manifest.tints).length} 个底色槽、${Object.keys(t.manifest.looks).length} 个字形槽、${Object.keys(t.manifest.pens).length} 支笔,default = ${t.manifest.default}` });
-          const { missingSlots } = await import('../lib/postprocess.ts');
-          if (t.post === null) push({ name: 'theme.post', ok: true, required: false, detail: `themes/${name}/post.md 不在,后期提示词用包里出厂的骨架`, fix: 'cotutor upgrade 会把出厂的 post.md 拷进来;想改口味就改它' });
-          else if (missingSlots(t.post).length) push({ name: 'theme.post', ok: false, required: false, detail: `themes/${name}/post.md 缺必需占位符 ${missingSlots(t.post).map((s) => `{${s}}`).join(' ')},后期退出厂骨架`, fix: '把缺的占位符加回去(cards / lines / rules / output 是代码生成的部分,不能少)' });
-          else push({ name: 'theme.post', ok: true, required: false, detail: `themes/${name}/post.md:后期提示词骨架 ${t.post.length} 字` });
         } catch (err) {
           push({ name: 'theme.manifest', ok: false, required: false, detail: `themes/${name}/ 用不了(服务退回出厂 default):${err instanceof Error ? err.message : String(err)}`, fix: name === 'default' ? 'cotutor init 补拷(已有的不动)或 cotutor upgrade' : `修 themes/${name}/theme.json 与 kid.css,或把 cotutor.json 的 kid.theme 改回 default` });
         }

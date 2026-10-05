@@ -38,10 +38,8 @@ const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>
 cfg.runtimes = {
   default: 'fake',
   fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] },
-  fast: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--output-format', 'json', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--output-format', 'json', '{prompt}'] },
 };
 cfg.paths = { vault: 'vault' };
-cfg.policyDefaults = { post: { runtime: 'fast', timeoutMs: 1500 } };
 cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'] };
 (cfg.tutors as Record<string, Record<string, unknown>>)['math-tutor'].voice = 'v-math';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
@@ -72,7 +70,7 @@ try {
   const evalIndex = await readIndex(evalWorkspace(ws), 'math-tutor', '2026-09-08');
   const next = evalIndex.messages.find((m) => m.job === rp.evalJob)!;
   check('回放落 evals/:索引在、消息带 replayOf、新会话、ok', existsSync(join(root, 'evals', 'math-tutor', '2026-09-08.json')) && next?.replayOf === orig.job && next.result === 'ok' && evalIndex.sessions[next.job] !== undefined, JSON.stringify({ replayOf: next?.replayOf, result: next?.result }));
-  check('回放不配音、不跑后期', next.section?.lines.every((l) => !l.audio) === true && next.post === undefined, JSON.stringify({ audio: next.section?.lines.map((l) => l.audio), post: next.post }));
+  check('回放不配音', next.section?.lines.every((l) => !l.audio) === true, JSON.stringify({ audio: next.section?.lines.map((l) => l.audio) }));
   check('回放的 log / run.json 落在 evals/', existsSync(join(root, 'evals', 'math-tutor', `2026-09-08.${next.job}.log`)) && existsSync(join(root, 'evals', 'math-tutor', `2026-09-08.${next.job}.run.json`)));
   const origIndex = await readIndex(ws, 'math-tutor', '2026-09-08');
   check('原索引没动:还是一条', origIndex.messages.length === 1 && origIndex.messages[0].job === orig.job && !existsSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${next.job}.log`)));

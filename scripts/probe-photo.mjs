@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 作业照片线(R5)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
- * 自己起一个临时 workspace(运行时指 tests/_fake-cli.ts --stream,后期关)+ 一个 HTTP 的 serve →
+ * 自己起一个临时 workspace(运行时指 tests/_fake-cli.ts --stream)+ 一个 HTTP 的 serve →
  * 把服务自己画的 /icon-192.png 当「照片」传上去(POST …/photos)→ 只带照片发一条 → 假老师「看图」:Read 那张、板书出 image 卡 + canvas 卡照片做底 →
  * 用 Chrome DevTools 协议开孩子端:节头有缩略图、直开画板舞台、iframe 里 excalidraw 的场景有一个 image 元素(底图)与一份 files →
  * 画一笔「给老师看」→ .cards/<n>.png 落盘;家长端那轮的问句下有缩略图。
@@ -26,7 +26,7 @@ const base = `http://127.0.0.1:${port}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ok = (name, cond, detail = '') => console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`);
 
-// ---- 临时 workspace:假 CLI 当老师、后期关、端口 8792 ----
+// ---- 临时 workspace:假 CLI 当老师、端口 8792 ----
 const home = mkdtempSync(join(tmpdir(), 'cotutor-probe-photo-'));
 const root = join(home, 'ws');
 const run = (args, opts = {}) => new Promise((resolve, reject) => { const p = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), ...args], { env: { ...process.env, HOME: home, COTUTOR_WORKSPACE: '' }, stdio: 'pipe', ...opts }); let out = ''; p.stdout.on('data', (d) => (out += d)); p.stderr.on('data', (d) => (out += d)); p.on('exit', (c) => (c === 0 ? resolve(out) : reject(new Error(out)))); });
@@ -36,7 +36,6 @@ const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 const fake = join(repo, 'tests', '_fake-cli.ts');
 cfg.runtimes.default = 'fake';
 cfg.runtimes.fake = { run: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '{prompt}'], resume: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '--resume', '{session}', '{prompt}'] };
-cfg.policyDefaults = { post: { mode: 'off' } };
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 

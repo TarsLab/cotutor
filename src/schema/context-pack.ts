@@ -7,6 +7,14 @@ import { z } from 'zod';
 export const MESSAGE_FROM = ['kid', 'parent', 'system'] as const;
 export type MessageFrom = (typeof MESSAGE_FROM)[number];
 
+/**
+ * 老师在上下文包里看到的「谁在说」(2026-10-04):只有孩子和系统任务。家长发的(家长端真发、试用、cotutor send --from parent)
+ * 一律按孩子拼包——老师面前只有一个孩子;消息在索引里照旧记 from: parent(不算上限、备课轮不写记忆这些是应用的事,不用老师知道)
+ */
+export const PACK_FROM = ['kid', 'system'] as const;
+export type PackFrom = (typeof PACK_FROM)[number];
+export const packFrom = (from: MessageFrom): PackFrom => (from === 'system' ? 'system' : 'kid');
+
 export const FocusSchema = z.object({
   /** 孩子发消息时正开着的那张卡(<job>/<n>) */
   card: z.string().optional(),
@@ -14,7 +22,7 @@ export const FocusSchema = z.object({
 export type Focus = z.infer<typeof FocusSchema>;
 
 export const ContextPackSchema = z.object({
-  from: z.enum(MESSAGE_FROM),
+  from: z.enum(PACK_FROM),
   /** 本地时间,分钟精度,如 2026-09-08T16:20 */
   at: z.string().min(1),
   /** 课程表命中的时段,如「数学 16:00-17:00」 */
@@ -32,10 +40,12 @@ export const ContextPackSchema = z.object({
   entry: z.string().optional(),
   /** 这位 agent 的记忆文件(`cotutor: memory`、`agent: <名>`):路径 + 状态,或「还没有」;原文在 notes */
   memory: z.string().optional(),
-  /** 参考资料的绝对路径:这科这学期的教材 + 档案与入口文件里的 [[链接]];只给路径,老师要用自己 Read */
+  /** 参考资料的绝对路径:这科这学期的教材 + 档案与入口文件里的 [[链接]];只给路径,老师要用自己 Read(这轮带工具才给) */
   refs: z.array(z.string()).optional(),
   /** 整篇带进来的原文(话题第一条、或话题里改过了才带):老师守则(rules)与家长笔记;接在 YAML 块后面,不进 YAML */
   notes: z.array(z.object({ role: z.enum(['rules', 'boardGuide', 'profile', 'entry', 'memory']), path: z.string().min(1), text: z.string() })).optional(),
+  /** 整篇带进来的备课原文(只在带 lesson: / materials: 的那条):课文件、素材的 material.md;接在笔记原文后面,不进 YAML */
+  docs: z.array(z.object({ kind: z.enum(['lesson', 'material']), id: z.string().min(1), text: z.string() })).optional(),
   /** 本周计划里与本老师相关的行(已按 planLines 截) */
   plan: z.array(z.string()).default([]),
   /** 最近 N 条本学科观察(从日记的「- 观察:」行抽,最近 14 天,已按 recent 截) */
@@ -46,7 +56,7 @@ export const ContextPackSchema = z.object({
   cards: z.array(z.string()).optional(),
   /** 家长备好、交给孩子的这节课(《备课设计.md》§十):孩子看到的那几张卡,一张一行;只在孩子在这个话题里的第一条 */
   lesson: z.array(z.string()).optional(),
-  /** 这节课的课文件(绝对路径,老师要看原文自己 Read;同 photoFiles 的做法)与文件尾巴里家长写给老师的讲法 */
+  /** 这节课的课文件(绝对路径;原文在 docs,这轮带工具才给路径)与文件尾巴里家长写给老师的讲法 */
   lessonFile: z.string().optional(),
   lessonBrief: z.string().optional(),
   /** 念这节课的时候孩子在各节后说过的(当时没交给老师),一句一行「第 N 节后:…」 */
@@ -65,7 +75,7 @@ export const ContextPackSchema = z.object({
     .optional(),
   /** 家长备好的素材(《备课设计.md》§11.3):这位老师的、能放的,一行一个「<id> · <标题> · 能讲:<第一条>」;只在新会话的第一条带 */
   materials: z.array(z.string()).optional(),
-  /** materials/ 的绝对路径:老师 Read <materialsDir>/<id>/material.md 看画面里有什么(Read 只认绝对路径) */
+  /** materials/ 的绝对路径(这轮带工具才给):docs 里没带说明的那几份,老师 Read <materialsDir>/<id>/material.md */
   materialsDir: z.string().optional(),
   /** 这条消息带的作业照片(相对 workspace 根,一行一张;老师先 Read 再答;R5) */
   photos: z.array(z.string()).optional(),

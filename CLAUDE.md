@@ -4,9 +4,9 @@
 
 本文件只写怎么在这个仓干活,不记历史、不记拍板:
 
-- 设计在 `docs/`:《产品规划.md》定位、两个端、里程碑;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《快模型方案.md》板书后期;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡;《首页设计.md》孩子端首页与 cotutor-home;《作业照片设计.md》孩子端拍照、编辑与发;《家长板书页设计.md》家长端 `/parent`;《备课设计.md》家长开的话题、课文件(`lessons/*.md`,排版在围栏行)与交给孩子;《口播老师设计.md》koubo 接进来:录音卡、评测时机、workspace jack
+- 设计在 `docs/`:《产品规划.md》定位、两个端;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡;《首页设计.md》孩子端首页与 cotutor-home;《作业照片设计.md》孩子端拍照、编辑与发;《家长板书页设计.md》家长端 `/parent`;《备课设计.md》家长开的话题、课文件(`lessons/*.md`,排版在围栏行)与交给孩子;《口播老师设计.md》koubo 接进来:录音卡、评测时机、workspace jack
 - 各设计文档末尾有「拍板记录」,带日期。**带日期的决定都是可推翻的**;一条约定要在两轮以上迭代里活下来才进本文件末尾的「约定」
-- 改 `agents/`、`skills/`、`cards/` 下的 md、`themes/*/post.md` 的字先看《写提示词.md》;自造的词查《词表.md》
+- 改 `agents/`、`skills/`、`cards/` 下的 md 的字先看《写提示词.md》;自造的词查《词表.md》
 - 《开发者手册.md》怎么跑。模块的来龙去脉与真跑数据不另存,看 git log 与各设计文档
 - 草稿与随手记放 `docs/wip/`(gitignore)
 
@@ -15,7 +15,7 @@
 - `agents/*.md` 出厂老师文件:frontmatter 取两 CLI 公共子集,正文即系统提示;init 拷进 workspace,hash 记 `.cotutor/shipped.json`
 - `skills/<name>/` 出厂技能:cotutor-tutor(有脸的老师共同的守则,应用注入上下文包)、cotutor-board(由 `cards/板书怎么写.md` 与 `cards/*/card.md` 生成)、cotutor-vault、cotutor-analyze、cotutor-tune、cotutor-home(家长在 workspace 里排首页)、cotutor-prep(家长在 workspace 里写课文件,references 由 `src/lib/prep-doc.ts` 生成)
 - `cards/<kind>/` 卡的协议:`card.md` 八栏(例子即测试)+ `card.css`
-- `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`、`post.md` 后期骨架
+- `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`
 - `src/schema/` 契约(zod,类型即文档);`src/lib/` 纯函数,离屏可测;`src/cards/` 卡的注册表
 - `src/stage/` 舞台包(React,esbuild 打到 `dist/stage/`);`src/cli/` 命令;`src/server/` 服务、runner、三个页面(孩子端 `/`、家长端 `/parent`、工作台 `/dev`)、mock
 - `tests/` 一文件一子进程,零依赖 `check()`;`_fake-cli.ts` / `_fake-tts.ts` 让全流程不花钱;`fixtures/board/` 真跑样本
@@ -33,7 +33,7 @@
 ## 坑(不可推导的)
 
 - 页面模板是模板字符串:反斜杠写 `\\n`,正则里 `\/` 写 `\\/`,吃掉一层那行就成了注释而脚本照样能解析
-- 后期子进程带 `MAX_THINKING_TOKENS=0`,否则 haiku 一拍 35–69 秒
+- haiku 的一问一答(`cotutor lesson post`)子进程带 `MAX_THINKING_TOKENS=0`,否则一趟 35–69 秒
 - Claude Code 会话里起 claude 子进程要 `env -u CLAUDECODE`;本机 claude 要 `--model sonnet`
 - claude 运行时模板带 `--setting-sources project` 隔离本机配置,代价是 `~/.claude/settings.json` 的代理 env 也不进:cotutor.json 的 `proxy`(init 会问,`cotutor proxy on`)起 claude 时注进去;没设就得从 export 了代理的 shell 起 serve。workspace 的 `.claude/settings.local.json` 那条旧路还要 `--setting-sources` 含 local 且 workspace 是 git 仓(claude 以 git 根为项目根)
 - serve 只热重载 cotutor.json;改 `src/` 要重起

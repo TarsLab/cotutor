@@ -10,12 +10,12 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../lib/agent-file.ts';
-import { CONFIG_SCHEMA_FILE, TTS_DEFAULT, cotutorJsonSchema } from '../schema/index.ts';
+import { CONFIG_SCHEMA_FILE, TTS_DEFAULT, TUTOR_TOOLS, cotutorJsonSchema } from '../schema/index.ts';
+
+export { TUTOR_TOOLS };
 import { mkdir, writeFile } from 'node:fs/promises';
 
 
-/** 普通老师的工具白名单(claude 的 --tools):Bash 查教材、裁作业照片;Read / Grep / Glob 读 vault 与技能文件 */
-export const TUTOR_TOOLS = 'Bash,Read,Grep,Glob';
 export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'scenes', 'bundles', 'snaps'] as const;
 export const LEDGER_FILES = ['ledger/artifacts.jsonl'] as const;
 
@@ -98,7 +98,7 @@ description: ${t.description ?? `${t.display}。${what}都找它;随口问的一
 maxTurns: 40
 permissionMode: bypassPermissions
 ---
-你是这个家的${t.display},对面是一个孩子,有时是家长。(在这里写这位老师的性子和讲法,一两句:比如「说话慢一点,爱打比方」。)
+你是这个家的${t.display},对面是一个孩子。(在这里写这位老师的性子和讲法,一两句:比如「说话慢一点,爱打比方」。)
 
 上下文包怎么看、三种回复、记忆段、不变的规矩,在每个话题第一条的 \`<cotutor-rules>\` 里,照着做;这里只写${t.display}自己的。
 
@@ -131,14 +131,15 @@ export interface ConfigTemplateInput {
   tutors: ShippedAgent[];
 }
 
-const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean; policy?: { effort?: 'low' | 'medium' | 'high' } }> = {
+const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
   // 数学多想一会儿:算错的代价大(别的老师用缺省 low)
   'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮', policy: { effort: 'medium' } },
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚' },
   'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤' },
   'scene-maker': { display: '画图老师', avatar: '🎨', hidden: true, runtime: 'claude-scene' },
   // 口播老师(《口播老师设计.md》§6):要 koubo 才有用,出厂关着;在要练的那个 workspace 里打开,upgrade 再装 koubo 的技能
-  'koubo-tutor': { display: '口播老师', subject: '口播', avatar: '🎙️', enabled: false },
+  // 它每节都要跑 koubo 命令(进度、出题),孩子说的话也带工具
+  'koubo-tutor': { display: '口播老师', subject: '口播', avatar: '🎙️', enabled: false, policy: { tools: 'on' } },
 };
 
 /** cotutor.json 模板:只在文件不存在时写入;政策文件永不自动重建或覆盖(家长的决定不由机器替她拍板)。 */
@@ -166,13 +167,16 @@ export function configTemplate(input: ConfigTemplateInput): string {
       // 普通老师的工具是白名单(--tools,2026-09-20;之前是 --disallowedTools Agent 黑名单):只有查教材、读文件、裁作业照片用得上的那几个。
       // 不在名单里的连工具定义都不发(黑名单只禁调用、定义照发)。由来:claude 会把 .claude/agents/ 里的老师文件当可派的子代理,老师自己去叫 scene-maker 就把预算烧在自己这轮里(画图作业由场景卡起);
       // CLI 升版本还会带进新工具——2.1.275 真跑里老师去调了 Artifact、ToolSearch,每次白花一个来回。Skill 也不给:板书写法与守则由应用递,别的技能按路径 Read
+      // --strict-mcp-config(2026-10-04):--setting-sources 管不到账号上的 claude.ai 连接器,真跑里每位老师的会话都带着 8 个 Claude Docs 的 MCP 工具(--tools "" 也去不掉);
+      // 加了它、又不给 --mcp-config,就一个 MCP 都不进
+      // --tools {tools}(2026-10-04):孩子说的话缺省不带工具({tools} 填成空,工具定义都不发),带照片的、记账的填整份白名单;政策 tools: on 的老师总是带
       // --effort {effort}:老师政策里的 effort(缺省 low),见 schema 的 PolicySchema.effort
       // 板书写法由应用递给老师,递法看模板(《agent层设计.md》拍板 11):{boardFile} = 板书技能 SKILL.md 的绝对路径,claude 用 --append-system-prompt-file 追加进系统提示
       // (落在「工具 → 系统」这段缓存前缀里,同一位老师的各话题共享);{systemBody} = 老师正文 + 板书写法,给只收一段系统提示文字的 CLI;
       // 两个都没用的运行时(以后的 codex 之类),应用在话题第一条注入 <cotutor-board>。frontmatter 的 skills: 对 --agent 主线程不生效(claude 2.1.275 实测)
       claude: {
-        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--tools', TUTOR_TOOLS, '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
-        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--tools', TUTOR_TOOLS, '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
+        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--tools', '{tools}', '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
+        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--tools', '{tools}', '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
       },
       qwen: {
         run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{systemBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],
@@ -180,19 +184,19 @@ export function configTemplate(input: ConfigTemplateInput): string {
       },
       // 场景作业(scene-maker):分钟级、几美元一个,预算与时限比问答大;老师条目 runtime 指到它
       'claude-scene': {
-        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '8'],
-        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '8'],
+        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '8'],
+        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '8'],
       },
       'qwen-scene': {
         run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '25m'],
         resume: ['qwen', '-p', '{prompt}', '--resume', '{session}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '25m'],
       },
-      // 板书后期(policy post.runtime):快模型、无工具、整块 JSON 出,几秒几厘;没有 resume 的事,写同一条。
+      // 课文件整份排版(cotutor lesson post):快模型、无工具、整块 JSON 出;没有 resume 的事,写同一条。
       // 2026-09-15 量过:--disallowedTools 只禁调用、工具定义照发,一拍输入 27K;--tools "" 去工具定义(→ 6.7K)、--disable-slash-commands 去技能索引、
       // --system-prompt 换掉 claude 自己的系统提示与子代理列表(→ 514,就是提示词本身)。样本 8 拍质量不变,p95 7.0s → 3.8s,费用 1/4
       'claude-fast': {
-        run: ['claude', '-p', '{prompt}', '--model', 'haiku', '--setting-sources', 'project', '--output-format', 'json', '--tools', '', '--disable-slash-commands', '--system-prompt', '你是板书后期,只回补丁。', '--max-budget-usd', '0.2'],
-        resume: ['claude', '-p', '{prompt}', '--model', 'haiku', '--setting-sources', 'project', '--output-format', 'json', '--tools', '', '--disable-slash-commands', '--system-prompt', '你是板书后期,只回补丁。', '--max-budget-usd', '0.2'],
+        run: ['claude', '-p', '{prompt}', '--model', 'haiku', '--setting-sources', 'project', '--strict-mcp-config', '--output-format', 'json', '--tools', '', '--disable-slash-commands', '--system-prompt', '你是课文件的排版,只回排好的整份文件。', '--max-budget-usd', '0.2'],
+        resume: ['claude', '-p', '{prompt}', '--model', 'haiku', '--setting-sources', 'project', '--strict-mcp-config', '--output-format', 'json', '--tools', '', '--disable-slash-commands', '--system-prompt', '你是课文件的排版,只回排好的整份文件。', '--max-budget-usd', '0.2'],
       },
     },
     tts: TTS_DEFAULT,

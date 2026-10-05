@@ -44,7 +44,6 @@ import { checkMaterial, enrichMaterials } from './material.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
-import { repost } from './post.ts';
 import { checkLesson, exportThread, handLessonFile, lessonName, lessonPage, lessonThreads, listLessons, readLesson, type LessonPage } from './lesson.ts';
 import { DeviceSchema } from '../schema/index.ts';
 import { listVoices, synthesize, type VoiceInfo } from './tts.ts';
@@ -838,16 +837,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
 
     // 看原文(2026-09-11):一轮拆成六站,一个接口给全;/fixture 是原文原样一份,开发者放进 tests/fixtures/board/
-    const rawRe = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2}|today)\/raw\/(\d{4}-\d+)(\/fixture|\/repost)?$/.exec(p);
+    const rawRe = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2}|today)\/raw\/(\d{4}-\d+)(\/fixture)?$/.exec(p);
     if (rawRe) {
       const [, tutor, d, job, fixture] = rawRe;
-      // 再做一次后期(第七站的按钮):老师原文重解 → 跑后期 → 改写索引;老师原文与配音不动
-      if (fixture === '/repost') {
-        if (method !== 'POST') return { status: 405, json: { error: 'method_not_allowed' } };
-        if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
-        const r = await repost(ws, tutor, d === 'today' ? localDate(ctx.now()) : d, job, { env: ctx.runner.env });
-        return r.message ? { status: 200, json: { ok: r.ok, post: r.message.post ?? null, error: r.error ?? null } } : { status: 404, json: { error: 'not_found', message: r.error } };
-      }
       if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
       if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
       const view = await rawView(ws, tutor, d === 'today' ? localDate(ctx.now()) : d, job);
@@ -1091,7 +1083,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (focus && !focus.success) return { status: 400, json: { error: 'bad_request', message: 'focus 形状不对' } };
         const photos = await photosOf(ws, body.photos);
         if (photos === null) return { status: 400, json: { error: 'bad_request', message: 'photos 要是 captures/ 里在的文件(先 POST …/photos 传图拿 path)' } };
-        // 家长端在 iPad 上真发(《家长板书页设计.md》第六节 3)带 device,板书后期按它排版;工作台 /dev 不带,缺省当平板横屏
+        // 家长端在 iPad 上真发(《家长板书页设计.md》第六节 3)带 device;工作台 /dev 不带,缺省当平板横屏
         const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
         if (device && !device.success) return { status: 400, json: { error: 'bad_request', message: 'device 只能是 phone / tablet' } };
         // 家长在自己的备课话题里按「继续」、做了卡「交给老师」(《备课设计.md》§3.2);孩子的话题里页面不给这两个

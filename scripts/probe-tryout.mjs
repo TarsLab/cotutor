@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 试用(《备课设计.md》§十二)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
- * 临时 workspace(运行时指 tests/_fake-cli.ts --stream,后期关)+ 一份课文件 + HTTP 的 serve →
+ * 临时 workspace(运行时指 tests/_fake-cli.ts --stream)+ 一份课文件 + HTTP 的 serve →
  * Chrome(iPad 横屏)开 /parent → 点课文件 → 底部条有「试用」→ 点了跳到孩子端 /?try=<老师>/<话题>:顶上「试用 · 明天删」、
  * 没有「以前的」「新话题」、从第一节念起 → 从输入条扮孩子说一句 → 老师回了;索引里那条 from parent,上下文包 from: kid、带 lesson: →
  * 孩子端(不带 try)看不到这个话题 → 退回家长端:清单上标「试用」、不打星;点进去头上「试用 · 明天删」、底部「这节课」条不出。
@@ -35,7 +35,6 @@ const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 const fake = join(repo, 'tests', '_fake-cli.ts');
 cfg.runtimes.default = 'fake';
 cfg.runtimes.fake = { run: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '{prompt}'], resume: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '--resume', '{session}', '{prompt}'] };
-cfg.policyDefaults = { post: { mode: 'off' } };
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'lessons'), { recursive: true });

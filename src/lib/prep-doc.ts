@@ -6,7 +6,7 @@ import { USAGE } from '../cli/usage.ts';
 import { kindsFor } from '../cards/index.ts';
 import type { ThemeManifest } from '../schema/theme.ts';
 import { MAX_CARDS_PER_ROW } from './kid-board.ts';
-import { MAX_MARKS_PER_CARD, MAX_MARKS_PER_LINE } from './postprocess.ts';
+import { MAX_MARKS_PER_CARD, MAX_MARKS_PER_LINE } from './lesson.ts';
 
 export const PREP_SKILL = 'cotutor-prep';
 
@@ -88,7 +88,7 @@ ${lines.join('\n')}
 `;
 }
 
-/** 排版规则(和板书后期的校验器同源的常量;槽名从 workspace 的主题现读):技能的 references/排版.md,也是 cotutor lesson post 的提示词正文 */
+/** 排版规则(槽名从 workspace 的主题现读):技能的 references/排版.md,也是 cotutor lesson post 的提示词正文 */
 export function layoutRules(theme?: ThemeManifest): string {
   const slots = (t: Record<string, { use: string }>): string => Object.entries(t).map(([k, v]) => `- \`${k}\`:${v.use}`).join('\n');
   const tints = theme ? slots(theme.tints) : '看 workspace 的 themes/<主题>/theme.json 的 tints(每个槽一句「给什么用」);主题名在 cotutor.json 的 kid.theme,缺省 default';

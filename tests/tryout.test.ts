@@ -30,7 +30,6 @@ cfg.runtimes = {
   fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] },
 };
 cfg.paths = { vault: 'vault' };
-cfg.policyDefaults = { post: { mode: 'off' } };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault'), { recursive: true });
 mkdirSync(join(root, 'lessons'), { recursive: true });

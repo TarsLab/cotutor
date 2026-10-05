@@ -1,9 +1,10 @@
 /**
- * 课文件(《备课设计.md》§十)的读写:lessons/<名>.md → 检查(老师在不在、主题槽名)→ 后期提案回写(cotutor lesson post --write)→ 交给孩子(cotutor lesson hand):
+ * 课文件(《备课设计.md》§十)的读写:lessons/<名>.md → 检查(老师在不在、主题槽名)→ 整份排版回写(cotutor lesson post --write)→ 交给孩子(cotutor lesson hand):
  * 配音每句、在 conversations/<老师>/<今天>.json 建一个备课话题(一节一轮、from parent、第一条 prepThread、没有会话)、lessons[thread] 记 handedAt 与文件、
  * 首页草稿追加「接着」再发布。家长端备课话题的「交给孩子」先把那几节写成课文件(exportThread)再走同一条路。
  * 交了、孩子没开口:再交覆盖同一个话题(话题 id 不变,首页那行不用改);孩子开口后再交是新话题。
  */
+import { spawn } from 'node:child_process';
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { cardAssets } from '../cards/index.ts';
@@ -18,9 +19,8 @@ import { LESSONS_DIR, LESSON_NAME_RE, applyLayoutReply, applyPostToLesson, cardB
 import { layoutPrompt } from '../lib/prep-doc.ts';
 import { withProxy } from '../lib/proxy.ts';
 import { parseSections } from '../lib/sections.ts';
-import { fillRuntime, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
+import { fillRuntime, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
 import { appendContinue, type PublishResult } from './home.ts';
-import { spawnPost, unwrapJsonOutput } from './post.ts';
 import { readIndex, readTranscript, writeIndex } from './store.ts';
 import { themeFiles } from './theme.ts';
 import { DubQueue } from './tts.ts';
@@ -92,6 +92,45 @@ export function formatCheck(check: LessonCheck, shown: string): string {
   return out.join('\n');
 }
 
+/** 课文件整份排版用的运行时(出厂模板里的那条:haiku、无工具、整块 JSON 出) */
+const LAYOUT_RUNTIME = 'claude-fast';
+
+/** claude --output-format json 的 stdout:一个对象,正文在 result,费用在 total_cost_usd;别的运行时直接把 stdout 当正文 */
+function unwrapJsonOutput(stdout: string): { text: string; costUsd?: number } {
+  const t = stdout.trim();
+  if (t.startsWith('{')) {
+    try {
+      const o = JSON.parse(t) as { result?: unknown; total_cost_usd?: unknown; is_error?: unknown };
+      if (typeof o.result === 'string') return { text: o.result, ...(typeof o.total_cost_usd === 'number' ? { costUsd: o.total_cost_usd } : {}) };
+    } catch {
+      /* 不是那种壳:整段当正文 */
+    }
+  }
+  return { text: stdout };
+}
+
+async function spawnOnce(argv: string[], cwd: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<{ out: string; code: number | null; error?: string }> {
+  return new Promise((resolve) => {
+    let out = '';
+    let err = '';
+    let done = false;
+    const finish = (r: { out: string; code: number | null; error?: string }): void => {
+      if (done) return;
+      done = true;
+      resolve(r);
+    };
+    const child = spawn(argv[0], argv.slice(1), { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const timer = setTimeout(() => {
+      child.kill();
+      finish({ out, code: null, error: `超时(${timeoutMs}ms),没排成` });
+    }, timeoutMs);
+    child.stdout.on('data', (d: Buffer) => { if (out.length < 200_000) out += d.toString(); });
+    child.stderr.on('data', (d: Buffer) => { if (err.length < 8000) err += d.toString(); });
+    child.once('error', (e) => { clearTimeout(timer); finish({ out, code: null, error: `起不来 ${argv[0]}:${e.message}` }); });
+    child.once('close', (code) => { clearTimeout(timer); finish({ out, code, ...(code ? { error: `退出码 ${code}${err.trim() ? `:${err.trim().slice(-300)}` : ''}` } : {}) }); });
+  });
+}
+
 export interface PostLessonResult {
   ok: boolean;
   /** --write 之后的全文(没写就是原文) */
@@ -105,7 +144,7 @@ export interface PostLessonResult {
 
 /**
  * 整份排一版(《备课设计.md》§10.4,拍板 31):课文件全文 + 排版规则(和 cotutor-prep 技能 references/排版.md 同一份,带这个主题的槽表)一次交给模型
- * (policy.post.runtime 那条运行时,缺省 haiku;--model 可换),它回整份文件;正文剥掉排版后必须逐字相同,否则整份不要;
+ * (runtimes 里的 claude-fast:haiku、无工具;--model 可换),它回整份文件;正文剥掉排版后必须逐字相同,否则整份不要;
  * 你手写过的修饰词当已定。给家长手写的文件用;技能写的文件写的时候就排好了
  */
 export async function postLesson(ws: Workspace, name: string, opts: { write?: boolean; env?: NodeJS.ProcessEnv; now?: Date; model?: string }): Promise<PostLessonResult> {
@@ -113,16 +152,15 @@ export async function postLesson(ws: Workspace, name: string, opts: { write?: bo
   if (md === null) throw new UsageError(`没有 ${lessonFiles(ws).rel(name)}`);
   const doc = parseLesson(md);
   if (!doc.tutor || !ws.config.tutors[doc.tutor]) throw new UsageError(`${name}:frontmatter 的 tutor 要是 cotutor.json 里的老师(现在是 ${doc.tutor ?? '没写'})`);
-  const policy = resolvePolicy(ws.config, doc.tutor);
   const theme = await themeFiles(ws.root, ws.config.kid.theme);
-  const rt = ws.config.runtimes[policy.post.runtime];
-  if (!rt || typeof rt === 'string') throw new UsageError(`运行时 ${policy.post.runtime} 不在 cotutor.json 的 runtimes 里(cotutor upgrade --config 可补)`);
+  const rt = ws.config.runtimes[LAYOUT_RUNTIME];
+  if (!rt || typeof rt === 'string') throw new UsageError(`运行时 ${LAYOUT_RUNTIME} 不在 cotutor.json 的 runtimes 里(cotutor upgrade --config 可补)`);
   const run = rt.run.map((a, i, xs) => (opts.model && i > 0 && xs[i - 1] === '--model' ? opts.model : a));
   const prompt = layoutPrompt(md, theme.manifest);
   const t0 = Date.now();
   const argv = fillRuntime(run, { agent: doc.tutor, prompt });
-  // 一问一答,不要思考(同板书后期:haiku 一想就是几十秒)
-  const r = await spawnPost(argv, ws.root, withProxy(argv, { ...(opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root, MAX_THINKING_TOKENS: '0' }, ws.config.proxy), 180_000);
+  // 一问一答,不要思考(haiku 一想就是几十秒)
+  const r = await spawnOnce(argv, ws.root, withProxy(argv, { ...(opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root, MAX_THINKING_TOKENS: '0' }, ws.config.proxy), 180_000);
   const ms = Date.now() - t0;
   if (r.error) return { ok: false, md, fences: 0, marks: 0, costUsd: 0, ms, error: r.error };
   const { text, costUsd } = unwrapJsonOutput(r.out);
@@ -222,7 +260,7 @@ export async function handLessonFile(ws: Workspace, name: string, opts: { label?
 
 /**
  * 家长端备课话题里老师写的那几节 → 课文件 lessons/<日期>-<话题>.md(《备课设计.md》§10.3 第 3 条):每轮的原文(转录里的板书,到第一个 H2 为止)
- * 一节,后期定的行与样子写成围栏行的修饰词、标注写成 [词];家长在话题里说过的话进「## 讲法」。转录不在的轮跳过(skipped 里说)。
+ * 一节,节上的行与样子写成围栏行的修饰词、标注写成 [词];家长在话题里说过的话进「## 讲法」。转录不在的轮跳过(skipped 里说)。
  * 写完记 lessons[thread].source(不记 handedAt:聊天的话题本身不给孩子看,给孩子的是从文件建的那个)
  */
 export async function exportThread(ws: Workspace, tutor: string, date: string, thread: string): Promise<{ name: string; source: string; md: string; skipped: string[] }> {
@@ -251,7 +289,7 @@ export async function exportThread(ws: Workspace, tutor: string, date: string, t
   const head = `---\ntutor: ${tutor}\n---\n\n`;
   const brief = said.length ? `\n\n## 讲法\n\n${said.map((s) => `- ${s}`).join('\n')}\n` : '\n';
   let md = `${head}${chunks.join('\n\n---\n\n')}${brief}`;
-  // 后期的决定回写:先按文件解析出各节的行号,再把原节(带 layout / look / 标注)套上去
+  // 节上的样子回写:先按文件解析出各节的行号,再把原节(带 layout / look / 标注)套上去
   const doc = parseLesson(md);
   md = applyPostToLesson(md, doc, posted).md;
   await mkdir(f.dir, { recursive: true });

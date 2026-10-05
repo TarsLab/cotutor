@@ -18,7 +18,7 @@ const { loadWorkspace } = await import('../src/cli/workspace.ts');
 const { checkMaterial, listMaterials, materialsFor, MATERIALS_IN_PACK } = await import('../src/server/material.ts');
 const { main } = await import('../src/cli/main.ts');
 const { createContext, route } = await import('../src/server/app.ts');
-const { readRunFile } = await import('../src/server/store.ts');
+const { readIndex, readRunFile } = await import('../src/server/store.ts');
 const { yamlScalar } = await import('../src/lib/context-pack.ts');
 const { handLessonFile, checkLesson } = await import('../src/server/lesson.ts');
 
@@ -109,14 +109,13 @@ try {
   check('cotutor material check:没问题 exit 0、列三段与上下文包那一行;缺 mp4 exit 1', ok.code === 0 && ok.out.includes('第 3 段:分给 6 个人') && ok.out.includes('上下文包里是:pingjunfen') && bad.code === 1 && bad.out.includes('缺 1.mp4'), ok.out + bad.out);
   check('cotutor material list:每份一行,要改的标出来', ls.out.includes('pingjunfen  math-tutor') && ls.out.includes('qiang') && ls.out.includes('✗ 1 条要改'), ls.out);
 
-  // ---- 接进老师(假 CLI):新会话的第一条带 materials: 与 materialsDir;老师回素材卡 → 孩子端下发带快照;孩子看到第 2 段 → 下一条 cards: 里说
+  // ---- 接进老师(假 CLI,模板带 --tools {tools}):孩子的话不带工具,新会话的第一条带 materials: 与 <material> 原文、不带 materialsDir;家长发的也按孩子拼包;老师回素材卡 → 孩子端下发带快照;孩子看到第 2 段 → 下一条 cards: 里说
   const cfgFile = join(root, 'cotutor.json');
   const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
   const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
   const node = process.execPath;
-  cfg.runtimes = { default: 'fake', fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] } };
-  cfg.policyDefaults = { post: { mode: 'off' } };
-  writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
+  cfg.runtimes = { default: 'fake', fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--tools', '{tools}', '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--tools', '{tools}', '--agent', '{agent}', '--resume', '{session}', '{prompt}'] } };
+    writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   // 只留平均分一份给数学老师(m0…、xiangyu 删掉,免得挤掉它)
   for (const d of ['xiangyu', ...Array.from({ length: MATERIALS_IN_PACK + 3 }, (_, k) => `m${k}`)]) rmSync(join(ws.dirs.materials, d), { recursive: true, force: true });
   const now = new Date(2026, 9, 2, 19, 0);
@@ -126,7 +125,10 @@ try {
   await wait();
   const job1 = (s1.json as { job: string }).job;
   const run1 = await readRunFile(ctx.ws, 'math-tutor', '2026-10-02', job1);
-  check('新会话的第一条:上下文包有 materials:(这位老师的那份)与 materialsDir(绝对路径)', run1?.prompt.includes(`  materials:\n    - ${yamlScalar('pingjunfen · 平均分:分的人越多,每人越少 · 能讲:平均分:一个一个轮着分,每人分到的一样多。')}\n  materialsDir: ${yamlScalar(ctx.ws.dirs.materials)}\n`) === true, run1?.prompt.slice(0, 1200));
+  const toolsOf = (r: unknown): string | undefined => { const a = (r as { argv?: string[] } | null)?.argv ?? []; return a[a.indexOf('--tools') + 1]; };
+  check('孩子的话不带工具(--tools 填空);新会话的第一条有 materials:(这位老师的那份),没有 materialsDir / vault / refs', toolsOf(run1) === '' && run1?.prompt.includes(`  materials:\n    - ${yamlScalar('pingjunfen · 平均分:分的人越多,每人越少 · 能讲:平均分:一个一个轮着分,每人分到的一样多。')}\n`) === true && !run1.prompt.includes('materialsDir:') && !run1.prompt.includes('\n  vault:') && !run1.prompt.includes('\n  refs:'), run1?.prompt.slice(0, 1200));
+  const matDoc = run1?.prompt.split('<material id="pingjunfen">')[1]?.split('</material>')[0] ?? '';
+  check('素材的说明原文跟着带(<material>):有画面与「停在」,给人看的注释剥掉', matDoc.includes('停在') && matDoc.includes('# 平均分') && !matDoc.includes('给人看'), matDoc.slice(0, 300));
   const kid = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; section?: { cards: { kind: string; props: Record<string, unknown> }[]; lines: { cues: { name: string; arg?: string }[] }[] } }[] };
   const card = kid.messages.find((m) => m.job === job1)?.section?.cards[0];
   check('老师回的素材卡:孩子端下发带快照(标题、3 段、ready);讲稿的 [[play 2]] 解析成 cue', card?.kind === 'material' && card.props.id === 'pingjunfen' && card.props.ready === true && card.props.segments === 3 && card.props.title === '平均分:分的人越多,每人越少' && kid.messages.find((m) => m.job === job1)?.section?.lines.some((l) => l.cues.some((c) => c.name === 'play' && c.arg === '2')) === true, JSON.stringify(card));
@@ -134,7 +136,23 @@ try {
   const s2 = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '一样高', thread: job1 });
   await wait();
   const run2 = await readRunFile(ctx.ws, 'math-tutor', '2026-10-02', (s2.json as { job: string }).job);
-  check('孩子看到第 2 段 → 下一条 cards: 里说;接着聊的会话不再带 materials:', put1.status === 200 && run2?.prompt.includes('material') === true && run2.prompt.includes('看到第 2 段') && !run2.prompt.includes('  materials:'), run2?.prompt.slice(0, 900));
+  check('孩子看到第 2 段 → 下一条 cards: 里说;接着聊的会话不再带 materials: 与 <material>,照样不带工具', put1.status === 200 && run2?.prompt.includes('material') === true && run2.prompt.includes('看到第 2 段') && !run2.prompt.includes('  materials:') && !run2.prompt.includes('<material') && toolsOf(run2) === '', run2?.prompt.slice(0, 900));
+  const sP = await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: '家长问一句', from: 'parent', newThread: true });
+  await wait();
+  const runP = await readRunFile(ctx.ws, 'math-tutor', '2026-10-02', (sP.json as { job: string }).job);
+  check('家长发的也按孩子拼包:from: kid、不带工具、没有路径;索引里照旧记 from: parent', toolsOf(runP) === '' && runP?.prompt.includes('  from: kid\n') === true && !runP.prompt.includes('materialsDir:') && !runP.prompt.includes('\n  vault:') && (await readIndex(ctx.ws, 'math-tutor', '2026-10-02')).messages.find((m) => m.job === (sP.json as { job: string }).job)?.from === 'parent', `${toolsOf(runP)} ${runP?.prompt.slice(0, 300)}`);
+  {
+    // 政策 tools: on 的老师(口播老师那样要跑命令的):孩子的话也带工具
+    const on = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { policy?: Record<string, unknown> }> };
+    on.tutors['english-tutor'].policy = { ...(on.tutors['english-tutor'].policy ?? {}), tools: 'on' };
+    writeFileSync(cfgFile, JSON.stringify(on, null, 2));
+    const ctxOn = createContext(loadWorkspace(root), { now: () => now });
+    const sOn = await route('POST', '/api/kid/conversations/english-tutor/messages', ctxOn, { text: '你好呀', newThread: true });
+    for (let i = 0; i < 200 && ctxOn.runner.running('english-tutor'); i++) await new Promise((r) => setTimeout(r, 25));
+    writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
+    const runOn = await readRunFile(ctxOn.ws, 'english-tutor', '2026-10-02', (sOn.json as { job: string }).job);
+    check('policy tools: on → 孩子的话也带工具', toolsOf(runOn) === 'Bash,Read,Grep,Glob', JSON.stringify([sOn.status, sOn.json, toolsOf(runOn)]));
+  }
   const eng = await route('POST', '/api/kid/conversations/english-tutor/messages', ctx, { text: '你好', newThread: true });
   for (let i = 0; i < 200 && ctx.runner.running('english-tutor'); i++) await new Promise((r) => setTimeout(r, 25));
   const runE = await readRunFile(ctx.ws, 'english-tutor', '2026-10-02', (eng.json as { job: string }).job);
@@ -155,6 +173,7 @@ try {
   const run3 = await readRunFile(ctx.ws, 'math-tutor', '2026-10-02', (s3.json as { job: string }).job);
   const mats = run3?.prompt.split('\n  materials:\n')[1]?.split('\n').filter((l) => l.startsWith('    - ')) ?? [];
   check('交出去的课,孩子第一次开口:materials: 第一行是课文件列的 pingjunfen,更新的 xin 排后面;讲法里没有素材那段', mats[0]?.includes('pingjunfen') === true && mats.some((l) => l.includes('xin')) && run3?.prompt.includes('lessonBrief: "先让他说怎么分的。"') === true, JSON.stringify(mats));
+  check('课文件原文跟着带(<lesson-file>),不给 lessonFile 路径;<material> 里课文件列的那份排第一', run3?.prompt.includes('<lesson-file path="lessons/分贴纸.md">') === true && run3.prompt.includes('18 个分给 3 人,每人几个?') && !run3.prompt.includes('lessonFile:') && run3.prompt.indexOf('<material id="pingjunfen">') > 0 && run3.prompt.indexOf('<material id="pingjunfen">') < run3.prompt.indexOf('<material id="xin">'), run3?.prompt.slice(-900));
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

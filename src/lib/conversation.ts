@@ -32,7 +32,6 @@ export interface ConversationFiles {
   err: (job: string) => string;
   /** 这一轮真发出去的东西:上下文包 + 完整命令行(家长端「看原文」第一站;跑完就丢的话,「老师为什么没看见」永远查不了) */
   run: (job: string) => string;
-  post: (job: string) => string;
   /** 这一轮的事件流 <date>.<job>.events.jsonl(lib/events.ts;控制台与时间线的唯一来源) */
   events: (job: string) => string;
   /** 孩子按住说话的原声 <date>.<job>.voice.<ext>(《家长录像设计.md》拍板 4;删话题时按 <date>.<job>.* 一起删) */
@@ -59,7 +58,6 @@ export function conversationFiles(conversationsDir: string, tutor: string, date:
     log: (job) => `${base}.${job}.log`,
     err: (job) => `${base}.${job}.err.log`,
     run: (job) => `${base}.${job}.run.json`,
-    post: (job) => `${base}.${job}.post.json`,
     events: (job) => `${base}.${job}.events.jsonl`,
     voice: (job, ext) => `${base}.${job}.voice.${ext}`,
     play: (job) => `${base}.${job}.play.jsonl`,
@@ -232,7 +230,7 @@ export function addMessage(index: ConversationIndex, msg: ConversationMessage): 
 export function applyRun(
   index: ConversationIndex,
   job: string,
-  run: { transcript: Transcript; kidView: KidView; runtime: string; artifacts?: string[]; timing?: Timing; post?: ConversationMessage['post']; tools?: ConversationMessage['tools'] },
+  run: { transcript: Transcript; kidView: KidView; runtime: string; artifacts?: string[]; timing?: Timing; tools?: ConversationMessage['tools'] },
 ): ConversationIndex {
   const { transcript, kidView } = run;
   const messages = index.messages.map((m) =>
@@ -250,7 +248,6 @@ export function applyRun(
           ...(kidView.warnings.length ? { warnings: [...(m.warnings ?? []), ...kidView.warnings] } : {}),
           error: transcript.final?.ok === false ? transcript.final.reason : null,
           ...(run.timing ? { timing: run.timing } : {}),
-          ...(run.post ? { post: run.post } : {}),
           ...(run.tools?.length ? { tools: run.tools } : {}),
         }
       : m,

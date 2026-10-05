@@ -17,7 +17,7 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 
 - 一轮 = 一条消息 + 老师的回答。
 - 文件都在 conversations/<老师>/,按 `<日期>.<job>.*` 命名,job 形如 1620-1。
-- 索引 `<日期>.json` 一天一份。每条消息物化了讲稿与卡、读了什么(tools)、用时(timing)、费用、后期、提醒。
+- 索引 `<日期>.json` 一天一份。每条消息物化了讲稿与卡、读了什么(tools)、用时(timing)、费用、提醒。
 - 各文件是什么、命令怎么用,见 references/命令与文件.md。
 
 **老师看到的只有两样:**
@@ -42,7 +42,7 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 |---|---|---|
 | 某一轮的全部:问句、上下文包、当时的老师文件与技能 hash、讲稿、卡、读了什么、费用、用时、给家长的尾巴 | `cotutor show <老师> <job> <日期>`(--json 是全量) | 不 |
 | 现在发这句话,老师会看到什么;每段从哪个文件来、那里共几条、截了几条 | `cotutor pack <老师> "<消息>" [--from kid] [--at 时间]` | 不 |
-| 一轮每道工序的时刻:首卡、每句配音、每拍后期、就绪 | `cotutor trace <老师> <job> <日期> [--lane main,tts,post]` | 不 |
+| 一轮每道工序的时刻:首卡、每句配音、就绪 | `cotutor trace <老师> <job> <日期> [--lane main,tts]` | 不 |
 | 改了老师文件、技能、vault 之后,**同一问答案怎么变** | `cotutor replay <老师> <job> <日期>`,跑完并排打印;`cotutor compare <老师> [evalJob] <日期>` 再看或列 | **是**,一轮老师的钱(几分到两毛美元),**跑前先问** |
 | 回放那轮自己的全部 | `cotutor show <老师> <evalJob> <日期> --evals` | 不 |
 | workspace 哪里坏了:路径、证书、技能、配置缺口 | `cotutor doctor` | 不(--live 花一分钱) |
@@ -50,7 +50,7 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 一天的费用与延迟不用命令,读 conversations/<老师>/<日期>.json:
 
 - 每条的 `costUsd` 是这轮的费用;顶层 `costUsd` 是这天合计。
-- `timing` 是从 startedAt 起算的毫秒:`firstReadyMs` 首拍就绪,`doneMs` 老师写完,`dubbedMs` 配音齐,`postMs` 后期完。
+- `timing` 是从 startedAt 起算的毫秒:`firstReadyMs` 首拍就绪,`doneMs` 老师写完,`dubbedMs` 配音齐。
 
 ## 查「老师为什么没提 X」的顺序
 
@@ -92,10 +92,10 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 - pack 干跑就够,不花钱:上下文包变了什么,就是效果。
 - 要看老师会不会因此说得不一样,再 replay。
 
-**板书后期为什么没标、排错了**
+**板上为什么没标重点、底色不对**
 
-- 看 show 的「后期」一行,和 .post.json 每拍的 prompt / raw / dropped。
-- 调后期的提示词与评测在 cotutor 仓库里(themes/<主题>/post.md 与 post-eval),不在 workspace。
+- 重点只有老师在讲稿里写的 `[词]`:show 看老师原文里标了没有。
+- 底色、字形按卡的种类定,一行几张按卡的宽度排。老师没写,就是机械规则的样子。
 
 ## 报告怎么写
 

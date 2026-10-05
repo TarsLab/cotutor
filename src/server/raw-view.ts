@@ -15,11 +15,10 @@ import { foldRuns, toolCalls, type ToolCall, type TranscriptRow } from '../lib/t
 import { resolvePolicy, type ConversationMessage } from '../schema/index.ts';
 import type { Workspace } from '../cli/workspace.ts';
 import { readErrLog, readIndex, readRunFile, readTranscript, scanCards, type RunSources } from './store.ts';
-import { readPostFile, type PostFile } from './post.ts';
 import { formatEvent, parseEvents, timelineSpans, type RunEvent, type TimelineSpan } from '../lib/events.ts';
 
 export interface RawStation {
-  id: 'pack' | 'timeline' | 'source' | 'parse' | 'kid' | 'audio' | 'tools' | 'trace' | 'post' | 'ledger';
+  id: 'pack' | 'timeline' | 'source' | 'parse' | 'kid' | 'audio' | 'tools' | 'trace' | 'ledger';
   title: string;
   /** 体量那行小字 */
   note: string;
@@ -81,9 +80,6 @@ export interface RawView {
   trace: TranscriptRow[];
   /** 这轮用了哪些工具、读了什么(索引物化的;老轮次从 .log 现抽) */
   tools: ToolCall[];
-  /** 第七站:板书后期的输入 / 原始输出 / 校验(<日期>.<job>.post.json);没跑过 → null */
-  post: PostFile | null;
-  postSummary: ConversationMessage['post'] | null;
   /** 时间线:这轮的事件(<日期>.<job>.events.jsonl;2026-09-13 之前的轮次没有 → 空)+ 甘特的段 + 控制台那种一行一条 */
   events: RunEvent[];
   timeline: { spans: TimelineSpan[]; lines: string[]; total: number };
@@ -179,7 +175,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
   const dubbed = lines.filter((l) => l.audioOk).length;
   const stations: RawStation[] = [
     { id: 'pack', title: '上下文包', note: pack ? `${pack.prompt.length} 字 · ${pack.resume ? 'resume' : '新开'}` : '这一轮没落(老 workspace)', state: pack ? 'ok' : 'none' },
-    { id: 'timeline', title: '时间线', note: events.length ? `${events.length} 条事件${m.timing?.firstReadyMs !== undefined ? ` · 首拍就绪 ${secs(m.timing.firstReadyMs)}` : ''}${m.timing?.doneMs !== undefined ? ` · 老师写完 ${secs(m.timing.doneMs)}` : ''}${m.timing?.dubbedMs !== undefined ? ` · 配音齐 ${secs(m.timing.dubbedMs)}` : ''}${m.timing?.postMs !== undefined ? ` · 后期 ${secs(m.timing.postMs)}` : ''}` : '这轮没有事件(2026-09-13 之前的轮次)', state: events.length ? (events.some((e) => (e.lane === 'post' && e.kind === 'failed') || (e.lane === 'tts' && e.kind === 'failed') || (e.lane === 'main' && e.kind === 'exit' && !e.ok)) ? 'warn' : 'ok') : 'none' },
+    { id: 'timeline', title: '时间线', note: events.length ? `${events.length} 条事件${m.timing?.firstReadyMs !== undefined ? ` · 首拍就绪 ${secs(m.timing.firstReadyMs)}` : ''}${m.timing?.doneMs !== undefined ? ` · 老师写完 ${secs(m.timing.doneMs)}` : ''}${m.timing?.dubbedMs !== undefined ? ` · 配音齐 ${secs(m.timing.dubbedMs)}` : ''}` : '这轮没有事件(2026-09-13 之前的轮次)', state: events.length ? (events.some((e) => (e.lane === 'tts' && e.kind === 'failed') || (e.lane === 'main' && e.kind === 'exit' && !e.ok)) ? 'warn' : 'ok') : 'none' },
     { id: 'source', title: '老师原文', note: `${src ? src.split('\n').length : 0} 行 · 顶层 ${blocks.length} 段${dropped.length ? ` · 丢 ${dropped.length} 段` : ''}`, state: src ? 'ok' : 'none' },
     { id: 'parse', title: '解析结果', note: `${ann.section.cards.length} 卡 · ${ann.section.lines.length} 句${warnCount ? ` · ${warnCount} 提醒` : ''}${same ? '' : ' · 与索引不同'}`, state: warnCount || !same ? 'warn' : 'ok' },
     { id: 'kid', title: '下发给孩子', note: `${lines.length} 句${lines.some((l) => l.cut) ? ` · 截了 ${lines.filter((l) => l.cut).length} 句` : ''} · ${cards.length} 卡`, state: lines.length || cards.length ? 'ok' : 'none' },
@@ -187,16 +183,6 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     { id: 'tools', title: '读了什么', note: tools.length ? `${tools.length} 次工具${toolFiles ? ` · Read ${toolFiles} 个文件` : ''}${toolFailed ? ` · ${toolFailed} 次失败` : ''}${tools.some((t) => t.sub) ? ' · 有子代理' : ''}` : '没用工具(只凭上下文包答的)', state: toolFailed ? 'warn' : tools.length ? 'ok' : 'none' },
     { id: 'trace', title: '转录与报错', note: `${transcript?.items.length ?? 0} 条${err ? ' · stderr 有东西' : ''}`, state: m.result === 'error' || err ? 'warn' : 'ok' },
   ];
-  // 第七站:板书后期(有卡的轮次才有;关着 / 老板书没跑过 → none)
-  const postFile: PostFile | null = await readPostFile(ws, tutor, date, job);
-  if (m.post || postFile) {
-    const kept = postFile?.kept;
-    const beats = m.post?.beats !== undefined ? `${m.post.beats} 拍${m.post.failed ? `(${m.post.failed} 拍没成,素版)` : ''} · ` : '';
-    const note = m.post?.ok
-      ? `${beats}${secs(m.post.ms)}${m.post.costUsd !== undefined ? ` · $${m.post.costUsd.toFixed(3)}` : ''} · 标注 ${kept?.marks ?? '?'} 锚点 ${kept?.anchors ?? '?'} 样子 ${kept?.looks ?? '?'}${m.post.dropped ? ` · 丢 ${m.post.dropped}` : ''}`
-      : `没成:${m.post?.error ?? postFile?.error ?? '?'}(素版)`;
-    stations.push({ id: 'post', title: '板书后期', note, state: m.post?.ok ? (m.post.dropped || m.post.failed ? 'warn' : 'ok') : 'warn' });
-  } else if (stored?.cards.length) stations.push({ id: 'post', title: '板书后期', note: policy.post.mode === 'off' ? '关着(policy post.mode = off),素版' : '这轮没跑过(老板书);可以「再做一次」', state: 'none' });
   if (m.artifacts.length) stations.push({ id: 'ledger', title: '账本', note: `产物 ${m.artifacts.join('、')}`, state: 'ok' });
 
   return {
@@ -222,8 +208,6 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     trace: foldRuns(transcript?.items ?? []),
     tools,
     err: err.slice(-4000),
-    post: postFile ? { ...postFile, beats: postFile.beats.map((b) => ({ ...b, raw: b.raw.slice(0, 20000) })) } : null,
-    postSummary: m.post ?? null,
     events,
     timeline: { spans: timelineSpans(events), lines: events.map(formatEvent), total: Math.max(1, ...events.map((e) => e.t)) },
     device: m.device ?? null,

@@ -9,7 +9,7 @@ import { conversationFiles } from './conversation.ts';
 export const ANALYZE_SKILL = 'cotutor-analyze';
 
 /** 分析用的那几条命令(按用法文本里的第二个词挑) */
-const ANALYZE_COMMANDS = ['show', 'pack', 'replay', 'compare', 'trace', 'doctor', 'send', 'rate', 'bookkeep', 'repost'];
+const ANALYZE_COMMANDS = ['show', 'pack', 'replay', 'compare', 'trace', 'doctor', 'send', 'rate', 'bookkeep'];
 
 export function analyzeReferenceDoc(): string {
   const cmds = USAGE.split('\n').filter((l) => {
@@ -18,12 +18,11 @@ export function analyzeReferenceDoc(): string {
   });
   const f = conversationFiles('conversations', '<老师>', '<日期>');
   const rows = [
-    [f.index, '一天的索引:每条消息物化了 text / kidText / section(卡与讲稿)/ tools(读了什么)/ timing / costUsd / post / warnings / scenes / bookkeeping;顶层 sessions / ratings / booked / costUsd'],
+    [f.index, '一天的索引:每条消息物化了 text / kidText / section(卡与讲稿)/ tools(读了什么)/ timing / costUsd / warnings / scenes / bookkeeping;顶层 sessions / ratings / booked / costUsd'],
     [f.run('<job>'), '这轮发给老师的:prompt(上下文包 + 消息)、argv(完整命令行)、resume / session、sources(当时的老师文件正文与 hash、技能 SKILL.md 的 hash)'],
     [f.log('<job>'), '老师进程的 stdout 原样(stream-json):每次 tool_use 的完整参数、tool_result 的内容、文本、result(费用、轮数)。最大最全,别整个读,按 job 与关键字 grep'],
     [f.err('<job>'), 'stderr'],
-    [f.events('<job>'), '这轮的事件流,一行一条 {t, lane, kind, …}:main 老师 / tts 配音 / post 后期 / ready 就绪 / index / scene 画图作业 / ledger;cotutor trace 读它'],
-    [f.post('<job>'), '板书后期每一拍:prompt、raw(模型原始输出)、output、dropped / kept、ms、costUsd'],
+    [f.events('<job>'), '这轮的事件流,一行一条 {t, lane, kind, …}:main 老师 / tts 配音 / ready 就绪 / index / scene 画图作业 / ledger;cotutor trace 读它'],
     [f.lineAudio('<job>', 9999).replace('9999', '<n>'), '讲稿第 n 句的配音'],
     [f.card('<job>', 9999).replace('9999', '<n>'), '第 n 张卡的状态(孩子在卡上做的):{at, turn, state}'],
     [f.cardAsset('<job>', 9999, '<k>.mp3').replace('9999', '<n>'), '卡的资产(点读段配音)'],

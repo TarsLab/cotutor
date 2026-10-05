@@ -46,14 +46,14 @@ export function boardPreloaded(runtime: Runtime): boolean {
 export function planRun(
   config: CotutorConfig,
   index: Pick<ConversationIndex, 'session'>,
-  vars: { agent: string; prompt: string; agentBody?: string; systemBody?: string; boardFile?: string; runtime?: string; effort?: 'low' | 'medium' | 'high' },
+  vars: { agent: string; prompt: string; agentBody?: string; systemBody?: string; boardFile?: string; runtime?: string; effort?: 'low' | 'medium' | 'high'; tools?: string },
 ): RunPlan {
   const { name, runtime } = getRuntime(config, vars.runtime);
   const session = index.session && index.session.runtime === name ? index.session.id : null;
   const template = session ? runtime.resume : runtime.run;
   return {
     runtime: name,
-    argv: fillRuntime(template, { agent: vars.agent, prompt: vars.prompt, session: session ?? undefined, agentBody: vars.agentBody, systemBody: vars.systemBody, boardFile: vars.boardFile, effort: vars.effort }),
+    argv: fillRuntime(template, { agent: vars.agent, prompt: vars.prompt, session: session ?? undefined, agentBody: vars.agentBody, systemBody: vars.systemBody, boardFile: vars.boardFile, effort: vars.effort, tools: vars.tools }),
     resume: session !== null,
     session,
     ...(runtime.stdin ? { stdin: stdinMessage(vars.prompt) } : {}),

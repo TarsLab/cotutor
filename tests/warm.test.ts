@@ -35,7 +35,7 @@ const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown> & { runtimes: Record<string, unknown> };
 cfg.runtimes = { default: 'fake', fake: stdinRuntime() };
-cfg.policyDefaults = { post: { mode: 'off' }, stall: { ms: 400, retries: 1 } };
+cfg.policyDefaults = { stall: { ms: 400, retries: 1 } };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
 const now = new Date(2026, 8, 29, 20, 40);

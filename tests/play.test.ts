@@ -23,7 +23,6 @@ const { root } = await initWorkspace({ slug: 'ray', name: 'Ray' });
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
 cfg.runtimes = { default: 'fake', fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] } };
-cfg.policyDefaults = { post: { runtime: 'none' } };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
 const ctx = createContext(loadWorkspace(root));

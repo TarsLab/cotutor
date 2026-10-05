@@ -651,7 +651,6 @@ export const DEV_PAGE = `<!doctype html>
       if (m.timing.doneMs !== undefined) foot.append(h('span', { class: 'chip' }, '整轮 ', h('b', {}, secs(m.timing.doneMs))));
       if (m.timing.dubbedMs !== undefined) foot.append(h('span', { class: 'chip' }, '配音 ', h('b', {}, secs(m.timing.dubbedMs))));
     }
-    if (m.post && m.post.beats !== undefined) foot.append(h('span', { class: 'chip' + (m.post.failed ? ' slow' : '') }, '后期 ', h('b', {}, m.post.beats + ' 拍' + (m.post.failed ? ' · ' + m.post.failed + ' 拍没成' : ''))));
     if (m.costUsd !== undefined) foot.append(h('span', { class: 'chip money' }, '$', h('b', {}, m.costUsd.toFixed(2))));
     if (m.artifacts && m.artifacts.length) foot.append(h('span', { class: 'chip' }, '课包 ' + m.artifacts.join(', ')));
     const rows = v.runs[m.job] || [];
@@ -794,7 +793,7 @@ export const DEV_PAGE = `<!doctype html>
       if (!ev.length) { box.append(h('p', { class: 'hintline' }, raw.stations.find((x) => x.id === 'timeline')?.note || '这轮没有事件。')); return box; }
       const spans = raw.timeline.spans;
       const total = raw.timeline.total;
-      const lanes = ['main', 'tts', 'post', 'ready', 'index', 'scene', 'ledger'].filter((l) => spans.some((x) => x.lane === l));
+      const lanes = ['main', 'tts', 'ready', 'index', 'scene', 'ledger'].filter((l) => spans.some((x) => x.lane === l));
       const detail = h('p', { class: 'hintline' }, '点一段看它是什么');
       const g = h('div', { class: 'gantt' });
       for (const l of lanes) {
@@ -808,7 +807,7 @@ export const DEV_PAGE = `<!doctype html>
       }
       g.append(h('div', { class: 'ax' }, h('span', {}, '0s'), h('span', {}, (total / 2000).toFixed(1) + 's'), h('span', {}, (total / 1000).toFixed(1) + 's')));
       box.append(h('h5', {}, '时间线:每道工序什么时候起、什么时候回(从老师进程起算)'), g, detail);
-      if (raw.timing && raw.timing.beats && raw.timing.beats.length) box.append(h('h5', {}, '每拍'), h('pre', {}, raw.timing.beats.map((b, i) => '拍 ' + i + (b.card === null ? '(没有卡)' : '(卡 ' + b.card + ')') + ':关 ' + (b.closedMs !== undefined ? (b.closedMs / 1000).toFixed(2) + 's' : '-') + ' · 配音齐 ' + (b.dubbedMs !== undefined ? (b.dubbedMs / 1000).toFixed(2) + 's' : '-') + ' · 后期 ' + (b.postMs !== undefined ? (b.postMs / 1000).toFixed(2) + 's' : '-') + ' · 就绪 ' + (b.readyMs !== undefined ? (b.readyMs / 1000).toFixed(2) + 's' : '-')).join('\\n')));
+      if (raw.timing && raw.timing.beats && raw.timing.beats.length) box.append(h('h5', {}, '每拍'), h('pre', {}, raw.timing.beats.map((b, i) => '拍 ' + i + (b.card === null ? '(没有卡)' : '(卡 ' + b.card + ')') + ':关 ' + (b.closedMs !== undefined ? (b.closedMs / 1000).toFixed(2) + 's' : '-') + ' · 配音齐 ' + (b.dubbedMs !== undefined ? (b.dubbedMs / 1000).toFixed(2) + 's' : '-') + ' · 就绪 ' + (b.readyMs !== undefined ? (b.readyMs / 1000).toFixed(2) + 's' : '-')).join('\\n')));
       box.append(h('details', {}, h('summary', {}, '全部事件 ' + ev.length + ' 条'), h('pre', {}, raw.timeline.lines.join('\\n'))));
       return box;
     }
@@ -864,27 +863,6 @@ export const DEV_PAGE = `<!doctype html>
       }
       return box;
     }
-    if (s === 'post') {
-      const box = h('div', { class: 'dsec' });
-      const p = raw.post, sm = raw.postSummary;
-      const redo = h('button', { class: 'btn', type: 'button', on: { click: async (e) => { e.target.disabled = true; e.target.textContent = '在做…'; try { await api('POST', '/api/conversations/' + raw.tutor + '/' + raw.date + '/raw/' + raw.job + '/repost'); } catch (err) { alert('没成:' + err.message); } openRaw(raw.job); } } }, '再做一次后期');
-      box.append(h('h5', {}, '板书后期:一拍(一张卡 + 跟着它的讲稿)一次,快模型定这张卡接不接上一行、样子、讲到每句时标哪个词;带前面几张已定的卡;老师原文与配音不动,校验不过的提案丢掉,页面走机械规则'));
-      if (!p && !sm) { box.append(h('p', { class: 'hintline' }, raw.stations.find((x) => x.id === 'post')?.note || '这轮没跑过后期。'), h('p', {}, redo)); return box; }
-      box.append(h('div', { class: 'kline' }, h('span', { class: 'n2' }, '·'), h('span', {}, (sm && sm.ok ? '收到' : '没成') + (sm && sm.beats !== undefined ? ' · ' + sm.beats + ' 拍' + (sm.failed ? '(' + sm.failed + ' 拍没成)' : '') : '') + (p ? ' · ' + p.runtime + ' · ' + (raw.device || '端未知,按平板横屏') + ' · 主题 ' + p.theme + (p.template === 'theme' ? '(骨架 post.md)' : '(出厂骨架)') : '') + (sm ? ' · ' + sm.ms + 'ms' + (sm.costUsd !== undefined ? ' · $' + sm.costUsd.toFixed(4) : '') : '')), h('span', {}, redo)));
-      if (sm && sm.error) box.append(h('p', { class: 'hintline' }, '原因:' + sm.error));
-      if (p && p.kept) box.append(h('p', { class: 'hintline' }, '收下:标注 ' + p.kept.marks + ' · 锚点 ' + p.kept.anchors + ' · ' + (p.kept.layout ? '有并排' : '一行一张') + ' · 样子 ' + p.kept.looks));
-      if (p && p.dropped.length) { box.append(h('h5', {}, '丢掉的提案 ' + p.dropped.length + ' 条(模型只是提案,契约说了算)')); for (const d of p.dropped) box.append(h('p', { class: 'hintline' }, d)); }
-      if (p) for (const b of p.beats) {
-        const bk = b.kept ? '标 ' + b.kept.marks + ' · 锚 ' + b.kept.anchors + ' · ' + (b.kept.row === 'same' ? '接上一行' : '另起一行') + (b.kept.look ? ' · 有样子' : '') : '';
-        const det = h('details', {}, h('summary', {}, '拍 ' + b.beat + '(卡 ' + b.card + ')' + (b.ok ? ' ✓ ' + b.ms + 'ms · ' + bk + (b.dropped.length ? ' · 丢 ' + b.dropped.length : '') : ' ✗ ' + (b.error || '?'))));
-        det.append(h('details', {}, h('summary', {}, '提示词(' + b.prompt.length + ' 字)'), h('pre', {}, b.prompt)));
-        det.append(h('details', {}, h('summary', {}, '模型原始输出'), h('pre', {}, b.raw || '(空)')));
-        if (b.output) det.append(h('details', {}, h('summary', {}, '解析出的提案'), h('pre', {}, JSON.stringify(b.output, null, 2))));
-        det.append(h('details', {}, h('summary', {}, '命令行'), h('pre', {}, b.argv.join(' '))));
-        box.append(det);
-      }
-      return box;
-    }
     if (s === 'tools') {
       // 读了什么(2026-09-15):一行一次工具调用——名字、路径 / 命令、成没成、结果多少字;答「老师为什么没看见档案那一行」
       const box = h('div', { class: 'dsec' });
@@ -928,8 +906,8 @@ export const DEV_PAGE = `<!doctype html>
   };
 
   // ---- 老师团:一位一行,政策折叠,改过的才亮 ----
-  const POLICY_FIELDS = [['replyMaxChars', '每句字数上限', 'number'], ['dailyMessages', '每日消息上限', 'number'], ['effort', '动笔前想多久(low = 开口快;medium = 多想一会儿,算题用;high = 最慢最细)', 'enum', ['low', 'medium', 'high']], ['board', '板书(auto = 老师判断;off = 只说话)', 'enum', ['auto', 'off']], ['scenes.dailyMax', '每天讲解动画上限', 'number'], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number'], ['contextPack.entryChars', '上下文包:档案 / 入口文件 / 记忆各带多少字', 'number']];
-  const SHORT = { replyMaxChars: '每句 ', dailyMessages: '每日 ', effort: '思考 ', board: '板书 ', 'scenes.dailyMax': '动画 ', 'contextPack.recent': '观察 ', 'contextPack.planLines': '计划 ', 'contextPack.entryChars': '原文 ' };
+  const POLICY_FIELDS = [['replyMaxChars', '每句字数上限', 'number'], ['dailyMessages', '每日消息上限', 'number'], ['effort', '动笔前想多久(low = 开口快;medium = 多想一会儿,算题用;high = 最慢最细)', 'enum', ['low', 'medium', 'high']], ['tools', '孩子的话带不带工具(off = 不带,开口快;on = 能查教材、读 vault,慢)', 'enum', ['off', 'on']], ['board', '板书(auto = 老师判断;off = 只说话)', 'enum', ['auto', 'off']], ['scenes.dailyMax', '每天讲解动画上限', 'number'], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number'], ['contextPack.entryChars', '上下文包:档案 / 入口文件 / 记忆各带多少字', 'number']];
+  const SHORT = { replyMaxChars: '每句 ', dailyMessages: '每日 ', effort: '思考 ', tools: '工具 ', board: '板书 ', 'scenes.dailyMax': '动画 ', 'contextPack.recent': '观察 ', 'contextPack.planLines': '计划 ', 'contextPack.entryChars': '原文 ' };
   const getPath = (o, p) => p.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
   const setPath = (o, p, v) => { const ks = p.split('.'); let cur = o; for (const k of ks.slice(0, -1)) cur = cur[k] = cur[k] || {}; cur[ks[ks.length - 1]] = v; };
 

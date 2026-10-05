@@ -332,7 +332,6 @@ export async function main(argv: string[]): Promise<void> {
         for (const l of v.kid.lines) out.push(`  ${l.text}${l.cut ? `〔截:${l.cut}〕` : ''}`);
         if (v.stored.parentText) out.push(`给家长的尾巴:\n${v.stored.parentText.split('\n').map((l) => `  ${l}`).join('\n')}`);
         if (v.stored.warnings.length) out.push(`提醒:${v.stored.warnings.join(';')}`);
-        if (v.postSummary) out.push(`后期:${v.postSummary.ok ? `${v.postSummary.beats ?? '?'} 拍 · ${secs(v.postSummary.ms)}${v.postSummary.costUsd !== undefined ? ` · $${v.postSummary.costUsd.toFixed(4)}` : ''} · 丢 ${v.postSummary.dropped}` : `没成 ${v.postSummary.error ?? ''}`}`);
         out.push(`文件:conversations/${tutor}/${v.files.log}${v.files.run ? ` · ${v.files.run}` : ''}`);
         process.stdout.write(`${out.join('\n')}\n`);
         return;
@@ -344,7 +343,7 @@ export async function main(argv: string[]): Promise<void> {
         const { childEnv, compareReplay, formatCompare, startReplay } = await import('../server/replay.ts');
         const { localDate } = await import('../lib/conversation.ts');
         const date = dateArg ?? localDate(new Date());
-        const r = await startReplay(ws, tutor, date, jobArg, { runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, post: flags.post === true, env: childEnv(process.env) });
+        const r = await startReplay(ws, tutor, date, jobArg, { runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, env: childEnv(process.env) });
         if (!json) process.stdout.write(`回放起了:evals/${tutor}/${date}.${r.evalJob}.*(原轮 ${jobArg}),等老师说完……\n`);
         await r.done;
         const c = await compareReplay(ws, tutor, date, r.evalJob);
@@ -389,27 +388,6 @@ export async function main(argv: string[]): Promise<void> {
         const events = parseEvents(text).filter(laneFilter(typeof flags.lane === 'string' ? flags.lane : undefined));
         if (json) process.stdout.write(`${JSON.stringify(events, null, 2)}\n`);
         else for (const e of events) process.stdout.write(`${formatEvent(e)}\n`);
-        return;
-      }
-      case 'repost': {
-        const [tutor, dateArg] = positionals;
-        if (!tutor) throw new UsageError(`repost 需要老师名,如 cotutor repost math-tutor 2026-09-12 --job 1620-1。\n${USAGE}`);
-        const ws = loadWorkspace(workspace);
-        const { repost } = await import('../server/post.ts');
-        const { readIndex } = await import('../server/store.ts');
-        const { localDate } = await import('../lib/conversation.ts');
-        const date = dateArg ?? localDate(new Date());
-        const index = await readIndex(ws, tutor, date);
-        const jobs = typeof flags.job === 'string' ? [flags.job] : index.messages.filter((m) => m.result === 'ok' && m.section?.cards.length).map((m) => m.job);
-        if (!jobs.length) throw new UsageError(`${tutor} ${date} 没有带卡的轮次`);
-        const results = [];
-        for (const job of jobs) {
-          const r = await repost(ws, tutor, date, job);
-          results.push({ job, ...r });
-          if (!json) process.stdout.write(`${r.ok ? '✓' : '!'} ${job}  ${r.message?.post ? `${r.message.post.ms}ms${r.message.post.costUsd !== undefined ? ` $${r.message.post.costUsd.toFixed(4)}` : ''} · 丢 ${r.message.post.dropped}${r.message.post.error ? ` · ${r.message.post.error}` : ''}` : r.error ?? ''}\n`);
-        }
-        if (json) process.stdout.write(`${JSON.stringify(redactDeep(results.map((r) => ({ job: r.job, ok: r.ok, post: r.message?.post ?? null, error: r.error ?? null }))), null, 2)}\n`);
-        else process.stdout.write(`索引已改写;孩子端刷新就是新的排版。细节在工作台 /dev「看原文」第七站,或 conversations/${tutor}/${date}.<job>.post.json\n`);
         return;
       }
       case 'rate': {

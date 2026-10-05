@@ -23,16 +23,15 @@ export const PolicySchema = z.object({
    * 不用 MAX_THINKING_TOKENS=0:同日真跑,思考归零后老师把盘算写进了讲稿(会念给孩子听)、字源开始编
    */
   effort: z.enum(['low', 'medium', 'high']).describe('老师动笔前想多久:low = 想得少、开口快(缺省,孩子等 10–15 秒);medium = 多想一会儿(算题的老师);high = 最慢最细。填进运行时模板的 {effort};模板里没有 {effort} 的运行时不受影响'),
+  /**
+   * 孩子的话,老师带不带工具(2026-10-04):填进运行时模板的 {tools}。ray 9 月的真实对话,用了工具的轮首拍就绪中位数 31.7 秒(24 轮),没用的 6.8 秒(37 轮);
+   * 孩子最喜欢的是回得快的那位老师。off 时要用的东西(课文件、素材的说明)由应用放进上下文包
+   */
+  tools: z.enum(['off', 'on']).describe('孩子说的话,老师带不带工具:off = 不带,只凭上下文包答,开口快(缺省);on = 带(查教材、读 vault,慢)。带照片的那条、记账,总是带。模板里没有 {tools} 的运行时不受影响'),
   /** 板书开关:auto = 老师判断要不要出卡(缺省);off = 只说话不出卡 */
   board: z.enum(['auto', 'off']).describe('板书:auto = 讲题讲概念时老师出卡(缺省);off = 只说话不出卡'),
   /** 场景作业(scene-maker 做课包,$3–5 / 10–15 分钟一个):每天最多起几个;配在 scene-maker 身上或 policyDefaults */
   scenes: z.object({ dailyMax: z.number().int().nonnegative().describe('每天最多起几个场景作业(一个 ≈ 一轮问答的 30 倍费用)') }),
-  /** 板书后期:一节跑完,快模型定标注 / 排版 / 样子;off = 素版(机械规则) */
-  post: z.object({
-    mode: z.enum(['auto', 'off']).describe('板书后期:auto = 有卡就让快模型划重点、排版、定样子(缺省);off = 素版'),
-    runtime: z.string().min(1).describe('后期用的运行时(runtimes 里的键,缺省 claude-fast:haiku、无工具)'),
-    timeoutMs: z.number().int().positive().describe('等一拍的后期最多几毫秒(缺省 10000;只有第一拍在关键路径上,后面的拍在前一拍播的时候跑),超时这拍素版、不重来'),
-  }),
   /**
    * 断流看门狗(2026-09-21):老师进程多久一个字节都不吐(工具在跑时不算)就当 API 流断了,杀掉、resume 同一个会话接着写。
    * claude CLI 自己要等约 180 秒才认断流再重试,9 月 21 日真跑连断两次,「讲个故事」一轮等了 6 分钟,模型真干活不到 10 秒
@@ -50,9 +49,9 @@ export const PolicyPatchSchema = z.object({
   dailyMessages: PolicySchema.shape.dailyMessages.optional(),
   contextPack: z.object({ recent: z.number().int().nonnegative().optional(), planLines: z.number().int().nonnegative().optional(), entryChars: z.number().int().positive().optional() }).optional(),
   effort: PolicySchema.shape.effort.optional(),
+  tools: PolicySchema.shape.tools.optional(),
   board: PolicySchema.shape.board.optional(),
   scenes: z.object({ dailyMax: z.number().int().nonnegative().optional() }).optional(),
-  post: z.object({ mode: z.enum(['auto', 'off']).optional(), runtime: z.string().min(1).optional(), timeoutMs: z.number().int().positive().optional() }).optional(),
   stall: z.object({ ms: z.number().int().nonnegative().optional(), retries: z.number().int().nonnegative().optional() }).optional(),
 });
 export type PolicyPatch = z.infer<typeof PolicyPatchSchema>;
@@ -63,9 +62,9 @@ export const POLICY_DEFAULTS: Policy = {
   dailyMessages: 30,
   contextPack: { recent: 10, planLines: 10, entryChars: 4000 },
   effort: 'low',
+  tools: 'off',
   board: 'auto',
   scenes: { dailyMax: 2 },
-  post: { mode: 'auto', runtime: 'claude-fast', timeoutMs: 10000 },
   stall: { ms: 30000, retries: 2 },
 };
 
@@ -225,7 +224,7 @@ export type CotutorConfig = z.infer<typeof CotutorConfigSchema>;
 /** 老师的有效政策 = POLICY_DEFAULTS ← policyDefaults ← tutors[name].policy */
 export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
   const layers = [config.policyDefaults, config.tutors[tutor]?.policy ?? {}];
-  const out: Policy = { ...POLICY_DEFAULTS, contextPack: { ...POLICY_DEFAULTS.contextPack }, scenes: { ...POLICY_DEFAULTS.scenes }, post: { ...POLICY_DEFAULTS.post }, stall: { ...POLICY_DEFAULTS.stall } };
+  const out: Policy = { ...POLICY_DEFAULTS, contextPack: { ...POLICY_DEFAULTS.contextPack }, scenes: { ...POLICY_DEFAULTS.scenes }, stall: { ...POLICY_DEFAULTS.stall } };
   for (const p of layers) {
     if (p.replyMaxChars !== undefined) out.replyMaxChars = p.replyMaxChars;
     if (p.dailyMessages !== undefined) out.dailyMessages = p.dailyMessages;
@@ -233,11 +232,9 @@ export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
     if (p.contextPack?.planLines !== undefined) out.contextPack.planLines = p.contextPack.planLines;
     if (p.contextPack?.entryChars !== undefined) out.contextPack.entryChars = p.contextPack.entryChars;
     if (p.effort !== undefined) out.effort = p.effort;
+    if (p.tools !== undefined) out.tools = p.tools;
     if (p.board !== undefined) out.board = p.board;
     if (p.scenes?.dailyMax !== undefined) out.scenes.dailyMax = p.scenes.dailyMax;
-    if (p.post?.mode !== undefined) out.post.mode = p.post.mode;
-    if (p.post?.runtime !== undefined) out.post.runtime = p.post.runtime;
-    if (p.post?.timeoutMs !== undefined) out.post.timeoutMs = p.post.timeoutMs;
     if (p.stall?.ms !== undefined) out.stall.ms = p.stall.ms;
     if (p.stall?.retries !== undefined) out.stall.retries = p.stall.retries;
   }
@@ -271,10 +268,13 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
     }));
 }
 
-/** 运行时模板填占位符;{agentBody} / {systemBody} / {boardFile} 只在给了值时替换,否则原样留着(doctor 会报);{effort} 没给用出厂缺省(后期这类不认老师政策的调用) */
+/** 老师带工具时的白名单(claude 的 --tools):Bash 查教材、裁作业照片;Read / Grep / Glob 读 vault 与技能文件 */
+export const TUTOR_TOOLS = 'Bash,Read,Grep,Glob';
+
+/** 运行时模板填占位符;{tools} 没给就是整份白名单(给 '' = 这轮不带工具);{agentBody} / {systemBody} / {boardFile} 只在给了值时替换,否则原样留着(doctor 会报);{effort} 没给用出厂缺省(课文件排版这类不认老师政策的调用) */
 export function fillRuntime(
   argv: readonly string[],
-  vars: { agent: string; prompt: string; session?: string; agentBody?: string; systemBody?: string; boardFile?: string; effort?: Policy['effort'] },
+  vars: { agent: string; prompt: string; session?: string; agentBody?: string; systemBody?: string; boardFile?: string; effort?: Policy['effort']; tools?: string },
 ): string[] {
   return argv.map((a) =>
     a
@@ -284,7 +284,8 @@ export function fillRuntime(
       .replaceAll('{agentBody}', vars.agentBody ?? '{agentBody}')
       .replaceAll('{systemBody}', vars.systemBody ?? '{systemBody}')
       .replaceAll('{boardFile}', vars.boardFile ?? '{boardFile}')
-      .replaceAll('{effort}', vars.effort ?? POLICY_DEFAULTS.effort),
+      .replaceAll('{effort}', vars.effort ?? POLICY_DEFAULTS.effort)
+      .replaceAll('{tools}', vars.tools ?? TUTOR_TOOLS),
   );
 }
 

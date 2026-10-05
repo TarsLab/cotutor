@@ -37,7 +37,6 @@ const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 const fake = join(repo, 'tests', '_fake-cli.ts');
 cfg.runtimes.default = 'fake';
 cfg.runtimes.fake = { run: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '{prompt}'], resume: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '--resume', '{session}', '{prompt}'] };
-cfg.policyDefaults = { post: { mode: 'off' } };
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const mdir = join(root, 'materials', 'pingjunfen');

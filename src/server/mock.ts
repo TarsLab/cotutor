@@ -24,7 +24,7 @@ import { lettersData } from './letters.ts';
 
 /** mock 的课包目录:仓库里的样本(tests/fixtures/bundles/),场景卡从这里播 */
 export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bundles/', import.meta.url));
-import { lineDurationMs, readyBeats, type BoardSection } from '../lib/kid-board.ts';
+import { lineDurationMs, readyBeats, type BoardSection, type PenName } from '../lib/kid-board.ts';
 import { REEL_LINE_GAP_MS, buildReel } from '../lib/reel.ts';
 import type { CardStates } from '../lib/conversation.ts';
 import { lanAddresses, listenInfo } from '../cli/serve.ts';
@@ -36,13 +36,8 @@ import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { kidPage } from './kid-page.ts';
 import { arrangeHome, kidButtons, parseHome } from '../lib/home.ts';
 import type { TutorButton } from '../cards/index.ts';
-import { PACKAGE_THEMES_DIR, packageTheme } from '../cli/themes.ts';
-import { validatePost, type PostOutput } from '../lib/postprocess.ts';
+import { packageTheme } from '../cli/themes.ts';
 import { cardsCss } from '../cards/docs.ts';
-import { ThemeManifestSchema, type ThemeManifest } from '../schema/index.ts';
-
-/** 出厂主题的清单(假后期校验槽名用;同步读,预装的节也要带后期) */
-const MOCK_THEME: ThemeManifest = ThemeManifestSchema.parse(JSON.parse(readFileSync(join(PACKAGE_THEMES_DIR, 'default', 'theme.json'), 'utf8')));
 
 export type MockScenario = 'normal' | 'limit' | 'offline' | 'nopost';
 
@@ -66,18 +61,17 @@ export function sectionFromScript(md: string): BoardSection {
 }
 
 /**
- * 假后期:真服务里这是快模型出的提案(src/lib/postprocess.ts 校验后套上);mock 没有模型,给几节写死的提案,
- * 过同一个 validatePost——页面走的是同一条渲染路(look 的槽、带 pen 的标注;行由页面按卡的宽度排)。键 = 老师名:脚本序号。
+ * 写死的样子:几节预装板书的底色 / emoji 与带笔的标注(真老师是写在围栏行与讲稿的 [词] 里的),直接套到解析出来的节上,
+ * 页面走的是同一条渲染路(look 的槽、带 pen 的标注;行由页面按卡的宽度排)。键 = 老师名:脚本序号。`nopost` 场景不套。
  */
-export const MOCK_POST: Record<string, PostOutput> = {
+export const MOCK_POST: Record<string, { marks: { line: number; card: number; phrase: string; pen: PenName }[]; look: Record<string, { tint?: string; look?: string; emoji?: string }> }> = {
   // 勾股定理:验证是方法卡(moss),封面的「三条边」画圈(讲到第一句时)、16 下划线(老师自己标的 直角边 / 斜边 / 25 保留,不重复)
   'math-tutor:0': {
     marks: [{ line: 0, card: 0, phrase: '三条边', pen: 'circle' }, { line: 3, card: 3, phrase: '16', pen: 'underline' }],
-    anchors: [],
     look: { '3': { tint: 'moss' }, '4': { emoji: '💡' } },
   },
-  'math-tutor:1': { marks: [], anchors: [], look: { '0': { tint: 'moss' } } },
-  'chinese-tutor:0': { marks: [{ line: 1, card: 1, phrase: '多做一步', pen: 'marker' }], anchors: [], look: { '1': { emoji: '💡' } } },
+  'math-tutor:1': { marks: [], look: { '0': { tint: 'moss' } } },
+  'chinese-tutor:0': { marks: [{ line: 1, card: 1, phrase: '多做一步', pen: 'marker' }], look: { '1': { emoji: '💡' } } },
 };
 
 /** mock 家长端的录音卡评测(真服务从 heard.json 读):过、重录、没评上各一份 */
@@ -90,7 +84,9 @@ const MOCK_HEARD = [
 function withMockPost(section: BoardSection, tutor: string, i: number): BoardSection {
   const out = MOCK_POST[`${tutor}:${i}`];
   if (!out) return section;
-  return validatePost(section, MOCK_THEME, out).section;
+  const cards = section.cards.map((c, n) => (out.look[String(n)] ? { ...c, look: { ...(c.look ?? {}), ...out.look[String(n)] } } : c));
+  const lines = section.lines.map((l, n) => ({ ...l, marks: [...l.marks, ...out.marks.filter((m) => m.line === n).map(({ card, phrase, pen }) => ({ card, phrase, pen }))] }));
+  return { ...section, cards, lines };
 }
 
 export const MOCK_TUTORS: MockTutor[] = [
@@ -450,7 +446,7 @@ const localDate = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 
 export function createMock(opts: MockOptions = {}): Mock {
-  // 假后期:nopost 场景看素版
+  // 写死的样子:nopost 场景看素版
   const withPost = (section: BoardSection, tutor: string, i: number): BoardSection => (opts.scenario === 'nopost' ? section : withMockPost(section, tutor, i));
   const scenario = opts.scenario ?? 'normal';
   const delay = opts.delayMs ?? 1800;
@@ -560,7 +556,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         k++;
         if (k <= n && full) {
           // 拍的就绪同真服务一个规则(readyBeats;mock 没配音 = 不等配音):露到第 k 张卡时前 k-1 拍关了 → 页面就绪一拍播一拍;卡前的句(锚 null)也在,和真 runner 一样
-          // 后期按拍:铺到第 k 张时前 k-1 张的样子与行都已定(卡带 look,layout 只到已定的那几张)
+          // 铺到第 k 张时前 k-1 张的样子与行都已定(卡带 look,layout 只到已定的那几张)
           const part = { cards: full.cards.slice(0, k).map((c, i) => (i < k - 1 ? c : (({ look: _l, ...rest }) => rest)(c))), lines: full.lines.filter((l) => l.anchor === null || l.anchor < k - 1) };
           const rows = full.layout ? full.layout.rows.map((r) => r.filter((i) => i < k - 1)).filter((r) => r.length) : [];
           m.section = { ...part, ...(full.layout && rows.length ? { layout: { for: full.layout.for, rows } } : {}), partial: true, ready: readyBeats(part, { voiced: false, done: false }) };

@@ -315,7 +315,7 @@ export async function handLesson(ws: Workspace, tutor: string, date: string, thr
 /** 这几天的日记(<日记目录>/<日期>.md);没有的跳过 */
 /**
  * 删掉一天里的一个话题(家长板书页清单上的「删」,2026-09-22):索引里它的消息、会话、星、记账标记都去掉,
- * 这些轮的文件(转录、run、事件、后期、配音、卡的状态与资产)按 <日期>.<job>.* 整个删。
+ * 这些轮的文件(转录、run、事件、配音、卡的状态与资产)按 <日期>.<job>.* 整个删。
  * 不动的:已写进 vault 的记忆与日记(那是家长的,在 Obsidian 里改)、captures/ 里的照片。跑着的轮由路由先挡(409)。
  */
 export async function deleteThread(ws: Workspace, tutor: string, date: string, thread: string, opts: { keepCost?: boolean } = {}): Promise<ConversationIndex> {

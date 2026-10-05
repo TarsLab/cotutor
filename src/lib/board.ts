@@ -47,7 +47,7 @@ export function splitMods(tag: string): { rest: string; mods: CardMods; warnings
   return { rest: rest.join(' '), mods, warnings };
 }
 
-/** 围栏行:把修饰词重新写上去(课文件回写后期的提案用);原有的排版修饰词换掉,种类与卡自己的修饰词照旧 */
+/** 围栏行:把修饰词重新写上去(课文件回写样子用);原有的排版修饰词换掉,种类与卡自己的修饰词照旧 */
 export function withMods(fenceLine: string, mods: CardMods): string {
   const m = FENCE_OPEN.exec(fenceLine);
   if (!m) return fenceLine;
@@ -219,7 +219,7 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
     layout = { for: opts.device ?? 'tablet-landscape', rows };
   }
   // 提问卡(2026-09-21):末句问句是孩子要答的那句,念完不能只剩字幕——没配能答的卡(choice / fill / canvas)就在节尾补一张文字卡写着这句。
-  // 末句的锚点不动(还在它讲的那张卡的拍里,后期照样能把问句里的词标到那张卡上);提问卡自己一拍、没有讲稿。
+  // 末句的锚点不动(还在它讲的那张卡的拍里);提问卡自己一拍、没有讲稿。
   // 老师还在写(partial)时不补:这时的末句不一定是最后一句。首页没有讲稿,不管
   const lastLine = out[out.length - 1];
   if (!partial && (opts.place ?? 'board') === 'board' && lastLine?.ask && !lastLine.cues.length) {

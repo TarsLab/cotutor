@@ -1,5 +1,5 @@
 /**
- * 上下文包序列化(《cotutor契约草案.md》§2):固定 YAML 块 + 老师守则原文(<cotutor-rules>)与家长笔记原文段(<vault-note>)+ `---` + 消息原文。
+ * 上下文包序列化(《cotutor契约草案.md》§2):固定 YAML 块 + 老师守则原文(<cotutor-rules>)、家长笔记原文段(<vault-note>)、备课原文(<lesson-file> / <material>)+ `---` + 消息原文。
  * 手写 YAML 子集:标量能裸写就裸写,其余 JSON 双引号(合法 YAML);空的 plan / recent 不写。
  */
 import { ContextPackSchema, VAULT_PACK_ROLES, type ContextPack } from '../schema/index.ts';
@@ -90,6 +90,11 @@ export function renderContextPack(pack: ContextPack): string {
     const shipped = n.role === 'rules' || n.role === 'boardGuide';
     const tag = n.role === 'rules' ? 'cotutor-rules' : n.role === 'boardGuide' ? 'cotutor-board' : 'vault-note';
     out.push(shipped ? `<${tag} path=${JSON.stringify(n.path)}>` : `<${tag} role="${n.role}" path=${JSON.stringify(n.path)}>`, n.text.replace(/\s+$/, ''), `</${tag}>`);
+  }
+  // 备课原文:课文件与素材的说明,老师不用再读盘
+  for (const d of p.docs ?? []) {
+    const tag = d.kind === 'lesson' ? 'lesson-file' : 'material';
+    out.push(d.kind === 'lesson' ? `<${tag} path=${JSON.stringify(d.id)}>` : `<${tag} id=${JSON.stringify(d.id)}>`, d.text.replace(/\s+$/, ''), `</${tag}>`);
   }
   return out.join('\n');
 }

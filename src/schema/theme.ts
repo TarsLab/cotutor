@@ -1,7 +1,7 @@
 /**
  * 主题清单(themes/<name>/theme.json)的契约。样子的真相在主题里,不在卡的协议里:
  * 卡的底色槽(tints)、字形槽(looks)、五支笔(pens)各是一张表,主题想要几个就几个,每个一个名字 + 一句「给什么用」——
- * 板书后期的提示词从这句现拼,校验 = 名字在表里,不在就落 `default`;所以换主题永远能显示。
+ * 老师与课文件在围栏行上写的 tint= / look= 照这张表认,名字不在表里就落 `default`;所以换主题永远能显示。
  * 颜色的值不在清单里,在旁边的 kid.css 里(同一个名字对应 CSS 里的 data-tint / data-look / mk-<pen>)。
  */
 import { z } from 'zod';
@@ -9,11 +9,9 @@ import { z } from 'zod';
 export const THEME_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 export const THEME_MANIFEST_FILE = 'theme.json';
 export const THEME_CSS_FILE = 'kid.css';
-/** 板书后期(快模型)的提示词骨架,和 kid.css 同一套(出厂 / 拷贝 / hash / upgrade / 现读);可选,没有就用包里出厂的 */
-export const THEME_POST_FILE = 'post.md';
 export const THEMES_DIR = 'themes';
 
-const SlotSchema = z.object({ use: z.string().min(1).describe('给什么用(板书后期照这句挑)') });
+const SlotSchema = z.object({ use: z.string().min(1).describe('给什么用(写课文件、排版时照这句挑)') });
 const SlotTable = z.record(z.string().regex(THEME_NAME_RE), SlotSchema);
 
 export const ThemeManifestSchema = z

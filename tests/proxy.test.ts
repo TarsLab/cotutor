@@ -71,7 +71,6 @@ chmodSync(claude, 0o755);
 const cfgFile = join(w2, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 cfg.runtimes = { default: 'claude', claude: { run: [claude, '--agent', '{agent}', '{prompt}'], resume: [claude, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] } };
-cfg.policyDefaults = { post: { mode: 'off' } };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(w2), { now: () => new Date('2026-09-26T19:00:00'), env: { PATH: process.env.PATH } });
 const sent = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '一加一' });

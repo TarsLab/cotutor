@@ -53,28 +53,9 @@ const sid = session ?? `fake-${process.pid}-${Date.now()}`;
 const emit = (o: unknown): void => void process.stdout.write(`${JSON.stringify(o)}\n`);
 const lastLine = prompt.trim().split('\n').filter(Boolean).pop() ?? '';
 
-// 板书后期(--output-format json,一拍一次):模仿 claude 的整块 JSON 壳,正文是这一拍的提案——这拍的卡上标第一个词(圈)、再标一个越界的卡 99;
-// 卡 0 给 sky + emoji,卡 1 给不存在的槽 nope;卡 2 接上一行(same),其余另起;提示词里有「后期慢」就拖 3 秒(测超时),有「后期坏」就吐不是 JSON 的话(测解析失败)
-if (outputFormat === 'json' && /class="c [^"]*\bnow\b/.test(prompt)) {
-  // HTML 方言(提示词里有 class 带 now 的卡):板书里 class 带 now 的是这一拍;补丁标它标题的头一个词(圈;没有标题的卡就标「三角形」,多半不在卡上)、再标一个越界的卡 99;卡 0 sky + emoji,卡 1 不存在的槽,卡 2 接上一行
-  const now = /<(?:div|pre|figure) class="c [^"]*\bnow\b[^"]*" id="c(\d+)"[^>]*>(?:<h3>([^<]{1,4}))?/.exec(prompt);
-  const cardNo = now ? Number(now[1]) : 0;
-  const firstWord = now?.[2] ?? '三角形';
-  const look = cardNo === 0 ? ' data-tint="sky" data-emoji="📐"' : cardNo === 1 ? ' data-tint="nope"' : '';
-  const patch = `<div class="c" id="c${cardNo}" data-row="${cardNo === 2 ? 'same' : 'new'}"${look}><mark data-pen="circle">${firstWord}</mark><mark data-pen="box" data-card="c99">越界</mark></div>`;
-  const text = prompt.includes('后期坏') ? '我觉得这节挺好的,不用改。' : patch;
-  if (prompt.includes('后期慢')) await new Promise((r) => setTimeout(r, 3000));
-  emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.0021, duration_ms: 900, result: text });
-  process.exit(0);
-}
+// 整块 JSON 出(--output-format json):模仿 claude 的壳,正文原样回提示词的最后一行
 if (outputFormat === 'json') {
-  const cardLine = /^卡 (\d+)\. (\S+?)[(:]/m.exec(prompt.split('\n## 这一拍\n')[1] ?? '');
-  const cardNo = cardLine ? Number(cardLine[1]) : 0;
-  const firstWord = /^卡 \d+\. text[^:]*:(?:标题「[^」]*」;)?(\S{2,4})/m.exec(prompt.split('\n## 这一拍\n')[1] ?? '')?.[1] ?? '三角形';
-  const proposal = { row: cardNo === 2 ? 'same' : 'new', look: cardNo === 0 ? { tint: 'sky', emoji: '📐' } : cardNo === 1 ? { tint: 'nope' } : undefined, marks: [{ line: 0, phrase: firstWord, pen: 'circle' }, { line: 0, card: 99, phrase: '越界', pen: 'box' }], anchors: [] };
-  const text = prompt.includes('后期坏') ? '我觉得这节挺好的,不用改。' : JSON.stringify(proposal);
-  if (prompt.includes('后期慢')) await new Promise((r) => setTimeout(r, 3000));
-  emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.0021, duration_ms: 900, result: text });
+  emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.0021, duration_ms: 900, result: lastLine });
   process.exit(0);
 }
 

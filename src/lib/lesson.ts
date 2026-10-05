@@ -1,5 +1,5 @@
 /**
- * 课文件(《备课设计.md》§十)的纯函数:解析 lessons/<名>.md、查问题(两级,同首页)、把后期的提案回写成围栏行上的修饰词与讲稿里的 [词]。
+ * 课文件(《备课设计.md》§十)的纯函数:解析 lessons/<名>.md、查问题(两级,同首页)、把节上的样子回写成围栏行上的修饰词与讲稿里的 [词]。
  * 文件 = frontmatter(tutor 必填、device / for 可省)+ 板书语法的正文(`---` 独占一行分节,一节 = 孩子端的一轮)+ 第一个 `## ` 起给老师的讲法。
  * 排版在围栏行上(same / tint= / look= / emoji=,src/lib/board.ts 的 splitMods),解析器把它们变成 section.layout 与 card.look,契约不变。
  * 永不抛错;问题都带行号(1 起)。要读盘的(老师在不在、主题槽表)由调用方查好传进来。
@@ -233,6 +233,10 @@ export function lessonIssues(doc: LessonDoc, ctx: LessonCheckContext): LessonIss
   return out.sort((a, b) => (a.line ?? Infinity) - (b.line ?? Infinity));
 }
 
+/** 排版时一句最多标几处、一张卡最多标几处(技能的 references/排版.md 与 cotutor lesson post 的提示词都用) */
+export const MAX_MARKS_PER_LINE = 2;
+export const MAX_MARKS_PER_CARD = 3;
+
 /** 一张卡的排版修饰词:接上一行(不是本行第一张)、样子 */
 export function modsOf(section: BoardSection, n: number): CardMods {
   const rows = section.layout?.rows ?? [];
@@ -243,8 +247,8 @@ export function modsOf(section: BoardSection, n: number): CardMods {
 }
 
 /**
- * 后期的提案回写进文件(《备课设计.md》§10.4):每张卡的围栏行换上 same / tint= / look= / emoji=(手写过的当已定,只填没写的:posted 是「文件的节」跑完后期的结果,
- * 调用方已把文件里写了的盖回去);后期的标注(带 pen 的)写成讲稿里的 [词]——那句里有这个词才写得进,没有的丢掉。
+ * 节上的样子回写进文件(《备课设计.md》§10.4):每张卡的围栏行换上 same / tint= / look= / emoji=(手写过的当已定,只填没写的:posted 是这几节带着样子的那份,
+ * 调用方已把文件里写了的盖回去);带 pen 的标注写成讲稿里的 [词]——那句里有这个词才写得进,没有的丢掉。
  * 讲稿里已有 [词] 的不重复。返回新的全文与改了几处
  */
 export function applyPostToLesson(md: string, doc: LessonDoc, posted: readonly BoardSection[]): { md: string; fences: number; marks: number } {

@@ -16,14 +16,14 @@
  */
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CotutorConfigSchema, explainIssues } from '../schema/index.ts';
+import { CotutorConfigSchema, TUTOR_TOOLS, explainIssues } from '../schema/index.ts';
 import { configTemplate, shippedAgents } from './skeleton.ts';
 import { installTutors, type InstallStep } from './tutors.ts';
 import { RENAMED_TUTORS, renameTutorData, renamedEntry, type RenameOp } from './rename.ts';
 import { CONFIG_FILE, ConfigError, readJson, resolvePaths } from './workspace.ts';
 
 /** rename:出厂老师改了键名(rename.ts),值原样搬到新键下,连带文件与目录 */
-export type GapKind = 'tutor' | 'rename' | 'runtime' | 'flag';
+export type GapKind = 'tutor' | 'rename' | 'runtime' | 'flag' | 'policy';
 
 export interface ConfigGap {
   kind: GapKind;
@@ -125,11 +125,29 @@ export async function configGaps(raw: unknown): Promise<ConfigGap[]> {
       const u = mine[key];
       if (!Array.isArray(f) || !Array.isArray(u)) continue;
       const { argv, added } = insertMissingFlags(u as string[], f as string[]);
-      if (!added.length) continue;
-      gaps.push({ kind: 'flag', path: `runtimes.${name}.${key}`, detail: `${name} 的 ${key} 命令模板缺出厂旗标 ${added.join(' ')}`, value: argv });
+      // --tools 的值还是旧出厂的白名单(没人改过)、出厂模板已经换成 {tools}:一起换,孩子的话才不带工具(policy.tools)。改过的白名单是家长的决定,不动
+      const at = argv.indexOf('--tools');
+      const swap = at >= 0 && argv[at + 1] === TUTOR_TOOLS && (f as string[])[(f as string[]).indexOf('--tools') + 1] === '{tools}';
+      if (swap) argv[at + 1] = '{tools}';
+      if (!added.length && !swap) continue;
+      const what = [added.length ? `缺出厂旗标 ${added.join(' ')}` : '', swap ? `--tools 还是写死的白名单,换成 {tools}(孩子的话不带工具,开口快)` : ''].filter(Boolean).join(';');
+      gaps.push({ kind: 'flag', path: `runtimes.${name}.${key}`, detail: `${name} 的 ${key} 命令模板${what}`, value: argv });
+    }
+  }
+  // 模板换成 {tools} 之后,出厂就要带工具的老师(口播老师要跑 koubo 命令)得在政策里写明,不然它孩子那轮没工具
+  if (gaps.some((g) => g.kind === 'flag' && (g.value as string[]).includes('{tools}') && !(getAt(raw, g.path) as string[]).includes('{tools}'))) {
+    for (const [name, entry] of Object.entries(factoryTutors)) {
+      const want = isObj(entry) && isObj(entry.policy) ? entry.policy.tools : undefined;
+      const mine = mineTutors[name];
+      if (want === undefined || !isObj(mine) || (isObj(mine.policy) && mine.policy.tools !== undefined)) continue;
+      gaps.push({ kind: 'policy', path: `tutors.${name}.policy.tools`, detail: `${name} 要带工具才干得了活(出厂政策 tools: ${String(want)})`, value: want });
     }
   }
   return gaps;
+}
+
+function getAt(obj: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((cur, k) => (isObj(cur) ? cur[k] : undefined), obj);
 }
 
 function setAt(obj: Record<string, unknown>, path: string, value: unknown): void {

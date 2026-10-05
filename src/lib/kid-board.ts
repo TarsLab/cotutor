@@ -17,7 +17,7 @@ export interface BoardCard {
   props: Record<string, unknown>;
   state?: unknown;
   assets?: string[];
-  /** 样子(板书后期定的;没有就走机械规则 tintFor / lookFor):底色槽、字形槽、emoji,名字来自主题清单 */
+  /** 样子(围栏行上写的 tint= / look= / emoji=;没有就走机械规则 tintFor / lookFor):底色槽、字形槽、emoji,名字来自主题清单 */
   look?: CardLook;
 }
 
@@ -46,7 +46,7 @@ export interface BoardMark {
   card: number;
   phrase: string;
   pen?: PenName;
-  /** 讲稿里念到它的那个词(卡上写「三个角」、讲稿说「几个角」时后期填);没有 = 用 phrase 在讲稿里找。只用来定时,不影响标在卡上哪个词 */
+  /** 讲稿里念到它的那个词(卡上写「三个角」、讲稿说「几个角」时填);没有 = 用 phrase 在讲稿里找。只用来定时,不影响标在卡上哪个词 */
   said?: string;
 }
 
@@ -73,14 +73,14 @@ export interface BoardSection {
   cards: BoardCard[];
   lines: BoardLine[];
   partial?: boolean;
-  /** 流式时:前几拍已经就绪(配音齐;以后加后期回)——页面就绪一拍播一拍;定稿的节没有这个字段(全部就绪) */
+  /** 流式时:前几拍已经就绪(配音齐)——页面就绪一拍播一拍;定稿的节没有这个字段(全部就绪) */
   ready?: number;
   layout?: BoardLayout;
 }
 
 /**
  * 拍(2026-09-13,《工作流程.md》§二):一张卡 + 它后面直到下一张卡之前的讲稿句;第一张卡之前的句子是没有卡的一拍。
- * 不进契约,从卡与句的顺序现算——句子锚到上一张卡(anchor),所以按 anchor 分组;后期改过锚点的定稿节不用它(全部就绪,拍无所谓)。
+ * 不进契约,从卡与句的顺序现算——句子锚到上一张卡(anchor),所以按 anchor 分组。
  */
 export interface Beat {
   card: number | null;
@@ -104,14 +104,13 @@ export function beatsOf(section: Pick<BoardSection, 'cards' | 'lines'>): Beat[] 
  * 流式时前几拍就绪了:一拍要「关了」(后面已经有下一张卡,或老师写完了)且它的每句配音都落了盘(老师没配音色 = 不等配音)。
  * 返回就绪的拍数(前缀:第 k 拍就绪的前提是前面都就绪,播放本来就是顺着来的)。
  */
-export function readyBeats(section: Pick<BoardSection, 'cards' | 'lines'>, opts: { voiced: boolean; done: boolean; settled?: (k: number, beat: Beat) => boolean }): number {
+export function readyBeats(section: Pick<BoardSection, 'cards' | 'lines'>, opts: { voiced: boolean; done: boolean }): number {
   const beats = beatsOf(section);
   let n = 0;
   for (let k = 0; k < beats.length; k++) {
     const closed = opts.done || k < beats.length - 1;
     const dubbed = !opts.voiced || beats[k].lines.every((i) => section.lines[i].audio !== null);
-    const posted = opts.settled ? opts.settled(k, beats[k]) : true;
-    if (!closed || !dubbed || !posted) break;
+    if (!closed || !dubbed) break;
     n++;
   }
   return n;
@@ -213,13 +212,13 @@ export function isHeading(card: BoardCard): boolean {
   return card.kind === 'text' && (card.props || {}).heading === true;
 }
 
-/** 提问卡:末句问句没配能答的卡时解析器补的那张文字卡(《卡片协议.md》);字就是那句问话,不过后期、独占一行 */
+/** 提问卡:末句问句没配能答的卡时解析器补的那张文字卡(《卡片协议.md》);字就是那句问话,独占一行 */
 export function isAskCard(card: BoardCard): boolean {
   return card.kind === 'text' && (card.props || {}).ask === true;
 }
 
 /**
- * 底色槽(机械规则;后期定了 look.tint 就用它):做题的卡紫(plum),定义 / 结论蓝(sky),方法绿(moss),事实 / 例子 / 引言米(sand),
+ * 底色槽(机械规则;卡上写了 look.tint 就用它):做题的卡紫(plum),定义 / 结论蓝(sky),方法绿(moss),事实 / 例子 / 引言米(sand),
  * 公式 / 图 / 代码白(paper)。名字对不上主题清单的,CSS 落回 paper。
  */
 export function tintFor(card: BoardCard): string {
@@ -242,7 +241,7 @@ export function tintFor(card: BoardCard): string {
   }
 }
 
-/** 字形槽(机械规则;后期定了 look.look 就用它):formula → formula(衬线),其余 plain */
+/** 字形槽(机械规则;卡上写了 look.look 就用它):formula → formula(衬线),其余 plain */
 export function lookFor(card: BoardCard): string {
   const l = card.look?.look;
   if (l) return l;
@@ -253,7 +252,7 @@ export function lookFor(card: BoardCard): string {
 const LATIN = /^[0-9A-Za-z.,%°²³+\-×÷=()\s]+$/;
 
 /**
- * 笔(机械规则;后期定了 mark.pen 就用它):选项 → 方框;填空、数字与拉丁词 → 下划线;点读段、公式、大字 → 荧光;
+ * 笔(机械规则;标注带了 pen 就用它):选项 → 方框;填空、数字与拉丁词 → 下划线;点读段、公式、大字 → 荧光;
  * 标题位上的词 → 圈;其余(正文里正在定义的词)→ 术语底。
  */
 export function penFor(card: BoardCard, phrase: string): PenName {
@@ -286,7 +285,7 @@ export function standsAlone(card: BoardCard): boolean {
 
 const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice', 'fill'];
 
-/** 能半宽的种类:文字、点读、代码、田字格、单词卡、选择题、填空题。字形(后期挑的大字等)不算:字大放不下,量出来自然是全宽 */
+/** 能半宽的种类:文字、点读、代码、田字格、单词卡、选择题、填空题。字形(大字等)不算:字大放不下,量出来自然是全宽 */
 export function canHalf(card: BoardCard): boolean {
   return !standsAlone(card) && HALF_KINDS.includes(card.kind);
 }
@@ -337,7 +336,7 @@ export function rowsFor(section: BoardSection, device: Device, half?: (i: number
   const n = section.cards.length;
   const isHalf = (i: number): boolean => canHalf(section.cards[i]) && (half ? half(i) : isShortCard(section.cards[i]));
   const lay = section.layout;
-  // layout 只盖住前几张也认:流式的节,和定稿后不过后期的提问卡
+  // layout 只盖住前几张也认:流式的节,和节尾补的提问卡
   const last = section.cards[n - 1];
   const covered = lay ? lay.rows.flat().length : 0;
   const prefix = Boolean((section.partial || (last && isAskCard(last))) && lay && validRows(lay.rows, covered) && covered <= n);
@@ -709,7 +708,7 @@ export interface PlayerState {
   section: number;
   line: number;
   status: PlayStatus;
-  /** 再听(2026-09-18):正在重念的句子(下标,不一定连着——后期可能改过锚点)与念完回到哪里 */
+  /** 再听(2026-09-18):正在重念的句子(下标,不一定连着)与念完回到哪里 */
   replay?: { lines: number[]; back: PlayerState };
 }
 
@@ -1201,7 +1200,7 @@ export function lineDurationMs(text: string): number {
 
 /**
  * 一处标注在这句里什么时候画(2026-09-13):没有字级时间戳(voxtell align 还是规划),按字数比例估——中文每字语速很均匀,
- * 20 字一句误差两三百毫秒。词取 said(后期填的讲稿里的词),没有就拿 phrase 在讲稿里找;讲稿里没这个词 → null(句首就画,同以前)。
+ * 20 字一句误差两三百毫秒。词取 said(讲稿里念到的那个词),没有就拿 phrase 在讲稿里找;讲稿里没这个词 → null(句首就画,同以前)。
  * totalMs = 这句声音的总时长(mp3 的 duration,或没声音时的 lineDurationMs)。dur 最短 350ms,描线不至于一闪。
  */
 export function markTiming(line: BoardLine, mark: BoardMark, totalMs: number): { at: number; dur: number } | null {

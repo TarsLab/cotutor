@@ -17,16 +17,14 @@ export const TimingSchema = z.object({
   warm: z.literal(true).optional(),
   /** 流式时第一张卡闭合(孩子端第一次看到东西);整块出的运行时没有 */
   firstCardMs: z.number().int().nonnegative().optional(),
-  /** 首拍就绪:第一拍配音齐(以后加后期回),孩子端能开播的那一刻(2026-09-13,头号埋点) */
+  /** 首拍就绪:第一拍配音齐,孩子端能开播的那一刻(2026-09-13,头号埋点) */
   firstReadyMs: z.number().int().nonnegative().optional(),
   /** 老师进程退出 */
   doneMs: z.number().int().nonnegative().optional(),
   /** 讲稿配音收尾(索引写好、孩子端能播的那一刻);没配音就没有 */
   dubbedMs: z.number().int().nonnegative().optional(),
-  /** 板书后期收尾(标注 / 排版 / 样子回来);没起就没有 */
-  postMs: z.number().int().nonnegative().optional(),
-  /** 每拍(2026-09-13,从事件推):关、配音齐、后期回、就绪 */
-  beats: z.array(z.object({ card: z.number().int().nonnegative().nullable(), closedMs: z.number().int().nonnegative().optional(), dubbedMs: z.number().int().nonnegative().optional(), postMs: z.number().int().nonnegative().optional(), readyMs: z.number().int().nonnegative().optional() })).optional(),
+  /** 每拍(2026-09-13,从事件推):关、配音齐、就绪 */
+  beats: z.array(z.object({ card: z.number().int().nonnegative().nullable(), closedMs: z.number().int().nonnegative().optional(), dubbedMs: z.number().int().nonnegative().optional(), readyMs: z.number().int().nonnegative().optional() })).optional(),
 });
 export type Timing = z.infer<typeof TimingSchema>;
 
@@ -76,10 +74,8 @@ export const ConversationMessageSchema = z.object({
   cards: z.array(z.object({ card: z.string().min(1), text: z.string() })).optional(),
   /** 这轮的用时(埋点,2026-09-11):都是从 startedAt 起的毫秒数;家长视图每轮一行「首卡 10s · 整轮 23s」 */
   timing: TimingSchema.optional(),
-  /** 发这条时孩子端是什么端(板书后期按它排版;缺省当平板横屏) */
+  /** 发这条时孩子端是什么端(缺省当平板横屏) */
   device: DeviceSchema.optional(),
-  /** 板书后期的结果:收没收到、用时、费用、丢了几条提案;没起(关了 / 没卡)就没有。细节在 <日期>.<job>.post.json */
-  post: z.object({ ok: z.boolean(), ms: z.number().int().nonnegative(), costUsd: z.number().optional(), dropped: z.number().int().nonnegative(), error: z.string().optional(), beats: z.number().int().nonnegative().optional(), failed: z.number().int().nonnegative().optional() }).optional(),
   /** 这轮是给某个话题记账的任务(from: system,resume 那个话题的会话);跑完老师回的「## 记账」段经应用落进日记 */
   bookkeep: z.object({ thread: z.string().min(1) }).optional(),
   /** 这轮是记账后整理记忆的任务(from: system,新会话;2026-09-18):老师回「## 记忆」段的一串增 / 改 / 删,不受每轮条数上限;孩子端看不到 */

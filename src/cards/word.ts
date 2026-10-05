@@ -11,7 +11,7 @@ export const WordPropsSchema = z.object({
   word: z.string().min(1),
   /** 自然拼读分段:拼起来就是 word(非字母跟着前一段);只在舞台里分开写 */
   chunks: z.array(z.string().min(1)).min(2).optional(),
-  /** 一张图:老师写的 emoji;没写看后期的 look.emoji */
+  /** 一张图:老师写的 emoji;没写看卡上的 look.emoji */
   emoji: z.string().min(1).optional(),
 });
 export type WordProps = z.infer<typeof WordPropsSchema>;

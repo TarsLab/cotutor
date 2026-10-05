@@ -1,6 +1,6 @@
 {
   "name": "default",
-  "_note": "cotutor 出厂主题的清单。tints = 卡的底色槽、looks = 字形槽、pens = 五支笔;槽想要几个就几个,每个一个名字 + 一句「给什么用」(板书后期照这句挑),default 是素版与回退用的槽。颜色的值在旁边的 kid.css 里,这里只登记名字。",
+  "_note": "cotutor 出厂主题的清单。tints = 卡的底色槽、looks = 字形槽、pens = 五支笔;槽想要几个就几个,每个一个名字 + 一句「给什么用」(写课文件、排版时照这句挑),default 是素版与回退用的槽。颜色的值在旁边的 kid.css 里,这里只登记名字。",
   "default": "paper",
   "tints": {
     "paper": { "use": "公式、图、代码:白底,不抢" },

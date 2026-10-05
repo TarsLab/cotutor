@@ -12,7 +12,7 @@ export const BoardCardSchema = z.object({
   state: z.unknown().optional(),
   /** 已生成好的配音资产(相对 conversations/<老师>/);索引里不存,下发时从 .cards/<n>/ 目录并进来 */
   assets: z.array(z.string()).optional(),
-  /** 样子(板书后期定的):底色槽 / 字形槽 / emoji,名字来自主题清单;没有就走机械规则 */
+  /** 样子(围栏行上写的):底色槽 / 字形槽 / emoji,名字来自主题清单;没有就走机械规则 */
   look: z.object({ tint: z.string().optional(), look: z.string().optional(), emoji: z.string().optional() }).optional(),
 });
 export const PenSchema = z.enum(['marker', 'tint', 'underline', 'box', 'circle']);
@@ -33,7 +33,7 @@ export const BoardSectionSchema = z.object({
   lines: z.array(BoardLineSchema),
   partial: z.boolean().optional(),
   ready: z.number().int().nonnegative().optional(),
-  /** 排版(板书后期为某个端排的行);没有 = 一行一张 */
+  /** 排版(围栏行上写的 same,为某个端排的行);没有 = 一行一张 */
   layout: BoardLayoutSchema.optional(),
 });
 

@@ -797,7 +797,7 @@ __REEL_JS__
   // 卡片:按 kind 分支(轻插件内联;不认识的 kind 把 props 里的字都显示出来)。紧凑态只读,点了开舞台;stage=true 是舞台里的画法
   const renderCard = (c, idx, secIdx, stage) => {
     const p = c.props || {};
-    // 每张卡带底色槽与字形槽(后期定的 look,没有就机械规则);名字对不上主题的,CSS 落回 paper / plain
+    // 每张卡带底色槽与字形槽(围栏行上写的 look,没有就机械规则);名字对不上主题的,CSS 落回 paper / plain
     const board = !stage && secIdx !== null;
     const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), on: board ? { click: () => openStage(secIdx, idx) } : {} }, ...kids, board ? againBtn() : null);
     switch (c.kind) {
@@ -1368,7 +1368,7 @@ __REEL_JS__
     for (; P.shown < n; P.shown++) { const c = placeCard(P, sec, P.shown, idx); c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     dispatch({ type: wasLive ? 'liveBeat' : 'liveStart', section: idx });
   };
-  /** 老师写完了:live 的那节换成正式的(带后期的标注 / 样子、每句配音),不重播——没铺的卡补上,铺过的换样子并把已播过的标注补画;等着的接上 */
+  /** 老师写完了:live 的那节换成正式的(带标注 / 样子、每句配音),不重播——没铺的卡补上,铺过的换样子并把已播过的标注补画;等着的接上 */
   const finalizeLive = (e) => {
     const P = S.partial; S.partial = null;
     const idx = P.idx;
@@ -1396,9 +1396,9 @@ __REEL_JS__
   };
   /** 一张卡换成新画的:选中态与「田字格写过了」跟着搬 */
   const swapCard = (old, fresh) => {
-    // 田字格不换元素:老师写完那一刻它可能正在写,换了动画就断(mock 里 1.5 秒必现);同一个词只把后期定的样子搬过去
+    // 田字格不换元素:老师写完那一刻它可能正在写,换了动画就断(mock 里 1.5 秒必现);同一个词只把定稿的样子搬过去
     if (old.classList.contains('c-tianzige') && fresh.classList.contains('c-tianzige') && old.dataset.ch === fresh.dataset.ch) { old.dataset.tint = fresh.dataset.tint; old.dataset.look = fresh.dataset.look; old.dataset.card = fresh.dataset.card; return; }
-    // 单词卡同理;后期晚到的 emoji 搬过去
+    // 单词卡同理;定稿才有的 emoji 搬过去
     if (old.classList.contains('c-word') && fresh.classList.contains('c-word') && old.dataset.w === fresh.dataset.w) {
       old.dataset.tint = fresh.dataset.tint; old.dataset.look = fresh.dataset.look; old.dataset.card = fresh.dataset.card;
       const fe = fresh.querySelector('.we'), oe = old.querySelector('.we');
@@ -1869,7 +1869,7 @@ __REEL_JS__
         const idx = S.sections.length - 1;
         if (!silent && S.autoplay) S.unfold.add(idx);
         if (S.partial && S.partial.job === e.job) {
-          // 流式时一行一张先铺着;跑完了按后期的行整节重画,节的编号就是它现在的位置
+          // 流式时一行一张先铺着;跑完了按定稿的行整节重画,节的编号就是它现在的位置
           const el = S.partial.el; S.partial = null;
           el.replaceWith(renderSection(e, idx));
         } else $('#board').append(renderSection(e, idx));
@@ -2182,7 +2182,7 @@ __REEL_JS__
     setBar('idle');
     loadLesson();
   };
-  /** 讲稿一句:标过的词(后期的 said,或老师的 [词])高亮 */
+  /** 讲稿一句:标过的词(老师的 [词])高亮 */
   const markedText = (l) => {
     const text = l.text; const parts = [];
     const spots = (l.marks || []).map((m) => { const w = m.said || m.phrase; const i = w ? text.indexOf(w) : -1; return i < 0 ? null : { i, w }; }).filter(Boolean).sort((a, b) => a.i - b.i);

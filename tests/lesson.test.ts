@@ -1,4 +1,4 @@
-/** 课文件(《备课设计.md》§十):排版修饰词 → layout / look;`---` 分节;frontmatter 与讲法;check 两级;后期提案回写(围栏行、[词]);手写的当已定。 */
+/** 课文件(《备课设计.md》§十):排版修饰词 → layout / look;`---` 分节;frontmatter 与讲法;check 两级;节上的样子回写(围栏行、[词]);手写的当已定。 */
 import { parseBoard, splitMods, withMods } from '../src/lib/board.ts';
 import { applyLayoutReply, applyPostToLesson, lessonIssues, modsOf, parseLesson, stripLayout } from '../src/lib/lesson.ts';
 import type { BoardSection } from '../src/lib/kid-board.ts';
@@ -77,7 +77,7 @@ for: 2026-09-28
   check('围栏里的 --- 不分节;讲法没有', inFence.sections.length === 1 && inFence.sections[0].section.cards.length === 1 && inFence.brief === '');
 }
 
-// ---- 备课话题导出时把后期的决定写进文件(applyPostToLesson)
+// ---- 备课话题导出时把节上的样子写进文件(applyPostToLesson)
 {
   const doc = parseLesson(FILE);
   const s0 = doc.sections[0].section;

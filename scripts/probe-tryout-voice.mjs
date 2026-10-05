@@ -35,7 +35,6 @@ const cfg = JSON.parse(readFileSync(join(root, 'cotutor.json'), 'utf8'));
 const fake = join(repo, 'tests', '_fake-cli.ts');
 cfg.runtimes.default = 'fake';
 cfg.runtimes.fake = { run: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '{prompt}'], resume: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '--resume', '{session}', '{prompt}'] };
-cfg.policyDefaults = { post: { mode: 'off' } };
 cfg.server.port = port;
 cfg.tts = { say: [process.execPath, sine, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: [process.execPath, sine, 'voices', '--json'] };
 cfg.tutors['math-tutor'].voice = 'v-math';

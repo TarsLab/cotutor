@@ -6,11 +6,14 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Workspace } from '../cli/workspace.ts';
 import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
+import { stripHumanNotes } from '../lib/human-notes.ts';
 import type { LessonIssue } from '../lib/lesson.ts';
 import { MATERIAL_FILE, MATERIAL_ID_RE, MATERIALS_DIR, materialIssues, materialLine, parseMaterial, type MaterialDoc } from '../lib/material.ts';
 
 /** 上下文包 materials: 最多几行(《备课设计.md》§11.3) */
 export const MATERIALS_IN_PACK = 20;
+/** 其中前几份把 material.md 原文也带上(<material>):老师不用再读盘就知道画面里有什么、每段停在哪 */
+export const MATERIAL_DOCS_IN_PACK = 5;
 
 export interface MaterialCheck {
   id: string;
@@ -63,6 +66,17 @@ export async function materialsFor(ws: Workspace, tutor: string, first: readonly
   const rank = (c: MaterialCheck): number => (first.includes(c.id) ? first.indexOf(c.id) : first.length);
   mine.sort((a, b) => rank(a) - rank(b) || (b.mtime ?? '').localeCompare(a.mtime ?? ''));
   return mine.slice(0, MATERIALS_IN_PACK).map((c) => materialLine(c.id, c.doc));
+}
+
+/** materials: 那几行里前 MATERIAL_DOCS_IN_PACK 份的 material.md 原文(去掉给人看的注释);读不到的跳过 */
+export async function materialDocs(ws: Workspace, lines: readonly string[]): Promise<{ id: string; text: string }[]> {
+  const out: { id: string; text: string }[] = [];
+  for (const line of lines.slice(0, MATERIAL_DOCS_IN_PACK)) {
+    const id = line.split(' · ')[0];
+    const md = await readFile(join(ws.dirs.materials, id, MATERIAL_FILE), 'utf8').catch(() => null);
+    if (md !== null) out.push({ id, text: stripHumanNotes(md).trim() });
+  }
+  return out;
 }
 
 export function formatMaterialCheck(c: MaterialCheck): string {

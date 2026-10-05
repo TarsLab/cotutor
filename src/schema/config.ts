@@ -10,7 +10,7 @@ export const PolicySchema = z.object({
   /** 老师说给孩子听的每一句的字数上限;超出在句末截断(《cotutor契约草案.md》§4;板书后按句算) */
   replyMaxChars: z.number().int().positive().describe('老师说给孩子听的每一句的字数上限(板书讲稿一行一句,按句截);超出在句末截断'),
   /** 每孩每日消息上限;超限老师头像灰掉 */
-  dailyMessages: z.number().int().nonnegative().describe('孩子每日可发消息条数(家长发的不算);到了头像灰'),
+  dailyMessages: z.number().int().nonnegative().describe('孩子端每日可发消息条数(「继续」与系统任务不算,删掉的话题退回);到了头像灰'),
   /** 上下文包的三个数:最近观察条数(从日记的「- 观察:」行抽,最近 14 天)、计划行数、档案 / 入口文件 / 记忆原文各带多少字 */
   contextPack: z.object({
     recent: z.number().int().nonnegative().describe('上下文包带最近几条观察(最近 14 天日记里本学科的「- 观察:」行,取最新的)'),
@@ -25,7 +25,7 @@ export const PolicySchema = z.object({
   effort: z.enum(['low', 'medium', 'high']).describe('老师动笔前想多久:low = 想得少、开口快(缺省,孩子等 10–15 秒);medium = 多想一会儿(算题的老师);high = 最慢最细。填进运行时模板的 {effort};模板里没有 {effort} 的运行时不受影响'),
   /**
    * 孩子的话,老师带不带工具(2026-10-04):填进运行时模板的 {tools}。ray 9 月的真实对话,用了工具的轮首拍就绪中位数 31.7 秒(24 轮),没用的 6.8 秒(37 轮);
-   * 孩子最喜欢的是回得快的那位老师。off 时要用的东西(课文件、素材的说明)由应用放进上下文包
+   * 孩子最喜欢的是回得快的那位老师。off 时要用的东西(素材的说明)由应用放进上下文包
    */
   tools: z.enum(['off', 'on']).describe('孩子说的话,老师带不带工具:off = 不带,只凭上下文包答,开口快(缺省);on = 带(查教材、读 vault,慢)。带照片的那条、记账,总是带。模板里没有 {tools} 的运行时不受影响'),
   /** 板书开关:auto = 老师判断要不要出卡(缺省);off = 只说话不出卡 */

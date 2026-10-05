@@ -24,7 +24,7 @@ try {
   const rep = (await get('/api/workspace')).json as { workspace: string; tutors: string[] };
   check('workspace 回报脱敏', rep.workspace.startsWith('$HOME') && rep.tutors.length === 5, JSON.stringify(rep));
   const cfg = (await get('/api/config')).json as { title: string; runtimes: string[]; tutors: { name: string; policy: { replyMaxChars: number } }[]; tutorPatches: Record<string, unknown> };
-  check('配置接口带老师、政策、运行时名', cfg.title === '小明的老师们' && cfg.tutors.length === 5 && cfg.tutors[0].policy.replyMaxChars === 60 && cfg.runtimes.join() === 'claude,qwen,claude-scene,qwen-scene,claude-fast' && 'scene-maker' in cfg.tutorPatches);
+  check('配置接口带老师、政策、运行时名', cfg.title === '小明的老师们' && cfg.tutors.length === 5 && cfg.tutors[0].policy.replyMaxChars === 60 && cfg.runtimes.join() === 'claude,qwen,claude-scene,qwen-scene' && 'scene-maker' in cfg.tutorPatches);
   check('孩子端老师列表不含 hidden', ((await get('/api/tutors?kid=1')).json as unknown[]).length === 3);
   // 政策文件补缺:新 workspace 没有差异;老 workspace 的差异由 /api/config 带给设置页,POST 补(与 cotutor upgrade --config 同一条路)
   check('新 workspace 没有可补的出厂件', ((await get('/api/config')).json as { migrate: unknown[] }).migrate.length === 0);
@@ -115,15 +115,15 @@ try {
     const b2 = parseBoard('再想想,借一个够不够?').section;
     let idx = emptyIndex('math-tutor', today);
     idx = addMessage(idx, { job: '1620-1', thread: '1620-1', at: `${today}T16:20`, from: 'kid', text: '7 减 9 怎么算', result: 'ok', artifacts: [], kidText: '开场。\n酒是谁的?', section: b1, parentText: '## 家长\n他其实会了。', remembered: [`${today} 减法爱跳步`] });
-    idx = addMessage(idx, { job: '1625-2', thread: '1620-1', at: `${today}T16:25`, from: 'parent', text: '换个说法', result: 'ok', artifacts: [], kidText: '再想想,借一个够不够?', section: b2 });
+    idx = addMessage(idx, { job: '1625-2', thread: '1620-1', at: `${today}T16:25`, from: 'system', text: '换个说法', result: 'ok', artifacts: [], kidText: '再想想,借一个够不够?', section: b2 });
     idx = addMessage(idx, { job: '1630-3', thread: '1630-3', at: `${today}T16:30`, from: 'kid', text: '再来', result: 'error', artifacts: [], error: 'timeout' });
     idx = { ...idx, ratings: { '1620-1': 4 }, costUsd: 0.12 };
     await writeIndex(ctx.ws, idx);
     type PMsg = { from: string; question: string | null; section?: { cards: { props: Record<string, unknown> }[] }; parentText?: string; remembered?: string[]; error?: string };
     const pb = (await get('/api/conversations/math-tutor/today/board')).json as { messages: PMsg[]; thread: string | null };
-    check('板书接口:三条都在,答案不剥、给家长的尾巴与记忆在、家长的话有 from、出错的轮有 error', pb.messages.length === 3 && JSON.stringify(pb.messages[0].section?.cards[0].props.answer) === '[0]' && pb.messages[0].parentText === '## 家长\n他其实会了。' && pb.messages[0].remembered?.length === 1 && pb.messages[1].from === 'parent' && pb.messages[1].question === '换个说法' && pb.messages[2].error === 'timeout' && pb.thread === '1630-3', JSON.stringify(pb));
+    check('板书接口:三条都在,答案不剥、给家长的尾巴与记忆在、系统的话有 from、出错的轮有 error', pb.messages.length === 3 && JSON.stringify(pb.messages[0].section?.cards[0].props.answer) === '[0]' && pb.messages[0].parentText === '## 家长\n他其实会了。' && pb.messages[0].remembered?.length === 1 && pb.messages[1].from === 'system' && pb.messages[1].question === '换个说法' && pb.messages[2].error === 'timeout' && pb.thread === '1630-3', JSON.stringify(pb));
     const kb = (await get('/api/kid/conversations/math-tutor/today')).json as { messages: PMsg[] };
-    check('护栏:同一份索引,孩子接口答案剥掉、没有家长尾巴与记忆、家长的话没有问句、没有 error', kb.messages.length === 3 && !('answer' in (kb.messages[0].section?.cards[0].props ?? {})) && !('parentText' in kb.messages[0]) && !('remembered' in kb.messages[0]) && kb.messages[1].question === null && !('from' in kb.messages[1]) && !('error' in kb.messages[2]), JSON.stringify(kb));
+    check('护栏:同一份索引,孩子接口答案剥掉、没有家长尾巴与记忆、系统的话没有问句、没有 error', kb.messages.length === 3 && !('answer' in (kb.messages[0].section?.cards[0].props ?? {})) && !('parentText' in kb.messages[0]) && !('remembered' in kb.messages[0]) && kb.messages[1].question === null && !('from' in kb.messages[1]) && !('error' in kb.messages[2]), JSON.stringify(kb));
     type OvTutor = { name: string; turns: number; costUsd: number; threads: { thread: string; title: string; from: string; sections: number; cards: number; stoppedAt: string | null; rating: number | null; booked: boolean }[] };
     const ov = (await get('/api/overview/today')).json as { date: string; today: string; tutors: OvTutor[] };
     const mt = ov.tutors.find((t) => t.name === 'math-tutor');

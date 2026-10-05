@@ -85,7 +85,6 @@ export const DEV_PAGE = `<!doctype html>
   .ask { display:flex; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line-soft); align-items:flex-start; }
   .ask .tag { font:500 12.5px/1.7 var(--mono); letter-spacing:.06em; padding:1px 7px; border-radius:5px; flex:none; background:var(--sunk); color:var(--muted); }
   .ask.from-kid .tag { background:var(--kid-soft); color:var(--kid); }
-  .ask.from-parent .tag { background:var(--parent-soft); color:var(--parent); }
   .ask .q { flex:1; min-width:0; white-space:pre-wrap; word-break:break-word; }
   .ask .q .did { display:block; margin-top:6px; font-size:14px; color:var(--kid); border-left:2px solid var(--kid); padding-left:9px; white-space:normal; }
   .ask .when { font:400 13px/1.9 var(--mono); color:var(--muted); flex:none; font-variant-numeric:tabular-nums; }
@@ -338,7 +337,7 @@ export const DEV_PAGE = `<!doctype html>
   <h1 id="title">cotutor<small>工作台</small></h1>
   <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">老师团</a><a href="#voices" data-tab="voices">音色</a><a href="#settings" data-tab="settings">设置</a></nav>
   <span class="health" id="health"></span>
-  <a class="qrlink" href="/parent" target="_blank" title="家长端:日常看孩子的板书、发消息、拍作业、打星、试用;iPad 上扫码进的就是它">家长端</a>
+  <a class="qrlink" href="/parent" target="_blank" title="家长端:日常看孩子的板书、看录像、打星、删话题、记账;iPad 上扫码进的就是它">家长端</a>
   <a class="qrlink" href="/qr" target="_blank" title="iPad / iPhone 用相机扫,不用输地址">扫码打开</a>
 </header>
 <main id="chat" class="on">
@@ -357,7 +356,7 @@ export const DEV_PAGE = `<!doctype html>
       </div>
       <div id="photos"></div>
       <div class="row">
-        <select id="from" title="以谁的身份说"><option value="parent">身份 家长</option><option value="kid">身份 孩子(模拟)</option><option value="system">身份 系统</option></select>
+        <select id="from" title="以谁的身份说"><option value="kid">身份 孩子</option><option value="system">身份 系统</option></select>
         <select id="runtime" title="运行时"></select>
         <select id="thread-pick" title="接着哪个话题说"></select>
         <label class="photo-btn" title="作业照片:落 captures/,老师自己看图认题">📷 照片<input id="photo-in" type="file" accept="image/*" multiple></label>
@@ -623,7 +622,7 @@ export const DEV_PAGE = `<!doctype html>
     return out;
   };
 
-  const FROM = { kid: '孩子', parent: '家长', system: '系统' };
+  const FROM = { kid: '孩子', system: '系统' };
   const SLOW_FIRST = 15000;
 
   /** 一轮一张卡:问句 → 板书 → 埋点 → 孩子看到 → 通知块,五段各有自己的容器与颜色 */

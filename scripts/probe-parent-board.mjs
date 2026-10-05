@@ -3,8 +3,8 @@
  * 家长板书页(《家长板书页设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock → Chrome 开 /parent:清单(每位老师一块、语文老师一个话题、英语老师「今天没聊」)→
  * 点话题进板书:卡锁着、没有「更多」、喇叭缺省关、节前有「孩子」旁注、节尾有「给家长」「记住了」、选择题下面有答案 →
- * 家长真发一条(输入条在,进孩子的对话,节前「家长」)→ 回清单打星 → 昨天的清单 → 手机与平板各截一张 →
- * 备课(《备课设计.md》§4 这节课:清单上「新话题」→ 卡默认给孩子、底部「这节课」→ 整节不要、舞台顶栏「给孩子」→ 看孩子会看到什么 → 交给孩子 → 孩子端首页多一个按钮,按了看到的就是这几张)。孩子端 `/` 上没有旁注、没有答案(护栏)。
+ * 家长端只看:没有输入条(2026-10-05 删了备课与家长真发;家长要试老师到孩子端当一回孩子,回来删话题)→ 回清单打星、记账、删话题 → 昨天的清单 →
+ * 手机与平板各截一张。孩子端 `/` 上没有旁注、没有答案(护栏)。
  *
  * 用法:node scripts/probe-parent-board.mjs [--out <截图目录>] [--keep](留下 mock)
  */
@@ -53,7 +53,7 @@ try {
   await device(390, 844, 2, true);
   await open(`${base}/parent`, `document.querySelectorAll('.pt').length > 0`);
   const list = await evaluate(`(() => ({ title: document.title, date: document.querySelector('#pdate b')?.textContent, tutors: [...document.querySelectorAll('.pt')].map((b) => ({ who: b.dataset.tutor, rows: [...b.querySelectorAll('.tr')].map((r) => r.querySelector('small').textContent), none: b.querySelector('.none')?.textContent })), more: document.querySelector('#more-btn').hidden }))()`);
-  ok('清单:标题带「家长」、今天;三位老师;语文老师一个话题停在末句问句;英语老师今天没聊', list.title.endsWith('· 家长') && list.date === '今天' && list.tutors.length === 3 && list.tutors[0].rows.length === 1 && list.tutors[0].rows[0].includes('停下等孩子') && list.tutors[2].none === '今天没聊', JSON.stringify(list));
+  ok('清单:标题带「家长」、今天;四位老师(含口播老师);语文老师一个话题停在末句问句;英语老师今天没聊', list.title.endsWith('· 家长') && list.date === '今天' && list.tutors.length === 4 && list.tutors[0].rows.length === 1 && list.tutors[0].rows[0].includes('停下等孩子') && list.tutors[2].none === '今天没聊', JSON.stringify(list));
   console.log('  ', await shot('parent-list-phone.png'));
 
   // ---- 点话题进板书 ----
@@ -70,9 +70,9 @@ try {
     post: [...document.querySelectorAll('#board .notes.post .note')].map((n) => n.querySelector('.tg').textContent),
     ans: [...document.querySelectorAll('#board .c .note-ans')].map((n) => n.textContent),
   }))()`);
-  ok('板书:看的 chrome(今天有输入条与相机、没有「回到今天」、没有「更多」),喇叭缺省关,头上是「今天 时间」', board.on && !board.pill && board.backToday && board.more && !board.spk && /^今天 · \d\d:\d\d$/.test(board.mo), JSON.stringify({ pill: board.pill, backToday: board.backToday, more: board.more, spk: board.spk, mo: board.mo }));
-  const locked = await evaluate(`(() => { const c = document.querySelector('#board .c-choice'); c.click(); return { stage: document.querySelector('#stage').classList.contains('on'), cam: document.querySelector('#cam').hidden }; })()`);
-  ok('卡锁着:点选择题不开舞台;相机在', !locked.stage && !locked.cam, JSON.stringify(locked));
+  ok('板书:只看的 chrome(没有输入条、没有「回到今天」、没有「更多」),喇叭缺省关,头上是「今天 时间」', board.on && board.pill && board.backToday && board.more && !board.spk && /^今天 · \d\d:\d\d$/.test(board.mo), JSON.stringify({ pill: board.pill, backToday: board.backToday, more: board.more, spk: board.spk, mo: board.mo }));
+  const locked = await evaluate(`(() => { const c = document.querySelector('#board .c-choice'); c.click(); return { stage: document.querySelector('#stage').classList.contains('on') }; })()`);
+  ok('卡锁着:点选择题不开舞台', !locked.stage, JSON.stringify(locked));
   ok('顺序:节前旁注 → 节 → 节尾旁注', board.order.slice(0, 3).join('|') === 'notes.pre|sec|notes.post', JSON.stringify(board.order));
   ok('节前:孩子的话;节尾:给家长、记住了', board.pre.length === 1 && board.pre[0].startsWith('孩子:') && board.post.join() === '给家长,记住了', JSON.stringify({ pre: board.pre, post: board.post }));
   ok('选择题下面一行答案', board.ans.length === 1 && board.ans[0].startsWith('答案:'), JSON.stringify(board.ans));
@@ -80,15 +80,6 @@ try {
   await device(1180, 820, 1, false);
   await sleep(400);
   console.log('  ', await shot('parent-board-tablet.png'));
-
-  // ---- 家长真发(第六节 3):走页面自己的输入条,进孩子的对话;节前「家长」 ----
-  await device(390, 844, 2, true);
-  const nBefore = await evaluate(`document.querySelectorAll('#board .sec').length`);
-  await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = '家长补一句'; document.querySelector('#go').click(); return true; })()`);
-  for (let i = 0; i < 60; i++) { if (await evaluate(`document.querySelectorAll('#board .sec').length > ${nBefore} && [...document.querySelectorAll('#board .notes.pre .note')].some((n) => n.textContent.includes('家长补一句'))`)) break; await sleep(250); }
-  const sent = await evaluate(`({ secs: document.querySelectorAll('#board .sec').length, pre: [...document.querySelectorAll('#board .notes.pre .note')].map((n) => n.querySelector('.tg').textContent + ':' + n.querySelector('.tx').textContent).slice(-1)[0] })`);
-  ok('家长发了一条 → 多一节,节前「家长:家长补一句」', sent.secs === nBefore + 1 && sent.pre === '家长:家长补一句', JSON.stringify(sent));
-  console.log('  ', await shot('parent-send-phone.png'));
 
   // ---- 回清单:打星;翻到昨天 ----
   await evaluate(`document.querySelector('#back').click()`);
@@ -116,71 +107,6 @@ try {
   // ---- 直接开在某个话题上(重载回来靠它) ----
   await open(`${base}/parent?tutor=math-tutor`, `document.querySelector('#tutor').classList.contains('on') && document.querySelectorAll('#board .notes.pre').length > 0`);
   ok('?tutor= 直接开在那位老师今天的话题上', await evaluate(`document.querySelector('#tutor').classList.contains('on') && document.querySelector('#c-av').textContent.length > 0`));
-
-  // ---- 备课(《备课设计.md》§4 这节课):新话题 → 老师写的卡默认给孩子、底部「这节课」条;第二节「整节不要」→ 变灰;
-  //      点开一张卡,舞台顶栏「给孩子」开关;看孩子会看到什么;交给孩子 → 孩子端按了看到的就是这几张 ----
-  await open(`${base}/parent`, `document.querySelectorAll('.pt').length > 0`);
-  await evaluate(`document.querySelector('.pt[data-tutor="english-tutor"] .try').click()`);
-  for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelector('#tutor')?.classList.contains('on')`)) break; await sleep(250); }
-  await sleep(300);
-  const prepChrome = await evaluate(`({ pill: document.querySelector('#pill').hidden, more: document.querySelector('#more-btn').hidden, mo: document.querySelector('#c-mo').textContent, blank: document.querySelector('#board .blank b')?.textContent, lesson: document.querySelector('#lesson').hidden, n: document.querySelector('#ls-n').textContent })`);
-  ok('新话题:空白老师页,输入条在、没有「更多」,头上「备课 · 孩子看不到」,底部「这节课 · 还没有卡」', !prepChrome.pill && prepChrome.more && prepChrome.mo === '备课 · 孩子看不到' && prepChrome.blank === '想问什么?' && !prepChrome.lesson && prepChrome.n === '这节课 · 还没有卡', JSON.stringify(prepChrome));
-  // 走页面自己的输入条(#go 读 #typed 的字调 send):新话题的第一条页面会带上 prep
-  await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = '试试新讲法'; document.querySelector('#go').click(); return true; })()`);
-  for (let i = 0; i < 60; i++) { if (await evaluate(`document.querySelectorAll('#board .sec').length === 1 && /张卡/.test(document.querySelector('#ls-n').textContent)`)) break; await sleep(250); }
-  const prepBoard = await evaluate(`({ secs: document.querySelectorAll('#board .sec').length, cards: document.querySelectorAll('#board .sec .c').length, off: document.querySelectorAll('#board .c.off').length, pre: [...document.querySelectorAll('#board .notes.pre .note')].map((n) => n.querySelector('.tg').textContent + ':' + n.querySelector('.tx').textContent), post: [...document.querySelectorAll('#board .notes.post .note .tg')].map((t) => t.textContent), shp: document.querySelector('#board .sh .shp')?.textContent, n: document.querySelector('#ls-n').textContent })`);
-  ok('发了一条 → 一节板书,卡都是正常的;节头「整节不要」;节尾「本来会记住的」「费用」;底部「这节课 · N 张卡」', prepBoard.secs === 1 && prepBoard.off === 0 && prepBoard.shp === '整节不要' && prepBoard.pre[0] === '家长:试试新讲法' && prepBoard.post.includes('本来会记住的') && prepBoard.post.includes('费用') && prepBoard.n === '这节课 · ' + prepBoard.cards + ' 张卡', JSON.stringify(prepBoard));
-  const first = prepBoard.cards;
-  // 按继续多一节,整节不要:那一节的卡全变灰,底部张数回到第一节的
-  await evaluate(`document.querySelector('#sub-btn')?.click()`);
-  for (let i = 0; i < 60; i++) { if (await evaluate(`document.querySelectorAll('#board .sec').length === 2 && document.querySelectorAll('#board .sec')[1].querySelector('.sh .shp')`)) break; await sleep(250); }
-  await evaluate(`document.querySelectorAll('#board .sec')[1].querySelector('.sh .shp').click()`);
-  for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelectorAll('#board .sec')[1].querySelectorAll('.c.off').length > 0`)) break; await sleep(250); }
-  const sec2 = await evaluate(`(() => { const s = document.querySelectorAll('#board .sec')[1]; return { cards: s.querySelectorAll('.c').length, off: s.querySelectorAll('.c.off').length, shp: s.querySelector('.sh .shp').textContent, n: document.querySelector('#ls-n').textContent }; })()`);
-  ok('继续 → 两节;第二节「整节不要」:卡全变灰、按钮换成「整节要」、底部回到第一节的张数', sec2.cards > 0 && sec2.off === sec2.cards && sec2.shp === '整节要' && sec2.n === '这节课 · ' + first + ' 张卡', JSON.stringify(sec2));
-  console.log('  ', await shot('parent-lesson.png'));
-  // 单张:点开第一节第一张卡,舞台顶栏「给孩子」开关关掉 → 那张变灰,张数少一;再打开
-  await evaluate(`document.querySelector('#board .sec .c').click()`);
-  for (let i = 0; i < 20; i++) { if (await evaluate(`!document.querySelector('#st-give').hidden`)) break; await sleep(250); }
-  const give0 = await evaluate(`({ hidden: document.querySelector('#st-give').hidden, text: document.querySelector('#st-give').textContent })`);
-  await evaluate(`document.querySelector('#st-give').click()`);
-  for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelector('#st-give').textContent === '不给孩子'`)) break; await sleep(250); }
-  const give1 = await evaluate(`({ text: document.querySelector('#st-give').textContent, off: document.querySelector('#board .sec .c').classList.contains('off'), n: document.querySelector('#ls-n').textContent })`);
-  console.log('  ', await shot('parent-give.png'));
-  await evaluate(`document.querySelector('#st-give').click()`);
-  for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelector('#st-give').textContent === '给孩子'`)) break; await sleep(250); }
-  await evaluate(`document.querySelector('#st-x').click()`);
-  ok('舞台顶栏「给孩子」:点一下变「不给孩子」、那张卡变灰、张数少一;再点回来', !give0.hidden && give0.text === '给孩子' && give1.text === '不给孩子' && give1.off && give1.n === '这节课 · ' + (first - 1) + ' 张卡', JSON.stringify({ give0, give1 }));
-  // 看孩子会看到什么
-  await sleep(300);
-  await evaluate(`document.querySelector('#ls-pv').click()`);
-  await sleep(300);
-  const pv = await evaluate(`({ on: document.querySelector('#pv').classList.contains('on'), n: document.querySelector('#pv-n').textContent, cards: document.querySelectorAll('#pv .ls .c').length })`);
-  ok('看孩子会看到什么:只有这节课的卡', pv.on && pv.n === '孩子会看到 · ' + first + ' 张卡' && pv.cards === first, JSON.stringify(pv));
-  console.log('  ', await shot('parent-preview.png'));
-  await evaluate(`document.querySelector('#pv-x').click()`);
-  // 交给孩子
-  await evaluate(`document.querySelector('#ls-hand').click()`);
-  await sleep(300);
-  const pre = await evaluate(`({ on: document.querySelector('#hand').classList.contains('on'), label: document.querySelector('#hd-label').value, ttl: document.querySelector('#hd-ttl').textContent })`);
-  await evaluate(`(() => { document.querySelector('#hd-label').value = '我们来读水果'; document.querySelector('#hd-go').click(); return true; })()`);
-  for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelector('#hd-msg').textContent.startsWith('首页上有了')`)) break; await sleep(250); }
-  console.log('  ', await shot('parent-hand.png'));
-  for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelector('#c-mo').textContent === '备课 · 已交给孩子'`)) break; await sleep(250); }
-  const handed = await evaluate(`({ msg: document.querySelector('#hd-msg').textContent, mo: document.querySelector('#c-mo').textContent, n: document.querySelector('#ls-n').textContent, names: document.querySelector('#ls-names').textContent, hand: document.querySelector('#ls-hand').hidden, shp: document.querySelectorAll('#board .sh .shp').length })`);
-  ok('交给孩子:小块标题带张数、按钮字预填;交了「首页上有了」,头上「已交给孩子」,底部写已交与按钮字,节头按钮还在(孩子开口前能改)', pre.on && pre.ttl === '交给孩子 · ' + first + ' 张卡' && pre.label.length > 0 && handed.msg === '首页上有了:我们来读水果' && handed.mo === '备课 · 已交给孩子' && handed.n.endsWith('已交给孩子') && handed.names.includes('我们来读水果') && handed.hand && handed.shp === 2, JSON.stringify({ pre, handed }));
-  await evaluate(`document.querySelector('#back').click()`);
-  for (let i = 0; i < 20; i++) { if (await evaluate(`document.querySelectorAll('.pt .tr .pin').length > 0`)) break; await sleep(250); }
-  const pins = await evaluate(`[...document.querySelectorAll('.pt[data-tutor="english-tutor"] .tr .pin')].map((b) => b.textContent)`);
-  ok('回清单:英语老师那一行标「已交给孩子:我们来读水果」', pins.length === 1 && pins[0] === '已交给孩子:我们来读水果', JSON.stringify(pins));
-  // 孩子端:首页多一个按钮;按了只打开,板书就是这节课的卡,没有旁注
-  await open(`${base}/`, `document.querySelectorAll('.c-tutor').length > 0`);
-  const kb = await evaluate(`[...document.querySelectorAll('.c-tutor .bt')].map((b) => b.textContent)`);
-  await evaluate(`[...document.querySelectorAll('.c-tutor .bt')].find((b) => b.textContent.includes('我们来读水果'))?.click()`);
-  for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelectorAll('#board .sec').length > 0`)) break; await sleep(250); }
-  const kopen = await evaluate(`({ secs: document.querySelectorAll('#board .sec').length, cards: document.querySelectorAll('#board .sec .c').length, notes: document.querySelectorAll('#board .notes').length })`);
-  ok('孩子端:首页有「我们来读水果」,按了就是这节课的卡(第二节不在)、没有旁注', kb.some((t) => t.includes('我们来读水果')) && kopen.secs === 1 && kopen.cards === first && kopen.notes === 0, JSON.stringify({ kb, kopen }));
-  console.log('  ', await shot('kid-opened.png'));
 
   // ---- 护栏:孩子端没有旁注、没有答案 ----
   await open(`${base}/?tutor=chinese-tutor`, `document.querySelectorAll('#board .sec').length > 0`);

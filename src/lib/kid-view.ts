@@ -7,7 +7,7 @@
 import { stripSecrets } from '../cards/index.ts';
 import type { Bookkeeping, ConversationMessage } from '../schema/index.ts';
 import { parseBoard } from './board.ts';
-import { asKid, kidHiddenJobs, prepJobs, threads, type CardAssets, type CardStates, type Lesson } from './conversation.ts';
+import { threads, type CardAssets, type CardStates } from './conversation.ts';
 import type { BoardSection } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 import type { Transcript } from './transcript.ts';
@@ -88,7 +88,7 @@ export interface KidMessage {
   /** 话题 id(话题第一条的 job) */
   thread: string;
   at: string;
-  /** 孩子自己说的;家长 / 系统发的不给孩子看,为 null */
+  /** 孩子自己说的;系统发的不给孩子看,为 null */
   question: string | null;
   /** 老师给孩子的话;还在跑或这轮没有 = null */
   reply: string | null;
@@ -100,8 +100,6 @@ export interface KidMessage {
   section?: BoardSection | null;
   /** 孩子这条带的作业照片(相对 workspace 根;页面经 /api/kid/image?p= 取);只在孩子自己的问句上 */
   photos?: string[];
-  /** 从课文件建的第几节(0 起):孩子还没开口时页面一节一节念、念到哪露到哪(《备课设计.md》拍板 34) */
-  lessonSection?: number;
 }
 
 /** 孩子做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到这轮的卡上;都没有就原样 */
@@ -114,24 +112,20 @@ function cardsWithState(m: ConversationMessage, states: CardStates, assets: Card
 /**
  * 对话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / 费用 / 家长尾巴;
  * 卡上的答案剥掉,孩子自己做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到卡上。出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
- * 家长的备课话题(《备课设计.md》§3.2、§十):没交给孩子的整个不出现,交了的整段出现(课文件里的几节就是几轮)。
- * 试用话题(§十二)永远不出现;试用页给 tryThread,就只出那一个话题,家长扮孩子说的当孩子的问句。
  */
-export function kidConversation(index: { messages: readonly ConversationMessage[]; lessons?: Record<string, Lesson> }, states: CardStates = {}, assets: CardAssets = {}, opts: { tryThread?: string } = {}): KidMessage[] {
+export function kidConversation(index: { messages: readonly ConversationMessage[] }, states: CardStates = {}, assets: CardAssets = {}): KidMessage[] {
   const out: KidMessage[] = [];
   const ths = threads(index.messages);
-  const hidden = kidHiddenJobs(index, opts.tryThread);
   for (const [i, m] of index.messages.entries()) {
     // 记账那轮是家长晚上起的任务,老师回的「记好了」不是给孩子的话
-    if (m.bookkeep || m.tidy || hidden.has(m.job)) continue;
-    if (opts.tryThread !== undefined && ths[i] !== opts.tryThread) continue;
-    const question = asKid(m, opts.tryThread !== undefined) ? m.text : null;
+    if (m.bookkeep || m.tidy) continue;
+    const question = m.from === 'kid' ? m.text : null;
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
     if (question === null && reply === null && !pending) continue;
     const withState = cardsWithState(m, states, assets);
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
-    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(typeof m.lessonSection === 'number' ? { lessonSection: m.lessonSection } : {}) });
+    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}) });
   }
   return out;
 }
@@ -153,27 +147,14 @@ export interface ParentMessage extends KidMessage {
   error?: string;
   bookkeep?: ConversationMessage['bookkeep'];
   tidy?: true;
-  /** 备课轮(《备课设计.md》§3.2):家长开的话题里孩子开口之前;记忆段原文是「本来会记住的」(费用不给家长看,2026-09-28:订阅之下那个数没有参考价值) */
-  prep?: true;
-  /** 从课文件建的第几节(0 起):不是谁说的话,页面不出「家长」旁注 */
-  lessonSection?: number;
-  /** 念课文件的时候孩子在各节后说过的(随孩子第一条带来) */
-  lessonSaid?: ConversationMessage['lessonSaid'];
   /** 按住说话的原声(只在家长端;孩子端条目没有这个字段) */
   voice?: ConversationMessage['voice'];
-  /** 这个话题的课交给孩子了 */
-  handed?: true;
-  /** 试用话题(《备课设计.md》§十二):家长在孩子端扮孩子跑的,第二天删 */
-  tryout?: true;
-  memoryDraft?: string[];
 }
 
 /** 对话索引 → 家长板书页条目:和 kidConversation 同一个循环,差集恰好是 ParentMessage 里多出的字段与「答案不剥」 */
-export function parentConversation(index: { messages: readonly ConversationMessage[]; lessons?: Record<string, Lesson> }, states: CardStates = {}, assets: CardAssets = {}): ParentMessage[] {
+export function parentConversation(index: { messages: readonly ConversationMessage[] }, states: CardStates = {}, assets: CardAssets = {}): ParentMessage[] {
   const out: ParentMessage[] = [];
   const ths = threads(index.messages);
-  const prep = prepJobs(index.messages);
-  const tries = new Set(index.messages.filter((m, i) => m.tryThread && ths[i] === m.job).map((m) => m.job));
   for (const [i, m] of index.messages.entries()) {
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
@@ -192,12 +173,6 @@ export function parentConversation(index: { messages: readonly ConversationMessa
       ...(m.result === 'error' ? { error: m.error ?? '没成' } : {}),
       ...(m.bookkeep ? { bookkeep: m.bookkeep } : {}),
       ...(m.tidy ? { tidy: true as const } : {}),
-      ...(prep.has(m.job) ? { prep: true as const } : {}),
-      ...(prep.has(m.job) && index.lessons?.[ths[i]]?.handedAt ? { handed: true as const } : {}),
-      ...(tries.has(ths[i]) ? { tryout: true as const } : {}),
-      ...(m.memoryDraft?.length ? { memoryDraft: m.memoryDraft } : {}),
-      ...(typeof m.lessonSection === 'number' ? { lessonSection: m.lessonSection } : {}),
-      ...(m.lessonSaid?.length ? { lessonSaid: m.lessonSaid } : {}),
       ...(m.voice ? { voice: m.voice } : {}),
     });
   }
@@ -230,7 +205,7 @@ export function kidThreads(messages: readonly KidMessage[]): KidThread[] {
   return [...by.values()].filter((t) => t.asked).map(({ asked: _a, ...t }) => t);
 }
 
-/** 今天孩子已发的条数(每日上限按它算;家长发的不算,「继续」不算,交答案算) */
+/** 今天孩子已发的条数(每日上限按它算;系统任务不算,「继续」不算,交答案算;删了的话题自然不算) */
 export function kidMessageCount(index: { messages: readonly ConversationMessage[] }): number {
   return index.messages.filter((m) => m.from === 'kid' && m.action !== 'continue').length;
 }

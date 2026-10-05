@@ -9,15 +9,17 @@ import { basename, dirname, join, relative, sep } from 'node:path';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { cardAssetName, conversationFiles, emptyIndex, localDate, threads, type CardAssets, type CardStateFile, type CardStates } from '../lib/conversation.ts';
 import { parseTranscript, type Transcript } from '../lib/transcript.ts';
-import { applyMemoryOps, frontmatter, memoryPath, memoryTemplate, parseMemoryOp, type VaultNote } from '../lib/vault-notes.ts';
+import { applyMemoryOps, frontmatter, memoryPath, memoryTemplate, parseMemoryOp, undoMemoryLines, type MemoryLine, type VaultNote } from '../lib/vault-notes.ts';
 import {
   ConversationIndexSchema,
   CotutorConfigSchema,
   DATE_RE,
   explainIssues,
   type ConversationIndex,
+  type ConversationMessage,
   type CotutorConfig,
 } from '../schema/index.ts';
+import { removeDiaryBlock } from '../lib/diary.ts';
 import { ConfigError, assembleWorkspace, parseConfig, readJson, redactHome, type Workspace } from '../cli/workspace.ts';
 
 export class IndexError extends Error {
@@ -292,33 +294,23 @@ export async function rateThread(ws: Workspace, tutor: string, date: string, thr
   return next;
 }
 
-/**
- * 把这节课交给孩子(《备课设计.md》§十):记下 handedAt 与课文件;这节课那几张卡上家长做过的状态删掉(孩子要自己做;卡的资产——场景图、卡上的音——留着)。
- * 首页按钮由调用方追加发布;能不能交(备课话题、孩子没开口、有卡)由路由查
- */
-export async function handLesson(ws: Workspace, tutor: string, date: string, thread: string, cards: readonly string[], now: Date, source?: string): Promise<ConversationIndex> {
-  const index = await readIndex(ws, tutor, date);
-  const files = conversationFiles(ws.dirs.conversations, tutor, date);
-  for (const c of cards) {
-    const [job, n] = c.split('/');
-    await rm(join(files.cardsDir(job), `${n}.json`), { force: true });
-    await rm(join(files.cardsDir(job), `${n}.png`), { force: true });
-  }
-  const cur = index.lessons[thread] ?? { handedAt: null };
-  const next: ConversationIndex = { ...index, lessons: { ...index.lessons, [thread]: { ...cur, handedAt: cur.handedAt ?? now.toISOString(), ...(source ? { source } : {}) } } };
-  await writeIndex(ws, next);
-  return next;
-}
-
 // ---- vault(《obsidian仓库设计.md》§6 的封闭清单:日记只追加;教材只读)----
 
 /** 这几天的日记(<日记目录>/<日期>.md);没有的跳过 */
+/** 删话题撤销了多少:记忆几行、日记几段;找不到原文没撤的(家长或整理那轮后来改过)一条一句 */
+export interface ThreadUndo {
+  memory: number;
+  diary: number;
+  misses: string[];
+}
+
 /**
  * 删掉一天里的一个话题(家长板书页清单上的「删」,2026-09-22):索引里它的消息、会话、星、记账标记都去掉,
  * 这些轮的文件(转录、run、事件、配音、卡的状态与资产)按 <日期>.<job>.* 整个删。
- * 不动的:已写进 vault 的记忆与日记(那是家长的,在 Obsidian 里改)、captures/ 里的照片。跑着的轮由路由先挡(409)。
+ * 这个话题留下的痕迹一起撤(2026-10-05,家长在孩子端试过再删):各轮写进 vault 记忆的行(memoryLines)倒着撤、记账写进日记的那段(diaryBlock)摘掉;
+ * 每日上限按索引数,消息删了自然退回。不动的:captures/ 里的照片。跑着的轮由路由先挡(409)。
  */
-export async function deleteThread(ws: Workspace, tutor: string, date: string, thread: string, opts: { keepCost?: boolean } = {}): Promise<ConversationIndex> {
+export async function deleteThread(ws: Workspace, tutor: string, date: string, thread: string): Promise<{ index: ConversationIndex; undo: ThreadUndo }> {
   const index = await readIndex(ws, tutor, date);
   const ths = threads(index.messages);
   if (!ths.includes(thread)) throw new IndexError(conversationFiles(ws.dirs.conversations, tutor, date).index, `${date} 没有话题 ${thread}`);
@@ -330,16 +322,43 @@ export async function deleteThread(ws: Workspace, tutor: string, date: string, t
   const { [thread]: _s, ...sessions } = index.sessions;
   const { [thread]: _r, ...ratings } = index.ratings;
   const { [thread]: _b, ...booked } = index.booked;
-  const { [thread]: _o, ...lessons } = index.lessons;
   // 当前话题(末条所在)的会话:删的正是它就换成剩下的末条那个;不是就不动
   const keptThreads = threads(kept);
   const last = keptThreads[keptThreads.length - 1];
   const session = ths[ths.length - 1] === thread ? (last ? (sessions[last] ?? null) : null) : index.session;
-  // keepCost:试用话题第二天删(server/tryout.ts),钱是真花了的,这天的合计不减
-  const cost = opts.keepCost ? index.costUsd : Math.max(0, index.costUsd - gone.reduce((s, m) => s + (m.costUsd ?? 0), 0));
-  const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, lessons, session, costUsd: Math.round(cost * 1e6) / 1e6 };
+  const cost = Math.max(0, index.costUsd - gone.reduce((s, m) => s + (m.costUsd ?? 0), 0));
+  const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, session, costUsd: Math.round(cost * 1e6) / 1e6 };
+  const undo = await undoThreadTraces(ws, tutor, date, gone);
   await writeIndex(ws, next);
-  return next;
+  return { index: next, undo };
+}
+
+async function undoThreadTraces(ws: Workspace, tutor: string, date: string, gone: readonly ConversationMessage[]): Promise<ThreadUndo> {
+  const undo: ThreadUndo = { memory: 0, diary: 0, misses: [] };
+  const edits = gone.flatMap((m) => m.memoryLines ?? []);
+  if (edits.length) {
+    const found = (await scanVault(ws)).notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === tutor);
+    if (!found) undo.misses.push('记忆文件不在了,记忆没撤');
+    else {
+      const r = undoMemoryLines(found.text, edits);
+      undo.memory = r.undone;
+      undo.misses.push(...r.misses.map((l) => `记忆:找不到这行,没撤:${l}`));
+      if (r.undone) {
+        const file = join(ws.paths.vault, found.path);
+        await writeFile(`${file}.tmp`, r.text);
+        await rename(`${file}.tmp`, file);
+      }
+    }
+  }
+  for (const m of gone) {
+    if (!m.diaryBlock) continue;
+    const existing = await readFile(join(ws.paths.diary, `${date}.md`), 'utf8').catch(() => null);
+    const out = existing === null ? null : removeDiaryBlock(existing, m.diaryBlock);
+    if (out === null) { undo.misses.push(`日记:${date} 里找不到这个话题记的那段,没摘`); continue; }
+    await writeDiary(ws, date, () => out);
+    undo.diary++;
+  }
+  return undo;
 }
 
 export async function readDiaries(ws: Workspace, dates: readonly string[]): Promise<{ date: string; text: string }[]> {
@@ -428,7 +447,7 @@ export async function scanVault(ws: Workspace): Promise<{ notes: VaultNote[]; fi
  * 把「## 记忆」段落进这位 agent 的记忆文件(按 `cotutor: memory` + `agent:` 找;没有就建 记忆/<显示名>.md):
  * 新增追加到末尾,「改:」「删:」按原话找行改、删(任何一行都能动,2026-09-18);缺省位置已有一篇没属性的同名文件就不碰,进提醒。先 .tmp 再 rename。
  */
-export async function updateVaultMemory(ws: Workspace, agent: string, display: string, items: readonly string[], date: string): Promise<{ file: string | null; changes: string[]; warnings: string[] }> {
+export async function updateVaultMemory(ws: Workspace, agent: string, display: string, items: readonly string[], date: string): Promise<{ file: string | null; changes: string[]; lines: MemoryLine[]; warnings: string[] }> {
   const found = (await scanVault(ws)).notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === agent);
   let file: string;
   let existing: string;
@@ -437,16 +456,16 @@ export async function updateVaultMemory(ws: Workspace, agent: string, display: s
     existing = found.text;
   } else {
     file = join(ws.paths.vault, memoryPath(display));
-    if ((await stat(file).catch(() => null)) !== null) return { file: null, changes: [], warnings: [`记忆没写:${memoryPath(display)} 已经有了但没有 cotutor: memory / agent: ${agent} 属性;加上属性,或挪开它`] };
+    if ((await stat(file).catch(() => null)) !== null) return { file: null, changes: [], lines: [], warnings: [`记忆没写:${memoryPath(display)} 已经有了但没有 cotutor: memory / agent: ${agent} 属性;加上属性,或挪开它`] };
     existing = memoryTemplate(agent, display);
   }
   const r = applyMemoryOps(existing, items.map(parseMemoryOp), date);
   const warnings = r.misses.length ? [`记忆:找不到原话,没改:${r.misses.join(';')}`] : [];
-  if (!r.changes.length) return { file: null, changes: [], warnings };
+  if (!r.changes.length) return { file: null, changes: [], lines: [], warnings };
   await mkdir(dirname(file), { recursive: true });
   await writeFile(`${file}.tmp`, r.text);
   await rename(`${file}.tmp`, file);
-  return { file, changes: r.changes, warnings };
+  return { file, changes: r.changes, lines: r.lines, warnings };
 }
 
 /** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 运行时模板走编辑器 */

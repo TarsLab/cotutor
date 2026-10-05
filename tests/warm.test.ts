@@ -44,7 +44,7 @@ const ctx = createContext(loadWorkspace(root), { now: () => now });
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const until = async (f: () => boolean, ms = 3000): Promise<boolean> => { for (let t = 0; t < ms && !f(); t += 25) await sleep(25); return f(); };
 type Msg = { job: string; thread?: string; result: string; kidText?: string | null; timing?: { warm?: true }; warnings?: string[] };
-const send = async (tutor: string, text: string, o: { from?: 'kid' | 'parent' | 'system'; thread?: string; newThread?: boolean } = {}): Promise<Msg> => {
+const send = async (tutor: string, text: string, o: { from?: 'kid' | 'system'; thread?: string; newThread?: boolean } = {}): Promise<Msg> => {
   const r = await route('POST', `/api/conversations/${tutor}/messages`, ctx, { text, from: o.from ?? 'kid', ...(o.thread ? { thread: o.thread } : {}), ...(o.newThread ? { newThread: true } : {}) });
   const job = (r.json as { job: string }).job;
   await until(() => !ctx.runner.running(tutor), 10_000);
@@ -104,29 +104,31 @@ try {
     check('同一话题拉今天有节流', !(await until(() => ctx.runner.spares.has('english-tutor'), 300)));
   }
 
-  // 家长端 · 数学老师:点进来就预热;别的话题说过话不碍事;同一话题被别人写过就不用;断流照旧
+  // 数学老师:家长端看板书不预热(只看,不发);孩子端点进来才预热;别的话题说过话不碍事;同一话题被别人写过就不用;断流照旧
   {
     await route('GET', '/api/conversations/math-tutor/today/board', ctx);
-    check('家长拉今天:起了 fresh', await until(() => ctx.runner.spares.has('math-tutor', 'fresh')));
-    const m = await send('math-tutor', '你好', { from: 'parent' });
+    check('家长端看板书:不起备用进程', !(await until(() => ctx.runner.spares.has('math-tutor'), 300)));
+    await route('GET', '/api/kid/conversations/math-tutor/today', ctx);
+    check('孩子端拉今天:起了 fresh', await until(() => ctx.runner.spares.has('math-tutor', 'fresh')));
+    const m = await send('math-tutor', '你好');
     const m1 = m.thread ?? '';
-    check('家长第一句:用 fresh', m.result === 'ok' && warmUsed('math-tutor', m), JSON.stringify(m));
-    check('家长这轮收尾两个位置都补齐', await both('math-tutor'));
+    check('第一句:用 fresh', m.result === 'ok' && warmUsed('math-tutor', m), JSON.stringify(m));
+    check('这轮收尾两个位置都补齐', await both('math-tutor'));
     // 系统轮开新话题:用 fresh;resume(话题 m1)不动;系统轮之后不补
     const sys = await send('math-tutor', '系统说', { from: 'system' });
     check('系统轮:用 fresh,之后不补 fresh', sys.result === 'ok' && sys.thread !== m1 && warmUsed('math-tutor', sys) && !(await until(() => ctx.runner.spares.has('math-tutor', 'fresh'), 400)), JSON.stringify(sys));
     check('系统轮在别的话题:m1 的 resume 还在', ctx.runner.spares.has('math-tutor', 'resume'));
-    const back = await send('math-tutor', '接着讲', { from: 'parent', thread: m1 });
+    const back = await send('math-tutor', '接着讲', { thread: m1 });
     check('别的话题说过话:m1 的 resume 照样用上', back.thread === m1 && back.kidText?.endsWith('接着说:接着讲') === true && warmUsed('math-tutor', back), JSON.stringify(back));
     // 同一话题被别的进程写过(比如另开的 cotutor send):索引里 m1 多了一条,resume 对不上,冷起
     await both('math-tutor');
     const idx = await readIndex(ctx.ws, 'math-tutor', DATE);
-    await writeIndex(ctx.ws, addMessage(idx, { job: '2359-99', thread: m1, at: `${DATE}T23:59`, from: 'parent', text: '别处写的', result: 'ok', artifacts: [] }));
-    const stale = await send('math-tutor', '再讲一遍', { from: 'parent', thread: m1 });
+    await writeIndex(ctx.ws, addMessage(idx, { job: '2359-99', thread: m1, at: `${DATE}T23:59`, from: 'kid', text: '别处写的', result: 'ok', artifacts: [] }));
+    const stale = await send('math-tutor', '再讲一遍', { thread: m1 });
     check('同一话题被别人写过:不用旧的,冷起', stale.result === 'ok' && starts('math-tutor', stale.job)[0].warmMs === undefined, JSON.stringify(stale));
     // 预热的那次断流:杀掉、resume 冷起接着写
     check('断流前 resume 已补上', await both('math-tutor'));
-    const st = await send('math-tutor', '断流', { from: 'parent', thread: m1 });
+    const st = await send('math-tutor', '断流', { thread: m1 });
     const ss = starts('math-tutor', st.job);
     check('预热进程断流:半截拼回、resume 冷起接上', st.result === 'ok' && st.kidText === '断流前这句。\n半截句话接上了。' && ss.length === 2 && ss[0].warmMs !== undefined && ss[1].resume && ss[1].warmMs === undefined, JSON.stringify([st, ss]));
   }
@@ -137,7 +139,7 @@ try {
     await sleep(20);
     cfg.runtimes = { default: 'fake', fake: stdinRuntime(['--model', 'haiku']) };
     writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
-    const m = await send('math-tutor', '改了配置', { from: 'parent' });
+    const m = await send('math-tutor', '改了配置');
     check('改了模板:不用旧的,冷起', m.result === 'ok' && starts('math-tutor', m.job)[0].warmMs === undefined, JSON.stringify(m));
   }
 

@@ -1,5 +1,5 @@
 /**
- * 上下文包序列化(《cotutor契约草案.md》§2):固定 YAML 块 + 老师守则原文(<cotutor-rules>)、家长笔记原文段(<vault-note>)、备课原文(<lesson-file> / <material>)+ `---` + 消息原文。
+ * 上下文包序列化(《cotutor契约草案.md》§2):固定 YAML 块 + 老师守则原文(<cotutor-rules>)、家长笔记原文段(<vault-note>)、素材说明(<material>)+ `---` + 消息原文。
  * 手写 YAML 子集:标量能裸写就裸写,其余 JSON 双引号(合法 YAML);空的 plan / recent 不写。
  */
 import { ContextPackSchema, VAULT_PACK_ROLES, type ContextPack } from '../schema/index.ts';
@@ -13,7 +13,7 @@ export function yamlScalar(v: string | number | boolean): string {
 
 export function renderContextPack(pack: ContextPack): string {
   const p = ContextPackSchema.parse(pack);
-  const out: string[] = ['cotutor:', `  from: ${p.from}`, `  at: ${yamlScalar(p.at)}`];
+  const out: string[] = ['cotutor:', `  at: ${yamlScalar(p.at)}`];
   if (p.slot) out.push(`  slot: ${yamlScalar(p.slot)}`);
   if (p.focus?.card) out.push('  focus:', `    card: ${yamlScalar(p.focus.card)}`);
   if (p.rules) out.push(`  rules: ${yamlScalar(p.rules)}`);
@@ -63,16 +63,6 @@ export function renderContextPack(pack: ContextPack): string {
     for (const c of p.materials) out.push(`    - ${yamlScalar(c)}`);
     if (p.materialsDir) out.push(`  materialsDir: ${yamlScalar(p.materialsDir)}`);
   }
-  if (p.lesson?.length) {
-    out.push('  lesson:');
-    for (const c of p.lesson) out.push(`    - ${yamlScalar(c)}`);
-  }
-  if (p.lessonFile) out.push(`  lessonFile: ${yamlScalar(p.lessonFile)}`);
-  if (p.lessonBrief) out.push(`  lessonBrief: ${yamlScalar(p.lessonBrief)}`);
-  if (p.lessonSaid?.length) {
-    out.push('  lessonSaid:');
-    for (const c of p.lessonSaid) out.push(`    - ${yamlScalar(c)}`);
-  }
   if (p.cards?.length) {
     out.push('  cards:');
     for (const c of p.cards) out.push(`    - ${yamlScalar(c)}`);
@@ -91,11 +81,8 @@ export function renderContextPack(pack: ContextPack): string {
     const tag = n.role === 'rules' ? 'cotutor-rules' : n.role === 'boardGuide' ? 'cotutor-board' : 'vault-note';
     out.push(shipped ? `<${tag} path=${JSON.stringify(n.path)}>` : `<${tag} role="${n.role}" path=${JSON.stringify(n.path)}>`, n.text.replace(/\s+$/, ''), `</${tag}>`);
   }
-  // 备课原文:课文件与素材的说明,老师不用再读盘
-  for (const d of p.docs ?? []) {
-    const tag = d.kind === 'lesson' ? 'lesson-file' : 'material';
-    out.push(d.kind === 'lesson' ? `<${tag} path=${JSON.stringify(d.id)}>` : `<${tag} id=${JSON.stringify(d.id)}>`, d.text.replace(/\s+$/, ''), `</${tag}>`);
-  }
+  // 素材的说明,老师不用再读盘
+  for (const d of p.docs ?? []) out.push(`<material id=${JSON.stringify(d.id)}>`, d.text.replace(/\s+$/, ''), '</material>');
   return out.join('\n');
 }
 

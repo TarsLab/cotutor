@@ -6,7 +6,7 @@ const msgs = [
   { job: '1', thread: '1', from: 'kid' as const, text: '80 再少 2 为什么是 78?', artifacts: [] },
   { job: '2', thread: '1', from: 'kid' as const, text: '', action: 'continue' as const, artifacts: ['2026-09-05-guilv1'] },
   { job: '3', thread: '1', from: 'kid' as const, text: '继续', artifacts: [] },
-  { job: '4', thread: '1', from: 'parent' as const, text: '讲慢点', artifacts: [] },
+  { job: '4', thread: '1', from: 'system' as const, text: '记账', artifacts: [] },
   { job: '5', thread: '1', from: 'kid' as const, text: '那 90、80、70\n也是吗?', artifacts: [] },
   { job: '6', thread: '6', from: 'kid' as const, text: '别的话题', artifacts: [] },
 ];

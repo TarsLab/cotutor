@@ -1,11 +1,11 @@
 /**
- * 素材(《备课设计.md》§十一)的纯函数:解析 materials/<id>/material.md、查问题(两级,同课文件)、拼上下文包 materials: 的一行。
+ * 素材(《备课设计.md》§十一)的纯函数:解析 materials/<id>/material.md、查问题(两级:要改 / 提醒)、拼上下文包 materials: 的一行。
  * 文件 = frontmatter(tutor 必填,media: clips | bundle)+ `# 标题` + 能讲: / 不能讲: 两个列表 + `## 一段一段`(编号一段一条,
  * 下面几行画面,「停在:」写末帧)。「## 画面里的东西」「## 什么时候用」是写给老师读的,不解析。格式定本:tests/fixtures/materials/pingjunfen/material.md。
  * 永不抛错;问题都带行号(1 起)。要读盘的(老师在不在、目录里几个 mp4)由调用方查好传进来。
  */
 import type { HomeTutorInfo } from './home.ts';
-import { readFrontmatter, type LessonIssue } from './lesson.ts';
+import { readFrontmatter, type DocIssue } from './frontmatter.ts';
 
 /** 素材的目录名(卡种那边定义:卡 → 这里 → board → 卡注册表会成环) */
 export { MATERIAL_ID_RE } from '../cards/material.ts';
@@ -34,7 +34,7 @@ export interface MaterialDoc {
   can: string[];
   cannot: string[];
   segments: MaterialSegment[];
-  issues: LessonIssue[];
+  issues: DocIssue[];
 }
 
 const LIST_ITEM = /^\s*[-*]\s+(.+)$/;
@@ -67,7 +67,7 @@ function listAfter(lines: readonly string[], label: string): { items: string[]; 
 export function parseMaterial(md: string): MaterialDoc {
   const all = blankComments(md);
   const fm = readFrontmatter(all);
-  const issues: LessonIssue[] = [...fm.issues];
+  const issues: DocIssue[] = [...fm.issues];
   for (const [k, v] of Object.entries(fm.keys)) if (!['tutor', 'media', 'bundle'].includes(k)) issues.push({ level: 'note', line: v.line, text: `frontmatter 的 ${k}: 不认识(只认 tutor / media / bundle)` });
   const tutor = fm.keys.tutor?.value || null;
   if (!tutor) issues.push({ level: 'fix', line: 1, text: 'frontmatter 要写 tutor:(哪位老师的素材,如 math-tutor)' });
@@ -131,7 +131,7 @@ export interface MaterialCheckContext {
 }
 
 /** 解析的问题 + 老师在不在 + 段数与 mp4 对不对得上;按行号排 */
-export function materialIssues(doc: MaterialDoc, ctx: MaterialCheckContext): LessonIssue[] {
+export function materialIssues(doc: MaterialDoc, ctx: MaterialCheckContext): DocIssue[] {
   const out = [...doc.issues];
   if (doc.tutor) {
     const t = ctx.tutors[doc.tutor];

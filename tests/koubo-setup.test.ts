@@ -33,6 +33,19 @@ check('koubo 工作区就是 workspace 根:koubo.json、takes/;ledger/ 两家共
 check('.gitignore 补了 takes/**/*.wav', readFileSync(join(root, '.gitignore'), 'utf8').includes('takes/**/*.wav'));
 await setupKoubo(root);
 check('再来一次:那一行不重复,koubo.json 不重建', readFileSync(join(root, '.gitignore'), 'utf8').split('\n').filter((l) => l === 'takes/**/*.wav').length === 1);
+{
+  // 不再出厂的机器件(cotutor-prep,备课 2026-10-05 删了):老 workspace 里装过的,upgrade 删掉目录与 .qwen 链、出厂记录里也去掉
+  const { readManifest, writeManifest } = await import('../src/cli/tutors.ts');
+  const { mkdirSync, symlinkSync } = await import('node:fs');
+  mkdirSync(join(root, '.claude', 'skills', 'cotutor-prep'), { recursive: true });
+  writeFileSync(join(root, '.claude', 'skills', 'cotutor-prep', 'SKILL.md'), '旧的');
+  symlinkSync('../../.claude/skills/cotutor-prep', join(root, '.qwen', 'skills', 'cotutor-prep'));
+  const m = await readManifest(root);
+  await writeManifest(root, { ...m, skills: { ...m.skills, 'cotutor-prep': { hash: 'x', version: '0' } } });
+  const up2 = await upgradeSkills(root);
+  check('upgrade 删掉不再出厂的 cotutor-prep:目录、.qwen 链、出厂记录', up2.some((s) => s.name === 'cotutor-prep' && s.action === 'retired') && !existsSync(join(root, '.claude', 'skills', 'cotutor-prep')) && !existsSync(join(root, '.qwen', 'skills', 'cotutor-prep')) && !('cotutor-prep' in ((await readManifest(root)).skills ?? {})));
+  check('出厂记录里没有的同名目录(家长自己建的)不碰', (await upgradeSkills(root)).every((s) => s.action !== 'retired'));
+}
 const d1 = await doctorWorkspace(root, { probeEnv: false });
 check('开着:doctor 查壳与 koubo,并进 koubo doctor 的各项(cloud 政策在)', d1.checks.some((c) => c.name === 'koubo' && c.ok) && d1.checks.some((c) => c.name === 'koubo.cloud 政策'), JSON.stringify(d1.checks.filter((c) => c.name.startsWith('koubo')).map((c) => [c.name, c.ok])));
 done();

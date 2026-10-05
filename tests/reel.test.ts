@@ -27,7 +27,7 @@ const E1 = ev([
 // S2:一张卡一句,整块来的(没有事件),配音 20 秒才齐
 const S2: BoardSection = { cards: [card('C')], lines: [line('讲 C', 0, 'd.mp3')] };
 
-check('话题里孩子一句都没说(没交出去的备课)→ 没有录像', buildReel(input([msg('p1', { from: 'parent', section: S2 })])) === null);
+check('话题里孩子一句都没说(只有系统起的轮)→ 没有录像', buildReel(input([msg('p1', { from: 'system', section: S2 })])) === null);
 
 {
   const m1 = msg('1', { text: '7 减 9', timing: { startedAt: iso(T) }, section: S1 });
@@ -89,11 +89,11 @@ check('话题里孩子一句都没说(没交出去的备课)→ 没有录像', b
 }
 
 {
-  // 孩子第一次开口之前的节(交给孩子的课):从开口往前倒推,一节接一节;有更早的卡状态就把那节往前挪
+  // 孩子第一次开口之前的节(2026-10-05 前交给孩子的课文件,旧索引读成 system):从开口往前倒推,一节接一节;有更早的卡状态就把那节往前挪
   const S3: BoardSection = { cards: [card('课 1')], lines: [line('第一节', 0, 'e.mp3'), line('懂了吗?', 0, 'f.mp3', true)] };
   const S4: BoardSection = { cards: [card('课 2')], lines: [line('第二节', 0, 'g.mp3')] };
-  const p0 = msg('p0', { from: 'parent', text: '课文件 6 的口诀', lessonSection: 0, section: S3 });
-  const p1 = msg('p1', { from: 'parent', text: '课文件 6 的口诀 · 第 2 节', lessonSection: 1, section: S4 });
+  const p0 = msg('p0', { from: 'system', text: '课文件 6 的口诀', section: S3 });
+  const p1 = msg('p1', { from: 'system', text: '课文件 6 的口诀 · 第 2 节', section: S4 });
   const k = msg('k', { text: '懂了', timing: { startedAt: iso(T), dubbedMs: 2000 }, section: S2 });
   const flat = buildReel(input([p0, p1, k]))!;
   check('课的几节一节接一节、正好在孩子开口时念完', flat.tracks.map((t) => `${t.job}:${t.at - T}`).join() === 'p0:-4600,p1:-2200,k:2000' && flat.says[0].from === T - 4600 && flat.says[2].to === T - 200, JSON.stringify(flat.tracks));

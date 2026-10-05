@@ -107,9 +107,9 @@ const tutors: Record<string, HomeTutorInfo> = {
 }
 
 {
-  const yaml = renderContextPack({ from: 'kid', at: '2026-09-17T19:30', plan: [], recent: [], home: { button: '我要预习小蝌蚪找妈妈', brief: '先读顺 1–3 段:重点字' }, continue: { from: '2026-09-16 1930-1', title: '看图写话', said: ['我们写到第二句了。'], cards: ['1930-2/0 canvas「画一画」 画了 3 笔'], index: '/w/conversations/chinese-tutor/2026-09-16.json' } });
+  const yaml = renderContextPack({ at: '2026-09-17T19:30', plan: [], recent: [], home: { button: '我要预习小蝌蚪找妈妈', brief: '先读顺 1–3 段:重点字' }, continue: { from: '2026-09-16 1930-1', title: '看图写话', said: ['我们写到第二句了。'], cards: ['1930-2/0 canvas「画一画」 画了 3 笔'], index: '/w/conversations/chinese-tutor/2026-09-16.json' } });
   check('上下文包:home 与 continue 两段', yaml.includes('  home:\n    button: "我要预习小蝌蚪找妈妈"\n    brief: "先读顺 1–3 段:重点字"') && yaml.includes('  continue:\n    from: "2026-09-16 1930-1"\n    title: "看图写话"\n    said:\n      - "我们写到第二句了。"\n    cards:\n      - "1930-2/0 canvas「画一画」 画了 3 笔"\n    index: "/w/conversations/chinese-tutor/2026-09-16.json"'), yaml);
-  const bare = renderContextPack({ from: 'kid', at: '2026-09-17T19:30', plan: [], recent: [] });
+  const bare = renderContextPack({ at: '2026-09-17T19:30', plan: [], recent: [] });
   check('没有就不写', !bare.includes('home:') && !bare.includes('continue:'));
 }
 

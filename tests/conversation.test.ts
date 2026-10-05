@@ -1,5 +1,5 @@
 /** 对话索引纯函数:命名、并入运行结果、session 只记一次。 */
-import { addMessage, applyRun, cardAssetName, cardId, changedCards, conversationFiles, currentThread, emptyIndex, isPrepThread, isTryThread, asKid, triedAsKid, jobId, kidCurrentThread, kidHiddenJobs, kidSpoke, lessonCards, prepJobs, lastJobOf, localDate, localMinute, sessionFor, threads } from '../src/lib/conversation.ts';
+import { addMessage, applyRun, cardAssetName, cardId, changedCards, conversationFiles, currentThread, emptyIndex, jobId, lastJobOf, localDate, localMinute, sessionFor, threads } from '../src/lib/conversation.ts';
 import { deriveKidView } from '../src/lib/kid-view.ts';
 import { parseTranscript } from '../src/lib/transcript.ts';
 import { ConversationIndexSchema } from '../src/schema/index.ts';
@@ -50,41 +50,20 @@ check('卡的状态文件与 id', f.cardsDir('1620-1') === '/ws/conversations/ma
   const parsed = ConversationIndexSchema.safeParse({ tutor: 'x', date: '2026-09-08', session: { id: 's', runtime: 'claude' }, messages: [] });
   check('旧索引没有 sessions 也过契约(缺省空)', parsed.success && Object.keys(parsed.data.sessions).length === 0);
 }
-// 备课(《备课设计.md》§3.2、§4):家长端开的话题(第一条 prepThread)孩子开口前是备课轮;没交整个看不到;交了只看这节课的卡
+// 旧索引(2026-10-05 前):家长端开的备课话题、试用、交给孩子的课都还在盘上。读时 from: parent 当孩子,备课那几个字段丢掉,索引照样过契约
 {
-  type Sec = { cards: { kind: string; props: Record<string, unknown> }[]; lines: { text: string; audio: null; marks: { card: number; phrase: string }[]; ask: boolean; anchor: number | null; cues: { card: number; name: string }[] }[]; layout?: { for: 'tablet-landscape'; rows: number[][] } };
-  const line = (text: string, anchor: number | null, ask = false) => ({ text, audio: null, marks: anchor === null ? [] : [{ card: anchor, phrase: text }], ask, anchor, cues: [] });
-  const sec = (n: number): Sec => ({ cards: Array.from({ length: n }, (_, k) => ({ kind: 'text', props: { text: `卡${k}` } })), lines: [line('开场白', null), ...Array.from({ length: n }, (_, k) => line(`说卡${k}`, k, k === n - 1))], layout: { for: 'tablet-landscape', rows: [[0, 1], ...(n > 2 ? [[2]] : [])] } });
-  type M = { job: string; thread: string; from: 'kid' | 'parent' | 'system'; prepThread?: true; result: 'ok' | 'running'; section?: Sec };
-  const msgs: M[] = [
-    { job: '1900-1', thread: '1900-1', from: 'kid', result: 'ok', section: sec(1) },
-    { job: '1910-2', thread: '1910-2', from: 'parent', result: 'ok', section: sec(1) },
-    { job: '2000-3', thread: '2000-3', from: 'parent', prepThread: true, result: 'ok', section: sec(3) },
-    { job: '2001-4', thread: '2000-3', from: 'parent', result: 'ok', section: sec(2) },
-    { job: '2002-5', thread: '2000-3', from: 'parent', result: 'ok', section: sec(2) },
-    { job: '2100-6', thread: '2100-6', from: 'parent', prepThread: true, result: 'ok', section: sec(1) },
-  ];
-  check('备课轮:只认 prepThread 开的话题;工作台开的(from parent 不带)不算', [...prepJobs(msgs)].join() === '2000-3,2001-4,2002-5,2100-6' && isPrepThread(msgs, '2000-3') && !isPrepThread(msgs, '1910-2'));
-  check('没交:备课话题整个看不到;孩子的当前话题落在孩子看得到的末条', [...kidHiddenJobs({ messages: msgs })].join() === '2000-3,2001-4,2002-5,2100-6' && kidCurrentThread({ messages: msgs }) === '1910-2');
-  check('这节课:新卡默认都在,按生成的顺序', lessonCards({ messages: msgs }, '2000-3').join() === '2000-3/0,2000-3/1,2000-3/2,2001-4/0,2001-4/1,2002-5/0,2002-5/1');
-  const lessons = { '2000-3': { handedAt: '2026-09-25T13:00:00Z', source: 'lessons/2026-09-25-2000-3.md' } };
-  check('交了:这节课全部的卡;那个话题的轮孩子都看得到;没交的仍看不到;旧索引的 off 读时丢掉', lessonCards({ messages: msgs, lessons }, '2000-3').length === 7 && [...kidHiddenJobs({ messages: msgs, lessons })].join() === '2100-6' && kidCurrentThread({ messages: msgs, lessons }) === '2000-3' && !('off' in (ConversationIndexSchema.parse({ tutor: 'x', date: '2026-09-08', lessons: { a: { handedAt: null, off: ['1/0'] } } }).lessons.a as object)));
-  const spoke: M[] = [...msgs, { job: '2003-7', thread: '2000-3', from: 'kid', result: 'ok' }, { job: '2004-8', thread: '2000-3', from: 'parent', result: 'ok', section: sec(1) }];
-  check('孩子开口后:那一条起不是备课轮(家长再发也不是,也不进这节课);kidSpoke', !prepJobs(spoke).has('2003-7') && !prepJobs(spoke).has('2004-8') && prepJobs(spoke).has('2002-5') && kidSpoke(spoke, '2000-3') && !kidSpoke(spoke, '2100-6') && !lessonCards({ messages: spoke }, '2000-3').includes('2004-8/0'));
-}
-
-// 试用(《备课设计.md》§十二):第一条带 tryThread(和 prepThread 一起);孩子端永远看不到,点名 show 的才露;家长扮孩子说的(不是课文件建的轮)算孩子开口
-{
-  type M = { job: string; thread: string; from: 'kid' | 'parent' | 'system'; prepThread?: true; tryThread?: true; lessonSection?: number; result: 'ok' };
-  const msgs: M[] = [
-    { job: '1900-1', thread: '1900-1', from: 'kid', result: 'ok' },
-    { job: '2000-2', thread: '2000-2', from: 'parent', prepThread: true, tryThread: true, lessonSection: 0, result: 'ok' },
-    { job: '2000-3', thread: '2000-2', from: 'parent', lessonSection: 1, result: 'ok' },
-  ];
-  const lessons = { '2000-2': { handedAt: '2026-10-02T12:00:00Z' } };
-  check('试用:isTryThread 只认第一条带的;孩子端看不到(就算有 handedAt 也看不到);点名的才露', isTryThread(msgs, '2000-2') && !isTryThread(msgs, '1900-1') && [...kidHiddenJobs({ messages: msgs, lessons })].join() === '2000-2,2000-3' && kidHiddenJobs({ messages: msgs }, '2000-2').size === 0 && kidCurrentThread({ messages: msgs, lessons }) === '1900-1');
-  const said: M[] = [...msgs, { job: '2001-4', thread: '2000-2', from: 'parent', result: 'ok' }];
-  check('asKid / triedAsKid:课文件建的轮不算,家长扮孩子说的算;不是试用的话题里家长说的不算;kidSpoke 不受影响', !triedAsKid(msgs, '2000-2') && triedAsKid(said, '2000-2') && asKid(said[3], true) && !asKid(said[3], false) && !asKid(said[1], true) && !kidSpoke(said, '2000-2') && prepJobs(said).has('2001-4'));
+  const old = ConversationIndexSchema.parse({
+    tutor: 'x', date: '2026-10-04',
+    messages: [
+      { job: '1900-1', thread: '1900-1', at: 'x', from: 'parent', text: '课文件 平均分', prepThread: true, tryThread: true, lessonSection: 0, memoryDraft: ['想记的'], result: 'ok', artifacts: [] },
+      { job: '1901-2', thread: '1900-1', at: 'x', from: 'kid', text: '孩子说的', lessonSaid: [{ section: 1, text: '嗯' }], result: 'ok', artifacts: [], memoryLines: [{ before: null, after: '- 2026-10-04 爱抢答' }], diaryBlock: '## 数学 · 平均分\n' },
+      { job: '1902-3', thread: '1902-3', at: 'x', from: 'parent', text: '工作台发的', result: 'ok', artifacts: [] },
+    ],
+    lessons: { '1900-1': { handedAt: '2026-10-04T10:00:00Z', source: 'lessons/平均分.md' } },
+  });
+  const [a, b, c] = old.messages;
+  check('旧的 from: parent:课文件建的轮读成 system、别的读成 kid;备课、试用、课文件的字段读时丢掉;索引的 lessons 丢掉', a.from === 'system' && c.from === 'kid' && !('prepThread' in a) && !('tryThread' in a) && !('lessonSection' in a) && !('memoryDraft' in a) && !('lessonSaid' in b) && !('lessons' in old), JSON.stringify(old));
+  check('删话题要用的 memoryLines、diaryBlock 照存', b.memoryLines?.[0].after === '- 2026-10-04 爱抢答' && b.memoryLines[0].before === null && b.diaryBlock === '## 数学 · 平均分\n');
 }
 
 done();

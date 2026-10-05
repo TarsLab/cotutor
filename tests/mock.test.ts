@@ -215,40 +215,9 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const oy = (await get('/api/overview/2026-09-09')).json as Ov;
   check('清单:今天四位老师,语文老师一个话题停在末句问句,英语老师没聊;昨天有以前的话题;未来 400', ov.tutors.length === 4 && ov.tutors[0].threads.length === 1 && ov.tutors[0].threads[0].stoppedAt === 'ask' && ov.tutors[0].threads[0].title.length > 0 && ov.tutors[2].threads.length === 0 && oy.date === '2026-09-09' && oy.tutors[0].threads[0].title.startsWith('昨天问的') && (await get('/api/overview/2027-01-01')).status === 400, JSON.stringify(ov.tutors[0]));
 
-  // 备课(《备课设计.md》):家长端「新话题」开的话题在孩子那份列表里,孩子端看不到;家长能按继续、做卡;从第一节交给孩子 → 首页多一个只打开的「接着」,孩子端从开场看起
-  const t0 = await m.route('POST', '/api/conversations/english-tutor/messages', { text: '试试新讲法', newThread: true, prep: true });
-  await m.settle();
-  type PrepMsg = Msg & { from: string; prep?: boolean; opening?: boolean; costUsd?: number; memoryDraft?: string[]; thread: string; job: string };
-  const eb = async () => ((await get('/api/conversations/english-tutor/today/board')).json as { messages: PrepMsg[] }).messages;
-  const td = await eb();
-  const kd = (await get('/api/kid/conversations/english-tutor/today')).json as Day & { thread: string | null };
-  type OvT = { tutors: { name: string; threads: { thread: string; prep: boolean; handedAs: string | null }[] }[] };
-  const ov2 = (await get('/api/overview/today')).json as OvT;
-  const prepTh = td[0]?.thread;
-  check('备课:202;板书接口 from parent、prep、不给费用、本来会记住的;英语老师孩子端还是空的;清单上标备课', t0.status === 202 && td.length === 1 && td[0].from === 'parent' && td[0].prep === true && !('costUsd' in td[0]) && td[0].memoryDraft?.length === 1 && td[0].section !== null && kd.messages.length === 0 && kd.thread === null && ov2.tutors[2].threads[0]?.prep === true && ov2.tutors[2].threads[0].handedAs === null, JSON.stringify({ t0: t0.json, td: td[0], kd: kd.messages.length, ov: ov2.tutors[2].threads }));
-  const t1 = await m.route('POST', '/api/conversations/english-tutor/messages', { text: '', action: 'continue', thread: prepTh });
-  await m.settle();
-  const td2 = await eb();
-  const lp = `/api/conversations/english-tutor/2026-09-10/threads/${prepTh}/lesson`;
-  const c0 = td2[0]?.section?.cards.length ?? 0;
-  const c1 = td2[1]?.section?.cards.length ?? 0;
-  type LBoard = { messages: (PrepMsg & { handed?: boolean })[]; lessons: Record<string, { cards: string[]; handed: boolean; label: string | null }> };
-  const lb = (await get('/api/conversations/english-tutor/today/board')).json as LBoard;
-  const hand = await m.route('POST', `${lp}/hand`, { label: '我们来读水果' });
-  const kd3 = (await get('/api/kid/conversations/english-tutor/today')).json as Day & { messages: { section: { cards: unknown[] } | null }[] };
-  const kh = (await get('/api/kid/home')).json as { home: string; cards: { kind: string; props: { tutor?: string; buttons?: { id: number | string; label: string; open?: boolean }[] } }[] };
-  const hb = kh.cards.find((c) => c.props.tutor === 'english-tutor')?.props.buttons?.find((x) => x.label === '我们来读水果');
-  const ov4 = (await get('/api/overview/today')).json as OvT;
-  const lb2 = (await get('/api/conversations/english-tutor/today/board')).json as LBoard;
-  check('继续同一话题;这节课是两轮全部的卡;点灰接口没了;交给孩子(mock 里就是记下交了、回一个课文件名):孩子端两节都在、问句 null;首页有只打开的按钮;清单标已交', t1.status === 202 && td2.length === 2 && td2[1].thread === prepTh && c0 > 1 && (await m.route('PUT', lp, { cards: [`${td2[0]?.job}/0`], off: true })).status === 404 && lb.lessons[prepTh].cards.length === c0 + c1 && hand.status === 200 && (hand.json as { source: string }).source.startsWith('lessons/') && kd3.messages.length === 2 && kd3.messages[0].question === null && kd3.messages[0].section?.cards.length === c0 && hb?.open === true && ov4.tutors[2].threads[0].handedAs === '我们来读水果' && lb2.lessons[prepTh].handed === true && lb2.lessons[prepTh].label === '我们来读水果' && lb2.messages[0].handed === true, JSON.stringify({ lb: lb.lessons, hand: hand.json, kd3: kd3.messages.length, hb }));
-  // 家长真发(第六节 3):进孩子那份列表,from parent;孩子端 today 里问句为 null、不算上限;打星在清单上
-  const before = ((await get('/api/kid/conversations/chinese-tutor/today')).json as Day).remaining;
-  const p0 = await m.route('POST', '/api/conversations/chinese-tutor/messages', { text: '家长补一句', device: 'phone' });
-  await m.settle();
-  const kd2 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
+  // 家长端只看(2026-10-05 删了备课与试用):没有家长发消息、交给孩子的接口;要试老师到孩子端当一回孩子,用完删话题
+  check('家长端不能发消息、没有交给孩子', (await m.route('POST', '/api/conversations/chinese-tutor/messages', { text: '家长补一句' })).status === 404 && (await m.route('POST', '/api/conversations/chinese-tutor/2026-09-10/threads/x/lesson/hand', { label: 'x' })).status === 404);
   const pb2 = (await get('/api/conversations/chinese-tutor/today/board')).json as { messages: (Msg & { from: string })[] };
-  const last2 = pb2.messages[pb2.messages.length - 1];
-  check('家长真发:202,接当前话题;孩子端那条问句 null、剩余条数不变;板书接口 from parent', p0.status === 202 && kd2.messages[kd2.messages.length - 1].question === null && kd2.remaining === before && last2.from === 'parent' && last2.question === '家长补一句' && last2.section !== null, JSON.stringify({ p0: p0.json, q: kd2.messages[kd2.messages.length - 1]?.question, from: last2.from }));
   const th0 = (pb2.messages[0] as unknown as { thread: string }).thread;
   const r1 = await m.route('PUT', `/api/conversations/chinese-tutor/2026-09-10/threads/${th0}/rating`, { rating: 4 });
   const ov3 = (await get('/api/overview/today')).json as { tutors: { threads: { thread: string; rating: number | null }[] }[] };
@@ -259,8 +228,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   check('记账:202、queued 一个话题;清单上那行 booked;再记 queued 空', b1.status === 202 && (b1.json as { queued: string[] }).queued.length === 1 && ovb.tutors[0].threads.every((t) => t.booked) && ovb.tutors[0].booking === false && ((await m.route('POST', '/api/conversations/chinese-tutor/2026-09-10/bookkeep', {})).json as { queued: string[] }).queued.length === 0, JSON.stringify(b1.json));
   // 删话题(打完星之后删,清单上那个话题就没了)
   const dl = await m.route('DELETE', `/api/conversations/chinese-tutor/2026-09-10/threads/${th0}`);
-  const dt = await m.route('DELETE', `/api/conversations/english-tutor/2026-09-10/threads/${prepTh}`);
-  check('删话题:孩子的删了清单上没了、孩子端 today 空;备课的删了清单空、首页那个按钮没了;再删 404', dl.status === 200 && ((await get('/api/overview/today')).json as { tutors: { threads: unknown[] }[] }).tutors[0].threads.length === 0 && ((await get('/api/kid/conversations/chinese-tutor/today')).json as Day).messages.length === 0 && dt.status === 200 && ((await get('/api/overview/today')).json as { tutors: { threads: unknown[] }[] }).tutors[2].threads.length === 0 && !JSON.stringify((await get('/api/kid/home')).json).includes('我们来读水果') && (await m.route('DELETE', `/api/conversations/chinese-tutor/2026-09-10/threads/${th0}`)).status === 404, JSON.stringify({ dl: dl.json, dt: dt.json }));
+  check('删话题:删了清单上没了、孩子端 today 空;回撤销了多少(mock 没有 vault,0);再删 404', dl.status === 200 && ((await get('/api/overview/today')).json as { tutors: { threads: unknown[] }[] }).tutors[0].threads.length === 0 && ((await get('/api/kid/conversations/chinese-tutor/today')).json as Day).messages.length === 0 && (dl.json as { undo?: { memory: number } }).undo?.memory === 0 && (await m.route('DELETE', `/api/conversations/chinese-tutor/2026-09-10/threads/${th0}`)).status === 404, JSON.stringify({ dl: dl.json }));
 }
 // ---- 口播老师(《口播老师设计.md》):三张录音卡 → PUT 录音(data:audio)换成路径、/api/audio 取得回 → 交给老师追加下一节 ----
 {

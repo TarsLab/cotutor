@@ -89,6 +89,15 @@ export function renderDiaryBlock(t: DiaryTopic): string | null {
   return `${lines.join('\n')}\n`;
 }
 
+/** 从日记里摘掉一段(删话题时,2026-10-05):按记账时追加的原文找;家长改过那段就找不到,返回 null,不动 */
+export function removeDiaryBlock(existing: string, block: string): string | null {
+  const want = block.trim();
+  const i = existing.indexOf(want);
+  if (!want || i < 0) return null;
+  const out = `${existing.slice(0, i).replace(/\s+$/, '')}\n\n${existing.slice(i + want.length).replace(/^\s+/, '')}`.trim();
+  return out ? `${out}\n` : '';
+}
+
 /** 追加到当天的日记:文件不在就是这一段;在就空一行接上(家长自己写的行永不动) */
 export function appendDiary(existing: string | null, block: string): string {
   if (!existing || !existing.trim()) return block;

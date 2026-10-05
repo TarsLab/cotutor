@@ -2,7 +2,7 @@
  * 假 CLI:模仿 claude / qwen 的 stream-json 无头输出,给 runner 测试用(不花钱、不联网)。
  * 用法(运行时模板里):node --experimental-strip-types _fake-cli.ts [--resume <id>] [--agent <name>] [--fail] [--stream] <prompt>
  * --stream:最终文本先按行以 stream_event(content_block_delta)吐出来,每行歇 80ms(模仿 claude --include-partial-messages),再发 assistant 与 result。
- * 行为:回显 prompt 的最后一行;含「录音卡」出三张录音卡(第二张的句子带「慢」);上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);prompt 含「段在前」就在最终文本前加一段「## 记账」;含「画场景」出一张带题面 / 讲法的新场景卡,「放旧课包」出一张只有 id 的场景卡;含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);含「家长段」加「## 家长」;
+ * 行为:回显 prompt 的最后一行;含「录音卡」出三张录音卡(第二张的句子带「慢」);上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);prompt 含「段在前」就在最终文本前加一段「## 记账」;含「画场景」出一张带题面 / 讲法的新场景卡,「放旧课包」出一张只有 id 的场景卡;含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);含「家长段」加「## 家长」;含「记住它」「改记忆」回「## 记忆」(加两条 / 改一条删一条);
  * --resume 时 session_id 沿用给的 id,否则新造;--fail 出 error_max_turns。
  * --input-format stream-json(预热,2026-09-29):消息不在 argv,从 stdin 读第一行 {"type":"user","message":{"content":…}};读到之前一个字节不吐(同真 claude),
  * init 带 waitedMs(起来到收到消息等了多久);回完 result 等 stdin 关了才退。
@@ -140,6 +140,8 @@ if (fail) {
   // 记账后整理记忆(runner.tidyMemory 发的):改一条、删一条(家长手写的)、加一条、再删一条找不到的
   if (msg.includes('把你的记忆整理一遍')) parts.push('## 记忆\n- 改:凑十他懂 → 凑十熟练了\n- 删:家长写的别出选择题\n- 整理时新记的\n- 删:没有这句话');
   if (msg.includes('记住它')) parts.push('## 记忆\n- 讲角用手指比划他马上懂\n- 家长说别出选择题\n- 第三条会被丢掉');
+  // 讲课的轮也会改、删记忆(删话题时要撤回去)
+  if (msg.includes('改记忆')) parts.push('## 记忆\n- 改:讲慢点他跟得上 → 讲慢点才跟得上\n- 删:爱用手指数');
   // 记账任务(runner.bookkeep 发的):回一段固定形状的「## 记账」;prompt 里有「记账坏」就少写 name(应用该报 warning、日记不写)
   const bk = /给刚才这个话题记账\(话题 (\S+?)[,,]/.exec(prompt);
   if (bk) parts.push(msg.includes('记账坏') ? `## 记账\n- thread: ${bk[1]}\n  summary: 没名字` : `## 记账\n- thread: ${bk[1]}\n  name: 三角形的角\n  textbook: 人教数学一下#1 认识图形(二)\n  summary: 讲了三角形有三个角,孩子一开始说四个。\n  steps: 看图 → 数角 → 选一选\n  observations:\n    - 角和边会混`);

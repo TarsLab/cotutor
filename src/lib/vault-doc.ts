@@ -20,7 +20,7 @@ export function bookkeepingReferenceDoc(): string {
   const thin = bookkeepingPrompt({ thread: '1705-3', keepScore: 4, headings: [] });
   return `# 记账段的形状(机器生成,别改)
 
-记账任务的上下文包 \`from: system\`,消息正文长这样(打分够、话题里有一张作业照片的那种):
+记账任务的消息正文长这样(打分够、话题里有一张作业照片的那种):
 
 \`\`\`\`
 ${kept}

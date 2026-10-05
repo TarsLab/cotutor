@@ -76,7 +76,7 @@ try {
   check('doctor 查板书技能(机器件,必需)', d1.checks.some((c) => c.name === 'skill.cotutor-board' && c.ok && c.required));
   check('老师链都查了(五位:含 scene-maker、关着的口播老师)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 5);
   check('doctor 查主题:清单过契约、出厂件最新', d1.checks.some((c) => c.name === 'theme.manifest' && c.ok) && d1.checks.some((c) => c.name === 'theme.default.origin' && c.ok));
-  check('doctor 查 skill 与 drawtell 壳', d1.checks.filter((c) => c.name.startsWith('skill.') && c.ok).length === 11 && d1.checks.some((c) => c.name === 'skill.cotutor-vault' && c.required) && d1.checks.some((c) => c.name === 'skill.cotutor-home' && c.required) && d1.checks.some((c) => c.name === 'skill.cotutor-prep' && c.required) && d1.checks.filter((c) => c.name.startsWith('skill.drawtell') && !c.required).length === 4 && d1.checks.some((c) => c.name === 'drawtell' && c.ok && !c.required));
+  check('doctor 查 skill 与 drawtell 壳', d1.checks.filter((c) => c.name.startsWith('skill.') && c.ok).length === 10 && d1.checks.some((c) => c.name === 'skill.cotutor-vault' && c.required) && d1.checks.some((c) => c.name === 'skill.cotutor-home' && c.required) && !d1.checks.some((c) => c.name === 'skill.cotutor-prep') && d1.checks.filter((c) => c.name.startsWith('skill.drawtell') && !c.required).length === 4 && d1.checks.some((c) => c.name === 'drawtell' && c.ok && !c.required));
   check('默认运行时是 claude → .claude 链必需、.qwen 链非必需', d1.checks.some((c) => c.name === 'tutor.math-tutor.claude' && c.required) && d1.checks.some((c) => c.name === 'tutor.math-tutor.qwen' && !c.required));
   check('git 是建议', d1.checks.some((c) => c.name === 'git' && !c.ok && !c.required));
 
@@ -123,9 +123,8 @@ try {
   }
   const tplR = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: Record<string, string | { run: string[]; resume: string[] }> };
   const claudeOnes = Object.entries(tplR.runtimes).filter((e): e is [string, { run: string[]; resume: string[] }] => typeof e[1] !== 'string' && e[1].run[0] === 'claude');
-  const fast = tplR.runtimes['claude-fast'] as { run: string[] };
-  check('claude-fast 不发工具定义 / 技能索引 / claude 的系统提示(--tools "" + --disable-slash-commands + --system-prompt),不再用 --disallowedTools', fast.run.includes('--tools') && fast.run[fast.run.indexOf('--tools') + 1] === '' && fast.run.includes('--disable-slash-commands') && fast.run.includes('--system-prompt') && !fast.run.includes('--disallowedTools'));
-  check('claude 的三个模板 run / resume 都带 --setting-sources project(只读 workspace 的 .claude/,用户级技能 / hooks / 额外目录不进老师);qwen 没有', claudeOnes.length === 3 && claudeOnes.every(([, r]) => r.run.join(' ').includes('--setting-sources project') && r.resume.join(' ').includes('--setting-sources project')) && !(tplR.runtimes.qwen as { run: string[] }).run.includes('--setting-sources'));
+  check('不再出厂 claude-fast(给课文件排版的快模型,备课 2026-10-05 删了)', !('claude-fast' in tplR.runtimes));
+  check('claude 的两个模板 run / resume 都带 --setting-sources project(只读 workspace 的 .claude/,用户级技能 / hooks / 额外目录不进老师);qwen 没有', claudeOnes.length === 2 && claudeOnes.every(([, r]) => r.run.join(' ').includes('--setting-sources project') && r.resume.join(' ').includes('--setting-sources project')) && !(tplR.runtimes.qwen as { run: string[] }).run.includes('--setting-sources'));
 }
 // ---- 老 workspace 迁移(步 2):cotutor.json 是政策文件,机器不自动改,所以要算差异 + 只补缺 ----
 {

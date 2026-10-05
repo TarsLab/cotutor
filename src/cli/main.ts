@@ -249,7 +249,7 @@ export async function main(argv: string[]): Promise<void> {
         const gaps = await configGapsOf(root);
         if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps, skills: skillSteps, themes: themeSteps, koubo: kouboSteps, configGaps: gaps }), null, 2)}\n`);
         else {
-          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', unavailable: '来源的包没装,没法换' };
+          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', unavailable: '来源的包没装,没法换', retired: '不再出厂,删了' };
           for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' || s.action === 'unavailable' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.machine ? '(机器件)' : ''}\n`);
           for (const s of kouboSteps) process.stdout.write(`${s.action === 'kept' ? '!' : '✓'} ${s.item.padEnd(24)} ${s.note ?? ''}\n`);
           for (const s of themeSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} theme ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.action === 'kept-custom' ? '(themes/ 里改过的主题不动)' : ''}\n`);
@@ -280,7 +280,7 @@ export async function main(argv: string[]): Promise<void> {
         const ws = loadWorkspace(workspace);
         const { packDryRun } = await import('../server/runner.ts');
         const from = typeof flags.from === 'string' ? flags.from : 'kid';
-        if (from !== 'kid' && from !== 'parent' && from !== 'system') throw new UsageError('--from 只能是 kid / parent / system');
+        if (from !== 'kid' && from !== 'system') throw new UsageError('--from 只能是 kid / system');
         const at = typeof flags.at === 'string' ? new Date(flags.at) : new Date();
         if (Number.isNaN(at.getTime())) throw new UsageError(`--at 不是时间:${flags.at as string}`);
         const r = await packDryRun(ws, tutor, { from, at, text: rest.join(' ') || '(干跑)' });
@@ -489,58 +489,11 @@ export async function main(argv: string[]): Promise<void> {
         if (c.fixes) process.exitCode = 1;
         return;
       }
-      case 'lesson': {
-        const sub = positionals[0];
-        if (sub !== 'check' && sub !== 'post' && sub !== 'hand' && sub !== 'list') throw new UsageError(`lesson 后面跟 check / post / hand / list,如 cotutor lesson check 分数。\n${USAGE}`);
-        const ws = loadWorkspace(workspace);
-        const now = new Date();
-        const L = await import('../server/lesson.ts');
-        if (sub === 'list') {
-          const rows = await L.listLessons(ws, now);
-          if (json) process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
-          else if (!rows.length) process.stdout.write('lessons/ 下还没有课文件(用 cotutor-prep 技能写一份,或在家长端备课话题里点「交给孩子」)\n');
-          else for (const r of rows) process.stdout.write(`${r.name}  ${r.tutor ?? '(没写 tutor)'}  ${r.sections} 节 ${r.cards} 张卡${r.fixes ? `  ✗ ${r.fixes} 条要改` : ''}\n`);
-          return;
-        }
-        const name = positionals[1] ? L.lessonName(positionals[1]) : null;
-        if (!name) throw new UsageError(`${sub} 要课文件的名字(lessons/<课名>.md 的 <课名>,中英文、数字、- 与 _),如 cotutor lesson ${sub} 分数`);
-        if (sub === 'check') {
-          const md = await L.readLesson(ws, name);
-          if (md === null) throw new UsageError(`没有 lessons/${name}.md`);
-          const c = await L.checkLesson(ws, md, now);
-          if (json) process.stdout.write(`${JSON.stringify({ ok: c.fixes === 0, tutor: c.doc.tutor, device: c.doc.device, for: c.doc.for ?? null, issues: c.issues, sections: c.doc.sections.map((s) => s.section), brief: c.doc.brief }, null, 2)}\n`);
-          else process.stdout.write(`${L.formatCheck(c, `lessons/${name}.md`)}\n`);
-          if (c.fixes) process.exitCode = 1;
-          return;
-        }
-        if (sub === 'post') {
-          const r = await L.postLesson(ws, name, { write: flags.write === true, now, model: typeof flags.model === 'string' ? flags.model : undefined });
-          if (json) process.stdout.write(`${JSON.stringify({ ok: r.ok, fences: r.fences, marks: r.marks, costUsd: r.costUsd, ms: r.ms, error: r.error ?? null, md: r.md }, null, 2)}\n`);
-          else if (!r.ok) process.stdout.write(`没排成:${r.error}(${(r.ms / 1000).toFixed(1)}s)\n`);
-          else {
-            process.stdout.write(`整份排了一遍 · ${(r.ms / 1000).toFixed(1)}s · $${r.costUsd.toFixed(3)}\n`);
-            process.stdout.write(flags.write === true ? `回写 lessons/${name}.md:${r.fences} 处围栏行、${r.marks} 处 [词]\n` : `会改 ${r.fences} 处围栏行、${r.marks} 处 [词];加 --write 才写进文件\n`);
-          }
-          if (!r.ok) process.exitCode = 1;
-          return;
-        }
-        const r = await L.handLessonFile(ws, name, { label: typeof flags.label === 'string' ? flags.label : undefined, now });
-        if (r.ok && r.lines && !json) process.stdout.write(`交给孩子了:${r.tutor} ${r.date} 话题 ${r.thread} · ${r.cards} 张卡 · 首页按钮「${r.label}」;配音 ${r.lines} 句……\n`);
-        await r.dubbing;
-        if (json) process.stdout.write(`${JSON.stringify({ ok: r.ok && Boolean(r.home?.ok), tutor: r.tutor, thread: r.thread, label: r.label, cards: r.cards, issues: r.check.issues, home: r.home ? { ok: r.home.ok, issues: r.home.check.issues } : null }, null, 2)}\n`);
-        else if (!r.ok) process.stdout.write(`${L.formatCheck(r.check, `lessons/${name}.md`)}\n没交:有 ${r.check.fixes} 条要改\n`);
-        else {
-          process.stdout.write(r.lines ? '配音齐了\n' : `交给孩子了:${r.tutor} ${r.date} 话题 ${r.thread} · ${r.cards} 张卡 · 首页按钮「${r.label}」\n`);
-          if (r.home && !r.home.ok) process.stdout.write(`首页草稿里加上了那行,但首页有别处要改,这次没发:\n${r.home.check.issues.filter((i) => i.level === 'fix').map((i) => `  ✗ ${i.text}`).join('\n')}\n`);
-        }
-        if (!r.ok || (r.home && !r.home.ok)) process.exitCode = 1;
-        return;
-      }
       case 'send': {
         const [tutor, ...words] = positionals;
         const text = words.join(' ');
         if (!tutor || !text) throw new UsageError(`send 需要老师名和消息,如 cotutor send math-tutor "这一步为什么要借位"。\n${USAGE}`);
-        const from = typeof flags.from === 'string' ? flags.from : 'parent';
+        const from = typeof flags.from === 'string' ? flags.from : 'kid';
         if (!(MESSAGE_FROM as readonly string[]).includes(from)) throw new UsageError(`--from 只能是 ${MESSAGE_FROM.join(' / ')}`);
         const ctx = createContext(loadWorkspace(workspace));
         // 现场打印每道工序的事件(--quiet / --json 不打);事件同时落在 events.jsonl,事后 cotutor trace 能回放

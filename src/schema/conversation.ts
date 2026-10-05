@@ -31,12 +31,13 @@ export type Timing = z.infer<typeof TimingSchema>;
 export const SessionSchema = z.object({ id: z.string().min(1), runtime: z.string().min(1) });
 export type Session = z.infer<typeof SessionSchema>;
 
-export const ConversationMessageSchema = z.object({
+const MessageObjectSchema = z.object({
   /** 一轮的 id(job),也是转录文件名的一段:<date>.<job>.log */
   job: z.string().min(1),
   /** 话题 id = 话题第一条消息的 job(2026-09-11 拍板:一个话题 = 一段连续问答 = 老师的一个会话;一天可多个)。旧索引没有:读时按 threadOf 现算 */
   thread: z.string().optional(),
   at: z.string().min(1),
+  /** 谁发的:孩子(孩子端、工作台、cotutor send 都算)或应用派的任务。旧索引的 parent 读时改过来(legacyFrom) */
   from: z.enum(MESSAGE_FROM),
   /** 消息原文(不含上下文包) */
   text: z.string(),
@@ -68,6 +69,10 @@ export const ConversationMessageSchema = z.object({
   warnings: z.array(z.string()).optional(),
   /** 这轮「## 记忆」段真落进 vault 记忆文件的改动:新增的行(带日期)、「改:旧 → 新」、「删:旧」;家长视图显示 */
   remembered: z.array(z.string()).optional(),
+  /** 同一批改动的整行原文(删话题时按它撤销,2026-10-05):before = 改之前那行(新增的为 null),after = 改之后那行(删掉的为 null) */
+  memoryLines: z.array(z.object({ before: z.string().nullable(), after: z.string().nullable() })).optional(),
+  /** 记账那轮追加进日记的那一段原文(删话题时从日记里摘掉,2026-10-05) */
+  diaryBlock: z.string().optional(),
   /** 这轮上下文包里家长笔记的版本:role(profile / entry)→ `路径@hash`;同一话题下一轮对得上就只写「未变」(2026-09-17) */
   notes: z.record(z.string(), z.string()).optional(),
   /** 这条消息带给老师的卡(上一轮之后孩子改过状态的):id 与 describe 出的那句;家长视图显示「孩子在板书上做的」 */
@@ -86,22 +91,21 @@ export const ConversationMessageSchema = z.object({
   tools: z.array(z.object({ name: z.string().min(1), arg: z.string(), ok: z.boolean().nullable(), chars: z.number().int().nonnegative(), sub: z.boolean().optional() })).optional(),
   /** 这条是回放(cotutor replay,server/replay.ts):原轮的 job。回放落在 evals/ 里,不在 conversations/ */
   replayOf: z.string().min(1).optional(),
-  /** 这条开了一个备课话题(《备课设计.md》:家长在家长端 /parent 点「新话题」开的;只在话题第一条)。工作台与 cotutor send 开的不算 */
-  prepThread: z.literal(true).optional(),
-  /** 这条开了一个试用话题(《备课设计.md》§十二:家长在家长端课文件页点「试用」,在孩子端扮孩子跑一遍;只在话题第一条,和 prepThread 一起带)。
-   *  老师拿到孩子的上下文包;消息仍记 from: parent,不写记忆、不记账、不算上限、孩子看不到;第二天整个删掉(server/tryout.ts) */
-  tryThread: z.literal(true).optional(),
-  /** 这轮是从课文件建的第几节(0 起;《备课设计.md》§10.5,交给孩子时 handLessonFile 写的):不是谁说的话,家长端不出「家长」旁注,话题头一条「课文件」 */
-  lessonSection: z.number().int().nonnegative().optional(),
-  /** 孩子在课文件交出去的话题里的第一条(拍板 34):前面几节念的时候孩子说过的(当时没发给老师,页面攒着,这条一起带来);section = 第几节后(1 起) */
-  lessonSaid: z.array(z.object({ section: z.number().int().positive(), text: z.string().min(1) })).optional(),
-  /** 备课轮(《备课设计.md》:家长开的话题里孩子开口之前)「## 记忆」段的原文(没写进 vault;家长端旁注「本来会记住的」) */
-  memoryDraft: z.array(z.string()).optional(),
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2);开场按钮的 text 就是按钮上的字,不是孩子说的 */
   via: MessageViaSchema.optional(),
   /** 这个话题接着以前哪天的哪个话题(首页的「接着」按钮;新会话,上下文包带那个话题的尾巴) */
   continues: z.object({ date: z.string().regex(DATE_RE), thread: z.string().min(1) }).optional(),
 });
+
+/**
+ * 旧索引(2026-10-05 前)的 from: parent:从课文件建的那几轮(带 lessonSection)不是谁说的话,当系统消息(孩子端只出老师的话、不算上限、录像从孩子第一次开口往前倒推);
+ * 其余是家长端 / 工作台发的,当孩子说的。备课、试用、课文件那几个字段不在契约里,读时丢掉
+ */
+function legacyFrom(v: unknown): unknown {
+  if (!v || typeof v !== 'object' || (v as { from?: unknown }).from !== 'parent') return v;
+  return { ...v, from: typeof (v as { lessonSection?: unknown }).lessonSection === 'number' ? 'system' : 'kid' };
+}
+export const ConversationMessageSchema = z.preprocess(legacyFrom, MessageObjectSchema);
 export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 
 export const ConversationIndexSchema = z.object({
@@ -117,11 +121,5 @@ export const ConversationIndexSchema = z.object({
   ratings: z.record(z.string(), z.number().int().min(1).max(5)).default({}),
   /** 话题 id → 记账那轮的 job(记过的不再记;日记里已有这个话题的一段) */
   booked: z.record(z.string(), z.string().min(1)).default({}),
-  /**
-   * 话题 id → 这节课(《备课设计.md》§十):handedAt = 交给孩子的时刻(没交 = null,孩子端整个话题不下发);
-   * source = 交出去的课文件(相对 workspace 根,如 lessons/分数.md);从课文件建的话题没有会话,孩子第一条新会话、上下文包带文件。
-   * 旧索引的 off(点灰的卡,2026-09-25 那版)读时丢掉
-   */
-  lessons: z.record(z.string(), z.object({ handedAt: z.string().nullable().default(null), source: z.string().min(1).optional() })).default({}),
 });
 export type ConversationIndex = z.infer<typeof ConversationIndexSchema>;

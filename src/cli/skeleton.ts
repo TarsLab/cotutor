@@ -191,13 +191,6 @@ export function configTemplate(input: ConfigTemplateInput): string {
         run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '25m'],
         resume: ['qwen', '-p', '{prompt}', '--resume', '{session}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '25m'],
       },
-      // 课文件整份排版(cotutor lesson post):快模型、无工具、整块 JSON 出;没有 resume 的事,写同一条。
-      // 2026-09-15 量过:--disallowedTools 只禁调用、工具定义照发,一拍输入 27K;--tools "" 去工具定义(→ 6.7K)、--disable-slash-commands 去技能索引、
-      // --system-prompt 换掉 claude 自己的系统提示与子代理列表(→ 514,就是提示词本身)。样本 8 拍质量不变,p95 7.0s → 3.8s,费用 1/4
-      'claude-fast': {
-        run: ['claude', '-p', '{prompt}', '--model', 'haiku', '--setting-sources', 'project', '--strict-mcp-config', '--output-format', 'json', '--tools', '', '--disable-slash-commands', '--system-prompt', '你是课文件的排版,只回排好的整份文件。', '--max-budget-usd', '0.2'],
-        resume: ['claude', '-p', '{prompt}', '--model', 'haiku', '--setting-sources', 'project', '--strict-mcp-config', '--output-format', 'json', '--tools', '', '--disable-slash-commands', '--system-prompt', '你是课文件的排版,只回排好的整份文件。', '--max-budget-usd', '0.2'],
-      },
     },
     tts: TTS_DEFAULT,
     // 字段说明不写在这里:一写进去就冻住(政策文件永不覆盖),$schema 指的 schema 文件每次 init / upgrade 从 zod 的 .describe() 刷新

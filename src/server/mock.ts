@@ -31,7 +31,6 @@ import { lanAddresses, listenInfo } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { USER_CERT_DIR } from '../cli/workspace.ts';
 import { kidThreads } from '../lib/kid-view.ts';
-import { isPrepThread, kidHiddenJobs, kidSpoke, lessonCards, prepJobs, type Lesson } from '../lib/conversation.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { kidPage } from './kid-page.ts';
 import { arrangeHome, kidButtons, parseHome } from '../lib/home.ts';
@@ -373,10 +372,6 @@ interface MockMessage {
   states?: Record<number, unknown>;
   /** 孩子这条带的照片(假路径;/api/kid/image 给占位图) */
   photos?: string[];
-  /** 家长端「新话题」开的备课话题的第一条(《备课设计.md》) */
-  prepThread?: true;
-  /** 谁发的;缺省孩子。家长从家长板书页真发的是 parent:孩子端 today 里问句为 null、不算上限 */
-  from?: 'kid' | 'parent';
 }
 
 /** mock 的首页原文(昨晚 21:30 发布的那份;接着按钮指向 past 里昨天的话题,job = 0930-<老师名长度>) */
@@ -457,18 +452,6 @@ export function createMock(opts: MockOptions = {}): Mock {
   /** 以前的:昨天每位讲过课的老师有一个话题(拿脚本最后一节充数),只读回放用 */
   const past = new Map<string, MockMessage[]>();
   const cursor = new Map<string, number>();
-  /** 这节课(《备课设计.md》§十):老师 → 话题 → { handedAt };首页上多一个「接着」按钮(字在 handedLabel) */
-  const lessons = new Map<string, Map<string, Lesson>>();
-  const handedLabel = new Map<string, { thread: string; label: string }>();
-  /** 备课轮、这节课、孩子看不到的轮:和真服务同一组函数(lib/conversation.ts) */
-  const asIndex = (name: string) => {
-    const list = messages.get(name) ?? [];
-    return { messages: list.map((m) => ({ job: m.job, thread: m.thread, from: m.from ?? ('kid' as const), prepThread: m.prepThread, result: m.pending ? ('running' as const) : ('ok' as const), section: m.section ?? undefined })), lessons: Object.fromEntries(lessons.get(name) ?? []) };
-  };
-  const kidVisible = (name: string): MockMessage[] => {
-    const hidden = kidHiddenJobs(asIndex(name));
-    return (messages.get(name) ?? []).filter((m) => !hidden.has(m.job));
-  };
   const inflight = new Map<string, Promise<void>>();
   let seq = 0;
   const nextJob = (): string => { const d = now(); return `${pad(d.getHours())}${pad(d.getMinutes())}-${++seq}`; };
@@ -488,18 +471,18 @@ export function createMock(opts: MockOptions = {}): Mock {
     }
   }
   const dailyLimit = 30;
-  const used = (name: string): number => (messages.get(name) ?? []).filter((m) => m.question !== null && m.action !== 'continue' && m.from !== 'parent').length;
+  const used = (name: string): number => (messages.get(name) ?? []).filter((m) => m.question !== null && m.action !== 'continue').length;
   /** 话题打星(家长端清单上):<老师>/<话题> → 1–5;记过账的话题(同样的键) */
   const ratings = new Map<string, number>();
   /** 录音卡的录音(<老师>/<日期>.<job>.cards/<n>/rec-<k>.<ext> → 字节),只在内存里 */
   const recordings = new Map<string, { type: string; data: Buffer }>();
   const booked = new Set<string>();
-  /** 下发孩子端的形状:答案剥掉、状态并到卡上、场景卡补课包快照(样本课包在仓库里);家长发的问句不露 */
+  /** 下发孩子端的形状:答案剥掉、状态并到卡上、场景卡补课包快照(样本课包在仓库里) */
   const kidMessage = async (m: MockMessage) => {
-    const { states, action: _a, from: _f, ...rest } = m;
+    const { states, action: _a, ...rest } = m;
     const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => (states && i in states ? { ...c, state: states[i] } : c)) } : null;
     const section = withState ? await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, stripSecrets(withState)) : null;
-    return { ...rest, question: m.from === 'parent' ? null : m.question, section };
+    return { ...rest, section };
   };
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
   const tutorsJson = () => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, motto: t.motto, hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0 }));
@@ -508,29 +491,23 @@ export function createMock(opts: MockOptions = {}): Mock {
     const cards = arrangeHome(parseHome(mockHomeMd(localDate(d), yesterday())).cards, MOCK_TUTORS.map((t) => t.name)).map((c) => {
       if (c.kind !== 'tutor') return c;
       const name = String(c.props.tutor);
-      const list = kidVisible(name);
-      const asked = list.find((m) => m.question !== null && m.from !== 'parent' && m.thread === list[list.length - 1]?.thread);
+      const list = messages.get(name) ?? [];
+      const asked = list.find((m) => m.question !== null && m.thread === list[list.length - 1]?.thread);
       const recent = asked ? { date: localDate(d), thread: asked.thread, title: asked.question ?? '' } : null;
       const alive = (date: string, thread: string): boolean => (date === yesterday() && (past.get(name) ?? []).some((m) => m.thread === thread)) || (date === localDate(d) && list.some((m) => m.thread === thread));
-      const handed = (date: string, thread: string): boolean => date === localDate(d) && Boolean(lessons.get(name)?.get(thread)?.handedAt) && !list.some((m) => m.thread === thread && m.from !== 'parent' && m.question !== null);
-      return { kind: 'tutor', props: { tutor: name, buttons: kidButtons(mockCardButtons(name, c.props.buttons), { recent, alive, handed }) } };
+      return { kind: 'tutor', props: { tutor: name, buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { recent, alive }) } };
     });
     // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
     return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 } };
   };
   const mockHomeId = (): string => `${yesterday()}-2130`;
-  /** 老师卡上的按钮:原文里的,加上家长交给孩子的那个「接着」(真服务是追加进草稿再发布) */
-  const mockCardButtons = (name: string, raw: unknown): TutorButton[] => {
-    const h = handedLabel.get(name);
-    return [...((raw ?? []) as TutorButton[]), ...(h ? [{ kind: 'continue' as const, label: h.label, date: localDate(now()), thread: h.thread }] : [])];
-  };
   /** via → 按钮(真服务在 server/home.ts resolveVia;mock 从同一份原文取) */
   const mockButton = (name: string, via: unknown): TutorButton | 'new' | 'recent' | null => {
     if (!isObj(via)) return null;
     if (via.button === 'new' || via.button === 'recent') return via.button;
     if (via.home !== mockHomeId() || typeof via.button !== 'number') return null;
     const card = parseHome(mockHomeMd(localDate(now()), yesterday())).cards.find((c) => c.kind === 'tutor' && c.props.tutor === name);
-    return mockCardButtons(name, card?.props.buttons)[via.button] ?? null;
+    return ((card?.props.buttons ?? []) as TutorButton[])[via.button] ?? null;
   };
   const answer = (m: MockMessage, full: BoardSection | null): void => {
     if (full) {
@@ -597,17 +574,13 @@ export function createMock(opts: MockOptions = {}): Mock {
       const listOf = (name: string): MockMessage[] => (date === today ? messages.get(name) : date === yesterday() ? past.get(name) : undefined) ?? [];
       const tutors = MOCK_TUTORS.map((t) => {
         const list = listOf(t.name);
-        const prep = date === today ? prepJobs(asIndex(t.name).messages) : new Set<string>();
-        const by = new Map<string, { thread: string; at: string; title: string; from: 'kid' | 'parent'; via: null; sections: number; cards: number; stoppedAt: 'writing' | 'ask' | null; rating: number | null; booked: boolean; prep: boolean; handedAs: string | null; lessonCards: number }>();
+        const by = new Map<string, { thread: string; at: string; title: string; from: 'kid'; via: null; sections: number; cards: number; stoppedAt: 'writing' | 'ask' | null; rating: number | null; booked: boolean }>();
         for (const m of list) {
           let th = by.get(m.thread);
           if (!th) {
-            const isPrep = prep.has(m.job);
-            const handed = handedLabel.get(t.name);
-            th = { thread: m.thread, at: m.at, title: Array.from(((m.from === 'parent' ? '家长:' : '') + (m.question ?? '')).trim()).slice(0, 20).join(''), from: m.from ?? 'kid', via: null, sections: 0, cards: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: booked.has(`${t.name}/${m.thread}`), prep: isPrep, handedAs: isPrep && lessons.get(t.name)?.get(m.thread)?.handedAt ? (handed?.thread === m.thread ? handed.label : '') : null, lessonCards: isPrep ? lessonCards(asIndex(t.name), m.thread).length : 0 };
+            th = { thread: m.thread, at: m.at, title: Array.from((m.question ?? '').trim()).slice(0, 20).join(''), from: 'kid', via: null, sections: 0, cards: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: booked.has(`${t.name}/${m.thread}`) };
             by.set(m.thread, th);
           }
-          if (m.from !== 'parent' && m.question !== null) { th.prep = false; th.handedAs = null; th.lessonCards = 0; }
           if (m.pending) th.stoppedAt = 'writing';
           else if (m.section && (m.section.cards.length || m.section.lines.length)) { th.sections++; th.cards += m.section.cards.length; th.stoppedAt = m.section.lines[m.section.lines.length - 1]?.ask ? 'ask' : null; }
         }
@@ -625,8 +598,6 @@ export function createMock(opts: MockOptions = {}): Mock {
       const date = tail === 'today' ? today : tail;
       if (date > today) return { status: 400, json: { error: 'bad_request' } };
       const list = (date === today ? messages.get(name) : date === yesterday() ? past.get(name) : undefined) ?? [];
-      const prep = date === today ? prepJobs(asIndex(name).messages) : new Set<string>();
-      const ls = date === today ? (lessons.get(name) ?? new Map<string, Lesson>()) : new Map<string, Lesson>();
       const out = await Promise.all(list.map(async (m, i) => {
         const { states, ...rest } = m;
         // 录音卡录过的:家长端旁注给一份写死的评测(mock 不起 koubo),按这一节里第几张录音卡轮着给 过 / 重录 / 没评上
@@ -639,15 +610,10 @@ export function createMock(opts: MockOptions = {}): Mock {
           return st === undefined ? c : { ...c, state: st, ...(h ? { heard: h } : {}) };
         };
         const section = m.section ? await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, { ...m.section, cards: m.section.cards.map(withHeard) }) : null;
-        // 备课轮(《备课设计.md》):标 prep、带费用;第一轮带一条「本来会记住的」看旁注的样子
-        if (prep.has(m.job)) return { ...rest, from: m.from ?? 'kid', section, prep: true, ...(ls.get(m.thread)?.handedAt ? { handed: true } : {}), ...(m.job === m.thread && !m.pending ? { memoryDraft: ['分数刚起步,1/4 还会和 1/3 混'] } : {}) };
-        return { ...rest, from: m.from ?? 'kid', section, ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };
+        return { ...rest, from: 'kid' as const, section, ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };
       }));
       const pending = list.find((m) => m.pending);
-      const idx = asIndex(name);
-      const lessonsOut: Record<string, { cards: string[]; handed: boolean; label: string | null; source: string | null; dubbing: null }> = {};
-      if (date === today) for (const th of new Set(list.map((m) => m.thread))) if (isPrepThread(idx.messages, th)) lessonsOut[th] = { cards: lessonCards(idx, th), handed: Boolean(ls.get(th)?.handedAt), label: handedLabel.get(name)?.thread === th ? handedLabel.get(name)!.label : null, source: ls.get(th)?.source ?? null, dubbing: null };
-      return { status: 200, json: { tutor: name, date, messages: out, pending: pending ? pending.job : null, thread: list.length ? list[list.length - 1].thread : null, lessons: lessonsOut } };
+      return { status: 200, json: { tutor: name, date, messages: out, pending: pending ? pending.job : null, thread: list.length ? list[list.length - 1].thread : null } };
     }
     // 看录像(《家长录像设计.md》):mock 的消息没有真时刻(种子全是同一刻),照一个固定节奏排——
     // 等老师 3 秒(第二轮 14 秒,看「等老师」的压缩)、念完孩子想 8 秒(第一轮 40 秒,看「孩子想了」);卡的状态算在下一轮开口前 5 秒
@@ -656,7 +622,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const [, name, tail, raw] = rl;
       const board = await route('GET', `/api/conversations/${name}/${tail}/board`);
       if (board.status !== 200) return board;
-      const day = board.json as { date: string; messages: (Record<string, unknown> & { job: string; thread: string; from: 'kid' | 'parent'; question: string | null; pending: boolean; section: BoardSection | null; action?: 'continue' | 'submit' })[] };
+      const day = board.json as { date: string; messages: (Record<string, unknown> & { job: string; thread: string; from: 'kid'; question: string | null; pending: boolean; section: BoardSection | null; action?: 'continue' | 'submit' })[] };
       const thread = decodeURIComponent(raw);
       const mine = day.messages.filter((m) => m.thread === thread);
       let t = now().getTime() - 10 * 60000;
@@ -673,40 +639,6 @@ export function createMock(opts: MockOptions = {}): Mock {
       const reel = buildReel({ messages: conv, events: {}, cards, durations: {}, tutor: name, now: now().getTime() });
       return reel ? { status: 200, json: { tutor: name, date: day.date, thread, reel, messages: mine } } : { status: 404, json: { error: 'no_reel' } };
     }
-    // 家长真发(《家长板书页设计.md》第六节 3):/api/conversations/<老师>/messages|photos 与打星——进孩子那份列表,from: parent;不算上限、不看 via
-    const pm = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(messages|photos)$/.exec(p);
-    if (pm && method === 'POST') {
-      const [, name, tail] = pm;
-      const t = MOCK_TUTORS.find((x) => x.name === name);
-      if (!t) return { status: 404, json: { error: 'no_such_tutor' } };
-      const list = messages.get(name) ?? [];
-      const date = localDate(now());
-      if (tail === 'photos') {
-        if (!isObj(body) || typeof body.image !== 'string' || !body.image.startsWith('data:image/')) return { status: 400, json: { error: 'bad_request' } };
-        const d = now();
-        return { status: 201, json: { path: `captures/${date}/${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}-${list.length + 1}.jpg` } };
-      }
-      if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
-      const photos = Array.isArray(body.photos) ? (body.photos as unknown[]).filter((x): x is string => typeof x === 'string') : [];
-      // 家长在自己的备课话题里按「继续」/ 做卡「交给老师」
-      const action = body.action === 'continue' || body.action === 'submit' ? body.action : undefined;
-      if (!body.text.trim() && !photos.length && !action) return { status: 400, json: { error: 'bad_request' } };
-      if (list.some((m) => m.pending)) return { status: 409, json: { error: 'busy' } };
-      const text = body.text.trim() || (action === 'continue' ? '继续' : action === 'submit' ? '(交了答案,没说话)' : photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`);
-      const job = nextJob();
-      let thread = job;
-      if (body.newThread !== true && list.length) {
-        if (body.thread !== undefined) {
-          if (typeof body.thread !== 'string' || !list.some((x) => x.thread === body.thread)) return { status: 400, json: { error: 'bad_request' } };
-          thread = body.thread;
-        } else thread = list[list.length - 1].thread;
-      }
-      const m: MockMessage = { job, thread, at: now().toISOString(), from: 'parent', question: text, reply: null, pending: true, artifacts: [], section: null, ...(thread === job && body.prep === true ? { prepThread: true as const } : {}), ...(action ? { action } : {}), ...(photos.length ? { photos } : {}) };
-      list.push(m);
-      const done = think(t, m).then(() => { inflight.delete(m.job); });
-      inflight.set(m.job, done);
-      return { status: 202, json: { tutor: name, date, job, thread } };
-    }
     // 记账(家长端清单上的「记账」):这天还没记过的话题都算记了(真服务是每个话题起一轮老师;mock 立刻记上)
     const bk = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/bookkeep$/.exec(p);
     if (bk && method === 'POST') {
@@ -717,27 +649,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       for (const th of queued) booked.add(`${name}/${th}`);
       return { status: 202, json: { tutor: name, queued, skipped: [] } };
     }
-    // 这节课(《备课设计.md》§十):POST …/lesson/hand {label} 交给孩子(真服务先写成课文件再交;mock 里就是记下交了,首页多一个「接着」)
-    const lsn = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/lesson\/hand$/.exec(p);
-    if (lsn && method === 'POST') {
-      const [, name, , thread] = lsn;
-      const list = messages.get(name);
-      if (!list || !list.some((m) => m.thread === thread)) return { status: 404, json: { error: 'no_such_thread' } };
-      const idx = asIndex(name);
-      if (!isPrepThread(idx.messages, thread)) return { status: 409, json: { error: 'not_prep' } };
-      if (kidSpoke(idx.messages, thread)) return { status: 409, json: { error: 'kid_spoke' } };
-      if (!lessons.has(name)) lessons.set(name, new Map());
-      const cur = lessons.get(name)!.get(thread) ?? { handedAt: null };
-      const label = isObj(body) && typeof body.label === 'string' ? body.label.trim() : '';
-      const cards = lessonCards(idx, thread);
-      if (!label || Array.from(label).length > 16 || !cards.length) return { status: 400, json: { error: 'bad_request' } };
-      const source = `lessons/${localDate(now())}-${thread}.md`;
-      lessons.get(name)!.set(thread, { ...cur, handedAt: cur.handedAt ?? now().toISOString(), source });
-      handedLabel.set(name, { thread, label });
-      for (const m of list) if (m.thread === thread) delete m.states;
-      return { status: 200, json: { ok: true, label, cards: cards.length, source, issues: [] } };
-    }
-    // 删掉一个话题(孩子的 / 家长开的):列表里去掉;还在想的 409
+    // 删掉一个话题:列表里去掉;还在想的 409(mock 没有 vault,撤销记 0)
     const del = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)$/.exec(p);
     if (del && method === 'DELETE') {
       const [, name, , thread] = del;
@@ -747,9 +659,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (list.some((m) => m.thread === thread && m.pending)) return { status: 409, json: { error: 'busy' } };
       store.set(name, list.filter((m) => m.thread !== thread));
       ratings.delete(`${name}/${thread}`);
-      lessons.get(name)?.delete(thread);
-      if (handedLabel.get(name)?.thread === thread) handedLabel.delete(name);
-      return { status: 200, json: { tutor: name, thread } };
+      return { status: 200, json: { tutor: name, thread, undo: { memory: 0, diary: 0, misses: [] } } };
     }
     const rate = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/rating$/.exec(p);
     if (rate && method === 'PUT') {
@@ -777,14 +687,13 @@ export function createMock(opts: MockOptions = {}): Mock {
         return { status: 201, json: { path: `captures/${date}/${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}-${list.length + 1}.jpg` } };
       }
       if (tail === 'today' && method === 'GET') {
-        // 家长的备课话题:没交的不下发,交了的从开场起(《备课设计.md》§3.2)
-        const shown = kidVisible(name);
+        const shown = (messages.get(name) ?? []);
         const pending = shown.find((m) => m.pending);
         return { status: 200, json: { tutor: name, date, messages: await Promise.all(shown.map(kidMessage)), remaining: remaining(name), pending: pending ? pending.job : null, thread: shown.length ? shown[shown.length - 1].thread : null } };
       }
       if (tail === 'history' && method === 'GET') {
         const days: { date: string; threads: unknown[] }[] = [];
-        const todayThreads = kidThreads(await Promise.all(kidVisible(name).map(kidMessage))).reverse();
+        const todayThreads = kidThreads(await Promise.all((messages.get(name) ?? []).map(kidMessage))).reverse();
         if (todayThreads.length) days.push({ date, threads: todayThreads });
         const old = past.get(name) ?? [];
         if (old.length) days.push({ date: yesterday(), threads: kidThreads(old) });
@@ -804,10 +713,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         let said = body.text;
         let newThread = body.newThread === true;
         let wantThread = body.thread;
-        const handedTo = typeof button === 'object' && button.kind === 'continue' && button.date === date && lessons.get(name)?.get(button.thread)?.handedAt ? button.thread : null;
-        // 交给孩子的备课话题:按钮只打开,孩子自己说的才是第一句(《备课设计.md》§4.2)
-        if (handedTo) { wantThread = handedTo; newThread = false; }
-        else if (button && button !== 'new' && button !== 'recent') {
+        if (button && button !== 'new' && button !== 'recent') {
           said = button.label;
           if (button.kind === 'continue' && button.date === date) { wantThread = button.thread; newThread = false; }
           else { newThread = true; wantThread = undefined; }
@@ -833,11 +739,10 @@ export function createMock(opts: MockOptions = {}): Mock {
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
-    // 卡的状态:孩子的走 /api/kid/…;家长只在自己的备课轮里做(/api/conversations/…/cards/…)
-    const card = /^\/api\/(kid\/conversations|conversations)\/([a-z0-9][a-z0-9-]*)\/cards\/([^/]+)\/(\d+)$/.exec(pk);
+    // 卡的状态:孩子的走 /api/kid/…
+    const card = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/cards\/([^/]+)\/(\d+)$/.exec(pk);
     if (card) {
-      const [, ns, name, job, n] = card;
-      if (ns === 'conversations' && !prepJobs(asIndex(name).messages).has(job)) return { status: 409, json: { error: 'not_prep' } };
+      const [, name, job, n] = card;
       const m = (messages.get(name) ?? []).find((x) => x.job === job);
       const target = m?.section?.cards[Number(n)];
       if (!target) return { status: 404, json: { error: 'no_such_card' } };

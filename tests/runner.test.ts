@@ -108,7 +108,7 @@ try {
   const { gatherContext } = await import('../src/server/runner.ts');
   const pack = await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: now });
   check('gatherContext:本老师的计划行、本学科观察(从日记抽)、学期、守则(去掉 frontmatter)与档案、入口、参考给绝对路径、at', pack.plan.join() === '周三前讲退位' && pack.recent.map((r) => r.claim).join() === '借位忘了' && pack.semester === '二年级上' && pack.profile === '档案.md' && pack.entry === '随便/二上/数学.md' && pack.rules === '.claude/skills/cotutor-tutor/SKILL.md' && pack.notes?.map((n) => n.role).join() === 'rules,profile,entry' && pack.notes?.[0].text.startsWith('# 老师守则') && pack.refs?.join() === [join(root, 'vault', '随便', '数学二上课本.md'), join(root, 'vault', '参考', '跨十.md')].join() && pack.at === '2026-09-08T16:20', JSON.stringify(pack));
-  const packZh = await gatherContext(ctx.ws, 'chinese-tutor', { from: 'parent', at: now });
+  const packZh = await gatherContext(ctx.ws, 'chinese-tutor', { from: 'kid', at: now });
   check('语文老师拿到自己的;没有入口文件 → entry 写缺了什么,只带档案', packZh.plan.join() === '背古诗' && packZh.recent.map((r) => r.claim).join() === '错别字' && packZh.entry === '缺:vault 里没有 cotutor: subject、subject: 语文、semester: 二年级上 的文件' && packZh.notes?.map((n) => n.role).join() === 'rules,profile' && !packZh.refs, JSON.stringify(packZh));
   const packTight = await gatherContext({ ...ctx.ws, config: { ...ctx.ws.config, policyDefaults: { ...ctx.ws.config.policyDefaults, contextPack: { entryChars: 20 } } } }, 'math-tutor', { from: 'kid', at: now });
   check('entryChars:原文截断,YAML 里注明', packTight.entry?.startsWith('随便/二上/数学.md(原文 ') === true && packTight.notes?.find((n) => n.role === 'entry')?.text.includes('后面截掉了') === true && packTight.notes?.[0].text.includes('后面截掉了') === false, JSON.stringify(packTight));
@@ -164,7 +164,7 @@ try {
 
   // ---- 第二、三轮:resume 同会话 ----
   now = new Date(2026, 8, 8, 16, 25);
-  const r2 = await post('math-tutor', { text: '再讲一遍,段在前', from: 'parent' });
+  const r2 = await post('math-tutor', { text: '再讲一遍,段在前' });
   check('第二条 resume', (r2.json as { resume: boolean }).resume === true, JSON.stringify(r2.json));
   await wait('math-tutor');
   now = new Date(2026, 8, 8, 16, 30);
@@ -181,7 +181,7 @@ try {
   check('板书写法:fake 运行时没有预载占位符 → 话题第一条注入 <cotutor-board>(在守则后、家长笔记前,不带 frontmatter),续会话「未变」', pr1.includes('\n  boardGuide: ".claude/skills/cotutor-board/SKILL.md"\n') && pr1.indexOf('<cotutor-rules path=') < pr1.indexOf('<cotutor-board path=') && pr1.indexOf('<cotutor-board path=') > 0 && pr1.indexOf('<cotutor-board path=') < pr1.indexOf('<vault-note role=') && pr1.includes('# 板书怎么写') && !pr1.includes('disable-model-invocation') && !pr2.includes('<cotutor-board path=') && pr2.includes('boardGuide: ".claude/skills/cotutor-board/SKILL.md(未变,原文在本话题前面)"'), JSON.stringify({ line: pr1.split('\n').filter((l) => l.includes('boardGuide')), tag1: pr1.indexOf('<cotutor-board'), rules1: pr1.indexOf('<cotutor-rules'), note1: pr1.indexOf('<vault-note'), title: pr1.includes('# 板书怎么写'), fm: pr1.includes('disable-model-invocation'), tag2: pr2.includes('<cotutor-board'), line2: pr2.split('\n').filter((l) => l.includes('boardGuide')) }));
   {
     // 换语文老师跑:数学老师这一天的消息序号后面的断言写死了,不往里插
-    const rr = await post('chinese-tutor', { text: '回读板书', from: 'parent' });
+    const rr = await post('chinese-tutor', { text: '回读板书' });
     await wait('chinese-tutor');
     const rrDay = (await day('chinese-tutor', '2026-09-08')).json as Day;
     const rrMsg = rrDay.index.messages.find((m) => m.job === (rr.json as { job: string }).job) as { warnings?: string[] } | undefined;
@@ -227,7 +227,7 @@ try {
 
   // ---- 跨天新开 ----
   now = new Date(2026, 8, 9, 8, 0);
-  const r5 = await post('math-tutor', { text: '新的一天' });
+  const r5 = await post('math-tutor', { text: '新的一天', from: 'system' });
   check('零点后第一条不 resume、落新文件', (r5.json as { resume: boolean; date: string }).resume === false && (r5.json as { date: string }).date === '2026-09-09');
   await wait('math-tutor');
   check('两天两份索引', existsSync(join(root, 'conversations', 'math-tutor', '2026-09-09.json')) && existsSync(join(root, 'conversations', 'math-tutor', '2026-09-08.json')));
@@ -242,7 +242,7 @@ try {
   await wait('english-tutor');
   const dr2 = (await day('english-tutor', '2026-09-09')).json as Day & { index: { messages: { audio?: string | null }[] } };
   check('配音失败 → 讲稿句 audio null、对话照常、原因进 err.log', dr2.index.messages[1].result === 'ok' && (dr2.index.messages[1] as { section?: { lines: { audio: string | null }[] } }).section?.lines.every((l) => l.audio === null) === true && readFileSync(join(root, 'conversations', 'english-tutor', `2026-09-09.${dr2.index.messages[1].job}.err.log`), 'utf8').includes('没合成'), JSON.stringify(dr2.index.messages[1]));
-  await post('chinese-tutor', { text: '起不来', runtime: 'missing' });
+  await post('chinese-tutor', { text: '起不来', runtime: 'missing', from: 'system' });
   await wait('chinese-tutor');
   const dm = (await day('chinese-tutor', '2026-09-09')).json as Day;
   check('没有入口文件:这条消息带提醒(家长端看得到),起不来的尾巴没把它盖掉', (dm.index.messages[0] as { warnings?: string[] }).warnings?.[0]?.startsWith('入口文件缺:vault 里没有 cotutor: subject、subject: 语文') === true, JSON.stringify(dm.index.messages[0]));
@@ -253,7 +253,7 @@ try {
   check('首页:标题、孩子端老师(无 scene-maker)、没有课程表那一栏;没发布过 = 缺省首页(每位老师一张卡)', home.title === '小明的老师们' && !('timetable' in home) && home.tutors.length === 3 && !home.tutors.some((t) => t.name === 'scene-maker') && home.home === null && home.cards.map((c) => c.props.tutor).join() === 'chinese-tutor,english-tutor,math-tutor', JSON.stringify(home.cards));
   check('老师带 hasVoice 与剩余条数(今天 09-09 孩子还没发过)', home.tutors.find((t) => t.name === 'math-tutor')?.hasVoice === true && home.tutors.find((t) => t.name === 'math-tutor')?.remaining === 30, JSON.stringify(home.tutors));
   const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null; reply: string | null; audio: string | null }[]; remaining: number; pending: string | null };
-  check('孩子视图:家长发的只见回复,搜不到工具、错误、家长尾巴', kd.messages.length === 1 && kd.messages[0].question === null && kd.messages[0].reply === '第一次说:新的一天' && !/工具|error|holdup|handoff|costUsd|Read/.test(JSON.stringify(kd)), JSON.stringify(kd));
+  check('孩子视图:系统发的只见回复,搜不到工具、错误、家长尾巴', kd.messages.length === 1 && kd.messages[0].question === null && kd.messages[0].reply === '第一次说:新的一天' && !/工具|error|holdup|handoff|costUsd|Read/.test(JSON.stringify(kd)), JSON.stringify(kd));
   check('hidden 的 scene-maker 对孩子端不存在', (await route('GET', '/api/kid/conversations/scene-maker/today', ctx)).status === 404);
   const kp = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '孩子问的' });
   check('孩子发消息 202', kp.status === 202, JSON.stringify(kp.json));
@@ -265,16 +265,16 @@ try {
   const au = await route('GET', '/api/audio/math-tutor/2026-09-09.0800-2.1.mp3', ctx);
   check('配音文件能取', au.status === 200 && au.file !== undefined && au.contentType === 'audio/mpeg' && readFileSync(au.file!, 'utf8').includes('接着说:孩子问的'), JSON.stringify(au));
   check('配音路径校验', (await route('GET', '/api/audio/math-tutor/../cotutor.json', ctx)).status === 404 && (await route('GET', '/api/audio/math-tutor/2026-09-09.0800-9.mp3', ctx)).status === 404);
-  // 语文老师 dailyMessages = 1:孩子发一条后头像灰、再发 429;家长发的不算
+  // 语文老师 dailyMessages = 1:孩子发一条后头像灰、再发 429;系统任务不算
   check('语文老师上限前可用', (await route('GET', '/api/kid/home', ctx)).status === 200 && ((await route('GET', '/api/kid/home', ctx)).json as typeof home).tutors.find((t) => t.name === 'chinese-tutor')?.available === true);
   check('孩子发第一条 202', (await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '一' })).status === 202);
   await wait('chinese-tutor');
   const limited = await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '二' });
   check('到上限 → 429,头像灰', limited.status === 429 && ((await route('GET', '/api/kid/home', ctx)).json as typeof home).tutors.find((t) => t.name === 'chinese-tutor')?.available === false, JSON.stringify(limited.json));
-  check('家长照发不受孩子上限', (await post('chinese-tutor', { text: '家长的', from: 'parent' })).status === 202);
+  check('工作台照发不受孩子上限(只有孩子端的接口查上限);旧客户端带 from: parent 也收,当孩子', (await post('chinese-tutor', { text: '家长的', from: 'parent' })).status === 202);
   await wait('chinese-tutor');
   const kdZh = (await route('GET', '/api/kid/conversations/chinese-tutor/today', ctx)).json as { messages: { question: string | null }[]; remaining: number };
-  check('家长那条的问句不给孩子看,remaining 0', kdZh.messages.filter((m) => m.question !== null).length === 1 && kdZh.remaining === 0, JSON.stringify(kdZh));
+  check('工作台发的算孩子的话:问句孩子看得到,remaining 0', kdZh.messages.filter((m) => m.question !== null).length === 2 && kdZh.remaining === 0, JSON.stringify(kdZh));
   check('孩子端页面在,没有「错误」字样', ((await route('GET', '/', ctx)).html ?? '').includes('小明的老师们') && !((await route('GET', '/', ctx)).html ?? '').includes('错误'));
 
   // ---- 板书:最终文本 → section 进索引、逐句配音、孩子端剥答案、家长尾巴与提醒 ----
@@ -439,7 +439,7 @@ try {
   check('孩子端的场景卡不带题面 / 讲法', !JSON.stringify((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json).includes('题面'));
   now = new Date(2026, 8, 9, 10, 6);
   mkdirSync(join(root, 'bundles', '2026-09-09-guilv'), { recursive: true });
-  const rh3 = await post('math-tutor', { text: '放旧课包', from: 'parent' });
+  const rh3 = await post('math-tutor', { text: '放旧课包' });
   await wait('math-tutor');
   const mh3 = ((await day('math-tutor', '2026-09-09')).json as { index: { messages: HMsg[] } }).index.messages.find((m) => m.job === (rh3.json as { job: string }).job)!;
   check('放已有的课包(卡上没题面)→ 不起作业、不报', !mh3.scenes && !mh3.warnings?.length && !ctx.runner.running('scene-maker'), JSON.stringify(mh3));
@@ -484,10 +484,10 @@ try {
   const mN = dT.messages.find((m) => m.job === newThread)!;
   const logN = readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${newThread}.log`), 'utf8');
   check('新话题不 resume(假 CLI 新造 session)、不带旧话题的卡;sessions 里两条,顶层 = 新话题的', mN.thread === newThread && mN.cards === undefined && !logN.includes(oldSession) && mN.kidText?.includes('第一次说') === true && dT.sessions[oldThread]?.id === oldSession && dT.sessions[newThread] && dT.sessions[newThread].id !== oldSession && dT.session?.id === dT.sessions[newThread].id, JSON.stringify({ mN, sessions: dT.sessions }));
-  const rT2 = await post('math-tutor', { text: '再说一句', from: 'parent' });
+  const rT2 = await post('math-tutor', { text: '再说一句' });
   await wait('math-tutor');
   check('缺省接当前(新)话题并 resume 它', (rT2.json as { thread: string; resume: boolean }).thread === newThread && (rT2.json as { resume: boolean }).resume === true);
-  const r3 = await post('math-tutor', { text: '回到旧话题', from: 'parent', thread: oldThread });
+  const r3 = await post('math-tutor', { text: '回到旧话题', thread: oldThread });
   const j3 = (r3.json as { job: string; thread: string; resume: boolean });
   await wait('math-tutor');
   dT = ((await day('math-tutor', '2026-09-09')).json as TDay).index;
@@ -572,7 +572,7 @@ try {
   check('看原文「读了什么」:一站 + tools 数组 + 快照 hash', rawPh.stations.find((s) => s.id === 'tools')?.note.includes('Read') === true && rawPh.tools.length > 0 && rawPh.pack.sources?.agent.hash.startsWith('sha256:') === true, JSON.stringify(rawPh.stations.find((s) => s.id === 'tools')));
   const phKid = ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; question: string | null; photos?: string[] }[] }).messages.find((m) => m.job === phJ.job)!;
   check('孩子端:问句「(拍了一张)」带 photos;照片经 /api/kid/image 取得到', phKid.question === '(拍了一张)' && phKid.photos?.join() === phOne && (await route('GET', `/api/kid/image?p=${encodeURIComponent(phOne)}`, ctx)).status === 200, JSON.stringify(phKid));
-  const phR2 = await post('math-tutor', { text: '这道呢', from: 'parent', photos: [phTwo] });
+  const phR2 = await post('math-tutor', { text: '这道呢', photos: [phTwo] });
   await wait('math-tutor');
   const phM2 = ((await day('math-tutor', phDate)).json as PhotoDay).index.messages.find((m) => m.job === (phR2.json as { job: string }).job)!;
   check('家长端带字带图:text 照写、photos 记下,接着同一话题', phR2.status === 202 && phM2.text === '这道呢' && phM2.photos?.join() === phTwo && (phR2.json as { thread: string }).thread === phJ.thread, JSON.stringify(phM2));

@@ -23,7 +23,6 @@ const { doctorWorkspace } = await import('../src/cli/doctor.ts');
 const { main } = await import('../src/cli/main.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
-const FAKE_TTS = fileURLToPath(new URL('./_fake-tts.ts', import.meta.url));
 const node = process.execPath;
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
@@ -219,121 +218,49 @@ for: 2026-09-18
   const c2 = await run(['home', 'check', '--published']);
   check('cotutor home check --published:没有要改的', c2.code === 0 && !c2.out.includes('要改'), c2.out);
 
-  // ---- 备课(《备课设计.md》):家长端「新话题」开的话题孩子看不到、不写记忆、不记账;从某一节交给孩子 → 首页多一个只打开的「接着」,孩子答了 resume 原会话 ----
+  // ---- 家长在孩子端试、用完删(《备课设计.md》删掉之后,2026-10-05):话题照孩子的算,删的时候它写进记忆、日记的一起撤 ----
   {
     const { existsSync: exists } = await import('node:fs');
     const convDir = join(root, 'conversations', 'math-tutor');
-    const kidBefore = JSON.stringify((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json);
     const memFile = join(root, 'vault', '记忆', '数学老师.md');
-    const s1 = await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: '板书 记住它 家长段', newThread: true, prep: true });
-    check('备课:202,新话题', s1.status === 202 && (s1.json as { thread: string; job: string }).thread === (s1.json as { job: string }).job, JSON.stringify(s1.json));
-    const { job: job1, date: day, thread: prepTh } = s1.json as { job: string; date: string; thread: string };
+    mkdirSync(join(root, 'vault', '记忆'), { recursive: true });
+    const memBefore = '---\ncotutor: memory\nagent: math-tutor\n---\n\n家长写在开头的话。\n\n- 2026-09-01 讲慢点他跟得上\n- 2026-09-01 爱用手指数\n- 2026-09-02 喜欢乐高\n';
+    writeFileSync(memFile, memBefore);
+    const left0 = ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { remaining: number }).remaining;
+    const s1 = await kidSend('math-tutor', { text: '板书 记住它', newThread: true });
     await wait('math-tutor');
-    type PMsg = { job: string; thread: string; from: string; prep?: true; off?: number[]; handed?: true; memoryDraft?: string[]; remembered?: string[]; parentText?: string; costUsd?: number; section?: { cards: { kind: string; props: Record<string, unknown>; state?: unknown }[] }; reply: string | null; warnings?: string[] };
-    const board = async (): Promise<PMsg[]> => ((await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as { messages: PMsg[] }).messages.filter((m) => m.thread === prepTh);
-    const m1 = (await board())[0];
+    const { date: day, thread: th } = s1.json as { date: string; thread: string };
+    await kidSend('math-tutor', { text: '改记忆', thread: th });
+    await wait('math-tutor');
     const i1 = await readIndex(ctx.ws, 'math-tutor', day);
-    check('备课那轮:第一条带 prepThread;家长接口 prep、答案在、给家长的在、记忆段原文在 memoryDraft、没 remembered、不给费用', i1.messages.find((m) => m.job === job1)?.prepThread === true && m1.prep === true && m1.section?.cards.some((c) => c.kind === 'choice' && Array.isArray(c.props.answer)) === true && m1.parentText?.includes('他其实会了') === true && m1.memoryDraft?.length === 3 && m1.remembered === undefined && !('costUsd' in m1), JSON.stringify(m1));
-    check('孩子接口一字不变、vault 记忆文件没建;孩子端发不进这个话题', JSON.stringify((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json) === kidBefore && !exists(memFile) && (await kidSend('math-tutor', { text: 'x', thread: prepTh })).status === 400);
-    const ov = (await route('GET', '/api/overview/today', ctx)).json as { tutors: { name: string; threads: { thread: string; prep: boolean; handedAs: string | null }[] }[] };
-    const ovTh = ov.tutors.find((t) => t.name === 'math-tutor')!.threads.find((t) => t.thread === prepTh);
-    check('清单:这个话题标备课、还没交', ovTh?.prep === true && ovTh.handedAs === null, JSON.stringify(ovTh));
-    const ci = m1.section!.cards.findIndex((c) => c.kind === 'choice');
-    const put = await route('PUT', `/api/conversations/math-tutor/cards/${job1}/${ci}`, ctx, { picked: [1] });
-    const s2 = await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: '', action: 'continue', thread: prepTh });
-    await wait('math-tutor');
-    const b2 = await board();
-    check('家长在备课话题里做卡(存在 conversations/)、按继续:resume 同一会话,带上做过的卡;第二轮也是 prep', put.status === 200 && exists(join(convDir, `${day}.${job1}.cards`, `${ci}.json`)) && s2.status === 202 && b2.length === 2 && b2[1].prep === true && b2[1].reply?.includes('接着说') === true && b2[1].reply.includes('看到卡'), JSON.stringify({ put: put.json, s2: s2.json, r: b2[1]?.reply }));
-    const bk = (await route('POST', `/api/conversations/math-tutor/${day}/bookkeep`, ctx, { threads: [prepTh] })).json as { queued: string[]; skipped: { thread: string; why: string }[] };
-    check('记账不起备课话题', bk.queued.length === 0 && bk.skipped[0]?.why.includes('备课'), JSON.stringify(bk));
-    // 课文件(《备课设计.md》§十):「交给孩子」先把老师写的几节写成 lessons/<日期>-<话题>.md,再从文件建一个给孩子的话题(没有会话);首页多一个只打开的「接着」
-    const s3 = await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: '板书 第二节重写', thread: prepTh });
-    await wait('math-tutor');
-    const job2 = (s3.json as { job: string }).job;
-    const n1 = m1.section!.cards.length;
-    const n2 = (await board()).find((m) => m.job === job2)!.section!.cards.length;
-    type LessonDay = { messages: PMsg[]; lessons: Record<string, { cards: string[]; handed: boolean; label: string | null; source: string | null }> };
-    const lday = async (): Promise<LessonDay> => (await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as LessonDay;
-    const l0 = await lday();
-    check('这节课:两轮的卡都在、还没交、没写成文件;旧的点灰接口没了', l0.lessons[prepTh].cards.length === n1 + n2 && l0.lessons[prepTh].handed === false && l0.lessons[prepTh].source === null && (await route('PUT', `/api/conversations/math-tutor/${day}/threads/${prepTh}/lesson`, ctx, { cards: [`${job1}/0`], off: true })).status === 405, JSON.stringify(l0.lessons));
-    const hand = await route('POST', `/api/conversations/math-tutor/${day}/threads/${prepTh}/lesson/hand`, ctx, { label: '我们来切披萨' });
-    const hj = hand.json as { ok: boolean; cards: number; source: string; thread: string; issues: string[] };
-    const lessonFile = join(root, hj.source ?? 'x');
-    const lmd = exists(lessonFile) ? readFileSync(lessonFile, 'utf8') : '';
+    const mine = i1.messages.filter((m) => m.thread === th);
+    const mem1 = readFileSync(memFile, 'utf8');
+    check('孩子端发的两轮:from kid、记忆真写了(加两条、改一条、删一条),每轮记下整行原文', mine.length === 2 && mine.every((m) => m.from === 'kid') && mem1.includes('讲角用手指比划他马上懂') && mem1.includes('讲慢点才跟得上') && !mem1.includes('爱用手指数') && mine[0].memoryLines?.length === 2 && mine[1].memoryLines?.length === 2 && mine[1].memoryLines?.some((l) => l.before === '- 2026-09-01 爱用手指数' && l.after === null), JSON.stringify(mine.map((m) => m.memoryLines)));
+    await route('POST', `/api/conversations/math-tutor/${day}/bookkeep`, ctx, { threads: [th] });
+    await ctx.runner.flush();
+    const diaryFile = join(root, 'vault', '日记', `${day}.md`);
     const i2 = await readIndex(ctx.ws, 'math-tutor', day);
-    const kh = await kidHome();
-    const hb = buttonsOf(kh, 'math-tutor').find((b) => b.thread === hj.thread) as (Btn & { open?: true }) | undefined;
-    const l2 = await lday();
-    const lessonName = hj.source.replace(/^lessons\//, '').replace(/\.md$/, '');
-    check('交给孩子:200 ok;课文件写了(tutor、两节用 --- 分开、讲法是家长说过的话);新话题带 handedAt 与文件、没有会话;聊天的话题只记文件、不算交;首页有「接着」且只打开', hand.status === 200 && hj.ok === true && hj.cards === n1 + n2 && hj.thread !== prepTh && lmd.startsWith('---\ntutor: math-tutor\n') && lmd.split('\n---\n').length === 3 && lmd.includes('## 讲法') && lmd.includes('- 板书 第二节重写') && Boolean(i2.lessons[hj.thread]?.handedAt) && i2.lessons[hj.thread]?.source === hj.source && !(hj.thread in i2.sessions) && i2.lessons[prepTh]?.source === hj.source && !i2.lessons[prepTh]?.handedAt && hb?.kind === 'continue' && hb.label === '我们来切披萨' && hb.open === true && l2.lessons[hj.thread].handed === true && l2.lessons[hj.thread].label === '我们来切披萨' && readFileSync(join(root, 'home', 'draft.md'), 'utf8').includes(`接着 ${day} ${hj.thread} 我们来切披萨`), JSON.stringify({ hand: hand.json, hb, l2: l2.lessons, head: lmd.slice(0, 200) }));
-    const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; thread: string; question: string | null; section?: { cards: { state?: unknown; props: Record<string, unknown> }[]; lines: { audio: string | null }[] } }[]; thread: string | null };
-    const kmine = kd.messages.filter((m) => m.thread === hj.thread);
-    const pfile = (await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as { messages: { thread: string; lessonSection?: number }[] };
-    check('文件建的轮带 lessonSection 0、1(家长端据此不出「家长」旁注);清单标题不带「家长:」', pfile.messages.filter((m) => m.thread === hj.thread).map((m) => m.lessonSection).join() === '0,1' && i2.messages.filter((m) => m.thread === hj.thread).every((m) => typeof m.lessonSection === 'number'), JSON.stringify(pfile.messages.filter((m) => m.thread === hj.thread)));
-    check('孩子端:文件的两节在、问句 null、卡没状态、没答案;聊天的备课话题不在;当前话题是文件的', kmine.length === 2 && kmine.every((m) => m.question === null) && kmine.every((m) => m.section?.cards.every((c) => c.state === undefined && c.props.answer === undefined)) && !kd.messages.some((m) => m.thread === prepTh) && kd.thread === hj.thread, JSON.stringify(kmine.map((m) => m.job)));
-    check('孩子端:文件建的轮带 lessonSection 0、1(页面据此一节一节念,拍板 34)', kmine.map((m) => (m as { lessonSection?: number }).lessonSection).join() === '0,1', JSON.stringify(kmine.map((m) => m.job)));
-    // 课文件接口:清单、检查、预览、再交(同一文件、孩子没开口 → 覆盖同一个话题)
-    const ll = (await route('GET', '/api/lessons', ctx)).json as { lessons: { name: string; fixes: number; sections: number }[] };
-    const lc = (await route('GET', `/api/lessons/${lessonName}`, ctx)).json as { fixes: number; sections: unknown[]; brief: string };
-    const lp = (await route('GET', `/api/lessons/${lessonName}/page`, ctx)).json as { tutor: string; fixes: number; cards: number; sections: { job: string; from: number; section: { cards: { props: Record<string, unknown> }[] } }[]; handed: { thread: string; label: string | null; kidSpoke: boolean } | null; fromThread: string | null; brief: string };
-    const ovL = ((await route('GET', '/api/overview/today', ctx)).json as { tutors: { name: string; lessons: { name: string; handedAs: string | null; handedThread: string | null; fromThread: string | null; fixes: number }[] }[] }).tutors.find((t) => t.name === 'math-tutor')!.lessons;
-    const re = await route('POST', `/api/lessons/${lessonName}/hand`, ctx, { label: '再来一次' });
-    const i2b = await readIndex(ctx.ws, 'math-tutor', day);
-    check('课文件接口:清单里有它、没有要改;家长端课文件页两节、答案在、交了(话题、按钮字)、从哪个备课话题来的;清单(overview)每位老师带课文件;再交覆盖同一个话题、按钮字换了;坏名字 400、没有的 404', ll.lessons.some((l) => l.name === lessonName && l.fixes === 0 && l.sections === 2) && lc.fixes === 0 && lc.sections.length === 2 && lc.brief.includes('讲法') && lp.tutor === 'math-tutor' && lp.sections.length === 2 && lp.sections[0].from > 0 && lp.sections.some((m) => m.section.cards.some((c) => c.props.answer !== undefined)) && lp.handed?.thread === hj.thread && lp.handed.label === '我们来切披萨' && lp.handed.kidSpoke === false && lp.fromThread === prepTh && ovL.length === 1 && ovL[0].name === lessonName && ovL[0].handedThread === hj.thread && ovL[0].handedAs === '我们来切披萨' && ovL[0].fromThread === prepTh && re.status === 200 && (re.json as { thread: string }).thread === hj.thread && i2b.messages.filter((m) => m.thread === hj.thread).length === 2 && readFileSync(join(root, 'home', 'draft.md'), 'utf8').includes(`接着 ${day} ${hj.thread} 再来一次`) && (await route('GET', '/api/lessons/a%20b', ctx)).status === 400 && (await route('GET', '/api/lessons/nope', ctx)).status === 404, JSON.stringify({ ll: ll.lessons, lp: { handed: lp.handed, from: lp.fromThread }, ovL, re: re.json }));
-    check('课文件页「听这节」:老师没配音色 404(页面退回浏览器的声);句子越界 400', (await route('GET', `/api/lessons/${lessonName}/say?s=0&i=0`, ctx)).status === 404 && (await route('GET', `/api/lessons/${lessonName}/say?s=9&i=0`, ctx)).status === 400);
-    const cl = await run(['lesson', 'check', lessonName]);
-    check('cotutor lesson check:exit 0、列出两节', cl.code === 0 && cl.out.includes('第 2 节'), cl.out);
-    const kh2 = await kidHome();
-    const hb2 = buttonsOf(kh2, 'math-tutor').find((b) => b.thread === hj.thread)!;
-    const badSaid = await kidSend('math-tutor', { text: 'x', thread: hj.thread, lessonSaid: [{ section: 0, text: 'y' }] });
-    check('lessonSaid 坏的 400(节号从 1 起)', badSaid.status === 400);
-    const ks = await kidSend('math-tutor', { text: '记住它 我选 B', thread: hj.thread, via: { home: kh2.home, button: hb2.id }, lessonSaid: [{ section: 1, text: '一样大' }, { section: 1, text: '  ' }] });
-    await wait('math-tutor');
-    const i3 = await readIndex(ctx.ws, 'math-tutor', day);
-    const last = i3.messages[i3.messages.length - 1];
-    const runKid = await readRunFile(ctx.ws, 'math-tutor', day, last.job);
-    check('孩子答了:字是孩子说的、同一话题、新会话(不 resume)、带 via;这轮写了记忆;上下文包有 lesson:(文件的卡)、lessonFile:、lessonBrief:(家长的话)', ks.status === 202 && last.from === 'kid' && last.text === '记住它 我选 B' && last.thread === hj.thread && last.via?.label === '再来一次' && runKid?.resume === false && !runKid.argv.includes('--resume') && exists(memFile) && runKid?.prompt.includes('lesson:') === true && runKid.prompt.split(`${hj.thread}/0 `).length === 2 && i3.messages.filter((m) => m.thread === hj.thread).length === 3 && new Set(i3.messages.map((m) => m.job)).size === i3.messages.length && runKid.prompt.includes(`lessonFile: ${JSON.stringify(lessonFile)}`) && runKid.prompt.includes('lessonBrief:') && runKid.prompt.includes('第二节重写'), JSON.stringify({ ks: ks.json, argv: runKid?.argv, prompt: runKid?.prompt.split('\n').filter((l) => l.includes('lesson')) }));
-    const pSaid = ((await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as { messages: { job: string; lessonSaid?: { section: number; text: string }[] }[] }).messages.find((m) => m.job === last.job);
-    check('念课文件时孩子在节后说的:上下文包 lessonSaid:(空的丢掉)、记进消息、家长接口给', runKid?.prompt.includes('lessonSaid:\n    - "第 1 节后:一样大"') === true && !runKid.prompt.includes('第 1 节后:  ') && JSON.stringify(last.lessonSaid) === '[{"section":1,"text":"一样大"}]' && pSaid?.lessonSaid?.[0]?.text === '一样大', JSON.stringify({ said: last.lessonSaid, prompt: runKid?.prompt.split('\n').filter((l) => l.includes('节后')) }));
-    const again = await route('POST', `/api/conversations/math-tutor/${day}/threads/${hj.thread}/lesson/hand`, ctx, { label: '再交一次' });
-    const re2 = await route('POST', `/api/lessons/${lessonName}/hand`, ctx, { label: '第三次' });
-    const ov2 = (await route('GET', '/api/overview/today', ctx)).json as typeof ov;
-    const ovTh2 = ov2.tutors.find((t) => t.name === 'math-tutor')!.threads.find((t) => t.thread === hj.thread);
-    check('孩子开口后:那个话题再交 409、清单不再标备课;同一文件再交是新话题', again.status === 409 && ovTh2?.prep === false && re2.status === 200 && (re2.json as { thread: string }).thread !== hj.thread, JSON.stringify({ again: again.json, ovTh2, re2: re2.json }));
-    // 配音在后台(拍板 32):给数学老师配上假音色再交一次——接口立刻回、带句数;板书接口的 lessons[].dubbing 有进度或已经齐;齐了索引里每句都有 audio
-    {
-      const cfgNow = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tts?: unknown; tutors: Record<string, Record<string, unknown>> };
-      cfgNow.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, 'voices', '--json'] };
-      cfgNow.tutors['math-tutor'].voice = 'v-math';
-      writeFileSync(cfgFile, JSON.stringify(cfgNow, null, 2));
-      const t0 = Date.now();
-      const re3 = await route('POST', `/api/lessons/${lessonName}/hand`, ctx, { label: '配音的' });
-      const j3 = re3.json as { thread: string; lines: number; handed: boolean };
-      const tookMs = Date.now() - t0;
-      const b0 = ((await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as { lessons: Record<string, { dubbing: { done: number; total: number } | null }> }).lessons[j3.thread];
-      let allAudio = false;
-      for (let k = 0; k < 100 && !allAudio; k++) { await new Promise((r) => setTimeout(r, 50)); const ix = await readIndex(ctx.ws, 'math-tutor', day); allAudio = ix.messages.filter((m) => m.thread === j3.thread).every((m) => m.section?.lines.every((l) => !l.text.trim() || l.audio)); }
-      const b1 = ((await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as { lessons: Record<string, { dubbing: unknown }> }).lessons[j3.thread];
-      check('交给孩子不等配音:立刻回、带句数;进度形状对(或已齐);配齐了索引每句有 audio、进度没了', re3.status === 200 && j3.handed && j3.lines === 6 && tookMs < 2000 && (b0?.dubbing === null || (b0?.dubbing?.total === 6 && b0.dubbing.done <= 6)) && allAudio && b1?.dubbing === null, JSON.stringify({ j3, tookMs, b0, b1 }));
-    }
-    // 家长真发(第六节 3):家长板书页在 iPad 上发进孩子的对话,带 device;板书接口 from parent;孩子接口那条问句 null
-    const pf = await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: '家长补一句', device: 'phone' });
-    await wait('math-tutor');
-    const pfb = (await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as { messages: { from: string; question: string | null }[] };
-    const pfk = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null }[] };
-    const pfi = await readIndex(ctx.ws, 'math-tutor', day);
-    check('家长真发:202、消息记 device: phone、板书接口 from parent、孩子接口问句 null;坏 device 400', pf.status === 202 && pfi.messages[pfi.messages.length - 1].device === 'phone' && pfi.messages[pfi.messages.length - 1].from === 'parent' && pfb.messages[pfb.messages.length - 1].from === 'parent' && pfb.messages[pfb.messages.length - 1].question === '家长补一句' && pfk.messages[pfk.messages.length - 1].question === null && (await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: 'x', device: 'tv' })).status === 400, JSON.stringify({ pf: pf.json, last: pfi.messages[pfi.messages.length - 1] }));
-    const other = pfi.messages.find((m) => m.from === 'kid' && m.thread !== prepTh && m.thread !== hj.thread && m.result === 'ok' && m.section?.cards.length);
-    check('孩子的话题里家长不能做卡(409);交出接口:不是备课话题 409、字太长 400、没这个话题 404', (!other || (await route('PUT', `/api/conversations/math-tutor/cards/${other.job}/0`, ctx, {})).status === 409) && (!other || (await route('POST', `/api/conversations/math-tutor/${day}/threads/${other.thread}/lesson/hand`, ctx, { label: '字' })).status === 409) && (await route('POST', `/api/conversations/math-tutor/${day}/threads/0000-0/lesson/hand`, ctx, { label: '字' })).status === 404);
-    // 删话题(清单上的「删」):文件按 <日期>.<job>.* 整个没,会话、星、开场跟着没,孩子接口不再列;再删 404;记忆文件不碰
-    const kidThreadsBefore = new Set(pfi.messages.map((m) => m.thread));
-    const victim = prepTh;
-    const victimJobs = pfi.messages.filter((m) => m.thread === victim).map((m) => m.job);
-    const d2 = await route('DELETE', `/api/conversations/math-tutor/${day}/threads/${encodeURIComponent(victim)}`, ctx);
+    const bkMsg = i2.messages.find((m) => m.thread === th && m.bookkeep);
+    const diary1 = exists(diaryFile) ? readFileSync(diaryFile, 'utf8') : '';
+    check('记账:日记里有这个话题一段,原文记在记账那轮的 diaryBlock', Boolean(bkMsg?.diaryBlock) && diary1.includes(bkMsg!.diaryBlock!.trim()), diary1);
+    const left1 = ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { remaining: number }).remaining;
+    const del = await route('DELETE', `/api/conversations/math-tutor/${day}/threads/${encodeURIComponent(th)}`, ctx);
+    const undo = (del.json as { undo: { memory: number; diary: number; misses: string[] } }).undo;
+    const mem2 = readFileSync(memFile, 'utf8');
+    const diary2 = exists(diaryFile) ? readFileSync(diaryFile, 'utf8') : '';
     const after = await readIndex(ctx.ws, 'math-tutor', day);
-    const left = readdirSync(convDir).filter((f) => victimJobs.some((j) => f.startsWith(`${day}.${j}.`)));
-    const kidAfter = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { thread: string }[] };
-    check('删话题:200、索引只剩别的话题、会话与星与开场跟着没、文件没了、孩子接口不再列它、记忆文件还在;没这个话题 404', d2.status === 200 && (d2.json as { threadsLeft: number }).threadsLeft === kidThreadsBefore.size - 1 && !after.messages.some((m) => m.thread === victim) && !(victim in after.sessions) && !(victim in after.ratings) && !(victim in after.lessons) && left.length === 0 && !kidAfter.messages.some((m) => m.thread === victim) && exists(memFile) && (await route('DELETE', `/api/conversations/math-tutor/${day}/threads/0000-0`, ctx)).status === 404, JSON.stringify({ d2: d2.json, left, sessions: Object.keys(after.sessions) }));
+    const files = readdirSync(convDir).filter((f) => mine.some((m) => f.startsWith(`${day}.${m.job}.`)));
+    const left2 = ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { remaining: number }).remaining;
+    check('删话题:撤了 4 行记忆(加的删掉、改的换回、删的接回末尾)、日记那段摘掉;家长写的与整理那轮加的不动', del.status === 200 && undo.memory === 4 && undo.diary === 1 && !mem2.includes('讲角用手指比划他马上懂') && !mem2.includes('家长说别出选择题') && mem2.includes('- 2026-09-01 讲慢点他跟得上') && mem2.includes('- 2026-09-01 爱用手指数') && mem2.includes('家长写在开头的话。') && mem2.includes('喜欢乐高') && !diary2.includes(bkMsg!.diaryBlock!.trim()), JSON.stringify({ undo, mem2, diary2 }));
+    check('删话题:索引、会话、记账标记、文件都没了;用掉的次数退回来;再删 404', !after.messages.some((m) => m.thread === th) && !(th in after.sessions) && !(th in after.booked) && files.length === 0 && left1 === left0 - 2 && left2 === left0 && (await route('DELETE', `/api/conversations/math-tutor/${day}/threads/${encodeURIComponent(th)}`, ctx)).status === 404, JSON.stringify({ left0, left1, left2, files }));
+    // 工作台 / cotutor send 发的也是孩子的话(没有 from: parent 了;旧客户端带 parent 也当 kid)
+    const dv = await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: '工作台问一句', from: 'parent', newThread: true });
+    await wait('math-tutor');
+    const dvi = await readIndex(ctx.ws, 'math-tutor', day);
+    const dvm = dvi.messages.find((m) => m.job === (dv.json as { job: string }).job);
+    const dvk = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; question: string | null }[] };
+    const gone = [(await route('POST', `/api/conversations/math-tutor/${day}/threads/${dvm?.thread}/lesson/hand`, ctx, { label: 'x' })).status, (await route('GET', '/api/lessons', ctx)).status];
+    check('工作台发的:记 from kid,孩子端看得到问句;家长端没有备课与交给孩子的接口', dv.status === 202 && dvm?.from === 'kid' && dvk.messages.find((m) => m.job === dvm.job)?.question === '工作台问一句' && gone.every((x) => x >= 400), JSON.stringify({ dvm, gone }));
   }
 } finally {
   rmSync(home, { recursive: true, force: true });

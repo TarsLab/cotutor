@@ -9,8 +9,8 @@ export const USAGE = `用法:
   cotutor add-theme <主题名> [--from <主题>] [--workspace <dir>]       加一个自家的主题:拷一份(缺省出厂的 default)到 themes/<主题名>/,改 cotutor.json 的 kid.theme 换过去
   cotutor serve [--workspace <dir>] [--port <n>] [--http] [--trace] [--open-qr]   起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS;--trace 每一轮的事件按道打印;/qr 是扫码页,--open-qr 顺手打开)
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad / iPhone 上录音要 HTTPS;所有 workspace 共用)
-  cotutor send <老师> <消息> [--from parent|kid|system] [--runtime <名>] [--new] [--lane main,tts] [--quiet]   终端里发一条,现场按道打印每道工序的事件,说完打印结果(与页面同一条路;--new 开新话题;--quiet 只要结果)
-  cotutor pack <老师> [<消息>] [--from kid|parent|system] [--at <ISO时间>] [--json]   干跑上下文包:不起模型,打印现在会发给老师的那份 + 每段来自哪个文件、那里一共几条、按政策带了几条(改了档案 / 日记 / 计划立刻看效果)
+  cotutor send <老师> <消息> [--from kid|system] [--runtime <名>] [--new] [--lane main,tts] [--quiet]   终端里发一条,现场按道打印每道工序的事件,说完打印结果(与页面同一条路;--new 开新话题;--quiet 只要结果)
+  cotutor pack <老师> [<消息>] [--from kid|system] [--at <ISO时间>] [--json]   干跑上下文包:不起模型,打印现在会发给老师的那份 + 每段来自哪个文件、那里一共几条、按政策带了几条(改了档案 / 日记 / 计划立刻看效果)
   cotutor replay <老师> <job> [<日期>] [--runtime <名>] [--json]   回放一轮:同一问按现在的 vault 与提示词再跑一遍(落 evals/,不进孩子的对话、不配音),跑完并排打印上下文包 / 讲稿 / 卡 / 读了什么的 diff
   cotutor compare <老师> [<evalJob>] [<日期>] [--json]                   再看一次回放的对照(不给 evalJob 就列这天回放过哪些)
   cotutor show <老师> <job> [<日期>] [--json] [--evals] [--workspace <dir>]   看一轮:问了什么、上下文包、当时的老师文件与技能 hash、讲稿与卡、读了什么、费用与用时、给家长的尾巴;--json 是家长端「看原文」同一份数据,给 Claude Code 分析用
@@ -20,10 +20,6 @@ export const USAGE = `用法:
   cotutor home check [--published] [--json]                           检查首页草稿 home/draft.md(或已发布的那份):孩子会看到哪几张卡、每位老师的按钮、要改的与提醒(带行号);不花钱
   cotutor home publish [--force] [--from <文件>] [--json]              发布首页:检查 → 留历史 home/history/<id>.md → 写 home/published.json(孩子端只读它);有要改的不发,--force 丢掉那几张照发;--from 发另一份(如历史)
   cotutor home show [--json]                                          现在发布的是哪份、几天前、每个按钮被点了几次(哪天、哪个话题)
-  cotutor lesson check <课名> [--json]                                 检查课文件 lessons/<课名>.md:老师、几节几张卡、排版行、要改的与提醒(带行号);不花钱
-  cotutor lesson post <课名> [--write] [--model <名>] [--json]         家长手写的课文件让模型整份排一版(花钱,一次几分到一毛钱;技能写的文件写时就排好了):--write 把 same / tint= / look= / emoji= 与讲稿里的 [词] 回写进文件;正文一个字不动,你手写过的当已定
-  cotutor lesson hand <课名> [--label <按钮字>] [--json]               交给孩子:检查 → 配音 → 建一个给孩子的话题(一节一轮,没有会话)→ 首页多一个只打开的「接着」;同一文件孩子没开口再交是覆盖
-  cotutor lesson list [--json]                                        列 lessons/ 下的课文件:老师、几节几张卡、有没有要改的
   cotutor material list [--json]                                      列 materials/ 下的素材:老师、标题、几段几个 mp4、有没有要改的
   cotutor material check <id> [--json]                                检查素材 materials/<id>/material.md:老师、几段、段数与 mp4 对不对得上(带行号);不花钱
   cotutor mock [--port <n>] [--scenario normal|limit|offline|nopost] [--delay <ms>] [--http]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace;nopost = 没写样子的素版)

@@ -19,7 +19,7 @@ import { closeSync, createWriteStream, existsSync, openSync, writeSync } from 'n
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
-import { addMessage, applyRun, cardId, lastJobOf, changedCards, conversationFiles, isPrepThread, isTryThread, triedAsKid, jobId, kidSpoke, lessonCards, localDate, localMinute, prepJobs, sessionFor, threads } from '../lib/conversation.ts';
+import { addMessage, applyRun, cardId, lastJobOf, changedCards, conversationFiles, jobId, localDate, localMinute, sessionFor, threads } from '../lib/conversation.ts';
 import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
 import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
 import { BUNDLE_ID_RE, cardAssets, cardLabel, describeCard, type RecordProps } from '../cards/index.ts';
@@ -35,14 +35,13 @@ import { getRuntime, planRun, runtimeUses, stallPrompt, type RunPlan, boardPrelo
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, TUTOR_TOOLS, VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, packFrom, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
+import { MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, TUTOR_TOOLS, VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
 import type { Transcript } from '../lib/transcript.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { updateVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
-import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPrompt } from '../lib/vault-notes.ts';
+import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPrompt, type MemoryLine } from '../lib/vault-notes.ts';
 import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTEM, BOARD_GUIDE_PATH, boardGuideBody, boardGuideReads } from '../lib/tutor-rules.ts';
 import { DubQueue, LineDubber } from './tts.ts';
-import { handedLessonOf } from './lesson.ts';
 import { WarmPool, type Spare } from './warm.ts';
 import { continueContext } from './home.ts';
 
@@ -73,18 +72,12 @@ export interface SendInput {
   bookkeep?: { thread: string };
   /** 这轮是记账后整理记忆(2026-09-18):新会话,「## 记忆」段不受每轮条数上限,孩子端看不到 */
   tidy?: boolean;
-  /** 课文件交出去的话题里孩子的第一条(拍板 34):前面几节后孩子说过的,进上下文包 lessonSaid:、记进消息 */
-  lessonSaid?: { section: number; text: string }[];
   /** 按住说话时的原声(已由路由解码、验过扩展名与大小):落成 <日期>.<job>.voice.<ext>,消息记 voice;只给家长端,不进上下文包 */
   voice?: { data: Buffer; ext: string; seconds: number };
   /** 这条带的作业照片(相对 workspace 根,已由路由验过在 captures/ 里;R5):进上下文包 photos: 段,老师自己 Read 看图;文字可以空 */
   photos?: string[];
   /** 这条是回放(server/replay.ts):原轮的 job,记进消息;调用方已经把 Runner 指到 evals/ */
   replayOf?: string;
-  /** 这条开一个备课话题(家长端「新话题」,《备课设计.md》):只在新话题的第一条记进消息 */
-  prepThread?: boolean;
-  /** 这条开一个试用话题(《备课设计.md》§十二,老师块的「试用」:没备课,家长在孩子端扮孩子直接问);只在新话题的第一条,和 prepThread 一起记 */
-  tryThread?: boolean;
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2),记进消息 */
   via?: MessageVia;
   /** 按钮的字与家长备好的讲法(服务端从发布件查的),进上下文包 home: 段 */
@@ -133,7 +126,7 @@ const MANY = 100_000;
 export async function gatherContext(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; focus?: Focus }, report?: PackReport): Promise<ContextPack> {
   const t = ws.config.tutors[tutor];
   const policy = resolvePolicy(ws.config, tutor);
-  const pack: ContextPack = { from: packFrom(input.from), at: localMinute(input.at), focus: input.focus, plan: [], recent: [] };
+  const pack: ContextPack = { at: localMinute(input.at), focus: input.focus, plan: [], recent: [] };
   if (report) report.timetable = { file: ws.paths.timetable, found: false, slot: null };
   try {
     const slot = currentSlot(parseTimetable(await readFile(ws.paths.timetable, 'utf8')).entries, input.at);
@@ -256,7 +249,7 @@ export async function packDryRun(ws: Workspace, tutor: string, input: { from: Me
   if (policy.board === 'off') pack.board = 'off';
   const { runtime } = getRuntime(ws.config, t.runtime);
   // 和 send 同一条规矩:孩子的话不带工具时,只有工具才用得上的路径不进包
-  if (policy.tools !== 'on' && pack.from === 'kid' && runtimeUses(runtime, '{tools}')) { delete pack.refs; delete pack.vault; }
+  if (policy.tools !== 'on' && input.from === 'kid' && runtimeUses(runtime, '{tools}')) { delete pack.refs; delete pack.vault; }
   await attachBoardGuide(ws, tutor, pack, { preloaded: boardPreloaded(runtime), boardOff: policy.board === 'off' });
   return { prompt: buildContextPack(pack, input.text, policy.contextPack), pack, report };
 }
@@ -332,7 +325,7 @@ export class Runner {
 
   /**
    * 预热(《工作流程.md》§四「预热」):给这位老师起好下一轮的进程,两个位置都补齐——
-   * fresh:新开会话(新话题、备课话题、接着上次、课文件交出去后的第一句都用它);
+   * fresh:新开会话(新话题、接着上次都用它);
    * resume:接 thread(页面选着的话题;不给或今天没有 = 当天末条所在的话题,和 send 缺省一样)的会话,它没有会话就不留。
    * 只给有脸的、开着的、运行时 stdin: "stream-json"、这会儿没在跑的老师起;throttleMs 内同一话题看过就不再看(页面轮询今天)。
    * 起了返回 true;起不了不报错,下一轮冷起。
@@ -353,7 +346,7 @@ export class Runner {
     const thread = opts.thread && known.includes(opts.thread) ? opts.thread : known.at(-1);
     const session = thread ? sessionFor(index, thread) : null;
     const policy = resolvePolicy(ws.config, tutor);
-    const parts = await systemParts(ws, tutor, runtime, policy, { from: 'kid', at: '', plan: [], recent: [] });
+    const parts = await systemParts(ws, tutor, runtime, policy, { at: '', plan: [], recent: [] });
     const vars = { agent: tutor, prompt: '', ...parts, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: t.runtime, effort: policy.effort, tools: policy.tools === 'on' ? TUTOR_TOOLS : '' };
     // 预热的是孩子的下一句:工具照孩子那轮填(带照片的对不上,那轮冷起)
     const fresh = planRun(ws.config, { session: null }, vars);
@@ -396,10 +389,8 @@ export class Runner {
     else if (input.thread) {
       if (!known.includes(input.thread)) throw new UsageError(`${date} 没有话题 ${input.thread};有:${[...new Set(known)].join('、')}`);
       thread = input.thread;
-    } else thread = [...known].reverse().find((th) => !isTryThread(index.messages, th)) ?? job; // 缺省接当前话题,试用话题不接(工作台、cotutor send 不该落进家长的试用里)
+    } else thread = known[known.length - 1];
     const fresh = thread === job;
-    // 试用话题(《备课设计.md》§十二):家长在孩子端扮孩子;消息照旧记 from: parent。老师拿到的永远是孩子的上下文包(packFrom),试用不用另说
-    const tryout = fresh ? input.tryThread === true : isTryThread(index.messages, thread);
     const session = fresh ? null : sessionFor(index, thread);
     const { runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
     const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus });
@@ -410,9 +401,9 @@ export class Runner {
     const pack = session ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
     const noteWarnings = pack.entry?.startsWith('缺:') && !input.bookkeep ? [`入口文件${pack.entry}——在 vault 里给这位老师建一篇(cotutor doctor 有写法)`] : [];
     if (policy.board === 'off') pack.board = 'off';
-    // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话(家长发的也按孩子拼包)缺省不带,只凭上下文包答;带照片的(要 Read 看图)、系统任务照旧带。
-    // 不带的那轮,只有工具才用得上的路径(refs / vault / materialsDir / lessonFile)不进包;模板里没有 {tools} 的运行时管不了它的工具,照旧
-    const tools = policy.tools === 'on' || pack.from !== 'kid' || photos.length > 0 ? TUTOR_TOOLS : '';
+    // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的(要 Read 看图)、系统任务照旧带。
+    // 不带的那轮,只有工具才用得上的路径(refs / vault / materialsDir)不进包;模板里没有 {tools} 的运行时管不了它的工具,照旧
+    const tools = policy.tools === 'on' || input.from !== 'kid' || photos.length > 0 ? TUTOR_TOOLS : '';
     const bare = !tools && runtimeUses(runtime, '{tools}');
     if (bare) { delete pack.refs; delete pack.vault; }
     // 家长备好的素材(《备课设计.md》§11.3):有脸的老师、新会话的第一条、板书没关;一行一个,前几份的 material.md 原文接在后面(<material>)
@@ -420,7 +411,6 @@ export class Runner {
       const materials = await materialsFor(ws, tutor);
       if (materials.length) { pack.materials = materials; if (!bare) pack.materialsDir = ws.dirs.materials; }
     }
-    let lessonDoc: { id: string; text: string } | null = null;
     // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
     // 录音卡:评测结果接在那一行后面(存录音时就起了,这里取;还在跑就等,最多等到存录音之后 timeoutMs;回放不起新的)
     const changed = fresh || input.bookkeep ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread);
@@ -432,31 +422,8 @@ export class Runner {
       return { card: id, text: card ? describeCard(card, c.file.state, extra) : JSON.stringify(c.file.state) };
     }));
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
-    // 孩子在家长交给他的备课话题里的第一条(《备课设计.md》§十):孩子看到的是这节课那几张卡,老师照它接;从课文件建的话题没有会话,这条是新会话,
-    // 上下文包另带课文件的路径(老师要看原文自己 Read)与文件尾巴里家长的讲法
-    // 试用的从课文件建,没有 handedAt;家长扮孩子第一次开口时一样带
-    const firstWord = tryout ? input.from === 'parent' && !triedAsKid(index.messages, thread) : input.from === 'kid' && Boolean(index.lessons[thread]?.handedAt) && !kidSpoke(index.messages, thread);
-    if (firstWord && thread !== job && isPrepThread(index.messages, thread)) {
-      pack.lesson = lessonCards(index, thread).map((id) => {
-        const [j, n] = id.split('/');
-        const c = index.messages.find((m) => m.job === j)?.section?.cards[Number(n)];
-        return c ? `${id} ${c.kind}「${cardLabel(c)}」` : id;
-      });
-      const handed = await handedLessonOf(ws, index, thread);
-      if (handed) {
-        // 课文件原文接在后面(<lesson-file>),老师不用再读盘;路径只在带工具的那轮给
-        const md = await readFile(handed.file, 'utf8').catch(() => null);
-        if (md !== null) lessonDoc = { id: relative(ws.root, handed.file), text: md.trim() };
-        if (!bare || md === null) pack.lessonFile = handed.file;
-        if (handed.brief.trim()) pack.lessonBrief = handed.brief.replace(/^##\s+\S.*\n?/, '').trim();
-      }
-      // 课文件尾巴「## 素材」列的排在 materials: 最前面(§11.4);这条是新会话的第一条,上面已经按改动时间拼过一遍
-      if (handed?.materials.length && pack.materials) pack.materials = await materialsFor(ws, tutor, handed.materials);
-      if (input.lessonSaid?.length) pack.lessonSaid = input.lessonSaid.map((x) => `第 ${x.section} 节后:${x.text}`);
-    }
-    const docs = [...(lessonDoc ? [{ kind: 'lesson' as const, ...lessonDoc }] : []), ...(pack.materials ? (await materialDocs(ws, pack.materials)).map((d) => ({ kind: 'material' as const, ...d })) : [])];
+    const docs = pack.materials ? (await materialDocs(ws, pack.materials)).map((d) => ({ kind: 'material' as const, ...d })) : [];
     if (docs.length) pack.docs = docs;
-    const lessonSaid = pack.lessonSaid ? input.lessonSaid : undefined;
     if (photos.length) { pack.photos = photos; pack.photoFiles = photos.map((p) => join(ws.root, p)); }
     if (input.home) pack.home = input.home;
     const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
@@ -470,7 +437,7 @@ export class Runner {
       const file = conversationFiles(ws.dirs.conversations, tutor, date).voice(job, input.voice.ext);
       if (await mkdir(join(ws.dirs.conversations, tutor), { recursive: true }).then(() => writeFile(file, input.voice!.data)).then(() => true, () => false)) voice = { audio: basename(file), seconds: Math.round(input.voice.seconds * 10) / 10 };
     }
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(lessonSaid?.length ? { lessonSaid } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(input.prepThread && thread === job ? { prepThread: true as const } : {}), ...(input.tryThread && input.prepThread && thread === job ? { tryThread: true as const } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 
@@ -505,8 +472,6 @@ export class Runner {
     for (const th of only ?? all) {
       if (!all.includes(th)) skipped.push({ thread: th, why: `${date} 没有这个话题` });
       else if (index.booked[th]) skipped.push({ thread: th, why: `记过了(${index.booked[th]})` });
-      else if (isTryThread(index.messages, th)) skipped.push({ thread: th, why: '家长的试用话题' });
-      else if (isPrepThread(index.messages, th) && !kidSpoke(index.messages, th)) skipped.push({ thread: th, why: '家长的备课话题,孩子还没开口' });
       else if (!only && !kidQuestions(index.messages, th).length && index.ratings[th] === undefined) skipped.push({ thread: th, why: '没有孩子的话也没打分' });
       else queued.push(th);
     }
@@ -553,14 +518,14 @@ export class Runner {
   }
 
   /** 记忆段收尾:讲课的轮每轮最多 MEMORY_MAX_PER_TURN 条,多的丢(整理轮 max = null 不限);写不进(vault 不在、同名文件没属性)进提醒,不影响这轮 */
-  private async settleMemory(ws: Workspace, tutor: string, date: string, items: string[], max: number | null): Promise<{ changes: string[]; warnings: string[] }> {
+  private async settleMemory(ws: Workspace, tutor: string, date: string, items: string[], max: number | null): Promise<{ changes: string[]; lines: MemoryLine[]; warnings: string[] }> {
     const warnings: string[] = [];
     if (max !== null && items.length > max) warnings.push(`记忆:一轮最多记 ${max} 条,丢了 ${items.length - max} 条:${items.slice(max).join(';')}`);
     try {
       const r = await updateVaultMemory(ws, tutor, ws.config.tutors[tutor]?.display ?? tutor, max === null ? items : items.slice(0, max), date);
-      return { changes: r.changes, warnings: [...warnings, ...r.warnings] };
+      return { changes: r.changes, lines: r.lines, warnings: [...warnings, ...r.warnings] };
     } catch (err) {
-      return { changes: [], warnings: [...warnings, `记忆没写进去:${err instanceof Error ? err.message : String(err)}`] };
+      return { changes: [], lines: [], warnings: [...warnings, `记忆没写进去:${err instanceof Error ? err.message : String(err)}`] };
     }
   }
 
@@ -574,7 +539,9 @@ export class Runner {
     const block = renderDiaryBlock(topic);
     if (!block) return { index, file: null, warnings: ['记账:这个话题没有孩子的话、摘要、观察,日记没写'] };
     const file = await writeDiary(ws, date, (existing) => appendDiary(existing, block));
-    return { index: { ...index, booked: { ...index.booked, [thread]: job } }, file, warnings: [] };
+    // 写进去的那段原文记在这轮上:删这个话题时从日记里摘掉(store.deleteThread)
+    const messages = index.messages.map((m) => (m.job === job ? { ...m, diaryBlock: block } : m));
+    return { index: { ...index, messages, booked: { ...index.booked, [thread]: job } }, file, warnings: [] };
   }
 
   /**
@@ -888,14 +855,11 @@ export class Runner {
     const reread = takesTutorRules(tutor) && policy.board !== 'off' ? boardGuideReads(tools) : [];
     if (reread.length) kidView.warnings.push(`板书写法已经递给老师了,这轮它还是用工具去读了一遍(${reread.join(';')}):多一次模型来回。cotutor doctor 的 runtime.*.board 看这个运行时走的哪条递法`);
     let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, timing, tools });
-    // 「## 记忆」段:增 / 改 / 删落进 vault 里这位 agent 的记忆文件(回放不写;备课轮不写、原文留在 memoryDraft 给家长看;整理轮不限条数;家长视图看 remembered 与提醒)
+    // 「## 记忆」段:增 / 改 / 删落进 vault 里这位 agent 的记忆文件(回放不写;整理轮不限条数;家长视图看 remembered 与提醒;memoryLines 留给删话题时撤)
     if (kidView.memory.length) {
       const asked = latest.messages.find((m) => m.job === job);
-      // 备课轮(《备课设计.md》§3.2):家长开的话题里孩子开口之前,老师想记的是家长说的,不是孩子做的
-      const prep = !asked?.replayOf && prepJobs(latest.messages).has(job);
-      const r = asked?.replayOf ? { changes: [] as string[], warnings: ['回放不写记忆'] } : prep ? { changes: [] as string[], warnings: [] as string[] } : await this.settleMemory(ws, tutor, date, kidView.memory, asked?.tidy ? null : MEMORY_MAX_PER_TURN);
-      const draft = prep ? kidView.memory : null;
-      if (r.changes.length || r.warnings.length || draft) next = { ...next, messages: next.messages.map((m) => (m.job === job ? { ...m, ...(r.changes.length ? { remembered: r.changes } : {}), ...(draft ? { memoryDraft: draft } : {}), ...(r.warnings.length ? { warnings: [...(m.warnings ?? []), ...r.warnings] } : {}) } : m)) };
+      const r = asked?.replayOf ? { changes: [] as string[], lines: [] as MemoryLine[], warnings: ['回放不写记忆'] } : await this.settleMemory(ws, tutor, date, kidView.memory, asked?.tidy ? null : MEMORY_MAX_PER_TURN);
+      if (r.changes.length || r.warnings.length) next = { ...next, messages: next.messages.map((m) => (m.job === job ? { ...m, ...(r.changes.length ? { remembered: r.changes } : {}), ...(r.lines.length ? { memoryLines: r.lines } : {}), ...(r.warnings.length ? { warnings: [...(m.warnings ?? []), ...r.warnings] } : {}) } : m)) };
     }
     // 场景作业收尾:课包的费用与时长进账本,消息的 artifacts 记课包 id
     if (tutor === SCENE_MAKER) {

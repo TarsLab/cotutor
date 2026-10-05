@@ -218,6 +218,13 @@ export interface MemoryApplied {
   changes: string[];
   /** 找不到原话的改 / 删 */
   misses: string[];
+  /** 同一批改动的整行原文:before = 改之前那行(新增为 null),after = 改之后那行(删掉为 null);删话题时 undoMemoryLines 按它撤销 */
+  lines: MemoryLine[];
+}
+
+export interface MemoryLine {
+  before: string | null;
+  after: string | null;
 }
 
 /**
@@ -230,6 +237,7 @@ export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date:
   const bodyStart = fm > 0 ? fm + 1 : 0;
   const changes: string[] = [];
   const misses: string[] = [];
+  const edits: MemoryLine[] = [];
   const gone = new Set<number>();
   for (const o of ops) {
     if (o.op === 'add') continue;
@@ -242,16 +250,46 @@ export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date:
     if (o.op === 'delete') {
       gone.add(i);
       changes.push(`删:${old}`);
+      edits.push({ before: lines[i], after: null });
     } else {
       const bullet = /^(\s*[-*]\s+)/.exec(lines[i]);
+      const before = lines[i];
       lines[i] = bullet ? `${bullet[1]}${date} ${o.to}` : o.to;
       changes.push(`改:${old} → ${o.to}`);
+      edits.push({ before, after: lines[i] });
     }
   }
   const kept = lines.filter((_, i) => !gone.has(i)).join('\n');
   const adds = ops.flatMap((o) => (o.op === 'add' ? [o.text] : []));
   const r = appendMemory(kept, adds, date);
-  return { text: r.text, changes: [...changes, ...r.added], misses };
+  return { text: r.text, changes: [...changes, ...r.added], misses, lines: [...edits, ...r.added.map((after) => ({ before: null, after }))] };
+}
+
+/**
+ * 撤销一串改动(删话题时,2026-10-05):倒着来——改了的换回原来那行,新增的删掉,删了的接回末尾(原来的位置不记)。
+ * 按整行原文找;家长或整理那轮后来又改过那行就找不到,进 misses,不动。
+ */
+export function undoMemoryLines(existing: string, edits: readonly MemoryLine[]): { text: string; undone: number; misses: string[] } {
+  let lines = existing.split('\n');
+  let undone = 0;
+  const misses: string[] = [];
+  const back: string[] = [];
+  for (const e of [...edits].reverse()) {
+    if (e.after === null) {
+      if (e.before !== null) { back.unshift(e.before); undone++; }
+      continue;
+    }
+    const i = lines.findIndex((l) => l === e.after);
+    if (i < 0) { misses.push(bareLine(e.after)); continue; }
+    lines = e.before === null ? lines.filter((_, k) => k !== i) : lines.map((l, k) => (k === i ? e.before! : l));
+    undone++;
+  }
+  let text = lines.join('\n');
+  if (back.length) {
+    const base = text.replace(/\s*$/, '');
+    text = `${base}\n${/^\s*[-*]\s/.test(base.split('\n').at(-1) ?? '') ? '' : '\n'}${back.join('\n')}\n`;
+  }
+  return { text, undone, misses };
 }
 
 /** 记忆文件里有几条(frontmatter 之后的列表行) */

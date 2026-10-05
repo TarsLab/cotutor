@@ -8,10 +8,10 @@ import { check, done } from './_check.ts';
   const base = { at: '2026-09-14T16:20', result: 'ok' as const, artifacts: [], kidText: '看到了', costUsd: 0 };
   const list = kidConversation({ messages: [
     { ...base, job: '1620-1', from: 'kid', text: '(拍了一张)', photos: ['captures/2026-09-14/1620-1.jpg'] },
-    { ...base, job: '1620-2', from: 'parent', text: '这道呢', photos: ['captures/2026-09-14/1620-2.jpg'] },
+    { ...base, job: '1620-2', from: 'system', text: '这道呢', photos: ['captures/2026-09-14/1620-2.jpg'] },
     { ...base, job: '1620-3', from: 'kid', text: '再看' },
   ] });
-  check('孩子端条目:孩子自己的问句带 photos,家长的问句不露(照片也不露),没照片的没有 photos 字段', list[0].photos?.join() === 'captures/2026-09-14/1620-1.jpg' && list[1].question === null && list[1].photos === undefined && list[2].photos === undefined, JSON.stringify(list));
+  check('孩子端条目:孩子自己的问句带 photos,系统消息的问句不露(照片也不露),没照片的没有 photos 字段', list[0].photos?.join() === 'captures/2026-09-14/1620-1.jpg' && list[1].question === null && list[1].photos === undefined && list[2].photos === undefined, JSON.stringify(list));
 }
 
 const okRun = (result: string): ReturnType<typeof parseTranscript> =>
@@ -62,13 +62,13 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   check('只有固定段 → 孩子无话,记账在', onlySections.kidText === null && onlySections.bookkeeping?.entries[0].name === '退位' && onlySections.ok);
 }
 {
-  // 孩子端条目:服务端过滤——孩子的问句 + 老师给孩子的话 + 配音;家长的问句不露;出错的运行不出现;不带 result / error / 费用
+  // 孩子端条目:服务端过滤——孩子的问句 + 老师给孩子的话 + 配音;系统消息的问句不露;出错的运行不出现;不带 result / error / 费用
   const base = { at: 'x', artifacts: [] as string[] };
   const idx = {
     messages: [
       { ...base, job: '1', from: 'kid' as const, text: '为什么', result: 'ok' as const, kidText: '因为借位', costUsd: 0.1, error: null, parentText: '## 家长\n家长的话' },
-      { ...base, job: '2', from: 'parent' as const, text: '家长问的', result: 'ok' as const, kidText: '给孩子的话' },
-      { ...base, job: '3', from: 'parent' as const, text: '记账', result: 'ok' as const, kidText: null },
+      { ...base, job: '2', from: 'system' as const, text: '系统派的', result: 'ok' as const, kidText: '给孩子的话' },
+      { ...base, job: '3', from: 'system' as const, text: '记账', result: 'ok' as const, kidText: null },
       { ...base, job: '4', from: 'kid' as const, text: '又问', result: 'error' as const, kidText: null, error: 'error_max_turns' },
       { ...base, job: '5', from: 'system' as const, text: 'sys', result: 'error' as const, kidText: null, error: 'boom' },
       { ...base, job: '6', from: 'kid' as const, text: '再问', result: 'running' as const },
@@ -76,10 +76,10 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
     ],
   };
   const v = kidConversation(idx);
-  check('条目数:家长无话的与系统出错的不出现', v.map((m) => m.job).join() === '1,2,4,6,7', JSON.stringify(v.map((m) => m.job)));
+  check('条目数:系统无话的与系统出错的不出现', v.map((m) => m.job).join() === '1,2,4,6,7', JSON.stringify(v.map((m) => m.job)));
   check('板书节下发前剥答案;家长尾巴不下发', v[4].section?.cards.length === 2 && !('answer' in v[4].section.cards[0].props) && !('answers' in v[4].section.cards[1].props) && v[4].section.lines[0].ask && !JSON.stringify(v).includes('秘密'), JSON.stringify(v[4]));
   check('孩子的问句 + 回复,消息层不带配音', v[0].question === '为什么' && v[0].reply === '因为借位' && !('audio' in v[0]) && !v[0].pending);
-  check('家长的问句不露,只有给孩子的话', v[1].question === null && v[1].reply === '给孩子的话');
+  check('系统消息的问句不露,只有给孩子的话', v[1].question === null && v[1].reply === '给孩子的话');
   check('出错:问句在、没有回复、没有原因', v[2].question === '又问' && v[2].reply === null && !('error' in v[2]) && !('result' in v[2]));
   check('还在跑 → pending', v[3].pending && v[3].reply === null);
   check('序列化后搜不到工具 / 错误 / 家长尾巴 / 费用 / 答案', !/工具|error|家长的话|costUsd|result|answer/.test(JSON.stringify(v)), JSON.stringify(v));
@@ -108,7 +108,7 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   const base = { at: '2026-09-14T16:20', artifacts: [] as string[] };
   const index = { messages: [
     { ...base, job: '1', thread: '1', from: 'kid' as const, text: '讲讲', result: 'ok' as const, kidText: '开场。\n酒是谁的?', section: board, parentText: '## 家长\n他会了。', remembered: ['2026-09-14 爱抢答'], warnings: ['一句太长'], via: { home: 'h', button: 0, label: '我要预习' } },
-    { ...base, job: '2', thread: '1', from: 'parent' as const, text: '换个说法', result: 'ok' as const, kidText: '好。', section: parseBoard('好。').section, cards: [{ card: '1/0', text: '选了「A 他自己的」' }] },
+    { ...base, job: '2', thread: '1', from: 'kid' as const, text: '换个说法', result: 'ok' as const, kidText: '好。', section: parseBoard('好。').section, cards: [{ card: '1/0', text: '选了「A 他自己的」' }] },
     { ...base, job: '3', thread: '3', from: 'kid' as const, text: '再来', result: 'error' as const, error: 'timeout' },
     { ...base, job: '4', thread: '1', from: 'system' as const, text: '记账', result: 'ok' as const, kidText: '记好了', bookkeep: { thread: '1' } },
     { ...base, job: '5', thread: '5', from: 'system' as const, text: '整理', result: 'ok' as const, kidText: null, tidy: true as const, remembered: ['改:爱抢答 → 会先想'] },
@@ -118,10 +118,10 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   const par = parentConversation(index, states);
   check('家长条目:五条都在(记账、整理也在);孩子端三条(记账、整理不进)', par.length === 5 && kid.length === 3, `${par.length} ${kid.length}`);
   check('答案不剥,孩子做的状态照样并到卡上;孩子端剥了', JSON.stringify(par[0].section?.cards[0].props.answer) === '[0]' && JSON.stringify(par[0].section?.cards[0].state) === '{"picked":[1]}' && !('answer' in (kid[0].section?.cards[0].props ?? {})) && JSON.stringify(kid[0].section?.cards[0].state) === '{"picked":[1]}');
-  check('多出的字段:from、via、parentText、remembered、warnings、cards、error、bookkeep、tidy', par[0].from === 'kid' && par[0].via?.label === '我要预习' && par[0].parentText === '## 家长\n他会了。' && par[0].remembered?.join() === '2026-09-14 爱抢答' && par[0].warnings?.join() === '一句太长' && par[1].from === 'parent' && par[1].question === '换个说法' && par[1].cards?.[0].text === '选了「A 他自己的」' && par[2].error === 'timeout' && par[3].bookkeep?.thread === '1' && par[4].tidy === true && par[4].remembered?.length === 1, JSON.stringify(par));
-  check('孩子端那份没有这些字段,家长的问句是 null', !('from' in kid[0]) && !('parentText' in kid[0]) && !('remembered' in kid[0]) && !('warnings' in kid[0]) && kid[1].question === null && !('error' in kid[2]));
+  check('多出的字段:from、via、parentText、remembered、warnings、cards、error、bookkeep、tidy', par[0].from === 'kid' && par[0].via?.label === '我要预习' && par[0].parentText === '## 家长\n他会了。' && par[0].remembered?.join() === '2026-09-14 爱抢答' && par[0].warnings?.join() === '一句太长' && par[1].from === 'kid' && par[1].question === '换个说法' && par[1].cards?.[0].text === '选了「A 他自己的」' && par[2].error === 'timeout' && par[3].bookkeep?.thread === '1' && par[4].tidy === true && par[4].remembered?.length === 1, JSON.stringify(par));
+  check('孩子端那份没有这些字段', !('from' in kid[0]) && !('parentText' in kid[0]) && !('remembered' in kid[0]) && !('warnings' in kid[0]) && kid[1].question === '换个说法' && !('error' in kid[2]));
   const strip = (m: object) => { const { from: _f, via: _v, parentText: _p, remembered: _r, warnings: _w, cards: _c, error: _e, action: _a, bookkeep: _b, tidy: _t, ...rest } = m as Record<string, unknown>; return rest; };
   const noAnswer = (m: ReturnType<typeof parentConversation>[number]) => ({ ...strip(m), ...(m.section ? { section: { ...m.section, cards: m.section.cards.map((c) => { const { answer: _x, ...p } = c.props as Record<string, unknown>; return { ...c, props: p }; }) } } : {}), question: m.from === 'kid' ? m.question : null });
-  check('剥掉多出的字段与答案、家长的问句归 null 之后,孩子端能看到的那三条与 kidConversation 一字不差', JSON.stringify([par[0], par[1], par[2]].map(noAnswer)) === JSON.stringify(kid), JSON.stringify([par[0], par[1], par[2]].map(noAnswer)));
+  check('剥掉多出的字段与答案之后,孩子端能看到的那三条与 kidConversation 一字不差', JSON.stringify([par[0], par[1], par[2]].map(noAnswer)) === JSON.stringify(kid), JSON.stringify([par[0], par[1], par[2]].map(noAnswer)));
 }
 done();

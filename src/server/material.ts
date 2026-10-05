@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import type { Workspace } from '../cli/workspace.ts';
 import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
 import { stripHumanNotes } from '../lib/human-notes.ts';
-import type { LessonIssue } from '../lib/lesson.ts';
+import type { DocIssue } from '../lib/frontmatter.ts';
 import { MATERIAL_FILE, MATERIAL_ID_RE, MATERIALS_DIR, materialIssues, materialLine, parseMaterial, type MaterialDoc } from '../lib/material.ts';
 
 /** 上下文包 materials: 最多几行(《备课设计.md》§11.3) */
@@ -24,7 +24,7 @@ export interface MaterialCheck {
   clips: number[];
   /** material.md 的改动时间;没有这个文件 null */
   mtime: string | null;
-  issues: LessonIssue[];
+  issues: DocIssue[];
   fixes: number;
 }
 
@@ -42,7 +42,7 @@ export async function checkMaterial(ws: Workspace, id: string): Promise<Material
   const mtime = md === null ? null : ((await stat(file).catch(() => null))?.mtime.toISOString() ?? null);
   const doc = parseMaterial(md ?? '');
   const tutors = Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, { display: t.display, enabled: t.enabled, hidden: t.hidden }]));
-  const issues: LessonIssue[] = md === null ? [{ level: 'fix', text: `没有 ${MATERIAL_FILE}:老师不知道片子里演的是什么,不会拿它(写一份:标题、能讲、一段一段)` }] : materialIssues(doc, { tutors, clips });
+  const issues: DocIssue[] = md === null ? [{ level: 'fix', text: `没有 ${MATERIAL_FILE}:老师不知道片子里演的是什么,不会拿它(写一份:标题、能讲、一段一段)` }] : materialIssues(doc, { tutors, clips });
   return { id, source: rel(id), doc, clips, mtime, issues, fixes: issues.filter((i) => i.level === 'fix').length };
 }
 
@@ -57,14 +57,10 @@ export async function listMaterials(ws: Workspace): Promise<MaterialCheck[]> {
   return out;
 }
 
-/**
- * 上下文包 materials: 的几行:这位老师的、没有要改的;first 里列的排前面(课文件尾巴 `## 素材` 列的,§11.4),
- * 其余按改动时间新的在前;最多 MATERIALS_IN_PACK 行
- */
-export async function materialsFor(ws: Workspace, tutor: string, first: readonly string[] = []): Promise<string[]> {
+/** 上下文包 materials: 的几行:这位老师的、没有要改的,按改动时间新的在前;最多 MATERIALS_IN_PACK 行 */
+export async function materialsFor(ws: Workspace, tutor: string): Promise<string[]> {
   const mine = (await listMaterials(ws)).filter((c) => c.doc.tutor === tutor && !c.fixes);
-  const rank = (c: MaterialCheck): number => (first.includes(c.id) ? first.indexOf(c.id) : first.length);
-  mine.sort((a, b) => rank(a) - rank(b) || (b.mtime ?? '').localeCompare(a.mtime ?? ''));
+  mine.sort((a, b) => (b.mtime ?? '').localeCompare(a.mtime ?? ''));
   return mine.slice(0, MATERIALS_IN_PACK).map((c) => materialLine(c.id, c.doc));
 }
 

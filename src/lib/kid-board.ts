@@ -651,8 +651,6 @@ export interface BoardMessage {
   section?: BoardSection | null;
   /** 孩子这条带的作业照片(相对 workspace 根;R5):节头上回显缩略图 */
   photos?: string[];
-  /** 从课文件建的第几节 */
-  lessonSection?: number;
 }
 
 export interface BoardEntry extends BoardSection {
@@ -662,8 +660,6 @@ export interface BoardEntry extends BoardSection {
   partial?: boolean;
   /** 孩子问这节时拍的照片(节头上回显) */
   photos?: string[];
-  /** 从课文件建的第几节:孩子还没开口时页面把后面的节攒着,一节一节念 */
-  lessonSection?: number;
 }
 
 /**
@@ -673,7 +669,7 @@ export interface BoardEntry extends BoardSection {
 export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEntry[] {
   const out: BoardEntry[] = [];
   for (const m of messages) {
-    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length ? { photos: m.photos } : {}), ...(typeof m.lessonSection === 'number' ? { lessonSection: m.lessonSection } : {}) };
+    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length ? { photos: m.photos } : {}) };
     if (m.pending) {
       if (m.section && m.section.partial && m.section.cards.length) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;
@@ -773,7 +769,7 @@ export function spokenLines(state: PlayerState, sections: readonly BoardSection[
 }
 
 /**
- * 第一遍念的整节(2026-09-28,《备课设计.md》拍板 34):念到哪露到哪——露前几张卡(前缀)。
+ * 第一遍念的整节(2026-09-28):念到哪露到哪——露前几张卡(前缀)。
  * 念到第 i 句时,露到前 i 句里锚到、标到、[[play]] 到的最后一张;标题行这类没有讲稿的卡跟着后面第一张有讲稿的卡露;
  * 停下等答、念完 = 整节(推答题卡、节尾的提问卡这时才露)。-1 = 还没念到这节,整节不露。再听按回放前的位置算
  */

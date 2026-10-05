@@ -26,6 +26,7 @@ import { lettersData } from './letters.ts';
 export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bundles/', import.meta.url));
 import { lineDurationMs, readyBeats, type BoardSection, type PenName } from '../lib/kid-board.ts';
 import { REEL_LINE_GAP_MS, buildReel } from '../lib/reel.ts';
+import { lectureClock, type LectureSkeleton, type LectureStep } from '../lib/lecture.ts';
 import type { CardStates } from '../lib/conversation.ts';
 import { lanAddresses, listenInfo } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
@@ -372,6 +373,8 @@ interface MockMessage {
   states?: Record<number, unknown>;
   /** 孩子这条带的照片(假路径;/api/kid/image 给占位图) */
   photos?: string[];
+  /** 看完小课堂后的第一条:节前画小课堂卡 */
+  lecture?: { bundle: string; title: string };
 }
 
 /** mock 的首页原文(昨晚 21:30 发布的那份;接着按钮指向 past 里昨天的话题,job = 0930-<老师名长度>) */
@@ -390,6 +393,7 @@ for: ${today}
 \`\`\`tutor math-tutor
 再练两道退位减法
 讲法: 出 52−7、80−3,先让他说怎么想
+小课堂 2026-09-18-po13-jian-8 13 减 8 怎么拆
 \`\`\`
 
 \`\`\`text
@@ -486,6 +490,18 @@ export function createMock(opts: MockOptions = {}): Mock {
   };
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
   const tutorsJson = () => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, motto: t.motto, hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0 }));
+  /** 小课堂:样本课包在仓库里(tests/fixtures/bundles/),同步读、记住 */
+  const lectures = new Map<string, { title: string; ms: number } | null>();
+  const mockLecture = (id: string): { title: string; ms: number } | null => {
+    if (!lectures.has(id)) {
+      try {
+        const scene = JSON.parse(readFileSync(join(MOCK_BUNDLES_DIR, id, 'scene.json'), 'utf8')) as { title?: string; skeletons: LectureSkeleton[] };
+        const steps = (JSON.parse(readFileSync(join(MOCK_BUNDLES_DIR, id, 'manifest.json'), 'utf8')) as { steps: LectureStep[] }).steps;
+        lectures.set(id, steps.length ? { title: String(scene.title ?? id), ms: lectureClock(scene.skeletons, steps).total } : null);
+      } catch { lectures.set(id, null); }
+    }
+    return lectures.get(id) ?? null;
+  };
   const home = () => {
     const d = now();
     const cards = arrangeHome(parseHome(mockHomeMd(localDate(d), yesterday())).cards, MOCK_TUTORS.map((t) => t.name)).map((c) => {
@@ -495,7 +511,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const asked = list.find((m) => m.question !== null && m.thread === list[list.length - 1]?.thread);
       const recent = asked ? { date: localDate(d), thread: asked.thread, title: asked.question ?? '' } : null;
       const alive = (date: string, thread: string): boolean => (date === yesterday() && (past.get(name) ?? []).some((m) => m.thread === thread)) || (date === localDate(d) && list.some((m) => m.thread === thread));
-      return { kind: 'tutor', props: { tutor: name, buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { recent, alive }) } };
+      return { kind: 'tutor', props: { tutor: name, buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { recent, alive, lecture: (id) => Boolean(mockLecture(id)) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms } : b; }) } };
     });
     // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
     return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 } };
@@ -713,7 +729,13 @@ export function createMock(opts: MockOptions = {}): Mock {
         let said = body.text;
         let newThread = body.newThread === true;
         let wantThread = body.thread;
-        if (button && button !== 'new' && button !== 'recent') {
+        // 小课堂:看完才能开口,字是孩子说的,新话题
+        const lec = isObj(body.lecture) && typeof body.lecture.bundle === 'string' ? { bundle: body.lecture.bundle, finished: body.lecture.finished === true } : null;
+        if (lec && (typeof button !== 'object' || button === null || button.kind !== 'lecture')) return { status: 400, json: { error: 'bad_request' } };
+        if (typeof button === 'object' && button !== null && button.kind === 'lecture') {
+          if (!lec || lec.bundle !== button.bundle || !lec.finished) return { status: 400, json: { error: 'bad_request' } };
+          newThread = true; wantThread = undefined;
+        } else if (button && button !== 'new' && button !== 'recent') {
           said = button.label;
           if (button.kind === 'continue' && button.date === date) { wantThread = button.thread; newThread = false; }
           else { newThread = true; wantThread = undefined; }
@@ -731,7 +753,8 @@ export function createMock(opts: MockOptions = {}): Mock {
             thread = wantThread;
           } else thread = list[list.length - 1].thread;
         }
-        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}) };
+        const lt = lec ? mockLecture(lec.bundle) : null;
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle } } : {}) };
         list.push(m);
         const done = think(t, m, cursor).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);

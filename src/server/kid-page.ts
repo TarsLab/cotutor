@@ -79,6 +79,18 @@ const PAGE = `<!doctype html>
   .lbl { font-size:14px; color:var(--dim); }
   #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); max-width:min(560px,calc(100% - 32px)); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:15px; line-height:1.5; white-space:pre-line; z-index:50; display:none; }
   #toast.on { display:block; }
+  /* 小课堂(《小课堂设计.md》):首页按钮点进来,舞台包铺满整页放;看完关掉,板书顶上一张小课堂卡,输入条才亮 */
+  #lc-frame { position:fixed; inset:0; width:100%; height:100%; border:0; z-index:90; background:#faf9f4; }
+  #lc-frame[hidden] { display:none; }
+  .c.c-lecture { flex-direction:row; align-items:center; gap:14px; background:var(--tint-sand-bg); border-color:var(--tint-sand-line); }
+  .c-lecture .lt { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .c-lecture .lt small { font-size:13px; font-weight:700; color:var(--tint-sand-head); letter-spacing:1px; }
+  .c-lecture .lt b { font-size:20px; }
+  .c-lecture .lt span { font-size:14px; color:var(--dim); }
+  .c-lecture .re { flex:none; height:44px; padding:0 16px; border-radius:22px; border:1.5px solid var(--tint-sand-line); background:#fff; font-size:16px; }
+  .lc-ask { display:flex; flex-direction:column; align-items:center; gap:8px; padding:36px 0 12px; text-align:center; }
+  .lc-ask b { font-size:26px; }
+  .lc-ask span { font-size:16px; color:var(--dim); }
   #rest { display:none; text-align:center; color:var(--dim); font-size:16px; padding:12px 0; }
   /* 给老师换样子(figshot):不是首页发布的卡,是 cotutor.json 配了 figshot 就有的固定入口;figshot 没开着就不出现 */
   .c.c-figshot { flex-direction:row; align-items:center; gap:16px; text-decoration:none; color:var(--ink); background:#fff3e8; border-color:var(--accent); }
@@ -409,6 +421,7 @@ const PAGE = `<!doctype html>
   <div class="hcards" id="hcards"></div>
 </div>
 <div id="toast"></div>
+<iframe id="lc-frame" hidden title="小课堂"></iframe>
 <section id="tutor">
   <div id="main">
     <div class="tb l"><button id="back" type="button" aria-label="回首页"><i id="back-ic"></i><span class="av" id="c-av"></span></button><span id="c-mo" hidden></span></div>
@@ -583,7 +596,7 @@ __REEL_JS__
   };
 
   // ---- 首页(《首页设计.md》):老师卡在上,其余卡照发布的顺序;按钮决定进老师页之后的话题 ----
-  const BUTTON_ICON = { new: 'spark', start: 'start', continue: 'again' };
+  const BUTTON_ICON = { new: 'spark', start: 'start', continue: 'again', lecture: 'play' };
   let toastTimer = null;
   const toast = (text) => { const t = $('#toast'); t.textContent = text; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4000); };
   const pickButton = (t, b) => {
@@ -591,14 +604,19 @@ __REEL_JS__
     if (b.kind === 'new') openTutor(t, { kind: 'new', via });
     else if (b.id === 'recent') openTutor(t, { kind: 'thread', thread: b.thread, via });
     else if (b.kind === 'start') openTutor(t, { kind: 'new', via, send: b.label });
+    // 小课堂:新话题,先铺满放课;看完才能开口,开口那条带上 via 与看的情况
+    else if (b.kind === 'lecture') openTutor(t, { kind: 'new', via, lecture: { bundle: b.bundle, title: b.title || b.label } });
     else if (b.date === S.home.date) openTutor(t, { kind: 'thread', thread: b.thread, via, send: b.label });
     else openTutor(t, { kind: 'new', via, send: b.label, cont: b.date });
   };
+  /** 小课堂的课长:「1 分 40 秒」 */
+  const lcLen = (ms) => { const s = Math.floor(ms / 1000); return s >= 60 ? Math.floor(s / 60) + ' 分' + (s % 60 ? ' ' + (s % 60) + ' 秒' : '') : s + ' 秒'; };
   const tutorCard = (t, buttons) => {
     const first = buttons.find((b) => b.kind === 'new');
     return h('div', { class: 'c c-tutor' + (t.available ? '' : ' off'), 'data-tutor': t.name, style: 'border-color:' + color(t.subject || t.display) },
       h('div', { class: 'tt', on: { click: () => { if (first) pickButton(t, first); } } }, avatarEl(t), h('span', { class: 'nm' }, t.display)),
-      h('div', { class: 'bts' }, ...buttons.map((b) => h('button', { type: 'button', class: 'bt bt-' + b.kind, on: { click: () => pickButton(t, b) } }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }), h('span', {}, b.label)))));
+      h('div', { class: 'bts' }, ...buttons.map((b) => h('button', { type: 'button', class: 'bt bt-' + b.kind, on: { click: () => pickButton(t, b) } }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }),
+        b.kind === 'lecture' ? h('span', { class: 'lb' }, h('small', {}, '小课堂'), h('span', {}, b.label), h('small', { class: 'ln' }, (b.ms ? lcLen(b.ms) + ' · ' : '') + '看完再问老师')) : h('span', {}, b.label)))));
   };
   const renderHome = () => {
     const H = S.home;
@@ -700,20 +718,21 @@ __REEL_JS__
     intent = intent || { kind: 'new' };
     S.tutor = t; if (!PARENT) micWarm(); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
-    S.via = intent.via || null; S.cont = intent.cont || null;
+    S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false } : null;
     // 家长端只看:卡锁着(选择 / 填空 / 画板不开、没有「继续」)、没有输入条,看的是清单上那天的;家长要试,到孩子端当一回孩子,用完回这里删
     if (PARENT) { S.readonly = true; S.newThread = false; S.hist = intent.date || S.pdate || null; }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
     $('#board').replaceChildren();
-    if (S.newThread && !intent.send) $('#board').append(blankBoard('想问什么?'));
+    if (S.newThread && !intent.send && !S.lecture) $('#board').append(blankBoard('想问什么?'));
     $('#tutor').classList.add('on');
     setBar('idle');
     loadDay(true).then(() => { if (intent.send) send(intent.send); });
+    if (S.lecture) openLecture();
   };
   /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」 */
   const blankBoard = (title) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor) : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, S.tutor && S.tutor.motto ? h('span', { class: 'mo' }, S.tutor.motto) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null);
-  const closeTutor = () => { reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit'); loadHome(); };
+  const closeTutor = () => { hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit'); loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -1260,7 +1279,44 @@ __REEL_JS__
     return rowsFor(s, S.device, half).map((row) => ({ row, el: rowEl(rowCols(s, row, half), ...row.map((k) => els[k])) }));
   };
   /** 一节 = 头一行(时间 · 节名)+ 若干行;行按卡量出来的宽度排(rowsFor) */
-  const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i, 'data-job': s.job }, sectionHead(s), ...rowEls(s, s.cards.map((c, k) => renderCard(c, k, i, false))).map((r) => r.el));
+  // ---- 小课堂(《小课堂设计.md》):首页按钮 → 舞台包铺满整页放(#lc-frame);看完 → 板书顶上一张小课堂卡 + 「看完了!有什么想问老师的?」,输入条亮;
+  //      孩子第一句带上看的情况(body.lecture),那条的节前画小课堂卡;「再看一遍」再铺开,关了回板书 ----
+  const lcFrame = $('#lc-frame');
+  const lcPost = (m) => { try { lcFrame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
+  let lcShowing = null;
+  const openLecture = (l) => {
+    const L = l || S.lecture; if (!L) return;
+    lcShowing = L; dispatch({ type: 'halt' });
+    lcFrame.hidden = false; lcFrame.src = '/stage/?card=lecture';
+  };
+  const hideLecture = () => { lcShowing = null; lcFrame.hidden = true; lcFrame.src = 'about:blank'; };
+  /** 板书顶上的小课堂卡:课名、看完了、「再看一遍」(done = 孩子已经问过,卡画在那一节前面) */
+  const lectureCard = (l, done) => h('div', { class: 'c c-lecture', 'data-lecture': l.bundle },
+    h('div', { class: 'lt' }, h('small', {}, '小课堂'), h('b', {}, l.title || ''), h('span', {}, done ? '看完了' : '看完了 · 有不懂的就问老师')),
+    h('button', { type: 'button', class: 're', on: { click: (e) => { e.stopPropagation(); openLecture({ bundle: l.bundle, title: l.title }); } } }, '再看一遍'));
+  /** 看完、还没开口:板书上先放小课堂卡与一句提示(那一节回来以后就画在节前,这两样撤掉) */
+  const renderLecturePending = () => {
+    const old = $('#board .lc-pending');
+    // 问了、那一节回来了(节前画着小课堂卡):撤掉;问了还没回来:只撤提示,卡留着
+    if (!S.lecture || !S.lecture.watch || (S.lecture.sent && $('#board .sec .c-lecture'))) { if (old) old.remove(); return; }
+    if (S.lecture.sent) { const ask = old && old.querySelector('.lc-ask'); if (ask) ask.remove(); return; }
+    if (old) return;
+    $('#board').prepend(h('div', { class: 'lc-pending' }, lectureCard(S.lecture, false), h('div', { class: 'lc-ask' }, h('b', {}, '看完了!有什么想问老师的?'), h('span', {}, '按住说话,或者打字'))));
+  };
+  window.addEventListener('message', (e) => {
+    const m = e.data;
+    if (!m || m.source !== STAGE_SOURCE || e.source !== lcFrame.contentWindow || !lcShowing) return;
+    if (m.type === 'ready') lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title }, state: null, bundleUrl: '/api/bundles/' + encodeURIComponent(lcShowing.bundle) + '/' });
+    else if (m.type === 'lecture') {
+      const first = S.lecture && lcShowing.bundle === S.lecture.bundle && !S.lecture.watch;
+      if (m.event === 'finished' && first) S.lecture.watch = { watchedMs: m.watchedMs, finished: true, pauses: m.pauses };
+      // 第一遍没看完就回去 = 回首页(这一课不记);看完了、或「再看一遍」关掉 = 回板书
+      if (m.event === 'close' && first) { closeTutor(); return; }
+      if (m.event === 'finished' && !first) return;
+      hideLecture(); renderLecturePending(); renderBar(); renderSubtitle();
+    } else if (m.type === 'error') { const first = S.lecture && !S.lecture.watch; hideLecture(); if (first) closeTutor(); }
+  });
+  const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i, 'data-job': s.job }, sectionHead(s), s.lecture ? lectureCard(s.lecture, true) : null, ...rowEls(s, s.cards.map((c, k) => renderCard(c, k, i, false))).map((r) => r.el));
   /**
    * 老师还在说(2026-09-13,一拍一就绪):第一拍就绪前板上只有占位卡(字幕行「我写给你看」,见 renderSubtitle);就绪了就把这条转成 S.sections 里的一节(live)开播,
    * 之后每次 poll 只铺新就绪的拍的卡(一行一张,没有排版)、把 lines 换成最新的(配音名填进来),播到头等着(thinking)的就接上。
@@ -1279,7 +1335,7 @@ __REEL_JS__
     return c;
   };
   const renderLive = (e) => {
-    if (!S.partial || S.partial.job !== e.job) { if (S.partial) S.partial.el.remove(); const idx = S.sections.length; S.partial = { job: e.job, idx, live: false, shown: 0, el: h('div', { class: 'sec', 'data-sec': idx, 'data-job': e.job }, sectionHead(e)) }; $('#board').append(S.partial.el); }
+    if (!S.partial || S.partial.job !== e.job) { if (S.partial) S.partial.el.remove(); const idx = S.sections.length; S.partial = { job: e.job, idx, live: false, shown: 0, el: h('div', { class: 'sec', 'data-sec': idx, 'data-job': e.job }, sectionHead(e), e.lecture ? lectureCard(e.lecture, true) : null) }; $('#board').append(S.partial.el); }
     const P = S.partial, idx = P.idx;
     if (!(e.ready > 0)) return;
     const sec = { ...e, partial: true };
@@ -1783,7 +1839,8 @@ __REEL_JS__
       if (fresh.length) dispatch({ type: 'fresh', sections: fresh, silent: Boolean(silent) });
       else renderSubtitle();
       if (PARENT) { S.msgs = mine; syncNotes(mine); }
-      if (!S.sections.length && !S.partial && !stillPending && !S.readonly && !$('#board .blank')) $('#board').append(blankBoard('想问什么?'));
+      if (S.lecture) renderLecturePending();
+      if (!S.sections.length && !S.partial && !stillPending && !S.readonly && !S.lecture && !$('#board .blank')) $('#board').append(blankBoard('想问什么?'));
       renderHeader();
       clearTimeout(S.pollTimer);
       if (stillPending) S.pollTimer = setTimeout(() => loadDay(false), 1000);
@@ -1808,7 +1865,7 @@ __REEL_JS__
     if (PARENT) mo = [S.reel ? '录像' : '', S.hist && S.home ? dateLabel(S.hist, S.home.today) : '', clock(S.threadAt)].filter(Boolean).join(' · ');
     else if (S.hist && today) mo = '以前的 · ' + dateLabel(S.hist, S.hist === today ? '' : today) + ' ' + clock(S.threadAt);
     else if (S.cont && today) { const d = dateLabel(S.cont, today); mo = '接着' + (d === '昨天' ? d : ' ' + d + ' ') + '的话题'; }
-    else if (S.newThread) mo = '新话题';
+    else if (S.newThread) mo = S.lecture ? '小课堂' : '新话题';
     else if (S.thread && S.day && S.thread !== S.day.thread) mo = '今天的话题 · ' + clock(S.threadAt);
     $('#c-mo').textContent = mo; $('#c-mo').hidden = !mo;
     $('#reel-btn').hidden = !reelCanOpen();
@@ -1819,14 +1876,14 @@ __REEL_JS__
   // 家长端的 chrome:只看(S.readonly:选择 / 填空 / 画板不开、没有「继续」)、没有输入条、没有「回到今天」(回清单走左上角)、没有「更多」。
   // 家长要试老师,到孩子端当一回孩子,用完回清单删那个话题(写进记忆、日记的一起撤)
   /** 能不能发消息:孩子端 = 不只读;家长端不发 */
-  const canSend = () => !PARENT && !S.readonly;
+  const canSend = () => !PARENT && !S.readonly && !(S.lecture && !S.lecture.watch);
   const renderBar = () => { $('#pill').hidden = !canSend(); $('#back-today').hidden = !S.readonly || PARENT; };
   $('#more-btn').hidden = PARENT;
   const resetBoard = () => { dispatch({ type: 'halt' }); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.partial = null; $('#board').replaceChildren(); };
   /** 换到某天的某个话题:今天的能接着聊;以前的只读回放(从第一句播) */
   const switchThread = (date, thread) => {
     resetBoard();
-    S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null; S.via = null; S.cont = null;
+    S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null; S.via = null; S.cont = null; S.lecture = null;
     renderBar(); renderSubtitle(); renderHeader();
     loadDay(!S.readonly);
   };
@@ -1840,7 +1897,7 @@ __REEL_JS__
     closeMenu();
     if (S.pending || S.readonly) return;
     resetBoard();
-    S.newThread = true; S.thread = null; S.threadAt = null;
+    S.newThread = true; S.thread = null; S.threadAt = null; S.lecture = null;
     S.via = null; S.cont = null;
     $('#board').append(blankBoard('换个话题吧,想问什么?'));
     setBar('idle'); renderSubtitle(); renderHeader();
@@ -1884,9 +1941,10 @@ __REEL_JS__
     if (focus) body.focus = focus;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
+    if (S.lecture && S.lecture.watch && !S.lecture.sent) body.lecture = { bundle: S.lecture.bundle, ...S.lecture.watch };
     try {
       const r = await api('POST', CONV + S.tutor.name + '/messages', body);
-      S.via = null;
+      S.via = null; if (body.lecture && S.lecture) S.lecture.sent = true;
       if (r && r.thread) S.thread = r.thread;
       S.newThread = false; { const blank = $('#board .blank'); if (blank) blank.remove(); }
       renderHeader();

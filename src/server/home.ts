@@ -9,11 +9,12 @@ import { cardLabel, describeCard, stripSecrets, type TutorButton } from '../card
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { conversationFiles, localDate, threads } from '../lib/conversation.ts';
 import { kidQuestions } from '../lib/diary.ts';
-import { arrangeHome, dropFixes, faceTutor, homeId, homeIssues, homeRefs, homeTutors, kidButtons, parseHome, threadKey, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
+import { arrangeHome, dropFixes, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, parseHome, threadKey, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
 import { kidConversation, kidThreads } from '../lib/kid-view.ts';
 import { HOME_ID_RE, PublishedHomeSchema, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
 import { listDates, readCardStates, readIndex } from './store.ts';
+import { readLecture, type Lecture } from './lecture.ts';
 
 export function homeFiles(ws: Pick<Workspace, 'dirs'>): { dir: string; draft: string; published: string; history: string } {
   const dir = ws.dirs.home;
@@ -42,7 +43,7 @@ export async function readPublished(ws: Workspace): Promise<{ home: PublishedHom
 }
 
 function tutorInfos(ws: Workspace): Record<string, HomeTutorInfo> {
-  return Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, { display: t.display, enabled: t.enabled, hidden: t.hidden }]));
+  return Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, { display: t.display, enabled: t.enabled, hidden: t.hidden, ...(t.subject ? { subject: t.subject } : {}) }]));
 }
 
 /** 这些引用里真在的话题 */
@@ -61,7 +62,9 @@ async function liveThreads(ws: Workspace, refs: readonly { tutor: string; date: 
 }
 
 async function checkContext(ws: Workspace, doc: Pick<HomeDoc, 'cards'>, now: Date): Promise<HomeCheckContext> {
-  return { tutors: tutorInfos(ws), threads: await liveThreads(ws, homeRefs(doc)), today: localDate(now) };
+  const lectures = new Map<string, string | null>();
+  for (const id of homeLectures(doc)) { const l = await readLecture(ws, id); if (l) lectures.set(id, l.subject); }
+  return { tutors: tutorInfos(ws), threads: await liveThreads(ws, homeRefs(doc)), lectures, today: localDate(now) };
 }
 
 export interface HomeCheck {
@@ -175,6 +178,9 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
   }
   const tutors = homeTutors(tutorInfos(ws));
   const alive = await liveThreads(ws, homeRefs({ cards }));
+  // 小课堂按钮:课包读得出来才出现;课名与课长补在按钮上
+  const lectures = new Map<string, Lecture | null>();
+  for (const id of homeLectures({ cards })) lectures.set(id, await readLecture(ws, id));
   const out: BoardCard[] = [];
   for (const c of arrangeHome(cards, tutors)) {
     if (c.kind !== 'tutor') {
@@ -185,8 +191,9 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     const buttons = kidButtons((c.props.buttons ?? []) as TutorButton[], {
       recent: await recentThread(ws, name, today),
       alive: (date, thread) => alive.has(threadKey(name, date, thread)),
+      lecture: (bundle) => Boolean(lectures.get(bundle)),
       keepBriefs: opts.keepBriefs,
-    });
+    }).map((b) => { const l = b.kind === 'lecture' ? lectures.get(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.clock.total } : b; });
     out.push({ kind: 'tutor', props: { tutor: name, buttons } });
   }
   return { home: id, cards: out };
@@ -196,7 +203,8 @@ export type ResolvedVia =
   | { kind: 'new'; label: string }
   | { kind: 'recent'; label: string }
   | { kind: 'start'; label: string; brief?: string }
-  | { kind: 'continue'; label: string; date: string; thread: string; brief?: string };
+  | { kind: 'continue'; label: string; date: string; thread: string; brief?: string }
+  | { kind: 'lecture'; label: string; bundle: string; brief?: string };
 
 /**
  * 孩子发来的 via → 这个按钮是什么(讲法从服务端的发布件取,不经过孩子设备)。
@@ -212,7 +220,10 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
   const card = home.cards.find((c) => c.kind === 'tutor' && c.props.tutor === tutor);
   const b = card ? ((card.props.buttons ?? []) as TutorButton[])[via.button] : undefined;
   if (!b) return null;
-  return b.kind === 'start' ? { kind: 'start', label: b.label, ...(b.brief ? { brief: b.brief } : {}) } : { kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...(b.brief ? { brief: b.brief } : {}) };
+  const brief = b.brief ? { brief: b.brief } : {};
+  if (b.kind === 'start') return { kind: 'start', label: b.label, ...brief };
+  if (b.kind === 'lecture') return { kind: 'lecture', label: b.label, bundle: b.bundle, ...brief };
+  return { kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...brief };
 }
 
 /** 某份发布过的首页(按 via.home 读历史原文)上这位老师的第几个按钮;回放取讲法用。找不到 → null */
@@ -313,7 +324,7 @@ export async function homeStats(ws: Workspace, now: Date): Promise<HomeStats> {
   return { home, error, days, clicks };
 }
 
-const BUTTON_ICON: Record<string, string> = { new: '✨', start: '▶', continue: '↻' };
+const BUTTON_ICON: Record<string, string> = { new: '✨', start: '▶', continue: '↻', lecture: '▷' };
 
 /** cotutor home check 的文字版 */
 export function formatCheck(ws: Workspace, check: HomeCheck, title: string, kid: KidHomeView): string {
@@ -327,7 +338,7 @@ export function formatCheck(ws: Workspace, check: HomeCheck, title: string, kid:
     const briefs = ((src?.props.buttons ?? []) as TutorButton[]).map((b) => b.brief);
     const buttons = (c.props.buttons as KidHomeButton[]).map((b) => {
       const brief = typeof b.id === 'number' && briefs[b.id] ? `(讲法 ${Array.from(briefs[b.id]!).length} 字)` : '';
-      const ref = b.kind === 'continue' ? ` → ${b.date} ${b.thread}` : '';
+      const ref = b.kind === 'continue' ? ` → ${b.date} ${b.thread}` : b.kind === 'lecture' ? ` → 课包 ${b.bundle}` : '';
       return `${BUTTON_ICON[b.kind]} ${b.label}${ref}${brief}`;
     });
     out.push(`  ${display(name)} ${name}${written.has(name) ? '' : '(没写,应用补)'}:${buttons.join(' | ')}`);

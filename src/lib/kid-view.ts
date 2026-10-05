@@ -100,6 +100,8 @@ export interface KidMessage {
   section?: BoardSection | null;
   /** 孩子这条带的作业照片(相对 workspace 根;页面经 /api/kid/image?p= 取);只在孩子自己的问句上 */
   photos?: string[];
+  /** 这条是看完小课堂后的第一条:哪份课包、课名(板书顶上的小课堂卡从这里画) */
+  lecture?: { bundle: string; title: string };
 }
 
 /** 孩子做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到这轮的卡上;都没有就原样 */
@@ -125,7 +127,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     if (question === null && reply === null && !pending) continue;
     const withState = cardsWithState(m, states, assets);
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
-    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}) });
+    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: { bundle: m.lecture.bundle, title: m.lecture.title } } : {}) });
   }
   return out;
 }
@@ -149,6 +151,8 @@ export interface ParentMessage extends KidMessage {
   tidy?: true;
   /** 按住说话的原声(只在家长端;孩子端条目没有这个字段) */
   voice?: ConversationMessage['voice'];
+  /** 家长端多看到看的情况:看了多久、看完没、停过几次 */
+  lectureWatch?: Omit<NonNullable<ConversationMessage['lecture']>, 'bundle' | 'title'>;
 }
 
 /** 对话索引 → 家长板书页条目:和 kidConversation 同一个循环,差集恰好是 ParentMessage 里多出的字段与「答案不剥」 */
@@ -174,6 +178,7 @@ export function parentConversation(index: { messages: readonly ConversationMessa
       ...(m.bookkeep ? { bookkeep: m.bookkeep } : {}),
       ...(m.tidy ? { tidy: true as const } : {}),
       ...(m.voice ? { voice: m.voice } : {}),
+      ...(m.lecture ? { lecture: { bundle: m.lecture.bundle, title: m.lecture.title }, lectureWatch: { watchedMs: m.lecture.watchedMs, finished: m.lecture.finished, pauses: m.lecture.pauses } } : {}),
     });
   }
   return out;

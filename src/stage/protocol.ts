@@ -18,4 +18,6 @@ export type FromStage =
   | { source: typeof STAGE_SOURCE; type: 'state'; state: unknown }
   | { source: typeof STAGE_SOURCE; type: 'submit'; state: unknown; /** 画板导出的 png(data URL),页面转存 */ image?: string }
   | { source: typeof STAGE_SOURCE; type: 'close' }
+  /** 小课堂(《小课堂设计.md》):放到结尾一次 = finished;孩子按回去 = close。都带看了多久、停过几次 */
+  | { source: typeof STAGE_SOURCE; type: 'lecture'; event: 'finished' | 'close'; watchedMs: number; finished: boolean; pauses: number }
   | { source: typeof STAGE_SOURCE; type: 'error'; message: string };

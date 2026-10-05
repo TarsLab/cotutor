@@ -84,12 +84,16 @@ export interface HomeTutorInfo {
   display: string;
   enabled: boolean;
   hidden: boolean;
+  /** cotutor.json 的 subject(对小课堂课包的科目用);没配 = 不查 */
+  subject?: string;
 }
 
 export interface HomeCheckContext {
   tutors: Record<string, HomeTutorInfo>;
   /** 查得到的话题:`<老师> <日期> <话题>` */
   threads: ReadonlySet<string>;
+  /** 小课堂按钮引用的课包:读得出来的 → 课包的科目(没写 = null);不在表里 = 不在或坏了 */
+  lectures?: ReadonlyMap<string, string | null>;
   today: string;
 }
 
@@ -106,6 +110,13 @@ export function homeTutors(tutors: Record<string, HomeTutorInfo>): string[] {
 }
 
 export const threadKey = (tutor: string, date: string, thread: string): string => `${tutor} ${date} ${thread}`;
+
+/** 草稿里小课堂按钮引用的课包 id */
+export function homeLectures(doc: Pick<HomeDoc, 'cards'>): string[] {
+  const out = new Set<string>();
+  for (const c of doc.cards) if (c.kind === 'tutor') for (const b of (c.props.buttons ?? []) as TutorButton[]) if (b.kind === 'lecture') out.add(b.bundle);
+  return [...out];
+}
 
 /** 草稿里要读盘才能查的引用:接着按钮指的话题(调用方按它读索引) */
 export function homeRefs(doc: Pick<HomeDoc, 'cards'>): { tutor: string; date: string; thread: string }[] {
@@ -135,6 +146,12 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
     if (first !== undefined) return void out.push({ level: 'fix', line, card: n, text: `${t.display}已经有一张老师卡(第 ${doc.cardLines[first]} 行),按钮合到那一张里` });
     seen.set(name, n);
     ((c.props.buttons ?? []) as TutorButton[]).forEach((b, k) => {
+      if (b.kind === 'lecture') {
+        const subject = ctx.lectures?.get(b.bundle);
+        if (ctx.lectures && subject === undefined) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:bundles/${b.bundle}/ 不在或读不出来(要有 scene.json 与带步的 manifest.json)` });
+        else if (subject && t.subject && subject !== t.subject) out.push({ level: 'note', line, card: n, button: k, text: `${t.display}的「${b.label}」:课包 ${b.bundle} 是${subject}的,${t.display}教${t.subject}` });
+        return;
+      }
       if (b.kind !== 'continue') return;
       if (b.date > ctx.today) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${b.date} 还没到` });
       else if (!ctx.threads.has(threadKey(name, b.date, b.thread))) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${b.date} 没有话题 ${b.thread}(cotutor show ${name} <job> ${b.date} 或 conversations/${name}/${b.date}.json 里找话题 id)` });
@@ -193,7 +210,9 @@ export type KidHomeButton =
   | { id: 'new'; kind: 'new'; label: string }
   | { id: 'recent'; kind: 'continue'; label: string; date: string; thread: string }
   | { id: number; kind: 'start'; label: string; brief?: string }
-  | { id: number; kind: 'continue'; label: string; date: string; thread: string; brief?: string };
+  | { id: number; kind: 'continue'; label: string; date: string; thread: string; brief?: string }
+  /** 小课堂:title / ms(课名、课长)由服务端读课包后补 */
+  | { id: number; kind: 'lecture'; label: string; bundle: string; brief?: string; title?: string; ms?: number };
 
 export const NEW_THREAD_LABEL = '新话题';
 const RECENT_MAX = 10;
@@ -202,7 +221,7 @@ const RECENT_MAX = 10;
  * 一张老师卡的按钮:新话题第一;今天有话题(recent)第二,字 = 「接着刚才的:」+ 那个话题第一句孩子的话(文件里有接着它的按钮就不加);然后是文件里的。
  * 接着按钮指的话题现在找不到(alive 说没有)就不出现。keepBriefs = 家长预览(讲法留着)。
  */
-export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { date: string; thread: string; title: string } | null; alive: (date: string, thread: string) => boolean; keepBriefs?: boolean }): KidHomeButton[] {
+export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { date: string; thread: string; title: string } | null; alive: (date: string, thread: string) => boolean; lecture?: (bundle: string) => boolean; keepBriefs?: boolean }): KidHomeButton[] {
   const out: KidHomeButton[] = [{ id: 'new', kind: 'new', label: NEW_THREAD_LABEL }];
   // 文件里已经有接着这个话题的按钮(字与讲法是家长定的),就不再加一个「接着刚才的」
   const covered = opts.recent && buttons.some((b) => b.kind === 'continue' && b.date === opts.recent!.date && b.thread === opts.recent!.thread);
@@ -214,6 +233,7 @@ export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { da
   buttons.forEach((b, k) => {
     const brief = opts.keepBriefs && b.brief ? { brief: b.brief } : {};
     if (b.kind === 'start') out.push({ id: k, kind: 'start', label: b.label, ...brief });
+    else if (b.kind === 'lecture') { if (opts.lecture?.(b.bundle) ?? true) out.push({ id: k, kind: 'lecture', label: b.label, bundle: b.bundle, ...brief }); }
     else if (opts.alive(b.date, b.thread)) out.push({ id: k, kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...brief });
   });
   return out;

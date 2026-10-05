@@ -7,6 +7,7 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client';
 import 'drawtell/player/chalk-player.css';
 import { SceneStage, type SceneStageHandle } from './scene.tsx';
+import { LectureStage, type LectureWatch } from './lecture.tsx';
 import type { CanvasStageHandle } from './canvas.tsx';
 import '@excalidraw/excalidraw/dist/prod/index.css';
 import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
@@ -32,7 +33,7 @@ function App(): JSX.Element {
     // 调试 / 截图:?bundle=<课包 URL>&autoplay=1 不用页面也能开(mock:/stage/?bundle=/api/bundles/<id>/)
     const q = new URLSearchParams(location.search);
     const bundle = q.get('bundle');
-    if (bundle) setCard({ source: STAGE_SOURCE, type: 'card', id: 'debug', kind: 'scene', props: { bundle }, state: null, bundleUrl: bundle.endsWith('/') ? bundle : `${bundle}/`, autoplay: q.get('autoplay') === '1' });
+    if (bundle) setCard({ source: STAGE_SOURCE, type: 'card', id: 'debug', kind: q.get('lecture') === '1' ? 'lecture' : 'scene', props: { bundle, title: q.get('title') ?? '' }, state: null, bundleUrl: bundle.endsWith('/') ? bundle : `${bundle}/`, autoplay: q.get('autoplay') === '1' });
     const onMsg = (e: MessageEvent<ToStage>): void => {
       const m = e.data;
       if (!m || m.source !== STAGE_SOURCE) return;
@@ -51,8 +52,11 @@ function App(): JSX.Element {
   const onError = useCallback((message: string) => post({ type: 'error', message }), []);
   const onInk = useCallback((ink: Record<string, unknown>[]) => post({ type: 'state', state: { ink } }), []);
   const onSubmit = useCallback((ink: Record<string, unknown>[], image: string) => post({ type: 'submit', state: { ink }, image }), []);
+  const onLectureDone = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'finished', ...w }), []);
+  const onLectureClose = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'close', ...w }), []);
 
   if (!card) return <div className="stage-wait" />;
+  if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} onFinished={onLectureDone} onClose={onLectureClose} onError={onError} />;
   if (card.kind === 'scene' && card.bundleUrl) return <SceneStage ref={scene} bundleUrl={card.bundleUrl} autoplay={card.autoplay} onPhase={onPhase} onError={onError} />;
   if (card.kind === 'canvas') {
     const st = (card.state ?? {}) as { ink?: Record<string, unknown>[] };

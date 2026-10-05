@@ -651,6 +651,8 @@ export interface BoardMessage {
   section?: BoardSection | null;
   /** 孩子这条带的作业照片(相对 workspace 根;R5):节头上回显缩略图 */
   photos?: string[];
+  /** 看完小课堂后的第一条(《小课堂设计.md》):这一节前面是小课堂卡 */
+  lecture?: { bundle: string; title: string };
 }
 
 export interface BoardEntry extends BoardSection {
@@ -660,6 +662,8 @@ export interface BoardEntry extends BoardSection {
   partial?: boolean;
   /** 孩子问这节时拍的照片(节头上回显) */
   photos?: string[];
+  /** 这一节答的是看完小课堂后的第一问:节前画小课堂卡 */
+  lecture?: { bundle: string; title: string };
 }
 
 /**
@@ -669,7 +673,7 @@ export interface BoardEntry extends BoardSection {
 export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEntry[] {
   const out: BoardEntry[] = [];
   for (const m of messages) {
-    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length ? { photos: m.photos } : {}) };
+    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}) };
     if (m.pending) {
       if (m.section && m.section.partial && m.section.cards.length) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;

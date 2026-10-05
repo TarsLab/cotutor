@@ -1,0 +1,618 @@
+{
+  "schema": "chalk-scene",
+  "version": 1,
+  "id": "2026-09-18-po13-jian-8",
+  "title": "13 − 8 破十法",
+  "problem": "13 − 8,用破十法计算——把 13 看成 10 和 3,先算 10 减 8,剩下的 2 再加上原来的 3。",
+  "model": "破十",
+  "template": "paper-strict",
+  "subject": "数学",
+  "skeletons": [
+    {
+      "type": "text",
+      "id": "q",
+      "x": 450,
+      "y": 22,
+      "animateDuration": 900,
+      "text": "13 − 8 =",
+      "fontSize": 28,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "q-l",
+      "x": 586,
+      "y": 22,
+      "animateDuration": 200,
+      "text": "(",
+      "fontSize": 28,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "q-r",
+      "x": 640,
+      "y": 22,
+      "animateDuration": 200,
+      "text": ")",
+      "fontSize": 28,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "rectangle",
+      "id": "box",
+      "x": 40,
+      "y": 50,
+      "animateDuration": 900,
+      "width": 232,
+      "height": 140,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "b-1",
+      "x": 60,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "b-2",
+      "x": 80,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "b-3",
+      "x": 100,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "b-4",
+      "x": 120,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "b-5",
+      "x": 140,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "b-6",
+      "x": 160,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "b-7",
+      "x": 180,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "b-8",
+      "x": 200,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "b-9",
+      "x": 226,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "b-10",
+      "x": 246,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "lab10",
+      "x": 142,
+      "y": 14,
+      "animateDuration": 450,
+      "text": "10",
+      "fontSize": 24,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "s-1",
+      "x": 312,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "s-2",
+      "x": 334,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "s-3",
+      "x": 356,
+      "y": 84,
+      "animateDuration": 220,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          72
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "lab3",
+      "x": 327,
+      "y": 14,
+      "animateDuration": 450,
+      "text": "3",
+      "fontSize": 24,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "dec-l",
+      "x": 466,
+      "y": 60,
+      "animateDuration": 700,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -18,
+          28
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "dec-r",
+      "x": 466,
+      "y": 60,
+      "animateDuration": 700,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          18,
+          28
+        ]
+      ],
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "dec-10",
+      "x": 430,
+      "y": 92,
+      "animateDuration": 700,
+      "text": "10",
+      "fontSize": 24,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "dec-3",
+      "x": 480,
+      "y": 92,
+      "animateDuration": 700,
+      "text": "3",
+      "fontSize": 24,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "line",
+      "id": "x-1",
+      "x": 55,
+      "y": 130,
+      "animateDuration": 520,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          -20
+        ]
+      ],
+      "strokeColor": "#e8590c"
+    },
+    {
+      "type": "line",
+      "id": "x-2",
+      "x": 75,
+      "y": 130,
+      "animateDuration": 520,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          -20
+        ]
+      ],
+      "strokeColor": "#e8590c"
+    },
+    {
+      "type": "line",
+      "id": "x-3",
+      "x": 95,
+      "y": 130,
+      "animateDuration": 520,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          -20
+        ]
+      ],
+      "strokeColor": "#e8590c"
+    },
+    {
+      "type": "line",
+      "id": "x-4",
+      "x": 115,
+      "y": 130,
+      "animateDuration": 520,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          -20
+        ]
+      ],
+      "strokeColor": "#e8590c"
+    },
+    {
+      "type": "line",
+      "id": "x-5",
+      "x": 135,
+      "y": 130,
+      "animateDuration": 520,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          -20
+        ]
+      ],
+      "strokeColor": "#e8590c"
+    },
+    {
+      "type": "line",
+      "id": "x-6",
+      "x": 155,
+      "y": 130,
+      "animateDuration": 520,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          -20
+        ]
+      ],
+      "strokeColor": "#e8590c"
+    },
+    {
+      "type": "line",
+      "id": "x-7",
+      "x": 175,
+      "y": 130,
+      "animateDuration": 520,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          -20
+        ]
+      ],
+      "strokeColor": "#e8590c"
+    },
+    {
+      "type": "line",
+      "id": "x-8",
+      "x": 195,
+      "y": 130,
+      "animateDuration": 520,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          -20
+        ]
+      ],
+      "strokeColor": "#e8590c"
+    },
+    {
+      "type": "ellipse",
+      "id": "ring2",
+      "x": 212,
+      "y": 58,
+      "animateDuration": 800,
+      "width": 48,
+      "height": 124,
+      "strokeColor": "#e03131"
+    },
+    {
+      "type": "text",
+      "id": "lab2",
+      "x": 229,
+      "y": 198,
+      "animateDuration": 450,
+      "text": "2",
+      "fontSize": 24,
+      "strokeColor": "#e03131"
+    },
+    {
+      "type": "text",
+      "id": "eq1",
+      "x": 450,
+      "y": 150,
+      "animateDuration": 450,
+      "text": "10 − 8 =",
+      "fontSize": 28,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "eq1-a",
+      "x": 586,
+      "y": 150,
+      "animateDuration": 450,
+      "text": "2",
+      "fontSize": 28,
+      "strokeColor": "#e03131"
+    },
+    {
+      "type": "ellipse",
+      "id": "ring3",
+      "x": 292,
+      "y": 50,
+      "animateDuration": 800,
+      "width": 84,
+      "height": 140,
+      "strokeColor": "#e03131"
+    },
+    {
+      "type": "arrow",
+      "id": "join",
+      "x": 250,
+      "y": 212,
+      "animateDuration": 700,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          36,
+          6
+        ],
+        [
+          74,
+          -12
+        ]
+      ],
+      "strokeColor": "#e03131"
+    },
+    {
+      "type": "text",
+      "id": "eq2",
+      "x": 450,
+      "y": 206,
+      "animateDuration": 450,
+      "text": "2 + 3 =",
+      "fontSize": 28,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "eq2-a",
+      "x": 586,
+      "y": 206,
+      "animateDuration": 450,
+      "text": "5",
+      "fontSize": 28,
+      "strokeColor": "#e03131"
+    },
+    {
+      "type": "text",
+      "id": "ans",
+      "x": 612,
+      "y": 22,
+      "animateDuration": 700,
+      "text": "5",
+      "fontSize": 28,
+      "strokeColor": "#e03131"
+    },
+    {
+      "type": "ellipse",
+      "id": "ring-ans",
+      "x": 574,
+      "y": 10,
+      "animateDuration": 1000,
+      "width": 94,
+      "height": 58,
+      "strokeColor": "#e03131"
+    }
+  ]
+}

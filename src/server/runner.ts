@@ -15,6 +15,7 @@
  */
 import { spawn } from 'node:child_process';
 import { materialDocs, materialsFor } from './material.ts';
+import { lecturePack, readLecture } from './lecture.ts';
 import { closeSync, createWriteStream, existsSync, openSync, writeSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative } from 'node:path';
@@ -78,6 +79,8 @@ export interface SendInput {
   photos?: string[];
   /** 这条是回放(server/replay.ts):原轮的 job,记进消息;调用方已经把 Runner 指到 evals/ */
   replayOf?: string;
+  /** 孩子看完小课堂后的第一条(《小课堂设计.md》§六):上下文包带 lecture:(课的每句与看的情况),消息记 lecture */
+  lecture?: { bundle: string; watchedMs: number; finished: boolean; pauses: number };
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2),记进消息 */
   via?: MessageVia;
   /** 按钮的字与家长备好的讲法(服务端从发布件查的),进上下文包 home: 段 */
@@ -426,6 +429,10 @@ export class Runner {
     if (docs.length) pack.docs = docs;
     if (photos.length) { pack.photos = photos; pack.photoFiles = photos.map((p) => join(ws.root, p)); }
     if (input.home) pack.home = input.home;
+    // 小课堂:课包现读;读不出来(删了、坏了)就不带,这条照发,家长端提醒
+    const lecture = input.lecture ? await readLecture(ws, input.lecture.bundle) : null;
+    if (input.lecture && lecture) pack.lecture = lecturePack(lecture, input.lecture);
+    const lectureWarn = input.lecture && !lecture ? [`小课堂:bundles/${input.lecture.bundle}/ 读不出来,老师没拿到课的内容`] : [];
     const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
     if (continued) pack.continue = continued;
     const prompt = buildContextPack(pack, text, policy.contextPack);
@@ -437,7 +444,7 @@ export class Runner {
       const file = conversationFiles(ws.dirs.conversations, tutor, date).voice(job, input.voice.ext);
       if (await mkdir(join(ws.dirs.conversations, tutor), { recursive: true }).then(() => writeFile(file, input.voice!.data)).then(() => true, () => false)) voice = { audio: basename(file), seconds: Math.round(input.voice.seconds * 10) / 10 };
     }
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length ? { warnings: noteWarnings } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { ...input.lecture, title: lecture?.title ?? input.lecture.bundle } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length || lectureWarn.length ? { warnings: [...noteWarnings, ...lectureWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 

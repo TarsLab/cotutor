@@ -13,3 +13,8 @@
 .c-tutor.off .av { filter:grayscale(1); opacity:.4; box-shadow:none; }
 .c-tutor.off .nm, .c-tutor.off .bt { color:var(--dim); }
 .c-tutor.off .bt .bi { color:var(--dim); }
+/* 小课堂按钮(《小课堂设计.md》):浅橙底、主色边,两行:「小课堂」+ 课名,下面课长 */
+.c-tutor .bt-lecture { background:#fff3e8; border:2px solid var(--accent); border-radius:18px; }
+.c-tutor .bt-lecture .lb { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.c-tutor .bt-lecture .lb small { font-size:12px; font-weight:700; color:#c95a22; letter-spacing:1px; }
+.c-tutor .bt-lecture .lb small.ln { font-size:13px; font-weight:400; color:var(--dim); letter-spacing:0; }

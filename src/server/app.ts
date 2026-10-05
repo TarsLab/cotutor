@@ -33,6 +33,7 @@ import { BusyError, Runner } from './runner.ts';
 import { parseRange } from '../lib/range.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets, type Heard, type RecordProps } from '../cards/index.ts';
+import { BUNDLE_ID_RE } from '../cards/scene.ts';
 import { kouboYuanOfDay, readHeard } from './koubo.ts';
 import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset } from './stage.ts';
@@ -484,6 +485,15 @@ function voiceOf(v: unknown): { data: Buffer; ext: string; seconds: number } | u
   return { data: Buffer.from(m[2], 'base64'), ext, seconds: v.seconds };
 }
 
+/** 孩子看完小课堂带来的(《小课堂设计.md》§七):{bundle, watchedMs, finished, pauses};没带 undefined,形状不对 null(路由回 400) */
+function lectureOf(v: unknown): { bundle: string; watchedMs: number; finished: boolean; pauses: number } | null | undefined {
+  if (v === undefined) return undefined;
+  if (!isObj(v) || typeof v.bundle !== 'string' || !BUNDLE_ID_RE.test(v.bundle) || typeof v.watchedMs !== 'number' || !(v.watchedMs >= 0) || v.watchedMs > 6 * 3600_000 || typeof v.finished !== 'boolean') return null;
+  const pauses = v.pauses === undefined ? 0 : v.pauses;
+  if (typeof pauses !== 'number' || !Number.isInteger(pauses) || pauses < 0 || pauses > 999) return null;
+  return { bundle: v.bundle, watchedMs: Math.round(v.watchedMs), finished: v.finished, pauses };
+}
+
 /** 页面拉今天时的预热参数:?thread= 是页面选着的话题;同一话题 30 秒看一次 */
 function warmOpts(url: URL): { throttleMs: number; thread?: string } {
   const thread = url.searchParams.get('thread');
@@ -648,6 +658,15 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         let pick = thread;
         let home: { button: string; brief?: string } | undefined;
         let continues: { date: string; thread: string } | undefined;
+        // 小课堂(《小课堂设计.md》):看完才能开口——这一条要带 lecture(哪份课包、看完了、看了多久、停过几次),字是孩子说的;新开话题
+        const lecture = lectureOf(body.lecture);
+        if (lecture === null || (body.lecture !== undefined && button?.kind !== 'lecture')) return { status: 400, json: { error: 'bad_request' } };
+        if (button?.kind === 'lecture') {
+          if (!lecture || lecture.bundle !== button.bundle || !lecture.finished) return { status: 400, json: { error: 'bad_request', message: '小课堂要看完才能问' } };
+          home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
+          newThread = true;
+          pick = undefined;
+        }
         if (button && (button.kind === 'start' || button.kind === 'continue')) {
           text = button.label;
           home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
@@ -661,7 +680,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           }
         }
         if (!text.trim() && !action && !photos?.length) return { status: 400, json: { error: 'bad_request' } };
-        const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}) });
+        const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(lecture ? { lecture } : {}) });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };

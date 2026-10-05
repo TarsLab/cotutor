@@ -44,6 +44,15 @@ export function renderContextPack(pack: ContextPack): string {
     out.push('  home:', `    button: ${yamlScalar(p.home.button)}`);
     if (p.home.brief) out.push(`    brief: ${yamlScalar(p.home.brief)}`);
   }
+  if (p.lecture) {
+    const l = p.lecture;
+    out.push('  lecture:', `    title: ${yamlScalar(l.title)}`, `    source: ${yamlScalar(l.source)}`, `    length: ${yamlScalar(l.length)}`);
+    if (l.lines.length) {
+      out.push('    lines:');
+      for (const x of l.lines) out.push(`      - ${yamlScalar(x)}`);
+    }
+    out.push(`    watched: ${yamlScalar(l.watched)}`);
+  }
   if (p.continue) {
     const c = p.continue;
     out.push('  continue:', `    from: ${yamlScalar(c.from)}`);

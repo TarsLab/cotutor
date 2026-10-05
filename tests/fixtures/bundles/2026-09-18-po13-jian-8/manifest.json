@@ -1,0 +1,101 @@
+{
+  "schema": "lesson-manifest",
+  "version": 2,
+  "steps": [
+    {
+      "step": 1,
+      "elementIds": [
+        "q",
+        "q-l",
+        "q-r",
+        "box",
+        "b-1",
+        "b-2",
+        "b-3",
+        "b-4",
+        "b-5",
+        "b-6",
+        "b-7",
+        "b-8",
+        "b-9",
+        "b-10",
+        "lab10",
+        "s-1",
+        "s-2",
+        "s-3",
+        "lab3"
+      ],
+      "line": "先看 13 减 8。13 根小棒,就是一捆 10 根,再加 3 根散的。",
+      "pauseAfter": true,
+      "audioSrc": "audio/step-1.mp3",
+      "audioDurationMs": 9336
+    },
+    {
+      "step": 2,
+      "elementIds": [
+        "dec-l",
+        "dec-r",
+        "dec-10",
+        "dec-3"
+      ],
+      "line": "要拿走 8 根,散的只有 3 根,不够拿!把 13 分成 10 和 3。",
+      "pauseAfter": true,
+      "audioSrc": "audio/step-2.mp3",
+      "audioDurationMs": 10608
+    },
+    {
+      "step": 3,
+      "elementIds": [
+        "x-1",
+        "x-2",
+        "x-3",
+        "x-4",
+        "x-5",
+        "x-6",
+        "x-7",
+        "x-8"
+      ],
+      "line": "那就拆开这一捆,拿走 8 根:1、2、3、4、5、6、7、8。",
+      "pauseAfter": true,
+      "audioSrc": "audio/step-3.mp3",
+      "audioDurationMs": 10608
+    },
+    {
+      "step": 4,
+      "elementIds": [
+        "ring2",
+        "lab2",
+        "eq1",
+        "eq1-a"
+      ],
+      "line": "这一捆还剩 2 根。10 减 8 等于 2。",
+      "pauseAfter": true,
+      "audioSrc": "audio/step-4.mp3",
+      "audioDurationMs": 5328
+    },
+    {
+      "step": 5,
+      "elementIds": [
+        "ring3",
+        "join",
+        "eq2",
+        "eq2-a"
+      ],
+      "line": "剩下的 2 根,和原来的 3 根合起来:2 加 3 等于 5。",
+      "pauseAfter": true,
+      "audioSrc": "audio/step-5.mp3",
+      "audioDurationMs": 6624
+    },
+    {
+      "step": 6,
+      "elementIds": [
+        "ans",
+        "ring-ans"
+      ],
+      "line": "所以,13 减 8 等于 5。",
+      "pauseAfter": true,
+      "audioSrc": "audio/step-6.mp3",
+      "audioDurationMs": 4128
+    }
+  ]
+}

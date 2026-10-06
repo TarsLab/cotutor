@@ -38,10 +38,14 @@ const HELP = `drawtell ${VERSION} — draw & tell:把题目变成逐笔画出的
       GET /api/config 给 {title}(工作区 drawtell.json 的 title,孩子端页面读它)。
       需要先构建播放页:仓库根 pnpm build。
   drawtell snap <scene.ts|bundle-id> [--step <n>] [--no-cursor] [--out <dir>] [--bundles <dir>] [--json]
-      阶梯层 4:keyframe 截图,给视觉检验用。输入 .ts 会先 check + build。
+      阶梯层 4:keyframe 截图,给视觉检验用。输入 .ts 会先 check + build;画面没烤过或变了,顺手 bake。
       产物 <out>/step-<n>.png(0 = 空板配题面)+ index.json(图↔讲稿对照 + 每步新增元素清单 + 画板 viewBox)。
       --step n 只重截一步,index.json 只替换该步;--no-cursor 不画笔尖(检验用 keyframe 建议加)。
       缺省输出 <paths.snaps>/<scene-id>/(drawtell.json 的 paths,缺省工作区 snaps/);需要 playwright 与已构建的播放页(pnpm build)。
+  drawtell bake <scene.ts|bundle-id> [--bundles <dir>] [--json]
+      课包画面烤成 bundles/<id>/bake.json:excalidraw 在浏览器里静态导出一次,存每条路径、长度、笔尖轨迹与内嵌字体;
+      播放(drawtell/render)与服务端出图(drawtell/core renderFrameSvg)不再用 excalidraw 与 SMIL。输入 .ts 会先 check + build。
+      画面(skeletons、background)变了要重烤;配音、时长变了不用。需要 playwright 与已构建的播放页(pnpm build)。
   drawtell dub <scene.ts|bundle-id> [--voice <v>] [--instruction <s>] [--model <m>] [--dry-run] [--force] [--voxtell <bin>] [--bundles <dir>] [--json]
       课包配音:manifest 各步讲稿 → voxtell batch(用户级缓存,幂等)→ bundles/<id>/audio/step-<n>.mp3
       + audio/index.json → 回填 manifest.audioSrc。--voice 必填(或工作区根 drawtell.json 的 dub.voice);
@@ -143,6 +147,9 @@ export async function main(argv: string[]): Promise<void> {
       case 'snap':
         await runSnap(args.slice(1), json, workspace);
         return;
+      case 'bake':
+        await runBake(args.slice(1), json, workspace);
+        return;
       case 'dub':
         await runDub(args.slice(1), json, workspace);
         return;
@@ -183,6 +190,7 @@ function jsonHelp(): string {
         build: { usage: 'drawtell build <scene.ts|scene-dir> [--out <dir>] [--json]', desc: '场景 → 课包目录,先 check' },
         serve: { usage: 'drawtell serve [--port <n>] [--bundles <dir>] [--json]', desc: '播放页 + 课包分发' },
         snap: { usage: 'drawtell snap <scene.ts|bundle-id> [--step <n>] [--no-cursor] [--out <dir>] [--bundles <dir>] [--json]', desc: 'keyframe 截图 + index.json' },
+        bake: { usage: 'drawtell bake <scene.ts|bundle-id> [--bundles <dir>] [--json]', desc: '课包画面烤成 bake.json(运行时不用 excalidraw)' },
         dub: { usage: 'drawtell dub <scene.ts|bundle-id> [--voice <v>] [--instruction <s>] [--dry-run] [--force] [--json]', desc: '课包配音(voxtell 粘合)' },
         note: { usage: 'drawtell note <scene.ts|bundle-id> [--json]', desc: '课包档案段 → stdout(标题+题面+终帧 wikilink+每步讲稿),终帧拷到 <paths.attachments>/<id>-final.png;落进日记由调用方决定' },
         ls: { usage: 'drawtell ls [--json]', desc: '工作区现状:源 / 课包 / 音频 / 截图 / 验收' },
@@ -320,6 +328,37 @@ async function requireWebBuild(): Promise<void> {
   }
 }
 
+async function runBake(rest: string[], json: boolean, workspace?: string): Promise<void> {
+  const usage = 'drawtell bake <scene.ts|bundle-id> [--bundles <dir>] [--json]';
+  const { file, flags } = parseCmdArgs(rest, usage, ['--bundles'], true, []);
+  const ws = await loadWorkspace(workspace);
+  const bundlesDir = flags.get('--bundles') ?? ws.paths.bundles;
+  await requireWebBuild();
+  let id = file;
+  let findings: Finding[] = [];
+  if (file.endsWith('.ts')) {
+    const { raw, exportName } = await loadScene(file);
+    const r = checkScene(raw);
+    findings = r.findings;
+    if (!r.scene || findings.some((f) => f.level === 'error')) {
+      report(json, { command: 'bake', file, exportName, ok: false, findings });
+      process.exitCode = 1;
+      return;
+    }
+    await buildBundle(r.scene, join(bundlesDir, r.scene.id), dirname(resolve(file)));
+    id = r.scene.id;
+  } else {
+    await readBundle(bundlesDir, file);
+  }
+  const { bakeBundles } = await import('./bake.ts');
+  const [r] = await bakeBundles(bundlesDir, [id]);
+  if (json) console.log(JSON.stringify(redactDeep({ command: 'bake', file, ok: true, scene: id, bake: r.file, elements: r.elements, bytes: r.bytes, findings, ...workspaceReport(ws) }), null, 2));
+  else {
+    console.log(`✓ ${file} — ${r.elements} 个元素 → ${r.file}(${Math.round(r.bytes / 1024)} KB)`);
+    for (const f of findings) console.log(`  [${f.level}] ${f.rule}: ${f.message}`);
+  }
+}
+
 async function runSnap(rest: string[], json: boolean, workspace?: string): Promise<void> {
   const usage = 'drawtell snap <scene.ts|bundle-id> [--step <n>] [--no-cursor] [--out <dir>] [--bundles <dir>] [--json]';
   const { file, flags } = parseCmdArgs(rest, usage, ['--step', '--out', '--bundles'], true, ['--no-cursor']);
@@ -355,13 +394,16 @@ async function runSnap(rest: string[], json: boolean, workspace?: string): Promi
   }
 
   const outDir = flags.get('--out') ?? join(ws.paths.snaps, scene.id);
+  // 截图要开浏览器,顺手把画面烤了(bake.json 没有或画面变了):做课包的流程跑到 snap,播放就不用 excalidraw 了
+  const { bakeBundles, bakeIsFresh } = await import('./bake.ts');
+  const baked = (await bakeIsFresh(join(bundlesDir, scene.id))) ? null : (await bakeBundles(bundlesDir, [scene.id]))[0];
   const { snapScene } = await import('./snap.ts');
   const cursor = !flags.has('--no-cursor');
   const shots = await snapScene({ scene, bundlesDir, outDir, step, cursor });
   if (json) {
-    console.log(JSON.stringify(redactDeep({ command: 'snap', file, ok: true, scene: scene.id, outDir, cursor, findings, shots, ...workspaceReport(ws) }), null, 2));
+    console.log(JSON.stringify(redactDeep({ command: 'snap', file, ok: true, scene: scene.id, outDir, cursor, findings, shots, ...(baked ? { bake: baked.file } : {}), ...workspaceReport(ws) }), null, 2));
   } else {
-    console.log(`✓ ${file} — ${shots.length} 张 keyframe → ${outDir}/(${shots.map((s) => `step-${s.step}.png`).join(' ')} + index.json${step != null ? ',已合并' : ''}${cursor ? '' : ',无笔尖'})`);
+    console.log(`✓ ${file} — ${shots.length} 张 keyframe → ${outDir}/(${shots.map((s) => `step-${s.step}.png`).join(' ')} + index.json${step != null ? ',已合并' : ''}${cursor ? '' : ',无笔尖'})${baked ? `;画面烤好了 → ${baked.file}` : ''}`);
     for (const f of findings) console.log(`  [${f.level}] ${f.rule}: ${f.message}`);
   }
 }

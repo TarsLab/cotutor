@@ -1,6 +1,6 @@
 ---
 name: drawtell-cli
-description: drawtell 工具链用法领域:工作区解析、CLI 调用方式、反馈阶梯(typecheck / check / snap)与 index.json 契约、配音 dub、预览 serve。跑工具、自检截图、配音、起预览时读。不是:机制实现(在 drawtell 仓 src/cli)、这道题怎么讲(→ drawtell-teaching)、场景怎么写(→ drawtell-scene)。
+description: drawtell 工具链用法领域:工作区解析、CLI 调用方式、反馈阶梯(typecheck / check / snap)与 index.json 契约、烤画面 bake、配音 dub、预览 serve。跑工具、自检截图、配音、起预览时读。不是:机制实现(在 drawtell 仓 src/cli)、这道题怎么讲(→ drawtell-teaching)、场景怎么写(→ drawtell-scene)。
 ---
 
 # 工具用法
@@ -36,8 +36,8 @@ description: drawtell 工具链用法领域:工作区解析、CLI 调用方式�
 1. 类型层:`drawtell check` 自带(内嵌 tsc,把场景里的 `import type … from 'drawtell'` 映射到包内类型;工作区不需要
    tsconfig、不需要装 typescript),类型错误与结构错误一起出在 findings 里(rule `types`,带 文件:行:列 TS 号);
    `--no-types` 可跳过。仓库内另有 `pnpm typecheck` 管全仓
-2. `drawtell check scenes/<id>.ts --json`——修到 0 错误;警告逐条判断。它的文字估宽
-   (CJK ≈ 1em、其余 ≈ 0.55em、行高 1.3)与真实渲染很接近,排版按同一把尺子算
+2. `drawtell check scenes/<id>.ts --json`——修到 0 错误;警告逐条判断。文字宽按字宽表算
+   (真播放器量的:汉字 1em,数字、字母各有各的宽;行高 1.25),和真实渲染差不到 2%,排版按同一把尺子算
 3. `drawtell snap scenes/<id>.ts --no-cursor` → `snaps/<id>/step-*.png` + `index.json`。
    `--no-cursor` 不画笔尖,帧里只剩笔迹;不加也行,但要知道笔尖停在本步末笔处,不算画面元素。
    index.json(v2)的 shots[] 把每张图和该步讲稿配好对,并列出该步新增元素
@@ -46,6 +46,15 @@ description: drawtell 工具链用法领域:工作区解析、CLI 调用方式�
    (坐标 − viewBox 原点) × 图宽 / viewBox 宽)。
    修单步后 `--step <n>` 只重截那一步(index.json 合并写入);若改动影响了整体包围盒
    (播放器按整场等比缩放),其他帧比例会陈旧,最后再全量截一次
+
+## 烤画面 bake
+
+`drawtell bake <id>`(或 `scenes/<id>.ts`,先 check + build)→ `bundles/<id>/bake.json`:画面在浏览器里静态导出一次,
+存每一笔的路径与长度、笔尖轨迹、内嵌字体。孩子端照它现画,不再在孩子的设备上跑 excalidraw。
+
+- **snap 会顺手烤**:没烤过或画面改过才烤。走完反馈阶梯,课包就是烤好的。
+- **只改了讲稿、配音,不用重烤**;改了画面(元素、背景图)要重烤,不重烤应用会当它没烤过。
+- 要 playwright,同 snap。
 
 ## 配音 dub
 

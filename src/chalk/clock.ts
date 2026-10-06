@@ -91,10 +91,15 @@ export interface LessonFrame {
 
 export function frameAt(clock: LessonClock, ms: number): LessonFrame {
   const at = clockAt(clock, ms);
-  const elements: { id: string; progress: number }[] = [];
+  return { index: at.index, line: clock.segments[at.index]?.line ?? '', svgMs: at.svgMs, elements: elementsAtSvgTime(clock, at.svgMs) };
+}
+
+/** SVG 时间线上的某一刻(毫秒,含 START_MS)画面上有哪些元素、各画了多少:存的是 SVG 时刻的(圈的卡的缩略图)直接用它 */
+export function elementsAtSvgTime(clock: Pick<LessonClock, 'elements'>, svgMs: number): { id: string; progress: number }[] {
+  const out: { id: string; progress: number }[] = [];
   for (const [id, w] of clock.elements) {
-    if (w.start >= at.svgMs) continue;
-    elements.push({ id, progress: w.end <= w.start ? 1 : Math.min(1, (at.svgMs - w.start) / (w.end - w.start)) });
+    if (w.start >= svgMs) continue;
+    out.push({ id, progress: w.end <= w.start ? 1 : Math.min(1, (svgMs - w.start) / (w.end - w.start)) });
   }
-  return { index: at.index, line: clock.segments[at.index]?.line ?? '', svgMs: at.svgMs, elements };
+  return out;
 }

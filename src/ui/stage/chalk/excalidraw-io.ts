@@ -99,21 +99,23 @@ function withEraserDefaults(skeletons: readonly ChalkSkeleton[]): readonly Chalk
   return skeletons.map((el) => (isEraser(el) ? { strokeColor: PAPER_COLOR, roughness: 0, ...el } : el));
 }
 
-/** skeleton → 元素 → 静态 SVG → 原地打上 SMIL 逐笔动画(含笔尖跟随),返回时暂停在 0 */
-export async function buildAnimatedSvg(
-  skeletons: readonly ChalkSkeleton[],
-  options: BuildOptions = {},
-): Promise<AnimatedScene> {
-  // regenerateIds: false —— id 是与 manifest 的对齐键(时长指令已在上面注入)
+/** 静态导出的结果:SVG(没有动画)、量过字宽的元素(和 SVG 顶层的 <g> 一一对应)、场景坐标 → SVG 坐标的平移 */
+export interface StaticScene {
+  svg: SVGSVGElement;
+  elements: readonly { id: string; type: string; width: number; height: number; customData?: unknown }[];
+  offset: [number, number];
+}
+
+/** skeleton → 元素 → 静态 SVG(字宽在浏览器里量过、回写后重导)。withDurations = 把时长注进 id(只有 excalidraw-animate 要) */
+export async function exportStaticSvg(skeletons: readonly ChalkSkeleton[], options: { exportPadding?: number; withDurations?: boolean } = {}): Promise<StaticScene> {
+  const prepared = withStableSeeds(withEraserDefaults(skeletons));
+  // regenerateIds: false —— id 是与 manifest 的对齐键
   const elements = convertToExcalidrawElements(
-    withDurationIds(withStableSeeds(withEraserDefaults(skeletons))) as unknown as Parameters<typeof convertToExcalidrawElements>[0],
+    (options.withDurations ? withDurationIds(prepared) : prepared) as unknown as Parameters<typeof convertToExcalidrawElements>[0],
     { regenerateIds: false },
   );
-  const exportOpts = {
-    appState: { exportBackground: false, exportWithDarkMode: false },
-    files: null,
-    exportPadding: options.exportPadding ?? 24,
-  };
+  const exportPadding = options.exportPadding ?? 24;
+  const exportOpts = { appState: { exportBackground: false, exportWithDarkMode: false }, files: null, exportPadding };
   let svg = await exportToSvg({ ...exportOpts, elements });
   const corrected = await correctTextWidths(svg, elements);
   // 量宽回写后若有文本变宽,用校正后的元素重导一次:viewBox 才会把真实字宽算进去,
@@ -121,6 +123,17 @@ export async function buildAnimatedSvg(
   if (corrected.some((el, i) => el !== elements[i])) {
     svg = await exportToSvg({ ...exportOpts, elements: corrected as unknown as typeof elements });
   }
+  const [minX, minY] = getCommonBounds(corrected as unknown as Parameters<typeof getCommonBounds>[0]);
+  return { svg, elements: corrected as unknown as StaticScene['elements'], offset: [exportPadding - minX, exportPadding - minY] };
+}
+
+/** skeleton → 元素 → 静态 SVG → 原地打上 SMIL 逐笔动画(含笔尖跟随),返回时暂停在 0 */
+export async function buildAnimatedSvg(
+  skeletons: readonly ChalkSkeleton[],
+  options: BuildOptions = {},
+): Promise<AnimatedScene> {
+  const exportOpts = { exportPadding: options.exportPadding ?? 24 };
+  const { svg, elements: corrected, offset } = await exportStaticSvg(skeletons, { ...exportOpts, withDurations: true });
   const { finishedMs } = animateSvg(
     svg,
     corrected as unknown as Parameters<typeof animateSvg>[1],
@@ -146,9 +159,7 @@ export async function buildAnimatedSvg(
     // 导出时元素整体平移了 (padding − minX, padding − minY);图片按同一偏移垫到最底层,
     // 放在 animateSvg 之后——它按子节点与元素一一对齐,先插会错位
     const { href, width, height } = options.background;
-    const [minX, minY] = getCommonBounds(corrected as unknown as Parameters<typeof getCommonBounds>[0]);
-    const ox = exportOpts.exportPadding - minX;
-    const oy = exportOpts.exportPadding - minY;
+    const [ox, oy] = offset;
     const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
     img.setAttribute('href', href);
     img.setAttribute('x', String(ox));

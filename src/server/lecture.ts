@@ -5,9 +5,9 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BUNDLE_ID_RE } from '../cards/scene.ts';
-import { clockLabel, describeMark, lectureAt, lectureClock, lectureLines, type LectureBlock, type LectureClock, type LectureMark, type LectureSkeleton, type LectureStep } from '../lib/lecture.ts';
+import { clockLabel, describeMark, lectureAt, lectureClock, lectureLines, lectureRange, type LectureBlock, type LectureClock, type LectureMark, type LectureSkeleton, type LectureStep } from '../lib/lecture.ts';
 import type { ContextPack } from '../schema/index.ts';
-import type { Workspace } from '../cli/workspace.ts';
+import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
 
 export interface Lecture {
   id: string;
@@ -20,7 +20,7 @@ export interface Lecture {
   blocks: LectureBlock[];
 }
 
-export async function readLecture(ws: Pick<Workspace, 'dirs'>, id: string): Promise<Lecture | null> {
+export async function readLecture(ws: { dirs: { bundles: string } }, id: string): Promise<Lecture | null> {
   if (!BUNDLE_ID_RE.test(id)) return null;
   const dir = join(ws.dirs.bundles, id);
   try {
@@ -59,4 +59,23 @@ export function lecturePack(l: Lecture, w: LectureWatch, marks: readonly StoredM
   const seen = w.finished ? (w.again ? '又看完了一遍' : '看完了') : `${w.again ? '又看了一遍,' : ''}看到 ${clockLabel(w.watchedMs)}`;
   const watched = `${seen}${w.pauses ? `,停过 ${w.pauses} 次` : ''}${marks.length ? `,圈了 ${marks.length} 处` : ''}`;
   return { title: l.title, source: `bundle ${l.id}`, length: clockLabel(l.clock.total), lines: lectureLines(l.clock), watched, marks: marks.flatMap((m) => (m.text ? [m.text] : [])) };
+}
+
+/**
+ * 小课堂卡(cards/lecture)下发时补的快照:课名、真放的起止(对齐段界)、末帧停在 SVG 的哪一刻、能不能放。
+ * 课包每次现读(家长重做了课包,下一次下发就跟上);读不出来或起止对不上 → ready: false,讲稿 [[play]] 不停。同 enrichMaterials。
+ */
+export async function enrichLectures(ws: { dirs: { bundles: string } }, section: BoardSection): Promise<BoardSection> {
+  if (!section.cards.some((c) => c.kind === 'lecture')) return section;
+  const seen = new Map<string, Promise<Lecture | null>>();
+  const cards: BoardCard[] = [];
+  for (const c of section.cards) {
+    const p = c.props as { bundle?: unknown; from?: unknown; to?: unknown };
+    if (c.kind !== 'lecture' || typeof p.bundle !== 'string') { cards.push(c); continue; }
+    if (!seen.has(p.bundle)) seen.set(p.bundle, readLecture(ws, p.bundle));
+    const l = await seen.get(p.bundle)!;
+    const r = l ? lectureRange(l.clock, typeof p.from === 'number' ? p.from : undefined, typeof p.to === 'number' ? p.to : undefined) : null;
+    cards.push({ ...c, props: { ...c.props, ...(l ? { title: l.title } : {}), ...(l && r ? { start: r.start, end: r.end, still: Math.round(lectureAt(l.clock, Math.max(r.start, r.end - 1)).svgMs * 10) / 10 } : {}), ready: Boolean(l && r) } });
+  }
+  return { ...section, cards };
 }

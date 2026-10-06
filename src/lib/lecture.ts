@@ -282,3 +282,31 @@ export function describeMark(clock: LectureClock, mark: LectureMark, blocks: rea
   }
   return { text: `${head};圈住了:${parts.join(';')}`, ids: hits.map((e) => e.id) };
 }
+
+// ---- 老师放课里的一段(《小课堂设计.md》§六):lecture 卡写「<课包 id> 0:19-0:30」 ----
+
+/** 「分:秒」「时:分:秒」→ 毫秒;认不出来 null */
+export function parseClock(s: string): number | null {
+  const m = /^(?:(\d{1,2}):)?(\d{1,3}):(\d{2})$/.exec(s.trim());
+  if (!m) return null;
+  const [h, mm, ss] = [Number(m[1] ?? 0), Number(m[2]), Number(m[3])];
+  if (ss >= 60 || (m[1] !== undefined && mm >= 60)) return null;
+  return ((h * 60 + mm) * 60 + ss) * 1000;
+}
+
+/**
+ * 卡上写的一段 → 真放的起止(毫秒)。lines: 里的时间是段起点取整到秒,老师照抄的「0:19」其实是 19.4 秒那段的开头:
+ * 起止落在某个段界前后一秒内,就对齐到那个段界(不多放前一段的尾巴、不切掉这一段的末字)。
+ * 不写止 = 放到起点所在那一段的末尾;都不写 = 整堂课。越界夹到课里;止不在起之后 = null。
+ */
+export function lectureRange(clock: Pick<LectureClock, 'segments' | 'total'>, from: number | undefined, to: number | undefined): { start: number; end: number } | null {
+  if (!clock.segments.length) return null;
+  const bounds = [...clock.segments.map((s) => s.start), clock.total];
+  const snap = (ms: number): number => bounds.find((b) => b >= ms && b - ms < 1000) ?? ms;
+  const start = from === undefined ? 0 : Math.min(snap(from), clock.total);
+  let end: number;
+  if (to !== undefined) end = Math.min(snap(to), clock.total);
+  else if (from === undefined) end = clock.total;
+  else { const i = lectureAt(clock, start).index; end = clock.segments[i].start + clock.segments[i].len; }
+  return end > start ? { start, end } : null;
+}

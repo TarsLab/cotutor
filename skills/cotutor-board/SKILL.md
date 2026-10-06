@@ -1,6 +1,6 @@
 ---
 name: cotutor-board
-description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / word / scene / material / canvas / record / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
+description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / word / scene / material / lecture / canvas / record / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
 disable-model-invocation: true
 ---
 
@@ -279,6 +279,31 @@ pingjunfen
 > 三座塔一样高吗?
 ```material
 pingjunfen
+```
+
+### lecture — 放课里的一段
+
+孩子看过的小课堂里的一段,铺满放,带课里原来的声音。上下文包有 `lecture:` 才有课可放。
+
+- 第一行是课包 id 和一段时间,中间空一格。
+- 课包 id 照 `lecture.source` 抄,去掉前面的 `bundle `。
+- 时间照 `lecture.lines` 抄:那一句的起点到下一句的起点,写成 `0:19-0:30`。
+- 只写起点,就放起点那一句。
+- 第二行可以写一句给孩子的话,写在卡上。
+- 讲稿里写 `[[play]]` 锚到它:念完这句,铺满放那一段,接着念下一句。
+- 放完画面停在那一段的末帧,不关。这句之后的话,对着末帧说。
+
+```lecture
+2026-09-18-po13-jian-8 0:19-0:30
+再看一遍拆开那一捆。
+```
+
+卡后面的讲稿这样写:
+
+> 你圈的就是这一捆。我们回到那里再看一遍。[[play]]
+> 拿走 8 根,这一捆还剩几根?
+```lecture
+2026-09-18-po13-jian-8 0:30
 ```
 
 ### canvas — 画板

@@ -1,0 +1,8 @@
+/* 小课堂卡(cards/lecture/card.md):课名 + 那一段末帧的画面 + 「0:19–0:30 ▷」;舞台是舞台包里的小课堂播放器(只放这一段,停在末帧) */
+.c.c-lecture { gap:8px; padding:12px 14px; }
+.c.c-lecture .sp { font-weight:600; }
+.c.c-lecture .th { position:relative; border-radius:12px; overflow:hidden; background:#fff; border:1px solid var(--line); height:150px; display:grid; place-items:center; color:var(--dim); font-size:15px; }
+.c.c-lecture .th svg { width:100%; height:100%; display:block; }
+.c.c-lecture .th .pl { position:absolute; right:10px; bottom:10px; background:#000000aa; color:#fff; border-radius:14px; padding:3px 10px; font-size:13px; font-variant-numeric:tabular-nums; }
+.c.c-lecture .tx { font-size:15px; color:var(--dim); }
+.c.c-lecture .th .lc-still { position:absolute; inset:6px; }

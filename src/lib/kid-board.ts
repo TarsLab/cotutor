@@ -145,6 +145,7 @@ export function cardTexts(card: BoardCard): string[] {
     case 'scene':
       return [str(p.title), str(p.problem), str(p.text)];
     case 'material':
+    case 'lecture':
       return [str(p.title), str(p.text)];
     case 'canvas':
       return [str(p.prompt)];
@@ -280,7 +281,7 @@ export const MAX_CARDS_PER_ROW = 3;
 
 /** 独占一行的卡:标题行、提问卡、画板、录音卡、场景、素材(选择题、填空题量得下就能半宽,2026-10-01) */
 export function standsAlone(card: BoardCard): boolean {
-  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'record' || card.kind === 'scene' || card.kind === 'material';
+  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'record' || card.kind === 'scene' || card.kind === 'material' || card.kind === 'lecture';
 }
 
 const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice', 'fill'];
@@ -481,7 +482,7 @@ export function inkCount(card: BoardCard): number {
 
 /** 重卡:舞台在 iframe 里的舞台包(/stage/)开,页面只管顶栏、字幕行、输入条 */
 export function isHeavy(card: BoardCard): boolean {
-  return card.kind === 'scene' || card.kind === 'canvas';
+  return card.kind === 'scene' || card.kind === 'canvas' || card.kind === 'lecture';
 }
 
 /** 场景卡能不能播(课包到了);没到紧凑态写「图还在路上」 */
@@ -493,6 +494,12 @@ export function sceneReady(card: BoardCard): boolean {
 export function materialReady(card: BoardCard): boolean {
   const p = card.props || {};
   return card.kind === 'material' && p.ready === true && typeof p.segments === 'number' && p.segments > 0;
+}
+
+/** 小课堂卡能不能放(《小课堂设计.md》§六):课包读得出来,下发时服务端填 ready 与那一段的起止 */
+export function lectureReady(card: BoardCard): boolean {
+  const p = card.props || {};
+  return card.kind === 'lecture' && p.ready === true && typeof p.start === 'number' && typeof p.end === 'number' && p.end > p.start;
 }
 
 export type ScenePhase = 'loading' | 'ready' | 'drawing' | 'gap' | 'done' | 'paused';
@@ -1068,11 +1075,12 @@ export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { mod
         else { m = halt(m, ctx, fx, false); fx.push({ kind: 'render' }); }
         break;
       }
-      // [[play]]:念完这句把场景铺满播,播完(stageDone)再接着念;素材卡的 [[play N]] 只播第 N 段(没写 N 从头播完),播完舞台停在末帧、接着念
+      // [[play]]:念完这句把场景铺满播,播完(stageDone)再接着念;素材卡的 [[play N]] 只播第 N 段(没写 N 从头播完),播完舞台停在末帧、接着念;
+      // 小课堂卡的 [[play]] 放卡上那一段(课里原来的声音),放完舞台停在末帧、接着念
       const line = secs[st.section]?.lines[st.line];
       const cue = line?.cues.find((c) => c.name === 'play');
       const card = cue ? secs[st.section].cards[cue.card] : undefined;
-      if (cue && card && card.kind === 'scene' && sceneReady(card)) { put({ ...st, status: 'stage' }); fx.push({ kind: 'openStage', section: st.section, card: cue.card }); break; }
+      if (cue && card && ((card.kind === 'scene' && sceneReady(card)) || lectureReady(card))) { put({ ...st, status: 'stage' }); fx.push({ kind: 'openStage', section: st.section, card: cue.card }); break; }
       if (cue && card && materialReady(card)) {
         const n = Number(cue.arg);
         const segment = Number.isInteger(n) && n >= 1 && n <= Number(card.props.segments) ? n : undefined;

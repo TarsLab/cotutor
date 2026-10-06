@@ -82,12 +82,12 @@ const PAGE = `<!doctype html>
   /* 小课堂(《小课堂设计.md》):首页按钮点进来,舞台包铺满整页放;看完关掉,板书顶上一张小课堂卡,输入条才亮 */
   #lc-frame { position:fixed; inset:0; width:100%; height:100%; border:0; z-index:90; background:#faf9f4; }
   #lc-frame[hidden] { display:none; }
-  .c.c-lecture { flex-direction:row; align-items:center; gap:14px; background:var(--tint-sand-bg); border-color:var(--tint-sand-line); }
-  .c-lecture .lt { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
-  .c-lecture .lt small { font-size:13px; font-weight:700; color:var(--tint-sand-head); letter-spacing:1px; }
-  .c-lecture .lt b { font-size:20px; }
-  .c-lecture .lt span { font-size:14px; color:var(--dim); }
-  .c-lecture .re { flex:none; height:44px; padding:0 16px; border-radius:22px; border:1.5px solid var(--tint-sand-line); background:#fff; font-size:16px; }
+  .c.c-lc { flex-direction:row; align-items:center; gap:14px; background:var(--tint-sand-bg); border-color:var(--tint-sand-line); }
+  .c-lc .lt { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .c-lc .lt small { font-size:13px; font-weight:700; color:var(--tint-sand-head); letter-spacing:1px; }
+  .c-lc .lt b { font-size:20px; }
+  .c-lc .lt span { font-size:14px; color:var(--dim); }
+  .c-lc .re { flex:none; height:44px; padding:0 16px; border-radius:22px; border:1.5px solid var(--tint-sand-line); background:#fff; font-size:16px; }
   .lc-ask { display:flex; flex-direction:column; align-items:center; gap:8px; padding:36px 0 12px; text-align:center; }
   .lc-ask b { font-size:26px; }
   .lc-ask span { font-size:16px; color:var(--dim); }
@@ -103,6 +103,7 @@ const PAGE = `<!doctype html>
   .c-mark .mk-t b { font-size:22px; font-variant-numeric:tabular-nums; }
   .c-mark .x { position:absolute; right:4px; top:4px; width:40px; height:40px; border-radius:50%; border:none; background:transparent; font-size:22px; line-height:1; color:var(--dim); }
   .c-mark .mk-tx { max-width:460px; font-size:14px; line-height:1.6; color:var(--ink); }
+  .lc-still { width:100%; height:100%; }
   .lc-svgf { position:fixed; left:-10000px; top:0; width:800px; height:600px; border:0; visibility:hidden; pointer-events:none; }
   #rest { display:none; text-align:center; color:var(--dim); font-size:16px; padding:12px 0; }
   /* 给老师换样子(figshot):不是首页发布的卡,是 cotutor.json 配了 figshot 就有的固定入口;figshot 没开着就不出现 */
@@ -814,6 +815,11 @@ __REEL_JS__
         if (thumb) thumb.muted = true;
         return box('material', h('div', { class: 'sp' }, p.title || p.id || ''), p.text ? h('div', { class: 'tx' }, p.text) : null, h('div', { class: 'th' }, thumb || '动画还没放进来', ready ? h('span', { class: 'pl' }, n + ' 段 ▷') : null));
       }
+      case 'lecture': {
+        // 小课堂卡(《小课堂设计.md》§六):老师放课里的一段;紧凑态是那一段末帧的画面、「0:19–0:30 ▷」;舞台是舞台包里的小课堂播放器
+        const ready = lectureReady(c);
+        return box('lecture', h('div', { class: 'sp' }, p.title || p.bundle || ''), p.text ? h('div', { class: 'tx' }, p.text) : null, h('div', { class: 'th' }, ready ? lcStill(p.bundle, p.still || 0, null, 'lc-still') : '课还没放进来', ready ? h('span', { class: 'pl' }, lcClock(p.start) + '–' + lcClock(p.end) + ' ▷') : null));
+      }
       case 'canvas': {
         const n = inkCount(c);
         // 交过了:紧凑态是孩子画的那张图(真服务给 png 的相对路径,mock 存的是 data URL)
@@ -1337,8 +1343,9 @@ __REEL_JS__
   };
   let lcSeq = 0;
   /** 圈的卡的缩略图:克隆课包的 SVG(id 加前缀,一页多份不串)、停在那一刻、叠上圈(课包坐标 + 平移) */
-  const markThumb = (bundle, mk) => {
-    const box = h('div', { class: 'mk-th' });
+  /** 课包那一刻的画面(圈的卡、小课堂卡的缩略图):克隆课包的 SVG(id 加前缀,一页多份不串)、停在 SVG 的那一刻(svgMs)、有圈就叠上圈(课包坐标 + 平移) */
+  const lcStill = (bundle, svgMs, path, cls) => {
+    const box = h('div', { class: cls });
     lcSvg(bundle).then((v) => {
       if (!v) return;
       const pre = 'mk' + (++lcSeq) + '-';
@@ -1348,16 +1355,19 @@ __REEL_JS__
       svg.removeAttribute('width'); svg.removeAttribute('height'); svg.setAttribute('class', 'mk-svg'); svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
       svg.querySelectorAll('[id]').forEach((el) => { el.id = pre + el.id; });
       svg.querySelectorAll('*').forEach((el) => { for (const a of [...el.attributes]) { if ((a.localName === 'href') && a.value.startsWith('#')) a.value = '#' + pre + a.value.slice(1); else if (a.value.includes('url(#')) a.value = a.value.split('url(#').join('url(#' + pre); } });
-      const ring = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      ring.setAttribute('d', mk.path.map((p, i) => (i ? 'L' : 'M') + (p[0] + v.dx) + ' ' + (p[1] + v.dy)).join(' '));
-      for (const [k, val] of [['fill', 'none'], ['stroke', '#2f6fd6'], ['stroke-width', '3'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['vector-effect', 'non-scaling-stroke']]) ring.setAttribute(k, val);
-      svg.append(ring);
+      if (path && path.length) {
+        const ring = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        ring.setAttribute('d', path.map((p, i) => (i ? 'L' : 'M') + (p[0] + v.dx) + ' ' + (p[1] + v.dy)).join(' '));
+        for (const [k, val] of [['fill', 'none'], ['stroke', '#2f6fd6'], ['stroke-width', '3'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['vector-effect', 'non-scaling-stroke']]) ring.setAttribute(k, val);
+        svg.append(ring);
+      }
       box.replaceChildren(svg);
-      const still = () => { try { svg.pauseAnimations(); svg.setCurrentTime(mk.svgMs / 1000); } catch {} };
+      const still = () => { try { svg.pauseAnimations(); svg.setCurrentTime(svgMs / 1000); } catch {} };
       still(); requestAnimationFrame(still);
     });
     return box;
   };
+  const markThumb = (bundle, mk) => lcStill(bundle, mk.svgMs, mk.path, 'mk-th');
   /** 一张圈的卡:缩略图 + 「你圈的」+ 时刻;点了从那一刻停着打开小课堂;del = 看完还没交出去的能删;家长端下面一行老师拿到的那段话 */
   const markCard = (l, mk, del) => h('div', { class: 'c c-mark', 'data-at': String(mk.atMs) },
     h('div', { class: 'mk-main', on: { click: (e) => { e.stopPropagation(); openLecture({ bundle: l.bundle, title: l.title, at: mk.atMs }); } } }, markThumb(l.bundle, mk), h('div', { class: 'mk-t' }, h('small', {}, PARENT ? '孩子圈的' : '你圈的'), h('b', {}, lcClock(mk.atMs)))),
@@ -1367,7 +1377,7 @@ __REEL_JS__
   /** 板书顶上的小课堂卡:课名、看完了、圈了几处、「再看一遍」(done = 孩子已经问过,卡画在那一节前面) */
   const lectureCard = (l, done) => {
     const n = (l.marks || []).length;
-    return h('div', { class: 'c c-lecture', 'data-lecture': l.bundle },
+    return h('div', { class: 'c c-lc', 'data-lecture': l.bundle },
       h('div', { class: 'lt' }, h('small', {}, '小课堂'), h('b', {}, l.title || ''), h('span', {}, '看完了' + (n ? ' · 圈了 ' + n + ' 处' : done ? '' : ' · 有不懂的就问老师'))),
       h('button', { type: 'button', class: 're', on: { click: (e) => { e.stopPropagation(); openLecture({ bundle: l.bundle, title: l.title }); } } }, '再看一遍'));
   };
@@ -1514,12 +1524,13 @@ __REEL_JS__
   S.layHalf = halfWidth();
 
   // ---- 舞台:点卡放大,交互都在这里;开着时讲稿暂停,关了字幕行出「播放」 ----
-  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', word: '单词', scene: '讲解动画', material: '动画', canvas: '画一画', record: '录音', code: '' };
+  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', word: '单词', scene: '讲解动画', material: '动画', lecture: '小课堂', canvas: '画一画', record: '录音', code: '' };
   const GO_LABEL = { canvas: '给老师看' };
   const openStage = (secIdx, idx, opts = {}) => {
     const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];
     if (!card) return;
     if (isHeavy(card) && !sceneReady(card) && card.kind === 'scene') return; // 课包还没到:紧凑态写着「图还在路上」,不开
+    if (card.kind === 'lecture' && !lectureReady(card)) return; // 课包读不出来:紧凑态写着「课还没放进来」,不开
     if (S.readonly && hasState(card) && !opts.delegate) return; // 以前的只能看:选择 / 填空 / 画板不开,免得改了当时的答案
     if (!opts.delegate) dispatch({ type: 'stageOpen' });
     S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, scene: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
@@ -1588,7 +1599,7 @@ __REEL_JS__
   };
   /** 发给舞台包的这张卡(ready 时发;看录像时孩子改了卡再发一次,包按新状态重画) */
   const stageCard = (card) => {
-    const b = card.kind === 'scene' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null;
+    const b = card.kind === 'scene' || card.kind === 'lecture' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null;
     const im = card.kind === 'canvas' && card.props.base && typeof card.props.base.image === 'string' ? card.props.base.image : null;
     return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? '/api/bundles/' + encodeURIComponent(b) + '/' : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
   };
@@ -1598,7 +1609,13 @@ __REEL_JS__
     if (!m || m.source !== STAGE_SOURCE || !S.stage) return;
     const card = S.sections[S.stage.section].cards[S.stage.card];
     if (m.type === 'ready') postStage(stageCard(card));
-    else if (m.type === 'phase') { S.stage.scene = { phase: m.phase, line: m.line, step: m.step, total: m.total }; renderSubtitle(); if (m.phase === 'done' && S.stage.delegate) { const d = S.stage; closeStage(); resumeAfter(d); } }
+    else if (m.type === 'phase') {
+      S.stage.scene = { phase: m.phase, line: m.line, step: m.step, total: m.total };
+      // 小课堂卡(仲裁表「交给小课堂」):那一段放完,舞台不关、停在末帧,字幕行还给老师,接着念
+      if (m.phase === 'done' && card.kind === 'lecture') { S.stage.scene = null; if (S.stage.delegate) { S.stage.delegate = false; resumeAfter(); } }
+      renderSubtitle();
+      if (m.phase === 'done' && S.stage && S.stage.delegate) { const d = S.stage; closeStage(); resumeAfter(d); }
+    }
     else if (m.type === 'state') { card.state = m.state; $('#st-go').disabled = !stateSummary(card).length; $('#st-note').textContent = stateSummary(card).join('、'); repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, m.state); }
     else if (m.type === 'submit') { card.state = m.state; const id = S.stage.id; const job = S.sections[S.stage.section].job; const idx = S.stage.card; closeStage(); api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id } })); }
     else if (m.type === 'close' || m.type === 'error') { const d = S.stage; closeStage(); if (d.delegate) resumeAfter(d); }
@@ -1611,7 +1628,7 @@ __REEL_JS__
     wordRun++; if (S.stage && !S.reel && S.sections[S.stage.section] && (S.sections[S.stage.section].cards[S.stage.card] || {}).kind === 'word') silence(); S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); showNow(); };
   $('#st-x').innerHTML = ICON.close;
   // 孩子关:讲稿交给素材、还没播完的,关了接着念(场景卡的关在舞台包里,走上面的 close 消息)
-  const closeByKid = () => { const d = S.stage; const card = d && S.sections[d.section] ? S.sections[d.section].cards[d.card] : null; closeStage(); if (d && d.delegate && card && !isHeavy(card)) resumeAfter(); };
+  const closeByKid = () => { const d = S.stage; const card = d && S.sections[d.section] ? S.sections[d.section].cards[d.card] : null; closeStage(); if (d && d.delegate && card && (!isHeavy(card) || card.kind === 'lecture')) resumeAfter(); };
   $('#st-x').addEventListener('click', closeByKid);
   $('#st-dim').addEventListener('click', closeByKid);
   /** 选择题:点一项 → 本地改状态、重画、PUT 到服务端(失败不响,下次再点再存) */

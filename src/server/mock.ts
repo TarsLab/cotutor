@@ -19,8 +19,23 @@ import { parseCardState, stripSecrets } from '../cards/index.ts';
 import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset } from './stage.ts';
 import { enrichScenes } from './scene-props.ts';
+import { enrichLectures } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
+
+/** 看完小课堂的第一问,mock 老师这样答:对着圈的地方说,放课里拆开那一捆的那一段(《小课堂设计.md》§六) */
+const MOCK_LECTURE_REPLY = [
+  '你圈的是右边散的 3 根。8 根要从哪儿拿?',
+  '',
+  '```lecture',
+  '2026-09-18-po13-jian-8 0:19-0:30',
+  '再看一遍拆开那一捆。',
+  '```',
+  '',
+  '我们回到拆开那一捆的地方,再看一遍。[[play]]',
+  '',
+  '拿走 8 根,这一捆还剩几根?',
+].join('\n');
 
 /** mock 的课包目录:仓库里的样本(tests/fixtures/bundles/),场景卡从这里播 */
 export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bundles/', import.meta.url));
@@ -488,7 +503,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     const { states, action: _a, lectureWatch: _w, ...rest } = m;
     if (rest.lecture?.marks) rest.lecture = { ...rest.lecture, marks: rest.lecture.marks.map(({ text: _t, ...k }) => k) };
     const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => (states && i in states ? { ...c, state: states[i] } : c)) } : null;
-    const section = withState ? await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, stripSecrets(withState)) : null;
+    const section = withState ? await enrichLectures({ dirs: { bundles: MOCK_BUNDLES_DIR } }, await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, stripSecrets(withState))) : null;
     return { ...rest, section };
   };
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
@@ -542,8 +557,10 @@ export function createMock(opts: MockOptions = {}): Mock {
   /** 流式模拟:想的期间每隔一段露一张卡(讲稿句跟到那张卡为止),整段想完才定稿 */
   const think = (t: MockTutor, m: MockMessage, cur = cursor): Promise<void> => {
     const i = cur.get(t.name) ?? 0;
-    const step = t.script[i];
-    cur.set(t.name, i + 1);
+    // 看完小课堂的第一问:老师放课里的那一段(小课堂卡 + [[play]]);不占脚本的位置
+    const lectureFirst = Boolean(m.lecture && !m.lecture.again);
+    const step = lectureFirst ? MOCK_LECTURE_REPLY : t.script[i];
+    if (!lectureFirst) cur.set(t.name, i + 1);
     const full = step ? withPost(sectionFromScript(step), t.name, i) : null;
     const n = full ? full.cards.length : 0;
     const tick = delay / (n + 1);
@@ -629,7 +646,7 @@ export function createMock(opts: MockOptions = {}): Mock {
           rec++;
           return st === undefined ? c : { ...c, state: st, ...(h ? { heard: h } : {}) };
         };
-        const section = m.section ? await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, { ...m.section, cards: m.section.cards.map(withHeard) }) : null;
+        const section = m.section ? await enrichLectures({ dirs: { bundles: MOCK_BUNDLES_DIR } }, await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, { ...m.section, cards: m.section.cards.map(withHeard) })) : null;
         return { ...rest, from: 'kid' as const, section, ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };
       }));
       const pending = list.find((m) => m.pending);

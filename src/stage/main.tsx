@@ -7,7 +7,7 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client';
 import 'drawtell/player/chalk-player.css';
 import { SceneStage, type SceneStageHandle } from './scene.tsx';
-import { LectureStage, buildLecture, type LectureWatch, type StageMark } from './lecture.tsx';
+import { LectureStage, buildLecture, type LectureStageHandle, type LectureWatch, type StageMark } from './lecture.tsx';
 import type { CanvasStageHandle } from './canvas.tsx';
 import '@excalidraw/excalidraw/dist/prod/index.css';
 import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
@@ -22,12 +22,14 @@ const CanvasStage = lazy(async () => ({ default: (await import('./canvas.tsx')).
 type Card = Extract<ToStage, { type: 'card' }>;
 type Outgoing = FromStage extends infer U ? (U extends FromStage ? Omit<U, 'source'> : never) : never;
 
+const noop = (): void => {};
 const post = (m: Outgoing): void => { window.parent.postMessage({ source: STAGE_SOURCE, ...m }, '*'); };
 
 function App(): JSX.Element {
   const [card, setCard] = useState<Card | null>(null);
   const scene = useRef<SceneStageHandle>(null);
   const canvas = useRef<CanvasStageHandle>(null);
+  const lecture = useRef<LectureStageHandle>(null);
 
   useEffect(() => {
     // 调试 / 截图:?bundle=<课包 URL>&autoplay=1 不用页面也能开(mock:/stage/?bundle=/api/bundles/<id>/)
@@ -38,7 +40,7 @@ function App(): JSX.Element {
       const m = e.data;
       if (!m || m.source !== STAGE_SOURCE) return;
       if (m.type === 'card') setCard(m);
-      else if (m.type === 'control') { if (m.action === 'submit') canvas.current?.submit(); else scene.current?.control(m.action); }
+      else if (m.type === 'control') { if (m.action === 'submit') canvas.current?.submit(); else { scene.current?.control(m.action); lecture.current?.control(m.action); } }
     };
     window.addEventListener('message', onMsg);
     post({ type: 'ready' });
@@ -54,10 +56,20 @@ function App(): JSX.Element {
   const onSubmit = useCallback((ink: Record<string, unknown>[], image: string) => post({ type: 'submit', state: { ink }, image }), []);
   const onLectureDone = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'finished', ...w }), []);
   const onLectureClose = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'close', ...w }), []);
+  // 卡的样子:phase 给页面字幕行;那一段放完存状态 {done: true}
+  const onLecturePhase = useCallback((phase: 'drawing' | 'paused' | 'done', line: string, step: number, total: number) => {
+    post({ type: 'phase', phase, step, total, line });
+    if (phase === 'done') post({ type: 'state', state: { done: true } });
+  }, []);
   const onMarks = useCallback((marks: StageMark[]) => post({ type: 'marks', marks }), []);
   const onSvg = useCallback((markup: string, dx: number, dy: number) => post({ type: 'svg', markup, dx, dy }), []);
 
   if (!card) return <div className="stage-wait" />;
+  // 板书上的小课堂卡(老师放课里的一段):props 里有下发时补的起止
+  if (card.kind === 'lecture' && card.bundleUrl && typeof card.props.start === 'number' && typeof card.props.end === 'number') {
+    const range = { start: card.props.start, end: card.props.end };
+    return <LectureStage ref={lecture} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={[]} range={range} autoplay={card.autoplay} onPhase={onLecturePhase} onMarks={noop} onFinished={noop} onClose={noop} onError={onError} />;
+  }
   if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} onMarks={onMarks} onSvg={onSvg} onFinished={onLectureDone} onClose={onLectureClose} onError={onError} />;
   if (card.kind === 'lecture-svg' && card.bundleUrl) return <LectureSvg bundleUrl={card.bundleUrl} onSvg={onSvg} onError={onError} />;
   if (card.kind === 'scene' && card.bundleUrl) return <SceneStage ref={scene} bundleUrl={card.bundleUrl} autoplay={card.autoplay} onPhase={onPhase} onError={onError} />;

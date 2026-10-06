@@ -4,9 +4,9 @@ import { boardSkillDoc, boardSyntaxDoc } from '../src/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 {
-  check('有状态的卡:choice / fill / scene / material / canvas / record;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,fill,scene,material,canvas,record');
-  check('十三种卡登记在册:板书十二种 + 首页的老师卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,word,scene,material,canvas,record,code,tutor' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
-  check('用在哪:板书十二种;首页 = 老师卡 + 一段字 / 点读 / 图片 / 田字格 / 单词', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,word,scene,material,canvas,record,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,word,tutor');
+  check('有状态的卡:choice / fill / scene / material / lecture / canvas / record;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,fill,scene,material,lecture,canvas,record');
+  check('十四种卡登记在册:板书十三种 + 首页的老师卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,word,scene,material,lecture,canvas,record,code,tutor' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
+  check('用在哪:板书十三种;首页 = 老师卡 + 一段字 / 点读 / 图片 / 田字格 / 单词', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,word,scene,material,lecture,canvas,record,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,word,tutor');
   const tut = parseCard('tutor chinese-tutor', '- 我要预习小蝌蚪找妈妈\n讲法: 先读课文\n讲法: 再认字\n新话题\n接着 2026-09-16 1930-1 接着写看图写话', 'home');
   check('老师卡:列表号去掉、讲法挂上一个按钮(多行拼起来)、「新话题」不算、接着带日期与话题', tut.card.kind === 'tutor' && JSON.stringify(tut.card.props) === JSON.stringify({ tutor: 'chinese-tutor', buttons: [{ kind: 'start', label: '我要预习小蝌蚪找妈妈', brief: '先读课文\n再认字' }, { kind: 'continue', label: '接着写看图写话', date: '2026-09-16', thread: '1930-1' }] }) && !tut.warning, JSON.stringify(tut));
   check('老师卡剥讲法', JSON.stringify(stripSecrets({ cards: [tut.card], lines: [] }).cards[0].props.buttons) === '[{"kind":"start","label":"我要预习小蝌蚪找妈妈"},{"kind":"continue","label":"接着写看图写话","date":"2026-09-16","thread":"1930-1"}]');

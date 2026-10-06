@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
-import { DRAW_START_MS, clockLabel, colorWord, describeMark, drawnAt, lectureAt, lectureClock, lectureLines, textBox, type LectureSkeleton, type LectureStep } from '../src/lib/lecture.ts';
+import { DRAW_START_MS, clockLabel, colorWord, describeMark, drawnAt, lectureAt, lectureClock, lectureLines, lectureRange, parseClock, textBox, type LectureSkeleton, type LectureStep } from '../src/lib/lecture.ts';
 import { check, done } from './_check.ts';
 
 const dir = fileURLToPath(new URL('./fixtures/bundles/2026-09-18-po13-jian-8/', import.meta.url));
@@ -80,6 +80,25 @@ check('颜色:红橙黄绿蓝紫说出来,黑灰不说', colorWord('#e03131') ==
 {
   const b = textBox({ id: 't', type: 'text', x: 450, y: 22, text: '13 − 8 =', fontSize: 28 });
   check('文字的宽是估的:和 drawtell 在浏览器里量的(111)差不多', Math.abs(b.maxX - b.minX - 111) < 12 && b.maxY - b.minY === 35, JSON.stringify(b));
+}
+// ---- 老师放课里的一段:时间怎么认、起止怎么对齐 ----
+check('时间:分:秒、时:分:秒;秒过 59、乱写的不认', parseClock('0:19') === 19_000 && parseClock('12:05') === 725_000 && parseClock('1:02:05') === 3_725_000 && parseClock('0:60') === null && parseClock('19') === null && parseClock('1:60:00') === null);
+{
+  const [s1, s2, s3, s4] = clock.segments;
+  const r = lectureRange(clock, Math.floor(s3.start / 1000) * 1000, Math.floor(s4.start / 1000) * 1000);
+  check('照 lines 抄的起止(取整到秒)对齐到段界:正好是第 3 段', r?.start === s3.start && r.end === s4.start, JSON.stringify({ r, s3: s3.start, s4: s4.start }));
+  const only = lectureRange(clock, Math.floor(s2.start / 1000) * 1000, undefined);
+  check('只写起点:放起点那一段', only?.start === s2.start && only.end === s3.start, JSON.stringify(only));
+  const mid = lectureRange(clock, s1.start + 3000, s1.start + 5000);
+  check('离段界远的照写的放(段中间也行)', mid?.start === 3000 && mid.end === 5000);
+  check('都不写 = 整堂课;越界夹到课里;止不在起后 = null', JSON.stringify(lectureRange(clock, undefined, undefined)) === JSON.stringify({ start: 0, end: clock.total }) && lectureRange(clock, 0, 999_000)?.end === clock.total && lectureRange(clock, 20_000, 20_000) === null && lectureRange(lectureClock([], []), 0, 1000) === null);
+}
+{
+  const { enrichLectures } = await import('../src/server/lecture.ts');
+  const bundles = fileURLToPath(new URL('./fixtures/bundles/', import.meta.url));
+  const sec = await enrichLectures({ dirs: { bundles } }, { cards: [{ kind: 'lecture', props: { bundle: '2026-09-18-po13-jian-8', from: 19_000, to: 30_000 } }, { kind: 'lecture', props: { bundle: '2026-01-01-gone', from: 0 } }, { kind: 'text', props: { text: 'x' } }], lines: [] });
+  const [a, b, c] = sec.cards.map((x) => x.props as Record<string, unknown>);
+  check('下发时补快照:课名、对齐后的起止、末帧停在 SVG 的哪一刻、ready;课包不在 ready: false;别的卡不动', a.title === '13 − 8 破十法' && a.start === clock.segments[2].start && a.end === clock.segments[3].start && (a.still as number) > clock.segments[2].drawStart && (a.still as number) <= clock.segments[2].drawEnd && a.ready === true && b.ready === false && !('start' in b) && c.text === 'x' && !('ready' in c), JSON.stringify({ a, b }));
 }
 check('没有步的课包:空时钟', lectureClock(scene.skeletons, []).total === 0 && lectureAt(lectureClock([], []), 100).index === -1);
 done();

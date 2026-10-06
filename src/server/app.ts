@@ -41,6 +41,7 @@ import { bundleAsset, stageAsset } from './stage.ts';
 import { themeFiles } from './theme.ts';
 import { enrichScenes } from './scene-props.ts';
 import { enrichMaterials } from './material.ts';
+import { enrichLectures } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
@@ -211,7 +212,7 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
   }
   // 场景卡:课包在不在、题面、步数、缩略图,每次现读(课包落地卡就变成可播)
   const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
-  for (const m of messages) if (m.section) m.section = await enrichMaterials(ctx.ws, await enrichScenes(sceneDirs, m.section));
+  for (const m of messages) if (m.section) m.section = await enrichLectures(ctx.ws, await enrichMaterials(ctx.ws, await enrichScenes(sceneDirs, m.section)));
   const remaining = Math.max(0, policy.dailyMessages - kidMessageCount(index));
   return { tutor, date, messages, remaining, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
 }
@@ -236,7 +237,7 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
     if (m) m.section = partial;
   }
   const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
-  for (const m of messages) if (m.section) m.section = await enrichMaterials(ctx.ws, await enrichScenes(sceneDirs, m.section));
+  for (const m of messages) if (m.section) m.section = await enrichLectures(ctx.ws, await enrichMaterials(ctx.ws, await enrichScenes(sceneDirs, m.section)));
   // 录音卡:家长端旁注要评测全量(档、逐字分、花费),从录音旁边的 heard.json 读;孩子端不走这里。
   // 挂在新的卡对象上:索引有进程内缓存,改原对象判就漏到孩子端了
   for (const m of messages) {

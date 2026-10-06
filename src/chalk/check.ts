@@ -6,6 +6,7 @@
 
 import { KNOWN_ELEMENT_TYPES, sceneSchema } from '../schema/scene.ts';
 import type { ChalkScene, ChalkSkeleton, ChalkStep } from '../player/types.ts';
+import { elementBounds } from '../core/geometry.ts';
 
 export interface Finding {
   level: 'error' | 'warning';
@@ -129,6 +130,20 @@ function lintSemantics(scene: ChalkScene, findings: Finding[]): void {
   }
 
   lintInteractions(scene, findings);
+  lintGroups(scene, findings);
+}
+
+/** groups 的引用完整性:id 不重、成员都在场景里、一组里不重复 */
+function lintGroups(scene: ChalkScene, findings: Finding[]): void {
+  const els = new Set(scene.skeletons.map((e) => e.id));
+  const seen = new Set<string>();
+  for (const g of scene.groups ?? []) {
+    if (seen.has(g.id)) findings.push({ level: 'error', rule: 'group-id', message: `groups 里 id '${g.id}' 重复;每组一个 id` });
+    seen.add(g.id);
+    const missing = g.elementIds.filter((id) => !els.has(id));
+    if (missing.length) findings.push({ level: 'error', rule: 'group-ref', message: `group '${g.id}'(${g.label})引用了不存在的元素 ${missing.join(', ')};elementIds 写 skeletons 里的 id` });
+    if (new Set(g.elementIds).size !== g.elementIds.length) findings.push({ level: 'warning', rule: 'group-dup', message: `group '${g.id}' 的 elementIds 有重复` });
+  }
 }
 
 /** blocks / subscenes 的引用完整性与触发语义 */
@@ -202,28 +217,11 @@ export interface Box {
 }
 
 /**
- * 文本宽度:元素带实测 width(生成器/编辑器量过)以实测为准;
- * 没有才近似——CJK ≈ fontSize,其余 ≈ 0.55 × fontSize;行高 1.3(snap 的元素清单也用它)
+ * 包围盒:core/geometry 的 elementBounds(文字按真播放器量出来的字宽表;元素带的 width 更宽以它为准)。
+ * snap 的元素清单、build 落进 scene.json 的 bounds 都是这一份。
  */
 export function bboxOf(el: ChalkSkeleton): Box {
-  let w = typeof el.width === 'number' ? el.width : 0;
-  let h = typeof el.height === 'number' ? el.height : 0;
-  if (el.type === 'text' && typeof el.text === 'string' && typeof el.fontSize === 'number') {
-    const lines = el.text.split('\n');
-    if (!(w > 0)) {
-      w = Math.max(
-        ...lines.map((line) => [...line].reduce((acc, ch) => acc + ((ch.codePointAt(0) ?? 0) >= 0x2e80 ? el.fontSize as number : (el.fontSize as number) * 0.55), 0)),
-      );
-    }
-    if (!(h > 0)) h = lines.length * (el.fontSize as number) * 1.3;
-  }
-  if (Array.isArray(el.points)) {
-    const pts = el.points as [number, number][];
-    const xs = pts.map((p) => p[0]);
-    const ys = pts.map((p) => p[1]);
-    return { id: el.id, minX: el.x + Math.min(...xs), minY: el.y + Math.min(...ys), maxX: el.x + Math.max(...xs), maxY: el.y + Math.max(...ys) };
-  }
-  return { id: el.id, minX: el.x, minY: el.y, maxX: el.x + w, maxY: el.y + h };
+  return { id: el.id, ...elementBounds(el) };
 }
 
 /** 近似测量留 2px 容差 */

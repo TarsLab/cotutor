@@ -11,6 +11,7 @@ import type { ChalkScene } from '../player/types.ts';
 import { sceneSchema } from '../schema/scene.ts';
 import type { LessonManifest, SceneJson } from '../schema/lesson-manifest.ts';
 import { attachAudio } from './dub.ts';
+import { sceneBounds } from '../core/geometry.ts';
 import { LoadError, NotFoundError } from './load-scene.ts';
 
 /**
@@ -43,6 +44,8 @@ export async function buildBundle(scene: ChalkScene, outDir: string, sourceDir?:
     ...(scene.subject ? { subject: scene.subject } : {}),
     ...(background ? { background } : {}),
     skeletons: scene.skeletons,
+    ...(scene.groups?.length ? { groups: scene.groups } : {}),
+    bounds: sceneBounds(scene.skeletons),
   };
   const manifest: LessonManifest = {
     schema: 'lesson-manifest',
@@ -89,6 +92,7 @@ export async function readBundle(bundlesDir: string, id: string): Promise<ChalkS
     ...(sceneJson.subject != null ? { subject: sceneJson.subject } : {}),
     ...(sceneJson.background != null ? { background: sceneJson.background } : {}),
     skeletons: sceneJson.skeletons,
+    ...(sceneJson.groups != null ? { groups: sceneJson.groups } : {}),
     steps: manifest.steps,
     ...(manifest.blocks != null ? { blocks: manifest.blocks } : {}),
     ...(manifest.subscenes != null ? { subscenes: manifest.subscenes } : {}),

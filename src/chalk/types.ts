@@ -29,7 +29,22 @@ export interface ChalkSkeleton {
    * 画这一笔时笔尖换成橡皮。strokeColor 缺省取纸面底色;有背景图的地方擦不干净(盖住的是图)。
    */
   customData?: { layer?: ChalkLayer; tool?: 'eraser'; [key: string]: unknown };
+  /**
+   * 这一笔是什么(给人与应用读,不画出来):如「散的第 1 根小棒」「圈出剩下的 2 根」。
+   * 孩子圈住它时,应用说的就是这几个字;不写 = 按种类、颜色、第几步说(「第 1 步画的 3 条线」)。
+   */
+  label?: string;
   [key: string]: unknown;
+}
+
+/**
+ * 一组元素合起来是一样东西:「一捆 10 根小棒」「散的 3 根」「答案 5」。只是语义,不影响画法与笔顺;
+ * 一个元素可以在几组里(「散的 3 根」与「13 根小棒」)。孩子圈住这一组的大半,应用就说这一组的 label。
+ */
+export interface ChalkGroup {
+  id: string;
+  label: string;
+  elementIds: string[];
 }
 
 /**
@@ -103,6 +118,8 @@ export interface ChalkScene {
   /** 背景图(可选);缺省 = 白板 */
   background?: ChalkBackground;
   skeletons: ChalkSkeleton[];
+  /** 元素分组(语义,可选):孩子圈住了什么、检验方按名字说话都用它 */
+  groups?: ChalkGroup[];
   /** 空数组 = 静态场景(装载即整幅定格);讲解三档必须非空,check 把关 */
   steps: ChalkStep[];
   /** 词/字级命中块;缺省 = 本场景没有块逻辑 */

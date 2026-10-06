@@ -4,7 +4,7 @@
  * 前身是 growth-apps packages/schema 的 LessonManifestDraft,随架构重设计迁入并定版 v1。
  */
 
-import type { ChalkBlock, ChalkScene, ChalkStep, ChalkSubscene } from '../player/types.ts';
+import type { ChalkBlock, ChalkGroup, ChalkScene, ChalkStep, ChalkSubscene } from '../player/types.ts';
 
 export interface SceneJson {
   schema: 'chalk-scene';
@@ -18,6 +18,13 @@ export interface SceneJson {
   /** 背景图;src 相对课包目录(build 拷进来的 background.<ext>) */
   background?: ChalkScene['background'];
   skeletons: ChalkScene['skeletons'];
+  /** 元素分组(语义);画面的一部分,所以在 scene.json 不在 manifest */
+  groups?: ChalkGroup[];
+  /**
+   * build 时量好的每个元素的包围盒(场景坐标,[minX, minY, maxX, maxY]):文字按 core/text-metrics 的字宽算,
+   * 线按点、框按宽高。浏览器外的消费方(应用的服务端、检验)不用再估;播放器不读它。
+   */
+  bounds?: Record<string, [number, number, number, number]>;
 }
 
 /**

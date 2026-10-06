@@ -26,6 +26,7 @@ export const skeletonSchema = z.looseObject({
   y: z.number(),
   animateDuration: z.number().int().positive().optional(),
   // customData 透传 excalidraw,协议认领 layer(三层墨迹契约)与 tool(橡皮)两个键
+  label: z.string().min(1).optional(),
   customData: z
     .looseObject({
       layer: z.enum(['base', 'ink', 'feedback']).optional(),
@@ -61,6 +62,13 @@ export const subsceneSchema = z.strictObject({
   audioSrc: z.string().min(1).optional(),
 });
 
+/** 元素分组:语义,不影响画法;elementIds 都要在场景里(lint 把关) */
+export const groupSchema = z.strictObject({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  elementIds: z.array(z.string().min(1)).min(1),
+});
+
 /** 背景图:画板 = 图片,场景坐标即图片像素 */
 export const backgroundSchema = z.strictObject({
   src: z.string().min(1),
@@ -77,6 +85,7 @@ export const sceneSchema = z.strictObject({
   subject: z.string().min(1).optional(),
   background: backgroundSchema.optional(),
   skeletons: z.array(skeletonSchema).min(1),
+  groups: z.array(groupSchema).optional(),
   // 可省略 = 静态场景;规范形是空数组。「讲解三档必须非空、static 必须空」是语义,归 lint
   steps: z.array(stepSchema).default([]),
   blocks: z.array(blockSchema).optional(),

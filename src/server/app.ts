@@ -35,7 +35,7 @@ import { IMAGE_EXT, parseCardState, stripSecrets, type Heard, type RecordProps }
 import { BUNDLE_ID_RE } from '../cards/scene.ts';
 import { kouboYuanOfDay, readHeard } from './koubo.ts';
 import { resolve, sep } from 'node:path';
-import { bundleAsset, stageAsset } from './stage.ts';
+import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { themeFiles } from './theme.ts';
 import { enrichScenes } from './scene-props.ts';
 import { enrichMaterials } from './material.ts';
@@ -968,6 +968,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     // 舞台包(重卡在 iframe 里开)与课包文件:静态,越界 404
     if (method === 'GET' && p.startsWith('/stage/')) {
+      if (p === '/stage/') { const html = await stageIndex(); return html === null ? { status: 404, json: { error: 'not_found' } } : { status: 200, html }; }
       const f = await stageAsset(p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
@@ -990,9 +991,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!(ICON_SIZES as readonly number[]).includes(n)) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, body: appIconPng(n), contentType: 'image/png' };
     }
-    if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title)) };
+    if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title), {}, await stageVersion()) };
     // 家长端(《家长板书页设计.md》):也是孩子端页面本身,数据走家长接口(答案在、家长的话在),卡锁着;自己的清单,加到主屏幕才不会拿到孩子端那份
-    if (p === '/parent') return { status: 200, html: kidPage(esc(ws.config.title), { parent: true }) };
+    if (p === '/parent') return { status: 200, html: kidPage(esc(ws.config.title), { parent: true }, await stageVersion()) };
     if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${ws.config.title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };
     return { status: 404, json: { error: 'not_found', path: p } };
   } catch (err) {

@@ -3,7 +3,7 @@
  * serve 与 mock 共用;没打包(开发时没跑 pnpm run build:stage)→ null,页面开重卡舞台时什么都不出现,doctor 点名。
  */
 import { existsSync } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,6 +58,23 @@ export async function fileUnder(root: string, rel: string): Promise<StaticFile |
   if (!type) return null;
   if (!(await stat(file).catch(() => null))?.isFile()) return null;
   return { file, contentType: type };
+}
+
+/**
+ * 舞台包的版本:stage.js 的改动时间(打包一次变一次)。拼进孩子端 iframe 的地址与 index.html 里的 stage.js / stage.css:
+ * 舞台包的文件缓存一天,名字又不变,不带版本的话 iPad 上更新后一整天还在跑旧的舞台(2026-10-06 修了的毛病真机上还在)
+ */
+export async function stageVersion(): Promise<string> {
+  const st = await stat(join(STAGE_DIR, 'stage.js')).catch(() => null);
+  return st ? Math.round(st.mtimeMs).toString(36) : '0';
+}
+
+/** /stage/ 的 index.html,stage.js / stage.css 带上版本;调用方当 html 发(不缓存)。没打包 → null */
+export async function stageIndex(): Promise<string | null> {
+  const html = await readFile(join(STAGE_DIR, 'index.html'), 'utf8').catch(() => null);
+  if (html === null) return null;
+  const v = await stageVersion();
+  return html.replace('/stage/stage.js', `/stage/stage.js?v=${v}`).replace('/stage/stage.css', `/stage/stage.css?v=${v}`);
 }
 
 /** /stage/ → index.html;/stage/stage.js|css;/stage/fonts/<路径> → excalidraw 的字体目录 */

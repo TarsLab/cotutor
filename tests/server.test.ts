@@ -65,7 +65,11 @@ try {
   // 舞台包与课包:静态文件;越界、不存在 404;dist/stage 没打包时 /stage/ 404(doctor 点名)
   const { stageBuilt, STAGE_DIR } = await import('../src/server/stage.ts');
   const st = await get('/stage/');
-  check('舞台包:打了包就给 index.html,没打就 404', stageBuilt() ? st.status === 200 && st.file === join(STAGE_DIR, 'index.html') && st.contentType?.startsWith('text/html') === true : st.status === 404, JSON.stringify(st));
+  const { stageVersion } = await import('../src/server/stage.ts');
+  const sv = await stageVersion();
+  check('舞台包:打了包就给 index.html(当 html 发,不缓存;stage.js / stage.css 带版本),没打就 404', stageBuilt() ? st.status === 200 && st.html?.includes(`/stage/stage.js?v=${sv}`) === true && st.html.includes(`/stage/stage.css?v=${sv}`) && sv !== '0' : st.status === 404, JSON.stringify(st).slice(0, 300));
+  const kidHtml = (await get('/')).html ?? '';
+  check('孩子端页面带舞台包的版本(iframe 地址换了,不用浏览器缓存里的旧舞台)', kidHtml.includes(`const STAGE_V = '${sv}';`) && !kidHtml.includes('__STAGE_V__'));
   if (stageBuilt()) check('舞台包 js / css 能取', (await get('/stage/stage.js')).contentType?.startsWith('text/javascript') === true && (await get('/stage/stage.css')).status === 200);
   // 舞台包是拆开的(esbuild splitting):stage.js 只是入口,肉在同目录的 chunk-*.js 里,按需取;整目录都要能给
   if (stageBuilt()) {

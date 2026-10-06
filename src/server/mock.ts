@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { parseBoard } from '../lib/board.ts';
 import { parseCardState, stripSecrets } from '../cards/index.ts';
 import { fileURLToPath } from 'node:url';
-import { bundleAsset, stageAsset } from './stage.ts';
+import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { enrichScenes } from './scene-props.ts';
 import { sendFile } from './send-file.ts';
 import type { ConversationMessage } from '../schema/index.ts';
@@ -602,11 +602,11 @@ export function createMock(opts: MockOptions = {}): Mock {
     await lecturesLoaded;
     const url = new URL(path, 'http://x');
     const p = url.pathname;
-    if (p === '/') return { status: 200, html: kidPage(title) };
+    if (p === '/') return { status: 200, html: kidPage(title, {}, await stageVersion()) };
     if (p === '/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
     // 家长端(《家长板书页设计.md》):同一个页面,家长模式;清单与一天的板书(答案不剥,第一节带一条给家长的尾巴与记忆,看旁注的样子)。mock 没有工作台 /dev
-    if (p === '/parent') return { status: 200, html: kidPage(title, { parent: true }) };
+    if (p === '/parent') return { status: 200, html: kidPage(title, { parent: true }, await stageVersion()) };
     if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };
     // 主题:mock 没有 workspace,直接给包里的出厂 default
     if (p === '/kid/theme.css') return { status: 200, html: `${cardsCss()}\n\n${(await packageTheme()).css}`, contentType: 'text/css; charset=utf-8' };
@@ -855,6 +855,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       return { status: 200, contentType: 'image/svg+xml', html: `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7d9a8"/><stop offset="1" stop-color="#8fbf9f"/></linearGradient></defs><rect width="800" height="500" fill="url(#g)"/><circle cx="260" cy="250" r="90" fill="#e8743b"/><circle cx="420" cy="230" r="80" fill="#f4c542"/><circle cx="560" cy="270" r="85" fill="#e0508a"/><text x="400" y="460" font-size="22" text-anchor="middle" fill="#2b2b2b" font-family="sans-serif">${esc}</text></svg>` };
     }
     if (p.startsWith('/stage/') && method === 'GET') {
+      if (p === '/stage/') { const html = await stageIndex(); return html === null ? { status: 404, json: { error: 'not_found' } } : { status: 200, html }; }
       const f = await stageAsset(p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }

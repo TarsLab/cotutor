@@ -494,6 +494,9 @@ __REEL_JS__
 
   /** 页面的模式:{} = 孩子端;parent = 家长板书页(数据走家长接口,只读,节间插旁注) */
   const MODE = __MODE__;
+  /** 舞台包的版本(src/server/stage.ts stageVersion):iframe 的地址带上它,打包过一次就换一个地址,不用浏览器缓存里的旧舞台 */
+  const STAGE_V = '__STAGE_V__';
+  const stageUrl = (card) => '/stage/?v=' + STAGE_V + '&card=' + encodeURIComponent(card);
   const PARENT = MODE.parent === true;
   /** 孩子端对话接口的前缀(messages / photos / cards / history);家长端只看,一天的板书走自己的路 */
   const CONV = '/api/kid/conversations/';
@@ -1322,7 +1325,7 @@ __REEL_JS__
       if (own) S.lecture = { bundle: l.bundle, title: l.title, ...(own.lecture.video ? { video: true } : {}), watch: { watchedMs: 0, finished: true, pauses: 0 }, sent: true, firstJob: own.job, job: own.job, marks: [], flying: [], log: [] };
     }
     lcShowing = L; dispatch({ type: 'halt' });
-    lcFrame.hidden = false; lcFrame.src = '/stage/?card=lecture';
+    lcFrame.hidden = false; lcFrame.src = stageUrl('lecture');
   };
   const hideLecture = () => { lcShowing = null; lcFrame.hidden = true; lcFrame.src = 'about:blank'; };
   /** 「分:秒」(同 src/lib/lecture.ts 的 clockLabel) */
@@ -1342,7 +1345,7 @@ __REEL_JS__
         else if (m.type === 'svg' || m.type === 'error') { window.removeEventListener('message', onMsg); f.remove(); if (m.type === 'svg') x.done(m); else { lcSvgs.delete(bundle); x.done(null); } }
       };
       window.addEventListener('message', onMsg);
-      f.src = '/stage/?card=lecture-svg';
+      f.src = stageUrl('lecture-svg');
       document.body.append(f);
     }
     return x.p;
@@ -1594,7 +1597,7 @@ __REEL_JS__
     const heavy = isHeavy(card);
     $('#st-body').hidden = heavy;
     frame.hidden = !heavy;
-    if (heavy) { $('#st-body').replaceChildren(); frame.src = '/stage/?card=' + encodeURIComponent(S.stage.id); }
+    if (heavy) { $('#st-body').replaceChildren(); frame.src = stageUrl(S.stage.id); }
     else { frame.src = 'about:blank'; $('#st-body').replaceChildren(renderCard(card, S.stage.card, S.stage.section, true)); }
     const act = $('#st-act'); act.hidden = !hasState(card);
     $('#st-go').textContent = GO_LABEL[card.kind] || '交给老师';
@@ -2863,7 +2866,7 @@ export interface KidPageMode {
 }
 
 /** 孩子端页面:标题(已转义)填进去;mode 见 KidPageMode,不给 = 孩子端 */
-export function kidPage(title: string, mode: KidPageMode = {}): string {
+export function kidPage(title: string, mode: KidPageMode = {}, stageV = '0'): string {
   const shown = mode.parent ? `${title} · 家长` : title;
-  return KID_PAGE.replaceAll('__TITLE__', shown).replace('__SHORT__', shown).replace('__MODE__', JSON.stringify(mode)).replace('__MANIFEST__', mode.parent ? '/parent/manifest.webmanifest' : '/manifest.webmanifest');
+  return KID_PAGE.replaceAll('__TITLE__', shown).replace('__SHORT__', shown).replace('__MODE__', JSON.stringify(mode)).replace('__STAGE_V__', stageV).replace('__MANIFEST__', mode.parent ? '/parent/manifest.webmanifest' : '/manifest.webmanifest');
 }

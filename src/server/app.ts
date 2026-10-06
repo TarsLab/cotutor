@@ -14,6 +14,7 @@ import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
 import { conversationFiles, currentThread, lastJobOf, localDate, threads } from '../lib/conversation.ts';
+import type { LectureMark } from '../lib/lecture.ts';
 import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
@@ -485,13 +486,26 @@ function voiceOf(v: unknown): { data: Buffer; ext: string; seconds: number } | u
   return { data: Buffer.from(m[2], 'base64'), ext, seconds: v.seconds };
 }
 
-/** 孩子看完小课堂带来的(《小课堂设计.md》§七):{bundle, watchedMs, finished, pauses};没带 undefined,形状不对 null(路由回 400) */
-function lectureOf(v: unknown): { bundle: string; watchedMs: number; finished: boolean; pauses: number } | null | undefined {
+/** 一条消息最多带几处圈、一处圈最多几个点(《小课堂设计.md》§四) */
+const MAX_MARKS = 12;
+const MAX_MARK_POINTS = 400;
+
+/** 孩子看完小课堂带来的(《小课堂设计.md》§七):{bundle, watchedMs, finished, pauses, marks?};没带 undefined,形状不对 null(路由回 400) */
+function lectureOf(v: unknown): { bundle: string; watchedMs: number; finished: boolean; pauses: number; marks: LectureMark[] } | null | undefined {
   if (v === undefined) return undefined;
   if (!isObj(v) || typeof v.bundle !== 'string' || !BUNDLE_ID_RE.test(v.bundle) || typeof v.watchedMs !== 'number' || !(v.watchedMs >= 0) || v.watchedMs > 6 * 3600_000 || typeof v.finished !== 'boolean') return null;
   const pauses = v.pauses === undefined ? 0 : v.pauses;
   if (typeof pauses !== 'number' || !Number.isInteger(pauses) || pauses < 0 || pauses > 999) return null;
-  return { bundle: v.bundle, watchedMs: Math.round(v.watchedMs), finished: v.finished, pauses };
+  const raw = v.marks === undefined ? [] : v.marks;
+  if (!Array.isArray(raw) || raw.length > MAX_MARKS) return null;
+  const marks: LectureMark[] = [];
+  for (const m of raw as unknown[]) {
+    if (!isObj(m) || typeof m.atMs !== 'number' || !(m.atMs >= 0) || m.atMs > 6 * 3600_000 || !Array.isArray(m.path) || m.path.length < 3 || m.path.length > MAX_MARK_POINTS) return null;
+    const path = (m.path as unknown[]).map((p) => (Array.isArray(p) && p.length === 2 && p.every((x) => typeof x === 'number' && Number.isFinite(x) && Math.abs(x) < 1e5) ? [Math.round(p[0] as number), Math.round(p[1] as number)] as [number, number] : null));
+    if (path.some((p) => p === null)) return null;
+    marks.push({ atMs: Math.round(m.atMs), path: path as [number, number][] });
+  }
+  return { bundle: v.bundle, watchedMs: Math.round(v.watchedMs), finished: v.finished, pauses, marks };
 }
 
 /** 页面拉今天时的预热参数:?thread= 是页面选着的话题;同一话题 30 秒看一次 */
@@ -658,9 +672,17 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         let pick = thread;
         let home: { button: string; brief?: string } | undefined;
         let continues: { date: string; thread: string } | undefined;
-        // 小课堂(《小课堂设计.md》):看完才能开口——这一条要带 lecture(哪份课包、看完了、看了多久、停过几次),字是孩子说的;新开话题
-        const lecture = lectureOf(body.lecture);
-        if (lecture === null || (body.lecture !== undefined && button?.kind !== 'lecture')) return { status: 400, json: { error: 'bad_request' } };
+        // 小课堂(《小课堂设计.md》):看完才能开口——这一条要带 lecture(哪份课包、看完了、看了多久、停过几次、圈过的几处),字是孩子说的;新开话题。
+        // 问过以后「再看一遍」又圈了:同一话题的下一条带 lecture(只为带新圈的;话题得是从这份课包开始的)
+        let lecture: (NonNullable<ReturnType<typeof lectureOf>> & { again?: true }) | null | undefined = lectureOf(body.lecture);
+        if (lecture === null) return { status: 400, json: { error: 'bad_request' } };
+        if (lecture && button?.kind !== 'lecture') {
+          const idx = thread && !via ? await readIndex(ws, tutor, date) : null;
+          const ths = idx ? threads(idx.messages) : [];
+          const from = idx?.messages.find((m, i) => ths[i] === thread && m.lecture && !m.lecture.again);
+          if (!from || from.lecture?.bundle !== lecture.bundle || !lecture.marks.length) return { status: 400, json: { error: 'bad_request' } };
+          lecture = { ...lecture, again: true };
+        }
         if (button?.kind === 'lecture') {
           if (!lecture || lecture.bundle !== button.bundle || !lecture.finished) return { status: 400, json: { error: 'bad_request', message: '小课堂要看完才能问' } };
           home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };

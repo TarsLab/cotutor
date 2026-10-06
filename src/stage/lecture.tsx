@@ -3,12 +3,47 @@
  * 用 drawtell 公开的 buildAnimatedSvg 画出带 SMIL 逐笔动画的 SVG,时钟自己管(src/lib/lecture.ts):
  * 一段 = 一步,段长 = max(画, 配音);SVG 永远暂停,每帧 setCurrentTime 到这一刻;一个 <audio> 全程复用,换段换 src。
  * 能拖到任意一刻(拖的时候不出声),气口不停,放到结尾一次就算看完(发给页面)。
- * 界面照原型:顶上回去 + 课名,中间画面,下面字幕、进度条(步骤点、拖动、时间)、一行提示。没有错误文案:装不上就发 error。
+ * 圈(§四):停住了就能在画面上圈,一笔一处;记那一刻(课里的毫秒)与路径(课包坐标:屏幕点经 getScreenCTM 反算到 SVG,再减掉导出时的平移),
+ * 进度条上那一刻留一个蓝色记号;圈了、擦了都把整张单子发给页面(页面是圈的主人,带给老师、画圈的卡)。
+ * 界面照原型:顶上回去 + 课名,中间画面,下面字幕、进度条(步骤点、圈的记号、拖动、时间)、一行提示。没有错误文案:装不上就发 error。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildAnimatedSvg } from 'drawtell/player';
 import { clockLabel, lectureAt, lectureClock, type LectureClock } from '../lib/lecture.ts';
 import { loadBundle } from './scene.tsx';
+
+/** 一处圈(页面与舞台之间传的样子):课里的时刻、SVG 停在哪(画缩略图)、路径(课包坐标) */
+export interface StageMark {
+  atMs: number;
+  svgMs: number;
+  path: [number, number][];
+}
+
+/** 装好的小课堂:时钟、带逐笔动画的 SVG(暂停着)、课包坐标 → SVG 坐标的平移(exportToSvg 把元素挪进了 viewBox) */
+export interface BuiltLecture {
+  clock: LectureClock;
+  svg: SVGSVGElement;
+  dx: number;
+  dy: number;
+}
+
+/** 课包 → 时钟 + SVG。平移从第一个带 translate 的元素量:SVG 里第 i 个顶层 <g> 是第 i 个元素,translate = 元素 x/y + 平移 */
+export async function buildLecture(bundleUrl: string): Promise<BuiltLecture> {
+  const scene = await loadBundle(bundleUrl);
+  const clock = lectureClock(scene.skeletons, scene.steps);
+  if (!clock.segments.length) throw new Error('这份课包没有步');
+  const { svg } = await buildAnimatedSvg(clock.skeletons as typeof scene.skeletons);
+  svg.pauseAnimations();
+  let dx = 0, dy = 0;
+  const groups = [...svg.children].filter((e) => e.tagName.toLowerCase() === 'g');
+  for (const [i, g] of groups.entries()) {
+    const el = clock.skeletons[i] as { x?: unknown; y?: unknown } | undefined;
+    const tr = (g.matches('[transform]') ? g : g.querySelector('[transform]'))?.getAttribute('transform') ?? '';
+    const m = /translate\(\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(tr);
+    if (el && m && typeof el.x === 'number' && typeof el.y === 'number') { dx = Number(m[1]) - el.x; dy = Number(m[2]) - el.y; break; }
+  }
+  return { clock, svg, dx, dy };
+}
 
 export interface LectureWatch {
   watchedMs: number;
@@ -19,6 +54,15 @@ export interface LectureWatch {
 export interface LectureStageProps {
   bundleUrl: string;
   title: string;
+  /** 页面手上还没交出去的圈(再看一遍时接着画在进度条上) */
+  marks: StageMark[];
+  /** 从这一刻停着打开(点了圈的卡);不给 = 从头、先点「开始看」 */
+  at?: number;
+  /** 只看不圈(家长端、以前的话题) */
+  view?: boolean;
+  onMarks(marks: StageMark[]): void;
+  /** SVG 装好了:原样的 SVG(给页面画圈的卡的缩略图)与平移 */
+  onSvg?(markup: string, dx: number, dy: number): void;
   onFinished(w: LectureWatch): void;
   onClose(w: LectureWatch): void;
   onError(message: string): void;
@@ -26,12 +70,30 @@ export interface LectureStageProps {
 
 /** 声音和画面差多少就把声音拉回来(毫秒) */
 const RESYNC_MS = 300;
+/** 停在离一处圈多近算「这一刻的圈」(画在画面上、擦得掉) */
+const MARK_NEAR_MS = 400;
+/** 最多圈几处(路由也拦) */
+const MAX_MARKS = 12;
+/** 一笔算一处圈:至少几个点、多大(SVG 单位) */
+const MIN_POINTS = 4;
+const MIN_SIZE = 12;
+/** 一处圈最多留几个点 */
+const MAX_POINTS = 300;
+const INK = '#2f6fd6';
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export function LectureStage({ bundleUrl, title, onFinished, onClose, onError }: LectureStageProps): JSX.Element {
+export function LectureStage({ bundleUrl, title, marks: initialMarks, at: openAt, view = false, onMarks, onSvg, onFinished, onClose, onError }: LectureStageProps): JSX.Element {
   const [clock, setClock] = useState<LectureClock | null>(null);
   const [now, setNow] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState(openAt !== undefined);
+  const [marks, setMarks] = useState<StageMark[]>(initialMarks);
+  const [pen, setPen] = useState(true);
+  /** 刚圈好的那一处的时刻:字幕行换成「圈好了,记在 0:26」 */
+  const [fresh, setFresh] = useState<number | null>(null);
+  const shift = useRef({ dx: 0, dy: 0 });
+  const ink = useRef<SVGGElement | null>(null);
+  const stroke = useRef<{ pts: [number, number][]; el: SVGPathElement } | null>(null);
   const host = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -45,23 +107,29 @@ export function LectureStage({ bundleUrl, title, onFinished, onClose, onError }:
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const scene = await loadBundle(bundleUrl);
-      const c = lectureClock(scene.skeletons, scene.steps);
-      if (!c.segments.length) throw new Error('这份课包没有步');
-      const built = await buildAnimatedSvg(c.skeletons as typeof scene.skeletons);
+      const { clock: c, svg, dx, dy } = await buildLecture(bundleUrl);
       if (cancelled) return;
-      const svg = built.svg;
-      svg.pauseAnimations();
+      onSvg?.(svg.outerHTML, dx, dy);
+      shift.current = { dx, dy };
       svg.removeAttribute('width');
       svg.removeAttribute('height');
       svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
       svg.classList.add('lc-svg');
+      const g = document.createElementNS(SVG_NS, 'g');
+      g.setAttribute('class', 'lc-ink');
+      svg.append(g);
+      ink.current = g;
       host.current?.replaceChildren(svg);
       svgRef.current = svg;
-      svg.setCurrentTime(lectureAt(c, 0).svgMs / 1000);
+      const start = openAt !== undefined ? Math.max(0, Math.min(openAt, c.total)) : 0;
+      t.current = start;
+      svg.setCurrentTime(lectureAt(c, start).svgMs / 1000);
+      setNow(start);
       setClock(c);
     })().catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
     return () => { cancelled = true; };
+    // openAt / onSvg 只在装的时候用一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundleUrl, onError]);
 
   /** 这一段的声音:换段换 src,从段内 offset 放;没有配音 / 放不出来都不拦 */
@@ -116,6 +184,7 @@ export function LectureStage({ bundleUrl, title, onFinished, onClose, onError }:
   const toggle = useCallback(() => {
     if (!clock) return;
     setStarted(true);
+    setFresh(null);
     if (playing) { setPlaying(false); audio.current?.pause(); watch.current.pauses++; return; }
     if (t.current >= clock.total) paint(clock, 0);
     syncAudio(clock, t.current, true);
@@ -146,6 +215,7 @@ export function LectureStage({ bundleUrl, title, onFinished, onClose, onError }:
   const jump = (ms: number): void => {
     if (!clock) return;
     setStarted(true);
+    setFresh(null);
     paint(clock, ms);
     seg.current = -1;
     syncAudio(clock, ms, playing);
@@ -153,10 +223,90 @@ export function LectureStage({ bundleUrl, title, onFinished, onClose, onError }:
 
   useEffect(() => () => { audio.current?.pause(); }, []);
 
+  // ---- 圈 ----
+  const changeMarks = (next: StageMark[]): void => { setMarks(next); onMarks(next); };
+  const here = (m: StageMark): boolean => Math.abs(m.atMs - now) <= MARK_NEAR_MS;
+  const canDraw = Boolean(clock) && started && !playing && pen && !view && marks.length < MAX_MARKS;
+  /** 屏幕点 → SVG 坐标(viewBox 里,怎么缩放都对) */
+  const toSvg = (clientX: number, clientY: number): [number, number] | null => {
+    const m = svgRef.current?.getScreenCTM();
+    if (!m) return null;
+    const p = new DOMPoint(clientX, clientY).matrixTransform(m.inverse());
+    return [p.x, p.y];
+  };
+  const pathD = (pts: readonly [number, number][]): string => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+  const inkPath = (pts: readonly [number, number][]): SVGPathElement => {
+    const el = document.createElementNS(SVG_NS, 'path');
+    el.setAttribute('d', pathD(pts));
+    el.setAttribute('fill', 'none');
+    el.setAttribute('stroke', INK);
+    el.setAttribute('stroke-width', '5');
+    el.setAttribute('stroke-linecap', 'round');
+    el.setAttribute('stroke-linejoin', 'round');
+    el.setAttribute('vector-effect', 'non-scaling-stroke');
+    el.setAttribute('opacity', '0.9');
+    return el;
+  };
+  // 画面上的圈:停着的时候画出这一刻的(课包坐标 + 平移 = SVG 坐标);放着不画
+  useEffect(() => {
+    const g = ink.current;
+    if (!g) return;
+    const { dx, dy } = shift.current;
+    if (playing && !g.childNodes.length) return;
+    const shown = playing ? [] : marks.filter(here);
+    g.replaceChildren(...shown.map((m) => inkPath(m.path.map(([x, y]) => [x + dx, y + dy] as [number, number]))), ...(stroke.current ? [stroke.current.el] : []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marks, now, playing, clock]);
+  const penDown = (e: React.PointerEvent): void => {
+    if (!canDraw || !clock) return;
+    const p = toSvg(e.clientX, e.clientY);
+    if (!p) return;
+    try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* 合成的指针(探针)捕获不了,不碍事 */ }
+    const el = inkPath([p]);
+    ink.current?.append(el);
+    stroke.current = { pts: [p], el };
+  };
+  const penMove = (e: React.PointerEvent): void => {
+    const s = stroke.current;
+    if (!s) return;
+    const p = toSvg(e.clientX, e.clientY);
+    if (!p) return;
+    const last = s.pts[s.pts.length - 1];
+    if (Math.hypot(p[0] - last[0], p[1] - last[1]) < 2) return;
+    s.pts.push(p);
+    s.el.setAttribute('d', pathD(s.pts));
+  };
+  const penUp = (): void => {
+    const s = stroke.current;
+    stroke.current = null;
+    if (!s || !clock) return;
+    s.el.remove();
+    const xs = s.pts.map((p) => p[0]), ys = s.pts.map((p) => p[1]);
+    if (s.pts.length < MIN_POINTS || Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) < MIN_SIZE) { setMarks((m) => [...m]); return; }
+    const step = Math.ceil(s.pts.length / MAX_POINTS);
+    const { dx, dy } = shift.current;
+    const path = s.pts.filter((_, i) => i % step === 0 || i === s.pts.length - 1).map(([x, y]) => [Math.round(x - dx), Math.round(y - dy)] as [number, number]);
+    const at = Math.round(t.current);
+    changeMarks([...marks, { atMs: at, svgMs: Math.round(lectureAt(clock, at).svgMs * 10) / 10, path }].sort((a, b) => a.atMs - b.atMs));
+    setFresh(at);
+  };
+  const erase = (): void => { changeMarks(marks.filter((m) => !here(m))); setFresh(null); };
+  const showMark = (m: StageMark): void => {
+    if (!clock) return;
+    setStarted(true);
+    if (playing) { setPlaying(false); audio.current?.pause(); }
+    paint(clock, m.atMs);
+    seg.current = -1;
+    setFresh(null);
+  };
+
   const at = clock ? lectureAt(clock, now) : null;
   const line = clock && at ? (clock.segments[at.index]?.line ?? '') : '';
   const dots = useMemo(() => (clock ? clock.segments.map((s) => ({ i: s.index, left: (s.start / clock.total) * 100, start: s.start })) : []), [clock]);
   const pct = clock ? (now / clock.total) * 100 : 0;
+  const paused = Boolean(clock) && started && !playing;
+  const herePen = marks.filter(here).length;
+  const say = fresh !== null ? `圈好了,记在 ${clockLabel(fresh)}。问老师的时候,圈的地方会一起带上。` : started ? line : '';
 
   return (
     <div className="lc">
@@ -166,8 +316,20 @@ export function LectureStage({ bundleUrl, title, onFinished, onClose, onError }:
         </button>
         <div className="lc-chip"><span className="lc-tag">小课堂</span><span className="lc-title">{title}</span></div>
       </div>
-      <div className="lc-canvas">
+      <div className={'lc-canvas' + (canDraw ? ' pen' : '')} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp}>
         <div className="lc-host" ref={host} />
+        {paused && !view && (
+          <div className="lc-tools" onPointerDown={(e) => e.stopPropagation()}>
+            <button type="button" className={'lc-tool' + (pen ? ' on' : '')} aria-pressed={pen} onClick={() => setPen(!pen)}>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><ellipse cx="10" cy="10" rx="7.5" ry="6" /></svg>
+              圈一圈
+            </button>
+            <button type="button" className="lc-tool" disabled={!herePen} onClick={erase}>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12.5 9.5 6l4 4L7 16.5H3.5z" /><path d="M9 16.5h6" /></svg>
+              擦掉
+            </button>
+          </div>
+        )}
         {!clock && <div className="stage-wait">课还在路上…</div>}
         {clock && !started && (
           <button type="button" className="lc-start" onClick={toggle}>
@@ -176,12 +338,13 @@ export function LectureStage({ bundleUrl, title, onFinished, onClose, onError }:
           </button>
         )}
       </div>
-      <div className="lc-line">{started ? line : ''}</div>
+      <div className={'lc-line' + (fresh !== null ? ' ink' : '')}>{say}</div>
       <div className="lc-bar">
-        <button type="button" className="lc-play" aria-label={playing ? '暂停' : '播放'} onClick={toggle} disabled={!clock}>
+        <button type="button" className={'lc-play' + (paused && clock && now < clock.total ? ' go' : '')} aria-label={playing ? '暂停' : '播放'} onClick={toggle} disabled={!clock}>
           {playing
             ? <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><rect x="4" y="3" width="4.2" height="14" rx="1" /><rect x="11.8" y="3" width="4.2" height="14" rx="1" /></svg>
             : <svg width="20" height="20" viewBox="0 0 18 18"><path d="M5 3.5v11l9-5.5z" fill="currentColor" /></svg>}
+          {paused && clock && now < clock.total ? <span>接着看</span> : null}
         </button>
         <div className="lc-mid">
           <div className="lc-dots">
@@ -192,9 +355,17 @@ export function LectureStage({ bundleUrl, title, onFinished, onClose, onError }:
           <div className="lc-track" ref={track} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
             <div className="lc-fill" style={{ width: `${pct}%` }} />
             <div className="lc-knob" style={{ left: `${pct}%` }} />
+            {clock && marks.map((m) => (
+              <button key={`${m.atMs}-${m.path.length}`} type="button" className="lc-mark" style={{ left: `${(m.atMs / clock.total) * 100}%` }} aria-label={`看 ${clockLabel(m.atMs)} 圈的`} onPointerDown={(e) => e.stopPropagation()} onClick={() => showMark(m)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round"><ellipse cx="8" cy="8" rx="5.5" ry="4.5" /></svg>
+              </button>
+            ))}
           </div>
         </div>
-        <div className="lc-time">{clockLabel(now)} / {clock ? clockLabel(clock.total) : '0:00'}</div>
+        <div className="lc-time">
+          <span>{clockLabel(now)} / {clock ? clockLabel(clock.total) : '0:00'}</span>
+          {marks.length ? <small>圈了 {marks.length} 处</small> : null}
+        </div>
       </div>
       <div className="lc-hint">看完就能问老师</div>
     </div>

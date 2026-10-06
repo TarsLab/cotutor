@@ -52,6 +52,10 @@ export function renderContextPack(pack: ContextPack): string {
       for (const x of l.lines) out.push(`      - ${yamlScalar(x)}`);
     }
     out.push(`    watched: ${yamlScalar(l.watched)}`);
+    if (l.marks.length) {
+      out.push('    marks:');
+      for (const x of l.marks) out.push(`      - ${yamlScalar(x)}`);
+    }
   }
   if (p.continue) {
     const c = p.continue;

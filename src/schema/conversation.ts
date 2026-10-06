@@ -91,8 +91,21 @@ const MessageObjectSchema = z.object({
   tools: z.array(z.object({ name: z.string().min(1), arg: z.string(), ok: z.boolean().nullable(), chars: z.number().int().nonnegative(), sub: z.boolean().optional() })).optional(),
   /** 这条是回放(cotutor replay,server/replay.ts):原轮的 job。回放落在 evals/ 里,不在 conversations/ */
   replayOf: z.string().min(1).optional(),
-  /** 这条是孩子看完小课堂后的第一条(《小课堂设计.md》§七):哪份课包、课名、看了多久、看完没、停过几次;板书顶上的小课堂卡从这里画 */
-  lecture: z.object({ bundle: z.string().min(1), title: z.string(), watchedMs: z.number().nonnegative(), finished: z.boolean(), pauses: z.number().int().nonnegative() }).optional(),
+  /**
+   * 这条是孩子看完小课堂后的第一条(《小课堂设计.md》§七):哪份课包、课名、看了多久、看完没、停过几次、圈过的几处;节前的小课堂卡与圈的卡从这里画。
+   * again = 问过以后「再看一遍」又圈了,这条只为带上新圈的(节前只画圈的卡)。圈:时刻、SVG 停在哪(缩略图)、路径(课包坐标)、算出来的那段话
+   */
+  lecture: z
+    .object({
+      bundle: z.string().min(1),
+      title: z.string(),
+      watchedMs: z.number().nonnegative(),
+      finished: z.boolean(),
+      pauses: z.number().int().nonnegative(),
+      again: z.literal(true).optional(),
+      marks: z.array(z.object({ atMs: z.number().nonnegative(), svgMs: z.number().nonnegative(), path: z.array(z.tuple([z.number(), z.number()])), text: z.string().optional() })).optional(),
+    })
+    .optional(),
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2);开场按钮的 text 就是按钮上的字,不是孩子说的 */
   via: MessageViaSchema.optional(),
   /** 这个话题接着以前哪天的哪个话题(首页的「接着」按钮;新会话,上下文包带那个话题的尾巴) */

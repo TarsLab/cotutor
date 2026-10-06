@@ -2,6 +2,8 @@
  * 小课堂全流程(假 CLI,不花钱,《小课堂设计.md》):首页草稿写 `小课堂 <课包 id> <字>` → 检查(课包不在要改)→ 发布 →
  * 孩子端首页的小课堂按钮带课名与课长 → 没看完不能开口(400)→ 看完开口:新话题、上下文包 lecture:(每句起点与原话、看的情况)、
  * 消息记 lecture → 孩子端那一条带小课堂、家长端多看到看的情况。
+ * 圈:第一条带两处圈 → 上下文包 marks:(每处一段话)、消息记圈(SVG 时刻、那段话)、孩子端不带那段话、家长端带;
+ * 问过以后再看一遍又圈了 → 同一话题下一条带上(again);不是这份课包开头的话题、没带圈、没带话题都 400。
  */
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -49,7 +51,10 @@ try {
   const via = { home: kh.home, button: btn!.id };
   const watch = { bundle: BUNDLE, watchedMs: 47_000, finished: true, pauses: 2 };
   check('按小课堂按钮开口:没带看的情况 400;没看完 400;课包对不上 400;不是小课堂按钮却带了 400', (await send({ text: '问', via })).status === 400 && (await send({ text: '问', via, lecture: { ...watch, finished: false } })).status === 400 && (await send({ text: '问', via, lecture: { ...watch, bundle: 'other-one' } })).status === 400 && (await send({ text: '问', via: { home: kh.home, button: 'new' }, lecture: watch })).status === 400 && (await send({ text: '问', via, lecture: { bundle: BUNDLE } })).status === 400);
-  const r = await send({ text: '为什么要拆开那一捆', via, lecture: watch });
+  const ring = (cx: number, cy: number, rx: number, ry: number): [number, number][] => Array.from({ length: 20 }, (_, k) => [Math.round(cx + rx * Math.cos((k / 20) * 2 * Math.PI)), Math.round(cy + ry * Math.sin((k / 20) * 2 * Math.PI))] as [number, number]);
+  const marks = [{ atMs: 26_000, path: ring(334, 120, 45, 50) }, { atMs: 46_000, path: ring(600, 214, 40, 20) }];
+  check('圈的形状不对 400:点太少、坐标不是数、多过 12 处', (await send({ text: '问', via, lecture: { ...watch, marks: [{ atMs: 1, path: [[1, 1], [2, 2]] }] } })).status === 400 && (await send({ text: '问', via, lecture: { ...watch, marks: [{ atMs: 1, path: [[1, 'x'], [2, 2], [3, 3]] }] } })).status === 400 && (await send({ text: '问', via, lecture: { ...watch, marks: Array.from({ length: 13 }, () => marks[0]) } })).status === 400);
+  const r = await send({ text: '为什么要拆开那一捆', via, lecture: { ...watch, marks } });
   await wait();
   const { job, thread, date } = r.json as { job: string; thread: string; date: string };
   const idx = await readIndex(ctx.ws, 'math-tutor', date);
@@ -57,16 +62,31 @@ try {
   check('看完开口:202、新话题、字是孩子说的、记 via 与 lecture(课名从课包来)', r.status === 202 && thread === job && m?.text === '为什么要拆开那一捆' && m.via?.label === '13 减 8 怎么拆' && m.lecture?.bundle === BUNDLE && m.lecture.title === '13 − 8 破十法' && m.lecture.pauses === 2 && m.lecture.finished, JSON.stringify(m));
   const run = await readRunFile(ctx.ws, 'math-tutor', date, job);
   const prompt = run?.prompt ?? '';
-  check('上下文包 lecture:课名、来源、课长、每句起点与原话、看的情况;home: 带讲法', prompt.includes('  lecture:\n    title: "13 − 8 破十法"\n    source: "bundle 2026-09-18-po13-jian-8"\n    length: ') && prompt.includes('      - "0:00 先看 13 减 8。') && prompt.includes('    watched: "看完了,停过 2 次"') && prompt.includes('    brief: "他常把 13 当成 1 和 3"') && prompt.includes('---\n为什么要拆开那一捆'), prompt.slice(0, 1600));
-  const lines = prompt.split('\n').filter((l) => /^ {6}- "\d+:\d\d /.test(l));
+  check('上下文包 lecture:课名、来源、课长、每句起点与原话、看的情况;home: 带讲法', prompt.includes('  lecture:\n    title: "13 − 8 破十法"\n    source: "bundle 2026-09-18-po13-jian-8"\n    length: ') && prompt.includes('      - "0:00 先看 13 减 8。') && prompt.includes('    watched: "看完了,停过 2 次,圈了 2 处"') && prompt.includes('    brief: "他常把 13 当成 1 和 3"') && prompt.includes('---\n为什么要拆开那一捆'), prompt.slice(0, 1600));
+  const lines = prompt.split('\n').filter((l) => /^ {6}- "\d+:\d\d /.test(l) && !l.includes(' 圈的,'));
   check('每句一行,六句,起点递增', lines.length === 6, JSON.stringify(lines));
+  check('上下文包 marks:每处一段话(时刻、那时在讲哪句、圈住了什么);watched 带圈了几处', prompt.includes('    watched: "看完了,停过 2 次,圈了 2 处"\n    marks:\n      - "0:26 圈的,那时在讲『那就拆开这一捆') && prompt.includes('第 1 步画的 3 条线(旁边写着『3』)') && prompt.includes('      - "0:46 圈的,') && prompt.includes('文字『5』'), prompt.slice(prompt.indexOf('  lecture:'), prompt.indexOf('  lecture:') + 1400));
+  check('消息记圈:时刻、SVG 停在哪、路径、那段话', m?.lecture?.marks?.length === 2 && m.lecture.marks[0].atMs === 26_000 && m.lecture.marks[0].svgMs > 1000 && m.lecture.marks[0].path.length === 20 && (m.lecture.marks[0].text ?? '').startsWith('0:26 圈的'), JSON.stringify(m?.lecture?.marks?.[0]).slice(0, 300));
   const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; lecture?: { bundle: string; title: string } }[] };
   const pb = (await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as { messages: { job: string; lecture?: unknown; lectureWatch?: { watchedMs: number; pauses: number } }[] };
-  check('孩子端那一条带小课堂(课包、课名),不带看的情况;家长端多看到看了多久、停过几次', JSON.stringify(kd.messages.find((x) => x.job === job)?.lecture) === JSON.stringify({ bundle: BUNDLE, title: '13 − 8 破十法' }) && pb.messages.find((x) => x.job === job)?.lectureWatch?.pauses === 2 && !('lectureWatch' in (kd.messages.find((x) => x.job === job) ?? {})));
+  const kl = kd.messages.find((x) => x.job === job)?.lecture as { bundle: string; title: string; marks?: { atMs: number; svgMs: number; path: unknown[]; text?: string }[] } | undefined;
+  const pl = pb.messages.find((x) => x.job === job) as { lecture?: { marks?: { text?: string }[] } } | undefined;
+  check('孩子端那一条带小课堂(课包、课名、圈:时刻 / SVG 时刻 / 路径),不带看的情况、不带那段话', kl?.bundle === BUNDLE && kl.title === '13 − 8 破十法' && kl.marks?.length === 2 && kl.marks[0].svgMs > 0 && kl.marks[0].path.length === 20 && kl.marks.every((k) => !('text' in k)) && !('lectureWatch' in (kd.messages.find((x) => x.job === job) ?? {})), JSON.stringify(kl).slice(0, 300));
+  check('家长端多看到看了多久、停过几次,圈带那段话', pb.messages.find((x) => x.job === job)?.lectureWatch?.pauses === 2 && (pl?.lecture?.marks?.[0]?.text ?? '').includes('第 1 步画的 3 条线'));
   const r2 = await send({ text: '还有呢', thread });
   await wait();
   const run2 = await readRunFile(ctx.ws, 'math-tutor', date, (r2.json as { job: string }).job);
   check('同一话题再问:普通的一条,不再带 lecture:', r2.status === 202 && !(run2?.prompt ?? '').includes('  lecture:'));
+
+  // 问过以后再看一遍又圈了:同一话题下一条带上新圈的
+  const again = { bundle: BUNDLE, watchedMs: 30_000, finished: false, pauses: 1, marks: [{ atMs: 40_000, path: ring(600, 160, 40, 18) }] };
+  check('再看一遍的圈:没带话题 400、话题不是这份课包开头的 400、没带圈 400、课包对不上 400', (await send({ text: '这里', lecture: again })).status === 400 && (await send({ text: '这里', thread: '0800-9', lecture: again })).status === 400 && (await send({ text: '这里', thread, lecture: { ...again, marks: [] } })).status === 400 && (await send({ text: '这里', thread, lecture: { ...again, bundle: '2026-01-01-other' } })).status === 400);
+  const r3 = await send({ text: '这里为什么是 2', thread, lecture: again });
+  await wait();
+  const j3 = (r3.json as { job: string; thread: string }).job;
+  const m3 = (await readIndex(ctx.ws, 'math-tutor', date)).messages.find((x) => x.job === j3);
+  const p3 = (await readRunFile(ctx.ws, 'math-tutor', date, j3))?.prompt ?? '';
+  check('再看一遍的圈:同一话题、记 again 与新圈、上下文包 watched 说又看了一遍、marks 一处', r3.status === 202 && (r3.json as { thread: string }).thread === thread && m3?.lecture?.again === true && m3.lecture.marks?.length === 1 && p3.includes('    watched: "又看了一遍,看到 0:30,停过 1 次,圈了 1 处"') && p3.includes('      - "0:40 圈的,'), p3.slice(p3.indexOf('  lecture:'), p3.indexOf('  lecture:') + 900));
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

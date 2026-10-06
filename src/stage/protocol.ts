@@ -20,4 +20,8 @@ export type FromStage =
   | { source: typeof STAGE_SOURCE; type: 'close' }
   /** 小课堂(《小课堂设计.md》):放到结尾一次 = finished;孩子按回去 = close。都带看了多久、停过几次 */
   | { source: typeof STAGE_SOURCE; type: 'lecture'; event: 'finished' | 'close'; watchedMs: number; finished: boolean; pauses: number }
+  /** 小课堂里圈了 / 擦了:整张单子(时刻、SVG 停在哪、课包坐标的路径);页面是圈的主人(卡 props.marks 发进来的就是它) */
+  | { source: typeof STAGE_SOURCE; type: 'marks'; marks: { atMs: number; svgMs: number; path: [number, number][] }[] }
+  /** 小课堂的 SVG 装好了(播放器顺手发;页面也可以装一个看不见的舞台 kind lecture-svg 专门要):原样的 SVG 与课包坐标 → SVG 坐标的平移,页面拿它画圈的卡 */
+  | { source: typeof STAGE_SOURCE; type: 'svg'; markup: string; dx: number; dy: number }
   | { source: typeof STAGE_SOURCE; type: 'error'; message: string };

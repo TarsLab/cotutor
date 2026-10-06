@@ -642,6 +642,14 @@ export function isQuestion(text: string): boolean {
 }
 
 /** 孩子端条目里页面用到的字段(与 kid-view 的 KidMessage 兼容) */
+/** 孩子端一条带的小课堂(《小课堂设计.md》§五):圈的卡现画那一刻的画面再叠圈;家长端的圈多一段老师拿到的话(text);again = 再看一遍又圈的那条 */
+export interface KidLecture {
+  bundle: string;
+  title: string;
+  again?: true;
+  marks?: { atMs: number; svgMs: number; path: [number, number][]; text?: string }[];
+}
+
 export interface BoardMessage {
   job: string;
   at?: string;
@@ -652,7 +660,7 @@ export interface BoardMessage {
   /** 孩子这条带的作业照片(相对 workspace 根;R5):节头上回显缩略图 */
   photos?: string[];
   /** 看完小课堂后的第一条(《小课堂设计.md》):这一节前面是小课堂卡 */
-  lecture?: { bundle: string; title: string };
+  lecture?: KidLecture;
 }
 
 export interface BoardEntry extends BoardSection {
@@ -663,7 +671,7 @@ export interface BoardEntry extends BoardSection {
   /** 孩子问这节时拍的照片(节头上回显) */
   photos?: string[];
   /** 这一节答的是看完小课堂后的第一问:节前画小课堂卡 */
-  lecture?: { bundle: string; title: string };
+  lecture?: KidLecture;
 }
 
 /**

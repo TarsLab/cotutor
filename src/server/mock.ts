@@ -24,9 +24,9 @@ import { lettersData } from './letters.ts';
 
 /** mock 的课包目录:仓库里的样本(tests/fixtures/bundles/),场景卡从这里播 */
 export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bundles/', import.meta.url));
-import { lineDurationMs, readyBeats, type BoardSection, type PenName } from '../lib/kid-board.ts';
+import { lineDurationMs, readyBeats, type BoardSection, type KidLecture, type PenName } from '../lib/kid-board.ts';
 import { REEL_LINE_GAP_MS, buildReel } from '../lib/reel.ts';
-import { lectureClock, type LectureSkeleton, type LectureStep } from '../lib/lecture.ts';
+import { describeMark, lectureAt, lectureClock, type LectureClock, type LectureSkeleton, type LectureStep } from '../lib/lecture.ts';
 import type { CardStates } from '../lib/conversation.ts';
 import { lanAddresses, listenInfo } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
@@ -373,8 +373,10 @@ interface MockMessage {
   states?: Record<number, unknown>;
   /** 孩子这条带的照片(假路径;/api/kid/image 给占位图) */
   photos?: string[];
-  /** 看完小课堂后的第一条:节前画小课堂卡 */
-  lecture?: { bundle: string; title: string };
+  /** 看完小课堂后的第一条:节前画小课堂卡与圈的卡(圈带那段话;孩子端下发时摘掉) */
+  lecture?: KidLecture;
+  /** 家长端多看到的看的情况 */
+  lectureWatch?: { watchedMs: number; finished: boolean; pauses: number };
 }
 
 /** mock 的首页原文(昨晚 21:30 发布的那份;接着按钮指向 past 里昨天的话题,job = 0930-<老师名长度>) */
@@ -483,7 +485,8 @@ export function createMock(opts: MockOptions = {}): Mock {
   const booked = new Set<string>();
   /** 下发孩子端的形状:答案剥掉、状态并到卡上、场景卡补课包快照(样本课包在仓库里) */
   const kidMessage = async (m: MockMessage) => {
-    const { states, action: _a, ...rest } = m;
+    const { states, action: _a, lectureWatch: _w, ...rest } = m;
+    if (rest.lecture?.marks) rest.lecture = { ...rest.lecture, marks: rest.lecture.marks.map(({ text: _t, ...k }) => k) };
     const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => (states && i in states ? { ...c, state: states[i] } : c)) } : null;
     const section = withState ? await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, stripSecrets(withState)) : null;
     return { ...rest, section };
@@ -491,13 +494,14 @@ export function createMock(opts: MockOptions = {}): Mock {
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
   const tutorsJson = () => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, motto: t.motto, hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0 }));
   /** 小课堂:样本课包在仓库里(tests/fixtures/bundles/),同步读、记住 */
-  const lectures = new Map<string, { title: string; ms: number } | null>();
-  const mockLecture = (id: string): { title: string; ms: number } | null => {
+  const lectures = new Map<string, { title: string; ms: number; clock: LectureClock } | null>();
+  const mockLecture = (id: string): { title: string; ms: number; clock: LectureClock } | null => {
     if (!lectures.has(id)) {
       try {
         const scene = JSON.parse(readFileSync(join(MOCK_BUNDLES_DIR, id, 'scene.json'), 'utf8')) as { title?: string; skeletons: LectureSkeleton[] };
         const steps = (JSON.parse(readFileSync(join(MOCK_BUNDLES_DIR, id, 'manifest.json'), 'utf8')) as { steps: LectureStep[] }).steps;
-        lectures.set(id, steps.length ? { title: String(scene.title ?? id), ms: lectureClock(scene.skeletons, steps).total } : null);
+        const clock = lectureClock(scene.skeletons, steps);
+        lectures.set(id, steps.length ? { title: String(scene.title ?? id), ms: clock.total, clock } : null);
       } catch { lectures.set(id, null); }
     }
     return lectures.get(id) ?? null;
@@ -729,9 +733,14 @@ export function createMock(opts: MockOptions = {}): Mock {
         let said = body.text;
         let newThread = body.newThread === true;
         let wantThread = body.thread;
-        // 小课堂:看完才能开口,字是孩子说的,新话题
-        const lec = isObj(body.lecture) && typeof body.lecture.bundle === 'string' ? { bundle: body.lecture.bundle, finished: body.lecture.finished === true } : null;
-        if (lec && (typeof button !== 'object' || button === null || button.kind !== 'lecture')) return { status: 400, json: { error: 'bad_request' } };
+        // 小课堂:看完才能开口,字是孩子说的,新话题;圈的那几处现算成一段话(同 runner)。问过以后再看一遍又圈了:同一话题的下一条带上(again)
+        const marksIn = isObj(body.lecture) && Array.isArray(body.lecture.marks) ? (body.lecture.marks as { atMs: number; path: [number, number][] }[]) : [];
+        const lec = isObj(body.lecture) && typeof body.lecture.bundle === 'string' ? { bundle: body.lecture.bundle, finished: body.lecture.finished === true, again: false, watchedMs: Number(body.lecture.watchedMs) || 0, pauses: Number(body.lecture.pauses) || 0 } : null;
+        if (lec && (typeof button !== 'object' || button === null || button.kind !== 'lecture')) {
+          const from = list.find((x) => x.thread === body.thread && x.lecture && !x.lecture.again);
+          if (!from || from.lecture?.bundle !== lec.bundle || !marksIn.length) return { status: 400, json: { error: 'bad_request' } };
+          lec.again = true;
+        }
         if (typeof button === 'object' && button !== null && button.kind === 'lecture') {
           if (!lec || lec.bundle !== button.bundle || !lec.finished) return { status: 400, json: { error: 'bad_request' } };
           newThread = true; wantThread = undefined;
@@ -754,7 +763,8 @@ export function createMock(opts: MockOptions = {}): Mock {
           } else thread = list[list.length - 1].thread;
         }
         const lt = lec ? mockLecture(lec.bundle) : null;
-        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle } } : {}) };
+        const marks = lt ? marksIn.map((k) => ({ atMs: k.atMs, svgMs: lectureAt(lt.clock, k.atMs).svgMs, path: k.path, text: describeMark(lt.clock, k).text })) : [];
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses } } : {}) };
         list.push(m);
         const done = think(t, m, cursor).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);

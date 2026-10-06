@@ -1,120 +1,18 @@
 /**
- * 小课堂(《小课堂设计.md》)的时钟:课包的每一步首尾相接成一条时间线,像视频一样能拖到任意一刻。纯函数,服务端(课长、上下文包
- * lecture: 的每句起点)与舞台包(播放器)共用。
+ * 小课堂(《小课堂设计.md》)的纯函数:服务端(课长、上下文包 lecture: 的每句起点、圈住了什么)与舞台包(播放器)共用。
  *
- * 画的部分照 drawtell 的 timeline.ts(dist/player/timeline.js)一字不差地算:笔画串行、单笔 animateDuration 缺省 500、
- * 起点 START_MS;按配音拉伸(只拉不缩、封顶 5 倍)。drawtell 的包只导出整个播放器(带 React),服务端 import 不了,
- * 所以照抄一份;tests/lecture.test.ts 拿 drawtell 的原函数对。
- *
- * 时钟:一段 = 一步,段长 = max(这步画多久, 这步配音多久)——画完了定格,声音接着讲;声音先完,等画完。
- * 课的 0 毫秒对着 SVG 的 START_MS(开头那一秒空白不算进课里)。
+ * 课包的时钟、几何、圈住了什么都在 drawtell/core(纯计算,不带 React,服务端能 import):一段 = 一步,段长 = max(画, 配音),
+ * 课的 0 毫秒对着 SVG 的 START_MS;笔画按配音拉伸,和 buildAnimatedSvg 画出来的同一份时间。这里用小课堂的名字转出来
+ * (视频也有时钟,videoClock),外加小课堂自己的:时间怎么写、上下文包的每句、老师放的那一段、视频的 lecture.md。
  */
+import { circleHits, clockAt, describeCircle, type LessonPicture } from 'drawtell/core';
+import type { LessonClock, LessonSegment } from 'drawtell/core';
 
-/** drawtell timeline.ts 的常量 */
-export const DRAW_START_MS = 1000;
-const DEFAULT_DUR = 500;
-const MAX_STRETCH = 5;
-/** 步尾定格退半毫秒(drawtell FREEZE_EPS_MS:停在整点会露出下一笔的起点) */
-const FREEZE_EPS_MS = 0.5;
-
-export interface LectureSkeleton {
-  id: string;
-  animateDuration?: number;
-  [key: string]: unknown;
-}
-export interface LectureStep {
-  step: number;
-  elementIds: string[];
-  line: string;
-  audioSrc?: string;
-  audioDurationMs?: number;
-}
-
-export interface LectureSegment {
-  /** 第几步(0 起,与 steps 同序) */
-  index: number;
-  /** 这一段在课里的起点与长度(毫秒) */
-  start: number;
-  len: number;
-  /** 这一步笔画在 SVG 时间线上的窗(毫秒,含 DRAW_START_MS) */
-  drawStart: number;
-  drawEnd: number;
-  /** 配音时长;没有配音 = null */
-  audioMs: number | null;
-  line: string;
-  audioSrc?: string;
-}
-
-export interface LectureClock {
-  /** 拉伸后的元素(给 buildAnimatedSvg;时长和这条时钟同一份数) */
-  skeletons: LectureSkeleton[];
-  segments: LectureSegment[];
-  /** 课长(毫秒) */
-  total: number;
-  /** 每个元素在 SVG 时间线上什么时候开始画、画完(毫秒) */
-  elements: Map<string, { start: number; end: number; step: number }>;
-}
-
-export const durationOf = (e: { animateDuration?: number }): number => e.animateDuration ?? DEFAULT_DUR;
-
-/** 课包 → 时钟。steps 的 elementIds 要按顺序覆盖全部元素(drawtell 的约定);没对上的元素不进任何一段 */
-export function lectureClock(skeletons: readonly LectureSkeleton[], steps: readonly LectureStep[]): LectureClock {
-  const byId = new Map(skeletons.map((e) => [e.id, e]));
-  // 拉伸:有配音、配音比画长,这一步的笔画等比放大到 ≈ 配音时长(封顶 5 倍)
-  const factor = new Map<string, number>();
-  for (const s of steps) {
-    const els = s.elementIds.map((id) => byId.get(id)).filter((e): e is LectureSkeleton => !!e);
-    const drawMs = els.reduce((a, e) => a + durationOf(e), 0);
-    const audioMs = s.audioDurationMs ?? null;
-    const f = audioMs && drawMs > 0 && audioMs > drawMs ? Math.min(audioMs / drawMs, MAX_STRETCH) : 1;
-    for (const e of els) factor.set(e.id, f);
-  }
-  const stretched = skeletons.map((e) => {
-    const f = factor.get(e.id) ?? 1;
-    return f === 1 ? e : { ...e, animateDuration: Math.round(durationOf(e) * f) };
-  });
-  const elements = new Map<string, { start: number; end: number; step: number }>();
-  const stepOf = new Map<string, number>();
-  steps.forEach((s, i) => s.elementIds.forEach((id) => stepOf.set(id, i)));
-  let cur = DRAW_START_MS;
-  for (const e of stretched) {
-    const start = cur;
-    cur += durationOf(e);
-    elements.set(e.id, { start, end: cur, step: stepOf.get(e.id) ?? -1 });
-  }
-  const segments: LectureSegment[] = [];
-  let prevDraw = DRAW_START_MS;
-  let at = 0;
-  steps.forEach((s, i) => {
-    const last = s.elementIds[s.elementIds.length - 1];
-    const drawEnd = last !== undefined ? (elements.get(last)?.end ?? prevDraw) : prevDraw;
-    const drawStart = prevDraw;
-    const audioMs = s.audioDurationMs ?? null;
-    const len = Math.max(drawEnd - drawStart, audioMs ?? 0, 1);
-    segments.push({ index: i, start: at, len, drawStart, drawEnd, audioMs, line: s.line, ...(s.audioSrc ? { audioSrc: s.audioSrc } : {}) });
-    at += len;
-    prevDraw = drawEnd;
-  });
-  return { skeletons: stretched, segments, total: at, elements };
-}
-
-/** 课里的某一刻 → 第几段、段内多少、SVG 该停在哪(毫秒)。越界夹到 0..total */
-export function lectureAt(clock: Pick<LectureClock, 'segments' | 'total'>, ms: number): { index: number; offset: number; svgMs: number } {
-  const t = Math.max(0, Math.min(ms, clock.total));
-  const segs = clock.segments;
-  if (!segs.length) return { index: -1, offset: 0, svgMs: DRAW_START_MS };
-  let i = segs.findIndex((s) => t < s.start + s.len);
-  if (i < 0) i = segs.length - 1;
-  const s = segs[i];
-  const offset = t - s.start;
-  return { index: i, offset, svgMs: Math.min(s.drawStart + offset, s.drawEnd - FREEZE_EPS_MS) };
-}
-
-/** 那一刻画面上已经有的元素(开始画了就算;画到一半的也算) */
-export function drawnAt(clock: Pick<LectureClock, 'segments' | 'total' | 'elements'>, ms: number): string[] {
-  const { svgMs } = lectureAt(clock, ms);
-  return [...clock.elements].filter(([, w]) => w.start <= svgMs).map(([id]) => id);
-}
+export { lessonClock as lectureClock, clockAt as lectureAt, START_MS as DRAW_START_MS } from 'drawtell/core';
+export type { ChalkSkeleton as LectureSkeleton, ChalkStep as LectureStep, ChalkBlock as LectureBlock, ChalkGroup as LectureGroup, LessonPicture as LecturePicture } from 'drawtell/core';
+/** 小课堂的时钟:课包的(drawtell lessonClock)或视频的(videoClock,没有画面元素) */
+export type LectureClock = LessonClock;
+export type LectureSegment = LessonSegment;
 
 /** 毫秒 → 「分:秒」;一小时以上「时:分:秒」 */
 export function clockLabel(ms: number): string {
@@ -137,150 +35,16 @@ export interface LectureMark {
   atMs: number;
   path: [number, number][];
 }
-/** drawtell 的词级命中块(scene.blocks):圈住块里的字,说块的 text */
-export interface LectureBlock {
-  id: string;
-  elementIds: string[];
-  text: string;
-}
-
-interface Box { minX: number; minY: number; maxX: number; maxY: number }
-const num = (v: unknown, d = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
-const pointsOf = (e: LectureSkeleton): [number, number][] | null =>
-  Array.isArray(e.points) ? (e.points as unknown[]).filter((p): p is [number, number] => Array.isArray(p) && p.length >= 2).map((p) => [num(e.x) + num(p[0]), num(e.y) + num(p[1])]) : null;
-
-/** 文字的宽:场景里的文字不带量过的宽(drawtell 在浏览器里量),这里估:汉字一个字号宽,其余半个多 */
-export function textBox(e: LectureSkeleton): Box {
-  const size = num(e.fontSize, 20);
-  const rows = String(e.text ?? '').split('\n');
-  const w = Math.max(0, ...rows.map((r) => [...r].reduce((a, ch) => a + (ch === ' ' ? 0.3 : ch.codePointAt(0)! >= 0x2e80 ? 1 : 0.55), 0))) * size;
-  const width = typeof e.width === 'number' && e.width > w ? e.width : w;
-  return { minX: num(e.x), minY: num(e.y), maxX: num(e.x) + width, maxY: num(e.y) + rows.length * size * 1.25 };
-}
-
-/** 元素上取的样点:文字取包围盒里的九宫格,线取沿线的点,框 / 椭圆 / 菱形取边上的点(圈在框里面的东西不算圈住了框) */
-function samplesOf(e: LectureSkeleton): [number, number][] {
-  if (e.type === 'text') {
-    const b = textBox(e);
-    const out: [number, number][] = [];
-    for (const fx of [0.2, 0.5, 0.8]) for (const fy of [0.25, 0.5, 0.75]) out.push([b.minX + (b.maxX - b.minX) * fx, b.minY + (b.maxY - b.minY) * fy]);
-    return out;
-  }
-  const pts = pointsOf(e);
-  if (pts && pts.length) {
-    if (pts.length === 1) return pts;
-    const out: [number, number][] = [];
-    const per = Math.max(2, Math.ceil(12 / (pts.length - 1)));
-    for (let i = 1; i < pts.length; i++) for (let k = 0; k <= per; k++) { if (i > 1 && k === 0) continue; const t = k / per; out.push([pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t]); }
-    return out;
-  }
-  const x = num(e.x), y = num(e.y), w = num(e.width), h = num(e.height);
-  const out: [number, number][] = [];
-  for (let k = 0; k < 16; k++) {
-    const a = (k / 16) * Math.PI * 2;
-    if (e.type === 'ellipse') out.push([x + w / 2 + (w / 2) * Math.cos(a), y + h / 2 + (h / 2) * Math.sin(a)]);
-    else if (e.type === 'diamond') { const c = Math.cos(a), s = Math.sin(a), k1 = 1 / (Math.abs(c) + Math.abs(s)); out.push([x + w / 2 + (w / 2) * c * k1, y + h / 2 + (h / 2) * s * k1]); }
-    else { const t = (k / 16) * 4, side = Math.floor(t), f = t - side; out.push(side === 0 ? [x + w * f, y] : side === 1 ? [x + w, y + h * f] : side === 2 ? [x + w * (1 - f), y + h] : [x, y + h * (1 - f)]); }
-  }
-  return out;
-}
-
-function boxOf(pts: readonly [number, number][]): Box {
-  return { minX: Math.min(...pts.map((p) => p[0])), minY: Math.min(...pts.map((p) => p[1])), maxX: Math.max(...pts.map((p) => p[0])), maxY: Math.max(...pts.map((p) => p[1])) };
-}
-const elementBox = (e: LectureSkeleton): Box => (e.type === 'text' ? textBox(e) : boxOf(samplesOf(e)));
-
-/** 点在不在圈里(圈首尾连上;射线法) */
-function inside(poly: readonly [number, number][], [x, y]: [number, number]): boolean {
-  let hit = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, yi] = poly[i], [xj, yj] = poly[j];
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
-  }
-  return hit;
-}
-const boxGap = (a: Box, b: Box): number => Math.hypot(Math.max(0, a.minX - b.maxX, b.minX - a.maxX), Math.max(0, a.minY - b.maxY, b.minY - a.maxY));
-
-const SHAPE_WORD: Record<string, [string, string]> = { line: ['条', '线'], arrow: ['个', '箭头'], rectangle: ['个', '框'], ellipse: ['个', '圈'], diamond: ['个', '菱形'], freedraw: ['处', '笔画'], image: ['张', '图'] };
-/** 笔画颜色 → 一个字(黑、灰不说) */
-export function colorWord(hex: unknown): string {
-  const m = typeof hex === 'string' ? /^#?([0-9a-f]{6})$/i.exec(hex.trim()) : null;
-  if (!m) return '';
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
-  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
-  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
-  if (s < 0.3 || l < 0.15 || l > 0.92) return '';
-  const h = (max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60;
-  return h < 15 || h >= 340 ? '红' : h < 40 ? '橙' : h < 70 ? '黄' : h < 170 ? '绿' : h < 255 ? '蓝' : '紫';
-}
-
-/** 样点有多少在圈里算圈住了 */
-const HIT_SHARE = 0.5;
-/** 什么都没圈住时,离圈多近的东西算「旁边」(课包坐标) */
-const NEAR = 80;
 
 /**
  * 一处圈 → 一段话给老师(上下文包 lecture.marks)与家长(圈的卡下面那行):
- * 「0:26 圈的,那时在讲『…』;圈住了:文字『3』;第 1 步画的 3 条线(旁边写着『3』)」。
- * 只看那一刻画面上已经有的(开始画了就算);文字先认块(blocks)的 text;线、框这类没字的说第几步画的、几条、什么颜色、旁边写着什么;
- * 什么都没圈住说离它最近的那样东西;画面上那一带什么都没有也照实说。
+ * 「0:26 圈的,那时在讲『…』;圈住了:散的 3 根小棒;文字『3』」。
+ * 圈住了什么由 drawtell 的 circleHits 认(分组 > 命中块 > 带 label 的元素 > 文字 > 没字的按第几步、什么、颜色归堆),这里只拼上时刻与那句讲稿。
  */
-export function describeMark(clock: LectureClock, mark: LectureMark, blocks: readonly LectureBlock[] = []): { text: string; ids: string[] } {
-  const at = lectureAt(clock, mark.atMs);
-  const line = clock.segments[at.index]?.line.trim() ?? '';
-  const head = `${clockLabel(mark.atMs)} 圈的${line ? `,那时在讲『${line}』` : ''}`;
-  const poly = mark.path;
-  if (poly.length < 3) return { text: `${head};圈得太小,看不出圈的是什么`, ids: [] };
-  const shown = clock.skeletons.filter((e) => { const w = clock.elements.get(e.id); return w !== undefined && w.start < at.svgMs; });
-  const ring = boxOf(poly);
-  const hits = shown.filter((e) => {
-    const s = samplesOf(e);
-    if (!s.length) return false;
-    if (s.filter((p) => inside(poly, p)).length / s.length >= HIT_SHARE) return true;
-    // 长的一行字里圈了几个字:圈整个落在这行字里
-    const b = e.type === 'text' ? textBox(e) : null;
-    return b !== null && ring.minX >= b.minX - 8 && ring.maxX <= b.maxX + 8 && ring.minY >= b.minY - 8 && ring.maxY <= b.maxY + 8;
-  });
-  const texts = shown.filter((e) => e.type === 'text');
-  const quote = (e: LectureSkeleton): string => `『${String(e.text ?? '').replace(/\s*\n\s*/g, ' ').trim()}』`;
-  const stepOf = (e: LectureSkeleton): number => clock.elements.get(e.id)?.step ?? -1;
-  const shapeName = (type: string, color: string, n: number): string => {
-    const [m, noun] = SHAPE_WORD[type] ?? ['样', '东西'];
-    return `${n > 1 ? ` ${n} ${m}` : ''}${color ? `${color}色的` : ''}${noun}`;
-  };
-
-  if (!hits.length) {
-    const center: Box = { minX: (ring.minX + ring.maxX) / 2, maxX: (ring.minX + ring.maxX) / 2, minY: (ring.minY + ring.maxY) / 2, maxY: (ring.minY + ring.maxY) / 2 };
-    const near = shown.map((e) => ({ e, d: boxGap(elementBox(e), ring) })).filter((x) => x.d <= NEAR).sort((a, b) => a.d - b.d || boxGap(elementBox(a.e), center) - boxGap(elementBox(b.e), center))[0];
-    if (!near) return { text: `${head};圈的地方那时还没画东西`, ids: [] };
-    const what = near.e.type === 'text' ? `文字${quote(near.e)}` : `第 ${stepOf(near.e) + 1} 步画的${shapeName(String(near.e.type), colorWord(near.e.strokeColor), 1)}`;
-    return { text: `${head};没圈住东西,圈在${what}旁边`, ids: [] };
-  }
-
-  const parts: string[] = [];
-  const hitIds = new Set(hits.map((e) => e.id));
-  // 文字:圈住了块里的字就说整个块
-  const said = new Set<string>();
-  const words: string[] = [];
-  for (const e of hits.filter((x) => x.type === 'text')) {
-    const b = blocks.find((k) => k.elementIds.includes(e.id));
-    if (b) { if (!said.has(b.id)) { said.add(b.id); words.push(`『${b.text}』`); } }
-    else words.push(quote(e));
-  }
-  if (words.length) parts.push(`文字${words.join('、')}`);
-  // 没字的:按(第几步、什么、颜色)归成一堆,说几样、旁边写着什么
-  const groups = new Map<string, LectureSkeleton[]>();
-  for (const e of hits.filter((x) => x.type !== 'text')) {
-    const k = `${stepOf(e)}|${String(e.type)}|${colorWord(e.strokeColor)}`;
-    groups.set(k, [...(groups.get(k) ?? []), e]);
-  }
-  for (const [k, els] of groups) {
-    const [step, type, color] = k.split('|');
-    const gb = boxOf(els.flatMap((e) => { const b = elementBox(e); return [[b.minX, b.minY], [b.maxX, b.maxY]] as [number, number][]; }));
-    const label = texts.filter((t) => !hitIds.has(t.id)).map((t) => ({ t, d: boxGap(textBox(t), gb) })).filter((x) => x.d <= NEAR / 2).sort((a, b) => a.d - b.d)[0];
-    parts.push(`第 ${Number(step) + 1} 步画的${shapeName(type, color, els.length)}${label ? `(旁边写着${quote(label.t)})` : ''}`);
-  }
-  return { text: `${head};圈住了:${parts.join(';')}`, ids: hits.map((e) => e.id) };
+export function describeMark(clock: LectureClock, mark: LectureMark, picture: LessonPicture = {}): { text: string; ids: string[] } {
+  const r = circleHits(clock, mark.atMs, mark.path, picture);
+  const line = r.line.trim();
+  return { text: `${clockLabel(mark.atMs)} 圈的${line ? `,那时在讲『${line}』` : ''};${describeCircle(r)}`, ids: r.ids };
 }
 
 // ---- 老师放课里的一段(《小课堂设计.md》§六):lecture 卡写「<课包 id> 0:19-0:30」 ----
@@ -307,7 +71,7 @@ export function lectureRange(clock: Pick<LectureClock, 'segments' | 'total'>, fr
   let end: number;
   if (to !== undefined) end = Math.min(snap(to), clock.total);
   else if (from === undefined) end = clock.total;
-  else { const i = lectureAt(clock, start).index; end = clock.segments[i].start + clock.segments[i].len; }
+  else { const i = clockAt(clock, start).index; end = clock.segments[i].start + clock.segments[i].len; }
   return end > start ? { start, end } : null;
 }
 

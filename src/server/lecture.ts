@@ -6,7 +6,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BUNDLE_ID_RE } from '../cards/scene.ts';
 import { mp4DurationMs } from './mp4.ts';
-import { LECTURE_FILE, LECTURE_VIDEO, clockLabel, describeMark, lectureAt, lectureClock, lectureLines, lectureRange, parseLectureDoc, videoClock, type LectureBlock, type LectureClock, type LectureMark, type LectureSkeleton, type LectureStep } from '../lib/lecture.ts';
+import { LECTURE_FILE, LECTURE_VIDEO, clockLabel, describeMark, lectureAt, lectureClock, lectureLines, lectureRange, parseLectureDoc, videoClock, type LectureClock, type LectureMark, type LecturePicture, type LectureSkeleton, type LectureStep } from '../lib/lecture.ts';
 import type { ContextPack } from '../schema/index.ts';
 import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
 
@@ -17,8 +17,8 @@ export interface Lecture {
   /** 课包的科目(scene.json 的 subject);没写 = null */
   subject: string | null;
   clock: LectureClock;
-  /** drawtell 的词级命中块(scene.blocks);圈住块里的字说块的 text */
-  blocks: LectureBlock[];
+  /** 画面的语义(课包的 groups、blocks 与 build 时量好的 bounds):圈住了什么靠它说;视频没有 */
+  picture: LecturePicture;
   /** 视频(lectures/<id>/video.mp4);false = 课包 */
   video: boolean;
 }
@@ -51,18 +51,24 @@ export async function inspectLecture(ws: LectureDirs, id: string): Promise<{ lec
   if (hasVideo && total === null) problems.push(`lectures/${id}/${LECTURE_VIDEO} 读不出时长(要是 mp4)`);
   if (total !== null) for (const c of doc.chapters.filter((x) => x.start >= total)) problems.push(`lectures/${id}/${LECTURE_FILE} 第 ${c.at} 行:${clockLabel(c.start)} 超过了视频的长度 ${clockLabel(total)}`);
   if (problems.length || total === null) return { lecture: null, problems };
-  return { lecture: { id, title: doc.title, problem: '', subject: doc.subject, clock: videoClock(doc.chapters, total), blocks: [], video: true }, problems: [] };
+  return { lecture: { id, title: doc.title, problem: '', subject: doc.subject, clock: videoClock(doc.chapters, total), picture: {}, video: true }, problems: [] };
 }
 
 async function readBundleLecture(ws: LectureDirs, id: string): Promise<Lecture | null> {
   const dir = join(ws.dirs.bundles, id);
   try {
-    const scene = JSON.parse(await readFile(join(dir, 'scene.json'), 'utf8')) as { title?: unknown; problem?: unknown; subject?: unknown; skeletons?: unknown; blocks?: unknown };
-    const manifest = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) as { steps?: unknown };
+    const scene = JSON.parse(await readFile(join(dir, 'scene.json'), 'utf8')) as { title?: unknown; problem?: unknown; subject?: unknown; skeletons?: unknown; groups?: unknown; bounds?: unknown };
+    const manifest = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) as { steps?: unknown; blocks?: unknown };
     if (!Array.isArray(scene.skeletons) || !Array.isArray(manifest.steps) || !manifest.steps.length) return null;
     const clock = lectureClock(scene.skeletons as LectureSkeleton[], manifest.steps as LectureStep[]);
-    const blocks = Array.isArray(scene.blocks) ? (scene.blocks as Partial<LectureBlock>[]).filter((b): b is LectureBlock => typeof b?.id === 'string' && typeof b.text === 'string' && Array.isArray(b.elementIds)) : [];
-    return { id, title: String(scene.title ?? id), problem: String(scene.problem ?? ''), subject: typeof scene.subject === 'string' ? scene.subject : null, clock, blocks, video: false };
+    // 分组与 bounds 在 scene.json(画面),命中块在 manifest.json(交互);形状不对的丢掉,不拦
+    const listOf = <T extends { elementIds: unknown }>(v: unknown, ok: (x: Record<string, unknown>) => boolean): T[] => (Array.isArray(v) ? (v as Record<string, unknown>[]).filter((x) => x && typeof x === 'object' && Array.isArray(x.elementIds) && ok(x)) as unknown as T[] : []);
+    const picture: LecturePicture = {
+      groups: listOf(scene.groups, (g) => typeof g.id === 'string' && typeof g.label === 'string'),
+      blocks: listOf(manifest.blocks, (b) => typeof b.id === 'string' && typeof b.text === 'string'),
+      ...(scene.bounds && typeof scene.bounds === 'object' ? { bounds: scene.bounds as NonNullable<LecturePicture['bounds']> } : {}),
+    };
+    return { id, title: String(scene.title ?? id), problem: String(scene.problem ?? ''), subject: typeof scene.subject === 'string' ? scene.subject : null, clock, picture, video: false };
   } catch {
     return null;
   }
@@ -99,7 +105,7 @@ export function storedMarks(l: Lecture | null, marks: readonly IncomingMark[], p
     const shot = m.image ? ++k : null;
     const base = { atMs: m.atMs, svgMs: l && !l.video ? Math.round(lectureAt(l.clock, m.atMs).svgMs * 10) / 10 : 0, path: m.path, ...(m.image ? { image: m.image } : {}), ...(m.t !== undefined ? { t: m.t } : {}) };
     if (!l) return base;
-    if (!l.video) return { ...base, text: describeMark(l.clock, m, l.blocks).text };
+    if (!l.video) return { ...base, text: describeMark(l.clock, m, l.picture).text };
     const line = l.clock.segments[lectureAt(l.clock, m.atMs).index]?.line.trim() ?? '';
     return { ...base, text: `${clockLabel(m.atMs)} 圈的${line ? `,那时在讲『${line}』` : ''};${shot ? `圈在截图上(photos 第 ${shot} 张)` : '没有截图,看不出圈的是什么'}` };
   });

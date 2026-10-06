@@ -1,5 +1,5 @@
 /**
- * 小课堂卡(《小课堂设计.md》§六):老师答孩子时放课里的一段,不另讲一遍。正文第一行「<课包 id> 0:19-0:30」,第二行可以写一句给孩子的话。
+ * 小课堂卡(《小课堂设计.md》§六):老师答孩子时放课里的一段,不另讲一遍。正文第一行「<课包或视频的 id> 0:19-0:30」,第二行可以写一句给孩子的话。
  * 拿现成的课包,不起画图老师(场景卡放新 id 会起);时间照上下文包 lecture.lines 抄。
  * 课名、真放的起止(对齐到段界,lib/lecture.ts lectureRange)、能不能放(ready)、末帧停在 SVG 的哪一刻,都是服务端下发时从课包现算的快照(src/server/lecture.ts 的 enrichLectures)。
  * 状态 = 那一段看完没;讲稿 [[play]] 锚到它:念到那句,铺满放那一段(课里原来的声音),放完停在末帧接着念。
@@ -26,6 +26,8 @@ export const LecturePropsSchema = z.object({
   still: z.number().nonnegative().optional(),
   /** 课包读得出来、起止对得上 */
   ready: z.boolean().optional(),
+  /** 这一课是视频(lectures/<id>/video.mp4),不是课包 */
+  video: z.boolean().optional(),
 });
 export type LectureProps = z.infer<typeof LecturePropsSchema>;
 

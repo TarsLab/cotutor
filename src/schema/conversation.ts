@@ -103,7 +103,10 @@ const MessageObjectSchema = z.object({
       finished: z.boolean(),
       pauses: z.number().int().nonnegative(),
       again: z.literal(true).optional(),
-      marks: z.array(z.object({ atMs: z.number().nonnegative(), svgMs: z.number().nonnegative(), path: z.array(z.tuple([z.number(), z.number()])), text: z.string().optional() })).optional(),
+      /** 视频小课堂(lectures/<id>/);没有 = 课包 */
+      video: z.literal(true).optional(),
+      /** 视频的圈带一张截图(captures/ 里,已叠上圈;路径相对 workspace 根) */
+      marks: z.array(z.object({ atMs: z.number().nonnegative(), svgMs: z.number().nonnegative(), path: z.array(z.tuple([z.number(), z.number()])), text: z.string().optional(), image: z.string().optional() })).optional(),
     })
     .optional(),
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2);开场按钮的 text 就是按钮上的字,不是孩子说的 */

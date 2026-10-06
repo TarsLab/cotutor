@@ -654,7 +654,9 @@ export interface KidLecture {
   bundle: string;
   title: string;
   again?: true;
-  marks?: { atMs: number; svgMs: number; path: [number, number][]; text?: string }[];
+  /** 视频小课堂:圈的卡是截下来的图(image),不现画 */
+  video?: true;
+  marks?: { atMs: number; svgMs: number; path: [number, number][]; text?: string; image?: string }[];
 }
 
 export interface BoardMessage {

@@ -98,6 +98,7 @@ const PAGE = `<!doctype html>
   .c-mark .mk-main { display:flex; align-items:center; gap:12px; cursor:pointer; padding-right:34px; }
   .c-mark .mk-th { width:156px; height:80px; flex:none; border:1px solid var(--line); border-radius:10px; overflow:hidden; display:grid; place-items:center; background:#fff; }
   .c-mark .mk-svg { width:100%; height:100%; display:block; }
+  .c-mark img.mk-svg { object-fit:contain; }
   .c-mark .mk-t { display:flex; flex-direction:column; gap:2px; }
   .c-mark .mk-t small { font-size:13px; font-weight:700; color:#2f6fd6; }
   .c-mark .mk-t b { font-size:22px; font-variant-numeric:tabular-nums; }
@@ -619,7 +620,7 @@ __REEL_JS__
     else if (b.id === 'recent') openTutor(t, { kind: 'thread', thread: b.thread, via });
     else if (b.kind === 'start') openTutor(t, { kind: 'new', via, send: b.label });
     // 小课堂:新话题,先铺满放课;看完才能开口,开口那条带上 via 与看的情况
-    else if (b.kind === 'lecture') openTutor(t, { kind: 'new', via, lecture: { bundle: b.bundle, title: b.title || b.label } });
+    else if (b.kind === 'lecture') openTutor(t, { kind: 'new', via, lecture: { bundle: b.bundle, title: b.title || b.label, ...(b.video ? { video: true } : {}) } });
     else if (b.date === S.home.date) openTutor(t, { kind: 'thread', thread: b.thread, via, send: b.label });
     else openTutor(t, { kind: 'new', via, send: b.label, cont: b.date });
   };
@@ -818,7 +819,7 @@ __REEL_JS__
       case 'lecture': {
         // 小课堂卡(《小课堂设计.md》§六):老师放课里的一段;紧凑态是那一段末帧的画面、「0:19–0:30 ▷」;舞台是舞台包里的小课堂播放器
         const ready = lectureReady(c);
-        return box('lecture', h('div', { class: 'sp' }, p.title || p.bundle || ''), p.text ? h('div', { class: 'tx' }, p.text) : null, h('div', { class: 'th' }, ready ? lcStill(p.bundle, p.still || 0, null, 'lc-still') : '课还没放进来', ready ? h('span', { class: 'pl' }, lcClock(p.start) + '–' + lcClock(p.end) + ' ▷') : null));
+        return box('lecture', h('div', { class: 'sp' }, p.title || p.bundle || ''), p.text ? h('div', { class: 'tx' }, p.text) : null, h('div', { class: 'th' }, ready ? (p.video ? lcVideoStill(p.bundle, p.end) : lcStill(p.bundle, p.still || 0, null, 'lc-still')) : '课还没放进来', ready ? h('span', { class: 'pl' }, lcClock(p.start) + '–' + lcClock(p.end) + ' ▷') : null));
       }
       case 'canvas': {
         const n = inkCount(c);
@@ -1304,7 +1305,8 @@ __REEL_JS__
   //      问过以后「再看一遍」又圈了,下一条带上(again)。圈的卡的缩略图 = 同一份 SVG 停在那一刻再叠圈(录数据不录屏幕) ----
   const lcFrame = $('#lc-frame');
   const lcPost = (m) => { try { lcFrame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
-  const lcBundleUrl = (bundle) => '/api/bundles/' + encodeURIComponent(bundle) + '/';
+  /** 小课堂在哪:课包 /api/bundles/<id>/;视频 /api/kid/lectures/<id>/(lecture.json + video.mp4) */
+  const lcBundleUrl = (bundle, video) => (video ? '/api/kid/lectures/' : '/api/bundles/') + encodeURIComponent(bundle) + '/';
   let lcShowing = null;
   /** 正在放的就是孩子手上这一课(圈记到 S.lecture) */
   const lcMine = () => Boolean(S.lecture && lcShowing && lcShowing.bundle === S.lecture.bundle && !PARENT && !S.readonly);
@@ -1313,7 +1315,7 @@ __REEL_JS__
     // 问过以后(刷新过、或从别处回来,手上没有 S.lecture)从节前的小课堂卡再看一遍:这个话题接着收圈,下一条带上
     if (l && !PARENT && !S.readonly && !S.newThread && (!S.lecture || S.lecture.bundle !== l.bundle)) {
       const own = S.sections.find((x) => x.lecture && !x.lecture.again && x.lecture.bundle === l.bundle);
-      if (own) S.lecture = { bundle: l.bundle, title: l.title, watch: { watchedMs: 0, finished: true, pauses: 0 }, sent: true, firstJob: own.job, job: own.job, marks: [], flying: [] };
+      if (own) S.lecture = { bundle: l.bundle, title: l.title, ...(own.lecture.video ? { video: true } : {}), watch: { watchedMs: 0, finished: true, pauses: 0 }, sent: true, firstJob: own.job, job: own.job, marks: [], flying: [] };
     }
     lcShowing = L; dispatch({ type: 'halt' });
     lcFrame.hidden = false; lcFrame.src = '/stage/?card=lecture';
@@ -1367,10 +1369,17 @@ __REEL_JS__
     });
     return box;
   };
-  const markThumb = (bundle, mk) => lcStill(bundle, mk.svgMs, mk.path, 'mk-th');
+  /** 圈的卡的缩略图:视频的是截下来的那张(还没发的是 data URL,发了是 captures/ 路径);课包的现画 */
+  /** 视频那一段末尾的一帧(小课堂卡的缩略图):<video> 停在 end 前一点,不出声 */
+  const lcVideoStill = (bundle, end) => {
+    const v = h('video', { class: 'lc-still', src: lcBundleUrl(bundle, true) + 'video.mp4#t=' + Math.max(0, (end - 200) / 1000).toFixed(2), playsinline: '', preload: 'metadata' });
+    v.muted = true;
+    return v;
+  };
+  const markThumb = (l, mk) => mk.image ? h('div', { class: 'mk-th' }, h('img', { class: 'mk-svg', alt: '', src: mk.image.startsWith('data:') ? mk.image : '/api/kid/image?p=' + encodeURIComponent(mk.image) })) : lcStill(l.bundle, mk.svgMs, mk.path, 'mk-th');
   /** 一张圈的卡:缩略图 + 「你圈的」+ 时刻;点了从那一刻停着打开小课堂;del = 看完还没交出去的能删;家长端下面一行老师拿到的那段话 */
   const markCard = (l, mk, del) => h('div', { class: 'c c-mark', 'data-at': String(mk.atMs) },
-    h('div', { class: 'mk-main', on: { click: (e) => { e.stopPropagation(); openLecture({ bundle: l.bundle, title: l.title, at: mk.atMs }); } } }, markThumb(l.bundle, mk), h('div', { class: 'mk-t' }, h('small', {}, PARENT ? '孩子圈的' : '你圈的'), h('b', {}, lcClock(mk.atMs)))),
+    h('div', { class: 'mk-main', on: { click: (e) => { e.stopPropagation(); openLecture({ bundle: l.bundle, title: l.title, at: mk.atMs, ...(l.video ? { video: true } : {}) }); } } }, markThumb(l, mk), h('div', { class: 'mk-t' }, h('small', {}, PARENT ? '孩子圈的' : '你圈的'), h('b', {}, lcClock(mk.atMs)))),
     del ? h('button', { type: 'button', class: 'x', 'aria-label': '删掉这个圈', on: { click: (e) => { e.stopPropagation(); del(); } } }, '×') : null,
     PARENT ? h('div', { class: 'mk-tx' }, mk.text || '(课包读不出来,没算出圈住了什么)') : null);
   const markRow = (l, marks, del) => h('div', { class: 'mk-row' }, ...marks.map((k) => markCard(l, k, del ? () => del(k) : null)));
@@ -1379,7 +1388,7 @@ __REEL_JS__
     const n = (l.marks || []).length;
     return h('div', { class: 'c c-lc', 'data-lecture': l.bundle },
       h('div', { class: 'lt' }, h('small', {}, '小课堂'), h('b', {}, l.title || ''), h('span', {}, '看完了' + (n ? ' · 圈了 ' + n + ' 处' : done ? '' : ' · 有不懂的就问老师'))),
-      h('button', { type: 'button', class: 're', on: { click: (e) => { e.stopPropagation(); openLecture({ bundle: l.bundle, title: l.title }); } } }, '再看一遍'));
+      h('button', { type: 'button', class: 're', on: { click: (e) => { e.stopPropagation(); openLecture({ bundle: l.bundle, title: l.title, ...(l.video ? { video: true } : {}) }); } } }, '再看一遍'));
   };
   /** 一节前面的小课堂:第一问那节是小课堂卡 + 圈的卡;再看一遍又圈的那节只有圈的卡 */
   const lectureHead = (s) => !s.lecture ? [] : [s.lecture.again ? null : lectureCard(s.lecture, true), s.lecture.marks && s.lecture.marks.length ? markRow(s.lecture, s.lecture.marks, null) : null];
@@ -1401,7 +1410,7 @@ __REEL_JS__
     const del = (k) => { L.marks = L.marks.filter((x) => x !== k); renderLecturePending(); };
     const ask = !L.sent ? h('div', { class: 'lc-ask' }, h('b', {}, '看完了!有什么想问老师的?'), h('span', {}, marks.length ? '圈的 ' + marks.length + ' 处,问的时候会一起带给老师;不想带的点 × 去掉' : '按住说话,或者打字'))
       : marks.length ? h('div', { class: 'lc-ask sm' }, h('span', {}, '又圈了 ' + marks.length + ' 处,下次说话会一起带给老师;不想带的点 × 去掉')) : null;
-    const el = h('div', { class: 'lc-pending', 'data-key': key }, showCard ? lectureCard({ bundle: L.bundle, title: L.title, marks: L.sent ? flying : marks }, false) : null,
+    const el = h('div', { class: 'lc-pending', 'data-key': key }, showCard ? lectureCard({ bundle: L.bundle, title: L.title, video: L.video, marks: L.sent ? flying : marks }, false) : null,
       flying.length || marks.length ? h('div', { class: 'mk-row' }, ...flying.map((k) => markCard(L, k, null)), ...marks.map((k) => markCard(L, k, () => del(k)))) : null, ask);
     if (old) old.remove();
     if (showCard) $('#board').prepend(el); else $('#board').append(el);
@@ -1409,7 +1418,7 @@ __REEL_JS__
   window.addEventListener('message', (e) => {
     const m = e.data;
     if (!m || m.source !== STAGE_SOURCE || e.source !== lcFrame.contentWindow || !lcShowing) return;
-    if (m.type === 'ready') lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle) });
+    if (m.type === 'ready') lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
     else if (m.type === 'svg') { const x = lcSvgSlot(lcShowing.bundle); x.asked = true; x.done(m); }
     else if (m.type === 'marks') { if (lcMine()) S.lecture.marks = m.marks; }
     else if (m.type === 'lecture') {
@@ -1601,7 +1610,7 @@ __REEL_JS__
   const stageCard = (card) => {
     const b = card.kind === 'scene' || card.kind === 'lecture' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null;
     const im = card.kind === 'canvas' && card.props.base && typeof card.props.base.image === 'string' ? card.props.base.image : null;
-    return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? '/api/bundles/' + encodeURIComponent(b) + '/' : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
+    return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? lcBundleUrl(b, card.kind === 'lecture' && card.props.video === true) : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
   };
   /** 舞台包说话:ready → 把卡发过去;phase → 字幕行;state → 存;done 且是讲稿委托的 → 关舞台接着念 */
   window.addEventListener('message', (e) => {
@@ -2056,7 +2065,11 @@ __REEL_JS__
     if (S.via) body.via = S.via;
     // 小课堂:看完后的第一条带看的情况与圈;问过以后再看一遍又圈了,下一条带新圈的
     const L = S.lecture;
-    if (L && L.watch && (!L.sent || L.marks.length)) body.lecture = { bundle: L.bundle, ...(L.sent ? (L.rewatch || { watchedMs: 0, finished: false, pauses: 0 }) : L.watch), ...(L.marks.length ? { marks: L.marks.map((k) => ({ atMs: k.atMs, path: k.path })) } : {}) };
+    // 视频的圈带截图:先传成 captures/ 里的文件(同照片),换成路径;传不上就不带这张图
+    if (L && L.marks && L.marks.some((k) => k.image && k.image.startsWith('data:'))) {
+      for (const k of L.marks) if (k.image && k.image.startsWith('data:')) { try { const r = await api('POST', CONV + S.tutor.name + '/photos', { image: k.image }); k.image = r.path; } catch { delete k.image; } }
+    }
+    if (L && L.watch && (!L.sent || L.marks.length)) body.lecture = { bundle: L.bundle, ...(L.sent ? (L.rewatch || { watchedMs: 0, finished: false, pauses: 0 }) : L.watch), ...(L.marks.length ? { marks: L.marks.map((k) => ({ atMs: k.atMs, path: k.path, ...(k.image ? { image: k.image } : {}) })) } : {}) };
     try {
       const r = await api('POST', CONV + S.tutor.name + '/messages', body);
       S.via = null;

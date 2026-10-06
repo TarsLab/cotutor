@@ -106,7 +106,7 @@ export interface KidMessage {
 
 /** 索引里的小课堂 → 孩子端(圈不带那段话)/ 家长端(带) */
 function lectureView(l: NonNullable<ConversationMessage['lecture']>, parent: boolean): KidLecture {
-  return { bundle: l.bundle, title: l.title, ...(l.again ? { again: true as const } : {}), ...(l.marks?.length ? { marks: l.marks.map((m) => ({ atMs: m.atMs, svgMs: m.svgMs, path: m.path, ...(parent && m.text ? { text: m.text } : {}) })) } : {}) };
+  return { bundle: l.bundle, title: l.title, ...(l.again ? { again: true as const } : {}), ...(l.video ? { video: true as const } : {}), ...(l.marks?.length ? { marks: l.marks.map((m) => ({ atMs: m.atMs, svgMs: m.svgMs, path: m.path, ...(m.image ? { image: m.image } : {}), ...(parent && m.text ? { text: m.text } : {}) })) } : {}) };
 }
 
 /** 孩子做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到这轮的卡上;都没有就原样 */

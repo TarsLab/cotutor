@@ -5,7 +5,6 @@
  * R3 加:孩子端 `/`(kidPage)与 /api/kid/*(首页:课程表 + 老师卡 + 家长发布的首页卡;对话:服务端过滤后的孩子视图;发消息:from 固定 kid、每日上限 429)、配音文件 /api/audio。
  * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
-import { createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { appendFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -14,7 +13,6 @@ import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
 import { conversationFiles, currentThread, lastJobOf, localDate, threads } from '../lib/conversation.ts';
-import type { LectureMark } from '../lib/lecture.ts';
 import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
@@ -31,7 +29,7 @@ import { kidHomeView, messageVia, resolveVia } from './home.ts';
 import { DEV_PAGE } from './dev-page.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
-import { parseRange } from '../lib/range.ts';
+import { sendFile } from './send-file.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets, type Heard, type RecordProps } from '../cards/index.ts';
 import { BUNDLE_ID_RE } from '../cards/scene.ts';
@@ -41,7 +39,7 @@ import { bundleAsset, stageAsset } from './stage.ts';
 import { themeFiles } from './theme.ts';
 import { enrichScenes } from './scene-props.ts';
 import { enrichMaterials } from './material.ts';
-import { enrichLectures } from './lecture.ts';
+import { enrichLectures, inspectLecture, type IncomingMark } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
@@ -492,19 +490,21 @@ const MAX_MARKS = 12;
 const MAX_MARK_POINTS = 400;
 
 /** 孩子看完小课堂带来的(《小课堂设计.md》§七):{bundle, watchedMs, finished, pauses, marks?};没带 undefined,形状不对 null(路由回 400) */
-function lectureOf(v: unknown): { bundle: string; watchedMs: number; finished: boolean; pauses: number; marks: LectureMark[] } | null | undefined {
+function lectureOf(v: unknown): { bundle: string; watchedMs: number; finished: boolean; pauses: number; marks: IncomingMark[] } | null | undefined {
   if (v === undefined) return undefined;
   if (!isObj(v) || typeof v.bundle !== 'string' || !BUNDLE_ID_RE.test(v.bundle) || typeof v.watchedMs !== 'number' || !(v.watchedMs >= 0) || v.watchedMs > 6 * 3600_000 || typeof v.finished !== 'boolean') return null;
   const pauses = v.pauses === undefined ? 0 : v.pauses;
   if (typeof pauses !== 'number' || !Number.isInteger(pauses) || pauses < 0 || pauses > 999) return null;
   const raw = v.marks === undefined ? [] : v.marks;
   if (!Array.isArray(raw) || raw.length > MAX_MARKS) return null;
-  const marks: LectureMark[] = [];
+  const marks: IncomingMark[] = [];
   for (const m of raw as unknown[]) {
     if (!isObj(m) || typeof m.atMs !== 'number' || !(m.atMs >= 0) || m.atMs > 6 * 3600_000 || !Array.isArray(m.path) || m.path.length < 3 || m.path.length > MAX_MARK_POINTS) return null;
     const path = (m.path as unknown[]).map((p) => (Array.isArray(p) && p.length === 2 && p.every((x) => typeof x === 'number' && Number.isFinite(x) && Math.abs(x) < 1e5) ? [Math.round(p[0] as number), Math.round(p[1] as number)] as [number, number] : null));
     if (path.some((p) => p === null)) return null;
-    marks.push({ atMs: Math.round(m.atMs), path: path as [number, number][] });
+    // 视频的圈带一张截图(先 POST photos 拿到的 captures/ 路径;在不在由路由再查)
+    if (m.image !== undefined && (typeof m.image !== 'string' || m.image.length > 200)) return null;
+    marks.push({ atMs: Math.round(m.atMs), path: path as [number, number][], ...(typeof m.image === 'string' ? { image: m.image } : {}) });
   }
   return { bundle: v.bundle, watchedMs: Math.round(v.watchedMs), finished: v.finished, pauses, marks };
 }
@@ -677,6 +677,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         // 问过以后「再看一遍」又圈了:同一话题的下一条带 lecture(只为带新圈的;话题得是从这份课包开始的)
         let lecture: (NonNullable<ReturnType<typeof lectureOf>> & { again?: true }) | null | undefined = lectureOf(body.lecture);
         if (lecture === null) return { status: 400, json: { error: 'bad_request' } };
+        if (lecture) {
+          const shots = lecture.marks.flatMap((k) => (k.image ? [k.image] : []));
+          if (shots.length + (photos?.length ?? 0) > 9) return { status: 400, json: { error: 'bad_request', message: '照片和圈的截图一共最多 9 张' } };
+          for (const x of shots) if (!(await capturePathOk(ws, x))) return { status: 400, json: { error: 'bad_request' } };
+        }
         if (lecture && button?.kind !== 'lecture') {
           const idx = thread && !via ? await readIndex(ws, tutor, date) : null;
           const ths = idx ? threads(idx.messages) : [];
@@ -739,6 +744,14 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (lt && method === 'GET') {
       const d = lettersData(decodeURIComponent(lt[1]));
       return d ? { status: 200, json: d, cacheControl: 'max-age=86400' } : { status: 404, json: { error: 'not_found' } };
+    }
+    // 视频小课堂(《小课堂设计.md》§八第 4 步):lectures/<id>/ 的课名与一句一段(舞台包的播放器拼时钟用),与 video.mp4(Range 由 sendFile 管)
+    const lv = /^\/api\/kid\/lectures\/([a-z0-9][a-z0-9-]*)\/(lecture\.json|video\.mp4)$/.exec(p);
+    if (lv && method === 'GET') {
+      const { lecture: l } = await inspectLecture(ws, lv[1]);
+      if (!l?.video) return { status: 404, json: { error: 'not_found' } };
+      if (lv[2] === 'video.mp4') return { status: 200, file: join(ws.dirs.lectures, lv[1], 'video.mp4'), contentType: 'video/mp4', cacheControl: 'no-cache' };
+      return { status: 200, json: { title: l.title, total: l.clock.total, segments: l.clock.segments.map((x) => ({ start: x.start, len: x.len, line: x.line })) } };
     }
     // 素材的一段视频(《卡片协议.md》「素材卡」):materials/<id>/<n>.mp4。分段取(Range)由 sendFile 管;家长重渲了同名文件要马上见到,no-cache
     const mat = /^\/api\/kid\/material\/([a-z0-9][a-z0-9-]*)\/(\d{1,3})\.mp4$/.exec(p);
@@ -999,27 +1012,6 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
  * 发文件(配音、图、素材视频……):都带 accept-ranges 与长度;GET 带单段 Range → 206 只发那一段(iPad Safari 放视频非这样不可,
  * 先要 bytes=0-1,拿不到 206 就不放;音频拖动也靠它),起点越界 416;HEAD 只发头。文件读之前没了 → 404
  */
-async function sendFile(req: IncomingMessage, res: ServerResponse, r: RouteResult & { file: string }): Promise<void> {
-  const st = await stat(r.file).catch(() => null);
-  if (!st?.isFile()) {
-    res.writeHead(404, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-    res.end(JSON.stringify({ error: 'not_found' }));
-    return;
-  }
-  const head = { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': r.cacheControl ?? 'private, max-age=86400', 'accept-ranges': 'bytes' };
-  const range = r.status === 200 ? parseRange(req.headers.range, st.size) : null;
-  if (range === 'unsatisfiable') {
-    res.writeHead(416, { ...head, 'content-range': `bytes */${st.size}` });
-    res.end();
-    return;
-  }
-  const start = range ? range.start : 0;
-  const end = range ? range.end : st.size - 1;
-  res.writeHead(range ? 206 : r.status, { ...head, 'content-length': String(st.size ? end - start + 1 : 0), ...(range ? { 'content-range': `bytes ${start}-${end}/${st.size}` } : {}) });
-  if (req.method === 'HEAD' || !st.size) { res.end(); return; }
-  createReadStream(r.file, { start, end }).on('error', () => res.end()).pipe(res);
-}
-
 /** 这个进程的启动号:每个 JSON 响应都带(x-cotutor-boot)。页面轮询时见它变了 = 服务重起过(多半是换了新代码),空下来就自己重载——iPad 上下拉刷新常拉不到位 */
 const BOOT = Date.now().toString(36);
 

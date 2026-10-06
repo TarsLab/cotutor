@@ -14,7 +14,7 @@ import type { BoardCard } from '../lib/kid-board.ts';
 import { kidConversation, kidThreads } from '../lib/kid-view.ts';
 import { HOME_ID_RE, PublishedHomeSchema, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
 import { listDates, readCardStates, readIndex } from './store.ts';
-import { readLecture, type Lecture } from './lecture.ts';
+import { inspectLecture, readLecture, type Lecture } from './lecture.ts';
 
 export function homeFiles(ws: Pick<Workspace, 'dirs'>): { dir: string; draft: string; published: string; history: string } {
   const dir = ws.dirs.home;
@@ -63,8 +63,9 @@ async function liveThreads(ws: Workspace, refs: readonly { tutor: string; date: 
 
 async function checkContext(ws: Workspace, doc: Pick<HomeDoc, 'cards'>, now: Date): Promise<HomeCheckContext> {
   const lectures = new Map<string, string | null>();
-  for (const id of homeLectures(doc)) { const l = await readLecture(ws, id); if (l) lectures.set(id, l.subject); }
-  return { tutors: tutorInfos(ws), threads: await liveThreads(ws, homeRefs(doc)), lectures, today: localDate(now) };
+  const lectureProblems = new Map<string, string[]>();
+  for (const id of homeLectures(doc)) { const r = await inspectLecture(ws, id); if (r.lecture) lectures.set(id, r.lecture.subject); else lectureProblems.set(id, r.problems); }
+  return { tutors: tutorInfos(ws), threads: await liveThreads(ws, homeRefs(doc)), lectures, lectureProblems, today: localDate(now) };
 }
 
 export interface HomeCheck {
@@ -193,7 +194,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
       alive: (date, thread) => alive.has(threadKey(name, date, thread)),
       lecture: (bundle) => Boolean(lectures.get(bundle)),
       keepBriefs: opts.keepBriefs,
-    }).map((b) => { const l = b.kind === 'lecture' ? lectures.get(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.clock.total } : b; });
+    }).map((b) => { const l = b.kind === 'lecture' ? lectures.get(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.clock.total, ...(l.video ? { video: true as const } : {}) } : b; });
     out.push({ kind: 'tutor', props: { tutor: name, buttons } });
   }
   return { home: id, cards: out };
@@ -338,7 +339,7 @@ export function formatCheck(ws: Workspace, check: HomeCheck, title: string, kid:
     const briefs = ((src?.props.buttons ?? []) as TutorButton[]).map((b) => b.brief);
     const buttons = (c.props.buttons as KidHomeButton[]).map((b) => {
       const brief = typeof b.id === 'number' && briefs[b.id] ? `(讲法 ${Array.from(briefs[b.id]!).length} 字)` : '';
-      const ref = b.kind === 'continue' ? ` → ${b.date} ${b.thread}` : b.kind === 'lecture' ? ` → 课包 ${b.bundle}` : '';
+      const ref = b.kind === 'continue' ? ` → ${b.date} ${b.thread}` : b.kind === 'lecture' ? ` → 小课堂 ${b.bundle}` : '';
       return `${BUTTON_ICON[b.kind]} ${b.label}${ref}${brief}`;
     });
     out.push(`  ${display(name)} ${name}${written.has(name) ? '' : '(没写,应用补)'}:${buttons.join(' | ')}`);

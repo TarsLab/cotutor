@@ -6,3 +6,4 @@
 .c.c-lecture .th .pl { position:absolute; right:10px; bottom:10px; background:#000000aa; color:#fff; border-radius:14px; padding:3px 10px; font-size:13px; font-variant-numeric:tabular-nums; }
 .c.c-lecture .tx { font-size:15px; color:var(--dim); }
 .c.c-lecture .th .lc-still { position:absolute; inset:6px; }
+.c.c-lecture .th video.lc-still { width:calc(100% - 12px); height:calc(100% - 12px); object-fit:contain; pointer-events:none; }

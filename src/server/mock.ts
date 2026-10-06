@@ -9,7 +9,8 @@
  * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有开场与接着昨天的按钮,数学老师有开场,英语老师没写(补一张);
  * 发消息带 via 时照真服务的规则换成按钮上的字、定话题。
  */
-import { createReadStream, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
 import { createServer as createHttp, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttps } from 'node:https';
 import { hostname } from 'node:os';
@@ -19,11 +20,24 @@ import { parseCardState, stripSecrets } from '../cards/index.ts';
 import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset } from './stage.ts';
 import { enrichScenes } from './scene-props.ts';
-import { enrichLectures } from './lecture.ts';
+import { sendFile } from './send-file.ts';
+import { enrichLectures, readLecture, storedMarks, type Lecture } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
 
-/** 看完小课堂的第一问,mock 老师这样答:对着圈的地方说,放课里拆开那一捆的那一段(《小课堂设计.md》§六) */
+/** 看完小课堂的第一问,mock 老师这样答:对着圈的地方说,放课里拆开那一捆的那一段(《小课堂设计.md》§六);视频的放轮着分那一段 */
+const MOCK_VIDEO_LECTURE_REPLY = [
+  '你圈的是轮着分的那一下。',
+  '',
+  '```lecture',
+  '2026-10-06-pingjunfen 0:05-0:11',
+  '再看一遍怎么轮着分。',
+  '```',
+  '',
+  '我们回到轮着分的地方,再看一遍。[[play]]',
+  '',
+  '每人分到几块?',
+].join('\n');
 const MOCK_LECTURE_REPLY = [
   '你圈的是右边散的 3 根。8 根要从哪儿拿?',
   '',
@@ -39,9 +53,11 @@ const MOCK_LECTURE_REPLY = [
 
 /** mock 的课包目录:仓库里的样本(tests/fixtures/bundles/),场景卡从这里播 */
 export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bundles/', import.meta.url));
+/** mock 的视频小课堂目录:仓库里的样本(tests/fixtures/lectures/) */
+export const MOCK_LECTURES_DIR = fileURLToPath(new URL('../../tests/fixtures/lectures/', import.meta.url));
+const MOCK_LECTURE_DIRS = { dirs: { bundles: MOCK_BUNDLES_DIR, lectures: MOCK_LECTURES_DIR } };
 import { lineDurationMs, readyBeats, type BoardSection, type KidLecture, type PenName } from '../lib/kid-board.ts';
 import { REEL_LINE_GAP_MS, buildReel } from '../lib/reel.ts';
-import { describeMark, lectureAt, lectureClock, type LectureClock, type LectureSkeleton, type LectureStep } from '../lib/lecture.ts';
 import type { CardStates } from '../lib/conversation.ts';
 import { lanAddresses, listenInfo } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
@@ -411,6 +427,7 @@ for: ${today}
 再练两道退位减法
 讲法: 出 52−7、80−3,先让他说怎么想
 小课堂 2026-09-18-po13-jian-8 13 减 8 怎么拆
+小课堂 2026-10-06-pingjunfen 平均分怎么分
 \`\`\`
 
 \`\`\`text
@@ -503,24 +520,19 @@ export function createMock(opts: MockOptions = {}): Mock {
     const { states, action: _a, lectureWatch: _w, ...rest } = m;
     if (rest.lecture?.marks) rest.lecture = { ...rest.lecture, marks: rest.lecture.marks.map(({ text: _t, ...k }) => k) };
     const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => (states && i in states ? { ...c, state: states[i] } : c)) } : null;
-    const section = withState ? await enrichLectures({ dirs: { bundles: MOCK_BUNDLES_DIR } }, await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, stripSecrets(withState))) : null;
+    const section = withState ? await enrichLectures(MOCK_LECTURE_DIRS, await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, stripSecrets(withState))) : null;
     return { ...rest, section };
   };
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
   const tutorsJson = () => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, motto: t.motto, hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0 }));
-  /** 小课堂:样本课包在仓库里(tests/fixtures/bundles/),同步读、记住 */
-  const lectures = new Map<string, { title: string; ms: number; clock: LectureClock } | null>();
-  const mockLecture = (id: string): { title: string; ms: number; clock: LectureClock } | null => {
-    if (!lectures.has(id)) {
-      try {
-        const scene = JSON.parse(readFileSync(join(MOCK_BUNDLES_DIR, id, 'scene.json'), 'utf8')) as { title?: string; skeletons: LectureSkeleton[] };
-        const steps = (JSON.parse(readFileSync(join(MOCK_BUNDLES_DIR, id, 'manifest.json'), 'utf8')) as { steps: LectureStep[] }).steps;
-        const clock = lectureClock(scene.skeletons, steps);
-        lectures.set(id, steps.length ? { title: String(scene.title ?? id), ms: clock.total, clock } : null);
-      } catch { lectures.set(id, null); }
+  /** 小课堂:样本课包与样本视频在仓库里(tests/fixtures/bundles/、lectures/),起来时和真服务一样读一遍(readLecture)、记住 */
+  const lectures = new Map<string, Lecture>();
+  const lecturesLoaded = (async () => {
+    for (const dir of [MOCK_BUNDLES_DIR, MOCK_LECTURES_DIR]) {
+      for (const id of await readdir(dir).catch(() => [] as string[])) { const l = await readLecture(MOCK_LECTURE_DIRS, id); if (l && !lectures.has(id)) lectures.set(id, l); }
     }
-    return lectures.get(id) ?? null;
-  };
+  })();
+  const mockLecture = (id: string): (Lecture & { ms: number }) | null => { const l = lectures.get(id); return l ? { ...l, ms: l.clock.total } : null; };
   const home = () => {
     const d = now();
     const cards = arrangeHome(parseHome(mockHomeMd(localDate(d), yesterday())).cards, MOCK_TUTORS.map((t) => t.name)).map((c) => {
@@ -530,7 +542,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const asked = list.find((m) => m.question !== null && m.thread === list[list.length - 1]?.thread);
       const recent = asked ? { date: localDate(d), thread: asked.thread, title: asked.question ?? '' } : null;
       const alive = (date: string, thread: string): boolean => (date === yesterday() && (past.get(name) ?? []).some((m) => m.thread === thread)) || (date === localDate(d) && list.some((m) => m.thread === thread));
-      return { kind: 'tutor', props: { tutor: name, buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { recent, alive, lecture: (id) => Boolean(mockLecture(id)) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms } : b; }) } };
+      return { kind: 'tutor', props: { tutor: name, buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { recent, alive, lecture: (id) => Boolean(mockLecture(id)) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
     });
     // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
     return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 } };
@@ -559,7 +571,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     const i = cur.get(t.name) ?? 0;
     // 看完小课堂的第一问:老师放课里的那一段(小课堂卡 + [[play]]);不占脚本的位置
     const lectureFirst = Boolean(m.lecture && !m.lecture.again);
-    const step = lectureFirst ? MOCK_LECTURE_REPLY : t.script[i];
+    const step = lectureFirst ? (m.lecture?.video ? MOCK_VIDEO_LECTURE_REPLY : MOCK_LECTURE_REPLY) : t.script[i];
     if (!lectureFirst) cur.set(t.name, i + 1);
     const full = step ? withPost(sectionFromScript(step), t.name, i) : null;
     const n = full ? full.cards.length : 0;
@@ -584,6 +596,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     });
   };
   const route = async (method: string, path: string, body?: unknown): Promise<MockRouteResult> => {
+    await lecturesLoaded;
     const url = new URL(path, 'http://x');
     const p = url.pathname;
     if (p === '/') return { status: 200, html: kidPage(title) };
@@ -646,7 +659,7 @@ export function createMock(opts: MockOptions = {}): Mock {
           rec++;
           return st === undefined ? c : { ...c, state: st, ...(h ? { heard: h } : {}) };
         };
-        const section = m.section ? await enrichLectures({ dirs: { bundles: MOCK_BUNDLES_DIR } }, await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, { ...m.section, cards: m.section.cards.map(withHeard) })) : null;
+        const section = m.section ? await enrichLectures(MOCK_LECTURE_DIRS, await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, { ...m.section, cards: m.section.cards.map(withHeard) })) : null;
         return { ...rest, from: 'kid' as const, section, ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };
       }));
       const pending = list.find((m) => m.pending);
@@ -751,7 +764,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         let newThread = body.newThread === true;
         let wantThread = body.thread;
         // 小课堂:看完才能开口,字是孩子说的,新话题;圈的那几处现算成一段话(同 runner)。问过以后再看一遍又圈了:同一话题的下一条带上(again)
-        const marksIn = isObj(body.lecture) && Array.isArray(body.lecture.marks) ? (body.lecture.marks as { atMs: number; path: [number, number][] }[]) : [];
+        const marksIn = isObj(body.lecture) && Array.isArray(body.lecture.marks) ? (body.lecture.marks as { atMs: number; path: [number, number][]; image?: string }[]) : [];
         const lec = isObj(body.lecture) && typeof body.lecture.bundle === 'string' ? { bundle: body.lecture.bundle, finished: body.lecture.finished === true, again: false, watchedMs: Number(body.lecture.watchedMs) || 0, pauses: Number(body.lecture.pauses) || 0 } : null;
         if (lec && (typeof button !== 'object' || button === null || button.kind !== 'lecture')) {
           const from = list.find((x) => x.thread === body.thread && x.lecture && !x.lecture.again);
@@ -780,8 +793,8 @@ export function createMock(opts: MockOptions = {}): Mock {
           } else thread = list[list.length - 1].thread;
         }
         const lt = lec ? mockLecture(lec.bundle) : null;
-        const marks = lt ? marksIn.map((k) => ({ atMs: k.atMs, svgMs: lectureAt(lt.clock, k.atMs).svgMs, path: k.path, text: describeMark(lt.clock, k).text })) : [];
-        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses } } : {}) };
+        const marks = lt ? storedMarks(lt, marksIn, photos.length) : [];
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses } } : {}) };
         list.push(m);
         const done = think(t, m, cursor).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);
@@ -835,6 +848,14 @@ export function createMock(opts: MockOptions = {}): Mock {
       const f = await stageAsset(p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
+    // 视频小课堂:同真服务(app.ts)
+    const lv = /^\/api\/kid\/lectures\/([a-z0-9][a-z0-9-]*)\/(lecture\.json|video\.mp4)$/.exec(p);
+    if (lv && method === 'GET') {
+      const l = lectures.get(lv[1]);
+      if (!l?.video) return { status: 404, json: { error: 'not_found' } };
+      if (lv[2] === 'video.mp4') return { status: 200, file: join(MOCK_LECTURES_DIR, lv[1], 'video.mp4'), contentType: 'video/mp4' };
+      return { status: 200, json: { title: l.title, total: l.clock.total, segments: l.clock.segments.map((x) => ({ start: x.start, len: x.len, line: x.line })) } };
+    }
     if (p.startsWith('/api/bundles/') && method === 'GET') {
       const f = await bundleAsset(MOCK_BUNDLES_DIR, p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
@@ -854,7 +875,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       let body: unknown;
       try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : undefined; } catch { body = undefined; }
       const r = await route(req.method ?? 'GET', req.url ?? '/', body);
-      if (r.file !== undefined) { res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=3600' }); createReadStream(r.file).on('error', () => res.end()).pipe(res); }
+      if (r.file !== undefined) await sendFile(req, res, { status: r.status, file: r.file, contentType: r.contentType, cacheControl: 'private, max-age=3600' });
       else if (r.body !== undefined) { res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=3600' }); res.end(Buffer.from(r.body)); }
       else if (r.html !== undefined) { res.writeHead(r.status, { 'content-type': r.contentType ?? 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(r.html); }
       else { res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(r.json ?? null)); }

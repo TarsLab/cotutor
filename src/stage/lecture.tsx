@@ -19,6 +19,8 @@ export interface StageMark {
   atMs: number;
   svgMs: number;
   path: [number, number][];
+  /** 视频的圈:那一帧叠上圈的截图(data URL;页面发消息前传成 captures/ 里的文件,换成路径) */
+  image?: string;
 }
 
 /** 装好的小课堂:时钟、带逐笔动画的 SVG(暂停着)、课包坐标 → SVG 坐标的平移(exportToSvg 把元素挪进了 viewBox) */
@@ -74,6 +76,17 @@ export interface LectureStageProps {
   autoplay?: boolean;
   /** 卡的样子:放着 / 停着 / 那一段放完,带课里那一句(页面的字幕行) */
   onPhase?(phase: 'drawing' | 'paused' | 'done', line: string, step: number, total: number): void;
+  /** 视频小课堂(第 4 步):bundleUrl 是 /api/kid/lectures/<id>/,下面有 lecture.json(一句一段)与 video.mp4 */
+  video?: boolean;
+}
+
+/** 视频小课堂的时钟:服务端按 lecture.md 拼好的一句一段 */
+async function loadVideoClock(url: string): Promise<LectureClock> {
+  const r = await fetch(new URL('lecture.json', new URL(url, location.href)).href);
+  if (!r.ok) throw new Error(`小课堂的视频读不出来(${r.status})`);
+  const j = (await r.json()) as { total: number; segments: { start: number; len: number; line: string }[] };
+  if (!j.segments.length) throw new Error('这份视频没有一句');
+  return { skeletons: [], segments: j.segments.map((x, i) => ({ index: i, start: x.start, len: x.len, drawStart: 0, drawEnd: 0, audioMs: null, line: x.line })), total: j.total, elements: new Map() };
 }
 
 /** 页面的字幕行按钮(control toggle / play / pause)转到这里 */
@@ -85,8 +98,11 @@ export interface LectureStageHandle {
 const RESYNC_MS = 300;
 /** 停在离一处圈多近算「这一刻的圈」(画在画面上、擦得掉) */
 const MARK_NEAR_MS = 400;
-/** 最多圈几处(路由也拦) */
+/** 最多圈几处(路由也拦);视频的每处带一张截图,和照片一共不过 9 张,少一些 */
 const MAX_MARKS = 12;
+const MAX_VIDEO_MARKS = 6;
+/** 截图的长边 */
+const SHOT_SIDE = 1280;
 /** 一笔算一处圈:至少几个点、多大(SVG 单位) */
 const MIN_POINTS = 4;
 const MIN_SIZE = 12;
@@ -95,7 +111,7 @@ const MAX_POINTS = 300;
 const INK = '#2f6fd6';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onSvg, onFinished, onClose, onError, range, autoplay = false, onPhase }, ref): JSX.Element {
+export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onSvg, onFinished, onClose, onError, range, autoplay = false, onPhase, video = false }, ref): JSX.Element {
   const card = range !== undefined;
   const view = rawView || card;
   const openAt = card ? range.start : rawAt;
@@ -117,6 +133,11 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const host = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
+  /** 视频小课堂:画面与声音都是它;svgRef 是叠在上面圈用的那层(viewBox = 视频自己的像素) */
+  const vid = useRef<HTMLVideoElement | null>(null);
+  const box = useRef<HTMLDivElement | null>(null);
+  const hush = (): void => { audio.current?.pause(); vid.current?.pause(); };
+  const onBlocked = (e: unknown): void => { if (e instanceof DOMException && e.name === 'NotAllowedError') { blocked.current = true; vid.current?.pause(); setPlaying(false); setStarted(false); } };
   const t = useRef(0);
   const last = useRef(0);
   const seg = useRef(-1);
@@ -127,6 +148,42 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (video) {
+        const c = await loadVideoClock(bundleUrl);
+        const v = document.createElement('video');
+        v.playsInline = true;
+        v.setAttribute('webkit-playsinline', '');
+        v.preload = 'auto';
+        v.className = 'lc-video';
+        v.src = new URL('video.mp4', new URL(bundleUrl, location.href)).href;
+        await new Promise<void>((res, rej) => { v.addEventListener('loadedmetadata', () => res(), { once: true }); v.addEventListener('error', () => rej(new Error('小课堂的视频放不出来')), { once: true }); });
+        if (cancelled) return;
+        const W = v.videoWidth || 16, H = v.videoHeight || 9;
+        const over = document.createElementNS(SVG_NS, 'svg');
+        over.setAttribute('viewBox', `0 0 ${W} ${H}`);
+        over.setAttribute('class', 'lc-over');
+        const g = document.createElementNS(SVG_NS, 'g');
+        g.setAttribute('class', 'lc-ink');
+        over.append(g);
+        ink.current = g;
+        const b = document.createElement('div');
+        b.className = 'lc-vbox';
+        b.append(v, over);
+        // 画框按视频的宽高比铺在画面里(圈那层与视频严丝合缝)
+        const fit = (): void => { const hb = host.current?.getBoundingClientRect(); if (!hb) return; const k = Math.min(hb.width / W, hb.height / H); b.style.width = `${Math.floor(W * k)}px`; b.style.height = `${Math.floor(H * k)}px`; };
+        host.current?.replaceChildren(b);
+        fit();
+        new ResizeObserver(fit).observe(host.current!);
+        vid.current = v;
+        box.current = b;
+        svgRef.current = over;
+        const start = openAt !== undefined ? Math.max(0, Math.min(openAt, c.total)) : 0;
+        t.current = start;
+        v.currentTime = start / 1000;
+        setNow(start);
+        setClock(c);
+        return;
+      }
       const { clock: c, svg, dx, dy } = await buildLecture(bundleUrl);
       if (cancelled) return;
       onSvg?.(svg.outerHTML, dx, dy);
@@ -154,6 +211,12 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
 
   /** 这一段的声音:换段换 src,从段内 offset 放;没有配音 / 放不出来都不拦 */
   const syncAudio = useCallback((c: LectureClock, ms: number, play: boolean) => {
+    const v = vid.current;
+    if (v) {
+      if (play && v.paused && !v.ended) v.play().catch(onBlocked);
+      if (!play && !v.paused) v.pause();
+      return;
+    }
     const a = (audio.current ??= new Audio());
     const at = lectureAt(c, ms);
     const s = c.segments[at.index];
@@ -164,14 +227,16 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     }
     if (!s.audioSrc || s.audioMs === null || at.offset >= s.audioMs) { a.pause(); return; }
     if (Math.abs(a.currentTime * 1000 - at.offset) > RESYNC_MS) { try { a.currentTime = at.offset / 1000; } catch { /* 还没装好 metadata */ } }
-    if (play && a.paused) a.play().catch((e: unknown) => { if (e instanceof DOMException && e.name === 'NotAllowedError') { blocked.current = true; setPlaying(false); setStarted(false); } });
+    if (play && a.paused) a.play().catch(onBlocked);
     if (!play && !a.paused) a.pause();
   }, [bundleUrl]);
 
   /** 画到这一刻 */
-  const paint = useCallback((c: LectureClock, ms: number) => {
+  /** 画到这一刻;视频:seek = 把视频挪过去(放着的时候时钟跟视频走,不挪) */
+  const paint = useCallback((c: LectureClock, ms: number, seek = true) => {
     t.current = ms;
-    svgRef.current?.setCurrentTime(lectureAt(c, ms).svgMs / 1000);
+    if (vid.current) { if (seek) vid.current.currentTime = ms / 1000; }
+    else svgRef.current?.setCurrentTime(lectureAt(c, ms).svgMs / 1000);
     setNow(ms);
   }, []);
 
@@ -184,23 +249,25 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
       const dt = p - last.current;
       last.current = p;
       if (!scrubbing.current) {
-        let next = Math.min(clock.total, t.current + dt);
+        // 视频:时钟就是视频自己的;课包:按真实时间往前走
+        const v = vid.current;
+        let next = v ? (v.ended ? clock.total : Math.min(clock.total, v.currentTime * 1000)) : Math.min(clock.total, t.current + dt);
         // 卡的样子:放到那一段的末尾停在末帧(退 1 毫秒,不露下一段的头一笔),只停这一次
         if (range && !rangeDone.current && t.current < range.end && next >= range.end) {
           next = Math.max(range.start, range.end - 1);
+          hush();
           paint(clock, next);
           rangeDone.current = true;
           setPlaying(false);
-          audio.current?.pause();
           onRangeEnd.current();
           return;
         }
-        paint(clock, next);
+        paint(clock, next, false);
         watch.current.watchedMs = Math.max(watch.current.watchedMs, next);
         syncAudio(clock, next, true);
         if (next >= clock.total) {
           setPlaying(false);
-          audio.current?.pause();
+          hush();
           if (!watch.current.finished) { watch.current.finished = true; onFinished({ ...watch.current }); }
           return;
         }
@@ -216,7 +283,8 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     setStarted(true);
     setFresh(null);
     blocked.current = false;
-    if (playing) { setPlaying(false); audio.current?.pause(); watch.current.pauses++; return; }
+    // 视频:停下时时钟对到视频真停的那一帧(圈与截图是同一刻)
+    if (playing) { setPlaying(false); hush(); if (vid.current) paint(clock, vid.current.currentTime * 1000, false); watch.current.pauses++; return; }
     if (t.current >= clock.total) paint(clock, 0);
     syncAudio(clock, t.current, true);
     setPlaying(true);
@@ -262,7 +330,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     if (!clock) return;
     scrubbing.current = true;
     (e.target as Element).setPointerCapture?.(e.pointerId);
-    audio.current?.pause();
+    hush();
     paint(clock, msAt(e.clientX));
   };
   const onMove = (e: React.PointerEvent): void => { if (scrubbing.current && clock) paint(clock, msAt(e.clientX)); };
@@ -281,12 +349,12 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     syncAudio(clock, ms, playing);
   };
 
-  useEffect(() => () => { audio.current?.pause(); }, []);
+  useEffect(() => () => { audio.current?.pause(); vid.current?.pause(); }, []);
 
   // ---- 圈 ----
   const changeMarks = (next: StageMark[]): void => { setMarks(next); onMarks(next); };
   const here = (m: StageMark): boolean => Math.abs(m.atMs - now) <= MARK_NEAR_MS;
-  const canDraw = Boolean(clock) && started && !playing && pen && !view && marks.length < MAX_MARKS;
+  const canDraw = Boolean(clock) && started && !playing && pen && !view && marks.length < (video ? MAX_VIDEO_MARKS : MAX_MARKS);
   /** 屏幕点 → SVG 坐标(viewBox 里,怎么缩放都对) */
   const toSvg = (clientX: number, clientY: number): [number, number] | null => {
     const m = svgRef.current?.getScreenCTM();
@@ -347,14 +415,39 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     const { dx, dy } = shift.current;
     const path = s.pts.filter((_, i) => i % step === 0 || i === s.pts.length - 1).map(([x, y]) => [Math.round(x - dx), Math.round(y - dy)] as [number, number]);
     const at = Math.round(t.current);
-    changeMarks([...marks, { atMs: at, svgMs: Math.round(lectureAt(clock, at).svgMs * 10) / 10, path }].sort((a, b) => a.atMs - b.atMs));
+    const image = vid.current ? shot(vid.current, path) : undefined;
+    changeMarks([...marks, { atMs: at, svgMs: vid.current ? 0 : Math.round(lectureAt(clock, at).svgMs * 10) / 10, path, ...(image ? { image } : {}) }].sort((a, b) => a.atMs - b.atMs));
     setFresh(at);
+  };
+  /** 视频的圈:这一帧画到 canvas 上,叠上圈(视频像素坐标),出一张 jpeg;画不出来(没帧)就不带图 */
+  const shot = (v: HTMLVideoElement, path: readonly [number, number][]): string | undefined => {
+    try {
+      const W = v.videoWidth, H = v.videoHeight;
+      if (!W || !H) return undefined;
+      const k = Math.min(1, SHOT_SIDE / Math.max(W, H));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(W * k);
+      cv.height = Math.round(H * k);
+      const g = cv.getContext('2d');
+      if (!g) return undefined;
+      g.drawImage(v, 0, 0, cv.width, cv.height);
+      g.strokeStyle = INK;
+      g.lineWidth = Math.max(3, Math.round(cv.width / 160));
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
+      g.beginPath();
+      path.forEach(([x, y], i) => (i ? g.lineTo(x * k, y * k) : g.moveTo(x * k, y * k)));
+      g.stroke();
+      return cv.toDataURL('image/jpeg', 0.85);
+    } catch {
+      return undefined;
+    }
   };
   const erase = (): void => { changeMarks(marks.filter((m) => !here(m))); setFresh(null); };
   const showMark = (m: StageMark): void => {
     if (!clock) return;
     setStarted(true);
-    if (playing) { setPlaying(false); audio.current?.pause(); }
+    if (playing) { setPlaying(false); hush(); }
     paint(clock, m.atMs);
     seg.current = -1;
     setFresh(null);

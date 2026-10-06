@@ -4,6 +4,8 @@
  * 消息记 lecture → 孩子端那一条带小课堂、家长端多看到看的情况。
  * 圈:第一条带两处圈 → 上下文包 marks:(每处一段话)、消息记圈(SVG 时刻、那段话)、孩子端不带那段话、家长端带;
  * 问过以后再看一遍又圈了 → 同一话题下一条带上(again);不是这份课包开头的话题、没带圈、没带话题都 400。
+ * 视频来源(第 4 步):lectures/<id>/ 的按钮(课长从 mp4)、坏的 lecture.md 首页检查说清楚;圈带截图(先传进 captures/)→ 上下文包 source: video、
+ * photos: 带截图、marks: 说「圈在截图上(photos 第 1 张)」;消息的 photos 不记截图;截图不在 captures/ 400。
  */
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -87,6 +89,39 @@ try {
   const m3 = (await readIndex(ctx.ws, 'math-tutor', date)).messages.find((x) => x.job === j3);
   const p3 = (await readRunFile(ctx.ws, 'math-tutor', date, j3))?.prompt ?? '';
   check('再看一遍的圈:同一话题、记 again 与新圈、上下文包 watched 说又看了一遍、marks 一处', r3.status === 202 && (r3.json as { thread: string }).thread === thread && m3?.lecture?.again === true && m3.lecture.marks?.length === 1 && p3.includes('    watched: "又看了一遍,看到 0:30,停过 1 次,圈了 1 处"') && p3.includes('      - "0:40 圈的,'), p3.slice(p3.indexOf('  lecture:'), p3.indexOf('  lecture:') + 900));
+
+  // ---- 视频来源 ----
+  const VID = '2026-10-06-pingjunfen';
+  cpSync(fileURLToPath(new URL(`./fixtures/lectures/${VID}/`, import.meta.url)), join(root, 'lectures', VID), { recursive: true });
+  mkdirSync(join(root, 'lectures', '2026-01-02-bad'), { recursive: true });
+  writeFileSync(join(root, 'lectures', '2026-01-02-bad', 'lecture.md'), '0:05 没有标题\n');
+  const vbad = await checkHome(ctx.ws, draft('```tutor math-tutor\n小课堂 2026-01-02-bad 坏的\n```\n\n## 为什么\n\n- 测试\n'), now);
+  const vfix = vbad.issues.find((i) => i.level === 'fix')?.text ?? '';
+  check('首页检查:视频小课堂坏了说清楚哪里(没有 video.mp4、lecture.md 没标题)', vfix.includes('lectures/2026-01-02-bad/ 没有 video.mp4') && vfix.includes('# 标题'), vfix);
+  const vgood = await checkHome(ctx.ws, draft(`\`\`\`tutor math-tutor\n小课堂 ${VID} 平均分怎么分\n\`\`\`\n\n## 为什么\n\n- 测试\n`), now);
+  await publishHome(ctx.ws, { now });
+  const kh2 = (await route('GET', '/api/kid/home', ctx)).json as { home: string; cards: { kind: string; props: { tutor?: string; buttons?: (Btn & { video?: boolean })[] } }[] };
+  const vbtn = kh2.cards.find((c) => c.props.tutor === 'math-tutor')?.props.buttons?.find((b) => b.kind === 'lecture');
+  check('视频小课堂:首页检查没有要改;孩子端按钮带课名、课长(mp4 的 18 秒)、video', vgood.fixes === 0 && vbtn?.bundle === VID && vbtn.title === '平均分:一个一个轮着分' && vbtn.ms === 18_000 && vbtn.video === true, JSON.stringify({ issues: vgood.issues, vbtn }));
+  const lj = (await route('GET', `/api/kid/lectures/${VID}/lecture.json`, ctx)).json as { total: number; segments: { start: number; line: string }[] };
+  const mp4 = await route('GET', `/api/kid/lectures/${VID}/video.mp4`, ctx);
+  check('舞台要的:lecture.json(课长、一句一段)与 video.mp4;课包的 id 在这里 404', lj.total === 18_000 && lj.segments.length === 3 && lj.segments[1].start === 5000 && mp4.status === 200 && (mp4 as { file?: string }).file?.endsWith('video.mp4') === true && (await route('GET', `/api/kid/lectures/${BUNDLE}/lecture.json`, ctx)).status === 404);
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const up = await route('POST', '/api/kid/conversations/math-tutor/photos', ctx, { image: PNG });
+  const shotPath = (up.json as { path: string }).path;
+  const vvia = { home: kh2.home, button: vbtn!.id };
+  const vmark = { atMs: 12_600, path: ring(160, 90, 48, 32), image: shotPath };
+  check('视频的圈:截图不在 captures/ 400', (await send({ text: '问', via: vvia, lecture: { bundle: VID, watchedMs: 18_000, finished: true, pauses: 1, marks: [{ ...vmark, image: 'captures/nope.jpg' }] } })).status === 400);
+  const r4 = await send({ text: '为什么要轮着分', via: vvia, lecture: { bundle: VID, watchedMs: 18_000, finished: true, pauses: 1, marks: [vmark] } });
+  await wait();
+  const j4 = (r4.json as { job: string }).job;
+  const m4 = (await readIndex(ctx.ws, 'math-tutor', date)).messages.find((x) => x.job === j4);
+  const p4 = (await readRunFile(ctx.ws, 'math-tutor', date, j4))?.prompt ?? '';
+  check('视频的圈:上下文包 source: video、photos: 带截图、marks: 说那时在讲哪句与截图是第几张', r4.status === 202 && p4.includes(`    source: "video ${VID}"`) && p4.includes(`  photos:\n    - "${shotPath}"`) && p4.includes('      - "0:12 圈的,那时在讲『分完了,每人 4 块,一样多。这就是平均分。』;圈在截图上(photos 第 1 张)"'), p4.slice(0, 1500));
+  check('消息记 lecture.video 与圈的截图;消息的 photos 不记截图', m4?.lecture?.video === true && m4.lecture.marks?.[0].image === shotPath && !m4.photos, JSON.stringify(m4?.lecture));
+  const kd4 = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; lecture?: { video?: boolean; marks?: { image?: string; text?: string }[] } }[] };
+  const kl4 = kd4.messages.find((x) => x.job === j4)?.lecture;
+  check('孩子端那一条带 video 与截图路径(圈的卡画这张),不带那段话', kl4?.video === true && kl4.marks?.[0].image === shotPath && !kl4.marks[0].text);
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

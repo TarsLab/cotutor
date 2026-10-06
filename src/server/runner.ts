@@ -15,8 +15,7 @@
  */
 import { spawn } from 'node:child_process';
 import { materialDocs, materialsFor } from './material.ts';
-import type { LectureMark } from '../lib/lecture.ts';
-import { lecturePack, readLecture, storedMarks } from './lecture.ts';
+import { lecturePack, readLecture, storedMarks, type IncomingMark } from './lecture.ts';
 import { closeSync, createWriteStream, existsSync, openSync, writeSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative } from 'node:path';
@@ -81,7 +80,7 @@ export interface SendInput {
   /** 这条是回放(server/replay.ts):原轮的 job,记进消息;调用方已经把 Runner 指到 evals/ */
   replayOf?: string;
   /** 孩子看完小课堂后的第一条(《小课堂设计.md》§六):上下文包带 lecture:(课的每句、看的情况、圈过的几处),消息记 lecture;again = 问过以后再看一遍又圈了 */
-  lecture?: { bundle: string; watchedMs: number; finished: boolean; pauses: number; again?: boolean; marks?: LectureMark[] };
+  lecture?: { bundle: string; watchedMs: number; finished: boolean; pauses: number; again?: boolean; marks?: IncomingMark[] };
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2),记进消息 */
   via?: MessageVia;
   /** 按钮的字与家长备好的讲法(服务端从发布件查的),进上下文包 home: 段 */
@@ -377,6 +376,9 @@ export class Runner {
     if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
     if (!t.enabled) throw new UsageError(`${t.display} 已关闭(cotutor.json tutors.${tutor}.enabled = false),打开再发`);
     const photos = input.photos?.filter(Boolean) ?? [];
+    // 视频小课堂的圈带截图(《小课堂设计.md》拍板 4):和照片一样进上下文包 photos:(排在孩子拍的后面),这一轮带工具读图;消息的 photos 只记孩子拍的
+    const shots = input.lecture?.marks?.flatMap((m) => (m.image ? [m.image] : [])) ?? [];
+    const seen = [...photos, ...shots];
     const text = input.text.trim() || (input.action === 'continue' ? '继续' : input.action === 'submit' ? '(交了答案,没说话)' : photos.length ? (photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`) : '');
     if (!text) throw new UsageError('消息是空的');
     const busy = this.active.get(tutor);
@@ -407,7 +409,7 @@ export class Runner {
     if (policy.board === 'off') pack.board = 'off';
     // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的(要 Read 看图)、系统任务照旧带。
     // 不带的那轮,只有工具才用得上的路径(refs / vault / materialsDir)不进包;模板里没有 {tools} 的运行时管不了它的工具,照旧
-    const tools = policy.tools === 'on' || input.from !== 'kid' || photos.length > 0 ? TUTOR_TOOLS : '';
+    const tools = policy.tools === 'on' || input.from !== 'kid' || seen.length > 0 ? TUTOR_TOOLS : '';
     const bare = !tools && runtimeUses(runtime, '{tools}');
     if (bare) { delete pack.refs; delete pack.vault; }
     // 家长备好的素材(《备课设计.md》§11.3):有脸的老师、新会话的第一条、板书没关;一行一个,前几份的 material.md 原文接在后面(<material>)
@@ -428,13 +430,13 @@ export class Runner {
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
     const docs = pack.materials ? (await materialDocs(ws, pack.materials)).map((d) => ({ kind: 'material' as const, ...d })) : [];
     if (docs.length) pack.docs = docs;
-    if (photos.length) { pack.photos = photos; pack.photoFiles = photos.map((p) => join(ws.root, p)); }
+    if (seen.length) { pack.photos = seen; pack.photoFiles = seen.map((p) => join(ws.root, p)); }
     if (input.home) pack.home = input.home;
     // 小课堂:课包现读;读不出来(删了、坏了)就不带,这条照发,家长端提醒
     const lecture = input.lecture ? await readLecture(ws, input.lecture.bundle) : null;
-    const marks = input.lecture?.marks?.length ? storedMarks(lecture, input.lecture.marks) : [];
+    const marks = input.lecture?.marks?.length ? storedMarks(lecture, input.lecture.marks, photos.length) : [];
     if (input.lecture && lecture) pack.lecture = lecturePack(lecture, input.lecture, marks);
-    const lectureWarn = input.lecture && !lecture ? [`小课堂:bundles/${input.lecture.bundle}/ 读不出来,老师没拿到课的内容`] : [];
+    const lectureWarn = input.lecture && !lecture ? [`小课堂:${input.lecture.bundle} 读不出来(bundles/ 与 lectures/ 下都没有能放的),老师没拿到课的内容`] : [];
     const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
     if (continued) pack.continue = continued;
     const prompt = buildContextPack(pack, text, policy.contextPack);
@@ -446,7 +448,7 @@ export class Runner {
       const file = conversationFiles(ws.dirs.conversations, tutor, date).voice(job, input.voice.ext);
       if (await mkdir(join(ws.dirs.conversations, tutor), { recursive: true }).then(() => writeFile(file, input.voice!.data)).then(() => true, () => false)) voice = { audio: basename(file), seconds: Math.round(input.voice.seconds * 10) / 10 };
     }
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(marks.length ? { marks } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length || lectureWarn.length ? { warnings: [...noteWarnings, ...lectureWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length || lectureWarn.length ? { warnings: [...noteWarnings, ...lectureWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 

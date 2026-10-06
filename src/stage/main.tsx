@@ -68,9 +68,9 @@ function App(): JSX.Element {
   // 板书上的小课堂卡(老师放课里的一段):props 里有下发时补的起止
   if (card.kind === 'lecture' && card.bundleUrl && typeof card.props.start === 'number' && typeof card.props.end === 'number') {
     const range = { start: card.props.start, end: card.props.end };
-    return <LectureStage ref={lecture} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={[]} range={range} autoplay={card.autoplay} onPhase={onLecturePhase} onMarks={noop} onFinished={noop} onClose={noop} onError={onError} />;
+    return <LectureStage ref={lecture} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={[]} range={range} autoplay={card.autoplay} video={card.props.video === true} onPhase={onLecturePhase} onMarks={noop} onFinished={noop} onClose={noop} onError={onError} />;
   }
-  if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} onMarks={onMarks} onSvg={onSvg} onFinished={onLectureDone} onClose={onLectureClose} onError={onError} />;
+  if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} video={card.props.video === true} onMarks={onMarks} onSvg={onSvg} onFinished={onLectureDone} onClose={onLectureClose} onError={onError} />;
   if (card.kind === 'lecture-svg' && card.bundleUrl) return <LectureSvg bundleUrl={card.bundleUrl} onSvg={onSvg} onError={onError} />;
   if (card.kind === 'scene' && card.bundleUrl) return <SceneStage ref={scene} bundleUrl={card.bundleUrl} autoplay={card.autoplay} onPhase={onPhase} onError={onError} />;
   if (card.kind === 'canvas') {

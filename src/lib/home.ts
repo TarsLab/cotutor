@@ -92,8 +92,10 @@ export interface HomeCheckContext {
   tutors: Record<string, HomeTutorInfo>;
   /** 查得到的话题:`<老师> <日期> <话题>` */
   threads: ReadonlySet<string>;
-  /** 小课堂按钮引用的课包:读得出来的 → 课包的科目(没写 = null);不在表里 = 不在或坏了 */
+  /** 小课堂按钮引用的课包或视频:读得出来的 → 科目(没写 = null);不在表里 = 不在或坏了 */
   lectures?: ReadonlyMap<string, string | null>;
+  /** 读不出来的那几份,为什么(src/server/lecture.ts inspectLecture);没给就说一句笼统的 */
+  lectureProblems?: ReadonlyMap<string, readonly string[]>;
   today: string;
 }
 
@@ -148,8 +150,8 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
     ((c.props.buttons ?? []) as TutorButton[]).forEach((b, k) => {
       if (b.kind === 'lecture') {
         const subject = ctx.lectures?.get(b.bundle);
-        if (ctx.lectures && subject === undefined) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:bundles/${b.bundle}/ 不在或读不出来(要有 scene.json 与带步的 manifest.json)` });
-        else if (subject && t.subject && subject !== t.subject) out.push({ level: 'note', line, card: n, button: k, text: `${t.display}的「${b.label}」:课包 ${b.bundle} 是${subject}的,${t.display}教${t.subject}` });
+        if (ctx.lectures && subject === undefined) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${ctx.lectureProblems?.get(b.bundle)?.join(';') || `bundles/${b.bundle}/ 不在或读不出来(要有 scene.json 与带步的 manifest.json)`}` });
+        else if (subject && t.subject && subject !== t.subject) out.push({ level: 'note', line, card: n, button: k, text: `${t.display}的「${b.label}」:小课堂 ${b.bundle} 是${subject}的,${t.display}教${t.subject}` });
         return;
       }
       if (b.kind !== 'continue') return;
@@ -212,7 +214,7 @@ export type KidHomeButton =
   | { id: number; kind: 'start'; label: string; brief?: string }
   | { id: number; kind: 'continue'; label: string; date: string; thread: string; brief?: string }
   /** 小课堂:title / ms(课名、课长)由服务端读课包后补 */
-  | { id: number; kind: 'lecture'; label: string; bundle: string; brief?: string; title?: string; ms?: number };
+  | { id: number; kind: 'lecture'; label: string; bundle: string; brief?: string; title?: string; ms?: number; video?: true };
 
 export const NEW_THREAD_LABEL = '新话题';
 const RECENT_MAX = 10;

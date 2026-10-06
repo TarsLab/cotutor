@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
-import { DRAW_START_MS, clockLabel, colorWord, describeMark, drawnAt, lectureAt, lectureClock, lectureLines, lectureRange, parseClock, textBox, type LectureSkeleton, type LectureStep } from '../src/lib/lecture.ts';
+import { DRAW_START_MS, clockLabel, colorWord, describeMark, drawnAt, lectureAt, lectureClock, lectureLines, lectureRange, parseClock, parseLectureDoc, textBox, videoClock, type LectureSkeleton, type LectureStep } from '../src/lib/lecture.ts';
 import { check, done } from './_check.ts';
 
 const dir = fileURLToPath(new URL('./fixtures/bundles/2026-09-18-po13-jian-8/', import.meta.url));
@@ -99,6 +99,30 @@ check('时间:分:秒、时:分:秒;秒过 59、乱写的不认', parseClock('0:
   const sec = await enrichLectures({ dirs: { bundles } }, { cards: [{ kind: 'lecture', props: { bundle: '2026-09-18-po13-jian-8', from: 19_000, to: 30_000 } }, { kind: 'lecture', props: { bundle: '2026-01-01-gone', from: 0 } }, { kind: 'text', props: { text: 'x' } }], lines: [] });
   const [a, b, c] = sec.cards.map((x) => x.props as Record<string, unknown>);
   check('下发时补快照:课名、对齐后的起止、末帧停在 SVG 的哪一刻、ready;课包不在 ready: false;别的卡不动', a.title === '13 − 8 破十法' && a.start === clock.segments[2].start && a.end === clock.segments[3].start && (a.still as number) > clock.segments[2].drawStart && (a.still as number) <= clock.segments[2].drawEnd && a.ready === true && b.ready === false && !('start' in b) && c.text === 'x' && !('ready' in c), JSON.stringify({ a, b }));
+}
+// ---- 视频来源(第 4 步):lecture.md、视频的时钟、mp4 的时长、读盘 ----
+{
+  const doc = parseLectureDoc('---\nsubject: 数学\n---\n# 平均分\n\n<!-- 给人看 -->\n0:00 第一句\n0:05 第二句\n随手一行\n0:11 第三句\n');
+  check('lecture.md:标题、科目、一行一句(起点与原话);认不出的行提醒、不算错', doc.title === '平均分' && doc.subject === '数学' && JSON.stringify(doc.chapters.map((c) => [c.start, c.line])) === JSON.stringify([[0, '第一句'], [5000, '第二句'], [11000, '第三句']]) && doc.issues.length === 1 && doc.issues[0].level === 'note' && doc.issues[0].line === 9, JSON.stringify(doc));
+  const bad = parseLectureDoc('0:05 先说\n0:03 倒回去了\n');
+  check('lecture.md:没标题要改、时间倒回去要改、第一句不从 0:00 起提醒', bad.issues.some((x) => x.level === 'fix' && x.text.includes('# 标题')) && bad.issues.some((x) => x.level === 'fix' && x.line === 2) && bad.issues.some((x) => x.level === 'note' && x.text.includes('0:05')), JSON.stringify(bad.issues));
+  check('lecture.md:一句都没有要改', parseLectureDoc('# 只有标题\n').issues.some((x) => x.level === 'fix' && x.text.includes('一句都没有')));
+  const vc = videoClock(doc.chapters, 18_000);
+  check('视频的时钟:一句一段,最后一句到视频末尾;落在第几段照算', vc.total === 18_000 && JSON.stringify(vc.segments.map((x) => [x.start, x.len])) === JSON.stringify([[0, 5000], [5000, 6000], [11000, 7000]]) && lectureAt(vc, 12_000).index === 2 && lectureRange(vc, 5000, 11_000)?.end === 11_000);
+  const late = videoClock([{ start: 3000, line: 'a' }, { start: 30_000, line: '超了' }], 18_000);
+  check('第一句不从 0 起:前面补一段没话的;超过视频长度的那句不算', late.segments.length === 2 && late.segments[0].line === '' && late.segments[1].start === 3000 && late.segments[1].len === 15_000);
+}
+{
+  const { mp4DurationMs } = await import('../src/server/mp4.ts');
+  const { inspectLecture } = await import('../src/server/lecture.ts');
+  const lectures = fileURLToPath(new URL('./fixtures/lectures/', import.meta.url));
+  const bundles = fileURLToPath(new URL('./fixtures/bundles/', import.meta.url));
+  check('mp4 的时长:读 moov/mvhd;不是 mp4 回 null', (await mp4DurationMs(join(lectures, '2026-10-06-pingjunfen', 'video.mp4'))) === 18_000 && (await mp4DurationMs(join(dir, 'scene.json'))) === null && (await mp4DurationMs('/nope.mp4')) === null);
+  const v = await inspectLecture({ dirs: { bundles, lectures } }, '2026-10-06-pingjunfen');
+  check('读视频小课堂:课名、科目、课长从 mp4、三句;视频', v.lecture?.video === true && v.lecture.title === '平均分:一个一个轮着分' && v.lecture.subject === '数学' && v.lecture.clock.total === 18_000 && v.lecture.clock.segments.length === 3 && !v.problems.length, JSON.stringify(v.problems));
+  const b = await inspectLecture({ dirs: { bundles, lectures } }, '2026-09-18-po13-jian-8');
+  const none = await inspectLecture({ dirs: { bundles, lectures } }, '2026-01-01-gone');
+  check('同一个读法认课包(不是视频);两边都没有说清楚要什么', b.lecture?.video === false && none.lecture === null && none.problems[0].includes('bundles/2026-01-01-gone/ 与 lectures/2026-01-01-gone/ 都没有'), JSON.stringify(none.problems));
 }
 check('没有步的课包:空时钟', lectureClock(scene.skeletons, []).total === 0 && lectureAt(lectureClock([], []), 100).index === -1);
 done();

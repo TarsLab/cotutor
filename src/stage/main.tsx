@@ -7,7 +7,7 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client';
 import 'drawtell/player/chalk-player.css';
 import { SceneStage, type SceneStageHandle } from './scene.tsx';
-import { LectureStage, buildLecture, type LectureStageHandle, type LectureWatch, type StageMark } from './lecture.tsx';
+import { LectureStage, buildLecture, type LectureStageHandle, type LectureWatch, type StageMark, type WatchEntry } from './lecture.tsx';
 import type { CanvasStageHandle } from './canvas.tsx';
 import '@excalidraw/excalidraw/dist/prod/index.css';
 import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
@@ -40,6 +40,7 @@ function App(): JSX.Element {
       const m = e.data;
       if (!m || m.source !== STAGE_SOURCE) return;
       if (m.type === 'card') setCard(m);
+      else if (m.type === 'follow') lecture.current?.follow(m.ms, m.playing, m.rate, m.marks as StageMark[]);
       else if (m.type === 'control') { if (m.action === 'submit') canvas.current?.submit(); else { scene.current?.control(m.action); lecture.current?.control(m.action); } }
     };
     window.addEventListener('message', onMsg);
@@ -62,6 +63,7 @@ function App(): JSX.Element {
     if (phase === 'done') post({ type: 'state', state: { done: true } });
   }, []);
   const onMarks = useCallback((marks: StageMark[]) => post({ type: 'marks', marks }), []);
+  const onWatch = useCallback((e: WatchEntry) => post({ type: 'watch', ...e }), []);
   const onSvg = useCallback((markup: string, dx: number, dy: number) => post({ type: 'svg', markup, dx, dy }), []);
 
   if (!card) return <div className="stage-wait" />;
@@ -70,7 +72,7 @@ function App(): JSX.Element {
     const range = { start: card.props.start, end: card.props.end };
     return <LectureStage ref={lecture} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={[]} range={range} autoplay={card.autoplay} video={card.props.video === true} onPhase={onLecturePhase} onMarks={noop} onFinished={noop} onClose={noop} onError={onError} />;
   }
-  if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} video={card.props.video === true} onMarks={onMarks} onSvg={onSvg} onFinished={onLectureDone} onClose={onLectureClose} onError={onError} />;
+  if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage ref={lecture} follow={card.props.follow === true} onLog={onWatch} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} video={card.props.video === true} onMarks={onMarks} onSvg={onSvg} onFinished={onLectureDone} onClose={onLectureClose} onError={onError} />;
   if (card.kind === 'lecture-svg' && card.bundleUrl) return <LectureSvg bundleUrl={card.bundleUrl} onSvg={onSvg} onError={onError} />;
   if (card.kind === 'scene' && card.bundleUrl) return <SceneStage ref={scene} bundleUrl={card.bundleUrl} autoplay={card.autoplay} onPhase={onPhase} onError={onError} />;
   if (card.kind === 'canvas') {

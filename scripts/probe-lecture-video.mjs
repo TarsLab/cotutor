@@ -110,6 +110,16 @@ try {
 
   const pb = await (await fetch(`${base}/api/conversations/math-tutor/today/board`)).json();
   const pm = pb.messages.find((m) => m.lecture?.video)?.lecture?.marks?.[0];
+  await send('Page.navigate', { url: `${base}/parent?tutor=math-tutor` });
+  await until(`document.querySelector('#tutor').classList.contains('on') && document.querySelectorAll('#board .sec').length > 0`);
+  await evaluate(`document.querySelector('#reel-btn').click()`);
+  const reelOn = await until(`document.body.classList.contains('reel') && !${F}.hidden && Boolean(${D}?.querySelector('.lc video.lc-video'))`, 80);
+  await evaluate(`document.querySelector('#rl-play').click()`);
+  await evaluate(`document.querySelector('#rl-marks i.circle').click()`);
+  await sleep(1000);
+  const rr = await evaluate(`({ t: ${D}.querySelector('video').currentTime, ink: ${D}.querySelectorAll('.lc-over .lc-ink path').length, sub: document.querySelector('#sub-text').textContent })`);
+  ok('家长看录像:看视频那一段铺在板书上,点「圈了一处」视频停在圈的那一刻、画着那一圈', reelOn && rr.t > 12 && rr.t < 13.5 && rr.ink === 1 && rr.sub.startsWith('⏸ 小课堂停在 0:1'), JSON.stringify(rr));
+  await shot('video-reel.png');
   ok('家长端:圈带着那段话(那时在讲哪句、截图是 photos 第 1 张)与截图路径', /^0:1\d 圈的,那时在讲『分完了/.test(pm?.text ?? '') && pm.text.endsWith('圈在截图上(photos 第 1 张)') && /^captures\//.test(pm.image ?? ''), JSON.stringify(pm));
 } finally {
   browser?.kill();

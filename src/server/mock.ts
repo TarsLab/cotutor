@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset } from './stage.ts';
 import { enrichScenes } from './scene-props.ts';
 import { sendFile } from './send-file.ts';
+import type { ConversationMessage } from '../schema/index.ts';
 import { enrichLectures, readLecture, storedMarks, type Lecture } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
@@ -408,6 +409,8 @@ interface MockMessage {
   lecture?: KidLecture;
   /** 家长端多看到的看的情况 */
   lectureWatch?: { watchedMs: number; finished: boolean; pauses: number };
+  /** 看的过程(录像用;孩子端不下发) */
+  lectureLog?: { t: number; pos: number; play: boolean }[];
 }
 
 /** mock 的首页原文(昨晚 21:30 发布的那份;接着按钮指向 past 里昨天的话题,job = 0930-<老师名长度>) */
@@ -517,7 +520,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   const booked = new Set<string>();
   /** 下发孩子端的形状:答案剥掉、状态并到卡上、场景卡补课包快照(样本课包在仓库里) */
   const kidMessage = async (m: MockMessage) => {
-    const { states, action: _a, lectureWatch: _w, ...rest } = m;
+    const { states, action: _a, lectureWatch: _w, lectureLog: _l, ...rest } = m;
     if (rest.lecture?.marks) rest.lecture = { ...rest.lecture, marks: rest.lecture.marks.map(({ text: _t, ...k }) => k) };
     const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => (states && i in states ? { ...c, state: states[i] } : c)) } : null;
     const section = withState ? await enrichLectures(MOCK_LECTURE_DIRS, await enrichScenes({ bundles: MOCK_BUNDLES_DIR }, stripSecrets(withState))) : null;
@@ -667,6 +670,12 @@ export function createMock(opts: MockOptions = {}): Mock {
     }
     // 看录像(《家长录像设计.md》):mock 的消息没有真时刻(种子全是同一刻),照一个固定节奏排——
     // 等老师 3 秒(第二轮 14 秒,看「等老师」的压缩)、念完孩子想 8 秒(第一轮 40 秒,看「孩子想了」);卡的状态算在下一轮开口前 5 秒
+    /** 看小课堂的那条:录像要它的看的过程(mock 的家长端条目带着 lecture 与 lectureLog) */
+    const lectureOfMock = (m: Record<string, unknown>): { lecture?: NonNullable<ConversationMessage['lecture']> } => {
+      const l = m.lecture as KidLecture | undefined;
+      if (!l) return {};
+      return { lecture: { bundle: l.bundle, title: l.title, watchedMs: 0, finished: true, pauses: 0, ...(l.again ? { again: true as const } : {}), ...(l.video ? { video: true as const } : {}), ...(l.marks ? { marks: l.marks } : {}), ...(Array.isArray(m.lectureLog) ? { log: m.lectureLog as { t: number; pos: number; play: boolean }[] } : {}) } };
+    };
     const rl = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/reel$/.exec(p);
     if (rl && method === 'GET') {
       const [, name, tail, raw] = rl;
@@ -682,7 +691,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         starts.push(t);
         const startedAt = new Date(t).toISOString();
         t += wait + (m.section?.lines ?? []).reduce((n, l) => n + lineDurationMs(l.text) + REEL_LINE_GAP_MS, 0) + (k === 0 ? 40000 : 8000);
-        return { job: m.job, thread, at: startedAt, from: m.from, text: m.question ?? '', result: m.pending ? ('running' as const) : ('ok' as const), artifacts: [], section: m.section, timing: { startedAt, doneMs: wait, dubbedMs: wait }, ...(m.action ? { action: m.action } : {}) };
+        return { job: m.job, thread, at: startedAt, from: m.from, text: m.question ?? '', result: m.pending ? ('running' as const) : ('ok' as const), artifacts: [], section: m.section, timing: { startedAt, doneMs: wait, dubbedMs: wait }, ...(m.action ? { action: m.action } : {}), ...lectureOfMock(m) };
       });
       const cards: CardStates = {};
       mine.forEach((m, k) => (m.section?.cards ?? []).forEach((c, n) => { if (c.state !== undefined) (cards[m.job] ??= {})[n] = { at: new Date((starts[k + 1] ?? t) - 5000).toISOString(), turn: m.job, state: c.state }; }));
@@ -764,11 +773,12 @@ export function createMock(opts: MockOptions = {}): Mock {
         let newThread = body.newThread === true;
         let wantThread = body.thread;
         // 小课堂:看完才能开口,字是孩子说的,新话题;圈的那几处现算成一段话(同 runner)。问过以后再看一遍又圈了:同一话题的下一条带上(again)
-        const marksIn = isObj(body.lecture) && Array.isArray(body.lecture.marks) ? (body.lecture.marks as { atMs: number; path: [number, number][]; image?: string }[]) : [];
+        const marksIn = isObj(body.lecture) && Array.isArray(body.lecture.marks) ? (body.lecture.marks as { atMs: number; path: [number, number][]; image?: string; t?: number }[]) : [];
+        const logIn = isObj(body.lecture) && Array.isArray(body.lecture.log) ? (body.lecture.log as { t: number; pos: number; play: boolean }[]) : [];
         const lec = isObj(body.lecture) && typeof body.lecture.bundle === 'string' ? { bundle: body.lecture.bundle, finished: body.lecture.finished === true, again: false, watchedMs: Number(body.lecture.watchedMs) || 0, pauses: Number(body.lecture.pauses) || 0 } : null;
         if (lec && (typeof button !== 'object' || button === null || button.kind !== 'lecture')) {
           const from = list.find((x) => x.thread === body.thread && x.lecture && !x.lecture.again);
-          if (!from || from.lecture?.bundle !== lec.bundle || !marksIn.length) return { status: 400, json: { error: 'bad_request' } };
+          if (!from || from.lecture?.bundle !== lec.bundle || (!marksIn.length && !logIn.length)) return { status: 400, json: { error: 'bad_request' } };
           lec.again = true;
         }
         if (typeof button === 'object' && button !== null && button.kind === 'lecture') {
@@ -794,7 +804,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         }
         const lt = lec ? mockLecture(lec.bundle) : null;
         const marks = lt ? storedMarks(lt, marksIn, photos.length) : [];
-        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses } } : {}) };
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
         list.push(m);
         const done = think(t, m, cursor).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);

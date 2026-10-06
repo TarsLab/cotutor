@@ -21,6 +21,15 @@ export interface StageMark {
   path: [number, number][];
   /** 视频的圈:那一帧叠上圈的截图(data URL;页面发消息前传成 captures/ 里的文件,换成路径) */
   image?: string;
+  /** 圈下去的那一刻(Date.now();录像用,页面发消息时换成离发出去多少毫秒) */
+  at?: number;
+}
+
+/** 看的过程的一条(录像用):那一刻(Date.now())停在课里的哪儿、之后在不在放 */
+export interface WatchEntry {
+  at: number;
+  pos: number;
+  play: boolean;
 }
 
 /** 装好的小课堂:时钟、带逐笔动画的 SVG(暂停着)、课包坐标 → SVG 坐标的平移(exportToSvg 把元素挪进了 viewBox) */
@@ -78,6 +87,10 @@ export interface LectureStageProps {
   onPhase?(phase: 'drawing' | 'paused' | 'done', line: string, step: number, total: number): void;
   /** 视频小课堂(第 4 步):bundleUrl 是 /api/kid/lectures/<id>/,下面有 lecture.json(一句一段)与 video.mp4 */
   video?: boolean;
+  /** 看的过程:放 / 停 / 拖完 / 跳 / 放完 / 回去,一次一条(录像用) */
+  onLog?(e: WatchEntry): void;
+  /** 家长看录像:只看,时钟跟着页面(follow) */
+  follow?: boolean;
 }
 
 /** 视频小课堂的时钟:服务端按 lecture.md 拼好的一句一段 */
@@ -89,9 +102,10 @@ async function loadVideoClock(url: string): Promise<LectureClock> {
   return { skeletons: [], segments: j.segments.map((x, i) => ({ index: i, start: x.start, len: x.len, drawStart: 0, drawEnd: 0, audioMs: null, line: x.line })), total: j.total, elements: new Map() };
 }
 
-/** 页面的字幕行按钮(control toggle / play / pause)转到这里 */
+/** 页面的字幕行按钮(control toggle / play / pause)转到这里;家长看录像时页面每 100 毫秒对一次(follow) */
 export interface LectureStageHandle {
   control(action: string): void;
+  follow(ms: number, playing: boolean, rate: number, marks: StageMark[]): void;
 }
 
 /** 声音和画面差多少就把声音拉回来(毫秒) */
@@ -111,9 +125,11 @@ const MAX_POINTS = 300;
 const INK = '#2f6fd6';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onSvg, onFinished, onClose, onError, range, autoplay = false, onPhase, video = false }, ref): JSX.Element {
+export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onSvg, onFinished, onClose, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false }, ref): JSX.Element {
   const card = range !== undefined;
-  const view = rawView || card;
+  const view = rawView || card || follow;
+  /** 录像跟着放:倍速 */
+  const rate = useRef(1);
   const openAt = card ? range.start : rawAt;
   const [clock, setClock] = useState<LectureClock | null>(null);
   const [now, setNow] = useState(0);
@@ -213,6 +229,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const syncAudio = useCallback((c: LectureClock, ms: number, play: boolean) => {
     const v = vid.current;
     if (v) {
+      v.playbackRate = rate.current;
       if (play && v.paused && !v.ended) v.play().catch(onBlocked);
       if (!play && !v.paused) v.pause();
       return;
@@ -227,6 +244,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     }
     if (!s.audioSrc || s.audioMs === null || at.offset >= s.audioMs) { a.pause(); return; }
     if (Math.abs(a.currentTime * 1000 - at.offset) > RESYNC_MS) { try { a.currentTime = at.offset / 1000; } catch { /* 还没装好 metadata */ } }
+    a.playbackRate = rate.current;
     if (play && a.paused) a.play().catch(onBlocked);
     if (!play && !a.paused) a.pause();
   }, [bundleUrl]);
@@ -246,7 +264,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     let raf = 0;
     last.current = performance.now();
     const tick = (p: number): void => {
-      const dt = p - last.current;
+      const dt = (p - last.current) * rate.current;
       last.current = p;
       if (!scrubbing.current) {
         // 视频:时钟就是视频自己的;课包:按真实时间往前走
@@ -317,7 +335,26 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     control(action: string) {
       if (action === 'toggle' || (action === 'play' && !playing) || (action === 'pause' && playing)) toggle();
     },
-  }), [toggle, playing]);
+    // 录像:页面的时钟是准的;差 300 毫秒以上(拖了、压过一段空白)就挪过去,放着就自己按倍速走(画面每帧都画)
+    follow(ms: number, play: boolean, r: number, ms2: StageMark[]) {
+      if (!clock) return;
+      rate.current = r;
+      setStarted(true);
+      setMarks((cur) => (cur.length === ms2.length ? cur : ms2));
+      if (!play || Math.abs(t.current - ms) > RESYNC_MS) { paint(clock, ms); seg.current = -1; }
+      if (play && !playing) { syncAudio(clock, ms, true); setPlaying(true); }
+      else if (!play && playing) { setPlaying(false); hush(); }
+    },
+  }), [toggle, playing, clock, paint, syncAudio]);
+
+  // ---- 看的过程(录像用):放 / 停变了记一条;拖完、跳、点记号挪了位置也记 ----
+  const logOf = useRef(onLog);
+  logOf.current = onLog;
+  const log = (play: boolean): void => { if (!follow) logOf.current?.({ at: Date.now(), pos: Math.round(t.current), play }); };
+  useEffect(() => {
+    if (clock && started) log(playing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, started, clock]);
 
   // 拖:按下就跟手,不出声;松手从那一刻接着(原来在放就接着放)
   const track = useRef<HTMLDivElement>(null);
@@ -339,6 +376,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     scrubbing.current = false;
     seg.current = -1;
     syncAudio(clock, t.current, playing);
+    log(playing);
   };
   const jump = (ms: number): void => {
     if (!clock) return;
@@ -347,6 +385,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     paint(clock, ms);
     seg.current = -1;
     syncAudio(clock, ms, playing);
+    log(playing);
   };
 
   useEffect(() => () => { audio.current?.pause(); vid.current?.pause(); }, []);
@@ -416,7 +455,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     const path = s.pts.filter((_, i) => i % step === 0 || i === s.pts.length - 1).map(([x, y]) => [Math.round(x - dx), Math.round(y - dy)] as [number, number]);
     const at = Math.round(t.current);
     const image = vid.current ? shot(vid.current, path) : undefined;
-    changeMarks([...marks, { atMs: at, svgMs: vid.current ? 0 : Math.round(lectureAt(clock, at).svgMs * 10) / 10, path, ...(image ? { image } : {}) }].sort((a, b) => a.atMs - b.atMs));
+    changeMarks([...marks, { atMs: at, svgMs: vid.current ? 0 : Math.round(lectureAt(clock, at).svgMs * 10) / 10, path, ...(image ? { image } : {}), at: Date.now() }].sort((a, b) => a.atMs - b.atMs));
     setFresh(at);
   };
   /** 视频的圈:这一帧画到 canvas 上,叠上圈(视频像素坐标),出一张 jpeg;画不出来(没帧)就不带图 */
@@ -451,6 +490,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     paint(clock, m.atMs);
     seg.current = -1;
     setFresh(null);
+    log(false);
   };
 
   const at = clock ? lectureAt(clock, now) : null;
@@ -464,9 +504,9 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   return (
     <div className={'lc' + (card ? ' lc-card' : '')}>
       {!card && <div className="lc-top">
-        <button type="button" className="lc-round" aria-label="回首页" onClick={() => onClose({ ...watch.current })}>
+        {!follow && <button type="button" className="lc-round" aria-label="回首页" onClick={() => { log(false); onClose({ ...watch.current }); }}>
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 4 6.5 10l6 6" /></svg>
-        </button>
+        </button>}
         <div className="lc-chip"><span className="lc-tag">小课堂</span><span className="lc-title">{title}</span></div>
       </div>}
       <div className={'lc-canvas' + (canDraw ? ' pen' : '')} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp}>
@@ -484,7 +524,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
           </div>
         )}
         {!clock && <div className="stage-wait">课还在路上…</div>}
-        {clock && !started && (
+        {clock && !started && !follow && (
           <button type="button" className="lc-start" onClick={toggle}>
             <svg width="28" height="28" viewBox="0 0 18 18"><path d="M5 3.5v11l9-5.5z" fill="currentColor" /></svg>
             {card ? '放这一段' : '开始看'}
@@ -521,7 +561,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
           {marks.length ? <small>圈了 {marks.length} 处</small> : null}
         </div>
       </div>
-      {!card && <div className="lc-hint">看完就能问老师</div>}
+      {!card && !follow && <div className="lc-hint">看完就能问老师</div>}
     </div>
   );
 });

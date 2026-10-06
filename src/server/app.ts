@@ -488,9 +488,12 @@ function voiceOf(v: unknown): { data: Buffer; ext: string; seconds: number } | u
 /** 一条消息最多带几处圈、一处圈最多几个点(《小课堂设计.md》§四) */
 const MAX_MARKS = 12;
 const MAX_MARK_POINTS = 400;
+/** 看的过程最多几条(拖进度条只记松手那一下,一堂课几十条) */
+const MAX_WATCH_LOG = 500;
+type WatchLog = { t: number; pos: number; play: boolean }[];
 
 /** 孩子看完小课堂带来的(《小课堂设计.md》§七):{bundle, watchedMs, finished, pauses, marks?};没带 undefined,形状不对 null(路由回 400) */
-function lectureOf(v: unknown): { bundle: string; watchedMs: number; finished: boolean; pauses: number; marks: IncomingMark[] } | null | undefined {
+function lectureOf(v: unknown): { bundle: string; watchedMs: number; finished: boolean; pauses: number; marks: IncomingMark[]; log: WatchLog } | null | undefined {
   if (v === undefined) return undefined;
   if (!isObj(v) || typeof v.bundle !== 'string' || !BUNDLE_ID_RE.test(v.bundle) || typeof v.watchedMs !== 'number' || !(v.watchedMs >= 0) || v.watchedMs > 6 * 3600_000 || typeof v.finished !== 'boolean') return null;
   const pauses = v.pauses === undefined ? 0 : v.pauses;
@@ -504,9 +507,20 @@ function lectureOf(v: unknown): { bundle: string; watchedMs: number; finished: b
     if (path.some((p) => p === null)) return null;
     // 视频的圈带一张截图(先 POST photos 拿到的 captures/ 路径;在不在由路由再查)
     if (m.image !== undefined && (typeof m.image !== 'string' || m.image.length > 200)) return null;
-    marks.push({ atMs: Math.round(m.atMs), path: path as [number, number][], ...(typeof m.image === 'string' ? { image: m.image } : {}) });
+    // 圈下去的那一刻(离发出去多少毫秒,≤ 0;录像用)
+    const t = m.t === undefined ? undefined : typeof m.t === 'number' && Number.isFinite(m.t) && m.t <= 0 && m.t > -6 * 3600_000 ? Math.round(m.t) : null;
+    if (t === null) return null;
+    marks.push({ atMs: Math.round(m.atMs), path: path as [number, number][], ...(typeof m.image === 'string' ? { image: m.image } : {}), ...(t !== undefined ? { t } : {}) });
   }
-  return { bundle: v.bundle, watchedMs: Math.round(v.watchedMs), finished: v.finished, pauses, marks };
+  // 看的过程(录像用):放 / 停 / 拖到哪,一次一条,t ≤ 0
+  const rawLog = v.log === undefined ? [] : v.log;
+  if (!Array.isArray(rawLog) || rawLog.length > MAX_WATCH_LOG) return null;
+  const log: WatchLog = [];
+  for (const e of rawLog as unknown[]) {
+    if (!isObj(e) || typeof e.t !== 'number' || !Number.isFinite(e.t) || e.t > 0 || e.t < -6 * 3600_000 || typeof e.pos !== 'number' || !(e.pos >= 0) || e.pos > 6 * 3600_000 || typeof e.play !== 'boolean') return null;
+    log.push({ t: Math.round(e.t), pos: Math.round(e.pos), play: e.play });
+  }
+  return { bundle: v.bundle, watchedMs: Math.round(v.watchedMs), finished: v.finished, pauses, marks, log };
 }
 
 /** 页面拉今天时的预热参数:?thread= 是页面选着的话题;同一话题 30 秒看一次 */
@@ -674,7 +688,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         let home: { button: string; brief?: string } | undefined;
         let continues: { date: string; thread: string } | undefined;
         // 小课堂(《小课堂设计.md》):看完才能开口——这一条要带 lecture(哪份课包、看完了、看了多久、停过几次、圈过的几处),字是孩子说的;新开话题。
-        // 问过以后「再看一遍」又圈了:同一话题的下一条带 lecture(只为带新圈的;话题得是从这份课包开始的)
+        // 问过以后「再看一遍」:同一话题的下一条带 lecture(新圈的、又看的过程;话题得是从这份课包开始的)
         let lecture: (NonNullable<ReturnType<typeof lectureOf>> & { again?: true }) | null | undefined = lectureOf(body.lecture);
         if (lecture === null) return { status: 400, json: { error: 'bad_request' } };
         if (lecture) {
@@ -686,7 +700,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           const idx = thread && !via ? await readIndex(ws, tutor, date) : null;
           const ths = idx ? threads(idx.messages) : [];
           const from = idx?.messages.find((m, i) => ths[i] === thread && m.lecture && !m.lecture.again);
-          if (!from || from.lecture?.bundle !== lecture.bundle || !lecture.marks.length) return { status: 400, json: { error: 'bad_request' } };
+          if (!from || from.lecture?.bundle !== lecture.bundle || (!lecture.marks.length && !lecture.log.length)) return { status: 400, json: { error: 'bad_request' } };
           lecture = { ...lecture, again: true };
         }
         if (button?.kind === 'lecture') {

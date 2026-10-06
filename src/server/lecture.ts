@@ -79,6 +79,8 @@ export interface LectureWatch {
 /** 孩子带来的一处圈;视频的带一张截好的图(captures/ 里,已经叠上了圈) */
 export interface IncomingMark extends LectureMark {
   image?: string;
+  /** 圈下去的那一刻:离这条消息发出去多少毫秒(≤ 0;录像用) */
+  t?: number;
 }
 
 /** 落盘的一处圈:时刻、SVG 停在哪(画缩略图用,毫秒)、路径(课包坐标;视频是视频自己的像素坐标)、算出来的那段话(读不出来时没有)、视频的截图 */
@@ -95,7 +97,7 @@ export function storedMarks(l: Lecture | null, marks: readonly IncomingMark[], p
   let k = photoBase;
   return marks.map((m) => {
     const shot = m.image ? ++k : null;
-    const base = { atMs: m.atMs, svgMs: l && !l.video ? Math.round(lectureAt(l.clock, m.atMs).svgMs * 10) / 10 : 0, path: m.path, ...(m.image ? { image: m.image } : {}) };
+    const base = { atMs: m.atMs, svgMs: l && !l.video ? Math.round(lectureAt(l.clock, m.atMs).svgMs * 10) / 10 : 0, path: m.path, ...(m.image ? { image: m.image } : {}), ...(m.t !== undefined ? { t: m.t } : {}) };
     if (!l) return base;
     if (!l.video) return { ...base, text: describeMark(l.clock, m, l.blocks).text };
     const line = l.clock.segments[lectureAt(l.clock, m.atMs).index]?.line.trim() ?? '';

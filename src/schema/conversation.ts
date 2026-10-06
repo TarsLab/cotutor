@@ -106,7 +106,12 @@ const MessageObjectSchema = z.object({
       /** 视频小课堂(lectures/<id>/);没有 = 课包 */
       video: z.literal(true).optional(),
       /** 视频的圈带一张截图(captures/ 里,已叠上圈;路径相对 workspace 根) */
-      marks: z.array(z.object({ atMs: z.number().nonnegative(), svgMs: z.number().nonnegative(), path: z.array(z.tuple([z.number(), z.number()])), text: z.string().optional(), image: z.string().optional() })).optional(),
+      marks: z.array(z.object({ atMs: z.number().nonnegative(), svgMs: z.number().nonnegative(), path: z.array(z.tuple([z.number(), z.number()])), text: z.string().optional(), image: z.string().optional(), t: z.number().optional() })).optional(),
+      /**
+       * 看的过程(录像用,《小课堂设计.md》§八第 5 步):放 / 停 / 拖到哪 / 放完,一次一条。t = 离这条消息发出去多少毫秒(≤ 0,孩子端自己的钟算,
+       * 不用对钟);pos = 那时停在课里的哪一刻;play = 那之后在放。圈的 t 同理(圈下去的那一刻)
+       */
+      log: z.array(z.object({ t: z.number(), pos: z.number().nonnegative(), play: z.boolean() })).optional(),
     })
     .optional(),
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2);开场按钮的 text 就是按钮上的字,不是孩子说的 */

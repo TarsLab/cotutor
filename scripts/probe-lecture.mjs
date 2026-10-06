@@ -5,7 +5,8 @@
  * 暂停 → 「圈一圈」「擦掉」出来 → 在画面上圈散的 3 根小棒:进度条上一个蓝记号、字幕行「圈好了,记在 0:2x」→ 擦掉再圈 →
  * 点第 6 个步骤点放到结尾 → 看完:铺满的收起,板书顶上小课堂卡(圈了 1 处)+ 一张圈的卡(缩略图是那一刻的画面 + 蓝圈,能删)+「看完了!有什么想问老师的?」,输入条亮、头上「小课堂」→
  * 从输入条问一句 → 老师那一节的节前画着小课堂卡与圈的卡(不能删了),提示撤掉;老师那一节有一张小课堂卡(放课里 0:19–0:30,缩略图是那一段的末帧),
- * 讲稿念到 [[play]] 自己铺满放那一段、放到 0:30 停在末帧、舞台不关、接着念下一句;家长端那条的圈带着算出来的那段话。iPad 横屏,每步截图。
+ * 讲稿念到 [[play]] 自己铺满放那一段、放到 0:30 停在末帧、舞台不关、接着念下一句;家长端那条的圈带着算出来的那段话;
+ * 家长看录像:从看小课堂开始,进度条上有「看小课堂」「圈了一处」的点,看课那一段播放器铺在板书上跟着录像走(只看),点「圈了一处」停在圈的那一刻、画着那一圈。iPad 横屏,每步截图。
  *
  * 用法:node scripts/probe-lecture.mjs [--shots <目录>] [--keep]
  */
@@ -156,6 +157,21 @@ try {
   const pb = await (await fetch(`${base}/api/conversations/math-tutor/today/board`)).json();
   const pm = pb.messages.find((m) => m.lecture)?.lecture?.marks?.[0];
   ok('家长端:那条的圈带着算出来的那段话(圈住了散的 3 根)', Boolean(pm?.text?.includes('第 1 步画的 3 条线')), pm?.text ?? JSON.stringify(pb.messages.map((m) => m.lecture)));
+
+  // 家长看录像(第 5 步):看小课堂那一段也在
+  await send('Page.navigate', { url: `${base}/parent?tutor=math-tutor` });
+  await until(`document.querySelector('#tutor').classList.contains('on') && document.querySelectorAll('#board .sec').length > 0`);
+  await evaluate(`document.querySelector('#reel-btn').click()`);
+  const reelOn = await until(`document.body.classList.contains('reel') && !${F}.hidden && Boolean(${D}?.querySelector('.lc .lc-svg'))`, 80);
+  const r0 = await evaluate(`({ kinds: [...document.querySelectorAll('#rl-marks i')].map((i) => i.className).join(' '), sub: document.querySelector('#sub-text').textContent, back: Boolean(${D}.querySelector('.lc-round')), start: Boolean(${D}.querySelector('.lc-start')), gap: Math.round(document.querySelector('#sub').getBoundingClientRect().top - ${F}.getBoundingClientRect().bottom), h: Math.round(${F}.getBoundingClientRect().height) })`);
+  ok('录像从看小课堂开始:进度条上「看小课堂」「圈了一处」的点;播放器铺在板书上、字幕行与控制条露着、只看(没有回去、没有开始看);字幕行写在看小课堂', reelOn && r0.kinds.startsWith('lecture') && r0.kinds.includes('circle') && !r0.back && !r0.start && r0.gap >= 0 && r0.gap <= 2 && r0.h > 500 && /^[▷⏸] /.test(r0.sub), JSON.stringify(r0));
+  await shot('reel-lecture.png');
+  await evaluate(`document.querySelector('#rl-play').click()`);
+  await evaluate(`document.querySelector('#rl-marks i.circle').click()`);
+  await sleep(800);
+  const r1 = await evaluate(`({ time: ${D}.querySelector('.lc-time span').textContent, ink: ${D}.querySelectorAll('.lc-ink path').length, marks: ${D}.querySelectorAll('.lc-mark').length, sub: document.querySelector('#sub-text').textContent })`);
+  ok('点「圈了一处」:录像停在圈下去那一刻,播放器停在课里圈的那一刻(0:23),画面上画着那一圈', /^0:2[2-4] \/ 0:46$/.test(r1.time) && r1.ink === 1 && r1.marks >= 1 && r1.sub.startsWith('⏸ 小课堂停在 0:2'), JSON.stringify(r1));
+  await shot('reel-circle.png');
 } finally {
   browser?.kill();
   await sleep(600);

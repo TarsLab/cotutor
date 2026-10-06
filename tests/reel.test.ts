@@ -154,6 +154,20 @@ check('话题里孩子一句都没说(只有系统起的轮)→ 没有录像', b
   const all = buildReel(input([m1], { plays }))!;
   check('每一轮有讲稿的节都有记录:实录', all.precise);
 }
+{
+  // 看小课堂(《小课堂设计.md》§八第 5 步):开口前 60 秒开始看;放 10 秒停下、5 秒后圈一处、再过 7 秒接着放;放 8 秒后拖到 0:30;放到 0:46 看完;14 秒后开口
+  const L = { bundle: '2026-09-18-po13-jian-8', title: '13 − 8 破十法', watchedMs: 46000, finished: true, pauses: 1,
+    log: [{ t: -60000, pos: 0, play: true }, { t: -50000, pos: 10000, play: false }, { t: -38000, pos: 10000, play: true }, { t: -30000, pos: 30000, play: true }, { t: -14000, pos: 46000, play: false }],
+    marks: [{ atMs: 10000, svgMs: 9000, path: [[1, 1], [9, 1], [5, 9]] as [number, number][], t: -45000 }] };
+  const r = buildReel(input([msg('1', { text: '为什么要拆', timing: { startedAt: iso(T) }, section: S2, lecture: L })]))!;
+  check('看小课堂的一段:从第一条看的记录起、到看完那条止;录像从看课开始', r.lectures.length === 1 && r.lectures[0].from === T - 60000 && r.lectures[0].to === T - 14000 && r.startAt === T - 60000, JSON.stringify(r.lectures[0]).slice(0, 300));
+  check('进度条上的点:开始看小课堂、圈了一处(课里的时刻)、开口', r.marks.slice(0, 3).map((m) => `${m.kind}@${m.at - T}:${m.label}`).join(' ') === 'lecture@-60000:看小课堂 · 13 − 8 破十法 circle@-45000:圈了一处(课里 0:10) said@0:为什么要拆', r.marks.map((m) => `${m.kind}@${m.at - T}:${m.label}`).join(' '));
+  const at = (dt: number) => reelFrameAt(r, T + dt).lecture;
+  check('某一刻:放着按真实时间往前推;停着停在那儿;圈过的到圈下去那一刻才出来', at(-55000)?.pos === 5000 && at(-55000)?.playing === true && at(-48000)?.pos === 10000 && at(-48000)?.playing === false && at(-48000)?.marks.length === 0 && at(-44000)?.marks.length === 1 && at(-31000)?.pos === 17000 && at(-29000)?.pos === 31000 && at(-15000)?.pos === 45000, JSON.stringify([at(-31000), at(-29000)]));
+  check('看完到开口之间不在看(板书那边);开口之后也不在', at(-10000) === null && at(1000) === null);
+  check('空白:停着的 12 秒被那一圈切开(圈前后各 1 秒照放),后一段 6 秒压;在放的不压;看完到开口的 14 秒压', r.gaps.map((g) => `${g.kind}:${g.from - T}-${g.to - T}${g.cont ? ':cont' : ''}`).join(' ') === 'think:-44000--38000:cont think:-14000-0', JSON.stringify(r.gaps.map((g) => [g.from - T, g.to - T])));
+  check('没带看的过程(以前的话题):没有这一段', buildReel(input([msg('1', { text: 'x', timing: { startedAt: iso(T) }, section: S2, lecture: { ...L, log: undefined } })]))!.lectures.length === 0);
+}
 check('实录的形状:好的收、坏的丢', playRecordOk({ at: 1, k: 'play', job: '1620-1', line: 0, status: 'playing' }) && playRecordOk({ at: 1, k: 'play', job: null, line: -1, status: 'idle' }) && playRecordOk({ at: 1, k: 'stage', job: '1620-1', card: 2, open: true }) && !playRecordOk({ at: 1, k: 'stage', job: '../x', card: 2, open: true }) && !playRecordOk({ at: 'x', k: 'visible', on: true }) && !playRecordOk({ at: 1, k: 'eval', on: true }) && !playRecordOk(null));
 check('进度条上怎么写孩子这句', reelSaid({ text: 'x', action: 'continue' }) === '继续' && reelSaid({ text: '', action: 'submit', via: { home: 'h', button: 'new', label: '6 的口诀' } }) === '交给老师' && reelSaid({ text: 'x', via: { home: 'h', button: 0, label: '开场' } }) === '开场' && reelSaid({ text: '原话' }) === '原话');
 check('时长的写法', reelDuration(23400) === '23 秒' && reelDuration(130000) === '2 分 10 秒' && reelDuration(120000) === '2 分' && reelDuration(3_900_000) === '1 小时 5 分');

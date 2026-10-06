@@ -276,6 +276,10 @@ const PAGE = `<!doctype html>
   #rl-marks i.card { background:#2fa36b; }
   #rl-marks i.ask { background:#5b3d86; border-radius:2px; transform:scale(.8); }
   #rl-marks i.error { background:#b3541e; border-radius:2px; }
+  #rl-marks i.lecture { background:#c95a22; border-radius:2px; }
+  #rl-marks i.circle { background:#2f6fd6; }
+  /* 录像里看小课堂的那一段:铺在板书上,字幕行与控制条露着;只看 */
+  body.reel #lc-frame { height:calc(100% - var(--rl-lc-bottom, 140px)); pointer-events:none; }
   .rl-row { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--dim); }
   .rl-when { flex:none; display:flex; flex-direction:column; align-items:flex-start; gap:1px; line-height:1.2; }
   #rl-play { flex:none; width:44px; height:44px; border-radius:50%; background:var(--ink); color:#fff; display:grid; place-items:center; }
@@ -733,7 +737,7 @@ __REEL_JS__
     intent = intent || { kind: 'new' };
     S.tutor = t; if (!PARENT) micWarm(); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
-    S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [] } : null;
+    S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null;
     // 家长端只看:卡锁着(选择 / 填空 / 画板不开、没有「继续」)、没有输入条,看的是清单上那天的;家长要试,到孩子端当一回孩子,用完回这里删
     if (PARENT) { S.readonly = true; S.newThread = false; S.hist = intent.date || S.pdate || null; }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
@@ -1315,7 +1319,7 @@ __REEL_JS__
     // 问过以后(刷新过、或从别处回来,手上没有 S.lecture)从节前的小课堂卡再看一遍:这个话题接着收圈,下一条带上
     if (l && !PARENT && !S.readonly && !S.newThread && (!S.lecture || S.lecture.bundle !== l.bundle)) {
       const own = S.sections.find((x) => x.lecture && !x.lecture.again && x.lecture.bundle === l.bundle);
-      if (own) S.lecture = { bundle: l.bundle, title: l.title, ...(own.lecture.video ? { video: true } : {}), watch: { watchedMs: 0, finished: true, pauses: 0 }, sent: true, firstJob: own.job, job: own.job, marks: [], flying: [] };
+      if (own) S.lecture = { bundle: l.bundle, title: l.title, ...(own.lecture.video ? { video: true } : {}), watch: { watchedMs: 0, finished: true, pauses: 0 }, sent: true, firstJob: own.job, job: own.job, marks: [], flying: [], log: [] };
     }
     lcShowing = L; dispatch({ type: 'halt' });
     lcFrame.hidden = false; lcFrame.src = '/stage/?card=lecture';
@@ -1418,9 +1422,11 @@ __REEL_JS__
   window.addEventListener('message', (e) => {
     const m = e.data;
     if (!m || m.source !== STAGE_SOURCE || e.source !== lcFrame.contentWindow || !lcShowing) return;
-    if (m.type === 'ready') lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
+    if (m.type === 'ready') lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}), ...(lcShowing.follow ? { follow: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
     else if (m.type === 'svg') { const x = lcSvgSlot(lcShowing.bundle); x.asked = true; x.done(m); }
     else if (m.type === 'marks') { if (lcMine()) S.lecture.marks = m.marks; }
+    // 看的过程(录像用):孩子开口时一起带上(拍板 11:没开口之前哪里都不记)
+    else if (m.type === 'watch') { if (lcMine() && S.lecture.log.length < 500) S.lecture.log.push({ at: m.at, pos: m.pos, play: m.play }); }
     else if (m.type === 'lecture') {
       const first = lcMine() && !S.lecture.watch;
       if (m.event === 'finished' && first) S.lecture.watch = { watchedMs: m.watchedMs, finished: true, pauses: m.pauses };
@@ -2069,11 +2075,13 @@ __REEL_JS__
     if (L && L.marks && L.marks.some((k) => k.image && k.image.startsWith('data:'))) {
       for (const k of L.marks) if (k.image && k.image.startsWith('data:')) { try { const r = await api('POST', CONV + S.tutor.name + '/photos', { image: k.image }); k.image = r.path; } catch { delete k.image; } }
     }
-    if (L && L.watch && (!L.sent || L.marks.length)) body.lecture = { bundle: L.bundle, ...(L.sent ? (L.rewatch || { watchedMs: 0, finished: false, pauses: 0 }) : L.watch), ...(L.marks.length ? { marks: L.marks.map((k) => ({ atMs: k.atMs, path: k.path, ...(k.image ? { image: k.image } : {}) })) } : {}) };
+    // 时刻换成离发出去多少毫秒(孩子端自己的钟,不用对钟);问过以后又看了(圈了或只是看了)也带上
+    const sentAt = Date.now();
+    if (L && L.watch && (!L.sent || L.marks.length || L.log.length)) body.lecture = { bundle: L.bundle, ...(L.sent ? (L.rewatch || { watchedMs: 0, finished: false, pauses: 0 }) : L.watch), ...(L.marks.length ? { marks: L.marks.map((k) => ({ atMs: k.atMs, path: k.path, ...(k.image ? { image: k.image } : {}), ...(k.at ? { t: Math.min(0, k.at - sentAt) } : {}) })) } : {}), ...(L.log.length ? { log: L.log.map((e) => ({ t: Math.min(0, e.at - sentAt), pos: e.pos, play: e.play })) } : {}) };
     try {
       const r = await api('POST', CONV + S.tutor.name + '/messages', body);
       S.via = null;
-      if (body.lecture && L) { L.flying = L.marks; L.marks = []; if (!L.sent) L.firstJob = r && r.job; L.sent = true; L.job = r && r.job; L.rewatch = null; renderLecturePending(); }
+      if (body.lecture && L) { L.flying = L.marks; L.marks = []; L.log = []; if (!L.sent) L.firstJob = r && r.job; L.sent = true; L.job = r && r.job; L.rewatch = null; renderLecturePending(); }
       if (r && r.thread) S.thread = r.thread;
       S.newThread = false; { const blank = $('#board .blank'); if (blank) blank.remove(); }
       renderHeader();
@@ -2253,7 +2261,8 @@ __REEL_JS__
     const R = S.reel, el = $('#sub-text');
     const lineOf = (x) => { const sec = x && R.entries.find((e) => e.job === x.job); return sec && sec.lines[x.line] ? plainLine(sec.lines[x.line].text) : ''; };
     let text = '', cls = 'line';
-    if (f.saying) text = lineOf(f.saying);
+    if (f.lecture) { text = (f.lecture.playing ? '▷ 在看小课堂 ' : '⏸ 小课堂停在 ') + lcClock(f.lecture.pos) + (f.gap ? ' · 停了 ' + reelDuration(f.gap.ms) : ''); cls = f.lecture.playing ? 'line' : 'gap'; }
+    else if (f.saying) text = lineOf(f.saying);
     else if (f.clip && f.clip.kind === 'voice') { text = '🎙 孩子的原声 · 认成「' + (f.clip.text || '') + '」'; cls = 'replay'; }
     else if (f.clip) { text = '🎙 孩子的录音'; cls = 'replay'; }
     else if (f.gap && f.gap.kind === 'wait') { text = '⏳ 等老师 ' + reelDuration(f.gap.ms); cls = 'gap'; }
@@ -2271,10 +2280,21 @@ __REEL_JS__
     R.last = now;
     const t = R.clock.toWall(R.p);
     const f = reelFrameAt(R.d.reel, t);
-    reelDraw(f); reelVoice(f); reelSub(f);
+    reelDraw(f); reelVoice(f); reelSub(f); reelLecture(f);
     if (!R.seeking) $('#rl-seek').value = String(Math.round(R.p));
     $('#rl-clock').textContent = reelHms(t);
     if (R.playing && R.p >= R.clock.total) reelPlay(false);
+  };
+  /** 看小课堂的那一段(《小课堂设计.md》§八第 5 步):铺在板书上(字幕行与控制条露着),舞台包的播放器跟着录像的时钟(follow) */
+  const reelLecture = (f) => {
+    const R = S.reel, x = f.lecture;
+    if (!x) { if (R.lc) { R.lc = null; hideLecture(); } return; }
+    if (!R.lc || R.lc !== x.job) {
+      R.lc = x.job;
+      document.body.style.setProperty('--rl-lc-bottom', Math.max(0, innerHeight - $('#sub').getBoundingClientRect().top) + 'px');
+      openLecture({ bundle: x.bundle, title: x.title, follow: true, ...(x.video ? { video: true } : {}) });
+    }
+    lcPost({ type: 'follow', ms: x.pos, playing: x.playing && R.playing && !R.seeking, rate: R.speed, marks: x.marks.map((k) => ({ atMs: k.atMs, svgMs: k.svgMs, path: k.path, ...(k.image ? { image: k.image } : {}) })) });
   };
   const reelPlay = (on) => {
     const R = S.reel; if (!R) return;
@@ -2289,7 +2309,7 @@ __REEL_JS__
   /** 只收拾录像自己的东西(关老师页时也调);不重开话题 */
   const reelStop = () => {
     const R = S.reel; if (!R) return;
-    clearInterval(R.timer); S.reel = null; silence(); if (S.stage) closeStage();
+    clearInterval(R.timer); S.reel = null; silence(); if (S.stage) closeStage(); if (R.lc) hideLecture();
     document.body.classList.remove('reel'); $('#reel').hidden = true;
   };
   const reelOpen = async () => {

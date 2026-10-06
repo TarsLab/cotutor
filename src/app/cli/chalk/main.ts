@@ -7,7 +7,7 @@
 
 import { stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { buildBundle, readBundle } from './build.ts';
 import { checkScene, type Finding } from './check.ts';
 import { typecheckScene } from './typecheck.ts';
@@ -304,7 +304,7 @@ async function runBuild(rest: string[], json: boolean, workspace?: string): Prom
   }
   const ws = await loadWorkspace(workspace);
   const outDir = flags.get('--out') ?? join(ws.paths.bundles, scene.id);
-  const files = await buildBundle(scene, outDir);
+  const files = await buildBundle(scene, outDir, input.kind === 'files' ? input.dir : dirname(resolve(file)));
   report(json, { command: 'build', file, exportName, ok: true, findings, bundle: outDir, files, ...workspaceReport(ws) });
 }
 
@@ -340,7 +340,7 @@ async function runSnap(rest: string[], json: boolean, workspace?: string): Promi
       return;
     }
     scene = r.scene;
-    await buildBundle(scene, join(bundlesDir, scene.id));
+    await buildBundle(scene, join(bundlesDir, scene.id), dirname(resolve(file)));
   } else {
     scene = await readBundle(bundlesDir, file);
   }
@@ -395,7 +395,7 @@ async function runDub(rest: string[], json: boolean, workspace?: string): Promis
       return;
     }
     scene = r.scene;
-    await buildBundle(scene, join(bundlesDir, scene.id));
+    await buildBundle(scene, join(bundlesDir, scene.id), dirname(resolve(file)));
   } else {
     scene = await readBundle(bundlesDir, file);
   }

@@ -10,4 +10,17 @@ const PENCIL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="3
   </g>
 </svg>`;
 
+/** 橡皮:擦除端的中点落在图片 (5,5),由 excalidraw-io 用 x/y = -5 对回路径 */
+const ERASER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+  <g transform="translate(5 5) rotate(45)">
+    <rect x="0" y="-6" width="30" height="12" rx="2.5" fill="#f6a5b4" stroke="#c2687a" stroke-width="1"/>
+    <rect x="11" y="-6" width="19" height="12" rx="1.5" fill="#4c7fd0" stroke="#345a9c" stroke-width="1"/>
+  </g>
+</svg>`;
+
+export const ERASER_POINTER_IMG = `data:image/svg+xml,${encodeURIComponent(ERASER_SVG)}`;
+
+/** 纸面底色:与 chalk-player.css 的 .chalk-stage 同值;橡皮笔画缺省用它盖住旧笔迹 */
+export const PAPER_COLOR = '#fffdf7';
+
 export const DEFAULT_POINTER_IMG = `data:image/svg+xml,${encodeURIComponent(PENCIL_SVG)}`;

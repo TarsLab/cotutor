@@ -25,10 +25,11 @@ export const skeletonSchema = z.looseObject({
   x: z.number(),
   y: z.number(),
   animateDuration: z.number().int().positive().optional(),
-  // customData 透传 excalidraw,协议只认领 layer 一个键(三层墨迹契约)
+  // customData 透传 excalidraw,协议认领 layer(三层墨迹契约)与 tool(橡皮)两个键
   customData: z
     .looseObject({
       layer: z.enum(['base', 'ink', 'feedback']).optional(),
+      tool: z.enum(['eraser']).optional(),
     })
     .optional(),
 });
@@ -60,6 +61,13 @@ export const subsceneSchema = z.strictObject({
   audioSrc: z.string().min(1).optional(),
 });
 
+/** 背景图:画板 = 图片,场景坐标即图片像素 */
+export const backgroundSchema = z.strictObject({
+  src: z.string().min(1),
+  width: z.number().positive(),
+  height: z.number().positive(),
+});
+
 export const sceneSchema = z.strictObject({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, 'id 用作课包目录名,只允许小写字母、数字、连字符'),
   title: z.string().min(1),
@@ -67,6 +75,7 @@ export const sceneSchema = z.strictObject({
   model: z.string().min(1),
   template: z.enum(['paper-strict', 'camera-free', 'motion', 'static']),
   subject: z.string().min(1).optional(),
+  background: backgroundSchema.optional(),
   skeletons: z.array(skeletonSchema).min(1),
   // 可省略 = 静态场景;规范形是空数组。「讲解三档必须非空、static 必须空」是语义,归 lint
   steps: z.array(stepSchema).default([]),

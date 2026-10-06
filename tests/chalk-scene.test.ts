@@ -157,6 +157,18 @@ const staticScene = {
     check('讲解课包 manifest 无 blocks/subscenes 键', !('blocks' in m2) && !('subscenes' in m2));
     const lectureErrs = errorsOf(lecture);
     check('讲解场景照旧 0 错', lectureErrs.length === 0, lectureErrs.map((f) => f.message).join('\n'));
+
+    // 背景图:build 把图拷进课包并把 src 改写成课包内相对路径;出界的笔迹给警告
+    const { writeFileSync, existsSync } = await import('node:fs');
+    writeFileSync(join(dir, 'photo.PNG'), 'png-bytes');
+    const onPhoto: ChalkScene = sceneSchema.parse({ ...lecture, id: 'on-photo', background: { src: 'photo.PNG', width: 400, height: 300 } });
+    await buildBundle(onPhoto, join(dir, onPhoto.id), dir);
+    check('背景图拷进课包', existsSync(join(dir, onPhoto.id, 'background.png')));
+    const backPhoto = await readBundle(dir, onPhoto.id);
+    check('往返后 background 指向课包内文件', JSON.stringify(backPhoto.background) === JSON.stringify({ src: 'background.png', width: 400, height: 300 }), JSON.stringify(backPhoto.background));
+    check('图内笔迹不报 background-bounds', !rules(onPhoto).includes('background-bounds'));
+    check('图外笔迹报 background-bounds', rules({ ...onPhoto, background: { src: 'photo.PNG', width: 20, height: 20 } }).includes('background-bounds'));
+    check('讲解课包 scene.json 无 background 键', !('background' in JSON.parse(await import('node:fs/promises').then((fs) => fs.readFile(join(dir, lecture.id, 'scene.json'), 'utf8')))));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

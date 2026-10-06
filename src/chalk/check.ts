@@ -124,6 +124,10 @@ function lintSemantics(scene: ChalkScene, findings: Finding[]): void {
     findings.push({ level: 'error', rule: 'steps-required', message: `template '${scene.template}' 是讲解模板,steps 不能为空;静态点读/圈读页请用 template 'static'` });
   }
 
+  if (scene.background && !relativeAudioOk(scene.background.src)) {
+    findings.push({ level: 'warning', rule: 'background-path', message: `background.src '${scene.background.src}' 不是相对路径;写成相对场景文件的路径,build 会把图拷进课包` });
+  }
+
   lintInteractions(scene, findings);
 }
 
@@ -259,6 +263,15 @@ function lintLayoutOf(skeletons: readonly ChalkSkeleton[], findings: Finding[], 
 
 function lintLayout(scene: ChalkScene, findings: Finding[]): void {
   lintLayoutOf(scene.skeletons, findings);
+  // 有背景图时画板 = 图片,出界的笔迹会被裁掉
+  const bg = scene.background;
+  if (bg) {
+    for (const b of scene.skeletons.map(bboxOf)) {
+      if (b.minX < 0 || b.minY < 0 || b.maxX > bg.width || b.maxY > bg.height) {
+        findings.push({ level: 'warning', rule: 'background-bounds', message: `元素 '${b.id}' 超出背景图范围(0,0)–(${bg.width},${bg.height});画板即图片,图外的笔迹会被裁掉` });
+      }
+    }
+  }
   for (const sub of scene.subscenes ?? []) {
     lintLayoutOf(sub.skeletons, findings, `子场景 '${sub.id}' `);
   }

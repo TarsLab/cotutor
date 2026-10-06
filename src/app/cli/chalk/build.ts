@@ -5,15 +5,33 @@
  * 讲稿改了的步自动失去音频(等重新 dub),不会拿旧音配新词。
  */
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { extname, join, resolve } from 'node:path';
 import type { ChalkScene } from '../player/types.ts';
 import { sceneSchema } from '../schema/scene.ts';
 import type { LessonManifest, SceneJson } from '../schema/lesson-manifest.ts';
 import { attachAudio } from './dub.ts';
 import { LoadError, NotFoundError } from './load-scene.ts';
 
-export async function buildBundle(scene: ChalkScene, outDir: string): Promise<string[]> {
+/**
+ * sourceDir:场景源所在目录,background.src 相对它解析;build 把图拷进课包(background.<ext>)并改写 src。
+ * 不给 sourceDir = 场景已是课包形态(src 相对课包目录),原样保留。
+ */
+export async function buildBundle(scene: ChalkScene, outDir: string, sourceDir?: string): Promise<string[]> {
+  await mkdir(outDir, { recursive: true });
+  const files: string[] = [];
+  let background = scene.background;
+  if (background && sourceDir) {
+    const from = resolve(sourceDir, background.src);
+    const name = `background${extname(background.src).toLowerCase()}`;
+    try {
+      await copyFile(from, join(outDir, name));
+    } catch {
+      throw new LoadError(`背景图读不到:${from}(background.src '${background.src}' 相对场景文件所在目录解析);检查路径`);
+    }
+    background = { ...background, src: name };
+    files.push(join(outDir, name));
+  }
   const sceneJson: SceneJson = {
     schema: 'chalk-scene',
     version: 1,
@@ -23,6 +41,7 @@ export async function buildBundle(scene: ChalkScene, outDir: string): Promise<st
     model: scene.model,
     template: scene.template,
     ...(scene.subject ? { subject: scene.subject } : {}),
+    ...(background ? { background } : {}),
     skeletons: scene.skeletons,
   };
   const manifest: LessonManifest = {
@@ -39,9 +58,7 @@ export async function buildBundle(scene: ChalkScene, outDir: string): Promise<st
     ...(scene.blocks?.length ? { blocks: scene.blocks } : {}),
     ...(scene.subscenes?.length ? { subscenes: scene.subscenes } : {}),
   };
-  await mkdir(outDir, { recursive: true });
   await attachAudio(outDir, manifest);
-  const files: string[] = [];
   for (const [name, data] of [
     ['scene.json', sceneJson],
     ['manifest.json', manifest],
@@ -70,6 +87,7 @@ export async function readBundle(bundlesDir: string, id: string): Promise<ChalkS
     model: sceneJson.model,
     template: sceneJson.template,
     ...(sceneJson.subject != null ? { subject: sceneJson.subject } : {}),
+    ...(sceneJson.background != null ? { background: sceneJson.background } : {}),
     skeletons: sceneJson.skeletons,
     steps: manifest.steps,
     ...(manifest.blocks != null ? { blocks: manifest.blocks } : {}),

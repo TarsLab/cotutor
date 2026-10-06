@@ -3,8 +3,9 @@
  * 与 kid-canvas/excalidraw-api.ts 同一纪律:深路径类型脆弱,包内一律走这层。
  */
 
-import { convertToExcalidrawElements, exportToSvg } from '@excalidraw/excalidraw';
+import { convertToExcalidrawElements, exportToSvg, getCommonBounds } from '@excalidraw/excalidraw';
 import { animateSvg } from 'excalidraw-animate';
+import { ERASER_POINTER_IMG, PAPER_COLOR } from './pointer.ts';
 import type { ChalkSkeleton } from './types.ts';
 
 export interface AnimatedScene {
@@ -16,6 +17,8 @@ export interface BuildOptions {
   pointerImg?: string;
   pointerWidth?: string;
   exportPadding?: number;
+  /** 背景图:href 是已解析好的 URL;画板(viewBox)收成图片矩形,场景坐标 = 图片像素 */
+  background?: { href: string; width: number; height: number };
 }
 
 /**
@@ -89,6 +92,13 @@ function withStableSeeds(skeletons: readonly ChalkSkeleton[]): readonly ChalkSke
   return skeletons.map((el) => (typeof el.seed === 'number' ? el : { ...el, seed: seedFromId(el.id) }));
 }
 
+const isEraser = (el: { customData?: unknown }): boolean => (el.customData as { tool?: unknown } | undefined)?.tool === 'eraser';
+
+/** 橡皮笔画的缺省外观:纸色、不抖(抖了盖不严);作者显式给的值优先 */
+function withEraserDefaults(skeletons: readonly ChalkSkeleton[]): readonly ChalkSkeleton[] {
+  return skeletons.map((el) => (isEraser(el) ? { strokeColor: PAPER_COLOR, roughness: 0, ...el } : el));
+}
+
 /** skeleton → 元素 → 静态 SVG → 原地打上 SMIL 逐笔动画(含笔尖跟随),返回时暂停在 0 */
 export async function buildAnimatedSvg(
   skeletons: readonly ChalkSkeleton[],
@@ -96,7 +106,7 @@ export async function buildAnimatedSvg(
 ): Promise<AnimatedScene> {
   // regenerateIds: false —— id 是与 manifest 的对齐键(时长指令已在上面注入)
   const elements = convertToExcalidrawElements(
-    withDurationIds(withStableSeeds(skeletons)) as unknown as Parameters<typeof convertToExcalidrawElements>[0],
+    withDurationIds(withStableSeeds(withEraserDefaults(skeletons))) as unknown as Parameters<typeof convertToExcalidrawElements>[0],
     { regenerateIds: false },
   );
   const exportOpts = {
@@ -116,6 +126,40 @@ export async function buildAnimatedSvg(
     corrected as unknown as Parameters<typeof animateSvg>[1],
     { pointerImg: options.pointerImg, pointerWidth: options.pointerWidth },
   );
+  if (options.pointerImg) {
+    // animateSvg 给每一笔各挂一个笔尖 <image>(在该元素的 <g> 里):橡皮笔画的换成橡皮
+    const gNodes = Array.from(svg.childNodes).filter((n) => ['g', 'use'].includes((n as Element).tagName)) as Element[];
+    if (gNodes.length === corrected.length) {
+      corrected.forEach((el, i) => {
+        if (!isEraser(el as { customData?: unknown })) return;
+        for (const img of gNodes[i].querySelectorAll('image')) {
+          if (img.getAttribute('href') !== options.pointerImg) continue;
+          img.setAttribute('href', ERASER_POINTER_IMG);
+          img.setAttribute('width', '36');
+          img.setAttribute('x', '-5');
+          img.setAttribute('y', '-5');
+        }
+      });
+    }
+  }
+  if (options.background) {
+    // 导出时元素整体平移了 (padding − minX, padding − minY);图片按同一偏移垫到最底层,
+    // 放在 animateSvg 之后——它按子节点与元素一一对齐,先插会错位
+    const { href, width, height } = options.background;
+    const [minX, minY] = getCommonBounds(corrected as unknown as Parameters<typeof getCommonBounds>[0]);
+    const ox = exportOpts.exportPadding - minX;
+    const oy = exportOpts.exportPadding - minY;
+    const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+    img.setAttribute('href', href);
+    img.setAttribute('x', String(ox));
+    img.setAttribute('y', String(oy));
+    img.setAttribute('width', String(width));
+    img.setAttribute('height', String(height));
+    img.setAttribute('preserveAspectRatio', 'none');
+    const firstDrawn = Array.from(svg.childNodes).find((n) => ['g', 'use'].includes((n as Element).tagName)) ?? null;
+    svg.insertBefore(img, firstDrawn);
+    svg.setAttribute('viewBox', `${ox} ${oy} ${width} ${height}`);
+  }
   svg.pauseAnimations();
   svg.setCurrentTime(0);
   return { svg, finishedMs };

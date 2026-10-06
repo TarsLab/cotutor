@@ -23,8 +23,12 @@ export interface ChalkSkeleton {
   y: number;
   /** 单笔时长(毫秒),缺省 500;由 excalidraw-io 注回 id 喂给 excalidraw-animate */
   animateDuration?: number;
-  /** excalidraw 自定义数据;协议只认领 layer 一个键(见 ChalkLayer),其余透传 */
-  customData?: { layer?: ChalkLayer; [key: string]: unknown };
+  /** excalidraw 自定义数据;协议认领 layer(见 ChalkLayer)与 tool 两个键,其余透传 */
+  /**
+   * tool: 'eraser' = 这一笔是橡皮:引擎只能添画,擦除 = 沿旧笔迹盖一道纸色粗线,
+   * 画这一笔时笔尖换成橡皮。strokeColor 缺省取纸面底色;有背景图的地方擦不干净(盖住的是图)。
+   */
+  customData?: { layer?: ChalkLayer; tool?: 'eraser'; [key: string]: unknown };
   [key: string]: unknown;
 }
 
@@ -72,6 +76,19 @@ export interface ChalkStep {
   audioDurationMs?: number;
 }
 
+/**
+ * 背景图:垫在笔迹底下的一张图(题目原图、课本照片),笔迹直接圈画在它上面。
+ * 有背景图时画板 = 图片本身:场景坐标 (0,0)–(width,height) 就是图片像素,
+ * 画板不再随元素包围盒伸缩;画到图外的笔迹会被裁掉(check 提醒)。
+ */
+export interface ChalkBackground {
+  /** 场景源里相对场景文件;课包里相对课包目录(build 拷贝并改写) */
+  src: string;
+  /** 图片像素宽高,也是画板的场景坐标尺寸 */
+  width: number;
+  height: number;
+}
+
 export interface ChalkScene {
   id: string;
   title: string;
@@ -83,6 +100,8 @@ export interface ChalkScene {
   template: 'paper-strict' | 'camera-free' | 'motion' | 'static';
   /** 学科标签(自由文本,如 语文/数学/英语),入口按它归类;机制不枚举,枚举是应用政策 */
   subject?: string;
+  /** 背景图(可选);缺省 = 白板 */
+  background?: ChalkBackground;
   skeletons: ChalkSkeleton[];
   /** 空数组 = 静态场景(装载即整幅定格);讲解三档必须非空,check 把关 */
   steps: ChalkStep[];

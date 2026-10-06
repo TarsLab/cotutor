@@ -15,6 +15,8 @@ export interface SceneJson {
   model: string;
   template: ChalkScene['template'];
   subject?: string;
+  /** 背景图;src 相对课包目录(build 拷进来的 background.<ext>) */
+  background?: ChalkScene['background'];
   skeletons: ChalkScene['skeletons'];
 }
 

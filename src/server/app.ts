@@ -38,7 +38,6 @@ import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { themeFiles } from './theme.ts';
 import { enrichScenes } from './scene-props.ts';
-import { enrichMaterials } from './material.ts';
 import { enrichLectures, inspectLecture, type IncomingMark } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
@@ -210,7 +209,7 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
   }
   // 场景卡:课包在不在、题面、步数、缩略图,每次现读(课包落地卡就变成可播)
   const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
-  for (const m of messages) if (m.section) m.section = await enrichLectures(ctx.ws, await enrichMaterials(ctx.ws, await enrichScenes(sceneDirs, m.section)));
+  for (const m of messages) if (m.section) m.section = await enrichLectures(ctx.ws, await enrichScenes(sceneDirs, m.section));
   const remaining = Math.max(0, policy.dailyMessages - kidMessageCount(index));
   return { tutor, date, messages, remaining, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
 }
@@ -235,7 +234,7 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
     if (m) m.section = partial;
   }
   const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
-  for (const m of messages) if (m.section) m.section = await enrichLectures(ctx.ws, await enrichMaterials(ctx.ws, await enrichScenes(sceneDirs, m.section)));
+  for (const m of messages) if (m.section) m.section = await enrichLectures(ctx.ws, await enrichScenes(sceneDirs, m.section));
   // 录音卡:家长端旁注要评测全量(档、逐字分、花费),从录音旁边的 heard.json 读;孩子端不走这里。
   // 挂在新的卡对象上:索引有进程内缓存,改原对象判就漏到孩子端了
   for (const m of messages) {
@@ -767,13 +766,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (lv[2] === 'video.mp4') return { status: 200, file: join(ws.dirs.lectures, lv[1], 'video.mp4'), contentType: 'video/mp4', cacheControl: 'no-cache' };
       return { status: 200, json: { title: l.title, total: l.clock.total, segments: l.clock.segments.map((x) => ({ start: x.start, len: x.len, line: x.line })) } };
     }
-    // 素材的一段视频(《卡片协议.md》「素材卡」):materials/<id>/<n>.mp4。分段取(Range)由 sendFile 管;家长重渲了同名文件要马上见到,no-cache
-    const mat = /^\/api\/kid\/material\/([a-z0-9][a-z0-9-]*)\/(\d{1,3})\.mp4$/.exec(p);
-    if (mat && method === 'GET') {
-      const file = join(ws.dirs.materials, mat[1], `${Number(mat[2])}.mp4`);
-      if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
-      return { status: 200, file, contentType: 'video/mp4', cacheControl: 'no-cache' };
-    }
     // 图片卡的图:只认 workspace 根以内的图片文件(产物、照片);越界、不是图、不存在都 404
     if (p === '/api/kid/image' && method === 'GET') {
       const rel = url.searchParams.get('p') ?? '';
@@ -1024,7 +1016,7 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 }
 
 /**
- * 发文件(配音、图、素材视频……):都带 accept-ranges 与长度;GET 带单段 Range → 206 只发那一段(iPad Safari 放视频非这样不可,
+ * 发文件(配音、图、小课堂的视频……):都带 accept-ranges 与长度;GET 带单段 Range → 206 只发那一段(iPad Safari 放视频非这样不可,
  * 先要 bytes=0-1,拿不到 206 就不放;音频拖动也靠它),起点越界 416;HEAD 只发头。文件读之前没了 → 404
  */
 /** 这个进程的启动号:每个 JSON 响应都带(x-cotutor-boot)。页面轮询时见它变了 = 服务重起过(多半是换了新代码),空下来就自己重载——iPad 上下拉刷新常拉不到位 */

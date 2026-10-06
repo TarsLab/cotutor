@@ -1,5 +1,5 @@
 /**
- * 上下文包序列化(《cotutor契约草案.md》§2):固定 YAML 块 + 老师守则原文(<cotutor-rules>)、家长笔记原文段(<vault-note>)、素材说明(<material>)+ `---` + 消息原文。
+ * 上下文包序列化(《cotutor契约草案.md》§2):固定 YAML 块 + 老师守则原文(<cotutor-rules>)、家长笔记原文段(<vault-note>)+ `---` + 消息原文。
  * 手写 YAML 子集:标量能裸写就裸写,其余 JSON 双引号(合法 YAML);空的 plan / recent 不写。
  */
 import { ContextPackSchema, VAULT_PACK_ROLES, type ContextPack } from '../schema/index.ts';
@@ -71,11 +71,6 @@ export function renderContextPack(pack: ContextPack): string {
     }
     out.push(`    index: ${yamlScalar(c.index)}`);
   }
-  if (p.materials?.length) {
-    out.push('  materials:');
-    for (const c of p.materials) out.push(`    - ${yamlScalar(c)}`);
-    if (p.materialsDir) out.push(`  materialsDir: ${yamlScalar(p.materialsDir)}`);
-  }
   if (p.cards?.length) {
     out.push('  cards:');
     for (const c of p.cards) out.push(`    - ${yamlScalar(c)}`);
@@ -94,8 +89,6 @@ export function renderContextPack(pack: ContextPack): string {
     const tag = n.role === 'rules' ? 'cotutor-rules' : n.role === 'boardGuide' ? 'cotutor-board' : 'vault-note';
     out.push(shipped ? `<${tag} path=${JSON.stringify(n.path)}>` : `<${tag} role="${n.role}" path=${JSON.stringify(n.path)}>`, n.text.replace(/\s+$/, ''), `</${tag}>`);
   }
-  // 素材的说明,老师不用再读盘
-  for (const d of p.docs ?? []) out.push(`<material id=${JSON.stringify(d.id)}>`, d.text.replace(/\s+$/, ''), '</material>');
   return out.join('\n');
 }
 

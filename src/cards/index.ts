@@ -15,7 +15,6 @@ import type { CardKind, CardPlace } from './kind.ts';
 import { read } from './read.ts';
 import { record } from './record.ts';
 import { scene } from './scene.ts';
-import { material } from './material.ts';
 import { lecture } from './lecture.ts';
 import { text } from './text.ts';
 import { tutor } from './tutor.ts';
@@ -28,7 +27,6 @@ export { fill, type FillProps } from './fill.ts';
 export { code, type CodeProps } from './code.ts';
 export { image, IMAGE_EXT, type ImageProps } from './image.ts';
 export { scene, BUNDLE_ID_RE, type SceneProps, type SceneState } from './scene.ts';
-export { material, MATERIAL_ID_RE, type MaterialProps, type MaterialState } from './material.ts';
 export { lecture, type LectureProps, type LectureState } from './lecture.ts';
 export { canvas, type CanvasProps, type CanvasState } from './canvas.ts';
 export { record, HeardSchema, RECORD_AUDIO_RE, RECORD_MAX_SECONDS, heardTail, type Heard, type RecordExtra, type RecordProps, type RecordState } from './record.ts';
@@ -36,9 +34,9 @@ export { tianzige, HAN, TIANZIGE_MAX, type TianzigeProps } from './tianzige.ts';
 export { word, wordChunks, WORD_MAX, WORD_MAX_WORDS, WORD_RE, type WordProps } from './word.ts';
 export { tutor, BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, type TutorButton, type TutorProps } from './tutor.ts';
 
-/** 全部种类:先板书的十三种(注册表顺序即技能里的顺序),再首页专属的 */
+/** 全部种类:先板书的十二种(注册表顺序即技能里的顺序),再首页专属的 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, word, scene, material, lecture, canvas, record, code, tutor];
+export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, word, scene, lecture, canvas, record, code, tutor];
 
 export function cardKind(name: string): CardKind | undefined {
   return CARD_KINDS.find((k) => k.name === name) as CardKind | undefined;

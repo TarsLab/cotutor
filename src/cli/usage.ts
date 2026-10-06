@@ -20,8 +20,6 @@ export const USAGE = `用法:
   cotutor home check [--published] [--json]                           检查首页草稿 home/draft.md(或已发布的那份):孩子会看到哪几张卡、每位老师的按钮、要改的与提醒(带行号);不花钱
   cotutor home publish [--force] [--from <文件>] [--json]              发布首页:检查 → 留历史 home/history/<id>.md → 写 home/published.json(孩子端只读它);有要改的不发,--force 丢掉那几张照发;--from 发另一份(如历史)
   cotutor home show [--json]                                          现在发布的是哪份、几天前、每个按钮被点了几次(哪天、哪个话题)
-  cotutor material list [--json]                                      列 materials/ 下的素材:老师、标题、几段几个 mp4、有没有要改的
-  cotutor material check <id> [--json]                                检查素材 materials/<id>/material.md:老师、几段、段数与 mp4 对不对得上(带行号);不花钱
   cotutor mock [--port <n>] [--scenario normal|limit|offline|nopost] [--delay <ms>] [--http]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace;nopost = 没写样子的素版)
   cotutor --version | --help
 workspace解析:--workspace > COTUTOR_WORKSPACE > cwd 或祖先有 cotutor.json > ~/.config/cotutor/config.json > ~/cotutor/ 下唯一的孩子目录

@@ -177,8 +177,6 @@ export interface Workspace {
     snaps: string;
     /** 首页(《首页设计.md》):草稿、已发布、历史;publish 时才建,不进骨架 */
     home: string;
-    /** 素材(《备课设计.md》§十一):materials/<id>/material.md + 分段的 1.mp4 2.mp4 …;备课时做,不进骨架 */
-    materials: string;
     /** 视频小课堂(《小课堂设计.md》§八第 4 步):lectures/<id>/lecture.md + video.mp4;家长在 Claude Code 里做,不进骨架 */
     lectures: string;
   };
@@ -222,7 +220,6 @@ export function assembleWorkspace(root: string, source: RootSource, config: Cotu
       bundles: join(root, 'bundles'),
       snaps: join(root, 'snaps'),
       home: join(root, 'home'),
-      materials: join(root, 'materials'),
       lectures: join(root, 'lectures'),
     },
     files: {

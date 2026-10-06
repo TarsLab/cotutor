@@ -469,26 +469,6 @@ export async function main(argv: string[]): Promise<void> {
         if (!r.ok) process.exitCode = 1;
         return;
       }
-      case 'material': {
-        const sub = positionals[0];
-        if (sub !== 'check' && sub !== 'list') throw new UsageError(`material 后面跟 check / list,如 cotutor material check pingjunfen。\n${USAGE}`);
-        const ws = loadWorkspace(workspace);
-        const M = await import('../server/material.ts');
-        if (sub === 'list') {
-          const rows = await M.listMaterials(ws);
-          if (json) process.stdout.write(`${JSON.stringify(rows.map((c) => ({ id: c.id, tutor: c.doc.tutor, title: c.doc.title, segments: c.doc.segments.length, clips: c.clips.length, fixes: c.fixes })), null, 2)}\n`);
-          else if (!rows.length) process.stdout.write('materials/ 下还没有素材(一份 = materials/<id>/ 里一份 material.md 加 1.mp4 2.mp4 …)\n');
-          else for (const c of rows) process.stdout.write(`${c.id}  ${c.doc.tutor ?? '(没写 tutor)'}  ${c.doc.title || '(没有标题)'}  ${c.doc.segments.length} 段 ${c.clips.length} 个 mp4${c.fixes ? `  ✗ ${c.fixes} 条要改` : ''}\n`);
-          return;
-        }
-        const id = positionals[1] ?? '';
-        const c = await M.checkMaterial(ws, id);
-        if (!c) throw new UsageError(`没有 materials/${id}/(id 只能是小写字母、数字、连字符),如 cotutor material check pingjunfen`);
-        if (json) process.stdout.write(`${JSON.stringify({ ok: c.fixes === 0, id: c.id, tutor: c.doc.tutor, title: c.doc.title, can: c.doc.can, cannot: c.doc.cannot, segments: c.doc.segments, clips: c.clips, issues: c.issues }, null, 2)}\n`);
-        else process.stdout.write(`${M.formatMaterialCheck(c)}\n`);
-        if (c.fixes) process.exitCode = 1;
-        return;
-      }
       case 'send': {
         const [tutor, ...words] = positionals;
         const text = words.join(' ');

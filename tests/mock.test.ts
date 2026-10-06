@@ -98,7 +98,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   check('空消息 400;没这位老师 404;配音 404', (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400 && (await get('/api/kid/conversations/nobody/today')).status === 404 && (await get('/api/audio/math-tutor/x.mp3')).status === 404);
   const page = await get('/');
   check('页面:标题、按住说话、内联了板书逻辑、舞台、没有家长入口、没有「错误」', page.html?.includes('小明的老师们') === true && page.html?.includes('发消息或按住说话') === true && page.html?.includes('function subtitleFor(') === true && page.html?.includes('id="stage"') === true && page.html?.includes('交给老师') === true && !page.html?.includes('export ') && !page.html?.includes('/parent') && !page.html?.includes('错误'), String(page.html?.length));
-  check('舞台有遮罩:紧跟在舞台后面(靠 #stage.on ~ #st-dim 显示),点它走 closeStage(经 closeByKid:讲稿交给素材的,关了接着念)', /id="st-act"[^\n]*<\/div><\/div>\s*<div id="st-dim"><\/div>/.test(page.html ?? '') && page.html?.includes("$('#st-dim').addEventListener('click', closeByKid)") === true && /const closeByKid = \(\) => \{[^\n]*closeStage\(\)/.test(page.html ?? ''));
+  check('舞台有遮罩:紧跟在舞台后面(靠 #stage.on ~ #st-dim 显示),点它走 closeStage(经 closeByKid:讲稿交给小课堂卡的,关了接着念)', /id="st-act"[^\n]*<\/div><\/div>\s*<div id="st-dim"><\/div>/.test(page.html ?? '') && page.html?.includes("$('#st-dim').addEventListener('click', closeByKid)") === true && /const closeByKid = \(\) => \{[^\n]*closeStage\(\)/.test(page.html ?? ''));
   check('内联的逻辑没有残留类型标注', !/function anchorMarks\(cards: /.test(page.html ?? ''));
   const html = page.html ?? '';
   const js = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'));

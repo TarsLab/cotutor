@@ -103,8 +103,6 @@ if (fail) {
   if (msg.includes('回读板书')) emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 'toolu_skill1', name: 'Skill', input: { skill: 'cotutor-board' } }] } });
   if (msg.includes('段在前')) parts.push('## 记账\nthread: 0000-1\nname: 重讲');
   if (msg.includes('画场景')) parts.push('```scene\n2026-09-09-guilv\n我去把这道题画出来。\n题面:找规律填数 75、70、65、__\n讲法:每次少 5;用交错数列分行讲\n```\n\n等我画好。');
-  // 素材卡(《备课设计.md》§11.3):上下文包 materials: 第一行的 id,讲稿 [[play 2]] 播第 2 段
-  if (msg.includes('放素材')) parts.push(`\`\`\`material\n${/\n  materials:\n    - "?([a-z0-9-]+) ·/.exec(prompt)?.[1] ?? 'none'}\n\`\`\`\n\n看三个人怎么分。[[play 2]]\n\n每人几块?`);
   if (msg.includes('放旧课包')) parts.push('```scene\n2026-09-09-guilv\n```\n\n我们再看一遍。');
   if (prompt.startsWith('cotutor:') && /\n---\n场景作业\(/.test(prompt)) parts.push('课包 2026-09-09-guilv 做好了,6 步');
   // 录音卡(口播老师):三张;第二张的句子带「慢」,假 koubo 会拖过超时

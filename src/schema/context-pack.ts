@@ -36,8 +36,6 @@ export const ContextPackSchema = z.object({
   refs: z.array(z.string()).optional(),
   /** 整篇带进来的原文(话题第一条、或话题里改过了才带):老师守则(rules)与家长笔记;接在 YAML 块后面,不进 YAML */
   notes: z.array(z.object({ role: z.enum(['rules', 'boardGuide', 'profile', 'entry', 'memory']), path: z.string().min(1), text: z.string() })).optional(),
-  /** 整篇带进来的素材说明(只在带 materials: 的那条):前几份的 material.md;接在笔记原文后面,不进 YAML */
-  docs: z.array(z.object({ kind: z.enum(['material']), id: z.string().min(1), text: z.string() })).optional(),
   /** 本周计划里与本老师相关的行(已按 planLines 截) */
   plan: z.array(z.string()).default([]),
   /** 最近 N 条本学科观察(从日记的「- 观察:」行抽,最近 14 天,已按 recent 截) */
@@ -70,10 +68,6 @@ export const ContextPackSchema = z.object({
       index: z.string().min(1),
     })
     .optional(),
-  /** 家长备好的素材(《备课设计.md》§11.3,素材那部分留着):这位老师的、能放的,一行一个「<id> · <标题> · 能讲:<第一条>」;只在新会话的第一条带 */
-  materials: z.array(z.string()).optional(),
-  /** materials/ 的绝对路径(这轮带工具才给):docs 里没带说明的那几份,老师 Read <materialsDir>/<id>/material.md */
-  materialsDir: z.string().optional(),
   /** 这条消息带的作业照片(相对 workspace 根,一行一张;老师先 Read 再答;R5) */
   photos: z.array(z.string()).optional(),
   /** photos 里同一批照片的绝对路径,顺序一一对应:Read 工具只认绝对路径,老师的 cwd 在 agents/<名>/,不给就得先 find 一轮(2026-09-18 真跑) */

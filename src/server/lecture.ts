@@ -114,7 +114,7 @@ export function lecturePack(l: Lecture, w: LectureWatch, marks: readonly StoredM
 
 /**
  * 小课堂卡(cards/lecture)下发时补的快照:课名、真放的起止(对齐段界)、末帧停在 SVG 的哪一刻、能不能放。
- * 课包每次现读(家长重做了课包,下一次下发就跟上);读不出来或起止对不上 → ready: false,讲稿 [[play]] 不停。同 enrichMaterials。
+ * 课包每次现读(家长重做了课包,下一次下发就跟上);读不出来或起止对不上 → ready: false,讲稿 [[play]] 不停。
  */
 export async function enrichLectures(ws: LectureDirs, section: BoardSection): Promise<BoardSection> {
   if (!section.cards.some((c) => c.kind === 'lecture')) return section;

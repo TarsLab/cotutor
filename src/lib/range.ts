@@ -1,5 +1,5 @@
 /**
- * HTTP 分段取(Range,RFC 9110 §14):iPad Safari 放视频一定先要 bytes=0-1,拿不到 206 就不放(《备课设计.md》§11.2 素材的 mp4)。
+ * HTTP 分段取(Range,RFC 9110 §14):iPad Safari 放视频一定先要 bytes=0-1,拿不到 206 就不放(小课堂的视频)。
  * 只认单段 `bytes=a-b` / `bytes=a-` / `bytes=-n`;多段、写坏的、b < a 的当没给(回整份 200,规范允许);起点越过文件尾 → 416。
  */
 export type ByteRange = { start: number; end: number } | 'unsatisfiable' | null;

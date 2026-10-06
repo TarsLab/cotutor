@@ -14,7 +14,6 @@
  * 进程 cwd 是老师目录 agents/<name>/(《agent层设计.md》拍板)。
  */
 import { spawn } from 'node:child_process';
-import { materialDocs, materialsFor } from './material.ts';
 import { lecturePack, readLecture, storedMarks, type IncomingMark } from './lecture.ts';
 import { closeSync, createWriteStream, existsSync, openSync, writeSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -408,15 +407,10 @@ export class Runner {
     const noteWarnings = pack.entry?.startsWith('缺:') && !input.bookkeep ? [`入口文件${pack.entry}——在 vault 里给这位老师建一篇(cotutor doctor 有写法)`] : [];
     if (policy.board === 'off') pack.board = 'off';
     // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的(要 Read 看图)、系统任务照旧带。
-    // 不带的那轮,只有工具才用得上的路径(refs / vault / materialsDir)不进包;模板里没有 {tools} 的运行时管不了它的工具,照旧
+    // 不带的那轮,只有工具才用得上的路径(refs / vault)不进包;模板里没有 {tools} 的运行时管不了它的工具,照旧
     const tools = policy.tools === 'on' || input.from !== 'kid' || seen.length > 0 ? TUTOR_TOOLS : '';
     const bare = !tools && runtimeUses(runtime, '{tools}');
     if (bare) { delete pack.refs; delete pack.vault; }
-    // 家长备好的素材(《备课设计.md》§11.3):有脸的老师、新会话的第一条、板书没关;一行一个,前几份的 material.md 原文接在后面(<material>)
-    if (!session && tutor.endsWith('-tutor') && policy.board !== 'off' && !input.bookkeep && !input.tidy) {
-      const materials = await materialsFor(ws, tutor);
-      if (materials.length) { pack.materials = materials; if (!bare) pack.materialsDir = ws.dirs.materials; }
-    }
     // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
     // 录音卡:评测结果接在那一行后面(存录音时就起了,这里取;还在跑就等,最多等到存录音之后 timeoutMs;回放不起新的)
     const changed = fresh || input.bookkeep ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread);
@@ -428,8 +422,6 @@ export class Runner {
       return { card: id, text: card ? describeCard(card, c.file.state, extra) : JSON.stringify(c.file.state) };
     }));
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
-    const docs = pack.materials ? (await materialDocs(ws, pack.materials)).map((d) => ({ kind: 'material' as const, ...d })) : [];
-    if (docs.length) pack.docs = docs;
     if (seen.length) { pack.photos = seen; pack.photoFiles = seen.map((p) => join(ws.root, p)); }
     if (input.home) pack.home = input.home;
     // 小课堂:课包现读;读不出来(删了、坏了)就不带,这条照发,家长端提醒

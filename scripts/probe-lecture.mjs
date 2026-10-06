@@ -46,6 +46,13 @@ try {
   const send = (method, params = {}) => new Promise((resolve) => { const id = ++seq; pending.set(id, resolve); ws.send(JSON.stringify({ id, method, params })); });
   const evaluate = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 300)); return r.result?.result?.value; };
   const until = async (expr, n = 80) => { for (let i = 0; i < n; i++) { if (await evaluate(expr).catch(() => false)) return true; await sleep(250); } return false; };
+  // 真的鼠标(CDP Input):按下、一串移动、松手,走浏览器的命中判定(页面上盖着什么、pointer-events 关没关都算数;dispatchEvent 直接派到元素上会漏掉)
+  const drag = async (pts) => {
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pts[0].x, y: pts[0].y, button: 'left', buttons: 1, clickCount: 1 });
+    for (const p of pts.slice(1)) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p.x, y: p.y, button: 'left', buttons: 1 });
+    const z = pts[pts.length - 1];
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: z.x, y: z.y, button: 'left', buttons: 0, clickCount: 1 });
+  };
   const shot = async (name) => { const r = await send('Page.captureScreenshot', { format: 'png' }); const f = join(shots, name); writeFileSync(f, Buffer.from(r.result.data, 'base64')); console.log('  ', f); };
   await send('Runtime.enable');
   await send('Page.enable');
@@ -72,7 +79,10 @@ try {
   await shot('lecture-playing.png');
 
   // 拖到中间:按下、移、松手(拖着不出声由播放器保证,这里看画面与时间跟着)
-  const mid = await evaluate(`(() => { const t = ${D}.querySelector('.lc-track'); const r = t.getBoundingClientRect(); const x = r.left + r.width * 0.5, y = r.top + r.height / 2; const ev = (type) => t.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 1 })); ev('pointerdown'); ev('pointermove'); ev('pointerup'); return new Promise((r) => setTimeout(() => r(${D}.querySelector('.lc-time').textContent), 300)); })()`);
+  const tp = await evaluate(`(() => { const r = ${D}.querySelector('.lc-track').getBoundingClientRect(); return { x: r.left + r.width * 0.5, y: r.top + r.height / 2 }; })()`);
+  await drag([tp, { x: tp.x + 1, y: tp.y }, tp]);
+  await sleep(300);
+  const mid = await evaluate(`${D}.querySelector('.lc-time').textContent`);
   ok('拖到中间:时间跳过去', /^0:2[2-4] /.test(mid), mid);
   await shot('lecture-seek.png');
 
@@ -81,16 +91,19 @@ try {
   await sleep(300);
   const tools = await evaluate(`[...${D}.querySelectorAll('.lc-tool')].map((b) => b.textContent.trim() + (b.disabled ? '(灰)' : '')).join(' ') + ' | ' + ${D}.querySelector('.lc-play').textContent.trim()`);
   ok('暂停:「圈一圈」「擦掉」出来(这一刻没圈过,擦掉是灰的),播放钮写「接着看」', tools === '圈一圈 擦掉(灰) | 接着看', tools);
-  const circle = (cx, cy, rx, ry) => evaluate(`(() => {
-    const d = ${D}, svg = d.querySelector('.lc-svg'), canvas = d.querySelector('.lc-canvas');
+  const circle = async (cx, cy, rx, ry) => {
+    const pts = await evaluate(`(() => {
+    const d = ${D}, svg = d.querySelector('.lc-svg');
     const g = [...svg.children].find((e) => e.tagName === 'g'); const m0 = /translate\\(([-\\d.]+) ([-\\d.]+)/.exec(g.getAttribute('transform'));
     const dx = Number(m0[1]) - 450, dy = Number(m0[2]) - 22; // 第一个元素 q 在课包坐标 (450, 22)
     const ctm = svg.getScreenCTM();
     const at = (k) => { const a = k / 24 * Math.PI * 2; return new DOMPoint(${cx} + dx + ${rx} * Math.cos(a), ${cy} + dy + ${ry} * Math.sin(a)).matrixTransform(ctm); };
-    const ev = (type, p) => canvas.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: p.x, clientY: p.y, pointerId: 7, isPrimary: true }));
-    ev('pointerdown', at(0)); for (let k = 1; k <= 24; k++) ev('pointermove', at(k)); ev('pointerup', at(24));
-    return new Promise((r) => setTimeout(() => r({ marks: d.querySelectorAll('.lc-mark').length, line: d.querySelector('.lc-line').textContent, count: d.querySelector('.lc-time small')?.textContent ?? '', ink: d.querySelectorAll('.lc-ink path').length }), 300));
+    return Array.from({ length: 25 }, (_, k) => { const p = at(k); return { x: p.x, y: p.y }; });
   })()`);
+    await drag(pts);
+    await sleep(300);
+    return evaluate(`(() => { const d = ${D}; return { marks: d.querySelectorAll('.lc-mark').length, line: d.querySelector('.lc-line').textContent, count: d.querySelector('.lc-time small')?.textContent ?? '', ink: d.querySelectorAll('.lc-ink path').length }; })()`);
+  };
   const c1 = await circle(334, 120, 45, 50);
   ok('圈了一处:进度条上一个蓝记号、字幕行「圈好了,记在 0:2x」、「圈了 1 处」、画面上留着那一圈', c1.marks === 1 && /^圈好了,记在 0:2\d。/.test(c1.line) && c1.count === '圈了 1 处' && c1.ink === 1, JSON.stringify(c1));
   await shot('lecture-circle.png');

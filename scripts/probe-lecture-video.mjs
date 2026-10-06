@@ -46,6 +46,13 @@ try {
   const send = (method, params = {}) => new Promise((resolve) => { const id = ++seq; pending.set(id, resolve); ws.send(JSON.stringify({ id, method, params })); });
   const evaluate = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 300)); return r.result?.result?.value; };
   const until = async (expr, n = 80) => { for (let i = 0; i < n; i++) { if (await evaluate(expr).catch(() => false)) return true; await sleep(250); } return false; };
+  // 真的鼠标(CDP Input):按下、一串移动、松手,走浏览器的命中判定(页面上盖着什么、pointer-events 关没关都算数;dispatchEvent 直接派到元素上会漏掉)
+  const drag = async (pts) => {
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pts[0].x, y: pts[0].y, button: 'left', buttons: 1, clickCount: 1 });
+    for (const p of pts.slice(1)) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p.x, y: p.y, button: 'left', buttons: 1 });
+    const z = pts[pts.length - 1];
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: z.x, y: z.y, button: 'left', buttons: 0, clickCount: 1 });
+  };
   const shot = async (name) => { const r = await send('Page.captureScreenshot', { format: 'png' }); const f = join(shots, name); writeFileSync(f, Buffer.from(r.result.data, 'base64')); console.log('  ', f); };
   await send('Runtime.enable');
   await send('Page.enable');
@@ -71,20 +78,20 @@ try {
   await shot('video-playing.png');
 
   // 拖到 0:12 附近,停下,圈画面中间一块
-  await evaluate(`(() => { const t = ${D}.querySelector('.lc-track'); const r = t.getBoundingClientRect(); const x = r.left + r.width * (12.4 / 18), y = r.top + r.height / 2; const ev = (type) => t.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 1 })); ev('pointerdown'); ev('pointermove'); ev('pointerup'); return true; })()`);
+  const tp = await evaluate(`(() => { const r = ${D}.querySelector('.lc-track').getBoundingClientRect(); return { x: r.left + r.width * (12.4 / 18), y: r.top + r.height / 2 }; })()`);
+  await drag([tp, { x: tp.x + 1, y: tp.y }, tp]);
   await sleep(300);
   await evaluate(`${D}.querySelector('.lc-play').click()`);
   await sleep(500);
   const seek = await evaluate(`({ time: ${D}.querySelector('.lc-time span').textContent, t: ${D}.querySelector('video').currentTime, line: ${D}.querySelector('.lc-line').textContent })`);
   ok('拖到 0:12、停下:视频挪过去了,字幕是第三句', /^0:1[23] /.test(seek.time) && seek.t > 11.8 && seek.t < 13.5 && seek.line.startsWith('分完了'), JSON.stringify(seek));
-  const marked = await evaluate(`(() => {
-    const d = ${D}, over = d.querySelector('.lc-over'), canvas = d.querySelector('.lc-canvas');
-    const r = over.getBoundingClientRect(); const cx = r.left + r.width * 0.5, cy = r.top + r.height * 0.5, rx = r.width * 0.15, ry = r.height * 0.18;
-    const at = (k) => { const a = k / 24 * Math.PI * 2; return { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) }; };
-    const ev = (type, p) => canvas.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: p.x, clientY: p.y, pointerId: 7, isPrimary: true }));
-    ev('pointerdown', at(0)); for (let k = 1; k <= 24; k++) ev('pointermove', at(k)); ev('pointerup', at(24));
-    return new Promise((res) => setTimeout(() => res({ marks: d.querySelectorAll('.lc-mark').length, line: d.querySelector('.lc-line').textContent, ink: d.querySelectorAll('.lc-over .lc-ink path').length }), 300));
+  const ring = await evaluate(`(() => {
+    const r = ${D}.querySelector('.lc-over').getBoundingClientRect(); const cx = r.left + r.width * 0.5, cy = r.top + r.height * 0.5, rx = r.width * 0.15, ry = r.height * 0.18;
+    return Array.from({ length: 25 }, (_, k) => { const a = k / 24 * Math.PI * 2; return { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) }; });
   })()`);
+  await drag(ring);
+  await sleep(300);
+  const marked = await evaluate(`(() => { const d = ${D}; return { marks: d.querySelectorAll('.lc-mark').length, line: d.querySelector('.lc-line').textContent, ink: d.querySelectorAll('.lc-over .lc-ink path').length }; })()`);
   ok('在视频上圈了一处:进度条上一个蓝记号、「圈好了」、画面上留着那一圈', marked.marks === 1 && marked.line.startsWith('圈好了,记在 0:1') && marked.ink === 1, JSON.stringify(marked));
   await shot('video-circle.png');
 

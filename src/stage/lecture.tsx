@@ -214,6 +214,8 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
       ink.current = g;
       host.current?.replaceChildren(svg);
       svgRef.current = svg;
+      // Safari(iPad)把 SVG 放进页面时时间轴重新走起来,之前的暂停不算:放进去以后再停一次(不然没点「开始看」画面就自己画,没有声音)
+      svg.pauseAnimations();
       const start = openAt !== undefined ? Math.max(0, Math.min(openAt, c.total)) : 0;
       t.current = start;
       svg.setCurrentTime(lectureAt(c, start).svgMs / 1000);
@@ -254,7 +256,12 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const paint = useCallback((c: LectureClock, ms: number, seek = true) => {
     t.current = ms;
     if (vid.current) { if (seek) vid.current.currentTime = ms / 1000; }
-    else svgRef.current?.setCurrentTime(lectureAt(c, ms).svgMs / 1000);
+    else {
+      const svg = svgRef.current;
+      // SVG 永远停着,画面只由这里挪;哪次没停住(Safari)就再停一次
+      if (svg && !svg.animationsPaused()) svg.pauseAnimations();
+      svg?.setCurrentTime(lectureAt(c, ms).svgMs / 1000);
+    }
     setNow(ms);
   }, []);
 
@@ -509,7 +516,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
         </button>}
         <div className="lc-chip"><span className="lc-tag">小课堂</span><span className="lc-title">{title}</span></div>
       </div>}
-      <div className={'lc-canvas' + (canDraw ? ' pen' : '')} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp}>
+      <div className={'lc-canvas' + (canDraw ? ' lc-pen' : '')} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp}>
         <div className="lc-host" ref={host} />
         {paused && !view && (
           <div className="lc-tools" onPointerDown={(e) => e.stopPropagation()}>

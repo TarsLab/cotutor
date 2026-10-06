@@ -43,7 +43,15 @@ try {
   const bad = await checkHome(ctx.ws, draft('```tutor math-tutor\n小课堂 2026-01-01-nope 不在的课\n```\n\n## 为什么\n\n- 测试\n'), now);
   check('首页检查:小课堂的课包不在 → 要改', bad.issues.some((i) => i.level === 'fix' && i.text.includes('bundles/2026-01-01-nope/')), JSON.stringify(bad.issues));
   const good = await checkHome(ctx.ws, draft(`\`\`\`tutor math-tutor\n小课堂 ${BUNDLE} 13 减 8 怎么拆\n讲法: 他常把 13 当成 1 和 3\n\`\`\`\n\n## 为什么\n\n- 测试\n`), now);
-  check('课包在、科目对得上:没有要改的', good.fixes === 0 && !good.issues.some((i) => i.text.includes('课包')), JSON.stringify(good.issues));
+  check('课包在、科目对得上、烤过:没有要改的,也没有提醒', good.fixes === 0 && !good.issues.some((i) => i.text.includes('课包')), JSON.stringify(good.issues));
+  {
+    const { renameSync } = await import('node:fs');
+    const bk = join(root, 'bundles', BUNDLE, 'bake.json');
+    renameSync(bk, `${bk}.off`);
+    const unbaked = await checkHome(ctx.ws, readFileSync(join(root, 'home', 'draft.md'), 'utf8'), now);
+    renameSync(`${bk}.off`, bk);
+    check('课包没烤过:提醒去 drawtell bake(不算要改的)', unbaked.fixes === 0 && unbaked.issues.some((i) => i.level === 'note' && i.text.includes(`drawtell bake ${BUNDLE}`)), JSON.stringify(unbaked.issues));
+  }
   const pub = await publishHome(ctx.ws, { now });
   type Btn = { id: string | number; kind: string; label: string; bundle?: string; title?: string; ms?: number; brief?: string };
   const kh = (await route('GET', '/api/kid/home', ctx)).json as { home: string; cards: { kind: string; props: { tutor?: string; buttons?: Btn[] } }[] };

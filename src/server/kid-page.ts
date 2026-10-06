@@ -105,6 +105,7 @@ const PAGE = `<!doctype html>
   .c-mark .x { position:absolute; right:4px; top:4px; width:40px; height:40px; border-radius:50%; border:none; background:transparent; font-size:22px; line-height:1; color:var(--dim); }
   .c-mark .mk-tx { max-width:460px; font-size:14px; line-height:1.6; color:var(--ink); }
   .lc-still { width:100%; height:100%; }
+  .lc-still img { width:100%; height:100%; display:block; object-fit:contain; }
   .lc-svgf { position:fixed; left:-10000px; top:0; width:800px; height:600px; border:0; visibility:hidden; pointer-events:none; }
   #rest { display:none; text-align:center; color:var(--dim); font-size:16px; padding:12px 0; }
   /* 给老师换样子(figshot):不是首页发布的卡,是 cotutor.json 配了 figshot 就有的固定入口;figshot 没开着就不出现 */
@@ -1335,10 +1336,19 @@ __REEL_JS__
     return x.p;
   };
   let lcSeq = 0;
-  /** 圈的卡的缩略图:克隆课包的 SVG(id 加前缀,一页多份不串)、停在那一刻、叠上圈(课包坐标 + 平移) */
-  /** 课包那一刻的画面(圈的卡、小课堂卡的缩略图):克隆课包的 SVG(id 加前缀,一页多份不串)、停在 SVG 的那一刻(svgMs)、有圈就叠上圈(课包坐标 + 平移) */
+  /**
+   * 课包那一刻的画面(圈的卡、小课堂卡的缩略图):烤过的课包由服务端现画(frame.svg,SVG 时刻 + 圈),一张 <img>;
+   * 没烤过的老课包 404,退回克隆播放器的 SVG(id 加前缀,一页多份不串)、停在 SVG 的那一刻、叠上圈(课包坐标 + 平移)
+   */
   const lcStill = (bundle, svgMs, path, cls) => {
     const box = h('div', { class: cls });
+    const ring = path && path.length ? '&ring=' + encodeURIComponent(path.map((p) => Math.round(p[0]) + ',' + Math.round(p[1])).join(';')) : '';
+    const img = h('img', { class: 'mk-svg', alt: '', src: lcBundleUrl(bundle) + 'frame.svg?svg=' + (Math.round((svgMs || 0) * 10) / 10) + ring });
+    img.addEventListener('error', () => lcStillClone(box, bundle, svgMs, path), { once: true });
+    box.append(img);
+    return box;
+  };
+  const lcStillClone = (box, bundle, svgMs, path) => {
     lcSvg(bundle).then((v) => {
       if (!v) return;
       const pre = 'mk' + (++lcSeq) + '-';
@@ -1358,7 +1368,6 @@ __REEL_JS__
       const still = () => { try { svg.pauseAnimations(); svg.setCurrentTime(svgMs / 1000); } catch {} };
       still(); requestAnimationFrame(still);
     });
-    return box;
   };
   /** 圈的卡的缩略图:视频的是截下来的那张(还没发的是 data URL,发了是 captures/ 路径);课包的现画 */
   /** 视频那一段末尾的一帧(小课堂卡的缩略图):<video> 停在 end 前一点,不出声 */

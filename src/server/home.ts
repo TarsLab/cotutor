@@ -64,8 +64,12 @@ async function liveThreads(ws: Workspace, refs: readonly { tutor: string; date: 
 async function checkContext(ws: Workspace, doc: Pick<HomeDoc, 'cards'>, now: Date): Promise<HomeCheckContext> {
   const lectures = new Map<string, string | null>();
   const lectureProblems = new Map<string, string[]>();
-  for (const id of homeLectures(doc)) { const r = await inspectLecture(ws, id); if (r.lecture) lectures.set(id, r.lecture.subject); else lectureProblems.set(id, r.problems); }
-  return { tutors: tutorInfos(ws), threads: await liveThreads(ws, homeRefs(doc)), lectures, lectureProblems, today: localDate(now) };
+  const unbaked = new Set<string>();
+  for (const id of homeLectures(doc)) {
+    const r = await inspectLecture(ws, id);
+    if (r.lecture) { lectures.set(id, r.lecture.subject); if (!r.lecture.video && !r.lecture.baked) unbaked.add(id); } else lectureProblems.set(id, r.problems);
+  }
+  return { tutors: tutorInfos(ws), threads: await liveThreads(ws, homeRefs(doc)), lectures, lectureProblems, unbaked, today: localDate(now) };
 }
 
 export interface HomeCheck {

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { BUNDLE_ID_RE } from '../cards/scene.ts';
 import { mp4DurationMs } from './mp4.ts';
 import { LECTURE_FILE, LECTURE_VIDEO, clockLabel, describeMark, lectureAt, lectureClock, lectureLines, lectureRange, parseLectureDoc, videoClock, type LectureClock, type LectureMark, type LecturePicture, type LectureSkeleton, type LectureStep } from '../lib/lecture.ts';
+import { bakeMatches, elementsAtSvgTime, renderFrameSvg } from 'drawtell/core';
 import type { ContextPack } from '../schema/index.ts';
 import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
 
@@ -21,6 +22,8 @@ export interface Lecture {
   picture: LecturePicture;
   /** 视频(lectures/<id>/video.mp4);false = 课包 */
   video: boolean;
+  /** 课包烤过(bake.json 和画面对得上):孩子端不用 excalidraw 现画,缩略图服务端出 */
+  baked?: boolean;
 }
 
 /** 读小课堂要的目录:课包,与视频(没给就只认课包) */
@@ -68,7 +71,8 @@ async function readBundleLecture(ws: LectureDirs, id: string): Promise<Lecture |
       blocks: listOf(manifest.blocks, (b) => typeof b.id === 'string' && typeof b.text === 'string'),
       ...(scene.bounds && typeof scene.bounds === 'object' ? { bounds: scene.bounds as NonNullable<LecturePicture['bounds']> } : {}),
     };
-    return { id, title: String(scene.title ?? id), problem: String(scene.problem ?? ''), subject: typeof scene.subject === 'string' ? scene.subject : null, clock, picture, video: false };
+    const baked = await readFile(join(dir, 'bake.json'), 'utf8').then((t) => bakeMatches(JSON.parse(t), scene), () => false);
+    return { id, title: String(scene.title ?? id), problem: String(scene.problem ?? ''), subject: typeof scene.subject === 'string' ? scene.subject : null, clock, picture, video: false, baked };
   } catch {
     return null;
   }
@@ -136,4 +140,41 @@ export async function enrichLectures(ws: LectureDirs, section: BoardSection): Pr
     cards.push({ ...c, props: { ...c.props, ...(l ? { title: l.title } : {}), ...(l?.video ? { video: true } : {}), ...(l && r ? { start: r.start, end: r.end, ...(l.video ? {} : { still: Math.round(lectureAt(l.clock, Math.max(r.start, r.end - 1)).svgMs * 10) / 10 }) } : {}), ready: Boolean(l && r) } });
   }
   return { ...section, cards };
+}
+
+/**
+ * 课包在 SVG 时刻 svgMs 的画面(圈的卡、lecture 卡的缩略图;《小课堂设计.md》§五):用烤好的画面(bake.json)在服务端现画成一张 SVG,
+ * 有圈就叠上圈(课包坐标,加上导出时的平移)。没烤过、画面改过没重烤 → null(页面退回在浏览器里克隆播放器的 SVG)。
+ * 背景图内嵌成 data URI:SVG 当 <img> 用时不去取外面的文件。
+ */
+export async function lectureFrameSvg(ws: Pick<LectureDirs, 'dirs'>, id: string, svgMs: number, ring: readonly [number, number][] = []): Promise<string | null> {
+  if (!BUNDLE_ID_RE.test(id)) return null;
+  const dir = join(ws.dirs.bundles, id);
+  try {
+    const [sceneRaw, manifestRaw, bakedRaw] = await Promise.all(['scene.json', 'manifest.json', 'bake.json'].map((f) => readFile(join(dir, f), 'utf8')));
+    const scene = JSON.parse(sceneRaw) as { skeletons?: unknown; background?: unknown };
+    const baked: unknown = JSON.parse(bakedRaw);
+    if (!bakeMatches(baked, scene) || !Array.isArray(scene.skeletons)) return null;
+    const steps = (JSON.parse(manifestRaw) as { steps?: unknown }).steps;
+    const clock = lectureClock(scene.skeletons as LectureSkeleton[], (Array.isArray(steps) ? steps : []) as LectureStep[]);
+    const [dx, dy] = baked.offset;
+    const overlay = ring.length >= 2 ? `<path d="${ring.map((p, i) => `${i ? 'L' : 'M'}${p[0] + dx} ${p[1] + dy}`).join(' ')}" fill="none" stroke="#2f6fd6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` : '';
+    let backgroundHref: string | undefined;
+    if (baked.background) {
+      const ext = baked.background.src.split('.').pop()?.toLowerCase() ?? 'png';
+      const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png';
+      const data = await readFile(join(dir, baked.background.src)).catch(() => null);
+      if (data) backgroundHref = `data:${mime};base64,${data.toString('base64')}`;
+    }
+    return renderFrameSvg(baked, new Map(elementsAtSvgTime(clock, svgMs).map((e) => [e.id, e.progress])), { overlay, ...(backgroundHref ? { backgroundHref } : {}) });
+  } catch {
+    return null;
+  }
+}
+
+/** frame.svg 的 ring 参数:「x,y;x,y;…」(课包坐标,取整);认不出来 = 没有 */
+export function parseRing(s: string | null): [number, number][] {
+  if (!s) return [];
+  const pts = s.split(';').slice(0, 400).map((p) => p.split(',').map(Number));
+  return pts.every((p) => p.length === 2 && p.every((x) => Number.isFinite(x) && Math.abs(x) < 1e5)) ? (pts as [number, number][]) : [];
 }

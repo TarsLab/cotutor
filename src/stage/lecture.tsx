@@ -1,7 +1,8 @@
 /**
  * 小课堂的播放器(《小课堂设计.md》§三):不用 ChalkPlayer(那是接力式,一步一停、只能跳到步开头),
- * 用 drawtell 公开的 buildAnimatedSvg 画出带 SMIL 逐笔动画的 SVG,时钟自己管(src/lib/lecture.ts):
- * 一段 = 一步,段长 = max(画, 配音);SVG 永远暂停,每帧 setCurrentTime 到这一刻;一个 <audio> 全程复用,换段换 src。
+ * 时钟是 drawtell/core 的(src/lib/lecture.ts):一段 = 一步,段长 = max(画, 配音);一个 <audio> 全程复用,换段换 src。
+ * 画面:课包烤过(bake.json,和 scene.json 的画面对得上)就用 drawtell/render 按这一刻每个元素画了多少现画,不用 excalidraw、不用 SMIL;
+ * 没烤过的老课包退回 buildAnimatedSvg(SMIL 动画永远暂停,每帧 setCurrentTime 到这一刻;excalidraw 按需装)。
  * 能拖到任意一刻(拖的时候不出声),气口不停,放到结尾一次就算看完(发给页面)。
  * 圈(§四):停住了就能在画面上圈,一笔一处;记那一刻(课里的毫秒)与路径(课包坐标:屏幕点经 getScreenCTM 反算到 SVG,再减掉导出时的平移),
  * 进度条上那一刻留一个蓝色记号;圈了、擦了都把整张单子发给页面(页面是圈的主人,带给老师、画圈的卡)。
@@ -10,7 +11,8 @@
  * 放到那一段的末尾一次就停在末帧、发 done;放着 / 停着 / 放完都发 phase(页面字幕行显示课里那句)。iPad 不让出声就停着等孩子点「放这一段」。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { buildAnimatedSvg } from 'drawtell/player';
+import { bakeMatches, frameAt, type BakedLesson } from 'drawtell/core';
+import { mountBaked } from 'drawtell/render';
 import { clockLabel, lectureAt, lectureClock, type LectureClock } from '../lib/lecture.ts';
 import { loadBundle } from './scene.tsx';
 
@@ -32,19 +34,42 @@ export interface WatchEntry {
   play: boolean;
 }
 
-/** 装好的小课堂:时钟、带逐笔动画的 SVG(暂停着)、课包坐标 → SVG 坐标的平移(exportToSvg 把元素挪进了 viewBox) */
+/** 装好的小课堂:时钟、画面的 SVG、课包坐标 → SVG 坐标的平移、画到某一刻;baked = 用的是烤好的画面 */
 export interface BuiltLecture {
   clock: LectureClock;
   svg: SVGSVGElement;
   dx: number;
   dy: number;
+  baked: boolean;
+  /** 画到课里的这一刻(毫秒) */
+  draw(ms: number): void;
 }
 
-/** 课包 → 时钟 + SVG。平移从第一个带 translate 的元素量:SVG 里第 i 个顶层 <g> 是第 i 个元素,translate = 元素 x/y + 平移 */
+/** 烤好的画面:bake.json 在、和 scene.json 的画面对得上才用(画面改过没重烤就当没有) */
+async function loadBaked(bundleUrl: string): Promise<BakedLesson | null> {
+  const base = new URL(bundleUrl, location.href);
+  try {
+    const [b, sj] = await Promise.all([fetch(new URL('bake.json', base)), fetch(new URL('scene.json', base))]);
+    if (!b.ok || !sj.ok) return null;
+    const baked: unknown = await b.json();
+    return bakeMatches(baked, (await sj.json()) as { skeletons?: unknown; background?: unknown }) ? baked : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 课包 → 时钟 + 画面。烤过的用 drawtell/render;没烤过的退回 excalidraw + SMIL(平移从第一个带 translate 的元素量) */
 export async function buildLecture(bundleUrl: string): Promise<BuiltLecture> {
-  const scene = await loadBundle(bundleUrl);
+  const [scene, baked] = await Promise.all([loadBundle(bundleUrl), loadBaked(bundleUrl)]);
   const clock = lectureClock(scene.skeletons, scene.steps);
   if (!clock.segments.length) throw new Error('这份课包没有步');
+  if (baked) {
+    const bg = baked.background ? new URL(baked.background.src, new URL(bundleUrl, location.href)).href : undefined;
+    const m = mountBaked(baked, { backgroundHref: bg });
+    m.paint(frameAt(clock, 0));
+    return { clock, svg: m.svg, dx: baked.offset[0], dy: baked.offset[1], baked: true, draw: (ms) => m.paint(frameAt(clock, ms)) };
+  }
+  const { buildAnimatedSvg } = await import('drawtell/player');
   const { svg } = await buildAnimatedSvg(clock.skeletons as typeof scene.skeletons);
   svg.pauseAnimations();
   let dx = 0, dy = 0;
@@ -55,7 +80,12 @@ export async function buildLecture(bundleUrl: string): Promise<BuiltLecture> {
     const m = /translate\(\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(tr);
     if (el && m && typeof el.x === 'number' && typeof el.y === 'number') { dx = Number(m[1]) - el.x; dy = Number(m[2]) - el.y; break; }
   }
-  return { clock, svg, dx, dy };
+  const draw = (ms: number): void => {
+    // SVG 永远停着,画面只由这里挪;哪次没停住(Safari 放进页面后时间轴重新走)就再停一次
+    if (!svg.animationsPaused()) svg.pauseAnimations();
+    svg.setCurrentTime(lectureAt(clock, ms).svgMs / 1000);
+  };
+  return { clock, svg, dx, dy, baked: false, draw };
 }
 
 export interface LectureWatch {
@@ -148,6 +178,8 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const stroke = useRef<{ pts: [number, number][]; el: SVGPathElement } | null>(null);
   const host = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  /** 画到课里的某一刻(课包;buildLecture 给的) */
+  const drawRef = useRef<((ms: number) => void) | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
   /** 视频小课堂:画面与声音都是它;svgRef 是叠在上面圈用的那层(viewBox = 视频自己的像素) */
   const vid = useRef<HTMLVideoElement | null>(null);
@@ -200,9 +232,12 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
         setClock(c);
         return;
       }
-      const { clock: c, svg, dx, dy } = await buildLecture(bundleUrl);
+      const built = await buildLecture(bundleUrl);
+      const { clock: c, svg, dx, dy } = built;
       if (cancelled) return;
-      onSvg?.(svg.outerHTML, dx, dy);
+      // 圈的卡的缩略图:烤过的课包服务端出图(frame.svg),不用这份;老课包页面克隆它
+      if (!built.baked) onSvg?.(svg.outerHTML, dx, dy);
+      drawRef.current = built.draw;
       shift.current = { dx, dy };
       svg.removeAttribute('width');
       svg.removeAttribute('height');
@@ -214,11 +249,10 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
       ink.current = g;
       host.current?.replaceChildren(svg);
       svgRef.current = svg;
-      // Safari(iPad)把 SVG 放进页面时时间轴重新走起来,之前的暂停不算:放进去以后再停一次(不然没点「开始看」画面就自己画,没有声音)
-      svg.pauseAnimations();
       const start = openAt !== undefined ? Math.max(0, Math.min(openAt, c.total)) : 0;
       t.current = start;
-      svg.setCurrentTime(lectureAt(c, start).svgMs / 1000);
+      // 老课包:Safari(iPad)把 SVG 放进页面时时间轴重新走起来,之前的暂停不算——draw 里会再停一次
+      built.draw(start);
       setNow(start);
       setClock(c);
     })().catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
@@ -251,17 +285,11 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     if (!play && !a.paused) a.pause();
   }, [bundleUrl]);
 
-  /** 画到这一刻 */
   /** 画到这一刻;视频:seek = 把视频挪过去(放着的时候时钟跟视频走,不挪) */
-  const paint = useCallback((c: LectureClock, ms: number, seek = true) => {
+  const paint = useCallback((_c: LectureClock, ms: number, seek = true) => {
     t.current = ms;
     if (vid.current) { if (seek) vid.current.currentTime = ms / 1000; }
-    else {
-      const svg = svgRef.current;
-      // SVG 永远停着,画面只由这里挪;哪次没停住(Safari)就再停一次
-      if (svg && !svg.animationsPaused()) svg.pauseAnimations();
-      svg?.setCurrentTime(lectureAt(c, ms).svgMs / 1000);
-    }
+    else drawRef.current?.(ms);
     setNow(ms);
   }, []);
 

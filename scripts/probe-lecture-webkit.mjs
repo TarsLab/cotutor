@@ -30,13 +30,14 @@ try {
   const fr = page.frameLocator('#lc-frame');
   await fr.locator('.lc-start').waitFor({ timeout: 30000 });
   const frame = page.frames().find((f) => f.url().includes('/stage/'));
-  const st = () => frame.evaluate(() => { const s = document.querySelector('.lc-svg'); return { paused: s.animationsPaused(), t: Math.round(s.getCurrentTime() * 1000), time: document.querySelector('.lc-time span').textContent }; });
+  // 画面的样子:烤过的课包没有 SMIL,看露出来几个元素、正在画的那一笔描到哪(dashoffset);paused = 没有 SMIL 在自己走
+  const st = () => frame.evaluate(() => { const s = document.querySelector('.lc-svg'); const roots = [...s.children].filter((e) => e.tagName === 'g'); const shown = roots.filter((e) => e.style.display !== 'none'); const dash = [...s.querySelectorAll('[stroke-dashoffset]')].map((e) => e.getAttribute('stroke-dashoffset')).join(','); return { paused: !s.querySelector('animate'), t: shown.length * 1000 + dash.length, shown: shown.length, dash, time: document.querySelector('.lc-time span').textContent }; });
   const a = await st(); await sleep(2000); const b = await st();
   ok('没点开始看:画面不动', a.t === b.t && b.time === '0:00 / 0:46', JSON.stringify([a, b]));
   await fr.locator('.lc-start').click();
   await sleep(3000);
   const c = await st();
-  ok('点了开始看:时钟走、画面跟着(SVG 时刻 ≈ 1000 + 课里的毫秒)、SVG 还是停着由时钟挪', c.paused && /^0:0[2-4]/.test(c.time) && c.t > 3000, JSON.stringify(c));
+  ok('点了开始看:时钟走、画面跟着(露出了好几样)、没有 SMIL', c.paused && /^0:0[2-4]/.test(c.time) && c.shown > a.shown && c.shown >= 3, JSON.stringify({ a, c }));
   await fr.locator('.lc-play').click();
   const d = await st(); await sleep(1500); const e = await st();
   ok('暂停:画面停住', d.t === e.t && d.time === e.time, JSON.stringify([d, e]));
@@ -51,9 +52,9 @@ try {
   ok('圈了一处', (await fr.locator('.lc-mark').count()) === 1);
   await fr.locator('.lc-dot').nth(5).click();
   await fr.locator('.lc-play').click();
-  await page.waitForSelector('.lc-pending .c-mark .mk-svg', { timeout: 30000 });
-  await sleep(500);
-  const th = await page.evaluate(() => { const s = document.querySelector('.lc-pending .c-mark .mk-svg'); const t1 = s.getCurrentTime(); return new Promise((r) => setTimeout(() => r({ paused: s.animationsPaused(), t1, t2: s.getCurrentTime() }), 1500)); });
-  ok('圈的卡的缩略图:克隆的 SVG 停在那一刻、不自己走', th.paused && th.t1 === th.t2 && th.t1 > 1, JSON.stringify(th));
+  await page.waitForSelector('.lc-pending .c-mark img.mk-svg', { timeout: 30000 });
+  await page.waitForFunction(() => (document.querySelector('.lc-pending .c-mark img.mk-svg')?.naturalWidth ?? 0) > 0, null, { timeout: 30000 });
+  const th = await page.evaluate(() => { const i = document.querySelector('.lc-pending .c-mark img.mk-svg'); return { w: i.naturalWidth, src: i.src.includes('/frame.svg?svg=') && i.src.includes('ring=') }; });
+  ok('圈的卡的缩略图:服务端现画的一张图(frame.svg,带圈),Safari 里显示得出', th.w > 0 && th.src, JSON.stringify(th));
   if (process.argv[2]) await page.screenshot({ path: process.argv[2] });
 } finally { await browser.close(); mock.kill(); }

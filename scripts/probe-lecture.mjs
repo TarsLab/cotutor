@@ -121,9 +121,10 @@ try {
   const finished = await until(`${F}.hidden && Boolean(document.querySelector('.lc-pending'))`, 60);
   const after = await evaluate(`({ ask: document.querySelector('.lc-ask b')?.textContent, card: document.querySelector('.lc-pending .c-lc b')?.textContent, pill: document.querySelector('#pill').hidden, mo: document.querySelector('#c-mo').textContent, blank: Boolean(document.querySelector('#board .blank')) })`);
   ok('放到结尾:铺满的收起;小课堂卡 + 「看完了!有什么想问老师的?」;输入条亮;头上「小课堂」;没有空板', finished && after.ask === '看完了!有什么想问老师的?' && after.card === '13 − 8 破十法' && !after.pill && after.mo === '小课堂' && !after.blank, JSON.stringify(after));
-  await until(`Boolean(document.querySelector('.lc-pending .c-mark .mk-svg path[stroke="#2f6fd6"]'))`, 60);
-  const mk = await evaluate(`(() => { const c = document.querySelector('.lc-pending .c-mark'); const svg = c?.querySelector('.mk-svg'); return { n: document.querySelectorAll('.lc-pending .c-mark').length, label: c?.querySelector('.mk-t')?.textContent, x: Boolean(c?.querySelector('.x')), sub: document.querySelector('.lc-pending .c-lc .lt span')?.textContent, hint: document.querySelector('.lc-ask span')?.textContent, svg: Boolean(svg), t: svg ? svg.getCurrentTime() : -1, paused: svg ? svg.animationsPaused() : null, w: svg ? Math.round(svg.getBoundingClientRect().width) : 0 }; })()`);
-  ok('看完那排:一张圈的卡(「你圈的 0:2x」、能删),缩略图停在那一刻(SVG 停着、时刻 > 第 3 步起点)、带蓝圈;小课堂卡写「圈了 1 处」;提示说会一起带给老师', mk.n === 1 && /^你圈的0:2\d$/.test(mk.label) && mk.x && mk.sub === '看完了 · 圈了 1 处' && mk.hint.startsWith('圈的 1 处,问的时候会一起带给老师') && mk.svg && mk.paused && mk.t > 15 && mk.w > 100, JSON.stringify(mk));
+  await until(`(document.querySelector('.lc-pending .c-mark img.mk-svg')?.naturalWidth ?? 0) > 0`, 60);
+  // 缩略图是服务端用烤好的画面现画的(frame.svg):停在圈的那一刻(第 3 步画到一半,不是全画完)、叠着蓝圈
+  const mk = await evaluate(`(async () => { const c = document.querySelector('.lc-pending .c-mark'); const img = c?.querySelector('img.mk-svg'); const svg = img ? await (await fetch(img.src)).text() : ''; return { n: document.querySelectorAll('.lc-pending .c-mark').length, label: c?.querySelector('.mk-t')?.textContent, x: Boolean(c?.querySelector('.x')), sub: document.querySelector('.lc-pending .c-lc .lt span')?.textContent, hint: document.querySelector('.lc-ask span')?.textContent, frame: Boolean(img?.src.includes('/frame.svg?svg=')), ring: svg.includes('stroke="#2f6fd6"'), crossed: (svg.match(/#e8590c/g) || []).length, red: (svg.match(/#e03131/g) || []).length, w: img ? Math.round(img.getBoundingClientRect().width) : 0 }; })()`);
+  ok('看完那排:一张圈的卡(「你圈的 0:2x」、能删),缩略图是服务端现画的那一刻(第 3 步的橙色斜线画上了、第 4 步的红圈还没有)、带蓝圈;小课堂卡写「圈了 1 处」;提示说会一起带给老师', mk.n === 1 && /^你圈的0:2\d$/.test(mk.label) && mk.x && mk.sub === '看完了 · 圈了 1 处' && mk.hint.startsWith('圈的 1 处,问的时候会一起带给老师') && mk.frame && mk.ring && mk.crossed >= 1 && mk.red === 0 && mk.w > 100, JSON.stringify(mk));
   await shot('lecture-done.png');
 
   await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = '为什么要拆开那一捆'; document.querySelector('#go').click(); return true; })()`);
@@ -134,7 +135,7 @@ try {
 
   // 老师放课里的一段(§六):节里一张小课堂卡,讲稿 [[play]] 交给它
   const SF = `document.querySelector('#st-frame')`;
-  const seg = await evaluate(`(() => { const c = document.querySelector('#board .sec .c-lecture'); return c ? { pl: c.querySelector('.pl')?.textContent, title: c.querySelector('.sp')?.textContent, svg: Boolean(c.querySelector('.th svg')) } : null; })()`);
+  const seg = await evaluate(`(() => { const c = document.querySelector('#board .sec .c-lecture'); return c ? { pl: c.querySelector('.pl')?.textContent, title: c.querySelector('.sp')?.textContent, svg: (c.querySelector('.th img')?.naturalWidth ?? 0) > 0 && c.querySelector('.th img').src.includes('/frame.svg?svg=') } : null; })()`);
   ok('老师那一节有一张小课堂卡:课名、「0:19–0:30 ▷」、缩略图是那一段的末帧', seg?.pl === '0:19–0:30 ▷' && seg.title === '13 − 8 破十法' && seg.svg, JSON.stringify(seg));
   const opened2 = await until(`document.querySelector('#stage').classList.contains('on') && Boolean(${SF}.contentDocument?.querySelector('.lc.lc-card .lc-svg'))`, 120);
   const st0 = opened2 ? await evaluate(`({ time: ${SF}.contentDocument.querySelector('.lc-time span').textContent, top: Boolean(${SF}.contentDocument.querySelector('.lc-top')), kd: document.querySelector('#st-kd').textContent, sub: document.querySelector('#sub-text').textContent })`) : null;

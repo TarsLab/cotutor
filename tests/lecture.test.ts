@@ -44,11 +44,21 @@ const s3 = clock.segments[2];
   try {
     cpSync(dir, join(tmp, 'po'), { recursive: true });
     const sj = JSON.parse(readFileSync(join(dir, 'scene.json'), 'utf8')) as Record<string, unknown>;
-    writeFileSync(join(tmp, 'po', 'scene.json'), JSON.stringify({ ...sj, groups: [{ id: 'loose', label: '散的 3 根小棒', elementIds: ['s-1', 's-2', 's-3'] }, { bad: true }], bounds: { q: [0, 0, 1, 1] } }));
+    // 第一个元素挪 1 像素:画面改过、没重烤,bake.json 就不算数
+    writeFileSync(join(tmp, 'po', 'scene.json'), JSON.stringify({ ...sj, skeletons: (sj.skeletons as { x: number }[]).map((e, i) => (i ? e : { ...e, x: e.x + 1 })), groups: [{ id: 'loose', label: '散的 3 根小棒', elementIds: ['s-1', 's-2', 's-3'] }, { bad: true }], bounds: { q: [0, 0, 1, 1] } }));
     const mj = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as Record<string, unknown>;
     writeFileSync(join(tmp, 'po', 'manifest.json'), JSON.stringify({ ...mj, blocks: [{ id: 'k', elementIds: ['q'], text: '十三减八', audioSrc: 'a.mp3' }] }));
     const l = await readLecture({ dirs: { bundles: tmp } }, 'po');
-    check('readLecture:groups(形状不对的丢掉)、bounds 从 scene.json,blocks 从 manifest.json', l?.picture.groups?.length === 1 && l.picture.blocks?.[0]?.text === '十三减八' && JSON.stringify(l.picture.bounds?.q) === '[0,0,1,1]', JSON.stringify(l?.picture));
+    check('readLecture:groups(形状不对的丢掉)、bounds 从 scene.json,blocks 从 manifest.json;画面改过 → 烤的那份不算数', l?.picture.groups?.length === 1 && l.picture.blocks?.[0]?.text === '十三减八' && JSON.stringify(l.picture.bounds?.q) === '[0,0,1,1]' && l.baked === false, JSON.stringify(l?.picture));
+    // 服务端出缩略图(frame.svg):烤过且画面对得上才出
+    const { lectureFrameSvg, parseRing } = await import('../src/server/lecture.ts');
+    const fresh = await readLecture({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8');
+    check('样本课包烤过:baked', fresh?.baked === true);
+    const s3mid = clock.segments[2].drawStart + 2000;
+    const svg = await lectureFrameSvg({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8', s3mid, [[300, 80], [360, 80], [360, 160]]) ?? '';
+    check('frame.svg:那一刻画到第 3 步一半(橙色斜线有、第 4 步的红圈没有),叠着蓝圈(加了平移),字体内嵌', svg.startsWith('<svg') && svg.includes('#e8590c') && !svg.includes('#e03131') && svg.includes('stroke="#2f6fd6"') && svg.includes('M284 94 L344 94') && svg.includes('@font-face'), svg.slice(0, 200));
+    check('frame.svg:画面改过没重烤、id 不对 → null(页面退回自己克隆)', (await lectureFrameSvg({ dirs: { bundles: tmp } }, 'po', 2000)) === null && (await lectureFrameSvg({ dirs: { bundles: tmp } }, '../x', 2000)) === null);
+    check('ring 参数:「x,y;x,y」,认不出来就当没有', JSON.stringify(parseRing('1,2;3,4')) === '[[1,2],[3,4]]' && parseRing('1,2;x').length === 0 && parseRing(null).length === 0);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

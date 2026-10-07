@@ -1,8 +1,10 @@
 /**
  * 场景卡的舞台:drawtell 的 ChalkPlayer 全屏,controls 关——控制条是板书自己的字幕行,phase 经 postMessage 回页面,
  * 页面的按钮映射回 control。课包从 bundleUrl 取(scene.json + manifest.json 拼回 ChalkScene,与 drawtell 播放页同一拼法)。
+ * 画面用课包烤好的 bake.json(和 scene.json 对得上才用);没烤过的,ChalkPlayer 在浏览器里现烤(按需装 excalidraw)。
  */
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react';
+import { bakeMatches, type BakedLesson } from 'drawtell/core';
 import { ChalkPlayer, type ChalkPhase, type ChalkPlayerHandle, type ChalkScene } from 'drawtell/player';
 
 export interface SceneStageHandle {
@@ -32,6 +34,7 @@ export async function loadBundle(bundleUrl: string): Promise<ChalkScene> {
     model: String(scene.model ?? ''),
     template: (scene.template as ChalkScene['template']) ?? 'paper-strict',
     ...(scene.subject != null ? { subject: String(scene.subject) } : {}),
+    ...(scene.background != null ? { background: scene.background as NonNullable<ChalkScene['background']> } : {}),
     skeletons: (scene.skeletons as ChalkScene['skeletons']) ?? [],
     steps: (manifest.steps as ChalkScene['steps']) ?? [],
     ...(manifest.blocks != null ? { blocks: manifest.blocks as ChalkScene['blocks'] } : {}),
@@ -39,15 +42,29 @@ export async function loadBundle(bundleUrl: string): Promise<ChalkScene> {
   };
 }
 
+/** 烤好的画面:bake.json 在、和 scene.json 的画面对得上才用(画面改过没重烤就当没有) */
+export async function loadBaked(bundleUrl: string): Promise<BakedLesson | null> {
+  const base = new URL(bundleUrl, location.href);
+  try {
+    const [b, sj] = await Promise.all([fetch(new URL('bake.json', base)), fetch(new URL('scene.json', base))]);
+    if (!b.ok || !sj.ok) return null;
+    const baked: unknown = await b.json();
+    return bakeMatches(baked, (await sj.json()) as { skeletons?: unknown; background?: unknown }) ? baked : null;
+  } catch {
+    return null;
+  }
+}
+
 export const SceneStage = forwardRef<SceneStageHandle, SceneStageProps>(function SceneStage({ bundleUrl, autoplay, onPhase, onError }, ref) {
   const [scene, setScene] = useState<ChalkScene | null>(null);
+  const [baked, setBaked] = useState<BakedLesson | null>(null);
   const player = useRef<ChalkPlayerHandle>(null);
   const started = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
-    loadBundle(bundleUrl)
-      .then((s) => { if (!cancelled) setScene(s); })
+    Promise.all([loadBundle(bundleUrl), loadBaked(bundleUrl)])
+      .then(([s, b]) => { if (!cancelled) { setBaked(b); setScene(s); } })
       .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
     return () => { cancelled = true; };
   }, [bundleUrl, onError]);
@@ -73,5 +90,5 @@ export const SceneStage = forwardRef<SceneStageHandle, SceneStageProps>(function
   }), []);
 
   if (!scene) return <div className="stage-wait">图还在路上…</div>;
-  return <ChalkPlayer ref={player} scene={scene} audioBaseUrl={bundleUrl} pointer controls={false} onPhaseChange={handlePhase} />;
+  return <ChalkPlayer ref={player} scene={scene} baked={baked} audioBaseUrl={bundleUrl} pointer controls={false} onPhaseChange={handlePhase} />;
 });

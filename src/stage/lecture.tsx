@@ -2,7 +2,7 @@
  * 小课堂的播放器(《小课堂设计.md》§三):不用 ChalkPlayer(那是接力式,一步一停、只能跳到步开头),
  * 时钟是 drawtell/core 的(src/lib/lecture.ts):一段 = 一步,段长 = max(画, 配音);一个 <audio> 全程复用,换段换 src。
  * 画面:课包烤过(bake.json,和 scene.json 的画面对得上)就用 drawtell/render 按这一刻每个元素画了多少现画,不用 excalidraw、不用 SMIL;
- * 没烤过的老课包退回 buildAnimatedSvg(SMIL 动画永远暂停,每帧 setCurrentTime 到这一刻;excalidraw 按需装)。
+ * 没烤过的课包在浏览器里现烤一份(drawtell/bake,按需装 excalidraw),画法一样;不再有 SMIL。
  * 能拖到任意一刻(拖的时候不出声),气口不停,放到结尾一次就算看完(发给页面)。
  * 圈(§四):停住了就能在画面上圈,一笔一处;记那一刻(课里的毫秒)与路径(课包坐标:屏幕点经 getScreenCTM 反算到 SVG,再减掉导出时的平移),
  * 进度条上那一刻留一个蓝色记号;圈了、擦了都把整张单子发给页面(页面是圈的主人,带给老师、画圈的卡)。
@@ -11,10 +11,10 @@
  * 放到那一段的末尾一次就停在末帧、发 done;放着 / 停着 / 放完都发 phase(页面字幕行显示课里那句)。iPad 不让出声就停着等孩子点「放这一段」。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { bakeMatches, frameAt, type BakedLesson } from 'drawtell/core';
+import { frameAt } from 'drawtell/core';
 import { mountBaked } from 'drawtell/render';
 import { clockLabel, lectureAt, lectureClock, type LectureClock } from '../lib/lecture.ts';
-import { loadBundle } from './scene.tsx';
+import { loadBaked, loadBundle } from './scene.tsx';
 
 /** 一处圈(页面与舞台之间传的样子):课里的时刻、SVG 停在哪(画缩略图)、路径(课包坐标) */
 export interface StageMark {
@@ -34,7 +34,7 @@ export interface WatchEntry {
   play: boolean;
 }
 
-/** 装好的小课堂:时钟、画面的 SVG、课包坐标 → SVG 坐标的平移、画到某一刻;baked = 用的是烤好的画面 */
+/** 装好的小课堂:时钟、画面的 SVG、课包坐标 → SVG 坐标的平移、画到某一刻;baked = 课包里有烤好的(否则是现烤的) */
 export interface BuiltLecture {
   clock: LectureClock;
   svg: SVGSVGElement;
@@ -45,47 +45,16 @@ export interface BuiltLecture {
   draw(ms: number): void;
 }
 
-/** 烤好的画面:bake.json 在、和 scene.json 的画面对得上才用(画面改过没重烤就当没有) */
-async function loadBaked(bundleUrl: string): Promise<BakedLesson | null> {
-  const base = new URL(bundleUrl, location.href);
-  try {
-    const [b, sj] = await Promise.all([fetch(new URL('bake.json', base)), fetch(new URL('scene.json', base))]);
-    if (!b.ok || !sj.ok) return null;
-    const baked: unknown = await b.json();
-    return bakeMatches(baked, (await sj.json()) as { skeletons?: unknown; background?: unknown }) ? baked : null;
-  } catch {
-    return null;
-  }
-}
-
-/** 课包 → 时钟 + 画面。烤过的用 drawtell/render;没烤过的退回 excalidraw + SMIL(平移从第一个带 translate 的元素量) */
+/** 课包 → 时钟 + 画面:烤好的用 bake.json,没烤过的在浏览器里现烤(drawtell/bake,按需装 excalidraw);画都由 drawtell/render 按 frameAt 现画 */
 export async function buildLecture(bundleUrl: string): Promise<BuiltLecture> {
   const [scene, baked] = await Promise.all([loadBundle(bundleUrl), loadBaked(bundleUrl)]);
   const clock = lectureClock(scene.skeletons, scene.steps);
   if (!clock.segments.length) throw new Error('这份课包没有步');
-  if (baked) {
-    const bg = baked.background ? new URL(baked.background.src, new URL(bundleUrl, location.href)).href : undefined;
-    const m = mountBaked(baked, { backgroundHref: bg });
-    m.paint(frameAt(clock, 0));
-    return { clock, svg: m.svg, dx: baked.offset[0], dy: baked.offset[1], baked: true, draw: (ms) => m.paint(frameAt(clock, ms)) };
-  }
-  const { buildAnimatedSvg } = await import('drawtell/player');
-  const { svg } = await buildAnimatedSvg(clock.skeletons as typeof scene.skeletons);
-  svg.pauseAnimations();
-  let dx = 0, dy = 0;
-  const groups = [...svg.children].filter((e) => e.tagName.toLowerCase() === 'g');
-  for (const [i, g] of groups.entries()) {
-    const el = clock.skeletons[i] as { x?: unknown; y?: unknown } | undefined;
-    const tr = (g.matches('[transform]') ? g : g.querySelector('[transform]'))?.getAttribute('transform') ?? '';
-    const m = /translate\(\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(tr);
-    if (el && m && typeof el.x === 'number' && typeof el.y === 'number') { dx = Number(m[1]) - el.x; dy = Number(m[2]) - el.y; break; }
-  }
-  const draw = (ms: number): void => {
-    // SVG 永远停着,画面只由这里挪;哪次没停住(Safari 放进页面后时间轴重新走)就再停一次
-    if (!svg.animationsPaused()) svg.pauseAnimations();
-    svg.setCurrentTime(lectureAt(clock, ms).svgMs / 1000);
-  };
-  return { clock, svg, dx, dy, baked: false, draw };
+  const picture = baked ?? (await (await import('drawtell/bake')).bakeSkeletons(scene.skeletons, { background: scene.background }));
+  const bg = picture.background ? new URL(picture.background.src, new URL(bundleUrl, location.href)).href : undefined;
+  const m = mountBaked(picture, { backgroundHref: bg });
+  m.paint(frameAt(clock, 0));
+  return { clock, svg: m.svg, dx: picture.offset[0], dy: picture.offset[1], baked: Boolean(baked), draw: (ms) => m.paint(frameAt(clock, ms)) };
 }
 
 export interface LectureWatch {
@@ -104,8 +73,6 @@ export interface LectureStageProps {
   /** 只看不圈(家长端、以前的话题) */
   view?: boolean;
   onMarks(marks: StageMark[]): void;
-  /** SVG 装好了:原样的 SVG(给页面画圈的卡的缩略图)与平移 */
-  onSvg?(markup: string, dx: number, dy: number): void;
   onFinished(w: LectureWatch): void;
   onClose(w: LectureWatch): void;
   onError(message: string): void;
@@ -155,7 +122,7 @@ const MAX_POINTS = 300;
 const INK = '#2f6fd6';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onSvg, onFinished, onClose, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false }, ref): JSX.Element {
+export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onFinished, onClose, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false }, ref): JSX.Element {
   const card = range !== undefined;
   const view = rawView || card || follow;
   /** 录像跟着放:倍速 */
@@ -235,8 +202,6 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
       const built = await buildLecture(bundleUrl);
       const { clock: c, svg, dx, dy } = built;
       if (cancelled) return;
-      // 圈的卡的缩略图:烤过的课包服务端出图(frame.svg),不用这份;老课包页面克隆它
-      if (!built.baked) onSvg?.(svg.outerHTML, dx, dy);
       drawRef.current = built.draw;
       shift.current = { dx, dy };
       svg.removeAttribute('width');
@@ -257,7 +222,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
       setClock(c);
     })().catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
     return () => { cancelled = true; };
-    // openAt / onSvg 只在装的时候用一次
+    // openAt 只在装的时候用一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundleUrl, onError]);
 

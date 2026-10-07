@@ -2,8 +2,10 @@
  * 小课堂(《小课堂设计.md》)读盘的那一半:从 bundles/<id>/ 读课包,或从 lectures/<id>/ 读视频(lecture.md + video.mp4,第 4 步),拼时钟(src/lib/lecture.ts),
  * 给首页按钮的标题与课长、首页检查、上下文包 lecture: 用。同一个 id 两边都有,课包先。坏了、不在都回 null,不抛;为什么读不出来给首页检查(inspectLecture)。
  */
+import { spawn } from 'node:child_process';
 import { readFile, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { BUNDLE_ID_RE } from '../cards/scene.ts';
 import { mp4DurationMs } from './mp4.ts';
 import { LECTURE_FILE, LECTURE_VIDEO, clockLabel, describeMark, lectureAt, lectureClock, lectureLines, lectureRange, parseLectureDoc, videoClock, type LectureClock, type LectureMark, type LecturePicture, type LectureSkeleton, type LectureStep } from '../lib/lecture.ts';
@@ -142,18 +144,67 @@ export async function enrichLectures(ws: LectureDirs, section: BoardSection): Pr
   return { ...section, cards };
 }
 
+const baking = new Map<string, Promise<boolean>>();
+
+/**
+ * 课包没烤过(或画面改过没重烤):起一次 drawtell bake(同一份课包同时只烤一次;要 playwright,drawtell 的可选依赖)。
+ * 烤好 true;烤不了(没浏览器、课包坏了、超时)false,不抛。
+ */
+export function ensureBaked(bundlesDir: string, id: string): Promise<boolean> {
+  const key = join(bundlesDir, id);
+  let p = baking.get(key);
+  if (!p) {
+    p = new Promise<boolean>((resolve) => {
+      let bin: string;
+      try { bin = join(dirname(createRequire(import.meta.url).resolve('drawtell/package.json')), 'bin', 'drawtell.js'); } catch { resolve(false); return; }
+      const child = spawn(process.execPath, [bin, 'bake', id, '--bundles', bundlesDir, '--json'], { stdio: 'ignore' });
+      const timer = setTimeout(() => child.kill(), BAKE_TIMEOUT_MS);
+      child.on('error', () => { clearTimeout(timer); resolve(false); });
+      child.on('exit', (code) => { clearTimeout(timer); resolve(code === 0); });
+    }).finally(() => baking.delete(key));
+    baking.set(key, p);
+  }
+  return p;
+}
+const BAKE_TIMEOUT_MS = 120_000;
+
+const tried = new Set<string>();
+
+/**
+ * 孩子端要用到的课包(场景卡、小课堂、lecture 卡)没烤过:后台烤一次,不等(下一次下发就是烤好的)。
+ * 一个服务进程里每份课包只看一次;烤不了照样放(孩子端在浏览器里现烤)。
+ */
+export function bakeSoon(bundlesDir: string, id: string): void {
+  const key = join(bundlesDir, id);
+  if (tried.has(key) || !BUNDLE_ID_RE.test(id)) return;
+  tried.add(key);
+  void (async () => {
+    const [scene, baked] = await Promise.all(['scene.json', 'bake.json'].map((f) => readFile(join(key, f), 'utf8').then((t) => JSON.parse(t) as unknown, () => null)));
+    if (scene && !bakeMatches(baked, scene as { skeletons?: unknown })) await ensureBaked(bundlesDir, id);
+  })().catch(() => {});
+}
+
+/** 一节板书里用到的课包(场景卡、lecture 卡),没烤过的后台烤 */
+export function bakeSectionSoon(bundlesDir: string, section: BoardSection): void {
+  for (const c of section.cards) if ((c.kind === 'scene' || c.kind === 'lecture') && typeof c.props.bundle === 'string' && !(c.props as { video?: unknown }).video) bakeSoon(bundlesDir, c.props.bundle);
+}
+
 /**
  * 课包在 SVG 时刻 svgMs 的画面(圈的卡、lecture 卡的缩略图;《小课堂设计.md》§五):用烤好的画面(bake.json)在服务端现画成一张 SVG,
- * 有圈就叠上圈(课包坐标,加上导出时的平移)。没烤过、画面改过没重烤 → null(页面退回在浏览器里克隆播放器的 SVG)。
+ * 有圈就叠上圈(课包坐标,加上导出时的平移)。没烤过、画面改过没重烤:给了 bake(路由给 ensureBaked)就先烤再画,烤不了 → null。
  * 背景图内嵌成 data URI:SVG 当 <img> 用时不去取外面的文件。
  */
-export async function lectureFrameSvg(ws: Pick<LectureDirs, 'dirs'>, id: string, svgMs: number, ring: readonly [number, number][] = []): Promise<string | null> {
+export async function lectureFrameSvg(ws: Pick<LectureDirs, 'dirs'>, id: string, svgMs: number, ring: readonly [number, number][] = [], opts: { bake?: (bundlesDir: string, id: string) => Promise<boolean> } = {}): Promise<string | null> {
   if (!BUNDLE_ID_RE.test(id)) return null;
   const dir = join(ws.dirs.bundles, id);
   try {
-    const [sceneRaw, manifestRaw, bakedRaw] = await Promise.all(['scene.json', 'manifest.json', 'bake.json'].map((f) => readFile(join(dir, f), 'utf8')));
+    const read = (): Promise<string[]> => Promise.all(['scene.json', 'manifest.json', 'bake.json'].map((f) => readFile(join(dir, f), 'utf8').catch(() => '')));
+    const [sceneRaw, manifestRaw, bakedRaw] = await read();
+    if (!sceneRaw || !manifestRaw) return null;
     const scene = JSON.parse(sceneRaw) as { skeletons?: unknown; background?: unknown };
-    const baked: unknown = JSON.parse(bakedRaw);
+    const parse = (raw: string): unknown => { try { return JSON.parse(raw); } catch { return null; } };
+    let baked: unknown = parse(bakedRaw);
+    if (!bakeMatches(baked, scene) && opts.bake && (await opts.bake(ws.dirs.bundles, id))) baked = parse(await readFile(join(dir, 'bake.json'), 'utf8').catch(() => ''));
     if (!bakeMatches(baked, scene) || !Array.isArray(scene.skeletons)) return null;
     const steps = (JSON.parse(manifestRaw) as { steps?: unknown }).steps;
     const clock = lectureClock(scene.skeletons as LectureSkeleton[], (Array.isArray(steps) ? steps : []) as LectureStep[]);

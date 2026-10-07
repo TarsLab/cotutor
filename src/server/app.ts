@@ -38,7 +38,7 @@ import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { themeFiles } from './theme.ts';
 import { enrichScenes } from './scene-props.ts';
-import { enrichLectures, inspectLecture, lectureFrameSvg, parseRing, type IncomingMark } from './lecture.ts';
+import { enrichLectures, inspectLecture, bakeSectionSoon, ensureBaked, lectureFrameSvg, parseRing, type IncomingMark } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
@@ -209,7 +209,7 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
   }
   // 场景卡:课包在不在、题面、步数、缩略图,每次现读(课包落地卡就变成可播)
   const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
-  for (const m of messages) if (m.section) m.section = await enrichLectures(ctx.ws, await enrichScenes(sceneDirs, m.section));
+  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichLectures(ctx.ws, await enrichScenes(sceneDirs, m.section)); }
   const remaining = Math.max(0, policy.dailyMessages - kidMessageCount(index));
   return { tutor, date, messages, remaining, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
 }
@@ -234,7 +234,7 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
     if (m) m.section = partial;
   }
   const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
-  for (const m of messages) if (m.section) m.section = await enrichLectures(ctx.ws, await enrichScenes(sceneDirs, m.section));
+  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichLectures(ctx.ws, await enrichScenes(sceneDirs, m.section)); }
   // 录音卡:家长端旁注要评测全量(档、逐字分、花费),从录音旁边的 heard.json 读;孩子端不走这里。
   // 挂在新的卡对象上:索引有进程内缓存,改原对象判就漏到孩子端了
   for (const m of messages) {
@@ -967,7 +967,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     // 课包某一刻的画面(圈的卡、lecture 卡的缩略图):烤过的课包服务端现画;没烤过 404,页面退回自己克隆
     const frame = /^\/api\/bundles\/([a-z0-9][a-z0-9-]*)\/frame\.svg$/.exec(p);
     if (method === 'GET' && frame) {
-      const svg = await lectureFrameSvg(ws, frame[1], Number(url.searchParams.get('svg')) || 0, parseRing(url.searchParams.get('ring')));
+      const svg = await lectureFrameSvg(ws, frame[1], Number(url.searchParams.get('svg')) || 0, parseRing(url.searchParams.get('ring')), { bake: ensureBaked });
       return svg === null ? { status: 404, json: { error: 'not_found' } } : { status: 200, body: Buffer.from(svg), contentType: 'image/svg+xml; charset=utf-8' };
     }
     if (method === 'GET' && p.startsWith('/api/bundles/')) {

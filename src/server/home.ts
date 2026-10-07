@@ -14,7 +14,7 @@ import type { BoardCard } from '../lib/kid-board.ts';
 import { kidConversation, kidThreads } from '../lib/kid-view.ts';
 import { HOME_ID_RE, PublishedHomeSchema, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
 import { listDates, readCardStates, readIndex } from './store.ts';
-import { inspectLecture, readLecture, type Lecture } from './lecture.ts';
+import { bakeSoon, inspectLecture, readLecture, type Lecture } from './lecture.ts';
 
 export function homeFiles(ws: Pick<Workspace, 'dirs'>): { dir: string; draft: string; published: string; history: string } {
   const dir = ws.dirs.home;
@@ -185,7 +185,11 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
   const alive = await liveThreads(ws, homeRefs({ cards }));
   // 小课堂按钮:课包读得出来才出现;课名与课长补在按钮上
   const lectures = new Map<string, Lecture | null>();
-  for (const id of homeLectures({ cards })) lectures.set(id, await readLecture(ws, id));
+  for (const id of homeLectures({ cards })) {
+    const l = await readLecture(ws, id);
+    lectures.set(id, l);
+    if (l && !l.video && !l.baked) bakeSoon(ws.dirs.bundles, id);
+  }
   const out: BoardCard[] = [];
   for (const c of arrangeHome(cards, tutors)) {
     if (c.kind !== 'tutor') {

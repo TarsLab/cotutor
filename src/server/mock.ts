@@ -22,7 +22,7 @@ import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { enrichScenes } from './scene-props.ts';
 import { sendFile } from './send-file.ts';
 import type { ConversationMessage } from '../schema/index.ts';
-import { enrichLectures, lectureFrameSvg, parseRing, readLecture, storedMarks, type Lecture } from './lecture.ts';
+import { enrichLectures, ensureBaked, lectureFrameSvg, parseRing, readLecture, storedMarks, type Lecture } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
 
@@ -869,7 +869,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     }
     const frame = /^\/api\/bundles\/([a-z0-9][a-z0-9-]*)\/frame\.svg$/.exec(p);
     if (frame && method === 'GET') {
-      const svg = await lectureFrameSvg({ dirs: { bundles: MOCK_BUNDLES_DIR } }, frame[1], Number(url.searchParams.get('svg')) || 0, parseRing(url.searchParams.get('ring')));
+      const svg = await lectureFrameSvg({ dirs: { bundles: MOCK_BUNDLES_DIR } }, frame[1], Number(url.searchParams.get('svg')) || 0, parseRing(url.searchParams.get('ring')), { bake: ensureBaked });
       return svg === null ? { status: 404, json: { error: 'not_found' } } : { status: 200, body: Buffer.from(svg), contentType: 'image/svg+xml; charset=utf-8' };
     }
     if (p.startsWith('/api/bundles/') && method === 'GET') {

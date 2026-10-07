@@ -7,7 +7,7 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client';
 import 'drawtell/player/chalk-player.css';
 import { SceneStage, type SceneStageHandle } from './scene.tsx';
-import { LectureStage, buildLecture, type LectureStageHandle, type LectureWatch, type StageMark, type WatchEntry } from './lecture.tsx';
+import { LectureStage, type LectureStageHandle, type LectureWatch, type StageMark, type WatchEntry } from './lecture.tsx';
 import type { CanvasStageHandle } from './canvas.tsx';
 import '@excalidraw/excalidraw/dist/prod/index.css';
 import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
@@ -64,7 +64,6 @@ function App(): JSX.Element {
   }, []);
   const onMarks = useCallback((marks: StageMark[]) => post({ type: 'marks', marks }), []);
   const onWatch = useCallback((e: WatchEntry) => post({ type: 'watch', ...e }), []);
-  const onSvg = useCallback((markup: string, dx: number, dy: number) => post({ type: 'svg', markup, dx, dy }), []);
 
   if (!card) return <div className="stage-wait" />;
   // 板书上的小课堂卡(老师放课里的一段):props 里有下发时补的起止
@@ -72,8 +71,7 @@ function App(): JSX.Element {
     const range = { start: card.props.start, end: card.props.end };
     return <LectureStage ref={lecture} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={[]} range={range} autoplay={card.autoplay} video={card.props.video === true} onPhase={onLecturePhase} onMarks={noop} onFinished={noop} onClose={noop} onError={onError} />;
   }
-  if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage ref={lecture} follow={card.props.follow === true} onLog={onWatch} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} video={card.props.video === true} onMarks={onMarks} onSvg={onSvg} onFinished={onLectureDone} onClose={onLectureClose} onError={onError} />;
-  if (card.kind === 'lecture-svg' && card.bundleUrl) return <LectureSvg bundleUrl={card.bundleUrl} onSvg={onSvg} onError={onError} />;
+  if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage ref={lecture} follow={card.props.follow === true} onLog={onWatch} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} video={card.props.video === true} onMarks={onMarks} onFinished={onLectureDone} onClose={onLectureClose} onError={onError} />;
   if (card.kind === 'scene' && card.bundleUrl) return <SceneStage ref={scene} bundleUrl={card.bundleUrl} autoplay={card.autoplay} onPhase={onPhase} onError={onError} />;
   if (card.kind === 'canvas') {
     const st = (card.state ?? {}) as { ink?: Record<string, unknown>[] };
@@ -86,14 +84,6 @@ function App(): JSX.Element {
     );
   }
   return <div className="stage-wait">{String(card.props.title ?? card.props.text ?? '')}</div>;
-}
-
-/** 看不见的舞台:只装小课堂的 SVG 发给页面(页面画圈的卡的缩略图;刷新过、家长端都靠它) */
-function LectureSvg({ bundleUrl, onSvg, onError }: { bundleUrl: string; onSvg(markup: string, dx: number, dy: number): void; onError(message: string): void }): JSX.Element {
-  useEffect(() => {
-    buildLecture(bundleUrl).then((b) => onSvg(b.svg.outerHTML, b.dx, b.dy), (e: unknown) => onError(e instanceof Error ? e.message : String(e)));
-  }, [bundleUrl, onSvg, onError]);
-  return <div className="stage-wait" />;
 }
 
 createRoot(document.getElementById('root')!).render(<App />);

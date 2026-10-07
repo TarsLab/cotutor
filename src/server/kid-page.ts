@@ -106,7 +106,6 @@ const PAGE = `<!doctype html>
   .c-mark .mk-tx { max-width:460px; font-size:14px; line-height:1.6; color:var(--ink); }
   .lc-still { width:100%; height:100%; }
   .lc-still img { width:100%; height:100%; display:block; object-fit:contain; }
-  .lc-svgf { position:fixed; left:-10000px; top:0; width:800px; height:600px; border:0; visibility:hidden; pointer-events:none; }
   #rest { display:none; text-align:center; color:var(--dim); font-size:16px; padding:12px 0; }
   /* 给老师换样子(figshot):不是首页发布的卡,是 cotutor.json 配了 figshot 就有的固定入口;figshot 没开着就不出现 */
   .c.c-figshot { flex-direction:row; align-items:center; gap:16px; text-decoration:none; color:var(--ink); background:#fff3e8; border-color:var(--accent); }
@@ -1316,58 +1315,13 @@ __REEL_JS__
   /** 「分:秒」(同 src/lib/lecture.ts 的 clockLabel) */
   const lcClock = (ms) => { const t = Math.max(0, Math.floor(ms / 1000)); const hh = Math.floor(t / 3600), mm = Math.floor((t % 3600) / 60), ss = String(t % 60).padStart(2, '0'); return hh ? hh + ':' + String(mm).padStart(2, '0') + ':' + ss : mm + ':' + ss; };
   /** 课包的 SVG(画圈的卡):播放器装好时顺手发来;没有(刷新过、家长端)就装一个看不见的舞台(kind lecture-svg)要。课包 → Promise<{markup, dx, dy} | null> */
-  const lcSvgs = new Map();
-  const lcSvgSlot = (bundle) => { let x = lcSvgs.get(bundle); if (!x) { let done = null; const p = new Promise((r) => { done = r; }); x = { p, done, asked: false }; lcSvgs.set(bundle, x); } return x; };
-  const lcSvg = (bundle) => {
-    const x = lcSvgSlot(bundle);
-    if (!x.asked) {
-      x.asked = true;
-      const f = h('iframe', { class: 'lc-svgf', title: '', 'aria-hidden': 'true', tabindex: '-1' });
-      const onMsg = (e) => {
-        const m = e.data;
-        if (!m || m.source !== STAGE_SOURCE || e.source !== f.contentWindow) return;
-        if (m.type === 'ready') f.contentWindow.postMessage({ source: STAGE_SOURCE, type: 'card', id: 'lecture-svg', kind: 'lecture-svg', props: {}, state: null, bundleUrl: lcBundleUrl(bundle) }, '*');
-        else if (m.type === 'svg' || m.type === 'error') { window.removeEventListener('message', onMsg); f.remove(); if (m.type === 'svg') x.done(m); else { lcSvgs.delete(bundle); x.done(null); } }
-      };
-      window.addEventListener('message', onMsg);
-      f.src = stageUrl('lecture-svg');
-      document.body.append(f);
-    }
-    return x.p;
-  };
-  let lcSeq = 0;
-  /**
-   * 课包那一刻的画面(圈的卡、小课堂卡的缩略图):烤过的课包由服务端现画(frame.svg,SVG 时刻 + 圈),一张 <img>;
-   * 没烤过的老课包 404,退回克隆播放器的 SVG(id 加前缀,一页多份不串)、停在 SVG 的那一刻、叠上圈(课包坐标 + 平移)
-   */
+  /** 课包那一刻的画面(圈的卡、小课堂卡的缩略图):服务端用烤好的画面现画(frame.svg,SVG 时刻 + 圈;没烤过的服务端先烤),一张 <img> */
   const lcStill = (bundle, svgMs, path, cls) => {
     const box = h('div', { class: cls });
     const ring = path && path.length ? '&ring=' + encodeURIComponent(path.map((p) => Math.round(p[0]) + ',' + Math.round(p[1])).join(';')) : '';
     const img = h('img', { class: 'mk-svg', alt: '', src: lcBundleUrl(bundle) + 'frame.svg?svg=' + (Math.round((svgMs || 0) * 10) / 10) + ring });
-    img.addEventListener('error', () => lcStillClone(box, bundle, svgMs, path), { once: true });
     box.append(img);
     return box;
-  };
-  const lcStillClone = (box, bundle, svgMs, path) => {
-    lcSvg(bundle).then((v) => {
-      if (!v) return;
-      const pre = 'mk' + (++lcSeq) + '-';
-      const tpl = document.createElement('div');
-      tpl.innerHTML = v.markup;
-      const svg = tpl.querySelector('svg'); if (!svg) return;
-      svg.removeAttribute('width'); svg.removeAttribute('height'); svg.setAttribute('class', 'mk-svg'); svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-      svg.querySelectorAll('[id]').forEach((el) => { el.id = pre + el.id; });
-      svg.querySelectorAll('*').forEach((el) => { for (const a of [...el.attributes]) { if ((a.localName === 'href') && a.value.startsWith('#')) a.value = '#' + pre + a.value.slice(1); else if (a.value.includes('url(#')) a.value = a.value.split('url(#').join('url(#' + pre); } });
-      if (path && path.length) {
-        const ring = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        ring.setAttribute('d', path.map((p, i) => (i ? 'L' : 'M') + (p[0] + v.dx) + ' ' + (p[1] + v.dy)).join(' '));
-        for (const [k, val] of [['fill', 'none'], ['stroke', '#2f6fd6'], ['stroke-width', '3'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['vector-effect', 'non-scaling-stroke']]) ring.setAttribute(k, val);
-        svg.append(ring);
-      }
-      box.replaceChildren(svg);
-      const still = () => { try { svg.pauseAnimations(); svg.setCurrentTime(svgMs / 1000); } catch {} };
-      still(); requestAnimationFrame(still);
-    });
   };
   /** 圈的卡的缩略图:视频的是截下来的那张(还没发的是 data URL,发了是 captures/ 路径);课包的现画 */
   /** 视频那一段末尾的一帧(小课堂卡的缩略图):<video> 停在 end 前一点,不出声 */
@@ -1419,7 +1373,6 @@ __REEL_JS__
     const m = e.data;
     if (!m || m.source !== STAGE_SOURCE || e.source !== lcFrame.contentWindow || !lcShowing) return;
     if (m.type === 'ready') lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}), ...(lcShowing.follow ? { follow: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
-    else if (m.type === 'svg') { const x = lcSvgSlot(lcShowing.bundle); x.asked = true; x.done(m); }
     else if (m.type === 'marks') { if (lcMine()) S.lecture.marks = m.marks; }
     // 看的过程(录像用):孩子开口时一起带上(拍板 11:没开口之前哪里都不记)
     else if (m.type === 'watch') { if (lcMine() && S.lecture.log.length < 500) S.lecture.log.push({ at: m.at, pos: m.pos, play: m.play }); }

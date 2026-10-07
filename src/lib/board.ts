@@ -20,9 +20,9 @@ export interface ParseBoardOptions {
 }
 
 /**
- * 排版修饰词(《备课设计.md》§10.2):写在围栏标签里种类后面,哪种卡都认,解析器先摘掉再按种类解析——
- * `same` 和上一张并排(没写 = 孩子端按卡的宽度排,kid-board.ts 的 rowsFor)、`tint=<底色槽>`、`look=<字形槽>`、`emoji=<一个>`。槽名对不对主题由课文件的 check 查(解析器不认识主题)。
- * 老师也写得出来:cotutor-board 技能不教,写了就当已定(拍板 27)
+ * 排版修饰词(《工作流程.md》§二「排版」):写在围栏标签里种类后面,哪种卡都认,解析器先摘掉再按种类解析——
+ * `same` 和上一张并排(没写 = 孩子端按卡的宽度排,kid-board.ts 的 rowsFor)、`tint=<底色槽>`、`look=<字形槽>`、`emoji=<一个>`。槽名没人对着主题查(解析器不认识主题),对不上的 CSS 落回缺省。
+ * 老师也写得出来:cotutor-board 技能不教,写了就当已定
  */
 export interface CardMods {
   same?: true;
@@ -205,7 +205,7 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
     const plain = plainLine(r.text);
     return { text: plain, audio: null, marks, ask: isQuestion(plain), anchor: r.anchor, cues: r.cues };
   });
-  // 排版(《备课设计.md》§10.2):有卡写了 same 才排行(明写的并排,其余孩子端按宽度排);接不上(上一行满了、有独占一行的卡)就另起一行并提醒。提问卡(下面补的)不在行里,rowsFor 认前缀
+  // 排版:有卡写了 same 才排行(明写的并排,其余孩子端按宽度排);接不上(上一行满了、有独占一行的卡)就另起一行并提醒。提问卡(下面补的)不在行里,rowsFor 认前缀
   let layout: BoardSection['layout'];
   if (mods.some((m) => m.same)) {
     const rows: number[][] = [];

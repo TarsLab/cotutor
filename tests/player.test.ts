@@ -113,7 +113,7 @@ for (const r of rows) {
   check(`仲裁表:${r.name}`, r.want(out.model, out.effects), `${JSON.stringify(out.model)} | ${kinds(out.effects)}`);
 }
 
-// ---- 第一遍念的整节:念到哪露到哪(shownCards,《备课设计.md》拍板 34)----
+// ---- 第一遍念的整节:念到哪露到哪(shownCards,《工作流程.md》§一)----
 {
   const heading: BoardCard = { kind: 'text', props: { title: '拼' } };
   // 卡 0 标题行没讲稿;卡 1 两句;第三句锚在卡 1、标注落在卡 2;卡 3 是节尾补的提问卡(没讲稿)

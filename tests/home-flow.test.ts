@@ -218,7 +218,7 @@ for: 2026-09-18
   const c2 = await run(['home', 'check', '--published']);
   check('cotutor home check --published:没有要改的', c2.code === 0 && !c2.out.includes('要改'), c2.out);
 
-  // ---- 家长在孩子端试、用完删(《备课设计.md》删掉之后,2026-10-05):话题照孩子的算,删的时候它写进记忆、日记的一起撤 ----
+  // ---- 家长在孩子端试、用完删(备课删掉之后,2026-10-05):话题照孩子的算,删的时候它写进记忆、日记的一起撤 ----
   {
     const { existsSync: exists } = await import('node:fs');
     const convDir = join(root, 'conversations', 'math-tutor');

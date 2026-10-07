@@ -32,12 +32,11 @@ import { BusyError, Runner } from './runner.ts';
 import { sendFile } from './send-file.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets, type Heard, type RecordProps } from '../cards/index.ts';
-import { BUNDLE_ID_RE } from '../cards/scene.ts';
+import { BUNDLE_ID_RE } from '../cards/kind.ts';
 import { kouboYuanOfDay, readHeard } from './koubo.ts';
 import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { themeFiles } from './theme.ts';
-import { enrichScenes } from './scene-props.ts';
 import { enrichLectures, inspectLecture, bakeSectionSoon, ensureBaked, lectureFrameSvg, parseRing, type IncomingMark } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
@@ -207,9 +206,8 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
     const m = messages.find((x) => x.job === active!.job);
     if (m) m.section = stripSecrets(partial);
   }
-  // 场景卡:课包在不在、题面、步数、缩略图,每次现读(课包落地卡就变成可播)
-  const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
-  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichLectures(ctx.ws, await enrichScenes(sceneDirs, m.section)); }
+  // 小课堂卡:课读不读得出、那一段的起止,每次现读
+  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichLectures(ctx.ws, m.section); }
   const remaining = Math.max(0, policy.dailyMessages - kidMessageCount(index));
   return { tutor, date, messages, remaining, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
 }
@@ -233,8 +231,7 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
     const m = messages.find((x) => x.job === active!.job);
     if (m) m.section = partial;
   }
-  const sceneDirs = { bundles: ctx.ws.dirs.bundles, snaps: ctx.ws.dirs.snaps, thumbBase: 'snaps' };
-  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichLectures(ctx.ws, await enrichScenes(sceneDirs, m.section)); }
+  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichLectures(ctx.ws, m.section); }
   // 录音卡:家长端旁注要评测全量(档、逐字分、花费),从录音旁边的 heard.json 读;孩子端不走这里。
   // 挂在新的卡对象上:索引有进程内缓存,改原对象判就漏到孩子端了
   for (const m of messages) {

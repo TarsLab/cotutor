@@ -88,13 +88,13 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const schemaThere = await exists(join(root, '.cotutor', 'cotutor.schema.json'));
   await writeSchemaFile(root);
   steps.push({ item: '.cotutor/cotutor.schema.json', action: schemaThere ? 'exists' : 'created', note: schemaThere ? '已按本包刷新(机器文件)' : 'cotutor.json 的 JSON Schema,编辑器补全用' });
-  // 出厂 skill(机器件 cotutor-board + scene-maker 的四个领域 skill)与 drawtell 壳脚本
+  // 出厂 skill(机器件 cotutor-board 等 + drawtell 的四个领域 skill,家长做课包用)与 drawtell 壳脚本
   steps.push(...(await installSkills(root)));
   // 出厂主题(孩子端板书的样子):拷进 themes/default/,是家长的
   steps.push(...(await installThemes(root)));
   const shimThere = await exists(join(root, TOOL_SHIM));
   const shim = await writeToolShim(root);
-  steps.push({ item: TOOL_SHIM, action: shimThere ? 'exists' : 'created', note: shim.available ? (shimThere ? '已按本包刷新(机器文件)' : 'drawtell CLI 的壳,scene-maker 用 ../../.cotutor/drawtell 跑它') : 'node_modules 里没有 drawtell,壳只会报错' });
+  steps.push({ item: TOOL_SHIM, action: shimThere ? 'exists' : 'created', note: shim.available ? (shimThere ? '已按本包刷新(机器文件)' : 'drawtell CLI 的壳,家长做课包用它,和服务端烤画面是同一版 drawtell') : 'node_modules 里没有 drawtell,壳只会报错' });
   const kShimThere = await exists(join(root, KOUBO_SHIM));
   const kShim = await writeKouboShim(root);
   steps.push({ item: KOUBO_SHIM, action: kShimThere ? 'exists' : 'created', note: kShim.available ? (kShimThere ? '已按本包刷新(机器文件)' : 'koubo CLI 的壳,口播老师与录音卡的评测用它') : 'node_modules 里没有 koubo,壳只会报错' });

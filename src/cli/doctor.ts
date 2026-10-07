@@ -326,7 +326,7 @@ export async function doctorWorkspace(
       const home = join(ws.dirs.agents, name);
       const there = (await statOrNull(home))?.isDirectory() ?? false;
       push({ name: `tutor.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建' });
-      // 音色:一老师一音色走 API 是正路(《工作流程.md》§四);没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师(scene-maker)不对孩子说话,不用音色
+      // 音色:一老师一音色走 API 是正路(《工作流程.md》§四);没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师不对孩子说话,不用音色
       const tc = ws.config.tutors[name];
       if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),孩子端用浏览器合成声——只适合测试`, fix: '家长端「音色」页能听着挑(挑中直接写进去);终端里 voxtell voices --grep <关键词> 挑一个、voxtell preview <voice> 试听,填进 voice' });
       // 头像是图片路径时(figshot 写的 avatars/<name>.png)查文件在不在、在不在根以内;emoji 不查
@@ -339,14 +339,14 @@ export async function doctorWorkspace(
     }
 
     {
-      // 舞台包与 drawtell:场景卡 / 画板卡要它们;没有只是重卡打不开,轻卡与对话照常
+      // 舞台包与 drawtell:小课堂 / 画板卡要它们;没有只是重卡打不开,轻卡与对话照常
       const { stageBuilt } = await import('../server/stage.ts');
       const built = stageBuilt();
-      push({ name: 'stage.bundle', ok: built, required: false, detail: built ? 'dist/stage/ 在(舞台包:场景卡与画板卡的播放器)' : 'dist/stage/ 不在,场景卡与画板卡的舞台打不开(轻卡照常)', fix: built ? undefined : '仓库根 pnpm run build:stage(npm 装的包自带)' });
+      push({ name: 'stage.bundle', ok: built, required: false, detail: built ? 'dist/stage/ 在(舞台包:小课堂与画板卡的舞台)' : 'dist/stage/ 不在,小课堂与画板卡的舞台打不开(轻卡照常)', fix: built ? undefined : '仓库根 pnpm run build:stage(npm 装的包自带)' });
       const { TOOL_SHIM, drawtellBin, skillStatuses } = await import('./skills.ts');
       const dt = drawtellBin();
       const shim = (await statOrNull(join(root, TOOL_SHIM)))?.isFile() ?? false;
-      push({ name: 'drawtell', ok: dt !== null && shim, required: false, detail: !dt ? 'node_modules 里没有 drawtell,场景作业跑不了' : shim ? `${TOOL_SHIM} 在,指向本包的 drawtell(scene-maker 用它 check / build / dub / snap)` : `${TOOL_SHIM} 不在,scene-maker 找不到 drawtell`, fix: !dt ? '仓库根 pnpm install' : shim ? undefined : 'cotutor init 或 cotutor upgrade 生成' });
+      push({ name: 'drawtell', ok: dt !== null && shim, required: false, detail: !dt ? 'node_modules 里没有 drawtell,服务端烤不了课包的画面' : shim ? `${TOOL_SHIM} 在,指向本包的 drawtell(家长做课包用它 build / dub / bake)` : `${TOOL_SHIM} 不在,家长做课包只能用全局的 drawtell(版本可能和服务端对不上)`, fix: !dt ? '仓库根 pnpm install' : shim ? undefined : 'cotutor init 或 cotutor upgrade 生成' });
       // 口播老师(《口播老师设计.md》§8):开着才查——壳与 koubo 包在不在,再把 koubo doctor 的各项并进来(凭据、cloud 政策、ffmpeg;--live 真评一句)
       {
         const { kouboTutorOn } = await import('./koubo-setup.ts');

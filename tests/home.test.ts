@@ -36,7 +36,7 @@ const DRAFT = [
   '又一张',
   '```',
   '',
-  '```tutor scene-maker',
+  '```tutor helper',
   '画一画',
   '```',
   '',
@@ -49,7 +49,7 @@ const tutors: Record<string, HomeTutorInfo> = {
   'math-tutor': { display: '数学老师', enabled: true, hidden: false },
   'english-tutor': { display: '英语老师', enabled: true, hidden: false },
   'off-tutor': { display: '关着的', enabled: false, hidden: false },
-  'scene-maker': { display: '画图老师', enabled: true, hidden: true },
+  'helper': { display: '小帮手', enabled: true, hidden: true },
 };
 
 {

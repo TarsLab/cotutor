@@ -146,8 +146,8 @@ for: 2026-09-18
   // ---- 按钮发来的 via ----
   const bad = await kidSend('chinese-tutor', { text: '', via: { home: '2026-09-17-2130', button: 0 } });
   const bad2 = await kidSend('chinese-tutor', { text: '', via: { home: h1.home, button: 7 } });
-  const bad3 = await kidSend('scene-maker', { text: '', via: { home: h1.home, button: 0 } });
-  check('via 对不上(旧的那份、越界、藏着的老师)→ 400 / 404', bad.status === 400 && bad2.status === 400 && bad3.status === 404, JSON.stringify([bad.json, bad2.json]));
+  const bad3 = await kidSend('nobody-tutor', { text: '', via: { home: h1.home, button: 0 } });
+  check('via 对不上(旧的那份、越界、没有这位老师)→ 400 / 404', bad.status === 400 && bad2.status === 400 && bad3.status === 404, JSON.stringify([bad.json, bad2.json]));
 
   const s0 = await kidSend('chinese-tutor', { text: '', newThread: true, via: { home: h1.home, button: 0 } });
   await wait('chinese-tutor');

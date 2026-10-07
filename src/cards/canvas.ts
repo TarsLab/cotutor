@@ -5,9 +5,8 @@
  * 状态存 ink 元素;describe 给笔数与图的路径,老师 Read 看图(qwen 看不了图就靠笔数)。
  */
 import { z } from 'zod';
-import { bodyLines, type CardKind } from './kind.ts';
+import { BUNDLE_ID_RE, bodyLines, type CardKind } from './kind.ts';
 import { IMAGE_EXT } from './image.ts';
-import { BUNDLE_ID_RE } from './scene.ts';
 
 export const CanvasPropsSchema = z.object({
   /** 底图:课包 id / 行内骨架 / 一张图(相对 workspace 根,如 captures/2026-09-14/1620-1.jpg)/ 没有(空白) */

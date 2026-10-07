@@ -27,7 +27,7 @@ export type GapKind = 'tutor' | 'rename' | 'runtime' | 'flag' | 'policy';
 
 export interface ConfigGap {
   kind: GapKind;
-  /** 点位:tutors.scene-maker / runtimes.claude-scene / runtimes.claude.run */
+  /** 点位:tutors.koubo-tutor / runtimes.qwen / runtimes.claude.run */
   path: string;
   /** 人话:缺的是什么、补上有什么用 */
   detail: string;

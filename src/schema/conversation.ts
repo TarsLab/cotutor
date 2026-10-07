@@ -57,8 +57,6 @@ const MessageObjectSchema = z.object({
   artifacts: z.array(z.string()).default([]),
   /** 跑这条用的运行时名(runtimes 里的键);换运行时时新开会话 */
   runtime: z.string().optional(),
-  /** 这轮板书里的新场景卡起的画图作业(scene-maker 的 job;没起的 job 为 null,原因在 warnings) */
-  scenes: z.array(z.object({ bundle: z.string().min(1), job: z.string().nullable() })).optional(),
   /** 不 ok 时的原因(subtype / terminal_reason),家长视图红条 */
   error: z.string().nullable().optional(),
   /** 最终文本解析出的板书节(卡 + 讲稿;孩子端下发前剥答案);null = 这轮没有 */

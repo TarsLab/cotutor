@@ -17,7 +17,7 @@ export const ArtifactEventSchema = z.object({
   status: z.enum(ARTIFACT_STATUS).optional(),
   path: z.string().optional(),
   source: z.object({ conversation: z.string().min(1), job: z.string().optional() }).optional(),
-  /** 做这个产物花的钱与时长(应用在 scene-maker 那轮收尾时追加,老师自己不写) */
+  /** 做这个产物花的钱与时长(做它的那一方记;老 workspace 里有 scene-maker 那轮收尾时应用追加的) */
   costUsd: z.number().nonnegative().optional(),
   durationMs: z.number().int().nonnegative().optional(),
 });

@@ -1,6 +1,6 @@
 ---
 name: cotutor-board
-description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / word / scene / lecture / canvas / record / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
+description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / word / lecture / canvas / record / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
 disable-model-invocation: true
 ---
 
@@ -237,23 +237,6 @@ ice cr-ea-m
 ```
 ```word
 like
-```
-
-### scene — 讲解动画(课包)
-
-一段逐笔画出来的讲解:图形当场增画、填色、标号,自带讲稿与声音。课包由画图老师(scene-maker)做,几分钟、几毛钱一个;做好之前卡上写「图还在路上」,做好了卡自己变成可播。
-
-- 第一行是课包 id:小写字母、数字、连字符,形如 `2026-09-10-guilv`。
-- 第二行可以写一句给孩子的话。
-- 新课包再写一行 `题面:`(完整题目)和一行 `讲法:`(讲法要点、孩子的口径)。画图老师主要看这两行,孩子看不到。
-- 要再放一次做好的课包,只写 id,不写这两行。
-- 讲稿里写 `[[play]]` 锚到它:念到那句,就把动画铺满播,播完接着念下一句。
-
-```scene
-2026-09-10-guilv
-我去把这道题画出来,画好了我们一起看。
-题面:找规律填数 75、70、65、__、55
-讲法:每次少 5;先圈出相邻两个数,再一格一格往后推
 ```
 
 ### lecture — 放课里的一段

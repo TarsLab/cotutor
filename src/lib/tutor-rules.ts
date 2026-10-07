@@ -15,7 +15,7 @@ export function tutorRulesBody(skillMd: string): string {
   return stripHumanNotes(parseAgentFile(skillMd).body);
 }
 
-/** 谁拿守则:有脸的老师(键以 -tutor 结尾);scene-maker 这类工具人的工作流写在自己文件里 */
+/** 谁拿守则:有脸的老师(键以 -tutor 结尾);工具人的工作流写在自己文件里 */
 export function takesTutorRules(agent: string): boolean {
   return agent.endsWith('-tutor');
 }

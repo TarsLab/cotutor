@@ -14,19 +14,17 @@ import { image } from './image.ts';
 import type { CardKind, CardPlace } from './kind.ts';
 import { read } from './read.ts';
 import { record } from './record.ts';
-import { scene } from './scene.ts';
 import { lecture } from './lecture.ts';
 import { text } from './text.ts';
 import { tutor } from './tutor.ts';
 
-export type { CardKind, CardPlace } from './kind.ts';
+export { BUNDLE_ID_RE, type CardKind, type CardPlace } from './kind.ts';
 export { text, TEXT_STYLES, type TextProps, type TextStyle } from './text.ts';
 export { read, type ReadProps } from './read.ts';
 export { choice, type ChoiceProps } from './choice.ts';
 export { fill, type FillProps } from './fill.ts';
 export { code, type CodeProps } from './code.ts';
 export { image, IMAGE_EXT, type ImageProps } from './image.ts';
-export { scene, BUNDLE_ID_RE, type SceneProps, type SceneState } from './scene.ts';
 export { lecture, type LectureProps, type LectureState } from './lecture.ts';
 export { canvas, type CanvasProps, type CanvasState } from './canvas.ts';
 export { record, HeardSchema, RECORD_AUDIO_RE, RECORD_MAX_SECONDS, heardTail, type Heard, type RecordExtra, type RecordProps, type RecordState } from './record.ts';
@@ -34,9 +32,9 @@ export { tianzige, HAN, TIANZIGE_MAX, type TianzigeProps } from './tianzige.ts';
 export { word, wordChunks, WORD_MAX, WORD_MAX_WORDS, WORD_RE, type WordProps } from './word.ts';
 export { tutor, BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, type TutorButton, type TutorProps } from './tutor.ts';
 
-/** 全部种类:先板书的十二种(注册表顺序即技能里的顺序),再首页专属的 */
+/** 全部种类:先板书的十一种(注册表顺序即技能里的顺序),再首页专属的 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, word, scene, lecture, canvas, record, code, tutor];
+export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, word, lecture, canvas, record, code, tutor];
 
 export function cardKind(name: string): CardKind | undefined {
   return CARD_KINDS.find((k) => k.name === name) as CardKind | undefined;
@@ -100,6 +98,8 @@ export function stripSecrets(section: BoardSection): BoardSection {
   return {
     ...section,
     cards: section.cards.map((c) => {
+      // 场景卡 2026-10-07 删了:老对话里存下的退成一段字,只留老师那句;题面 / 讲法(写给画图老师的)与课包 id 不下发
+      if (c.kind === 'scene') return { kind: 'text', props: { text: typeof c.props.text === 'string' ? c.props.text : '' } };
       const k = cardKind(c.kind);
       return k?.strip ? { ...c, props: k.strip(c.props) } : c;
     }),

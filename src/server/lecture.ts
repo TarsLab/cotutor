@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { readFile, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { BUNDLE_ID_RE } from '../cards/scene.ts';
+import { BUNDLE_ID_RE } from '../cards/kind.ts';
 import { mp4DurationMs } from './mp4.ts';
 import { LECTURE_FILE, LECTURE_VIDEO, clockLabel, describeMark, lectureAt, lectureClock, lectureLines, lectureRange, parseLectureDoc, videoClock, type LectureClock, type LectureMark, type LecturePicture, type LectureSkeleton, type LectureStep } from '../lib/lecture.ts';
 import { bakeMatches, elementsAtSvgTime, renderFrameSvg } from 'drawtell/core';
@@ -171,7 +171,7 @@ const BAKE_TIMEOUT_MS = 120_000;
 const tried = new Set<string>();
 
 /**
- * 孩子端要用到的课包(场景卡、小课堂、lecture 卡)没烤过:后台烤一次,不等(下一次下发就是烤好的)。
+ * 孩子端要用到的课包(首页的小课堂、lecture 卡)没烤过:后台烤一次,不等(下一次下发就是烤好的)。
  * 一个服务进程里每份课包只看一次;烤不了照样放(孩子端在浏览器里现烤)。
  */
 export function bakeSoon(bundlesDir: string, id: string): void {
@@ -184,9 +184,9 @@ export function bakeSoon(bundlesDir: string, id: string): void {
   })().catch(() => {});
 }
 
-/** 一节板书里用到的课包(场景卡、lecture 卡),没烤过的后台烤 */
+/** 一节板书里 lecture 卡用到的课包,没烤过的后台烤 */
 export function bakeSectionSoon(bundlesDir: string, section: BoardSection): void {
-  for (const c of section.cards) if ((c.kind === 'scene' || c.kind === 'lecture') && typeof c.props.bundle === 'string' && !(c.props as { video?: unknown }).video) bakeSoon(bundlesDir, c.props.bundle);
+  for (const c of section.cards) if (c.kind === 'lecture' && typeof c.props.bundle === 'string' && !(c.props as { video?: unknown }).video) bakeSoon(bundlesDir, c.props.bundle);
 }
 
 /**

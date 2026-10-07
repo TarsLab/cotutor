@@ -4,12 +4,12 @@ import { configTemplate, shippedAgents } from '../src/cli/skeleton.ts';
 import { check, done } from './_check.ts';
 
 const agents = await shippedAgents();
-check('本包带 5 位老师(口播老师出厂关着)', agents.length === 5, agents.map((a) => a.name).join(','));
+check('本包带 4 位老师(口播老师出厂关着;画图老师 2026-10-07 删了)', agents.length === 4 && !agents.some((a) => a.name === 'scene-maker'), agents.map((a) => a.name).join(','));
 
 const raw = JSON.parse(configTemplate({ slug: 'ming', name: '小明', port: 5181, tutors: agents }));
 const cfg = CotutorConfigSchema.parse(raw);
 check('模板可解析', cfg.kid.slug === 'ming' && cfg.title === '小明的老师们' && cfg.server.port === 5181);
-check('老师表齐', Object.keys(cfg.tutors).length === 5 && cfg.tutors['scene-maker'].hidden === true && cfg.tutors['scene-maker'].runtime === 'claude-scene');
+check('老师表齐;没有画图老师与它的运行时', Object.keys(cfg.tutors).length === 4 && !('scene-maker' in cfg.tutors) && !('claude-scene' in cfg.runtimes) && !('qwen-scene' in cfg.runtimes));
 check('enabled 缺省 true;口播老师出厂关着(要 koubo)', cfg.tutors['math-tutor'].enabled === true && Object.entries(cfg.tutors).every(([k, t]) => t.enabled === (k !== 'koubo-tutor')));
 check('运行时 claude/qwen 都在', 'claude' in cfg.runtimes && 'qwen' in cfg.runtimes && cfg.runtimes.default === 'claude');
 
@@ -23,10 +23,11 @@ const layered = CotutorConfigSchema.parse({
 });
 const p2 = resolvePolicy(layered, 'math-tutor');
 check('政策逐层覆盖', p2.replyMaxChars === 80 && p2.contextPack.recent === 3 && p2.contextPack.planLines === 10 && p2.dailyMessages === 5 && p2.board === 'off');
-check('别的老师不受影响', resolvePolicy(layered, 'scene-maker').board === 'auto' && resolvePolicy(layered, 'scene-maker').replyMaxChars === 80);
+check('别的老师不受影响', resolvePolicy(layered, 'chinese-tutor').board === 'auto' && resolvePolicy(layered, 'chinese-tutor').replyMaxChars === 80);
 
-const kidOnly = listTutors(cfg, { kidOnly: true });
-check('孩子端不见 hidden', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'scene-maker'));
+const withHelper = CotutorConfigSchema.parse({ ...raw, tutors: { ...raw.tutors, helper: { display: '工具人', hidden: true } } });
+const kidOnly = listTutors(withHelper, { kidOnly: true });
+check('孩子端不见 hidden 与关着的', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'helper' || t.name === 'koubo-tutor'));
 check('列表带有效政策', listTutors(cfg)[0].policy.replyMaxChars === 60);
 
 const bad = CotutorConfigSchema.safeParse({ version: 2, kid: { slug: 'Bad Slug' }, tutors: { x: { display: '' } }, runtimes: { default: 'nope' } });
@@ -40,7 +41,7 @@ check('运行时 default 不存在 → 指南', !bad2.success && explainIssues(b
 
 const filled = fillRuntime(cfg.runtimes.claude.resume, { agent: 'math-tutor', prompt: 'hi', session: 's-1', boardFile: '/ws/.claude/skills/cotutor-board/SKILL.md' });
 check('占位填充', filled.includes('math-tutor') && filled.includes('s-1') && filled.includes('hi') && !filled.some((a) => a.includes('{')));
-// 思考深浅(2026-09-20):政策 effort 三层覆盖,填进模板的 {effort};模板里没有 {effort} 的运行时(qwen、claude-scene)不受影响
+// 思考深浅(2026-09-20):政策 effort 三层覆盖,填进模板的 {effort};模板里没有 {effort} 的运行时(qwen)不受影响
 const effortOf = (argv: string[]): string | undefined => argv[argv.indexOf('--effort') + 1];
 check('effort:出厂缺省 low,数学老师 medium;policyDefaults 与老师条目逐层盖', resolvePolicy(cfg, 'chinese-tutor').effort === 'low' && resolvePolicy(cfg, 'math-tutor').effort === 'medium' && resolvePolicy(CotutorConfigSchema.parse({ ...raw, policyDefaults: { effort: 'high' } }), 'chinese-tutor').effort === 'high' && resolvePolicy(CotutorConfigSchema.parse({ ...raw, policyDefaults: { effort: 'high' } }), 'math-tutor').effort === 'medium');
 check('effort:不认的档位过不了契约', !CotutorConfigSchema.safeParse({ ...raw, policyDefaults: { effort: 'max' } }).success);
@@ -53,12 +54,8 @@ check('没给 systemBody / boardFile 就原样留着(doctor 会报)', q.includes
   check('board 旋钮缺省 auto,老师条目可覆盖成 off', POLICY_DEFAULTS.board === 'auto' && resolvePolicy({ policyDefaults: {}, tutors: { t: { display: 't', enabled: true, policy: { board: 'off' } } } } as never, 't').board === 'off');
 }
 {
-  const { resolvePolicy } = await import('../src/schema/index.ts');
-  const { loadWorkspace: _lw } = await import('../src/cli/workspace.ts');
-  void _lw;
-  const base = { version: 1 as const, title: 'x', kid: { slug: 'x' }, server: { port: 1 }, paths: {}, policyDefaults: { scenes: { dailyMax: 3 } }, tutors: { 'scene-maker': { display: 'a', enabled: true, hidden: true, policy: { scenes: { dailyMax: 1 } } }, 'math-tutor': { display: 'b', enabled: true, hidden: false } }, runtimes: { default: 'c', c: { run: ['x'], resume: ['x'] } }, tts: { say: ['x'] } };
-  const { CotutorConfigSchema } = await import('../src/schema/index.ts');
-  const cfg2 = CotutorConfigSchema.parse(base);
-  check('scenes.dailyMax:缺省 2,policyDefaults 与老师条目逐层覆盖', resolvePolicy(cfg2, 'math-tutor').scenes.dailyMax === 3 && resolvePolicy(cfg2, 'scene-maker').scenes.dailyMax === 1 && resolvePolicy(CotutorConfigSchema.parse({ ...base, policyDefaults: {} }), 'math-tutor').scenes.dailyMax === 2);
+  // 老 workspace 的 cotutor.json 里还写着 policy.scenes(画图老师 2026-10-07 删了):契约不拦,丢掉不认的键
+  const old = CotutorConfigSchema.safeParse({ ...raw, policyDefaults: { scenes: { dailyMax: 3 } }, tutors: { ...raw.tutors, 'scene-maker': { display: '画图老师', hidden: true, runtime: 'claude', policy: { scenes: { dailyMax: 1 } } } } });
+  check('老配置里的 scenes 不拦,有效政策里没有它', old.success && !('scenes' in resolvePolicy(old.data, 'math-tutor')) && !('scenes' in resolvePolicy(old.data, 'scene-maker')));
 }
 done();

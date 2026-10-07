@@ -40,7 +40,7 @@ for (const d of docs) {
   const syn = boardSyntaxDoc();
   check('语法表从 md 拼:板书每种卡的写法与例子都在、没有 expect 注释、没有「反例」栏', kindsFor('board').every((k) => syn.includes(`### ${k.name} — `)) && syn.includes('- [x] 12 平方厘米') && !syn.includes('<!-- expect') && !syn.includes('## 反例'));
   const css = cardsCss();
-  check('各卡的 css 拼成一段,每种一个标头,选项行与空都在', CARD_KINDS.every((k) => css.includes(`cards/${k.name}/card.css`)) && css.includes('.ch-o {') && css.includes('.bl {') && css.includes('.c-scene .th'));
+  check('各卡的 css 拼成一段,每种一个标头,选项行与空都在', CARD_KINDS.every((k) => css.includes(`cards/${k.name}/card.css`)) && css.includes('.ch-o {') && css.includes('.bl {') && css.includes('.c-lecture .th') && !css.includes('c-scene'));
   const sp = splitSections('# x — y\n\n## 甲\na\n\n## 乙\nb\nc\n');
   check('splitSections:标题行与栏目', sp.headline === 'x — y' && sp.sections['甲'] === 'a' && sp.sections['乙'] === 'b\nc');
 }

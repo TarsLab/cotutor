@@ -30,8 +30,6 @@ export const PolicySchema = z.object({
   tools: z.enum(['off', 'on']).describe('孩子说的话,老师带不带工具:off = 不带,只凭上下文包答,开口快(缺省);on = 带(查教材、读 vault,慢)。带照片的那条、记账,总是带。模板里没有 {tools} 的运行时不受影响'),
   /** 板书开关:auto = 老师判断要不要出卡(缺省);off = 只说话不出卡 */
   board: z.enum(['auto', 'off']).describe('板书:auto = 讲题讲概念时老师出卡(缺省);off = 只说话不出卡'),
-  /** 场景作业(scene-maker 做课包,$3–5 / 10–15 分钟一个):每天最多起几个;配在 scene-maker 身上或 policyDefaults */
-  scenes: z.object({ dailyMax: z.number().int().nonnegative().describe('每天最多起几个场景作业(一个 ≈ 一轮问答的 30 倍费用)') }),
   /**
    * 断流看门狗(2026-09-21):老师进程多久一个字节都不吐(工具在跑时不算)就当 API 流断了,杀掉、resume 同一个会话接着写。
    * claude CLI 自己要等约 180 秒才认断流再重试,9 月 21 日真跑连断两次,「讲个故事」一轮等了 6 分钟,模型真干活不到 10 秒
@@ -51,7 +49,6 @@ export const PolicyPatchSchema = z.object({
   effort: PolicySchema.shape.effort.optional(),
   tools: PolicySchema.shape.tools.optional(),
   board: PolicySchema.shape.board.optional(),
-  scenes: z.object({ dailyMax: z.number().int().nonnegative().optional() }).optional(),
   stall: z.object({ ms: z.number().int().nonnegative().optional(), retries: z.number().int().nonnegative().optional() }).optional(),
 });
 export type PolicyPatch = z.infer<typeof PolicyPatchSchema>;
@@ -64,7 +61,6 @@ export const POLICY_DEFAULTS: Policy = {
   effort: 'low',
   tools: 'off',
   board: 'auto',
-  scenes: { dailyMax: 2 },
   stall: { ms: 30000, retries: 2 },
 };
 
@@ -80,10 +76,10 @@ export const TutorSchema = z.object({
   /** voxtell 音色 id(2026-09-08 拍板);没有 = 用 voxtell 缺省 */
   voice: z.string().optional().describe('voxtell 音色 id(voxtell voices 可查);不配就不配音,孩子端用浏览器的声'),
   enabled: z.boolean().default(true).describe('开关:false 时两端都不见'),
-  /** 孩子端不露(画图老师这类工具人) */
-  hidden: z.boolean().default(false).describe('孩子端不露(画图老师这类只和系统、家长打交道的)'),
+  /** 孩子端不露(只和系统、家长打交道的工具人) */
+  hidden: z.boolean().default(false).describe('孩子端不露(只和系统、家长打交道的工具人)'),
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
-  /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。scene-maker 这种要更大预算与时限的配一个自己的 */
+  /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。要更大预算与时限的老师配一个自己的 */
   runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——预算、时限不同的老师配自己的'),
 });
 export type Tutor = z.infer<typeof TutorSchema>;
@@ -224,7 +220,7 @@ export type CotutorConfig = z.infer<typeof CotutorConfigSchema>;
 /** 老师的有效政策 = POLICY_DEFAULTS ← policyDefaults ← tutors[name].policy */
 export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
   const layers = [config.policyDefaults, config.tutors[tutor]?.policy ?? {}];
-  const out: Policy = { ...POLICY_DEFAULTS, contextPack: { ...POLICY_DEFAULTS.contextPack }, scenes: { ...POLICY_DEFAULTS.scenes }, stall: { ...POLICY_DEFAULTS.stall } };
+  const out: Policy = { ...POLICY_DEFAULTS, contextPack: { ...POLICY_DEFAULTS.contextPack }, stall: { ...POLICY_DEFAULTS.stall } };
   for (const p of layers) {
     if (p.replyMaxChars !== undefined) out.replyMaxChars = p.replyMaxChars;
     if (p.dailyMessages !== undefined) out.dailyMessages = p.dailyMessages;
@@ -234,7 +230,6 @@ export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
     if (p.effort !== undefined) out.effort = p.effort;
     if (p.tools !== undefined) out.tools = p.tools;
     if (p.board !== undefined) out.board = p.board;
-    if (p.scenes?.dailyMax !== undefined) out.scenes.dailyMax = p.scenes.dailyMax;
     if (p.stall?.ms !== undefined) out.stall.ms = p.stall.ms;
     if (p.stall?.retries !== undefined) out.stall.retries = p.stall.retries;
   }

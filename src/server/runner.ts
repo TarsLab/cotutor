@@ -4,25 +4,21 @@
  * 流式:stdout 经本进程落盘,同时喂 PartialReader 拼当前回复正文 → parseBoard(partial) → 内存里的 partial section
  * (孩子端 pending 条目带着它,卡随围栏闭合逐张出现);讲稿每定稿一句就开始配音,整轮跑完只等没配完的;
  * 点读段等资产在索引写好之后后台接着配(同一条队列),孩子端点到还没好的段用浏览器的声。
- * 板书里有新课包的场景卡就自动起 scene-maker 的一轮(from: system,作业单 = 谁放的卡、课包 id、题面与讲法、讲稿、孩子的话、照片、voice):
- * scene-maker 不在 / 关着 / 忙 / 到了 dailyMax 都不起,原因进这条消息的 warnings;起了记 scenes。它用自己的 runtime(cotutor.json tutors.scene-maker.runtime)。
  * 一老师同时只跑一条(老师还在回上一条就 409),跨天自动新开(索引按本地日期分文件,新文件没 session 就不带 --resume)。
  * 话题(2026-09-11):一天可多个,每个话题自己的会话(index.sessions[thread]);newThread / 系统消息 / 今天第一条开新话题(不 resume、不带旧卡),
  * 指定 thread 接着今天的旧话题(resume 它的会话),缺省接当前话题。
- * 埋点(2026-09-11):每轮记 timing(进程起的时刻、首卡、进程退出、配音收尾,毫秒),家长视图每轮一行;scene-maker 那轮收尾
- * 把课包的费用与时长追加进 artifacts.jsonl(老师自己只记 ready / retired 那行;它忘了记就由应用补一整行),消息的 artifacts 记课包 id。
+ * 埋点(2026-09-11):每轮记 timing(进程起的时刻、首卡、进程退出、配音收尾,毫秒),家长视图每轮一行。
  * 进程 cwd 是老师目录 agents/<name>/(《agent层设计.md》拍板)。
  */
 import { spawn } from 'node:child_process';
 import { lecturePack, readLecture, storedMarks, type IncomingMark } from './lecture.ts';
-import { closeSync, createWriteStream, existsSync, openSync, writeSync } from 'node:fs';
+import { closeSync, createWriteStream, openSync, writeSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
 import { addMessage, applyRun, cardId, lastJobOf, changedCards, conversationFiles, jobId, localDate, localMinute, sessionFor, threads } from '../lib/conversation.ts';
-import { mergeArtifacts, parseArtifactEvents } from '../lib/ledger.ts';
 import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
-import { BUNDLE_ID_RE, cardAssets, cardLabel, describeCard, type RecordProps } from '../cards/index.ts';
+import { cardAssets, cardLabel, describeCard, type RecordProps } from '../cards/index.ts';
 import { KouboQueue } from './koubo.ts';
 import { withProxy } from '../lib/proxy.ts';
 import { parseBoard } from '../lib/board.ts';
@@ -35,8 +31,7 @@ import { getRuntime, planRun, runtimeUses, stallPrompt, type RunPlan, boardPrelo
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, TUTOR_TOOLS, VAULT_PACK_ROLES, resolvePolicy, type ArtifactEvent, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
-import type { Transcript } from '../lib/transcript.ts';
+import { MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, TUTOR_TOOLS, VAULT_PACK_ROLES, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { updateVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
 import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPrompt, type MemoryLine } from '../lib/vault-notes.ts';
@@ -269,9 +264,6 @@ export function vaultPack(paths: Workspace['paths']): NonNullable<ContextPack['v
   return out;
 }
 
-/** 画图老师:场景卡的课包由它做 */
-const SCENE_MAKER = 'scene-maker';
-
 export class Runner {
   private readonly active = new Map<string, Active>();
   /** 还在后台跑的资产生成(测试与关服前 flush) */
@@ -451,7 +443,7 @@ export class Runner {
     const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent: tutor, prompt: stallPrompt(open), agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: plan.runtime, effort: policy.effort, tools });
     active.done = this.spawn(ws, tutor, date, job, plan, policy, active, resumePlan, spare).finally(() => {
       this.active.delete(tutor);
-      // 孩子 / 家长这轮完了,马上起好下一轮的进程;系统轮(记账、整理记忆、画图作业)之后孩子多半不在,不起
+      // 孩子 / 家长这轮完了,马上起好下一轮的进程;系统轮(记账、整理记忆)之后孩子多半不在,不起
       if (input.from !== 'system' && !input.replayOf) void this.prewarm(tutor).catch(() => {});
     });
     this.active.set(tutor, active);
@@ -545,92 +537,6 @@ export class Runner {
     // 写进去的那段原文记在这轮上:删这个话题时从日记里摘掉(store.deleteThread)
     const messages = index.messages.map((m) => (m.job === job ? { ...m, diaryBlock: block } : m));
     return { index: { ...index, messages, booked: { ...index.booked, [thread]: job } }, file, warnings: [] };
-  }
-
-  /**
-   * 场景卡起画图作业:这节里每张 scene 卡,课包还没有(scenes/ 与 bundles/ 里都没这个 id)就起 scene-maker 的一轮(from: system)。
-   * 已经有了:卡上没写题面 = 老师在放做好的课包,不起;写了题面 = 起名撞了(真跑见过:孩子卡上放了旧课包),改成 <id>-2、-3…,卡上一起改。
-   * scene-maker 不在 / 关着 / 忙 / 今天到了 dailyMax / 这轮是回放,都不起,原因进 warnings。目标老师用自己的 runtime。
-   */
-  private async startScenes(ws: Workspace, from: string, job: string, section: BoardSection, asked: ConversationMessage | undefined): Promise<{ section: BoardSection; scenes: { bundle: string; job: string | null; why?: string }[]; warnings: string[] }> {
-    const warnings: string[] = [];
-    const scenes: { bundle: string; job: string | null; why?: string }[] = [];
-    const taken = (x: string): boolean => existsSync(join(ws.dirs.scenes, `${x}.ts`)) || existsSync(join(ws.dirs.scenes, `${x}.md`)) || existsSync(join(ws.dirs.bundles, x));
-    const cards = [...section.cards];
-    for (let n = 0; n < cards.length; n++) {
-      const c = cards[n];
-      if (c.kind !== 'scene' || typeof c.props.bundle !== 'string') continue;
-      let id = c.props.bundle;
-      const brief = typeof c.props.brief === 'string' ? c.props.brief : '';
-      if (taken(id)) {
-        if (!brief) continue;
-        let k = 2;
-        while (taken(`${id}-${k}`)) k++;
-        warnings.push(`课包 id ${id} 已占用,改成 ${id}-${k}(卡上一起改)`);
-        id = `${id}-${k}`;
-        cards[n] = { ...c, props: { ...c.props, bundle: id } };
-      }
-      const skip = (why: string): void => {
-        scenes.push({ bundle: id, job: null, why });
-        warnings.push(`画图作业 ${id} 没起:${why}`);
-      };
-      const target = ws.config.tutors[SCENE_MAKER];
-      if (asked?.replayOf) { skip('回放不起画图作业'); continue; }
-      if (!target || !target.enabled) { skip(`${SCENE_MAKER} ${target ? '关着' : '不在 cotutor.json 里'}`); continue; }
-      const policy = resolvePolicy(ws.config, SCENE_MAKER);
-      const today = await readIndex(ws, SCENE_MAKER, localDate((this.opts.now ?? (() => new Date()))()));
-      if (today.messages.length >= policy.scenes.dailyMax) { skip(`今天已到上限 ${policy.scenes.dailyMax}(policy scenes.dailyMax)`); continue; }
-      if (!brief) warnings.push(`场景卡 ${id} 没写「题面:」「讲法:」,画图老师只能看讲稿猜`);
-      try {
-        const lines = section.lines.map((l) => l.text);
-        const r = await this.send(SCENE_MAKER, { from: 'system', text: Runner.sceneText(ws, from, job, id, brief, lines, asked?.text ?? ''), ...(asked?.photos?.length ? { photos: asked.photos } : {}) });
-        scenes.push({ bundle: id, job: r.job });
-      } catch (err) {
-        skip(err instanceof Error ? err.message : String(err));
-      }
-    }
-    return { section: { ...section, cards }, scenes, warnings };
-  }
-
-  /** 画图作业单:scene-maker 看到的那条消息(from: system) */
-  static sceneText(ws: Workspace, from: string, job: string, bundle: string, brief: string, lines: readonly string[], kidText: string): string {
-    const t = ws.config.tutors[from];
-    const out = [`场景作业(${t?.display ?? from} ${from} 的 job ${job} 放的场景卡):`, `课包: ${bundle}`];
-    if (brief) out.push(brief);
-    if (lines.length) out.push(`老师这节的讲稿:${lines.join(' / ')}`);
-    if (kidText.trim()) out.push(`孩子刚才说的:${kidText.trim()}`);
-    if (t?.voice) out.push(`voice: ${t.voice}`);
-    return out.join('\n');
-  }
-
-  /** 作业单里的课包 id(「课包: <id>」那行);没有就从收尾那句「课包 x 做好了 / 没做成」取 */
-  static sceneJobId(jobText: string, finalText: string | null): string | null {
-    const line = /^课包[:：]\s*(\S+)\s*$/m.exec(jobText)?.[1];
-    return (line && BUNDLE_ID_RE.test(line) ? line : null) ?? /课包\s+(\S+?)\s*(?:做好了|没做成)/.exec(finalText ?? '')?.[1] ?? null;
-  }
-
-  /**
-   * scene-maker 那轮收尾:往 artifacts.jsonl 追加这个课包的 costUsd / durationMs(一行,同 id 后者为准,老师文件那行不用改)。
-   * 老师忘了记账(账本里没这个 id)就由应用补一整行:bundles/<id>/manifest.json 在 → ready,不在 → retired。
-   */
-  private async settleSceneLedger(ws: Workspace, tutor: string, date: string, job: string, jobText: string, transcript: Transcript, timing: Timing): Promise<{ id: string | null; warnings: string[] }> {
-    const id = Runner.sceneJobId(jobText, transcript.final?.text ?? null);
-    if (!id) return { id: null, warnings: ['作业单没有课包 id,收尾那句也没写「课包 x 做好了」,这轮的费用没记进账本'] };
-    const warnings: string[] = [];
-    const known = mergeArtifacts(parseArtifactEvents(await readFile(ws.files.artifacts, 'utf8').catch(() => '')).rows).artifacts.some((a) => a.id === id);
-    const row: ArtifactEvent = { id, at: new Date().toISOString(), source: { conversation: `${tutor}/${date}`, job }, ...(transcript.final?.costUsd !== undefined ? { costUsd: transcript.final.costUsd } : {}), ...(timing.doneMs !== undefined ? { durationMs: timing.doneMs } : {}) };
-    if (!known) {
-      const ready = existsSync(join(ws.dirs.bundles, id, 'manifest.json'));
-      Object.assign(row, { kind: '课包', by: tutor, status: ready ? 'ready' : 'retired', ...(ready ? { path: `bundles/${id}` } : {}) });
-      warnings.push(`画图老师没往账本记 ${id},应用补了一行(${ready ? 'ready' : 'retired:bundles/' + id + '/manifest.json 不在'})`);
-    }
-    try {
-      await mkdir(ws.dirs.ledger, { recursive: true });
-      await appendFile(ws.files.artifacts, `${JSON.stringify(row)}\n`);
-    } catch (err) {
-      warnings.push(`账本写不进:${err instanceof Error ? err.message : String(err)}`);
-    }
-    return { id, warnings };
   }
 
   private async spawn(ws: Workspace, tutor: string, date: string, job: string, plan: RunPlan, policy: Policy, active: Active, resumePlan: (session: string, open: string) => RunPlan, spare: Spare | null = null): Promise<ConversationIndex> {
@@ -863,19 +769,6 @@ export class Runner {
       const asked = latest.messages.find((m) => m.job === job);
       const r = asked?.replayOf ? { changes: [] as string[], lines: [] as MemoryLine[], warnings: ['回放不写记忆'] } : await this.settleMemory(ws, tutor, date, kidView.memory, asked?.tidy ? null : MEMORY_MAX_PER_TURN);
       if (r.changes.length || r.warnings.length) next = { ...next, messages: next.messages.map((m) => (m.job === job ? { ...m, ...(r.changes.length ? { remembered: r.changes } : {}), ...(r.lines.length ? { memoryLines: r.lines } : {}), ...(r.warnings.length ? { warnings: [...(m.warnings ?? []), ...r.warnings] } : {}) } : m)) };
-    }
-    // 场景作业收尾:课包的费用与时长进账本,消息的 artifacts 记课包 id
-    if (tutor === SCENE_MAKER) {
-      const r = await this.settleSceneLedger(ws, tutor, date, job, latest.messages.find((m) => m.job === job)?.text ?? '', transcript, timing);
-      if (r.id) emit({ lane: 'ledger', kind: 'artifact', id: r.id, status: r.warnings.length ? '补了一行' : '记了账' });
-      if (r.id || r.warnings.length) next = { ...next, messages: next.messages.map((m) => (m.job === job ? { ...m, ...(r.id ? { artifacts: [r.id] } : {}), ...(r.warnings.length ? { warnings: [...(m.warnings ?? []), ...r.warnings] } : {}) } : m)) };
-    }
-    // 场景卡:新课包起 scene-maker 的一轮;起不了的原因记进 warnings,撞名改过的 id 回写到卡上
-    if (tutor !== SCENE_MAKER && kidView.section?.cards.some((c) => c.kind === 'scene')) {
-      const r = await this.startScenes(ws, tutor, job, kidView.section, latest.messages.find((m) => m.job === job));
-      for (const x of r.scenes) emit(x.job ? { lane: 'scene', kind: 'started', bundle: x.bundle, job: x.job } : { lane: 'scene', kind: 'skipped', bundle: x.bundle, why: x.why ?? '?' });
-      const scenes = r.scenes.map(({ bundle, job: j }) => ({ bundle, job: j }));
-      if (scenes.length || r.warnings.length) next = { ...next, messages: next.messages.map((m) => (m.job === job ? { ...m, section: r.section, ...(scenes.length ? { scenes } : {}), ...(r.warnings.length ? { warnings: [...(m.warnings ?? []), ...r.warnings] } : {}) } : m)) };
     }
     // 记账那轮:「## 记账」段落进日记(老师不直接写 vault;写了什么、没写成为什么都在这条的 warnings 里)
     const mine = latest.messages.find((m) => m.job === job);

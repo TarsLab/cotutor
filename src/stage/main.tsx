@@ -1,12 +1,10 @@
 /**
  * 舞台包入口(打成 dist/stage/stage.js,页面在 iframe 里装 /stage/?card=<id>):等页面发 card,按 kind 装组件;
- * 场景卡 = ChalkPlayer;画板卡 = excalidraw 编辑器(步 10)。所有对外说话都走 postMessage(protocol.ts)。
+ * 小课堂(孩子从首页看的整堂、老师放的一段)= lecture.tsx;画板卡 = excalidraw 编辑器(步 10)。所有对外说话都走 postMessage(protocol.ts)。
  * 界面上没有错误文案:装不上就发 error,页面关掉舞台、什么都不显示。
  */
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import 'drawtell/player/chalk-player.css';
-import { SceneStage, type SceneStageHandle } from './scene.tsx';
 import { LectureStage, type LectureStageHandle, type LectureWatch, type StageMark, type WatchEntry } from './lecture.tsx';
 import type { CanvasStageHandle } from './canvas.tsx';
 import '@excalidraw/excalidraw/dist/prod/index.css';
@@ -14,8 +12,8 @@ import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
 import './stage.css';
 
 /**
- * 画板的编辑器按需装(esbuild splitting 把它单独成块):八张卡里只有画板卡要它,
- * 场景卡与轻卡的舞台不该为它等。装载中显示一句「画板准备中」——这不是错误文案,是等待。
+ * 画板的编辑器按需装(esbuild splitting 把它单独成块):只有画板卡要它,
+ * 小课堂与轻卡的舞台不该为它等。装载中显示一句「画板准备中」——这不是错误文案,是等待。
  */
 const CanvasStage = lazy(async () => ({ default: (await import('./canvas.tsx')).CanvasStage }));
 
@@ -27,31 +25,26 @@ const post = (m: Outgoing): void => { window.parent.postMessage({ source: STAGE_
 
 function App(): JSX.Element {
   const [card, setCard] = useState<Card | null>(null);
-  const scene = useRef<SceneStageHandle>(null);
   const canvas = useRef<CanvasStageHandle>(null);
   const lecture = useRef<LectureStageHandle>(null);
 
   useEffect(() => {
-    // 调试 / 截图:?bundle=<课包 URL>&autoplay=1 不用页面也能开(mock:/stage/?bundle=/api/bundles/<id>/)
+    // 调试 / 截图:?bundle=<课包 URL> 不用页面也能开小课堂(mock:/stage/?bundle=/api/bundles/<id>/)
     const q = new URLSearchParams(location.search);
     const bundle = q.get('bundle');
-    if (bundle) setCard({ source: STAGE_SOURCE, type: 'card', id: 'debug', kind: q.get('lecture') === '1' ? 'lecture' : 'scene', props: { bundle, title: q.get('title') ?? '' }, state: null, bundleUrl: bundle.endsWith('/') ? bundle : `${bundle}/`, autoplay: q.get('autoplay') === '1' });
+    if (bundle) setCard({ source: STAGE_SOURCE, type: 'card', id: 'debug', kind: 'lecture', props: { bundle, title: q.get('title') ?? '' }, state: null, bundleUrl: bundle.endsWith('/') ? bundle : `${bundle}/`, autoplay: q.get('autoplay') === '1' });
     const onMsg = (e: MessageEvent<ToStage>): void => {
       const m = e.data;
       if (!m || m.source !== STAGE_SOURCE) return;
       if (m.type === 'card') setCard(m);
       else if (m.type === 'follow') lecture.current?.follow(m.ms, m.playing, m.rate, m.marks as StageMark[]);
-      else if (m.type === 'control') { if (m.action === 'submit') canvas.current?.submit(); else { scene.current?.control(m.action); lecture.current?.control(m.action); } }
+      else if (m.type === 'control') { if (m.action === 'submit') canvas.current?.submit(); else lecture.current?.control(m.action); }
     };
     window.addEventListener('message', onMsg);
     post({ type: 'ready' });
     return () => window.removeEventListener('message', onMsg);
   }, []);
 
-  const onPhase = useCallback((phase: 'loading' | 'ready' | 'drawing' | 'gap' | 'done' | 'paused', step: number, total: number, line: string) => {
-    post({ type: 'phase', phase, step, total, line });
-    if (phase === 'gap' || phase === 'done') post({ type: 'state', state: { step, done: phase === 'done' } });
-  }, []);
   const onError = useCallback((message: string) => post({ type: 'error', message }), []);
   const onInk = useCallback((ink: Record<string, unknown>[]) => post({ type: 'state', state: { ink } }), []);
   const onSubmit = useCallback((ink: Record<string, unknown>[], image: string) => post({ type: 'submit', state: { ink }, image }), []);
@@ -72,7 +65,6 @@ function App(): JSX.Element {
     return <LectureStage ref={lecture} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={[]} range={range} autoplay={card.autoplay} video={card.props.video === true} onPhase={onLecturePhase} onMarks={noop} onFinished={noop} onClose={noop} onError={onError} />;
   }
   if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage ref={lecture} follow={card.props.follow === true} onLog={onWatch} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} video={card.props.video === true} onMarks={onMarks} onFinished={onLectureDone} onClose={onLectureClose} onError={onError} />;
-  if (card.kind === 'scene' && card.bundleUrl) return <SceneStage ref={scene} bundleUrl={card.bundleUrl} autoplay={card.autoplay} onPhase={onPhase} onError={onError} />;
   if (card.kind === 'canvas') {
     const st = (card.state ?? {}) as { ink?: Record<string, unknown>[] };
     const base = (card.props.base ?? null) as { bundle: string } | { skeletons: Record<string, unknown>[] } | { image: string } | null;

@@ -51,7 +51,7 @@
 - 老师按 cotutor.json 里有谁走,没有注册表;键以 `-tutor` 结尾的是有脸的老师,其余是工具人
 - 老师文件里只有运行字段与正文;display / avatar / voice / enabled / policy / runtime 在 cotutor.json
 - 老师的正文就是板书:普通行 = 讲稿一句,围栏 = 卡,第一个 H2 起是给家长的尾巴;解析器永不抛
-- 老师不派子代理、不互相交活(自己派会烧光自己的预算);画图作业由场景卡起
+- 老师不派子代理、不互相交活(自己派会烧光自己的预算)
 - 孩子端永远没有错误与评判;卡上不画对错;答案下发前剥掉
 - 卡的状态是孩子的,存服务端;vault 是家长的,老师(LLM)不直接写,回结构化段由应用落盘
 - workspace 解析链 `--workspace` > `COTUTOR_WORKSPACE` > cwd 祖先 > `~/.config/cotutor/config.json` > `~/cotutor/` 唯一目录;init 幂等补缺,已有文件不动

@@ -4,9 +4,9 @@ import { boardSkillDoc, boardSyntaxDoc } from '../src/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 {
-  check('有状态的卡:choice / fill / scene / lecture / canvas / record;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,fill,scene,lecture,canvas,record');
-  check('十三种卡登记在册:板书十二种 + 首页的老师卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,word,scene,lecture,canvas,record,code,tutor' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
-  check('用在哪:板书十二种;首页 = 老师卡 + 一段字 / 点读 / 图片 / 田字格 / 单词', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,word,scene,lecture,canvas,record,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,word,tutor');
+  check('有状态的卡:choice / fill / lecture / canvas / record;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,fill,lecture,canvas,record');
+  check('十二种卡登记在册:板书十一种 + 首页的老师卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,word,lecture,canvas,record,code,tutor' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
+  check('用在哪:板书十一种;首页 = 老师卡 + 一段字 / 点读 / 图片 / 田字格 / 单词', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,word,lecture,canvas,record,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,word,tutor');
   const tut = parseCard('tutor chinese-tutor', '- 我要预习小蝌蚪找妈妈\n讲法: 先读课文\n讲法: 再认字\n新话题\n接着 2026-09-16 1930-1 接着写看图写话', 'home');
   check('老师卡:列表号去掉、讲法挂上一个按钮(多行拼起来)、「新话题」不算、接着带日期与话题', tut.card.kind === 'tutor' && JSON.stringify(tut.card.props) === JSON.stringify({ tutor: 'chinese-tutor', buttons: [{ kind: 'start', label: '我要预习小蝌蚪找妈妈', brief: '先读课文\n再认字' }, { kind: 'continue', label: '接着写看图写话', date: '2026-09-16', thread: '1930-1' }] }) && !tut.warning, JSON.stringify(tut));
   check('老师卡剥讲法', JSON.stringify(stripSecrets({ cards: [tut.card], lines: [] }).cards[0].props.buttons) === '[{"kind":"start","label":"我要预习小蝌蚪找妈妈"},{"kind":"continue","label":"接着写看图写话","date":"2026-09-16","thread":"1930-1"}]');
@@ -20,10 +20,9 @@ import { check, done } from './_check.ts';
   const cvj = parseCard('canvas', '{"skeletons":[{"type":"rectangle","x":0,"y":0,"width":10,"height":10}]}');
   check('canvas:行内骨架 JSON 做底;坏 JSON / 没 skeletons / 全空 → 文字卡', (cvj.card.props.base as { skeletons: unknown[] }).skeletons.length === 1 && parseCard('canvas', '{bad').card.kind === 'text' && parseCard('canvas', '{"a":1}').card.kind === 'text' && parseCard('canvas', '').card.kind === 'text');
   check('canvas 状态与 describe:笔数 + 图的路径;没画', parseCardState(cv.card, { ink: [{ id: 'a' }] }).ok && !parseCardState(cv.card, { ink: 'x' }).ok && describeCard(cv.card, { ink: [{ id: 'a' }, { id: 'b' }], image: 'conversations/math-tutor/2026-09-10.1.cards/0.png' }) === 'canvas「画一个三角形,标出它的一条高。」 画了 2 笔,图:conversations/math-tutor/2026-09-10.1.cards/0.png(用 Read 看)' && describeCard(cv.card, { ink: [] }) === 'canvas「画一个三角形,标出它的一条高。」 还没画');
-  const sc = parseCard('scene', '2026-09-04-guilv5\n我去把这道题画出来。');
-  check('scene:第一行课包 id,后面一句给孩子的话', sc.card.kind === 'scene' && sc.card.props.bundle === '2026-09-04-guilv5' && sc.card.props.text === '我去把这道题画出来。' && !sc.warning, JSON.stringify(sc));
-  check('scene:坏 id / 行内 JSON(未接)/ 空 → 文字卡 + warning', parseCard('scene', 'Bad_ID').card.kind === 'text' && parseCard('scene', '{ "title": "x" }').warning?.includes('行内') === true && parseCard('scene', '').card.kind === 'text');
-  check('scene 状态与 describe:没到 / 没开始 / 停在第 n 步 / 看完', parseCardState(sc.card, { step: 2, done: false }).ok && !parseCardState(sc.card, { step: -1 }).ok && describeCard(sc.card, { step: 2, done: false }) === 'scene「我去把这道题画出来。」 课包还没做好,孩子看不了' && describeCard({ kind: 'scene', props: { bundle: 'x', title: '找规律', ready: true, steps: ['a', 'b', 'c'] } }, { step: 0, done: false }) === 'scene「找规律」 还没开始看' && describeCard({ kind: 'scene', props: { bundle: 'x', title: '找规律', ready: true, steps: ['a', 'b', 'c'] } }, { step: 2, done: false }) === 'scene「找规律」 看到第 2 步(共 3 步)停在气口' && describeCard({ kind: 'scene', props: { bundle: 'x', title: '找规律', ready: true, steps: ['a', 'b', 'c'] } }, { step: 3, done: true }) === 'scene「找规律」 看完了(共 3 步)');
+  // 场景卡 2026-10-07 删了:老师照旧写 ```scene 也不报错,按不认识的标签当代码卡原样显示
+  check('scene 不再是卡:当代码卡原样显示', parseCard('scene', '2026-09-04-guilv5\n我去把这道题画出来。').card.kind === 'code' && cardKind('scene') === undefined);
+  check('老对话里存下的 scene 卡:下发孩子前退成一段字,只留老师那句,题面 / 讲法与课包 id 不下发', JSON.stringify(stripSecrets({ cards: [{ kind: 'scene', props: { bundle: '2026-09-09-guilv', text: '我去画出来。', brief: '题面:x\n讲法:y' } }], lines: [] }).cards) === '[{"kind":"text","props":{"text":"我去画出来。"}}]');
   const br = parseCard('text', '# 认边\n两条短边叫[直角边],最长的一条叫[斜边]');
   check('卡里写了讲稿的 [词] 语法:括号剥掉 + warning(孩子端不显示括号)', br.card.props.text === '两条短边叫直角边,最长的一条叫斜边' && br.card.props.title === '认边' && br.warning?.includes('方括号') === true, JSON.stringify(br));
   const brc = parseCard('choice', '[斜边]是多少?\n- [ ] 6\n- [x] 5');

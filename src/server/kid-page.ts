@@ -15,9 +15,9 @@
  * 每种卡的紧凑态只读;点卡开舞台(盖住板书那块,顶栏是卡的名字 + 关闭,讲稿暂停):选择题在舞台里点大按钮,选了就 PUT 状态,
  * 「交给老师」= 发一条 {text:'', action:'submit', focus:{card}};舞台开着时发的消息都带 focus.card。「继续」= {text:'', action:'continue'}。
  * 状态存服务端,重开页面从 section.cards[n].state 读回;卡上永远不画对错。
- * 重卡(scene / canvas)的舞台在 iframe 里装 /stage/?card=<id>(舞台包,src/stage/),postMessage 协议见 src/stage/protocol.ts:
- * 页面发 card(props + state + 课包 URL),包回 phase / state / submit / close;场景在播时字幕行显示场景讲稿、按钮映射到播放器;
- * 讲稿 [[play]] 锚到场景卡 → 念完那句把动画铺满播,done 了关舞台接着念。
+ * 重卡(小课堂 / 画板)的舞台在 iframe 里装 /stage/?card=<id>(舞台包,src/stage/),postMessage 协议见 src/stage/protocol.ts:
+ * 页面发 card(props + state + 课包 URL),包回 phase / state / submit / close;小课堂那一段在放时字幕行显示课里那句、按钮映射到播放器;
+ * 讲稿 [[play]] 锚到小课堂卡 → 念完那句铺满放那一段,放完停在末帧、接着念。
  * 点读段:card.assets 里有 <段号>.mp3 的放服务端配的,没有的浏览器合成;填空舞台逐空打字、「交给老师」;图片舞台双指缩放。
  * 作业照片(《作业照片设计.md》):相机 / 相册先进发照片屏(裁剪、圈画、转 90°、配一句话,坐标在 src/lib/photo-edit.ts),再一条 {text, photos};节头小图点开看大图。
  * 流式:老师还在说时 pending 条目带 partial 板书,卡按下标只追加不重画(先出的卡不闪),讲稿不播;整轮跑完那节换成正式的,声音从第一句起。
@@ -801,12 +801,6 @@ __REEL_JS__
         parts.forEach((t, i) => { body.append(t); if (i < parts.length - 1) body.append(h('span', { class: 'bl' + (got[i] ? ' f' : '') }, got[i] || '\\u200b')); });
         return el;
       }
-      case 'scene': {
-        const ready = sceneReady(c);
-        const n = Array.isArray(p.steps) ? p.steps.length : 0;
-        const thumb = ready && p.thumb ? h('img', { src: '/api/kid/image?p=' + encodeURIComponent(p.thumb), alt: '' }) : null;
-        return box('scene', p.problem ? h('div', { class: 'sp' }, p.problem) : (p.title ? h('div', { class: 'sp' }, p.title) : null), h('div', { class: 'th' }, thumb || (ready ? '' : '图还在路上'), ready ? h('span', { class: 'pl' }, (n ? n + ' 步 ' : '') + '▷') : null), p.text ? h('div', { class: 'tx' }, p.text) : null);
-      }
       case 'lecture': {
         // 小课堂卡(《小课堂设计.md》§六):老师放课里的一段;紧凑态是那一段末帧的画面、「0:19–0:30 ▷」;舞台是舞台包里的小课堂播放器
         const ready = lectureReady(c);
@@ -1488,16 +1482,15 @@ __REEL_JS__
   S.layHalf = halfWidth();
 
   // ---- 舞台:点卡放大,交互都在这里;开着时讲稿暂停,关了字幕行出「播放」 ----
-  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', word: '单词', scene: '讲解动画', lecture: '小课堂', canvas: '画一画', record: '录音', code: '' };
+  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', word: '单词', lecture: '小课堂', canvas: '画一画', record: '录音', code: '' };
   const GO_LABEL = { canvas: '给老师看' };
   const openStage = (secIdx, idx, opts = {}) => {
     const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];
     if (!card) return;
-    if (isHeavy(card) && !sceneReady(card) && card.kind === 'scene') return; // 课包还没到:紧凑态写着「图还在路上」,不开
     if (card.kind === 'lecture' && !lectureReady(card)) return; // 课包读不出来:紧凑态写着「课还没放进来」,不开
     if (S.readonly && hasState(card) && !opts.delegate) return; // 以前的只能看:选择 / 填空 / 画板不开,免得改了当时的答案
     if (!opts.delegate) dispatch({ type: 'stageOpen' });
-    S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, scene: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
+    S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, playing: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
     playRec({ k: 'stage', job: S.sections[secIdx].job, card: idx, open: true });
     // 画板:题目在工作台自己的题目条上(可收起),顶栏只写「画一画」
     $('#st-ttl').textContent = card.kind === 'canvas' ? '画一画' : cardTitle(card);
@@ -1536,7 +1529,7 @@ __REEL_JS__
   };
   /** 发给舞台包的这张卡(ready 时发;看录像时孩子改了卡再发一次,包按新状态重画) */
   const stageCard = (card) => {
-    const b = card.kind === 'scene' || card.kind === 'lecture' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null;
+    const b = card.kind === 'lecture' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null;
     const im = card.kind === 'canvas' && card.props.base && typeof card.props.base.image === 'string' ? card.props.base.image : null;
     return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? lcBundleUrl(b, card.kind === 'lecture' && card.props.video === true) : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
   };
@@ -1547,24 +1540,22 @@ __REEL_JS__
     const card = S.sections[S.stage.section].cards[S.stage.card];
     if (m.type === 'ready') postStage(stageCard(card));
     else if (m.type === 'phase') {
-      S.stage.scene = { phase: m.phase, line: m.line, step: m.step, total: m.total };
+      S.stage.playing = { phase: m.phase, line: m.line };
       // 小课堂卡(仲裁表「交给小课堂」):那一段放完,舞台不关、停在末帧,字幕行还给老师,接着念
-      if (m.phase === 'done' && card.kind === 'lecture') { S.stage.scene = null; if (S.stage.delegate) { S.stage.delegate = false; resumeAfter(); } }
+      if (m.phase === 'done' && card.kind === 'lecture') { S.stage.playing = null; if (S.stage.delegate) { S.stage.delegate = false; resumeAfter(); } }
       renderSubtitle();
-      if (m.phase === 'done' && S.stage && S.stage.delegate) { const d = S.stage; closeStage(); resumeAfter(d); }
     }
     else if (m.type === 'state') { card.state = m.state; $('#st-go').disabled = !stateSummary(card).length; $('#st-note').textContent = stateSummary(card).join('、'); repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, m.state); }
     else if (m.type === 'submit') { card.state = m.state; const id = S.stage.id; const job = S.sections[S.stage.section].job; const idx = S.stage.card; closeStage(); api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id } })); }
     else if (m.type === 'close' || m.type === 'error') { const d = S.stage; closeStage(); if (d.delegate) resumeAfter(d); }
   });
-  /** 讲稿委托给场景播完(或孩子关了)→ 接着念下一句 */
   const resumeAfter = () => dispatch({ type: 'stageDone' });
   const closeStage = () => { if (S.stage && S.sections[S.stage.section]) playRec({ k: 'stage', job: S.sections[S.stage.section].job, card: S.stage.card, open: false }); recStop(false);
     // 单词卡舞台:自动那一遍停下,慢念也停
     for (const v of document.querySelectorAll('#st-body video')) { try { v.pause(); } catch {} }
     wordRun++; if (S.stage && !S.reel && S.sections[S.stage.section] && (S.sections[S.stage.section].cards[S.stage.card] || {}).kind === 'word') silence(); S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); showNow(); };
   $('#st-x').innerHTML = ICON.close;
-  // 孩子关:讲稿交给小课堂卡、还没放完的,关了接着念(场景卡的关在舞台包里,走上面的 close 消息)
+  // 孩子关:讲稿交给小课堂卡、还没放完的,关了接着念
   const closeByKid = () => { const d = S.stage; const card = d && S.sections[d.section] ? S.sections[d.section].cards[d.card] : null; closeStage(); if (d && d.delegate && card && (!isHeavy(card) || card.kind === 'lecture')) resumeAfter(); };
   $('#st-x').addEventListener('click', closeByKid);
   $('#st-dim').addEventListener('click', closeByKid);
@@ -1651,7 +1642,7 @@ __REEL_JS__
     if (!S.pending) S.waitSince = null;
     const waited = S.waitSince ? Date.now() - S.waitSince : 0;
     let v = subtitleFor({ state: S.state, sections: S.sections, pending: S.pending, waitedMs: waited, limit: S.limit });
-    if (S.stage && S.stage.scene && !S.limit) v = sceneSubtitle(S.stage.scene.phase, S.stage.scene.line, S.stage.scene.step, S.stage.scene.total);
+    if (S.stage && S.stage.playing && !S.limit) v = stageSubtitle(S.stage.playing.phase, S.stage.playing.line);
     const t = $('#sub-text'); t.className = v.kind;
     const dots = () => h('span', { class: 'dots' }, h('i'), h('i'), h('i'));
     if (v.kind === 'wait') t.replaceChildren(avatarEl(S.tutor), v.text, dots());
@@ -1679,7 +1670,7 @@ __REEL_JS__
     markHeard();
   };
   $('#sub-btn').addEventListener('click', () => {
-    if (S.stage && S.stage.scene) { postStage({ type: 'control', action: 'toggle' }); return; }
+    if (S.stage && S.stage.playing) { postStage({ type: 'control', action: 'toggle' }); return; }
     dispatch({ type: 'tapButton' });
   });
 
@@ -1706,7 +1697,7 @@ __REEL_JS__
       if (S.state.status !== 'playing') return;
       // 句尾的标注可能还没轮到(声音比估的短一点):念完先把没画的补上,再往下走
       for (const m of timed) if (!done.has(m)) { done.add(m); applyMark(secIdx, m, false); }
-      // 往下走(再听 / [[play]] 交给场景 / 下一句 / 停下等答)都在 step 的 lineEnded
+      // 往下走(再听 / [[play]] 交给小课堂 / 下一句 / 停下等答)都在 step 的 lineEnded
       dispatch({ type: 'lineEnded' });
     }, onStart);
   };
@@ -1878,7 +1869,7 @@ __REEL_JS__
       }
       // 这条既不 pending 也没定稿(运行出错了):撤掉;live 的那节也撤(孩子端出错的运行不出现)
       if (S.partial && !entries.some((e) => e.job === S.partial.job)) { const P = S.partial; S.partial = null; P.el.remove(); if (P.live) { S.sections.splice(P.idx, 1); dispatch({ type: 'liveDropped' }); } }
-      // 服务端的状态是真相(别的设备上选的、重开页面):没在舞台里改着的卡照它画;props 也跟(场景卡的课包晚到,ready / 缩略图是服务端现读的)
+      // 服务端的状态是真相(别的设备上选的、重开页面):没在舞台里改着的卡照它画;props 也跟(小课堂卡的 ready、起止是服务端下发时现读的)
       entries.forEach((e) => { const i = S.sections.findIndex((x) => x.job === e.job); if (i < 0 || fresh.includes(i)) return; e.cards.forEach((c, idx) => { const mine = S.sections[i].cards[idx]; if (!mine || (S.stage && S.stage.section === i && S.stage.card === idx)) return; const ds = JSON.stringify(mine.state) !== JSON.stringify(c.state), dp = JSON.stringify(mine.props) !== JSON.stringify(c.props); if (ds || dp) { mine.state = c.state; mine.props = c.props; repaintCard(i, idx); } }); });
       if (fresh.length && S.stage) closeStage();
       // 录音卡:后面又来了一节,前面各节的录音卡就锁住(一节一节铺的时候前面那节还不知道后面有)

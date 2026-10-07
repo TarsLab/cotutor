@@ -5,8 +5,7 @@
  * 「新话题」应用永远放第一个,不进 props。老师在不在、话题在不在,由首页检查(src/server/home.ts)查。
  */
 import { z } from 'zod';
-import type { CardKind } from './kind.ts';
-import { BUNDLE_ID_RE } from './scene.ts';
+import { BUNDLE_ID_RE, type CardKind } from './kind.ts';
 
 export const TUTOR_BUTTONS_MAX = 4;
 export const BUTTON_LABEL_MAX = 16;

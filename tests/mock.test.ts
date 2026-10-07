@@ -72,7 +72,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'continue' });
   await m.settle();
   const md5 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  check('「继续」不计次数,空文本没 action 400;第三节有场景卡', md5.remaining === before && md5.messages[2].question === '继续' && md5.messages[2].section?.cards.some((c) => c.kind === 'scene') === true && (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400, `${before} ${md5.remaining}`);
+  check('「继续」不计次数,空文本没 action 400;第三节有小课堂卡', md5.remaining === before && md5.messages[2].question === '继续' && md5.messages[2].section?.cards.some((c) => c.kind === 'lecture') === true && (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400, `${before} ${md5.remaining}`);
   await m.route('POST', '/api/kid/conversations/english-tutor/messages', { text: 'apple' });
   await m.settle();
   const rd = ((await get('/api/kid/conversations/english-tutor/today')).json as Day).messages[0];
@@ -113,11 +113,11 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const toggled = [...js.matchAll(/classList\.(?:add|toggle|remove)\('([\w-]+)'/g)].map((x) => x[1]);
   const clash = [...new Set(toggled.filter((c) => bare.has(c)))];
   check('页面挂的状态类不与主题的裸类名撞(主题认得 .pen)', bare.has('pen') && toggled.length > 10 && clash.length === 0, clash.join());
-  // 场景卡:数学老师第三节;课包样本在仓库里,下发时补快照(ready / steps / problem);舞台包与课包路由
+  // 小课堂卡:数学老师第三节;课包样本在仓库里,下发时补 ready 与那一段的起止;舞台包与课包路由
   const md6 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  const sc = md6.messages.map((x) => x.section).find((x) => x && x.cards.some((c) => c.kind === 'scene'))!;
-  const si = sc ? sc.cards.findIndex((c) => c.kind === 'scene') : -1;
-  check('场景卡下发时带课包快照:ready、6 步、题面;讲稿 [[play]] 锚到它', si >= 0 && sc.cards[si].props.ready === true && (sc.cards[si].props.steps as string[]).length === 6 && String(sc.cards[si].props.problem).includes('75') && sc.lines.some((l) => l.cues.some((c) => c.name === 'play' && c.card === si)), JSON.stringify(sc.cards[si]));
+  const sc = md6.messages.map((x) => x.section).find((x) => x && x.cards.some((c) => c.kind === 'lecture'))!;
+  const si = sc ? sc.cards.findIndex((c) => c.kind === 'lecture') : -1;
+  check('小课堂卡下发时带 ready 与那一段的起止;讲稿 [[play]] 锚到它', si >= 0 && sc.cards[si].props.ready === true && sc.cards[si].props.start === 0 && Number(sc.cards[si].props.end) > 0 && sc.lines.some((l) => l.cues.some((c) => c.name === 'play' && c.card === si)), JSON.stringify(sc.cards[si]));
   check('课包文件能取;没有的 404', (await get('/api/bundles/2026-09-04-guilv5/manifest.json')).status === 200 && (await get('/api/bundles/nope/scene.json')).status === 404);
   const { stageBuilt } = await import('../src/server/stage.ts');
   if (stageBuilt()) check('舞台包能取', (await get('/stage/')).status === 200 && (await get('/stage/stage.js')).file !== undefined);

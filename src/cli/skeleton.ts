@@ -16,7 +16,7 @@ export { TUTOR_TOOLS };
 import { mkdir, writeFile } from 'node:fs/promises';
 
 
-export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'scenes', 'bundles', 'snaps'] as const;
+export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'bundles'] as const;
 export const LEDGER_FILES = ['ledger/artifacts.jsonl'] as const;
 
 /** 本包自带的老师文件目录(仓库检出与 npm 安装都在包根 agents/) */
@@ -46,9 +46,8 @@ conversations/**/*.log
 conversations/**/*.mp3
 # 回放(cotutor replay)是调提示词与 vault 时的对照,不是孩子的对话
 evals/
-# 课包与截图是 drawtell build / snap 的派生物,场景源在 scenes/
+# 课包是 drawtell build 的派生物(小课堂的源在家长做课的地方)
 bundles/
-snaps/
 # 作业照片(孩子在老师页上拍的;paths.captures):体积大、只是这一轮的素材,认出的文字在日记里
 captures/
 node_modules/
@@ -136,7 +135,6 @@ const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar
   'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮', policy: { effort: 'medium' } },
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚' },
   'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤' },
-  'scene-maker': { display: '画图老师', avatar: '🎨', hidden: true, runtime: 'claude-scene' },
   // 口播老师(《口播老师设计.md》§6):要 koubo 才有用,出厂关着;在要练的那个 workspace 里打开,upgrade 再装 koubo 的技能
   // 它每节都要跑 koubo 命令(进度、出题),孩子说的话也带工具
   'koubo-tutor': { display: '口播老师', subject: '口播', avatar: '🎙️', enabled: false, policy: { tools: 'on' } },
@@ -165,7 +163,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
       // --setting-sources project(2026-09-15):老师只读 workspace 的 .claude/,~/.claude 的技能(obsidian-cli 之类)/ hooks / additionalDirectories / 插件都不进老师会话;
       // 代价是 ~/.claude/settings.json 的 env(代理)也不进,serve 要从有代理的 shell 起,doctor env.userSettings 点名
       // 普通老师的工具是白名单(--tools,2026-09-20;之前是 --disallowedTools Agent 黑名单):只有查教材、读文件、裁作业照片用得上的那几个。
-      // 不在名单里的连工具定义都不发(黑名单只禁调用、定义照发)。由来:claude 会把 .claude/agents/ 里的老师文件当可派的子代理,老师自己去叫 scene-maker 就把预算烧在自己这轮里(画图作业由场景卡起);
+      // 不在名单里的连工具定义都不发(黑名单只禁调用、定义照发)。由来:claude 会把 .claude/agents/ 里的老师文件当可派的子代理,老师自己去派别的老师就把预算烧在自己这轮里;
       // CLI 升版本还会带进新工具——2.1.275 真跑里老师去调了 Artifact、ToolSearch,每次白花一个来回。Skill 也不给:板书写法与守则由应用递,别的技能按路径 Read
       // --strict-mcp-config(2026-10-04):--setting-sources 管不到账号上的 claude.ai 连接器,真跑里每位老师的会话都带着 8 个 Claude Docs 的 MCP 工具(--tools "" 也去不掉);
       // 加了它、又不给 --mcp-config,就一个 MCP 都不进
@@ -181,15 +179,6 @@ export function configTemplate(input: ConfigTemplateInput): string {
       qwen: {
         run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{systemBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],
         resume: ['qwen', '-p', '{prompt}', '--resume', '{session}', '--append-system-prompt', '{systemBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],
-      },
-      // 场景作业(scene-maker):分钟级、几美元一个,预算与时限比问答大;老师条目 runtime 指到它
-      'claude-scene': {
-        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '8'],
-        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '8'],
-      },
-      'qwen-scene': {
-        run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '25m'],
-        resume: ['qwen', '-p', '{prompt}', '--resume', '{session}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '25m'],
       },
     },
     tts: TTS_DEFAULT,

@@ -42,6 +42,9 @@ cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS,
 (cfg.tutors as Record<string, Record<string, unknown>>)['math-tutor'].voice = 'v-math';
 (cfg.tutors as Record<string, Record<string, unknown>>)['english-tutor'].voice = 'fail';
 (cfg.tutors as Record<string, Record<string, unknown>>)['chinese-tutor'].policy = { dailyMessages: 1 };
+// 工具人(只和系统、家长打交道的,孩子端不露):测守则只给有脸的、记忆文件、hidden、系统消息开话题
+(cfg.tutors as Record<string, Record<string, unknown>>).helper = { display: '小帮手', avatar: '🧰', enabled: true, hidden: true };
+writeFileSync(join(root, '.claude', 'agents', 'helper.md'), '---\nname: helper\ndescription: 测试用的工具人\n---\n只和系统打交道。\n');
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault', '计划'), { recursive: true });
 writeFileSync(join(root, 'vault', '课程表.md'), '| 星期 | 时间 | 学科 |\n|---|---|---|\n| 二 | 16:00–17:00 | 数学 |\n| 三 | 19:00–19:40 | 语文 |\n');
@@ -112,8 +115,8 @@ try {
   check('语文老师拿到自己的;没有入口文件 → entry 写缺了什么,只带档案', packZh.plan.join() === '背古诗' && packZh.recent.map((r) => r.claim).join() === '错别字' && packZh.entry === '缺:vault 里没有 cotutor: subject、subject: 语文、semester: 二年级上 的文件' && packZh.notes?.map((n) => n.role).join() === 'rules,profile' && !packZh.refs, JSON.stringify(packZh));
   const packTight = await gatherContext({ ...ctx.ws, config: { ...ctx.ws.config, policyDefaults: { ...ctx.ws.config.policyDefaults, contextPack: { entryChars: 20 } } } }, 'math-tutor', { from: 'kid', at: now });
   check('entryChars:原文截断,YAML 里注明', packTight.entry?.startsWith('随便/二上/数学.md(原文 ') === true && packTight.notes?.find((n) => n.role === 'entry')?.text.includes('后面截掉了') === true && packTight.notes?.[0].text.includes('后面截掉了') === false, JSON.stringify(packTight));
-  const packScene = await gatherContext(ctx.ws, 'scene-maker', { from: 'system', at: now });
-  check('守则只给有脸的老师:scene-maker 不带', !packScene.rules && !packScene.notes?.some((n) => n.role === 'rules'), JSON.stringify(packScene.notes?.map((n) => n.role)));
+  const packHelper = await gatherContext(ctx.ws, 'helper', { from: 'system', at: now });
+  check('守则只给有脸的老师:helper 不带', !packHelper.rules && !packHelper.notes?.some((n) => n.role === 'rules'), JSON.stringify(packHelper.notes?.map((n) => n.role)));
   {
     const rulesFile = join(ctx.ws.root, '.claude', 'skills', 'cotutor-tutor', 'SKILL.md');
     const saved = readFileSync(rulesFile, 'utf8');
@@ -195,18 +198,18 @@ try {
   check('写在前面的记账段剥掉并物化,孩子视图没有它', d3.index.messages[1].bookkeeping?.entries[0].name === '重讲' && !d3.index.messages[1].kidText?.includes('记账'), JSON.stringify(d3.index.messages[1]));
   // ---- 记忆(2026-09-17):「## 记忆」段追加进 vault 的记忆文件,每轮最多两条;下个话题原文进上下文包 ----
   {
-    const memFile = join(root, 'vault', '记忆', '画图老师.md');
-    const s1 = await ctx.runner.send('scene-maker', { from: 'system', text: '记住它', newThread: true, runtime: 'fake' });
+    const memFile = join(root, 'vault', '记忆', '小帮手.md');
+    const s1 = await ctx.runner.send('helper', { from: 'system', text: '记住它', newThread: true, runtime: 'fake' });
     const i1 = await s1.done;
     const mm = i1.messages.find((m) => m.job === s1.job)!;
     const text1 = readFileSync(memFile, 'utf8');
-    check('记忆:没有就建 记忆/<显示名>.md,带属性,两条带日期,第三条丢掉并提醒', text1.startsWith('---\ncotutor: memory\nagent: scene-maker\n---\n') && text1.endsWith('- 2026-09-08 讲角用手指比划他马上懂\n- 2026-09-08 家长说别出选择题\n') && !text1.includes('第三条') && mm.remembered?.length === 2 && mm.warnings?.some((w) => w.includes('丢了 1 条')) === true && !mm.parentText?.includes('记忆'), JSON.stringify({ text1, mm }));
+    check('记忆:没有就建 记忆/<显示名>.md,带属性,两条带日期,第三条丢掉并提醒', text1.startsWith('---\ncotutor: memory\nagent: helper\n---\n') && text1.endsWith('- 2026-09-08 讲角用手指比划他马上懂\n- 2026-09-08 家长说别出选择题\n') && !text1.includes('第三条') && mm.remembered?.length === 2 && mm.warnings?.some((w) => w.includes('丢了 1 条')) === true && !mm.parentText?.includes('记忆'), JSON.stringify({ text1, mm }));
     writeFileSync(memFile, text1.replace('- 2026-09-08 家长说别出选择题\n', '- 家长改过:可以出选择题\n'));
-    const s2 = await ctx.runner.send('scene-maker', { from: 'system', text: '记住它', newThread: true, runtime: 'fake' });
+    const s2 = await ctx.runner.send('helper', { from: 'system', text: '记住它', newThread: true, runtime: 'fake' });
     const i2 = await s2.done;
     const text2 = readFileSync(memFile, 'utf8');
-    const run2 = JSON.parse(readFileSync(join(root, 'conversations', 'scene-maker', `2026-09-08.${s2.job}.run.json`), 'utf8')) as { prompt: string };
-    check('记忆:新话题带原文(家长改过的样子);已有的不重复记,家长删掉的那条会被记回来', run2.prompt.includes('  memory: "记忆/画图老师.md"') && run2.prompt.includes('<vault-note role="memory" path="记忆/画图老师.md">') && run2.prompt.includes('家长改过:可以出选择题') && text2.endsWith('- 家长改过:可以出选择题\n- 2026-09-08 家长说别出选择题\n') && i2.messages.find((m) => m.job === s2.job)?.remembered?.join() === '- 2026-09-08 家长说别出选择题', JSON.stringify({ text2 }));
+    const run2 = JSON.parse(readFileSync(join(root, 'conversations', 'helper', `2026-09-08.${s2.job}.run.json`), 'utf8')) as { prompt: string };
+    check('记忆:新话题带原文(家长改过的样子);已有的不重复记,家长删掉的那条会被记回来', run2.prompt.includes('  memory: "记忆/小帮手.md"') && run2.prompt.includes('<vault-note role="memory" path="记忆/小帮手.md">') && run2.prompt.includes('家长改过:可以出选择题') && text2.endsWith('- 家长改过:可以出选择题\n- 2026-09-08 家长说别出选择题\n') && i2.messages.find((m) => m.job === s2.job)?.remembered?.join() === '- 2026-09-08 家长说别出选择题', JSON.stringify({ text2 }));
     const mp = await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: now });
     check('记忆按 agent 分:数学老师还没有', mp.memory === '还没有' && !mp.notes?.some((n) => n.role === 'memory'), JSON.stringify(mp.memory));
   }
@@ -250,11 +253,11 @@ try {
 
   // ---- 孩子端接口:首页、过滤后的会话、发消息、每日上限、配音文件 ----
   const home = (await route('GET', '/api/kid/home', ctx)).json as { title: string; tutors: { name: string; available: boolean; remaining: number; hasVoice: boolean }[]; home: string | null; cards: { kind: string; props: { tutor?: string } }[] };
-  check('首页:标题、孩子端老师(无 scene-maker)、没有课程表那一栏;没发布过 = 缺省首页(每位老师一张卡)', home.title === '小明的老师们' && !('timetable' in home) && home.tutors.length === 3 && !home.tutors.some((t) => t.name === 'scene-maker') && home.home === null && home.cards.map((c) => c.props.tutor).join() === 'chinese-tutor,english-tutor,math-tutor', JSON.stringify(home.cards));
+  check('首页:标题、孩子端老师(无 helper)、没有课程表那一栏;没发布过 = 缺省首页(每位老师一张卡)', home.title === '小明的老师们' && !('timetable' in home) && home.tutors.length === 3 && !home.tutors.some((t) => t.name === 'helper') && home.home === null && home.cards.map((c) => c.props.tutor).join() === 'chinese-tutor,english-tutor,math-tutor', JSON.stringify(home.cards));
   check('老师带 hasVoice 与剩余条数(今天 09-09 孩子还没发过)', home.tutors.find((t) => t.name === 'math-tutor')?.hasVoice === true && home.tutors.find((t) => t.name === 'math-tutor')?.remaining === 30, JSON.stringify(home.tutors));
   const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null; reply: string | null; audio: string | null }[]; remaining: number; pending: string | null };
   check('孩子视图:系统发的只见回复,搜不到工具、错误、家长尾巴', kd.messages.length === 1 && kd.messages[0].question === null && kd.messages[0].reply === '第一次说:新的一天' && !/工具|error|holdup|handoff|costUsd|Read/.test(JSON.stringify(kd)), JSON.stringify(kd));
-  check('hidden 的 scene-maker 对孩子端不存在', (await route('GET', '/api/kid/conversations/scene-maker/today', ctx)).status === 404);
+  check('hidden 的 helper 对孩子端不存在', (await route('GET', '/api/kid/conversations/helper/today', ctx)).status === 404);
   const kp = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '孩子问的' });
   check('孩子发消息 202', kp.status === 202, JSON.stringify(kp.json));
   const kdMid = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { pending: string | null; messages: { pending: boolean }[] };
@@ -410,61 +413,15 @@ try {
   check('图片:workspace 内的图能取', im.status === 200 && im.contentType === 'image/png' && im.file === join(root, 'vault', 'pic.png'));
   check('图片:越界 / 不是图 / 不存在 / 绝对路径都 404', (await route('GET', '/api/kid/image?p=..%2Fx.png', ctx)).status === 404 && (await route('GET', '/api/kid/image?p=cotutor.json', ctx)).status === 404 && (await route('GET', '/api/kid/image?p=vault%2Fnope.png', ctx)).status === 404 && (await route('GET', `/api/kid/image?p=${encodeURIComponent(join(root, 'vault', 'pic.png'))}`, ctx)).status === 404);
 
-  // ---- 场景卡起画图作业:数学老师放一张新课包的 scene 卡 → 系统消息进 scene-maker 的索引(作业单:课包 / 题面 / 讲法 / 讲稿 / 孩子的话 / voice),用它自己的 runtime;到了 scenes.dailyMax 不起,原因进 warnings ----
+  // ---- 画图老师删了(2026-10-07):老师写了 ```scene 当代码卡、不起任何系统轮;要一堂课写「## 想要小课堂」,留在给家长的尾巴里 ----
   now = new Date(2026, 8, 9, 10, 0);
-  const cfgNow = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
-  (cfgNow.tutors as Record<string, Record<string, unknown>>)['scene-maker'] = { display: '画图老师', avatar: '🎨', enabled: true, hidden: true, runtime: 'fake2', policy: { scenes: { dailyMax: 1 } } };
-  writeFileSync(cfgFile, JSON.stringify(cfgNow, null, 2));
-  const rh = await post('math-tutor', { text: '这题要画图,画场景', from: 'kid' });
-  const jobH = (rh.json as { job: string }).job;
+  type HMsg = { job: string; warnings?: string[]; text: string; from: string; kidText?: string | null; parentText?: string; section?: { cards: { kind: string }[] } | null };
+  const rh = await post('math-tutor', { text: '这题要画图,想要小课堂', from: 'kid' });
   await wait('math-tutor');
-  for (let i = 0; i < 200 && !ctx.runner.running('scene-maker') && i < 8; i++) await new Promise((r) => setTimeout(r, 25));
-  await wait('scene-maker');
-  type HMsg = { job: string; scenes?: { bundle: string; job: string | null }[]; warnings?: string[]; text: string; from: string; runtime?: string; kidText?: string | null; artifacts?: string[]; timing?: Timing; costUsd?: number };
-  const dh = (await day('math-tutor', '2026-09-09')).json as { index: { messages: HMsg[] } };
-  const mh = dh.index.messages.find((m) => m.job === jobH)!;
-  check('新课包的场景卡自动起了 scene-maker 的一轮', mh.scenes?.length === 1 && mh.scenes[0].bundle === '2026-09-09-guilv' && typeof mh.scenes[0].job === 'string' && !mh.warnings?.length, JSON.stringify(mh));
-  const dsm = (await day('scene-maker', '2026-09-09')).json as { index: { messages: HMsg[] } };
-  const sm = dsm.index.messages.find((m) => m.job === mh.scenes![0].job)!;
-  check('scene-maker 收到系统消息:作业单带课包 / 题面 / 讲法 / 讲稿 / 孩子的话 / voice,用自己的 runtime,回了「做好了」', sm.from === 'system' && sm.text.startsWith('场景作业(数学老师 math-tutor') && sm.text.includes('\n课包: 2026-09-09-guilv\n') && sm.text.includes('题面:找规律填数') && sm.text.includes('讲法:每次少 5') && sm.text.includes('老师这节的讲稿:等我画好。') && sm.text.includes('孩子刚才说的:这题要画图,画场景') && sm.text.includes('voice: v-math') && sm.runtime === 'fake2' && sm.kidText?.includes('课包 2026-09-09-guilv 做好了') === true, JSON.stringify(sm));
-  const { mergeArtifacts, parseArtifactEvents } = await import('../src/lib/ledger.ts');
-  const ledger1 = parseArtifactEvents(readFileSync(join(root, 'ledger', 'artifacts.jsonl'), 'utf8'));
-  const art1 = mergeArtifacts(ledger1.rows).artifacts.find((a) => a.id === '2026-09-09-guilv');
-  check('场景作业收尾:假老师没记账 → 应用补一整行(retired,没有 manifest)带 costUsd / durationMs / source,消息的 artifacts 记 id,warnings 说明', ledger1.errors.length === 0 && art1?.kind === '课包' && art1.by === 'scene-maker' && art1.status === 'retired' && art1.costUsd === 0.05 && typeof art1.durationMs === 'number' && art1.durationMs === sm.timing?.doneMs && art1.source?.conversation === 'scene-maker/2026-09-09' && art1.source.job === sm.job && JSON.stringify(sm.artifacts) === '["2026-09-09-guilv"]' && sm.warnings?.some((w) => w.includes('没往账本记')) === true, JSON.stringify({ art1, errors: ledger1.errors, sm }));
-  now = new Date(2026, 8, 9, 10, 5);
-  const rh2 = await post('math-tutor', { text: '再画一题,画场景', from: 'kid' });
-  await wait('math-tutor');
-  const mh2 = ((await day('math-tutor', '2026-09-09')).json as { index: { messages: HMsg[] } }).index.messages.find((m) => m.job === (rh2.json as { job: string }).job)!;
-  check('场景作业到了 dailyMax(1)→ 不起,原因进 warnings', mh2.scenes?.[0]?.job === null && mh2.warnings?.some((w) => w.includes('上限 1')) === true, JSON.stringify(mh2));
-  check('孩子端的场景卡不带题面 / 讲法', !JSON.stringify((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json).includes('题面'));
-  now = new Date(2026, 8, 9, 10, 6);
-  mkdirSync(join(root, 'bundles', '2026-09-09-guilv'), { recursive: true });
-  const rh3 = await post('math-tutor', { text: '放旧课包' });
-  await wait('math-tutor');
-  const mh3 = ((await day('math-tutor', '2026-09-09')).json as { index: { messages: HMsg[] } }).index.messages.find((m) => m.job === (rh3.json as { job: string }).job)!;
-  check('放已有的课包(卡上没题面)→ 不起作业、不报', !mh3.scenes && !mh3.warnings?.length && !ctx.runner.running('scene-maker'), JSON.stringify(mh3));
-  // 课包 id 撞了(卡上写了题面,但 scenes/<id>.ts 已有)→ 改成 <id>-2,卡上的 bundle 与作业单一起改,warnings 说明
-  const cfg3 = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
-  ((cfg3.tutors as Record<string, Record<string, unknown>>)['scene-maker'].policy as Record<string, unknown>) = { scenes: { dailyMax: 5 } };
-  writeFileSync(cfgFile, JSON.stringify(cfg3, null, 2));
-  mkdirSync(join(root, 'scenes'), { recursive: true });
-  writeFileSync(join(root, 'scenes', '2026-09-09-guilv.ts'), 'export default {}');
-  // 这次让「老师自己记了账」:先写好 ready 行(-2 是必然的 id),应用收尾只该追加费用行,不报没记账
-  writeFileSync(join(root, 'ledger', 'artifacts.jsonl'), readFileSync(join(root, 'ledger', 'artifacts.jsonl'), 'utf8') + '{"id":"2026-09-09-guilv-2","at":"2026-09-09T10:08:00","by":"scene-maker","kind":"课包","status":"ready","path":"bundles/2026-09-09-guilv-2"}\n');
-  now = new Date(2026, 8, 9, 10, 8);
-  const rh4 = await post('math-tutor', { text: '同名的题,画场景', from: 'kid' });
-  await wait('math-tutor');
-  await wait('scene-maker');
-  type SceneMsg = HMsg & { section?: { cards: { kind: string; props: Record<string, unknown> }[] } | null };
-  const mh4 = ((await day('math-tutor', '2026-09-09')).json as { index: { messages: SceneMsg[] } }).index.messages.find((m) => m.job === (rh4.json as { job: string }).job)!;
-  check('id 撞了 → 卡上 bundle 改成 -2,warnings 说明,作业照起', mh4.section?.cards.find((c) => c.kind === 'scene')?.props.bundle === '2026-09-09-guilv-2' && mh4.scenes?.[0]?.bundle === '2026-09-09-guilv-2' && typeof mh4.scenes[0].job === 'string' && mh4.warnings?.some((w) => w.includes('已占用')) === true, JSON.stringify(mh4));
-  const sm4 = ((await day('scene-maker', '2026-09-09')).json as { index: { messages: HMsg[] } }).index.messages.find((m) => m.job === mh4.scenes![0].job)!;
-  check('作业单里的课包也是新 id', sm4.text.includes('课包: 2026-09-09-guilv-2\n'), sm4.text);
-  const ledger2 = parseArtifactEvents(readFileSync(join(root, 'ledger', 'artifacts.jsonl'), 'utf8'));
-  const rows2 = ledger2.rows.filter((r) => r.id === '2026-09-09-guilv-2');
-  const art2 = mergeArtifacts(ledger2.rows).artifacts.find((a) => a.id === '2026-09-09-guilv-2');
-  check('老师记了账 → 应用只追加一行费用(没有 kind / status),折叠后 ready + costUsd + durationMs,不报没记账', ledger2.errors.length === 0 && rows2.length === 2 && rows2[1].kind === undefined && rows2[1].status === undefined && rows2[1].costUsd === 0.05 && art2?.status === 'ready' && art2.path === 'bundles/2026-09-09-guilv-2' && art2.costUsd === 0.05 && typeof art2.durationMs === 'number' && JSON.stringify(sm4.artifacts) === '["2026-09-09-guilv-2"]' && !sm4.warnings?.some((w) => w.includes('没往账本记')), JSON.stringify({ rows2, art2, sm4 }));
-  check('sceneJobId:「课包:」行优先,没有从收尾句取,都没有 → null', (() => { const R = ctx.runner.constructor as unknown as { sceneJobId: (h: string, f: string | null) => string | null }; return R.sceneJobId('场景作业(x):\n课包: 2026-09-09-guilv-2\n题面:y', '课包 别的 做好了') === '2026-09-09-guilv-2' && R.sceneJobId('why: 没 refs', '课包 2026-09-10-abc 做好了,6 步') === '2026-09-10-abc' && R.sceneJobId('why: 没 refs', '课包 2026-09-10-abc 没做成:check 过不了') === '2026-09-10-abc' && R.sceneJobId('why: 没', '什么都没说') === null; })());
+  const mh = ((await day('math-tutor', '2026-09-09')).json as { index: { messages: HMsg[] } }).index.messages.find((m) => m.job === (rh.json as { job: string }).job)!;
+  check('```scene 当代码卡,板书照出', mh.section?.cards.map((c) => c.kind).slice(0, 2).join() === 'code,text', JSON.stringify(mh.section));
+  check('「## 想要小课堂」进给家长的尾巴,孩子看不到', mh.parentText?.startsWith('## 想要小课堂\n- 题面: 找规律填数') === true && !mh.kidText?.includes('题面') && !JSON.stringify((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json).includes('交错数列'), JSON.stringify(mh));
+  check('没有起别的老师', !existsSync(join(root, 'conversations', 'scene-maker')) && !ctx.runner.running('helper'));
 
   // ---- 话题:新话题不 resume 且不带旧卡;缺省接当前话题;指定今天的旧话题 resume 它自己的会话;history / 日期路由;卡的 turn 按话题 ----
   now = new Date(2026, 8, 9, 10, 20);
@@ -495,8 +452,9 @@ try {
   const log3 = readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${j3.job}.log`), 'utf8');
   check('指定旧话题:resume 旧话题自己的会话,带上旧话题里改过的卡,顶层 session 换回旧的', j3.thread === oldThread && j3.resume === true && log3.includes(oldSession) && m3.thread === oldThread && m3.cards?.length === 1 && m3.kidText?.includes('接着说') === true && dT.session?.id === oldSession, JSON.stringify({ j3, cards: m3.cards, log: log3.slice(0, 200) }));
   check('不存在的话题 → 4xx', (await post('math-tutor', { text: 'x', thread: '0000-9' })).status >= 400 && (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: 'x', thread: 'bad' })).status === 400);
-  const smDay = ((await day('scene-maker', '2026-09-09')).json as TDay).index;
-  check('系统消息(场景作业)每条各开一个话题', smDay.messages.length >= 2 && smDay.messages.every((m) => m.thread === m.job));
+  for (const text of ['系统一', '系统二']) { await ctx.runner.send('helper', { from: 'system', text }); await wait('helper'); }
+  const smDay = ((await day('helper', '2026-09-09')).json as TDay).index;
+  check('系统消息每条各开一个话题(没说 newThread 也开)', smDay.messages.length === 2 && smDay.messages.every((m) => m.thread === m.job));
   const hist = (await route('GET', '/api/kid/conversations/math-tutor/history?days=30', ctx)).json as { today: string; days: { date: string; threads: { thread: string; title: string; sections: number; cards: number }[] }[] };
   const todayH = hist.days.find((d) => d.date === '2026-09-09')!;
   check('history:按天(新的在前),今天两个话题(新的在前),名字是孩子第一句、节数与卡数', hist.today === '2026-09-09' && hist.days[0].date === '2026-09-09' && hist.days.some((d) => d.date === '2026-09-08') && todayH.threads[0].thread === newThread && todayH.threads[0].title === '换个话题 板书' && todayH.threads[0].sections === 2 && todayH.threads[0].cards === 2 && todayH.threads[1].thread === oldThread && todayH.threads[1].sections > 2, JSON.stringify(hist.days.map((d) => ({ date: d.date, n: d.threads.length, t: d.threads.map((t) => t.title) }))));

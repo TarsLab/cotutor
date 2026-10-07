@@ -142,8 +142,6 @@ export function cardTexts(card: BoardCard): string[] {
       return [str(p.text)];
     case 'image':
       return [str(p.caption)];
-    case 'scene':
-      return [str(p.title), str(p.problem), str(p.text)];
     case 'lecture':
       return [str(p.title), str(p.text)];
     case 'canvas':
@@ -278,9 +276,9 @@ export function penFor(card: BoardCard, phrase: string): PenName {
 /** 一行最多几张:明写的并排(课文件 / 老师的 same)能到 3 张;按宽度排的最多 2 张(半宽 + 半宽) */
 export const MAX_CARDS_PER_ROW = 3;
 
-/** 独占一行的卡:标题行、提问卡、画板、录音卡、场景、小课堂(选择题、填空题量得下就能半宽,2026-10-01) */
+/** 独占一行的卡:标题行、提问卡、画板、录音卡、小课堂(选择题、填空题量得下就能半宽,2026-10-01) */
 export function standsAlone(card: BoardCard): boolean {
-  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'record' || card.kind === 'scene' || card.kind === 'lecture';
+  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'record' || card.kind === 'lecture';
 }
 
 const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice', 'fill'];
@@ -327,7 +325,7 @@ function validRows(rows: readonly (readonly number[])[], n: number): boolean {
  * 一节的行(2026-10-01 起排版归代码,《工作流程.md》§二「排版」):每张卡半宽还是全宽,看它自己量出来的样子
  * (half(i),页面在量具里量;没给就按 isShortCard 估)。从左往右排,只看前面的卡:
  * - 相邻两张半宽的并一行;一张半宽后面跟的不是半宽,它自己一行、占左半(右边空着)
- * - 全宽的一行一张;标题行、提问卡、画板、录音卡、场景永远独占
+ * - 全宽的一行一张;标题行、提问卡、画板、录音卡、小课堂永远独占
  * - 明写的并排(section.layout 里不止一张的行:课文件 / 老师写的 same)照办,最多 3 张;
  *   别的端排的到了手机上,超过 2 张或有不能半宽的就拆开,再按宽度排
  * 流式一张张来时,前面的行不会因为后来的卡变。
@@ -481,12 +479,7 @@ export function inkCount(card: BoardCard): number {
 
 /** 重卡:舞台在 iframe 里的舞台包(/stage/)开,页面只管顶栏、字幕行、输入条 */
 export function isHeavy(card: BoardCard): boolean {
-  return card.kind === 'scene' || card.kind === 'canvas' || card.kind === 'lecture';
-}
-
-/** 场景卡能不能播(课包到了);没到紧凑态写「图还在路上」 */
-export function sceneReady(card: BoardCard): boolean {
-  return card.kind === 'scene' && (card.props || {}).ready === true;
+  return card.kind === 'canvas' || card.kind === 'lecture';
 }
 
 /** 小课堂卡能不能放(《小课堂设计.md》§六):课包读得出来,下发时服务端填 ready 与那一段的起止 */
@@ -495,17 +488,13 @@ export function lectureReady(card: BoardCard): boolean {
   return card.kind === 'lecture' && p.ready === true && typeof p.start === 'number' && typeof p.end === 'number' && p.end > p.start;
 }
 
-export type ScenePhase = 'loading' | 'ready' | 'drawing' | 'gap' | 'done' | 'paused';
+export type StagePhase = 'drawing' | 'paused' | 'done';
 
-/** 舞台里场景在播时的字幕行:讲稿句是场景的,右侧按钮映射到播放器(drawing → 暂停;gap / ready / paused → 继续 / 播放;done → 没钮) */
-export function sceneSubtitle(phase: ScenePhase, line: string, step: number, total: number): SubtitleView {
+/** 舞台里小课堂那一段在放时的字幕行:讲稿句是课里的,右侧按钮映射到播放器(drawing → 暂停;paused → 播放;done → 没钮) */
+export function stageSubtitle(phase: StagePhase, line: string): SubtitleView {
   switch (phase) {
     case 'drawing':
       return { text: line, kind: 'line', right: 'pause' };
-    case 'gap':
-      return { text: line, kind: 'line', right: step >= total ? 'none' : 'continue' };
-    case 'ready':
-      return { text: line, kind: 'line', right: 'play' };
     case 'paused':
       return { text: line, kind: 'line', right: 'play' };
     case 'done':
@@ -710,7 +699,7 @@ export function sectionTitle(s: BoardSection): string {
   return cps.length > 14 ? `${cps.slice(0, 14).join('')}…` : cps.join('');
 }
 
-/** stage = 讲稿把这句交给了场景卡的舞台([[play]]),等它 done */
+/** stage = 讲稿把这句交给了小课堂卡的舞台([[play]]),等它 done */
 /** thinking = 老师还在写,已就绪的句子播完了,等下一拍(字幕行见 subtitleFor 的 wait / gap,不出错、不响) */
 export type PlayStatus = 'idle' | 'playing' | 'paused' | 'waiting' | 'done' | 'stage' | 'thinking';
 
@@ -759,7 +748,7 @@ export function advance(state: PlayerState, sections: readonly BoardSection[]): 
 }
 
 /**
- * 这节念完了几句(前缀):前面的节全念完,后面的节一句没念;本节看播放器——在念 / 暂停的那句不算,等下一拍 / 交给场景的那句算。
+ * 这节念完了几句(前缀):前面的节全念完,后面的节一句没念;本节看播放器——在念 / 暂停的那句不算,等下一拍 / 交给小课堂的那句算。
  * 再听时按回放前的位置算(重念不改「念到哪」)
  */
 export function spokenLines(state: PlayerState, sections: readonly BoardSection[], secIdx: number): number {
@@ -819,7 +808,7 @@ export function replayLines(sections: readonly BoardSection[], secIdx: number, t
 }
 
 /**
- * 这会儿能不能再听:板上安静才行——停下等答、念完、孩子自己暂停。老师在想、正在念(包括等下一拍、交给场景)都不行:
+ * 这会儿能不能再听:板上安静才行——停下等答、念完、孩子自己暂停。老师在想、正在念(包括等下一拍、交给小课堂)都不行:
  * 再听会打断正在念的回答,同一个声音念旧内容听着像答非所问(2026-09-18 真机:念到一半点了田字格的喇叭)。再听中按回放前的位置算
  */
 export function replayQuiet(state: PlayerState, pending: boolean): boolean {
@@ -918,7 +907,7 @@ export interface PlayerCtx {
 
 /**
  * 事件:孩子做的(tap*、segment 点读、stageOpen 点卡、send 发话)、声音的(lineEnded 一句念完、lineMissing 那句不在了)、
- * 老师的(liveStart 第一拍就绪、liveBeat 又一拍、liveFinal 写完了、liveDropped 出错撤掉、fresh 整节到了)、舞台的(stageDone 场景播完或关了)、
+ * 老师的(liveStart 第一拍就绪、liveBeat 又一拍、liveFinal 写完了、liveDropped 出错撤掉、fresh 整节到了)、舞台的(stageDone 那一段放完或关了)、
  * 页面的(reset 换老师、halt 只停声音:关老师页 / 按住说话 / 清板、autoplayOff 关自动念、jump 调试跳句)、
  * 录音卡的(recStart 按下录音键、recEnd 松手 / 上滑取消 / 关舞台 / 切后台:停录)
  */
@@ -1070,11 +1059,11 @@ export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { mod
         else { m = halt(m, ctx, fx, false); fx.push({ kind: 'render' }); }
         break;
       }
-      // [[play]]:念完这句把场景铺满播,播完(stageDone)再接着念;小课堂卡的 [[play]] 放卡上那一段(课里原来的声音),放完舞台停在末帧、接着念
+      // [[play]]:念完这句铺满放小课堂卡上那一段(课里原来的声音),放完(stageDone)舞台停在末帧、接着念
       const line = secs[st.section]?.lines[st.line];
       const cue = line?.cues.find((c) => c.name === 'play');
       const card = cue ? secs[st.section].cards[cue.card] : undefined;
-      if (cue && card && ((card.kind === 'scene' && sceneReady(card)) || lectureReady(card))) { put({ ...st, status: 'stage' }); fx.push({ kind: 'openStage', section: st.section, card: cue.card }); break; }
+      if (cue && card && lectureReady(card)) { put({ ...st, status: 'stage' }); fx.push({ kind: 'openStage', section: st.section, card: cue.card }); break; }
       let next = advance(st, secs);
       if (ctx.readonly && next.status === 'waiting') next = { ...next, status: 'done' };
       put(next);
@@ -1162,7 +1151,7 @@ export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { mod
       break;
     }
   }
-  // 在录时老师那边来的(新的一拍、整节、写完、场景该播了、推答题卡)也不响:该念的那句停成暂停,松手后接着念
+  // 在录时老师那边来的(新的一拍、整节、写完、小课堂该放了、推答题卡)也不响:该念的那句停成暂停,松手后接着念
   if (ctx.recording && ev.type !== 'recEnd' && fx.some((f) => f.kind === 'play' || f.kind === 'openStage' || f.kind === 'openAsk')) {
     const kept = fx.filter((f) => f.kind !== 'play' && f.kind !== 'openStage' && f.kind !== 'openAsk');
     if (m.state.replay) m = halt(m, ctx, kept);

@@ -7,7 +7,6 @@
  * - machine: true 的是机器件(cotutor-tutor / cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune / cotutor-home:它们和解析器、契约、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
  *   其余拷进来就是家长的:upgrade 没改过的换新、改过的报 diff 保留(custom / untracked)
  *   来源 koubo = koubo 包根 skills/<name>/(koubo-cli、koubo-coach;《口播老师设计.md》§8):带 onlyWith,口播老师在 cotutor.json 里开着才装、才查
- * 工作流 skill(math-explainer 等)不拷,scene-maker 的工作流写在它的老师文件正文里。
  * 顺带两个机器文件 .cotutor/drawtell、.cotutor/koubo:指向本包 node_modules 里 CLI 的壳脚本,老师与应用用相对路径就能跑它们。
  */
 import { createHash } from 'node:crypto';
@@ -209,7 +208,7 @@ export async function installSkills(root: string): Promise<SkillStep[]> {
     const src = skillSourceDir(skill);
     const item = `.claude/skills/${name}/`;
     if (s.state === 'unavailable' || !src) {
-      steps.push({ item, action: 'kept', note: `${skill.source} 没装,没拷(${skill.source === 'koubo' ? '口播老师' : 'scene-maker 作业'}要它);仓库根 pnpm install` });
+      steps.push({ item, action: 'kept', note: `${skill.source} 没装,没拷(${skill.source === 'koubo' ? '口播老师' : '家长做课包'}要它);仓库根 pnpm install` });
       continue;
     }
     if (s.state === 'missing') {
@@ -280,14 +279,14 @@ export async function writeKouboShim(root: string): Promise<{ file: string; avai
   return { file, available: bin !== null };
 }
 
-/** .cotutor/drawtell:壳脚本,老师在 agents/<name>/ 里用 ../../.cotutor/drawtell 跑 drawtell CLI;机器文件,init / upgrade 每次刷新 */
+/** .cotutor/drawtell:壳脚本,家长在 workspace 里做课包时用 .cotutor/drawtell 跑 drawtell CLI(和服务端烤画面同一版);机器文件,init / upgrade 每次刷新 */
 export async function writeToolShim(root: string): Promise<{ file: string; available: boolean }> {
   const file = join(root, TOOL_SHIM);
   const bin = drawtellBin();
   await mkdir(dirname(file), { recursive: true });
   const body = bin
     ? `#!/bin/sh\n# cotutor 生成的机器文件:drawtell CLI 的壳,指向本包 node_modules 里的 drawtell;init / upgrade 会刷新\nexec node "${bin}" "$@"\n`
-    : `#!/bin/sh\necho "cotutor: node_modules 里没有 drawtell(仓库根 pnpm install),场景作业跑不了" >&2\nexit 1\n`;
+    : `#!/bin/sh\necho "cotutor: node_modules 里没有 drawtell(仓库根 pnpm install),做不了课包" >&2\nexit 1\n`;
   await writeFile(file, body);
   await chmod(file, 0o755);
   return { file, available: bin !== null };

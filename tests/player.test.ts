@@ -26,15 +26,12 @@ import { check, done } from './_check.ts';
 
 const L = (text: string, anchor: number | null, extra: Partial<BoardLine> = {}): BoardLine => ({ text, audio: null, marks: [], ask: isQuestion(text), anchor, cues: [], ...extra });
 const text = (t: string): BoardCard => ({ kind: 'text', props: { text: t } });
-const scene: BoardCard = { kind: 'scene', props: { bundle: 'b', ready: true, steps: [{}] } };
 /** 讲完的一节:卡 0 两句,卡 1 一句问句 */
 const done0: BoardSection = { cards: [text('a'), text('b')], lines: [L('一', 0), L('二', 0), L('三?', 1)] };
 /** 最新一节:卡 0 一句,末句问句 */
 const last: BoardSection = { cards: [text('c')], lines: [L('四', 0), L('五?', 0)] };
 /** 老师还在写:前一拍就绪 */
 const live: BoardSection = { cards: [text('d'), text('e')], lines: [L('六', 0), L('七', 1)], partial: true, ready: 1 };
-/** 念完这句交给场景 */
-const withScene: BoardSection = { cards: [scene], lines: [L('看我画', 0, { cues: [{ card: 0, name: 'play' }] }), L('画完了', 0)] };
 const lecture: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-18-po13-jian-8', start: 19_400, end: 30_000, ready: true } };
 const withLecture: BoardSection = { cards: [lecture], lines: [L('我们回到拆开那一捆的地方', 0, { cues: [{ card: 0, name: 'play' }] }), L('剩下几根?', 0)] };
 const withLectureOff: BoardSection = { cards: [{ kind: 'lecture', props: { bundle: 'gone', ready: false } }], lines: [L('看看', 0, { cues: [{ card: 0, name: 'play' }] }), L('接着说', 0)] };
@@ -71,11 +68,10 @@ const rows: Row[] = [
   { name: '在念 + 一句念完 → 下一句', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.line === 1 && kinds(fx) === 'play' },
   { name: '在念 + 末句问句念完 → 等答、推答题卡', model: M({ section: 1, line: 1, status: 'playing' }), sections: [done0, last], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'waiting' && kinds(fx) === 'render,openAsk' },
   { name: '以前的话题 + 末句问句念完 → 完(不等答)', model: M({ section: 1, line: 1, status: 'playing' }), sections: [done0, last], ctx: { readonly: true }, ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'done' && kinds(fx) === 'render' },
-  { name: '在念 + [[play]] 那句念完 → 交给场景', model: M({ section: 0, line: 0, status: 'playing' }), sections: [withScene], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'stage' && kinds(fx) === 'openStage' },
   { name: '在念 + 锚到小课堂卡的 [[play]] 那句念完 → 交给小课堂(不带段号)', model: M({ section: 0, line: 0, status: 'playing' }), sections: [withLecture], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'stage' && JSON.stringify(fx[0]) === '{"kind":"openStage","section":0,"card":0}' },
   { name: '在念 + 小课堂卡的课包读不出来 → 不停,念下一句', model: M({ section: 0, line: 0, status: 'playing' }), sections: [withLectureOff], ev: { type: 'lineEnded' }, want: (m, fx) => m.state.status === 'playing' && m.state.line === 1 && kinds(fx) === 'play' },
   { name: '交给小课堂 + 那一段放完(舞台还开着)→ 接着念下一句', model: M({ section: 0, line: 0, status: 'stage' }), sections: [withLecture], ctx: { stage: true }, ev: { type: 'stageDone' }, want: (m, fx) => m.state.status === 'playing' && m.state.line === 1 && kinds(fx) === 'play' },
-  { name: '交给场景 + 场景播完 → 接着念', model: M({ section: 0, line: 0, status: 'stage' }), sections: [withScene], ev: { type: 'stageDone' }, want: (m, fx) => m.state.status === 'playing' && m.state.line === 1 && kinds(fx) === 'play' },
+  { name: '交给小课堂 + 孩子关了舞台 → 接着念', model: M({ section: 0, line: 0, status: 'stage' }), sections: [withLecture], ev: { type: 'stageDone' }, want: (m, fx) => m.state.status === 'playing' && m.state.line === 1 && kinds(fx) === 'play' },
   { name: '在念 + 点卡开舞台 → 暂停', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'stageOpen' }, want: (m) => m.state.status === 'paused' },
   { name: '在念 + 拿起相机(同开舞台)→ 暂停,不算念完', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'stageOpen' }, want: (m) => m.state.status === 'paused' && m.state.line === 0 },
   { name: '在念 + 点读 → 暂停', model: M({ section: 1, line: 0, status: 'playing' }), sections: [done0, last], ev: { type: 'segment' }, want: (m) => m.state.status === 'paused' },
@@ -126,13 +122,13 @@ for (const r of rows) {
   check('露:卡前的开场白 → 一张都不露', at(0) === 0);
   check('露:念到锚在卡 1 的句 → 标题行跟着一起露', at(1) === 2);
   check('露:标注落在后面那张 → 那张也露', at(2) === 3);
-  check('露:暂停 / 交给场景同在念', at(2, 'paused') === 3 && at(2, 'stage') === 3);
+  check('露:暂停 / 交给小课堂同在念', at(2, 'paused') === 3 && at(2, 'stage') === 3);
   check('露:停下等答 → 整节(提问卡这时才露)', at(3, 'waiting') === 4);
   check('露:念完 → 整节', at(3, 'done') === 4);
   check('露:前面的节整节、后面没念到的节 -1', shownCards({ section: 1, line: 0, status: 'playing' }, [sec, sec], 0) === 4 && shownCards({ section: 0, line: 0, status: 'playing' }, [sec, sec], 1) === -1);
   check('露:孩子开口(算念完)后面的节也整节', shownCards({ section: 0, line: 1, status: 'done' }, [sec, sec], 1) === 4);
   check('露:再听按回放前的位置算', shownCards(startReplay({ section: 0, line: 1, status: 'paused' }, 0, [3]), [sec], 0) === 2);
-  check('露:[[play]] 到的场景卡跟着露', shownCards({ section: 0, line: 0, status: 'playing' }, [withScene], 0) === 1);
+  check('露:[[play]] 到的小课堂卡跟着露', shownCards({ section: 0, line: 0, status: 'playing' }, [withLecture], 0) === 1);
 }
 
 // ---- 随机事件序列:模拟页面、声音与老师,每一步查不变式 ----
@@ -144,9 +140,9 @@ const NESTED = new Set(['play', 'send', 'openStage', 'openAsk']);
 
 interface World { m: PlayerModel; sections: BoardSection[]; pending: boolean; autoplay: boolean; stage: boolean; recording: boolean; now: number; log: string[] }
 
-/** 一次完整的老师回复(有卡、末句可能是问句、可能带场景) */
+/** 一次完整的老师回复(有卡、末句可能是问句、可能放小课堂的一段) */
 function reply(r: () => number, n: number): BoardSection {
-  if (r() < 0.2) return { cards: [scene, text('x' + n)], lines: [L('看我画' + n, 0, { cues: [{ card: 0, name: 'play' }] }), L('好了' + n, 1), L('懂了吗' + n + '?', 1)] };
+  if (r() < 0.2) return { cards: [lecture, text('x' + n)], lines: [L('再看一遍' + n, 0, { cues: [{ card: 0, name: 'play' }] }), L('好了' + n, 1), L('懂了吗' + n + '?', 1)] };
   const cards = [text('p' + n), text('q' + n)];
   return { cards, lines: [L('开头' + n, null), L('甲' + n, 0), L('乙' + n, 1), L(r() < 0.6 ? '对吗' + n + '?' : '完' + n, 1)] };
 }

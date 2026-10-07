@@ -138,7 +138,7 @@ export const DEV_PAGE = `<!doctype html>
   .notice .ico { font:600 13px/20px var(--mono); width:20px; height:20px; border-radius:5px; text-align:center; flex:none; color:#fff; }
   .notice h5 { margin:0 0 3px; font-size:15px; font-weight:600; }
   .notice p { margin:0; font-size:14px; color:var(--ink-2); white-space:pre-wrap; }
-  .notice.scene { background:var(--accent-soft); } .notice.scene .ico { background:var(--accent); }
+  .notice.note { background:var(--accent-soft); } .notice.note .ico { background:var(--accent); }
   .notice.err { background:var(--err-soft); } .notice.err .ico { background:var(--err); }
   .notice.err p { font:400 13.5px/1.6 var(--mono); color:var(--err); }
   .notice.warn { background:var(--surface-2); } .notice.warn .ico { background:var(--muted); }
@@ -554,7 +554,7 @@ export const DEV_PAGE = `<!doctype html>
     return el;
   };
 
-  const KIND_LABEL = { text: '文字', read: '点读', choice: '选择', fill: '填空', image: '图片', tianzige: '田字格', word: '单词', scene: '讲解动画', canvas: '画板', code: '原样' };
+  const KIND_LABEL = { text: '文字', read: '点读', choice: '选择', fill: '填空', image: '图片', tianzige: '田字格', word: '单词', lecture: '小课堂', canvas: '画板', code: '原样' };
   const cardEl = (card, n) => {
     const p = card.props || {};
     const style = card.kind === 'text' ? (p.style || 'plain') : '';
@@ -576,11 +576,10 @@ export const DEV_PAGE = `<!doctype html>
       body.append(row, p.answers ? h('div', { class: 'meta2' }, '答案:' + p.answers.join(' / ')) : null);
     } else if (card.kind === 'image') {
       body.append(h('img', { src: /^https?:/.test(p.src || '') ? p.src : '/api/kid/image?p=' + encodeURIComponent(p.src || ''), alt: p.caption || '' }), p.caption ? h('p', {}, p.caption) : null);
-    } else if (card.kind === 'scene') {
-      body.append(h('div', {}, h('b', {}, p.title || p.text || p.bundle), p.ready === false ? h('span', { class: 'meta2' }, ' · 课包还没到') : null),
-        p.problem ? h('p', {}, p.problem) : null,
-        h('div', { class: 'meta2' }, '课包 ' + p.bundle + (p.steps ? ' · ' + p.steps + ' 步' : '')),
-        p.ready ? h('a', { class: 'linkish', href: '/stage/?bundle=' + encodeURIComponent('/api/bundles/' + p.bundle + '/') + '&autoplay=1', target: '_blank' }, '打开看看') : null);
+    } else if (card.kind === 'lecture') {
+      body.append(h('div', {}, h('b', {}, p.title || p.bundle), p.ready === false ? h('span', { class: 'meta2' }, ' · 课读不出来') : null),
+        p.text ? h('p', {}, p.text) : null,
+        h('div', { class: 'meta2' }, '课 ' + p.bundle + (typeof p.from === 'number' ? ' · ' + Math.floor(p.from / 60000) + ':' + String(Math.floor(p.from / 1000) % 60).padStart(2, '0') + (typeof p.to === 'number' ? '–' + Math.floor(p.to / 60000) + ':' + String(Math.floor(p.to / 1000) % 60).padStart(2, '0') : '') : '')));
     } else if (card.kind === 'canvas') {
       body.append(h('div', {}, p.prompt || '(没写题目)'),
         h('div', { class: 'meta2' }, p.base && p.base.bundle ? '底图课包 ' + p.base.bundle : p.base && p.base.skeletons ? '行内骨架 ' + p.base.skeletons.length + ' 个' : '空白画板'));
@@ -673,13 +672,8 @@ export const DEV_PAGE = `<!doctype html>
     }
     if (m.parentText) el.append(h('div', { class: 'kidview parent' }, h('span', { class: 'lab' }, '给家长'), h('p', {}, m.parentText.replace(/^## 家长\\s*/, ''))));
 
-    for (const s of m.scenes || []) {
-      el.append(h('div', { class: 'notice scene' }, h('span', { class: 'ico' }, '→'), h('div', {},
-        h('h5', {}, '画图作业 · 课包 ' + s.bundle),
-        h('p', {}, s.job ? '已起 ' + (tutorOf('scene-maker').display || 'scene-maker') + ' 的 ' + s.job : '没起(见下面的提醒)'))));
-    }
     if (m.result === 'error') el.append(h('div', { class: 'notice err' }, h('span', { class: 'ico' }, '!'), h('div', {}, h('h5', {}, '本轮出错:' + (m.error || '未知')), h('p', {}, v.errors[m.job] || ''))));
-    if (m.remembered && m.remembered.length) el.append(h('div', { class: 'notice scene' }, h('span', { class: 'ico' }, '✎'), h('div', {}, h('h5', {}, (m.tidy ? '整理了记忆' : '记住了') + '(vault 里' + t.display + '的记忆文件,在 Obsidian 里可以改、删)'), h('p', {}, m.remembered.join('\\n')))));
+    if (m.remembered && m.remembered.length) el.append(h('div', { class: 'notice note' }, h('span', { class: 'ico' }, '✎'), h('div', {}, h('h5', {}, (m.tidy ? '整理了记忆' : '记住了') + '(vault 里' + t.display + '的记忆文件,在 Obsidian 里可以改、删)'), h('p', {}, m.remembered.join('\\n')))));
     if (m.warnings && m.warnings.length) el.append(h('div', { class: 'notice warn' }, h('span', { class: 'ico' }, 'i'), h('div', {}, h('h5', {}, '提醒'), h('p', {}, m.warnings.join('\\n')))));
     if (m.result === 'running') el.append(h('div', { class: 'running' }, v.running === m.job ? '老师在想……' : '(没跑完:服务重启过或进程被杀,看原文里的转录)'));
     return el;
@@ -792,7 +786,7 @@ export const DEV_PAGE = `<!doctype html>
       if (!ev.length) { box.append(h('p', { class: 'hintline' }, raw.stations.find((x) => x.id === 'timeline')?.note || '这轮没有事件。')); return box; }
       const spans = raw.timeline.spans;
       const total = raw.timeline.total;
-      const lanes = ['main', 'tts', 'ready', 'index', 'scene', 'ledger'].filter((l) => spans.some((x) => x.lane === l));
+      const lanes = ['main', 'tts', 'ready', 'index', 'ledger'].filter((l) => spans.some((x) => x.lane === l));
       const detail = h('p', { class: 'hintline' }, '点一段看它是什么');
       const g = h('div', { class: 'gantt' });
       for (const l of lanes) {
@@ -905,8 +899,8 @@ export const DEV_PAGE = `<!doctype html>
   };
 
   // ---- 老师团:一位一行,政策折叠,改过的才亮 ----
-  const POLICY_FIELDS = [['replyMaxChars', '每句字数上限', 'number'], ['dailyMessages', '每日消息上限', 'number'], ['effort', '动笔前想多久(low = 开口快;medium = 多想一会儿,算题用;high = 最慢最细)', 'enum', ['low', 'medium', 'high']], ['tools', '孩子的话带不带工具(off = 不带,开口快;on = 能查教材、读 vault,慢)', 'enum', ['off', 'on']], ['board', '板书(auto = 老师判断;off = 只说话)', 'enum', ['auto', 'off']], ['scenes.dailyMax', '每天讲解动画上限', 'number'], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number'], ['contextPack.entryChars', '上下文包:档案 / 入口文件 / 记忆各带多少字', 'number']];
-  const SHORT = { replyMaxChars: '每句 ', dailyMessages: '每日 ', effort: '思考 ', tools: '工具 ', board: '板书 ', 'scenes.dailyMax': '动画 ', 'contextPack.recent': '观察 ', 'contextPack.planLines': '计划 ', 'contextPack.entryChars': '原文 ' };
+  const POLICY_FIELDS = [['replyMaxChars', '每句字数上限', 'number'], ['dailyMessages', '每日消息上限', 'number'], ['effort', '动笔前想多久(low = 开口快;medium = 多想一会儿,算题用;high = 最慢最细)', 'enum', ['low', 'medium', 'high']], ['tools', '孩子的话带不带工具(off = 不带,开口快;on = 能查教材、读 vault,慢)', 'enum', ['off', 'on']], ['board', '板书(auto = 老师判断;off = 只说话)', 'enum', ['auto', 'off']], ['contextPack.recent', '上下文包:最近观察条数', 'number'], ['contextPack.planLines', '上下文包:计划行数', 'number'], ['contextPack.entryChars', '上下文包:档案 / 入口文件 / 记忆各带多少字', 'number']];
+  const SHORT = { replyMaxChars: '每句 ', dailyMessages: '每日 ', effort: '思考 ', tools: '工具 ', board: '板书 ', 'contextPack.recent': '观察 ', 'contextPack.planLines': '计划 ', 'contextPack.entryChars': '原文 ' };
   const getPath = (o, p) => p.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
   const setPath = (o, p, v) => { const ks = p.split('.'); let cur = o; for (const k of ks.slice(0, -1)) cur = cur[k] = cur[k] || {}; cur[ks[ks.length - 1]] = v; };
 

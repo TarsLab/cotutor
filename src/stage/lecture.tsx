@@ -14,7 +14,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { frameAt } from 'drawtell/core';
 import { mountBaked } from 'drawtell/render';
 import { clockLabel, lectureAt, lectureClock, type LectureClock } from '../lib/lecture.ts';
-import { loadBaked, loadBundle } from './scene.tsx';
+import { loadBaked, loadBundle } from './bundle.ts';
 
 /** 一处圈(页面与舞台之间传的样子):课里的时刻、SVG 停在哪(画缩略图)、路径(课包坐标) */
 export interface StageMark {

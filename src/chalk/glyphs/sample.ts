@@ -1,8 +1,7 @@
 /**
  * 段 → 点序列的采样器(纯几何,无浏览器依赖)。
  *
- * 点密度直接决定两件事:笔迹曲线的平滑度,以及 excalidraw-animate 的动画粒度
- * (patchSvgFreedraw 给每个点生成一个 SMIL animate,points 越多动画越细但 DOM 越重)。
+ * 点密度直接决定两件事:笔迹曲线的平滑度,以及 bake.json 的体积(freedraw 的路径按点长)。
  * 按弧长自适应:每 STEP 个单位(x 高的几分之一)落一个点,直段少、圆弧多。
  */
 
@@ -11,10 +10,9 @@ import type { Glyph, GlyphStroke, Seg } from './types.ts';
 /**
  * 默认采样步长(归一化单位):x 高 100px 时约 10px 一个点。
  *
- * 这个值同时决定曲线平滑度和**动画的 DOM 体积**,而后者是超线性的:
- * excalidraw-animate 的 patchSvgFreedraw 给每个点生成一条完整路径的 animate,
- * 体积 ≈ O(点数²)。0.05 时单个 `g` 的动画 SVG 就有 586KB,一个词上兆——
- * iPad 上会卡。0.1 视觉几无差别,体积降到约四分之一。要更平滑就按需调小。
+ * 这个值同时决定曲线平滑度和体积。当年定它时播放靠 excalidraw-animate,每个点生成一条完整路径的 animate,
+ * 体积 ≈ O(点数²),0.05 时一个词上兆、iPad 卡;0.1 视觉几无差别。现在播放是描边揭示(体积随点数线性),
+ * 值没动,要更平滑可以按需调小。
  */
 export const SAMPLE_STEP = 0.1;
 /** 一段至少给几个点(短到不足一步的段也要有形) */

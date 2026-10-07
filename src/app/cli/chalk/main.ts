@@ -396,7 +396,8 @@ async function runSnap(rest: string[], json: boolean, workspace?: string): Promi
   const outDir = flags.get('--out') ?? join(ws.paths.snaps, scene.id);
   // 截图要开浏览器,顺手把画面烤了(bake.json 没有或画面变了):做课包的流程跑到 snap,播放就不用 excalidraw 了
   const { bakeBundles, bakeIsFresh } = await import('./bake.ts');
-  const baked = (await bakeIsFresh(join(bundlesDir, scene.id))) ? null : (await bakeBundles(bundlesDir, [scene.id]))[0];
+  const bundleId = file.endsWith('.ts') ? scene.id : file;
+  const baked = (await bakeIsFresh(join(bundlesDir, bundleId))) ? null : (await bakeBundles(bundlesDir, [bundleId]))[0];
   const { snapScene } = await import('./snap.ts');
   const cursor = !flags.has('--no-cursor');
   const shots = await snapScene({ scene, bundlesDir, outDir, step, cursor });

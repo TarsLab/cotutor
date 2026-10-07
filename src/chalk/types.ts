@@ -21,7 +21,7 @@ export interface ChalkSkeleton {
   id: string;
   x: number;
   y: number;
-  /** 单笔时长(毫秒),缺省 500;由 excalidraw-io 注回 id 喂给 excalidraw-animate */
+  /** 单笔时长(毫秒),缺省 500;时钟(timeline / core 的 lessonClock)按它排笔 */
   animateDuration?: number;
   /** excalidraw 自定义数据;协议认领 layer(见 ChalkLayer)与 tool 两个键,其余透传 */
   /**

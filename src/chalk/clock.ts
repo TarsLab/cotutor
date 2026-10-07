@@ -42,7 +42,7 @@ export interface LessonClock {
 export function lessonClock(
   skeletons: readonly ChalkSkeleton[],
   steps: readonly ChalkStep[],
-  opts: { durations?: ReadonlyArray<number | null | undefined> } = {},
+  opts: { durations?: ReadonlyArray<number | null | undefined>; maxStretch?: number } = {},
 ): LessonClock {
   const stretched = stretchToAudio(skeletons, steps, opts).skeletons;
   const stepOf = new Map<string, number>();

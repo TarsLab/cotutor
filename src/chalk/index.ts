@@ -10,7 +10,7 @@ export type { Bounds, BoundsTuple } from './geometry.ts';
 export { circleHits, describeCircle, hitPhrase, colorWord } from './circle.ts';
 export type { CircleHit, CircleResult, LessonPicture } from './circle.ts';
 export { paintElement, renderFrameSvg, bakedPaths, progressMap, pointerBox, pictureHash, bakeMatches } from './bake.ts';
-export type { BakedLesson, BakedElement, BakedNode, ElementPaint, PathPaint, FrameProgress, RenderOptions } from './bake.ts';
+export type { BakedLesson, BakedPicture, BakedElement, BakedNode, ElementPaint, PathPaint, FrameProgress, RenderOptions } from './bake.ts';
 export { CHAR_EM, CJK_EM, FALLBACK_EM, LINE_HEIGHT } from './text-metrics.ts';
 export { computeStepWindows, durationOf, freezeTimeSec, FREEZE_EPS_MS, START_MS, stretchToAudio } from '../player/timeline.ts';
 export type { StretchInfo, StepWindow } from '../player/timeline.ts';

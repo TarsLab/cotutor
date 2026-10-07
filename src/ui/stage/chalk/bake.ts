@@ -4,7 +4,7 @@
  * 挂进文档量每条路径的长度、笔尖要走的轨迹;字体是导出时内嵌的那份。drawtell bake 用 playwright 打开播放页的 ?bake= 来调它。
  */
 
-import type { BakedElement, BakedLesson, BakedNode } from '../core/bake.ts';
+import type { BakedElement, BakedNode, BakedPicture } from '../core/bake.ts';
 import { bakedPaths } from '../core/bake.ts';
 import { exportStaticSvg } from './excalidraw-io.ts';
 import type { ChalkBackground, ChalkSkeleton } from './types.ts';
@@ -35,7 +35,7 @@ function toRoot(svg: SVGSVGElement, el: SVGGraphicsElement): (x: number, y: numb
 export async function bakeSkeletons(
   skeletons: readonly ChalkSkeleton[],
   options: { background?: ChalkBackground; exportPadding?: number } = {},
-): Promise<Omit<BakedLesson, 'source'>> {
+): Promise<BakedPicture> {
   const { svg, elements, offset } = await exportStaticSvg(skeletons, { exportPadding: options.exportPadding });
   const fonts = Array.from(svg.querySelectorAll('style')).map((s) => s.textContent ?? '').join('\n');
   const defsEl = svg.querySelector('defs');

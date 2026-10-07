@@ -73,6 +73,9 @@ export function bakeMatches(baked: unknown, sceneJson: { skeletons?: unknown; ba
   return Boolean(b && b.schema === 'drawtell-bake' && b.version === 1 && b.source?.hash === pictureHash(sceneJson));
 }
 
+/** 只要画面(不管是哪个 excalidraw 烤的、对的哪份画面):播放与出图只用到这些 */
+export type BakedPicture = Omit<BakedLesson, 'source'>;
+
 /** 一条路径在 progress p 时的样子 */
 export interface PathPaint {
   /** 描边揭示:dasharray = len,dashoffset = len × (1 − 画了多少);全画完 = 不设 */
@@ -177,7 +180,7 @@ export interface RenderOptions {
  * 整幅画面在这一刻的 SVG 字符串(服务端出缩略图、测试用):没开始画的元素不出,画到一半的按 paintElement 揭示。
  * 字体原样内嵌,<img> 里也显示得对。
  */
-export function renderFrameSvg(baked: BakedLesson, frame: FrameProgress, opts: RenderOptions = {}): string {
+export function renderFrameSvg(baked: BakedPicture, frame: FrameProgress, opts: RenderOptions = {}): string {
   const prog = progressMap(frame);
   const [vx, vy, vw, vh] = baked.viewBox;
   const clips: string[] = [];

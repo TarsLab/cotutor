@@ -1,11 +1,8 @@
 /**
- * 步进时间轴:镜像 excalidraw-animate 的调度规则自行计算,不读回 SVG。
- * (getBeginTimeList 会把 defs 里 text 辅助 path 计入,索引与元素错位,不可靠。)
- *
- * animateSvg 的规则(0.7.2 dist/animate.js):元素无 groupIds 时按数组顺序串行,
- * 单笔时长从 id 中 `animateDuration:N` 读,否则 500ms;起点 startMs(默认 1000)。
- * 创作层时长是 animateDuration 字段,由 excalidraw-io 注回 id——本模块与 animateSvg
- * 消费同一份数值,天然一致。前提:不用 groupIds、id 不带 animate 指令——validate 兜底。
+ * 步进时间轴:笔画按数组顺序串行,单笔时长 animateDuration(缺省 500ms),起点 START_MS(1000)。
+ * 最早是镜像 excalidraw-animate 的调度规则(0.7.2);播放改成烤好的画面 + 自己的时钟以后(《重新设计.md》第 4 步),
+ * 这里就是时间的唯一来源:ChalkPlayer、core 的 lessonClock、应用的时钟都从这里算,规则没变,老课包的节奏不变。
+ * groupIds、id 里带 animate 指令仍然拒绝(老规矩,check 也拦)。
  */
 
 import type { ChalkSkeleton, ChalkStep } from './types.ts';

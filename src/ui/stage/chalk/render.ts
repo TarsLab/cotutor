@@ -5,7 +5,7 @@
  * 「这一刻画了多少」是 drawtell/core 的 frameAt(时钟)给的,两边同一份 paintElement,和服务端 renderFrameSvg 出的图一样。
  */
 
-import { bakedPaths, paintElement, pointerBox, progressMap, type BakedLesson, type BakedNode, type FrameProgress } from '../core/bake.ts';
+import { bakedPaths, paintElement, pointerBox, progressMap, type BakedNode, type BakedPicture, type FrameProgress } from '../core/bake.ts';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -14,6 +14,8 @@ export interface MountOptions {
   backgroundHref?: string;
   /** 画不画笔尖;缺省画 */
   pointer?: boolean;
+  /** 换一支笔(笔尖落在图片 (0,0),30×30);橡皮那一笔照旧是橡皮 */
+  pointerImg?: string;
 }
 
 export interface MountedLesson {
@@ -33,7 +35,7 @@ function build(n: BakedNode, paths: SVGElement[]): SVGElement {
   return el;
 }
 
-export function mountBaked(baked: BakedLesson, opts: MountOptions = {}): MountedLesson {
+export function mountBaked(baked: BakedPicture, opts: MountOptions = {}): MountedLesson {
   const uid = `dt${++seq}`;
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', baked.viewBox.join(' '));
@@ -116,7 +118,7 @@ export function mountBaked(baked: BakedLesson, opts: MountOptions = {}): Mounted
       });
       const at = pointer as { at: [number, number]; eraser: boolean } | null;
       if (showPointer && at) {
-        const b = pointerBox(at.at, at.eraser);
+        const b = !at.eraser && opts.pointerImg ? { href: opts.pointerImg, x: at.at[0], y: at.at[1], size: 30 } : pointerBox(at.at, at.eraser);
         if (pen.getAttribute('href') !== b.href) pen.setAttribute('href', b.href);
         pen.setAttribute('x', String(b.x));
         pen.setAttribute('y', String(b.y));

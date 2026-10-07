@@ -144,9 +144,7 @@ const clamp01 = (x: number): number => Math.max(0, Math.min(1, x));
 export function paintElement(el: BakedElement, p: number): ElementPaint {
   const paths = bakedPaths(el.node);
   if (!(p > 0)) return { visible: false, done: false, paths: paths.map(() => ({})) };
-  // 字:轮到它就整段出现,不从左往右露、不跟笔尖(2026-10-07 家长看了觉得直接出现更好;excalidraw-animate 是沿一条变长的线露)。
-  // 这一笔的时长照旧占着,时钟和配音的对齐不变
-  const done = p >= 1 || Boolean(el.reveal);
+  const done = p >= 1;
   if (done) return { visible: true, done: true, paths: paths.map(() => ({})), ...(el.reveal ? { clip: el.reveal.width } : {}) };
   // 有描边的路径(虚线也算)一拨一拨首尾相接,同一拨(同一笔的两遍)一起画;虚线没法描边揭示,轮到它就整条出现;
   // 还没轮到的整条藏起来(round 线帽画零长的虚线会露一个点);实心填充最后一段淡入

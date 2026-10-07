@@ -40,8 +40,9 @@ check('课的结尾(最后一笔停在画完前半毫秒)全部元素都在;全�
 const s3 = clock.segments[2];
 const mid3 = at(s3.start + s3.len * 0.45);
 check('第 3 段中间:正在画的那一笔带 dashoffset、笔尖在;后面的斜线还没出', count(mid3, 'stroke-dashoffset') >= 1 && count(mid3, 'stroke-dashoffset') <= 2 && mid3.includes('<image') && !mid3.includes('translate(171 '), String(count(mid3, 'stroke-dashoffset')));
-const textMid = renderFrameSvg(baked, new Map([['q', 0.25]]), { pointer: true });
-check('字轮到了就整段出现:不套裁剪、不露一半、没有笔尖', textMid.includes('13 − 8 =') && !textMid.includes('clip-path') && !textMid.includes('<image') && !renderFrameSvg(baked, new Map([['q', 0]])).includes('13 − 8 ='), textMid.slice(-300));
+const textMid = renderFrameSvg(baked, new Map([['q', 0.25]]));
+const w = Number(/<clipPath[^>]*><rect x="-2" y="[^"]+" width="([\d.]+)"/.exec(textMid)?.[1]);
+check('字画到 1/4:套一层裁剪,框宽 ≈ 字宽 × 1/4(+2)', Math.abs(w - (111.2 * 0.25 + 2)) < 0.1 && textMid.includes('clip-path="url(#clip-q)"'), String(w));
 check('笔尖:画着时有,步尾定格(画完前半毫秒)时收起', renderFrameSvg(baked, new Map([['box', 0.5]]), { pointer: true }).includes('<image') && !renderFrameSvg(baked, new Map([['box', 0.999]]), { pointer: true }).includes('<image') && !renderFrameSvg(baked, new Map([['box', 0.5]])).includes('<image'));
 check('背景图:给了 URL 才画', !full.includes('background') && renderFrameSvg({ ...baked, background: { src: 'background.png', x: 1, y: 2, width: 3, height: 4 } }, new Map(), { backgroundHref: '/b/background.png' }).includes('<image href="/b/background.png" x="1" y="2" width="3" height="4"'));
 

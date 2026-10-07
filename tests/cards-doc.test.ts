@@ -39,6 +39,21 @@ for (const d of docs) {
   check('README 索引:板书的每种一行,带文件名与「是什么」', kindsFor('board').every((k) => idx.includes(`**${k.name}**(${k.name}.md)`)) && idx.includes('用在:'));
   const syn = boardSyntaxDoc();
   check('语法表从 md 拼:板书每种卡的写法与例子都在、没有 expect 注释、没有「反例」栏', kindsFor('board').every((k) => syn.includes(`### ${k.name} — `)) && syn.includes('- [x] 12 平方厘米') && !syn.includes('<!-- expect') && !syn.includes('## 反例'));
+  {
+    const { applyCardGuards } = await import('../src/lib/card-guards.ts');
+    const { boardGuideFor, boardSkillDoc: skillDoc } = await import('../src/cards/docs.ts');
+    const { boardGuideBody } = await import('../src/lib/tutor-rules.ts');
+    const g = 'a\n{{有 x}}\nb\n{{有 y}}\nc\n{{/有}}\n{{/有}}\n\n\n\nd';
+    check('守卫:{{有 x}} 里的行 x 在才留,能套,守卫行不留,删出来的连续空行并掉', applyCardGuards(g, ['x']) === 'a\nb\n\nd' && applyCardGuards(g, ['x', 'y']) === 'a\nb\nc\n\nd' && applyCardGuards(g, []) === 'a\n\nd' && applyCardGuards('{{有 x y}}\nq\n{{/有}}', ['x']) === '');
+    let threw = 0;
+    for (const bad of ['{{有 x}}\na', 'a\n{{/有}}']) { try { applyCardGuards(bad, ['x']); } catch { threw++; } }
+    check('守卫不配对就抛(gen:skills 先红)', threw === 2);
+    check('全部卡的递法 = 出厂 SKILL.md 去掉 frontmatter(没写 cards 的老师拿的那份)', boardGuideFor(kindsFor('board').map((k) => k.name)) === boardGuideBody(skillDoc()));
+    const k = boardGuideFor(['text', 'read', 'record']);
+    check('按老师裁:只有清单里的卡,没给 choice / fill 那句与作业照片,没有守卫行', k.includes('### record') && k.includes('### read') && !k.includes('### choice') && !k.includes('能选,就配一张') && !k.includes('## 作业照片') && !k.includes('{{') && k.includes('## 一节长什么样'));
+    const noCanvas = boardGuideFor(['text', 'choice', 'fill', 'image']);
+    check('有图片没画板:作业照片在,「用 canvas 卡」那段不在', noCanvas.includes('## 作业照片') && !noCanvas.includes('用 `canvas` 卡'));
+  }
   const css = cardsCss();
   check('各卡的 css 拼成一段,每种一个标头,选项行与空都在', CARD_KINDS.every((k) => css.includes(`cards/${k.name}/card.css`)) && css.includes('.ch-o {') && css.includes('.bl {') && css.includes('.c-lecture .th') && !css.includes('c-scene'));
   const sp = splitSections('# x — y\n\n## 甲\na\n\n## 乙\nb\nc\n');

@@ -5,14 +5,24 @@
  */
 import { parseAgentFile } from './agent-file.ts';
 import { stripHumanNotes } from './human-notes.ts';
+import { applyCardGuards } from './card-guards.ts';
+import { BOARD_CARD_KINDS } from '../schema/config.ts';
 
 export const TUTOR_SKILL = 'cotutor-tutor';
 /** 相对 workspace 根 */
 export const TUTOR_RULES_PATH = `.claude/skills/${TUTOR_SKILL}/SKILL.md`;
 
-/** 放进上下文包的正文:去掉 frontmatter(那是给 CLI 的技能索引看的)与给人看的注释 */
-export function tutorRulesBody(skillMd: string): string {
-  return stripHumanNotes(parseAgentFile(skillMd).body);
+/**
+ * 放进上下文包的正文:去掉 frontmatter(那是给 CLI 的技能索引看的)与给人看的注释,按这位老师的卡裁 `{{有 …}}` 段(没给 = 全部)。
+ * 守卫写坏了(家长改过的机器件)就只去掉守卫行,整篇照给。
+ */
+export function tutorRulesBody(skillMd: string, kinds: readonly string[] = BOARD_CARD_KINDS): string {
+  const body = stripHumanNotes(parseAgentFile(skillMd).body);
+  try {
+    return applyCardGuards(body, kinds);
+  } catch {
+    return body.replace(/^\{\{\/?有[^}]*\}\}\s*\n/gm, '');
+  }
 }
 
 /** 谁拿守则:有脸的老师(键以 -tutor 结尾);工具人的工作流写在自己文件里 */
@@ -33,8 +43,9 @@ export const BOARD_GUIDE_IN_SYSTEM = '已在你的系统提示里(「# 板书怎
 
 /**
  * 回归检查(与 CLI 无关):板书写法已经递到手里,老师这轮还用工具去读它 → 预载没起作用(换模型 / 换 CLI / 升版本后最先坏的地方)。
- * 认两种:Skill 工具点名 cotutor-board;任何工具的参数里带 cotutor-board/SKILL.md(Read、cat、别家 CLI 的读文件工具)。references/<种类>.md 是按需读的,不算。
+ * 认三种:Skill 工具点名 cotutor-board;任何工具的参数里带 cotutor-board/SKILL.md(Read、cat、别家 CLI 的读文件工具),或按老师裁的那份 .cotutor/board/。
+ * references/<种类>.md 是按需读的,不算。
  */
 export function boardGuideReads(tools: readonly { name: string; arg: string }[]): string[] {
-  return tools.filter((t) => (t.name === 'Skill' && t.arg.trim() === 'cotutor-board') || t.arg.includes('cotutor-board/SKILL.md')).map((t) => `${t.name} ${t.arg}`.trim());
+  return tools.filter((t) => (t.name === 'Skill' && t.arg.trim() === 'cotutor-board') || t.arg.includes('cotutor-board/SKILL.md') || t.arg.includes('.cotutor/board/')).map((t) => `${t.name} ${t.arg}`.trim());
 }

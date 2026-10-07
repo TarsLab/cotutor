@@ -25,6 +25,8 @@ const p2 = resolvePolicy(layered, 'math-tutor');
 check('政策逐层覆盖', p2.replyMaxChars === 80 && p2.contextPack.recent === 3 && p2.contextPack.planLines === 10 && p2.dailyMessages === 5 && p2.board === 'off');
 check('别的老师不受影响', resolvePolicy(layered, 'chinese-tutor').board === 'auto' && resolvePolicy(layered, 'chinese-tutor').replyMaxChars === 80);
 
+check('出厂老师带卡的清单(text 总在);口播只有 text / read / record', cfg.tutors['math-tutor'].cards?.join() === 'text,choice,fill,image,lecture,canvas,code' && cfg.tutors['koubo-tutor'].cards?.join() === 'text,read,record' && Object.values(cfg.tutors).every((t) => t.cards?.includes('text')));
+check('cards 只认板书的种类:写错名字、写首页的老师卡都过不了契约;不写也行', !CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['txt'] } } }).success && !CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['tutor'] } } }).success && CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x' } } }).success);
 const withHelper = CotutorConfigSchema.parse({ ...raw, tutors: { ...raw.tutors, helper: { display: '工具人', hidden: true } } });
 const kidOnly = listTutors(withHelper, { kidOnly: true });
 check('孩子端不见 hidden 与关着的', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'helper' || t.name === 'koubo-tutor'));

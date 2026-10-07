@@ -23,7 +23,7 @@ import { RENAMED_TUTORS, renameTutorData, renamedEntry, type RenameOp } from './
 import { CONFIG_FILE, ConfigError, readJson, resolvePaths } from './workspace.ts';
 
 /** rename:出厂老师改了键名(rename.ts),值原样搬到新键下,连带文件与目录 */
-export type GapKind = 'tutor' | 'rename' | 'runtime' | 'flag' | 'policy';
+export type GapKind = 'tutor' | 'rename' | 'runtime' | 'flag' | 'policy' | 'cards';
 
 export interface ConfigGap {
   kind: GapKind;
@@ -108,6 +108,12 @@ export async function configGaps(raw: unknown): Promise<ConfigGap[]> {
     if (name in mineTutors || renamedTo.has(name)) continue;
     const display = isObj(entry) && typeof entry.display === 'string' ? entry.display : name;
     gaps.push({ kind: 'tutor', path: `tutors.${name}`, detail: `出厂老师 ${display}(${name})不在 tutors 里`, value: entry });
+  }
+  // 卡的清单(2026-10-07,《卡片协议.md》「谁拿到哪些卡」):出厂老师有、你这份没写 → 补出厂的;不想裁就写全部种类,这条就不再提
+  for (const [name, entry] of Object.entries(factoryTutors)) {
+    const mine = mineTutors[name];
+    if (!isObj(mine) || 'cards' in mine || !isObj(entry) || !Array.isArray(entry.cards)) continue;
+    gaps.push({ kind: 'cards', path: `tutors.${name}.cards`, detail: `${name} 没写卡的清单,板书写法里讲全部卡;出厂清单 ${(entry.cards as string[]).join(' ')}`, value: entry.cards });
   }
 
   const mineRuntimes = isObj(raw.runtimes) ? raw.runtimes : {};

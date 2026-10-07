@@ -102,3 +102,10 @@ vault(家长面,**一个孩子一个 vault**,如 ray-vault,自己是 git 仓;文
     - **留的**:drawtell 的四个领域技能与 `.cotutor/drawtell` 壳(家长做课包用,壳和服务端烤画面是同一版 drawtell);`loadBundle` / `loadBaked` 挪到 `src/stage/bundle.ts`。
     - **老数据**:存下的场景卡下发孩子前退成一段字(老师那句),题面、讲法、课包 id 不下发;老 workspace 里的 `tutors.scene-maker`、它的老师文件、`scenes/` 没有代码再读,家长自己删。老师照旧写 ```` ```scene ```` 当代码卡原样显示。
     没验证的:真老师会不会写 `## 想要小课堂`、写得好不好,要真跑看;按天列出这些请求、做完划掉的界面没做。
+14. 按老师配卡(2026-10-07):cotutor.json 老师条目加 `cards`,板书写法与守则只讲这位老师用得上的卡。起因:每位有脸的老师拿到的板书写法都是同一份 12.5 KB(删场景卡后 11 种),口播老师也读着选择题和作业照片;以后每加一种卡,每位老师的提示都变长。
+    - **配在条目顶层,不在 `policy`**:政策是一层层盖的旋钮,卡的清单是这位老师教什么,数组也不好「在缺省上加一张」。
+    - **只裁写法,解析器不动**:清单外的卡照常解析、照常显示,这轮记一条提醒。按老师裁的写法从包里现拼(和解析器同一版),写到 `.cotutor/board/<老师>-<hash>.md` 给 `{boardFile}`;hash 进文件名,改了清单预热进程自然作废。没写 `cards` = 全部、递出厂的 SKILL.md,老 workspace 不改也照旧。
+    - **手写段落用守卫**:`{{有 x y}}` … `{{/有}}`(`src/lib/card-guards.ts`),板书写法里「能选配 choice、能填配 fill」那句、作业照片一节、作业上用画板那段,守则里小课堂那几段。「一节长什么样」的例子照常留。
+    - **出厂清单**:数学 text choice fill image lecture canvas code;语文 text read choice fill image tianzige lecture canvas;英语 text read choice fill image word lecture;口播 text read record。按老师文件与学科估的,没有真跑数据;`cotutor upgrade --config` 给老 workspace 补。
+    - **没做的**:按这一轮的上下文裁(有照片才给作业照片)——写法预载在系统提示里,预热在孩子开口前就起好进程,同一话题系统提示一变缓存也作废。给 `record` 设「配了 koubo 才给」的门——koubo 的评测模板有缺省值,从配置看不出能不能用。
+    没验证的:裁了以后老师出卡的样子变没变,要 ray 的真跑;清单外的卡多不多,看提醒。

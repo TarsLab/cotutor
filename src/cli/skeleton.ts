@@ -10,7 +10,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../lib/agent-file.ts';
-import { CONFIG_SCHEMA_FILE, TTS_DEFAULT, TUTOR_TOOLS, cotutorJsonSchema } from '../schema/index.ts';
+import { CONFIG_SCHEMA_FILE, TTS_DEFAULT, TUTOR_TOOLS, cotutorJsonSchema, type BoardCardKind } from '../schema/index.ts';
 
 export { TUTOR_TOOLS };
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -130,14 +130,15 @@ export interface ConfigTemplateInput {
   tutors: ShippedAgent[];
 }
 
-const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
+/** 出厂老师的条目;cards = 板书写法里讲哪几种卡(《卡片协议.md》「谁拿到哪些卡」,2026-10-07),text 总在 */
+const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean; cards?: BoardCardKind[]; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
   // 数学多想一会儿:算错的代价大(别的老师用缺省 low)
-  'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮', policy: { effort: 'medium' } },
-  'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚' },
-  'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤' },
+  'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮', cards: ['text', 'choice', 'fill', 'image', 'lecture', 'canvas', 'code'], policy: { effort: 'medium' } },
+  'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚', cards: ['text', 'read', 'choice', 'fill', 'image', 'tianzige', 'lecture', 'canvas'] },
+  'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤', cards: ['text', 'read', 'choice', 'fill', 'image', 'word', 'lecture'] },
   // 口播老师(《口播老师设计.md》§6):要 koubo 才有用,出厂关着;在要练的那个 workspace 里打开,upgrade 再装 koubo 的技能
   // 它每节都要跑 koubo 命令(进度、出题),孩子说的话也带工具
-  'koubo-tutor': { display: '口播老师', subject: '口播', avatar: '🎙️', enabled: false, policy: { tools: 'on' } },
+  'koubo-tutor': { display: '口播老师', subject: '口播', avatar: '🎙️', enabled: false, cards: ['text', 'read', 'record'], policy: { tools: 'on' } },
 };
 
 /** cotutor.json 模板:只在文件不存在时写入;政策文件永不自动重建或覆盖(家长的决定不由机器替她拍板)。 */
@@ -146,7 +147,7 @@ export function configTemplate(input: ConfigTemplateInput): string {
   for (const a of input.tutors) {
     const p = TUTOR_DEFAULTS[a.name];
     tutors[a.name] = p
-      ? { display: p.display, ...(p.subject ? { subject: p.subject } : {}), avatar: p.avatar, enabled: p.enabled ?? true, ...(p.hidden ? { hidden: true } : {}), ...(p.runtime ? { runtime: p.runtime } : {}), ...(p.policy ? { policy: p.policy } : {}) }
+      ? { display: p.display, ...(p.subject ? { subject: p.subject } : {}), avatar: p.avatar, enabled: p.enabled ?? true, ...(p.hidden ? { hidden: true } : {}), ...(p.runtime ? { runtime: p.runtime } : {}), ...(p.cards ? { cards: p.cards } : {}), ...(p.policy ? { policy: p.policy } : {}) }
       : { display: a.name, enabled: true };
   }
   const cfg = {

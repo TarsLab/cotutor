@@ -51,6 +51,15 @@ export function kindsFor(place: CardPlace): readonly CardKind<any>[] {
   return CARD_KINDS.filter((k) => usableIn(k, place));
 }
 
+/**
+ * 这位老师的板书写法里讲哪几种卡(cotutor.json tutors.<老师>.cards,《卡片协议.md》「谁拿到哪些卡」):
+ * 没写 = null(全部,递出厂的 cotutor-board SKILL.md);写了 = 板书能用的、按注册表顺序,text 总在(写坏的卡退成它)。
+ */
+export function tutorCardKinds(cards: readonly string[] | undefined): string[] | null {
+  if (!cards) return null;
+  return kindsFor('board').map((k) => k.name).filter((k) => k === 'text' || cards.includes(k));
+}
+
 /** 正文是「字」的卡:老师把讲稿的 [词] 标注语法写进这些卡时,把括号剥掉(2026-09-11 真跑:孩子看到了「[直角边]」);choice 的 - [ ] / - [x] 不动 */
 const TEXTUAL = new Set(['text', 'read', 'choice', 'fill', 'image', 'word']);
 const MARK_IN_CARD = /\[([^\[\]\n]+)\]/g;

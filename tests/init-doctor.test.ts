@@ -75,6 +75,7 @@ try {
   check('init 再跑:档案按属性认出来,不再补', again.steps.some((x) => x.item.endsWith('孩子.md') && x.action === 'exists'), JSON.stringify(again.steps.filter((x) => x.item.includes('孩子'))));
   check('doctor 查板书技能(机器件,必需)', d1.checks.some((c) => c.name === 'skill.cotutor-board' && c.ok && c.required));
   check('老师链都查了(四位:含关着的口播老师)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 4);
+  check('doctor 报每位有脸的老师讲哪几种卡', d1.checks.find((c) => c.name === 'tutor.math-tutor.cards')?.detail === '板书写法讲 text choice fill image lecture canvas code' && d1.checks.find((c) => c.name === 'tutor.koubo-tutor.cards')?.detail === '板书写法讲 text read record', JSON.stringify(d1.checks.filter((c) => c.name.endsWith('.cards'))));
   check('doctor 查主题:清单过契约、出厂件最新', d1.checks.some((c) => c.name === 'theme.manifest' && c.ok) && d1.checks.some((c) => c.name === 'theme.default.origin' && c.ok));
   check('doctor 查 skill 与 drawtell 壳', d1.checks.filter((c) => c.name.startsWith('skill.') && c.ok).length === 10 && d1.checks.some((c) => c.name === 'skill.cotutor-vault' && c.required) && d1.checks.some((c) => c.name === 'skill.cotutor-home' && c.required) && !d1.checks.some((c) => c.name === 'skill.cotutor-prep') && d1.checks.filter((c) => c.name.startsWith('skill.drawtell') && !c.required).length === 4 && d1.checks.some((c) => c.name === 'drawtell' && c.ok && !c.required));
   check('默认运行时是 claude → .claude 链必需、.qwen 链非必需', d1.checks.some((c) => c.name === 'tutor.math-tutor.claude' && c.required) && d1.checks.some((c) => c.name === 'tutor.math-tutor.qwen' && !c.required));
@@ -168,6 +169,14 @@ try {
     const gaps = await configGaps(old);
     check('差异三项:新老师 + run / resume 各一条', gaps.map((g) => g.path).join(' ') === 'tutors.koubo-tutor runtimes.claude.run runtimes.claude.resume', JSON.stringify(gaps.map((g) => g.path)));
 
+    {
+      // 卡的清单(2026-10-07)之前的条目:没有 cards → 补出厂的;写过的(哪怕是全部)不动
+      const noCards = JSON.parse(JSON.stringify(old)) as Record<string, any>;
+      delete noCards.tutors['math-tutor'].cards;
+      noCards.tutors['chinese-tutor'].cards = ['text', 'read'];
+      const cg = (await configGaps(noCards)).filter((g) => g.kind === 'cards');
+      check('没写 cards 的出厂老师 → 补出厂清单;写过的不动', cg.length === 1 && cg[0].path === 'tutors.math-tutor.cards' && (cg[0].value as string[]).join() === 'text,choice,fill,image,lecture,canvas,code', JSON.stringify(cg));
+    }
     const d = await doctorWorkspace(ws, { probeEnv: false });
     const cap = d.checks.find((c) => c.name === 'captures');
     check('doctor:captures 还没拍过也绿(第一张时建),不是必需项', cap?.ok === true && cap.required === false && cap.detail.includes('还没有'), JSON.stringify(cap));

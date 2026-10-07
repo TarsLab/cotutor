@@ -15,6 +15,7 @@ import { parseAgentFile } from '../lib/agent-file.ts';
 import { localDate } from '../lib/conversation.ts';
 import { memoryPath, missingEntry, pickNotes } from '../lib/vault-notes.ts';
 import { listTutors, resolvePolicy } from '../schema/index.ts';
+import { kindsFor, tutorCardKinds } from '../cards/index.ts';
 import { scanVault } from '../server/store.ts';
 import { parseArtifactEvents } from '../lib/ledger.ts';
 import { parseTimetable } from '../lib/timetable.ts';
@@ -329,6 +330,11 @@ export async function doctorWorkspace(
       // 音色:一老师一音色走 API 是正路(《工作流程.md》§四);没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师不对孩子说话,不用音色
       const tc = ws.config.tutors[name];
       if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),孩子端用浏览器合成声——只适合测试`, fix: '家长端「音色」页能听着挑(挑中直接写进去);终端里 voxtell voices --grep <关键词> 挑一个、voxtell preview <voice> 试听,填进 voice' });
+      // 卡的清单(《卡片协议.md》「谁拿到哪些卡」):有脸的老师才递板书写法;只是报一声讲哪几种
+      if (takesTutorRules(name)) {
+        const kinds = tutorCardKinds(tc.cards);
+        push({ name: `tutor.${name}.cards`, ok: true, required: false, detail: kinds ? `板书写法讲 ${kinds.join(' ')}` : `没写 cards,板书写法讲全部 ${kindsFor('board').length} 种` });
+      }
       // 头像是图片路径时(figshot 写的 avatars/<name>.png)查文件在不在、在不在根以内;emoji 不查
       if (tc.avatar && /\.(png|jpe?g|webp|gif|svg)$/i.test(tc.avatar)) {
         const file = resolve(root, tc.avatar);

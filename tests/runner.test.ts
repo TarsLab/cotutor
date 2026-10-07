@@ -36,6 +36,8 @@ cfg.runtimes = {
   broken: fake(['--fail']),
   stream: fake(['--stream']),
   missing: { run: ['/nonexistent/cli', '{prompt}'], resume: ['/nonexistent/cli', '{prompt}'] },
+  // 像 claude 模板那样把板书写法预载进系统提示({boardFile});假 CLI 吃掉这个旗标
+  preload: fake(['--append-system-prompt-file', '{boardFile}']),
 };
 cfg.paths = { vault: 'vault', plans: '计划', timetable: '课程表.md' };
 cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, 'voices', '--json'] };
@@ -44,6 +46,8 @@ cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS,
 (cfg.tutors as Record<string, Record<string, unknown>>)['chinese-tutor'].policy = { dailyMessages: 1 };
 // 工具人(只和系统、家长打交道的,孩子端不露):测守则只给有脸的、记忆文件、hidden、系统消息开话题
 (cfg.tutors as Record<string, Record<string, unknown>>).helper = { display: '小帮手', avatar: '🧰', enabled: true, hidden: true };
+// 按老师配卡:一位只讲 text / choice 的老师,运行时预载板书写法(孩子端不露,不占首页)
+(cfg.tutors as Record<string, Record<string, unknown>>)['science-tutor'] = { display: '科学老师', enabled: true, hidden: true, runtime: 'preload', cards: ['choice'] };
 writeFileSync(join(root, '.claude', 'agents', 'helper.md'), '---\nname: helper\ndescription: 测试用的工具人\n---\n只和系统打交道。\n');
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault', '计划'), { recursive: true });
@@ -81,6 +85,28 @@ try {
     check('pack 干跑:prompt 带档案与入口文件原文 / 计划 / 观察与消息', r.prompt.includes('有阅读困难') && r.prompt.includes('<vault-note role="entry" path="随便/二上/数学.md">') && !r.prompt.includes('上学期的') && r.prompt.includes('周三前讲退位') && r.prompt.includes('借位忘了') && r.prompt.endsWith('干跑一句\n'), r.prompt);
     check('pack 干跑:来源清单', r.report.vault.semester === '二年级上' && r.report.vault.profile === '档案.md' && r.report.vault.entry === '随便/二上/数学.md' && r.report.vault.refs.join() === '随便/数学二上课本.md,参考/跨十.md' && r.report.plan.found && r.report.plan.kept === 1 && r.report.recent.filesFound.join() === '2026-09-06,2026-09-07' && r.report.recent.total === 1 && r.report.recent.kept === 1 && r.report.recent.subject === '数学', JSON.stringify(r.report));
     check('pack 干跑:不写盘', !existsSync(join(root, 'conversations', 'math-tutor')));
+    // 按老师配卡(《卡片协议.md》「谁拿到哪些卡」):init 给出厂老师写了 cards,板书写法按清单从包里现拼,落 .cotutor/board/<老师>-<hash>.md
+    const guideOf = (p: { boardGuide?: string }): string => readFileSync(join(root, p.boardGuide ?? ''), 'utf8');
+    const mathPath = r.pack.boardGuide ?? '';
+    const mathGuide = guideOf(r.pack);
+    check('按老师裁的板书写法:路径带 hash;数学有选择题、画板、作业照片,没有田字格 / 单词 / 点读 / 录音', /^\.cotutor\/board\/math-tutor-[0-9a-f]{8}\.md$/.test(mathPath) && mathGuide.startsWith('# 板书怎么写') && mathGuide.includes('### choice') && mathGuide.includes('### canvas') && mathGuide.includes('## 作业照片') && !mathGuide.includes('### tianzige') && !mathGuide.includes('### word') && !mathGuide.includes('### read') && !mathGuide.includes('### record') && !mathGuide.includes('{{'), mathPath);
+    const ws2 = loadWorkspace(root);
+    ws2.config.tutors['math-tutor'].cards = ['text', 'choice'];
+    const r2 = await packDryRun(ws2, 'math-tutor', { from: 'kid', at: now, text: '干跑一句' });
+    check('清单改了 → 文件名跟着变(预热进程的 argv 对不上就不用),内容只剩 text / choice、没有作业照片', r2.pack.boardGuide !== mathPath && guideOf(r2.pack).includes('### choice') && !guideOf(r2.pack).includes('### fill') && !guideOf(r2.pack).includes('## 作业照片') && existsSync(join(root, mathPath)), String(r2.pack.boardGuide));
+    const rk = await packDryRun(loadWorkspace(root), 'koubo-tutor', { from: 'kid', at: now, text: '干跑一句' });
+    const kRules = rk.pack.notes?.find((n) => n.role === 'rules')?.text ?? '';
+    const mRules = r.pack.notes?.find((n) => n.role === 'rules')?.text ?? '';
+    check('口播老师(text / read / record):板书写法没有选择题那句、没有作业照片;守则没有小课堂那几段;数学的守则有', guideOf(rk.pack).includes('### record') && !guideOf(rk.pack).includes('能选,就配一张') && !guideOf(rk.pack).includes('## 作业照片') && !kRules.includes('小课堂') && kRules.includes('## 记忆') && mRules.includes('## 想要小课堂') && mRules.includes('### 孩子刚看完小课堂') && !mRules.includes('{{'), kRules.slice(0, 200));
+    const wsAll = loadWorkspace(root);
+    delete wsAll.config.tutors['chinese-tutor'].cards;
+    const ra = await packDryRun(wsAll, 'chinese-tutor', { from: 'kid', at: now, text: '干跑一句' });
+    check('没写 cards → 照旧递出厂的 SKILL.md(全部卡)', ra.pack.boardGuide === '.claude/skills/cotutor-board/SKILL.md', String(ra.pack.boardGuide));
+    const rs = await ctx.runner.send('science-tutor', { from: 'kid', text: '你好', newThread: true });
+    await wait('science-tutor');
+    const runS = JSON.parse(readFileSync(join(root, 'conversations', 'science-tutor', `2026-09-08.${rs.job}.run.json`), 'utf8')) as { prompt: string; argv: string[] };
+    const fileS = runS.argv[runS.argv.indexOf('--append-system-prompt-file') + 1] ?? '';
+    check('预载的运行时:{boardFile} 填的是这位老师裁过的那份(只有 text / choice),上下文包只写「已在系统提示里」', fileS.startsWith(join(root, '.cotutor', 'board', 'science-tutor-')) && readFileSync(fileS, 'utf8').includes('### choice') && !readFileSync(fileS, 'utf8').includes('### fill') && runS.prompt.includes('boardGuide: "已在你的系统提示里') && !runS.prompt.includes('<cotutor-board path='), fileS);
   }
   // ---- 第一轮:新开 ----
   const r1 = await post('math-tutor', { text: '妈妈我不懂这一步', from: 'kid' });
@@ -181,7 +207,7 @@ try {
   const pr3 = await promptOf(d3.index.messages[2].job);
   check('笔记原文:新会话整篇带,消息记下版本', pr1.includes('<vault-note role="profile"') && pr1.includes('<vault-note role="entry"') && /^随便\/二上\/数学\.md@[0-9a-f]{8}$/.test((d3.index.messages[0] as { notes?: Record<string, string> }).notes?.entry ?? ''), pr1);
   check('守则:新会话整篇带在笔记前面,续会话没改过 → 只写「未变」', pr1.includes('\n  rules: ".claude/skills/cotutor-tutor/SKILL.md"\n') && pr1.indexOf('<cotutor-rules') < pr1.indexOf('<vault-note') && !pr1.includes('name: cotutor-tutor') && !pr2.includes('<cotutor-rules') && pr2.includes('rules: ".claude/skills/cotutor-tutor/SKILL.md(未变,原文在本话题前面)"'), pr2);
-  check('板书写法:fake 运行时没有预载占位符 → 话题第一条注入 <cotutor-board>(在守则后、家长笔记前,不带 frontmatter),续会话「未变」', pr1.includes('\n  boardGuide: ".claude/skills/cotutor-board/SKILL.md"\n') && pr1.indexOf('<cotutor-rules path=') < pr1.indexOf('<cotutor-board path=') && pr1.indexOf('<cotutor-board path=') > 0 && pr1.indexOf('<cotutor-board path=') < pr1.indexOf('<vault-note role=') && pr1.includes('# 板书怎么写') && !pr1.includes('disable-model-invocation') && !pr2.includes('<cotutor-board path=') && pr2.includes('boardGuide: ".claude/skills/cotutor-board/SKILL.md(未变,原文在本话题前面)"'), JSON.stringify({ line: pr1.split('\n').filter((l) => l.includes('boardGuide')), tag1: pr1.indexOf('<cotutor-board'), rules1: pr1.indexOf('<cotutor-rules'), note1: pr1.indexOf('<vault-note'), title: pr1.includes('# 板书怎么写'), fm: pr1.includes('disable-model-invocation'), tag2: pr2.includes('<cotutor-board'), line2: pr2.split('\n').filter((l) => l.includes('boardGuide')) }));
+  check('板书写法:fake 运行时没有预载占位符 → 话题第一条注入 <cotutor-board>(在守则后、家长笔记前,不带 frontmatter),续会话「未变」', /\n  boardGuide: "\.cotutor\/board\/math-tutor-[0-9a-f]{8}\.md"\n/.test(pr1) && pr1.indexOf('<cotutor-rules path=') < pr1.indexOf('<cotutor-board path=') && pr1.indexOf('<cotutor-board path=') > 0 && pr1.indexOf('<cotutor-board path=') < pr1.indexOf('<vault-note role=') && pr1.includes('# 板书怎么写') && !pr1.includes('disable-model-invocation') && !pr2.includes('<cotutor-board path=') && /boardGuide: "\.cotutor\/board\/math-tutor-[0-9a-f]{8}\.md\(未变,原文在本话题前面\)"/.test(pr2), JSON.stringify({ line: pr1.split('\n').filter((l) => l.includes('boardGuide')), tag1: pr1.indexOf('<cotutor-board'), rules1: pr1.indexOf('<cotutor-rules'), note1: pr1.indexOf('<vault-note'), title: pr1.includes('# 板书怎么写'), fm: pr1.includes('disable-model-invocation'), tag2: pr2.includes('<cotutor-board'), line2: pr2.split('\n').filter((l) => l.includes('boardGuide')) }));
   {
     // 换语文老师跑:数学老师这一天的消息序号后面的断言写死了,不往里插
     const rr = await post('chinese-tutor', { text: '回读板书' });
@@ -404,6 +430,8 @@ try {
   await ctx.runner.flush();
   const assetDir = join(root, 'conversations', 'math-tutor', `2026-09-09.${jobA}.cards`, '2');
   check('点读卡的两段配音落盘 .cards/2/1.mp3、2.mp3(第 3 张卡是点读)', existsSync(join(assetDir, '1.mp3')) && readFileSync(join(assetDir, '2.mp3'), 'utf8').includes('banana 香蕉'), String(existsSync(assetDir)));
+  const wA = ((await day('math-tutor', '2026-09-09')).json as { index: { messages: { job: string; warnings?: string[] }[] } }).index.messages.find((m) => m.job === jobA)?.warnings ?? [];
+  check('数学老师的清单里没有点读:照常出、照常配音,这轮记一条清单外的卡(图片在清单里,不报)', wA.some((w) => w.startsWith('板书里有清单外的卡:read(') && w.includes('tutors.math-tutor.cards')) && !wA.some((w) => w.includes('image')), JSON.stringify(wA));
   const kdA = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; section?: { cards: { kind: string; assets?: string[] }[] } }[] };
   const ka = kdA.messages.find((m) => m.job === jobA)!.section!;
   check('孩子端:点读卡带 assets,别的卡没有;图片卡在', ka.cards[2].kind === 'read' && JSON.stringify(ka.cards[2].assets) === `["2026-09-09.${jobA}.cards/2/1.mp3","2026-09-09.${jobA}.cards/2/2.mp3"]` && !('assets' in ka.cards[0]) && ka.cards[3].kind === 'image', JSON.stringify(ka.cards));

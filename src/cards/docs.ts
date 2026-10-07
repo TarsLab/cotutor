@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CARD_KINDS, kindsFor, type CardPlace } from './index.ts';
 import { stripHumanNotes } from '../lib/human-notes.ts';
+import { applyCardGuards } from '../lib/card-guards.ts';
 
 /** 本包自带的卡协议目录(仓库检出与 npm 安装都在包根 cards/) */
 export const PACKAGE_CARDS_DIR = fileURLToPath(new URL('../../cards/', import.meta.url));
@@ -55,9 +56,11 @@ export function readCardDoc(kind: string, dir = PACKAGE_CARDS_DIR): CardDoc {
   return { kind, md, sections, headline };
 }
 
-/** 能用在某处的种类的协议(按注册表的顺序);缺省板书——cotutor-board 技能只列这些 */
-export function cardDocs(dir = PACKAGE_CARDS_DIR, place: CardPlace = 'board'): CardDoc[] {
-  return kindsFor(place).map((k) => readCardDoc(k.name, dir));
+/** 能用在某处的种类的协议(按注册表的顺序);缺省板书——cotutor-board 技能只列这些;给了 only 就只要这几种(按老师裁,boardGuideFor) */
+export function cardDocs(dir = PACKAGE_CARDS_DIR, place: CardPlace = 'board', only?: readonly string[]): CardDoc[] {
+  return kindsFor(place)
+    .filter((k) => !only || only.includes(k.name))
+    .map((k) => readCardDoc(k.name, dir));
 }
 
 /** 例子里的 `<!-- expect {…} -->` 注释:给老师看的版本要去掉 */
@@ -66,18 +69,27 @@ const EXPECT_RE = /^\s*<!--\s*expect\b.*?-->\s*\n?/gm;
 /** 板书写法的手写部分(开头的规矩、一节的例子、作业照片),人改的就是这一篇;`{{卡的种类}}` 那一行由下面拼的各种卡替换 */
 export const BOARD_GUIDE_SOURCE = '板书怎么写.md';
 const KINDS_SLOT = /^\{\{卡的种类\}\}$/m;
-
-/** 给老师看的语法表(SKILL.md 的正文):cards/板书怎么写.md(剥掉给人看的注释)+ 各 card.md 的「是什么 / 写法 / 例子」 */
-export function boardSyntaxDoc(dir = PACKAGE_CARDS_DIR): string {
-  const kinds = cardDocs(dir)
+/**
+ * 给老师看的语法表(SKILL.md 的正文):cards/板书怎么写.md(剥掉给人看的注释,按卡裁段落)+ 各 card.md 的「是什么 / 写法 / 例子」。
+ * kinds 不给 = 板书的全部种类(出厂的 SKILL.md);给了就只拼这几种(按老师裁,boardGuideFor)。
+ */
+export function boardSyntaxDoc(dir = PACKAGE_CARDS_DIR, kinds?: readonly string[]): string {
+  const all = kindsFor('board').map((k) => k.name);
+  const want = kinds ? all.filter((k) => kinds.includes(k)) : all;
+  const docs = cardDocs(dir, 'board', want)
     .map((d) => {
       const parts = [`### ${d.headline}`, d.sections['是什么'], d.sections['写法'], d.sections['例子']?.replace(EXPECT_RE, '')].filter((x) => x && x.trim());
       return parts.join('\n\n').trim();
     })
     .join('\n\n');
-  const guide = stripHumanNotes(readFileSync(join(dir, BOARD_GUIDE_SOURCE), 'utf8'));
+  const guide = applyCardGuards(stripHumanNotes(readFileSync(join(dir, BOARD_GUIDE_SOURCE), 'utf8')), want);
   if (!KINDS_SLOT.test(guide)) throw new Error(`cards/${BOARD_GUIDE_SOURCE} 里没有「{{卡的种类}}」那一行`);
-  return `${guide.replace(KINDS_SLOT, () => kinds)}\n`;
+  return `${guide.replace(KINDS_SLOT, () => docs)}\n`;
+}
+
+/** 按老师裁的板书写法(递给老师的正文,同 boardGuideBody(SKILL.md) 的形状:没有 frontmatter、没有给人看的注释) */
+export function boardGuideFor(kinds: readonly string[], dir = PACKAGE_CARDS_DIR): string {
+  return stripHumanNotes(boardSyntaxDoc(dir, kinds));
 }
 
 /** references/README.md:一行一种——名字、一句是什么、何时用;老师按需 @ 单张 */

@@ -20,6 +20,11 @@ export interface BakedNode {
   children?: BakedNode[];
   /** path 的总长(SVG 坐标):有描边的路径按它揭示 */
   len?: number;
+  /**
+   * 同一笔的第几遍:手绘(rough.js)每一笔描两遍,bake 把两遍拆成两条 path,pass 相同的一起画(同 excalidraw-animate);
+   * 没有 = 自己一拨
+   */
+  pass?: number;
 }
 
 export interface BakedElement {
@@ -34,9 +39,15 @@ export interface BakedElement {
   eraser?: boolean;
 }
 
+/**
+ * bake.json 的格式版本;画法变了就加一,旧的一律当没烤(应用后台重烤、snap 顺手重烤)。
+ * 2(2026-10-07):手绘一笔的两遍拆成两条 path、记 pass,一起画——1 的两遍先后画,笔画完一遍跳回起点再画,看着像抖
+ */
+export const BAKE_VERSION = 2;
+
 export interface BakedLesson {
   schema: 'drawtell-bake';
-  version: 1;
+  version: typeof BAKE_VERSION;
   /** 烤它的 excalidraw 版本、画面的 hash(scene.json 的 skeletons 与 background;变了要重烤) */
   source: { excalidraw: string; hash: string };
   viewBox: [number, number, number, number];
@@ -70,7 +81,7 @@ export function pictureHash(sceneJson: { skeletons?: unknown; background?: unkno
 /** 这份烤好的画面是不是这份 scene.json 的 */
 export function bakeMatches(baked: unknown, sceneJson: { skeletons?: unknown; background?: unknown }): baked is BakedLesson {
   const b = baked as Partial<BakedLesson> | null;
-  return Boolean(b && b.schema === 'drawtell-bake' && b.version === 1 && b.source?.hash === pictureHash(sceneJson));
+  return Boolean(b && b.schema === 'drawtell-bake' && b.version === BAKE_VERSION && b.source?.hash === pictureHash(sceneJson));
 }
 
 /** 只要画面(不管是哪个 excalidraw 烤的、对的哪份画面):播放与出图只用到这些 */
@@ -109,6 +120,21 @@ export function bakedPaths(node: BakedNode): { node: BakedNode; stroke: boolean;
   return out;
 }
 
+/** 有描边的路径分拨:pass 相同、挨着的一拨一起画,拨与拨首尾相接;一拨的长度取最长的那条 */
+export function strokeGroups(paths: readonly { node: BakedNode; stroke: boolean }[]): { idx: number[]; len: number }[] {
+  const out: { idx: number[]; len: number; pass?: number }[] = [];
+  paths.forEach((x, i) => {
+    if (!x.stroke) return;
+    const last = out[out.length - 1];
+    const prev = last ? paths[last.idx[last.idx.length - 1]] : undefined;
+    if (last && x.node.pass !== undefined && last.pass === x.node.pass && prev && last.idx[last.idx.length - 1] === i - 1) {
+      last.idx.push(i);
+      last.len = Math.max(last.len, x.node.len ?? 0);
+    } else out.push({ idx: [i], len: x.node.len ?? 0, ...(x.node.pass !== undefined ? { pass: x.node.pass } : {}) });
+  });
+  return out.map(({ idx, len }) => ({ idx, len }));
+}
+
 /** 实心填充(没法描边揭示)从 progress 多少开始淡入 */
 const FILL_FROM = 0.7;
 /** 画到多少以后笔尖收起 */
@@ -120,17 +146,21 @@ export function paintElement(el: BakedElement, p: number): ElementPaint {
   if (!(p > 0)) return { visible: false, done: false, paths: paths.map(() => ({})) };
   const done = p >= 1;
   if (done) return { visible: true, done: true, paths: paths.map(() => ({})), ...(el.reveal ? { clip: el.reveal.width } : {}) };
-  // 有描边的路径(虚线也算)按长度首尾相接;虚线没法描边揭示,轮到它就整条出现;实心填充最后一段淡入
-  const total = paths.reduce((a, x) => a + (x.stroke ? x.node.len! : 0), 0);
-  let at = 0;
+  // 有描边的路径(虚线也算)一拨一拨首尾相接,同一拨(同一笔的两遍)一起画;虚线没法描边揭示,轮到它就整条出现;
+  // 还没轮到的整条藏起来(round 线帽画零长的虚线会露一个点);实心填充最后一段淡入
+  const groups = strokeGroups(paths);
+  const total = groups.reduce((a, g) => a + g.len, 0);
   const drawn = p * total;
-  const paints = paths.map((x): PathPaint => {
-    if (!x.stroke) return { opacity: total > 0 ? clamp01((p - FILL_FROM) / (1 - FILL_FROM)) : p };
-    const len = x.node.len!;
-    const q = clamp01((drawn - at) / len);
-    at += len;
-    return x.dashed ? { opacity: q > 0 ? 1 : 0 } : { dash: { len, offset: len * (1 - q) } };
-  });
+  const paints: PathPaint[] = paths.map(() => ({ opacity: total > 0 ? clamp01((p - FILL_FROM) / (1 - FILL_FROM)) : p }));
+  let at = 0;
+  for (const g of groups) {
+    const q = g.len > 0 ? clamp01((drawn - at) / g.len) : 1;
+    at += g.len;
+    for (const i of g.idx) {
+      const len = paths[i].node.len!;
+      paints[i] = q <= 0 ? { opacity: 0 } : paths[i].dashed ? {} : q >= 1 ? {} : { dash: { len, offset: len * (1 - q) } };
+    }
+  }
   // 笔尖只在真画着的时候出现:步尾定格停在画完前半毫秒(p ≈ 0.999),笔不该杵在那儿
   return { visible: true, done: false, paths: paints, ...(el.reveal ? { clip: el.reveal.width * p } : {}), ...(p < POINTER_UNTIL ? (trackAt(el.track, p) ?? {}) : {}) };
 }

@@ -61,8 +61,17 @@ const p0 = paintElement(el, 0);
 const half = paintElement(el, 0.5);
 const done = paintElement(el, 1);
 check('p = 0 不出;p = 1 全画完、没有揭示', !p0.visible && done.visible && done.done && done.paths.every((x) => !x.dash && x.opacity === undefined));
-check('描边按长度首尾相接(10 + 30 + 虚线 20,画了一半 = 第一条画完、第二条画了 2/3);stroke 继承父节点', half.paths[1].dash?.offset === 0 && Math.abs(half.paths[2].dash!.offset - 10) < 1e-9, JSON.stringify(half.paths));
-check('实心填充最后淡入;虚线轮到它才整条出现', half.paths[0].opacity === 0 && Math.abs(paintElement(el, 0.85).paths[0].opacity! - 0.5) < 1e-9 && half.paths[3].opacity === 0 && paintElement(el, 0.8).paths[3].opacity === 1, JSON.stringify(half.paths));
+check('描边按长度首尾相接(10 + 30 + 虚线 20,画了一半 = 第一条画完、第二条画了 2/3);stroke 继承父节点', !half.paths[1].dash && half.paths[1].opacity === undefined && Math.abs(half.paths[2].dash!.offset - 10) < 1e-9, JSON.stringify(half.paths));
+check('实心填充最后淡入;虚线轮到它才整条出现;没轮到的整条藏起来(不露 round 线帽的点)', half.paths[0].opacity === 0 && Math.abs(paintElement(el, 0.85).paths[0].opacity! - 0.5) < 1e-9 && half.paths[3].opacity === 0 && paintElement(el, 0.8).paths[3].opacity === undefined && paintElement(el, 0.1).paths[2].opacity === 0, JSON.stringify(half.paths));
+{
+  // 手绘一笔描两遍:bake 拆成两条 path、pass 相同,一起画;下一笔(另一个 pass)等这一拨画完
+  const twice: BakedElement = { id: 't', track: [], node: { tag: 'g', attrs: { stroke: '#000' }, children: [
+    { tag: 'path', attrs: {}, len: 100, pass: 0 }, { tag: 'path', attrs: {}, len: 90, pass: 0 },
+    { tag: 'path', attrs: {}, len: 100, pass: 1 }, { tag: 'path', attrs: {}, len: 110, pass: 1 },
+  ] } };
+  const h = paintElement(twice, 50 / 210); // 两拨长 100 + 110,画到 50 = 第一拨一半
+  check('同一笔的两遍一起画(按各自长度画同样的几分之几),下一笔等着;一拨的长度取最长的', Math.abs(h.paths[0].dash!.offset - 50) < 1e-9 && Math.abs(h.paths[1].dash!.offset - 45) < 1e-9 && h.paths[2].opacity === 0 && h.paths[3].opacity === 0, JSON.stringify(h.paths));
+}
 check('笔尖沿轨迹插值', JSON.stringify(paintElement(el, 0.25).pointer) === '[5,0]' && JSON.stringify(paintElement(el, 0.75).pointer) === '[10,5]');
 
 // ---- 画面指纹 ----

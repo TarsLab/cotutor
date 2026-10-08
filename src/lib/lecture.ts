@@ -28,6 +28,24 @@ export function lectureLines(clock: Pick<LectureClock, 'segments'>): string[] {
   return clock.segments.map((s) => `${clockLabel(s.start)} ${s.line.trim()}`);
 }
 
+/** 换了 src 声音迟迟不出来,等多久就不等了,按墙上的钟走(毫秒) */
+export const VOICE_STALL_MS = 1500;
+
+/**
+ * 放着的时候时钟下一刻走到哪(课包;《小课堂设计.md》§三、拍板 36):这一段的配音在放,跟着配音走——
+ * 「段起点 + 配音放到哪」,声音还没出来就停在原地等(不往回退);等过 VOICE_STALL_MS、配音放完了、没在放配音,按墙上的钟走 dt。
+ * voice:正在放的是第几段的配音、放到哪(毫秒)、位置多久没动了;没在放 = null。
+ */
+export function lectureNext(clock: Pick<LectureClock, 'segments' | 'total'>, cur: number, dt: number, voice: { index: number; posMs: number; stalledMs: number } | null): number {
+  const wall = Math.min(clock.total, cur + dt);
+  if (!voice) return wall;
+  const s = clock.segments[voice.index];
+  if (!s || s.audioMs === null || voice.posMs >= s.audioMs || voice.stalledMs > VOICE_STALL_MS) return wall;
+  // 声音是别的段的(刚拖过、刚换段):不跟
+  if (cur < s.start || cur >= s.start + s.len) return wall;
+  return Math.min(clock.total, Math.max(cur, s.start + voice.posMs));
+}
+
 // ---- 圈(《小课堂设计.md》§四):孩子暂停后在画面上圈的一处 → 一段话(那一刻在讲哪句、圈住了什么)。只认课包 ----
 
 /** 一处圈:课里的时刻 + 一条路径(课包画面坐标,即 scene.json 的坐标系) */

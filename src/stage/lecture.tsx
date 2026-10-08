@@ -13,7 +13,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { frameAt } from 'drawtell/core';
 import { mountBaked } from 'drawtell/render';
-import { clockLabel, lectureAt, lectureClock, type LectureClock } from '../lib/lecture.ts';
+import { clockLabel, lectureAt, lectureClock, lectureNext, type LectureClock } from '../lib/lecture.ts';
 import { loadBaked, loadBundle } from './bundle.ts';
 
 /** 一处圈(页面与舞台之间传的样子):课里的时刻、SVG 停在哪(画缩略图)、路径(课包坐标) */
@@ -156,6 +156,8 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const t = useRef(0);
   const last = useRef(0);
   const seg = useRef(-1);
+  /** 配音放到哪、从什么时候起没动(时钟跟着声音走,拍板 36) */
+  const voiceAt = useRef({ index: -1, pos: -1, since: 0 });
   const scrubbing = useRef(false);
   const watch = useRef<LectureWatch>({ watchedMs: 0, finished: false, pauses: 0 });
 
@@ -258,7 +260,21 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     setNow(ms);
   }, []);
 
-  // 一个时钟:播着就按真实时间往前走;到了结尾停下,算看完
+  /**
+   * 正在放的配音:第几段、放到哪、多久没动了;没在放、放不出来(404 之类)= null。
+   * 还没装好(readyState < 2)的 currentTime 是我们刚设的值,不算动了,位置当 0(时钟原地等)。
+   */
+  const voiceOf = (p: number): { index: number; posMs: number; stalledMs: number } | null => {
+    const a = audio.current;
+    if (!a || a.paused || a.error || seg.current < 0 || !a.getAttribute('src')) return null;
+    const ready = a.readyState >= 2;
+    const pos = ready ? a.currentTime * 1000 : -1;
+    const w = voiceAt.current;
+    if (w.index !== seg.current || (ready && w.pos !== pos)) voiceAt.current = { index: seg.current, pos, since: p };
+    return { index: seg.current, posMs: Math.max(0, pos), stalledMs: p - voiceAt.current.since };
+  };
+
+  // 一个时钟:播着就往前走(课包跟着配音);到了结尾停下,算看完
   useEffect(() => {
     if (!clock || !playing) return;
     let raf = 0;
@@ -267,9 +283,9 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
       const dt = (p - last.current) * rate.current;
       last.current = p;
       if (!scrubbing.current) {
-        // 视频:时钟就是视频自己的;课包:按真实时间往前走
+        // 视频:时钟就是视频自己的;课包:配音在放跟着配音走,没在放按真实时间往前走(看录像跟页面的钟,不跟声音)
         const v = vid.current;
-        let next = v ? (v.ended ? clock.total : Math.min(clock.total, v.currentTime * 1000)) : Math.min(clock.total, t.current + dt);
+        let next = v ? (v.ended ? clock.total : Math.min(clock.total, v.currentTime * 1000)) : lectureNext(clock, t.current, dt, follow ? null : voiceOf(p));
         // 卡的样子:放到那一段的末尾停在末帧(退 1 毫秒,不露下一段的头一笔),只停这一次
         if (range && !rangeDone.current && t.current < range.end && next >= range.end) {
           next = Math.max(range.start, range.end - 1);

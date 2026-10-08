@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { computeStepWindows, frameAt } from 'drawtell/core';
-import { DRAW_START_MS, clockLabel, describeMark, lectureAt, lectureClock, lectureLines, lectureRange, parseClock, parseLectureDoc, videoClock, type LectureSkeleton, type LectureStep } from '../src/lib/lecture.ts';
+import { DRAW_START_MS, VOICE_STALL_MS, clockLabel, describeMark, lectureAt, lectureClock, lectureLines, lectureNext, lectureRange, parseClock, parseLectureDoc, videoClock, type LectureSkeleton, type LectureStep } from '../src/lib/lecture.ts';
 import { check, done } from './_check.ts';
 
 const dir = fileURLToPath(new URL('./fixtures/bundles/2026-09-18-po13-jian-8/', import.meta.url));
@@ -23,6 +23,18 @@ check('某一刻的画面(frameAt):开头什么都还没画,结尾全在', frame
 check('时间显示:分:秒,一小时以上带时', clockLabel(0) === '0:00' && clockLabel(65_400) === '1:05' && clockLabel(3_725_000) === '1:02:05');
 const lines = lectureLines(clock);
 check('上下文包的每句起点', lines.length === 6 && lines[0].startsWith('0:00 先看 13 减 8') && lines[1].startsWith(`${clockLabel(s2.start)} `), JSON.stringify(lines));
+
+// ---- 放着的时候跟着声音走(拍板 36) ----
+{
+  // 两段:第一段配音 3 秒(画 0.5 秒),第二段没有配音(画 0.5 秒)
+  const v = lectureClock([{ type: 'line', id: 'a', x: 0, y: 0, points: [[0, 0], [10, 0]], animateDuration: 500 }, { type: 'line', id: 'b', x: 0, y: 9, points: [[0, 0], [10, 0]], animateDuration: 500 }], [{ step: 1, elementIds: ['a'], line: '一', pauseAfter: true, audioSrc: 'audio/step-1.mp3' }, { step: 2, elementIds: ['b'], line: '二', pauseAfter: true }], { durations: [3000] });
+  const [a, b] = v.segments;
+  const voice = (posMs: number, stalledMs = 0) => ({ index: 0, posMs, stalledMs });
+  check('配音在放:时钟 = 段起点 + 配音放到哪(不管墙上的钟走了多少)', lectureNext(v, a.start + 1000, 16, voice(1200)) === a.start + 1200 && lectureNext(v, a.start + 1000, 400, voice(1010)) === a.start + 1010);
+  check('换了 src 声音还没出来:原地等,不往回退;等过 1.5 秒就按墙上的钟走', lectureNext(v, a.start + 20, 16, voice(0, 300)) === a.start + 20 && lectureNext(v, a.start + 20, 16, voice(0, VOICE_STALL_MS + 1)) === a.start + 36);
+  check('配音放完了、没在放、声音是别的段的:按墙上的钟走', lectureNext(v, a.start + 2990, 16, voice(3000)) === a.start + 3006 && lectureNext(v, b.start + 100, 16, null) === b.start + 116 && lectureNext(v, b.start + 100, 16, voice(500)) === b.start + 116);
+  check('不越过课尾', lectureNext(v, v.total - 5, 16, null) === v.total);
+}
 
 // ---- 圈(describeMark):时刻 + 那时在讲的那句 + drawtell 说圈住了什么 ----
 const ring = (cx: number, cy: number, rx: number, ry: number): [number, number][] => Array.from({ length: 24 }, (_, k) => [Math.round(cx + rx * Math.cos((k / 24) * 2 * Math.PI)), Math.round(cy + ry * Math.sin((k / 24) * 2 * Math.PI))] as [number, number]);

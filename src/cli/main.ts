@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline/promises';
 import { detectProxy, type DetectedProxy } from '../lib/proxy.ts';
 import { proxyOf, setProxy } from './proxy.ts';
 import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
@@ -22,11 +23,11 @@ import { serveWorkspace } from './serve.ts';
 import { serveMock, type MockScenario } from '../server/mock.ts';
 import { UsageError, loadWorkspace, redactDeep, redactHome, workspaceReport } from './workspace.ts';
 import { USAGE } from './usage.ts';
-import { createContext } from '../server/app.ts';
+import { PHOTO_MAX_BYTES, createContext } from '../server/app.ts';
 import { MESSAGE_FROM, type MessageFrom } from '../schema/index.ts';
 import { formatEvent, laneFilter, parseEvents } from '../lib/events.ts';
 import { localDate } from '../lib/conversation.ts';
-import { rateThread } from '../server/store.ts';
+import { rateThread, writeCapture } from '../server/store.ts';
 
 
 function version(): string {
@@ -95,7 +96,7 @@ async function printQr(page: string, open: boolean): Promise<void> {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -472,16 +473,30 @@ export async function main(argv: string[]): Promise<void> {
       case 'send': {
         const [tutor, ...words] = positionals;
         const text = words.join(' ');
-        if (!tutor || !text) throw new UsageError(`send 需要老师名和消息,如 cotutor send math-tutor "这一步为什么要借位"。\n${USAGE}`);
+        const photoFiles = typeof flags.photo === 'string' ? flags.photo.split(',').filter(Boolean) : [];
+        if (!tutor || (!text && !photoFiles.length)) throw new UsageError(`send 需要老师名和消息,如 cotutor send math-tutor "这一步为什么要借位"。\n${USAGE}`);
         const from = typeof flags.from === 'string' ? flags.from : 'kid';
         if (!(MESSAGE_FROM as readonly string[]).includes(from)) throw new UsageError(`--from 只能是 ${MESSAGE_FROM.join(' / ')}`);
-        const ctx = createContext(loadWorkspace(workspace));
+        const ws = loadWorkspace(workspace);
+        // --photo:和孩子端拍照同一条路,先拷进 captures/ 再随消息发;孩子端会先缩到长边 2000 的 jpeg,这里不缩,太大就拒
+        const photos: string[] = [];
+        if (photoFiles.length > 9) throw new UsageError('--photo 一次最多 9 张');
+        for (const f of photoFiles) {
+          const ext = /\.(jpe?g|png)$/i.exec(f)?.[1]?.toLowerCase();
+          if (!ext) throw new UsageError(`--photo 只认 jpg / png:${f}`);
+          const data = await readFile(f).catch(() => null);
+          if (!data) throw new UsageError(`--photo 读不到:${f}`);
+          if (data.length > PHOTO_MAX_BYTES) throw new UsageError(`--photo ${f} 太大(${(data.length / 1e6).toFixed(1)} MB,最多 ${PHOTO_MAX_BYTES / 1e6} MB);先缩,如 sips -s format jpeg -Z 2000 ${f} --out x.jpg`);
+          photos.push(await writeCapture(ws, new Date(), data, ext === 'png' ? 'png' : 'jpg'));
+        }
+        // 不预热:send 跑完就退,备用进程会把这个进程挂住(WARM_IDLE_MS)
+        const ctx = createContext(ws, { warm: false });
         // 现场打印每道工序的事件(--quiet / --json 不打);事件同时落在 events.jsonl,事后 cotutor trace 能回放
         if (!json && flags.quiet !== true) {
           const keep = laneFilter(typeof flags.lane === 'string' ? flags.lane : undefined);
           ctx.runner.onEvent((e) => { if (e.tutor === tutor && keep(e.event)) process.stdout.write(`${formatEvent(e.event)}\n`); });
         }
-        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, newThread: flags.new === true });
+        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, newThread: flags.new === true, ...(photos.length ? { photos } : {}) });
         if (!json) process.stdout.write(`→ ${tutor} ${started.date} ${started.job} 话题 ${started.thread}(${started.plan.runtime}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
         const index = await started.done;
         const m = index.messages.find((x) => x.job === started.job);

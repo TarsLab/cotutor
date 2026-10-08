@@ -295,7 +295,7 @@ export class Runner {
   /** 还在后台跑的资产生成(测试与关服前 flush) */
   private readonly background = new Set<Promise<void>>();
   private readonly getWs: () => Workspace;
-  private readonly opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number };
+  private readonly opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number; warm?: boolean };
   private readonly listeners = new Set<(e: RunEventEnvelope) => void>();
   /** 预热的老师进程(《工作流程.md》§四「预热」):一位老师最多一个 */
   readonly spares: WarmPool;
@@ -307,7 +307,7 @@ export class Runner {
   }
   /** 录音卡的评测队列(《口播老师设计.md》§4) */
   readonly koubo: KouboQueue;
-  constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number } = {}) {
+  constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number; warm?: boolean } = {}) {
     this.getWs = getWs;
     this.opts = opts;
     this.koubo = new KouboQueue(opts.env);
@@ -348,9 +348,10 @@ export class Runner {
    * fresh:新开会话(新话题、接着上次都用它);
    * resume:接 thread(页面选着的话题;不给或今天没有 = 当天末条所在的话题,和 send 缺省一样)的会话,它没有会话就不留。
    * 只给有脸的、开着的、运行时 stdin: "stream-json"、这会儿没在跑的老师起;throttleMs 内同一话题看过就不再看(页面轮询今天)。
-   * 起了返回 true;起不了不报错,下一轮冷起。
+   * 起了返回 true;起不了不报错,下一轮冷起。warm: false(cotutor send:跑完就退,留着备用进程会把它挂一小时)不起。
    */
   async prewarm(tutor: string, opts: { throttleMs?: number; thread?: string } = {}): Promise<boolean> {
+    if (this.opts.warm === false) return false;
     const t0 = Date.now();
     const seen = `${tutor}\n${opts.thread ?? ''}`;
     if (opts.throttleMs && t0 - (this.prewarmedAt.get(seen) ?? -Infinity) < opts.throttleMs) return false;

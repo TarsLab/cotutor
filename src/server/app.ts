@@ -71,7 +71,7 @@ export interface AppContext {
   reload(): Promise<void>;
 }
 
-export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv } = {}): AppContext {
+export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean } = {}): AppContext {
   let mtime = -1;
   const ctx: AppContext = {
     ws,
@@ -443,7 +443,7 @@ const RECORD_MAX_B64 = 4_000_000;
 const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
 
 /** 作业照片一张最多这么大(解码后;页面先缩到长边 PHOTO_MAX_SIDE 的 jpeg,通常几百 KB) */
-const PHOTO_MAX_BYTES = 3_000_000;
+export const PHOTO_MAX_BYTES = 3_000_000;
 /** 音色页的试听句;与 tutors.*.voice 里合法的 id 形状(voxtell 的是 qwen-audio-3.0-tts-plus-xxx) */
 const PREVIEW_TEXT = '你好呀,我是你的老师。今天我们一起来学一个新东西,准备好了吗?';
 const VOICE_ID_RE = /^[A-Za-z0-9._:-]{1,120}$/;

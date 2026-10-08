@@ -9,7 +9,7 @@ export const USAGE = `用法:
   cotutor add-theme <主题名> [--from <主题>] [--workspace <dir>]       加一个自家的主题:拷一份(缺省出厂的 default)到 themes/<主题名>/,改 cotutor.json 的 kid.theme 换过去
   cotutor serve [--workspace <dir>] [--port <n>] [--http] [--trace] [--open-qr]   起服务(一 workspace 一进程;~/.config/cotutor/certs/ 有证书就走 HTTPS;--trace 每一轮的事件按道打印;/qr 是扫码页,--open-qr 顺手打开)
   cotutor cert [--host <名或IP>]...                                      用 mkcert 建这台机器的自签证书到 ~/.config/cotutor/certs/(iPad / iPhone 上录音要 HTTPS;所有 workspace 共用)
-  cotutor send <老师> <消息> [--from kid|system] [--runtime <名>] [--new] [--lane main,tts] [--quiet]   终端里发一条,现场按道打印每道工序的事件,说完打印结果(与页面同一条路;--new 开新话题;--quiet 只要结果)
+  cotutor send <老师> [<消息>] [--from kid|system] [--runtime <名>] [--new] [--photo a.jpg,b.png] [--lane main,tts] [--quiet]   终端里发一条,现场按道打印每道工序的事件,说完打印结果(与页面同一条路;--new 开新话题;--photo 带作业照片,拷进 captures/,有照片时消息可以空;--quiet 只要结果)
   cotutor pack <老师> [<消息>] [--from kid|system] [--at <ISO时间>] [--json]   干跑上下文包:不起模型,打印现在会发给老师的那份 + 每段来自哪个文件、那里一共几条、按政策带了几条(改了档案 / 日记 / 计划立刻看效果)
   cotutor replay <老师> <job> [<日期>] [--runtime <名>] [--json]   回放一轮:同一问按现在的 vault 与提示词再跑一遍(落 evals/,不进孩子的对话、不配音),跑完并排打印上下文包 / 讲稿 / 卡 / 读了什么的 diff
   cotutor compare <老师> [<evalJob>] [<日期>] [--json]                   再看一次回放的对照(不给 evalJob 就列这天回放过哪些)

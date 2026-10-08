@@ -102,6 +102,10 @@ export interface KidMessage {
   photos?: string[];
   /** 这条是看完小课堂后的第一条:哪份课包、课名、圈过的几处(节前的小课堂卡与圈的卡从这里画);again = 再看一遍又圈的那条,节前只画圈的卡 */
   lecture?: KidLecture;
+  /** 孩子的话怎么上板(《工作流程.md》§二「一个话题一节」):交卡 / 老数据的「继续」不写;按住说话的去口头禅;首页按钮发的(正文就是按钮上的字)不写,从按钮进来后孩子自己说的照写 */
+  action?: 'submit' | 'continue';
+  spoken?: true;
+  fromHome?: true;
 }
 
 /** 索引里的小课堂 → 孩子端(圈不带那段话)/ 家长端(带) */
@@ -132,7 +136,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     if (question === null && reply === null && !pending) continue;
     const withState = cardsWithState(m, states, assets);
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
-    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}) });
+    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.voice ? { spoken: true as const } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}) });
   }
   return out;
 }

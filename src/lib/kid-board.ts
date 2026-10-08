@@ -73,8 +73,10 @@ export interface BoardSection {
   cards: BoardCard[];
   lines: BoardLine[];
   partial?: boolean;
-  /** 流式时:前几拍已经就绪(配音齐)——页面就绪一拍播一拍;定稿的节没有这个字段(全部就绪) */
+  /** 流式时:前几拍已经就绪(配音齐)——页面就绪一拍铺一拍卡;定稿的节没有这个字段(全部就绪) */
   ready?: number;
+  /** 流式时:讲稿从第一句起连着配好了几句——配好一句念一句,不等拍(《工作流程.md》拍板 15);没配音色的老师没有 */
+  voiced?: number;
   layout?: BoardLayout;
 }
 
@@ -116,11 +118,18 @@ export function readyBeats(section: Pick<BoardSection, 'cards' | 'lines'>, opts:
   return n;
 }
 
-/** 流式的节:前 ready 拍里的句子能播;定稿的节:全部 */
+/** 流式的节:前 ready 拍里的句子、和连着配好的前 voiced 句,取多的能播(先出声、后出卡);定稿的节:全部 */
 export function playableLines(section: BoardSection): number {
   if (!section.partial) return section.lines.length;
   const beats = beatsOf(section).slice(0, section.ready ?? 0);
-  return beats.reduce((n, b) => Math.max(n, b.lines.length ? b.lines[b.lines.length - 1] + 1 : n), 0);
+  const byBeat = beats.reduce((n, b) => Math.max(n, b.lines.length ? b.lines[b.lines.length - 1] + 1 : n), 0);
+  return Math.min(section.lines.length, Math.max(byBeat, section.voiced ?? 0));
+}
+
+/** 流式时讲稿从第一句起连着配好了几句(配音文件落了盘) */
+export function voicedLines(section: Pick<BoardSection, 'lines'>): number {
+  const i = section.lines.findIndex((l) => l.audio === null);
+  return i < 0 ? section.lines.length : i;
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -652,6 +661,19 @@ export interface BoardMessage {
   photos?: string[];
   /** 看完小课堂后的第一条(《小课堂设计.md》):这一节前面是小课堂卡 */
   lecture?: KidLecture;
+  /** 孩子这条不是说的话:submit = 交卡(答案在卡上)、continue = 老数据里的「继续」 */
+  action?: 'submit' | 'continue';
+  /** 按住说话的(索引里带 voice):板上去口头禅、一行截断 */
+  spoken?: boolean;
+  /** 首页按钮发的:按钮上的字,不是孩子说的 */
+  fromHome?: boolean;
+}
+
+/** 板上孩子的一句话(《工作流程.md》§二「一个话题一节」):text 是显示的(语音去了口头禅),full 是原话 */
+export interface KidSaid {
+  text: string;
+  full: string;
+  voice: boolean;
 }
 
 export interface BoardEntry extends BoardSection {
@@ -663,18 +685,64 @@ export interface BoardEntry extends BoardSection {
   photos?: string[];
   /** 这一节答的是看完小课堂后的第一问:节前画小课堂卡 */
   lecture?: KidLecture;
+  /** 孩子引出这一节的那句话;saidOn = 它答的是哪一节的哪张问题卡(写进那张卡的答案栏),没有 = 在这一节开头单独一行 */
+  said?: KidSaid;
+  saidOn?: { job: string; card: number };
+}
+
+/** 口头禅:单独的语气词随处去掉;「那个」「就是」「然后」只在句首或标点旁去掉(句中的「就是 4」「那个是七」留着),连说两遍以上的随处去掉 */
+const FILLER_ANY = /[嗯呃额唔啊哦噢]+(?=[,,。.!!??、…\s]|$)|^[嗯呃额唔啊哦噢]+/gu;
+const FILLER_EDGE = /(^|[,,。.!!??、…\s])(?:那个|就是|然后)+(?=[,,。.!!??、…\s]|$)/gu;
+/** 语音识别出来的孩子的话 → 板上显示的:去口头禅、省略号与重复的标点,去掉首尾的标点;去完是空的就留原话 */
+export function tidySpoken(text: string): string {
+  let t = text.replace(/……|…|\.{3,}/g, ',');
+  for (let k = 0; k < 3; k++) t = t.replace(/(?:那个|就是|然后){2,}/gu, ',').replace(FILLER_EDGE, '$1').replace(FILLER_ANY, '');
+  t = t.replace(/\s+/g, ' ').replace(/([,,、])\s*(?=[,,、。.!!??])/g, '').replace(/([。.!!??])\s*[,,、]+/g, '$1').replace(/[,,、]{2,}/g, ',').replace(/^[\s,,、。.!!]+|[\s,,、]+$/g, '').trim();
+  return t || text.trim();
+}
+
+/** 一节的问题卡:末句是问句(不交给小课堂)、它锚着的是文字卡(不是小节标题),或解析器补的提问卡;没有 = null。孩子开口答的写进它的答案栏 */
+export function askCard(section: Pick<BoardSection, 'cards' | 'lines' | 'partial'>): number | null {
+  const last = section.lines[section.lines.length - 1];
+  if (section.partial || !last || !last.ask || last.cues.length) return null;
+  const n = section.cards.length;
+  if (n && section.cards[n - 1].kind === 'text' && section.cards[n - 1].props?.ask === true) return n - 1;
+  const t = lineTarget(last);
+  const c = t === null ? undefined : section.cards[t];
+  return c && c.kind === 'text' && !isHeading(c) ? t : null;
+}
+
+/**
+ * 每条孩子的话放在板上哪(《工作流程.md》§二):交卡、首页按钮、空的不放;答的是上一节的问题卡就进那张卡的答案栏(on),
+ * 否则在它引出的那一节开头单独一行(on = null)。看完小课堂后的第一问不算答卡。按 job 给,还在跑的那条也有(刚发出去先挂上)。
+ */
+export function kidSaid(messages: readonly BoardMessage[]): Map<string, { said: KidSaid; on: { job: string; card: number } | null }> {
+  const out = new Map<string, { said: KidSaid; on: { job: string; card: number } | null }>();
+  let prev: BoardMessage | null = null;
+  for (const m of messages) {
+    const q = (m.question ?? '').trim();
+    if (q && !m.action && !m.fromHome) {
+      const voice = m.spoken === true;
+      const card = prev && prev.section && !m.lecture ? askCard(prev.section) : null;
+      out.set(m.job, { said: { text: voice ? tidySpoken(q) : q, full: q, voice }, on: prev && card !== null ? { job: prev.job, card } : null });
+    }
+    if (m.section && !m.section.partial && !m.pending && (m.section.cards.length || m.section.lines.length)) prev = m;
+  }
+  return out;
 }
 
 /**
  * 孩子端条目 → 板书节(没有 section 的条目不出节);
- * 孩子的话不上板;还在跑的只有带 partial 板书(流式,已有卡)才出节且标 partial,其余不出。
+ * 孩子的话挂在它引出的那一节上(said / saidOn,kidSaid);还在跑的只有带 partial 板书(流式,已有卡或已有配好的句)才出节且标 partial,其余不出。
  */
 export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEntry[] {
   const out: BoardEntry[] = [];
+  const says = kidSaid(messages);
   for (const m of messages) {
-    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}) };
+    const k = says.get(m.job);
+    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}) };
     if (m.pending) {
-      if (m.section && m.section.partial && m.section.cards.length) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.layout ? { layout: m.section.layout } : {}) });
+      if (m.section && m.section.partial && (m.section.cards.length || (m.section.voiced ?? 0) > 0)) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.voiced ? { voiced: m.section.voiced } : {}), ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;
     }
     if (m.section && (m.section.cards.length || m.section.lines.length)) {
@@ -711,7 +779,7 @@ export interface PlayerState {
   replay?: { lines: number[]; back: PlayerState };
 }
 
-/** 打开页面时的位置:停在最后一节末尾;末句是问句就等着(继续钮在) */
+/** 打开页面时的位置:停在最后一节末尾;末句是问句就等着 */
 export function playerAtEnd(sections: readonly BoardSection[]): PlayerState {
   if (!sections.length) return { section: -1, line: -1, status: 'idle' };
   const section = sections.length - 1;
@@ -843,8 +911,8 @@ export interface SubtitleView {
   text: string;
   /** wait = 第一拍前(板上有占位卡);gap = 拍与拍之间(留着刚念那句,变暗加点);replay = 再听(淡一档、前面一个小喇叭,和老师正在说的分开) */
   kind: 'line' | 'wait' | 'gap' | 'replay' | 'limit' | 'empty';
-  /** stop = 再听时的钮(停,回原位置),和暂停 / 播放 / 继续长得不一样 */
-  right: 'pause' | 'play' | 'continue' | 'stop' | 'none';
+  /** stop = 再听时的钮(停,回原位置),和暂停 / 播放长得不一样;等答时没有钮(「继续」2026-10-08 去掉了) */
+  right: 'pause' | 'play' | 'stop' | 'none';
 }
 
 /** 第一拍前等过这么久,字幕从「我写给你看」换成「再等我一下下」 */
@@ -865,7 +933,7 @@ export function subtitleFor(i: SubtitleInput): SubtitleView {
     case 'paused':
       return { text, kind: 'line', right: 'play' };
     case 'waiting':
-      return { text, kind: 'line', right: 'continue' };
+      return { text, kind: 'line', right: 'none' };
     case 'done':
       return { text, kind: text ? 'line' : 'empty', right: 'none' };
     case 'stage':
@@ -877,14 +945,13 @@ export function subtitleFor(i: SubtitleInput): SubtitleView {
 
 // ---- 播放器(2026-09-18):页面上一切改播放状态的事都走 step,页面只照单执行它回的「要做的事」 ----
 // 为什么:以前 27 处直接改状态、20 处停声音,散在十几个事件入口里,「谁能打断谁」只能从这些地方拼出来;
-// 再听加进来漏了两处就是真机事故(新回答被打断、「继续」被误点)。仲裁表在《工作流程.md》§孩子端「播放器」,
+// 再听加进来漏了两处就是真机事故(新回答被打断、「继续」被误点;「继续」2026-10-08 去掉了)。仲裁表在《工作流程.md》§孩子端「播放器」,
 // 每一格在 tests/player.test.ts 里有一条;不变式用随机事件序列跑。
 
-/** 播放器的全部状态:播到哪、在再听哪个(喇叭变橙、再点一下停)、「继续」在这之前不响应(毫秒时刻)、在录时被压住的(录完接着念) */
+/** 播放器的全部状态:播到哪、在再听哪个(喇叭变橙、再点一下停)、在录时被压住的(录完接着念) */
 export interface PlayerModel {
   state: PlayerState;
   replayOf: { section: number; card: number | 'all' | 'line' } | null;
-  contGuardUntil: number;
   /** 录音卡(《口播老师设计.md》§3):按下录音键时老师在念、或在录时新的一拍到了,念的那句停成暂停;松手后接着念 */
   held: boolean;
 }
@@ -934,7 +1001,7 @@ export type PlayerEvent =
   | { type: 'recEnd' };
 
 /**
- * 要做的事,按顺序执行。play / send / openStage / openAsk 会让页面再 dispatch,所以最多一个、且在最后(不变式,测试兜)。
+ * 要做的事,按顺序执行。play / openStage / openAsk 会让页面再 dispatch,所以最多一个、且在最后(不变式,测试兜)。
  * stop 只停声音;paint = 把某节前 upTo+1 句的标注画齐(没 upTo 全画);unpaint = 撤掉这几句的标注(再听时重描);
  * replayStart = 解锁声音、田字格这一趟再写的记号清空;scrollLast = 滚到最后一节
  */
@@ -948,17 +1015,13 @@ export type PlayerEffect =
   | { kind: 'replayStart' }
   | { kind: 'openStage'; section: number; card: number }
   | { kind: 'openAsk'; section: number; line: number }
-  | { kind: 'send'; action: 'continue' }
   | { kind: 'scrollLast' };
 
-/** 再听停下后「继续」灰这么久:停钮与继续钮在同一个位置,想停再听的那一下别变成「继续」发给老师 */
-export const CONT_GUARD_MS = 800;
-
 export function initialPlayer(): PlayerModel {
-  return { state: { section: -1, line: -1, status: 'idle' }, replayOf: null, contGuardUntil: 0, held: false };
+  return { state: { section: -1, line: -1, status: 'idle' }, replayOf: null, held: false };
 }
 
-/** 停声音;在再听就回到再听前的位置,念过的标注补齐,「继续」防误点 */
+/** 停声音;在再听就回到再听前的位置,念过的标注补齐 */
 function halt(m: PlayerModel, ctx: PlayerCtx, fx: PlayerEffect[], stopAudio = true): PlayerModel {
   if (stopAudio) fx.push({ kind: 'stop' });
   const r = m.state.replay;
@@ -967,7 +1030,7 @@ function halt(m: PlayerModel, ctx: PlayerCtx, fx: PlayerEffect[], stopAudio = tr
   const n = spokenLines(r.back, ctx.sections, sec);
   if (n > 0) fx.push({ kind: 'paint', section: sec, upTo: n - 1 });
   fx.push({ kind: 'showNow' });
-  return { ...m, state: r.back, replayOf: null, contGuardUntil: ctx.now + CONT_GUARD_MS };
+  return { ...m, state: r.back, replayOf: null };
 }
 
 /** 开始再听:板上要安静、舞台没开;先停掉在念的(包括别的再听) */
@@ -990,7 +1053,7 @@ export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { mod
   let m = model;
   const secs = ctx.sections;
   const put = (state: PlayerState): void => { m = { ...m, state }; };
-  // 在录:孩子这边能出声的都不响(喇叭、点读、回放、暂停 / 继续钮;会录进去)
+  // 在录:孩子这边能出声的都不响(喇叭、点读、回放、暂停钮;会录进去)
   if (ctx.recording && (ev.type === 'tapButton' || ev.type === 'tapAgain' || ev.type === 'tapSubtitle' || ev.type === 'segment')) return { model: m, effects: fx };
   switch (ev.type) {
     case 'recStart':
@@ -1029,7 +1092,6 @@ export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { mod
       if (m.state.replay) { m = halt(m, ctx, fx); fx.push({ kind: 'render' }); }
       else if (m.state.status === 'playing') { m = halt(m, ctx, fx); put({ ...m.state, status: 'paused' }); fx.push({ kind: 'render' }); }
       else if (m.state.status === 'paused') { put({ ...m.state, status: 'playing' }); fx.push({ kind: 'play' }); }
-      else if (m.state.status === 'waiting' && ctx.now >= m.contGuardUntil) fx.push({ kind: 'send', action: 'continue' });
       break;
     case 'tapAgain': {
       const r = m.replayOf;

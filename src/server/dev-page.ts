@@ -644,7 +644,7 @@ export const DEV_PAGE = `<!doctype html>
 
     const foot = h('div', { class: 'turn-foot' }, h('span', { class: 'chip' }, (isAvatarImage(t.avatar) ? '' : (t.avatar || '') + ' ') + t.display));
     if (m.timing) {
-      if (m.timing.firstReadyMs !== undefined) foot.append(h('span', { class: 'chip' + (m.timing.firstReadyMs > SLOW_FIRST ? ' slow' : '') }, '首拍就绪 ', h('b', {}, secs(m.timing.firstReadyMs))));
+      if (m.timing.firstReadyMs !== undefined) foot.append(h('span', { class: 'chip' + (m.timing.firstReadyMs > SLOW_FIRST ? ' slow' : '') }, '首句就绪 ', h('b', {}, secs(m.timing.firstReadyMs))));
       if (m.timing.firstCardMs !== undefined) foot.append(h('span', { class: 'chip' + (m.timing.firstCardMs > SLOW_FIRST ? ' slow' : '') }, '首卡 ', h('b', {}, secs(m.timing.firstCardMs))));
       if (m.timing.doneMs !== undefined) foot.append(h('span', { class: 'chip' }, '整轮 ', h('b', {}, secs(m.timing.doneMs))));
       if (m.timing.dubbedMs !== undefined) foot.append(h('span', { class: 'chip' }, '配音 ', h('b', {}, secs(m.timing.dubbedMs))));

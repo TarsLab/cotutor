@@ -3,7 +3,7 @@
  * 再听(2026-09-18)的手动验收(不进 pnpm test,要本机 Chrome;走 cotutor mock,不花钱,配音退回合成声 / 按字数计时):
  * 停在第一节第二句 → 只有讲完的卡露喇叭、节头没有;点喇叭 → 字幕念那张卡的句、喇叭变橙,念完回到原来那句(暂停);
  * 整页念完 → 节头露喇叭,点节头从第一句念;点字幕上的字重念这句;手机尺寸截一张。
- * 板上不安静(正在念)喇叭全藏;再听时字幕淡一档带小喇叭、钮是停;停了「继续」晚 0.8 秒才能点(误点不发)。
+ * 板上不安静(正在念)喇叭全藏;再听时字幕淡一档带小喇叭、钮是停;停了回到原来的样子,等答时右边没有钮(「继续」2026-10-08 去掉了),点那儿不发。
  *
  * 用法:node scripts/probe-replay.mjs [--out <截图目录>]
  */
@@ -82,11 +82,11 @@ try {
   await sleep(200);
   ok('重念中再点一下就停', await evaluate(`!document.querySelector('#board .replaying') && document.querySelector('#sub-text').textContent === ${JSON.stringify(before)}`));
 
-  // ---- 停了再听,「继续」先灰 0.8 秒,这时点了不发 ----
+  // ---- 停了再听:回到原来的样子;等答时右边没有钮(「继续」去掉了),点那个位置也不发 ----
   await evaluate(`document.querySelector('#board .sec[data-sec="0"] .c.heard > .again').click()`);
   await sleep(300);
-  const guard = await evaluate(`(async () => { document.querySelector('#sub-btn').click(); await new Promise((r) => setTimeout(r, 50)); const b = document.querySelector('#sub-btn'); const r = { cont: b.classList.contains('cont'), disabled: b.disabled }; b.disabled = false; b.click(); await new Promise((r) => setTimeout(r, 200)); r.pending = document.body.classList.contains('pending'); await new Promise((r) => setTimeout(r, 800)); r.later = document.querySelector('#sub-btn').disabled; return r; })()`);
-  ok('停了再听:「继续」先灰着,这时点了不发给老师,0.8 秒后能点', guard.cont && guard.disabled && !guard.pending && !guard.later, JSON.stringify(guard));
+  const after = await evaluate(`(async () => { document.querySelector('#sub-btn').click(); await new Promise((r) => setTimeout(r, 300)); const b = document.querySelector('#sub-btn'); const r = { hidden: b.hidden, text: b.textContent }; b.click(); await new Promise((r) => setTimeout(r, 300)); r.pending = document.body.classList.contains('pending'); return r; })()`);
+  ok('停了再听:不发给老师,字幕行右边没有「继续」', !after.pending && !after.text.includes('继续'), JSON.stringify(after));
 
   // ---- 节头:整节从第一句 ----
   await evaluate(`document.querySelector('#board .sec[data-sec="0"] > .sh').click()`);

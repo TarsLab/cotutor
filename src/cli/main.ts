@@ -320,7 +320,7 @@ export async function main(argv: string[]): Promise<void> {
         if (json) { process.stdout.write(`${JSON.stringify(redactDeep(v), null, 2)}\n`); return; }
         const secs = (ms?: number): string => (ms === undefined ? '?' : `${(ms / 1000).toFixed(1)}s`);
         const out: string[] = [];
-        out.push(`${v.tutor} ${v.date} ${v.job} · ${v.from} 问 · ${v.result}${v.error ? ` · 出错 ${v.error}` : ''}${v.costUsd !== null ? ` · $${v.costUsd.toFixed(3)}` : ''}${v.timing ? ` · 首拍就绪 ${secs(v.timing.firstReadyMs)} 老师写完 ${secs(v.timing.doneMs)}` : ''}`);
+        out.push(`${v.tutor} ${v.date} ${v.job} · ${v.from} 问 · ${v.result}${v.error ? ` · 出错 ${v.error}` : ''}${v.costUsd !== null ? ` · $${v.costUsd.toFixed(3)}` : ''}${v.timing ? ` · 首句就绪 ${secs(v.timing.firstReadyMs)} 老师写完 ${secs(v.timing.doneMs)}` : ''}`);
         out.push(`问:${v.text}`);
         const src = v.pack?.sources;
         out.push(`上下文包:${v.pack ? `${v.pack.prompt.length} 字 · ${v.pack.resume ? 'resume' : '新开'} · ${v.pack.runtime}` : '没落(老轮次)'}${src ? ` · 老师文件 ${src.agent ? `${src.agent.file} ${src.agent.hash.slice(7)}` : '读不到'} · 技能 ${Object.entries(src.skills).map(([k, h]) => `${k} ${h.slice(7, 13)}`).join(' / ') || '无'}` : ''}`);
@@ -492,7 +492,7 @@ export async function main(argv: string[]): Promise<void> {
         } else {
           process.stdout.write(`孩子看到:${m.kidText ?? '(没有给孩子的话)'}\n`);
           const secs = (ms: number): string => (ms < 120000 ? `${Math.round(ms / 100) / 10}s` : `${Math.round(ms / 6000) / 10}min`);
-          const timing = [m.timing?.firstReadyMs !== undefined ? `首拍就绪 ${secs(m.timing.firstReadyMs)}` : null, m.timing?.firstCardMs !== undefined ? `首卡 ${secs(m.timing.firstCardMs)}` : null, m.timing?.doneMs !== undefined ? `整轮 ${secs(m.timing.doneMs)}` : null, m.timing?.dubbedMs !== undefined ? `配音 ${secs(m.timing.dubbedMs)}` : null].filter(Boolean);
+          const timing = [m.timing?.firstReadyMs !== undefined ? `首句就绪 ${secs(m.timing.firstReadyMs)}` : null, m.timing?.firstCardMs !== undefined ? `首卡 ${secs(m.timing.firstCardMs)}` : null, m.timing?.doneMs !== undefined ? `整轮 ${secs(m.timing.doneMs)}` : null, m.timing?.dubbedMs !== undefined ? `配音 ${secs(m.timing.dubbedMs)}` : null].filter(Boolean);
           if (m.artifacts.length) process.stdout.write(`课包:${m.artifacts.join(', ')}\n`);
           process.stdout.write(`会话 ${index.session?.id ?? '?'}${timing.length ? ' · ' + timing.join(' · ') : ''} · 本轮 $${(m.costUsd ?? 0).toFixed(2)} · 今日 $${index.costUsd.toFixed(2)}\n`);
         }

@@ -23,7 +23,7 @@ import { boardGuideFor } from '../cards/docs.ts';
 import { KouboQueue } from './koubo.ts';
 import { withProxy } from '../lib/proxy.ts';
 import { parseBoard } from '../lib/board.ts';
-import { readyBeats, beatsOf, type BoardSection, type Device } from '../lib/kid-board.ts';
+import { readyBeats, beatsOf, voicedLines, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
 import { createPartialReader } from '../lib/stream.ts';
 import { parseSections } from '../lib/sections.ts';
@@ -627,16 +627,26 @@ export class Runner {
     };
     let cardsSeen = 0;
     let linesSeen = 0;
-    // 拍的就绪(流式):每句配音落盘就填进 partial 的 audio,重算前几拍就绪;涨了发 ready:beat,第一拍记 firstReadyMs
+    // 就绪(流式):每句配音落盘就填进 partial 的 audio。句:从第一句起连着配好几句就能念几句(voiced,《工作流程.md》拍板 15),
+    // 第一句配好记 firstReadyMs、发 ready:speak;拍:重算前几拍就绪(卡等它),涨了发 ready:beat。没配音色的老师按拍,第一拍就绪才算能开口
     const lineAudio = new Map<number, string>();
     let readySeen = 0;
+    const speak = (): void => {
+      if (timing.firstReadyMs !== undefined) return;
+      timing.firstReadyMs = since();
+      emit({ lane: 'ready', kind: 'speak' });
+    };
     const settleReady = (): void => {
       if (!active.partial) return;
+      if (voice) {
+        const v = voicedLines(active.partial);
+        if (v > (active.partial.voiced ?? 0)) { speak(); active.partial = { ...active.partial, voiced: v }; }
+      }
       const n = readyBeats(active.partial, { voiced: Boolean(voice), done: false });
       if (n <= readySeen) return;
       const beats = beatsOf(active.partial);
       for (; readySeen < n; readySeen++) {
-        if (timing.firstReadyMs === undefined) timing.firstReadyMs = since();
+        speak();
         emit({ lane: 'ready', kind: 'beat', beat: readySeen, card: beats[readySeen]?.card ?? null, first: readySeen === 0 });
       }
       active.partial = { ...active.partial, ready: n };
@@ -657,7 +667,8 @@ export class Runner {
       // 先剥「## 记账」再解析,和定稿的 deriveKidView 同一条路;不剥的话固定段写在前面的那轮流式时一张卡都出不来(2026-09-13 控制台里看见的)
       const { section } = parseBoard(parseSections(liveText()).body, { partial: true });
       const lines = section.lines.map((l, i) => ({ ...l, text: truncateReply(l.text, replyMaxChars).text, audio: lineAudio.get(i) ?? null }));
-      active.partial = section.cards.length || lines.length ? { cards: section.cards, lines, partial: true, ready: readySeen } : null;
+      const voiced = voice ? voicedLines({ lines }) : 0;
+      active.partial = section.cards.length || lines.length ? { cards: section.cards, lines, partial: true, ready: readySeen, ...(voiced ? { voiced } : {}) } : null;
       if (section.cards.length && timing.firstCardMs === undefined) timing.firstCardMs = since();
       for (; cardsSeen < section.cards.length; cardsSeen++) emit({ lane: 'main', kind: 'card', card: cardsSeen, label: `${section.cards[cardsSeen].kind} ${cardLabel(section.cards[cardsSeen])}`.trim() });
       for (; linesSeen < lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: lines[linesSeen].text });

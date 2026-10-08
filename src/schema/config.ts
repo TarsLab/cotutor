@@ -10,7 +10,7 @@ export const PolicySchema = z.object({
   /** 老师说给孩子听的每一句的字数上限;超出在句末截断(《cotutor契约草案.md》§4;板书后按句算) */
   replyMaxChars: z.number().int().positive().describe('老师说给孩子听的每一句的字数上限(板书讲稿一行一句,按句截);超出在句末截断'),
   /** 每孩每日消息上限;超限老师头像灰掉 */
-  dailyMessages: z.number().int().nonnegative().describe('孩子端每日可发消息条数(「继续」与系统任务不算,删掉的话题退回);到了头像灰'),
+  dailyMessages: z.number().int().nonnegative().describe('孩子端每日可发消息条数(系统任务不算,删掉的话题退回);到了头像灰'),
   /** 上下文包的三个数:最近观察条数(从日记的「- 观察:」行抽,最近 14 天)、计划行数、档案 / 入口文件 / 记忆原文各带多少字 */
   contextPack: z.object({
     recent: z.number().int().nonnegative().describe('上下文包带最近几条观察(最近 14 天日记里本学科的「- 观察:」行,取最新的)'),

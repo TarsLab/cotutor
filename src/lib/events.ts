@@ -21,6 +21,8 @@ export type RunEvent = { t: number } & (
   | { lane: 'tts'; kind: 'done'; label: string; ms: number; file: string }
   | { lane: 'tts'; kind: 'failed'; label: string; ms: number; error: string }
   | { lane: 'ready'; kind: 'beat'; beat: number; card: number | null; first: boolean }
+  /** 第一句配好了,能开口了(首句就绪;2026-10-08 起比第一拍早,《工作流程.md》拍板 15) */
+  | { lane: 'ready'; kind: 'speak' }
   | { lane: 'ready'; kind: 'all'; cards: number; lines: number }
   | { lane: 'index'; kind: 'written'; warnings: number }
   /** 记账:话题的一段写进了 vault 的日记(file 是日记文件名) */
@@ -56,7 +58,8 @@ export function describeEvent(e: RunEvent): string {
       if (e.kind === 'done') return `${e.label}✓ ${secs(e.ms)}s`;
       return `${e.label}✗ ${secs(e.ms)}s ${e.error}`;
     case 'ready':
-      if (e.kind === 'beat') return `拍 ${e.beat} ✓${e.card === null ? '(没有卡)' : `(卡 ${e.card})`}${e.first ? ' ← 首拍就绪' : ''}`;
+      if (e.kind === 'speak') return '第一句配好了 ← 首句就绪(能开口)';
+      if (e.kind === 'beat') return `拍 ${e.beat} ✓${e.card === null ? '(没有卡)' : `(卡 ${e.card})`}${e.first ? ' ← 第一拍' : ''}`;
       return `全部就绪(${e.cards} 张卡 ${e.lines} 句)`;
     case 'index':
       return `写入${e.warnings ? ` · 提醒 ${e.warnings}` : ''}`;

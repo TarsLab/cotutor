@@ -45,6 +45,9 @@ import {
   startReplay,
   sectionTitle,
   sectionsFromMessages,
+  askCard,
+  kidSaid,
+  tidySpoken,
   startSection,
   subtitleFor,
   type BoardCard,
@@ -148,7 +151,10 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
     { job: '6', question: '只有讲稿', reply: '一句话', pending: false, section: { cards: [], lines: [L('一句话')] } },
     { job: '7', question: '还在说', reply: null, pending: true, section: { cards: [{ kind: 'text', props: { text: '先出的卡' } }], lines: [L('第一句')], partial: true } },
     { job: '8', question: '还在说但没卡', reply: null, pending: true, section: { cards: [], lines: [L('只有句')], partial: true } },
+    { job: '9', question: '没卡但第一句配好了', reply: null, pending: true, section: { cards: [], lines: [L('先开口')], partial: true, voiced: 1 } },
   ]);
+  check('流式还没卡、但第一句配好了:出 partial 节、带 voiced(先出声、后出卡,《工作流程.md》拍板 15)', entries.at(-1)?.job === '9' && entries.at(-1)?.partial === true && entries.at(-1)?.voiced === 1 && entries.at(-1)?.cards.length === 0);
+  entries.pop();
   check('有 section 用 section;没有 section / 还在跑 / 出错的不出节;流式已出卡的出 partial 节', entries.map((e) => e.job).join() === '1,5,6,7' && entries[0].cards.length === 6 && entries[3].partial === true && entries[3].cards.length === 1 && !entries.slice(0, 3).some((e) => e.partial), JSON.stringify(entries.map((e) => e.job)));
   check('只有卡没讲稿、只有讲稿没卡都成节', entries[1].lines.length === 0 && entries[1].cards.length === 1 && entries[2].cards.length === 0 && entries[2].lines.length === 1);
   check('孩子的话不上板', !entries.some((e) => e.cards.some((c) => cardTexts(c).some((t) => t.includes('画蛇添足是什么')))));
@@ -181,7 +187,7 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   const base = { sections: [s1], pending: false, waitedMs: 0, limit: false };
   check('字幕:播放中 → 当前句 + 暂停', JSON.stringify(subtitleFor({ ...base, state: { section: 0, line: 0, status: 'playing' } })) === '{"text":"一","kind":"line","right":"pause"}');
   check('字幕:暂停 → 播放钮', subtitleFor({ ...base, state: { section: 0, line: 0, status: 'paused' } }).right === 'play');
-  check('字幕:停下等 → 继续', subtitleFor({ ...base, state: { section: 0, line: 1, status: 'waiting' } }).right === 'continue');
+  check('字幕:停下等 → 留着问句、没钮(「继续」去掉了)', JSON.stringify(subtitleFor({ ...base, state: { section: 0, line: 1, status: 'waiting' } })) === '{"text":"二?","kind":"line","right":"none"}');
   check('字幕:完 → 留末句、没钮', JSON.stringify(subtitleFor({ ...base, state: { section: 0, line: 1, status: 'done' } })) === '{"text":"二?","kind":"line","right":"none"}');
   check('字幕:等老师', subtitleFor({ ...base, pending: true, state: { section: 0, line: 1, status: 'done' } }).text === '我写给你看');
   check('字幕:上限压过一切', subtitleFor({ ...base, limit: true, pending: true, state: { section: 0, line: 0, status: 'playing' } }).kind === 'limit');
@@ -237,5 +243,28 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
 }
 // 问句认半角与全角问号(2026-10-04:真老师写「你想问什么呀？」,原来只认半角,孩子端念完不停)
 check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人几块?') && isQuestion('每人几块？') && isQuestion(' 好吗？ ') && !isQuestion('好的。'));
+
+// ---- 一个话题一节:孩子的话进问题卡(《工作流程.md》§二、拍板 17) ----
+{
+  check('tidySpoken:去口头禅、省略号、句末标点后的逗号;句中的「就是 4」留着;去完是空的留原话', tidySpoken('嗯……那个,要是有七个小朋友呢?就是,呃,还是十八个贴纸') === '要是有七个小朋友呢?还是十八个贴纸' && tidySpoken('嗯……每个人两个吧,呃,两个') === '每个人两个吧,两个' && tidySpoken('答案就是 4') === '答案就是 4' && tidySpoken('那个那个我不知道') === '我不知道' && tidySpoken('嗯') === '嗯' && tidySpoken('4') === '4', tidySpoken('嗯……那个,要是有七个小朋友呢?就是,呃,还是十八个贴纸'));
+  const q = (t: string, extra: Partial<BoardCard['props']> = {}): BoardCard => ({ kind: 'text', props: { text: t, ...extra } });
+  const asks: BoardSection = { cards: [q('想一想')], lines: [L('分完了吗?', { anchor: 0 })] };
+  const askAdded: BoardSection = { cards: [{ kind: 'code', props: { code: 'x' } }, q('还剩几个?', { ask: true })], lines: [L('还剩几个?', { anchor: 0 })] };
+  const onFill: BoardSection = { cards: [{ kind: 'fill', props: { text: '一共 ___ 个' } }], lines: [L('一共几个?', { anchor: 0 })] };
+  const told: BoardSection = { cards: [q('一捆 10 根')], lines: [L('这就是一捆。', { anchor: 0 })] };
+  check('askCard:末句问句锚着文字卡 → 它;解析器补的提问卡 → 它;锚着填空 / 没问 / 还在写 → 没有', askCard(asks) === 0 && askCard(askAdded) === 1 && askCard(onFill) === null && askCard(told) === null && askCard({ ...asks, partial: true }) === null);
+  const msgs = [
+    { job: 'a', question: '分一分', reply: 'x', pending: false, fromHome: true, section: asks },
+    { job: 'b', question: '嗯……每个人两个吧', reply: 'x', pending: false, spoken: true, section: onFill },
+    { job: 'c', question: '', reply: 'x', pending: false, action: 'submit' as const, section: asks },
+    { job: 'd', question: '4', reply: null, pending: true },
+  ];
+  const says = kidSaid(msgs);
+  check('kidSaid:首页按钮、交卡的不放;答问题卡的挂那张卡(语音去口头禅、原话留着);上一节问在填空上 → 单独一行;刚发出去的也有', !says.has('a') && !says.has('c') && says.get('b')?.on?.job === 'a' && says.get('b')?.on?.card === 0 && says.get('b')?.said.text === '每个人两个吧' && says.get('b')?.said.full === '嗯……每个人两个吧' && says.get('b')?.said.voice === true && says.get('d')?.on?.job === 'c' && says.get('d')?.said.text === '4', JSON.stringify([...says]));
+  const lone = kidSaid([{ job: 'x', question: '有7个小朋友呢?', reply: 'x', pending: false, section: onFill }, { job: 'y', question: '我不会', reply: 'x', pending: false, section: asks }]);
+  check('kidSaid:话题第一句、上一节问在填空上 → 单独一行(on = null)', lone.get('x')?.on === null && lone.get('y')?.on === null);
+  const es = sectionsFromMessages(msgs);
+  check('sectionsFromMessages:节带上 said / saidOn', es.find((e) => e.job === 'b')?.saidOn?.job === 'a' && es.find((e) => e.job === 'b')?.said?.text === '每个人两个吧' && es.find((e) => e.job === 'a')?.said === undefined);
+}
 
 done();

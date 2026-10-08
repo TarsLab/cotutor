@@ -17,7 +17,7 @@ export const TimingSchema = z.object({
   warm: z.literal(true).optional(),
   /** 流式时第一张卡闭合(孩子端第一次看到东西);整块出的运行时没有 */
   firstCardMs: z.number().int().nonnegative().optional(),
-  /** 首拍就绪:第一拍配音齐,孩子端能开播的那一刻(2026-09-13,头号埋点) */
+  /** 首句就绪:孩子端能开口的那一刻(头号埋点)。2026-10-08 起是第一句配好(《工作流程.md》拍板 15),之前是第一拍配音齐 */
   firstReadyMs: z.number().int().nonnegative().optional(),
   /** 老师进程退出 */
   doneMs: z.number().int().nonnegative().optional(),

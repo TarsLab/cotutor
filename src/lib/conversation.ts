@@ -139,6 +139,33 @@ export function addMessage(index: ConversationIndex, msg: ConversationMessage): 
   return { ...index, messages: [...index.messages, msg] };
 }
 
+/**
+ * 接着会话跑的这一轮,报的花费里有多少是上一轮已经算过的(累计的那部分;不是累计 = 0)。
+ * 上一轮 = 同一话题、同一运行时、排在第 before 条之前、跑完了的最后一条;老数据没有 sessionUsd,那时 costUsd 记的就是原数。
+ * 算累计要两样都对:花费不比上一轮少;累计输出 token 至少是「上一轮的累计 + 这一轮自己的」(旧版 claude 续会话报单轮,对不上)。
+ * 上一轮没记累计输出 token(老数据),退一步:这一轮的累计输出比最后一次请求的多(多出来的是前面的轮)。
+ */
+export function resumedFrom(
+  index: { messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'runtime' | 'result' | 'costUsd' | 'sessionUsd' | 'sessionOut'>[] },
+  thread: string,
+  runtime: string,
+  before: number,
+  raw: number,
+  out: { modelOut?: number; lastOut?: number },
+): number {
+  const t = threads(index.messages);
+  for (let k = (before < 0 ? index.messages.length : before) - 1; k >= 0; k--) {
+    const m = index.messages[k];
+    if (t[k] !== thread || m.runtime !== runtime || m.result === 'running') continue;
+    const usd = m.sessionUsd ?? m.costUsd;
+    if (typeof usd !== 'number') continue;
+    if (raw < usd || out.modelOut === undefined || out.lastOut === undefined) return 0;
+    const piled = m.sessionOut !== undefined ? out.modelOut >= m.sessionOut + out.lastOut : out.modelOut > out.lastOut;
+    return piled ? usd : 0;
+  }
+  return 0;
+}
+
 /** 一次运行收尾:写 result / cost / kidText / artifacts / timing,首次拿到 session 就记下 */
 export function applyRun(
   index: ConversationIndex,
@@ -146,12 +173,24 @@ export function applyRun(
   run: { transcript: Transcript; kidView: KidView; runtime: string; artifacts?: string[]; timing?: Timing; tools?: ConversationMessage['tools'] },
 ): ConversationIndex {
   const { transcript, kidView } = run;
+  // 会话按话题记:这个话题首次拿到就记;换了运行时(agent 不同)就以这次的为准——跨 CLI 不能 resume。顶层 session = 当前话题的
+  const i = index.messages.findIndex((m) => m.job === job);
+  const thread = i >= 0 ? threads(index.messages)[i] : job;
+  // 话题第一条(thread === job)一律新会话
+  const prev = thread === job ? null : sessionFor(index, thread);
+  const keep = prev && prev.runtime === run.runtime ? prev : null;
+  // 花费:新版 claude 接着会话跑,报的是会话累计,减掉同一话题上一轮的累计才是这一轮的
+  const raw = transcript.final?.costUsd;
+  const base = raw !== undefined && keep && transcript.sessionId === keep.id ? resumedFrom(index, thread, run.runtime, i, raw, transcript.final ?? {}) : 0;
+  const cost = raw === undefined ? undefined : Math.round((raw - base) * 1e6) / 1e6;
   const messages = index.messages.map((m) =>
     m.job === job
       ? {
           ...m,
           result: transcript.final ? (transcript.final.ok ? ('ok' as const) : ('error' as const)) : ('running' as const),
-          costUsd: transcript.final?.costUsd,
+          costUsd: cost,
+          ...(raw !== undefined ? { sessionUsd: raw } : {}),
+          ...(transcript.final?.modelOut !== undefined ? { sessionOut: transcript.final.modelOut } : {}),
           kidText: kidView.kidText,
           artifacts: run.artifacts ?? m.artifacts,
           runtime: run.runtime,
@@ -165,12 +204,6 @@ export function applyRun(
         }
       : m,
   );
-  // 会话按话题记:这个话题首次拿到就记;换了运行时(agent 不同)就以这次的为准——跨 CLI 不能 resume。顶层 session = 当前话题的
-  const i = index.messages.findIndex((m) => m.job === job);
-  const thread = i >= 0 ? threads(index.messages)[i] : job;
-  // 话题第一条(thread === job)一律新会话
-  const prev = thread === job ? null : sessionFor(index, thread);
-  const keep = prev && prev.runtime === run.runtime ? prev : null;
   const mine = keep ?? (transcript.sessionId ? { id: transcript.sessionId, runtime: run.runtime } : prev);
   const sessions = mine ? { ...index.sessions, [thread]: mine } : index.sessions;
   const cur = currentThread(index);

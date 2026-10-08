@@ -50,7 +50,11 @@ const MessageObjectSchema = z.object({
   /** 这条消息带的作业照片(R5,2026-09-14):相对 workspace 根的路径(captures/<日期>/<HHMM>-<n>.jpg),上下文包 photos: 段原样给老师 Read;日记永不引用它 */
   photos: z.array(z.string().min(1)).optional(),
   result: z.enum(['running', 'ok', 'error']).default('running'),
+  /** 这一轮花了多少(美元)。claude 接着会话跑(--resume)报的是整个会话的累计,这里记的是减掉同一话题上一轮的累计之后的 */
   costUsd: z.number().optional(),
+  /** 运行时报的花费原数(新版 claude 续会话时是累计)与那时的累计输出 token;下一轮拿它们判断、算自己花了多少。没有 = 老数据 */
+  sessionUsd: z.number().optional(),
+  sessionOut: z.number().optional(),
   /** 孩子视图文本;null = 这次运行没有给孩子的话(出错或空) */
   kidText: z.string().nullable().optional(),
   /** 本次运行新增的产物 id */

@@ -20,8 +20,12 @@ export interface TranscriptFinal {
   ok: boolean;
   /** 不 ok 时的原因(subtype 或 terminal_reason) */
   reason: string | null;
+  /** result.total_cost_usd:新版 claude 接着会话跑(--resume)时是整个会话的累计 */
   costUsd?: number;
   numTurns?: number;
+  /** result.modelUsage 各模型的输出 token 之和(累计时也累计)与 result.usage 的输出 token(只是最后一次请求):判断 costUsd 是不是累计 */
+  modelOut?: number;
+  lastOut?: number;
 }
 
 export interface Transcript {
@@ -79,6 +83,8 @@ interface Event {
   is_error?: boolean;
   num_turns?: number;
   total_cost_usd?: number;
+  modelUsage?: Record<string, { outputTokens?: number }>;
+  usage?: { output_tokens?: number };
   terminal_reason?: string;
   result?: unknown;
 }
@@ -193,6 +199,8 @@ export function parseTranscript(text: string): Transcript {
         reason: failed ? reason : null,
         costUsd: typeof e.total_cost_usd === 'number' ? e.total_cost_usd : undefined,
         numTurns: typeof e.num_turns === 'number' ? e.num_turns : undefined,
+        ...(e.modelUsage && typeof e.modelUsage === 'object' ? { modelOut: Object.values(e.modelUsage).reduce((s, u) => s + (typeof u?.outputTokens === 'number' ? u.outputTokens : 0), 0) } : {}),
+        ...(typeof e.usage?.output_tokens === 'number' ? { lastOut: e.usage.output_tokens } : {}),
       };
     }
   }

@@ -47,6 +47,25 @@ check('卡的状态文件与 id', f.cardsDir('1620-1') === '/ws/conversations/ma
   idx = addMessage(idx, { job: '3', thread: '1', at: 'x', from: 'kid', text: 'c', result: 'running', artifacts: [] });
   idx = applyRun(idx, '3', { transcript: run('3', 's-1'), kidView: deriveKidView(run('3', 's-1'), { replyMaxChars: 60 }), runtime: 'claude' });
   check('接回第一个话题:sessions 不变,顶层换成它', idx.sessions['1']?.id === 's-1' && idx.sessions['2']?.id === 's-2' && idx.session?.id === 's-1' && currentThread(idx) === '1', JSON.stringify(idx.session));
+  // 花费:claude --resume 报的是会话累计;这一轮 = 累计 − 同一话题上一轮的累计(2026-10-08 ray 的一个话题 6 轮实花 $0.07,记成了 $0.32)
+  // modelUsage 的输出 token 跟着累计,usage 只是这一轮最后一次请求的
+  const paid = (sid: string, usd: number, mo: number, lo: number) => parseTranscript(`{"type":"system","subtype":"init","session_id":"${sid}"}\n{"type":"result","subtype":"success","result":"好。","total_cost_usd":${usd},"usage":{"output_tokens":${lo}},"modelUsage":{"m":{"outputTokens":${mo}}}}`);
+  let c = emptyIndex('math-tutor', '2026-10-08');
+  const turn = (job: string, thread: string, sid: string, usd: number, mo: number, lo: number, runtime = 'claude') => {
+    c = addMessage(c, { job, thread, at: 'x', from: 'kid', text: job, result: 'running', artifacts: [] });
+    c = applyRun(c, job, { transcript: paid(sid, usd, mo, lo), kidView: deriveKidView(paid(sid, usd, mo, lo), { replyMaxChars: 60 }), runtime });
+  };
+  turn('a1', 'a1', 's-a', 0.04, 472, 472);
+  turn('a2', 'a1', 's-a', 0.05, 786, 314);
+  turn('b1', 'b1', 's-b', 0.03, 200, 200);
+  turn('a3', 'a1', 's-a', 0.07, 830, 44);
+  const by = (j: string) => c.messages.find((m) => m.job === j)!;
+  check('续会话(新版 claude 报累计):每轮记减掉上一轮累计的(0.04、0.01、0.02),原数与累计输出记下;别的话题的新会话不减;总账 = 实花', by('a1').costUsd === 0.04 && by('a2').costUsd === 0.01 && by('a3').costUsd === 0.02 && by('a3').sessionUsd === 0.07 && by('a3').sessionOut === 830 && by('b1').costUsd === 0.03 && c.costUsd === 0.1, JSON.stringify(c.messages.map((m) => [m.job, m.costUsd, m.sessionUsd])));
+  turn('a4', 'a1', 's-q', 0.02, 50, 50, 'qwen');
+  check('换了运行时 = 新会话,不减', by('a4').costUsd === 0.02);
+  // 旧版 claude 续会话报单轮:累计输出 token 对不上「上一轮 + 这一轮」,花费比上一轮多也不减
+  turn('b2', 'b1', 's-b', 0.05, 120, 120);
+  check('旧版 claude 续会话报单轮:不减', by('b2').costUsd === 0.05, String(by('b2').costUsd));
   const parsed = ConversationIndexSchema.safeParse({ tutor: 'x', date: '2026-09-08', session: { id: 's', runtime: 'claude' }, messages: [] });
   check('旧索引没有 sessions 也过契约(缺省空)', parsed.success && Object.keys(parsed.data.sessions).length === 0);
 }

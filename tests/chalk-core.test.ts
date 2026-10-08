@@ -76,6 +76,21 @@ const after4 = clock.segments[3].start + 100;
   check('元素带 label:说 label(同一个 label 归一样)', describeCircle(circleHits(labeled, after4, ring(130, 115, 85, 30), { groups })) === '圈住了:一捆 10 根小棒(圈住了其中 6 个);划掉的小棒', describeCircle(circleHits(labeled, after4, ring(130, 115, 85, 30), { groups })));
   check('那一刻还没画到的不算;空白处说最近的;太小不猜', circleHits(clock, 500, ring(130, 115, 85, 30)).kind === 'empty' && describeCircle(circleHits(clock, clock.total, ring(300, 250, 12, 12), { groups })).startsWith('没圈住东西,圈在') && circleHits(clock, 0, [[1, 1], [2, 2]]).kind === 'tiny');
   check('长的一行字里圈几个字:说整行;有命中块说块的字', describeCircle(circleHits(clock, clock.total, ring(515, 38, 22, 14))) === '圈住了:文字『13 − 8 =』' && describeCircle(circleHits(clock, clock.total, ring(515, 38, 22, 14), { blocks: [{ id: 'k', elementIds: ['q'], text: '十三减八', audioSrc: 'a.mp3' }] })) === '圈住了:『十三减八』');
+  // 横线画了、擦了、又画回来
+  const wipe = lessonClock(
+    [
+      { type: 'line', id: 'h', x: 0, y: 50, points: [[0, 0], [200, 0]], strokeColor: '#e03131' },
+      { type: 'line', id: 'x', x: -10, y: 50, points: [[0, 0], [220, 0]], strokeWidth: 12, customData: { tool: 'eraser' } },
+      { type: 'line', id: 'h2', x: 0, y: 50, points: [[0, 0], [200, 0]], strokeColor: '#1971c2' },
+    ],
+    [
+      { step: 1, elementIds: ['h'], line: '切一刀', pauseAfter: true },
+      { step: 2, elementIds: ['x'], line: '擦掉', pauseAfter: true },
+      { step: 3, elementIds: ['h2'], line: '再切', pauseAfter: true },
+    ],
+  );
+  const band = ring(100, 50, 120, 20);
+  check('橡皮擦掉的不算:擦之前圈得住,擦完了说那一带没东西,画回来的照样算', describeCircle(circleHits(wipe, wipe.segments[1].start, band)) === '圈住了:第 1 步画的红色的线' && circleHits(wipe, wipe.segments[2].start, band).kind === 'empty' && describeCircle(circleHits(wipe, wipe.total, band)) === '圈住了:第 3 步画的蓝色的线', describeCircle(circleHits(wipe, wipe.segments[2].start, band)));
   const stored = circleHits(clock, s3.start + 2000, ring(334, 70, 52, 110), { groups, bounds: { lab3: [-999, -999, -998, -998] } });
   check('课包带 bounds:文字按存的算(「3」存在别处就不算圈住)', describeCircle(stored) === '圈住了:散的 3 根小棒', describeCircle(stored));
 }

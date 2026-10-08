@@ -6,7 +6,7 @@
 
 import type { ChalkBlock, ChalkGroup, ChalkSkeleton } from '../player/types.ts';
 import { clockAt, type LessonClock } from './clock.ts';
-import { boundsGap, boundsOfPoints, elementBounds, insidePolygon, samplePoints, unionBounds, type Bounds, type BoundsTuple } from './geometry.ts';
+import { boundsGap, boundsOfPoints, elementBounds, insidePolygon, pointsOf, samplePoints, unionBounds, type Bounds, type BoundsTuple } from './geometry.ts';
 
 /** 画面的语义:分组、命中块、build 时量好的包围盒(都可缺) */
 export interface LessonPicture {
@@ -60,6 +60,26 @@ export function colorWord(hex: unknown): string {
   return h < 15 || h >= 340 ? '红' : h < 40 ? '橙' : h < 70 ? '黄' : h < 170 ? '绿' : h < 255 ? '蓝' : '紫';
 }
 
+/** 点到线段的距离 */
+function segmentGap([px, py]: readonly [number, number], [ax, ay]: readonly [number, number], [bx, by]: readonly [number, number]): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len = dx * dx + dy * dy;
+  const t = len ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len)) : 0;
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+/** 橡皮那一笔擦完了这个元素:元素画在橡皮之前,样点大半落在橡皮的笔迹里(离橡皮的线不到半个笔宽) */
+function erasedBy(eraser: ChalkSkeleton, e: ChalkSkeleton, start: number, clock: LessonClock, boundsOf: (e: ChalkSkeleton) => Bounds): boolean {
+  const ew = clock.elements.get(eraser.id);
+  const line = pointsOf(eraser);
+  if (!ew || start >= ew.start || !line || !line.length) return false;
+  const half = (typeof eraser.strokeWidth === 'number' ? eraser.strokeWidth : 1) / 2 + 1;
+  const s = samplePoints(e, boundsOf(e));
+  const covered = (p: [number, number]): boolean => (line.length === 1 ? Math.hypot(p[0] - line[0][0], p[1] - line[0][1]) <= half : line.slice(1).some((b, i) => segmentGap(p, line[i], b) <= half));
+  return s.length > 0 && s.filter(covered).length / s.length >= HIT_SHARE;
+}
+
 export function circleHits(clock: LessonClock, ms: number, path: readonly [number, number][], picture: LessonPicture = {}): CircleResult {
   const at = clockAt(clock, ms);
   const base = { index: at.index, line: clock.segments[at.index]?.line ?? '' };
@@ -68,10 +88,11 @@ export function circleHits(clock: LessonClock, ms: number, path: readonly [numbe
     const t = picture.bounds?.[e.id];
     return t ? { minX: t[0], minY: t[1], maxX: t[2], maxY: t[3] } : elementBounds(e);
   };
-  // 那一刻画面上已经有的(开始画了就算;橡皮不算东西)
+  // 那一刻画面上已经有的(开始画了就算;橡皮不算东西,擦掉了的也不算)
+  const erasers = clock.skeletons.filter((e) => e.customData?.tool === 'eraser' && (clock.elements.get(e.id)?.end ?? Infinity) <= at.svgMs);
   const shown = clock.skeletons.filter((e) => {
     const w = clock.elements.get(e.id);
-    return w !== undefined && w.start < at.svgMs && e.customData?.tool !== 'eraser';
+    return w !== undefined && w.start < at.svgMs && e.customData?.tool !== 'eraser' && !erasers.some((x) => erasedBy(x, e, w.start, clock, boundsOf));
   });
   const shownIds = new Set(shown.map((e) => e.id));
   const ring = boundsOfPoints(path);

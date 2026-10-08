@@ -57,7 +57,7 @@ export interface BoardCue {
   arg?: string;
 }
 
-/** 讲稿的一句:配音文件(没有 = 浏览器合成)、这句念到时要画的标注、是不是问句(末句问句 → 停下等)、锚到上一张卡 */
+/** 讲稿的一句:配音文件(没有 = 不出声按字数计时,mock 里是浏览器合成)、这句念到时要画的标注、是不是问句(末句问句 → 停下等)、锚到上一张卡 */
 export interface BoardLine {
   text: string;
   audio: string | null;
@@ -513,7 +513,7 @@ export function stageSubtitle(phase: StagePhase, line: string): SubtitleView {
   }
 }
 
-/** 点读第 k 段(0 起)的配音文件(相对 conversations/<老师>/);没生成好 → null(退浏览器合成声) */
+/** 点读第 k 段(0 起)的配音文件(相对 conversations/<老师>/);没生成好 → null(孩子端等它到,mock 退浏览器合成声) */
 export function segmentAudio(card: BoardCard, k: number): string | null {
   const want = `/${k + 1}.mp3`;
   return (card.assets || []).find((a) => a.endsWith(want)) ?? null;

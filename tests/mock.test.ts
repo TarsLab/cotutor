@@ -198,7 +198,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const js = page.slice(page.indexOf('<script>') + 8, page.lastIndexOf('</script>'));
   let parses = true;
   try { new Function(js); } catch (e) { parses = false; console.error(String(e)); }
-  check('家长端 /parent:带家长标记、自己的 manifest、内联脚本能解析', page.includes('const MODE = {"parent":true};') && page.includes('/parent/manifest.webmanifest') && parses && ((await get('/parent/manifest.webmanifest')).json as { start_url: string }).start_url === '/parent');
+  check('家长端 /parent:带家长标记、自己的 manifest、内联脚本能解析', page.includes('const MODE = {"parent":true,"synth":true};') && page.includes('/parent/manifest.webmanifest') && parses && ((await get('/parent/manifest.webmanifest')).json as { start_url: string }).start_url === '/parent');
   type PMsg = Msg & { from: string; parentText?: string; remembered?: string[] };
   const pb = (await get('/api/conversations/chinese-tutor/today/board')).json as { messages: PMsg[] };
   const ch = pb.messages[0].section!.cards.find((c) => c.kind === 'choice');

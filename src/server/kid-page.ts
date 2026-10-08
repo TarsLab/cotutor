@@ -7,7 +7,7 @@
  * 文字尽量少,语音优先。孩子设备上没有通往家长端的入口(2026-09-10 拍板)。
  *
  * 老师页照豆包爱学的形态(《豆包录屏分析.md》):板书是一天一份、越讲越长的文档;孩子的话进问题卡的答案栏或节开头一行(《工作流程.md》§二),不在字幕行回显;
- * 一轮回复 = 一节:卡整块铺出,讲稿逐句播(有 mp3 放 mp3,没有用浏览器合成,再没有按字数计时),
+ * 一轮回复 = 一节:卡整块铺出,讲稿逐句播(有 mp3 放 mp3,没有就不出声、按字数计时;浏览器合成声只在 mock 里用,《工作流程.md》拍板 18),
  * 播到哪句就在卡上画标注、滚到那张卡;末句是问句就停下等孩子答。
  * 输入条照豆包通用版:相机 | 发消息或按住说话 | 加号(相册)。平板横屏:板书两列(最宽 1040 居中),没有左栏。
  *
@@ -18,7 +18,7 @@
  * 重卡(小课堂 / 画板)的舞台在 iframe 里装 /stage/?card=<id>(舞台包,src/stage/),postMessage 协议见 src/stage/protocol.ts:
  * 页面发 card(props + state + 课包 URL),包回 phase / state / submit / close;小课堂那一段在放时字幕行显示课里那句、按钮映射到播放器;
  * 讲稿 [[play]] 锚到小课堂卡 → 念完那句铺满放那一段,放完停在末帧、接着念。
- * 点读段:card.assets 里有 <段号>.mp3 的放服务端配的,没有的浏览器合成;填空舞台逐空打字、「交给老师」;图片舞台双指缩放。
+ * 点读段:card.assets 里有 <段号>.mp3 的放服务端配的,还没配好的等它到(拉今天会补上);填空舞台逐空打字、「交给老师」;图片舞台双指缩放。
  * 作业照片(《作业照片设计.md》):相机 / 相册先进发照片屏(裁剪、圈画、转 90°、配一句话,坐标在 src/lib/photo-edit.ts),再一条 {text, photos};节头小图点开看大图。
  * 流式:老师还在说时 pending 条目带 partial 板书,卡按下标只追加不重画(先出的卡不闪),讲稿不播;整轮跑完那节换成正式的,声音从第一句起。
  * __TITLE__ / __SHORT__(主屏幕图标下的名字)由路由替换。调试:`?step=<节>.<句>` 直接停在某句(标注画齐、不出声),截图与测试用。
@@ -502,8 +502,10 @@ __BOARD_JS__
 __PHOTO_JS__
 __REEL_JS__
 
-  /** 页面的模式:{} = 孩子端;parent = 家长板书页(数据走家长接口,只读,节间插旁注) */
+  /** 页面的模式:{} = 孩子端;parent = 家长板书页(数据走家长接口,只读,节间插旁注);synth = 没有配音时用浏览器合成声(只有 mock) */
   const MODE = __MODE__;
+  /** 浏览器合成声:只在 mock 里用(那里没有配音文件)。真服务上一律不用——老师配了音色,机械声孩子不习惯(《工作流程.md》拍板 18) */
+  const SYNTH = MODE.synth === true;
   /** 舞台包的版本(src/server/stage.ts stageVersion):iframe 的地址带上它,打包过一次就换一个地址,不用浏览器缓存里的旧舞台 */
   const STAGE_V = '__STAGE_V__';
   const stageUrl = (card) => '/stage/?v=' + STAGE_V + '&card=' + encodeURIComponent(card);
@@ -579,7 +581,7 @@ __REEL_JS__
   /** 家长板书页:清单的日期(null = 今天) */
   S.pdate = null;
 
-  // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音退回浏览器合成;都没有按字数计时 ----
+  // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音就不出声、按字数计时(浏览器合成声只在 mock 里,见 SYNTH) ----
   const audioEl = new Audio();
   let unlocked = false;
   // 老师的声已经放过(元素早解锁了)就不再放静音:换 src 会抢走正在念的那句,触发它的 onerror 退成浏览器的声重念(2026-10-04 真机:点输入框,当前那句被浏览器重念一遍)。
@@ -590,11 +592,32 @@ __REEL_JS__
     try { audioEl.onended = audioEl.onerror = audioEl.onplaying = null; audioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='; audioEl.play().then(() => { unlocked = true; }, (e) => { if (e && e.name === 'AbortError') unlocked = true; }); } catch {}
   };
   let voiceToken = 0;
+  /** 配音文件(相对 conversations/<老师>/)的地址 */
+  const audioUrl = (rel) => AUDIO + S.tutor.name + '/' + rel.split('/').map(encodeURIComponent).join('/');
+  /** 卡上第 k 段的配音(点读段、单词、录音卡的示范音):这一轮跑完才在后台配,孩子刚看到卡就点时可能还没好。
+   *  好了就 play(相对路径);没好就每秒拉一次今天(会把 card.assets 补上),到了再放,最多 CARD_CLIP_WAIT_MS;等的时候被别的声音打断(token 变了)就算了。
+   *  等不到:mock 里 synth()(浏览器合成声),真服务上 miss()(不出声)。2026-10-08 之前直接退合成声:刚出来的单词卡「听」是机械声,iPad 上开着麦克风时还可能把话筒弄哑 */
+  const CARD_CLIP_WAIT_MS = 12000;
+  const cardClip = (card, k, token, play, synth, miss) => {
+    const a = S.tutor ? segmentAudio(card, k) : null;
+    if (a) return play(a);
+    if (SYNTH || !S.tutor) return synth();
+    const until = Date.now() + CARD_CLIP_WAIT_MS;
+    const tick = async () => {
+      try { await loadDay(true); } catch {}
+      if (token !== voiceToken || !S.tutor) return miss(); // miss 里的收尾自己查 token:这里只是把按钮的「在念」撤掉
+      const b = segmentAudio(card, k);
+      if (b) play(b);
+      else if (Date.now() < until) setTimeout(tick, 1000);
+      else miss();
+    };
+    setTimeout(tick, 300);
+  };
   /** 换了音源后定倍速(单词卡舞台慢放;看录像另有倍速):换 src 会把 playbackRate 重置成 defaultPlaybackRate,两个一起设;音高不变 */
   const audioRate = (r) => { audioEl.defaultPlaybackRate = r; audioEl.playbackRate = r; try { audioEl.preservesPitch = true; audioEl.webkitPreservesPitch = true; } catch {} };
   /** 只停声音。播放状态不在这里改——那走 dispatch(见下面「播放器」) */
   const silence = () => { voiceToken++; try { audioEl.pause(); } catch {} try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {} };
-  /** 念一句;念完调 onEnd(被打断不调);声音真开始时调 onStart(总时长毫秒:mp3 取 duration,合成声与没声音按字数估),给标注定时用 */
+  /** 念一句;念完调 onEnd(被打断不调);声音真开始时调 onStart(总时长毫秒:mp3 取 duration,没声音按字数估),给标注定时用 */
   const say = (line, onEnd, onStart) => {
     const token = ++voiceToken;
     const finish = () => { if (token === voiceToken) onEnd(); };
@@ -603,18 +626,19 @@ __REEL_JS__
     const fallback = () => { const ms = lineDurationMs(line.text); start(ms); setTimeout(finish, ms); };
     if (line.audio && S.tutor) {
       try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {}
-      // 退回合成声前先查 token:silence 的 pause 会让还没 resolve 的 play() 以 AbortError 拒掉,那不是「配音放不出来」,是被打断了(2026-09-12 真机复现:点「新话题」后合成声念旧话题那句)
+      // 放不出来先查 token:silence 的 pause 会让还没 resolve 的 play() 以 AbortError 拒掉,那不是「配音放不出来」,是被打断了(2026-09-12 真机复现:点「新话题」后合成声念旧话题那句)
       const fallbackVoice = () => { if (token === voiceToken) speak(plainLine(line.text), finish, fallback, start); };
       audioEl.onended = finish; audioEl.onerror = fallbackVoice;
       audioEl.onplaying = () => start(isFinite(audioEl.duration) && audioEl.duration > 0 ? audioEl.duration * 1000 : lineDurationMs(line.text));
-      audioEl.src = AUDIO + S.tutor.name + '/' + line.audio.split('/').map(encodeURIComponent).join('/');
+      audioEl.src = audioUrl(line.audio);
       audioRate(1);
       audioEl.play().catch(fallbackVoice);
     } else speak(plainLine(line.text), finish, fallback, start);
   };
+  /** 浏览器合成声;不是 mock(SYNTH)就直接 onFail——孩子端听到的只有老师的音色 */
   const speak = (text, onEnd, onFail, onStart, opts) => {
     try {
-      if (!('speechSynthesis' in window)) return onFail();
+      if (!SYNTH || !('speechSynthesis' in window)) return onFail();
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text); u.lang = (opts && opts.lang) || 'zh-CN'; u.rate = (opts && opts.rate) || 0.95;
       let ended = false;
@@ -755,7 +779,7 @@ __REEL_JS__
     if (PARENT) { S.readonly = true; S.newThread = false; S.hist = intent.date || S.pdate || null; }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
-    $('#board').replaceChildren();
+    $('#board').replaceChildren(); pin.on = false;
     if (S.newThread && !intent.send && !S.lecture) $('#board').append(blankBoard('想问什么?'));
     $('#tutor').classList.add('on');
     setBar('idle');
@@ -1040,7 +1064,7 @@ __REEL_JS__
     grid.classList.toggle('merged', merged);
     for (const l of grid.querySelectorAll('.lt')) l.style.transform = 'translate(' + l._x[merged ? 0 : 1] + 'px, 0px)';
   };
-  /** 念这个词:服务端配好的 1.mp3(老师的音色)按 rate 倍速放(音高不变),没好就浏览器的英文合成声;念完调 then(被打断不调) */
+  /** 念这个词:服务端配好的 1.mp3(老师的音色)按 rate 倍速放(音高不变),没好就等它到(cardClip);念完调 then(被打断不调) */
   const wordSay = (card, btn, rate, then) => {
     if (S.rec) return;
     dispatch({ type: 'segment' });
@@ -1050,14 +1074,14 @@ __REEL_JS__
     const done = () => { if (btn) btn.classList.remove('on'); if (token === voiceToken && then) then(); };
     const w = String((card.props || {}).word || '');
     const synth = () => { if (token === voiceToken) speak(w, done, done, null, { lang: 'en-US', rate: 0.9 * rate }); };
-    const a = segmentAudio(card, 0);
-    if (!a || !S.tutor) { synth(); return; }
-    audioEl.onplaying = null;
-    audioEl.onended = () => { if (token === voiceToken) done(); };
-    audioEl.onerror = synth;
-    audioEl.src = AUDIO + S.tutor.name + '/' + a.split('/').map(encodeURIComponent).join('/');
-    audioRate(rate);
-    audioEl.play().catch(synth);
+    cardClip(card, 0, token, (a) => {
+      audioEl.onplaying = null;
+      audioEl.onended = () => { if (token === voiceToken) done(); };
+      audioEl.onerror = synth;
+      audioEl.src = audioUrl(a);
+      audioRate(rate);
+      audioEl.play().catch(synth);
+    }, synth, done);
   };
   /** 舞台里的单词卡:emoji、分段两色的四线三格、「再听一遍」(慢);打开就走一遍:慢念与一段一段慢写同时开始 → 写完合拢 → 再慢念。点一段,那段慢写一遍 */
   let wordRun = 0;
@@ -1089,13 +1113,13 @@ __REEL_JS__
     }
     return el;
   };
-  /** 点读:点哪段念哪段——服务端配好的段(card.assets 里有 <段号>.mp3)放 mp3,没好的用浏览器合成声;讲稿在播就先停下 */
+  /** 点读:点哪段念哪段——服务端配好的段(card.assets 里有 <段号>.mp3)放 mp3,没好的等它到(cardClip);讲稿在播就先停下 */
   const readSegment = (el, card, k, seg) => {
     dispatch({ type: 'segment' });
     for (const x of document.querySelectorAll('.rd.on')) x.classList.remove('on');
     el.classList.add('on');
     const off = () => el.classList.remove('on');
-    say({ text: seg, audio: segmentAudio(card, k) }, off);
+    cardClip(card, k, ++voiceToken, (a) => say({ text: seg, audio: a }, off), () => say({ text: seg, audio: null }, off), off);
   };
   /** 填空:改一个空 → 本地状态、紧凑态重画、400ms 后 PUT(打字中不刷舞台,免得输入框失焦) */
   let fillTimer = null;
@@ -1126,17 +1150,22 @@ __REEL_JS__
     audioRate(1);
     audioEl.play().catch(() => { if (token === voiceToken) off(); });
   };
-  /** 示范音:服务端配好的 1.mp3(老师的音色),没好就浏览器合成声念给人看的字 */
+  /** 示范音:服务端配好的 1.mp3(老师的音色),没好就等它到(cardClip;mock 里是浏览器合成声念给人看的字) */
   const playDemo = (card, btn) => {
-    const a = segmentAudio(card, 0);
+    const a = S.tutor ? segmentAudio(card, 0) : null;
     const say = card.props.show || (card.props.mode === 'pinyin' ? '' : card.props.text || '');
-    playClip(a && S.tutor ? AUDIO + S.tutor.name + '/' + a.split('/').map(encodeURIComponent).join('/') : '', btn, say);
+    if (a || SYNTH || !S.tutor) return playClip(a ? audioUrl(a) : '', btn, say);
+    if (S.rec) return;
+    dispatch({ type: 'segment' });
+    if (btn) btn.classList.add('on');
+    const off = () => { if (btn) btn.classList.remove('on'); };
+    cardClip(card, 0, ++voiceToken, (x) => playClip(audioUrl(x), btn, say), off, off);
   };
   /** 自己的录音:刚录的放本地那份,刷新后从服务端取 */
   const playMine = (card, btn) => {
     const st = card.state || {};
     const rel = typeof st.audio === 'string' && S.tutor ? st.audio.replace(/^conversations\\/[^\\/]+\\//, '') : '';
-    playClip(card._blob || (rel ? AUDIO + S.tutor.name + '/' + rel.split('/').map(encodeURIComponent).join('/') : ''), btn, '');
+    playClip(card._blob || (rel ? audioUrl(rel) : ''), btn, '');
   };
   /** 舞台里的录音卡:句子、上排(先听 / 听我的 + 示范 / 计时)、中间的大圆键(按住录,往上滑松手取消) */
   const recordStage = (card, idx, secIdx, t, py, sec, locked) => {
@@ -1453,6 +1482,37 @@ __REEL_JS__
    */
   const liveCardsOf = (e) => { const bs = beatsOf(e).slice(0, e.ready || 0); let n = 0; for (const b of bs) if (b.card !== null) n = Math.max(n, b.card + 1); return n; };
   /** 一张卡落到行里:和前面的卡并一行(半宽 + 半宽,或明写的并排)就进那一行,否则新起一行;只看这张和前面的,后面的卡不影响前面的行 */
+  // ---- 跟到底:新露出来的卡在板的最后 → 板滚到底(连底下留的空一起露);之后这一节再长高(问题卡的「等你说…」、图片载完、排版量完),
+  //      只要孩子没自己往上翻,就再滚到底。原来是 scrollIntoView nearest:只把卡的下沿贴到可视区下沿,之后长高的那截就在屏幕外
+  //      (2026-10-08 真机:新卡要手动往上滑才看全;mock 量出来每轮停下等答时最后一张卡被截 45px,其余 4–7px) ----
+  const pin = { on: false, touched: 0 };
+  /** 让孩子看到 el:它是板上最后看得见的东西就滚到底并跟着(pin);不是(念到上面另一张卡)就照旧 nearest,不跟;比可视区还高的露上沿 */
+  const follow = (el) => {
+    const b = $('#board'); if (!el || !b.contains(el)) return;
+    const er = el.getBoundingClientRect();
+    const padB = parseFloat(getComputedStyle(b).paddingBottom) || 0;
+    // 板上最后看得见的东西的下沿(不用 scrollHeight:内容还没板高时它就是板高,短板上的卡永远「不是最后」,之后上面的卡长高把它挤出去也不跟)
+    let tail = b.lastElementChild; while (tail && !tail.getClientRects().length) tail = tail.previousElementSibling;
+    const gap = tail ? tail.getBoundingClientRect().bottom - er.bottom : 0;
+    if (er.height > b.clientHeight - padB) { pin.on = false; el.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+    if (gap > 32) {
+      // 已经整张看得见就不动:再滚一次 nearest 会打断正在往底下滚的那一下(新卡刚铺、这句又念到上面那张时,新卡停在半截)
+      const br = b.getBoundingClientRect();
+      if (er.top >= br.top && er.bottom <= br.bottom) return;
+      pin.on = false; el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return;
+    }
+    pin.on = true;
+    b.scrollTo({ top: b.scrollHeight, behavior: 'smooth' });
+  };
+  {
+    const b = $('#board');
+    // 孩子自己翻了就不跟(点一下不算:只有拖动、滚轮)
+    for (const ev of ['touchmove', 'wheel']) b.addEventListener(ev, () => { pin.on = false; pin.touched = Date.now(); }, { passive: true });
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => { if (pin.on && b.scrollHeight - b.scrollTop - b.clientHeight > 1) b.scrollTo({ top: b.scrollHeight, behavior: 'smooth' }); });
+      new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) ro.observe(n); }).observe(b, { childList: true });
+    }
+  }
   const placeCard = (P, sec, k, idx) => {
     const c = renderCard(sec.cards[k], k, idx, false);
     const half = (j) => j <= k && halfOf(sec.cards[j], j === k ? c : null);
@@ -1474,7 +1534,7 @@ __REEL_JS__
     else S.sections[idx] = sec;
     const n = liveCardsOf(sec);
     if (n > P.shown) { const g = $('#board > .wait-card'); if (g) g.remove(); }
-    for (; P.shown < n; P.shown++) { const c = placeCard(P, sec, P.shown, idx); c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    for (; P.shown < n; P.shown++) follow(placeCard(P, sec, P.shown, idx));
     dispatch({ type: wasLive ? 'liveBeat' : 'liveStart', section: idx });
   };
   /** 老师写完了:live 的那节换成正式的(带标注 / 样子、每句配音),不重播——没铺的卡补上,铺过的换样子并把已播过的标注补画;等着的接上 */
@@ -1719,7 +1779,7 @@ __REEL_JS__
     if (v.kind === 'wait' && waited < WAIT_LONG_MS) S.waitTimer = setTimeout(renderSubtitle, WAIT_LONG_MS - waited);
     // 占位卡:第一拍前、以及念着没卡的开头句时都在(第一张卡落下才撤),总在板的最后
     const board = $('#board'); let g = board.querySelector(':scope > .wait-card');
-    if (v.kind === 'wait' || (S.partial && S.partial.live && !S.partial.shown)) { if (!g) { g = waitCardEl(); board.append(g); g.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } else if (g !== board.lastElementChild) board.append(g); }
+    if (v.kind === 'wait' || (S.partial && S.partial.live && !S.partial.shown)) { if (!g) { g = waitCardEl(); board.append(g); follow(g); } else if (g !== board.lastElementChild) board.append(g); }
     else if (g) g.remove();
     const b = $('#sub-btn');
     b.hidden = v.right === 'none';
@@ -1728,6 +1788,11 @@ __REEL_JS__
     document.body.classList.toggle('limit', S.limit);
     // 老师等着孩子答:最后那张问题卡的答案栏露「等你说…」
     document.body.classList.toggle('waiting', S.state.status === 'waiting' && !S.state.replay && !S.pending);
+    // 老师停下来了(等孩子答、念完):板上最后那张卡整张露出来——念最后几句时滚去了上面的卡,问题卡在底下只露半截。孩子 3 秒内自己翻过就不拉
+    // 只认「刚才在念 → 停下」这一下;进老师页时铺好的旧板(本来就停着)还是停在最后一节开头(scrollLast)
+    const settled = (S.state.status === 'waiting' || S.state.status === 'done') && !S.state.replay && !S.pending && !S.stage && !S.reel;
+    if (settled && pin.was === 'playing' && Date.now() - pin.touched > 3000) { const cs = [...$('#board').querySelectorAll('.sec .c')].filter((c) => c.getClientRects().length); if (cs.length) follow(cs[cs.length - 1]); }
+    pin.was = S.state.status;
     markHeard();
   };
   $('#sub-btn').addEventListener('click', () => {
@@ -1747,7 +1812,7 @@ __REEL_JS__
     const timed = [];
     for (const m of line.marks) { if (markTiming(line, m, 1000)) timed.push(m); else target = applyMark(secIdx, m, true) || target; }
     if (!target) { const at = nowCard(S.sections, S.state); target = $('#board').querySelector('[data-sec="' + secIdx + '"] ' + (at === null ? '.c' : '[data-card="' + at + '"]')); }
-    if (target) target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (target) follow(target);
     const done = new Set();
     const onStart = (totalMs) => {
       const tok = voiceToken;
@@ -1824,7 +1889,7 @@ __REEL_JS__
       case 'replayStart': unlock(); replayWrote.clear(); break;
       case 'openStage': openStage(f.section, f.card, { delegate: true, autoplay: true }); break;
       case 'openAsk': { const s = S.sections[f.section]; if (s && s.lines[f.line]) openAskCard(f.section, s.lines[f.line]); break; }
-      case 'scrollLast': { const last = $('#board').querySelector('[data-sec="' + (S.sections.length - 1) + '"] .c'); if (last) last.scrollIntoView({ block: 'start', behavior: 'instant' }); break; }
+      case 'scrollLast': { pin.on = false; const last = $('#board').querySelector('[data-sec="' + (S.sections.length - 1) + '"] .c'); if (last) last.scrollIntoView({ block: 'start', behavior: 'instant' }); break; }
     }
   };
   // ---- 第一遍念的整节:念到哪露到哪,卡一张一张出来,和老师现讲时一样;停下等答、念完、孩子开口就整节在(shownCards) ----
@@ -1846,7 +1911,7 @@ __REEL_JS__
       }
       if (n === S.sections[i].cards.length) S.unfold.delete(i);
     }
-    if (fresh) fresh.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (fresh) follow(fresh);
   };
   // ---- 录像的实录(《家长录像设计.md》§4,只在孩子端):孩子看到、听到、做了什么,攒着每 10 秒一批发给服务端(页面退到后台时 sendBeacon)。
   //      只记今天、能发消息的话题(以前的只读回放不记);卡的每次改动服务端在存卡时自己记。发不出去就丢,不重试 ----
@@ -1913,6 +1978,8 @@ __REEL_JS__
       const entries = sectionsFromMessages(mine);
       // 配音晚到:已经铺上的节,句子的 mp3 到了就补上,还没念到的句用老师的声
       for (const e of entries) { const s = S.sections.find((x) => x.job === e.job); if (s && s !== e) e.lines.forEach((l, i) => { const t = s.lines[i]; if (l.audio && t && !t.audio && t.text === l.text) t.audio = l.audio; }); }
+      // 卡上的配音(点读段、单词、示范音)这一轮跑完才在后台配,比节晚一两秒:已经铺上的节把 card.assets 补上,不重画,点的时候才看(cardClip)。原来不补,不重进老师页就一直没有
+      for (const e of entries) { const s = S.sections.find((x) => x.job === e.job); if (s && s !== e) e.cards.forEach((c, i) => { const t = s.cards[i]; if (t && Array.isArray(c.assets) && c.assets.length > (t.assets || []).length) t.assets = c.assets; }); }
       const fresh = [];
       for (const e of entries) {
         if (S.partial && S.partial.job === e.job && S.partial.live) { if (e.partial) renderLive(e); else finalizeLive(e); continue; }
@@ -1988,7 +2055,7 @@ __REEL_JS__
   const canSend = () => !PARENT && !S.readonly && !(S.lecture && !S.lecture.watch);
   const renderBar = () => { $('#pill').hidden = !canSend(); $('#back-today').hidden = !S.readonly || PARENT; };
   $('#more-btn').hidden = PARENT;
-  const resetBoard = () => { dispatch({ type: 'halt' }); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.partial = null; $('#board').replaceChildren(); };
+  const resetBoard = () => { dispatch({ type: 'halt' }); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.partial = null; pin.on = false; $('#board').replaceChildren(); };
   /** 换到某天的某个话题:今天的能接着聊;以前的只读回放(从第一句播) */
   const switchThread = (date, thread) => {
     resetBoard();
@@ -2806,6 +2873,9 @@ __REEL_JS__
       if (t) { const th = debug.get('thread'); openTutor(t, th ? { kind: 'thread', thread: th, date: S.home.date } : { kind: 'today', date: S.home.date }); setTimeout(jumpTo, 400); }
       return;
     }
+    // 地址栏里定落在哪的调试参数(tutor / new / hist / panel / step / stage)只管这一次打开:读完就去掉,只留 device。孩子之后从首页换了老师地址栏不跟着变,
+    // 留着的话刷新(或 Safari 自己重载、服务重启后的自动重载)永远回到地址栏里那位(2026-10-08 真机:在数学小课堂刷新跳到语文老师)
+    try { const q = new URLSearchParams(); if (debug.get('device')) q.set('device', debug.get('device')); const rest = q.toString(); if (location.search !== (rest ? '?' + rest : '')) history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '')); } catch {}
     if (open && S.home) {
       const t = S.home.tutors.find((x) => x.name === open);
       if (t) {
@@ -2824,13 +2894,15 @@ __REEL_JS__
   /** 服务换了新代码:孩子手上没事时重载,回到原来那位老师。正按着、在打字、在等老师、老师正在念、舞台或发照片屏开着,都先不动 */
   const staleReload = () => {
     if (!stale || document.hidden) return;
-    if (press || rec || psRec || S.pending || S.stage || S.bar !== 'idle' || S.state.status === 'playing' || psEl.classList.contains('on')) return;
+    if (press || rec || psRec || S.pending || S.stage || lcShowing || S.bar !== 'idle' || S.state.status === 'playing' || psEl.classList.contains('on')) return;
     if (PARENT) { if (S.tutor) { const q = new URLSearchParams({ tutor: S.tutor.name }); if (S.hist) q.set('date', S.hist); if (S.thread) q.set('thread', S.thread); location.replace(location.pathname + '?' + q); } else location.reload(); return; }
     try { if (S.tutor && !S.readonly) sessionStorage.setItem('kid-resume', S.tutor.name); } catch {}
     location.reload();
   };
   setInterval(() => { staleReload(); if (S.tutor) { if (!S.pending) loadDay(true); } else loadHome(); }, 5000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) (S.tutor ? loadDay(true) : loadHome()); });
+  // 孩子端刷新(手动的、Safari 自己重载的)回到手上这位老师;在首页刷新就回首页。只读回放不记(重载回来是今天的)
+  if (!PARENT) window.addEventListener('pagehide', () => { try { if (S.tutor && !S.readonly) sessionStorage.setItem('kid-resume', S.tutor.name); else sessionStorage.removeItem('kid-resume'); } catch {} });
 })();
 </script>
 </html>
@@ -2841,6 +2913,8 @@ export const KID_PAGE = PAGE.replace('__BOARD_JS__', () => libSource('kid-board'
 export interface KidPageMode {
   /** 家长板书页(《家长板书页设计.md》):数据走家长接口、只读、旁注;自己的 manifest */
   parent?: boolean;
+  /** 没有配音时用浏览器合成声:只有 mock 给(它没有配音文件);真服务不给(《工作流程.md》拍板 18) */
+  synth?: boolean;
 }
 
 /** 孩子端页面:标题(已转义)填进去;mode 见 KidPageMode,不给 = 孩子端 */

@@ -2,7 +2,7 @@
  * 模拟接口(`cotutor mock`):不经真实老师与配音,用固定的板书 JSON 把孩子端页面喂起来,
  * 专门测前端的交互逻辑与渲染效果(卡先铺、笔跟声、停下等、追问追加、上限、离线)。
  * 不需要 workspace。老师的每一轮从各自的脚本里按顺序取(脚本就是老师会写的正文,过真解析器);脚本用完给一句收尾话。
- * 没有配音文件(/api/audio 一律 404),页面退回浏览器自带的合成声,所以逐句节奏是真的。
+ * 没有配音文件(/api/audio 一律 404),页面退回浏览器自带的合成声(页面模式 synth,只有这里给;真服务的孩子端不用合成声),所以逐句节奏是真的。
  * 老师「想」的期间按流式模拟:卡在 delay 里一张张出现(pending 条目带 partial 板书),想完才有讲稿与声音。
  * 卡的状态 PUT 假存在内存里(过真的 state 契约),today 里并回卡上;发消息接 {text, action, focus},「交给老师」后照常追加下一节。
  * 场景:normal(缺省)/ limit(每日上限已到)/ offline(接口全 500,页面该灰)。
@@ -601,11 +601,11 @@ export function createMock(opts: MockOptions = {}): Mock {
     await lecturesLoaded;
     const url = new URL(path, 'http://x');
     const p = url.pathname;
-    if (p === '/') return { status: 200, html: kidPage(title, {}, await stageVersion()) };
+    if (p === '/') return { status: 200, html: kidPage(title, { synth: true }, await stageVersion()) };
     if (p === '/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
     // 家长端(《家长板书页设计.md》):同一个页面,家长模式;清单与一天的板书(答案不剥,第一节带一条给家长的尾巴与记忆,看旁注的样子)。mock 没有工作台 /dev
-    if (p === '/parent') return { status: 200, html: kidPage(title, { parent: true }, await stageVersion()) };
+    if (p === '/parent') return { status: 200, html: kidPage(title, { parent: true, synth: true }, await stageVersion()) };
     if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };
     // 主题:mock 没有 workspace,直接给包里的出厂 default
     if (p === '/kid/theme.css') return { status: 200, html: `${cardsCss()}\n\n${(await packageTheme()).css}`, contentType: 'text/css; charset=utf-8' };

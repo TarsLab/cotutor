@@ -37,7 +37,7 @@ import { kouboYuanOfDay, readHeard } from './koubo.ts';
 import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { themeFiles } from './theme.ts';
-import { enrichLectures, inspectLecture, bakeSectionSoon, ensureBaked, lectureFrameSvg, parseRing, type IncomingMark } from './lecture.ts';
+import { enrichLectures, inspectLecture, bakeSectionSoon, ensureBaked, lectureFrameSvg, parseRing, parseSvgMs, type IncomingMark } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
@@ -964,7 +964,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     // 课包某一刻的画面(圈的卡、lecture 卡的缩略图):烤过的课包服务端现画;没烤过 404,页面退回自己克隆
     const frame = /^\/api\/bundles\/([a-z0-9][a-z0-9-]*)\/frame\.svg$/.exec(p);
     if (method === 'GET' && frame) {
-      const svg = await lectureFrameSvg(ws, frame[1], Number(url.searchParams.get('svg')) || 0, parseRing(url.searchParams.get('ring')), { bake: ensureBaked });
+      const svg = await lectureFrameSvg(ws, frame[1], parseSvgMs(url.searchParams.get('svg')), parseRing(url.searchParams.get('ring')), { bake: ensureBaked });
       return svg === null ? { status: 404, json: { error: 'not_found' } } : { status: 200, body: Buffer.from(svg), contentType: 'image/svg+xml; charset=utf-8' };
     }
     if (method === 'GET' && p.startsWith('/api/bundles/')) {

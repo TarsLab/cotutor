@@ -223,6 +223,11 @@ export async function lectureFrameSvg(ws: Pick<LectureDirs, 'dirs'>, id: string,
   }
 }
 
+/** frame.svg 的 svg 参数:SVG 时刻(毫秒);`end` = 最后一帧(小课堂卡的缩略图,拍板 37);认不出来 = 0 */
+export function parseSvgMs(s: string | null): number {
+  return s === 'end' ? Infinity : Number(s) || 0;
+}
+
 /** frame.svg 的 ring 参数:「x,y;x,y;…」(课包坐标,取整);认不出来 = 没有 */
 export function parseRing(s: string | null): [number, number][] {
   if (!s) return [];

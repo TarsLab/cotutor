@@ -50,6 +50,7 @@ function App(): JSX.Element {
   const onSubmit = useCallback((ink: Record<string, unknown>[], image: string) => post({ type: 'submit', state: { ink }, image }), []);
   const onLectureDone = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'finished', ...w }), []);
   const onLectureClose = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'close', ...w }), []);
+  const onLectureAsk = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'ask', ...w }), []);
   // 卡的样子:phase 给页面字幕行;那一段放完存状态 {done: true}
   const onLecturePhase = useCallback((phase: 'drawing' | 'paused' | 'done', line: string, step: number, total: number) => {
     post({ type: 'phase', phase, step, total, line });
@@ -64,7 +65,7 @@ function App(): JSX.Element {
     const range = { start: card.props.start, end: card.props.end };
     return <LectureStage ref={lecture} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={[]} range={range} autoplay={card.autoplay} video={card.props.video === true} onPhase={onLecturePhase} onMarks={noop} onFinished={noop} onClose={noop} onError={onError} />;
   }
-  if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage ref={lecture} follow={card.props.follow === true} onLog={onWatch} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} video={card.props.video === true} onMarks={onMarks} onFinished={onLectureDone} onClose={onLectureClose} onError={onError} />;
+  if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage ref={lecture} follow={card.props.follow === true} onLog={onWatch} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} video={card.props.video === true} onMarks={onMarks} onFinished={onLectureDone} onClose={onLectureClose} onAsk={onLectureAsk} onError={onError} />;
   if (card.kind === 'canvas') {
     const st = (card.state ?? {}) as { ink?: Record<string, unknown>[] };
     const base = (card.props.base ?? null) as { bundle: string } | { skeletons: Record<string, unknown>[] } | { image: string } | null;

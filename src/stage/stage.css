@@ -56,7 +56,14 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .lc-fill { position: absolute; left: 0; top: 10px; height: 8px; border-radius: 4px; background: #e8743b; }
 .lc-knob { position: absolute; top: 3px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: #ffffff; border: 2px solid #e8743b; box-sizing: border-box; }
 .lc-time { flex: none; font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.lc-hint { text-align: center; color: #8a8781; font-size: 15px; }
+.lc-hint { min-height: 48px; display: grid; place-items: center; text-align: center; color: #8a8781; font-size: 15px; }
+/* 放完了停在最后一帧(拍板 37):「再看一遍」「去问老师」话音落了一会儿才淡入;占着和提示行一样高,画面不跳 */
+.lc-end { min-height: 48px; display: flex; justify-content: center; align-items: center; gap: 12px; }
+.lc-end.lc-wait { visibility: hidden; }
+.lc-askbtn { height: 48px; border-radius: 24px; border: none; background: #c95a22; color: #ffffff; font: inherit; font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 6px; padding: 0 18px 0 24px; cursor: pointer; }
+.lc-in { animation: lc-in .4s ease-out both; }
+@keyframes lc-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lc-in { animation: none; } }
 /* 不叫 .pen:舞台页也装了孩子端的 theme.css,那里 .pen 是标注的笔(pointer-events: none),圈就收不到手指了 */
 .lc-canvas.lc-pen { cursor: crosshair; touch-action: none; }
 .lc-tools { position: absolute; left: 18px; top: 18px; display: flex; gap: 8px; }

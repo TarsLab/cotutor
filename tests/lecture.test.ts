@@ -63,12 +63,14 @@ const s3 = clock.segments[2];
     const l = await readLecture({ dirs: { bundles: tmp } }, 'po');
     check('readLecture:groups(形状不对的丢掉)、bounds 从 scene.json,blocks 从 manifest.json;画面改过 → 烤的那份不算数', l?.picture.groups?.length === 1 && l.picture.blocks?.[0]?.text === '十三减八' && JSON.stringify(l.picture.bounds?.q) === '[0,0,1,1]' && l.baked === false, JSON.stringify(l?.picture));
     // 服务端出缩略图(frame.svg):烤过且画面对得上才出
-    const { lectureFrameSvg, parseRing } = await import('../src/server/lecture.ts');
+    const { lectureFrameSvg, parseRing, parseSvgMs } = await import('../src/server/lecture.ts');
     const fresh = await readLecture({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8');
     check('样本课包烤过:baked', fresh?.baked === true);
     const s3mid = clock.segments[2].drawStart + 2000;
     const svg = await lectureFrameSvg({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8', s3mid, [[300, 80], [360, 80], [360, 160]]) ?? '';
     check('frame.svg:那一刻画到第 3 步一半(橙色斜线有、第 4 步的红圈没有),叠着蓝圈(加了平移),字体内嵌', svg.startsWith('<svg') && svg.includes('#e8590c') && !svg.includes('#e03131') && svg.includes('stroke="#2f6fd6"') && svg.includes('M284 94 L344 94') && svg.includes('@font-face'), svg.slice(0, 200));
+    const end = await lectureFrameSvg({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8', parseSvgMs('end')) ?? '';
+    check('frame.svg?svg=end:最后一帧(小课堂卡的缩略图,拍板 37),第 4 步的红圈也画上了;认不出来的 svg = 0', end.includes('#e03131') && parseSvgMs('end') === Infinity && parseSvgMs('x') === 0 && parseSvgMs(null) === 0 && parseSvgMs('1500') === 1500);
     check('frame.svg:画面改过没重烤、id 不对 → null(页面退回自己克隆)', (await lectureFrameSvg({ dirs: { bundles: tmp } }, 'po', 2000)) === null && (await lectureFrameSvg({ dirs: { bundles: tmp } }, '../x', 2000)) === null);
     check('ring 参数:「x,y;x,y」,认不出来就当没有', JSON.stringify(parseRing('1,2;3,4')) === '[[1,2],[3,4]]' && parseRing('1,2;x').length === 0 && parseRing(null).length === 0);
   } finally {

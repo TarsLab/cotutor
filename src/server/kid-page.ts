@@ -87,6 +87,9 @@ const PAGE = `<!doctype html>
   .c-lc .lt small { font-size:13px; font-weight:700; color:var(--tint-sand-head); letter-spacing:1px; }
   .c-lc .lt b { font-size:20px; }
   .c-lc .lt span { font-size:14px; color:var(--dim); }
+  .c-lc .lc-th { width:168px; height:100px; flex:none; padding:0; border:1px solid var(--tint-sand-line); border-radius:10px; overflow:hidden; display:grid; place-items:center; background:#fff; }
+  .c-lc .lc-th .th, .c-lc .lc-th .mk-svg, .c-lc .lc-th video { width:100%; height:100%; display:block; object-fit:contain; }
+  @media (max-width:560px) { .c-lc .lc-th { width:112px; height:68px; } }
   .c-lc .re { flex:none; height:44px; padding:0 16px; border-radius:22px; border:1.5px solid var(--tint-sand-line); background:#fff; font-size:16px; }
   .lc-ask { display:flex; flex-direction:column; align-items:center; gap:8px; padding:36px 0 12px; text-align:center; }
   .lc-ask b { font-size:26px; }
@@ -1313,7 +1316,7 @@ __REEL_JS__
   const lcStill = (bundle, svgMs, path, cls) => {
     const box = h('div', { class: cls });
     const ring = path && path.length ? '&ring=' + encodeURIComponent(path.map((p) => Math.round(p[0]) + ',' + Math.round(p[1])).join(';')) : '';
-    const img = h('img', { class: 'mk-svg', alt: '', src: lcBundleUrl(bundle) + 'frame.svg?svg=' + (Math.round((svgMs || 0) * 10) / 10) + ring });
+    const img = h('img', { class: 'mk-svg', alt: '', src: lcBundleUrl(bundle) + 'frame.svg?svg=' + (svgMs === 'end' ? 'end' : Math.round((svgMs || 0) * 10) / 10) + ring });
     box.append(img);
     return box;
   };
@@ -1331,12 +1334,16 @@ __REEL_JS__
     del ? h('button', { type: 'button', class: 'x', 'aria-label': '删掉这个圈', on: { click: (e) => { e.stopPropagation(); del(); } } }, '×') : null,
     PARENT ? h('div', { class: 'mk-tx' }, mk.text || '(课包读不出来,没算出圈住了什么)') : null);
   const markRow = (l, marks, del) => h('div', { class: 'mk-row' }, ...marks.map((k) => markCard(l, k, del ? () => del(k) : null)));
-  /** 板书顶上的小课堂卡:课名、看完了、圈了几处、「再看一遍」(done = 孩子已经问过,卡画在那一节前面) */
+  /** 板书顶上的小课堂卡:最后一帧的缩略图、课名、看完了、圈了几处、「再看一遍」(done = 孩子已经问过,卡画在那一节前面);缩略图点了也是再看一遍(拍板 37) */
   const lectureCard = (l, done) => {
     const n = (l.marks || []).length;
+    const again = (e) => { e.stopPropagation(); openLecture({ bundle: l.bundle, title: l.title, ...(l.video ? { video: true } : {}) }); };
+    // 课包画最后一帧(frame.svg?svg=end);视频停在看到的最后一刻,不知道就不画
+    const still = l.video ? (l.endMs ? lcVideoStill(l.bundle, l.endMs) : null) : lcStill(l.bundle, 'end', null, 'th');
     return h('div', { class: 'c c-lc', 'data-lecture': l.bundle },
+      still ? h('button', { type: 'button', class: 'lc-th', 'aria-label': '再看一遍', on: { click: again } }, still) : null,
       h('div', { class: 'lt' }, h('small', {}, '小课堂'), h('b', {}, l.title || ''), h('span', {}, '看完了' + (n ? ' · 圈了 ' + n + ' 处' : done ? '' : ' · 有不懂的就问老师'))),
-      h('button', { type: 'button', class: 're', on: { click: (e) => { e.stopPropagation(); openLecture({ bundle: l.bundle, title: l.title, ...(l.video ? { video: true } : {}) }); } } }, '再看一遍'));
+      h('button', { type: 'button', class: 're', on: { click: again } }, '再看一遍'));
   };
   /** 一节前面的小课堂:第一问那节是小课堂卡 + 圈的卡;再看一遍又圈的那节只有圈的卡 */
   const lectureHead = (s) => !s.lecture ? [] : [s.lecture.again ? null : lectureCard(s.lecture, true), s.lecture.marks && s.lecture.marks.length ? markRow(s.lecture, s.lecture.marks, null) : null];
@@ -1358,7 +1365,7 @@ __REEL_JS__
     const del = (k) => { L.marks = L.marks.filter((x) => x !== k); renderLecturePending(); };
     const ask = !L.sent ? h('div', { class: 'lc-ask' }, h('b', {}, '看完了!有什么想问老师的?'), h('span', {}, marks.length ? '圈的 ' + marks.length + ' 处,问的时候会一起带给老师;不想带的点 × 去掉' : '按住说话,或者打字'))
       : marks.length ? h('div', { class: 'lc-ask sm' }, h('span', {}, '又圈了 ' + marks.length + ' 处,下次说话会一起带给老师;不想带的点 × 去掉')) : null;
-    const el = h('div', { class: 'lc-pending', 'data-key': key }, showCard ? lectureCard({ bundle: L.bundle, title: L.title, video: L.video, marks: L.sent ? flying : marks }, false) : null,
+    const el = h('div', { class: 'lc-pending', 'data-key': key }, showCard ? lectureCard({ bundle: L.bundle, title: L.title, video: L.video, endMs: L.watch && L.watch.watchedMs, marks: L.sent ? flying : marks }, false) : null,
       flying.length || marks.length ? h('div', { class: 'mk-row' }, ...flying.map((k) => markCard(L, k, null)), ...marks.map((k) => markCard(L, k, () => del(k)))) : null, ask);
     if (old) old.remove();
     if (showCard) $('#board').prepend(el); else $('#board').append(el);
@@ -1374,9 +1381,10 @@ __REEL_JS__
       const first = lcMine() && !S.lecture.watch;
       if (m.event === 'finished' && first) S.lecture.watch = { watchedMs: m.watchedMs, finished: true, pauses: m.pauses };
       else if (lcMine()) S.lecture.rewatch = { watchedMs: m.watchedMs, finished: m.finished, pauses: m.pauses };
-      // 第一遍没看完就回去 = 回首页(这一课不记);看完了、或「再看一遍」关掉 = 回板书
+      // 第一遍没看完就回去 = 回首页(这一课不记);看完了点「去问老师」或回去、「再看一遍」关掉 = 回板书。
+      // 放完(finished)只记下来,停在最后一帧,孩子点了才回板书(拍板 37)
       if (m.event === 'close' && first) { closeTutor(); return; }
-      if (m.event === 'finished' && !first) return;
+      if (m.event === 'finished') return;
       hideLecture(); renderLecturePending(); renderBar(); renderSubtitle();
     } else if (m.type === 'error') { const first = S.lecture && !S.lecture.watch; hideLecture(); if (first) closeTutor(); }
   });

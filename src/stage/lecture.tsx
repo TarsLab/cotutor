@@ -75,6 +75,8 @@ export interface LectureStageProps {
   onMarks(marks: StageMark[]): void;
   onFinished(w: LectureWatch): void;
   onClose(w: LectureWatch): void;
+  /** 放完了,孩子点「去问老师」(拍板 37);不给就不画这个按钮 */
+  onAsk?(w: LectureWatch): void;
   onError(message: string): void;
   /** 板书上的小课堂卡:只放这一段(毫秒);有它就是卡的样子(没有顶栏、字幕行、提示,只看不圈) */
   range?: { start: number; end: number };
@@ -105,6 +107,8 @@ export interface LectureStageHandle {
   follow(ms: number, playing: boolean, rate: number, marks: StageMark[]): void;
 }
 
+/** 放完了停在最后一帧,话音落了多久「再看一遍」「去问老师」才淡入(拍板 37) */
+const END_UI_MS = 1000;
 /** 声音和画面差多少就把声音拉回来(毫秒) */
 const RESYNC_MS = 300;
 /** 停在离一处圈多近算「这一刻的圈」(画在画面上、擦得掉) */
@@ -122,7 +126,7 @@ const MAX_POINTS = 300;
 const INK = '#2f6fd6';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onFinished, onClose, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false }, ref): JSX.Element {
+export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onFinished, onClose, onAsk, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false }, ref): JSX.Element {
   const card = range !== undefined;
   const view = rawView || card || follow;
   /** 录像跟着放:倍速 */
@@ -140,6 +144,8 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const [pen, setPen] = useState(true);
   /** 刚圈好的那一处的时刻:字幕行换成「圈好了,记在 0:26」 */
   const [fresh, setFresh] = useState<number | null>(null);
+  /** 放完了,按钮淡入了没有 */
+  const [endUi, setEndUi] = useState(false);
   const shift = useRef({ dx: 0, dy: 0 });
   const ink = useRef<SVGGElement | null>(null);
   const stroke = useRef<{ pts: [number, number][]; el: SVGPathElement } | null>(null);
@@ -514,6 +520,13 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const dots = useMemo(() => (clock ? clock.segments.map((s) => ({ i: s.index, left: (s.start / clock.total) * 100, start: s.start })) : []), [clock]);
   const pct = clock ? (now / clock.total) * 100 : 0;
   const paused = Boolean(clock) && started && !playing;
+  /** 放完了停在最后一帧(孩子的那份):按钮晚一点淡入,不打断孩子还在听、还在想的那一下 */
+  const ended = paused && !card && !follow && !view && Boolean(clock) && now >= clock!.total;
+  useEffect(() => {
+    if (!ended) { setEndUi(false); return; }
+    const id = setTimeout(() => setEndUi(true), END_UI_MS);
+    return () => clearTimeout(id);
+  }, [ended]);
   const herePen = marks.filter(here).length;
   const say = fresh !== null ? `圈好了,记在 ${clockLabel(fresh)}。问老师的时候,圈的地方会一起带上。` : started ? line : '';
 
@@ -527,8 +540,8 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
       </div>}
       <div className={'lc-canvas' + (canDraw ? ' lc-pen' : '')} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp}>
         <div className="lc-host" ref={host} />
-        {paused && !view && (
-          <div className="lc-tools" onPointerDown={(e) => e.stopPropagation()}>
+        {paused && !view && (!ended || endUi) && (
+          <div className={'lc-tools' + (ended ? ' lc-in' : '')} onPointerDown={(e) => e.stopPropagation()}>
             <button type="button" className={'lc-tool' + (pen ? ' on' : '')} aria-pressed={pen} onClick={() => setPen(!pen)}>
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><ellipse cx="10" cy="10" rx="7.5" ry="6" /></svg>
               圈一圈
@@ -577,7 +590,18 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
           {marks.length ? <small>圈了 {marks.length} 处</small> : null}
         </div>
       </div>
-      {!card && !follow && <div className="lc-hint">看完就能问老师</div>}
+      {!card && !follow && (ended
+        ? <div className={'lc-end' + (endUi ? ' lc-in' : ' lc-wait')}>
+            <button type="button" className="lc-tool" disabled={!endUi} onClick={toggle}>
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6" /><path d="M3.5 3v3.5H7" /></svg>
+              再看一遍
+            </button>
+            {onAsk && <button type="button" className="lc-askbtn" disabled={!endUi} onClick={() => { log(false); onAsk({ ...watch.current }); }}>
+              去问老师
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m7.5 4 6 6-6 6" /></svg>
+            </button>}
+          </div>
+        : <div className="lc-hint">看完就能问老师</div>)}
     </div>
   );
 });

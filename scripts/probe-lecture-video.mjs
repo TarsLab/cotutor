@@ -97,9 +97,12 @@ try {
 
   // 放到结尾(点第 3 个句子点再放完)
   await evaluate(`${D}.querySelector('.lc-play').click()`);
+  // 放完停在最后一帧(拍板 37),「去问老师」淡入了才回板书
+  const asked = await until(`${D}.querySelector('.lc-end.lc-in') !== null && !${F}.hidden`, 60);
+  await evaluate(`[...${D}.querySelectorAll('.lc-end button')].find((b) => b.textContent.includes('去问老师')).click()`);
   const finished = await until(`${F}.hidden && Boolean(document.querySelector('.lc-pending .c-mark'))`, 60);
-  const mk = await evaluate(`(() => { const img = document.querySelector('.lc-pending .c-mark img'); return { src: img?.getAttribute('src')?.slice(0, 22), w: img?.naturalWidth ?? 0, h: img?.naturalHeight ?? 0, label: document.querySelector('.lc-pending .c-mark .mk-t')?.textContent }; })()`);
-  ok('放完:看完那排一张圈的卡,缩略图是那一帧的截图(jpeg,320×180,叠着圈)', finished && mk.src === 'data:image/jpeg;base64' && mk.w === 320 && mk.h === 180 && /^你圈的0:1\d$/.test(mk.label), JSON.stringify(mk));
+  const mk = await evaluate(`(() => { const img = document.querySelector('.lc-pending .c-mark img'); return { src: img?.getAttribute('src')?.slice(0, 22), w: img?.naturalWidth ?? 0, h: img?.naturalHeight ?? 0, label: document.querySelector('.lc-pending .c-mark .mk-t')?.textContent, th: document.querySelector('.lc-pending .c-lc .lc-th video')?.getAttribute('src')?.split('#')[1] }; })()`);
+  ok('放完停在最后一帧,点「去问老师」回板书:看完那排一张圈的卡,缩略图是那一帧的截图(jpeg,320×180,叠着圈);小课堂卡的缩略图是视频最后一刻', asked && finished && mk.src === 'data:image/jpeg;base64' && mk.w === 320 && mk.h === 180 && /^你圈的0:1\d$/.test(mk.label) && /^t=1[78]\.\d\d$/.test(mk.th ?? ''), JSON.stringify(mk));
   await shot('video-done.png');
 
   await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = '为什么要轮着分'; document.querySelector('#go').click(); return true; })()`);

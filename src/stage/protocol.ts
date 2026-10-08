@@ -20,8 +20,8 @@ export type FromStage =
   | { source: typeof STAGE_SOURCE; type: 'state'; state: unknown }
   | { source: typeof STAGE_SOURCE; type: 'submit'; state: unknown; /** 画板导出的 png(data URL),页面转存 */ image?: string }
   | { source: typeof STAGE_SOURCE; type: 'close' }
-  /** 小课堂(《小课堂设计.md》):放到结尾一次 = finished;孩子按回去 = close。都带看了多久、停过几次 */
-  | { source: typeof STAGE_SOURCE; type: 'lecture'; event: 'finished' | 'close'; watchedMs: number; finished: boolean; pauses: number }
+  /** 小课堂(《小课堂设计.md》):放到结尾一次 = finished(停在最后一帧,页面不收);孩子按回去 = close;放完点「去问老师」= ask。都带看了多久、停过几次 */
+  | { source: typeof STAGE_SOURCE; type: 'lecture'; event: 'finished' | 'close' | 'ask'; watchedMs: number; finished: boolean; pauses: number }
   /** 小课堂看的过程一条(录像用):那一刻(Date.now())停在课里的哪儿、之后在不在放 */
   | { source: typeof STAGE_SOURCE; type: 'watch'; at: number; pos: number; play: boolean }
   /** 小课堂里圈了 / 擦了:整张单子(时刻、SVG 停在哪、课包坐标的路径);页面是圈的主人(卡 props.marks 发进来的就是它) */

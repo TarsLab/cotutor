@@ -90,6 +90,14 @@ export interface LectureStageProps {
   onLog?(e: WatchEntry): void;
   /** 家长看录像:只看,时钟跟着页面(follow) */
   follow?: boolean;
+  /** 左上返回胶囊里的老师头像(和老师页的「‹ 头像」一样):图或一个字,圈的颜色;不给只画箭头 */
+  tutor?: LectureTutor;
+}
+
+export interface LectureTutor {
+  color: string;
+  img?: string;
+  text?: string;
 }
 
 /** 视频小课堂的时钟:服务端按 lecture.md 拼好的一句一段 */
@@ -126,7 +134,7 @@ const MAX_POINTS = 300;
 const INK = '#2f6fd6';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onFinished, onClose, onAsk, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false }, ref): JSX.Element {
+export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onFinished, onClose, onAsk, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false, tutor }, ref): JSX.Element {
   const card = range !== undefined;
   const view = rawView || card || follow;
   /** 录像跟着放:倍速 */
@@ -530,28 +538,36 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const herePen = marks.filter(here).length;
   const say = fresh !== null ? `圈好了,记在 ${clockLabel(fresh)}。问老师的时候,圈的地方会一起带上。` : started ? line : '';
 
+  /** 圈一圈:停着 = 拿起 / 放下笔;放着 = 停下并拿起笔(少按一次暂停) */
+  const penTool = (): void => {
+    if (!clock) return;
+    if (playing) { toggle(); setPen(true); return; }
+    setPen(!pen);
+  };
+  const again = ended && endUi;
+
   return (
-    <div className={'lc' + (card ? ' lc-card' : '')}>
-      {!card && <div className="lc-top">
-        {!follow && <button type="button" className="lc-round" aria-label="回首页" onClick={() => { log(false); onClose({ ...watch.current }); }}>
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 4 6.5 10l6 6" /></svg>
-        </button>}
-        <div className="lc-chip"><span className="lc-tag">小课堂</span><span className="lc-title">{title}</span></div>
+    <div className={'lc' + (card ? ' lc-card' : ' lc-full') + (video ? ' lc-vid' : '')}>
+      {/* 左上「‹ 头像」浮在上面,和老师页的返回胶囊一个样子(拍板 39) */}
+      {!card && !follow && <button type="button" className="lc-back" aria-label="回首页" onClick={() => { log(false); onClose({ ...watch.current }); }}>
+        <i className="lc-back-ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg></i>
+        {tutor && <span className="lc-av" style={{ borderColor: tutor.color, color: tutor.color }}>{tutor.img ? <img src={tutor.img} alt="" /> : tutor.text}</span>}
+      </button>}
+      {!card && <div className={'lc-rail' + (follow ? '' : ' lc-under')}>
+        <div className="lc-name"><span className="lc-tag">小课堂</span><span className="lc-title">{title}</span></div>
+        {!view && <div className="lc-tools">
+          <button type="button" className={'lc-tool' + (paused && pen ? ' on' : '')} aria-pressed={paused && pen} disabled={!clock || !started} onClick={penTool}>
+            <svg width="26" height="26" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><ellipse cx="10" cy="10" rx="7.5" ry="6" /></svg>
+            圈一圈
+          </button>
+          <button type="button" className="lc-tool" disabled={!paused || !herePen} onClick={erase}>
+            <svg width="24" height="24" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12.5 9.5 6l4 4L7 16.5H3.5z" /><path d="M9 16.5h6" /></svg>
+            擦掉
+          </button>
+        </div>}
       </div>}
       <div className={'lc-canvas' + (canDraw ? ' lc-pen' : '')} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp}>
         <div className="lc-host" ref={host} />
-        {paused && !view && (!ended || endUi) && (
-          <div className={'lc-tools' + (ended ? ' lc-in' : '')} onPointerDown={(e) => e.stopPropagation()}>
-            <button type="button" className={'lc-tool' + (pen ? ' on' : '')} aria-pressed={pen} onClick={() => setPen(!pen)}>
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><ellipse cx="10" cy="10" rx="7.5" ry="6" /></svg>
-              圈一圈
-            </button>
-            <button type="button" className="lc-tool" disabled={!herePen} onClick={erase}>
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12.5 9.5 6l4 4L7 16.5H3.5z" /><path d="M9 16.5h6" /></svg>
-              擦掉
-            </button>
-          </div>
-        )}
         {!clock && <div className="stage-wait">课还在路上…</div>}
         {clock && !started && !follow && (
           <button type="button" className="lc-start" onClick={toggle}>
@@ -562,11 +578,13 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
       </div>
       {!card && <div className={'lc-line' + (fresh !== null ? ' ink' : '')}>{say}</div>}
       <div className="lc-bar">
-        <button type="button" className={'lc-play' + (paused && clock && now < clock.total ? ' go' : '')} aria-label={playing ? '暂停' : '播放'} onClick={toggle} disabled={!clock}>
+        <button type="button" className={'lc-play' + (again ? ' again' : paused && clock && now < clock.total ? ' go' : '')} aria-label={playing ? '暂停' : '播放'} onClick={toggle} disabled={!clock}>
           {playing
             ? <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><rect x="4" y="3" width="4.2" height="14" rx="1" /><rect x="11.8" y="3" width="4.2" height="14" rx="1" /></svg>
-            : <svg width="20" height="20" viewBox="0 0 18 18"><path d="M5 3.5v11l9-5.5z" fill="currentColor" /></svg>}
-          {paused && clock && now < clock.total ? <span>{card && !rangeDone.current ? '放这一段' : '接着看'}</span> : null}
+            : again
+              ? <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6" /><path d="M3.5 3v3.5H7" /></svg>
+              : <svg width="20" height="20" viewBox="0 0 18 18"><path d="M5 3.5v11l9-5.5z" fill="currentColor" /></svg>}
+          {again ? <span>再看一遍</span> : paused && clock && now < clock.total ? <span>{card && !rangeDone.current ? '放这一段' : '接着看'}</span> : null}
         </button>
         <div className="lc-mid">
           <div className="lc-dots">
@@ -589,19 +607,18 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
           <span>{clockLabel(now)} / {clock ? clockLabel(clock.total) : '0:00'}</span>
           {marks.length ? <small>圈了 {marks.length} 处</small> : null}
         </div>
+        {/* 「看完就能问老师」与「去问老师」占同一个位置:放完了话音落了一会儿才换(拍板 37) */}
+        {!card && !follow && <div className="lc-slot">
+          {!ended
+            ? <span className="lc-hint">看完就能问老师</span>
+            : again && onAsk
+              ? <button type="button" className="lc-askbtn lc-in" onClick={() => { log(false); onAsk({ ...watch.current }); }}>
+                  去问老师
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m7.5 4 6 6-6 6" /></svg>
+                </button>
+              : null}
+        </div>}
       </div>
-      {!card && !follow && (ended
-        ? <div className={'lc-end' + (endUi ? ' lc-in' : ' lc-wait')}>
-            <button type="button" className="lc-tool" disabled={!endUi} onClick={toggle}>
-              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6" /><path d="M3.5 3v3.5H7" /></svg>
-              再看一遍
-            </button>
-            {onAsk && <button type="button" className="lc-askbtn" disabled={!endUi} onClick={() => { log(false); onAsk({ ...watch.current }); }}>
-              去问老师
-              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m7.5 4 6 6-6 6" /></svg>
-            </button>}
-          </div>
-        : <div className="lc-hint">看完就能问老师</div>)}
     </div>
   );
 });

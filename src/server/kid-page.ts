@@ -1303,6 +1303,8 @@ __REEL_JS__
   //      问过以后「再看一遍」又圈了,下一条带上(again)。圈的卡的缩略图 = 同一份 SVG 停在那一刻再叠圈(录数据不录屏幕) ----
   const lcFrame = $('#lc-frame');
   const lcPost = (m) => { try { lcFrame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
+  /** 播放器左上「‹ 头像」用的老师头像(和老师页的返回胶囊一样;照 avatarEl 画法拆成图或字 + 颜色) */
+  const lcTutor = () => { const t = S.tutor; if (!t) return null; const av = avatarEl(t), img = av.querySelector('img'); return { color: color(t.subject || t.display), ...(img ? { img: img.getAttribute('src') } : { text: av.textContent }) }; };
   /** 小课堂在哪:课包 /api/bundles/<id>/;视频 /api/kid/lectures/<id>/(lecture.json + video.mp4) */
   const lcBundleUrl = (bundle, video) => (video ? '/api/kid/lectures/' : '/api/bundles/') + encodeURIComponent(bundle) + '/';
   let lcShowing = null;
@@ -1383,7 +1385,7 @@ __REEL_JS__
   window.addEventListener('message', (e) => {
     const m = e.data;
     if (!m || m.source !== STAGE_SOURCE || e.source !== lcFrame.contentWindow || !lcShowing) return;
-    if (m.type === 'ready') lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}), ...(lcShowing.follow ? { follow: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
+    if (m.type === 'ready') lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, tutor: lcTutor(), marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}), ...(lcShowing.follow ? { follow: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
     else if (m.type === 'marks') { if (lcMine()) S.lecture.marks = m.marks; }
     // 看的过程(录像用):孩子开口时一起带上(拍板 11:没开口之前哪里都不记)
     else if (m.type === 'watch') { if (lcMine() && S.lecture.log.length < 500) S.lecture.log.push({ at: m.at, pos: m.pos, play: m.play }); }

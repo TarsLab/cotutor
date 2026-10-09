@@ -18,7 +18,7 @@ import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
 import { buildReel, playRecordOk, reelCardTook, type PlayRecord, type Reel } from '../lib/reel.ts';
 import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
-import type { BoardCard } from '../lib/kid-board.ts';
+import type { BoardCard, Device } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
 import { tutorStatuses } from '../cli/tutors.ts';
 import { configGapsOf, upgradeConfig } from '../cli/migrate.ts';
@@ -287,13 +287,20 @@ async function audioMs(file: string): Promise<number | null> {
   return ms;
 }
 
-/** 家长端看录像(《家长录像设计.md》):这个话题的轨道(lib/reel.ts 推算)+ 这个话题的家长条目(页面照 /board 渲染)。没有孩子开口的话题 → null */
+/**
+ * 家长端看录像(《家长录像设计.md》):这个话题的轨道(lib/reel.ts 推算)+ 这个话题的家长条目(录像栏的说明用)+ 孩子端条目(孩子的屏幕照它画,
+ * 和 /api/kid 一样剥了答案,拍板 6)+ 孩子那台设备(屏幕多大)与老师的脸(孩子屏幕左上角)。没有孩子开口的话题 → null
+ */
 export interface ParentReel {
   tutor: string;
   date: string;
   thread: string;
   reel: Reel;
   messages: ParentMessage[];
+  kid: KidMessage[];
+  /** 孩子发这个话题最后一句时的设备;没记 → null(页面按 iPad 横屏) */
+  device: Device | null;
+  face: { name: string; display: string; avatar: string | null; subject: string | null };
 }
 export async function parentReel(ctx: AppContext, tutor: string, date: string, thread: string): Promise<ParentReel | null> {
   const index = await readIndex(ctx.ws, tutor, date);
@@ -320,7 +327,11 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const reel = buildReel({ messages: mine, events, cards, durations, tutor, now: ctx.now().getTime(), plays });
   if (!reel) return null;
   const day = await parentDay(ctx, tutor, date);
-  return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread) };
+  const kid = await kidDay(ctx, tutor, date);
+  const device = [...mine].reverse().find((m) => m.device)?.device ?? null;
+  const t = ctx.ws.config.tutors[tutor];
+  const face = { name: tutor, display: t?.display ?? tutor, avatar: t?.avatar ?? null, subject: t?.subject ?? null };
+  return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread), kid: kid.messages.filter((m) => m.thread === thread), device, face };
 }
 
 /** 家长板书页的清单(《家长板书页设计.md》§2.2):这一天每位有脸的老师几轮、几个话题、停在哪 */
@@ -989,6 +1000,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title), {}, await stageVersion()) };
     // 家长端(《家长板书页设计.md》):也是孩子端页面本身,数据走家长接口(答案在、家长的话在),卡锁着;自己的清单,加到主屏幕才不会拿到孩子端那份
     if (p === '/parent') return { status: 200, html: kidPage(esc(ws.config.title), { parent: true }, await stageVersion()) };
+    // 录像里孩子的屏幕(《家长录像设计.md》拍板 6):家长端录像时开在 iframe 里;直接打开也能看(调试),?tutor=&date=&thread=[&at=时:分:秒]
+    if (p === '/reel') return { status: 200, html: kidPage(esc(ws.config.title), { reel: true }, await stageVersion()) };
     if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${ws.config.title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };
     return { status: 404, json: { error: 'not_found', path: p } };
   } catch (err) {

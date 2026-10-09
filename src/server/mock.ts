@@ -606,6 +606,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
     // 家长端(《家长板书页设计.md》):同一个页面,家长模式;清单与一天的板书(答案不剥,第一节带一条给家长的尾巴与记忆,看旁注的样子)。mock 没有工作台 /dev
     if (p === '/parent') return { status: 200, html: kidPage(title, { parent: true, synth: true }, await stageVersion()) };
+    if (p === '/reel') return { status: 200, html: kidPage(title, { reel: true, synth: true }, await stageVersion()) };
     if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };
     // 主题:mock 没有 workspace,直接给包里的出厂 default
     if (p === '/kid/theme.css') return { status: 200, html: `${cardsCss()}\n\n${(await packageTheme()).css}`, contentType: 'text/css; charset=utf-8' };
@@ -695,7 +696,12 @@ export function createMock(opts: MockOptions = {}): Mock {
       const cards: CardStates = {};
       mine.forEach((m, k) => (m.section?.cards ?? []).forEach((c, n) => { if (c.state !== undefined) (cards[m.job] ??= {})[n] = { at: new Date((starts[k + 1] ?? t) - 5000).toISOString(), turn: m.job, state: c.state }; }));
       const reel = buildReel({ messages: conv, events: {}, cards, durations: {}, tutor: name, now: now().getTime() });
-      return reel ? { status: 200, json: { tutor: name, date: day.date, thread, reel, messages: mine } } : { status: 404, json: { error: 'no_reel' } };
+      // mock 的孩子接口只认 today 是今天(写日期的走「以前的」那份)
+      const kidDay = await route('GET', `/api/kid/conversations/${name}/${tail === localDate(now()) ? 'today' : tail}`);
+      const kid = kidDay.status === 200 ? (kidDay.json as { messages: { thread: string }[] }).messages.filter((m) => m.thread === thread) : [];
+      const tt = MOCK_TUTORS.find((x) => x.name === name);
+      const face = { name, display: tt?.display ?? name, avatar: tt?.avatar ?? null, subject: tt?.subject ?? null };
+      return reel ? { status: 200, json: { tutor: name, date: day.date, thread, reel, messages: mine, kid, device: null, face } } : { status: 404, json: { error: 'no_reel' } };
     }
     // 记账(家长端清单上的「记账」):这天还没记过的话题都算记了(真服务是每个话题起一轮老师;mock 立刻记上)
     const bk = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/bookkeep$/.exec(p);

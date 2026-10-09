@@ -143,6 +143,9 @@ try {
     const rl = await get('/api/conversations/math-tutor/today/threads/1620-1/reel');
     const rj = rl.json as Rl;
     check('录像接口:两节(孩子问的、家长补的)、节在 ready all 那一刻出来、两次开口、推算;条目只有这个话题的、答案不剥', rl.status === 200 && rj.thread === '1620-1' && rj.reel.tracks.map((t) => t.job).join() === '1620-1,1625-2' && rj.reel.tracks[0].at - Date.parse(`${today}T16:20`) === 5000 && rj.reel.marks.filter((m) => m.kind === 'said').map((m) => m.label).join() === '7 减 9 怎么算,换个说法' && !rj.reel.precise && rj.messages.length === 2 && JSON.stringify(rj.messages[0].section?.cards[0].props.answer) === '[0]', JSON.stringify(rj));
+    // 孩子的屏幕照孩子端条目画(拍板 6):答案剥掉、孩子的话带着;老师的脸;设备没记就是 null
+    const rk = rl.json as Rl & { kid: { job: string; question: string | null; section?: { cards: { props: Record<string, unknown> }[] } }[]; device: string | null; face: { name: string; display: string } };
+    check('录像接口:孩子端条目(答案剥了、只有这个话题的)、老师的脸、设备', rk.kid.length === 2 && rk.kid.map((m) => m.job).join() === '1620-1,1625-2' && rk.kid[0].section?.cards[0].props.answer === undefined && rk.kid[0].question === '7 减 9 怎么算' && rk.face.name === 'math-tutor' && typeof rk.face.display === 'string' && 'device' in rk, JSON.stringify({ kid: rk.kid.map((m) => [m.job, m.question, m.section?.cards[0]?.props]), face: rk.face, device: rk.device }));
     const re = (await get('/api/conversations/math-tutor/today/threads/1630-3/reel')).json as Rl;
     check('录像接口:出错的话题也有录像(开口 + 没成)', re.reel.tracks.length === 0 && re.reel.marks.map((m) => m.kind).join() === 'said,error', JSON.stringify(re));
     check('录像接口:没这个话题 / 没这位老师 404,未来的日期 400', (await get('/api/conversations/math-tutor/today/threads/9999-9/reel')).status === 404 && (await get('/api/conversations/nobody/today/threads/1620-1/reel')).status === 404 && (await get('/api/conversations/math-tutor/2099-01-01/threads/1620-1/reel')).status === 400);

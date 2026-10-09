@@ -569,7 +569,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
       {/* 左上「‹ 头像」浮在上面,和老师页的返回胶囊一个样子(拍板 39) */}
       {!card && !follow && <button type="button" className="lc-back" aria-label="回首页" onClick={() => { log(false); onClose({ ...watch.current }); }}>
         <i className="lc-back-ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg></i>
-        {tutor && <span className="lc-av" style={{ borderColor: tutor.color, color: tutor.color }}>{tutor.img ? <img src={tutor.img} alt="" /> : tutor.text}</span>}
+        {tutor && <span className="lc-av" style={{ color: tutor.color }}><svg className="lc-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44" /></svg><span className="lc-face">{tutor.img ? <img src={tutor.img} alt="" /> : tutor.text}</span></span>}
       </button>}
       {!card && <div className={'lc-rail' + (follow ? '' : ' lc-under')}>
         <div className="lc-name"><span className="lc-tag">小课堂</span><span className="lc-title">{title}</span></div>

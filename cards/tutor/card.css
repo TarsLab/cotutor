@@ -10,7 +10,10 @@
 .c-tutor .bt .bi svg { width:20px; height:20px; }
 .c-tutor .bt-new { font-weight:600; }
 .c-tutor.off { pointer-events:none; }
-.c-tutor.off .av { filter:grayscale(1); opacity:.4; box-shadow:none; }
+.c-tutor.off .av { filter:grayscale(1); opacity:.4; }
+/* 休息:次数用完 / 服务不通,C 的开口朝下(低头);点一下:手指按着时 C 扭一下,松开弹回(弹的那下是 .av 环上的 transition) */
+.c-tutor.off .av .ring circle { transform:rotate(126deg); }
+.c-tutor:active .av .ring circle { transform:rotate(8deg); transition-duration:.08s; }
 .c-tutor.off .nm, .c-tutor.off .bt { color:var(--dim); }
 .c-tutor.off .bt .bi { color:var(--dim); }
 /* 小课堂按钮(《小课堂设计.md》):浅橙底、主色边,两行:「小课堂」+ 课名,下面课长 */

@@ -76,8 +76,31 @@ const PAGE = `<!doctype html>
   #home { min-height:100%; padding:calc(env(safe-area-inset-top) + 16px) 20px calc(env(safe-area-inset-bottom) + 40px); max-width:960px; margin:0 auto; display:flex; flex-direction:column; gap:18px; }
   h1 { font-size:20px; font-weight:600; margin:0; color:var(--dim); }
   .tutors { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
-  .av { border-radius:50%; background:var(--card); border:3px solid var(--line); display:grid; place-items:center; font-weight:700; box-shadow:0 4px 12px #0000000f; flex:0 0 auto; overflow:hidden; }
+  /* 老师头像 = C 形开口环(Cotutor 的 C,开口朝右、朝着老师说出来的话;《首页设计.md》拍板 15):环是 r=44 的圆(周长 276.46),
+     描 80% 留 20%,转 36° 让缺口居中在右;环是学科色(currentColor),里面一个白底圆放图或字。会动的只改 dasharray 与转角 */
+  .av { position:relative; display:grid; place-items:center; font-weight:700; flex:0 0 auto; }
+  .av .ring { position:absolute; left:0; top:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+  .av .ring circle { fill:none; stroke:currentColor; stroke-width:7; stroke-linecap:round; stroke-dasharray:221.17 55.29; transform-origin:50px 50px; transform:rotate(36deg); transition:transform .45s cubic-bezier(.3,1.6,.5,1); }
+  .av .face { position:absolute; left:15%; top:15%; width:70%; height:70%; border-radius:50%; background:var(--card); overflow:hidden; display:grid; place-items:center; font-size:.76em; line-height:1; }
   .av img { width:100%; height:100%; object-fit:cover; }
+  /* 画出来:从右上起笔逆时针一笔写出 C,写完头像冒出来(首页打开、回到首页、空白板;--d 是首页几位老师错开的那一下) */
+  .av.draw .ring circle { animation:av-draw .9s cubic-bezier(.6,0,.3,1) var(--d, 0s) backwards; }
+  .av.draw .face { animation:av-pop .5s ease-out calc(var(--d, 0s) + .35s) backwards; }
+  @keyframes av-draw { from { stroke-dasharray:0 276.46; stroke-dashoffset:-221.17; } to { stroke-dasharray:221.17 276.46; stroke-dashoffset:0; } }
+  @keyframes av-pop { from { opacity:0; transform:scale(.7); } to { opacity:1; transform:scale(1); } }
+  /* 老师页左上那颗跟着播放走(body 上的类,renderSubtitle / setBar 记):该你了 = 点一下头,说 = 开口一张一合,想 = 慢慢转圈、开口一呼一吸,
+     听 = 开口转向下面的输入条;同时有几样时后写的赢(听 > 想 > 说 > 该你了)。等待卡与字幕里的小头像只在等的时候出现,一直是「想」 */
+  body.nod #c-av .ring circle { animation:av-nod .9s ease-in-out; }
+  body.speaking #c-av .ring circle { animation:av-talk 1.6s ease-in-out infinite; }
+  body.pending #c-av .ring circle, .wait-card .av .ring circle, #sub-text .av .ring circle { animation:av-spin 2.4s linear infinite, av-breathe 1.2s ease-in-out infinite; }
+  body.listening #c-av .ring circle { animation:av-turn .35s ease-out both, av-listen 1.6s ease-in-out .35s infinite; }
+  @keyframes av-nod { 0%,100% { transform:rotate(36deg); } 30% { transform:rotate(60deg); } 60% { transform:rotate(26deg); } 80% { transform:rotate(41deg); } }
+  @keyframes av-talk { 0%,46%,100% { stroke-dasharray:221.17 55.29; transform:rotate(36deg); } 12% { stroke-dasharray:187.99 88.47; transform:rotate(57.6deg); } 22% { stroke-dasharray:226.7 49.76; transform:rotate(32.4deg); } 34% { stroke-dasharray:193.52 82.94; transform:rotate(54deg); } 58% { stroke-dasharray:182.46 94; transform:rotate(61.2deg); } 70% { stroke-dasharray:215.64 60.82; transform:rotate(39.6deg); } 82% { stroke-dasharray:199.05 77.41; transform:rotate(50.4deg); } }
+  @keyframes av-spin { from { transform:rotate(36deg); } to { transform:rotate(396deg); } }
+  @keyframes av-breathe { 0%,100% { stroke-dasharray:221.17 55.29; } 50% { stroke-dasharray:204.58 71.88; } }
+  @keyframes av-turn { to { transform:rotate(126deg); } }
+  @keyframes av-listen { 0%,100% { stroke-dasharray:221.17 55.29; transform:rotate(126deg); } 50% { stroke-dasharray:204.58 71.88; transform:rotate(136.8deg); } }
+  @media (prefers-reduced-motion:reduce) { .av .ring circle, .av .face { animation:none !important; transition:none; } }
   .hcards { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
   .hcards:empty { display:none; }
   .lbl { font-size:14px; color:var(--dim); }
@@ -133,7 +156,7 @@ const PAGE = `<!doctype html>
   .c.c-figshot { flex-direction:row; align-items:center; gap:16px; text-decoration:none; color:var(--ink); background:#fff3e8; border-color:var(--accent); }
   .c-figshot[hidden] { display:none; }
   .c-figshot .avs { display:flex; flex:none; }
-  .c-figshot .avs .av { width:52px; height:52px; font-size:24px; border-color:#fff3e8; }
+  .c-figshot .avs .av { width:52px; height:52px; font-size:24px; }
   .c-figshot .avs .av + .av { margin-left:-14px; }
   .c-figshot .tx { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
   .c-figshot .tx b { font-size:19px; }
@@ -141,7 +164,8 @@ const PAGE = `<!doctype html>
   .c-figshot .go { flex:none; height:48px; padding:0 22px; border-radius:24px; background:#c95a22; color:#fff; font-size:17px; font-weight:600; display:flex; align-items:center; }
   body.offline #rest { display:block; }
   body.offline .c-tutor { pointer-events:none; }
-  body.offline .c-tutor .av { filter:grayscale(1); opacity:.4; box-shadow:none; }
+  body.offline .c-tutor .av { filter:grayscale(1); opacity:.4; }
+  body.offline .c-tutor .av .ring circle { transform:rotate(126deg); }
   body.offline .c-tutor .nm, body.offline .c-tutor .bt { color:var(--dim); }
   /* ---- 老师页 = 板书页 ---- */
   #tutor { position:fixed; inset:0; background:var(--paper); display:none; z-index:10; }
@@ -151,7 +175,8 @@ const PAGE = `<!doctype html>
   .tb { position:absolute; top:calc(env(safe-area-inset-top) + 10px); z-index:3; display:flex; align-items:center; gap:10px; }
   .tb.l { left:calc(env(safe-area-inset-left) + 12px); } .tb.r { right:calc(env(safe-area-inset-right) + 12px); }
   #back { display:flex; align-items:center; gap:2px; height:48px; padding:0 4px 0 8px; border-radius:24px; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; }
-  #back .av { width:40px; height:40px; font-size:19px; box-shadow:none; }
+  #back .av { width:40px; height:40px; font-size:19px; }
+  #back .av .ring circle, .pt .hd .av .ring circle, .wait-card .av .ring circle { stroke-width:8; }
   #back-ic { width:24px; height:24px; color:var(--dim); display:grid; place-items:center; }
   #c-mo { font-size:13px; color:var(--dim); background:#fffffff0; border:1px solid var(--line); border-radius:14px; padding:4px 12px; box-shadow:0 2px 10px #00000010; white-space:nowrap; }
   #c-mo[hidden] { display:none; }
@@ -241,21 +266,21 @@ const PAGE = `<!doctype html>
   #sub { display:flex; align-items:center; gap:12px; padding:8px 16px 4px; min-height:52px; }
   #sub-text { flex:1; font-size:15px; line-height:1.45; color:#5a5650; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   #sub-text.wait, #sub-text.gap { color:var(--dim); }
-  #sub-text .av { display:inline-grid; width:22px; height:22px; font-size:12px; border-width:2px; box-shadow:none; vertical-align:middle; margin-right:8px; }
+  #sub-text .av { display:inline-grid; width:22px; height:22px; font-size:12px; vertical-align:middle; margin-right:8px; }
+  #sub-text .av .ring circle { stroke-width:10; }
   .dots { display:inline-flex; gap:4px; margin-left:6px; vertical-align:middle; }
   .dots i { width:5px; height:5px; border-radius:50%; background:var(--accent); opacity:.3; animation:dot 1.2s ease-in-out infinite; }
   .dots i:nth-child(2) { animation-delay:.2s; } .dots i:nth-child(3) { animation-delay:.4s; }
   @keyframes dot { 0%,100% { opacity:.25; transform:translateY(0); } 40% { opacity:1; transform:translateY(-3px); } }
-  /* 第一拍前板上的占位卡:老师头像轻轻浮,一支笔慢慢地写;第一拍就绪就撤,真卡落在同一个位置 */
+  /* 第一拍前板上的占位卡:老师头像的 C 慢慢转(「想」),一支笔慢慢地写;第一拍就绪就撤,真卡落在同一个位置 */
   .wait-card { flex:0 0 auto; height:118px; border-radius:16px; border:1.5px dashed var(--line); background:var(--card); display:flex; align-items:center; justify-content:center; gap:14px; }
-  .wait-card .av { width:36px; height:36px; font-size:18px; border-width:2px; box-shadow:none; animation:float 3s ease-in-out infinite; }
+  .wait-card .av { width:36px; height:36px; font-size:18px; }
   .wait-card svg { width:120px; height:34px; overflow:visible; }
   .wait-card path { fill:none; stroke:var(--accent); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:260; stroke-dashoffset:260; animation:write 5s ease-in-out infinite; }
   .wait-card path + path { stroke-width:2.5; opacity:.55; animation-delay:.6s; }
   .blank ~ .wait-card { display:none; }
   @keyframes write { 0% { stroke-dashoffset:260; opacity:1; } 65% { stroke-dashoffset:0; opacity:1; } 88% { stroke-dashoffset:0; opacity:0; } 100% { stroke-dashoffset:260; opacity:0; } }
-  @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-3px); } }
-  @media (prefers-reduced-motion:reduce) { .wait-card path { animation:none; stroke-dashoffset:0; } .wait-card .av, .dots i { animation:none; opacity:.6; } }
+  @media (prefers-reduced-motion:reduce) { .wait-card path { animation:none; stroke-dashoffset:0; } .dots i { animation:none; opacity:.6; } }
   /* 再听(2026-09-18):讲完的卡右上角一个小喇叭,节头念完也有;点了重念,念着的那张喇叭变橙、轻轻跳 */
   .c > .again { position:absolute; top:-9px; right:-9px; z-index:1; width:30px; height:30px; padding:0; border-radius:50%; border:1px solid var(--line); background:#fff; color:var(--dim); display:none; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.08); }
   .c > .again::before { content:""; position:absolute; inset:-7px; }
@@ -630,16 +655,21 @@ __REEL_JS__
   const PALETTE = ['#e8743b', '#3b82e8', '#2fa36b', '#b45fd1', '#d9a520', '#e0508a'];
   const FIXED = { '语文': '#e0508a', '数学': '#3b82e8', '英语': '#2fa36b' };
   const color = (s) => { if (FIXED[s]) return FIXED[s]; let x = 0; for (const ch of s || '') x = (x * 31 + ch.codePointAt(0)) >>> 0; return PALETTE[x % PALETTE.length]; };
-  const avatarEl = (t, cls) => {
-    const el = h('span', { class: 'av ' + (cls || ''), style: 'border-color:' + color(t.subject || t.display) + ';color:' + color(t.subject || t.display) });
-    if (t.avatar && /\.(png|jpe?g|webp|svg)$/i.test(t.avatar)) el.append(h('img', { src: '/api/kid/avatar/' + t.name, alt: '' }));
-    else el.textContent = t.avatar || (t.subject || t.display || '?').slice(0, 1);
+  /** 老师头像:学科色的 C 形开口环 + 白底圆里的图或字(样子见 .av 的样式);cls 'draw' = 一笔画出来,delay 是错开的秒数 */
+  const AV_RING = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>';
+  const avatarEl = (t, cls, delay) => {
+    const el = h('span', { class: 'av ' + (cls || ''), style: 'color:' + color(t.subject || t.display) + (delay ? ';--d:' + delay + 's' : '') });
+    el.innerHTML = AV_RING;
+    const face = h('span', { class: 'face' });
+    if (t.avatar && /\.(png|jpe?g|webp|svg)$/i.test(t.avatar)) face.append(h('img', { src: '/api/kid/avatar/' + t.name, alt: '' }));
+    else face.textContent = t.avatar || (t.subject || t.display || '?').slice(0, 1);
+    el.append(face);
     return el;
   };
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), unfold: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, held: false, rec: null, submitted: new Set(), pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, reel: null, pendSaid: null };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), unfold: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, held: false, rec: null, submitted: new Set(), pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, reel: null, pendSaid: null, homeDraw: true };
   // 家长板书页看的模式缺省不念(家长想听哪句点哪句);开关各记一个键,不和孩子的搅
   try { S.autoplay = PARENT ? localStorage.getItem(AUTOPLAY_KEY) === '1' : localStorage.getItem(AUTOPLAY_KEY) !== '0'; } catch { S.autoplay = !PARENT; }
   /** 家长板书页:清单的日期(null = 今天) */
@@ -733,10 +763,10 @@ __REEL_JS__
   };
   /** 小课堂的课长:「1 分 40 秒」 */
   const lcLen = (ms) => { const s = Math.floor(ms / 1000); return s >= 60 ? Math.floor(s / 60) + ' 分' + (s % 60 ? ' ' + (s % 60) + ' 秒' : '') : s + ' 秒'; };
-  const tutorCard = (t, buttons) => {
+  const tutorCard = (t, buttons, draw) => {
     const first = buttons.find((b) => b.kind === 'new');
     return h('div', { class: 'c c-tutor' + (t.available ? '' : ' off'), 'data-tutor': t.name, style: 'border-color:' + color(t.subject || t.display) },
-      h('div', { class: 'tt', on: { click: () => { if (first) pickButton(t, first); } } }, avatarEl(t), h('span', { class: 'nm' }, t.display)),
+      h('div', { class: 'tt', on: { click: () => { if (first) pickButton(t, first); } } }, draw === null ? avatarEl(t) : avatarEl(t, 'draw', draw), h('span', { class: 'nm' }, t.display)),
       h('div', { class: 'bts' }, ...buttons.map((b) => h('button', { type: 'button', class: 'bt bt-' + b.kind, on: { click: () => pickButton(t, b) } }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }),
         b.kind === 'lecture' ? h('span', { class: 'lb' }, h('small', {}, '小课堂'), h('span', {}, b.label), h('small', { class: 'ln' }, (b.ms ? lcLen(b.ms) + ' · ' : '') + '看完再问老师')) : h('span', {}, b.label)))));
   };
@@ -746,7 +776,9 @@ __REEL_JS__
     const byName = new Map(H.tutors.map((t) => [t.name, t]));
     const cards = Array.isArray(H.cards) ? H.cards : [];
     const tcards = cards.filter((c) => c.kind === 'tutor' && byName.has(c.props.tutor));
-    $('#tutors').replaceChildren(...tcards.map((c) => tutorCard(byName.get(c.props.tutor), Array.isArray(c.props.buttons) ? c.props.buttons : [])));
+    // 头像一笔画出来只在打开首页、从老师页回来时画一次;5 秒一轮的刷新照常重铺,不再画
+    const draw = S.homeDraw; S.homeDraw = false;
+    $('#tutors').replaceChildren(...tcards.map((c, i) => tutorCard(byName.get(c.props.tutor), Array.isArray(c.props.buttons) ? c.props.buttons : [], draw ? i * 0.15 : null)));
     $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor').map((c, i) => renderCard(c, i, null, false)));
     renderFigshot(H);
   };
@@ -854,8 +886,8 @@ __REEL_JS__
     viewKey = ''; viewNote();
   };
   /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」 */
-  const blankBoard = (title) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor) : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, S.tutor && S.tutor.motto ? h('span', { class: 'mo' }, S.tutor.motto) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null);
-  const closeTutor = () => { hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit'); loadHome(); };
+  const blankBoard = (title) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor, 'draw') : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, S.tutor && S.tutor.motto ? h('span', { class: 'mo' }, S.tutor.motto) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null);
+  const closeTutor = () => { hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit', 'speaking', 'nod'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -1285,7 +1317,7 @@ __REEL_JS__
   const recStart = async (r) => {
     if (!window.MediaRecorder) return;
     Object.assign(r, { chunks: [], t0: Date.now(), cancel: false, mr: null, timer: 0, stopped: false, keep: false, ms: 0 });
-    S.rec = r;
+    S.rec = r; avListen();
     dispatch({ type: 'recStart' });
     r.el.classList.add('rec'); r.lb.textContent = '松手就停'; r.tm.textContent = '0:00';
     r.timer = setInterval(() => { const ms = Date.now() - r.t0; r.tm.textContent = recClock(ms); if (ms >= REC_MAX_MS) recStop(true); }, 200);
@@ -1314,7 +1346,7 @@ __REEL_JS__
   };
   /** 收尾:dispatch recEnd(压住的接着念);够长就存——本地先有回放,PUT 上去服务端落盘、换成路径、起评测 */
   const recDone = (r) => {
-    if (S.rec === r) { S.rec = null; dispatch({ type: 'recEnd' }); }
+    if (S.rec === r) { S.rec = null; avListen(); dispatch({ type: 'recEnd' }); }
     const sec = S.sections[r.secIdx];
     const card = sec && sec.cards[r.idx];
     if (card && r.keep && r.ms >= REC_MIN_MS && r.chunks.length) {
@@ -1563,6 +1595,10 @@ __REEL_JS__
   //      只要孩子没自己往上翻,就再滚到底。原来是 scrollIntoView nearest:只把卡的下沿贴到可视区下沿,之后长高的那截就在屏幕外
   //      (2026-10-08 真机:新卡要手动往上滑才看全;mock 量出来每轮停下等答时最后一张卡被截 45px,其余 4–7px) ----
   const pin = { on: false, touched: 0 };
+  /** 老师页左上的头像跟着谁在说走(.av 的样式):孩子按住说话、录音卡在录 = 听;刚念完停下等孩子 = 点一下头(body.nod 一秒后摘掉,下回再加才会再点) */
+  const avListen = () => document.body.classList.toggle('listening', S.bar === 'holding' || Boolean(S.rec));
+  let avWas = 'idle', nodTimer = 0;
+  const avNod = () => { const b = document.body; b.classList.remove('nod'); void b.offsetWidth; b.classList.add('nod'); clearTimeout(nodTimer); nodTimer = setTimeout(() => b.classList.remove('nod'), 1000); };
   /** 让孩子看到 el:它是板上最后看得见的东西就滚到底并跟着(pin);不是(念到上面另一张卡)就照旧 nearest,不跟;比可视区还高的露上沿 */
   const follow = (el) => {
     const b = $('#board'); if (!el || !b.contains(el)) return;
@@ -1873,6 +1909,9 @@ __REEL_JS__
     const settled = (S.state.status === 'waiting' || S.state.status === 'done') && !S.state.replay && !S.pending && !S.stage && !S.reel;
     if (settled && pin.was === 'playing' && Date.now() - pin.touched > 3000) { const cs = [...$('#board').querySelectorAll('.sec .c')].filter((c) => c.getClientRects().length); if (cs.length) follow(cs[cs.length - 1]); }
     pin.was = S.state.status;
+    document.body.classList.toggle('speaking', ps.status === 'playing' && !S.pending);
+    if ((ps.status === 'waiting' || ps.status === 'done') && avWas === 'playing' && !S.pending) avNod();
+    avWas = ps.status;
     markHeard();
   };
   $('#sub-btn').addEventListener('click', () => {
@@ -2762,7 +2801,7 @@ __REEL_JS__
   const setBar = (mode) => {
     if (mode === 'typing' && S.bar !== 'typing') typeRec('focus');
     else if (mode !== 'typing' && S.bar === 'typing') typeRec('blur');
-    S.bar = mode;
+    S.bar = mode; avListen();
     $('#ph').hidden = mode === 'typing'; $('#typed').hidden = mode !== 'typing'; $('#go').hidden = mode !== 'typing';
     $('#hold').classList.toggle('on', mode === 'holding');
     if (mode === 'typing') $('#typed').focus();

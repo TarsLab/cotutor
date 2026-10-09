@@ -79,7 +79,11 @@ export function qwenHomeSettings(): Record<string, unknown> {
 
 /** 这几份机器文件:绝对路径 → 内容 */
 export function qwenFiles(root: string): Record<string, string> {
-  const files: Record<string, string> = { [join(homeOf(root), 'settings.json')]: `${JSON.stringify(qwenHomeSettings(), null, 2)}\n` };
+  const files: Record<string, string> = {
+    // 整个目录不进 git:会话记录(runtime/)是对话原文,同 conversations/ 只留本机;其余都是这里每次重新生成的
+    [join(root, QWEN_DIR, '.gitignore')]: '# qwen 的隔离家目录与会话记录(cotutor 生成,对话原文只留本机)\n*\n',
+    [join(homeOf(root), 'settings.json')]: `${JSON.stringify(qwenHomeSettings(), null, 2)}\n`,
+  };
   for (const level of new Set(Object.values(EFFORT))) files[effortFile(root, level)] = `${JSON.stringify({ $version: 4, model: { reasoningEffort: level } }, null, 2)}\n`;
   return files;
 }

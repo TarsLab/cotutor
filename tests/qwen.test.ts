@@ -54,6 +54,7 @@ try {
   check('隔离的家:QWEN_HOME 在 workspace 的 .cotutor/qwen/home', i1.qwenHome === join(root, '.cotutor', 'qwen', 'home'));
   const settings = readFileSync(join(root, '.cotutor', 'qwen', 'home', 'settings.json'), 'utf8');
   check('家里的 settings.json:关了它自己的记忆整理与使用统计,只写 key 的环境变量名', settings.includes('"enableManagedAutoMemory": false') && settings.includes('"usageStatisticsEnabled": false') && settings.includes('"envKey": "DASHSCOPE_API_KEY"') && !settings.includes('sk-'));
+  check('.cotutor/qwen/ 整个不进 git(会话记录是对话原文)', readFileSync(join(root, '.cotutor', 'qwen', '.gitignore'), 'utf8').split('\n').includes('*'));
   check('思考量:语文老师 effort low → 不想(effort-none.json)', i1.effortFile === join(root, '.cotutor', 'qwen', 'effort-none.json') && readFileSync(i1.effortFile!, 'utf8').includes('"reasoningEffort": "none"'));
   check('key 从环境来;别处的 OPENAI_MODEL 去掉', i1.key && !i1.openai);
   check('没有钱数,记 token(输入含缓存读)', kid.costUsd === undefined && kid.tokens?.in === 2500 && kid.tokens?.out === 120, JSON.stringify(kid));

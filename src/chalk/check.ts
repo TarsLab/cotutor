@@ -7,6 +7,7 @@
 import { KNOWN_ELEMENT_TYPES, sceneSchema } from '../schema/scene.ts';
 import type { ChalkScene, ChalkSkeleton, ChalkStep } from '../player/types.ts';
 import { elementBounds } from '../core/geometry.ts';
+import { isAction, resolveActions } from '../core/actions.ts';
 
 export interface Finding {
   level: 'error' | 'warning';
@@ -62,6 +63,16 @@ function lintDrawing(skeletons: readonly ChalkSkeleton[], steps: readonly ChalkS
   }
 
   for (const el of skeletons) {
+    if (isAction(el)) {
+      if (ctx) findings.push({ level: 'error', rule: 'subscene-action', message: `${ctx}里有动作 '${el.id}'(${el.type});弹窗子场景不擦、不换画板,去掉它` });
+      continue;
+    }
+    if (typeof el.x !== 'number' || typeof el.y !== 'number') {
+      findings.push({ level: 'error', rule: 'xy', message: `${ctx}元素 '${el.id}' 缺 x / y(数字,场景坐标);只有动作(erase、board)不用写位置` });
+    }
+    if (el.targets !== undefined || el.background !== undefined) {
+      findings.push({ level: 'warning', rule: 'action-field', message: `${ctx}元素 '${el.id}'(${el.type})带了 ${el.targets !== undefined ? 'targets' : 'background'},那是动作的字段(erase 的 targets、board 的 background),画的元素用不上` });
+    }
     if (/animate(Duration|Order):/.test(el.id)) {
       findings.push({ level: 'error', rule: 'clean-id', message: `${ctx}元素 '${el.id}' 的 id 携带 animate 指令;时长写成 animateDuration 字段,顺序由数组位置决定` });
     }
@@ -129,8 +140,37 @@ function lintSemantics(scene: ChalkScene, findings: Finding[]): void {
     findings.push({ level: 'warning', rule: 'background-path', message: `background.src '${scene.background.src}' 不是相对路径;写成相对场景文件的路径,build 会把图拷进课包` });
   }
 
+  lintActions(scene, findings);
+
   lintInteractions(scene, findings);
   lintGroups(scene, findings);
+}
+
+/** 笔顺里的动作(擦掉、换画板):引用对不对、放的地方对不对 */
+function lintActions(scene: ChalkScene, findings: Finding[]): void {
+  const acts = scene.skeletons.filter(isAction);
+  if (!acts.length) return;
+  if (scene.template === 'static') {
+    findings.push({ level: 'error', rule: 'static-action', message: `静态场景(template 'static')没有时间轴,不能有动作(${acts.map((a) => a.id).join('、')});要擦、换画板请换讲解模板` });
+  }
+  for (const p of resolveActions(scene.skeletons, scene.background).problems) {
+    findings.push({ level: 'error', rule: 'erase-target', message: p.message });
+  }
+  if (scene.skeletons[0]?.type === 'board') {
+    findings.push({ level: 'error', rule: 'board-first', message: `第一笔 '${scene.skeletons[0].id}' 就换画板;第一块画板的背景图写在场景的 background 上,board 只用来换到下一块` });
+  }
+  for (const a of acts) {
+    if (a.type === 'board' && a.targets !== undefined) {
+      findings.push({ level: 'warning', rule: 'action-field', message: `换画板 '${a.id}' 不用写 targets:旧板上的东西都会擦掉` });
+    }
+    if (a.type === 'erase' && a.background !== undefined) {
+      findings.push({ level: 'warning', rule: 'action-field', message: `擦除 '${a.id}' 带了 background;换背景图要用 { type: 'board', background }` });
+    }
+    const bg = a.background as { src?: unknown } | undefined;
+    if (a.type === 'board' && bg && typeof bg.src === 'string' && !relativeAudioOk(bg.src)) {
+      findings.push({ level: 'warning', rule: 'background-path', message: `换画板 '${a.id}' 的 background.src '${bg.src}' 不是相对路径;写成相对场景文件的路径,build 会把图拷进课包` });
+    }
+  }
 }
 
 /** groups 的引用完整性:id 不重、成员都在场景里、一组里不重复 */
@@ -229,12 +269,15 @@ function intersects(a: Box, b: Box, margin = 2): boolean {
   return a.minX + margin < b.maxX - margin && b.minX + margin < a.maxX - margin && a.minY + margin < b.maxY - margin && b.minY + margin < a.maxY - margin;
 }
 
-/** 一幅画面的布局检查;主场景与每个子场景各自独立的坐标系,分开跑,互不误报 */
-function lintLayoutOf(skeletons: readonly ChalkSkeleton[], findings: Finding[], ctx = ''): void {
+/**
+ * 一幅画面的布局检查;主场景与每个子场景各自独立的坐标系,分开跑,互不误报。
+ * together(i, j):两个元素同时在画面上过没有(擦掉一个再写另一个、在两块画板上,叠在一处不算错);缺省 = 总在一起
+ */
+function lintLayoutOf(skeletons: readonly ChalkSkeleton[], findings: Finding[], ctx = '', together: (a: string, b: string) => boolean = () => true): void {
   const textBoxes = skeletons.filter((e) => e.type === 'text').map(bboxOf);
   for (let i = 0; i < textBoxes.length; i++) {
     for (let j = i + 1; j < textBoxes.length; j++) {
-      if (intersects(textBoxes[i], textBoxes[j])) {
+      if (intersects(textBoxes[i], textBoxes[j]) && together(textBoxes[i].id, textBoxes[j].id)) {
         findings.push({
           level: 'error',
           rule: 'text-overlap',
@@ -260,16 +303,30 @@ function lintLayoutOf(skeletons: readonly ChalkSkeleton[], findings: Finding[], 
 }
 
 function lintLayout(scene: ChalkScene, findings: Finding[]): void {
-  lintLayoutOf(scene.skeletons, findings);
-  // 有背景图时画板 = 图片,出界的笔迹会被裁掉
-  const bg = scene.background;
-  if (bg) {
-    for (const b of scene.skeletons.map(bboxOf)) {
-      if (b.minX < 0 || b.minY < 0 || b.maxX > bg.width || b.maxY > bg.height) {
-        findings.push({ level: 'warning', rule: 'background-bounds', message: `元素 '${b.id}' 超出背景图范围(0,0)–(${bg.width},${bg.height});画板即图片,图外的笔迹会被裁掉` });
+  const acts = resolveActions(scene.skeletons, scene.background);
+  const drawn = scene.skeletons.filter((e) => !isAction(e));
+  // 每块画板各查各的(各自的视口);同一块上,擦掉以后才写的不算和它叠
+  const order = new Map(scene.skeletons.map((e, i) => [e.id, i]));
+  const life = (id: string): [number, number] => [order.get(id) ?? 0, order.get(acts.erasedBy.get(id) ?? '') ?? Infinity];
+  const together = (a: string, b: string): boolean => {
+    const [a0, a1] = life(a);
+    const [b0, b1] = life(b);
+    return a0 < b1 && b0 < a1;
+  };
+  acts.boards.forEach((board, k) => {
+    const on = drawn.filter((e) => (acts.boardOf.get(e.id) ?? 0) === k);
+    if (!on.length) return;
+    lintLayoutOf(on, findings, acts.boards.length > 1 ? `画板 ${k + 1}:` : '', together);
+    // 有背景图时画板 = 图片,出界的笔迹会被裁掉
+    const bg = board.background;
+    if (bg) {
+      for (const b of on.map(bboxOf)) {
+        if (b.minX < 0 || b.minY < 0 || b.maxX > bg.width || b.maxY > bg.height) {
+          findings.push({ level: 'warning', rule: 'background-bounds', message: `元素 '${b.id}' 超出背景图范围(0,0)–(${bg.width},${bg.height});画板即图片,图外的笔迹会被裁掉` });
+        }
       }
     }
-  }
+  });
   for (const sub of scene.subscenes ?? []) {
     lintLayoutOf(sub.skeletons, findings, `子场景 '${sub.id}' `);
   }

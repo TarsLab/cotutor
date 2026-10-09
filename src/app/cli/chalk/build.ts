@@ -7,7 +7,7 @@
 
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
-import type { ChalkScene } from '../player/types.ts';
+import type { ChalkBackground, ChalkScene } from '../player/types.ts';
 import type { LessonManifest, SceneJson } from '../schema/lesson-manifest.ts';
 import { attachAudio } from './dub.ts';
 import { sceneBounds } from '../core/geometry.ts';
@@ -21,17 +21,27 @@ import { LoadError, NotFoundError } from './load-scene.ts';
 export async function buildBundle(scene: ChalkScene, outDir: string, sourceDir?: string): Promise<string[]> {
   await mkdir(outDir, { recursive: true });
   const files: string[] = [];
-  let background = scene.background;
-  if (background && sourceDir) {
-    const from = resolve(sourceDir, background.src);
-    const name = `background${extname(background.src).toLowerCase()}`;
+  // 背景图拷进课包、改写 src:第一块画板 background.<ext>,换画板的 background-<board id>.<ext>
+  const copyBackground = async (bg: ChalkBackground, stem: string, where: string): Promise<ChalkBackground> => {
+    const from = resolve(sourceDir!, bg.src);
+    const name = `${stem}${extname(bg.src).toLowerCase()}`;
     try {
       await copyFile(from, join(outDir, name));
     } catch {
-      throw new LoadError(`背景图读不到:${from}(background.src '${background.src}' 相对场景文件所在目录解析);检查路径`);
+      throw new LoadError(`背景图读不到:${from}(${where} '${bg.src}' 相对场景文件所在目录解析);检查路径`);
     }
-    background = { ...background, src: name };
     files.push(join(outDir, name));
+    return { ...bg, src: name };
+  };
+  let background = scene.background;
+  let skeletons = scene.skeletons;
+  if (sourceDir) {
+    if (background) background = await copyBackground(background, 'background', 'background.src');
+    skeletons = [];
+    for (const e of scene.skeletons) {
+      const bg = e.type === 'board' ? (e.background as ChalkBackground | undefined) : undefined;
+      skeletons.push(bg ? { ...e, background: await copyBackground(bg, `background-${e.id}`, `换画板 '${e.id}' 的 background.src`) } : e);
+    }
   }
   const sceneJson: SceneJson = {
     schema: 'chalk-scene',
@@ -43,9 +53,9 @@ export async function buildBundle(scene: ChalkScene, outDir: string, sourceDir?:
     template: scene.template,
     ...(scene.subject ? { subject: scene.subject } : {}),
     ...(background ? { background } : {}),
-    skeletons: scene.skeletons,
+    skeletons,
     ...(scene.groups?.length ? { groups: scene.groups } : {}),
-    bounds: sceneBounds(scene.skeletons),
+    bounds: sceneBounds(skeletons),
   };
   const manifest: LessonManifest = {
     schema: 'lesson-manifest',

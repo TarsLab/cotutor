@@ -5,13 +5,17 @@
  * 「这一刻画了多少」是 drawtell/core 的 frameAt(时钟)给的,两边同一份 paintElement,和服务端 renderFrameSvg 出的图一样。
  */
 
-import { bakedPaths, paintElement, pointerBox, progressMap, type BakedNode, type BakedPicture, type FrameProgress } from '../core/bake.ts';
+import { actionState, bakedPaths, boardOf, paintElement, pointerBox, progressMap, type BakedNode, type BakedPicture, type FrameProgress } from '../core/bake.ts';
 
 const NS = 'http://www.w3.org/2000/svg';
 
 export interface MountOptions {
-  /** 背景图的 URL(bake 里的 src 相对课包目录,调用方拼好) */
+  /** 背景图的 URL(bake 里的 src 相对课包目录,调用方拼好);只管第 0 块画板,换过画板的课用 assetHref */
   backgroundHref?: string;
+  /** 课包里的文件(背景图的 src)→ URL;给了就用它,每块画板的背景图都能出 */
+  assetHref?: (src: string) => string | undefined;
+  /** 换到另一块画板时(svg 的 viewBox 已经换好):应用要按新视口重新铺画框就用它 */
+  onBoard?: (board: number, viewBox: [number, number, number, number]) => void;
   /** 画不画笔尖;缺省画 */
   pointer?: boolean;
   /** 换一支笔(笔尖落在图片 (0,0),30×30);橡皮那一笔照旧是橡皮 */
@@ -22,6 +26,8 @@ export interface MountedLesson {
   svg: SVGSVGElement;
   /** 画到这一刻 */
   paint(frame: FrameProgress): void;
+  /** 现在在第几块画板(0 起) */
+  readonly board: number;
 }
 
 let seq = 0;
@@ -49,13 +55,21 @@ export function mountBaked(baked: BakedPicture, opts: MountOptions = {}): Mounte
     defs.append(...Array.from(tmp.childNodes));
   }
   svg.append(defs);
-  if (baked.background && opts.backgroundHref) {
+  // 每块画板一张背景图(没有背景图 = null),只露当前那块的
+  const boardCount = baked.boards?.length ?? 1;
+  const bgs = Array.from({ length: boardCount }, (_, k) => {
+    const b = boardOf(baked, k).background;
+    const href = b ? (opts.assetHref ? opts.assetHref(b.src) : k === 0 ? opts.backgroundHref : undefined) : undefined;
+    if (!b || !href) return null;
     const img = document.createElementNS(NS, 'image');
-    img.setAttribute('href', opts.backgroundHref);
-    for (const k of ['x', 'y', 'width', 'height'] as const) img.setAttribute(k, String(baked.background[k]));
+    img.setAttribute('href', href);
+    for (const key of ['x', 'y', 'width', 'height'] as const) img.setAttribute(key, String(b[key]));
     img.setAttribute('preserveAspectRatio', 'none');
+    if (k) img.style.display = 'none';
     svg.append(img);
-  }
+    return img;
+  });
+  let board = 0;
   const els = baked.elements.map((el, i) => {
     const paths: SVGElement[] = [];
     const root = build(el.node, paths);
@@ -77,7 +91,7 @@ export function mountBaked(baked: BakedPicture, opts: MountOptions = {}): Mounte
     }
     root.style.display = 'none';
     svg.append(root);
-    return { el, root, paths, clipRect, last: -1 };
+    return { el, root, paths, clipRect, last: -1, fade: 1 };
   });
   const pen = document.createElementNS(NS, 'image');
   pen.style.display = 'none';
@@ -88,11 +102,30 @@ export function mountBaked(baked: BakedPicture, opts: MountOptions = {}): Mounte
 
   return {
     svg,
+    get board() {
+      return board;
+    },
     paint(frame) {
       const prog = progressMap(frame);
+      const act = actionState(baked, prog);
+      if (act.board !== board) {
+        board = act.board;
+        const vb = boardOf(baked, board).viewBox;
+        svg.setAttribute('viewBox', vb.join(' '));
+        bgs.forEach((img, k) => { if (img) img.style.display = k === board ? '' : 'none'; });
+        opts.onBoard?.(board, vb);
+      }
+      const bg = bgs[board];
+      if (bg) bg.style.opacity = act.backgroundOpacity < 1 ? String(act.backgroundOpacity) : '';
       let pointer: { at: [number, number]; eraser: boolean } | null = null;
       els.forEach((x, i) => {
-        const p = prog.get(x.el.id) ?? 0;
+        // 被擦:淡掉;擦完 = 当没画(藏起来,下回再出现时从头按进度画)
+        const left = act.fade.get(x.el.id) ?? 1;
+        if (left !== x.fade) {
+          x.fade = left;
+          x.root.style.opacity = left > 0 && left < 1 ? String(left) : '';
+        }
+        const p = left > 0 ? (prog.get(x.el.id) ?? 0) : 0;
         if (p === x.last) {
           if (p > 0 && p < 1) { const pp = paintElement(x.el, p); if (pp.pointer) pointer = { at: pp.pointer, eraser: Boolean(x.el.eraser) }; }
           return;

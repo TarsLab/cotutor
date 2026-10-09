@@ -5,6 +5,7 @@
  */
 
 import type { ChalkSkeleton } from '../player/types.ts';
+import { isAction } from './actions.ts';
 import { CHAR_EM, CJK_EM, FALLBACK_EM, LINE_HEIGHT } from './text-metrics.ts';
 
 /** 场景坐标的包围盒 */
@@ -70,6 +71,7 @@ export function sceneBounds(skeletons: readonly ChalkSkeleton[]): Record<string,
   const r = (n: number): number => Math.round(n * 10) / 10;
   const out: Record<string, BoundsTuple> = {};
   for (const el of skeletons) {
+    if (isAction(el)) continue; // 动作不画东西,没有包围盒
     const b = elementBounds(el);
     out[el.id] = [r(b.minX), r(b.minY), r(b.maxX), r(b.maxY)];
   }

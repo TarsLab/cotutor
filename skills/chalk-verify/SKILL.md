@@ -21,6 +21,8 @@ description: 检验 drawtell 讲解动画质量:keyframe 截图逐张对照讲�
    (`added[]`:id / type / strokeColor / backgroundColor / text / bbox)与画板 `board.viewBox`——
    报问题按 id 说话,数数对着 added 数,越界对着 viewBox 判(bbox 是场景坐标,图像像素 =
    (坐标 − viewBox 原点) × 图宽 / viewBox 宽)。评审按它走,不要自己翻场景源码猜。
+   换过画板的课每张图带自己的 `viewBox`(按它换算);`added` 里的动作(type `erase` / `board`)没有 bbox,
+   `erases` 列出它擦掉的元素——这一步的图上它们应该已经不在了。
 
 3. **逐张评审**(step-0 是空板配题面,从它开始),参考 `references/评判标准.md` 的视角:
    - **检验点**(有说明文件时先做):逐步核它的「检验」行——数量、位置、心算;讲稿行与 TS `line` 逐字一致,不一致直接列问题

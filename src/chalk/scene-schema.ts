@@ -18,12 +18,25 @@ export const KNOWN_ELEMENT_TYPES = [
   'freedraw',
 ] as const;
 
-/** 元素允许携带 excalidraw 的任意属性(strokeColor、points、text……),故 loose */
+/** 笔顺里的动作:不画东西,改画面上已经有的(ChalkErase、ChalkBoard) */
+export const ACTION_TYPES = ['erase', 'board'] as const;
+
+/** 背景图:画板 = 图片,场景坐标即图片像素 */
+export const backgroundSchema = z.strictObject({
+  src: z.string().min(1),
+  width: z.number().positive(),
+  height: z.number().positive(),
+});
+
+/** 元素允许携带 excalidraw 的任意属性(strokeColor、points、text……),故 loose;画的元素缺 x / y 由 lint 报 */
 export const skeletonSchema = z.looseObject({
   type: z.string().min(1),
   id: z.string().min(1),
-  x: z.number(),
-  y: z.number(),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  // 动作的字段:erase 的 targets、board 的 background;用在别的类型上 lint 报
+  targets: z.array(z.string().min(1)).min(1).optional(),
+  background: backgroundSchema.optional(),
   animateDuration: z.number().int().positive().optional(),
   // customData 透传 excalidraw,协议认领 layer(三层墨迹契约)与 tool(橡皮)两个键
   label: z.string().min(1).optional(),
@@ -67,13 +80,6 @@ export const groupSchema = z.strictObject({
   id: z.string().min(1),
   label: z.string().min(1),
   elementIds: z.array(z.string().min(1)).min(1),
-});
-
-/** 背景图:画板 = 图片,场景坐标即图片像素 */
-export const backgroundSchema = z.strictObject({
-  src: z.string().min(1),
-  width: z.number().positive(),
-  height: z.number().positive(),
 });
 
 export const sceneSchema = z.strictObject({

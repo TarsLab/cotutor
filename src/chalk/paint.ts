@@ -35,8 +35,20 @@ export interface BakedElement {
   reveal?: { width: number; height: number };
   /** 笔尖走的轨迹(SVG 坐标):[x, y, 走到这里是全程的几分之几] */
   track: [number, number, number][];
-  /** 橡皮那一笔:笔尖换成橡皮 */
+  /** 橡皮那一笔:笔尖换成橡皮(擦除、换画板这两种动作也是) */
   eraser?: boolean;
+  /**
+   * 笔顺里的动作(core/actions.ts):不画东西(node 是空的 <g>),轨迹是橡皮来回走的路。
+   * erase 做的时候 targets 渐渐淡掉、做完不见;board 一样擦掉 targets(旧板上的全部),做完换到下一块画板
+   */
+  action?: 'erase' | 'board';
+  targets?: string[];
+}
+
+/** 一块画板:自己的视口(SVG 坐标)与背景图 */
+export interface BakedBoard {
+  viewBox: [number, number, number, number];
+  background?: { src: string; x: number; y: number; width: number; height: number };
 }
 
 /**
@@ -59,6 +71,11 @@ export interface BakedLesson {
   defs: string;
   /** 背景图:src 相对课包目录,x/y/width/height 是 SVG 坐标 */
   background?: { src: string; x: number; y: number; width: number; height: number };
+  /**
+   * 换过画板的课才有:每块画板的视口与背景图(第 0 块 = 上面的 viewBox / background)。
+   * 所有画板的元素在同一个 SVG 坐标里(同一个 offset),换板只换视口与背景
+   */
+  boards?: BakedBoard[];
   elements: BakedElement[];
 }
 
@@ -177,11 +194,47 @@ function trackAt(track: readonly [number, number, number][], p: number): { point
   return { pointer: [x0 + (x1 - x0) * k, y0 + (y1 - y0) * k] };
 }
 
-/** 一刻的进度:frameAt 的结果,或 id → progress */
-export type FrameProgress = LessonFrame | ReadonlyMap<string, number>;
+/** 一刻的进度:frameAt 的结果(或只有 elements 的,如 { elements: elementsAtSvgTime(…) }),或 id → progress */
+export type FrameProgress = Pick<LessonFrame, 'elements'> | ReadonlyMap<string, number>;
 
 export function progressMap(frame: FrameProgress): ReadonlyMap<string, number> {
   return 'elements' in frame ? new Map((frame as LessonFrame).elements.map((e) => [e.id, e.progress])) : (frame as ReadonlyMap<string, number>);
+}
+
+/**
+ * 动作做到哪,画面就怎样(只看 progress,渲染端各自算,和 core 的时钟同一个规矩):
+ * 在第几块画板(做完了几个换画板);谁正在被擦(还剩几成)、谁擦完了(0);旧板的背景图跟着淡掉。
+ */
+export interface ActionState {
+  board: number;
+  /** 当前画板背景图的不透明度(换画板做着的时候 1 → 0) */
+  backgroundOpacity: number;
+  /** 被擦的元素 → 还剩几成(0 = 擦完了,不画);不在里面 = 没在擦 */
+  fade: Map<string, number>;
+}
+
+export function actionState(baked: Pick<BakedPicture, 'elements'>, prog: ReadonlyMap<string, number>): ActionState {
+  let board = 0;
+  let backgroundOpacity = 1;
+  const fade = new Map<string, number>();
+  for (const el of baked.elements) {
+    if (!el.action) continue;
+    const p = prog.get(el.id) ?? 0;
+    if (!(p > 0)) continue;
+    const left = p >= 1 ? 0 : 1 - p;
+    for (const id of el.targets ?? []) fade.set(id, Math.min(fade.get(id) ?? 1, left));
+    if (el.action === 'board') {
+      if (p >= 1) { board++; backgroundOpacity = 1; } else backgroundOpacity = left;
+    }
+  }
+  return { board, backgroundOpacity, fade };
+}
+
+/** 第 k 块画板的视口与背景图(没换过画板的课只有第 0 块) */
+export function boardOf(baked: Pick<BakedPicture, 'viewBox' | 'background' | 'boards'>, k: number): BakedBoard {
+  const b = baked.boards?.[k];
+  if (b) return b;
+  return { viewBox: baked.viewBox, ...(baked.background ? { background: baked.background } : {}) };
 }
 
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -198,8 +251,10 @@ function nodeSvg(n: BakedNode, paintOf: Map<BakedNode, PathPaint>): string {
 const round = (n: number): number => Math.round(n * 100) / 100;
 
 export interface RenderOptions {
-  /** 背景图的 URL(bake 里存的是相对课包目录的 src;服务端给 /api/bundles/<id>/…) */
+  /** 背景图的 URL(bake 里存的是相对课包目录的 src;服务端给 /api/bundles/<id>/…);只管第 0 块画板,换过画板的课用 assetHref */
   backgroundHref?: string;
+  /** 课包里的文件(背景图的 src)→ URL;给了就用它,每块画板的背景图都能出 */
+  assetHref?: (src: string) => string | undefined;
   /** 再叠一层(圈的卡:孩子的圈);SVG 坐标 */
   overlay?: string;
   /** 画不画笔尖(铅笔;橡皮那一笔是橡皮);缺省不画 */
@@ -212,13 +267,18 @@ export interface RenderOptions {
  */
 export function renderFrameSvg(baked: BakedPicture, frame: FrameProgress, opts: RenderOptions = {}): string {
   const prog = progressMap(frame);
-  const [vx, vy, vw, vh] = baked.viewBox;
+  const act = actionState(baked, prog);
+  const board = boardOf(baked, act.board);
+  const [vx, vy, vw, vh] = board.viewBox;
   const clips: string[] = [];
   const body: string[] = [];
   let pointer: { at: [number, number]; eraser: boolean } | undefined;
   for (const el of baked.elements) {
+    const left = act.fade.get(el.id) ?? 1;
+    if (!(left > 0)) continue;
     const pnt = paintElement(el, prog.get(el.id) ?? 0);
     if (!pnt.visible) continue;
+    const at = body.length;
     const paths = bakedPaths(el.node);
     const paintOf = new Map(paths.map((x, i) => [x.node, pnt.paths[i]] as const));
     if (pnt.clip !== undefined && !pnt.done && el.reveal) {
@@ -227,9 +287,13 @@ export function renderFrameSvg(baked: BakedPicture, frame: FrameProgress, opts: 
       const { tag, attrs, children, text } = el.node;
       body.push(`<${tag}${attrText(attrs)}><g clip-path="url(#${esc(cid)})">${text !== undefined ? esc(text) : ''}${(children ?? []).map((c) => nodeSvg(c, paintOf)).join('')}</g></${tag}>`);
     } else body.push(nodeSvg(el.node, paintOf));
+    if (left < 1) body[at] = `<g opacity="${round(left)}">${body[at]}</g>`;
     if (pnt.pointer && !pnt.done) pointer = { at: pnt.pointer, eraser: Boolean(el.eraser) };
   }
-  const bg = baked.background && opts.backgroundHref ? `<image href="${esc(opts.backgroundHref)}" x="${baked.background.x}" y="${baked.background.y}" width="${baked.background.width}" height="${baked.background.height}" preserveAspectRatio="none"/>` : '';
+  const b = board.background;
+  const href = b ? (opts.assetHref ? opts.assetHref(b.src) : act.board === 0 ? opts.backgroundHref : undefined) : undefined;
+  const bgOpacity = act.backgroundOpacity < 1 ? ` opacity="${round(act.backgroundOpacity)}"` : '';
+  const bg = b && href ? `<image href="${esc(href)}" x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" preserveAspectRatio="none"${bgOpacity}/>` : '';
   const pen = opts.pointer && pointer ? pointerSvg(pointer.at, pointer.eraser) : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vx} ${vy} ${vw} ${vh}"><defs><style>${baked.fonts}</style>${baked.defs}${clips.join('')}</defs>${bg}${body.join('')}${opts.overlay ?? ''}${pen}</svg>`;
 }

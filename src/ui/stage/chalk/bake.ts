@@ -4,7 +4,8 @@
  * 挂进文档量每条路径的长度、笔尖要走的轨迹;字体是导出时内嵌的那份。drawtell bake 用 playwright 打开播放页的 ?bake= 来调它。
  */
 
-import type { BakedElement, BakedNode, BakedPicture } from '../core/bake.ts';
+import type { BakedBoard, BakedElement, BakedNode, BakedPicture } from '../core/bake.ts';
+import { isAction, resolveActions } from '../core/actions.ts';
 import { BAKE_VERSION, bakedPaths, strokeGroups } from '../core/bake.ts';
 import { exportStaticSvg } from './excalidraw-io.ts';
 import type { ChalkBackground, ChalkSkeleton } from './types.ts';
@@ -77,18 +78,48 @@ function toRoot(svg: SVGSVGElement, el: SVGGraphicsElement): (x: number, y: numb
   };
 }
 
+/** 一块区域(SVG 坐标)上橡皮来回走的轨迹:沿长边一趟一趟,至少来回三趟;[x, y, 走到这里是全程的几分之几] */
+function zigzag([x0, y0, x1, y1]: readonly [number, number, number, number]): [number, number, number][] {
+  const horiz = x1 - x0 >= y1 - y0;
+  const [a0, a1, b0, b1] = horiz ? [x0, x1, y0, y1] : [y0, y1, x0, x1];
+  const rows = Math.max(3, Math.min(7, Math.ceil((b1 - b0) / 60) + 1));
+  const pts: [number, number][] = [];
+  for (let r = 0; r < rows; r++) {
+    const b = b0 + ((b1 - b0) * (r + 0.5)) / rows;
+    const ends: [number, number][] = [[a0, b], [a1, b]];
+    for (const [a, bb] of r % 2 ? ends.reverse() : ends) pts.push(horiz ? [a, bb] : [bb, a]);
+  }
+  const lens = pts.map((pt, i) => (i ? Math.hypot(pt[0] - pts[i - 1][0], pt[1] - pts[i - 1][1]) : 0));
+  const total = lens.reduce((x, y) => x + y, 0);
+  let at = 0;
+  return pts.map((pt, i) => {
+    at += lens[i];
+    return [Math.round(pt[0] * 10) / 10, Math.round(pt[1] * 10) / 10, total ? Math.round((at / total) * 10000) / 10000 : 1];
+  });
+}
+
+type Box = [number, number, number, number];
+const union = (bs: readonly Box[]): Box | null => (bs.length ? [Math.min(...bs.map((b) => b[0])), Math.min(...bs.map((b) => b[1])), Math.max(...bs.map((b) => b[2])), Math.max(...bs.map((b) => b[3]))] : null);
+const pad = (b: Box, d: number): Box => [b[0] - d, b[1] - d, b[2] + d, b[3] + d];
+const r1 = (n: number): number => Math.round(n * 10) / 10;
+
 export async function bakeSkeletons(
   skeletons: readonly ChalkSkeleton[],
   options: { background?: ChalkBackground; exportPadding?: number } = {},
 ): Promise<BakedPicture> {
-  const { svg, elements, offset } = await exportStaticSvg(skeletons, { exportPadding: options.exportPadding });
+  // 动作(擦掉、换画板)不交给 excalidraw:只画画的元素,动作按笔顺插回去
+  const acts = resolveActions(skeletons, options.background);
+  const drawn = skeletons.filter((e) => !isAction(e));
+  const exportPadding = options.exportPadding ?? 24;
+  const { svg, elements, offset } = await exportStaticSvg(drawn, { exportPadding });
   const fonts = Array.from(svg.querySelectorAll('style')).map((s) => s.textContent ?? '').join('\n');
   const defsEl = svg.querySelector('defs');
   const defs = defsEl ? Array.from(defsEl.children).filter((c) => c.tagName !== 'style').map((c) => c.outerHTML).join('') : '';
   const groups = Array.from(svg.children).filter((n) => n.tagName === 'g' || n.tagName === 'use') as SVGGElement[];
   if (groups.length !== elements.length) throw new Error(`导出的 SVG 有 ${groups.length} 个顶层 <g>,元素 ${elements.length} 个,对不上(excalidraw 导出结构变了)`);
   let viewBox = (svg.getAttribute('viewBox') ?? '0 0 100 100').split(/[\s,]+/).map(Number) as [number, number, number, number];
-  const background = options.background ? { src: options.background.src, x: offset[0], y: offset[1], width: options.background.width, height: options.background.height } : undefined;
+  const bgOf = (b: ChalkBackground) => ({ src: b.src, x: offset[0], y: offset[1], width: b.width, height: b.height });
+  const background = options.background ? bgOf(options.background) : undefined;
   if (background) viewBox = [background.x, background.y, background.width, background.height];
 
   // 挂进文档才量得了长度与坐标
@@ -96,6 +127,8 @@ export async function bakeSkeletons(
   svg.style.visibility = 'hidden';
   document.body.appendChild(svg);
   try {
+    const boxes = new Map<string, Box>();
+    const boxesOf = (ids: readonly string[]): Box[] => ids.map((id) => boxes.get(id)).filter((b): b is Box => !!b);
     const baked: BakedElement[] = elements.map((meta, i) => {
       const g = groups[i];
       const isText = meta.type === 'text';
@@ -119,11 +152,51 @@ export async function bakeSkeletons(
           at += grp.len;
         }
       }
-      const id = skeletons[i]?.id ?? meta.id;
+      const id = drawn[i]?.id ?? meta.id;
+      if (acts.boards.length > 1 || acts.targets.size) {
+        // 根坐标里的包围盒:擦的范围、每块画板的视口用它
+        const bb = g.getBBox();
+        const map = toRoot(svg, g);
+        const cs = [map(bb.x, bb.y), map(bb.x + bb.width, bb.y), map(bb.x, bb.y + bb.height), map(bb.x + bb.width, bb.y + bb.height)];
+        boxes.set(id, [Math.min(...cs.map((c) => c[0])), Math.min(...cs.map((c) => c[1])), Math.max(...cs.map((c) => c[0])), Math.max(...cs.map((c) => c[1]))]);
+      }
       const eraser = (meta.customData as { tool?: unknown } | undefined)?.tool === 'eraser';
       return { id, node, ...(isText ? { reveal: { width: Math.round(meta.width * 10) / 10, height: Math.round(meta.height * 10) / 10 } } : {}), track, ...(eraser ? { eraser: true } : {}) };
     });
-    return { schema: 'drawtell-bake', version: BAKE_VERSION, viewBox, offset: [Math.round(offset[0] * 10) / 10, Math.round(offset[1] * 10) / 10], fonts, defs, ...(background ? { background } : {}), elements: baked };
+    // 换过画板:每块画板自己的视口(有背景图 = 图片;没有 = 这块板上画的东西的包围盒留白);第 0 块也照这样算,顶层的 viewBox / background 就是它
+    let boards: BakedBoard[] | undefined;
+    if (acts.boards.length > 1) {
+      boards = acts.boards.map((b, k) => {
+        if (b.background) {
+          const bg = bgOf(b.background);
+          return { viewBox: [bg.x, bg.y, bg.width, bg.height], background: bg };
+        }
+        const u = union(boxesOf(drawn.filter((e) => acts.boardOf.get(e.id) === k).map((e) => e.id)));
+        const p = u ? pad(u, exportPadding) : null;
+        return { viewBox: p ? [r1(p[0]), r1(p[1]), r1(p[2] - p[0]), r1(p[3] - p[1])] : viewBox };
+      });
+      viewBox = boards[0].viewBox;
+    }
+    const byId = new Map(baked.map((e) => [e.id, e]));
+    const out: BakedElement[] = skeletons.map((e) => {
+      if (!isAction(e)) return byId.get(e.id)!;
+      // 动作:不画东西;橡皮在要擦的地方来回走(擦除 = 要擦的那几样的包围盒;换画板 = 旧板的整个视口)
+      const targets = acts.targets.get(e.id) ?? [];
+      const old = boards?.[acts.boardOf.get(e.id) ?? 0]?.viewBox ?? viewBox;
+      const area: Box | null = e.type === 'board' ? [old[0], old[1], old[0] + old[2], old[1] + old[3]] : union(boxesOf(targets));
+      return { id: e.id, node: { tag: 'g', attrs: {} }, track: area ? zigzag(e.type === 'board' ? area : pad(area, 8)) : [], eraser: true, action: e.type as 'erase' | 'board', targets };
+    });
+    return {
+      schema: 'drawtell-bake',
+      version: BAKE_VERSION,
+      viewBox,
+      offset: [Math.round(offset[0] * 10) / 10, Math.round(offset[1] * 10) / 10],
+      fonts,
+      defs,
+      ...(boards ? (boards[0].background ? { background: boards[0].background } : {}) : background ? { background } : {}),
+      ...(boards ? { boards } : {}),
+      elements: out,
+    };
   } finally {
     document.body.removeChild(svg);
   }

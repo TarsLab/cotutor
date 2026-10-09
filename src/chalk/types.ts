@@ -15,18 +15,23 @@
  */
 export type ChalkLayer = 'base' | 'ink' | 'feedback';
 
-/** skeleton 元素:draw 顺序 = 数组顺序;id 保持干净,单笔时长走 animateDuration 字段 */
+/**
+ * skeleton 元素:draw 顺序 = 数组顺序;id 保持干净,单笔时长走 animateDuration 字段。
+ * 笔顺里除了画的(excalidraw 元素,x / y 必填,check 把关),还可以有两种动作(ChalkErase、ChalkBoard):
+ * 它们和画一笔一样占时间、被步覆盖、跟着配音拉伸,只是不画东西,改的是画面上已经有的。
+ */
 export interface ChalkSkeleton {
   type: string;
   id: string;
-  x: number;
-  y: number;
+  /** 画的元素必填;动作(erase / board)没有位置 */
+  x?: number;
+  y?: number;
   /** 单笔时长(毫秒),缺省 500;时钟(timeline / core 的 lessonClock)按它排笔 */
   animateDuration?: number;
   /** excalidraw 自定义数据;协议认领 layer(见 ChalkLayer)与 tool 两个键,其余透传 */
   /**
-   * tool: 'eraser' = 这一笔是橡皮:引擎只能添画,擦除 = 沿旧笔迹盖一道纸色粗线,
-   * 画这一笔时笔尖换成橡皮。strokeColor 缺省取纸面底色;有背景图的地方擦不干净(盖住的是图)。
+   * tool: 'eraser' = 这一笔是橡皮笔画:沿旧笔迹盖一道纸色粗线,画这一笔时笔尖换成橡皮,只用来擦一笔的一部分;
+   * 整样擦掉用 ChalkErase 动作。strokeColor 缺省取纸面底色;有背景图的地方擦不干净(盖住的是图)。
    */
   customData?: { layer?: ChalkLayer; tool?: 'eraser'; [key: string]: unknown };
   /**
@@ -35,6 +40,27 @@ export interface ChalkSkeleton {
    */
   label?: string;
   [key: string]: unknown;
+}
+
+/**
+ * 擦掉前面画过的几样(整样擦,不是擦一半):擦的时候橡皮在它们上面来回走、它们渐渐淡掉,擦完就不在画面上了
+ * (播放、截图、圈住了什么都不算它)。要擦一笔的一部分,还是用 customData.tool: 'eraser' 的橡皮笔画。
+ */
+export interface ChalkErase extends ChalkSkeleton {
+  type: 'erase';
+  /** 擦哪几样:前面画过、还在这块画板上、还没擦掉的元素 id */
+  targets: string[];
+}
+
+/**
+ * 换一块画板:这块板上的东西(连背景图)橡皮擦干净,之后画在新的一块上。
+ * 每块画板自己的视口(有背景图 = 图片;没有 = 这块板上元素的包围盒),坐标各写各的,不用为了挤进一块板手算缩放。
+ * 第一块画板是场景的 background(或白板)。
+ */
+export interface ChalkBoard extends ChalkSkeleton {
+  type: 'board';
+  /** 新画板的背景图;缺省 = 白板。src 相对场景文件(build 拷进课包,改名 background-<id>.<ext>) */
+  background?: ChalkBackground;
 }
 
 /**
@@ -115,7 +141,7 @@ export interface ChalkScene {
   template: 'paper-strict' | 'camera-free' | 'motion' | 'static';
   /** 学科标签(自由文本,如 语文/数学/英语),入口按它归类;机制不枚举,枚举是应用政策 */
   subject?: string;
-  /** 背景图(可选);缺省 = 白板 */
+  /** 第一块画板的背景图(可选);缺省 = 白板。换画板见 ChalkBoard */
   background?: ChalkBackground;
   skeletons: ChalkSkeleton[];
   /** 元素分组(语义,可选):孩子圈住了什么、检验方按名字说话都用它 */

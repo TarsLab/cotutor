@@ -12,6 +12,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { ChalkScene, ChalkSkeleton } from '../player/types.ts';
 import { bboxOf } from './check.ts';
+import { isAction, resolveActions } from '../core/actions.ts';
 import { startServer } from './serve.ts';
 
 export interface SnapOptions {
@@ -34,7 +35,10 @@ export interface AddedElement {
   fillStyle?: string;
   strokeStyle?: string;
   text?: string;
-  bbox: { x: number; y: number; w: number; h: number };
+  /** 动作(erase / board)没有 */
+  bbox?: { x: number; y: number; w: number; h: number };
+  /** 动作擦掉的元素 id(erase 写的 targets;board = 旧板上还在的全部) */
+  erases?: string[];
 }
 
 export interface Shot {
@@ -46,6 +50,8 @@ export interface Shot {
   added: AddedElement[];
   /** 这张图截的时候画没画笔尖(单步重截可能与其他步不同) */
   cursor: boolean;
+  /** 这张图的 viewBox(换过画板的课每块板不一样;bbox 换算按它) */
+  viewBox?: [number, number, number, number];
 }
 
 export interface SnapIndex {
@@ -54,7 +60,7 @@ export interface SnapIndex {
   scene: string;
   title: string;
   problem: string;
-  /** 播放器 SVG 的 viewBox(场景坐标 + 出图留白):元素 bbox 与图像像素的换算依据 */
+  /** 播放器 SVG 的 viewBox(场景坐标 + 出图留白):元素 bbox 与图像像素的换算依据;换过画板的课以每张图自己的 viewBox 为准 */
   board: { viewBox: [number, number, number, number] } | null;
   shots: Array<Omit<Shot, 'file'> & { file: string }>;
 }
@@ -63,7 +69,8 @@ const READY_EXPR = `document.body.dataset.drawtellReady === '1' || (document.que
 const ERROR_EXPR = `document.body.dataset.drawtellReady === '1' ? null : (document.querySelector('.bench-problem')?.textContent ?? null)`;
 const VIEWBOX_EXPR = `document.querySelector('.chalk-stage svg')?.getAttribute('viewBox') ?? null`;
 
-function describe(el: ChalkSkeleton): AddedElement {
+function describe(el: ChalkSkeleton, erases?: string[]): AddedElement {
+  if (isAction(el)) return { id: el.id, type: el.type, erases: erases ?? [] };
   const b = bboxOf(el);
   const out: AddedElement = {
     id: el.id,
@@ -109,8 +116,9 @@ export async function snapScene({ scene, bundlesDir, outDir, step, cursor = true
   }
 
   const byId = new Map(scene.skeletons.map((e) => [e.id, e]));
+  const acts = resolveActions(scene.skeletons, scene.background);
   const addedOf = (n: number): AddedElement[] =>
-    n === 0 ? [] : scene.steps[n - 1].elementIds.map((id) => byId.get(id)).filter((e): e is ChalkSkeleton => !!e).map(describe);
+    n === 0 ? [] : scene.steps[n - 1].elementIds.map((id) => byId.get(id)).filter((e): e is ChalkSkeleton => !!e).map((e) => describe(e, acts.targets.get(e.id)));
 
   const { port, close } = await startServer({ port: 0, bundlesDir });
   // 先用 playwright 自带的 chromium(npx playwright install chromium);没下载过就退到本机装的 Chrome(channel: chrome),零下载
@@ -133,10 +141,11 @@ export async function snapScene({ scene, bundlesDir, outDir, step, cursor = true
       await page.waitForFunction(READY_EXPR, undefined, { timeout: 20_000 });
       const pageErr = (await page.evaluate(ERROR_EXPR)) as string | null;
       if (pageErr) throw new Error(`播放页报错(step ${n}):${pageErr.trim()}`);
-      if (!board) board = parseViewBox((await page.evaluate(VIEWBOX_EXPR)) as string | null);
+      const vb = parseViewBox((await page.evaluate(VIEWBOX_EXPR)) as string | null);
+      if (!board) board = vb;
       const file = join(outDir, `step-${n}.png`);
       await page.locator('.chalk-player').screenshot({ path: file });
-      shots.push({ step: n, file, line: n === 0 ? `(题面)${scene.problem}` : scene.steps[n - 1].line, added: addedOf(n), cursor });
+      shots.push({ step: n, file, line: n === 0 ? `(题面)${scene.problem}` : scene.steps[n - 1].line, added: addedOf(n), cursor, ...(vb ? { viewBox: vb.viewBox } : {}) });
     }
 
     // 单步重截:与已有对照表合并,只替换这一步(第一批真题里三组生成方都踩过"覆盖成单条")

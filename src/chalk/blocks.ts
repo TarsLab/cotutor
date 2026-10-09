@@ -15,15 +15,17 @@ export interface BlockBounds {
 }
 
 function elementBounds(el: ChalkSkeleton): { minX: number; minY: number; maxX: number; maxY: number } {
+  const x = el.x ?? 0;
+  const y = el.y ?? 0;
   if (Array.isArray(el.points)) {
     const pts = el.points as [number, number][];
     const xs = pts.map((p) => p[0]);
     const ys = pts.map((p) => p[1]);
-    return { minX: el.x + Math.min(...xs), minY: el.y + Math.min(...ys), maxX: el.x + Math.max(...xs), maxY: el.y + Math.max(...ys) };
+    return { minX: x + Math.min(...xs), minY: y + Math.min(...ys), maxX: x + Math.max(...xs), maxY: y + Math.max(...ys) };
   }
   const w = typeof el.width === 'number' ? el.width : 0;
   const h = typeof el.height === 'number' ? el.height : 0;
-  return { minX: el.x, minY: el.y, maxX: el.x + w, maxY: el.y + h };
+  return { minX: x, minY: y, maxX: x + w, maxY: y + h };
 }
 
 /** 块的命中包围盒;所引元素一个都找不到时返回 null(check 会把这种场景拦在 build 前) */

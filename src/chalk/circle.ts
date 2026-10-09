@@ -6,6 +6,7 @@
 
 import type { ChalkBlock, ChalkGroup, ChalkSkeleton } from '../player/types.ts';
 import { clockAt, type LessonClock } from './clock.ts';
+import { isAction } from './actions.ts';
 import { boundsGap, boundsOfPoints, elementBounds, insidePolygon, pointsOf, samplePoints, unionBounds, type Bounds, type BoundsTuple } from './geometry.ts';
 
 /** 画面的语义:分组、命中块、build 时量好的包围盒(都可缺) */
@@ -88,11 +89,13 @@ export function circleHits(clock: LessonClock, ms: number, path: readonly [numbe
     const t = picture.bounds?.[e.id];
     return t ? { minX: t[0], minY: t[1], maxX: t[2], maxY: t[3] } : elementBounds(e);
   };
-  // 那一刻画面上已经有的(开始画了就算;橡皮不算东西,擦掉了的也不算)
+  // 那一刻画面上已经有的(开始画了就算;动作与橡皮笔画不算东西;擦掉了的不算:擦除动作擦完的、换画板换走的,橡皮笔画盖住大半的)
   const erasers = clock.skeletons.filter((e) => e.customData?.tool === 'eraser' && (clock.elements.get(e.id)?.end ?? Infinity) <= at.svgMs);
   const shown = clock.skeletons.filter((e) => {
     const w = clock.elements.get(e.id);
-    return w !== undefined && w.start < at.svgMs && e.customData?.tool !== 'eraser' && !erasers.some((x) => erasedBy(x, e, w.start, clock, boundsOf));
+    if (w === undefined || w.start >= at.svgMs || isAction(e) || e.customData?.tool === 'eraser') return false;
+    if (w.erased && w.erased.end <= at.svgMs) return false;
+    return !erasers.some((x) => erasedBy(x, e, w.start, clock, boundsOf));
   });
   const shownIds = new Set(shown.map((e) => e.id));
   const ring = boundsOfPoints(path);

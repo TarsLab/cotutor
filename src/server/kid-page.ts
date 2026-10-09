@@ -793,7 +793,7 @@ __REEL_JS__
     fetch(url + 'api/health', { mode: 'no-cors', cache: 'no-store' }).then(() => { el.hidden = false; }, () => { el.hidden = true; });
   };
   const loadHome = async () => {
-    try { S.home = await api('GET', PARENT ? '/api/overview/' + (S.pdate || 'today') : '/api/kid/home'); setOffline(false); if (PARENT) renderOverview(); else renderHome(); }
+    try { S.home = await api('GET', PARENT ? '/api/overview/' + (S.pdate || 'today') : '/api/kid/home'); setOffline(false); if (PARENT) renderOverview(); else { renderHome(); phIdle(); } }
     catch { setOffline(true); }
   };
   // ---- 家长板书页的清单(《家长板书页设计.md》§2.2):日期、每位老师一块、一行一个话题,点了进板书 ----
@@ -2275,6 +2275,7 @@ __REEL_JS__
     S.pending = true; S.waitSince = Date.now(); renderSubtitle();
     const body = { text, device: S.device };
     if (opts.voice) { try { body.voice = { audio: await blobDataUrl(opts.voice.blob), seconds: Math.round(opts.voice.seconds * 10) / 10 }; } catch {} }
+    if (opts.listened) body.listened = opts.listened;
     if (opts.action) body.action = opts.action;
     if (opts.photos && opts.photos.length) body.photos = opts.photos;
     const focus = opts.focus || (S.stage ? { card: S.stage.id } : null);
@@ -2331,6 +2332,9 @@ __REEL_JS__
     else {
       const said = m.via ? m.via.label : m.action === 'continue' ? '继续' : m.action === 'submit' ? '交给老师' : (m.question || '');
       if (said || m.from === 'kid') { const n = noteEl('said ' + (m.from || ''), m.via ? '首页' : (NOTE_FROM[m.from] || m.from || ''), said); if (m.voice) n.append(voiceBtn(m.voice)); out.push(n); }
+      // kid.listen: omni 时两份听法对照:浏览器认的、omni 听的(发出去的是后者,没成退回前者)
+      const L = m.listened;
+      if (L) out.push(noteEl('did', '听写', [L.browser !== undefined ? '浏览器:' + (L.browser || '(没认出字)') : '浏览器:(没有识别)', L.omni !== undefined ? 'omni:' + (L.omni || '(没听出字)') + (L.ms !== undefined ? ' · ' + (Math.round(L.ms / 100) / 10) + ' 秒' : '') : 'omni 没成(' + (L.error || '?') + '),发的是浏览器的'].join('\\n')));
     }
     // 在弹窗里想了多久、改过几次(《家长录像设计.md》§4.7,有实录才有)
     const took = (t) => !t ? '' : [t.think !== null ? '想了 ' + reelDuration(t.think) : '', t.changes > 1 ? '改过 ' + (t.changes - 1) + ' 次' : ''].filter(Boolean).map((x) => ' · ' + x).join('');
@@ -2821,7 +2825,12 @@ __REEL_JS__
   let srDead = false; try { srDead = sessionStorage.getItem('kid-sr-dead') === '1'; } catch {}
   const srOk = () => Boolean(SR) && !srDead;
   const srDied = () => { srDead = true; try { sessionStorage.setItem('kid-sr-dead', '1'); } catch {} const ph = $('#ph'); if (ph) ph.textContent = PH_IDLE(); };
-  const PH_IDLE = () => (srOk() ? '发消息或按住说话…' : '发消息…');
+  // kid.listen: omni(首页接口给):松手后原声交给服务端的 omni 再听一遍、发它听的;浏览器没有识别(或一起就断)也能按住,只录不认
+  const omniOn = () => !PARENT && Boolean(S.home && S.home.listen === 'omni') && Boolean(window.MediaRecorder) && Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  const holdOk = () => srOk() || omniOn();
+  const PH_IDLE = () => (holdOk() ? '发消息或按住说话…' : '发消息…');
+  /** kid.listen 跟着首页接口来(改 cotutor.json 不用刷新页面):输入条上是空闲那句就按现在的重写,「没听清」那几秒不动 */
+  const phIdle = () => { const ph = $('#ph'); if (ph && /^发消息/.test(ph.textContent)) ph.textContent = PH_IDLE(); };
   $('#ph').textContent = PH_IDLE();
   let press = null, rec = null, finalText = '';
   // 麦克风常开(真机诊断 2026-09-19,/voice-test)。这台 iPad 上的三条事实:
@@ -2880,7 +2889,7 @@ __REEL_JS__
   };
   const micWarm = () => {
     let ok = false; try { ok = localStorage.getItem('kid-mic-ok') === '1'; } catch {}
-    if (!ok || !srOk() || !S.tutor || !canSend() || document.hidden || micLive()) return;
+    if (!ok || !holdOk() || !S.tutor || !canSend() || document.hidden || micLive()) return;
     micOpen().catch(() => {});
   };
   document.addEventListener('visibilitychange', () => { if (document.hidden) { if (!mic.opening) micDrop(); } else micWarm(); });
@@ -2891,13 +2900,14 @@ __REEL_JS__
    *  识别是单句的(continuous 关):Safari 听到停顿 1.5 秒左右就自己停(2026-09-28 真机:孩子说到 12 秒想了一下,话被截走发了)。
    *  所以手还按着(held)它自己停了,就再起一段接着认、字拼在后面;松手(settle 把 held 置假)之后停了才算完。
    *  段与段之间补一个逗号:Safari 认中文不带标点,停顿是唯一的断句,不补老师收到的是一口气连着的一串(2026-10-01 真机) */
-  const listen = (onText, onEnd, where, onAudio, onLevel) => {
-    if (!srOk()) return null;
+  const listen = (onText, onEnd, where, onAudio, onLevel, omni = false) => {
+    if (!srOk() && !omni) return null;
     // 诊断:每次按住记一行事件码 + 距按下的毫秒(不记字、不记声音),停了发给 /api/kid/voice-diag;真机上出错是静默的,只有这份能说清哪一步断了
     const t0 = Date.now(), ev = [], mark = (k, v) => ev.push(v === undefined ? [k, Date.now() - t0] : [k, Date.now() - t0, v]);
     const diag = { where, tutor: S.tutor ? S.tutor.name : null, thread: S.newThread ? null : S.thread, standalone: Boolean(navigator.standalone), wasPlaying: !audioEl.paused, ua: navigator.userAgent, peak: -1, ev };
     const report = () => { try { fetch('/api/kid/voice-diag', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(diag), keepalive: true }).catch(() => {}); } catch {} };
-    const hd = { live: { len: 0, lastAt: 0, done: false }, held: true, diagMark: mark, r: null, voice: null };
+    // omni:原声才是要的,识别只是边听边出字;识别没有、一起就断、半道断了,都接着只录(recOnly),松手就收
+    const hd = { live: { len: 0, lastAt: 0, done: false }, held: true, diagMark: mark, r: null, voice: null, omni, recOnly: omni && !srOk() };
     // 原声(《家长录像设计.md》拍板 4):识别的同时在常开的那一路上录;收尾(close)时停,hd.voice 给 {blob, seconds} 或 null(没录上、放弃了)
     let vr = null, vchunks = [], vt0 = 0, vdone = null;
     hd.voice = new Promise((resolve) => { vdone = resolve; });
@@ -2923,12 +2933,13 @@ __REEL_JS__
     let raf = 0, round = 0, again = 0, startedAt = 0, errored = '', prev = '', cur = '', active = false;
     const joined = (s) => (prev && s && !/[，。！？、,.!?…]$/.test(prev) ? prev + '，' + s : prev + s);
     const close = (keep) => { hd.live.done = true; cancelAnimationFrame(raf); voiceEnd(keep); report(); };
-    const done = () => { if (hd.live.done) return; mark('end', hd.live.len); close(true); const dead = !again && Boolean(errored) && errored !== 'no-speech' && !hd.live.len && Date.now() - startedAt < 500; if (dead) { mark('sr-dead'); srDied(); } onEnd(dead); };
+    const done = () => { if (hd.live.done) return; mark('end', hd.live.len); close(true); const dead = !hd.recOnly && !again && Boolean(errored) && errored !== 'no-speech' && !hd.live.len && Date.now() - startedAt < 500; if (dead) { mark('sr-dead'); srDied(); } onEnd(dead); };
     // 这一段停了:手还按着就接着认,除非这段一起就断(不是没听到声音、没出字、不到 500ms)、页面退到了后台或已经接了 40 段
     const ended = () => {
       active = false;
       if (hd.live.done) return;
       const broke = Boolean(errored) && errored !== 'no-speech' && !cur && Date.now() - startedAt < 500;
+      if (hd.omni && hd.held && !document.hidden && (broke || again >= 40)) { if (broke && !again && !prev) { mark('sr-dead'); srDied(); } prev = joined(cur); cur = ''; hd.r = null; hd.recOnly = true; mark('rec-only'); return; }
       if (!hd.held || broke || document.hidden || again >= 40) { done(); return; }
       prev = joined(cur); cur = ''; again++; mark('again', again);
       listenOnce();
@@ -2962,13 +2973,13 @@ __REEL_JS__
         r.onresult = (e) => { let s = ''; for (const x of e.results) s += x[0].transcript; cur = s; const t = joined(s); hd.live.len = t.length; hd.live.lastAt = Date.now(); mark('result', hd.live.len); onText(t); };
         r.onerror = (e) => { errored = String(e && e.error) || 'error'; mark('error', errored); };
         r.onend = ended;
-        errored = ''; startedAt = Date.now(); hd.r = r; r.start(); active = true; mark('start()');
+        errored = ''; startedAt = Date.now(); hd.r = r; hd.sr = true; r.start(); active = true; mark('start()');
       } catch (e) { mark('throw', String(e && e.name)); active = false; done(); }
     };
     const start = () => micOpen().then((how) => mark('mic', how), (e) => mark('mic-fail', String(e && (e.name || e.message)))).then(() => {
       if (hd.live.done) return;
       voiceStart();
-      listenOnce();
+      if (hd.recOnly) { mark('rec-only'); if (onAudio) onAudio(); } else listenOnce();
       if (!hd.live.done && mic.an) meter();
     });
     start();
@@ -2979,7 +2990,7 @@ __REEL_JS__
   const settle = (r) => {
     const t1 = Date.now();
     r.held = false;
-    if (!r.r) { r.stop(); return; } // 麦克风还没开就松手了:什么也没听到
+    if (!r.r || r.omni) { r.stop(); return; } // 麦克风还没开就松手了:什么也没听到;omni 要的是原声,不等识别的字
     const tick = () => {
       if (r.live.done) return;
       if ((r.live.len && Date.now() - r.live.lastAt > 500) || Date.now() - t1 > 2500) { try { r.diagMark('stop()'); r.stop(); } catch {} return; }
@@ -3003,7 +3014,9 @@ __REEL_JS__
     finalText = ''; hold.audio = false; hold.tail = false; renderHold(); holdText('');
     holdRec('down');
     rec = listen((t) => { finalText = t; holdText(t); holdHeard.put(t); }, (dead) => {
-      const t = finalText; const voice = rec ? rec.voice : null; rec = null; hold.tail = false; holdText('');
+      const t = finalText; const r0 = rec; const voice = r0 ? r0.voice : null; rec = null;
+      if (!dead && r0 && r0.omni) { omniSend(t, voice, Boolean(r0.sr)); return; }
+      hold.tail = false; holdText('');
       holdEnd(dead ? 'dead' : t.trim() ? 'sent' : 'unclear');
       setBar(barNext(S.bar, 'holdEnd'));
       // 识别一起就断:这一下当成点了一下,直接打字
@@ -3011,14 +3024,35 @@ __REEL_JS__
       // 原声停录是异步的(onstop):等它最多 1.5 秒,没等到就只发字
       if (t.trim()) Promise.race([voice || Promise.resolve(null), new Promise((r) => setTimeout(() => r(null), 1500))]).then((v) => send(t, v ? { voice: v } : {}));
       else { $('#ph').textContent = '没听清,再按住说一次'; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = PH_IDLE(); }, 2500); }
-    }, 'bar', () => { hold.audio = true; renderHold(); holdRec('audio'); }, holdLevel);
+    }, 'bar', () => { hold.audio = true; renderHold(); holdRec('audio'); }, holdLevel, omniOn());
     if (!rec) { holdEnd('dead'); setBar(barNext(S.bar, 'holdEnd')); }
+  };
+  /** omni 的收尾:浮层留着(「正在听清…」),等原声停录(最多 1.5 秒)、交给 /api/kid/listen 听(最多 9 秒),发它听的;
+   *  没录上、没成、它没听出字,都退回浏览器认的;两样都没有 = 没听清。发出去的消息带 listened(两份都记,家长端对照) */
+  let hearing = false;
+  const omniSend = async (t, voice, sr) => {
+    hearing = true;
+    const v = await Promise.race([voice || Promise.resolve(null), wait(1500).then(() => null)]);
+    const listened = sr ? { browser: t } : {};
+    let heard = '';
+    if (v) {
+      try {
+        const r = await Promise.race([api('POST', '/api/kid/listen', { audio: await blobDataUrl(v.blob), seconds: Math.round(v.seconds * 10) / 10 }), wait(9000).then(() => { throw Object.assign(new Error('timeout'), { body: { error: 'timeout' } }); })]);
+        heard = String(r.text || '').trim(); Object.assign(listened, { omni: heard, model: r.model, ms: r.ms });
+      } catch (e) { listened.error = String((e && e.body && e.body.error) || (e && e.status) || 'failed').slice(0, 40); }
+    } else listened.error = 'no_audio';
+    const text = heard || t.trim();
+    hearing = false; hold.tail = false; holdText('');
+    holdEnd(text ? 'sent' : 'unclear');
+    setBar(barNext(S.bar, 'holdEnd'));
+    if (text) send(text, { ...(v ? { voice: v } : {}), listened });
+    else { $('#ph').textContent = '没听清,再按住说一次'; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = PH_IDLE(); }, 2500); }
   };
   mid.addEventListener('pointerdown', (e) => {
     if (S.bar === 'typing') return;
     e.preventDefault(); unlock();
-    if (rec) return; // 上一句还在收尾
-    press = { y: e.clientY, cancelled: false, held: false, timer: setTimeout(() => { if (!press || !srOk()) return; press.held = true; setBar(barNext(S.bar, 'holdStart')); dispatch({ type: 'halt' }); startRec(); }, 150) };
+    if (rec || hearing) return; // 上一句还在收尾(omni 还在听)
+    press = { y: e.clientY, cancelled: false, held: false, timer: setTimeout(() => { if (!press || !holdOk()) return; press.held = true; setBar(barNext(S.bar, 'holdStart')); dispatch({ type: 'halt' }); startRec(); }, 150) };
     try { mid.setPointerCapture(e.pointerId); } catch {}
   });
   mid.addEventListener('pointermove', (e) => { if (press && press.held) { const up = press.y - e.clientY > 60; if (up !== press.cancelled) { press.cancelled = up; renderHold(); holdRec('slide', { on: up }); } } });

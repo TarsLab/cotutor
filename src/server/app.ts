@@ -16,6 +16,7 @@ import { conversationFiles, currentThread, lastJobOf, localDate, threads } from 
 import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
+import { audioData } from '../lib/audio-data.ts';
 import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelDiag } from '../lib/reel.ts';
 import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
 import type { BoardCard, Device } from '../lib/kid-board.ts';
@@ -29,6 +30,7 @@ import { kidHomeView, messageVia, resolveVia } from './home.ts';
 import { DEV_PAGE } from './dev-page.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
+import { listenOmni, type Transcribe } from './listen.ts';
 import { sendFile } from './send-file.ts';
 import { xlaoshiRoute } from '../xlaoshi/route.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
@@ -68,11 +70,13 @@ export interface AppContext {
   configError: string | null;
   /** 在哪个地址上听着(serve 在 listen 之后填;扫码页 /qr 每次现问——局域网 IP 会在服务跑着的时候变)。没起端口(测试走 route)→ null */
   listen: (() => ListenInfo) | null;
+  /** 按住说话的原声听写(kid.listen: omni);测试注入假的,不花钱 */
+  transcribe: Transcribe;
   /** 重读 cotutor.json(改了才读) */
   reload(): Promise<void>;
 }
 
-export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean } = {}): AppContext {
+export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean; transcribe?: Transcribe } = {}): AppContext {
   let mtime = -1;
   const ctx: AppContext = {
     ws,
@@ -80,6 +84,7 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
     now: opts.now ?? (() => new Date()),
     configError: null,
     listen: null,
+    transcribe: opts.transcribe ?? ((audio) => listenOmni(audio, { env: opts.env })),
     async reload() {
       try {
         const r = await reloadIfChanged(ctx.ws, mtime);
@@ -154,6 +159,8 @@ export interface KidHome {
   cards: BoardCard[];
   /** 「给老师们换个样子」的入口(figshot pick 在这台电脑的哪个端口);cotutor.json 没配 figshot 就是 null */
   figshot: { port: number } | null;
+  /** 按住说话怎么听(cotutor.json 的 kid.listen):omni = 松手后原声交给 /api/kid/listen 再听一遍 */
+  listen: 'browser' | 'omni';
 }
 
 export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
@@ -161,7 +168,7 @@ export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
   const date = localDate(now);
   const view = await kidHomeView(ws, now);
   const figshot = ws.config.figshot ? { port: ws.config.figshot.port } : null;
-  return { title: ws.config.title, date, tutors: await kidTutors(ctx, date), home: view.home, cards: view.cards, figshot };
+  return { title: ws.config.title, date, tutors: await kidTutors(ctx, date), home: view.home, cards: view.cards, figshot, listen: ws.config.kid.listen };
 }
 
 export interface KidDay {
@@ -480,10 +487,9 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
     state = { ...rest, image: `conversations/${tutor}/${png}` };
   }
   if (target.kind === 'record' && isObj(body) && typeof body.audio === 'string' && body.audio.startsWith('data:')) {
-    const m = /^data:audio\/([a-z0-9.+-]+)(?:;[^,]*)?;base64,([A-Za-z0-9+/=]+)$/.exec(body.audio);
-    const ext = m ? RECORD_EXT[m[1]] : undefined;
-    if (!m || !ext || m[2].length > RECORD_MAX_B64) return { status: 400, json: { error: 'bad_state' } };
-    const rel = await writeCardAudio(ws, tutor, date, job, n, Buffer.from(m[2], 'base64'), ext);
+    const a = audioData(body.audio);
+    if (!a) return { status: 400, json: { error: 'bad_state' } };
+    const rel = await writeCardAudio(ws, tutor, date, job, n, a.data, a.ext);
     state = { ...body, audio: `conversations/${tutor}/${rel}` };
     fresh = `conversations/${tutor}/${rel}`;
   }
@@ -504,10 +510,6 @@ const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+(?:\.\d+|\.cards\/\d+\/\d+)?
 /** 录音卡的录音(回放):<日期>.<job>.cards/<n>/rec-<k>.<ext>;按住说话的原声:<日期>.<job>.voice.<ext>(《家长录像设计.md》拍板 4) */
 const REC_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.(?:cards\/\d+\/rec-\d+|voice)\.(webm|m4a|ogg|wav)$/;
 const REC_TYPES: Record<string, string> = { webm: 'audio/webm', m4a: 'audio/mp4', ogg: 'audio/ogg', wav: 'audio/wav' };
-/** 浏览器录音的 MIME 子类型 → 落盘扩展名(Safari 录 mp4/aac,Chrome 录 webm/opus) */
-const RECORD_EXT: Record<string, string> = { webm: 'webm', mp4: 'm4a', 'x-m4a': 'm4a', aac: 'm4a', ogg: 'ogg', wav: 'wav', 'x-wav': 'wav' };
-/** 一条录音的 base64 最多这么长(60 秒 opus 约 0.5 MB,aac 约 1 MB;留足余量) */
-const RECORD_MAX_B64 = 4_000_000;
 const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
 
 /** 作业照片一张最多这么大(解码后;页面先缩到长边 PHOTO_MAX_SIDE 的 jpeg,通常几百 KB) */
@@ -542,11 +544,18 @@ async function photosOf(ws: Workspace, v: unknown): Promise<string[] | null | un
 
 /** 按住说话的原声(《家长录像设计.md》拍板 4):{audio: data:audio/…;base64,…, seconds};形状不对、太大就当没带——不回 400,认出的字照发 */
 function voiceOf(v: unknown): { data: Buffer; ext: string; seconds: number } | undefined {
-  if (!isObj(v) || typeof v.audio !== 'string' || typeof v.seconds !== 'number' || !(v.seconds > 0) || v.seconds > 600) return undefined;
-  const m = /^data:audio\/([a-z0-9.+-]+)(?:;[^,]*)?;base64,([A-Za-z0-9+/=]+)$/.exec(v.audio);
-  const ext = m ? RECORD_EXT[m[1]] : undefined;
-  if (!m || !ext || m[2].length > RECORD_MAX_B64) return undefined;
-  return { data: Buffer.from(m[2], 'base64'), ext, seconds: v.seconds };
+  if (!isObj(v) || typeof v.seconds !== 'number' || !(v.seconds > 0) || v.seconds > 600) return undefined;
+  const a = audioData(v.audio);
+  return a ? { ...a, seconds: v.seconds } : undefined;
+}
+
+/** 按住说话是怎么听的(kid.listen: omni 时孩子端带来):形状不对就当没带,字照发 */
+function listenedOf(v: unknown): NonNullable<ConversationMessage['listened']> | undefined {
+  if (!isObj(v)) return undefined;
+  const str = (x: unknown, max: number): string | undefined => (typeof x === 'string' && x.length <= max ? x : undefined);
+  const out = { browser: str(v.browser, 2000), omni: str(v.omni, 2000), model: str(v.model, 60), ms: typeof v.ms === 'number' && v.ms >= 0 && v.ms < 600000 ? Math.round(v.ms) : undefined, error: str(v.error, 40) };
+  const kept = Object.fromEntries(Object.entries(out).filter(([, x]) => x !== undefined));
+  return Object.keys(kept).length ? kept : undefined;
 }
 
 /** 一条消息最多带几处圈、一处圈最多几个点(《小课堂设计.md》§四) */
@@ -682,6 +691,14 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       await appendFile(join(ws.root, '.cotutor', 'voice-diag.jsonl'), `${JSON.stringify(row)}\n`).catch(() => {});
       return { status: 200, json: { ok: true } };
     }
+    // 按住说话的原声听写(kid.listen: omni,《家长录像设计.md》§4.12):收 {audio: data:audio/…},回 {text, model, ms};没开、没成都不是孩子的错,孩子端退回浏览器认的字
+    if (p === '/api/kid/listen' && method === 'POST') {
+      if (ws.config.kid.listen !== 'omni') return { status: 404, json: { error: 'listen_off' } };
+      const audio = isObj(body) ? audioData(body.audio) : undefined;
+      if (!audio) return { status: 400, json: { error: 'bad_request' } };
+      const r = await ctx.transcribe(audio);
+      return r.ok ? { status: 200, json: { text: r.text, model: r.model, ms: r.ms } } : { status: 502, json: { error: r.error, ms: r.ms } };
+    }
     const kid =/^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|play|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (kid) {
       const [, tutor, tail] = kid;
@@ -786,7 +803,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           }
         }
         if (!text.trim() && !action && !photos?.length) return { status: 400, json: { error: 'bad_request' } };
-        const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(lecture ? { lecture } : {}) });
+        const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(listenedOf(body.listened) ? { listened: listenedOf(body.listened) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(lecture ? { lecture } : {}) });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
@@ -1006,6 +1023,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           photos,
           device: device?.data,
           voice: voiceOf(body.voice),
+          listened: listenedOf(body.listened),
         });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread, runtime: started.plan.runtime, resume: started.plan.resume } };
       }

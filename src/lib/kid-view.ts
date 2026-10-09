@@ -160,6 +160,8 @@ export interface ParentMessage extends KidMessage {
   tidy?: true;
   /** 按住说话的原声(只在家长端;孩子端条目没有这个字段) */
   voice?: ConversationMessage['voice'];
+  /** 按住说话是怎么听的(kid.listen: omni):浏览器认的与 omni 听的两份,家长对照 */
+  listened?: ConversationMessage['listened'];
   /** 家长端多看到看的情况:看了多久、看完没、停过几次 */
   lectureWatch?: Pick<NonNullable<ConversationMessage['lecture']>, 'watchedMs' | 'finished' | 'pauses'>;
 }
@@ -187,6 +189,7 @@ export function parentConversation(index: { messages: readonly ConversationMessa
       ...(m.bookkeep ? { bookkeep: m.bookkeep } : {}),
       ...(m.tidy ? { tidy: true as const } : {}),
       ...(m.voice ? { voice: m.voice } : {}),
+      ...(m.listened ? { listened: m.listened } : {}),
       ...(m.lecture ? { lecture: lectureView(m.lecture, true), lectureWatch: { watchedMs: m.lecture.watchedMs, finished: m.lecture.finished, pauses: m.lecture.pauses } } : {}),
     });
   }

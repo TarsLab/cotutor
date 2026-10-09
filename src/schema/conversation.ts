@@ -47,6 +47,9 @@ const MessageObjectSchema = z.object({
   /** 按住说话时的原声(2026-09-29,《家长录像设计.md》拍板 4):audio = 相对 conversations/<老师>/ 的 <日期>.<job>.voice.<ext>,seconds = 按住多久。
    *  只给家长端(录像里在开口那一刻放、旁注上能听,看识别认得对不对);孩子端、老师、上下文包都不给 */
   voice: z.object({ audio: z.string().min(1), seconds: z.number().positive() }).optional(),
+  /** 按住说话是怎么听成字的(2026-10-09 起试 omni):kid.listen 是 omni 时记两份——browser 是浏览器识别边听边出的字(没有识别就没有),
+   *  omni 是原声交给 qwen omni 听写出来的(没听出字 = 空串;没成就不写、记 error),ms 是听写那一下花了多久;text 用的是 omni 的,没成退回浏览器的。只给家长端对照 */
+  listened: z.object({ browser: z.string().optional(), omni: z.string().optional(), model: z.string().optional(), ms: z.number().nonnegative().optional(), error: z.string().optional() }).optional(),
   /** 这条消息带的作业照片(R5,2026-09-14):相对 workspace 根的路径(captures/<日期>/<HHMM>-<n>.jpg),上下文包 photos: 段原样给老师 Read;日记永不引用它 */
   photos: z.array(z.string().min(1)).optional(),
   result: z.enum(['running', 'ok', 'error']).default('running'),

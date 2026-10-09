@@ -168,6 +168,9 @@ export const VaultPolicySchema = z.object({
 });
 export type VaultPolicy = z.infer<typeof VaultPolicySchema>;
 
+/** 按住说话的听法(kid.listen) */
+export const KID_LISTEN = ['browser', 'omni'] as const;
+
 export const CotutorConfigSchema = z
   .object({
     version: z.literal(1),
@@ -180,6 +183,7 @@ export const CotutorConfigSchema = z
       grade: z.string().optional(),
       /** 孩子端用哪个主题(themes/<name>/);缺省 default(出厂主题,init 拷进 workspace) */
       theme: z.string().regex(AGENT_NAME_RE).default('default').describe('孩子端的主题:themes/<名字>/(theme.json + kid.css);cotutor add-theme <名字> 拷一份出厂的来改'),
+      listen: z.enum(KID_LISTEN).default('browser').describe('按住说话怎么听成字:browser 浏览器自带的识别(缺省);omni 浏览器照样边听边出字,松手后原声交给百炼的 qwen omni 再听一遍、发它听的(没成就发浏览器的),浏览器没有识别时也能按住说话;要百炼 key'),
     }),
     server: z
       .object({

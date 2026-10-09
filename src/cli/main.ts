@@ -96,7 +96,7 @@ async function printQr(page: string, open: boolean): Promise<void> {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'listen', 'lane', 'job', 'date', 'thread', 'at', 'photo']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -181,7 +181,9 @@ export async function main(argv: string[]): Promise<void> {
         if (!['normal', 'limit', 'offline', 'nopost'].includes(scenario)) throw new UsageError('--scenario 只能是 normal / limit / offline / nopost');
         const delayMs = typeof flags.delay === 'string' ? Number(flags.delay) : undefined;
         if (delayMs !== undefined && !(Number.isInteger(delayMs) && delayMs >= 0)) throw new UsageError('--delay 要是非负整数(毫秒)');
-        const r = await serveMock({ port, scenario: scenario as MockScenario, delayMs, http: flags.http === true });
+        const listen = typeof flags.listen === 'string' ? flags.listen : 'browser';
+        if (listen !== 'browser' && listen !== 'omni') throw new UsageError('--listen 只能是 browser / omni');
+        const r = await serveMock({ port, scenario: scenario as MockScenario, delayMs, http: flags.http === true, listen });
         process.stdout.write(`cotutor mock 场景 ${scenario}(不经真实老师与配音;配音退回浏览器合成声)\n`);
         if (!r.https) process.stdout.write('  ! HTTP:iPad / iPhone 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);

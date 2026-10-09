@@ -1,5 +1,5 @@
 /** 录像(《家长录像设计.md》):推算轨道、某一刻的样子、空白压缩与播放时钟。纯函数,手搭的节,时刻都算得准。 */
-import { buildReel, playRecordOk, reelCardTook, reelClock, reelDuration, reelFrameAt, reelSaid, REEL_GAP_PLAY_MS, type PlayRecord, type ReelInput } from '../src/lib/reel.ts';
+import { buildReel, playRecordOk, reelCardTook, reelClock, reelDuration, reelFrameAt, reelSaid, REEL_GAP_PLAY_MS, type PlayRecord, type ReelDiag, type ReelInput } from '../src/lib/reel.ts';
 import type { BoardSection } from '../src/lib/kid-board.ts';
 import type { RunEvent } from '../src/lib/events.ts';
 import type { ConversationMessage } from '../src/schema/conversation.ts';
@@ -167,6 +167,44 @@ check('话题里孩子一句都没说(只有系统起的轮)→ 没有录像', b
   check('看完到开口之间不在看(板书那边);开口之后也不在', at(-10000) === null && at(1000) === null);
   check('空白:停着的 12 秒被那一圈切开(圈前后各 1 秒照放),后一段 6 秒压;在放的不压;看完到开口的 14 秒压', r.gaps.map((g) => `${g.kind}:${g.from - T}-${g.to - T}${g.cont ? ':cont' : ''}`).join(' ') === 'think:-44000--38000:cont think:-14000-0', JSON.stringify(r.gaps.map((g) => [g.from - T, g.to - T])));
   check('没带看的过程(以前的话题):没有这一段', buildReel(input([msg('1', { text: 'x', timing: { startedAt: iso(T) }, section: S2, lecture: { ...L, log: undefined } })]))!.lectures.length === 0);
+}
+{
+  // 改版补记(拍板 6、7、10):按住说话、打字、发照片屏、屏幕尺寸、翻板书;连着没发出去
+  // 老师 0 秒开口那轮念完(S2 整块,20 秒配音齐 → 念到 21 秒);孩子 30 秒按住、话筒 31 秒开、认出字两段、34 秒松手、35 秒没听清;
+  // 40 秒、50 秒又两次没听清(一共三次连着);60 秒打字、删改、66 秒发出去;70 秒开发照片屏、圈画、发;80 秒那条带照片
+  const at = (dt: number) => T + dt;
+  const plays: PlayRecord[] = [
+    { at: at(500), k: 'view', w: 1180, h: 820, kb: 0, v: 'abcd1234' },
+    { at: at(25000), k: 'scroll', job: '1', card: 0, dy: -40 },
+    { at: at(30000), k: 'hold', e: 'down' }, { at: at(31000), k: 'hold', e: 'audio' }, { at: at(31800), k: 'hold', e: 'text', text: '拜拜' }, { at: at(32600), k: 'hold', e: 'text', text: '拜拜和爸爸' },
+    { at: at(33000), k: 'hold', e: 'slide', on: true }, { at: at(33400), k: 'hold', e: 'slide', on: false }, { at: at(34000), k: 'hold', e: 'up' }, { at: at(35000), k: 'hold', e: 'end', r: 'unclear', lv: '0001234567899876543210000000000000000000000000000000' },
+    { at: at(40000), k: 'hold', e: 'down' }, { at: at(42000), k: 'hold', e: 'end', r: 'unclear', lv: '0000000000000000000' },
+    { at: at(50000), k: 'hold', e: 'down' }, { at: at(52000), k: 'hold', e: 'end', r: 'dead' },
+    { at: at(60000), k: 'view', w: 1180, h: 820, kb: 360, v: 'abcd1234' },
+    { at: at(60000), k: 'type', e: 'focus' }, { at: at(61000), k: 'type', e: 'v', v: '他们' }, { at: at(62000), k: 'type', e: 'v', v: '他们在看大象' }, { at: at(63000), k: 'type', e: 'v', v: '他们在看' }, { at: at(65000), k: 'type', e: 'v', v: '他们在看大熊猫' }, { at: at(66000), k: 'type', e: 'send' }, { at: at(66100), k: 'type', e: 'blur' },
+    { at: at(66200), k: 'view', w: 1180, h: 820, kb: 0, v: 'abcd1234' },
+    { at: at(70000), k: 'ps', e: 'open' }, { at: at(72000), k: 'ps', e: 'tool', tool: 'pen' }, { at: at(79000), k: 'ps', e: 'send' },
+  ];
+  const m1 = msg('1', { text: '看图说话', timing: { startedAt: iso(T) }, section: S2 });
+  const m2 = msg('2', { text: '他们在看大熊猫', timing: { startedAt: iso(T + 66000) } });
+  const m3 = msg('3', { text: '', photos: ['captures/2026-09-28/1201-1.jpg'], timing: { startedAt: iso(T + 80000) } });
+  const r = buildReel(input([m1, m2, m3], { plays }))!;
+  check('按住说话:三次各成一段(话筒开、松手、字、上滑、音量、结果);打字一段(四次值、发了);发照片屏一段(圈画、发、照片是之后那条的)', r.holds.length === 3 && r.holds[0].audioAt === at(31000) && r.holds[0].upAt === at(34000) && r.holds[0].texts.length === 2 && r.holds[0].slides.length === 2 && r.holds[0].result === 'unclear' && r.holds[2].result === 'dead' && r.types.length === 1 && r.types[0].vals.length === 4 && r.types[0].sent && r.types[0].to === at(66000) && r.photoScreens.length === 1 && r.photoScreens[0].photo === 'captures/2026-09-28/1201-1.jpg' && r.views.length === 3 && r.scrolls.length === 1, JSON.stringify({ holds: r.holds, types: r.types, ps: r.photoScreens }).slice(0, 400));
+  check('连着三次没发出去(中间一句也没发成):三个淡点 + 一串;按住、打字、发照片屏照真实时间放(不压)', r.marks.filter((m) => m.kind === 'miss').length === 3 && r.misses.length === 1 && r.misses[0].n === 3 && r.misses[0].from === at(30000) && r.misses[0].to === at(52000) && r.marks.some((m) => m.kind === 'misses' && m.label === '按住说话连着 3 次没发出去' && m.to === at(52000)) && !r.gaps.some((g) => (g.from < at(35000) && g.to > at(30000)) || (g.from < at(66000) && g.to > at(60000)) || (g.from < at(79000) && g.to > at(70000))), JSON.stringify(r.gaps.map((g) => [g.from - T, g.to - T])));
+  const f = (dt: number) => reelFrameAt(r, at(dt));
+  check('按住:话筒没开「等一下」→ 在听(字到这一刻、上滑那会儿算取消区)→ 松手收尾;音量取到这一刻的最近 25 格', f(30500).hold?.phase === 'wait' && f(31900).hold?.phase === 'live' && f(31900).hold?.text === '拜拜' && f(33200).hold?.slide === true && f(33600).hold?.slide === false && f(34500).hold?.phase === 'tail' && f(34500).hold?.text === '拜拜和爸爸' && f(31000).hold?.lv === '0000000000000000012345678' && f(30500).miss?.k === 1 && f(41000).miss?.k === 2 && f(51000).miss?.n === 3, JSON.stringify([f(31000).hold, f(41000).miss]));
+  check('没听清:收尾后 2.5 秒输入条写「没听清」;再过就没了', f(35500).unclear && !f(38000).unclear && f(35500).hold === null);
+  check('打字:输入框里这一刻的字(删掉的大象也看得到);键盘高跟着屏幕尺寸的记录', f(62500).typing?.v === '他们在看大象' && f(64000).typing?.v === '他们在看' && f(65500).typing?.v === '他们在看大熊猫' && f(66500).typing === null && f(61000).view?.kb === 360 && f(67000).view?.kb === 0 && f(100).view?.w === 1180);
+  check('发照片屏:开着时有最近的工具与那张照片;翻板书取最近一次', f(73000).photoScreen?.tool === 'pen' && f(73000).photoScreen?.photo === 'captures/2026-09-28/1201-1.jpg' && f(80000).photoScreen === null && f(26000).scroll?.dy === -40 && f(20000).scroll === null);
+  // 中间发成了一句:不算连着
+  const ok2 = buildReel(input([m1, msg('2', { text: '好', timing: { startedAt: iso(T + 45000) } })], { plays: plays.filter((p) => p.at < at(60000)) }))!;
+  check('两次没发出去之间孩子发成了一句:不算一串', ok2.misses.length === 0 && ok2.marks.filter((m) => m.kind === 'miss').length === 3);
+  // 老话题:没有 hold 实录,从 voice-diag 推没发出去的那几次;发出去的不进(有原声那一段)
+  const diag: ReelDiag[] = [{ at: at(30000), ms: 4000, audioMs: null, result: 'unclear', peak: -1 }, { at: at(36000), ms: 3000, audioMs: 100, result: 'unclear', peak: 0 }, { at: at(40000), ms: 2000, audioMs: 50, result: 'dead', peak: 0 }, { at: at(45000), ms: 2000, audioMs: 50, result: 'sent', peak: 1 }];
+  const old = buildReel(input([m1], { diag }))!;
+  check('老话题从 voice-diag 推:三次没发出去成一串;话筒没开的一直是「等一下」,音量 0 的波形是平的', old.holds.length === 3 && old.holds.every((x) => x.diag) && old.misses.length === 1 && reelFrameAt(old, at(28000)).hold?.phase === 'wait' && reelFrameAt(old, at(34000)).hold?.lv === '0000000000000000000000000' && reelFrameAt(old, at(28000)).hold?.lv === null, JSON.stringify(old.holds.map((x) => [x.from - T, x.to - T, x.audioAt, x.lv.length])));
+  check('有 hold 实录就不用 voice-diag', buildReel(input([m1], { plays, diag }))!.holds.length === 3 && buildReel(input([m1], { plays, diag }))!.holds.every((x) => !x.diag));
+  check('补记的形状:好的收、坏的丢', playRecordOk({ at: 1, k: 'view', w: 1180, h: 820, kb: 0, v: 'abc' }) && playRecordOk({ at: 1, k: 'hold', e: 'end', r: 'unclear', lv: '0123' }) && playRecordOk({ at: 1, k: 'type', e: 'v', v: '他们' }) && playRecordOk({ at: 1, k: 'ps', e: 'tool', tool: 'pen' }) && playRecordOk({ at: 1, k: 'scroll', job: '1620-1', card: 0, dy: -40 }) && !playRecordOk({ at: 1, k: 'hold', e: 'end', r: 'oops' }) && !playRecordOk({ at: 1, k: 'hold', e: 'end', lv: 'abc' }) && !playRecordOk({ at: 1, k: 'view', w: 1, h: 820, kb: 0, v: '' }) && !playRecordOk({ at: 1, k: 'type', e: 'v', v: 'x'.repeat(500) }) && !playRecordOk({ at: 1, k: 'scroll', job: 'x', card: 0, dy: 0 }));
 }
 check('实录的形状:好的收、坏的丢', playRecordOk({ at: 1, k: 'play', job: '1620-1', line: 0, status: 'playing' }) && playRecordOk({ at: 1, k: 'play', job: null, line: -1, status: 'idle' }) && playRecordOk({ at: 1, k: 'stage', job: '1620-1', card: 2, open: true }) && !playRecordOk({ at: 1, k: 'stage', job: '../x', card: 2, open: true }) && !playRecordOk({ at: 'x', k: 'visible', on: true }) && !playRecordOk({ at: 1, k: 'eval', on: true }) && !playRecordOk(null));
 check('进度条上怎么写孩子这句', reelSaid({ text: 'x', action: 'continue' }) === '继续' && reelSaid({ text: '', action: 'submit', via: { home: 'h', button: 'new', label: '6 的口诀' } }) === '交给老师' && reelSaid({ text: 'x', via: { home: 'h', button: 0, label: '开场' } }) === '开场' && reelSaid({ text: '原话' }) === '原话');

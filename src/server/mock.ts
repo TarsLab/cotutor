@@ -57,7 +57,7 @@ export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bund
 export const MOCK_LECTURES_DIR = fileURLToPath(new URL('../../tests/fixtures/lectures/', import.meta.url));
 const MOCK_LECTURE_DIRS = { dirs: { bundles: MOCK_BUNDLES_DIR, lectures: MOCK_LECTURES_DIR } };
 import { lineDurationMs, readyBeats, type BoardSection, type KidLecture, type PenName } from '../lib/kid-board.ts';
-import { REEL_LINE_GAP_MS, buildReel } from '../lib/reel.ts';
+import { REEL_LINE_GAP_MS, buildReel, playRecordOk, type PlayRecord } from '../lib/reel.ts';
 import type { CardStates } from '../lib/conversation.ts';
 import { lanAddresses, listenInfo } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
@@ -494,6 +494,8 @@ export function createMock(opts: MockOptions = {}): Mock {
   const cursor = new Map<string, number>();
   const inflight = new Map<string, Promise<void>>();
   let seq = 0;
+  /** 孩子端发来的实录(不打盘):老师 → [{话题, 记录}] */
+  const mockPlays: Record<string, { thread: string; rec: PlayRecord }[]> = {};
   const nextJob = (): string => { const d = now(); return `${pad(d.getHours())}${pad(d.getMinutes())}-${++seq}`; };
   for (const t of MOCK_TUTORS) {
     const list: MockMessage[] = [];
@@ -695,7 +697,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       });
       const cards: CardStates = {};
       mine.forEach((m, k) => (m.section?.cards ?? []).forEach((c, n) => { if (c.state !== undefined) (cards[m.job] ??= {})[n] = { at: new Date((starts[k + 1] ?? t) - 5000).toISOString(), turn: m.job, state: c.state }; }));
-      const reel = buildReel({ messages: conv, events: {}, cards, durations: {}, tutor: name, now: now().getTime() });
+      const plays = (mockPlays[name] ?? []).filter((x) => x.thread === thread).map((x) => x.rec);
+      const reel = buildReel({ messages: conv, events: {}, cards, durations: {}, tutor: name, now: now().getTime(), plays });
       // mock 的孩子接口只认 today 是今天(写日期的走「以前的」那份)
       const kidDay = await route('GET', `/api/kid/conversations/${name}/${tail === localDate(now()) ? 'today' : tail}`);
       const kid = kidDay.status === 200 ? (kidDay.json as { messages: { thread: string }[] }).messages.filter((m) => m.thread === thread) : [];
@@ -743,7 +746,14 @@ export function createMock(opts: MockOptions = {}): Mock {
       const list = messages.get(name) ?? [];
       const date = localDate(now());
       // 录像的实录:收下就丢(mock 的录像按固定节奏排,不用它);不收的话页面每 10 秒撞一个 404
-      if (tail === 'play' && method === 'POST') return { status: 200, json: { kept: isObj(body) && Array.isArray(body.records) ? body.records.length : 0 } };
+      // 实录:不打盘,攒在内存里给录像用(按 sentAt 校钟、形状不对的丢掉、孩子端发的卡改动不收,同真服务)
+      if (tail === 'play' && method === 'POST') {
+        if (!isObj(body) || typeof body.thread !== 'string' || !Array.isArray(body.records)) return { status: 200, json: { kept: 0 } };
+        const skew = typeof body.sentAt === 'number' ? now().getTime() - body.sentAt : 0;
+        const kept = (body.records as unknown[]).filter((x): x is PlayRecord => playRecordOk(x) && x.k !== 'card').map((x) => ({ ...x, at: Math.round(x.at + skew) }));
+        (mockPlays[name] ??= []).push(...kept.map((rec) => ({ thread: body.thread as string, rec })));
+        return { status: 200, json: { kept: kept.length } };
+      }
       // 作业照片:不落盘,回一个像样的假路径(缩略图由 /api/kid/image 的占位 svg 顶)
       if (tail === 'photos' && method === 'POST') {
         if (!isObj(body) || typeof body.image !== 'string' || !body.image.startsWith('data:image/')) return { status: 400, json: { error: 'bad_request' } };

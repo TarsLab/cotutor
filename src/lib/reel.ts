@@ -23,10 +23,17 @@ export interface ReelSay {
   replay?: true;
 }
 
+/** 按住说话收尾时孩子看到的:sent 发出去了 · unclear「没听清,再按住说一次」· cancel 上滑取消 · dead 识别一起就断(转成打字) */
+export type ReelHoldResult = 'sent' | 'unclear' | 'cancel' | 'dead';
+
 /**
  * 实录(第二期,《家长录像设计.md》§4):孩子端记下的一条,落 <日期>.<job>.play.jsonl。at 是服务端的墙钟(路由按发来时两边的钟差校过)。
  * play = 播放器的位置变了(job = 那一节的 job;status 同 PlayerState;replay = 在再听);stage = 弹窗开 / 关;autoplay = 喇叭;
- * visible = 页面切到后台 / 回来;card = 卡的一次存(服务端在 putCardState 里记,孩子端不发)
+ * visible = 页面切到后台 / 回来;card = 卡的一次存(服务端在 putCardState 里记,孩子端不发)。
+ * 改版(拍板 6、7,孩子看到什么记什么):view = 孩子屏幕的 CSS 尺寸、键盘高、页面版本;
+ * hold = 按住说话的一步(down 按下 / audio 话筒开了 / text 认出的字变了 / slide 上滑取消 on 或滑回来 / up 松手 / end 收尾,r 见 ReelHoldResult,lv = 按下起每 100 毫秒一位的音量 0–9);
+ * type = 打字(focus 点进输入框 / v 值变了 / send 发了 / blur 收起);ps = 发照片屏(open / tool:crop 裁剪 · pen 圈画 · rot 转 / send / cancel);
+ * scroll = 孩子自己翻到哪(锚在卡上:那张卡的上沿离板书上沿 dy 像素)
  */
 export type PlayRecord = { at: number } & (
   | { k: 'play'; job: string | null; line: number; status: string; replay?: true }
@@ -34,6 +41,11 @@ export type PlayRecord = { at: number } & (
   | { k: 'autoplay'; on: boolean }
   | { k: 'visible'; on: boolean }
   | { k: 'card'; job: string; card: number; state: unknown }
+  | { k: 'view'; w: number; h: number; kb: number; v: string }
+  | { k: 'hold'; e: 'down' | 'audio' | 'text' | 'slide' | 'up' | 'end'; text?: string; on?: boolean; r?: ReelHoldResult; lv?: string }
+  | { k: 'type'; e: 'focus' | 'v' | 'send' | 'blur'; v?: string }
+  | { k: 'ps'; e: 'open' | 'tool' | 'send' | 'cancel'; tool?: string }
+  | { k: 'scroll'; job: string; card: number; dy: number }
 );
 
 /** 一条实录的形状对不对(服务端收、读 play.jsonl 时用;坏的丢掉) */
@@ -42,6 +54,8 @@ export function playRecordOk(x: unknown): x is PlayRecord {
   const r = x as Record<string, unknown>;
   const job = (v: unknown): boolean => typeof v === 'string' && /^\d{4}-\d+$/.test(v);
   const int = (v: unknown): boolean => typeof v === 'number' && Number.isInteger(v) && v >= -1 && v < 1000;
+  const px = (v: unknown, lo: number, hi: number): boolean => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
+  const text = (v: unknown): boolean => v === undefined || (typeof v === 'string' && v.length <= 400);
   if (typeof r.at !== 'number' || !Number.isFinite(r.at)) return false;
   switch (r.k) {
     case 'play': return (r.job === null || job(r.job)) && int(r.line) && typeof r.status === 'string' && r.status.length < 16 && (r.replay === undefined || r.replay === true);
@@ -49,6 +63,11 @@ export function playRecordOk(x: unknown): x is PlayRecord {
     case 'autoplay':
     case 'visible': return typeof r.on === 'boolean';
     case 'card': return job(r.job) && int(r.card) && 'state' in r;
+    case 'view': return px(r.w, 100, 4000) && px(r.h, 100, 4000) && px(r.kb, 0, 2000) && typeof r.v === 'string' && r.v.length <= 16;
+    case 'hold': return ['down', 'audio', 'text', 'slide', 'up', 'end'].includes(r.e as string) && text(r.text) && (r.on === undefined || typeof r.on === 'boolean') && (r.r === undefined || ['sent', 'unclear', 'cancel', 'dead'].includes(r.r as string)) && (r.lv === undefined || (typeof r.lv === 'string' && /^[0-9]{0,600}$/.test(r.lv)));
+    case 'type': return ['focus', 'v', 'send', 'blur'].includes(r.e as string) && text(r.v);
+    case 'ps': return ['open', 'tool', 'send', 'cancel'].includes(r.e as string) && (r.tool === undefined || (typeof r.tool === 'string' && r.tool.length <= 12));
+    case 'scroll': return job(r.job) && int(r.card) && px(r.dy, -20000, 20000);
     default: return false;
   }
 }
@@ -110,9 +129,13 @@ export interface ReelGap {
   cont?: true;
 }
 
-/** 进度条上的点:said 孩子 / 家长开口、card 孩子改了一张卡、ask 老师停下等孩子、error 这轮没成、lecture 开始看小课堂、circle 在小课堂上圈了一处 */
+/**
+ * 进度条上的点:said 孩子 / 家长开口、card 孩子改了一张卡、ask 老师停下等孩子、error 这轮没成、lecture 开始看小课堂、circle 在小课堂上圈了一处、
+ * miss 按住说话没发出去(淡,偶尔一两次不算事)、misses 连着 REEL_MISS_STREAK 次以上没发出去(拍板 10;to 是这一串的末尾)
+ */
 export interface ReelMark {
-  kind: 'said' | 'card' | 'ask' | 'error' | 'lecture' | 'circle';
+  kind: 'said' | 'card' | 'ask' | 'error' | 'lecture' | 'circle' | 'miss' | 'misses';
+  to?: number;
   at: number;
   job: string;
   label: string;
@@ -131,6 +154,45 @@ export interface ReelLecture {
   to: number;
   log: { at: number; pos: number; play: boolean }[];
   marks: { at: number; atMs: number; svgMs: number; path: [number, number][]; image?: string }[];
+}
+
+/** 按住说话的一次(拍板 6):按下 → 话筒开 → 认出的字一段段 → 松手 → 收尾。diag = 老话题从 voice-diag.jsonl 推的(没有字、没有音量,只有没发出去的) */
+export interface ReelHold {
+  from: number;
+  to: number;
+  audioAt: number | null;
+  upAt: number | null;
+  texts: { at: number; text: string }[];
+  slides: { at: number; on: boolean }[];
+  result: ReelHoldResult | null;
+  lv: string;
+  diag?: true;
+}
+
+/** 打字的一段:点进输入框到发了 / 收起;vals = 每次值变了 */
+export interface ReelType {
+  from: number;
+  to: number;
+  vals: { at: number; v: string }[];
+  sent: boolean;
+}
+
+/** 发照片屏开着的一段;photo = 发出去的那条的第一张照片(相对 workspace;取消了没有) */
+export interface ReelPhotoScreen {
+  from: number;
+  to: number;
+  tools: { at: number; tool: string }[];
+  sent: boolean;
+  photo: string | null;
+}
+
+/** 老话题(还没有 hold 实录)从 .cotutor/voice-diag.jsonl 推的一次按住:at = 收尾那一刻,ms = 按下到收尾,audioMs = 按下到话筒开(没开 = null),peak = 最大音量 */
+export interface ReelDiag {
+  at: number;
+  ms: number;
+  audioMs: number | null;
+  result: ReelHoldResult;
+  peak: number;
 }
 
 export interface Reel {
@@ -152,6 +214,13 @@ export interface Reel {
   aways: { from: number; to: number }[];
   /** 看小课堂的几段(没有 = 这个话题不是从小课堂开始的,或那时还不记) */
   lectures: ReelLecture[];
+  /** 改版补记的(拍板 6):孩子屏幕尺寸、按住说话、打字、发照片屏、自己翻板书;连着没发出去的几串(拍板 10) */
+  views: { at: number; w: number; h: number; kb: number; v: string }[];
+  holds: ReelHold[];
+  types: ReelType[];
+  photoScreens: ReelPhotoScreen[];
+  scrolls: { at: number; job: string; card: number; dy: number }[];
+  misses: { from: number; to: number; n: number }[];
 }
 
 /** 开口后老师多久没出声以内照真实时间放(这就是孩子感受到的慢) */
@@ -164,6 +233,10 @@ export const REEL_GAP_PLAY_MS = 1500;
 export const REEL_LINE_GAP_MS = 200;
 /** 最后一件事之后再留一会儿 */
 export const REEL_TAIL_MS = 1500;
+/** 按住说话连着几次没发出去(中间一句也没发成)才标出来(拍板 10;待定,真看几个话题再调) */
+export const REEL_MISS_STREAK = 3;
+/** 「没听清,再按住说一次」在输入条上留多久(同孩子端) */
+export const REEL_UNCLEAR_MS = 2500;
 
 export interface ReelInput {
   /** 这个话题的消息,索引顺序 */
@@ -178,6 +251,8 @@ export interface ReelInput {
   now: number;
   /** 实录(第二期):这个话题各轮的 play.jsonl 合在一起;没有 = 全靠推算 */
   plays?: readonly PlayRecord[];
+  /** 老话题的按住说话(还没有 hold 实录时才用):服务端从 voice-diag.jsonl 挑出落在这个话题里的 */
+  diag?: readonly ReelDiag[];
 }
 
 /** 念到第 upTo 句(含)时露到第几张卡:锚到的、标到的、[[play]] 到的最后一张(同 kid-board 的 shownCards) */
@@ -410,6 +485,77 @@ export function buildReel(input: ReelInput): Reel | null {
     aways.push({ from: r.at, to: back ? back.at : Math.max(r.at, plays[plays.length - 1].at) });
   });
 
+  // ---- 改版补记的(拍板 6):按住说话、打字、发照片屏、屏幕尺寸、翻板书 ----
+  const holds: ReelHold[] = [];
+  let hd: ReelHold | null = null;
+  for (const r of plays) {
+    if (r.k !== 'hold') continue;
+    if (r.e === 'down') { if (hd) holds.push({ ...hd, to: Math.max(hd.to, r.at - 1) }); hd = { from: r.at, to: r.at, audioAt: null, upAt: null, texts: [], slides: [], result: null, lv: '' }; continue; }
+    if (!hd) continue;
+    hd.to = r.at;
+    if (r.e === 'audio') hd.audioAt ??= r.at;
+    else if (r.e === 'text') hd.texts.push({ at: r.at, text: r.text ?? '' });
+    else if (r.e === 'slide') hd.slides.push({ at: r.at, on: Boolean(r.on) });
+    else if (r.e === 'up') hd.upAt ??= r.at;
+    else { hd.result = r.r ?? null; hd.lv = r.lv ?? ''; holds.push(hd); hd = null; }
+  }
+  if (hd) holds.push({ ...hd, to: hd.to + 500 });
+  // 还没有 hold 实录的老话题:voice-diag 里没发出去的那几次(发出去的有原声那一段)
+  if (!plays.some((r) => r.k === 'hold')) {
+    for (const d of input.diag ?? []) {
+      if (d.result === 'sent') continue;
+      const from = d.at - d.ms;
+      holds.push({ from, to: d.at, audioAt: d.audioMs === null ? null : from + d.audioMs, upAt: null, texts: [], slides: [], result: d.result, lv: d.peak === 0 ? '0'.repeat(Math.min(600, Math.ceil(d.ms / 100))) : '', diag: true });
+    }
+  }
+  holds.sort((a, b) => a.from - b.from);
+  const types: ReelType[] = [];
+  let ty: ReelType | null = null;
+  for (const r of plays) {
+    if (r.k !== 'type') continue;
+    if (r.e === 'focus') { if (ty) types.push(ty); ty = { from: r.at, to: r.at, vals: [], sent: false }; continue; }
+    if (!ty) continue;
+    ty.to = r.at;
+    if (r.e === 'v') ty.vals.push({ at: r.at, v: r.v ?? '' });
+    else { ty.sent = r.e === 'send'; types.push(ty); ty = null; }
+  }
+  if (ty) types.push({ ...ty, to: ty.to + 1000 });
+  const photoScreens: ReelPhotoScreen[] = [];
+  let ps: ReelPhotoScreen | null = null;
+  for (const r of plays) {
+    if (r.k !== 'ps') continue;
+    if (r.e === 'open') { if (ps) photoScreens.push(ps); ps = { from: r.at, to: r.at, tools: [], sent: false, photo: null }; continue; }
+    if (!ps) continue;
+    ps.to = r.at;
+    if (r.e === 'tool') ps.tools.push({ at: r.at, tool: r.tool ?? '' });
+    else {
+      ps.sent = r.e === 'send';
+      // 发出去的那条:这一刻之后最近的、带照片的那次开口
+      if (ps.sent) { const k = live.findIndex((m, i) => liveStarts[i] >= r.at - 2000 && m.photos?.length); if (k >= 0) ps.photo = live[k].photos![0]; }
+      photoScreens.push(ps); ps = null;
+    }
+  }
+  if (ps) photoScreens.push({ ...ps, to: ps.to + 1000 });
+  const views: Reel['views'] = [];
+  const scrolls: Reel['scrolls'] = [];
+  for (const r of plays) {
+    if (r.k === 'view') views.push({ at: r.at, w: r.w, h: r.h, kb: r.kb, v: r.v });
+    else if (r.k === 'scroll' && secByJob.get(r.job)) scrolls.push({ at: r.at, job: r.job, card: r.card, dy: r.dy });
+  }
+  // 没发出去的按住:每次一个淡点;连着 REEL_MISS_STREAK 次以上(中间孩子一句也没发成)标成一串(拍板 10)
+  const misses: Reel['misses'] = [];
+  const MISS_LABEL: Record<ReelHoldResult, string> = { sent: '', unclear: '没听清', cancel: '上滑取消了', dead: '识别没起来' };
+  let run: ReelHold[] = [];
+  const flush = (): void => { if (run.length >= REEL_MISS_STREAK) misses.push({ from: run[0].from, to: run[run.length - 1].to, n: run.length }); run = []; };
+  for (const x of holds) {
+    if (x.result === 'sent') { flush(); continue; }
+    if (run.length && (speakAt.some((at) => at > run[run.length - 1].to && at < x.from) || types.some((t) => t.sent && t.to > run[run.length - 1].to && t.to < x.from))) flush();
+    run.push(x);
+    marks.push({ kind: 'miss', at: x.from, job: '', label: '按住说话没发出去' + (x.result ? ' · ' + MISS_LABEL[x.result] : '') });
+  }
+  flush();
+  for (const x of misses) marks.push({ kind: 'misses', at: x.from, to: x.to, job: '', label: `按住说话连着 ${x.n} 次没发出去` });
+
   // ---- 卡的状态:有实录的卡用每一次存(选了又改都在);没有的用状态文件(at 起生效,只有最后一次)。录音卡把孩子的录音也排进来 ----
   const cards: ReelCardChange[] = [];
   const recPrefix = `conversations/${input.tutor}/`;
@@ -443,10 +589,10 @@ export function buildReel(input: ReelInput): Reel | null {
   notes.sort((a, b) => a.at - b.at);
 
   // ---- 起止与空白 ----
-  const points = [...tracks.map((t) => t.at), ...speakAt, ...clips.map((c) => c.from), ...stages.map((x) => x.from), ...lectures.map((x) => x.from)].filter((x) => Number.isFinite(x));
+  const points = [...tracks.map((t) => t.at), ...speakAt, ...clips.map((c) => c.from), ...stages.map((x) => x.from), ...lectures.map((x) => x.from), ...holds.map((x) => x.from), ...types.map((x) => x.from), ...photoScreens.map((x) => x.from)].filter((x) => Number.isFinite(x));
   const startAt = Math.min(...points);
   const running = live.some((m) => m.result === 'running');
-  const lastAt = Math.max(...tracks.map((t) => t.doneAt), ...liveStarts, ...lectures.map((x) => x.to), ...cards.map((c) => c.at), ...clips.map((c) => c.to), ...notes.map((n) => n.postAt), ...says.map((x) => x.to), ...stages.map((x) => x.to));
+  const lastAt = Math.max(...tracks.map((t) => t.doneAt), ...liveStarts, ...lectures.map((x) => x.to), ...cards.map((c) => c.at), ...clips.map((c) => c.to), ...notes.map((n) => n.postAt), ...says.map((x) => x.to), ...stages.map((x) => x.to), ...holds.map((x) => x.to), ...types.map((x) => x.to), ...photoScreens.map((x) => x.to));
   const endAt = running ? Math.max(input.now, lastAt) : lastAt + REEL_TAIL_MS;
   const gaps: ReelGap[] = [];
   for (const w of waits) if (w.to - w.from > REEL_WAIT_KEEP_MS) gaps.push({ kind: 'wait', from: w.from + REEL_WAIT_KEEP_MS, to: w.to, ms: w.to - w.from });
@@ -457,6 +603,10 @@ export function buildReel(input: ReelInput): Reel | null {
     ...tracks.map((t): [number, number] => [t.at, t.doneAt]),
     ...says.map((x): [number, number] => [x.from, x.to]),
     ...clips.map((c): [number, number] => [c.from, c.to]),
+    // 孩子按着说话、在打字、在发照片屏:照真实时间放(拍板 6)
+    ...holds.map((x): [number, number] => [x.from, x.to + (x.result === 'unclear' ? REEL_UNCLEAR_MS : 0)]),
+    ...types.map((x): [number, number] => [x.from, x.to]),
+    ...photoScreens.map((x): [number, number] => [x.from, x.to]),
     // 小课堂在放的时段;停着的不算(孩子停下来想、圈,太久照样压)
     ...lectures.flatMap((x) => x.log.flatMap((e, i): [number, number][] => (e.play ? [[e.at, i + 1 < x.log.length ? x.log[i + 1].at : x.to]] : []))),
   ];
@@ -484,7 +634,7 @@ export function buildReel(input: ReelInput): Reel | null {
   gaps.sort((a, b) => a.from - b.from);
   // 实录:每一轮孩子开口之后、有讲稿的节都有 play 记录
   const precise = recorded.size > 0 && live.every((m) => !sectionOf(m)?.lines.length || recorded.has(m.job));
-  return { startAt, endAt, precise, tracks, says, clips, cards, notes, waits, gaps, marks, stages, aways, lectures };
+  return { startAt, endAt, precise, tracks, says, clips, cards, notes, waits, gaps, marks, stages, aways, lectures, views, holds, types, photoScreens, scrolls, misses };
 }
 
 /** 课里的「分:秒」(同 lecture.ts 的 clockLabel;这份文件只准从 kid-board 取运行时的东西) */
@@ -550,6 +700,23 @@ export interface ReelFrame {
   away: boolean;
   /** 在看小课堂:看的是哪一课、停在课里的哪一刻、在不在放、到这一刻圈过的几处 */
   lecture: { job: string; bundle: string; title: string; video: boolean; pos: number; playing: boolean; marks: ReelLecture['marks'] } | null;
+  /**
+   * 孩子按着说话(拍板 6):wait = 话筒还没开(「等一下…」)、live = 在听、tail = 松手了在收尾(「正在听清…」);text = 到这一刻认出的字;
+   * slide = 手上滑到了取消区;lv = 到这一刻为止最近 25 个 100 毫秒的音量(0–9;没记 = null,页面用假波形);diag = 老话题推的
+   */
+  hold: { phase: 'wait' | 'live' | 'tail'; text: string; slide: boolean; lv: string | null; diag: boolean } | null;
+  /** 输入条上「没听清,再按住说一次」那 2.5 秒 */
+  unclear: boolean;
+  /** 在打字:输入框里这一刻的字 */
+  typing: { v: string } | null;
+  /** 发照片屏开着:最近用的工具、发出去的那张照片 */
+  photoScreen: { tool: string; photo: string | null } | null;
+  /** 孩子屏幕这一刻的尺寸与键盘高(还没记 = null) */
+  view: { w: number; h: number; kb: number } | null;
+  /** 孩子自己最近一次翻到哪(at 是那一刻) */
+  scroll: { at: number; job: string; card: number; dy: number } | null;
+  /** 在一串连着没发出去的按住里:一共几次、这是第几次(还在两次之间也算) */
+  miss: { n: number; k: number } | null;
 }
 
 export function reelFrameAt(reel: Reel, t: number): ReelFrame {
@@ -584,7 +751,31 @@ export function reelFrameAt(reel: Reel, t: number): ReelFrame {
   const touched = st ? reel.cards.some((c) => c.job === st.job && c.card === st.card && c.at >= st.from && c.at <= t) : true;
   const thinking = st && !touched ? { job: st.job, card: st.card, ms: t - st.from - reelAwayMs(reel.aways, st.from, t) } : null;
   const away = reel.aways.some((a) => a.from <= t && t < a.to);
-  return { sections, saying, clip, last, cards, notes, wait: w ? { job: w.job, ms: t - w.from } : null, gap, asking, stage: st ? { job: st.job, card: st.card } : null, thinking, away, lecture: reelLectureAt(reel.lectures ?? [], t) };
+  const hd = (reel.holds ?? []).find((x) => x.from <= t && t < x.to) ?? null;
+  let hold: ReelFrame['hold'] = null;
+  if (hd) {
+    let text = '';
+    for (const x of hd.texts) if (x.at <= t) text = x.text;
+    let slide = false;
+    for (const x of hd.slides) if (x.at <= t) slide = x.on;
+    const i = Math.floor((t - hd.from) / 100);
+    const lv = hd.lv ? hd.lv.slice(Math.max(0, i - 24), i + 1).padStart(25, '0') : null;
+    hold = { phase: hd.upAt !== null && t >= hd.upAt ? 'tail' : hd.audioAt === null || t < hd.audioAt ? 'wait' : 'live', text, slide, lv, diag: Boolean(hd.diag) };
+  }
+  const unclear = !hd && (reel.holds ?? []).some((x) => x.result === 'unclear' && x.to <= t && t < x.to + REEL_UNCLEAR_MS);
+  const tp = (reel.types ?? []).find((x) => x.from <= t && t < x.to);
+  let typing: ReelFrame['typing'] = null;
+  if (tp) { let v = ''; for (const x of tp.vals) if (x.at <= t) v = x.v; typing = { v }; }
+  const pss = (reel.photoScreens ?? []).find((x) => x.from <= t && t < x.to);
+  let photoScreen: ReelFrame['photoScreen'] = null;
+  if (pss) { let tool = ''; for (const x of pss.tools) if (x.at <= t) tool = x.tool; photoScreen = { tool, photo: pss.photo }; }
+  let view: ReelFrame['view'] = null;
+  for (const x of reel.views ?? []) { if (x.at > t && view) break; view = { w: x.w, h: x.h, kb: x.at <= t ? x.kb : 0 }; }
+  let scroll: ReelFrame['scroll'] = null;
+  for (const x of reel.scrolls ?? []) { if (x.at > t) break; scroll = x; }
+  const ms = (reel.misses ?? []).find((x) => x.from <= t && t < x.to);
+  const miss = ms ? { n: ms.n, k: (reel.holds ?? []).filter((x) => x.result !== 'sent' && x.from >= ms.from && x.from <= t).length } : null;
+  return { sections, saying, clip, last, cards, notes, wait: w ? { job: w.job, ms: t - w.from } : null, gap, asking, stage: st ? { job: st.job, card: st.card } : null, thinking, away, lecture: reelLectureAt(reel.lectures ?? [], t), hold, unclear, typing, photoScreen, view, scroll, miss };
 }
 
 /** 这一刻在不在看小课堂:最近一条看的记录;在放的按真实时间往前推(推不过下一条) */

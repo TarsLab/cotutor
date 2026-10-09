@@ -26,6 +26,7 @@
  * 流式:老师还在说时 pending 条目带 partial 板书,卡按下标只追加不重画(先出的卡不闪),讲稿不播;整轮跑完那节换成正式的,声音从第一句起。
  * __TITLE__ / __SHORT__(主屏幕图标下的名字)由路由替换。调试:`?step=<节>.<句>` 直接停在某句(标注画齐、不出声),截图与测试用。
  */
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { letterAdvances } from './letters.ts';
 import { stripTypeScriptTypes } from 'node:module';
@@ -298,6 +299,10 @@ const PAGE = `<!doctype html>
   #rl-marks i.error { background:#b3541e; border-radius:2px; }
   #rl-marks i.lecture { background:#c95a22; border-radius:2px; }
   #rl-marks i.circle { background:#2f6fd6; }
+  /* 按住说话没发出去:每次一个淡点;连着几次的一串是一条橙色的带(拍板 10) */
+  #rl-marks i.miss { background:#b9b4a8; width:7px; height:7px; margin-left:-3.5px; top:1px; }
+  #rl-marks i.misses { background:#e8743b40; border:1px solid #e8743b; border-radius:5px; height:9px; margin-left:-3px; box-sizing:border-box; }
+  #rl-cap.miss { color:#b3541e; }
   /* 录像里看小课堂的那一段:铺在板书上,字幕行与控制条露着;只看 */
   /* 家长端录像(拍板 6):上半是孩子的屏幕(iframe 里的孩子端,按孩子设备的尺寸开、等比缩),下半是录像栏;家长页自己的板书、字幕行、顶栏收起来 */
   body.reel #wrap, body.reel #sub, body.reel .tb { display:none; }
@@ -311,12 +316,24 @@ const PAGE = `<!doctype html>
   body.rlk #tutor .tb, body.rlk #wrap, body.rlk #sub, body.rlk #bar, body.rlk #lc-frame { pointer-events:none; }
   /* 直接打开孩子的屏幕(调试)时录像栏在它自己底下:压在按住浮层、小课堂上面 */
   body.rlk #reel { position:relative; z-index:25; background:var(--paper); }
+  /* 录像里孩子在打字:底下垫一块示意的键盘,老师页挪到它上面 */
+  #rl-kbd { position:fixed; left:0; right:0; bottom:0; height:var(--rl-kb, 0); background:#d1d4db; display:none; flex-direction:column; justify-content:center; gap:8px; padding:8px; box-sizing:border-box; z-index:30; }
+  body.rlk.kbd #rl-kbd { display:flex; }
+  body.rlk.kbd #tutor { bottom:var(--rl-kb, 0); }
+  #rl-kbd .r { display:flex; gap:6px; justify-content:center; flex:1; max-height:56px; }
+  #rl-kbd .r span { flex:0 1 72px; border-radius:7px; background:#fdfdfd; box-shadow:0 1px 0 #8e9196; display:grid; place-items:center; font-size:18px; color:#333; }
+  #rl-kbd .r span.sp { flex:0 1 420px; font-size:14px; color:#777; }
+  #rl-ps-img { position:absolute; inset:0; margin:auto; max-width:100%; max-height:100%; object-fit:contain; }
+  body.rlk #ps-cv { visibility:hidden; }
+  body.rlk #ps { pointer-events:none; }
   .rl-row { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--dim); }
   .rl-when { flex:none; display:flex; flex-direction:column; align-items:flex-start; gap:1px; line-height:1.2; }
   #rl-play { flex:none; width:44px; height:44px; border-radius:50%; background:var(--ink); color:#fff; display:grid; place-items:center; }
   #rl-clock { font-variant-numeric:tabular-nums; color:var(--ink); font-size:15px; }
   #rl-tag { font-size:11px; border:1px solid var(--line); border-radius:7px; padding:0 6px; background:#fff; white-space:nowrap; }
-  #rl-tag[hidden] { display:none; }
+  #rl-tag[hidden], #rl-ver[hidden] { display:none; }
+  .rl-tags { display:flex; gap:4px; }
+  #rl-ver { font-size:11px; border:1px solid var(--line); border-radius:7px; padding:0 6px; background:#fff; white-space:nowrap; color:var(--dim); }
   .rl-sp { flex:1; }
   .rl-row .tx { flex:none; height:34px; padding:0 11px; border-radius:17px; white-space:nowrap; border:1px solid var(--line); background:#fff; font-size:14px; color:var(--ink); }
   /* 「跳过空白」是个开关(主流播放器的「跳过静音」都这样):滑块在右、底色填满 = 开着 */
@@ -495,7 +512,7 @@ const PAGE = `<!doctype html>
     <div id="reel" hidden>
       <div id="rl-cap"></div>
       <div class="rl-track"><div id="rl-marks"></div><input id="rl-seek" type="range" min="0" max="1000" step="100" value="0" aria-label="录像进度"></div>
-      <div class="rl-row"><button id="rl-play" type="button" aria-label="播放"></button><span class="rl-when"><span id="rl-clock"></span><button id="rl-tag" type="button">推算</button></span><span class="rl-sp"></span><label class="rl-sw" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就按真实时间放"><input type="checkbox" id="rl-skip" role="switch" checked><i></i>跳过空白</label><button class="tx" id="rl-speed" type="button">1×</button><button class="tx" id="rl-x" type="button">退出</button></div>
+      <div class="rl-row"><button id="rl-play" type="button" aria-label="播放"></button><span class="rl-when"><span id="rl-clock"></span><span class="rl-tags"><button id="rl-tag" type="button">推算</button><button id="rl-ver" type="button" hidden>画法已更新</button></span></span><span class="rl-sp"></span><label class="rl-sw" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就按真实时间放"><input type="checkbox" id="rl-skip" role="switch" checked><i></i>跳过空白</label><button class="tx" id="rl-speed" type="button">1×</button><button class="tx" id="rl-x" type="button">退出</button></div>
     </div>
     <div id="hold"><div class="t"></div><span>松手发送,上移取消</span><div class="w"></div></div>
   </div>
@@ -531,6 +548,8 @@ __REEL_JS__
   const SYNTH = MODE.synth === true;
   /** 舞台包的版本(src/server/stage.ts stageVersion):iframe 的地址带上它,打包过一次就换一个地址,不用浏览器缓存里的旧舞台 */
   const STAGE_V = '__STAGE_V__';
+  /** 这份页面的版本(源码的 hash):孩子端记进实录,录像对不上时标「画法已更新」(《家长录像设计.md》拍板 9) */
+  const PAGE_V = '__PAGE_V__';
   const stageUrl = (card) => '/stage/?v=' + STAGE_V + '&card=' + encodeURIComponent(card);
   const PARENT = MODE.parent === true;
   /** 录像里孩子的屏幕(/reel,《家长录像设计.md》拍板 6):孩子端的样子,数据是 /reel 给的一个话题;只读、不记、点不动,由录像的时钟驱动 */
@@ -812,6 +831,7 @@ __REEL_JS__
     setBar('idle');
     loadDay(true).then(() => { if (intent.send) send(intent.send); });
     if (S.lecture) openLecture();
+    viewKey = ''; viewNote();
   };
   /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」 */
   const blankBoard = (title) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor) : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, S.tutor && S.tutor.motto ? h('span', { class: 'mo' }, S.tutor.motto) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null);
@@ -1962,6 +1982,51 @@ __REEL_JS__
     PLAY.buf.push({ tutor: S.tutor.name, thread: S.newThread ? null : S.thread, rec: { at: Date.now(), ...r } });
     if (PLAY.buf.length > 600) PLAY.buf.splice(0, PLAY.buf.length - 600);
   };
+  // ---- 实录补记(《家长录像设计.md》拍板 6、7):孩子看到什么记什么——屏幕多大(键盘弹起来多高)、按住说话的每一步、输入框里的字、发照片屏、自己翻到哪 ----
+  /** 屏幕尺寸、键盘高(iOS 键盘弹起来只缩 visualViewport)、页面版本;变了才记,转屏、键盘起落停手 300 毫秒记一次 */
+  let viewKey = '', viewTimer = 0;
+  const viewNote = () => {
+    const vv = window.visualViewport;
+    const kb0 = vv ? Math.round(innerHeight - vv.height - (vv.offsetTop || 0)) : 0;
+    const kb = kb0 > 80 ? Math.min(2000, kb0) : 0;
+    const key = innerWidth + 'x' + innerHeight + '/' + kb;
+    if (key === viewKey) return;
+    viewKey = key;
+    playRec({ k: 'view', w: Math.max(100, Math.min(4000, innerWidth)), h: Math.max(100, Math.min(4000, innerHeight)), kb, v: PAGE_V });
+  };
+  const viewSoon = () => { clearTimeout(viewTimer); viewTimer = setTimeout(viewNote, 300); };
+  window.addEventListener('resize', viewSoon);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', viewSoon);
+  /** 两次之间不到 gap 毫秒的值先攒着,到点再记最新的那个(按住时认出的字、输入框里的字一秒能变好几次) */
+  const throttled = (gap, rec) => {
+    const T0 = { last: '', at: 0, timer: 0, pend: null };
+    const flush = () => { clearTimeout(T0.timer); if (T0.pend !== null && T0.pend !== T0.last) { T0.last = T0.pend; T0.at = Date.now(); rec(T0.pend); } T0.pend = null; };
+    return { put: (v) => { if (v === T0.last && T0.pend === null) return; T0.pend = v; const wait = gap - (Date.now() - T0.at); if (wait <= 0) flush(); else { clearTimeout(T0.timer); T0.timer = setTimeout(flush, wait); } }, flush, reset: () => { clearTimeout(T0.timer); T0.last = ''; T0.at = 0; T0.pend = null; } };
+  };
+  /** 按住说话:按下 / 话筒开了 / 认出的字(200 毫秒一次)/ 上滑进出取消区 / 松手 / 收尾(结果 + 每 100 毫秒一位的音量) */
+  const HR = { on: false, t0: 0, lv: [] };
+  const holdHeard = throttled(200, (text) => playRec({ k: 'hold', e: 'text', text: text.slice(-400) }));
+  const holdRec = (e, extra) => { if (e === 'down') { HR.on = true; HR.t0 = Date.now(); HR.lv = []; holdHeard.reset(); } else if (!HR.on) return; playRec({ k: 'hold', e, ...(extra || {}) }); };
+  const holdLvRec = (v) => { if (!HR.on) return; const i = Math.floor((Date.now() - HR.t0) / 100); if (i >= 0 && i < 600) HR.lv[i] = Math.max(HR.lv[i] || 0, v); };
+  const holdEnd = (r) => {
+    if (!HR.on) return;
+    holdHeard.flush();
+    const lv = Array.from({ length: HR.lv.length }, (_, i) => String(Math.min(9, Math.round((HR.lv[i] || 0) * 9)))).join('');
+    holdRec('end', { r, ...(lv ? { lv } : {}) });
+    HR.on = false;
+  };
+  /** 打字:点进输入框 / 值变了(300 毫秒一次)/ 发了 / 收起 */
+  const typeHeard = throttled(300, (v) => playRec({ k: 'type', e: 'v', v: v.slice(0, 400) }));
+  const typeRec = (e) => { if (e === 'focus') typeHeard.reset(); else typeHeard.flush(); playRec({ k: 'type', e }); };
+  /** 孩子自己翻板书(拖、滚轮;程序滚的不算):停手 400 毫秒记一次,锚在最上面露出来的那张卡上 */
+  const scrollNote = () => {
+    const b = $('#board'), top = b.getBoundingClientRect().top;
+    const c = [...b.querySelectorAll(':scope > .sec[data-job] .c[data-card]')].find((el) => el.getBoundingClientRect().bottom > top + 8);
+    if (!c) return;
+    playRec({ k: 'scroll', job: c.closest('.sec').dataset.job, card: Number(c.dataset.card), dy: Math.max(-20000, Math.min(20000, Math.round(c.getBoundingClientRect().top - top))) });
+  };
+  let scrollTimer = 0;
+  $('#board').addEventListener('scroll', () => { if (Date.now() - pin.touched > 1500) return; clearTimeout(scrollTimer); scrollTimer = setTimeout(scrollNote, 400); }, { passive: true });
   /** 播放器的位置变了才记(哪一节 · 第几句 · 在念 / 暂停 / 等答 …) */
   const playNote = () => {
     const st = S.state, sec = S.sections[st.section];
@@ -2355,21 +2420,75 @@ __REEL_JS__
     S.waitSince = f.wait ? Date.now() - waitMs : null;
     renderSubtitle();
   };
-  /** 按住说话:原声那一段就是孩子按着的时候——蓝色浮层、波形;认出的字按原声的进度一点点露(推算:还没记识别的过程) */
+  /** 按住说话:有实录(hold)照它画——话筒没开「等一下…」、在听、上滑「松手取消」、松手「正在听清…」,认出的字到这一刻为止,波形照记下的音量;
+   *  老话题没有实录:原声那一段就是孩子按着的时候,认成的字按原声的进度一点点露、波形是浮层的假波形(推算);voice-diag 推出来的没发出去的那几次也在 f.hold 里 */
   const reelHold = (f) => {
     const R = S.reel;
-    const c = f.clip && f.clip.kind === 'voice' ? f.clip : null;
-    $('#hold').classList.toggle('on', Boolean(c));
-    if (!c) { if (R.hold) { R.hold = null; $('#hold .t').textContent = ''; } return; }
-    R.hold = c.job;
-    const clip = R.d.reel.clips.find((x) => x.kind === 'voice' && x.job === c.job);
-    const dur = clip ? clip.to - clip.from : 1;
-    const text = c.text || '';
-    const k = Math.max(0, Math.min(text.length, Math.ceil(text.length * (c.offset - 900) / Math.max(1, dur - 1200))));
-    $('#hold .t').textContent = text.slice(0, k);
-    const cold = c.offset < 900;
-    $('#hold').classList.toggle('wait', cold);
-    $('#hold span').textContent = cold ? '等一下…' : '松手发送,上移取消';
+    const recorded = R.d.reel.holds.some((x) => !x.diag);
+    const c = !f.hold && !recorded && f.clip && f.clip.kind === 'voice' ? f.clip : null;
+    const on = Boolean(f.hold || c);
+    $('#hold').classList.toggle('on', on);
+    if (!on) { if (R.hold) { R.hold = false; $('#hold .t').textContent = ''; $('#hold').classList.remove('real'); holdBars.forEach((b, i) => { b.style.height = R.barsH[i]; }); } return; }
+    R.hold = true;
+    let text = '', phase = 'live', slide = false, lv = null;
+    if (f.hold) ({ text, phase, slide, lv } = f.hold);
+    else {
+      const clip = R.d.reel.clips.find((x) => x.kind === 'voice' && x.job === c.job);
+      const dur = clip ? clip.to - clip.from : 1;
+      const all = c.text || '';
+      text = all.slice(0, Math.max(0, Math.min(all.length, Math.ceil(all.length * (c.offset - 900) / Math.max(1, dur - 1200)))));
+      phase = c.offset < 900 ? 'wait' : 'live';
+    }
+    $('#hold .t').textContent = text.length > 60 ? '…' + text.slice(-60) : text;
+    $('#hold').classList.toggle('wait', phase !== 'live');
+    $('#hold span').textContent = phase === 'tail' ? '正在听清…' : slide ? '松手取消' : phase === 'wait' ? '等一下…' : '松手发送,上移取消';
+    $('#hold').classList.toggle('real', lv !== null);
+    if (lv !== null) holdBars.forEach((b, i) => { b.style.height = Math.round(4 + Number(lv[i] || 0) / 9 * 24) + 'px'; });
+  };
+  /** 输入条:在打字就是输入框里那一刻的字;没听清那 2.5 秒是「没听清,再按住说一次」;别的时候是占位字 */
+  const reelInput = (f) => {
+    const R = S.reel, ty = f.typing;
+    const key = JSON.stringify([ty, f.unclear]);
+    if (key === R.inKey) return;
+    R.inKey = key;
+    $('#ph').hidden = Boolean(ty); $('#typed').hidden = !ty; $('#go').hidden = !ty;
+    $('#typed').value = ty ? ty.v : '';
+    $('#ph').textContent = f.unclear ? '没听清,再按住说一次' : '发消息或按住说话…';
+  };
+  /** 键盘:在打字、记下的屏幕尺寸里有键盘高,就在底下垫一块示意的键盘,输入条挪到它上面(iPad 上键盘弹起来只缩可见的那块) */
+  const reelKbd = (f) => {
+    const R = S.reel, kb = f.typing && f.view ? f.view.kb : 0;
+    if (kb === R.kb) return;
+    R.kb = kb;
+    document.body.classList.toggle('kbd', kb > 0);
+    document.body.style.setProperty('--rl-kb', kb + 'px');
+  };
+  /** 发照片屏:开着就盖上,照片用发出去的那张(裁过、圈过的成品;取消了的没有照片),亮着最近用的工具 */
+  const reelPs = (f) => {
+    const R = S.reel, p = f.photoScreen;
+    const key = p ? p.tool + '|' + (p.photo || '') : '';
+    if (key === R.psKey) return;
+    R.psKey = key;
+    psEl.classList.toggle('on', Boolean(p));
+    if (!p) return;
+    let im = $('#rl-ps-img');
+    if (!im) { im = h('img', { id: 'rl-ps-img', alt: '' }); $('#ps .view').append(im); }
+    if (p.photo) im.src = '/api/kid/image?p=' + encodeURIComponent(p.photo); else im.removeAttribute('src');
+    im.hidden = !p.photo;
+    for (const [id, t] of [['#ps-t-crop', 'crop'], ['#ps-t-pen', 'pen'], ['#ps-t-rot', 'rot']]) $(id).classList.toggle('on', p.tool === t);
+  };
+  /** 孩子自己翻板书:翻到那张卡离板书上沿那么远。拖过进度条时,只认最后一次翻之后板上没再出新东西的(出了新东西孩子端会跟过去) */
+  const reelScroll = (f, t) => {
+    const R = S.reel, x = f.scroll;
+    if (!x || x.at === R.scrollAt) return;
+    if (R.scrollAt === undefined) {
+      let shownAt = -Infinity;
+      for (const tr of R.d.reel.tracks) { if (tr.at <= t) shownAt = Math.max(shownAt, tr.at); for (const c of tr.cards) if (c.at <= t) shownAt = Math.max(shownAt, c.at); }
+      if (x.at < shownAt) { R.scrollAt = x.at; return; }
+    }
+    R.scrollAt = x.at;
+    const b = $('#board'), el = b.querySelector(':scope > .sec[data-job="' + x.job + '"] .c[data-card="' + x.card + '"]');
+    if (el) b.scrollTop += el.getBoundingClientRect().top - b.getBoundingClientRect().top - x.dy;
   };
   /** 声音:换了一句(或孩子的一段录音、原声)就从这一刻的偏移放那个文件;没配音的句不出声 */
   const reelVoice = (f) => {
@@ -2387,6 +2506,15 @@ __REEL_JS__
   };
   /** 录像栏上这一刻的说明(孩子屏幕上没有的):孩子的原声认成了什么、等老师多久、孩子想了多久(拍板 1:只露这两种时长)、切到别处、小课堂停在哪 */
   const reelCaption = (f) => {
+    const streak = f.miss ? '⚠ 按住说话连着 ' + f.miss.n + ' 次没发出去' : '';
+    if (f.hold) {
+      const how = f.hold.diag ? (f.hold.phase === 'wait' ? ' · 话筒没开' : f.hold.lv && /^0+$/.test(f.hold.lv) ? ' · 话筒没声音' : '') : f.hold.text ? ' · 认到「' + f.hold.text + '」' : '';
+      return streak ? { text: streak + ' · 第 ' + f.miss.k + ' 次' + how, cls: 'miss' } : { text: '🎙 孩子按住说话' + how, cls: 'kid' };
+    }
+    if (streak) return { text: streak, cls: 'miss' };
+    if (f.unclear) return { text: '🎙 没发出去:没认出字', cls: 'miss' };
+    if (f.typing) return { text: '⌨ 孩子在打字', cls: 'kid' };
+    if (f.photoScreen) return { text: '📷 发照片屏' + ({ crop: ' · 在裁剪', pen: ' · 在圈画', rot: ' · 转了一下' }[f.photoScreen.tool] || ''), cls: 'kid' };
     if (f.lecture) return { text: (f.lecture.playing ? '▷ 在看小课堂 ' : '⏸ 小课堂停在 ') + lcClock(f.lecture.pos) + (f.gap ? ' · 停了 ' + reelDuration(f.gap.ms) : ''), cls: f.lecture.playing ? 'line' : 'gap' };
     if (f.clip && f.clip.kind === 'voice') return { text: '🎙 孩子按住说话 · 认成「' + (f.clip.text || '') + '」', cls: 'kid' };
     if (f.clip) return { text: '🎙 孩子的录音', cls: 'kid' };
@@ -2414,7 +2542,7 @@ __REEL_JS__
     const t = R.clock.toWall(R.p);
     const f = reelFrameAt(R.d.reel, t);
     R.f = f; R.t = t;
-    reelDraw(f); reelKidSub(f, t); reelHold(f); reelVoice(f); reelLecture(f);
+    reelDraw(f); reelScroll(f, t); reelKidSub(f, t); reelHold(f); reelInput(f); reelKbd(f); reelPs(f); reelVoice(f); reelLecture(f);
     if (R.playing && R.p >= R.clock.total) reelPlay(false);
   };
   const reelPlay = (on) => {
@@ -2424,15 +2552,17 @@ __REEL_JS__
     clearInterval(R.timer); R.timer = on ? setInterval(reelTick, 100) : null;
     reelTick();
   };
-  const reelSeek = (p) => { const R = S.reel; if (!R) return; R.seeking = false; R.p = Math.max(0, Math.min(R.clock.total, p)); R.last = performance.now(); R.voice = null; R.follow = true; reelTick(); };
+  const reelSeek = (p) => { const R = S.reel; if (!R) return; R.seeking = false; R.p = Math.max(0, Math.min(R.clock.total, p)); R.last = performance.now(); R.voice = null; R.follow = true; R.scrollAt = undefined; reelTick(); };
   /** 孩子屏幕的把手:录像栏只经它说话(家长页上隔着 iframe 直接调) */
   const reelApi = {
-    get: () => { const R = S.reel; if (!R) return null; return { p: R.p, total: R.clock.total, wall: R.t || R.clock.toWall(R.p), playing: R.playing, speed: R.speed, real: R.real, precise: R.d.reel.precise, cap: R.f ? reelCaption(R.f) : { text: '', cls: '' } }; },
-    marks: () => { const R = S.reel; return R ? R.d.reel.marks.map((m) => ({ kind: m.kind, label: m.label, at: m.at, p: R.clock.toPlay(m.at) })) : []; },
+    get: () => { const R = S.reel; if (!R) return null; return { p: R.p, total: R.clock.total, wall: R.t || R.clock.toWall(R.p), playing: R.playing, speed: R.speed, real: R.real, precise: R.d.reel.precise, cap: R.f ? reelCaption(R.f) : { text: '', cls: '' }, size: R.f && R.f.view ? [R.f.view.w, R.f.view.h] : R.size, stale: R.d.reel.views.some((v) => v.v && v.v !== PAGE_V) }; },
+    marks: () => { const R = S.reel; return R ? R.d.reel.marks.map((m) => ({ kind: m.kind, label: m.label, at: m.at, p: R.clock.toPlay(m.at), ...(m.to ? { pTo: R.clock.toPlay(m.to) } : {}) })) : []; },
     play: (on) => reelPlay(on),
     seek: (p) => reelSeek(p),
+    /** 跳到墙钟的某一刻(调试、探针) */
+    seekAt: (w) => { const R = S.reel; if (R) reelSeek(R.clock.toPlay(w)); },
     /** 拖着进度条:不出声,画面跟着;松手走 seek */
-    drag: (p) => { const R = S.reel; if (!R) return; R.seeking = true; R.p = Math.max(0, Math.min(R.clock.total, p)); R.voice = null; R.follow = true; reelTick(); },
+    drag: (p) => { const R = S.reel; if (!R) return; R.seeking = true; R.p = Math.max(0, Math.min(R.clock.total, p)); R.voice = null; R.follow = true; R.scrollAt = undefined; reelTick(); },
     real: (on) => { const R = S.reel; if (!R) return; R.real = on; reelSetClock(); R.voice = null; reelTick(); },
     speed: (x) => { const R = S.reel; if (!R) return; R.speed = x; audioEl.defaultPlaybackRate = x; audioEl.playbackRate = x; },
     stop: () => reelStop(),
@@ -2449,7 +2579,10 @@ __REEL_JS__
     $('#c-av').replaceWith(Object.assign(avatarEl(S.tutor), { id: 'c-av' }));
     $('#tutor').classList.add('on');
     renderSpk(); renderBar(); setBar('idle');
-    S.reel = { d, entries: sectionsFromMessages(d.kid), said: kidSaid(d.kid), size: REEL_SIZES[d.device] || REEL_SIZES['tablet-landscape'], real: false, speed: 1, p: 0, playing: false, seeking: false, last: 0, key: '', painted: {}, now: '', voice: null, timer: null, clock: null, seen: 0, follow: false, pend: null, subKey: '', hold: null, f: null, t: 0 };
+    const v0 = d.reel.views[0];
+    // 示意的键盘(打字时垫在底下):三排字母一排空格,不画真键盘
+    document.body.append(h('div', { id: 'rl-kbd' }, ...['qwertyuiop', 'asdfghjkl', 'zxcvbnm', ' '].map((r) => h('div', { class: 'r' }, ...[...r].map((k) => h('span', { class: k === ' ' ? 'sp' : '' }, k === ' ' ? '拼音' : k))))));
+    S.reel = { d, entries: sectionsFromMessages(d.kid), said: kidSaid(d.kid), size: v0 ? [v0.w, v0.h] : REEL_SIZES[d.device] || REEL_SIZES['tablet-landscape'], barsH: holdBars.map((b) => b.style.height), kb: 0, inKey: '', psKey: '', scrollAt: undefined, real: false, speed: 1, p: 0, playing: false, seeking: false, last: 0, key: '', painted: {}, now: '', voice: null, timer: null, clock: null, seen: 0, follow: false, pend: null, subKey: '', hold: null, f: null, t: 0 };
     reelSetClock();
     // ?at=时:分:秒 停在那一刻(调试、截图);那天的日期从录像起点取
     const at = /^(\\d{1,2}):(\\d{2})(?::(\\d{2}))?$/.exec(debug.get('at') || '');
@@ -2457,7 +2590,7 @@ __REEL_JS__
     renderHeader();
     reelTick();
     window.cotutorReel = reelApi;
-    if (host) host.cotutorReelReady(reelApi, { size: S.reel.size, device: d.device });
+    if (host) host.cotutorReelReady(reelApi, { size: S.reel.size });
     else { $('#rl-x').hidden = true; dockOpen(reelApi); }
   };
 
@@ -2468,13 +2601,17 @@ __REEL_JS__
     if (st.real !== dockReal) {
       dockReal = st.real;
       $('#rl-seek').max = String(Math.max(1, Math.round(st.total)));
-      $('#rl-marks').replaceChildren(...RE.marks().map((m) => h('i', { class: m.kind, title: reelHms(m.at) + ' ' + m.label, style: 'left:' + (100 * m.p / Math.max(1, st.total)).toFixed(2) + '%', on: { click: () => { if (RE) RE.seek(m.p); } } })));
+      const pct = (p) => (100 * p / Math.max(1, st.total)).toFixed(2) + '%';
+      $('#rl-marks').replaceChildren(...RE.marks().map((m) => h('i', { class: m.kind, title: reelHms(m.at) + ' ' + m.label, style: 'left:' + pct(m.p) + (m.pTo !== undefined ? ';width:calc(' + pct(m.pTo - m.p) + ' + 6px)' : ''), on: { click: () => { if (RE) RE.seek(m.p); } } })));
       $('#rl-skip').checked = !st.real;
     }
     if (!dockDragging) $('#rl-seek').value = String(Math.round(st.p));
     $('#rl-clock').textContent = reelHms(st.wall);
     if (st.playing !== dockPlaying) { dockPlaying = st.playing; $('#rl-play').innerHTML = st.playing ? ICON.pause : ICON.play; $('#rl-play').setAttribute('aria-label', st.playing ? '暂停' : '播放'); }
     const cap = $('#rl-cap'); if (cap.textContent !== st.cap.text) { cap.textContent = st.cap.text; cap.className = st.cap.cls; }
+    $('#rl-ver').hidden = !st.stale;
+    // 孩子转了屏、换了尺寸:上半那块照这一刻的尺寸重缩(家长页这头;直接打开孩子屏幕时没有)
+    if (!REEL && st.size && reelSize && (st.size[0] !== reelSize[0] || st.size[1] !== reelSize[1])) { reelSize = st.size; reelFit(); }
   };
   const dockOpen = (api) => {
     RE = api; dockReal = null; dockPlaying = null; dockDragging = false;
@@ -2520,7 +2657,7 @@ __REEL_JS__
     const fr = $('#rl-frame');
     window.cotutorReelReady = (api, info) => {
       if (!S.reel) return;
-      reelSize = REEL_SIZES[info && info.device] ? REEL_SIZES[info.device] : info && info.size ? info.size : REEL_SIZES['tablet-landscape'];
+      reelSize = info && info.size ? info.size : REEL_SIZES['tablet-landscape'];
       dockOpen(api); reelFit(); api.play(true);
     };
     window.cotutorReelFail = () => { reelClose(); toast('这个话题没有录像'); };
@@ -2534,6 +2671,7 @@ __REEL_JS__
   $('#rl-play').addEventListener('click', () => { if (RE) { const st = RE.get(); if (st) RE.play(!st.playing); } });
   $('#rl-x').addEventListener('click', reelClose);
   $('#rl-tag').addEventListener('click', () => toast(REEL_HINT));
+  $('#rl-ver').addEventListener('click', () => toast('这段是旧版孩子端录的,现在用新版的样子画:板上有什么、孩子做了什么照旧,样子可能和孩子当时看到的不一样'));
   $('#rl-skip').addEventListener('change', (e) => { if (RE) RE.real(!e.target.checked); });
   $('#rl-speed').addEventListener('click', (e) => { if (!RE) return; const st = RE.get(); const x = REEL_SPEEDS[(REEL_SPEEDS.indexOf(st.speed) + 1) % REEL_SPEEDS.length]; RE.speed(x); e.currentTarget.textContent = x + '×'; });
   // 拖的时候不出声,松手从那一刻接着放
@@ -2546,13 +2684,16 @@ __REEL_JS__
   $('#go').innerHTML = ICON.send;
   $('#ic-album').innerHTML = ICON.album; $('#ic-cam2').innerHTML = ICON.camera;
   const setBar = (mode) => {
+    if (mode === 'typing' && S.bar !== 'typing') typeRec('focus');
+    else if (mode !== 'typing' && S.bar === 'typing') typeRec('blur');
     S.bar = mode;
     $('#ph').hidden = mode === 'typing'; $('#typed').hidden = mode !== 'typing'; $('#go').hidden = mode !== 'typing';
     $('#hold').classList.toggle('on', mode === 'holding');
     if (mode === 'typing') $('#typed').focus();
   };
   const mid = $('#mid'), typed = $('#typed');
-  $('#go').addEventListener('click', () => { const t = typed.value; typed.value = ''; setBar(barNext(S.bar, 'sent')); send(t); });
+  $('#go').addEventListener('click', () => { const t = typed.value; typeHeard.put(t); typeRec('send'); typed.value = ''; setBar(barNext(S.bar, 'sent')); send(t); });
+  typed.addEventListener('input', () => typeHeard.put(typed.value));
   typed.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#go').click(); } });
   typed.addEventListener('blur', () => { if (!typed.value.trim()) setBar(barNext(S.bar, 'blur')); });
   $('#plus').addEventListener('click', () => $('#sheet').classList.add('on'));
@@ -2640,7 +2781,7 @@ __REEL_JS__
     if (!srOk()) return null;
     // 诊断:每次按住记一行事件码 + 距按下的毫秒(不记字、不记声音),停了发给 /api/kid/voice-diag;真机上出错是静默的,只有这份能说清哪一步断了
     const t0 = Date.now(), ev = [], mark = (k, v) => ev.push(v === undefined ? [k, Date.now() - t0] : [k, Date.now() - t0, v]);
-    const diag = { where, standalone: Boolean(navigator.standalone), wasPlaying: !audioEl.paused, ua: navigator.userAgent, peak: -1, ev };
+    const diag = { where, tutor: S.tutor ? S.tutor.name : null, thread: S.newThread ? null : S.thread, standalone: Boolean(navigator.standalone), wasPlaying: !audioEl.paused, ua: navigator.userAgent, peak: -1, ev };
     const report = () => { try { fetch('/api/kid/voice-diag', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(diag), keepalive: true }).catch(() => {}); } catch {} };
     const hd = { live: { len: 0, lastAt: 0, done: false }, held: true, diagMark: mark, r: null, voice: null };
     // 原声(《家长录像设计.md》拍板 4):识别的同时在常开的那一路上录;收尾(close)时停,hd.voice 给 {blob, seconds} 或 null(没录上、放弃了)
@@ -2741,21 +2882,23 @@ __REEL_JS__
   let phTimer = 0;
   // 真音量:25 根条往左滚;没有麦克风那一路(老浏览器、没授权)就还是原来的假波形
   const holdBars = [...document.querySelectorAll('#hold .w i')], holdLv = new Array(25).fill(0);
-  const holdLevel = (v) => { $('#hold').classList.add('real'); holdLv.shift(); holdLv.push(v); for (let i = 0; i < 25; i++) holdBars[i].style.height = Math.round(4 + holdLv[i] * 24) + 'px'; };
+  const holdLevel = (v) => { holdLvRec(v); $('#hold').classList.add('real'); holdLv.shift(); holdLv.push(v); for (let i = 0; i < 25; i++) holdBars[i].style.height = Math.round(4 + holdLv[i] * 24) + 'px'; };
   // 按住时认出的字:浮层上跟着出,太长只留最后 60 个字
   const holdText = (t) => { $('#hold .t').textContent = t.length > 60 ? '…' + t.slice(-60) : t; };
   const startRec = () => {
     finalText = ''; hold.audio = false; hold.tail = false; renderHold(); holdText('');
-    rec = listen((t) => { finalText = t; holdText(t); }, (dead) => {
+    holdRec('down');
+    rec = listen((t) => { finalText = t; holdText(t); holdHeard.put(t); }, (dead) => {
       const t = finalText; const voice = rec ? rec.voice : null; rec = null; hold.tail = false; holdText('');
+      holdEnd(dead ? 'dead' : t.trim() ? 'sent' : 'unclear');
       setBar(barNext(S.bar, 'holdEnd'));
       // 识别一起就断:这一下当成点了一下,直接打字
       if (dead) { if (press) { clearTimeout(press.timer); press = null; } setBar(barNext(S.bar, 'tap')); return; }
       // 原声停录是异步的(onstop):等它最多 1.5 秒,没等到就只发字
       if (t.trim()) Promise.race([voice || Promise.resolve(null), new Promise((r) => setTimeout(() => r(null), 1500))]).then((v) => send(t, v ? { voice: v } : {}));
       else { $('#ph').textContent = '没听清,再按住说一次'; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = PH_IDLE(); }, 2500); }
-    }, 'bar', () => { hold.audio = true; renderHold(); }, holdLevel);
-    if (!rec) setBar(barNext(S.bar, 'holdEnd'));
+    }, 'bar', () => { hold.audio = true; renderHold(); holdRec('audio'); }, holdLevel);
+    if (!rec) { holdEnd('dead'); setBar(barNext(S.bar, 'holdEnd')); }
   };
   mid.addEventListener('pointerdown', (e) => {
     if (S.bar === 'typing') return;
@@ -2764,15 +2907,15 @@ __REEL_JS__
     press = { y: e.clientY, cancelled: false, held: false, timer: setTimeout(() => { if (!press || !srOk()) return; press.held = true; setBar(barNext(S.bar, 'holdStart')); dispatch({ type: 'halt' }); startRec(); }, 150) };
     try { mid.setPointerCapture(e.pointerId); } catch {}
   });
-  mid.addEventListener('pointermove', (e) => { if (press && press.held) { const up = press.y - e.clientY > 60; if (up !== press.cancelled) { press.cancelled = up; renderHold(); } } });
+  mid.addEventListener('pointermove', (e) => { if (press && press.held) { const up = press.y - e.clientY > 60; if (up !== press.cancelled) { press.cancelled = up; renderHold(); holdRec('slide', { on: up }); } } });
   const release = () => {
     if (!press) return;
     clearTimeout(press.timer);
     const p = press; press = null;
     if (!p.held) { setBar(barNext(S.bar, 'tap')); return; }
-    if (p.cancelled || !rec) { setBar(barNext(S.bar, 'holdCancel')); if (rec) { const r = rec; rec = null; r.abort(); } return; }
+    if (p.cancelled || !rec) { holdEnd('cancel'); setBar(barNext(S.bar, 'holdCancel')); if (rec) { const r = rec; rec = null; r.abort(); } return; }
     // 松手发送:浮层留到识别停下(onEnd 里收),这段时间在收尾
-    hold.tail = true; renderHold(); settle(rec);
+    holdRec('up'); hold.tail = true; renderHold(); settle(rec);
   };
   mid.addEventListener('pointerup', release);
   mid.addEventListener('pointercancel', release);
@@ -2894,6 +3037,7 @@ __REEL_JS__
     if (!items.length || !S.tutor) return;
     psReset(); PS.items = items;
     psEl.classList.add('on');
+    playRec({ k: 'ps', e: 'open' });
     psMode('view');
   };
   // 拿起相机老师就停(同点卡开舞台);拍完 / 选完进发照片屏。相册最多 4 张,多的只取前 4 张
@@ -2901,9 +3045,9 @@ __REEL_JS__
     f.addEventListener('click', () => dispatch({ type: 'stageOpen' }));
     f.addEventListener('change', () => { $('#sheet').classList.remove('on'); const files = Array.from(f.files || []).slice(0, f.multiple ? PHOTO_ALBUM_MAX : 1); f.value = ''; psOpen(files); });
   }
-  $('#ps-t-crop').addEventListener('click', () => psMode('crop'));
-  $('#ps-t-pen').addEventListener('click', () => psMode('pen'));
-  $('#ps-t-rot').addEventListener('click', () => { psEdit(rotateEdit(psCur().edit)); psRender(); });
+  $('#ps-t-crop').addEventListener('click', () => { playRec({ k: 'ps', e: 'tool', tool: 'crop' }); psMode('crop'); });
+  $('#ps-t-pen').addEventListener('click', () => { playRec({ k: 'ps', e: 'tool', tool: 'pen' }); psMode('pen'); });
+  $('#ps-t-rot').addEventListener('click', () => { playRec({ k: 'ps', e: 'tool', tool: 'rot' }); psEdit(rotateEdit(psCur().edit)); psRender(); });
   $('#ps-c-full').addEventListener('click', () => { PS.work = { x: 0, y: 0, w: PS.R.w, h: PS.R.h }; psCropFrame(); });
   $('#ps-c-ok').addEventListener('click', () => { const e = setCrop(psCur().edit, PS.work); if (JSON.stringify(e.crop) !== JSON.stringify(psCur().edit.crop)) psEdit(e); psMode('view'); });
   $('#ps-p-undo').addEventListener('click', () => { const e = psCur().edit; psEdit({ ...e, strokes: e.strokes.slice(0, -1) }); psUi(); psRender(); });
@@ -2961,7 +3105,7 @@ __REEL_JS__
   psTyped.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); psTyped.blur(); } });
   psTyped.addEventListener('blur', () => { PS.text = psTyped.value.trim(); psTyped.hidden = true; psUi(); });
   $('#ps-clear').addEventListener('click', () => { PS.text = ''; psUi(); });
-  $('#ps-cancel').addEventListener('click', () => { if (!PS.busy) psClose(); });
+  $('#ps-cancel').addEventListener('click', () => { if (!PS.busy) { playRec({ k: 'ps', e: 'cancel' }); psClose(); } });
   // 发:逐张导出(转 → 裁 → 画 → 缩到长边 PHOTO_MAX_SIDE)上传拿 path,全拿到再发一条 {text, photos};传不上去屏不关、编辑留着,再点一次只传没传上的
   $('#ps-go').addEventListener('click', async () => {
     if (PS.busy || !PS.items.length) return;
@@ -2977,6 +3121,7 @@ __REEL_JS__
       return;
     }
     const photos = PS.items.map((it) => it.path), text = PS.text;
+    playRec({ k: 'ps', e: 'send' });
     psClose();
     if (S.tutor && S.tutor.name === name) send(text, { photos });
   });
@@ -3057,7 +3202,8 @@ __REEL_JS__
 </html>
 `;
 
-export const KID_PAGE = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_ADV__', () => JSON.stringify(letterAdvances())).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel'));
+const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_ADV__', () => JSON.stringify(letterAdvances())).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel'));
+export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 
 export interface KidPageMode {
   /** 家长板书页(《家长板书页设计.md》):数据走家长接口、只读、旁注;自己的 manifest */

@@ -16,7 +16,7 @@ import { conversationFiles, currentThread, lastJobOf, localDate, threads } from 
 import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
-import { buildReel, playRecordOk, reelCardTook, type PlayRecord, type Reel } from '../lib/reel.ts';
+import { buildReel, playRecordOk, reelCardTook, type PlayRecord, type Reel, type ReelDiag } from '../lib/reel.ts';
 import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
 import type { BoardCard, Device } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
@@ -324,7 +324,8 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const jobs = new Set(mine.map((m) => m.job));
   const cards = Object.fromEntries(Object.entries(states).filter(([job]) => jobs.has(job)));
   const plays = await readPlays(ctx.ws, tutor, date, jobs);
-  const reel = buildReel({ messages: mine, events, cards, durations, tutor, now: ctx.now().getTime(), plays });
+  const diag = plays.some((r) => r.k === 'hold') ? [] : await readDiag(ctx, tutor, date, thread);
+  const reel = buildReel({ messages: mine, events, cards, durations, tutor, now: ctx.now().getTime(), plays, diag });
   if (!reel) return null;
   const day = await parentDay(ctx, tutor, date);
   const kid = await kidDay(ctx, tutor, date);
@@ -332,6 +333,50 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const t = ctx.ws.config.tutors[tutor];
   const face = { name: tutor, display: t?.display ?? tutor, avatar: t?.avatar ?? null, subject: t?.subject ?? null };
   return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread), kid: kid.messages.filter((m) => m.thread === thread), device, face };
+}
+
+/**
+ * 老话题的按住说话(还没有 hold 实录,《家长录像设计.md》拍板 10):.cotutor/voice-diag.jsonl 里这一天输入条上的那几次,归到这个话题。
+ * 新的行带 tutor / thread;老的按「那一刻最近开始的话题」算(各位老师一起比:孩子同一时刻只在一个话题里)。结果照孩子当时看到的:
+ * 出了字 = 发了;abort() = 上滑取消;sr-dead = 识别一起就断;其余 = 没听清
+ */
+async function readDiag(ctx: AppContext, tutor: string, date: string, thread: string): Promise<ReelDiag[]> {
+  const text = await readFile(join(ctx.ws.root, '.cotutor', 'voice-diag.jsonl'), 'utf8').catch(() => '');
+  if (!text) return [];
+  const starts: { tutor: string; thread: string; at: number }[] = [];
+  for (const name of Object.keys(ctx.ws.config.tutors)) {
+    const idx = await readIndex(ctx.ws, name, date).catch(() => null);
+    if (!idx) continue;
+    const ths = threads(idx.messages);
+    const seen = new Set<string>();
+    idx.messages.forEach((m, i) => {
+      if (seen.has(ths[i])) return;
+      seen.add(ths[i]);
+      const at = Date.parse(m.timing?.startedAt ?? '') || Date.parse(m.at);
+      if (Number.isFinite(at)) starts.push({ tutor: name, thread: ths[i], at });
+    });
+  }
+  const out: ReelDiag[] = [];
+  for (const line of text.split('\n')) {
+    let row: { at?: unknown; where?: unknown; tutor?: unknown; thread?: unknown; peak?: unknown; ev?: unknown };
+    try { row = JSON.parse(line) as typeof row; } catch { continue; }
+    if (row.where !== 'bar' || typeof row.at !== 'string' || !Array.isArray(row.ev)) continue;
+    const at = Date.parse(row.at);
+    if (!Number.isFinite(at) || localDate(new Date(at)) !== date) continue;
+    if (typeof row.tutor === 'string' && typeof row.thread === 'string') { if (row.tutor !== tutor || row.thread !== thread) continue; }
+    else {
+      const mine = starts.filter((x) => x.at <= at).sort((a, b) => b.at - a.at)[0];
+      if (!mine || mine.tutor !== tutor || mine.thread !== thread) continue;
+    }
+    const ev = row.ev.filter((e): e is [string, number, unknown?] => Array.isArray(e) && typeof e[0] === 'string' && typeof e[1] === 'number');
+    const end = ev.find((e) => e[0] === 'end');
+    const ms = end ? end[1] : Math.max(0, ...ev.map((e) => e[1]));
+    const len = end && typeof end[2] === 'number' ? end[2] : 0;
+    const audio = ev.find((e) => e[0] === 'audiostart');
+    const result = len > 0 ? 'sent' : ev.some((e) => e[0] === 'abort()') ? 'cancel' : ev.some((e) => e[0] === 'sr-dead') ? 'dead' : 'unclear';
+    out.push({ at, ms, audioMs: audio ? audio[1] : null, result, peak: typeof row.peak === 'number' ? row.peak : -1 });
+  }
+  return out;
 }
 
 /** 家长板书页的清单(《家长板书页设计.md》§2.2):这一天每位有脸的老师几轮、几个话题、停在哪 */
@@ -647,7 +692,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           if (!playRecordOk(x) || x.k === 'card') continue;
           const at = Math.round(x.at + skew);
           if (at > now + 60_000 || at < now - 86_400_000) continue;
-          if ((x.k === 'play' && x.job !== null && !jobs.has(x.job)) || (x.k === 'stage' && !jobs.has(x.job))) continue;
+          if ((x.k === 'play' && x.job !== null && !jobs.has(x.job)) || ((x.k === 'stage' || x.k === 'scroll') && !jobs.has(x.job))) continue;
           rows.push(JSON.stringify({ ...x, at }));
         }
         if (rows.length) await appendFile(conversationFiles(ws.dirs.conversations, tutor, date).play(last), `${rows.join('\n')}\n`).catch(() => {});

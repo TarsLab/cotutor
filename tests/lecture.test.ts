@@ -57,11 +57,16 @@ const s3 = clock.segments[2];
     cpSync(dir, join(tmp, 'po'), { recursive: true });
     const sj = JSON.parse(readFileSync(join(dir, 'scene.json'), 'utf8')) as Record<string, unknown>;
     // 第一个元素挪 1 像素:画面改过、没重烤,bake.json 就不算数
-    writeFileSync(join(tmp, 'po', 'scene.json'), JSON.stringify({ ...sj, skeletons: (sj.skeletons as { x: number }[]).map((e, i) => (i ? e : { ...e, x: e.x + 1 })), groups: [{ id: 'loose', label: '散的 3 根小棒', elementIds: ['s-1', 's-2', 's-3'] }, { bad: true }], bounds: { q: [0, 0, 1, 1] } }));
+    writeFileSync(join(tmp, 'po', 'scene.json'), JSON.stringify({ ...sj, skeletons: (sj.skeletons as { x: number }[]).map((e, i) => (i ? e : { ...e, x: e.x + 1 })), groups: [{ id: 'loose', label: '散的 3 根小棒', elementIds: ['s-1', 's-2', 's-3'] }], bounds: { q: [0, 0, 1, 1] } }));
     const mj = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as Record<string, unknown>;
     writeFileSync(join(tmp, 'po', 'manifest.json'), JSON.stringify({ ...mj, blocks: [{ id: 'k', elementIds: ['q'], text: '十三减八', audioSrc: 'a.mp3' }] }));
     const l = await readLecture({ dirs: { bundles: tmp } }, 'po');
-    check('readLecture:groups(形状不对的丢掉)、bounds 从 scene.json,blocks 从 manifest.json;画面改过 → 烤的那份不算数', l?.picture.groups?.length === 1 && l.picture.blocks?.[0]?.text === '十三减八' && JSON.stringify(l.picture.bounds?.q) === '[0,0,1,1]' && l.baked === false, JSON.stringify(l?.picture));
+    check('readLecture:groups、bounds 从 scene.json,blocks 从 manifest.json;画面改过 → 烤的那份不算数', l?.picture.groups?.length === 1 && l.picture.blocks?.[0]?.text === '十三减八' && JSON.stringify(l.picture.bounds?.q) === '[0,0,1,1]' && l.baked === false, JSON.stringify(l?.picture));
+    // 形状不对的课包(drawtell 的 parseBundle 校验不过):不读,首页检查说为什么
+    writeFileSync(join(tmp, 'po', 'scene.json'), JSON.stringify({ ...sj, groups: [{ bad: true }] }));
+    const { inspectLecture: inspect } = await import('../src/server/lecture.ts');
+    const broken = await inspect({ dirs: { bundles: tmp } }, 'po');
+    check('课包不合契约:读不出来,problems 说哪里不对', broken.lecture === null && broken.problems.length === 1 && broken.problems[0].includes('bundles/po/') && broken.problems[0].includes('groups'), JSON.stringify(broken.problems));
     // 服务端出缩略图(frame.svg):烤过且画面对得上才出
     const { lectureFrameSvg, parseRing, parseSvgMs } = await import('../src/server/lecture.ts');
     const fresh = await readLecture({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8');

@@ -8,8 +8,8 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { BUNDLE_ID_RE } from '../cards/kind.ts';
 import { mp4DurationMs } from './mp4.ts';
-import { LECTURE_FILE, LECTURE_VIDEO, clockLabel, describeMark, lectureAt, lectureClock, lectureLines, lectureRange, parseLectureDoc, videoClock, type LectureClock, type LectureMark, type LecturePicture, type LectureSkeleton, type LectureStep } from '../lib/lecture.ts';
-import { bakeMatches, elementsAtSvgTime, renderFrameSvg } from 'drawtell/core';
+import { LECTURE_FILE, LECTURE_VIDEO, clockLabel, describeMark, lectureAt, lectureClock, lectureLines, lectureRange, parseLectureDoc, videoClock, type LectureClock, type LectureMark, type LecturePicture } from '../lib/lecture.ts';
+import { bakeMatches, BundleError, elementsAtSvgTime, parseBundle, renderFrameSvg, type LessonBundle } from 'drawtell/core';
 import type { ContextPack } from '../schema/index.ts';
 import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
 
@@ -41,7 +41,8 @@ export async function readLecture(ws: LectureDirs, id: string): Promise<Lecture 
 export async function inspectLecture(ws: LectureDirs, id: string): Promise<{ lecture: Lecture | null; problems: string[] }> {
   if (!BUNDLE_ID_RE.test(id)) return { lecture: null, problems: [`${id} 不是合规的 id(小写字母、数字、连字符)`] };
   const bundle = await readBundleLecture(ws, id);
-  if (bundle) return { lecture: bundle, problems: [] };
+  if (bundle.lecture) return { lecture: bundle.lecture, problems: [] };
+  if (bundle.problem) return { lecture: null, problems: [bundle.problem] };
   if (!ws.dirs.lectures) return { lecture: null, problems: [`bundles/${id}/ 不在或读不出来(要有 scene.json 与带步的 manifest.json)`] };
   const dir = join(ws.dirs.lectures, id);
   const md = await readFile(join(dir, LECTURE_FILE), 'utf8').catch(() => null);
@@ -59,25 +60,27 @@ export async function inspectLecture(ws: LectureDirs, id: string): Promise<{ lec
   return { lecture: { id, title: doc.title, problem: '', subject: doc.subject, clock: videoClock(doc.chapters, total), picture: {}, video: true }, problems: [] };
 }
 
-async function readBundleLecture(ws: LectureDirs, id: string): Promise<Lecture | null> {
+/** 读课包:拼法与校验是 drawtell 的 parseBundle;读不出来时 problem 说为什么(不在 = 没有 problem,让给视频) */
+async function readBundleLecture(ws: LectureDirs, id: string): Promise<{ lecture: Lecture | null; problem?: string }> {
   const dir = join(ws.dirs.bundles, id);
+  let sceneJson: unknown;
+  let manifestJson: unknown;
   try {
-    const scene = JSON.parse(await readFile(join(dir, 'scene.json'), 'utf8')) as { title?: unknown; problem?: unknown; subject?: unknown; skeletons?: unknown; groups?: unknown; bounds?: unknown };
-    const manifest = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) as { steps?: unknown; blocks?: unknown };
-    if (!Array.isArray(scene.skeletons) || !Array.isArray(manifest.steps) || !manifest.steps.length) return null;
-    const clock = lectureClock(scene.skeletons as LectureSkeleton[], manifest.steps as LectureStep[]);
-    // 分组与 bounds 在 scene.json(画面),命中块在 manifest.json(交互);形状不对的丢掉,不拦
-    const listOf = <T extends { elementIds: unknown }>(v: unknown, ok: (x: Record<string, unknown>) => boolean): T[] => (Array.isArray(v) ? (v as Record<string, unknown>[]).filter((x) => x && typeof x === 'object' && Array.isArray(x.elementIds) && ok(x)) as unknown as T[] : []);
-    const picture: LecturePicture = {
-      groups: listOf(scene.groups, (g) => typeof g.id === 'string' && typeof g.label === 'string'),
-      blocks: listOf(manifest.blocks, (b) => typeof b.id === 'string' && typeof b.text === 'string'),
-      ...(scene.bounds && typeof scene.bounds === 'object' ? { bounds: scene.bounds as NonNullable<LecturePicture['bounds']> } : {}),
-    };
-    const baked = await readFile(join(dir, 'bake.json'), 'utf8').then((t) => bakeMatches(JSON.parse(t), scene), () => false);
-    return { id, title: String(scene.title ?? id), problem: String(scene.problem ?? ''), subject: typeof scene.subject === 'string' ? scene.subject : null, clock, picture, video: false, baked };
+    [sceneJson, manifestJson] = await Promise.all(['scene.json', 'manifest.json'].map(async (f) => JSON.parse(await readFile(join(dir, f), 'utf8')) as unknown));
   } catch {
-    return null;
+    return { lecture: null };
   }
+  let bundle: LessonBundle;
+  try {
+    bundle = parseBundle(sceneJson, manifestJson);
+  } catch (e) {
+    return { lecture: null, problem: `bundles/${id}/ ${e instanceof BundleError ? e.message : String(e)};用源 TS 重新 drawtell build` };
+  }
+  const { scene, picture } = bundle;
+  if (!scene.steps.length) return { lecture: null, problem: `bundles/${id}/ 的 manifest.json 没有步(小课堂要逐步讲的课包)` };
+  const clock = lectureClock(scene.skeletons, scene.steps);
+  const baked = await readFile(join(dir, 'bake.json'), 'utf8').then((t) => bakeMatches(JSON.parse(t), sceneJson as Record<string, unknown>), () => false);
+  return { lecture: { id, title: scene.title, problem: scene.problem, subject: scene.subject ?? null, clock, picture, video: false, baked } };
 }
 
 /** 孩子看完带来的:看了多久、看完没、停过几次;again = 问过以后「再看一遍」又圈了(这条只为带圈) */
@@ -205,9 +208,9 @@ export async function lectureFrameSvg(ws: Pick<LectureDirs, 'dirs'>, id: string,
     const parse = (raw: string): unknown => { try { return JSON.parse(raw); } catch { return null; } };
     let baked: unknown = parse(bakedRaw);
     if (!bakeMatches(baked, scene) && opts.bake && (await opts.bake(ws.dirs.bundles, id))) baked = parse(await readFile(join(dir, 'bake.json'), 'utf8').catch(() => ''));
-    if (!bakeMatches(baked, scene) || !Array.isArray(scene.skeletons)) return null;
-    const steps = (JSON.parse(manifestRaw) as { steps?: unknown }).steps;
-    const clock = lectureClock(scene.skeletons as LectureSkeleton[], (Array.isArray(steps) ? steps : []) as LectureStep[]);
+    if (!bakeMatches(baked, scene)) return null;
+    const { scene: parsed } = parseBundle(scene, JSON.parse(manifestRaw));
+    const clock = lectureClock(parsed.skeletons, parsed.steps);
     const [dx, dy] = baked.offset;
     const overlay = ring.length >= 2 ? `<path d="${ring.map((p, i) => `${i ? 'L' : 'M'}${p[0] + dx} ${p[1] + dy}`).join(' ')}" fill="none" stroke="#2f6fd6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` : '';
     let backgroundHref: string | undefined;

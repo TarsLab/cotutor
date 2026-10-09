@@ -2,7 +2,7 @@
  * 画板卡的舞台 = 孩子的工作台:
  * 题目条在顶(可收起);工具是自己画的六个大钮——笔 / 橡皮 / 黑红蓝 / 撤销 / 清空(要点两下),竖屏一行、横屏一列;
  * excalidraw 只当画布,它的工具栏、菜单、缩放钮全藏掉(stage.css),禁选择 / 文字 / 形状,留双指缩放。
- * 底层(课包终帧 / 行内骨架 / 一张照片)锁定、灰一档(opacity 45)、打 customData.layer = 'base';孩子画的全打 'ink',全黑(或红 / 蓝)。
+ * 底层(课包终帧 / 行内骨架 / 一张照片)锁定、灰一档(opacity 45)、打 customData.layer = 'base';课包先过 drawtell 的 prepareSkeletons,有背景图就垫在底下;孩子画的全打 'ink',全黑(或红 / 蓝)。
  * 照片做底(R5):页面给 imageUrl,这里取回来当 excalidraw 的 image 元素(files 里一张),长边落到 1200,孩子在自己的作业上圈画。
  * 状态(ink 元素)改了就回页面(防抖);页面按「给老师看」→ control submit → 导出 png(底图恢复原色)连 ink 一起交回去。
  */
@@ -10,6 +10,7 @@ import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardR
 import { Excalidraw, convertToExcalidrawElements, exportToBlob } from '@excalidraw/excalidraw';
 import type { BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
+import { isEraser, prepareSkeletons, type ChalkBackground, type ChalkSkeleton } from 'drawtell/core';
 
 export interface CanvasStageHandle {
   submit(): void;
@@ -41,17 +42,18 @@ interface Base {
   files: BinaryFiles;
 }
 
-async function loadPhoto(url: string): Promise<Base> {
+/** 一张图做底:没给 size 就按长边 PHOTO_LONG_EDGE 缩;给了(课包的背景图,场景坐标即图片像素)就按它摆,笔迹才对得上 */
+async function loadPhoto(url: string, size?: { width: number; height: number }): Promise<Base> {
   const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) throw new Error('照片取不到');
   const blob = await r.blob();
   const dataURL = await new Promise<string>((resolve, reject) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result)); fr.onerror = () => reject(new Error('照片读不出')); fr.readAsDataURL(blob); });
-  const size = await new Promise<{ w: number; h: number }>((resolve, reject) => { const im = new Image(); im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight }); im.onerror = () => reject(new Error('照片解不开')); im.src = dataURL; });
-  const k = Math.min(1, PHOTO_LONG_EDGE / Math.max(size.w, size.h, 1));
+  const natural = await new Promise<{ w: number; h: number }>((resolve, reject) => { const im = new Image(); im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight }); im.onerror = () => reject(new Error('照片解不开')); im.src = dataURL; });
+  const k = Math.min(1, PHOTO_LONG_EDGE / Math.max(natural.w, natural.h, 1));
   const fileId = 'base-photo';
   const mimeType = (blob.type || 'image/jpeg') as BinaryFiles[string]['mimeType'];
   const files: BinaryFiles = { [fileId]: { id: fileId as BinaryFiles[string]['id'], dataURL: dataURL as BinaryFiles[string]['dataURL'], mimeType, created: Date.now() } };
-  const els = convertToExcalidrawElements([{ type: 'image', fileId, x: 0, y: 0, width: Math.round(size.w * k), height: Math.round(size.h * k), customData: { layer: 'base' }, locked: true, opacity: BASE_OPACITY } as unknown as Skeleton], { regenerateIds: false });
+  const els = convertToExcalidrawElements([{ type: 'image', fileId, x: 0, y: 0, width: size?.width ?? Math.round(natural.w * k), height: size?.height ?? Math.round(natural.h * k), customData: { layer: 'base' }, locked: true, opacity: BASE_OPACITY } as unknown as Skeleton], { regenerateIds: false });
   return { elements: els as unknown as ExcalidrawElement[], files };
 }
 
@@ -60,16 +62,21 @@ async function loadBase(base: CanvasStageProps['base'], bundleUrl?: string, imag
     if (!imageUrl) throw new Error('照片底图没有地址');
     return loadPhoto(imageUrl);
   }
-  let skeletons: Record<string, unknown>[] = [];
-  if (base && 'skeletons' in base) skeletons = base.skeletons;
+  let skeletons: ChalkSkeleton[] = [];
+  let photo: Base = { elements: [], files: {} };
+  if (base && 'skeletons' in base) skeletons = base.skeletons as ChalkSkeleton[];
   else if (base && 'bundle' in base && bundleUrl) {
     const r = await fetch(`${bundleUrl}scene.json`, { cache: 'no-store' });
     if (!r.ok) throw new Error(`课包 ${base.bundle} 取不到`);
-    skeletons = ((await r.json()) as { skeletons?: Record<string, unknown>[] }).skeletons ?? [];
+    const scene = (await r.json()) as { skeletons?: ChalkSkeleton[]; background?: ChalkBackground };
+    skeletons = scene.skeletons ?? [];
+    // 课包画在照片上(background):照片先垫底,src 相对课包目录
+    if (scene.background) photo = await loadPhoto(new URL(scene.background.src, new URL(bundleUrl, location.href)).href, scene.background);
   }
-  if (!skeletons.length) return { elements: [], files: {} };
-  const els = convertToExcalidrawElements(skeletons.map((s) => ({ ...s, customData: { ...(s.customData as object | undefined), layer: 'base' }, locked: true, opacity: BASE_OPACITY })) as unknown as Skeleton[], { regenerateIds: false });
-  return { elements: els as unknown as ExcalidrawElement[], files: {} };
+  if (!skeletons.length) return photo;
+  // drawtell 的预处理:稳定 seed(抖动和小课堂里一样)、橡皮补纸色不抖;橡皮不灰一档,灰了盖不住底下那一笔
+  const els = convertToExcalidrawElements(prepareSkeletons(skeletons).map((s) => ({ ...s, customData: { ...s.customData, layer: 'base' }, locked: true, opacity: isEraser(s) ? 100 : BASE_OPACITY })) as unknown as Skeleton[], { regenerateIds: false });
+  return { elements: [...photo.elements, ...(els as unknown as ExcalidrawElement[])], files: photo.files };
 }
 
 const isBase = (el: ExcalidrawElement): boolean => (el.customData as { layer?: string } | undefined)?.layer === 'base';

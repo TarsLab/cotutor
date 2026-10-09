@@ -8,10 +8,10 @@
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 import type { ChalkScene } from '../player/types.ts';
-import { sceneSchema } from '../schema/scene.ts';
 import type { LessonManifest, SceneJson } from '../schema/lesson-manifest.ts';
 import { attachAudio } from './dub.ts';
 import { sceneBounds } from '../core/geometry.ts';
+import { parseBundle } from '../core/bundle.ts';
 import { LoadError, NotFoundError } from './load-scene.ts';
 
 /**
@@ -73,36 +73,19 @@ export async function buildBundle(scene: ChalkScene, outDir: string, sourceDir?:
   return files;
 }
 
-/** 课包 → 场景(load-bundle.ts 的 Node 版):snap 直接吃 bundle id 时用 */
+/** 课包 → 场景(拼法与校验在 core 的 parseBundle):snap 直接吃 bundle id 时用 */
 export async function readBundle(bundlesDir: string, id: string): Promise<ChalkScene> {
-  let sceneJson: Record<string, unknown>;
-  let manifest: Record<string, unknown>;
+  let sceneJson: unknown;
+  let manifest: unknown;
   try {
-    sceneJson = JSON.parse(await readFile(join(bundlesDir, id, 'scene.json'), 'utf8')) as Record<string, unknown>;
-    manifest = JSON.parse(await readFile(join(bundlesDir, id, 'manifest.json'), 'utf8')) as Record<string, unknown>;
+    sceneJson = JSON.parse(await readFile(join(bundlesDir, id, 'scene.json'), 'utf8'));
+    manifest = JSON.parse(await readFile(join(bundlesDir, id, 'manifest.json'), 'utf8'));
   } catch {
     throw new NotFoundError(`课包 '${id}' 不存在或不完整(${join(bundlesDir, id)}/ 需含 scene.json + manifest.json);先 drawtell build <scene.ts>`);
   }
-  const parsed = sceneSchema.safeParse({
-    id: sceneJson.id,
-    title: sceneJson.title,
-    problem: sceneJson.problem,
-    model: sceneJson.model,
-    template: sceneJson.template,
-    ...(sceneJson.subject != null ? { subject: sceneJson.subject } : {}),
-    ...(sceneJson.background != null ? { background: sceneJson.background } : {}),
-    skeletons: sceneJson.skeletons,
-    ...(sceneJson.groups != null ? { groups: sceneJson.groups } : {}),
-    steps: manifest.steps,
-    ...(manifest.blocks != null ? { blocks: manifest.blocks } : {}),
-    ...(manifest.subscenes != null ? { subscenes: manifest.subscenes } : {}),
-  });
-  if (!parsed.success) {
-    const first = parsed.error.issues
-      .slice(0, 3)
-      .map((i) => `${i.path.join('.')}:${i.message}`)
-      .join(';');
-    throw new LoadError(`课包 '${id}' 不符合场景契约:${first}。用源 TS 重新 drawtell build`);
+  try {
+    return parseBundle(sceneJson, manifest).scene;
+  } catch (e) {
+    throw new LoadError(`课包 '${id}' ${(e as Error).message}。用源 TS 重新 drawtell build`);
   }
-  return parsed.data;
 }

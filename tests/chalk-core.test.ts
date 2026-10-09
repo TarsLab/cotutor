@@ -6,7 +6,9 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { circleHits, clockAt, describeCircle, elementBounds, frameAt, lessonClock, measureText } from '../src/core/index.ts';
+import { assembleBundle, BundleError, circleHits, clockAt, describeCircle, elementBounds, frameAt, lessonClock, measureText, parseBundle, prepareSkeletons } from '../src/core/index.ts';
+import { seedFromId } from '../src/player/seed.ts';
+import { PAPER_COLOR } from '../src/player/pointer.ts';
 import { computeStepWindows, START_MS } from '../src/player/timeline.ts';
 import { buildBundle, readBundle } from '../src/cli/build.ts';
 import { checkScene } from '../src/cli/check.ts';
@@ -106,6 +108,15 @@ const after4 = clock.segments[3].start + 100;
     check('build:scene.json 带每个元素的 bounds(文字按字宽表)与 groups', Object.keys(built.bounds).length === sceneJson.skeletons.length && q[0] === 450 && q[1] === 22 && Math.abs(q[2] - 450 - 111.2) < 3 && q[3] === 57 && built.groups.length === 3, JSON.stringify(q));
     const back = await readBundle(tmp, 'po');
     check('readBundle:groups 往返', JSON.stringify(back.groups) === JSON.stringify(groups));
+    const sj = JSON.parse(readFileSync(join(tmp, 'po', 'scene.json'), 'utf8')) as Record<string, unknown>;
+    const mj = JSON.parse(readFileSync(join(tmp, 'po', 'manifest.json'), 'utf8')) as Record<string, unknown>;
+    const parsed = parseBundle(sj, mj);
+    check('parseBundle:场景、bounds、给 circleHits 的画面语义', parsed.scene.steps.length === steps.length && JSON.stringify(parsed.picture.groups) === JSON.stringify(groups) && parsed.picture.bounds === parsed.bounds && Object.keys(parsed.bounds ?? {}).length === sceneJson.skeletons.length);
+    const err = (f: () => unknown): string => { try { f(); return ''; } catch (e) { return e instanceof BundleError ? e.message : `不是 BundleError:${String(e)}`; } };
+    check('parseBundle:不合契约抛 BundleError,说哪里不对', /不符合场景契约:steps/.test(err(() => parseBundle(sj, { steps: 'x' }))), err(() => parseBundle(sj, { steps: 'x' })));
+    check('parseBundle:bounds 形状不对也报', /bounds/.test(err(() => parseBundle({ ...sj, bounds: { q: [1, 2] } }, mj))));
+    check('assembleBundle:只拼不校验,拼出来和 parseBundle 一样', JSON.stringify(assembleBundle(sj, mj)) === JSON.stringify(parsed));
+    check('parseBundle:不是对象就报', /scene\.json/.test(err(() => parseBundle(null, mj))));
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -113,6 +124,20 @@ const after4 = clock.segments[3].start + 100;
   check('check:group id 重复、引用不存在的元素都报', bad.includes('group-id') && bad.includes('group-ref'), JSON.stringify(bad));
   check('check:分组写对了没有 group 的报', !checkScene(scene).findings.some((f) => f.rule.startsWith('group')));
   check('schema:label 要有字', checkScene({ ...scene, skeletons: scene.skeletons.map((e, i) => (i ? e : { ...e, label: '' })) }).findings.some((f) => f.level === 'error'));
+}
+
+// ---- 交给 excalidraw 前的预处理 ----
+{
+  const els: ChalkSkeleton[] = [
+    { type: 'line', id: 'a', x: 0, y: 0 },
+    { type: 'line', id: 'b', x: 0, y: 0, seed: 7 },
+    { type: 'line', id: 'e', x: 0, y: 0, strokeWidth: 30, customData: { tool: 'eraser' } },
+    { type: 'line', id: 'e2', x: 0, y: 0, strokeColor: '#123456', customData: { tool: 'eraser' } },
+  ];
+  const [a, b, e, e2] = prepareSkeletons(els);
+  check('prepareSkeletons:没 seed 的按 id 派生,给了的不动', a.seed === seedFromId('a') && b.seed === 7);
+  check('prepareSkeletons:橡皮补纸色、不抖,作者给的颜色优先', e.strokeColor === PAPER_COLOR && e.roughness === 0 && e2.strokeColor === '#123456' && a.strokeColor === undefined);
+  check('prepareSkeletons:不改原数组', els[0].seed === undefined);
 }
 
 console.log(`${passed} 通过, ${failed} 失败`);

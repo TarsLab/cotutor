@@ -4,8 +4,7 @@
  */
 
 import { convertToExcalidrawElements, exportToSvg, getCommonBounds } from '@excalidraw/excalidraw';
-import { PAPER_COLOR } from './pointer.ts';
-import { seedFromId } from './seed.ts';
+import { prepareSkeletons } from '../core/prepare.ts';
 import type { ChalkSkeleton } from './types.ts';
 
 /**
@@ -54,17 +53,6 @@ async function correctTextWidths<T extends { type: string; width: number }>(
   }
 }
 
-function withStableSeeds(skeletons: readonly ChalkSkeleton[]): readonly ChalkSkeleton[] {
-  return skeletons.map((el) => (typeof el.seed === 'number' ? el : { ...el, seed: seedFromId(el.id) }));
-}
-
-const isEraser = (el: { customData?: unknown }): boolean => (el.customData as { tool?: unknown } | undefined)?.tool === 'eraser';
-
-/** 橡皮笔画的缺省外观:纸色、不抖(抖了盖不严);作者显式给的值优先 */
-function withEraserDefaults(skeletons: readonly ChalkSkeleton[]): readonly ChalkSkeleton[] {
-  return skeletons.map((el) => (isEraser(el) ? { strokeColor: PAPER_COLOR, roughness: 0, ...el } : el));
-}
-
 /** 静态导出的结果:SVG(没有动画)、量过字宽的元素(和 SVG 顶层的 <g> 一一对应)、场景坐标 → SVG 坐标的平移 */
 export interface StaticScene {
   svg: SVGSVGElement;
@@ -74,7 +62,7 @@ export interface StaticScene {
 
 /** skeleton → 元素 → 静态 SVG(字宽在浏览器里量过、回写后重导) */
 export async function exportStaticSvg(skeletons: readonly ChalkSkeleton[], options: { exportPadding?: number } = {}): Promise<StaticScene> {
-  const prepared = withStableSeeds(withEraserDefaults(skeletons));
+  const prepared = prepareSkeletons(skeletons);
   // regenerateIds: false —— id 是与 manifest 的对齐键
   const elements = convertToExcalidrawElements(
     prepared as unknown as Parameters<typeof convertToExcalidrawElements>[0],

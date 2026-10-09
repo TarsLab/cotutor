@@ -43,6 +43,8 @@ export interface BuiltLecture {
   baked: boolean;
   /** 画到课里的这一刻(毫秒) */
   draw(ms: number): void;
+  /** 换了画板(svg 的 viewBox 换了):舞台按新视口重新铺画框 */
+  onBoard?: () => void;
 }
 
 /** 课包 → 时钟 + 画面:烤好的用 bake.json,没烤过的在浏览器里现烤(drawtell/bake,按需装 excalidraw);画都由 drawtell/render 按 frameAt 现画 */
@@ -51,10 +53,12 @@ export async function buildLecture(bundleUrl: string): Promise<BuiltLecture> {
   const clock = lectureClock(scene.skeletons, scene.steps);
   if (!clock.segments.length) throw new Error('这份课包没有步');
   const picture = baked ?? (await (await import('drawtell/bake')).bakeSkeletons(scene.skeletons, { background: scene.background }));
-  const bg = picture.background ? new URL(picture.background.src, new URL(bundleUrl, location.href)).href : undefined;
-  const m = mountBaked(picture, { backgroundHref: bg });
+  // 背景图(换过画板的课每块板一张)相对课包目录;所有画板同一个 offset,屏幕 → 课包坐标的换算不跟着变
+  const base = new URL(bundleUrl, location.href);
+  const hooks: Pick<BuiltLecture, 'onBoard'> = {};
+  const m = mountBaked(picture, { assetHref: (src) => new URL(src, base).href, onBoard: () => hooks.onBoard?.() });
   m.paint(frameAt(clock, 0));
-  return { clock, svg: m.svg, dx: picture.offset[0], dy: picture.offset[1], baked: Boolean(baked), draw: (ms) => m.paint(frameAt(clock, ms)) };
+  return Object.assign(hooks, { clock, svg: m.svg, dx: picture.offset[0], dy: picture.offset[1], baked: Boolean(baked), draw: (ms: number) => m.paint(frameAt(clock, ms)) });
 }
 
 export interface LectureWatch {
@@ -241,6 +245,8 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
         const fit = (): void => { const hb = host.current?.getBoundingClientRect(); if (!hb) return; const k = Math.min(hb.width / vb.width, hb.height / vb.height); b.style.width = `${Math.floor(vb.width * k)}px`; b.style.height = `${Math.floor(vb.height * k)}px`; };
         fit();
         new ResizeObserver(fit).observe(host.current!);
+        // 换画板:viewBox 换了(vb 是活的),按新视口重铺
+        built.onBoard = fit;
       } else { b.style.width = '100%'; b.style.height = '100%'; }
       box.current = b;
       svgRef.current = svg;

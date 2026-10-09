@@ -213,14 +213,16 @@ export async function lectureFrameSvg(ws: Pick<LectureDirs, 'dirs'>, id: string,
     const clock = lectureClock(parsed.skeletons, parsed.steps);
     const [dx, dy] = baked.offset;
     const overlay = ring.length >= 2 ? `<path d="${ring.map((p, i) => `${i ? 'L' : 'M'}${p[0] + dx} ${p[1] + dy}`).join(' ')}" fill="none" stroke="#2f6fd6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` : '';
-    let backgroundHref: string | undefined;
-    if (baked.background) {
-      const ext = baked.background.src.split('.').pop()?.toLowerCase() ?? 'png';
+    // 背景图(换过画板的课每块板一张)内嵌成 data URI;画哪块板、淡没淡由 drawtell 按那一刻算
+    const hrefs = new Map<string, string>();
+    for (const b of (baked.boards ?? [baked]).map((x) => x.background)) {
+      if (!b || hrefs.has(b.src)) continue;
+      const ext = b.src.split('.').pop()?.toLowerCase() ?? 'png';
       const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png';
-      const data = await readFile(join(dir, baked.background.src)).catch(() => null);
-      if (data) backgroundHref = `data:${mime};base64,${data.toString('base64')}`;
+      const data = await readFile(join(dir, b.src)).catch(() => null);
+      if (data) hrefs.set(b.src, `data:${mime};base64,${data.toString('base64')}`);
     }
-    return renderFrameSvg(baked, new Map(elementsAtSvgTime(clock, svgMs).map((e) => [e.id, e.progress])), { overlay, ...(backgroundHref ? { backgroundHref } : {}) });
+    return renderFrameSvg(baked, { elements: elementsAtSvgTime(clock, svgMs) }, { overlay, assetHref: (src) => hrefs.get(src) });
   } catch {
     return null;
   }

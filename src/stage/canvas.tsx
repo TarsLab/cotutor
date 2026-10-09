@@ -2,7 +2,7 @@
  * 画板卡的舞台 = 孩子的工作台:
  * 题目条在顶(可收起);工具是自己画的六个大钮——笔 / 橡皮 / 黑红蓝 / 撤销 / 清空(要点两下),竖屏一行、横屏一列;
  * excalidraw 只当画布,它的工具栏、菜单、缩放钮全藏掉(stage.css),禁选择 / 文字 / 形状,留双指缩放。
- * 底层(课包终帧 / 行内骨架 / 一张照片)锁定、灰一档(opacity 45)、打 customData.layer = 'base';课包先过 drawtell 的 prepareSkeletons,有背景图就垫在底下;孩子画的全打 'ink',全黑(或红 / 蓝)。
+ * 底层(课包终帧 / 行内骨架 / 一张照片)锁定、灰一档(opacity 45)、打 customData.layer = 'base';课包取最后一块画板上留着的(finalBoard)、过 drawtell 的 prepareSkeletons,有背景图就垫在底下;孩子画的全打 'ink',全黑(或红 / 蓝)。
  * 照片做底(R5):页面给 imageUrl,这里取回来当 excalidraw 的 image 元素(files 里一张),长边落到 1200,孩子在自己的作业上圈画。
  * 状态(ink 元素)改了就回页面(防抖);页面按「给老师看」→ control submit → 导出 png(底图恢复原色)连 ink 一起交回去。
  */
@@ -10,7 +10,7 @@ import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardR
 import { Excalidraw, convertToExcalidrawElements, exportToBlob } from '@excalidraw/excalidraw';
 import type { BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
-import { isEraser, prepareSkeletons, type ChalkBackground, type ChalkSkeleton } from 'drawtell/core';
+import { finalBoard, isEraser, prepareSkeletons, type ChalkBackground, type ChalkSkeleton } from 'drawtell/core';
 
 export interface CanvasStageHandle {
   submit(): void;
@@ -69,9 +69,11 @@ async function loadBase(base: CanvasStageProps['base'], bundleUrl?: string, imag
     const r = await fetch(`${bundleUrl}scene.json`, { cache: 'no-store' });
     if (!r.ok) throw new Error(`课包 ${base.bundle} 取不到`);
     const scene = (await r.json()) as { skeletons?: ChalkSkeleton[]; background?: ChalkBackground };
-    skeletons = scene.skeletons ?? [];
-    // 课包画在照片上(background):照片先垫底,src 相对课包目录
-    if (scene.background) photo = await loadPhoto(new URL(scene.background.src, new URL(bundleUrl, location.href)).href, scene.background);
+    // 课讲完时画面上留着的:最后一块画板上没擦掉的(擦掉、换画板这些动作不交给 excalidraw)
+    const fin = finalBoard(scene.skeletons ?? [], scene.background);
+    skeletons = fin.skeletons;
+    // 那块画板画在照片上(background):照片先垫底,src 相对课包目录
+    if (fin.background) photo = await loadPhoto(new URL(fin.background.src, new URL(bundleUrl, location.href)).href, fin.background);
   }
   if (!skeletons.length) return photo;
   // drawtell 的预处理:稳定 seed(抖动和小课堂里一样)、橡皮补纸色不抖;橡皮不灰一档,灰了盖不住底下那一笔

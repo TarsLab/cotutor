@@ -1,8 +1,8 @@
 /**
  * cotutor.json:每个 workspace 一份,一孩一 workspace。承接 drawtell.json 的做法——
  * `paths` 角色映射 + `runtimes` 的 {run, resume} 命令模板——再加老师表与政策。
- * 字段归属铁律:老师的 .md 文件里只有 name / description / maxTurns / permissionMode / memory + 正文;
- * 人设(display / avatar / voice)、政策、开关全在这里。老师团页只改本文件,永不改链进来的定义文件。
+ * 字段归属铁律:老师的 .md 文件里只有 name / description / maxTurns / permissionMode + 正文;
+ * 人设(display / avatar / voice)、政策、开关全在这里。
  */
 import { z } from 'zod';
 
@@ -190,7 +190,7 @@ export const CotutorConfigSchema = z
       .default({ port: 5180 }),
     paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;diary / plans / profile / timetable / textbooks / reference 相对 vault(缺省 日记 / 计划 / 孩子.md / 课程表.md / 教材 / 参考),不配 vault 就相对 workspace 根;profile 只是 init 新建档案的位置,老师按 cotutor: profile 属性找;captures(作业照片)相对 workspace 根'),
     vault: VaultPolicySchema.default({ keepScore: 4 }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4)'),
-    policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 30 条 / 板书 auto / 每天 2 个动画 / 观察 10 条、计划 10 行、原文 4000 字)'),
+    policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 30 条 / 板书 auto / 观察 10 条、计划 10 行、原文 4000 字)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
     runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {systemBody} {boardFile} {prompt} {session};模型、预算、时限写在这里'),
     proxy: z

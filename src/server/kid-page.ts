@@ -1453,7 +1453,6 @@ __REEL_JS__
   const hideLecture = () => { lcShowing = null; lcFrame.hidden = true; lcFrame.src = 'about:blank'; };
   /** 「分:秒」(同 src/lib/lecture.ts 的 clockLabel) */
   const lcClock = (ms) => { const t = Math.max(0, Math.floor(ms / 1000)); const hh = Math.floor(t / 3600), mm = Math.floor((t % 3600) / 60), ss = String(t % 60).padStart(2, '0'); return hh ? hh + ':' + String(mm).padStart(2, '0') + ':' + ss : mm + ':' + ss; };
-  /** 课包的 SVG(画圈的卡):播放器装好时顺手发来;没有(刷新过、家长端)就装一个看不见的舞台(kind lecture-svg)要。课包 → Promise<{markup, dx, dy} | null> */
   /** 课包那一刻的画面(圈的卡、小课堂卡的缩略图):服务端用烤好的画面现画(frame.svg,SVG 时刻 + 圈;没烤过的服务端先烤),一张 <img> */
   const lcStill = (bundle, svgMs, path, cls) => {
     const box = h('div', { class: cls });

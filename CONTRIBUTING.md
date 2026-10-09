@@ -14,7 +14,7 @@
 - **文件是真相,页面是视图**:cotutor.json、老师文件、账本、课程表都是文本;页面只写这些文件,不藏状态。
 - **孩子端永远没有错误与评判**:过滤在服务端做(`/api/kid/*`),不靠前端隐藏。
 - **不动用户数据**:init 幂等补缺,政策文件与家规只在缺失时写;老师文件拷进 workspace 后归家长,upgrade 不覆盖改过的。
-- 两个 CLI(claude / qwen)都要能跑:老师文件只用 frontmatter 的公共子集,CLI 差异写在 cotutor.json 的预设模板里。
+- 两个 CLI(claude / qwen)都要能跑:老师文件只用 frontmatter 的公共子集,CLI 差异写在 `src/clis/<cli>.ts` 的适配器里(再接一家见 `docs/接一个 CLI.md`)。
 
 ## 提交前
 
@@ -26,4 +26,4 @@ pnpm typecheck && pnpm test && pnpm build && pnpm smoke
 
 ## 加一位出厂老师
 
-在 `agents/<name>.md` 写文件(frontmatter:name / description / maxTurns / permissionMode / memory,正文即系统提示,只写人设与这一科的做法,照现有三位有脸的老师;公共守则在 `skills/cotutor-tutor/SKILL.md`,名字要以 `-tutor` 结尾才拿得到),`src/cli/skeleton.ts` 的 `TUTOR_PRESETS` 加人设缺省,`scripts/smoke.ts` 的老师数改一下。用户侧加老师不用改仓库:`cotutor add`。
+在 `agents/<name>.md` 写文件(frontmatter:name / description / maxTurns / permissionMode,正文即系统提示,只写人设与这一科的做法,照现有几位有脸的老师,写法见 `docs/写提示词.md`;公共守则在 `skills/cotutor-tutor/SKILL.md`,名字要以 `-tutor` 结尾才拿得到),`src/cli/skeleton.ts` 的 `TUTOR_DEFAULTS` 加人设缺省。用户侧加老师不用改仓库:`cotutor add`。

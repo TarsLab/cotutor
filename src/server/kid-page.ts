@@ -107,14 +107,21 @@ const PAGE = `<!doctype html>
   .c-mark .mk-t b { font-size:22px; font-variant-numeric:tabular-nums; }
   .c-mark .x { position:absolute; right:4px; top:4px; width:40px; height:40px; border-radius:50%; border:none; background:transparent; font-size:22px; line-height:1; color:var(--dim); }
   .c-mark .mk-tx { max-width:460px; font-size:14px; line-height:1.6; color:var(--ink); }
-  /* 孩子的话(《工作流程.md》§二「一个话题一节」):答问题卡的进卡下沿的答案栏,其余在节开头右边一行;语音一行截断,点开看原话 */
-  .kid-ans { margin:6px -16px -14px; padding:9px 16px; border:0; border-top:1.5px dashed var(--tint-paper-line); border-radius:0 0 14px 14px; background:rgba(255,255,255,.55); display:flex; align-items:flex-start; gap:8px; font:inherit; font-size:16px; line-height:1.5; color:var(--ink); text-align:left; cursor:pointer; }
-  .kid-ans.wait { display:none; color:var(--dim); cursor:default; }
+  /* 孩子的话(《工作流程.md》§二「一个话题一节」,拍板 19):答问题卡的进卡下沿的答案栏,其余的就是那一节的节头(.sh.said);语音前面一个蓝底小话筒,一行截断,点字看原话 */
+  .kid-ans { margin:8px -16px -14px; padding:10px 16px 12px; border:0; border-top:1.5px dashed var(--tint-paper-line); border-radius:0 0 14px 14px; background:transparent; display:flex; align-items:center; gap:9px; font:inherit; font-size:18px; font-weight:500; line-height:1.5; color:var(--ink); text-align:left; cursor:pointer; }
+  .kid-ans.wait { display:none; font-weight:400; color:var(--dim); cursor:default; }
   body.waiting .kid-ans.wait { display:flex; }
-  .kid-say { align-self:flex-end; max-width:min(460px, 80%); min-width:0; display:flex; align-items:flex-start; gap:8px; padding:8px 16px; border:0; border-radius:18px; background:var(--line); font:inherit; font-size:16px; line-height:1.5; color:var(--ink); text-align:left; cursor:pointer; }
-  .kid-ans .ka-t, .kid-say .ka-t { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .kid-ans.open .ka-t, .kid-say.open .ka-t { white-space:normal; }
-  .ka-mic { flex:none; display:inline-flex; margin-top:3px; color:var(--dim); }
+  .sh.said { gap:10px; padding-top:14px; }
+  .sh.said::after { display:none; }
+  .sh.said .ln { flex:1 1 12px; min-width:12px; height:1px; margin-left:6px; background:var(--line); }
+  .sh.said .ka-t { font-size:22px; font-weight:600; letter-spacing:.5px; line-height:1.4; color:var(--ink); cursor:pointer; }
+  .kid-ans .ka-t, .sh.said .ka-t { flex:0 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .kid-ans .ka-t { flex-grow:1; }
+  .kid-ans.open .ka-t, .sh.said.open .ka-t { white-space:normal; }
+  .ka-mic { flex:none; width:26px; height:26px; border-radius:50%; background:var(--kid); color:var(--tint-sky-head); display:inline-flex; align-items:center; justify-content:center; }
+  .ka-mic svg { width:14px; height:14px; }
+  .sh.said .ka-mic { width:30px; height:30px; }
+  .sh.said .ka-mic svg { width:16px; height:16px; }
   .lc-still { width:100%; height:100%; }
   .lc-still img { width:100%; height:100%; display:block; object-fit:contain; }
   #rest { display:none; text-align:center; color:var(--dim); font-size:16px; padding:12px 0; }
@@ -538,7 +545,7 @@ __REEL_JS__
     stop: SVG('<rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor"></rect>', 16, 1.5),
     mute: SVG('<path d="M4 10v4h4l5 4V6L8 10z"></path><path d="M17 9l4 6M21 9l-4 6"></path>', 24),
     send: SVG('<path d="M12 19V5M5 12l7-7 7 7"></path>', 20, 2.4),
-    mic: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 15, 2),
+    micSm: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 16, 2.2),
     image: SVG('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 16l5-5 4 4 3-3 6 6"></path><circle cx="16" cy="9" r="1.5"></circle>', 36, 1.6),
     album: SVG('<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 15l5-4 4 3 3-2 6 4"></path>', 28),
     close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
@@ -1280,7 +1287,9 @@ __REEL_JS__
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   };
   // 节头:时间 · 节名;孩子问这节时拍的照片(R5)缩略图跟在后面,点小图看大图(不是再听)
-  const sectionHead = (s) => h('div', { class: 'sh', on: { click: (e) => againAt(e.currentTarget, 'all') } }, (s.at ? clock(s.at) + ' · ' : '') + sectionTitle(s), ...((s.photos || []).map((p, k) => h('img', { class: 'ph', src: '/api/kid/image?p=' + encodeURIComponent(p), alt: '', loading: 'lazy', on: { click: (e) => { e.stopPropagation(); openLb(s.photos, k); } } }))), h('button', { type: 'button', class: 'again', 'aria-label': '再听这一节', html: ICON.replay }));
+  const headPhotos = (s) => (s.photos || []).map((p, k) => h('img', { class: 'ph', src: '/api/kid/image?p=' + encodeURIComponent(p), alt: '', loading: 'lazy', on: { click: (e) => { e.stopPropagation(); openLb(s.photos, k); } } }));
+  const headAgain = () => h('button', { type: 'button', class: 'again', 'aria-label': '再听这一节', html: ICON.replay });
+  const sectionHead = (s) => h('div', { class: 'sh', on: { click: (e) => againAt(e.currentTarget, 'all') } }, (s.at ? clock(s.at) + ' · ' : '') + sectionTitle(s), ...headPhotos(s), headAgain());
   const rowEl = (n, ...kids) => h('div', { class: 'row', style: 'grid-template-columns:repeat(' + n + ',minmax(0,1fr))' }, ...kids);
   // ---- 排版(2026-10-01,《工作流程.md》§二「排版」):每张卡放进量具量一次,半宽放得下(fitsHalf)就半宽,相邻两张半宽的并一行(rowsFor) ----
   // 量具在 body 下、屏幕外:板书藏着(首页开着)时也量得出;按 端 + 半宽像素 + 卡的内容缓存,看录像每次重画不再量
@@ -1429,13 +1438,21 @@ __REEL_JS__
       hideLecture(); renderLecturePending(); renderBar(); renderSubtitle();
     } else if (m.type === 'error') { const first = S.lecture && !S.lecture.watch; hideLecture(); if (first) closeTutor(); }
   });
-  // ---- 一个话题一节(《工作流程.md》§二):孩子端节头只留板上第一节与带照片的节;孩子的话答问题卡的进卡的答案栏,其余在节开头右边一行 ----
+  // ---- 一个话题一节(《工作流程.md》§二):孩子端节头只留板上第一节、带照片的节与孩子单独说了话的节(他的话就是节头,拍板 19);孩子的话答问题卡的进卡的答案栏 ----
   const headOf = (s, i) => (PARENT || i === 0 || (s.photos && s.photos.length) ? sectionHead(s) : null);
-  const saidBody = (sd) => [sd.voice ? h('span', { class: 'ka-mic', html: ICON.mic }) : null, h('span', { class: 'ka-t' }, sd.text)];
+  const saidBody = (sd, on = {}) => [sd.voice ? h('span', { class: 'ka-mic', html: ICON.micSm }) : null, h('span', { class: 'ka-t', on }, sd.text)];
   /** 点开看原话(语音的显示是去了口头禅的),再点收起 */
-  const toggleSaid = (sd) => (e) => { e.stopPropagation(); const el = e.currentTarget; const open = el.classList.toggle('open'); el.querySelector('.ka-t').textContent = open ? sd.full : sd.text; };
-  const kidSayEl = (sd, job) => h('button', { type: 'button', class: 'kid-say', 'data-said': job, on: { click: toggleSaid(sd) } }, ...saidBody(sd));
-  const sayOf = (s) => (!PARENT && s.said && !s.saidOn ? kidSayEl(s.said, s.job) : null);
+  const toggleSaid = (sd) => (e) => { e.stopPropagation(); const el = e.currentTarget.closest('.kid-ans, .sh'); const open = el.classList.toggle('open'); el.querySelector('.ka-t').textContent = open ? sd.full : sd.text; };
+  /** 孩子单独说的那句当节头(拍板 19):话 —— 线 —— [时间] [照片] 再听;meta = false 只要话和线(刚发出去挂在板尾的、小课堂卡下面的) */
+  const saidHead = (s, sd, meta, first) => h('div', { class: 'sh said', on: meta ? { click: (e) => againAt(e.currentTarget, 'all') } : {} }, ...saidBody(sd, { click: toggleSaid(sd) }), h('span', { class: 'ln' }), ...(meta ? [first && s.at ? clock(s.at) : null, ...headPhotos(s), headAgain()] : []));
+  /** 一节开头:孩子没单独说话 → 原来的节头(只留第一节与带照片的);说了 → 他的话就是节头;看完小课堂后的第一问写在小课堂卡下面 */
+  const headEls = (s, i) => {
+    const sd = !PARENT && s.said && !s.saidOn ? s.said : null;
+    const lec = lectureHead(s);
+    if (!sd) return [headOf(s, i), ...lec];
+    if (!lec.some(Boolean)) return [saidHead(s, sd, true, i === 0)];
+    return [headOf(s, i), ...lec, saidHead(s, sd, false)];
+  };
   /** 第 j 节第 k 张卡的答案栏:孩子答了就是他的话;最后一节的问题卡还没人答、老师在等,写「等你说…」(body.waiting 时才露) */
   const ansFor = (j, k) => {
     const sec = S.sections[j];
@@ -1466,15 +1483,15 @@ __REEL_JS__
   };
   /** 刚发出去、老师还没写出这一节:不答卡的那句先挂在板尾(占位卡前) */
   const syncPendSay = () => {
-    const old = $('#board > .kid-say.pend');
+    const old = $('#board > .sh.said.pend');
     const p = S.pendSaid && !S.pendSaid.on ? S.pendSaid : null;
     if (old && (!p || old.dataset.said !== p.job)) old.remove();
     if (!p || (old && old.dataset.said === p.job)) return;
-    const el = kidSayEl(p.said, p.job); el.classList.add('pend');
+    const el = saidHead(null, p.said, false); el.classList.add('pend'); el.dataset.said = p.job;
     const g = $('#board > .wait-card');
     if (g) g.before(el); else $('#board').append(el);
   };
-  const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i, 'data-job': s.job }, headOf(s, i), ...lectureHead(s), sayOf(s), ...rowEls(s, s.cards.map((c, k) => renderCard(c, k, i, false))).map((r) => r.el));
+  const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i, 'data-job': s.job }, ...headEls(s, i), ...rowEls(s, s.cards.map((c, k) => renderCard(c, k, i, false))).map((r) => r.el));
   /**
    * 老师还在说(2026-09-13,一拍一就绪):第一拍就绪前板上只有占位卡(字幕行「我写给你看」,见 renderSubtitle);就绪了就把这条转成 S.sections 里的一节(live)开播,
    * 之后每次 poll 只铺新就绪的拍的卡(一行一张,没有排版)、把 lines 换成最新的(配音名填进来),播到头等着(thinking)的就接上。
@@ -1524,7 +1541,7 @@ __REEL_JS__
     return c;
   };
   const renderLive = (e) => {
-    if (!S.partial || S.partial.job !== e.job) { if (S.partial) S.partial.el.remove(); const idx = S.sections.length; S.partial = { job: e.job, idx, live: false, shown: 0, el: h('div', { class: 'sec', 'data-sec': idx, 'data-job': e.job }, headOf(e, idx), ...lectureHead(e), sayOf(e)) }; $('#board').append(S.partial.el); }
+    if (!S.partial || S.partial.job !== e.job) { if (S.partial) S.partial.el.remove(); const idx = S.sections.length; S.partial = { job: e.job, idx, live: false, shown: 0, el: h('div', { class: 'sec', 'data-sec': idx, 'data-job': e.job }, ...headEls(e, idx)) }; $('#board').append(S.partial.el); }
     const P = S.partial, idx = P.idx;
     // 第一句配好就开播(《工作流程.md》拍板 15):卡还是一拍就绪才铺,先出声、后出卡
     if (!(e.ready > 0) && !(e.voiced > 0)) return;

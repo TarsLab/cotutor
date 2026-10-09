@@ -247,6 +247,8 @@ check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人�
 // ---- 一个话题一节:孩子的话进问题卡(《工作流程.md》§二、拍板 17) ----
 {
   check('tidySpoken:去口头禅、省略号、句末标点后的逗号;句中的「就是 4」留着;去完是空的留原话', tidySpoken('嗯……那个,要是有七个小朋友呢?就是,呃,还是十八个贴纸') === '要是有七个小朋友呢?还是十八个贴纸' && tidySpoken('嗯……每个人两个吧,呃,两个') === '每个人两个吧,两个' && tidySpoken('答案就是 4') === '答案就是 4' && tidySpoken('那个那个我不知道') === '我不知道' && tidySpoken('嗯') === '嗯' && tidySpoken('4') === '4', tidySpoken('嗯……那个,要是有七个小朋友呢?就是,呃,还是十八个贴纸'));
+  // 语音识别给的是全角标点(iPad 上「嗯,腿的英语」板上成了「,腿的英语」)
+  check('tidySpoken:全角标点也认', tidySpoken('嗯，腿的英语') === '腿的英语' && tidySpoken('那个，腿的英语？') === '腿的英语？' && tidySpoken('嗯……每个人两个吧，呃，两个') === '每个人两个吧，两个' && tidySpoken('我想……是两个！，') === '我想，是两个！', [tidySpoken('嗯，腿的英语'), tidySpoken('那个，腿的英语？'), tidySpoken('嗯……每个人两个吧，呃，两个'), tidySpoken('我想……是两个！，')].join(' | '));
   const q = (t: string, extra: Partial<BoardCard['props']> = {}): BoardCard => ({ kind: 'text', props: { text: t, ...extra } });
   const asks: BoardSection = { cards: [q('想一想')], lines: [L('分完了吗?', { anchor: 0 })] };
   const askAdded: BoardSection = { cards: [{ kind: 'code', props: { code: 'x' } }, q('还剩几个?', { ask: true })], lines: [L('还剩几个?', { anchor: 0 })] };

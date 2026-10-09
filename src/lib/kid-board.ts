@@ -691,13 +691,13 @@ export interface BoardEntry extends BoardSection {
 }
 
 /** 口头禅:单独的语气词随处去掉;「那个」「就是」「然后」只在句首或标点旁去掉(句中的「就是 4」「那个是七」留着),连说两遍以上的随处去掉 */
-const FILLER_ANY = /[嗯呃额唔啊哦噢]+(?=[,,。.!!??、…\s]|$)|^[嗯呃额唔啊哦噢]+/gu;
-const FILLER_EDGE = /(^|[,,。.!!??、…\s])(?:那个|就是|然后)+(?=[,,。.!!??、…\s]|$)/gu;
+const FILLER_ANY = /[嗯呃额唔啊哦噢]+(?=[,，。.!！?？、…\s]|$)|^[嗯呃额唔啊哦噢]+/gu;
+const FILLER_EDGE = /(^|[,，。.!！?？、…\s])(?:那个|就是|然后)+(?=[,，。.!！?？、…\s]|$)/gu;
 /** 语音识别出来的孩子的话 → 板上显示的:去口头禅、省略号与重复的标点,去掉首尾的标点;去完是空的就留原话 */
 export function tidySpoken(text: string): string {
-  let t = text.replace(/……|…|\.{3,}/g, ',');
-  for (let k = 0; k < 3; k++) t = t.replace(/(?:那个|就是|然后){2,}/gu, ',').replace(FILLER_EDGE, '$1').replace(FILLER_ANY, '');
-  t = t.replace(/\s+/g, ' ').replace(/([,,、])\s*(?=[,,、。.!!??])/g, '').replace(/([。.!!??])\s*[,,、]+/g, '$1').replace(/[,,、]{2,}/g, ',').replace(/^[\s,,、。.!!]+|[\s,,、]+$/g, '').trim();
+  let t = text.replace(/……|…|\.{3,}/g, '，');
+  for (let k = 0; k < 3; k++) t = t.replace(/(?:那个|就是|然后){2,}/gu, '，').replace(FILLER_EDGE, '$1').replace(FILLER_ANY, '');
+  t = t.replace(/\s+/g, ' ').replace(/([,，、])\s*(?=[,，、。.!！?？])/g, '').replace(/([。.!！?？])\s*[,，、]+/g, '$1').replace(/([,，、])[,，、]+/g, '$1').replace(/^[\s,，、。.!！]+|[\s,，、]+$/g, '').trim();
   return t || text.trim();
 }
 

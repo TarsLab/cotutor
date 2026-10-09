@@ -4,7 +4,7 @@
 
 本文件只写怎么在这个仓干活,不记历史、不记拍板:
 
-- 设计在 `docs/`:《产品规划.md》定位、两个端;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡;《首页设计.md》孩子端首页与 cotutor-home;《作业照片设计.md》孩子端拍照、编辑与发;《家长板书页设计.md》家长端 `/parent`;《小课堂设计.md》做好的课(课包或视频)孩子看完再聊:播放器、圈、圈的卡、老师放课里一段;《口播老师设计.md》koubo 接进来:录音卡、评测时机、workspace jack;《看图说话设计.md》卡片小课堂(板书写法烤成视频)与语文老师一问一答带看图说话(设计稿)
+- 设计在 `docs/`:《产品规划.md》定位、两个端;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡;《首页设计.md》孩子端首页与 cotutor-home;《作业照片设计.md》孩子端拍照、编辑与发;《家长板书页设计.md》家长端 `/parent`;《小课堂设计.md》做好的课(课包或视频)孩子看完再聊:播放器、圈、圈的卡、老师放课里一段;《口播老师设计.md》koubo 接进来:录音卡、评测时机、workspace jack;《看图说话设计.md》卡片小课堂(板书写法烤成视频)与语文老师一问一答带看图说话(设计稿);《接一个 CLI.md》再接一家 agent CLI(写给开源开发者)
 - 各设计文档末尾有「拍板记录」,带日期。**带日期的决定都是可推翻的**;一条约定要在两轮以上迭代里活下来才进本文件末尾的「约定」
 - 改 `agents/`、`skills/`、`cards/` 下的 md 的字先看《写提示词.md》;自造的词查《词表.md》
 - 《开发者手册.md》怎么跑。模块的来龙去脉与真跑数据不另存,看 git log 与各设计文档
@@ -16,7 +16,7 @@
 - `skills/<name>/` 出厂技能:cotutor-tutor(有脸的老师共同的守则,应用注入上下文包)、cotutor-board(由 `cards/板书怎么写.md` 与 `cards/*/card.md` 生成)、cotutor-vault、cotutor-analyze、cotutor-tune、cotutor-home(家长在 workspace 里排首页);不再出厂的机器件列在 `src/cli/skills.ts` 的 `RETIRED_SKILLS`,upgrade 时删
 - `cards/<kind>/` 卡的协议:`card.md` 八栏(例子即测试)+ `card.css`
 - `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`
-- `src/schema/` 契约(zod,类型即文档);`src/lib/` 纯函数,离屏可测;`src/cards/` 卡的注册表
+- `src/schema/` 契约(zod,类型即文档);`src/lib/` 纯函数,离屏可测;`src/cards/` 卡的注册表;`src/clis/` 各 agent CLI 的适配器(一家一个文件,读输出、关工具、环境、出厂模板都在里面,别处只认统一事件)
 - `src/stage/` 舞台包(React,esbuild 打到 `dist/stage/`);`src/cli/` 命令;`src/server/` 服务、runner、三个页面(孩子端 `/`、家长端 `/parent`、工作台 `/dev`)、mock
 - `tests/` 一文件一子进程,零依赖 `check()`;`_fake-cli.ts` / `_fake-tts.ts` 让全流程不花钱;`fixtures/board/` 真跑样本
 
@@ -24,7 +24,7 @@
 
 - `pnpm typecheck`;`pnpm test`;`node bin/cotutor.js --help`(bin 直跑 src,Node ≥ 22.18)
 - 改了 `cards/` 下的 md、`src/lib/*-doc.ts` 跑 `pnpm run gen:skills`(不跑 skills.test 会红);改了 `src/stage/` 跑 `pnpm run build:stage`(dist 不在 git,没打包时舞台开不了)
-- 改解析器或卡先过 `tests/board.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」
+- 改解析器或卡先过 `tests/board.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」;改 `src/clis/` 先过 `tests/clis.test.ts` 与 `tests/qwen.test.ts`(假 CLI 有 qwen 方言)
 - 改孩子端播放(谁念、谁停、谁打断谁)先改《工作流程.md》的仲裁表,再改 `tests/player.test.ts`,最后改 `kid-board.ts` 的 `step`;页面只 `dispatch`
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`
 - 手动验收走 `scripts/probe-*.mjs`(CDP);舞台里的东西用 CDP 驱动,截图用 CLI `--screenshot`,手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`
@@ -42,6 +42,8 @@
 - 舞台页(`/stage/`)也装孩子端的 `theme.css`:舞台里自己的类名要带前缀(`lc-` 这种),撞上 `.pen` `.c` 之类会被那边的样式改掉(2026-10-06 `.pen` 关了 pointer-events,iPad 上圈不上)
 - 探针模拟手指用 CDP `Input.dispatchMouseEvent`,别用 `dispatchEvent`:后者直接派到元素上,不走命中判定,盖住了、pointer-events 关了都照样过
 - 课包的画面是 build 后烤好的(`bake.json`,drawtell 0.10),孩子端不跑 excalidraw 也没有 SMIL;改了画面要重烤(`drawtell bake`,snap 顺手烤),不然孩子端在浏览器里现烤、服务端后台补烤
+- qwen 老师的家是 workspace 的 `.cotutor/qwen/home/`(`QWEN_HOME`,适配器生成),手跑 qwen 复现要带上 `QWEN_HOME`、`QWEN_RUNTIME_DIR`、`QWEN_CODE_SYSTEM_SETTINGS_PATH`;别改 `HOME`。`--bare` 不认 `--core-tools`,别用
+- qwen 读会话 cwd(老师目录)外的文件要征得同意,消息走 stdin 时没人回答,进程就挂到 `--max-wall-time`;只读那轮的 `--include-directories` 由适配器展开
 - Safari 才有的毛病拿 Playwright 的 WebKit 复现(`scripts/probe-lecture-webkit.mjs`,本仓不装 playwright,借一份)
 
 ## 约定(活过多轮的)

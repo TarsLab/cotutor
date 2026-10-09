@@ -28,7 +28,7 @@
   .claude/agents/<name>.md               老师与帮手的定义(**拷贝**自 cotutor 包的出厂件,是家长的)
   .cotutor/shipped.json                  出厂 hash(机器文件),cotutor upgrade 据此分辨没改过 / 改过
   .claude/skills/                        技能(拷贝;`machine: true` 的每次覆盖)
-  .qwen/agents/  .qwen/skills/           指向 .claude/ 下同名文件的相对链(一份真相两处可见)
+  .cotutor/qwen/                         qwen 的隔离家目录与思考量配置(机器文件,qwen 适配器生成;拍板 15)
   agents/<name>/                         老师的家 = 会话 cwd
   ledger/artifacts.jsonl                 产物索引:谁、何时、出了什么、状态、费用
   captures/                              应用拍的作业照片(vault 里只存老师认出的文字)
@@ -85,7 +85,8 @@ vault(家长面,**一个孩子一个 vault**,如 ray-vault,自己是 git 仓;文
 - **找适配器**:运行时写了 `cli` 就按它,没写就按 `run[0]` 的文件名(`claude`、`qwen`)。套了一层壳脚本的运行时要写 `cli`。
 - **统一事件**:适配器把 CLI 的输出行读成同一套事件——一个字(增量)、一段整的正文、开始新的一条、工具调用、工具结果、会话 id、收尾(成没成、费用或 token)。孩子端的流式出卡、断流看门狗、家长端的「读了什么」、费用都只认这套事件,不认哪家的 JSON。
 - **工具按类别认**:应用要知道「读了哪个文件」「用没用 Skill 回读板书写法」时问适配器这是哪一类(读文件 / shell / 搜索 / 技能 / 别的),不比工具名。
-- **`{tools}` 由适配器展开**:政策 `tools` 只说带不带(孩子的话缺省不带;带照片的、记账的带只读的几样),展开成什么旗标、几个参数,是适配器的事。
+- **`{tools}` 由适配器展开**:政策 `tools` 只说带不带(孩子的话缺省不带;带照片的、记账的带只读的几样),展开成什么旗标、几个参数,是适配器的事(`{tools}` 填一串名字,独占一个参数的 `{toolArgs}` 展开成几个参数)。带的那轮,应用还告诉适配器哪些目录该读得到(workspace 根、vault),会话 cwd 是老师目录,它们在外面。
+- **核对工具表**:进程起来会报自己带了哪些工具,适配器说这轮该有哪些,多出来的记一条提醒。CLI 升版本带进新工具、关工具的旗标失效,最先在这里露出来。
 - **`{effort}` 由适配器落地**:claude 是 `--effort`;qwen 没有这个旗标,适配器按 effort 给进程选一份配置文件(环境变量),见拍板 15。
 - **费用可以没有**:有的 CLI 只报 token 不报钱。没有钱数的轮次记 token,家长端显示 token。
 
@@ -129,12 +130,13 @@ claude 与 qwen 的输出同族(Claude Code 的 stream-json),共用一个读法,
     - **出厂清单**:数学 text choice fill image lecture canvas code;语文 text read choice fill image tianzige lecture canvas;英语 text read choice fill image word lecture;口播 text read record。按老师文件与学科估的,没有真跑数据;`cotutor upgrade --config` 给老 workspace 补。
     - **没做的**:按这一轮的上下文裁(有照片才给作业照片)——写法预载在系统提示里,预热在孩子开口前就起好进程,同一话题系统提示一变缓存也作废。给 `record` 设「配了 koubo 才给」的门——koubo 的评测模板有缺省值,从配置看不出能不能用。
     没验证的:裁了以后老师出卡的样子变没变,要 ray 的真跑;清单外的卡多不多,看提醒。
-15. CLI 的差别收进适配器,接上 qwen code(2026-10-09)。起因:cotutor 要开源,开发者要能接各家 agent CLI;原来「认得某个 CLI」的知识散在十几个文件里(读输出流、写 stdin、工具名 `Read` / `Skill`、`--tools` 白名单、代理、嵌套变量、费用),而且都默认 claude 的 stream-json,qwen 碰巧同族才跑得通。改成一个 CLI 一个适配器(§6),先抽 claude、行为不变,再写 qwen。qwen code 0.25 的定法(同日真跑与读它的打包代码):
-    - **不用 `--bare`,给 qwen 一个隔离的家**:`QWEN_HOME` 指 workspace 的 `.cotutor/qwen/home/`(不改 `HOME`),里面的 `settings.json` 由 cotutor 生成。`--bare` 虽快,但它不读任何配置(思考关不掉)、不认 `--core-tools`、自带 `read_file` `edit` `run_shell_command` 一套——9 日 A/B 真跑里 qwen 在「不带工具」的轮次照样跑 shell,整理记忆那轮用 `edit` 直接改了日记。隔离的家实测每轮 2.4–3.1 秒、约 2K 输入 token,与 `--bare` 一样快;原来测到的 7 秒、26K token 来自 `~/.qwen` 里装的东西。家里要关掉它自己的记忆整理(`memory.enableManagedAutoMemory: false`),不然一轮跑完它在后台用 `write_file` 写文件。
-    - **工具**:不带 = `--core-tools read_file --exclude-tools read_file,<非核心工具>`(`system/init` 的工具表为空);只读 = `--core-tools read_file,glob,grep_search` 加 `--approval-mode default`(读 workspace 外、shell、写都被拒;`--yolo` 会放行 workspace 外的读,不用)。qwen 只读时没有 shell,要跑命令的老师(口播老师跑 koubo)在 qwen 上干不了活。每轮核对 `system/init` 的工具表,多出没想到的工具记提醒(CLI 升版本会带进新工具)。
-    - **思考量**:`QWEN_CODE_SYSTEM_SETTINGS_PATH` 每次起进程时按 effort 指一份配置(`model.reasoningEffort`):low → none(不想)、medium → low、high → high。qwen3.7-plus 只有开关,low / medium 都是关;qwen3.8 系列分档。
-    - **key 不落盘**:起 qwen 时 `DASHSCOPE_API_KEY` 先看环境变量,没有就从本机 `~/.qwen/settings.json` 的 `env` 现读,只放进子进程的环境;workspace 是 git 仓,key 永不写进去。
-    - **消息走 stdin**(`--input-format stream-json`),新话题 `--session-id` 先给定 id,续话题 `--resume`。数组旗标(`--core-tools` 之类)会把跟在后面的消息吞掉,消息不进 argv 正好避开。
-    - **收尾**:超时(退出码 55)不吐 `result`,当出错;每轮一条 `goal_state` 事件不管;使用统计默认发往阿里云,家里关掉。
-    - **出厂缺省仍是 claude**,qwen 由家长在 `cotutor.json` 里给某位老师配。`.qwen/agents/`、`.qwen/skills/` 两套链退役:老师正文与板书写法由 `{systemBody}` 递,qwen 的 skill 工具不给。
-    没验证的:qwen 的讲课质量(9 日 7 题回放里 qwen3.7-plus 把「明」讲成「名」,claude 没错);effort none 会不会像 claude 归零那样把盘算写进讲稿;关了工具后 qwen 偶尔在正文里写假的 `<tool_use>`,孩子端会不会念出来。
+15. CLI 的差别收进适配器,接上 qwen code(2026-10-09)。起因:cotutor 要开源,开发者要能接各家 agent CLI;原来「认得某个 CLI」的知识散在十几个文件里(读输出流、写 stdin、工具名 `Read` / `Skill`、`--tools` 白名单、代理、嵌套变量、费用),而且都默认 claude 的 stream-json,qwen 碰巧同族才跑得通。改成一个 CLI 一个适配器(§6,`src/clis/`),先抽 claude、行为不变,再写 qwen。qwen code 0.25 的定法(同日真跑与读它的打包代码):
+    - **不用 `--bare`,给 qwen 一个隔离的家**:`QWEN_HOME` 指 workspace 的 `.cotutor/qwen/home/`(不改 `HOME`),里面的 `settings.json` 由适配器生成。`--bare` 虽快,但它不读任何配置(思考关不掉)、不认 `--core-tools`、自带 `read_file` `edit` `run_shell_command` 一套——9 日 A/B 真跑里 qwen 在「不带工具」的轮次照样跑 shell,整理记忆那轮用 `edit` 直接改了日记。隔离的家每轮 2.4–3.1 秒、约 2K 输入 token,与 `--bare` 一样快;原来测到的 7 秒、26K token 来自 `~/.qwen` 里装的东西。家里关掉它自己的记忆整理(`memory.enableManagedAutoMemory: false`),不然一轮跑完它在后台用 `write_file` 写文件;也关掉使用统计(缺省发往阿里云)。
+    - **工具**:不带 = `--core-tools read_file --exclude-tools read_file,<非核心工具>`(工具表为空);只读 = `--core-tools read_file,glob,grep_search` 加 `--approval-mode default`(shell、写都被拒;`--yolo` 会放行 workspace 外的读,不用),再用 `--include-directories` 把 workspace 根与 vault 划进可读范围。不划会挂:会话 cwd 是老师目录,读外面的作业照片要征得同意,消息走 stdin 时它就停在那儿等到 `--max-wall-time`(真跑挂了 435 秒)。qwen 只读时没有 shell,要跑命令的老师(口播老师跑 koubo)在 qwen 上干不了活。核对工具表在第一次真跑就抓到了不加 `--bare` 时多带的 `ask_user_question` 与计划模式两个,一并排除。
+    - **思考量**:每次起进程时用 `QWEN_CODE_SYSTEM_SETTINGS_PATH` 按 effort 指一份配置(`model.reasoningEffort`):low → none(不想)、medium → low、high → xhigh;qwen3.7 系列只有开关,none 以外都是开。**带工具的轮次至少 low**:同一道照片题 none 那次 `read_file` 都没调、请孩子说是哪页,low 那次读了图、认出题目。时限按每条消息算,预热的进程在 stdin 上空等不算时间。
+    - **key 不落盘**:起 qwen 时 `DASHSCOPE_API_KEY` 先看环境变量,没有就从本机 `~/.qwen/settings.json` 的 `env` 现读,只放进子进程的环境;workspace 是 git 仓,key 永不写进去。别处的 `OPENAI_*` / `QWEN_MODEL` 会盖掉家里选的模型,去掉。
+    - **消息走 stdin**(`--input-format stream-json`,能预热);会话 id 从输出里拿,续话题 `--resume`。数组旗标(`--core-tools` 之类)会把跟在后面的消息吞掉,消息不进 argv 正好避开。
+    - **收尾**:qwen 不报钱数,这轮记 token(消息的 `tokens`);超时(退出码 55)不吐 `result`,当出错;每轮一条 `goal_state` 事件不管。
+    - **出厂缺省仍是 claude**,qwen 由家长在 `cotutor.json` 里给某位老师配。`cotutor upgrade --config` 认得没人改过的旧 qwen 模板,整份换新;改过的不动。`.qwen/agents/`、`.qwen/skills/` 两套链退役:老师正文与板书写法由 `{systemBody}` 递,qwen 的 skill 工具不给;init / upgrade 删掉旧链。
+    真跑(ray 的拷贝,qwen3.7-plus):孩子的话 2.7–4.8 秒、工具表为空;照片题 24 秒读对了图;记账只读、日记由应用落盘。claude 同题:孩子的话 5–11 秒,照片题 7.7 秒。
+    没验证的:qwen 的讲课质量(9 日 7 题回放里 qwen3.7-plus 把「明」讲成「名」,claude 没错);说了「你要记住哦」qwen 答应了却没写记忆段(两次都这样);关了工具后 qwen 偶尔在正文里写假的 `<tool_use>`,孩子端会不会念出来;孩子端真机上一整天的样子。

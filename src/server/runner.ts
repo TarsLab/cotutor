@@ -21,7 +21,7 @@ import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservatio
 import { cardAssets, cardLabel, describeCard, tutorCardKinds, type RecordProps } from '../cards/index.ts';
 import { boardGuideFor } from '../cards/docs.ts';
 import { KouboQueue } from './koubo.ts';
-import { withProxy } from '../lib/proxy.ts';
+import { controlsTools, parserOf, processEnv, toolsOf } from '../clis/index.ts';
 import { parseBoard } from '../lib/board.ts';
 import { readyBeats, beatsOf, voicedLines, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
@@ -32,7 +32,7 @@ import { getRuntime, planRun, runtimeUses, stallPrompt, type RunPlan, boardPrelo
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, TUTOR_TOOLS, VAULT_PACK_ROLES, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
+import { MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { updateVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
 import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPrompt, type MemoryLine } from '../lib/vault-notes.ts';
@@ -272,7 +272,7 @@ export async function packDryRun(ws: Workspace, tutor: string, input: { from: Me
   if (policy.board === 'off') pack.board = 'off';
   const { runtime } = getRuntime(ws.config, t.runtime);
   // 和 send 同一条规矩:孩子的话不带工具时,只有工具才用得上的路径不进包
-  if (policy.tools !== 'on' && input.from === 'kid' && runtimeUses(runtime, '{tools}')) { delete pack.refs; delete pack.vault; }
+  if (policy.tools !== 'on' && input.from === 'kid' && controlsTools(runtime)) { delete pack.refs; delete pack.vault; }
   await attachBoardGuide(ws, tutor, pack, { preloaded: boardPreloaded(runtime), boardOff: policy.board === 'off' });
   return { prompt: buildContextPack(pack, input.text, policy.contextPack), pack, report };
 }
@@ -368,7 +368,7 @@ export class Runner {
     const session = thread ? sessionFor(index, thread) : null;
     const policy = resolvePolicy(ws.config, tutor);
     const parts = await systemParts(ws, tutor, runtime, policy, { at: '', plan: [], recent: [] });
-    const vars = { agent: tutor, prompt: '', ...parts, runtime: t.runtime, effort: policy.effort, tools: policy.tools === 'on' ? TUTOR_TOOLS : '' };
+    const vars = { agent: tutor, prompt: '', ...parts, runtime: t.runtime, effort: policy.effort, tools: policy.tools === 'on' ? ('on' as const) : ('off' as const), root: ws.root };
     // 预热的是孩子的下一句:工具照孩子那轮填(带照片的对不上,那轮冷起)
     const fresh = planRun(ws.config, { session: null }, vars);
     const resume = session ? planRun(ws.config, { session }, vars) : null;
@@ -376,9 +376,9 @@ export class Runner {
     await mkdir(cwd, { recursive: true });
     // 读索引这会儿孩子可能已经开口了:这轮在跑就不起(它收尾时会再起)
     if (this.active.has(tutor)) return false;
-    const env = (p: RunPlan): NodeJS.ProcessEnv => withProxy(p.argv, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, ws.config.proxy);
-    this.spares.warm(tutor, 'fresh', { argv: fresh.argv, cwd, date, lastJob: null }, env(fresh));
-    if (resume?.resume && thread) this.spares.warm(tutor, 'resume', { argv: resume.argv, cwd, date, lastJob: lastJobOf(index, thread) }, env(resume));
+    const env = (p: RunPlan): NodeJS.ProcessEnv => processEnv(p, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, { proxy: ws.config.proxy });
+    this.spares.warm(tutor, 'fresh', { argv: fresh.argv, env: fresh.env, cwd, date, lastJob: null }, env(fresh));
+    if (resume?.resume && thread) this.spares.warm(tutor, 'resume', { argv: resume.argv, env: resume.env, cwd, date, lastJob: lastJobOf(index, thread) }, env(resume));
     else this.spares.drop(tutor, 'resume');
     return true;
   }
@@ -426,9 +426,9 @@ export class Runner {
     const noteWarnings = pack.entry?.startsWith('缺:') && !input.bookkeep ? [`入口文件${pack.entry}——在 vault 里给这位老师建一篇(cotutor doctor 有写法)`] : [];
     if (policy.board === 'off') pack.board = 'off';
     // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的(要 Read 看图)、系统任务照旧带。
-    // 不带的那轮,只有工具才用得上的路径(refs / vault)不进包;模板里没有 {tools} 的运行时管不了它的工具,照旧
-    const tools = policy.tools === 'on' || input.from !== 'kid' || seen.length > 0 ? TUTOR_TOOLS : '';
-    const bare = !tools && runtimeUses(runtime, '{tools}');
+    // 不带的那轮,只有工具才用得上的路径(refs / vault)不进包;模板管不了工具的运行时(没有 {tools} / {toolArgs}),照旧
+    const tools = policy.tools === 'on' || input.from !== 'kid' || seen.length > 0 ? ('on' as const) : ('off' as const);
+    const bare = tools === 'off' && controlsTools(runtime);
     if (bare) { delete pack.refs; delete pack.vault; }
     // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
     // 录音卡:评测结果接在那一行后面(存录音时就起了,这里取;还在跑就等,最多等到存录音之后 timeoutMs;回放不起新的)
@@ -451,7 +451,7 @@ export class Runner {
     const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
     if (continued) pack.continue = continued;
     const prompt = buildContextPack(pack, text, policy.contextPack);
-    const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, systemBody, boardFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools });
+    const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, systemBody, boardFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, root: ws.root });
 
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
     let voice: { audio: string; seconds: number } | undefined;
@@ -464,10 +464,10 @@ export class Runner {
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
 
     // 预热的进程:resume 的接那个位置(对得上 = 这个话题从它起来之后没人写过),新开的接 fresh;对不上(或这轮不走 stdin)就杀掉
-    const spare = this.spares.claim(tutor, plan.resume ? 'resume' : 'fresh', { argv: plan.argv, cwd: join(ws.dirs.agents, tutor), date, lastJob: plan.resume ? lastJobOf(index, thread) : null });
+    const spare = this.spares.claim(tutor, plan.resume ? 'resume' : 'fresh', { argv: plan.argv, env: plan.env, cwd: join(ws.dirs.agents, tutor), date, lastJob: plan.resume ? lastJobOf(index, thread) : null });
     const active: Active = { job, date, partial: null, done: Promise.resolve(started) };
     // 断流后接着跑:同一运行时 resume 这个会话,消息换成 stallPrompt
-    const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent: tutor, prompt: stallPrompt(open), agentBody, systemBody, boardFile, runtime: plan.runtime, effort: policy.effort, tools });
+    const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent: tutor, prompt: stallPrompt(open), agentBody, systemBody, boardFile, runtime: plan.runtime, effort: policy.effort, tools, root: ws.root });
     active.done = this.spawn(ws, tutor, date, job, plan, policy, active, resumePlan, spare).finally(() => {
       this.active.delete(tutor);
       // 孩子 / 家长这轮完了,马上起好下一轮的进程;系统轮(记账、整理记忆)之后孩子多半不在,不起
@@ -597,35 +597,13 @@ export class Runner {
     const queue = voice ? new DubQueue(ws.config.tts, voice, files.err(job), this.opts.env) : null;
     if (queue) queue.report = (e) => emit(e.kind === 'queued' ? { lane: 'tts', kind: 'queued', label: e.label } : e.kind === 'done' ? { lane: 'tts', kind: 'done', label: e.label, ms: e.ms, file: e.file ?? '' } : { lane: 'tts', kind: 'failed', label: e.label, ms: e.ms, error: e.error ?? '?' });
     const dubber = queue ? new LineDubber(queue, (n) => files.lineAudio(job, n)) : null;
-    // 工具调用:stdout 的 assistant 事件里有 tool_use 就发一条(子代理的标 sub);只对含 tool_use / tool_result 的行 JSON.parse。
-    // 顺手记哪些顶层工具还没回 tool_result:工具在跑时进程不吐字是正常的,断流看门狗不算这段
-    let toolBuf = '';
+    // 读输出:按这轮 CLI 的适配器把每行读成统一事件(src/clis/),一行只解析一次,同一批事件给流式拼正文、工具、会话 id 用。
+    // 工具调用发一条事件(子代理的标 sub);顺手记哪些顶层工具还没回结果:工具在跑时进程不吐字是正常的,断流看门狗不算这段
+    const parse = parserOf(plan.cli);
+    let lineBuf = '';
     const toolsRunning = new Set<string>();
-    // 消息走 stdin 的运行时:看到 result 就关 stdin,进程自己退(每次 runOnce 换一个)
+    // 消息走 stdin 的运行时:看到收尾就关 stdin,进程自己退(每次 runOnce 换一个)
     let onResult: (() => void) | null = null;
-    const scanTools = (chunk: string): void => {
-      toolBuf += chunk;
-      const parts = toolBuf.split('\n');
-      toolBuf = parts.pop() ?? '';
-      for (const line of parts) {
-        if (onResult && line.includes('"type":"result"')) onResult();
-        if (!line.includes('"tool_use"') && !line.includes('"tool_result"')) continue;
-        try {
-          const e = JSON.parse(line) as { type?: string; parent_tool_use_id?: string | null; message?: { content?: { type?: string; id?: string; tool_use_id?: string; name?: string; input?: Record<string, unknown> }[] } };
-          if (!Array.isArray(e.message?.content)) continue;
-          const top = !e.parent_tool_use_id;
-          if (e.type === 'user') { if (top) for (const b of e.message.content) if (b.type === 'tool_result' && b.tool_use_id) toolsRunning.delete(b.tool_use_id); continue; }
-          if (e.type !== 'assistant') continue;
-          for (const b of e.message.content) {
-            if (b.type !== 'tool_use' || !b.name) continue;
-            if (top && b.id) toolsRunning.add(b.id);
-            emit({ lane: 'main', kind: 'tool', name: toolSummary(b.name, b.input), sub: !top });
-          }
-        } catch {
-          /* 不是一行完整 JSON:跳过 */
-        }
-      }
-    };
     let cardsSeen = 0;
     let linesSeen = 0;
     // 就绪(流式):每句配音落盘就填进 partial 的 audio。句:从第一句起连着配好几句就能念几句(voiced,《工作流程.md》拍板 15),
@@ -679,15 +657,17 @@ export class Runner {
     // 断流看门狗:进程 stall.ms 没吐一个字节、也没有工具在跑 → 杀掉,resume 同一个会话接着写(最多 stall.retries 次)。
     // claude CLI 自己要等约 180 秒才认断流(2026-09-21 真跑一轮连断两次,等了 6 分钟)
     let session = plan.session;
-    // 新会话要等模型开始回了(第一条 stream_event / assistant)才在盘上、才 resume 得了
+    // 新会话要等模型开始回了(开始回复、吐字、在想、整条回复)才在盘上、才 resume 得了
     // (2026-09-22 真跑:init 吐了会话 id 就被杀,resume 报 No conversation found;吐过三个字再杀,盘上有这条用户消息)
     let persisted = plan.resume;
     let stalls = 0;
     // warm:预热好的进程(只给第一次;断流接着跑的那次照旧冷起)
     const runOnce = (p: RunPlan, warm: Spare | null = null): Promise<{ code: number | null; spawnError?: Error; stalled?: boolean }> => new Promise((resolveExit) => {
+      // 被杀的那次没收完的半行不要了
+      lineBuf = '';
       const child = warm?.child ?? spawn(p.argv[0], p.argv.slice(1), {
         cwd,
-        env: withProxy(p.argv, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, ws.config.proxy),
+        env: processEnv(p, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, { proxy: ws.config.proxy }),
         stdio: [p.stdin ? 'pipe' : 'ignore', 'pipe', err],
       });
       if (warm) {
@@ -721,11 +701,27 @@ export class Runner {
         lastByte = Date.now();
         arm();
         out.write(chunk);
-        const s = chunk.toString('utf8');
-        if (!session) session = /"session_id":"([^"]+)"/.exec(s)?.[1] ?? null;
-        if (!persisted && (s.includes('"type":"stream_event"') || s.includes('"type":"assistant"'))) persisted = true;
-        scanTools(s);
-        if (reader.feed(s)) {
+        lineBuf += chunk.toString('utf8');
+        const lines = lineBuf.split('\n');
+        lineBuf = lines.pop() ?? '';
+        let changed = false;
+        for (const line of lines) {
+          const events = parse(line);
+          for (const e of events) {
+            if (e.kind === 'session') { if (!session) session = e.id; }
+            else if (e.kind === 'result') onResult?.();
+            else if (e.kind === 'results') { if (!e.sub) for (const r of e.results) toolsRunning.delete(r.id); }
+            else {
+              if (e.kind === 'start' || e.kind === 'delta' || e.kind === 'thinking' || e.kind === 'assistant') persisted = true;
+              if (e.kind === 'assistant') for (const tool of toolsOf(e.parts)) {
+                if (!e.sub && tool.id) toolsRunning.add(tool.id);
+                emit({ lane: 'main', kind: 'tool', name: toolSummary(tool.name, tool.input), sub: e.sub });
+              }
+            }
+          }
+          if (reader.apply(events)) changed = true;
+        }
+        if (changed) {
           dirty = true;
           if (!timer) timer = setTimeout(reparse, 150);
         }
@@ -765,13 +761,13 @@ export class Runner {
     closeSync(err);
     if (exit.spawnError) await appendFile(files.err(job), `cotutor: 起不来 ${plan.argv[0]}:${exit.spawnError.message}\n`);
     const logText = await readFile(files.log(job), 'utf8').catch(() => '');
-    const transcript = parseTranscript(logText);
+    const transcript = parseTranscript(logText, parse);
     // 断流接着跑的:断在半截的那段没进会话、也不在最后的 result 里,拼回最后一段前面(老师是从断处接着写的)
     // (result 的正文被 trim 过,断在句末 / 围栏上的补回换行,免得两句粘成一行)
     if (open && transcript.final?.text) transcript.final.text = open + (/[。!!??;;`\n]\s*$/.test(open) ? '\n' : '') + transcript.final.text;
     if (exit.stalled && !transcript.final) transcript.final = { text: null, ok: false, reason: `stalled:${stalls} 次断流(每次 ${policy.stall.ms}ms 没输出),接着跑的次数用完了` };
     // 这轮用了哪些工具、读了什么:从 .log 抽出来物化(家长端「看原文」一站、cotutor show)
-    const tools = toolCalls(logText).slice(0, 200);
+    const tools = toolCalls(logText, parse).slice(0, 200);
     if (!transcript.final) {
       // 进程退了但没有 result 事件:起不来、被杀、或 CLI 崩了;标 error,原因指向 err.log
       transcript.final = { text: null, ok: false, reason: exit.spawnError ? `spawn:${exit.spawnError.message}` : `exit:${exit.code ?? 'signal'}` };

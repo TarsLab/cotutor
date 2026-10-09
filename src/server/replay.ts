@@ -10,6 +10,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { cardLabel } from '../cards/index.ts';
+import { parserForRuntime, withoutNested } from '../clis/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { conversationFiles } from '../lib/conversation.ts';
 import { compactDiff, diffLines, type DiffRow } from '../lib/diff.ts';
@@ -21,12 +22,9 @@ import { readIndex, readRunFile } from './store.ts';
 
 export const EVALS_DIR = 'evals';
 
-/** 在 Claude Code 会话里跑 cotutor replay(技能 cotutor-analyze 就是这么用的):claude 见到 CLAUDECODE 会当嵌套拒掉,起老师前把这几个去掉 */
-const NESTED_KEYS = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID', 'CLAUDE_EFFORT'];
+/** 在 Claude Code 会话里跑 cotutor replay(技能 cotutor-analyze 就是这么用的):claude 见到 CLAUDECODE 会当嵌套拒掉,起老师前把各 CLI 认作嵌套的变量去掉(src/clis/) */
 export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const out = { ...env };
-  for (const k of NESTED_KEYS) delete out[k];
-  return out;
+  return withoutNested(env);
 }
 
 export interface ReplayOptions {
@@ -176,7 +174,7 @@ export function compareSides(base: { tutor: string; date: string; job: string; e
 async function toolsOf(ws: Workspace, tutor: string, date: string, m: ConversationMessage): Promise<ToolCall[]> {
   if (m.tools) return m.tools;
   const text = await readFile(conversationFiles(ws.dirs.conversations, tutor, date).log(m.job), 'utf8').catch(() => '');
-  return toolCalls(text);
+  return toolCalls(text, parserForRuntime(ws.config.runtimes, m.runtime));
 }
 
 export async function compareReplay(ws: Workspace, tutor: string, date: string, evalJob: string): Promise<Compare | null> {

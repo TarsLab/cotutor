@@ -3,13 +3,14 @@
  * 静默失败摆到明面:配置坏了、老师链断了、账本有坏行、角色指向踩空。
  * exit 约定同 drawtell / voxtell doctor:必需项全过 exit 0,否则 1;--json 带 ok 与整份 checks。
  */
-import { detectProxy, withProxy } from '../lib/proxy.ts';
+import { detectProxy } from '../lib/proxy.ts';
+import { parserOf, processEnv } from '../clis/index.ts';
 import { execFile } from 'node:child_process';
 import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
-import { boardPreloaded, runtimeUses, stdinMessage } from '../lib/run-plan.ts';
+import { boardPreloaded, planRun, runtimeUses } from '../lib/run-plan.ts';
 import { BOARD_GUIDE_PATH, boardGuideBody, takesTutorRules } from '../lib/tutor-rules.ts';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { localDate } from '../lib/conversation.ts';
@@ -95,7 +96,7 @@ export function explainLlmFailure(text: string, runtime: readonly string[]): str
  */
 async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: NodeJS.ProcessEnv): Promise<void> {
   const { spawn } = await import('node:child_process');
-  const { fillRuntime, fillTts, listTutors } = await import('../schema/index.ts');
+  const { fillTts, listTutors } = await import('../schema/index.ts');
   const { parseTranscript } = await import('../lib/transcript.ts');
   const { parseAgentFile } = await import('../lib/agent-file.ts');
   const { tmpdir } = await import('node:os');
@@ -122,21 +123,28 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
     /* skills.* 已报 */
   }
   const systemBody = agentBody !== undefined ? (boardBody && takesTutorRules(first.name) ? `${agentBody}\n\n${boardBody}` : agentBody) : undefined;
-  const argv = fillRuntime(runtime.run, { agent: first.name, prompt: LIVE_PROMPT, agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH) });
+  // 和真跑同一条规划:命令行、stdin 那行、环境变量都由这个运行时的 CLI 适配器定
+  const plan = planRun(ws.config, { session: null }, { agent: first.name, prompt: LIVE_PROMPT, agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: runtimeName, root: ws.root });
+  const { argv } = plan;
+  const parse = parserOf(plan.cli);
   const cwd = join(ws.dirs.agents, first.name);
   const run = await new Promise<{ out: string; err: string; code: number | null; spawnErr?: string }>((resolveRun) => {
     let out = '';
     let err = '';
-    const child = spawn(argv[0], argv.slice(1), { cwd, env: withProxy(argv, { ...env, COTUTOR_WORKSPACE: ws.root }, ws.config.proxy), stdio: [runtime.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
+    const child = spawn(argv[0], argv.slice(1), { cwd, env: processEnv(plan, { ...env, COTUTOR_WORKSPACE: ws.root }, { proxy: ws.config.proxy }), stdio: [plan.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
     const timer = setTimeout(() => child.kill(), 120_000);
-    // 消息走 stdin 的运行时:写一条,看到 result 就关 stdin
-    if (runtime.stdin) {
+    // 消息走 stdin 的运行时:写一条,看到收尾就关 stdin
+    if (plan.stdin) {
       child.stdin?.on('error', () => {});
-      child.stdin?.write(stdinMessage(LIVE_PROMPT));
+      child.stdin?.write(plan.stdin);
     }
+    let rest = '';
     child.stdout?.on('data', (d: Buffer) => {
       out += d.toString();
-      if (runtime.stdin && out.includes('"type":"result"')) child.stdin?.end();
+      rest += d.toString();
+      const lines = rest.split('\n');
+      rest = lines.pop() ?? '';
+      if (plan.stdin && lines.some((l) => parse(l).some((e) => e.kind === 'result'))) child.stdin?.end();
     });
     child.stderr?.on('data', (d: Buffer) => (err += d.toString()));
     child.once('error', (e) => {
@@ -148,7 +156,7 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
       resolveRun({ out, err, code });
     });
   });
-  const t = parseTranscript(run.out);
+  const t = parseTranscript(run.out, parse);
   const said = t.items.filter((i) => i.kind === 'text' && !i.sub).map((i) => i.text).join(' ');
   const ok = Boolean(t.final?.ok) && !run.spawnErr;
   const raw = run.spawnErr ?? (t.final ? `${t.final.reason ?? ''} ${said}`.trim() : `没有 result 事件(exit ${run.code}):${run.err.trim().split('\n').slice(-3).join(' / ')}`);

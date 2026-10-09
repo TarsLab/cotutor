@@ -95,12 +95,14 @@ export type Tutor = z.infer<typeof TutorSchema>;
  * {agent} 老师名 / {agentBody} 老师文件正文(给没有 --agent 的 CLI 塞系统提示)/ {prompt} 消息 / {session} 会话 id。
  * 板书写法的两种预载({boardFile} 板书技能 SKILL.md 的绝对路径,给能从文件追加系统提示的 CLI;{systemBody} 老师正文 + 板书写法,给只收一段系统提示文字的 CLI):
  * 模板里用了其中一个,应用就当板书写法已在系统提示里;都没用,应用在话题第一条消息里注入 <cotutor-board>(任何 CLI 都成立的退路)。
- * {effort} 这位老师的政策 effort(low / medium / high),claude 模板里是 `--effort {effort}`。
- * 政策旋钮(预算、轮数、模型、工具白名单)写进模板,换 agent 只换运行时。
+ * {effort} 这位老师的政策 effort(low / medium / high),claude 模板里是 `--effort {effort}`;别的 CLI 怎么落地由它的适配器定。
+ * 带不带工具由适配器展开(src/clis/,《agent层设计.md》§6):{tools} 填一串工具名(claude 的 `--tools {tools}`),独占一个参数的 {toolArgs} 展开成几个参数。
+ * 政策旋钮(预算、轮数、模型)写进模板,换 agent 只换运行时。
  * stdin: "stream-json"(2026-09-29,《工作流程.md》§四「预热」):消息不进命令行,写进 stdin(claude 的 `--input-format stream-json`),
  * 模板里就不写 {prompt};argv 与消息无关,应用把下一轮的进程提前起好等着。
  */
 export const RuntimeSchema = z.object({
+  cli: z.string().min(1).optional().describe('这是哪个 CLI(src/clis/ 里的适配器名:claude / qwen);不写按 run 的第一个词认。套了壳脚本的运行时要写'),
   run: z.array(z.string()).min(1),
   resume: z.array(z.string()).min(1),
   stdin: z.literal('stream-json').optional().describe('消息写进 stdin(模板带 --input-format stream-json、不写 {prompt});这样的运行时,应用提前把下一轮的老师进程起好等着(预热)'),
@@ -269,10 +271,7 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
     }));
 }
 
-/** 老师带工具时的白名单(claude 的 --tools):Bash 查教材、裁作业照片;Read / Grep / Glob 读 vault 与技能文件 */
-export const TUTOR_TOOLS = 'Bash,Read,Grep,Glob';
-
-/** 运行时模板填占位符;{tools} 没给就是整份白名单(给 '' = 这轮不带工具);{agentBody} / {systemBody} / {boardFile} 只在给了值时替换,否则原样留着(doctor 会报);{effort} 没给用出厂缺省(课文件排版这类不认老师政策的调用) */
+/** 运行时模板填占位符;{tools} 填适配器给的工具名单(src/clis/ 的 fillArgs 先算好,没给就填空);{agentBody} / {systemBody} / {boardFile} 只在给了值时替换,否则原样留着(doctor 会报);{effort} 没给用出厂缺省(课文件排版这类不认老师政策的调用) */
 export function fillRuntime(
   argv: readonly string[],
   vars: { agent: string; prompt: string; session?: string; agentBody?: string; systemBody?: string; boardFile?: string; effort?: Policy['effort']; tools?: string },
@@ -286,7 +285,7 @@ export function fillRuntime(
       .replaceAll('{systemBody}', vars.systemBody ?? '{systemBody}')
       .replaceAll('{boardFile}', vars.boardFile ?? '{boardFile}')
       .replaceAll('{effort}', vars.effort ?? POLICY_DEFAULTS.effort)
-      .replaceAll('{tools}', vars.tools ?? TUTOR_TOOLS),
+      .replaceAll('{tools}', vars.tools ?? ''),
   );
 }
 

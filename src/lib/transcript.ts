@@ -1,8 +1,13 @@
 /**
- * stream-json NDJSON 转录 → 家长视图条目 + 最终文本。抄自 growth-apps 的 gen-transcript(2026-08-26 实测形状,
- * claude 2.1.220;qwen code 同族),加两样:parent_tool_use_id 非空的事件标 sub(子代理),
- * result.result 单独取出作 final——它是两个 CLI 都有的稳定锚点,孩子视图只看它。
+ * 老师进程的转录(.log,一行一个 JSON)→ 家长视图条目 + 最终文本。起初抄自 growth-apps 的 gen-transcript(2026-08-26,claude 2.1.220),
+ * 现在按 CLI 适配器读成统一事件再拼(src/clis/,缺省 stream-json,claude / qwen 同族):子代理的条目标 sub,
+ * 收尾的最终正文单独取出作 final——各家 CLI 都有的稳定锚点,孩子视图只看它。
  */
+import { parseStreamJson } from '../clis/stream-json.ts';
+import type { CliEvent, CliFinal } from '../clis/types.ts';
+
+/** 一行输出 → 统一事件(CLI 适配器的 parse) */
+export type LineParser = (line: string) => CliEvent[];
 
 export interface TranscriptItem {
   /** text 说话 / tool 用工具 / tool-error 工具报错 / done 收尾 */
@@ -14,19 +19,8 @@ export interface TranscriptItem {
 
 export type TranscriptRow = TranscriptItem | { kind: 'fold'; tools: TranscriptItem[] };
 
-export interface TranscriptFinal {
-  /** result.result;没有就是 null */
-  text: string | null;
-  ok: boolean;
-  /** 不 ok 时的原因(subtype 或 terminal_reason) */
-  reason: string | null;
-  /** result.total_cost_usd:新版 claude 接着会话跑(--resume)时是整个会话的累计 */
-  costUsd?: number;
-  numTurns?: number;
-  /** result.modelUsage 各模型的输出 token 之和(累计时也累计)与 result.usage 的输出 token(只是最后一次请求):判断 costUsd 是不是累计 */
-  modelOut?: number;
-  lastOut?: number;
-}
+/** 收尾:result 的最终正文、成没成、费用或 token(见 src/clis/types.ts 的 CliFinal) */
+export type TranscriptFinal = CliFinal;
 
 export interface Transcript {
   sessionId: string | null;
@@ -63,37 +57,9 @@ export function foldRuns(items: TranscriptItem[]): TranscriptRow[] {
   return rows;
 }
 
-interface Block {
-  type?: string;
-  id?: string;
-  tool_use_id?: string;
-  text?: string;
-  name?: string;
-  input?: Record<string, unknown>;
-  content?: unknown;
-  is_error?: boolean;
-}
-
-interface Event {
-  type?: string;
-  subtype?: string;
-  session_id?: string;
-  parent_tool_use_id?: string | null;
-  message?: { content?: unknown };
-  is_error?: boolean;
-  num_turns?: number;
-  total_cost_usd?: number;
-  modelUsage?: Record<string, { outputTokens?: number }>;
-  usage?: { output_tokens?: number };
-  terminal_reason?: string;
-  result?: unknown;
-}
-
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n)}…` : s);
 /** 路径截头留尾:要紧的是文件名(作业照片的绝对路径在 workspace 深的机器上会超长) */
 const clipPath = (s: string, n: number): string => (s.length > n ? `…${s.slice(-n)}` : s);
-const blocks = (c: unknown): Block[] => (Array.isArray(c) ? (c as Block[]) : []);
-const blockText = (c: unknown): string => (typeof c === 'string' ? c : blocks(c).map((b) => b.text ?? '').join(''));
 
 export function toolSummary(name: string, input: Record<string, unknown> | undefined): string {
   for (const k of ['description', 'command', 'file_path', 'skill', 'pattern', 'prompt', 'url']) {
@@ -131,77 +97,56 @@ export function toolArg(input: Record<string, unknown> | undefined): string {
   return '';
 }
 
-export function toolCalls(text: string): ToolCall[] {
+export function toolCalls(text: string, parse: LineParser = parseStreamJson): ToolCall[] {
   const calls: ToolCall[] = [];
   const byId = new Map<string, ToolCall>();
   for (const line of text.split('\n')) {
-    if (!line.includes('tool_use') && !line.includes('tool_result')) continue;
-    let e: Event;
-    try {
-      e = JSON.parse(line) as Event;
-    } catch {
-      continue;
-    }
-    const sub = typeof e.parent_tool_use_id === 'string' && e.parent_tool_use_id.length > 0 ? true : undefined;
-    if (e.type === 'assistant') {
-      for (const b of blocks(e.message?.content)) {
-        if (b.type !== 'tool_use' || !b.name) continue;
-        const c: ToolCall = { name: b.name, arg: toolArg(b.input), ok: null, chars: 0, ...(sub ? { sub } : {}) };
-        calls.push(c);
-        if (b.id) byId.set(b.id, c);
-      }
-    } else if (e.type === 'user') {
-      for (const b of blocks(e.message?.content)) {
-        if (b.type !== 'tool_result' || !b.tool_use_id) continue;
-        const c = byId.get(b.tool_use_id);
-        if (!c) continue;
-        c.ok = !b.is_error;
-        c.chars = blockText(b.content).length;
+    for (const e of parse(line)) {
+      if (e.kind === 'assistant') {
+        for (const p of e.parts) {
+          if (p.type !== 'tool') continue;
+          const c: ToolCall = { name: p.tool.name, arg: toolArg(p.tool.input), ok: null, chars: 0, ...(e.sub ? { sub: true } : {}) };
+          calls.push(c);
+          if (p.tool.id) byId.set(p.tool.id, c);
+        }
+      } else if (e.kind === 'results') {
+        for (const r of e.results) {
+          const c = byId.get(r.id);
+          if (!c) continue;
+          c.ok = r.ok;
+          c.chars = r.text.length;
+        }
       }
     }
   }
   return calls;
 }
 
-export function parseTranscript(text: string): Transcript {
+export function parseTranscript(text: string, parse: LineParser = parseStreamJson): Transcript {
   let sessionId: string | null = null;
   const items: TranscriptItem[] = [];
   let final: TranscriptFinal | null = null;
   for (const line of text.split('\n')) {
-    if (!line.trim()) continue;
-    let e: Event;
-    try {
-      e = JSON.parse(line) as Event;
-    } catch {
-      continue;
-    }
-    if (!sessionId && typeof e.session_id === 'string') sessionId = e.session_id;
-    const sub = typeof e.parent_tool_use_id === 'string' && e.parent_tool_use_id.length > 0 ? true : undefined;
-    if (e.type === 'assistant') {
-      for (const b of blocks(e.message?.content)) {
-        if (b.type === 'text' && b.text?.trim()) items.push({ kind: 'text', text: b.text.trim(), sub });
-        else if (b.type === 'tool_use' && b.name) items.push({ kind: 'tool', text: toolSummary(b.name, b.input), sub });
+    for (const e of parse(line)) {
+      if (e.kind === 'session') {
+        if (!sessionId) sessionId = e.id;
+      } else if (e.kind === 'assistant') {
+        const sub = e.sub ? true : undefined;
+        for (const p of e.parts) {
+          if (p.type === 'text' && p.text.trim()) items.push({ kind: 'text', text: p.text.trim(), sub });
+          else if (p.type === 'tool') items.push({ kind: 'tool', text: toolSummary(p.tool.name, p.tool.input), sub });
+        }
+      } else if (e.kind === 'results') {
+        const sub = e.sub ? true : undefined;
+        for (const r of e.results) if (!r.ok) items.push({ kind: 'tool-error', text: clip(r.text.trim(), 300), sub });
+      } else if (e.kind === 'result') {
+        const f = e.final;
+        if (f.text && !items.some((i) => i.kind === 'text' && !i.sub)) items.push({ kind: 'text', text: f.text });
+        const cost = f.costUsd !== undefined ? ` · $${f.costUsd.toFixed(2)}` : '';
+        const turns = f.numTurns !== undefined ? ` · ${f.numTurns} 轮` : '';
+        items.push({ kind: 'done', text: f.ok ? `本轮结束${turns}${cost}` : `本轮出错(${f.reason})${turns}${cost}` });
+        final = f;
       }
-    } else if (e.type === 'user') {
-      for (const b of blocks(e.message?.content))
-        if (b.type === 'tool_result' && b.is_error) items.push({ kind: 'tool-error', text: clip(blockText(b.content).trim(), 300), sub });
-    } else if (e.type === 'result') {
-      const failed = Boolean(e.is_error) || Boolean(e.subtype && e.subtype !== 'success');
-      const resultText = typeof e.result === 'string' && e.result.trim() ? e.result.trim() : null;
-      if (resultText && !items.some((i) => i.kind === 'text' && !i.sub)) items.push({ kind: 'text', text: resultText });
-      const cost = typeof e.total_cost_usd === 'number' ? ` · $${e.total_cost_usd.toFixed(2)}` : '';
-      const turns = typeof e.num_turns === 'number' ? ` · ${e.num_turns} 轮` : '';
-      const reason = e.subtype && e.subtype !== 'success' ? e.subtype : (e.terminal_reason ?? '未知');
-      items.push({ kind: 'done', text: failed ? `本轮出错(${reason})${turns}${cost}` : `本轮结束${turns}${cost}` });
-      final = {
-        text: resultText,
-        ok: !failed,
-        reason: failed ? reason : null,
-        costUsd: typeof e.total_cost_usd === 'number' ? e.total_cost_usd : undefined,
-        numTurns: typeof e.num_turns === 'number' ? e.num_turns : undefined,
-        ...(e.modelUsage && typeof e.modelUsage === 'object' ? { modelOut: Object.values(e.modelUsage).reduce((s, u) => s + (typeof u?.outputTokens === 'number' ? u.outputTokens : 0), 0) } : {}),
-        ...(typeof e.usage?.output_tokens === 'number' ? { lastOut: e.usage.output_tokens } : {}),
-      };
     }
   }
   return { sessionId, items, final };

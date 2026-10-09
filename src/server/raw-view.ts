@@ -12,6 +12,7 @@ import { conversationFiles, type CardStateFile } from '../lib/conversation.ts';
 import { kidSource, truncateReply } from '../lib/kid-view.ts';
 import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
 import { foldRuns, toolCalls, type ToolCall, type TranscriptRow } from '../lib/transcript.ts';
+import { parserForRuntime, toolKind, type ToolKind } from '../clis/index.ts';
 import { resolvePolicy, type ConversationMessage } from '../schema/index.ts';
 import type { Workspace } from '../cli/workspace.ts';
 import { readErrLog, readIndex, readRunFile, readTranscript, scanCards, type RunSources } from './store.ts';
@@ -78,8 +79,8 @@ export interface RawView {
   kid: { lines: RawKidLine[]; cards: RawCard[] };
   /** 转录(工具行、子代理),与家长视图同一套折叠 */
   trace: TranscriptRow[];
-  /** 这轮用了哪些工具、读了什么(索引物化的;老轮次从 .log 现抽) */
-  tools: ToolCall[];
+  /** 这轮用了哪些工具、读了什么(索引物化的;老轮次从 .log 现抽);kind 是工具的类别(src/clis/,页面按它认「读了几个文件」,不比工具名) */
+  tools: (ToolCall & { kind: ToolKind })[];
   /** 时间线:这轮的事件(<日期>.<job>.events.jsonl;2026-09-13 之前的轮次没有 → 空)+ 甘特的段 + 控制台那种一行一条 */
   events: RunEvent[];
   timeline: { spans: TimelineSpan[]; lines: string[]; total: number };
@@ -132,7 +133,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
   if (!m) return null;
   const files = conversationFiles(ws.dirs.conversations, tutor, date);
   const policy = resolvePolicy(ws.config, tutor);
-  const transcript = await readTranscript(ws, tutor, date, job);
+  const transcript = await readTranscript(ws, tutor, date, job, m.runtime);
   const pack = await readRunFile(ws, tutor, date, job);
   const blocks = (transcript?.items ?? []).filter((i) => i.kind === 'text' && !i.sub).map((i) => i.text.trim());
   const src = (transcript ? kidSource(transcript) : null) ?? '';
@@ -167,8 +168,8 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
 
   const err = await readErrLog(ws, tutor, date, job);
   // 读了什么:索引里物化过的优先(和当时一致),没有(老轮次)就从 .log 现抽
-  const tools: ToolCall[] = m.tools ?? toolCalls(await readFile(files.log(job), 'utf8').catch(() => ''));
-  const toolFiles = new Set(tools.filter((t) => t.name === 'Read' && t.arg).map((t) => t.arg)).size;
+  const tools = (m.tools ?? toolCalls(await readFile(files.log(job), 'utf8').catch(() => ''), parserForRuntime(ws.config.runtimes, m.runtime))).map((t) => ({ ...t, kind: toolKind(t.name) }));
+  const toolFiles = new Set(tools.filter((t) => t.kind === 'read' && t.arg).map((t) => t.arg)).size;
   const toolFailed = tools.filter((t) => t.ok === false).length;
   const events = parseEvents(await readFile(files.events(job), 'utf8').catch(() => ''));
   const warnCount = ann.warnings.length + (m.warnings?.length ?? 0);
@@ -180,7 +181,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     { id: 'parse', title: '解析结果', note: `${ann.section.cards.length} 卡 · ${ann.section.lines.length} 句${warnCount ? ` · ${warnCount} 提醒` : ''}${same ? '' : ' · 与索引不同'}`, state: warnCount || !same ? 'warn' : 'ok' },
     { id: 'kid', title: '下发给孩子', note: `${lines.length} 句${lines.some((l) => l.cut) ? ` · 截了 ${lines.filter((l) => l.cut).length} 句` : ''} · ${cards.length} 卡`, state: lines.length || cards.length ? 'ok' : 'none' },
     { id: 'audio', title: '配音与资产', note: !lines.length ? '这轮没有讲稿' : !lines.some((l) => l.audio) ? '没配音 · 孩子端用浏览器的声' : `${dubbed} / ${lines.length} 句${m.timing?.dubbedMs !== undefined ? ` · ${secs(m.timing.dubbedMs)}` : ''}`, state: !lines.length || !lines.some((l) => l.audio) ? 'none' : dubbed === lines.length ? 'ok' : 'warn' },
-    { id: 'tools', title: '读了什么', note: tools.length ? `${tools.length} 次工具${toolFiles ? ` · Read ${toolFiles} 个文件` : ''}${toolFailed ? ` · ${toolFailed} 次失败` : ''}${tools.some((t) => t.sub) ? ' · 有子代理' : ''}` : '没用工具(只凭上下文包答的)', state: toolFailed ? 'warn' : tools.length ? 'ok' : 'none' },
+    { id: 'tools', title: '读了什么', note: tools.length ? `${tools.length} 次工具${toolFiles ? ` · 读了 ${toolFiles} 个文件` : ''}${toolFailed ? ` · ${toolFailed} 次失败` : ''}${tools.some((t) => t.sub) ? ' · 有子代理' : ''}` : '没用工具(只凭上下文包答的)', state: toolFailed ? 'warn' : tools.length ? 'ok' : 'none' },
     { id: 'trace', title: '转录与报错', note: `${transcript?.items.length ?? 0} 条${err ? ' · stderr 有东西' : ''}`, state: m.result === 'error' || err ? 'warn' : 'ok' },
   ];
   if (m.artifacts.length) stations.push({ id: 'ledger', title: '账本', note: `产物 ${m.artifacts.join('、')}`, state: 'ok' });

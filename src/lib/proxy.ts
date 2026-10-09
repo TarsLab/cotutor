@@ -7,7 +7,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
+import { adapterFor } from '../clis/index.ts';
 
 export interface DetectedProxy {
   url: string;
@@ -40,8 +41,8 @@ export function detectProxy(opts: { home?: string; env?: NodeJS.ProcessEnv } = {
   return url ? { url, source: '环境变量' } : null;
 }
 
-/** 起子进程的环境:命令是 claude 且 cotutor.json 设了代理,就注 HTTP(S)_PROXY(大小写都给);别的原样 */
+/** 起子进程的环境:按命令认 CLI 适配器,由它决定代理怎么注(claude 注 HTTP(S)_PROXY,别的原样);老师进程走 src/clis/ 的 processEnv,这里给只有一条命令的调用 */
 export function withProxy(argv: readonly string[], env: NodeJS.ProcessEnv, proxy: string | false | undefined): NodeJS.ProcessEnv {
-  if (typeof proxy !== 'string' || !argv.length || basename(argv[0]) !== 'claude') return env;
-  return { ...env, HTTP_PROXY: proxy, HTTPS_PROXY: proxy, http_proxy: proxy, https_proxy: proxy };
+  if (!argv.length) return env;
+  return adapterFor({ run: argv }).env(env, { proxy });
 }

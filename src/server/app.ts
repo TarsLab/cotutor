@@ -109,7 +109,7 @@ export async function dayView(ctx: AppContext, tutor: string, date: string): Pro
   const runs: Record<string, TranscriptRow[]> = {};
   const errors: Record<string, string> = {};
   for (const m of index.messages) {
-    const t = await readTranscript(ctx.ws, tutor, date, m.job);
+    const t = await readTranscript(ctx.ws, tutor, date, m.job, m.runtime);
     runs[m.job] = t ? foldRuns(t.items) : [];
     if (m.result === 'error') {
       const tail = (await readErrLog(ctx.ws, tutor, date, m.job)).trim().split('\n').slice(-5).join('\n');

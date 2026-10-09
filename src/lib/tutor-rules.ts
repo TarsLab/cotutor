@@ -7,6 +7,7 @@ import { parseAgentFile } from './agent-file.ts';
 import { stripHumanNotes } from './human-notes.ts';
 import { applyCardGuards } from './card-guards.ts';
 import { BOARD_CARD_KINDS } from '../schema/config.ts';
+import { toolKind } from '../clis/index.ts';
 
 export const TUTOR_SKILL = 'cotutor-tutor';
 /** 相对 workspace 根 */
@@ -43,9 +44,9 @@ export const BOARD_GUIDE_IN_SYSTEM = '已在你的系统提示里(「# 板书怎
 
 /**
  * 回归检查(与 CLI 无关):板书写法已经递到手里,老师这轮还用工具去读它 → 预载没起作用(换模型 / 换 CLI / 升版本后最先坏的地方)。
- * 认三种:Skill 工具点名 cotutor-board;任何工具的参数里带 cotutor-board/SKILL.md(Read、cat、别家 CLI 的读文件工具),或按老师裁的那份 .cotutor/board/。
+ * 认三种:技能工具(claude 的 Skill、qwen 的 skill,按 src/clis/ 的工具类别认)点名 cotutor-board;任何工具的参数里带 cotutor-board/SKILL.md(Read、cat、别家 CLI 的读文件工具),或按老师裁的那份 .cotutor/board/。
  * references/<种类>.md 是按需读的,不算。
  */
 export function boardGuideReads(tools: readonly { name: string; arg: string }[]): string[] {
-  return tools.filter((t) => (t.name === 'Skill' && t.arg.trim() === 'cotutor-board') || t.arg.includes('cotutor-board/SKILL.md') || t.arg.includes('.cotutor/board/')).map((t) => `${t.name} ${t.arg}`.trim());
+  return tools.filter((t) => (toolKind(t.name) === 'skill' && t.arg.trim() === 'cotutor-board') || t.arg.includes('cotutor-board/SKILL.md') || t.arg.includes('.cotutor/board/')).map((t) => `${t.name} ${t.arg}`.trim());
 }

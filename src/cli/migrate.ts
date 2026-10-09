@@ -16,7 +16,8 @@
  */
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CotutorConfigSchema, TUTOR_TOOLS, explainIssues } from '../schema/index.ts';
+import { CotutorConfigSchema, explainIssues } from '../schema/index.ts';
+import { CLAUDE_TUTOR_TOOLS } from '../clis/claude.ts';
 import { configTemplate, shippedAgents } from './skeleton.ts';
 import { installTutors, type InstallStep } from './tutors.ts';
 import { RENAMED_TUTORS, renameTutorData, renamedEntry, type RenameOp } from './rename.ts';
@@ -133,7 +134,7 @@ export async function configGaps(raw: unknown): Promise<ConfigGap[]> {
       const { argv, added } = insertMissingFlags(u as string[], f as string[]);
       // --tools 的值还是旧出厂的白名单(没人改过)、出厂模板已经换成 {tools}:一起换,孩子的话才不带工具(policy.tools)。改过的白名单是家长的决定,不动
       const at = argv.indexOf('--tools');
-      const swap = at >= 0 && argv[at + 1] === TUTOR_TOOLS && (f as string[])[(f as string[]).indexOf('--tools') + 1] === '{tools}';
+      const swap = at >= 0 && argv[at + 1] === CLAUDE_TUTOR_TOOLS && (f as string[])[(f as string[]).indexOf('--tools') + 1] === '{tools}';
       if (swap) argv[at + 1] = '{tools}';
       if (!added.length && !swap) continue;
       const what = [added.length ? `缺出厂旗标 ${added.join(' ')}` : '', swap ? `--tools 还是写死的白名单,换成 {tools}(孩子的话不带工具,开口快)` : ''].filter(Boolean).join(';');

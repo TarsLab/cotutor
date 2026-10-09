@@ -860,8 +860,8 @@ export const DEV_PAGE = `<!doctype html>
       // 读了什么(2026-09-15):一行一次工具调用——名字、路径 / 命令、成没成、结果多少字;答「老师为什么没看见档案那一行」
       const box = h('div', { class: 'dsec' });
       if (!raw.tools.length) { box.append(h('p', { class: 'hintline' }, '这轮没用工具:老师只凭上下文包答的(问答缺省就是这样)。')); return box; }
-      const files = [...new Set(raw.tools.filter((t) => t.name === 'Read' && t.arg).map((t) => t.arg))];
-      box.append(h('h5', {}, raw.tools.length + ' 次工具调用' + (files.length ? ' · Read 了 ' + files.length + ' 个文件' : '')));
+      const files = [...new Set(raw.tools.filter((t) => t.kind === 'read' && t.arg).map((t) => t.arg))];
+      box.append(h('h5', {}, raw.tools.length + ' 次工具调用' + (files.length ? ' · 读了 ' + files.length + ' 个文件' : '')));
       for (const t of raw.tools) box.append(h('div', { class: 'dline ' + (t.ok === false ? 'del' : 'same') },
         h('span', { class: 's' }, t.ok === false ? '✗' : t.ok === null ? '?' : '·'),
         h('span', {}, t.name + (t.sub ? '(子代理)' : '') + '  ' + (t.arg || '') + (t.chars ? '  → ' + t.chars + ' 字' : ''))));

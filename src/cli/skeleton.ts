@@ -10,9 +10,9 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../lib/agent-file.ts';
-import { CONFIG_SCHEMA_FILE, TTS_DEFAULT, TUTOR_TOOLS, cotutorJsonSchema, type BoardCardKind } from '../schema/index.ts';
+import { CONFIG_SCHEMA_FILE, TTS_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../schema/index.ts';
+import { factoryRuntimes } from '../clis/index.ts';
 
-export { TUTOR_TOOLS };
 import { mkdir, writeFile } from 'node:fs/promises';
 
 
@@ -159,29 +159,8 @@ export function configTemplate(input: ConfigTemplateInput): string {
     paths: {},
     policyDefaults: {},
     tutors,
-    runtimes: {
-      default: 'claude',
-      // --setting-sources project(2026-09-15):老师只读 workspace 的 .claude/,~/.claude 的技能(obsidian-cli 之类)/ hooks / additionalDirectories / 插件都不进老师会话;
-      // 代价是 ~/.claude/settings.json 的 env(代理)也不进,serve 要从有代理的 shell 起,doctor env.userSettings 点名
-      // 普通老师的工具是白名单(--tools,2026-09-20;之前是 --disallowedTools Agent 黑名单):只有查教材、读文件、裁作业照片用得上的那几个。
-      // 不在名单里的连工具定义都不发(黑名单只禁调用、定义照发)。由来:claude 会把 .claude/agents/ 里的老师文件当可派的子代理,老师自己去派别的老师就把预算烧在自己这轮里;
-      // CLI 升版本还会带进新工具——2.1.275 真跑里老师去调了 Artifact、ToolSearch,每次白花一个来回。Skill 也不给:板书写法与守则由应用递,别的技能按路径 Read
-      // --strict-mcp-config(2026-10-04):--setting-sources 管不到账号上的 claude.ai 连接器,真跑里每位老师的会话都带着 8 个 Claude Docs 的 MCP 工具(--tools "" 也去不掉);
-      // 加了它、又不给 --mcp-config,就一个 MCP 都不进
-      // --tools {tools}(2026-10-04):孩子说的话缺省不带工具({tools} 填成空,工具定义都不发),带照片的、记账的填整份白名单;政策 tools: on 的老师总是带
-      // --effort {effort}:老师政策里的 effort(缺省 low),见 schema 的 PolicySchema.effort
-      // 板书写法由应用递给老师,递法看模板(《agent层设计.md》拍板 11):{boardFile} = 板书技能 SKILL.md 的绝对路径,claude 用 --append-system-prompt-file 追加进系统提示
-      // (落在「工具 → 系统」这段缓存前缀里,同一位老师的各话题共享);{systemBody} = 老师正文 + 板书写法,给只收一段系统提示文字的 CLI;
-      // 两个都没用的运行时(以后的 codex 之类),应用在话题第一条注入 <cotutor-board>。frontmatter 的 skills: 对 --agent 主线程不生效(claude 2.1.275 实测)
-      claude: {
-        run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--tools', '{tools}', '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
-        resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--tools', '{tools}', '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
-      },
-      qwen: {
-        run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{systemBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],
-        resume: ['qwen', '-p', '{prompt}', '--resume', '{session}', '--append-system-prompt', '{systemBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],
-      },
-    },
+    // 出厂运行时由各 CLI 的适配器给(src/clis/<cli>.ts 的 runtimes(),旗标为什么这么写的注释也在那里);缺省 claude
+    runtimes: { default: 'claude', ...factoryRuntimes() },
     tts: TTS_DEFAULT,
     // 字段说明不写在这里:一写进去就冻住(政策文件永不覆盖),$schema 指的 schema 文件每次 init / upgrade 从 zod 的 .describe() 刷新
     _note: '一孩一 workspace 的政策文件,家长改这里,机器不覆盖(写坏了靠 git 回退,cotutor doctor 可体检);每个字段的说明在 $schema 指的 .cotutor/cotutor.schema.json,编辑器里悬停就能看到。',

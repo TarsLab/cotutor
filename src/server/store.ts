@@ -9,6 +9,7 @@ import { basename, dirname, join, relative, sep } from 'node:path';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { cardAssetName, conversationFiles, emptyIndex, localDate, threads, type CardAssets, type CardStateFile, type CardStates } from '../lib/conversation.ts';
 import { parseTranscript, type Transcript } from '../lib/transcript.ts';
+import { parserForRuntime } from '../clis/index.ts';
 import { applyMemoryOps, frontmatter, memoryPath, memoryTemplate, parseMemoryOp, undoMemoryLines, type MemoryLine, type VaultNote } from '../lib/vault-notes.ts';
 import {
   ConversationIndexSchema,
@@ -70,9 +71,10 @@ export async function listDates(ws: Workspace, tutor: string): Promise<string[]>
   }
 }
 
-export async function readTranscript(ws: Workspace, tutor: string, date: string, job: string): Promise<Transcript | null> {
+/** runtime:这轮的运行时名(消息上记着),按它的 CLI 适配器读;不给按 stream-json */
+export async function readTranscript(ws: Workspace, tutor: string, date: string, job: string, runtime?: string): Promise<Transcript | null> {
   try {
-    return parseTranscript(await readFile(conversationFiles(ws.dirs.conversations, tutor, date).log(job), 'utf8'));
+    return parseTranscript(await readFile(conversationFiles(ws.dirs.conversations, tutor, date).log(job), 'utf8'), parserForRuntime(ws.config.runtimes, runtime));
   } catch {
     return null;
   }

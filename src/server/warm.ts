@@ -2,7 +2,7 @@
  * 预热(《工作流程.md》§四「预热」,2026-09-29):消息走 stdin 的运行时,下一轮的老师进程提前起好、在 stdin 上等着;
  * 孩子开口时对得上就接过来写消息,省掉起进程与读会话(真跑冷起中位 1.8 秒,预热约 0.07 秒)。
  * 一位老师两个位置:resume(接某个话题的会话)与 fresh(新开会话:新话题、接着上次)。
- * 对得上 = argv、cwd、日期、**这个话题**末条 job 都和它起来时一样(fresh 没有会话,末条记 null):
+ * 对得上 = argv、适配器定的环境变量、cwd、日期、**这个话题**末条 job 都和它起来时一样(fresh 没有会话,末条记 null):
  * argv 管换话题 / 会话 / 老师正文 / effort / cotutor.json,末条 job 管「会话被别的进程写过」(它起来时读的会话就旧了,拿它写会分叉)。
  * 对不上、闲置超时、自己退了,都杀掉,调用方走冷起。开口前吐的字节(claude 实测一个都没有)先攒着,接过来时交出去。
  */
@@ -15,9 +15,11 @@ export const WARM_IDLE_MS = 60 * 60_000;
 export type Slot = 'resume' | 'fresh';
 export const SLOTS: readonly Slot[] = ['resume', 'fresh'];
 
-/** 对得上才用:argv、cwd、日期、这个话题末条 job(fresh 为 null) */
+/** 对得上才用:argv、适配器定的环境变量、cwd、日期、这个话题末条 job(fresh 为 null) */
 export interface SpareKey {
   argv: readonly string[];
+  /** 计划里适配器定的环境变量(qwen 按 effort 选的配置之类);不给当空 */
+  env?: Readonly<Record<string, string>>;
   cwd: string;
   date: string;
   lastJob: string | null;
@@ -40,7 +42,7 @@ interface Held extends Omit<Spare, 'closed'> {
   idle: NodeJS.Timeout;
 }
 
-const keyOf = (k: SpareKey): string => JSON.stringify([k.argv, k.cwd, k.date, k.lastJob]);
+const keyOf = (k: SpareKey): string => JSON.stringify([k.argv, Object.entries(k.env ?? {}).sort(), k.cwd, k.date, k.lastJob]);
 const at = (tutor: string, slot: Slot): string => `${tutor}\n${slot}`;
 
 export class WarmPool {

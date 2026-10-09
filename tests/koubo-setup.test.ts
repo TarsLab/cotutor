@@ -28,7 +28,7 @@ cfg.tutors['koubo-tutor'].enabled = true;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const up = await upgradeSkills(root);
 const steps = await setupKoubo(root);
-check('打开后 upgrade:koubo-cli / koubo-coach 补上,.qwen 链也在', up.filter((s) => s.name.startsWith('koubo-')).every((s) => s.action === 'installed') && existsSync(join(root, '.claude', 'skills', 'koubo-coach', 'SKILL.md')) && existsSync(join(root, '.qwen', 'skills', 'koubo-cli')), JSON.stringify(up.filter((s) => s.name.startsWith('koubo-'))));
+check('打开后 upgrade:koubo-cli / koubo-coach 补上(.qwen 链退役,不建)', up.filter((s) => s.name.startsWith('koubo-')).every((s) => s.action === 'installed') && existsSync(join(root, '.claude', 'skills', 'koubo-coach', 'SKILL.md')) && !existsSync(join(root, '.qwen', 'skills', 'koubo-cli')), JSON.stringify(up.filter((s) => s.name.startsWith('koubo-'))));
 check('koubo 工作区就是 workspace 根:koubo.json、takes/;ledger/ 两家共用(cotutor 的 artifacts.jsonl 还在)', existsSync(join(root, 'koubo.json')) && existsSync(join(root, 'takes')) && existsSync(join(root, 'ledger', 'artifacts.jsonl')), JSON.stringify(steps));
 check('.gitignore 补了 takes/**/*.wav', readFileSync(join(root, '.gitignore'), 'utf8').includes('takes/**/*.wav'));
 await setupKoubo(root);
@@ -39,6 +39,7 @@ check('再来一次:那一行不重复,koubo.json 不重建', readFileSync(join(
   const { mkdirSync, symlinkSync } = await import('node:fs');
   mkdirSync(join(root, '.claude', 'skills', 'cotutor-prep'), { recursive: true });
   writeFileSync(join(root, '.claude', 'skills', 'cotutor-prep', 'SKILL.md'), '旧的');
+  mkdirSync(join(root, '.qwen', 'skills'), { recursive: true });
   symlinkSync('../../.claude/skills/cotutor-prep', join(root, '.qwen', 'skills', 'cotutor-prep'));
   const m = await readManifest(root);
   await writeManifest(root, { ...m, skills: { ...m.skills, 'cotutor-prep': { hash: 'x', version: '0' } } });

@@ -1,7 +1,7 @@
 /**
  * workspace骨架清单:init 建、doctor 查,同一张清单(两边各写一遍必然漂移)。
  * 布局见《cotutor-agent层设计.md》§2:
- *   cotutor.json / .claude/agents(老师文件,拷自本包 agents/,是家长的)/ .qwen/agents(相对链)/ .cotutor/shipped.json(出厂 hash)
+ *   cotutor.json / .claude/agents(老师文件,拷自本包 agents/,是家长的;所有 CLI 都从这里拿老师正文)/ .cotutor/shipped.json(出厂 hash)
  *   agents/<name>/(老师的家 = 会话 cwd)/ ledger/(产物账本)/ conversations/(对话索引与转录)
  * vault 侧(《obsidian仓库设计.md》):档案 / 课程表 / 日记 / 教材 / 计划 / 参考,init 只建档案与参考 README(缺了才写)
  */
@@ -16,7 +16,7 @@ import { factoryRuntimes } from '../clis/index.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 
-export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'bundles'] as const;
+export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', 'bundles'] as const;
 export const LEDGER_FILES = ['ledger/artifacts.jsonl'] as const;
 
 /** 本包自带的老师文件目录(仓库检出与 npm 安装都在包根 agents/) */

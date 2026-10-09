@@ -1,6 +1,6 @@
 /**
  * 出厂 skill:与老师文件同一套「拷不链」机制——init 拷进 workspace 的 .claude/skills/<name>/,hash 记 .cotutor/shipped.json 的 skills,
- * .qwen/skills/<name> 是相对链。出厂表 SHIPPED_SKILLS 每项带来源与 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录):
+ * (原来 .qwen/skills/<name> 是相对链,2026-10-09 退役,init / upgrade 删掉旧链,《agent层设计.md》拍板 15。)出厂表 SHIPPED_SKILLS 每项带来源与 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录):
  * - 来源 cotutor = 本包根 skills/<name>/(进 npm files;cotutor-board 整个、cotutor-vault 的 references/ 是 scripts/gen-skills.ts 生成后入库的,
  *   tests/skills.test.ts 断言一致),来源 drawtell = drawtell 包根 skills/<name>/(四个领域 skill,2026-09-15 从退役的 drawtell-skills 仓搬过去的;
  *   没装 → unavailable,doctor 点名,init 跳过)
@@ -10,7 +10,7 @@
  * 顺带两个机器文件 .cotutor/drawtell、.cotutor/koubo:指向本包 node_modules 里 CLI 的壳脚本,老师与应用用相对路径就能跑它们。
  */
 import { createHash } from 'node:crypto';
-import { chmod, cp, lstat, mkdir, readFile, readdir, readlink, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, lstat, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,7 +22,7 @@ import { HOME_SKILL } from '../lib/home-doc.ts';
 import { TUTOR_SKILL } from '../lib/tutor-rules.ts';
 export { ANALYZE_SKILL, BOARD_SKILL, HOME_SKILL, TUNE_SKILL, TUTOR_SKILL, VAULT_SKILL };
 import { PACKAGE_VERSION } from './skeleton.ts';
-import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
+import { pruneQwenDirs, readManifest, retireQwenLink, writeManifest, type ShippedManifest } from './tutors.ts';
 
 export interface ShippedSkill {
   name: string;
@@ -175,25 +175,9 @@ async function installOne(root: string, skill: ShippedSkill, src: string, manife
   manifest.skills[skill.name] = { hash: await dirHash(claude), version: PACKAGE_VERSION };
 }
 
-async function ensureQwenLink(root: string, name: string): Promise<'created' | 'exists' | 'replaced'> {
-  const { claude, qwen } = skillDirs(root, name);
-  await mkdir(dirname(qwen), { recursive: true });
-  const want = relative(dirname(qwen), claude);
-  const st = await lstat(qwen).catch(() => null);
-  if (st?.isSymbolicLink() && (await readlink(qwen).catch(() => '')) === want) return 'exists';
-  if (st) {
-    if (!st.isSymbolicLink()) return 'exists';
-    await unlink(qwen);
-    await symlink(want, qwen);
-    return 'replaced';
-  }
-  await symlink(want, qwen);
-  return 'created';
-}
-
 export interface SkillStep {
   item: string;
-  action: 'created' | 'exists' | 'kept' | 'replaced';
+  action: 'created' | 'exists' | 'kept' | 'replaced' | 'removed';
   note?: string;
 }
 
@@ -220,9 +204,9 @@ export async function installSkills(root: string): Promise<SkillStep[]> {
       touched = true;
       steps.push({ item, action: 'exists', note: s.state === 'latest' ? '已按本包刷新(机器件)' : '已按本包换新(机器件,不认改动)' });
     } else steps.push({ item, action: 'exists', note: s.state === 'custom' ? `自定义(基于 ${s.basedOn})` : s.state === 'upgradable' ? '可升级(cotutor upgrade)' : s.state === 'untracked' ? '已有(没有出厂记录);升级时当自定义对待' : undefined });
-    const q = await ensureQwenLink(root, name);
-    steps.push({ item: `.qwen/skills/${name}`, action: q, note: q === 'exists' ? undefined : '→ ../../.claude/skills/' });
+    if (await retireQwenLink(skillDirs(root, name).qwen)) steps.push({ item: `.qwen/skills/${name}`, action: 'removed', note: '链退役(qwen 的技能工具不给)' });
   }
+  await pruneQwenDirs(root);
   if (touched) await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   return steps;
 }
@@ -252,16 +236,17 @@ export async function upgradeSkills(root: string): Promise<SkillUpgradeStep[]> {
     else if (s.state === 'missing') { await installOne(root, skill, src, manifest); steps.push({ name, action: 'installed', machine }); }
     else if (s.state === 'upgradable') { await installOne(root, skill, src, manifest); steps.push({ name, action: 'upgraded', basedOn: s.basedOn, machine }); }
     else steps.push({ name, action: 'kept-custom', basedOn: s.basedOn, machine });
-    await ensureQwenLink(root, name);
+    await retireQwenLink(skillDirs(root, name).qwen);
   }
   for (const name of RETIRED_SKILLS) {
     if (!manifest.skills?.[name]) continue;
     const { claude, qwen } = skillDirs(root, name);
     await rm(claude, { recursive: true, force: true });
-    if ((await lstat(qwen).catch(() => null))?.isSymbolicLink()) await unlink(qwen);
+    await retireQwenLink(qwen);
     delete manifest.skills[name];
     steps.push({ name, action: 'retired', machine: true });
   }
+  await pruneQwenDirs(root);
   await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   return steps;
 }

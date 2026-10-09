@@ -1,5 +1,5 @@
 /** init 幂等补缺、老师文件是拷贝;doctor 把缺文件、坏配置、坏账本摆到明面。 */
-import { statSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { statSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -19,22 +19,32 @@ try {
   const r1 = await initWorkspace({ slug: 'ming', name: '小明' });
   const ws = join(home, 'cotutor', 'ming');
   check('缺省建在 ~/cotutor/<slug>', r1.root === ws && existsSync(ws), r1.root);
-  check('骨架目录齐', ['agents', 'ledger', 'conversations', '.claude/agents', '.qwen/agents', 'bundles'].every((d) => existsSync(join(ws, d))) && !existsSync(join(ws, 'scenes')) && !existsSync(join(ws, 'snaps')));
+  check('骨架目录齐(.qwen/ 退役,不建)', ['agents', 'ledger', 'conversations', '.claude/agents', 'bundles'].every((d) => existsSync(join(ws, d))) && !existsSync(join(ws, 'scenes')) && !existsSync(join(ws, 'snaps')) && !existsSync(join(ws, '.qwen')));
   check('老师目录齐', ['math-tutor', 'chinese-tutor', 'english-tutor', 'koubo-tutor'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
   const link = join(ws, '.claude', 'agents', 'math-tutor.md');
   check('老师文件是拷贝,内容同本包', !lstatSync(link).isSymbolicLink() && readFileSync(link, 'utf8') === readFileSync(join(PACKAGE_AGENTS_DIR, 'math-tutor.md'), 'utf8'));
-  check('.qwen 是指向 .claude 的相对链', lstatSync(join(ws, '.qwen', 'agents', 'chinese-tutor.md')).isSymbolicLink() && readlinkSync(join(ws, '.qwen', 'agents', 'chinese-tutor.md')) === '../../.claude/agents/chinese-tutor.md');
+  {
+    // 老 workspace 的 .qwen 两套链(2026-10-09 退役,《agent层设计.md》拍板 15):再 init 一次,是链就删,家长手放的实体文件留着,空了的目录删掉
+    mkdirSync(join(ws, '.qwen', 'agents'), { recursive: true });
+    mkdirSync(join(ws, '.qwen', 'skills'), { recursive: true });
+    symlinkSync('../../.claude/agents/chinese-tutor.md', join(ws, '.qwen', 'agents', 'chinese-tutor.md'));
+    symlinkSync('../../.claude/skills/cotutor-board', join(ws, '.qwen', 'skills', 'cotutor-board'));
+    writeFileSync(join(ws, '.qwen', 'agents', 'mine.md'), '家长自己的');
+    const again = await initWorkspace({ slug: 'ming', name: '小明' });
+    check('再 init:.qwen 的旧链删掉(报 removed),家长的实体文件留着,空的 skills/ 删掉', again.steps.some((x) => x.item === '.qwen/agents/chinese-tutor.md' && x.action === 'removed') && !lstatSync(join(ws, '.qwen', 'agents', 'chinese-tutor.md'), { throwIfNoEntry: false }) && !existsSync(join(ws, '.qwen', 'skills')) && readFileSync(join(ws, '.qwen', 'agents', 'mine.md'), 'utf8') === '家长自己的');
+    rmSync(join(ws, '.qwen'), { recursive: true, force: true });
+  }
   check('出厂 hash 记下', (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { tutors: Record<string, { hash: string }> }).tutors['math-tutor'].hash.startsWith('sha256:'));
   check('产物账本空文件在', existsSync(join(ws, 'ledger', 'artifacts.jsonl')));
   const skillMd = readFileSync(join(ws, '.claude', 'skills', 'cotutor-board', 'SKILL.md'), 'utf8');
-  check('板书技能出厂:SKILL.md 有 frontmatter 与语法表、和包里 skills/ 一致,references/ 逐张 + 索引,.qwen 相对链', skillMd.startsWith('---\nname: cotutor-board\ndescription: ') && skillMd.includes('### choice') && existsSync(join(ws, '.claude', 'skills', 'cotutor-board', 'references', 'choice.md')) && readFileSync(join(ws, '.claude', 'skills', 'cotutor-board', 'references', 'README.md'), 'utf8').includes('**choice**') && readlinkSync(join(ws, '.qwen', 'skills', 'cotutor-board')) === '../../.claude/skills/cotutor-board' && skillMd === readFileSync(join(PACKAGE_SKILLS_DIR, 'cotutor-board', 'SKILL.md'), 'utf8'));
+  check('板书技能出厂:SKILL.md 有 frontmatter 与语法表、和包里 skills/ 一致,references/ 逐张 + 索引', skillMd.startsWith('---\nname: cotutor-board\ndescription: ') && skillMd.includes('### choice') && existsSync(join(ws, '.claude', 'skills', 'cotutor-board', 'references', 'choice.md')) && readFileSync(join(ws, '.claude', 'skills', 'cotutor-board', 'references', 'README.md'), 'utf8').includes('**choice**') && skillMd === readFileSync(join(PACKAGE_SKILLS_DIR, 'cotutor-board', 'SKILL.md'), 'utf8'));
   const analyzeMd = readFileSync(join(ws, '.claude', 'skills', 'cotutor-analyze', 'SKILL.md'), 'utf8');
   check('analyze 技能出厂(2026-09-15):手写 SKILL.md + 生成的 references/命令与文件.md(命令行从 usage 取、文件名从 conversationFiles 取)', analyzeMd.startsWith('---\nname: cotutor-analyze\ndescription: ') && readFileSync(join(ws, '.claude', 'skills', 'cotutor-analyze', 'references', '命令与文件.md'), 'utf8').includes('cotutor replay <老师> <job>') && readFileSync(join(ws, '.claude', 'skills', 'cotutor-analyze', 'references', '命令与文件.md'), 'utf8').includes('<日期>.<job>.run.json'));
   const tuneRef = readFileSync(join(ws, '.claude', 'skills', 'cotutor-tune', 'references', '字段.md'), 'utf8');
   check('tune 技能出厂(2026-09-15):手写 SKILL.md + 生成的 references/字段.md(tutors 字段与政策缺省从契约取、frontmatter 键从 agent-file 取)', readFileSync(join(ws, '.claude', 'skills', 'cotutor-tune', 'SKILL.md'), 'utf8').startsWith('---\nname: cotutor-tune\ndescription: ') && tuneRef.includes('| `display` | 必需 |') && tuneRef.includes('| `contextPack.entryChars` | 必需 | 4000 |') && tuneRef.includes('`permissionMode`') && tuneRef.includes('cotutor add <老师名>'));
   const vaultMd = readFileSync(join(ws, '.claude', 'skills', 'cotutor-vault', 'SKILL.md'), 'utf8');
-  check('vault 技能出厂:手写 SKILL.md + 生成的 references/记账.md,和包里一致,.qwen 相对链', vaultMd.startsWith('---\nname: cotutor-vault\ndescription: ') && vaultMd === readFileSync(join(PACKAGE_SKILLS_DIR, 'cotutor-vault', 'SKILL.md'), 'utf8') && readFileSync(join(ws, '.claude', 'skills', 'cotutor-vault', 'references', '记账.md'), 'utf8').includes('## 字段') && readlinkSync(join(ws, '.qwen', 'skills', 'cotutor-vault')) === '../../.claude/skills/cotutor-vault');
-  check('四个领域 skill 拷进 .claude/skills/,.qwen/skills/ 是相对链,hash 记下', existsSync(join(ws, '.claude', 'skills', 'drawtell-scene', 'SKILL.md')) && existsSync(join(ws, '.claude', 'skills', 'drawtell-teaching', 'models-index.md')) && lstatSync(join(ws, '.qwen', 'skills', 'drawtell-cli')).isSymbolicLink() && readlinkSync(join(ws, '.qwen', 'skills', 'drawtell-cli')) === '../../.claude/skills/drawtell-cli' && (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { skills: Record<string, { hash: string }> }).skills['drawtell-verify'].hash.startsWith('sha256:'));
+  check('vault 技能出厂:手写 SKILL.md + 生成的 references/记账.md,和包里一致', vaultMd.startsWith('---\nname: cotutor-vault\ndescription: ') && vaultMd === readFileSync(join(PACKAGE_SKILLS_DIR, 'cotutor-vault', 'SKILL.md'), 'utf8') && readFileSync(join(ws, '.claude', 'skills', 'cotutor-vault', 'references', '记账.md'), 'utf8').includes('## 字段'));
+  check('四个领域 skill 拷进 .claude/skills/,hash 记下', existsSync(join(ws, '.claude', 'skills', 'drawtell-scene', 'SKILL.md')) && existsSync(join(ws, '.claude', 'skills', 'drawtell-teaching', 'models-index.md')) && (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { skills: Record<string, { hash: string }> }).skills['drawtell-verify'].hash.startsWith('sha256:'));
   check('出厂主题拷进 themes/default/,hash 记下', existsSync(join(ws, 'themes', 'default', 'theme.json')) && existsSync(join(ws, 'themes', 'default', 'kid.css')) && (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { themes: Record<string, { hash: string }> }).themes.default.hash.startsWith('sha256:'));
   check('drawtell 壳脚本在,可执行,指向本包的 drawtell', readFileSync(join(ws, '.cotutor', 'drawtell'), 'utf8').includes('drawtell.js') && (statSync(join(ws, '.cotutor', 'drawtell')).mode & 0o100) !== 0);
   check('没有画图老师(2026-10-07 删了):老师表、运行时、老师文件都没有', !('scene-maker' in (JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { tutors: Record<string, unknown> }).tutors) && !('claude-scene' in (JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { runtimes: Record<string, unknown> }).runtimes) && !existsSync(join(ws, '.claude', 'agents', 'scene-maker.md')));
@@ -78,7 +88,7 @@ try {
   check('doctor 报每位有脸的老师讲哪几种卡', d1.checks.find((c) => c.name === 'tutor.math-tutor.cards')?.detail === '板书写法讲 text choice fill image lecture canvas code' && d1.checks.find((c) => c.name === 'tutor.koubo-tutor.cards')?.detail === '板书写法讲 text read record', JSON.stringify(d1.checks.filter((c) => c.name.endsWith('.cards'))));
   check('doctor 查主题:清单过契约、出厂件最新', d1.checks.some((c) => c.name === 'theme.manifest' && c.ok) && d1.checks.some((c) => c.name === 'theme.default.origin' && c.ok));
   check('doctor 查 skill 与 drawtell 壳', d1.checks.filter((c) => c.name.startsWith('skill.') && c.ok).length === 10 && d1.checks.some((c) => c.name === 'skill.cotutor-vault' && c.required) && d1.checks.some((c) => c.name === 'skill.cotutor-home' && c.required) && !d1.checks.some((c) => c.name === 'skill.cotutor-prep') && d1.checks.filter((c) => c.name.startsWith('skill.drawtell') && !c.required).length === 4 && d1.checks.some((c) => c.name === 'drawtell' && c.ok && !c.required));
-  check('默认运行时是 claude → .claude 链必需、.qwen 链非必需', d1.checks.some((c) => c.name === 'tutor.math-tutor.claude' && c.required) && d1.checks.some((c) => c.name === 'tutor.math-tutor.qwen' && !c.required));
+  check('老师文件(.claude/agents/)必需,不管哪个 CLI;不再查 .qwen 链', d1.checks.some((c) => c.name === 'tutor.math-tutor.claude' && c.required) && !d1.checks.some((c) => c.name.endsWith('.qwen')));
   check('git 是建议', d1.checks.some((c) => c.name === 'git' && !c.ok && !c.required));
 
   unlinkSync(link);
@@ -160,7 +170,6 @@ try {
     writeFileSync(cfgFile, `${JSON.stringify(old, null, 2)}\n`);
     // 那会儿口播老师还不存在:文件、链、家、出厂记录都没有
     unlinkSync(join(ws, '.claude', 'agents', 'koubo-tutor.md'));
-    unlinkSync(join(ws, '.qwen', 'agents', 'koubo-tutor.md'));
     rmSync(join(ws, 'agents', 'koubo-tutor'), { recursive: true, force: true });
     const shipped = JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { tutors: Record<string, unknown> };
     delete shipped.tutors['koubo-tutor'];
@@ -191,7 +200,7 @@ try {
     const after = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
     check('补上之后:新老师、旗标都在', applied.applied && after.tutors['koubo-tutor'].enabled === false && (after.runtimes.claude.run as string[]).join(' ').includes('--tools {tools} --effort {effort}') && (after.runtimes.claude.run as string[]).join(' ').includes('--disallowedTools Agent') && (after.runtimes.claude.resume as string[]).join(' ').includes('--effort {effort}') && (after.runtimes.claude.resume as string[]).includes('--include-partial-messages'));
     check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['english-tutor'].enabled === false && (after.runtimes.claude.run as string[]).slice(-2).join(' ') === '--model sonnet' && after._note === '家长自己写的说明' && after.$schema === old.$schema);
-    check('新老师的文件、.qwen 链、家跟着补上', existsSync(join(ws, '.claude', 'agents', 'koubo-tutor.md')) && lstatSync(join(ws, '.qwen', 'agents', 'koubo-tutor.md')).isSymbolicLink() && existsSync(join(ws, 'agents', 'koubo-tutor', '.gitkeep')) && applied.installed.length > 0);
+    check('新老师的文件、家跟着补上(不再建 .qwen 链)', existsSync(join(ws, '.claude', 'agents', 'koubo-tutor.md')) && !existsSync(join(ws, '.qwen', 'agents', 'koubo-tutor.md')) && existsSync(join(ws, 'agents', 'koubo-tutor', '.gitkeep')) && applied.installed.length > 0);
 
     {
       // 2026-10-04 之前的模板:--tools 后面是写死的白名单。没改过的换成 {tools},出厂要带工具的老师(口播)政策里写明;家长改过的白名单不动

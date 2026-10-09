@@ -180,7 +180,7 @@ export interface UpgradeConfigResult {
   gaps: ConfigGap[];
   /** 真写了没有(--dry-run 与没有差异时都是 false) */
   applied: boolean;
-  /** 新老师进了表之后顺带补的文件与目录(老师文件、.qwen 链、agents/<name>/) */
+  /** 新老师进了表之后顺带补的文件与目录(老师文件、agents/<name>/) */
   installed: InstallStep[];
   /** 改名挪了(--dry-run:要挪)的文件与目录 */
   moved: RenameOp[];

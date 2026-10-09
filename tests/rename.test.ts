@@ -1,5 +1,5 @@
 /** 出厂老师改名(reading-tutor → english-tutor)的迁移:upgrade --config 把设置、老师文件、目录、对话、记忆笔记、首页一起挪;冲突先查、一个都不动。 */
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -29,7 +29,8 @@ async function oldWorkspace(slug: string, opts: { custom?: boolean; display?: st
   const text = readFileSync(join(root, '.claude/agents', `${NEW}.md`), 'utf8').replace(`name: ${NEW}`, `name: ${OLD}`);
   unlinkSync(join(root, '.claude/agents', `${NEW}.md`));
   writeFileSync(join(root, '.claude/agents', `${OLD}.md`), opts.custom ? `${text}\n- 家长加的一条\n` : text);
-  unlinkSync(join(root, '.qwen/agents', `${NEW}.md`));
+  // 那会儿还有 .qwen 链(2026-10-09 退役)
+  mkdirSync(join(root, '.qwen/agents'), { recursive: true });
   symlinkSync(`../../.claude/agents/${OLD}.md`, join(root, '.qwen/agents', `${OLD}.md`));
   const m = await readManifest(root);
   delete m.tutors[NEW];
@@ -72,7 +73,7 @@ try {
   const status = Object.fromEntries((await tutorStatuses(root)).map((s) => [s.name, s.state]));
   const man = await readManifest(root);
   check('老师文件:旧的删了,新的是出厂原样,记录换了', !existsSync(join(root, '.claude/agents', `${OLD}.md`)) && status[NEW] === 'latest' && !(OLD in man.tutors) && NEW in man.tutors, JSON.stringify(status));
-  check('.qwen 链:旧的没了,新的指向新文件', lstatSync(join(root, '.qwen/agents', `${OLD}.md`), { throwIfNoEntry: false }) === undefined && readlinkSync(join(root, '.qwen/agents', `${NEW}.md`)).endsWith(`.claude/agents/${NEW}.md`));
+  check('.qwen 链:旧的删了,新的不再补(链已退役)', lstatSync(join(root, '.qwen/agents', `${OLD}.md`), { throwIfNoEntry: false }) === undefined && lstatSync(join(root, '.qwen/agents', `${NEW}.md`), { throwIfNoEntry: false }) === undefined);
   check('会话目录挪了', existsSync(join(root, 'agents', NEW, '.gitkeep')) && !existsSync(join(root, 'agents', OLD)));
   const idx = readFileSync(join(root, 'conversations', NEW, '2026-09-10.json'), 'utf8');
   check('对话挪了,索引的 tutor 与图片路径改了', !existsSync(join(root, 'conversations', OLD)) && existsSync(join(root, 'conversations', NEW, '2026-09-10.1658-1.log')) && JSON.parse(idx).tutor === NEW && idx.includes(`conversations/${NEW}/`) && !idx.includes(OLD), idx);

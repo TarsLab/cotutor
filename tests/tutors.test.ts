@@ -1,5 +1,5 @@
 /** 老师文件的出厂 / 自定义状态与 upgrade:没改过的换新、改过的只报 diff、--force 覆盖留 .bak、缺的补;lineDiff。 */
-import { mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -62,7 +62,7 @@ try {
   const added = await addTutorFile(root, { name: 'science-tutor', display: '科学老师', subject: '科学' });
   const fm = parseAgentFile(readFileSync(added.file, 'utf8'));
   check('模板:frontmatter name 一致、只有人设与学科,公共守则指向 <cotutor-rules>', fm.frontmatter.name === 'science-tutor' && fm.frontmatter.memory === undefined && fm.body.includes('科学老师') && fm.body.includes('入口文件') && fm.body.includes('<cotutor-rules>') && !fm.body.includes('子代理'), fm.body.slice(0, 80));
-  check('目录与 .qwen 链', existsSync(join(root, 'agents', 'science-tutor', '.gitkeep')) && readlinkSync(join(root, '.qwen', 'agents', 'science-tutor.md')) === '../../.claude/agents/science-tutor.md');
+  check('目录建好,不再建 .qwen 链', existsSync(join(root, 'agents', 'science-tutor', '.gitkeep')) && !existsSync(join(root, '.qwen', 'agents', 'science-tutor.md')));
   let dup = '';
   try {
     await addTutorFile(root, { name: 'science-tutor', display: 'x' });
@@ -79,7 +79,7 @@ try {
   check('名字不合规拒绝', badName.includes('不合规'));
   await patchConfig(loadWorkspace(root), { tutors: { 'science-tutor': { display: '科学老师', subject: '科学', avatar: '🔬', enabled: true } } });
   const d = await doctorWorkspace(root, { probeEnv: false });
-  check('doctor:自家老师文件 / 链 / 目录都 ✓,origin 标自家的', d.ok && d.checks.some((c) => c.name === 'tutor.science-tutor.claude' && c.ok) && d.checks.some((c) => c.name === 'tutor.science-tutor.qwen' && c.ok) && d.checks.some((c) => c.name === 'tutor.science-tutor.home' && c.ok) && d.checks.some((c) => c.name === 'tutor.science-tutor.origin' && c.detail.includes('自家')), JSON.stringify(d.checks.filter((c) => c.name.includes('science'))));
+  check('doctor:自家老师文件 / 目录都 ✓,origin 标自家的', d.ok && d.checks.some((c) => c.name === 'tutor.science-tutor.claude' && c.ok) && !d.checks.some((c) => c.name === 'tutor.science-tutor.qwen') && d.checks.some((c) => c.name === 'tutor.science-tutor.home' && c.ok) && d.checks.some((c) => c.name === 'tutor.science-tutor.origin' && c.detail.includes('自家')), JSON.stringify(d.checks.filter((c) => c.name.includes('science'))));
   check('upgrade 不碰自家老师', !(await upgradeTutors(root)).some((s) => s.name === 'science-tutor') && readFileSync(added.file, 'utf8').includes('科学老师'));
   check('tutorStatuses 只列出厂的', !(await tutorStatuses(root)).some((s) => s.name === 'science-tutor'));
 

@@ -107,7 +107,7 @@ export async function renameTutorData(root: string, vault: string, r: TutorRenam
     ops.push({ op: { item: '.cotutor/shipped.json', note: `去掉 ${r.from} 的出厂记录` }, run: async () => { delete manifest.tutors[r.from]; manifestTouched = true; } });
   }
   const qst = await lstat(oldF.qwen).catch(() => null);
-  if (qst?.isSymbolicLink()) ops.push({ op: { item: `.qwen/agents/${r.from}.md`, note: '旧链删掉,新链照常补' }, run: () => unlink(oldF.qwen) });
+  if (qst?.isSymbolicLink()) ops.push({ op: { item: `.qwen/agents/${r.from}.md`, note: '旧链删掉(.qwen 链已退役,不再补)' }, run: () => unlink(oldF.qwen) });
   else if (qst) {
     if (await exists(newF.qwen)) conflict(`.qwen/agents/${r.to}.md 已经在`);
     ops.push({ op: { item: `.qwen/agents/${r.from}.md`, note: `挪成 ${r.to}.md` }, run: () => rename(oldF.qwen, newF.qwen) });

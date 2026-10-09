@@ -107,7 +107,7 @@ ${rows.join('\n')}
 `;
 }
 
-/** 技能名;目录 .claude/skills/cotutor-board/,Qwen 那边 .qwen/skills/cotutor-board 是相对链 */
+/** 技能名;目录 .claude/skills/cotutor-board/ */
 export const BOARD_SKILL = 'cotutor-board';
 
 /** SKILL.md:frontmatter(两 CLI 都认 name / description;disable-model-invocation 只有 claude 认)+ 语法表;description 列出卡的种类,让模型不读正文也知道有哪几种 */

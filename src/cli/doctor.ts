@@ -71,7 +71,7 @@ async function evictedCount(dir: string): Promise<number> {
   }
 }
 
-/** 运行时的 CLI 名(run[0] 的 basename):决定链在 .claude 还是 .qwen 下 */
+/** 运行时的 CLI 名(run[0] 的 basename) */
 export function runtimeCli(run: readonly string[]): string {
   return basename(run[0] ?? '');
 }
@@ -288,39 +288,31 @@ export async function doctorWorkspace(
 
   if (ws) {
     // ---- 老师:定义文件(拷贝)+ 名字一致 + 出厂 / 自定义状态 + 老师目录 ----
-    const defaultCli = runtimeCli(ws.config.runtimes[ws.config.runtimes.default]?.run ?? []);
+    // 老师文件只有 .claude/agents/ 这一份:claude 用 --agent 读,别的 CLI 由应用读正文递进系统提示({agentBody} / {systemBody});.qwen/agents/ 的链 2026-10-09 退役
     const statuses = new Map((await tutorStatuses(root)).map((s) => [s.name, s]));
     for (const name of Object.keys(ws.config.tutors)) {
       const shipped = statuses.has(name);
-      for (const [cli, dir] of [
-        ['claude', ws.dirs.claudeAgents],
-        ['qwen', ws.dirs.qwenAgents],
-      ] as const) {
-        const file = join(dir, `${name}.md`);
-        const required = cli === defaultCli;
-        let detail: string;
-        let ok = false;
-        try {
-          const { frontmatter } = parseAgentFile(await readFile(file, 'utf8'));
-          ok = frontmatter.name === name;
-          detail = ok ? `${redactHome(file)} name 一致` : `${redactHome(file)} 的 frontmatter name 是 "${frontmatter.name ?? ''}",与老师键 ${name} 不一致`;
-        } catch {
-          detail = `${redactHome(file)} 读不到(链断了或没建)`;
-        }
-        push({
-          name: `tutor.${name}.${cli}`,
-          ok,
-          required,
-          detail,
-          fix: ok
-            ? undefined
-            : shipped
-              ? `cotutor init 补拷(拷自本包 agents/${name}.md),或把老师键改成文件里的 name`
-              : cli === 'qwen'
-                ? 'cotutor init 补链(.qwen/agents/ 指向 .claude/agents/)'
-                : `这是自家加的老师:写 .claude/agents/${name}.md(frontmatter name: ${name}),cotutor add ${name} --display <显示名> 可出模板;或把 cotutor.json 里这条删掉`,
-        });
+      const file = join(ws.dirs.claudeAgents, `${name}.md`);
+      let detail: string;
+      let ok = false;
+      try {
+        const { frontmatter } = parseAgentFile(await readFile(file, 'utf8'));
+        ok = frontmatter.name === name;
+        detail = ok ? `${redactHome(file)} name 一致` : `${redactHome(file)} 的 frontmatter name 是 "${frontmatter.name ?? ''}",与老师键 ${name} 不一致`;
+      } catch {
+        detail = `${redactHome(file)} 读不到`;
       }
+      push({
+        name: `tutor.${name}.claude`,
+        ok,
+        required: true,
+        detail,
+        fix: ok
+          ? undefined
+          : shipped
+            ? `cotutor init 补拷(拷自本包 agents/${name}.md),或把老师键改成文件里的 name`
+            : `这是自家加的老师:写 .claude/agents/${name}.md(frontmatter name: ${name}),cotutor add ${name} --display <显示名> 可出模板;或把 cotutor.json 里这条删掉`,
+      });
       const st = statuses.get(name);
       if (!st) push({ name: `tutor.${name}.origin`, ok: true, required: false, detail: '自家加的老师(不是出厂件,upgrade 不碰)' });
       if (st) {
@@ -390,8 +382,7 @@ export async function doctorWorkspace(
       }
       for (const sk of await skillStatuses(root)) {
         const label: Record<string, string> = { latest: sk.machine ? '机器件,最新' : '出厂件,最新', upgradable: sk.machine ? '机器件,和包里不一样(改过或包已更新)' : `出厂件,基于 ${sk.basedOn},包已更新`, custom: `自定义(基于 ${sk.basedOn})`, untracked: '自定义(没有出厂记录)', missing: sk.machine ? '缺(机器件,老师或家长的技能靠它)' : '缺', unavailable: `${sk.source} 没装,没法拷` };
-        const qwenOk = (await statOrNull(join(root, '.qwen', 'skills', sk.name)))?.isDirectory() ?? false;
-        push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'unavailable' && sk.state !== 'upgradable', required: Boolean(sk.machine), detail: `.claude/skills/${sk.name}/:${label[sk.state]}${qwenOk ? '' : ';.qwen/skills/ 链不通'}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor upgrade 换新版' : sk.state === 'unavailable' ? '仓库根 pnpm install' : qwenOk ? undefined : 'cotutor init 补链' });
+        push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'unavailable' && sk.state !== 'upgradable', required: Boolean(sk.machine), detail: `.claude/skills/${sk.name}/:${label[sk.state]}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor upgrade 换新版' : sk.state === 'unavailable' ? '仓库根 pnpm install' : undefined });
       }
       // ---- 主题:孩子端板书的样子,themes/<kid.theme>/;清单要过契约、css 要在;坏了服务退回出厂 default,孩子端不会没样子 ----
       {

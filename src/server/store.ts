@@ -252,15 +252,12 @@ const sha = (text: string): string => `sha256:${createHash('sha256').update(text
 /** 这轮起跑时老师文件与技能长什么样(记进 run.json;读不到的就 null / 空,不拦这一轮) */
 export async function snapshotSources(ws: Workspace, name: string): Promise<RunSources> {
   let agent: RunSources['agent'] = null;
-  for (const dir of [ws.dirs.claudeAgents, ws.dirs.qwenAgents]) {
-    const file = join(dir, `${name}.md`);
-    try {
-      const body = await readFile(file, 'utf8');
-      agent = { file: relative(ws.root, file), hash: sha(body), body };
-      break;
-    } catch {
-      /* 试下一处 */
-    }
+  const file = join(ws.dirs.claudeAgents, `${name}.md`);
+  try {
+    const body = await readFile(file, 'utf8');
+    agent = { file: relative(ws.root, file), hash: sha(body), body };
+  } catch {
+    /* 读不到:记 null */
   }
   const skills: Record<string, string> = {};
   const skillsDir = join(ws.root, '.claude', 'skills');
@@ -272,16 +269,14 @@ export async function snapshotSources(ws: Workspace, name: string): Promise<RunS
   return { agent, skills };
 }
 
-/** 老师文件正文(系统提示),给 {agentBody};从 .claude/agents/ 读,那里的链是必需项 */
+/** 老师文件正文(系统提示),给 {agentBody} / {systemBody};从 .claude/agents/ 读(所有 CLI 都从这里拿) */
 export async function readAgentBody(ws: Workspace, name: string): Promise<string> {
-  for (const dir of [ws.dirs.claudeAgents, ws.dirs.qwenAgents]) {
-    try {
-      return parseAgentFile(await readFile(join(dir, `${name}.md`), 'utf8')).body;
-    } catch {
-      /* 试下一处 */
-    }
+  const file = join(ws.dirs.claudeAgents, `${name}.md`);
+  try {
+    return parseAgentFile(await readFile(file, 'utf8')).body;
+  } catch {
+    throw new ConfigError(file, '老师文件读不到;cotutor init 补拷');
   }
-  throw new ConfigError(join(ws.dirs.claudeAgents, `${name}.md`), '老师文件读不到;cotutor init 补拷');
 }
 
 /** 给一个话题打星(1–5;null 清掉):话题要在这天的索引里;写回索引 */

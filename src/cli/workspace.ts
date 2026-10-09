@@ -168,7 +168,6 @@ export interface Workspace {
     ledger: string;
     conversations: string;
     claudeAgents: string;
-    qwenAgents: string;
     /** 课包(drawtell build 的产物,小课堂与 lecture 卡从这里放;派生物,gitignore) */
     bundles: string;
     /** 首页(《首页设计.md》):草稿、已发布、历史;publish 时才建,不进骨架 */
@@ -211,7 +210,6 @@ export function assembleWorkspace(root: string, source: RootSource, config: Cotu
       ledger: join(root, 'ledger'),
       conversations: join(root, 'conversations'),
       claudeAgents: join(root, '.claude', 'agents'),
-      qwenAgents: join(root, '.qwen', 'agents'),
       bundles: join(root, 'bundles'),
       home: join(root, 'home'),
       lectures: join(root, 'lectures'),

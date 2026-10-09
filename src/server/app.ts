@@ -30,6 +30,7 @@ import { DEV_PAGE } from './dev-page.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
 import { sendFile } from './send-file.ts';
+import { xlaoshiRoute } from '../xlaoshi/route.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets, type Heard, type RecordProps } from '../cards/index.ts';
 import { BUNDLE_ID_RE } from '../cards/kind.ts';
@@ -1038,6 +1039,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const f = await bundleAsset(ws.dirs.bundles, p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
+    // 小老师(家长用,代码都在 src/xlaoshi/,《wip/小老师设想.md》):/xlaoshi 与 /api/xlaoshi/* 交给它
+    const xl = await xlaoshiRoute(method, url, ctx, body); if (xl) return xl;
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
     // 工作台:对话原始视图、看原文、老师团、音色、设置、首页排版——给有技术背景的家长与开发者;家长端在 /parent
     if (p === '/dev') return { status: 200, html: DEV_PAGE };

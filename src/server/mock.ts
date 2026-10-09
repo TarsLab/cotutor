@@ -57,7 +57,7 @@ export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bund
 export const MOCK_LECTURES_DIR = fileURLToPath(new URL('../../tests/fixtures/lectures/', import.meta.url));
 const MOCK_LECTURE_DIRS = { dirs: { bundles: MOCK_BUNDLES_DIR, lectures: MOCK_LECTURES_DIR } };
 import { lineDurationMs, readyBeats, type BoardSection, type KidLecture, type PenName } from '../lib/kid-board.ts';
-import { REEL_LINE_GAP_MS, buildReel, playRecordOk, type PlayRecord } from '../lib/reel.ts';
+import { REEL_LINE_GAP_MS, buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord } from '../lib/reel.ts';
 import type { CardStates } from '../lib/conversation.ts';
 import { lanAddresses, listenInfo } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
@@ -629,7 +629,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const listOf = (name: string): MockMessage[] => (date === today ? messages.get(name) : date === yesterday() ? past.get(name) : undefined) ?? [];
       const tutors = MOCK_TUTORS.map((t) => {
         const list = listOf(t.name);
-        const by = new Map<string, { thread: string; at: string; title: string; from: 'kid'; via: null; sections: number; cards: number; stoppedAt: 'writing' | 'ask' | null; rating: number | null; booked: boolean }>();
+        const by = new Map<string, { thread: string; at: string; title: string; from: 'kid'; via: null; sections: number; cards: number; stoppedAt: 'writing' | 'ask' | null; rating: number | null; booked: boolean; misses?: number }>();
         for (const m of list) {
           let th = by.get(m.thread);
           if (!th) {
@@ -638,6 +638,12 @@ export function createMock(opts: MockOptions = {}): Mock {
           }
           if (m.pending) th.stoppedAt = 'writing';
           else if (m.section && (m.section.cards.length || m.section.lines.length)) { th.sections++; th.cards += m.section.cards.length; th.stoppedAt = m.section.lines[m.section.lines.length - 1]?.ask ? 'ask' : null; }
+        }
+        // 按住说话连着没发出去(拍板 10):攒着的实录里的 hold;mock 的消息没有真时刻,发成的一句只认打字发出去的
+        if (date === today) for (const th of by.values()) {
+          const plays = (mockPlays[t.name] ?? []).filter((x) => x.thread === th.thread).map((x) => x.rec);
+          const n = Math.max(0, ...reelMissRuns(reelHolds(plays, []), plays.filter((r) => r.k === 'type' && r.e === 'send').map((r) => r.at)).map((x) => x.n));
+          if (n) th.misses = n;
         }
         const recorded = list.reduce((n, m) => n + Object.keys(m.states ?? {}).filter((k) => m.section?.cards[Number(k)]?.kind === 'record').length, 0);
         return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], booking: false, ...(recorded ? { kouboYuan: recorded * 0.015 } : {}) };

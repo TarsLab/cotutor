@@ -148,6 +148,20 @@ try {
     check('录像接口:孩子端条目(答案剥了、只有这个话题的)、老师的脸、设备', rk.kid.length === 2 && rk.kid.map((m) => m.job).join() === '1620-1,1625-2' && rk.kid[0].section?.cards[0].props.answer === undefined && rk.kid[0].question === '7 减 9 怎么算' && rk.face.name === 'math-tutor' && typeof rk.face.display === 'string' && 'device' in rk, JSON.stringify({ kid: rk.kid.map((m) => [m.job, m.question, m.section?.cards[0]?.props]), face: rk.face, device: rk.device }));
     const re = (await get('/api/conversations/math-tutor/today/threads/1630-3/reel')).json as Rl;
     check('录像接口:出错的话题也有录像(开口 + 没成)', re.reel.tracks.length === 0 && re.reel.marks.map((m) => m.kind).join() === 'said,error', JSON.stringify(re));
+    // 按住说话连着没发出去(拍板 10):老话题没有 hold 实录,从 voice-diag 推;老的行不带话题,按那一刻最近开始的话题归(16:21 → 1620-1,16:31 → 1630-3)
+    const diagRow = (hm: string, ev: unknown[]) => JSON.stringify({ at: new Date(`${today}T${hm}`).toISOString(), where: 'bar', peak: 0, ev });
+    mkdirSync(join(root, '.cotutor'), { recursive: true });
+    writeFileSync(join(root, '.cotutor', 'voice-diag.jsonl'), [
+      diagRow('16:21:05', [['start()', 0], ['end', 3000, 0]]), diagRow('16:21:15', [['start()', 0], ['audiostart', 100], ['end', 3000, 0]]), diagRow('16:21:25', [['start()', 0], ['abort()', 900], ['end', 1000, 0]]),
+      diagRow('16:21:40', [['start()', 0], ['audiostart', 100], ['end', 3000, 4]]),
+      diagRow('16:31:05', [['start()', 0], ['end', 2000, 0]]), JSON.stringify({ at: new Date(`${today}T16:21:30`).toISOString(), where: 'mic', ev: [] }), 'not json',
+    ].join('\n') + '\n');
+    type RlH = { reel: { holds: { result: string; diag?: true }[]; misses: { n: number }[]; marks: { kind: string }[] } };
+    const rh = (await get('/api/conversations/math-tutor/today/threads/1620-1/reel')).json as RlH;
+    check('录像接口:老话题从 voice-diag 推没发出去的那几次(话筒没开的、没声音的、上滑取消的),出了字的那次不进;连着 3 次成一串', rh.reel.holds.map((x) => x.result).join() === 'unclear,unclear,cancel' && rh.reel.holds.every((x) => x.diag) && rh.reel.misses.length === 1 && rh.reel.misses[0].n === 3 && rh.reel.marks.filter((m) => m.kind === 'miss').length === 3, JSON.stringify(rh.reel.holds));
+    const ov2 = (await get('/api/overview/today')).json as { tutors: { name: string; threads: { thread: string; misses?: number }[] }[] };
+    const mt2 = ov2.tutors.find((t) => t.name === 'math-tutor')!;
+    check('清单:那个话题上「连着 3 次没发出去」;另一个话题只有一次,不标', mt2.threads.find((t) => t.thread === '1620-1')?.misses === 3 && mt2.threads.find((t) => t.thread === '1630-3')?.misses === undefined, JSON.stringify(mt2.threads));
     check('录像接口:没这个话题 / 没这位老师 404,未来的日期 400', (await get('/api/conversations/math-tutor/today/threads/9999-9/reel')).status === 404 && (await get('/api/conversations/nobody/today/threads/1620-1/reel')).status === 404 && (await get('/api/conversations/math-tutor/2099-01-01/threads/1620-1/reel')).status === 400);
   }
   check('404 / 405', (await get('/nope')).status === 404 && (await route('POST', '/api/health', ctx)).status === 200 && (await route('POST', '/api/workspace', ctx)).status === 405 && (await route('PUT', '/api/config', ctx)).status === 405);

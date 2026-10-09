@@ -106,6 +106,12 @@ try {
   const focusAt = types[0].at, sendAt = types.find((r) => r.e === 'send').at;
   await fetch(`${base}/api/kid/conversations/chinese-tutor/play`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ thread, sentAt: Date.now(), records: [{ at: focusAt + 50, k: 'view', w: 1180, h: 820, kb: 330, v: 'old00000' }, { at: sendAt + 50, k: 'view', w: 1180, h: 820, kb: 0, v: 'old00000' }] }) });
 
+  // ---- 家长端清单:这个话题上露「连着没发出去」 ----
+  await send('Page.navigate', { url: `${base}/parent` });
+  await until(`document.querySelectorAll('.pt').length > 0`);
+  const flag = await evaluate(`(document.querySelector('.pt[data-tutor="chinese-tutor"] .tr small .miss') || {}).textContent || ''`);
+  ok('家长端清单:这个话题上写「⚠ 按住说话连着 4 次没发出去」', flag.includes('⚠ 按住说话连着 4 次没发出去'), JSON.stringify(flag));
+
   // ---- 家长端看录像 ----
   await send('Page.navigate', { url: `${base}/parent?tutor=chinese-tutor` });
   await until(`document.querySelector('#tutor')?.classList.contains('on') && !document.querySelector('#reel-btn').hidden`, 40);
@@ -153,6 +159,17 @@ try {
   await seekAt(sentText + 100);
   const h4 = await look();
   ok('认出字的那次:浮层上是「Apple苹」,不在那一串里', h4.hold && h4.ht === 'Apple苹' && !h4.cap.startsWith('⚠'), JSON.stringify(h4));
+  // ---- 录像栏展开成经过(C):一条一行,点一条跳过去 ----
+  await evaluate(`document.querySelector('#rl-more').click()`);
+  await sleep(300);
+  const lg = await evaluate(`({ open: !document.querySelector('#rl-log').hidden, rows: [...document.querySelectorAll('#rl-log li')].map((li) => li.querySelector('.rl-k').textContent + '|' + li.querySelector('.rl-t').textContent), cur: document.querySelectorAll('#rl-log li.cur').length, fut: document.querySelectorAll('#rl-log li.fut').length })`);
+  ok('展开「经过」:有连着没发出去那一串、四次没发出去、打字(最后的字)、孩子开口;当前一条亮着、后面的淡着', lg.open && lg.rows.some((r) => r.startsWith('⚠ 连着|按住说话连着 4 次')) && lg.rows.filter((r) => r.startsWith('没发出去|')).length === 4 && lg.rows.includes('打字|他们在看大熊猫') && lg.rows.some((r) => r.startsWith('孩子|')) && lg.cur === 1, JSON.stringify(lg));
+  const i0 = await evaluate(`[...document.querySelectorAll('#rl-log li')].findIndex((li) => li.querySelector('.rl-k').textContent === '打字')`);
+  await evaluate(`document.querySelectorAll('#rl-log li')[${i0}].click()`);
+  await sleep(500);
+  const jumped = await evaluate(`({ cur: [...document.querySelectorAll('#rl-log li')].findIndex((li) => li.classList.contains('cur')), cap: document.querySelector('#rl-cap').textContent })`);
+  ok('点「打字」那一条:跳到那一刻,那条亮着,录像栏「⌨ 孩子在打字」', jumped.cur === i0 && jumped.cap === '⌨ 孩子在打字', JSON.stringify({ i0, jumped }));
+  console.log('  ', await shot('reel-log.png'));
   ok('页面没抛异常', errors.length === 0, errors.join(' | '));
   console.log(bad ? `${bad} 项没过` : '全过');
 } finally {

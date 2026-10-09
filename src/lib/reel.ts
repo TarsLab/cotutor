@@ -290,6 +290,46 @@ export function reelSaid(m: Pick<ConversationMessage, 'text' | 'via' | 'action'>
  * 某节的卡有状态文件、时刻更早,就把这节往前挪到念完时正好是那一刻。之后的轮按开口时刻、每拍就绪、mp3 时长顺着排;
  * 下一次开口时这节没念完的句不念了(孩子端发消息就停声音)。
  */
+/** 按住说话的几次:有 hold 实录照它分段(按下起、收尾止);没有的老话题用 voice-diag 推的没发出去的那几次(发出去的有原声那一段) */
+export function reelHolds(plays: readonly PlayRecord[], diag: readonly ReelDiag[]): ReelHold[] {
+  const holds: ReelHold[] = [];
+  let hd: ReelHold | null = null;
+  for (const r of plays) {
+    if (r.k !== 'hold') continue;
+    if (r.e === 'down') { if (hd) holds.push({ ...hd, to: Math.max(hd.to, r.at - 1) }); hd = { from: r.at, to: r.at, audioAt: null, upAt: null, texts: [], slides: [], result: null, lv: '' }; continue; }
+    if (!hd) continue;
+    hd.to = r.at;
+    if (r.e === 'audio') hd.audioAt ??= r.at;
+    else if (r.e === 'text') hd.texts.push({ at: r.at, text: r.text ?? '' });
+    else if (r.e === 'slide') hd.slides.push({ at: r.at, on: Boolean(r.on) });
+    else if (r.e === 'up') hd.upAt ??= r.at;
+    else { hd.result = r.r ?? null; hd.lv = r.lv ?? ''; holds.push(hd); hd = null; }
+  }
+  if (hd) holds.push({ ...hd, to: hd.to + 500 });
+  if (!plays.some((r) => r.k === 'hold')) {
+    for (const d of diag) {
+      if (d.result === 'sent') continue;
+      const from = d.at - d.ms;
+      holds.push({ from, to: d.at, audioAt: d.audioMs === null ? null : from + d.audioMs, upAt: null, texts: [], slides: [], result: d.result, lv: d.peak === 0 ? '0'.repeat(Math.min(600, Math.ceil(d.ms / 100))) : '', diag: true });
+    }
+  }
+  return holds.sort((a, b) => a.from - b.from);
+}
+
+/** 连着没发出去的几串(拍板 10):按时间走,发出去的一次或中间孩子发成了一句(sentAt:开口、打字发出去的时刻)就断开;够 REEL_MISS_STREAK 次才算 */
+export function reelMissRuns(holds: readonly ReelHold[], sentAt: readonly number[]): { from: number; to: number; n: number }[] {
+  const out: { from: number; to: number; n: number }[] = [];
+  let run: ReelHold[] = [];
+  const flush = (): void => { if (run.length >= REEL_MISS_STREAK) out.push({ from: run[0].from, to: run[run.length - 1].to, n: run.length }); run = []; };
+  for (const x of holds) {
+    if (x.result === 'sent') { flush(); continue; }
+    if (run.length && sentAt.some((at) => at > run[run.length - 1].to && at < x.from)) flush();
+    run.push(x);
+  }
+  flush();
+  return out;
+}
+
 export function buildReel(input: ReelInput): Reel | null {
   const turns = input.messages.filter((m) => !m.bookkeep && !m.tidy);
   const firstKid = turns.findIndex((m) => m.from === 'kid');
@@ -486,29 +526,7 @@ export function buildReel(input: ReelInput): Reel | null {
   });
 
   // ---- 改版补记的(拍板 6):按住说话、打字、发照片屏、屏幕尺寸、翻板书 ----
-  const holds: ReelHold[] = [];
-  let hd: ReelHold | null = null;
-  for (const r of plays) {
-    if (r.k !== 'hold') continue;
-    if (r.e === 'down') { if (hd) holds.push({ ...hd, to: Math.max(hd.to, r.at - 1) }); hd = { from: r.at, to: r.at, audioAt: null, upAt: null, texts: [], slides: [], result: null, lv: '' }; continue; }
-    if (!hd) continue;
-    hd.to = r.at;
-    if (r.e === 'audio') hd.audioAt ??= r.at;
-    else if (r.e === 'text') hd.texts.push({ at: r.at, text: r.text ?? '' });
-    else if (r.e === 'slide') hd.slides.push({ at: r.at, on: Boolean(r.on) });
-    else if (r.e === 'up') hd.upAt ??= r.at;
-    else { hd.result = r.r ?? null; hd.lv = r.lv ?? ''; holds.push(hd); hd = null; }
-  }
-  if (hd) holds.push({ ...hd, to: hd.to + 500 });
-  // 还没有 hold 实录的老话题:voice-diag 里没发出去的那几次(发出去的有原声那一段)
-  if (!plays.some((r) => r.k === 'hold')) {
-    for (const d of input.diag ?? []) {
-      if (d.result === 'sent') continue;
-      const from = d.at - d.ms;
-      holds.push({ from, to: d.at, audioAt: d.audioMs === null ? null : from + d.audioMs, upAt: null, texts: [], slides: [], result: d.result, lv: d.peak === 0 ? '0'.repeat(Math.min(600, Math.ceil(d.ms / 100))) : '', diag: true });
-    }
-  }
-  holds.sort((a, b) => a.from - b.from);
+  const holds = reelHolds(plays, input.diag ?? []);
   const types: ReelType[] = [];
   let ty: ReelType | null = null;
   for (const r of plays) {
@@ -542,18 +560,10 @@ export function buildReel(input: ReelInput): Reel | null {
     if (r.k === 'view') views.push({ at: r.at, w: r.w, h: r.h, kb: r.kb, v: r.v });
     else if (r.k === 'scroll' && secByJob.get(r.job)) scrolls.push({ at: r.at, job: r.job, card: r.card, dy: r.dy });
   }
-  // 没发出去的按住:每次一个淡点;连着 REEL_MISS_STREAK 次以上(中间孩子一句也没发成)标成一串(拍板 10)
-  const misses: Reel['misses'] = [];
+  // 没发出去的按住:每次一个淡点;连着 REEL_MISS_STREAK 次以上(中间孩子一句也没发成:开口或打字发出去)标成一串(拍板 10)
   const MISS_LABEL: Record<ReelHoldResult, string> = { sent: '', unclear: '没听清', cancel: '上滑取消了', dead: '识别没起来' };
-  let run: ReelHold[] = [];
-  const flush = (): void => { if (run.length >= REEL_MISS_STREAK) misses.push({ from: run[0].from, to: run[run.length - 1].to, n: run.length }); run = []; };
-  for (const x of holds) {
-    if (x.result === 'sent') { flush(); continue; }
-    if (run.length && (speakAt.some((at) => at > run[run.length - 1].to && at < x.from) || types.some((t) => t.sent && t.to > run[run.length - 1].to && t.to < x.from))) flush();
-    run.push(x);
-    marks.push({ kind: 'miss', at: x.from, job: '', label: '按住说话没发出去' + (x.result ? ' · ' + MISS_LABEL[x.result] : '') });
-  }
-  flush();
+  for (const x of holds) if (x.result !== 'sent') marks.push({ kind: 'miss', at: x.from, job: '', label: '按住说话没发出去' + (x.result ? ' · ' + MISS_LABEL[x.result] : '') });
+  const misses = reelMissRuns(holds, [...speakAt, ...types.filter((t) => t.sent).map((t) => t.to)]);
   for (const x of misses) marks.push({ kind: 'misses', at: x.from, to: x.to, job: '', label: `按住说话连着 ${x.n} 次没发出去` });
 
   // ---- 卡的状态:有实录的卡用每一次存(选了又改都在);没有的用状态文件(at 起生效,只有最后一次)。录音卡把孩子的录音也排进来 ----

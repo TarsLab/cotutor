@@ -303,6 +303,25 @@ const PAGE = `<!doctype html>
   #rl-marks i.miss { background:#b9b4a8; width:7px; height:7px; margin-left:-3.5px; top:1px; }
   #rl-marks i.misses { background:#e8743b40; border:1px solid #e8743b; border-radius:5px; height:9px; margin-left:-3px; box-sizing:border-box; }
   #rl-cap.miss { color:#b3541e; }
+  .pt .tr small .miss { color:#b3541e; }
+  /* 录像栏展开(拍板 8 的 C):这个话题的经过,一条一行;当前那条亮着、后面的淡着,点一条跳过去。往上拉展开、往下拉收起,也可以点「经过」 */
+  .rl-caprow { display:flex; align-items:center; gap:8px; min-height:24px; touch-action:none; }
+  .rl-caprow #rl-cap { flex:1; min-width:0; }
+  #rl-more { flex:none; font-size:13px; color:var(--dim); border:1px solid var(--line); border-radius:12px; padding:2px 10px; background:#fff; }
+  #rl-log { max-height:min(30vh, 260px); overflow-y:auto; border:1px solid var(--line); border-radius:12px; background:#fff; overscroll-behavior:contain; }
+  #rl-log[hidden] { display:none; }
+  #rl-log ol { list-style:none; margin:0; padding:4px 0; }
+  #rl-log li { display:grid; grid-template-columns:62px 68px minmax(0,1fr); gap:8px; align-items:baseline; padding:5px 12px; font-size:14px; line-height:1.45; cursor:pointer; }
+  #rl-log li .rl-c { font-variant-numeric:tabular-nums; color:var(--dim); font-size:12px; }
+  #rl-log li .rl-k { font-size:12px; border-radius:6px; padding:0 6px; text-align:center; white-space:nowrap; background:var(--grey); color:var(--dim); }
+  #rl-log li .rl-k.said { background:#fde3d2; color:#9a4318; }
+  #rl-log li .rl-k.card { background:var(--purple); color:var(--purple-ink); }
+  #rl-log li .rl-k.miss, #rl-log li .rl-k.err { background:#fbe0d6; color:#b3541e; }
+  #rl-log li .rl-k.tail { background:var(--ok); color:var(--ok-ink); }
+  #rl-log li .rl-t { min-width:0; overflow-wrap:anywhere; }
+  #rl-log li.fut { opacity:.45; }
+  #rl-log li.cur { background:#fdeee4; }
+  @media (max-width:600px) { #rl-log li { grid-template-columns:52px minmax(0,1fr); } #rl-log li .rl-k { display:none; } }
   /* 录像里看小课堂的那一段:铺在板书上,字幕行与控制条露着;只看 */
   /* 家长端录像(拍板 6):上半是孩子的屏幕(iframe 里的孩子端,按孩子设备的尺寸开、等比缩),下半是录像栏;家长页自己的板书、字幕行、顶栏收起来 */
   body.reel #wrap, body.reel #sub, body.reel .tb { display:none; }
@@ -510,7 +529,8 @@ const PAGE = `<!doctype html>
     </div>
     <div id="rl-screen" hidden><iframe id="rl-frame" title="孩子的屏幕" allow="autoplay"></iframe></div>
     <div id="reel" hidden>
-      <div id="rl-cap"></div>
+      <div id="rl-log" hidden><ol></ol></div>
+      <div class="rl-caprow" id="rl-caprow"><div id="rl-cap"></div><button id="rl-more" type="button" aria-expanded="false">经过 ▴</button></div>
       <div class="rl-track"><div id="rl-marks"></div><input id="rl-seek" type="range" min="0" max="1000" step="100" value="0" aria-label="录像进度"></div>
       <div class="rl-row"><button id="rl-play" type="button" aria-label="播放"></button><span class="rl-when"><span id="rl-clock"></span><span class="rl-tags"><button id="rl-tag" type="button">推算</button><button id="rl-ver" type="button" hidden>画法已更新</button></span></span><span class="rl-sp"></span><label class="rl-sw" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就按真实时间放"><input type="checkbox" id="rl-skip" role="switch" checked><i></i>跳过空白</label><button class="tx" id="rl-speed" type="button">1×</button><button class="tx" id="rl-x" type="button">退出</button></div>
     </div>
@@ -796,7 +816,7 @@ __REEL_JS__
     };
     const row = (t, th) => h('div', { class: 'tr', on: { click: () => openTutor(t, { kind: 'thread', thread: th.thread, date: H.date }) } },
       h('b', {}, th.title || '(没有话)'),
-      h('small', {}, clock(th.at) + ' · ' + th.sections + ' 节 · ' + th.cards + ' 张卡' + stopped(th) + (th.booked ? ' · 已记账' : t.booking && th.sections > 0 ? ' · 记账中' : '')),
+      h('small', {}, clock(th.at) + ' · ' + th.sections + ' 节 · ' + th.cards + ' 张卡' + stopped(th) + (th.booked ? ' · 已记账' : t.booking && th.sections > 0 ? ' · 记账中' : ''), th.misses ? h('span', { class: 'miss' }, ' · ⚠ 按住说话连着 ' + th.misses + ' 次没发出去') : null),
       stars(t, th), th.stoppedAt === 'writing' ? null : delBtn('conversations', t, th));
     $('#tutors').replaceChildren(...H.tutors.map((t) => h('div', { class: 'pt', 'data-tutor': t.name },
       h('div', { class: 'hd' }, avatarEl(t), h('div', { class: 'who' }, h('span', { class: 'nm' }, t.display), t.turns ? h('small', {}, h('span', {}, t.turns + ' 轮'), ...(t.kouboYuan ? [' ', h('span', {}, '· koubo ¥' + t.kouboYuan.toFixed(2))] : [])) : null)),
@@ -2559,6 +2579,34 @@ __REEL_JS__
     marks: () => { const R = S.reel; return R ? R.d.reel.marks.map((m) => ({ kind: m.kind, label: m.label, at: m.at, p: R.clock.toPlay(m.at), ...(m.to ? { pTo: R.clock.toPlay(m.to) } : {}) })) : []; },
     play: (on) => reelPlay(on),
     seek: (p) => reelSeek(p),
+    /** 这个话题的经过(录像栏展开后的列表):孩子做的每件事、等了多久、给家长的,一条一行,按时间排 */
+    events: () => {
+      const R = S.reel; if (!R) return [];
+      const rl = R.d.reel, out = [];
+      const add = (at, kind, chip, text) => { if (Number.isFinite(at)) out.push({ at, p: R.clock.toPlay(at), kind, chip, text }); };
+      const msgOf = (job) => R.d.messages.find((m) => m.job === job);
+      const took = (t) => (!t ? '' : [t.think !== null ? '想了 ' + reelDuration(t.think) : '', t.changes > 1 ? '改过 ' + (t.changes - 1) + ' 次' : ''].filter(Boolean).map((x) => ' · ' + x).join(''));
+      for (const m of rl.marks) {
+        if (m.kind === 'said') { const pm = msgOf(m.job); add(m.at, 'said', pm && pm.via ? '首页' : '孩子', m.label + (pm && pm.voice ? ' · 原声 ' + Math.round(pm.voice.seconds * 10) / 10 + ' 秒' : '')); if (pm && pm.cards && pm.cards.length) add(m.at + 1, 'card', '做了', pm.cards.map((c) => c.text + took(c.took)).join(';')); }
+        else if (m.kind === 'ask') add(m.at, 'wait', '等孩子', m.label);
+        else if (m.kind === 'error') add(m.at, 'err', '没成', m.label);
+        else if (m.kind === 'lecture' || m.kind === 'circle') add(m.at, 'card', '小课堂', m.label);
+        else if (m.kind === 'miss') add(m.at, 'miss', '没发出去', m.label.replace('按住说话没发出去 · ', '按住说话 · '));
+        else if (m.kind === 'misses') add(m.at - 1, 'miss', '⚠ 连着', m.label);
+      }
+      for (const w of rl.waits) if (w.to - w.from >= 3000) add(w.from + 1, 'wait', '等老师', reelDuration(w.to - w.from));
+      for (const g of rl.gaps) if (g.kind === 'think') add(g.from, 'wait', g.cont ? '又过了' : '孩子想了', reelDuration(g.ms));
+      for (const x of rl.stages) { const e = R.entries.find((y) => y.job === x.job); const c = e && e.cards[x.card]; add(x.from, 'card', '弹窗', (c ? cardTitle(c) : '一张卡') + ' · 开了 ' + reelDuration(x.to - x.from)); }
+      for (const x of rl.types) add(x.from, 'said', '打字', (x.vals.length ? x.vals[x.vals.length - 1].v : '') + (x.sent ? '' : ' · 没发'));
+      for (const x of rl.photoScreens) add(x.from, 'said', '拍照', x.sent ? '发了照片' : '打开又取消了');
+      // 节尾的旁注(给家长的、记住了):原来插在板书里,现在在这里
+      for (const n of rl.notes) {
+        const pm = msgOf(n.job); if (!pm) continue;
+        if (pm.parentText) add(n.postAt, 'tail', '给家长', pm.parentText.replace('## 家长', '').trim());
+        if (pm.remembered && pm.remembered.length) add(n.postAt, 'tail', '记住了', pm.remembered.join(';'));
+      }
+      return out.sort((a, b) => a.at - b.at);
+    },
     /** 跳到墙钟的某一刻(调试、探针) */
     seekAt: (w) => { const R = S.reel; if (R) reelSeek(R.clock.toPlay(w)); },
     /** 拖着进度条:不出声,画面跟着;松手走 seek */
@@ -2595,9 +2643,29 @@ __REEL_JS__
   };
 
   // ---- 录像栏:家长页上(隔着 iframe),或直接打开孩子屏幕时在它自己身上。只经把手 RE 说话 ----
-  let RE = null, dockTimer = 0, dockReal = null, dockPlaying = null, dockDragging = false;
+  let RE = null, dockTimer = 0, dockReal = null, dockPlaying = null, dockDragging = false, dockEv = [], dockCur = -2;
+  /** 经过的列表:跟着录像的钟亮当前那条;展开着才滚 */
+  const dockLog = (st) => {
+    if (st.real !== dockReal || !dockEv.length) {
+      dockEv = RE.events(); dockCur = -2;
+      $('#rl-log ol').replaceChildren(...dockEv.map((e, i) => h('li', { 'data-i': i, on: { click: () => { if (RE) RE.seek(e.p + 1); } } }, h('span', { class: 'rl-c' }, reelHms(e.at)), h('span', { class: 'rl-k ' + e.kind }, e.chip), h('span', { class: 'rl-t' }, e.text))));
+    }
+    let cur = -1; dockEv.forEach((e, i) => { if (e.at <= st.wall) cur = i; });
+    if (cur === dockCur) return;
+    dockCur = cur;
+    const lis = $('#rl-log ol').children;
+    for (let i = 0; i < lis.length; i++) { lis[i].classList.toggle('cur', i === cur); lis[i].classList.toggle('fut', i > cur); }
+    const box = $('#rl-log'), li = lis[Math.max(0, cur)];
+    if (!box.hidden && li) box.scrollTo({ top: Math.max(0, li.offsetTop - box.clientHeight / 2 + li.offsetHeight / 2), behavior: 'smooth' });
+  };
+  const dockMore = (open) => {
+    $('#rl-log').hidden = !open; $('#rl-more').setAttribute('aria-expanded', String(open)); $('#rl-more').textContent = open ? '经过 ▾' : '经过 ▴';
+    try { localStorage.setItem('parent-reel-log', open ? '1' : '0'); } catch {}
+    dockCur = -2; const st = RE && RE.get(); if (st) dockLog(st);
+  };
   const dockRender = () => {
     const st = RE && RE.get(); if (!st) return;
+    dockLog(st);
     if (st.real !== dockReal) {
       dockReal = st.real;
       $('#rl-seek').max = String(Math.max(1, Math.round(st.total)));
@@ -2614,7 +2682,9 @@ __REEL_JS__
     if (!REEL && st.size && reelSize && (st.size[0] !== reelSize[0] || st.size[1] !== reelSize[1])) { reelSize = st.size; reelFit(); }
   };
   const dockOpen = (api) => {
-    RE = api; dockReal = null; dockPlaying = null; dockDragging = false;
+    RE = api; dockReal = null; dockPlaying = null; dockDragging = false; dockEv = [];
+    let open = false; try { open = localStorage.getItem('parent-reel-log') === '1'; } catch {}
+    $('#rl-log').hidden = !open; $('#rl-more').setAttribute('aria-expanded', String(open)); $('#rl-more').textContent = open ? '经过 ▾' : '经过 ▴';
     const st = api.get();
     $('#rl-speed').textContent = st.speed + '×';
     $('#rl-tag').hidden = st.precise;
@@ -2671,6 +2741,12 @@ __REEL_JS__
   $('#rl-play').addEventListener('click', () => { if (RE) { const st = RE.get(); if (st) RE.play(!st.playing); } });
   $('#rl-x').addEventListener('click', reelClose);
   $('#rl-tag').addEventListener('click', () => toast(REEL_HINT));
+  $('#rl-more').addEventListener('click', () => dockMore($('#rl-log').hidden));
+  // 在说明那一行上往上拉展开、往下拉收起
+  { let y0 = null; const row = $('#rl-caprow');
+    row.addEventListener('pointerdown', (e) => { if (e.target.closest('#rl-more')) return; y0 = e.clientY; });
+    row.addEventListener('pointerup', (e) => { if (y0 === null) return; const dy = e.clientY - y0; y0 = null; if (dy < -24) dockMore(true); else if (dy > 24) dockMore(false); });
+    row.addEventListener('pointercancel', () => { y0 = null; }); }
   $('#rl-ver').addEventListener('click', () => toast('这段是旧版孩子端录的,现在用新版的样子画:板上有什么、孩子做了什么照旧,样子可能和孩子当时看到的不一样'));
   $('#rl-skip').addEventListener('change', (e) => { if (RE) RE.real(!e.target.checked); });
   $('#rl-speed').addEventListener('click', (e) => { if (!RE) return; const st = RE.get(); const x = REEL_SPEEDS[(REEL_SPEEDS.indexOf(st.speed) + 1) % REEL_SPEEDS.length]; RE.speed(x); e.currentTarget.textContent = x + '×'; });

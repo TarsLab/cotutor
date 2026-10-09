@@ -16,7 +16,7 @@ import { conversationFiles, currentThread, lastJobOf, localDate, threads } from 
 import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
-import { buildReel, playRecordOk, reelCardTook, type PlayRecord, type Reel, type ReelDiag } from '../lib/reel.ts';
+import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelDiag } from '../lib/reel.ts';
 import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
 import type { BoardCard, Device } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
@@ -324,7 +324,7 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const jobs = new Set(mine.map((m) => m.job));
   const cards = Object.fromEntries(Object.entries(states).filter(([job]) => jobs.has(job)));
   const plays = await readPlays(ctx.ws, tutor, date, jobs);
-  const diag = plays.some((r) => r.k === 'hold') ? [] : await readDiag(ctx, tutor, date, thread);
+  const diag = plays.some((r) => r.k === 'hold') ? [] : (await diagOfDay(ctx, date)).filter((x) => x.tutor === tutor && x.thread === thread).map((x) => x.d);
   const reel = buildReel({ messages: mine, events, cards, durations, tutor, now: ctx.now().getTime(), plays, diag });
   if (!reel) return null;
   const day = await parentDay(ctx, tutor, date);
@@ -336,11 +336,11 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
 }
 
 /**
- * 老话题的按住说话(还没有 hold 实录,《家长录像设计.md》拍板 10):.cotutor/voice-diag.jsonl 里这一天输入条上的那几次,归到这个话题。
+ * 老话题的按住说话(还没有 hold 实录,《家长录像设计.md》拍板 10):.cotutor/voice-diag.jsonl 里这一天输入条上的那几次,各归到一个话题。
  * 新的行带 tutor / thread;老的按「那一刻最近开始的话题」算(各位老师一起比:孩子同一时刻只在一个话题里)。结果照孩子当时看到的:
  * 出了字 = 发了;abort() = 上滑取消;sr-dead = 识别一起就断;其余 = 没听清
  */
-async function readDiag(ctx: AppContext, tutor: string, date: string, thread: string): Promise<ReelDiag[]> {
+async function diagOfDay(ctx: AppContext, date: string): Promise<{ tutor: string; thread: string; d: ReelDiag }[]> {
   const text = await readFile(join(ctx.ws.root, '.cotutor', 'voice-diag.jsonl'), 'utf8').catch(() => '');
   if (!text) return [];
   const starts: { tutor: string; thread: string; at: number }[] = [];
@@ -356,25 +356,23 @@ async function readDiag(ctx: AppContext, tutor: string, date: string, thread: st
       if (Number.isFinite(at)) starts.push({ tutor: name, thread: ths[i], at });
     });
   }
-  const out: ReelDiag[] = [];
+  starts.sort((a, b) => b.at - a.at);
+  const out: { tutor: string; thread: string; d: ReelDiag }[] = [];
   for (const line of text.split('\n')) {
     let row: { at?: unknown; where?: unknown; tutor?: unknown; thread?: unknown; peak?: unknown; ev?: unknown };
     try { row = JSON.parse(line) as typeof row; } catch { continue; }
     if (row.where !== 'bar' || typeof row.at !== 'string' || !Array.isArray(row.ev)) continue;
     const at = Date.parse(row.at);
     if (!Number.isFinite(at) || localDate(new Date(at)) !== date) continue;
-    if (typeof row.tutor === 'string' && typeof row.thread === 'string') { if (row.tutor !== tutor || row.thread !== thread) continue; }
-    else {
-      const mine = starts.filter((x) => x.at <= at).sort((a, b) => b.at - a.at)[0];
-      if (!mine || mine.tutor !== tutor || mine.thread !== thread) continue;
-    }
+    const owner = typeof row.tutor === 'string' && typeof row.thread === 'string' ? { tutor: row.tutor, thread: row.thread } : starts.find((x) => x.at <= at);
+    if (!owner) continue;
     const ev = row.ev.filter((e): e is [string, number, unknown?] => Array.isArray(e) && typeof e[0] === 'string' && typeof e[1] === 'number');
     const end = ev.find((e) => e[0] === 'end');
     const ms = end ? end[1] : Math.max(0, ...ev.map((e) => e[1]));
     const len = end && typeof end[2] === 'number' ? end[2] : 0;
     const audio = ev.find((e) => e[0] === 'audiostart');
     const result = len > 0 ? 'sent' : ev.some((e) => e[0] === 'abort()') ? 'cancel' : ev.some((e) => e[0] === 'sr-dead') ? 'dead' : 'unclear';
-    out.push({ at, ms, audioMs: audio ? audio[1] : null, result, peak: typeof row.peak === 'number' ? row.peak : -1 });
+    out.push({ tutor: owner.tutor, thread: owner.thread, d: { at, ms, audioMs: audio ? audio[1] : null, result, peak: typeof row.peak === 'number' ? row.peak : -1 } });
   }
   return out;
 }
@@ -393,6 +391,8 @@ export interface OverviewThread {
   stoppedAt: 'writing' | 'ask' | null;
   rating: number | null;
   booked: boolean;
+  /** 按住说话连着几次没发出去(最长的一串,够 REEL_MISS_STREAK 才有;《家长录像设计.md》拍板 10) */
+  misses?: number;
 }
 export interface OverviewTutor {
   name: string;
@@ -438,6 +438,17 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
         const last = m.section.lines[m.section.lines.length - 1];
         th.stoppedAt = last?.ask ? 'ask' : null;
       }
+    }
+    // 按住说话连着没发出去(拍板 10):实录里的 hold,没有的老话题用 voice-diag;孩子发成的一句(开口、打字发出去)把一串断开
+    const diag = (await diagOfDay(ctx, date)).filter((x) => x.tutor === t.name);
+    for (const th of by.values()) {
+      const mine = index.messages.filter((_m, i) => ths[i] === th.thread);
+      const plays = await readPlays(ctx.ws, t.name, date, new Set(mine.map((m) => m.job)));
+      const holds = reelHolds(plays, diag.filter((x) => x.thread === th.thread).map((x) => x.d));
+      if (!holds.length) continue;
+      const sent = [...mine.filter((m) => m.from === 'kid').map((m) => (Date.parse(m.timing?.startedAt ?? '') || Date.parse(m.at)) - (m.voice ? m.voice.seconds * 1000 : 0)), ...plays.filter((r) => r.k === 'type' && r.e === 'send').map((r) => r.at)];
+      const n = Math.max(0, ...reelMissRuns(holds, sent).map((x) => x.n));
+      if (n) th.misses = n;
     }
     const booking = index.messages.some((m) => (m.bookkeep || m.tidy) && m.result === 'running');
     const kouboYuan = await kouboYuanOfDay(join(ctx.ws.dirs.conversations, t.name), date);

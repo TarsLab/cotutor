@@ -71,7 +71,27 @@ vault(家长面,**一个孩子一个 vault**,如 ray-vault,自己是 git 仓;文
 - **周汇总**:不另设周记;周计划家长自己写。
 - **家长入口**:日记、档案、记忆文件都在 Obsidian 里直接改。
 
-## 6. 拍板记录
+## 6. 运行时与适配器
+
+老师进程是一个本地的 agent CLI(claude、qwen……):能读写本地文件、能接着一个会话往下说、能把回复一个字一个字吐出来。cotutor 不直接调模型 API,换 CLI 就是换运行时。
+
+两层分开:
+
+| | 装什么 | 在哪 | 谁改 |
+|---|---|---|---|
+| **运行时模板** | 选哪个 CLI、哪个模型、预算与时限、递板书写法的旗标 | `cotutor.json` 的 `runtimes`(`{run, resume}` 两条命令,占位符见 `src/schema/config.ts`) | 家长、开发者,改数据不改代码 |
+| **CLI 适配器** | 这个 CLI 怎么说话:输出流怎么读、消息怎么写进 stdin、工具叫什么、工具怎么关、思考量怎么调、环境变量要什么、出厂模板长什么样 | `src/clis/<cli>.ts`,一个 CLI 一个文件 | 开发者,接一个新 CLI 写一个文件 |
+
+- **找适配器**:运行时写了 `cli` 就按它,没写就按 `run[0]` 的文件名(`claude`、`qwen`)。套了一层壳脚本的运行时要写 `cli`。
+- **统一事件**:适配器把 CLI 的输出行读成同一套事件——一个字(增量)、一段整的正文、开始新的一条、工具调用、工具结果、会话 id、收尾(成没成、费用或 token)。孩子端的流式出卡、断流看门狗、家长端的「读了什么」、费用都只认这套事件,不认哪家的 JSON。
+- **工具按类别认**:应用要知道「读了哪个文件」「用没用 Skill 回读板书写法」时问适配器这是哪一类(读文件 / shell / 搜索 / 技能 / 别的),不比工具名。
+- **`{tools}` 由适配器展开**:政策 `tools` 只说带不带(孩子的话缺省不带;带照片的、记账的带只读的几样),展开成什么旗标、几个参数,是适配器的事。
+- **`{effort}` 由适配器落地**:claude 是 `--effort`;qwen 没有这个旗标,适配器按 effort 给进程选一份配置文件(环境变量),见拍板 15。
+- **费用可以没有**:有的 CLI 只报 token 不报钱。没有钱数的轮次记 token,家长端显示 token。
+
+claude 与 qwen 的输出同族(Claude Code 的 stream-json),共用一个读法,各自的差别写在各自的文件里。接一个新 CLI 要满足的条件、怎么写适配器,见《接一个 CLI.md》。
+
+## 7. 拍板记录
 
 1. cwd 取老师目录,不取根(2026-09-08,约定)。
 3. 记账在学习结束后由家长触发,不自动跑(2026-09-08;这条链在 ray 上还没真跑过一次)。
@@ -109,3 +129,12 @@ vault(家长面,**一个孩子一个 vault**,如 ray-vault,自己是 git 仓;文
     - **出厂清单**:数学 text choice fill image lecture canvas code;语文 text read choice fill image tianzige lecture canvas;英语 text read choice fill image word lecture;口播 text read record。按老师文件与学科估的,没有真跑数据;`cotutor upgrade --config` 给老 workspace 补。
     - **没做的**:按这一轮的上下文裁(有照片才给作业照片)——写法预载在系统提示里,预热在孩子开口前就起好进程,同一话题系统提示一变缓存也作废。给 `record` 设「配了 koubo 才给」的门——koubo 的评测模板有缺省值,从配置看不出能不能用。
     没验证的:裁了以后老师出卡的样子变没变,要 ray 的真跑;清单外的卡多不多,看提醒。
+15. CLI 的差别收进适配器,接上 qwen code(2026-10-09)。起因:cotutor 要开源,开发者要能接各家 agent CLI;原来「认得某个 CLI」的知识散在十几个文件里(读输出流、写 stdin、工具名 `Read` / `Skill`、`--tools` 白名单、代理、嵌套变量、费用),而且都默认 claude 的 stream-json,qwen 碰巧同族才跑得通。改成一个 CLI 一个适配器(§6),先抽 claude、行为不变,再写 qwen。qwen code 0.25 的定法(同日真跑与读它的打包代码):
+    - **不用 `--bare`,给 qwen 一个隔离的家**:`QWEN_HOME` 指 workspace 的 `.cotutor/qwen/home/`(不改 `HOME`),里面的 `settings.json` 由 cotutor 生成。`--bare` 虽快,但它不读任何配置(思考关不掉)、不认 `--core-tools`、自带 `read_file` `edit` `run_shell_command` 一套——9 日 A/B 真跑里 qwen 在「不带工具」的轮次照样跑 shell,整理记忆那轮用 `edit` 直接改了日记。隔离的家实测每轮 2.4–3.1 秒、约 2K 输入 token,与 `--bare` 一样快;原来测到的 7 秒、26K token 来自 `~/.qwen` 里装的东西。家里要关掉它自己的记忆整理(`memory.enableManagedAutoMemory: false`),不然一轮跑完它在后台用 `write_file` 写文件。
+    - **工具**:不带 = `--core-tools read_file --exclude-tools read_file,<非核心工具>`(`system/init` 的工具表为空);只读 = `--core-tools read_file,glob,grep_search` 加 `--approval-mode default`(读 workspace 外、shell、写都被拒;`--yolo` 会放行 workspace 外的读,不用)。qwen 只读时没有 shell,要跑命令的老师(口播老师跑 koubo)在 qwen 上干不了活。每轮核对 `system/init` 的工具表,多出没想到的工具记提醒(CLI 升版本会带进新工具)。
+    - **思考量**:`QWEN_CODE_SYSTEM_SETTINGS_PATH` 每次起进程时按 effort 指一份配置(`model.reasoningEffort`):low → none(不想)、medium → low、high → high。qwen3.7-plus 只有开关,low / medium 都是关;qwen3.8 系列分档。
+    - **key 不落盘**:起 qwen 时 `DASHSCOPE_API_KEY` 先看环境变量,没有就从本机 `~/.qwen/settings.json` 的 `env` 现读,只放进子进程的环境;workspace 是 git 仓,key 永不写进去。
+    - **消息走 stdin**(`--input-format stream-json`),新话题 `--session-id` 先给定 id,续话题 `--resume`。数组旗标(`--core-tools` 之类)会把跟在后面的消息吞掉,消息不进 argv 正好避开。
+    - **收尾**:超时(退出码 55)不吐 `result`,当出错;每轮一条 `goal_state` 事件不管;使用统计默认发往阿里云,家里关掉。
+    - **出厂缺省仍是 claude**,qwen 由家长在 `cotutor.json` 里给某位老师配。`.qwen/agents/`、`.qwen/skills/` 两套链退役:老师正文与板书写法由 `{systemBody}` 递,qwen 的 skill 工具不给。
+    没验证的:qwen 的讲课质量(9 日 7 题回放里 qwen3.7-plus 把「明」讲成「名」,claude 没错);effort none 会不会像 claude 归零那样把盘算写进讲稿;关了工具后 qwen 偶尔在正文里写假的 `<tool_use>`,孩子端会不会念出来。

@@ -139,4 +139,5 @@ claude 与 qwen 的输出同族(Claude Code 的 stream-json),共用一个读法,
     - **收尾**:qwen 不报钱数,这轮记 token(消息的 `tokens`);超时(退出码 55)不吐 `result`,当出错;每轮一条 `goal_state` 事件不管。
     - **出厂缺省仍是 claude**,qwen 由家长在 `cotutor.json` 里给某位老师配。`cotutor upgrade --config` 认得没人改过的旧 qwen 模板,整份换新;改过的不动。`.qwen/agents/`、`.qwen/skills/` 两套链退役:老师正文与板书写法由 `{systemBody}` 递,qwen 的 skill 工具不给;init / upgrade 删掉旧链。
     真跑(ray 的拷贝,qwen3.7-plus):孩子的话 2.7–4.8 秒、工具表为空;照片题 24 秒读对了图;记账只读、日记由应用落盘。claude 同题:孩子的话 5–11 秒,照片题 7.7 秒。
+    **出厂模型 qwen3.8-max**(同日改,原来 qwen3.7-plus):五个模型各跑 7 道真题回放与 2 条孩子的话(孩子的话不想、带照片的 low)。qwen3.8-max 多数 2–8 秒,徐明瑞三个字讲得准(耑读 duān)、静夜思出了点读与选择题、端午节抓到「古典」→「鼓点」,照片题 49 秒;qwen3.7-plus 2–5 秒但讲得浅(静夜思只问在哪看到的、端午节只教标点);qwen3.8-flash 不想时把上下文包原文和整段盘算当讲稿(徐明瑞那题 50 多句),不能用;kimi-k3 讲得最好、两次都写了记忆,但思考关不掉,讲解一轮 87–124 秒;glm-5.1 快,把「老师,徐明瑞」读成老师的名字、端午节那段当成看图说话,也看不了图。老 workspace 里没改过的 qwen3.7-plus 模板由 `upgrade --config` 整份换新。
     没验证的:qwen 的讲课质量(9 日 7 题回放里 qwen3.7-plus 把「明」讲成「名」,claude 没错);说了「你要记住哦」qwen 答应了却没写记忆段(两次都这样);关了工具后 qwen 偶尔在正文里写假的 `<tool_use>`,孩子端会不会念出来;孩子端真机上一整天的样子。

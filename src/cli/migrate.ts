@@ -128,13 +128,13 @@ export async function configGaps(raw: unknown): Promise<ConfigGap[]> {
     if (name === 'default' || !isObj(rt)) continue;
     const mine = mineRuntimes[name];
     if (!isObj(mine)) continue; // 整个运行时都缺,上面那轮已经报了
-    // 出厂模板换了说话方式(消息改走 stdin):逐个补旗标会拼出过不了契约的模板。没人改过的旧出厂模板整份换新,改过的不动(家长的决定)
-    if (rt.stdin && !mine.stdin) {
-      if (Array.isArray(mine.run) && Array.isArray(mine.resume) && isRetiredRuntime(name, { run: mine.run as string[], resume: mine.resume as string[] })) {
-        gaps.push({ kind: 'runtime', path: `runtimes.${name}`, detail: `${name} 还是旧的出厂模板(消息进命令行、不流式):整份换成新的(消息走 stdin、工具与思考量由适配器管,src/clis/${name}.ts)`, value: rt });
-      }
+    // 没人改过的旧出厂模板(和某一版出厂的一字不差):整份换新——换模型、换说话方式都靠这一条
+    if (Array.isArray(mine.run) && Array.isArray(mine.resume) && isRetiredRuntime(name, { run: mine.run as string[], resume: mine.resume as string[] })) {
+      gaps.push({ kind: 'runtime', path: `runtimes.${name}`, detail: `${name} 还是旧的出厂模板,没改过:整份换成新的(src/clis/${name}.ts 的出厂模板)`, value: rt });
       continue;
     }
+    // 出厂模板换了说话方式(消息改走 stdin)而你的改过:逐个补旗标会拼出过不了契约的模板,不动(家长的决定)
+    if (rt.stdin && !mine.stdin) continue;
     for (const key of ['run', 'resume'] as const) {
       const f = rt[key];
       const u = mine[key];

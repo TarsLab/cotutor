@@ -52,6 +52,9 @@ const levelOf = (effort: Policy['effort'], tools: ToolSet): string => (tools ===
 const DASHSCOPE = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 const toggle = { thinking: true, toggleOnly: true, disableField: 'enable_thinking' };
 const tiers = { thinking: true, efforts: ['low', 'medium', 'xhigh'], defaultEffort: 'xhigh', disableField: 'reasoning_effort' };
+/** 出厂模型(2026-10-09 五个模型 7 道真题对比:不想时 2–8 秒,讲得准也细;3.7-plus 快但浅,3.8-flash 不想时把盘算写进讲稿) */
+export const QWEN_DEFAULT_MODEL = 'qwen3.8-max';
+
 /** 百炼(DashScope)上能用的几个;运行时模板的 -m 选其中一个 */
 const MODELS = [
   { id: 'qwen3.7-plus', capabilities: { reasoning: toggle }, generationConfig: { contextWindowSize: 1_000_000, modalities: { image: true } } },
@@ -65,7 +68,7 @@ export function qwenHomeSettings(): Record<string, unknown> {
   return {
     $version: 4,
     security: { auth: { selectedType: 'openai' } },
-    model: { name: MODELS[0].id },
+    model: { name: QWEN_DEFAULT_MODEL },
     modelProviders: { openai: MODELS.map((m) => ({ ...m, baseUrl: DASHSCOPE, envKey: 'DASHSCOPE_API_KEY' })) },
     memory: { enableManagedAutoMemory: false, enableManagedAutoDream: false },
     privacy: { usageStatisticsEnabled: false },
@@ -127,7 +130,8 @@ export const qwen: CliAdapter = {
     }
     return out;
   },
-  // 0.21 时代的出厂模板(消息进 argv、--yolo、只追加系统提示,不流式);拍板 15 换掉。头一版追加的是 {agentBody},板书写法放在话题第一条(拍板 11 之前)
+  // 0.21 时代的出厂模板(消息进 argv、--yolo、只追加系统提示,不流式);拍板 15 换掉。头一版追加的是 {agentBody},板书写法放在话题第一条(拍板 11 之前)。
+  // 最后一版是拍板 15 当天的 qwen3.7-plus,同日换成 qwen3.8-max
   retired: {
     qwen: [
       {
@@ -138,6 +142,10 @@ export const qwen: CliAdapter = {
         run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{systemBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],
         resume: ['qwen', '-p', '{prompt}', '--resume', '{session}', '--append-system-prompt', '{systemBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],
       },
+      (() => {
+        const f = ['-m', 'qwen3.7-plus', '--system-prompt', '{systemBody}', '--input-format', 'stream-json', '--output-format', 'stream-json', '--include-partial-messages', '--approval-mode', 'default', '{toolArgs}', '--max-wall-time', '10m'];
+        return { run: ['qwen', ...f], resume: ['qwen', '--resume', '{session}', ...f] };
+      })(),
     ],
   },
   check: ({ version, env }) => {
@@ -152,7 +160,7 @@ export const qwen: CliAdapter = {
   runtimes: (): Record<string, Runtime> => {
     // 消息走 stdin(预热能用;数组旗标 --core-tools 之类会吞掉跟在后面的消息,不进 argv 正好避开);-m 选模型(家里那份 settings.json 列着的);
     // {systemBody} = 老师正文 + 板书写法,整份换掉 qwen 自己的系统提示;{toolArgs} 由适配器展开;--approval-mode default:shell、写、读 workspace 外都拒
-    const flags = ['-m', 'qwen3.7-plus', '--system-prompt', '{systemBody}', '--input-format', 'stream-json', '--output-format', 'stream-json', '--include-partial-messages', '--approval-mode', 'default', '{toolArgs}', '--max-wall-time', '10m'];
+    const flags = ['-m', QWEN_DEFAULT_MODEL, '--system-prompt', '{systemBody}', '--input-format', 'stream-json', '--output-format', 'stream-json', '--include-partial-messages', '--approval-mode', 'default', '{toolArgs}', '--max-wall-time', '10m'];
     return { qwen: { stdin: 'stream-json', run: ['qwen', ...flags], resume: ['qwen', '--resume', '{session}', ...flags] } };
   },
 };

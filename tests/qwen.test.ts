@@ -84,6 +84,9 @@ try {
   const raw = (rt: Record<string, unknown>): Record<string, unknown> => ({ version: 1, kid: { slug: 'ming' }, tutors: {}, runtimes: { default: 'qwen', ...rt } });
   const g = (await configGaps(raw({ qwen: { run: [...old.run], resume: [...old.resume] } }))).find((x) => x.path === 'runtimes.qwen');
   check('upgrade --config:没人改过的旧 qwen 模板整份换成新的', g?.kind === 'runtime' && JSON.stringify(g.value) === JSON.stringify(factoryQwen), JSON.stringify(g));
+  const last = qwen.retired!.qwen.at(-1)!;
+  const g2 = (await configGaps(raw({ qwen: { stdin: 'stream-json', run: [...last.run], resume: [...last.resume] } }))).find((x) => x.path === 'runtimes.qwen');
+  check('upgrade --config:没改过的上一版(qwen3.7-plus)也整份换成新的(qwen3.8-max)', g2?.kind === 'runtime' && JSON.stringify(g2.value) === JSON.stringify(factoryQwen) && (g2.value as { run: string[] }).run.includes('qwen3.8-max'), JSON.stringify(g2));
   const mine = raw({ qwen: { run: [...old.run, '-m', 'qwen3.8-max'], resume: [...old.resume] } });
   check('改过的旧模板不动,也不往里插旗标', !(await configGaps(mine)).some((x) => x.path.startsWith('runtimes.qwen')));
 }

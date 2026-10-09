@@ -52,6 +52,8 @@ const MessageObjectSchema = z.object({
   result: z.enum(['running', 'ok', 'error']).default('running'),
   /** 这一轮花了多少(美元)。claude 接着会话跑(--resume)报的是整个会话的累计,这里记的是减掉同一话题上一轮的累计之后的 */
   costUsd: z.number().optional(),
+  /** 运行时不报钱数时(qwen,《agent层设计.md》§6)这一轮的 token:输入(含缓存读)与输出;报钱数的运行时不记 */
+  tokens: z.object({ in: z.number().int().nonnegative(), out: z.number().int().nonnegative() }).optional(),
   /** 运行时报的花费原数(新版 claude 续会话时是累计)与那时的累计输出 token;下一轮拿它们判断、算自己花了多少。没有 = 老数据 */
   sessionUsd: z.number().optional(),
   sessionOut: z.number().optional(),

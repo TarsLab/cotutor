@@ -110,8 +110,8 @@ try {
 }
 {
   const { configTemplate } = await import('../src/cli/skeleton.ts');
-  const tpl = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: { claude: { run: string[]; resume: string[] }; qwen: { run: string[] } } };
-  check('claude 模板带 --include-partial-messages(流式),qwen 没有这个开关', tpl.runtimes.claude.run.includes('--include-partial-messages') && tpl.runtimes.claude.resume.includes('--include-partial-messages') && !tpl.runtimes.qwen.run.includes('--include-partial-messages'));
+  const tpl = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: { claude: { run: string[]; resume: string[] }; qwen: { run: string[]; resume: string[]; stdin?: string } } };
+  check('claude、qwen 模板都带 --include-partial-messages(流式);qwen 的消息走 stdin、工具由适配器展开', tpl.runtimes.claude.run.includes('--include-partial-messages') && tpl.runtimes.claude.resume.includes('--include-partial-messages') && tpl.runtimes.qwen.run.includes('--include-partial-messages') && tpl.runtimes.qwen.stdin === 'stream-json' && tpl.runtimes.qwen.resume.includes('{toolArgs}'));
   const tplS = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [{ name: 'math-tutor' }, { name: 'chinese-tutor' }] as never })) as { runtimes: Record<string, { run: string[]; resume: string[] }>; tutors: Record<string, { policy?: { effort?: string } }> };
   check('普通老师的 claude 模板:--tools {tools}(孩子的话填空 = 不带工具,别的填白名单;没有 Agent / Skill / Artifact,不派子代理)+ --effort {effort};run 与 resume 一样', (['run', 'resume'] as const).every((k) => tplS.runtimes.claude[k].join(' ').includes('--tools {tools} --effort {effort}')) && !tplS.runtimes.claude.run.includes('--disallowedTools'));
   check('数学老师出厂多想一会儿(effort medium),别的老师用缺省 low', tplS.tutors['math-tutor'].policy?.effort === 'medium' && tplS.tutors['chinese-tutor'].policy === undefined);

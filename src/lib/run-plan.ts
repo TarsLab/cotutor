@@ -13,6 +13,8 @@ export interface RunPlan {
   runtime: string;
   /** 适配器名(src/clis/;认不出的是 stream-json) */
   cli: string;
+  /** 这轮带不带工具(模板管不了工具的运行时也照记,只是没用上) */
+  tools: ToolSet;
   /** 完整命令行,argv[0] 是可执行文件 */
   argv: string[];
   /** 这次是 resume 还是新开 */
@@ -53,7 +55,7 @@ export function boardPreloaded(runtime: Runtime): boolean {
 export function planRun(
   config: CotutorConfig,
   index: Pick<ConversationIndex, 'session'>,
-  vars: { agent: string; prompt: string; agentBody?: string; systemBody?: string; boardFile?: string; runtime?: string; effort?: Policy['effort']; tools?: ToolSet; root?: string },
+  vars: { agent: string; prompt: string; agentBody?: string; systemBody?: string; boardFile?: string; runtime?: string; effort?: Policy['effort']; tools?: ToolSet; root?: string; readDirs?: readonly string[] },
 ): RunPlan {
   const { name, runtime } = getRuntime(config, vars.runtime);
   const adapter = adapterFor(runtime);
@@ -63,11 +65,12 @@ export function planRun(
   return {
     runtime: name,
     cli: adapter.name,
-    argv: fillArgs(adapter, template, { agent: vars.agent, prompt: vars.prompt, session: session ?? undefined, agentBody: vars.agentBody, systemBody: vars.systemBody, boardFile: vars.boardFile, effort: vars.effort, tools: vars.tools }),
+    tools: vars.tools ?? 'on',
+    argv: fillArgs(adapter, template, { agent: vars.agent, prompt: vars.prompt, session: session ?? undefined, agentBody: vars.agentBody, systemBody: vars.systemBody, boardFile: vars.boardFile, effort: vars.effort, tools: vars.tools, readDirs: vars.readDirs }),
     resume: session !== null,
     session,
     ...(runtime.stdin ? { stdin: adapter.stdinMessage(vars.prompt) } : {}),
-    env: adapter.planEnv?.({ root: vars.root, effort }) ?? {},
+    env: adapter.planEnv?.({ root: vars.root, effort, tools: vars.tools ?? 'on' }) ?? {},
   };
 }
 

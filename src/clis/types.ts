@@ -83,6 +83,8 @@ export interface PlanContext {
   /** workspace 根(适配器的私有文件放在它的 .cotutor/ 下);测试与不关心的调用可以不给 */
   root?: string;
   effort: Policy['effort'];
+  /** 这轮带不带工具 */
+  tools: ToolSet;
 }
 
 export interface CliAdapter {
@@ -94,15 +96,23 @@ export interface CliAdapter {
   stdinMessage(prompt: string): string;
   /** 模板里 `{tools}` 填什么(一个参数里的文字) */
   toolList(set: ToolSet): string;
-  /** 模板里独占一个参数的 `{toolArgs}` 展开成哪几个参数(可以是零个) */
-  toolArgs(set: ToolSet): string[];
+  /** 模板里独占一个参数的 `{toolArgs}` 展开成哪几个参数(可以是零个);readDirs = 这轮该读得到的目录(workspace 根、vault),会话 cwd 是老师目录,它们在 cwd 外面 */
+  toolArgs(set: ToolSet, ctx: { readDirs: readonly string[] }): string[];
   toolKind(name: string): ToolKind;
+  /** 这轮带或不带工具时,进程起来报的工具表(init 事件)应该正好是哪几样;多出来的记提醒(CLI 升版本会带进新工具)。不给 = 不核对 */
+  expectedTools?(set: ToolSet): readonly string[];
+  /** 起进程前把这个 CLI 在 workspace 里要的机器文件备好(幂等,内容一样就不写) */
+  prepare?(root: string): Promise<void>;
   /** 由这轮的计划定下来的环境变量(进预热的比对:变了的备用进程不能用);没有就不写 */
   planEnv?(ctx: PlanContext): Record<string, string>;
   /** 起进程前最后过一遍环境(代理之类);不改就原样返回 */
   env(env: NodeJS.ProcessEnv, ctx: EnvContext): NodeJS.ProcessEnv;
   /** 在别的 agent 会话里起这个 CLI 会被当嵌套拒掉的那几个环境变量(cotutor replay 起老师前去掉) */
   nestedEnv?: readonly string[];
+  /** cotutor doctor 查这个 CLI 时多看几样(version 是 `--version` 的第一行);不给就只查装没装 */
+  check?(ctx: { version: string; env: NodeJS.ProcessEnv }): { name: string; ok: boolean; detail: string; fix?: string }[];
+  /** 以前出厂过、现在换掉了的模板(键是运行时名):老 workspace 里一字不差(没人改过)的,`cotutor upgrade --config` 整份换新 */
+  retired?: Readonly<Record<string, readonly Pick<Runtime, 'run' | 'resume'>[]>>;
   /** 出厂运行时模板:键是运行时名 */
   runtimes(): Record<string, Runtime>;
 }

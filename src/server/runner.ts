@@ -21,7 +21,7 @@ import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservatio
 import { cardAssets, cardLabel, describeCard, tutorCardKinds, type RecordProps } from '../cards/index.ts';
 import { boardGuideFor } from '../cards/docs.ts';
 import { KouboQueue } from './koubo.ts';
-import { controlsTools, parserOf, processEnv, toolsOf } from '../clis/index.ts';
+import { controlsTools, parserOf, prepareCli, processEnv, toolsOf, unexpectedTools } from '../clis/index.ts';
 import { parseBoard } from '../lib/board.ts';
 import { readyBeats, beatsOf, voicedLines, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
@@ -262,6 +262,11 @@ export function seenNotes(messages: readonly ConversationMessage[], thread: stri
   return {};
 }
 
+/** 老师该读得到的目录:workspace 根(作业照片、技能)与 vault(教材、日记);会话 cwd 是老师目录,这些在它外面(qwen 读外面要先划进来) */
+export function readDirsOf(ws: Workspace): string[] {
+  return [...new Set([ws.root, ws.paths.vault])];
+}
+
 /** 干跑:现在给这位老师发这句话,上下文包会是什么样、每段从哪来、截了多少;不起模型、不写盘 */
 export async function packDryRun(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; text: string }): Promise<{ prompt: string; pack: ContextPack; report: PackReport }> {
   const t = ws.config.tutors[tutor];
@@ -368,7 +373,7 @@ export class Runner {
     const session = thread ? sessionFor(index, thread) : null;
     const policy = resolvePolicy(ws.config, tutor);
     const parts = await systemParts(ws, tutor, runtime, policy, { at: '', plan: [], recent: [] });
-    const vars = { agent: tutor, prompt: '', ...parts, runtime: t.runtime, effort: policy.effort, tools: policy.tools === 'on' ? ('on' as const) : ('off' as const), root: ws.root };
+    const vars = { agent: tutor, prompt: '', ...parts, runtime: t.runtime, effort: policy.effort, tools: policy.tools === 'on' ? ('on' as const) : ('off' as const), root: ws.root, readDirs: readDirsOf(ws) };
     // 预热的是孩子的下一句:工具照孩子那轮填(带照片的对不上,那轮冷起)
     const fresh = planRun(ws.config, { session: null }, vars);
     const resume = session ? planRun(ws.config, { session }, vars) : null;
@@ -377,6 +382,8 @@ export class Runner {
     // 读索引这会儿孩子可能已经开口了:这轮在跑就不起(它收尾时会再起)
     if (this.active.has(tutor)) return false;
     const env = (p: RunPlan): NodeJS.ProcessEnv => processEnv(p, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, { proxy: ws.config.proxy });
+    await prepareCli(fresh.cli, ws.root).catch(() => {});
+    if (this.active.has(tutor)) return false;
     this.spares.warm(tutor, 'fresh', { argv: fresh.argv, env: fresh.env, cwd, date, lastJob: null }, env(fresh));
     if (resume?.resume && thread) this.spares.warm(tutor, 'resume', { argv: resume.argv, env: resume.env, cwd, date, lastJob: lastJobOf(index, thread) }, env(resume));
     else this.spares.drop(tutor, 'resume');
@@ -451,7 +458,7 @@ export class Runner {
     const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
     if (continued) pack.continue = continued;
     const prompt = buildContextPack(pack, text, policy.contextPack);
-    const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, systemBody, boardFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, root: ws.root });
+    const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, systemBody, boardFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
 
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
     let voice: { audio: string; seconds: number } | undefined;
@@ -462,12 +469,14 @@ export class Runner {
     const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length || lectureWarn.length ? { warnings: [...noteWarnings, ...lectureWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
+    // 这个 CLI 在 workspace 里要的机器文件(qwen 的隔离家目录):备不好这轮照起,起不来的原因会在 err.log
+    await prepareCli(plan.cli, ws.root).catch(() => {});
 
     // 预热的进程:resume 的接那个位置(对得上 = 这个话题从它起来之后没人写过),新开的接 fresh;对不上(或这轮不走 stdin)就杀掉
     const spare = this.spares.claim(tutor, plan.resume ? 'resume' : 'fresh', { argv: plan.argv, env: plan.env, cwd: join(ws.dirs.agents, tutor), date, lastJob: plan.resume ? lastJobOf(index, thread) : null });
     const active: Active = { job, date, partial: null, done: Promise.resolve(started) };
     // 断流后接着跑:同一运行时 resume 这个会话,消息换成 stallPrompt
-    const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent: tutor, prompt: stallPrompt(open), agentBody, systemBody, boardFile, runtime: plan.runtime, effort: policy.effort, tools, root: ws.root });
+    const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent: tutor, prompt: stallPrompt(open), agentBody, systemBody, boardFile, runtime: plan.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
     active.done = this.spawn(ws, tutor, date, job, plan, policy, active, resumePlan, spare).finally(() => {
       this.active.delete(tutor);
       // 孩子 / 家长这轮完了,马上起好下一轮的进程;系统轮(记账、整理记忆)之后孩子多半不在,不起
@@ -604,6 +613,8 @@ export class Runner {
     const toolsRunning = new Set<string>();
     // 消息走 stdin 的运行时:看到收尾就关 stdin,进程自己退(每次 runOnce 换一个)
     let onResult: (() => void) | null = null;
+    // 进程起来报的工具表里不该有的(适配器核对;不带工具那轮却有工具 = 关工具的旗标失效了,CLI 升版本最先坏的地方)
+    let unexpected: string[] = [];
     let cardsSeen = 0;
     let linesSeen = 0;
     // 就绪(流式):每句配音落盘就填进 partial 的 audio。句:从第一句起连着配好几句就能念几句(voiced,《工作流程.md》拍板 15),
@@ -709,6 +720,7 @@ export class Runner {
           const events = parse(line);
           for (const e of events) {
             if (e.kind === 'session') { if (!session) session = e.id; }
+            else if (e.kind === 'init') unexpected = unexpectedTools(plan.cli, plan.tools, e.tools);
             else if (e.kind === 'result') onResult?.();
             else if (e.kind === 'results') { if (!e.sub) for (const r of e.results) toolsRunning.delete(r.id); }
             else {
@@ -775,6 +787,7 @@ export class Runner {
     }
     emit({ lane: 'main', kind: 'exit', ok: transcript.final.ok, ...(transcript.final.reason ? { reason: transcript.final.reason } : {}), ...(transcript.final.costUsd !== undefined ? { costUsd: transcript.final.costUsd } : {}), ...(transcript.final.numTurns !== undefined ? { turns: transcript.final.numTurns } : {}) });
     const kidView = deriveKidView(transcript, { replyMaxChars });
+    if (unexpected.length) kidView.warnings.push(`${plan.cli} 起来时带着这轮不该有的工具:${unexpected.join('、')}(${plan.tools === 'off' ? '这轮应该一个工具都不带' : '这轮只该带只读的几样'});关工具的旗标可能随 CLI 升级失效了,看 src/clis/${plan.cli}.ts`);
     if (stalls) kidView.warnings.push(`API 流断了 ${stalls} 次(每次 ${policy.stall.ms / 1000} 秒没动静),应用杀掉进程、resume 会话接着写的${exit.stalled ? ';次数用完还断,这轮没收尾' : ''}`);
     // 整块出的(没走流式):卡与句这时才第一次见到,也发一遍
     if (kidView.section) {

@@ -4,7 +4,7 @@
  * exit 约定同 drawtell / voxtell doctor:必需项全过 exit 0,否则 1;--json 带 ok 与整份 checks。
  */
 import { detectProxy } from '../lib/proxy.ts';
-import { parserOf, processEnv } from '../clis/index.ts';
+import { adapterFor, parserOf, prepareCli, processEnv } from '../clis/index.ts';
 import { execFile } from 'node:child_process';
 import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
@@ -124,9 +124,10 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
   }
   const systemBody = agentBody !== undefined ? (boardBody && takesTutorRules(first.name) ? `${agentBody}\n\n${boardBody}` : agentBody) : undefined;
   // 和真跑同一条规划:命令行、stdin 那行、环境变量都由这个运行时的 CLI 适配器定
-  const plan = planRun(ws.config, { session: null }, { agent: first.name, prompt: LIVE_PROMPT, agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: runtimeName, root: ws.root });
+  const plan = planRun(ws.config, { session: null }, { agent: first.name, prompt: LIVE_PROMPT, agentBody, systemBody, boardFile: join(ws.root, BOARD_GUIDE_PATH), runtime: runtimeName, root: ws.root, readDirs: [...new Set([ws.root, ws.paths.vault])] });
   const { argv } = plan;
   const parse = parserOf(plan.cli);
+  await prepareCli(plan.cli, ws.root);
   const cwd = join(ws.dirs.agents, first.name);
   const run = await new Promise<{ out: string; err: string; code: number | null; spawnErr?: string }>((resolveRun) => {
     let out = '';
@@ -556,7 +557,10 @@ export async function doctorWorkspace(
         const required = runtime === ws.config.runtimes.default;
         try {
           const { stdout } = await execFileP(bin, ['--version'], { timeout: 8000 });
-          push({ name: `runtime.${runtime}`, ok: true, required, detail: `${bin} ${stdout.trim().split('\n')[0]}` });
+          const version = stdout.trim().split('\n')[0];
+          push({ name: `runtime.${runtime}`, ok: true, required, detail: `${bin} ${version}` });
+          // 这个 CLI 的适配器要多看的几样(qwen:版本、百炼 key)
+          for (const c of adapterFor(p).check?.({ version, env }) ?? []) push({ name: `runtime.${runtime}.${c.name}`, ok: c.ok, required, detail: c.detail, fix: c.fix });
         } catch {
           push({ name: `runtime.${runtime}`, ok: false, required, detail: `PATH 里没有 ${bin}`, fix: required ? `装 ${bin},或把 runtimes.default 改成装了的那个运行时` : undefined });
         }

@@ -32,7 +32,7 @@ check('~/.claude/settings.json 优先(claude 平常用的就是它)', d?.url ===
 // ---- 只注给 claude ----
 const base = { PATH: '/bin' };
 check('claude(裸名或全路径)注 HTTP(S)_PROXY,大小写都给', withProxy(['claude', '-p'], base, 'http://p:1').HTTPS_PROXY === 'http://p:1' && withProxy(['/usr/local/bin/claude'], base, 'http://p:1').http_proxy === 'http://p:1');
-check('qwen / voxtell 不动;false、没选不动', withProxy(['qwen'], base, 'http://p:1') === base && withProxy(['claude'], base, false) === base && withProxy(['claude'], base, undefined) === base);
+check('qwen 不注 cotutor.json 的代理(只加它自己的环境变量)、voxtell 不动;false、没选不动', withProxy(['qwen'], base, 'http://p:1').HTTPS_PROXY === undefined && withProxy(['voxtell'], base, 'http://p:1') === base && withProxy(['claude'], base, false) === base && withProxy(['claude'], base, undefined) === base);
 
 // ---- init 的选择 ----
 const w1 = (await initWorkspace({ slug: 'a', proxy: 'http://127.0.0.1:7890' })).root;

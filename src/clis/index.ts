@@ -66,6 +66,8 @@ export interface FillVars {
   effort?: Policy['effort'];
   /** 这轮带不带工具;不给 = 带 */
   tools?: ToolSet;
+  /** 这轮该读得到的目录(workspace 根、vault) */
+  readDirs?: readonly string[];
 }
 
 /**
@@ -73,7 +75,7 @@ export interface FillVars {
  */
 export function fillArgs(adapter: CliAdapter, argv: readonly string[], vars: FillVars): string[] {
   const set = vars.tools ?? 'on';
-  const spread = argv.flatMap((a) => (a === '{toolArgs}' ? adapter.toolArgs(set) : [a]));
+  const spread = argv.flatMap((a) => (a === '{toolArgs}' ? adapter.toolArgs(set, { readDirs: vars.readDirs ?? [] }) : [a]));
   return fillRuntime(spread, { ...vars, effort: vars.effort ?? POLICY_DEFAULTS.effort, tools: adapter.toolList(set) });
 }
 
@@ -92,4 +94,21 @@ export function parserOf(cli: string | undefined): (line: string) => CliEvent[] 
 export function parserForRuntime(runtimes: Readonly<Record<string, unknown>>, name: string | undefined): (line: string) => CliEvent[] {
   const r = name && name !== 'default' ? runtimes[name] : undefined;
   return r && typeof r === 'object' && Array.isArray((r as Runtime).run) ? adapterFor(r as Runtime).parse : STREAM_JSON.parse;
+}
+
+/** 起进程前让这个 CLI 的适配器备好 workspace 里的机器文件(qwen 的隔离家目录);没有这一步的 CLI 什么都不做 */
+export async function prepareCli(cli: string, root: string): Promise<void> {
+  await adapterNamed(cli)?.prepare?.(root);
+}
+
+/** 进程起来报的工具表里,不该有的那几样(适配器不核对就是空) */
+export function unexpectedTools(cli: string, set: ToolSet, tools: readonly string[]): string[] {
+  const want = adapterNamed(cli)?.expectedTools?.(set);
+  return want ? tools.filter((t) => !want.includes(t)) : [];
+}
+
+/** 这份模板是不是某个 CLI 以前出厂过、没人改过的(换新时整份换) */
+export function isRetiredRuntime(name: string, runtime: { run: readonly string[]; resume: readonly string[] }): boolean {
+  const same = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
+  return ADAPTERS.some((a) => (a.retired?.[name] ?? []).some((r) => same(r.run, runtime.run) && same(r.resume, runtime.resume)));
 }

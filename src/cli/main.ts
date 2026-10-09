@@ -509,7 +509,7 @@ export async function main(argv: string[]): Promise<void> {
           const secs = (ms: number): string => (ms < 120000 ? `${Math.round(ms / 100) / 10}s` : `${Math.round(ms / 6000) / 10}min`);
           const timing = [m.timing?.firstReadyMs !== undefined ? `首句就绪 ${secs(m.timing.firstReadyMs)}` : null, m.timing?.firstCardMs !== undefined ? `首卡 ${secs(m.timing.firstCardMs)}` : null, m.timing?.doneMs !== undefined ? `整轮 ${secs(m.timing.doneMs)}` : null, m.timing?.dubbedMs !== undefined ? `配音 ${secs(m.timing.dubbedMs)}` : null].filter(Boolean);
           if (m.artifacts.length) process.stdout.write(`课包:${m.artifacts.join(', ')}\n`);
-          process.stdout.write(`会话 ${index.session?.id ?? '?'}${timing.length ? ' · ' + timing.join(' · ') : ''} · 本轮 $${(m.costUsd ?? 0).toFixed(2)} · 今日 $${index.costUsd.toFixed(2)}\n`);
+          process.stdout.write(`会话 ${index.session?.id ?? '?'}${timing.length ? ' · ' + timing.join(' · ') : ''} · 本轮 ${m.costUsd === undefined && m.tokens ? `${m.tokens.in} 入 / ${m.tokens.out} 出 token(这个运行时不报钱数)` : `$${(m.costUsd ?? 0).toFixed(2)}`} · 今日 $${index.costUsd.toFixed(2)}\n`);
         }
         return;
       }

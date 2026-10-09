@@ -1,5 +1,6 @@
 /** CLI 适配器(《agent层设计.md》§6):stream-json 读成统一事件、按运行时找适配器、填模板(含 {toolArgs})、工具类别、环境。 */
-import { ADAPTERS, STREAM_JSON, adapterFor, controlsTools, factoryRuntimes, fillArgs, parserForRuntime, processEnv, runtimeCli, toolKind, withoutNested } from '../src/clis/index.ts';
+import { ADAPTERS, STREAM_JSON, adapterFor, controlsTools, factoryRuntimes, fillArgs, isRetiredRuntime, parserForRuntime, processEnv, runtimeCli, toolKind, unexpectedTools, withoutNested } from '../src/clis/index.ts';
+import { qwen } from '../src/clis/qwen.ts';
 import { parseStreamJson } from '../src/clis/stream-json.ts';
 import { check, done } from './_check.ts';
 
@@ -42,6 +43,21 @@ const j = (o: unknown): string => JSON.stringify(o);
   check('按运行时名找读法;没这个运行时按 stream-json', parserForRuntime({ claude: { run: ['claude'], resume: ['claude'] } }, 'claude') === adapterFor({ run: ['claude'] }).parse && parserForRuntime({}, 'gone') === STREAM_JSON.parse && parserForRuntime({ default: 'claude' }, 'default') === STREAM_JSON.parse);
   const rt = factoryRuntimes();
   check('出厂运行时由各适配器给,每个都能找回自己的适配器', ADAPTERS.every((a) => Object.values(a.runtimes()).every((r) => adapterFor(r) === a)) && 'claude' in rt && 'qwen' in rt);
+}
+
+{
+  const off = fillArgs(qwen, ['qwen', '{toolArgs}', '-m', 'x'], { agent: 'a', prompt: 'p', tools: 'off' });
+  const on = fillArgs(qwen, ['qwen', '{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'on' });
+  check('qwen 不带工具:--core-tools 给一个再排除掉,非核心的也排除', off[1] === '--core-tools' && off[2] === 'read_file' && off[3] === '--exclude-tools' && off[4].split(',').includes('read_file') && off[4].split(',').includes('agent') && off[4].split(',').includes('skill') && off[5] === '-m', off.join(' '));
+  check('qwen 只读:read_file / glob / grep_search,非核心的排除', on[2] === 'read_file,glob,grep_search' && !on[4].split(',').includes('read_file') && on[4].split(',').includes('agent'));
+  check('qwen 核对工具表:不带时多一个都提醒,只读时多出只读三样以外的提醒', unexpectedTools('qwen', 'off', ['read_file']).join() === 'read_file' && unexpectedTools('qwen', 'on', ['glob', 'edit']).join() === 'edit' && unexpectedTools('claude', 'off', ['Bash']).length === 0);
+  const env = qwen.planEnv!({ root: '/ws', effort: 'high', tools: 'off' });
+  check('qwen 的家与思考量:high → xhigh;没给 root 不设', env.QWEN_HOME === '/ws/.cotutor/qwen/home' && env.QWEN_CODE_SYSTEM_SETTINGS_PATH === '/ws/.cotutor/qwen/effort-xhigh.json' && Object.keys(qwen.planEnv!({ effort: 'low', tools: 'off' })).length === 0);
+  check('qwen:effort low 不带工具不想,带工具(照片、记账)至少想一点', qwen.planEnv!({ root: '/ws', effort: 'low', tools: 'off' }).QWEN_CODE_SYSTEM_SETTINGS_PATH.endsWith('effort-none.json') && qwen.planEnv!({ root: '/ws', effort: 'low', tools: 'on' }).QWEN_CODE_SYSTEM_SETTINGS_PATH.endsWith('effort-low.json'));
+  check('qwen 只读那轮把可读目录划进来', j(fillArgs(qwen, ['{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'on', readDirs: ['/ws', '/vault'] }).slice(4)) === j(['--include-directories', '/ws', '--include-directories', '/vault']) && !fillArgs(qwen, ['{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'off', readDirs: ['/ws'] }).includes('--include-directories'));
+  check('qwen 体检:0.25 以下要升级', !qwen.check!({ version: '0.21.13', env: { DASHSCOPE_API_KEY: 'k' } })[0].ok && qwen.check!({ version: '0.25.0', env: { DASHSCOPE_API_KEY: 'k' } }).every((c) => c.ok));
+  const old = qwen.retired!.qwen[0];
+  check('旧出厂模板认得出;改过一个词就不算', isRetiredRuntime('qwen', old) && !isRetiredRuntime('qwen', { run: [...old.run, '-m', 'x'], resume: old.resume }) && !isRetiredRuntime('claude', old));
 }
 
 done();

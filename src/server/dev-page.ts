@@ -650,6 +650,7 @@ export const DEV_PAGE = `<!doctype html>
       if (m.timing.dubbedMs !== undefined) foot.append(h('span', { class: 'chip' }, '配音 ', h('b', {}, secs(m.timing.dubbedMs))));
     }
     if (m.costUsd !== undefined) foot.append(h('span', { class: 'chip money' }, '$', h('b', {}, m.costUsd.toFixed(2))));
+    else if (m.tokens) foot.append(h('span', { class: 'chip money', title: '这个运行时不报钱数,只报 token(输入 / 输出)' }, h('b', {}, m.tokens.in + ' / ' + m.tokens.out), ' token'));
     if (m.artifacts && m.artifacts.length) foot.append(h('span', { class: 'chip' }, '课包 ' + m.artifacts.join(', ')));
     const rows = v.runs[m.job] || [];
     const trace = h('div', { class: 'trace', style: 'display:none' }, ...rowsEl(rows));

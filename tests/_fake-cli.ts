@@ -7,6 +7,9 @@
  * --input-format stream-json(预热,2026-09-29):消息不在 argv,从 stdin 读第一行 {"type":"user","message":{"content":…}};读到之前一个字节不吐(同真 claude),
  * init 带 waitedMs(起来到收到消息等了多久);回完 result 等 stdin 关了才退。
  * 含「断流」/「一直断」/「工具慢」的见下面断流那段(stall.test)。
+ * qwen 方言(命令行里有 --core-tools,qwen 适配器的 {toolArgs} 展开出来的):init 报工具表(核心工具按 --core-tools 留、非核心的照带,再减 --exclude-tools;
+ * 环境变量 FAKE_QWEN_LEAK 里的工具总在,模仿关不掉的)、带 QWEN_HOME 与思考量配置的路径,每轮一条 goal_state 与一段思考增量,收尾没有钱数只有 token;
+ * 消息含「超时」就以 55 退出、不吐 result(同 qwen 的 --max-wall-time)。
  */
 export {};
 const argv = process.argv.slice(2);
@@ -17,6 +20,8 @@ let agent = '';
 let body = '';
 let outputFormat = 'stream-json';
 let inputFormat = 'text';
+let coreTools: string[] | null = null;
+let excludeTools: string[] = [];
 const rest: string[] = [];
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--resume') session = argv[++i];
@@ -26,6 +31,9 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === '--stream') stream = true;
   else if (argv[i] === '--output-format') outputFormat = argv[++i];
   else if (argv[i] === '--input-format') inputFormat = argv[++i];
+  else if (argv[i] === '--core-tools') coreTools = argv[++i].split(',').filter(Boolean);
+  else if (argv[i] === '--exclude-tools') excludeTools = argv[++i].split(',').filter(Boolean);
+  else if (argv[i] === '-m' || argv[i] === '--approval-mode' || argv[i] === '--max-wall-time') i++;
   else if (argv[i] === '--model' || argv[i] === '--disallowedTools' || argv[i] === '--max-budget-usd' || argv[i] === '--setting-sources' || argv[i] === '--tools' || argv[i] === '--effort' || argv[i] === '--system-prompt' || argv[i] === '--append-system-prompt-file') i++;
   else if (argv[i] === '--disable-slash-commands') continue;
   else rest.push(argv[i]);
@@ -59,7 +67,15 @@ if (outputFormat === 'json') {
   process.exit(0);
 }
 
-emit({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), agent: agent || undefined, bodyLen: body.length, proxy: process.env.HTTPS_PROXY, ...(viaStdin ? { waitedMs } : {}) });
+const qwenish = coreTools !== null;
+// qwen 的工具表:核心工具只留 --core-tools 里的,非核心的(agent / skill / get_goal…)照带,再减 --exclude-tools
+const qwenTools = qwenish ? [...new Set([...['read_file', 'glob', 'grep_search', 'run_shell_command', 'edit', 'write_file'].filter((t) => coreTools!.includes(t)), 'agent', 'skill', 'get_goal', ...(process.env.FAKE_QWEN_LEAK ?? '').split(',').filter(Boolean)])].filter((t) => !excludeTools.includes(t) || (process.env.FAKE_QWEN_LEAK ?? '').split(',').includes(t)) : [];
+emit({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), agent: agent || undefined, bodyLen: body.length, proxy: process.env.HTTPS_PROXY, ...(viaStdin ? { waitedMs } : {}), ...(qwenish ? { tools: qwenTools, qwenHome: process.env.QWEN_HOME, effortFile: process.env.QWEN_CODE_SYSTEM_SETTINGS_PATH, key: Boolean(process.env.DASHSCOPE_API_KEY), openai: Boolean(process.env.OPENAI_MODEL) } : {}) });
+if (qwenish) {
+  emit({ type: 'stream_event', event: { type: 'goal_state', goal_state: { v: 2, goal: null, activity: 'idle' } }, session_id: sid, parent_tool_use_id: null });
+  emit({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: '想一想' } }, session_id: sid, parent_tool_use_id: null });
+  if (prompt.includes('超时')) { process.stderr.write('Run aborted: wall-clock budget exceeded\n'); process.exit(55); }
+}
 // 「起就卡」:头一次吐了 init(带会话 id)就挂住,模型一个事件没回(会话没落盘,resume 不了);第二次起(cwd 里有记号)照常回
 if (prompt.includes('起就卡')) {
   const { existsSync, writeFileSync } = await import('node:fs');
@@ -156,7 +172,7 @@ if (fail) {
     emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'text', text: result }] } });
     emit({ type: 'stream_event', event: { type: 'message_stop' }, session_id: sid, parent_tool_use_id: null });
   }
-  emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 2, total_cost_usd: 0.05, result });
+  emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 2, ...(qwenish ? { usage: { input_tokens: 2000, output_tokens: 120, cache_read_input_tokens: 500, total_tokens: 2620 } } : { total_cost_usd: 0.05 }), result });
 }
 process.stderr.write('fake-cli done\n');
 // 消息走 stdin 的:同真 claude,回完还等下一条,stdin 关了才退

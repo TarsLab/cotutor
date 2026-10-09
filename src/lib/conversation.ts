@@ -189,6 +189,7 @@ export function applyRun(
           ...m,
           result: transcript.final ? (transcript.final.ok ? ('ok' as const) : ('error' as const)) : ('running' as const),
           costUsd: cost,
+          ...(raw === undefined && transcript.final?.inTokens !== undefined ? { tokens: { in: transcript.final.inTokens, out: transcript.final.outTokens ?? 0 } } : {}),
           ...(raw !== undefined ? { sessionUsd: raw } : {}),
           ...(transcript.final?.modelOut !== undefined ? { sessionOut: transcript.final.modelOut } : {}),
           kidText: kidView.kidText,

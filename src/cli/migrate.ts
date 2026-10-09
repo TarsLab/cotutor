@@ -18,6 +18,7 @@ import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CotutorConfigSchema, explainIssues } from '../schema/index.ts';
 import { CLAUDE_TUTOR_TOOLS } from '../clis/claude.ts';
+import { isRetiredRuntime } from '../clis/index.ts';
 import { configTemplate, shippedAgents } from './skeleton.ts';
 import { installTutors, type InstallStep } from './tutors.ts';
 import { RENAMED_TUTORS, renameTutorData, renamedEntry, type RenameOp } from './rename.ts';
@@ -127,6 +128,13 @@ export async function configGaps(raw: unknown): Promise<ConfigGap[]> {
     if (name === 'default' || !isObj(rt)) continue;
     const mine = mineRuntimes[name];
     if (!isObj(mine)) continue; // 整个运行时都缺,上面那轮已经报了
+    // 出厂模板换了说话方式(消息改走 stdin):逐个补旗标会拼出过不了契约的模板。没人改过的旧出厂模板整份换新,改过的不动(家长的决定)
+    if (rt.stdin && !mine.stdin) {
+      if (Array.isArray(mine.run) && Array.isArray(mine.resume) && isRetiredRuntime(name, { run: mine.run as string[], resume: mine.resume as string[] })) {
+        gaps.push({ kind: 'runtime', path: `runtimes.${name}`, detail: `${name} 还是旧的出厂模板(消息进命令行、不流式):整份换成新的(消息走 stdin、工具与思考量由适配器管,src/clis/${name}.ts)`, value: rt });
+      }
+      continue;
+    }
     for (const key of ['run', 'resume'] as const) {
       const f = rt[key];
       const u = mine[key];

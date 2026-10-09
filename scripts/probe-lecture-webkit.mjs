@@ -50,7 +50,8 @@ try {
   await page.mouse.up();
   await sleep(300);
   ok('圈了一处', (await fr.locator('.lc-mark').count()) === 1);
-  await fr.locator('.lc-dot').nth(5).click();
+  const sb = await fr.locator('.lc-seg').nth(5).boundingBox();
+  await page.mouse.click(sb.x + 2, sb.y + sb.height / 2);
   await fr.locator('.lc-play').click();
   await page.waitForSelector('.lc-pending .c-mark img.mk-svg', { timeout: 30000 });
   await page.waitForFunction(() => (document.querySelector('.lc-pending .c-mark img.mk-svg')?.naturalWidth ?? 0) > 0, null, { timeout: 30000 });

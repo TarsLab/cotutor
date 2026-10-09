@@ -68,8 +68,8 @@ try {
 
   await evaluate(`${BTN}.click()`);
   const opened = await until(`!${F}.hidden && Boolean(${D}?.querySelector('.lc-start')) && Boolean(${D}?.querySelector('video.lc-video'))`);
-  const pre = await evaluate(`({ dots: ${D}.querySelectorAll('.lc-dot').length, time: ${D}.querySelector('.lc-time span').textContent, box: (() => { const b = ${D}.querySelector('.lc-vbox').getBoundingClientRect(); return Math.round(b.width / b.height * 100) / 100; })() })`);
-  ok('点了:铺满的是视频,三个句子点、课长 0:18;画框按视频的宽高比(16:9)', opened && pre.dots === 3 && pre.time === '0:00 / 0:18' && Math.abs(pre.box - 16 / 9) < 0.03, JSON.stringify(pre));
+  const pre = await evaluate(`({ dots: ${D}.querySelectorAll('.lc-seg').length, time: ${D}.querySelector('.lc-time span').textContent, box: (() => { const b = ${D}.querySelector('.lc-vbox').getBoundingClientRect(); return Math.round(b.width / b.height * 100) / 100; })() })`);
+  ok('点了:铺满的是视频,进度条三段、课长 0:18;画框按视频的宽高比(16:9)', opened && pre.dots === 3 && pre.time === '0:00 / 0:18' && Math.abs(pre.box - 16 / 9) < 0.03, JSON.stringify(pre));
 
   await evaluate(`${D}.querySelector('.lc-start').click()`);
   await sleep(2500);

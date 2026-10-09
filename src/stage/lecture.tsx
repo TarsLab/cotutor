@@ -132,6 +132,8 @@ const MIN_SIZE = 12;
 /** 一处圈最多留几个点 */
 const MAX_POINTS = 300;
 const INK = '#2f6fd6';
+/** 进度条段与段之间空多少(像素) */
+const SEG_GAP = 3;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onFinished, onClose, onAsk, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false, tutor }, ref): JSX.Element {
@@ -141,6 +143,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const rate = useRef(1);
   const openAt = card ? range.start : rawAt;
   const [clock, setClock] = useState<LectureClock | null>(null);
+  const segs = useMemo(() => (clock ? clock.segments.map((x) => ({ i: x.index, start: x.start, len: x.len })) : []), [clock]);
   const [now, setNow] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [started, setStarted] = useState(openAt !== undefined);
@@ -228,7 +231,18 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
       g.setAttribute('class', 'lc-ink');
       svg.append(g);
       ink.current = g;
-      host.current?.replaceChildren(svg);
+      // 画框按课包的 viewBox 铺(和视频一样):外面不留白框,拿着笔描的那圈贴着画面
+      const vb = svg.viewBox.baseVal;
+      const b = document.createElement('div');
+      b.className = 'lc-vbox lc-sbox';
+      b.append(svg);
+      host.current?.replaceChildren(b);
+      if (vb && vb.width > 0 && vb.height > 0) {
+        const fit = (): void => { const hb = host.current?.getBoundingClientRect(); if (!hb) return; const k = Math.min(hb.width / vb.width, hb.height / vb.height); b.style.width = `${Math.floor(vb.width * k)}px`; b.style.height = `${Math.floor(vb.height * k)}px`; };
+        fit();
+        new ResizeObserver(fit).observe(host.current!);
+      } else { b.style.width = '100%'; b.style.height = '100%'; }
+      box.current = b;
       svgRef.current = svg;
       const start = openAt !== undefined ? Math.max(0, Math.min(openAt, c.total)) : 0;
       t.current = start;
@@ -388,10 +402,18 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
 
   // 拖:按下就跟手,不出声;松手从那一刻接着(原来在放就接着放)
   const track = useRef<HTMLDivElement>(null);
+  /** 进度条一句一段,段间空 SEG_GAP(拍板 40):点哪就跳到哪,算的时候把空隙扣掉 */
   const msAt = (clientX: number): number => {
     const r = track.current?.getBoundingClientRect();
-    if (!r || !clock) return 0;
-    return Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * clock.total;
+    if (!r || !clock || !segs.length) return 0;
+    const W = Math.max(1, r.width - (segs.length - 1) * SEG_GAP);
+    const x = clientX - r.left;
+    for (let i = 0; i < segs.length; i++) {
+      const sg = segs[i];
+      const a = (sg.start / clock.total) * W + i * SEG_GAP, w = Math.max(1, (sg.len / clock.total) * W);
+      if (x < a + w + SEG_GAP / 2 || i === segs.length - 1) return Math.max(0, Math.min(clock.total, sg.start + Math.max(0, Math.min(1, (x - a) / w)) * sg.len));
+    }
+    return 0;
   };
   const onDown = (e: React.PointerEvent): void => {
     if (!clock) return;
@@ -406,15 +428,6 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     scrubbing.current = false;
     seg.current = -1;
     syncAudio(clock, t.current, playing);
-    log(playing);
-  };
-  const jump = (ms: number): void => {
-    if (!clock) return;
-    setStarted(true);
-    setFresh(null);
-    paint(clock, ms);
-    seg.current = -1;
-    syncAudio(clock, ms, playing);
     log(playing);
   };
 
@@ -525,8 +538,13 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
 
   const at = clock ? lectureAt(clock, now) : null;
   const line = clock && at ? (clock.segments[at.index]?.line ?? '') : '';
-  const dots = useMemo(() => (clock ? clock.segments.map((s) => ({ i: s.index, left: (s.start / clock.total) * 100, start: s.start })) : []), [clock]);
-  const pct = clock ? (now / clock.total) * 100 : 0;
+  /** 进度条上一时刻的横坐标:按段铺,扣掉段间空隙(和 msAt 互逆) */
+  const posOf = (ms: number): string => {
+    if (!clock || !segs.length) return '0%';
+    let i = 0;
+    while (i + 1 < segs.length && segs[i + 1].start <= ms) i++;
+    return `calc((100% - ${(segs.length - 1) * SEG_GAP}px) * ${Math.max(0, Math.min(1, ms / clock.total))} + ${i * SEG_GAP}px)`;
+  };
   const paused = Boolean(clock) && started && !playing;
   /** 放完了停在最后一帧(孩子的那份):按钮晚一点淡入,不打断孩子还在听、还在想的那一下 */
   const ended = paused && !card && !follow && !view && Boolean(clock) && now >= clock!.total;
@@ -586,22 +604,17 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
               : <svg width="20" height="20" viewBox="0 0 18 18"><path d="M5 3.5v11l9-5.5z" fill="currentColor" /></svg>}
           {again ? <span>再看一遍</span> : paused && clock && now < clock.total ? <span>{card && !rangeDone.current ? '放这一段' : '接着看'}</span> : null}
         </button>
-        <div className="lc-mid">
-          <div className="lc-dots">
-            {dots.map((d) => (
-              <button key={d.i} type="button" className={'lc-dot' + (now >= d.start ? ' on' : '')} style={{ left: `${d.left}%` }} aria-label={`从 ${clockLabel(d.start)} 放`} onClick={() => jump(d.start)}>{d.i + 1}</button>
+        <div className="lc-track" ref={track} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+          <div className="lc-segs">
+            {segs.map((d) => (
+              <i key={d.i} className="lc-seg" data-start={d.start} style={{ flexGrow: d.len }}><b style={{ width: `${Math.max(0, Math.min(1, (now - d.start) / d.len)) * 100}%` }} /></i>
             ))}
           </div>
-          <div className="lc-track" ref={track} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
-            {clock && range && <div className="lc-range" style={{ left: `${(range.start / clock.total) * 100}%`, width: `${((range.end - range.start) / clock.total) * 100}%` }} />}
-            <div className="lc-fill" style={{ width: `${pct}%` }} />
-            <div className="lc-knob" style={{ left: `${pct}%` }} />
-            {clock && marks.map((m) => (
-              <button key={`${m.atMs}-${m.path.length}`} type="button" className="lc-mark" style={{ left: `${(m.atMs / clock.total) * 100}%` }} aria-label={`看 ${clockLabel(m.atMs)} 圈的`} onPointerDown={(e) => e.stopPropagation()} onClick={() => showMark(m)}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round"><ellipse cx="8" cy="8" rx="5.5" ry="4.5" /></svg>
-              </button>
-            ))}
-          </div>
+          {clock && range && <div className="lc-range" style={{ left: posOf(range.start), width: `calc(${posOf(range.end)} - ${posOf(range.start)})` }} />}
+          {clock && marks.map((m) => (
+            <button key={`${m.atMs}-${m.path.length}`} type="button" className="lc-mark" style={{ left: posOf(m.atMs) }} aria-label={`看 ${clockLabel(m.atMs)} 圈的`} onPointerDown={(e) => e.stopPropagation()} onClick={() => showMark(m)} />
+          ))}
+          <div className="lc-knob" style={{ left: posOf(now) }} />
         </div>
         <div className="lc-time">
           <span>{clockLabel(now)} / {clock ? clockLabel(clock.total) : '0:00'}</span>

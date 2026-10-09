@@ -30,13 +30,13 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
   .canvas-sep { width: 28px; height: 1px; }
 }
 
-/* ---- 小课堂(《小课堂设计.md》拍板 38):左边一条竖栏(回去、课名、圈一圈 / 擦掉),画面占满中间,下面字幕、进度条(步骤点、拖、时间、去问老师) ---- */
-.lc { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: #faf9f4; }
-/* 横着拿:画面被高卡着,两边本来就空;竖栏放左边,右边留一条同宽的空,视频在整屏居中(课包是一块白板,铺到右边) */
+/* ---- 小课堂(《小课堂设计.md》拍板 38–40):左边一条竖栏(回去、课名、圈一圈 / 擦掉),画面占满中间,下面字幕、一行控制(播放、进度条、时间、去问老师) ---- */
+/* 底色就是课包板子的纸色(#fffdf8):画面四周不留白框,也不画分割线,竖向的地方都给画面(拍板 40) */
+.lc { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: #fffdf8; }
+/* 横着拿:画面被高卡着,两边本来就空;竖栏放左边,右边留一条同宽的空,画面在整屏居中 */
 .lc.lc-full { position: relative; display: grid; grid-template-columns: 76px minmax(0, 1fr) 76px; grid-template-rows: minmax(0, 1fr) auto auto; column-gap: 12px; row-gap: 8px; }
 .lc-full > .lc-rail { grid-column: 1; grid-row: 1; }
-.lc-full > .lc-canvas { grid-column: 2 / -1; grid-row: 1; }
-.lc-full.lc-vid > .lc-canvas { grid-column: 2; }
+.lc-full > .lc-canvas { grid-column: 2; grid-row: 1; }
 .lc-full > .lc-line, .lc-full > .lc-bar { grid-column: 1 / -1; }
 .lc-rail { min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 /* 左上「‹ 头像」:和老师页的 #back 一个样子(kid-page.ts),浮在上面;竖栏让出它的位置(拍板 39) */
@@ -49,54 +49,56 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .lc-name { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
 .lc-tag { font-size: 12px; font-weight: 700; color: #b54d1b; letter-spacing: 1px; flex: none; }
 .lc-title { font-size: 16px; font-weight: 600; line-height: 1.3; overflow: hidden; word-break: break-all; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-.lc-canvas { position: relative; flex: 1; min-height: 0; background: #ffffff; border: 1.5px solid #e2dfd6; border-radius: 24px; overflow: hidden; display: grid; }
-.lc-host { position: absolute; inset: 12px; display: grid; }
-.lc-svg { width: 100%; height: 100%; }
+/* 画面:铺满的时候没有框;板书上的小课堂卡还是一块白板 */
+.lc-canvas { position: relative; flex: 1; min-height: 0; display: grid; }
+.lc-host { position: absolute; inset: 0; display: grid; }
+.lc-card .lc-canvas { background: #ffffff; border: 1.5px solid #e2dfd6; border-radius: 24px; overflow: hidden; }
+.lc-card .lc-host { inset: 12px; }
+/* 画框按画面自己的宽高比(课包的 viewBox、视频的像素)铺在中间,圈的那层叠在上面 */
+.lc-vbox { position: relative; margin: auto; }
+.lc-vbox:not(.lc-sbox) { border-radius: 12px; overflow: hidden; }
+.lc-svg { display: block; width: 100%; height: 100%; }
 .lc-canvas .stage-wait { position: absolute; inset: 0; }
 .lc-start { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); height: 72px; padding: 0 32px 0 26px; border-radius: 36px; border: none; background: #c95a22; color: #ffffff; font: inherit; font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 10px; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.15); }
-.lc-line { min-height: 1.5em; text-align: center; font-size: 22px; line-height: 1.5; padding: 0 40px; }
-.lc-bar { display: flex; align-items: center; gap: 18px; background: #ffffff; border: 1.5px solid #e2dfd6; border-radius: 22px; padding: 8px 10px 8px 8px; }
-.lc-play { width: 56px; height: 56px; flex: none; border-radius: 50%; border: none; background: #2b2b2b; color: #ffffff; display: grid; place-items: center; padding: 0; cursor: pointer; }
+/* 不叫 .pen:舞台页也装了孩子端的 theme.css,那里 .pen 是标注的笔(pointer-events: none),圈就收不到手指了。拿着笔:画面描一圈蓝,是这页唯一的线 */
+.lc-canvas.lc-pen { cursor: crosshair; touch-action: none; }
+.lc-canvas.lc-pen .lc-vbox { border-radius: 10px; box-shadow: 0 0 0 3px #2f6fd6; }
+.lc-line { min-height: 1.4em; text-align: center; font-size: 22px; line-height: 1.4; padding: 0 40px; }
+.lc-line.ink { color: #2f6fd6; font-weight: 500; }
+/* 控制一行,不加框 */
+.lc-bar { display: flex; align-items: center; gap: 18px; min-height: 48px; }
+.lc-play { width: 48px; height: 48px; flex: none; border-radius: 50%; border: none; background: #2b2b2b; color: #ffffff; display: grid; place-items: center; padding: 0; cursor: pointer; }
 .lc-play:disabled { opacity: .4; }
-.lc-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.lc-dots { position: relative; height: 28px; }
-.lc-dot { position: absolute; top: 0; width: 28px; height: 28px; margin-left: -14px; border-radius: 50%; border: 1.5px solid #d8d4ca; background: #ffffff; color: #8a8781; font: inherit; font-size: 13px; font-weight: 700; padding: 0; cursor: pointer; }
-.lc-dot:first-child { margin-left: 0; }
-.lc-dot.on { background: #e8743b; border-color: #e8743b; color: #ffffff; }
-.lc-track { position: relative; height: 28px; touch-action: none; cursor: pointer; }
-.lc-track::before { content: ""; position: absolute; left: 0; right: 0; top: 10px; height: 8px; border-radius: 4px; background: #ece9e1; }
-.lc-fill { position: absolute; left: 0; top: 10px; height: 8px; border-radius: 4px; background: #e8743b; }
-.lc-knob { position: absolute; top: 3px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: #ffffff; border: 2px solid #e8743b; box-sizing: border-box; }
-.lc-time { flex: none; font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; }
-/* 进度条右头一格:放着写「看完就能问老师」,放完了话音落了一会儿换成「去问老师」(拍板 37);播放钮同时换成「再看一遍」 */
-.lc-slot { flex: none; min-width: 150px; display: flex; justify-content: flex-end; }
-.lc-hint { height: 48px; border-radius: 24px; background: #f1eee7; color: #66625b; font-size: 15px; display: flex; align-items: center; padding: 0 18px; white-space: nowrap; }
-.lc-askbtn { height: 56px; border-radius: 28px; border: none; background: #c95a22; color: #ffffff; font: inherit; font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 6px; padding: 0 18px 0 24px; cursor: pointer; white-space: nowrap; }
+.lc-play.go { width: auto; border-radius: 24px; padding: 0 20px 0 16px; display: flex; gap: 8px; background: #c95a22; font: inherit; font-size: 17px; font-weight: 700; }
+.lc-play.again { width: auto; border-radius: 24px; padding: 0 18px 0 14px; display: flex; gap: 8px; background: #ffffff; color: #2b2b2b; border: 1.5px solid #e2dfd6; font: inherit; font-size: 16px; font-weight: 600; }
+/* 铺满的时候三种样子(暂停圆钮、接着看、再看一遍)一样宽,进度条的左头不跟着跳 */
+.lc-full .lc-play { width: 132px; padding: 0; border-radius: 24px; justify-content: center; }
+/* 进度条:一句一段,段间空 3px,不写数字(拍板 40);点哪就跳到哪,整行 48 高都能按 */
+.lc-track { position: relative; flex: 1; min-width: 0; height: 48px; touch-action: none; cursor: pointer; }
+.lc-segs { position: absolute; left: 0; right: 0; top: 21px; height: 6px; display: flex; gap: 3px; pointer-events: none; }
+.lc-seg { display: block; flex: 1 1 0; min-width: 0; height: 100%; border-radius: 3px; background: #e6e2d8; overflow: hidden; }
+.lc-seg b { display: block; height: 100%; background: #e8743b; }
+.lc-knob { position: absolute; top: 15px; width: 18px; height: 18px; margin-left: -9px; box-sizing: border-box; border-radius: 50%; background: #ffffff; border: 2.5px solid #e8743b; box-shadow: 0 1px 4px #00000026; pointer-events: none; z-index: 1; transition: transform .1s; }
+.lc-track:active .lc-knob { transform: scale(1.3); }
+.lc-mark { position: absolute; top: 10px; width: 28px; height: 28px; margin-left: -14px; border: 0; padding: 0; background: none; cursor: pointer; z-index: 2; }
+.lc-mark::after { content: ""; position: absolute; left: 7px; top: 7px; width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; background: #2f6fd6; border: 2px solid #ffffff; box-shadow: 0 0 0 1px #2f6fd655; }
+.lc-range { position: absolute; top: 16px; height: 16px; border-radius: 8px; background: #2f6fd633; pointer-events: none; }
+.lc-time { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.lc-time small { font-size: 12px; color: #2f6fd6; font-weight: 600; }
+/* 右头一格:放着写「看完就能问老师」,放完了话音落了一会儿换成「去问老师」(拍板 37);播放钮同时换成「再看一遍」 */
+.lc-slot { flex: none; width: 152px; display: flex; justify-content: flex-end; }
+.lc-hint { height: 44px; border-radius: 22px; background: #f1eee7; color: #66625b; font-size: 15px; display: flex; align-items: center; padding: 0 18px; white-space: nowrap; }
+.lc-askbtn { height: 48px; border-radius: 24px; border: none; background: #c95a22; color: #ffffff; font: inherit; font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 6px; padding: 0 16px 0 22px; cursor: pointer; white-space: nowrap; }
 .lc-in { animation: lc-in .4s ease-out both; }
 @keyframes lc-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .lc-in { animation: none; } .lc-back { transition: none; } }
-/* 不叫 .pen:舞台页也装了孩子端的 theme.css,那里 .pen 是标注的笔(pointer-events: none),圈就收不到手指了 */
-.lc-canvas.lc-pen { cursor: crosshair; touch-action: none; border-color: #2f6fd6; }
+@media (prefers-reduced-motion: reduce) { .lc-in { animation: none; } .lc-back, .lc-knob { transition: none; } }
 /* 竖栏里的工具一直在,位置不跳;放着点「圈一圈」= 停下并拿起笔(拍板 38) */
 .lc-tools { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
 .lc-tool { width: 72px; height: 72px; border-radius: 20px; border: 1.5px solid #e2dfd6; background: #ffffff; color: #2b2b2b; font: inherit; font-size: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; cursor: pointer; }
 .lc-tool.on { background: #2f6fd6; border-color: #2f6fd6; color: #ffffff; font-weight: 700; }
 .lc-tool:disabled { opacity: .4; cursor: default; }
-.lc-line.ink { color: #2f6fd6; font-weight: 500; }
-.lc-play.go { width: auto; border-radius: 28px; padding: 0 22px 0 18px; display: flex; gap: 8px; background: #c95a22; font: inherit; font-size: 18px; font-weight: 700; }
-.lc-play.again { width: auto; border-radius: 28px; padding: 0 20px 0 16px; display: flex; gap: 8px; background: #ffffff; color: #2b2b2b; border: 1.5px solid #e2dfd6; font: inherit; font-size: 17px; font-weight: 600; }
-.lc-mark { position: absolute; top: 0; width: 28px; height: 28px; margin-left: -14px; border-radius: 50%; border: none; background: #2f6fd6; display: grid; place-items: center; padding: 0; cursor: pointer; z-index: 1; }
-.lc-time { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-.lc-time small { font-size: 13px; color: #2f6fd6; font-weight: 500; }
-/* 板书上的小课堂卡(老师放课里的一段):没有顶栏、字幕行、提示;进度条上那一段描一道 */
+/* 板书上的小课堂卡(老师放课里的一段):没有竖栏、字幕行、提示;进度条上那一段描一道 */
 .lc.lc-card { padding: 12px 16px; }
-.lc-range { position: absolute; top: 6px; height: 16px; border-radius: 8px; background: #2f6fd633; }
-/* 视频小课堂:画框按视频的宽高比铺在画面中间,圈的那层叠在上面 */
-.lc-vbox { position: relative; margin: auto; border-radius: 16px; overflow: hidden; box-shadow: 0 0 0 1.5px #e2dfd6; }
-/* 视频:不要外面那块白板,画面自己就是框;拿着笔描一圈蓝 */
-.lc-full.lc-vid .lc-canvas { background: none; border: 0; border-radius: 0; overflow: visible; }
-.lc-full.lc-vid .lc-host { inset: 0; }
-.lc-vid .lc-canvas.lc-pen .lc-vbox { box-shadow: 0 0 0 3px #2f6fd6; }
 .lc-video { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: #000; }
 .lc-over { position: absolute; inset: 0; width: 100%; height: 100%; }
 /* 平板横屏:老师页的返回胶囊离左边 20(kid-page.ts 的 .tb.l),这里跟着;竖栏加宽一点,胶囊不压画面 */
@@ -108,7 +110,7 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 @media (orientation: portrait), (max-width: 699px) {
   .lc.lc-full { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto; }
   .lc-full > .lc-rail { grid-column: 1; grid-row: 1; }
-  .lc-full > .lc-canvas, .lc-full.lc-vid > .lc-canvas { grid-column: 1; grid-row: 2; }
+  .lc-full > .lc-canvas { grid-column: 1; grid-row: 2; }
   .lc-rail { flex-direction: row; flex-wrap: wrap; min-height: 48px; }
   .lc-rail.lc-under { padding: 0 0 0 92px; }
   .lc-name { width: auto; flex: 1; flex-direction: row; align-items: baseline; gap: 8px; text-align: left; }
@@ -116,8 +118,8 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
   .lc-tools { margin: 0 0 0 auto; flex-direction: row; }
   .lc-tool { width: auto; height: 52px; border-radius: 26px; flex-direction: row; gap: 8px; padding: 0 18px 0 14px; font-size: 16px; }
   .lc-tool svg { width: 22px; height: 22px; }
-  /* 竖着拿上下有富余:视频落在字幕上面,空的留在顶栏底下 */
-  .lc-full.lc-vid .lc-vbox { margin: auto auto 0; }
+  /* 竖着拿上下有富余:画面落在字幕上面,空的留在顶栏底下 */
+  .lc-full .lc-vbox { margin: auto auto 0; }
 }
 @media (max-width: 599px) {
   .lc-line { font-size: 19px; padding: 0 8px; }

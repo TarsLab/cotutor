@@ -12,6 +12,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const repo = fileURLToPath(new URL('..', import.meta.url));
@@ -45,7 +46,7 @@ for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok)
 
 let browser = null;
 try {
-  browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(tmp, 'chrome')}`, 'about:blank'], { stdio: 'ignore' });
+  browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(tmp, 'chrome')}`, 'about:blank'], { stdio: 'ignore' });
   let wsUrl = null;
   for (let i = 0; i < 40 && !wsUrl; i++) { try { const list = await (await fetch(`http://127.0.0.1:${cdp}/json`)).json(); wsUrl = list.find((t) => t.type === 'page')?.webSocketDebuggerUrl ?? null; } catch {} if (!wsUrl) await sleep(250); }
   if (!wsUrl) throw new Error('Chrome 没起来');
@@ -58,6 +59,7 @@ try {
   const until = async (expr, n = 40) => { for (let i = 0; i < n; i++) { if (await evaluate(expr)) return true; await sleep(250); } return false; };
   await send('Runtime.enable');
   await send('Page.enable');
+  await quiet(send);
   await send('Page.addScriptToEvaluateOnNewDocument', { source: FAKE_SR });
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor` });
   await until(`document.querySelector('#tutor') && document.querySelector('#tutor').classList.contains('on') && document.querySelectorAll('#board .sec').length > 0`);

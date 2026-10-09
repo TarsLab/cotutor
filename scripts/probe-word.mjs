@@ -12,6 +12,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -33,7 +34,7 @@ for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok)
 
 let browser = null;
 try {
-  browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(tmp, 'chrome')}`, 'about:blank'], { stdio: 'ignore' });
+  browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(tmp, 'chrome')}`, 'about:blank'], { stdio: 'ignore' });
   let wsUrl = null;
   for (let i = 0; i < 40 && !wsUrl; i++) { try { const list = await (await fetch(`http://127.0.0.1:${cdp}/json`)).json(); wsUrl = list.find((t) => t.type === 'page')?.webSocketDebuggerUrl ?? null; } catch {} if (!wsUrl) await sleep(250); }
   if (!wsUrl) throw new Error('Chrome 没起来');
@@ -49,6 +50,7 @@ try {
   const until = async (expr, n = 40) => { for (let i = 0; i < n; i++) { if (await evaluate(expr)) return true; await sleep(250); } return false; };
   await send('Runtime.enable');
   await send('Page.enable');
+  await quiet(send);
   // 浏览器合成声记下来(念了什么、什么语言、多快),1.2 秒算念完(免得等兜底计时;也够看出念的同时在写)
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__said = []; window.speechSynthesis && (speechSynthesis.speak = (u) => { __said.push({ text: u.text, lang: u.lang, rate: +u.rate.toFixed(2) }); setTimeout(() => { __ended++; u.onend && u.onend(); }, 1200); }); window.__ended = 0;
     // 讲到单词卡时写没写:看板上有没有长出过 .ink(元素可能被重画换掉,只看出现过)

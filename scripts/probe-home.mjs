@@ -12,6 +12,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -82,7 +83,7 @@ for: ${day}
   const pub = await run(['home', 'publish', '--workspace', root]);
   ok('cotutor home publish', pub.includes('发布了'), pub.split('\n')[0]);
 
-  browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(home, 'chrome')}`, `${base}/`], { stdio: 'ignore' });
+  browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(home, 'chrome')}`, `${base}/`], { stdio: 'ignore' });
   let wsUrl = null;
   for (let i = 0; i < 40 && !wsUrl; i++) { try { const list = await (await fetch(`http://127.0.0.1:${cdp}/json`)).json(); wsUrl = list.find((t) => t.type === 'page' && t.url.startsWith('http'))?.webSocketDebuggerUrl ?? null; } catch {} if (!wsUrl) await sleep(250); }
   if (!wsUrl) throw new Error('Chrome 没起来');
@@ -97,6 +98,7 @@ for: ${day}
   const open = async (url) => { await send('Page.navigate', { url }); for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelectorAll('.c-tutor').length > 0 || !!document.querySelector('#home-side')`)) break; await sleep(250); } await sleep(300); };
   await send('Runtime.enable');
   await send('Page.enable');
+  await quiet(send);
 
   // ---- 孩子端首页 ----
   await device(390, 844, 2, true);

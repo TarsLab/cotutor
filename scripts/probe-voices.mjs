@@ -10,6 +10,7 @@
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i >= 0 ? process.argv[i + 1] : d; };
 const base = arg('--base', 'http://127.0.0.1:5180');
@@ -20,7 +21,7 @@ const port = 9336;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ok = (name, cond, detail = '') => { console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`); if (!cond) process.exitCode = 1; };
 
-const proc = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${port}`, '--window-size=1280,900', '--user-data-dir=/tmp/cotutor-probe-voices-profile', `${base}/dev#voices`], { stdio: 'ignore' });
+const proc = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${port}`, '--window-size=1280,900', '--user-data-dir=/tmp/cotutor-probe-voices-profile', `${base}/dev#voices`], { stdio: 'ignore' });
 
 async function target() {
   for (let i = 0; i < 40; i++) {
@@ -56,6 +57,7 @@ let who = null;
 try {
   await send('Runtime.enable');
   await send('Page.enable');
+  await quiet(send);
   const api = await (await fetch(`${base}/api/tts/voices`)).json();
   ok('接口列出音色', api.ok && api.count > 0, `${api.count} 个${api.error ? ' · ' + api.error : ''}`);
   let rows = 0;

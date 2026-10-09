@@ -12,6 +12,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const outAt = process.argv.indexOf('--out');
 const repo = fileURLToPath(new URL('..', import.meta.url));
@@ -31,7 +32,7 @@ for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/`)).ok) break; } 
 
 let browser = null;
 try {
-  browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${cdp}`, '--force-device-scale-factor=2', '--window-size=780,1688', `--user-data-dir=${join(home, 'chrome')}`, 'about:blank'], { stdio: 'ignore' });
+  browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${cdp}`, '--force-device-scale-factor=2', '--window-size=780,1688', `--user-data-dir=${join(home, 'chrome')}`, 'about:blank'], { stdio: 'ignore' });
   let wsUrl = null;
   for (let i = 0; i < 40 && !wsUrl; i++) { try { const list = await (await fetch(`http://127.0.0.1:${cdp}/json`)).json(); wsUrl = list.find((t) => t.type === 'page')?.webSocketDebuggerUrl ?? null; } catch {} if (!wsUrl) await sleep(250); }
   const ws = new WebSocket(wsUrl);
@@ -45,6 +46,7 @@ try {
   const until = async (expr, ms = 20000) => { for (let t = 0; t < ms; t += 200) { if (await evaluate(expr)) return true; await sleep(200); } return false; };
   const open = async (q) => { await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor${q}` }); await until(`document.querySelectorAll('#board .sec .c').length > 0`); await sleep(600); };
   await send('Page.enable');
+  await quiet(send);
 
   // ---- 停在第一节第二句:讲完的卡才有喇叭 ----
   await open('&step=0.1&device=phone');

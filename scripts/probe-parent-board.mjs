@@ -13,6 +13,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -33,7 +34,7 @@ for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok)
 
 let browser = null;
 try {
-  browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(tmp, 'chrome')}`, `${base}/parent`], { stdio: 'ignore' });
+  browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(tmp, 'chrome')}`, `${base}/parent`], { stdio: 'ignore' });
   let wsUrl = null;
   for (let i = 0; i < 40 && !wsUrl; i++) { try { const list = await (await fetch(`http://127.0.0.1:${cdp}/json`)).json(); wsUrl = list.find((t) => t.type === 'page' && t.url.startsWith('http'))?.webSocketDebuggerUrl ?? null; } catch {} if (!wsUrl) await sleep(250); }
   if (!wsUrl) throw new Error('Chrome 没起来');
@@ -48,6 +49,7 @@ try {
   const open = async (url, ready) => { await send('Page.navigate', { url }); for (let i = 0; i < 40; i++) { if (await evaluate(ready)) break; await sleep(250); } await sleep(300); };
   await send('Runtime.enable');
   await send('Page.enable');
+  await quiet(send);
 
   // ---- 清单 ----
   await device(390, 844, 2, true);

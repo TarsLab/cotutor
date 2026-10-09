@@ -12,6 +12,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
@@ -33,7 +34,7 @@ for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/kid/home`)).o
 
 let browser = null;
 try {
-  browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--ignore-certificate-errors', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(tmp, 'chrome')}`, 'about:blank'], { stdio: 'ignore' });
+  browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--ignore-certificate-errors', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(tmp, 'chrome')}`, 'about:blank'], { stdio: 'ignore' });
   let wsUrl = null;
   for (let i = 0; i < 40 && !wsUrl; i++) { try { const list = await (await fetch(`http://127.0.0.1:${cdp}/json`)).json(); wsUrl = list.find((t) => t.type === 'page')?.webSocketDebuggerUrl ?? null; } catch {} if (!wsUrl) await sleep(250); }
   if (!wsUrl) throw new Error('Chrome 没起来');
@@ -49,6 +50,7 @@ try {
   const AV = `(el) => { if (!el) return null; const c = el.querySelector('.ring circle'), f = el.querySelector('.face'), cs = c && getComputedStyle(c); return { ring: Boolean(c), face: Boolean(f), border: getComputedStyle(el).borderTopWidth, stroke: cs && cs.stroke, color: getComputedStyle(el).color, dash: cs && cs.strokeDasharray, transform: cs && cs.transform, anim: cs && cs.animationName, draw: el.classList.contains('draw') }; }`;
 
   await send('Page.enable');
+  await quiet(send);
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: `${base}/` });
   await until(`document.querySelectorAll('.c-tutor .av').length > 0`);

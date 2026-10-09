@@ -11,6 +11,7 @@
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const args = process.argv.slice(2);
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args.splice(i, 2)[1] : undefined; };
@@ -19,7 +20,7 @@ const shots = opt('--shots');
 const url = args[0] ?? 'http://127.0.0.1:8790/?tutor=koubo-tutor&step=0.0&stage=0.1';
 const chrome = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const port = 9334;
-const flags = ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${port}`, '--window-size=390,844', '--force-device-scale-factor=2', '--user-data-dir=/tmp/cotutor-probe-record', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required', ...(wav ? [`--use-file-for-fake-audio-capture=${wav}`] : []), url];
+const flags = [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${port}`, '--window-size=390,844', '--force-device-scale-factor=2', '--user-data-dir=/tmp/cotutor-probe-record', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required', ...(wav ? [`--use-file-for-fake-audio-capture=${wav}`] : []), url];
 const proc = spawn(chrome, flags, { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -69,6 +70,7 @@ const ok = (name, cond, detail = '') => console.log(`${cond ? '✓' : '✗'} ${n
 try {
   await send('Runtime.enable');
   await send('Page.enable');
+  await quiet(send);
   let ready = false;
   for (let i = 0; i < 60 && !ready; i++) { ready = await evaluate(`Boolean(document.querySelector('#stage.on #st-body .rc-mic'))`); if (!ready) await sleep(250); }
   ok('舞台开在录音卡上,有大圆键', ready);

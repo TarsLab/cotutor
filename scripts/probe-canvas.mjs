@@ -8,11 +8,12 @@
  *   缺省 http://127.0.0.1:8790/?tutor=chinese-tutor&step=2.1&stage=2.1(mock 里语文老师第三节的画板卡;先发两条消息把节推到那里)
  */
 import { spawn } from 'node:child_process';
+import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const url = process.argv[2] ?? 'http://127.0.0.1:8790/?tutor=chinese-tutor&step=2.1&stage=2.1';
 const chrome = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const port = 9333;
-const proc = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${port}`, '--window-size=1180,820', '--user-data-dir=/tmp/cotutor-probe-profile', url], { stdio: 'ignore' });
+const proc = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${port}`, '--window-size=1180,820', '--user-data-dir=/tmp/cotutor-probe-profile', url], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function target() {
@@ -38,6 +39,7 @@ const evaluate = async (expression) => { const r = await send('Runtime.evaluate'
 const ok = (name, cond, detail = '') => console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`);
 try {
   await send('Runtime.enable');
+  await quiet(send);
   // 等舞台 iframe 里的画布出来
   let ready = false;
   for (let i = 0; i < 60 && !ready; i++) { ready = await evaluate(`Boolean(document.querySelector('#st-frame')?.contentDocument?.querySelector('.canvas-board canvas'))`); if (!ready) await sleep(250); }

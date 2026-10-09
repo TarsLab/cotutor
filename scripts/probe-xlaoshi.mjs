@@ -11,13 +11,14 @@
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const base = process.argv[2] ?? 'http://127.0.0.1:8797';
 const wsRoot = process.argv[3] ?? null;
 const shots = process.env.XLAOSHI_SHOTS ?? null;
 const chrome = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const port = 9341;
-const args = ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${port}`, '--window-size=1180,820', '--user-data-dir=/tmp/cotutor-probe-xlaoshi', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'];
+const args = [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${port}`, '--window-size=1180,820', '--user-data-dir=/tmp/cotutor-probe-xlaoshi', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'];
 if (process.env.XLAOSHI_WAV) args.push(`--use-file-for-fake-audio-capture=${process.env.XLAOSHI_WAV}`);
 const proc = spawn(chrome, [...args, `${base}/xlaoshi`], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -62,6 +63,7 @@ const shot = async (name) => {
 try {
   await send('Runtime.enable');
   await send('Page.enable');
+  await quiet(send);
   ok('出题页开了', await until(`document.querySelector('#v-list').classList.contains('on') && document.querySelector('#sessions') !== null`));
   await evaluate(`document.querySelector('#topic').value = '18 张贴纸平均分给 3 个人,每人几张?讲给我听。'`);
   await shot('1-list');

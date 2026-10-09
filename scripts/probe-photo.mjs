@@ -14,6 +14,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const shotsAt = process.argv.indexOf('--shots');
@@ -65,7 +66,7 @@ try {
   // ---- Chrome:孩子端节头缩略图 → 直开画板舞台 → excalidraw 场景里有底图 → 画一笔给老师看 ----
   const secIdx = 0;
   const url = `${base}/?tutor=math-tutor&step=${secIdx}.0&stage=${secIdx}.${canvasIdx}`;
-  browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(home, 'chrome')}`, url], { stdio: 'ignore' });
+  browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(home, 'chrome')}`, url], { stdio: 'ignore' });
   let wsUrl = null;
   for (let i = 0; i < 40 && !wsUrl; i++) { try { const list = await (await fetch(`http://127.0.0.1:${cdp}/json`)).json(); wsUrl = list.find((t) => t.type === 'page' && t.url.startsWith('http'))?.webSocketDebuggerUrl ?? null; } catch {} if (!wsUrl) await sleep(250); }
   if (!wsUrl) throw new Error('Chrome 没起来');
@@ -76,6 +77,7 @@ try {
   const send = (method, params = {}) => new Promise((resolve) => { const id = ++seq; pending.set(id, resolve); ws.send(JSON.stringify({ id, method, params })); });
   const evaluate = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails.exception?.description ?? r.result.exceptionDetails)); return r.result?.result?.value; };
   await send('Runtime.enable');
+  await quiet(send);
   let scene = null;
   for (let i = 0; i < 80 && !scene; i++) { scene = await evaluate(`(() => { const w = document.querySelector('#st-frame')?.contentWindow; const a = w && w.__excalidraw; if (!a) return null; const els = a.getSceneElements(); const img = els.filter((e) => e.type === 'image'); return img.length ? { images: img.length, files: Object.keys(a.getFiles()).length, locked: img[0].locked, opacity: img[0].opacity, layer: img[0].customData?.layer, w: img[0].width, h: img[0].height } : null; })()`); if (!scene) await sleep(250); }
   ok('画板舞台:excalidraw 场景里有一个 image 元素做底(锁定、灰一档、layer base)、files 里一份', scene && scene.images === 1 && scene.files === 1 && scene.locked === true && scene.opacity === 45 && scene.layer === 'base' && scene.w > 0, JSON.stringify(scene));

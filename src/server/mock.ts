@@ -24,7 +24,7 @@ import type { ConversationMessage } from '../schema/index.ts';
 import { enrichLectures, ensureBaked, lectureFrameSvg, parseRing, parseSvgMs, readLecture, storedMarks, type Lecture } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { handleDictation, type DictationDeps } from '../dictation/route.ts';
-import type { PhotoItem, Recognize } from '../dictation/recognize.ts';
+import type { PhotoItem, PhotoProgress, Recognize } from '../dictation/recognize.ts';
 import { lettersData } from './letters.ts';
 
 /** 看完小课堂的第一问,mock 老师这样答:对着圈的地方说,放课里拆开那一捆的那一段(《小课堂设计.md》§六);视频的放轮着分那一段 */
@@ -457,19 +457,21 @@ for: ${today}
 `;
 }
 
-/** 拍照认词表的假识别:不看照片,照《小蝌蚪找妈妈》那页回(词语一行、写字一行,宽大没认准),一项隔 120 毫秒,像真的一项一项出来 */
+/** 拍照认词表的假识别:不看照片,照《小蝌蚪找妈妈》那页回(词语一行、写字一行,宽大没认准,识字不默认选),再回三行全文;一行隔 100 毫秒,像真的一行一行出来 */
+const MOCK_SAY: Record<string, string> = { 脑袋: '小蝌蚪的大脑袋', 灰色: '灰色的小蝌蚪', 眼睛: '大大的眼睛', 肚皮: '白白的肚皮', 孩子: '青蛙妈妈的孩子', 宽大: '宽大的嘴巴', 两: '两个人的两', 哪: '在哪里的哪', 塘: '池塘的塘' };
 const MOCK_PHOTO: PhotoItem[] = [
-  ...['脑袋', '灰色', '眼睛', '肚皮', '孩子', '宽大'].map((text, i): PhotoItem => ({ text, kind: 'word', box: [80 + i * 140, 640, 190 + i * 140, 700], sure: text !== '宽大', say: `${text},${({ 脑袋: '小蝌蚪的大脑袋', 灰色: '灰色的小蝌蚪', 眼睛: '大大的眼睛', 肚皮: '白白的肚皮', 孩子: '青蛙妈妈的孩子', 宽大: '宽大的嘴巴' } as Record<string, string>)[text]}` })),
-  ...['两', '哪', '宽', '顶', '眼', '睛', '肚', '皮', '孩'].map((text, i): PhotoItem => ({ text, kind: 'char', box: [80 + i * 92, 480, 150 + i * 92, 550], sure: true, say: `${text},${({ 两: '两个人', 哪: '在哪里', 宽: '宽宽的路', 顶: '山顶', 眼: '眼睛', 睛: '眼睛', 肚: '肚子', 皮: '肚皮', 孩: '孩子' } as Record<string, string>)[text]}的${text}` })),
+  ...['脑袋', '灰色', '眼睛', '肚皮', '孩子', '宽大'].map((text, i): PhotoItem => ({ text, kind: 'word', pick: true, box: [80 + i * 140, 640, 190 + i * 140, 700], sure: text !== '宽大', say: `${text},${MOCK_SAY[text]}` })),
+  ...['两', '哪'].map((text, i): PhotoItem => ({ text, kind: 'char', pick: true, box: [80 + i * 92, 480, 150 + i * 92, 550], sure: true, say: `${text},${MOCK_SAY[text]}` })),
+  { text: '塘', kind: 'read', pick: false, box: [80, 320, 150, 390], sure: true, say: `塘,${MOCK_SAY['塘']}` },
 ];
-const mockRecognize: Recognize = async (_image, onItem) => {
+const MOCK_FULL = ['池塘 里 有 一群 小蝌蚪 , 大大的 脑袋 , 黑灰色 的 身子 。', '小蝌蚪 游 哇 游 , 过了 几天 , 长出 两条 后腿 。', '他们 看见 鲤鱼 妈妈 在 教 小鲤鱼 捕食 。'];
+const mockRecognize: Recognize = async (_image, onProgress) => {
   const t0 = Date.now();
-  onItem(null, '小蝌蚪找妈妈');
-  for (const it of MOCK_PHOTO) {
-    await new Promise((r) => setTimeout(r, 120));
-    onItem(it, '小蝌蚪找妈妈');
-  }
-  return { ok: true, items: MOCK_PHOTO, lesson: '小蝌蚪找妈妈', model: 'mock', ms: Date.now() - t0 };
+  const p: PhotoProgress = { items: [], lesson: '小蝌蚪找妈妈', full: [] };
+  onProgress({ ...p });
+  for (const it of MOCK_PHOTO) { await new Promise((r) => setTimeout(r, 100)); p.items = [...p.items, it]; onProgress({ ...p }); }
+  for (const f of MOCK_FULL) { await new Promise((r) => setTimeout(r, 100)); p.full = [...p.full, f]; onProgress({ ...p }); }
+  return { ok: true, model: 'mock', ...p, ms: Date.now() - t0 };
 };
 
 export interface MockRouteResult {

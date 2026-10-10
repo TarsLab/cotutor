@@ -187,6 +187,29 @@ export const TalkSchema = z.object({
 });
 export type TalkConfig = z.infer<typeof TalkSchema>;
 
+/**
+ * 听写(《wip/听写设想.md》):拍照认词表用哪个模型、照什么要求挑词。prompt 一行一个字符串(JSON 里好改),拼起来交给模型;
+ * 回什么格式(一行一段 JSON)由应用接在后面(src/dictation/recognize.ts 的 FORMAT),改 prompt 不会把解析改坏。
+ */
+export const DICTATION_PROMPT_DEFAULT = [
+  '这是一张照片:小学语文课本的一页(课文、写字、词语表、读读写写、识字),或者老师发的听写单。孩子在读二年级。',
+  '先把照片上的正文一行一行全认出来;再挑出这页要孩子会写的字词,当听写的词。',
+  '怎么挑、默认选不选:',
+  '- 「写字」那栏(田字格里的字):挑,默认选上。',
+  '- 「词语表」「读读写写」里的词:挑,默认选上。',
+  '- 课文里课本用彩色框、圈、下划线标出来的字词:挑,默认选上。',
+  '- 老师的听写单上的:都挑,默认选上。',
+  '- 「识字」那栏(只要会认、通常带拼音或在圈里):挑出来,但默认不选。',
+  '- 课文正文里别的词:不挑,全文里有就够了。',
+  '念法:听写时老师怎么念给孩子听。先念这一项,再说一个孩子熟悉的短语或短句把它用进去,让同音字分得开;短语里要有别的字,不能只是把它重复一遍。例如「鼓励,老师鼓励我」「灰色,灰色的小蝌蚪」「叶,树叶的叶」。30 字以内。',
+];
+export const DICTATION_DEFAULT = { model: 'qwen3.8-max', prompt: DICTATION_PROMPT_DEFAULT };
+export const DictationSchema = z.object({
+  model: z.string().min(1).default(DICTATION_DEFAULT.model).describe('拍照认词表用的百炼视觉模型(兼容接口,流式)'),
+  prompt: z.array(z.string()).min(1).default(DICTATION_PROMPT_DEFAULT).describe('拍照认词表的要求:一行一个字符串,拼起来交给模型(认哪些、默认选哪些、怎么念);回什么格式应用自己接在后面,不用写'),
+});
+export type DictationConfig = z.infer<typeof DictationSchema>;
+
 export const CotutorConfigSchema = z
   .object({
     version: z.literal(1),
@@ -223,6 +246,7 @@ export const CotutorConfigSchema = z
       .optional()
       .describe('给老师换样子(figshot pick):它在这台电脑的哪个端口(缺省 8477)。配了孩子端首页多一张「给老师们换个样子」,figshot 没开着就不出现;不配就没有这张卡'),
     koubo: KouboSchema.default(KOUBO_DEFAULT).describe('录音卡的评测命令模板(口播老师):card 一条龙评一条录音(占位 {audio} {text} {mode} {pairs}),timeoutMs 一条最多等多久;门槛与花费上限在 workspace 根的 koubo.json'),
+    dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型与要求(prompt 一行一个字符串,家长可改,改了不用重起服务)'),
     talk: TalkSchema.default(TALK_DEFAULT).describe('口语课(/talk):家长拍一张今天学的,孩子先跟读、再和 realtime 模型用这些词聊;enabled 出厂 false;要百炼 key 与业务空间 id(DASHSCOPE_WORKSPACE_ID 或 voxtell 的配置)'),
   })
   .superRefine((c, ctx) => {

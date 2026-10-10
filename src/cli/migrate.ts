@@ -25,7 +25,8 @@ import { RENAMED_TUTORS, renameTutorData, renamedEntry, type RenameOp } from './
 import { CONFIG_FILE, ConfigError, readJson, resolvePaths } from './workspace.ts';
 
 /** rename:出厂老师改了键名(rename.ts),值原样搬到新键下,连带文件与目录 */
-export type GapKind = 'tutor' | 'rename' | 'runtime' | 'flag' | 'policy' | 'cards';
+/** section:出厂模板里有的整段(dictation 这种后加的),你这份没有 */
+export type GapKind = 'tutor' | 'rename' | 'runtime' | 'flag' | 'policy' | 'cards' | 'section';
 
 export interface ConfigGap {
   kind: GapKind;
@@ -158,8 +159,17 @@ export async function configGaps(raw: unknown): Promise<ConfigGap[]> {
       gaps.push({ kind: 'policy', path: `tutors.${name}.policy.tools`, detail: `${name} 要带工具才干得了活(出厂政策 tools: ${String(want)})`, value: want });
     }
   }
+  // 后加的整段(2026-10-10 听写的拍照认词要求):写进文件家长才看得见、改得动;已经有这一段就不碰
+  for (const key of SECTIONS) {
+    if (key in raw || !(key in factory)) continue;
+    gaps.push({ kind: 'section', path: key, detail: `缺 ${key} 这一段(${SECTION_WHAT[key]})`, value: factory[key] });
+  }
   return gaps;
 }
+
+/** 补缺时会整段补上的配置段:出厂模板写了、写进文件才好改的 */
+const SECTIONS = ['dictation'] as const;
+const SECTION_WHAT: Record<(typeof SECTIONS)[number], string> = { dictation: '听写拍照认词用的模型与挑词要求,补上就能在文件里改' };
 
 function getAt(obj: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((cur, k) => (isObj(cur) ? cur[k] : undefined), obj);

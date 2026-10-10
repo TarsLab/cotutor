@@ -182,16 +182,24 @@ try {
   const doc = await send('DOM.getDocument', {});
   const input = await send('DOM.querySelector', { nodeId: doc.result.root.nodeId, selector: '#snap-lib' });
   await send('DOM.setFileInputFiles', { nodeId: input.result.nodeId, files: [icon] });
-  ok('选了照片:进认词屏,框一个一个冒出来(假识别 15 项)', await waitFor(`!!document.querySelector('#v-pick.on') && document.querySelectorAll('#p-shot .bx').length === 15`, 10000));
+  ok('选了照片:进认词屏,框一个一个冒出来(假识别 9 项)', await waitFor(`!!document.querySelector('#v-pick.on') && document.querySelectorAll('#p-shot .bx').length === 9`, 10000));
   await waitFor(`document.querySelector('#p-status').textContent.startsWith('认好了')`);
-  ok('词语默认选上(6 个)、写字默认不选;没认准的「宽大」在列表里能改字;课名', (await evaluate(`document.querySelectorAll('#p-shot .bx.on').length`)) === 6 && (await evaluate(`document.querySelectorAll('#p-list .wr').length`)) === 6 && (await evaluate(`!!document.querySelector('#p-list input') && document.querySelector('#p-list input').value === '宽大' && document.querySelector('#p-lesson').textContent === '小蝌蚪找妈妈'`)));
-  await tap('#p-shot .bx[data-k="13"]');
-  ok('点照片上的「皮」:选上,列表多一个', (await evaluate(`document.querySelectorAll('#p-list .wr').length`)) === 7 && (await evaluate(`document.querySelector('#p-shot .bx[data-k="13"]').classList.contains('on')`)));
+  ok('默认选上照模型的(词语 6、写字 2),识字的「塘」不选;没认准的「宽大」能改字;课名', (await evaluate(`document.querySelectorAll('#p-shot .bx.on').length`)) === 8 && (await evaluate(`document.querySelectorAll('#p-list .wr').length`)) === 8 && (await evaluate(`!!document.querySelector('#p-list input') && document.querySelector('#p-list input').value === '宽大' && document.querySelector('#p-lesson').textContent === '小蝌蚪找妈妈'`)));
+  ok('全文:三行,选上的词标蓝(脑袋)', (await evaluate(`document.querySelectorAll('#p-lines .ln').length`)) === 3 && (await evaluate(`[...document.querySelectorAll('#p-lines .seg.on')].map((x) => x.textContent).join()`)) === '脑袋');
+  await tap('#p-shot .bx[data-k="8"]');
+  ok('点照片上的「塘」:选上,列表多一个', (await evaluate(`document.querySelectorAll('#p-list .wr').length`)) === 9 && (await evaluate(`document.querySelector('#p-shot .bx[data-k="8"]').classList.contains('on')`)));
   await tap('#p-list .wr:nth-child(6) .x');
-  ok('列表里点 × 去掉「宽大」', (await evaluate(`[...document.querySelectorAll('#p-list .wr')].map((r) => r.textContent).join('|').includes('宽大')`)) === false && (await evaluate(`document.querySelector('#p-go').textContent`)) === '开始听写 · 六个词');
+  ok('列表里点 × 去掉「宽大」', (await evaluate(`[...document.querySelectorAll('#p-list .wr')].map((r) => r.textContent).join('|').includes('宽大')`)) === false);
+  const seg = await evaluate(`(() => { const b = [...document.querySelectorAll('#p-lines .seg')].find((x) => x.textContent === '小蝌蚪'); b.setAttribute('data-probe-seg', '1'); return !!b; })()`);
+  await tap('[data-probe-seg]');
+  ok('全文里点「小蝌蚪」:进列表(自己加的),全文里标蓝', seg && (await evaluate(`[...document.querySelectorAll('#p-list .wr.extra b')].map((x) => x.textContent).join()`)) === '小蝌蚪' && (await evaluate(`[...document.querySelectorAll('#p-lines .seg.on')].map((x) => x.textContent).includes('小蝌蚪')`)));
+  await tap('#p-add');
+  await send('Input.insertText', { text: '鲤鱼,捕食 abc 画蛇添足啊' });
+  await tap('#p-add-go');
+  ok('输入框加词:鲤鱼、捕食加进来;超过四个字的留在框里,说要分开写', (await evaluate(`[...document.querySelectorAll('#p-list .wr.extra b')].map((x) => x.textContent).join()`)) === '小蝌蚪,鲤鱼,捕食' && (await evaluate(`document.querySelector('#p-add').value`)) === '画蛇添足啊' && (await evaluate(`document.querySelector('#p-go').textContent`)) === '开始听写 · 11 个');
   await shot('12-pick');
   await tap('#p-go');
-  ok('开始听写:进写字屏,听写本六行,第一个词两格、没有字', await waitFor(`!!document.querySelector('#v-listen.on') && document.querySelectorAll('#l-book .brow').length === 6 && document.querySelectorAll('#l-book .brow')[0].querySelectorAll('.padbox').length === 2 && document.querySelector('#l-what').textContent === '第一个词的第一个字'`));
+  ok('开始听写:进写字屏,听写本十一行,第一个词两格、没有字', await waitFor(`!!document.querySelector('#v-listen.on') && document.querySelectorAll('#l-book .brow').length === 11 && document.querySelectorAll('#l-book .brow')[0].querySelectorAll('.padbox').length === 2 && document.querySelector('#l-what').textContent === '第一个词的第一个字'`));
   await shot('13-photo-listen');
 
   // 手机宽度看一眼家长页

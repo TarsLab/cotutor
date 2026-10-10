@@ -20,7 +20,7 @@ const { createContext, route } = await import('../src/server/app.ts');
 const { publishHome, checkHome } = await import('../src/server/home.ts');
 const { parseCard, stripSecrets } = await import('../src/cards/index.ts');
 const { judgeChar, placeNote, strokeFit } = await import('../src/dictation/lib/match.ts');
-const { LineReader, recognizePhoto } = await import('../src/dictation/recognize.ts');
+const { LineReader, photoPrompt, recognizePhoto, splitWords } = await import('../src/dictation/recognize.ts');
 const { dictationDeps, handleDictation, photosIdle } = await import('../src/dictation/route.ts');
 const { tianzigeData } = await import('../src/server/tianzige.ts');
 
@@ -94,6 +94,7 @@ cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS,
 cfg.tutors['chinese-tutor'].voice = 'v-kid';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
+const cfgNow = (): Record<string, any> => JSON.parse(readFileSync(cfgFile, 'utf8')); // eslint-disable-line @typescript-eslint/no-explicit-any
 let now = new Date(2026, 9, 10, 19, 30);
 const ctx = createContext(loadWorkspace(root), { now: () => now });
 type J = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -216,17 +217,22 @@ try {
 
   // ---- 拍照认词表:按行收 ----
   {
-    const r = new LineReader();
-    const got: string[] = [];
-    const on = (it: { text: string } | null, lesson: string | null): void => { got.push(it ? it.text : `课:${lesson}`); };
-    for (const piece of ['```json\n{"lesson": "小蝌蚪找', '妈妈"}\n{"text": "脑袋", "kind": "word", "box": [100, 650, 180, 690], "sure": true, "say": "脑袋,小蝌蚪的大脑袋"}\n{"text": "宽', '大", "kind": "word", "box": [640, 640, 720, 680], "sure": false}\n', '{"text": "脑袋", "kind": "word"}\n{"text": "pí", "kind": "char"}\n{"text": "画蛇添足啊", "kind": "word"}\n{"text": "两", "kind": "char", "box": [700, 10, 600, 50]}\n```']) r.push(piece, on);
-    r.end(on);
-    check('按行收:一行一项、断在半行也接得上;代码块的围栏、重复的、不是汉字的、超过四个字的都丢;框反了当没给', got.join() === '课:小蝌蚪找妈妈,脑袋,宽大,两' && r.items[1].sure === false && r.items[1].say === null && r.items[2].box === null && JSON.stringify(r.items[0].box) === '[100,650,180,690]', got.join());
+    const seen: number[] = [];
+    const r = new LineReader((p) => seen.push(p.items.length + p.full.length));
+    for (const piece of ['```json\n{"lesson": "堆雪', '人"}\n{"text": "当", "kind": "mark", "pick": true, "box": [400, 580, 430, 620], "sure": true, "say": "当,用胡萝卜当鼻子"}\n{"text": "雪', '白", "kind": "mark", "pick": false, "box": [650, 310, 690, 350], "sure": false}\n', '{"text": "脑袋", "kind": "word"}\n{"text": "披", "kind": "read"}\n{"text": "当", "kind": "mark"}\n{"text": "pí", "kind": "char"}\n{"text": "画蛇添足啊", "kind": "word"}\n{"text": "两", "kind": "char", "box": [700, 10, 600, 50]}\n{"full": "冬天  来 啦 !"}\n{"full": "一场 大雪 过后"}\n```']) r.push(piece);
+    r.end();
+    check('按行收:课名、一项一行、断在半行也接得上;代码块围栏、重复的、不是汉字的、超过四个字的丢;框反了当没给', r.lesson === '堆雪人' && r.items.map((x) => x.text).join() === '当,雪白,脑袋,披,两' && r.items[1].sure === false && r.items[1].say === null && r.items[4].box === null && JSON.stringify(r.items[0].box) === '[400,580,430,620]', JSON.stringify(r.items));
+    check('默认选不选:模型说了照它(雪白 false);没说按栏(词语、写字选,识字不选)', r.items[0].pick && !r.items[1].pick && r.items[2].pick && !r.items[3].pick && r.items[4].pick);
+    check('全文:一行一个字符串,重新分好词;每认出一行交一次进度', r.full.join('|') === '冬天 来 啦 !|一 场 大雪 过后' && seen.length === 8 && seen[seen.length - 1] === 7, JSON.stringify(seen));
+    const sw = splitWords('冬天来啦!一场大雪过后,大地一片雪白。');
+    check('全文分词:不管模型连着写还是每个字都空格,都去掉空格重新分', sw.split(' ').includes('雪白') && sw.split(' ').includes('大雪') && splitWords('一 场 大 雪 过 后') === splitWords('一场大雪过后') && splitWords('一 场 大 雪').includes('大雪'), sw);
+    const pr = photoPrompt(['只挑写字栏的']);
+    check('交给模型的:家长的要求在前,格式接在后面(改要求不会改坏格式)', pr.startsWith('只挑写字栏的\n') && pr.includes('{"full":') && pr.includes('"pick"') && photoPrompt().includes('课文里课本用彩色框'));
   }
   // ---- 拍照认词表:真走一遍流式(假的百炼,SSE 一块一块吐)----
   {
     const { createServer } = await import('node:http');
-    const lines = ['{"lesson": null}', '{"text": "肚皮", "kind": "word", "box": [1, 2, 30, 40], "sure": true, "say": "肚皮,白白的肚皮"}', '{"text": "孩", "kind": "char", "box": [50, 2, 80, 40], "sure": true}'];
+    const lines = ['{"lesson": null}', '{"text": "肚皮", "kind": "word", "box": [1, 2, 30, 40], "sure": true, "say": "肚皮,白白的肚皮"}', '{"text": "孩", "kind": "char", "box": [50, 2, 80, 40], "sure": true}', '{"full": "肚皮 白白 的"}'];
     let seenAuth = '';
     let seenModel = '';
     const srv = createServer((req, res) => {
@@ -235,6 +241,7 @@ try {
       req.on('data', (c) => (b += c));
       req.on('end', () => {
         seenModel = JSON.parse(b).model;
+        sentPrompt = JSON.parse(b).messages[0].content[1].text;
         res.writeHead(200, { 'content-type': 'text/event-stream' });
         const text = lines.join('\n');
         // 故意在一行中间切块
@@ -245,23 +252,28 @@ try {
     await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
     const port = (srv.address() as { port: number }).port;
     const seen: string[] = [];
-    const rr = await recognizePhoto({ data: Buffer.from('jpg'), mime: 'image/jpeg' }, (it) => { if (it) seen.push(it.text); }, { env: { DASHSCOPE_API_KEY: 'k-test' }, endpoint: `http://127.0.0.1:${port}/` });
+    let sentPrompt = '';
+    const rr = await recognizePhoto({ data: Buffer.from('jpg'), mime: 'image/jpeg' }, (p) => { seen.push(p.items.map((x) => x.text).join('')); }, { env: { DASHSCOPE_API_KEY: 'k-test' }, endpoint: `http://127.0.0.1:${port}/`, prompt: ['挑写字栏'] });
     const none = await recognizePhoto({ data: Buffer.from('jpg'), mime: 'image/jpeg' }, () => {}, { env: { HOME: home } });
     srv.close();
-    check('流式认:边收边回调、key 只进请求头、缺省 qwen3.8-max;没有 key 回 no_key', rr.ok && seen.join() === '肚皮,孩' && seenAuth === 'Bearer k-test' && seenModel === 'qwen3.8-max' && !none.ok && none.error === 'no_key', JSON.stringify(rr));
+    check('流式认:边收边回调、key 只进请求头、缺省 qwen3.8-max、提示词是传进来的要求 + 格式;全文也收;没有 key 回 no_key', rr.ok && seen.includes('肚皮') && seen[seen.length - 1] === '肚皮孩' && rr.full.join() === '肚皮 白白 的' && seenAuth === 'Bearer k-test' && seenModel === 'qwen3.8-max' && sentPrompt.startsWith('挑写字栏\n') && sentPrompt.includes('{"full":') && !none.ok && none.error === 'no_key', JSON.stringify(rr));
   }
   // ---- 拍照开始:传照片 → 后台认(假的)→ 轮询 → 点选的词开始听写 ----
   {
     const fakeItems = [
-      { text: '脑袋', kind: 'word' as const, box: [100, 650, 180, 690] as [number, number, number, number], sure: true, say: '脑袋,小蝌蚪的大脑袋' },
-      { text: '宽大', kind: 'word' as const, box: [640, 640, 720, 680] as [number, number, number, number], sure: false, say: null },
-      { text: '皮', kind: 'char' as const, box: [700, 530, 750, 570] as [number, number, number, number], sure: true, say: '皮,肚皮的皮' },
+      { text: '脑袋', kind: 'word' as const, pick: true, box: [100, 650, 180, 690] as [number, number, number, number], sure: true, say: '脑袋,小蝌蚪的大脑袋' },
+      { text: '宽大', kind: 'word' as const, pick: true, box: [640, 640, 720, 680] as [number, number, number, number], sure: false, say: null },
+      { text: '皮', kind: 'char' as const, pick: true, box: [700, 530, 750, 570] as [number, number, number, number], sure: true, say: '皮,肚皮的皮' },
     ];
     let fail = false;
-    const deps = { ...dictationDeps(ctx), recognize: async (_img: { data: Buffer; mime: string }, onItem: (it: (typeof fakeItems)[number] | null, lesson: string | null) => void) => {
-      onItem(null, '小蝌蚪找妈妈');
-      for (const it of fakeItems.slice(0, fail ? 1 : 3)) { await new Promise((r) => setTimeout(r, 5)); onItem(it, '小蝌蚪找妈妈'); }
-      return fail ? { ok: false as const, error: 'timeout', items: fakeItems.slice(0, 1), lesson: '小蝌蚪找妈妈', ms: 9 } : { ok: true as const, items: fakeItems, lesson: '小蝌蚪找妈妈', model: 'fake', ms: 9 };
+    let gotPrompt: readonly string[] | undefined;
+    const real = dictationDeps(ctx);
+    const deps = { ...real, recognize: async (_img: { data: Buffer; mime: string }, onProgress: (p: { items: typeof fakeItems; lesson: string | null; full: string[] }) => void) => {
+      gotPrompt = ctx.ws.config.dictation.prompt;
+      const p = { items: [] as typeof fakeItems, lesson: '小蝌蚪找妈妈' as string | null, full: [] as string[] };
+      for (const it of fakeItems.slice(0, fail ? 1 : 3)) { await new Promise((r) => setTimeout(r, 5)); p.items = [...p.items, it]; onProgress({ ...p }); }
+      if (!fail) { p.full = ['池塘 里 有 一群 小蝌蚪']; onProgress({ ...p }); }
+      return fail ? { ok: false as const, error: 'timeout', ...p, ms: 9 } : { ok: true as const, model: 'fake', ...p, ms: 9 };
     } };
     const hx = async (method: string, path: string, body?: unknown): Promise<{ status: number; json: J; file?: string; html?: string }> => {
       const r = (await handleDictation(method, new URL(path, 'http://x'), deps, body))!;
@@ -274,7 +286,8 @@ try {
     const running = await hx('GET', `/api/dictation/photos/${pid}`);
     await photosIdle();
     const done = await hx('GET', `/api/dictation/photos/${pid}`);
-    check('拍照:201 回 id,后台认;认的时候 running,认完 done、课名与三项都在', up.status === 201 && /^\d{4}-\d{2}-\d{2}-\d{4}/.test(pid) && running.json.state === 'running' && done.json.state === 'done' && done.json.lesson === '小蝌蚪找妈妈' && done.json.items.map((i: J) => i.text).join() === '脑袋,宽大,皮', JSON.stringify(done.json));
+    check('拍照:201 回 id,后台认;认的时候 running,认完 done、课名、三项与全文都在', up.status === 201 && pid.length >= 15 && running.json.state === 'running' && done.json.state === 'done' && done.json.lesson === '小蝌蚪找妈妈' && done.json.items.map((i: J) => i.text).join() === '脑袋,宽大,皮' && done.json.full.join() === '池塘 里 有 一群 小蝌蚪', JSON.stringify(done.json));
+    check('认的时候用的是 cotutor.json 的 dictation.prompt(init 写进文件的出厂要求)', JSON.stringify(gotPrompt) === JSON.stringify(cfgNow().dictation.prompt) && cfgNow().dictation.model === 'qwen3.8-max');
     const img = await hx('GET', `/api/dictation/photos/${pid}/image`);
     check('照片原样存在 dictation/photos/,取得回来', img.status === 200 && readFileSync(img.file!).equals(jpg) && img.file!.includes(join('dictation', 'photos')));
     check('开始:词不对 400(空、不是汉字、超过四个字、超过 20 个);照片不在 404', (await hx('POST', '/api/dictation', { photo: pid, words: [] })).status === 400 && (await hx('POST', '/api/dictation', { photo: pid, words: [{ chars: 'pi' }] })).status === 400 && (await hx('POST', '/api/dictation', { photo: pid, words: [{ chars: '画蛇添足啊' }] })).status === 400 && (await hx('POST', '/api/dictation', { photo: pid, words: Array.from({ length: 21 }, () => ({ chars: '皮' })) })).status === 400 && (await hx('POST', '/api/dictation', { photo: '2020-01-01-0000', words: [{ chars: '皮' }] })).status === 404);
@@ -282,11 +295,20 @@ try {
     const sx = (await hx('GET', `/api/dictation/${go.json.id}`)).json;
     check('拍照开始:201,和首页卡一样的孩子端样子(没有字);记下照片与课名,不挂首页', go.status === 201 && go.json.sizes.join() === '2,2,1' && !JSON.stringify(go.json).includes('脑') && sx.photo === pid && sx.lesson === '小蝌蚪找妈妈' && sx.home === null && sx.n === -1 && sx.words[1].chars === '宽大' && sx.words[2].say === '皮,肚皮的皮', JSON.stringify(sx).slice(0, 300));
     check('拍照开始的照样能念、能交', (await hx('GET', `/api/dictation/${go.json.id}/say/0?text=1`)).json.text === '脑袋,小蝌蚪的大脑袋');
+    {
+      const c2 = cfgNow();
+      c2.dictation.prompt = ['只挑写字栏的字,全都默认选上。'];
+      writeFileSync(cfgFile, JSON.stringify(c2, null, 2));
+      await ctx.reload();
+      await hx('POST', '/api/dictation/photos', { image: `data:image/jpeg;base64,${jpg.toString('base64')}` });
+      await photosIdle();
+      check('家长改了 cotutor.json 的要求:下一张就用新的,不用重起服务', JSON.stringify(gotPrompt) === JSON.stringify(['只挑写字栏的字,全都默认选上。']));
+    }
     fail = true;
     const up2 = await hx('POST', '/api/dictation/photos', { image: `data:image/jpeg;base64,${jpg.toString('base64')}` });
     await photosIdle();
     const f2 = (await hx('GET', `/api/dictation/photos/${up2.json.id}`)).json;
-    check('没认完(超时):failed、带原因,已经认出的留着能用', f2.state === 'failed' && f2.error === 'timeout' && f2.items.length === 1);
+    check('没认完(超时):failed、带原因,已经认出的留着能用', f2.state === 'failed' && f2.error === 'timeout' && f2.items.length === 1, JSON.stringify(f2));
     check('页面:拍照那几屏在,内联脚本能解析(上面查过);不带 home 是拍照开始', ((await hx('GET', '/dictation')).html ?? '').includes('拍今天要听写的'));
   }
 

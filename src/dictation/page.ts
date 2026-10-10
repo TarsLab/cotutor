@@ -141,6 +141,15 @@ export const DICTATION_PAGE = `<!doctype html>
   .wr input { font:inherit; font-size:22px; letter-spacing:2px; width:100%; border:0; border-bottom:2px solid #e8a26f; background:transparent; padding:0; }
   .wr small { font-size:13px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .wr .x { flex:none; width:44px; height:44px; border-radius:22px; border:1px solid var(--line); background:#fff; font-size:18px; color:var(--dim); }
+  .wr.extra { border-style:dashed; }
+  .add { display:flex; gap:8px; align-items:center; }
+  .add input { flex:1; min-width:0; font:inherit; font-size:18px; min-height:48px; padding:0 14px; border:1px solid var(--line); border-radius:14px; background:#fff; }
+  .fulltxt { display:flex; flex-direction:column; gap:6px; padding:12px; background:#fff; border:1px solid var(--line); border-radius:14px; }
+  .fulltxt .fh { font-size:14px; color:var(--dim); }
+  .fulltxt .ln { line-height:2.1; font-size:19px; }
+  .seg { font:inherit; font-size:19px; padding:2px 4px; margin:0 1px; border:0; border-radius:6px; background:transparent; color:var(--ink); cursor:pointer; }
+  .seg.on { background:rgba(47,111,214,.18); box-shadow:inset 0 0 0 2px #2f6fd6; }
+  .seg.no { cursor:default; color:var(--dim); padding:2px 1px; }
   @media (orientation: portrait) { #v-pick { flex-direction:column; } .side2 { width:auto; flex:0 0 42%; } }
   @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
 </style></head>
@@ -172,7 +181,11 @@ export const DICTATION_PAGE = `<!doctype html>
   <div class="side2">
     <div><div class="ttl" id="p-lesson">认一认</div><div class="st" id="p-status"></div></div>
     <div class="hint" style="font-size:15px">点照片上的框:蓝的会念,虚线的不念。橙的没认准,改一下字。</div>
-    <div class="wl" id="p-list"></div>
+    <div class="wl">
+      <div id="p-list" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div class="add"><input id="p-add" placeholder="自己加词,空格分开" aria-label="自己加词"><button class="tool sm" id="p-add-go">加</button></div>
+      <div class="fulltxt" id="p-full" hidden><div class="fh">照片上的字 · 点一个词加进来</div><div id="p-lines"></div></div>
+    </div>
     <div class="row">
       <button class="tool" id="p-again">重拍</button>
       <button class="main" id="p-go" style="flex:1">开始听写</button>
@@ -264,7 +277,8 @@ export const DICTATION_PAGE = `<!doctype html>
   var h = function (tag, attrs) {
     var el = document.createElement(tag); attrs = attrs || {};
     for (var k in attrs) { if (k === 'on') { for (var ev in attrs.on) el.addEventListener(ev, attrs.on[ev]); } else if (k === 'text') el.textContent = attrs[k]; else el.setAttribute(k, attrs[k]); }
-    for (var i = 2; i < arguments.length; i++) { var c = arguments[i]; if (c !== null && c !== undefined && c !== false) el.append(c); }
+    var add = function (c) { if (Array.isArray(c)) c.forEach(add); else if (c !== null && c !== undefined && c !== false) el.append(c); };
+    for (var i = 2; i < arguments.length; i++) add(arguments[i]);
     return el;
   };
   var CN = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -425,7 +439,7 @@ export const DICTATION_PAGE = `<!doctype html>
   };
 
   // ---------- 拍照开始:拍 → 传 → 一项一项认出来 → 点选 → 开始 ----------
-  var P = { id: null, items: [], on: {}, edits: {}, timer: 0, img: null, url: null };
+  var P = { id: null, items: [], full: [], extra: [], on: {}, edits: {}, timer: 0, img: null, url: null };
   var openSnap = function () { clearTimeout(P.timer); show('snap'); };
   /** 照片缩到长边 2000 的 jpeg(iPad 拍的十几 MB,传不动也不必) */
   var shrink = function (file) {
@@ -444,8 +458,8 @@ export const DICTATION_PAGE = `<!doctype html>
   var onPicked = function (e) {
     var f = e.target.files && e.target.files[0]; e.target.value = '';
     if (!f) return;
-    P = { id: null, items: [], on: {}, edits: {}, timer: 0, img: null, url: null };
-    $('#p-lesson').textContent = '认一认'; $('#p-status').textContent = '传照片…'; $('#p-list').replaceChildren(); $('#p-shot').replaceChildren();
+    P = { id: null, items: [], full: [], extra: [], on: {}, edits: {}, timer: 0, img: null, url: null };
+    $('#p-lesson').textContent = '认一认'; $('#p-status').textContent = '传照片…'; $('#p-list').replaceChildren(); $('#p-shot').replaceChildren(); $('#p-lines').replaceChildren(); $('#p-full').hidden = true;
     show('pick'); renderPickBtn();
     shrink(f).then(function (sh) {
       P.url = sh.url; P.w = sh.w; P.h = sh.h; layoutShot();
@@ -486,7 +500,8 @@ export const DICTATION_PAGE = `<!doctype html>
     P.frame.style.transform = 'translate(' + Math.round(tx) + 'px,' + Math.round(ty) + 'px) scale(' + z.toFixed(3) + ')';
     P.frame.style.setProperty('--z', z.toFixed(3));
   };
-  var defaultOn = function (it) { return it.kind === 'word' || it.kind === 'list'; };
+  /** 默认选不选:模型说了算(cotutor.json 的 dictation.prompt 里写怎么挑) */
+  var defaultOn = function (it) { return typeof it.pick === 'boolean' ? it.pick : it.kind !== 'read' && it.kind !== 'other'; };
   var keyOf = function (k) { return 'i' + k; };
   var drawBoxes = function () {
     if (!P.frame) return;
@@ -508,29 +523,69 @@ export const DICTATION_PAGE = `<!doctype html>
   var paintBoxes = function () { if (!P.frame) return; var bs = P.frame.querySelectorAll('.bx'); for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('on', Boolean(P.on[keyOf(Number(bs[i].dataset.k))])); };
   var textOf = function (k) { return keyOf(k) in P.edits ? P.edits[keyOf(k)] : P.items[k].text; };
   var picked = function () { var out = []; P.items.forEach(function (it, k) { if (!it.box && !(keyOf(k) in P.on)) P.on[keyOf(k)] = defaultOn(it); if (P.on[keyOf(k)]) out.push(k); }); return out; };
+  /** 选上的总数:照片上的 + 自己加的 */
+  var pickedN = function () { return picked().length + P.extra.length; };
   var renderList = function () {
     var ks = picked(); var list = $('#p-list'); list.replaceChildren();
     ks.forEach(function (k) {
       var it = P.items[k];
-      var head = it.sure ? h('b', {}, textOf(k)) : h('input', { value: textOf(k), 'aria-label': '改一下这个词', on: { input: function (e) { P.edits[keyOf(k)] = e.target.value.replace(/ /g, ''); } } });
+      var head = it.sure ? h('b', {}, textOf(k)) : h('input', { value: textOf(k), 'aria-label': '改一下这个词', on: { input: function (e) { P.edits[keyOf(k)] = e.target.value.replace(/ /g, ''); renderFull(); } } });
       list.append(h('div', { 'class': 'wr' }, h('div', { 'class': 't' }, head, it.say ? h('small', {}, it.say) : null), h('button', { 'class': 'x', 'aria-label': '不要这个', on: { click: function () { P.on[keyOf(k)] = false; paintBoxes(); renderList(); } } }, '×')));
     });
-    renderPickBtn();
+    P.extra.forEach(function (t, j) {
+      list.append(h('div', { 'class': 'wr extra' }, h('div', { 'class': 't' }, h('b', {}, t), h('small', {}, '自己加的')), h('button', { 'class': 'x', 'aria-label': '不要这个', on: { click: function () { P.extra.splice(j, 1); renderList(); } } }, '×')));
+    });
+    renderFull(); renderPickBtn();
   };
-  var renderPickBtn = function () { var n = picked().length; if (P.done) $('#p-status').textContent = '认好了 · 选了 ' + n + ' 个'; $('#p-go').disabled = !P.id || n === 0; $('#p-go').textContent = n ? '开始听写 · ' + cn(Math.min(n, 20)) + '个词' : '开始听写'; };
+  /** 一到四个汉字(不用正则:这段脚本里不写反斜杠) */
+  var isHan = function (c) { var n = c.charCodeAt(0); return (n >= 0x3400 && n <= 0x9fff) || (n >= 0xf900 && n <= 0xfaff); };
+  var hanWords = function (text) { var out = []; var cur = ''; Array.from(text + ' ').forEach(function (c) { if (isHan(c)) cur += c; else { if (cur) out.push(cur); cur = ''; } }); return out; };
+  /** 加一个词 / 去掉一个词:照片上认出过(按现在的字)就点那一项,不然进自己加的 */
+  var toggleWord = function (t) {
+    var k = -1; P.items.forEach(function (it, i) { if (k < 0 && textOf(i) === t) k = i; });
+    if (k >= 0) { P.on[keyOf(k)] = !P.on[keyOf(k)]; paintBoxes(); renderList(); return; }
+    var j = P.extra.indexOf(t);
+    if (j >= 0) P.extra.splice(j, 1); else if (pickedN() >= 20) { $('#p-status').textContent = '一次最多 20 个词'; return; } else P.extra.push(t);
+    renderList();
+  };
+  var addTyped = function () {
+    var raw = $('#p-add').value; var ws = hanWords(raw);
+    var bad = ws.filter(function (w) { return Array.from(w).length > 4; });
+    ws.filter(function (w) { return Array.from(w).length <= 4; }).forEach(function (w) { var on = picked().some(function (k) { return textOf(k) === w; }) || P.extra.indexOf(w) >= 0; if (!on) toggleWord(w); });
+    $('#p-add').value = bad.join(' ');
+    if (bad.length) $('#p-status').textContent = '一个词最多四个字,分开写';
+  };
+  $('#p-add-go').addEventListener('click', addTyped);
+  $('#p-add').addEventListener('keydown', function (e) { if (e.key === 'Enter') addTyped(); });
+  /** 全文:一行一行,词能点(一到四个汉字的),选上的标蓝 */
+  var renderFull = function () {
+    var box = $('#p-lines'); $('#p-full').hidden = !P.full.length; if (!P.full.length) return;
+    var on = {}; picked().forEach(function (k) { on[textOf(k)] = true; }); P.extra.forEach(function (t) { on[t] = true; });
+    box.replaceChildren.apply(box, P.full.map(function (line) {
+      return h('div', { 'class': 'ln' }, line.split(' ').filter(Boolean).map(function (seg) {
+        var n = Array.from(seg).length;
+        var ok = n >= 1 && n <= 4 && Array.from(seg).every(isHan);
+        return ok ? h('button', { 'class': 'seg' + (on[seg] ? ' on' : ''), on: { click: function () { toggleWord(seg); } } }, seg) : h('span', { 'class': 'seg no' }, seg);
+      }));
+    }));
+  };
+  var renderPickBtn = function () { var n = pickedN(); if (P.done) $('#p-status').textContent = '认好了 · 选了 ' + n + ' 个'; $('#p-go').disabled = !P.id || n === 0; $('#p-go').textContent = n ? '开始听写 · ' + Math.min(n, 20) + ' 个' : '开始听写'; };
   var poll = function () {
     clearTimeout(P.timer);
     api('GET', '/api/dictation/photos/' + P.id).then(function (r) {
       if (r.lesson) $('#p-lesson').textContent = r.lesson;
-      if (r.items.length > P.items.length) { P.items = r.items; drawBoxes(); renderList(); }
+      var grew = r.items.length > P.items.length || (r.full || []).length > P.full.length;
+      if (r.items.length > P.items.length) { P.items = r.items; drawBoxes(); }
+      P.full = r.full || [];
+      if (grew) renderList();
       if (r.state === 'running') { $('#p-status').textContent = '正在认… 认出 ' + r.items.length + ' 个'; P.timer = setTimeout(poll, 700); return; }
-      if (!r.items.length) { $('#p-status').textContent = '没认出字来,再拍一张试试'; return; }
+      if (!r.items.length && !P.full.length) { $('#p-status').textContent = '没认出字来,再拍一张试试'; return; }
       P.done = true; renderPickBtn();
     }, function () { P.timer = setTimeout(poll, 1500); });
   };
   $('#p-again').addEventListener('click', function () { clearTimeout(P.timer); openSnap(); });
   $('#p-go').addEventListener('click', function () {
-    var words = picked().slice(0, 20).map(function (k) { var it = P.items[k]; var t = textOf(k); return t === it.text ? { chars: t, say: it.say || undefined } : { chars: t }; }).filter(function (w) { return w.chars; });
+    var words = picked().map(function (k) { var it = P.items[k]; var t = textOf(k); return t === it.text ? { chars: t, say: it.say || undefined } : { chars: t }; }).concat(P.extra.map(function (t) { return { chars: t }; })).filter(function (w) { return w.chars; }).slice(0, 20);
     if (!words.length) return;
     clearTimeout(P.timer);
     persist('POST', '/api/dictation', { photo: P.id, words: words }, $('#p-go')).then(function (v) { setView(v); openListen(); }, function () { $('#p-status').textContent = '有的词不是一到四个汉字,改一下再开始'; });

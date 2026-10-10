@@ -1,26 +1,31 @@
 /**
- * 拍照认词表(《wip/听写设想.md》拍板 10):孩子端拍课本的写字、词语,或老师发的听写单,交给百炼的视觉模型,
- * 每认出一项回一行:是什么字词、属于哪一栏、在照片上的哪儿(0–1000 的框,页面在照片上画框让人点)、认没认准、老师怎么念。
- * 流式:模型一行一项地吐,收到一行就交给 onItem,孩子端轮询着一个一个画框,不用干等整张认完。
+ * 拍照认词表(《wip/听写设想.md》拍板 10、12):孩子端拍课本(课文、写字、词语、识字)或老师发的听写单,交给百炼的视觉模型,一次回齐:
+ * 挑出的字词(是什么、哪一栏、在照片上的哪儿、默认选不选、认没认准、老师怎么念),再是正文全文(分好词,孩子端能点着加)。
+ * 「认哪些、默认选哪些、怎么念」在 cotutor.json 的 dictation.prompt(家长可改);回什么格式是这里的 FORMAT,接在后面,改 prompt 不会把解析改坏。
+ * 流式:模型一行一段地吐,收到一行就交出到这时为止认出的全部,孩子端轮询着一个一个画框,不用干等整张认完。
  * 2026-10-10 拿一页仿课本试(识字 9、写字 9、读读写写 6):qwen3.8-max 24 项全对、框都套在字上,第一项 2.8 秒、全部 23 秒;
- * qwen3.5-omni-flash 整张 20 秒但不照一行一项回;qwen-vl-max / qwen3-vl-plus 36–37 秒。
+ * qwen3.5-omni-flash 整张 20 秒但不照一行一段回;qwen-vl-max / qwen3-vl-plus 36–37 秒。
  * key 与 qwen 老师同一份(环境变量 DASHSCOPE_API_KEY,没有就读本机 ~/.qwen/settings.json 的 env),只进请求头。出错、超时都不抛。
  */
 import { homedir } from 'node:os';
 import { localDashscopeKey } from '../clis/qwen.ts';
+import { DICTATION_PROMPT_DEFAULT, DICTATION_DEFAULT } from '../schema/index.ts';
 import { DICTATION_SAY_MAX, DICTATION_WORD_MAX, HAN } from '../cards/index.ts';
 
-export const VISION_MODEL = 'qwen3.8-max';
-export const VISION_TIMEOUT_MS = 90_000;
+export const VISION_TIMEOUT_MS = 120_000;
 const ENDPOINT = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 
-/** 一栏:word 词语(读读写写、词语表)/ char 写字(田字格里的,会写)/ read 识字(会认,不听写)/ list 听写单上的 / other */
-export type PhotoKind = 'word' | 'char' | 'read' | 'list' | 'other';
-export const PHOTO_KINDS: readonly PhotoKind[] = ['word', 'char', 'read', 'list', 'other'];
+/** 一栏:char 写字(田字格里的)/ word 词语表、读读写写 / mark 课文里课本标出来的 / list 听写单上的 / read 识字(会认就行)/ other */
+export type PhotoKind = 'char' | 'word' | 'mark' | 'list' | 'read' | 'other';
+export const PHOTO_KINDS: readonly PhotoKind[] = ['char', 'word', 'mark', 'list', 'read', 'other'];
+/** 模型没说默认选不选时,这几栏选上 */
+const PICK_BY_KIND: readonly PhotoKind[] = ['char', 'word', 'mark', 'list'];
 
 export interface PhotoItem {
   text: string;
   kind: PhotoKind;
+  /** 默认选上(模型的判断;没说就按栏) */
+  pick: boolean;
   /** 在照片上的框 [左, 上, 右, 下],0–1000(按照片宽高的千分比);没给 null */
   box: [number, number, number, number] | null;
   /** 认准了;糊的、反光的、拿不准的 false */
@@ -29,27 +34,48 @@ export interface PhotoItem {
   say: string | null;
 }
 
-export type Recognized = { ok: true; items: PhotoItem[]; lesson: string | null; model: string; ms: number } | { ok: false; error: string; items: PhotoItem[]; lesson: string | null; ms: number };
-/** 认一张照片;每认出一项调一次 onItem(lesson 认出来时也调,item 为 null) */
-export type Recognize = (image: { data: Buffer; mime: string }, onItem: (item: PhotoItem | null, lesson: string | null) => void) => Promise<Recognized>;
+/** 认到这时为止的全部:挑出的字词、课名、全文(一行一个字符串,词之间空一格) */
+export interface PhotoProgress {
+  items: PhotoItem[];
+  lesson: string | null;
+  full: string[];
+}
 
-export const PROMPT = `这是一张照片:小学语文课本的一页(写字、词语表、读读写写、识字),或老师发的听写单。把照片上要孩子写或认的字词一个一个找出来。
+export type Recognized = ({ ok: true; model: string } | { ok: false; error: string }) & PhotoProgress & { ms: number };
+/** 认一张照片;每收到一行调一次 onProgress */
+export type Recognize = (image: { data: Buffer; mime: string }, onProgress: (p: PhotoProgress) => void) => Promise<Recognized>;
 
-一行一段 JSON,不要别的字、不要代码块。第一行写课名:
-{"lesson": "小蝌蚪找妈妈"}
-没有课名就写 {"lesson": null}。之后每认出一项就写一行:
-{"text": "脑袋", "kind": "word", "box": [左, 上, 右, 下], "sure": true, "say": "脑袋,小蝌蚪的大脑袋"}
+/** 回什么格式:接在家长的要求后面,解析靠它 */
+export const FORMAT = `回答的格式:一行一段 JSON,不要别的字、不要代码块。按这个顺序写:
+1. 第一行写课名:{"lesson": "小蝌蚪找妈妈"},没有课名写 {"lesson": null}。
+2. 挑出的字词,一项一行,默认选上的先写:
+{"text": "脑袋", "kind": "word", "pick": true, "box": [左, 上, 右, 下], "sure": true, "say": "脑袋,小蝌蚪的大脑袋"}
+   - text:只写汉字,一个字或一个词,最多四个字;照片上怎么分就怎么分。
+   - kind:「写字」栏写 char;「词语表」「读读写写」写 word;课文里课本标出来的写 mark;听写单上的写 list;「识字」栏写 read;别的写 other。
+   - pick:默认选不选(true / false)。
+   - box:这一项在照片上的位置,按照片宽、高的千分比,0 到 1000 的整数。
+   - sure:看清了 true;糊、反光、被挡住、拿不准写 false,text 写你觉得最可能的字。
+   - say:念法。
+3. 最后是全文:照片上的正文照原样一行写一行 {"full": "冬天来啦!一场大雪过后"};不要拼音、页码、栏目名。`;
 
-先写 word 和 list,再写 char,最后写 read。
-
-- text:只写汉字,一项一个字或一个词,最多四个字。照片上怎么分就怎么分,不要自己组词。
-- kind:「词语表」「读读写写」「词语」写 word;手写或打印的听写单写 list;「写字」那栏(田字格里的)写 char;「识字」那栏(只要会认,通常带拼音或在圈里)写 read;别的写 other。课文正文、标题、页码、拼音、栏目名都不要。
-- box:这一项在照片上的位置,按照片宽、高的千分比,0 到 1000 的整数。
-- sure:看清了 true;糊、反光、被挡住、拿不准 false,text 写你觉得最可能的字。
-- say:听写时老师怎么念给二年级孩子听。先念这一项,再说一个孩子熟悉的短语或短句把它用进去,让同音字分得开;短语里要有别的字,不能只是把它重复一遍。例如「鼓励,老师鼓励我」「灰色,灰色的小蝌蚪」「叶,树叶的叶」。30 字以内。`;
+/** 交给模型的整段:家长的要求 + 格式 */
+export function photoPrompt(prompt: readonly string[] = DICTATION_PROMPT_DEFAULT): string {
+  return `${prompt.join('\n')}\n\n${FORMAT}`;
+}
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
+
+const ZH_WORDS = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new Intl.Segmenter('zh', { granularity: 'word' }) : null;
+/**
+ * 全文的一行分成词(词之间空一格),孩子端一个词一个词点。不靠模型分:2026-10-10 同一张真照片,qwen3.8-max 一次整行连着回、
+ * 一次每个字之间都空一格;所以去掉空格,一律用 Intl.Segmenter 的中文分词(Node 与 Safari 都有),分得准不准都一个样。
+ */
+export function splitWords(line: string): string {
+  const t = line.replace(/\s+/g, '');
+  if (!ZH_WORDS) return t;
+  return [...ZH_WORDS.segment(t)].map((x) => x.segment.trim()).filter(Boolean).join(' ');
+}
 
 /** 模型的一行 → 一项;不是一项(形状不对、不是汉字、超过四个字)→ null */
 export function parseItem(v: unknown): PhotoItem | null {
@@ -61,31 +87,40 @@ export function parseItem(v: unknown): PhotoItem | null {
   const b = Array.isArray(v.box) && v.box.length === 4 && v.box.every((x) => typeof x === 'number' && Number.isFinite(x)) ? (v.box as number[]).map((x) => Math.max(0, Math.min(1000, Math.round(x)))) : null;
   const box = b && b[2] > b[0] && b[3] > b[1] ? (b as PhotoItem['box']) : null;
   const say = str(v.say);
-  return { text: t, kind, box, sure: v.sure !== false, say: say && Array.from(say).length <= DICTATION_SAY_MAX ? say : null };
+  const pick = typeof v.pick === 'boolean' ? v.pick : PICK_BY_KIND.includes(kind);
+  return { text: t, kind, pick, box, sure: v.sure !== false, say: say && Array.from(say).length <= DICTATION_SAY_MAX ? say : null };
 }
 
 /**
  * 一行一行地收:吐出来的字攒着,遇到换行就认一行;同一栏同一个字词只留第一个。
- * push(片段) 返回这一下新认出的项;lesson 认出来存在 lesson 上。
+ * 课名、一项、一行全文都算一行;每认出一行调一次 onProgress。
  */
-export class LineReader {
+export class LineReader implements PhotoProgress {
   items: PhotoItem[] = [];
   lesson: string | null = null;
+  full: string[] = [];
   private buf = '';
   private seen = new Set<string>();
-  push(chunk: string, onItem?: (item: PhotoItem | null, lesson: string | null) => void): void {
+  private onProgress: (p: PhotoProgress) => void;
+  constructor(onProgress: (p: PhotoProgress) => void = () => {}) {
+    this.onProgress = onProgress;
+  }
+  push(chunk: string): void {
     this.buf += chunk;
     let i: number;
     while ((i = this.buf.indexOf('\n')) >= 0) {
-      this.line(this.buf.slice(0, i), onItem);
+      this.line(this.buf.slice(0, i));
       this.buf = this.buf.slice(i + 1);
     }
   }
-  end(onItem?: (item: PhotoItem | null, lesson: string | null) => void): void {
-    this.line(this.buf, onItem);
+  end(): void {
+    this.line(this.buf);
     this.buf = '';
   }
-  private line(raw: string, onItem?: (item: PhotoItem | null, lesson: string | null) => void): void {
+  snapshot(): PhotoProgress {
+    return { items: [...this.items], lesson: this.lesson, full: [...this.full] };
+  }
+  private line(raw: string): void {
     const s = raw.trim().replace(/,$/, '');
     if (!s.startsWith('{') || !s.endsWith('}')) return;
     let v: unknown;
@@ -94,18 +129,22 @@ export class LineReader {
     } catch {
       return;
     }
-    if (isObj(v) && 'lesson' in v && !('text' in v)) {
+    if (!isObj(v)) return;
+    if ('lesson' in v && !('text' in v)) {
       this.lesson = str(v.lesson);
-      onItem?.(null, this.lesson);
-      return;
+    } else if ('full' in v && !('text' in v)) {
+      const f = str(v.full);
+      if (!f) return;
+      this.full.push(splitWords(f));
+    } else {
+      const it = parseItem(v);
+      if (!it) return;
+      const key = `${it.kind}\n${it.text}`;
+      if (this.seen.has(key)) return;
+      this.seen.add(key);
+      this.items.push(it);
     }
-    const it = parseItem(v);
-    if (!it) return;
-    const key = `${it.kind}\n${it.text}`;
-    if (this.seen.has(key)) return;
-    this.seen.add(key);
-    this.items.push(it);
-    onItem?.(it, this.lesson);
+    this.onProgress(this.snapshot());
   }
 }
 
@@ -122,16 +161,20 @@ function deltaOf(line: string): string {
   }
 }
 
-/** 认一张照片(流式);出错、超时都不抛,回 {ok: false} 并带上已经认出的项 */
-export async function recognizePhoto(image: { data: Buffer; mime: string }, onItem: (item: PhotoItem | null, lesson: string | null) => void = () => {}, opts: { env?: NodeJS.ProcessEnv; endpoint?: string; model?: string; timeoutMs?: number } = {}): Promise<Recognized> {
+/** 认一张照片(流式);出错、超时都不抛,回 {ok: false} 并带上已经认出的 */
+export async function recognizePhoto(
+  image: { data: Buffer; mime: string },
+  onProgress: (p: PhotoProgress) => void = () => {},
+  opts: { env?: NodeJS.ProcessEnv; endpoint?: string; model?: string; prompt?: readonly string[]; timeoutMs?: number } = {},
+): Promise<Recognized> {
   const env = opts.env ?? process.env;
   const t0 = Date.now();
   const ms = (): number => Date.now() - t0;
-  const reader = new LineReader();
-  const fail = (error: string): Recognized => ({ ok: false, error, items: reader.items, lesson: reader.lesson, ms: ms() });
+  const reader = new LineReader(onProgress);
+  const fail = (error: string): Recognized => ({ ok: false, error, ...reader.snapshot(), ms: ms() });
   const key = env.DASHSCOPE_API_KEY?.trim() || localDashscopeKey(env.HOME || homedir());
   if (!key) return fail('no_key');
-  const model = opts.model ?? VISION_MODEL;
+  const model = opts.model ?? DICTATION_DEFAULT.model;
   try {
     const res = await fetch(opts.endpoint ?? ENDPOINT, {
       method: 'POST',
@@ -141,7 +184,7 @@ export async function recognizePhoto(image: { data: Buffer; mime: string }, onIt
         stream: true,
         temperature: 0.1,
         enable_thinking: false,
-        messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.data.toString('base64')}` } }, { type: 'text', text: PROMPT }] }],
+        messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.data.toString('base64')}` } }, { type: 'text', text: photoPrompt(opts.prompt) }] }],
       }),
       signal: AbortSignal.timeout(opts.timeoutMs ?? VISION_TIMEOUT_MS),
     });
@@ -154,13 +197,13 @@ export async function recognizePhoto(image: { data: Buffer; mime: string }, onIt
       while ((i = sse.indexOf('\n')) >= 0) {
         const d = deltaOf(sse.slice(0, i));
         sse = sse.slice(i + 1);
-        if (d) reader.push(d, onItem);
+        if (d) reader.push(d);
       }
     }
-    reader.push(deltaOf(sse), onItem);
-    reader.end(onItem);
-    if (!reader.items.length) return fail('nothing');
-    return { ok: true, items: reader.items, lesson: reader.lesson, model, ms: ms() };
+    reader.push(deltaOf(sse));
+    reader.end();
+    if (!reader.items.length && !reader.full.length) return fail('nothing');
+    return { ok: true, model, ...reader.snapshot(), ms: ms() };
   } catch (err) {
     return fail(err instanceof Error && err.name === 'TimeoutError' ? 'timeout' : 'network');
   }

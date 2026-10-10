@@ -7,7 +7,7 @@
  *   GET  /dictation/parent                   家长看结果
  *   GET  /dictation/reel?id=<id>             家长看录像:一笔一笔重放这次听写
  *   POST /api/dictation/photos               {image: data:image/jpeg;base64,…} 拍的照片:存下、后台开始认,回 {id}
- *   GET  /api/dictation/photos/<id>          认的进度:{state, items, lesson};页面轮询着一项一项画框
+ *   GET  /api/dictation/photos/<id>          认的进度:{state, items, lesson, full};页面轮询着一项一项画框
  *   GET  /api/dictation/photos/<id>/image    那张照片
  *   POST /api/dictation                      {home, n, fresh?} 从首页的卡开始;今天这张卡有没写完的就接着(fresh 另开一次)
  *                                            {photo, words: [{chars, say?}]} 拍照开始:照片上点选的词
@@ -92,7 +92,8 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
     async medians(ch) {
       return (await tianzigeData(ch))?.medians ?? null;
     },
-    recognize: (image, onItem) => recognizePhoto(image, onItem),
+    // 每次现读 cotutor.json 的 dictation(家长改了要求不用重起服务)
+    recognize: (image, onProgress) => recognizePhoto(image, onProgress, { model: ws().config.dictation.model, prompt: ws().config.dictation.prompt }),
   };
 }
 
@@ -211,14 +212,16 @@ function startRecognizing(deps: DictationDeps, rec: PhotoRecord, image: { data: 
     chain = chain.then(() => writePhotoRecord(deps.root, snap)).catch(() => {});
   };
   const job = deps
-    .recognize(image, (item, lesson) => {
-      if (item) rec.items.push(item);
-      rec.lesson = lesson;
+    .recognize(image, (p) => {
+      rec.items = p.items;
+      rec.lesson = p.lesson;
+      rec.full = p.full;
       save();
     })
     .then((r) => {
       rec.items = r.items;
       rec.lesson = r.lesson;
+      rec.full = r.full;
       rec.ms = r.ms;
       if (r.ok) {
         rec.state = 'done';

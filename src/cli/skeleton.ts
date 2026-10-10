@@ -10,7 +10,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../lib/agent-file.ts';
-import { CONFIG_SCHEMA_FILE, TTS_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../schema/index.ts';
+import { CONFIG_SCHEMA_FILE, DICTATION_DEFAULT, TTS_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../schema/index.ts';
 import { factoryRuntimes } from '../clis/index.ts';
 
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -162,6 +162,8 @@ export function configTemplate(input: ConfigTemplateInput): string {
     // 出厂运行时由各 CLI 的适配器给(src/clis/<cli>.ts 的 runtimes(),旗标为什么这么写的注释也在那里);缺省 claude
     runtimes: { default: 'claude', ...factoryRuntimes() },
     tts: TTS_DEFAULT,
+    // 听写的拍照认词:模型与挑词要求(prompt 一行一个字符串)写进文件,家长看得见、改得动
+    dictation: DICTATION_DEFAULT,
     // 字段说明不写在这里:一写进去就冻住(政策文件永不覆盖),$schema 指的 schema 文件每次 init / upgrade 从 zod 的 .describe() 刷新
     _note: '一孩一 workspace 的政策文件,家长改这里,机器不覆盖(写坏了靠 git 回退,cotutor doctor 可体检);每个字段的说明在 $schema 指的 .cotutor/cotutor.schema.json,编辑器里悬停就能看到。',
   };

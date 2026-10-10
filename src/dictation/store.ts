@@ -109,10 +109,11 @@ export async function listSessions(wsRoot: string): Promise<Session[]> {
 
 const p2 = (n: number): string => String(n).padStart(2, '0');
 
-export function newId(wsRoot: string, now: Date): string {
+/** 新 id:日期-时分;同一分钟已经有了(taken)加 -2、-3 */
+export function newId(wsRoot: string, now: Date, taken: (id: string) => boolean = (id) => existsSync(fileOf(wsRoot, id))): string {
   const base = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}-${p2(now.getHours())}${p2(now.getMinutes())}`;
   let id = base;
-  for (let k = 2; existsSync(fileOf(wsRoot, id)); k++) id = `${base}-${k}`;
+  for (let k = 2; taken(id); k++) id = `${base}-${k}`;
   return id;
 }
 
@@ -132,6 +133,8 @@ export interface PhotoRecord {
   state: 'running' | 'done' | 'failed';
   items: PhotoItem[];
   lesson: string | null;
+  /** 正文全文:一行一个字符串,词之间空一格(孩子端能点着加词) */
+  full: string[];
   error?: string;
   model?: string;
   ms?: number;
@@ -160,11 +163,9 @@ export async function readPhotoRecord(wsRoot: string, id: string): Promise<Photo
 export async function createPhoto(wsRoot: string, data: Buffer, now: Date): Promise<PhotoRecord> {
   await ensureRoot(wsRoot);
   await mkdir(photosDir(wsRoot), { recursive: true });
-  const base = newId(wsRoot, now);
-  let id = base;
-  for (let k = 2; existsSync(photoFile(wsRoot, id)); k++) id = `${base}-${k}`;
+  const id = newId(wsRoot, now, (x) => existsSync(photoFile(wsRoot, x)));
   await writeFile(photoFile(wsRoot, id), data);
-  const r: PhotoRecord = { id, at: now.toISOString(), state: 'running', items: [], lesson: null };
+  const r: PhotoRecord = { id, at: now.toISOString(), state: 'running', items: [], lesson: null, full: [] };
   await writePhotoRecord(wsRoot, r);
   return r;
 }

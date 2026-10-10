@@ -17,6 +17,7 @@
 - `cards/<kind>/` 卡的协议:`card.md` 八栏(例子即测试)+ `card.css`
 - `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`
 - `src/schema/` 契约(zod,类型即文档);`src/lib/` 纯函数,离屏可测;`src/cards/` 卡的注册表;`src/clis/` 各 agent CLI 的适配器(一家一个文件,读输出、关工具、环境、出厂模板都在里面,别处只认统一事件)
+- `src/paint/` 你说我画的画图卡在后台画(百炼文生图,同步接口):拼提示词、画、落盘到卡的资产目录、下发时补画好没有;runner 一轮跑完起它,app 的孩子 / 家长那天接一行;设计在 `docs/wip/你说我画设想.md`
 - `src/stage/` 舞台包(React,esbuild 打到 `dist/stage/`);`src/cli/` 命令;`src/server/` 服务、runner、页面(孩子端 `/`、家长端 `/parent`(记录)与 `/parent/home`(设孩子的首页)、工作台 `/dev`,另有扫码 `/qr`、按住说话试验页 `/voice-test`)、mock
 - 一个场景一个目录、cotutor 只在 app.ts 接一行的模块:`src/xlaoshi/`(小老师,`/xlaoshi`)、`src/talk/`(口语课,`/talk`:百炼 realtime 直连,自带零依赖 WebSocket 服务端,serve.ts 的 upgrade 多接一行)、`src/dictation/`(听写,`/dictation`:从首页的 `dictation` 卡点进来,所以多了卡的注册、kid-page 画卡、mock 接一行;老师卡上常驻「拍照听写」,照片交百炼视觉模型流式认词;英文单词听写是另一页 `/dictation?lang=en`(四线三格,不逐字母比);比对照搬 hanzi-writer 的一笔像不像,改它先过 `tests/dictation.test.ts`,页面走 `scripts/probe-dictation.mjs` 与 `probe-dictation-en.mjs`);设计在 `docs/wip/`
 - `tests/` 一文件一子进程,零依赖 `check()`;`_fake-cli.ts` / `_fake-tts.ts` 让全流程不花钱;`fixtures/board/` 真跑样本
@@ -26,6 +27,7 @@
 - `pnpm typecheck`;`pnpm test`;`node bin/cotutor.js --help`(bin 直跑 src,Node ≥ 22.18)
 - 改了 `cards/` 下的 md、`src/lib/*-doc.ts` 跑 `pnpm run gen:skills`(不跑 skills.test 会红);改了 `src/stage/` 跑 `pnpm run build:stage`(dist 不在 git,没打包时舞台开不了)
 - 改解析器或卡先过 `tests/board.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」;改 `src/clis/` 先过 `tests/clis.test.ts` 与 `tests/qwen.test.ts`(假 CLI 有 qwen 方言);改 `src/talk/` 先过 `tests/talk*.test.ts`(假百炼 `tests/_fake-realtime.ts`),页面走 `scripts/probe-talk-page.mjs`(加 `--real` 真连一次几分钱),Safari 的音频路径走 `scripts/probe-talk-webkit.mjs`(WebKit,假麦克风是振荡器),协议走 `scripts/probe-talk.mjs`
+- 改 `src/paint/` 或画图卡先过 `tests/paint.test.ts`(假百炼、假老师全流程),页面走 `scripts/probe-paint.mjs`;真画按张计费,一天最多 `paint.daily` 张
 - 改孩子端播放(谁念、谁停、谁打断谁)先改《工作流程.md》的仲裁表,再改 `tests/player.test.ts`,最后改 `kid-board.ts` 的 `step`;页面只 `dispatch`
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`
 - 手动验收走 `scripts/probe-*.mjs`(CDP);舞台里的东西用 CDP 驱动;截图也走 CDP(`Page.captureScreenshot`),孩子端、工作台在轮询,无头 Chrome 的 `--screenshot` 会挂;手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`;探针不出声:起 Chrome 加 `QUIET_ARGS`、连上先 `quiet(send)`(`scripts/_quiet.mjs`,mock 的合成声走系统语音服务,`--mute-audio` 静不了它),要听加 `COTUTOR_PROBE_SOUND=1`

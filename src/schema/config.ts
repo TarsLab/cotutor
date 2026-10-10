@@ -65,7 +65,7 @@ export const POLICY_DEFAULTS: Policy = {
 };
 
 /** 板书能用的卡(注册表顺序;tests/cards.test.ts 断言与 src/cards 的 kindsFor('board') 一致,这里不 import 卡,免得契约拖进卡的依赖) */
-export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'fill', 'image', 'tianzige', 'word', 'lecture', 'canvas', 'record', 'code'] as const;
+export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'fill', 'image', 'tianzige', 'word', 'lecture', 'canvas', 'record', 'paint', 'code'] as const;
 export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
 
 /** agent 名:与 .claude/agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */

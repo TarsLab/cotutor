@@ -161,6 +161,8 @@ export function cardTexts(card: BoardCard): string[] {
       return [str(p.word)]; // [apple] 落到这张卡上(讲到时亮这张);格里是笔顺不是文字,页面不画标注
     case 'record':
       return [str(p.show) || (p.mode === 'pinyin' ? '' : str(p.text))];
+    case 'paint':
+      return [str(p.ask), ...strs(p.panels), ...strs(p.words)];
     default:
       return Object.values(p).flatMap((v) => (typeof v === 'string' ? [v] : strs(v)));
   }
@@ -285,9 +287,9 @@ export function penFor(card: BoardCard, phrase: string): PenName {
 /** 一行最多几张:明写的并排(课文件 / 老师的 same)能到 3 张;按宽度排的最多 2 张(半宽 + 半宽) */
 export const MAX_CARDS_PER_ROW = 3;
 
-/** 独占一行的卡:标题行、提问卡、画板、录音卡、小课堂(选择题、填空题量得下就能半宽,2026-10-01) */
+/** 独占一行的卡:标题行、提问卡、画板、录音卡、小课堂、画图(选择题、填空题量得下就能半宽,2026-10-01) */
 export function standsAlone(card: BoardCard): boolean {
-  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'record' || card.kind === 'lecture';
+  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'record' || card.kind === 'lecture' || card.kind === 'paint';
 }
 
 const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice', 'fill'];
@@ -613,7 +615,7 @@ export function recordLocked(sections: readonly BoardSection[], secIdx: number, 
 /** 舞台顶栏的名字:文字卡的标题 / 正文、选择题的问题、其余第一段有字的;截 24 字 */
 export function cardTitle(card: BoardCard): string {
   const p = card.props || {};
-  const first = str(p.title) || str(p.question) || str(p.show) || str(p.text) || str(p.caption) || str(p.prompt) || strs(p.segments)[0] || cardTexts(card).find((t) => t.trim()) || (card.kind === 'image' ? '图' : card.kind === 'canvas' ? '画一画' : card.kind === 'tianzige' ? str(p.chars) : '');
+  const first = card.kind === 'paint' ? '画家画的' : str(p.title) || str(p.question) || str(p.show) || str(p.text) || str(p.caption) || str(p.prompt) || strs(p.segments)[0] || cardTexts(card).find((t) => t.trim()) || (card.kind === 'image' ? '图' : card.kind === 'canvas' ? '画一画' : card.kind === 'tianzige' ? str(p.chars) : '');
   const cps = Array.from(first.trim().replace(/\s+/g, ' '));
   return cps.length > 24 ? `${cps.slice(0, 24).join('')}…` : cps.join('');
 }

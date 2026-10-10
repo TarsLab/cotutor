@@ -14,6 +14,7 @@ import { image } from './image.ts';
 import type { CardKind, CardPlace } from './kind.ts';
 import { read } from './read.ts';
 import { record } from './record.ts';
+import { paint } from './paint.ts';
 import { lecture } from './lecture.ts';
 import { text } from './text.ts';
 import { tutor } from './tutor.ts';
@@ -29,14 +30,15 @@ export { image, IMAGE_EXT, type ImageProps } from './image.ts';
 export { lecture, type LectureProps, type LectureState } from './lecture.ts';
 export { canvas, type CanvasProps, type CanvasState } from './canvas.ts';
 export { record, HeardSchema, RECORD_AUDIO_RE, RECORD_MAX_SECONDS, heardTail, type Heard, type RecordExtra, type RecordProps, type RecordState } from './record.ts';
+export { paint, PaintPropsSchema, PAINT_PANELS_MAX, type PaintCast, type PaintProps } from './paint.ts';
 export { tianzige, HAN, TIANZIGE_MAX, type TianzigeProps } from './tianzige.ts';
 export { word, wordChunks, WORD_MAX, WORD_MAX_WORDS, WORD_RE, type WordProps } from './word.ts';
 export { tutor, BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, type TutorButton, type TutorProps } from './tutor.ts';
 export { dictation, dictationWordLang, DictationPropsSchema, DICTATION_EN_MAX, DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, EN_WORD_RE, type DictationLang, type DictationProps, type DictationWord } from './dictation.ts';
 
-/** 全部种类:先板书的十一种(注册表顺序即技能里的顺序),再首页专属的 */
+/** 全部种类:先板书的十二种(注册表顺序即技能里的顺序),再首页专属的 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, word, lecture, canvas, record, code, tutor, dictation];
+export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, word, lecture, canvas, record, paint, code, tutor, dictation];
 
 export function cardKind(name: string): CardKind | undefined {
   return CARD_KINDS.find((k) => k.name === name) as CardKind | undefined;
@@ -63,7 +65,7 @@ export function tutorCardKinds(cards: readonly string[] | undefined): string[] |
 }
 
 /** 正文是「字」的卡:老师把讲稿的 [词] 标注语法写进这些卡时,把括号剥掉(2026-09-11 真跑:孩子看到了「[直角边]」);choice 的 - [ ] / - [x] 不动 */
-const TEXTUAL = new Set(['text', 'read', 'choice', 'fill', 'image', 'word']);
+const TEXTUAL = new Set(['text', 'read', 'choice', 'fill', 'image', 'word', 'paint']);
 const MARK_IN_CARD = /\[([^\[\]\n]+)\]/g;
 function unmark(body: string): { body: string; had: boolean } {
   let had = false;

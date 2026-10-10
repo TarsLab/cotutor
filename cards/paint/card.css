@@ -1,0 +1,18 @@
+/* 画图(cards/paint/card.md):题干、四格图(没画好时是分好的几幅)、词语宝库;舞台里双指缩放 .zoom(同 image) */
+.c.c-paint { gap:12px; }
+.c.c-paint .pt-ask { font-size:18px; line-height:1.6; }
+.c.c-paint img { display:block; width:100%; border-radius:12px; animation:pt-in .9s ease; }
+@keyframes pt-in { from { opacity:0; } to { opacity:1; } }
+/* 还没画好:一幅一格,四幅时 2×2 */
+.c.c-paint .pt-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
+.c.c-paint .pt-grid.one { grid-template-columns:minmax(0, 1fr); }
+.c.c-paint .pt-cell { border:1.5px dashed var(--tint-plum-line); background:var(--tint-plum-bg); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:6px; font-size:15px; line-height:1.55; min-height:96px; }
+.c.c-paint .pt-n { width:24px; height:24px; border-radius:12px; border:2px solid var(--pen-circle); color:var(--pen-circle); font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; box-sizing:border-box; flex:none; }
+.c.c-paint .pt-wait { font-size:14px; color:var(--tint-plum-head); }
+.c.c-paint[data-drawn="drawing"] .pt-wait::after { content:'…'; animation:pt-dots 1.4s steps(4) infinite; display:inline-block; overflow:hidden; vertical-align:bottom; width:0; }
+@keyframes pt-dots { to { width:1.2em; } }
+/* 词语宝库:像练习册上贴着的那块蓝纸 */
+.c.c-paint .pt-words { align-self:center; background:#dcebf8; border-radius:14px; padding:12px 22px; text-align:center; }
+.c.c-paint .pt-words b { display:block; font-size:16px; letter-spacing:3px; margin-bottom:4px; }
+.c.c-paint .pt-words span { font-size:18px; }
+.c.c-paint .pt-note { font-size:13px; color:#6b675f; }

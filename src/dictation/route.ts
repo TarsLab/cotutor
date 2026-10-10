@@ -179,7 +179,7 @@ export function kidView(s: Session, display: string): unknown {
 function summary(s: Session): unknown {
   const firstOk = s.first.filter((a) => a && a.judges.every((j) => !j.ask) && a.chars.every((c) => !c.revealed)).length;
   const revealed = s.first.filter((a) => a && a.chars.some((c) => c.revealed)).length;
-  return { id: s.id, startedAt: s.startedAt, words: s.words.map((w) => w.chars), checked: s.checkedAt !== null, done: s.doneAt !== null, firstOk, asked: s.asked.length, revealed, photo: s.photo ?? null, lesson: s.lesson ?? null };
+  return { id: s.id, startedAt: s.startedAt, tutor: s.tutor ?? null, words: s.words.map((w) => w.chars), checked: s.checkedAt !== null, done: s.doneAt !== null, firstOk, asked: s.asked.length, revealed, photo: s.photo ?? null, lesson: s.lesson ?? null };
 }
 
 const PHOTO_MAX_BYTES = 3_000_000;

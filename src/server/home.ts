@@ -111,6 +111,23 @@ export async function publishHome(ws: Workspace, opts: { force?: boolean; from?:
   const md = await readFile(src, 'utf8').catch(() => null);
   const shown = relative(ws.root, src) || src;
   if (md === null) throw new UsageError(opts.from ? `读不到 ${opts.from}` : '还没有草稿 home/draft.md(用 cotutor-home 技能写一份)');
+  return publishHomeMd(ws, md, shown, opts);
+}
+
+/**
+ * 家长端表单改首页(《首页设计.md》拍板 20):拿已发布那份的原文(没发布过 = 空的)改一下,照常检查、留历史、发布。
+ * 改完和原来一样就不发;有「要改」的不发,回检查结果。草稿 home/draft.md 不动。
+ */
+export async function editPublished(ws: Workspace, edit: (md: string) => string, now: Date): Promise<PublishResult | null> {
+  const { home } = await readPublished(ws);
+  const base = home ? ((await publishedSource(ws, home)) ?? '') : '';
+  const md = edit(base);
+  if (md === base) return null;
+  return publishHomeMd(ws, md, '家长端表单', { now });
+}
+
+async function publishHomeMd(ws: Workspace, md: string, shown: string, opts: { force?: boolean; now: Date }): Promise<PublishResult> {
+  const f = homeFiles(ws);
   const check = await checkHome(ws, md, opts.now);
   if (check.fixes && !opts.force) return { ok: false, check, dropped: [], source: shown };
   const { cards, dropped } = opts.force ? dropFixes(check.doc.cards, check.issues) : { cards: check.doc.cards, dropped: [] };
@@ -221,6 +238,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
       alive: (date, thread) => alive.has(threadKey(name, date, thread)),
       lecture: (bundle) => Boolean(lectures.get(bundle)),
       keepBriefs: opts.keepBriefs,
+      today,
     }).map((b) => { const l = b.kind === 'lecture' ? lectures.get(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.clock.total, ...(l.video ? { video: true as const } : {}) } : b; });
     // 橙点:这份首页给他排了按钮或卡,而发布以来孩子还没找过他
     const arranged = buttons.some((b) => typeof b.id === 'number') || cards.some((x) => x.kind !== 'tutor' && owners.get(x) === name);

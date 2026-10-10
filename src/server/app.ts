@@ -34,6 +34,8 @@ import { listenOmni, type Transcribe } from './listen.ts';
 import { sendFile } from './send-file.ts';
 import { xlaoshiRoute } from '../xlaoshi/route.ts';
 import { talkRoute } from '../talk/route.ts';
+import { parentHomeRoute } from './parent-home.ts';
+import { PARENT_HOME_PAGE } from './parent-home-page.ts';
 import { dictationRoute } from '../dictation/route.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets, type Heard, type RecordProps } from '../cards/index.ts';
@@ -418,6 +420,8 @@ export interface OverviewTutor {
   booking: boolean;
   /** 这天录音卡在 koubo 上花的钱(元,heard.json 加总);没花就没有 */
   kouboYuan?: number;
+  /** 卡上的常驻入口:家长端「记录」把听写、口语课挂在常驻它们的老师下面 */
+  extras: TutorExtra[];
 }
 
 export interface Overview {
@@ -464,7 +468,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
     }
     const booking = index.messages.some((m) => (m.bookkeep || m.tidy) && m.result === 'running');
     const kouboYuan = await kouboYuanOfDay(join(ctx.ws.dirs.conversations, t.name), date);
-    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], booking, ...(kouboYuan > 0 ? { kouboYuan } : {}) });
+    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], booking, ...(kouboYuan > 0 ? { kouboYuan } : {}), extras: t.extras.filter((x) => x !== 'talk' || ctx.ws.config.talk.enabled) });
   }
   return { title: ctx.ws.config.title, date, today: localDate(ctx.now()), tutors };
 }
@@ -1063,6 +1067,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     // 小老师(家长用,代码都在 src/xlaoshi/,《wip/小老师设想.md》):/xlaoshi 与 /api/xlaoshi/* 交给它
     const xl = await xlaoshiRoute(method, url, ctx, body); if (xl) return xl;
+    // 家长端「首页」的接口(/api/parent/*)
+    const phr = await parentHomeRoute(method, p, ctx, body); if (phr) return phr;
     // 口语课(代码都在 src/talk/,《wip/口语课设想.md》):/talk 与 /api/talk/* 交给它;通话的 WebSocket 在 serve.ts 的 upgrade 里接
     const tk = await talkRoute(method, url, ctx, body); if (tk) return tk;
     // 听写(代码都在 src/dictation/,《wip/听写设想.md》):/dictation 与 /api/dictation/* 交给它;首页的听写卡在 kid-page 画
@@ -1085,6 +1091,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title), {}, await stageVersion()) };
     // 家长端(《家长板书页设计.md》):也是孩子端页面本身,数据走家长接口(答案在、家长的话在),卡锁着;自己的清单,加到主屏幕才不会拿到孩子端那份
     if (p === '/parent') return { status: 200, html: kidPage(esc(ws.config.title), { parent: true }, await stageVersion()) };
+    // 家长端「首页」(设孩子的首页与几项常改的设置;《家长板书页设计.md》拍板 20)
+    if (p === '/parent/home') return { status: 200, html: PARENT_HOME_PAGE };
     // 录像里孩子的屏幕(《家长录像设计.md》拍板 6):家长端录像时开在 iframe 里;直接打开也能看(调试),?tutor=&date=&thread=[&at=时:分:秒]
     if (p === '/reel') return { status: 200, html: kidPage(esc(ws.config.title), { reel: true }, await stageVersion()) };
     if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${ws.config.title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };

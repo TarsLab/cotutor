@@ -1,7 +1,7 @@
 /**
  * 老师卡(kind 名 tutor,只用在首页,《首页设计.md》§3.3):一位老师 + 几个按钮,孩子点了进这位老师。
  * 标签修饰 = 老师的键;正文一行一个按钮:`接着 <日期> <话题> <字>` 接着那天的那个话题,`小课堂 <课包 id> <字>` 先看那份课包再聊(《小课堂设计.md》),其余行是开场按钮;
- * `讲法:` 行挂在上一个按钮下面,是家长和 LLM 写给老师的,strip 剥掉,孩子端 JSON 里没有。
+ * `讲法:` 行挂在上一个按钮下面,是家长和 LLM 写给老师的,strip 剥掉,孩子端 JSON 里没有;`留到: <日期>` 也挂在上一个按钮下面,过了那天孩子端不再出现(家长端表单的「只今天 / 到周日」,《首页设计.md》拍板 20)。
  * 「新话题」应用永远放第一个,不进 props。老师在不在、话题在不在,由首页检查(src/server/home.ts)查。
  */
 import { z } from 'zod';
@@ -14,18 +14,21 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const THREAD_RE = /^\d{4}-\d+$/;
 const LIST_PREFIX = /^(?:[-*+]|\d+[.)])\s+/;
 const BRIEF_LINE = /^讲法\s*[:：]\s*(.*)$/;
+const UNTIL_LINE = /^留到\s*[:：]\s*(.*)$/;
 const CONTINUE_LINE = /^接着\s+/;
 const LECTURE_LINE = /^小课堂\s+/;
 
 const label = z.string().min(1).refine((s) => Array.from(s).length <= BUTTON_LABEL_MAX, `按钮的字最多 ${BUTTON_LABEL_MAX} 个`);
+/** 留到哪天(含那天);过了孩子端不再出现 */
+const until = z.string().regex(DAY_RE).optional();
 
 export const TutorButtonSchema = z.discriminatedUnion('kind', [
   /** 开场:孩子点了就把 label 发给老师(新话题),老师照 brief 开讲 */
-  z.object({ kind: z.literal('start'), label, brief: z.string().min(1).optional() }),
+  z.object({ kind: z.literal('start'), label, brief: z.string().min(1).optional(), until }),
   /** 接着:那天的那个话题;今天的 resume,以前的新开会话、上下文包带那个话题的尾巴 */
-  z.object({ kind: z.literal('continue'), label, date: z.string().regex(DAY_RE), thread: z.string().regex(THREAD_RE), brief: z.string().min(1).optional() }),
+  z.object({ kind: z.literal('continue'), label, date: z.string().regex(DAY_RE), thread: z.string().regex(THREAD_RE), brief: z.string().min(1).optional(), until }),
   /** 小课堂:孩子点了先看这份课包(铺满、一口气放完),看完才能开口;开口那条新开话题,老师拿到课的每句与孩子圈的地方 */
-  z.object({ kind: z.literal('lecture'), label, bundle: z.string().regex(BUNDLE_ID_RE), brief: z.string().min(1).optional() }),
+  z.object({ kind: z.literal('lecture'), label, bundle: z.string().regex(BUNDLE_ID_RE), brief: z.string().min(1).optional(), until }),
 ]);
 export type TutorButton = z.infer<typeof TutorButtonSchema>;
 
@@ -55,6 +58,15 @@ export const tutor: CardKind<TutorProps> = {
         if (!last) throw new Error('「讲法:」前面要有一个按钮(讲法挂在上一个按钮下面)');
         const text = brief[1].trim();
         if (text) last.brief = last.brief ? `${last.brief}\n${text}` : text;
+        continue;
+      }
+      const keep = UNTIL_LINE.exec(line);
+      if (keep) {
+        const last = buttons[buttons.length - 1];
+        if (!last) throw new Error('「留到:」前面要有一个按钮(留到挂在上一个按钮下面)');
+        const day = keep[1].trim();
+        if (!DAY_RE.test(day)) throw new Error(`「${line}」:留到要写日期,如「留到: 2026-10-12」(那天过完孩子就看不到这个按钮)`);
+        last.until = day;
         continue;
       }
       if (line === '新话题') continue;

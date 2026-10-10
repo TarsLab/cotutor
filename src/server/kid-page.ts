@@ -247,6 +247,12 @@ const PAGE = `<!doctype html>
   #back-today { width:100%; height:56px; border-radius:28px; background:#fff; border:1px solid var(--line); box-shadow:0 2px 10px #00000010; font-size:17px; font-weight:600; color:var(--ink); }
   #back-today[hidden] { display:none; }
   /* ---- 家长板书页(《家长板书页设计.md》):清单(每位老师一块、一行一个话题)与旁注。旁注不是卡:只读块,插在节前后;卡下面一行灰字是答案 ---- */
+  .ptabs { display:flex; padding:3px; border-radius:12px; background:#e9e6de; }
+  .ptabs a { flex:1; height:36px; border-radius:9px; font-size:15px; color:var(--dim); display:flex; align-items:center; justify-content:center; text-decoration:none; }
+  .ptabs a.on { background:#fff; color:var(--ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .pt a.tr-x { text-decoration:none; color:var(--ink); }
+  .pt .tr-x b { padding-right:0; }
+  .pt .tr-x .xk { font-size:12px; font-weight:600; padding:2px 7px; margin-right:8px; border-radius:6px; background:#fcebf2; color:#9c2c5a; vertical-align:2px; }
   #pdate { display:flex; align-items:center; gap:12px; font-size:15px; color:var(--dim); }
   #pdate b { font-weight:600; color:var(--ink); min-width:5em; text-align:center; }
   #pdate button { width:36px; height:36px; border-radius:50%; background:var(--card); border:1px solid var(--line); font-size:18px; display:grid; place-items:center; }
@@ -962,13 +968,43 @@ __REEL_JS__
   };
   // ---- 家长板书页的清单(《家长板书页设计.md》§2.2):日期、每位老师一块、一行一个话题,点了进板书 ----
   const shiftDate = (date, n) => { const [y, m, d] = date.split('-').map(Number); const t = new Date(y, m - 1, d + n); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); };
+  // 听写(/api/dictation)与口语课(/api/talk)的记录:模块自己的接口,15 秒读一次;读回来重画清单
+  const modFetch = () => {
+    if (S.modAt && Date.now() - S.modAt < 15000) return;
+    S.modAt = Date.now();
+    Promise.all([api('GET', '/api/dictation').catch(() => null), api('GET', '/api/talk').catch(() => null)]).then(([d, t]) => {
+      S.mods = { dictation: (d && d.sessions) || [], talks: (t && t.talks) || [] };
+      if (S.home && !S.tutor) renderOverview();
+    });
+  };
+  const hhmm = (iso) => { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  const ymd = (iso) => { const d = new Date(iso); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const modRows = (H) => {
+    modFetch();
+    const out = new Map();
+    const put = (k, el) => { if (!out.has(k)) out.set(k, []); out.get(k).push(el); };
+    const owner = (kind, tutor) => (tutor && H.tutors.some((t) => t.name === tutor) ? tutor : (H.tutors.find((t) => (t.extras || []).includes(kind)) || {}).name || ':' + (kind === 'talk' ? '口语课' : '听写'));
+    const xrow = (tag, href, title, sub) => h('a', { class: 'tr tr-x', href }, h('b', {}, h('span', { class: 'xk' }, tag), title), h('small', {}, sub));
+    const M = S.mods || { dictation: [], talks: [] };
+    for (const x of M.dictation.filter((x) => ymd(x.startedAt) === H.date)) {
+      const sub = [hhmm(x.startedAt), x.revealed ? '看了答案 ' + x.revealed + ' 个' : '', x.asked ? '再写 ' + x.asked + ' 个' : '', x.done ? '对好了' : x.checked ? '交了' : '还在写'].filter(Boolean).join(' · ');
+      put(owner('dictation', x.tutor), xrow('听写', '/dictation/reel?id=' + encodeURIComponent(x.id), (x.lesson ? x.lesson + ' · ' : '') + x.words.length + ' 个词', sub));
+    }
+    for (const x of M.talks.filter((x) => ymd(x.createdAt) === H.date && x.call)) {
+      const n = x.list.words.length + x.list.sentences.length;
+      put(owner('talk', null), xrow('口语课', '/talk#/review/' + encodeURIComponent(x.id), n + ' 句口语单', [hhmm(x.call.startedAt), '跟读 ' + x.call.read + '/' + x.call.items + ' 句', '聊了 ' + Math.max(1, Math.round(x.call.ms / 60000)) + ' 分钟'].join(' · ')));
+    }
+    return out;
+  };
   const renderOverview = () => {
     const H = S.home;
     document.title = H.title + ' · 家长'; $('#title').textContent = H.title;
+    // 家长端两块:首页(设孩子的首页)与记录(这一页)。这段也在孩子端的 html 里:不写家长端的路径,从这一页的地址拼
+    if (!$('#ptabs')) $('#title').after(h('nav', { id: 'ptabs', class: 'ptabs' }, h('a', { href: (location.pathname + '/home').replace('//', '/') }, '首页'), h('a', { class: 'on', href: location.pathname }, '记录')));
     // 有按钮正在「确定?」那一下(删、记账),这一轮心跳先不重画,免得把它抹掉
     if ($('#home .arm')) return;
     let bar = $('#pdate');
-    if (!bar) { bar = h('div', { id: 'pdate' }); $('#title').after(bar); }
+    if (!bar) { bar = h('div', { id: 'pdate' }); $('#ptabs').after(bar); }
     const go = (n) => { S.pdate = shiftDate(H.date, n); if (S.pdate === H.today) S.pdate = null; loadHome(); };
     // 记账(《obsidian仓库设计.md》§4,原来只在工作台):这天每位老师还没记过的话题各起一轮,老师回「## 记账」段,应用写日记。花钱,所以两下确认;老师在写或在记就灰
     const booking = H.tutors.some((t) => t.booking);
@@ -1014,9 +1050,13 @@ __REEL_JS__
       h('b', {}, th.title || '(没有话)'),
       h('small', {}, clock(th.at) + ' · ' + th.sections + ' 节 · ' + th.cards + ' 张卡' + stopped(th) + (th.booked ? ' · 已记账' : t.booking && th.sections > 0 ? ' · 记账中' : ''), th.misses ? h('span', { class: 'miss' }, ' · ⚠ 按住说话连着 ' + th.misses + ' 次没发出去') : null),
       stars(t, th), th.stoppedAt === 'writing' ? null : delBtn('conversations', t, th));
-    $('#tutors').replaceChildren(...H.tutors.map((t) => h('div', { class: 'pt', 'data-tutor': t.name },
+    // 听写与口语课(《家长板书页设计.md》拍板 20):挂在常驻它们的老师下面,点了去各自的结果页 / 回放;没人常驻的单列一块
+    const mods = modRows(H);
+    const block = (t, rows) => h('div', { class: 'pt', 'data-tutor': t.name },
       h('div', { class: 'hd' }, avatarEl(t), h('div', { class: 'who' }, h('span', { class: 'nm' }, t.display), t.turns ? h('small', {}, h('span', {}, t.turns + ' 轮'), ...(t.kouboYuan ? [' ', h('span', {}, '· koubo ¥' + t.kouboYuan.toFixed(2))] : [])) : null)),
-      ...(t.threads.length ? t.threads.map((th) => row(t, th)) : [h('div', { class: 'none' }, H.date === H.today ? '今天没聊' : '这天没聊')]))));
+      ...(rows.length ? rows : [h('div', { class: 'none' }, H.date === H.today ? '今天没聊' : '这天没聊')]));
+    $('#tutors').replaceChildren(...H.tutors.map((t) => block(t, [...t.threads.map((th) => row(t, th)), ...(mods.get(t.name) || [])])),
+      ...[...mods.entries()].filter(([k]) => k.startsWith(':')).map(([k, rows]) => block({ name: k, display: k.slice(1), subject: k.slice(1) }, rows)));
     $('#hcards').replaceChildren();
   };
   const setOffline = (off) => {

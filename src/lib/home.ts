@@ -241,7 +241,7 @@ const RECENT_MAX = 10;
  * 一张老师卡的按钮:新话题第一;今天有话题(recent)第二,字 = 「接着刚才的:」+ 那个话题第一句孩子的话(文件里有接着它的按钮就不加);然后是文件里的。
  * 接着按钮指的话题现在找不到(alive 说没有)就不出现。keepBriefs = 家长预览(讲法留着)。
  */
-export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { date: string; thread: string; title: string } | null; alive: (date: string, thread: string) => boolean; lecture?: (bundle: string) => boolean; keepBriefs?: boolean }): KidHomeButton[] {
+export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { date: string; thread: string; title: string } | null; alive: (date: string, thread: string) => boolean; lecture?: (bundle: string) => boolean; keepBriefs?: boolean; today?: string }): KidHomeButton[] {
   const out: KidHomeButton[] = [{ id: 'new', kind: 'new', label: NEW_THREAD_LABEL }];
   // 文件里已经有接着这个话题的按钮(字与讲法是家长定的),就不再加一个「接着刚才的」
   const covered = opts.recent && buttons.some((b) => b.kind === 'continue' && b.date === opts.recent!.date && b.thread === opts.recent!.thread);
@@ -251,6 +251,8 @@ export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { da
     out.push({ id: 'recent', kind: 'continue', label: title ? `接着刚才的:${title}` : '接着刚才的', date: opts.recent.date, thread: opts.recent.thread });
   }
   buttons.forEach((b, k) => {
+    // 留到那天为止(家长端表单的「只今天 / 到周日」);过了就不出现,id 还是文件里的下标
+    if (b.until && opts.today && b.until < opts.today) return;
     const brief = opts.keepBriefs && b.brief ? { brief: b.brief } : {};
     if (b.kind === 'start') out.push({ id: k, kind: 'start', label: b.label, ...brief });
     else if (b.kind === 'lecture') { if (opts.lecture?.(b.bundle) ?? true) out.push({ id: k, kind: 'lecture', label: b.label, bundle: b.bundle, ...brief }); }

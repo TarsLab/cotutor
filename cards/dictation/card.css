@@ -1,0 +1,10 @@
+/* 听写(cards/dictation/card.md):首页上一张,点了去 /dictation 听写页;卡上没有字 */
+.c.c-dictation { flex-direction:row; align-items:center; gap:16px; text-decoration:none; color:var(--ink); }
+.c-dictation .tg { flex:none; display:flex; gap:4px; }
+.c-dictation .tg i { width:34px; height:34px; border:2px solid var(--tint-sand-line); border-radius:4px; background:linear-gradient(var(--tint-sand-line),var(--tint-sand-line)) center/100% 1px no-repeat, linear-gradient(var(--tint-sand-line),var(--tint-sand-line)) center/1px 100% no-repeat, #fff; }
+.c-dictation .tx { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.c-dictation .tx b { font-size:19px; }
+.c-dictation .tx span { font-size:15px; color:var(--dim); }
+.c-dictation .go { flex:none; height:48px; padding:0 22px; border-radius:24px; background:#c95a22; color:#fff; font-size:17px; font-weight:600; display:flex; align-items:center; }
+/* 首页固定的「拍照听写」入口(不是发布的卡):左边一个相机 */
+.c-snap .tg { width:52px; height:52px; border-radius:14px; background:#fff3e8; color:#c95a22; align-items:center; justify-content:center; }

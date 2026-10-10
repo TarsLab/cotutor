@@ -779,7 +779,9 @@ __REEL_JS__
     // 头像一笔画出来只在打开首页、从老师页回来时画一次;5 秒一轮的刷新照常重铺,不再画
     const draw = S.homeDraw; S.homeDraw = false;
     $('#tutors').replaceChildren(...tcards.map((c, i) => tutorCard(byName.get(c.props.tutor), Array.isArray(c.props.buttons) ? c.props.buttons : [], draw ? i * 0.15 : null)));
-    $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor').map((c, i) => renderCard(c, i, null, false)));
+    // 拍照听写(《wip/听写设想.md》拍板 10):不是首页发布的卡,孩子端总在;拍课本或听写单,认出来的词点一点就开始听写
+    const snap = h('a', { class: 'c c-dictation c-snap', href: '/dictation' }, h('span', { class: 'tg', html: SVG('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 30) }), h('span', { class: 'tx' }, h('b', {}, '拍照听写'), h('span', {}, '拍一下要写的词,老师念给你听')), h('span', { class: 'go' }, '去拍'));
+    $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor').map((c, i) => renderCard(c, i, null, false)), snap);
     renderFigshot(H);
   };
   // 给老师换样子(figshot pick):同一台电脑、同一张证书,所以协议和主机跟着本页走,只换端口。
@@ -978,6 +980,12 @@ __REEL_JS__
         for (const ch of Array.from(String(p.chars || ''))) el.append(tianzigeBox(ch));
         if (board) el.append(againBtn());
         return el;
+      }
+      case 'dictation': {
+        // 听写卡(只在首页,cards/dictation):点了去 /dictation 听写页;卡上没有字,只有几个词。n = 首页里第几张听写卡
+        const all = (S.home && Array.isArray(S.home.cards) ? S.home.cards : []).filter((x) => x.kind === 'dictation');
+        const href = '/dictation?home=' + encodeURIComponent((S.home && S.home.home) || '') + '&n=' + Math.max(0, all.indexOf(c));
+        return h('a', { class: 'c c-dictation', 'data-card': idx, href }, h('span', { class: 'tg' }, h('i', {}), h('i', {})), h('span', { class: 'tx' }, h('b', {}, '听写'), h('span', {}, (p.count || 0) + ' 个词 · 老师念,你来写')), h('span', { class: 'go' }, '去写'));
       }
       case 'word': {
         // 单词卡:四线三格里写这个词,卡上没有中文;点卡开舞台(慢念、分段慢写),「听」按正常速度念;讲到它时 setNow 写一遍
@@ -1720,7 +1728,7 @@ __REEL_JS__
   S.layHalf = halfWidth();
 
   // ---- 舞台:点卡放大,交互都在这里;开着时讲稿暂停,关了字幕行出「播放」 ----
-  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', word: '单词', lecture: '小课堂', canvas: '画一画', record: '录音', code: '' };
+  const KIND_NAME = { text: '', read: '点读', choice: '选一选', fill: '填一填', image: '看图', tianzige: '田字格', dictation: '听写', word: '单词', lecture: '小课堂', canvas: '画一画', record: '录音', code: '' };
   const GO_LABEL = { canvas: '给老师看' };
   const openStage = (secIdx, idx, opts = {}) => {
     const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];

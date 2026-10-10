@@ -17,6 +17,7 @@ import { record } from './record.ts';
 import { lecture } from './lecture.ts';
 import { text } from './text.ts';
 import { tutor } from './tutor.ts';
+import { dictation } from './dictation.ts';
 
 export { BUNDLE_ID_RE, type CardKind, type CardPlace } from './kind.ts';
 export { text, TEXT_STYLES, type TextProps, type TextStyle } from './text.ts';
@@ -31,10 +32,11 @@ export { record, HeardSchema, RECORD_AUDIO_RE, RECORD_MAX_SECONDS, heardTail, ty
 export { tianzige, HAN, TIANZIGE_MAX, type TianzigeProps } from './tianzige.ts';
 export { word, wordChunks, WORD_MAX, WORD_MAX_WORDS, WORD_RE, type WordProps } from './word.ts';
 export { tutor, BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, type TutorButton, type TutorProps } from './tutor.ts';
+export { dictation, DictationPropsSchema, DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, type DictationProps, type DictationWord } from './dictation.ts';
 
 /** 全部种类:先板书的十一种(注册表顺序即技能里的顺序),再首页专属的 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, word, lecture, canvas, record, code, tutor];
+export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, word, lecture, canvas, record, code, tutor, dictation];
 
 export function cardKind(name: string): CardKind | undefined {
   return CARD_KINDS.find((k) => k.name === name) as CardKind | undefined;
@@ -115,11 +117,11 @@ export function stripSecrets(section: BoardSection): BoardSection {
   };
 }
 
-/** 一张卡的标题(舞台顶栏、给老师的描述里用):文字卡的 title / text,选择题的问题,其余第一段有字的,田字格的字,单词卡的词 */
+/** 一张卡的标题(舞台顶栏、给老师的描述里用):文字卡的 title / text,选择题的问题,其余第一段有字的,田字格的字,单词卡的词,听写卡的词表 */
 export function cardLabel(card: BoardCard): string {
   const p = card.props;
   const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
-  const first = s(p.title) || s(p.question) || s(p.show) || s(p.text) || s(p.caption) || s(p.prompt) || (Array.isArray(p.segments) ? s(p.segments[0]) : '') || s(p.chars) || s(p.word);
+  const first = s(p.title) || s(p.question) || s(p.show) || s(p.text) || s(p.caption) || s(p.prompt) || (Array.isArray(p.segments) ? s(p.segments[0]) : '') || s(p.chars) || s(p.word) || (Array.isArray(p.words) ? p.words.map((w) => s((w as { chars?: unknown })?.chars)).filter(Boolean).join('、') : '');
   const cps = Array.from(first.replace(/\s+/g, ' '));
   return cps.length > 40 ? `${cps.slice(0, 40).join('')}…` : cps.join('');
 }

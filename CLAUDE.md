@@ -18,7 +18,7 @@
 - `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`
 - `src/schema/` 契约(zod,类型即文档);`src/lib/` 纯函数,离屏可测;`src/cards/` 卡的注册表;`src/clis/` 各 agent CLI 的适配器(一家一个文件,读输出、关工具、环境、出厂模板都在里面,别处只认统一事件)
 - `src/stage/` 舞台包(React,esbuild 打到 `dist/stage/`);`src/cli/` 命令;`src/server/` 服务、runner、页面(孩子端 `/`、家长端 `/parent`、工作台 `/dev`,另有扫码 `/qr`、按住说话试验页 `/voice-test`)、mock
-- 一个场景一个目录、cotutor 只在 app.ts 接一行的模块:`src/xlaoshi/`(小老师,`/xlaoshi`)、`src/talk/`(口语课,`/talk`:百炼 realtime 直连,自带零依赖 WebSocket 服务端,serve.ts 的 upgrade 多接一行);设计在 `docs/wip/`
+- 一个场景一个目录、cotutor 只在 app.ts 接一行的模块:`src/xlaoshi/`(小老师,`/xlaoshi`)、`src/talk/`(口语课,`/talk`:百炼 realtime 直连,自带零依赖 WebSocket 服务端,serve.ts 的 upgrade 多接一行)、`src/dictation/`(听写,`/dictation`:从首页的 `dictation` 卡点进来,所以多了卡的注册、kid-page 画卡、mock 接一行;孩子端首页另有固定的「拍照听写」入口,照片交百炼视觉模型流式认词;比对照搬 hanzi-writer 的一笔像不像,改它先过 `tests/dictation.test.ts`,页面走 `scripts/probe-dictation.mjs`);设计在 `docs/wip/`
 - `tests/` 一文件一子进程,零依赖 `check()`;`_fake-cli.ts` / `_fake-tts.ts` 让全流程不花钱;`fixtures/board/` 真跑样本
 
 ## 运行与验证

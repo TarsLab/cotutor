@@ -9,20 +9,22 @@
  * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有开场与接着昨天的按钮,数学老师有开场,英语老师没写(补一张);
  * 发消息带 via 时照真服务的规则换成按钮上的字、定话题。
  */
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { createServer as createHttp, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttps } from 'node:https';
-import { hostname } from 'node:os';
+import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseBoard } from '../lib/board.ts';
-import { parseCardState, stripSecrets } from '../cards/index.ts';
+import { parseCardState, stripSecrets, DictationPropsSchema } from '../cards/index.ts';
 import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { sendFile } from './send-file.ts';
 import type { ConversationMessage } from '../schema/index.ts';
 import { enrichLectures, ensureBaked, lectureFrameSvg, parseRing, parseSvgMs, readLecture, storedMarks, type Lecture } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
+import { handleDictation, type DictationDeps } from '../dictation/route.ts';
+import type { PhotoItem, Recognize } from '../dictation/recognize.ts';
 import { lettersData } from './letters.ts';
 
 /** 看完小课堂的第一问,mock 老师这样答:对着圈的地方说,放课里拆开那一捆的那一段(《小课堂设计.md》§六);视频的放轮着分那一段 */
@@ -443,11 +445,32 @@ for: ${today}
 塘脑袋
 \`\`\`
 
+\`\`\`dictation chinese-tutor
+春天
+鼓励 鼓励,老师鼓励我的鼓励
+叶 树叶的叶
+\`\`\`
+
 ## 为什么这么排
 
 - mock 的样例
 `;
 }
+
+/** 拍照认词表的假识别:不看照片,照《小蝌蚪找妈妈》那页回(词语一行、写字一行,宽大没认准),一项隔 120 毫秒,像真的一项一项出来 */
+const MOCK_PHOTO: PhotoItem[] = [
+  ...['脑袋', '灰色', '眼睛', '肚皮', '孩子', '宽大'].map((text, i): PhotoItem => ({ text, kind: 'word', box: [80 + i * 140, 640, 190 + i * 140, 700], sure: text !== '宽大', say: `${text},${({ 脑袋: '小蝌蚪的大脑袋', 灰色: '灰色的小蝌蚪', 眼睛: '大大的眼睛', 肚皮: '白白的肚皮', 孩子: '青蛙妈妈的孩子', 宽大: '宽大的嘴巴' } as Record<string, string>)[text]}` })),
+  ...['两', '哪', '宽', '顶', '眼', '睛', '肚', '皮', '孩'].map((text, i): PhotoItem => ({ text, kind: 'char', box: [80 + i * 92, 480, 150 + i * 92, 550], sure: true, say: `${text},${({ 两: '两个人', 哪: '在哪里', 宽: '宽宽的路', 顶: '山顶', 眼: '眼睛', 睛: '眼睛', 肚: '肚子', 皮: '肚皮', 孩: '孩子' } as Record<string, string>)[text]}的${text}` })),
+];
+const mockRecognize: Recognize = async (_image, onItem) => {
+  const t0 = Date.now();
+  onItem(null, '小蝌蚪找妈妈');
+  for (const it of MOCK_PHOTO) {
+    await new Promise((r) => setTimeout(r, 120));
+    onItem(it, '小蝌蚪找妈妈');
+  }
+  return { ok: true, items: MOCK_PHOTO, lesson: '小蝌蚪找妈妈', model: 'mock', ms: Date.now() - t0 };
+};
 
 export interface MockRouteResult {
   status: number;
@@ -545,7 +568,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   const home = () => {
     const d = now();
     const cards = arrangeHome(parseHome(mockHomeMd(localDate(d), yesterday())).cards, MOCK_TUTORS.map((t) => t.name)).map((c) => {
-      if (c.kind !== 'tutor') return c;
+      if (c.kind !== 'tutor') return stripSecrets({ cards: [c], lines: [] }).cards[0]; // 同真服务:答案(听写卡的字)不下发
       const name = String(c.props.tutor);
       const list = messages.get(name) ?? [];
       const asked = list.find((m) => m.question !== null && m.thread === list[list.length - 1]?.thread);
@@ -557,6 +580,22 @@ export function createMock(opts: MockOptions = {}): Mock {
     return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, listen: opts.listen ?? 'browser' };
   };
   const mockHomeId = (): string => `${yesterday()}-2130`;
+  let dictationRoot: string | null = null;
+  const dictationDeps = (): DictationDeps => ({
+    root: (dictationRoot ??= mkdtempSync(join(tmpdir(), 'cotutor-mock-dictation-'))),
+    now,
+    card: async (home, n) => {
+      if (home !== mockHomeId()) return null;
+      const c = parseHome(mockHomeMd(localDate(now()), yesterday())).cards.filter((x) => x.kind === 'dictation')[n];
+      const r = c ? DictationPropsSchema.safeParse(c.props) : null;
+      return r?.success ? r.data : null;
+    },
+    reader: () => 'chinese-tutor',
+    display: (t) => MOCK_TUTORS.find((x) => x.name === t)?.display ?? '老师',
+    say: async () => null,
+    medians: async (ch) => (await tianzigeData(ch))?.medians ?? null,
+    recognize: mockRecognize,
+  });
   /** via → 按钮(真服务在 server/home.ts resolveVia;mock 从同一份原文取) */
   const mockButton = (name: string, via: unknown): TutorButton | 'new' | 'recent' | null => {
     if (!isObj(via)) return null;
@@ -626,6 +665,8 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p === '/api/health') return { status: 200, json: { ok: scenario !== 'offline', mock: true, scenario } };
     if (scenario === 'offline' && p.startsWith('/api/')) return { status: 500, json: { error: 'mock_offline' } };
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: home() };
+    // 听写(src/dictation/,和真服务同一套接口):卡从 mock 的首页取,存在临时目录,不配音(页面退浏览器合成声)
+    const tx = await handleDictation(method, url, dictationDeps(), body); if (tx) return tx;
     if (p === '/api/kid/listen' && method === 'POST') {
       if (opts.listen !== 'omni') return { status: 404, json: { error: 'listen_off' } };
       const audio = isObj(body) ? audioData(body.audio) : undefined;

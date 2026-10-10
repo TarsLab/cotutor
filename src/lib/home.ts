@@ -162,6 +162,11 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
       else if (!ctx.threads.has(threadKey(name, b.date, b.thread))) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${b.date} 没有话题 ${b.thread}(cotutor show ${name} <job> ${b.date} 或 conversations/${name}/${b.date}.json 里找话题 id)` });
     });
   });
+  // 听写卡写了念的老师:不在 cotutor.json 就换人念(听写页照样能用,只提醒)
+  doc.cards.forEach((c, n) => {
+    if (c.kind !== 'dictation' || typeof c.props.tutor !== 'string' || ctx.tutors[c.props.tutor]) return;
+    out.push({ level: 'note', line: doc.cardLines[n], card: n, text: `听写卡写的 ${c.props.tutor} 不在 cotutor.json 里(有:${names.join('、')}),会换成语文老师念` });
+  });
   const missing = homeTutors(ctx.tutors).filter((name) => !seen.has(name));
   if (missing.length) out.push({ level: 'note', text: `${missing.map((m) => ctx.tutors[m].display).join('、')}没写老师卡,孩子端会补一张只有「新话题」的` });
   if (doc.for && doc.for < ctx.today) out.push({ level: 'note', text: `for 是 ${doc.for},已经过去了(孩子端照样显示)` });

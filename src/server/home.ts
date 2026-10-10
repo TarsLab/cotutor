@@ -355,7 +355,10 @@ export function formatCheck(ws: Workspace, check: HomeCheck, title: string, kid:
   const rest = kid.cards.filter((x) => x.kind !== 'tutor');
   if (rest.length) {
     out.push('其余的卡');
-    for (const c of rest) out.push(`  ${c.kind}「${cardLabel(c)}」`);
+    // 听写卡在孩子端剥了字,家长看的这份从草稿里的原卡取词表
+    const lists = check.doc.cards.filter((x) => x.kind === 'dictation');
+    let k = 0;
+    for (const c of rest) out.push(`  ${c.kind}「${cardLabel(c.kind === 'dictation' ? (lists[k++] ?? c) : c)}」`);
   }
   out.push(`家长段:${check.doc.note ? `${check.doc.note.split('\n').length} 行` : '没有'}`);
   const fixes = check.issues.filter((i) => i.level === 'fix');

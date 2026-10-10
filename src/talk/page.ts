@@ -230,6 +230,9 @@ export const TALK_PAGE = `<!doctype html>
   const views = ['home', 'list', 'kid', 'review'];
   const show = (name) => { for (const v of views) $('#' + v).classList.toggle('on', v === name); };
   const go = (hash) => { location.hash = hash; };
+  /** 孩子从首页英语老师卡上的「口语课」进来(《首页设计.md》拍板 18):「回去」与打完都回首页,不进家长的那几屏 */
+  const FROM_HOME = new URLSearchParams(location.search).get('home') === '1';
+  if (FROM_HOME) $('#k-back').setAttribute('href', '/');
   const route = () => {
     const m = /^#\\/(list|kid|review)\\/([^/]+)/.exec(location.hash);
     if (!m) { show('home'); void home(); return; }
@@ -424,7 +427,8 @@ export const TALK_PAGE = `<!doctype html>
       clearInterval(C.timer); A.close();
       try { if (C.ws && C.ws.readyState <= 1) C.ws.close(1000, why); } catch (e) {}
       call = null;
-      if (location.hash.startsWith('#/kid/')) go('#/review/' + C.id);
+      // 孩子从首页进来的(?home=1):打完回首页;家长递过去的:打完到回看
+      if (location.hash.startsWith('#/kid/')) { if (FROM_HOME) location.href = '/'; else go('#/review/' + C.id); }
     };
     return C;
   }

@@ -29,6 +29,8 @@ export interface TalkMeta {
   listBy: 'omni' | 'parent' | null;
   listError?: string;
   listMs?: number;
+  /** 照着哪一次的口语单再开的(孩子从首页的「口语课」进来,上一次已经聊过) */
+  from?: string;
   /** 通话完了记的 */
   call?: { startedAt: string; ms: number; why: string; model: string; voice: string; items: number; read: number };
 }

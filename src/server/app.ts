@@ -18,7 +18,7 @@ import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
 import { audioData } from '../lib/audio-data.ts';
 import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelDiag } from '../lib/reel.ts';
-import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage } from '../schema/index.ts';
+import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../schema/index.ts';
 import type { BoardCard, Device } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
 import { tutorStatuses } from '../cli/tutors.ts';
@@ -139,6 +139,8 @@ export interface KidTutor {
   hasVoice: boolean;
   remaining: number;
   available: boolean;
+  /** 卡上的常驻入口(《首页设计.md》拍板 18):dictation 听写与拍照听写、talk 口语课(要 talk.enabled) */
+  extras: TutorExtra[];
 }
 
 export async function kidTutors(ctx: AppContext, date: string): Promise<KidTutor[]> {
@@ -146,7 +148,7 @@ export async function kidTutors(ctx: AppContext, date: string): Promise<KidTutor
   for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
     const used = kidMessageCount(await readIndex(ctx.ws, t.name, date));
     const remaining = Math.max(0, t.policy.dailyMessages - used);
-    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, hasVoice: Boolean(t.voice), remaining, available: remaining > 0 });
+    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, hasVoice: Boolean(t.voice), remaining, available: remaining > 0, extras: t.extras.filter((x) => x !== 'talk' || ctx.ws.config.talk.enabled) });
   }
   return out;
 }

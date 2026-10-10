@@ -294,6 +294,9 @@ try {
     const go = await hx('POST', '/api/dictation', { photo: pid, words: [{ chars: '脑袋', say: '脑袋,小蝌蚪的大脑袋' }, { chars: '宽 大' }, { chars: '皮', say: '皮,肚皮的皮' }] });
     const sx = (await hx('GET', `/api/dictation/${go.json.id}`)).json;
     check('拍照开始:201,和首页卡一样的孩子端样子(没有字);记下照片与课名,不挂首页', go.status === 201 && go.json.sizes.join() === '2,2,1' && !JSON.stringify(go.json).includes('脑') && sx.photo === pid && sx.lesson === '小蝌蚪找妈妈' && sx.home === null && sx.n === -1 && sx.words[1].chars === '宽大' && sx.words[2].say === '皮,肚皮的皮', JSON.stringify(sx).slice(0, 300));
+    const viaMath = await hx('POST', '/api/dictation', { photo: pid, words: [{ chars: '皮' }], tutor: 'math-tutor' });
+    const viaNone = await hx('POST', '/api/dictation', { photo: pid, words: [{ chars: '皮' }], tutor: 'nobody' });
+    check('拍照开始带 tutor(从哪位老师卡上进来):用他的声音;没有这位老师退回语文老师', (await hx('GET', `/api/dictation/${viaMath.json.id}`)).json.tutor === 'math-tutor' && (await hx('GET', `/api/dictation/${viaNone.json.id}`)).json.tutor === 'chinese-tutor');
     check('拍照开始的照样能念、能交', (await hx('GET', `/api/dictation/${go.json.id}/say/0?text=1`)).json.text === '脑袋,小蝌蚪的大脑袋');
     {
       const c2 = cfgNow();

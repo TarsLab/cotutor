@@ -2,7 +2,7 @@
 /**
  * 首页(《首页设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 临时 workspace + HTTP serve → 语文老师先讲一轮(给「接着」一个话题)→ 写草稿、cotutor home publish →
- * Chrome 开孩子端:老师卡置顶、按钮齐、讲法不在页面里;手机与平板各截一张 →
+ * Chrome 开孩子端:老师卡置顶、按钮齐、常驻入口在语文卡里、讲法不在页面里;手机与平板各截一张 →
  * 点「新话题」是空白老师页 → 回首页点开场按钮:老师页打开、按钮上的字发出去、索引里那条带 via →
  *
  * 用法:node scripts/probe-home.mjs [--out <截图目录>] [--keep](留下临时 workspace 与 serve)
@@ -103,8 +103,9 @@ for: ${day}
   // ---- 孩子端首页 ----
   await device(390, 844, 2, true);
   await open(`${base}/`);
-  const view = await evaluate(`(() => ({ tutors: [...document.querySelectorAll('.c-tutor')].map((c) => ({ who: c.dataset.tutor, buttons: [...c.querySelectorAll('.bt')].map((b) => b.textContent) })), cards: [...document.querySelectorAll('#hcards > *')].map((c) => c.className), html: document.body.innerHTML.includes('重点字') }))()`);
+  const view = await evaluate(`(() => ({ tutors: [...document.querySelectorAll('.c-tutor')].map((c) => ({ who: c.dataset.tutor, buttons: [...c.querySelectorAll('.bt:not(.bt-extra)')].map((b) => b.textContent), extras: [...c.querySelectorAll('.bt-extra')].map((b) => b.getAttribute('href')) })), cards: [...document.querySelectorAll('#hcards > *')].map((c) => c.className), html: document.body.innerHTML.includes('重点字') }))()`);
   ok('老师卡置顶:语文 / 数学 / 英语(补的),按钮齐(接着的就是今天那个话题,不再加「接着刚才的」)', view.tutors.map((t) => t.who).join() === 'chinese-tutor,math-tutor,english-tutor' && view.tutors[0].buttons.join('|') === '新话题|我要预习小蝌蚪找妈妈|接着讲刚才的板书' && view.tutors[2].buttons.join('|') === '新话题', JSON.stringify(view.tutors));
+  ok('常驻入口:语文老师卡里有「拍照听写」(带他的名字),别的老师没有;首页没有公共的拍照听写', view.tutors[0].extras.join() === '/dictation?tutor=chinese-tutor' && view.tutors[1].extras.length === 0 && view.tutors[2].extras.length === 0 && !view.cards.some((c) => c.includes('c-snap')), JSON.stringify(view.tutors.map((t) => t.extras)));
   ok('其余卡:一段字、田字格;讲法不在页面里', view.cards.length === 2 && view.cards[0].includes('c-text') && view.cards[1].includes('c-tianzige') && !view.html, JSON.stringify(view.cards));
   console.log('  ', await shot('home-phone.png'));
   await device(1180, 820, 1, false);

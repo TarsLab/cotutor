@@ -3,14 +3,14 @@
  * cotutor 只在 app.ts 的 route() 里接一行、kid-page 画首页那张卡;这里引用 cotutor 的东西,cotutor 别处不引用这里。拆掉 = 删 src/dictation/、cards/dictation/ 与那两处。
  * 词是答案:孩子端交卷(check)之前只拿得到几个词、每个词几个字和念的音频;交了才拿到字与「要不要再写一遍」。
  *
- *   GET  /dictation?home=<id>&n=<k>          孩子的听写页(从首页那张卡点进来);不带 home 是拍照开始(首页固定的「拍照听写」)
+ *   GET  /dictation?home=<id>&n=<k>          孩子的听写页(从首页的听写卡点进来);不带 home 是拍照开始(老师卡上常驻的「拍照听写」,?tutor=<老师>)
  *   GET  /dictation/parent                   家长看结果
  *   GET  /dictation/reel?id=<id>             家长看录像:一笔一笔重放这次听写
  *   POST /api/dictation/photos               {image: data:image/jpeg;base64,…} 拍的照片:存下、后台开始认,回 {id}
  *   GET  /api/dictation/photos/<id>          认的进度:{state, items, lesson, full};页面轮询着一项一项画框
  *   GET  /api/dictation/photos/<id>/image    那张照片
  *   POST /api/dictation                      {home, n, fresh?} 从首页的卡开始;今天这张卡有没写完的就接着(fresh 另开一次)
- *                                            {photo, words: [{chars, say?}]} 拍照开始:照片上点选的词
+ *                                            {photo, words: [{chars, say?}], tutor?} 拍照开始:照片上点选的词;tutor = 从哪位老师卡上进来的(用他的声音)
  *   GET  /api/dictation                      全部听写(家长)
  *   GET  /api/dictation/<id>                 一次听写的全部(家长)
  *   GET  /api/dictation/<id>/kid             孩子端的样子(交卷前没有字)
@@ -280,7 +280,8 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
       if (!rec) return { status: 404, json: { error: 'no_such_photo' } };
       const words = parseWords(body.words);
       if (!words) return bad(`要 {photo, words: [{chars, say?}]}:1 到 ${DICTATION_WORDS_MAX} 个词,每个 1 到 ${DICTATION_WORD_MAX} 个汉字`);
-      const tutor = deps.reader(undefined);
+      // 从哪位老师卡上的「拍照听写」进来就用他的声音
+      const tutor = deps.reader(typeof body.tutor === 'string' ? body.tutor : undefined);
       const s = await createSession(root, { home: null, n: -1, tutor, words, photo: rec.id, lesson: rec.lesson }, now);
       return { status: 201, json: kidView(s, deps.display(tutor)) };
     }

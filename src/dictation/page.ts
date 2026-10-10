@@ -285,7 +285,7 @@ export const DICTATION_PAGE = `<!doctype html>
   var cn = function (n) { return n <= 10 ? CN[n] : n < 20 ? '十' + CN[n - 10] : CN[Math.floor(n / 10)] + '十' + (n % 10 ? CN[n % 10] : ''); };
 
   var q = new URLSearchParams(location.search);
-  var HOME = q.get('home'); var N = Number(q.get('n') || 0);
+  var HOME = q.get('home'); var N = Number(q.get('n') || 0); var TUTOR = q.get('tutor');
   var S = { v: null, base: Date.now(), i: 0, w: null, pads: [], stack: [], active: null, sawPen: false, noAudio: false, sayTimer: 0, order: null, rw: null };
   /** 点与事件的时刻:离这次听写开始(startedAt)多少毫秒;孩子端的钟,录像只看先后与间隔 */
   var now = function () { return Math.max(0, Date.now() - S.base); };
@@ -588,7 +588,7 @@ export const DICTATION_PAGE = `<!doctype html>
     var words = picked().map(function (k) { var it = P.items[k]; var t = textOf(k); return t === it.text ? { chars: t, say: it.say || undefined } : { chars: t }; }).concat(P.extra.map(function (t) { return { chars: t }; })).filter(function (w) { return w.chars; }).slice(0, 20);
     if (!words.length) return;
     clearTimeout(P.timer);
-    persist('POST', '/api/dictation', { photo: P.id, words: words }, $('#p-go')).then(function (v) { setView(v); openListen(); }, function () { $('#p-status').textContent = '有的词不是一到四个汉字,改一下再开始'; });
+    persist('POST', '/api/dictation', TUTOR ? { photo: P.id, words: words, tutor: TUTOR } : { photo: P.id, words: words }, $('#p-go')).then(function (v) { setView(v); openListen(); }, function () { $('#p-status').textContent = '有的词不是一到四个汉字,改一下再开始'; });
   });
   window.addEventListener('resize', function () { if ($('#v-pick').classList.contains('on')) layoutShot(); });
 

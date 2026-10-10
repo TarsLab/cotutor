@@ -71,6 +71,10 @@ export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
 /** agent 名:与 .claude/agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
+/** 老师卡上的常驻入口(《首页设计.md》拍板 18):不经首页发布、一直在那位老师的卡上 */
+export const TUTOR_EXTRAS = ['dictation', 'talk'] as const;
+export type TutorExtra = (typeof TUTOR_EXTRAS)[number];
+
 export const TutorSchema = z.object({
   /** 显示名(孩子端头像下的字、计划文件的 H2 标题) */
   display: z.string().min(1).describe('显示名:孩子端头像下的字,计划文件的 H2 标题'),
@@ -87,8 +91,15 @@ export const TutorSchema = z.object({
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
   /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。要更大预算与时限的老师配一个自己的 */
   runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——预算、时限不同的老师配自己的'),
+  extras: z.array(z.enum(TUTOR_EXTRAS)).optional().describe('老师卡上的常驻入口:dictation 听写(含拍照听写)、talk 口语课(要 talk.enabled);不写按学科给缺省:语文有听写,其余没有;[] = 都不要'),
 });
 export type Tutor = z.infer<typeof TutorSchema>;
+
+/** 这位老师卡上的常驻入口:配了照配的;没配按学科(语文 = 听写) */
+export function tutorExtras(t: Pick<Tutor, 'extras' | 'subject'>): TutorExtra[] {
+  if (t.extras) return [...new Set(t.extras)];
+  return t.subject === '语文' ? ['dictation'] : [];
+}
 
 /**
  * 运行时:一个 CLI 一组 {run, resume} 命令模板。占位符:
@@ -184,6 +195,7 @@ export const TalkSchema = z.object({
   minutes: z.number().int().min(1).max(20).default(TALK_DEFAULT.minutes).describe('聊那段几分钟;到了老师收尾'),
   silenceMs: z.number().int().min(400).max(4000).default(TALK_DEFAULT.silenceMs).describe('聊那段 VAD 判「说完了」的静音毫秒;孩子想词慢就调长'),
   interrupt: z.boolean().default(false).describe('聊那段老师说话时麦克风开不开:false = 老师说完才听(没有回声问题,但孩子插不了嘴);true = 全双工,靠设备的回声消除'),
+  note: z.string().max(600).optional().describe('家长给口语课老师的话(这周学什么、想多聊什么);跟读与聊的系统提示都带上,孩子看不到'),
 });
 export type TalkConfig = z.infer<typeof TalkSchema>;
 
@@ -298,6 +310,8 @@ export interface TutorView {
   enabled: boolean;
   hidden: boolean;
   policy: Policy;
+  /** 老师卡上的常驻入口(已按学科补缺省) */
+  extras: TutorExtra[];
 }
 
 /** 老师列表(带有效政策);kidOnly = 只要孩子端能看到的(enabled 且不 hidden) */
@@ -313,6 +327,7 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
       enabled: t.enabled,
       hidden: t.hidden,
       policy: resolvePolicy(config, name),
+      extras: tutorExtras(t),
     }));
 }
 

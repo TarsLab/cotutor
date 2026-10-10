@@ -5,6 +5,7 @@
  *   GET    /talk                       页面(家长与孩子同一页,按 hash 切)
  *   GET    /api/talk                   开关、有没有 key、设置、全部口语课(新的在前)
  *   POST   /api/talk                   {photo?: dataURL} 开一次;有照片就交给 omni 读口语单
+ *                                      {from: 'latest'} 孩子从首页的「口语课」进来:最近那份口语单还没聊过就用它,聊过了照它再开一次(404 = 还没有口语单)
  *   GET    /api/talk/<id>              一次的全部(口语单、通话的字、有没有声音)
  *   PUT    /api/talk/<id>/list         {words, sentences, ready?} 家长改口语单;ready = 给孩子
  *   DELETE /api/talk/<id>
@@ -78,6 +79,16 @@ export function makeTalkRoute(deps: TalkDeps = { readList }) {
       if (method !== 'POST') return { status: 405, json: { error: 'method_not_allowed' } };
       if (!cfg.enabled) return { status: 404, json: { error: 'talk_disabled', message: 'cotutor.json 的 talk.enabled 还是 false' } };
       const b = isObj(body) ? body : {};
+      if (b.from !== undefined) {
+        if (b.from !== 'latest') return bad("from 只认 'latest'");
+        const last = (await listTalks(root)).find((t) => (t.status === 'ready' || t.status === 'done') && t.list.words.length + t.list.sentences.length > 0);
+        if (!last) return { status: 404, json: { error: 'no_list', message: '还没有给孩子的口语单' } };
+        if (last.status === 'ready') return { status: 200, json: last };
+        const again = await createTalk(root, ctx.now(), null);
+        Object.assign(again, { status: 'ready', list: last.list, listBy: last.listBy, from: last.id });
+        await writeMeta(root, again);
+        return { status: 201, json: again };
+      }
       const photo = b.photo === undefined ? null : photoData(b.photo);
       if (photo === undefined) return bad('photo 要是 data:image/…;base64,…,不超过 4MB');
       const meta = await createTalk(root, ctx.now(), photo?.data ?? null);

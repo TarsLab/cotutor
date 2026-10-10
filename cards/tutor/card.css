@@ -21,3 +21,10 @@
 .c-tutor .bt-lecture .lb { display:flex; flex-direction:column; gap:1px; min-width:0; }
 .c-tutor .bt-lecture .lb small { font-size:12px; font-weight:700; color:#c95a22; letter-spacing:1px; }
 .c-tutor .bt-lecture .lb small.ln { font-size:13px; font-weight:400; color:var(--dim); letter-spacing:0; }
+/* 常驻入口(《首页设计.md》拍板 18):听写、拍照听写、口语课,不经首页发布、一直在这位老师的卡上 */
+.c-tutor .extras { padding-top:4px; }
+.c-tutor .extras .xl { font-size:13px; color:var(--dim); padding:0 4px; }
+.c-tutor .bt-extra { text-decoration:none; color:var(--ink); background:var(--tint-sand-bg); border-color:var(--tint-sand-line); }
+.c-tutor .bt-extra .lb { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.c-tutor .bt-extra .lb small.ln { font-size:13px; color:var(--dim); }
+.c-tutor .bt-extra .bi { color:#c95a22; }

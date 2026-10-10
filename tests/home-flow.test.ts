@@ -95,6 +95,27 @@ try {
   withFigshot(undefined);
   check('去掉配置入口就没了', (await kidHome()).figshot === null);
 
+  // 常驻入口(《首页设计.md》拍板 18):没配按学科(语文 = 听写);配了照配的;口语课要 talk.enabled
+  type KT = { name: string; extras: string[] };
+  const extrasOf = async (): Promise<Record<string, string>> => Object.fromEntries(((await route('GET', '/api/kid/home', ctx)).json as { tutors: KT[] }).tutors.map((t) => [t.name, t.extras.join('+')]));
+  const e0 = await extrasOf();
+  check('常驻入口:没配时语文有听写,别的没有', e0['chinese-tutor'] === 'dictation' && e0['english-tutor'] === '' && e0['math-tutor'] === '', JSON.stringify(e0));
+  const withTutor = (name: string, patch: Record<string, unknown>): void => {
+    const c = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, Record<string, unknown>> };
+    for (const [k, v] of Object.entries(patch)) { if (v === undefined) delete c.tutors[name][k]; else c.tutors[name][k] = v; }
+    writeFileSync(cfgFile, JSON.stringify(c, null, 2));
+    const t = new Date(Date.now() + 2000 + Math.random() * 1000);
+    utimesSync(cfgFile, t, t);
+  };
+  withTutor('english-tutor', { extras: ['talk', 'dictation', 'talk'] });
+  withTutor('chinese-tutor', { extras: [] });
+  const e1 = await extrasOf();
+  check('配了照配的(去重);口语课没开 talk 不出现;[] = 都不要', e1['english-tutor'] === 'dictation' && e1['chinese-tutor'] === '', JSON.stringify(e1));
+  withTutor('english-tutor', { extras: undefined });
+  withTutor('chinese-tutor', { extras: undefined });
+  const html = (await route('GET', '/', ctx)).html ?? '';
+  check('孩子端页面:没有公共的「拍照听写」卡了,拍照听写在老师卡里', !html.includes('c-snap') && html.includes("'/dictation?tutor='"));
+
   const BAD = `---
 for: 2026-09-18
 ---

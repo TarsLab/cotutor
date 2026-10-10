@@ -116,7 +116,7 @@ export class TalkCall {
     this.timers.push(setTimeout(() => void this.end('max'), CALL_MAX_MS));
     this.state();
     if (!this.items.length) { await this.startChat(); return; }
-    const s = new RealtimeSession({ instructions: readInstructions(this.meta.list, this.deps.kidName), voice: this.deps.config.voice, model: this.deps.config.model, turn: 'manual', endpoint: this.deps.endpoint, env: this.deps.env }, this.events());
+    const s = new RealtimeSession({ instructions: readInstructions(this.meta.list, this.deps.kidName, this.deps.config.note ?? ''), voice: this.deps.config.voice, model: this.deps.config.model, turn: 'manual', endpoint: this.deps.endpoint, env: this.deps.env }, this.events());
     const why = await s.connect();
     if (why !== null) { this.send({ t: 'err', msg: `connect:${why}` }); await this.end(`connect:${why}`); return; }
     this.session = s;
@@ -188,7 +188,7 @@ export class TalkCall {
     this.phase = 'chat';
     this.state();
     const cfg = this.deps.config;
-    const s = new RealtimeSession({ instructions: chatInstructions(this.meta.list, this.deps.kidName, cfg.minutes, readSummary(this.meta.list, read, this.kidLines)), voice: cfg.voice, model: cfg.model, turn: 'semantic_vad', silenceMs: cfg.silenceMs, endpoint: this.deps.endpoint, env: this.deps.env }, this.events());
+    const s = new RealtimeSession({ instructions: chatInstructions(this.meta.list, this.deps.kidName, cfg.minutes, readSummary(this.meta.list, read, this.kidLines), cfg.note ?? ''), voice: cfg.voice, model: cfg.model, turn: 'semantic_vad', silenceMs: cfg.silenceMs, endpoint: this.deps.endpoint, env: this.deps.env }, this.events());
     const why = await s.connect();
     if (this.ended) { s.close(); return; }
     if (why !== null) { this.send({ t: 'err', msg: `connect:${why}` }); await this.end(`connect:${why}`); return; }

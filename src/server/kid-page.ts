@@ -763,12 +763,50 @@ __REEL_JS__
   };
   /** 小课堂的课长:「1 分 40 秒」 */
   const lcLen = (ms) => { const s = Math.floor(ms / 1000); return s >= 60 ? Math.floor(s / 60) + ' 分' + (s % 60 ? ' ' + (s % 60) + ' 秒' : '') : s + ' 秒'; };
-  const tutorCard = (t, buttons, draw) => {
+  // ---- 常驻入口(《首页设计.md》拍板 18):听写、拍照听写、口语课一直在那位老师的卡上,不经首页发布 ----
+  const EXTRA_ICON = { dictation: SVG('<path d="M4 20l4-1 11-11-3-3L5 16z"></path><path d="M14 7l3 3"></path>', 20), photo: SVG('<path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle>', 20), talk: SVG('<path d="M4 5h16v11H9l-5 4z"></path><path d="M8 10h8"></path>', 20) };
+  const extraBtn = (kind, label, sub, on) => h(on.href ? 'a' : 'button', { type: on.href ? null : 'button', class: 'bt bt-extra bt-x-' + kind, href: on.href || null, on: on.click ? { click: on.click } : {} },
+    h('span', { class: 'bi', html: EXTRA_ICON[kind === 'photo' ? 'photo' : kind] }), h('span', { class: 'lb' }, h('span', {}, label), sub ? h('small', { class: 'ln' }, sub) : null));
+  /** 听写卡归哪位老师:卡上写了念的老师、那位老师有常驻听写 → 进他的卡;别的照旧铺在卡区 */
+  const dictationOwner = (c, H) => { const t = c.props && c.props.tutor && H.tutors.find((x) => x.name === c.props.tutor); return t && (t.extras || []).includes('dictation') ? t.name : null; };
+  /** 口语课:有给孩子的口语单才出现(/api/talk,30 秒读一次);点了用最近那份开一次(聊过了就照它再开) */
+  const talkInfo = () => {
+    if (S.talkAt && Date.now() - S.talkAt < 30000) return S.talkLast;
+    S.talkAt = Date.now();
+    api('GET', '/api/talk').then((j) => {
+      const last = j && j.enabled ? (j.talks || []).find((x) => (x.status === 'ready' || x.status === 'done') && x.list.words.length + x.list.sentences.length > 0) : null;
+      const was = S.talkLast; S.talkLast = last || null;
+      if (Boolean(was) !== Boolean(S.talkLast) && S.home && !S.tutor) renderHome();
+    }, () => {});
+    return S.talkLast;
+  };
+  const openTalk = async (el) => {
+    el.disabled = true;
+    try { const m = await api('POST', '/api/talk', { from: 'latest' }); location.href = '/talk?home=1#/kid/' + encodeURIComponent(m.id); }
+    catch { el.disabled = false; S.talkAt = 0; talkInfo(); }
+  };
+  const extrasFor = (t, H) => {
+    const out = [];
+    const extras = t.extras || [];
+    if (extras.includes('dictation')) {
+      const all = (Array.isArray(H.cards) ? H.cards : []).filter((x) => x.kind === 'dictation');
+      for (const c of all) if (dictationOwner(c, H) === t.name) out.push(extraBtn('dictation', '听写', (c.props.count || 0) + ' 个词 · 老师念,你来写', { href: '/dictation?home=' + encodeURIComponent(H.home || '') + '&n=' + all.indexOf(c) }));
+      out.push(extraBtn('photo', '拍照听写', '拍一下要写的词', { href: '/dictation?tutor=' + encodeURIComponent(t.name) }));
+    }
+    if (extras.includes('talk')) {
+      const last = talkInfo();
+      if (last) { const n = last.list.words.length + last.list.sentences.length; const b = extraBtn('talk', '口语课', n + ' 句 · 先跟我读,再聊', { click: () => openTalk(b) }); out.push(b); }
+    }
+    return out;
+  };
+  const tutorCard = (t, buttons, draw, H) => {
     const first = buttons.find((b) => b.kind === 'new');
+    const extras = extrasFor(t, H);
     return h('div', { class: 'c c-tutor' + (t.available ? '' : ' off'), 'data-tutor': t.name, style: 'border-color:' + color(t.subject || t.display) },
       h('div', { class: 'tt', on: { click: () => { if (first) pickButton(t, first); } } }, draw === null ? avatarEl(t) : avatarEl(t, 'draw', draw), h('span', { class: 'nm' }, t.display)),
       h('div', { class: 'bts' }, ...buttons.map((b) => h('button', { type: 'button', class: 'bt bt-' + b.kind, on: { click: () => pickButton(t, b) } }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }),
-        b.kind === 'lecture' ? h('span', { class: 'lb' }, h('small', {}, '小课堂'), h('span', {}, b.label), h('small', { class: 'ln' }, (b.ms ? lcLen(b.ms) + ' · ' : '') + '看完再问老师')) : h('span', {}, b.label)))));
+        b.kind === 'lecture' ? h('span', { class: 'lb' }, h('small', {}, '小课堂'), h('span', {}, b.label), h('small', { class: 'ln' }, (b.ms ? lcLen(b.ms) + ' · ' : '') + '看完再问老师')) : h('span', {}, b.label)))),
+      extras.length ? h('div', { class: 'bts extras' }, h('span', { class: 'xl' }, '每天都在'), ...extras) : null);
   };
   const renderHome = () => {
     const H = S.home;
@@ -778,10 +816,9 @@ __REEL_JS__
     const tcards = cards.filter((c) => c.kind === 'tutor' && byName.has(c.props.tutor));
     // 头像一笔画出来只在打开首页、从老师页回来时画一次;5 秒一轮的刷新照常重铺,不再画
     const draw = S.homeDraw; S.homeDraw = false;
-    $('#tutors').replaceChildren(...tcards.map((c, i) => tutorCard(byName.get(c.props.tutor), Array.isArray(c.props.buttons) ? c.props.buttons : [], draw ? i * 0.15 : null)));
-    // 拍照听写(《wip/听写设想.md》拍板 10):不是首页发布的卡,孩子端总在;拍课本或听写单,认出来的词点一点就开始听写
-    const snap = h('a', { class: 'c c-dictation c-snap', href: '/dictation' }, h('span', { class: 'tg', html: SVG('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 30) }), h('span', { class: 'tx' }, h('b', {}, '拍照听写'), h('span', {}, '拍一下要写的词,老师念给你听')), h('span', { class: 'go' }, '去拍'));
-    $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor').map((c, i) => renderCard(c, i, null, false)), snap);
+    $('#tutors').replaceChildren(...tcards.map((c, i) => tutorCard(byName.get(c.props.tutor), Array.isArray(c.props.buttons) ? c.props.buttons : [], draw ? i * 0.15 : null, H)));
+    // 拍照听写、归了老师的听写卡在老师卡里(常驻入口);首页上不再有公共的那张(《首页设计.md》拍板 18)
+    $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor' && !(c.kind === 'dictation' && dictationOwner(c, H))).map((c, i) => renderCard(c, i, null, false)));
     renderFigshot(H);
   };
   // 给老师换样子(figshot pick):同一台电脑、同一张证书,所以协议和主机跟着本页走,只换端口。

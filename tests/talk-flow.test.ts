@@ -45,6 +45,9 @@ const until = async (f: () => boolean, ms = 4000): Promise<boolean> => { const t
   const list = { words: [{ en: 'red', zh: '红色' }], sentences: [{ en: "It's a red car.", zh: '这是一辆红色的车。' }] };
   const ri = readInstructions(list, 'Ray');
   const ci = chatInstructions(list, 'Ray', 5, readSummary(list, 2, ['red', "it's a red car"]));
+  const nr = readInstructions(list, 'Ray', '这周学颜色。多问他喜欢什么颜色');
+  const nc = chatInstructions(list, 'Ray', 5, '', '这周学颜色。多问他喜欢什么颜色');
+  check('提示词:家长的话(talk.note)两条会话都带,没写就没有这段', nr.includes('家长交代的') && nr.includes('多问他喜欢什么颜色') && nc.includes('多问他喜欢什么颜色') && !ri.includes('家长交代的') && !readInstructions(list, 'Ray', '  ').includes('家长交代的'));
   check('提示词:人设 + 口语单 + 规矩;聊的带跟读情况', ri.includes('Ray') && ri.includes('red(红色)') && ri.includes('不打分') && ri.includes('跟读') && ci.includes('5 分钟') && ci.includes('他跟读了 2 句') && ci.includes('「red」'), ci.slice(-200));
 }
 
@@ -219,6 +222,17 @@ const last = (k: { msgs: Msg[] }, t: string): Msg | undefined => [...k.msgs].rev
   fake.failUpdate = false;
   check('连不上 realtime:err + end,不挂着', ok4 && last(k4, 'end')?.why.startsWith('connect:'), JSON.stringify(k4.msgs));
   await until(() => finished.length === 4, 5000);
+}
+
+// ---- 首页的「口语课」:最近那份口语单,没聊过就用它,聊过了照它再开一次 ----
+{
+  check('from 只认 latest', (await call('POST', '/api/talk', { from: 'x' }))?.status === 400);
+  const a = await call('POST', '/api/talk', { from: 'latest' });
+  const am = a?.json as any;
+  check('最近有内容的那份聊过了:照它再开一次(201,ready,口语单一样,记 from)', a?.status === 201 && am.status === 'ready' && am.from && am.list.sentences[0]?.en === 'Hello!' && am.photo === null, JSON.stringify(am));
+  const b = await call('POST', '/api/talk', { from: 'latest' });
+  check('还没聊过的那份:直接回它,不再开新的', b?.status === 200 && (b.json as any).id === am.id);
+  await call('DELETE', `/api/talk/${am.id}`);
 }
 
 // ---- 关着 / 删 ----

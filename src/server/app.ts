@@ -44,6 +44,8 @@ import { kouboYuanOfDay, readHeard } from './koubo.ts';
 import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { themeFiles } from './theme.ts';
+import { enrichPaints } from '../paint/painter.ts';
+import type { Draw } from '../paint/draw.ts';
 import { enrichLectures, inspectLecture, bakeSectionSoon, ensureBaked, lectureFrameSvg, parseRing, parseSvgMs, type IncomingMark } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
@@ -80,7 +82,7 @@ export interface AppContext {
   reload(): Promise<void>;
 }
 
-export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean; transcribe?: Transcribe } = {}): AppContext {
+export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean; transcribe?: Transcribe; draw?: Draw } = {}): AppContext {
   let mtime = -1;
   const ctx: AppContext = {
     ws,
@@ -221,7 +223,7 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
     if (m) m.section = stripSecrets(partial);
   }
   // 小课堂卡:课读不读得出、那一段的起止,每次现读
-  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichLectures(ctx.ws, m.section); }
+  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichPaints(ctx.ws, tutor, date, m.job, m.at, await enrichLectures(ctx.ws, m.section)); }
   const remaining = Math.max(0, policy.dailyMessages - kidMessageCount(index));
   return { tutor, date, messages, remaining, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
 }
@@ -245,7 +247,7 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
     const m = messages.find((x) => x.job === active!.job);
     if (m) m.section = partial;
   }
-  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichLectures(ctx.ws, m.section); }
+  for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichPaints(ctx.ws, tutor, date, m.job, m.at, await enrichLectures(ctx.ws, m.section), { parent: true }); }
   // 录音卡:家长端旁注要评测全量(档、逐字分、花费),从录音旁边的 heard.json 读;孩子端不走这里。
   // 挂在新的卡对象上:索引有进程内缓存,改原对象判就漏到孩子端了
   for (const m of messages) {

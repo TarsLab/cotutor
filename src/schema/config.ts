@@ -235,6 +235,25 @@ export const DictationSchema = z.object({
 });
 export type DictationConfig = z.infer<typeof DictationSchema>;
 
+/**
+ * 你说我画(《wip/你说我画设想.md》):画图卡(paint)用哪个文生图模型、画多大、一天最多几张、画成什么样。
+ * prompt 是画风、版式、禁忌,一行一个字符串,家长可改;角色与分幅由应用接在后面(src/paint/prompt.ts),改 prompt 不会把分幅弄丢。
+ * 2026-10-11 拿「小熊和小猴种西瓜」四格试:qwen-image-2.0 4 秒、qwen-image-2.0-pro 15 秒,四格里角色都对得上;pro 的表情(低头、脸红)更到位。
+ */
+export const PAINT_PROMPT_DEFAULT = [
+  '儿童绘本插画,水彩加干净的线条,颜色明亮柔和,像小学二年级语文练习册里的看图写话插图。',
+  '人物是可爱的卡通形象,表情和动作夸张一点,一眼看得出在干什么、心情怎样。',
+  '除了圆圈数字,画面里不要任何文字、对话气泡、拟声词。',
+];
+export const PAINT_DEFAULT = { model: 'qwen-image-2.0-pro', size: '1280*1280', daily: 2, prompt: PAINT_PROMPT_DEFAULT };
+export const PaintSchema = z.object({
+  model: z.string().min(1).default(PAINT_DEFAULT.model).describe('画图用的百炼文生图模型(同步接口):qwen-image-2.0-pro 表情更到位(约 15 秒),qwen-image-2.0 快(约 4 秒)'),
+  size: z.string().regex(/^\d{3,4}\*\d{3,4}$/).default(PAINT_DEFAULT.size).describe('图多大,「宽*高」;四格是方的,缺省 1280*1280(总像素在 512*512 到 2048*2048 之间)'),
+  daily: z.number().int().nonnegative().default(PAINT_DEFAULT.daily).describe('一天最多画几张(各位老师加起来;删掉的话题退回);到了画图卡停在分好的几幅,孩子端不说;0 = 不画'),
+  prompt: z.array(z.string()).min(1).default(PAINT_PROMPT_DEFAULT).describe('画风与禁忌:一行一个字符串;版式(几格怎么排)、角色、分幅由应用接在后面,不用写'),
+});
+export type PaintConfig = z.infer<typeof PaintSchema>;
+
 export const CotutorConfigSchema = z
   .object({
     version: z.literal(1),
@@ -272,6 +291,7 @@ export const CotutorConfigSchema = z
       .describe('给老师换样子(figshot pick):它在这台电脑的哪个端口(缺省 8477)。配了孩子端首页多一张「给老师们换个样子」,figshot 没开着就不出现;不配就没有这张卡'),
     koubo: KouboSchema.default(KOUBO_DEFAULT).describe('录音卡的评测命令模板(口播老师):card 一条龙评一条录音(占位 {audio} {text} {mode} {pairs}),timeoutMs 一条最多等多久;门槛与花费上限在 workspace 根的 koubo.json'),
     dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型与要求(prompt 一行一个字符串,家长可改,改了不用重起服务)'),
+    paint: PaintSchema.default(PAINT_DEFAULT).describe('你说我画:画图卡(paint)用的文生图模型、尺寸、一天几张、画风(prompt 一行一个字符串,家长可改,改了不用重起服务)'),
     talk: TalkSchema.default(TALK_DEFAULT).describe('口语课(/talk):家长拍一张今天学的,孩子先跟读、再和 realtime 模型用这些词聊;enabled 出厂 false;要百炼 key 与业务空间 id(DASHSCOPE_WORKSPACE_ID 或 voxtell 的配置)'),
   })
   .superRefine((c, ctx) => {

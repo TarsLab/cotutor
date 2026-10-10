@@ -40,6 +40,8 @@ import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTE
 import { DubQueue, LineDubber } from './tts.ts';
 import { WarmPool, type Spare } from './warm.ts';
 import { continueContext } from './home.ts';
+import { makeDraw, type Draw } from '../paint/draw.ts';
+import { paintLines, startPaints } from '../paint/painter.ts';
 
 export class BusyError extends Error {
   constructor(tutor: string, job: string) {
@@ -302,7 +304,7 @@ export class Runner {
   /** 还在后台跑的资产生成(测试与关服前 flush) */
   private readonly background = new Set<Promise<void>>();
   private readonly getWs: () => Workspace;
-  private readonly opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number; warm?: boolean };
+  private readonly opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number; warm?: boolean; draw?: Draw };
   private readonly listeners = new Set<(e: RunEventEnvelope) => void>();
   /** 预热的老师进程(《工作流程.md》§四「预热」):一位老师最多一个 */
   readonly spares: WarmPool;
@@ -314,10 +316,13 @@ export class Runner {
   }
   /** 录音卡的评测队列(《口播老师设计.md》§4) */
   readonly koubo: KouboQueue;
-  constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number; warm?: boolean } = {}) {
+  /** 画图卡交给谁画(《wip/你说我画设想.md》§6;测试与 mock 注入假的) */
+  readonly draw: Draw;
+  constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number; warm?: boolean; draw?: Draw } = {}) {
     this.getWs = getWs;
     this.opts = opts;
     this.koubo = new KouboQueue(opts.env);
+    this.draw = opts.draw ?? makeDraw({ env: opts.env });
     this.spares = new WarmPool({ idleMs: opts.warmIdleMs });
   }
 
@@ -449,6 +454,11 @@ export class Runner {
       const extra = card?.kind === 'record' && typeof audio === 'string' ? await this.koubo.take(ws.root, ws.config.koubo, join(ws.root, audio), card.props as RecordProps, { noStart: Boolean(input.replayOf) }) : undefined;
       return { card: id, text: card ? describeCard(card, c.file.state, extra) : JSON.stringify(c.file.state) };
     }));
+    // 画图卡(《wip/你说我画设想.md》):这个话题上一节有画图卡,告诉老师画好没有(老师看不到图)
+    if (!fresh && !input.bookkeep) {
+      const prevAt = index.messages.map((m, i) => ({ m, th: known[i] })).reverse().find((x) => x.th === thread && x.m.result === 'ok' && x.m.section);
+      if (prevAt?.m.section?.cards.some((c) => c.kind === 'paint')) for (const line of await paintLines(ws, tutor, date, prevAt.m.job, prevAt.m.section)) cards.push({ card: line.slice(0, line.indexOf(' ')), text: line.slice(line.indexOf(' ') + 1) });
+    }
     if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
     if (seen.length) { pack.photos = seen; pack.photoFiles = seen.map((p) => join(ws.root, p)); }
     if (input.home) pack.home = input.home;
@@ -846,6 +856,12 @@ export class Runner {
         this.background.add(bg);
         void bg.finally(() => this.background.delete(bg));
       }
+    }
+    // 画图卡:后台画,一张一张排着(一天 paint.daily 张);回放不画
+    if (kidView.section?.cards.some((c) => c.kind === 'paint')) {
+      const bg = startPaints(ws, tutor, date, job, kidView.section, { draw: this.draw, now: this.opts.now, replay: Boolean(latest.messages.find((m) => m.job === job)?.replayOf) });
+      this.background.add(bg);
+      void bg.finally(() => this.background.delete(bg));
     }
     return next;
   }

@@ -28,6 +28,8 @@ try {
   if (!LOUD) await page.addInitScript(SILENT_SPEECH); // 合成声不出声(_quiet.mjs);WebKit 没有 --mute-audio
   page.on('pageerror', (e) => console.log('ERR', e.message));
   await page.goto(`${base}/`);
+  await page.click('#kstack .sa[data-tutor="math-tutor"]');
+  await page.waitForTimeout(900);
   await page.click('.bt-lecture');
   const fr = page.frameLocator('#lc-frame');
   await fr.locator('.lc-start').waitFor({ timeout: 30000 });

@@ -9,7 +9,7 @@ import { cardLabel, describeCard, stripSecrets, type TutorButton } from '../card
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { conversationFiles, localDate, threads } from '../lib/conversation.ts';
 import { kidQuestions } from '../lib/diary.ts';
-import { arrangeHome, dropFixes, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, parseHome, threadKey, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
+import { arrangeHome, dropFixes, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, parseHome, threadKey, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
 import { kidConversation, kidThreads } from '../lib/kid-view.ts';
 import { HOME_ID_RE, PublishedHomeSchema, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
@@ -144,11 +144,26 @@ export function historyFile(ws: Workspace, id: string): string | null {
   return HOME_ID_RE.test(id) ? join(homeFiles(ws).history, `${id}.md`) : null;
 }
 
+/** 首页上的一张卡;非老师卡带 owner(《首页设计.md》拍板 19:写在哪张老师卡后面归哪位,听写卡写了念的老师归那位;null = 公共的) */
+export type KidHomeCard = BoardCard & { owner?: string | null };
+
 export interface KidHomeView {
   /** 发布的 id;缺省首页 / 预览草稿 = null */
   home: string | null;
-  /** 老师卡在前(props.buttons 是孩子端的按钮),其余卡照文件顺序;答案与讲法已剥(keepBriefs 除外) */
-  cards: BoardCard[];
+  /** 老师卡在前(props.buttons 是孩子端的按钮;props.news = 家长这次给他排了东西、孩子发布以来还没找过他),其余卡照文件顺序;答案与讲法已剥(keepBriefs 除外) */
+  cards: KidHomeCard[];
+}
+
+/** 发布以来孩子有没有找过这位老师(发布那天起每天的索引里有孩子的话,且晚于发布时刻);最多往回看 7 天 */
+async function talkedSince(ws: Workspace, tutor: string, since: string, now: Date): Promise<boolean> {
+  const from = localDate(new Date(since));
+  for (let d = 0; d < 7; d++) {
+    const date = localDate(new Date(now.getTime() - d * 86400000));
+    if (date < from) break;
+    const index = await readIndex(ws, tutor, date).catch(() => null);
+    if (index?.messages.some((m) => m.from === 'kid' && m.at >= since)) return true;
+  }
+  return false;
 }
 
 /** 这位老师今天孩子能接着的话题(孩子端最后一条所在、孩子在里面说过话的) */
@@ -170,6 +185,7 @@ async function recentThread(ws: Workspace, tutor: string, today: string): Promis
 export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'published' | 'draft'; keepBriefs?: boolean } = {}): Promise<KidHomeView> {
   const today = localDate(now);
   let id: string | null = null;
+  let publishedAt: string | null = null;
   let cards: BoardCard[] = [];
   if (opts.source === 'draft') {
     const md = await readDraft(ws);
@@ -178,6 +194,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     const { home } = await readPublished(ws);
     if (home) {
       id = home.id;
+      publishedAt = home.publishedAt;
       cards = home.cards;
     }
   }
@@ -190,10 +207,12 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     lectures.set(id, l);
     if (l && !l.video && !l.baked) bakeSoon(ws.dirs.bundles, id);
   }
-  const out: BoardCard[] = [];
+  const ownerOf = homeOwners(cards, tutors);
+  const owners = new Map(cards.map((c, i) => [c, ownerOf[i]]));
+  const out: KidHomeCard[] = [];
   for (const c of arrangeHome(cards, tutors)) {
     if (c.kind !== 'tutor') {
-      out.push(stripSecrets({ cards: [c], lines: [] }).cards[0]);
+      out.push({ ...stripSecrets({ cards: [c], lines: [] }).cards[0], owner: owners.get(c) ?? null });
       continue;
     }
     const name = String(c.props.tutor);
@@ -203,7 +222,10 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
       lecture: (bundle) => Boolean(lectures.get(bundle)),
       keepBriefs: opts.keepBriefs,
     }).map((b) => { const l = b.kind === 'lecture' ? lectures.get(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.clock.total, ...(l.video ? { video: true as const } : {}) } : b; });
-    out.push({ kind: 'tutor', props: { tutor: name, buttons } });
+    // 橙点:这份首页给他排了按钮或卡,而发布以来孩子还没找过他
+    const arranged = buttons.some((b) => typeof b.id === 'number') || cards.some((x) => x.kind !== 'tutor' && owners.get(x) === name);
+    const news = Boolean(publishedAt && arranged && !(await talkedSince(ws, name, publishedAt, now)));
+    out.push({ kind: 'tutor', props: { tutor: name, buttons, ...(news ? { news: true } : {}) } });
   }
   return { home: id, cards: out };
 }
@@ -358,7 +380,8 @@ export function formatCheck(ws: Workspace, check: HomeCheck, title: string, kid:
     // 听写卡在孩子端剥了字,家长看的这份从草稿里的原卡取词表
     const lists = check.doc.cards.filter((x) => x.kind === 'dictation');
     let k = 0;
-    for (const c of rest) out.push(`  ${c.kind}「${cardLabel(c.kind === 'dictation' ? (lists[k++] ?? c) : c)}」`);
+    // 归哪位老师(拍板 19):孩子端只在那位老师展开时看到;公共的放在头像那一叠上面
+    for (const c of rest) out.push(`  ${c.kind}「${cardLabel(c.kind === 'dictation' ? (lists[k++] ?? c) : c)}」 → ${c.owner ? `${display(c.owner)}的卡里` : '公共(头像上面)'}`);
   }
   out.push(`家长段:${check.doc.note ? `${check.doc.note.split('\n').length} 行` : '没有'}`);
   const fixes = check.issues.filter((i) => i.level === 'fix');

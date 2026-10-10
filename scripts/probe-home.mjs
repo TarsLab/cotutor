@@ -2,7 +2,7 @@
 /**
  * 首页(《首页设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 临时 workspace + HTTP serve → 语文老师先讲一轮(给「接着」一个话题)→ 写草稿、cotutor home publish →
- * Chrome 开孩子端:老师卡置顶、按钮齐、常驻入口在语文卡里、讲法不在页面里;手机与平板各截一张 →
+ * Chrome 开孩子端(C 版,头像叠起来):叠的顺序、只展开最前那位、卡的归属、橙点;点后面那位抽出换到最前;手机与平板各截一张 →
  * 点「新话题」是空白老师页 → 回首页点开场按钮:老师页打开、按钮上的字发出去、索引里那条带 via →
  *
  * 用法:node scripts/probe-home.mjs [--out <截图目录>] [--keep](留下临时 workspace 与 serve)
@@ -56,6 +56,11 @@ try {
 for: ${day}
 ---
 
+\`\`\`text
+# 今晚
+先读课文,再练两道题
+\`\`\`
+
 \`\`\`tutor chinese-tutor
 我要预习小蝌蚪找妈妈
 讲法: 第 22 课。先带他把 1–3 自然段读顺,重点字 塘、脑、袋
@@ -65,11 +70,6 @@ for: ${day}
 \`\`\`tutor math-tutor
 再练两道退位减法
 讲法: 出 52−7、80−3,先让他说怎么想
-\`\`\`
-
-\`\`\`text
-# 今晚
-先读课文,再练两道题
 \`\`\`
 
 \`\`\`tianzige
@@ -95,7 +95,11 @@ for: ${day}
   const evaluate = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails.exception?.description ?? r.result.exceptionDetails)); return r.result?.result?.value; };
   const shot = async (name) => { const r = await send('Page.captureScreenshot', { format: 'png' }); writeFileSync(join(shots, name), Buffer.from(r.result.data, 'base64')); return join(shots, name); };
   const device = async (w, h, dsf, mobile) => { await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: dsf, mobile }); await sleep(400); };
-  const open = async (url) => { await send('Page.navigate', { url }); for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelectorAll('.c-tutor').length > 0 || !!document.querySelector('#home-side')`)) break; await sleep(250); } await sleep(300); };
+  const open = async (url) => { await send('Page.navigate', { url }); for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelectorAll('#kcard .bt').length > 0`)) break; await sleep(250); } await sleep(1200); };
+  // 手指点:CDP 鼠标事件走命中判定(叠着的头像只露出左边一条,点到的是谁由页面说了算)
+  const tapAt = async (x, y) => { for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 }); };
+  const tapAvatar = async (name) => { const r = await evaluate(`(() => { const b = document.querySelector('#kstack .sa[data-tutor="${name}"]').getBoundingClientRect(); return { x: b.left + 12, y: b.top + b.height / 2 }; })()`); await tapAt(r.x, r.y); };
+  const stack = () => evaluate(`(() => { const els = [...document.querySelectorAll('#kstack .sa')].sort((a, b) => a.style.getPropertyValue('--slot') - b.style.getPropertyValue('--slot')); return { order: els.map((e) => e.dataset.tutor), front: els.filter((e) => e.classList.contains('front')).map((e) => e.dataset.tutor), dots: els.filter((e) => e.querySelector('.dot')).map((e) => e.dataset.tutor), card: document.querySelector('#kcard').dataset.tutor, name: document.querySelector('#knm').textContent, buttons: [...document.querySelectorAll('#kcard .bt:not(.bt-extra)')].map((b) => b.textContent), extras: [...document.querySelectorAll('#kcard .bt-extra')].map((b) => b.getAttribute('href')), owned: [...document.querySelectorAll('#kcard .kcards > *')].map((c) => c.className), shared: [...document.querySelectorAll('#hcards > *')].map((c) => c.className), brief: document.body.innerHTML.includes('重点字') }; })()`);
   await send('Runtime.enable');
   await send('Page.enable');
   await quiet(send);
@@ -103,28 +107,49 @@ for: ${day}
   // ---- 孩子端首页 ----
   await device(390, 844, 2, true);
   await open(`${base}/`);
-  const view = await evaluate(`(() => ({ tutors: [...document.querySelectorAll('.c-tutor')].map((c) => ({ who: c.dataset.tutor, buttons: [...c.querySelectorAll('.bt:not(.bt-extra)')].map((b) => b.textContent), extras: [...c.querySelectorAll('.bt-extra')].map((b) => b.getAttribute('href')) })), cards: [...document.querySelectorAll('#hcards > *')].map((c) => c.className), html: document.body.innerHTML.includes('重点字') }))()`);
-  ok('老师卡置顶:语文 / 数学 / 英语(补的),按钮齐(接着的就是今天那个话题,不再加「接着刚才的」)', view.tutors.map((t) => t.who).join() === 'chinese-tutor,math-tutor,english-tutor' && view.tutors[0].buttons.join('|') === '新话题|我要预习小蝌蚪找妈妈|接着讲刚才的板书' && view.tutors[2].buttons.join('|') === '新话题', JSON.stringify(view.tutors));
-  ok('常驻入口:语文老师卡里有「拍照听写」(带他的名字),别的老师没有;首页没有公共的拍照听写', view.tutors[0].extras.join() === '/dictation?tutor=chinese-tutor' && view.tutors[1].extras.length === 0 && view.tutors[2].extras.length === 0 && !view.cards.some((c) => c.includes('c-snap')), JSON.stringify(view.tutors.map((t) => t.extras)));
-  ok('其余卡:一段字、田字格;讲法不在页面里', view.cards.length === 2 && view.cards[0].includes('c-text') && view.cards[1].includes('c-tianzige') && !view.html, JSON.stringify(view.cards));
+  const v0 = await stack();
+  ok('叠的顺序:家长排第一的(语文)在最前,排第二的(数学)紧挨在后面,补的英语在最后;只展开语文', v0.order.join() === 'english-tutor,math-tutor,chinese-tutor' && v0.front.join() === 'chinese-tutor' && v0.card === 'chinese-tutor' && v0.name === '语文老师', JSON.stringify(v0));
+  ok('语文的卡:按钮齐(接着的就是今天那个话题,不再加「接着刚才的」);「每天都在」有拍照听写;讲法不在页面里', v0.buttons.join('|') === '新话题|我要预习小蝌蚪找妈妈|接着讲刚才的板书' && v0.extras.join() === '/dictation?tutor=chinese-tutor' && !v0.brief, JSON.stringify(v0.buttons));
+  ok('卡的归属:写在老师卡前面的一段字是公共的(叠上面);跟在数学后面的田字格不在语文卡里', v0.shared.length === 1 && v0.shared[0].includes('c-text') && v0.owned.length === 0, JSON.stringify([v0.shared, v0.owned]));
+  ok('橙点:数学(家长排了按钮、孩子还没找过)亮;最前的语文、什么都没排的英语不亮', v0.dots.join() === 'math-tutor', JSON.stringify(v0.dots));
   console.log('  ', await shot('home-phone.png'));
+
+  // ---- 点后面的数学:抽出 → 换到最前 ----
+  await tapAvatar('math-tutor');
+  await sleep(70);
+  const mid = await evaluate(`({ lift: document.querySelector('#kstack .sa[data-tutor="math-tutor"]').classList.contains('lift'), leaving: document.querySelector('#kcard').classList.contains('leaving') })`);
+  ok('抽出那一下(0–160 ms):数学抬起来、卡里淡出', mid.lift && mid.leaving, JSON.stringify(mid));
+  await sleep(900);
+  const v1 = await stack();
+  ok('换位:数学到最前,语文往左让一格,英语不动;卡换成数学的,田字格归数学、在他的卡里;橙点灭', v1.order.join() === 'english-tutor,chinese-tutor,math-tutor' && v1.front.join() === 'math-tutor' && v1.card === 'math-tutor' && v1.name === '数学老师' && v1.buttons.join('|') === '新话题|再练两道退位减法' && v1.owned.length === 1 && v1.owned[0].includes('c-tianzige') && v1.dots.length === 0 && v1.extras.length === 0, JSON.stringify(v1));
+  const bite = await evaluate(`document.querySelector('#kstack .sa[data-tutor="math-tutor"]').classList.contains('bite')`);
+  ok('张嘴:新的最前那位开口一张一合', bite);
+  await tapAvatar('math-tutor');
+  await sleep(400);
+  ok('点最前那位:不换人', (await stack()).order.join() === v1.order.join());
+  await sleep(5600);
+  const v2 = await stack();
+  ok('5 秒一轮的刷新:顺序与展开的老师不变', v2.order.join() === v1.order.join() && v2.card === 'math-tutor', JSON.stringify(v2.order));
   await device(1180, 820, 1, false);
   await sleep(300);
-  const cols = await evaluate(`getComputedStyle(document.querySelector('#tutors')).gridTemplateColumns.split(' ').length`);
-  ok('平板横屏:老师卡并排', cols >= 2, `${cols} 列`);
+  const sz = await evaluate(`getComputedStyle(document.querySelector('#kst')).getPropertyValue('--sz').trim()`);
+  ok('平板横屏:头像大一号', sz === '104px', sz);
   console.log('  ', await shot('home-tablet.png'));
 
-  // ---- 新话题:空白老师页 ----
+  // ---- 新话题:空白老师页;回来停在刚才那位 ----
   await device(390, 844, 2, true);
-  await evaluate(`document.querySelector('.c-tutor[data-tutor="math-tutor"] .bt-new').click()`);
+  await evaluate(`document.querySelector('#kcard .bt-new').click()`);
   await sleep(600);
   const blank = await evaluate(`({ on: document.querySelector('#tutor').classList.contains('on'), blank: document.querySelector('#board .blank b')?.textContent, mo: document.querySelector('#c-mo').textContent })`);
   ok('新话题:空白老师页,等孩子开口', blank.on && blank.blank === '想问什么?' && blank.mo === '新话题', JSON.stringify(blank));
   await evaluate(`document.querySelector('#back').click()`);
-  await sleep(800);
+  await sleep(1500);
+  ok('从老师页回来:还是数学在最前', (await stack()).card === 'math-tutor');
+  await tapAvatar('chinese-tutor');
+  await sleep(900);
 
   // ---- 开场按钮:老师页打开,按钮上的字发出去 ----
-  await evaluate(`[...document.querySelectorAll('.c-tutor[data-tutor="chinese-tutor"] .bt')].find((b) => b.textContent.includes('预习')).click()`);
+  await evaluate(`[...document.querySelectorAll('#kcard[data-tutor="chinese-tutor"] .bt')].find((b) => b.textContent.includes('预习')).click()`);
   await sleep(500);
   const d = await settle('chinese-tutor');
   const idx = (await api('GET', '/api/conversations/chinese-tutor/today')).json?.index;

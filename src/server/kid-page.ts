@@ -152,6 +152,36 @@ const PAGE = `<!doctype html>
   .lc-still { width:100%; height:100%; }
   .lc-still img { width:100%; height:100%; display:block; object-fit:contain; }
   #rest { display:none; text-align:center; color:var(--dim); font-size:16px; padding:12px 0; }
+  /* 首页 C 版(《首页设计.md》拍板 16):头像横着叠,最前(最右)那位露出开口、展开成下面那张卡;后面几位的开口被下一位的脸盖住。
+     换人 = 抽出(.lift,0–160 ms)→ 换位(left / transform 过渡 320 ms,略回弹)→ 张嘴(.bite)+ 名字从开口滑出(.knm.in)→ 按钮一个接一个进场(.up,错开 40 ms) */
+  #kst { display:flex; align-items:center; gap:10px; --sz:84px; --step:52px; }
+  #kst[hidden] { display:none; }
+  .kstack { position:relative; flex:none; height:calc(var(--sz) + 24px); width:calc(var(--step) * (var(--n, 1) - 1) + var(--sz)); }
+  .kstack .sa { position:absolute; top:12px; left:calc(var(--step) * var(--slot, 0)); z-index:var(--z, 1); width:var(--sz); height:var(--sz); padding:0; border:0; background:transparent; cursor:pointer; transform:scale(.86); transition:left .32s cubic-bezier(.3,1.25,.5,1), transform .32s cubic-bezier(.3,1.25,.5,1); -webkit-tap-highlight-color:transparent; }
+  .kstack .sa.front { transform:none; }
+  .kstack .sa.lift { z-index:10; transform:translateY(-16px) scale(1.06); transition:left .32s cubic-bezier(.3,1.25,.5,1), transform .16s ease-out; }
+  .kstack .sa:not(.front):not(.lift):active { transform:scale(.81); transition-duration:.08s; }
+  .kstack .sa.front:active .ring circle { transform:rotate(8deg); transition-duration:.08s; }
+  .kstack .sa .av { width:100%; height:100%; font-size:calc(var(--sz) * .4); }
+  .kstack .sa .av .face { box-shadow:0 0 0 4px var(--paper); }
+  .kstack .sa.bite .ring circle { animation:av-bite .3s ease-in-out .14s both; }
+  @keyframes av-bite { 0%,100% { stroke-dasharray:221.17 55.29; transform:rotate(36deg); } 45% { stroke-dasharray:193.52 82.94; transform:rotate(54deg); } }
+  .kstack .sa.off .av, body.offline .kstack .sa .av { filter:grayscale(1); opacity:.4; }
+  .kstack .sa.off .ring circle, body.offline .kstack .sa .ring circle { transform:rotate(126deg); }
+  body.offline .kstack .sa { pointer-events:none; }
+  .kstack .dot { position:absolute; top:calc(var(--sz) * .02); left:calc(var(--sz) * .2); width:14px; height:14px; border-radius:50%; background:var(--accent); border:3px solid var(--paper); }
+  .knm { font-size:24px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; transition:opacity .12s ease-in; }
+  .knm.in { animation:k-nm .24s cubic-bezier(.2,.8,.2,1) var(--nd, 0s) both; }
+  @keyframes k-nm { from { opacity:0; transform:translateX(-16px); } to { opacity:1; transform:none; } }
+  #kcard { transition:border-color .24s ease .14s, opacity .12s ease-in; }
+  #kcard[hidden] { display:none; }
+  #kcard.leaving, .knm.leaving { opacity:0; }
+  #kcard .kc { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
+  #kcard .kcards { margin-top:4px; }
+  #kcard .up { animation:k-up .22s cubic-bezier(.2,.8,.2,1) var(--ud, 0s) both; }
+  @keyframes k-up { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  .tutors:empty { display:none; }
+  @media (prefers-reduced-motion:reduce) { .kstack .sa, #kcard, .knm { transition:none; } .kstack .sa.bite .ring circle, .knm.in { animation:none; } #kcard .up { animation-duration:.12s; animation-delay:0s; } }
   /* 给老师换样子(figshot):不是首页发布的卡,是 cotutor.json 配了 figshot 就有的固定入口;figshot 没开着就不出现 */
   .c.c-figshot { flex-direction:row; align-items:center; gap:16px; text-decoration:none; color:var(--ink); background:#fff3e8; border-color:var(--accent); }
   .c-figshot[hidden] { display:none; }
@@ -517,6 +547,10 @@ const PAGE = `<!doctype html>
     #home { max-width:1040px; padding:calc(env(safe-area-inset-top) + 40px) 48px 40px; gap:24px; }
     #home h1 { font-size:22px; }
     #home .tutors { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; align-items:start; }
+    #kst { --sz:104px; --step:64px; gap:14px; }
+    .knm { font-size:30px; }
+    #kcard { padding:24px 28px; }
+    #kcard .kc.two { grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:28px; }
     #home .hcards { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
     .tb.l { left:calc(env(safe-area-inset-left) + 20px); } .tb.r { right:calc(env(safe-area-inset-right) + 20px); }
     #menu .panel { right:calc(env(safe-area-inset-right) + 20px); }
@@ -526,10 +560,12 @@ const PAGE = `<!doctype html>
 </style>
 <div id="home">
   <h1 id="title">__TITLE__</h1>
+  <div class="hcards" id="hcards"></div>
+  <div id="kst" hidden><div class="kstack" id="kstack"></div><span class="knm" id="knm"></span></div>
+  <div class="c c-tutor kcard" id="kcard" hidden></div>
   <div class="tutors" id="tutors"></div>
   <p id="rest">老师们休息中</p>
   <a class="c c-figshot" id="figshot" hidden><span class="avs"></span><span class="tx"><b>给老师们换个样子</b><span>帽子、脸、衣服,都由你来挑</span></span><span class="go">去搭</span></a>
-  <div class="hcards" id="hcards"></div>
 </div>
 <div id="toast"></div>
 <iframe id="lc-frame" hidden title="小课堂"></iframe>
@@ -653,7 +689,8 @@ __REEL_JS__
   };
   let bootId = null, stale = false;
   const PALETTE = ['#e8743b', '#3b82e8', '#2fa36b', '#b45fd1', '#d9a520', '#e0508a'];
-  const FIXED = { '语文': '#e0508a', '数学': '#3b82e8', '英语': '#2fa36b' };
+  // 学科色调深过(《首页设计.md》拍板 21):白字按钮压在上面要看得清
+  const FIXED = { '语文': '#c43c74', '数学': '#2f6fd6', '英语': '#1f8a4c' };
   const color = (s) => { if (FIXED[s]) return FIXED[s]; let x = 0; for (const ch of s || '') x = (x * 31 + ch.codePointAt(0)) >>> 0; return PALETTE[x % PALETTE.length]; };
   /** 老师头像:学科色的 C 形开口环 + 白底圆里的图或字(样子见 .av 的样式);cls 'draw' = 一笔画出来,delay 是错开的秒数 */
   const AV_RING = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>';
@@ -767,8 +804,6 @@ __REEL_JS__
   const EXTRA_ICON = { dictation: SVG('<path d="M4 20l4-1 11-11-3-3L5 16z"></path><path d="M14 7l3 3"></path>', 20), photo: SVG('<path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle>', 20), talk: SVG('<path d="M4 5h16v11H9l-5 4z"></path><path d="M8 10h8"></path>', 20) };
   const extraBtn = (kind, label, sub, on) => h(on.href ? 'a' : 'button', { type: on.href ? null : 'button', class: 'bt bt-extra bt-x-' + kind, href: on.href || null, on: on.click ? { click: on.click } : {} },
     h('span', { class: 'bi', html: EXTRA_ICON[kind === 'photo' ? 'photo' : kind] }), h('span', { class: 'lb' }, h('span', {}, label), sub ? h('small', { class: 'ln' }, sub) : null));
-  /** 听写卡归哪位老师:卡上写了念的老师、那位老师有常驻听写 → 进他的卡;别的照旧铺在卡区 */
-  const dictationOwner = (c, H) => { const t = c.props && c.props.tutor && H.tutors.find((x) => x.name === c.props.tutor); return t && (t.extras || []).includes('dictation') ? t.name : null; };
   /** 口语课:有给孩子的口语单才出现(/api/talk,30 秒读一次);点了用最近那份开一次(聊过了就照它再开) */
   const talkInfo = () => {
     if (S.talkAt && Date.now() - S.talkAt < 30000) return S.talkLast;
@@ -785,40 +820,130 @@ __REEL_JS__
     try { const m = await api('POST', '/api/talk', { from: 'latest' }); location.href = '/talk?home=1#/kid/' + encodeURIComponent(m.id); }
     catch { el.disabled = false; S.talkAt = 0; talkInfo(); }
   };
+  /** 这位老师卡上「每天都在」那栏:归他的听写卡(《首页设计.md》拍板 19)、常驻的拍照听写与口语课(拍板 18) */
   const extrasFor = (t, H) => {
     const out = [];
     const extras = t.extras || [];
-    if (extras.includes('dictation')) {
-      const all = (Array.isArray(H.cards) ? H.cards : []).filter((x) => x.kind === 'dictation');
-      for (const c of all) if (dictationOwner(c, H) === t.name) out.push(extraBtn('dictation', '听写', (c.props.count || 0) + ' 个词 · 老师念,你来写', { href: '/dictation?home=' + encodeURIComponent(H.home || '') + '&n=' + all.indexOf(c) }));
-      out.push(extraBtn('photo', '拍照听写', '拍一下要写的词', { href: '/dictation?tutor=' + encodeURIComponent(t.name) }));
-    }
+    const all = (Array.isArray(H.cards) ? H.cards : []).filter((x) => x.kind === 'dictation');
+    for (const c of all) if (c.owner === t.name) out.push(extraBtn('dictation', '听写', (c.props.count || 0) + ' 个词 · 老师念,你来写', { href: '/dictation?home=' + encodeURIComponent(H.home || '') + '&n=' + all.indexOf(c) }));
+    if (extras.includes('dictation')) out.push(extraBtn('photo', '拍照听写', '拍一下要写的词', { href: '/dictation?tutor=' + encodeURIComponent(t.name) }));
     if (extras.includes('talk')) {
       const last = talkInfo();
       if (last) { const n = last.list.words.length + last.list.sentences.length; const b = extraBtn('talk', '口语课', n + ' 句 · 先跟我读,再聊', { click: () => openTalk(b) }); out.push(b); }
     }
     return out;
   };
-  const tutorCard = (t, buttons, draw, H) => {
-    const first = buttons.find((b) => b.kind === 'new');
+  const tutorButton = (t, b) => h('button', { type: 'button', class: 'bt bt-' + b.kind, on: { click: () => pickButton(t, b) } }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }),
+    b.kind === 'lecture' ? h('span', { class: 'lb' }, h('small', {}, '小课堂'), h('span', {}, b.label), h('small', { class: 'ln' }, (b.ms ? lcLen(b.ms) + ' · ' : '') + '看完再问老师')) : h('span', {}, b.label));
+
+  // ---- 首页 C 版(《首页设计.md》拍板 16、17,动画说明见原型「C · 切换动画说明」):老师头像横着叠,最前(最右)那位展开成下面那张卡 ----
+  // 叠的顺序 K.order:最后一个在最前。进首页时家长排第一的在最前、排第二的紧挨在后面;点过谁谁到最前(最近点过的在前);
+  // 从老师页回来不变,刷新页面回到家长排的。头像元素常驻(换位靠 CSS 过渡 left / transform),5 秒一轮的刷新只在内容变了时重画卡、不放动画。
+  const K = { order: null, els: new Map(), sig: '', lifting: false, timer: 0 };
+  const reduced = () => Boolean(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  // 橙点「看过了」记在这台设备上(换了一份首页就清):家长排了东西、孩子还没找过这位老师时亮,换到最前就灭
+  const SEEN_KEY = 'kid-home-seen';
+  const seenOf = (home) => { try { const j = JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); return j.home === home && Array.isArray(j.tutors) ? j.tutors : []; } catch { return []; } };
+  const markSeen = (home, name) => { try { const t = seenOf(home); if (!t.includes(name)) localStorage.setItem(SEEN_KEY, JSON.stringify({ home, tutors: [...t, name] })); } catch {} };
+  const homeTutorsOf = (H) => {
+    const byName = new Map(H.tutors.map((t) => [t.name, t]));
+    return (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind === 'tutor' && byName.has(c.props.tutor)).map((c) => ({ t: byName.get(c.props.tutor), card: c }));
+  };
+  const renderStack = (H, list, draw) => {
+    const box = $('#kstack');
+    const front = K.order[K.order.length - 1];
+    const seen = seenOf(H.home);
+    for (const [n, el] of K.els) if (!K.order.includes(n)) { el.remove(); K.els.delete(n); }
+    K.order.forEach((n, slot) => {
+      const { t, card } = list.find((x) => x.t.name === n);
+      const sig = [t.avatar, t.subject, t.display].join('|');
+      let el = K.els.get(n);
+      // 画出来(打开首页、从老师页回来):从后往前一位一位画,最前那位最后
+      if (!el || el.dataset.sig !== sig || draw) {
+        const nel = h('button', { type: 'button', class: 'sa', 'data-tutor': n, 'data-sig': sig, 'aria-label': t.display, on: { click: () => pickTutor(n) } }, draw ? avatarEl(t, 'draw', slot * 0.12) : avatarEl(t));
+        if (el) el.replaceWith(nel); else box.append(nel);
+        el = nel; K.els.set(n, el);
+      } else el.querySelector('.av').classList.remove('draw'); // 之后的刷新摘掉(动画早放完了,摘了也不会重放)
+      el.style.setProperty('--slot', slot); el.style.setProperty('--z', slot + 1);
+      el.classList.toggle('front', n === front);
+      el.classList.toggle('off', !t.available);
+      const dot = Boolean(card.props.news) && n !== front && !seen.includes(n);
+      const had = el.querySelector('.dot');
+      if (dot && !had) el.append(h('span', { class: 'dot' })); else if (!dot && had) had.remove();
+    });
+    box.style.setProperty('--n', K.order.length);
+  };
+  /** 最前那位的名字与卡;mode = draw(打开首页)/ switch(换了人)放进场动画,null = 内容没变就不动 */
+  const renderFront = (H, list, mode) => {
+    const n = K.order[K.order.length - 1];
+    const { t, card } = list.find((x) => x.t.name === n);
+    const buttons = Array.isArray(card.props.buttons) ? card.props.buttons : [];
+    const owned = (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind !== 'tutor' && c.owner === n);
+    const sig = JSON.stringify([n, t.available, buttons, owned, t.extras, S.talkLast && S.talkLast.id, H.home]);
+    if (!mode && sig === K.sig) return;
+    K.sig = sig;
+    const el = $('#kcard'); const nm = $('#knm');
+    el.hidden = false;
+    el.className = 'c c-tutor kcard' + (t.available ? '' : ' off');
+    el.dataset.tutor = n;
+    el.style.borderColor = color(t.subject || t.display);
+    // 进场:按钮一个接一个上移淡入,错开 40 ms(换人时从 240 ms 起,打开首页等头像画得差不多)
+    let j = 0;
+    const base = mode === 'switch' ? 0.24 : 0.4;
+    const up = (x) => { if (mode && x) { x.classList.add('up'); x.style.setProperty('--ud', (base + 0.04 * j++).toFixed(2) + 's'); } return x; };
     const extras = extrasFor(t, H);
-    return h('div', { class: 'c c-tutor' + (t.available ? '' : ' off'), 'data-tutor': t.name, style: 'border-color:' + color(t.subject || t.display) },
-      h('div', { class: 'tt', on: { click: () => { if (first) pickButton(t, first); } } }, draw === null ? avatarEl(t) : avatarEl(t, 'draw', draw), h('span', { class: 'nm' }, t.display)),
-      h('div', { class: 'bts' }, ...buttons.map((b) => h('button', { type: 'button', class: 'bt bt-' + b.kind, on: { click: () => pickButton(t, b) } }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }),
-        b.kind === 'lecture' ? h('span', { class: 'lb' }, h('small', {}, '小课堂'), h('span', {}, b.label), h('small', { class: 'ln' }, (b.ms ? lcLen(b.ms) + ' · ' : '') + '看完再问老师')) : h('span', {}, b.label)))),
-      extras.length ? h('div', { class: 'bts extras' }, h('span', { class: 'xl' }, '每天都在'), ...extras) : null);
+    const others = owned.filter((c) => c.kind !== 'dictation');
+    el.replaceChildren(...[
+      h('div', { class: 'kc' + (extras.length ? ' two' : '') },
+        h('div', { class: 'bts' }, ...buttons.map((b) => up(tutorButton(t, b)))),
+        extras.length ? h('div', { class: 'bts extras' }, up(h('span', { class: 'xl' }, '每天都在')), ...extras.map(up)) : null),
+      others.length ? h('div', { class: 'hcards kcards' }, ...others.map((c, i) => up(renderCard(c, i, null, false)))) : null,
+    ].filter(Boolean));
+    nm.textContent = t.display;
+    nm.classList.remove('in');
+    if (mode) { void nm.offsetWidth; nm.style.setProperty('--nd', mode === 'switch' ? '.2s' : (K.order.length * 0.12 + 0.3).toFixed(2) + 's'); nm.classList.add('in'); }
+  };
+  /** 点后面那位:抽出(0–160 ms,名字与按钮淡出)→ 换到最前(其余往左让一格)、张嘴、名字滑出、新按钮进场;点最前那位只「点一下」(:active) */
+  const pickTutor = (n) => {
+    const H = S.home;
+    if (!H || K.lifting || n === K.order[K.order.length - 1]) return;
+    const el = K.els.get(n);
+    const go = () => {
+      K.lifting = false;
+      K.order = K.order.filter((x) => x !== n).concat([n]);
+      el.classList.remove('lift');
+      $('#kcard').classList.remove('leaving'); $('#knm').classList.remove('leaving');
+      markSeen(H.home, n);
+      const list = homeTutorsOf(H);
+      renderStack(H, list, false);
+      for (const x of K.els.values()) x.classList.remove('bite');
+      void el.offsetWidth; el.classList.add('bite');
+      renderFront(H, list, 'switch');
+    };
+    if (reduced()) return go();
+    K.lifting = true;
+    el.classList.add('lift');
+    $('#kcard').classList.add('leaving'); $('#knm').classList.add('leaving');
+    clearTimeout(K.timer); K.timer = setTimeout(go, 160);
   };
   const renderHome = () => {
     const H = S.home;
     document.title = H.title; $('#title').textContent = H.title;
-    const byName = new Map(H.tutors.map((t) => [t.name, t]));
     const cards = Array.isArray(H.cards) ? H.cards : [];
-    const tcards = cards.filter((c) => c.kind === 'tutor' && byName.has(c.props.tutor));
+    const list = homeTutorsOf(H);
     // 头像一笔画出来只在打开首页、从老师页回来时画一次;5 秒一轮的刷新照常重铺,不再画
     const draw = S.homeDraw; S.homeDraw = false;
-    $('#tutors').replaceChildren(...tcards.map((c, i) => tutorCard(byName.get(c.props.tutor), Array.isArray(c.props.buttons) ? c.props.buttons : [], draw ? i * 0.15 : null, H)));
-    // 拍照听写、归了老师的听写卡在老师卡里(常驻入口);首页上不再有公共的那张(《首页设计.md》拍板 18)
-    $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor' && !(c.kind === 'dictation' && dictationOwner(c, H))).map((c, i) => renderCard(c, i, null, false)));
+    const names = list.map((x) => x.t.name);
+    // 老师变了(开了、关了、换了一份首页的排法)就按家长排的重来:排第一的在最前
+    if (!K.order || K.order.length !== names.length || names.some((x) => !K.order.includes(x))) K.order = [...names].reverse();
+    $('#kst').hidden = !names.length;
+    if (names.length && !K.lifting) {
+      renderStack(H, list, draw);
+      renderFront(H, list, draw ? 'draw' : null);
+      if (draw) markSeen(H.home, K.order[K.order.length - 1]);
+    } else if (!names.length) $('#kcard').hidden = true;
+    // 公共的卡(写在第一张老师卡前面的)在叠的上面;归了老师的在那位老师的卡里
+    $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor' && !c.owner).map((c, i) => renderCard(c, i, null, false)));
     renderFigshot(H);
   };
   // 给老师换样子(figshot pick):同一台电脑、同一张证书,所以协议和主机跟着本页走,只换端口。

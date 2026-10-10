@@ -20,7 +20,7 @@ import { parseCardState, stripSecrets, DictationPropsSchema } from '../cards/ind
 import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { sendFile } from './send-file.ts';
-import type { ConversationMessage } from '../schema/index.ts';
+import { tutorExtras, type ConversationMessage } from '../schema/index.ts';
 import { enrichLectures, ensureBaked, lectureFrameSvg, parseRing, parseSvgMs, readLecture, storedMarks, type Lecture } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { handleDictation, type DictationDeps } from '../dictation/route.ts';
@@ -67,7 +67,7 @@ import { USER_CERT_DIR } from '../cli/workspace.ts';
 import { kidThreads } from '../lib/kid-view.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { kidPage } from './kid-page.ts';
-import { arrangeHome, kidButtons, parseHome } from '../lib/home.ts';
+import { arrangeHome, homeOwners, kidButtons, parseHome } from '../lib/home.ts';
 import type { TutorButton } from '../cards/index.ts';
 import { packageTheme } from '../cli/themes.ts';
 import { cardsCss } from '../cards/docs.ts';
@@ -558,7 +558,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     return { ...rest, section };
   };
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
-  const tutorsJson = () => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, motto: t.motto, hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0 }));
+  const tutorsJson = () => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, motto: t.motto, hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') }));
   /** 小课堂:样本课包与样本视频在仓库里(tests/fixtures/bundles/、lectures/),起来时和真服务一样读一遍(readLecture)、记住 */
   const lectures = new Map<string, Lecture>();
   const lecturesLoaded = (async () => {
@@ -569,8 +569,12 @@ export function createMock(opts: MockOptions = {}): Mock {
   const mockLecture = (id: string): (Lecture & { ms: number }) | null => { const l = lectures.get(id); return l ? { ...l, ms: l.clock.total } : null; };
   const home = () => {
     const d = now();
-    const cards = arrangeHome(parseHome(mockHomeMd(localDate(d), yesterday())).cards, MOCK_TUTORS.map((t) => t.name)).map((c) => {
-      if (c.kind !== 'tutor') return stripSecrets({ cards: [c], lines: [] }).cards[0]; // 同真服务:答案(听写卡的字)不下发
+    const parsed = parseHome(mockHomeMd(localDate(d), yesterday())).cards;
+    const names = MOCK_TUTORS.map((t) => t.name);
+    const ownerOf = homeOwners(parsed, names);
+    const owners = new Map(parsed.map((c, i) => [c, ownerOf[i]]));
+    const cards = arrangeHome(parsed, names).map((c) => {
+      if (c.kind !== 'tutor') return { ...stripSecrets({ cards: [c], lines: [] }).cards[0], owner: owners.get(c) ?? null }; // 同真服务:答案(听写卡的字)不下发;非老师卡带归属
       const name = String(c.props.tutor);
       const list = messages.get(name) ?? [];
       const asked = list.find((m) => m.question !== null && m.thread === list[list.length - 1]?.thread);

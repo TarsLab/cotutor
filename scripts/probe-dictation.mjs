@@ -71,9 +71,9 @@ try {
   const view = () => evaluate(`document.querySelector('.view.on')?.id ?? null`);
 
   // ---- 首页的听写卡 ----
-  ok('首页:有听写卡,写着「听写」与几个词,没有字', await waitFor(`!!document.querySelector('.c-dictation:not(.c-snap)')`) && (await evaluate(`(() => { const c = document.querySelector('.c-dictation:not(.c-snap)'); return c.textContent.includes('3 个词') && !c.textContent.includes('鼓') && c.getAttribute('href').startsWith('/dictation?home='); })()`)));
+  ok('首页:听写卡写了念的老师(语文),收在语文老师的卡里,写着「听写」与几个词,没有字', await waitFor(`!!document.querySelector('#kcard[data-tutor="chinese-tutor"] .bt-x-dictation')`) && (await evaluate(`(() => { const c = document.querySelector('#kcard .bt-x-dictation'); return c.textContent.includes('3 个词') && !c.textContent.includes('鼓') && c.getAttribute('href').startsWith('/dictation?home='); })()`)));
   await shot('01-home');
-  await tap('.c-dictation:not(.c-snap)');
+  await tap('#kcard .bt-x-dictation');
   ok('点卡:进 /dictation,开始屏「听写 · 三个词」', await waitFor(`location.pathname === '/dictation' && document.querySelector('#v-start.on') && document.querySelector('#s-big').textContent === '听写 · 三个词'`));
   await shot('02-start');
 
@@ -153,7 +153,7 @@ try {
   ok('交了:回对答案,都不问了', await waitFor(`document.querySelector('#v-check.on') && [...document.querySelectorAll('.wc')].map((c) => c.querySelector('.ask') ? 'ask' : 'self').join() === 'self,self,self'`));
   await shot('08-check-after');
   await tapText('对好了');
-  ok('对好了:回首页', await waitFor(`location.pathname === '/' && !!document.querySelector('.c-dictation')`));
+  ok('对好了:回首页', await waitFor(`location.pathname === '/' && !!document.querySelector('#kcard .bt-x-dictation')`));
 
   // ---- 家长 ----
   await send('Page.navigate', { url: `${base}/dictation/parent` });
@@ -170,11 +170,11 @@ try {
   ok('播放:钟往前走,格里一笔一笔出来', (await evaluate(`document.querySelector('#clock').textContent !== '0:00' || document.querySelectorAll('#cells .ink path').length > 0`)));
   await tap('#play');
   await shot('10-reel');
-  // ---- 拍照开始(孩子端,首页固定的「拍照听写」)----
+  // ---- 拍照开始(孩子端,语文老师卡里常驻的「拍照听写」)----
   await send('Emulation.clearDeviceMetricsOverride');
   await send('Page.navigate', { url: `${base}/` });
-  ok('首页:固定的「拍照听写」入口在', await waitFor(`!!document.querySelector('.c-snap') && document.querySelector('.c-snap').getAttribute('href') === '/dictation'`));
-  await tap('.c-snap');
+  ok('首页:语文老师卡里有「拍照听写」,带他的名字(用他的声音念)', await waitFor(`!!document.querySelector('#kcard[data-tutor="chinese-tutor"] .bt-x-photo') && document.querySelector('.bt-x-photo').getAttribute('href') === '/dictation?tutor=chinese-tutor'`));
+  await tap('.bt-x-photo');
   ok('点了:拍照屏(拍照 / 从相册选)', await waitFor(`location.pathname === '/dictation' && !!document.querySelector('#v-snap.on')`));
   await shot('11-snap');
   const icon = join(home, 'photo.png');

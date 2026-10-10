@@ -60,6 +60,11 @@ try {
   await quiet(send);
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: `${base}/` });
+  // 首页只展开最前那位(C 版):小课堂按钮在数学老师卡上,先把数学换到最前
+  await until(`!!document.querySelector('#kstack .sa[data-tutor="math-tutor"]')`);
+  await evaluate(`document.querySelector('#kstack .sa[data-tutor="math-tutor"]').click()`);
+  await until(`document.querySelector('#kcard').dataset.tutor === 'math-tutor'`);
+  await sleep(900);
   await until(`document.querySelectorAll('.bt-lecture').length > 1`);
   const F = `document.querySelector('#lc-frame')`;
   const D = `${F}.contentDocument`;

@@ -164,6 +164,21 @@ for: 2026-09-18
   const zh = buttonsOf(h1, 'chinese-tutor');
   check('孩子端首页:发布的 id、老师卡置顶、英语补上、讲法不下发', h1.home === '2026-09-17-2130-2' && h1.cards.map((c) => c.props.tutor ?? c.kind).join() === 'chinese-tutor,math-tutor,english-tutor,tianzige' && zh.map((b) => b.id).join() === 'new,0,1' && zh[2].kind === 'continue' && zh[2].thread === t16 && !JSON.stringify(h1).includes('第 22 课') && !JSON.stringify(h1).includes('brief'), JSON.stringify(h1));
 
+  // ---- 只展开一位老师(拍板 16–19):非老师卡的归属、橙点 ----
+  type HC = { kind: string; owner?: string | null; props: { tutor?: string; news?: boolean } };
+  const hc = h1.cards as HC[];
+  const newsOf = (h: KidHome): string => (h.cards as HC[]).filter((c) => c.kind === 'tutor' && c.props.news).map((c) => c.props.tutor).join();
+  check('归属:跟在数学老师卡后面的田字格归数学', hc.find((c) => c.kind === 'tianzige')?.owner === 'math-tutor', JSON.stringify(hc.filter((c) => c.kind !== 'tutor')));
+  check('橙点:家长排了按钮、发布以来孩子还没找过的(语文、数学)亮;补的英语不亮', newsOf(h1) === 'chinese-tutor,math-tutor', newsOf(h1));
+  const ck = await run(['home', 'check', '--published']);
+  check('home check 说每张卡归谁', ck.out.includes('tianzige「塘脑袋」 → 数学老师的卡里'), ck.out);
+  {
+    const { homeOwners } = await import('../src/lib/home.ts');
+    const T = (tutor: string) => ({ kind: 'tutor', props: { tutor, buttons: [] } });
+    const owners = homeOwners([{ kind: 'text', props: {} }, T('chinese-tutor'), { kind: 'image', props: {} }, { kind: 'dictation', props: { tutor: 'english-tutor', words: [] } }, T('nobody-tutor'), { kind: 'text', props: {} }, { kind: 'dictation', props: { words: [] } }], ['chinese-tutor', 'english-tutor']);
+    check('homeOwners:第一张老师卡前面的公共;跟在谁后面归谁;听写卡写了念的老师归他;不上首页的老师卡不算', owners.join() === ',,chinese-tutor,english-tutor,,chinese-tutor,chinese-tutor', owners.join());
+  }
+
   // ---- 按钮发来的 via ----
   const bad = await kidSend('chinese-tutor', { text: '', via: { home: '2026-09-17-2130', button: 0 } });
   const bad2 = await kidSend('chinese-tutor', { text: '', via: { home: h1.home, button: 7 } });
@@ -176,6 +191,7 @@ for: 2026-09-18
   const idx17 = await readIndex(ctx.ws, 'chinese-tutor', '2026-09-17');
   const m0 = idx17.messages.find((m) => m.job === j0)!;
   const run0 = await readRunFile(ctx.ws, 'chinese-tutor', '2026-09-17', j0);
+  check('孩子找过语文老师了:他的橙点灭,数学的还亮', newsOf(await kidHome()) === 'math-tutor', newsOf(await kidHome()));
   check('开场按钮:发的是按钮上的字、新话题、消息记 via', m0.text === '我要预习小蝌蚪找妈妈' && m0.thread === j0 && JSON.stringify(m0.via) === JSON.stringify({ home: h1.home, button: 0, label: '我要预习小蝌蚪找妈妈' }) && !m0.continues, JSON.stringify(m0));
   check('开场按钮:上下文包带 home 段(按钮字与讲法),不带 continue', run0?.prompt.includes('  home:\n    button: "我要预习小蝌蚪找妈妈"\n    brief: "第 22 课,先读顺 1–3 段"') === true && !run0.prompt.includes('\n  continue:'), run0?.prompt);
 

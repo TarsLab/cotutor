@@ -215,6 +215,16 @@ export function arrangeHome(cards: readonly BoardCard[], tutors: readonly string
   return [...top, ...rest];
 }
 
+/** 非老师卡归哪位老师(《首页设计.md》拍板 19):文件顺序里跟在哪张(上首页的)老师卡后面;听写卡写了念的老师(而且上首页)就归他;都没有 = 公共 */
+export function homeOwners(cards: readonly BoardCard[], tutors: readonly string[]): (string | null)[] {
+  let cur: string | null = null;
+  return cards.map((c) => {
+    if (c.kind === 'tutor') { const n = String(c.props.tutor); if (tutors.includes(n)) cur = n; return null; }
+    const who = c.kind === 'dictation' && typeof c.props.tutor === 'string' && tutors.includes(c.props.tutor) ? c.props.tutor : null;
+    return who ?? cur;
+  });
+}
+
 /** 孩子端老师卡上的一个按钮:id = 文件里的下标,或应用加的 new / recent */
 export type KidHomeButton =
   | { id: 'new'; kind: 'new'; label: string }

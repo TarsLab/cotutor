@@ -53,26 +53,29 @@ try {
   await quiet(send);
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: `${base}/` });
-  await until(`document.querySelectorAll('.c-tutor .av').length > 0`);
-  const home = await evaluate(`[...document.querySelectorAll('.c-tutor .av')].map(${AV})`);
-  ok('首页:每张老师卡的头像是环 + 白底圆,没有边框;环是学科色(stroke = color);第一回铺是「画出来」', home.length > 0 && home.every((a) => a.ring && a.face && a.border === '0px' && a.stroke === a.color && a.draw && a.anim === 'av-draw'), JSON.stringify(home[0]));
-  const delays = await evaluate(`[...document.querySelectorAll('.c-tutor .av')].map((el) => getComputedStyle(el.querySelector('.ring circle')).animationDelay)`);
-  ok('几位老师错开画(0s、0.15s、0.3s…)', delays.length < 2 || delays[1] === '0.15s', delays.join(' '));
+  await until(`document.querySelectorAll('#kstack .av').length > 0`);
+  const home = await evaluate(`[...document.querySelectorAll('#kstack .av')].map(${AV})`);
+  ok('首页(头像叠起来):每颗头像是环 + 白底圆,没有边框;环是学科色(stroke = color);第一回铺是「画出来」', home.length > 0 && home.every((a) => a.ring && a.face && a.border === '0px' && a.stroke === a.color && a.draw && a.anim === 'av-draw'), JSON.stringify(home[0]));
+  const delays = await evaluate(`[...document.querySelectorAll('#kstack .sa')].sort((a, b) => a.style.getPropertyValue('--slot') - b.style.getPropertyValue('--slot')).map((el) => getComputedStyle(el.querySelector('.ring circle')).animationDelay)`);
+  ok('从后往前一位一位画(0s、0.12s、0.24s…),最前那位最后', delays.length < 2 || delays[1] === '0.12s', delays.join(' '));
   await sleep(250); await shot('avatar-home-drawing.png');
   await sleep(1500);
-  const rest = await evaluate(`(${AV})(document.querySelector('.c-tutor .av'))`);
+  const rest = await evaluate(`(${AV})(document.querySelector('#kstack .sa.front .av'))`);
   ok('画完:描 80% 留 20%,转 36°,开口居中在右', /^221\.17px?,? 55\.29px?$/.test(rest.dash.replace(/,\s*/, ' ')) && /matrix\(0\.809/.test(rest.transform), `${rest.dash} ${rest.transform}`);
   await shot('avatar-home.png');
   await sleep(5600);
-  const again = await evaluate(`[...document.querySelectorAll('.c-tutor .av')].some((el) => el.classList.contains('draw'))`);
+  const again = await evaluate(`[...document.querySelectorAll('#kstack .av')].some((el) => el.classList.contains('draw'))`);
   ok('5 秒一轮的刷新重铺了也不再画', again === false);
 
   // 休息:整张卡灰掉时开口朝下(126°);按着卡时扭一下(8°)
-  const off = await evaluate(`(async () => { const c = document.querySelector('.c-tutor'); c.classList.add('off'); await new Promise((r) => setTimeout(r, 700)); const t = getComputedStyle(c.querySelector('.av .ring circle')); const r = { transform: t.transform, filter: getComputedStyle(c.querySelector('.av')).filter }; c.classList.remove('off'); return r; })()`);
+  const off = await evaluate(`(async () => { const c = document.querySelector('#kstack .sa.front'); c.classList.add('off'); await new Promise((r) => setTimeout(r, 700)); const t = getComputedStyle(c.querySelector('.av .ring circle')); const r = { transform: t.transform, filter: getComputedStyle(c.querySelector('.av')).filter }; c.classList.remove('off'); return r; })()`);
   ok('休息:开口朝下、变灰', /matrix\(-0\.58/.test(off.transform) && /grayscale/.test(off.filter), JSON.stringify(off));
 
   // 进数学老师、新话题:空白板
-  await evaluate(`[...document.querySelectorAll('.c-tutor')].find((c) => c.dataset.tutor === 'math-tutor')?.querySelector('.bt-new')?.click()`);
+  await evaluate(`document.querySelector('#kstack .sa[data-tutor="math-tutor"]').click()`);
+  await until(`document.querySelector('#kcard').dataset.tutor === 'math-tutor'`);
+  await sleep(600);
+  await evaluate(`document.querySelector('#kcard .bt-new').click()`);
   await until(`document.querySelector('#tutor.on .blank .av')`);
   const blank = await evaluate(`(${AV})(document.querySelector('.blank .av'))`);
   const back = await evaluate(`(${AV})(document.querySelector('#c-av'))`);

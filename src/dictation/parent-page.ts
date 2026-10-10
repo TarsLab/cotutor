@@ -46,6 +46,7 @@ export const DICTATION_PARENT_PAGE = `<!doctype html>
   .ok { font-size:15px; }
   textarea { width:100%; min-height:120px; font:14px/1.5 ui-monospace,Menlo,monospace; border:1px solid var(--line); border-radius:12px; padding:10px; background:#fff; }
   .empty { padding:40px 0; text-align:center; color:var(--dim); }
+  a.reel { display:flex; align-items:center; min-height:48px; padding:0 16px; border-radius:14px; background:#fff; border:1px solid var(--line); color:#24508c; text-decoration:none; font-size:15px; }
   .src { display:flex; align-items:center; gap:12px; font-size:14px; color:var(--dim); }
   .src img { width:72px; height:72px; object-fit:cover; border-radius:10px; border:1px solid var(--line); }
 </style></head>
@@ -116,29 +117,34 @@ export const DICTATION_PARENT_PAGE = `<!doctype html>
     return bits.length ? bits.join('、') : null;
   };
   var wrong = function (a) { return a && a.judges.some(function (j) { return j.ask; }); };
+  /** 写之前点了「不会写,给答案」的字(看了笔顺照着描红写的) */
+  var revealedOf = function (a, chars) { return a ? chars.filter(function (ch, ci) { return a.chars[ci] && a.chars[ci].revealed; }) : []; };
   var smallIssues = function (a) { return a && a.judges.some(function (j) { return j.judged && !j.empty && (!j.order || j.backwards.length || placeNote(j.place)); }); };
 
   var render = function (s) {
     var body = $('#body'); body.replaceChildren();
     var n = s.words.length;
-    var firstOk = s.first.filter(function (a) { return a && !wrong(a); }).length;
+    var firstOk = s.first.filter(function (a) { return a && !wrong(a) && !a.chars.some(function (c) { return c.revealed; }); }).length;
+    var revealedN = s.first.filter(function (a) { return a && a.chars.some(function (c) { return c.revealed; }); }).length;
     var fixed = s.asked.filter(function (i) { var r = s.rewrites.filter(function (x) { return x.word === i; }); return r.length && !wrong(r[r.length - 1].attempt); }).length;
     var selfs = s.rewrites.filter(function (r) { return r.self; }).map(function (r) { return r.word; }).filter(function (w, k, all) { return all.indexOf(w) === k; });
     var when = new Date(s.startedAt);
     var head = s.checkedAt
-      ? n + ' 个词,' + firstOk + ' 个第一遍就写全'
+      ? n + ' 个词,' + firstOk + ' 个自己写全' + (revealedN ? ',' + revealedN + ' 个看了答案' : '')
       : '还在写:写了 ' + s.first.filter(Boolean).length + ' / ' + n + ' 个词';
     var line = s.checkedAt
       ? (s.asked.length ? '问了「再写一遍」的 ' + s.asked.length + ' 个,重写后写全的 ' + fixed + ' 个。' : '没有要问「再写一遍」的。') + '孩子自己点重写的 ' + selfs.length + ' 个。' + (s.doneAt ? '' : '还没点「对好了」。')
       : '';
     if (s.photo) body.append(h('div', { 'class': 'src' }, h('img', { src: '/api/dictation/photos/' + s.photo + '/image', alt: '拍的照片' }), h('span', { text: '拍照听写' + (s.lesson ? ' · ' + s.lesson : '') })));
+    body.append(h('a', { 'class': 'reel', href: '/dictation/reel?id=' + encodeURIComponent(s.id) }, '看录像:这次是怎么写的 ›'));
     body.append(h('div', { 'class': 'sum' }, h('b', { text: head }), h('span', { text: (when.getMonth() + 1) + ' 月 ' + when.getDate() + ' 日 ' + String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0') + ' 开始。' + line })));
 
     var rows = s.words.map(function (w, i) {
       var a = s.first[i]; var rs = s.rewrites.filter(function (r) { return r.word === i; });
       var asked = s.asked.indexOf(i) >= 0;
       var orders = s.events.filter(function (e) { return e.kind === 'strokeOrder' && e.word === i; }).length;
-      return { w: w, i: i, a: a, rs: rs, asked: asked, orders: orders, rank: !a ? 3 : wrong(a) ? 0 : smallIssues(a) ? 1 : rs.length ? 1 : 2 };
+      var shown = revealedOf(a, Array.from(w.chars));
+      return { w: w, i: i, a: a, rs: rs, asked: asked, orders: orders, shown: shown, rank: !a ? 3 : shown.length || wrong(a) ? 0 : smallIssues(a) ? 1 : rs.length ? 1 : 2 };
     });
     var attention = rows.filter(function (r) { return r.rank < 2; }).sort(function (x, y) { return x.rank - y.rank || x.i - y.i; });
     var fine = rows.filter(function (r) { return r.rank === 2; });
@@ -148,7 +154,7 @@ export const DICTATION_PARENT_PAGE = `<!doctype html>
     if (fine.length) body.append(h('div', { 'class': 'item' }, h('div', { 'class': 'head' }, h('div', { 'class': 'ok', text: fine.map(function (r) { return r.w.chars; }).join(' · ') }), h('span', { 'class': 'chip good', text: '写全了' }))));
     if (waiting.length) body.append(h('div', { 'class': 'muted', text: '还没写:' + waiting.map(function (r) { return r.w.chars; }).join('、') }));
 
-    var again = rows.filter(function (r) { return r.a && (wrong(r.a) || r.rs.length); }).map(function (r) { return r.w; });
+    var again = rows.filter(function (r) { return r.a && (r.shown.length || wrong(r.a) || r.rs.length); }).map(function (r) { return r.w; });
     if (again.length) {
       body.append(h('div', { 'class': 'sec', text: '要再练的词:复制进 home/draft.md,下次听写' }));
       var fence = String.fromCharCode(96, 96, 96);
@@ -162,7 +168,8 @@ export const DICTATION_PARENT_PAGE = `<!doctype html>
   var item = function (s, r) {
     var chars = Array.from(r.w.chars);
     var chips = [];
-    if (r.a && wrong(r.a)) chips.push(h('span', { 'class': 'chip warm', text: r.rs.length ? (r.asked ? '问了才改' : '自己改的') : '没写全' }));
+    if (r.shown.length) chips.push(h('span', { 'class': 'chip warm', text: '看了答案:' + r.shown.join('、') }));
+    else if (r.a && wrong(r.a)) chips.push(h('span', { 'class': 'chip warm', text: r.rs.length ? (r.asked ? '问了才改' : '自己改的') : '没写全' }));
     else if (r.rs.length) chips.push(h('span', { 'class': 'chip calm', text: '写全了 · 自己又写了' }));
     else chips.push(h('span', { 'class': 'chip calm', text: '写全了' }));
     if (r.orders) chips.push(h('span', { 'class': 'chip calm', text: '逐笔看过 ' + r.orders + ' 次' }));

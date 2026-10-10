@@ -5,6 +5,7 @@
  *
  *   GET  /dictation?home=<id>&n=<k>          孩子的听写页(从首页那张卡点进来);不带 home 是拍照开始(首页固定的「拍照听写」)
  *   GET  /dictation/parent                   家长看结果
+ *   GET  /dictation/reel?id=<id>             家长看录像:一笔一笔重放这次听写
  *   POST /api/dictation/photos               {image: data:image/jpeg;base64,…} 拍的照片:存下、后台开始认,回 {id}
  *   GET  /api/dictation/photos/<id>          认的进度:{state, items, lesson};页面轮询着一项一项画框
  *   GET  /api/dictation/photos/<id>/image    那张照片
@@ -17,7 +18,8 @@
  *   PUT  /api/dictation/<id>/first/<i>       {chars: [{strokes, undos}]} 第一遍写的(交卷前可以改)
  *   POST /api/dictation/<id>/check           交卷:逐字比对,回字与「再写一遍?」
  *   POST /api/dictation/<id>/rewrites/<i>    {chars, self} 再写一遍(交卷后)
- *   POST /api/dictation/<id>/events          {kind, word, char?} 对答案时做了什么
+ *   POST /api/dictation/<id>/reveal/<i>      {char} 不会写,给答案:回这一个字(交卷前);记下这个字看过答案
+ *   POST /api/dictation/<id>/events          {kind, word, char?, t?, n?} 孩子做了什么(录像按它排)
  *   POST /api/dictation/<id>/done            对好了
  */
 import { createHash } from 'node:crypto';
@@ -33,7 +35,8 @@ import { judgeChar, type CharJudge, type InkPoint } from './lib/match.ts';
 import { recognizePhoto, type Recognize } from './recognize.ts';
 import { DICTATION_PAGE } from './page.ts';
 import { DICTATION_PARENT_PAGE } from './parent-page.ts';
-import { ID_RE, createPhoto, createSession, listSessions, photoFile, readPhotoRecord, readSession, writePhotoRecord, writeSession, type PhotoRecord, type Attempt, type CharInk, type Session, type DictationEvent } from './store.ts';
+import { DICTATION_REEL_PAGE } from './reel-page.ts';
+import { EVENT_KINDS, ID_RE, createPhoto, createSession, listSessions, photoFile, readPhotoRecord, readSession, writePhotoRecord, writeSession, type PhotoRecord, type Attempt, type CharInk, type Session, type DictationEvent } from './store.ts';
 
 export interface DictationDeps {
   /** workspace 根 */
@@ -106,6 +109,8 @@ const bad = (message: string): RouteResult => ({ status: 400, json: { error: 'ba
 const HOME_ID_RE = /^\d{4}-\d{2}-\d{2}-\d{4}(?:-\d+)?$/;
 
 const MAX_STROKES = 60;
+/** 点与事件的时刻:离开始多少毫秒,一天以内 */
+const MAX_T = 24 * 3600_000;
 const MAX_POINTS = 3000;
 const num = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
 
@@ -122,12 +127,12 @@ export function parseChars(v: unknown, size: number): CharInk[] | null {
       if (!Array.isArray(s) || s.length === 0 || s.length > MAX_POINTS) return null;
       const pts: InkPoint[] = [];
       for (const p of s as unknown[]) {
-        if (!Array.isArray(p) || p.length !== 3 || !num(p[0], -2048, 3072) || !num(p[1], -2048, 3072) || !num(p[2], 0, 6 * 3600_000)) return null;
+        if (!Array.isArray(p) || p.length !== 3 || !num(p[0], -2048, 3072) || !num(p[1], -2048, 3072) || !num(p[2], 0, MAX_T)) return null;
         pts.push([Math.round(p[0]), Math.round(p[1]), Math.round(p[2])]);
       }
       strokes.push(pts);
     }
-    out.push({ strokes, undos });
+    out.push({ strokes, undos, ...(c.revealed === true ? { revealed: true } : {}) });
   }
   return out;
 }
@@ -151,13 +156,17 @@ export function kidView(s: Session, display: string): unknown {
     id: s.id,
     tutor: display,
     sizes: sizes(s),
+    startedAt: s.startedAt,
     written: s.first.map((a) => a !== null),
+    /** 自己写过的(笔迹不是答案):中途回来接着写、听写本上画小格 */
+    mine: s.first.map((a) => (a ? a.chars.map((c) => ({ strokes: c.strokes, revealed: c.revealed === true })) : null)),
     checked: s.checkedAt !== null,
     done: s.doneAt !== null,
-    reveal: s.checkedAt
+    answers: s.checkedAt
       ? s.words.map((w, i) => ({
           chars: w.chars,
           ask: s.asked.includes(i) && !s.rewrites.some((r) => r.word === i),
+          revealed: (s.first[i]?.chars ?? []).some((c) => c.revealed === true),
           rewrote: s.rewrites.some((r) => r.word === i),
           ink: (latestOf(s, i)?.chars ?? []).map((c) => c.strokes),
         }))
@@ -167,8 +176,9 @@ export function kidView(s: Session, display: string): unknown {
 
 /** 家长的列表一行 */
 function summary(s: Session): unknown {
-  const firstOk = s.first.filter((a) => a && a.judges.every((j) => !j.ask)).length;
-  return { id: s.id, startedAt: s.startedAt, words: s.words.map((w) => w.chars), checked: s.checkedAt !== null, done: s.doneAt !== null, firstOk, asked: s.asked.length };
+  const firstOk = s.first.filter((a) => a && a.judges.every((j) => !j.ask) && a.chars.every((c) => !c.revealed)).length;
+  const revealed = s.first.filter((a) => a && a.chars.some((c) => c.revealed)).length;
+  return { id: s.id, startedAt: s.startedAt, words: s.words.map((w) => w.chars), checked: s.checkedAt !== null, done: s.doneAt !== null, firstOk, asked: s.asked.length, revealed, photo: s.photo ?? null, lesson: s.lesson ?? null };
 }
 
 const PHOTO_MAX_BYTES = 3_000_000;
@@ -235,6 +245,7 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
   if (!isOurs(p)) return null;
   if (p === '/dictation' || p === '/dictation/') return method === 'GET' ? { status: 200, html: DICTATION_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
   if (p === '/dictation/parent') return method === 'GET' ? { status: 200, html: DICTATION_PARENT_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
+  if (p === '/dictation/reel') return method === 'GET' ? { status: 200, html: DICTATION_REEL_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
   if (!p.startsWith('/api/')) return { status: 404, json: { error: 'not_found' } };
   const root = deps.root;
   const now = deps.now();
@@ -324,7 +335,8 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
           s.first[k] = { at: now.toISOString(), chars: empty, judges: await judge(deps, s.words[k].chars, empty) };
         }
       }
-      s.asked = s.first.map((a, k) => (a!.judges.some((j) => j.ask) ? k : -1)).filter((k) => k >= 0);
+      // 看过答案的词不问「再写一遍?」:已经照着写过一遍了(拍板 8)
+      s.asked = s.first.map((a, k) => (a!.judges.some((j) => j.ask) && !a!.chars.some((c) => c.revealed) ? k : -1)).filter((k) => k >= 0);
       s.checkedAt = now.toISOString();
       await writeSession(root, s);
     }
@@ -341,12 +353,26 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
     return { status: 200, json: kidView(s, deps.display(s.tutor)) };
   }
 
+  if (sub === 'reveal' && method === 'POST' && i >= 0) {
+    if (s.checkedAt) return { status: 409, json: { error: 'checked', message: '已经交了' } };
+    const cs = Array.from(s.words[i].chars);
+    const ch = isObj(body) ? body.char : undefined;
+    if (!num(ch, 0, cs.length - 1) || !Number.isInteger(ch)) return bad('要 {char}:第几个字');
+    const t = isObj(body) && num(body.t, 0, MAX_T) ? Math.round(body.t) : undefined;
+    if (s.events.length < 4000) s.events.push({ at: now.toISOString(), kind: 'reveal', word: i, char: ch, ...(t !== undefined ? { t } : {}) });
+    await writeSession(root, s);
+    return { status: 200, json: { ch: cs[ch] } };
+  }
+
   if (sub === 'events' && method === 'POST') {
-    const kinds: DictationEvent['kind'][] = ['strokeOrder', 'rewrite', 'self', 'again'];
-    if (!isObj(body) || !kinds.includes(body.kind as DictationEvent['kind']) || !num(body.word, 0, s.words.length - 1) || !Number.isInteger(body.word)) return bad('要 {kind, word, char?}');
+    const kind = isObj(body) ? (body.kind as DictationEvent['kind']) : undefined;
+    if (!isObj(body) || kind === undefined || !EVENT_KINDS.includes(kind) || kind === 'reveal' || !num(body.word, 0, s.words.length - 1) || !Number.isInteger(body.word)) return bad('要 {kind, word, char?, t?, n?}');
     const ch = body.char;
     if (ch !== undefined && (!num(ch, 0, 3) || !Number.isInteger(ch))) return bad('char 是第几个字');
-    if (s.events.length < 2000) s.events.push({ at: now.toISOString(), kind: body.kind as DictationEvent['kind'], word: body.word as number, ...(ch !== undefined ? { char: ch as number } : {}) });
+    const t = body.t === undefined ? undefined : num(body.t, 0, MAX_T) ? Math.round(body.t) : null;
+    const n = body.n === undefined ? undefined : num(body.n, 1, 99) && Number.isInteger(body.n) ? body.n : null;
+    if (t === null || n === null) return bad('t 是离开始的毫秒,n 是第几遍');
+    if (s.events.length < 4000) s.events.push({ at: now.toISOString(), kind, word: body.word as number, ...(ch !== undefined ? { char: ch as number } : {}), ...(t !== undefined ? { t } : {}), ...(n !== undefined ? { n } : {}) });
     await writeSession(root, s);
     return { status: 200, json: { ok: true } };
   }

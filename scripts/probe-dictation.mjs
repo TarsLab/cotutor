@@ -71,40 +71,61 @@ try {
   const view = () => evaluate(`document.querySelector('.view.on')?.id ?? null`);
 
   // ---- 首页的听写卡 ----
-  ok('首页:有听写卡,写着「听写」与几个词,没有字', await waitFor(`!!document.querySelector('.c-dictation')`) && (await evaluate(`(() => { const c = document.querySelector('.c-dictation'); return c.textContent.includes('3 个词') && !c.textContent.includes('鼓') && c.getAttribute('href').startsWith('/dictation?home='); })()`)));
+  ok('首页:有听写卡,写着「听写」与几个词,没有字', await waitFor(`!!document.querySelector('.c-dictation:not(.c-snap)')`) && (await evaluate(`(() => { const c = document.querySelector('.c-dictation:not(.c-snap)'); return c.textContent.includes('3 个词') && !c.textContent.includes('鼓') && c.getAttribute('href').startsWith('/dictation?home='); })()`)));
   await shot('01-home');
-  await tap('.c-dictation');
+  await tap('.c-dictation:not(.c-snap)');
   ok('点卡:进 /dictation,开始屏「听写 · 三个词」', await waitFor(`location.pathname === '/dictation' && document.querySelector('#v-start.on') && document.querySelector('#s-big').textContent === '听写 · 三个词'`));
   await shot('02-start');
 
-  // ---- 听写 ----
+  // ---- 听写(左边听写本,右边一次写一个字)----
+  const inkCount = (sel) => evaluate(`document.querySelector(${JSON.stringify(sel)})?.children.length ?? -1`);
   await tapText('开始');
-  ok('听写中:第一个词两个格、气泡里没有字', await waitFor(`document.querySelectorAll('#l-pads .padbox').length === 2`) && (await evaluate(`document.querySelector('#l-what').textContent === '第一个词,两个字' && !document.body.innerText.includes('春')`)));
-  await writeChar('#l-pads .padbox:nth-child(1)', '春');
-  await writeChar('#l-pads .padbox:nth-child(2)', '天');
-  ok('写:格里出现孩子的笔(春 9 笔、天 4 笔)', (await evaluate(`[...document.querySelectorAll('#l-pads .ink')].map((g) => g.children.length).join()`)) === '9,4');
+  ok('听写中:听写本三行(2、2、1 格)、右边一个大格;气泡里没有字', await waitFor(`document.querySelectorAll('#l-book .brow').length === 3 && document.querySelectorAll('#l-big .padbox').length === 1`) && (await evaluate(`[...document.querySelectorAll('#l-book .brow')].map((r) => r.querySelectorAll('.padbox').length).join() === '2,2,1' && document.querySelector('#l-what').textContent === '第一个词的第一个字' && !document.body.innerText.includes('春')`)));
+  const bigSize = await evaluate(`Math.round(document.querySelector('#l-big .padbox').getBoundingClientRect().width)`);
+  ok('大格放得大(≥ 480)', bigSize >= 480, `${bigSize}px`);
+  await writeChar('#l-big .padbox', '春');
+  ok('写:大格里 9 笔,听写本上当前这格跟着画', (await inkCount('#l-big .ink')) === 9 && (await inkCount('#l-book .here .ink')) === 9);
   await shot('03-listen');
-  await tapText('写好了');
-  ok('写好了:下一个词', await waitFor(`document.querySelector('#l-what').textContent === '第二个词,两个字'`));
-  await writeChar('#l-pads .padbox:nth-child(1)', '鼓', [6]);
-  await writeChar('#l-pads .padbox:nth-child(2)', '励');
-  // 撤销一笔再补上:撤销只撤最后一笔
+  await tapText('这个字写好了');
+  ok('这个字写好了:同一个词的第二个字', await waitFor(`document.querySelector('#l-what').textContent === '第一个词的第二个字'`) && (await inkCount('#l-big .ink')) === 0);
+  await writeChar('#l-big .padbox', '天');
+  await tapText('这个字写好了');
+  ok('一个词写完:念下一个词,听写本上第一行留着写的字', await waitFor(`document.querySelector('#l-what').textContent === '第二个词的第一个字'`) && (await evaluate(`[...document.querySelectorAll('#l-book .brow')[0].querySelectorAll('.ink')].map((g) => g.children.length).join()`)) === '9,4');
+  await writeChar('#l-big .padbox', '鼓', [6]);
+  await tapText('这个字写好了');
+  await writeChar('#l-big .padbox', '励');
   await tapText('撤销');
-  const afterUndo = await evaluate(`[...document.querySelectorAll('#l-pads .ink')].map((g) => g.children.length).join()`);
-  await writeChar('#l-pads .padbox:nth-child(2)', '励');
-  await tapText('擦掉这一格');
-  await writeChar('#l-pads .padbox:nth-child(2)', '励');
-  ok('撤销撤最后一笔;擦掉这一格清当前格', afterUndo === '12,6' && (await evaluate(`[...document.querySelectorAll('#l-pads .ink')].map((g) => g.children.length).join()`)) === '12,7');
-  await tapText('写好了');
-  ok('第三个词一个格', await waitFor(`document.querySelector('#l-what').textContent === '第三个词,一个字' && document.querySelectorAll('#l-pads .padbox').length === 1`));
-  await writeChar('#l-pads .padbox', '页');
-  await tapText('写好了');
+  const afterUndo = await inkCount('#l-big .ink');
+  await tapText('擦掉重写');
+  const afterClear = await inkCount('#l-big .ink');
+  await writeChar('#l-big .padbox', '励');
+  ok('撤销撤最后一笔、擦掉重写清这个字', afterUndo === 6 && afterClear === 0 && (await inkCount('#l-big .ink')) === 7, `${afterUndo}/${afterClear}`);
+  await tap('#l-book .brow.cur .padbox:nth-child(2)');
+  ok('点听写本上这个词的第一格:回去看「鼓」', await waitFor(`document.querySelector('#l-what').textContent === '第二个词的第一个字'`) && (await inkCount('#l-big .ink')) === 12);
+  await tap('#l-book .brow.cur .padbox:nth-child(3)');
+  await tapText('这个字写好了');
+
+  // ---- 不会写,给答案:看笔顺,照着描红写一遍 ----
+  ok('第三个词一个格', await waitFor(`document.querySelector('#l-what').textContent === '第三个词 · 一个字'`));
+  await shot('03b-stuck');
+  await tapText('不会写,给答案');
+  ok('给答案:书上的「叶」在大格里一笔一笔写,下面 5 个方块', await waitFor(`!document.querySelector('#l-foot-order').hidden && document.querySelectorAll('#l-sqs i').length === 5 && document.querySelector('#l-what').textContent === '看「叶」一笔一笔写'`));
+  await sleep(2500);
+  ok('写着写着:前面的笔变蓝', (await evaluate(`document.querySelectorAll('#l-sqs i.d').length`)) >= 1);
+  await shot('03c-answer');
+  await tapText('我来写');
+  ok('我来写:灰色描红打底,「给答案」换成「再看笔顺」', await waitFor(`document.querySelector('#l-big .std').classList.contains('trace') && document.querySelector('#l-big .std').children.length === 5 && document.querySelector('#l-reveal').hidden && !document.querySelector('#l-reorder').hidden`));
+  await tapText('这个字写好了');
+  ok('没照着写就点写好了:不让过,提示照着写', await evaluate(`document.querySelector('#l-status').textContent.includes('照着灰色的写一遍')`) && (await evaluate(`!!document.querySelector('#v-listen.on')`)));
+  await writeChar('#l-big .padbox', '叶');
+  await shot('03d-trace');
+  await tapText('这个字写好了');
 
   // ---- 对答案 ----
   ok('交卷:进对答案,三张词卡', await waitFor(`document.querySelector('#v-check.on') && document.querySelectorAll('.wc').length === 3`));
   await waitFor(`[...document.querySelectorAll('.wc .std')].every((g) => g.children.length > 0)`);
   const asks = await evaluate(`[...document.querySelectorAll('.wc')].map((c) => c.querySelector('.ask') ? 'ask' : 'self').join()`);
-  ok('问「这个再写一遍?」的:鼓励(少一笔)、叶(写成页);春天不问', asks === 'self,ask,ask', asks);
+  ok('问「这个再写一遍?」的只有鼓励(少一笔);春天不问,叶看过答案照着写了也不问', asks === 'self,ask,self', asks);
   ok('页面上没有叉、没有分数、没有对错的字', !(await evaluate(`/[✗×]|错|分数|不对/.test(document.querySelector('#v-check').innerText)`)));
   await shot('04-check');
   await tap('#c-toggle');
@@ -129,15 +150,26 @@ try {
   await writeChar('#w-pads .padbox:nth-child(2)', '励');
   await shot('07-rewrite');
   await tapText('写好了');
-  ok('交了:回对答案,鼓励不再问', await waitFor(`document.querySelector('#v-check.on') && [...document.querySelectorAll('.wc')].map((c) => c.querySelector('.ask') ? 'ask' : 'self').join() === 'self,self,ask'`));
+  ok('交了:回对答案,都不问了', await waitFor(`document.querySelector('#v-check.on') && [...document.querySelectorAll('.wc')].map((c) => c.querySelector('.ask') ? 'ask' : 'self').join() === 'self,self,self'`));
   await shot('08-check-after');
   await tapText('对好了');
   ok('对好了:回首页', await waitFor(`location.pathname === '/' && !!document.querySelector('.c-dictation')`));
 
   // ---- 家长 ----
   await send('Page.navigate', { url: `${base}/dictation/parent` });
-  ok('家长页:鼓少了第 7 笔、叶可能写成了别的字、问了才改、要再练的词', await waitFor(`document.body.innerText.includes('少了第 7 笔') && document.body.innerText.includes('可能写成了别的字') && document.body.innerText.includes('问了才改') && (document.querySelector('textarea')?.value ?? '').includes('鼓励 鼓励,老师鼓励我的鼓励')`), (await evaluate(`document.body.innerText.slice(0, 400)`)) ?? '');
+  ok('家长页:鼓少了第 7 笔、问了才改、看了答案:叶、要再练的词里有叶', await waitFor(`document.body.innerText.includes('少了第 7 笔') && document.body.innerText.includes('看了答案:叶') && document.body.innerText.includes('问了才改') && (document.querySelector('textarea')?.value ?? '').includes('叶')`), (await evaluate(`document.body.innerText.slice(0, 400)`)) ?? '');
   await shot('09-parent');
+  // ---- 录像 ----
+  await tap('a.reel');
+  ok('录像:三章,第一章两个格;经过里有念与写', await waitFor(`location.pathname === '/dictation/reel' && document.querySelectorAll('#chs .ch').length === 3 && document.querySelectorAll('#cells svg').length === 2 && document.querySelector('#log').innerText.includes('老师念')`));
+  await tap('#chs .ch:nth-child(3)');
+  ok('第三章「叶」:标看过答案,经过里有「给答案」与「照着写」', await waitFor(`document.querySelector('#chs .ch:nth-child(3)').classList.contains('rv') && document.querySelector('#log').innerText.includes('给答案') && document.querySelector('#log').innerText.includes('照着写「叶」')`));
+  await tap('#chs .ch:nth-child(1)');
+  await tap('#play');
+  await sleep(1500);
+  ok('播放:钟往前走,格里一笔一笔出来', (await evaluate(`document.querySelector('#clock').textContent !== '0:00' || document.querySelectorAll('#cells .ink path').length > 0`)));
+  await tap('#play');
+  await shot('10-reel');
   // ---- 拍照开始(孩子端,首页固定的「拍照听写」)----
   await send('Emulation.clearDeviceMetricsOverride');
   await send('Page.navigate', { url: `${base}/` });
@@ -159,7 +191,7 @@ try {
   ok('列表里点 × 去掉「宽大」', (await evaluate(`[...document.querySelectorAll('#p-list .wr')].map((r) => r.textContent).join('|').includes('宽大')`)) === false && (await evaluate(`document.querySelector('#p-go').textContent`)) === '开始听写 · 六个词');
   await shot('12-pick');
   await tap('#p-go');
-  ok('开始听写:进写字屏,第一个词两个格、没有字', await waitFor(`!!document.querySelector('#v-listen.on') && document.querySelectorAll('#l-pads .padbox').length === 2 && document.querySelector('#l-what').textContent === '第一个词,两个字'`));
+  ok('开始听写:进写字屏,听写本六行,第一个词两格、没有字', await waitFor(`!!document.querySelector('#v-listen.on') && document.querySelectorAll('#l-book .brow').length === 6 && document.querySelectorAll('#l-book .brow')[0].querySelectorAll('.padbox').length === 2 && document.querySelector('#l-what').textContent === '第一个词的第一个字'`));
   await shot('13-photo-listen');
 
   // 手机宽度看一眼家长页

@@ -15,6 +15,8 @@ export const ID_RE = /^\d{4}-\d{2}-\d{2}-\d{4}(?:-\d{1,2})?$/;
 export interface CharInk {
   strokes: InkPoint[][];
   undos: number;
+  /** 写之前点了「不会写,给答案」,看了笔顺照着描红写的 */
+  revealed?: boolean;
 }
 
 /** 一个词写的一遍 */
@@ -24,12 +26,22 @@ export interface Attempt {
   judges: CharJudge[];
 }
 
-/** 孩子在对答案时做的事:点开一个字逐笔看、问了再写一遍点「好」、自己说「我想再写」 */
+/**
+ * 孩子做的事,录像按它排时间:
+ * 写的时候 show 出了这个词、say 老师念了一遍(n 第几遍)、again 点了再念、reveal 点了「给答案」(服务端记)、order 看了一遍笔顺、done 写好了这个字;
+ * 对答案时 strokeOrder 点开一个字逐笔看、rewrite 问了再写一遍点「好」、self 自己说「我想再写」。
+ */
+export const EVENT_KINDS = ['show', 'say', 'again', 'reveal', 'order', 'done', 'strokeOrder', 'rewrite', 'self'] as const;
 export interface DictationEvent {
+  /** 服务端收到的时刻 */
   at: string;
-  kind: 'strokeOrder' | 'rewrite' | 'self' | 'again';
+  /** 孩子端的时刻:离这次听写开始(startedAt)多少毫秒,和笔迹的点同一个尺子;老数据没有 */
+  t?: number;
+  kind: (typeof EVENT_KINDS)[number];
   word: number;
   char?: number;
+  /** say 是第几遍 */
+  n?: number;
 }
 
 export interface Session {

@@ -58,6 +58,31 @@ export const DICTATION_PAGE = `<!doctype html>
   .grow { flex:1; display:flex; flex-direction:column; justify-content:center; gap:28px; }
   .foot { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
   .foot .tools { display:flex; gap:12px; flex-wrap:wrap; }
+  [hidden] { display:none !important; }
+  /* 写字(原型 v2 的 C):左边听写本,右边放大写一个字 */
+  #v-listen { flex-direction:row; gap:20px; padding:16px 20px 20px; height:100vh; height:100dvh; }
+  .book { width:300px; flex:none; min-height:0; display:flex; flex-direction:column; gap:4px; padding:14px 10px; background:#fff; border:1px solid var(--line); border-radius:22px; overflow:auto; }
+  .book .bh { display:flex; align-items:baseline; justify-content:space-between; padding:0 8px 6px; }
+  .book .bh b { font-size:20px; }
+  .book .bh span { font-size:14px; color:var(--dim); }
+  .brow { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:14px; }
+  .brow.cur { background:#fff3e8; }
+  .brow .no { width:24px; text-align:right; color:var(--dim); font-size:15px; flex:none; }
+  .brow.cur .no { color:#b9531c; font-weight:700; }
+  .brow .padbox { width:58px; height:58px; }
+  .brow .padbox.ahead { opacity:.45; }
+  .brow .padbox.here { box-shadow:0 0 0 4px rgba(232,116,59,.45); border-radius:4px; }
+  .desk { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; gap:12px; }
+  .bar2 { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .chip { display:flex; align-items:center; gap:12px; padding:6px 16px 6px 6px; background:var(--tutor); border-radius:28px; min-width:0; }
+  .chip .av { width:44px; height:44px; font-size:18px; }
+  .chip svg { width:26px; height:26px; flex:none; }
+  .chip b { display:block; font-size:18px; color:var(--tutor-ink); white-space:nowrap; }
+  .chip small { display:block; font-size:14px; color:#7a5212; white-space:nowrap; min-height:20px; }
+  .big { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
+  .tool.reveal { border:2px solid #e8a26f; background:#fff8f2; color:#8f3c14; font-weight:600; }
+  .std.trace path { fill:#d9d5cc; fill-opacity:1; }
+  @media (orientation: portrait) { #v-listen { flex-direction:column; } .book { width:auto; max-height:210px; flex:none; } }
   /* 开始 */
   #v-start .grow { align-items:center; text-align:center; }
   #v-start .big { font-size:30px; font-weight:700; }
@@ -156,24 +181,33 @@ export const DICTATION_PAGE = `<!doctype html>
 </div>
 
 <div class="view" id="v-listen">
-  <div class="bar">
-    <div class="l"><span class="ttl">听写</span><span class="dots" id="l-dots"></span></div>
-    <button class="tool sm" data-home="1">先停一下</button>
-  </div>
-  <div class="grow">
-    <div class="say">
-      <div class="av" id="l-av"></div>
-      <div class="bubble"><svg viewBox="0 0 24 24" fill="none" stroke="#8a5a12" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M18.5 5.5a9 9 0 0 1 0 13"></path></svg><div><b id="l-what"></b><small id="l-status"></small></div></div>
-      <button class="tool" id="l-again"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>再念一遍</button>
+  <div class="book" id="l-book"></div>
+  <div class="desk">
+    <div class="bar2">
+      <div class="chip">
+        <div class="av" id="l-av"></div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="#8a5a12" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg>
+        <div style="min-width:0"><b id="l-what"></b><small id="l-status"></small></div>
+      </div>
+      <div class="row" style="flex:none">
+        <button class="tool sm" id="l-again"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>再念</button>
+        <button class="tool sm" data-home="1">先停一下</button>
+      </div>
     </div>
-    <div class="pads" id="l-pads"></div>
-  </div>
-  <div class="foot">
-    <div class="tools">
-      <button class="tool" data-undo="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"></path><path d="M4 9h11a5 5 0 0 1 0 10h-3"></path></svg>撤销</button>
-      <button class="tool" data-clear="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20H8l-4-4 10-10 6 6-6 6"></path></svg>擦掉这一格</button>
+    <div class="big" id="l-big"></div>
+    <div class="foot" id="l-foot-write">
+      <div class="tools">
+        <button class="tool" data-undo="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"></path><path d="M4 9h11a5 5 0 0 1 0 10h-3"></path></svg>撤销</button>
+        <button class="tool" data-clear="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20H8l-4-4 10-10 6 6-6 6"></path></svg>擦掉重写</button>
+        <button class="tool reveal" id="l-reveal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"></path><path d="M10 21h4"></path><path d="M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"></path></svg>不会写,给答案</button>
+        <button class="tool" id="l-reorder" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>再看笔顺</button>
+      </div>
+      <button class="main" id="l-next">这个字写好了</button>
     </div>
-    <button class="main" id="l-next">写好了</button>
+    <div class="foot" id="l-foot-order" hidden>
+      <div class="tools" style="align-items:center"><div class="sqs" id="l-sqs"></div><button class="tool" id="l-again-order">再看一遍</button></div>
+      <button class="main" id="l-trace">我来写</button>
+    </div>
   </div>
 </div>
 
@@ -235,11 +269,13 @@ export const DICTATION_PAGE = `<!doctype html>
   };
   var CN = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
   var cn = function (n) { return n <= 10 ? CN[n] : n < 20 ? '十' + CN[n - 10] : CN[Math.floor(n / 10)] + '十' + (n % 10 ? CN[n % 10] : ''); };
-  var CHARS_CN = ['', '一个字', '两个字', '三个字', '四个字'];
 
   var q = new URLSearchParams(location.search);
   var HOME = q.get('home'); var N = Number(q.get('n') || 0);
-  var S = { v: null, i: 0, pads: [], stack: [], active: null, sawPen: false, t0: performance.now(), noAudio: false, sayTimer: 0, order: null, rw: null };
+  var S = { v: null, base: Date.now(), i: 0, w: null, pads: [], stack: [], active: null, sawPen: false, noAudio: false, sayTimer: 0, order: null, rw: null };
+  /** 点与事件的时刻:离这次听写开始(startedAt)多少毫秒;孩子端的钟,录像只看先后与间隔 */
+  var now = function () { return Math.max(0, Date.now() - S.base); };
+  var setView = function (v) { S.v = v; S.base = Date.parse(v.startedAt) || S.base; };
 
   var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); window.scrollTo(0, 0); };
   var goHome = function () { stopSay(); location.href = '/'; };
@@ -264,6 +300,9 @@ export const DICTATION_PAGE = `<!doctype html>
       go();
     });
   };
+
+  /** 记一件事(录像按它排);发不出去就算了 */
+  var event = function (kind, word, ch, n) { var b = { kind: kind, word: word, t: now() }; if (ch !== undefined) b.char = ch; if (n !== undefined) b.n = n; api('POST', '/api/dictation/' + S.v.id + '/events', b).catch(function () {}); };
 
   // ---------- 字形(书上的字):/api/kid/tianzige/<字>,strokes 轮廓 + medians 中线 ----------
   var GL = {};
@@ -291,7 +330,7 @@ export const DICTATION_PAGE = `<!doctype html>
   /** 记一笔:点 = [x, y, t],x / y 是字的坐标(1024 见方、y 向上),t 是离进页面多少毫秒 */
   var bindPen = function (pad) {
     var cur = null;
-    var pos = function (e) { var r = pad.svg.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * 1024), Math.round(900 - (e.clientY - r.top) / r.height * 1024), Math.round(performance.now() - S.t0)]; };
+    var pos = function (e) { var r = pad.svg.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * 1024), Math.round(900 - (e.clientY - r.top) / r.height * 1024), now()]; };
     pad.svg.addEventListener('pointerdown', function (e) {
       if (e.pointerType === 'pen') S.sawPen = true; else if (e.pointerType === 'touch' && S.sawPen) return; // 用过笔就不认手掌
       if (cur) return;
@@ -308,11 +347,11 @@ export const DICTATION_PAGE = `<!doctype html>
       cur.path.setAttribute('d', pathD(cur.pts));
       e.preventDefault();
     });
-    var up = function (e) { if (cur && e.pointerId === cur.id) cur = null; };
+    var up = function (e) { if (cur && e.pointerId === cur.id) { cur = null; if (pad.onUp) pad.onUp(); } };
     pad.svg.addEventListener('pointerup', up); pad.svg.addEventListener('pointercancel', up);
   };
-  var undo = function () { var pad = S.stack.pop(); if (!pad || !pad.strokes.length) return; pad.strokes.pop(); if (pad.ink.lastChild) pad.ink.lastChild.remove(); pad.undos++; };
-  var clearActive = function () { var pad = S.active; if (!pad || !pad.strokes.length) return; pad.strokes = []; pad.ink.replaceChildren(); pad.undos++; S.stack = S.stack.filter(function (x) { return x !== pad; }); };
+  var undo = function () { var pad = S.stack.pop(); if (!pad || !pad.strokes.length) return; pad.strokes.pop(); if (pad.ink.lastChild) pad.ink.lastChild.remove(); pad.undos++; if (pad.onUp) pad.onUp(); };
+  var clearActive = function () { var pad = S.active; if (!pad || !pad.strokes.length) return; pad.strokes = []; pad.ink.replaceChildren(); pad.undos++; S.stack = S.stack.filter(function (x) { return x !== pad; }); if (pad.onUp) pad.onUp(); };
   var us = document.querySelectorAll('[data-undo]'); for (var i1 = 0; i1 < us.length; i1++) us[i1].addEventListener('click', undo);
   var cs = document.querySelectorAll('[data-clear]'); for (var i2 = 0; i2 < cs.length; i2++) cs[i2].addEventListener('click', clearActive);
   var padsOut = function () { return { chars: S.pads.map(function (p) { return { strokes: p.strokes, undos: p.undos }; }) }; };
@@ -335,7 +374,7 @@ export const DICTATION_PAGE = `<!doctype html>
   var sayWord = function (i, times) {
     stopSay();
     var tok = S.sayTok; var left = times; var nth = 0;
-    var next = function () { if (tok !== S.sayTok) return; if (left <= 0) { status('听完了就写'); return; } left--; nth++; status('正在念 · 第 ' + nth + ' 遍'); play(); };
+    var next = function () { if (tok !== S.sayTok) return; if (left <= 0) { status('听完了就写'); return; } left--; nth++; status('正在念 · 第 ' + nth + ' 遍'); event('say', i, undefined, nth); play(); };
     var gap = function () { if (tok !== S.sayTok) return; status(left > 0 ? '再听一遍' : '听完了就写'); if (left > 0) S.sayTimer = setTimeout(next, 1800); };
     var synth = function () {
       api('GET', '/api/dictation/' + S.v.id + '/say/' + i + '?text=1').then(function (j) {
@@ -375,7 +414,7 @@ export const DICTATION_PAGE = `<!doctype html>
   };
   var start = function (fresh) {
     api('POST', '/api/dictation', { home: HOME, n: N, fresh: Boolean(fresh) }).then(function (v) {
-      S.v = v;
+      setView(v);
       if (v.checked && !v.done) openCheck(); else renderStart();
     }, function () {
       $('#s-big').textContent = '首页换过了';
@@ -494,49 +533,143 @@ export const DICTATION_PAGE = `<!doctype html>
     var words = picked().slice(0, 20).map(function (k) { var it = P.items[k]; var t = textOf(k); return t === it.text ? { chars: t, say: it.say || undefined } : { chars: t }; }).filter(function (w) { return w.chars; });
     if (!words.length) return;
     clearTimeout(P.timer);
-    persist('POST', '/api/dictation', { photo: P.id, words: words }, $('#p-go')).then(function (v) { S.v = v; openListen(); }, function () { $('#p-status').textContent = '有的词不是一到四个汉字,改一下再开始'; });
+    persist('POST', '/api/dictation', { photo: P.id, words: words }, $('#p-go')).then(function (v) { setView(v); openListen(); }, function () { $('#p-status').textContent = '有的词不是一到四个汉字,改一下再开始'; });
   });
   window.addEventListener('resize', function () { if ($('#v-pick').classList.contains('on')) layoutShot(); });
 
-  // ---------- 听写 ----------
-  var renderDots = function () {
-    var box = $('#l-dots'); box.replaceChildren();
-    S.v.sizes.forEach(function (_, k) { box.append(h('i', { 'class': k === S.i ? 'c' : S.v.written[k] ? 'd' : '' })); });
+  // ---------- 听写(左边听写本,右边一次写一个字;不会写就给答案:看笔顺,再照着描红写一遍)----------
+  var updateHere = function () {
+    var el = $('#l-book .here .ink'); if (!el || !S.w) return;
+    el.replaceChildren.apply(el, S.w.pad.strokes.filter(function (x) { return x.length; }).map(function (x) { return sv('path', { d: pathD(x) }); }));
+  };
+  var renderBook = function () {
+    var b = $('#l-book');
+    var rows = [h('div', { 'class': 'bh' }, h('b', {}, '听写本'), h('span', {}, cn(S.v.sizes.length) + '个词'))];
+    S.v.sizes.forEach(function (size, wi) {
+      var row = h('div', { 'class': 'brow' + (wi === S.i ? ' cur' : '') }, h('div', { 'class': 'no' }, String(wi + 1)));
+      for (var c = 0; c < size; c++) {
+        (function (c) {
+          var mine = wi === S.i ? (c === S.w.c ? { strokes: S.w.pad.strokes } : S.w.inks[c]) : S.v.mine[wi] ? S.v.mine[wi][c] : null;
+          var cell = makePad({ ink: mine ? mine.strokes : [], onTap: wi === S.i ? function () { if (S.w.mode !== 'order' && c !== S.w.c) openChar(c); } : null });
+          if (wi > S.i) cell.el.classList.add('ahead');
+          if (wi === S.i && c === S.w.c) cell.el.classList.add('here');
+          row.append(cell.el);
+        })(c);
+      }
+      rows.push(row);
+    });
+    b.replaceChildren.apply(b, rows);
+    var cur = b.querySelector('.brow.cur'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
+  };
+  var whatText = function () { return S.v.sizes[S.i] === 1 ? '第' + cn(S.i + 1) + '个词 · 一个字' : '第' + cn(S.i + 1) + '个词的第' + cn(S.w.c + 1) + '个字'; };
+  var renderFoot = function () {
+    var m = S.w.mode;
+    $('#l-foot-write').hidden = m === 'order'; $('#l-foot-order').hidden = m !== 'order';
+    $('#l-reveal').hidden = m === 'trace'; $('#l-reorder').hidden = m !== 'trace';
+    $('#l-what').textContent = m === 'order' ? '看「' + S.w.chars[S.w.c] + '」一笔一笔写' : m === 'trace' ? '照着灰色的「' + S.w.chars[S.w.c] + '」写一遍' : whatText();
+  };
+  /** 手上这个字收进这个词的格子里(换字、写好了之前) */
+  var stash = function () {
+    if (!S.w || !S.w.pad) return;
+    var prev = S.w.inks[S.w.c];
+    S.w.inks[S.w.c] = { strokes: S.w.pad.strokes, undos: S.w.pad.undos, revealed: S.w.mode === 'trace' || Boolean(prev && prev.revealed) };
+  };
+  var openChar = function (c) {
+    stash(); S.w.otok = (S.w.otok || 0) + 1;
+    S.w.c = c;
+    var prev = S.w.inks[c];
+    S.w.mode = prev && prev.revealed ? 'trace' : 'write';
+    var pad = makePad({ write: true, ink: prev ? prev.strokes : [] });
+    pad.strokes = prev ? prev.strokes.slice() : []; pad.undos = prev ? prev.undos : 0;
+    pad.onUp = updateHere;
+    S.w.pad = pad; S.pads = [pad]; S.stack = pad.strokes.map(function () { return pad; });
+    var big = $('#l-big'); big.replaceChildren(pad.el);
+    var r = big.getBoundingClientRect();
+    pad.el.style.width = pad.el.style.height = Math.max(240, Math.min(640, Math.floor(Math.min(r.width, r.height)) - 10)) + 'px';
+    setActive(pad);
+    if (S.w.mode === 'trace') glyph(S.w.chars[c]).then(function (d) { if (S.w && S.w.pad === pad) fillStd(pad, d, 'trace'); });
+    renderFoot(); renderBook();
   };
   var openListen = function () {
     var k = S.v.written.indexOf(false);
     if (k < 0) return submitAll();
     S.i = k;
+    var inks = []; for (var c = 0; c < S.v.sizes[k]; c++) inks.push(null);
+    S.w = { i: k, c: 0, inks: inks, done: [], chars: {}, mode: 'write', pad: null };
     $('#l-av').textContent = avatarText();
-    $('#l-what').textContent = '第' + cn(k + 1) + '个词,' + CHARS_CN[S.v.sizes[k]];
-    renderDots();
     show('listen');
-    writePads($('#l-pads'), S.v.sizes[k], 330);
+    event('show', k);
+    openChar(0);
     sayWord(k, 2);
   };
-  $('#l-again').addEventListener('click', function () { sayWord(S.i, 1); });
+  $('#l-again').addEventListener('click', function () { event('again', S.i); sayWord(S.i, 1); });
+  /** 这个字写好了:下一个没写的字;这个词都写了就交这个词,念下一个 */
   $('#l-next').addEventListener('click', function () {
+    var w = S.w; if (!w) return;
+    if (w.mode === 'trace' && !w.pad.strokes.length) { status('照着灰色的写一遍,再点写好了'); return; }
+    event('done', S.i, w.c);
+    stash(); w.done[w.c] = true;
+    var size = S.v.sizes[S.i];
+    for (var c = 1; c <= size; c++) { var n = (w.c + c) % size; if (!w.done[n]) return openChar(n); }
     stopSay();
     var k = S.i;
-    persist('PUT', '/api/dictation/' + S.v.id + '/first/' + k, padsOut(), $('#l-next')).then(function () {
-      S.v.written[k] = true;
+    var chars = w.inks.map(function (x) { return x ? { strokes: x.strokes, undos: x.undos, revealed: x.revealed || undefined } : { strokes: [], undos: 0 }; });
+    persist('PUT', '/api/dictation/' + S.v.id + '/first/' + k, { chars: chars }, $('#l-next')).then(function () {
+      S.v.written[k] = true; S.v.mine[k] = chars;
       openListen();
     }, function () { start(false); });
   });
+  /** 不会写,给答案:服务端回这一个字(并记下),写了一半的清掉,书上的字一笔一笔写 */
+  $('#l-reveal').addEventListener('click', function () {
+    var w = S.w; if (!w) return;
+    stopSay(); status('');
+    persist('POST', '/api/dictation/' + S.v.id + '/reveal/' + S.i, { char: w.c, t: now() }, $('#l-reveal')).then(function (j) {
+      w.chars[w.c] = j.ch; w.mode = 'order';
+      w.pad.strokes = []; w.pad.ink.replaceChildren(); S.stack = []; updateHere();
+      renderFoot();
+      glyph(j.ch).then(function (d) { w.d = d; fillStd(w.pad, d, ''); playOrder(); });
+    });
+  });
+  var playOrder = function () {
+    var w = S.w, pad = w.pad, d = w.d; if (!d) return;
+    event('order', S.i, w.c);
+    var tok = (w.otok = (w.otok || 0) + 1);
+    pad.top.replaceChildren();
+    var paths = pad.std.children, n = d.strokes.length, k = 0, sq = $('#l-sqs');
+    var paint = function (cur, anim) {
+      for (var i = 0; i < paths.length; i++) paths[i].setAttribute('class', i < cur ? 'sd' : i === cur && !anim ? 'sc' : 'sf');
+      sq.replaceChildren(); for (var j = 0; j < n; j++) sq.append(h('i', { 'class': j < cur ? 'd' : j === cur ? 'c' : '' }, String(j + 1)));
+    };
+    var step = function () {
+      if (tok !== w.otok) return;
+      if (k >= n) { paint(n, false); return; }
+      paint(k, true);
+      animStroke(pad, d, k, 'o', function () { if (tok !== w.otok) return; paint(k, false); k++; setTimeout(step, 380); });
+    };
+    step();
+  };
+  $('#l-again-order').addEventListener('click', playOrder);
+  /** 我来写:描红打底,必须照着写一遍才能写好了(拍板 8) */
+  $('#l-trace').addEventListener('click', function () {
+    var w = S.w; w.otok++; w.pad.top.replaceChildren();
+    w.mode = 'trace'; fillStd(w.pad, w.d, 'trace');
+    var ps = w.pad.std.children; for (var i = 0; i < ps.length; i++) ps[i].removeAttribute('class');
+    renderFoot(); status('');
+  });
+  $('#l-reorder').addEventListener('click', function () { var w = S.w; if (!w.d) return glyph(w.chars[w.c]).then(function (d) { w.d = d; $('#l-reorder').click(); }); w.mode = 'order'; fillStd(w.pad, w.d, ''); renderFoot(); playOrder(); });
   var submitAll = function () {
-    persist('POST', '/api/dictation/' + S.v.id + '/check', null, $('#l-next')).then(function (v) { S.v = v; openCheck(); });
+    persist('POST', '/api/dictation/' + S.v.id + '/check', null, $('#l-next')).then(function (v) { setView(v); openCheck(); });
   };
 
   // ---------- 对答案 ----------
-  var event = function (kind, word, ch) { api('POST', '/api/dictation/' + S.v.id + '/events', ch === undefined ? { kind: kind, word: word } : { kind: kind, word: word, char: ch }).catch(function () {}); };
   var openCheck = function () {
-    if (!S.v.reveal) { api('GET', '/api/dictation/' + S.v.id + '/kid').then(function (v) { S.v = v; if (v.reveal) openCheck(); }); return; }
+    if (!S.v.answers) { api('GET', '/api/dictation/' + S.v.id + '/kid').then(function (v) { setView(v); if (v.answers) openCheck(); }); return; }
     var box = $('#c-cards');
     var size = window.innerWidth < 700 ? 110 : 130;
-    var most = Math.max.apply(null, S.v.reveal.map(function (w) { return Array.from(w.chars).length; }));
+    var most = Math.max.apply(null, S.v.answers.map(function (w) { return Array.from(w.chars).length; }));
     box.style.setProperty('--card', Math.min(window.innerWidth - 48, most * (size + 10) + 40) + 'px');
     box.replaceChildren();
-    S.v.reveal.forEach(function (w, wi) {
+    S.v.answers.forEach(function (w, wi) {
       var chars = Array.from(w.chars);
       var row = h('div', { 'class': 'pads' });
       row.style.setProperty('--pad', size + 'px');
@@ -578,7 +711,7 @@ export const DICTATION_PAGE = `<!doctype html>
     return setTimeout(function () { pad.top.replaceChildren(); if (then) then(); }, ms + 120);
   };
   var openStrokeOrder = function (wi, ci) {
-    var w = S.v.reveal[wi]; var ch = Array.from(w.chars)[ci];
+    var w = S.v.answers[wi]; var ch = Array.from(w.chars)[ci];
     stopStrokeOrder();
     var box = $('#r-pad');
     var size = Math.max(240, Math.min(560, window.innerHeight - 140, Math.floor(window.innerWidth * (window.innerWidth > window.innerHeight ? 0.5 : 0.9))));
@@ -612,11 +745,11 @@ export const DICTATION_PAGE = `<!doctype html>
   $('#r-play').addEventListener('click', function () { if (!S.order || !S.order.d) return; stepTo(S.order.k >= S.order.d.strokes.length ? 0 : S.order.k, true); });
   $('#r-zero').addEventListener('click', function () { if (S.order) stepTo(0, true); });
   $('#r-back').addEventListener('click', function () { stopStrokeOrder(); S.order = null; openCheck(); });
-  $('#r-rewrite').addEventListener('click', function () { var wi = S.order ? S.order.wi : 0; var w = S.v.reveal[wi]; stopStrokeOrder(); S.order = null; event(w.ask ? 'rewrite' : 'self', wi); openRewrite(wi, !w.ask); });
+  $('#r-rewrite').addEventListener('click', function () { var wi = S.order ? S.order.wi : 0; var w = S.v.answers[wi]; stopStrokeOrder(); S.order = null; event(w.ask ? 'rewrite' : 'self', wi); openRewrite(wi, !w.ask); });
 
   // ---------- 再写一遍 ----------
   var openRewrite = function (wi, self) {
-    var w = S.v.reveal[wi]; var chars = Array.from(w.chars);
+    var w = S.v.answers[wi]; var chars = Array.from(w.chars);
     S.rw = { wi: wi, self: self };
     $('#w-title').textContent = '再写一遍:' + w.chars;
     var mbox = $('#w-models'); mbox.style.setProperty('--pad', (window.innerWidth < 700 ? 90 : 140) + 'px'); mbox.replaceChildren();
@@ -644,7 +777,7 @@ export const DICTATION_PAGE = `<!doctype html>
   $('#w-done').addEventListener('click', function () {
     if (!S.rw) return;
     var body = padsOut(); body.self = S.rw.self;
-    persist('POST', '/api/dictation/' + S.v.id + '/rewrites/' + S.rw.wi, body, $('#w-done')).then(function (v) { S.v = v; S.rw = null; openCheck(); }, function () { openCheck(); });
+    persist('POST', '/api/dictation/' + S.v.id + '/rewrites/' + S.rw.wi, body, $('#w-done')).then(function (v) { setView(v); S.rw = null; openCheck(); }, function () { openCheck(); });
   });
 
   if (HOME) start(false); else openSnap();

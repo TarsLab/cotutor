@@ -133,7 +133,7 @@ try {
   check('开始:要 {home, n}', (await call('POST', '/api/dictation', { n: 0 })).status === 400 && (await call('POST', '/api/dictation', { home: homeId, n: 1 })).status === 404);
   const st = await call('POST', '/api/dictation', { home: homeId, n: 0 });
   const id = st.json.id as string;
-  check('开始:201,id 是日期-时分;只给几个字一个词,没有字;语文老师念', st.status === 201 && id === '2026-10-10-1930' && st.json.sizes.join() === '2,2,1,1' && st.json.tutor === '语文老师' && !JSON.stringify(st.json).includes('春') && st.json.reveal === null, JSON.stringify(st.json));
+  check('开始:201,id 是日期-时分;只给几个字一个词,没有字;语文老师念', st.status === 201 && id === '2026-10-10-1930' && st.json.sizes.join() === '2,2,1,1' && st.json.tutor === '语文老师' && !JSON.stringify(st.json).includes('春') && st.json.answers === null, JSON.stringify(st.json));
   check('dictation/ 整个不进 git', readFileSync(join(root, 'dictation', '.gitignore'), 'utf8').split('\n').includes('*'));
   const again = await call('POST', '/api/dictation', { home: homeId, n: 0 });
   check('今天这张卡开过、没对好:再点进来接着那一次', again.status === 200 && again.json.id === id);
@@ -153,21 +153,21 @@ try {
   const s3 = await put(2, [await write('页')]);
   check('交:三个词各 200', s1 === 200 && s2 === 200 && s3 === 200);
   const mid = (await call('GET', `/api/dictation/${id}/kid`)).json;
-  check('交卷前:写了哪几个;还是没有字', mid.written.join() === 'true,true,true,false' && mid.reveal === null && !JSON.stringify(mid).includes('鼓'));
+  check('交卷前:写了哪几个;还是没有字', mid.written.join() === 'true,true,true,false' && mid.answers === null && !JSON.stringify(mid).includes('鼓'));
 
   // ---- 交卷 ----
   const ck = (await call('POST', `/api/dictation/${id}/check`)).json;
-  const asks = ck.reveal.map((w: J) => w.ask).join();
-  check('交卷:字下发;少一笔、写成别字、空着的问「再写一遍?」,笔顺反了的不问', ck.checked && ck.reveal.map((w: J) => w.chars).join() === '春天,鼓励,叶,雪' && asks === 'false,true,true,true', asks);
-  check('交卷:孩子端只有字、问不问、笔迹,没有判的细节', !JSON.stringify(ck).includes('missing') && !JSON.stringify(ck).includes('order') && ck.reveal[1].ink[0].length === 12);
-  check('交卷后第一遍不能改(409);再交一次卷照旧', (await call('PUT', `/api/dictation/${id}/first/0`, { chars: [cell([]), cell([])] })).status === 409 && (await call('POST', `/api/dictation/${id}/check`)).json.reveal[1].ask === true);
+  const asks = ck.answers.map((w: J) => w.ask).join();
+  check('交卷:字下发;少一笔、写成别字、空着的问「再写一遍?」,笔顺反了的不问', ck.checked && ck.answers.map((w: J) => w.chars).join() === '春天,鼓励,叶,雪' && asks === 'false,true,true,true', asks);
+  check('交卷:孩子端只有字、问不问、笔迹,没有判的细节', !JSON.stringify(ck).includes('missing') && !JSON.stringify(ck).includes('order') && ck.answers[1].ink[0].length === 12);
+  check('交卷后第一遍不能改(409);再交一次卷照旧', (await call('PUT', `/api/dictation/${id}/first/0`, { chars: [cell([]), cell([])] })).status === 409 && (await call('POST', `/api/dictation/${id}/check`)).json.answers[1].ask === true);
 
   // ---- 对答案时做的事、再写一遍 ----
   check('事件:逐笔看了鼓;坏的 400', (await call('POST', `/api/dictation/${id}/events`, { kind: 'strokeOrder', word: 1, char: 0 })).status === 200 && (await call('POST', `/api/dictation/${id}/events`, { kind: 'peek', word: 1 })).status === 400 && (await call('POST', `/api/dictation/${id}/events`, { kind: 'strokeOrder', word: 9 })).status === 400);
   const rw = (await call('POST', `/api/dictation/${id}/rewrites/1`, { chars: [cell(await write('鼓')), cell(await write('励'))] })).json;
-  check('再写一遍:这个词不再问,标 rewrote,笔迹换成新写的', rw.reveal[1].ask === false && rw.reveal[1].rewrote === true && rw.reveal[1].ink[0].length === 13);
+  check('再写一遍:这个词不再问,标 rewrote,笔迹换成新写的', rw.answers[1].ask === false && rw.answers[1].rewrote === true && rw.answers[1].ink[0].length === 13);
   const self = (await call('POST', `/api/dictation/${id}/rewrites/0`, { chars: [cell(await write('春')), cell(await write('天'))], self: true })).json;
-  check('自己说「我想再写」:照样记下', self.reveal[0].rewrote === true);
+  check('自己说「我想再写」:照样记下', self.answers[0].rewrote === true);
   check('对好了', (await call('POST', `/api/dictation/${id}/done`)).status === 200 && (await call('GET', `/api/dictation/${id}/kid`)).json.done === true);
 
   // ---- 家长 ----
@@ -179,6 +179,27 @@ try {
   // ---- 再听写一次、首页换了 ----
   const fresh = await call('POST', '/api/dictation', { home: homeId, n: 0, fresh: true });
   check('再听写一次(fresh):另开一次,同一分钟加 -2', fresh.status === 201 && fresh.json.id === '2026-10-10-1930-2');
+
+  // ---- 不会写,给答案:看笔顺,照着描红写一遍(拍板 8);事件带孩子端的时刻,录像按它排 ----
+  {
+    const fid = fresh.json.id as string;
+    check('孩子端样子带开始时刻与自己写过的(笔迹不是答案)', typeof fresh.json.startedAt === 'string' && fresh.json.mine.every((m: unknown) => m === null));
+    check('事件:show / say 带 t 与第几遍;坏的 t、坏的种类 400;reveal 不能从 events 记', (await call('POST', `/api/dictation/${fid}/events`, { kind: 'show', word: 1, t: 120 })).status === 200 && (await call('POST', `/api/dictation/${fid}/events`, { kind: 'say', word: 1, t: 300, n: 2 })).status === 200 && (await call('POST', `/api/dictation/${fid}/events`, { kind: 'say', word: 1, t: -5 })).status === 400 && (await call('POST', `/api/dictation/${fid}/events`, { kind: 'reveal', word: 1, char: 0 })).status === 400);
+    const rv = await call('POST', `/api/dictation/${fid}/reveal/1`, { char: 0, t: 9100 });
+    check('给答案:回这一个字(只这一个),记一条 reveal;第几个字越界 400', rv.status === 200 && rv.json.ch === '鼓' && !JSON.stringify(rv.json).includes('励') && (await call('POST', `/api/dictation/${fid}/reveal/1`, { char: 2 })).status === 400);
+    const traced = (await write('鼓', { skip: [6, 7] })).map((st) => st.map(([x, y, t]) => [x, y, t + 10_000] as InkPoint));
+    await call('PUT', `/api/dictation/${fid}/first/1`, { chars: [{ strokes: traced, undos: 0, revealed: true }, cell(await write('励'))] });
+    for (const k of [0, 2, 3]) await call('PUT', `/api/dictation/${fid}/first/${k}`, { chars: Array.from(['春天', '', '叶', '雪'][k] || 'x').map(() => cell([])) });
+    const fck = (await call('POST', `/api/dictation/${fid}/check`)).json;
+    check('看过答案的词:交卷不问「再写一遍?」(照着写过了),孩子端标 revealed;别的照问', fck.answers[1].ask === false && fck.answers[1].revealed === true && fck.answers[0].ask === true);
+    check('给答案在交卷后 409', (await call('POST', `/api/dictation/${fid}/reveal/0`, { char: 0 })).status === 409);
+    const ff = (await call('GET', `/api/dictation/${fid}`)).json;
+    const evs = ff.events.map((e: J) => `${e.kind}:${e.word}:${e.t ?? '-'}${e.n ? ':' + e.n : ''}`).join();
+    check('全量:鼓记 revealed、笔迹的 t 原样;事件 show / say(第 2 遍)/ reveal 都带 t', ff.first[1].chars[0].revealed === true && ff.first[1].chars[0].strokes[0][0][2] >= 10_000 && evs === 'show:1:120,say:1:300:2,reveal:1:9100', evs);
+    const lst = (await call('GET', '/api/dictation')).json.sessions.find((x: J) => x.id === fid);
+    check('家长列表:看了答案的 1 个,不算「自己写全」', lst.revealed === 1 && lst.firstOk === 0, JSON.stringify(lst));
+    check('录像页:/dictation/reel 内联脚本能解析', parses((await call('GET', '/dictation/reel')).html));
+  }
   now = new Date(2026, 9, 10, 20, 0);
   const home2 = await publish(DRAFT.replace('雪\n', '雪花\n'));
   check('首页换过了:旧首页的卡 404(页面叫孩子回首页)', home2 !== homeId && (await call('POST', '/api/dictation', { home: homeId, n: 0 })).status === 404 && (await call('POST', '/api/dictation', { home: home2, n: 0 })).status === 201);

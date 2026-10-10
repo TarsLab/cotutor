@@ -124,6 +124,11 @@ function withMockPost(section: BoardSection, tutor: string, i: number): BoardSec
   return { ...section, cards, lines };
 }
 
+/** 孩子发出后几毫秒内画图卡算「画家在画」(含老师想的那几秒;真的 qwen-image-2.0-pro 约 15 秒) */
+const MOCK_PAINT_MS = 20000;
+/** 画图卡的占位图:方的 2×2 四格,每格一个圆圈数字 */
+const MOCK_PAINT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#fbfaf6"/>${[[24, 24, '#dcecf7'], [524, 24, '#fdeccb'], [24, 524, '#e3f1d8'], [524, 524, '#f6dde4']].map(([x, y, c], i) => `<rect x="${x}" y="${y}" width="476" height="476" rx="24" fill="${c}" stroke="#8a8781" stroke-width="3"/><rect x="${x}" y="${Number(y) + 300}" width="476" height="176" fill="#a9d18e"/><circle cx="${Number(x) + 238}" cy="${Number(y) + 250}" r="70" fill="#9a6235"/><circle cx="${Number(x) + 62}" cy="${Number(y) + 62}" r="34" fill="#fff" stroke="#1f8a4c" stroke-width="6"/><text x="${Number(x) + 62}" y="${Number(y) + 76}" font-size="40" text-anchor="middle" fill="#1f8a4c" font-family="sans-serif" font-weight="700">${i + 1}</text>`).join('')}</svg>`;
+
 export const MOCK_TUTORS: MockTutor[] = [
   {
     name: 'chinese-tutor',
@@ -209,6 +214,31 @@ export const MOCK_TUTORS: MockTutor[] = [
 鼓是敲鼓的鼓,励是[努力]的力多一个厂字头,一个人在厂下面使劲。
 
 你想再看一遍哪个字?点一下它就再写一遍。`,
+      // 你说我画(《wip/你说我画设想.md》):出题版的画图卡;mock 不真画,刚出来几秒是「画家在画」,之后给一张占位的四格
+      `你说得清清楚楚,四个词都放好了。
+
+~~~read
+春天的早上,小熊和小猴在地里种西瓜。
+小熊把种子埋进土里,小猴坐在树下吃桃子。
+中午太阳很大,小熊给小苗浇水,小猴躺在树下睡大觉。
+过了一个夏天,小熊的地里结满了大西瓜,小猴的地里只长了草。
+小熊推着满满一车西瓜,送给小猴一个,小猴低着头,脸红红的。
+~~~
+
+这是你出的题,画家开始画了。
+
+~~~paint
+题: 图上画了谁?他们分别在干什么?结果又是怎样的?用上词语宝库里的词,写几句话。
+词: 播种、睡大觉、满满、羞愧
+角色: 小熊:棕色,戴黄色草帽,穿绿色背带裤
+角色: 小猴:黄褐色,穿红背心
+1. 春天的早上,地里。小熊弯着腰把西瓜种子埋进土里;小猴坐在树下吃桃子。
+2. 中午,大太阳。小熊提着水壶给小苗浇水;小猴躺在树荫下睡大觉。
+3. 夏天,小熊的地里结满大西瓜,小熊抱着一个笑着;小猴的地里只长了草。
+4. 小熊推着满满一车西瓜,递给小猴一个;小猴低着头,脸红红的。
+~~~
+
+你猜,画家会把小猴画成什么样子?`,
     ],
   },
   {
@@ -564,12 +594,21 @@ export function createMock(opts: MockOptions = {}): Mock {
   /** 录音卡的录音(<老师>/<日期>.<job>.cards/<n>/rec-<k>.<ext> → 字节),只在内存里 */
   const recordings = new Map<string, { type: string; data: Buffer }>();
   const booked = new Set<string>();
+  /** 孩子这回发的消息是真钟几点发的(mock 的 now 可能是假钟;画图卡「在画」按它算,种子里的直接是画好的) */
+  const sentAt = new Map<string, number>();
+  /** 画图卡(mock 不真画):发出后 MOCK_PAINT_MS 内是「画家在画」,之后给一张占位的四格(/api/kid/image 认 mock-paint/);家长端多一行 note */
+  const mockPaints = (section: BoardSection, m: MockMessage, parent = false): BoardSection => {
+    if (!section.cards.some((c) => c.kind === 'paint')) return section;
+    const t = sentAt.get(m.job);
+    const drawing = t !== undefined && Date.now() - t < MOCK_PAINT_MS;
+    return { ...section, cards: section.cards.map((c, n) => (c.kind !== 'paint' ? c : { ...c, props: { ...c.props, drawn: drawing ? 'drawing' : 'done', ...(drawing ? {} : { pic: `mock-paint/${m.job}-${n}.png` }), ...(parent ? { note: drawing ? '在画(mock)' : '画好了:qwen-image-2.0-pro,15 秒(mock 的占位图)' } : {}) } })) };
+  };
   /** 下发孩子端的形状:答案剥掉、状态并到卡上、小课堂卡补那一段的起止(样本课包在仓库里) */
   const kidMessage = async (m: MockMessage) => {
     const { states, action: _a, lectureWatch: _w, lectureLog: _l, ...rest } = m;
     if (rest.lecture?.marks) rest.lecture = { ...rest.lecture, marks: rest.lecture.marks.map(({ text: _t, ...k }) => k) };
     const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => (states && i in states ? { ...c, state: states[i] } : c)) } : null;
-    const section = withState ? await enrichLectures(MOCK_LECTURE_DIRS, stripSecrets(withState)) : null;
+    const section = withState ? mockPaints(await enrichLectures(MOCK_LECTURE_DIRS, stripSecrets(withState)), m) : null;
     return { ...rest, section };
   };
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
@@ -745,7 +784,7 @@ export function createMock(opts: MockOptions = {}): Mock {
           rec++;
           return st === undefined ? c : { ...c, state: st, ...(h ? { heard: h } : {}) };
         };
-        const section = m.section ? await enrichLectures(MOCK_LECTURE_DIRS, { ...m.section, cards: m.section.cards.map(withHeard) }) : null;
+        const section = m.section ? mockPaints(await enrichLectures(MOCK_LECTURE_DIRS, { ...m.section, cards: m.section.cards.map(withHeard) }), m, true) : null;
         return { ...rest, from: 'kid' as const, section, ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };
       }));
       const pending = list.find((m) => m.pending);
@@ -900,6 +939,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         }
         const lt = lec ? mockLecture(lec.bundle) : null;
         const marks = lt ? storedMarks(lt, marksIn, photos.length) : [];
+        sentAt.set(job, Date.now());
         const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
         list.push(m);
         const done = think(t, m, cursor).then(() => { inflight.delete(m.job); });
@@ -945,8 +985,9 @@ export function createMock(opts: MockOptions = {}): Mock {
       return d ? { status: 200, json: d } : { status: 404, json: { error: 'not_found' } };
     }
     if (p === '/api/kid/image') {
-      // 图片卡:任何路径都给一张占位 svg(写着路径),前端能看到版式
+      // 图片卡:任何路径都给一张占位 svg(写着路径),前端能看到版式;画图卡(mock-paint/)给一张方的四格
       const rel = url.searchParams.get('p') ?? '';
+      if (rel.startsWith('mock-paint/')) return { status: 200, contentType: 'image/svg+xml', html: MOCK_PAINT_SVG };
       const esc = rel.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
       return { status: 200, contentType: 'image/svg+xml', html: `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7d9a8"/><stop offset="1" stop-color="#8fbf9f"/></linearGradient></defs><rect width="800" height="500" fill="url(#g)"/><circle cx="260" cy="250" r="90" fill="#e8743b"/><circle cx="420" cy="230" r="80" fill="#f4c542"/><circle cx="560" cy="270" r="85" fill="#e0508a"/><text x="400" y="460" font-size="22" text-anchor="middle" fill="#2b2b2b" font-family="sans-serif">${esc}</text></svg>` };
     }

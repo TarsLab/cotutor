@@ -1121,6 +1121,18 @@ __REEL_JS__
         if (stage) { const el = box('image'); el.className = 'zoom'; el.append(h('img', { src, alt: p.caption || '' })); pinch(el); return el; }
         return box('image', h('img', { src, alt: '', loading: 'lazy' }), p.caption ? h('div', { class: 'cap' }, p.caption) : null);
       }
+      case 'paint': {
+        // 画图卡(你说我画):题干、画好的图(没画好是分好的几幅)、词语宝库;舞台里放大看图。没画成也不说,停在分好的几幅;角色不显示
+        const pic = p.pic ? '/api/kid/image?p=' + encodeURIComponent(p.pic) : null;
+        if (stage && pic) { const el = box('paint'); el.className = 'zoom'; el.append(h('img', { src: pic, alt: '画家画的' })); pinch(el); return el; }
+        const panels = Array.isArray(p.panels) ? p.panels : [];
+        const grid = h('div', { class: 'pt-grid' + (panels.length === 1 ? ' one' : '') }, ...panels.map((t, i) => h('div', { class: 'pt-cell' }, h('span', { class: 'pt-n' }, String(i + 1)), h('div', {}, t))));
+        const words = Array.isArray(p.words) && p.words.length ? h('div', { class: 'pt-words' }, h('b', {}, '词语宝库'), h('span', {}, p.words.join('、'))) : null;
+        const art = h('div', { class: 'pt-art' }, pic ? h('img', { src: pic, alt: '画家画的' }) : grid, !pic && p.drawn === 'drawing' ? h('div', { class: 'pt-wait' }, '画家在画') : null);
+        const el = box('paint', p.ask ? h('div', { class: 'pt-ask' }, p.ask) : null, h('div', { class: 'pt-body' }, art, words), PARENT && p.note ? h('div', { class: 'pt-note' }, p.note) : null);
+        el.dataset.drawn = p.drawn || '';
+        return el;
+      }
       case 'choice': {
         const picked = (c.state && Array.isArray(c.state.picked)) ? c.state.picked : [];
         if (stage) return box('choice', h('div', { class: 'sq' }, p.question || ''), ...(p.options || []).map((o, i) => h('button', { type: 'button', class: 'so' + (picked.includes(i) ? ' on' : ''), on: { click: () => pick(secIdx, idx, i) } }, h('i', {}, picked.includes(i) ? h('span', { html: ICON.check }) : 'ABCDEFGH'[i] || ''), o)));
@@ -2395,7 +2407,10 @@ __REEL_JS__
       if (!S.sections.length && !S.partial && !stillPending && !S.readonly && !S.lecture && !$('#board .blank')) $('#board').append(blankBoard('想问什么?'));
       renderHeader();
       clearTimeout(S.pollTimer);
+      // 画图卡还在画(老师已经说完了):隔 3 秒拉一次,图到了 props 变了就重画那张卡
+      const painting = S.sections.some((sec) => sec.cards.some((c) => c.kind === 'paint' && c.props && c.props.drawn === 'drawing'));
       if (stillPending) S.pollTimer = setTimeout(() => loadDay(false), 1000);
+      else if (painting && !S.hist) S.pollTimer = setTimeout(() => loadDay(true), 3000);
     } catch (e) {
       if (e && e.status === 404) return closeTutor();
       setOffline(true);

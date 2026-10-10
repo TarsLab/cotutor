@@ -41,11 +41,18 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const hzOk = await get('/api/kid/tianzige/' + encodeURIComponent('鼓'));
   const hzNo = await get('/api/kid/tianzige/' + encodeURIComponent('ab'));
   check('笔顺数据:鼓 13 笔、每笔轮廓与中线成对;不是汉字 404', hzOk.status === 200 && (hzOk.json as { strokes: string[]; medians: number[][][] }).strokes.length === 13 && (hzOk.json as { medians: number[][][] }).medians.length === 13 && hzNo.status === 404, JSON.stringify(hzNo));
+  await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '我说完了,画吧' });
+  await m.settle();
+  const dp = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
+  const pc = dp.messages[4].section?.cards.find((c) => c.kind === 'paint');
+  check('画图卡:刚出来是「画家在画」,没有图、没有家长那行;角色与分幅照下发', pc?.props.drawn === 'drawing' && !pc.props.pic && !pc.props.note && (pc.props.panels as string[]).length === 4 && (pc.props.words as string[]).join() === '播种,睡大觉,满满,羞愧', JSON.stringify(pc));
+  const pimg = await get('/api/kid/image?p=' + encodeURIComponent('mock-paint/x-2.png'));
+  check('画图卡的占位图:方的四格 svg', pimg.status === 200 && String(pimg.html).includes('viewBox="0 0 1024 1024"'));
   await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '还有吗' });
   await m.settle();
   const d3 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('脚本用完 → 只有一句收尾话(一节只有讲稿;末句是问句,补了提问卡)', d3.messages.length === 5 && d3.messages[2].section?.cards[0].kind === 'text' && d3.messages[4].section?.cards.length === 1 && d3.messages[4].section?.cards[0].props.ask === true && d3.messages[4].section?.lines.length === 1 && d3.messages[4].reply === '这个我们明天接着说,好不好?');
-  check('剩余次数只数孩子发的', d3.remaining === 30 - 5);
+  check('脚本用完 → 只有一句收尾话(一节只有讲稿;末句是问句,补了提问卡)', d3.messages.length === 6 && d3.messages[2].section?.cards[0].kind === 'text' && d3.messages[5].section?.cards.length === 1 && d3.messages[5].section?.cards[0].props.ask === true && d3.messages[5].section?.lines.length === 1 && d3.messages[5].reply === '这个我们明天接着说,好不好?');
+  check('剩余次数只数孩子发的', d3.remaining === 30 - 6);
   // 卡的状态:数学老师首节有选择题 → PUT 状态假存、today 里并回卡上、答案仍剥;交给老师 → 下一节;「继续」不计次数
   const md = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   const mj = md.messages[0].job;

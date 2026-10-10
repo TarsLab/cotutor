@@ -831,8 +831,9 @@ __REEL_JS__
     const out = [];
     const extras = t.extras || [];
     const all = (Array.isArray(H.cards) ? H.cards : []).filter((x) => x.kind === 'dictation');
-    for (const c of all) if (c.owner === t.name) out.push(extraBtn('dictation', '听写', (c.props.count || 0) + ' 个词 · 老师念,你来写', { href: '/dictation?home=' + encodeURIComponent(H.home || '') + '&n=' + all.indexOf(c) }));
-    if (extras.includes('dictation')) out.push(extraBtn('photo', '拍照听写', '拍一下要写的词', { href: '/dictation?tutor=' + encodeURIComponent(t.name) }));
+    // 英文单词听写(《wip/听写设想.md》拍板 15):卡上的词是英文单词,或者英语老师卡上的拍照听写 → /dictation?lang=en
+    for (const c of all) if (c.owner === t.name) { const en = c.props.lang === 'en'; out.push(extraBtn('dictation', en ? '单词听写' : '听写', (c.props.count || 0) + (en ? ' 个单词' : ' 个词') + ' · 老师念,你来写', { href: '/dictation?home=' + encodeURIComponent(H.home || '') + '&n=' + all.indexOf(c) + (en ? '&lang=en' : '') })); }
+    if (extras.includes('dictation')) { const en = t.subject === '英语'; out.push(extraBtn('photo', '拍照听写', en ? '拍一下要写的单词' : '拍一下要写的词', { href: '/dictation?tutor=' + encodeURIComponent(t.name) + (en ? '&lang=en' : '') })); }
     if (extras.includes('talk')) {
       const last = talkInfo();
       if (last) { const n = last.list.words.length + last.list.sentences.length; const b = extraBtn('talk', '口语课', n + ' 句 · 先跟我读,再聊', { click: () => openTalk(b) }); out.push(b); }
@@ -1186,8 +1187,9 @@ __REEL_JS__
       case 'dictation': {
         // 听写卡(只在首页,cards/dictation):点了去 /dictation 听写页;卡上没有字,只有几个词。n = 首页里第几张听写卡
         const all = (S.home && Array.isArray(S.home.cards) ? S.home.cards : []).filter((x) => x.kind === 'dictation');
-        const href = '/dictation?home=' + encodeURIComponent((S.home && S.home.home) || '') + '&n=' + Math.max(0, all.indexOf(c));
-        return h('a', { class: 'c c-dictation', 'data-card': idx, href }, h('span', { class: 'tg' }, h('i', {}), h('i', {})), h('span', { class: 'tx' }, h('b', {}, '听写'), h('span', {}, (p.count || 0) + ' 个词 · 老师念,你来写')), h('span', { class: 'go' }, '去写'));
+        const en = p.lang === 'en';
+        const href = '/dictation?home=' + encodeURIComponent((S.home && S.home.home) || '') + '&n=' + Math.max(0, all.indexOf(c)) + (en ? '&lang=en' : '');
+        return h('a', { class: 'c c-dictation', 'data-card': idx, href }, h('span', { class: 'tg' }, h('i', {}), h('i', {})), h('span', { class: 'tx' }, h('b', {}, en ? '单词听写' : '听写'), h('span', {}, (p.count || 0) + (en ? ' 个单词' : ' 个词') + ' · 老师念,你来写')), h('span', { class: 'go' }, '去写'));
       }
       case 'word': {
         // 单词卡:四线三格里写这个词,卡上没有中文;点卡开舞台(慢念、分段慢写),「听」按正常速度念;讲到它时 setNow 写一遍

@@ -215,10 +215,23 @@ export const DICTATION_PROMPT_DEFAULT = [
   '- 课文正文里别的词:不挑,全文里有就够了。',
   '念法:听写时老师怎么念给孩子听。先念这一项,再说一个孩子熟悉的短语或短句把它用进去,让同音字分得开;短语里要有别的字,不能只是把它重复一遍。例如「鼓励,老师鼓励我」「灰色,灰色的小蝌蚪」「叶,树叶的叶」。30 字以内。',
 ];
-export const DICTATION_DEFAULT = { model: 'qwen3.8-max', prompt: DICTATION_PROMPT_DEFAULT };
+/** 英文单词的拍照认词(英语老师卡上的拍照听写,《wip/听写设想.md》拍板 15) */
+export const DICTATION_PROMPT_EN_DEFAULT = [
+  '这是一张照片:小学英语课本的一页(单词表、对话、课文),或者老师发的单词听写单。孩子在读二年级。',
+  '先把照片上的正文一行一行全认出来;再挑出这页要孩子会写的英文单词,当听写的词。',
+  '怎么挑、默认选不选:',
+  '- 单词表、「Words」「Let\'s learn」里的单词:挑,默认选上。',
+  '- 课文、对话里课本用彩色、加粗、框出来的单词:挑,默认选上。',
+  '- 老师的听写单上的:都挑,默认选上。',
+  '- 只要会认、会读的(课本标着「认读」「Listen and say」那种):挑出来,但默认不选。',
+  '- 人名、a / the 这类小词:不挑。',
+  '念法:先念这个单词,再说一个孩子熟悉的短语把它用进去,例如「yellow, a yellow bus」「cat, a little cat」。英文,10 个词以内。',
+];
+export const DICTATION_DEFAULT = { model: 'qwen3.8-max', prompt: DICTATION_PROMPT_DEFAULT, promptEn: DICTATION_PROMPT_EN_DEFAULT };
 export const DictationSchema = z.object({
   model: z.string().min(1).default(DICTATION_DEFAULT.model).describe('拍照认词表用的百炼视觉模型(兼容接口,流式)'),
   prompt: z.array(z.string()).min(1).default(DICTATION_PROMPT_DEFAULT).describe('拍照认词表的要求:一行一个字符串,拼起来交给模型(认哪些、默认选哪些、怎么念);回什么格式应用自己接在后面,不用写'),
+  promptEn: z.array(z.string()).min(1).default(DICTATION_PROMPT_EN_DEFAULT).describe('英文单词的拍照认词要求(英语老师卡上的拍照听写):一行一个字符串;回什么格式应用自己接在后面'),
 });
 export type DictationConfig = z.infer<typeof DictationSchema>;
 

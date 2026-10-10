@@ -25,7 +25,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, DictationPropsSchema, HAN, type DictationProps, type DictationWord } from '../cards/index.ts';
+import { DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, DictationPropsSchema, dictationWordLang, type DictationLang, type DictationProps, type DictationWord } from '../cards/index.ts';
 import { localDate } from '../lib/conversation.ts';
 import type { AppContext, RouteResult } from '../server/app.ts';
 import { readPublished } from '../server/home.ts';
@@ -34,6 +34,7 @@ import { synthesize } from '../server/tts.ts';
 import { judgeChar, type CharJudge, type InkPoint } from './lib/match.ts';
 import { recognizePhoto, type Recognize } from './recognize.ts';
 import { DICTATION_PAGE } from './page.ts';
+import { DICTATION_EN_PAGE } from './en-page.ts';
 import { DICTATION_PARENT_PAGE } from './parent-page.ts';
 import { DICTATION_REEL_PAGE } from './reel-page.ts';
 import { EVENT_KINDS, ID_RE, createPhoto, createSession, listSessions, photoFile, readPhotoRecord, readSession, writePhotoRecord, writeSession, type PhotoRecord, type Attempt, type CharInk, type Session, type DictationEvent } from './store.ts';
@@ -52,7 +53,7 @@ export interface DictationDeps {
   say(text: string, tutor: string | null): Promise<string | null>;
   /** 一个字的笔画中线(hanzi-writer-data);数据里没有 → null */
   medians(ch: string): Promise<number[][][] | null>;
-  /** 认一张照片(流式,每认出一项回调一次) */
+  /** 认一张照片(流式,每认出一项回调一次);lang = en 认英文单词 */
   recognize: Recognize;
 }
 
@@ -93,7 +94,7 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
       return (await tianzigeData(ch))?.medians ?? null;
     },
     // 每次现读 cotutor.json 的 dictation(家长改了要求不用重起服务)
-    recognize: (image, onProgress) => recognizePhoto(image, onProgress, { model: ws().config.dictation.model, prompt: ws().config.dictation.prompt }),
+    recognize: (image, onProgress, lang) => recognizePhoto(image, onProgress, { model: ws().config.dictation.model, prompt: lang === 'en' ? ws().config.dictation.promptEn : ws().config.dictation.prompt, lang }),
   };
 }
 
@@ -138,14 +139,17 @@ export function parseChars(v: unknown, size: number): CharInk[] | null {
   return out;
 }
 
-async function judge(deps: DictationDeps, chars: string, ink: CharInk[]): Promise<CharJudge[]> {
+async function judge(deps: DictationDeps, chars: string, ink: CharInk[], lang?: 'en'): Promise<CharJudge[]> {
+  // 英文单词不逐字母比(拍板 15):孩子自己对
+  if (lang === 'en') return [];
   const out: CharJudge[] = [];
   const cs = Array.from(chars);
   for (let i = 0; i < cs.length; i++) out.push(judgeChar(ink[i]?.strokes ?? [], await deps.medians(cs[i])));
   return out;
 }
 
-const sizes = (s: Session): number[] => s.words.map((w) => Array.from(w.chars).length);
+/** 每个词几个格:汉字一个字一格;英文一个单词一格 */
+const sizes = (s: Session): number[] => s.words.map((w) => (s.lang === 'en' ? 1 : Array.from(w.chars).length));
 const latestOf = (s: Session, i: number): Attempt | null => {
   const r = s.rewrites.filter((x) => x.word === i);
   return r.length ? r[r.length - 1].attempt : s.first[i];
@@ -156,6 +160,7 @@ export function kidView(s: Session, display: string): unknown {
   return {
     id: s.id,
     tutor: display,
+    ...(s.lang ? { lang: s.lang } : {}),
     sizes: sizes(s),
     startedAt: s.startedAt,
     written: s.first.map((a) => a !== null),
@@ -179,21 +184,21 @@ export function kidView(s: Session, display: string): unknown {
 function summary(s: Session): unknown {
   const firstOk = s.first.filter((a) => a && a.judges.every((j) => !j.ask) && a.chars.every((c) => !c.revealed)).length;
   const revealed = s.first.filter((a) => a && a.chars.some((c) => c.revealed)).length;
-  return { id: s.id, startedAt: s.startedAt, tutor: s.tutor ?? null, words: s.words.map((w) => w.chars), checked: s.checkedAt !== null, done: s.doneAt !== null, firstOk, asked: s.asked.length, revealed, photo: s.photo ?? null, lesson: s.lesson ?? null };
+  return { id: s.id, startedAt: s.startedAt, tutor: s.tutor ?? null, ...(s.lang ? { lang: s.lang } : {}), words: s.words.map((w) => w.chars), checked: s.checkedAt !== null, done: s.doneAt !== null, firstOk, asked: s.asked.length, revealed, photo: s.photo ?? null, lesson: s.lesson ?? null };
 }
 
 const PHOTO_MAX_BYTES = 3_000_000;
 
-/** 拍照开始时页面交来的词:1–20 个,每个 1–4 个汉字,念法可有可无(超长的丢掉念法) */
-export function parseWords(v: unknown): DictationWord[] | null {
+/** 拍照开始时页面交来的词:1–20 个,每个 1–4 个汉字(lang = en:一个英文单词),念法可有可无(超长的丢掉念法);一种也不能混 */
+export function parseWords(v: unknown, lang: DictationLang = 'zh'): DictationWord[] | null {
   if (!Array.isArray(v) || v.length === 0 || v.length > DICTATION_WORDS_MAX) return null;
   const out: DictationWord[] = [];
   for (const w of v as unknown[]) {
     if (!isObj(w) || typeof w.chars !== 'string') return null;
-    const cs = Array.from(w.chars.replace(/\s+/g, ''));
-    if (!cs.length || cs.length > DICTATION_WORD_MAX || !cs.every((c) => HAN.test(c))) return null;
+    const chars = lang === 'en' ? w.chars.trim() : w.chars.replace(/\s+/g, '');
+    if (dictationWordLang(chars) !== lang) return null;
     const say = typeof w.say === 'string' && w.say.trim() && Array.from(w.say.trim()).length <= DICTATION_SAY_MAX ? w.say.trim() : undefined;
-    out.push({ chars: cs.join(''), ...(say ? { say } : {}) });
+    out.push({ chars, ...(say ? { say } : {}) });
   }
   return out;
 }
@@ -217,7 +222,7 @@ function startRecognizing(deps: DictationDeps, rec: PhotoRecord, image: { data: 
       rec.lesson = p.lesson;
       rec.full = p.full;
       save();
-    })
+    }, rec.lang)
     .then((r) => {
       rec.items = r.items;
       rec.lesson = r.lesson;
@@ -246,7 +251,8 @@ function startRecognizing(deps: DictationDeps, rec: PhotoRecord, image: { data: 
 export async function handleDictation(method: string, url: URL, deps: DictationDeps, body: unknown): Promise<RouteResult | null> {
   const p = url.pathname;
   if (!isOurs(p)) return null;
-  if (p === '/dictation' || p === '/dictation/') return method === 'GET' ? { status: 200, html: DICTATION_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
+  // 英文单词听写另一页(四线三格写整个单词,《wip/听写设想.md》拍板 15)
+  if (p === '/dictation' || p === '/dictation/') return method === 'GET' ? { status: 200, html: url.searchParams.get('lang') === 'en' ? DICTATION_EN_PAGE : DICTATION_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
   if (p === '/dictation/parent') return method === 'GET' ? { status: 200, html: DICTATION_PARENT_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
   if (p === '/dictation/reel') return method === 'GET' ? { status: 200, html: DICTATION_REEL_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
   if (!p.startsWith('/api/')) return { status: 404, json: { error: 'not_found' } };
@@ -259,7 +265,7 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
     if (!m) return bad('要 {image: data:image/jpeg;base64,…}');
     const data = Buffer.from(m[2], 'base64');
     if (!data.length || data.length > PHOTO_MAX_BYTES) return { status: 413, json: { error: 'too_large', message: `一张最多 ${PHOTO_MAX_BYTES / 1_000_000} MB,页面该先缩到长边 2000` } };
-    const rec = await createPhoto(root, data, now);
+    const rec = await createPhoto(root, data, now, isObj(body) && body.lang === 'en' ? 'en' : undefined);
     startRecognizing(deps, rec, { data, mime: `image/${m[1]}` });
     return { status: 201, json: { id: rec.id } };
   }
@@ -278,11 +284,12 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
     if (isObj(body) && typeof body.photo === 'string') {
       const rec = await readPhotoRecord(root, body.photo);
       if (!rec) return { status: 404, json: { error: 'no_such_photo' } };
-      const words = parseWords(body.words);
-      if (!words) return bad(`要 {photo, words: [{chars, say?}]}:1 到 ${DICTATION_WORDS_MAX} 个词,每个 1 到 ${DICTATION_WORD_MAX} 个汉字`);
+      const lang: DictationLang = rec.lang === 'en' || body.lang === 'en' ? 'en' : 'zh';
+      const words = parseWords(body.words, lang);
+      if (!words) return bad(lang === 'en' ? `要 {photo, words: [{chars, say?}]}:1 到 ${DICTATION_WORDS_MAX} 个英文单词` : `要 {photo, words: [{chars, say?}]}:1 到 ${DICTATION_WORDS_MAX} 个词,每个 1 到 ${DICTATION_WORD_MAX} 个汉字`);
       // 从哪位老师卡上的「拍照听写」进来就用他的声音
       const tutor = deps.reader(typeof body.tutor === 'string' ? body.tutor : undefined);
-      const s = await createSession(root, { home: null, n: -1, tutor, words, photo: rec.id, lesson: rec.lesson }, now);
+      const s = await createSession(root, { home: null, n: -1, tutor, words, photo: rec.id, lesson: rec.lesson, ...(lang === 'en' ? { lang } : {}) }, now);
       return { status: 201, json: kidView(s, deps.display(tutor)) };
     }
     if (!isObj(body) || !(body.home === null || (typeof body.home === 'string' && HOME_ID_RE.test(body.home))) || !num(body.n, 0, 99) || !Number.isInteger(body.n)) return bad('要 {home, n}');
@@ -297,12 +304,28 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
       if (same) return { status: 200, json: kidView(same, deps.display(same.tutor)) };
     }
     const tutor = deps.reader(card.tutor);
-    const s = await createSession(root, { home, n, tutor, words: card.words }, now);
+    const s = await createSession(root, { home, n, tutor, words: card.words, ...(card.lang ? { lang: card.lang } : {}) }, now);
     return { status: 201, json: kidView(s, deps.display(tutor)) };
   }
 
   const m = /^\/api\/dictation\/([^/]+)(?:\/([a-z]+)(?:\/(\d{1,2}))?)?$/.exec(p);
   if (!m || !ID_RE.test(m[1])) return { status: 404, json: { error: 'not_found' } };
+  // 同一次听写的请求一个一个来:每个都是读 → 改 → 写整个文件,并发的(出词与念、写好了与事件)会互相盖掉
+  return serially(`${root}\n${m[1]}`, () => handleSession(method, url, deps, body, m, now));
+}
+
+const queues = new Map<string, Promise<unknown>>();
+function serially<T>(key: string, job: () => Promise<T>): Promise<T> {
+  const prev = queues.get(key) ?? Promise.resolve();
+  const next = prev.then(job, job);
+  const tail = next.catch(() => {});
+  queues.set(key, tail);
+  void tail.then(() => { if (queues.get(key) === tail) queues.delete(key); });
+  return next;
+}
+
+async function handleSession(method: string, url: URL, deps: DictationDeps, body: unknown, m: RegExpExecArray, now: Date): Promise<RouteResult> {
+  const root = deps.root;
   const [, id, sub, idx] = m;
   const s = await readSession(root, id);
   if (!s) return { status: 404, json: { error: 'no_such_session' } };
@@ -325,7 +348,7 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
     if (s.checkedAt) return { status: 409, json: { error: 'checked', message: '已经交了' } };
     const chars = parseChars(body, sizes(s)[i]);
     if (!chars) return bad('要 {chars: [{strokes, undos}]},格数对上');
-    s.first[i] = { at: now.toISOString(), chars, judges: await judge(deps, s.words[i].chars, chars) };
+    s.first[i] = { at: now.toISOString(), chars, judges: await judge(deps, s.words[i].chars, chars, s.lang) };
     await writeSession(root, s);
     return { status: 200, json: { ok: true } };
   }
@@ -335,8 +358,8 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
       // 没写的词按空着判(孩子跳过了、页面丢了那一笔)
       for (let k = 0; k < s.words.length; k++) {
         if (!s.first[k]) {
-          const empty = Array.from(s.words[k].chars).map(() => ({ strokes: [], undos: 0 }));
-          s.first[k] = { at: now.toISOString(), chars: empty, judges: await judge(deps, s.words[k].chars, empty) };
+          const empty = Array.from({ length: sizes(s)[k] }, () => ({ strokes: [], undos: 0 }));
+          s.first[k] = { at: now.toISOString(), chars: empty, judges: await judge(deps, s.words[k].chars, empty, s.lang) };
         }
       }
       // 看过答案的词不问「再写一遍?」:已经照着写过一遍了(拍板 8)
@@ -352,14 +375,15 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
     const chars = parseChars(body, sizes(s)[i]);
     if (!chars) return bad('要 {chars: [{strokes, undos}]},格数对上');
     const self = isObj(body) && body.self === true;
-    s.rewrites.push({ word: i, self, attempt: { at: now.toISOString(), chars, judges: await judge(deps, s.words[i].chars, chars) } });
+    s.rewrites.push({ word: i, self, attempt: { at: now.toISOString(), chars, judges: await judge(deps, s.words[i].chars, chars, s.lang) } });
     await writeSession(root, s);
     return { status: 200, json: kidView(s, deps.display(s.tutor)) };
   }
 
   if (sub === 'reveal' && method === 'POST' && i >= 0) {
     if (s.checkedAt) return { status: 409, json: { error: 'checked', message: '已经交了' } };
-    const cs = Array.from(s.words[i].chars);
+    // 英文:一个单词一格,给的是整个单词
+    const cs = s.lang === 'en' ? [s.words[i].chars] : Array.from(s.words[i].chars);
     const ch = isObj(body) ? body.char : undefined;
     if (!num(ch, 0, cs.length - 1) || !Number.isInteger(ch)) return bad('要 {char}:第几个字');
     const t = isObj(body) && num(body.t, 0, MAX_T) ? Math.round(body.t) : undefined;

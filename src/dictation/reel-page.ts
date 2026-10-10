@@ -3,8 +3,11 @@
  * 录的是孩子端本来就有的数据:每一笔的点带时刻(离这次听写开始多少毫秒),加上事件(出词、念第几遍、再念、给答案、看笔顺、写好了)。
  * 放的时候一个词一章:格里按时刻一笔一笔重画,看过答案的字到点了显出浅灰的描红;时间轴上标念、给答案、停着没写的段;下面是这一章的经过,点一行跳过去。
  * 「放老师念的声音」勾着、1 倍速时,走到念的那一刻放那一句(和孩子当时听到的同一个音频)。
- * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
+ * 英文单词听写(拍板 15):一章一个单词、一个四线三格;给答案时显出灰色的单词。
+ * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」;下面两处插进来的是 en-box.ts 的画法)。
  */
+import { EN_BOX_CSS, EN_BOX_JS } from './en-box.ts';
+
 export const DICTATION_REEL_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -49,6 +52,8 @@ export const DICTATION_REEL_PAGE = `<!doctype html>
   .ev.rv { color:#a8501f; font-weight:600; }
   .ev.gap { color:#6f6150; }
   .empty { padding:40px 0; text-align:center; color:var(--dim); }
+  .cells svg.en { width:var(--cellw,640px); height:calc(var(--cellw,640px) / 4); }
+${EN_BOX_CSS}
 </style></head>
 <body><main>
   <div><div class="muted" id="sub"></div><h1>听写录像</h1></div>
@@ -95,7 +100,7 @@ export const DICTATION_REEL_PAGE = `<!doctype html>
     var shows = {}; evs.forEach(function (e) { if (e.kind === 'show' && !(e.word in shows)) shows[e.word] = e.t; });
     var chs = s.words.map(function (w, i) {
       var a = s.first[i];
-      var chars = Array.from(w.chars).map(function (ch, ci) { var ink = a && a.chars[ci] ? a.chars[ci] : { strokes: [] }; return { ch: ch, strokes: ink.strokes.filter(function (x) { return x.length; }), revealed: Boolean(ink.revealed) }; });
+      var chars = (s.lang === 'en' ? [w.chars] : Array.from(w.chars)).map(function (ch, ci) { var ink = a && a.chars[ci] ? a.chars[ci] : { strokes: [] }; return { ch: ch, strokes: ink.strokes.filter(function (x) { return x.length; }), revealed: Boolean(ink.revealed) }; });
       var ts = []; chars.forEach(function (c) { c.strokes.forEach(function (st) { ts.push(st[0][2], st[st.length - 1][2]); }); });
       var from = i in shows ? shows[i] : ts.length ? Math.min.apply(null, ts) - 500 : 0;
       return { i: i, w: w, chars: chars, from: Math.max(0, from), last: ts.length ? Math.max.apply(null, ts) : from, revealed: chars.some(function (c) { return c.revealed; }) };
@@ -120,6 +125,14 @@ export const DICTATION_REEL_PAGE = `<!doctype html>
     return out;
   };
 
+${EN_BOX_JS}
+  /** 英文单词的一格:四线三格,笔不翻(y 朝下);trace 放给答案时的灰单词 */
+  var enCellSvg = function () {
+    var svg = sv('svg', { viewBox: '0 0 2048 512', 'class': 'en' });
+    var trace = sv('g', {}); var ink = sv('g', { 'class': 'ink' });
+    svg.append(enLines(sv), trace, ink);
+    return { svg: svg, trace: trace, ink: ink, shown: false };
+  };
   var cellSvg = function () {
     var svg = sv('svg', { viewBox: '0 0 1024 1024' });
     var grid = sv('g', { 'class': 'grid' });
@@ -142,7 +155,9 @@ export const DICTATION_REEL_PAGE = `<!doctype html>
     var box = $('#cells'); var cl = $('#clock');
     var size = Math.min(180, Math.floor((Math.min(window.innerWidth, 760) - 32 - (c.chars.length - 1) * 8) / c.chars.length));
     box.style.setProperty('--cell', size + 'px');
-    R.cells = c.chars.map(function () { return cellSvg(); });
+    var en = R.s && R.s.lang === 'en';
+    if (en) box.style.setProperty('--cellw', Math.min(720, Math.min(window.innerWidth, 760) - 32) + 'px');
+    R.cells = c.chars.map(function () { return en ? enCellSvg() : cellSvg(); });
     box.replaceChildren.apply(box, R.cells.map(function (x) { return x.svg; }).concat([cl]));
     var bs = document.querySelectorAll('#chs .ch'); for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('on', i === k);
     if (bs[k] && bs[k].scrollIntoView) bs[k].scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -161,7 +176,8 @@ export const DICTATION_REEL_PAGE = `<!doctype html>
       var show = rt !== null && t >= rt;
       if (show !== cell.shown) {
         cell.shown = show;
-        if (show) glyph(x.ch).then(function (d) { if (d && cell.shown) cell.trace.replaceChildren.apply(cell.trace, d.strokes.map(function (p) { return sv('path', { d: p }); })); });
+        if (show && R.s && R.s.lang === 'en') cell.trace.replaceChildren(enWord(sv, x.ch, 'enw trace'));
+        else if (show) glyph(x.ch).then(function (d) { if (d && cell.shown) cell.trace.replaceChildren.apply(cell.trace, d.strokes.map(function (p) { return sv('path', { d: p }); })); });
         else cell.trace.replaceChildren();
       }
     });
@@ -182,6 +198,7 @@ export const DICTATION_REEL_PAGE = `<!doctype html>
     if (writing) return (revealAt(c, c.chars.indexOf(writing)) !== null && t >= revealAt(c, c.chars.indexOf(writing)) ? '照着写「' : '正在写「') + writing.ch + '」';
     if (!e) return '';
     if (e.kind === 'say') return '老师念第 ' + (e.n || 1) + ' 遍';
+    if (e.kind === 'reveal' && R.s && R.s.lang === 'en') return '看了答案「' + c.chars[0].ch + '」';
     if (e.kind === 'reveal' || e.kind === 'order') return '看「' + c.chars[e.char].ch + '」的笔顺';
     if (e.kind === 'done') return '「' + c.chars[e.char].ch + '」写好了';
     if (e.kind === 'again') return '点了再念';

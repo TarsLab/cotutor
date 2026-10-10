@@ -53,6 +53,8 @@ export interface Session {
   photo?: string;
   lesson?: string | null;
   tutor: string | null;
+  /** 英文单词听写(一个单词一个四线三格,不逐字母比;《wip/听写设想.md》拍板 15);汉字的不写 */
+  lang?: 'en';
   words: DictationWord[];
   startedAt: string;
   /** 第一遍:一个词一项,还没写的 null */
@@ -78,10 +80,12 @@ async function ensureRoot(wsRoot: string): Promise<void> {
   if ((await readFile(f, 'utf8').catch(() => null)) !== GITIGNORE) await writeFile(f, GITIGNORE);
 }
 
+let tmpSeq = 0;
 export async function writeSession(wsRoot: string, s: Session): Promise<void> {
   await ensureRoot(wsRoot);
   const file = fileOf(wsRoot, s.id);
-  const tmp = `${file}.${process.pid}.tmp`;
+  // 临时文件各取各的名:同一次听写同时写两回(并发的请求)不能抢同一个临时文件
+  const tmp = `${file}.${process.pid}.${++tmpSeq}.tmp`;
   await writeFile(tmp, `${JSON.stringify(s)}\n`);
   await rename(tmp, file);
 }
@@ -117,7 +121,7 @@ export function newId(wsRoot: string, now: Date, taken: (id: string) => boolean 
   return id;
 }
 
-export async function createSession(wsRoot: string, init: { home: string | null; n: number; tutor: string | null; words: DictationWord[]; photo?: string; lesson?: string | null }, now: Date): Promise<Session> {
+export async function createSession(wsRoot: string, init: { home: string | null; n: number; tutor: string | null; words: DictationWord[]; photo?: string; lesson?: string | null; lang?: 'en' }, now: Date): Promise<Session> {
   await ensureRoot(wsRoot);
   const s: Session = { id: newId(wsRoot, now), ...init, startedAt: now.toISOString(), first: init.words.map(() => null), checkedAt: null, asked: [], rewrites: [], events: [], doneAt: null };
   await writeSession(wsRoot, s);
@@ -138,6 +142,8 @@ export interface PhotoRecord {
   error?: string;
   model?: string;
   ms?: number;
+  /** 认的是英文单词(英语老师卡上的拍照听写) */
+  lang?: 'en';
 }
 
 export const photosDir = (wsRoot: string): string => join(rootOf(wsRoot), 'photos');
@@ -160,12 +166,12 @@ export async function readPhotoRecord(wsRoot: string, id: string): Promise<Photo
 }
 
 /** 存一张照片,开一份 running 的记录 */
-export async function createPhoto(wsRoot: string, data: Buffer, now: Date): Promise<PhotoRecord> {
+export async function createPhoto(wsRoot: string, data: Buffer, now: Date, lang?: 'en'): Promise<PhotoRecord> {
   await ensureRoot(wsRoot);
   await mkdir(photosDir(wsRoot), { recursive: true });
   const id = newId(wsRoot, now, (x) => existsSync(photoFile(wsRoot, x)));
   await writeFile(photoFile(wsRoot, id), data);
-  const r: PhotoRecord = { id, at: now.toISOString(), state: 'running', items: [], lesson: null, full: [] };
+  const r: PhotoRecord = { id, at: now.toISOString(), state: 'running', items: [], lesson: null, full: [], ...(lang ? { lang } : {}) };
   await writePhotoRecord(wsRoot, r);
   return r;
 }

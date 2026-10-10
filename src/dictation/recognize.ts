@@ -10,7 +10,7 @@
 import { homedir } from 'node:os';
 import { localDashscopeKey } from '../clis/qwen.ts';
 import { DICTATION_PROMPT_DEFAULT, DICTATION_DEFAULT } from '../schema/index.ts';
-import { DICTATION_SAY_MAX, DICTATION_WORD_MAX, HAN } from '../cards/index.ts';
+import { DICTATION_SAY_MAX, dictationWordLang, type DictationLang } from '../cards/index.ts';
 
 export const VISION_TIMEOUT_MS = 120_000;
 const ENDPOINT = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
@@ -42,8 +42,8 @@ export interface PhotoProgress {
 }
 
 export type Recognized = ({ ok: true; model: string } | { ok: false; error: string }) & PhotoProgress & { ms: number };
-/** 认一张照片;每收到一行调一次 onProgress */
-export type Recognize = (image: { data: Buffer; mime: string }, onProgress: (p: PhotoProgress) => void) => Promise<Recognized>;
+/** 认一张照片;每收到一行调一次 onProgress;lang = en 认英文单词(英语老师卡上的拍照听写) */
+export type Recognize = (image: { data: Buffer; mime: string }, onProgress: (p: PhotoProgress) => void, lang?: DictationLang) => Promise<Recognized>;
 
 /** 回什么格式:接在家长的要求后面,解析靠它 */
 export const FORMAT = `回答的格式:一行一段 JSON,不要别的字、不要代码块。按这个顺序写:
@@ -58,9 +58,22 @@ export const FORMAT = `回答的格式:一行一段 JSON,不要别的字、不�
    - say:念法。
 3. 最后是全文:照片上的正文照原样一行写一行 {"full": "冬天来啦!一场大雪过后"};不要拼音、页码、栏目名。`;
 
+/** 英文单词的格式:一项一个单词;kind 只分 word(单词表、要会写的)与 read(会认就行)、other */
+export const FORMAT_EN = `回答的格式:一行一段 JSON,不要别的字、不要代码块。按这个顺序写:
+1. 第一行写单元名:{"lesson": "Unit 3 Colours"},没有写 {"lesson": null}。
+2. 挑出的单词,一项一行,默认选上的先写:
+{"text": "yellow", "kind": "word", "pick": true, "box": [左, 上, 右, 下], "sure": true, "say": "yellow, a yellow bus"}
+   - text:一个英文单词,只写字母(可以带 - 和 '),不带空格;照课本的大小写。
+   - kind:要会写的单词写 word;只要会认、会读的写 read;别的写 other。
+   - pick:默认选不选(true / false)。
+   - box:这一项在照片上的位置,按照片宽、高的千分比,0 到 1000 的整数。
+   - sure:看清了 true;糊、反光、被挡住、拿不准写 false。
+   - say:念法,英文。
+3. 最后是全文:照片上的正文照原样一行写一行 {"full": "What colour is it? It's yellow."};不要页码、栏目名。`;
+
 /** 交给模型的整段:家长的要求 + 格式 */
-export function photoPrompt(prompt: readonly string[] = DICTATION_PROMPT_DEFAULT): string {
-  return `${prompt.join('\n')}\n\n${FORMAT}`;
+export function photoPrompt(prompt: readonly string[] = DICTATION_PROMPT_DEFAULT, lang: DictationLang = 'zh'): string {
+  return `${prompt.join('\n')}\n\n${lang === 'en' ? FORMAT_EN : FORMAT}`;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -71,18 +84,19 @@ const ZH_WORDS = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new Intl.S
  * 全文的一行分成词(词之间空一格),孩子端一个词一个词点。不靠模型分:2026-10-10 同一张真照片,qwen3.8-max 一次整行连着回、
  * 一次每个字之间都空一格;所以去掉空格,一律用 Intl.Segmenter 的中文分词(Node 与 Safari 都有),分得准不准都一个样。
  */
-export function splitWords(line: string): string {
+export function splitWords(line: string, lang: DictationLang = 'zh'): string {
+  // 英文:只留单词(去掉标点),词之间空一格
+  if (lang === 'en') return (line.match(/[A-Za-z][A-Za-z'-]*/g) ?? []).join(' ');
   const t = line.replace(/\s+/g, '');
   if (!ZH_WORDS) return t;
   return [...ZH_WORDS.segment(t)].map((x) => x.segment.trim()).filter(Boolean).join(' ');
 }
 
-/** 模型的一行 → 一项;不是一项(形状不对、不是汉字、超过四个字)→ null */
-export function parseItem(v: unknown): PhotoItem | null {
+/** 模型的一行 → 一项;不是一项(形状不对、不是汉字、超过四个字;lang = en:不是一个英文单词)→ null */
+export function parseItem(v: unknown, lang: DictationLang = 'zh'): PhotoItem | null {
   if (!isObj(v)) return null;
-  const t = str(v.text)?.replace(/\s+/g, '') ?? '';
-  const cs = Array.from(t);
-  if (!cs.length || cs.length > DICTATION_WORD_MAX || !cs.every((c) => HAN.test(c))) return null;
+  const t = lang === 'en' ? (str(v.text) ?? '') : (str(v.text)?.replace(/\s+/g, '') ?? '');
+  if (dictationWordLang(t) !== lang) return null;
   const kind = PHOTO_KINDS.includes(v.kind as PhotoKind) ? (v.kind as PhotoKind) : 'other';
   const b = Array.isArray(v.box) && v.box.length === 4 && v.box.every((x) => typeof x === 'number' && Number.isFinite(x)) ? (v.box as number[]).map((x) => Math.max(0, Math.min(1000, Math.round(x)))) : null;
   const box = b && b[2] > b[0] && b[3] > b[1] ? (b as PhotoItem['box']) : null;
@@ -102,8 +116,10 @@ export class LineReader implements PhotoProgress {
   private buf = '';
   private seen = new Set<string>();
   private onProgress: (p: PhotoProgress) => void;
-  constructor(onProgress: (p: PhotoProgress) => void = () => {}) {
+  private lang: DictationLang;
+  constructor(onProgress: (p: PhotoProgress) => void = () => {}, lang: DictationLang = 'zh') {
     this.onProgress = onProgress;
+    this.lang = lang;
   }
   push(chunk: string): void {
     this.buf += chunk;
@@ -135,9 +151,9 @@ export class LineReader implements PhotoProgress {
     } else if ('full' in v && !('text' in v)) {
       const f = str(v.full);
       if (!f) return;
-      this.full.push(splitWords(f));
+      this.full.push(splitWords(f, this.lang));
     } else {
-      const it = parseItem(v);
+      const it = parseItem(v, this.lang);
       if (!it) return;
       const key = `${it.kind}\n${it.text}`;
       if (this.seen.has(key)) return;
@@ -165,12 +181,12 @@ function deltaOf(line: string): string {
 export async function recognizePhoto(
   image: { data: Buffer; mime: string },
   onProgress: (p: PhotoProgress) => void = () => {},
-  opts: { env?: NodeJS.ProcessEnv; endpoint?: string; model?: string; prompt?: readonly string[]; timeoutMs?: number } = {},
+  opts: { env?: NodeJS.ProcessEnv; endpoint?: string; model?: string; prompt?: readonly string[]; timeoutMs?: number; lang?: DictationLang } = {},
 ): Promise<Recognized> {
   const env = opts.env ?? process.env;
   const t0 = Date.now();
   const ms = (): number => Date.now() - t0;
-  const reader = new LineReader(onProgress);
+  const reader = new LineReader(onProgress, opts.lang);
   const fail = (error: string): Recognized => ({ ok: false, error, ...reader.snapshot(), ms: ms() });
   const key = env.DASHSCOPE_API_KEY?.trim() || localDashscopeKey(env.HOME || homedir());
   if (!key) return fail('no_key');
@@ -184,7 +200,7 @@ export async function recognizePhoto(
         stream: true,
         temperature: 0.1,
         enable_thinking: false,
-        messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.data.toString('base64')}` } }, { type: 'text', text: photoPrompt(opts.prompt) }] }],
+        messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.data.toString('base64')}` } }, { type: 'text', text: photoPrompt(opts.prompt, opts.lang) }] }],
       }),
       signal: AbortSignal.timeout(opts.timeoutMs ?? VISION_TIMEOUT_MS),
     });

@@ -2,8 +2,11 @@
  * /dictation/parent:家长看听写的结果(《wip/听写设想.md》)。孩子端没有对错,对错全在这里:
  * 每个词第一遍写的(书上的字淡淡叠着)→ 再写的;逐字一句:少了第几笔、多了几笔、笔顺先后、写反方向、占格、擦过几次;问了才改还是自己改的。
  * 末尾一张「要再练的词」,复制成下一张听写卡。
- * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
+ * 英文单词听写(拍板 15):一个单词一个四线三格,书上的单词淡淡叠着;不逐字母比,只记看没看答案、擦过几次、自己又写了。
+ * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」;下面两处插进来的是 en-box.ts 的画法)。
  */
+import { EN_BOX_CSS, EN_BOX_JS } from './en-box.ts';
+
 export const DICTATION_PARENT_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -49,6 +52,8 @@ export const DICTATION_PARENT_PAGE = `<!doctype html>
   a.reel { display:flex; align-items:center; min-height:48px; padding:0 16px; border-radius:14px; background:#fff; border:1px solid var(--line); color:#24508c; text-decoration:none; font-size:15px; }
   .src { display:flex; align-items:center; gap:12px; font-size:14px; color:var(--dim); }
   .src img { width:72px; height:72px; object-fit:cover; border-radius:10px; border:1px solid var(--line); }
+  .tz.en { width:min(100%, 360px); height:auto; aspect-ratio:4 / 1; }
+${EN_BOX_CSS}
 </style></head>
 <body><main>
   <div><div class="muted">家长 · 听写</div><h1>听写的结果</h1></div>
@@ -72,6 +77,17 @@ export const DICTATION_PARENT_PAGE = `<!doctype html>
   var api = function (path) { return fetch(path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); }); };
   var GL = {};
   var glyph = function (ch) { if (!GL[ch]) GL[ch] = fetch('/api/kid/tianzige/' + encodeURIComponent(ch)).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); return GL[ch]; };
+${EN_BOX_JS}
+  /** 英文单词的一格:四线三格、书上的单词淡淡叠着、孩子的笔(y 朝下,不翻) */
+  var enThumb = function (word, strokes, overlay) {
+    var svg = sv('svg', { viewBox: '0 0 2048 512', 'class': 'tz en' });
+    var ink = sv('g', { 'class': 'eni' });
+    (strokes || []).forEach(function (st) { if (st.length) ink.append(sv('path', { d: pathD(st) })); });
+    svg.append(enLines(sv), ink); if (overlay) svg.append(enWord(sv, word));
+    return svg;
+  };
+  /** 一个词的格:汉字一个字一格;英文整个单词一格 */
+  var unitsOf = function (s, w) { return s.lang === 'en' ? [w.chars] : Array.from(w.chars); };
   var pathD = function (pts) { var d = 'M' + pts[0][0] + ' ' + pts[0][1]; if (pts.length === 1) d += ' L' + (pts[0][0] + 1) + ' ' + pts[0][1]; for (var i = 1; i < pts.length; i++) d += ' L' + pts[i][0] + ' ' + pts[i][1]; return d; };
 
   /** 一个格的小图:田字格、书上的字淡淡叠着(overlay)、孩子的笔;numbers = 在每一笔起笔处标孩子写的先后 */
@@ -129,10 +145,14 @@ export const DICTATION_PARENT_PAGE = `<!doctype html>
     var fixed = s.asked.filter(function (i) { var r = s.rewrites.filter(function (x) { return x.word === i; }); return r.length && !wrong(r[r.length - 1].attempt); }).length;
     var selfs = s.rewrites.filter(function (r) { return r.self; }).map(function (r) { return r.word; }).filter(function (w, k, all) { return all.indexOf(w) === k; });
     var when = new Date(s.startedAt);
-    var head = s.checkedAt
+    var head = s.checkedAt && s.lang === 'en'
+      ? n + ' 个英文单词' + (revealedN ? ',' + revealedN + ' 个看了答案' : '') + '(不逐字母比,对一对下面的)'
+      : s.checkedAt
       ? n + ' 个词,' + firstOk + ' 个自己写全' + (revealedN ? ',' + revealedN + ' 个看了答案' : '')
       : '还在写:写了 ' + s.first.filter(Boolean).length + ' / ' + n + ' 个词';
-    var line = s.checkedAt
+    var line = s.checkedAt && s.lang === 'en'
+      ? '孩子自己点重写的 ' + selfs.length + ' 个。' + (s.doneAt ? '' : '还没点「对好了」。')
+      : s.checkedAt
       ? (s.asked.length ? '问了「再写一遍」的 ' + s.asked.length + ' 个,重写后写全的 ' + fixed + ' 个。' : '没有要问「再写一遍」的。') + '孩子自己点重写的 ' + selfs.length + ' 个。' + (s.doneAt ? '' : '还没点「对好了」。')
       : '';
     if (s.photo) body.append(h('div', { 'class': 'src' }, h('img', { src: '/api/dictation/photos/' + s.photo + '/image', alt: '拍的照片' }), h('span', { text: '拍照听写' + (s.lesson ? ' · ' + s.lesson : '') })));
@@ -143,13 +163,13 @@ export const DICTATION_PARENT_PAGE = `<!doctype html>
       var a = s.first[i]; var rs = s.rewrites.filter(function (r) { return r.word === i; });
       var asked = s.asked.indexOf(i) >= 0;
       var orders = s.events.filter(function (e) { return e.kind === 'strokeOrder' && e.word === i; }).length;
-      var shown = revealedOf(a, Array.from(w.chars));
-      return { w: w, i: i, a: a, rs: rs, asked: asked, orders: orders, shown: shown, rank: !a ? 3 : shown.length || wrong(a) ? 0 : smallIssues(a) ? 1 : rs.length ? 1 : 2 };
+      var shown = revealedOf(a, unitsOf(s, w));
+      return { w: w, i: i, a: a, rs: rs, asked: asked, orders: orders, shown: shown, rank: !a ? 3 : shown.length || wrong(a) ? 0 : smallIssues(a) ? 1 : rs.length ? 1 : s.lang === 'en' ? 1 : 2 };
     });
     var attention = rows.filter(function (r) { return r.rank < 2; }).sort(function (x, y) { return x.rank - y.rank || x.i - y.i; });
     var fine = rows.filter(function (r) { return r.rank === 2; });
     var waiting = rows.filter(function (r) { return r.rank === 3; });
-    if (attention.length) body.append(h('div', { 'class': 'sec', text: '要看一下的' }));
+    if (attention.length) body.append(h('div', { 'class': 'sec', text: s.lang === 'en' ? '英文单词:对一对他写的和蓝字' : '要看一下的' }));
     attention.forEach(function (r) { body.append(item(s, r)); });
     if (fine.length) body.append(h('div', { 'class': 'item' }, h('div', { 'class': 'head' }, h('div', { 'class': 'ok', text: fine.map(function (r) { return r.w.chars; }).join(' · ') }), h('span', { 'class': 'chip good', text: '写全了' }))));
     if (waiting.length) body.append(h('div', { 'class': 'muted', text: '还没写:' + waiting.map(function (r) { return r.w.chars; }).join('、') }));
@@ -166,24 +186,27 @@ export const DICTATION_PARENT_PAGE = `<!doctype html>
   };
 
   var item = function (s, r) {
-    var chars = Array.from(r.w.chars);
+    var chars = unitsOf(s, r.w);
+    var en = s.lang === 'en';
     var chips = [];
     if (r.shown.length) chips.push(h('span', { 'class': 'chip warm', text: '看了答案:' + r.shown.join('、') }));
     else if (r.a && wrong(r.a)) chips.push(h('span', { 'class': 'chip warm', text: r.rs.length ? (r.asked ? '问了才改' : '自己改的') : '没写全' }));
-    else if (r.rs.length) chips.push(h('span', { 'class': 'chip calm', text: '写全了 · 自己又写了' }));
-    else chips.push(h('span', { 'class': 'chip calm', text: '写全了' }));
+    else if (r.rs.length) chips.push(h('span', { 'class': 'chip calm', text: en ? '自己又写了' : '写全了 · 自己又写了' }));
+    else if (!en) chips.push(h('span', { 'class': 'chip calm', text: '写全了' }));
     if (r.orders) chips.push(h('span', { 'class': 'chip calm', text: '逐笔看过 ' + r.orders + ' 次' }));
     var att = function (a, label, overlay) {
       var ps = h('div', { 'class': 'ps' });
-      chars.forEach(function (ch, ci) { var j = a.judges[ci]; ps.append(thumb(ch, a.chars[ci] ? a.chars[ci].strokes : [], overlay, j && j.judged && !j.order)); });
+      chars.forEach(function (ch, ci) { var j = a.judges[ci]; var st = a.chars[ci] ? a.chars[ci].strokes : []; ps.append(en ? enThumb(ch, st, overlay) : thumb(ch, st, overlay, j && j.judged && !j.order)); });
       return h('div', { 'class': 'att' }, ps, h('small', { text: label }));
     };
     var thumbs = h('div', { 'class': 'thumbs' }, att(r.a, '第一遍', true));
     r.rs.forEach(function (x, k) { thumbs.append(h('span', { 'class': 'arrow', text: '→' }), att(x.attempt, (x.self ? '自己重写' : '重写') + (r.rs.length > 1 ? ' ' + (k + 1) : ''), false)); });
     var notes = [];
-    chars.forEach(function (ch, ci) { notes = notes.concat(charNotes(ch, r.a.judges[ci], r.a.chars[ci])); });
+    // 英文不逐字母比:只说擦过几次;对没对家长看叠着的蓝字
+    if (en) { if (r.a.chars[0] && r.a.chars[0].undos) notes.push('擦过 ' + r.a.chars[0].undos + ' 次'); }
+    else chars.forEach(function (ch, ci) { notes = notes.concat(charNotes(ch, r.a.judges[ci], r.a.chars[ci])); });
     var last = r.rs.length ? r.rs[r.rs.length - 1].attempt : null;
-    if (last) notes.push(wrong(last) ? '重写的那遍还有对不上的:' + chars.map(function (ch, ci) { return charNotes(ch, last.judges[ci], null).join(';'); }).filter(Boolean).join(';') : '重写的那遍写全了');
+    if (last && !en) notes.push(wrong(last) ? '重写的那遍还有对不上的:' + chars.map(function (ch, ci) { return charNotes(ch, last.judges[ci], null).join(';'); }).filter(Boolean).join(';') : '重写的那遍写全了');
     return h('div', { 'class': 'item' },
       h('div', { 'class': 'head' }, h('div', { 'class': 'w', text: r.w.chars }), h('div', { 'class': 'chips' }, chips)),
       thumbs,

@@ -451,6 +451,12 @@ for: ${today}
 叶 树叶的叶
 \`\`\`
 
+\`\`\`dictation english-tutor
+red
+yellow yellow, a yellow bus
+bus
+\`\`\`
+
 ## 为什么这么排
 
 - mock 的样例
@@ -465,10 +471,19 @@ const MOCK_PHOTO: PhotoItem[] = [
   { text: '塘', kind: 'read', pick: false, box: [80, 320, 150, 390], sure: true, say: `塘,${MOCK_SAY['塘']}` },
 ];
 const MOCK_FULL = ['池塘 里 有 一群 小蝌蚪 , 大大的 脑袋 , 黑灰色 的 身子 。', '小蝌蚪 游 哇 游 , 过了 几天 , 长出 两条 后腿 。', '他们 看见 鲤鱼 妈妈 在 教 小鲤鱼 捕食 。'];
-const mockRecognize: Recognize = async (_image, onProgress) => {
+/** 英文单词的假识别(英语老师卡上的拍照听写):一页单词表 */
+const MOCK_PHOTO_EN: PhotoItem[] = ['red', 'yellow', 'green', 'bus'].map((text, i): PhotoItem => ({ text, kind: 'word', pick: true, box: [80 + i * 200, 600, 240 + i * 200, 660], sure: true, say: `${text}, a ${text} ${text === 'bus' ? 'stop' : 'car'}` }));
+const MOCK_FULL_EN = ['What colour is it', "It's yellow", 'I can see a red bus'];
+const mockRecognize: Recognize = async (_image, onProgress, lang) => {
   const t0 = Date.now();
-  const p: PhotoProgress = { items: [], lesson: '小蝌蚪找妈妈', full: [] };
+  const en = lang === 'en';
+  const p: PhotoProgress = { items: [], lesson: en ? 'Unit 3 Colours' : '小蝌蚪找妈妈', full: [] };
   onProgress({ ...p });
+  if (en) {
+    for (const it of MOCK_PHOTO_EN) { await new Promise((r) => setTimeout(r, 100)); p.items = [...p.items, it]; onProgress({ ...p }); }
+    p.full = MOCK_FULL_EN; onProgress({ ...p });
+    return { ok: true, model: 'mock', ...p, ms: Date.now() - t0 };
+  }
   for (const it of MOCK_PHOTO) { await new Promise((r) => setTimeout(r, 100)); p.items = [...p.items, it]; onProgress({ ...p }); }
   for (const f of MOCK_FULL) { await new Promise((r) => setTimeout(r, 100)); p.full = [...p.full, f]; onProgress({ ...p }); }
   return { ok: true, model: 'mock', ...p, ms: Date.now() - t0 };
@@ -596,7 +611,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       const r = c ? DictationPropsSchema.safeParse(c.props) : null;
       return r?.success ? r.data : null;
     },
-    reader: () => 'chinese-tutor',
+    // 同真服务:卡上写的(或拍照听写从哪位老师卡上进来的)老师在就用他,不然语文老师
+    reader: (t) => (t && MOCK_TUTORS.some((x) => x.name === t) ? t : 'chinese-tutor'),
     display: (t) => MOCK_TUTORS.find((x) => x.name === t)?.display ?? '老师',
     say: async () => null,
     medians: async (ch) => (await tianzigeData(ch))?.medians ?? null,

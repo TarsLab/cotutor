@@ -9,7 +9,7 @@
  *   PUT   /api/parent/home/order                    {tutors: [老师…]} 老师的先后(排第一的进首页时在最前)
  *   PATCH /api/parent/settings                      {tutors?: {<老师>: {extras?: [..] | null, hidden?}}, talk?: {note?, minutes?}, listen?, dailyMessages?}
  */
-import { DICTATION_WORD_MAX, DICTATION_WORDS_MAX, HAN, TUTOR_BUTTONS_MAX, TutorButtonSchema, type TutorButton } from '../cards/index.ts';
+import { DICTATION_EN_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, dictationWordLang, type DictationLang, type TutorButton } from '../cards/index.ts';
 import { localDate } from '../lib/conversation.ts';
 import { orderTutors, setTutorButtons, setTutorDictation } from '../lib/home-edit.ts';
 import { AGENT_NAME_RE, KID_LISTEN, POLICY_DEFAULTS, TUTOR_EXTRAS, tutorExtras, type CotutorConfig } from '../schema/index.ts';
@@ -36,6 +36,8 @@ export interface ParentHomeTutor {
   buttons: TutorButton[];
   /** 这周的词:写了这位老师的听写卡;没有 = null */
   dictation: { chars: string; say?: string }[] | null;
+  /** 他的听写是哪种:学科「英语」= en(英文单词),别的 zh */
+  lang: DictationLang;
 }
 
 export async function parentHome(ctx: AppContext): Promise<Record<string, unknown>> {
@@ -60,6 +62,7 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
       extrasSet: t.extras ?? null,
       buttons: ((card?.props.buttons ?? []) as TutorButton[]),
       dictation: dict ? ((dict.props.words ?? []) as { chars: string; say?: string }[]) : null,
+      lang: t.subject === '英语' ? 'en' : 'zh',
     };
   });
   return {
@@ -90,15 +93,15 @@ function parseButtons(v: unknown): TutorButton[] | string {
   return out;
 }
 
-function parseWords(v: unknown): { chars: string; say?: string }[] | string {
+/** 这周的词:语文老师一到四个汉字;英语老师(学科「英语」)一个英文单词(《wip/听写设想.md》拍板 15) */
+function parseWords(v: unknown, lang: DictationLang): { chars: string; say?: string }[] | string {
   if (!Array.isArray(v)) return '要 {words: [{chars, say?}]}';
   if (v.length > DICTATION_WORDS_MAX) return `一次最多 ${DICTATION_WORDS_MAX} 个词`;
   const out: { chars: string; say?: string }[] = [];
   for (const w of v) {
     if (!isObj(w) || typeof w.chars !== 'string') return '每个词要 {chars, say?}';
-    const chars = w.chars.replace(/\s+/g, '');
-    const cps = Array.from(chars);
-    if (!cps.length || cps.length > DICTATION_WORD_MAX || cps.some((x) => !HAN.test(x))) return `「${w.chars}」:一个词一到 ${DICTATION_WORD_MAX} 个汉字`;
+    const chars = lang === 'en' ? w.chars.trim() : w.chars.replace(/\s+/g, '');
+    if (dictationWordLang(chars) !== lang) return lang === 'en' ? `「${w.chars}」:一行一个英文单词(只要字母,最多 ${DICTATION_EN_MAX} 个)` : `「${w.chars}」:一个词一到 ${DICTATION_WORD_MAX} 个汉字`;
     const say = typeof w.say === 'string' ? w.say.replace(/\s+/g, ' ').trim() : '';
     out.push({ chars, ...(say ? { say } : {}) });
   }
@@ -125,7 +128,7 @@ export async function parentHomeRoute(method: string, p: string, ctx: AppContext
       if (typeof buttons === 'string') return bad(buttons);
       return published(await editPublished(ctx.ws, (md) => setTutorButtons(md, name, buttons), ctx.now()));
     }
-    const words = parseWords(b.words);
+    const words = parseWords(b.words, ctx.ws.config.tutors[name].subject === '英语' ? 'en' : 'zh');
     if (typeof words === 'string') return bad(words);
     return published(await editPublished(ctx.ws, (md) => setTutorDictation(md, name, words), ctx.now()));
   }

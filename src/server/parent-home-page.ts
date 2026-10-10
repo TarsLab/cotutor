@@ -208,7 +208,8 @@ export const PARENT_HOME_PAGE = String.raw`<!doctype html>
 
   // ---- 这周的词:一行一个,念法空一格写在后面 ----
   const editWords = (t) => {
-    const ta = h('textarea', { class: 'fld', id: 'w-text', rows: '10', placeholder: '春天\n鼓励 鼓励,老师鼓励我的鼓励\n叶 树叶的叶' });
+    const en = t.lang === 'en';
+    const ta = h('textarea', { class: 'fld', id: 'w-text', rows: '10', placeholder: en ? 'red\nyellow yellow, a yellow bus\nice-cream' : '春天\n鼓励 鼓励,老师鼓励我的鼓励\n叶 树叶的叶' });
     ta.value = (t.dictation || []).map((w) => (w.say ? w.chars + ' ' + w.say : w.chars)).join('\n');
     const go = h('button', { type: 'button' }, '发布');
     const parse = () => ta.value.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const m = /^(\S+)(?:\s+(.+))?$/.exec(l); return m[2] ? { chars: m[1], say: m[2] } : { chars: m[1] }; });
@@ -216,7 +217,9 @@ export const PARENT_HOME_PAGE = String.raw`<!doctype html>
     openSheet(
       h('div', { class: 'nav' }, h('button', { type: 'button', on: { click: closeSheet } }, '取消'), h('b', {}, t.display + ' · 这周的词'), go),
       h('div', {}, h('div', { class: 'gh' }, h('label', { for: 'w-text' }, '一行一个词,念法空一格写在后面')), ta),
-      h('div', { class: 'note' }, '一个词一到四个汉字,最多 20 个。孩子点「听写」,老师一个一个念,每个念两遍。清空 = 不要这周的词。想从课本上挑,在孩子的 iPad 上点「拍照听写」。'));
+      // 英语老师:一键用最近给孩子的口语单上的单词(口语课拍的那页)
+      en ? h('button', { type: 'button', class: 'it', style: 'border-radius:14px', on: { click: async () => { try { const j = await api('GET', '/api/talk'); const last = (j.talks || []).find((x) => (x.status === 'ready' || x.status === 'done') && x.list.words.length); const ws = last ? last.list.words.map((w) => String(w.en || '').trim()).filter((w) => /^[A-Za-z][A-Za-z'-]*$/.test(w)) : []; if (!ws.length) return toast('口语单上没有单词'); ta.value = ws.slice(0, 20).join('\n'); } catch (e) { toast('读不到口语单'); } } } }, h('span', { class: 'tx' }, h('b', { style: 'color:var(--accent)' }, '用口语单上的单词'), h('small', {}, '最近给孩子的那份口语单')))  : null,
+      h('div', { class: 'note' }, en ? '一行一个英文单词,念法空一格写在后面,最多 20 个。孩子点「单词听写」,老师一个一个念,每个念两遍;他在四线三格里写整个单词,写完自己对。清空 = 不要这周的词。' : '一个词一到四个汉字,最多 20 个。孩子点「听写」,老师一个一个念,每个念两遍。清空 = 不要这周的词。想从课本上挑,在孩子的 iPad 上点「拍照听写」。'));
   };
 
   load();

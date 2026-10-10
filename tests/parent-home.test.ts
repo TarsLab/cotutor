@@ -112,6 +112,12 @@ try {
   check('这周的词:发布了;读回来词与念法;孩子端那张听写卡归语文、只给几个词', w.status === 200 && JSON.stringify(g2.tutors.find((t) => t.name === 'chinese-tutor')!.dictation) === JSON.stringify([{ chars: '春天' }, { chars: '叶', say: '树叶的叶' }]) && dc?.owner === 'chinese-tutor' && dc.props.count === 2 && !JSON.stringify(k2).includes('春天') && history().length === 2, JSON.stringify(dc));
   check('词不对 400:不是汉字、超过四个字', (await call('PUT', '/api/parent/home/tutors/chinese-tutor/dictation', { words: [{ chars: 'red' }] })).status === 400 && (await call('PUT', '/api/parent/home/tutors/chinese-tutor/dictation', { words: [{ chars: '画蛇添足啊' }] })).status === 400);
 
+  // 英语老师的这周的词:英文单词(学科「英语」)
+  const we = await call('PUT', '/api/parent/home/tutors/english-tutor/dictation', { words: [{ chars: 'red' }, { chars: 'yellow', say: 'yellow, a yellow bus' }] });
+  const ke = (await kid()).cards.find((c) => c.kind === 'dictation' && c.owner === 'english-tutor') as { props: { lang?: string; count?: number } } | undefined;
+  check('英语老师的这周的词:收英文单词,孩子端那张是 lang en;汉字的 400、语文老师写英文 400', we.status === 200 && ke?.props.lang === 'en' && ke.props.count === 2 && (await call('PUT', '/api/parent/home/tutors/english-tutor/dictation', { words: [{ chars: '春天' }] })).status === 400 && (await call('PUT', '/api/parent/home/tutors/chinese-tutor/dictation', { words: [{ chars: 'red' }] })).status === 400 && (await get()).tutors.find((t) => t.name === 'english-tutor')!.dictation!.length === 2, JSON.stringify(ke));
+  await call('PUT', '/api/parent/home/tutors/english-tutor/dictation', { words: [] });
+
   // 先后
   const o = await call('PUT', '/api/parent/home/order', { tutors: ['math-tutor', 'chinese-tutor', 'english-tutor'] });
   const k3 = await kid();

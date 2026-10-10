@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { doctorWorkspace } from './doctor.ts';
 import type { ListenInfo } from '../server/qr-page.ts';
 import { createContext, createHandler, type AppContext } from '../server/app.ts';
+import { talkUpgrade } from '../talk/route.ts';
 import { USER_CERT_DIR, expandPath, loadWorkspace, type ResolveOptions, type Workspace } from './workspace.ts';
 
 export interface ServeOptions extends ResolveOptions {
@@ -90,6 +91,8 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
   const handler = createHandler(ctx);
   const tls = opts.http ? null : httpsFiles(ws);
   const server = tls ? createHttps({ cert: readFileSync(tls.cert), key: readFileSync(tls.key) }, handler) : createHttp(handler);
+  // 口语课的通话走 WebSocket(src/talk/);别的升级请求一律断掉
+  server.on('upgrade', (req, socket, head) => { void talkUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }, () => socket.destroy()); });
   await new Promise<void>((resolveListen, reject) => {
     server.once('error', reject);
     server.listen(port, opts.host ?? '0.0.0.0', () => resolveListen());

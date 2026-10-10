@@ -18,13 +18,14 @@
 - `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`
 - `src/schema/` 契约(zod,类型即文档);`src/lib/` 纯函数,离屏可测;`src/cards/` 卡的注册表;`src/clis/` 各 agent CLI 的适配器(一家一个文件,读输出、关工具、环境、出厂模板都在里面,别处只认统一事件)
 - `src/stage/` 舞台包(React,esbuild 打到 `dist/stage/`);`src/cli/` 命令;`src/server/` 服务、runner、页面(孩子端 `/`、家长端 `/parent`、工作台 `/dev`,另有扫码 `/qr`、按住说话试验页 `/voice-test`)、mock
+- 一个场景一个目录、cotutor 只在 app.ts 接一行的模块:`src/xlaoshi/`(小老师,`/xlaoshi`)、`src/talk/`(口语课,`/talk`:百炼 realtime 直连,自带零依赖 WebSocket 服务端,serve.ts 的 upgrade 多接一行);设计在 `docs/wip/`
 - `tests/` 一文件一子进程,零依赖 `check()`;`_fake-cli.ts` / `_fake-tts.ts` 让全流程不花钱;`fixtures/board/` 真跑样本
 
 ## 运行与验证
 
 - `pnpm typecheck`;`pnpm test`;`node bin/cotutor.js --help`(bin 直跑 src,Node ≥ 22.18)
 - 改了 `cards/` 下的 md、`src/lib/*-doc.ts` 跑 `pnpm run gen:skills`(不跑 skills.test 会红);改了 `src/stage/` 跑 `pnpm run build:stage`(dist 不在 git,没打包时舞台开不了)
-- 改解析器或卡先过 `tests/board.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」;改 `src/clis/` 先过 `tests/clis.test.ts` 与 `tests/qwen.test.ts`(假 CLI 有 qwen 方言)
+- 改解析器或卡先过 `tests/board.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」;改 `src/clis/` 先过 `tests/clis.test.ts` 与 `tests/qwen.test.ts`(假 CLI 有 qwen 方言);改 `src/talk/` 先过 `tests/talk*.test.ts`(假百炼 `tests/_fake-realtime.ts`),页面走 `scripts/probe-talk-page.mjs`(加 `--real` 真连一次几分钱),Safari 的音频路径走 `scripts/probe-talk-webkit.mjs`(WebKit,假麦克风是振荡器),协议走 `scripts/probe-talk.mjs`
 - 改孩子端播放(谁念、谁停、谁打断谁)先改《工作流程.md》的仲裁表,再改 `tests/player.test.ts`,最后改 `kid-board.ts` 的 `step`;页面只 `dispatch`
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`
 - 手动验收走 `scripts/probe-*.mjs`(CDP);舞台里的东西用 CDP 驱动;截图也走 CDP(`Page.captureScreenshot`),孩子端、工作台在轮询,无头 Chrome 的 `--screenshot` 会挂;手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`;探针不出声:起 Chrome 加 `QUIET_ARGS`、连上先 `quiet(send)`(`scripts/_quiet.mjs`,mock 的合成声走系统语音服务,`--mute-audio` 静不了它),要听加 `COTUTOR_PROBE_SOUND=1`
@@ -42,6 +43,7 @@
 - qwen 老师的家是 workspace 的 `.cotutor/qwen/home/`(`QWEN_HOME`,适配器生成),手跑 qwen 复现要带上 `QWEN_HOME`、`QWEN_RUNTIME_DIR`、`QWEN_CODE_SYSTEM_SETTINGS_PATH`;别改 `HOME`。`--bare` 不认 `--core-tools`,别用
 - qwen 读会话 cwd(老师目录)外的文件要征得同意,消息走 stdin 时没人回答,进程就挂到 `--max-wall-time`;只读那轮的 `--include-directories` 由适配器展开
 - Safari 才有的毛病拿 Playwright 的 WebKit 复现(`scripts/probe-lecture-webkit.mjs`,本仓不装 playwright,借一份)
+- 百炼 realtime:`turn_detection.silence_duration_ms` 喂过音频就改不了(切 null 再切回也回缺省 800),要不同的 silence 就另开会话;端点用业务空间 id 的域名,公网域名连上 1 秒就断;Node 的 WebSocket 客户端握手被拒只发 error 不发 close,`close()` 后服务端那头要 5–10 秒才回;CDP 的鼠标事件派不到视口外的元素,先 `scrollIntoView`
 
 ## 约定(活过多轮的)
 

@@ -33,6 +33,7 @@ import { BusyError, Runner } from './runner.ts';
 import { listenOmni, type Transcribe } from './listen.ts';
 import { sendFile } from './send-file.ts';
 import { xlaoshiRoute } from '../xlaoshi/route.ts';
+import { talkRoute } from '../talk/route.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets, type Heard, type RecordProps } from '../cards/index.ts';
 import { BUNDLE_ID_RE } from '../cards/kind.ts';
@@ -1059,6 +1060,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     // 小老师(家长用,代码都在 src/xlaoshi/,《wip/小老师设想.md》):/xlaoshi 与 /api/xlaoshi/* 交给它
     const xl = await xlaoshiRoute(method, url, ctx, body); if (xl) return xl;
+    // 口语课(代码都在 src/talk/,《wip/口语课设想.md》):/talk 与 /api/talk/* 交给它;通话的 WebSocket 在 serve.ts 的 upgrade 里接
+    const tk = await talkRoute(method, url, ctx, body); if (tk) return tk;
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
     // 工作台:对话原始视图、看原文、老师团、音色、设置、首页排版——给有技术背景的家长与开发者;家长端在 /parent
     if (p === '/dev') return { status: 200, html: DEV_PAGE };

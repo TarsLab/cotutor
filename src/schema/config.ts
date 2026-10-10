@@ -171,6 +171,22 @@ export type VaultPolicy = z.infer<typeof VaultPolicySchema>;
 /** 按住说话的听法(kid.listen) */
 export const KID_LISTEN = ['browser', 'omni'] as const;
 
+/**
+ * 口语课(《wip/口语课设想.md》):家长拍一张今天学的,孩子先跟读、再和 realtime 模型用这些词聊。出厂关着;要百炼 key 与业务空间 id。
+ * 不进老师团:没有老师文件、板书、记忆;音色是 realtime 自己那套(Tina / Serena…),和 voxtell 的不是一家。
+ */
+export const TALK_DEFAULT = { enabled: false, model: 'qwen3.8-omni-flash-realtime', listModel: 'qwen3.8-omni-flash', voice: 'Serena', minutes: 5, silenceMs: 1200, interrupt: false };
+export const TalkSchema = z.object({
+  enabled: z.boolean().default(false).describe('开不开口语课(/talk);关着页面只说怎么开'),
+  model: z.string().min(1).default(TALK_DEFAULT.model).describe('通话用的 realtime 模型'),
+  listModel: z.string().min(1).default(TALK_DEFAULT.listModel).describe('照片读成口语单用的模型(兼容接口,不想)'),
+  voice: z.string().min(1).default(TALK_DEFAULT.voice).describe('老师的音色:realtime 音色表里的名字(Tina 缺省;Serena 温柔)'),
+  minutes: z.number().int().min(1).max(20).default(TALK_DEFAULT.minutes).describe('聊那段几分钟;到了老师收尾'),
+  silenceMs: z.number().int().min(400).max(4000).default(TALK_DEFAULT.silenceMs).describe('聊那段 VAD 判「说完了」的静音毫秒;孩子想词慢就调长'),
+  interrupt: z.boolean().default(false).describe('聊那段老师说话时麦克风开不开:false = 老师说完才听(没有回声问题,但孩子插不了嘴);true = 全双工,靠设备的回声消除'),
+});
+export type TalkConfig = z.infer<typeof TalkSchema>;
+
 export const CotutorConfigSchema = z
   .object({
     version: z.literal(1),
@@ -207,6 +223,7 @@ export const CotutorConfigSchema = z
       .optional()
       .describe('给老师换样子(figshot pick):它在这台电脑的哪个端口(缺省 8477)。配了孩子端首页多一张「给老师们换个样子」,figshot 没开着就不出现;不配就没有这张卡'),
     koubo: KouboSchema.default(KOUBO_DEFAULT).describe('录音卡的评测命令模板(口播老师):card 一条龙评一条录音(占位 {audio} {text} {mode} {pairs}),timeoutMs 一条最多等多久;门槛与花费上限在 workspace 根的 koubo.json'),
+    talk: TalkSchema.default(TALK_DEFAULT).describe('口语课(/talk):家长拍一张今天学的,孩子先跟读、再和 realtime 模型用这些词聊;enabled 出厂 false;要百炼 key 与业务空间 id(DASHSCOPE_WORKSPACE_ID 或 voxtell 的配置)'),
   })
   .superRefine((c, ctx) => {
     if (!(c.runtimes.default in c.runtimes) || c.runtimes.default === 'default') {

@@ -97,7 +97,7 @@ async function printQr(page: string, open: boolean): Promise<void> {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'listen', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'listen', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -280,9 +280,35 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'activity': {
         const sub = positionals[0];
-        if (sub !== 'check') throw new UsageError(`activity 后面跟 check,如 cotutor activity check chinese-tutor 你说我画。\n${USAGE}`);
+        if (sub !== 'check' && sub !== 'eval') throw new UsageError(`activity 后面跟 check / eval,如 cotutor activity check chinese-tutor 你说我画。\n${USAGE}`);
         const ws = loadWorkspace(workspace);
         const [, tutor, name] = positionals;
+        if (sub === 'eval') {
+          if (!tutor || !name) throw new UsageError(`activity eval 要老师和名字,如 cotutor activity eval chinese-tutor 你说我画。\n${USAGE}`);
+          const runs = typeof flags.runs === 'string' ? Number(flags.runs) : 3;
+          if (!Number.isInteger(runs) || runs < 1 || runs > 10) throw new UsageError('--runs 要是 1–10 的整数');
+          const { evalActivity, makeKidModel } = await import('../server/activity-eval.ts');
+          const r = await evalActivity(ws, tutor, name, {
+            runs,
+            ...(typeof flags.only === 'string' ? { only: flags.only } : {}),
+            kid: makeKidModel(typeof flags['kid-model'] === 'string' ? { model: flags['kid-model'] } : {}),
+            onTurn: json ? undefined : (e) => process.stdout.write(`  ${e.example} #${e.run} 第 ${e.turn} 轮  孩子:${e.kid}\n      老师:${e.said.slice(0, 90)}${e.said.length > 90 ? '…' : ''}${e.paint ? '  [画图卡]' : ''}\n`),
+          });
+          if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
+          else {
+            process.stdout.write('\n');
+            for (const x of r.examples) {
+              process.stdout.write(`${x.pass ? '✓' : '✗'} ${x.name}  ${x.runs.filter((y) => y.pass).length}/${x.runs.length} 次过\n`);
+              x.runs.forEach((y, k) => {
+                for (const g of y.grades.filter((g) => !g.pass)) process.stdout.write(`    #${k + 1} ${g.check}:${g.why ?? ''}\n`);
+                if (y.error) process.stdout.write(`    #${k + 1} ${y.error}\n`);
+              });
+            }
+            process.stdout.write(`花了 $${r.costUsd.toFixed(3)}(老师;模拟孩子另算,很少)· 报告 ${r.file} · 每轮在 evals/${tutor}/ 里,cotutor show ${tutor} <job> --evals 看\n`);
+          }
+          if (r.examples.some((x) => !x.pass)) process.exitCode = 1;
+          return;
+        }
         const results = await checkActivities(ws.root, ws.config.tutors, { tutor, name });
         if (!results.length) throw new UsageError(tutor ? `agents/${tutor}/activities/ 里没有${name ? ` ${name}.md` : ' activity 文件'}` : '这个 workspace 里还没有 activity 文件(cotutor upgrade 补出厂的)');
         const fixes = results.reduce((n, r) => n + r.issues.filter((i) => i.level === 'fix').length, 0);

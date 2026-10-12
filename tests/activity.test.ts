@@ -31,7 +31,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
 // ---- 出厂的那份 ----
 {
   const shipped = await shippedActivities();
-  check('包里出厂一份:语文老师的你说我画', shipped.length === 1 && shipped[0].tutor === 'chinese-tutor' && shipped[0].name === '你说我画', JSON.stringify(shipped));
+  check('包里出厂:语文老师的你说我画与它的例子', shipped.map((x) => `${x.tutor}/${x.name}`).join(' ') === 'chinese-tutor/你说我画 chinese-tutor/你说我画.例子', JSON.stringify(shipped));
   for (const cards of [undefined, factoryCards]) {
     const { issues } = lintActivity(text, { fileName: '你说我画', tutorCards: cards });
     check(`出厂的你说我画过检查(老师的卡 ${cards ? '照出厂 cotutor.json' : '全部'})`, issues.length === 0, JSON.stringify(issues));
@@ -131,6 +131,33 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('failingGate:照文件里的顺序报第一条没过的', failingGate(a, { thread: t(), job: 'x', state: { 还能画: 0 } }) === '连说过一遍' && failingGate({ gates: [{ rule: '还能画', line: 1 }] }, { thread: t(), job: 'x', state: { 还能画: 0 } }) === '还能画' && failingGate({ gates: [] }, { thread: t(), job: 'x', state: {} }) === null);
 }
 
+// ---- 例子与判分(activity eval)----
+{
+  const { gradeRun, kidPrompt, parseExamples } = await import('../src/lib/activity-eval.ts');
+  const ex = parseExamples(readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', '你说我画.例子.md'), 'utf8'));
+  check('出厂例子文件:没有要改的,五个例子', ex.activity === '你说我画' && ex.issues.length === 0 && ex.examples.length === 5, JSON.stringify(ex.issues));
+  check('出厂例子的参数都对得上 activity 文件', ex.examples.every((e) => resolveParams(parseActivity(text).activity, Object.fromEntries(e.params.split(';').filter(Boolean).map((x) => x.split('=') as [string, string]))).issues.length === 0));
+  const bad = parseExamples('---\nactivity: x\n---\n## 甲\n孩子: 你好\n判:\n- 出彩虹\n## 乙\n乱写一行\n最多轮: 99\n');
+  check('例子写坏:判不认得、行认不出、最多轮超了、没孩子没人设、没有判都报', ['判「出彩虹」不认得', '认不出', '最多轮要是', '孩子一句都没有', '没有判'].every((w) => bad.issues.some((i) => i.text.includes(w))), JSON.stringify(bad.issues));
+  const line = (t: string) => ({ text: t, audio: null, marks: [], ask: false, anchor: null });
+  const sec = (lines: string[], cards: { kind: string; props: Record<string, unknown> }[] = []) => ({ lines: lines.map(line), cards }) as never;
+  const story = { kind: 'read', props: { segments: ['小熊睡大觉。', '小熊浇了水。', '西瓜熟了。'] } };
+  const paint = (panels: string[]) => ({ kind: 'paint', props: { panels } });
+  const turns = [
+    { kid: '你说我画', section: sec(['画家想知道是谁的故事?']) },
+    { kid: '小熊', section: sec(['画家画哪个?'], [story]) },
+    { kid: '小熊睡大觉浇了水西瓜熟了', section: sec(['画家开始画了。', '你猜画家会怎么画?'], [paint(['小熊播种。', '小熊很高兴。'])]) },
+  ];
+  const g = Object.fromEntries(gradeRun(['出画图卡', '不出画图卡', '画图卡前放过整段', '分幅没有看不见的词', '每节末句是问句', '不说: 错了', '问到: 画家', '并排: 睡大觉 | 浇了水', '词落到幅: 1'], turns, { 词: ['播种', '羞愧'] }).map((r) => [r.check, r]));
+  check('判:出画图卡 / 不出画图卡', g['出画图卡'].pass && !g['不出画图卡'].pass && g['不出画图卡'].why!.includes('第 3 轮'));
+  check('判:画图卡前放过整段', g['画图卡前放过整段'].pass && !gradeRun(['画图卡前放过整段'], [turns[0], turns[2]])[0].pass);
+  check('判:分幅里的「高兴」报出来', !g['分幅没有看不见的词'].pass && g['分幅没有看不见的词'].why!.includes('高兴'));
+  check('判:每节末句问句、不说、问到、并排、词落到幅', g['每节末句是问句'].pass && g['不说: 错了'].pass && g['问到: 画家'].pass && g['并排: 睡大觉 | 浇了水'].pass && g['词落到幅: 1'].pass && !gradeRun(['词落到幅: 2'], turns, { 词: ['播种', '羞愧'] })[0].pass);
+  check('判:末句不是问句报哪轮', !gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。']) }])[0].pass);
+  const kp = kidPrompt({ story: '小熊种瓜', persona: '问一句答一句' }, turns.slice(0, 2));
+  check('模拟孩子的提示词:故事、人设、对话、板上的整段', kp.includes('小熊种瓜') && kp.includes('问一句答一句') && kp.includes('孩子:小熊') && kp.includes('板上:小熊睡大觉。 / 小熊浇了水。'));
+}
+
 // ---- 没有老师那节的(像听写):只提醒,不算错;解析永不抛 ----
 {
   const dict = '---\nname: 听写\ndescription: 老师念,孩子写\ncards: \n---\n\n## 家长填的\n\n```参数\n词表: 词表 —— 一行一个\n```\n';
@@ -154,7 +181,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   try {
     const steps = await installActivities(root);
     const file = activityFile(root, 'chinese-tutor', '你说我画');
-    check('init 拷进老师的家', steps.length === 1 && steps[0].action === 'created' && readFileSync(file, 'utf8') === text, JSON.stringify(steps));
+    check('init 拷进老师的家(连例子文件)', steps.length === 2 && steps.every((x) => x.action === 'created') && readFileSync(file, 'utf8') === text && existsSync(activityFile(root, 'chinese-tutor', '你说我画.例子')), JSON.stringify(steps));
     check('hash 记进 shipped.json 的 activities', (await readManifest(root)).activities?.['chinese-tutor/你说我画']?.hash === sha256(text));
     await installTutors(root, []);
     check('老师那边写清单不抹掉 activities', Boolean((await readManifest(root)).activities?.['chinese-tutor/你说我画']));

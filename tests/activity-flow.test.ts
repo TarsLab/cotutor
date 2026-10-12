@@ -23,6 +23,7 @@ const { main } = await import('../src/cli/main.ts');
 const { parseHome } = await import('../src/lib/home.ts');
 const { setTutorButtons } = await import('../src/lib/home-edit.ts');
 const { renderContextPack } = await import('../src/lib/context-pack.ts');
+const { evalActivity } = await import('../src/server/activity-eval.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
 const node = process.execPath;
@@ -203,6 +204,26 @@ try {
     check('还能画 0:拦下(还能画),不交给画家', stateOf(a5.prompt).includes('"还能画": 0') && (await recOf(a5.job))?.error === 'gate:还能画' && drew === 2, stateOf(a5.prompt));
     const a6 = await send({ text: '好吧', thread: th });
     check('下一条:cards 说张数到头了', a6.prompt.includes('没画:这个话题能画的张数到头了') && stateOf(a6.prompt).includes('"缺": "还能画"'));
+  }
+
+  // ---- activity eval:假老师 + 假孩子,不花钱 ----
+  {
+    const exFile = join(root, 'agents', 'chinese-tutor', 'activities', '你说我画.例子.md');
+    const shipped = readFileSync(exFile, 'utf8');
+    writeFileSync(exFile, '---\nactivity: 你说我画\n---\n\n## 写死的\n孩子: 整段\n孩子: 画图\n判:\n- 出画图卡\n- 画图卡前放过整段\n\n## 模拟的\n人设: 乖\n故事: 小熊种瓜\n最多轮: 4\n判:\n- 不出画图卡\n');
+    const said: string[] = [];
+    const kid = async (prompt: string): Promise<string | null> => { said.push(prompt); return said.length === 1 ? '整段' : '画图'; };
+    const lines: string[] = [];
+    const r = await evalActivity(ctx.ws, 'chinese-tutor', '你说我画', { runs: 2, kid, onTurn: (e) => lines.push(`${e.example}#${e.run}:${e.turn}:${e.kid}${e.paint ? ':画' : ''}`) });
+    const [a, b] = r.examples;
+    check('eval:写死的那个,两次都走到画图卡、都过', a.name === '写死的' && a.pass && a.runs.length === 2 && a.runs.every((x) => x.turns.map((t) => t.kid).join('/') === '你说我画/整段/画图'), JSON.stringify(a.runs.map((x) => ({ k: x.turns.map((t) => t.kid), g: x.grades, e: x.error }))));
+    check('eval:模拟的那个,孩子的话来自模拟孩子,画了 → 「不出画图卡」不过,报出来', b.name === '模拟的' && !b.pass && b.runs[0].grades[0].why?.includes('画图卡') === true && said[0].includes('小熊种瓜'), JSON.stringify(b.runs[0]));
+    check('eval:每轮回调,画图卡那轮标出来', lines[0] === '写死的#1:1:你说我画' && lines.includes('写死的#1:3:画图:画'), lines.join(' '));
+    check('eval:落在 evals/,不进孩子的对话;报告写了', readFileSync(join(root, r.file), 'utf8').includes('"activity": "你说我画"') && !(await readIndex(ctx.ws, 'chinese-tutor', DATE)).messages.some((m) => m.thread === a.runs[0].thread && m.text === '整段' && m.job === a.runs[0].thread));
+    let threw = '';
+    await evalActivity(ctx.ws, 'chinese-tutor', '你说我画', { only: '没有这个', kid }).catch((e: Error) => { threw = e.message; });
+    check('eval:--only 不认得报有哪些', threw.includes('写死的、模拟的'), threw);
+    writeFileSync(exFile, shipped);
   }
 
   // ---- 渲染:没有 activity 的包不多出东西 ----

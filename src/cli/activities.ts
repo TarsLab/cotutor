@@ -20,19 +20,23 @@ export interface ActivityRef {
   file: string;
 }
 
-/** 某个根下(包的 agents/,或 workspace 的 agents/)每位老师的 activities/*.md */
-export async function listActivities(agentsDir: string, tutor?: string): Promise<ActivityRef[]> {
+/** 例子文件(cotutor activity eval 用):和 activity 放在一起,`<名>.例子.md`;跟着 activity 一起出厂,检查时不当 activity */
+export const EXAMPLES_SUFFIX = '.例子';
+
+/** 某个根下(包的 agents/,或 workspace 的 agents/)每位老师的 activities/*.md;examples = 连例子文件一起(出厂、升级用) */
+export async function listActivities(agentsDir: string, tutor?: string, opts: { examples?: boolean } = {}): Promise<ActivityRef[]> {
   const out: ActivityRef[] = [];
   const tutors = tutor ? [tutor] : (await readdir(agentsDir, { withFileTypes: true }).catch(() => [])).filter((d) => d.isDirectory()).map((d) => d.name).sort();
   for (const t of tutors) {
     const dir = join(agentsDir, t, ACTIVITIES_DIR);
     const files = (await readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith('.md')).sort();
-    for (const f of files) out.push({ tutor: t, name: f.slice(0, -3), file: join(dir, f) });
+    for (const f of files) if (opts.examples || !f.slice(0, -3).endsWith(EXAMPLES_SUFFIX)) out.push({ tutor: t, name: f.slice(0, -3), file: join(dir, f) });
   }
   return out;
 }
 
-export const shippedActivities = (): Promise<ActivityRef[]> => listActivities(PACKAGE_AGENTS_DIR);
+/** 出厂的 activity 与它们的例子文件 */
+export const shippedActivities = (): Promise<ActivityRef[]> => listActivities(PACKAGE_AGENTS_DIR, undefined, { examples: true });
 
 /** workspace 里那份的位置 */
 export function activityFile(root: string, tutor: string, name: string): string {

@@ -194,7 +194,7 @@ export const PARENT_HOME_PAGE = String.raw`<!doctype html>
       const r = await save('PUT', '/api/parent/home/tutors/' + encodeURIComponent(t.name) + '/buttons', { buttons: list }, '发布了');
       if (r) closeSheet(); else go.disabled = false;
     });
-    const what = b.kind === 'continue' ? '接着 ' + md(b.date) + ' 的话题 ' + b.thread : b.kind === 'lecture' ? '小课堂 ' + b.bundle : '';
+    const what = b.kind === 'continue' ? '接着 ' + md(b.date) + ' 的话题 ' + b.thread : b.kind === 'lecture' ? '小课堂 ' + b.bundle : b.kind === 'activity' ? 'activity ' + b.activity : '';
     openSheet(
       h('div', { class: 'nav' }, h('button', { type: 'button', on: { click: closeSheet } }, '取消'), h('b', {}, t.display + ' · ' + (k >= 0 ? '改按钮' : '开场按钮')), go),
       what ? h('div', { class: 'note' }, what + '(从 Claude Code 排的,这里只改字和讲法)') : null,

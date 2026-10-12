@@ -64,7 +64,8 @@ const blank = (): HomeSeg => ({ kind: 'text', lines: [''] });
 export function tutorBody(buttons: readonly TutorButton[]): string[] {
   const out: string[] = [];
   for (const b of buttons) {
-    out.push(b.kind === 'continue' ? `接着 ${b.date} ${b.thread} ${b.label}` : b.kind === 'lecture' ? `小课堂 ${b.bundle} ${b.label}` : b.label);
+    out.push(b.kind === 'continue' ? `接着 ${b.date} ${b.thread} ${b.label}` : b.kind === 'lecture' ? `小课堂 ${b.bundle} ${b.label}` : b.kind === 'activity' ? `activity ${b.activity}${b.label === b.activity ? '' : ` ${b.label}`}` : b.label);
+    if (b.kind === 'activity') for (const [k, v] of Object.entries(b.params)) out.push(`${k}: ${v}`);
     if (b.brief) for (const l of b.brief.split('\n')) out.push(`讲法: ${l}`);
     if (b.until) out.push(`留到: ${b.until}`);
   }

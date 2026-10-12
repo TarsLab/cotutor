@@ -97,3 +97,14 @@ export const ActivitySchema = z.object({
   tools: z.array(ActivityToolSchema),
 });
 export type Activity = z.infer<typeof ActivitySchema>;
+
+/** 参数与应用算的值:词表是一串词,数是整数,别的是一段字 */
+export const ActivityValueSchema = z.union([z.string(), z.number(), z.array(z.string())]);
+export type ActivityValue = z.infer<typeof ActivityValueSchema>;
+
+/** 一个话题是从哪个 activity 起的:名字与孩子点的那一刻的参数(补了缺省);记在话题第一条消息上,整个话题都用这一份 */
+export const ActivityRunSchema = z.object({
+  name: z.string().min(1),
+  params: z.record(z.string(), ActivityValueSchema),
+});
+export type ActivityRun = z.infer<typeof ActivityRunSchema>;

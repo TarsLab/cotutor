@@ -8,7 +8,7 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-activity-home-')))
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { activityCards, checkActivity, fillSlots, lintActivity, parseActivity, renderTutorSection } = await import('../src/lib/activity.ts');
+const { activityCards, checkActivity, fillSlots, lintActivity, parseActivity, renderTutorSection, resolveParams } = await import('../src/lib/activity.ts');
 const { PAINT_PROMPT_DEFAULT } = await import('../src/schema/index.ts');
 const { PAINT_NEGATIVE } = await import('../src/paint/prompt.ts');
 const { PACKAGE_AGENTS_DIR, configTemplate, shippedAgents } = await import('../src/cli/skeleton.ts');
@@ -92,7 +92,8 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('工具人那节没有围栏', has(fixesAfter('```画家\n', '```text\n'), '要有一个 ```画家 围栏'));
   check('头上的卡不认得', has(fixesAfter('cards: read paint', 'cards: read paintt'), '「paintt」不是板书的卡'));
   check('正文用的卡老师和 activity 都没有', has(fixesAfter('cards: read paint', 'cards: read', { fileName: '你说我画', tutorCards: ['text', 'read'] }), '`paint` 卡,老师和这个 activity 都没有'));
-  check('老师有这种卡就不用 activity 再写', fixesAfter('cards: read paint', 'cards: read', { fileName: '你说我画', tutorCards: factoryCards }).length === 0);
+  check('出厂语文老师的卡里没有 paint(只跟着 activity)', !factoryCards?.includes('paint'));
+  check('老师有这种卡就不用 activity 再写', fixesAfter('cards: read paint', 'cards: read', { fileName: '你说我画', tutorCards: ['text', 'read', 'paint'] }).length === 0);
   check('缺第一句', has(fixesAfter('第一句: ', '先说: '), '「第一句: …」'));
   check('缺收', has(fixesAfter('收: 问完', '最后: 问完'), '「收: …」'));
   check('name 和文件名对不上', has(lintActivity(text, { fileName: '你画我说' }).issues, '文件名是「你画我说.md」'));
@@ -101,6 +102,18 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('同一节写两次', has(fixesAfter('## 孩子看到什么', '## 家长填的\n\n```参数\n别的: 字\n```\n\n## 孩子看到什么'), '写了两节'));
   check('家长填的没有围栏', has(fixesAfter('```参数\n', '```\n'), '```参数 围栏'));
   check('围栏没收口', has(lintActivity('---\nname: x\ndescription: y\n---\n## 家长填的\n```参数\n词: 字\n', { fileName: 'x' }).issues, '没有收口'));
+}
+
+// ---- 首页按钮下面的参数 → 值 ----
+{
+  const { activity: a } = parseActivity(text);
+  const ok = resolveParams(a, { 词: '播种、睡大觉, 满满 羞愧' });
+  check('词表:顿号、逗号、空格都分;最多画补缺省 2,是数', JSON.stringify(ok) === JSON.stringify({ values: { 词: ['播种', '睡大觉', '满满', '羞愧'], 最多画: 2 }, issues: [] }), JSON.stringify(ok));
+  check('可空的没填:不出现', JSON.stringify(resolveParams(a, {}).values) === JSON.stringify({ 最多画: 2 }) && resolveParams(a, { 词: ' ' }).issues.length === 0);
+  check('数:不是整数、超出范围都报', resolveParams(a, { 最多画: '两' }).issues[0]?.includes('整数') && resolveParams(a, { 最多画: '5' }).issues[0]?.includes('1 到 4'));
+  check('不认得的参数报一条,列出有哪些', resolveParams(a, { 单词: 'x' }).issues[0]?.includes('有:词、最多画'));
+  const must = parseActivity(text.replace('词: 词表,可空', '词: 词表')).activity;
+  check('要填的没填:报', resolveParams(must, {}).issues[0]?.includes('要填「词」'));
 }
 
 // ---- 没有老师那节的(像听写):只提醒,不算错;解析永不抛 ----

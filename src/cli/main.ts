@@ -12,7 +12,7 @@ import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
 import { makeCert } from './cert.ts';
 import { addTutorFile, upgradeTutors } from './tutors.ts';
-import { checkActivities, upgradeActivities } from './activities.ts';
+import { activityRunFor, checkActivities, upgradeActivities } from './activities.ts';
 import { configGapsOf, upgradeConfig } from './migrate.ts';
 import { portBusy } from './rename.ts';
 import { upgradeSkills, writeKouboShim, writeToolShim } from './skills.ts';
@@ -97,7 +97,7 @@ async function printQr(page: string, open: boolean): Promise<void> {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'listen', 'lane', 'job', 'date', 'thread', 'at', 'photo']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'listen', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -318,7 +318,8 @@ export async function main(argv: string[]): Promise<void> {
         if (from !== 'kid' && from !== 'system') throw new UsageError('--from 只能是 kid / system');
         const at = typeof flags.at === 'string' ? new Date(flags.at) : new Date();
         if (Number.isNaN(at.getTime())) throw new UsageError(`--at 不是时间:${flags.at as string}`);
-        const r = await packDryRun(ws, tutor, { from, at, text: rest.join(' ') || '(干跑)' });
+        const activity = typeof flags.activity === 'string' ? await activityRunFor(ws.root, tutor, flags.activity, typeof flags.param === 'string' ? flags.param : '') : undefined;
+        const r = await packDryRun(ws, tutor, { from, at, text: rest.join(' ') || activity?.name || '(干跑)', ...(activity ? { activity } : {}) });
         if (json) { process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`); return; }
         const rel = (f: string): string => redactHome(f.startsWith(ws.root) ? f.slice(ws.root.length + 1) : f);
         const rp = r.report;
@@ -506,8 +507,10 @@ export async function main(argv: string[]): Promise<void> {
       }
       case 'send': {
         const [tutor, ...words] = positionals;
-        const text = words.join(' ');
         const photoFiles = typeof flags.photo === 'string' ? flags.photo.split(',').filter(Boolean) : [];
+        // --activity:像孩子点了首页的 activity 按钮,新开话题;没写消息就发 activity 的名字(按钮上的字)
+        const activityName = typeof flags.activity === 'string' ? flags.activity : undefined;
+        const text = words.join(' ') || activityName || '';
         if (!tutor || (!text && !photoFiles.length)) throw new UsageError(`send 需要老师名和消息,如 cotutor send math-tutor "这一步为什么要借位"。\n${USAGE}`);
         const from = typeof flags.from === 'string' ? flags.from : 'kid';
         if (!(MESSAGE_FROM as readonly string[]).includes(from)) throw new UsageError(`--from 只能是 ${MESSAGE_FROM.join(' / ')}`);
@@ -530,7 +533,8 @@ export async function main(argv: string[]): Promise<void> {
           const keep = laneFilter(typeof flags.lane === 'string' ? flags.lane : undefined);
           ctx.runner.onEvent((e) => { if (e.tutor === tutor && keep(e.event)) process.stdout.write(`${formatEvent(e.event)}\n`); });
         }
-        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, newThread: flags.new === true, ...(photos.length ? { photos } : {}) });
+        const activity = activityName ? await activityRunFor(ws.root, tutor, activityName, typeof flags.param === 'string' ? flags.param : '') : undefined;
+        const started = await ctx.runner.send(tutor, { from: from as MessageFrom, text, runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, newThread: flags.new === true || Boolean(activity), ...(photos.length ? { photos } : {}), ...(activity ? { activity } : {}) });
         if (!json) process.stdout.write(`→ ${tutor} ${started.date} ${started.job} 话题 ${started.thread}(${started.plan.runtime}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
         const index = await started.done;
         const m = index.messages.find((x) => x.job === started.job);

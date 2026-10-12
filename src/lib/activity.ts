@@ -17,6 +17,7 @@ import {
   type ActivityParamType,
   type ActivityState,
   type ActivityTool,
+  type ActivityValue,
 } from '../schema/index.ts';
 import { parseAgentFile } from './agent-file.ts';
 import { GUARD_CLOSE, GUARD_OPEN, applyGuards } from './card-guards.ts';
@@ -368,4 +369,35 @@ export function fillSlots(template: string, values: Readonly<Record<string, stri
     .replace(SLOT, (_, name: string) => values[name] ?? '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+
+/**
+ * 首页按钮下面家长填的参数(原文)→ 按 activity 文件的「家长填的」解析成值:按声明的顺序、补缺省、按类型转。
+ * 写了没有的参数、要填的没填、类型不对,进 issues(一条一句,给首页检查);值里只留解析得了的。
+ */
+export function resolveParams(a: Activity, raw: Readonly<Record<string, string>>): { values: Record<string, ActivityValue>; issues: string[] } {
+  const values: Record<string, ActivityValue> = {};
+  const issues: string[] = [];
+  const known = new Set(a.params.map((p) => p.name));
+  for (const k of Object.keys(raw)) if (!known.has(k)) issues.push(`「${k}」不是 ${a.name} 的参数(${a.params.length ? `有:${a.params.map((p) => p.name).join('、')}` : '它没有参数'})`);
+  for (const p of a.params) {
+    const given = raw[p.name]?.trim();
+    const text = given || p.default;
+    if (!text) {
+      if (!p.optional) issues.push(`${a.name} 要填「${p.name}」(${p.type}${p.note ? `:${p.note}` : ''})`);
+      continue;
+    }
+    if (p.type === '词表') {
+      const words = text.split(/[\s、,，;；]+/).filter(Boolean);
+      if (words.length) values[p.name] = words;
+    } else if (p.type === '数') {
+      const n = Number(text);
+      if (!/^-?\d+$/.test(text)) issues.push(`「${p.name}」要填整数,写的是「${text}」`);
+      else if ((p.min !== undefined && n < p.min) || (p.max !== undefined && n > p.max)) issues.push(`「${p.name}」要在 ${p.min} 到 ${p.max} 之间,写的是 ${n}`);
+      else values[p.name] = n;
+    } else if (p.type === '日期' && !/^\d{4}-\d{2}-\d{2}$/.test(text)) issues.push(`「${p.name}」要写成 2026-10-12 这样,写的是「${text}」`);
+    else values[p.name] = text;
+  }
+  return { values, issues };
 }

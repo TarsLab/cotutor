@@ -14,12 +14,14 @@ import { spawn } from 'node:child_process';
 import { lecturePack, readLecture, storedMarks, type IncomingMark } from './lecture.ts';
 import { closeSync, createWriteStream, existsSync, openSync, writeSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, isAbsolute, join, relative } from 'node:path';
+import { basename, isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
 import { addMessage, applyRun, cardId, lastJobOf, changedCards, conversationFiles, jobId, localDate, localMinute, sessionFor, threads } from '../lib/conversation.ts';
 import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
 import { cardAssets, cardLabel, describeCard, tutorCardKinds, type RecordProps } from '../cards/index.ts';
-import { boardGuideFor } from '../cards/docs.ts';
+import { boardGuideFor, cardGuidesFor } from '../cards/docs.ts';
+import { activityCards, parseActivity, renderTutorSection } from '../lib/activity.ts';
+import { activityFile } from '../cli/activities.ts';
 import { KouboQueue } from './koubo.ts';
 import { controlsTools, parserOf, prepareCli, processEnv, toolsOf, unexpectedTools } from '../clis/index.ts';
 import { parseBoard } from '../lib/board.ts';
@@ -32,7 +34,7 @@ import { getRuntime, planRun, runtimeUses, stallPrompt, type RunPlan, boardPrelo
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
+import { MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { updateVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
 import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPrompt, type MemoryLine } from '../lib/vault-notes.ts';
@@ -51,6 +53,8 @@ export class BusyError extends Error {
 
 export interface SendInput {
   from: MessageFrom;
+  /** 从首页的 activity 按钮起的新话题(或 cotutor send --activity):哪个 activity、点的那一刻的参数;记在这条消息上,话题后面每条照它带 */
+  activity?: ActivityRun;
   /** 带 action 时可以是空的:继续 → 「继续」;交给老师 → 「(交了答案,没说话)」 */
   text: string;
   focus?: Focus;
@@ -183,6 +187,40 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
   return pack;
 }
 
+/** 这个话题是从哪个 activity 起的:话题里第一条带 activity 的消息(只记在第一条);没有 → null */
+export function threadActivity(messages: readonly ConversationMessage[], thread: string): ActivityRun | null {
+  const ths = threads(messages);
+  return messages.find((m, i) => ths[i] === thread && m.activity)?.activity ?? null;
+}
+
+/**
+ * activity 的那两段(《wip/activity设计.md》§五):`activity:`(名字、参数、应用算的)每条都带;
+ * 「老师怎么带」那节(按参数与这个话题的卡裁过、剥了注释)+ 这个 activity 多带的卡的写法,作为一条笔记放进话题第一条(<cotutor-activity>),
+ * 续话题没改过写「未变」(同守则)。文件不在、读不了 → activityGuide 写「缺」,老师照自己的文件做。返回给这轮的提醒。
+ */
+export async function attachActivity(ws: Workspace, tutor: string, pack: ContextPack, run: ActivityRun): Promise<string[]> {
+  pack.activity = { name: run.name, params: run.params, state: {} };
+  const path = relative(ws.root, activityFile(ws.root, tutor, run.name)).split(sep).join('/');
+  const text = await readFile(join(ws.root, path), 'utf8').catch(() => null);
+  if (text === null) {
+    pack.activityGuide = `缺:${path} 不在,照你老师文件里的做`;
+    return [`activity ${run.name}:${path} 不在,老师没拿到「老师怎么带」`];
+  }
+  const a = parseActivity(text).activity;
+  const mine = tutorCardKinds(ws.config.tutors[tutor]?.cards);
+  const cards = activityCards(a, mine ?? undefined);
+  const body = renderTutorSection(a, { params: run.params, cards });
+  if (body === null) return [];
+  // 这个 activity 要用、老师的板书写法里没有的卡:写法跟在后面(不动系统提示,《wip/activity设计.md》5.1)
+  const extra = mine ? a.cards.filter((k) => !mine.includes(k)) : [];
+  const notes = pack.notes ?? [];
+  const at = Math.max(notes.findIndex((n) => n.role === 'boardGuide'), notes.findIndex((n) => n.role === 'rules'));
+  notes.splice(at + 1, 0, { role: 'activityGuide', path, text: extra.length ? `${body}\n\n## 这个 activity 多用的卡\n\n${cardGuidesFor(extra)}` : body });
+  pack.notes = notes;
+  pack.activityGuide = path;
+  return [];
+}
+
 /** 按老师裁的板书写法落在哪(相对 workspace 根;机器文件,内容变了文件名跟着变) */
 export const TUTOR_BOARD_DIR = '.cotutor/board';
 
@@ -272,7 +310,7 @@ export function readDirsOf(ws: Workspace): string[] {
 }
 
 /** 干跑:现在给这位老师发这句话,上下文包会是什么样、每段从哪来、截了多少;不起模型、不写盘 */
-export async function packDryRun(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; text: string }): Promise<{ prompt: string; pack: ContextPack; report: PackReport }> {
+export async function packDryRun(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; text: string; activity?: ActivityRun }): Promise<{ prompt: string; pack: ContextPack; report: PackReport }> {
   const t = ws.config.tutors[tutor];
   if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
   const report = {} as PackReport;
@@ -283,6 +321,7 @@ export async function packDryRun(ws: Workspace, tutor: string, input: { from: Me
   // 和 send 同一条规矩:孩子的话不带工具时,只有工具才用得上的路径不进包
   if (policy.tools !== 'on' && input.from === 'kid' && controlsTools(runtime)) { delete pack.refs; delete pack.vault; }
   await attachBoardGuide(ws, tutor, pack, { preloaded: boardPreloaded(runtime), boardOff: policy.board === 'off' });
+  if (input.activity) await attachActivity(ws, tutor, pack, input.activity);
   return { prompt: buildContextPack(pack, input.text, policy.contextPack), pack, report };
 }
 
@@ -434,6 +473,9 @@ export class Runner {
     const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus });
     const policy = resolvePolicy(ws.config, tutor);
     const { agentBody, systemBody, boardFile } = await systemParts(ws, tutor, runtime, policy, gathered);
+    // activity:新话题照这条带的,续话题照话题第一条记的;记账那种系统轮不带
+    const activityRun = input.bookkeep ? null : fresh ? (input.activity ?? null) : threadActivity(index.messages, thread);
+    const activityWarn = activityRun ? await attachActivity(ws, tutor, gathered, activityRun) : [];
     // 家长笔记原文:新会话整篇带;续会话时这个话题带过、没改的只写「未变」
     const notes = noteVersions(gathered);
     const pack = session ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
@@ -478,7 +520,7 @@ export class Runner {
       const file = conversationFiles(ws.dirs.conversations, tutor, date).voice(job, input.voice.ext);
       if (await mkdir(join(ws.dirs.conversations, tutor), { recursive: true }).then(() => writeFile(file, input.voice!.data)).then(() => true, () => false)) voice = { audio: basename(file), seconds: Math.round(input.voice.seconds * 10) / 10 };
     }
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.listened ? { listened: input.listened } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(noteWarnings.length || lectureWarn.length ? { warnings: [...noteWarnings, ...lectureWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.listened ? { listened: input.listened } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(noteWarnings.length || lectureWarn.length || activityWarn.length ? { warnings: [...noteWarnings, ...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
     // 这个 CLI 在 workspace 里要的机器文件(qwen 的隔离家目录):备不好这轮照起,起不来的原因会在 err.log

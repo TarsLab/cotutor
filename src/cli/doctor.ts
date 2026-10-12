@@ -392,6 +392,9 @@ export async function doctorWorkspace(
         for (const s of states.values()) if (s.state === 'missing') push({ name: `activity.${s.key}`, ok: false, required: false, detail: `agents/${s.key.replace('/', '/activities/')}.md 不在`, fix: 'cotutor init 补拷' });
         for (const r of await checkActivities(root, ws.config.tutors)) {
           const key = `${r.tutor}/${r.name}`;
+          // 老 workspace 改过老师文件:upgrade 只报 diff,里面同名那节还在,两处说法会打架
+          const agentText = await readFile(join(ws.dirs.claudeAgents, `${r.tutor}.md`), 'utf8').catch(() => '');
+          if (new RegExp(`^#{2,4}\\s*${r.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm').test(agentText)) push({ name: `activity.${key}.dup`, ok: false, required: false, detail: `.claude/agents/${r.tutor}.md 里还有一节「${r.name}」,和 activity 文件两处说法会打架`, fix: `删掉老师文件里那一节(做法以 agents/${r.tutor}/activities/${r.name}.md 为准)` });
           const st = states.get(key);
           const fixes = r.issues.filter((i) => i.level === 'fix');
           const origin = st ? label[st.state] + (st.basedOn && st.state !== 'latest' ? `(基于 ${st.basedOn})` : '') : '自家写的';

@@ -18,6 +18,7 @@ export function renderContextPack(pack: ContextPack): string {
   if (p.focus?.card) out.push('  focus:', `    card: ${yamlScalar(p.focus.card)}`);
   if (p.rules) out.push(`  rules: ${yamlScalar(p.rules)}`);
   if (p.boardGuide) out.push(`  boardGuide: ${yamlScalar(p.boardGuide)}`);
+  if (p.activityGuide) out.push(`  activityGuide: ${yamlScalar(p.activityGuide)}`);
   if (p.semester) out.push(`  semester: ${yamlScalar(p.semester)}`);
   if (p.profile) out.push(`  profile: ${yamlScalar(p.profile)}`);
   if (p.entry) out.push(`  entry: ${yamlScalar(p.entry)}`);
@@ -83,10 +84,27 @@ export function renderContextPack(pack: ContextPack): string {
     out.push('  photoFiles:');
     for (const c of p.photoFiles) out.push(`    - ${yamlScalar(c)}`);
   }
+  // activity 放最后、键序固定:剩几张这种每条会变的,离孩子的话最近(《wip/activity设计.md》拍板 5)
+  if (p.activity) {
+    const a = p.activity;
+    out.push('  activity:', `    name: ${yamlScalar(a.name)}`);
+    for (const [key, values] of [['params', a.params], ['state', a.state]] as const) {
+      const entries = Object.entries(values);
+      if (!entries.length) continue;
+      out.push(`    ${key}:`);
+      for (const [k, v] of entries) {
+        if (!Array.isArray(v)) out.push(`      ${yamlScalar(k)}: ${yamlScalar(v)}`);
+        else {
+          out.push(`      ${yamlScalar(k)}:`);
+          for (const x of v) out.push(`        - ${yamlScalar(x)}`);
+        }
+      }
+    }
+  }
   // 守则是出厂的,不是家长的笔记,换个标签;路径相对 workspace 根(家长笔记的相对 vault 根)
   for (const n of p.notes ?? []) {
-    const shipped = n.role === 'rules' || n.role === 'boardGuide';
-    const tag = n.role === 'rules' ? 'cotutor-rules' : n.role === 'boardGuide' ? 'cotutor-board' : 'vault-note';
+    const shipped = n.role === 'rules' || n.role === 'boardGuide' || n.role === 'activityGuide';
+    const tag = n.role === 'rules' ? 'cotutor-rules' : n.role === 'boardGuide' ? 'cotutor-board' : n.role === 'activityGuide' ? 'cotutor-activity' : 'vault-note';
     out.push(shipped ? `<${tag} path=${JSON.stringify(n.path)}>` : `<${tag} role="${n.role}" path=${JSON.stringify(n.path)}>`, n.text.replace(/\s+$/, ''), `</${tag}>`);
   }
   return out.join('\n');

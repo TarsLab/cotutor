@@ -5,10 +5,11 @@
  */
 import { readFile, readdir, mkdir, writeFile, lstat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { lintActivity, type ActivityIssue } from '../lib/activity.ts';
-import type { Activity } from '../schema/index.ts';
+import { lintActivity, parseActivity, resolveParams, type ActivityIssue } from '../lib/activity.ts';
+import type { Activity, ActivityRun } from '../schema/index.ts';
 import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION } from './skeleton.ts';
 import { lineDiff, readManifest, sha256, writeManifest, type ShippedManifest, type TutorState } from './tutors.ts';
+import { UsageError } from './workspace.ts';
 
 export const ACTIVITIES_DIR = 'activities';
 
@@ -159,4 +160,23 @@ export async function checkActivities(root: string, tutors: Readonly<Record<stri
     out.push({ ...r, activity, issues });
   }
   return out;
+}
+
+/**
+ * 终端里起一个 activity 话题(cotutor send / pack --activity):读 workspace 里那份,参数照首页按钮的写法给(`名=值`,几个用 ; 隔开),
+ * 和孩子点按钮同一条解析(补缺省、按类型转)。不在、参数不对 → UsageError。
+ */
+export async function activityRunFor(root: string, tutor: string, name: string, raw = ''): Promise<ActivityRun> {
+  const file = activityFile(root, tutor, name);
+  const text = await readFile(file, 'utf8').catch(() => null);
+  if (text === null) throw new UsageError(`${file} 不在;cotutor activity check ${tutor} 看这位老师有哪些`);
+  const params: Record<string, string> = {};
+  for (const pair of raw.split(/[;；]/).map((x) => x.trim()).filter(Boolean)) {
+    const m = /^([^=]+)=(.*)$/.exec(pair);
+    if (!m) throw new UsageError(`--param 写成「名=值」,几个用 ; 隔开,如 --param '词=播种、羞愧;最多画=1'(「${pair}」不对)`);
+    params[m[1].trim()] = m[2].trim();
+  }
+  const r = resolveParams(parseActivity(text).activity, params);
+  if (r.issues.length) throw new UsageError(r.issues.join(';'));
+  return { name, params: r.values };
 }

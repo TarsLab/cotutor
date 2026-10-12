@@ -7,6 +7,7 @@ import { FocusSchema, MESSAGE_FROM } from './context-pack.ts';
 import { BoardSectionSchema, DeviceSchema } from './board.ts';
 import { BookkeepingSchema } from './sections.ts';
 import { MessageViaSchema } from './home.ts';
+import { ActivityRunSchema } from './activity.ts';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -123,6 +124,8 @@ const MessageObjectSchema = z.object({
     .optional(),
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2);开场按钮的 text 就是按钮上的字,不是孩子说的 */
   via: MessageViaSchema.optional(),
+  /** 这个话题是从哪个 activity 起的(只记在话题第一条;《wip/activity设计.md》):名字与点的那一刻的参数,话题后面每条都照它带 */
+  activity: ActivityRunSchema.optional(),
   /** 这个话题接着以前哪天的哪个话题(首页的「接着」按钮;新会话,上下文包带那个话题的尾巴) */
   continues: z.object({ date: z.string().regex(DATE_RE), thread: z.string().min(1) }).optional(),
 });

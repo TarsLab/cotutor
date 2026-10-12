@@ -3,6 +3,8 @@
  * 解析走板书同一个解析器(place = home);永不抛错,问题都带行号(1 起)与修法。要读盘的引用(话题在不在)由调用方查好传进来。
  */
 import type { TutorButton } from '../cards/index.ts';
+import type { Activity } from '../schema/index.ts';
+import { resolveParams } from './activity.ts';
 import { parseBoard } from './board.ts';
 import type { BoardCard } from './kid-board.ts';
 
@@ -99,6 +101,11 @@ export interface HomeCheckContext {
   /** 读得出来但没烤过(或画面改过没重烤)的课包 id:播放退回在浏览器里现跑 excalidraw,提醒去 drawtell bake */
   unbaked?: ReadonlySet<string>;
   today: string;
+  /**
+   * activity 按钮引用的 activity 文件(键「老师/名」):读得出来的 → 解析出来的 activity 与文件自己的「要改」(activity check 那几条);
+   * 不在表里 = 文件不在。没给就不查
+   */
+  activities?: ReadonlyMap<string, { activity: Activity; fixes: number }>;
 }
 
 /** 老师卡能不能上首页:有脸(-tutor 结尾)、开着、孩子端露 */
@@ -120,6 +127,13 @@ export function homeLectures(doc: Pick<HomeDoc, 'cards'>): string[] {
   const out = new Set<string>();
   for (const c of doc.cards) if (c.kind === 'tutor') for (const b of (c.props.buttons ?? []) as TutorButton[]) if (b.kind === 'lecture') out.add(b.bundle);
   return [...out];
+}
+
+/** 草稿里 activity 按钮引用的 activity:「老师/名」 */
+export function homeActivities(doc: Pick<HomeDoc, 'cards'>): { tutor: string; name: string }[] {
+  const out = new Map<string, { tutor: string; name: string }>();
+  for (const c of doc.cards) if (c.kind === 'tutor') for (const b of (c.props.buttons ?? []) as TutorButton[]) if (b.kind === 'activity') out.set(`${c.props.tutor}/${b.activity}`, { tutor: String(c.props.tutor), name: b.activity });
+  return [...out.values()];
 }
 
 /** 草稿里要读盘才能查的引用:接着按钮指的话题(调用方按它读索引) */
@@ -155,6 +169,14 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
         if (ctx.lectures && subject === undefined) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${ctx.lectureProblems?.get(b.bundle)?.join(';') || `bundles/${b.bundle}/ 不在或读不出来(要有 scene.json 与带步的 manifest.json)`}` });
         else if (subject && t.subject && subject !== t.subject) out.push({ level: 'note', line, card: n, button: k, text: `${t.display}的「${b.label}」:小课堂 ${b.bundle} 是${subject}的,${t.display}教${t.subject}` });
         if (ctx.unbaked?.has(b.bundle)) out.push({ level: 'note', line, card: n, button: k, text: `${t.display}的「${b.label}」:课包 ${b.bundle} 没烤过(或画面改过没重烤),孩子端要现画,慢、iPad 上可能不顺;在做课包的地方跑 drawtell bake ${b.bundle},再拷进 bundles/` });
+        return;
+      }
+      if (b.kind === 'activity') {
+        if (!ctx.activities) return;
+        const got = ctx.activities.get(`${name}/${b.activity}`);
+        if (!got) return void out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:agents/${name}/activities/${b.activity}.md 不在(cotutor activity check ${name} 看这位老师有哪些)` });
+        if (got.fixes) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:activity 文件 ${b.activity}.md 有 ${got.fixes} 处要改(cotutor activity check ${name} ${b.activity})` });
+        for (const text of resolveParams(got.activity, b.params).issues) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${text}` });
         return;
       }
       if (b.kind !== 'continue') return;
@@ -254,7 +276,8 @@ export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { da
     // 留到那天为止(家长端表单的「只今天 / 到周日」);过了就不出现,id 还是文件里的下标
     if (b.until && opts.today && b.until < opts.today) return;
     const brief = opts.keepBriefs && b.brief ? { brief: b.brief } : {};
-    if (b.kind === 'start') out.push({ id: k, kind: 'start', label: b.label, ...brief });
+    // activity 按钮在孩子那边就是开场按钮:点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查
+    if (b.kind === 'start' || b.kind === 'activity') out.push({ id: k, kind: 'start', label: b.label, ...brief });
     else if (b.kind === 'lecture') { if (opts.lecture?.(b.bundle) ?? true) out.push({ id: k, kind: 'lecture', label: b.label, bundle: b.bundle, ...brief }); }
     else if (opts.alive(b.date, b.thread)) out.push({ id: k, kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...brief });
   });

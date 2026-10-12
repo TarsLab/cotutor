@@ -3,6 +3,7 @@
  * 孩子由 workspace 决定,不进包。
  */
 import { z } from 'zod';
+import { ActivityValueSchema } from './activity.ts';
 
 /** 消息是谁发的:孩子(孩子端、工作台、cotutor send),或应用派的任务(记账、整理记忆、画图作业)。上下文包里不写,老师面前只有孩子;系统任务的消息正文自己说明是什么活 */
 export const MESSAGE_FROM = ['kid', 'system'] as const;
@@ -35,7 +36,9 @@ export const ContextPackSchema = z.object({
   /** 参考资料的绝对路径:这科这学期的教材 + 档案与入口文件里的 [[链接]];只给路径,老师要用自己 Read(这轮带工具才给) */
   refs: z.array(z.string()).optional(),
   /** 整篇带进来的原文(话题第一条、或话题里改过了才带):老师守则(rules)与家长笔记;接在 YAML 块后面,不进 YAML */
-  notes: z.array(z.object({ role: z.enum(['rules', 'boardGuide', 'profile', 'entry', 'memory']), path: z.string().min(1), text: z.string() })).optional(),
+  notes: z.array(z.object({ role: z.enum(['rules', 'boardGuide', 'activityGuide', 'profile', 'entry', 'memory']), path: z.string().min(1), text: z.string() })).optional(),
+  /** 这个话题的 activity 文件(「老师怎么带」那节,按参数裁过,后面接这个 activity 多带的卡的写法):相对 workspace 根的路径 + 状态(未变 / 缺);原文在 notes(<cotutor-activity>) */
+  activityGuide: z.string().optional(),
   /** 本周计划里与本老师相关的行(已按 planLines 截) */
   plan: z.array(z.string()).default([]),
   /** 最近 N 条本学科观察(从日记的「- 观察:」行抽,最近 14 天,已按 recent 截) */
@@ -68,6 +71,11 @@ export const ContextPackSchema = z.object({
       index: z.string().min(1),
     })
     .optional(),
+  /**
+   * 孩子从首页的 activity 进来的话题(《wip/activity设计.md》):哪个 activity、家长填的参数(点的那一刻,补了缺省)、应用算的值。
+   * 话题里每条都带;放在 YAML 块最后,键序固定(name、params、state;参数照文件「家长填的」的顺序)
+   */
+  activity: z.object({ name: z.string().min(1), params: z.record(z.string(), ActivityValueSchema).default({}), state: z.record(z.string(), ActivityValueSchema).default({}) }).optional(),
   /** 这条消息带的作业照片(相对 workspace 根,一行一张;老师先 Read 再答;R5) */
   photos: z.array(z.string()).optional(),
   /** photos 里同一批照片的绝对路径,顺序一一对应:Read 工具只认绝对路径,老师的 cwd 在 agents/<名>/,不给就得先 find 一轮(2026-09-18 真跑) */

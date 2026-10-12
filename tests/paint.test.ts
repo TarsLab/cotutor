@@ -88,7 +88,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   cfg.paint = { daily: 2 };
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   const ws = loadWorkspace(root);
-  check('出厂:语文老师的卡里有 paint;paint 缺省 pro、1280、一天 2 张', (ws.config.tutors['chinese-tutor'].cards ?? []).includes('paint') && ws.config.paint.model === 'qwen-image-2.0-pro' && ws.config.paint.size === '1280*1280' && ws.config.paint.daily === 2);
+  check('出厂:paint 只跟着你说我画 activity(语文老师的卡里没有);paint 缺省 pro、1280、一天 2 张', !(ws.config.tutors['chinese-tutor'].cards ?? []).includes('paint') && ws.config.paint.model === 'qwen-image-2.0-pro' && ws.config.paint.size === '1280*1280' && ws.config.paint.daily === 2);
   const asked: string[] = [];
   const fakeDraw: Draw = async ({ prompt, model, size }) => { asked.push(`${model} ${size} ${prompt.split('\n')[0]}`); return prompt.includes('画不出') ? { ok: false, error: 'http_400:DataInspectionFailed', ms: 5 } : { ok: true, data: PNG, model, ms: 1234 }; };
   const sec = (panels: string[]): BoardSection => ({ cards: [{ kind: 'text', props: { text: '先说' } }, parseCard('paint', panels.map((t, i) => `${i + 1}. ${t}`).join('\n')).card], lines: [{ text: '画家开始画了。', audio: null }] } as unknown as BoardSection);

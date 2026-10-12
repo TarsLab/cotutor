@@ -76,15 +76,21 @@ const KINDS_SLOT = /^\{\{卡的种类\}\}$/m;
 export function boardSyntaxDoc(dir = PACKAGE_CARDS_DIR, kinds?: readonly string[]): string {
   const all = kindsFor('board').map((k) => k.name);
   const want = kinds ? all.filter((k) => kinds.includes(k)) : all;
-  const docs = cardDocs(dir, 'board', want)
-    .map((d) => {
-      const parts = [`### ${d.headline}`, d.sections['是什么'], d.sections['写法'], d.sections['例子']?.replace(EXPECT_RE, '')].filter((x) => x && x.trim());
-      return parts.join('\n\n').trim();
-    })
-    .join('\n\n');
+  const docs = cardDocs(dir, 'board', want).map(cardGuide).join('\n\n');
   const guide = applyCardGuards(stripHumanNotes(readFileSync(join(dir, BOARD_GUIDE_SOURCE), 'utf8')), want);
   if (!KINDS_SLOT.test(guide)) throw new Error(`cards/${BOARD_GUIDE_SOURCE} 里没有「{{卡的种类}}」那一行`);
   return `${guide.replace(KINDS_SLOT, () => docs)}\n`;
+}
+
+/** 一种卡给老师看的那段:标题 + 是什么 / 写法 / 例子(去掉 expect);板书写法里「卡的种类」一节就是一张张拼的它 */
+function cardGuide(d: CardDoc): string {
+  const parts = [`### ${d.headline}`, d.sections['是什么'], d.sections['写法'], d.sections['例子']?.replace(EXPECT_RE, '')].filter((x) => x && x.trim());
+  return parts.join('\n\n').trim();
+}
+
+/** 板书写法以外多带的几种卡(activity 要用、老师的清单里没有的),同板书写法里那一段的样子;递给老师前剥掉给人看的注释 */
+export function cardGuidesFor(kinds: readonly string[], dir = PACKAGE_CARDS_DIR): string {
+  return stripHumanNotes(cardDocs(dir, 'board', kinds).map(cardGuide).join('\n\n'));
 }
 
 /** 按老师裁的板书写法(递给老师的正文,同 boardGuideBody(SKILL.md) 的形状:没有 frontmatter、没有给人看的注释) */

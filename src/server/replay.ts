@@ -12,12 +12,12 @@ import { join } from 'node:path';
 import { cardLabel } from '../cards/index.ts';
 import { parserForRuntime, withoutNested } from '../clis/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
-import { conversationFiles } from '../lib/conversation.ts';
+import { conversationFiles, threads } from '../lib/conversation.ts';
 import { compactDiff, diffLines, type DiffRow } from '../lib/diff.ts';
 import { toolCalls, type ToolCall } from '../lib/transcript.ts';
 import type { ConversationMessage, Timing } from '../schema/index.ts';
 import { continueContext, homeButtonAt } from './home.ts';
-import { Runner } from './runner.ts';
+import { Runner, threadActivity } from './runner.ts';
 import { readIndex, readRunFile } from './store.ts';
 
 export const EVALS_DIR = 'evals';
@@ -68,6 +68,8 @@ export async function startReplay(ws: Workspace, tutor: string, date: string, jo
   // 从首页按钮进来的那轮:讲法从当时发布的那份原文取,接着的话题从原 workspace 读(回放的 workspace 指到 evals/)
   const button = m.via && typeof m.via.button === 'number' ? await homeButtonAt(ws, tutor, m.via) : null;
   const continued = m.continues ? await continueContext(ws, tutor, m.continues.date, m.continues.thread) : null;
+  // activity 话题里的哪一轮:照话题第一条记的 activity 带(回放是新会话,activity 那段整篇带)
+  const activity = threadActivity(index.messages, threads(index.messages)[index.messages.indexOf(m)]);
   const started = await runner.send(tutor, {
     from: m.from,
     text: m.text,
@@ -82,6 +84,7 @@ export async function startReplay(ws: Workspace, tutor: string, date: string, jo
     ...(m.via ? { via: m.via } : {}),
     ...(m.via && typeof m.via.button === 'number' ? { home: { button: m.via.label, ...(button?.brief ? { brief: button.brief } : {}) } } : {}),
     ...(m.continues && continued ? { continues: { ...m.continues, pack: continued } } : {}),
+    ...(activity ? { activity } : {}),
   });
   return { tutor, date, job, evalJob: started.job, done: started.done.then(() => runner.flush()) };
 }

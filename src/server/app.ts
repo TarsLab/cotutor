@@ -18,7 +18,7 @@ import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
 import { audioData } from '../lib/audio-data.ts';
 import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelDiag } from '../lib/reel.ts';
-import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../schema/index.ts';
+import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, type ActivityValue, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../schema/index.ts';
 import type { BoardCard, Device } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
 import { tutorStatuses } from '../cli/tutors.ts';
@@ -778,6 +778,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         let pick = thread;
         let home: { button: string; brief?: string } | undefined;
         let continues: { date: string; thread: string } | undefined;
+        let activity: { name: string; params: Record<string, ActivityValue> } | undefined;
         // 小课堂(《小课堂设计.md》):看完才能开口——这一条要带 lecture(哪份课包、看完了、看了多久、停过几次、圈过的几处),字是孩子说的;新开话题。
         // 问过以后「再看一遍」:同一话题的下一条带 lecture(新圈的、又看的过程;话题得是从这份课包开始的)
         let lecture: (NonNullable<ReturnType<typeof lectureOf>> & { again?: true }) | null | undefined = lectureOf(body.lecture);
@@ -812,8 +813,16 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             if (button.kind === 'continue') continues = { date: button.date, thread: button.thread };
           }
         }
+        // activity 按钮(《wip/activity设计.md》):和开场按钮一样新开话题、发按钮上的字;参数是 resolveVia 按 activity 文件解析好的,记在这条消息上
+        if (button?.kind === 'activity') {
+          text = button.label;
+          home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
+          newThread = true;
+          pick = undefined;
+          activity = { name: button.activity, params: button.params };
+        }
         if (!text.trim() && !action && !photos?.length) return { status: 400, json: { error: 'bad_request' } };
-        const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(listenedOf(body.listened) ? { listened: listenedOf(body.listened) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(lecture ? { lecture } : {}) });
+        const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(listenedOf(body.listened) ? { listened: listenedOf(body.listened) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };

@@ -9,10 +9,12 @@ import { cardLabel, describeCard, stripSecrets, type TutorButton } from '../card
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { conversationFiles, localDate, threads } from '../lib/conversation.ts';
 import { kidQuestions } from '../lib/diary.ts';
-import { arrangeHome, dropFixes, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, parseHome, threadKey, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
+import { activityFile } from '../cli/activities.ts';
+import { lintActivity, parseActivity, resolveParams } from '../lib/activity.ts';
+import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, parseHome, threadKey, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
 import { kidConversation, kidThreads } from '../lib/kid-view.ts';
-import { HOME_ID_RE, PublishedHomeSchema, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
+import { HOME_ID_RE, PublishedHomeSchema, type Activity, type ActivityValue, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
 import { listDates, readCardStates, readIndex } from './store.ts';
 import { bakeSoon, inspectLecture, readLecture, type Lecture } from './lecture.ts';
 
@@ -69,7 +71,14 @@ async function checkContext(ws: Workspace, doc: Pick<HomeDoc, 'cards'>, now: Dat
     const r = await inspectLecture(ws, id);
     if (r.lecture) { lectures.set(id, r.lecture.subject); if (!r.lecture.video && !r.lecture.baked) unbaked.add(id); } else lectureProblems.set(id, r.problems);
   }
-  return { tutors: tutorInfos(ws), threads: await liveThreads(ws, homeRefs(doc)), lectures, lectureProblems, unbaked, today: localDate(now) };
+  const activities = new Map<string, { activity: Activity; fixes: number }>();
+  for (const r of homeActivities(doc)) {
+    const text = await readFile(activityFile(ws.root, r.tutor, r.name), 'utf8').catch(() => null);
+    if (text === null) continue;
+    const { activity, issues } = lintActivity(text, { fileName: r.name, tutorCards: ws.config.tutors[r.tutor]?.cards });
+    activities.set(`${r.tutor}/${r.name}`, { activity, fixes: issues.filter((i) => i.level === 'fix').length });
+  }
+  return { tutors: tutorInfos(ws), threads: await liveThreads(ws, homeRefs(doc)), lectures, lectureProblems, unbaked, today: localDate(now), activities };
 }
 
 export interface HomeCheck {
@@ -253,7 +262,9 @@ export type ResolvedVia =
   | { kind: 'recent'; label: string }
   | { kind: 'start'; label: string; brief?: string }
   | { kind: 'continue'; label: string; date: string; thread: string; brief?: string }
-  | { kind: 'lecture'; label: string; bundle: string; brief?: string };
+  | { kind: 'lecture'; label: string; bundle: string; brief?: string }
+  /** params = 按 activity 文件解析好的值(补了缺省);读不出来或参数不对 → resolveVia 回 null */
+  | { kind: 'activity'; label: string; activity: string; params: Record<string, ActivityValue>; brief?: string };
 
 /**
  * 孩子发来的 via → 这个按钮是什么(讲法从服务端的发布件取,不经过孩子设备)。
@@ -272,6 +283,14 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
   const brief = b.brief ? { brief: b.brief } : {};
   if (b.kind === 'start') return { kind: 'start', label: b.label, ...brief };
   if (b.kind === 'lecture') return { kind: 'lecture', label: b.label, bundle: b.bundle, ...brief };
+  if (b.kind === 'activity') {
+    // 参数在点的那一刻按 activity 文件解析、补缺省,跟着话题走(家长后来改了只管以后的话题,《wip/activity设计.md》拍板 2)
+    const text = await readFile(activityFile(ws.root, tutor, b.activity), 'utf8').catch(() => null);
+    if (text === null) return null;
+    const r = resolveParams(parseActivity(text).activity, b.params);
+    if (r.issues.length) return null;
+    return { kind: 'activity', label: b.label, activity: b.activity, params: r.values, ...brief };
+  }
   return { kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...brief };
 }
 
@@ -387,7 +406,8 @@ export function formatCheck(ws: Workspace, check: HomeCheck, title: string, kid:
     const briefs = ((src?.props.buttons ?? []) as TutorButton[]).map((b) => b.brief);
     const buttons = (c.props.buttons as KidHomeButton[]).map((b) => {
       const brief = typeof b.id === 'number' && briefs[b.id] ? `(讲法 ${Array.from(briefs[b.id]!).length} 字)` : '';
-      const ref = b.kind === 'continue' ? ` → ${b.date} ${b.thread}` : b.kind === 'lecture' ? ` → 小课堂 ${b.bundle}` : '';
+      const act = typeof b.id === 'number' ? ((src?.props.buttons ?? []) as TutorButton[])[b.id] : undefined;
+      const ref = b.kind === 'continue' ? ` → ${b.date} ${b.thread}` : b.kind === 'lecture' ? ` → 小课堂 ${b.bundle}` : act?.kind === 'activity' ? ` → activity ${act.activity}${Object.keys(act.params).length ? `(${Object.entries(act.params).map(([k, v]) => `${k}: ${v}`).join(';')})` : ''}` : '';
       return `${BUTTON_ICON[b.kind]} ${b.label}${ref}${brief}`;
     });
     out.push(`  ${display(name)} ${name}${written.has(name) ? '' : '(没写,应用补)'}:${buttons.join(' | ')}`);

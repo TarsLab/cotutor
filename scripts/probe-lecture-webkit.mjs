@@ -28,8 +28,8 @@ try {
   if (!LOUD) await page.addInitScript(SILENT_SPEECH); // 合成声不出声(_quiet.mjs);WebKit 没有 --mute-audio
   page.on('pageerror', (e) => console.log('ERR', e.message));
   await page.goto(`${base}/`);
-  await page.click('#kstack .sa[data-tutor="math-tutor"]');
-  await page.waitForTimeout(900);
+  await page.click('#deck .pc[data-tutor="math-tutor"]', { position: { x: 40, y: 40 } }); // 后面那张只露出左上角(牌角的头像),里面的东西不收触摸
+  await page.waitForTimeout(1200);
   await page.click('.bt-lecture');
   const fr = page.frameLocator('#lc-frame');
   await fr.locator('.lc-start').waitFor({ timeout: 30000 });

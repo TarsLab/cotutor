@@ -67,11 +67,11 @@ try {
   const view = () => evaluate(`document.querySelector('.view.on')?.id ?? null`);
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: `${base}/` });
-  await waitFor(`!!document.querySelector('#kstack .sa[data-tutor="english-tutor"]')`);
-  await tap('#kstack .sa[data-tutor="english-tutor"]');
-  ok('首页:英语老师卡里有「单词听写 · 3 个单词」,看不到字', await waitFor(`!!document.querySelector('#kcard[data-tutor="english-tutor"] .bt-x-dictation') && document.querySelector('#kcard .bt-x-dictation').textContent.includes('单词听写') && document.querySelector('#kcard .bt-x-dictation').textContent.includes('3 个单词') && !document.querySelector('#kcard').textContent.includes('yellow') && document.querySelector('#kcard .bt-x-dictation').getAttribute('href').endsWith('&lang=en')`));
+  await waitFor(`!!document.querySelector('#deck .pc[data-tutor="english-tutor"] .pc-hd .av')`);
+  await tap('#deck .pc[data-tutor="english-tutor"] .pc-hd .av');
+  ok('首页:英语老师卡里有「单词听写 · 3 个单词」,看不到字', await waitFor(`!!document.querySelector('#deck .pc.front[data-tutor="english-tutor"] .bt-x-dictation') && document.querySelector('#deck .pc.front .bt-x-dictation').textContent.includes('单词听写') && document.querySelector('#deck .pc.front .bt-x-dictation').textContent.includes('3 个单词') && !document.querySelector('#deck .pc.front').textContent.includes('yellow') && document.querySelector('#deck .pc.front .bt-x-dictation').getAttribute('href').endsWith('&lang=en')`));
   await shot('en-01-home');
-  await tap('#kcard .bt-x-dictation');
+  await tap('#deck .pc.front .bt-x-dictation');
   ok('进英文那页:开始屏「单词听写 · 3 个单词」', await waitFor(`location.search.includes('lang=en') && document.querySelector('#v-start.on #s-title')?.textContent === '单词听写 · 3 个单词'`));
   await tap('#s-go');
   ok('写:第 1 个,四线三格(四条线、第三条基线),气泡里没有单词', await waitFor(`document.querySelector('.view.on')?.id === 'v-write' && document.querySelectorAll('#w-pad .enl line').length === 4 && document.querySelectorAll('#w-pad .enl line.base').length === 1 && !document.body.innerText.includes('red')`));

@@ -73,7 +73,7 @@ const PAGE = `<!doctype html>
   button { font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; }
   .ic svg { display:block; }
   /* ---- 首页 ---- */
-  #home { min-height:100%; padding:calc(env(safe-area-inset-top) + 16px) 20px calc(env(safe-area-inset-bottom) + 40px); max-width:960px; margin:0 auto; display:flex; flex-direction:column; gap:18px; }
+  #home { min-height:100%; padding:calc(env(safe-area-inset-top) + 16px) 20px calc(env(safe-area-inset-bottom) + 40px); max-width:960px; margin:0 auto; display:flex; flex-direction:column; gap:18px; overflow-x:clip; }
   h1 { font-size:20px; font-weight:600; margin:0; color:var(--dim); }
   .tutors { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
   /* 老师头像 = C 形开口环(Cotutor 的 C,开口朝右、朝着老师说出来的话;《首页设计.md》拍板 15):环是 r=44 的圆(周长 276.46),
@@ -152,36 +152,28 @@ const PAGE = `<!doctype html>
   .lc-still { width:100%; height:100%; }
   .lc-still img { width:100%; height:100%; display:block; object-fit:contain; }
   #rest { display:none; text-align:center; color:var(--dim); font-size:16px; padding:12px 0; }
-  /* 首页 C 版(《首页设计.md》拍板 16):头像横着叠,最前(最右)那位露出开口、展开成下面那张卡;后面几位的开口被下一位的脸盖住。
-     换人 = 抽出(.lift,0–160 ms)→ 换位(left / transform 过渡 320 ms,略回弹)→ 张嘴(.bite)+ 名字从开口滑出(.knm.in)→ 按钮一个接一个进场(.up,错开 40 ms) */
-  #kst { display:flex; align-items:center; gap:10px; --sz:84px; --step:52px; }
-  #kst[hidden] { display:none; }
-  .kstack { position:relative; flex:none; height:calc(var(--sz) + 24px); width:calc(var(--step) * (var(--n, 1) - 1) + var(--sz)); }
-  .kstack .sa { position:absolute; top:12px; left:calc(var(--step) * var(--slot, 0)); z-index:var(--z, 1); width:var(--sz); height:var(--sz); padding:0; border:0; background:transparent; cursor:pointer; transform:scale(.86); transition:left .32s cubic-bezier(.3,1.25,.5,1), transform .32s cubic-bezier(.3,1.25,.5,1); -webkit-tap-highlight-color:transparent; }
-  .kstack .sa.front { transform:none; }
-  .kstack .sa.lift { z-index:10; transform:translateY(-16px) scale(1.06); transition:left .32s cubic-bezier(.3,1.25,.5,1), transform .16s ease-out; }
-  .kstack .sa:not(.front):not(.lift):active { transform:scale(.81); transition-duration:.08s; }
-  .kstack .sa.front:active .ring circle { transform:rotate(8deg); transition-duration:.08s; }
-  .kstack .sa .av { width:100%; height:100%; font-size:calc(var(--sz) * .4); }
-  .kstack .sa .av .face { box-shadow:0 0 0 4px var(--paper); }
-  .kstack .sa.bite .ring circle { animation:av-bite .3s ease-in-out .14s both; }
-  @keyframes av-bite { 0%,100% { stroke-dasharray:221.17 55.29; transform:rotate(36deg); } 45% { stroke-dasharray:193.52 82.94; transform:rotate(54deg); } }
-  .kstack .sa.off .av, body.offline .kstack .sa .av { filter:grayscale(1); opacity:.4; }
-  .kstack .sa.off .ring circle, body.offline .kstack .sa .ring circle { transform:rotate(126deg); }
-  body.offline .kstack .sa { pointer-events:none; }
-  .kstack .dot { position:absolute; top:calc(var(--sz) * .02); left:calc(var(--sz) * .2); width:14px; height:14px; border-radius:50%; background:var(--accent); border:3px solid var(--paper); }
-  .knm { font-size:24px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; transition:opacity .12s ease-in; }
-  .knm.in { animation:k-nm .24s cubic-bezier(.2,.8,.2,1) var(--nd, 0s) both; }
-  @keyframes k-nm { from { opacity:0; transform:translateX(-16px); } to { opacity:1; transform:none; } }
-  #kcard { transition:border-color .24s ease .14s, opacity .12s ease-in; }
-  #kcard[hidden] { display:none; }
-  #kcard.leaving, .knm.leaving { opacity:0; }
-  #kcard .kc { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
-  #kcard .kcards { margin-top:4px; }
-  #kcard .up { animation:k-up .22s cubic-bezier(.2,.8,.2,1) var(--ud, 0s) both; }
-  @keyframes k-up { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  /* 首页牌堆(《首页设计.md》拍板 22):一位老师一张牌(老师卡),平着叠,最前那张在最上层。手机竖着叠:后面的牌在上面,每张往上露出头那一行;
+     平板横着叠:后面的牌在左边,每张往左露出一格(左上角的头像)。位置全在 transform 里(JS 按层算,换牌用 Web Animations);--tf 是同一个值,
+     给「减弱动态效果」下的 *:active { transform:none !important } 兜底。牌堆往上伸进上面的空当(换牌时抽出、浮起要地方),空的地方不收触摸 */
+  #deck { position:relative; z-index:1; flex:none; pointer-events:none; margin-top:calc(6px - var(--head, 0px)); }
+  #deck[hidden] { display:none; }
+  #deck .pc { position:absolute; left:0; top:var(--head); width:var(--w); height:var(--h); transform-origin:var(--org); pointer-events:auto; padding:14px 14px 44px; gap:12px; border-width:2px; }
+  #deck .pc:not(.front) { cursor:pointer; }
+  #deck .pc:not(.front) * { pointer-events:none; }
+  #deck .pc .veil { position:absolute; inset:0; border-radius:inherit; background:var(--paper); pointer-events:none; z-index:2; }
+  #deck .pc-hd { position:relative; display:flex; align-items:center; gap:10px; min-width:0; }
+  #deck .pc-hd .av { position:relative; z-index:3; width:var(--av); height:var(--av); font-size:calc(var(--av) * .4); }
+  #deck .pc-hd .nm { font-size:var(--nmz); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  #deck .pc-hd .dot { position:absolute; z-index:4; top:0; left:calc(var(--av) * .12); width:14px; height:14px; border-radius:50%; background:var(--accent); border:3px solid var(--card); }
+  #deck .pc-ix { position:absolute; right:12px; bottom:10px; width:28px; height:28px; transform:rotate(180deg); }
+  #deck .pc-ix .av { width:100%; height:100%; font-size:11px; }
+  #deck .pc .kc { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
+  #deck .pc .kcards { margin-top:4px; }
+  #deck .pc.off { pointer-events:auto; }
+  #deck .pc.off.front .bts { pointer-events:none; }
+  body.offline #deck .pc { pointer-events:none; }
   .tutors:empty { display:none; }
-  @media (prefers-reduced-motion:reduce) { .kstack .sa, #kcard, .knm { transition:none; } .kstack .sa.bite .ring circle, .knm.in { animation:none; } #kcard .up { animation-duration:.12s; animation-delay:0s; } }
+  @media (prefers-reduced-motion:reduce) { #deck .pc:active { transform:var(--tf) !important; } }
   /* 给老师换样子(figshot):不是首页发布的卡,是 cotutor.json 配了 figshot 就有的固定入口;figshot 没开着就不出现 */
   .c.c-figshot { flex-direction:row; align-items:center; gap:16px; text-decoration:none; color:var(--ink); background:#fff3e8; border-color:var(--accent); }
   .c-figshot[hidden] { display:none; }
@@ -553,10 +545,6 @@ const PAGE = `<!doctype html>
     #home { max-width:1040px; padding:calc(env(safe-area-inset-top) + 40px) 48px 40px; gap:24px; }
     #home h1 { font-size:22px; }
     #home .tutors { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; align-items:start; }
-    #kst { --sz:104px; --step:64px; gap:14px; }
-    .knm { font-size:30px; }
-    #kcard { padding:24px 28px; }
-    #kcard .kc.two { grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:28px; }
     #home .hcards { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
     .tb.l { left:calc(env(safe-area-inset-left) + 20px); } .tb.r { right:calc(env(safe-area-inset-right) + 20px); }
     #menu .panel { right:calc(env(safe-area-inset-right) + 20px); }
@@ -567,8 +555,7 @@ const PAGE = `<!doctype html>
 <div id="home">
   <h1 id="title">__TITLE__</h1>
   <div class="hcards" id="hcards"></div>
-  <div id="kst" hidden><div class="kstack" id="kstack"></div><span class="knm" id="knm"></span></div>
-  <div class="c c-tutor kcard" id="kcard" hidden></div>
+  <div class="deck" id="deck" hidden></div>
   <div class="tutors" id="tutors"></div>
   <p id="rest">老师们休息中</p>
   <a class="c c-figshot" id="figshot" hidden><span class="avs"></span><span class="tx"><b>给老师们换个样子</b><span>帽子、脸、衣服,都由你来挑</span></span><span class="go">去搭</span></a>
@@ -843,10 +830,11 @@ __REEL_JS__
   const tutorButton = (t, b) => h('button', { type: 'button', class: 'bt bt-' + b.kind, on: { click: () => pickButton(t, b) } }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }),
     b.kind === 'lecture' ? h('span', { class: 'lb' }, h('small', {}, '小课堂'), h('span', {}, b.label), h('small', { class: 'ln' }, (b.ms ? lcLen(b.ms) + ' · ' : '') + '看完再问老师')) : h('span', {}, b.label));
 
-  // ---- 首页 C 版(《首页设计.md》拍板 16、17,动画说明见原型「C · 切换动画说明」):老师头像横着叠,最前(最右)那位展开成下面那张卡 ----
+  // ---- 首页牌堆(《首页设计.md》拍板 16、17、22,原型 https://claude.ai/artifact/BAUVUj9TgCKpiQkRyZtvLy):一位老师一张牌,平着叠,最前那张在最上层 ----
+  // 手机竖着叠:后面的牌在上面,每张往上露出头那一行(头像 + 名字);平板横着叠:后面的牌在左边,每张往左露出一格(左上角的头像)。
   // 叠的顺序 K.order:最后一个在最前。进首页时家长排第一的在最前、排第二的紧挨在后面;点过谁谁到最前(最近点过的在前);
-  // 从老师页回来不变,刷新页面回到家长排的。头像元素常驻(换位靠 CSS 过渡 left / transform),5 秒一轮的刷新只在内容变了时重画卡、不放动画。
-  const K = { order: null, els: new Map(), sig: '', lifting: false, timer: 0 };
+  // 从老师页回来不变,刷新页面回到家长排的。牌一样高(取最高那张)。牌元素常驻,5 秒一轮的刷新只在这张牌的内容变了时重画它、不放动画
+  const K = { order: null, els: new Map(), busy: false, geo: null };
   const reduced = () => Boolean(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   // 橙点「看过了」记在这台设备上(换了一份首页就清):家长排了东西、孩子还没找过这位老师时亮,换到最前就灭
   const SEEN_KEY = 'kid-home-seen';
@@ -856,100 +844,150 @@ __REEL_JS__
     const byName = new Map(H.tutors.map((t) => [t.name, t]));
     return (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind === 'tutor' && byName.has(c.props.tutor)).map((c) => ({ t: byName.get(c.props.tutor), card: c }));
   };
-  const renderStack = (H, list, draw) => {
-    const box = $('#kstack');
+  const DECK = { V: { av: 48, nm: 21, pull: 44, head: 48 }, H: { av: 60, nm: 24, pull: 120, head: 40, wMax: 420, wMin: 320, step: 84, stepMin: 48 } };
+  const DECK_SCALE = [1, 0.97, 0.94, 0.91, 0.88], DECK_VEIL = [0, 0.16, 0.26, 0.34, 0.4];
+  // 影子:竖着叠往上投、横着叠往左投,落在后面那张上;第二个是拿起来时的
+  const DECK_SHADOW = { V: ['0 -4px 14px rgba(70,50,30,.14)', '0 24px 34px rgba(70,50,30,.24)'], H: ['-6px 4px 14px rgba(70,50,30,.16)', '-18px 26px 34px rgba(70,50,30,.26)'] };
+  // 换一张的时间表(ms):按下 → 往盖着它的牌的反方向抽出(还在原层)→ 230 换到最上层、浮起 → 飘到最前、略冲过 → 落下回弹、张嘴;
+  // 其余几张 230 起各退一层,挨着缺口的先走
+  const DT = { press: 70, pull: 230, lift: 320, glide: 580, land: 700, shift: [230, 580], stagger: 30, bite: 580, lock: 900 };
+  const deckAxis = () => ((debug.get('device') || deviceFor(innerWidth, innerHeight)) === 'phone' ? 'V' : 'H');
+  const deckBase = (slot, n) => { const g = K.geo, d = Math.min(n - 1 - slot, 4); return { x: g.axis === 'H' ? slot * g.step : 0, y: g.axis === 'V' ? slot * g.strip : 0, r: 0, s: DECK_SCALE[d], v: DECK_VEIL[d] }; };
+  const deckTf = (b) => 'translate(' + b.x.toFixed(1) + 'px,' + b.y.toFixed(1) + 'px) rotate(' + b.r + 'deg) scale(' + b.s + ')';
+  const deckPlace = (el, slot, n) => {
+    const b = deckBase(slot, n), tf = deckTf(b);
+    el.style.transform = tf; el.style.setProperty('--tf', tf); el.style.boxShadow = DECK_SHADOW[K.geo.axis][0]; el.style.zIndex = String(slot + 1);
+    el.querySelector('.veil').style.opacity = String(b.v);
+  };
+  /** 量牌宽、牌高、竖着叠露出的那条,摆好每张;换牌时不动 */
+  const layoutDeck = () => {
+    const box = $('#deck'), n = K.order ? K.order.length : 0;
+    if (K.busy || !n || box.hidden) return;
+    const axis = deckAxis(), d = DECK[axis], home = box.parentElement, cs = getComputedStyle(home);
+    const avail = home.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const g = { axis, ...d, step: d.step || 0 };
+    if (axis === 'V') g.w = avail;
+    else {
+      g.w = Math.min(d.wMax, avail - (n - 1) * d.step);
+      if (g.w < d.wMin) { g.step = Math.max(d.stepMin, (avail - d.wMin) / Math.max(1, n - 1)); g.w = Math.max(240, avail - (n - 1) * g.step); }
+    }
+    box.style.setProperty('--w', g.w + 'px'); box.style.setProperty('--av', d.av + 'px'); box.style.setProperty('--nmz', d.nm + 'px');
+    box.style.setProperty('--org', axis === 'V' ? '50% 0%' : '0% 100%'); box.style.setProperty('--head', d.head + 'px');
+    // 一样高:取最高那张;竖着叠时露出的那条 = 头那一行实际的高度 + 8
+    const cards = [...K.els.values()];
+    let tall = 0, strip = 0;
+    for (const el of cards) { el.style.height = 'auto'; tall = Math.max(tall, el.offsetHeight); const hd = el.querySelector('.pc-hd'); strip = Math.max(strip, hd.offsetTop + hd.offsetHeight + 8); }
+    for (const el of cards) el.style.height = '';
+    g.strip = strip; K.geo = g;
+    box.style.setProperty('--h', tall + 'px');
+    box.style.width = (axis === 'H' ? g.w + (n - 1) * g.step : g.w) + 'px';
+    box.style.height = (d.head + (axis === 'V' ? (n - 1) * strip : 0) + tall + 12) + 'px';
+    box.style.marginLeft = box.style.marginRight = axis === 'H' ? 'auto' : '';
+    K.order.forEach((name, slot) => deckPlace(K.els.get(name), slot, n));
+  };
+  /** 每位老师一张牌:头像 + 名字、按钮、「每天都在」、归他的卡(拍板 19),右下角倒着一个小头像;deal = 打开首页、从老师页回来,发牌 */
+  const renderDeck = (H, list, deal) => {
+    const box = $('#deck');
     const front = K.order[K.order.length - 1];
     const seen = seenOf(H.home);
     for (const [n, el] of K.els) if (!K.order.includes(n)) { el.remove(); K.els.delete(n); }
     K.order.forEach((n, slot) => {
       const { t, card } = list.find((x) => x.t.name === n);
-      const sig = [t.avatar, t.subject, t.display].join('|');
+      const buttons = Array.isArray(card.props.buttons) ? card.props.buttons : [];
+      const owned = (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind !== 'tutor' && c.owner === n);
+      const sig = JSON.stringify([t.avatar, t.subject, t.display, t.available, buttons, owned, t.extras, S.talkLast && S.talkLast.id, H.home]);
       let el = K.els.get(n);
-      // 画出来(打开首页、从老师页回来):从后往前一位一位画,最前那位最后
-      if (!el || el.dataset.sig !== sig || draw) {
-        const nel = h('button', { type: 'button', class: 'sa', 'data-tutor': n, 'data-sig': sig, 'aria-label': t.display, on: { click: () => pickTutor(n) } }, draw ? avatarEl(t, 'draw', slot * 0.12) : avatarEl(t));
-        if (el) el.replaceWith(nel); else box.append(nel);
-        el = nel; K.els.set(n, el);
-      } else el.querySelector('.av').classList.remove('draw'); // 之后的刷新摘掉(动画早放完了,摘了也不会重放)
-      el.style.setProperty('--slot', slot); el.style.setProperty('--z', slot + 1);
+      if (!el) {
+        const pc = h('div', { class: 'c c-tutor pc', 'data-tutor': n, on: { click: () => { if (!pc.classList.contains('front')) pickTutor(n); } } });
+        box.append(pc); K.els.set(n, pc); el = pc;
+      }
+      if (deal || el.dataset.sig !== sig) {
+        el.dataset.sig = sig;
+        el.style.borderColor = color(t.subject || t.display);
+        const extras = extrasFor(t, H);
+        const others = owned.filter((c) => c.kind !== 'dictation');
+        el.replaceChildren(...[
+          h('div', { class: 'pc-hd' }, deal ? avatarEl(t, 'draw', 0.1 + slot * 0.12) : avatarEl(t), h('span', { class: 'nm' }, t.display)),
+          h('div', { class: 'kc' }, h('div', { class: 'bts' }, ...buttons.map((b) => tutorButton(t, b))), extras.length ? h('div', { class: 'bts extras' }, h('span', { class: 'xl' }, '每天都在'), ...extras) : null),
+          others.length ? h('div', { class: 'hcards kcards' }, ...others.map((c, i) => renderCard(c, i, null, false))) : null,
+          h('span', { class: 'pc-ix' }, avatarEl(t)),
+          h('span', { class: 'veil' }),
+        ].filter(Boolean));
+        // 归他的卡里有图:图到了牌会变高,重量一次
+        for (const img of el.querySelectorAll('img')) if (!img.complete) img.addEventListener('load', layoutDeck, { once: true });
+      } else el.querySelector('.pc-hd .av').classList.remove('draw'); // 之后的刷新摘掉(动画早放完了,摘了也不会重放)
       el.classList.toggle('front', n === front);
       el.classList.toggle('off', !t.available);
       const dot = Boolean(card.props.news) && n !== front && !seen.includes(n);
-      const had = el.querySelector('.dot');
-      if (dot && !had) el.append(h('span', { class: 'dot' })); else if (!dot && had) had.remove();
+      const hd = el.querySelector('.pc-hd'), had = hd.querySelector('.dot');
+      if (dot && !had) hd.append(h('span', { class: 'dot' })); else if (!dot && had) had.remove();
     });
-    box.style.setProperty('--n', K.order.length);
+    layoutDeck();
+    // 发牌:从最底下那张起,一张张从下面滑上来,最前那张最后
+    if (deal && !reduced()) K.order.forEach((n, slot) => { const b = deckBase(slot, K.order.length); K.els.get(n).animate([{ transform: deckTf({ ...b, y: b.y + 60 }), opacity: 0 }, { transform: deckTf(b), opacity: 1 }], { duration: 420, delay: slot * 120, easing: 'cubic-bezier(.2,.9,.3,1.15)', fill: 'backwards' }); });
   };
-  /** 最前那位的名字与卡;mode = draw(打开首页)/ switch(换了人)放进场动画,null = 内容没变就不动 */
-  const renderFront = (H, list, mode) => {
-    const n = K.order[K.order.length - 1];
-    const { t, card } = list.find((x) => x.t.name === n);
-    const buttons = Array.isArray(card.props.buttons) ? card.props.buttons : [];
-    const owned = (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind !== 'tutor' && c.owner === n);
-    const sig = JSON.stringify([n, t.available, buttons, owned, t.extras, S.talkLast && S.talkLast.id, H.home]);
-    if (!mode && sig === K.sig) return;
-    K.sig = sig;
-    const el = $('#kcard'); const nm = $('#knm');
-    el.hidden = false;
-    el.className = 'c c-tutor kcard' + (t.available ? '' : ' off');
-    el.dataset.tutor = n;
-    el.style.borderColor = color(t.subject || t.display);
-    // 进场:按钮一个接一个上移淡入,错开 40 ms(换人时从 240 ms 起,打开首页等头像画得差不多)
-    let j = 0;
-    const base = mode === 'switch' ? 0.24 : 0.4;
-    const up = (x) => { if (mode && x) { x.classList.add('up'); x.style.setProperty('--ud', (base + 0.04 * j++).toFixed(2) + 's'); } return x; };
-    const extras = extrasFor(t, H);
-    const others = owned.filter((c) => c.kind !== 'dictation');
-    el.replaceChildren(...[
-      h('div', { class: 'kc' + (extras.length ? ' two' : '') },
-        h('div', { class: 'bts' }, ...buttons.map((b) => up(tutorButton(t, b)))),
-        extras.length ? h('div', { class: 'bts extras' }, up(h('span', { class: 'xl' }, '每天都在')), ...extras.map(up)) : null),
-      others.length ? h('div', { class: 'hcards kcards' }, ...others.map((c, i) => up(renderCard(c, i, null, false)))) : null,
-    ].filter(Boolean));
-    nm.textContent = t.display;
-    nm.classList.remove('in');
-    if (mode) { void nm.offsetWidth; nm.style.setProperty('--nd', mode === 'switch' ? '.2s' : (K.order.length * 0.12 + 0.3).toFixed(2) + 's'); nm.classList.add('in'); }
+  /** 一段动画:跑完把末帧写进 style 再取消,不留 fill */
+  const deckRun = (el, kf, dur, delay, easing) => {
+    const a = el.animate(kf, { duration: dur, delay: delay || 0, easing: easing || 'linear', fill: 'both' });
+    a.finished.then(() => { const last = kf[kf.length - 1]; for (const k in last) if (k !== 'offset' && k !== 'easing') el.style[k] = last[k]; a.cancel(); }, () => {});
   };
-  /** 点后面那位:抽出(0–160 ms,名字与按钮淡出)→ 换到最前(其余往左让一格)、张嘴、名字滑出、新按钮进场;点最前那位只「点一下」(:active) */
+  /** 点后面那张:先往盖着它的牌的反方向抽出(平板往左、手机往上),230 ms 换到最上层、浮起,再飘到最前(平板往右、手机往下)、落下、张嘴;
+   *  其余几张各退一层。牌太大抽不干净,换层那一下会盖过前面那张,靠它同时放大、影子拉长、前面几张同时变暗读成「拿起来了」。点最前那张不换 */
   const pickTutor = (n) => {
-    const H = S.home;
-    if (!H || K.lifting || n === K.order[K.order.length - 1]) return;
+    const H = S.home, N = K.order ? K.order.length : 0, i = N ? K.order.indexOf(n) : -1;
+    if (!H || K.busy || !K.geo || i < 0 || i === N - 1) return;
+    const next = K.order.filter((x) => x !== n).concat([n]);
     const el = K.els.get(n);
-    const go = () => {
-      K.lifting = false;
-      K.order = K.order.filter((x) => x !== n).concat([n]);
-      el.classList.remove('lift');
-      $('#kcard').classList.remove('leaving'); $('#knm').classList.remove('leaving');
-      markSeen(H.home, n);
-      const list = homeTutorsOf(H);
-      renderStack(H, list, false);
-      for (const x of K.els.values()) x.classList.remove('bite');
-      void el.offsetWidth; el.classList.add('bite');
-      renderFront(H, list, 'switch');
-    };
-    if (reduced()) return go();
-    K.lifting = true;
-    el.classList.add('lift');
-    $('#kcard').classList.add('leaving'); $('#knm').classList.add('leaving');
-    clearTimeout(K.timer); K.timer = setTimeout(go, 160);
+    const done = () => { K.busy = false; K.order = next; markSeen(H.home, n); renderHome(); };
+    if (reduced()) { done(); el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: 'ease-out' }); return; }
+    K.busy = true;
+    const g = K.geo, b = deckBase(i, N), f = deckBase(N - 1, N), [SH, UP] = DECK_SHADOW[g.axis];
+    let way;
+    if (g.axis === 'H') { const ax = b.x - g.pull, mid = (ax + 10 + f.x + 8) / 2; way = [{ x: ax, y: -14, r: -2, s: b.s }, { x: ax + 10, y: -30, r: -1, s: 1.03 }, { x: mid, y: -34, r: 0, s: 1.03 }, { x: f.x + 8, y: -8, r: 1, s: 1.01 }]; }
+    else { const ay = b.y - g.pull, mid = (ay - 10 + f.y + 8) / 2; way = [{ x: -6, y: ay, r: 0, s: b.s }, { x: -12, y: ay - 10, r: 0, s: 1.03 }, { x: -18, y: mid, r: 0, s: 1.03 }, { x: -4, y: f.y + 8, r: 0, s: 1.01 }]; }
+    const o = (x) => x / DT.land;
+    for (const x of K.els.values()) x.classList.remove('front');
+    deckRun(el, [
+      { offset: 0, transform: deckTf(b), boxShadow: SH, easing: 'ease-out' },
+      { offset: o(DT.press), transform: deckTf({ ...b, s: b.s * 0.97 }), boxShadow: SH, easing: 'cubic-bezier(.3,0,.2,1)' },
+      { offset: o(DT.pull), transform: deckTf(way[0]), boxShadow: SH, easing: 'ease-out' },
+      { offset: o(DT.lift), transform: deckTf(way[1]), boxShadow: UP, easing: 'ease-in' },
+      { offset: o((DT.lift + DT.glide) / 2), transform: deckTf(way[2]), boxShadow: UP, easing: 'ease-out' },
+      { offset: o(DT.glide), transform: deckTf(way[3]), boxShadow: UP, easing: 'cubic-bezier(.3,1.5,.6,1)' },
+      { offset: 1, transform: deckTf(f), boxShadow: SH },
+    ], DT.land);
+    deckRun(el.querySelector('.veil'), [{ opacity: String(b.v) }, { opacity: '0' }], DT.lift - DT.press, DT.press, 'ease-out');
+    setTimeout(() => { el.style.zIndex = '50'; K.order.forEach((x) => { if (x !== n) K.els.get(x).style.zIndex = String(next.indexOf(x) + 1); }); }, DT.pull);
+    K.order.forEach((x, s) => {
+      if (x === n) return;
+      const from = deckBase(s, N), to = deckBase(next.indexOf(x), N), q = K.els.get(x);
+      const delay = DT.shift[0] + (s > i ? (s - i - 1) * DT.stagger : 0);
+      deckRun(q, [{ transform: deckTf(from) }, { transform: deckTf(to) }], DT.shift[1] - DT.shift[0], delay, 'cubic-bezier(.3,1.2,.5,1)');
+      deckRun(q.querySelector('.veil'), [{ opacity: String(from.v) }, { opacity: String(to.v) }], 200, delay, 'ease-out');
+    });
+    // 张嘴:开口一张一合一次(和老师页「说」同一套 dasharray)
+    const ring = el.querySelector('.pc-hd .ring circle');
+    if (ring) ring.animate([{ strokeDasharray: '221.17 55.29', transform: 'rotate(36deg)' }, { offset: 0.45, strokeDasharray: '193.52 82.94', transform: 'rotate(54deg)' }, { strokeDasharray: '221.17 55.29', transform: 'rotate(36deg)' }], { duration: 300, delay: DT.bite, easing: 'ease-in-out' });
+    setTimeout(done, DT.lock);
   };
+  let deckResize = 0;
+  window.addEventListener('resize', () => { clearTimeout(deckResize); deckResize = setTimeout(() => { if (!PARENT && !S.tutor && S.home) layoutDeck(); }, 150); });
   const renderHome = () => {
     const H = S.home;
     document.title = H.title; $('#title').textContent = H.title;
     const cards = Array.isArray(H.cards) ? H.cards : [];
     const list = homeTutorsOf(H);
-    // 头像一笔画出来只在打开首页、从老师页回来时画一次;5 秒一轮的刷新照常重铺,不再画
-    const draw = S.homeDraw; S.homeDraw = false;
     const names = list.map((x) => x.t.name);
-    // 老师变了(开了、关了、换了一份首页的排法)就按家长排的重来:排第一的在最前
-    if (!K.order || K.order.length !== names.length || names.some((x) => !K.order.includes(x))) K.order = [...names].reverse();
-    $('#kst').hidden = !names.length;
-    if (names.length && !K.lifting) {
-      renderStack(H, list, draw);
-      renderFront(H, list, draw ? 'draw' : null);
-      if (draw) markSeen(H.home, K.order[K.order.length - 1]);
-    } else if (!names.length) $('#kcard').hidden = true;
-    // 公共的卡(写在第一张老师卡前面的)在叠的上面;归了老师的在那位老师的卡里
+    $('#deck').hidden = !names.length;
+    // 换牌的那 900 ms 里不动牌堆(下一轮刷新补上);发牌只在打开首页、从老师页回来时发一次
+    if (names.length && !K.busy) {
+      const deal = S.homeDraw; S.homeDraw = false;
+      // 老师变了(开了、关了、换了一份首页的排法)就按家长排的重来:排第一的在最前
+      if (!K.order || K.order.length !== names.length || names.some((x) => !K.order.includes(x))) K.order = [...names].reverse();
+      renderDeck(H, list, deal);
+      if (deal) markSeen(H.home, K.order[K.order.length - 1]);
+    }
+    // 公共的卡(写在第一张老师卡前面的)在牌堆上面;归了老师的在那位老师的牌里
     $('#hcards').replaceChildren(...cards.filter((c) => c.kind !== 'tutor' && !c.owner).map((c, i) => renderCard(c, i, null, false)));
     renderFigshot(H);
   };

@@ -158,6 +158,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     { kid: '小熊', section: sec(['画家画哪个?'], [story]) },
     { kid: '小熊睡大觉浇了水西瓜熟了', section: sec(['画家开始画了。', '你猜画家会怎么画?'], [paint(['小熊播种。', '小熊很高兴。'])]) },
   ];
+  check('判:画图卡带题干和词', !gradeRun(['画图卡带题干和词'], turns)[0].pass && gradeRun(['画图卡带题干和词'], [{ kid: 'x', section: sec(['好?'], [{ kind: 'paint', props: { panels: ['a'], ask: '题', words: ['词'] } }]) }])[0].pass);
   check('判:分幅至少', gradeRun(['分幅至少: 2'], turns)[0].pass && !gradeRun(['分幅至少: 3'], turns)[0].pass && gradeRun(['分幅至少: 3'], turns)[0].why!.includes('2 幅'));
   check('判:放过整段', gradeRun(['放过整段'], [{ kid: 'x', section: sec(['好?'], [{ kind: 'read', props: { segments: ['一', '二', '三'] } }]) }])[0].pass && !gradeRun(['放过整段'], [{ kid: 'x', section: sec(['好?']) }])[0].pass);
   const g = Object.fromEntries(gradeRun(['出画图卡', '不出画图卡', '画图卡前放过整段', '分幅没有看不见的词', '每节末句是问句', '不说: 错了', '问到: 画家', '并排: 睡大觉 | 浇了水', '词落到幅: 1'], turns, { 词: ['播种', '羞愧'] }).map((r) => [r.check, r]));

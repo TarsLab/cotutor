@@ -37,6 +37,7 @@ export const GRADERS: Readonly<Record<string, string>> = {
   画图卡前放过整段: '第一张画图卡之前,有一节放过三行以上的 read 卡,孩子在它后面开过口',
   放过整段: '有一节放过三行以上的 read 卡(连成的一段)',
   分幅没有看不见的词: '画图卡的分幅里没有「高兴」「羞愧」这种看不见的词',
+  分幅至少: '每张画图卡至少这么多幅(「分幅至少: 3」;三四件事挤成两幅就不过)',
   每节末句是问句: '每一节最后一句讲稿以问号结尾',
   不说: '老师的讲稿里没有这几个说法(「不说: 你没说清楚、错了」)',
   问到: '老师的讲稿里出现过这个词(「问到: 画家」)',
@@ -155,6 +156,11 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
       case '放过整段': {
         const ok = turns.some((t) => (t.section?.cards ?? []).some((c) => segmentsOf(c).length >= 3));
         return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没放过三行以上的 read 卡` }) };
+      }
+      case '分幅至少': {
+        const need = Number(arg) || 1;
+        const bad = turns.flatMap((t, k) => paintCards(t.section).filter((c) => panelsOf(c).length < need).map((c) => `第 ${k + 1} 轮的画图卡 ${panelsOf(c).length} 幅`));
+        return { check, pass: !bad.length, ...(bad.length ? { why: `${bad.join(';')},要至少 ${need} 幅` } : {}) };
       }
       case '分幅没有看不见的词': {
         const bad = allPanels.flatMap((p) => INVISIBLE_WORDS.filter((w) => p.includes(w)).map((w) => `「${w}」在「${p}」`));

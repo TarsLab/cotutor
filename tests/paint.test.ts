@@ -31,6 +31,9 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   const card = parseCard('paint', '题: 图上画了谁?\n词: 播种、羞愧\n角色: 小熊:棕色,戴黄草帽\n角色: 小猴:黄褐色,穿红背心\n1. 早上,小熊播种。\n2. 中午,小猴睡大觉。\n第3幅:夏天,西瓜熟了。\n4、小猴低着头,脸红红的。').card;
   const p = card.props as { panels: string[]; cast: { name: string; look: string }[]; ask: string; words: string[] };
   check('解析:四幅(1. / 第3幅: / 4、都认)、两个角色、题干、词', card.kind === 'paint' && p.panels.length === 4 && p.panels[2] === '夏天,西瓜熟了。' && p.cast.length === 2 && p.cast[1].look === '黄褐色,穿红背心' && p.ask === '图上画了谁?' && p.words.join() === '播种,羞愧', JSON.stringify(card));
+  const full = parseCard('paint', '题：图上画了谁？\n词：播种，羞愧；满满\n角色：小熊：棕色\n1．早上,小熊播种。\n2）中午,小猴睡觉。\n第3幅：夏天。').card;
+  const fp = full.props as { panels: string[]; cast: { name: string; look: string }[]; ask: string; words: string[] };
+  check('全角冒号、逗号、分号、句点、括号都认(qwen 爱写全角)', full.kind === 'paint' && fp.ask === '图上画了谁？' && fp.words.join() === '播种,羞愧,满满' && fp.cast[0]?.look === '棕色' && fp.panels.length === 3, JSON.stringify(full));
   const prompt = paintPrompt(p);
   check('四格:2×2、圆圈数字、画风缺省、角色一行一个、第 n 格', prompt.startsWith('一张四格连环画,四格按 2×2 排') && prompt.includes(PAINT_DEFAULT.prompt[0]) && prompt.includes('- 小熊:棕色,戴黄草帽') && prompt.includes('第 4 格:小猴低着头,脸红红的。') && !prompt.includes('播种、羞愧') && !prompt.includes('图上画了谁'), prompt);
   check('题干与词语宝库不进画(画面里不要字)', !prompt.includes('题') && !prompt.includes('词语宝库'));
@@ -145,6 +148,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   const cfgFile = join(root, 'cotutor.json');
   const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
   cfg.runtimes = { default: 'fake', fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] } };
+  for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   let calls = 0;
   const now = new Date('2026-10-11T02:00:00Z');

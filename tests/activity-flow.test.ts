@@ -3,7 +3,7 @@
  * 孩子端是开场按钮、参数不下发 → 点了:新话题、按钮字、参数补了缺省记在第一条 → 上下文包 activity: 在最后、<cotutor-activity> 按参数裁过、
  * 老师没有的 paint 卡写法跟在后面 → 同一话题下一条:activity: 还在、原文「未变」→ 家长改了参数,旧话题照旧 → pack / send --activity → 回放带上。
  */
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +34,7 @@ cfg.runtimes = {
   default: 'fake',
   fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] },
 };
+for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
 cfg.paths = { vault: 'vault' };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault'), { recursive: true });
@@ -218,8 +219,16 @@ try {
     const [a, b] = r.examples;
     check('eval:写死的那个,两次都走到画图卡、都过', a.name === '写死的' && a.pass && a.runs.length === 2 && a.runs.every((x) => x.turns.map((t) => t.kid).join('/') === '你说我画/整段/画图'), JSON.stringify(a.runs.map((x) => ({ k: x.turns.map((t) => t.kid), g: x.grades, e: x.error }))));
     check('eval:模拟的那个,孩子的话来自模拟孩子,画了 → 「不出画图卡」不过,报出来', b.name === '模拟的' && !b.pass && b.runs[0].grades[0].why?.includes('画图卡') === true && said[0].includes('小熊种瓜'), JSON.stringify(b.runs[0]));
+    const evalMsgs = (await readIndex({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'chinese-tutor', a.runs[0].date)).messages.filter((m) => m.thread === a.runs[0].thread);
+    check('eval:每轮记着 eval,不写记忆', evalMsgs.length === 3 && evalMsgs.every((m) => m.eval === true));
     check('eval:每轮回调,画图卡那轮标出来', lines[0] === '写死的#1:1:你说我画' && lines.includes('写死的#1:3:画图:画'), lines.join(' '));
     check('eval:落在 evals/,不进孩子的对话;报告写了', readFileSync(join(root, r.file), 'utf8').includes('"activity": "你说我画"') && !(await readIndex(ctx.ws, 'chinese-tutor', DATE)).messages.some((m) => m.thread === a.runs[0].thread && m.text === '整段' && m.job === a.runs[0].thread));
+    writeFileSync(exFile, '---\nactivity: 你说我画\n---\n\n## 记\n孩子: 记住它\n最多轮: 2\n判:\n- 不出画图卡\n');
+    const vaultBefore = JSON.stringify(readdirSync(join(root, 'vault'), { recursive: true }));
+    const rm = await evalActivity(ctx.ws, 'chinese-tutor', '你说我画', { runs: 1, kid });
+    const memMsg = (await readIndex({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'chinese-tutor', rm.examples[0].runs[0].date)).messages.find((m) => m.thread === rm.examples[0].runs[0].thread && m.text === '记住它');
+    check('eval:老师回了「## 记忆」也不写进 vault', Boolean(memMsg?.warnings?.includes('eval 不写记忆')) && JSON.stringify(readdirSync(join(root, 'vault'), { recursive: true })) === vaultBefore, JSON.stringify(memMsg?.warnings));
+    writeFileSync(exFile, '---\nactivity: 你说我画\n---\n\n## 写死的\n孩子: 整段\n判:\n- 放过整段\n\n## 模拟的\n人设: 乖\n判:\n- 放过整段\n');
     let threw = '';
     await evalActivity(ctx.ws, 'chinese-tutor', '你说我画', { only: '没有这个', kid }).catch((e: Error) => { threw = e.message; });
     check('eval:--only 不认得报有哪些', threw.includes('写死的、模拟的'), threw);

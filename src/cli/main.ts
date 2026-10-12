@@ -304,7 +304,8 @@ export async function main(argv: string[]): Promise<void> {
                 if (y.error) process.stdout.write(`    #${k + 1} ${y.error}\n`);
               });
             }
-            process.stdout.write(`花了 $${r.costUsd.toFixed(3)}(老师;模拟孩子另算,很少)· 报告 ${r.file} · 每轮在 evals/${tutor}/ 里,cotutor show ${tutor} <job> --evals 看\n`);
+            const spent = r.costUsd > 0 ? `花了 $${r.costUsd.toFixed(3)}` : `用了 ${r.tokens.in} 进 / ${r.tokens.out} 出 token(这个运行时不报钱数)`;
+            process.stdout.write(`${spent}(老师;模拟孩子另算,很少)· 报告 ${r.file} · 每轮在 evals/${tutor}/ 里,cotutor show ${tutor} <job> --evals 看\n`);
           }
           if (r.examples.some((x) => !x.pass)) process.exitCode = 1;
           return;

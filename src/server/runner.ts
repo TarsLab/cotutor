@@ -83,6 +83,8 @@ export interface SendInput {
   photos?: string[];
   /** 这条是回放(server/replay.ts):原轮的 job,记进消息;调用方已经把 Runner 指到 evals/ */
   replayOf?: string;
+  /** cotutor activity eval 跑的一轮:不写记忆、不预热(画照画,画家由 eval 换成假的) */
+  eval?: true;
   /** 孩子看完小课堂后的第一条(《小课堂设计.md》§六):上下文包带 lecture:(课的每句、看的情况、圈过的几处),消息记 lecture;again = 问过以后再看一遍又圈了 */
   lecture?: { bundle: string; watchedMs: number; finished: boolean; pauses: number; again?: boolean; marks?: IncomingMark[]; log?: { t: number; pos: number; play: boolean }[] };
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2),记进消息 */
@@ -516,7 +518,7 @@ export class Runner {
       const file = conversationFiles(ws.dirs.conversations, tutor, date).voice(job, input.voice.ext);
       if (await mkdir(join(ws.dirs.conversations, tutor), { recursive: true }).then(() => writeFile(file, input.voice!.data)).then(() => true, () => false)) voice = { audio: basename(file), seconds: Math.round(input.voice.seconds * 10) / 10 };
     }
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.listened ? { listened: input.listened } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(noteWarnings.length || lectureWarn.length || activityWarn.length ? { warnings: [...noteWarnings, ...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.listened ? { listened: input.listened } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(noteWarnings.length || lectureWarn.length || activityWarn.length ? { warnings: [...noteWarnings, ...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
     // 这个 CLI 在 workspace 里要的机器文件(qwen 的隔离家目录):备不好这轮照起,起不来的原因会在 err.log
@@ -530,7 +532,7 @@ export class Runner {
     active.done = this.spawn(ws, tutor, date, job, plan, policy, active, resumePlan, spare).finally(() => {
       this.active.delete(tutor);
       // 孩子 / 家长这轮完了,马上起好下一轮的进程;系统轮(记账、整理记忆)之后孩子多半不在,不起
-      if (input.from !== 'system' && !input.replayOf) void this.prewarm(tutor).catch(() => {});
+      if (input.from !== 'system' && !input.replayOf && !input.eval) void this.prewarm(tutor).catch(() => {});
     });
     this.active.set(tutor, active);
     return { tutor, date, job, thread, plan, done: active.done };
@@ -826,7 +828,7 @@ export class Runner {
     const transcript = parseTranscript(logText, parse);
     // 断流接着跑的:断在半截的那段没进会话、也不在最后的 result 里,拼回最后一段前面(老师是从断处接着写的)
     // (result 的正文被 trim 过,断在句末 / 围栏上的补回换行,免得两句粘成一行)
-    if (open && transcript.final?.text) transcript.final.text = open + (/[。!!??;;`\n]\s*$/.test(open) ? '\n' : '') + transcript.final.text;
+    if (open && transcript.final?.text) transcript.final.text = open + (/[。!\uFF01?\uFF1F;\uFF1B`\n]\s*$/.test(open) ? '\n' : '') + transcript.final.text;
     if (exit.stalled && !transcript.final) transcript.final = { text: null, ok: false, reason: `stalled:${stalls} 次断流(每次 ${policy.stall.ms}ms 没输出),接着跑的次数用完了` };
     // 这轮用了哪些工具、读了什么:从 .log 抽出来物化(家长端「看原文」一站、cotutor show)
     const tools = toolCalls(logText, parse).slice(0, 200);
@@ -872,7 +874,7 @@ export class Runner {
     // 「## 记忆」段:增 / 改 / 删落进 vault 里这位 agent 的记忆文件(回放不写;整理轮不限条数;家长视图看 remembered 与提醒;memoryLines 留给删话题时撤)
     if (kidView.memory.length) {
       const asked = latest.messages.find((m) => m.job === job);
-      const r = asked?.replayOf ? { changes: [] as string[], lines: [] as MemoryLine[], warnings: ['回放不写记忆'] } : await this.settleMemory(ws, tutor, date, kidView.memory, asked?.tidy ? null : MEMORY_MAX_PER_TURN);
+      const r = asked?.replayOf || asked?.eval ? { changes: [] as string[], lines: [] as MemoryLine[], warnings: [asked.eval ? 'eval 不写记忆' : '回放不写记忆'] } : await this.settleMemory(ws, tutor, date, kidView.memory, asked?.tidy ? null : MEMORY_MAX_PER_TURN);
       if (r.changes.length || r.warnings.length) next = { ...next, messages: next.messages.map((m) => (m.job === job ? { ...m, ...(r.changes.length ? { remembered: r.changes } : {}), ...(r.lines.length ? { memoryLines: r.lines } : {}), ...(r.warnings.length ? { warnings: [...(m.warnings ?? []), ...r.warnings] } : {}) } : m)) };
     }
     // 记账那轮:「## 记账」段落进日记(老师不直接写 vault;写了什么、没写成为什么都在这条的 warnings 里)

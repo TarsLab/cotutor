@@ -97,6 +97,8 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('头上的卡不认得', has(fixesAfter('cards: read paint', 'cards: read paintt'), '「paintt」不是板书的卡'));
   check('正文用的卡老师和 activity 都没有', has(fixesAfter('cards: read paint', 'cards: read', { fileName: '你说我画', tutorCards: ['text', 'read'] }), '`paint` 卡,老师和这个 activity 都没有'));
   check('出厂语文老师的卡里没有 paint(只跟着 activity)', !factoryCards?.includes('paint'));
+  const factoryTutors = (JSON.parse(configTemplate({ slug: 'x', tutors: await shippedAgents() })) as { tutors: Record<string, { runtime?: string }> }).tutors;
+  check('出厂语文老师走 qwen,别的老师照旧(缺省运行时)', factoryTutors['chinese-tutor'].runtime === 'qwen' && factoryTutors['math-tutor'].runtime === undefined);
   check('老师有这种卡就不用 activity 再写', fixesAfter('cards: read paint', 'cards: read', { fileName: '你说我画', tutorCards: ['text', 'read', 'paint'] }).length === 0);
   check('缺第一句', has(fixesAfter('第一句: ', '先说: '), '「第一句: …」'));
   check('缺收', has(fixesAfter('收: 问完', '最后: 问完'), '「收: …」'));
@@ -156,6 +158,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     { kid: '小熊', section: sec(['画家画哪个?'], [story]) },
     { kid: '小熊睡大觉浇了水西瓜熟了', section: sec(['画家开始画了。', '你猜画家会怎么画?'], [paint(['小熊播种。', '小熊很高兴。'])]) },
   ];
+  check('判:分幅至少', gradeRun(['分幅至少: 2'], turns)[0].pass && !gradeRun(['分幅至少: 3'], turns)[0].pass && gradeRun(['分幅至少: 3'], turns)[0].why!.includes('2 幅'));
   check('判:放过整段', gradeRun(['放过整段'], [{ kid: 'x', section: sec(['好?'], [{ kind: 'read', props: { segments: ['一', '二', '三'] } }]) }])[0].pass && !gradeRun(['放过整段'], [{ kid: 'x', section: sec(['好?']) }])[0].pass);
   const g = Object.fromEntries(gradeRun(['出画图卡', '不出画图卡', '画图卡前放过整段', '分幅没有看不见的词', '每节末句是问句', '不说: 错了', '问到: 画家', '并排: 睡大觉 | 浇了水', '词落到幅: 1'], turns, { 词: ['播种', '羞愧'] }).map((r) => [r.check, r]));
   check('判:出画图卡 / 不出画图卡', g['出画图卡'].pass && !g['不出画图卡'].pass && g['不出画图卡'].why!.includes('第 3 轮'));

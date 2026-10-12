@@ -99,6 +99,8 @@ const MessageObjectSchema = z.object({
   tools: z.array(z.object({ name: z.string().min(1), arg: z.string(), ok: z.boolean().nullable(), chars: z.number().int().nonnegative(), sub: z.boolean().optional() })).optional(),
   /** 这条是回放(cotutor replay,server/replay.ts):原轮的 job。回放落在 evals/ 里,不在 conversations/ */
   replayOf: z.string().min(1).optional(),
+  /** 这条是 cotutor activity eval 跑的(落在 evals/,模拟孩子):同回放,不写记忆、不预热 */
+  eval: z.literal(true).optional(),
   /**
    * 这条是孩子看完小课堂后的第一条(《小课堂设计.md》§七):哪份课包、课名、看了多久、看完没、停过几次、圈过的几处;节前的小课堂卡与圈的卡从这里画。
    * again = 问过以后「再看一遍」又圈了,这条只为带上新圈的(节前只画圈的卡)。圈:时刻、SVG 停在哪(缩略图)、路径(课包坐标)、算出来的那段话

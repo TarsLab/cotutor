@@ -1,6 +1,6 @@
 /**
  * cotutor activity eval(《wip/activity设计.md》6.1):照例子文件,真老师 + 模拟孩子跑多轮,判只看板书。
- * 跑在 evals/ 里(同回放:不进孩子的对话、不配音);画家是假的(不花钱,当画好了)。一个例子跑几次,次次都过才算过(pass^k)。
+ * 跑在 evals/ 里(同回放:不进孩子的对话、不配音、不写记忆);画家是假的(不花钱,当画好了)。一个例子跑几次,次次都过才算过(pass^k)。
  * 模拟孩子交给百炼的对话模型(缺省 qwen-plus,key 同 qwen 老师);写死的那几句先说完再交给它。
  */
 import { homedir } from 'node:os';
@@ -34,7 +34,7 @@ export function makeKidModel(opts: { env?: NodeJS.ProcessEnv; model?: string; en
       });
       if (!res.ok) return null;
       const text = ((await res.json()) as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content ?? '';
-      return text.replace(/^["“「]|["”」]$/g, '').replace(/^孩子[::]\s*/, '').trim() || null;
+      return text.replace(/^["“「]|["”」]$/g, '').replace(/^孩子[:\uFF1A]\s*/, '').trim() || null;
     } catch {
       return null;
     }
@@ -52,6 +52,8 @@ export interface EvalRun {
   /** 跑不下去的原因(老师出错、模拟孩子不通) */
   error?: string;
   costUsd: number;
+  /** 不报钱数的运行时(qwen)记 token */
+  tokens: { in: number; out: number };
   thread: string;
   date: string;
 }
@@ -69,6 +71,7 @@ export interface EvalReport {
   at: string;
   examples: EvalExampleReport[];
   costUsd: number;
+  tokens: { in: number; out: number };
   /** 报告落在哪(相对 workspace 根) */
   file: string;
 }
@@ -119,13 +122,14 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
       let thread = '';
       let date = '';
       let costUsd = 0;
+      const tokens = { in: 0, out: 0 };
       let error: string | undefined;
       let scripted = 0;
       // 第一句是按钮上的字(activity 的名字),和孩子点首页按钮一样;照片随第一句写死的孩子的话发
       let say: string | null = name;
       let photos: string[] = [];
       while (say !== null && turns.length < e.maxTurns) {
-        const started = await runner.send(tutor, { from: 'kid', text: say, ...(photos.length ? { photos } : {}), ...(thread ? { thread } : { newThread: true, activity: run }) });
+        const started = await runner.send(tutor, { from: 'kid', text: say, eval: true, ...(photos.length ? { photos } : {}), ...(thread ? { thread } : { newThread: true, activity: run }) });
         photos = [];
         thread = started.thread;
         date = started.date;
@@ -133,6 +137,8 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
         await runner.flush();
         const m = index.messages.find((x) => x.job === started.job);
         costUsd += m?.costUsd ?? 0;
+        tokens.in += m?.tokens?.in ?? 0;
+        tokens.out += m?.tokens?.out ?? 0;
         if (!m || m.result !== 'ok') { error = `第 ${turns.length + 1} 轮老师出错:${m?.error ?? '未知'}`; break; }
         const section = m.section ?? null;
         turns.push({ kid: say, section });
@@ -149,13 +155,14 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
         } else say = null;
       }
       const grades = gradeRun(e.checks, turns, run.params);
-      runs.push({ turns, grades, pass: !error && grades.every((g) => g.pass), ...(error ? { error } : {}), costUsd, thread, date });
+      runs.push({ turns, grades, pass: !error && grades.every((g) => g.pass), ...(error ? { error } : {}), costUsd, tokens, thread, date });
     }
     out.push({ name: e.name, runs, pass: runs.every((r) => r.pass) });
   }
   const at = new Date().toISOString();
   const rel = join(EVALS_DIR, 'activity-eval', `${tutor}-${name}-${at.replace(/[:.]/g, '-')}.json`);
-  const report: EvalReport = { tutor, activity: name, at, examples: out, costUsd: out.reduce((n, x) => n + x.runs.reduce((a, r) => a + r.costUsd, 0), 0), file: rel };
+  const all = out.flatMap((x) => x.runs);
+  const report: EvalReport = { tutor, activity: name, at, examples: out, costUsd: all.reduce((a, r) => a + r.costUsd, 0), tokens: { in: all.reduce((a, r) => a + r.tokens.in, 0), out: all.reduce((a, r) => a + r.tokens.out, 0) }, file: rel };
   await mkdir(join(ws.root, EVALS_DIR, 'activity-eval'), { recursive: true });
   await writeFile(join(ws.root, rel), `${JSON.stringify(report, null, 2)}\n`);
   return report;

@@ -39,6 +39,7 @@ cfg.runtimes = {
   // 像 claude 模板那样把板书写法预载进系统提示({boardFile});假 CLI 吃掉这个旗标
   preload: fake(['--append-system-prompt-file', '{boardFile}']),
 };
+for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
 cfg.paths = { vault: 'vault', plans: '计划', timetable: '课程表.md' };
 cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, 'voices', '--json'] };
 (cfg.tutors as Record<string, Record<string, unknown>>)['math-tutor'].voice = 'v-math';

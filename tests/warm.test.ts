@@ -35,6 +35,7 @@ const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown> & { runtimes: Record<string, unknown> };
 cfg.runtimes = { default: 'fake', fake: stdinRuntime() };
+for (const t of Object.values((cfg as unknown as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
 cfg.policyDefaults = { stall: { ms: 400, retries: 1 } };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 

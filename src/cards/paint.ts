@@ -38,11 +38,11 @@ export const PaintPropsSchema = z.object({
 });
 export type PaintProps = z.infer<typeof PaintPropsSchema>;
 
-/** 「题:」「词:」「角色:」;中英文冒号都认 */
-const FIELD = /^(题干?|词语?宝库|词|角色)\s*[::]\s*(.*)$/;
+/** 「题:」「词:」「角色:」;中英文冒号都认(全角写成 \uFF1A,一眼看得出两种都在;原来少了全角那个,2026-10-12 qwen 写「题：」整张卡退成文字) */
+const FIELD = /^(题干?|词语?宝库|词|角色)\s*[:\uFF1A]\s*(.*)$/;
 /** 「1.」「1、」「1)」「第1幅:」「第 1 格:」 */
-const PANEL = /^(?:第\s*)?([1-9])\s*(?:[.、)]|幅\s*[::]?|格\s*[::]?)\s*(.+)$/;
-const WORD_SEP = /[、,,;;\s]+/;
+const PANEL = /^(?:第\s*)?([1-9])\s*(?:[.、)\uFF0E\uFF09]|幅\s*[:\uFF1A]?|格\s*[:\uFF1A]?)\s*(.+)$/;
+const WORD_SEP = /[、,\uFF0C;\uFF1B\s]+/;
 
 export const paint: CardKind<PaintProps> = {
   name: 'paint',
@@ -59,7 +59,7 @@ export const paint: CardKind<PaintProps> = {
         if (!v) continue;
         if (f[1].startsWith('题')) ask = v;
         else if (f[1] === '角色') {
-          const m = /^([^::]+)[::]\s*(.+)$/.exec(v);
+          const m = /^([^:\uFF1A]+)[:\uFF1A]\s*(.+)$/.exec(v);
           if (!m) throw new Error(`角色要写成「名字:样子」:${v}`);
           cast.push({ name: m[1].trim(), look: m[2].trim() });
         } else words = v.split(WORD_SEP).map((w) => w.trim()).filter(Boolean);

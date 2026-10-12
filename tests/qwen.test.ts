@@ -30,6 +30,7 @@ const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown> & { runtimes: Record<string, unknown> };
 const factoryQwen = cfg.runtimes.qwen;
 cfg.runtimes = { default: 'fakeqwen', fakeqwen: { cli: 'qwen', stdin: 'stream-json', run: [...base, ...flags], resume: [...base, '--resume', '{session}', ...flags] } };
+for (const t of Object.values((cfg as unknown as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
 const now = new Date(2026, 9, 9, 20, 0);

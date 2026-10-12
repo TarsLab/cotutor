@@ -8,7 +8,7 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-activity-home-')))
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { activityCards, checkActivity, fillSlots, lintActivity, parseActivity, renderTutorSection, resolveParams } = await import('../src/lib/activity.ts');
+const { activityCards, checkActivity, fillSlots, lintActivity, parseActivity, renderTutorSection, resolveParams, failingGate, gatePasses } = await import('../src/lib/activity.ts');
 const { PAINT_PROMPT_DEFAULT } = await import('../src/schema/index.ts');
 const { PAINT_NEGATIVE } = await import('../src/paint/prompt.ts');
 const { PACKAGE_AGENTS_DIR, configTemplate, shippedAgents } = await import('../src/cli/skeleton.ts');
@@ -114,6 +114,21 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('不认得的参数报一条,列出有哪些', resolveParams(a, { 单词: 'x' }).issues[0]?.includes('有:词、最多画'));
   const must = parseActivity(text.replace('词: 词表,可空', '词: 词表')).activity;
   check('要填的没填:报', resolveParams(must, {}).issues[0]?.includes('要填「词」'));
+}
+
+// ---- 应用拦的:纯判断 ----
+{
+  type M = { job: string; from: 'kid' | 'system'; action?: 'continue' | 'submit'; section?: { cards: { kind: string; props: Record<string, unknown> }[]; lines: never[] } };
+  const story = (n: number) => ({ cards: [{ kind: 'read', props: { segments: Array.from({ length: n }, (_, i) => `第 ${i + 1} 句。`) } }], lines: [] as never[] });
+  const t = (...ms: M[]) => ms as never;
+  const S = { 还能画: 1 };
+  check('连说过一遍:前面放过三行的整段,孩子后面开过口 → 过', gatePasses('连说过一遍', { thread: t({ job: '1', from: 'kid', section: story(3) }, { job: '2', from: 'kid' }), job: '2', state: S }));
+  check('连说过一遍:整段只有两行 → 不过', !gatePasses('连说过一遍', { thread: t({ job: '1', from: 'kid', section: story(2) }, { job: '2', from: 'kid' }), job: '2', state: S }));
+  check('连说过一遍:整段和画图卡在同一节 → 不过(孩子还没开口)', !gatePasses('连说过一遍', { thread: t({ job: '1', from: 'kid', section: story(4) }), job: '1', state: S }));
+  check('连说过一遍:后面只按了继续 → 不过', !gatePasses('连说过一遍', { thread: t({ job: '1', from: 'kid', section: story(3) }, { job: '2', from: 'kid', action: 'continue' }), job: '2', state: S }));
+  check('还能画:大于 0 才过,没算出来不过', gatePasses('还能画', { thread: t(), job: 'x', state: { 还能画: 2 } }) && !gatePasses('还能画', { thread: t(), job: 'x', state: { 还能画: 0 } }) && !gatePasses('还能画', { thread: t(), job: 'x', state: {} }));
+  const { activity: a } = parseActivity(text);
+  check('failingGate:照文件里的顺序报第一条没过的', failingGate(a, { thread: t(), job: 'x', state: { 还能画: 0 } }) === '连说过一遍' && failingGate({ gates: [{ rule: '还能画', line: 1 }] }, { thread: t(), job: 'x', state: { 还能画: 0 } }) === '还能画' && failingGate({ gates: [] }, { thread: t(), job: 'x', state: {} }) === null);
 }
 
 // ---- 没有老师那节的(像听写):只提醒,不算错;解析永不抛 ----

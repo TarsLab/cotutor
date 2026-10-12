@@ -54,7 +54,10 @@ async function run(argv: string[]): Promise<{ out: string; code: number }> {
 
 const now = new Date(2026, 9, 12, 16, 20);
 const DATE = '2026-10-12';
-const ctx = createContext(loadWorkspace(root), { now: () => now });
+// 画家是假的:不花钱,记下画了几张
+const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+let drew = 0;
+const ctx = createContext(loadWorkspace(root), { now: () => now, draw: async ({ model }) => { drew++; return { ok: true, data: PNG, model, ms: 5 }; } });
 const wait = async (tutor: string): Promise<void> => {
   for (let i = 0; i < 200 && ctx.runner.running(tutor); i++) await new Promise((r) => setTimeout(r, 25));
 };
@@ -101,7 +104,7 @@ try {
   check('第一条记下 activity:参数是解析好的,补了缺省', JSON.stringify(m1.activity) === JSON.stringify({ name: '你说我画', params: { 词: ['播种', '睡大觉', '羞愧'], 最多画: 2 } }), JSON.stringify(m1.activity));
   const p1 = (await readRunFile(ctx.ws, 'chinese-tutor', DATE, j1))!.prompt;
   const yaml = p1.slice(0, p1.indexOf('\n<'));
-  check('上下文包:activity: 在 YAML 最后,参数一行一个、词表是列表', yaml.endsWith('  activity:\n    name: "你说我画"\n    params:\n      "词":\n        - "播种"\n        - "睡大觉"\n        - "羞愧"\n      "最多画": 2'), yaml.slice(-200));
+  check('上下文包:activity: 在 YAML 最后,参数一行一个、词表是列表,state 跟在后面', yaml.endsWith('  activity:\n    name: "你说我画"\n    params:\n      "词":\n        - "播种"\n        - "睡大觉"\n        - "羞愧"\n      "最多画": 2\n    state:\n      "还能画": 2\n      "缺": ""'), yaml.slice(-200));
   check('上下文包:activityGuide 指到文件', p1.includes('  activityGuide: "agents/chinese-tutor/activities/你说我画.md"\n'));
   check('上下文包:home: 照旧带按钮字与讲法', p1.includes('  home:\n    button: "我来出题"\n    brief: "羞愧要落到一幅上"'));
   const guide = p1.slice(p1.indexOf('<cotutor-activity'), p1.indexOf('</cotutor-activity>'));
@@ -168,6 +171,39 @@ try {
   await rp.done;
   const ev = (await readRunFile({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'chinese-tutor', DATE, rp.evalJob))!.prompt;
   check('回放:新会话,activity 那段整篇带', ev.includes('<cotutor-activity') && ev.includes('    name: "你说我画"'));
+
+  // ---- 第 3 期:应用算的、应用拦的(你说我画,最多画 2;一天 2 张)----
+  {
+    const send = async (body: unknown): Promise<{ job: string; prompt: string }> => {
+      const r = await kidSend('chinese-tutor', body);
+      await wait('chinese-tutor');
+      await ctx.runner.flush();
+      const job = (r.json as { job: string }).job;
+      return { job, prompt: (await readRunFile(ctx.ws, 'chinese-tutor', DATE, job))!.prompt };
+    };
+    const stateOf = (prompt: string): string => prompt.slice(prompt.indexOf('    state:'), prompt.indexOf('\n<') > 0 && prompt.indexOf('\n<') > prompt.indexOf('    state:') ? prompt.indexOf('\n<') : prompt.indexOf('\n---'));
+    const recOf = async (job: string): Promise<{ state: string; error?: string } | null> => {
+      try { return JSON.parse(readFileSync(join(root, 'conversations', 'chinese-tutor', `${DATE}.${job}.cards`, '0', 'paint.json'), 'utf8')); } catch { return null; }
+    };
+    const p0 = await send({ text: '', via: { home: pub2.home!.id, button: 0 } });
+    const th = p0.job;
+    check('第一条:state 有还能画 2(最多画 2、今天还没画)、缺是空的', stateOf(p0.prompt).includes('"还能画": 2') && stateOf(p0.prompt).includes('"缺": ""'), stateOf(p0.prompt));
+    const a1 = await send({ text: '画图', thread: th });
+    const rec1 = await recOf(a1.job);
+    check('没放过整段、孩子没连着说:拦下,不交给画家', rec1?.state === 'none' && rec1.error === 'gate:连说过一遍' && drew === 0, JSON.stringify(rec1));
+    index = await readIndex(ctx.ws, 'chinese-tutor', DATE);
+    check('activity 话题里的 paint 不报「清单外的卡」', !(index.messages.find((m) => m.job === a1.job)?.warnings ?? []).some((w) => w.includes('清单外')));
+    const a2 = await send({ text: '整段', thread: th });
+    check('下一条:cards 说没画、为什么;缺 = 连说过一遍;拦下的不占张数', a2.prompt.includes('没画:孩子还没看着整段连着说一遍') && stateOf(a2.prompt).includes('"缺": "连说过一遍"') && stateOf(a2.prompt).includes('"还能画": 2'), stateOf(a2.prompt));
+    const a3 = await send({ text: '画图', thread: th });
+    check('放过整段、孩子后面开过口:交给画家', (await recOf(a3.job))?.state === 'done' && drew === 1);
+    const a4 = await send({ text: '画图', thread: th });
+    check('还能画 1:再画一张', stateOf(a4.prompt).includes('"还能画": 1') && stateOf(a4.prompt).includes('"缺": ""') && (await recOf(a4.job))?.state === 'done' && drew === 2, stateOf(a4.prompt));
+    const a5 = await send({ text: '画图', thread: th });
+    check('还能画 0:拦下(还能画),不交给画家', stateOf(a5.prompt).includes('"还能画": 0') && (await recOf(a5.job))?.error === 'gate:还能画' && drew === 2, stateOf(a5.prompt));
+    const a6 = await send({ text: '好吧', thread: th });
+    check('下一条:cards 说张数到头了', a6.prompt.includes('没画:这个话题能画的张数到头了') && stateOf(a6.prompt).includes('"缺": "还能画"'));
+  }
 
   // ---- 渲染:没有 activity 的包不多出东西 ----
   check('没 activity 的包没有那几行', !renderContextPack({ at: 'x', plan: [], recent: [] }).includes('activity'));

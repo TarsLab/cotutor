@@ -24,6 +24,12 @@ export type PaintRecord =
   | { state: 'done'; at: string; prompt: string; model: string; size: string; ms: number }
   | { state: 'none'; at: string; error: string; prompt?: string; model?: string; ms?: number };
 
+/** 某一轮某张画图卡的记录;过了 PAINT_STALE_MS 还在画的当没画成(stale) */
+export async function paintRecordAt(ws: Workspace, tutor: string, date: string, job: string, n: number, now: number = Date.now()): Promise<PaintRecord | null> {
+  const r = await readRecord(join(conversationFiles(ws.dirs.conversations, tutor, date).cardAssetsDir(job, n), PAINT_JSON));
+  return r?.state === 'drawing' && now - Date.parse(r.at) > PAINT_STALE_MS ? { state: 'none', at: r.at, error: 'stale' } : r;
+}
+
 async function readRecord(file: string): Promise<PaintRecord | null> {
   try {
     const r = JSON.parse(await readFile(file, 'utf8')) as PaintRecord;
@@ -66,7 +72,7 @@ let chain: Promise<unknown> = Promise.resolve();
  * 这一轮板书里的画图卡,一张一张画。已经有记录的不再画(重起、重放都不重画);replay = 回放那轮不画(evals 目录里,不花钱)。
  * 返回画完的 Promise(测试与关服前等它),不抛。
  */
-export function startPaints(ws: Workspace, tutor: string, date: string, job: string, section: BoardSection, opts: { draw: Draw; now?: () => Date; replay?: boolean }): Promise<void> {
+export function startPaints(ws: Workspace, tutor: string, date: string, job: string, section: BoardSection, opts: { draw: Draw; now?: () => Date; replay?: boolean; gate?: () => Promise<string | null> }): Promise<void> {
   const cfg = ws.config.paint ?? PAINT_DEFAULT;
   const files = conversationFiles(ws.dirs.conversations, tutor, date);
   const at = (): string => (opts.now?.() ?? new Date()).toISOString();
@@ -85,6 +91,9 @@ export function startPaints(ws: Workspace, tutor: string, date: string, job: str
       const prompt = paintPrompt(props, cfg.prompt);
       const model = cfg.model;
       if (opts.replay) { await writeRecord(rec, { state: 'none', at: at(), error: 'replay' }); continue; }
+      // activity「应用拦的」(《wip/activity设计.md》4.1):没过就不画、不占张数,下一条告诉老师缺哪条;排在队里现查,同一轮第二张看得到第一张
+      const stop = opts.gate ? await opts.gate().catch(() => null) : null;
+      if (stop) { await writeRecord(rec, { state: 'none', at: at(), error: `gate:${stop}`, prompt, model }); continue; }
       const used = await paintedToday(ws, date, (opts.now?.() ?? new Date()).getTime());
       if (used >= cfg.daily) { await writeRecord(rec, { state: 'none', at: at(), error: `daily:${used}/${cfg.daily}`, prompt, model }); continue; }
       await writeRecord(rec, { state: 'drawing', at: at(), prompt, model });
@@ -108,6 +117,7 @@ export function paintNote(r: PaintRecord | null): string {
   if (r.state === 'done') return `画好了:${r.model},${Math.round(r.ms / 1000)} 秒`;
   const e = r.error;
   const why = e.startsWith('daily:') ? `今天画了 ${e.slice(6).split('/')[0]} 张,到了一天的上限(cotutor.json paint.daily)`
+    : e.startsWith('gate:') ? `应用拦下了,没交给画家(activity「应用拦的」:${e.slice(5)})`
     : e === 'replay' ? '回放不画'
     : e === 'no_key' ? '拿不到百炼 key(DASHSCOPE_API_KEY,或本机 ~/.qwen/settings.json)'
     : e === 'stale' ? '画到一半服务重起了'
@@ -145,7 +155,7 @@ export async function paintLines(ws: Workspace, tutor: string, date: string, job
     if (c.kind !== 'paint') continue;
     let r = await readRecord(join(files.cardAssetsDir(job, n), PAINT_JSON));
     if (r?.state === 'drawing' && now - Date.parse(r.at) > PAINT_STALE_MS) r = { state: 'none', at: r.at, error: 'stale' };
-    const said = !r || r.state === 'drawing' ? '画家还在画,孩子还没看到图' : r.state === 'done' ? '画好了,孩子看到了图(你看不到图,问孩子画得怎样)' : r.error.startsWith('daily:') ? '没画成:今天画的张数到头了,孩子只看到分好的几幅' : '没画成,孩子只看到分好的几幅';
+    const said = !r || r.state === 'drawing' ? '画家还在画,孩子还没看到图' : r.state === 'done' ? '画好了,孩子看到了图(你看不到图,问孩子画得怎样)' : r.error.startsWith('daily:') ? '没画成:今天画的张数到头了,孩子只看到分好的几幅' : r.error === 'gate:连说过一遍' ? '没画:孩子还没看着整段连着说一遍,孩子只看到分好的几幅' : r.error === 'gate:还能画' ? '没画:这个话题能画的张数到头了,孩子只看到分好的几幅' : r.error.startsWith('gate:') ? `没画:${r.error.slice(5)}没过,孩子只看到分好的几幅` : '没画成,孩子只看到分好的几幅';
     out.push(`${cardId(job, n)} 画图卡:${said}`);
   }
   return out;

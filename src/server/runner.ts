@@ -22,6 +22,7 @@ import { cardAssets, cardLabel, describeCard, tutorCardKinds, type RecordProps }
 import { boardGuideFor, cardGuidesFor } from '../cards/docs.ts';
 import { activityCards, parseActivity, renderTutorSection } from '../lib/activity.ts';
 import { activityFile } from '../cli/activities.ts';
+import { activityState, paintGate, readActivity, threadActivity } from './activity-state.ts';
 import { KouboQueue } from './koubo.ts';
 import { controlsTools, parserOf, prepareCli, processEnv, toolsOf, unexpectedTools } from '../clis/index.ts';
 import { parseBoard } from '../lib/board.ts';
@@ -187,18 +188,12 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
   return pack;
 }
 
-/** 这个话题是从哪个 activity 起的:话题里第一条带 activity 的消息(只记在第一条);没有 → null */
-export function threadActivity(messages: readonly ConversationMessage[], thread: string): ActivityRun | null {
-  const ths = threads(messages);
-  return messages.find((m, i) => ths[i] === thread && m.activity)?.activity ?? null;
-}
-
 /**
  * activity 的那两段(《wip/activity设计.md》§五):`activity:`(名字、参数、应用算的)每条都带;
  * 「老师怎么带」那节(按参数与这个话题的卡裁过、剥了注释)+ 这个 activity 多带的卡的写法,作为一条笔记放进话题第一条(<cotutor-activity>),
  * 续话题没改过写「未变」(同守则)。文件不在、读不了 → activityGuide 写「缺」,老师照自己的文件做。返回给这轮的提醒。
  */
-export async function attachActivity(ws: Workspace, tutor: string, pack: ContextPack, run: ActivityRun): Promise<string[]> {
+export async function attachActivity(ws: Workspace, tutor: string, pack: ContextPack, run: ActivityRun, where: { date: string; messages: readonly ConversationMessage[]; thread: string; now: number }): Promise<string[]> {
   pack.activity = { name: run.name, params: run.params, state: {} };
   const path = relative(ws.root, activityFile(ws.root, tutor, run.name)).split(sep).join('/');
   const text = await readFile(join(ws.root, path), 'utf8').catch(() => null);
@@ -207,6 +202,7 @@ export async function attachActivity(ws: Workspace, tutor: string, pack: Context
     return [`activity ${run.name}:${path} 不在,老师没拿到「老师怎么带」`];
   }
   const a = parseActivity(text).activity;
+  pack.activity.state = await activityState(ws, tutor, where.date, where.messages, where.thread, run, a, where.now);
   const mine = tutorCardKinds(ws.config.tutors[tutor]?.cards);
   const cards = activityCards(a, mine ?? undefined);
   const body = renderTutorSection(a, { params: run.params, cards });
@@ -321,7 +317,7 @@ export async function packDryRun(ws: Workspace, tutor: string, input: { from: Me
   // 和 send 同一条规矩:孩子的话不带工具时,只有工具才用得上的路径不进包
   if (policy.tools !== 'on' && input.from === 'kid' && controlsTools(runtime)) { delete pack.refs; delete pack.vault; }
   await attachBoardGuide(ws, tutor, pack, { preloaded: boardPreloaded(runtime), boardOff: policy.board === 'off' });
-  if (input.activity) await attachActivity(ws, tutor, pack, input.activity);
+  if (input.activity) await attachActivity(ws, tutor, pack, input.activity, { date: localDate(input.at), messages: [], thread: '', now: input.at.getTime() });
   return { prompt: buildContextPack(pack, input.text, policy.contextPack), pack, report };
 }
 
@@ -475,7 +471,7 @@ export class Runner {
     const { agentBody, systemBody, boardFile } = await systemParts(ws, tutor, runtime, policy, gathered);
     // activity:新话题照这条带的,续话题照话题第一条记的;记账那种系统轮不带
     const activityRun = input.bookkeep ? null : fresh ? (input.activity ?? null) : threadActivity(index.messages, thread);
-    const activityWarn = activityRun ? await attachActivity(ws, tutor, gathered, activityRun) : [];
+    const activityWarn = activityRun ? await attachActivity(ws, tutor, gathered, activityRun, { date, messages: index.messages, thread, now: now.getTime() }) : [];
     // 家长笔记原文:新会话整篇带;续会话时这个话题带过、没改的只写「未变」
     const notes = noteVersions(gathered);
     const pack = session ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
@@ -865,8 +861,12 @@ export class Runner {
     const reread = takesTutorRules(tutor) && policy.board !== 'off' ? boardGuideReads(tools) : [];
     if (reread.length) kidView.warnings.push(`板书写法已经递给老师了,这轮它还是用工具去读了一遍(${reread.join(';')}):多一次模型来回。cotutor doctor 的 runtime.*.board 看这个运行时走的哪条递法`);
     // 清单外的卡(《卡片协议.md》「谁拿到哪些卡」):照常解析、照常显示,只在这轮记一条,家长据此调清单
+    // activity 话题里,那个 activity 带的卡(你说我画的 paint)也算在清单里
+    const jobAt = latest.messages.findIndex((m) => m.job === job);
+    const run = jobAt >= 0 ? threadActivity(latest.messages, threads(latest.messages)[jobAt]) : null;
+    const actCards = run ? ((await readActivity(ws, tutor, run.name))?.cards ?? []) : [];
     const kinds = tutorCardKinds(ws.config.tutors[tutor]?.cards);
-    const outside = kinds && kidView.section ? [...new Set(kidView.section.cards.map((c) => c.kind).filter((k) => !kinds.includes(k)))] : [];
+    const outside = kinds && kidView.section ? [...new Set(kidView.section.cards.map((c) => c.kind).filter((k) => !kinds.includes(k) && !actCards.includes(k)))] : [];
     if (outside.length) kidView.warnings.push(`板书里有清单外的卡:${outside.join('、')}(照常显示;要它就加进 cotutor.json tutors.${tutor}.cards)`);
     let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, timing, tools });
     // 「## 记忆」段:增 / 改 / 删落进 vault 里这位 agent 的记忆文件(回放不写;整理轮不限条数;家长视图看 remembered 与提醒;memoryLines 留给删话题时撤)
@@ -901,7 +901,9 @@ export class Runner {
     }
     // 画图卡:后台画,一张一张排着(一天 paint.daily 张);回放不画
     if (kidView.section?.cards.some((c) => c.kind === 'paint')) {
-      const bg = startPaints(ws, tutor, date, job, kidView.section, { draw: this.draw, now: this.opts.now, replay: Boolean(latest.messages.find((m) => m.job === job)?.replayOf) });
+      const clock = (): number => (this.opts.now?.() ?? new Date()).getTime();
+      const gate = await paintGate(ws, tutor, date, job, clock).catch(() => null);
+      const bg = startPaints(ws, tutor, date, job, kidView.section, { draw: this.draw, now: this.opts.now, replay: Boolean(latest.messages.find((m) => m.job === job)?.replayOf), ...(gate ? { gate } : {}) });
       this.background.add(bg);
       void bg.finally(() => this.background.delete(bg));
     }

@@ -18,6 +18,7 @@ import {
   type ActivityState,
   type ActivityTool,
   type ActivityValue,
+  type ConversationMessage,
 } from '../schema/index.ts';
 import { parseAgentFile } from './agent-file.ts';
 import { GUARD_CLOSE, GUARD_OPEN, applyGuards } from './card-guards.ts';
@@ -400,4 +401,35 @@ export function resolveParams(a: Activity, raw: Readonly<Record<string, string>>
     else values[p.name] = text;
   }
   return { values, issues };
+}
+
+/** 拦法要看的:这个话题的消息(文件顺序)、这一轮的 job、应用算好的值 */
+export interface GateInput {
+  thread: readonly Pick<ConversationMessage, 'job' | 'from' | 'action' | 'section'>[];
+  job: string;
+  state: Readonly<Record<string, ActivityValue>>;
+}
+
+/** 整段放出来的那张 read 卡:三行以上 */
+const STORY_LINES = 3;
+
+/** 一条拦法过没过(规则名见 ACTIVITY_GATES;不认得的当过,activity check 会报) */
+export function gatePasses(rule: string, input: GateInput): boolean {
+  if (rule === '还能画') return typeof input.state.还能画 === 'number' && input.state.还能画 > 0;
+  if (rule === '连说过一遍') {
+    const at = input.thread.findIndex((m) => m.job === input.job);
+    const end = at < 0 ? input.thread.length - 1 : at;
+    // 这一轮之前的某一节放过整段(三行以上的 read 卡),它后面孩子开过口(继续、交答案不算)
+    for (let i = 0; i < end; i++) {
+      const story = input.thread[i].section?.cards.some((c) => c.kind === 'read' && Array.isArray((c.props as { segments?: unknown }).segments) && (c.props as { segments: unknown[] }).segments.length >= STORY_LINES);
+      if (story && input.thread.slice(i + 1, end + 1).some((m) => m.from === 'kid' && !m.action)) return true;
+    }
+    return false;
+  }
+  return true;
+}
+
+/** 按 activity 文件「应用拦的」的顺序,第一条没过的规则名;都过了 → null */
+export function failingGate(a: Pick<Activity, 'gates'>, input: GateInput): string | null {
+  return a.gates.find((g) => !gatePasses(g.rule, input))?.rule ?? null;
 }

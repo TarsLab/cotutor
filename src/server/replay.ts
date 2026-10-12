@@ -17,7 +17,8 @@ import { compactDiff, diffLines, type DiffRow } from '../lib/diff.ts';
 import { toolCalls, type ToolCall } from '../lib/transcript.ts';
 import type { ConversationMessage, Timing } from '../schema/index.ts';
 import { continueContext, homeButtonAt } from './home.ts';
-import { Runner, threadActivity } from './runner.ts';
+import { Runner } from './runner.ts';
+import { threadActivity } from './activity-state.ts';
 import { readIndex, readRunFile } from './store.ts';
 
 export const EVALS_DIR = 'evals';

@@ -384,6 +384,26 @@ export async function doctorWorkspace(
         const label: Record<string, string> = { latest: sk.machine ? '机器件,最新' : '出厂件,最新', upgradable: sk.machine ? '机器件,和包里不一样(改过或包已更新)' : `出厂件,基于 ${sk.basedOn},包已更新`, custom: `自定义(基于 ${sk.basedOn})`, untracked: '自定义(没有出厂记录)', missing: sk.machine ? '缺(机器件,老师或家长的技能靠它)' : '缺', unavailable: `${sk.source} 没装,没法拷` };
         push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'unavailable' && sk.state !== 'upgradable', required: Boolean(sk.machine), detail: `.claude/skills/${sk.name}/:${label[sk.state]}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor upgrade 换新版' : sk.state === 'unavailable' ? '仓库根 pnpm install' : undefined });
       }
+      // ---- activity:老师的家里 agents/<老师>/activities/<名>.md;出厂的看新旧,每份都过一遍 activity check ----
+      {
+        const { activityStatuses, checkActivities } = await import('./activities.ts');
+        const states = new Map((await activityStatuses(root)).map((s) => [s.key, s]));
+        const label: Record<string, string> = { latest: '出厂件,最新', upgradable: '出厂件,包已更新', custom: '自定义', untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
+        for (const s of states.values()) if (s.state === 'missing') push({ name: `activity.${s.key}`, ok: false, required: false, detail: `agents/${s.key.replace('/', '/activities/')}.md 不在`, fix: 'cotutor init 补拷' });
+        for (const r of await checkActivities(root, ws.config.tutors)) {
+          const key = `${r.tutor}/${r.name}`;
+          const st = states.get(key);
+          const fixes = r.issues.filter((i) => i.level === 'fix');
+          const origin = st ? label[st.state] + (st.basedOn && st.state !== 'latest' ? `(基于 ${st.basedOn})` : '') : '自家写的';
+          push({
+            name: `activity.${key}`,
+            ok: !fixes.length && st?.state !== 'upgradable',
+            required: false,
+            detail: fixes.length ? `${origin};${fixes.length} 条要改,第一条:${fixes[0].line ? `第 ${fixes[0].line} 行 ` : ''}${fixes[0].text}` : origin,
+            fix: fixes.length ? `cotutor activity check ${r.tutor} ${r.name} 看全` : st?.state === 'upgradable' ? 'cotutor upgrade 换新版' : undefined,
+          });
+        }
+      }
       // ---- 主题:孩子端板书的样子,themes/<kid.theme>/;清单要过契约、css 要在;坏了服务退回出厂 default,孩子端不会没样子 ----
       {
         const { readTheme, themeDir, themeStatuses } = await import('./themes.ts');

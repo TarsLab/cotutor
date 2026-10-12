@@ -10,6 +10,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, configTemplate, profileTemplate, shippedAgents, writeSchemaFile } from './skeleton.ts';
 import { installTutors } from './tutors.ts';
+import { installActivities } from './activities.ts';
 import { KOUBO_SHIM, TOOL_SHIM, installSkills, writeKouboShim, writeToolShim } from './skills.ts';
 import { setupKoubo } from './koubo-setup.ts';
 import { installThemes } from './themes.ts';
@@ -76,6 +77,8 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
     if (!(err instanceof ConfigError)) throw err;
   }
   steps.push(...(await installTutors(root, tutorNames)));
+  // 出厂 activity(老师的家里 agents/<老师>/activities/):缺的拷,有的不动
+  steps.push(...(await installActivities(root)));
   // 本机有代理、还没选过:问一句(老师进程拿不到代理 claude 会 403;src/lib/proxy.ts);没问成只是提示,进「下一步」
   let proxyHint: string | null = null;
   try {

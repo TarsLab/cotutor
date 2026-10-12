@@ -8,6 +8,7 @@
  *  plan          计划文件
  *  timetable     课程表(vault 里的 markdown 表)
  *  theme         主题清单(themes/<name>/theme.json:底色槽、字形槽、笔)
+ *  activity      activity 文件(agents/<老师>/activities/<名>.md:家长填的、应用算的、应用拦的、老师怎么带、工具人收到什么)
  * 运行时校验用 zod,失败信息经 explainIssues 变成修复指南。
  */
 export * from './issues.ts';
@@ -22,3 +23,4 @@ export * from './timetable.ts';
 export * from './json-schema.ts';
 export * from './theme.ts';
 export * from './home.ts';
+export * from './activity.ts';

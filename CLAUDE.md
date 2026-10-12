@@ -13,6 +13,7 @@
 ## 目录
 
 - `agents/*.md` 出厂老师文件:frontmatter 取两 CLI 公共子集,正文即系统提示;init 拷进 workspace,hash 记 `.cotutor/shipped.json`
+- `agents/<老师>/activities/<名>.md` 出厂 activity(孩子从首页一个按钮进去的一种做法):一节一个读者,init 拷进 workspace 同一位置(老师的家),hash 同上;形状在 `src/schema/activity.ts`,解析与检查在 `src/lib/activity.ts`;设计在 `docs/wip/activity设计.md`
 - `skills/<name>/` 出厂技能:cotutor-tutor(有脸的老师共同的守则,应用注入上下文包)、cotutor-board(由 `cards/板书怎么写.md` 与 `cards/*/card.md` 生成)、cotutor-vault、cotutor-analyze、cotutor-tune、cotutor-home(家长在 workspace 里排首页);不再出厂的机器件列在 `src/cli/skills.ts` 的 `RETIRED_SKILLS`,upgrade 时删
 - `cards/<kind>/` 卡的协议:`card.md` 八栏(例子即测试)+ `card.css`
 - `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`
@@ -27,6 +28,7 @@
 - `pnpm typecheck`;`pnpm test`;`node bin/cotutor.js --help`(bin 直跑 src,Node ≥ 22.18)
 - 改了 `cards/` 下的 md、`src/lib/*-doc.ts` 跑 `pnpm run gen:skills`(不跑 skills.test 会红);改了 `src/stage/` 跑 `pnpm run build:stage`(dist 不在 git,没打包时舞台开不了)
 - 改解析器或卡先过 `tests/board.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」;改 `src/clis/` 先过 `tests/clis.test.ts` 与 `tests/qwen.test.ts`(假 CLI 有 qwen 方言);改 `src/talk/` 先过 `tests/talk*.test.ts`(假百炼 `tests/_fake-realtime.ts`),页面走 `scripts/probe-talk-page.mjs`(加 `--real` 真连一次几分钱),Safari 的音频路径走 `scripts/probe-talk-webkit.mjs`(WebKit,假麦克风是振荡器),协议走 `scripts/probe-talk.mjs`
+- 改 activity 文件或 `src/lib/activity.ts` 先过 `tests/activity.test.ts`(出厂那份画家的画风要和 `paint.prompt` 缺省一字不差),workspace 里的跑 `cotutor activity check`
 - 改 `src/paint/` 或画图卡先过 `tests/paint.test.ts`(假百炼、假老师全流程),页面走 `scripts/probe-paint.mjs`;真画按张计费,一天最多 `paint.daily` 张
 - 改孩子端播放(谁念、谁停、谁打断谁)先改《工作流程.md》的仲裁表,再改 `tests/player.test.ts`,最后改 `kid-board.ts` 的 `step`;页面只 `dispatch`
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`

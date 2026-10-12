@@ -3,7 +3,7 @@ export const USAGE = `用法:
   cotutor init <slug> [--dir <path>] [--name <孩子名>] [--port <n>] [--proxy <地址> | --no-proxy]   建 ~/cotutor/<slug>/ 骨架(幂等补缺);本机有代理、还没选过就问老师走不走它
   cotutor proxy [on | off | <地址>] [--workspace <dir>] [--json]       老师进程(claude)走不走代理:写 cotutor.json 的 proxy,起 claude 时注进 HTTP(S)_PROXY(不靠 serve 从哪个终端起);不给参数看现状
   cotutor doctor [--workspace <dir>] [--json] [--live]                 逐项体检;--live 真起一次老师与配音(花一分钱)把 API 层的坑摆出来
-  cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件与 skill 换新版:没改过的直接换,改过的只报 diff(--force 才覆盖,原文留 .bak)
+  cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件、activity 与 skill 换新版:没改过的直接换,改过的只报 diff(--force <老师> 或 --force <老师>/<名> 才覆盖,原文留 .bak)
   cotutor upgrade --config [--dry-run] [--workspace <dir>]              cotutor.json 补缺:新出厂老师 / 运行时 / 命令模板旗标(只加缺的,你改过的值不动)
   cotutor add <老师名> --display <显示名> [--subject <学科>] [--avatar <emoji|图片相对路径>] [--hidden]   加一位自家的老师:出模板文件、进 cotutor.json、建目录(名字以 -tutor 结尾的是老师,figshot 给它做头像)
   cotutor add-theme <主题名> [--from <主题>] [--workspace <dir>]       加一个自家的主题:拷一份(缺省出厂的 default)到 themes/<主题名>/,改 cotutor.json 的 kid.theme 换过去
@@ -20,6 +20,7 @@ export const USAGE = `用法:
   cotutor home check [--published] [--json]                           检查首页草稿 home/draft.md(或已发布的那份):孩子会看到哪几张卡、每位老师的按钮、要改的与提醒(带行号);不花钱
   cotutor home publish [--force] [--from <文件>] [--json]              发布首页:检查 → 留历史 home/history/<id>.md → 写 home/published.json(孩子端只读它);有要改的不发,--force 丢掉那几张照发;--from 发另一份(如历史)
   cotutor home show [--json]                                          现在发布的是哪份、几天前、每个按钮被点了几次(哪天、哪个话题)
+  cotutor activity check [<老师> [<名>]] [--json]                      检查 activity 文件(agents/<老师>/activities/<名>.md):家长填的、应用算的、应用拦的、裁段、插槽、正文用的卡、第一句与收(带行号);不花钱
   cotutor mock [--port <n>] [--scenario normal|limit|offline|nopost] [--delay <ms>] [--http] [--listen omni]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace;nopost = 没写样子的素版;--listen omni 按住说话的原声真交给百炼 omni 听写,要 key)
   cotutor --version | --help
 workspace解析:--workspace > COTUTOR_WORKSPACE > cwd 或祖先有 cotutor.json > ~/.config/cotutor/config.json > ~/cotutor/ 下唯一的孩子目录

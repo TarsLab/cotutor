@@ -12,6 +12,7 @@ import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
 import { makeCert } from './cert.ts';
 import { addTutorFile, upgradeTutors } from './tutors.ts';
+import { checkActivities, upgradeActivities } from './activities.ts';
 import { configGapsOf, upgradeConfig } from './migrate.ts';
 import { portBusy } from './rename.ts';
 import { upgradeSkills, writeKouboShim, writeToolShim } from './skills.ts';
@@ -243,6 +244,7 @@ export async function main(argv: string[]): Promise<void> {
         }
         const force = typeof flags.force === 'string' ? [flags.force, ...positionals] : positionals;
         const steps = await upgradeTutors(root, { force });
+        const activitySteps = await upgradeActivities(root, { force });
         const skillSteps = await upgradeSkills(root);
         const themeSteps = await upgradeThemes(root);
         await writeToolShim(root);
@@ -250,7 +252,7 @@ export async function main(argv: string[]): Promise<void> {
         const kouboSteps = await setupKoubo(root);
         // 老师文件换新了,政策文件却不会自动多出新老师与新运行时(cotutor.json 是家长的),提一句
         const gaps = await configGapsOf(root);
-        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps, skills: skillSteps, themes: themeSteps, koubo: kouboSteps, configGaps: gaps }), null, 2)}\n`);
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps, activities: activitySteps, skills: skillSteps, themes: themeSteps, koubo: kouboSteps, configGaps: gaps }), null, 2)}\n`);
         else {
           const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', unavailable: '来源的包没装,没法换', retired: '不再出厂,删了' };
           for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' || s.action === 'unavailable' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.machine ? '(机器件)' : ''}\n`);
@@ -264,8 +266,38 @@ export async function main(argv: string[]): Promise<void> {
               if (s.diff.length > 40) process.stdout.write(`    …还有 ${s.diff.length - 40} 行\n`);
             }
           }
+          for (const s of activitySteps) {
+            process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} activity ${s.key.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
+            if (s.diff?.length) {
+              process.stdout.write(`    你的 vs 新版(- 你的 / + 新版),想用新版:cotutor upgrade --force ${s.key}\n`);
+              for (const l of s.diff.slice(0, 40)) process.stdout.write(`    ${l}\n`);
+              if (s.diff.length > 40) process.stdout.write(`    …还有 ${s.diff.length - 40} 行\n`);
+            }
+          }
           if (gaps.length) process.stdout.write(`! 配置有 ${gaps.length} 项可补(新出厂老师 / 运行时 / 命令模板旗标):cotutor upgrade --config --dry-run 先看\n`);
         }
+        return;
+      }
+      case 'activity': {
+        const sub = positionals[0];
+        if (sub !== 'check') throw new UsageError(`activity 后面跟 check,如 cotutor activity check chinese-tutor 你说我画。\n${USAGE}`);
+        const ws = loadWorkspace(workspace);
+        const [, tutor, name] = positionals;
+        const results = await checkActivities(ws.root, ws.config.tutors, { tutor, name });
+        if (!results.length) throw new UsageError(tutor ? `agents/${tutor}/activities/ 里没有${name ? ` ${name}.md` : ' activity 文件'}` : '这个 workspace 里还没有 activity 文件(cotutor upgrade 补出厂的)');
+        const fixes = results.reduce((n, r) => n + r.issues.filter((i) => i.level === 'fix').length, 0);
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ ok: fixes === 0, activities: results.map((r) => ({ tutor: r.tutor, name: r.name, file: r.file, issues: r.issues, params: r.activity?.params ?? [], state: r.activity?.state ?? [], gates: r.activity?.gates ?? [], tools: r.activity?.tools.map((t) => t.tool) ?? [] })) }), null, 2)}\n`);
+        else {
+          for (const r of results) {
+            const bad = r.issues.filter((i) => i.level === 'fix').length;
+            const a = r.activity;
+            process.stdout.write(`${bad ? '✗' : '✓'} ${r.tutor}/${r.name}  ${redactHome(r.file)}\n`);
+            if (a) process.stdout.write(`    家长填的:${a.params.map((p) => `${p.name}(${p.type}${p.optional ? ',可空' : ''}${p.default !== undefined ? `,缺省 ${p.default}` : ''})`).join(' ') || '无'} · 应用算的:${a.state.map((x) => x.name).join(' ') || '无'} · 应用拦的:${a.gates.map((g) => g.rule).join(' ') || '无'} · 工具人:${a.tools.map((t) => t.tool).join(' ') || '无'}\n`);
+            for (const i of r.issues) process.stdout.write(`    ${i.level === 'fix' ? '要改' : '提醒'}${i.line ? ` 第 ${i.line} 行` : ''}:${i.text}\n`);
+          }
+          process.stdout.write(fixes ? `有 ${fixes} 条要改\n` : '都对得上\n');
+        }
+        if (fixes) process.exitCode = 1;
         return;
       }
       case 'cert': {

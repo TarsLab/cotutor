@@ -22,6 +22,8 @@ export interface ShippedManifest {
   skills?: Record<string, { hash: string; version: string }>;
   /** 出厂主题(themes/<name>/)的目录 hash,同一套机制(src/cli/themes.ts) */
   themes?: Record<string, { hash: string; version: string }>;
+  /** 出厂 activity(agents/<老师>/activities/<名>.md,键是「老师/名」),同一套机制(src/cli/activities.ts) */
+  activities?: Record<string, { hash: string; version: string }>;
   version: string;
   tutors: Record<string, { hash: string; version: string }>;
 }
@@ -31,8 +33,8 @@ export const sha256 = (text: string): string => `sha256:${createHash('sha256').u
 export async function readManifest(root: string): Promise<ShippedManifest> {
   try {
     const raw = JSON.parse(await readFile(join(root, SHIPPED_FILE), 'utf8')) as Partial<ShippedManifest>;
-    // skills / themes 也要带回来,不然 tutors 这边一写就把它们抹了
-    return { version: raw.version ?? '0', tutors: raw.tutors ?? {}, ...(raw.skills ? { skills: raw.skills } : {}), ...(raw.themes ? { themes: raw.themes } : {}) };
+    // skills / themes / activities 也要带回来,不然 tutors 这边一写就把它们抹了
+    return { version: raw.version ?? '0', tutors: raw.tutors ?? {}, ...(raw.skills ? { skills: raw.skills } : {}), ...(raw.themes ? { themes: raw.themes } : {}), ...(raw.activities ? { activities: raw.activities } : {}) };
   } catch {
     return { version: '0', tutors: {} };
   }

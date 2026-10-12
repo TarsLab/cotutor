@@ -34,6 +34,8 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   const full = parseCard('paint', '题：图上画了谁？\n词：播种，羞愧；满满\n角色：小熊：棕色\n1．早上,小熊播种。\n2）中午,小猴睡觉。\n第3幅：夏天。').card;
   const fp = full.props as { panels: string[]; cast: { name: string; look: string }[]; ask: string; words: string[] };
   check('全角冒号、逗号、分号、句点、括号都认(qwen 爱写全角)', full.kind === 'paint' && fp.ask === '图上画了谁？' && fp.words.join() === '播种,羞愧,满满' && fp.cast[0]?.look === '棕色' && fp.panels.length === 3, JSON.stringify(full));
+  const bare = parseCard('paint', '角色: 小熊\n角色: 小猴:穿红背心\n1. 小熊播种。').card;
+  check('角色只写名字也认(孩子没说样子);画家那段只列名字', bare.kind === 'paint' && JSON.stringify((bare.props as { cast: unknown }).cast) === JSON.stringify([{ name: '小熊' }, { name: '小猴', look: '穿红背心' }]) && paintPrompt(bare.props as never).includes('\n- 小熊\n- 小猴:穿红背心'), JSON.stringify(bare));
   const prompt = paintPrompt(p);
   check('四格:2×2、圆圈数字、画风缺省、角色一行一个、第 n 格', prompt.startsWith('一张四格连环画,四格按 2×2 排') && prompt.includes(PAINT_DEFAULT.prompt[0]) && prompt.includes('- 小熊:棕色,戴黄草帽') && prompt.includes('第 4 格:小猴低着头,脸红红的。') && !prompt.includes('播种、羞愧') && !prompt.includes('图上画了谁'), prompt);
   check('题干与词语宝库不进画(画面里不要字)', !prompt.includes('题') && !prompt.includes('词语宝库'));

@@ -26,7 +26,7 @@ export function paintSize(n: number, size: string): string {
 export function paintPrompt(p: Pick<PaintProps, 'panels' | 'cast'>, style: readonly string[] = PAINT_PROMPT_DEFAULT): string {
   const n = p.panels.length;
   const parts = [paintLayout(n), style.join('\n')];
-  if (p.cast?.length) parts.push([`同一个角色在${n > 1 ? '每一格里' : '画里'}长相、颜色、衣服都照这样画:`, ...p.cast.map((c) => `- ${c.name}:${c.look}`)].join('\n'));
+  if (p.cast?.length) parts.push([`同一个角色在${n > 1 ? '每一格里' : '画里'}长相、颜色、衣服都照这样画:`, ...p.cast.map((c) => (c.look ? `- ${c.name}:${c.look}` : `- ${c.name}`))].join('\n'));
   parts.push(n > 1 ? p.panels.map((t, i) => `第 ${i + 1} 格:${t}`).join('\n') : `画面:${p.panels[0]}`);
   return parts.join('\n\n');
 }

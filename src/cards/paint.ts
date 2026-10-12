@@ -17,8 +17,8 @@ export const PAINT_WORDS_MAX = 8;
 
 export const PaintCastSchema = z.object({
   name: z.string().min(1),
-  /** 样子、颜色、衣服 */
-  look: z.string().min(1),
+  /** 样子、颜色、衣服;孩子没说就不写(只有名字,画家照名字画,每幅一样就行) */
+  look: z.string().min(1).optional(),
 });
 export type PaintCast = z.infer<typeof PaintCastSchema>;
 
@@ -59,9 +59,9 @@ export const paint: CardKind<PaintProps> = {
         if (!v) continue;
         if (f[1].startsWith('题')) ask = v;
         else if (f[1] === '角色') {
+          // 「名字:样子」;孩子没说样子就只写名字(2026-10-12 qwen 照「只写孩子说过的」写了「角色: 小熊」,整张卡退成文字)
           const m = /^([^:\uFF1A]+)[:\uFF1A]\s*(.+)$/.exec(v);
-          if (!m) throw new Error(`角色要写成「名字:样子」:${v}`);
-          cast.push({ name: m[1].trim(), look: m[2].trim() });
+          cast.push(m ? { name: m[1].trim(), look: m[2].trim() } : { name: v });
         } else words = v.split(WORD_SEP).map((w) => w.trim()).filter(Boolean);
         continue;
       }

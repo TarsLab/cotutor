@@ -14,7 +14,7 @@ import { spawn } from 'node:child_process';
 import { lecturePack, readLecture, storedMarks, type IncomingMark } from './lecture.ts';
 import { closeSync, createWriteStream, existsSync, openSync, writeSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, isAbsolute, join, relative, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
 import { addMessage, applyRun, cardId, lastJobOf, changedCards, conversationFiles, jobId, localDate, localMinute, sessionFor, threads } from '../lib/conversation.ts';
 import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
@@ -35,7 +35,7 @@ import { getRuntime, planRun, runtimeUses, stallPrompt, type RunPlan, boardPrelo
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
+import { ACTIVITY_RUN_DIR, BOARD_CARD_KINDS, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { updateVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
 import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPrompt, type MemoryLine } from '../lib/vault-notes.ts';
@@ -132,7 +132,7 @@ const MANY = 100_000;
  * + 参考路径 + 本周计划里本老师的行 + 最近 14 天日记里本学科的「- 观察:」行。
  * 守则与笔记原文总是带上;同一话题里没改过的由 send 换成「未变」。
  */
-export async function gatherContext(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; focus?: Focus }, report?: PackReport): Promise<ContextPack> {
+export async function gatherContext(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; focus?: Focus; agent?: string; kinds?: readonly string[] }, report?: PackReport): Promise<ContextPack> {
   const t = ws.config.tutors[tutor];
   const policy = resolvePolicy(ws.config, tutor);
   const pack: ContextPack = { at: localMinute(input.at), focus: input.focus, plan: [], recent: [] };
@@ -146,14 +146,15 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
     /* 没有课程表:不带 slot */
   }
   const { notes, files } = await scanVault(ws);
-  const pick = pickNotes(notes, files, { date: localDate(input.at), subject: t?.subject, agent: tutor });
+  // activity 话题的记忆是它自己的(agent: <老师>/<activity>,《wip/activity设计.md》拍板 14);档案、入口文件、日记观察照旧共用
+  const pick = pickNotes(notes, files, { date: localDate(input.at), subject: t?.subject, agent: input.agent ?? tutor });
   const limit = policy.contextPack.entryChars;
   if (pick.semester) pack.semester = pick.semester;
   pack.notes = [];
   // 有脸的老师的公共守则:机器技能 cotutor-tutor 的原文,排在家长笔记前面(不截;同一话题没改过由 send 换成「未变」)
   if (takesTutorRules(tutor)) {
     try {
-      pack.notes.push({ role: 'rules', path: TUTOR_RULES_PATH, text: tutorRulesBody(await readFile(join(ws.root, TUTOR_RULES_PATH), 'utf8'), tutorCardKinds(ws.config.tutors[tutor]?.cards) ?? undefined) });
+      pack.notes.push({ role: 'rules', path: TUTOR_RULES_PATH, text: tutorRulesBody(await readFile(join(ws.root, TUTOR_RULES_PATH), 'utf8'), input.kinds ?? tutorCardKinds(ws.config.tutors[tutor]?.cards) ?? undefined) });
       pack.rules = TUTOR_RULES_PATH;
     } catch {
       pack.rules = `缺:${TUTOR_RULES_PATH} 不在(cotutor upgrade 补),照你老师文件里的做`;
@@ -195,7 +196,7 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
  * 「老师怎么带」那节(按参数与这个话题的卡裁过、剥了注释)+ 这个 activity 多带的卡的写法,作为一条笔记放进话题第一条(<cotutor-activity>),
  * 续话题没改过写「未变」(同守则)。文件不在、读不了 → activityGuide 写「缺」,老师照自己的文件做。返回给这轮的提醒。
  */
-export async function attachActivity(ws: Workspace, tutor: string, pack: ContextPack, run: ActivityRun, where: { date: string; messages: readonly ConversationMessage[]; thread: string; now: number }): Promise<string[]> {
+export async function attachActivity(ws: Workspace, tutor: string, pack: ContextPack, run: ActivityRun, where: { date: string; messages: readonly ConversationMessage[]; thread: string; now: number }, inSystem = false): Promise<string[]> {
   pack.activity = { name: run.name, params: run.params, state: {} };
   const path = relative(ws.root, activityFile(ws.root, tutor, run.name)).split(sep).join('/');
   const text = await readFile(join(ws.root, path), 'utf8').catch(() => null);
@@ -205,6 +206,11 @@ export async function attachActivity(ws: Workspace, tutor: string, pack: Context
   }
   const a = parseActivity(text).activity;
   pack.activity.state = await activityState(ws, tutor, where.date, where.messages, where.thread, run, a, where.now);
+  // activity 已经是这个会话的系统提示(拍板 13):不再在第一条里带原文
+  if (inSystem) {
+    pack.activityGuide = ACTIVITY_IN_SYSTEM;
+    return [];
+  }
   const mine = tutorCardKinds(ws.config.tutors[tutor]?.cards);
   const cards = activityCards(a, mine ?? undefined);
   const body = renderTutorSection(a, { params: run.params, cards });
@@ -221,6 +227,49 @@ export async function attachActivity(ws: Workspace, tutor: string, pack: Context
 
 /** 按老师裁的板书写法落在哪(相对 workspace 根;机器文件,内容变了文件名跟着变) */
 export const TUTOR_BOARD_DIR = '.cotutor/board';
+
+/** activity 在系统提示里时,上下文包 activityGuide 那一行 */
+export const ACTIVITY_IN_SYSTEM = '已在你的系统提示里(这个话题的 activity,照它带)';
+
+/**
+ * activity 话题的系统提示(《wip/activity设计.md》九点五、拍板 13–14):不读老师文件,人设与做法都是 activity 自己的。
+ *   body   「老师怎么带」按参数与这个话题的卡裁好、剥了注释
+ *   kinds  这个话题的卡:activity 头上的 cards 加 text(不并老师的)
+ *   guide  只讲这几种卡的板书写法,写到 .cotutor/board/
+ *   agent / agentsFile  claude 的 --agent / --agents:现生成的 agent 定义(prompt = body),名字带内容 hash,改了就换
+ *   memory 这个 activity 自己的记忆:agent: <老师>/<activity>,文件名 <老师显示名>·<activity>
+ * activity 文件不在、没有「老师怎么带」→ null(退回老师文件)。
+ */
+export interface ActivityParts {
+  body: string;
+  kinds: string[];
+  guide: { body: string; path: string };
+  agent: string;
+  agentsFile: string;
+  memory: { agent: string; display: string };
+}
+
+export async function activityParts(ws: Workspace, tutor: string, run: ActivityRun): Promise<ActivityParts | null> {
+  const a = await readActivity(ws, tutor, run.name);
+  if (!a?.tutor) return null;
+  const kinds = [...new Set(['text', ...a.cards.filter((k) => (BOARD_CARD_KINDS as readonly string[]).includes(k))])];
+  const body = renderTutorSection(a, { params: run.params, cards: kinds }) ?? '';
+  const guideBody = boardGuideFor(kinds);
+  const guide = { body: guideBody, path: `${TUTOR_BOARD_DIR}/${tutor}-${textHash(guideBody).slice(0, 8)}.md` };
+  const agent = `${tutor}-a${textHash(body).slice(0, 8)}`;
+  const agentsFile = join(ws.root, ACTIVITY_RUN_DIR, `${agent}.json`);
+  const display = ws.config.tutors[tutor]?.display ?? tutor;
+  const def = `${JSON.stringify({ [agent]: { description: `${display}的 activity「${run.name}」`, prompt: body } }, null, 2)}\n`;
+  await writeIfChanged(join(ws.root, guide.path), guideBody);
+  await writeIfChanged(agentsFile, def);
+  return { body, kinds, guide, agent, agentsFile, memory: { agent: `${tutor}/${run.name}`, display: `${display}·${run.name}` } };
+}
+
+async function writeIfChanged(file: string, text: string): Promise<void> {
+  if ((await readFile(file, 'utf8').catch(() => null)) === text) return;
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, text);
+}
 
 /**
  * 这位老师的板书写法:正文 + 相对 workspace 根的路径(给 {boardFile} 与上下文包)。
@@ -273,12 +322,19 @@ export async function attachBoardGuide(ws: Workspace, tutor: string, pack: Conte
  * 老师正文({agentBody})与系统提示({systemBody} = 正文 + 板书写法)、板书写法的文件({boardFile}):模板用到才读。send 与预热同一份,预热起的进程 argv 才对得上。
  * 顺手把板书写法挂到上下文包上(attachBoardGuide)。没递板书写法(工具人、板书关了)的 {boardFile} 照旧是出厂的 SKILL.md。
  */
-async function systemParts(ws: Workspace, tutor: string, runtime: Runtime, policy: Policy, pack: ContextPack): Promise<{ agentBody?: string; systemBody?: string; boardFile: string }> {
+async function systemParts(ws: Workspace, tutor: string, runtime: Runtime, policy: Policy, pack: ContextPack, act: ActivityParts | null = null): Promise<{ agentBody?: string; systemBody?: string; boardFile: string; agent: string; agentsFile?: string; activityInSystem: boolean }> {
   const wantsSystemBody = runtimeUses(runtime, '{systemBody}');
+  // activity 话题:系统提示换成 activity 的(qwen 走 {systemBody},claude 走 --agents);模板两样都没有就退回老师文件 + 第一条带原文
+  if (act && takesTutorRules(tutor) && (wantsSystemBody || runtimeUses(runtime, '{agentsFile}'))) {
+    const boardOff = policy.board === 'off';
+    if (!boardOff) pack.boardGuide = BOARD_GUIDE_IN_SYSTEM;
+    const systemBody = boardOff ? act.body : `${act.body}\n\n${act.guide.body}`;
+    return { agentBody: act.body, systemBody, boardFile: join(ws.root, boardOff ? BOARD_GUIDE_PATH : act.guide.path), agent: runtimeUses(runtime, '{agentsFile}') ? act.agent : tutor, agentsFile: act.agentsFile, activityInSystem: true };
+  }
   const agentBody = runtimeUses(runtime, '{agentBody}') || wantsSystemBody ? await readAgentBody(ws, tutor) : undefined;
   const guide = await attachBoardGuide(ws, tutor, pack, { preloaded: boardPreloaded(runtime), boardOff: policy.board === 'off' });
   const systemBody = wantsSystemBody && agentBody !== undefined ? (guide ? `${agentBody}\n\n${guide.body}` : agentBody) : undefined;
-  return { agentBody, systemBody, boardFile: join(ws.root, guide?.path ?? BOARD_GUIDE_PATH) };
+  return { agentBody, systemBody, boardFile: join(ws.root, guide?.path ?? BOARD_GUIDE_PATH), agent: tutor, activityInSystem: false };
 }
 
 /** 这轮带的笔记版本:role → `路径@hash`(记进消息;同一话题下一轮对得上就不再带原文) */
@@ -312,14 +368,15 @@ export async function packDryRun(ws: Workspace, tutor: string, input: { from: Me
   const t = ws.config.tutors[tutor];
   if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
   const report = {} as PackReport;
-  const pack = await gatherContext(ws, tutor, { from: input.from, at: input.at }, report);
+  const act = input.activity ? await activityParts(ws, tutor, input.activity) : null;
+  const pack = await gatherContext(ws, tutor, { from: input.from, at: input.at, ...(act ? { agent: act.memory.agent, kinds: act.kinds } : {}) }, report);
   const policy = resolvePolicy(ws.config, tutor);
   if (policy.board === 'off') pack.board = 'off';
   const { runtime } = getRuntime(ws.config, t.runtime);
   // 和 send 同一条规矩:孩子的话不带工具时,只有工具才用得上的路径不进包
   if (policy.tools !== 'on' && input.from === 'kid' && controlsTools(runtime)) { delete pack.refs; delete pack.vault; }
-  await attachBoardGuide(ws, tutor, pack, { preloaded: boardPreloaded(runtime), boardOff: policy.board === 'off' });
-  if (input.activity) await attachActivity(ws, tutor, pack, input.activity, { date: localDate(input.at), messages: [], thread: '', now: input.at.getTime() });
+  const parts = await systemParts(ws, tutor, runtime, policy, pack, act);
+  if (input.activity) await attachActivity(ws, tutor, pack, input.activity, { date: localDate(input.at), messages: [], thread: '', now: input.at.getTime() }, parts.activityInSystem);
   return { prompt: buildContextPack(pack, input.text, policy.contextPack), pack, report };
 }
 
@@ -417,10 +474,13 @@ export class Runner {
     const session = thread ? sessionFor(index, thread) : null;
     const policy = resolvePolicy(ws.config, tutor);
     const parts = await systemParts(ws, tutor, runtime, policy, { at: '', plan: [], recent: [] });
-    const vars = { agent: tutor, prompt: '', ...parts, runtime: t.runtime, effort: policy.effort, tools: policy.tools === 'on' ? ('on' as const) : ('off' as const), root: ws.root, readDirs: readDirsOf(ws) };
-    // 预热的是孩子的下一句:工具照孩子那轮填(带照片的对不上,那轮冷起)
-    const fresh = planRun(ws.config, { session: null }, vars);
-    const resume = session ? planRun(ws.config, { session }, vars) : null;
+    const base = { prompt: '', runtime: t.runtime, effort: policy.effort, tools: policy.tools === 'on' ? ('on' as const) : ('off' as const), root: ws.root, readDirs: readDirsOf(ws) };
+    // 预热的是孩子的下一句:工具照孩子那轮填(带照片的对不上,那轮冷起)。新话题照老师文件;接着的话题是 activity 的,照它的系统提示
+    const fresh = planRun(ws.config, { session: null }, { ...base, ...parts });
+    const run = thread ? threadActivity(index.messages, thread) : null;
+    const act = run ? await activityParts(ws, tutor, run) : null;
+    const resumeParts = act ? await systemParts(ws, tutor, runtime, policy, { at: '', plan: [], recent: [] }, act) : parts;
+    const resume = session ? planRun(ws.config, { session }, { ...base, ...resumeParts }) : null;
     const cwd = join(ws.dirs.agents, tutor);
     await mkdir(cwd, { recursive: true });
     // 读索引这会儿孩子可能已经开口了:这轮在跑就不起(它收尾时会再起)
@@ -468,12 +528,14 @@ export class Runner {
     const fresh = thread === job;
     const session = fresh ? null : sessionFor(index, thread);
     const { runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
-    const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus });
+    // activity:新话题照这条带的,续话题照话题第一条记的。系统提示、卡、记忆都是它的(记账轮也是,接着同一个会话);上下文包的 activity 段记账轮不带
+    const threadRun = fresh ? (input.activity ?? null) : threadActivity(index.messages, thread);
+    const act = threadRun ? await activityParts(ws, tutor, threadRun) : null;
+    const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus, ...(act ? { agent: act.memory.agent, kinds: act.kinds } : {}) });
     const policy = resolvePolicy(ws.config, tutor);
-    const { agentBody, systemBody, boardFile } = await systemParts(ws, tutor, runtime, policy, gathered);
-    // activity:新话题照这条带的,续话题照话题第一条记的;记账那种系统轮不带
-    const activityRun = input.bookkeep ? null : fresh ? (input.activity ?? null) : threadActivity(index.messages, thread);
-    const activityWarn = activityRun ? await attachActivity(ws, tutor, gathered, activityRun, { date, messages: index.messages, thread, now: now.getTime() }) : [];
+    const { agentBody, systemBody, boardFile, agent, agentsFile, activityInSystem } = await systemParts(ws, tutor, runtime, policy, gathered, act);
+    const activityRun = input.bookkeep ? null : threadRun;
+    const activityWarn = activityRun ? await attachActivity(ws, tutor, gathered, activityRun, { date, messages: index.messages, thread, now: now.getTime() }, activityInSystem) : [];
     // 家长笔记原文:新会话整篇带;续会话时这个话题带过、没改的只写「未变」
     const notes = noteVersions(gathered);
     const pack = session ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
@@ -510,7 +572,7 @@ export class Runner {
     const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
     if (continued) pack.continue = continued;
     const prompt = buildContextPack(pack, text, policy.contextPack);
-    const plan = planRun(ws.config, { session }, { agent: tutor, prompt, agentBody, systemBody, boardFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
+    const plan = planRun(ws.config, { session }, { agent, prompt, agentBody, systemBody, boardFile, agentsFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
 
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
     let voice: { audio: string; seconds: number } | undefined;
@@ -528,7 +590,7 @@ export class Runner {
     const spare = this.spares.claim(tutor, plan.resume ? 'resume' : 'fresh', { argv: plan.argv, env: plan.env, cwd: join(ws.dirs.agents, tutor), date, lastJob: plan.resume ? lastJobOf(index, thread) : null });
     const active: Active = { job, date, partial: null, done: Promise.resolve(started) };
     // 断流后接着跑:同一运行时 resume 这个会话,消息换成 stallPrompt
-    const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent: tutor, prompt: stallPrompt(open), agentBody, systemBody, boardFile, runtime: plan.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
+    const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent, prompt: stallPrompt(open), agentBody, systemBody, boardFile, agentsFile, runtime: plan.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
     active.done = this.spawn(ws, tutor, date, job, plan, policy, active, resumePlan, spare).finally(() => {
       this.active.delete(tutor);
       // 孩子 / 家长这轮完了,马上起好下一轮的进程;系统轮(记账、整理记忆)之后孩子多半不在,不起
@@ -601,11 +663,11 @@ export class Runner {
   }
 
   /** 记忆段收尾:讲课的轮每轮最多 MEMORY_MAX_PER_TURN 条,多的丢(整理轮 max = null 不限);写不进(vault 不在、同名文件没属性)进提醒,不影响这轮 */
-  private async settleMemory(ws: Workspace, tutor: string, date: string, items: string[], max: number | null): Promise<{ changes: string[]; lines: MemoryLine[]; warnings: string[] }> {
+  private async settleMemory(ws: Workspace, tutor: string, date: string, items: string[], max: number | null, owner?: { agent: string; display: string }): Promise<{ changes: string[]; lines: MemoryLine[]; warnings: string[] }> {
     const warnings: string[] = [];
     if (max !== null && items.length > max) warnings.push(`记忆:一轮最多记 ${max} 条,丢了 ${items.length - max} 条:${items.slice(max).join(';')}`);
     try {
-      const r = await updateVaultMemory(ws, tutor, ws.config.tutors[tutor]?.display ?? tutor, max === null ? items : items.slice(0, max), date);
+      const r = await updateVaultMemory(ws, owner?.agent ?? tutor, owner?.display ?? ws.config.tutors[tutor]?.display ?? tutor, max === null ? items : items.slice(0, max), date);
       return { changes: r.changes, lines: r.lines, warnings: [...warnings, ...r.warnings] };
     } catch (err) {
       return { changes: [], lines: [], warnings: [...warnings, `记忆没写进去:${err instanceof Error ? err.message : String(err)}`] };
@@ -863,18 +925,18 @@ export class Runner {
     const reread = takesTutorRules(tutor) && policy.board !== 'off' ? boardGuideReads(tools) : [];
     if (reread.length) kidView.warnings.push(`板书写法已经递给老师了,这轮它还是用工具去读了一遍(${reread.join(';')}):多一次模型来回。cotutor doctor 的 runtime.*.board 看这个运行时走的哪条递法`);
     // 清单外的卡(《卡片协议.md》「谁拿到哪些卡」):照常解析、照常显示,只在这轮记一条,家长据此调清单
-    // activity 话题里,那个 activity 带的卡(你说我画的 paint)也算在清单里
+    // activity 话题的卡是 activity 自己的(加 text);别的话题照老师的清单
     const jobAt = latest.messages.findIndex((m) => m.job === job);
     const run = jobAt >= 0 ? threadActivity(latest.messages, threads(latest.messages)[jobAt]) : null;
-    const actCards = run ? ((await readActivity(ws, tutor, run.name))?.cards ?? []) : [];
-    const kinds = tutorCardKinds(ws.config.tutors[tutor]?.cards);
-    const outside = kinds && kidView.section ? [...new Set(kidView.section.cards.map((c) => c.kind).filter((k) => !kinds.includes(k) && !actCards.includes(k)))] : [];
-    if (outside.length) kidView.warnings.push(`板书里有清单外的卡:${outside.join('、')}(照常显示;要它就加进 cotutor.json tutors.${tutor}.cards)`);
+    const actFile = run ? await readActivity(ws, tutor, run.name) : null;
+    const kinds = actFile ? ['text', ...actFile.cards] : tutorCardKinds(ws.config.tutors[tutor]?.cards);
+    const outside = kinds && kidView.section ? [...new Set(kidView.section.cards.map((c) => c.kind).filter((k) => !kinds.includes(k)))] : [];
+    if (outside.length) kidView.warnings.push(actFile ? `板书里有这个 activity 清单外的卡:${outside.join('、')}(照常显示;要它就加进 agents/${tutor}/activities/${run!.name}.md 头上的 cards)` : `板书里有清单外的卡:${outside.join('、')}(照常显示;要它就加进 cotutor.json tutors.${tutor}.cards)`);
     let next = applyRun(latest, job, { transcript, kidView, runtime: plan.runtime, timing, tools });
     // 「## 记忆」段:增 / 改 / 删落进 vault 里这位 agent 的记忆文件(回放不写;整理轮不限条数;家长视图看 remembered 与提醒;memoryLines 留给删话题时撤)
     if (kidView.memory.length) {
       const asked = latest.messages.find((m) => m.job === job);
-      const r = asked?.replayOf || asked?.eval ? { changes: [] as string[], lines: [] as MemoryLine[], warnings: [asked.eval ? 'eval 不写记忆' : '回放不写记忆'] } : await this.settleMemory(ws, tutor, date, kidView.memory, asked?.tidy ? null : MEMORY_MAX_PER_TURN);
+      const r = asked?.replayOf || asked?.eval ? { changes: [] as string[], lines: [] as MemoryLine[], warnings: [asked.eval ? 'eval 不写记忆' : '回放不写记忆'] } : await this.settleMemory(ws, tutor, date, kidView.memory, asked?.tidy ? null : MEMORY_MAX_PER_TURN, actFile && run ? { agent: `${tutor}/${run.name}`, display: `${ws.config.tutors[tutor]?.display ?? tutor}·${run.name}` } : undefined);
       if (r.changes.length || r.warnings.length) next = { ...next, messages: next.messages.map((m) => (m.job === job ? { ...m, ...(r.changes.length ? { remembered: r.changes } : {}), ...(r.lines.length ? { memoryLines: r.lines } : {}), ...(r.warnings.length ? { warnings: [...(m.warnings ?? []), ...r.warnings] } : {}) } : m)) };
     }
     // 记账那轮:「## 记账」段落进日记(老师不直接写 vault;写了什么、没写成为什么都在这条的 warnings 里)

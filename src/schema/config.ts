@@ -279,7 +279,7 @@ export const CotutorConfigSchema = z
     vault: VaultPolicySchema.default({ keepScore: 4 }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4)'),
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 30 条 / 板书 auto / 观察 10 条、计划 10 行、原文 4000 字)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
-    runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {systemBody} {boardFile} {prompt} {session};模型、预算、时限写在这里'),
+    runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {systemBody} {boardFile} {agentsFile} {prompt} {session};模型、预算、时限写在这里'),
     proxy: z
       .union([z.string().regex(/^(https?|socks5h?):\/\/\S+$/), z.literal(false)])
       .optional()
@@ -364,10 +364,14 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
     }));
 }
 
+/** activity 话题现生成的 agent 定义与板书写法放在这(机器文件);none.json 是别的话题 --agents 指的空定义 */
+export const ACTIVITY_RUN_DIR = '.cotutor/activity';
+export const NO_AGENTS_FILE = `${ACTIVITY_RUN_DIR}/none.json`;
+
 /** 运行时模板填占位符;{tools} 填适配器给的工具名单(src/clis/ 的 fillArgs 先算好,没给就填空);{agentBody} / {systemBody} / {boardFile} 只在给了值时替换,否则原样留着(doctor 会报);{effort} 没给用出厂缺省(课文件排版这类不认老师政策的调用) */
 export function fillRuntime(
   argv: readonly string[],
-  vars: { agent: string; prompt: string; session?: string; agentBody?: string; systemBody?: string; boardFile?: string; effort?: Policy['effort']; tools?: string },
+  vars: { agent: string; prompt: string; session?: string; agentBody?: string; systemBody?: string; boardFile?: string; agentsFile?: string; effort?: Policy['effort']; tools?: string },
 ): string[] {
   return argv.map((a) =>
     a
@@ -377,6 +381,7 @@ export function fillRuntime(
       .replaceAll('{agentBody}', vars.agentBody ?? '{agentBody}')
       .replaceAll('{systemBody}', vars.systemBody ?? '{systemBody}')
       .replaceAll('{boardFile}', vars.boardFile ?? '{boardFile}')
+      .replaceAll('{agentsFile}', vars.agentsFile ?? '{agentsFile}')
       .replaceAll('{effort}', vars.effort ?? POLICY_DEFAULTS.effort)
       .replaceAll('{tools}', vars.tools ?? ''),
   );

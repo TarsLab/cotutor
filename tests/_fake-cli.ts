@@ -34,7 +34,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === '--core-tools') coreTools = argv[++i].split(',').filter(Boolean);
   else if (argv[i] === '--exclude-tools') excludeTools = argv[++i].split(',').filter(Boolean);
   else if (argv[i] === '-m' || argv[i] === '--approval-mode' || argv[i] === '--max-wall-time') i++;
-  else if (argv[i] === '--model' || argv[i] === '--disallowedTools' || argv[i] === '--max-budget-usd' || argv[i] === '--setting-sources' || argv[i] === '--tools' || argv[i] === '--effort' || argv[i] === '--system-prompt' || argv[i] === '--append-system-prompt-file') i++;
+  else if (argv[i] === '--model' || argv[i] === '--disallowedTools' || argv[i] === '--max-budget-usd' || argv[i] === '--setting-sources' || argv[i] === '--tools' || argv[i] === '--effort' || argv[i] === '--system-prompt' || argv[i] === '--append-system-prompt-file' || argv[i] === '--agents') i++;
   else if (argv[i] === '--disable-slash-commands') continue;
   else rest.push(argv[i]);
 }

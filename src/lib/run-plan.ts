@@ -6,7 +6,8 @@
 import { adapterFor, fillArgs } from '../clis/index.ts';
 import { streamJsonUserMessage } from '../clis/stream-json.ts';
 import type { ToolSet } from '../clis/types.ts';
-import { POLICY_DEFAULTS, type ConversationIndex, type CotutorConfig, type Policy, type Runtime } from '../schema/index.ts';
+import { join } from 'node:path';
+import { NO_AGENTS_FILE, POLICY_DEFAULTS, type ConversationIndex, type CotutorConfig, type Policy, type Runtime } from '../schema/index.ts';
 
 export interface RunPlan {
   /** 运行时名(runtimes 里的键) */
@@ -55,7 +56,7 @@ export function boardPreloaded(runtime: Runtime): boolean {
 export function planRun(
   config: CotutorConfig,
   index: Pick<ConversationIndex, 'session'>,
-  vars: { agent: string; prompt: string; agentBody?: string; systemBody?: string; boardFile?: string; runtime?: string; effort?: Policy['effort']; tools?: ToolSet; root?: string; readDirs?: readonly string[] },
+  vars: { agent: string; prompt: string; agentBody?: string; systemBody?: string; boardFile?: string; agentsFile?: string; runtime?: string; effort?: Policy['effort']; tools?: ToolSet; root?: string; readDirs?: readonly string[] },
 ): RunPlan {
   const { name, runtime } = getRuntime(config, vars.runtime);
   const adapter = adapterFor(runtime);
@@ -66,7 +67,7 @@ export function planRun(
     runtime: name,
     cli: adapter.name,
     tools: vars.tools ?? 'on',
-    argv: fillArgs(adapter, template, { agent: vars.agent, prompt: vars.prompt, session: session ?? undefined, agentBody: vars.agentBody, systemBody: vars.systemBody, boardFile: vars.boardFile, effort: vars.effort, tools: vars.tools, readDirs: vars.readDirs }),
+    argv: fillArgs(adapter, template, { agent: vars.agent, prompt: vars.prompt, session: session ?? undefined, agentBody: vars.agentBody, systemBody: vars.systemBody, boardFile: vars.boardFile, agentsFile: vars.agentsFile ?? (vars.root ? join(vars.root, NO_AGENTS_FILE) : undefined), effort: vars.effort, tools: vars.tools, readDirs: vars.readDirs }),
     resume: session !== null,
     session,
     ...(runtime.stdin ? { stdin: adapter.stdinMessage(vars.prompt) } : {}),

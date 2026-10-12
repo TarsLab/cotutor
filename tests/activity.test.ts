@@ -72,6 +72,16 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('没给的插槽填空,不留三个换行', !fillSlots(painter!.prompt, { 版式: 'A', 分幅: 'B' }).includes('\n\n\n'));
 }
 
+// ---- 老 workspace 的 claude 模板:upgrade --config 补上 --agents {agentsFile}(activity 独立,拍板 13)----
+{
+  const { insertMissingFlags } = await import('../src/cli/migrate.ts');
+  const { factoryRuntimes } = await import('../src/clis/index.ts');
+  const factory = factoryRuntimes().claude.run;
+  const old = factory.filter((a, i) => a !== '--agents' && factory[i - 1] !== '--agents');
+  const r = insertMissingFlags(old, factory);
+  check('旧 claude 模板补上 --agents {agentsFile},紧跟在 --agent {agent} 后面', r.added.join(' ') === '--agents {agentsFile}' && r.argv.join(' ') === factory.join(' '), JSON.stringify(r));
+}
+
 // ---- 写错了报到行 ----
 {
   check('类型不认得', has(fixesAfter('词: 词表,可空', '词: 词组,可空'), '类型「词组」不认得', lineOf('词: 词表')));
@@ -101,6 +111,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('出厂语文老师走 qwen,别的老师照旧(缺省运行时)', factoryTutors['chinese-tutor'].runtime === 'qwen' && factoryTutors['math-tutor'].runtime === undefined);
   check('老师有这种卡就不用 activity 再写', fixesAfter('cards: read paint', 'cards: read', { fileName: '你说我画', tutorCards: ['text', 'read', 'paint'] }).length === 0);
   check('缺第一句', has(fixesAfter('第一句: ', '先说: '), '「第一句: …」'));
+  check('缺人设', has(fixesAfter('你是这个家的语文老师,今天陪孩子玩', '今天陪孩子玩'), '以「你是」开头'));
   check('缺收', has(fixesAfter('收: 问完', '最后: 问完'), '「收: …」'));
   check('name 和文件名对不上', has(lintActivity(text, { fileName: '你画我说' }).issues, '文件名是「你画我说.md」'));
   check('缺 description', has(fixesAfter(/description: .*\n/.exec(text)![0], ''), '缺 description'));

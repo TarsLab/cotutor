@@ -63,6 +63,8 @@ export interface FillVars {
   agentBody?: string;
   systemBody?: string;
   boardFile?: string;
+  /** claude 的 --agents:activity 话题现生成的 agent 定义;别的话题是一份空的 {} */
+  agentsFile?: string;
   effort?: Policy['effort'];
   /** 这轮带不带工具;不给 = 带 */
   tools?: ToolSet;

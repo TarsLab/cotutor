@@ -59,6 +59,8 @@ const NOTE_SEP = /\s*——\s*/;
 const SLOT = /\{\{([^{}\s]+)\}\}/g;
 const CARD_MENTION = /`([a-z]+)` 卡/g;
 const FIRST_LINE = /^第一句[ \t]*[:：]/m;
+/** 人设:activity 不读老师文件(《wip/activity设计.md》拍板 13),「老师怎么带」自己写「你是……」 */
+const PERSONA_LINE = /^你是/m;
 const CLOSE_LINE = /^收[ \t]*[:：]/m;
 
 const isType = (t: string): t is ActivityParamType => (ACTIVITY_PARAM_TYPES as readonly string[]).includes(t);
@@ -321,6 +323,7 @@ export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIss
       if (!isCardKind(k)) fix(`正文用了「${k}」卡,没有这种卡`, line);
       else if (!cards.includes(k)) fix(`正文用了 \`${k}\` 卡,老师和这个 activity 都没有:在头上 cards 加上`, line);
     }
+    if (!PERSONA_LINE.test(body)) fix('「## 老师怎么带」要有一句人设,以「你是」开头:这个话题不读老师文件,老师是谁写在这里', a.tutor.line);
     if (!FIRST_LINE.test(body)) fix('「## 老师怎么带」要写一行「第一句: …」:孩子点进来老师先说什么', a.tutor.line);
     if (!CLOSE_LINE.test(body)) fix('「## 老师怎么带」要写一行「收: …」:到哪一步收', a.tutor.line);
   }

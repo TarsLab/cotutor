@@ -2,7 +2,9 @@
  * Claude Code(`claude`)的适配器。输出是 stream-json 的本家(stream-json.ts);工具白名单走 `--tools {tools}`,
  * 思考量走 `--effort {effort}`,代理靠 cotutor.json 的 proxy 注进环境(《agent层设计.md》拍板 15 之前就这样,搬过来行为不变)。
  */
-import type { Runtime } from '../schema/index.ts';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { NO_AGENTS_FILE, type Runtime } from '../schema/index.ts';
 import { parseStreamJson, streamJsonUserMessage } from './stream-json.ts';
 import type { CliAdapter, ToolKind } from './types.ts';
 
@@ -18,6 +20,13 @@ export const claude: CliAdapter = {
   toolList: (set) => (set === 'on' ? CLAUDE_TUTOR_TOOLS : ''),
   toolArgs: (set) => ['--tools', set === 'on' ? CLAUDE_TUTOR_TOOLS : ''],
   toolKind: (name) => KINDS[name] ?? 'other',
+  // activity 话题以外 --agents 指的那份空定义
+  async prepare(root) {
+    const file = join(root, NO_AGENTS_FILE);
+    if ((await readFile(file, 'utf8').catch(() => null)) === '{}\n') return;
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, '{}\n');
+  },
   // 模板带 --setting-sources project,~/.claude/settings.json 的代理进不来:cotutor.json 设了 proxy 就注 HTTP(S)_PROXY(大小写都给)
   env: (env, ctx) => (typeof ctx.proxy === 'string' ? { ...env, HTTP_PROXY: ctx.proxy, HTTPS_PROXY: ctx.proxy, http_proxy: ctx.proxy, https_proxy: ctx.proxy } : env),
   // 在 Claude Code 会话里跑 cotutor replay(技能 cotutor-analyze 就是这么用的):claude 见到 CLAUDECODE 会当嵌套拒掉
@@ -35,9 +44,11 @@ export const claude: CliAdapter = {
     // 板书写法由应用递给老师,递法看模板(《agent层设计.md》拍板 11):{boardFile} = 板书技能 SKILL.md 的绝对路径,claude 用 --append-system-prompt-file 追加进系统提示
     // (落在「工具 → 系统」这段缓存前缀里,同一位老师的各话题共享);{systemBody} = 老师正文 + 板书写法,给只收一段系统提示文字的 CLI;
     // 两个都没用的运行时(以后的 codex 之类),应用在话题第一条注入 <cotutor-board>。frontmatter 的 skills: 对 --agent 主线程不生效(claude 2.1.275 实测)
+    // --agents {agentsFile}(2026-10-12,《wip/activity设计.md》拍板 13):activity 话题不读老师文件,应用现生成一份 agent 定义(activity 的人设与做法),{agent} 换成它的名字;
+    // 别的话题指一份空的 {}(prepare 写),照旧 --agent <老师>。claude 2.1.296 实测两种都行
     claude: {
-      run: ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--tools', '{tools}', '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
-      resume: ['claude', '--agent', '{agent}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--tools', '{tools}', '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
+      run: ['claude', '--agent', '{agent}', '--agents', '{agentsFile}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--tools', '{tools}', '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
+      resume: ['claude', '--agent', '{agent}', '--agents', '{agentsFile}', '-p', '--resume', '{session}', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--tools', '{tools}', '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],
     },
   }),
 };

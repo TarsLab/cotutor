@@ -41,7 +41,7 @@ check('指南点名空 display', lines.some((l) => l.startsWith('tutors.x.displa
 const bad2 = CotutorConfigSchema.safeParse({ ...raw, runtimes: { default: 'nope', claude: raw.runtimes.claude } });
 check('运行时 default 不存在 → 指南', !bad2.success && explainIssues(bad2.error.issues).some((l) => l.includes('runtimes.default') && l.includes('nope')));
 
-const filled = fillRuntime(cfg.runtimes.claude.resume, { agent: 'math-tutor', prompt: 'hi', session: 's-1', boardFile: '/ws/.claude/skills/cotutor-board/SKILL.md' });
+const filled = fillRuntime(cfg.runtimes.claude.resume, { agent: 'math-tutor', prompt: 'hi', session: 's-1', boardFile: '/ws/.claude/skills/cotutor-board/SKILL.md', agentsFile: '/ws/.cotutor/activity/none.json' });
 check('占位填充', filled.includes('math-tutor') && filled.includes('s-1') && filled.includes('hi') && !filled.some((a) => a.includes('{')));
 // 思考深浅(2026-09-20):政策 effort 三层覆盖,填进模板的 {effort};模板里没有 {effort} 的运行时(qwen)不受影响
 const effortOf = (argv: string[]): string | undefined => argv[argv.indexOf('--effort') + 1];

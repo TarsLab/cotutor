@@ -39,7 +39,7 @@ export const GRADERS: Readonly<Record<string, string>> = {
   分幅没有看不见的词: '画图卡的分幅里没有「高兴」「羞愧」这种看不见的词',
   分幅至少: '每张画图卡至少这么多幅(「分幅至少: 3」;三四件事挤成两幅就不过)',
   画图卡带题干和词: '每张画图卡都写了「题:」和「词:」(我来出题)',
-  每节末句是问句: '每一节最后一句讲稿以问号结尾',
+  每节末句是问句: '有卡的每一节(讲解),最后一句讲稿以问号结尾;没卡的随口问答不查(守则:问答一两句、没有卡)',
   不说: '老师的讲稿里没有这几个说法(「不说: 你没说清楚、错了」)',
   问到: '老师的讲稿里出现过这个词(「问到: 画家」)',
   并排: '有一张 read 卡同时有这两句里的字(「并排: 睡大觉 | 浇了水」)',
@@ -174,7 +174,7 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
       case '每节末句是问句': {
         const bad = turns.flatMap((t, k) => {
           const last = t.section?.lines[t.section.lines.length - 1]?.text.trim() ?? '';
-          return t.section && !/[?？]$/.test(last) ? [`第 ${k + 1} 轮末句「${last}」`] : [];
+          return t.section?.cards.length && !/[?？]$/.test(last) ? [`第 ${k + 1} 轮末句「${last}」`] : [];
         });
         return { check, pass: !bad.length, ...(bad.length ? { why: bad.join(';') } : {}) };
       }

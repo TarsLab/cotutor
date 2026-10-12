@@ -166,7 +166,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('判:画图卡前放过整段', g['画图卡前放过整段'].pass && !gradeRun(['画图卡前放过整段'], [turns[0], turns[2]])[0].pass);
   check('判:分幅里的「高兴」报出来', !g['分幅没有看不见的词'].pass && g['分幅没有看不见的词'].why!.includes('高兴'));
   check('判:每节末句问句、不说、问到、并排、词落到幅', g['每节末句是问句'].pass && g['不说: 错了'].pass && g['问到: 画家'].pass && g['并排: 睡大觉 | 浇了水'].pass && g['词落到幅: 1'].pass && !gradeRun(['词落到幅: 2'], turns, { 词: ['播种', '羞愧'] })[0].pass);
-  check('判:末句不是问句报哪轮', !gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。']) }])[0].pass);
+  check('判:有卡的节末句不是问句报哪轮;没卡的随口一句不查', !gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。'], [story]) }])[0].pass && gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。']) }])[0].pass);
   const kp = kidPrompt({ story: '小熊种瓜', persona: '问一句答一句' }, turns.slice(0, 2));
   check('模拟孩子的提示词:故事、人设、对话、板上的整段', kp.includes('小熊种瓜') && kp.includes('问一句答一句') && kp.includes('孩子:小熊') && kp.includes('板上:小熊睡大觉。 / 小熊浇了水。'));
 }

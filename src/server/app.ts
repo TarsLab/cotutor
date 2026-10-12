@@ -798,6 +798,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         if (button?.kind === 'lecture') {
           if (!lecture || lecture.bundle !== button.bundle || !lecture.finished) return { status: 400, json: { error: 'bad_request', message: '小课堂要看完才能问' } };
           home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
+          if (button.activity) activity = button.activity;
           newThread = true;
           pick = undefined;
         }

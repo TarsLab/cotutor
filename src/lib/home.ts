@@ -132,7 +132,10 @@ export function homeLectures(doc: Pick<HomeDoc, 'cards'>): string[] {
 /** 草稿里 activity 按钮引用的 activity:「老师/名」 */
 export function homeActivities(doc: Pick<HomeDoc, 'cards'>): { tutor: string; name: string }[] {
   const out = new Map<string, { tutor: string; name: string }>();
-  for (const c of doc.cards) if (c.kind === 'tutor') for (const b of (c.props.buttons ?? []) as TutorButton[]) if (b.kind === 'activity') out.set(`${c.props.tutor}/${b.activity}`, { tutor: String(c.props.tutor), name: b.activity });
+  for (const c of doc.cards) if (c.kind === 'tutor') for (const b of (c.props.buttons ?? []) as TutorButton[]) {
+    const name = b.kind === 'activity' ? b.activity : b.kind === 'lecture' ? b.activity : undefined;
+    if (name) out.set(`${c.props.tutor}/${name}`, { tutor: String(c.props.tutor), name });
+  }
   return [...out.values()];
 }
 
@@ -164,19 +167,22 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
     if (first !== undefined) return void out.push({ level: 'fix', line, card: n, text: `${t.display}已经有一张老师卡(第 ${doc.cardLines[first]} 行),按钮合到那一张里` });
     seen.set(name, n);
     ((c.props.buttons ?? []) as TutorButton[]).forEach((b, k) => {
+      // activity 按钮,或小课堂按钮下面挂的 activity:文件在不在、文件自己要不要改、参数对不对(挂在小课堂下面的只用缺省)
+      const act = b.kind === 'activity' ? { name: b.activity, params: b.params } : b.kind === 'lecture' && b.activity ? { name: b.activity, params: {} } : null;
+      if (act && ctx.activities) {
+        const got = ctx.activities.get(`${name}/${act.name}`);
+        if (!got) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:agents/${name}/activities/${act.name}.md 不在(cotutor activity check ${name} 看这位老师有哪些)` });
+        else {
+          if (got.fixes) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:activity 文件 ${act.name}.md 有 ${got.fixes} 处要改(cotutor activity check ${name} ${act.name})` });
+          for (const text of resolveParams(got.activity, act.params).issues) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${text}` });
+        }
+      }
+      if (b.kind === 'activity') return;
       if (b.kind === 'lecture') {
         const subject = ctx.lectures?.get(b.bundle);
         if (ctx.lectures && subject === undefined) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${ctx.lectureProblems?.get(b.bundle)?.join(';') || `bundles/${b.bundle}/ 不在或读不出来(要有 scene.json 与带步的 manifest.json)`}` });
         else if (subject && t.subject && subject !== t.subject) out.push({ level: 'note', line, card: n, button: k, text: `${t.display}的「${b.label}」:小课堂 ${b.bundle} 是${subject}的,${t.display}教${t.subject}` });
         if (ctx.unbaked?.has(b.bundle)) out.push({ level: 'note', line, card: n, button: k, text: `${t.display}的「${b.label}」:课包 ${b.bundle} 没烤过(或画面改过没重烤),孩子端要现画,慢、iPad 上可能不顺;在做课包的地方跑 drawtell bake ${b.bundle},再拷进 bundles/` });
-        return;
-      }
-      if (b.kind === 'activity') {
-        if (!ctx.activities) return;
-        const got = ctx.activities.get(`${name}/${b.activity}`);
-        if (!got) return void out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:agents/${name}/activities/${b.activity}.md 不在(cotutor activity check ${name} 看这位老师有哪些)` });
-        if (got.fixes) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:activity 文件 ${b.activity}.md 有 ${got.fixes} 处要改(cotutor activity check ${name} ${b.activity})` });
-        for (const text of resolveParams(got.activity, b.params).issues) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${text}` });
         return;
       }
       if (b.kind !== 'continue') return;

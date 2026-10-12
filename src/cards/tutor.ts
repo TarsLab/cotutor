@@ -2,6 +2,7 @@
  * 老师卡(kind 名 tutor,只用在首页,《首页设计.md》§3.3):一位老师 + 几个按钮,孩子点了进这位老师。
  * 标签修饰 = 老师的键;正文一行一个按钮:`接着 <日期> <话题> <字>` 接着那天的那个话题,`小课堂 <课包 id> <字>` 先看那份课包再聊(《小课堂设计.md》),其余行是开场按钮;
  * `讲法:` 行挂在上一个按钮下面,是家长和 LLM 写给老师的,strip 剥掉,孩子端 JSON 里没有;`留到: <日期>` 也挂在上一个按钮下面,过了那天孩子端不再出现(家长端表单的「只今天 / 到周日」,《首页设计.md》拍板 20)。
+ * 小课堂按钮下面 `activity: <名>` 挂一个 activity,看完开口那条起照它带。
  * `activity <名> [孩子看到的字]` 进那个 activity(agents/<老师>/activities/<名>.md,《wip/activity设计.md》);它下面 `名: 值` 的行是这个 activity 的参数,和讲法一样 strip 剥掉。
  * 「新话题」应用永远放第一个,不进 props。老师在不在、话题在不在,由首页检查(src/server/home.ts)查。
  */
@@ -21,6 +22,8 @@ const LECTURE_LINE = /^小课堂\s+/;
 const ACTIVITY_LINE = /^activity(?:\s|$)/;
 /** activity 按钮下面的参数行:名: 值 */
 const PARAM_LINE = /^([^\s:：]+)\s*[:：]\s*(.*)$/;
+/** 小课堂按钮下面挂一个 activity:看完开口那条起照那个 activity 带(参数用缺省) */
+const LECTURE_ACTIVITY = /^activity\s*[:：]\s*(.*)$/;
 
 const label = z.string().min(1).refine((s) => Array.from(s).length <= BUTTON_LABEL_MAX, `按钮的字最多 ${BUTTON_LABEL_MAX} 个`);
 /** 留到哪天(含那天);过了孩子端不再出现 */
@@ -32,7 +35,7 @@ export const TutorButtonSchema = z.discriminatedUnion('kind', [
   /** 接着:那天的那个话题;今天的 resume,以前的新开会话、上下文包带那个话题的尾巴 */
   z.object({ kind: z.literal('continue'), label, date: z.string().regex(DAY_RE), thread: z.string().regex(THREAD_RE), brief: z.string().min(1).optional(), until }),
   /** 小课堂:孩子点了先看这份课包(铺满、一口气放完),看完才能开口;开口那条新开话题,老师拿到课的每句与孩子圈的地方 */
-  z.object({ kind: z.literal('lecture'), label, bundle: z.string().regex(BUNDLE_ID_RE), brief: z.string().min(1).optional(), until }),
+  z.object({ kind: z.literal('lecture'), label, bundle: z.string().regex(BUNDLE_ID_RE), brief: z.string().min(1).optional(), until, activity: z.string().min(1).optional() }),
   /** activity:孩子点了新开话题、把 label 发给老师;老师照那个 activity 文件带,params 是家长填的(原文,对不对由首页检查读 activity 文件查) */
   z.object({ kind: z.literal('activity'), label, activity: z.string().min(1), params: z.record(z.string(), z.string()), brief: z.string().min(1).optional(), until }),
 ]);
@@ -77,6 +80,14 @@ export const tutor: CardKind<TutorProps> = {
       }
       if (line === '新话题') continue;
       const last = buttons[buttons.length - 1];
+      const hang = LECTURE_ACTIVITY.exec(line);
+      if (hang) {
+        if (last?.kind !== 'lecture') throw new Error(`「${line}」:activity: 只挂在小课堂按钮下面;要一个 activity 按钮,写「activity <名>」`);
+        const name = hang[1].trim();
+        if (!/^\S+$/.test(name)) throw new Error(`「${line}」:activity: 后面写一个 activity 的名字,如「activity: 看图说话」`);
+        last.activity = name;
+        continue;
+      }
       const param = last?.kind === 'activity' ? PARAM_LINE.exec(line) : null;
       if (last?.kind === 'activity' && param) {
         if (param[1] in last.params) throw new Error(`「${line}」:参数 ${param[1]} 写了两次`);

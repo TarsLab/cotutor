@@ -5,7 +5,7 @@
  */
 import { homedir } from 'node:os';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { localDashscopeKey } from '../clis/qwen.ts';
 import { activityRunFor } from '../cli/activities.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
@@ -13,6 +13,7 @@ import { gradeRun, kidPrompt, parseExamples, type ActivityExample, type EvalTurn
 import type { Draw } from '../paint/draw.ts';
 import { evalWorkspace, EVALS_DIR } from './replay.ts';
 import { Runner } from './runner.ts';
+import { writeCapture } from './store.ts';
 
 /** 模拟孩子:给提示词,回孩子说的一句;不通回 null */
 export type KidModel = (prompt: string) => Promise<string | null>;
@@ -94,6 +95,18 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
   // 参数先都解析一遍:写错了一轮都不跑
   const runsOf = new Map<ActivityExample, Awaited<ReturnType<typeof activityRunFor>>>();
   for (const e of examples) runsOf.set(e, await activityRunFor(ws.root, tutor, name, e.params));
+  // 照片先拷进 captures/(和孩子端拍照、cotutor send --photo 同一条路);读不到一轮都不跑
+  const photosOf = new Map<ActivityExample, string[]>();
+  for (const e of examples) {
+    const saved: string[] = [];
+    for (const p of e.photos) {
+      const src = isAbsolute(p) ? p : join(dirname(file), p);
+      const data = await readFile(src).catch(() => null);
+      if (!data) throw new UsageError(`例子「${e.name}」的照片读不到:${src}`);
+      saved.push(await writeCapture(ws, new Date(), data, /\.png$/i.test(p) ? 'png' : 'jpg'));
+    }
+    photosOf.set(e, saved);
+  }
   const kid = opts.kid ?? makeKidModel({ env: opts.env });
   const evalWs = evalWorkspace(ws);
   const runner = new Runner(() => evalWs, { env: opts.env, warm: false, draw: opts.draw ?? fakeDraw });
@@ -108,10 +121,12 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
       let costUsd = 0;
       let error: string | undefined;
       let scripted = 0;
-      // 第一句是按钮上的字(activity 的名字),和孩子点首页按钮一样
+      // 第一句是按钮上的字(activity 的名字),和孩子点首页按钮一样;照片随第一句写死的孩子的话发
       let say: string | null = name;
+      let photos: string[] = [];
       while (say !== null && turns.length < e.maxTurns) {
-        const started = await runner.send(tutor, { from: 'kid', text: say, ...(thread ? { thread } : { newThread: true, activity: run }) });
+        const started = await runner.send(tutor, { from: 'kid', text: say, ...(photos.length ? { photos } : {}), ...(thread ? { thread } : { newThread: true, activity: run }) });
+        photos = [];
         thread = started.thread;
         date = started.date;
         const index = await started.done;
@@ -124,7 +139,10 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
         const paint = (section?.cards ?? []).some((c) => c.kind === 'paint');
         opts.onTurn?.({ example: e.name, run: k + 1, turn: turns.length, kid: say, said: (section?.lines ?? []).map((l) => l.text).join(''), paint });
         if (paint) break;
-        if (scripted < e.kid.length) say = e.kid[scripted++];
+        if (scripted < e.kid.length) {
+          say = e.kid[scripted++];
+          if (scripted === 1) photos = photosOf.get(e) ?? [];
+        }
         else if (e.persona || e.story) {
           say = await kid(kidPrompt(e, turns));
           if (say === null) { error = '模拟孩子不通(百炼 key?)'; break; }

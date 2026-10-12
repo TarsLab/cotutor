@@ -20,6 +20,7 @@
 - `接着 <日期> <话题> <孩子看到的字>` = **接着按钮**:接着那天的那个话题(话题 = 那个话题第一条消息的 job,如 `1930-1`,`cotutor show` 与对话索引里都有)。今天的话题就是接着聊;以前的新开一个会话,老师会拿到那个话题最后一节的讲稿与卡。
 - `小课堂 <课包或视频的 id> <孩子看到的字>` = **小课堂按钮**:孩子点了先铺满看这一课(课包 `bundles/<id>/`,或视频 `lectures/<id>/`),看完才能开口;开口那句新开一个话题,老师拿到课的每句原话与孩子看的情况。
 - `activity <名> [孩子看到的字]` = **activity 按钮**:进这位老师的一个 activity(`agents/<老师>/activities/<名>.md`,如你说我画)。字不写就是 activity 的名字。孩子点了和开场按钮一样,新开一个话题,老师照那个 activity 文件带。
+- 小课堂按钮下面可以挂一行 `activity: <名>`:孩子看完课开口那条起,老师照那个 activity 带(参数用缺省)。如看图说话的课,挂 `activity: 看图说话`。
 - activity 按钮下面 `名: 值` 的行是这个 activity 的参数(家长填的),一行一个。有哪些参数、什么类型、能不能空,看那个文件的「## 家长填的」;检查会对。孩子看不到。
 - `讲法: …` 挂在上一个按钮下面,写给老师的:从哪开始、重点是什么、讲到哪收。可以写多行。孩子看不到。
 - `留到: <日期>` 挂在上一个按钮下面:这个按钮留到那天(含那天),过了孩子就看不到。不写就一直留着。
@@ -43,12 +44,20 @@
 讲法: 他常把 13 当成 1 和 3
 ```
 
+小课堂看完接着照 activity 带:
+
+<!-- expect {"kind":"tutor","props":{"tutor":"chinese-tutor","buttons":[{"kind":"lecture","label":"看图说话怎么说","bundle":"2026-10-08-kantu","activity":"看图说话"}]}} -->
+```tutor chinese-tutor
+小课堂 2026-10-08-kantu 看图说话怎么说
+activity: 看图说话
+```
+
 只今天用的开场按钮:
 
-<!-- expect {"kind":"tutor","props":{"tutor":"chinese-tutor","buttons":[{"kind":"start","label":"我要看图说话","brief":"孩子会拍一张看图写话的图","until":"2026-10-10"}]}} -->
+<!-- expect {"kind":"tutor","props":{"tutor":"chinese-tutor","buttons":[{"kind":"start","label":"我要读课文","brief":"第 22 课,读顺 1–3 自然段","until":"2026-10-10"}]}} -->
 ```tutor chinese-tutor
-我要看图说话
-讲法: 孩子会拍一张看图写话的图
+我要读课文
+讲法: 第 22 课,读顺 1–3 自然段
 留到: 2026-10-10
 ```
 
@@ -97,7 +106,7 @@ activity 你说我画 我来出题
 
 <!-- expect {"kind":"text","warning":true} -->
 ```tutor chinese-tutor
-我要看图说话
+我要读课文
 留到: 明天
 ```
 
@@ -106,6 +115,14 @@ activity 你说我画 我来出题
 <!-- expect {"kind":"text","warning":true} -->
 ```tutor chinese-tutor
 activity
+```
+
+`activity:` 挂在开场按钮下面(只能挂在小课堂按钮下面):
+
+<!-- expect {"kind":"text","warning":true} -->
+```tutor chinese-tutor
+我要看图说话
+activity: 看图说话
 ```
 
 activity 的名字写错、参数写错或少了要填的,解析得过,首页检查报「要改」(对的是那个 activity 文件)。

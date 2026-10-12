@@ -78,6 +78,8 @@ description: 排 cotutor 孩子端的首页。孩子学完之后,家长在 works
 - 「小课堂」要指到 `bundles/` 里一份课包,或 `lectures/` 里一份视频的 id。孩子先从头看完这一课,才能问老师。
 - 小课堂的讲法写孩子在这一课常卡在哪,别写课里已经讲过的。
 - 「activity」是老师的一种做法,写在 `agents/<老师>/activities/<名>.md`(如语文老师的「你说我画」)。`cotutor activity check <老师>` 列出这位老师有哪些、每个要家长填什么。
+- 看图说话、你说我画都是语文老师的 activity:`activity 看图说话`、`activity 你说我画`。孩子在新话题里拍看图说话,老师不走那套;要他照那套说,就摆按钮。
+- 小课堂看完要接着照某个 activity 聊(如看图说话的课),在小课堂按钮下面挂一行 `activity: 看图说话`。
 - activity 按钮写 `activity <名> [孩子看到的字]`,下面一行一个参数(`词: 播种、羞愧`),照那个文件「## 家长填的」填;同一个 activity 填不同的参数可以是两个按钮(你说我画、我来出题)。
 - 家长想改 activity 本身怎么带,不在这里改,用 cotutor-tune。
 

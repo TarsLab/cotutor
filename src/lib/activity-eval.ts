@@ -17,6 +17,8 @@ export interface ActivityExample {
   persona?: string;
   /** 写死的孩子的话,按顺序先说;说完了有人设就交给模拟孩子 */
   kid: string[];
+  /** 随第一句写死的孩子的话一起发的照片(相对例子文件所在的目录,或绝对路径) */
+  photos: string[];
   /** 最多几轮(孩子说一句、老师回一节算一轮) */
   maxTurns: number;
   /** 判,原文一行一条(见 GRADERS) */
@@ -33,6 +35,7 @@ export const GRADERS: Readonly<Record<string, string>> = {
   出画图卡: '最后写了画图卡',
   不出画图卡: '一张画图卡都没写',
   画图卡前放过整段: '第一张画图卡之前,有一节放过三行以上的 read 卡,孩子在它后面开过口',
+  放过整段: '有一节放过三行以上的 read 卡(连成的一段)',
   分幅没有看不见的词: '画图卡的分幅里没有「高兴」「羞愧」这种看不见的词',
   每节末句是问句: '每一节最后一句讲稿以问号结尾',
   不说: '老师的讲稿里没有这几个说法(「不说: 你没说清楚、错了」)',
@@ -74,7 +77,7 @@ export function parseExamples(text: string): { activity: string; examples: Activ
     if (line.startsWith('<!--')) { if (!line.includes('-->')) inNote = true; continue; }
     const h = /^##\s+(.+)$/.exec(line);
     if (h) {
-      cur = { name: h[1].trim(), line: no, params: '', kid: [], maxTurns: DEFAULT_TURNS, checks: [] };
+      cur = { name: h[1].trim(), line: no, params: '', kid: [], photos: [], maxTurns: DEFAULT_TURNS, checks: [] };
       examples.push(cur);
       inChecks = false;
       continue;
@@ -83,12 +86,13 @@ export function parseExamples(text: string): { activity: string; examples: Activ
     if (inChecks && /^[-*]\s+/.test(line)) { cur.checks.push(line.replace(/^[-*]\s+/, '')); continue; }
     inChecks = false;
     const m = /^([^:：]+)[:：]\s*(.*)$/.exec(line);
-    if (!m) { issues.push({ text: `「${line}」认不出:例子里一行写「故事: / 人设: / 孩子: / 参数: / 最多轮: / 判:」`, line: no }); continue; }
+    if (!m) { issues.push({ text: `「${line}」认不出:例子里一行写「故事: / 人设: / 孩子: / 照片: / 参数: / 最多轮: / 判:」`, line: no }); continue; }
     const [, key, value] = m;
     if (key === '故事') cur.story = value;
     else if (key === '人设') cur.persona = value;
     else if (key === '孩子') cur.kid.push(value);
     else if (key === '参数') cur.params = value;
+    else if (key === '照片') cur.photos.push(...value.split(/[,，\s]+/).filter(Boolean));
     else if (key === '最多轮') {
       const n = Number(value);
       if (Number.isInteger(n) && n >= 1 && n <= MAX_TURNS) cur.maxTurns = n;
@@ -96,11 +100,13 @@ export function parseExamples(text: string): { activity: string; examples: Activ
     } else if (key === '判') {
       inChecks = true;
       if (value) cur.checks.push(value);
-    } else issues.push({ text: `「${key}」认不出:例子里一行写「故事: / 人设: / 孩子: / 参数: / 最多轮: / 判:」`, line: no });
+    } else issues.push({ text: `「${key}」认不出:例子里一行写「故事: / 人设: / 孩子: / 照片: / 参数: / 最多轮: / 判:」`, line: no });
   }
   for (const e of examples) {
     if (!e.kid.length && !e.persona) issues.push({ text: `例子「${e.name}」:孩子一句都没有,也没有人设`, line: e.line });
     if (!e.checks.length) issues.push({ text: `例子「${e.name}」:没有判`, line: e.line });
+    if (e.photos.length && !e.kid.length) issues.push({ text: `例子「${e.name}」:照片随第一句写死的孩子的话发,要写一句「孩子:」`, line: e.line });
+    for (const p of e.photos) if (!/\.(jpe?g|png)$/i.test(p)) issues.push({ text: `例子「${e.name}」:照片只认 jpg / png(${p})`, line: e.line });
     for (const c of e.checks) {
       const name = c.split(/[:：]/)[0].trim();
       if (!GRADERS[name]) issues.push({ text: `例子「${e.name}」:判「${name}」不认得(有:${Object.keys(GRADERS).join('、')})`, line: e.line });
@@ -145,6 +151,10 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
         // 整段那一节之后(含画图卡那一轮孩子说的话)孩子开过口:轮 k 的孩子话在轮 k 的老师那节之前,所以整段要在画图卡那一轮之前
         const story = turns.slice(0, firstPaint).some((t) => (t.section?.cards ?? []).some((c) => segmentsOf(c).length >= 3));
         return { check, pass: story, ...(story ? {} : { why: `第 ${firstPaint + 1} 轮写画图卡之前没放过整段` }) };
+      }
+      case '放过整段': {
+        const ok = turns.some((t) => (t.section?.cards ?? []).some((c) => segmentsOf(c).length >= 3));
+        return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没放过三行以上的 read 卡` }) };
       }
       case '分幅没有看不见的词': {
         const bad = allPanels.flatMap((p) => INVISIBLE_WORDS.filter((w) => p.includes(w)).map((w) => `「${w}」在「${p}」`));

@@ -17,7 +17,7 @@ const { initWorkspace } = await import('../src/cli/init.ts');
 const { loadWorkspace } = await import('../src/cli/workspace.ts');
 const { createContext, route } = await import('../src/server/app.ts');
 const { readIndex, readRunFile } = await import('../src/server/store.ts');
-const { publishHome, checkHome } = await import('../src/server/home.ts');
+const { publishHome, checkHome, resolveVia } = await import('../src/server/home.ts');
 const { startReplay } = await import('../src/server/replay.ts');
 const { main } = await import('../src/cli/main.ts');
 const { parseHome } = await import('../src/lib/home.ts');
@@ -223,6 +223,40 @@ try {
     let threw = '';
     await evalActivity(ctx.ws, 'chinese-tutor', '你说我画', { only: '没有这个', kid }).catch((e: Error) => { threw = e.message; });
     check('eval:--only 不认得报有哪些', threw.includes('写死的、模拟的'), threw);
+    writeFileSync(exFile, shipped);
+  }
+
+  // ---- 小课堂按钮下面挂 activity(看图说话)----
+  {
+    const pubFile = join(root, 'home', 'published.json');
+    const keep = readFileSync(pubFile, 'utf8');
+    const lec = (activity?: string) => JSON.stringify({ id: '2026-10-12-0900', publishedAt: now.toISOString(), source: 'home/history/x.md', cards: [{ kind: 'tutor', props: { tutor: 'chinese-tutor', buttons: [{ kind: 'lecture', label: '看图说话怎么说', bundle: '2026-10-08-kantu', ...(activity ? { activity } : {}) }] } }], note: '', warnings: [] });
+    writeFileSync(pubFile, lec('看图说话'));
+    const v = await resolveVia(ctx.ws, 'chinese-tutor', { home: '2026-10-12-0900', button: 0 });
+    check('小课堂挂 activity:resolveVia 带上 activity(参数用缺省)', v?.kind === 'lecture' && JSON.stringify((v as { activity?: unknown }).activity) === JSON.stringify({ name: '看图说话', params: {} }), JSON.stringify(v));
+    writeFileSync(pubFile, lec('没有这个'));
+    check('挂的 activity 不在:按钮点不了(null)', (await resolveVia(ctx.ws, 'chinese-tutor', { home: '2026-10-12-0900', button: 0 })) === null);
+    writeFileSync(pubFile, lec());
+    const plain = await resolveVia(ctx.ws, 'chinese-tutor', { home: '2026-10-12-0900', button: 0 });
+    check('不挂:照旧是小课堂,没有 activity', plain?.kind === 'lecture' && !('activity' in (plain ?? {})));
+    writeFileSync(pubFile, keep);
+    const c = await checkHome(ctx.ws, HOME('小课堂 2026-10-08-kantu 看图说话怎么说\nactivity: 看图说说'), now);
+    check('首页检查:挂的 activity 不在,要改', c.issues.some((i) => i.level === 'fix' && i.text.includes('看图说说.md 不在')), JSON.stringify(c.issues));
+  }
+
+  // ---- eval 带照片:随第一句写死的孩子的话发 ----
+  {
+    const dir = join(root, 'agents', 'chinese-tutor', 'activities');
+    const exFile = join(dir, '看图说话.例子.md');
+    const shipped = readFileSync(exFile, 'utf8');
+    writeFileSync(join(dir, '小狗.png'), PNG);
+    writeFileSync(exFile, '---\nactivity: 看图说话\n---\n\n## 一幅图\n照片: 小狗.png\n孩子: 这是我的看图说话\n最多轮: 2\n判:\n- 每节末句是问句\n');
+    const r = await evalActivity(ctx.ws, 'chinese-tutor', '看图说话', { runs: 1, kid: async () => null });
+    const run = r.examples[0].runs[0];
+    const evalIndex = await readIndex({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'chinese-tutor', run.date);
+    const second = evalIndex.messages.find((m) => m.thread === run.thread && m.text === '这是我的看图说话');
+    check('eval 带照片:第二轮(第一句写死的话)带着照片,拷进了 captures/', run.turns.length === 2 && second?.photos?.length === 1 && second.photos[0].startsWith('captures/'), JSON.stringify({ turns: run.turns.length, photos: second?.photos, err: run.error }));
+    check('eval 带照片:看图说话的话题挂着 activity', evalIndex.messages.find((m) => m.job === run.thread)?.activity?.name === '看图说话');
     writeFileSync(exFile, shipped);
   }
 

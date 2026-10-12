@@ -14,7 +14,7 @@ import { lintActivity, parseActivity, resolveParams } from '../lib/activity.ts';
 import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, parseHome, threadKey, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
 import { kidConversation, kidThreads } from '../lib/kid-view.ts';
-import { HOME_ID_RE, PublishedHomeSchema, type Activity, type ActivityValue, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
+import { HOME_ID_RE, PublishedHomeSchema, type Activity, type ActivityRun, type ActivityValue, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
 import { listDates, readCardStates, readIndex } from './store.ts';
 import { bakeSoon, inspectLecture, readLecture, type Lecture } from './lecture.ts';
 
@@ -262,7 +262,8 @@ export type ResolvedVia =
   | { kind: 'recent'; label: string }
   | { kind: 'start'; label: string; brief?: string }
   | { kind: 'continue'; label: string; date: string; thread: string; brief?: string }
-  | { kind: 'lecture'; label: string; bundle: string; brief?: string }
+  /** activity = 小课堂下面挂的(参数用缺省,点的那一刻解析) */
+  | { kind: 'lecture'; label: string; bundle: string; brief?: string; activity?: ActivityRun }
   /** params = 按 activity 文件解析好的值(补了缺省);读不出来或参数不对 → resolveVia 回 null */
   | { kind: 'activity'; label: string; activity: string; params: Record<string, ActivityValue>; brief?: string };
 
@@ -282,14 +283,21 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
   if (!b) return null;
   const brief = b.brief ? { brief: b.brief } : {};
   if (b.kind === 'start') return { kind: 'start', label: b.label, ...brief };
-  if (b.kind === 'lecture') return { kind: 'lecture', label: b.label, bundle: b.bundle, ...brief };
-  if (b.kind === 'activity') {
-    // 参数在点的那一刻按 activity 文件解析、补缺省,跟着话题走(家长后来改了只管以后的话题,《wip/activity设计.md》拍板 2)
-    const text = await readFile(activityFile(ws.root, tutor, b.activity), 'utf8').catch(() => null);
+  // activity 的参数在点的那一刻按 activity 文件解析、补缺省,跟着话题走(家长后来改了只管以后的话题,《wip/activity设计.md》拍板 2);文件不在、参数不对 → null
+  const runOf = async (name: string, params: Record<string, string>): Promise<ActivityRun | null> => {
+    const text = await readFile(activityFile(ws.root, tutor, name), 'utf8').catch(() => null);
     if (text === null) return null;
-    const r = resolveParams(parseActivity(text).activity, b.params);
-    if (r.issues.length) return null;
-    return { kind: 'activity', label: b.label, activity: b.activity, params: r.values, ...brief };
+    const r = resolveParams(parseActivity(text).activity, params);
+    return r.issues.length ? null : { name, params: r.values };
+  };
+  if (b.kind === 'lecture') {
+    const run = b.activity ? await runOf(b.activity, {}) : null;
+    if (b.activity && !run) return null;
+    return { kind: 'lecture', label: b.label, bundle: b.bundle, ...brief, ...(run ? { activity: run } : {}) };
+  }
+  if (b.kind === 'activity') {
+    const run = await runOf(b.activity, b.params);
+    return run ? { kind: 'activity', label: b.label, activity: b.activity, params: run.params, ...brief } : null;
   }
   return { kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...brief };
 }

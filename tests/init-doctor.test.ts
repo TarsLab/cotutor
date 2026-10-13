@@ -135,7 +135,7 @@ try {
   const tplR = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: Record<string, string | { run: string[]; resume: string[] }> };
   const claudeOnes = Object.entries(tplR.runtimes).filter((e): e is [string, { run: string[]; resume: string[] }] => typeof e[1] !== 'string' && e[1].run[0] === 'claude');
   check('不再出厂 claude-fast(给课文件排版的快模型,备课 2026-10-05 删了)', !('claude-fast' in tplR.runtimes));
-  check('claude 模板 run / resume 都带 --setting-sources project(只读 workspace 的 .claude/,用户级技能 / hooks / 额外目录不进老师);qwen 没有;只出厂 claude、qwen 两个运行时', claudeOnes.length === 1 && Object.keys(tplR.runtimes).join() === 'default,claude,qwen' && claudeOnes.every(([, r]) => r.run.join(' ').includes('--setting-sources project') && r.resume.join(' ').includes('--setting-sources project')) && !(tplR.runtimes.qwen as { run: string[] }).run.includes('--setting-sources'));
+  check('claude 模板 run / resume 都带 --setting-sources project(只读 workspace 的 .claude/,用户级技能 / hooks / 额外目录不进老师);qwen 没有;只出厂 claude、qwen、qwen-flash 三个运行时', claudeOnes.length === 1 && Object.keys(tplR.runtimes).join() === 'default,claude,qwen,qwen-flash' && claudeOnes.every(([, r]) => r.run.join(' ').includes('--setting-sources project') && r.resume.join(' ').includes('--setting-sources project')) && !(tplR.runtimes.qwen as { run: string[] }).run.includes('--setting-sources'));
 }
 // ---- 老 workspace 迁移(步 2):cotutor.json 是政策文件,机器不自动改,所以要算差异 + 只补缺 ----
 {

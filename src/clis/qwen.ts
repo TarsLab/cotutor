@@ -54,7 +54,8 @@ const BASE_ENV = 'COTUTOR_QWEN_BASE_URL';
 const KEY_ENV = 'COTUTOR_QWEN_API_KEY';
 const toggle = { thinking: true, toggleOnly: true, disableField: 'enable_thinking' };
 const tiers = { thinking: true, efforts: ['low', 'medium', 'xhigh'], defaultEffort: 'xhigh', disableField: 'reasoning_effort' };
-/** 出厂模型(2026-10-09 五个模型 7 道真题对比:不想时 2–8 秒,讲得准也细;3.7-plus 快但浅,3.8-flash 不想时把盘算写进讲稿) */
+/** 出厂模型(2026-10-09 五个模型 7 道真题对比:不想时 2–8 秒,讲得准也细;3.7-plus 快但浅,3.8-flash 不想时把盘算写进讲稿——
+ * 2026-10-13 英语老师三问没再见到,出厂 qwen-flash 运行时给英语老师) */
 export const QWEN_DEFAULT_MODEL = 'qwen3.8-max';
 
 /** 千问上能用的几个(Token Plan 与百炼按量都有);运行时模板的 -m 选其中一个 */
@@ -158,7 +159,11 @@ export const qwen: CliAdapter = {
   runtimes: (): Record<string, Runtime> => {
     // 消息走 stdin(预热能用;数组旗标 --core-tools 之类会吞掉跟在后面的消息,不进 argv 正好避开);-m 选模型(家里那份 settings.json 列着的);
     // {systemBody} = 老师正文 + 板书写法,整份换掉 qwen 自己的系统提示;{toolArgs} 由适配器展开;--approval-mode default:shell、写、读 workspace 外都拒
-    const flags = ['-m', QWEN_DEFAULT_MODEL, '--system-prompt', '{systemBody}', '--input-format', 'stream-json', '--output-format', 'stream-json', '--include-partial-messages', '--approval-mode', 'default', '{toolArgs}', '--max-wall-time', '10m'];
-    return { qwen: { stdin: 'stream-json', run: ['qwen', ...flags], resume: ['qwen', '--resume', '{session}', ...flags] } };
+    // qwen-flash 只差模型(2026-10-13 英语老师出厂走它:Token Plan 上便宜、开口 2.5–4 秒)
+    const of = (model: string): Runtime => {
+      const flags = ['-m', model, '--system-prompt', '{systemBody}', '--input-format', 'stream-json', '--output-format', 'stream-json', '--include-partial-messages', '--approval-mode', 'default', '{toolArgs}', '--max-wall-time', '10m'];
+      return { stdin: 'stream-json', run: ['qwen', ...flags], resume: ['qwen', '--resume', '{session}', ...flags] };
+    };
+    return { qwen: of(QWEN_DEFAULT_MODEL), 'qwen-flash': of('qwen3.8-flash') };
   },
 };

@@ -137,7 +137,8 @@ const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar
   // 画图卡(paint)不在这里:只在「你说我画」activity 的话题里有(agents/chinese-tutor/activities/你说我画.md 头上的 cards,《wip/activity设计.md》拍板 11)
   // 语文老师走 qwen(2026-10-12 Jack 拍板:以后语文老师都用 qwen;你说我画、看图说话两套 activity eval 在 qwen3.8-max 上真跑过)
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚', runtime: 'qwen', cards: ['text', 'read', 'choice', 'fill', 'image', 'tianzige', 'lecture', 'canvas'] },
-  'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤', cards: ['text', 'read', 'choice', 'fill', 'image', 'word', 'lecture'] },
+  // 英语老师走 qwen3.8-flash(2026-10-13 Jack 拍板:Token Plan 上扣 Credits,比 claude 便宜;真跑三问 2.5–4 秒开口)
+  'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤', runtime: 'qwen-flash', cards: ['text', 'read', 'choice', 'fill', 'image', 'word', 'lecture'] },
   // 口播老师(《口播老师设计.md》§6):要 koubo 才有用,出厂关着;在要练的那个 workspace 里打开,upgrade 再装 koubo 的技能
   // 它每节都要跑 koubo 命令(进度、出题),孩子说的话也带工具
   'koubo-tutor': { display: '口播老师', subject: '口播', avatar: '🎙️', enabled: false, cards: ['text', 'read', 'record'], policy: { tools: 'on' } },

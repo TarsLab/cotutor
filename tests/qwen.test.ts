@@ -100,7 +100,9 @@ try {
   const g2 = (await configGaps(raw({ qwen: { stdin: 'stream-json', run: [...last.run], resume: [...last.resume] } }))).find((x) => x.path === 'runtimes.qwen');
   check('upgrade --config:没改过的上一版(qwen3.7-plus)也整份换成新的(qwen3.8-max)', g2?.kind === 'runtime' && JSON.stringify(g2.value) === JSON.stringify(factoryQwen) && (g2.value as { run: string[] }).run.includes('qwen3.8-max'), JSON.stringify(g2));
   const mine = raw({ qwen: { run: [...old.run, '-m', 'qwen3.8-max'], resume: [...old.resume] } });
-  check('改过的旧模板不动,也不往里插旗标', !(await configGaps(mine)).some((x) => x.path.startsWith('runtimes.qwen')));
+  const gm = await configGaps(mine);
+  check('改过的旧模板不动,也不往里插旗标', !gm.some((x) => x.path === 'runtimes.qwen' || x.path.startsWith('runtimes.qwen.')), JSON.stringify(gm));
+  check('老 workspace 没有 qwen-flash:upgrade --config 补上(英语老师的 runtime 不动)', gm.some((x) => x.path === 'runtimes.qwen-flash') && !gm.some((x) => x.path === 'tutors.english-tutor.runtime'));
 }
 
 done();

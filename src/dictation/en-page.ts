@@ -8,6 +8,7 @@
 import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
 import { EN_BOX_CSS, EN_BOX_JS } from './en-box.ts';
 import { UNLOCK_JS } from './unlock.ts';
+import { REEL_MODE_JS } from './reel-mode.ts';
 
 export const DICTATION_EN_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -70,6 +71,8 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .muted { color:var(--dim); font-size:15px; }
   #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:16px; display:none; z-index:9; }
   #toast.on { display:block; }
+  /* 录像里(?reel=):孩子当时的样子,点不动 */
+  body.rlk { pointer-events:none; }
   ${EN_BOX_CSS}
   ${TUTOR_FACE_CSS}
 </style></head><body>
@@ -130,11 +133,24 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
 
   var q = new URLSearchParams(location.search);
   var HOME = q.get('home'); var N = Number(q.get('n') || 0); var TUTOR = q.get('tutor');
-  var S = { v: null, base: Date.now(), i: 0, strokes: [], undos: 0, revealed: false, word: null, sawPen: false, mode: 'first', hide: false, noAudio: false, tok: 0, timer: 0 };
+  /** 家长看录像时,这一页开在录像外壳的 iframe 里:只照记录画,不发事件、不念、点不动(《家长录像设计.md》拍板 13) */
+  var REEL_ID = q.get('reel');
+  var S = { v: null, base: Date.now(), i: 0, strokes: [], undos: 0, gone: [], revealed: false, word: null, sawPen: false, mode: 'first', hide: false, noAudio: false, tok: 0, timer: 0 };
   var now = function () { return Math.max(0, Date.now() - S.base); };
-  var setView = function (v) { S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); };
+  var setView = function (v) { var fresh = !S.v || S.v.id !== v.id; S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); if (fresh) { S.vw = 0; sendView(); } };
   var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'write' && S.mode === 'rewrite'; window.scrollTo(0, 0); };
-  var event = function (kind, word, n) { var b = { kind: kind, word: word, t: now() }; if (n) b.n = n; if (kind !== 'show' && kind !== 'say' && kind !== 'again' && kind !== 'self' && kind !== 'rewrite') b.char = 0; api('POST', '/api/dictation/' + S.v.id + '/events', b).catch(function () {}); };
+  var event = function (kind, word, n, more) {
+    if (!S.v || REEL_ID) return;
+    var b = { kind: kind, word: word, t: now() }; if (n) b.n = n; if (more) { b.w = more.w; b.h = more.h; }
+    if (kind !== 'show' && kind !== 'say' && kind !== 'again' && kind !== 'self' && kind !== 'rewrite' && kind !== 'view' && kind !== 'away' && kind !== 'back') b.char = 0;
+    try { fetch('/api/dictation/' + S.v.id + '/events', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b), keepalive: true }).catch(function () {}); } catch (e) {}
+  };
+  /** 录像要的:屏幕多大(进来、转屏,停手 300 毫秒,变了才记)、切到别处 / 回来;擦掉的笔连同擦的时刻 */
+  var viewTimer = 0;
+  var sendView = function () { if (!S.v || S.v.done) return; var w = window.innerWidth, hh = window.innerHeight; if (w === S.vw && hh === S.vh) return; S.vw = w; S.vh = hh; event('view', S.i || 0, 0, { w: w, h: hh }); };
+  window.addEventListener('resize', function () { clearTimeout(viewTimer); viewTimer = setTimeout(sendView, 300); });
+  document.addEventListener('visibilitychange', function () { if (S.v && !S.v.done) event(document.hidden ? 'away' : 'back', S.i || 0); });
+  var drop = function (pts) { if (S.gone.length < 200) S.gone.push({ t: now(), pts: pts }); };
   var goHome = function () { stopSay(); location.href = '/'; };
   // ---- 左上角「‹ 头像」胶囊,同老师页(《wip/听写设想.md》拍板 16);再写一遍是叠在对一对上的一层,右上角 × 回去 ----
   ${TUTOR_FACE_JS}
@@ -184,21 +200,21 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   pad.addEventListener('pointermove', function (e) { if (!cur || e.pointerId !== cur.id) return; e.preventDefault(); cur.pts.push(at(e)); var p = ink.lastChild; if (p) p.setAttribute('d', pathD(cur.pts)); });
   var up = function (e) { if (cur && e.pointerId === cur.id) cur = null; };
   pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up);
-  $('#w-undo').addEventListener('click', function () { if (S.strokes.length) { S.strokes.pop(); S.undos++; drawInk(); } });
-  $('#w-clear').addEventListener('click', function () { if (S.strokes.length) { S.strokes = []; S.undos++; drawInk(); } });
+  $('#w-undo').addEventListener('click', function () { if (S.strokes.length) { drop(S.strokes.pop()); S.undos++; drawInk(); } });
+  $('#w-clear').addEventListener('click', function () { if (S.strokes.length) { S.strokes.forEach(drop); S.strokes = []; S.undos++; drawInk(); } });
   $('#w-again').addEventListener('click', function () { event('again', S.i); sayWord(S.i, 1); });
   $('#w-reveal').addEventListener('click', function () {
     var i = S.i; var b = $('#w-reveal'); b.disabled = true;
     api('POST', '/api/dictation/' + S.v.id + '/reveal/' + i, { char: 0, t: now() }).then(function (j) {
       if (S.i !== i) return;
-      S.revealed = true; S.strokes = []; drawInk();
+      S.revealed = true; S.strokes.forEach(drop); S.strokes = []; drawInk();
       trace.replaceChildren(enWord(sv, j.ch, 'enw trace'));
       status('照着灰色的单词写一遍');
     }, function () { b.disabled = false; toast('没连上,再点一次'); });
   });
   var dots = function () { var box = $('#w-dots'); box.replaceChildren(); for (var k = 0; k < S.v.sizes.length; k++) box.append(h('i', { 'class': k === S.i ? 'c' : S.v.written[k] ? 'd' : '' })); };
   var openWord = function (i) {
-    S.i = i; S.strokes = []; S.undos = 0; S.revealed = false; S.mode = 'first';
+    S.i = i; S.strokes = []; S.undos = 0; S.gone = []; S.revealed = false; S.mode = 'first';
     trace.replaceChildren(); drawInk(); $('#w-model').hidden = true;
     $('#w-who').textContent = (S.v.tutor || '老师') + '念第 ' + (i + 1) + ' 个';
     $('#w-reveal').disabled = false; $('#w-reveal').hidden = false; $('#w-done').disabled = false; $('#w-x').hidden = true;
@@ -208,7 +224,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   $('#w-done').addEventListener('click', function () {
     if (S.revealed && !S.strokes.length) { status('照着灰色的单词写一遍'); return; }
     var i = S.i; var b = $('#w-done'); b.disabled = true;
-    var chars = [{ strokes: S.strokes, undos: S.undos, revealed: S.revealed || undefined }];
+    var chars = [{ strokes: S.strokes, undos: S.undos, gone: S.gone.length ? S.gone : undefined, revealed: S.revealed || undefined }];
     if (S.mode === 'rewrite') {
       api('POST', '/api/dictation/' + S.v.id + '/rewrites/' + i, { chars: chars, self: true }).then(function (v) { setView(v); stopSay(); openCheck(); }, function () { b.disabled = false; toast('没连上,再点一次'); });
       return;
@@ -232,13 +248,13 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   $('#c-hide').addEventListener('click', function () { S.hide = !S.hide; $('#c-hide').textContent = S.hide ? '放回蓝字' : '拿开蓝字'; openCheck(); });
   var rewrite = function (i) {
     event('self', i);
-    S.i = i; S.strokes = []; S.undos = 0; S.revealed = false; S.mode = 'rewrite';
+    S.i = i; S.strokes = []; S.undos = 0; S.gone = []; S.revealed = false; S.mode = 'rewrite';
     trace.replaceChildren(); drawInk();
     var m = $('#w-model'); m.textContent = S.v.answers[i].chars; m.hidden = false;
     $('#w-who').textContent = '再写一遍'; status('看着上面的单词写'); $('#w-reveal').hidden = true; $('#w-done').disabled = false;
     $('#w-dots').replaceChildren(); $('#w-x').hidden = false; show('write'); sayWord(i, 1);
   };
-  $('#w-x').addEventListener('click', function () { stopSay(); S.mode = 'first'; openCheck(); });
+  $('#w-x').addEventListener('click', function () { event('close', S.i); stopSay(); S.mode = 'first'; openCheck(); });
   $('#c-done').addEventListener('click', function () { api('POST', '/api/dictation/' + S.v.id + '/done').then(goHome, goHome); });
 
   // ---------- 开始 ----------
@@ -336,7 +352,58 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   };
   $('#snap-resume-go').addEventListener('click', function () { var v = R.v; if (!v) return; showResume(null); setView(v); if (v.checked) openCheck(); else nextWord(); });
 
-  if (HOME) api('POST', '/api/dictation', { home: HOME, n: N }).then(begin, goHome);
+  // ---------- 录像(?reel=<id>,《家长录像设计.md》拍板 13):照记录用这一页的画法画;钟、把手、启动在 reel-mode.ts ----------
+  ${REEL_MODE_JS}
+  /** 一组笔这一刻的样子:点数变了才重画 */
+  var reelPaths = function (o, g, strokes) {
+    var n = 0; strokes.forEach(function (x) { n += x.length; });
+    var sig = strokes.length + ':' + n;
+    if (o.sig === sig) return;
+    o.sig = sig;
+    g.replaceChildren.apply(g, strokes.filter(function (x) { return x.length; }).map(function (x) { return sv('path', { d: pathD(x) }); }));
+  };
+  var reelDraw = function (f) {
+    var R = RL.r;
+    var view = f.view === 'check' || f.view === 'order' ? 'check' : f.view === 'rewrite' && f.open ? 'rewrite' : f.allDone ? 'submit' : 'write';
+    var done = R.rewrites.filter(function (x) { return x.to <= RL.t; }).length;
+    var wi = view === 'rewrite' ? f.open.word : f.word;
+    var key = [view, wi, view === 'write' && f.mode !== 'write' ? 't' : '', view === 'check' ? done : 0, window.innerWidth, window.innerHeight].join('|');
+    var rebuild = key !== RL.key; RL.key = key;
+    if (view === 'submit') { if (rebuild) show('submit'); return; }
+    if (view === 'check') {
+      if (rebuild) {
+        var rows = $('#c-rows'); rows.replaceChildren();
+        RL.rows = R.chars.map(function (cs, i) {
+          var svg = sv('svg', { viewBox: '0 0 2048 512' }); var g = sv('g', { 'class': 'eni' });
+          svg.append(enLines(sv), g, enWord(sv, cs[0]));
+          var a = RL.s.first[i]; var rv = Boolean(a && a.chars[0] && a.chars[0].revealed);
+          var rw = R.rewrites.some(function (x) { return x.word === i && x.to <= RL.t; });
+          rows.append(h('div', { 'class': 'row' }, svg, h('div', { 'class': 'ft' }, h('small', { text: (i + 1) + (rv ? ' · 看了答案,照着写的' : rw ? ' · 又写了一遍' : '') }), h('button', { 'class': 'tool', type: 'button' }, '再写一遍'))));
+          return { g: g, sig: '' };
+        });
+        S.mode = 'first'; show('check');
+      }
+      RL.rows.forEach(function (o, i) { reelPaths(o, o.g, f.latest[i][0] || []); });
+      return;
+    }
+    if (rebuild) {
+      S.mode = view === 'rewrite' ? 'rewrite' : 'first'; S.i = wi;
+      show('write');
+      trace.replaceChildren(); if (view === 'write' && f.mode !== 'write') trace.append(enWord(sv, R.chars[wi][0], 'enw trace'));
+      var m = $('#w-model'); m.hidden = view !== 'rewrite'; m.textContent = view === 'rewrite' ? R.chars[wi][0] : '';
+      $('#w-who').textContent = view === 'rewrite' ? '再写一遍' : (S.v.tutor || '老师') + '念第 ' + (wi + 1) + ' 个';
+      $('#w-reveal').hidden = view === 'rewrite'; $('#w-reveal').disabled = view === 'write' && f.mode !== 'write';
+      $('#w-x').hidden = view !== 'rewrite';
+      var box = $('#w-dots'); box.replaceChildren();
+      if (view === 'write') for (var k = 0; k < R.chars.length; k++) box.append(h('i', { 'class': k === wi ? 'c' : k < wi ? 'd' : '' }));
+      RL.inkO = { sig: '' };
+    }
+    reelPaths(RL.inkO, ink, view === 'rewrite' ? (f.rewrite && f.rewrite[0]) || [] : f.ink[wi][0]);
+    status(view === 'rewrite' ? '看着上面的单词写' : f.mode !== 'write' ? '照着灰色的单词写一遍' : f.say ? '正在念 · 第 ' + f.say.n + ' 遍' : f.said === 1 ? '再听一遍' : f.said > 1 ? '听完了就写' : '');
+  };
+
+  if (REEL_ID) reelBoot();
+  else if (HOME) api('POST', '/api/dictation', { home: HOME, n: N }).then(begin, goHome);
   else { show('snap'); $('#p-list').hidden = true; findResume(); }
 })();
 </script>

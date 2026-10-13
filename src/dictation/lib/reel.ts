@@ -136,8 +136,8 @@ export function drBuild(s: Session): DrReel {
   for (const r of rewrites) { busy.push(r.from, r.to); for (const st of r.strokes) busy.push(st.pts[0][2], st.pts[st.pts.length - 1][2]); }
   for (const { e, t } of evs) if (e.kind !== 'view') busy.push(t);
   for (const x of says_) busy.push(x.t + x.d);
-  // 看笔顺的动画一笔约 0.9 秒
-  for (const x of steps) if (x.k === 'reveal' || x.k === 'order') busy.push(x.t + 8000);
+  // 看笔顺的动画一笔约 0.9 秒(英文给答案直接描红,没有动画)
+  if (lang === 'zh') for (const x of steps) if (x.k === 'reveal' || x.k === 'order') busy.push(x.t + 8000);
   if (checkedAt !== null) busy.push(checkedAt);
   if (doneAt !== null) busy.push(doneAt);
   busy.sort((a, b) => a - b);
@@ -250,6 +250,8 @@ export interface DrFrame {
   orderAt: number;
   /** 再写一遍 / 逐笔看的是哪个词哪个字 */
   open: { word: number; char: number } | null;
+  /** 每个词都写好了(英文页这时是「交上去」那一屏) */
+  allDone: boolean;
   /** 第一遍:每个词每个格这一刻看得到的笔(写到一半的截到 t) */
   ink: InkPoint[][][][];
   /** 再写一遍那一屏的笔 */
@@ -288,7 +290,8 @@ export function drFrameAt(r: DrReel, t: number): DrFrame {
   const gap = r.gaps.find((g) => t > g.from && t < g.to) ?? null;
   let size: [number, number] | null = null;
   for (const x of r.views) if (x.t <= t || !size) size = [x.w, x.h];
-  return { view: v.view, word: v.word, char: v.char, mode: v.mode, orderAt: v.orderAt, open: v.open, ink, rewrite, latest, say, said, writing, gap, size };
+  const allDone = r.chars.every((cs, w) => cs.every((_c, c) => v.done.has(w + ':' + c)));
+  return { view: v.view, word: v.word, char: v.char, mode: v.mode, orderAt: v.orderAt, open: v.open, allDone, ink, rewrite, latest, say, said, writing, gap, size };
 }
 
 /** 这一刻录像栏上那一行字 */
@@ -296,7 +299,7 @@ export function drCaption(r: DrReel, f: DrFrame): { text: string; cls: string } 
   const ch = (w: number, c: number): string => (r.chars[w] && r.chars[w][c]) || '';
   if (f.gap) return { text: f.gap.kind === 'away' ? '📴 孩子切到别处了 · ' + drSecs(f.gap.to - f.gap.from) : '⏩ 停了 ' + drSecs(f.gap.to - f.gap.from) + (f.gap.view === 'listen' ? ',一笔没写' : ''), cls: 'gap' };
   if (f.writing) return { text: (f.view === 'rewrite' ? '✏️ 再写一遍「' : f.mode === 'trace' ? '✏️ 照着灰色的写「' : '✏️ 正在写「') + ch(f.writing.word, f.writing.char) + '」', cls: 'kid' };
-  if (f.view === 'listen' && f.mode === 'order') return { text: '💡 点了「不会写,给答案」· 在看「' + ch(f.word, f.char) + '」的笔顺', cls: 'miss' };
+  if (f.view === 'listen' && f.mode === 'order') return { text: r.lang === 'en' ? '💡 点了「不会写,给答案」· 照着灰色的单词写' : '💡 点了「不会写,给答案」· 在看「' + ch(f.word, f.char) + '」的笔顺', cls: 'miss' };
   if (f.view === 'listen' && f.say) return { text: '🔊 老师念「' + r.says[f.word] + '」' + (f.say.n > 1 ? ' · 第 ' + f.say.n + ' 遍' : ''), cls: '' };
   if (f.view === 'check') return { text: '自己对一对', cls: 'gap' };
   if (f.view === 'order' && f.open) return { text: '在看「' + ch(f.open.word, f.open.char) + '」一笔一笔写', cls: 'gap' };

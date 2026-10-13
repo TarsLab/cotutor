@@ -119,9 +119,15 @@ try {
   ok('家长页:四线三格的格、蓝字叠着、看了答案:yellow、不说逐笔的话', await waitFor(`document.querySelectorAll('svg.tz.en').length >= 3 && document.body.innerText.includes('看了答案:yellow') && !document.body.innerText.includes('笔顺')`));
   await shot('en-05-parent');
   await send('Page.navigate', { url: `${base}/dictation/reel?id=${s?.id}` });
-  ok('录像页:一章一个单词、一个四线三格', await waitFor(`document.querySelectorAll('#chs .ch').length === 3 && document.querySelectorAll('#cells svg.en').length === 1 && document.querySelectorAll('#cells .enl line').length === 4`));
-  await evaluate(`document.querySelector('#chs .ch:nth-child(2)').click()`);
-  ok('第 2 章:经过里有「给答案」', await waitFor(`document.querySelector('#log').innerText.includes('给答案')`));
+  const K = `document.querySelector('#rl-frame').contentDocument`;
+  ok('录像:外壳里上半是英文页的录像模式(四线三格)、下半录像栏;一个单词一章(三章 + 对一对)', await waitFor(`!document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').getAttribute('src') || '').includes('lang=en') && ${K}?.querySelector('.view.on')?.id === 'v-write' && ${K}.querySelectorAll('#w-pad .enl line').length === 4 && document.querySelectorAll('#rl-chaps i').length === 3`, 10000), await evaluate(`JSON.stringify({ src: document.querySelector('#rl-frame').getAttribute('src'), chaps: document.querySelectorAll('#rl-chaps i').length })`));
+  await tap('#rl-marks i.rv');
+  ok('点「给答案」的点:yellow 灰灰地打底,录像栏写给答案', await waitFor(`${K}.querySelector('#w-pad .enw.trace')?.textContent === 'yellow' && document.querySelector('#rl-cap').textContent.includes('给答案')`), await evaluate(`document.querySelector('#rl-cap').textContent`));
+  await tap('#rl-more');
+  ok('经过:给答案、照着写、交卷、再写一遍', await waitFor(`(() => { const t = document.querySelector('#rl-log').innerText; return ['给答案', '照着写', '交卷', '再写一遍「red」'].every((x) => t.includes(x)); })()`), await evaluate(`document.querySelector('#rl-log').innerText.slice(0, 500)`));
+  await evaluate(`[...document.querySelectorAll('#rl-log li')].find((li) => li.textContent.includes('再写一遍「red」')).setAttribute('data-probe-li', '1')`);
+  await tap('[data-probe-li]');
+  ok('点经过里的「再写一遍」:上面是 red,右上角 ×', await waitFor(`${K}.querySelector('.view.on')?.id === 'v-write' && ${K}.querySelector('#w-model').textContent === 'red' && !${K}.querySelector('#w-x').hidden`));
   await shot('en-06-reel');
   // ---- 拍照开始(英语老师卡上的拍照听写):拍 → 一项一项认出单词 → 点选 → 开始 ----
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });

@@ -134,10 +134,14 @@ try {
   await send('DOM.setFileInputFiles', { nodeId: input.result.nodeId, files: [icon] });
   ok('认出来:四个单词默认选上;照片上还有的单词能点着加', await waitFor(`document.querySelectorAll('#p-chips .chip.on').length === 4 && [...document.querySelectorAll('#p-more .chip')].some((b) => b.textContent === 'colour')`, 12000));
   await evaluate(`[...document.querySelectorAll('#p-more .chip')].find((b) => b.textContent === 'colour').click()`);
-  await evaluate(`[...document.querySelectorAll('#p-chips .chip')].find((b) => b.textContent === 'bus').click()`);
+  ok('选词屏有照片:四个框都选上,还有「重拍」', await waitFor(`document.querySelector('#p-img').naturalWidth > 0 && document.querySelectorAll('#p-boxes .ebx.on').length === 4 && !!document.querySelector('#p-again')`));
+  await shot('en-07b-pick');
+  await tap('#p-boxes .ebx[aria-label="bus"]');
+  ok('点照片上 bus 的框:框和词一起去掉', await evaluate(`!document.querySelector('#p-boxes .ebx[aria-label="bus"]').classList.contains('on') && ![...document.querySelectorAll('#p-chips .chip.on')].some((b) => b.textContent === 'bus')`));
   await evaluate(`(() => { const i = document.querySelector('#p-add'); i.value = 'blue 红色'; })()`);
   await tap('#p-add-go');
   ok('点选:加了 colour、去掉 bus、自己打的 blue 加进来,汉字的不收', await waitFor(`[...document.querySelectorAll('#p-chips .chip.on')].map((b) => b.textContent).join() === 'red,yellow,green,colour,blue'`), await evaluate(`[...document.querySelectorAll('#p-chips .chip.on')].map((b) => b.textContent).join()`));
+  ok('自己加了词,「照片上还有这些」还在', await evaluate(`document.querySelectorAll('#p-more .chip').length > 0`));
   await shot('en-07-snap');
   await tap('#p-go');
   ok('开始听写:五个单词,英语老师念', await waitFor(`document.querySelector('#v-start.on #s-title')?.textContent === '单词听写 · 5 个单词' && document.querySelector('#s-sub').textContent.startsWith('英语老师')`));

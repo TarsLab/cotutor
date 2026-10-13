@@ -56,6 +56,14 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .snapbtns label { min-height:64px; padding:0 28px; border-radius:32px; background:var(--green); color:#fff; font-size:20px; font-weight:600; display:inline-flex; align-items:center; cursor:pointer; }
   .snapbtns label.alt { background:#fff; color:var(--ink); border:1px solid var(--line); }
   .snapbtns input { display:none; }
+  /* 选词屏的照片:认出的单词画框,点框同点词(同中文页) */
+  .shotwrap { display:flex; justify-content:center; }
+  .shotin { position:relative; display:inline-block; border-radius:12px; overflow:hidden; background:#2b2b2b; }
+  .shotin img { display:block; max-width:100%; max-height:46vh; }
+  .ebx { position:absolute; border-radius:6px; border:3px dashed rgba(120,115,105,.85); background:transparent; padding:0; cursor:pointer; }
+  .ebx.on { border-style:solid; border-color:var(--green); background:rgba(31,138,76,.16); }
+  .ebx.unsure.on { border-color:var(--accent); background:rgba(232,116,59,.18); }
+  .pgo { display:flex; justify-content:center; gap:12px; }
   /* 今天没写完的拍照听写(拍板 17):拍照屏最上面一块,点了接着写 */
   .resume { display:flex; align-items:center; gap:24px; padding:14px 14px 14px 26px; background:#fff; border:1px solid var(--line); border-radius:32px; text-align:left; box-shadow:0 2px 10px #00000010; }
   .resume b { display:block; font-size:20px; } .resume small { display:block; color:var(--dim); font-size:15px; }
@@ -74,12 +82,13 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   <div class="center" id="p-pick"><div class="resume" id="snap-resume" hidden><div><b>刚才的还没写完</b><small id="snap-resume-sub"></small></div><button class="main" type="button" id="snap-resume-go">接着写</button></div><b>拍一下要写的单词</b><span>课本上的单词表,或者老师发的听写单</span>
     <div class="snapbtns"><label id="snap-cam-btn">拍照<input type="file" accept="image/*" capture="environment" id="p-cam"></label><label class="alt">从相册选<input type="file" accept="image/*" id="p-lib"></label></div></div>
   <div id="p-list" hidden style="display:flex;flex-direction:column;gap:14px">
+    <div class="shotwrap"><div class="shotin"><img id="p-img" alt="拍的照片"><div id="p-boxes"></div></div></div>
     <div class="muted" id="p-status">正在看照片…</div>
     <div class="chips" id="p-chips"></div>
     <div class="muted">照片上还有这些,点一下加进来:</div>
     <div class="chips" id="p-more"></div>
     <div class="add"><input id="p-add" placeholder="自己加单词,空格分开" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="tool" type="button" id="p-add-go">加</button></div>
-    <div style="display:flex;justify-content:center"><button class="main" type="button" id="p-go" disabled>开始听写</button></div>
+    <div class="pgo"><button class="tool" type="button" id="p-again">重拍</button><button class="main" type="button" id="p-go" disabled>开始听写</button></div>
   </div>
 </div>
 <div class="view" id="v-write">
@@ -245,7 +254,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   $('#s-go').addEventListener('click', function () { nextWord(); });
 
   // ---------- 拍照开始:拍 → 一项一项认出来 → 点选 → 开始 ----------
-  var P = { id: null, items: [], on: {}, extra: [], timer: 0 };
+  var P = { id: null, items: [], on: {}, extra: [], timer: 0, rec: null, url: null };
   var shrink = function (file) {
     return new Promise(function (resolve, reject) {
       var url = URL.createObjectURL(file); var im = new Image();
@@ -257,6 +266,8 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   var WORD = /^[A-Za-z][A-Za-z'-]*$/;
   var chosen = function () { var out = []; P.items.forEach(function (it) { if (P.on[it.text]) out.push({ chars: it.text, say: it.say || undefined }); }); P.extra.forEach(function (w) { if (P.on[w] && !out.some(function (x) { return x.chars === w; })) out.push({ chars: w }); }); return out.slice(0, 20); };
   var drawChips = function (rec) {
+    if (rec) P.rec = rec; else rec = P.rec;
+    drawBoxes();
     var mk = function (w) { return h('button', { 'class': 'chip' + (P.on[w] ? ' on' : ''), type: 'button', on: { click: function () { P.on[w] = !P.on[w]; drawChips(rec); } } }, w); };
     $('#p-chips').replaceChildren.apply($('#p-chips'), P.items.map(function (it) { return mk(it.text); }).concat(P.extra.map(mk)));
     var seen = {}; P.items.forEach(function (it) { seen[it.text.toLowerCase()] = 1; }); P.extra.forEach(function (w) { seen[w.toLowerCase()] = 1; });
@@ -264,20 +275,37 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     $('#p-more').replaceChildren.apply($('#p-more'), more.slice(0, 40).map(function (w) { return h('button', { 'class': 'chip', type: 'button', on: { click: function () { P.extra.push(w); P.on[w] = true; drawChips(rec); } } }, w); }));
     $('#p-go').disabled = !chosen().length;
   };
+  var drawBoxes = function () {
+    var box = $('#p-boxes');
+    box.replaceChildren.apply(box, P.items.filter(function (it) { return it.box; }).map(function (it) {
+      var b = h('button', { 'class': 'ebx' + (P.on[it.text] ? ' on' : '') + (it.sure === false ? ' unsure' : ''), type: 'button', 'aria-label': it.text, on: { click: function () { P.on[it.text] = !P.on[it.text]; drawChips(null); } } });
+      b.style.left = it.box[0] / 10 + '%'; b.style.top = it.box[1] / 10 + '%'; b.style.width = (it.box[2] - it.box[0]) / 10 + '%'; b.style.height = (it.box[3] - it.box[1]) / 10 + '%';
+      return b;
+    }));
+  };
   var poll = function () {
-    api('GET', '/api/dictation/photos/' + P.id).then(function (rec) {
+    var id = P.id;
+    api('GET', '/api/dictation/photos/' + id).then(function (rec) {
+      if (P.id !== id) return;
       rec.items.forEach(function (it) { if (!P.items.some(function (x) { return x.text === it.text; })) { P.items.push(it); P.on[it.text] = it.pick; } });
       $('#p-status').textContent = rec.state === 'running' ? '正在看照片…' : P.items.length ? (rec.lesson ? rec.lesson + ' · ' : '') + '点一下选上或去掉' : '没认出单词,自己打上也行';
       drawChips(rec);
       if (rec.state === 'running') P.timer = setTimeout(poll, 700);
-    }, function () { P.timer = setTimeout(poll, 1500); });
+    }, function () { if (P.id === id) P.timer = setTimeout(poll, 1500); });
   };
   var onFile = function (e) {
     var f = e.target.files && e.target.files[0]; if (!f) return;
-    $('#p-pick').hidden = true; $('#p-list').hidden = false; showResume(null); $('#p-status').textContent = '正在看照片…';
+    $('#p-pick').hidden = true; $('#p-list').hidden = false; showResume(null);
+    P.url = URL.createObjectURL(f); $('#p-img').src = P.url; $('#p-status').textContent = '正在看照片…';
     shrink(f).then(function (data) { return api('POST', '/api/dictation/photos', { image: data, lang: 'en' }); }).then(function (j) { P.id = j.id; poll(); }, function () { $('#p-status').textContent = '没看成,自己打上单词也行'; });
   };
   $('#p-cam').addEventListener('change', onFile); $('#p-lib').addEventListener('change', onFile);
+  $('#p-again').addEventListener('click', function () {
+    clearTimeout(P.timer); if (P.url) URL.revokeObjectURL(P.url);
+    P = { id: null, items: [], on: {}, extra: [], timer: 0, rec: null, url: null };
+    $('#p-cam').value = ''; $('#p-lib').value = ''; $('#p-img').removeAttribute('src'); $('#p-boxes').replaceChildren(); $('#p-chips').replaceChildren(); $('#p-more').replaceChildren();
+    $('#p-list').hidden = true; $('#p-pick').hidden = false; $('#p-go').disabled = true; findResume();
+  });
   $('#p-add-go').addEventListener('click', function () { var inp = $('#p-add'); inp.value.split(/ +/).forEach(function (w) { w = w.trim(); if (WORD.test(w) && w.length <= 20 && P.extra.indexOf(w) < 0) { P.extra.push(w); P.on[w] = true; } }); inp.value = ''; drawChips(null); });
   $('#p-go').addEventListener('click', function () {
     var b = $('#p-go'); b.disabled = true; clearTimeout(P.timer);

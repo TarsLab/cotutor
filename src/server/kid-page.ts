@@ -30,6 +30,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { letterAdvances } from './letters.ts';
 import { TUTOR_FIXED, TUTOR_PALETTE } from './tutor-face.ts';
+import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from './reel-dock.ts';
 import { stripTypeScriptTypes } from 'node:module';
 
 /** 读 src/lib/<name> 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
@@ -344,56 +345,16 @@ const PAGE = `<!doctype html>
   #typed[hidden] { display:none; }
   #go { width:36px; height:36px; border-radius:50%; background:var(--ink); color:#fff; display:grid; place-items:center; }
   #go[hidden] { display:none; }
-  /* 看录像(《家长录像设计.md》,只在家长端):底部换成控制条——进度条上一排点(开口 / 改卡 / 停下等孩子 / 没成),下面播放、钟点、推算、跳过空白、倍速、退出 */
-  #reel { padding:2px 16px calc(env(safe-area-inset-bottom) + 12px); display:flex; flex-direction:column; gap:4px; }
-  #reel[hidden] { display:none; }
+  /* 看录像(《家长录像设计.md》,只在家长端):孩子的屏幕与录像栏的样式在 reel-dock.ts,话题与听写共用;下面是老师页自己的 */
+__REEL_DOCK_CSS__
   body.reel #bar, body.reel #sub-btn { display:none; }
   /* 录像里的弹窗是孩子当时的样子:只看,点不动,没有关闭钮,跟着实录关 */
   body.reel #st-x, body.reel #st-act { display:none; }
   body.reel #st-body, body.reel #st-frame, body.reel #st-dim { pointer-events:none; }
-  .rl-track { position:relative; height:34px; }
-  #rl-seek { position:absolute; left:0; right:0; bottom:0; width:100%; height:24px; margin:0; accent-color:var(--accent); background:none; }
-  #rl-marks { position:absolute; left:8px; right:8px; top:0; height:10px; }
-  #rl-marks i { position:absolute; top:0; width:9px; height:9px; margin-left:-4.5px; border-radius:50%; cursor:pointer; }
-  #rl-marks i::before { content:""; position:absolute; inset:-8px; }
-  #rl-marks i.said { background:var(--accent); }
-  #rl-marks i.card { background:#2fa36b; }
-  #rl-marks i.ask { background:#5b3d86; border-radius:2px; transform:scale(.8); }
-  #rl-marks i.error { background:#b3541e; border-radius:2px; }
-  #rl-marks i.lecture { background:#c95a22; border-radius:2px; }
-  #rl-marks i.circle { background:#2f6fd6; }
-  /* 按住说话没发出去:每次一个淡点;连着几次的一串是一条橙色的带(拍板 10) */
-  #rl-marks i.miss { background:#b9b4a8; width:7px; height:7px; margin-left:-3.5px; top:1px; }
-  #rl-marks i.misses { background:#e8743b40; border:1px solid #e8743b; border-radius:5px; height:9px; margin-left:-3px; box-sizing:border-box; }
-  #rl-cap.miss { color:#b3541e; }
   .pt .tr small .miss { color:#b3541e; }
-  /* 录像栏展开(拍板 8 的 C):这个话题的经过,一条一行;当前那条亮着、后面的淡着,点一条跳过去。往上拉展开、往下拉收起,也可以点「经过」 */
-  .rl-caprow { display:flex; align-items:center; gap:8px; min-height:24px; touch-action:none; }
-  .rl-caprow #rl-cap { flex:1; min-width:0; }
-  #rl-more { flex:none; font-size:13px; color:var(--dim); border:1px solid var(--line); border-radius:12px; padding:2px 10px; background:#fff; }
-  #rl-log { max-height:min(30vh, 260px); overflow-y:auto; border:1px solid var(--line); border-radius:12px; background:#fff; overscroll-behavior:contain; }
-  #rl-log[hidden] { display:none; }
-  #rl-log ol { list-style:none; margin:0; padding:4px 0; }
-  #rl-log li { display:grid; grid-template-columns:62px 68px minmax(0,1fr); gap:8px; align-items:baseline; padding:5px 12px; font-size:14px; line-height:1.45; cursor:pointer; }
-  #rl-log li .rl-c { font-variant-numeric:tabular-nums; color:var(--dim); font-size:12px; }
-  #rl-log li .rl-k { font-size:12px; border-radius:6px; padding:0 6px; text-align:center; white-space:nowrap; background:var(--grey); color:var(--dim); }
-  #rl-log li .rl-k.said { background:#fde3d2; color:#9a4318; }
-  #rl-log li .rl-k.card { background:var(--purple); color:var(--purple-ink); }
-  #rl-log li .rl-k.miss, #rl-log li .rl-k.err { background:#fbe0d6; color:#b3541e; }
-  #rl-log li .rl-k.tail { background:var(--ok); color:var(--ok-ink); }
-  #rl-log li .rl-t { min-width:0; overflow-wrap:anywhere; }
-  #rl-log li.fut { opacity:.45; }
-  #rl-log li.cur { background:#fdeee4; }
-  @media (max-width:600px) { #rl-log li { grid-template-columns:52px minmax(0,1fr); } #rl-log li .rl-k { display:none; } }
   /* 录像里看小课堂的那一段:铺在板书上,字幕行与控制条露着;只看 */
   /* 家长端录像(拍板 6):上半是孩子的屏幕(iframe 里的孩子端,按孩子设备的尺寸开、等比缩),下半是录像栏;家长页自己的板书、字幕行、顶栏收起来 */
   body.reel #wrap, body.reel #sub, body.reel .tb { display:none; }
-  #rl-screen { position:relative; flex:1; min-height:0; overflow:hidden; background:#e7e3d9; }
-  #rl-screen[hidden] { display:none; }
-  #rl-frame { position:absolute; left:0; top:0; width:1180px; height:820px; border:0; transform-origin:0 0; background:var(--paper); border-radius:10px; box-shadow:0 0 0 5px #1d1d1d, 0 8px 24px #0003; }
-  #rl-cap { min-height:22px; font-size:15px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  #rl-cap.gap { color:var(--dim); font-weight:500; }
-  #rl-cap.kid { color:var(--accent); }
   /* 孩子的屏幕(iframe 里):孩子端原样,只是点不动 */
   body.rlk #tutor .tb, body.rlk #wrap, body.rlk #sub, body.rlk #bar, body.rlk #lc-frame { pointer-events:none; }
   /* 直接打开孩子的屏幕(调试)时录像栏在它自己底下:压在按住浮层、小课堂上面 */
@@ -408,24 +369,6 @@ const PAGE = `<!doctype html>
   #rl-ps-img { position:absolute; inset:0; margin:auto; max-width:100%; max-height:100%; object-fit:contain; }
   body.rlk #ps-cv { visibility:hidden; }
   body.rlk #ps { pointer-events:none; }
-  .rl-row { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--dim); }
-  .rl-when { flex:none; display:flex; flex-direction:column; align-items:flex-start; gap:1px; line-height:1.2; }
-  #rl-play { flex:none; width:44px; height:44px; border-radius:50%; background:var(--ink); color:#fff; display:grid; place-items:center; }
-  #rl-clock { font-variant-numeric:tabular-nums; color:var(--ink); font-size:15px; }
-  #rl-tag { font-size:11px; border:1px solid var(--line); border-radius:7px; padding:0 6px; background:#fff; white-space:nowrap; }
-  #rl-tag[hidden], #rl-ver[hidden] { display:none; }
-  .rl-tags { display:flex; gap:4px; }
-  #rl-ver { font-size:11px; border:1px solid var(--line); border-radius:7px; padding:0 6px; background:#fff; white-space:nowrap; color:var(--dim); }
-  .rl-sp { flex:1; }
-  .rl-row .tx { flex:none; height:34px; padding:0 11px; border-radius:17px; white-space:nowrap; border:1px solid var(--line); background:#fff; font-size:14px; color:var(--ink); }
-  /* 「跳过空白」是个开关(主流播放器的「跳过静音」都这样):滑块在右、底色填满 = 开着 */
-  .rl-sw { flex:none; display:inline-flex; align-items:center; gap:6px; height:34px; font-size:14px; color:var(--ink); cursor:pointer; white-space:nowrap; }
-  .rl-sw input { position:absolute; opacity:0; width:1px; height:1px; pointer-events:none; }
-  .rl-sw i { position:relative; flex:none; width:36px; height:22px; border-radius:11px; background:var(--line); transition:background .15s; }
-  .rl-sw i::after { content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 3px #00000033; transition:transform .15s; }
-  .rl-sw input:checked + i { background:var(--accent); }
-  .rl-sw input:checked + i::after { transform:translateX(14px); }
-  .rl-sw input:focus-visible + i { outline:2px solid var(--accent); outline-offset:2px; }
   body.limit #pill, body.pending #pill { opacity:.45; pointer-events:none; }
   #hold { position:absolute; left:0; right:0; bottom:0; height:300px; background:linear-gradient(180deg,#3b82e800 0%,#3b82e8cc 45%,#2f6fd6 100%); display:none; flex-direction:column; align-items:center; justify-content:flex-end; gap:22px; padding-bottom:calc(env(safe-area-inset-bottom) + 70px); color:#fff; pointer-events:none; z-index:20; }
   #hold.on { display:flex; }
@@ -592,12 +535,7 @@ const PAGE = `<!doctype html>
       <button id="back-today" type="button" hidden>回到今天</button>
     </div>
     <div id="rl-screen" hidden><iframe id="rl-frame" title="孩子的屏幕" allow="autoplay"></iframe></div>
-    <div id="reel" hidden>
-      <div id="rl-log" hidden><ol></ol></div>
-      <div class="rl-caprow" id="rl-caprow"><div id="rl-cap"></div><button id="rl-more" type="button" aria-expanded="false">经过 ▴</button></div>
-      <div class="rl-track"><div id="rl-marks"></div><input id="rl-seek" type="range" min="0" max="1000" step="100" value="0" aria-label="录像进度"></div>
-      <div class="rl-row"><button id="rl-play" type="button" aria-label="播放"></button><span class="rl-when"><span id="rl-clock"></span><span class="rl-tags"><button id="rl-tag" type="button">推算</button><button id="rl-ver" type="button" hidden>画法已更新</button></span></span><span class="rl-sp"></span><label class="rl-sw" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就按真实时间放"><input type="checkbox" id="rl-skip" role="switch" checked><i></i>跳过空白</label><button class="tx" id="rl-speed" type="button">1×</button><button class="tx" id="rl-x" type="button">退出</button></div>
-    </div>
+    __REEL_DOCK_HTML__
     <div id="hold"><div class="t"></div><span>松手发送,上移取消</span><div class="w"></div></div>
   </div>
   <div id="hist"><div class="dimmer"></div><div class="panel"><div class="hd"><span>以前的</span><button class="hb" id="hist-x" type="button"></button></div><div class="ls"></div></div></div>
@@ -2035,7 +1973,7 @@ __REEL_JS__
   /** 换端(转屏)或窗口变了:端或半宽变了就整节重排(卡重新量),标注按已播到的画齐,选中态照旧 */
   const relayout = () => {
     const d = debug.get('device') || deviceFor(innerWidth, innerHeight);
-    // 录像:孩子的屏幕转屏 / 换端整块重画;家长页这头只是 iframe 换个缩放(reelFit)
+    // 录像:孩子的屏幕转屏 / 换端整块重画;家长页这头只是 iframe 换个缩放(reelDock 自己跟着窗口)
     if (S.reel) { if (REEL) { S.device = d; S.reel.key = ''; reelTick(); } return; }
     const hw = halfWidth();
     if (d !== S.device || hw !== S.layHalf) {
@@ -2955,6 +2893,9 @@ __REEL_JS__
     marks: () => { const R = S.reel; return R ? R.d.reel.marks.map((m) => ({ kind: m.kind, label: m.label, at: m.at, p: R.clock.toPlay(m.at), ...(m.to ? { pTo: R.clock.toPlay(m.to) } : {}) })) : []; },
     play: (on) => reelPlay(on),
     seek: (p) => reelSeek(p),
+    speeds: REEL_SPEEDS,
+    /** 章:孩子每开口一次是一轮(拍板 13) */
+    chapters: () => { const R = S.reel; return R ? R.d.reel.marks.filter((m) => m.kind === 'said').map((m, i) => ({ p: R.clock.toPlay(m.at), title: '第 ' + (i + 1) + ' 轮' })) : []; },
     /** 这个话题的经过(录像栏展开后的列表):孩子做的每件事、等了多久、给家长的,一条一行,按时间排 */
     events: () => {
       const R = S.reel; if (!R) return [];
@@ -3015,78 +2956,16 @@ __REEL_JS__
     reelTick();
     window.cotutorReel = reelApi;
     if (host) host.cotutorReelReady(reelApi, { size: S.reel.size });
-    else { $('#rl-x').hidden = true; dockOpen(reelApi); }
+    else reelDock.open(reelApi, { toast, tagHint: REEL_HINT });
   };
 
-  // ---- 录像栏:家长页上(隔着 iframe),或直接打开孩子屏幕时在它自己身上。只经把手 RE 说话 ----
-  let RE = null, dockTimer = 0, dockReal = null, dockPlaying = null, dockDragging = false, dockEv = [], dockCur = -2;
-  /** 经过的列表:跟着录像的钟亮当前那条;展开着才滚 */
-  const dockLog = (st) => {
-    if (st.real !== dockReal || !dockEv.length) {
-      dockEv = RE.events(); dockCur = -2;
-      $('#rl-log ol').replaceChildren(...dockEv.map((e, i) => h('li', { 'data-i': i, on: { click: () => { if (RE) RE.seek(e.p + 1); } } }, h('span', { class: 'rl-c' }, reelHms(e.at)), h('span', { class: 'rl-k ' + e.kind }, e.chip), h('span', { class: 'rl-t' }, e.text))));
-    }
-    let cur = -1; dockEv.forEach((e, i) => { if (e.at <= st.wall) cur = i; });
-    if (cur === dockCur) return;
-    dockCur = cur;
-    const lis = $('#rl-log ol').children;
-    for (let i = 0; i < lis.length; i++) { lis[i].classList.toggle('cur', i === cur); lis[i].classList.toggle('fut', i > cur); }
-    const box = $('#rl-log'), li = lis[Math.max(0, cur)];
-    if (!box.hidden && li) box.scrollTo({ top: Math.max(0, li.offsetTop - box.clientHeight / 2 + li.offsetHeight / 2), behavior: 'smooth' });
-  };
-  const dockMore = (open) => {
-    $('#rl-log').hidden = !open; $('#rl-more').setAttribute('aria-expanded', String(open)); $('#rl-more').textContent = open ? '经过 ▾' : '经过 ▴';
-    try { localStorage.setItem('parent-reel-log', open ? '1' : '0'); } catch {}
-    dockCur = -2; const st = RE && RE.get(); if (st) dockLog(st);
-  };
-  const dockRender = () => {
-    const st = RE && RE.get(); if (!st) return;
-    dockLog(st);
-    if (st.real !== dockReal) {
-      dockReal = st.real;
-      $('#rl-seek').max = String(Math.max(1, Math.round(st.total)));
-      const pct = (p) => (100 * p / Math.max(1, st.total)).toFixed(2) + '%';
-      $('#rl-marks').replaceChildren(...RE.marks().map((m) => h('i', { class: m.kind, title: reelHms(m.at) + ' ' + m.label, style: 'left:' + pct(m.p) + (m.pTo !== undefined ? ';width:calc(' + pct(m.pTo - m.p) + ' + 6px)' : ''), on: { click: () => { if (RE) RE.seek(m.p); } } })));
-      $('#rl-skip').checked = !st.real;
-    }
-    if (!dockDragging) $('#rl-seek').value = String(Math.round(st.p));
-    $('#rl-clock').textContent = reelHms(st.wall);
-    if (st.playing !== dockPlaying) { dockPlaying = st.playing; $('#rl-play').innerHTML = st.playing ? ICON.pause : ICON.play; $('#rl-play').setAttribute('aria-label', st.playing ? '暂停' : '播放'); }
-    const cap = $('#rl-cap'); if (cap.textContent !== st.cap.text) { cap.textContent = st.cap.text; cap.className = st.cap.cls; }
-    $('#rl-ver').hidden = !st.stale;
-    // 孩子转了屏、换了尺寸:上半那块照这一刻的尺寸重缩(家长页这头;直接打开孩子屏幕时没有)
-    if (!REEL && st.size && reelSize && (st.size[0] !== reelSize[0] || st.size[1] !== reelSize[1])) { reelSize = st.size; reelFit(); }
-  };
-  const dockOpen = (api) => {
-    RE = api; dockReal = null; dockPlaying = null; dockDragging = false; dockEv = [];
-    let open = false; try { open = localStorage.getItem('parent-reel-log') === '1'; } catch {}
-    $('#rl-log').hidden = !open; $('#rl-more').setAttribute('aria-expanded', String(open)); $('#rl-more').textContent = open ? '经过 ▾' : '经过 ▴';
-    const st = api.get();
-    $('#rl-speed').textContent = st.speed + '×';
-    $('#rl-tag').hidden = st.precise;
-    $('#reel').hidden = false;
-    clearInterval(dockTimer); dockTimer = setInterval(dockRender, 100);
-    dockRender();
-  };
-  const dockClose = () => { clearInterval(dockTimer); RE = null; $('#reel').hidden = true; };
-
-  // ---- 家长页这头:开 / 关孩子的屏幕(iframe),按孩子设备的尺寸等比缩进录像栏上面那块 ----
-  let reelSize = null;
-  const reelFit = () => {
-    const sc = $('#rl-screen'), fr = $('#rl-frame');
-    if (sc.hidden || !reelSize) return;
-    const [w, hh] = reelSize, pad = 12;
-    const k = Math.min((sc.clientWidth - 2 * pad) / w, (sc.clientHeight - 2 * pad) / hh, 1);
-    fr.style.width = w + 'px'; fr.style.height = hh + 'px';
-    fr.style.transform = 'translate(' + Math.round((sc.clientWidth - w * k) / 2) + 'px,' + Math.round((sc.clientHeight - hh * k) / 2) + 'px) scale(' + k + ')';
-  };
-  // 录像栏出来、转屏、窗口变了,上半那块都会变:跟着它的尺寸重算
-  if (window.ResizeObserver) new ResizeObserver(reelFit).observe($('#rl-screen')); else window.addEventListener('resize', reelFit);
+__REEL_DOCK_JS__
+  // ---- 家长页这头:开 / 关孩子的屏幕(iframe),录像栏(reelDock)照孩子设备的尺寸把它缩进上半 ----
   /** 只收拾录像自己的东西(关老师页时也调);不重开话题 */
   const reelStop = () => {
     if (!S.reel) return;
     if (REEL) { const R = S.reel; clearInterval(R.timer); S.reel = null; silence(); if (S.stage) closeStage(); if (R.lc) hideLecture(); return; }
-    S.reel = null; reelSize = null; dockClose();
+    S.reel = null; reelDock.close();
     window.cotutorReelReady = null; window.cotutorReelFail = null;
     const fr = $('#rl-frame'); try { if (fr.contentWindow && fr.contentWindow.cotutorReel) fr.contentWindow.cotutorReel.stop(); } catch {}
     fr.src = 'about:blank';
@@ -3103,8 +2982,9 @@ __REEL_JS__
     const fr = $('#rl-frame');
     window.cotutorReelReady = (api, info) => {
       if (!S.reel) return;
-      reelSize = info && info.size ? info.size : REEL_SIZES['tablet-landscape'];
-      dockOpen(api); reelFit(); api.play(true);
+      reelDock.open(api, { exit: reelClose, toast, tagHint: REEL_HINT });
+      reelDock.frame(info && info.size ? info.size : REEL_SIZES['tablet-landscape']);
+      api.play(true);
     };
     window.cotutorReelFail = () => { reelClose(); toast('这个话题没有录像'); };
     document.body.classList.add('reel'); $('#rl-screen').hidden = false;
@@ -3114,21 +2994,6 @@ __REEL_JS__
   const reelClose = () => { if (!S.reel) return; const t = S.tutor, th = S.thread, date = S.hist; reelStop(); openTutor(t, { kind: 'thread', thread: th, date }); };
   $('#reel-btn').innerHTML = ICON.reel;
   $('#reel-btn').addEventListener('click', reelOpen);
-  $('#rl-play').addEventListener('click', () => { if (RE) { const st = RE.get(); if (st) RE.play(!st.playing); } });
-  $('#rl-x').addEventListener('click', reelClose);
-  $('#rl-tag').addEventListener('click', () => toast(REEL_HINT));
-  $('#rl-more').addEventListener('click', () => dockMore($('#rl-log').hidden));
-  // 在说明那一行上往上拉展开、往下拉收起
-  { let y0 = null; const row = $('#rl-caprow');
-    row.addEventListener('pointerdown', (e) => { if (e.target.closest('#rl-more')) return; y0 = e.clientY; });
-    row.addEventListener('pointerup', (e) => { if (y0 === null) return; const dy = e.clientY - y0; y0 = null; if (dy < -24) dockMore(true); else if (dy > 24) dockMore(false); });
-    row.addEventListener('pointercancel', () => { y0 = null; }); }
-  $('#rl-ver').addEventListener('click', () => toast('这段是旧版孩子端录的,现在用新版的样子画:板上有什么、孩子做了什么照旧,样子可能和孩子当时看到的不一样'));
-  $('#rl-skip').addEventListener('change', (e) => { if (RE) RE.real(!e.target.checked); });
-  $('#rl-speed').addEventListener('click', (e) => { if (!RE) return; const st = RE.get(); const x = REEL_SPEEDS[(REEL_SPEEDS.indexOf(st.speed) + 1) % REEL_SPEEDS.length]; RE.speed(x); e.currentTarget.textContent = x + '×'; });
-  // 拖的时候不出声,松手从那一刻接着放
-  $('#rl-seek').addEventListener('input', (e) => { if (!RE) return; dockDragging = true; RE.drag(Number(e.target.value)); });
-  $('#rl-seek').addEventListener('change', (e) => { if (!RE) return; dockDragging = false; RE.seek(Number(e.target.value)); });
 
   // ---- 输入条:相机 | 发消息或按住说话 | 加号 ----
   $('#cam').insertAdjacentHTML('afterbegin', ICON.camera);
@@ -3684,7 +3549,7 @@ __REEL_JS__
 </html>
 `;
 
-const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_ADV__', () => JSON.stringify(letterAdvances())).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__TUTOR_PALETTE__', () => JSON.stringify(TUTOR_PALETTE)).replace('__TUTOR_FIXED__', () => JSON.stringify(TUTOR_FIXED));
+const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_ADV__', () => JSON.stringify(letterAdvances())).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__TUTOR_PALETTE__', () => JSON.stringify(TUTOR_PALETTE)).replace('__TUTOR_FIXED__', () => JSON.stringify(TUTOR_FIXED));
 export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 
 export interface KidPageMode {

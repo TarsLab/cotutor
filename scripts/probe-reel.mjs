@@ -77,8 +77,8 @@ try {
   await evaluate(`document.querySelector('#reel-btn').click()`);
   await until(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden`);
   await sleep(300);
-  const s0 = await evaluate(`({ board: getComputedStyle(document.querySelector('#wrap')).display, screen: !document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), fw: document.querySelector('#rl-frame').style.width, scale: document.querySelector('#rl-frame').style.transform, max: Number(document.querySelector('#rl-seek').max), marks: [...document.querySelectorAll('#rl-marks i')].map((i) => i.className), cap: document.querySelector('#rl-cap').textContent, clock: document.querySelector('#rl-clock').textContent, tag: !document.querySelector('#rl-tag').hidden })`);
-  ok('进录像:家长页的板书收起来,上半是孩子的屏幕(/reel,按 iPad 横屏 1180 宽开、缩小),下半录像栏;标「推算」', s0.board === 'none' && s0.screen && s0.src.startsWith('/reel?') && s0.fw === '1180px' && /scale\(0\.\d+\)/.test(s0.scale) && s0.tag && /^\d\d:\d\d:\d\d$/.test(s0.clock), JSON.stringify(s0));
+  const s0 = await evaluate(`({ board: getComputedStyle(document.querySelector('#wrap')).display, screen: !document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), fw: document.querySelector('#rl-frame').style.width, scale: document.querySelector('#rl-frame').style.transform, max: Number(document.querySelector('#rl-seek').max), marks: [...document.querySelectorAll('#rl-marks i')].map((i) => i.className), cap: document.querySelector('#rl-cap').textContent, clock: document.querySelector('#rl-clock').textContent, sub: document.querySelector('#rl-sub').textContent, tag: !document.querySelector('#rl-tag').hidden, fill: (() => { const a = document.querySelector('#rl-screen').getBoundingClientRect(), b = document.querySelector('#rl-frame').getBoundingClientRect(); return Math.abs(a.width - b.width) < 2 || Math.abs(a.height - b.height) < 2; })() })`);
+  ok('进录像:家长页的板书收起来,上半是孩子的屏幕(/reel,按 iPad 横屏 1180 宽开、等比缩到铺满),下半录像栏;时间是「放到哪 / 一共多久」、下面小字当时几点;标「推算」', s0.board === 'none' && s0.screen && s0.src.startsWith('/reel?') && s0.fw === '1180px' && /scale\(0\.\d+\)/.test(s0.scale) && s0.tag && /^\d+:\d\d \/ \d+:\d\d$/.test(s0.clock) && /^当时 \d\d:\d\d:\d\d$/.test(s0.sub) && s0.fill, JSON.stringify(s0));
   ok('进度条上的点:两次开口、停下等孩子', s0.marks.filter((c) => c === 'said').length === 2 && s0.marks.includes('ask') && s0.max > 0, JSON.stringify(s0.marks));
   const k0 = await kid(`({ rlk: document.body.classList.contains('rlk'), pill: !document.querySelector('#pill').hidden, bar: getComputedStyle(document.querySelector('#bar')).pointerEvents, secs: document.querySelectorAll('#board .sec').length, pend: document.querySelectorAll('#board > .sh.said.pend').length, wait: document.querySelectorAll('#board > .wait-card').length, notes: document.querySelectorAll('.notes').length, reelUi: !document.querySelector('#reel').hidden, mo: document.querySelector('#c-mo').hidden, back: document.querySelector('#back-today').hidden })`);
   ok('孩子的屏幕:孩子端的样子——输入条露着(点不动)、没有旁注、没有录像栏、没有「以前的」「回到今天」', k0.rlk && k0.pill && k0.bar === 'none' && k0.notes === 0 && !k0.reelUi && k0.mo && k0.back, JSON.stringify(k0));
@@ -115,6 +115,19 @@ try {
   await sleep(300);
   const s4 = await kid(`({ secs: document.querySelectorAll('#board .sec').length })`);
   ok('点第二次开口的点:跳到那儿,第一节在', s4.secs === 1, JSON.stringify(s4));
+  const c4 = await evaluate(`({ seps: document.querySelectorAll('#rl-chaps i').length, chap: document.querySelector('#rl-chap').textContent, hidden: document.querySelector('#rl-chap').hidden })`);
+  ok('章:孩子每开口一次一轮,进度条上断开一处;跳到第二次开口时说明那行左边写「第 2 轮」', c4.seps === 1 && !c4.hidden && c4.chap === '第 2 轮', JSON.stringify(c4));
+
+  // ---- 录像栏收起 / 展开(拍板 15) ----
+  const tall = await evaluate(`document.querySelector('#rl-screen').getBoundingClientRect().height`);
+  await evaluate(`document.querySelector('#rl-fold').click()`);
+  await sleep(300);
+  const f0 = await evaluate(`({ min: document.querySelector('#reel').classList.contains('min'), row: getComputedStyle(document.querySelector('.rl-row')).display, cap: getComputedStyle(document.querySelector('.rl-caprow')).display, mplay: getComputedStyle(document.querySelector('#rl-mplay')).display, mclock: document.querySelector('#rl-mclock').textContent, h: document.querySelector('#reel').offsetHeight, sc: document.querySelector('#rl-screen').getBoundingClientRect().height, kept: localStorage.getItem('parent-reel-min') })`);
+  ok('收起:只剩一行(播放、细进度条、时间),上半跟着变高;这台设备记住', f0.min && f0.row === 'none' && f0.cap === 'none' && f0.mplay === 'grid' && /^\d+:\d\d \/ \d+:\d\d$/.test(f0.mclock) && f0.h < 80 && f0.sc > tall + 30 && f0.kept === '1', JSON.stringify({ f0, tall }));
+  await evaluate(`document.querySelector('#rl-unfold').click()`);
+  await sleep(300);
+  const f1 = await evaluate(`({ min: document.querySelector('#reel').classList.contains('min'), row: getComputedStyle(document.querySelector('.rl-row')).display, mplay: getComputedStyle(document.querySelector('#rl-mplay')).display })`);
+  ok('展开:控制行回来', !f1.min && f1.row === 'flex' && f1.mplay === 'none', JSON.stringify(f1));
 
   // ---- 手机:家长在手机上看 iPad 的录像,孩子的屏幕缩进上半;录像栏不撑出横向滚动 ----
   await device(390, 844, 2, true);

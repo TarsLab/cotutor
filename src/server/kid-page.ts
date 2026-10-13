@@ -170,6 +170,7 @@ const PAGE = `<!doctype html>
   #deck .pc-ix .av { width:100%; height:100%; font-size:11px; }
   #deck .pc .kc { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
   #deck .pc .kcards { margin-top:4px; }
+  #deck .pc:not(.front) .bt-new::before { visibility:hidden; } /* 后面那几张只露出头那一行,新话题气泡的尖角会从缝里冒出来 */
   #deck .pc.off { pointer-events:auto; }
   #deck .pc.off.front .bts { pointer-events:none; }
   body.offline #deck .pc { pointer-events:none; }
@@ -190,6 +191,7 @@ const PAGE = `<!doctype html>
   body.offline .c-tutor .av { filter:grayscale(1); opacity:.4; }
   body.offline .c-tutor .av .ring circle { transform:rotate(126deg); }
   body.offline .c-tutor .nm, body.offline .c-tutor .bt { color:var(--dim); }
+  body.offline .c-tutor .bt-new { background:var(--grey); }
   /* ---- 老师页 = 板书页 ---- */
   #tutor { position:fixed; inset:0; background:var(--paper); display:none; z-index:10; }
   #tutor.on { display:flex; }
@@ -805,7 +807,11 @@ __REEL_JS__
   // ---- 常驻入口(《首页设计.md》拍板 18):听写、拍照听写、口语课一直在那位老师的卡上,不经首页发布 ----
   const EXTRA_ICON = { dictation: SVG('<path d="M4 20l4-1 11-11-3-3L5 16z"></path><path d="M14 7l3 3"></path>', 20), photo: SVG('<path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle>', 20), talk: SVG('<path d="M4 5h16v11H9l-5 4z"></path><path d="M8 10h8"></path>', 20) };
   const extraBtn = (kind, label, sub, on) => h(on.href ? 'a' : 'button', { type: on.href ? null : 'button', class: 'bt bt-extra bt-x-' + kind, href: on.href || null, on: on.click ? { click: on.click } : {} },
-    h('span', { class: 'bi', html: EXTRA_ICON[kind === 'photo' ? 'photo' : kind] }), h('span', { class: 'lb' }, h('span', {}, label), sub ? h('small', { class: 'ln' }, sub) : null));
+    h('span', { class: 'bi', html: EXTRA_ICON[kind === 'photo' ? 'photo' : kind] }), h('span', { class: 'lb' }, h('span', { class: 'btx' }, label), sub ? h('small', { class: 'ln' }, sub) : null));
+  /** 听写(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):一整条,上面一排空格子,几个词几格(最多 6,英文是四线三格),下面「听写 · 几个词」和「去写」 */
+  const dictationBtn = (label, sub, n, en, href) => h('a', { class: 'bt bt-extra bt-x-dictation' + (en ? ' en' : ''), href },
+    h('span', { class: 'dg', 'aria-hidden': 'true' }, ...Array.from({ length: Math.max(1, Math.min(n, en ? 4 : 6)) }, () => h('i'))),
+    h('span', { class: 'dr' }, h('span', { class: 'lb' }, h('span', { class: 'btx' }, label), h('small', { class: 'ln' }, sub)), h('span', { class: 'go' }, '去写')));
   /** 口语课:有给孩子的口语单才出现(/api/talk,30 秒读一次);点了用最近那份开一次(聊过了就照它再开) */
   const talkInfo = () => {
     if (S.talkAt && Date.now() - S.talkAt < 30000) return S.talkLast;
@@ -828,7 +834,7 @@ __REEL_JS__
     const extras = t.extras || [];
     const all = (Array.isArray(H.cards) ? H.cards : []).filter((x) => x.kind === 'dictation');
     // 英文单词听写(《wip/听写设想.md》拍板 15):卡上的词是英文单词,或者英语老师卡上的拍照听写 → /dictation?lang=en
-    for (const c of all) if (c.owner === t.name) { const en = c.props.lang === 'en'; out.push(extraBtn('dictation', en ? '单词听写' : '听写', (c.props.count || 0) + (en ? ' 个单词' : ' 个词') + ' · 老师念,你来写', { href: '/dictation?home=' + encodeURIComponent(H.home || '') + '&n=' + all.indexOf(c) + (en ? '&lang=en' : '') })); }
+    for (const c of all) if (c.owner === t.name) { const en = c.props.lang === 'en', n = c.props.count || 0; out.push(dictationBtn(en ? '单词听写' : '听写', n + (en ? ' 个单词' : ' 个词') + ' · 老师念,你来写', n, en, '/dictation?home=' + encodeURIComponent(H.home || '') + '&n=' + all.indexOf(c) + (en ? '&lang=en' : ''))); }
     if (extras.includes('dictation')) { const en = t.subject === '英语'; out.push(extraBtn('photo', '拍照听写', en ? '拍一下要写的单词' : '拍一下要写的词', { href: '/dictation?tutor=' + encodeURIComponent(t.name) + (en ? '&lang=en' : '') })); }
     if (extras.includes('talk')) {
       const last = talkInfo();
@@ -836,8 +842,34 @@ __REEL_JS__
     }
     return out;
   };
-  const tutorButton = (t, b) => h('button', { type: 'button', class: 'bt bt-' + b.kind, on: { click: () => pickButton(t, b) } }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }),
-    b.kind === 'lecture' ? h('span', { class: 'lb' }, h('small', {}, '小课堂'), h('span', {}, b.label), h('small', { class: 'ln' }, (b.ms ? lcLen(b.ms) + ' · ' : '') + '看完再问老师')) : h('span', {}, b.label));
+  // 牌上的按钮(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):新话题是从 C 的开口说出来的一个大气泡;小课堂是带预览图的海报;其余是大胶囊。
+  // 孩子看到的字都在 .btx 里(探针按它读)
+  const tutorButton = (t, b) => {
+    const on = { click: () => pickButton(t, b) };
+    if (b.kind === 'new') return h('button', { type: 'button', class: 'bt bt-new', style: '--sc:' + color(t.subject || t.display), on }, h('span', { class: 'lb' }, h('span', { class: 'btx' }, b.label), h('small', { class: 'ln' }, '想问我什么?')), h('span', { class: 'bi', html: ICON.spark }));
+    if (b.kind === 'lecture') return h('button', { type: 'button', class: 'bt bt-lecture', on }, lecturePic(b),
+      h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, b.label), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null));
+    return h('button', { type: 'button', class: 'bt bt-' + b.kind, on }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }), h('span', { class: 'btx' }, b.label));
+  };
+  /** 挨着的几个小课堂收进一格(平板上两张海报并排,手机上一张一行) */
+  const buttonRuns = (t, buttons) => {
+    const out = [];
+    for (const b of buttons) {
+      const el = tutorButton(t, b), last = out[out.length - 1];
+      if (b.kind !== 'lecture') out.push(el);
+      else if (last && last.classList.contains('lcs')) last.append(el);
+      else out.push(h('div', { class: 'lcs' }, el));
+    }
+    return out;
+  };
+  /** 小课堂海报的图:课包画最后一帧(frame.svg,没烤好时 404 就只留底色和播放键),视频停在末尾前一点 */
+  const lecturePic = (b) => {
+    const box = h('span', { class: 'lp' });
+    if (b.video) { if (b.ms) box.append(lcVideoStill(b.bundle, b.ms)); }
+    else box.append(h('img', { alt: '', src: lcBundleUrl(b.bundle) + 'frame.svg?svg=end', on: { error: () => box.classList.add('nopic') } }));
+    box.append(h('span', { class: 'pl', html: ICON.play }));
+    return box;
+  };
 
   // ---- 首页牌堆(《首页设计.md》拍板 16、17、22,原型 https://claude.ai/artifact/BAUVUj9TgCKpiQkRyZtvLy):一位老师一张牌,平着叠,最前那张在最上层 ----
   // 手机竖着叠:后面的牌在上面,每张往上露出头那一行(头像 + 名字);平板横着叠:后面的牌在左边,每张往左露出一格(左上角的头像)。
@@ -853,7 +885,8 @@ __REEL_JS__
     const byName = new Map(H.tutors.map((t) => [t.name, t]));
     return (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind === 'tutor' && byName.has(c.props.tutor)).map((c) => ({ t: byName.get(c.props.tutor), card: c }));
   };
-  const DECK = { V: { av: 48, nm: 21, pull: 44, head: 48 }, H: { av: 60, nm: 24, pull: 120, head: 40, wMax: 420, wMin: 320, step: 84, stepMin: 48 } };
+  // 平板的牌最宽 640(原型 B):两张小课堂海报并排要这么宽
+  const DECK = { V: { av: 56, nm: 21, pull: 44, head: 48 }, H: { av: 64, nm: 24, pull: 120, head: 40, wMax: 640, wMin: 320, step: 84, stepMin: 48 } };
   const DECK_SCALE = [1, 0.97, 0.94, 0.91, 0.88], DECK_VEIL = [0, 0.16, 0.26, 0.34, 0.4];
   // 影子:竖着叠往上投、横着叠往左投,落在后面那张上;第二个是拿起来时的
   const DECK_SHADOW = { V: ['0 -4px 14px rgba(70,50,30,.14)', '0 24px 34px rgba(70,50,30,.24)'], H: ['-6px 4px 14px rgba(70,50,30,.16)', '-18px 26px 34px rgba(70,50,30,.26)'] };
@@ -917,7 +950,7 @@ __REEL_JS__
         const others = owned.filter((c) => c.kind !== 'dictation');
         el.replaceChildren(...[
           h('div', { class: 'pc-hd' }, deal ? avatarEl(t, 'draw', 0.1 + slot * 0.12) : avatarEl(t), h('span', { class: 'nm' }, t.display)),
-          h('div', { class: 'kc' }, h('div', { class: 'bts' }, ...buttons.map((b) => tutorButton(t, b))), extras.length ? h('div', { class: 'bts extras' }, h('span', { class: 'xl' }, '每天都在'), ...extras) : null),
+          h('div', { class: 'kc' }, h('div', { class: 'bts' }, ...buttonRuns(t, buttons)), extras.length ? h('div', { class: 'bts extras' }, ...extras) : null),
           others.length ? h('div', { class: 'hcards kcards' }, ...others.map((c, i) => renderCard(c, i, null, false))) : null,
           h('span', { class: 'pc-ix' }, avatarEl(t)),
           h('span', { class: 'veil' }),

@@ -71,7 +71,7 @@ try {
   const BTN = `[...document.querySelectorAll('.bt-lecture')].find((b) => b.textContent.includes('平均分'))`;
 
   const btn = await evaluate(`${BTN}?.textContent`);
-  ok('首页:数学老师卡上的视频小课堂按钮,课长从 mp4 读的', /^小课堂平均分怎么分18 秒 · 看完再问老师$/.test(btn ?? ''), btn);
+  ok('首页:数学老师卡上的视频小课堂海报,课长从 mp4 读的,图是停在末尾的视频', /^小课堂平均分怎么分18 秒$/.test(btn ?? '') && await evaluate(`Boolean(${BTN}.querySelector('.lp video'))`), btn);
 
   await evaluate(`${BTN}.click()`);
   const opened = await until(`!${F}.hidden && Boolean(${D}?.querySelector('.lc-start')) && Boolean(${D}?.querySelector('video.lc-video'))`);

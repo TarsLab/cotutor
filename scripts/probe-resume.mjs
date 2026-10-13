@@ -81,7 +81,7 @@ try {
   const shot = async (name) => { const r = await send('Page.captureScreenshot', { format: 'png' }); writeFileSync(join(shots, name), Buffer.from(r.result.data, 'base64')); return join(shots, name); };
   // 手指点:CDP 鼠标事件走命中判定
   const tap = async (selector) => { const r = await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return null; e.scrollIntoView({ block: 'center' }); const b = e.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`); if (!r) throw new Error(`没有 ${selector}`); for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: r.x, y: r.y, button: 'left', clickCount: 1 }); };
-  const tapButton = async (text) => { const i = await evaluate(`[...document.querySelectorAll('#deck .pc.front .bt')].findIndex((b) => b.textContent.includes(${JSON.stringify(text)}))`); await tap(`#deck .pc.front .bt:nth-of-type(${i + 1})`); };
+  const tapButton = async (text) => { await evaluate(`(() => { for (const b of document.querySelectorAll('#deck .pc.front .bt')) b.toggleAttribute('data-probe', b.querySelector('.btx')?.textContent === ${JSON.stringify(text)}); })()`); await tap('#deck .pc.front .bt[data-probe]'); };
   const openHome = async () => { await send('Page.navigate', { url: `${base}/` }); for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelectorAll('#deck .pc.front .bt').length > 0`)) break; await sleep(250); } await sleep(1200); };
   const backHome = async () => { await tap('#back'); await sleep(1500); };
   const boardState = () => evaluate(`({ secs: document.querySelectorAll('#board .sec').length, blank: !!document.querySelector('#board .blank'), chip: document.querySelector('#board .blank .resume')?.textContent ?? null, ask: document.querySelector('#board .blank.ask b')?.textContent ?? null, choices: [...document.querySelectorAll('#board .ask-go')].map((b) => b.textContent), pill: !document.querySelector('#pill').hidden, mo: document.querySelector('#c-mo').textContent })`);
@@ -91,7 +91,7 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
 
   await openHome();
-  const buttons = await evaluate(`[...document.querySelectorAll('#deck .pc.front .bt:not(.bt-extra)')].map((b) => b.textContent)`);
+  const buttons = await evaluate(`[...document.querySelectorAll('#deck .pc.front .bt:not(.bt-extra)')].map((b) => b.querySelector('.btx').textContent)`);
   ok('首页语文牌:新话题、你说我画;没有应用加的「接着刚才的」', buttons.join('|') === '新话题|你说我画', JSON.stringify(buttons));
 
   // ---- 新话题:空白板上的胶囊 → 回到那个自由话题 ----

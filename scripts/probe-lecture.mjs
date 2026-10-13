@@ -72,7 +72,7 @@ try {
   const D = `${F}.contentDocument`;
 
   const btn = await evaluate(`document.querySelector('.bt-lecture').textContent`);
-  ok('首页:数学老师卡上的小课堂按钮,带课长与「看完再问老师」', /^小课堂13 减 8 怎么拆46 秒 · 看完再问老师$/.test(btn), btn);
+  ok('首页:数学老师卡上的小课堂海报,带预览图与课长', /^小课堂13 减 8 怎么拆46 秒$/.test(btn) && await evaluate(`Boolean(document.querySelector('.bt-lecture .lp img'))`), btn);
   await shot('lecture-home.png');
 
   await evaluate(`document.querySelector('.bt-lecture').click()`);

@@ -3,12 +3,20 @@
 .c-tutor .tt { display:flex; align-items:center; gap:12px; cursor:pointer; }
 .c-tutor .tt .av { width:64px; height:64px; font-size:30px; }
 .c-tutor .tt .nm { font-size:20px; font-weight:700; }
-.c-tutor .bts { display:flex; flex-direction:column; gap:8px; }
-.c-tutor .bt { display:flex; align-items:center; gap:10px; width:100%; min-height:48px; padding:8px 14px; border-radius:24px; background:#fff; border:1px solid var(--line); font-size:17px; text-align:left; line-height:1.3; }
+.c-tutor .bts { display:flex; flex-direction:column; gap:12px; }
+/* 按钮(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):大胶囊;孩子看到的字在 .btx */
+.c-tutor .bt { display:flex; align-items:center; gap:14px; width:100%; min-height:64px; padding:10px 20px; border-radius:32px; background:#fff; border:1.5px solid var(--line); color:var(--ink); font-size:20px; font-weight:600; text-align:left; line-height:1.3; }
 .c-tutor .bt:active { transform:scale(.98); }
-.c-tutor .bt .bi { flex:0 0 auto; width:22px; height:22px; display:grid; place-items:center; color:var(--accent); }
-.c-tutor .bt .bi svg { width:20px; height:20px; }
-.c-tutor .bt-new { font-weight:600; }
+.c-tutor .bt .bi { flex:0 0 auto; width:28px; height:28px; display:grid; place-items:center; color:var(--accent); }
+.c-tutor .bt .bi svg { width:26px; height:26px; }
+/* 新话题:从头像 C 的开口说出来的一个大气泡,学科色(--sc,页面按老师给);尖角朝上指着开口(--av 是牌堆给的头像大小) */
+.c-tutor .bt-new { position:relative; min-height:84px; margin-top:6px; padding:10px 20px 10px 22px; border:0; border-radius:24px; background:var(--sc, var(--accent)); color:#fff; }
+.c-tutor .bt-new::before { content:''; position:absolute; top:-12px; left:calc(var(--av, 56px) * .55); width:24px; height:14px; background:inherit; clip-path:polygon(0 100%, 100% 100%, 92% 0); }
+.c-tutor .bt-new .lb { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.c-tutor .bt-new .btx { font-size:26px; font-weight:700; letter-spacing:1px; }
+.c-tutor .bt-new .ln { font-size:15px; font-weight:400; opacity:.9; }
+.c-tutor .bt-new .bi { margin-left:auto; width:40px; height:40px; color:#fff; }
+.c-tutor .bt-new .bi svg { width:36px; height:36px; }
 .c-tutor.off { pointer-events:none; }
 .c-tutor.off .av { filter:grayscale(1); opacity:.4; }
 /* 休息:次数用完 / 服务不通,C 的开口朝下(低头);点一下:手指按着时 C 扭一下,松开弹回(弹的那下是 .av 环上的 transition) */
@@ -16,15 +24,29 @@
 .c-tutor:active .av .ring circle { transform:rotate(8deg); transition-duration:.08s; }
 .c-tutor.off .nm, .c-tutor.off .bt { color:var(--dim); }
 .c-tutor.off .bt .bi { color:var(--dim); }
-/* 小课堂按钮(《小课堂设计.md》):浅橙底、主色边,两行:「小课堂」+ 课名,下面课长 */
-.c-tutor .bt-lecture { background:#fff3e8; border:2px solid var(--accent); border-radius:18px; }
-.c-tutor .bt-lecture .lb { display:flex; flex-direction:column; gap:1px; min-width:0; }
-.c-tutor .bt-lecture .lb small { font-size:12px; font-weight:700; color:#c95a22; letter-spacing:1px; }
-.c-tutor .bt-lecture .lb small.ln { font-size:13px; font-weight:400; color:var(--dim); letter-spacing:0; }
+.c-tutor.off .bt-new { background:var(--grey); }
+/* 小课堂(《小课堂设计.md》):带预览图的海报,图上一个播放键,下面「小课堂 · 课名 · 课长」;挨着的几张收在 .lcs 里,够宽就并排 */
+.c-tutor .lcs { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
+.c-tutor .bt-lecture { flex-direction:column; align-items:stretch; gap:0; min-height:0; padding:0; border-radius:20px; overflow:hidden; }
+.c-tutor .bt-lecture .lp { position:relative; display:block; aspect-ratio:16 / 10; background:#fff3e8; }
+.c-tutor .bt-lecture .lp img, .c-tutor .bt-lecture .lp video { position:absolute; inset:0; width:100%; height:100%; display:block; object-fit:cover; }
+.c-tutor .bt-lecture .lp.nopic img { display:none; }
+.c-tutor .bt-lecture .pl { position:absolute; left:50%; top:50%; width:64px; height:64px; margin:-32px 0 0 -32px; border-radius:50%; background:rgba(255,255,255,.94); color:var(--accent); display:grid; place-items:center; box-shadow:0 4px 14px rgba(0,0,0,.22); }
+.c-tutor .bt-lecture .pl svg { width:28px; height:28px; margin-left:3px; }
+.c-tutor .bt-lecture .lm { display:flex; align-items:center; gap:8px; min-width:0; padding:12px 14px; }
+.c-tutor .bt-lecture .tg { flex:none; padding:2px 8px; border-radius:8px; background:#fdeee4; color:#b8541c; font-size:13px; font-weight:700; }
+.c-tutor .bt-lecture .btx { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:20px; font-weight:700; }
+.c-tutor .bt-lecture .ln { flex:none; margin-left:auto; font-size:14px; font-weight:400; color:var(--dim); }
 /* 常驻入口(《首页设计.md》拍板 18):听写、拍照听写、口语课,不经首页发布、一直在这位老师的卡上 */
-.c-tutor .extras { padding-top:4px; }
-.c-tutor .extras .xl { font-size:13px; color:var(--dim); padding:0 4px; }
-.c-tutor .bt-extra { text-decoration:none; color:var(--ink); background:var(--tint-sand-bg); border-color:var(--tint-sand-line); }
+.c-tutor .bt-extra { text-decoration:none; color:var(--ink); border-color:var(--tint-sand-line); }
 .c-tutor .bt-extra .lb { display:flex; flex-direction:column; gap:1px; min-width:0; }
-.c-tutor .bt-extra .lb small.ln { font-size:13px; color:var(--dim); }
+.c-tutor .bt-extra .ln { font-size:14px; font-weight:400; color:var(--dim); }
 .c-tutor .bt-extra .bi { color:#c95a22; }
+/* 听写:一整条,上面一排空格子(几个词几格;英文是四线三格),下面「听写 · 几个词」和「去写」 */
+.c-tutor .bt-x-dictation { flex-direction:column; align-items:stretch; gap:14px; padding:16px; border-radius:20px; background:var(--tint-sand-bg); }
+.c-tutor .bt-x-dictation .dg { display:flex; gap:8px; }
+.c-tutor .bt-x-dictation .dg i { flex:0 1 56px; aspect-ratio:1; border:1.5px solid #d9b97a; background:linear-gradient(var(--tint-sand-line), var(--tint-sand-line)) center / 1px 100% no-repeat, linear-gradient(var(--tint-sand-line), var(--tint-sand-line)) center / 100% 1px no-repeat, #fff; }
+.c-tutor .bt-x-dictation.en .dg i { flex-basis:104px; aspect-ratio:2; background:linear-gradient(to bottom, #fff 32%, var(--tint-sand-line) 32% 34%, #fff 34% 65%, var(--tint-sand-line) 65% 67%, #fff 67%); }
+.c-tutor .bt-x-dictation .dr { display:flex; align-items:center; gap:12px; }
+.c-tutor .bt-x-dictation .btx { font-size:22px; font-weight:700; }
+.c-tutor .bt-x-dictation .go { flex:none; margin-left:auto; height:48px; padding:0 22px; border-radius:24px; background:#c95a22; color:#fff; font-size:18px; font-weight:700; display:grid; place-items:center; }

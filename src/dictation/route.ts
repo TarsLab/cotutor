@@ -91,6 +91,8 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
       if ((await stat(file).catch(() => null))?.isFile()) return file;
       await mkdir(dir, { recursive: true });
       const r = await synthesize(ws().config.tts, { text, voice, out: file }, { env: process.env });
+      // 孩子端照样退回浏览器的声;原因只在这里说,不然家长只看到「声音不对」
+      if (r.error) console.error(`dictation: 「${text}」没合成(${r.error});孩子端用浏览器的声`);
       return r.file;
     },
     async medians(ch) {

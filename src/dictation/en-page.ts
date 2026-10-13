@@ -7,6 +7,7 @@
  */
 import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
 import { EN_BOX_CSS, EN_BOX_JS } from './en-box.ts';
+import { UNLOCK_JS } from './unlock.ts';
 
 export const DICTATION_EN_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -131,6 +132,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
 
   // ---------- 念:配了音色放音频,没有退浏览器的英文合成声 ----------
   var audio = new Audio(); audio.preload = 'auto';
+  ${UNLOCK_JS}
   var stopSay = function () { clearTimeout(S.timer); S.tok++; try { audio.pause(); } catch (e) {} try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {} };
   var status = function (t) { $('#w-status').textContent = t; };
   var sayWord = function (i, times) {
@@ -150,7 +152,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
       audio.onended = gap;
       audio.onerror = function () { S.noAudio = true; synth(); };
       audio.src = '/api/dictation/' + S.v.id + '/say/' + i;
-      var pr = audio.play(); if (pr && pr.catch) pr.catch(function () { if (tok === S.tok && audio.error) { S.noAudio = true; synth(); } });
+      var pr = audio.play(); if (pr && pr.catch) pr.catch(function (e) { if (tok !== S.tok) return; if (audio.error) { S.noAudio = true; synth(); } else if (blocked(e)) status('点「再念」听老师念'); });
     };
     next();
   };
@@ -235,7 +237,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     $('#s-sub').textContent = (v.tutor || '老师') + '念,你来写';
     show('start');
   };
-  $('#s-go').addEventListener('click', function () { try { audio.play().catch(function () {}); audio.pause(); } catch (e) {} nextWord(); });
+  $('#s-go').addEventListener('click', function () { nextWord(); });
 
   // ---------- 拍照开始:拍 → 一项一项认出来 → 点选 → 开始 ----------
   var P = { id: null, items: [], on: {}, extra: [], timer: 0 };

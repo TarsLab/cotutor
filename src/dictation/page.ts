@@ -6,6 +6,7 @@
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
 import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
+import { UNLOCK_JS } from './unlock.ts';
 
 export const DICTATION_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -390,6 +391,7 @@ ${TUTOR_FACE_CSS}
 
   // ---------- 念 ----------
   var audio = new Audio(); audio.preload = 'auto';
+  ${UNLOCK_JS}
   var stopSay = function () { clearTimeout(S.sayTimer); S.sayTok = (S.sayTok || 0) + 1; try { audio.pause(); } catch (e) {} try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {} };
   var status = function (t) { $('#l-status').textContent = t; };
   /** 念第 i 个词,念 times 遍,两遍之间停一下;没有音频(没配音色、合成失败)退浏览器合成声 */
@@ -410,7 +412,7 @@ ${TUTOR_FACE_CSS}
       audio.onended = gap;
       audio.onerror = function () { S.noAudio = true; synth(); };
       audio.src = '/api/dictation/' + S.v.id + '/say/' + i;
-      var pr = audio.play(); if (pr && pr.catch) pr.catch(function () { if (tok === S.sayTok && audio.error) { S.noAudio = true; synth(); } });
+      var pr = audio.play(); if (pr && pr.catch) pr.catch(function (e) { if (tok !== S.sayTok) return; if (audio.error) { S.noAudio = true; synth(); } else if (blocked(e)) status('点「再念」听老师念'); });
     };
     next();
   };

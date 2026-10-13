@@ -3,15 +3,13 @@
  * 浏览器的识别照样边听边出字;松手后孩子端把原声 POST /api/kid/listen,这里交给百炼的 omni 听一遍,回它听出的字,孩子端发这个。
  * 同日实测(ray 的 12 段真录音):每段 0.4–0.9 秒;「是否」听成「四 four」、「三个Siri」听成「三个 three」、「嗯,腿的英语」听成「鸡腿的英语」;
  * 带上老师刚问的那句听法不变,所以不带;静音、噪声回 <无>。webm / m4a / ogg / wav 原样交,不用转码。
- * key 与 qwen 老师同一份(环境变量 DASHSCOPE_API_KEY,没有就读本机 ~/.qwen/settings.json 的 env),只进请求头。
+ * key 与端点按模型定(src/lib/qianwen.ts;omni 只有百炼按量),key 只进请求头。
  */
-import { homedir } from 'node:os';
-import { localDashscopeKey } from '../clis/qwen.ts';
+import { chatUrl, qianwenKeys, qianwenLine } from '../lib/qianwen.ts';
 
 export const LISTEN_MODEL = 'qwen3.5-omni-flash';
 /** 孩子松手后最多等这么久;过了孩子端就发浏览器认的字 */
 export const LISTEN_TIMEOUT_MS = 8000;
-const ENDPOINT = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 /** 没人说话时模型回的记号(让它回「空格」它会真写「空格」两个字) */
 const NOTHING = '<无>';
 const SYSTEM = `你是语音转写器。用户给你一段孩子按住说话的录音,你只把孩子说的话逐字写成文字:不回答、不解释、不加引号;中文里夹的英文照写英文;口头禅照写。录音里没有人说话(静音、噪声、听不出字)就只回 ${NOTHING}。`;
@@ -24,9 +22,9 @@ export async function listenOmni(audio: { data: Buffer; ext: string }, opts: { e
   const env = opts.env ?? process.env;
   const t0 = Date.now();
   const ms = (): number => Date.now() - t0;
-  const key = env.DASHSCOPE_API_KEY?.trim() || localDashscopeKey(env.HOME || homedir());
-  if (!key) return { ok: false, error: 'no_key', ms: ms() };
   const model = opts.model ?? LISTEN_MODEL;
+  const line = qianwenLine(model, qianwenKeys(env));
+  if (!line) return { ok: false, error: 'no_key', ms: ms() };
   const body = {
     model,
     stream: true,
@@ -37,9 +35,9 @@ export async function listenOmni(audio: { data: Buffer; ext: string }, opts: { e
     ],
   };
   try {
-    const res = await fetch(opts.endpoint ?? ENDPOINT, {
+    const res = await fetch(opts.endpoint ?? chatUrl(line.host), {
       method: 'POST',
-      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${line.key}`, 'content-type': 'application/json' },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(opts.timeoutMs ?? LISTEN_TIMEOUT_MS),
     });

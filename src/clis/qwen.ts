@@ -6,13 +6,13 @@
  * - **工具**:`{toolArgs}` 展开成 `--core-tools` + `--exclude-tools`;不带 = 工具表为空,只读 = read_file / glob / grep_search。
  *   模板带 `--approval-mode default`:shell、写、读 workspace 外都被拒(`--yolo` 会放行 workspace 外的读)。
  * - **思考量**:没有旗标;按 effort 指一份系统配置(`QWEN_CODE_SYSTEM_SETTINGS_PATH`,`model.reasoningEffort`)。
- * - **key**:起进程时 `DASHSCOPE_API_KEY` 先看环境,没有就从本机 `~/.qwen/settings.json` 的 env 现读,只进子进程的环境,不落盘。
+ * - **key 与端点**:settings.json 只写 `${COTUTOR_QWEN_BASE_URL}` 与环境变量名 `COTUTOR_QWEN_API_KEY`(qwen 读配置时展开);起进程时按 `src/lib/qianwen.ts`
+ *   定走 Token Plan 还是百炼按量,把这两个填进子进程的环境,不落盘。出厂的几个模型 Token Plan 都有,有它的 key 就走它。
  * - 没有钱数,只报 token;超时(退出码 55)不吐 result;每轮一条 goal_state 事件(读法里不出事件)。
  */
-import { readFileSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { compatibleBase, qianwenKeys, qianwenLine } from '../lib/qianwen.ts';
 import type { Policy, Runtime } from '../schema/index.ts';
 import { parseStreamJson, streamJsonUserMessage } from './stream-json.ts';
 import type { CliAdapter, ToolKind, ToolSet } from './types.ts';
@@ -49,13 +49,15 @@ const EFFORT: Record<Policy['effort'], string> = { low: 'none', medium: 'low', h
  */
 const levelOf = (effort: Policy['effort'], tools: ToolSet): string => (tools === 'on' && EFFORT[effort] === 'none' ? 'low' : EFFORT[effort]);
 
-const DASHSCOPE = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+/** settings.json 里写的占位;qwen 读配置时拿子进程环境展开 */
+const BASE_ENV = 'COTUTOR_QWEN_BASE_URL';
+const KEY_ENV = 'COTUTOR_QWEN_API_KEY';
 const toggle = { thinking: true, toggleOnly: true, disableField: 'enable_thinking' };
 const tiers = { thinking: true, efforts: ['low', 'medium', 'xhigh'], defaultEffort: 'xhigh', disableField: 'reasoning_effort' };
 /** 出厂模型(2026-10-09 五个模型 7 道真题对比:不想时 2–8 秒,讲得准也细;3.7-plus 快但浅,3.8-flash 不想时把盘算写进讲稿) */
 export const QWEN_DEFAULT_MODEL = 'qwen3.8-max';
 
-/** 百炼(DashScope)上能用的几个;运行时模板的 -m 选其中一个 */
+/** 千问上能用的几个(Token Plan 与百炼按量都有);运行时模板的 -m 选其中一个 */
 const MODELS = [
   { id: 'qwen3.7-plus', capabilities: { reasoning: toggle }, generationConfig: { contextWindowSize: 1_000_000, modalities: { image: true } } },
   { id: 'qwen3.7-max', capabilities: { reasoning: toggle }, generationConfig: { contextWindowSize: 1_000_000 } },
@@ -69,7 +71,7 @@ export function qwenHomeSettings(): Record<string, unknown> {
     $version: 4,
     security: { auth: { selectedType: 'openai' } },
     model: { name: QWEN_DEFAULT_MODEL },
-    modelProviders: { openai: MODELS.map((m) => ({ ...m, baseUrl: DASHSCOPE, envKey: 'DASHSCOPE_API_KEY' })) },
+    modelProviders: { openai: MODELS.map((m) => ({ ...m, baseUrl: `\${${BASE_ENV}}`, envKey: KEY_ENV })) },
     memory: { enableManagedAutoMemory: false, enableManagedAutoDream: false },
     privacy: { usageStatisticsEnabled: false },
     telemetry: { enabled: false },
@@ -86,17 +88,6 @@ export function qwenFiles(root: string): Record<string, string> {
   };
   for (const level of new Set(Object.values(EFFORT))) files[effortFile(root, level)] = `${JSON.stringify({ $version: 4, model: { reasoningEffort: level } }, null, 2)}\n`;
   return files;
-}
-
-/** 本机 qwen 配好的百炼 key(~/.qwen/settings.json 的 env);读不到就是 null */
-export function localDashscopeKey(home = homedir()): string | null {
-  try {
-    const s = JSON.parse(readFileSync(join(home, '.qwen', 'settings.json'), 'utf8')) as { env?: Record<string, unknown> };
-    const k = s.env?.DASHSCOPE_API_KEY;
-    return typeof k === 'string' && k.trim() ? k.trim() : null;
-  } catch {
-    return null;
-  }
 }
 
 /** 别处的设置会盖掉家里选的模型与供应商,起进程时去掉 */
@@ -128,9 +119,10 @@ export const qwen: CliAdapter = {
   env: (env) => {
     const out: NodeJS.ProcessEnv = { ...env, QWEN_USAGE_STATISTICS_ENABLED: 'false', QWEN_CODE_MODELS_DEV: 'off', QWEN_CODE_SUPPRESS_YOLO_WARNING: '1' };
     for (const k of FOREIGN) delete out[k];
-    if (!out.DASHSCOPE_API_KEY) {
-      const key = localDashscopeKey(out.HOME || homedir());
-      if (key) out.DASHSCOPE_API_KEY = key;
+    const line = qianwenLine(QWEN_DEFAULT_MODEL, qianwenKeys(out));
+    if (line) {
+      out[BASE_ENV] = compatibleBase(line.host);
+      out[KEY_ENV] = line.key;
     }
     return out;
   },
@@ -155,10 +147,12 @@ export const qwen: CliAdapter = {
   check: ({ version, env }) => {
     const v = /(\d+)\.(\d+)\.(\d+)/.exec(version);
     const old = !v || Number(v[1]) === 0 && Number(v[2]) < 25;
-    const key = Boolean(env.DASHSCOPE_API_KEY) || localDashscopeKey(env.HOME || homedir()) !== null;
+    const line = qianwenLine(QWEN_DEFAULT_MODEL, qianwenKeys(env));
     return [
       { name: 'version', ok: !old, detail: old ? `qwen ${version || '?'}:要 0.25 起(关工具的旗标、隔离的家、思考量配置都按 0.25 定的)` : `qwen ${version}`, fix: old ? 'qwen update(或 brew upgrade qwen-code)' : undefined },
-      { name: 'key', ok: key, detail: key ? '百炼 key 拿得到(环境变量 DASHSCOPE_API_KEY,或本机 ~/.qwen/settings.json 的 env)' : '拿不到百炼 key:老师进程起来就会 401', fix: key ? undefined : '在起 serve 的 shell 里 export DASHSCOPE_API_KEY,或先在终端跑一次 qwen 配好百炼' },
+      line
+        ? { name: 'key', ok: true, detail: line.plan ? '走千问 Token Plan(QWENCLOUD_TOKEN_PLAN_API_KEY)' : '走百炼按量(DASHSCOPE_API_KEY,或本机 qwen / voxtell 的配置)' }
+        : { name: 'key', ok: false, detail: '千问的 key 一把都拿不到:老师进程起来就会 401', fix: '在起 serve 的 shell 里 export QWENCLOUD_TOKEN_PLAN_API_KEY(Token Plan,sk-sp-)或 DASHSCOPE_API_KEY(百炼按量)' },
     ];
   },
   runtimes: (): Record<string, Runtime> => {

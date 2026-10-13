@@ -14,6 +14,7 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-listen-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 delete process.env.DASHSCOPE_API_KEY;
+delete process.env.QWENCLOUD_TOKEN_PLAN_API_KEY;
 
 const { listenOmni, readStream, tidy, LISTEN_MODEL } = await import('../src/server/listen.ts');
 const { initWorkspace } = await import('../src/cli/init.ts');

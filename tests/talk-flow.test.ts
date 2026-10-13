@@ -15,6 +15,7 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-talk-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 delete process.env.DASHSCOPE_API_KEY;
+delete process.env.QWENCLOUD_TOKEN_PLAN_API_KEY;
 
 const { initWorkspace } = await import('../src/cli/init.ts');
 const { loadWorkspace } = await import('../src/cli/workspace.ts');

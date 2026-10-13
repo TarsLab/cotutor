@@ -9,9 +9,11 @@ import { fileURLToPath } from 'node:url';
 
 const dir = fileURLToPath(new URL('../tests/', import.meta.url));
 const files = readdirSync(dir).filter((f) => f.endsWith('.test.ts')).sort();
+// Token Plan 的 key 不进测试:测试只打假服务,有它的线会真花 Credits
+const { QWENCLOUD_TOKEN_PLAN_API_KEY: _plan, ...env } = process.env;
 let failed = 0;
 for (const f of files) {
-  const r = spawnSync(process.execPath, ['--experimental-strip-types', '--no-warnings', join(dir, f)], { stdio: 'inherit' });
+  const r = spawnSync(process.execPath, ['--experimental-strip-types', '--no-warnings', join(dir, f)], { stdio: 'inherit', env });
   if (r.status !== 0) {
     failed++;
     console.error(`FAIL ${f} (exit ${r.status})`);

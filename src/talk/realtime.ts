@@ -16,10 +16,8 @@
  *   type 在 null 与 vad 之间随时能切。所以跟读与聊各开一条会话(跟读手动;聊 semantic_vad 带自己的 silence),setTurn 只在不改 silence 时用。
  * 不抛:连不上、断了、服务端报错都走 onClose / onError;send 在没连上时丢弃并回 false。
  */
-import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { localDashscopeKey } from '../clis/qwen.ts';
+import { qianwenKeys, voxtellConfig } from '../lib/qianwen.ts';
 
 export const TALK_MODEL = 'qwen3.8-omni-flash-realtime';
 export const TALK_VOICE = 'Serena';
@@ -61,18 +59,10 @@ export interface RealtimeEvents {
   onClose?(reason: string): void;
 }
 
-/** 百炼的 key 与业务空间 id:先看环境,再看本机 qwen(~/.qwen/settings.json)、voxtell(~/.config/voxtell/config.json)的配置 */
+/** 百炼按量的 key 与业务空间 id(Token Plan 没有 omni realtime;key 怎么找见 src/lib/qianwen.ts,业务空间 id 先看环境再看 voxtell 的配置) */
 export function dashscopeAuth(env: NodeJS.ProcessEnv = process.env): { key: string; workspaceId: string } | null {
-  const home = env.HOME || homedir();
-  let key = env.DASHSCOPE_API_KEY?.trim() || localDashscopeKey(home);
-  let workspaceId = env.DASHSCOPE_WORKSPACE_ID?.trim() || '';
-  try {
-    const v = JSON.parse(readFileSync(join(home, '.config', 'voxtell', 'config.json'), 'utf8')) as { apiKey?: unknown; workspaceId?: unknown };
-    if (!key && typeof v.apiKey === 'string' && v.apiKey.trim()) key = v.apiKey.trim();
-    if (!workspaceId && typeof v.workspaceId === 'string' && v.workspaceId.trim()) workspaceId = v.workspaceId.trim();
-  } catch {
-    /* 没装 voxtell */
-  }
+  const key = qianwenKeys(env).payg;
+  const workspaceId = env.DASHSCOPE_WORKSPACE_ID?.trim() || voxtellConfig(env.HOME || homedir()).workspaceId;
   return key && workspaceId ? { key, workspaceId } : null;
 }
 

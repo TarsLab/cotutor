@@ -1,33 +1,20 @@
 /**
  * paraformer 补转(《wip/小老师设想.md》拍板 7):原声先用 ffmpeg 转成 16k 单声道 PCM,再走百炼的实时识别 WebSocket(paraformer-realtime-v2),
  * 按约 4 倍速推过去,收 sentence_end 的句子(带起止毫秒和每个词的标点)。
- * key:DASHSCOPE_API_KEY 先看环境,再看本机 qwen(~/.qwen/settings.json)、voxtell(~/.config/voxtell/config.json)的配置;只在内存里用。
+ * key:百炼按量那把(Token Plan 没有 paraformer;怎么找见 src/lib/qianwen.ts);只在内存里用。
  */
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { localDashscopeKey } from '../clis/qwen.ts';
+import { DASHSCOPE_HOST, inferenceWs, qianwenKeys, qianwenLine } from '../lib/qianwen.ts';
 import type { AsrSentence } from './lib/transcript.ts';
 
-const URL_WS = 'wss://dashscope.aliyuncs.com/api-ws/v1/inference/';
 const MODEL = 'paraformer-realtime-v2';
 /** 200 毫秒一块,40 毫秒发一块 ≈ 5 倍速 */
 const CHUNK = 6400;
 const PACE_MS = 40;
 
 export function dashscopeKey(env: NodeJS.ProcessEnv = process.env): string | null {
-  if (env.DASHSCOPE_API_KEY) return env.DASHSCOPE_API_KEY;
-  const home = env.HOME || homedir();
-  const q = localDashscopeKey(home);
-  if (q) return q;
-  try {
-    const v = JSON.parse(readFileSync(join(home, '.config', 'voxtell', 'config.json'), 'utf8')) as { apiKey?: unknown };
-    return typeof v.apiKey === 'string' && v.apiKey ? v.apiKey : null;
-  } catch {
-    return null;
-  }
+  return qianwenLine(MODEL, qianwenKeys(env))?.key ?? null;
 }
 
 /** 任何 ffmpeg 认得的音频 → 16k 单声道 s16le */
@@ -55,7 +42,7 @@ export function recognizePcm(pcm: Buffer, key: string, opts: { url?: string; tim
   return new Promise((resolve, reject) => {
     const out: AsrSentence[] = [];
     let settled = false;
-    const ws = new WebSocket(opts.url ?? URL_WS, { headers: { Authorization: `bearer ${key}` } } as unknown as string[]);
+    const ws = new WebSocket(opts.url ?? inferenceWs(DASHSCOPE_HOST), { headers: { Authorization: `bearer ${key}` } } as unknown as string[]);
     const finish = (err: Error | null): void => {
       if (settled) return;
       settled = true;

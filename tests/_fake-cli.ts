@@ -70,7 +70,7 @@ if (outputFormat === 'json') {
 const qwenish = coreTools !== null;
 // qwen 的工具表:核心工具只留 --core-tools 里的,非核心的(agent / skill / get_goal…)照带,再减 --exclude-tools
 const qwenTools = qwenish ? [...new Set([...['read_file', 'glob', 'grep_search', 'run_shell_command', 'edit', 'write_file'].filter((t) => coreTools!.includes(t)), 'agent', 'skill', 'get_goal', ...(process.env.FAKE_QWEN_LEAK ?? '').split(',').filter(Boolean)])].filter((t) => !excludeTools.includes(t) || (process.env.FAKE_QWEN_LEAK ?? '').split(',').includes(t)) : [];
-emit({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), agent: agent || undefined, bodyLen: body.length, proxy: process.env.HTTPS_PROXY, ...(viaStdin ? { waitedMs } : {}), ...(qwenish ? { tools: qwenTools, qwenHome: process.env.QWEN_HOME, effortFile: process.env.QWEN_CODE_SYSTEM_SETTINGS_PATH, key: Boolean(process.env.DASHSCOPE_API_KEY), openai: Boolean(process.env.OPENAI_MODEL) } : {}) });
+emit({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), agent: agent || undefined, bodyLen: body.length, proxy: process.env.HTTPS_PROXY, ...(viaStdin ? { waitedMs } : {}), ...(qwenish ? { tools: qwenTools, qwenHome: process.env.QWEN_HOME, effortFile: process.env.QWEN_CODE_SYSTEM_SETTINGS_PATH, key: process.env.COTUTOR_QWEN_API_KEY ?? null, base: process.env.COTUTOR_QWEN_BASE_URL ?? null, openai: Boolean(process.env.OPENAI_MODEL) } : {}) });
 if (qwenish) {
   emit({ type: 'stream_event', event: { type: 'goal_state', goal_state: { v: 2, goal: null, activity: 'idle' } }, session_id: sid, parent_tool_use_id: null });
   emit({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: '想一想' } }, session_id: sid, parent_tool_use_id: null });

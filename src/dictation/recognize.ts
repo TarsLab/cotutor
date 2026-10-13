@@ -6,16 +6,14 @@
  * 流式:模型一行一段地吐,收到一行就交出到这时为止认出的全部,孩子端轮询着一个一个画框,不用干等整张认完。
  * 2026-10-10 拿一页仿课本试(识字 9、写字 9、读读写写 6):qwen3.8-max 24 项全对、框都套在字上,第一项 2.8 秒、全部 23 秒;
  * qwen3.5-omni-flash 整张 20 秒但不照一行一段回;qwen-vl-max / qwen3-vl-plus 36–37 秒。
- * key 与 qwen 老师同一份(环境变量 DASHSCOPE_API_KEY,没有就读本机 ~/.qwen/settings.json 的 env),只进请求头。出错、超时都不抛。
+ * key 与端点按模型定(src/lib/qianwen.ts:Token Plan 有这个模型就走它,否则百炼按量),key 只进请求头。出错、超时都不抛。
  */
-import { homedir } from 'node:os';
-import { localDashscopeKey } from '../clis/qwen.ts';
+import { chatUrl, qianwenKeys, qianwenLine } from '../lib/qianwen.ts';
 import { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT, DICTATION_DEFAULT } from '../schema/index.ts';
 import { fillSlots } from '../lib/activity.ts';
 import { DICTATION_SAY_MAX, dictationWordLang, type DictationLang } from '../cards/index.ts';
 
 export const VISION_TIMEOUT_MS = 120_000;
-const ENDPOINT = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 
 /** 一栏:char 写字(田字格里的)/ word 词语表、读读写写 / mark 课文里课本标出来的 / list 听写单上的 / read 识字(会认就行)/ other */
 export type PhotoKind = 'char' | 'word' | 'mark' | 'list' | 'read' | 'other';
@@ -200,13 +198,13 @@ export async function recognizePhoto(
   const ms = (): number => Date.now() - t0;
   const reader = new LineReader(onProgress, opts.lang);
   const fail = (error: string): Recognized => ({ ok: false, error, ...reader.snapshot(), ms: ms() });
-  const key = env.DASHSCOPE_API_KEY?.trim() || localDashscopeKey(env.HOME || homedir());
-  if (!key) return fail('no_key');
   const model = opts.model ?? DICTATION_DEFAULT.model;
+  const line = qianwenLine(model, qianwenKeys(env));
+  if (!line) return fail('no_key');
   try {
-    const res = await fetch(opts.endpoint ?? ENDPOINT, {
+    const res = await fetch(opts.endpoint ?? chatUrl(line.host), {
       method: 'POST',
-      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${line.key}`, 'content-type': 'application/json' },
       body: JSON.stringify({
         model,
         stream: true,

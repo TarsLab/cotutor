@@ -1,14 +1,12 @@
 /**
  * 照片 → 口语单:交给 qwen3.8-omni-flash(兼容接口,不想)读出今天学的词和句,各带中文(《wip/口语课设想.md》§二 2)。
  * 只读印刷体(2026-10-10 实测:印刷稳、手写不稳);读出来的家长要看一眼改,孩子只拿改过的。
- * key 同 listen.ts(环境变量 DASHSCOPE_API_KEY,没有就读本机 qwen 的配置)。
+ * key 同 listen.ts(omni 只有百炼按量,见 src/lib/qianwen.ts)。
  */
-import { homedir } from 'node:os';
-import { localDashscopeKey } from '../clis/qwen.ts';
+import { chatUrl, qianwenKeys, qianwenLine } from '../lib/qianwen.ts';
 import { readStream } from '../server/listen.ts';
 import type { ListItem, TalkList } from './lib/used.ts';
 
-const ENDPOINT = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 export const LIST_TIMEOUT_MS = 40_000;
 const MAX_WORDS = 12;
 const MAX_SENTENCES = 8;
@@ -57,9 +55,9 @@ export async function readList(photo: { data: Buffer; mime: string }, opts: { en
   const env = opts.env ?? process.env;
   const t0 = Date.now();
   const ms = (): number => Date.now() - t0;
-  const key = env.DASHSCOPE_API_KEY?.trim() || localDashscopeKey(env.HOME || homedir());
-  if (!key) return { ok: false, error: 'no_key', ms: ms() };
   const model = opts.model ?? 'qwen3.8-omni-flash';
+  const line = qianwenLine(model, qianwenKeys(env));
+  if (!line) return { ok: false, error: 'no_key', ms: ms() };
   const body = {
     model,
     stream: true,
@@ -68,9 +66,9 @@ export async function readList(photo: { data: Buffer; mime: string }, opts: { en
     messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: `data:${photo.mime};base64,${photo.data.toString('base64')}` } }, { type: 'text', text: PROMPT }] }],
   };
   try {
-    const res = await fetch(opts.endpoint ?? ENDPOINT, {
+    const res = await fetch(opts.endpoint ?? chatUrl(line.host), {
       method: 'POST',
-      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${line.key}`, 'content-type': 'application/json' },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(opts.timeoutMs ?? LIST_TIMEOUT_MS),
     });

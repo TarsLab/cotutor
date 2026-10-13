@@ -97,6 +97,7 @@ export function explainLlmFailure(text: string, runtime: readonly string[]): str
 async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: NodeJS.ProcessEnv): Promise<void> {
   const { spawn } = await import('node:child_process');
   const { fillTts, listTutors } = await import('../schema/index.ts');
+  const { voxtellEnv } = await import('../server/tts.ts');
   const { parseTranscript } = await import('../lib/transcript.ts');
   const { parseAgentFile } = await import('../lib/agent-file.ts');
   const { tmpdir } = await import('node:os');
@@ -178,7 +179,8 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
   const out = join(dir, 'probe.mp3');
   const argvT = fillTts(ws.config.tts.say, { text: '你好', voice: voiced.voice as string, out });
   const r = await new Promise<{ ok: boolean; msg: string }>((resolveTts) => {
-    execFile(argvT[0], argvT.slice(1), { env, timeout: 60_000 }, async (e, _o, se) => {
+    // 和孩子端配音同一个环境:模型 Token Plan 有就注它的端点与 key
+    execFile(argvT[0], argvT.slice(1), { env: voxtellEnv(argvT, env), timeout: 60_000 }, async (e, _o, se) => {
       if (e) return resolveTts({ ok: false, msg: (e as NodeJS.ErrnoException).code === 'ENOENT' ? `PATH 里没有 ${argvT[0]}` : `${e.message} ${String(se).trim().slice(-200)}` });
       const st = await stat(out).catch(() => null);
       resolveTts(st?.isFile() && st.size > 0 ? { ok: true, msg: `${voiced.display} 的音色 ${voiced.voice} 能合成(${st.size} 字节)` } : { ok: false, msg: '命令跑完但没出文件' });

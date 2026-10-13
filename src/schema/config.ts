@@ -241,15 +241,16 @@ export type DictationConfig = z.infer<typeof DictationSchema>;
  * 画风在 activity 文件「画家收到什么」那节(《wip/activity设计.md》拍板 12)。prompt 是老 workspace 的画风:和出厂的(PAINT_PROMPT_DEFAULT)一样就当没写,
  * 改过就以它为准(doctor 提示挪进 activity 文件);不在 activity 话题里画也照它。版式、角色、分幅由应用接(src/paint/prompt.ts)。
  * 2026-10-11 拿「小熊和小猴种西瓜」四格试:qwen-image-2.0 4 秒、qwen-image-2.0-pro 15 秒,四格里角色都对得上;pro 的表情(低头、脸红)更到位。
+ * 2026-10-13 缺省换 qwen-image-3.0-pro:千问 Token Plan 有它(一张约 50 Credits),2.0 系列没有;同一个四格 10 秒,画风照提示词,角色分到哪格有几处没对上。
  */
 export const PAINT_PROMPT_DEFAULT = [
   '儿童绘本插画,水彩加干净的线条,颜色明亮柔和,像小学二年级语文练习册里的看图写话插图。',
   '人物是可爱的卡通形象,表情和动作夸张一点,一眼看得出在干什么、心情怎样。',
   '除了圆圈数字,画面里不要任何文字、对话气泡、拟声词。',
 ];
-export const PAINT_DEFAULT = { model: 'qwen-image-2.0-pro', size: '1280*1280', daily: 2, prompt: PAINT_PROMPT_DEFAULT };
+export const PAINT_DEFAULT = { model: 'qwen-image-3.0-pro', size: '1280*1280', daily: 2, prompt: PAINT_PROMPT_DEFAULT };
 export const PaintSchema = z.object({
-  model: z.string().min(1).default(PAINT_DEFAULT.model).describe('画图用的百炼文生图模型(同步接口):qwen-image-2.0-pro 表情更到位(约 15 秒),qwen-image-2.0 快(约 4 秒)'),
+  model: z.string().min(1).default(PAINT_DEFAULT.model).describe('画图用的千问文生图模型(同步接口):qwen-image-3.0-pro 约 10–20 秒,Token Plan 有它;qwen-image-2.0-pro(约 15 秒)、qwen-image-2.0(约 4 秒)只有百炼按量'),
   size: z.string().regex(/^\d{3,4}\*\d{3,4}$/).default(PAINT_DEFAULT.size).describe('图多大,「宽*高」;四格是方的,缺省 1280*1280(总像素在 512*512 到 2048*2048 之间)'),
   daily: z.number().int().nonnegative().default(PAINT_DEFAULT.daily).describe('一天最多画几张(各位老师加起来;删掉的话题退回);到了画图卡停在分好的几幅,孩子端不说;0 = 不画'),
   prompt: z.array(z.string()).min(1).default(PAINT_PROMPT_DEFAULT).describe('旧的画风(一行一个字符串)。画风现在写在 activity 文件「画家收到什么」;这里和出厂的一样就不起作用,改过就以它为准(挪进 activity 文件后删掉这一项)'),

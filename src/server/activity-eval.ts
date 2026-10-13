@@ -1,12 +1,11 @@
 /**
  * cotutor activity eval(《wip/activity设计.md》6.1):照例子文件,真老师 + 模拟孩子跑多轮,判只看板书。
  * 跑在 evals/ 里(同回放:不进孩子的对话、不配音、不写记忆);画家是假的(不花钱,当画好了)。一个例子跑几次,次次都过才算过(pass^k)。
- * 模拟孩子交给百炼的对话模型(缺省 qwen-plus,key 同 qwen 老师);写死的那几句先说完再交给它。
+ * 模拟孩子交给千问的对话模型(缺省 qwen3.8-flash,有 Token Plan 走它,不然百炼按量);写死的那几句先说完再交给它。
  */
-import { homedir } from 'node:os';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
-import { localDashscopeKey } from '../clis/qwen.ts';
+import { chatUrl, qianwenKeys, qianwenLine } from '../lib/qianwen.ts';
 import { ACTIVITIES_DIR, activityRunFor } from '../cli/activities.ts';
 import { PACKAGE_AGENTS_DIR } from '../cli/skeleton.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
@@ -20,18 +19,20 @@ import { writeCapture } from './store.ts';
 /** 模拟孩子:给提示词,回孩子说的一句;不通回 null */
 export type KidModel = (prompt: string) => Promise<string | null>;
 
-const CHAT = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+/** 模拟孩子缺省的模型(2026-10-13 从 qwen-plus 换来:Token Plan 有它,回归跑得最多) */
+export const KID_MODEL = 'qwen3.8-flash';
 
 export function makeKidModel(opts: { env?: NodeJS.ProcessEnv; model?: string; endpoint?: string; timeoutMs?: number } = {}): KidModel {
   const env = opts.env ?? process.env;
   return async (prompt) => {
-    const key = env.DASHSCOPE_API_KEY?.trim() || localDashscopeKey(env.HOME || homedir());
-    if (!key) return null;
+    const model = opts.model ?? KID_MODEL;
+    const line = qianwenLine(model, qianwenKeys(env));
+    if (!line) return null;
     try {
-      const res = await fetch(opts.endpoint ?? CHAT, {
+      const res = await fetch(opts.endpoint ?? chatUrl(line.host), {
         method: 'POST',
-        headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ model: opts.model ?? 'qwen-plus', enable_thinking: false, messages: [{ role: 'user', content: prompt }] }),
+        headers: { authorization: `Bearer ${line.key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model, enable_thinking: false, messages: [{ role: 'user', content: prompt }] }),
         signal: AbortSignal.timeout(opts.timeoutMs ?? 30_000),
       });
       if (!res.ok) return null;

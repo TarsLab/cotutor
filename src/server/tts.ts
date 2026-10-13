@@ -2,9 +2,12 @@
  * 配音:老师说完,把 kidText 按 cotutor.json 的 tts 运行时合成到 conversations/<老师>/<日期>.<job>.mp3。
  * 失败不响、不阻塞对话:这条没有音频,孩子端退回浏览器自带的声;原因写进 err.log 供家长看。
  * 音色是人设(tutors[].voice),没配就不合成——「无缺省音色」是 voxtell 的政策,这里照办。
+ * 起 voxtell 时按合成模型定走哪家(src/lib/qianwen.ts):Token Plan 有就把它的端点与 key 注给 voxtell,否则给按量那把。
  */
 import { execFile } from 'node:child_process';
 import { appendFile, stat } from 'node:fs/promises';
+import { basename } from 'node:path';
+import { qianwenKeys, qianwenLine, ttsUrl } from '../lib/qianwen.ts';
 import { fillTts, type Tts } from '../schema/index.ts';
 
 export interface TtsResult {
@@ -32,10 +35,22 @@ function explainExec(argv: readonly string[], err: Error, stdout: unknown, stder
   return `${argv[0]} ${argv[1] ?? ''} 失败${detail ? `:${detail}` : `(${err.message})`}`;
 }
 
+/** voxtell 不带 --model 时用的合成模型 */
+const VOXTELL_MODEL = 'qwen-audio-3.0-tts-plus';
+
+/** 起 voxtell 的环境:模型 Token Plan 有 → 端点换成它的、key 换成它的;否则按量那把(别让 sk-sp- 顶在 DASHSCOPE_API_KEY 上)。不是 voxtell 就原样 */
+export function voxtellEnv(argv: readonly string[], env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  if (basename(argv[0]) !== 'voxtell') return env;
+  const i = argv.indexOf('--model');
+  const line = qianwenLine(i >= 0 && argv[i + 1] ? argv[i + 1] : VOXTELL_MODEL, qianwenKeys(env));
+  if (!line) return env;
+  return line.plan ? { ...env, DASHSCOPE_API_KEY: line.key, VOXTELL_TTS_ENDPOINT: ttsUrl(line.host) } : { ...env, DASHSCOPE_API_KEY: line.key };
+}
+
 export function synthesize(tts: Tts, vars: { text: string; voice: string; out: string }, opts: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}): Promise<TtsResult> {
   const argv = fillTts(tts.say, vars);
   return new Promise((resolveResult) => {
-    execFile(argv[0], argv.slice(1), { env: opts.env ?? process.env, timeout: opts.timeoutMs ?? 60_000, maxBuffer: 1 << 20 }, async (err, stdout, stderr) => {
+    execFile(argv[0], argv.slice(1), { env: voxtellEnv(argv, opts.env ?? process.env), timeout: opts.timeoutMs ?? 60_000, maxBuffer: 1 << 20 }, async (err, stdout, stderr) => {
       if (err) return resolveResult({ file: null, error: explainExec(argv, err, stdout, stderr) });
       const st = await stat(vars.out).catch(() => null);
       if (!st?.isFile() || st.size === 0) return resolveResult({ file: null, error: `命令跑完了但 ${vars.out} 没有内容` });

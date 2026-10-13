@@ -23,16 +23,32 @@
 
 ```
 ~/cotutor/<slug>/                        一个孩子一个 workspace;git 仓(私有);slug 是短名不是真名
+  ── 家长的(进 git)
   cotutor.json                           老师人设与政策、运行时({run, resume} 模板)、paths 角色映射(vault 侧目录)
   CLAUDE.md   QWEN.md                    可选:家长自建的共同规矩(不出厂)
-  .claude/agents/<name>.md               老师与帮手的定义(**拷贝**自 cotutor 包的出厂件,是家长的)
-  .cotutor/shipped.json                  出厂 hash(机器文件),cotutor upgrade 据此分辨没改过 / 改过
+  .claude/agents/<name>.md               老师的定义(**拷贝**自 cotutor 包的出厂件,是家长的)
   .claude/skills/                        技能(拷贝;`machine: true` 的每次覆盖)
-  .cotutor/qwen/                         qwen 的隔离家目录与思考量配置(机器文件,qwen 适配器生成;拍板 15)
   agents/<name>/                         老师的家 = 会话 cwd
+  agents/<name>/activities/<名>.md       首页一个按钮进去的一种做法(出厂拷贝,hash 同上)
+  avatars/<name>.png  .fig.json          图片头像(figshot 按这个约定写,cotutor.json 的 avatar 指过来)
+  themes/default/                        孩子端主题(出厂拷贝)
+  home/draft.md  published.json  history/  孩子的首页:草稿、发布的那份、发过的每一版
   ledger/artifacts.jsonl                 产物索引:谁、何时、出了什么、状态、费用
-  captures/                              应用拍的作业照片(vault 里只存老师认出的文字)
-  conversations/<name>/<日期>.*          对话索引(session id、话题、打星 ratings、记过 booked、费用)+ 转录 NDJSON
+  ── 做好的课(不进 git:体积大,源在家长做课的地方)
+  bundles/<id>/                          课包(drawtell build、dub 后整个拷进来);snaps/ 是 drawtell snap 的截图缓存
+  lectures/<id>/                         视频课:lecture.md + video.mp4
+  ── 运行记录(不进 git:有孩子的原话、原声、照片)
+  conversations/<name>/<日期>.*          对话索引(session id、话题、打星 ratings、记过 booked、费用)+ 每轮的 run / events / 转录 / 配音,卡的资产在 .cards/
+  evals/<name>/                          回放(cotutor replay),形状同 conversations
+  captures/<日期>/                       应用拍的作业照片(paths.captures;vault 里只存老师认出的文字)
+  talk/<id>/  dictation/  xlaoshi/       口语课、听写、小老师,各一个场景目录(后两个自带 .gitignore,第一次用时建)
+  koubo.json  takes/                     口播老师开着时 koubo init 补的骨架
+  ── 机器的
+  .cotutor/shipped.json  cotutor.schema.json  出厂 hash(upgrade 据此分辨没改过 / 改过)与 cotutor.json 的 schema;.cotutor/ 只有这两个进 git
+  .cotutor/board/  activity/             按老师裁的板书写法、activity 现生成的 agent 定义(名字带 hash,改了就换)
+  .cotutor/qwen/                         qwen 的隔离家目录与思考量配置(qwen 适配器生成;拍板 15)
+  .cotutor/tts-preview/  qr/  voice-diag.jsonl  koubo  drawtell  配音试听、二维码、按住说话的诊断、两个 CLI 壳
+  .claude/settings.local.json            本机代理(老师子进程用 --setting-sources project,local 读它)
 
 vault(家长面,**一个孩子一个 vault**,如 ray-vault,自己是 git 仓;文件按 frontmatter `cotutor:` 找,《obsidian仓库设计.md》§2):profile.md 档案、课程/<学期>/<学科>.md 入口文件、教材/、记忆/<显示名>.md、日记/<日期>.md、计划/<周>.md、参考/
 ```
@@ -145,3 +161,4 @@ claude 与 qwen 的输出同族(Claude Code 的 stream-json),共用一个读法,
     条款是灰的:个人版写明只许在编程 / 智能体工具里交互式用,不许当应用后端、跑自动化脚本;cotutor 起的是无头进程、服务端直接调 REST。自家一个孩子的量、开发期大头是测试,先用;不写进 README 当功能宣传。调研见《wip/2026-10-13-token-plan调研.md》。
     真跑(同日):qwen 老师一轮 4.4–4.8 秒,1.4 万进(多数命中缓存)177 出约 3.9 Credits;模拟孩子 0.9 秒;配音 1.7 秒(音色 id 照用 `qwen-audio-3.0-tts-plus-*`);画图四格 10 秒、单幅 20 秒,画风照提示词,四格里角色分到哪格有几处没对上(2.0-pro 那次是对的),只试了一张。
 17. 英语老师出厂走 qwen3.8-flash(2026-10-13,Jack 拍板):qwen 适配器多出厂一个运行时 `qwen-flash`(和 `qwen` 只差 `-m`),英语老师条目写 `runtime: "qwen-flash"`;老 workspace `upgrade --config` 只补运行时,不改老师。起因是 Token Plan 上扣 Credits、比 claude 便宜。真跑三问(怎么说苹果、a 和 an、学颜色)2.5–4.2 秒开口,没见 10-09 那种把盘算写进讲稿;头一句「apple 苹果。」只有一行,讲得短。没验证:带照片的轮、小课堂、activity eval。
+18. workspace 目录保持平铺,不再分层(2026-10-13,Jack 拍板):对着 ray 的 workspace 量过三种分层,都不做。①课合进 `lessons/<id>/`(课包 + 视频课 + 截图):本意是让「课要不要备份」只剩一条规则,同日已定课包、视频课都不进 git,收益只剩名字;drawtell 的截图是自己一个 `snaps/<id>` 根,放不进每份课里。②运行记录收进 `records/`(conversations、evals、talk、captures、ledger、听写、小老师):只改 Finder 里根目录的样子,应用与家长页不在乎,代价约 70 个源文件、多数测试与探针、analyze 技能、captures 角色的缺省,老 workspace 还要停服务搬家。③对话改成每轮一个目录:文件名格式有 26 个源文件、23 个测试、10 个探针在读,换来的只是手翻方便。改成在 §2 按「家长的 / 做好的课 / 运行记录 / 机器的」四组写清每个目录,出厂 `.gitignore` 照这四组补齐(`.cotutor/` 整个忽略,只留 shipped.json 与 schema;lectures、snaps、talk 不进 git)。同日 ray 清了画图老师的残留(拍板 13 留给家长删的那些)和早先提交进历史的 materials 视频。

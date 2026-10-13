@@ -222,6 +222,14 @@ const PAGE = `<!doctype html>
   .blank .nm { font-size:26px; font-weight:700; color:var(--ink); }
   .blank .mo { font-size:15px; margin-bottom:14px; }
   .blank b { font-size:22px; font-weight:600; color:var(--ink); }
+  .blank .resume { margin-top:24px; min-height:48px; padding:0 20px; border-radius:24px; border:1.5px solid; background:#fff; display:inline-flex; align-items:center; gap:10px; font:inherit; font-size:17px; font-weight:500; box-shadow:0 2px 10px #0000000f; cursor:pointer; max-width:100%; }
+  .blank .resume .ic { display:grid; } .blank .resume small { font-size:14px; color:var(--dim); }
+  .blank.ask b { margin-top:14px; }
+  .ask-row { display:flex; flex-wrap:wrap; justify-content:center; gap:16px; margin-top:20px; width:100%; }
+  .ask-go { flex:0 1 300px; min-height:120px; border-radius:24px; padding:18px 22px; display:flex; flex-direction:column; align-items:flex-start; gap:6px; text-align:left; font:inherit; cursor:pointer; box-shadow:0 4px 16px #0000000f; }
+  .ask-go.back { background:#fff; border:2px solid; } .ask-go.fresh { border:0; color:#fff; }
+  .ask-go .t { display:flex; align-items:center; gap:8px; font-size:18px; font-weight:700; } .ask-go .ic { display:grid; }
+  .ask-go .s { font-size:17px; color:var(--ink); } .ask-go.fresh .s { color:#fff; } .ask-go small { font-size:14px; color:var(--dim); }
   .blank small { font-size:15px; }
   #hist { position:absolute; inset:0; display:none; z-index:30; }
   #hist.on { display:block; }
@@ -532,7 +540,7 @@ const PAGE = `<!doctype html>
   @media (hover:hover) {
     #back:hover, .tb .hb:hover, #hist-x:hover, #st-x:hover, #sub-btn:hover, #pill .ic:hover, #back-today:hover, .again:hover, #menu .panel button:hover, #sheet label:hover, #hist .tr:hover, .so:hover, .rd:hover, .c-tutor .bt:hover, #board .c:not(.c-tianzige):hover { filter:brightness(.97); }
   }
-  #back:active, .tb .hb:active, #hist-x:active, #st-x:active, #st-go:active, #sub-btn:active, #pill .ic:active, #go:active, #back-today:active, .again:active, #ps-clear:active, .c-tutor .bt:active { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
+  #back:active, .tb .hb:active, #hist-x:active, #st-x:active, #st-go:active, #sub-btn:active, #pill .ic:active, #go:active, #back-today:active, .again:active, #ps-clear:active, .c-tutor .bt:active, .blank .resume:active, .ask-go:active { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
   #ps .tools button:active, #ps .foot button:active, #ps-strip .x:active, #lb .x:active, #lb .nav:active { transform:scale(.94); opacity:.65; transition-duration:.06s; }
   #menu .panel button:active, #sheet label:active, #hist .tr:active, .so:active, .rd:active, .hz:active, .c-tutor .tt:active, #ps-strip .t:active { transform:scale(.985); filter:brightness(.95); transition-duration:.06s; }
   #board .c:not(.c-tianzige):active:not(:has(button:active, .hz:active)) { transform:scale(.985); filter:brightness(.96); transition-duration:.06s; transition-delay:.08s; }
@@ -699,7 +707,7 @@ __REEL_JS__
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), unfold: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, held: false, rec: null, submitted: new Set(), pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, reel: null, pendSaid: null, homeDraw: true };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), unfold: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, held: false, rec: null, submitted: new Set(), pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, reel: null, pendSaid: null, homeDraw: true };
   // 家长板书页看的模式缺省不念(家长想听哪句点哪句);开关各记一个键,不和孩子的搅
   try { S.autoplay = PARENT ? localStorage.getItem(AUTOPLAY_KEY) === '1' : localStorage.getItem(AUTOPLAY_KEY) !== '0'; } catch { S.autoplay = !PARENT; }
   /** 家长板书页:清单的日期(null = 今天) */
@@ -783,11 +791,11 @@ __REEL_JS__
   const toast = (text) => { const t = $('#toast'); t.textContent = text; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4000); };
   const pickButton = (t, b) => {
     const via = { home: S.home.home, button: b.id };
-    if (b.kind === 'new') openTutor(t, { kind: 'new', via });
-    else if (b.id === 'recent') openTutor(t, { kind: 'thread', thread: b.thread, via });
-    else if (b.kind === 'start') openTutor(t, { kind: 'new', via, send: b.label });
+    // 今天同一个入口聊过的(b.resume,《wip/activity设计.md》§八):新话题在空白板上放一个胶囊;activity、小课堂先问接着那个还是重新开始
+    if (b.kind === 'new') openTutor(t, { kind: 'new', via, resume: b.resume });
+    else if (b.kind === 'start') openTutor(t, b.resume ? { kind: 'new', via, ask: { label: b.label, resume: b.resume, send: b.label } } : { kind: 'new', via, send: b.label });
     // 小课堂:新话题,先铺满放课;看完才能开口,开口那条带上 via 与看的情况
-    else if (b.kind === 'lecture') openTutor(t, { kind: 'new', via, lecture: { bundle: b.bundle, title: b.title || b.label, ...(b.video ? { video: true } : {}) } });
+    else if (b.kind === 'lecture') { const lecture = { bundle: b.bundle, title: b.title || b.label, ...(b.video ? { video: true } : {}) }; openTutor(t, b.resume ? { kind: 'new', via, ask: { label: b.label, resume: b.resume, lecture } } : { kind: 'new', via, lecture }); }
     else if (b.date === S.home.date) openTutor(t, { kind: 'thread', thread: b.thread, via, send: b.label });
     else openTutor(t, { kind: 'new', via, send: b.label, cont: b.date });
   };
@@ -1115,13 +1123,14 @@ __REEL_JS__
     intent = intent || { kind: 'new' };
     S.tutor = t; if (!PARENT) micWarm(); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
-    S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null;
+    S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null; S.ask = intent.ask || null;
     // 家长端只看:卡锁着(选择 / 填空 / 画板不开、没有「继续」)、没有输入条,看的是清单上那天的;家长要试,到孩子端当一回孩子,用完回这里删
     if (PARENT) { S.readonly = true; S.newThread = false; S.hist = intent.date || S.pdate || null; }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
     $('#board').replaceChildren(); pin.on = false;
-    if (S.newThread && !intent.send && !S.lecture) $('#board').append(blankBoard('想问什么?'));
+    if (S.ask) $('#board').append(askBoard(S.ask));
+    else if (S.newThread && !intent.send && !S.lecture) $('#board').append(blankBoard('想问什么?', intent.resume));
     $('#tutor').classList.add('on');
     setBar('idle');
     loadDay(true).then(() => { if (intent.send) send(intent.send); });
@@ -1129,8 +1138,27 @@ __REEL_JS__
     viewKey = ''; viewNote();
   };
   /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」 */
-  const blankBoard = (title) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor, 'draw') : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, S.tutor && S.tutor.motto ? h('span', { class: 'mo' }, S.tutor.motto) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null);
-  const closeTutor = () => { hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit', 'speaking', 'nod'); S.homeDraw = true; loadHome(); };
+  const blankBoard = (title, resume) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor, 'draw') : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, S.tutor && S.tutor.motto ? h('span', { class: 'mo' }, S.tutor.motto) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null, resume && S.tutor ? resumeChip(resume) : null);
+  // ---- 接着今天的(《wip/activity设计.md》§八,设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm):首页不再有「接着刚才的」,进来都是新话题 ----
+  const tutorColor = () => color(S.tutor.subject || S.tutor.display);
+  /** 回到今天的那个话题:照旧铺开、不重播(同「以前的」里点今天的一行) */
+  const resumeThread = (thread) => { S.ask = null; switchThread(null, thread); };
+  /** 新话题空白板上的胶囊:今天最后一个自由话题;孩子一开口(发出去)空白板连它一起收起 */
+  const resumeChip = (r) => h('button', { type: 'button', class: 'resume', style: 'color:' + tutorColor() + ';border-color:' + tutorColor(), on: { click: () => resumeThread(r.thread) } }, h('span', { class: 'ic', html: ICON.again }), h('span', {}, r.title ? '接着刚才的:' + r.title : '接着刚才的'), h('small', {}, clock(r.at)));
+  /** activity、小课堂今天点过同一个:先问接着那个,还是重新开始(不点就不开讲、不算一条) */
+  const askBoard = (ask) => h('div', { class: 'blank ask' }, avatarEl(S.tutor, 'draw'), h('span', { class: 'nm' }, S.tutor.display), h('b', {}, '今天点过「' + ask.label + '」啦'),
+    h('div', { class: 'ask-row' },
+      h('button', { type: 'button', class: 'ask-go back', style: 'color:' + tutorColor() + ';border-color:' + tutorColor(), on: { click: () => resumeThread(ask.resume.thread) } },
+        h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.again }), '接着刚才那个'), h('span', { class: 's' }, ask.resume.title || '刚开了个头'), h('small', {}, clock(ask.resume.at))),
+      h('button', { type: 'button', class: 'ask-go fresh', style: 'background:' + tutorColor(), on: { click: () => startFresh(ask) } },
+        h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.spark }), ask.lecture ? '从头看一遍' : '重新开始'), h('span', { class: 's' }, ask.lecture ? ask.lecture.title : ask.label))));
+  const startFresh = (ask) => {
+    S.ask = null;
+    const b = $('#board .blank'); if (b) b.remove();
+    if (ask.lecture) { S.lecture = { ...ask.lecture, watch: null, sent: false, marks: [], flying: [], log: [] }; renderBar(); renderHeader(); openLecture(); }
+    else { renderBar(); send(ask.send); }
+  };
+  const closeTutor = () => { hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit', 'speaking', 'nod'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -2481,14 +2509,14 @@ __REEL_JS__
   // 家长端的 chrome:只看(S.readonly:选择 / 填空 / 画板不开、没有「继续」)、没有输入条、没有「回到今天」(回清单走左上角)、没有「更多」。
   // 家长要试老师,到孩子端当一回孩子,用完回清单删那个话题(写进记忆、日记的一起撤)
   /** 能不能发消息:孩子端 = 不只读;家长端不发 */
-  const canSend = () => !PARENT && !S.readonly && !(S.lecture && !S.lecture.watch);
+  const canSend = () => !PARENT && !S.readonly && !S.ask && !(S.lecture && !S.lecture.watch);
   const renderBar = () => { $('#pill').hidden = !canSend() && !REEL; $('#back-today').hidden = !S.readonly || PARENT || REEL; };
   $('#more-btn').hidden = PARENT;
   const resetBoard = () => { dispatch({ type: 'halt' }); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.partial = null; pin.on = false; $('#board').replaceChildren(); };
   /** 换到某天的某个话题:今天的能接着聊;以前的只读回放(从第一句播) */
   const switchThread = (date, thread) => {
     resetBoard();
-    S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null; S.via = null; S.cont = null; S.lecture = null;
+    S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null; S.via = null; S.cont = null; S.lecture = null; S.ask = null;
     renderBar(); renderSubtitle(); renderHeader();
     loadDay(!S.readonly);
   };

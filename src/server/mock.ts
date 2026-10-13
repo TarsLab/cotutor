@@ -632,9 +632,10 @@ export function createMock(opts: MockOptions = {}): Mock {
       const name = String(c.props.tutor);
       const list = messages.get(name) ?? [];
       const asked = list.find((m) => m.question !== null && m.thread === list[list.length - 1]?.thread);
-      const recent = asked ? { date: localDate(d), thread: asked.thread, title: asked.question ?? '' } : null;
+      // mock 的话题都是新话题进去的:今天孩子问过的那个,挂在新话题按钮上(空白板上的胶囊)
+      const resumes = asked ? new Map([['free', { thread: asked.thread, title: (asked.question ?? '').slice(0, 10), at: list[list.length - 1]?.at ?? '' }]]) : undefined;
       const alive = (date: string, thread: string): boolean => (date === yesterday() && (past.get(name) ?? []).some((m) => m.thread === thread)) || (date === localDate(d) && list.some((m) => m.thread === thread));
-      return { kind: 'tutor', props: { tutor: name, buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { recent, alive, lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
+      return { kind: 'tutor', props: { tutor: name, buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { resumes, alive, lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
     });
     // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
     return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, listen: opts.listen ?? 'browser' };

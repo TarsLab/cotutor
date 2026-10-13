@@ -35,6 +35,8 @@ const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 const fake = join(repo, 'tests', '_fake-cli.ts');
 cfg.runtimes.default = 'fake';
 cfg.runtimes.fake = { run: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '{prompt}'], resume: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '--resume', '{session}', '{prompt}'] };
+// 出厂的语文老师走 qwen:探针一律用假老师
+for (const t of Object.values(cfg.tutors)) delete t.runtime;
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 

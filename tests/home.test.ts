@@ -1,5 +1,5 @@
 /** 首页文件的纯函数(《首页设计.md》):解析、两级问题、排卡、孩子端按钮、--force 丢卡、发布 id;上下文包的 home / continue 两段;日记不记按钮字。 */
-import { arrangeHome, dropFixes, homeId, homeIssues, homeRefs, homeTutors, kidButtons, parseHome, threadKey, type HomeTutorInfo } from '../src/lib/home.ts';
+import { arrangeHome, dropFixes, homeId, homeIssues, homeRefs, homeTutors, kidButtons, parseHome, threadKey, todayResumes, type HomeTutorInfo } from '../src/lib/home.ts';
 import { renderContextPack } from '../src/lib/context-pack.ts';
 import { kidQuestions } from '../src/lib/diary.ts';
 import type { TutorButton } from '../src/cards/index.ts';
@@ -96,15 +96,31 @@ const tutors: Record<string, HomeTutorInfo> = {
     { kind: 'continue', label: '找不到的', date: '2026-09-15', thread: '0900-1' },
   ];
   const alive = (date: string, thread: string): boolean => date === '2026-09-16' && thread === '1930-1';
-  const kb = kidButtons(buttons, { recent: { date: '2026-09-17', thread: '1900-2', title: '画蛇添足是什么意思呢老师' }, alive });
-  check('孩子端按钮:新话题、接着刚才的(标题截 10 字)、文件里的;找不到的接着不出现;讲法不下发', kb.map((b) => b.id).join() === 'new,recent,0,1' && kb[1].label === '接着刚才的:画蛇添足是什么意思呢…' && !JSON.stringify(kb).includes('brief'), JSON.stringify(kb));
-  const pv = kidButtons(buttons, { recent: null, alive, keepBriefs: true });
-  check('家长预览留讲法;今天没聊过就没有接着刚才的', pv.map((b) => b.id).join() === 'new,0,1' && JSON.stringify(pv).includes('念给他听'));
-  const dup = kidButtons(buttons, { recent: { date: '2026-09-16', thread: '1930-1', title: '上次' }, alive });
-  check('文件里已经有接着今天那个话题的按钮:不再加「接着刚才的」', dup.map((b) => b.id).join() === 'new,0,1');
+  const kb = kidButtons(buttons, { alive });
+  check('孩子端按钮:新话题、文件里的;应用不再加「接着刚才的」;找不到的接着不出现;讲法不下发', kb.map((b) => b.id).join() === 'new,0,1' && !JSON.stringify(kb).includes('brief') && !JSON.stringify(kb).includes('接着刚才的'), JSON.stringify(kb));
+  const pv = kidButtons(buttons, { alive, keepBriefs: true });
+  check('家长预览留讲法', pv.map((b) => b.id).join() === 'new,0,1' && JSON.stringify(pv).includes('念给他听'));
+  // 今天同一个入口的话题(《wip/activity设计.md》§八):新话题接自由话题,activity 按名字,小课堂按课包;开场按钮不接
+  const R = (thread: string) => ({ thread, title: thread, at: '2026-09-17T10:00:00.000Z' });
+  const rs = new Map([['free', R('f')], ['activity:你说我画', R('a')], ['lecture:b1', R('l')]]);
+  const withR = kidButtons([{ kind: 'start', label: '开场' }, { kind: 'activity', label: '画', activity: '你说我画', params: {} }, { kind: 'activity', label: '看图', activity: '看图说话', params: {} }, { kind: 'lecture', label: '课', bundle: 'b1' }] as never[], { alive, resumes: rs });
+  check('按钮带 resume:新话题 ← 自由话题,activity ← 同名,小课堂 ← 同课包;开场、没聊过的不带', JSON.stringify(withR.map((b) => ('resume' in b && b.resume ? b.resume.thread : '-'))) === JSON.stringify(['f', '-', 'a', '-', 'l']), JSON.stringify(withR));
   const acts = [{ kind: 'lecture', label: '分一分', bundle: 'b1' }, { kind: 'lecture', label: '看图', bundle: 'b1', activity: '看图说话' }, { kind: 'activity', label: '画', activity: '你说我画', params: {} }] as never[];
-  const only = (names: string[]) => kidButtons(acts, { recent: null, alive, activity: (n) => names.includes(n) }).map((b) => b.label).slice(1).join();
+  const only = (names: string[]) => kidButtons(acts, { alive, activity: (n) => names.includes(n) }).map((b) => b.label).slice(1).join();
   check('activity 文件不在的按钮不出:小课堂看完照「小课堂」,挂了的照挂的', only(['小课堂', '看图说话', '你说我画']) === '分一分,看图,画' && only(['看图说话']) === '看图' && only(['小课堂']) === '分一分');
+  const msg = (job: string, thread: string, at: string, from: string, text: string, extra: Record<string, unknown> = {}) => ({ job, thread, at, from, text, ...extra });
+  const tr = todayResumes([
+    msg('0900-1', '0900-1', '2026-09-17T09:00:00Z', 'kid', '鼓励怎么写', { via: { home: null, button: 'new', label: '新话题' } }),
+    msg('0905-2', '0900-1', '2026-09-17T09:05:00Z', 'kid', '还有呢'),
+    msg('0930-3', '0930-3', '2026-09-17T09:30:00Z', 'kid', '你说我画', { via: { home: 'h', button: 1, label: '你说我画' }, activity: { name: '你说我画', params: {} } }),
+    msg('0931-4', '0930-3', '2026-09-17T09:31:00Z', 'kid', '小熊和小猴种西瓜的故事'),
+    msg('1000-5', '1000-5', '2026-09-17T10:00:00Z', 'kid', '为什么要拆开', { via: { home: 'h', button: 2, label: '课' }, activity: { name: '小课堂', params: {} }, lecture: { bundle: 'b1' } }),
+    msg('1010-6', '1010-6', '2026-09-17T10:10:00Z', 'kid', '我要预习', { via: { home: 'h', button: 0, label: '我要预习' } }),
+    msg('1020-7', '1020-7', '2026-09-17T10:20:00Z', 'system', '给刚才这个话题记账'),
+  ]);
+  const only1 = todayResumes([msg('1100-1', '1100-1', '2026-09-17T11:00:00Z', 'kid', '你说我画', { via: { home: 'h', button: 1, label: '你说我画' }, activity: { name: '你说我画', params: {} } })]);
+  check('activity 话题孩子还没开口:标题空着(不拿按钮字当标题)', only1.get('activity:你说我画')?.title === '', JSON.stringify([...only1]));
+  check('今天每个入口最近的话题:自由话题、activity(标题用孩子第二句)、小课堂(按课包,不算进小课堂 activity);开场按钮、系统任务不算', tr.get('free')?.thread === '0900-1' && tr.get('free')?.at === '2026-09-17T09:05:00Z' && tr.get('activity:你说我画')?.title === '小熊和小猴种西瓜的故…' && tr.get('lecture:b1')?.thread === '1000-5' && !tr.has('activity:小课堂') && tr.size === 3, JSON.stringify([...tr]));
   const taken = new Set(['2026-09-17-2130', '2026-09-17-2130-2']);
   check('发布 id:时分,同一分钟加序号', homeId(new Date(2026, 8, 17, 21, 30), (x) => taken.has(x)) === '2026-09-17-2130-3' && homeId(new Date(2026, 8, 17, 8, 5), () => false) === '2026-09-17-0805');
 }

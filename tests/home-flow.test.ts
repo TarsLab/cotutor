@@ -213,11 +213,11 @@ for: 2026-09-18
 
   const h2 = await kidHome();
   const zh2 = buttonsOf(h2, 'chinese-tutor');
-  check('今天聊过:老师卡第二个是「接着刚才的」,指今天当前的话题', zh2.map((b) => b.id).join() === 'new,recent,0,1' && zh2[1].thread === j1 && zh2[1].label === '接着刚才的:接着讲昨天的', JSON.stringify(zh2));
+  check('今天聊过:首页不再加「接着刚才的」;那个话题是「接着」按钮进去的,新话题也不挂它(只接新话题进去的)', zh2.map((b) => b.id).join() === 'new,0,1' && !('resume' in zh2[0]), JSON.stringify(zh2));
   const s3 = await kidSend('chinese-tutor', { text: '小蝌蚪后来呢', thread: j1, via: { home: h1.home, button: 'recent' } });
   await wait('chinese-tutor');
   const m3 = (await readIndex(ctx.ws, 'chinese-tutor', '2026-09-17')).messages.find((m) => m.job === (s3.json as { job: string }).job)!;
-  check('接着刚才的:接今天那个话题,孩子自己的话', m3.thread === j1 && m3.text === '小蝌蚪后来呢' && m3.via?.button === 'recent');
+  check('老页面的「接着刚才的」(via recent)服务端照旧认:接今天那个话题,孩子自己的话', m3.thread === j1 && m3.text === '小蝌蚪后来呢' && m3.via?.button === 'recent');
 
   // ---- 点击统计 ----
   const st = await homeStats(ctx.ws, now);

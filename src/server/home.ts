@@ -11,9 +11,8 @@ import { conversationFiles, localDate, threads } from '../lib/conversation.ts';
 import { kidQuestions } from '../lib/diary.ts';
 import { activityFile } from '../cli/activities.ts';
 import { lintActivity, parseActivity, resolveParams } from '../lib/activity.ts';
-import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, parseHome, threadKey, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
+import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, parseHome, threadKey, todayResumes, type Resume, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
-import { kidConversation, kidThreads } from '../lib/kid-view.ts';
 import { HOME_ID_RE, LECTURE_ACTIVITY, PublishedHomeSchema, type Activity, type ActivityRun, type ActivityValue, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
 import { listDates, readCardStates, readIndex } from './store.ts';
 import { bakeSoon, inspectLecture, readLecture, type Lecture } from './lecture.ts';
@@ -193,14 +192,12 @@ async function talkedSince(ws: Workspace, tutor: string, since: string, now: Dat
 }
 
 /** 这位老师今天孩子能接着的话题(孩子端最后一条所在、孩子在里面说过话的) */
-async function recentThread(ws: Workspace, tutor: string, today: string): Promise<{ date: string; thread: string; title: string } | null> {
+/** 今天这位老师每个入口最近的话题(《wip/activity设计.md》§八);读不出来 → 空 */
+async function resumesOf(ws: Workspace, tutor: string, today: string): Promise<Map<string, Resume>> {
   try {
-    const msgs = kidConversation(await readIndex(ws, tutor, today));
-    const last = msgs[msgs.length - 1];
-    const t = last && kidThreads(msgs).find((x) => x.thread === last.thread);
-    return t ? { date: today, thread: t.thread, title: t.title } : null;
+    return todayResumes((await readIndex(ws, tutor, today)).messages);
   } catch {
-    return null;
+    return new Map();
   }
 }
 
@@ -246,7 +243,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     }
     const name = String(c.props.tutor);
     const buttons = kidButtons((c.props.buttons ?? []) as TutorButton[], {
-      recent: await recentThread(ws, name, today),
+      resumes: await resumesOf(ws, name, today),
       alive: (date, thread) => alive.has(threadKey(name, date, thread)),
       lecture: (bundle) => Boolean(lectures.get(bundle)),
       activity: (a) => hasActivity.has(`${name}/${a}`),

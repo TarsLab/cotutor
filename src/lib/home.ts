@@ -253,31 +253,66 @@ export function homeOwners(cards: readonly BoardCard[], tutors: readonly string[
   });
 }
 
-/** 孩子端老师卡上的一个按钮:id = 文件里的下标,或应用加的 new / recent */
+/**
+ * 今天从同一个入口进去的话题(《wip/activity设计.md》§八,设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm):
+ * 新话题的空白板上一个胶囊接它;activity、小课堂按钮先问接着它还是重新开始。title = 那个话题孩子说的第一句(截到 10 字;activity 是按钮字之后那句,还没说就空),at = 最后一条的时刻
+ */
+export interface Resume {
+  thread: string;
+  title: string;
+  at: string;
+}
+
+/** 孩子端老师卡上的一个按钮:id = 文件里的下标,或应用加的 new;resume = 今天同一个入口的话题 */
 export type KidHomeButton =
-  | { id: 'new'; kind: 'new'; label: string }
-  | { id: 'recent'; kind: 'continue'; label: string; date: string; thread: string }
-  | { id: number; kind: 'start'; label: string; brief?: string }
+  | { id: 'new'; kind: 'new'; label: string; resume?: Resume }
+  | { id: number; kind: 'start'; label: string; brief?: string; resume?: Resume }
   | { id: number; kind: 'continue'; label: string; date: string; thread: string; brief?: string }
   /** 小课堂:title / ms(课名、课长)由服务端读课包后补 */
-  | { id: number; kind: 'lecture'; label: string; bundle: string; brief?: string; title?: string; ms?: number; video?: true };
+  | { id: number; kind: 'lecture'; label: string; bundle: string; brief?: string; title?: string; ms?: number; video?: true; resume?: Resume };
 
 export const NEW_THREAD_LABEL = '新话题';
-const RECENT_MAX = 10;
+const RESUME_MAX = 10;
+
+/** 一个话题是从哪个入口进去的:小课堂(按课包)、activity(按名字,参数不比)、自由话题(新话题按钮或没有按钮);别的按钮(开场、接着)进去的 → null */
+export function resumeKey(first: { via?: { button: number | string }; activity?: { name: string }; lecture?: { bundle: string }; continues?: unknown }): string | null {
+  if (first.lecture) return `lecture:${first.lecture.bundle}`;
+  if (first.activity) return `activity:${first.activity.name}`;
+  if (first.continues) return null;
+  return !first.via || first.via.button === 'new' || first.via.button === 'recent' ? 'free' : null;
+}
+
+/** 今天的索引 → 每个入口最近的那个话题(孩子开过口的;系统任务的话题不算) */
+export function todayResumes(messages: readonly { thread?: string; job: string; at: string; from: string; text: string; via?: { button: number | string }; activity?: { name: string }; lecture?: { bundle: string }; continues?: unknown; bookkeep?: unknown }[]): Map<string, Resume> {
+  const by = new Map<string, { key: string | null; kid: string[]; at: string; firstVia: boolean }>();
+  for (const m of messages) {
+    const th = m.thread ?? m.job;
+    let t = by.get(th);
+    if (!t) { t = { key: m.from === 'kid' ? resumeKey(m) : null, kid: [], at: m.at, firstVia: Boolean(m.via) }; by.set(th, t); }
+    if (m.from === 'kid' && !m.bookkeep) t.kid.push(m.text);
+    if (m.at > t.at) t.at = m.at;
+  }
+  const out = new Map<string, Resume>();
+  for (const [thread, t] of by) {
+    if (!t.key || !t.kid.length) continue;
+    // 按钮进去的第一条是按钮上的字(activity 的名字),不是孩子说的:用第二句;还没有第二句就空着(孩子端写「刚开了个头」)
+    const said = (t.key.startsWith('activity:') ? (t.kid[1] ?? '') : t.kid[0]).replace(/\s+/g, ' ').trim();
+    const cps = Array.from(said);
+    const title = cps.length > RESUME_MAX ? `${cps.slice(0, RESUME_MAX).join('')}…` : said;
+    const prev = out.get(t.key);
+    if (!prev || t.at >= prev.at) out.set(t.key, { thread, title, at: t.at });
+  }
+  return out;
+}
 
 /**
- * 一张老师卡的按钮:新话题第一;今天有话题(recent)第二,字 = 「接着刚才的:」+ 那个话题第一句孩子的话(文件里有接着它的按钮就不加);然后是文件里的。
+ * 一张老师卡的按钮:新话题第一,然后是文件里的。应用不再加「接着刚才的」(《wip/activity设计.md》§八):每个按钮进去都是新话题,
+ * 新话题、activity、小课堂三种按钮带上 resume(今天同一个入口的话题),孩子端在空白板上接。
  * 接着按钮指的话题现在找不到(alive 说没有)就不出现。keepBriefs = 家长预览(讲法留着)。
  */
-export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { date: string; thread: string; title: string } | null; alive: (date: string, thread: string) => boolean; lecture?: (bundle: string) => boolean; activity?: (name: string) => boolean; keepBriefs?: boolean; today?: string }): KidHomeButton[] {
-  const out: KidHomeButton[] = [{ id: 'new', kind: 'new', label: NEW_THREAD_LABEL }];
-  // 文件里已经有接着这个话题的按钮(字与讲法是家长定的),就不再加一个「接着刚才的」
-  const covered = opts.recent && buttons.some((b) => b.kind === 'continue' && b.date === opts.recent!.date && b.thread === opts.recent!.thread);
-  if (opts.recent && !covered) {
-    const cps = Array.from(opts.recent.title.replace(/\s+/g, ' ').trim());
-    const title = cps.length > RECENT_MAX ? `${cps.slice(0, RECENT_MAX).join('')}…` : cps.join('');
-    out.push({ id: 'recent', kind: 'continue', label: title ? `接着刚才的:${title}` : '接着刚才的', date: opts.recent.date, thread: opts.recent.thread });
-  }
+export function kidButtons(buttons: readonly TutorButton[], opts: { resumes?: ReadonlyMap<string, Resume>; alive: (date: string, thread: string) => boolean; lecture?: (bundle: string) => boolean; activity?: (name: string) => boolean; keepBriefs?: boolean; today?: string }): KidHomeButton[] {
+  const resume = (key: string): { resume?: Resume } => { const r = opts.resumes?.get(key); return r ? { resume: r } : {}; };
+  const out: KidHomeButton[] = [{ id: 'new', kind: 'new', label: NEW_THREAD_LABEL, ...resume('free') }];
   buttons.forEach((b, k) => {
     // 留到那天为止(家长端表单的「只今天 / 到周日」);过了就不出现,id 还是文件里的下标
     if (b.until && opts.today && b.until < opts.today) return;
@@ -286,8 +321,8 @@ export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { da
     // activity 文件不在(家长删了、老 workspace 没升级),按钮不出:不让孩子点进一个没人带的话题;小课堂看完照它聊,同样
     const hasActivity = (name: string): boolean => opts.activity?.(name) ?? true;
     if (b.kind === 'start') out.push({ id: k, kind: 'start', label: b.label, ...brief });
-    else if (b.kind === 'activity') { if (hasActivity(b.activity)) out.push({ id: k, kind: 'start', label: b.label, ...brief }); }
-    else if (b.kind === 'lecture') { if ((opts.lecture?.(b.bundle) ?? true) && hasActivity(b.activity ?? LECTURE_ACTIVITY)) out.push({ id: k, kind: 'lecture', label: b.label, bundle: b.bundle, ...brief }); }
+    else if (b.kind === 'activity') { if (hasActivity(b.activity)) out.push({ id: k, kind: 'start', label: b.label, ...brief, ...resume(`activity:${b.activity}`) }); }
+    else if (b.kind === 'lecture') { if ((opts.lecture?.(b.bundle) ?? true) && hasActivity(b.activity ?? LECTURE_ACTIVITY)) out.push({ id: k, kind: 'lecture', label: b.label, bundle: b.bundle, ...brief, ...resume(`lecture:${b.bundle}`) }); }
     else if (opts.alive(b.date, b.thread)) out.push({ id: k, kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...brief });
   });
   return out;

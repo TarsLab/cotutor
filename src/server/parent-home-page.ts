@@ -130,10 +130,9 @@ export const PARENT_HOME_PAGE = String.raw`<!doctype html>
       keepTag(b) ? h('span', { class: 'tag' }, keepTag(b)) : null, h('span', { class: 'chev', html: CHEV })));
     const buttons = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '孩子看到的按钮')), h('div', { class: 'grp' },
       h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '新话题')), h('span', { class: 'tag' }, '总在')),
-      h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '接着刚才的')), h('span', { class: 'tag' }, '今天聊过才有')),
       ...btnRows,
       t.buttons.length < 4 ? h('button', { type: 'button', class: 'it add', on: { click: () => editButton(t, -1) } }, h('span', { class: 'tx' }, h('b', {}, '+ 加一个开场按钮'))) : null),
-      h('div', { class: 'note' }, '孩子一点,按钮上的字就当他说的第一句发给老师;老师照讲法开场。改了马上发到孩子的首页。'));
+      h('div', { class: 'note' }, '孩子一点,按钮上的字就当他说的第一句发给老师;老师照讲法开场。改了马上发到孩子的首页。今天聊过的,孩子进老师页后在空白板上接,不占按钮。'));
     // 每天都在
     const has = (k) => t.extras.includes(k);
     const daily = [];

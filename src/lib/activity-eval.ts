@@ -19,6 +19,8 @@ export interface ActivityExample {
   kid: string[];
   /** 随第一句写死的孩子的话一起发的照片(相对例子文件所在的目录,或绝对路径) */
   photos: string[];
+  /** 先看了一堂小课堂(小课堂 activity):课包或视频的 id、停过几次、圈的几处(时刻 + 圈住了什么,原样给老师);第一句写死的孩子的话带着它发 */
+  lecture?: { bundle: string; pauses: number; marks: { atMs: number; text: string }[] };
   /** 最多几轮(孩子说一句、老师回一节算一轮) */
   maxTurns: number;
   /** 判,原文一行一条(见 GRADERS) */
@@ -42,6 +44,9 @@ export const GRADERS: Readonly<Record<string, string>> = {
   每节末句是问句: '有卡的每一节(讲解),最后一句讲稿以问号结尾;没卡的随口问答不查(守则:问答一两句、没有卡)',
   一节一问: '有卡的每一节,讲稿里最多一个问号(看图说话:一节只问一个问题)',
   不说: '老师的讲稿里没有这几个说法(「不说: 你没说清楚、错了」)',
+  说到: '老师的讲稿里出现过这几个说法(「说到: 圈」;同「问到」,不要求是问句)',
+  放课里一段: '写过 lecture 卡(放小课堂里的一段)',
+  一节最多一段: '每一节最多一张 lecture 卡',
   问到: '老师的讲稿里出现过这个词(「问到: 画家」)',
   并排: '有一张 read 卡同时有这两句里的字(「并排: 睡大觉 | 浇了水」)',
   卡上有: '老师写的卡上出现过这几个说法(「卡上有: 先看清」,如顺口溜)',
@@ -52,6 +57,9 @@ export const GRADERS: Readonly<Record<string, string>> = {
 export const INVISIBLE_WORDS = ['高兴', '开心', '难过', '伤心', '生气', '害怕', '羞愧', '着急', '得意', '后悔', '觉得', '心里', '想着'];
 
 const DEFAULT_TURNS = 12;
+const KEYS = '故事: / 人设: / 孩子: / 照片: / 课: / 看: / 圈: / 参数: / 最多轮: / 判:';
+/** 「1:05」「0:26」→ 毫秒 */
+const clockMs = (s: string): number | null => { const m = /^(\d+):([0-5]\d)$/.exec(s); return m ? (Number(m[1]) * 60 + Number(m[2])) * 1000 : null; };
 const MAX_TURNS = 30;
 
 /** 解析例子文件;写坏的行进 issues,不抛 */
@@ -90,13 +98,23 @@ export function parseExamples(text: string): { activity: string; examples: Activ
     if (inChecks && /^[-*]\s+/.test(line)) { cur.checks.push(line.replace(/^[-*]\s+/, '')); continue; }
     inChecks = false;
     const m = /^([^:：]+)[:：]\s*(.*)$/.exec(line);
-    if (!m) { issues.push({ text: `「${line}」认不出:例子里一行写「故事: / 人设: / 孩子: / 照片: / 参数: / 最多轮: / 判:」`, line: no }); continue; }
+    if (!m) { issues.push({ text: `「${line}」认不出:例子里一行写「${KEYS}」`, line: no }); continue; }
     const [, key, value] = m;
     if (key === '故事') cur.story = value;
     else if (key === '人设') cur.persona = value;
     else if (key === '孩子') cur.kid.push(value);
     else if (key === '参数') cur.params = value;
     else if (key === '照片') cur.photos.push(...value.split(/[,，\s]+/).filter(Boolean));
+    else if (key === '课') cur.lecture = { bundle: value.trim(), pauses: cur.lecture?.pauses ?? 0, marks: cur.lecture?.marks ?? [] };
+    else if (key === '看') {
+      const n = /停过\s*(\d+)\s*次/.exec(value);
+      cur.lecture = { bundle: cur.lecture?.bundle ?? '', pauses: n ? Number(n[1]) : 0, marks: cur.lecture?.marks ?? [] };
+    } else if (key === '圈') {
+      const m2 = /^(\d+:\d\d)\s*(.*)$/.exec(value.trim());
+      const at = m2 ? clockMs(m2[1]) : null;
+      if (at === null) issues.push({ text: '「圈:」后面先写时刻,再写圈住了什么:「圈: 0:14 圈住了:散的 3 根小棒」', line: no });
+      else cur.lecture = { bundle: cur.lecture?.bundle ?? '', pauses: cur.lecture?.pauses ?? 0, marks: [...(cur.lecture?.marks ?? []), { atMs: at, text: m2![2].trim() }] };
+    }
     else if (key === '最多轮') {
       const n = Number(value);
       if (Number.isInteger(n) && n >= 1 && n <= MAX_TURNS) cur.maxTurns = n;
@@ -104,12 +122,14 @@ export function parseExamples(text: string): { activity: string; examples: Activ
     } else if (key === '判') {
       inChecks = true;
       if (value) cur.checks.push(value);
-    } else issues.push({ text: `「${key}」认不出:例子里一行写「故事: / 人设: / 孩子: / 照片: / 参数: / 最多轮: / 判:」`, line: no });
+    } else issues.push({ text: `「${key}」认不出:例子里一行写「${KEYS}」`, line: no });
   }
   for (const e of examples) {
     if (!e.kid.length && !e.persona) issues.push({ text: `例子「${e.name}」:孩子一句都没有,也没有人设`, line: e.line });
     if (!e.checks.length) issues.push({ text: `例子「${e.name}」:没有判`, line: e.line });
     if (e.photos.length && !e.kid.length) issues.push({ text: `例子「${e.name}」:照片随第一句写死的孩子的话发,要写一句「孩子:」`, line: e.line });
+    if (e.lecture && !e.lecture.bundle) issues.push({ text: `例子「${e.name}」:写了「看:」或「圈:」,要先写「课: <课包 id>」`, line: e.line });
+    if (e.lecture && !e.kid.length) issues.push({ text: `例子「${e.name}」:看完课第一句是孩子问的,要写一句「孩子:」`, line: e.line });
     for (const p of e.photos) if (!/\.(jpe?g|png)$/i.test(p)) issues.push({ text: `例子「${e.name}」:照片只认 jpg / png(${p})`, line: e.line });
     for (const c of e.checks) {
       const name = c.split(/[:：]/)[0].trim();
@@ -196,6 +216,15 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
         const said = listArg(arg).flatMap((w) => lines.filter((l) => l.includes(w)).map((l) => `「${l}」`));
         return { check, pass: !said.length, ...(said.length ? { why: said.join(';') } : {}) };
       }
+      case '放课里一段': {
+        const ok = turns.some((t) => (t.section?.cards ?? []).some((c) => c.kind === 'lecture'));
+        return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没放课里的一段` }) };
+      }
+      case '一节最多一段': {
+        const bad = turns.flatMap((t, k) => { const n = (t.section?.cards ?? []).filter((c) => c.kind === 'lecture').length; return n > 1 ? [`第 ${k + 1} 轮放了 ${n} 段`] : []; });
+        return { check, pass: !bad.length, ...(bad.length ? { why: bad.join(';') } : {}) };
+      }
+      case '说到':
       case '问到': {
         const want = listArg(arg);
         const miss = want.filter((w) => !lines.some((l) => l.includes(w)));

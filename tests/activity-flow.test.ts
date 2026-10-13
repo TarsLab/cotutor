@@ -3,7 +3,7 @@
  * 孩子端是开场按钮、参数不下发 → 点了:新话题、按钮字、参数补了缺省记在第一条 → 上下文包 activity: 在最后、<cotutor-activity> 按参数裁过、
  * 老师没有的 paint 卡写法跟在后面 → 同一话题下一条:activity: 还在、原文「未变」→ 家长改了参数,旧话题照旧 → pack / send --activity → 回放带上。
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -292,6 +292,23 @@ try {
     const idx2 = await readIndex({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'chinese-tutor', run2.date);
     check('eval 带照片:workspace 里没有那张图,用包里 例子图/ 的', !existsSync(join(dir, '例子图')) && idx2.messages.find((m) => m.thread === run2.thread && m.text === '这是我的看图说话')?.photos?.length === 1, JSON.stringify({ err: run2.error }));
     writeFileSync(exFile, shipped);
+  }
+
+  // ---- eval 先看小课堂(数学老师的小课堂):第一句带着 lecture 发,圈住了什么照写的、前面接上那时在讲哪句 ----
+  {
+    const B = '2026-09-18-po13-jian-8';
+    cpSync(fileURLToPath(new URL(`./fixtures/bundles/${B}/`, import.meta.url)), join(root, 'bundles', B), { recursive: true });
+    const r = await evalActivity(ctx.ws, 'math-tutor', '小课堂', { runs: 1, only: '圈了不够拿那里', kid: async () => null });
+    const run = r.examples[0].runs[0];
+    const idx = await readIndex({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'math-tutor', run.date);
+    const first = idx.messages.find((m) => m.job === run.thread);
+    const mark = first?.lecture?.marks?.[0]?.text ?? '';
+    check('eval 先看小课堂:第一句是孩子看完问的,带着 lecture;话题是小课堂 activity', run.turns[0]?.kid === '为什么要拆开那一捆呀?' && first?.lecture?.bundle === B && first.lecture.pauses === 1 && first.activity?.name === '小课堂', JSON.stringify({ kid: run.turns[0]?.kid, lec: first?.lecture, err: run.error }));
+    check('eval 先看小课堂:圈住了什么照例子写的,前面接上时刻与那句讲稿', mark.startsWith('0:14 圈的,那时在讲『要拿走 8 根') && mark.endsWith('圈住了:散的 3 根小棒;文字『3』'), mark);
+    rmSync(join(root, 'bundles', B), { recursive: true, force: true });
+    let msg = '';
+    try { await evalActivity(ctx.ws, 'math-tutor', '小课堂', { runs: 1, kid: async () => null }); } catch (err) { msg = String(err); }
+    check('eval 先看小课堂:课不在 workspace 里,一轮都不跑,说换成自己的课', msg.includes('不在 bundles/ 或 lectures/'), msg);
   }
 
   // ---- activity 独立:系统提示、卡、记忆都是 activity 的(拍板 13–14)----

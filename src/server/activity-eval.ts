@@ -13,6 +13,7 @@ import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { gradeRun, kidPrompt, parseExamples, type ActivityExample, type EvalTurn, type GradeResult } from '../lib/activity-eval.ts';
 import type { Draw } from '../paint/draw.ts';
 import { evalWorkspace, EVALS_DIR } from './replay.ts';
+import { readLecture } from './lecture.ts';
 import { Runner } from './runner.ts';
 import { writeCapture } from './store.ts';
 
@@ -112,6 +113,8 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
     }
     photosOf.set(e, saved);
   }
+  // 先看小课堂的例子:课要在 workspace 里(bundles/ 或 lectures/);读不出来一轮都不跑
+  for (const e of examples) if (e.lecture && !(await readLecture(ws, e.lecture.bundle))) throw new UsageError(`例子「${e.name}」的课 ${e.lecture.bundle} 不在 bundles/ 或 lectures/ 里:拷一份进来,或把「课:」换成你自己的课`);
   const kid = opts.kid ?? makeKidModel({ env: opts.env });
   const evalWs = evalWorkspace(ws);
   const runner = new Runner(() => evalWs, { env: opts.env, warm: false, draw: opts.draw ?? fakeDraw });
@@ -126,13 +129,16 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
       let costUsd = 0;
       const tokens = { in: 0, out: 0 };
       let error: string | undefined;
-      let scripted = 0;
-      // 第一句是按钮上的字(activity 的名字),和孩子点首页按钮一样;照片随第一句写死的孩子的话发
-      let say: string | null = name;
+      // 第一句是按钮上的字(activity 的名字),和孩子点首页按钮一样;照片随第一句写死的孩子的话发。
+      // 先看小课堂的:第一句就是孩子看完问的那句(写死的第一句),带着 lecture(看完了、停过几次、圈的几处)
+      let scripted = e.lecture ? 1 : 0;
+      let say: string | null = e.lecture ? e.kid[0] : name;
       let photos: string[] = [];
+      let lecture = e.lecture ? { bundle: e.lecture.bundle, watchedMs: 0, finished: true, pauses: e.lecture.pauses, marks: e.lecture.marks.map((m) => ({ atMs: m.atMs, path: [] as [number, number][], hit: m.text })) } : undefined;
       while (say !== null && turns.length < e.maxTurns) {
-        const started = await runner.send(tutor, { from: 'kid', text: say, eval: true, ...(photos.length ? { photos } : {}), ...(thread ? { thread } : { newThread: true, activity: run }) });
+        const started = await runner.send(tutor, { from: 'kid', text: say, eval: true, ...(photos.length ? { photos } : {}), ...(lecture ? { lecture } : {}), ...(thread ? { thread } : { newThread: true, activity: run }) });
         photos = [];
+        lecture = undefined;
         thread = started.thread;
         date = started.date;
         const index = await started.done;

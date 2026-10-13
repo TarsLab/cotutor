@@ -5,6 +5,7 @@
  * 接口和汉字的一样(src/dictation/route.ts),会话带 lang = en、一个单词一格;笔迹的点记在 2048 × 512 的尺子上(en-box.ts)。
  * 孩子端:没有对错、没有分数、没有报错的字。用 String.raw:脚本里不写反斜杠转义与反引号。
  */
+import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
 import { EN_BOX_CSS, EN_BOX_JS } from './en-box.ts';
 
 export const DICTATION_EN_PAGE = String.raw`<!doctype html>
@@ -19,7 +20,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   html,body { margin:0; min-height:100%; background:var(--paper); color:var(--ink); font:17px/1.5 -apple-system,"PingFang SC","Hiragino Sans GB",sans-serif; overscroll-behavior:none; -webkit-user-select:none; user-select:none; }
   button, input { font:inherit; color:inherit; }
   button { cursor:pointer; }
-  .view { display:none; flex-direction:column; gap:18px; max-width:1000px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 18px) 20px calc(env(safe-area-inset-bottom) + 28px); }
+  .view { display:none; flex-direction:column; gap:18px; max-width:1000px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 10px) 20px calc(env(safe-area-inset-bottom) + 28px); }
   .view.on { display:flex; }
   .bar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .tool { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:52px; padding:0 18px; border-radius:26px; border:1px solid var(--line); background:#fff; font-size:17px; }
@@ -58,13 +59,14 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:16px; display:none; z-index:9; }
   #toast.on { display:block; }
   ${EN_BOX_CSS}
+  ${TUTOR_FACE_CSS}
 </style></head><body>
 <div class="view" id="v-start">
-  <div class="bar"><button class="tool" type="button" data-home>‹ 回首页</button></div>
+  <div class="bar"><span class="bk-slot"></span></div>
   <div class="center"><b id="s-title">单词听写</b><span id="s-sub">老师念,你来写</span><button class="main" type="button" id="s-go">开始</button></div>
 </div>
 <div class="view" id="v-snap">
-  <div class="bar"><button class="tool" type="button" data-home>‹ 回首页</button><span class="ttl">拍照听写</span><span></span></div>
+  <div class="bar"><span class="bk-slot"></span><span class="ttl">拍照听写</span><span></span></div>
   <div class="center" id="p-pick"><b>拍一下要写的单词</b><span>课本上的单词表,或者老师发的听写单</span>
     <div class="snapbtns"><label>拍照<input type="file" accept="image/*" capture="environment" id="p-cam"></label><label class="alt">从相册选<input type="file" accept="image/*" id="p-lib"></label></div></div>
   <div id="p-list" hidden style="display:flex;flex-direction:column;gap:14px">
@@ -77,12 +79,12 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   </div>
 </div>
 <div class="view" id="v-write">
-  <div class="bar"><button class="tool" type="button" data-home>‹ 回首页</button><div class="dots" id="w-dots"></div></div>
+  <div class="bar"><span class="bk-slot"></span><div class="dots" id="w-dots"></div><button class="layer-x" type="button" id="w-x" aria-label="回到对一对" hidden>${LAYER_X}</button></div>
   <div class="bubble"><div><b id="w-who">老师在念</b><small id="w-status"></small></div></div>
   <div class="model" id="w-model" hidden></div>
   <svg class="pad" id="w-pad" viewBox="0 0 2048 512"></svg>
   <div class="tools">
-    <button class="tool" type="button" id="w-again">再听一遍</button>
+    <button class="tool" type="button" id="w-again">再念</button>
     <button class="tool" type="button" id="w-undo">撤销</button>
     <button class="tool" type="button" id="w-clear">擦掉</button>
     <button class="tool" type="button" id="w-reveal">不会写,给答案</button>
@@ -90,13 +92,13 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   </div>
 </div>
 <div class="view" id="v-check">
-  <div class="bar"><button class="tool" type="button" data-home>‹ 回首页</button><span class="ttl">对一对</span><button class="tool" type="button" id="c-hide">拿开蓝字</button></div>
+  <div class="bar"><span class="bk-slot"></span><span class="ttl">对一对</span><button class="tool" type="button" id="c-hide">拿开蓝字</button></div>
   <div class="muted">蓝色的是书上的单词,看看你写的一样不一样。想再写哪个就点「再写一遍」。</div>
   <div class="rows" id="c-rows"></div>
   <div style="display:flex;justify-content:center"><button class="main" type="button" id="c-done">对好了</button></div>
 </div>
 <div class="view" id="v-submit">
-  <div class="bar"><button class="tool" type="button" data-home>‹ 回首页</button></div>
+  <div class="bar"><span class="bk-slot"></span></div>
   <div class="center"><b>都写完了</b><span>交上去,看看书上的单词</span><button class="main" type="button" id="u-go">交上去</button></div>
 </div>
 <div id="toast"></div>
@@ -117,11 +119,15 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   var HOME = q.get('home'); var N = Number(q.get('n') || 0); var TUTOR = q.get('tutor');
   var S = { v: null, base: Date.now(), i: 0, strokes: [], undos: 0, revealed: false, word: null, sawPen: false, mode: 'first', hide: false, noAudio: false, tok: 0, timer: 0 };
   var now = function () { return Math.max(0, Date.now() - S.base); };
-  var setView = function (v) { S.v = v; S.base = Date.parse(v.startedAt) || S.base; };
-  var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); window.scrollTo(0, 0); };
+  var setView = function (v) { S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); };
+  var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'write' && S.mode === 'rewrite'; window.scrollTo(0, 0); };
   var event = function (kind, word, n) { var b = { kind: kind, word: word, t: now() }; if (n) b.n = n; if (kind !== 'show' && kind !== 'say' && kind !== 'again' && kind !== 'self' && kind !== 'rewrite') b.char = 0; api('POST', '/api/dictation/' + S.v.id + '/events', b).catch(function () {}); };
   var goHome = function () { stopSay(); location.href = '/'; };
-  var hs = document.querySelectorAll('[data-home]'); for (var k0 = 0; k0 < hs.length; k0++) hs[k0].addEventListener('click', goHome);
+  // ---- 左上角「‹ 头像」胶囊,同老师页(《wip/听写设想.md》拍板 16);再写一遍是叠在对一对上的一层,右上角 × 回去 ----
+  ${TUTOR_FACE_JS}
+  var BACK = backCapsule(goHome); document.body.append(BACK.el);
+  var TUTORS = null;
+  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (TUTORS && name) BACK.set(TUTORS.filter(function (t) { return t.name === name; })[0] || null); };
 
   // ---------- 念:配了音色放音频,没有退浏览器的英文合成声 ----------
   var audio = new Audio(); audio.preload = 'auto';
@@ -181,7 +187,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     S.i = i; S.strokes = []; S.undos = 0; S.revealed = false; S.mode = 'first';
     trace.replaceChildren(); drawInk(); $('#w-model').hidden = true;
     $('#w-who').textContent = (S.v.tutor || '老师') + '念第 ' + (i + 1) + ' 个';
-    $('#w-reveal').disabled = false; $('#w-reveal').hidden = false; $('#w-done').disabled = false;
+    $('#w-reveal').disabled = false; $('#w-reveal').hidden = false; $('#w-done').disabled = false; $('#w-x').hidden = true;
     dots(); show('write'); event('show', i); sayWord(i, 2);
   };
   var nextWord = function () { for (var k = 0; k < S.v.written.length; k++) if (!S.v.written[k]) return openWord(k); stopSay(); show('submit'); };
@@ -216,8 +222,9 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     trace.replaceChildren(); drawInk();
     var m = $('#w-model'); m.textContent = S.v.answers[i].chars; m.hidden = false;
     $('#w-who').textContent = '再写一遍'; status('看着上面的单词写'); $('#w-reveal').hidden = true; $('#w-done').disabled = false;
-    $('#w-dots').replaceChildren(); show('write'); sayWord(i, 1);
+    $('#w-dots').replaceChildren(); $('#w-x').hidden = false; show('write'); sayWord(i, 1);
   };
+  $('#w-x').addEventListener('click', function () { stopSay(); S.mode = 'first'; openCheck(); });
   $('#c-done').addEventListener('click', function () { api('POST', '/api/dictation/' + S.v.id + '/done').then(goHome, goHome); });
 
   // ---------- 开始 ----------
@@ -272,6 +279,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     api('POST', '/api/dictation', body).then(begin, function () { b.disabled = false; toast('没连上,再点一次'); });
   });
 
+  api('GET', '/api/kid/home').then(function (j) { TUTORS = j.tutors || []; showFace(); }, function () {});
   if (HOME) api('POST', '/api/dictation', { home: HOME, n: N }).then(begin, goHome);
   else { show('snap'); $('#p-list').hidden = true; }
 })();

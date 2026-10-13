@@ -5,6 +5,8 @@
  * 页面上永远没有对错:没有叉、没有分数;比对的结果只变成一句「这个再写一遍?」,其余给家长(/dictation/parent)。
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
+import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
+
 export const DICTATION_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
@@ -16,7 +18,7 @@ export const DICTATION_PAGE = `<!doctype html>
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { margin:0; height:100%; background:var(--paper); color:var(--ink); font:17px/1.5 -apple-system,"PingFang SC","Hiragino Sans GB",sans-serif; overscroll-behavior:none; -webkit-user-select:none; user-select:none; }
   button { font:inherit; color:inherit; cursor:pointer; }
-  .view { display:none; min-height:100%; flex-direction:column; padding:20px max(24px, env(safe-area-inset-right)) 24px max(24px, env(safe-area-inset-left)); gap:18px; }
+  .view { display:none; min-height:100%; flex-direction:column; padding:calc(env(safe-area-inset-top) + 10px) max(24px, env(safe-area-inset-right)) 24px max(24px, env(safe-area-inset-left)); gap:18px; }
   .view.on { display:flex; }
   .bar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .bar .l { display:flex; align-items:center; gap:14px; min-width:0; }
@@ -60,7 +62,9 @@ export const DICTATION_PAGE = `<!doctype html>
   .foot .tools { display:flex; gap:12px; flex-wrap:wrap; }
   [hidden] { display:none !important; }
   /* 写字(原型 v2 的 C):左边听写本,右边放大写一个字 */
-  #v-listen { flex-direction:row; gap:20px; padding:16px 20px 20px; height:100vh; height:100dvh; }
+  #v-listen { flex-direction:row; gap:20px; padding:calc(env(safe-area-inset-top) + 10px) 20px 20px; height:100vh; height:100dvh; }
+  /* 左上角的胶囊(回首页)浮在听写本、照片上面:它们从胶囊下面开始 */
+  #v-listen .book, #v-pick .shot { margin-top:58px; }
   .book { width:300px; flex:none; min-height:0; display:flex; flex-direction:column; gap:4px; padding:14px 10px; background:#fff; border:1px solid var(--line); border-radius:22px; overflow:auto; }
   .book .bh { display:flex; align-items:baseline; justify-content:space-between; padding:0 8px 6px; }
   .book .bh b { font-size:20px; }
@@ -152,10 +156,11 @@ export const DICTATION_PAGE = `<!doctype html>
   .seg.no { cursor:default; color:var(--dim); padding:2px 1px; }
   @media (orientation: portrait) { #v-pick { flex-direction:column; } .side2 { width:auto; flex:0 0 42%; } }
   @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+${TUTOR_FACE_CSS}
 </style></head>
 <body>
 <div class="view" id="v-start">
-  <div class="bar"><div class="l"><button class="tool sm" data-home="1">回首页</button></div></div>
+  <div class="bar"><span class="bk-slot"></span></div>
   <div class="grow">
     <div class="av" id="s-av"></div>
     <div class="big" id="s-big">听写</div>
@@ -165,7 +170,7 @@ export const DICTATION_PAGE = `<!doctype html>
 </div>
 
 <div class="view" id="v-snap">
-  <div class="bar"><div class="l"><button class="tool sm" data-home="1">回首页</button></div></div>
+  <div class="bar"><span class="bk-slot"></span></div>
   <div class="grow">
     <div class="big">拍今天要听写的</div>
     <div class="sub">拍课本上的词语、写字,或者老师发的听写单。拍正一点,字要清楚。</div>
@@ -204,7 +209,6 @@ export const DICTATION_PAGE = `<!doctype html>
       </div>
       <div class="row" style="flex:none">
         <button class="tool sm" id="l-again"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>再念</button>
-        <button class="tool sm" data-home="1">先停一下</button>
       </div>
     </div>
     <div class="big" id="l-big"></div>
@@ -226,15 +230,15 @@ export const DICTATION_PAGE = `<!doctype html>
 
 <div class="view" id="v-check">
   <div class="bar">
-    <div class="l" style="flex-direction:column;align-items:flex-start;gap:2px"><span class="ttl">写完啦,自己对一对</span><span class="hint">淡蓝的是书上的字,叠在你写的上面。点一个字,看它一笔一笔怎么写。</span></div>
-    <button class="tool" id="c-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="#4f86d1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="13" height="13" rx="2"></rect><rect x="8" y="8" width="13" height="13" rx="2"></rect></svg><span>拿开蓝字</span></button>
+    <div class="l"><span class="bk-slot"></span><div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span class="ttl">写完啦,自己对一对</span><span class="hint">淡蓝的是书上的字,叠在你写的上面。点一个字,看它一笔一笔怎么写。</span></div></div>
+    <button class="tool sm" id="c-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="#4f86d1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="13" height="13" rx="2"></rect><rect x="8" y="8" width="13" height="13" rx="2"></rect></svg><span>拿开蓝字</span></button>
   </div>
   <div class="cards" id="c-cards"></div>
   <div class="foot"><span></span><button class="main" id="c-done">对好了</button></div>
 </div>
 
 <div class="view" id="v-order">
-  <div class="bar"><button class="tool sm" id="r-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>回到对答案</button></div>
+  <div class="bar"><span></span><button class="layer-x" type="button" id="r-back" aria-label="回到对一对">${LAYER_X}</button></div>
   <div class="grow">
     <div class="pads" id="r-pad"></div>
     <div class="side">
@@ -253,7 +257,7 @@ export const DICTATION_PAGE = `<!doctype html>
 </div>
 
 <div class="view" id="v-rewrite">
-  <div class="bar"><span class="ttl" id="w-title">再写一遍</span><button class="tool sm" id="w-skip">先不写了</button></div>
+  <div class="bar"><span class="ttl" id="w-title">再写一遍</span><button class="layer-x" type="button" id="w-skip" aria-label="回到对一对">${LAYER_X}</button></div>
   <div class="grow">
     <div class="models"><span class="hint">照着看 · 点一下看笔顺</span><div class="pads" id="w-models"></div></div>
     <div class="pads" id="w-pads"></div>
@@ -289,11 +293,15 @@ export const DICTATION_PAGE = `<!doctype html>
   var S = { v: null, base: Date.now(), i: 0, w: null, pads: [], stack: [], active: null, sawPen: false, noAudio: false, sayTimer: 0, order: null, rw: null };
   /** 点与事件的时刻:离这次听写开始(startedAt)多少毫秒;孩子端的钟,录像只看先后与间隔 */
   var now = function () { return Math.max(0, Date.now() - S.base); };
-  var setView = function (v) { S.v = v; S.base = Date.parse(v.startedAt) || S.base; };
+  var setView = function (v) { S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); };
 
-  var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); window.scrollTo(0, 0); };
+  var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'order' || name === 'rewrite'; window.scrollTo(0, 0); };
   var goHome = function () { stopSay(); location.href = '/'; };
-  var hs = document.querySelectorAll('[data-home]'); for (var i0 = 0; i0 < hs.length; i0++) hs[i0].addEventListener('click', goHome);
+  // ---- 左上角「‹ 头像」胶囊,同老师页(《wip/听写设想.md》拍板 16):听写这次的老师,没开始时是从哪位老师卡上进来的 ----
+  ${TUTOR_FACE_JS}
+  var BACK = backCapsule(goHome); document.body.append(BACK.el);
+  var TUTORS = null;
+  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (TUTORS && name) BACK.set(TUTORS.filter(function (t) { return t.name === name; })[0] || null); };
 
   var api = function (method, path, body) {
     return fetch(path, { method: method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' })
@@ -835,6 +843,7 @@ export const DICTATION_PAGE = `<!doctype html>
     persist('POST', '/api/dictation/' + S.v.id + '/rewrites/' + S.rw.wi, body, $('#w-done')).then(function (v) { setView(v); S.rw = null; openCheck(); }, function () { openCheck(); });
   });
 
+  api('GET', '/api/kid/home').then(function (j) { TUTORS = j.tutors || []; showFace(); }, function () {});
   if (HOME) start(false); else openSnap();
 })();
 </script>

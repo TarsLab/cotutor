@@ -86,6 +86,7 @@ try {
   await writeChar('#l-big .padbox', '春');
   ok('写:大格里 9 笔,听写本上当前这格跟着画', (await inkCount('#l-big .ink')) === 9 && (await inkCount('#l-book .here .ink')) === 9);
   await shot('03-listen');
+  ok('出口同老师页:左上角「‹ 头像」胶囊带语文老师的脸,没有「先停一下」', await waitFor(`(() => { const b = document.querySelector('#back'); if (!b || b.hidden) return false; const r = b.getBoundingClientRect(); return r.left < 30 && r.top < 30 && !!b.querySelector('.tfav .face') && !document.body.innerText.includes('先停一下'); })()`));
   await tapText('这个字写好了');
   ok('这个字写好了:同一个词的第二个字', await waitFor(`document.querySelector('#l-what').textContent === '第一个词的第二个字'`) && (await inkCount('#l-big .ink')) === 0);
   await writeChar('#l-big .padbox', '天');
@@ -141,6 +142,7 @@ try {
   ok('写着写着:前面的笔变蓝', k >= 3, `已写 ${k} 笔`);
   await tap('#r-next');
   await shot('06-stroke-order');
+  ok('逐笔看是一层:胶囊收起,右上角 ×', await evaluate(`document.querySelector('#back').hidden && !!document.querySelector('#v-order.on #r-back.layer-x')`));
   await tapText('我再写一遍');
 
   // ---- 再写一遍 ----
@@ -149,6 +151,7 @@ try {
   await writeChar('#w-pads .padbox:nth-child(1)', '鼓');
   await writeChar('#w-pads .padbox:nth-child(2)', '励');
   await shot('07-rewrite');
+  ok('再写一遍是一层:胶囊收起,右上角 ×,没有「先不写了」', await evaluate(`document.querySelector('#back').hidden && !!document.querySelector('#v-rewrite.on #w-skip.layer-x') && !document.body.innerText.includes('先不写了')`));
   await tapText('写好了');
   ok('交了:回对答案,都不问了', await waitFor(`document.querySelector('#v-check.on') && [...document.querySelectorAll('.wc')].map((c) => c.querySelector('.ask') ? 'ask' : 'self').join() === 'self,self,self'`));
   await shot('08-check-after');
@@ -177,6 +180,7 @@ try {
   await tap('.bt-x-photo');
   ok('点了:拍照屏(拍照 / 从相册选)', await waitFor(`location.pathname === '/dictation' && !!document.querySelector('#v-snap.on')`));
   await shot('11-snap');
+  ok('拍照屏:胶囊在,点了回首页', await evaluate(`!document.querySelector('#back').hidden && !document.body.innerText.includes('回首页')`));
   const icon = join(home, 'photo.png');
   writeFileSync(icon, Buffer.from(await (await fetch(`${base}/icon-512.png`)).arrayBuffer()));
   const doc = await send('DOM.getDocument', {});

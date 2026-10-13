@@ -29,6 +29,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { letterAdvances } from './letters.ts';
+import { TUTOR_FIXED, TUTOR_PALETTE } from './tutor-face.ts';
 import { stripTypeScriptTypes } from 'node:module';
 
 /** 读 src/lib/<name> 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
@@ -689,9 +690,9 @@ __REEL_JS__
     return r.json();
   };
   let bootId = null, stale = false;
-  const PALETTE = ['#e8743b', '#3b82e8', '#2fa36b', '#b45fd1', '#d9a520', '#e0508a'];
+  const PALETTE = __TUTOR_PALETTE__; // 颜色在 src/server/tutor-face.ts,听写页共用
   // 学科色调深过(《首页设计.md》拍板 21):白字按钮压在上面要看得清
-  const FIXED = { '语文': '#c43c74', '数学': '#2f6fd6', '英语': '#1f8a4c' };
+  const FIXED = __TUTOR_FIXED__;
   const color = (s) => { if (FIXED[s]) return FIXED[s]; let x = 0; for (const ch of s || '') x = (x * 31 + ch.codePointAt(0)) >>> 0; return PALETTE[x % PALETTE.length]; };
   /** 老师头像:学科色的 C 形开口环 + 白底圆里的图或字(样子见 .av 的样式);cls 'draw' = 一笔画出来,delay 是错开的秒数 */
   const AV_RING = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>';
@@ -3643,7 +3644,7 @@ __REEL_JS__
 </html>
 `;
 
-const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_ADV__', () => JSON.stringify(letterAdvances())).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel'));
+const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_ADV__', () => JSON.stringify(letterAdvances())).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__TUTOR_PALETTE__', () => JSON.stringify(TUTOR_PALETTE)).replace('__TUTOR_FIXED__', () => JSON.stringify(TUTOR_FIXED));
 export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 
 export interface KidPageMode {

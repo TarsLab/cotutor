@@ -80,6 +80,7 @@ try {
   await tap('#w-undo');
   ok('撤销撤一笔', (await evaluate(`document.querySelectorAll('#w-pad .eni path').length`)) === 2);
   await shot('en-02-write');
+  ok('出口同老师页:左上角「‹ 头像」胶囊带英语老师的脸;按钮叫「再念」', await evaluate(`(() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('.tfav .face') && b.getBoundingClientRect().left < 30 && !document.body.innerText.includes('回首页') && document.querySelector('#w-again').textContent === '再念'; })()`));
   await tap('#w-done');
   ok('写好了:到第 2 个', await waitFor(`document.querySelector('#w-who').textContent.includes('第 2 个') && document.querySelectorAll('#w-pad .eni path').length === 0`));
   await tap('#w-reveal');
@@ -103,6 +104,7 @@ try {
   await tap('#c-hide');
   await tap('#c-rows .row:first-child .tool');
   ok('自己点再写一遍:上面是 red,下面空格', await waitFor(`document.querySelector('.view.on')?.id === 'v-write' && document.querySelector('#w-model').textContent === 'red' && !document.querySelector('#w-model').hidden`));
+  ok('再写一遍是一层:胶囊收起,右上角 ×', await evaluate(`document.querySelector('#back').hidden && !document.querySelector('#w-x').hidden`));
   await writeWord('#w-pad', 2);
   await tap('#w-done');
   ok('交了:回对一对,第一行写着又写了一遍', await waitFor(`document.querySelector('.view.on')?.id === 'v-check' && document.querySelectorAll('#c-rows .row')[0].innerText.includes('又写了一遍')`));

@@ -1,0 +1,49 @@
+/**
+ * 老师的脸:学科色 + C 形开口环 + 白底圆里的图或字。孩子端(kid-page.ts)与听写页(src/dictation/)共用颜色;
+ * 听写页另用这里的「‹ 头像」胶囊回首页(《wip/听写设想.md》拍板 16),样子照 kid-page.ts 的 #back,两处改要一起改。
+ * 脚本是 ES5、没有反斜杠与反引号(插进各页的模板字符串)。
+ */
+
+/** 没有固定色的学科按名字散列到这几种 */
+export const TUTOR_PALETTE = ['#e8743b', '#3b82e8', '#2fa36b', '#b45fd1', '#d9a520', '#e0508a'];
+export const TUTOR_FIXED: Readonly<Record<string, string>> = { '语文': '#c43c74', '数学': '#2f6fd6', '英语': '#1f8a4c' };
+
+/** 听写页用:tutorColor、backCapsule(onClick) → { el, set(t) };t = /api/kid/home 里 tutors 的一项(name、display、subject、avatar) */
+export const TUTOR_FACE_JS = `
+  var TUTOR_PALETTE = ${JSON.stringify(TUTOR_PALETTE)}, TUTOR_FIXED = ${JSON.stringify(TUTOR_FIXED)};
+  var tutorColor = function (s) { if (TUTOR_FIXED[s]) return TUTOR_FIXED[s]; var x = 0; Array.from(s || '').forEach(function (ch) { x = (x * 31 + ch.codePointAt(0)) >>> 0; }); return TUTOR_PALETTE[x % TUTOR_PALETTE.length]; };
+  var backCapsule = function (onClick) {
+    var el = document.createElement('button'); el.type = 'button'; el.id = 'back'; el.setAttribute('aria-label', '回首页');
+    el.innerHTML = '<i class="bk-ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></i>';
+    el.addEventListener('click', onClick);
+    var set = function (t) {
+      var old = el.querySelector('.tfav'); if (old) old.remove();
+      if (!t) return;
+      var av = document.createElement('span'); av.className = 'tfav'; av.style.color = tutorColor(t.subject || t.display);
+      av.innerHTML = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>';
+      var face = document.createElement('span'); face.className = 'face';
+      if (t.avatar && /[.](png|jpe?g|webp|svg)$/i.test(t.avatar)) { var img = document.createElement('img'); img.src = '/api/kid/avatar/' + encodeURIComponent(t.name); img.alt = ''; face.append(img); }
+      else face.textContent = t.avatar || (t.subject || t.display || '?').slice(0, 1);
+      av.append(face); el.append(av);
+    };
+    return { el: el, set: set };
+  };
+`;
+
+export const TUTOR_FACE_CSS = `
+  #back { position:fixed; top:calc(env(safe-area-inset-top) + 10px); left:calc(env(safe-area-inset-left) + 12px); z-index:20; display:flex; align-items:center; gap:2px; height:48px; min-width:48px; padding:0 4px 0 8px; border-radius:24px; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; color:inherit; cursor:pointer; transition:transform .12s; }
+  #back[hidden] { display:none; }
+  #back:active { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
+  #back .bk-ic { width:24px; height:24px; color:var(--dim); display:grid; place-items:center; }
+  #back .tfav { position:relative; width:40px; height:40px; font-size:19px; font-weight:700; display:grid; place-items:center; flex:none; }
+  #back .tfav .ring { position:absolute; left:0; top:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+  #back .tfav .ring circle { fill:none; stroke:currentColor; stroke-width:8; stroke-linecap:round; stroke-dasharray:221.17 55.29; transform-origin:50px 50px; transform:rotate(36deg); }
+  #back .tfav .face { position:absolute; left:15%; top:15%; width:70%; height:70%; border-radius:50%; background:#fff; overflow:hidden; display:grid; place-items:center; font-size:.76em; line-height:1; }
+  #back .tfav img { width:100%; height:100%; object-fit:cover; }
+  .bk-slot { width:100px; height:48px; flex:none; }
+  .layer-x { width:48px; height:48px; border-radius:50%; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; display:grid; place-items:center; color:var(--dim); flex:none; cursor:pointer; }
+  .layer-x svg { width:24px; height:24px; }
+`;
+
+/** 叠上来的一层(逐笔看、再写一遍)右上角的 ×,照老师页舞台的关 */
+export const LAYER_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';

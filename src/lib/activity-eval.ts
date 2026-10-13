@@ -40,9 +40,11 @@ export const GRADERS: Readonly<Record<string, string>> = {
   分幅至少: '每张画图卡至少这么多幅(「分幅至少: 3」;三四件事挤成两幅就不过)',
   画图卡带题干和词: '每张画图卡都写了「题:」和「词:」(我来出题)',
   每节末句是问句: '有卡的每一节(讲解),最后一句讲稿以问号结尾;没卡的随口问答不查(守则:问答一两句、没有卡)',
+  一节一问: '有卡的每一节,讲稿里最多一个问号(看图说话:一节只问一个问题)',
   不说: '老师的讲稿里没有这几个说法(「不说: 你没说清楚、错了」)',
   问到: '老师的讲稿里出现过这个词(「问到: 画家」)',
   并排: '有一张 read 卡同时有这两句里的字(「并排: 睡大觉 | 浇了水」)',
+  卡上有: '老师写的卡上出现过这几个说法(「卡上有: 先看清」,如顺口溜)',
   词落到幅: '参数「词」里至少这么多个出现在分幅里(「词落到幅: 2」)',
 };
 
@@ -177,6 +179,18 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
           return t.section?.cards.length && !/[?？]$/.test(last) ? [`第 ${k + 1} 轮末句「${last}」`] : [];
         });
         return { check, pass: !bad.length, ...(bad.length ? { why: bad.join(';') } : {}) };
+      }
+      case '一节一问': {
+        const bad = turns.flatMap((t, k) => {
+          const n = (t.section?.lines ?? []).reduce((a, l) => a + (l.text.match(/[?？]/g)?.length ?? 0), 0);
+          return t.section?.cards.length && n > 1 ? [`第 ${k + 1} 轮问了 ${n} 个`] : [];
+        });
+        return { check, pass: !bad.length, ...(bad.length ? { why: bad.join(';') } : {}) };
+      }
+      case '卡上有': {
+        const cards = turns.flatMap((t) => (t.section?.cards ?? []).map((c) => JSON.stringify(c.props)));
+        const miss = listArg(arg).filter((w) => !cards.some((c) => c.includes(w)));
+        return { check, pass: !miss.length, ...(miss.length ? { why: `卡上没有:${miss.join('、')}` } : {}) };
       }
       case '不说': {
         const said = listArg(arg).flatMap((w) => lines.filter((l) => l.includes(w)).map((l) => `「${l}」`));

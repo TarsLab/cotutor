@@ -157,7 +157,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   const ex = parseExamples(readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', '你说我画.例子.md'), 'utf8'));
   check('出厂例子文件:没有要改的,五个例子', ex.activity === '你说我画' && ex.issues.length === 0 && ex.examples.length === 5, JSON.stringify(ex.issues));
   const ex2 = parseExamples(readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', '看图说话.例子.md'), 'utf8'));
-  check('看图说话的例子:没有要改的;注释里的带图写法不算例子', ex2.activity === '看图说话' && ex2.issues.length === 0 && ex2.examples.map((e) => e.name).join() === '还没拍图', JSON.stringify(ex2));
+  check('看图说话的例子:没有要改的;带图的三个,图在包里的 例子图/', ex2.activity === '看图说话' && ex2.issues.length === 0 && ex2.examples.map((e) => e.name).join() === '还没拍图,一幅图,四幅图一口气说,说不出就给两个挑' && ex2.examples.flatMap((e) => e.photos).every((p) => existsSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', p))), JSON.stringify(ex2.examples.map((e) => [e.name, e.photos])));
   const ph = parseExamples('---\nactivity: x\n---\n## 带图\n照片: a.jpg, b.png\n孩子: 这是我的\n判:\n- 放过整段\n## 光有图\n照片: c.gif\n判:\n- 放过整段\n');
   check('照片:几张都收;没有孩子的话、不是 jpg / png 都报', JSON.stringify(ph.examples[0].photos) === '["a.jpg","b.png"]' && ph.issues.some((i) => i.text.includes('要写一句「孩子:」')) && ph.issues.some((i) => i.text.includes('只认 jpg / png')), JSON.stringify(ph.issues));
   check('出厂例子的参数都对得上 activity 文件', ex.examples.every((e) => resolveParams(parseActivity(text).activity, Object.fromEntries(e.params.split(';').filter(Boolean).map((x) => x.split('=') as [string, string]))).issues.length === 0));
@@ -181,6 +181,8 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('判:分幅里的「高兴」报出来', !g['分幅没有看不见的词'].pass && g['分幅没有看不见的词'].why!.includes('高兴'));
   check('判:每节末句问句、不说、问到、并排、词落到幅', g['每节末句是问句'].pass && g['不说: 错了'].pass && g['问到: 画家'].pass && g['并排: 睡大觉 | 浇了水'].pass && g['词落到幅: 1'].pass && !gradeRun(['词落到幅: 2'], turns, { 词: ['播种', '羞愧'] })[0].pass);
   check('判:有卡的节末句不是问句报哪轮;没卡的随口一句不查', !gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。'], [story]) }])[0].pass && gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。']) }])[0].pass);
+  check('判:一节一问(有卡的节最多一个问号;没卡的不查)', gradeRun(['一节一问'], [{ kid: 'x', section: sec(['这是你说的话。', '他们在哪里呀?'], [story]) }])[0].pass && !gradeRun(['一节一问'], [{ kid: 'x', section: sec(['在哪里?', '什么时候?'], [story]) }])[0].pass && gradeRun(['一节一问'], [{ kid: 'x', section: sec(['在哪里?什么时候?']) }])[0].pass);
+  check('判:卡上有', gradeRun(['卡上有: 浇了水、西瓜'], turns)[0].pass && !gradeRun(['卡上有: 先看清'], turns)[0].pass);
   const kp = kidPrompt({ story: '小熊种瓜', persona: '问一句答一句' }, turns.slice(0, 2));
   check('模拟孩子的提示词:故事、人设、对话、板上的整段', kp.includes('小熊种瓜') && kp.includes('问一句答一句') && kp.includes('孩子:小熊') && kp.includes('板上:小熊睡大觉。 / 小熊浇了水。'));
 }

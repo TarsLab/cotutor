@@ -3,7 +3,7 @@
  * 孩子端是开场按钮、参数不下发 → 点了:新话题、按钮字、参数补了缺省记在第一条 → 上下文包 activity: 在最后、<cotutor-activity> 按参数裁过、
  * 老师没有的 paint 卡写法跟在后面 → 同一话题下一条:activity: 还在、原文「未变」→ 家长改了参数,旧话题照旧 → pack / send --activity → 回放带上。
  */
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -278,6 +278,12 @@ try {
     const second = evalIndex.messages.find((m) => m.thread === run.thread && m.text === '这是我的看图说话');
     check('eval 带照片:第二轮(第一句写死的话)带着照片,拷进了 captures/', run.turns.length === 2 && second?.photos?.length === 1 && second.photos[0].startsWith('captures/'), JSON.stringify({ turns: run.turns.length, photos: second?.photos, err: run.error }));
     check('eval 带照片:看图说话的话题挂着 activity', evalIndex.messages.find((m) => m.job === run.thread)?.activity?.name === '看图说话');
+    // 出厂例子的图在包里(例子图/),不拷进 workspace:workspace 里没有就找包里的
+    writeFileSync(exFile, '---\nactivity: 看图说话\n---\n\n## 包里的图\n照片: 例子图/借伞.jpg\n孩子: 这是我的看图说话\n最多轮: 2\n判:\n- 每节末句是问句\n');
+    const r2 = await evalActivity(ctx.ws, 'chinese-tutor', '看图说话', { runs: 1, kid: async () => null });
+    const run2 = r2.examples[0].runs[0];
+    const idx2 = await readIndex({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'chinese-tutor', run2.date);
+    check('eval 带照片:workspace 里没有那张图,用包里 例子图/ 的', !existsSync(join(dir, '例子图')) && idx2.messages.find((m) => m.thread === run2.thread && m.text === '这是我的看图说话')?.photos?.length === 1, JSON.stringify({ err: run2.error }));
     writeFileSync(exFile, shipped);
   }
 

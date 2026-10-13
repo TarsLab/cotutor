@@ -7,7 +7,8 @@ import { homedir } from 'node:os';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { localDashscopeKey } from '../clis/qwen.ts';
-import { activityRunFor } from '../cli/activities.ts';
+import { ACTIVITIES_DIR, activityRunFor } from '../cli/activities.ts';
+import { PACKAGE_AGENTS_DIR } from '../cli/skeleton.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { gradeRun, kidPrompt, parseExamples, type ActivityExample, type EvalTurn, type GradeResult } from '../lib/activity-eval.ts';
 import type { Draw } from '../paint/draw.ts';
@@ -104,7 +105,8 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
     const saved: string[] = [];
     for (const p of e.photos) {
       const src = isAbsolute(p) ? p : join(dirname(file), p);
-      const data = await readFile(src).catch(() => null);
+      // 出厂例子的图跟着包走,不拷进 workspace:workspace 里没有,就找包里同一个位置的
+      const data = (await readFile(src).catch(() => null)) ?? (isAbsolute(p) ? null : await readFile(join(PACKAGE_AGENTS_DIR, tutor, ACTIVITIES_DIR, p)).catch(() => null));
       if (!data) throw new UsageError(`例子「${e.name}」的照片读不到:${src}`);
       saved.push(await writeCapture(ws, new Date(), data, /\.png$/i.test(p) ? 'png' : 'jpg'));
     }

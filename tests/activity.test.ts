@@ -111,7 +111,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('正文用的卡老师和 activity 都没有', has(fixesAfter('cards: read paint', 'cards: read', { fileName: '你说我画', tutorCards: ['text', 'read'] }), '`paint` 卡,老师和这个 activity 都没有'));
   check('出厂语文老师的卡里没有 paint(只跟着 activity)', !factoryCards?.includes('paint'));
   const factoryTutors = (JSON.parse(configTemplate({ slug: 'x', tutors: await shippedAgents() })) as { tutors: Record<string, { runtime?: string }> }).tutors;
-  check('出厂语文老师走 qwen,别的老师照旧(缺省运行时)', factoryTutors['chinese-tutor'].runtime === 'qwen' && factoryTutors['math-tutor'].runtime === undefined);
+  check('出厂语文、数学老师走 qwen,英语老师走 qwen-flash,口播老师照旧(缺省运行时)', factoryTutors['chinese-tutor'].runtime === 'qwen' && factoryTutors['math-tutor'].runtime === 'qwen' && factoryTutors['english-tutor'].runtime === 'qwen-flash' && factoryTutors['koubo-tutor'].runtime === undefined);
   check('老师有这种卡就不用 activity 再写', fixesAfter('cards: read paint', 'cards: read', { fileName: '你说我画', tutorCards: ['text', 'read', 'paint'] }).length === 0);
   check('缺第一句', has(fixesAfter('第一句: ', '先说: '), '「第一句: …」'));
   check('缺人设', has(fixesAfter('你是这个家的语文老师,今天陪孩子玩', '今天陪孩子玩'), '以「你是」开头'));

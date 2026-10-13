@@ -142,8 +142,8 @@ export interface ConfigTemplateInput {
 
 /** 出厂老师的条目;cards = 板书写法里讲哪几种卡(《卡片协议.md》「谁拿到哪些卡」,2026-10-07),text 总在 */
 const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean; cards?: BoardCardKind[]; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
-  // 数学多想一会儿:算错的代价大(别的老师用缺省 low)
-  'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮', cards: ['text', 'choice', 'fill', 'image', 'lecture', 'canvas', 'code'], policy: { effort: 'medium' } },
+  // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(2026-10-13 Jack 拍板,同语文老师)
+  'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮', runtime: 'qwen', cards: ['text', 'choice', 'fill', 'image', 'lecture', 'canvas', 'code'], policy: { effort: 'medium' } },
   // 画图卡(paint)不在这里:只在「你说我画」activity 的话题里有(agents/chinese-tutor/activities/你说我画.md 头上的 cards,《wip/activity设计.md》拍板 11)
   // 语文老师走 qwen(2026-10-12 Jack 拍板:以后语文老师都用 qwen;你说我画、看图说话两套 activity eval 在 qwen3.8-max 上真跑过)
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚', runtime: 'qwen', cards: ['text', 'read', 'choice', 'fill', 'image', 'tianzige', 'lecture', 'canvas'] },

@@ -824,7 +824,7 @@ __REEL_JS__
   };
   const openTalk = async (el) => {
     el.disabled = true;
-    try { const m = await api('POST', '/api/talk', { from: 'latest' }); location.href = '/talk?home=1#/kid/' + encodeURIComponent(m.id); }
+    try { const m = await api('POST', '/api/talk', { from: 'latest' }); stashFront(el); location.href = '/talk?home=1#/kid/' + encodeURIComponent(m.id); }
     catch { el.disabled = false; S.talkAt = 0; talkInfo(); }
   };
   /** 这位老师卡上「每天都在」那栏:归他的听写卡(《首页设计.md》拍板 19)、常驻的拍照听写与口语课(拍板 18) */
@@ -875,6 +875,10 @@ __REEL_JS__
   // 叠的顺序 K.order:最后一个在最前。进首页时家长排第一的在最前、排第二的紧挨在后面;点过谁谁到最前(最近点过的在前);
   // 从老师页回来不变,刷新页面回到家长排的。牌一样高(取最高那张)。牌元素常驻,5 秒一轮的刷新只在这张牌的内容变了时重画它、不放动画
   const K = { order: null, els: new Map(), busy: false, geo: null };
+  // 从牌上去了别的页(听写、拍照听写、口语课),回来是整页重开、K.order 没了:走之前记下是哪位的牌,下一次进首页读一次就删(拍板 17「回来停在刚才那位」;刷新照旧回家长排的)
+  const FRONT_KEY = 'kid-home-front';
+  const stashFront = (el) => { const pc = el && el.closest && el.closest('[data-tutor]'); try { if (pc) sessionStorage.setItem(FRONT_KEY, pc.dataset.tutor); } catch {} };
+  const takeFront = () => { let f = null; try { f = sessionStorage.getItem(FRONT_KEY); sessionStorage.removeItem(FRONT_KEY); } catch {} return f; };
   const reduced = () => Boolean(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   // 橙点「看过了」记在这台设备上(换了一份首页就清):家长排了东西、孩子还没找过这位老师时亮,换到最前就灭
   const SEEN_KEY = 'kid-home-seen';
@@ -939,7 +943,7 @@ __REEL_JS__
       const sig = JSON.stringify([t.avatar, t.subject, t.display, t.available, buttons, owned, t.extras, S.talkLast && S.talkLast.id, H.home]);
       let el = K.els.get(n);
       if (!el) {
-        const pc = h('div', { class: 'c c-tutor pc', 'data-tutor': n, on: { click: () => { if (!pc.classList.contains('front')) pickTutor(n); } } });
+        const pc = h('div', { class: 'c c-tutor pc', 'data-tutor': n, on: { click: (e) => { if (e.target.closest && e.target.closest('a[href]')) stashFront(pc); if (!pc.classList.contains('front')) pickTutor(n); } } });
         box.append(pc); K.els.set(n, pc); el = pc;
       }
       if (deal || el.dataset.sig !== sig) {
@@ -1024,7 +1028,11 @@ __REEL_JS__
     if (names.length && !K.busy) {
       const deal = S.homeDraw; S.homeDraw = false;
       // 老师变了(开了、关了、换了一份首页的排法)就按家长排的重来:排第一的在最前
-      if (!K.order || K.order.length !== names.length || names.some((x) => !K.order.includes(x))) K.order = [...names].reverse();
+      if (!K.order || K.order.length !== names.length || names.some((x) => !K.order.includes(x))) {
+        const f = K.order ? null : takeFront();
+        K.order = [...names].reverse();
+        if (f && K.order.includes(f)) K.order = K.order.filter((x) => x !== f).concat([f]);
+      }
       renderDeck(H, list, deal);
       if (deal) markSeen(H.home, K.order[K.order.length - 1]);
     }

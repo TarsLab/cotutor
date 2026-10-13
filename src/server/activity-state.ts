@@ -52,6 +52,17 @@ export async function activityState(ws: Workspace, tutor: string, date: string, 
   return out;
 }
 
+/** 这一轮(job)所在话题的 activity 文件「画家收到什么」;不在 activity 话题、文件不在、没有那节 → null(照 cotutor.json 的画风) */
+export async function paintTool(ws: Workspace, tutor: string, date: string, job: string): Promise<{ prompt: string; negative?: string } | null> {
+  const { readIndex } = await import('./store.ts');
+  const index = await readIndex(ws, tutor, date);
+  const at = index.messages.findIndex((m) => m.job === job);
+  if (at < 0) return null;
+  const run = threadActivity(index.messages, threads(index.messages)[at]);
+  const t = run ? (await readActivity(ws, tutor, run.name))?.tools.find((x) => x.tool === '画家') : null;
+  return t ? { prompt: t.prompt, ...(t.negative ? { negative: t.negative } : {}) } : null;
+}
+
 /**
  * 画图前的拦:这一轮(job)在 activity 话题里,就照 activity 文件「应用拦的」查;不在 activity 话题、文件不在 → null(照旧画)。
  * 返回的函数在画图队里现调,同一轮第二张看得到第一张已经在画。

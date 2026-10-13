@@ -10,7 +10,7 @@ delete process.env.COTUTOR_WORKSPACE;
 
 const { activityCards, checkActivity, fillSlots, lintActivity, parseActivity, renderTutorSection, resolveParams, failingGate, gatePasses } = await import('../src/lib/activity.ts');
 const { PAINT_PROMPT_DEFAULT } = await import('../src/schema/index.ts');
-const { PAINT_NEGATIVE } = await import('../src/paint/prompt.ts');
+const { PAINT_NEGATIVE, paintPrompt, paintPromptFrom } = await import('../src/paint/prompt.ts');
 const { PACKAGE_AGENTS_DIR, configTemplate, shippedAgents } = await import('../src/cli/skeleton.ts');
 const { activityFile, checkActivities, installActivities, shippedActivities, upgradeActivities } = await import('../src/cli/activities.ts');
 const { installTutors, readManifest, sha256, writeManifest } = await import('../src/cli/tutors.ts');
@@ -49,11 +49,14 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('应用拦的:连说过一遍、还能画', a.gates.map((g) => g.rule).join(' ') === '连说过一遍 还能画' && a.gates.every((g) => g.note));
   check('老师那节从「## 老师怎么带」下一行起', a.tutor !== null && a.tutor.line > lineOf('## 老师怎么带') && !a.tutor.text.includes('## 画家收到什么'));
 
-  // 画家那节第 4 期才接管画风;在那之前和出厂的 paint.prompt / 反向提示词一字不差(《wip/activity设计.md》拍板 12)
+  // 画家那节接管了画风(拍板 12);出厂那份仍和 paint.prompt 缺省一字不差:不在 activity 话题里画、老 workspace 都照缺省,两处画得一样
   const painter = a.tools.find((t) => t.tool === '画家');
   const style = painter?.prompt.split('\n').filter((l) => l.trim() && !l.includes('{{')) ?? [];
   check('画家那段的画风 = 出厂 paint.prompt', JSON.stringify(style) === JSON.stringify(PAINT_PROMPT_DEFAULT), JSON.stringify(style));
   check('画家不要 = 出厂反向提示词', painter?.negative === PAINT_NEGATIVE, painter?.negative);
+  const cast = { panels: ['小熊播种。', '小猴睡觉。'], cast: [{ name: '小熊', look: '棕色' }, { name: '小猴' }] };
+  const bare = { panels: ['小熊播种。'] };
+  check('画家那节填好插槽 = 照出厂画风拼的(有角色、没角色)', !!painter && paintPromptFrom(painter.prompt, cast) === paintPrompt(cast) && paintPromptFrom(painter.prompt, bare) === paintPrompt(bare), painter ? paintPromptFrom(painter.prompt, bare) : '');
   check('别的节(孩子看到什么、记下什么)应用不读', !a.tutor?.text.includes('孩子端不说没画成') && !painter?.prompt.includes('paint.png'));
 
   // 递给老师的那节

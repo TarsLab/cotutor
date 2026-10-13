@@ -11,7 +11,7 @@ import type { BoardSection } from '../lib/kid-board.ts';
 import { cardId, conversationFiles } from '../lib/conversation.ts';
 import { PaintPropsSchema, type PaintProps } from '../cards/index.ts';
 import { PAINT_DEFAULT } from '../schema/index.ts';
-import { paintPrompt, paintSize } from './prompt.ts';
+import { PAINT_NEGATIVE, paintPrompt, paintPromptFrom, paintSize, paintStyleCustom } from './prompt.ts';
 import type { Draw } from './draw.ts';
 
 export const PAINT_PNG = 'paint.png';
@@ -20,8 +20,8 @@ export const PAINT_JSON = 'paint.json';
 export const PAINT_STALE_MS = 5 * 60_000;
 
 export type PaintRecord =
-  | { state: 'drawing'; at: string; prompt: string; model: string }
-  | { state: 'done'; at: string; prompt: string; model: string; size: string; ms: number }
+  | { state: 'drawing'; at: string; prompt: string; model: string; negative?: string }
+  | { state: 'done'; at: string; prompt: string; model: string; size: string; ms: number; negative?: string }
   | { state: 'none'; at: string; error: string; prompt?: string; model?: string; ms?: number };
 
 /** 某一轮某张画图卡的记录;过了 PAINT_STALE_MS 还在画的当没画成(stale) */
@@ -70,10 +70,13 @@ let chain: Promise<unknown> = Promise.resolve();
 
 /**
  * 这一轮板书里的画图卡,一张一张画。已经有记录的不再画(重起、重放都不重画);replay = 回放那轮不画(evals 目录里,不花钱)。
+ * painter = 这个话题的 activity 文件「画家收到什么」(模板与不要的);给了且 cotutor.json 的 paint.prompt 没改过,照它画。
  * 返回画完的 Promise(测试与关服前等它),不抛。
  */
-export function startPaints(ws: Workspace, tutor: string, date: string, job: string, section: BoardSection, opts: { draw: Draw; now?: () => Date; replay?: boolean; gate?: () => Promise<string | null> }): Promise<void> {
+export function startPaints(ws: Workspace, tutor: string, date: string, job: string, section: BoardSection, opts: { draw: Draw; now?: () => Date; replay?: boolean; gate?: () => Promise<string | null>; painter?: { prompt: string; negative?: string } | null }): Promise<void> {
   const cfg = ws.config.paint ?? PAINT_DEFAULT;
+  const painter = opts.painter && !paintStyleCustom(cfg.prompt) ? opts.painter : null;
+  const negative = painter?.negative || PAINT_NEGATIVE;
   const files = conversationFiles(ws.dirs.conversations, tutor, date);
   const at = (): string => (opts.now?.() ?? new Date()).toISOString();
   const work = section.cards.flatMap((c, n) => {
@@ -88,7 +91,7 @@ export function startPaints(ws: Workspace, tutor: string, date: string, job: str
       const rec = join(dir, PAINT_JSON);
       if (await readRecord(rec)) continue;
       await mkdir(dir, { recursive: true });
-      const prompt = paintPrompt(props, cfg.prompt);
+      const prompt = painter ? paintPromptFrom(painter.prompt, props) : paintPrompt(props, cfg.prompt);
       const model = cfg.model;
       if (opts.replay) { await writeRecord(rec, { state: 'none', at: at(), error: 'replay' }); continue; }
       // activity「应用拦的」(《wip/activity设计.md》4.1):没过就不画、不占张数,下一条告诉老师缺哪条;排在队里现查,同一轮第二张看得到第一张
@@ -96,12 +99,12 @@ export function startPaints(ws: Workspace, tutor: string, date: string, job: str
       if (stop) { await writeRecord(rec, { state: 'none', at: at(), error: `gate:${stop}`, prompt, model }); continue; }
       const used = await paintedToday(ws, date, (opts.now?.() ?? new Date()).getTime());
       if (used >= cfg.daily) { await writeRecord(rec, { state: 'none', at: at(), error: `daily:${used}/${cfg.daily}`, prompt, model }); continue; }
-      await writeRecord(rec, { state: 'drawing', at: at(), prompt, model });
+      await writeRecord(rec, { state: 'drawing', at: at(), prompt, model, negative });
       const size = paintSize(props.panels.length, cfg.size);
-      const r = await opts.draw({ prompt, model, size });
+      const r = await opts.draw({ prompt, model, size, negative });
       if (r.ok) {
         await writeFile(join(dir, PAINT_PNG), r.data);
-        await writeRecord(rec, { state: 'done', at: at(), prompt, model, size, ms: r.ms });
+        await writeRecord(rec, { state: 'done', at: at(), prompt, model, size, ms: r.ms, negative });
       } else await writeRecord(rec, { state: 'none', at: at(), error: r.error, prompt, model, ms: r.ms });
     }
   };

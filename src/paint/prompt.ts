@@ -1,8 +1,11 @@
 /**
- * 画图卡 → 交给文生图模型的一段(《wip/你说我画设想.md》§5.3):版式(几格怎么排)+ 家长可改的画风(cotutor.json paint.prompt)+ 角色 + 分幅。
- * 纯函数;版式与角色、分幅由这里接,改 prompt 不会把分幅弄丢。
+ * 画图卡 → 交给文生图模型的一段(《wip/你说我画设想.md》§5.3):版式(几格怎么排)+ 画风 + 角色 + 分幅。
+ * 画风在 activity 文件「画家收到什么」那节(模板里留 {{版式}} {{角色}} {{分幅}} 三个插槽,《wip/activity设计.md》拍板 12);
+ * 不在 activity 话题里、或 cotutor.json 的 paint.prompt 改过(老 workspace),照旧是 paint.prompt 夹在版式与角色中间。
+ * 纯函数;版式与角色、分幅由这里接,改画风不会把分幅弄丢。
  */
 import type { PaintProps } from '../cards/index.ts';
+import { fillSlots } from '../lib/activity.ts';
 import { PAINT_PROMPT_DEFAULT } from '../schema/index.ts';
 
 /** 反向提示词(百炼限 500 字符) */
@@ -23,10 +26,28 @@ export function paintSize(n: number, size: string): string {
   return n === 2 || n === 3 ? '1664*928' : size;
 }
 
-export function paintPrompt(p: Pick<PaintProps, 'panels' | 'cast'>, style: readonly string[] = PAINT_PROMPT_DEFAULT): string {
+/** 画家那节的三个插槽:版式、角色(没有就空)、分幅 */
+export function paintSlots(p: Pick<PaintProps, 'panels' | 'cast'>): { 版式: string; 角色: string; 分幅: string } {
   const n = p.panels.length;
-  const parts = [paintLayout(n), style.join('\n')];
-  if (p.cast?.length) parts.push([`同一个角色在${n > 1 ? '每一格里' : '画里'}长相、颜色、衣服都照这样画:`, ...p.cast.map((c) => (c.look ? `- ${c.name}:${c.look}` : `- ${c.name}`))].join('\n'));
-  parts.push(n > 1 ? p.panels.map((t, i) => `第 ${i + 1} 格:${t}`).join('\n') : `画面:${p.panels[0]}`);
-  return parts.join('\n\n');
+  return {
+    版式: paintLayout(n),
+    角色: p.cast?.length ? [`同一个角色在${n > 1 ? '每一格里' : '画里'}长相、颜色、衣服都照这样画:`, ...p.cast.map((c) => (c.look ? `- ${c.name}:${c.look}` : `- ${c.name}`))].join('\n') : '',
+    分幅: n > 1 ? p.panels.map((t, i) => `第 ${i + 1} 格:${t}`).join('\n') : `画面:${p.panels[0]}`,
+  };
+}
+
+/** cotutor.json 的画风(paint.prompt):版式、画风、角色、分幅,空一行隔开 */
+export function paintPrompt(p: Pick<PaintProps, 'panels' | 'cast'>, style: readonly string[] = PAINT_PROMPT_DEFAULT): string {
+  const s = paintSlots(p);
+  return [s.版式, style.join('\n'), s.角色, s.分幅].filter(Boolean).join('\n\n');
+}
+
+/** activity 文件「画家收到什么」的模板填好插槽 */
+export function paintPromptFrom(template: string, p: Pick<PaintProps, 'panels' | 'cast'>): string {
+  return fillSlots(template, paintSlots(p));
+}
+
+/** cotutor.json 的 paint.prompt 改过(和出厂的不一样):老 workspace 家长改的画风,以它为准 */
+export function paintStyleCustom(style: readonly string[] | undefined): boolean {
+  return style !== undefined && JSON.stringify(style) !== JSON.stringify(PAINT_PROMPT_DEFAULT);
 }

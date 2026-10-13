@@ -11,8 +11,8 @@ const ENDPOINT = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal
 export const DRAW_TIMEOUT_MS = 180_000;
 
 export type Drawn = ({ ok: true; data: Buffer; model: string } | { ok: false; error: string }) & { ms: number };
-/** 画一张:提示词、模型、尺寸 → PNG(测试与 mock 注入假的) */
-export type Draw = (job: { prompt: string; model: string; size: string }) => Promise<Drawn>;
+/** 画一张:提示词、模型、尺寸、反向提示词(缺省 PAINT_NEGATIVE)→ PNG(测试与 mock 注入假的) */
+export type Draw = (job: { prompt: string; model: string; size: string; negative?: string }) => Promise<Drawn>;
 
 interface GenerationReply {
   code?: string;
@@ -21,7 +21,7 @@ interface GenerationReply {
 }
 
 export function makeDraw(opts: { env?: NodeJS.ProcessEnv; endpoint?: string; timeoutMs?: number } = {}): Draw {
-  return async ({ prompt, model, size }) => {
+  return async ({ prompt, model, size, negative }) => {
     const env = opts.env ?? process.env;
     const t0 = Date.now();
     const fail = (error: string): Drawn => ({ ok: false, error, ms: Date.now() - t0 });
@@ -32,7 +32,7 @@ export function makeDraw(opts: { env?: NodeJS.ProcessEnv; endpoint?: string; tim
       const res = await fetch(opts.endpoint ?? ENDPOINT, {
         method: 'POST',
         headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ model, input: { messages: [{ role: 'user', content: [{ text: prompt }] }] }, parameters: { size, n: 1, prompt_extend: false, watermark: false, negative_prompt: PAINT_NEGATIVE } }),
+        body: JSON.stringify({ model, input: { messages: [{ role: 'user', content: [{ text: prompt }] }] }, parameters: { size, n: 1, prompt_extend: false, watermark: false, negative_prompt: negative || PAINT_NEGATIVE } }),
         signal,
       });
       const j = (await res.json().catch(() => ({}))) as GenerationReply;

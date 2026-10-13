@@ -118,6 +118,23 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   await startPaints(ws, 'chinese-tutor', date, '1004-1', sec(['回放的。']), { draw: fakeDraw, now: () => now, replay: true });
   check('回放不画', asked.length === 3 && JSON.parse(readFileSync(join(dir('1004-1', 1), 'paint.json'), 'utf8')).error === 'replay');
 
+  // activity 文件「画家收到什么」接管画风(《wip/activity设计.md》拍板 12):给了 painter 就照它的模板与不要的
+  {
+    const d2 = '2026-10-13';
+    const got: { prompt: string; negative?: string }[] = [];
+    const spy: Draw = async (j) => { got.push(j); return { ok: true, data: PNG, model: j.model, ms: 1 }; };
+    const painter = { prompt: '{{版式}}\n\n剪纸风,红纸黑线。\n\n{{角色}}\n\n{{分幅}}', negative: '照片,文字' };
+    await startPaints(ws, 'chinese-tutor', d2, '1100-1', sec(['小熊播种。', '小猴睡觉。']), { draw: spy, now: () => now, painter });
+    const r = JSON.parse(readFileSync(join(root, 'conversations', 'chinese-tutor', `${d2}.1100-1.cards`, '1', 'paint.json'), 'utf8')) as { prompt: string; negative: string };
+    check('画家那节接管:插槽填好(版式、分幅),没角色那段不留空行;不要的交给画家、记进 paint.json', got[0]?.prompt === `${paintLayout(2)}\n\n剪纸风,红纸黑线。\n\n第 1 格:小熊播种。\n第 2 格:小猴睡觉。` && got[0].negative === '照片,文字' && r.prompt === got[0].prompt && r.negative === '照片,文字', JSON.stringify(got[0]));
+    await startPaints(ws, 'chinese-tutor', d2, '1101-1', sec(['小熊播种。']), { draw: spy, now: () => now });
+    check('不在 activity 话题(没给 painter):照 cotutor.json 的画风,不要的是出厂那串', got[1]?.prompt === paintPrompt({ panels: ['小熊播种。'] }) && got[1].negative === PAINT_NEGATIVE);
+    const custom = loadWorkspace(root);
+    custom.config.paint = { ...custom.config.paint, prompt: ['家长改的画风'], daily: 9 };
+    await startPaints(custom, 'chinese-tutor', d2, '1102-1', sec(['小熊播种。']), { draw: spy, now: () => now, painter });
+    check('cotutor.json 的 paint.prompt 改过(老 workspace):以它为准,画家那节不起作用', got[2]?.prompt.includes('家长改的画风') && !got[2].prompt.includes('剪纸风') && got[2].negative === PAINT_NEGATIVE, got[2]?.prompt);
+  }
+
   // 下发时补
   const at = now.toISOString();
   const kidDone = await enrichPaints(ws, 'chinese-tutor', date, '1000-1', at, sec(['小熊播种。']), { now: now.getTime() });

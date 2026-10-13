@@ -202,8 +202,15 @@ try {
     check('activity 话题里的 paint 不报「清单外的卡」', !(index.messages.find((m) => m.job === a1.job)?.warnings ?? []).some((w) => w.includes('清单外')));
     const a2 = await send({ text: '整段', thread: th });
     check('下一条:cards 说没画、为什么;缺 = 连说过一遍;拦下的不占张数', a2.prompt.includes('没画:孩子还没看着整段连着说一遍') && stateOf(a2.prompt).includes('"缺": "连说过一遍"') && stateOf(a2.prompt).includes('"还能画": 2'), stateOf(a2.prompt));
+    // 画风照 workspace 里这份 activity 文件的「画家收到什么」(拍板 12):家长改了那一行,下一张就照它
+    const actFile = join(root, 'agents', 'chinese-tutor', 'activities', '你说我画.md');
+    const actText = readFileSync(actFile, 'utf8');
+    writeFileSync(actFile, actText.replace('儿童绘本插画,水彩加干净的线条', '剪纸风格插画,红纸黑线'));
     const a3 = await send({ text: '画图', thread: th });
-    check('放过整段、孩子后面开过口:交给画家', (await recOf(a3.job))?.state === 'done' && drew === 1);
+    const rec3 = (await recOf(a3.job)) as { state: string; prompt?: string } | null;
+    writeFileSync(actFile, actText);
+    check('放过整段、孩子后面开过口:交给画家', rec3?.state === 'done' && drew === 1);
+    check('画风照 activity 文件「画家收到什么」(家长改的那一行进了提示词)', !!rec3?.prompt?.includes('剪纸风格插画,红纸黑线') && !rec3.prompt.includes('水彩'), rec3?.prompt?.slice(0, 200));
     const a4 = await send({ text: '画图', thread: th });
     check('还能画 1:再画一张', stateOf(a4.prompt).includes('"还能画": 1') && stateOf(a4.prompt).includes('"缺": ""') && (await recOf(a4.job))?.state === 'done' && drew === 2, stateOf(a4.prompt));
     const a5 = await send({ text: '画图', thread: th });

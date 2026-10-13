@@ -22,7 +22,7 @@ import { cardAssets, cardLabel, describeCard, tutorCardKinds, type RecordProps }
 import { boardGuideFor, cardGuidesFor } from '../cards/docs.ts';
 import { activityCards, parseActivity, renderTutorSection } from '../lib/activity.ts';
 import { activityFile } from '../cli/activities.ts';
-import { activityState, paintGate, readActivity, threadActivity } from './activity-state.ts';
+import { activityState, paintGate, paintTool, readActivity, threadActivity } from './activity-state.ts';
 import { KouboQueue } from './koubo.ts';
 import { controlsTools, parserOf, prepareCli, processEnv, toolsOf, unexpectedTools } from '../clis/index.ts';
 import { parseBoard } from '../lib/board.ts';
@@ -968,7 +968,8 @@ export class Runner {
     if (kidView.section?.cards.some((c) => c.kind === 'paint')) {
       const clock = (): number => (this.opts.now?.() ?? new Date()).getTime();
       const gate = await paintGate(ws, tutor, date, job, clock).catch(() => null);
-      const bg = startPaints(ws, tutor, date, job, kidView.section, { draw: this.draw, now: this.opts.now, replay: Boolean(latest.messages.find((m) => m.job === job)?.replayOf), ...(gate ? { gate } : {}) });
+      const painter = await paintTool(ws, tutor, date, job).catch(() => null);
+      const bg = startPaints(ws, tutor, date, job, kidView.section, { draw: this.draw, now: this.opts.now, replay: Boolean(latest.messages.find((m) => m.job === job)?.replayOf), ...(gate ? { gate } : {}), painter });
       this.background.add(bg);
       void bg.finally(() => this.background.delete(bg));
     }

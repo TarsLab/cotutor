@@ -390,6 +390,9 @@ export async function doctorWorkspace(
         const states = new Map((await activityStatuses(root)).map((s) => [s.key, s]));
         const label: Record<string, string> = { latest: '出厂件,最新', upgradable: '出厂件,包已更新', custom: '自定义', untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
         for (const s of states.values()) if (s.state === 'missing') push({ name: `activity.${s.key}`, ok: false, required: false, detail: `agents/${s.key.replace('/', '/activities/')}.md 不在`, fix: 'cotutor init 补拷' });
+        // 画风挪进了 activity 文件「画家收到什么」(《wip/activity设计.md》拍板 12);老 workspace 在 cotutor.json 改过的还以它为准,提示挪过去
+        const { paintStyleCustom } = await import('../paint/prompt.ts');
+        if (paintStyleCustom(ws.config.paint?.prompt)) push({ name: 'paint.prompt', ok: false, required: false, detail: 'cotutor.json 的 paint.prompt 改过:画家照它画,activity 文件「画家收到什么」那节的画风不起作用', fix: '把改的画风挪进 agents/chinese-tutor/activities/你说我画.md「画家收到什么」,再删掉 cotutor.json 的 paint.prompt' });
         for (const r of await checkActivities(root, ws.config.tutors)) {
           const key = `${r.tutor}/${r.name}`;
           // 老 workspace 改过老师文件:upgrade 只报 diff,里面同名那节还在,两处说法会打架

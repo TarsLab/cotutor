@@ -4,6 +4,7 @@
  */
 import {
   ACTIVITY_GATES,
+  ACTIVITY_PAGES,
   ACTIVITY_PARAM_TYPES,
   ACTIVITY_RESERVED_PARAMS,
   ACTIVITY_SECTIONS,
@@ -184,6 +185,7 @@ export function parseActivity(text: string): ParsedActivity {
     name: frontmatter.name ?? '',
     description: frontmatter.description ?? '',
     cards: (frontmatter.cards ?? '').split(/[\s,，、]+/).filter(Boolean),
+    ...(frontmatter.page?.trim() ? { page: frontmatter.page.trim() } : {}),
     params: [],
     state: [],
     gates: [],
@@ -301,8 +303,10 @@ export function checkActivity(a: Activity, opts: CheckOptions = {}): ActivityIss
     if (!ACTIVITY_GATES[g.rule]) fix(`应用不认得「${g.rule}」这条拦法:只有 ${Object.keys(ACTIVITY_GATES).join('、')}(拦法只能加在代码里,这里只能删)`, g.line);
   }
 
-  if (!a.tutor) issues.push({ level: 'note', text: '没有「## 老师怎么带」:这个 activity 不起老师' });
-  else {
+  if (a.page !== undefined && !ACTIVITY_PAGES[a.page]) fix(`头上 page 写的「${a.page}」不认得:只有 ${Object.keys(ACTIVITY_PAGES).join('、')}`);
+  if (a.page !== undefined && a.tutor) fix(`头上写了 page: ${a.page}(不起老师,进那一页),「## 老师怎么带」用不上:删掉那节,或删掉 page`, a.tutor.line);
+  else if (!a.tutor && a.page === undefined) issues.push({ level: 'note', text: '没有「## 老师怎么带」:这个 activity 不起老师' });
+  else if (a.tutor) {
     const rows = a.tutor.text.split('\n');
     const at = (i: number): number => a.tutor!.line + i;
     const open: number[] = [];

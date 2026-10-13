@@ -393,6 +393,11 @@ export async function doctorWorkspace(
         // 画风挪进了 activity 文件「画家收到什么」(《wip/activity设计.md》拍板 12);老 workspace 在 cotutor.json 改过的还以它为准,提示挪过去
         const { paintStyleCustom } = await import('../paint/prompt.ts');
         if (paintStyleCustom(ws.config.paint?.prompt)) push({ name: 'paint.prompt', ok: false, required: false, detail: 'cotutor.json 的 paint.prompt 改过:画家照它画,activity 文件「画家收到什么」那节的画风不起作用', fix: '把改的画风挪进 agents/chinese-tutor/activities/你说我画.md「画家收到什么」,再删掉 cotutor.json 的 paint.prompt' });
+        // 认词的要求挪进了听写 activity「认字收到什么」(拍板 21);同上
+        const { dictationPromptCustom } = await import('../dictation/recognize.ts');
+        for (const [k, lang, t] of [['prompt', 'zh', 'chinese-tutor'], ['promptEn', 'en', 'english-tutor']] as const) {
+          if (dictationPromptCustom(ws.config.dictation?.[k], lang)) push({ name: `dictation.${k}`, ok: false, required: false, detail: `cotutor.json 的 dictation.${k} 改过:拍照认词照它,听写 activity「认字收到什么」那段不起作用`, fix: `把改的要求挪进 agents/${t}/activities/听写.md「认字收到什么」,再删掉 cotutor.json 的 dictation.${k}` });
+        }
         for (const r of await checkActivities(root, ws.config.tutors)) {
           const key = `${r.tutor}/${r.name}`;
           // 老 workspace 改过老师文件:upgrade 只报 diff,里面同名那节还在,两处说法会打架

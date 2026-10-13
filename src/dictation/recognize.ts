@@ -1,7 +1,8 @@
 /**
  * 拍照认词表(《wip/听写设想.md》拍板 10、12):孩子端拍课本(课文、写字、词语、识字)或老师发的听写单,交给百炼的视觉模型,一次回齐:
  * 挑出的字词(是什么、哪一栏、在照片上的哪儿、默认选不选、认没认准、老师怎么念),再是正文全文(分好词,孩子端能点着加)。
- * 「认哪些、默认选哪些、怎么念」在 cotutor.json 的 dictation.prompt(家长可改);回什么格式是这里的 FORMAT,接在后面,改 prompt 不会把解析改坏。
+ * 「认哪些、默认选哪些、怎么念」在听写 activity 文件的「认字收到什么」(`{{格式}}` 插槽由这里的 FORMAT 填,《wip/activity设计.md》拍板 21);
+ * 老 workspace 改过 cotutor.json 的 dictation.prompt / promptEn 的,以它为准,FORMAT 接在后面。改要求不会把解析改坏。
  * 流式:模型一行一段地吐,收到一行就交出到这时为止认出的全部,孩子端轮询着一个一个画框,不用干等整张认完。
  * 2026-10-10 拿一页仿课本试(识字 9、写字 9、读读写写 6):qwen3.8-max 24 项全对、框都套在字上,第一项 2.8 秒、全部 23 秒;
  * qwen3.5-omni-flash 整张 20 秒但不照一行一段回;qwen-vl-max / qwen3-vl-plus 36–37 秒。
@@ -9,7 +10,8 @@
  */
 import { homedir } from 'node:os';
 import { localDashscopeKey } from '../clis/qwen.ts';
-import { DICTATION_PROMPT_DEFAULT, DICTATION_DEFAULT } from '../schema/index.ts';
+import { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT, DICTATION_DEFAULT } from '../schema/index.ts';
+import { fillSlots } from '../lib/activity.ts';
 import { DICTATION_SAY_MAX, dictationWordLang, type DictationLang } from '../cards/index.ts';
 
 export const VISION_TIMEOUT_MS = 120_000;
@@ -71,9 +73,19 @@ export const FORMAT_EN = `回答的格式:一行一段 JSON,不要别的字、�
    - say:念法,英文。
 3. 最后是全文:照片上的正文照原样一行写一行 {"full": "What colour is it? It's yellow."};不要页码、栏目名。`;
 
-/** 交给模型的整段:家长的要求 + 格式 */
+/** 交给模型的整段:cotutor.json 的要求 + 格式 */
 export function photoPrompt(prompt: readonly string[] = DICTATION_PROMPT_DEFAULT, lang: DictationLang = 'zh'): string {
   return `${prompt.join('\n')}\n\n${lang === 'en' ? FORMAT_EN : FORMAT}`;
+}
+
+/** 交给模型的整段:听写 activity 文件「认字收到什么」的模板填好 {{格式}} */
+export function photoPromptFrom(template: string, lang: DictationLang = 'zh'): string {
+  return fillSlots(template, { 格式: lang === 'en' ? FORMAT_EN : FORMAT });
+}
+
+/** cotutor.json 的 dictation.prompt / promptEn 改过(和出厂的不一样):老 workspace 家长改的要求,以它为准 */
+export function dictationPromptCustom(prompt: readonly string[] | undefined, lang: DictationLang = 'zh'): boolean {
+  return prompt !== undefined && JSON.stringify(prompt) !== JSON.stringify(lang === 'en' ? DICTATION_PROMPT_EN_DEFAULT : DICTATION_PROMPT_DEFAULT);
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -181,7 +193,7 @@ function deltaOf(line: string): string {
 export async function recognizePhoto(
   image: { data: Buffer; mime: string },
   onProgress: (p: PhotoProgress) => void = () => {},
-  opts: { env?: NodeJS.ProcessEnv; endpoint?: string; model?: string; prompt?: readonly string[]; timeoutMs?: number; lang?: DictationLang } = {},
+  opts: { env?: NodeJS.ProcessEnv; endpoint?: string; model?: string; prompt?: readonly string[]; text?: string; timeoutMs?: number; lang?: DictationLang } = {},
 ): Promise<Recognized> {
   const env = opts.env ?? process.env;
   const t0 = Date.now();
@@ -200,7 +212,7 @@ export async function recognizePhoto(
         stream: true,
         temperature: 0.1,
         enable_thinking: false,
-        messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.data.toString('base64')}` } }, { type: 'text', text: photoPrompt(opts.prompt, opts.lang) }] }],
+        messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.data.toString('base64')}` } }, { type: 'text', text: opts.text ?? photoPrompt(opts.prompt, opts.lang) }] }],
       }),
       signal: AbortSignal.timeout(opts.timeoutMs ?? VISION_TIMEOUT_MS),
     });

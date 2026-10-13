@@ -200,7 +200,8 @@ export const TalkSchema = z.object({
 export type TalkConfig = z.infer<typeof TalkSchema>;
 
 /**
- * 听写(《wip/听写设想.md》):拍照认词表用哪个模型、照什么要求挑词。prompt 一行一个字符串(JSON 里好改),拼起来交给模型;
+ * 听写(《wip/听写设想.md》):拍照认词表用哪个模型。挑词的要求在听写 activity 文件「认字收到什么」(《wip/activity设计.md》拍板 21);
+ * prompt / promptEn 是老 workspace 的要求:和出厂的一样就当没写,改过就以它为准(doctor 提示挪进 activity 文件)。
  * 回什么格式(一行一段 JSON)由应用接在后面(src/dictation/recognize.ts 的 FORMAT),改 prompt 不会把解析改坏。
  */
 export const DICTATION_PROMPT_DEFAULT = [
@@ -230,8 +231,8 @@ export const DICTATION_PROMPT_EN_DEFAULT = [
 export const DICTATION_DEFAULT = { model: 'qwen3.8-max', prompt: DICTATION_PROMPT_DEFAULT, promptEn: DICTATION_PROMPT_EN_DEFAULT };
 export const DictationSchema = z.object({
   model: z.string().min(1).default(DICTATION_DEFAULT.model).describe('拍照认词表用的百炼视觉模型(兼容接口,流式)'),
-  prompt: z.array(z.string()).min(1).default(DICTATION_PROMPT_DEFAULT).describe('拍照认词表的要求:一行一个字符串,拼起来交给模型(认哪些、默认选哪些、怎么念);回什么格式应用自己接在后面,不用写'),
-  promptEn: z.array(z.string()).min(1).default(DICTATION_PROMPT_EN_DEFAULT).describe('英文单词的拍照认词要求(英语老师卡上的拍照听写):一行一个字符串;回什么格式应用自己接在后面'),
+  prompt: z.array(z.string()).min(1).default(DICTATION_PROMPT_DEFAULT).describe('旧的拍照认词要求(一行一个字符串)。要求现在写在 agents/chinese-tutor/activities/听写.md「认字收到什么」;这里和出厂的一样就不起作用,改过就以它为准'),
+  promptEn: z.array(z.string()).min(1).default(DICTATION_PROMPT_EN_DEFAULT).describe('旧的英文单词拍照认词要求。要求现在写在 agents/english-tutor/activities/听写.md「认字收到什么」;这里和出厂的一样就不起作用,改过就以它为准'),
 });
 export type DictationConfig = z.infer<typeof DictationSchema>;
 
@@ -291,7 +292,7 @@ export const CotutorConfigSchema = z
       .optional()
       .describe('给老师换样子(figshot pick):它在这台电脑的哪个端口(缺省 8477)。配了孩子端首页多一张「给老师们换个样子」,figshot 没开着就不出现;不配就没有这张卡'),
     koubo: KouboSchema.default(KOUBO_DEFAULT).describe('录音卡的评测命令模板(口播老师):card 一条龙评一条录音(占位 {audio} {text} {mode} {pairs}),timeoutMs 一条最多等多久;门槛与花费上限在 workspace 根的 koubo.json'),
-    dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型与要求(prompt 一行一个字符串,家长可改,改了不用重起服务)'),
+    dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型(改了不用重起服务);挑词的要求在听写 activity 文件「认字收到什么」'),
     paint: PaintSchema.default(PAINT_DEFAULT).describe('你说我画:画图卡(paint)用的文生图模型、尺寸、一天几张(改了不用重起服务);画风在 activity 文件「画家收到什么」'),
     talk: TalkSchema.default(TALK_DEFAULT).describe('口语课(/talk):家长拍一张今天学的,孩子先跟读、再和 realtime 模型用这些词聊;enabled 出厂 false;要百炼 key 与业务空间 id(DASHSCOPE_WORKSPACE_ID 或 voxtell 的配置)'),
   })

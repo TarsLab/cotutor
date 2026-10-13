@@ -31,7 +31,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
 // ---- 出厂的那份 ----
 {
   const shipped = await shippedActivities();
-  check('包里出厂:语文老师的你说我画、看图说话与它们的例子;语文、数学、英语各一份小课堂', shipped.map((x) => `${x.tutor}/${x.name}`).join(' ') === 'chinese-tutor/你说我画 chinese-tutor/你说我画.例子 chinese-tutor/小课堂 chinese-tutor/看图说话 chinese-tutor/看图说话.例子 english-tutor/小课堂 math-tutor/小课堂 math-tutor/小课堂.例子', JSON.stringify(shipped));
+  check('包里出厂:语文老师的你说我画、看图说话与它们的例子;语文、数学、英语各一份小课堂', shipped.map((x) => `${x.tutor}/${x.name}`).join(' ') === 'chinese-tutor/你说我画 chinese-tutor/你说我画.例子 chinese-tutor/听写 chinese-tutor/小课堂 chinese-tutor/看图说话 chinese-tutor/看图说话.例子 english-tutor/听写 english-tutor/小课堂 math-tutor/小课堂 math-tutor/小课堂.例子', JSON.stringify(shipped));
   const kantu = readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', '看图说话.md'), 'utf8');
   check('出厂的看图说话过检查(老师的卡照出厂 cotutor.json)', lintActivity(kantu, { fileName: '看图说话', tutorCards: factoryCards }).issues.length === 0, JSON.stringify(lintActivity(kantu, { fileName: '看图说话', tutorCards: factoryCards }).issues));
   const teacher = readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor.md'), 'utf8');
@@ -193,6 +193,22 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('模拟孩子的提示词:故事、人设、对话、板上的整段', kp.includes('小熊种瓜') && kp.includes('问一句答一句') && kp.includes('孩子:小熊') && kp.includes('板上:小熊睡大觉。 / 小熊浇了水。'));
 }
 
+// ---- 听写:不起老师(page:),认字那段和出厂的 dictation.prompt 拼出来一字不差(《wip/activity设计.md》拍板 20、21)----
+{
+  const { photoPrompt, photoPromptFrom } = await import('../src/dictation/recognize.ts');
+  const { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT } = await import('../src/schema/index.ts');
+  for (const [t, page, lang, def] of [['chinese-tutor', 'dictation', 'zh', DICTATION_PROMPT_DEFAULT], ['english-tutor', 'dictation-en', 'en', DICTATION_PROMPT_EN_DEFAULT]] as const) {
+    const r = lintActivity(readFileSync(join(PACKAGE_AGENTS_DIR, t, 'activities', '听写.md'), 'utf8'), { fileName: '听写' });
+    const tool = r.activity.tools.find((x) => x.tool === '认字');
+    check(`${t} 的听写:page ${page}、没有老师那节、没有要改的(也没有「不起老师」的提醒)`, r.activity.page === page && r.activity.tutor === null && r.issues.length === 0, JSON.stringify(r.issues));
+    check(`${t} 的听写:认字那段填好格式 = 照出厂 dictation.${lang === 'en' ? 'promptEn' : 'prompt'} 拼的`, !!tool && photoPromptFrom(tool.prompt, lang) === photoPrompt(def, lang));
+  }
+  const bad = lintActivity('---\nname: 听写\ndescription: x\npage: 别的页\n---\n\n## 老师怎么带\n\n你是老师。\n第一句: 好\n收: 好\n', { fileName: '听写' });
+  check('page 不认得、写了 page 又写老师那节:都报', has(bad.issues, '不认得') && has(bad.issues, '用不上'), JSON.stringify(bad.issues));
+  const miss = lintActivity('---\nname: 听写\ndescription: x\npage: dictation\n---\n\n## 认字收到什么\n\n```认字\n挑词\n```\n', { fileName: '听写' });
+  check('认字少了 {{格式}}:报', has(miss.issues, '少了 {{格式}}'), JSON.stringify(miss.issues));
+}
+
 // ---- 没有老师那节的(像听写):只提醒,不算错;解析永不抛 ----
 {
   const dict = '---\nname: 听写\ndescription: 老师念,孩子写\ncards: \n---\n\n## 家长填的\n\n```参数\n词表: 词表 —— 一行一个\n```\n';
@@ -216,7 +232,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   try {
     const steps = await installActivities(root);
     const file = activityFile(root, 'chinese-tutor', '你说我画');
-    check('init 拷进老师的家(连例子文件)', steps.length === 8 && steps.every((x) => x.action === 'created') && readFileSync(file, 'utf8') === text && existsSync(activityFile(root, 'chinese-tutor', '你说我画.例子')), JSON.stringify(steps));
+    check('init 拷进老师的家(连例子文件)', steps.length === 10 && steps.every((x) => x.action === 'created') && readFileSync(file, 'utf8') === text && existsSync(activityFile(root, 'chinese-tutor', '你说我画.例子')), JSON.stringify(steps));
     check('hash 记进 shipped.json 的 activities', (await readManifest(root)).activities?.['chinese-tutor/你说我画']?.hash === sha256(text));
     await installTutors(root, []);
     check('老师那边写清单不抹掉 activities', Boolean((await readManifest(root)).activities?.['chinese-tutor/你说我画']));
@@ -239,7 +255,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     check('删了:upgrade 补上', (await upgradeActivities(root))[0].action === 'installed' && existsSync(file));
 
     const ok = await checkActivities(root, { 'chinese-tutor': { cards: factoryCards }, 'math-tutor': {}, 'english-tutor': {} });
-    check('activity check:workspace 里出厂的都对得上(例子文件不当 activity)', ok.map((x) => `${x.tutor}/${x.name}`).join() === 'chinese-tutor/你说我画,chinese-tutor/小课堂,chinese-tutor/看图说话,english-tutor/小课堂,math-tutor/小课堂' && ok.every((x) => x.issues.length === 0), JSON.stringify(ok.map((x) => x.issues)));
+    check('activity check:workspace 里出厂的都对得上(例子文件不当 activity)', ok.map((x) => `${x.tutor}/${x.name}`).join() === 'chinese-tutor/你说我画,chinese-tutor/听写,chinese-tutor/小课堂,chinese-tutor/看图说话,english-tutor/听写,english-tutor/小课堂,math-tutor/小课堂' && ok.every((x) => x.issues.length === 0), JSON.stringify(ok.map((x) => x.issues)));
     const orphan = await checkActivities(root, {});
     check('activity check:老师不在 cotutor.json 里报一条', has(orphan[0].issues, '没有 chinese-tutor 这位老师'));
     check('activity check:按老师、按名字筛', (await checkActivities(root, {}, { tutor: 'math-tutor' })).map((x) => x.name).join() === '小课堂' && (await checkActivities(root, {}, { tutor: 'koubo-tutor' })).length === 0 && (await checkActivities(root, {}, { tutor: 'chinese-tutor', name: '别的' })).length === 0);

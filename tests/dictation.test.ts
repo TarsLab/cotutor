@@ -258,6 +258,31 @@ try {
     srv.close();
     check('流式认:边收边回调、key 只进请求头、缺省 qwen3.8-max、提示词是传进来的要求 + 格式;全文也收;没有 key 回 no_key', rr.ok && seen.includes('肚皮') && seen[seen.length - 1] === '肚皮孩' && rr.full.join() === '肚皮 白白 的' && seenAuth === 'Bearer k-test' && seenModel === 'qwen3.8-max' && sentPrompt.startsWith('挑写字栏\n') && sentPrompt.includes('{"full":') && !none.ok && none.error === 'no_key', JSON.stringify(rr));
   }
+  // ---- 认词的要求在听写 activity「认字收到什么」(《wip/activity设计.md》拍板 21)----
+  {
+    const { dictationTemplate } = await import('../src/dictation/route.ts');
+    const { createServer } = await import('node:http');
+    const { photoPromptFrom, FORMAT, FORMAT_EN } = await import('../src/dictation/recognize.ts');
+    const { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT } = await import('../src/schema/index.ts');
+    const zh = await dictationTemplate(root, 'zh');
+    const en = await dictationTemplate(root, 'en');
+    check('出厂:中文认字照语文老师的听写.md、英文照英语老师的;填好格式和出厂 prompt 拼的一样', !!zh && !!en && photoPromptFrom(zh, 'zh') === photoPrompt(DICTATION_PROMPT_DEFAULT, 'zh') && photoPromptFrom(en, 'en') === photoPrompt(DICTATION_PROMPT_EN_DEFAULT, 'en') && photoPromptFrom(en, 'en').endsWith(FORMAT_EN) && photoPromptFrom(zh, 'zh').endsWith(FORMAT));
+    const f = join(root, 'agents', 'chinese-tutor', 'activities', '听写.md');
+    const keep = readFileSync(f, 'utf8');
+    writeFileSync(f, keep.replace('先把照片上的正文一行一行全认出来', '只挑写字栏'));
+    const mine = await dictationTemplate(root, 'zh');
+    writeFileSync(f, keep.replace('{{格式}}', '').replace('page: dictation', 'page: dictation-x'));
+    const gone = await dictationTemplate(root, 'zh');
+    writeFileSync(f, keep);
+    check('家长改了那段:下一张照片就照它;page 不对就不认这份(退回 cotutor.json)', !!mine?.includes('只挑写字栏') && gone === null);
+    let sent = '';
+    const fake = createServer((req, res) => { let b = ''; req.on('data', (c: Buffer) => (b += c)); req.on('end', () => { sent = JSON.parse(b).messages[0].content[1].text; res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: [DONE]\n\n'); }); });
+    await new Promise<void>((r) => fake.listen(0, '127.0.0.1', () => r()));
+    const { recognizePhoto: rp } = await import('../src/dictation/recognize.ts');
+    await rp({ data: Buffer.from('jpg'), mime: 'image/jpeg' }, () => {}, { env: { DASHSCOPE_API_KEY: 'k' }, endpoint: `http://127.0.0.1:${(fake.address() as { port: number }).port}/`, text: '整段给的要求' });
+    fake.close();
+    check('recognizePhoto 给了 text 就整段用它', sent === '整段给的要求');
+  }
   // ---- 拍照开始:传照片 → 后台认(假的)→ 轮询 → 点选的词开始听写 ----
   {
     const fakeItems = [

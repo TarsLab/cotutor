@@ -32,7 +32,10 @@ import { readPublished } from '../server/home.ts';
 import { tianzigeData } from '../server/tianzige.ts';
 import { synthesize } from '../server/tts.ts';
 import { judgeChar, type CharJudge, type InkPoint } from './lib/match.ts';
-import { recognizePhoto, type Recognize } from './recognize.ts';
+import { dictationPromptCustom, photoPromptFrom, recognizePhoto, type Recognize } from './recognize.ts';
+import { readFile } from 'node:fs/promises';
+import { listActivities } from '../cli/activities.ts';
+import { parseActivity } from '../lib/activity.ts';
 import { DICTATION_PAGE } from './page.ts';
 import { DICTATION_EN_PAGE } from './en-page.ts';
 import { DICTATION_PARENT_PAGE } from './parent-page.ts';
@@ -93,9 +96,28 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
     async medians(ch) {
       return (await tianzigeData(ch))?.medians ?? null;
     },
-    // 每次现读 cotutor.json 的 dictation(家长改了要求不用重起服务)
-    recognize: (image, onProgress, lang) => recognizePhoto(image, onProgress, { model: ws().config.dictation.model, prompt: lang === 'en' ? ws().config.dictation.promptEn : ws().config.dictation.prompt, lang }),
+    // 每次现读(家长改了要求不用重起服务):听写 activity 文件「认字收到什么」;cotutor.json 的要求改过(老 workspace)以它为准
+    recognize: async (image, onProgress, lang) => {
+      const cfg = ws().config.dictation;
+      const prompt = lang === 'en' ? cfg.promptEn : cfg.prompt;
+      const tpl = dictationPromptCustom(prompt, lang) ? null : await dictationTemplate(ws().root, lang ?? 'zh');
+      return recognizePhoto(image, onProgress, { model: cfg.model, prompt, lang, ...(tpl ? { text: photoPromptFrom(tpl, lang) } : {}) });
+    },
   };
+}
+
+/**
+ * 认词的要求:workspace 里头上写着这一页(page: dictation / dictation-en)、有「认字收到什么」的那份听写 activity(按老师排第一份);
+ * 没有 → null(照 cotutor.json 的 dictation.prompt / promptEn)
+ */
+export async function dictationTemplate(root: string, lang: DictationLang): Promise<string | null> {
+  const page = lang === 'en' ? 'dictation-en' : 'dictation';
+  for (const r of await listActivities(join(root, 'agents'))) {
+    const a = parseActivity(await readFile(r.file, 'utf8').catch(() => '')).activity;
+    const t = a.page === page ? a.tools.find((x) => x.tool === '认字') : undefined;
+    if (t) return t.prompt;
+  }
+  return null;
 }
 
 /** app.ts 接的那一行 */

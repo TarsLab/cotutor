@@ -33,6 +33,17 @@ export const ACTIVITY_GATES: Readonly<Record<string, string>> = {
 /** 工具人与它认得的插槽(都要在模板里出现) */
 export const ACTIVITY_TOOLS: Readonly<Record<string, { slots: readonly string[] }>> = {
   画家: { slots: ['版式', '角色', '分幅'] },
+  /** 听写的拍照认词(src/dictation/recognize.ts):格式 = 回什么格式,应用接(FORMAT / FORMAT_EN) */
+  认字: { slots: ['格式'] },
+};
+
+/**
+ * 不起老师的会话、按钮进一页的 activity(头上 `page:`,《wip/activity设计.md》拍板 20):名字、音色、牌还是那位老师的。
+ * dictation = 中文听写页,dictation-en = 英文单词听写页(四线三格)
+ */
+export const ACTIVITY_PAGES: Readonly<Record<string, string>> = {
+  dictation: '中文听写页 /dictation',
+  'dictation-en': '英文单词听写页 /dictation?lang=en',
 };
 
 /** 应用认的节标题;工具人那节是 `<工具人>收到什么` */
@@ -95,6 +106,8 @@ export const ActivitySchema = z.object({
   params: z.array(ActivityParamSchema),
   state: z.array(ActivityStateSchema),
   gates: z.array(ActivityGateSchema),
+  /** 头上的 `page:`:不起老师、进这一页(见 ACTIVITY_PAGES);没写 = 起老师 */
+  page: z.string().optional(),
   /** 「老师怎么带」那节的原文(没剥注释、没裁);没有这节就是 null(这个 activity 不起老师,如听写) */
   tutor: z.object({ text: z.string(), line: z.number().int() }).nullable(),
   tools: z.array(ActivityToolSchema),

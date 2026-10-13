@@ -7,6 +7,10 @@
  */
 import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
 import { UNLOCK_JS } from './unlock.ts';
+import { inlineScript } from '../server/inline-lib.ts';
+
+/** 录像的纯函数(lib/reel.ts),内联进来 */
+const DICT_REEL_JS = inlineScript(new URL('./lib/reel.ts', import.meta.url));
 
 export const DICTATION_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -160,6 +164,8 @@ export const DICTATION_PAGE = `<!doctype html>
   .seg.no { cursor:default; color:var(--dim); padding:2px 1px; }
   @media (orientation: portrait) { #v-pick { flex-direction:column; } .side2 { width:auto; flex:0 0 42%; } }
   @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+  /* 录像里(?reel=):孩子当时的样子,点不动 */
+  body.rlk { pointer-events:none; }
 ${TUTOR_FACE_CSS}
 </style></head>
 <body>
@@ -295,10 +301,12 @@ ${TUTOR_FACE_CSS}
 
   var q = new URLSearchParams(location.search);
   var HOME = q.get('home'); var N = Number(q.get('n') || 0); var TUTOR = q.get('tutor');
+  /** 家长看录像时,这一页开在录像外壳的 iframe 里:只照记录画,不发事件、不念、点不动(《家长录像设计.md》拍板 13) */
+  var REEL_ID = q.get('reel');
   var S = { v: null, base: Date.now(), i: 0, w: null, pads: [], stack: [], active: null, sawPen: false, noAudio: false, sayTimer: 0, order: null, rw: null };
   /** 点与事件的时刻:离这次听写开始(startedAt)多少毫秒;孩子端的钟,录像只看先后与间隔 */
   var now = function () { return Math.max(0, Date.now() - S.base); };
-  var setView = function (v) { S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); };
+  var setView = function (v) { var fresh = !S.v || S.v.id !== v.id; S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); if (fresh) { S.vw = 0; sendView(); } };
 
   var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'order' || name === 'rewrite'; window.scrollTo(0, 0); };
   var goHome = function () { stopSay(); location.href = '/'; };
@@ -329,7 +337,16 @@ ${TUTOR_FACE_CSS}
   };
 
   /** 记一件事(录像按它排);发不出去就算了 */
-  var event = function (kind, word, ch, n) { var b = { kind: kind, word: word, t: now() }; if (ch !== undefined) b.char = ch; if (n !== undefined) b.n = n; api('POST', '/api/dictation/' + S.v.id + '/events', b).catch(function () {}); };
+  var event = function (kind, word, ch, n, more) {
+    if (!S.v || REEL_ID) return;
+    var b = { kind: kind, word: word, t: now() }; if (ch !== undefined) b.char = ch; if (n !== undefined) b.n = n; if (more) { b.w = more.w; b.h = more.h; }
+    try { fetch('/api/dictation/' + S.v.id + '/events', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b), keepalive: true }).catch(function () {}); } catch (e) {}
+  };
+  /** 录像要的:屏幕多大(进来、转屏,停手 300 毫秒,变了才记)、切到别处 / 回来 */
+  var viewTimer = 0;
+  var sendView = function () { if (!S.v || S.v.done) return; var w = window.innerWidth, hh = window.innerHeight; if (w === S.vw && hh === S.vh) return; S.vw = w; S.vh = hh; event('view', S.i || 0, undefined, undefined, { w: w, h: hh }); };
+  window.addEventListener('resize', function () { clearTimeout(viewTimer); viewTimer = setTimeout(sendView, 300); });
+  document.addEventListener('visibilitychange', function () { if (S.v && !S.v.done) event(document.hidden ? 'away' : 'back', S.i || 0); });
 
   // ---------- 字形(书上的字):/api/kid/tianzige/<字>,strokes 轮廓 + medians 中线 ----------
   var GL = {};
@@ -346,7 +363,7 @@ ${TUTOR_FACE_CSS}
     var ink = sv('g', { 'class': 'ink', transform: HZ_T });
     var top = sv('g', { 'class': 'top', transform: HZ_T });
     svg.append(grid, std, ink, top);
-    var pad = { el: h('div', { 'class': 'padbox' }, svg), svg: svg, std: std, ink: ink, top: top, strokes: [], undos: 0 };
+    var pad = { el: h('div', { 'class': 'padbox' }, svg), svg: svg, std: std, ink: ink, top: top, strokes: [], undos: 0, gone: [] };
     (opts.ink || []).forEach(function (s) { if (s.length) ink.append(sv('path', { d: pathD(s) })); });
     if (opts.write) bindPen(pad);
     if (opts.onTap) pad.el.addEventListener('click', opts.onTap);
@@ -377,11 +394,13 @@ ${TUTOR_FACE_CSS}
     var up = function (e) { if (cur && e.pointerId === cur.id) { cur = null; if (pad.onUp) pad.onUp(); } };
     pad.svg.addEventListener('pointerup', up); pad.svg.addEventListener('pointercancel', up);
   };
-  var undo = function () { var pad = S.stack.pop(); if (!pad || !pad.strokes.length) return; pad.strokes.pop(); if (pad.ink.lastChild) pad.ink.lastChild.remove(); pad.undos++; if (pad.onUp) pad.onUp(); };
-  var clearActive = function () { var pad = S.active; if (!pad || !pad.strokes.length) return; pad.strokes = []; pad.ink.replaceChildren(); pad.undos++; S.stack = S.stack.filter(function (x) { return x !== pad; }); if (pad.onUp) pad.onUp(); };
+  /** 擦掉的笔留着,记上擦的时刻(录像里在那一刻消失,《家长录像设计.md》拍板 13) */
+  var drop = function (pad, pts) { if (pad.gone.length < 200) pad.gone.push({ t: now(), pts: pts }); };
+  var undo = function () { var pad = S.stack.pop(); if (!pad || !pad.strokes.length) return; drop(pad, pad.strokes.pop()); if (pad.ink.lastChild) pad.ink.lastChild.remove(); pad.undos++; if (pad.onUp) pad.onUp(); };
+  var clearActive = function () { var pad = S.active; if (!pad || !pad.strokes.length) return; pad.strokes.forEach(function (st) { drop(pad, st); }); pad.strokes = []; pad.ink.replaceChildren(); pad.undos++; S.stack = S.stack.filter(function (x) { return x !== pad; }); if (pad.onUp) pad.onUp(); };
   var us = document.querySelectorAll('[data-undo]'); for (var i1 = 0; i1 < us.length; i1++) us[i1].addEventListener('click', undo);
   var cs = document.querySelectorAll('[data-clear]'); for (var i2 = 0; i2 < cs.length; i2++) cs[i2].addEventListener('click', clearActive);
-  var padsOut = function () { return { chars: S.pads.map(function (p) { return { strokes: p.strokes, undos: p.undos }; }) }; };
+  var padsOut = function () { return { chars: S.pads.map(function (p) { return { strokes: p.strokes, undos: p.undos, gone: p.gone }; }) }; };
   /** 一排写字的格多大:屏幕放得下、不超过 340 */
   var padSize = function (count, wFrac, hRoom) { var w = Math.floor((window.innerWidth * wFrac - 48 - (count - 1) * 24) / count); return Math.max(120, Math.min(340, w, window.innerHeight - hRoom)); };
   var writePads = function (box, count, hRoom, wFrac) {
@@ -639,7 +658,7 @@ ${TUTOR_FACE_CSS}
       for (var c = 0; c < size; c++) {
         (function (c) {
           var mine = wi === S.i ? (c === S.w.c ? { strokes: S.w.pad.strokes } : S.w.inks[c]) : S.v.mine[wi] ? S.v.mine[wi][c] : null;
-          var cell = makePad({ ink: mine ? mine.strokes : [], onTap: wi === S.i ? function () { if (S.w.mode !== 'order' && c !== S.w.c) openChar(c); } : null });
+          var cell = makePad({ ink: mine ? mine.strokes : [], onTap: wi === S.i ? function () { if (S.w.mode !== 'order' && c !== S.w.c) { event('open', S.i, c); openChar(c); } } : null });
           if (wi > S.i) cell.el.classList.add('ahead');
           if (wi === S.i && c === S.w.c) cell.el.classList.add('here');
           row.append(cell.el);
@@ -661,7 +680,7 @@ ${TUTOR_FACE_CSS}
   var stash = function () {
     if (!S.w || !S.w.pad) return;
     var prev = S.w.inks[S.w.c];
-    S.w.inks[S.w.c] = { strokes: S.w.pad.strokes, undos: S.w.pad.undos, revealed: S.w.mode === 'trace' || Boolean(prev && prev.revealed) };
+    S.w.inks[S.w.c] = { strokes: S.w.pad.strokes, undos: S.w.pad.undos, gone: S.w.pad.gone, revealed: S.w.mode === 'trace' || Boolean(prev && prev.revealed) };
   };
   var openChar = function (c) {
     stash(); S.w.otok = (S.w.otok || 0) + 1;
@@ -669,7 +688,7 @@ ${TUTOR_FACE_CSS}
     var prev = S.w.inks[c];
     S.w.mode = prev && prev.revealed ? 'trace' : 'write';
     var pad = makePad({ write: true, ink: prev ? prev.strokes : [] });
-    pad.strokes = prev ? prev.strokes.slice() : []; pad.undos = prev ? prev.undos : 0;
+    pad.strokes = prev ? prev.strokes.slice() : []; pad.undos = prev ? prev.undos : 0; pad.gone = prev && prev.gone ? prev.gone.slice() : [];
     pad.onUp = updateHere;
     S.w.pad = pad; S.pads = [pad]; S.stack = pad.strokes.map(function () { return pad; });
     var big = $('#l-big'); big.replaceChildren(pad.el);
@@ -702,7 +721,7 @@ ${TUTOR_FACE_CSS}
     for (var c = 1; c <= size; c++) { var n = (w.c + c) % size; if (!w.done[n]) return openChar(n); }
     stopSay();
     var k = S.i;
-    var chars = w.inks.map(function (x) { return x ? { strokes: x.strokes, undos: x.undos, revealed: x.revealed || undefined } : { strokes: [], undos: 0 }; });
+    var chars = w.inks.map(function (x) { return x ? { strokes: x.strokes, undos: x.undos, gone: x.gone && x.gone.length ? x.gone : undefined, revealed: x.revealed || undefined } : { strokes: [], undos: 0 }; });
     persist('PUT', '/api/dictation/' + S.v.id + '/first/' + k, { chars: chars }, $('#l-next')).then(function () {
       S.v.written[k] = true; S.v.mine[k] = chars;
       openListen();
@@ -714,7 +733,7 @@ ${TUTOR_FACE_CSS}
     stopSay(); status('');
     persist('POST', '/api/dictation/' + S.v.id + '/reveal/' + S.i, { char: w.c, t: now() }, $('#l-reveal')).then(function (j) {
       w.chars[w.c] = j.ch; w.mode = 'order';
-      w.pad.strokes = []; w.pad.ink.replaceChildren(); S.stack = []; updateHere();
+      w.pad.strokes.forEach(function (st) { drop(w.pad, st); }); w.pad.strokes = []; w.pad.ink.replaceChildren(); S.stack = []; updateHere();
       renderFoot();
       glyph(j.ch).then(function (d) { w.d = d; fillStd(w.pad, d, ''); playOrder(); });
     });
@@ -741,6 +760,7 @@ ${TUTOR_FACE_CSS}
   /** 我来写:描红打底,必须照着写一遍才能写好了(拍板 8) */
   $('#l-trace').addEventListener('click', function () {
     var w = S.w; w.otok++; w.pad.top.replaceChildren();
+    event('trace', S.i, w.c);
     w.mode = 'trace'; fillStd(w.pad, w.d, 'trace');
     var ps = w.pad.std.children; for (var i = 0; i < ps.length; i++) ps[i].removeAttribute('class');
     renderFoot(); status('');
@@ -833,7 +853,7 @@ ${TUTOR_FACE_CSS}
   $('#r-next').addEventListener('click', function () { if (S.order) stepTo(S.order.k + 1, false); });
   $('#r-play').addEventListener('click', function () { if (!S.order || !S.order.d) return; stepTo(S.order.k >= S.order.d.strokes.length ? 0 : S.order.k, true); });
   $('#r-zero').addEventListener('click', function () { if (S.order) stepTo(0, true); });
-  $('#r-back').addEventListener('click', function () { stopStrokeOrder(); S.order = null; openCheck(); });
+  $('#r-back').addEventListener('click', function () { if (S.order) event('close', S.order.wi, S.order.ci); stopStrokeOrder(); S.order = null; openCheck(); });
   $('#r-rewrite').addEventListener('click', function () { var wi = S.order ? S.order.wi : 0; var w = S.v.answers[wi]; stopStrokeOrder(); S.order = null; event(w.ask ? 'rewrite' : 'self', wi); openRewrite(wi, !w.ask); });
 
   // ---------- 再写一遍 ----------
@@ -862,15 +882,212 @@ ${TUTOR_FACE_CSS}
     };
     next();
   };
-  $('#w-skip').addEventListener('click', function () { S.rw = null; openCheck(); });
+  $('#w-skip').addEventListener('click', function () { if (S.rw) event('close', S.rw.wi); S.rw = null; openCheck(); });
   $('#w-done').addEventListener('click', function () {
     if (!S.rw) return;
     var body = padsOut(); body.self = S.rw.self;
     persist('POST', '/api/dictation/' + S.v.id + '/rewrites/' + S.rw.wi, body, $('#w-done')).then(function (v) { setView(v); S.rw = null; openCheck(); }, function () { openCheck(); });
   });
 
+  // ---------- 录像(?reel=<id>,《家长录像设计.md》拍板 13):开在录像外壳的 iframe 里,照记录用这一页的画法画;不经过上面的流程,不发事件、不自己念 ----------
+  ${DICT_REEL_JS}
+  var RL = null;
+  /** 字形要同步拿:还没到就先不画,到了整屏重画一次 */
+  var RG = {};
+  var reelGlyph = function (ch) {
+    if (RG[ch] !== undefined) return RG[ch] || null;
+    RG[ch] = null;
+    glyph(ch).then(function (d) { RG[ch] = d || false; if (RL) { RL.gl++; reelTick(); } });
+    return null;
+  };
+  /** 看笔顺放到第几笔:照 animStroke 与 playOrder 的节奏(一笔画 max(260, (中线长 + 200) × 0.9) 毫秒,再停 120 + 380) */
+  var orderStep = function (d, ms) {
+    var t = 0;
+    for (var i = 0; i < d.strokes.length; i++) {
+      var len = Math.max(260, Math.round((polyLen(d.medians[i] || []) + 200) * 0.9));
+      if (ms < t + len + 500) return i;
+      t += len + 500;
+    }
+    return d.strokes.length;
+  };
+  var paintOrder = function (pad, d, k, sqs) {
+    var ps = pad.std.children; for (var i = 0; i < ps.length; i++) ps[i].setAttribute('class', i < k ? 'sd' : i === k ? 'sc' : 'sf');
+    sqs.replaceChildren(); for (var j = 0; j < d.strokes.length; j++) sqs.append(h('i', { 'class': j < k ? 'd' : j === k ? 'c' : '' }, String(j + 1)));
+  };
+  /** 一个格这一刻的笔:点数变了才重画 */
+  var reelInk = function (pad, strokes) {
+    var n = 0; strokes.forEach(function (x) { n += x.length; });
+    var sig = strokes.length + ':' + n;
+    if (pad.sig === sig) return;
+    pad.sig = sig;
+    pad.ink.replaceChildren.apply(pad.ink, strokes.filter(function (x) { return x.length; }).map(function (x) { return sv('path', { d: pathD(x) }); }));
+  };
+  var reelListen = function (f, rebuild) {
+    var R = RL.r, ch = R.chars[f.word][f.char];
+    if (rebuild) {
+      show('listen');
+      $('#l-av').textContent = avatarText();
+      var rows = [h('div', { 'class': 'bh' }, h('b', {}, '听写本'), h('span', {}, cn(R.chars.length) + '个词'))];
+      RL.cells = R.chars.map(function (cs, wi) {
+        var row = h('div', { 'class': 'brow' + (wi === f.word ? ' cur' : '') }, h('div', { 'class': 'no' }, String(wi + 1)));
+        rows.push(row);
+        return cs.map(function (x, ci) { var p = makePad({}); if (wi > f.word) p.el.classList.add('ahead'); if (wi === f.word && ci === f.char) p.el.classList.add('here'); row.append(p.el); return p; });
+      });
+      var b = $('#l-book'); b.replaceChildren.apply(b, rows);
+      var cur = b.querySelector('.brow.cur'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
+      var big = $('#l-big'); RL.big = makePad({}); big.replaceChildren(RL.big.el);
+      var r = big.getBoundingClientRect();
+      RL.big.el.style.width = RL.big.el.style.height = Math.max(240, Math.min(640, Math.floor(Math.min(r.width, r.height)) - 10)) + 'px';
+      setActive(RL.big);
+      RL.std = '';
+    }
+    RL.cells.forEach(function (pads, wi) { pads.forEach(function (p, ci) { reelInk(p, f.ink[wi][ci]); }); });
+    reelInk(RL.big, f.ink[f.word][f.char]);
+    var d = f.mode === 'write' ? null : reelGlyph(ch);
+    var k = d && f.mode === 'order' ? orderStep(d, RL.t - f.orderAt) : -1;
+    var sk = f.mode + ':' + (d ? 1 : 0) + ':' + k;
+    if (sk !== RL.std) {
+      RL.std = sk;
+      RL.big.std.setAttribute('class', 'std' + (f.mode === 'trace' ? ' trace' : ''));
+      RL.big.std.replaceChildren();
+      if (d) { fillStd(RL.big, d, f.mode === 'trace' ? 'trace' : ''); if (f.mode === 'order') paintOrder(RL.big, d, k, $('#l-sqs')); }
+    }
+    $('#l-foot-write').hidden = f.mode === 'order'; $('#l-foot-order').hidden = f.mode !== 'order';
+    $('#l-reveal').hidden = f.mode === 'trace'; $('#l-reorder').hidden = f.mode !== 'trace';
+    $('#l-what').textContent = f.mode === 'order' ? '看「' + ch + '」一笔一笔写' : f.mode === 'trace' ? '照着灰色的「' + ch + '」写一遍' : R.chars[f.word].length === 1 ? '第' + cn(f.word + 1) + '个词 · 一个字' : '第' + cn(f.word + 1) + '个词的第' + cn(f.char + 1) + '个字';
+    status(f.mode !== 'write' ? '' : f.say ? '正在念 · 第 ' + f.say.n + ' 遍' : f.said === 1 ? '再听一遍' : f.said > 1 ? '听完了就写' : '');
+  };
+  var reelCheck = function (f, rebuild) {
+    var R = RL.r;
+    if (rebuild) {
+      show('check');
+      var box = $('#c-cards'), size = window.innerWidth < 700 ? 110 : 130;
+      var most = Math.max.apply(null, R.chars.map(function (cs) { return cs.length; }));
+      box.style.setProperty('--card', Math.min(window.innerWidth - 48, most * (size + 10) + 40) + 'px');
+      RL.cards = R.chars.map(function (cs, wi) {
+        var row = h('div', { 'class': 'pads' }); row.style.setProperty('--pad', size + 'px');
+        var pads = cs.map(function (ch) { var p = makePad({}); var d = reelGlyph(ch); if (d) fillStd(p, d, ''); row.append(p.el); return p; });
+        var rewrote = R.rewrites.some(function (x) { return x.word === wi && x.to <= RL.t; });
+        var tail = RL.s.asked.indexOf(wi) >= 0 && !rewrote ? h('div', { 'class': 'ask' }, '这个再写一遍?', h('button', {}, '好')) : h('button', { 'class': 'self' }, rewrote ? '再写一次' : '我想再写');
+        return { pads: pads, el: h('div', { 'class': 'wc' }, row, tail) };
+      });
+      box.replaceChildren.apply(box, RL.cards.map(function (c) { return c.el; }));
+    }
+    RL.cards.forEach(function (c, wi) { c.pads.forEach(function (p, ci) { reelInk(p, f.latest[wi][ci] || []); }); });
+  };
+  var reelOrder = function (f, rebuild) {
+    var o = f.open, d = reelGlyph(RL.r.chars[o.word][o.char]);
+    if (rebuild) {
+      show('order');
+      var box = $('#r-pad');
+      box.style.setProperty('--pad', Math.max(240, Math.min(560, window.innerHeight - 140, Math.floor(window.innerWidth * (window.innerWidth > window.innerHeight ? 0.5 : 0.9)))) + 'px');
+      RL.opad = makePad({}); RL.opad.svg.insertBefore(RL.opad.ink, RL.opad.std);
+      box.replaceChildren(RL.opad.el);
+      if (d) fillStd(RL.opad, d, '');
+      RL.std = '';
+    }
+    reelInk(RL.opad, f.latest[o.word][o.char] || []);
+    if (!d) return;
+    var k = orderStep(d, RL.t - f.orderAt), n = d.strokes.length;
+    if (RL.std === 'r' + k) return;
+    RL.std = 'r' + k;
+    paintOrder(RL.opad, d, k, $('#r-sqs'));
+    $('#r-count').innerHTML = k < n ? '<b>第 ' + (k + 1) + ' 笔</b> · 一共 ' + n + ' 笔' : '写完了 · 一共 ' + n + ' 笔';
+    $('#r-play').textContent = k >= n ? '再写一遍' : '接着写';
+  };
+  var reelRewrite = function (f, rebuild) {
+    var cs = RL.r.chars[f.open.word];
+    if (rebuild) {
+      show('rewrite');
+      $('#w-title').textContent = '再写一遍:' + cs.join('');
+      var mbox = $('#w-models'); mbox.style.setProperty('--pad', (window.innerWidth < 700 ? 90 : 140) + 'px');
+      mbox.replaceChildren.apply(mbox, cs.map(function (ch) { var p = makePad({}); var d = reelGlyph(ch); if (d) fillStd(p, d, 'model'); return p.el; }));
+      var land = window.innerWidth > window.innerHeight, box = $('#w-pads');
+      box.style.setProperty('--pad', padSize(cs.length, land ? 0.62 : 1, land ? 260 : 520) + 'px');
+      RL.rpads = cs.map(function () { return makePad({}); });
+      box.replaceChildren.apply(box, RL.rpads.map(function (p) { return p.el; }));
+    }
+    RL.rpads.forEach(function (p, ci) { reelInk(p, (f.rewrite && f.rewrite[ci]) || []); });
+  };
+  /** 这一刻的屏幕:哪一屏、哪个词哪一格、什么样子变了就整屏重画,笔每次对一下 */
+  var reelDraw = function (f) {
+    var done = RL.r.rewrites.filter(function (x) { return x.to <= RL.t; }).length;
+    var key = [f.view, f.word, f.char, f.view === 'listen' ? '' : f.mode, f.open ? f.open.word + ':' + f.open.char : '', f.view === 'check' ? done : 0, RL.gl, window.innerWidth, window.innerHeight].join('|');
+    var rebuild = key !== RL.key; RL.key = key;
+    if (f.view === 'check') reelCheck(f, rebuild);
+    else if (f.view === 'order' && f.open) reelOrder(f, rebuild);
+    else if (f.view === 'rewrite' && f.open) reelRewrite(f, rebuild);
+    else reelListen(f, rebuild);
+  };
+  /** 放声音用录像外壳那个 Audio(家长点播放时解锁过);念的那一刻放孩子当时听到的那一句 */
+  var reelAudio = function () { try { if (window.parent !== window && window.parent.__cotutorAudio) return window.parent.__cotutorAudio; } catch (e) {} return audio; };
+  var reelHush = function () { try { reelAudio().pause(); } catch (e) {} };
+  var reelSay = function (t0, t1) {
+    if (!RL.playing || RL.seeking || t1 <= t0) return;
+    RL.r.says_.forEach(function (x) {
+      if (x.t <= t0 || x.t > t1 || t1 - x.t > 1500) return;
+      var a = reelAudio();
+      a.src = '/api/dictation/' + RL.s.id + '/say/' + x.word;
+      a.defaultPlaybackRate = RL.speed; a.playbackRate = RL.speed;
+      var pr = a.play(); if (pr && pr.catch) pr.catch(function () {});
+    });
+  };
+  var reelTick = function () {
+    if (!RL) return;
+    var t = performance.now();
+    if (RL.playing && !RL.seeking) RL.p = Math.min(RL.clock.total, RL.p + (t - RL.last) * RL.speed);
+    RL.last = t;
+    var t0 = RL.t;
+    RL.t = RL.clock.toWall(RL.p);
+    RL.f = drFrameAt(RL.r, RL.t);
+    reelDraw(RL.f);
+    reelSay(t0, RL.t);
+    if (RL.playing && RL.p >= RL.clock.total) reelPlay(false);
+  };
+  var reelPlay = function (on) {
+    if (on && RL.p >= RL.clock.total) RL.p = 0;
+    RL.playing = on; RL.last = performance.now();
+    clearInterval(RL.timer); RL.timer = on ? setInterval(reelTick, 100) : 0;
+    if (!on) reelHush();
+    reelTick();
+  };
+  var reelTo = function (p, seeking) { RL.seeking = seeking; RL.p = Math.max(0, Math.min(RL.clock.total, p)); RL.last = performance.now(); reelHush(); reelTick(); };
+  /** 把手:录像栏(reel-dock.ts)只经它说话 */
+  var reelApi = {
+    speeds: [1, 2, 4],
+    get: function () { if (!RL) return null; return { p: RL.p, total: RL.clock.total, wall: RL.r.startAt + RL.t, playing: RL.playing, speed: RL.speed, real: RL.real, precise: true, cap: drCaption(RL.r, RL.f), size: RL.f.size || [1180, 820] }; },
+    marks: function () { return RL ? RL.r.marks.map(function (m) { return { kind: m.kind, label: m.label, p: RL.clock.toPlay(m.t) }; }) : []; },
+    events: function () { return RL ? RL.r.notes.map(function (n) { return { p: RL.clock.toPlay(n.t), kind: n.kind, chip: n.chip, text: n.text }; }) : []; },
+    chapters: function () { return RL ? RL.r.chapters.map(function (c) { return { p: RL.clock.toPlay(c.t), title: c.title }; }) : []; },
+    play: function (on) { if (RL) reelPlay(on); },
+    seek: function (p) { if (RL) reelTo(p, false); },
+    drag: function (p) { if (RL) reelTo(p, true); },
+    real: function (on) { if (!RL) return; RL.real = on; RL.clock = drClock(RL.r, on); RL.p = RL.clock.toPlay(RL.t); reelTick(); },
+    speed: function (x) { if (!RL) return; RL.speed = x; var a = reelAudio(); a.defaultPlaybackRate = x; a.playbackRate = x; },
+    stop: function () { if (RL) { clearInterval(RL.timer); reelHush(); RL = null; } },
+    /** 跳到离开始 t 毫秒那一刻(探针) */
+    seekAt: function (t) { if (RL) reelTo(RL.clock.toPlay(t), false); },
+  };
+  var reelBoot = function () {
+    var host = null; try { if (window.parent !== window && typeof window.parent.cotutorReelReady === 'function') host = window.parent; } catch (e) {}
+    // 直接打开(不在外壳里):去外壳
+    if (!host) { location.replace('/dictation/reel?id=' + encodeURIComponent(REEL_ID)); return; }
+    document.body.classList.add('rlk');
+    var path = '/api/dictation/' + encodeURIComponent(REEL_ID);
+    Promise.all([api('GET', path), api('GET', path + '/kid')]).then(function (x) {
+      S.v = x[1]; showFace();
+      var r = drBuild(x[0]);
+      if (!r.first.length && !r.says_.length) { host.cotutorReelFail(); return; }
+      RL = { s: x[0], r: r, p: 0, t: 0, playing: false, seeking: false, speed: 1, real: false, last: 0, timer: 0, key: '', gl: 0, f: null, std: '' };
+      RL.clock = drClock(r, false);
+      reelTick();
+      window.cotutorReel = reelApi;
+      host.cotutorReelReady(reelApi, { size: RL.f.size || [1180, 820] });
+    }, function () { host.cotutorReelFail(); });
+  };
+
   api('GET', '/api/kid/home').then(function (j) { TUTORS = j.tutors || []; showFace(); }, function () {});
-  if (HOME) start(false); else openSnap();
+  if (REEL_ID) reelBoot(); else if (HOME) start(false); else openSnap();
 })();
 </script>
 </body></html>`;

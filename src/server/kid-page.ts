@@ -27,32 +27,14 @@
  * __TITLE__ / __SHORT__(主屏幕图标下的名字)由路由替换。调试:`?step=<节>.<句>` 直接停在某句(标注画齐、不出声),截图与测试用。
  */
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { letterAdvances } from './letters.ts';
 import { TUTOR_FIXED, TUTOR_PALETTE } from './tutor-face.ts';
 import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from './reel-dock.ts';
-import { stripTypeScriptTypes } from 'node:module';
+import { inlineScript } from './inline-lib.ts';
 
 /** 读 src/lib/<name> 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
 function libSource(name: 'kid-board' | 'photo-edit' | 'reel'): string {
-  let src: string;
-  try {
-    const ts = readFileSync(new URL(`../lib/${name}.ts`, import.meta.url), 'utf8');
-    // stripTypeScriptTypes 会发一条 ExperimentalWarning;这里只剥自己的文件,警告对用户没有信息量,压掉
-    const warn = process.emitWarning;
-    process.emitWarning = () => {};
-    try {
-      src = stripTypeScriptTypes(ts);
-    } finally {
-      process.emitWarning = warn;
-    }
-  } catch {
-    src = readFileSync(new URL(`../lib/${name}.js`, import.meta.url), 'utf8');
-  }
-  return src
-    .replace(/^export (?=(?:async )?(?:function|const|let|class) )/gm, '')
-    .replace(/^export \{[^}]*\};?[ \t]*$/gm, '')
-    .replace(/^import [^\n]*$/gm, '');
+  return inlineScript(new URL(`../lib/${name}.ts`, import.meta.url));
 }
 
 const PAGE = `<!doctype html>

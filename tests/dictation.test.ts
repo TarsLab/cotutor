@@ -21,7 +21,7 @@ const { publishHome, checkHome } = await import('../src/server/home.ts');
 const { parseCard, stripSecrets } = await import('../src/cards/index.ts');
 const { judgeChar, placeNote, strokeFit } = await import('../src/dictation/lib/match.ts');
 const { LineReader, photoPrompt, recognizePhoto, splitWords } = await import('../src/dictation/recognize.ts');
-const { dictationDeps, handleDictation, photosIdle } = await import('../src/dictation/route.ts');
+const { dictationDeps, handleDictation, parseChars, photosIdle } = await import('../src/dictation/route.ts');
 const { tianzigeData } = await import('../src/server/tianzige.ts');
 
 type InkPoint = [number, number, number];
@@ -200,6 +200,16 @@ try {
     const lst = (await call('GET', '/api/dictation')).json.sessions.find((x: J) => x.id === fid);
     check('家长列表:看了答案的 1 个,不算「自己写全」', lst.revealed === 1 && lst.firstOk === 0, JSON.stringify(lst));
     check('录像页:/dictation/reel 内联脚本能解析', parses((await call('GET', '/dictation/reel')).html));
+    // 录像要的(《家长录像设计.md》拍板 13):擦掉的笔、屏幕尺寸、我来写、点格子回去改、回到对一对、切到别处 / 回来
+    const pc = parseChars({ chars: [{ strokes: [[[1, 2, 3]]], undos: 2, gone: [{ t: 50, pts: [[4, 5, 6], [7, 8, 9]] }, { t: 'x', pts: [[1, 1, 1]] }, { t: 60, pts: [[1]] }] }] }, 1);
+    check('擦掉的笔(gone)照收,坏的那几条丢掉、留下的笔不受影响', pc?.[0].gone?.length === 1 && pc[0].gone![0].t === 50 && pc[0].gone![0].pts.length === 2 && pc[0].strokes.length === 1, JSON.stringify(pc));
+    check('没有擦掉的笔就不带 gone', parseChars({ chars: [{ strokes: [], undos: 0 }] }, 1)?.[0].gone === undefined);
+    const okEv = async (b: unknown): Promise<number> => (await call('POST', `/api/dictation/${fid}/events`, b)).status;
+    const st = [await okEv({ kind: 'view', word: 0, t: 10, w: 1180, h: 820 }), await okEv({ kind: 'trace', word: 1, char: 0, t: 20 }), await okEv({ kind: 'open', word: 1, char: 1, t: 30 }), await okEv({ kind: 'close', word: 1, t: 40 }), await okEv({ kind: 'away', word: 1, t: 50 }), await okEv({ kind: 'back', word: 1, t: 60 }), await okEv({ kind: 'view', word: 0, t: 70 })];
+    const fv = (await call('GET', `/api/dictation/${fid}`)).json.events.find((e: J) => e.kind === 'view');
+    check('事件:view 带屏幕尺寸;trace / open / close / away / back 都收;view 没尺寸 400', st.join() === '200,200,200,200,200,200,400' && fv.w === 1180 && fv.h === 820, st.join());
+    const reelPage = (await call('GET', '/dictation?reel=' + fid)).html ?? '';
+    check('听写页内联了录像(drBuild / drFrameAt / drClock),脚本能解析;录像外壳带录像栏', parses(reelPage) && reelPage.includes('function drBuild(') && reelPage.includes('function drFrameAt(') && reelPage.includes('function drClock(') && !reelPage.includes('/parent') && ((await call('GET', '/dictation/reel')).html ?? '').includes('id="rl-seek"'));
   }
   now = new Date(2026, 9, 10, 20, 0);
   const home2 = await publish(DRAFT.replace('雪\n', '雪花\n'));

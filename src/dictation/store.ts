@@ -11,10 +11,17 @@ import type { PhotoItem } from './recognize.ts';
 
 export const ID_RE = /^\d{4}-\d{2}-\d{2}-\d{4}(?:-\d{1,2})?$/;
 
-/** 一个格里写的:留下来的笔(撤销、擦掉的不在),撤销 / 擦掉了几次 */
+/** 擦掉的一笔:什么时候擦的(离开始多少毫秒,撤销、擦掉重写、点「给答案」清掉的都算) */
+export interface InkGone {
+  t: number;
+  pts: InkPoint[];
+}
+
+/** 一个格里写的:留下来的笔,撤销 / 擦掉了几次;擦掉的笔另记在 gone(录像里在擦的那一刻消失;老数据没有) */
 export interface CharInk {
   strokes: InkPoint[][];
   undos: number;
+  gone?: InkGone[];
   /** 写之前点了「不会写,给答案」,看了笔顺照着描红写的 */
   revealed?: boolean;
 }
@@ -30,8 +37,10 @@ export interface Attempt {
  * 孩子做的事,录像按它排时间:
  * 写的时候 show 出了这个词、say 老师念了一遍(n 第几遍)、again 点了再念、reveal 点了「给答案」(服务端记)、order 看了一遍笔顺、done 写好了这个字;
  * 对答案时 strokeOrder 点开一个字逐笔看、rewrite 问了再写一遍点「好」、self 自己说「我想再写」。
+ * 录像要的(《家长录像设计.md》拍板 13):trace 给答案后点「我来写」、open 点听写本上的一格回去改、close 从逐笔看 / 再写一遍回到对一对、
+ * view 屏幕多大(w、h,进页面与转屏)、away / back 切到别处 / 回来。
  */
-export const EVENT_KINDS = ['show', 'say', 'again', 'reveal', 'order', 'done', 'strokeOrder', 'rewrite', 'self'] as const;
+export const EVENT_KINDS = ['show', 'say', 'again', 'reveal', 'order', 'done', 'strokeOrder', 'rewrite', 'self', 'trace', 'open', 'close', 'view', 'away', 'back'] as const;
 export interface DictationEvent {
   /** 服务端收到的时刻 */
   at: string;
@@ -42,6 +51,9 @@ export interface DictationEvent {
   char?: number;
   /** say 是第几遍 */
   n?: number;
+  /** view:孩子屏幕的 CSS 尺寸 */
+  w?: number;
+  h?: number;
 }
 
 export interface Session {

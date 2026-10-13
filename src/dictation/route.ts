@@ -15,11 +15,11 @@
  *   GET  /api/dictation/<id>                 一次听写的全部(家长)
  *   GET  /api/dictation/<id>/kid             孩子端的样子(交卷前没有字)
  *   GET  /api/dictation/<id>/say/<i>         第 i 个词念的音频;没有音色 / 合成失败 404,?text=1 给要念的字(页面退浏览器合成声)
- *   PUT  /api/dictation/<id>/first/<i>       {chars: [{strokes, undos}]} 第一遍写的(交卷前可以改)
+ *   PUT  /api/dictation/<id>/first/<i>       {chars: [{strokes, undos, gone?}]} 第一遍写的(交卷前可以改);gone 是擦掉的笔,录像用
  *   POST /api/dictation/<id>/check           交卷:逐字比对,回字与「再写一遍?」
  *   POST /api/dictation/<id>/rewrites/<i>    {chars, self} 再写一遍(交卷后)
  *   POST /api/dictation/<id>/reveal/<i>      {char} 不会写,给答案:回这一个字(交卷前);记下这个字看过答案
- *   POST /api/dictation/<id>/events          {kind, word, char?, t?, n?} 孩子做了什么(录像按它排)
+ *   POST /api/dictation/<id>/events          {kind, word, char?, t?, n?, w?, h?} 孩子做了什么(录像按它排)
  *   POST /api/dictation/<id>/done            对好了
  */
 import { createHash } from 'node:crypto';
@@ -40,7 +40,7 @@ import { DICTATION_PAGE } from './page.ts';
 import { DICTATION_EN_PAGE } from './en-page.ts';
 import { DICTATION_PARENT_PAGE } from './parent-page.ts';
 import { DICTATION_REEL_PAGE } from './reel-page.ts';
-import { EVENT_KINDS, ID_RE, createPhoto, createSession, listSessions, photoFile, readPhotoRecord, readSession, writePhotoRecord, writeSession, type PhotoRecord, type Attempt, type CharInk, type Session, type DictationEvent } from './store.ts';
+import { EVENT_KINDS, ID_RE, createPhoto, createSession, listSessions, photoFile, readPhotoRecord, readSession, writePhotoRecord, writeSession, type PhotoRecord, type Attempt, type CharInk, type InkGone, type Session, type DictationEvent } from './store.ts';
 
 export interface DictationDeps {
   /** workspace 根 */
@@ -140,7 +140,18 @@ const MAX_T = 24 * 3600_000;
 const MAX_POINTS = 3000;
 const num = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
 
-/** 页面交来的一个词:每个格 {strokes: [[x,y,t]...], undos};格数要对上 */
+/** 一笔:[[x, y, t], …];坏的 → null */
+function parseStroke(s: unknown): InkPoint[] | null {
+  if (!Array.isArray(s) || s.length === 0 || s.length > MAX_POINTS) return null;
+  const pts: InkPoint[] = [];
+  for (const p of s as unknown[]) {
+    if (!Array.isArray(p) || p.length !== 3 || !num(p[0], -2048, 3072) || !num(p[1], -2048, 3072) || !num(p[2], 0, MAX_T)) return null;
+    pts.push([Math.round(p[0]), Math.round(p[1]), Math.round(p[2])]);
+  }
+  return pts;
+}
+
+/** 页面交来的一个词:每个格 {strokes: [[x,y,t]...], undos, gone?: [{t, pts}]};格数要对上 */
 export function parseChars(v: unknown, size: number): CharInk[] | null {
   if (!isObj(v) || !Array.isArray(v.chars) || v.chars.length !== size) return null;
   const out: CharInk[] = [];
@@ -150,15 +161,20 @@ export function parseChars(v: unknown, size: number): CharInk[] | null {
     if (!num(undos, 0, 10_000) || !Number.isInteger(undos)) return null;
     const strokes: InkPoint[][] = [];
     for (const s of c.strokes as unknown[]) {
-      if (!Array.isArray(s) || s.length === 0 || s.length > MAX_POINTS) return null;
-      const pts: InkPoint[] = [];
-      for (const p of s as unknown[]) {
-        if (!Array.isArray(p) || p.length !== 3 || !num(p[0], -2048, 3072) || !num(p[1], -2048, 3072) || !num(p[2], 0, MAX_T)) return null;
-        pts.push([Math.round(p[0]), Math.round(p[1]), Math.round(p[2])]);
-      }
+      const pts = parseStroke(s);
+      if (!pts) return null;
       strokes.push(pts);
     }
-    out.push({ strokes, undos, ...(c.revealed === true ? { revealed: true } : {}) });
+    // 擦掉的笔(录像用):形状不对的整个不要,留下的照收
+    const gone: InkGone[] = [];
+    if (Array.isArray(c.gone) && c.gone.length <= MAX_STROKES) {
+      for (const g of c.gone as unknown[]) {
+        if (!isObj(g) || !num(g.t, 0, MAX_T)) continue;
+        const pts = parseStroke(g.pts);
+        if (pts) gone.push({ t: Math.round(g.t), pts });
+      }
+    }
+    out.push({ strokes, undos, ...(c.revealed === true ? { revealed: true } : {}), ...(gone.length ? { gone } : {}) });
   }
   return out;
 }
@@ -426,7 +442,10 @@ async function handleSession(method: string, url: URL, deps: DictationDeps, body
     const t = body.t === undefined ? undefined : num(body.t, 0, MAX_T) ? Math.round(body.t) : null;
     const n = body.n === undefined ? undefined : num(body.n, 1, 99) && Number.isInteger(body.n) ? body.n : null;
     if (t === null || n === null) return bad('t 是离开始的毫秒,n 是第几遍');
-    if (s.events.length < 4000) s.events.push({ at: now.toISOString(), kind, word: body.word as number, ...(ch !== undefined ? { char: ch as number } : {}), ...(t !== undefined ? { t } : {}), ...(n !== undefined ? { n } : {}) });
+    // view:孩子屏幕的 CSS 尺寸(录像按它开)
+    const size = kind === 'view' && num(body.w, 200, 4000) && num(body.h, 200, 4000) ? { w: Math.round(body.w), h: Math.round(body.h) } : kind === 'view' ? null : {};
+    if (size === null) return bad('view 要 {w, h}');
+    if (s.events.length < 4000) s.events.push({ at: now.toISOString(), kind, word: body.word as number, ...(ch !== undefined ? { char: ch as number } : {}), ...(t !== undefined ? { t } : {}), ...(n !== undefined ? { n } : {}), ...size });
     await writeSession(root, s);
     return { status: 200, json: { ok: true } };
   }

@@ -162,17 +162,32 @@ try {
   await send('Page.navigate', { url: `${base}/dictation/parent` });
   ok('家长页:鼓少了第 7 笔、问了才改、看了答案:叶、要再练的词里有叶', await waitFor(`document.body.innerText.includes('少了第 7 笔') && document.body.innerText.includes('看了答案:叶') && document.body.innerText.includes('问了才改') && (document.querySelector('textarea')?.value ?? '').includes('叶')`), (await evaluate(`document.body.innerText.slice(0, 400)`)) ?? '');
   await shot('09-parent');
-  // ---- 录像 ----
+  // ---- 录像(《家长录像设计.md》拍板 13–15):上半是听写页本身(iframe,/dictation?reel=),下半是和话题一样的录像栏 ----
   await tap('a.reel');
-  ok('录像:三章,第一章两个格;经过里有念与写', await waitFor(`location.pathname === '/dictation/reel' && document.querySelectorAll('#chs .ch').length === 3 && document.querySelectorAll('#cells svg').length === 2 && document.querySelector('#log').innerText.includes('老师念')`));
-  await tap('#chs .ch:nth-child(3)');
-  ok('第三章「叶」:标看过答案,经过里有「给答案」与「照着写」', await waitFor(`document.querySelector('#chs .ch:nth-child(3)').classList.contains('rv') && document.querySelector('#log').innerText.includes('给答案') && document.querySelector('#log').innerText.includes('照着写「叶」')`));
-  await tap('#chs .ch:nth-child(1)');
-  await tap('#play');
-  await sleep(1500);
-  ok('播放:钟往前走,格里一笔一笔出来', (await evaluate(`document.querySelector('#clock').textContent !== '0:00' || document.querySelectorAll('#cells .ink path').length > 0`)));
-  await tap('#play');
+  const K = `document.querySelector('#rl-frame').contentDocument`;
+  ok('录像:外壳里上半是听写页的录像模式、下半录像栏;时间是「放到哪 / 一共多久」;一个词一章(三章 + 对一对)', await waitFor(`location.pathname === '/dictation/reel' && !document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').getAttribute('src') || '').startsWith('/dictation?reel=') && !!${K}?.querySelector('#v-listen.on') && /^\\d+:\\d\\d \\/ \\d+:\\d\\d$/.test(document.querySelector('#rl-clock').textContent) && document.querySelectorAll('#rl-chaps i').length === 3`, 10000), await evaluate(`JSON.stringify({ src: document.querySelector('#rl-frame').getAttribute('src'), clock: document.querySelector('#rl-clock').textContent, chaps: document.querySelectorAll('#rl-chaps i').length, chap: document.querySelector('#rl-chap').textContent })`));
+  ok('孩子的屏幕:听写本三行(2、2、1 格)、右边大格,点不动', await evaluate(`[...${K}.querySelectorAll('#l-book .brow')].map((r) => r.querySelectorAll('.padbox').length).join() === '2,2,1' && ${K}.querySelectorAll('#l-big .padbox').length === 1 && getComputedStyle(${K}.body).pointerEvents === 'none'`));
+  ok('进度条上的点:给答案一个、撤销与擦掉重写两个', await evaluate(`document.querySelectorAll('#rl-marks i.rv').length === 1 && document.querySelectorAll('#rl-marks i.erase').length === 2`), await evaluate(`[...document.querySelectorAll('#rl-marks i')].map((i) => i.className).join()`));
+  await tap('#rl-play');
+  await sleep(2500);
+  ok('播放:进度往前走,第一格里一笔一笔出来', await evaluate(`Number(document.querySelector('#rl-seek').value) > 1000 && ${K}.querySelectorAll('#l-big .ink path').length > 0`), await evaluate(`JSON.stringify({ v: document.querySelector('#rl-seek').value, ink: ${K}.querySelectorAll('#l-big .ink path').length, cap: document.querySelector('#rl-cap').textContent })`));
+  await tap('#rl-play');
+  await tap('#rl-marks i.rv');
+  await sleep(400);
+  ok('点「给答案」的点:孩子的屏幕在看「叶」的笔顺,录像栏写给答案', await waitFor(`${K}.querySelector('#l-what').textContent === '看「叶」一笔一笔写' && !${K}.querySelector('#l-foot-order').hidden && ${K}.querySelectorAll('#l-big .std path').length === 5 && document.querySelector('#rl-cap').textContent.includes('给答案')`), await evaluate(`JSON.stringify({ what: ${K}.querySelector('#l-what').textContent, cap: document.querySelector('#rl-cap').textContent })`));
   await shot('10-reel');
+  const erase = await evaluate(`[...document.querySelectorAll('#rl-marks i.erase')].map((i) => i.title).join('|')`);
+  await tap('#rl-marks i.erase:nth-of-type(2)');
+  await sleep(400);
+  ok('点「擦掉重写」的点:擦之前的那几笔这一刻没了(励的格是空的)', await evaluate(`${K}.querySelector('#l-what').textContent === '第二个词的第二个字' && ${K}.querySelectorAll('#l-big .ink path').length === 0`), erase);
+  await tap('#rl-more');
+  ok('经过:写、撤销、擦掉、给答案、照着写、交卷、再写一遍', await waitFor(`(() => { const t = document.querySelector('#rl-log').innerText; return ['写', '撤销了一笔', '擦掉', '给答案', '照着写', '「叶」', '交卷', '再写一遍「鼓励」', '对好了'].every((x) => t.includes(x)); })()`), await evaluate(`document.querySelector('#rl-log').innerText.slice(0, 600)`));
+  await evaluate(`[...document.querySelectorAll('#rl-log li')].find((li) => li.textContent.includes('交卷')).setAttribute('data-probe-li', '1')`);
+  await tap('[data-probe-li]');
+  ok('点经过里的「交卷」:孩子的屏幕是对一对,三张词卡', await waitFor(`!!${K}.querySelector('#v-check.on') && ${K}.querySelectorAll('.wc').length === 3`));
+  const m0 = await evaluate(`Number(document.querySelector('#rl-seek').max)`);
+  await tap('.rl-sw');
+  ok('关掉「跳过空白」:开关关上,总长不变短(探针写得快,空白可能一段都没有)', await waitFor(`!document.querySelector('#rl-skip').checked && Number(document.querySelector('#rl-seek').max) >= ${m0}`), `${m0} → ${await evaluate(`document.querySelector('#rl-seek').max`)}`);
   // ---- 拍照开始(孩子端,语文老师卡里常驻的「拍照听写」)----
   await send('Emulation.clearDeviceMetricsOverride');
   await send('Page.navigate', { url: `${base}/` });

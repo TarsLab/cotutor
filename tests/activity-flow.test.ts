@@ -298,6 +298,14 @@ try {
     check('记忆写进 activity 自己那篇(agent: chinese-tutor/你说我画)', memText.includes('agent: chinese-tutor/你说我画') && memText.split('\n').some((l) => l.startsWith('- ')) && !readdirSync(memDir).includes('语文老师.md'), readdirSync(memDir).join());
     const s3 = await go({ text: '后来呢', runtime: 'fakesys', thread: s1.thread });
     check('续话题:上下文包的记忆是 activity 那篇', /memory: "记忆\/语文老师·你说我画\.md/.test(s3.file.prompt), s3.file.prompt.slice(0, 600));
+    // 隔天「接着」:新话题、只带 continues,沿用被接话题的 activity
+    const cont = await ctx.runner.send('chinese-tutor', { from: 'kid', text: '接着刚才的', runtime: 'fakesys', newThread: true, continues: { date: DATE, thread: s1.thread } });
+    await cont.done;
+    await ctx.runner.flush();
+    const contRun = (await readRunFile(ctx.ws, 'chinese-tutor', DATE, cont.job))!;
+    const contSys = (contRun.argv as string[])[(contRun.argv as string[]).indexOf('--system-prompt') + 1];
+    const contMsg = (await readIndex(ctx.ws, 'chinese-tutor', DATE)).messages.find((m) => m.job === cont.job);
+    check('接着以前的 activity 话题:新话题照旧是那个 activity(系统提示、记在第一条)', contSys.startsWith('你是这个家的语文老师,今天陪孩子玩「你说我画」') && contMsg?.activity?.name === '你说我画' && contMsg.activity.params.最多画 === 2 && !!contMsg.continues, JSON.stringify({ sys: contSys.slice(0, 40), act: contMsg?.activity, cont: contMsg?.continues }));
     const free = await ctx.runner.send('chinese-tutor', { from: 'kid', text: '随便聊聊', runtime: 'fakesys', newThread: true });
     await free.done;
     const freeRun = (await readRunFile(ctx.ws, 'chinese-tutor', DATE, free.job))!;

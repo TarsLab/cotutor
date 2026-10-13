@@ -529,7 +529,8 @@ export class Runner {
     const session = fresh ? null : sessionFor(index, thread);
     const { runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
     // activity:新话题照这条带的,续话题照话题第一条记的。系统提示、卡、记忆都是它的(记账轮也是,接着同一个会话);上下文包的 activity 段记账轮不带
-    const threadRun = fresh ? (input.activity ?? null) : threadActivity(index.messages, thread);
+    // 隔天「接着」是新话题:没带 activity 就沿用被接的那个话题的(参数也是那时的),不然退回老师文件,没有那套做法和卡
+    const threadRun = fresh ? (input.activity ?? (input.continues ? threadActivity((await readIndex(ws, tutor, input.continues.date)).messages, input.continues.thread) : null)) : threadActivity(index.messages, thread);
     const act = threadRun ? await activityParts(ws, tutor, threadRun) : null;
     const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus, ...(act ? { agent: act.memory.agent, kinds: act.kinds } : {}) });
     const policy = resolvePolicy(ws.config, tutor);

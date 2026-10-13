@@ -3,7 +3,7 @@
  * 解析走板书同一个解析器(place = home);永不抛错,问题都带行号(1 起)与修法。要读盘的引用(话题在不在)由调用方查好传进来。
  */
 import type { TutorButton } from '../cards/index.ts';
-import type { Activity } from '../schema/index.ts';
+import { LECTURE_ACTIVITY, type Activity } from '../schema/index.ts';
 import { resolveParams } from './activity.ts';
 import { parseBoard } from './board.ts';
 import type { BoardCard } from './kid-board.ts';
@@ -133,7 +133,7 @@ export function homeLectures(doc: Pick<HomeDoc, 'cards'>): string[] {
 export function homeActivities(doc: Pick<HomeDoc, 'cards'>): { tutor: string; name: string }[] {
   const out = new Map<string, { tutor: string; name: string }>();
   for (const c of doc.cards) if (c.kind === 'tutor') for (const b of (c.props.buttons ?? []) as TutorButton[]) {
-    const name = b.kind === 'activity' ? b.activity : b.kind === 'lecture' ? b.activity : undefined;
+    const name = b.kind === 'activity' ? b.activity : b.kind === 'lecture' ? (b.activity ?? LECTURE_ACTIVITY) : undefined;
     if (name) out.set(`${c.props.tutor}/${name}`, { tutor: String(c.props.tutor), name });
   }
   return [...out.values()];
@@ -167,11 +167,11 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
     if (first !== undefined) return void out.push({ level: 'fix', line, card: n, text: `${t.display}已经有一张老师卡(第 ${doc.cardLines[first]} 行),按钮合到那一张里` });
     seen.set(name, n);
     ((c.props.buttons ?? []) as TutorButton[]).forEach((b, k) => {
-      // activity 按钮,或小课堂按钮下面挂的 activity:文件在不在、文件自己要不要改、参数对不对(挂在小课堂下面的只用缺省)
-      const act = b.kind === 'activity' ? { name: b.activity, params: b.params } : b.kind === 'lecture' && b.activity ? { name: b.activity, params: {} } : null;
+      // activity 按钮,或小课堂按钮看完照哪个 activity 聊(写了 activity: 就是它,没写是这位老师的「小课堂」):文件在不在、文件自己要不要改、参数对不对(挂在小课堂下面的只用缺省)
+      const act = b.kind === 'activity' ? { name: b.activity, params: b.params } : b.kind === 'lecture' ? { name: b.activity ?? LECTURE_ACTIVITY, params: {} } : null;
       if (act && ctx.activities) {
         const got = ctx.activities.get(`${name}/${act.name}`);
-        if (!got) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:agents/${name}/activities/${act.name}.md 不在(cotutor activity check ${name} 看这位老师有哪些)` });
+        if (!got) out.push({ level: 'fix', line, card: n, button: k, text: b.kind === 'lecture' && !b.activity ? `${t.display}的「${b.label}」:看完怎么聊写在 agents/${name}/activities/${LECTURE_ACTIVITY}.md,这份不在(cotutor upgrade 补出厂的;或按钮下面写一行 activity: <名> 换一个)` : `${t.display}的「${b.label}」:agents/${name}/activities/${act.name}.md 不在(cotutor activity check ${name} 看这位老师有哪些)` });
         else {
           if (got.fixes) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:activity 文件 ${act.name}.md 有 ${got.fixes} 处要改(cotutor activity check ${name} ${act.name})` });
           for (const text of resolveParams(got.activity, act.params).issues) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${text}` });
@@ -269,7 +269,7 @@ const RECENT_MAX = 10;
  * 一张老师卡的按钮:新话题第一;今天有话题(recent)第二,字 = 「接着刚才的:」+ 那个话题第一句孩子的话(文件里有接着它的按钮就不加);然后是文件里的。
  * 接着按钮指的话题现在找不到(alive 说没有)就不出现。keepBriefs = 家长预览(讲法留着)。
  */
-export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { date: string; thread: string; title: string } | null; alive: (date: string, thread: string) => boolean; lecture?: (bundle: string) => boolean; keepBriefs?: boolean; today?: string }): KidHomeButton[] {
+export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { date: string; thread: string; title: string } | null; alive: (date: string, thread: string) => boolean; lecture?: (bundle: string) => boolean; activity?: (name: string) => boolean; keepBriefs?: boolean; today?: string }): KidHomeButton[] {
   const out: KidHomeButton[] = [{ id: 'new', kind: 'new', label: NEW_THREAD_LABEL }];
   // 文件里已经有接着这个话题的按钮(字与讲法是家长定的),就不再加一个「接着刚才的」
   const covered = opts.recent && buttons.some((b) => b.kind === 'continue' && b.date === opts.recent!.date && b.thread === opts.recent!.thread);
@@ -283,8 +283,11 @@ export function kidButtons(buttons: readonly TutorButton[], opts: { recent: { da
     if (b.until && opts.today && b.until < opts.today) return;
     const brief = opts.keepBriefs && b.brief ? { brief: b.brief } : {};
     // activity 按钮在孩子那边就是开场按钮:点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查
-    if (b.kind === 'start' || b.kind === 'activity') out.push({ id: k, kind: 'start', label: b.label, ...brief });
-    else if (b.kind === 'lecture') { if (opts.lecture?.(b.bundle) ?? true) out.push({ id: k, kind: 'lecture', label: b.label, bundle: b.bundle, ...brief }); }
+    // activity 文件不在(家长删了、老 workspace 没升级),按钮不出:不让孩子点进一个没人带的话题;小课堂看完照它聊,同样
+    const hasActivity = (name: string): boolean => opts.activity?.(name) ?? true;
+    if (b.kind === 'start') out.push({ id: k, kind: 'start', label: b.label, ...brief });
+    else if (b.kind === 'activity') { if (hasActivity(b.activity)) out.push({ id: k, kind: 'start', label: b.label, ...brief }); }
+    else if (b.kind === 'lecture') { if ((opts.lecture?.(b.bundle) ?? true) && hasActivity(b.activity ?? LECTURE_ACTIVITY)) out.push({ id: k, kind: 'lecture', label: b.label, bundle: b.bundle, ...brief }); }
     else if (opts.alive(b.date, b.thread)) out.push({ id: k, kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...brief });
   });
   return out;

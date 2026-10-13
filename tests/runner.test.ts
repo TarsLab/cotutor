@@ -98,7 +98,7 @@ try {
     const rk = await packDryRun(loadWorkspace(root), 'koubo-tutor', { from: 'kid', at: now, text: '干跑一句' });
     const kRules = rk.pack.notes?.find((n) => n.role === 'rules')?.text ?? '';
     const mRules = r.pack.notes?.find((n) => n.role === 'rules')?.text ?? '';
-    check('口播老师(text / read / record):板书写法没有选择题那句、没有作业照片;守则没有小课堂那几段;数学的守则有', guideOf(rk.pack).includes('### record') && !guideOf(rk.pack).includes('能选,就配一张') && !guideOf(rk.pack).includes('## 作业照片') && !kRules.includes('小课堂') && kRules.includes('## 记忆') && mRules.includes('## 想要小课堂') && mRules.includes('### 孩子刚看完小课堂') && !mRules.includes('{{'), kRules.slice(0, 200));
+    check('口播老师(text / read / record):板书写法没有选择题那句、没有作业照片;守则没有小课堂那几段;数学的守则有「想要小课堂」(看完怎么聊搬进了 小课堂 activity)', guideOf(rk.pack).includes('### record') && !guideOf(rk.pack).includes('能选,就配一张') && !guideOf(rk.pack).includes('## 作业照片') && !kRules.includes('小课堂') && kRules.includes('## 记忆') && mRules.includes('## 想要小课堂') && !mRules.includes('孩子刚看完小课堂') && !mRules.includes('{{'), kRules.slice(0, 200));
     const wsAll = loadWorkspace(root);
     delete wsAll.config.tutors['chinese-tutor'].cards;
     const ra = await packDryRun(wsAll, 'chinese-tutor', { from: 'kid', at: now, text: '干跑一句' });

@@ -31,7 +31,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
 // ---- 出厂的那份 ----
 {
   const shipped = await shippedActivities();
-  check('包里出厂:语文老师的你说我画、看图说话与它们的例子', shipped.map((x) => `${x.tutor}/${x.name}`).join(' ') === 'chinese-tutor/你说我画 chinese-tutor/你说我画.例子 chinese-tutor/看图说话 chinese-tutor/看图说话.例子', JSON.stringify(shipped));
+  check('包里出厂:语文老师的你说我画、看图说话与它们的例子;语文、数学、英语各一份小课堂', shipped.map((x) => `${x.tutor}/${x.name}`).join(' ') === 'chinese-tutor/你说我画 chinese-tutor/你说我画.例子 chinese-tutor/小课堂 chinese-tutor/看图说话 chinese-tutor/看图说话.例子 english-tutor/小课堂 math-tutor/小课堂', JSON.stringify(shipped));
   const kantu = readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', '看图说话.md'), 'utf8');
   check('出厂的看图说话过检查(老师的卡照出厂 cotutor.json)', lintActivity(kantu, { fileName: '看图说话', tutorCards: factoryCards }).issues.length === 0, JSON.stringify(lintActivity(kantu, { fileName: '看图说话', tutorCards: factoryCards }).issues));
   const teacher = readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor.md'), 'utf8');
@@ -210,7 +210,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   try {
     const steps = await installActivities(root);
     const file = activityFile(root, 'chinese-tutor', '你说我画');
-    check('init 拷进老师的家(连例子文件)', steps.length === 4 && steps.every((x) => x.action === 'created') && readFileSync(file, 'utf8') === text && existsSync(activityFile(root, 'chinese-tutor', '你说我画.例子')), JSON.stringify(steps));
+    check('init 拷进老师的家(连例子文件)', steps.length === 7 && steps.every((x) => x.action === 'created') && readFileSync(file, 'utf8') === text && existsSync(activityFile(root, 'chinese-tutor', '你说我画.例子')), JSON.stringify(steps));
     check('hash 记进 shipped.json 的 activities', (await readManifest(root)).activities?.['chinese-tutor/你说我画']?.hash === sha256(text));
     await installTutors(root, []);
     check('老师那边写清单不抹掉 activities', Boolean((await readManifest(root)).activities?.['chinese-tutor/你说我画']));
@@ -232,11 +232,11 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     rmSync(file);
     check('删了:upgrade 补上', (await upgradeActivities(root))[0].action === 'installed' && existsSync(file));
 
-    const ok = await checkActivities(root, { 'chinese-tutor': { cards: factoryCards } });
-    check('activity check:workspace 里两个都对得上(例子文件不当 activity)', ok.map((x) => x.name).join() === '你说我画,看图说话' && ok.every((x) => x.issues.length === 0), JSON.stringify(ok.map((x) => x.issues)));
+    const ok = await checkActivities(root, { 'chinese-tutor': { cards: factoryCards }, 'math-tutor': {}, 'english-tutor': {} });
+    check('activity check:workspace 里出厂的都对得上(例子文件不当 activity)', ok.map((x) => `${x.tutor}/${x.name}`).join() === 'chinese-tutor/你说我画,chinese-tutor/小课堂,chinese-tutor/看图说话,english-tutor/小课堂,math-tutor/小课堂' && ok.every((x) => x.issues.length === 0), JSON.stringify(ok.map((x) => x.issues)));
     const orphan = await checkActivities(root, {});
     check('activity check:老师不在 cotutor.json 里报一条', has(orphan[0].issues, '没有 chinese-tutor 这位老师'));
-    check('activity check:按老师、按名字筛', (await checkActivities(root, {}, { tutor: 'math-tutor' })).length === 0 && (await checkActivities(root, {}, { tutor: 'chinese-tutor', name: '别的' })).length === 0);
+    check('activity check:按老师、按名字筛', (await checkActivities(root, {}, { tutor: 'math-tutor' })).map((x) => x.name).join() === '小课堂' && (await checkActivities(root, {}, { tutor: 'koubo-tutor' })).length === 0 && (await checkActivities(root, {}, { tutor: 'chinese-tutor', name: '别的' })).length === 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

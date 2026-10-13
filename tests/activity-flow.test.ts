@@ -259,7 +259,14 @@ try {
     check('挂的 activity 不在:按钮点不了(null)', (await resolveVia(ctx.ws, 'chinese-tutor', { home: '2026-10-12-0900', button: 0 })) === null);
     writeFileSync(pubFile, lec());
     const plain = await resolveVia(ctx.ws, 'chinese-tutor', { home: '2026-10-12-0900', button: 0 });
-    check('不挂:照旧是小课堂,没有 activity', plain?.kind === 'lecture' && !('activity' in (plain ?? {})));
+    check('不挂:看完照这位老师的「小课堂」activity(拍板 17、18)', plain?.kind === 'lecture' && JSON.stringify((plain as { activity?: unknown }).activity) === JSON.stringify({ name: '小课堂', params: {} }), JSON.stringify(plain));
+    const lecFile = join(root, 'agents', 'chinese-tutor', 'activities', '小课堂.md');
+    const lecText = readFileSync(lecFile, 'utf8');
+    rmSync(lecFile);
+    check('没有小课堂.md:按钮点不了(null)', (await resolveVia(ctx.ws, 'chinese-tutor', { home: '2026-10-12-0900', button: 0 })) === null);
+    const noLec = await checkHome(ctx.ws, HOME('小课堂 2026-10-08-kantu 看图说话怎么说'), now);
+    check('没有小课堂.md:首页检查报要改,说看完怎么聊写在哪', noLec.issues.some((i) => i.level === 'fix' && i.text.includes('看完怎么聊写在 agents/chinese-tutor/activities/小课堂.md')), JSON.stringify(noLec.issues));
+    writeFileSync(lecFile, lecText);
     writeFileSync(pubFile, keep);
     const c = await checkHome(ctx.ws, HOME('小课堂 2026-10-08-kantu 看图说话怎么说\nactivity: 看图说说'), now);
     check('首页检查:挂的 activity 不在,要改', c.issues.some((i) => i.level === 'fix' && i.text.includes('看图说说.md 不在')), JSON.stringify(c.issues));

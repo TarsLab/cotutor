@@ -14,7 +14,7 @@ import { lintActivity, parseActivity, resolveParams } from '../lib/activity.ts';
 import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, parseHome, threadKey, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
 import type { BoardCard } from '../lib/kid-board.ts';
 import { kidConversation, kidThreads } from '../lib/kid-view.ts';
-import { HOME_ID_RE, PublishedHomeSchema, type Activity, type ActivityRun, type ActivityValue, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
+import { HOME_ID_RE, LECTURE_ACTIVITY, PublishedHomeSchema, type Activity, type ActivityRun, type ActivityValue, type ContextPack, type ConversationIndex, type HomeVia, type MessageVia, type PublishedHome } from '../schema/index.ts';
 import { listDates, readCardStates, readIndex } from './store.ts';
 import { bakeSoon, inspectLecture, readLecture, type Lecture } from './lecture.ts';
 
@@ -233,6 +233,9 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     lectures.set(id, l);
     if (l && !l.video && !l.baked) bakeSoon(ws.dirs.bundles, id);
   }
+  // 按钮引用的 activity 文件在不在(不在的按钮孩子端不出)
+  const hasActivity = new Set<string>();
+  for (const a of homeActivities({ cards })) if (await readFile(activityFile(ws.root, a.tutor, a.name), 'utf8').then(() => true, () => false)) hasActivity.add(`${a.tutor}/${a.name}`);
   const ownerOf = homeOwners(cards, tutors);
   const owners = new Map(cards.map((c, i) => [c, ownerOf[i]]));
   const out: KidHomeCard[] = [];
@@ -246,6 +249,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
       recent: await recentThread(ws, name, today),
       alive: (date, thread) => alive.has(threadKey(name, date, thread)),
       lecture: (bundle) => Boolean(lectures.get(bundle)),
+      activity: (a) => hasActivity.has(`${name}/${a}`),
       keepBriefs: opts.keepBriefs,
       today,
     }).map((b) => { const l = b.kind === 'lecture' ? lectures.get(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.clock.total, ...(l.video ? { video: true as const } : {}) } : b; });
@@ -290,10 +294,10 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
     const r = resolveParams(parseActivity(text).activity, params);
     return r.issues.length ? null : { name, params: r.values };
   };
+  // 小课堂看完照哪个 activity 聊:写了 activity: 是它,没写是这位老师的「小课堂」(拍板 17、18);文件不在 → null
   if (b.kind === 'lecture') {
-    const run = b.activity ? await runOf(b.activity, {}) : null;
-    if (b.activity && !run) return null;
-    return { kind: 'lecture', label: b.label, bundle: b.bundle, ...brief, ...(run ? { activity: run } : {}) };
+    const run = await runOf(b.activity ?? LECTURE_ACTIVITY, {});
+    return run ? { kind: 'lecture', label: b.label, bundle: b.bundle, ...brief, activity: run } : null;
   }
   if (b.kind === 'activity') {
     const run = await runOf(b.activity, b.params);

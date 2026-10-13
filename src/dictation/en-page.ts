@@ -56,6 +56,9 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .snapbtns label { min-height:64px; padding:0 28px; border-radius:32px; background:var(--green); color:#fff; font-size:20px; font-weight:600; display:inline-flex; align-items:center; cursor:pointer; }
   .snapbtns label.alt { background:#fff; color:var(--ink); border:1px solid var(--line); }
   .snapbtns input { display:none; }
+  /* 今天没写完的拍照听写(拍板 17):拍照屏最上面一块,点了接着写 */
+  .resume { display:flex; align-items:center; gap:24px; padding:14px 14px 14px 26px; background:#fff; border:1px solid var(--line); border-radius:32px; text-align:left; box-shadow:0 2px 10px #00000010; }
+  .resume b { display:block; font-size:20px; } .resume small { display:block; color:var(--dim); font-size:15px; }
   .muted { color:var(--dim); font-size:15px; }
   #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:16px; display:none; z-index:9; }
   #toast.on { display:block; }
@@ -68,8 +71,8 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
 </div>
 <div class="view" id="v-snap">
   <div class="bar"><span class="bk-slot"></span><span class="ttl">拍照听写</span><span></span></div>
-  <div class="center" id="p-pick"><b>拍一下要写的单词</b><span>课本上的单词表,或者老师发的听写单</span>
-    <div class="snapbtns"><label>拍照<input type="file" accept="image/*" capture="environment" id="p-cam"></label><label class="alt">从相册选<input type="file" accept="image/*" id="p-lib"></label></div></div>
+  <div class="center" id="p-pick"><div class="resume" id="snap-resume" hidden><div><b>刚才的还没写完</b><small id="snap-resume-sub"></small></div><button class="main" type="button" id="snap-resume-go">接着写</button></div><b>拍一下要写的单词</b><span>课本上的单词表,或者老师发的听写单</span>
+    <div class="snapbtns"><label id="snap-cam-btn">拍照<input type="file" accept="image/*" capture="environment" id="p-cam"></label><label class="alt">从相册选<input type="file" accept="image/*" id="p-lib"></label></div></div>
   <div id="p-list" hidden style="display:flex;flex-direction:column;gap:14px">
     <div class="muted" id="p-status">正在看照片…</div>
     <div class="chips" id="p-chips"></div>
@@ -234,7 +237,9 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     setView(v);
     if (v.checked) return openCheck();
     $('#s-title').textContent = '单词听写 · ' + v.sizes.length + ' 个单词';
-    $('#s-sub').textContent = (v.tutor || '老师') + '念,你来写';
+    var wrote = v.written.filter(Boolean).length;
+    $('#s-sub').textContent = wrote ? '写到第 ' + (wrote + 1) + ' 个了' : (v.tutor || '老师') + '念,你来写';
+    $('#s-go').textContent = wrote ? '接着写' : '开始';
     show('start');
   };
   $('#s-go').addEventListener('click', function () { nextWord(); });
@@ -269,7 +274,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   };
   var onFile = function (e) {
     var f = e.target.files && e.target.files[0]; if (!f) return;
-    $('#p-pick').hidden = true; $('#p-list').hidden = false; $('#p-status').textContent = '正在看照片…';
+    $('#p-pick').hidden = true; $('#p-list').hidden = false; showResume(null); $('#p-status').textContent = '正在看照片…';
     shrink(f).then(function (data) { return api('POST', '/api/dictation/photos', { image: data, lang: 'en' }); }).then(function (j) { P.id = j.id; poll(); }, function () { $('#p-status').textContent = '没看成,自己打上单词也行'; });
   };
   $('#p-cam').addEventListener('change', onFile); $('#p-lib').addEventListener('change', onFile);
@@ -282,8 +287,29 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   });
 
   api('GET', '/api/kid/home').then(function (j) { TUTORS = j.tutors || []; showFace(); }, function () {});
+  /** 今天这位老师没写完(没点「对好了」)的拍照听写,拍照屏最上面给「接着写」(《wip/听写设想.md》拍板 17);会话先读好,点下去在手势里直接念 */
+  var ymdOf = function (d) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
+  var R = { v: null };
+  var showResume = function (v) {
+    R.v = v;
+    $('#snap-resume').hidden = !v;
+    $('#snap-cam-btn').className = v ? 'alt' : '';
+    if (!v) return;
+    var wrote = v.written.filter(Boolean).length;
+    $('#snap-resume-sub').textContent = v.checked || wrote === v.sizes.length ? '写完了,还没对一对' : '写到第 ' + (wrote + 1) + ' 个了 · 一共 ' + v.sizes.length + ' 个';
+  };
+  var findResume = function () {
+    var today = ymdOf(new Date());
+    api('GET', '/api/dictation').then(function (j) {
+      var x = (j.sessions || []).filter(function (s) { return s.photo && !s.done && s.lang === 'en' && (!TUTOR || s.tutor === TUTOR) && ymdOf(new Date(s.startedAt)) === today; })[0];
+      if (!x) return;
+      return api('GET', '/api/dictation/' + x.id + '/kid').then(function (v) { if ($('#v-snap').classList.contains('on') && !$('#p-pick').hidden) showResume(v); });
+    }).catch(function () {});
+  };
+  $('#snap-resume-go').addEventListener('click', function () { var v = R.v; if (!v) return; showResume(null); setView(v); if (v.checked) openCheck(); else nextWord(); });
+
   if (HOME) api('POST', '/api/dictation', { home: HOME, n: N }).then(begin, goHome);
-  else { show('snap'); $('#p-list').hidden = true; }
+  else { show('snap'); $('#p-list').hidden = true; findResume(); }
 })();
 </script>
 </body></html>

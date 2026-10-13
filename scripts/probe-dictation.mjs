@@ -205,6 +205,14 @@ try {
   await tap('#p-go');
   ok('开始听写:进写字屏,听写本十一行,第一个词两格、没有字', await waitFor(`!!document.querySelector('#v-listen.on') && document.querySelectorAll('#l-book .brow').length === 11 && document.querySelectorAll('#l-book .brow')[0].querySelectorAll('.padbox').length === 2 && document.querySelector('#l-what').textContent === '第一个词的第一个字'`));
   await shot('13-photo-listen');
+  // 拍板 17:点胶囊回首页,再点拍照听写:最上面「接着写」,点了接着这一次
+  await tap('#back');
+  ok('写字屏点胶囊:回首页', await waitFor(`location.pathname === '/'`));
+  await send('Page.navigate', { url: `${base}/dictation?tutor=chinese-tutor` });
+  ok('再进拍照听写:最上面「刚才的还没写完 · 写到第一个了」,拍照让成次要', await waitFor(`!document.querySelector('#snap-resume')?.hidden && document.querySelector('#snap-resume-sub').textContent === '写到第一个了 · 一共十一个' && document.querySelector('#snap-cam-btn').classList.contains('tool')`));
+  await shot('14-resume');
+  await tap('#snap-resume-go');
+  ok('点接着写:回到这一次的写字屏,还是十一个词', await waitFor(`!!document.querySelector('#v-listen.on') && document.querySelectorAll('#l-book .brow').length === 11`));
 
   // 手机宽度看一眼家长页
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 1400, deviceScaleFactor: 2, mobile: true });

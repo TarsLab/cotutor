@@ -122,6 +122,9 @@ export const DICTATION_PAGE = `<!doctype html>
   #v-snap .grow { align-items:center; text-align:center; }
   #v-snap .big { font-size:30px; font-weight:700; }
   #v-snap .sub { color:var(--dim); font-size:18px; max-width:520px; }
+  /* 今天没写完的拍照听写(拍板 17):拍照屏最上面一块,点了接着写 */
+  .resume { display:flex; align-items:center; gap:24px; padding:14px 14px 14px 26px; background:#fff; border:1px solid var(--line); border-radius:32px; text-align:left; box-shadow:0 2px 10px #00000010; }
+  .resume b { display:block; font-size:20px; } .resume small { display:block; color:var(--dim); font-size:15px; }
   .pick-btn { position:relative; overflow:hidden; }
   .pick-btn input { position:absolute; inset:0; opacity:0; font-size:200px; cursor:pointer; }
   #v-pick { flex-direction:row; gap:20px; align-items:stretch; height:100vh; height:100dvh; }
@@ -173,10 +176,11 @@ ${TUTOR_FACE_CSS}
 <div class="view" id="v-snap">
   <div class="bar"><span class="bk-slot"></span></div>
   <div class="grow">
+    <div class="resume" id="snap-resume" hidden><div><b>刚才的还没写完</b><small id="snap-resume-sub"></small></div><button class="main" id="snap-resume-go">接着写</button></div>
     <div class="big">拍今天要听写的</div>
     <div class="sub">拍课本上的词语、写字,或者老师发的听写单。拍正一点,字要清楚。</div>
     <div class="row" style="justify-content:center">
-      <label class="main pick-btn">拍照<input type="file" accept="image/*" capture="environment" id="snap-cam"></label>
+      <label class="main pick-btn" id="snap-cam-btn" style="min-height:64px">拍照<input type="file" accept="image/*" capture="environment" id="snap-cam"></label>
       <label class="tool pick-btn" style="min-height:64px">从相册选<input type="file" accept="image/*" id="snap-lib"></label>
     </div>
   </div>
@@ -450,7 +454,27 @@ ${TUTOR_FACE_CSS}
 
   // ---------- 拍照开始:拍 → 传 → 一项一项认出来 → 点选 → 开始 ----------
   var P = { id: null, items: [], full: [], extra: [], on: {}, edits: {}, timer: 0, img: null, url: null };
-  var openSnap = function () { clearTimeout(P.timer); show('snap'); };
+  /** 今天这位老师没写完(没点「对好了」)的拍照听写,拍照屏最上面给「接着写」(《wip/听写设想.md》拍板 17);会话先读好,点下去在手势里直接念 */
+  var ymdOf = function (d) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
+  var R = { v: null };
+  var showResume = function (v) {
+    R.v = v;
+    $('#snap-resume').hidden = !v;
+    $('#snap-cam-btn').className = (v ? 'tool' : 'main') + ' pick-btn';
+    if (!v) return;
+    var wrote = v.written.filter(Boolean).length;
+    $('#snap-resume-sub').textContent = v.checked || wrote === v.sizes.length ? '写完了,还没对一对' : '写到第' + cn(wrote + 1) + '个了 · 一共' + cn(v.sizes.length) + '个';
+  };
+  var findResume = function () {
+    var today = ymdOf(new Date());
+    api('GET', '/api/dictation').then(function (j) {
+      var x = (j.sessions || []).filter(function (s) { return s.photo && !s.done && !s.lang && (!TUTOR || s.tutor === TUTOR) && ymdOf(new Date(s.startedAt)) === today; })[0];
+      if (!x) return;
+      return api('GET', '/api/dictation/' + x.id + '/kid').then(function (v) { if ($('#v-snap').classList.contains('on')) showResume(v); });
+    }).catch(function () {});
+  };
+  $('#snap-resume-go').addEventListener('click', function () { var v = R.v; if (!v) return; showResume(null); setView(v); if (v.checked) openCheck(); else openListen(); });
+  var openSnap = function () { clearTimeout(P.timer); showResume(null); show('snap'); findResume(); };
   /** 照片缩到长边 2000 的 jpeg(iPad 拍的十几 MB,传不动也不必) */
   var shrink = function (file) {
     return new Promise(function (resolve, reject) {

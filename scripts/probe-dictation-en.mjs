@@ -141,6 +141,15 @@ try {
   await shot('en-07-snap');
   await tap('#p-go');
   ok('开始听写:五个单词,英语老师念', await waitFor(`document.querySelector('#v-start.on #s-title')?.textContent === '单词听写 · 5 个单词' && document.querySelector('#s-sub').textContent.startsWith('英语老师')`));
+  await tap('#s-go');
+  ok('写第 1 个', await waitFor(`!!document.querySelector('#v-write.on')`));
+  await tap('#back');
+  ok('写字屏点胶囊:回首页', await waitFor(`location.pathname === '/'`));
+  await send('Page.navigate', { url: `${base}/dictation?tutor=english-tutor&lang=en` });
+  ok('再进拍照听写:最上面「刚才的还没写完 · 写到第 1 个了」', await waitFor(`!document.querySelector('#snap-resume')?.hidden && document.querySelector('#snap-resume-sub').textContent === '写到第 1 个了 · 一共 5 个' && document.querySelector('#snap-cam-btn').className === 'alt'`));
+  await shot('en-08-resume');
+  await tap('#snap-resume-go');
+  ok('点接着写:写第 1 个', await waitFor(`!!document.querySelector('#v-write.on') && document.querySelector('#w-who').textContent.includes('第 1 个')`));
   ws.close();
 } finally {
   browser.kill();

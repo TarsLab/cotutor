@@ -46,10 +46,20 @@ conversations/**/*.log
 conversations/**/*.mp3
 # 回放(cotutor replay)是调提示词与 vault 时的对照,不是孩子的对话
 evals/
-# 课包是 drawtell build 的派生物(小课堂的源在家长做课的地方)
+# 做好的课(课包、视频课)与课包截图:体积大,源在家长做课的地方
 bundles/
+lectures/
+snaps/
+# 口语课(孩子的原声、照片)
+talk/
 # 作业照片(孩子在老师页上拍的;paths.captures):体积大、只是这一轮的素材,认出的文字在日记里
 captures/
+# 本机代理等私有设置
+.claude/settings.local.json
+# .cotutor/ 是机器文件(板书写法缓存、配音试听、二维码、日志、CLI 壳、qwen 的家),只留出厂 hash 与 schema
+.cotutor/*
+!.cotutor/shipped.json
+!.cotutor/cotutor.schema.json
 node_modules/
 .DS_Store
 `;

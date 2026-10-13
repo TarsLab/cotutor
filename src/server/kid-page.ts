@@ -170,7 +170,6 @@ const PAGE = `<!doctype html>
   #deck .pc-ix .av { width:100%; height:100%; font-size:11px; }
   #deck .pc .kc { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
   #deck .pc .kcards { margin-top:4px; }
-  #deck .pc:not(.front) .bt-new::before { visibility:hidden; } /* 后面那几张只露出头那一行,新话题气泡的尖角会从缝里冒出来 */
   #deck .pc.off { pointer-events:auto; }
   #deck .pc.off.front .bts { pointer-events:none; }
   body.offline #deck .pc { pointer-events:none; }
@@ -842,7 +841,7 @@ __REEL_JS__
     }
     return out;
   };
-  // 牌上的按钮(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):新话题是从 C 的开口说出来的一个大气泡;小课堂是带预览图的海报;其余是大胶囊。
+  // 牌上的按钮(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):新话题是头像下面一个学科色大气泡(不带尖角);小课堂是带预览图的海报;其余是大胶囊。
   // 孩子看到的字都在 .btx 里(探针按它读)
   const tutorButton = (t, b) => {
     const on = { click: () => pickButton(t, b) };

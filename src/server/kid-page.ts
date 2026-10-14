@@ -753,10 +753,11 @@ __REEL_JS__
     return out;
   };
   // 牌上的按钮(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):新话题是头像下面一个学科色大气泡(不带尖角);小课堂是带预览图的海报;其余是大胶囊。
-  // 孩子看到的字都在 .btx 里(探针按它读)
+  // 孩子看到的字都在 .btx 里(探针按它读)。新话题打头印名字的首字(.fc,拍板 28):平板横着叠时后面的牌只露左边一格,露出来的那截气泡就是这个字;手机露着整行名字,不出
   const tutorButton = (t, b) => {
     const on = { click: () => pickButton(t, b) };
-    if (b.kind === 'new') return h('button', { type: 'button', class: 'bt bt-new', style: '--sc:' + colorOf(t), on }, h('span', { class: 'lb' }, h('span', { class: 'btx' }, b.label), h('small', { class: 'ln' }, '想问我什么?')), h('span', { class: 'bi', html: ICON.spark }));
+    const fc = Array.from(t.display || '')[0];
+    if (b.kind === 'new') return h('button', { type: 'button', class: 'bt bt-new', style: '--sc:' + colorOf(t), on }, fc ? h('span', { class: 'fc', 'aria-hidden': 'true' }, fc) : null, h('span', { class: 'lb' }, h('span', { class: 'btx' }, b.label), h('small', { class: 'ln' }, '想问我什么?')), h('span', { class: 'bi', html: ICON.spark }));
     if (b.kind === 'lecture') return h('button', { type: 'button', class: 'bt bt-lecture', on }, lecturePic(b),
       h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, b.label), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null));
     return h('button', { type: 'button', class: 'bt bt-' + b.kind, on }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }), h('span', { class: 'btx' }, b.label));
@@ -828,6 +829,7 @@ __REEL_JS__
       if (g.w < d.wMin) { g.step = Math.max(d.stepMin, (avail - d.wMin) / Math.max(1, n - 1)); g.w = Math.max(240, avail - (n - 1) * g.step); }
     }
     box.style.setProperty('--w', g.w + 'px'); box.style.setProperty('--av', d.av + 'px'); box.style.setProperty('--nmz', d.nm + 'px');
+    box.dataset.axis = axis;
     box.style.setProperty('--org', axis === 'V' ? '50% 0%' : '0% 100%'); box.style.setProperty('--head', d.head + 'px');
     // 一样高:取最高那张;竖着叠时露出的那条 = 头那一行实际的高度 + 8
     const cards = [...K.els.values()];

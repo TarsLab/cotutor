@@ -199,7 +199,7 @@ try {
   ok('拍照听写的图标是田字格「字」带相机角标(拍板 19)', await evaluate(`document.querySelector('#deck .pc.front .bt-x-photo .pg i')?.textContent === '字' && !!document.querySelector('#deck .pc.front .bt-x-photo .pg .cam svg') && !document.querySelector('#deck .pc.front .bt-x-photo').classList.contains('en')`));
   await shot('11a-home-photo');
   await tap('.bt-x-photo');
-  ok('点了:拍照屏(拍照 / 从相册选)', await waitFor(`location.pathname === '/dictation' && !!document.querySelector('#v-snap.on')`));
+  ok('点了:拍照屏(拍照 / 相册),中间是语文老师的大头像', await waitFor(`location.pathname === '/dictation' && !!document.querySelector('#v-snap.on')`) && await waitFor(`!!document.querySelector('#snap-av .tfav')`));
   await shot('11-snap');
   ok('拍照屏:胶囊在,点了回首页', await evaluate(`!document.querySelector('#back').hidden && !document.body.innerText.includes('回首页')`));
   const icon = join(home, 'photo.png');
@@ -230,7 +230,7 @@ try {
   await tap('#back');
   ok('写字屏点胶囊:回首页', await waitFor(`location.pathname === '/'`));
   await send('Page.navigate', { url: `${base}/dictation?tutor=chinese-tutor` });
-  ok('再进拍照听写:最上面「刚才的还没写完 · 写到第一个了」,拍照让成次要', await waitFor(`!document.querySelector('#snap-resume')?.hidden && document.querySelector('#snap-resume-sub').textContent === '写到第一个了 · 一共十一个' && document.querySelector('#snap-cam-btn').classList.contains('tool')`));
+  ok('再进拍照听写:最上面「刚才的还没写完 · 写到第一个了」,拍照让成次要', await waitFor(`!document.querySelector('#snap-resume')?.hidden && document.querySelector('#snap-resume-sub').textContent === '写到第一个了 · 一共十一个' && document.querySelector('#snap-cam-btn').classList.contains('alt')`));
   await shot('14-resume');
   await tap('#snap-resume-go');
   ok('点接着写:回到这一次的写字屏,还是十一个词', await waitFor(`!!document.querySelector('#v-listen.on') && document.querySelectorAll('#l-book .brow').length === 11`));

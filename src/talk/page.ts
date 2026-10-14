@@ -9,6 +9,7 @@
 import { inlineScript } from '../server/inline-lib.ts';
 import { wordDrawJs } from '../server/word-draw.ts';
 import { TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
+import { albumSvg, cameraSvg } from '../server/photo-ui.ts';
 
 /** 录像的轨道(lib/reel.ts),内联进录像模式 */
 const TALK_REEL_JS = inlineScript(new URL('./lib/reel.ts', import.meta.url));
@@ -58,6 +59,7 @@ const TALK_PAGE = `<!doctype html>
   #home .shoot { margin-top:16px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; min-height:260px; border-radius:20px; background:var(--ink); color:rgba(255,255,255,.85); text-align:center; padding:28px; position:relative; }
   #home .shoot .frame { position:absolute; left:20px; right:20px; top:20px; bottom:20px; border:2px dashed rgba(255,255,255,.5); border-radius:14px; pointer-events:none; }
   #home .shoot label { display:inline-flex; align-items:center; gap:10px; height:52px; padding:0 22px; border-radius:26px; background:#fff; color:var(--ink); font-weight:700; cursor:pointer; }
+  #home .shoot label.alt { background:#ffffff1f; color:#fff; border:1px solid #ffffff33; }
   #home .shoot input { display:none; }
   #home .past { margin-top:22px; display:flex; flex-direction:column; gap:10px; }
   #home .past .row { display:flex; align-items:center; gap:12px; padding:14px 16px; cursor:pointer; }
@@ -182,11 +184,11 @@ const TALK_PAGE = `<!doctype html>
   <div class="card off" id="h-off" hidden></div>
   <div class="shoot" id="h-shoot">
     <div class="frame"></div>
-    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3l2-3h6l2 3h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+    ${cameraSvg(40, 1.8)}
     <div>对准课本的单词表或今天学的句子<br><span class="small" style="color:rgba(255,255,255,.6)">印刷的字读得准,手写的先别拍</span></div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
-      <label><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3l2-3h6l2 3h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg>拍照<input type="file" accept="image/*" capture="environment" id="h-cam"></label>
-      <label><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg>相册<input type="file" accept="image/*" id="h-pick"></label>
+      <label>${cameraSvg(22, 2.2)}拍照<input type="file" accept="image/*" capture="environment" id="h-cam"></label>
+      <label class="alt">${albumSvg(22, 2.2)}相册<input type="file" accept="image/*" id="h-pick"></label>
       <button class="pill" id="h-blank" type="button">不拍,自己填</button>
     </div>
   </div>

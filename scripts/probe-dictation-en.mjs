@@ -142,7 +142,7 @@ try {
   // ---- 拍照开始(英语老师卡上的拍照听写):拍 → 一项一项认出单词 → 点选 → 开始 ----
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: `${base}/dictation?tutor=english-tutor&lang=en` });
-  ok('拍照屏:拍照 / 从相册选', await waitFor(`document.querySelector('.view.on')?.id === 'v-snap' && !document.querySelector('#p-pick').hidden`));
+  ok('拍照屏:拍照 / 相册,中间是英语老师的大头像', await waitFor(`document.querySelector('.view.on')?.id === 'v-snap' && !document.querySelector('#p-pick').hidden`) && await waitFor(`!!document.querySelector('#snap-av .tfav')`));
   const icon = join(home, 'photo.png');
   writeFileSync(icon, Buffer.from((await (await fetch(`${base}/icon-512.png`)).arrayBuffer())));
   const doc = await send('DOM.getDocument', {});
@@ -166,7 +166,7 @@ try {
   await tap('#back');
   ok('写字屏点胶囊:回首页', await waitFor(`location.pathname === '/'`));
   await send('Page.navigate', { url: `${base}/dictation?tutor=english-tutor&lang=en` });
-  ok('再进拍照听写:最上面「刚才的还没写完 · 写到第 1 个了」', await waitFor(`!document.querySelector('#snap-resume')?.hidden && document.querySelector('#snap-resume-sub').textContent === '写到第 1 个了 · 一共 5 个' && document.querySelector('#snap-cam-btn').className === 'alt'`));
+  ok('再进拍照听写:最上面「刚才的还没写完 · 写到第 1 个了」', await waitFor(`!document.querySelector('#snap-resume')?.hidden && document.querySelector('#snap-resume-sub').textContent === '写到第 1 个了 · 一共 5 个' && document.querySelector('#snap-cam-btn').classList.contains('alt')`));
   await shot('en-08-resume');
   await tap('#snap-resume-go');
   ok('点接着写:写第 1 个', await waitFor(`!!document.querySelector('#v-write.on') && document.querySelector('#w-who').textContent.includes('第 1 个')`));

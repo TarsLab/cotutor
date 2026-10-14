@@ -9,6 +9,7 @@ import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts'
 import { EN_BOX_CSS, EN_BOX_JS } from './en-box.ts';
 import { UNLOCK_JS } from './unlock.ts';
 import { REEL_MODE_JS } from './reel-mode.ts';
+import { SNAP_CSS, cameraSvg, snapHtml } from '../server/photo-ui.ts';
 
 export const DICTATION_EN_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -77,21 +78,29 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .chip.on { background:var(--tutor); border-color:var(--tutor-line); color:var(--tutor-ink); font-weight:600; }
   .add { display:flex; gap:8px; }
   .add input { flex:1; min-width:0; min-height:48px; padding:0 14px; border-radius:14px; border:1.5px solid var(--line); font-size:18px; -webkit-user-select:text; user-select:text; }
-  .snapbtns { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; }
-  .snapbtns label { min-height:64px; padding:0 28px; border-radius:32px; background:var(--green); color:#fff; font-size:20px; font-weight:600; display:inline-flex; align-items:center; cursor:pointer; }
-  .snapbtns label.alt { background:#fff; color:var(--ink); border:1px solid var(--line); }
-  .snapbtns input { display:none; }
-  /* 选词屏的照片:认出的单词画框,点框同点词(同中文页) */
-  .shotwrap { display:flex; justify-content:center; }
-  .shotin { position:relative; display:inline-block; border-radius:12px; overflow:hidden; background:#2b2b2b; }
-  .shotin img { display:block; max-width:100%; max-height:46vh; }
+  .tool svg { width:22px; height:22px; flex:none; }
+  /* 拍照屏同语文页(photo-ui.ts):中间老师的大头像、用途图、拍照 / 相册 */
+  #v-snap { max-width:none; height:100vh; height:100dvh; padding-bottom:calc(env(safe-area-inset-bottom) + 16px); }
+  ${SNAP_CSS}
+  /* 选词屏同语文页:照片在左(框画在照片上,点框同点词),要写的单词在右,按钮在右下;竖着照片在上 */
+  #p-list { flex:1; min-height:0; display:flex; gap:20px; }
+  .shotwrap { flex:1; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; padding-top:48px; }
+  .shotin { position:relative; display:inline-block; max-width:100%; border-radius:12px; overflow:hidden; background:#2b2b2b; }
+  .shotin img { display:block; max-width:100%; max-height:calc(100vh - 100px); max-height:calc(100dvh - 100px); }
+  .pside { width:340px; flex:none; min-height:0; display:flex; flex-direction:column; gap:12px; }
+  .pscroll { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:12px; }
+  .pgo { display:flex; gap:10px; }
+  .pgo .main { flex:1; padding:0 16px; }
+  @media (orientation: portrait) {
+    #p-list { flex-direction:column; }
+    .shotwrap { flex:none; }
+    .shotin img { max-height:40vh; }
+    .pside { width:auto; flex:1; }
+  }
   .ebx { position:absolute; border-radius:6px; border:3px dashed rgba(120,115,105,.85); background:transparent; padding:0; cursor:pointer; }
   .ebx.on { border-style:solid; border-color:var(--green); background:color-mix(in srgb, var(--sc) 16%, transparent); }
   .ebx.unsure.on { border-color:var(--accent); background:rgba(232,116,59,.18); }
   .pgo { display:flex; justify-content:center; gap:12px; }
-  /* 今天没写完的拍照听写(拍板 17):拍照屏最上面一块,点了接着写 */
-  .resume { display:flex; align-items:center; gap:24px; padding:14px 14px 14px 26px; background:#fff; border:1px solid var(--line); border-radius:32px; text-align:left; box-shadow:0 2px 10px #00000010; }
-  .resume b { display:block; font-size:20px; } .resume small { display:block; color:var(--dim); font-size:15px; }
   .muted { color:var(--dim); font-size:15px; }
   #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:16px; display:none; z-index:9; }
   #toast.on { display:block; }
@@ -103,17 +112,19 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   <div class="center"><b id="s-title">单词听写</b><span id="s-sub">老师念,你来写</span><button class="main" type="button" id="s-go">开始</button></div>
 </div>
 <div class="view" id="v-snap">
-  <div class="bar"><span class="bk-slot"></span><span class="ttl">拍照听写</span><span></span></div>
-  <div class="center" id="p-pick"><div class="resume" id="snap-resume" hidden><div><b>刚才的还没写完</b><small id="snap-resume-sub"></small></div><button class="main" type="button" id="snap-resume-go">接着写</button></div><b>拍一下要写的单词</b><span>课本上的单词表,或者老师发的听写单</span>
-    <div class="snapbtns"><label id="snap-cam-btn">拍照<input type="file" accept="image/*" capture="environment" id="p-cam"></label><label class="alt">从相册选<input type="file" accept="image/*" id="p-lib"></label></div></div>
-  <div id="p-list" hidden style="display:flex;flex-direction:column;gap:14px">
+  ${snapHtml({ en: true, id: 'p-pick', cam: 'p-cam', lib: 'p-lib' })}
+  <div id="p-list" hidden>
     <div class="shotwrap"><div class="shotin"><img id="p-img" alt="拍的照片"><div id="p-boxes"></div></div></div>
-    <div class="muted" id="p-status">正在看照片…</div>
-    <div class="chips" id="p-chips"></div>
-    <div class="muted">照片上还有这些,点一下加进来:</div>
-    <div class="chips" id="p-more"></div>
-    <div class="add"><input id="p-add" placeholder="自己加单词,空格分开" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="tool" type="button" id="p-add-go">加</button></div>
-    <div class="pgo"><button class="tool" type="button" id="p-again">重拍</button><button class="main" type="button" id="p-go" disabled>开始听写</button></div>
+    <div class="pside">
+      <div><div class="ttl" id="p-lesson">认一认</div><div class="muted" id="p-status">正在看照片…</div></div>
+      <div class="pscroll">
+        <div class="chips" id="p-chips"></div>
+        <div class="muted">照片上还有这些,点一下加进来:</div>
+        <div class="chips" id="p-more"></div>
+        <div class="add"><input id="p-add" placeholder="自己加单词,空格分开" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="tool" type="button" id="p-add-go">加</button></div>
+      </div>
+      <div class="pgo"><button class="tool" type="button" id="p-again">${cameraSvg()}重拍</button><button class="main" type="button" id="p-go" disabled>开始听写</button></div>
+    </div>
   </div>
 </div>
 <div class="view" id="v-write">
@@ -180,7 +191,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   ${TUTOR_FACE_JS}
   var BACK = backCapsule(goHome); document.body.append(BACK.el);
   var TUTORS = null;
-  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; BACK.set(t); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
+  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; BACK.set(t); $('#snap-av').replaceChildren(t ? tutorAvatar(t) : ''); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
 
   // ---------- 念:配了音色放音频,没有退浏览器的英文合成声 ----------
   var audio = new Audio(); audio.preload = 'auto';
@@ -344,7 +355,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     var seen = {}; P.items.forEach(function (it) { seen[it.text.toLowerCase()] = 1; }); P.extra.forEach(function (w) { seen[w.toLowerCase()] = 1; });
     var more = []; (rec && rec.full || []).forEach(function (l) { l.split(' ').forEach(function (w) { if (WORD.test(w) && w.length > 1 && !seen[w.toLowerCase()]) { seen[w.toLowerCase()] = 1; more.push(w); } }); });
     $('#p-more').replaceChildren.apply($('#p-more'), more.slice(0, 40).map(function (w) { return h('button', { 'class': 'chip', type: 'button', on: { click: function () { P.extra.push(w); P.on[w] = true; drawChips(rec); } } }, w); }));
-    $('#p-go').disabled = !chosen().length;
+    var n = chosen().length; $('#p-go').disabled = !n; $('#p-go').textContent = n ? '开始听写 · ' + n + ' 个' : '开始听写';
   };
   var drawBoxes = function () {
     var box = $('#p-boxes');
@@ -359,7 +370,8 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     api('GET', '/api/dictation/photos/' + id).then(function (rec) {
       if (P.id !== id) return;
       rec.items.forEach(function (it) { if (!P.items.some(function (x) { return x.text === it.text; })) { P.items.push(it); P.on[it.text] = it.pick; } });
-      $('#p-status').textContent = rec.state === 'running' ? '正在看照片…' : P.items.length ? (rec.lesson ? rec.lesson + ' · ' : '') + '点一下选上或去掉' : '没认出单词,自己打上也行';
+      if (rec.lesson) $('#p-lesson').textContent = rec.lesson;
+      $('#p-status').textContent = rec.state === 'running' ? '正在看照片…' : P.items.length ? '点照片上的框或单词,选上或去掉' : '没认出单词,自己打上也行';
       drawChips(rec);
       if (rec.state === 'running') P.timer = setTimeout(poll, 700);
     }, function () { if (P.id === id) P.timer = setTimeout(poll, 1500); });
@@ -367,7 +379,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   var onFile = function (e) {
     var f = e.target.files && e.target.files[0]; if (!f) return;
     $('#p-pick').hidden = true; $('#p-list').hidden = false; showResume(null);
-    P.url = URL.createObjectURL(f); $('#p-img').src = P.url; $('#p-status').textContent = '正在看照片…';
+    P.url = URL.createObjectURL(f); $('#p-img').src = P.url; $('#p-lesson').textContent = '认一认'; $('#p-status').textContent = '正在看照片…';
     shrink(f).then(function (data) { return api('POST', '/api/dictation/photos', { image: data, lang: 'en' }); }).then(function (j) { P.id = j.id; poll(); }, function () { $('#p-status').textContent = '没看成,自己打上单词也行'; });
   };
   $('#p-cam').addEventListener('change', onFile); $('#p-lib').addEventListener('change', onFile);
@@ -375,7 +387,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     clearTimeout(P.timer); if (P.url) URL.revokeObjectURL(P.url);
     P = { id: null, items: [], on: {}, extra: [], timer: 0, rec: null, url: null };
     $('#p-cam').value = ''; $('#p-lib').value = ''; $('#p-img').removeAttribute('src'); $('#p-boxes').replaceChildren(); $('#p-chips').replaceChildren(); $('#p-more').replaceChildren();
-    $('#p-list').hidden = true; $('#p-pick').hidden = false; $('#p-go').disabled = true; findResume();
+    $('#p-list').hidden = true; $('#p-pick').hidden = false; $('#p-go').disabled = true; $('#p-go').textContent = '开始听写'; findResume();
   });
   $('#p-add-go').addEventListener('click', function () { var inp = $('#p-add'); inp.value.split(/ +/).forEach(function (w) { w = w.trim(); if (WORD.test(w) && w.length <= 20 && P.extra.indexOf(w) < 0) { P.extra.push(w); P.on[w] = true; } }); inp.value = ''; drawChips(null); });
   $('#p-go').addEventListener('click', function () {
@@ -392,7 +404,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   var showResume = function (v) {
     R.v = v;
     $('#snap-resume').hidden = !v;
-    $('#snap-cam-btn').className = v ? 'alt' : '';
+    $('#snap-cam-btn').classList.toggle('alt', Boolean(v));
     if (!v) return;
     var wrote = v.written.filter(Boolean).length;
     $('#snap-resume-sub').textContent = v.checked || wrote === v.sizes.length ? '写完了,还没对一对' : '写到第 ' + (wrote + 1) + ' 个了 · 一共 ' + v.sizes.length + ' 个';

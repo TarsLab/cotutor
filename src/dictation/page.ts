@@ -8,6 +8,7 @@
 import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
 import { UNLOCK_JS } from './unlock.ts';
 import { REEL_MODE_JS } from './reel-mode.ts';
+import { SNAP_CSS, cameraSvg, snapHtml } from '../server/photo-ui.ts';
 
 export const DICTATION_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -113,7 +114,7 @@ export const DICTATION_PAGE = `<!doctype html>
   }
   /* 开始 */
   #v-start .grow { align-items:center; text-align:center; }
-  #v-start .big { font-size:30px; font-weight:700; }
+  #v-start .hd { font-size:30px; font-weight:700; }
   #v-start .sub { color:var(--dim); font-size:18px; }
   #v-start .acts { display:flex; flex-direction:column; gap:14px; align-items:center; }
   /* 对答案 */
@@ -137,15 +138,8 @@ export const DICTATION_PAGE = `<!doctype html>
   .models { display:flex; flex-direction:column; align-items:center; gap:12px; padding:20px; background:var(--card); border:1px solid var(--line); border-radius:20px; }
   .models .pads { gap:10px; flex-wrap:nowrap; }
   .models .padbox { cursor:pointer; }
-  /* 拍照开始:拍 → 照片上一项一项冒出框,点着选 → 右边是这次写的词 */
-  #v-snap .grow { align-items:center; text-align:center; }
-  #v-snap .big { font-size:30px; font-weight:700; }
-  #v-snap .sub { color:var(--dim); font-size:18px; max-width:520px; }
-  /* 今天没写完的拍照听写(拍板 17):拍照屏最上面一块,点了接着写 */
-  .resume { display:flex; align-items:center; gap:24px; padding:14px 14px 14px 26px; background:#fff; border:1px solid var(--line); border-radius:32px; text-align:left; box-shadow:0 2px 10px #00000010; }
-  .resume b { display:block; font-size:20px; } .resume small { display:block; color:var(--dim); font-size:15px; }
-  .pick-btn { position:relative; overflow:hidden; }
-  .pick-btn input { position:absolute; inset:0; opacity:0; font-size:200px; cursor:pointer; }
+  /* 拍照开始:拍(拍照屏同英语页,photo-ui.ts)→ 照片上一项一项冒出框,点着选 → 右边是这次写的词 */
+${SNAP_CSS}
   #v-pick { flex-direction:row; gap:20px; align-items:stretch; height:100vh; height:100dvh; }
   #v-pick.on { display:flex; }
   .shot { flex:1; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; }
@@ -186,23 +180,14 @@ ${TUTOR_FACE_CSS}
   <div class="bar"><span class="bk-slot"></span></div>
   <div class="grow">
     <div class="av" id="s-av"></div>
-    <div class="big" id="s-big">听写</div>
+    <div class="hd" id="s-big">听写</div>
     <div class="sub" id="s-sub"></div>
     <div class="acts" id="s-acts"></div>
   </div>
 </div>
 
 <div class="view" id="v-snap">
-  <div class="bar"><span class="bk-slot"></span></div>
-  <div class="grow">
-    <div class="resume" id="snap-resume" hidden><div><b>刚才的还没写完</b><small id="snap-resume-sub"></small></div><button class="main" id="snap-resume-go">接着写</button></div>
-    <div class="big">拍今天要听写的</div>
-    <div class="sub">拍课本上的词语、写字,或者老师发的听写单。拍正一点,字要清楚。</div>
-    <div class="row" style="justify-content:center">
-      <label class="main pick-btn" id="snap-cam-btn" style="min-height:64px">拍照<input type="file" accept="image/*" capture="environment" id="snap-cam"></label>
-      <label class="tool pick-btn" style="min-height:64px">从相册选<input type="file" accept="image/*" id="snap-lib"></label>
-    </div>
-  </div>
+  ${snapHtml({ en: false, id: 'snap-hero', cam: 'snap-cam', lib: 'snap-lib' })}
 </div>
 
 <div class="view" id="v-pick">
@@ -216,7 +201,7 @@ ${TUTOR_FACE_CSS}
       <div class="fulltxt" id="p-full" hidden><div class="fh">照片上的字 · 点一个词加进来</div><div id="p-lines"></div></div>
     </div>
     <div class="row">
-      <button class="tool" id="p-again">重拍</button>
+      <button class="tool" id="p-again">${cameraSvg()}重拍</button>
       <button class="main" id="p-go" style="flex:1">开始听写</button>
     </div>
   </div>
@@ -322,7 +307,7 @@ ${TUTOR_FACE_CSS}
   ${TUTOR_FACE_JS}
   var BACK = backCapsule(goHome); document.body.append(BACK.el);
   var TUTORS = null;
-  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; BACK.set(t); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
+  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; BACK.set(t); $('#snap-av').replaceChildren(t ? tutorAvatar(t) : ''); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
 
   var api = function (method, path, body) {
     return fetch(path, { method: method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' })
@@ -489,7 +474,7 @@ ${TUTOR_FACE_CSS}
   var showResume = function (v) {
     R.v = v;
     $('#snap-resume').hidden = !v;
-    $('#snap-cam-btn').className = (v ? 'tool' : 'main') + ' pick-btn';
+    $('#snap-cam-btn').classList.toggle('alt', Boolean(v));
     if (!v) return;
     var wrote = v.written.filter(Boolean).length;
     $('#snap-resume-sub').textContent = v.checked || wrote === v.sizes.length ? '写完了,还没对一对' : '写到第' + cn(wrote + 1) + '个了 · 一共' + cn(v.sizes.length) + '个';

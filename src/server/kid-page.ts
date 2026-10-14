@@ -31,6 +31,7 @@ import { wordDrawJs } from './word-draw.ts';
 import { NEUTRAL_COLOR } from '../lib/tutor-color.ts';
 import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from './reel-dock.ts';
 import { inlineScript } from './inline-lib.ts';
+import { albumSvg, cameraSvg } from './photo-ui.ts';
 
 /** 读 src/lib/<name> 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
 function libSource(name: 'kid-board' | 'photo-edit' | 'reel'): string {
@@ -424,7 +425,14 @@ __REEL_DOCK_CSS__
   /* 发照片屏(《作业照片设计.md》):看一眼、裁剪 / 圈画 / 转 90°、配一句话,再发 */
   #ps { position:absolute; inset:0; z-index:40; background:#1d1c1a; color:#fff; display:none; flex-direction:column; }
   #ps.on { display:flex; }
-  #ps .view { position:relative; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:calc(env(safe-area-inset-top) + 12px) 16px 8px; }
+  /* 发给谁(设计稿 https://claude.ai/artifact/SPtjRhH9aLoLQoGfCNJaVz):头像和名字;「发给」按钮用这位老师的颜色,和拍照听写拍完的「开始听写」分得开 */
+  #ps-top { display:flex; align-items:center; padding:calc(env(safe-area-inset-top) + 12px) 16px 0; }
+  #ps-to { display:inline-flex; align-items:center; gap:10px; height:50px; padding:0 18px 0 6px; border-radius:25px; background:#ffffff14; border:1px solid #ffffff26; font-size:17px; }
+  #ps-to:empty { display:none; }
+  #ps-to small { font-size:17px; color:#ffffffb3; }
+  #ps-to .av { width:38px; height:38px; font-size:18px; }
+  #ps-to .av .ring circle { stroke-width:8; }
+  #ps .view { position:relative; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:8px 16px; }
   #ps .cv { position:relative; }
   #ps canvas { display:block; touch-action:none; }
   #ps.ps-drawing canvas { cursor:crosshair; }
@@ -581,6 +589,7 @@ __REEL_DOCK_CSS__
     <label><span class="ic" id="ic-cam2"></span>拍照<input type="file" accept="image/*" capture="environment"></label>
   </div></div></div>
   <div id="ps">
+    <div id="ps-top"><span id="ps-to"></span></div>
     <div class="view"><div class="cv"><canvas id="ps-cv"></canvas><div id="ps-crop" hidden><div class="dim"></div><div class="dim"></div><div class="dim"></div><div class="dim"></div><div class="fr" data-g="move"><span class="g nw" data-g="nw"></span><span class="g ne" data-g="ne"></span><span class="g sw" data-g="sw"></span><span class="g se" data-g="se"></span></div></div></div></div>
     <div id="ps-strip"></div>
     <div class="tools" id="ps-tools"><button type="button" id="ps-t-crop">裁剪</button><button type="button" id="ps-t-pen">圈画</button><button type="button" id="ps-t-rot">转 90°</button></div>
@@ -628,7 +637,9 @@ __REEL_JS__
   const SVG = (paths, size, sw) => '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (sw || 2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>';
   const ICON = {
     back: SVG('<path d="M15 5l-7 7 7 7"></path>', 28, 2.2),
-    camera: SVG('<path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle>', 22),
+    // 相机、相册同拍照听写那几屏(photo-ui.ts);加号面板里两个一样大
+    camera: __CAMERA_22__,
+    cameraLg: __CAMERA_28__,
     plus: SVG('<path d="M12 5v14M5 12h14"></path>', 22, 2.2),
     play: SVG('<path d="M8 5l11 7-11 7z" fill="currentColor"></path>', 16, 1.5),
     pause: SVG('<path d="M8 5v14M16 5v14"></path>', 16, 2.6),
@@ -639,7 +650,7 @@ __REEL_JS__
     send: SVG('<path d="M12 19V5M5 12l7-7 7 7"></path>', 20, 2.4),
     micSm: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 16, 2.2),
     image: SVG('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 16l5-5 4 4 3-3 6 6"></path><circle cx="16" cy="9" r="1.5"></circle>', 36, 1.6),
-    album: SVG('<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 15l5-4 4 3 3-2 6 4"></path>', 28),
+    album: __ALBUM_28__,
     close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
     closeSm: SVG('<path d="M7 7l10 10M17 7L7 17"></path>', 14, 2.8),
     check: SVG('<path d="M5 12l5 5 9-10"></path>', 16, 3),
@@ -772,7 +783,7 @@ __REEL_JS__
   /** 小课堂的课长:「1 分 40 秒」 */
   const lcLen = (ms) => { const s = Math.floor(ms / 1000); return s >= 60 ? Math.floor(s / 60) + ' 分' + (s % 60 ? ' ' + (s % 60) + ' 秒' : '') : s + ' 秒'; };
   // ---- 常驻入口(《首页设计.md》拍板 18):听写、拍照听写、口语课一直在那位老师的卡上,不经首页发布 ----
-  const EXTRA_ICON = { dictation: SVG('<path d="M4 20l4-1 11-11-3-3L5 16z"></path><path d="M14 7l3 3"></path>', 20), photo: SVG('<path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle>', 20), talk: SVG('<path d="M4 5h16v11H9l-5 4z"></path><path d="M8 10h8"></path>', 20) };
+  const EXTRA_ICON = { dictation: SVG('<path d="M4 20l4-1 11-11-3-3L5 16z"></path><path d="M14 7l3 3"></path>', 20), photo: __CAMERA_20__, talk: SVG('<path d="M4 5h16v11H9l-5 4z"></path><path d="M8 10h8"></path>', 20) };
   const extraBtn = (kind, label, sub, on) => h(on.href ? 'a' : 'button', { type: on.href ? null : 'button', class: 'bt bt-extra bt-x-' + kind, href: on.href || null, on: on.click ? { click: on.click } : {} },
     h('span', { class: 'bi', html: EXTRA_ICON[kind === 'photo' ? 'photo' : kind] }), h('span', { class: 'lb' }, h('span', { class: 'btx' }, label), sub ? h('small', { class: 'ln' }, sub) : null));
   /** 听写(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):一整条,上面一排空格子,几个词几格(最多 6,英文是四线三格),下面「听写 · 几个词」和「去写」 */
@@ -2982,7 +2993,7 @@ __REEL_DOCK_JS__
   $('#cam').insertAdjacentHTML('afterbegin', ICON.camera);
   $('#plus').innerHTML = ICON.plus;
   $('#go').innerHTML = ICON.send;
-  $('#ic-album').innerHTML = ICON.album; $('#ic-cam2').innerHTML = ICON.camera;
+  $('#ic-album').innerHTML = ICON.album; $('#ic-cam2').innerHTML = ICON.cameraLg;
   const setBar = (mode) => {
     if (mode === 'typing' && S.bar !== 'typing') typeRec('focus');
     else if (mode !== 'typing' && S.bar === 'typing') typeRec('blur');
@@ -3367,6 +3378,8 @@ __REEL_DOCK_JS__
     if (!items.length || !S.tutor) return;
     psReset(); PS.items = items;
     psEl.classList.add('on');
+    $('#ps-to').replaceChildren(avatarEl(S.tutor), h('span', {}, h('small', {}, '发给 '), h('b', {}, S.tutor.display)));
+    $('#ps-go').textContent = '发给' + S.tutor.display; $('#ps-go').style.background = colorOf(S.tutor);
     playRec({ k: 'ps', e: 'open' });
     psMode('view');
   };
@@ -3533,7 +3546,8 @@ __REEL_DOCK_JS__
 </html>
 `;
 
-const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR));
+const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR))
+  .replace('__CAMERA_22__', () => JSON.stringify(cameraSvg(22))).replace('__CAMERA_28__', () => JSON.stringify(cameraSvg(28))).replace('__CAMERA_20__', () => JSON.stringify(cameraSvg(20))).replace('__ALBUM_28__', () => JSON.stringify(albumSvg(28)));
 export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 
 export interface KidPageMode {

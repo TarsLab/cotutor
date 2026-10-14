@@ -347,7 +347,7 @@ try {
     await photosIdle();
     const f2 = (await hx('GET', `/api/dictation/photos/${up2.json.id}`)).json;
     check('没认完(超时):failed、带原因,已经认出的留着能用', f2.state === 'failed' && f2.error === 'timeout' && f2.items.length === 1, JSON.stringify(f2));
-    check('页面:拍照那几屏在,内联脚本能解析(上面查过);不带 home 是拍照开始', ((await hx('GET', '/dictation')).html ?? '').includes('拍今天要听写的'));
+    check('页面:拍照那几屏在,内联脚本能解析(上面查过);不带 home 是拍照开始', ((await hx('GET', '/dictation')).html ?? '').includes('拍语文书上要写的词'));
   }
 
   // ---- 边界 ----

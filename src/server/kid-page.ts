@@ -717,6 +717,13 @@ __REEL_JS__
   const dictationBtn = (label, sub, n, en, href) => h('a', { class: 'bt bt-extra bt-x-dictation' + (en ? ' en' : ''), href },
     h('span', { class: 'dg', 'aria-hidden': 'true' }, ...Array.from({ length: Math.max(1, Math.min(n, en ? 4 : 6)) }, () => h('i'))),
     h('span', { class: 'dr' }, h('span', { class: 'lb' }, h('span', { class: 'btx' }, label), h('small', { class: 'ln' }, sub)), h('span', { class: 'go' }, '去写')));
+  /** 拍照听写(《wip/听写设想.md》拍板 19):图标是一小格——语文的田字格写个「字」、英语的四线格写个「Aa」,右下角学科色的相机;孩子看格子就分得出是写汉字还是写英文 */
+  const photoBtn = (t) => {
+    const en = t.subject === '英语';
+    return h('a', { class: 'bt bt-extra bt-x-photo' + (en ? ' en' : ''), href: '/dictation?tutor=' + encodeURIComponent(t.name) + (en ? '&lang=en' : ''), style: '--sc:' + color(t.subject || t.display) },
+      h('span', { class: 'pg', 'aria-hidden': 'true' }, h('i', {}, en ? 'Aa' : '字'), h('span', { class: 'cam', html: EXTRA_ICON.photo })),
+      h('span', { class: 'lb' }, h('span', { class: 'btx' }, '拍照听写'), h('small', { class: 'ln' }, en ? '拍英语书上要写的单词' : '拍语文书上要写的词')));
+  };
   /** 口语课:有给孩子的口语单才出现(/api/talk,30 秒读一次);点了用最近那份开一次(聊过了就照它再开) */
   const talkInfo = () => {
     if (S.talkAt && Date.now() - S.talkAt < 30000) return S.talkLast;
@@ -740,7 +747,7 @@ __REEL_JS__
     const all = (Array.isArray(H.cards) ? H.cards : []).filter((x) => x.kind === 'dictation');
     // 英文单词听写(《wip/听写设想.md》拍板 15):卡上的词是英文单词,或者英语老师卡上的拍照听写 → /dictation?lang=en
     for (const c of all) if (c.owner === t.name) { const en = c.props.lang === 'en', n = c.props.count || 0; out.push(dictationBtn(en ? '单词听写' : '听写', n + (en ? ' 个单词' : ' 个词') + ' · 老师念,你来写', n, en, '/dictation?home=' + encodeURIComponent(H.home || '') + '&n=' + all.indexOf(c) + (en ? '&lang=en' : ''))); }
-    if (extras.includes('dictation')) { const en = t.subject === '英语'; out.push(extraBtn('photo', '拍照听写', en ? '拍一下要写的单词' : '拍一下要写的词', { href: '/dictation?tutor=' + encodeURIComponent(t.name) + (en ? '&lang=en' : '') })); }
+    if (extras.includes('dictation')) out.push(photoBtn(t));
     if (extras.includes('talk')) {
       const last = talkInfo();
       if (last) { const n = last.list.words.length + last.list.sentences.length; const b = extraBtn('talk', '口语课', n + ' 句 · 先跟我读,再聊', { click: () => openTalk(b) }); out.push(b); }

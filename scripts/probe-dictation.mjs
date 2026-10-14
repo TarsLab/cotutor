@@ -195,6 +195,8 @@ try {
   await send('Emulation.clearDeviceMetricsOverride');
   await send('Page.navigate', { url: `${base}/` });
   ok('首页:语文老师卡里有「拍照听写」,带他的名字(用他的声音念)', await waitFor(`!!document.querySelector('#deck .pc.front[data-tutor="chinese-tutor"] .bt-x-photo') && document.querySelector('.bt-x-photo').getAttribute('href') === '/dictation?tutor=chinese-tutor'`));
+  ok('拍照听写的图标是田字格「字」带相机角标(拍板 19)', await evaluate(`document.querySelector('#deck .pc.front .bt-x-photo .pg i')?.textContent === '字' && !!document.querySelector('#deck .pc.front .bt-x-photo .pg .cam svg') && !document.querySelector('#deck .pc.front .bt-x-photo').classList.contains('en')`));
+  await shot('11a-home-photo');
   await tap('.bt-x-photo');
   ok('点了:拍照屏(拍照 / 从相册选)', await waitFor(`location.pathname === '/dictation' && !!document.querySelector('#v-snap.on')`));
   await shot('11-snap');

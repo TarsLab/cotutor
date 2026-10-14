@@ -134,7 +134,18 @@ try {
     // 卡数 2:选择题一张,第二节末句问句没配能答的卡、解析器补的提问卡一张
     check('清单:三位有脸的老师;数学老师 3 轮、两个话题;第一个话题的题、节数、卡数、停在末句问句、星;出错的话题 0 节', ov.date === today && ov.tutors.length === 3 && mt?.turns === 3 && mt.costUsd === 0.12 && mt.threads.length === 2 && mt.threads[0].title === '7 减 9 怎么算' && mt.threads[0].sections === 2 && mt.threads[0].cards === 2 && mt.threads[0].stoppedAt === 'ask' && mt.threads[0].rating === 4 && !mt.threads[0].booked && mt.threads[1].sections === 0 && mt.threads[1].stoppedAt === null, JSON.stringify(ov));
     const wk = (ov as unknown as { week: { date: string; tutors: string[] }[] }).week;
-    check('清单:七天日期条以今天结尾,今天有话题的是数学老师;话题种类是对话(拍板 24、26)', wk.length === 7 && wk[6].date === today && JSON.stringify(wk[6].tutors) === '["math-tutor"]' && wk[0].tutors.length === 0 && (mt?.threads[0] as { kind?: string } | undefined)?.kind === 'talk', JSON.stringify(wk));
+    check('清单:七天日期条以今天结尾,今天有话题的是数学老师(拍板 24)', wk.length === 7 && wk[6].date === today && JSON.stringify(wk[6].tutors) === '["math-tutor"]' && wk[0].tutors.length === 0, JSON.stringify(wk));
+    const t0 = mt?.threads[0] as unknown as { start: { kind: string; label: string }; said: string | null; endAt: string | null; notes: string[]; remembered: string[] };
+    check('清单:话题从哪颗进来(没从首页来 = 新话题)、孩子的第一句、给家长的(去掉标题)与记住了;没计时的 endAt 为 null(拍板 30、31)', t0.start.kind === 'new' && t0.start.label === '新话题' && t0.said === '7 减 9 怎么算' && JSON.stringify(t0.notes) === '["他其实会了。"]' && t0.remembered.length === 1 && t0.endAt === null, JSON.stringify(t0));
+    {
+      // 首页开场按钮进来的话题:种类 start、按钮字;按钮发出去的那句不算孩子的第一句;有计时就有结束时刻;用完删掉,后面的检查照旧
+      let ci = emptyIndex('chinese-tutor', today);
+      ci = addMessage(ci, { job: '1640-1', thread: '1640-1', at: `${today}T16:40`, from: 'kid', text: '我要看图说话', via: { home: null, button: 0, label: '我要看图说话' }, timing: { startedAt: '2026-01-01T08:40:00.000Z', doneMs: 4000, dubbedMs: 6000 }, result: 'ok', artifacts: [], kidText: '好。', section: b1 });
+      await writeIndex(ctx.ws, ci);
+      const c0 = ((await get('/api/overview/today')).json as { tutors: { name: string; threads: { start: { kind: string; label: string }; said: string | null; endAt: string | null }[] }[] }).tutors.find((t) => t.name === 'chinese-tutor')?.threads[0];
+      check('清单:开场按钮进来的是 start + 按钮字,按钮那句不算孩子的第一句;结束时刻 = 起来 + 配好音', c0?.start.kind === 'start' && c0.start.label === '我要看图说话' && c0.said === null && c0.endAt === '2026-01-01T08:40:06.000Z', JSON.stringify(c0));
+      await writeIndex(ctx.ws, emptyIndex('chinese-tutor', today));
+    }
     check('清单与板书接口:未来的日期 400,没这位老师 404', (await get('/api/overview/2099-01-01')).status === 400 && (await get('/api/conversations/math-tutor/2099-01-01/board')).status === 400 && (await get('/api/conversations/nobody/today/board')).status === 404);
     const page = (await get('/parent')).html ?? '';
     // 地址按端分(2026-10-14):孩子端 /、/dictation、/talk(只有跟读那一屏);家长端 /parent/*;工作台 /dev/*;旧地址不留

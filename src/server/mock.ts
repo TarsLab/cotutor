@@ -747,13 +747,15 @@ export function createMock(opts: MockOptions = {}): Mock {
       const listOf = (name: string, d = date): MockMessage[] => (d === today ? messages.get(name) : d === yesterday() ? past.get(name) : undefined) ?? [];
       const tutors = MOCK_TUTORS.map((t) => {
         const list = listOf(t.name);
-        const by = new Map<string, { thread: string; at: string; title: string; from: 'kid'; via: null; kind: 'talk'; sections: number; cards: number; stoppedAt: 'writing' | 'ask' | null; rating: number | null; booked: boolean; misses?: number }>();
+        const by = new Map<string, { thread: string; at: string; title: string; from: 'kid'; via: null; start: { kind: 'new'; label: string }; said: string | null; endAt: string | null; notes: string[]; remembered: string[]; sections: number; cards: number; stoppedAt: 'writing' | 'ask' | null; rating: number | null; booked: boolean; misses?: number }>();
         for (const m of list) {
           let th = by.get(m.thread);
           if (!th) {
-            th = { thread: m.thread, at: m.at, title: Array.from((m.question ?? '').trim()).slice(0, 20).join(''), from: 'kid', via: null, kind: 'talk', sections: 0, cards: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: booked.has(`${t.name}/${m.thread}`) };
+            th = { thread: m.thread, at: m.at, title: Array.from((m.question ?? '').trim()).slice(0, 20).join(''), from: 'kid', via: null, start: { kind: 'new', label: '新话题' }, said: (m.question ?? '').trim() || null, endAt: null, notes: [], remembered: [], sections: 0, cards: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: booked.has(`${t.name}/${m.thread}`) };
             by.set(m.thread, th);
           }
+          // 给家长的、记住了:同 mock 的板书接口,那天第一条带
+          if (m === list[0] && !m.pending) { th.notes.push('第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。'); th.remembered.push(`${date} 讲故事时爱抢着说结局,可以先让他猜`); }
           if (m.pending) th.stoppedAt = 'writing';
           else if (m.section && (m.section.cards.length || m.section.lines.length)) { th.sections++; th.cards += m.section.cards.length; th.stoppedAt = m.section.lines[m.section.lines.length - 1]?.ask ? 'ask' : null; }
         }

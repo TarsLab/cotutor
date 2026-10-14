@@ -410,8 +410,20 @@ export interface OverviewThread {
   title: string;
   from: ConversationMessage['from'];
   via: string | null;
-  /** 行头的种类标签(拍板 26):看过小课堂的话题是 lecture,其余 talk(对话) */
-  kind: 'talk' | 'lecture';
+  /**
+   * 孩子是点哪颗进来的(拍板 30:记录的卡照搬孩子端那颗):new 新话题(或没从首页进来)、start 开场、continue 接着、lecture 小课堂、activity、system 系统起的;
+   * label = 按钮上的字(new 是「新话题」)
+   */
+  start: { kind: 'new' | 'start' | 'continue' | 'lecture' | 'activity' | 'system'; label: string };
+  /** 孩子自己说的第一句(截 30 字;按钮发的那句不算):新话题气泡上的小字 */
+  said: string | null;
+  /** 最后一轮老师写完(配好音)的时刻(ISO);没有计时的老数据 null */
+  endAt: string | null;
+  /** 看过小课堂:海报用 */
+  lecture?: { bundle: string; title: string; video?: true; watchedMs: number; finished: boolean; marks: number };
+  /** 各轮给家长的(去掉「## 家长」)与记住了:宽屏右栏「这一天老师跟你说的」(拍板 31) */
+  notes: string[];
+  remembered: string[];
   sections: number;
   cards: number;
   /** 老师还在写 / 末句问句停下等孩子 / 没停 */
@@ -461,10 +473,20 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       if (!th) {
         const via = m.via?.label ?? null;
         const raw = via ? `首页 · ${via}` : m.from === 'kid' ? m.text : `系统:${m.text}`;
-        th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, kind: 'talk', sections: 0, cards: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked };
+        const b = m.via?.button;
+        const kind = m.from === 'system' ? 'system' : m.lecture ? 'lecture' : m.continues ? 'continue' : m.activity ? 'activity' : typeof b === 'number' ? 'start' : 'new';
+        th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, start: { kind, label: kind === 'new' ? '新话题' : (via ?? m.lecture?.title ?? '') }, said: null, endAt: null, notes: [], remembered: [], sections: 0, cards: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked };
         by.set(id, th);
       }
-      if (m.lecture) th.kind = 'lecture';
+      if (m.lecture && !th.lecture) th.lecture = { bundle: m.lecture.bundle, title: m.lecture.title, ...(m.lecture.video ? { video: true as const } : {}), watchedMs: m.lecture.watchedMs, finished: m.lecture.finished, marks: (m.lecture.marks ?? []).length };
+      // 孩子自己说的第一句:首页开场 / 接着按钮发出去的那句(正文就是按钮上的字)不算
+      if (th.said === null && m.from === 'kid' && m.text.trim() && !(typeof m.via?.button === 'number' && m.via.label === m.text)) th.said = Array.from(m.text.trim()).slice(0, 30).join('');
+      const t0 = Date.parse(m.timing?.startedAt ?? '');
+      const dt = m.timing?.dubbedMs ?? m.timing?.doneMs;
+      if (Number.isFinite(t0) && dt !== undefined) th.endAt = new Date(t0 + dt).toISOString();
+      const tail = (m.parentText ?? '').replace(/^##\s*家长\s*/, '').trim();
+      if (tail) th.notes.push(tail);
+      if (m.remembered?.length) th.remembered.push(...m.remembered);
       if (m.result === 'running') th.stoppedAt = 'writing';
       else if (m.result === 'ok' && m.section && (m.section.cards.length || m.section.lines.length)) {
         th.sections++;

@@ -247,6 +247,11 @@ export const DEV_PAGE = `<!doctype html>
   .field { display:flex; flex-direction:column; gap:5px; min-width:0; }
   .field label { font-size:13px; color:var(--muted); }
   .field input, .field select { font-size:15px; padding:7px 9px; border:1px solid var(--line); border-radius:8px; background:var(--surface); width:100%; }
+  /* 学科色的色块(拍板 26):自动 + 三门主科 + 八种,都是白字压得住的深色;不开放随便填 */
+  .swatches { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .swatches .sw { width:30px; height:30px; border-radius:50%; border:2px solid transparent; box-shadow:inset 0 0 0 2px #fff; cursor:pointer; padding:0; }
+  .swatches .sw.auto { width:auto; padding:0 10px; border-radius:15px; font-size:13px; color:#fff; box-shadow:none; }
+  .swatches .sw.on { border-color:var(--text, #222); }
   .field.changed input, .field.changed select { border-left:3px solid var(--accent); background:var(--accent-soft); }
   .field .foot { font:400 12.5px/1.4 var(--mono); color:var(--muted); }
   .field.chk { flex-direction:row; align-items:center; gap:7px; }
@@ -442,6 +447,15 @@ export const DEV_PAGE = `<!doctype html>
   // ---- 对话:左栏 ----
   /** 头像:和孩子端同一条判定——是图片路径就走 /api/kid/avatar/<老师>(figshot 写的),否则当 emoji 显示 */
   const isAvatarImage = (v) => Boolean(v) && /\.(png|jpe?g|webp|svg)$/i.test(v);
+  /** 学科色(拍板 26):「自动」= 不写 color(三门主科固定色,其余按先后分);点一个色块 = 写进 cotutor.json */
+  const colorField = (t, c) => {
+    const box = h('div', { class: 'swatches', 'data-f': 'color', 'data-v': t.color || '' });
+    const pick = (v) => { box.dataset.v = v; for (const b of box.children) b.classList.toggle('on', (b.dataset.c || '') === v); };
+    const sw = (hex, label) => h('button', { type: 'button', class: 'sw' + (hex ? '' : ' auto'), 'data-c': hex, title: label, 'aria-label': label, style: 'background:' + (hex || (t.color ? '#9a958c' : c.colors[t.name])), on: { click: () => pick(hex) } }, hex ? '' : '自动');
+    box.append(sw('', '自动'), ...Object.entries(c.palette.subject).map(([s, hex]) => sw(hex, s + '的颜色 ' + hex)), ...c.palette.auto.map((hex) => sw(hex, hex)));
+    pick(t.color || '');
+    return h('div', { class: 'field', style: 'grid-column:span 2' }, h('label', {}, '学科色(头像的环、新话题气泡,白字压在上面;自动 = 主科固定、其余不撞色)'), box);
+  };
   const avatarEl = (t) => h('span', { class: 'av' }, ...(isAvatarImage(t.avatar) ? [h('img', { src: '/api/kid/avatar/' + t.name + '?v=' + Date.now(), alt: '' })] : [t.avatar || '🙂']));
   const renderTutors = () => {
     const list = state.config.tutors.filter((t) => t.enabled);
@@ -1027,6 +1041,7 @@ export const DEV_PAGE = `<!doctype html>
       body.append(
         h('div', { class: 'field' }, h('label', {}, '显示名'), h('input', { type: 'text', 'data-f': 'display', value: t.display })),
         h('div', { class: 'field' }, h('label', {}, '学科'), h('input', { type: 'text', 'data-f': 'subject', value: t.subject || '' })),
+        colorField(t, c),
         h('div', { class: 'field' }, h('label', {}, '头像(emoji,或图片路径如 avatars/' + t.name + '.png)'), h('input', { type: 'text', 'data-f': 'avatar', value: t.avatar || '' })),
         h('div', { class: 'field' }, h('label', {}, '音色(voxtell id)'), h('div', { class: 'withbtn' }, h('input', { type: 'text', 'data-f': 'voice', value: t.voice || '' }),
           h('button', { class: 'btn', type: 'button', title: '到音色页听着挑', on: { click: () => { voiceState.for = t.name; location.hash = '#voices'; showTab('voices'); } } }, '去挑'))),
@@ -1045,7 +1060,7 @@ export const DEV_PAGE = `<!doctype html>
       saveBtn.addEventListener('click', () => {
         try {
           const f = (name) => $('[data-f=' + name + ']', body);
-          patchAndReload(card, { tutors: { [t.name]: { display: f('display').value.trim(), subject: f('subject').value.trim() || null, avatar: f('avatar').value.trim() || null, voice: f('voice').value.trim() || null, enabled: f('enabled').checked, hidden: f('hidden').checked, policy: readPolicy(body) } } }, renderTeam);
+          patchAndReload(card, { tutors: { [t.name]: { display: f('display').value.trim(), subject: f('subject').value.trim() || null, color: f('color').dataset.v || null, avatar: f('avatar').value.trim() || null, voice: f('voice').value.trim() || null, enabled: f('enabled').checked, hidden: f('hidden').checked, policy: readPolicy(body) } } }, renderTeam);
         } catch (e) { feedback(card, false, e.message); }
       });
       const caret = h('span', { class: 'caret' }, '▾');

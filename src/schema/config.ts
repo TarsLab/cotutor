@@ -370,6 +370,8 @@ export interface TutorView {
   display: string;
   subject?: string;
   avatar?: string;
+  /** cotutor.json 里写的学科色(没写 = 自动;用的颜色看 src/lib/tutor-color.ts 的 tutorColors) */
+  color?: string;
   voice?: string;
   enabled: boolean;
   hidden: boolean;
@@ -387,6 +389,7 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
       display: t.display,
       subject: t.subject,
       avatar: t.avatar,
+      color: t.color,
       voice: t.voice,
       enabled: t.enabled,
       hidden: t.hidden,

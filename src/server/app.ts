@@ -16,7 +16,7 @@ import { conversationFiles, currentThread, lastJobOf, localDate, threads } from 
 import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
-import { NEUTRAL_COLOR, tutorColors } from '../lib/tutor-color.ts';
+import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../lib/tutor-color.ts';
 import { audioData } from '../lib/audio-data.ts';
 import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelDiag } from '../lib/reel.ts';
 import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, subjectLang, type ActivityValue, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../schema/index.ts';
@@ -651,6 +651,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             /** 老 workspace 的政策文件缺的出厂件(新老师 / 新运行时 / 模板里的新旗标);设置页据此提示一行 */
             migrate: await configGapsOf(ws.root),
             tutors: listTutors(ws.config),
+            /** 学科色(《首页设计.md》拍板 26):每位老师现在用的(写了的、主科的、自动分的),与工作台点选的色块 */
+            colors: tutorColors(ws.config.tutors),
+            palette: { subject: SUBJECT_COLORS, auto: TUTOR_PALETTE },
             /** 老师条目的原始政策补丁(页面区分「继承」与「覆盖」) */
             tutorPatches: Object.fromEntries(Object.entries(ws.config.tutors).map(([k, t]) => [k, t.policy ?? {}])),
           },

@@ -86,6 +86,16 @@ try {
   check('doctor 查板书技能(机器件,必需)', d1.checks.some((c) => c.name === 'skill.cotutor-board' && c.ok && c.required));
   check('老师链都查了(四位:含关着的口播老师)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 4);
   check('doctor 报每位有脸的老师讲哪几种卡', d1.checks.find((c) => c.name === 'tutor.math-tutor.cards')?.detail === '板书写法讲 text choice fill image lecture canvas code' && d1.checks.find((c) => c.name === 'tutor.koubo-tutor.cards')?.detail === '板书写法讲 text read record', JSON.stringify(d1.checks.filter((c) => c.name.endsWith('.cards'))));
+  {
+    // 学科色(拍板 26):手写的颜色白字压不住,doctor 提示;压得住的不说
+    const cfgPath = join(ws, 'cotutor.json'), before = readFileSync(cfgPath, 'utf8');
+    const cfg = JSON.parse(before); cfg.tutors['koubo-tutor'].color = '#d9a520'; cfg.tutors['chinese-tutor'].color = '#a33a2a';
+    writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+    const dc = await doctorWorkspace(ws, { probeEnv: false });
+    const light = dc.checks.find((c) => c.name === 'tutors.koubo-tutor.color');
+    check('doctor:学科色太浅(黄 2.25)提示、说怎么改;深的不说;不算必需', light?.ok === false && !light.required && light.detail.includes('2.25') && !dc.checks.some((c) => c.name === 'tutors.chinese-tutor.color'), JSON.stringify(light));
+    writeFileSync(cfgPath, before);
+  }
   check('doctor 查主题:清单过契约、出厂件最新', d1.checks.some((c) => c.name === 'theme.manifest' && c.ok) && d1.checks.some((c) => c.name === 'theme.default.origin' && c.ok));
   check('doctor 查 skill 与 drawtell 壳', d1.checks.filter((c) => c.name.startsWith('skill.') && c.ok).length === 10 && d1.checks.some((c) => c.name === 'skill.cotutor-vault' && c.required) && d1.checks.some((c) => c.name === 'skill.cotutor-home' && c.required) && !d1.checks.some((c) => c.name === 'skill.cotutor-prep') && d1.checks.filter((c) => c.name.startsWith('skill.drawtell') && !c.required).length === 4 && d1.checks.some((c) => c.name === 'drawtell' && c.ok && !c.required));
   check('老师文件(.claude/agents/)必需,不管哪个 CLI;不再查 .qwen 链', d1.checks.some((c) => c.name === 'tutor.math-tutor.claude' && c.required) && !d1.checks.some((c) => c.name.endsWith('.qwen')));

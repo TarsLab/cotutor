@@ -14,6 +14,7 @@ import { boardPreloaded, planRun, runtimeUses } from '../lib/run-plan.ts';
 import { BOARD_GUIDE_PATH, boardGuideBody, takesTutorRules } from '../lib/tutor-rules.ts';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { localDate } from '../lib/conversation.ts';
+import { MIN_CONTRAST, contrastWithWhite } from '../lib/tutor-color.ts';
 import { memoryPath, missingEntry, pickNotes } from '../lib/vault-notes.ts';
 import { listTutors, resolvePolicy } from '../schema/index.ts';
 import { kindsFor, tutorCardKinds } from '../cards/index.ts';
@@ -395,6 +396,12 @@ export async function doctorWorkspace(
         // 画风挪进了 activity 文件「画家收到什么」(《wip/activity设计.md》拍板 12);老 workspace 在 cotutor.json 改过的还以它为准,提示挪过去
         const { paintStyleCustom } = await import('../paint/prompt.ts');
         if (paintStyleCustom(ws.config.paint?.prompt)) push({ name: 'paint.prompt', ok: false, required: false, detail: 'cotutor.json 的 paint.prompt 改过:画家照它画,activity 文件「画家收到什么」那节的画风不起作用', fix: '把改的画风挪进 agents/chinese-tutor/activities/你说我画.md「画家收到什么」,再删掉 cotutor.json 的 paint.prompt' });
+        // 学科色(《首页设计.md》拍板 26):手改 cotutor.json 写的颜色,新话题气泡的白字要压得住
+        for (const [name, t] of Object.entries(ws.config.tutors)) {
+          if (!t.color) continue;
+          const cr = contrastWithWhite(t.color);
+          if (cr < MIN_CONTRAST) push({ name: `tutors.${name}.color`, ok: false, required: false, detail: `${t.display}的学科色 ${t.color} 太浅:白字对比度 ${cr.toFixed(2)},要 ${MIN_CONTRAST} 以上,新话题气泡上的字看不清`, fix: `在工作台「老师团」里点一个色块,或删掉 cotutor.json 的 tutors.${name}.color 用自动的` });
+        }
         // 认词的要求挪进了听写 activity「认字收到什么」(拍板 21);同上
         const { dictationPromptCustom } = await import('../dictation/recognize.ts');
         for (const [k, lang, t] of [['prompt', 'zh', 'chinese-tutor'], ['promptEn', 'en', 'english-tutor']] as const) {

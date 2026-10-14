@@ -51,15 +51,16 @@ try {
   const rect = (sel) => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
   const tap = async (sel) => { const r = await rect(sel); if (!r) throw new Error(`点不到 ${sel}`); const x = r.x + r.w / 2, y = r.y + r.h / 2; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 }); await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 }); await sleep(150); };
   const tapText = async (text) => { const sel = await evaluate(`(() => { document.querySelectorAll('[data-probe]').forEach((x) => x.removeAttribute('data-probe')); const b = [...document.querySelectorAll('.view.on button, .view.on a')].find((x) => x.textContent.trim() === ${JSON.stringify(text)}); if (!b) return null; b.setAttribute('data-probe', ${JSON.stringify(text)}); return '[data-probe=' + JSON.stringify(${JSON.stringify(text)}) + ']'; })()`); if (!sel) throw new Error(`找不到按钮 ${text}`); await tap(sel); };
-  /** 在四线三格里写一个单词:几笔折线,画在基线上下(尺子 2048 × 512;画的视窗上下各多露一截:0 -192 2048 896);第一笔竖着冒出最上面那条线(拍板 22) */
+  /** 在四线三格里写一个单词:几笔折线,画在基线上下(尺子 2048 × 512;写字屏看得到哪一段看格子的 viewBox,拍板 23);第一笔竖着冒出最上面那条线(线在 y 80,起笔在 0;拍板 22) */
   const writeWord = async (padSel, n = 3) => {
     const r = await rect(padSel);
+    const vb = await evaluate(`(() => { const v = document.querySelector(${JSON.stringify(padSel)}).viewBox.baseVal; return [v.x, v.y, v.width, v.height]; })()`);
     for (let k = 0; k < n; k++) {
       const x0 = 300 + k * 420;
       const pts = [];
-      if (k === 0) for (let q = 0; q <= 12; q++) pts.push([x0, -120 + q * 36]);
-      else for (let q = 0; q <= 12; q++) pts.push([x0 + q * 25, 210 + Math.sin(q / 2) * 100]);
-      const s = pts.map(([x, y]) => ({ x: r.x + (x / 2048) * r.w, y: r.y + ((y + 192) / 896) * r.h }));
+      if (k === 0) for (let q = 0; q <= 12; q++) pts.push([x0 + 300, 0 + q * 26]);
+      else for (let q = 0; q <= 12; q++) pts.push([x0 + 300 + q * 25, 210 + Math.sin(q / 2) * 100]);
+      const s = pts.map(([x, y]) => ({ x: r.x + ((x - vb[0]) / vb[2]) * r.w, y: r.y + ((y - vb[1]) / vb[3]) * r.h }));
       await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: s[0].x, y: s[0].y, button: 'left', buttons: 1, clickCount: 1 });
       for (const p of s.slice(1)) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p.x, y: p.y, button: 'left', buttons: 1 });
       await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: s[s.length - 1].x, y: s[s.length - 1].y, button: 'left', buttons: 0, clickCount: 1 });
@@ -79,7 +80,8 @@ try {
   ok('写字屏不出 emoji', await evaluate(`!document.body.innerText.includes('🚌')`));
   await writeWord('#w-pad');
   ok('写了三笔', (await evaluate(`document.querySelectorAll('#w-pad .eni path').length`)) === 3);
-  ok('第一笔冒出最上面那条线,出格的那截照样画着(拍板 22)', await evaluate(`(() => { const b = document.querySelector('#w-pad .eni path').getBBox(); return b.y < -60 && b.y > -192; })()`));
+  ok('第一笔冒出最上面那条线,出格的那截照样画着(拍板 22)', await evaluate(`(() => { const b = document.querySelector('#w-pad .eni path').getBBox(); return b.y < 40; })()`));
+  ok('格子铺满(拍板 23):1180 × 820 上四线带起码 300 高(iPad 实拍原来约 138),横着看得到尺子 1300 宽以上', await evaluate(`(() => { const p = document.querySelector('#w-pad'), v = p.viewBox.baseVal, h = p.getBoundingClientRect().height; return 360 / v.height * h >= 300 && v.width >= 1299; })()`), await evaluate(`(() => { const p = document.querySelector('#w-pad'), v = p.viewBox.baseVal; return [v.x, v.y, v.width, v.height, Math.round(360 / v.height * p.getBoundingClientRect().height)].join(' '); })()`));
   await tap('#w-undo');
   ok('撤销撤一笔', (await evaluate(`document.querySelectorAll('#w-pad .eni path').length`)) === 2);
   await shot('en-02-write');

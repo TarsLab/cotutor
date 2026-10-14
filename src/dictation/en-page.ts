@@ -33,21 +33,24 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .main:disabled { opacity:.45; }
   .ttl { font-size:22px; font-weight:700; }
   /* 写字屏(拍板 20):不限 1000 宽,四线格占满宽度(高度不够时按 16 : 7 收窄);听写本横排,一个单词一小条 */
-  #v-write { max-width:none; gap:14px; }
-  .wbook { flex:1; min-width:0; display:flex; align-items:center; gap:10px; padding:6px 12px; background:#fff; border:1px solid var(--line); border-radius:18px; overflow-x:auto; }
+  #v-write { max-width:none; gap:12px; height:100vh; height:100dvh; padding-bottom:calc(env(safe-area-inset-bottom) + 16px); }
+  .wtop { flex-wrap:wrap; row-gap:8px; }
+  .wbook { flex:1; min-width:0; height:56px; box-sizing:border-box; display:flex; align-items:center; gap:8px; padding:0 10px; background:#fff; border:1px solid var(--line); border-radius:18px; overflow-x:auto; }
   .wbook > b { flex:none; font-size:16px; padding-right:4px; }
   .wbook .bk { flex:none; display:flex; flex-direction:column; align-items:center; gap:2px; }
-  .wbook .bk svg { width:112px; height:auto; aspect-ratio:16 / 7; display:block; background:#fff; border:1.5px solid var(--line); border-radius:6px; }
+  .wbook .bk svg { width:92px; height:auto; aspect-ratio:16 / 7; display:block; background:#fff; border:1.5px solid var(--line); border-radius:6px; }
   .wbook .bk .enl line { stroke-width:12; }
   .wbook .bk .eni path { stroke-width:40; }
   .wbook .bk.c svg { border-color:var(--tutor-line); box-shadow:0 0 0 3px var(--tutor-line); }
   .wbook .bk.a { opacity:.55; }
-  .wbook .bk small { font-size:12px; color:var(--dim); line-height:1.2; }
-  .wbook .bk.c small { color:var(--tutor-ink); font-weight:700; }
-  .say2 { display:flex; align-items:center; gap:12px; }
-  .say2 .bubble { border-top-left-radius:22px; }
-  .say2 .bubble svg { width:24px; height:24px; flex:none; color:var(--tutor-ink); }
-  #v-write .pad { width:min(100%, calc((100vh - 330px) * 16 / 7)); width:min(100%, calc((100dvh - 330px) * 16 / 7)); align-self:center; }
+  .wbook .bk small { display:none; }
+  .wsay { flex:none; height:56px; box-sizing:border-box; padding:0 6px 0 14px; gap:10px; border-radius:28px; align-self:auto; }
+  .wsay svg { width:22px; height:22px; flex:none; color:var(--tutor-ink); }
+  .wsay b { font-size:16px; } .wsay small { font-size:13px; min-height:0; }
+  .wsay .tool { min-height:44px; padding:0 16px; border-color:var(--tutor-line); }
+  #v-write .model { flex:1; min-width:0; font-size:36px; text-align:left; padding-left:6px; }
+  /* 格子铺满剩下的高(拍板 23);看得到尺子的哪一段由 fitPad 按格子大小定 */
+  #v-write .pad { flex:1 1 0; min-height:0; width:100%; height:auto; aspect-ratio:auto; margin:auto 0; }
   .wtools { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
   .wtools .tools { justify-content:flex-start; }
   .wtools .main { margin-left:auto; }
@@ -114,13 +117,10 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   </div>
 </div>
 <div class="view" id="v-write">
-  <!-- 写字(拍板 20):听写本横排在上面,气泡与再念一行,四线格占满宽度,按钮一行 -->
-  <div class="bar"><span class="bk-slot"></span><div class="wbook" id="w-book"></div><button class="layer-x" type="button" id="w-x" aria-label="回到对一对" hidden>${LAYER_X}</button></div>
-  <div class="say2">
-    <div class="bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg><div><b id="w-who">老师在念</b><small id="w-status"></small></div></div>
-    <button class="tool" type="button" id="w-again">再念</button>
-  </div>
-  <div class="model" id="w-model" hidden></div>
+  <!-- 写字(拍板 23,iPad 实拍后放大):胶囊、听写本、气泡与再念并成一行,格子铺满中间,按钮一行 -->
+  <div class="bar wtop"><span class="bk-slot"></span><div class="wbook" id="w-book"></div><div class="model" id="w-model" hidden></div>
+    <div class="bubble wsay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg><div><b id="w-who">老师在念</b><small id="w-status"></small></div><button class="tool" type="button" id="w-again">再念</button></div>
+    <button class="layer-x" type="button" id="w-x" aria-label="回到对一对" hidden>${LAYER_X}</button></div>
   <svg class="pad" id="w-pad" viewBox="0 -192 2048 896"></svg>
   <div class="wtools">
     <div class="tools">
@@ -162,7 +162,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   var S = { v: null, base: Date.now(), i: 0, strokes: [], undos: 0, gone: [], revealed: false, word: null, sawPen: false, mode: 'first', hide: false, noAudio: false, tok: 0, timer: 0 };
   var now = function () { return Math.max(0, Date.now() - S.base); };
   var setView = function (v) { var fresh = !S.v || S.v.id !== v.id; S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); if (fresh) { S.vw = 0; sendView(); } };
-  var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'write' && S.mode === 'rewrite'; window.scrollTo(0, 0); };
+  var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'write' && S.mode === 'rewrite'; if (name === 'write') fitPad(); window.scrollTo(0, 0); };
   var event = function (kind, word, n, more) {
     if (!S.v || REEL_ID) return;
     var b = { kind: kind, word: word, t: now() }; if (n) b.n = n; if (more) { b.w = more.w; b.h = more.h; }
@@ -215,7 +215,23 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   pad.append(enLines(sv), trace, ink);
   var drawInk = function () { ink.replaceChildren.apply(ink, S.strokes.map(function (s) { return sv('path', { d: pathD(s) }); })); };
   var cur = null;
-  var at = function (e) { var b = pad.getBoundingClientRect(); return [Math.round((e.clientX - b.left) / b.width * EN_W), Math.round(EN_TOP + (e.clientY - b.top) / b.height * EN_VH), now()]; };
+  /**
+   * 格子铺满(拍板 23):四条线占格子高的 62%,横着起码看得到尺子上 1300 宽(grandmother 写得下),以单词中间(x 1024)、四条线中间(y 260)为准。
+   * 只改看得到哪一段,尺子不变:存的点、对一对叠的字照旧对得上。PV = 现在的 viewBox
+   */
+  var PV = { x: 0, y: EN_TOP, w: EN_W, h: EN_VH };
+  var fitPad = function () {
+    pad.style.maxHeight = '';
+    var b = pad.getBoundingClientRect(); if (!b.width || !b.height) return;
+    // 竖着(iPad 竖放、手机)宽度先不够:格子只要四条线占 62% 的那么高,居中,别空出一大片
+    if (b.width / 1300 < b.height * 0.62 / 360) { pad.style.maxHeight = Math.round(b.width / 1300 * 360 / 0.62) + 'px'; b = pad.getBoundingClientRect(); }
+    var s = Math.min(b.height * 0.62 / 360, b.width / 1300);
+    var w = Math.round(b.width / s), hh = Math.round(b.height / s);
+    PV = { x: Math.round(1024 - w / 2), y: Math.round(260 - hh / 2), w: w, h: hh };
+    pad.setAttribute('viewBox', [PV.x, PV.y, PV.w, PV.h].join(' '));
+  };
+  window.addEventListener('resize', function () { if ($('#v-write').classList.contains('on')) fitPad(); });
+  var at = function (e) { var b = pad.getBoundingClientRect(); return [Math.round(PV.x + (e.clientX - b.left) / b.width * PV.w), Math.round(PV.y + (e.clientY - b.top) / b.height * PV.h), now()]; };
   pad.addEventListener('pointerdown', function (e) {
     if (e.pointerType === 'pen') S.sawPen = true; else if (e.pointerType === 'touch' && S.sawPen) return; // 用过笔就不认手掌
     e.preventDefault(); try { pad.setPointerCapture(e.pointerId); } catch (x) {}
@@ -232,7 +248,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     api('POST', '/api/dictation/' + S.v.id + '/reveal/' + i, { char: 0, t: now() }).then(function (j) {
       if (S.i !== i) return;
       S.revealed = true; S.strokes.forEach(drop); S.strokes = []; drawInk();
-      trace.replaceChildren(enWord(sv, j.ch, 'enw trace'));
+      trace.replaceChildren(enWord(sv, j.ch, 'enw trace', PV.w - 120));
       status('照着灰色的单词写一遍');
     }, function () { b.disabled = false; toast('没连上,再点一次'); });
   });
@@ -428,7 +444,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     if (rebuild) {
       S.mode = view === 'rewrite' ? 'rewrite' : 'first'; S.i = wi;
       show('write');
-      trace.replaceChildren(); if (view === 'write' && f.mode !== 'write') trace.append(enWord(sv, R.chars[wi][0], 'enw trace'));
+      trace.replaceChildren(); if (view === 'write' && f.mode !== 'write') trace.append(enWord(sv, R.chars[wi][0], 'enw trace', PV.w - 120));
       var m = $('#w-model'); m.hidden = view !== 'rewrite'; m.textContent = view === 'rewrite' ? R.chars[wi][0] : '';
       $('#w-who').textContent = view === 'rewrite' ? '再写一遍' : (S.v.tutor || '老师') + '念第 ' + (wi + 1) + ' 个';
       $('#w-reveal').hidden = view === 'rewrite'; $('#w-reveal').disabled = view === 'write' && f.mode !== 'write';

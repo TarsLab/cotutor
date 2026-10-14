@@ -733,9 +733,9 @@ __REEL_JS__
     }, () => {});
     return S.talkLast;
   };
-  const openTalk = async (el) => {
+  const openTalk = async (el, t) => {
     el.disabled = true;
-    try { const m = await api('POST', '/api/talk', { from: 'latest' }); stashFront(el); location.href = '/talk?home=1#/kid/' + encodeURIComponent(m.id); }
+    try { const m = await api('POST', '/api/talk', { from: 'latest' }); stashFront(el); location.href = '/talk?home=1&tutor=' + encodeURIComponent(t.name) + '#/kid/' + encodeURIComponent(m.id); }
     catch { el.disabled = false; S.talkAt = 0; talkInfo(); }
   };
   /** 这位老师卡上「每天都在」那栏:归他的听写卡(《首页设计.md》拍板 19)、常驻的拍照听写与口语课(拍板 18) */
@@ -748,7 +748,7 @@ __REEL_JS__
     if (extras.includes('dictation')) out.push(photoBtn(t));
     if (extras.includes('talk')) {
       const last = talkInfo();
-      if (last) { const n = last.list.words.length + last.list.sentences.length; const b = extraBtn('talk', '口语课', n + ' 句 · 先跟我读,再聊', { click: () => openTalk(b) }); out.push(b); }
+      if (last) { const n = last.list.words.length + last.list.sentences.length; const b = extraBtn('talk', '口语课', n + ' 句 · 先跟我读,再聊', { click: () => openTalk(b, t) }); out.push(b); }
     }
     return out;
   };

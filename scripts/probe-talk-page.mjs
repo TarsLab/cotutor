@@ -3,17 +3,20 @@
  * 口语课页面(家长端 /parent/talk,孩子那一屏 /talk)的手动验收,不花钱:真 serve(临时 workspace,talk.enabled)+ 假 realtime(tests/_fake-realtime.ts,COTUTOR_TALK_ENDPOINT 指过去)
  * + 无头 Chrome(假麦克风放 say 念的一句英文)。走一遍:不拍自己填 → 口语单 → 给孩子 → 开始 → 跟我读(什么都不按)→ 聊 → 挂断 → 回看。
  * 逐项:页面连上、第一句 cue、跟我读不用按(老师放完就听、静了算读完、自己往下走)、老师的声音排进 AudioContext、再听一遍、开聊(第二条会话)、聊里孩子出声老师被掐、挂断后回看有字。
- * 用法:node scripts/probe-talk-page.mjs [--keep] [--real]
+ * 用法:node scripts/probe-talk-page.mjs [--keep] [--real] [--out <截图目录>]
  *   --real 不起假百炼,真连 realtime(要本机的 key 与业务空间 id,一次几分钱):看不到服务端那头的事,只验页面上看得见的——声音放了、孩子的字回来了、聊起来了、回看有字。
  */
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
+const outAt = process.argv.indexOf('--out');
+const out = outAt > 0 ? process.argv[outAt + 1] : null;
+if (out) mkdirSync(out, { recursive: true });
 const real = process.argv.includes('--real');
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const chrome = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -72,6 +75,7 @@ try {
   ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.method === 'Runtime.exceptionThrown') console.log('  页面报错:', m.params.exceptionDetails?.exception?.description ?? m.params.exceptionDetails?.text); if (process.env.PROBE_LOG && m.method === 'Runtime.consoleAPICalled') console.log('  console:', m.params.args.map((a) => a.value).join(' ')); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } };
   const send = (method, params = {}) => new Promise((resolve) => { const id = ++seq; pending.set(id, resolve); ws.send(JSON.stringify({ id, method, params })); });
   const evaluate = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails.exception?.description ?? r.result.exceptionDetails)); return r.result?.result?.value; };
+  const shot = async (name) => { if (!out) return; const r = await send('Page.captureScreenshot', { format: 'png' }); writeFileSync(join(out, `${name}.png`), Buffer.from(r.result.data, 'base64')); };
   const until = async (expr, n = 40) => { for (let i = 0; i < n; i++) { if (await evaluate(expr)) return true; await sleep(250); } return false; };
   const untilFn = async (f, n = 40) => { for (let i = 0; i < n; i++) { if (await f()) return true; await sleep(250); } return false; };
   // 先滚到看得见的地方:视口外的坐标 CDP 的鼠标事件派不到
@@ -94,6 +98,8 @@ try {
   await evaluate(`(() => { const r = document.querySelector('#l-sents .row'); const [en, zh] = r.querySelectorAll('input'); en.value = 'It is a red car.'; en.dispatchEvent(new Event('input')); zh.value = '这是一辆红色的车。'; zh.dispatchEvent(new Event('input')); return true; })()`);
   await click('#l-go');
   ok('给孩子 → 孩子页,写着先跟读 2 句', await until(`document.querySelector('#kid').classList.contains('on') && document.querySelector('#k-start-hint').textContent.includes('2 句')`));
+  ok('孩子页挂在英语老师下(《首页设计.md》拍板 27):左上角「‹ 头像」胶囊、开始屏是他的头像和名字、开始键是他的学科色', await until(`(() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('.tfav .face') && b.getBoundingClientRect().left < 30 && !!document.querySelector('#k-sav.tfav') && document.querySelector('#k-sname').textContent === '英语老师' && getComputedStyle(document.querySelector('#k-go')).backgroundColor === 'rgb(31, 138, 76)' && !document.querySelector('#k-back'); })()`));
+  await shot('talk-01-start');
   const id = await evaluate(`location.hash.split('/')[2]`);
   const meta = await (await fetch(`${base}/api/talk/${id}`)).json();
   ok('口语单存上了(ready,家长填的)', meta.meta.status === 'ready' && meta.meta.listBy === 'parent' && meta.meta.list.words[0].en === 'red', JSON.stringify(meta.meta.list));
@@ -119,6 +125,7 @@ try {
   ok('第 2 句也自己读完 → 老师说要聊了 → 深色聊天页、倒计时、第二条会话(semantic_vad)、开聊 cue', await untilFn(async () => (real || (fake.conns.length === 2 && fake.conns[1].items.length >= 1)) && (await evaluate(`document.querySelector('#kid').classList.contains('chat') && !document.querySelector('#k-chat').hidden && document.querySelector('#k-chip').textContent.includes('还有')`)), 120), JSON.stringify(real ? {} : { conns: fake.conns.length, td: fake.conns[1]?.session?.turn_detection?.type, items: c1.items.map((i) => i.content[0].text) }));
   const c2 = fake.conns[1];
   ok('打电话:不是深色屏;底下一排单词卡(口语单上的词,四线三格 + 「听」);老师讲到 red → 那张亮', await until(`getComputedStyle(document.querySelector('#kid')).backgroundColor !== 'rgb(43, 58, 74)' && document.querySelectorAll('#k-words .c-word').length === 1 && !!document.querySelector('#k-words .c-word .wg svg') && !!document.querySelector('#k-words .c-word .rc-pl') && !!document.querySelector('#k-words .c-word.now')`, 60), await evaluate(`document.querySelector('#k-words').outerHTML.slice(0, 200)`));
+  await shot('talk-02-call');
   ok('老师开聊的声音放了、字在屏上', await untilFn(async () => (await evaluate(`window.__played > ${played1} && /\\S/.test(document.querySelector('#k-tt').textContent)` + (real ? '' : ` && document.querySelector('#k-tt').textContent.includes("It's a red car.")`))), 60), `「${await evaluate(`document.querySelector('#k-tt').textContent`)}」`);
   // 假麦克风一直有声:老师放完,孩子的声音才推(interrupt=false);有声 → speech_started;留白 → 转写、老师接
   ok('聊:孩子的声音推上去了(老师放完才推),转写回来、老师接了', await untilFn(async () => (real || (c2.audio > 0 && c2.creates >= 2)) && heardRe.test(await sawKid('#k-heard2')), 100), JSON.stringify(real ? { kid: await sawKid('#k-heard2'), tutor: await evaluate(`document.querySelector('#k-tt').textContent`) } : { audio: c2.audio, creates: c2.creates, cancels: c2.cancels }));
@@ -126,6 +133,7 @@ try {
   // ---- 挂断 → 回看 ----
   await click('#k-hang');
   ok('挂断 → 回看页:聊过、分两段、有老师和孩子的话、有两段声音', await until(`document.querySelector('#review').classList.contains('on') && document.querySelectorAll('#r-lines .ln.tutor').length > 0 && document.querySelectorAll('#r-lines .ln.kid').length > 0 && document.querySelectorAll('#r-lines .ph').length === 2 && document.querySelectorAll('#r-play audio').length === 2`), 40);
+  ok('回看页是家长的:胶囊收起', await evaluate(`document.querySelector('#back').hidden`));
   const after = await (await fetch(`${base}/api/talk/${id}`)).json();
   ok('落盘:done、why bye、用到的词', after.meta.status === 'done' && after.transcript.why === 'bye' && after.hasKidAudio && after.hasTutorAudio && (real || after.transcript.used.words[0].kid >= 1), JSON.stringify({ why: after.transcript?.why, used: after.transcript?.used, usage: after.transcript?.usage }));
   if (real) console.log('老师说过的:\n' + after.transcript.lines.filter((l) => l.who === 'tutor').map((l) => '  ' + l.text).join('\n') + '\n孩子转写:\n' + after.transcript.lines.filter((l) => l.who === 'kid').map((l) => '  ' + l.text).join('\n'));

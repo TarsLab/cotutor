@@ -8,6 +8,7 @@
  */
 import { inlineScript } from '../server/inline-lib.ts';
 import { wordDrawJs } from '../server/word-draw.ts';
+import { TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
 
 /** 录像的轨道(lib/reel.ts),内联进录像模式 */
 const TALK_REEL_JS = inlineScript(new URL('./lib/reel.ts', import.meta.url));
@@ -20,6 +21,8 @@ const TALK_PAGE = `<!doctype html>
 <link rel="stylesheet" href="/kid/theme.css">
 <style>
   :root { --paper:#faf9f4; --ink:#2b2b2b; --dim:#8a8781; --line:#e2dfd6; --card:#ffffff; --kid:#dbeeff; --tutor:#fff3d6; --tutor-line:#f0dca8; --tutor-ink:#8a5a12; --accent:#e8743b; --blue:#eef4ff; --blue-ink:#2f5e9e; --plum:#efe9fb; --plum-ink:#7a4fc9; --grey:#eeece6; --night:#2b3a4a; --red:#b3412a; }
+  /* 孩子那几屏跟口语课挂的那位老师走(《首页设计.md》拍板 27):他的学科色(读到老师后换,缺省英语绿)、头像、名字 */
+  :root { --sc:#1f8a4c; --sc-soft:color-mix(in srgb, var(--sc) 12%, #fff); --sc-ink:color-mix(in srgb, var(--sc) 62%, #000); }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   /* 下面给 .mid / .start / .bar 写了 display:flex,会盖掉浏览器自带的 [hidden];不加这条,孩子页五块一起全露出来(2026-10-10 Safari 上看到的) */
   [hidden] { display:none !important; }
@@ -103,7 +106,7 @@ const TALK_PAGE = `<!doctype html>
   #kid .rc.now { border:2px solid var(--accent); box-shadow:0 6px 22px rgba(232,116,59,.16); }
   /* 跟我读不用按(《wip/口语课设想.md》§8.1):现在轮到谁,一颗胶囊 */
   #kid .tk-rd { display:inline-flex; align-items:center; gap:12px; min-height:64px; padding:0 26px 0 22px; border-radius:32px; font-size:20px; font-weight:600; }
-  #kid .tk-rd.tutor { background:#e5f4ea; color:#1f6b3f; }
+  #kid .tk-rd.tutor { background:var(--sc-soft); color:var(--sc-ink); }
   #kid .tk-rd.listen, #kid .tk-rd.speech, #kid .tk-rd.wait { background:#fff; color:var(--blue-ink); padding-left:8px; box-shadow:0 0 0 3px #9cc3ef, 0 2px 8px rgba(0,0,0,.08); }
   #kid .tk-rd.heard { background:var(--grey); color:var(--dim); }
   #kid .tk-rd .ring { position:relative; width:48px; height:48px; display:grid; place-items:center; flex:none; }
@@ -120,9 +123,9 @@ const TALK_PAGE = `<!doctype html>
   #kid .tk-av { position:relative; width:180px; height:180px; display:grid; place-items:center; flex:none; }
   #kid .tk-av i { position:absolute; border-radius:50%; transition:background .3s; }
   #kid .tk-av i.o1 { inset:0; } #kid .tk-av i.o2 { inset:16px; }
-  #kid .tk-av.talk i.o1 { background:rgba(31,138,76,.08); } #kid .tk-av.talk i.o2 { background:rgba(31,138,76,.15); }
+  #kid .tk-av.talk i.o1 { background:color-mix(in srgb, var(--sc) 8%, transparent); } #kid .tk-av.talk i.o2 { background:color-mix(in srgb, var(--sc) 15%, transparent); }
   #kid .tk-av.listen i.o1 { background:rgba(47,94,158,.08); } #kid .tk-av.listen i.o2 { background:rgba(47,94,158,.15); }
-  #kid .tk-av .face { position:relative; width:116px; height:116px; border-radius:50%; background:#fff; display:grid; place-items:center; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+  #kid .tk-av > .face { position:relative; width:116px; height:116px; border-radius:50%; background:#fff; display:grid; place-items:center; box-shadow:0 2px 10px rgba(0,0,0,.08); }
   #kid .tk-tt { width:100%; max-width:976px; padding:18px 28px; border-radius:22px; background:#fff; border:1px solid var(--line); font-size:30px; font-weight:700; line-height:1.3; min-height:84px; }
   #kid .tk-tt .zh { display:block; font-size:17px; font-weight:400; color:var(--dim); margin-top:4px; }
   #kid #k-heard2 { align-self:flex-end; max-width:80%; margin-right:max(0px, calc((100% - 976px) / 2)); }
@@ -132,7 +135,7 @@ const TALK_PAGE = `<!doctype html>
   #kid .tk-words .c-word .we { font-size:30px; }
   #kid .tk-words .c-word .wd-row { margin-left:4px; }
   #kid .c-word.now { border-color:var(--sel); box-shadow:0 0 0 1px var(--sel), 0 4px 14px var(--sel-halo); }
-  #kid .tk-call { width:100%; max-width:976px; height:60px; border-radius:30px; background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.12); display:flex; align-items:center; gap:14px; padding:0 8px 0 22px; color:#1f8a4c; }
+  #kid .tk-call { width:100%; max-width:976px; height:60px; border-radius:30px; background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.12); display:flex; align-items:center; gap:14px; padding:0 8px 0 22px; color:var(--sc); }
   #kid .tk-call.you { box-shadow:0 0 0 3px #9cc3ef, 0 1px 6px rgba(0,0,0,.12); color:var(--blue-ink); }
   #kid .tk-call .st { flex:1; font-size:17px; color:var(--dim); }
   #kid .tk-call.you .st { color:var(--blue-ink); font-weight:600; }
@@ -165,9 +168,12 @@ const TALK_PAGE = `<!doctype html>
     #kid .rc .en.long { font-size:26px; }
     #kid .big { height:64px; font-size:20px; padding:0 22px; }
     #kid .tk-tt { font-size:22px; padding:14px 18px; }
-    #kid .tk-av { width:136px; height:136px; } #kid .tk-av .face { width:88px; height:88px; }
+    #kid .tk-av { width:136px; height:136px; } #kid .tk-av > .face { width:88px; height:88px; } #kid .tk-av > .face > .tfav { font-size:32px; }
     #kid #k-card .we { font-size:52px; } #kid #k-card .rd { font-size:28px; }
   }
+  #kid .start .tfav { width:140px; height:140px; font-size:64px; }
+  #kid .tk-av > .face > .tfav { width:86%; height:86%; font-size:44px; }
+  __TUTOR_FACE_CSS__
 </style></head>
 <body>
 <div id="home" class="view"><div class="wrap">
@@ -206,14 +212,14 @@ const TALK_PAGE = `<!doctype html>
 
 <div id="kid" class="view"><div class="wrap">
   <div class="top">
-    <a class="back" href="#/" id="k-back" aria-label="回去"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><svg width="38" height="38" viewBox="0 0 48 48" aria-hidden="true"><path d="M40.4 12.5A20 20 0 1 0 40.4 35.5" fill="none" stroke="#1f8a4c" stroke-width="3.5" stroke-linecap="round"/><text x="24" y="30" text-anchor="middle" font-size="16" font-weight="700" fill="#1f8a4c">英</text></svg></a>
+    <span class="bk-slot"></span>
     <div style="display:flex;align-items:center;gap:12px"><div class="dots" id="k-dots"></div><span class="chip plum" id="k-chip">跟我读</span></div>
   </div>
   <div class="start" id="k-start">
-    <div class="av">E</div>
-    <b style="font-size:26px">英语老师</b>
+    <div class="av" id="k-sav">E</div>
+    <b style="font-size:26px" id="k-sname">英语老师</b>
     <div class="muted" id="k-start-hint">先跟老师读几句,再用这些词聊一聊</div>
-    <button class="big" type="button" id="k-go" style="background:#1f8a4c"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg>开始</button>
+    <button class="big" type="button" id="k-go" style="background:var(--sc)"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg>开始</button>
     <div class="muted small">老师读一句,你读一句;读完自己往下走,不用按</div>
   </div>
   <div class="mid" id="k-read" hidden>
@@ -223,7 +229,7 @@ const TALK_PAGE = `<!doctype html>
     <div class="heard" id="k-heard"></div>
   </div>
   <div class="mid" id="k-chat" hidden>
-    <div class="tk-av" id="k-av"><i class="o1"></i><i class="o2"></i><span class="face"><svg width="84" height="84" viewBox="0 0 48 48" aria-hidden="true"><path d="M40.4 12.5A20 20 0 1 0 40.4 35.5" fill="none" stroke="#1f8a4c" stroke-width="3" stroke-linecap="round"/><text x="24" y="30" text-anchor="middle" font-size="15" font-weight="700" fill="#1f8a4c">英</text></svg></span></div>
+    <div class="tk-av" id="k-av"><i class="o1"></i><i class="o2"></i><span class="face"><svg style="color:var(--sc)" width="84" height="84" viewBox="0 0 48 48" aria-hidden="true"><path d="M40.4 12.5A20 20 0 1 0 40.4 35.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><text x="24" y="30" text-anchor="middle" font-size="15" font-weight="700" fill="currentColor">英</text></svg></span></div>
     <div class="tk-tt" id="k-tt"></div>
     <div class="heard" id="k-heard2"></div>
     <div class="tk-words" id="k-words"></div>
@@ -265,7 +271,24 @@ __WORD_DRAW_JS__
 
   // ---- 路由 ----
   const views = ['home', 'list', 'kid', 'review'];
-  const show = (name) => { for (const v of views) $('#' + v).classList.toggle('on', v === name); };
+  const show = (name) => { for (const v of views) $('#' + v).classList.toggle('on', v === name); BACK.el.hidden = name !== 'kid' || Boolean(REEL_ID); };
+  // 左上角「‹ 头像」胶囊同老师页(《首页设计.md》拍板 27):头像是口语课挂的那位老师;点了挂断,从首页来的回首页,家长递过去的回清单
+  __TUTOR_FACE_JS__
+  const BACK = backCapsule(() => { if (call) call.hangup('left'); if (FROM_HOME) location.href = '/'; else location.hash = '#/'; });
+  BACK.el.hidden = true; document.body.append(BACK.el);
+  /** 口语课挂的那位老师:首页链接带 ?tutor=,没带就找卡上有口语课的,再没有找英语老师(家长递过去的);换上他的颜色、头像、名字 */
+  const wearOwner = async () => {
+    let ts = [];
+    try { ts = (await api('GET', '/api/kid/home')).tutors || []; } catch { return; }
+    const want = new URLSearchParams(location.search).get('tutor');
+    const t = ts.find((x) => x.name === want) || ts.find((x) => (x.extras || []).includes('talk')) || ts.find((x) => x.lang === 'en');
+    if (!t) return;
+    document.documentElement.style.setProperty('--sc', t.color);
+    BACK.set(t);
+    $('#k-sav').replaceWith(Object.assign(tutorAvatar(t), { id: 'k-sav' }));
+    $('#k-sname').textContent = t.display;
+    $('#k-av .face').replaceChildren(tutorAvatar(t));
+  };
   const go = (hash) => { location.hash = hash; };
   /** 孩子从首页英语老师卡上的「口语课」进来(《首页设计.md》拍板 18):「回去」与打完都回首页,不进家长的那几屏 */
   const KID_ONLY = __TALK_KID_ONLY__;
@@ -277,7 +300,6 @@ __WORD_DRAW_JS__
   /** 现在几毫秒:平时是钟;录像里是录像放到的那一刻(离通话开始) */
   const nowMs = () => (RL ? RL.t : Date.now());
   const FROM_HOME = KID_ONLY || new URLSearchParams(location.search).get('home') === '1';
-  if (FROM_HOME) $('#k-back').setAttribute('href', '/');
   const route = () => {
     const m = /^#\\/(list|kid|review)\\/([^/]+)/.exec(location.hash);
     if (KID_ONLY && (!m || m[1] !== 'kid')) { location.replace('/'); return; }
@@ -591,7 +613,6 @@ __WORD_DRAW_JS__
   $('#k-next').addEventListener('click', () => { if (call) { $('#k-next').disabled = true; $('#k-heard').textContent = ''; call.send({ t: 'next' }); } });
   $('#k-skip').addEventListener('click', () => { if (call) call.send({ t: 'chat' }); });
   $('#k-hang').addEventListener('click', () => { if (call) call.hangup('bye'); });
-  $('#k-back').addEventListener('click', () => { if (call) call.hangup('left'); });
 
   // ---- 家长:回看 ----
   /** 刚挂的那一次:服务端还在落盘(混录像的声音要一会儿),字没好就隔 0.4 秒再拿,最多 6 秒 */
@@ -699,6 +720,7 @@ __TALK_REEL_JS__
     }, () => host.cotutorReelFail());
   };
 
+  void wearOwner();
   if (REEL_ID) reelBoot(); else route();
 })();
 </script>
@@ -706,7 +728,7 @@ __TALK_REEL_JS__
 
 /** kidOnly = 孩子端 /talk:只有跟读与聊那一屏;家长端 /parent/talk 全有 */
 export function talkPage(kidOnly: boolean): string {
-  return TALK_PAGE.replace('__TALK_KID_ONLY__', kidOnly ? 'true' : 'false').replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__TALK_REEL_JS__', () => TALK_REEL_JS)
+  return TALK_PAGE.replace('__TALK_KID_ONLY__', kidOnly ? 'true' : 'false').replace('__TUTOR_FACE_JS__', () => TUTOR_FACE_JS).replace('__TUTOR_FACE_CSS__', () => TUTOR_FACE_CSS).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__TALK_REEL_JS__', () => TALK_REEL_JS)
     // 回看页的「看录像」只在家长端那份里有地址(孩子端页面的源码里不出现 /parent)
     .replace('__TALK_REEL_HREF__', kidOnly ? '' : '/parent/talk/reel?id=');
 }

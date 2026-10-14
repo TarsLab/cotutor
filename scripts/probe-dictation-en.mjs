@@ -51,14 +51,15 @@ try {
   const rect = (sel) => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
   const tap = async (sel) => { const r = await rect(sel); if (!r) throw new Error(`点不到 ${sel}`); const x = r.x + r.w / 2, y = r.y + r.h / 2; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 }); await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 }); await sleep(150); };
   const tapText = async (text) => { const sel = await evaluate(`(() => { document.querySelectorAll('[data-probe]').forEach((x) => x.removeAttribute('data-probe')); const b = [...document.querySelectorAll('.view.on button, .view.on a')].find((x) => x.textContent.trim() === ${JSON.stringify(text)}); if (!b) return null; b.setAttribute('data-probe', ${JSON.stringify(text)}); return '[data-probe=' + JSON.stringify(${JSON.stringify(text)}) + ']'; })()`); if (!sel) throw new Error(`找不到按钮 ${text}`); await tap(sel); };
-  /** 在四线三格里写一个单词:几笔折线,画在基线上下(格是 2048 × 512) */
+  /** 在四线三格里写一个单词:几笔折线,画在基线上下(尺子 2048 × 512;画的视窗上下各多露一截:0 -192 2048 896);第一笔竖着冒出最上面那条线(拍板 22) */
   const writeWord = async (padSel, n = 3) => {
     const r = await rect(padSel);
     for (let k = 0; k < n; k++) {
       const x0 = 300 + k * 420;
       const pts = [];
-      for (let q = 0; q <= 12; q++) pts.push([x0 + q * 25, 210 + Math.sin(q / 2) * 100]);
-      const s = pts.map(([x, y]) => ({ x: r.x + (x / 2048) * r.w, y: r.y + (y / 512) * r.h }));
+      if (k === 0) for (let q = 0; q <= 12; q++) pts.push([x0, -120 + q * 36]);
+      else for (let q = 0; q <= 12; q++) pts.push([x0 + q * 25, 210 + Math.sin(q / 2) * 100]);
+      const s = pts.map(([x, y]) => ({ x: r.x + (x / 2048) * r.w, y: r.y + ((y + 192) / 896) * r.h }));
       await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: s[0].x, y: s[0].y, button: 'left', buttons: 1, clickCount: 1 });
       for (const p of s.slice(1)) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p.x, y: p.y, button: 'left', buttons: 1 });
       await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: s[s.length - 1].x, y: s[s.length - 1].y, button: 'left', buttons: 0, clickCount: 1 });
@@ -77,6 +78,7 @@ try {
   ok('写:第 1 个,四线三格(四条线、第三条基线),气泡里没有单词', await waitFor(`document.querySelector('.view.on')?.id === 'v-write' && document.querySelectorAll('#w-pad .enl line').length === 4 && document.querySelectorAll('#w-pad .enl line.base').length === 1 && !document.body.innerText.includes('red')`));
   await writeWord('#w-pad');
   ok('写了三笔', (await evaluate(`document.querySelectorAll('#w-pad .eni path').length`)) === 3);
+  ok('第一笔冒出最上面那条线,出格的那截照样画着(拍板 22)', await evaluate(`(() => { const b = document.querySelector('#w-pad .eni path').getBBox(); return b.y < -60 && b.y > -192; })()`));
   await tap('#w-undo');
   ok('撤销撤一笔', (await evaluate(`document.querySelectorAll('#w-pad .eni path').length`)) === 2);
   await shot('en-02-write');

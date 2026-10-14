@@ -37,7 +37,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .bubble { display:flex; align-items:center; gap:14px; padding:14px 22px; background:var(--tutor); border-radius:22px; border-top-left-radius:6px; align-self:flex-start; }
   .bubble b { display:block; font-size:22px; color:var(--tutor-ink); }
   .bubble small { display:block; font-size:15px; color:#7a5212; min-height:22px; }
-  .pad { width:100%; aspect-ratio:4 / 1; background:#fff; border:2px solid var(--line); border-radius:18px; touch-action:none; display:block; }
+  .pad { width:100%; aspect-ratio:16 / 7; background:#fff; border:2px solid var(--line); border-radius:18px; touch-action:none; display:block; }
   .tools { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
   .center { display:flex; flex-direction:column; align-items:center; gap:18px; padding-top:40px; text-align:center; }
   .center b { font-size:28px; }
@@ -45,7 +45,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .model { font-size:44px; font-family:"Chalkboard SE","Comic Sans MS","Marker Felt",sans-serif; color:#2f6fd6; text-align:center; }
   .rows { display:flex; flex-direction:column; gap:14px; }
   .row { background:#fff; border:1.5px solid var(--line); border-radius:18px; padding:12px; display:flex; flex-direction:column; gap:8px; }
-  .row svg { width:100%; aspect-ratio:4 / 1; display:block; }
+  .row svg { width:100%; aspect-ratio:16 / 7; display:block; }
   .row .ft { display:flex; align-items:center; justify-content:space-between; gap:10px; }
   .row .ft small { color:var(--dim); font-size:14px; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
@@ -96,7 +96,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   <div class="bar"><span class="bk-slot"></span><div class="dots" id="w-dots"></div><button class="layer-x" type="button" id="w-x" aria-label="回到对一对" hidden>${LAYER_X}</button></div>
   <div class="bubble"><div><b id="w-who">老师在念</b><small id="w-status"></small></div></div>
   <div class="model" id="w-model" hidden></div>
-  <svg class="pad" id="w-pad" viewBox="0 0 2048 512"></svg>
+  <svg class="pad" id="w-pad" viewBox="0 -192 2048 896"></svg>
   <div class="tools">
     <button class="tool" type="button" id="w-again">再念</button>
     <button class="tool" type="button" id="w-undo">撤销</button>
@@ -189,7 +189,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   pad.append(enLines(sv), trace, ink);
   var drawInk = function () { ink.replaceChildren.apply(ink, S.strokes.map(function (s) { return sv('path', { d: pathD(s) }); })); };
   var cur = null;
-  var at = function (e) { var b = pad.getBoundingClientRect(); return [Math.round((e.clientX - b.left) / b.width * EN_W), Math.round((e.clientY - b.top) / b.height * EN_H), now()]; };
+  var at = function (e) { var b = pad.getBoundingClientRect(); return [Math.round((e.clientX - b.left) / b.width * EN_W), Math.round(EN_TOP + (e.clientY - b.top) / b.height * EN_VH), now()]; };
   pad.addEventListener('pointerdown', function (e) {
     if (e.pointerType === 'pen') S.sawPen = true; else if (e.pointerType === 'touch' && S.sawPen) return; // 用过笔就不认手掌
     e.preventDefault(); try { pad.setPointerCapture(e.pointerId); } catch (x) {}
@@ -235,7 +235,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   var openCheck = function () {
     var rows = $('#c-rows'); rows.replaceChildren();
     S.v.answers.forEach(function (a, i) {
-      var svg = sv('svg', { viewBox: '0 0 2048 512' }); var g = sv('g', { 'class': 'eni' });
+      var svg = sv('svg', { viewBox: EN_VIEW }); var g = sv('g', { 'class': 'eni' });
       (a.ink[0] || []).forEach(function (s) { if (s.length) g.append(sv('path', { d: pathD(s) })); });
       svg.append(enLines(sv), g); if (!S.hide) svg.append(enWord(sv, a.chars));
       var again = h('button', { 'class': 'tool', type: 'button', on: { click: function () { rewrite(i); } } }, '再写一遍');
@@ -372,7 +372,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
       if (rebuild) {
         var rows = $('#c-rows'); rows.replaceChildren();
         RL.rows = R.chars.map(function (cs, i) {
-          var svg = sv('svg', { viewBox: '0 0 2048 512' }); var g = sv('g', { 'class': 'eni' });
+          var svg = sv('svg', { viewBox: EN_VIEW }); var g = sv('g', { 'class': 'eni' });
           svg.append(enLines(sv), g, enWord(sv, cs[0]));
           var a = RL.s.first[i]; var rv = Boolean(a && a.chars[0] && a.chars[0].revealed);
           var rw = R.rewrites.some(function (x) { return x.word === i && x.to <= RL.t; });

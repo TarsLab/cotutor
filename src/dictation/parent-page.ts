@@ -52,7 +52,7 @@ export const DICTATION_PARENT_PAGE = `<!doctype html>
   a.reel { display:flex; align-items:center; min-height:48px; padding:0 16px; border-radius:14px; background:#fff; border:1px solid var(--line); color:#24508c; text-decoration:none; font-size:15px; }
   .src { display:flex; align-items:center; gap:12px; font-size:14px; color:var(--dim); }
   .src img { width:72px; height:72px; object-fit:cover; border-radius:10px; border:1px solid var(--line); }
-  .tz.en { width:min(100%, 360px); height:auto; aspect-ratio:4 / 1; }
+  .tz.en { width:min(100%, 360px); height:auto; aspect-ratio:16 / 7; }
 ${EN_BOX_CSS}
 </style></head>
 <body><main>
@@ -80,7 +80,7 @@ ${EN_BOX_CSS}
 ${EN_BOX_JS}
   /** 英文单词的一格:四线三格、书上的单词淡淡叠着、孩子的笔(y 朝下,不翻) */
   var enThumb = function (word, strokes, overlay) {
-    var svg = sv('svg', { viewBox: '0 0 2048 512', 'class': 'tz en' });
+    var svg = sv('svg', { viewBox: EN_VIEW, 'class': 'tz en' });
     var ink = sv('g', { 'class': 'eni' });
     (strokes || []).forEach(function (st) { if (st.length) ink.append(sv('path', { d: pathD(st) })); });
     svg.append(enLines(sv), ink); if (overlay) svg.append(enWord(sv, word));

@@ -947,8 +947,10 @@ __REEL_JS__
     window.cotutorPreviewSet = (o) => {
       if (!o) return;
       if ('pv' in o) S.pv = o.pv;
-      if (o.front && K.order && !K.busy && K.order.includes(o.front) && K.order[K.order.length - 1] !== o.front) K.order = K.order.filter((x) => x !== o.front).concat([o.front]);
-      if (o.reload) { loadHome(); return; }
+      const toFront = () => { if (o.front && K.order && !K.busy && K.order.includes(o.front) && K.order[K.order.length - 1] !== o.front) K.order = K.order.filter((x) => x !== o.front).concat([o.front]); };
+      // 发布了(按钮、先后、开关):重读孩子的首页,牌堆照家长新排的先后重叠一遍(孩子端只在老师换了人时才重叠),再把在看的那位抽到最前
+      if (o.reload) { K.order = null; loadHome().then(() => { toFront(); if (S.home && !S.tutor) renderHome(); }); return; }
+      toFront();
       if (S.home && !S.tutor) renderHome();
     };
     // 点牌上的按钮不跳走,告诉家长页点了哪颗;后面那张照孩子端换到最前(换完 pickTutor 里告诉家长页);牌外的东西点了什么都不做

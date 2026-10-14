@@ -1,9 +1,10 @@
 /**
- * 家长端「首页」(/parent/home,《家长板书页设计.md》拍板 20、27、28,原型 https://claude.ai/artifact/RDefXR1vYYWQTEwMoQpZLk 第二排):
- * 一位一位老师看孩子看到的那张牌(新话题气泡、开场按钮、常驻入口),点牌上的按钮改它(字、讲法、留多久);常驻入口(听写这周的词、口语课给老师的话)、
- * 这位老师在不在首页、排第几;再加孩子端常改的两项。宽屏(≥ 1000)三栏:左边老师(按住拖着排先后)与孩子端设置、中间那张牌、右边就地改;
- * 窄屏一栏,改按钮是整屏的表单。牌是这一页自己画的近似,不搬孩子端的代码。另一个标签「记录」是 /parent(孩子端页面的家长模式)。
- * 零依赖内联脚本,只走 /api/parent/*;每次现读,改了马上发到孩子的首页(src/server/parent-home.ts)。
+ * 家长端「首页」(/parent/home,《家长板书页设计.md》拍板 20、33、34):
+ * 左边(手机上是上面)是孩子端首页本身——iframe 装 /preview(孩子端页面的预览模式),按孩子设备的尺寸开、等比缩进来,可切 iPad / 手机;
+ * 点牌上的按钮在旁边改它(字、讲法、留多久),改字时牌上跟着变;点后面那张牌换老师;听写、口语课点了去改这周的词、口语课。
+ * 预览下面一排是老师的先后(按住左右拖)、孩子看不到的按钮、加一个开场按钮;右边是改着的那颗、这位老师「每天都在」的、在不在首页、孩子端常改的两项。
+ * 另一个标签「记录」是 /parent。零依赖内联脚本,只走 /api/parent/*;每次现读,改了马上发到孩子的首页(src/server/parent-home.ts)。
+ * iframe 一挪地方就会重新加载:它在 #pv 里常驻,重画只动 #pv-under 与 #body。
  * 用 String.raw:脚本里的反斜杠原样留着;脚本里不写反引号和 ${。
  */
 export const PARENT_HOME_PAGE = String.raw`<!doctype html>
@@ -58,40 +59,26 @@ export const PARENT_HOME_PAGE = String.raw`<!doctype html>
   .box { padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
   .row2 { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .lnk { color:var(--accent); text-decoration:none; font-size:15px; }
-  /* 孩子看到的那张牌(拍板 27):学科色的新话题气泡打头印名字的首字,按钮是大胶囊,听写是一条格子;点按钮改它 */
-  .kc { position:relative; border-radius:24px; background:#fff; box-shadow:0 2px 0 #e9e6de, 0 10px 26px #2b2b2b12; padding:18px 18px 20px; display:flex; flex-direction:column; gap:12px; }
-  .kc.off > :not(.kc-off) { opacity:.45; }
-  .kc-hd { display:flex; align-items:center; gap:12px; }
-  .kc-hd .av { width:56px; height:56px; }
-  .kc-hd .av .face { font-size:21px; }
-  .kc-hd b { font-size:20px; }
-  .kc-new { display:flex; align-items:center; gap:14px; height:64px; padding:0 18px; border-radius:20px; background:var(--c); color:#fff; font-size:20px; font-weight:700; }
-  .kc-new .ch { font-size:26px; padding-right:14px; border-right:2px solid #ffffff66; }
-  .kc-new small { margin-left:auto; font-size:12px; font-weight:500; background:#ffffff33; padding:3px 8px; border-radius:6px; }
-  .kc-b { display:flex; align-items:center; gap:10px; width:100%; min-height:52px; padding:6px 18px; border-radius:26px; border:2px solid #e9e6de; background:#fff; font-size:17px; font-weight:600; text-align:left; cursor:pointer; }
-  .kc-b .ic { flex:none; color:var(--c); display:grid; place-items:center; }
-  .kc-b .l { flex:1; min-width:0; }
-  .kc-b.on, .kc-add.on { border-color:var(--ink); box-shadow:0 0 0 4px #2b2b2b1a; }
-  .kc-add { height:46px; border:2px dashed #d9d5cc; border-radius:23px; background:transparent; color:var(--mute); font-size:15px; cursor:pointer; }
-  .kc-x { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:16px; background:#f6f5f1; font-size:15px; font-weight:600; }
-  .kc-x .bx { flex:1; display:flex; gap:4px; }
-  .kc-x .bx i { width:20px; height:20px; border-radius:4px; background:#fff; border:1px solid #e2dfd6; }
-  .kc-x .go { height:32px; padding:0 14px; border-radius:16px; background:var(--c); color:#fff; font-size:14px; display:flex; align-items:center; }
-  .kc-off { font-size:13px; color:var(--dim); text-align:center; }
-  /* 宽屏左栏的老师:按住左边的点拖着排先后(拍板 28) */
-  .tl { display:flex; flex-direction:column; gap:4px; }
-  .tr { display:flex; align-items:center; gap:4px; height:62px; border:2px solid transparent; border-radius:12px; background:transparent; position:relative; }
-  .tr.on { background:#fff; border-color:var(--ink); }
-  .tr.hid .pick { opacity:.45; }
-  .tr.drag { z-index:2; background:#fff; box-shadow:0 8px 20px #2b2b2b26; transition:none; }
-  .tr.slide { transition:transform .15s; }
-  .grip { flex:none; width:32px; height:52px; border:0; background:transparent; color:#b9b5ac; display:grid; place-items:center; cursor:grab; touch-action:none; }
-  .pick { flex:1; min-width:0; display:flex; align-items:center; gap:10px; height:100%; border:0; background:transparent; text-align:left; cursor:pointer; padding:0 8px 0 0; }
-  .pick .av { width:40px; height:40px; }
-  .pick .av .face { font-size:15px; }
-  .pick span { display:flex; flex-direction:column; gap:1px; min-width:0; }
-  .pick b { font-size:15px; }
-  .pick small { font-size:12px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* 孩子端首页本身(拍板 33):iframe 按孩子设备的尺寸开,等比缩到这一栏 */
+  .pvh { display:flex; align-items:center; gap:10px; padding:0 4px 8px; }
+  .pvh > span:first-child { flex:1; font-size:13px; color:var(--mute); }
+  .pvh .seg { flex:none; width:150px; }
+  .pvh .seg > * { height:30px; font-size:13px; }
+  #pvbox { position:relative; margin:0 auto; border-radius:18px; overflow:hidden; background:#faf9f4; box-shadow:0 0 0 1px #e2dfd6, 0 10px 26px #2b2b2b14; }
+  #pvf { position:absolute; left:0; top:0; border:0; transform-origin:0 0; background:#faf9f4; }
+  #pvoff { position:absolute; left:0; right:0; top:0; padding:10px 14px; background:#2b2b2bdd; color:#fff; font-size:14px; text-align:center; display:none; z-index:2; }
+  #pvoff.on { display:block; }
+  #pv-under { display:flex; flex-direction:column; gap:14px; padding-top:14px; }
+  .addb { height:46px; border:2px dashed #d9d5cc; border-radius:23px; background:transparent; color:var(--dim); font-size:15px; cursor:pointer; }
+  /* 老师的先后(拍板 34):一位一个,按住左右拖;点一下看这位老师 */
+  .ord { display:flex; gap:6px; overflow-x:auto; padding:2px; }
+  .ch { position:relative; flex:0 0 84px; display:flex; flex-direction:column; align-items:center; gap:3px; padding:8px 0; border:2px solid transparent; border-radius:14px; background:transparent; font-size:13px; color:var(--dim); cursor:grab; touch-action:pan-y; user-select:none; -webkit-user-select:none; }
+  .ch.on { background:#fff; border-color:var(--ink); color:var(--ink); font-weight:600; }
+  .ch.hid .av { opacity:.4; }
+  .ch small { font-size:11px; color:var(--mute); font-weight:400; }
+  .ch .n { position:absolute; left:8px; top:6px; font-size:11px; color:var(--mute); font-weight:600; }
+  .ch.drag { z-index:2; background:#fff; box-shadow:0 8px 20px #2b2b2b26; cursor:grabbing; }
+  .ch.slide { transition:transform .15s; }
   .hint { padding:28px 20px; text-align:center; color:var(--dim); font-size:15px; line-height:1.6; }
   .btns { display:flex; gap:10px; align-items:center; }
   .btns .del { height:44px; padding:0 12px; border:0; background:transparent; color:var(--red); font-size:15px; cursor:pointer; }
@@ -108,21 +95,27 @@ export const PARENT_HOME_PAGE = String.raw`<!doctype html>
   .danger { height:50px; border:0; border-radius:14px; background:#fff; color:var(--red); font-size:17px; cursor:pointer; }
   #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); max-width:min(560px,calc(100% - 32px)); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:15px; display:none; z-index:20; white-space:pre-line; }
   #toast.on { display:block; }
+  .main { display:flex; flex-direction:column; gap:18px; }
+  #body > div { display:flex; flex-direction:column; gap:18px; }
   @media (min-width:1000px) {
     .wrap { max-width:1180px; padding:calc(env(safe-area-inset-top) + 22px) 28px 40px; gap:20px; }
     .top { align-items:center; justify-content:flex-start; }
     .top .seg { order:0; flex:0 0 260px; }
     .top small { margin-left:auto; }
-    .who { display:none; }
-    .cols { display:grid; grid-template-columns:270px minmax(0,400px) minmax(0,1fr); gap:22px; align-items:start; }
-    .cols > div { display:flex; flex-direction:column; gap:18px; min-width:0; }
+    .main { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:22px; align-items:start; }
     .gh { padding:0 6px 6px; }
   }
 </style></head><body>
 <div class="wrap" id="main">
   <div class="top"><b id="title">家长</b><nav class="seg"><a class="on" href="/parent/home">首页</a><a href="/parent">记录</a></nav><small id="pub"></small></div>
-  <div class="who" id="who"></div>
-  <div id="body"></div>
+  <div class="main">
+    <section id="pv" aria-label="孩子看到的首页">
+      <div class="pvh"><span>孩子看到的首页 · 点牌上的按钮改它,点后面那张换老师</span><span class="seg" id="pvdev"><button type="button" data-d="tablet">iPad</button><button type="button" data-d="phone">手机</button></span></div>
+      <div id="pvbox"><div id="pvoff"></div><iframe id="pvf" title="孩子看到的首页"></iframe></div>
+      <div id="pv-under"></div>
+    </section>
+    <div id="body"></div>
+  </div>
 </div>
 <div class="sheet" id="sheet"><div class="wrap" id="sheet-in"></div></div>
 <div id="toast"></div>
@@ -144,68 +137,142 @@ export const PARENT_HOME_PAGE = String.raw`<!doctype html>
   // 留多久:只今天 = 今天;到周日 = 这周日(今天是周日就是今天);一直 = 不写
   const sunday = (today) => { const [y, m, d] = today.split('-').map(Number); const t = new Date(y, m - 1, d); t.setDate(t.getDate() + ((7 - t.getDay()) % 7)); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); };
   const keepTag = (b) => (!b.until ? '' : b.until === D.today ? '只今天' : b.until < D.today ? '过了' : '到 ' + md(b.until));
-  const KIND = { start: '', continue: '接着', lecture: '小课堂', activity: '' };
   const BUTTONS_MAX = 4;
   const WIDE = window.matchMedia('(min-width:1000px)');
 
   let D = null; let cur = null;
-  /** 宽屏右栏在改哪一个按钮:下标;-1 = 新加的开场按钮;null = 没选 */
+  /** 在改哪一个按钮(宽屏右栏):下标;-1 = 新加的开场按钮;null = 没选 */
   let sel = null;
   /** 右栏的表单改了还没发:这时别让心跳重画把字抹掉 */
   let dirty = false;
+  /** 预览里改着的(只在预览里,发布了才到孩子那边):edit = 改的那颗 {k, kind, label, until},add = 新加那颗的字 */
+  let draft = { edit: null, add: null };
+
+  // ---- 孩子端首页本身(拍板 33):iframe 装 /preview,按孩子设备的尺寸开,等比缩进来 ----
+  const SIZES = { tablet: [1180, 820], phone: [390, 844] };
+  // 缺省跟着这块屏幕(宽屏看 iPad 的样子、手机看手机的);家长点过就记住
+  let picked = null; try { picked = localStorage.getItem('parent-home-dev'); } catch (e) {}
+  if (picked !== 'tablet' && picked !== 'phone') picked = null;
+  let dev = picked || (WIDE.matches ? 'tablet' : 'phone');
+  const fit = () => {
+    const box = $('#pvbox'), f = $('#pvf'), wh = SIZES[dev], room = $('#pv').clientWidth;
+    const k = Math.min(1, room / wh[0], (dev === 'phone' ? 640 : 2000) / wh[1]);
+    box.style.width = Math.round(wh[0] * k) + 'px'; box.style.height = Math.round(wh[1] * k) + 'px';
+    f.style.width = wh[0] + 'px'; f.style.height = wh[1] + 'px'; f.style.transform = 'scale(' + k + ')';
+    for (const b of document.querySelectorAll('#pvdev button')) b.classList.toggle('on', b.dataset.d === dev);
+  };
+  const pvSet = (o) => { try { const w = $('#pvf').contentWindow; if (w && typeof w.cotutorPreviewSet === 'function') w.cotutorPreviewSet(o); } catch (e) {} };
+  /** 告诉预览:最前那张是谁、在改哪颗、改成什么;reload = 发布了,重读孩子的首页 */
+  const pvSync = (reload) => pvSet({ front: cur, pv: cur ? { tutor: cur, sel: sel === null ? null : sel === -1 ? 'draft' : sel, edit: draft.edit, add: draft.add } : null, reload: Boolean(reload) });
+  // 预览里点了什么(孩子端页面经 window.parent.cotutorPreview 说):换老师、改哪颗、去改这周的词 / 口语课
+  window.cotutorPreview = (ev) => {
+    if (!ev || !D) return;
+    if (ev.act === 'ready') { pvSync(); return; }
+    const t = D.tutors.find((x) => x.name === ev.tutor);
+    if (!t) return;
+    if (t.name !== cur) choose(t.name, true);
+    if (ev.act === 'button') { if (ev.id === 'new') toast('「新话题」是应用自己加的,一直在第一个,这里改不了'); else if (typeof ev.id === 'number') pick(ev.id); }
+    else if (ev.act === 'extra') { if (ev.kind === 'dictation') editWords(t); else { const el = $('#daily-talk'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
+  };
+  for (const b of document.querySelectorAll('#pvdev button')) b.addEventListener('click', () => { dev = picked = b.dataset.d; try { localStorage.setItem('parent-home-dev', dev); } catch (e) {} fit(); });
+  window.addEventListener('resize', fit);
+
   const load = async () => {
     try { D = await api('GET', '/api/parent/home'); } catch (e) { toast('读不到:' + e.message); return; }
     document.title = D.title + ' · 家长';
     $('#title').textContent = D.title;
     $('#pub').textContent = D.home ? md(D.home.publishedAt.slice(0, 10)) + ' ' + new Date(D.home.publishedAt).toTimeString().slice(0, 5) + ' 发布 · 改了马上到孩子的首页' : '还没发布过';
-    if (!cur || !D.tutors.some((t) => t.name === cur)) { cur = D.tutors[0] && D.tutors[0].name; sel = null; }
+    if (!cur || !D.tutors.some((t) => t.name === cur)) { const first = D.tutors.find((t) => !t.hidden) || D.tutors[0]; cur = first && first.name; sel = null; draft = { edit: null, add: null }; }
+    if (!$('#pvf').getAttribute('src')) $('#pvf').setAttribute('src', '/preview?front=' + encodeURIComponent(cur || ''));
     render();
   };
   const save = async (method, path, body, ok) => {
-    try { const r = await api(method, path, body); if (ok) toast(ok); return r; }
+    try { const r = await api(method, path, body); if (ok) toast(ok); draft = { edit: null, add: null }; return r; }
     catch (e) { toast('没改成:' + e.message); return null; }
-    finally { await load(); }
+    finally { await load(); pvSync(true); }
   };
   const tutorOf = () => D.tutors.find((t) => t.name === cur);
-  const choose = (name) => { if (name === cur) return; cur = name; sel = null; dirty = false; render(); };
+  /** 看哪位老师;fromPreview = 预览里换过去的,不用再告诉它 */
+  const choose = (name, fromPreview) => { if (name === cur) return; cur = name; sel = null; dirty = false; draft = { edit: null, add: null }; render(); if (!fromPreview) pvSync(); };
+  /** 改第 k 颗(-1 = 加一个):宽屏在右栏,窄屏整屏的表单 */
+  const pick = (k) => {
+    const t = tutorOf(); if (!t) return;
+    if (!WIDE.matches) { editButton(t, k); return; }
+    sel = k; dirty = false; draft = { edit: null, add: null }; render();
+    setTimeout(() => { const el = $('#b-label'); if (el) el.focus(); }, 50);
+  };
   const setExtras = (t, kind, on) => {
     const now = t.extras.filter((x) => x !== kind);
     if (on) now.push(kind);
     return save('PATCH', '/api/parent/settings', { tutors: { [t.name]: { extras: now } } });
   };
   const putOrder = (names) => save('PUT', '/api/parent/home/order', { tutors: names });
-  const summary = (t) => (t.hidden ? '不在首页上' : [t.buttons.length ? t.buttons.length + ' 个按钮' : '', ...t.extras.map((x) => (x === 'dictation' ? (t.lang === 'en' ? '单词听写' : '听写') : x === 'talk' ? '口语课' : '')).filter(Boolean)].filter(Boolean).join(' · ') || '只有新话题');
 
-  // ---- 孩子看到的那张牌(拍板 27):点一个按钮改它 ----
-  const kidCard = (t, onPick) => {
-    const has = (k) => t.extras.includes(k);
-    const words = (t.dictation || []).length;
-    return h('div', { class: 'kc' + (t.hidden ? ' off' : ''), style: '--c:' + t.color, 'aria-label': '孩子看到的' },
-      h('div', { class: 'kc-hd' }, avatar(t), h('b', {}, t.display)),
-      h('div', { class: 'kc-new' }, h('span', { class: 'ch', 'aria-hidden': 'true' }, Array.from(t.display)[0] || ''), '新话题', h('small', {}, '总在')),
-      ...t.buttons.map((b, k) => h('button', { type: 'button', class: 'kc-b' + (WIDE.matches && sel === k ? ' on' : ''), on: { click: () => onPick(k) } },
-        h('span', { class: 'ic', html: b.kind === 'continue' ? AGAIN : PLAY }), h('span', { class: 'l' }, (KIND[b.kind] ? KIND[b.kind] + ' · ' : '') + b.label), keepTag(b) ? h('span', { class: 'tag' }, keepTag(b)) : null)),
-      t.buttons.length < BUTTONS_MAX ? h('button', { type: 'button', class: 'kc-add' + (WIDE.matches && sel === -1 ? ' on' : ''), on: { click: () => onPick(-1) } }, '+ 加一个开场按钮') : null,
-      has('dictation') ? h('div', { class: 'kc-x' }, h('span', {}, t.lang === 'en' ? '单词听写' : '听写'), h('span', { class: 'bx', 'aria-hidden': 'true' }, ...Array.from({ length: Math.min(words, 6) }, () => h('i'))), h('span', { class: 'go' }, words ? '去写' : '拍照听写')) : null,
-      has('talk') ? h('div', { class: 'kc-x' }, h('span', { style: 'flex:1' }, '口语课'), h('span', { class: 'go' }, '开始')) : null,
-      t.hidden ? h('div', { class: 'kc-off' }, '不在孩子的首页上') : null);
+  // ---- 老师的先后(拍板 34):一位一个,按住左右拖;点一下看这位老师;左右键也能挪 ----
+  const orderRow = () => {
+    const box = h('div', { class: 'ord' });
+    const chips = D.tutors.map((t, i) => {
+      const c = h('button', { type: 'button', class: 'ch' + (t.name === cur ? ' on' : '') + (t.hidden ? ' hid' : ''), 'data-tutor': t.name, 'aria-label': t.display + ' 排第 ' + (i + 1) + '(左右键挪)' }, h('span', { class: 'n' }, String(i + 1)), avatar(t), t.display.replace(/老师$/, ''), t.hidden ? h('small', {}, '不在首页') : null);
+      // 键盘回车 / 空格(detail 0)是点;手指与鼠标的点在 pointerup 里分辨(没拖才算)
+      c.addEventListener('click', (e) => { if (e.detail === 0) choose(t.name); });
+      c.addEventListener('keydown', (e) => {
+        const d = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+        if (!d || i + d < 0 || i + d >= D.tutors.length) return;
+        e.preventDefault();
+        const names = D.tutors.map((x) => x.name); [names[i], names[i + d]] = [names[i + d], names[i]];
+        putOrder(names).then(() => { const g = document.querySelectorAll('.ord .ch')[i + d]; if (g) g.focus(); });
+      });
+      c.addEventListener('pointerdown', (e) => startDrag(e, c, i, chips));
+      return c;
+    });
+    box.append(...chips);
+    return box;
+  };
+  const startDrag = (e, el, from, all) => {
+    const x0 = e.clientX, step = el.getBoundingClientRect().width + 6;
+    let to = from, moved = false;
+    const onMove = (ev) => {
+      const dx = ev.clientX - x0;
+      if (!moved && Math.abs(dx) < 8) return;
+      if (!moved) { moved = true; try { el.setPointerCapture(e.pointerId); } catch (x) {} el.classList.add('drag'); for (const r of all) if (r !== el) r.classList.add('slide'); }
+      to = Math.max(0, Math.min(all.length - 1, from + Math.round(dx / step)));
+      el.style.transform = 'translateX(' + dx + 'px)';
+      all.forEach((r, j) => { if (r === el) return; const sh = from < to && j > from && j <= to ? -step : from > to && j < from && j >= to ? step : 0; r.style.transform = sh ? 'translateX(' + sh + 'px)' : ''; });
+    };
+    const onUp = () => {
+      el.removeEventListener('pointermove', onMove); el.removeEventListener('pointerup', onUp); el.removeEventListener('pointercancel', onUp);
+      if (!moved) { choose(D.tutors[from].name); return; }
+      if (to === from) { for (const r of all) { r.style.transform = ''; r.classList.remove('drag', 'slide'); } return; }
+      const names = D.tutors.map((x) => x.name); const n = names.splice(from, 1)[0]; names.splice(to, 0, n);
+      // 拖的是谁就看谁:预览里他抽到最前,能看到排过之后的牌堆
+      cur = n; sel = null; dirty = false; draft = { edit: null, add: null };
+      putOrder(names);
+    };
+    el.addEventListener('pointermove', onMove); el.addEventListener('pointerup', onUp); el.addEventListener('pointercancel', onUp);
   };
 
   const render = () => {
-    $('#who').replaceChildren(...D.tutors.map((t) => h('button', { type: 'button', class: 'mini' + (t.name === cur ? ' on' : '') + (t.hidden ? ' hid' : ''), on: { click: () => choose(t.name) } }, avatar(t), t.display.replace(/老师$/, ''))));
+    fit();
     const t = tutorOf();
+    const off = $('#pvoff');
+    off.classList.toggle('on', Boolean(t && t.hidden));
+    off.textContent = t && t.hidden ? t.display + '现在不在孩子的首页上(「在孩子的首页上」打开)' : '';
+    // 预览下面:老师的先后、孩子看不到的按钮、加一个开场按钮
+    const under = [h('div', {}, h('div', { class: 'gh' }, h('span', {}, '老师的先后 · 按住左右拖,排第一的在最前')), orderRow())];
+    if (t) {
+      const gone = t.buttons.map((b, k) => ({ b, k })).filter((x) => x.b.until && x.b.until < D.today);
+      if (gone.length) under.push(h('div', {}, h('div', { class: 'gh' }, h('span', {}, '孩子现在看不到的按钮(留到的日子过了)')), h('div', { class: 'grp' }, ...gone.map((x) => h('button', { type: 'button', class: 'it', on: { click: () => pick(x.k) } }, h('span', { class: 'tx' }, h('b', {}, x.b.label), x.b.brief ? h('small', {}, '讲法:' + x.b.brief) : null), h('span', { class: 'tag' }, '过了'), h('span', { class: 'chev', html: CHEV }))))));
+      if (t.buttons.length < BUTTONS_MAX) under.push(h('button', { type: 'button', class: 'addb', on: { click: () => pick(-1) } }, '+ 给' + t.display + '加一个开场按钮'));
+    }
+    $('#pv-under').replaceChildren(...under);
     if (!t) { $('#body').replaceChildren(h('p', { class: 'note' }, '还没有老师(cotutor.json 里 -tutor 结尾、开着的)')); return; }
-    const idx = D.tutors.indexOf(t);
     const wide = WIDE.matches;
-    const pick = (k) => { if (!wide) { editButton(t, k); return; } sel = k; dirty = false; render(); setTimeout(() => { const el = $('#b-label'); if (el) el.focus(); }, 50); };
-    const card = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '孩子看到的 · 点一个按钮改它')), kidCard(t, pick),
-      h('div', { class: 'note' }, '孩子一点,按钮上的字就当他说的第一句发给老师;老师照讲法开场。今天聊过的,孩子进老师页后在空白板上接,不占按钮。'));
     // 每天都在
     const has = (k) => t.extras.includes(k);
     const daily = [];
     daily.push(h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '听写'), h('small', {}, '拍照听写一直在;设了这周的词,孩子点「听写」直接写')), sw(has('dictation'), '听写', () => setExtras(t, 'dictation', !has('dictation')))));
     if (has('dictation') || t.dictation) daily.push(h('button', { type: 'button', class: 'it', on: { click: () => editWords(t) } }, h('span', { class: 'tx' }, h('b', {}, '这周的词'), h('small', {}, t.dictation && t.dictation.length ? t.dictation.length + ' 个词:' + t.dictation.map((w) => w.chars).join('、') : '还没设')), h('span', { class: 'chev', html: CHEV })));
-    daily.push(h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '口语课'), h('small', {}, D.talk.enabled ? '用你最近给孩子的口语单' : '口语课没开(cotutor.json 的 talk.enabled)')), sw(has('talk'), '口语课', () => setExtras(t, 'talk', !has('talk')), !D.talk.enabled && !has('talk'))));
+    daily.push(h('div', { class: 'it', id: 'daily-talk' }, h('span', { class: 'tx' }, h('b', {}, '口语课'), h('small', {}, D.talk.enabled ? '用你最近给孩子的口语单' : '口语课没开(cotutor.json 的 talk.enabled)')), sw(has('talk'), '口语课', () => setExtras(t, 'talk', !has('talk')), !D.talk.enabled && !has('talk'))));
     if (has('talk')) {
       const note = h('textarea', { class: 'fld', rows: '3', placeholder: '这周学什么、想让老师多聊什么(孩子看不到)' }); note.value = D.talk.note;
       const mins = h('b', {}, String(D.talk.minutes));
@@ -214,14 +281,9 @@ export const PARENT_HOME_PAGE = String.raw`<!doctype html>
         h('div', { class: 'row2' }, h('span', {}, '聊几分钟'), h('span', { class: 'step' }, h('button', { type: 'button', 'aria-label': '少一分钟', on: { click: () => save('PATCH', '/api/parent/settings', { talk: { minutes: Math.max(1, D.talk.minutes - 1) } }) } }, '−'), mins, h('button', { type: 'button', 'aria-label': '多一分钟', on: { click: () => save('PATCH', '/api/parent/settings', { talk: { minutes: Math.min(20, D.talk.minutes + 1) } }) } }, '+'))),
         h('div', { class: 'row2' }, h('a', { class: 'lnk', href: '/parent/talk' }, '拍口语单、看回放 ›'), h('button', { type: 'button', class: 'step', style: 'border:0;background:transparent;color:var(--accent);cursor:pointer', on: { click: () => save('PATCH', '/api/parent/settings', { talk: { note: note.value } }, '存好了') } }, '存给老师的话'))));
     }
-    const extras = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '每天都在' + (wide ? ' · ' + t.display : ''))), h('div', { class: 'grp' }, ...daily));
-    // 这位老师:在不在首页;窄屏还有排第几(宽屏在左栏拖)
-    const move = (d) => { const names = D.tutors.map((x) => x.name); const j = idx + d; [names[idx], names[j]] = [names[j], names[idx]]; return putOrder(names); };
+    const extras = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '每天都在 · ' + t.display)), h('div', { class: 'grp' }, ...daily));
     const self = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '这位老师')), h('div', { class: 'grp' },
-      h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '在孩子的首页上')), sw(!t.hidden, '在首页上', () => save('PATCH', '/api/parent/settings', { tutors: { [t.name]: { hidden: !t.hidden } } }))),
-      wide ? null : h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '排在第 ' + (idx + 1)), h('small', {}, '首页一进来,排第一的在最前')), h('span', { class: 'step' },
-        h('button', { type: 'button', 'aria-label': '往前', disabled: idx === 0 || null, on: { click: () => move(-1) } }, '↑'),
-        h('button', { type: 'button', 'aria-label': '往后', disabled: idx === D.tutors.length - 1 || null, on: { click: () => move(1) } }, '↓')))));
+      h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '在孩子的首页上')), sw(!t.hidden, '在首页上', () => save('PATCH', '/api/parent/settings', { tutors: { [t.name]: { hidden: !t.hidden } } })))));
     // 孩子端(所有老师一份)
     const day = h('b', {}, String(D.dailyMessages));
     const kid = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '孩子端(所有老师)')), h('div', { class: 'grp' },
@@ -231,58 +293,13 @@ export const PARENT_HOME_PAGE = String.raw`<!doctype html>
       h('div', { class: 'box' }, h('div', { class: 'row2' }, h('span', {}, '按住说话怎么听'), h('span', { class: 'seg', style: 'width:180px' },
         ...[['browser', '浏览器'], ['omni', 'omni']].map(([v, l]) => h('button', { type: 'button', class: D.listen === v ? 'on' : '', on: { click: () => { if (D.listen !== v) save('PATCH', '/api/parent/settings', { listen: v }); } } }, l)))),
         h('div', { class: 'note', style: 'padding:0' }, 'omni:松手后原声交给百炼再听一遍,认得更准,要百炼的 key'))));
-    if (!wide) { $('#body').replaceChildren(h('div', { style: 'display:flex;flex-direction:column;gap:18px' }, card, extras, self, kid)); return; }
-    // 宽屏三栏:左老师与孩子端、中间那张牌、右边就地改
-    const list = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '老师 · 按住左边的点拖着排先后')), tutorList());
-    const pane = sel === null || (sel >= 0 && !t.buttons[sel])
-      ? h('div', { class: 'grp hint' }, '点中间牌上的按钮改它的字和讲法,', h('br'), '或者加一个开场按钮。')
+    const pane = !wide ? null : sel === null || (sel >= 0 && !t.buttons[sel])
+      ? h('div', { class: 'grp hint' }, '点左边牌上的按钮,在这里改它的字和讲法;', h('br'), '改的时候牌上跟着变,点「发布」才到孩子那边。')
       : inlineForm(t, sel);
-    $('#body').replaceChildren(h('div', { class: 'cols' }, h('div', {}, list, kid), h('div', {}, card), h('div', {}, pane, extras, self)));
+    $('#body').replaceChildren(h('div', {}, pane, extras, self, kid));
   };
 
-  // ---- 宽屏左栏:老师一行一个,按住左边的点拖着排先后(拍板 28);点名字看这位老师 ----
-  const tutorList = () => {
-    const box = h('div', { class: 'tl' });
-    const rows = D.tutors.map((t, i) => {
-      const grip = h('button', { type: 'button', class: 'grip', html: GRIP, 'aria-label': '拖着排 ' + t.display + ' 的先后(上下键也能挪)' });
-      const row = h('div', { class: 'tr' + (t.name === cur ? ' on' : '') + (t.hidden ? ' hid' : ''), 'data-tutor': t.name }, grip,
-        h('button', { type: 'button', class: 'pick', on: { click: () => choose(t.name) } }, avatar(t), h('span', {}, h('b', {}, t.display), h('small', {}, summary(t)))));
-      grip.addEventListener('keydown', (e) => {
-        const d = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
-        if (!d || i + d < 0 || i + d >= D.tutors.length) return;
-        e.preventDefault();
-        const names = D.tutors.map((x) => x.name); [names[i], names[i + d]] = [names[i + d], names[i]];
-        putOrder(names).then(() => { const g = document.querySelectorAll('.tl .grip')[i + d]; if (g) g.focus(); });
-      });
-      grip.addEventListener('pointerdown', (e) => startDrag(e, row, i, rows));
-      return row;
-    });
-    box.append(...rows);
-    return box;
-  };
-  const startDrag = (e, row, from, rows) => {
-    e.preventDefault();
-    const step = row.getBoundingClientRect().height + 4;
-    const y0 = e.clientY; let to = from;
-    row.classList.add('drag');
-    for (const r of rows) if (r !== row) r.classList.add('slide');
-    const grip = e.currentTarget; grip.setPointerCapture(e.pointerId);
-    const onMove = (ev) => {
-      const dy = ev.clientY - y0;
-      to = Math.max(0, Math.min(rows.length - 1, from + Math.round(dy / step)));
-      row.style.transform = 'translateY(' + dy + 'px)';
-      rows.forEach((r, j) => { if (r === row) return; const shift = from < to && j > from && j <= to ? -step : from > to && j < from && j >= to ? step : 0; r.style.transform = shift ? 'translateY(' + shift + 'px)' : ''; });
-    };
-    const onUp = () => {
-      grip.removeEventListener('pointermove', onMove); grip.removeEventListener('pointerup', onUp); grip.removeEventListener('pointercancel', onUp);
-      if (to === from) { for (const r of rows) { r.style.transform = ''; r.classList.remove('drag', 'slide'); } return; }
-      const names = D.tutors.map((x) => x.name); const [n] = names.splice(from, 1); names.splice(to, 0, n);
-      putOrder(names);
-    };
-    grip.addEventListener('pointermove', onMove); grip.addEventListener('pointerup', onUp); grip.addEventListener('pointercancel', onUp);
-  };
-
-  // ---- 改一个按钮的表单(k = -1 是新加的开场按钮):窄屏整屏盖上,宽屏在右栏 ----
+  // ---- 改一个按钮的表单(k = -1 是新加的开场按钮):窄屏整屏盖上,宽屏在右栏;预览里那颗跟着变 ----
   const buttonForm = (t, k, done) => {
     const b = k >= 0 ? Object.assign({}, t.buttons[k]) : { kind: 'start', label: '', until: D.today };
     const label = h('input', { class: 'fld', id: 'b-label', maxlength: '40', placeholder: '孩子的口吻,如「我要预习小蝌蚪找妈妈」' }); label.value = b.label;
@@ -293,11 +310,13 @@ export const PARENT_HOME_PAGE = String.raw`<!doctype html>
     let keep = !b.until ? '' : b.until === D.today ? D.today : sunday(D.today);
     if (b.until && b.until !== D.today && b.until !== sunday(D.today)) keeps.push([b.until, '到 ' + md(b.until)]), keep = b.until;
     const seg = h('div', { class: 'seg' });
-    const drawSeg = () => seg.replaceChildren(...keeps.map(([v, l]) => h('button', { type: 'button', class: v === keep ? 'on' : '', on: { click: () => { keep = v; dirty = true; drawSeg(); } } }, l)));
+    const drawSeg = () => seg.replaceChildren(...keeps.map(([v, l]) => h('button', { type: 'button', class: v === keep ? 'on' : '', on: { click: () => { keep = v; dirty = true; drawSeg(); tell(); } } }, l)));
     const sync = () => { const n = Array.from(label.value.trim()).length; count.textContent = n + ' / 16'; count.style.color = n > 16 ? 'var(--red)' : ''; go.disabled = !n || n > 16; };
-    label.addEventListener('input', () => { dirty = true; sync(); });
+    // 预览里的那颗跟着变(拍板 33):改的换字,新加的排在最后;只在预览里,发布了才到孩子那边
+    const tell = () => { const lb = label.value.trim(); draft = k >= 0 ? { edit: { k, kind: b.kind, label: lb || b.label, until: keep || undefined }, add: null } : { edit: null, add: lb || '(按钮上的字)' }; pvSync(); };
+    label.addEventListener('input', () => { dirty = true; sync(); tell(); });
     brief.addEventListener('input', () => { dirty = true; });
-    drawSeg(); sync();
+    drawSeg(); sync(); tell();
     go.addEventListener('click', async () => {
       const nb = Object.assign({}, b, { label: label.value.trim(), brief: brief.value.trim() || undefined, until: keep || undefined });
       const list = k >= 0 ? t.buttons.map((x, j) => (j === k ? nb : x)) : t.buttons.concat([nb]);
@@ -319,17 +338,18 @@ export const PARENT_HOME_PAGE = String.raw`<!doctype html>
   };
   const inlineForm = (t, k) => {
     const f = buttonForm(t, k, (next) => { sel = next; render(); });
-    const close = h('button', { type: 'button', class: 'x', on: { click: () => { sel = null; dirty = false; render(); } } }, '收起');
+    const close = h('button', { type: 'button', class: 'x', on: { click: () => { sel = null; dirty = false; draft = { edit: null, add: null }; render(); pvSync(); } } }, '收起');
     return h('div', { class: 'grp box', id: 'pane' }, h('div', { class: 'row2' }, h('b', { style: 'font-size:17px' }, f.title), close), ...f.fields, h('div', { class: 'btns' }, f.del, f.go));
   };
   const openSheet = (...kids) => { $('#sheet-in').replaceChildren(...kids); $('#sheet').classList.add('on'); window.scrollTo(0, 0); };
   const closeSheet = () => $('#sheet').classList.remove('on');
   const editButton = (t, k) => {
     const f = buttonForm(t, k, () => closeSheet());
-    openSheet(h('div', { class: 'nav' }, h('button', { type: 'button', on: { click: () => { dirty = false; closeSheet(); } } }, '取消'), h('b', {}, f.title), f.go), ...f.fields, f.del ? h('button', { type: 'button', class: 'danger', on: { click: () => f.del.click() } }, '删掉这个按钮') : null);
+    openSheet(h('div', { class: 'nav' }, h('button', { type: 'button', on: { click: () => { dirty = false; draft = { edit: null, add: null }; closeSheet(); pvSync(); } } }, '取消'), h('b', {}, f.title), f.go), ...f.fields, f.del ? h('button', { type: 'button', class: 'danger', on: { click: () => f.del.click() } }, '删掉这个按钮') : null);
     setTimeout(() => f.label.focus(), 50);
   };
 
+  // ---- 这周的词:一行一个,念法空一格写在后面 ----
   // ---- 这周的词:一行一个,念法空一格写在后面 ----
   const editWords = (t) => {
     const en = t.lang === 'en';
@@ -347,7 +367,7 @@ export const PARENT_HOME_PAGE = String.raw`<!doctype html>
   };
 
   load();
-  WIDE.addEventListener('change', () => { if (D) { closeSheet(); render(); } });
+  WIDE.addEventListener('change', () => { if (!picked) dev = WIDE.matches ? 'tablet' : 'phone'; if (D) { closeSheet(); sel = null; draft = { edit: null, add: null }; render(); pvSync(); } else fit(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('#sheet').classList.contains('on') && !dirty) load(); });
 })();
 </script>

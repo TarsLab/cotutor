@@ -1092,9 +1092,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     // 工作台:对话原始视图、看原文、老师团、音色、设置、首页排版——给有技术背景的家长与开发者;家长端在 /parent
     if (p === '/dev') return { status: 200, html: DEV_PAGE };
     // 扫码页:在电脑上打开,iPad 用相机扫(不在孩子端的入口里)
-    if (p === '/qr') return ctx.listen ? { status: 200, html: qrPage(ws.config.title, ctx.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
+    if (p === '/dev/qr') return ctx.listen ? { status: 200, html: qrPage(ws.config.title, ctx.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     // 按住说话的试验页(真机上比策略用;不在孩子端与家长端的入口里)
-    if (p === '/voice-test') return { status: 200, html: VOICE_TEST_PAGE };
+    if (p === '/dev/voice-test') return { status: 200, html: VOICE_TEST_PAGE };
     // 主屏幕(iPad「添加到主屏幕」):清单与图标都按标题现生成,没有静态资源
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(ws.config.title), contentType: 'application/manifest+json; charset=utf-8' };
     const icon = /^\/icon-(\d{2,4})\.png$/.exec(p);

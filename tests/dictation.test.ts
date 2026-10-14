@@ -128,7 +128,7 @@ try {
   const card = kh.cards.find((c: J) => c.kind === 'dictation');
   check('孩子端首页:听写卡只有几个词,没有字', card && card.props.count === 4 && card.props.words.length === 0 && !JSON.stringify(kh).includes('鼓励'), JSON.stringify(card));
 
-  check('GET /dictation 与 /dictation/parent:经 app.ts 的 route() 进来,内联脚本能解析', parses((await call('GET', '/dictation')).html) && parses((await call('GET', '/dictation/parent')).html));
+  check('GET /dictation 与 /parent/dictation:经 app.ts 的 route() 进来,内联脚本能解析', parses((await call('GET', '/dictation')).html) && parses((await call('GET', '/parent/dictation')).html));
 
   // ---- 开始 ----
   check('开始:要 {home, n}', (await call('POST', '/api/dictation', { n: 0 })).status === 400 && (await call('POST', '/api/dictation', { home: homeId, n: 1 })).status === 404);
@@ -199,7 +199,7 @@ try {
     check('全量:鼓记 revealed、笔迹的 t 原样;事件 show / say(第 2 遍)/ reveal 都带 t', ff.first[1].chars[0].revealed === true && ff.first[1].chars[0].strokes[0][0][2] >= 10_000 && evs === 'show:1:120,say:1:300:2,reveal:1:9100', evs);
     const lst = (await call('GET', '/api/dictation')).json.sessions.find((x: J) => x.id === fid);
     check('家长列表:看了答案的 1 个,不算「自己写全」', lst.revealed === 1 && lst.firstOk === 0, JSON.stringify(lst));
-    check('录像页:/dictation/reel 内联脚本能解析', parses((await call('GET', '/dictation/reel')).html));
+    check('录像页:/parent/dictation/reel 内联脚本能解析', parses((await call('GET', '/parent/dictation/reel')).html));
     // 录像要的(《家长录像设计.md》拍板 13):擦掉的笔、屏幕尺寸、我来写、点格子回去改、回到对一对、切到别处 / 回来
     const pc = parseChars({ chars: [{ strokes: [[[1, 2, 3]]], undos: 2, gone: [{ t: 50, pts: [[4, 5, 6], [7, 8, 9]] }, { t: 'x', pts: [[1, 1, 1]] }, { t: 60, pts: [[1]] }] }] }, 1);
     check('擦掉的笔(gone)照收,坏的那几条丢掉、留下的笔不受影响', pc?.[0].gone?.length === 1 && pc[0].gone![0].t === 50 && pc[0].gone![0].pts.length === 2 && pc[0].strokes.length === 1, JSON.stringify(pc));
@@ -209,7 +209,7 @@ try {
     const fv = (await call('GET', `/api/dictation/${fid}`)).json.events.find((e: J) => e.kind === 'view');
     check('事件:view 带屏幕尺寸;trace / open / close / away / back 都收;view 没尺寸 400', st.join() === '200,200,200,200,200,200,400' && fv.w === 1180 && fv.h === 820, st.join());
     const reelPage = (await call('GET', '/dictation?reel=' + fid)).html ?? '';
-    check('听写页内联了录像(drBuild / drFrameAt / drClock),脚本能解析;录像外壳带录像栏', parses(reelPage) && reelPage.includes('function drBuild(') && reelPage.includes('function drFrameAt(') && reelPage.includes('function drClock(') && !reelPage.includes('/parent') && ((await call('GET', '/dictation/reel')).html ?? '').includes('id="rl-seek"'));
+    check('听写页内联了录像(drBuild / drFrameAt / drClock),脚本能解析;录像外壳带录像栏', parses(reelPage) && reelPage.includes('function drBuild(') && reelPage.includes('function drFrameAt(') && reelPage.includes('function drClock(') && !reelPage.includes('/parent') && ((await call('GET', '/parent/dictation/reel')).html ?? '').includes('id="rl-seek"'));
   }
   now = new Date(2026, 9, 10, 20, 0);
   const home2 = await publish(DRAFT.replace('雪\n', '雪花\n'));
@@ -369,7 +369,7 @@ try {
     const ec = kh2.cards.find((c: J) => c.kind === 'dictation');
     check('英文听写卡:孩子端带 lang en、几个单词、没有字;归英语老师', ec?.props.lang === 'en' && ec.props.count === 2 && ec.owner === 'english-tutor' && !JSON.stringify(kh2).includes('yellow'), JSON.stringify(ec));
     const page = (await call('GET', '/dictation?lang=en')).html;
-    check('GET /dictation?lang=en 是英文那页(四线三格),内联脚本能解析;家长页、录像页也能解析', parses(page) && (page ?? '').includes('单词听写') && (page ?? '').includes('EN_LINES') && parses((await call('GET', '/dictation/parent')).html) && parses((await call('GET', '/dictation/reel')).html));
+    check('GET /dictation?lang=en 是英文那页(四线三格),内联脚本能解析;家长页、录像页也能解析', parses(page) && (page ?? '').includes('单词听写') && (page ?? '').includes('EN_LINES') && parses((await call('GET', '/parent/dictation')).html) && parses((await call('GET', '/parent/dictation/reel')).html));
     const st = await call('POST', '/api/dictation', { home: enHome, n: 0 });
     const id = st.json.id as string;
     check('开始:lang en、一个单词一格、交卷前没有字', st.status === 201 && st.json.lang === 'en' && st.json.sizes.join() === '1,1' && !JSON.stringify(st.json).includes('red'), JSON.stringify(st.json));

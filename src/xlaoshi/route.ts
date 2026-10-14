@@ -1,8 +1,8 @@
 /**
- * /xlaoshi 与 /api/xlaoshi/*:小老师的页面与接口(《wip/小老师设想.md》)。
+ * /parent/xlaoshi(家长端)与 /api/xlaoshi/*:小老师的页面与接口(《wip/小老师设想.md》)。
  * cotutor 只在 app.ts 的 route() 里接一行;这里引用 cotutor 的东西,cotutor 别处不引用这里。拆掉 = 删 src/xlaoshi/ 和那一行。
  *
- *   GET  /xlaoshi                        页面
+ *   GET  /parent/xlaoshi                 页面
  *   GET  /api/xlaoshi                    讲过的(新的在前)
  *   POST /api/xlaoshi                    {topic} 出一道题
  *   GET  /api/xlaoshi/<id>               一次讲课的全部
@@ -181,7 +181,7 @@ function full(d: SessionData, hasKey: boolean): Record<string, unknown> {
 
 export async function xlaoshiRoute(method: string, url: URL, ctx: { ws: Workspace; now: () => Date }, body: unknown, deps: XlaoshiDeps = DEFAULT_DEPS): Promise<RouteResult | null> {
   const p = url.pathname;
-  if (p === '/xlaoshi' || p === '/xlaoshi/') return method === 'GET' ? { status: 200, html: XLAOSHI_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
+  if (p === '/parent/xlaoshi' || p === '/parent/xlaoshi/') return method === 'GET' ? { status: 200, html: XLAOSHI_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
   if (p !== '/api/xlaoshi' && !p.startsWith('/api/xlaoshi/')) return null;
   const root = ctx.ws.root;
 

@@ -112,7 +112,7 @@ try {
   const st = await api('POST', '/api/dictation', { home: h0, n });
   ok('开一次听写(孩子端点「听写」)', st.status === 201, JSON.stringify(st.json).slice(0, 120));
   await tap(`[...document.querySelectorAll('.seg a')].find((a) => a.textContent === '记录')`);
-  ok('「记录」:有两个标签,「记录」亮着;听写那一行挂在语文下面,点了去录像', await until(`location.pathname === '/parent' && document.querySelector('#ptabs .on')?.textContent === '记录' && !!document.querySelector('.pt[data-tutor="chinese-tutor"] a.tr-x[href^="/dictation/reel?id="]')`, 80));
+  ok('「记录」:有两个标签,「记录」亮着;听写那一行挂在语文下面,点了去录像', await until(`location.pathname === '/parent' && document.querySelector('#ptabs .on')?.textContent === '记录' && !!document.querySelector('.pt[data-tutor="chinese-tutor"] a.tr-x[href^="/parent/dictation/reel?id="]')`, 80));
   console.log('  ', await shot('parent-record.png'));
   await tap(`[...document.querySelectorAll('#ptabs a')].find((a) => a.textContent === '首页')`);
   ok('「首页」标签回到 /parent/home', await until(`location.pathname === '/parent/home'`));

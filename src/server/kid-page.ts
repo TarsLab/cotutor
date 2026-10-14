@@ -982,11 +982,11 @@ __REEL_JS__
     const M = S.mods || { dictation: [], talks: [] };
     for (const x of M.dictation.filter((x) => ymd(x.startedAt) === H.date)) {
       const sub = [hhmm(x.startedAt), x.revealed ? '看了答案 ' + x.revealed + ' 个' : '', x.asked ? '再写 ' + x.asked + ' 个' : '', x.done ? '对好了' : x.checked ? '交了' : '还在写'].filter(Boolean).join(' · ');
-      put(owner('dictation', x.tutor), xrow('听写', '/dictation/reel?id=' + encodeURIComponent(x.id), (x.lesson ? x.lesson + ' · ' : '') + x.words.length + ' 个词', sub));
+      put(owner('dictation', x.tutor), xrow('听写', MODE.links.dictationReel + encodeURIComponent(x.id), (x.lesson ? x.lesson + ' · ' : '') + x.words.length + ' 个词', sub));
     }
     for (const x of M.talks.filter((x) => ymd(x.createdAt) === H.date && x.call)) {
       const n = x.list.words.length + x.list.sentences.length;
-      put(owner('talk', null), xrow('口语课', '/talk#/review/' + encodeURIComponent(x.id), n + ' 句口语单', [hhmm(x.call.startedAt), '跟读 ' + x.call.read + '/' + x.call.items + ' 句', '聊了 ' + Math.max(1, Math.round(x.call.ms / 60000)) + ' 分钟'].join(' · ')));
+      put(owner('talk', null), xrow('口语课', MODE.links.talkReview + encodeURIComponent(x.id), n + ' 句口语单', [hhmm(x.call.startedAt), '跟读 ' + x.call.read + '/' + x.call.items + ' 句', '聊了 ' + Math.max(1, Math.round(x.call.ms / 60000)) + ' 分钟'].join(' · ')));
     }
     return out;
   };
@@ -3482,10 +3482,13 @@ export interface KidPageMode {
   synth?: boolean;
   /** 录像里孩子的屏幕(/reel,《家长录像设计.md》拍板 6):孩子端的样子,数据是 /reel 给的一个话题,只读、不记、点不动 */
   reel?: boolean;
+  /** 家长端清单上的跳转(听写的录像、口语课的回看):只在家长模式由服务端填,孩子端页面里永远没有家长端的路径 */
+  links?: { dictationReel: string; talkReview: string };
 }
 
 /** 孩子端页面:标题(已转义)填进去;mode 见 KidPageMode,不给 = 孩子端 */
 export function kidPage(title: string, mode: KidPageMode = {}, stageV = '0'): string {
   const shown = mode.parent ? `${title} · 家长` : title;
-  return KID_PAGE.replaceAll('__TITLE__', shown).replace('__SHORT__', shown).replace('__MODE__', JSON.stringify(mode)).replace('__STAGE_V__', stageV).replace('__MANIFEST__', mode.parent ? '/parent/manifest.webmanifest' : '/manifest.webmanifest');
+  const m: KidPageMode = mode.parent ? { ...mode, links: { dictationReel: '/parent/dictation/reel?id=', talkReview: '/parent/talk#/review/' } } : mode;
+  return KID_PAGE.replaceAll('__TITLE__', shown).replace('__SHORT__', shown).replace('__MODE__', JSON.stringify(m)).replace('__STAGE_V__', stageV).replace('__MANIFEST__', mode.parent ? '/parent/manifest.webmanifest' : '/manifest.webmanifest');
 }

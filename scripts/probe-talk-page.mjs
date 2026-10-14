@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 口语课页面(/talk)的手动验收,不花钱:真 serve(临时 workspace,talk.enabled)+ 假 realtime(tests/_fake-realtime.ts,COTUTOR_TALK_ENDPOINT 指过去)
+ * 口语课页面(家长端 /parent/talk,孩子那一屏 /talk)的手动验收,不花钱:真 serve(临时 workspace,talk.enabled)+ 假 realtime(tests/_fake-realtime.ts,COTUTOR_TALK_ENDPOINT 指过去)
  * + 无头 Chrome(假麦克风放 say 念的一句英文)。走一遍:不拍自己填 → 口语单 → 给孩子 → 打电话 → 跟读按住 / 松手 / 下一句 → 聊 → 挂断 → 回看。
  * 逐项:页面连上、第一句 cue、按住时 PCM 到了假百炼、老师的声音排进 AudioContext、下一句、开聊(第二条会话)、聊里孩子出声老师被掐、挂断后回看有字。
  * 用法:node scripts/probe-talk-page.mjs [--keep] [--real]
@@ -84,7 +84,7 @@ try {
   await send('Page.addScriptToEvaluateOnNewDocument', { source: INJECT });
 
   // ---- 家长:不拍自己填 → 口语单 ----
-  await send('Page.navigate', { url: `${base}/talk` });
+  await send('Page.navigate', { url: `${base}/parent/talk` });
   ok('首页:开着,有拍照与「不拍,自己填」', await until(`document.querySelector('#home').classList.contains('on') && document.querySelector('#h-off').hidden && document.querySelector('#h-blank')`));
   await click('#h-blank');
   ok('开一次 → 口语单页', await until(`document.querySelector('#list').classList.contains('on') && location.hash.startsWith('#/list/')`));
@@ -141,6 +141,6 @@ try {
   if (browser) browser.kill();
   fake.close();
   if (!keep) { serve.kill(); await sleep(300); try { rmSync(tmp, { recursive: true, force: true }); } catch {} }
-  else { serve.unref(); console.log(`serve 留着:${base}/talk  workspace ${wsRoot}`); }
+  else { serve.unref(); console.log(`serve 留着:${base}/parent/talk  workspace ${wsRoot}`); }
 }
 process.exit(bad ? 1 : 0);

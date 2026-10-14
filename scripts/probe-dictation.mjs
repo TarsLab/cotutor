@@ -4,7 +4,7 @@
  * 起 cotutor mock,Chrome 开孩子端首页(iPad 横屏 1180×820)→ 点听写卡进 /dictation → 开始 →
  * 照 hanzi-writer-data 的中线用鼠标写:春天写对、鼓励的鼓少写第 7 笔、叶写成页 → 每个词「写好了」→ 对答案:
  * 三张词卡、书上的字叠着、鼓励与叶问「这个再写一遍?」、春天不问;拿开 / 叠上蓝字 → 点鼓逐笔看:13 个方块、写到最后 →
- * 我再写一遍:范字、两个空格,写全了交 → 鼓励不再问 → 对好了回首页 → 家长页 /dictation/parent:少了第 7 笔、可能写成了别的字。
+ * 我再写一遍:范字、两个空格,写全了交 → 鼓励不再问 → 对好了回首页 → 家长页 /parent/dictation:少了第 7 笔、可能写成了别的字。
  * 手指走 CDP 的 Input.dispatchMouseEvent(经命中判定),不用 dispatchEvent。
  *
  * 用法:node scripts/probe-dictation.mjs [--out <截图目录>] [--keep](留下 mock)
@@ -159,7 +159,7 @@ try {
   ok('对好了:回首页', await waitFor(`location.pathname === '/' && !!document.querySelector('#deck .pc.front .bt-x-dictation')`));
 
   // ---- 家长 ----
-  await send('Page.navigate', { url: `${base}/dictation/parent` });
+  await send('Page.navigate', { url: `${base}/parent/dictation` });
   ok('家长页:鼓少了第 7 笔、问了才改、看了答案:叶、要再练的词里有叶', await waitFor(`document.body.innerText.includes('少了第 7 笔') && document.body.innerText.includes('看了答案:叶') && document.body.innerText.includes('问了才改') && (document.querySelector('textarea')?.value ?? '').includes('叶')`), (await evaluate(`document.body.innerText.slice(0, 400)`)) ?? '');
   await shot('09-parent');
   // ---- 录像(《家长录像设计.md》拍板 13–15):上半是听写页本身(iframe,/dictation?reel=),下半是和话题一样的录像栏 ----
@@ -168,7 +168,7 @@ try {
   const endOk = await waitFor(`Number(document.querySelector('#rl-seek').max) > 1000 && Number(document.querySelector('#rl-seek').value) >= Number(document.querySelector('#rl-seek').max) - 100 && document.querySelector('#rl-play').getAttribute('aria-label') === '播放' && !!document.querySelector('#rl-frame').contentDocument?.querySelector('#v-check.on')`, 10000);
   ok('一进来停在最后一帧:进度在头、不放、孩子的屏幕是对一对', endOk, await evaluate(`JSON.stringify({ v: document.querySelector('#rl-seek').value, max: document.querySelector('#rl-seek').max, play: document.querySelector('#rl-play').getAttribute('aria-label'), view: document.querySelector('#rl-frame').contentDocument?.querySelector('.view.on')?.id })`));
   await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
-  ok('录像:外壳里上半是听写页的录像模式、下半录像栏;时间是「放到哪 / 一共多久」;一个词一章(三章 + 对一对)', await waitFor(`location.pathname === '/dictation/reel' && !document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').getAttribute('src') || '').startsWith('/dictation?reel=') && !!${K}?.querySelector('#v-listen.on') && /^\\d+:\\d\\d \\/ \\d+:\\d\\d$/.test(document.querySelector('#rl-clock').textContent) && document.querySelectorAll('#rl-chaps i').length === 3`, 10000), await evaluate(`JSON.stringify({ src: document.querySelector('#rl-frame').getAttribute('src'), clock: document.querySelector('#rl-clock').textContent, chaps: document.querySelectorAll('#rl-chaps i').length, chap: document.querySelector('#rl-chap').textContent })`));
+  ok('录像:外壳里上半是听写页的录像模式、下半录像栏;时间是「放到哪 / 一共多久」;一个词一章(三章 + 对一对)', await waitFor(`location.pathname === '/parent/dictation/reel' && !document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').getAttribute('src') || '').startsWith('/dictation?reel=') && !!${K}?.querySelector('#v-listen.on') && /^\\d+:\\d\\d \\/ \\d+:\\d\\d$/.test(document.querySelector('#rl-clock').textContent) && document.querySelectorAll('#rl-chaps i').length === 3`, 10000), await evaluate(`JSON.stringify({ src: document.querySelector('#rl-frame').getAttribute('src'), clock: document.querySelector('#rl-clock').textContent, chaps: document.querySelectorAll('#rl-chaps i').length, chap: document.querySelector('#rl-chap').textContent })`));
   ok('孩子的屏幕:听写本三行(2、2、1 格)、右边大格;录像模式(点不动)', await evaluate(`[...${K}.querySelectorAll('#l-book .brow')].map((r) => r.querySelectorAll('.padbox').length).join() === '2,2,1' && ${K}.querySelectorAll('#l-big .padbox').length === 1 && ${K}.body.classList.contains('rlk')`));
   ok('进度条上的点:给答案一个、撤销与擦掉重写两个', await evaluate(`document.querySelectorAll('#rl-marks i.rv').length === 1 && document.querySelectorAll('#rl-marks i.erase').length === 2`), await evaluate(`[...document.querySelectorAll('#rl-marks i')].map((i) => i.className).join()`));
   await tap('#rl-play');

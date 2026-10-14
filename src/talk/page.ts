@@ -1,10 +1,10 @@
 /**
- * /talk:口语课的页面(《wip/口语课设想.md》;原型 https://claude.ai/artifact/9cC72r5d8Jyhayikz3rYaP)。
- * 家长与孩子同一页,按 hash 切:#/ 拍照与讲过的(家长)、#/list/<id> 改口语单(家长)、#/kid/<id> 跟读与聊(孩子,家长递过去)、#/review/<id> 回看(家长)。
+ * /talk(孩子端)与 /parent/talk(家长端):口语课的页面(《wip/口语课设想.md》;原型 https://claude.ai/artifact/9cC72r5d8Jyhayikz3rYaP)。
+ * 家长与孩子同一份页面,按 hash 切;/talk 只认孩子那一屏,别的 hash 回孩子端首页:#/ 拍照与讲过的(家长)、#/list/<id> 改口语单(家长)、#/kid/<id> 跟读与聊(孩子,家长递过去)、#/review/<id> 回看(家长)。
  * 声音:getUserMedia → AudioWorklet 降到 16k PCM16,100 毫秒一块走 WebSocket 二进制帧上去;下来的 24k PCM16 一块块排进 AudioContext 放。
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
-export const TALK_PAGE = `<!doctype html>
+const TALK_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -231,10 +231,12 @@ export const TALK_PAGE = `<!doctype html>
   const show = (name) => { for (const v of views) $('#' + v).classList.toggle('on', v === name); };
   const go = (hash) => { location.hash = hash; };
   /** 孩子从首页英语老师卡上的「口语课」进来(《首页设计.md》拍板 18):「回去」与打完都回首页,不进家长的那几屏 */
-  const FROM_HOME = new URLSearchParams(location.search).get('home') === '1';
+  const KID_ONLY = __TALK_KID_ONLY__;
+  const FROM_HOME = KID_ONLY || new URLSearchParams(location.search).get('home') === '1';
   if (FROM_HOME) $('#k-back').setAttribute('href', '/');
   const route = () => {
     const m = /^#\\/(list|kid|review)\\/([^/]+)/.exec(location.hash);
+    if (KID_ONLY && (!m || m[1] !== 'kid')) { location.replace('/'); return; }
     if (!m) { show('home'); void home(); return; }
     if (m[1] === 'list') { show('list'); void list(m[2]); }
     else if (m[1] === 'kid') { show('kid'); void kid(m[2]); }
@@ -478,3 +480,8 @@ export const TALK_PAGE = `<!doctype html>
 })();
 </script>
 </body></html>`;
+
+/** kidOnly = 孩子端 /talk:只有跟读与聊那一屏;家长端 /parent/talk 全有 */
+export function talkPage(kidOnly: boolean): string {
+  return TALK_PAGE.replace('__TALK_KID_ONLY__', kidOnly ? 'true' : 'false');
+}

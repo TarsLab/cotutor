@@ -156,7 +156,7 @@ ${EN_BOX_JS}
       ? (s.asked.length ? '问了「再写一遍」的 ' + s.asked.length + ' 个,重写后写全的 ' + fixed + ' 个。' : '没有要问「再写一遍」的。') + '孩子自己点重写的 ' + selfs.length + ' 个。' + (s.doneAt ? '' : '还没点「对好了」。')
       : '';
     if (s.photo) body.append(h('div', { 'class': 'src' }, h('img', { src: '/api/dictation/photos/' + s.photo + '/image', alt: '拍的照片' }), h('span', { text: '拍照听写' + (s.lesson ? ' · ' + s.lesson : '') })));
-    body.append(h('a', { 'class': 'reel', href: '/dictation/reel?id=' + encodeURIComponent(s.id) }, '看录像:这次是怎么写的 ›'));
+    body.append(h('a', { 'class': 'reel', href: '/parent/dictation/reel?id=' + encodeURIComponent(s.id) }, '看录像:这次是怎么写的 ›'));
     body.append(h('div', { 'class': 'sum' }, h('b', { text: head }), h('span', { text: (when.getMonth() + 1) + ' 月 ' + when.getDate() + ' 日 ' + String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0') + ' 开始。' + line })));
 
     var rows = s.words.map(function (w, i) {

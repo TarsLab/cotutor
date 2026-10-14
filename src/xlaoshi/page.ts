@@ -1,5 +1,5 @@
 /**
- * /xlaoshi:小老师的页面(家长用,孩子端没有入口;原型 https://claude.ai/artifact/RyBTC8csepmjP4GVCMzcag)。
+ * /parent/xlaoshi:小老师的页面(家长用,孩子端没有入口;原型 https://claude.ai/artifact/RyBTC8csepmjP4GVCMzcag)。
  * 五屏同一页,按 hash 切:#/ 出题与讲过的、#/talk/<id> 边画边讲、#/review/<id> 回看与改转写、#/notes/<id> 初步理解、#/ask/<id>/<k> 当面追问。
  * 画板自己一张 canvas(不进舞台包);一笔 = 颜色 + 粗细 + [x, y, 离开始讲的毫秒];原声 MediaRecorder,同时浏览器一句一句地认。
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。

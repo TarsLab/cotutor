@@ -4,8 +4,8 @@
  * 词是答案:孩子端交卷(check)之前只拿得到几个词、每个词几个字和念的音频;交了才拿到字与「要不要再写一遍」。
  *
  *   GET  /dictation?home=<id>&n=<k>          孩子的听写页(从首页的听写卡点进来);不带 home 是拍照开始(老师卡上常驻的「拍照听写」,?tutor=<老师>)
- *   GET  /dictation/parent                   家长看结果
- *   GET  /dictation/reel?id=<id>             家长看录像:一笔一笔重放这次听写
+ *   GET  /parent/dictation                   家长看结果(家长端)
+ *   GET  /parent/dictation/reel?id=<id>      家长看录像(家长端;上半 iframe 开 /dictation?reel=<id>)
  *   POST /api/dictation/photos               {image: data:image/jpeg;base64,…} 拍的照片:存下、后台开始认,回 {id}
  *   GET  /api/dictation/photos/<id>          认的进度:{state, items, lesson, full};页面轮询着一项一项画框
  *   GET  /api/dictation/photos/<id>/image    那张照片
@@ -128,7 +128,7 @@ export function dictationRoute(method: string, url: URL, ctx: AppContext, body: 
   return handleDictation(method, url, dictationDeps(ctx), body);
 }
 
-const isOurs = (p: string): boolean => p === '/dictation' || p.startsWith('/dictation/') || p === '/api/dictation' || p.startsWith('/api/dictation/');
+const isOurs = (p: string): boolean => p === '/dictation' || p === '/dictation/' || p === '/parent/dictation' || p === '/parent/dictation/reel' || p === '/api/dictation' || p.startsWith('/api/dictation/');
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const bad = (message: string): RouteResult => ({ status: 400, json: { error: 'bad_request', message } });
@@ -295,8 +295,8 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
   if (!isOurs(p)) return null;
   // 英文单词听写另一页(四线三格写整个单词,《wip/听写设想.md》拍板 15)
   if (p === '/dictation' || p === '/dictation/') return method === 'GET' ? { status: 200, html: url.searchParams.get('lang') === 'en' ? DICTATION_EN_PAGE : DICTATION_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
-  if (p === '/dictation/parent') return method === 'GET' ? { status: 200, html: DICTATION_PARENT_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
-  if (p === '/dictation/reel') return method === 'GET' ? { status: 200, html: DICTATION_REEL_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
+  if (p === '/parent/dictation') return method === 'GET' ? { status: 200, html: DICTATION_PARENT_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
+  if (p === '/parent/dictation/reel') return method === 'GET' ? { status: 200, html: DICTATION_REEL_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
   if (!p.startsWith('/api/')) return { status: 404, json: { error: 'not_found' } };
   const root = deps.root;
   const now = deps.now();

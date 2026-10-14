@@ -64,8 +64,8 @@ ${DICT_REEL_JS}
   };
   var reelBoot = function () {
     var host = null; try { if (window.parent !== window && typeof window.parent.cotutorReelReady === 'function') host = window.parent; } catch (e) {}
-    // 直接打开(不在外壳里):去外壳
-    if (!host) { location.replace('/dictation/reel?id=' + encodeURIComponent(REEL_ID)); return; }
+    // 只在家长端的录像外壳里开;直接打开什么都不放(孩子端页面里不写家长端的路径)
+    if (!host) { document.body.textContent = '录像要从家长端打开'; return; }
     document.body.classList.add('rlk');
     // 点不动,只能上下翻:点、按在捕获阶段挡掉(滚动不受影响)
     ['click', 'pointerdown', 'pointerup', 'dblclick', 'contextmenu'].forEach(function (k) { document.addEventListener(k, function (e) { e.stopPropagation(); if (k !== 'pointerdown' && k !== 'pointerup') e.preventDefault(); }, true); });

@@ -19,8 +19,8 @@
 - `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`
 - `src/schema/` 契约(zod,类型即文档);`src/lib/` 纯函数,离屏可测;`src/cards/` 卡的注册表;`src/clis/` 各 agent CLI 的适配器(一家一个文件,读输出、关工具、环境、出厂模板都在里面,别处只认统一事件)
 - `src/paint/` 你说我画的画图卡在后台画(百炼文生图,同步接口):拼提示词、画、落盘到卡的资产目录、下发时补画好没有;runner 一轮跑完起它,app 的孩子 / 家长那天接一行;设计在 `docs/wip/你说我画设想.md`
-- `src/stage/` 舞台包(React,esbuild 打到 `dist/stage/`);`src/cli/` 命令;`src/server/` 服务、runner、页面(孩子端 `/`、家长端 `/parent`(记录)与 `/parent/home`(设孩子的首页)、工作台 `/dev`,另有扫码 `/qr`、按住说话试验页 `/voice-test`)、mock
-- 一个场景一个目录、cotutor 只在 app.ts 接一行的模块:`src/xlaoshi/`(小老师,`/xlaoshi`)、`src/talk/`(口语课,`/talk`:百炼 realtime 直连,自带零依赖 WebSocket 服务端,serve.ts 的 upgrade 多接一行)、`src/dictation/`(听写,`/dictation`:从首页的 `dictation` 卡点进来,所以多了卡的注册、kid-page 画卡、mock 接一行;老师卡上常驻「拍照听写」,照片交百炼视觉模型流式认词;英文单词听写是另一页 `/dictation?lang=en`(四线三格,不逐字母比);比对照搬 hanzi-writer 的一笔像不像,改它先过 `tests/dictation.test.ts`,页面走 `scripts/probe-dictation.mjs` 与 `probe-dictation-en.mjs`);设计在 `docs/wip/`
+- `src/stage/` 舞台包(React,esbuild 打到 `dist/stage/`);`src/cli/` 命令;`src/server/` 服务、runner、页面,地址按端分:孩子端 `/`、`/dictation`、`/talk`(只有跟读那一屏);家长端都在 `/parent` 下(记录 `/parent`、设首页 `/parent/home`、听写 `/parent/dictation`、口语课 `/parent/talk`、小老师 `/parent/xlaoshi`);工作台都在 `/dev` 下(扫码 `/dev/qr`、按住说话试验页 `/dev/voice-test`)。录像里孩子的屏幕(`/reel`、`/dictation?reel=`)是孩子端页面本身,只开在家长端的 iframe 里;孩子端页面的源码里不出现 `/parent`,家长清单上的跳转由服务端只在家长模式塞进 `MODE.links`、mock
+- 一个场景一个目录、cotutor 只在 app.ts 接一行的模块:`src/xlaoshi/`(小老师,`/parent/xlaoshi`)、`src/talk/`(口语课,孩子 `/talk`、家长 `/parent/talk`:百炼 realtime 直连,自带零依赖 WebSocket 服务端,serve.ts 的 upgrade 多接一行)、`src/dictation/`(听写,`/dictation`:从首页的 `dictation` 卡点进来,所以多了卡的注册、kid-page 画卡、mock 接一行;老师卡上常驻「拍照听写」,照片交百炼视觉模型流式认词;英文单词听写是另一页 `/dictation?lang=en`(四线三格,不逐字母比);比对照搬 hanzi-writer 的一笔像不像,改它先过 `tests/dictation.test.ts`,页面走 `scripts/probe-dictation.mjs` 与 `probe-dictation-en.mjs`);设计在 `docs/wip/`
 - `tests/` 一文件一子进程,零依赖 `check()`;`_fake-cli.ts` / `_fake-tts.ts` 让全流程不花钱;`fixtures/board/` 真跑样本
 
 ## 运行与验证

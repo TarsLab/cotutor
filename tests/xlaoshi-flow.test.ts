@@ -1,5 +1,5 @@
 /**
- * 小老师全流程(不花钱,《wip/小老师设想.md》):经 app.ts 的 route() 进 /xlaoshi(页面的内联脚本能解析)→ 出题 → 传原声 → 讲完了
+ * 小老师全流程(不花钱,《wip/小老师设想.md》):经 app.ts 的 route() 进 /parent/xlaoshi(页面的内联脚本能解析)→ 出题 → 传原声 → 讲完了
  * (浏览器那份够:不叫 paraformer;timeline.md、frames/ 生成)→ 家长改字 → 浏览器不够又拿不到 key:记 nokey →
  * 换假的 paraformer:自动补转、家长重转(改过的行留着)、补转失败 → Claude Code 写 notes.md → 改勾 → 追问的回答(录音、笔迹)进 timeline.md →
  * 家长记一句、列表的样子、帧;边界:cotutor 别处不引用 src/xlaoshi/。
@@ -43,11 +43,11 @@ const GOOD = [{ at: 1000, end: 4500, text: '我要讲十八张贴纸分给三个
 
 try {
   // ---- 页面 ----
-  const page = await call('GET', '/xlaoshi');
+  const page = await call('GET', '/parent/xlaoshi');
   const js = /<script>([\s\S]*)<\/script>/.exec(page.html ?? '')?.[1] ?? '';
   let parses = true;
   try { new Function(js); } catch (e) { parses = false; console.error(String(e)); }
-  check('GET /xlaoshi:经 app.ts 的 route() 进来,页面的内联脚本能解析', page.status === 200 && js.length > 1000 && parses);
+  check('GET /parent/xlaoshi:经 app.ts 的 route() 进来,页面的内联脚本能解析', page.status === 200 && js.length > 1000 && parses);
 
   // ---- 出题 ----
   const empty = await call('GET', '/api/xlaoshi');

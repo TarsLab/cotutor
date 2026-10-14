@@ -20,7 +20,7 @@ const chrome = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/M
 const port = 9341;
 const args = [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${port}`, '--window-size=1180,820', '--user-data-dir=/tmp/cotutor-probe-xlaoshi', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'];
 if (process.env.XLAOSHI_WAV) args.push(`--use-file-for-fake-audio-capture=${process.env.XLAOSHI_WAV}`);
-const proc = spawn(chrome, [...args, `${base}/xlaoshi`], { stdio: 'ignore' });
+const proc = spawn(chrome, [...args, `${base}/parent/xlaoshi`], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function target() {

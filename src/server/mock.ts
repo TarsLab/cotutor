@@ -547,7 +547,7 @@ export interface Mock {
   /** 等所有还在「想」的老师答完(测试用) */
   settle(): Promise<void>;
   handler(req: IncomingMessage, res: ServerResponse): void;
-  /** 在哪个地址上听着(serveMock 在 listen 之后填;扫码页 /qr 每次现问) */
+  /** 在哪个地址上听着(serveMock 在 listen 之后填;扫码页 /dev/qr 每次现问) */
   listen: (() => ListenInfo) | null;
 }
 
@@ -710,7 +710,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     const url = new URL(path, 'http://x');
     const p = url.pathname;
     if (p === '/') return { status: 200, html: kidPage(title, { synth: true }, await stageVersion()) };
-    if (p === '/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
+    if (p === '/dev/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
     // 家长端(《家长板书页设计.md》):同一个页面,家长模式;清单与一天的板书(答案不剥,第一节带一条给家长的尾巴与记忆,看旁注的样子)。mock 没有工作台 /dev
     if (p === '/parent') return { status: 200, html: kidPage(title, { parent: true, synth: true }, await stageVersion()) };
@@ -1075,5 +1075,5 @@ export async function serveMock(opts: ServeMockOptions = {}): Promise<ServeMockR
   const scheme = tls ? 'https' : 'http';
   const urls = [hostname(), ...lanAddresses()].map((h) => `${scheme}://${h}:${port}/`);
   mock.listen = () => listenInfo(Boolean(tls), port);
-  return { server, mock, port, https: Boolean(tls), urls, qrPage: `${scheme}://localhost:${port}/qr` };
+  return { server, mock, port, https: Boolean(tls), urls, qrPage: `${scheme}://localhost:${port}/dev/qr` };
 }

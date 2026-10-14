@@ -338,7 +338,7 @@ export const DEV_PAGE = `<!doctype html>
   <nav><a href="#chat" data-tab="chat" class="on">对话</a><a href="#team" data-tab="team">老师团</a><a href="#voices" data-tab="voices">音色</a><a href="#settings" data-tab="settings">设置</a></nav>
   <span class="health" id="health"></span>
   <a class="qrlink" href="/parent" target="_blank" title="家长端:日常看孩子的板书、看录像、打星、删话题、记账;iPad 上扫码进的就是它">家长端</a>
-  <a class="qrlink" href="/qr" target="_blank" title="iPad / iPhone 用相机扫,不用输地址">扫码打开</a>
+  <a class="qrlink" href="/dev/qr" target="_blank" title="iPad / iPhone 用相机扫,不用输地址">扫码打开</a>
 </header>
 <main id="chat" class="on">
   <aside>

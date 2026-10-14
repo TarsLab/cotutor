@@ -1,5 +1,5 @@
 /**
- * /dictation/reel?id=<id>:家长看听写的录像(《家长录像设计.md》拍板 13–15;录数据不录屏幕,不录孩子的声音)。
+ * /parent/dictation/reel?id=<id>:家长看听写的录像(《家长录像设计.md》拍板 13–15;录数据不录屏幕,不录孩子的声音)。
  * 和话题的录像同一个样子:上半是孩子的屏幕——听写页本身以录像模式开在 iframe 里(/dictation?reel=<id>,英文 &lang=en),
  * 照记录用写字屏自己的画法画;下半是录像栏(src/server/reel-dock.ts),只经 iframe 交过来的把手说话。
  * 声音:iframe 用这一页的 Audio(window.__cotutorAudio),家长第一次点这一页就解锁(Safari 只让手势里起的声音响)。
@@ -34,7 +34,7 @@ ${REEL_DOCK_JS}
   let toastTimer = 0;
   const toast = (text) => { const t = $('#toast'); t.textContent = text; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4000); };
   const blank = (text) => { $('#rl-screen').hidden = true; reelDock.close(); const b = document.createElement('div'); b.className = 'blank'; b.textContent = text; document.body.prepend(b); };
-  const exit = () => { if (history.length > 1) history.back(); else location.href = '/dictation/parent'; };
+  const exit = () => { if (history.length > 1) history.back(); else location.href = '/parent/dictation'; };
   // 孩子的屏幕放的声音用这一个 Audio:家长第一次点这一页时放一段静音解锁
   const audio = new Audio(); audio.preload = 'auto';
   window.__cotutorAudio = audio;

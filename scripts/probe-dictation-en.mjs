@@ -113,12 +113,12 @@ try {
   const list = await (await fetch(`${base}/api/dictation`)).json();
   const s = list.sessions.find((x) => x.lang === 'en');
   ok('存下的:lang en、三个单词、看了答案 1 个、对好了', s && s.words.join() === 'red,yellow,bus' && s.revealed === 1 && s.done, JSON.stringify(s));
-  await send('Page.navigate', { url: `${base}/dictation/parent` });
+  await send('Page.navigate', { url: `${base}/parent/dictation` });
   await waitFor(`document.querySelectorAll('#dates button').length > 0`);
   await evaluate(`[...document.querySelectorAll('#dates button')].find((b) => b.dataset.id === ${JSON.stringify(s?.id)})?.click()`);
   ok('家长页:四线三格的格、蓝字叠着、看了答案:yellow、不说逐笔的话', await waitFor(`document.querySelectorAll('svg.tz.en').length >= 3 && document.body.innerText.includes('看了答案:yellow') && !document.body.innerText.includes('笔顺')`));
   await shot('en-05-parent');
-  await send('Page.navigate', { url: `${base}/dictation/reel?id=${s?.id}` });
+  await send('Page.navigate', { url: `${base}/parent/dictation/reel?id=${s?.id}` });
   const K = `document.querySelector('#rl-frame').contentDocument`;
   await waitFor(`!document.querySelector('#reel').hidden`, 10000);
   await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);

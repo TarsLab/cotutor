@@ -102,5 +102,5 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
   const urls = [hostname(), ...lanAddresses()].map((h) => `${scheme}://${h}:${actual}/`);
   ctx.listen = () => listenInfo(Boolean(tls), actual);
   if (tls && !certCovers(tls.cert, localName())) warnings.push(`证书不含 ${localName()}:扫码打开会报「不安全」(重跑 cotutor cert,再重启 serve)`);
-  return { server, ctx, ws, port: actual, https: Boolean(tls), urls, url: urls[0], qrPage: `${scheme}://localhost:${actual}/qr`, warnings };
+  return { server, ctx, ws, port: actual, https: Boolean(tls), urls, url: urls[0], qrPage: `${scheme}://localhost:${actual}/dev/qr`, warnings };
 }

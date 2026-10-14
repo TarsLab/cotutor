@@ -19,7 +19,7 @@ import { join } from 'node:path';
 import type { AppContext, RouteResult } from '../server/app.ts';
 import type { ListItem } from './lib/used.ts';
 import { readList } from './list.ts';
-import { TALK_PAGE } from './page.ts';
+import { talkPage } from './page.ts';
 import { dashscopeAuth } from './realtime.ts';
 import { TalkCall } from './relay.ts';
 import { ID_RE, createTalk, deleteTalk, dirOf, listTalks, readMeta, readTalk, writeMeta } from './store.ts';
@@ -67,7 +67,9 @@ export function parseItems(v: unknown, max: number): ListItem[] | null {
 export function makeTalkRoute(deps: TalkDeps = { readList }) {
   return async function talkRoute(method: string, url: URL, ctx: AppContext, body: unknown): Promise<RouteResult | null> {
     const p = url.pathname;
-    if (p === '/talk' || p === '/talk/') return method === 'GET' ? { status: 200, html: TALK_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
+    // 孩子端只有跟读与聊那一屏(#/kid/<id>);拍口语单、改口语单、回看在家长端 /parent/talk(同一份页面,家长递给孩子也在那里)
+    if (p === '/talk' || p === '/talk/') return method === 'GET' ? { status: 200, html: talkPage(true) } : { status: 405, json: { error: 'method_not_allowed' } };
+    if (p === '/parent/talk' || p === '/parent/talk/') return method === 'GET' ? { status: 200, html: talkPage(false) } : { status: 405, json: { error: 'method_not_allowed' } };
     if (p !== '/api/talk' && !p.startsWith('/api/talk/')) return null;
     const ws = ctx.ws;
     const cfg = ws.config.talk;

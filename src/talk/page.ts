@@ -495,7 +495,7 @@ __WORD_DRAW_JS__
       A.onLevel = (v) => { const rb = document.querySelectorAll('#k-rd .lv2 i'); for (let i = 0; i < rb.length; i++) { const w = 1 - Math.abs(i - 2) / 3; rb[i].style.height = Math.round(6 + 22 * Math.min(1, v * 6) * w) + 'px'; } const bars = $('#k-lv').children; const k = Math.min(1, v * 6); for (let i = 0; i < bars.length; i++) { const w = 1 - Math.abs(i - 2) / 3; bars[i].style.height = Math.round(6 + 22 * k * w) + 'px'; } if (C.st && C.st.phase === 'chat') { const you = !A.playing() && !C.saying; $('#k-av').classList.toggle('listen', k > 0.12 && you); $('#k-call').classList.toggle('you', you); $('#k-callst').textContent = you ? '轮到你说' : C.saying ? '在念这个词…' : (C.interrupt ? '老师在说,想插嘴就直接说' : '老师在说,等她说完你再说'); } };
       setHint('接通中…');
       const ws = new WebSocket(wsUrl); ws.binaryType = 'arraybuffer'; C.ws = ws;
-      ws.onopen = () => { A.muted = false; C.startedAt = Date.now(); setHint(''); C.timer = setInterval(C.tick, 500); };
+      ws.onopen = () => { A.muted = false; C.startedAt = Date.now(); setHint(''); C.timer = setInterval(C.tick, 500); C.view(); };
       ws.onmessage = (e) => {
         if (typeof e.data !== 'string') { A.play(e.data); return; }
         let m; try { m = JSON.parse(e.data); } catch (x) { return; }
@@ -523,6 +523,11 @@ __WORD_DRAW_JS__
       if (C.st.phase === 'read') setHint(C.st.rd && C.st.rd.mode === 'wait' ? '想读就读,或者点「下一句」' : C.st.rd && C.st.rd.mode === 'listen' ? '读完停一下就好' : '');
       else if (C.st.phase === 'chat') setHint(A.playing() ? '' : '说完停一下老师就接');
     };
+    /** 屏幕多大(录像按它开 iframe);转屏、键盘起落后停手 300 毫秒再报,变了才报 */
+    let viewKey = '', viewTimer = 0;
+    C.view = () => { const k = innerWidth + 'x' + innerHeight; if (k === viewKey) return; viewKey = k; C.send({ t: 'view', w: innerWidth, h: innerHeight }); };
+    C.onResize = () => { clearTimeout(viewTimer); viewTimer = setTimeout(C.view, 300); };
+    window.addEventListener('resize', C.onResize);
     /** 单词卡上的「听」:浏览器的英文声按正常速度念;老师在说就等她说完;念的时候麦不推(不当孩子说的) */
     C.say = (w, btn) => {
       const ss = window.speechSynthesis;
@@ -535,7 +540,7 @@ __WORD_DRAW_JS__
         const off = () => { C.saying = false; btn.classList.remove('on'); clearTimeout(guard); };
         const guard = setTimeout(off, 4000);
         u.onend = off; u.onerror = off;
-        C.saying = true; btn.classList.add('on');
+        C.saying = true; btn.classList.add('on'); C.send({ t: 'say', w });
         ss.cancel(); ss.speak(u);
       };
       go();
@@ -543,11 +548,11 @@ __WORD_DRAW_JS__
     C.hangup = (why) => { C.send({ t: 'bye' }); C.finish(why || 'bye'); };
     C.finish = (why) => {
       if (C.ended) return; C.ended = true;
-      clearInterval(C.timer); A.close();
+      clearInterval(C.timer); A.close(); window.removeEventListener('resize', C.onResize);
       try { if (C.ws && C.ws.readyState <= 1) C.ws.close(1000, why); } catch (e) {}
       call = null;
       // 孩子从首页进来的(?home=1):打完回首页;家长递过去的:打完到回看
-      if (location.hash.startsWith('#/kid/')) { if (FROM_HOME) location.href = '/'; else go('#/review/' + C.id); }
+      if (location.hash.startsWith('#/kid/')) { if (FROM_HOME) location.href = '/'; else { justEnded = C.id; go('#/review/' + C.id); } }
     };
     return C;
   }
@@ -569,8 +574,11 @@ __WORD_DRAW_JS__
   $('#k-back').addEventListener('click', () => { if (call) call.hangup('left'); });
 
   // ---- 家长:回看 ----
-  async function review(id) {
+  /** 刚挂的那一次:服务端还在落盘(混录像的声音要一会儿),字没好就隔 0.4 秒再拿,最多 6 秒 */
+  let justEnded = null;
+  async function review(id, tries = 0) {
     let d; try { d = await api('GET', '/api/talk/' + id); } catch (e) { toast('没有这一次'); go('#/'); return; }
+    if (!d.transcript && justEnded === id && tries < 15) { setTimeout(() => { if (location.hash === '#/review/' + id) void review(id, tries + 1); }, 400); return; }
     const t = d.transcript;
     $('#r-title').textContent = fmtDate(d.meta.createdAt);
     $('#r-meta').textContent = t ? '聊了 ' + Math.round(t.ms / 1000) + ' 秒 · ' + ({ bye: '孩子挂的', time: '到点了', idle: '半天没说话', left: '离开了页面' }[t.why] || t.why) + ' · token 进 ' + t.usage.input + ' 出 ' + t.usage.output : '还没聊';

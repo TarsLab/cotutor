@@ -145,6 +145,7 @@ const last = (k: { msgs: Msg[] }, t: string): Msg | undefined => [...k.msgs].rev
   const ok1 = await k.wait(() => k.msgs.some((m) => m.t === 'state' && m.item) && k.msgs.some((m) => m.t === 'tutor' && m.done !== undefined) && k.bins.length >= 1);
   const st = k.msgs.find((m) => m.t === 'state' && m.item)!;
   const c1 = fake.conns[0];
+  k.ws.send(JSON.stringify({ t: 'view', w: 1180, h: 820 }));
   check('接通:跟读的会话(手动、人设带 Ray 与口语单)、第一句 cue、状态(第 1/3 句)、老师的声音与字到孩子端', ok1 && c1.session?.turn_detection === null && String(c1.session?.instructions).includes('Ray') && String(c1.session?.instructions).includes('bus(公共汽车)') && c1.items[0]?.content?.[0]?.text === '读这句:red' && st.phase === 'read' && st.i === 0 && st.n === 3 && st.item.en === 'red' && st.interrupt === false && k.bins[0] === 4800 && last(k, 'tutor')?.done === "It's a red car.", JSON.stringify({ st, items: c1.items, bins: k.bins }).slice(0, 400));
   // ---- 跟我读不用按(《wip/口语课设想.md》§8.1;数是 cfg.talk.read:等 1 秒、再读 2 遍、静 300 毫秒算读完) ----
   const rdMode = (): string | undefined => last(k, 'state')?.rd?.mode;
@@ -200,6 +201,10 @@ const last = (k: { msgs: Msg[] }, t: string): Msg | undefined => [...k.msgs].rev
   const kidWav = pcmOfWav(readFileSync(join(dir, 'kid.wav')));
   const tutorWav = pcmOfWav(readFileSync(join(dir, 'tutor.wav')));
   check('挂断:end 到孩子端、落盘(why bye、字分两段、孩子的话带 item、用量加总、用到的词、两段 wav)', ok9 && finished[0][1] === 'bye' && last(k, 'end')?.why === 'bye' && tr.why === 'bye' && tr.lines.some((l: any) => l.who === 'kid' && l.phase === 'read' && l.item === 0) && tr.lines.some((l: any) => l.who === 'kid' && l.phase === 'chat' && l.text === 'Red!') && tr.usage.input > 865 && tr.used.words[0].kid === 1 && meta.status === 'done' && meta.call.read === 3 && meta.call.items === 3 && kidWav?.rate === 16000 && kidWav.pcm.length === 4 * 6 * 3200 + 6400 && tutorWav?.rate === 24000 && tutorWav.pcm.length % 4800 === 0 && c2.closed, JSON.stringify({ why: tr.why, lines: tr.lines.length, usage: tr.usage, used: tr.used.words, kid: kidWav?.pcm.length, tutor: tutorWav?.pcm.length }));
+  const reel = JSON.parse(readFileSync(join(dir, 'reel.json'), 'utf8')) as Record<string, any>;
+  const callWav = pcmOfWav(readFileSync(join(dir, 'call.wav')));
+  const has = (dir_: string, t: string): boolean => reel.msgs.some((m: any) => m[1] === dir_ && m[2].t === t);
+  check('录像的数据:reel.json 记了发出去的每条(state、老师的字、亮卡、end)与孩子端发来的(again、bye),时刻不倒退;屏幕多大;call.wav 24k、和通话一样长;老师出声的时段', reel.v === 1 && reel.ms === tr.ms && has('o', 'state') && has('o', 'tutor') && has('o', 'card') && has('o', 'end') && has('i', 'again') && has('i', 'bye') && reel.msgs.every((m: any, i: number) => i === 0 || m[0] >= reel.msgs[i - 1][0]) && JSON.stringify(reel.view) === '[1180,820]' && callWav?.rate === 24000 && Math.abs(callWav.pcm.length / 48 - reel.ms) <= 1 && reel.playing.length > 0 && reel.playing.every((p: number[]) => p[1] > p[0]), JSON.stringify({ n: reel.msgs.length, ms: reel.ms, view: reel.view, wav: callWav?.pcm.length, playing: reel.playing.slice(0, 3) }));
   const ok10 = await until(() => k.closed !== null);
   check('孩子端的连接关了(1000 bye)', ok10 && k.closed?.code === 1000, JSON.stringify(k.closed));
   const one = await call('GET', `/api/talk/${id}`);

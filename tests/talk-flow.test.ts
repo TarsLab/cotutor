@@ -42,6 +42,10 @@ const until = async (f: () => boolean, ms = 4000): Promise<boolean> => { const t
   const w = wavOfPcm(Buffer.from([0, 0, 0xff, 0x7f]), 16000);
   const back = pcmOfWav(w);
   check('wav 来回;rms', w.length === 48 && back?.rate === 16000 && back.channels === 1 && back.pcm.length === 4 && rms(Buffer.alloc(100)) === 0 && rms(Buffer.from([0xff, 0x7f])) > 0.99, JSON.stringify(back));
+  const wc = parseList('{"words":[{"en":"apple","zh":"苹果","emoji":"🍎","split":"ap-ple"},{"en":"red","zh":"红色","emoji":"x","split":"r-x"},{"en":"Red car!","zh":"","emoji":"🚗","split":"r-ed"}],"sentences":[{"en":"It is red.","zh":"","emoji":"🔴","split":"it"}]}');
+  check('parseList:词带单词卡的 emoji 与分段(过 cards/word 的 parse);不是 emoji、分段拼不回、词写不进四线三格就不要;句子不带', JSON.stringify(wc?.words) === JSON.stringify([{ en: 'apple', zh: '苹果', emoji: '🍎', chunks: ['ap', 'ple'] }, { en: 'red', zh: '红色' }, { en: 'Red car!', zh: '' }]) && JSON.stringify(wc?.sentences) === '[{"en":"It is red.","zh":""}]', JSON.stringify(wc));
+  const kept = parseItems([{ en: 'apple', zh: '苹果', emoji: '🍎', chunks: ['ap', 'ple'] }, { en: 'apples', zh: '', emoji: '🍎', chunks: ['ap', 'ple'] }], 12, true);
+  check('parseItems(词):家长没改的词留着 emoji 与分段;改了词旧分段拼不回就丢、emoji 留着;句子那组不收', JSON.stringify(kept) === JSON.stringify([{ en: 'apple', zh: '苹果', emoji: '🍎', chunks: ['ap', 'ple'] }, { en: 'apples', zh: '', emoji: '🍎' }]) && JSON.stringify(parseItems([{ en: 'Hi.', zh: '', emoji: '👋' }], 8)) === '[{"en":"Hi.","zh":""}]', JSON.stringify(kept));
   check('parseItems / photoData 守门', parseItems([{ en: ' red ', zh: '红' }, { en: 'RED' }, { en: '' }], 12)?.length === 1 && parseItems('x', 12) === null && parseItems([{ zh: 'x' }], 12) === null && photoData('data:image/png;base64,AAAA')?.mime === 'image/png' && photoData('data:audio/wav;base64,AAAA') === undefined && photoData(3) === undefined);
   const list = { words: [{ en: 'red', zh: '红色' }], sentences: [{ en: "It's a red car.", zh: '这是一辆红色的车。' }] };
   const ri = readInstructions(list, 'Ray');
@@ -185,6 +189,8 @@ const last = (k: { msgs: Msg[] }, t: string): Msg | undefined => [...k.msgs].rev
   k.ws.send(quiet());
   const ok8 = await k.wait(() => k.msgs.some((m) => m.t === 'kid' && m.text === 'Red!') && c2.creates >= 2);
   check('聊:孩子开口 → 孩子端 flush;停了 → 转写回来、老师自动接', ok7 && ok8 && k.msgs.filter((m) => m.t === 'flush').length > nFlush, JSON.stringify({ cancels: c2.cancels, creates: c2.creates, flush: k.msgs.filter((m) => m.t === 'flush').length - nFlush }));
+  const cards = k.msgs.filter((m) => m.t === 'card');
+  check('聊:老师的字里出现口语单上的词 → {t:card, i}(red 亮;bus 没说不亮;一次回答一个词只亮一次)', cards.some((m) => m.i === 0) && !cards.some((m) => m.i === 1) && cards.length <= c2.creates, JSON.stringify(cards));
   // 挂断 → 落盘
   k.ws.send(JSON.stringify({ t: 'bye' }));
   const ok9 = await until(() => finished.length === 1, 5000);

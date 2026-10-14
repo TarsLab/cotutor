@@ -1,6 +1,7 @@
 /** 口语单上哪些词句在通话里出现过(纯函数;家长回看用) */
 
-export interface ListItem { en: string; zh: string }
+/** 口语单的一条;词另有单词卡(cards/word)要的 emoji 与自然拼读分段(读照片时出,过 cards/word 的 parse;没有就卡上只有词) */
+export interface ListItem { en: string; zh: string; emoji?: string; chunks?: string[] }
 export interface TalkList { words: ListItem[]; sentences: ListItem[] }
 export interface Line { who: 'tutor' | 'kid'; text: string; at: number; phase: 'read' | 'chat'; item?: number }
 

@@ -18,7 +18,7 @@ import type { Duplex } from 'node:stream';
 import { join } from 'node:path';
 import type { AppContext, RouteResult } from '../server/app.ts';
 import type { ListItem } from './lib/used.ts';
-import { readList } from './list.ts';
+import { readList, wordCardOf } from './list.ts';
 import { talkPage } from './page.ts';
 import { dashscopeAuth } from './realtime.ts';
 import { TalkCall } from './relay.ts';
@@ -48,8 +48,8 @@ export function photoData(v: unknown): { data: Buffer; mime: string } | undefine
   return { data: Buffer.from(m[2], 'base64'), mime };
 }
 
-/** 家长改的口语单:两组各最多 12 / 8 条,去空去重 */
-export function parseItems(v: unknown, max: number): ListItem[] | null {
+/** 家长改的口语单:两组各最多 12 / 8 条,去空去重;词带回来的 emoji 与分段再过一遍单词卡的 parse(家长改了词,旧分段拼不回就丢) */
+export function parseItems(v: unknown, max: number, card = false): ListItem[] | null {
   if (!Array.isArray(v) || v.length > 50) return null;
   const out: ListItem[] = [];
   for (const x of v as unknown[]) {
@@ -58,7 +58,8 @@ export function parseItems(v: unknown, max: number): ListItem[] | null {
     const zh = typeof x.zh === 'string' ? x.zh.replace(/\s+/g, ' ').trim() : '';
     if (!en || en.length > 120 || zh.length > 120) continue;
     if (out.some((o) => o.en.toLowerCase() === en.toLowerCase())) continue;
-    out.push({ en, zh });
+    const ch = (x as { chunks?: unknown }).chunks;
+    out.push(card ? { en, zh, ...wordCardOf(en, x.emoji, Array.isArray(ch) ? ch.join('-') : undefined) } : { en, zh });
     if (out.length >= max) break;
   }
   return out;
@@ -116,7 +117,7 @@ export function makeTalkRoute(deps: TalkDeps = { readList }) {
     if (rest === '' && method === 'DELETE') { await deleteTalk(root, id); return { status: 200, json: { ok: true } }; }
     if (rest === 'list' && method === 'PUT') {
       const b = isObj(body) ? body : {};
-      const words = parseItems(b.words ?? [], 12);
+      const words = parseItems(b.words ?? [], 12, true);
       const sentences = parseItems(b.sentences ?? [], 8);
       if (!words || !sentences) return bad('words / sentences 要是 [{en, zh}]');
       const changed = JSON.stringify({ words, sentences }) !== JSON.stringify(meta.list);

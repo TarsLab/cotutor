@@ -1,14 +1,19 @@
 /**
  * /talk(孩子端)与 /parent/talk(家长端):口语课的页面(《wip/口语课设想.md》;原型 https://claude.ai/artifact/9cC72r5d8Jyhayikz3rYaP)。
  * 家长与孩子同一份页面,按 hash 切;/talk 只认孩子那一屏,别的 hash 回孩子端首页:#/ 拍照与讲过的(家长)、#/list/<id> 改口语单(家长)、#/kid/<id> 跟读与聊(孩子,家长递过去)、#/review/<id> 回看(家长)。
+ * 孩子那一屏的样子和老师页一样(《wip/口语课设想.md》§8.2):装孩子端的 /kid/theme.css,今天的词用单词卡(cards/word,画法 word-draw.ts)、句子用点读卡的行(cards/read);
+ * 自己的类名别撞主题的(.rd 是点读卡的行,自己的状态胶囊叫 .tk-rd)。
  * 声音:getUserMedia → AudioWorklet 降到 16k PCM16,100 毫秒一块走 WebSocket 二进制帧上去;下来的 24k PCM16 一块块排进 AudioContext 放。
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
+import { wordDrawJs } from '../server/word-draw.ts';
+
 const TALK_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>口语课</title>
+<link rel="stylesheet" href="/kid/theme.css">
 <style>
   :root { --paper:#faf9f4; --ink:#2b2b2b; --dim:#8a8781; --line:#e2dfd6; --card:#ffffff; --kid:#dbeeff; --tutor:#fff3d6; --tutor-line:#f0dca8; --tutor-ink:#8a5a12; --accent:#e8743b; --blue:#eef4ff; --blue-ink:#2f5e9e; --plum:#efe9fb; --plum-ink:#7a4fc9; --grey:#eeece6; --night:#2b3a4a; --red:#b3412a; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -93,37 +98,49 @@ const TALK_PAGE = `<!doctype html>
   #kid .bar.small { gap:12px; }
   #kid .rc.now { border:2px solid var(--accent); box-shadow:0 6px 22px rgba(232,116,59,.16); }
   /* 跟我读不用按(《wip/口语课设想.md》§8.1):现在轮到谁,一颗胶囊 */
-  #kid .rd { display:inline-flex; align-items:center; gap:12px; min-height:64px; padding:0 26px 0 22px; border-radius:32px; font-size:20px; font-weight:600; }
-  #kid .rd.tutor { background:#e5f4ea; color:#1f6b3f; }
-  #kid .rd.listen, #kid .rd.speech, #kid .rd.wait { background:#fff; color:var(--blue-ink); padding-left:8px; box-shadow:0 0 0 3px #9cc3ef, 0 2px 8px rgba(0,0,0,.08); }
-  #kid .rd.heard { background:var(--grey); color:var(--dim); }
-  #kid .rd .ring { position:relative; width:48px; height:48px; display:grid; place-items:center; flex:none; }
-  #kid .rd .ring svg.r { position:absolute; inset:0; transform:rotate(-90deg); }
-  #kid .rd .lv2 { display:flex; align-items:center; gap:4px; height:28px; }
-  #kid .rd .lv2 i { width:5px; height:6px; border-radius:3px; background:currentColor; opacity:.85; transition:height .08s; }
+  #kid .tk-rd { display:inline-flex; align-items:center; gap:12px; min-height:64px; padding:0 26px 0 22px; border-radius:32px; font-size:20px; font-weight:600; }
+  #kid .tk-rd.tutor { background:#e5f4ea; color:#1f6b3f; }
+  #kid .tk-rd.listen, #kid .tk-rd.speech, #kid .tk-rd.wait { background:#fff; color:var(--blue-ink); padding-left:8px; box-shadow:0 0 0 3px #9cc3ef, 0 2px 8px rgba(0,0,0,.08); }
+  #kid .tk-rd.heard { background:var(--grey); color:var(--dim); }
+  #kid .tk-rd .ring { position:relative; width:48px; height:48px; display:grid; place-items:center; flex:none; }
+  #kid .tk-rd .ring svg.r { position:absolute; inset:0; transform:rotate(-90deg); }
+  #kid .tk-rd .lv2 { display:flex; align-items:center; gap:4px; height:28px; }
+  #kid .tk-rd .lv2 i { width:5px; height:6px; border-radius:3px; background:currentColor; opacity:.85; transition:height .08s; }
   #kid .back { display:inline-flex; align-items:center; gap:6px; height:48px; padding:0 8px 0 12px; border-radius:24px; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.12); color:var(--dim); text-decoration:none; }
   #kid .hint { text-align:center; font-size:14px; color:var(--dim); min-height:20px; }
   #kid .start { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; text-align:center; }
   #kid .start .av { width:140px; height:140px; border-radius:50%; background:var(--blue); color:var(--blue-ink); display:grid; place-items:center; font-size:64px; font-weight:700; }
 
   /* 孩子:聊 */
-  #kid.chat { background:var(--night); color:#fff; }
-  #kid.chat .list { background:rgba(255,255,255,.1); color:#b7c3cf; }
-  #kid.chat .list b { color:#fff; }
-  #kid.chat .list b.now { background:none; color:#ffd66b; }
-  #kid.chat .pill { background:rgba(255,255,255,.12); border-color:transparent; color:#fff; }
-  #kid.chat .chip { background:rgba(255,255,255,.12); color:#fff; }
-  #kid.chat .av { width:160px; height:160px; border-radius:50%; background:#fff; color:var(--blue-ink); display:grid; place-items:center; font-size:72px; font-weight:700; box-shadow:0 0 0 10px rgba(156,195,239,.35); transition:box-shadow .3s; }
-  #kid.chat .av.talk { box-shadow:0 0 0 18px rgba(156,195,239,.55); }
-  #kid.chat .av.listen { box-shadow:0 0 0 18px rgba(127,211,154,.55); }
-  #kid.chat .tt { width:100%; max-width:860px; padding:20px 28px; border-radius:22px; background:rgba(255,255,255,.1); font-size:28px; font-weight:700; line-height:1.3; min-height:92px; }
-  #kid.chat .tt .zh { display:block; font-size:16px; font-weight:400; color:#b7c3cf; margin-top:6px; }
-  #kid.chat .heard { background:var(--kid); color:var(--ink); }
-  #kid.chat .lv { display:flex; align-items:flex-end; justify-content:center; gap:5px; height:44px; }
-  #kid.chat .lv i { width:6px; border-radius:3px; background:#7fd39a; height:6px; transition:height .08s; }
-  #kid.chat .hang { display:flex; flex-direction:column; align-items:center; gap:8px; color:#fff; font-size:15px; }
-  #kid.chat .hang span { display:grid; place-items:center; width:84px; height:84px; border-radius:50%; background:#d9534f; box-shadow:0 6px 18px rgba(0,0,0,.3); }
-  #kid.chat .hint { color:#b7c3cf; }
+  /* 孩子:打电话(§8.2):老师的头像(说话绿圈、听孩子蓝圈)、一张字幕卡、孩子那句、今天的单词卡一排、底部条 */
+  #kid .tk-av { position:relative; width:180px; height:180px; display:grid; place-items:center; flex:none; }
+  #kid .tk-av i { position:absolute; border-radius:50%; transition:background .3s; }
+  #kid .tk-av i.o1 { inset:0; } #kid .tk-av i.o2 { inset:16px; }
+  #kid .tk-av.talk i.o1 { background:rgba(31,138,76,.08); } #kid .tk-av.talk i.o2 { background:rgba(31,138,76,.15); }
+  #kid .tk-av.listen i.o1 { background:rgba(47,94,158,.08); } #kid .tk-av.listen i.o2 { background:rgba(47,94,158,.15); }
+  #kid .tk-av .face { position:relative; width:116px; height:116px; border-radius:50%; background:#fff; display:grid; place-items:center; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+  #kid .tk-tt { width:100%; max-width:976px; padding:18px 28px; border-radius:22px; background:#fff; border:1px solid var(--line); font-size:30px; font-weight:700; line-height:1.3; min-height:84px; }
+  #kid .tk-tt .zh { display:block; font-size:17px; font-weight:400; color:var(--dim); margin-top:4px; }
+  #kid #k-heard2 { align-self:flex-end; max-width:80%; margin-right:max(0px, calc((100% - 976px) / 2)); }
+  #kid .tk-words { width:100%; max-width:976px; display:flex; gap:10px; overflow-x:auto; padding:4px 2px 8px; margin-top:auto; scrollbar-width:none; }
+  #kid .tk-words::-webkit-scrollbar { display:none; }
+  #kid .tk-words .c.c-word { flex:none; flex-wrap:nowrap; gap:8px; padding:8px 10px 8px 14px; transition:border-color .2s, box-shadow .2s; }
+  #kid .tk-words .c-word .we { font-size:30px; }
+  #kid .tk-words .c-word .wd-row { margin-left:4px; }
+  #kid .c-word.now { border-color:var(--sel); box-shadow:0 0 0 1px var(--sel), 0 4px 14px var(--sel-halo); }
+  #kid .tk-call { width:100%; max-width:976px; height:60px; border-radius:30px; background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.12); display:flex; align-items:center; gap:14px; padding:0 8px 0 22px; color:#1f8a4c; }
+  #kid .tk-call.you { box-shadow:0 0 0 3px #9cc3ef, 0 1px 6px rgba(0,0,0,.12); color:var(--blue-ink); }
+  #kid .tk-call .st { flex:1; font-size:17px; color:var(--dim); }
+  #kid .tk-call.you .st { color:var(--blue-ink); font-weight:600; }
+  #kid .tk-call .lv { display:flex; align-items:center; gap:4px; height:28px; }
+  #kid .tk-call .lv i { width:4px; height:6px; border-radius:2px; background:currentColor; transition:height .08s; }
+  #kid .tk-call .hang { display:inline-flex; align-items:center; gap:8px; height:46px; padding:0 20px; border-radius:23px; background:var(--ink); color:#fff; font-size:16px; font-weight:600; }
+  /* 跟我读的大卡:单词是单词卡的四线三格(舞台那么大),句子是点读卡的一行 */
+  #kid #k-card { min-height:240px; justify-content:center; }
+  #kid #k-card .we { font-size:72px; line-height:1; }
+  #kid #k-card .c-read { width:100%; background:none; border:0; padding:0; }
+  #kid #k-card .rd { font-size:40px; font-weight:700; line-height:1.3; cursor:default; }
+  #kid #k-card .rd .zh { display:block; font-size:20px; font-weight:400; color:var(--dim); }
 
   /* 家长:回看 */
   #review .lines { display:flex; flex-direction:column; gap:10px; margin-top:14px; }
@@ -143,8 +160,9 @@ const TALK_PAGE = `<!doctype html>
     #kid .rc .en { font-size:40px; }
     #kid .rc .en.long { font-size:26px; }
     #kid .big { height:64px; font-size:20px; padding:0 22px; }
-    #kid.chat .tt { font-size:22px; }
-    #kid.chat .av { width:140px; height:140px; font-size:60px; }
+    #kid .tk-tt { font-size:22px; padding:14px 18px; }
+    #kid .tk-av { width:136px; height:136px; } #kid .tk-av .face { width:88px; height:88px; }
+    #kid #k-card .we { font-size:52px; } #kid #k-card .rd { font-size:28px; }
   }
 </style></head>
 <body>
@@ -196,17 +214,15 @@ const TALK_PAGE = `<!doctype html>
   </div>
   <div class="mid" id="k-read" hidden>
     <div class="say" id="k-say"><span class="en">Listen first, then you try.</span><span class="zh">先听,再你来。</span></div>
-    <div class="rc now"><div class="en" id="k-en"></div><div class="zh" id="k-zh"></div></div>
-    <div class="rd tutor" id="k-rd"></div>
+    <div class="rc now" id="k-card"></div>
+    <div class="tk-rd tutor" id="k-rd"></div>
     <div class="heard" id="k-heard"></div>
   </div>
   <div class="mid" id="k-chat" hidden>
-    <div class="av" id="k-av">E</div>
-    <b style="font-size:26px">英语老师</b>
-    <div class="list" id="k-list2"></div>
-    <div class="tt" id="k-tt"></div>
+    <div class="tk-av" id="k-av"><i class="o1"></i><i class="o2"></i><span class="face"><svg width="84" height="84" viewBox="0 0 48 48" aria-hidden="true"><path d="M40.4 12.5A20 20 0 1 0 40.4 35.5" fill="none" stroke="#1f8a4c" stroke-width="3" stroke-linecap="round"/><text x="24" y="30" text-anchor="middle" font-size="15" font-weight="700" fill="#1f8a4c">英</text></svg></span></div>
+    <div class="tk-tt" id="k-tt"></div>
     <div class="heard" id="k-heard2"></div>
-    <div class="lv" id="k-lv"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="tk-words" id="k-words"></div>
   </div>
   <div class="bar small" id="k-bar" hidden>
     <button class="pill" type="button" id="k-again"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg>再听一遍</button>
@@ -214,7 +230,7 @@ const TALK_PAGE = `<!doctype html>
     <button class="pill" type="button" id="k-skip" style="color:var(--dim)">直接打电话</button>
   </div>
   <div class="bar" id="k-bar2" hidden>
-    <button class="hang" type="button" id="k-hang"><span><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></span>挂断</button>
+    <div class="tk-call" id="k-call"><span class="lv" id="k-lv"><i></i><i></i><i></i><i></i><i></i></span><span class="st" id="k-callst">老师在说,等她说完你再说</span><button class="hang" type="button" id="k-hang"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 15c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.5a10 10 0 0 0-7 0V16l-3 1.5z"/></svg>挂断</button></div>
   </div>
   <div class="hint" id="k-hint"></div>
 </div></div>
@@ -233,6 +249,10 @@ const TALK_PAGE = `<!doctype html>
   const $ = (s) => document.querySelector(s);
   const h = (tag, attrs, ...kids) => { const el = document.createElement(tag); for (const k in attrs || {}) { if (k === 'class') el.className = attrs[k]; else if (k === 'on') { for (const e in attrs[k]) el.addEventListener(e, attrs[k][e]); } else if (k === 'html') el.innerHTML = attrs[k]; else if (attrs[k] !== null && attrs[k] !== undefined) el.setAttribute(k, attrs[k]); } for (const c of kids.flat()) if (c !== null && c !== undefined) el.append(c); return el; };
   const api = async (method, path, body) => { const r = await fetch(path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => null); if (!r.ok) throw new Error((j && (j.message || j.error)) || ('HTTP ' + r.status)); return j; };
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const sv = (tag, attrs) => { const el = document.createElementNS(SVG_NS, tag); for (const k in attrs || {}) el.setAttribute(k, String(attrs[k])); return el; };
+  // ---- 单词卡的画法(src/server/word-draw.ts,和老师页同一份):wordGrid / wordWrite / wordMerge ----
+__WORD_DRAW_JS__
   let toastTimer = null;
   const toast = (s) => { const t = $('#toast'); t.textContent = s; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2400); };
   const fmtDate = (iso) => { const d = new Date(iso); return (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
@@ -373,23 +393,59 @@ const TALK_PAGE = `<!doctype html>
   let K = null, call = null;
   const kidEl = $('#kid');
   const setHint = (s) => { $('#k-hint').textContent = s || ''; };
-  function renderListChips(el, st) {
-    const items = K ? [].concat(K.meta.list.words, K.meta.list.sentences) : [];
-    el.replaceChildren(h('span', {}, '今天的口语单'), ...items.map((it, i) => h('b', { class: st && st.phase === 'read' && i === st.i ? 'now' : '' }, it.en)));
-  }
   function renderState(st) {
     const read = st.phase === 'read';
     kidEl.classList.toggle('chat', st.phase === 'chat');
     $('#k-start').hidden = true; $('#k-read').hidden = !read; $('#k-chat').hidden = st.phase !== 'chat';
     $('#k-bar').hidden = !read; $('#k-bar2').hidden = st.phase !== 'chat';
-    $('#k-chip').textContent = read ? '跟我读 · 第 ' + (st.i + 1) + ' 句,读完就聊' : st.phase === 'chat' ? '聊一聊' : '结束了';
+    $('#k-chip').textContent = read ? '跟我读 · 第 ' + (st.i + 1) + ' 句' : st.phase === 'chat' ? '打电话' : '结束了';
     $('#k-chip').className = 'chip ' + (read ? 'plum' : 'blue');
     $('#k-dots').replaceChildren(...Array.from({ length: st.n }, (_, i) => h('i', { class: i < st.i ? 'done' : i === st.i ? 'now' : '' })));
-    if (read && st.item) { $('#k-en').textContent = st.item.en; $('#k-en').className = 'en' + (st.item.en.length > 14 ? ' long' : ''); $('#k-zh').textContent = st.item.zh; }
+    if (read && st.item) renderCard(st);
     if (read) renderRd(st);
-    if (st.phase === 'chat') { renderListChips($('#k-list2'), st); $('#k-av').className = 'av' + (st.speaking ? ' talk' : ''); }
+    if (st.phase === 'chat') { if (!wordsBuilt) { buildWords(); wordsBuilt = true; } $('#k-av').classList.toggle('talk', Boolean(st.speaking)); }
     if (st.phase === 'chat' && st.deadline !== null) call.deadline = st.deadline;
     $('#k-next').disabled = false;
+  }
+  // ---- 跟我读的大卡:词是单词卡(emoji + 舞台那么大的四线三格),句子是点读卡的一行;换了一句、老师再读时写一遍 ----
+  let cardI = -1, cardGrid = null, lastMode = '';
+  function renderCard(st) {
+    const el = $('#k-card'), it = st.item;
+    const isWord = Boolean(K) && st.i < K.meta.list.words.length;
+    if (st.i !== cardI) {
+      cardI = st.i; cardGrid = null; el.dataset.en = it.en;
+      if (isWord) {
+        cardGrid = wordGrid(it.en, null, { stage: true, fresh: true });
+        el.className = 'rc now c-word';
+        el.replaceChildren(...(it.emoji ? [h('span', { class: 'we' }, it.emoji)] : []), cardGrid);
+        wordWrite(cardGrid, false);
+      } else {
+        el.className = 'rc now';
+        el.replaceChildren(h('div', { class: 'c c-read' }, h('div', { class: 'rd' }, it.en, it.zh ? h('span', { class: 'zh' }, it.zh) : null)));
+      }
+    } else if (cardGrid && st.rd && st.rd.mode === 'tutor' && lastMode && lastMode !== 'tutor') wordWrite(cardGrid, false);
+    lastMode = st.rd ? st.rd.mode : '';
+  }
+  // ---- 打电话:今天的词一排单词卡(cards/word);老师讲到哪个服务端发 {t:'card', i},那张亮、写一遍;「听」念一遍 ----
+  let wordsBuilt = false;
+  const ICON_SPK_S = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg>';
+  function buildWords() {
+    const ws = K ? K.meta.list.words : [];
+    $('#k-words').replaceChildren(...ws.map((w, i) => {
+      const g = wordGrid(w.en, null, {});
+      const pl = h('button', { type: 'button', class: 'rc-pl', html: ICON_SPK_S, on: { click: (e) => { e.stopPropagation(); if (call) call.say(w.en, pl); } } }, '听');
+      const c = h('div', { class: 'c c-word', 'data-i': i }, w.emoji ? h('span', { class: 'we' }, w.emoji) : null, g, h('div', { class: 'wd-row' }, pl));
+      c._grid = g;
+      return c;
+    }));
+  }
+  function lightCard(i) {
+    const box = $('#k-words');
+    for (const c of box.children) c.classList.toggle('now', Number(c.dataset.i) === i);
+    const c = box.querySelector('[data-i="' + i + '"]');
+    if (!c) return;
+    c.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    wordWrite(c._grid, false);
   }
   // ---- 跟我读:现在轮到谁(服务端的 rd 说了算,lib/read-flow.ts) ----
   const ICON_SPK = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>';
@@ -401,7 +457,7 @@ const TALK_PAGE = `<!doctype html>
     if (!rd) { el.hidden = true; return; }
     el.hidden = false;
     const mode = rd.mode;
-    el.className = 'rd ' + mode;
+    el.className = 'tk-rd ' + mode;
     rdUntil = rd.left === null || rd.left === undefined ? null : Date.now() + rd.left;
     rdWait = rd.wait || 5000;
     if (mode === 'tutor') el.replaceChildren(h('span', { html: ICON_SPK }), rd.again ? '老师再读一遍,听完跟着读' : '先听老师读');
@@ -424,19 +480,19 @@ const TALK_PAGE = `<!doctype html>
   setInterval(drawRing, 100);
   function makeCall(id) {
     const A = makeAudio();
-    const C = { id, ws: null, st: null, deadline: null, tutorLine: '', tutorDone: true, interrupt: false, timer: null, ended: false, startedAt: 0 };
+    const C = { id, ws: null, st: null, deadline: null, saying: false, tutorLine: '', tutorDone: true, interrupt: false, timer: null, ended: false, startedAt: 0 };
     const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/talk/' + id + '/ws';
     C.send = (o) => { if (C.ws && C.ws.readyState === 1) C.ws.send(JSON.stringify(o)); };
     C.start = async () => {
       setHint('打开麦克风…');
       try { await A.open(); } catch (e) { setHint('麦克风打不开:' + (e && e.message ? e.message : e)); return; }
       A.onChunk = (ab) => {
-        if (!C.st) return;
+        if (!C.st || C.saying) return;
         // 跟读段不用按:老师放声时不推(没有回声),其余时间都推,开口 / 停由服务端判
         if (C.st.phase === 'read') { if (!A.playing()) C.ws.send(ab); return; }
         if (C.st.phase === 'chat') { if (C.interrupt || !A.playing()) C.ws.send(ab); }
       };
-      A.onLevel = (v) => { const rb = document.querySelectorAll('#k-rd .lv2 i'); for (let i = 0; i < rb.length; i++) { const w = 1 - Math.abs(i - 2) / 3; rb[i].style.height = Math.round(6 + 22 * Math.min(1, v * 6) * w) + 'px'; } const bars = $('#k-lv').children; const k = Math.min(1, v * 6); for (let i = 0; i < bars.length; i++) { const w = 1 - Math.abs(i - 4) / 5; bars[i].style.height = Math.round(6 + 38 * k * w) + 'px'; } if (C.st && C.st.phase === 'chat') $('#k-av').classList.toggle('listen', k > 0.12 && !A.playing()); };
+      A.onLevel = (v) => { const rb = document.querySelectorAll('#k-rd .lv2 i'); for (let i = 0; i < rb.length; i++) { const w = 1 - Math.abs(i - 2) / 3; rb[i].style.height = Math.round(6 + 22 * Math.min(1, v * 6) * w) + 'px'; } const bars = $('#k-lv').children; const k = Math.min(1, v * 6); for (let i = 0; i < bars.length; i++) { const w = 1 - Math.abs(i - 2) / 3; bars[i].style.height = Math.round(6 + 22 * k * w) + 'px'; } if (C.st && C.st.phase === 'chat') { const you = !A.playing() && !C.saying; $('#k-av').classList.toggle('listen', k > 0.12 && you); $('#k-call').classList.toggle('you', you); $('#k-callst').textContent = you ? '轮到你说' : C.saying ? '在念这个词…' : (C.interrupt ? '老师在说,想插嘴就直接说' : '老师在说,等她说完你再说'); } };
       setHint('接通中…');
       const ws = new WebSocket(wsUrl); ws.binaryType = 'arraybuffer'; C.ws = ws;
       ws.onopen = () => { A.muted = false; C.startedAt = Date.now(); setHint(''); C.timer = setInterval(C.tick, 500); };
@@ -453,6 +509,7 @@ const TALK_PAGE = `<!doctype html>
           else $('#k-say').replaceChildren(h('span', { class: 'en' }, C.tutorLine));
         }
         else if (m.t === 'kid') { const chat = C.st && C.st.phase === 'chat'; (chat ? $('#k-heard2') : $('#k-heard')).replaceChildren(h('span', { class: 'muted' }, chat ? '你说的:' : '你读的'), h('span', {}, m.text)); }
+        else if (m.t === 'card') lightCard(m.i);
         else if (m.t === 'flush') A.flush();
         else if (m.t === 'err') setHint(m.msg);
         else if (m.t === 'end') C.finish(m.why);
@@ -462,9 +519,26 @@ const TALK_PAGE = `<!doctype html>
     };
     C.tick = () => {
       if (!C.st) return;
-      if (C.st.phase === 'chat' && C.deadline !== null) { const left = Math.max(0, C.deadline - (Date.now() - C.startedAt)); $('#k-chip').textContent = '聊一聊 · 还有 ' + Math.floor(left / 60000) + ':' + String(Math.floor((left % 60000) / 1000)).padStart(2, '0'); }
+      if (C.st.phase === 'chat' && C.deadline !== null) { const left = Math.max(0, C.deadline - (Date.now() - C.startedAt)); $('#k-chip').textContent = '打电话 · 还有 ' + Math.floor(left / 60000) + ':' + String(Math.floor((left % 60000) / 1000)).padStart(2, '0'); }
       if (C.st.phase === 'read') setHint(C.st.rd && C.st.rd.mode === 'wait' ? '想读就读,或者点「下一句」' : C.st.rd && C.st.rd.mode === 'listen' ? '读完停一下就好' : '');
-      else if (C.st.phase === 'chat') setHint(A.playing() ? (C.interrupt ? '想插嘴就直接说' : '老师在说,等她说完') : '你说吧,说完停一下老师就接');
+      else if (C.st.phase === 'chat') setHint(A.playing() ? '' : '说完停一下老师就接');
+    };
+    /** 单词卡上的「听」:浏览器的英文声按正常速度念;老师在说就等她说完;念的时候麦不推(不当孩子说的) */
+    C.say = (w, btn) => {
+      const ss = window.speechSynthesis;
+      if (!ss) return;
+      let tries = 0;
+      const go = () => {
+        if (C.ended) return;
+        if (A.playing() && tries++ < 75) { setTimeout(go, 200); return; }
+        const u = new SpeechSynthesisUtterance(w); u.lang = 'en-US'; u.rate = 0.9;
+        const off = () => { C.saying = false; btn.classList.remove('on'); clearTimeout(guard); };
+        const guard = setTimeout(off, 4000);
+        u.onend = off; u.onerror = off;
+        C.saying = true; btn.classList.add('on');
+        ss.cancel(); ss.speak(u);
+      };
+      go();
     };
     C.hangup = (why) => { C.send({ t: 'bye' }); C.finish(why || 'bye'); };
     C.finish = (why) => {
@@ -480,13 +554,14 @@ const TALK_PAGE = `<!doctype html>
   async function kid(id) {
     kidEl.className = 'view on';
     $('#k-start').hidden = false; $('#k-read').hidden = true; $('#k-chat').hidden = true; $('#k-bar').hidden = true; $('#k-bar2').hidden = true; setHint('');
+    cardI = -1; cardGrid = null; lastMode = ''; wordsBuilt = false; $('#k-words').replaceChildren(); $('#k-card').replaceChildren();
     $('#k-chip').textContent = '跟我读'; $('#k-chip').className = 'chip plum'; $('#k-dots').replaceChildren(); $('#k-heard').textContent = ''; $('#k-heard2').textContent = '';
     try { K = await api('GET', '/api/talk/' + id); } catch (e) { toast('没有这一次'); go('#/'); return; }
     const n = K.meta.list.words.length + K.meta.list.sentences.length;
     $('#k-start-hint').textContent = n ? '先跟我读 ' + n + ' 句,再打个电话聊一聊' : '口语单是空的,直接打电话聊';
     if (K.meta.status === 'done') $('#k-start-hint').textContent = '这一次已经聊过了;再打一次会盖掉上次的记录';
   }
-  $('#k-go').addEventListener('click', async () => { if (call) return; call = makeCall(K.meta.id); $('#k-go').disabled = true; await call.start(); $('#k-go').disabled = false; });
+  $('#k-go').addEventListener('click', async () => { if (call) return; try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) {} call = makeCall(K.meta.id); $('#k-go').disabled = true; await call.start(); $('#k-go').disabled = false; });
   $('#k-again').addEventListener('click', () => { if (call) call.send({ t: 'again' }); });
   $('#k-next').addEventListener('click', () => { if (call) { $('#k-next').disabled = true; $('#k-heard').textContent = ''; call.send({ t: 'next' }); } });
   $('#k-skip').addEventListener('click', () => { if (call) call.send({ t: 'chat' }); });
@@ -521,5 +596,5 @@ const TALK_PAGE = `<!doctype html>
 
 /** kidOnly = 孩子端 /talk:只有跟读与聊那一屏;家长端 /parent/talk 全有 */
 export function talkPage(kidOnly: boolean): string {
-  return TALK_PAGE.replace('__TALK_KID_ONLY__', kidOnly ? 'true' : 'false');
+  return TALK_PAGE.replace('__TALK_KID_ONLY__', kidOnly ? 'true' : 'false').replace('__WORD_DRAW_JS__', () => wordDrawJs());
 }

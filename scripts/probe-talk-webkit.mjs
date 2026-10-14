@@ -70,7 +70,7 @@ try {
   await untilFn(() => page.evaluate(() => document.querySelector('#kid').classList.contains('on') && document.querySelector('#k-start-hint').textContent.includes('2 句')));
   ok('孩子页:只露「打电话」那块,跟读 / 聊 / 两条按钮栏都藏着', (await visible('#k-start')) && !(await visible('#k-read')) && !(await visible('#k-chat')) && !(await visible('#k-bar')) && !(await visible('#k-bar2')));
   await page.click('#k-go');
-  const up = await untilFn(async () => fake.conns.length === 1 && (await visible('#k-read')) && (await page.evaluate(() => document.querySelector('#k-en').textContent === 'red' && window.__played > 0)), 60);
+  const up = await untilFn(async () => fake.conns.length === 1 && (await visible('#k-read')) && (await page.evaluate(() => document.querySelector('#k-card').dataset.en === 'red' && window.__played > 0)), 60);
   ok('打电话:麦克风(假)开了、AudioWorklet 起了、接上、第一句在卡上、老师的声音排进去放了;打电话那块藏起来', up && !(await visible('#k-start')) && (await visible('#k-bar')), JSON.stringify(await stats()));
   const c1 = fake.conns[0];
   // 跟我读不用按(《wip/口语课设想.md》§8.1):老师放完就听;振荡器响着 = 孩子在读,__mute = 读完了
@@ -79,7 +79,7 @@ try {
   const got = await untilFn(() => c1.audio >= a0 + 3200 * 6, 40);
   ok('不用按:振荡器一响,worklet 的 16k PCM 一块块到了假百炼', got, `${c1.audio - a0} 字节 ${JSON.stringify(await stats())}`);
   await page.evaluate(() => window.__mute());
-  ok('静了 → commit、转写回来、自动到第 2 句', await untilFn(() => page.evaluate(() => document.querySelector('#k-en').textContent === 'It is a red car.'), 60) && c1.commits === 1, JSON.stringify({ commits: c1.commits }));
+  ok('静了 → commit、转写回来、自动到第 2 句', await untilFn(() => page.evaluate(() => document.querySelector('#k-card').dataset.en === 'It is a red car.'), 60) && c1.commits === 1, JSON.stringify({ commits: c1.commits }));
   await page.evaluate(() => window.__unmute());
   // 第 2 句点「下一句」:手动那条路,直接开聊
   await page.click('#k-next');

@@ -6,6 +6,7 @@
  *   {t:'again'} 再听老师读 · {t:'next'} 下一句(到头开聊)· {t:'chat'} 直接开聊 · {t:'bye'} 挂断
  * 这里 → 孩子端:二进制帧 = PCM16 24k 老师的声音;文本帧 = JSON
  *   {t:'state', phase, i, n, item, speaking, deadline, interrupt, rd} · {t:'tutor', delta} / {t:'tutor', done} · {t:'kid', text} · {t:'flush'}(清播放队列)· {t:'err', msg} · {t:'end', why}
+ *   {t:'card', i}(聊那段老师讲到口语单上第 i 个词:那张单词卡亮、写一遍;由这里从老师的字里认,录像照它放)
  *   rd(跟读段)= {mode: tutor|listen|speech|heard|wait, left: 离自动再读还有几毫秒 | null, wait: 一共等几毫秒, again: 这句自动再读了几遍}
  *
  * 轮次:跟读段手动轮次,但不用按(§8.1,lib/read-flow.ts)——孩子端在老师放声时不推,这里按响度判开口 / 停:开口起把声音(带 300 毫秒前垫)推给模型,
@@ -15,7 +16,7 @@
  */
 import type { TalkConfig } from '../schema/config.ts';
 import { readInit, readLeft, readStep, vadInit, vadStep, type ReadEvent, type ReadState, type Vad } from './lib/read-flow.ts';
-import { itemsOf, type Line, type ListItem } from './lib/used.ts';
+import { appears, itemsOf, type Line, type ListItem } from './lib/used.ts';
 import { rms } from './lib/wav.ts';
 import { chatCloseCue, chatInstructions, chatOpenCue, readAgainCue, readCue, readInstructions, readLastCue, readNextCue, readSummary } from './prompt.ts';
 import { INPUT_RATE, OUTPUT_RATE, RealtimeSession, type Usage } from './realtime.ts';
@@ -61,6 +62,9 @@ export class TalkCall {
   /** 这次回答的第一块声音什么时候到、一共多少字节(估老师什么时候放完) */
   private firstAudioAt: number | null = null;
   private answerBytes = 0;
+  /** 聊那段:这次回答到现在的字、这次回答里亮过哪几张单词卡 */
+  private answerText = '';
+  private lit = new Set<number>();
   private idleTimer: NodeJS.Timeout | null = null;
   private readonly lines: Line[] = [];
   private readonly kidLines: string[] = [];
@@ -115,7 +119,12 @@ export class TalkCall {
         this.tutorPcm.push(pcm);
         this.sock.sendBinary(pcm);
       },
-      onTutorText: (delta, done) => { if (done !== null) { this.note('tutor', done.trim()); this.send({ t: 'tutor', done: done.trim() }); } else if (delta) this.send({ t: 'tutor', delta }); },
+      onTutorText: (delta, done) => {
+        if (done !== null) { this.note('tutor', done.trim()); this.send({ t: 'tutor', done: done.trim() }); return; }
+        if (!delta) return;
+        this.send({ t: 'tutor', delta });
+        if (this.phase === 'chat') this.litCards(delta);
+      },
       onKidText: (text) => {
         this.note('kid', text);
         this.send({ t: 'kid', text });
@@ -126,7 +135,7 @@ export class TalkCall {
       },
       onResponse: (st, _status, usage) => {
         this.speaking = st === 'created';
-        if (st === 'created') { this.firstAudioAt = null; this.answerBytes = 0; }
+        if (st === 'created') { this.firstAudioAt = null; this.answerBytes = 0; this.answerText = ''; this.lit.clear(); }
         if (usage) this.usage = { input: this.usage.input + usage.input, output: this.usage.output + usage.output, inputAudio: this.usage.inputAudio + usage.inputAudio, outputAudio: this.usage.outputAudio + usage.outputAudio };
         this.state();
         if (st === 'done') {
@@ -239,6 +248,18 @@ export class TalkCall {
     this.lastKidAudioAt = this.ms();
     this.kidPcm.push(pcm);
     this.session.appendAudio(pcm);
+  }
+
+  /** 聊那段老师的字里出现口语单上的词 → 那张单词卡亮(一次回答里一个词只亮一次;后讲到的盖过先讲到的) */
+  private litCards(delta: string): void {
+    this.answerText += delta;
+    // 只看已经说完整的词:流到一半的「bus」可能是「busy」
+    const whole = this.answerText.replace(/[A-Za-z'’]+$/, '');
+    this.meta.list.words.forEach((w, i) => {
+      if (this.lit.has(i) || !appears(w.en, whole)) return;
+      this.lit.add(i);
+      this.send({ t: 'card', i });
+    });
   }
 
   /** 跟读段的一块声音:等孩子时按响度判开口 / 停;开口起推给模型(带前垫),停了交给状态机 */

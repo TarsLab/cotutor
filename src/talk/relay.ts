@@ -3,16 +3,21 @@
  * 跟读与聊各一条 realtime 会话(silence 喂过音频改不了,见 realtime.ts);两边的声音与字都记下,挂了落盘(store.finishCall)。
  *
  * 孩子端 → 这里:二进制帧 = PCM16 16k 单声道一块;文本帧 = JSON
- *   {t:'hold'} 跟读按下 · {t:'release'} 松手 · {t:'again'} 再听老师读 · {t:'next'} 下一句(到头开聊)· {t:'chat'} 直接开聊 · {t:'bye'} 挂断
+ *   {t:'again'} 再听老师读 · {t:'next'} 下一句(到头开聊)· {t:'chat'} 直接开聊 · {t:'bye'} 挂断
  * 这里 → 孩子端:二进制帧 = PCM16 24k 老师的声音;文本帧 = JSON
- *   {t:'state', phase, i, n, item, speaking, deadline, interrupt} · {t:'tutor', delta} / {t:'tutor', done} · {t:'kid', text} · {t:'flush'}(清播放队列)· {t:'err', msg} · {t:'end', why}
+ *   {t:'state', phase, i, n, item, speaking, deadline, interrupt, rd} · {t:'tutor', delta} / {t:'tutor', done} · {t:'kid', text} · {t:'flush'}(清播放队列)· {t:'err', msg} · {t:'end', why}
+ *   rd(跟读段)= {mode: tutor|listen|speech|heard|wait, left: 离自动再读还有几毫秒 | null, wait: 一共等几毫秒, again: 这句自动再读了几遍}
  *
- * 轮次:跟读段手动——按住才把声音推给模型,松手 commit + response.create;聊那段 semantic_vad——声音一直推(interrupt=false 时孩子端自己在老师放声时不推),
+ * 轮次:跟读段手动轮次,但不用按(§8.1,lib/read-flow.ts)——孩子端在老师放声时不推,这里按响度判开口 / 停:开口起把声音(带 300 毫秒前垫)推给模型,
+ *   停了 commit 拿转写,读到这句的词过半就下一句(「接一两个词 + 下一句」一次回答),不到就再读;老师读完几秒没开口也再读。老师的声音什么时候放完由这里估
+ *   (第一块到的时刻 + 声音长度),孩子端不用报。聊那段 semantic_vad——声音一直推(interrupt=false 时孩子端自己在老师放声时不推),
  * 模型判出孩子开口(speech_started)就掐掉正在出的回答、让孩子端清播放队列。
  */
 import type { TalkConfig } from '../schema/config.ts';
+import { readInit, readLeft, readStep, vadInit, vadStep, type ReadEvent, type ReadState, type Vad } from './lib/read-flow.ts';
 import { itemsOf, type Line, type ListItem } from './lib/used.ts';
-import { chatCloseCue, chatInstructions, chatOpenCue, readAgainCue, readCue, readInstructions, readSummary } from './prompt.ts';
+import { rms } from './lib/wav.ts';
+import { chatCloseCue, chatInstructions, chatOpenCue, readAgainCue, readCue, readInstructions, readLastCue, readNextCue, readSummary } from './prompt.ts';
 import { INPUT_RATE, OUTPUT_RATE, RealtimeSession, type Usage } from './realtime.ts';
 import { finishCall, type TalkMeta } from './store.ts';
 import type { ServerSocket } from './ws.ts';
@@ -34,17 +39,29 @@ type Phase = 'read' | 'chat' | 'ended';
 /** 整个通话最长;聊那段孩子多久不出声就收 */
 const CALL_MAX_MS = 20 * 60_000;
 const IDLE_MS = 3 * 60_000;
-/** 松手时推过去的声音不到这么多就当没说(0.15 秒) */
-const MIN_HOLD_BYTES = 4800;
+/** 开口前垫上几块(100 毫秒一块):响度判出开口要 200 毫秒,头一个音别丢了 */
+const PREROLL = 3;
+/** 老师的声音放完再多等一点才算放完(孩子端排队有 60 毫秒起步,网络也慢一点) */
+const IDLE_PAD_MS = 300;
+/** 跟读段多久看一次钟(自动再读、转写超时) */
+const READ_TICK_MS = 200;
 
 export class TalkCall {
   private phase: Phase = 'read';
   private i = 0;
   private readonly items: ListItem[];
   private session: RealtimeSession | null = null;
-  private holding = false;
-  private heldBytes = 0;
   private speaking = false;
+  /** 跟读段:一句的状态、响度判开口、开口前垫的几块、在不在往模型推、读完最后一句要开聊 */
+  private rd: ReadState = readInit();
+  private vad: Vad = vadInit();
+  private preroll: Buffer[] = [];
+  private pushing = false;
+  private toChat = false;
+  /** 这次回答的第一块声音什么时候到、一共多少字节(估老师什么时候放完) */
+  private firstAudioAt: number | null = null;
+  private answerBytes = 0;
+  private idleTimer: NodeJS.Timeout | null = null;
   private readonly lines: Line[] = [];
   private readonly kidLines: string[] = [];
   private readonly kidPcm: Buffer[] = [];
@@ -72,7 +89,9 @@ export class TalkCall {
   private ms(): number { return (this.deps.now ?? (() => new Date()))().getTime() - this.startedAt.getTime(); }
   private send(o: Record<string, unknown>): void { this.sock.sendText(JSON.stringify(o)); }
   private state(): void {
-    this.send({ t: 'state', phase: this.phase, i: this.i, n: this.items.length, item: this.items[this.i] ?? null, speaking: this.speaking, deadline: this.deadline, interrupt: this.deps.config.interrupt });
+    const rules = this.deps.config.read;
+    const rd = this.phase === 'read' ? { mode: this.rd.mode, left: readLeft(this.rd, this.ms(), rules), wait: rules.waitMs, again: this.rd.again } : null;
+    this.send({ t: 'state', phase: this.phase, i: this.i, n: this.items.length, item: this.items[this.i] ?? null, speaking: this.speaking, deadline: this.deadline, interrupt: this.deps.config.interrupt, rd });
   }
   private note(who: Line['who'], text: string): void {
     if (!text) return;
@@ -90,17 +109,28 @@ export class TalkCall {
 
   private events(): ConstructorParameters<typeof RealtimeSession>[1] {
     return {
-      onAudio: (pcm) => { this.tutorPcm.push(pcm); this.sock.sendBinary(pcm); },
+      onAudio: (pcm) => {
+        if (this.firstAudioAt === null) this.firstAudioAt = this.ms();
+        this.answerBytes += pcm.length;
+        this.tutorPcm.push(pcm);
+        this.sock.sendBinary(pcm);
+      },
       onTutorText: (delta, done) => { if (done !== null) { this.note('tutor', done.trim()); this.send({ t: 'tutor', done: done.trim() }); } else if (delta) this.send({ t: 'tutor', delta }); },
-      onKidText: (text) => { this.note('kid', text); this.send({ t: 'kid', text }); },
+      onKidText: (text) => {
+        this.note('kid', text);
+        this.send({ t: 'kid', text });
+        if (this.phase === 'read') this.readEvent({ e: 'text', t: this.ms(), text, target: this.items[this.i]?.en ?? '' });
+      },
       onSpeech: (s) => {
         if (s === 'started' && this.phase === 'chat') { if (this.session?.responding) this.session.cancel(); this.send({ t: 'flush' }); }
       },
       onResponse: (st, _status, usage) => {
         this.speaking = st === 'created';
+        if (st === 'created') { this.firstAudioAt = null; this.answerBytes = 0; }
         if (usage) this.usage = { input: this.usage.input + usage.input, output: this.usage.output + usage.output, inputAudio: this.usage.inputAudio + usage.inputAudio, outputAudio: this.usage.outputAudio + usage.outputAudio };
         this.state();
         if (st === 'done') {
+          if (this.phase === 'read') this.idleWhenPlayed();
           const fns = this.afterIdle.splice(0);
           for (const f of fns) f();
           if (this.closing && !fns.length) void this.end('time');
@@ -120,11 +150,60 @@ export class TalkCall {
     const why = await s.connect();
     if (why !== null) { this.send({ t: 'err', msg: `connect:${why}` }); await this.end(`connect:${why}`); return; }
     this.session = s;
-    this.cue(readCue(this.items[this.i]));
+    this.timers.push(setInterval(() => { if (this.phase === 'read') this.readEvent({ e: 'tick', t: this.ms() }); }, READ_TICK_MS));
+    this.cue(readCue(this.items[this.i]), true);
   }
 
-  private cue(text: string): void {
-    this.whenIdle(() => { this.session?.addText(text); this.session?.createResponse(); this.state(); });
+  /** 塞一句让老师说;跟读段同时告诉状态机「老师在读」(fresh = 换了一句,自动再读重新数) */
+  private cue(text: string, fresh = false): void {
+    this.whenIdle(() => {
+      if (this.phase === 'read') {
+        if (this.idleTimer) { clearTimeout(this.idleTimer); this.idleTimer = null; }
+        this.stopPushing(false);
+        this.rd = readStep(this.rd, { e: 'cue', t: this.ms(), fresh }, this.deps.config.read).s;
+      }
+      this.session?.addText(text);
+      this.session?.createResponse();
+      this.state();
+    });
+  }
+
+  /** 跟读段一个回答说完了:估孩子端什么时候放完(第一块到的时刻 + 声音长度),到点算老师读完 */
+  private idleWhenPlayed(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    const playedAt = this.firstAudioAt === null ? this.ms() : this.firstAudioAt + this.answerBytes / ((OUTPUT_RATE * 2) / 1000) + IDLE_PAD_MS;
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
+      if (this.phase !== 'read' || this.speaking) return;
+      if (this.toChat) { void this.startChat(); return; }
+      this.readEvent({ e: 'idle', t: this.ms() });
+    }, Math.max(0, playedAt - this.ms()));
+  }
+
+  /** 跟读段的一件事 → 状态机 → 做它说的 */
+  private readEvent(ev: ReadEvent): void {
+    if (this.phase !== 'read' || this.ended) return;
+    const was = this.rd;
+    const { s, act } = readStep(was, ev, this.deps.config.read);
+    this.rd = s;
+    if (ev.e === 'idle') this.vad = { ...vadInit(), floor: this.vad.floor };
+    if (act === 'commit') this.stopPushing(true);
+    else if (act === 'again') { const it = this.items[this.i]; if (it) this.cue(readAgainCue(it)); }
+    else if (act === 'next') {
+      const heard = ev.e === 'text' ? ev.text.trim() : '';
+      this.i++;
+      const it = this.items[this.i];
+      if (it) this.cue(heard ? readNextCue(heard, it) : readCue(it), true);
+      else { this.toChat = true; this.cue(heard ? readLastCue(heard) : readLastCue('…')); }
+    }
+    if (s.mode !== was.mode || act) this.state();
+  }
+
+  /** 停止往模型推孩子的声音;commit = 交出去转写(不然清掉) */
+  private stopPushing(commit: boolean): void {
+    if (!this.pushing) return;
+    this.pushing = false;
+    if (commit) this.session?.commit(); else this.session?.clearAudio();
   }
 
   /** 孩子端的一条文本消息 */
@@ -133,26 +212,14 @@ export class TalkCall {
     let m: { t?: unknown };
     try { m = JSON.parse(raw) as { t?: unknown }; } catch { return; }
     switch (m.t) {
-      case 'hold':
-        if (this.phase !== 'read' || !this.session) return;
-        if (this.session.responding) { this.session.cancel(); this.send({ t: 'flush' }); }
-        this.holding = true;
-        this.heldBytes = 0;
-        break;
-      case 'release':
-        if (this.phase !== 'read' || !this.session || !this.holding) return;
-        this.holding = false;
-        if (this.heldBytes < MIN_HOLD_BYTES) { this.session.clearAudio(); return; }
-        this.whenIdle(() => { this.session?.commit(); this.session?.createResponse(); });
-        break;
       case 'again':
+        // 孩子点的「再听一遍」不算自动再读的次数
         if (this.phase === 'read' && this.items[this.i]) this.cue(readAgainCue(this.items[this.i]));
         break;
       case 'next':
         if (this.phase !== 'read') return;
-        this.holding = false;
         this.i++;
-        if (this.i < this.items.length) this.cue(readCue(this.items[this.i]));
+        if (this.i < this.items.length) this.cue(readCue(this.items[this.i]), true);
         else void this.startChat();
         break;
       case 'chat':
@@ -168,17 +235,34 @@ export class TalkCall {
   /** 孩子端的一块声音 */
   onAudio(pcm: Buffer): void {
     if (this.ended || !this.session?.isReady) return;
-    if (this.phase === 'read') {
-      if (!this.holding) return;
-      this.heldBytes += pcm.length;
-    }
+    if (this.phase === 'read') { this.readAudio(pcm); return; }
     this.lastKidAudioAt = this.ms();
     this.kidPcm.push(pcm);
     this.session.appendAudio(pcm);
   }
 
+  /** 跟读段的一块声音:等孩子时按响度判开口 / 停;开口起推给模型(带前垫),停了交给状态机 */
+  private readAudio(pcm: Buffer): void {
+    const listening = this.rd.mode === 'listen' || this.rd.mode === 'wait' || this.rd.mode === 'speech';
+    if (!listening) { this.preroll.length = 0; return; }
+    const { v, ev } = vadStep(this.vad, rms(pcm), pcm.length / ((INPUT_RATE * 2) / 1000), this.deps.config.read.endMs);
+    this.vad = v;
+    if (ev === 'start') {
+      this.pushing = true;
+      for (const b of [...this.preroll, pcm]) { this.kidPcm.push(b); this.session?.appendAudio(b); }
+      this.preroll.length = 0;
+      this.readEvent({ e: 'start', t: this.ms() });
+      return;
+    }
+    if (this.pushing) { this.kidPcm.push(pcm); this.session?.appendAudio(pcm); }
+    else { this.preroll.push(pcm); if (this.preroll.length > PREROLL) this.preroll.shift(); }
+    if (ev === 'stop') this.readEvent({ e: 'stop', t: this.ms() });
+  }
+
   private async startChat(): Promise<void> {
     if (this.phase !== 'read' || this.ended) return;
+    if (this.idleTimer) { clearTimeout(this.idleTimer); this.idleTimer = null; }
+    this.pushing = false;
     const read = Math.min(this.i, this.items.length);
     const old = this.session;
     this.session = null;
@@ -213,6 +297,7 @@ export class TalkCall {
     if (this.ended) return;
     this.ended = true;
     for (const t of this.timers) clearTimeout(t);
+    if (this.idleTimer) clearTimeout(this.idleTimer);
     const s = this.session;
     this.session = null;
     // 老师说到一半被挂了,那半句也记下(真跑里孩子刚答完就挂,老师的「Great job!」没等到 done)

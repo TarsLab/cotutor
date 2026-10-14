@@ -1,7 +1,7 @@
 /**
  * 口语课整条线(《wip/口语课设想.md》),假百炼、假 omni,不花钱:
  * 接口(开关、开一次 + 照片读口语单、家长改、给孩子、照片、删);
- * 通话中转(孩子端的 WebSocket ↔ 假 realtime):跟读按住 / 松手 / 太短不算 / 再听 / 下一句、读完开聊(第二条会话,semantic_vad)、聊里孩子开口掐老师、挂断落盘(字、用量、用到的词、两段 wav);
+ * 通话中转(孩子端的 WebSocket ↔ 假 realtime):跟读不用按(响了推、静了 commit、读到了下一句、不沾再读、不出声再读两遍后不催、点再听不算次数)、读完开聊(第二条会话,semantic_vad)、聊里孩子开口掐老师、挂断落盘(字、用量、用到的词、两段 wav);
  * 关着时 404、升级被拒;照片 → 口语单的解析。
  */
 import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -81,7 +81,7 @@ const wsRoot = join(home, 'ws');
 await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot });
 const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
-cfg.talk = { enabled: true, minutes: 1 };
+cfg.talk = { enabled: true, minutes: 1, read: { waitMs: 1000, again: 2, endMs: 300 } };
 cfg.kid.name = 'Ray';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
@@ -142,35 +142,38 @@ const last = (k: { msgs: Msg[] }, t: string): Msg | undefined => [...k.msgs].rev
   const st = k.msgs.find((m) => m.t === 'state' && m.item)!;
   const c1 = fake.conns[0];
   check('接通:跟读的会话(手动、人设带 Ray 与口语单)、第一句 cue、状态(第 1/3 句)、老师的声音与字到孩子端', ok1 && c1.session?.turn_detection === null && String(c1.session?.instructions).includes('Ray') && String(c1.session?.instructions).includes('bus(公共汽车)') && c1.items[0]?.content?.[0]?.text === '读这句:red' && st.phase === 'read' && st.i === 0 && st.n === 3 && st.item.en === 'red' && st.interrupt === false && k.bins[0] === 4800 && last(k, 'tutor')?.done === "It's a red car.", JSON.stringify({ st, items: c1.items, bins: k.bins }).slice(0, 400));
-  // 按住两块、松手
-  const before = c1.audio;
-  k.ws.send(JSON.stringify({ t: 'hold' }));
-  await sleep(30);
-  k.ws.send(loud()); k.ws.send(loud());
-  await until(() => c1.audio === before + 6400);
-  k.ws.send(JSON.stringify({ t: 'release' }));
-  const ok2 = await k.wait(() => k.msgs.some((m) => m.t === 'kid') && c1.creates >= 2);
-  check('按住:声音到了模型;松手:commit + response.create,孩子那句的字回来', ok2 && c1.commits === 1 && last(k, 'kid')?.text === "It's a red car.", JSON.stringify({ audio: c1.audio, commits: c1.commits, creates: c1.creates }));
-  // 没按住时推的声音不进模型;太短的一下不算
-  const a0 = c1.audio;
-  k.ws.send(loud());
-  await sleep(80);
-  k.ws.send(JSON.stringify({ t: 'hold' })); await sleep(20); k.ws.send(new Uint8Array(1000).fill(3)); await until(() => c1.audio === a0 + 1000); k.ws.send(JSON.stringify({ t: 'release' }));
-  const ok3 = await until(() => c1.clears === 1);
-  check('没按住的声音不推;按一下太短 → clear,不 commit', ok3 && c1.audio === a0 + 1000 && c1.commits === 1, JSON.stringify({ audio: c1.audio - a0, clears: c1.clears, commits: c1.commits }));
-  // 再听一遍、下一句
+  // ---- 跟我读不用按(《wip/口语课设想.md》§8.1;数是 cfg.talk.read:等 1 秒、再读 2 遍、静 300 毫秒算读完) ----
+  const rdMode = (): string | undefined => last(k, 'state')?.rd?.mode;
+  /** 孩子读一遍:响三块(300 毫秒)、静三块(300 毫秒) */
+  const speak = (text: string): void => { fake.kidText = text; for (let i = 0; i < 3; i++) k.ws.send(loud()); for (let i = 0; i < 3; i++) k.ws.send(quiet()); };
+  const cues = (): string[] => c1.items.map((it) => String(it.content[0].text));
+  const okL = await k.wait(() => rdMode() === 'listen');
+  const stL = last(k, 'state')!;
+  check('老师的声音放完 → 等孩子(rd listen,倒计时不到 1 秒、一共 1 秒),这时什么都没推给模型', okL && stL.rd.left > 0 && stL.rd.left <= 1000 && stL.rd.wait === 1000 && c1.commits === 0 && c1.audio === 0, JSON.stringify(stL.rd));
+  speak('hello');
+  const okA = await until(() => cues().includes('再读一遍这句:red'));
+  check('不用按:响了推给模型(带前垫)、静了 commit 拿转写;读的不沾这句 → 老师再读一遍', okA && c1.commits === 1 && c1.audio === 6 * 3200 && last(k, 'kid')?.text === 'hello' && c1.creates === 2, JSON.stringify({ audio: c1.audio, commits: c1.commits, creates: c1.creates }));
+  await k.wait(() => rdMode() === 'listen');
+  speak('Red!');
+  const okN = await k.wait(() => k.msgs.some((m) => m.t === 'state' && m.i === 1 && m.item?.en === 'bus') && cues().includes('孩子读了「Red!」。先用一两个词接,再读下一句:bus'));
+  check('读到了 → 下一句(接一两个词 + 下一句,一次回答)', okN && c1.commits === 2, JSON.stringify(cues()));
+  const t0 = Date.now();
+  const okW = await k.wait(() => rdMode() === 'wait', 6000);
+  const agains = cues().filter((t) => t === '再读一遍这句:bus').length;
+  check('不出声:等 1 秒老师再读,两遍后不再催(wait,没有倒计时)', okW && agains === 2 && last(k, 'state')!.rd.left === null && Date.now() - t0 >= 2000, JSON.stringify({ agains, ms: Date.now() - t0 }));
+  speak('banana');
+  const okM = await k.wait(() => k.msgs.some((m) => m.t === 'state' && m.i === 2));
+  check('等着时开口、还不沾 → 自动再读用完了,往下走,不卡在一句上', okM && cues().some((t) => t.startsWith('孩子读了「banana」') && t.endsWith("It's a red car.")), JSON.stringify(cues().slice(-2)));
+  await k.wait(() => rdMode() === 'listen');
   k.ws.send(JSON.stringify({ t: 'again' }));
-  const ok4 = await until(() => c1.items.some((it) => it.content[0].text === '再读一遍这句:red'));
-  k.ws.send(JSON.stringify({ t: 'next' }));
-  const ok5 = await k.wait(() => k.msgs.some((m) => m.t === 'state' && m.i === 1 && m.item?.en === 'bus') && c1.items.some((it) => it.content[0].text === '读这句:bus'));
-  check('再听 → 再读一遍的 cue;下一句 → 第 2 句', ok4 && ok5);
-  // 读完开聊
-  k.ws.send(JSON.stringify({ t: 'next' }));
-  await k.wait(() => k.msgs.some((m) => m.t === 'state' && m.i === 2));
-  k.ws.send(JSON.stringify({ t: 'next' }));
+  const ok4 = await until(() => cues().includes("再读一遍这句:It's a red car."));
+  const ok5 = await k.wait(() => cues().includes("再读一遍这句:It's a red car.") && rdMode() === 'listen');
+  check('点「再听一遍」→ 再读,不算自动的次数', ok4 && ok5 && last(k, 'state')!.rd.again === 0);
+  speak("It's a red car.");
+  // 最后一句读完 → 夸一句、说要聊了 → 放完开聊
   const ok6 = await k.wait(() => fake.conns.length === 2 && k.msgs.some((m) => m.t === 'state' && m.phase === 'chat' && m.deadline !== null) && fake.conns[1].creates >= 1);
   const c2 = fake.conns[1];
-  check('三句读完 → 跟读会话关了、聊的会话开了(semantic_vad 1200,人设带跟读情况)、开聊的 cue、状态带截止', ok6 && c1.closed && c2.session?.turn_detection?.type === 'semantic_vad' && c2.session?.turn_detection?.silence_duration_ms === 1200 && String(c2.session?.instructions).includes('他跟读了 3 句') && String(c2.session?.instructions).includes('1 分钟') && c2.items[0]?.content?.[0]?.text.startsWith('开聊'), JSON.stringify({ closed: c1.closed, td: c2.session?.turn_detection, items: c2.items }).slice(0, 300));
+  check('最后一句读完 → 老师夸一句说要聊了、放完 → 跟读会话关了、聊的会话开了(semantic_vad 1200,人设带跟读情况)、开聊的 cue、状态带截止', ok6 && cues().includes("孩子读了「It's a red car.」。跟读完了:用一句英文夸他,再说 Now let's talk!") && c1.closed && c2.session?.turn_detection?.type === 'semantic_vad' && c2.session?.turn_detection?.silence_duration_ms === 1200 && String(c2.session?.instructions).includes('他跟读了 3 句') && String(c2.session?.instructions).includes('1 分钟') && c2.items[0]?.content?.[0]?.text.startsWith('开聊'), JSON.stringify({ closed: c1.closed, td: c2.session?.turn_detection, items: c2.items }).slice(0, 300));
   // 聊:老师讲长的,孩子开口 → 掐、flush;停了 → 转写、老师接
   fake.long = true;
   k.ws.send(JSON.stringify({ t: 'chat' })); // 已经在聊,不理
@@ -190,7 +193,7 @@ const last = (k: { msgs: Msg[] }, t: string): Msg | undefined => [...k.msgs].rev
   const meta = JSON.parse(readFileSync(join(dir, 'talk.json'), 'utf8')) as Record<string, any>;
   const kidWav = pcmOfWav(readFileSync(join(dir, 'kid.wav')));
   const tutorWav = pcmOfWav(readFileSync(join(dir, 'tutor.wav')));
-  check('挂断:end 到孩子端、落盘(why bye、字分两段、孩子的话带 item、用量加总、用到的词、两段 wav)', ok9 && finished[0][1] === 'bye' && last(k, 'end')?.why === 'bye' && tr.why === 'bye' && tr.lines.some((l: any) => l.who === 'kid' && l.phase === 'read' && l.item === 0) && tr.lines.some((l: any) => l.who === 'kid' && l.phase === 'chat' && l.text === 'Red!') && tr.usage.input > 865 && tr.used.words[0].kid === 1 && meta.status === 'done' && meta.call.read === 3 && meta.call.items === 3 && kidWav?.rate === 16000 && kidWav.pcm.length === 6400 + 1000 + 6400 && tutorWav?.rate === 24000 && tutorWav.pcm.length % 4800 === 0 && c2.closed, JSON.stringify({ why: tr.why, lines: tr.lines.length, usage: tr.usage, used: tr.used.words, kid: kidWav?.pcm.length, tutor: tutorWav?.pcm.length }));
+  check('挂断:end 到孩子端、落盘(why bye、字分两段、孩子的话带 item、用量加总、用到的词、两段 wav)', ok9 && finished[0][1] === 'bye' && last(k, 'end')?.why === 'bye' && tr.why === 'bye' && tr.lines.some((l: any) => l.who === 'kid' && l.phase === 'read' && l.item === 0) && tr.lines.some((l: any) => l.who === 'kid' && l.phase === 'chat' && l.text === 'Red!') && tr.usage.input > 865 && tr.used.words[0].kid === 1 && meta.status === 'done' && meta.call.read === 3 && meta.call.items === 3 && kidWav?.rate === 16000 && kidWav.pcm.length === 4 * 6 * 3200 + 6400 && tutorWav?.rate === 24000 && tutorWav.pcm.length % 4800 === 0 && c2.closed, JSON.stringify({ why: tr.why, lines: tr.lines.length, usage: tr.usage, used: tr.used.words, kid: kidWav?.pcm.length, tutor: tutorWav?.pcm.length }));
   const ok10 = await until(() => k.closed !== null);
   check('孩子端的连接关了(1000 bye)', ok10 && k.closed?.code === 1000, JSON.stringify(k.closed));
   const one = await call('GET', `/api/talk/${id}`);

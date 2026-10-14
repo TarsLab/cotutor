@@ -22,7 +22,8 @@ const persona = (kid: string): string => `你是一位教一年级孩子的英�
 export function readInstructions(list: TalkList, kid = '', note = ''): string {
   return `${persona(kid)}
 现在是跟读:我会告诉你「读这句:…」,你就只把那句英文读一遍(先英文,再轻轻说一遍中文意思),然后停下等孩子读。
-孩子读完,你只用一两句接:读得像就说 Nice! 或 Good job!,再请他读一遍更大声;读得不像就说 Listen 再读一遍那句,请他再试。不要讲别的,不要问问题。
+孩子读完,我会告诉你他读了什么、下一句是什么:你先用一两个词接(Nice! / Good job! / Great!),紧接着读下一句,一口气说完。
+我说「再读一遍这句」,你就说 Listen again 再读一遍那句。不要讲别的,不要问问题,不说他读得对不对。
 今天的口语单:
 ${listText(list)}${noteText(note)}`;
 }
@@ -30,6 +31,10 @@ ${listText(list)}${noteText(note)}`;
 /** 跟读段塞给模型的那句 */
 export const readCue = (item: ListItem): string => `读这句:${item.en}`;
 export const readAgainCue = (item: ListItem): string => `再读一遍这句:${item.en}`;
+/** 孩子读完了(《wip/口语课设想.md》§8.1):接一两个词 + 下一句,一次回答说完 */
+export const readNextCue = (heard: string, next: ListItem): string => `孩子读了「${heard}」。先用一两个词接,再读下一句:${next.en}`;
+/** 最后一句读完:夸一句、说要聊了;说完应用开聊的会话 */
+export const readLastCue = (heard: string): string => `孩子读了「${heard}」。跟读完了:用一句英文夸他,再说 Now let's talk!`;
 
 /** 聊那条会话的系统提示;summary 是跟读段的几句情况 */
 export function chatInstructions(list: TalkList, kid = '', minutes = 5, summary = '', note = ''): string {

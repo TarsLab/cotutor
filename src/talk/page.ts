@@ -90,6 +90,18 @@ const TALK_PAGE = `<!doctype html>
   #kid .dots i.done { background:var(--blue-ink); }
   #kid .dots i.now { background:var(--accent); }
   #kid .bar { display:flex; align-items:center; justify-content:center; gap:24px; padding:8px 0 10px; flex-wrap:wrap; }
+  #kid .bar.small { gap:12px; }
+  #kid .rc.now { border:2px solid var(--accent); box-shadow:0 6px 22px rgba(232,116,59,.16); }
+  /* 跟我读不用按(《wip/口语课设想.md》§8.1):现在轮到谁,一颗胶囊 */
+  #kid .rd { display:inline-flex; align-items:center; gap:12px; min-height:64px; padding:0 26px 0 22px; border-radius:32px; font-size:20px; font-weight:600; }
+  #kid .rd.tutor { background:#e5f4ea; color:#1f6b3f; }
+  #kid .rd.listen, #kid .rd.speech, #kid .rd.wait { background:#fff; color:var(--blue-ink); padding-left:8px; box-shadow:0 0 0 3px #9cc3ef, 0 2px 8px rgba(0,0,0,.08); }
+  #kid .rd.heard { background:var(--grey); color:var(--dim); }
+  #kid .rd .ring { position:relative; width:48px; height:48px; display:grid; place-items:center; flex:none; }
+  #kid .rd .ring svg.r { position:absolute; inset:0; transform:rotate(-90deg); }
+  #kid .rd .lv2 { display:flex; align-items:center; gap:4px; height:28px; }
+  #kid .rd .lv2 i { width:5px; height:6px; border-radius:3px; background:currentColor; opacity:.85; transition:height .08s; }
+  #kid .back { display:inline-flex; align-items:center; gap:6px; height:48px; padding:0 8px 0 12px; border-radius:24px; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.12); color:var(--dim); text-decoration:none; }
   #kid .hint { text-align:center; font-size:14px; color:var(--dim); min-height:20px; }
   #kid .start { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; text-align:center; }
   #kid .start .av { width:140px; height:140px; border-radius:50%; background:var(--blue); color:var(--blue-ink); display:grid; place-items:center; font-size:64px; font-weight:700; }
@@ -172,19 +184,20 @@ const TALK_PAGE = `<!doctype html>
 
 <div id="kid" class="view"><div class="wrap">
   <div class="top">
-    <a class="pill" href="#/" id="k-back">‹ 回去</a>
+    <a class="back" href="#/" id="k-back" aria-label="回去"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><svg width="38" height="38" viewBox="0 0 48 48" aria-hidden="true"><path d="M40.4 12.5A20 20 0 1 0 40.4 35.5" fill="none" stroke="#1f8a4c" stroke-width="3.5" stroke-linecap="round"/><text x="24" y="30" text-anchor="middle" font-size="16" font-weight="700" fill="#1f8a4c">英</text></svg></a>
     <div style="display:flex;align-items:center;gap:12px"><div class="dots" id="k-dots"></div><span class="chip plum" id="k-chip">跟我读</span></div>
   </div>
   <div class="start" id="k-start">
     <div class="av">E</div>
     <b style="font-size:26px">英语老师</b>
     <div class="muted" id="k-start-hint">先跟老师读几句,再用这些词聊一聊</div>
-    <button class="big" type="button" id="k-go"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>给英语老师打电话</button>
+    <button class="big" type="button" id="k-go" style="background:#1f8a4c"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg>开始</button>
+    <div class="muted small">老师读一句,你读一句;读完自己往下走,不用按</div>
   </div>
   <div class="mid" id="k-read" hidden>
-    <div class="list" id="k-list"></div>
     <div class="say" id="k-say"><span class="en">Listen first, then you try.</span><span class="zh">先听,再你来。</span></div>
-    <div class="rc"><div class="en" id="k-en"></div><div class="zh" id="k-zh"></div><button class="again" type="button" id="k-again"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>再听老师读一遍</button></div>
+    <div class="rc now"><div class="en" id="k-en"></div><div class="zh" id="k-zh"></div></div>
+    <div class="rd tutor" id="k-rd"></div>
     <div class="heard" id="k-heard"></div>
   </div>
   <div class="mid" id="k-chat" hidden>
@@ -195,10 +208,10 @@ const TALK_PAGE = `<!doctype html>
     <div class="heard" id="k-heard2"></div>
     <div class="lv" id="k-lv"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
   </div>
-  <div class="bar" id="k-bar" hidden>
-    <button class="big" type="button" id="k-hold"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg><span>按住跟我读</span></button>
+  <div class="bar small" id="k-bar" hidden>
+    <button class="pill" type="button" id="k-again"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg>再听一遍</button>
     <button class="pill" type="button" id="k-next">下一句 ›</button>
-    <button class="pill red" type="button" id="k-skip">直接聊</button>
+    <button class="pill" type="button" id="k-skip" style="color:var(--dim)">直接打电话</button>
   </div>
   <div class="bar" id="k-bar2" hidden>
     <button class="hang" type="button" id="k-hang"><span><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></span>挂断</button>
@@ -372,15 +385,46 @@ const TALK_PAGE = `<!doctype html>
     $('#k-chip').textContent = read ? '跟我读 · 第 ' + (st.i + 1) + ' 句,读完就聊' : st.phase === 'chat' ? '聊一聊' : '结束了';
     $('#k-chip').className = 'chip ' + (read ? 'plum' : 'blue');
     $('#k-dots').replaceChildren(...Array.from({ length: st.n }, (_, i) => h('i', { class: i < st.i ? 'done' : i === st.i ? 'now' : '' })));
-    if (read && st.item) { $('#k-en').textContent = st.item.en; $('#k-en').className = 'en' + (st.item.en.length > 14 ? ' long' : ''); $('#k-zh').textContent = st.item.zh; renderListChips($('#k-list'), st); }
+    if (read && st.item) { $('#k-en').textContent = st.item.en; $('#k-en').className = 'en' + (st.item.en.length > 14 ? ' long' : ''); $('#k-zh').textContent = st.item.zh; }
+    if (read) renderRd(st);
     if (st.phase === 'chat') { renderListChips($('#k-list2'), st); $('#k-av').className = 'av' + (st.speaking ? ' talk' : ''); }
     if (st.phase === 'chat' && st.deadline !== null) call.deadline = st.deadline;
-    $('#k-hold').classList.toggle('off', Boolean(st.speaking));
     $('#k-next').disabled = false;
   }
+  // ---- 跟我读:现在轮到谁(服务端的 rd 说了算,lib/read-flow.ts) ----
+  const ICON_SPK = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>';
+  const RING_C = 131.9;
+  const ringHtml = '<svg class="r" width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21" fill="none" stroke="#dbe6f5" stroke-width="4"/><circle id="k-ring" cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + RING_C + '" stroke-dashoffset="0"/></svg><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+  let rdUntil = null, rdWait = 5000;
+  function renderRd(st) {
+    const rd = st.rd, el = $('#k-rd');
+    if (!rd) { el.hidden = true; return; }
+    el.hidden = false;
+    const mode = rd.mode;
+    el.className = 'rd ' + mode;
+    rdUntil = rd.left === null || rd.left === undefined ? null : Date.now() + rd.left;
+    rdWait = rd.wait || 5000;
+    if (mode === 'tutor') el.replaceChildren(h('span', { html: ICON_SPK }), rd.again ? '老师再读一遍,听完跟着读' : '先听老师读');
+    else if (mode === 'heard') el.replaceChildren('听到了…');
+    else {
+      if (mode === 'speech') $('#k-heard').textContent = '';
+      const lv = h('span', { class: 'lv2' }, h('i'), h('i'), h('i'), h('i'), h('i'));
+      el.replaceChildren(h('span', { class: 'ring', html: ringHtml }), mode === 'speech' ? '在听你读…' : mode === 'wait' ? '想读就读' : '轮到你,跟着读一遍', lv);
+      if (mode !== 'listen') { const r = $('#k-ring'); if (r) r.style.opacity = mode === 'speech' ? '1' : '0'; }
+    }
+    drawRing();
+  }
+  /** 等孩子时外圈一点点走完:走完老师再读一遍 */
+  function drawRing() {
+    const r = $('#k-ring');
+    if (!r || rdUntil === null) return;
+    const left = Math.max(0, rdUntil - Date.now());
+    r.setAttribute('stroke-dashoffset', String(RING_C * (1 - left / rdWait)));
+  }
+  setInterval(drawRing, 100);
   function makeCall(id) {
     const A = makeAudio();
-    const C = { id, ws: null, st: null, holding: false, deadline: null, tutorLine: '', tutorDone: true, interrupt: false, timer: null, ended: false, startedAt: 0 };
+    const C = { id, ws: null, st: null, deadline: null, tutorLine: '', tutorDone: true, interrupt: false, timer: null, ended: false, startedAt: 0 };
     const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/talk/' + id + '/ws';
     C.send = (o) => { if (C.ws && C.ws.readyState === 1) C.ws.send(JSON.stringify(o)); };
     C.start = async () => {
@@ -388,10 +432,11 @@ const TALK_PAGE = `<!doctype html>
       try { await A.open(); } catch (e) { setHint('麦克风打不开:' + (e && e.message ? e.message : e)); return; }
       A.onChunk = (ab) => {
         if (!C.st) return;
-        if (C.st.phase === 'read') { if (C.holding) C.ws.send(ab); return; }
+        // 跟读段不用按:老师放声时不推(没有回声),其余时间都推,开口 / 停由服务端判
+        if (C.st.phase === 'read') { if (!A.playing()) C.ws.send(ab); return; }
         if (C.st.phase === 'chat') { if (C.interrupt || !A.playing()) C.ws.send(ab); }
       };
-      A.onLevel = (v) => { const bars = $('#k-lv').children; const k = Math.min(1, v * 6); for (let i = 0; i < bars.length; i++) { const w = 1 - Math.abs(i - 4) / 5; bars[i].style.height = Math.round(6 + 38 * k * w) + 'px'; } if (C.st && C.st.phase === 'chat') $('#k-av').classList.toggle('listen', k > 0.12 && !A.playing()); };
+      A.onLevel = (v) => { const rb = document.querySelectorAll('#k-rd .lv2 i'); for (let i = 0; i < rb.length; i++) { const w = 1 - Math.abs(i - 2) / 3; rb[i].style.height = Math.round(6 + 22 * Math.min(1, v * 6) * w) + 'px'; } const bars = $('#k-lv').children; const k = Math.min(1, v * 6); for (let i = 0; i < bars.length; i++) { const w = 1 - Math.abs(i - 4) / 5; bars[i].style.height = Math.round(6 + 38 * k * w) + 'px'; } if (C.st && C.st.phase === 'chat') $('#k-av').classList.toggle('listen', k > 0.12 && !A.playing()); };
       setHint('接通中…');
       const ws = new WebSocket(wsUrl); ws.binaryType = 'arraybuffer'; C.ws = ws;
       ws.onopen = () => { A.muted = false; C.startedAt = Date.now(); setHint(''); C.timer = setInterval(C.tick, 500); };
@@ -407,7 +452,7 @@ const TALK_PAGE = `<!doctype html>
           if (C.st && C.st.phase === 'chat') $('#k-tt').replaceChildren(en, ...(zh && zh !== C.tutorLine ? [h('span', { class: 'zh' }, zh)] : []));
           else $('#k-say').replaceChildren(h('span', { class: 'en' }, C.tutorLine));
         }
-        else if (m.t === 'kid') { const el = C.st && C.st.phase === 'chat' ? $('#k-heard2') : $('#k-heard'); el.replaceChildren(h('span', { class: 'muted' }, '你说的:'), h('span', {}, m.text)); }
+        else if (m.t === 'kid') { const chat = C.st && C.st.phase === 'chat'; (chat ? $('#k-heard2') : $('#k-heard')).replaceChildren(h('span', { class: 'muted' }, chat ? '你说的:' : '你读的'), h('span', {}, m.text)); }
         else if (m.t === 'flush') A.flush();
         else if (m.t === 'err') setHint(m.msg);
         else if (m.t === 'end') C.finish(m.why);
@@ -418,11 +463,9 @@ const TALK_PAGE = `<!doctype html>
     C.tick = () => {
       if (!C.st) return;
       if (C.st.phase === 'chat' && C.deadline !== null) { const left = Math.max(0, C.deadline - (Date.now() - C.startedAt)); $('#k-chip').textContent = '聊一聊 · 还有 ' + Math.floor(left / 60000) + ':' + String(Math.floor((left % 60000) / 1000)).padStart(2, '0'); }
-      if (C.st.phase === 'read') setHint(C.holding ? '松手就好' : C.st.speaking ? '老师在读…' : '按住,跟着读一遍');
+      if (C.st.phase === 'read') setHint(C.st.rd && C.st.rd.mode === 'wait' ? '想读就读,或者点「下一句」' : C.st.rd && C.st.rd.mode === 'listen' ? '读完停一下就好' : '');
       else if (C.st.phase === 'chat') setHint(A.playing() ? (C.interrupt ? '想插嘴就直接说' : '老师在说,等她说完') : '你说吧,说完停一下老师就接');
     };
-    C.hold = () => { if (!C.st || C.st.phase !== 'read' || C.holding) return; C.holding = true; A.flush(); $('#k-hold').classList.add('held'); C.send({ t: 'hold' }); };
-    C.release = () => { if (!C.holding) return; C.holding = false; $('#k-hold').classList.remove('held'); C.send({ t: 'release' }); };
     C.hangup = (why) => { C.send({ t: 'bye' }); C.finish(why || 'bye'); };
     C.finish = (why) => {
       if (C.ended) return; C.ended = true;
@@ -440,15 +483,10 @@ const TALK_PAGE = `<!doctype html>
     $('#k-chip').textContent = '跟我读'; $('#k-chip').className = 'chip plum'; $('#k-dots').replaceChildren(); $('#k-heard').textContent = ''; $('#k-heard2').textContent = '';
     try { K = await api('GET', '/api/talk/' + id); } catch (e) { toast('没有这一次'); go('#/'); return; }
     const n = K.meta.list.words.length + K.meta.list.sentences.length;
-    $('#k-start-hint').textContent = n ? '先跟老师读 ' + n + ' 句,再用这些词聊一聊' : '口语单是空的,直接聊';
+    $('#k-start-hint').textContent = n ? '先跟我读 ' + n + ' 句,再打个电话聊一聊' : '口语单是空的,直接打电话聊';
     if (K.meta.status === 'done') $('#k-start-hint').textContent = '这一次已经聊过了;再打一次会盖掉上次的记录';
   }
   $('#k-go').addEventListener('click', async () => { if (call) return; call = makeCall(K.meta.id); $('#k-go').disabled = true; await call.start(); $('#k-go').disabled = false; });
-  const holdBtn = $('#k-hold');
-  const down = (e) => { e.preventDefault(); if (call) call.hold(); };
-  const up = (e) => { if (e) e.preventDefault(); if (call) call.release(); };
-  holdBtn.addEventListener('pointerdown', down); holdBtn.addEventListener('pointerup', up); holdBtn.addEventListener('pointercancel', up); holdBtn.addEventListener('pointerleave', () => { if (call && call.holding) up(); });
-  holdBtn.addEventListener('contextmenu', (e) => e.preventDefault());
   $('#k-again').addEventListener('click', () => { if (call) call.send({ t: 'again' }); });
   $('#k-next').addEventListener('click', () => { if (call) { $('#k-next').disabled = true; $('#k-heard').textContent = ''; call.send({ t: 'next' }); } });
   $('#k-skip').addEventListener('click', () => { if (call) call.send({ t: 'chat' }); });

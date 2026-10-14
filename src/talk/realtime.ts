@@ -11,7 +11,7 @@
  *         input_audio_buffer.speech_started / speech_stopped(VAD);response.done {response: {status, usage}};error。
  *   端点要业务空间 id:wss://<WorkspaceId>.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=…(公网域名 dashscope.aliyuncs.com 连上 1 秒就被关)。
  *
- * 轮次:manual = 手动(跟读段:按住 append、松手 commit + response.create);semantic_vad / server_vad = 服务端判(聊那段)。
+ * 轮次:manual = 手动(跟读段:relay 按响度判出开口才 append、停了 commit 拿转写,下一步由应用塞 cue + response.create,见 relay.ts);semantic_vad / server_vad = 服务端判(聊那段)。
  *   服务端的规矩(2026-10-10 真连):turn_detection 的 silence_duration_ms 喂过音频就不能再改(切成 null 再切回来也回到缺省 800),
  *   type 在 null 与 vad 之间随时能切。所以跟读与聊各开一条会话(跟读手动;聊 semantic_vad 带自己的 silence),setTurn 只在不改 silence 时用。
  * 不抛:连不上、断了、服务端报错都走 onClose / onError;send 在没连上时丢弃并回 false。

@@ -73,26 +73,25 @@ try {
   const up = await untilFn(async () => fake.conns.length === 1 && (await visible('#k-read')) && (await page.evaluate(() => document.querySelector('#k-en').textContent === 'red' && window.__played > 0)), 60);
   ok('打电话:麦克风(假)开了、AudioWorklet 起了、接上、第一句在卡上、老师的声音排进去放了;打电话那块藏起来', up && !(await visible('#k-start')) && (await visible('#k-bar')), JSON.stringify(await stats()));
   const c1 = fake.conns[0];
-  await untilFn(() => page.evaluate(() => document.querySelector('#k-hint').textContent.includes('按住')));
+  // 跟我读不用按(《wip/口语课设想.md》§8.1):老师放完就听;振荡器响着 = 孩子在读,__mute = 读完了
+  ok('老师放完:轮到孩子,页面上没有「按住」', await untilFn(() => page.evaluate(() => /listen|speech/.test(document.querySelector('#k-rd').className) && !document.querySelector('#k-hold'))), JSON.stringify(await stats()));
   const a0 = c1.audio;
-  const box = await page.locator('#k-hold').boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
   const got = await untilFn(() => c1.audio >= a0 + 3200 * 6, 40);
-  ok('按住:worklet 的 16k PCM 一块块到了假百炼', got, `${c1.audio - a0} 字节 ${JSON.stringify(await stats())}`);
-  await page.mouse.up();
-  ok('松手:孩子那句的字出在卡下面', await untilFn(() => page.evaluate(() => document.querySelector('#k-heard').textContent.includes("It's a red car."))));
-  await page.click('#k-next');
-  await untilFn(() => page.evaluate(() => document.querySelector('#k-en').textContent === 'It is a red car.'));
+  ok('不用按:振荡器一响,worklet 的 16k PCM 一块块到了假百炼', got, `${c1.audio - a0} 字节 ${JSON.stringify(await stats())}`);
+  await page.evaluate(() => window.__mute());
+  ok('静了 → commit、转写回来、自动到第 2 句', await untilFn(() => page.evaluate(() => document.querySelector('#k-en').textContent === 'It is a red car.'), 60) && c1.commits === 1, JSON.stringify({ commits: c1.commits }));
+  await page.evaluate(() => window.__unmute());
+  // 第 2 句点「下一句」:手动那条路,直接开聊
   await page.click('#k-next');
   ok('读完开聊:聊那块露出来、跟读那块藏起来、倒计时', await untilFn(async () => fake.conns.length === 2 && (await visible('#k-chat')) && !(await visible('#k-read')) && (await page.evaluate(() => document.querySelector('#k-chip').textContent.includes('还有')))), JSON.stringify(await stats()));
   const c2 = fake.conns[1];
   await untilFn(() => c2.audio > 3200 * 5, 60);
   await page.evaluate(() => window.__mute());
   ok('聊:老师放完,孩子的声音推上去;停了 → 转写回来、老师接', await untilFn(() => page.evaluate(() => document.querySelector('#k-heard2').textContent.includes("It's a red car.")), 60) && c2.creates >= 2, JSON.stringify({ audio: c2.audio, creates: c2.creates }));
-  await page.click('#k-hang');
-  ok('挂断 → 回看', await untilFn(() => page.evaluate(() => document.querySelector('#review').classList.contains('on') && document.querySelectorAll('#r-lines .ln').length > 0)));
   const s = await stats();
+  await page.click('#k-hang');
+  // /talk 只有孩子那一屏(658a48a):挂了回孩子端首页,通话照样落盘
+  ok('挂断 → 回孩子端首页,这一次落盘了', await untilFn(() => page.evaluate(() => location.pathname === '/')) && await untilFn(async () => ((await (await fetch(`${base}/api/talk/${t.id}`)).json()).transcript?.lines.length ?? 0) > 0));
   ok('页面没报错', s.err.length === 0, JSON.stringify(s.err));
   console.log(bad ? `${bad} 项没过` : '全过');
 } finally {

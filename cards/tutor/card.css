@@ -16,9 +16,8 @@
 .c-tutor .bt-new .ln { font-size:15px; font-weight:400; opacity:.9; }
 .c-tutor .bt-new .bi { margin-left:auto; width:40px; height:40px; color:#fff; }
 .c-tutor .bt-new .bi svg { width:36px; height:36px; }
-/* 新话题打头的名字首字(《首页设计.md》拍板 28):只在平板横着叠的牌堆里出,后面的牌露出来的那一格就是它;右边一道竖线隔开「新话题」 */
-.c-tutor .bt-new .fc { display:none; flex:none; width:40px; padding-right:14px; border-right:2px solid rgba(255,255,255,.45); font-size:38px; font-weight:800; line-height:44px; text-align:center; box-sizing:content-box; }
-#deck[data-axis="H"] .c-tutor .bt-new .fc { display:block; }
+/* 新话题打头的名字首字(《首页设计.md》拍板 28):平板横着叠时后面的牌露出来的那一格就是它;右边一道竖线隔开「新话题」 */
+.c-tutor .bt-new .fc { flex:none; width:40px; padding-right:14px; border-right:2px solid rgba(255,255,255,.45); font-size:38px; font-weight:800; line-height:44px; text-align:center; box-sizing:content-box; }
 .c-tutor.off { pointer-events:none; }
 .c-tutor.off .av { filter:grayscale(1); opacity:.4; }
 /* 休息:次数用完 / 服务不通,C 的开口朝下(低头);点一下:手指按着时 C 扭一下,松开弹回(弹的那下是 .av 环上的 transition) */

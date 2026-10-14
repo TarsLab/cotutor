@@ -753,7 +753,7 @@ __REEL_JS__
     return out;
   };
   // 牌上的按钮(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):新话题是头像下面一个学科色大气泡(不带尖角);小课堂是带预览图的海报;其余是大胶囊。
-  // 孩子看到的字都在 .btx 里(探针按它读)。新话题打头印名字的首字(.fc,拍板 28):平板横着叠时后面的牌只露左边一格,露出来的那截气泡就是这个字;手机露着整行名字,不出
+  // 孩子看到的字都在 .btx 里(探针按它读)。新话题打头印名字的首字(.fc,拍板 28):平板横着叠时后面的牌只露左边一格,露出来的那截气泡就是这个字;手机也印,两处一样
   const tutorButton = (t, b) => {
     const on = { click: () => pickButton(t, b) };
     const fc = Array.from(t.display || '')[0];
@@ -829,7 +829,6 @@ __REEL_JS__
       if (g.w < d.wMin) { g.step = Math.max(d.stepMin, (avail - d.wMin) / Math.max(1, n - 1)); g.w = Math.max(240, avail - (n - 1) * g.step); }
     }
     box.style.setProperty('--w', g.w + 'px'); box.style.setProperty('--av', d.av + 'px'); box.style.setProperty('--nmz', d.nm + 'px');
-    box.dataset.axis = axis;
     box.style.setProperty('--org', axis === 'V' ? '50% 0%' : '0% 100%'); box.style.setProperty('--head', d.head + 'px');
     // 一样高:取最高那张;竖着叠时露出的那条 = 头那一行实际的高度 + 8
     const cards = [...K.els.values()];

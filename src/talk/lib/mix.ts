@@ -2,10 +2,14 @@
  * 口语课的录像声音(《wip/口语课设想.md》§8.3):两边的声音照到达的时刻摆成一条对齐墙钟的单声道(24k),和孩子当时听到的、说的一样。纯函数。
  *   孩子的块(16k)到了服务端才记时刻,声音是那之前 100 毫秒录的:往前挪一块的长度,升到 24k。
  *   老师的块照孩子端 A.play 的排法排:上一块放完或到达 + 60 毫秒,取晚的;flush(孩子插嘴、换段)那一刻还没放完的截掉,队列从头排。
- * 同时给出老师在出声的时段(录像里画「老师在说 / 轮到你」用)。
+ * 同时给出老师在出声的时段(录像里画「老师在说 / 轮到你」用)、孩子有声的时段(跳过空白时别把孩子说话剪掉)。
  */
 
+import { rms } from './wav.ts';
+
 export const MIX_RATE = 24000;
+/** 孩子的一块响过这个算有声(同 read-flow 的门限下限) */
+const KID_VOICE = 0.015;
 const KID_RATE = 16000;
 /** 孩子端排队的起步(A.play 里的 0.06 秒) */
 const LEAD_MS = 60;
@@ -53,7 +57,7 @@ export function playingOf(segs: { start: number; end: number }[]): [number, numb
 }
 
 /** 两边混成一条(PCM16 单声道 24k,长到 ms 为止;挂断那一刻还没放完的老师的声音不要) */
-export function mixCall(o: { kid: Chunk[]; tutor: Chunk[]; flushes: number[]; ms: number }): { pcm: Buffer; playing: [number, number][] } {
+export function mixCall(o: { kid: Chunk[]; tutor: Chunk[]; flushes: number[]; ms: number }): { pcm: Buffer; playing: [number, number][]; kidVoice: [number, number][] } {
   const n = Math.max(0, Math.round((o.ms * MIX_RATE) / 1000));
   const acc = new Float32Array(n);
   const put = (at: number, i16: (k: number) => number, len: number): void => {
@@ -75,5 +79,6 @@ export function mixCall(o: { kid: Chunk[]; tutor: Chunk[]; flushes: number[]; ms
   for (const s of segs) put(s.start, (k) => s.pcm.readInt16LE(k * 2), samplesOf(s.pcm));
   const pcm = Buffer.alloc(n * 2);
   for (let j = 0; j < n; j++) pcm.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(acc[j]))), j * 2);
-  return { pcm, playing: playingOf(segs.map((s) => ({ start: s.start, end: Math.min(s.end, o.ms) }))) };
+  const voiced = o.kid.filter((c) => rms(c.pcm) >= KID_VOICE).map((c) => ({ start: c.t - (samplesOf(c.pcm) * 1000) / KID_RATE, end: c.t }));
+  return { pcm, playing: playingOf(segs.map((s) => ({ start: s.start, end: Math.min(s.end, o.ms) }))), kidVoice: playingOf(voiced) };
 }

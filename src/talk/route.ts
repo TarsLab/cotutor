@@ -10,16 +10,20 @@
  *   PUT    /api/talk/<id>/list         {words, sentences, ready?} 家长改口语单;ready = 给孩子
  *   DELETE /api/talk/<id>
  *   GET    /api/talk/<id>/photo        那页照片
- *   GET    /api/talk/<id>/audio/<who>  kid / tutor 的声音(wav)
+ *   GET    /api/talk/<id>/audio/<who>  kid / tutor 的声音(wav);call = 录像的那一条(两边按时刻混好)
+ *   GET    /api/talk/<id>/reel        录像的数据(reel.json + 这一次的 meta);没有 404
+ *   GET    /parent/talk/reel?id=      家长看录像的外壳(reel-page.ts)
  *   WS     /api/talk/<id>/ws           通话(serve 的 upgrade 交给 talkUpgrade)
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AppContext, RouteResult } from '../server/app.ts';
 import type { ListItem } from './lib/used.ts';
 import { readList, wordCardOf } from './list.ts';
 import { talkPage } from './page.ts';
+import { TALK_REEL_PAGE } from './reel-page.ts';
 import { dashscopeAuth } from './realtime.ts';
 import { TalkCall } from './relay.ts';
 import { ID_RE, createTalk, deleteTalk, dirOf, listTalks, readMeta, readTalk, writeMeta } from './store.ts';
@@ -70,6 +74,7 @@ export function makeTalkRoute(deps: TalkDeps = { readList }) {
     const p = url.pathname;
     // 孩子端只有跟读与聊那一屏(#/kid/<id>);拍口语单、改口语单、回看在家长端 /parent/talk(同一份页面,家长递给孩子也在那里)
     if (p === '/talk' || p === '/talk/') return method === 'GET' ? { status: 200, html: talkPage(true) } : { status: 405, json: { error: 'method_not_allowed' } };
+    if (p === '/parent/talk/reel') return method === 'GET' ? { status: 200, html: TALK_REEL_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
     if (p === '/parent/talk' || p === '/parent/talk/') return method === 'GET' ? { status: 200, html: talkPage(false) } : { status: 405, json: { error: 'method_not_allowed' } };
     if (p !== '/api/talk' && !p.startsWith('/api/talk/')) return null;
     const ws = ctx.ws;
@@ -129,7 +134,11 @@ export function makeTalkRoute(deps: TalkDeps = { readList }) {
       return { status: 200, json: meta };
     }
     if (rest === 'photo' && method === 'GET') return meta.photo ? { status: 200, file: join(dir, meta.photo), contentType: 'image/jpeg', cacheControl: 'private, max-age=3600' } : { status: 404, json: { error: 'no_photo' } };
-    const a = /^audio\/(kid|tutor)$/.exec(rest);
+    if (rest === 'reel' && method === 'GET') {
+      const reel = await readFile(join(dir, 'reel.json'), 'utf8').then((t) => JSON.parse(t) as unknown, () => null);
+      return reel ? { status: 200, json: { reel, meta } } : { status: 404, json: { error: 'no_reel' } };
+    }
+    const a = /^audio\/(kid|tutor|call)$/.exec(rest);
     if (a && method === 'GET') return { status: 200, file: join(dir, `${a[1]}.wav`), contentType: 'audio/wav', cacheControl: 'no-cache' };
     if (rest === 'ws') return { status: 426, json: { error: 'upgrade_required' } };
     return { status: 404, json: { error: 'not_found' } };

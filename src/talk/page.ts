@@ -6,7 +6,11 @@
  * 声音:getUserMedia → AudioWorklet 降到 16k PCM16,100 毫秒一块走 WebSocket 二进制帧上去;下来的 24k PCM16 一块块排进 AudioContext 放。
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
+import { inlineScript } from '../server/inline-lib.ts';
 import { wordDrawJs } from '../server/word-draw.ts';
+
+/** 录像的轨道(lib/reel.ts),内联进录像模式 */
+const TALK_REEL_JS = inlineScript(new URL('./lib/reel.ts', import.meta.url));
 
 const TALK_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -265,6 +269,13 @@ __WORD_DRAW_JS__
   const go = (hash) => { location.hash = hash; };
   /** 孩子从首页英语老师卡上的「口语课」进来(《首页设计.md》拍板 18):「回去」与打完都回首页,不进家长的那几屏 */
   const KID_ONLY = __TALK_KID_ONLY__;
+  /** 录像模式(?reel=<id>,《wip/口语课设想.md》§8.3):开在家长端录像外壳的 iframe 里,照录下的消息画孩子那一屏 */
+  const REEL_ID = new URLSearchParams(location.search).get('reel');
+  /** 回看页「看录像」去哪(只在家长端那份里有;孩子端是空的) */
+  const REEL_HREF = '__TALK_REEL_HREF__';
+  let RL = null;
+  /** 现在几毫秒:平时是钟;录像里是录像放到的那一刻(离通话开始) */
+  const nowMs = () => (RL ? RL.t : Date.now());
   const FROM_HOME = KID_ONLY || new URLSearchParams(location.search).get('home') === '1';
   if (FROM_HOME) $('#k-back').setAttribute('href', '/');
   const route = () => {
@@ -275,7 +286,7 @@ __WORD_DRAW_JS__
     else if (m[1] === 'kid') { show('kid'); void kid(m[2]); }
     else { show('review'); void review(m[2]); }
   };
-  window.addEventListener('hashchange', () => { if (call && !location.hash.startsWith('#/kid/')) call.hangup('left'); route(); });
+  window.addEventListener('hashchange', () => { if (REEL_ID) return; if (call && !location.hash.startsWith('#/kid/')) call.hangup('left'); route(); });
 
   // ---- 家长:拍照与讲过的 ----
   async function home() {
@@ -404,7 +415,6 @@ __WORD_DRAW_JS__
     if (read && st.item) renderCard(st);
     if (read) renderRd(st);
     if (st.phase === 'chat') { if (!wordsBuilt) { buildWords(); wordsBuilt = true; } $('#k-av').classList.toggle('talk', Boolean(st.speaking)); }
-    if (st.phase === 'chat' && st.deadline !== null) call.deadline = st.deadline;
     $('#k-next').disabled = false;
   }
   // ---- 跟我读的大卡:词是单词卡(emoji + 舞台那么大的四线三格),句子是点读卡的一行;换了一句、老师再读时写一遍 ----
@@ -458,7 +468,7 @@ __WORD_DRAW_JS__
     el.hidden = false;
     const mode = rd.mode;
     el.className = 'tk-rd ' + mode;
-    rdUntil = rd.left === null || rd.left === undefined ? null : Date.now() + rd.left;
+    rdUntil = rd.left === null || rd.left === undefined ? null : nowMs() + rd.left;
     rdWait = rd.wait || 5000;
     if (mode === 'tutor') el.replaceChildren(h('span', { html: ICON_SPK }), rd.again ? '老师再读一遍,听完跟着读' : '先听老师读');
     else if (mode === 'heard') el.replaceChildren('听到了…');
@@ -474,12 +484,13 @@ __WORD_DRAW_JS__
   function drawRing() {
     const r = $('#k-ring');
     if (!r || rdUntil === null) return;
-    const left = Math.max(0, rdUntil - Date.now());
+    const left = Math.max(0, rdUntil - nowMs());
     r.setAttribute('stroke-dashoffset', String(RING_C * (1 - left / rdWait)));
   }
   setInterval(drawRing, 100);
-  function makeCall(id) {
-    const A = makeAudio();
+  /** reel = 录像模式:不开麦、不连,声音是替身(老师在不在出声照录像的时段),消息由录像喂进 C.handle */
+  function makeCall(id, reel) {
+    const A = reel ? { play() {}, flush() {}, close() {}, open: async () => {}, playing: () => Boolean(RL) && tkIn(RL.r.playing, RL.t), muted: true, onChunk: null, onLevel: null } : makeAudio();
     const C = { id, ws: null, st: null, deadline: null, saying: false, tutorLine: '', tutorDone: true, interrupt: false, timer: null, ended: false, startedAt: 0 };
     const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/talk/' + id + '/ws';
     C.send = (o) => { if (C.ws && C.ws.readyState === 1) C.ws.send(JSON.stringify(o)); };
@@ -499,27 +510,31 @@ __WORD_DRAW_JS__
       ws.onmessage = (e) => {
         if (typeof e.data !== 'string') { A.play(e.data); return; }
         let m; try { m = JSON.parse(e.data); } catch (x) { return; }
-        if (m.t === 'state') { const was = C.st && C.st.phase; C.st = m; C.interrupt = Boolean(m.interrupt); if (m.phase === 'chat' && was !== 'chat') { A.flush(); C.tutorLine = ''; C.tutorDone = true; $('#k-tt').textContent = ''; $('#k-heard2').textContent = ''; } if (m.phase !== 'ended') renderState(m); }
-        else if (m.t === 'tutor') {
-          // 一次回答一行:上一句 done 了,下一句的第一截来时从头记
-          if (m.done !== undefined) { C.tutorLine = m.done; C.tutorDone = true; } else { if (C.tutorDone) { C.tutorLine = ''; C.tutorDone = false; } C.tutorLine += m.delta; }
-          const en = C.tutorLine.replace(/[\\u4e00-\\u9fff].*$/, '').trim() || C.tutorLine;
-          const zh = C.tutorLine.slice(en.length).trim();
-          if (C.st && C.st.phase === 'chat') $('#k-tt').replaceChildren(en, ...(zh && zh !== C.tutorLine ? [h('span', { class: 'zh' }, zh)] : []));
-          else $('#k-say').replaceChildren(h('span', { class: 'en' }, C.tutorLine));
-        }
-        else if (m.t === 'kid') { const chat = C.st && C.st.phase === 'chat'; (chat ? $('#k-heard2') : $('#k-heard')).replaceChildren(h('span', { class: 'muted' }, chat ? '你说的:' : '你读的'), h('span', {}, m.text)); }
-        else if (m.t === 'card') lightCard(m.i);
-        else if (m.t === 'flush') A.flush();
-        else if (m.t === 'err') setHint(m.msg);
-        else if (m.t === 'end') C.finish(m.why);
+        C.handle(m);
       };
       ws.onclose = () => { if (!C.ended) C.finish('closed'); };
       ws.onerror = () => setHint('接不上');
     };
+    /** 服务端的一条消息 → 屏幕(录像模式也走这里:把录下的消息原样喂进来) */
+    C.handle = (m) => {
+      if (m.t === 'state') { const was = C.st && C.st.phase; C.st = m; if (m.phase === 'chat' && m.deadline !== null) C.deadline = m.deadline; C.interrupt = Boolean(m.interrupt); if (m.phase === 'chat' && was !== 'chat') { A.flush(); C.tutorLine = ''; C.tutorDone = true; $('#k-tt').textContent = ''; $('#k-heard2').textContent = ''; } if (m.phase !== 'ended') renderState(m); }
+      else if (m.t === 'tutor') {
+        // 一次回答一行:上一句 done 了,下一句的第一截来时从头记
+        if (m.done !== undefined) { C.tutorLine = m.done; C.tutorDone = true; } else { if (C.tutorDone) { C.tutorLine = ''; C.tutorDone = false; } C.tutorLine += m.delta; }
+        const en = C.tutorLine.replace(/[\\u4e00-\\u9fff].*$/, '').trim() || C.tutorLine;
+        const zh = C.tutorLine.slice(en.length).trim();
+        if (C.st && C.st.phase === 'chat') $('#k-tt').replaceChildren(en, ...(zh && zh !== C.tutorLine ? [h('span', { class: 'zh' }, zh)] : []));
+        else $('#k-say').replaceChildren(h('span', { class: 'en' }, C.tutorLine));
+      }
+      else if (m.t === 'kid') { const chat = C.st && C.st.phase === 'chat'; (chat ? $('#k-heard2') : $('#k-heard')).replaceChildren(h('span', { class: 'muted' }, chat ? '你说的:' : '你读的'), h('span', {}, m.text)); }
+      else if (m.t === 'card') lightCard(m.i);
+      else if (m.t === 'flush') A.flush();
+      else if (m.t === 'err') setHint(m.msg);
+      else if (m.t === 'end') { if (!reel) C.finish(m.why); }
+    };
     C.tick = () => {
       if (!C.st) return;
-      if (C.st.phase === 'chat' && C.deadline !== null) { const left = Math.max(0, C.deadline - (Date.now() - C.startedAt)); $('#k-chip').textContent = '打电话 · 还有 ' + Math.floor(left / 60000) + ':' + String(Math.floor((left % 60000) / 1000)).padStart(2, '0'); }
+      if (C.st.phase === 'chat' && C.deadline !== null) { const left = Math.max(0, C.deadline - (nowMs() - C.startedAt)); $('#k-chip').textContent = '打电话 · 还有 ' + Math.floor(left / 60000) + ':' + String(Math.floor((left % 60000) / 1000)).padStart(2, '0'); }
       if (C.st.phase === 'read') setHint(C.st.rd && C.st.rd.mode === 'wait' ? '想读就读,或者点「下一句」' : C.st.rd && C.st.rd.mode === 'listen' ? '读完停一下就好' : '');
       else if (C.st.phase === 'chat') setHint(A.playing() ? '' : '说完停一下老师就接');
     };
@@ -556,11 +571,16 @@ __WORD_DRAW_JS__
     };
     return C;
   }
-  async function kid(id) {
+  /** 孩子那一屏回到开头的样子(开一次、录像往回拖都用) */
+  function kidReset() {
     kidEl.className = 'view on';
     $('#k-start').hidden = false; $('#k-read').hidden = true; $('#k-chat').hidden = true; $('#k-bar').hidden = true; $('#k-bar2').hidden = true; setHint('');
     cardI = -1; cardGrid = null; lastMode = ''; wordsBuilt = false; $('#k-words').replaceChildren(); $('#k-card').replaceChildren();
     $('#k-chip').textContent = '跟我读'; $('#k-chip').className = 'chip plum'; $('#k-dots').replaceChildren(); $('#k-heard').textContent = ''; $('#k-heard2').textContent = '';
+    $('#k-tt').textContent = ''; $('#k-say').textContent = ''; $('#k-av').className = 'tk-av'; $('#k-call').className = 'tk-call';
+  }
+  async function kid(id) {
+    kidReset();
     try { K = await api('GET', '/api/talk/' + id); } catch (e) { toast('没有这一次'); go('#/'); return; }
     const n = K.meta.list.words.length + K.meta.list.sentences.length;
     $('#k-start-hint').textContent = n ? '先跟我读 ' + n + ' 句,再打个电话聊一聊' : '口语单是空的,直接打电话聊';
@@ -583,6 +603,7 @@ __WORD_DRAW_JS__
     $('#r-title').textContent = fmtDate(d.meta.createdAt);
     $('#r-meta').textContent = t ? '聊了 ' + Math.round(t.ms / 1000) + ' 秒 · ' + ({ bye: '孩子挂的', time: '到点了', idle: '半天没说话', left: '离开了页面' }[t.why] || t.why) + ' · token 进 ' + t.usage.input + ' 出 ' + t.usage.output : '还没聊';
     const play = $('#r-play'); play.replaceChildren();
+    if (d.hasReel && REEL_HREF) play.append(h('a', { class: 'pill dark', href: REEL_HREF + encodeURIComponent(id), id: 'r-reel' }, '▶ 看录像'));
     if (d.hasTutorAudio) play.append(h('div', {}, h('div', { class: 'muted small' }, '老师'), h('audio', { controls: '', preload: 'none', src: '/api/talk/' + id + '/audio/tutor' })));
     if (d.hasKidAudio) play.append(h('div', {}, h('div', { class: 'muted small' }, '孩子'), h('audio', { controls: '', preload: 'none', src: '/api/talk/' + id + '/audio/kid' })));
     const used = $('#r-used'); used.replaceChildren();
@@ -597,12 +618,95 @@ __WORD_DRAW_JS__
   }
   $('#r-del').addEventListener('click', async () => { const id = location.hash.split('/')[2]; if (!id || !confirm('删掉这一次?声音和字都没了')) return; try { await api('DELETE', '/api/talk/' + id); go('#/'); } catch (e) { toast('没删掉:' + e.message); } });
 
-  route();
+  // ---- 录像模式:轨道是 lib/reel.ts(tkBuild / tkClock / tkCaption,内联在下面);把手照《家长录像设计.md》的录像栏(reel-dock.ts) ----
+__TALK_REEL_JS__
+  const reelAudio = () => { try { if (window.parent !== window && window.parent.__cotutorAudio) return window.parent.__cotutorAudio; } catch (e) {} return null; };
+  /** 把 ≤ t 的消息喂进孩子那一屏;往回拖就从头再喂 */
+  const reelApply = (t) => {
+    if (t < RL.at) { kidReset(); RL.C = makeCall(REEL_ID, true); RL.C.startedAt = 0; RL.k = 0; }
+    const msgs = RL.r.msgs;
+    while (RL.k < msgs.length && msgs[RL.k][0] <= t) { const x = msgs[RL.k++]; RL.t = x[0]; if (x[1] === 'o') RL.C.handle(x[2]); }
+    RL.t = t; RL.at = t;
+    const C = RL.C;
+    if (C.st) C.tick();
+    drawRing();
+    // 底部条与头像照录像的时段:老师在出声 / 孩子在出声
+    const tutor = tkIn(RL.r.playing, t), kidOn = tkIn(RL.r.kidVoice, t);
+    $('#k-av').classList.toggle('talk', tutor); $('#k-av').classList.toggle('listen', kidOn && !tutor);
+    $('#k-call').classList.toggle('you', !tutor);
+    $('#k-callst').textContent = tutor ? '老师在说,等她说完你再说' : '轮到你说';
+  };
+  const reelSound = () => {
+    const a = reelAudio();
+    if (!a) return;
+    if (!RL.playing) { try { a.pause(); } catch (e) {} return; }
+    if (!a.src || a.src.indexOf('/api/talk/' + REEL_ID + '/audio/call') < 0) a.src = '/api/talk/' + encodeURIComponent(REEL_ID) + '/audio/call';
+    a.defaultPlaybackRate = RL.speed; a.playbackRate = RL.speed;
+    // 跳过空白时录像的钟跳一下,声音跟上
+    if (Math.abs(a.currentTime * 1000 - RL.t) > 350) { try { a.currentTime = RL.t / 1000; } catch (e) {} }
+    if (a.paused) { const pr = a.play(); if (pr && pr.catch) pr.catch(() => {}); }
+  };
+  const reelTick = () => {
+    if (!RL) return;
+    const now = performance.now();
+    if (RL.playing && !RL.seeking) RL.p = Math.min(RL.clock.total, RL.p + (now - RL.last) * RL.speed);
+    RL.last = now;
+    reelApply(RL.clock.toWall(RL.p));
+    reelSound();
+    if (RL.playing && RL.p >= RL.clock.total) reelPlay(false);
+  };
+  const reelPlay = (on) => {
+    if (on && RL.p >= RL.clock.total) RL.p = 0;
+    RL.playing = on; RL.last = performance.now();
+    clearInterval(RL.timer); RL.timer = on ? setInterval(reelTick, 100) : 0;
+    reelTick();
+  };
+  const reelTo = (p, seeking) => { RL.seeking = seeking; RL.p = Math.max(0, Math.min(RL.clock.total, p)); RL.last = performance.now(); const a = reelAudio(); if (a) { try { a.currentTime = RL.clock.toWall(RL.p) / 1000; } catch (e) {} } reelTick(); };
+  const reelApi = {
+    speeds: [1, 1.5, 2],
+    get: () => (RL ? { p: RL.p, total: RL.clock.total, wall: RL.r.startAt + RL.t, playing: RL.playing, speed: RL.speed, real: RL.real, precise: true, cap: tkCaption(RL.r, RL.t), size: RL.r.size } : null),
+    marks: () => (RL ? RL.r.marks.map((m) => ({ kind: m.kind, label: m.label, p: RL.clock.toPlay(m.t) })) : []),
+    events: () => (RL ? RL.r.notes.map((n) => ({ p: RL.clock.toPlay(n.t), kind: n.kind, chip: n.chip, text: n.text })) : []),
+    chapters: () => (RL ? RL.r.chapters.map((c) => ({ p: RL.clock.toPlay(c.t), title: c.title })) : []),
+    play: (on) => { if (RL) reelPlay(on); },
+    seek: (p) => { if (RL) reelTo(p, false); },
+    drag: (p) => { if (RL) reelTo(p, true); },
+    real: (on) => { if (!RL) return; RL.real = on; RL.clock = tkClock(RL.r, on); RL.p = RL.clock.toPlay(RL.t); reelTick(); },
+    speed: (x) => { if (!RL) return; RL.speed = x; const a = reelAudio(); if (a) { a.defaultPlaybackRate = x; a.playbackRate = x; } },
+    stop: () => { if (!RL) return; clearInterval(RL.timer); const a = reelAudio(); if (a) { try { a.pause(); } catch (e) {} } RL = null; },
+    /** 跳到离通话开始 t 毫秒那一刻(探针) */
+    seekAt: (t) => { if (RL) reelTo(RL.clock.toPlay(t), false); },
+  };
+  const reelBoot = () => {
+    let host = null; try { if (window.parent !== window && typeof window.parent.cotutorReelReady === 'function') host = window.parent; } catch (e) {}
+    // 只在家长端的录像外壳里开;直接打开什么都不放(孩子端页面里不写家长端的路径)
+    if (!host) { document.body.textContent = '录像要从家长端打开'; return; }
+    show('kid');
+    // 点不动,只能上下翻:点、按在捕获阶段挡掉
+    for (const k of ['click', 'pointerdown', 'pointerup', 'dblclick', 'contextmenu']) document.addEventListener(k, (e) => { e.stopPropagation(); if (k !== 'pointerdown' && k !== 'pointerup') e.preventDefault(); }, true);
+    api('GET', '/api/talk/' + encodeURIComponent(REEL_ID) + '/reel').then((d) => {
+      K = { meta: d.meta };
+      const r = tkBuild(d.reel, d.meta.list.words);
+      kidReset();
+      RL = { r, p: 0, t: 0, at: 0, k: 0, playing: false, seeking: false, speed: 1, real: false, last: 0, timer: 0, C: makeCall(REEL_ID, true) };
+      RL.C.startedAt = 0;
+      RL.clock = tkClock(r, false);
+      // 停在最后一帧(同话题与听写的录像:最后一帧信息最多,要看过程往前拖)
+      RL.p = RL.clock.total;
+      reelTick();
+      window.cotutorReel = reelApi;
+      host.cotutorReelReady(reelApi, { size: r.size });
+    }, () => host.cotutorReelFail());
+  };
+
+  if (REEL_ID) reelBoot(); else route();
 })();
 </script>
 </body></html>`;
 
 /** kidOnly = 孩子端 /talk:只有跟读与聊那一屏;家长端 /parent/talk 全有 */
 export function talkPage(kidOnly: boolean): string {
-  return TALK_PAGE.replace('__TALK_KID_ONLY__', kidOnly ? 'true' : 'false').replace('__WORD_DRAW_JS__', () => wordDrawJs());
+  return TALK_PAGE.replace('__TALK_KID_ONLY__', kidOnly ? 'true' : 'false').replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__TALK_REEL_JS__', () => TALK_REEL_JS)
+    // 回看页的「看录像」只在家长端那份里有地址(孩子端页面的源码里不出现 /parent)
+    .replace('__TALK_REEL_HREF__', kidOnly ? '' : '/parent/talk/reel?id=');
 }

@@ -130,6 +130,21 @@ try {
   ok('落盘:done、why bye、用到的词', after.meta.status === 'done' && after.transcript.why === 'bye' && after.hasKidAudio && after.hasTutorAudio && (real || after.transcript.used.words[0].kid >= 1), JSON.stringify({ why: after.transcript?.why, used: after.transcript?.used, usage: after.transcript?.usage }));
   if (real) console.log('老师说过的:\n' + after.transcript.lines.filter((l) => l.who === 'tutor').map((l) => '  ' + l.text).join('\n') + '\n孩子转写:\n' + after.transcript.lines.filter((l) => l.who === 'kid').map((l) => '  ' + l.text).join('\n'));
   if (!real) ok('两条 realtime 会话都关了', c1.closed && c2.closed);
+
+  // ---- 家长:看录像(《wip/口语课设想.md》§8.3:录下的消息喂回孩子那一屏,声音是 call.wav) ----
+  ok('回看页有「看录像」', await until(`!!document.querySelector('#r-reel')`));
+  await click('#r-reel');
+  ok('录像外壳:上半是孩子那一屏(/talk?reel=)、下半录像栏', await until(`location.pathname === '/parent/talk/reel' && !!document.querySelector('#rl-frame') && document.querySelector('#rl-frame').src.includes('/talk?reel=') && !!(document.querySelector('#rl-frame').contentWindow || {}).cotutorReel`, 60));
+  const inF = (expr) => evaluate(`(() => { const w = document.querySelector('#rl-frame').contentWindow; const d = w.document; return (${expr}); })()`);
+  ok('一进来停在最后一帧:打电话那一屏、单词卡在、章 3 个(跟我读两句 + 打电话)、不放', await inF(`!d.querySelector('#k-chat').hidden && d.querySelectorAll('#k-words .c-word').length === 1 && w.cotutorReel.chapters().length === 3 && !w.cotutorReel.get().playing`), await inF(`JSON.stringify({ chat: !d.querySelector('#k-chat').hidden, words: d.querySelectorAll('#k-words .c-word').length, ch: w.cotutorReel.chapters().map((c) => c.title) })`));
+  const ev = await inF(`JSON.stringify(w.cotutorReel.events().map((e) => e.chip + ':' + e.text))`);
+  ok('经过:老师说的、孩子读的、点的「再听一遍」、讲到 red、换到打电话、挂断', ['读:', '点:点了「再听一遍」', '卡:讲到 red', '打电话:跟我读完了', '挂断:'].every((x) => ev.includes(x)), ev.slice(0, 300));
+  const t1 = await inF(`w.cotutorReel.chapters()[0].p + 300`);
+  ok('拖回开头:跟我读第一句,单词卡 red', await inF(`(w.cotutorReel.seekAt(${t1}), !d.querySelector('#k-read').hidden && d.querySelector('#k-card').dataset.en === 'red' && d.querySelector('#k-chat').hidden)`), await inF(`JSON.stringify({ read: !d.querySelector('#k-read').hidden, en: d.querySelector('#k-card').dataset.en })`));
+  await click('#rl-play');
+  ok('点播放:声音是 call.wav、在走,进度往前', await untilFn(async () => evaluate(`!!window.__cotutorAudio && window.__cotutorAudio.src.includes('/audio/call') && document.querySelector('#rl-frame').contentWindow.cotutorReel.get().playing`), 20), await evaluate(`JSON.stringify({ src: window.__cotutorAudio && window.__cotutorAudio.src, paused: window.__cotutorAudio && window.__cotutorAudio.paused })`));
+  const callWav = await fetch(`${base}/api/talk/${id}/audio/call`);
+  ok('call.wav 拿得到', callWav.ok && (callWav.headers.get('content-type') || '').includes('audio/wav'));
   console.log(bad ? `${bad} 项没过` : '全过');
 } finally {
   if (browser) browser.kill();

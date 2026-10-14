@@ -46,7 +46,7 @@ export interface Transcript {
   used: Used;
 }
 
-export interface TalkData { meta: TalkMeta; transcript: Transcript | null; hasKidAudio: boolean; hasTutorAudio: boolean }
+export interface TalkData { meta: TalkMeta; transcript: Transcript | null; hasKidAudio: boolean; hasTutorAudio: boolean; hasReel: boolean }
 
 export const rootOf = (wsRoot: string): string => join(wsRoot, 'talk');
 export const dirOf = (wsRoot: string, id: string): string => join(rootOf(wsRoot), id);
@@ -82,7 +82,7 @@ export async function readTalk(root: string, id: string): Promise<TalkData | nul
   const meta = await readMeta(root, id);
   if (!meta) return null;
   const dir = dirOf(root, id);
-  return { meta, transcript: await readJson<Transcript>(join(dir, 'transcript.json')), hasKidAudio: existsSync(join(dir, 'kid.wav')), hasTutorAudio: existsSync(join(dir, 'tutor.wav')) };
+  return { meta, transcript: await readJson<Transcript>(join(dir, 'transcript.json')), hasKidAudio: existsSync(join(dir, 'kid.wav')), hasTutorAudio: existsSync(join(dir, 'tutor.wav')), hasReel: existsSync(join(dir, 'reel.json')) };
 }
 
 /** 全部,新的在前 */
@@ -97,21 +97,22 @@ export async function listTalks(root: string): Promise<TalkMeta[]> {
 export const deleteTalk = (root: string, id: string): Promise<void> => rm(dirOf(root, id), { recursive: true, force: true });
 
 /**
- * 录像的数据(《wip/口语课设想.md》§8.3):发给孩子端 / 孩子端发来的每条消息带毫秒、老师出声的时段、屏幕多大;
+ * 录像的数据(《wip/口语课设想.md》§8.3):发给孩子端 / 孩子端发来的每条消息带毫秒、老师出声的时段、孩子有声的时段、屏幕多大;
  * 声音另在 call.wav(两边按到达时刻混成一条,24k 单声道,lib/mix.ts)
  */
-export interface TalkReel { v: 1; startedAt: string; ms: number; view: [number, number] | null; msgs: [number, 'o' | 'i', Record<string, unknown>][]; playing: [number, number][] }
+export interface TalkReel { v: 1; startedAt: string; ms: number; view: [number, number] | null; msgs: [number, 'o' | 'i', Record<string, unknown>][]; playing: [number, number][]; kidVoice: [number, number][] }
 
 /** 通话完了:字、用量、用到的词、两边的声音、录像一起落盘;meta 标 done */
 export async function finishCall(root: string, meta: TalkMeta, call: { startedAt: string; ms: number; why: string; model: string; voice: string; items: number; read: number; lines: Line[]; usage: Usage; kidPcm: Buffer; tutorPcm: Buffer; kidRate: number; tutorRate: number; reel?: TalkReel; callPcm?: Buffer }): Promise<void> {
   const dir = dirOf(root, meta.id);
   await mkdir(dir, { recursive: true });
   const transcript: Transcript = { startedAt: call.startedAt, ms: call.ms, why: call.why, lines: call.lines, usage: call.usage, used: usedIn(meta.list, call.lines) };
-  await writeJson(join(dir, 'transcript.json'), transcript);
+  // 字最后写:回看页拿到字就当这一次落盘完了(声音、录像都在)
   if (call.kidPcm.length) await writeFile(join(dir, 'kid.wav'), wavOfPcm(call.kidPcm, call.kidRate));
   if (call.tutorPcm.length) await writeFile(join(dir, 'tutor.wav'), wavOfPcm(call.tutorPcm, call.tutorRate));
-  if (call.reel) await writeFile(join(dir, 'reel.json'), JSON.stringify(call.reel));
   if (call.callPcm?.length) await writeFile(join(dir, 'call.wav'), wavOfPcm(call.callPcm, MIX_RATE));
+  if (call.reel) await writeFile(join(dir, 'reel.json'), JSON.stringify(call.reel));
+  await writeJson(join(dir, 'transcript.json'), transcript);
   meta.status = 'done';
   meta.call = { startedAt: call.startedAt, ms: call.ms, why: call.why, model: call.model, voice: call.voice, items: call.items, read: call.read };
   await writeMeta(root, meta);

@@ -357,7 +357,7 @@ export class TalkCall {
       await finishCall(this.deps.root, this.meta, {
         startedAt: this.startedAt.toISOString(), ms, why, model: this.deps.config.model, voice: this.deps.config.voice, items: this.items.length, read, lines: this.lines, usage: this.usage,
         kidPcm: Buffer.concat(this.kidPcm.map((c) => c.pcm)), tutorPcm: Buffer.concat(this.tutorPcm.map((c) => c.pcm)), kidRate: INPUT_RATE, tutorRate: OUTPUT_RATE,
-        reel: { v: 1, startedAt: this.startedAt.toISOString(), ms, view: this.view, msgs: this.rec, playing: mix.playing }, callPcm: mix.pcm,
+        reel: { v: 1, startedAt: this.startedAt.toISOString(), ms, view: this.view, msgs: this.rec, playing: mix.playing, kidVoice: mix.kidVoice }, callPcm: mix.pcm,
       });
     } catch (err) {
       console.error('talk: 落盘失败', err);

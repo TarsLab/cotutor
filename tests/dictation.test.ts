@@ -174,6 +174,8 @@ try {
   // ---- 家长 ----
   const list = (await call('GET', '/api/dictation')).json.sessions;
   check('家长列表:一次,4 个词里第一遍写全 1 个,问了 3 个', list.length === 1 && list[0].firstOk === 1 && list[0].asked === 3 && list[0].done, JSON.stringify(list));
+  const ink = list[0].ink as ({ d: string[]; shown: boolean; again: boolean } | null)[];
+  check('家长列表:每个词最近写的那遍,一格一条 path(鼓励是重写的那遍、标 again);没写的雪是空的;要再练的是重写过与被问了的', ink.length === 4 && ink[1]!.d.length === 2 && /^M\d+ \d+L/.test(ink[1]!.d[0]) && (ink[1]!.d[0].match(/M/g) ?? []).length === 13 && ink[1]!.again && !ink[2]!.again && (ink[3] === null || ink[3].d.every((d) => d === '')) && list[0].practice.join() === '春天,鼓励,叶,雪' && typeof list[0].doneAt === 'string', JSON.stringify(ink[1]).slice(0, 200));
   const full = (await call('GET', `/api/dictation/${id}`)).json;
   check('家长全量:天的笔顺、鼓少的第 7 笔、自己重写、逐笔看过', full.first[0].judges[1].order === false && full.first[1].judges[0].missing.join() === '6' && full.rewrites.length === 2 && full.rewrites[1].self === true && full.events.some((e: J) => e.kind === 'strokeOrder' && e.word === 1));
 

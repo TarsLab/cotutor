@@ -223,11 +223,30 @@ export function kidView(s: Session, display: string): unknown {
   };
 }
 
-/** 家长的列表一行 */
+/**
+ * 一格的笔迹缩成一条 SVG path(家长端记录的听写格子画它,《家长板书页设计.md》拍板 32):点取整、隔一个丢一个(首尾留着),不要时刻。
+ * 坐标照原样(汉字是 hanzi-writer 的 1024 尺、y 朝上;英文是 2048 × 512、y 朝下),画的那头自己翻
+ */
+export function inkPath(strokes: InkPoint[][]): string {
+  return strokes
+    .filter((st) => st.length)
+    .map((st) => {
+      const pts = st.filter((_p, k) => k === 0 || k === st.length - 1 || k % 2 === 0);
+      if (pts.length === 1) pts.push([pts[0][0] + 1, pts[0][1], 0]);
+      return pts.map((p, k) => (k ? 'L' : 'M') + Math.round(p[0]) + ' ' + Math.round(p[1])).join('');
+    })
+    .join('');
+}
+
+/** 家长的列表一行;ink = 每个词最近写的那遍(一格一条 path;shown 第一遍看了答案、again 重写过),practice = 要再练的词(看了答案、重写过、被问了再写一遍的) */
 function summary(s: Session): unknown {
   const firstOk = s.first.filter((a) => a && a.judges.every((j) => !j.ask) && a.chars.every((c) => !c.revealed)).length;
   const revealed = s.first.filter((a) => a && a.chars.some((c) => c.revealed)).length;
-  return { id: s.id, startedAt: s.startedAt, tutor: s.tutor ?? null, ...(s.lang ? { lang: s.lang } : {}), words: s.words.map((w) => w.chars), written: s.first.filter((a) => a !== null).length, checked: s.checkedAt !== null, done: s.doneAt !== null, firstOk, asked: s.asked.length, revealed, photo: s.photo ?? null, lesson: s.lesson ?? null };
+  const shown = (i: number): boolean => (s.first[i]?.chars ?? []).some((c) => c.revealed === true);
+  const again = (i: number): boolean => s.rewrites.some((r) => r.word === i);
+  const ink = s.words.map((_w, i) => { const a = latestOf(s, i); return a ? { d: a.chars.map((c) => inkPath(c.strokes)), shown: shown(i), again: again(i) } : null; });
+  const practice = s.words.filter((_w, i) => shown(i) || again(i) || s.asked.includes(i)).map((w) => w.chars);
+  return { id: s.id, startedAt: s.startedAt, doneAt: s.doneAt, tutor: s.tutor ?? null, ...(s.lang ? { lang: s.lang } : {}), words: s.words.map((w) => w.chars), written: s.first.filter((a) => a !== null).length, checked: s.checkedAt !== null, done: s.doneAt !== null, firstOk, asked: s.asked.length, revealed, photo: s.photo ?? null, lesson: s.lesson ?? null, ink, practice };
 }
 
 const PHOTO_MAX_BYTES = 3_000_000;

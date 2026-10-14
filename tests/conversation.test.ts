@@ -1,5 +1,5 @@
 /** 对话索引纯函数:命名、并入运行结果、session 只记一次。 */
-import { addMessage, applyRun, cardAssetName, cardId, changedCards, conversationFiles, currentThread, emptyIndex, jobId, lastJobOf, localDate, localMinute, sessionFor, threads } from '../src/lib/conversation.ts';
+import { addMessage, applyRun, cardAssetName, cardId, changedCards, conversationFiles, currentThread, emptyIndex, jobId, lastJobOf, localDate, localMinute, sessionFor, threads, weekOf } from '../src/lib/conversation.ts';
 import { deriveKidView } from '../src/lib/kid-view.ts';
 import { parseTranscript } from '../src/lib/transcript.ts';
 import { ConversationIndexSchema } from '../src/schema/index.ts';
@@ -7,6 +7,11 @@ import { check, done } from './_check.ts';
 
 const d = new Date(2026, 8, 8, 16, 20);
 check('本地日期与分钟', localDate(d) === '2026-09-08' && localMinute(d) === '2026-09-08T16:20' && jobId(d, 3) === '1620-3');
+{
+  const w = weekOf('2026-10-14', '2026-10-14');
+  const back = weekOf('2026-10-07', '2026-10-14');
+  check('七天日期条:以今天结尾;往前第 7 天落到上一段;跨月、跨年按日历', w.length === 7 && w[0] === '2026-10-08' && w[6] === '2026-10-14' && weekOf('2026-10-08', '2026-10-14')[0] === '2026-10-08' && back[6] === '2026-10-07' && back[0] === '2026-10-01' && weekOf('2026-03-01', '2026-03-02')[0] === '2026-02-24' && weekOf('2027-01-02', '2027-01-02')[0] === '2026-12-27', JSON.stringify({ w, back }));
+}
 const f = conversationFiles('/ws/conversations', 'math-tutor', '2026-09-08');
 check('文件命名', f.index === '/ws/conversations/math-tutor/2026-09-08.json' && f.log('1620-3') === '/ws/conversations/math-tutor/2026-09-08.1620-3.log');
 

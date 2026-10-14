@@ -61,7 +61,7 @@ export const MOCK_LECTURES_DIR = fileURLToPath(new URL('../../tests/fixtures/lec
 const MOCK_LECTURE_DIRS = { dirs: { bundles: MOCK_BUNDLES_DIR, lectures: MOCK_LECTURES_DIR } };
 import { lineDurationMs, readyBeats, type BoardSection, type KidLecture, type PenName } from '../lib/kid-board.ts';
 import { REEL_LINE_GAP_MS, buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord } from '../lib/reel.ts';
-import type { CardStates } from '../lib/conversation.ts';
+import { weekOf, type CardStates } from '../lib/conversation.ts';
 import { lanAddresses, listenInfo } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { USER_CERT_DIR } from '../cli/workspace.ts';
@@ -744,14 +744,14 @@ export function createMock(opts: MockOptions = {}): Mock {
       const today = localDate(now());
       const date = ov[1] === 'today' ? today : ov[1];
       if (date > today) return { status: 400, json: { error: 'bad_request' } };
-      const listOf = (name: string): MockMessage[] => (date === today ? messages.get(name) : date === yesterday() ? past.get(name) : undefined) ?? [];
+      const listOf = (name: string, d = date): MockMessage[] => (d === today ? messages.get(name) : d === yesterday() ? past.get(name) : undefined) ?? [];
       const tutors = MOCK_TUTORS.map((t) => {
         const list = listOf(t.name);
-        const by = new Map<string, { thread: string; at: string; title: string; from: 'kid'; via: null; sections: number; cards: number; stoppedAt: 'writing' | 'ask' | null; rating: number | null; booked: boolean; misses?: number }>();
+        const by = new Map<string, { thread: string; at: string; title: string; from: 'kid'; via: null; kind: 'talk'; sections: number; cards: number; stoppedAt: 'writing' | 'ask' | null; rating: number | null; booked: boolean; misses?: number }>();
         for (const m of list) {
           let th = by.get(m.thread);
           if (!th) {
-            th = { thread: m.thread, at: m.at, title: Array.from((m.question ?? '').trim()).slice(0, 20).join(''), from: 'kid', via: null, sections: 0, cards: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: booked.has(`${t.name}/${m.thread}`) };
+            th = { thread: m.thread, at: m.at, title: Array.from((m.question ?? '').trim()).slice(0, 20).join(''), from: 'kid', via: null, kind: 'talk', sections: 0, cards: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: booked.has(`${t.name}/${m.thread}`) };
             by.set(m.thread, th);
           }
           if (m.pending) th.stoppedAt = 'writing';
@@ -766,7 +766,8 @@ export function createMock(opts: MockOptions = {}): Mock {
         const recorded = list.reduce((n, m) => n + Object.keys(m.states ?? {}).filter((k) => m.section?.cards[Number(k)]?.kind === 'record').length, 0);
         return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], booking: false, ...(recorded ? { kouboYuan: recorded * 0.015 } : {}), extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') };
       });
-      return { status: 200, json: { title, date, today, tutors } };
+      const week = weekOf(date, today).map((d) => ({ date: d, tutors: MOCK_TUTORS.filter((t) => listOf(t.name, d).length).map((t) => t.name) }));
+      return { status: 200, json: { title, date, today, tutors, week } };
     }
     const pb = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|\d{4}-\d{2}-\d{2})\/board$/.exec(p);
     if (pb && method === 'GET') {

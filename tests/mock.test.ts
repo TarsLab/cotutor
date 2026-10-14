@@ -222,6 +222,9 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const oy = (await get('/api/overview/2026-09-09')).json as Ov;
   check('清单:今天四位老师,语文老师一个话题停在末句问句,英语老师没聊;昨天有以前的话题;未来 400', ov.tutors.length === 4 && ov.tutors[0].threads.length === 1 && ov.tutors[0].threads[0].stoppedAt === 'ask' && ov.tutors[0].threads[0].title.length > 0 && ov.tutors[2].threads.length === 0 && oy.date === '2026-09-09' && oy.tutors[0].threads[0].title.startsWith('昨天问的') && (await get('/api/overview/2027-01-01')).status === 400, JSON.stringify(ov.tutors[0]));
 
+  const mw = (ov as unknown as { week: { date: string; tutors: string[] }[] }).week;
+  check('清单:七天日期条,今天语文老师有话题、昨天也有', mw.length === 7 && mw[6].date === ov.today && mw[6].tutors.includes('chinese-tutor') && mw[5].tutors.includes('chinese-tutor'), JSON.stringify(mw));
+
   // 家长端只看(2026-10-05 删了备课与试用):没有家长发消息、交给孩子的接口;要试老师到孩子端当一回孩子,用完删话题
   check('家长端不能发消息、没有交给孩子', (await m.route('POST', '/api/conversations/chinese-tutor/messages', { text: '家长补一句' })).status === 404 && (await m.route('POST', '/api/conversations/chinese-tutor/2026-09-10/threads/x/lesson/hand', { label: 'x' })).status === 404);
   const pb2 = (await get('/api/conversations/chinese-tutor/today/board')).json as { messages: (Msg & { from: string })[] };

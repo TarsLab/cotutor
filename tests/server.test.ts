@@ -133,6 +133,8 @@ try {
     const mt = ov.tutors.find((t) => t.name === 'math-tutor');
     // 卡数 2:选择题一张,第二节末句问句没配能答的卡、解析器补的提问卡一张
     check('清单:三位有脸的老师;数学老师 3 轮、两个话题;第一个话题的题、节数、卡数、停在末句问句、星;出错的话题 0 节', ov.date === today && ov.tutors.length === 3 && mt?.turns === 3 && mt.costUsd === 0.12 && mt.threads.length === 2 && mt.threads[0].title === '7 减 9 怎么算' && mt.threads[0].sections === 2 && mt.threads[0].cards === 2 && mt.threads[0].stoppedAt === 'ask' && mt.threads[0].rating === 4 && !mt.threads[0].booked && mt.threads[1].sections === 0 && mt.threads[1].stoppedAt === null, JSON.stringify(ov));
+    const wk = (ov as unknown as { week: { date: string; tutors: string[] }[] }).week;
+    check('清单:七天日期条以今天结尾,今天有话题的是数学老师;话题种类是对话(拍板 24、26)', wk.length === 7 && wk[6].date === today && JSON.stringify(wk[6].tutors) === '["math-tutor"]' && wk[0].tutors.length === 0 && (mt?.threads[0] as { kind?: string } | undefined)?.kind === 'talk', JSON.stringify(wk));
     check('清单与板书接口:未来的日期 400,没这位老师 404', (await get('/api/overview/2099-01-01')).status === 400 && (await get('/api/conversations/math-tutor/2099-01-01/board')).status === 400 && (await get('/api/conversations/nobody/today/board')).status === 404);
     const page = (await get('/parent')).html ?? '';
     // 地址按端分(2026-10-14):孩子端 /、/dictation、/talk(只有跟读那一屏);家长端 /parent/*;工作台 /dev/*;旧地址不留

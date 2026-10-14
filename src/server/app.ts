@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
-import { conversationFiles, currentThread, lastJobOf, localDate, threads } from '../lib/conversation.ts';
+import { conversationFiles, currentThread, lastJobOf, localDate, threads, weekOf } from '../lib/conversation.ts';
 import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
@@ -410,6 +410,8 @@ export interface OverviewThread {
   title: string;
   from: ConversationMessage['from'];
   via: string | null;
+  /** 行头的种类标签(拍板 26):看过小课堂的话题是 lecture,其余 talk(对话) */
+  kind: 'talk' | 'lecture';
   sections: number;
   cards: number;
   /** 老师还在写 / 末句问句停下等孩子 / 没停 */
@@ -441,6 +443,8 @@ export interface Overview {
   date: string;
   today: string;
   tutors: OverviewTutor[];
+  /** 七天日期条(拍板 24):date 所在的七天,每天有话题的老师(听写、口语课页面自己从模块接口补) */
+  week: { date: string; tutors: string[] }[];
 }
 
 export async function overview(ctx: AppContext, date: string): Promise<Overview> {
@@ -457,9 +461,10 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       if (!th) {
         const via = m.via?.label ?? null;
         const raw = via ? `首页 · ${via}` : m.from === 'kid' ? m.text : `系统:${m.text}`;
-        th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, sections: 0, cards: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked };
+        th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, kind: 'talk', sections: 0, cards: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked };
         by.set(id, th);
       }
+      if (m.lecture) th.kind = 'lecture';
       if (m.result === 'running') th.stoppedAt = 'writing';
       else if (m.result === 'ok' && m.section && (m.section.cards.length || m.section.lines.length)) {
         th.sections++;
@@ -483,7 +488,13 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
     const kouboYuan = await kouboYuanOfDay(join(ctx.ws.dirs.conversations, t.name), date);
     tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name] ?? NEUTRAL_COLOR, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], booking, ...(kouboYuan > 0 ? { kouboYuan } : {}), extras: t.extras.filter((x) => x !== 'talk' || ctx.ws.config.talk.enabled) });
   }
-  return { title: ctx.ws.config.title, date, today: localDate(ctx.now()), tutors };
+  const today = localDate(ctx.now());
+  const names = tutors.map((t) => t.name);
+  const week = await Promise.all(weekOf(date, today).map(async (d) => ({
+    date: d,
+    tutors: (await Promise.all(names.map(async (n) => ((await readIndex(ctx.ws, n, d)).messages.some((m) => !m.bookkeep && !m.tidy) ? n : null)))).filter((n): n is string => n !== null),
+  })));
+  return { title: ctx.ws.config.title, date, today, tutors, week };
 }
 
 /**

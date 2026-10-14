@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * 家长端「首页」(/parent/home,《家长板书页设计.md》拍板 20)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
- * 临时 workspace + HTTP serve → 手机尺寸开 /parent/home → 给英语老师加一个开场按钮(字、讲法、只今天)→ 发布了、孩子端看得到 →
- * 设语文这周的词 → 把数学调到第一 → 孩子端的先后跟着变 → 「记录」有两个标签,听写那一行挂在语文下面;截图。
+ * 临时 workspace + HTTP serve → 手机尺寸开 /parent/home → 点牌上的「加一个开场按钮」给英语老师加一个(字、讲法、只今天)→ 发布了、孩子端看得到 →
+ * 设语文这周的词 → 把数学调到第一 → 孩子端的先后跟着变 → 宽屏三栏(拍板 27、28):点牌上的按钮在右栏就地改、左栏拖着排先后 →
+ * 「记录」有两个标签,听写那一行挂在语文下面;截图。
  *
  * 用法:node scripts/probe-parent-home.mjs [--out <截图目录>] [--keep]
  */
@@ -70,19 +71,19 @@ try {
 
   // ---- 英语老师加一个开场按钮 ----
   await tap(byText('#who .mini', '英语'));
-  await until(`!!${byText('#body .it', '加一个开场按钮')}`);
-  await tap(byText('#body .it', '加一个开场按钮'));
+  await until(`!!document.querySelector('#body .kc-add')`);
+  await tap(`document.querySelector('#body .kc-add')`);
   ok('表单:缺省「只今天」,字为空时发布灰着', await until(`document.querySelector('#sheet').classList.contains('on') && document.querySelector('#sheet .seg .on')?.textContent === '只今天' && document.querySelector('#sheet .nav button:last-child').disabled`));
   await typeInto('#b-label', '我想说说我的小汽车');
   await typeInto('#b-brief', '多问他喜欢什么颜色');
-  const form = await evaluate(`({ count: document.querySelector('#sheet .gh span').textContent, prev: document.querySelector('#sheet .pill').textContent })`);
-  ok('打字:计数 9 / 16,「孩子看到的」跟着变', form.count === '9 / 16' && form.prev === '我想说说我的小汽车', JSON.stringify(form));
+  const form = await evaluate(`({ count: document.querySelector('#sheet .gh span').textContent, go: document.querySelector('#sheet .nav button:last-child').disabled })`);
+  ok('打字:计数 9 / 16,发布能点了', form.count === '9 / 16' && !form.go, JSON.stringify(form));
   console.log('  ', await shot('parent-button.png'));
   await tap(`document.querySelector('#sheet .nav button:last-child')`);
   await until(`!document.querySelector('#sheet').classList.contains('on')`);
   const kid1 = (await api('GET', '/api/kid/home')).json;
   const enBtns = kid1.cards.find((c) => c.kind === 'tutor' && c.props.tutor === 'english-tutor')?.props.buttons.map((b) => b.label);
-  ok('发布了:孩子端英语老师多了这个按钮,讲法不下发;家长端那一行写着「只今天」', enBtns?.join() === '新话题,我想说说我的小汽车' && !JSON.stringify(kid1).includes('颜色') && await until(`!!${byText('#body .it', '我想说说我的小汽车')} && ${byText('#body .it', '我想说说我的小汽车')}.textContent.includes('只今天')`), JSON.stringify(enBtns));
+  ok('发布了:孩子端英语老师多了这个按钮,讲法不下发;家长端牌上那颗写着「只今天」', enBtns?.join() === '新话题,我想说说我的小汽车' && !JSON.stringify(kid1).includes('颜色') && await until(`!!${byText('#body .kc-b', '我想说说我的小汽车')} && ${byText('#body .kc-b', '我想说说我的小汽车')}.textContent.includes('只今天')`), JSON.stringify(enBtns));
 
   // ---- 语文这周的词 ----
   await tap(byText('#who .mini', '语文'));
@@ -106,9 +107,32 @@ try {
   ok('孩子端:老师卡的先后跟着变', kid3.cards.filter((c) => c.kind === 'tutor').map((c) => c.props.tutor).join() === 'math-tutor,english-tutor,chinese-tutor', kid3.cards.filter((c) => c.kind === 'tutor').map((c) => c.props.tutor).join());
   console.log('  ', await shot('parent-home-after.png'));
 
+  // ---- 宽屏三栏:点牌上的按钮在右栏就地改;左栏按住拖着排先后 ----
+  await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
+  ok('宽屏:三栏,左栏三位老师、数学在前;没有窄屏的头像排与「排在第」', await until(`!!document.querySelector('.cols') && document.querySelectorAll('.tl .tr').length === 3 && document.querySelector('.tl .tr').dataset.tutor === 'math-tutor' && getComputedStyle(document.querySelector('#who')).display === 'none' && !${byText('#body .it', '排在第')}`));
+  await tap(`document.querySelector('.tl .tr[data-tutor="english-tutor"] .pick')`);
+  await until(`!!${byText('#body .kc-b', '我想说说我的小汽车')}`);
+  await tap(byText('#body .kc-b', '我想说说我的小汽车'));
+  ok('点牌上的按钮:右栏出表单,字是那颗的,牌上那颗框起来', await until(`document.querySelector('#pane #b-label')?.value === '我想说说我的小汽车' && document.querySelector('.kc-b.on')?.textContent.includes('小汽车') && !document.querySelector('#sheet').classList.contains('on')`));
+  await typeInto('#b-label', '我想讲讲小汽车');
+  console.log('  ', await shot('parent-home-wide.png'));
+  await tap(`document.querySelector('#pane .btns .go')`);
+  await until(`!!${byText('#body .kc-b', '我想讲讲小汽车')}`);
+  const kid4 = (await api('GET', '/api/kid/home')).json;
+  ok('右栏发布:孩子端那颗换了字,表单还开着', kid4.cards.find((c) => c.kind === 'tutor' && c.props.tutor === 'english-tutor')?.props.buttons.some((b) => b.label === '我想讲讲小汽车') && await until(`document.querySelector('#pane #b-label')?.value === '我想讲讲小汽车'`));
+  // 拖:按住最后一位(语文)的点往上拖两格 → 排第一
+  const g = await evaluate(`(() => { const b = document.querySelectorAll('.tl .grip')[2].getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2, step: document.querySelectorAll('.tl .tr')[1].getBoundingClientRect().top - document.querySelectorAll('.tl .tr')[0].getBoundingClientRect().top }; })()`);
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: g.x, y: g.y, button: 'left', clickCount: 1 });
+  for (let k = 1; k <= 8; k++) { await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: g.x, y: g.y - (g.step * 2 * k) / 8, button: 'left', buttons: 1 }); await sleep(30); }
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: g.x, y: g.y - g.step * 2, button: 'left', clickCount: 1 });
+  ok('拖着排:语文排到第一', await until(`document.querySelector('.tl .tr')?.dataset.tutor === 'chinese-tutor'`));
+  const kid5 = (await api('GET', '/api/kid/home')).json;
+  ok('孩子端:老师卡的先后跟着拖的变', kid5.cards.filter((c) => c.kind === 'tutor').map((c) => c.props.tutor).join() === 'chinese-tutor,math-tutor,english-tutor', kid5.cards.filter((c) => c.kind === 'tutor').map((c) => c.props.tutor).join());
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+
   // ---- 记录:两个标签,听写挂在语文下面 ----
-  const h0 = kid3.home;
-  const n = kid3.cards.filter((c) => c.kind === 'dictation').length - 1;
+  const h0 = kid5.home;
+  const n = kid5.cards.filter((c) => c.kind === 'dictation').length - 1;
   const st = await api('POST', '/api/dictation', { home: h0, n });
   ok('开一次听写(孩子端点「听写」)', st.status === 201, JSON.stringify(st.json).slice(0, 120));
   await tap(`[...document.querySelectorAll('.seg a')].find((a) => a.textContent === '记录')`);

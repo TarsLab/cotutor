@@ -42,7 +42,7 @@ ${REEL_DOCK_JS}
   const unlock = () => { if (unlocked) return; unlocked = true; try { if (!audio.src) { audio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='; const pr = audio.play(); if (pr && pr.catch) pr.catch(() => {}); } } catch (e) {} };
   document.addEventListener('pointerdown', unlock, true);
   window.cotutorReelReady = (api, info) => {
-    reelDock.open(api, { exit, toast });
+    reelDock.open(api, { exit, toast, title: '口语课' });
     reelDock.frame(info && info.size ? info.size : [1180, 820]);
   };
   window.cotutorReelFail = () => blank('这一次还没打,没有录像。');

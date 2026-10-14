@@ -42,13 +42,17 @@ ${REEL_DOCK_JS}
   const unlock = () => { if (unlocked) return; unlocked = true; try { if (!audio.src) { audio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='; const pr = audio.play(); if (pr && pr.catch) pr.catch(() => {}); } } catch (e) {} };
   document.addEventListener('pointerdown', unlock, true);
   const id = new URLSearchParams(location.search).get('id') || '';
+  // 左上角「退出录像」旁边写的(《家长录像设计.md》拍板 20):哪位老师 · 听写 · 几点;听写读回来再填
+  let title = '听写';
   window.cotutorReelReady = (api, info) => {
-    reelDock.open(api, { exit, toast });
+    reelDock.open(api, { exit, toast, title });
     reelDock.frame(info && info.size ? info.size : [1180, 820]);
   };
   window.cotutorReelFail = () => blank('这次还没写,没有录像。');
   fetch('/api/dictation/' + encodeURIComponent(id) + '/kid', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((v) => {
     if (!v) { blank('找不到这次听写。'); return; }
+    const at = new Date(v.startedAt);
+    title = [v.tutor, v.lang === 'en' ? '单词听写' : '听写', (at.getMonth() + 1) + ' 月 ' + at.getDate() + ' 日 ' + String(at.getHours()).padStart(2, '0') + ':' + String(at.getMinutes()).padStart(2, '0')].filter(Boolean).join(' · ');
     $('#rl-screen').hidden = false;
     $('#rl-frame').src = '/dictation?' + new URLSearchParams(v.lang === 'en' ? { lang: 'en', reel: id } : { reel: id });
   }, () => blank('找不到这次听写。'));

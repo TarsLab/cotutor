@@ -394,6 +394,8 @@ __REEL_DOCK_CSS__
   /* 录像里看小课堂的那一段:铺在板书上,字幕行与控制条露着;只看 */
   /* 家长端录像(拍板 6):上半是孩子的屏幕(iframe 里的孩子端,按孩子设备的尺寸开、等比缩),下半是录像栏;家长页自己的板书、字幕行、顶栏收起来 */
   body.reel #wrap, body.reel #sub, body.reel .tb { display:none; }
+  /* 录像整页深底(《家长录像设计.md》拍板 20,reel-dock.ts):老师页这一层自己铺着纸色,录像开着时换深色 */
+  html.rl-dark body.reel #tutor, html.rl-dark body.reel #main { background:#1c1c1c; }
   /* 孩子的屏幕(iframe 里):孩子端原样,只是点不动;板书能上下翻(拍板 16,点在 reelBoot 里挡掉) */
   body.rlk #tutor .tb, body.rlk #sub, body.rlk #bar, body.rlk #lc-frame { pointer-events:none; }
   /* 直接打开孩子的屏幕(调试)时录像栏在它自己底下:压在按住浮层、小课堂上面 */
@@ -2969,6 +2971,14 @@ __REEL_DOCK_JS__
     silence();
     document.body.classList.remove('reel'); $('#rl-screen').hidden = true;
   };
+  /** 录像左上角「退出录像」旁边写的:哪位老师 · 哪件事 · 哪天几点(《家长录像设计.md》拍板 20) */
+  const reelTitle = (t, thread, date) => {
+    const H = S.home, tu = H && H.tutors ? H.tutors.find((x) => x.name === t.name) : null;
+    const th = tu && tu.threads ? tu.threads.find((x) => x.thread === thread) : null;
+    const what = !th ? '' : th.start && th.start.kind === 'new' ? '新话题' + (th.said ? '「' + th.said + '」' : '') : th.start && th.start.kind === 'lecture' && th.lecture ? '小课堂「' + th.lecture.title + '」' : (th.start && th.start.label) || th.title;
+    const when = H && H.today ? dateLabel(date || H.today, H.today) : '';
+    return [t.display, what, when + (th ? ' ' + hhmm(atMs(th.at)) : '')].filter((x) => x && x.trim()).join(' · ');
+  };
   /** 家长从记录点进一个话题就是录像(拍板 16):停在最后一帧,不放;要看过程往前拖。退出回清单 */
   const openReel = (t, thread, date) => {
     unlock();
@@ -2980,7 +2990,7 @@ __REEL_DOCK_JS__
     const fr = $('#rl-frame');
     window.cotutorReelReady = (api, info) => {
       if (!S.reel) return;
-      reelDock.open(api, { exit: closeTutor, toast, tagHint: REEL_HINT });
+      reelDock.open(api, { exit: closeTutor, toast, tagHint: REEL_HINT, title: reelTitle(t, thread, S.hist) });
       reelDock.frame(info && info.size ? info.size : REEL_SIZES['tablet-landscape']);
     };
     window.cotutorReelFail = () => { closeTutor(); toast('这个话题没有录像'); };

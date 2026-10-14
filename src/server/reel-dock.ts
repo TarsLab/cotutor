@@ -9,6 +9,7 @@
  *   chapters?()  → [{p, title}] 章(话题一轮、听写一个词);进度条上断开一点,说明那行左边写在哪一章
  *   speeds?      → 倍速轮哪几档,缺省 1 / 1.5 / 2
  *   play(on) / seek(p) / drag(p) / real(on) / speed(x) / stop()
+ * open(把手, {exit, toast, tagHint, title}):title 写在左上角「退出录像」旁边(是谁的哪件事);开着时整页深底(html.rl-dark,拍板 20)。
  *
  * 时间和视频一样(拍板 14):左下角是放到哪 / 一共要放多久,下面一行小字是当时几点;经过里每条写录像里的位置。
  * 上半占满宽度(拍板 15):按孩子屏幕的尺寸等比缩到铺满,窗口不够高才按高度缩;录像栏能收成一行(播放、细进度条、时间),顶上的小横条点或上下拉。
@@ -95,14 +96,50 @@ export const REEL_DOCK_CSS = `
   #reel.min #rl-mclock.rl-mini { display:block !important; font-size:14px; }
   #reel.min #rl-mplay { width:34px; height:34px; }
   #reel.min #rl-marks i { width:6px; height:6px; margin-left:-3px; }
+  /* 深底(拍板 20):录像开着时整页深色,孩子的屏幕圆角嵌在中间,录像栏在深底上;「退出录像」在左上角,是整页最亮的一颗 */
+  #rl-top { display:none; }
+  html.rl-dark, html.rl-dark body { background:#1c1c1c; }
+  html.rl-dark #rl-top { position:fixed; z-index:6; top:calc(env(safe-area-inset-top) + 10px); left:16px; right:16px; height:48px; display:flex; align-items:center; gap:12px; color:#f4f2ec; pointer-events:none; }
+  html.rl-dark #rl-top > * { pointer-events:auto; }
+  html.rl-dark #rl-x { flex:none; height:48px; padding:0 20px 0 16px; border:0; border-radius:24px; background:#fff; color:#1c1c1c; font-size:17px; font-weight:700; display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+  html.rl-dark #rl-x[hidden] { display:none; }
+  #rl-ttl { flex:1; min-width:0; font-size:15px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #rl-only { flex:none; font-size:12px; color:#a8a49c; border:1px solid #4a4845; border-radius:6px; padding:2px 8px; white-space:nowrap; }
+  @media (max-width:600px) { #rl-only { display:none; } }
+  html.rl-dark #rl-screen { margin:calc(env(safe-area-inset-top) + 68px) 16px 0; border-radius:16px; box-shadow:0 0 0 1px #3a3835; }
+  html.rl-dark #reel { background:transparent; border-top:0; color:#f4f2ec; }
+  html.rl-dark #rl-grab i { background:#4a4845; }
+  html.rl-dark #rl-cap { color:#f4f2ec; }
+  html.rl-dark #rl-cap.gap { color:#c9c5bc; }
+  html.rl-dark #rl-cap.kid { color:#f0b48a; }
+  html.rl-dark #rl-cap.miss { color:#f0a080; }
+  html.rl-dark #rl-chap { color:#1c1c1c; background:#f0b48a; border-color:#f0b48a; font-weight:600; }
+  html.rl-dark #rl-more, html.rl-dark .rl-row .tx, html.rl-dark .rl-trow .tx, html.rl-dark .rl-row .ic, html.rl-dark .rl-trow .ic, html.rl-dark #rl-tag, html.rl-dark #rl-ver { background:transparent; border-color:#4a4845; color:#f4f2ec; }
+  html.rl-dark #rl-log { background:#262523; border-color:#3a3835; color:#f4f2ec; }
+  html.rl-dark #rl-log li .rl-c { color:#a8a49c; }
+  html.rl-dark #rl-log li.cur { background:#3a2c22; }
+  html.rl-dark #rl-play, html.rl-dark #rl-mplay { background:#fff; color:#1c1c1c; }
+  html.rl-dark #rl-clock, html.rl-dark #rl-mclock, html.rl-dark .rl-sw { color:#f4f2ec; }
+  html.rl-dark #rl-sub { color:#a8a49c; }
+  html.rl-dark .rl-sw i { background:#4a4845; }
+  html.rl-dark .rl-sw input:checked + i { background:var(--accent); }
+  html.rl-dark #rl-chaps i { background:#1c1c1c; }
+  /* 进度条:深色的轨道,走过的那段橙色(--fill 由脚本跟着写),白色圆头 */
+  html.rl-dark #rl-seek { -webkit-appearance:none; appearance:none; }
+  html.rl-dark #rl-seek::-webkit-slider-runnable-track { height:6px; border-radius:3px; background:linear-gradient(to right, var(--accent) var(--fill, 0%), #3a3835 var(--fill, 0%)); }
+  html.rl-dark #rl-seek::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; margin-top:-6px; border-radius:50%; background:#fff; box-shadow:0 0 0 3px #1c1c1c; }
+  html.rl-dark #rl-seek::-moz-range-track { height:6px; border-radius:3px; background:#3a3835; }
+  html.rl-dark #rl-seek::-moz-range-progress { height:6px; border-radius:3px; background:var(--accent); }
+  html.rl-dark #rl-seek::-moz-range-thumb { width:18px; height:18px; border:0; border-radius:50%; background:#fff; box-shadow:0 0 0 3px #1c1c1c; }
 `;
 
-export const REEL_DOCK_HTML = `<div id="reel" hidden>
+export const REEL_DOCK_HTML = `<div id="rl-top"><button id="rl-x" type="button" hidden aria-label="退出录像"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>退出录像</button><span id="rl-ttl"></span><span id="rl-only">孩子的屏幕 · 只看,点不动</span></div>
+    <div id="reel" hidden>
       <button id="rl-grab" type="button" aria-label="收起录像栏" aria-expanded="true"><i></i></button>
       <div id="rl-log" hidden><ol></ol></div>
       <div class="rl-caprow" id="rl-caprow"><span id="rl-chap" hidden></span><div id="rl-cap"></div><button id="rl-more" type="button" aria-expanded="false">经过 ▴</button></div>
       <div class="rl-trow"><button class="rl-mini" id="rl-mplay" type="button" aria-label="播放"></button><div class="rl-track"><div id="rl-marks"></div><div id="rl-chaps"></div><input id="rl-seek" type="range" min="0" max="1000" step="100" value="0" aria-label="录像进度"></div><span class="rl-mini" id="rl-mclock"></span><button class="rl-mini ic" id="rl-unfold" type="button" aria-label="展开录像栏"></button></div>
-      <div class="rl-row"><button id="rl-play" type="button" aria-label="播放"></button><span class="rl-when"><span id="rl-clock"></span><span class="rl-subrow"><span id="rl-sub"></span><button id="rl-tag" type="button" hidden>推算</button><button id="rl-ver" type="button" hidden>画法已更新</button></span></span><span class="rl-sp"></span><label class="rl-sw" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就是完整版,按真实时间放"><input type="checkbox" id="rl-skip" role="switch" checked><i></i>跳过空白</label><button class="tx" id="rl-speed" type="button">1×</button><button class="ic" id="rl-fold" type="button" aria-label="收起录像栏"></button><button class="tx" id="rl-x" type="button" hidden>退出</button></div>
+      <div class="rl-row"><button id="rl-play" type="button" aria-label="播放"></button><span class="rl-when"><span id="rl-clock"></span><span class="rl-subrow"><span id="rl-sub"></span><button id="rl-tag" type="button" hidden>推算</button><button id="rl-ver" type="button" hidden>画法已更新</button></span></span><span class="rl-sp"></span><label class="rl-sw" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就是完整版,按真实时间放"><input type="checkbox" id="rl-skip" role="switch" checked><i></i>跳过空白</label><button class="tx" id="rl-speed" type="button">1×</button><button class="ic" id="rl-fold" type="button" aria-label="收起录像栏"></button></div>
     </div>`;
 
 export const REEL_DOCK_JS = `
@@ -171,6 +208,7 @@ export const REEL_DOCK_JS = `
         q('#rl-skip').checked = !st.real;
       }
       if (!dragging) q('#rl-seek').value = String(Math.round(st.p));
+      q('#rl-seek').style.setProperty('--fill', pct(Number(q('#rl-seek').value), st.total));
       const t = pos(st.p) + ' / ' + pos(st.total);
       q('#rl-clock').textContent = t; q('#rl-mclock').textContent = t;
       q('#rl-sub').textContent = '当时 ' + hms(st.wall);
@@ -221,12 +259,14 @@ export const REEL_DOCK_JS = `
         const st = api.get();
         q('#rl-speed').textContent = st.speed + '×';
         q('#rl-tag').hidden = st.precise; q('#rl-x').hidden = !O.exit;
+        q('#rl-ttl').textContent = O.title || '';
+        document.documentElement.classList.add('rl-dark');
         q('#reel').hidden = false;
         more(kept('parent-reel-log') === '1'); fold(kept('parent-reel-min') === '1');
         clearInterval(timer); timer = setInterval(render, 100);
         render();
       },
-      close: () => { clearInterval(timer); RE = null; size = null; q('#reel').hidden = true; },
+      close: () => { clearInterval(timer); RE = null; size = null; q('#reel').hidden = true; document.documentElement.classList.remove('rl-dark'); },
       /** 孩子屏幕的尺寸(CSS 像素):上半照它缩 */
       frame: (sz) => { size = sz; fit(); },
     };

@@ -54,8 +54,8 @@ import {
   type BoardLine,
   type PlayerState,
   type BoardSection,
-  wordLayout,
 } from '../src/lib/kid-board.ts';
+import { wordLayout } from '../src/lib/word-layout.ts';
 import { check, done } from './_check.ts';
 
 const L = (text: string, extra: Partial<BoardLine> = {}): BoardLine => ({ text, audio: null, marks: [], ask: isQuestion(text), anchor: null, cues: [], ...extra });

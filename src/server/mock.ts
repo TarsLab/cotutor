@@ -718,6 +718,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     // 家长端(《家长板书页设计.md》):同一个页面,家长模式;清单与一天的板书(答案不剥,第一节带一条给家长的尾巴与记忆,看旁注的样子)。mock 没有工作台 /dev
     if (p === '/parent') return { status: 200, html: kidPage(title, { parent: true, synth: true }, await stageVersion()) };
     if (p === '/reel') return { status: 200, html: kidPage(title, { reel: true, synth: true }, await stageVersion()) };
+    if (p === '/preview') return { status: 200, html: kidPage(title, { preview: true, synth: true }, await stageVersion()) };
     if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };
     // 主题:mock 没有 workspace,直接给包里的出厂 default
     if (p === '/kid/theme.css') return { status: 200, html: `${cardsCss()}\n\n${(await packageTheme()).css}`, contentType: 'text/css; charset=utf-8' };

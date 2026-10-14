@@ -205,6 +205,13 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const js = page.slice(page.indexOf('<script>') + 8, page.lastIndexOf('</script>'));
   let parses = true;
   try { new Function(js); } catch (e) { parses = false; console.error(String(e)); }
+  {
+    // 家长端「首页」里的预览(《家长板书页设计.md》拍板 33):孩子端页面本身,带预览标记;页面里照旧没有家长端的路径
+    const pv = (await get('/preview')).html ?? '';
+    let ok = true;
+    try { new Function(pv.slice(pv.indexOf('<script>') + 8, pv.lastIndexOf('</script>'))); } catch (e) { ok = false; console.error(String(e)); }
+    check('预览 /preview:孩子端页面带预览标记、内联脚本能解析、没有家长端的路径', pv.includes('const MODE = {"preview":true') && ok && !pv.includes('/parent'));
+  }
   check('家长端 /parent:带家长标记、自己的 manifest、内联脚本能解析', page.includes('const MODE = {"parent":true,"synth":true,"links":') && page.includes('/parent/manifest.webmanifest') && parses && ((await get('/parent/manifest.webmanifest')).json as { start_url: string }).start_url === '/parent');
   type PMsg = Msg & { from: string; parentText?: string; remembered?: string[] };
   const pb = (await get('/api/conversations/chinese-tutor/today/board')).json as { messages: PMsg[] };

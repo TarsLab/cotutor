@@ -1154,6 +1154,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (p === '/parent/home') return { status: 200, html: PARENT_HOME_PAGE };
     // 录像里孩子的屏幕(《家长录像设计.md》拍板 6):家长端录像时开在 iframe 里;直接打开也能看(调试),?tutor=&date=&thread=[&at=时:分:秒]
     if (p === '/reel') return { status: 200, html: kidPage(esc(ws.config.title), { reel: true }, await stageVersion()) };
+    if (p === '/preview') return { status: 200, html: kidPage(esc(ws.config.title), { preview: true }, await stageVersion()) };
     if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${ws.config.title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };
     return { status: 404, json: { error: 'not_found', path: p } };
   } catch (err) {

@@ -6,6 +6,8 @@
  * 录像里孩子的屏幕(/reel,《家长录像设计.md》拍板 6)也是同一个页面:__MODE__ 里 reel = true——孩子端的样子,数据是 /reel 给的一个话题,
  * S.readonly 照样是真(不开麦克风、不记实录),由录像的时钟驱动。REEL 的分支只准出现在:声音(用家长页那个 Audio)、chrome(输入条露着、点不动)、
  * 答案栏的「等你说…」、启动与重载,以及录像那一块;别处看到 REEL 就是写错了。
+ * 家长端「首页」里的预览(/preview,《家长板书页设计.md》拍板 33)也是同一个页面:__MODE__ 里 preview = true——孩子端首页本身,在家长页的 iframe 里;点牌上的按钮不跳走,
+ * 经 window.parent.cotutorPreview 告诉家长页点了哪颗,家长页经 window.cotutorPreviewSet 换最前那张、塞改着的字;不记「看过了」。PREVIEW 的分支只准出现在首页那几处与启动。
  * 铁律(《产品规划.md》):界面上永远没有错误与评判——后端不通、老师出错、识别失败,都只是「什么都不出现」或头像灰;
  * 文字尽量少,语音优先。孩子设备上没有通往家长端的入口(2026-09-10 拍板)。
  *
@@ -153,6 +155,8 @@ const PAGE = `<!doctype html>
   #deck .pc-ix .av { width:100%; height:100%; font-size:11px; }
   #deck .pc .kc { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
   #deck .pc .kcards { margin-top:4px; }
+  /* 家长端预览里正在改的那颗(拍板 33) */
+  #deck .pc .bt.pv-sel { outline:4px solid var(--ink); outline-offset:3px; }
   #deck .pc.off { pointer-events:auto; }
   #deck .pc.off.front .bts { pointer-events:none; }
   body.offline #deck .pc { pointer-events:none; }
@@ -625,6 +629,7 @@ __REEL_JS__
   const PARENT = MODE.parent === true;
   /** 录像里孩子的屏幕(/reel,《家长录像设计.md》拍板 6):孩子端的样子,数据是 /reel 给的一个话题;只读、不记、点不动,由录像的时钟驱动 */
   const REEL = MODE.reel === true;
+  const PREVIEW = MODE.preview === true;
   /** 孩子端对话接口的前缀(messages / photos / cards / history);家长端只看,一天的板书走自己的路 */
   const CONV = '/api/kid/conversations/';
   const AUDIO = '/api/audio/';
@@ -839,10 +844,10 @@ __REEL_JS__
   const tutorButton = (t, b) => {
     const on = { click: () => pickButton(t, b) };
     const fc = Array.from(t.display || '')[0];
-    if (b.kind === 'new') return h('button', { type: 'button', class: 'bt bt-new', style: '--sc:' + colorOf(t), on }, fc ? h('span', { class: 'fc', 'aria-hidden': 'true' }, fc) : null, h('span', { class: 'lb' }, h('span', { class: 'btx' }, b.label), h('small', { class: 'ln' }, '想问我什么?')), h('span', { class: 'bi', html: ICON.spark }));
-    if (b.kind === 'lecture') return h('button', { type: 'button', class: 'bt bt-lecture', on }, lecturePic(b),
+    if (b.kind === 'new') return h('button', { type: 'button', class: 'bt bt-new', 'data-bid': String(b.id), style: '--sc:' + colorOf(t), on }, fc ? h('span', { class: 'fc', 'aria-hidden': 'true' }, fc) : null, h('span', { class: 'lb' }, h('span', { class: 'btx' }, b.label), h('small', { class: 'ln' }, '想问我什么?')), h('span', { class: 'bi', html: ICON.spark }));
+    if (b.kind === 'lecture') return h('button', { type: 'button', class: 'bt bt-lecture', 'data-bid': String(b.id), on }, lecturePic(b),
       h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, b.label), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null));
-    return h('button', { type: 'button', class: 'bt bt-' + b.kind, on }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }), h('span', { class: 'btx' }, b.label));
+    return h('button', { type: 'button', class: 'bt bt-' + b.kind, 'data-bid': String(b.id), on }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] || ICON.start }), h('span', { class: 'btx' }, b.label));
   };
   /** 挨着的几个小课堂收进一格(平板上两张海报并排,手机上一张一行) */
   const buttonRuns = (t, buttons) => {
@@ -871,13 +876,13 @@ __REEL_JS__
   const K = { order: null, els: new Map(), busy: false, geo: null };
   // 从牌上去了别的页(听写、拍照听写、口语课),回来是整页重开、K.order 没了:走之前记下是哪位的牌,下一次进首页读一次就删(拍板 17「回来停在刚才那位」;刷新照旧回家长排的)
   const FRONT_KEY = 'kid-home-front';
-  const stashFront = (el) => { const pc = el && el.closest && el.closest('[data-tutor]'); try { if (pc) sessionStorage.setItem(FRONT_KEY, pc.dataset.tutor); } catch {} };
-  const takeFront = () => { let f = null; try { f = sessionStorage.getItem(FRONT_KEY); sessionStorage.removeItem(FRONT_KEY); } catch {} return f; };
+  const stashFront = (el) => { if (PREVIEW) return; const pc = el && el.closest && el.closest('[data-tutor]'); try { if (pc) sessionStorage.setItem(FRONT_KEY, pc.dataset.tutor); } catch {} };
+  const takeFront = () => { if (PREVIEW) return null; let f = null; try { f = sessionStorage.getItem(FRONT_KEY); sessionStorage.removeItem(FRONT_KEY); } catch {} return f; };
   const reduced = () => Boolean(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   // 橙点「看过了」记在这台设备上(换了一份首页就清):家长排了东西、孩子还没找过这位老师时亮,换到最前就灭
   const SEEN_KEY = 'kid-home-seen';
   const seenOf = (home) => { try { const j = JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); return j.home === home && Array.isArray(j.tutors) ? j.tutors : []; } catch { return []; } };
-  const markSeen = (home, name) => { try { const t = seenOf(home); if (!t.includes(name)) localStorage.setItem(SEEN_KEY, JSON.stringify({ home, tutors: [...t, name] })); } catch {} };
+  const markSeen = (home, name) => { if (PREVIEW) return; try { const t = seenOf(home); if (!t.includes(name)) localStorage.setItem(SEEN_KEY, JSON.stringify({ home, tutors: [...t, name] })); } catch {} };
   const homeTutorsOf = (H) => {
     const byName = new Map(H.tutors.map((t) => [t.name, t]));
     return (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind === 'tutor' && byName.has(c.props.tutor)).map((c) => ({ t: byName.get(c.props.tutor), card: c }));
@@ -924,6 +929,40 @@ __REEL_JS__
     box.style.marginLeft = box.style.marginRight = axis === 'H' ? 'auto' : '';
     K.order.forEach((name, slot) => deckPlace(K.els.get(name), slot, n));
   };
+  // ---- 家长端「首页」里的预览(拍板 33):S.pv = {tutor, sel, edit: {k, kind, label, until} | null, add: 字 | null},家长页塞进来的,只在预览里 ----
+  const pvHost = () => { try { return window.parent !== window && typeof window.parent.cotutorPreview === 'function' ? window.parent : null; } catch { return null; } };
+  const pvTell = (ev) => { const host = pvHost(); if (host) host.cotutorPreview(ev); };
+  /** 牌上的按钮换上家长正改着的那颗(字、留到),新加的那颗(id draft)排在最后;没在改就是孩子此刻拿到的 */
+  const pvButtons = (n, list) => {
+    const P = PREVIEW && S.pv && S.pv.tutor === n ? S.pv : null;
+    if (!P || (!P.edit && !P.add)) return list;
+    const today = S.home && S.home.date;
+    const E = P.edit, gone = E && E.until && today && E.until < today;
+    let out = list.map((b) => (E && b.id === E.k ? { ...b, label: E.label } : b)).filter((b) => !(gone && E && b.id === E.k));
+    if (E && !gone && !out.some((b) => b.id === E.k)) out.push({ kind: E.kind === 'continue' ? 'continue' : 'start', label: E.label, id: E.k });
+    if (P.add) out.push({ kind: 'start', label: P.add, id: 'draft' });
+    return out;
+  };
+  if (PREVIEW) {
+    window.cotutorPreviewSet = (o) => {
+      if (!o) return;
+      if ('pv' in o) S.pv = o.pv;
+      if (o.front && K.order && !K.busy && K.order.includes(o.front) && K.order[K.order.length - 1] !== o.front) K.order = K.order.filter((x) => x !== o.front).concat([o.front]);
+      if (o.reload) { loadHome(); return; }
+      if (S.home && !S.tutor) renderHome();
+    };
+    // 点牌上的按钮不跳走,告诉家长页点了哪颗;后面那张照孩子端换到最前(换完 pickTutor 里告诉家长页);牌外的东西点了什么都不做
+    document.addEventListener('click', (e) => {
+      const pc = e.target.closest ? e.target.closest('#deck .pc') : null;
+      if (pc && !pc.classList.contains('front')) return;
+      e.preventDefault(); e.stopPropagation();
+      const bt = pc ? e.target.closest('.bt') : null;
+      if (!bt) return;
+      const bid = bt.dataset.bid;
+      if (bid !== undefined) pvTell({ act: 'button', tutor: pc.dataset.tutor, id: bid === 'new' || bid === 'draft' ? bid : Number(bid) });
+      else pvTell({ act: 'extra', tutor: pc.dataset.tutor, kind: bt.classList.contains('bt-x-talk') ? 'talk' : 'dictation' });
+    }, true);
+  }
   /** 每位老师一张牌:头像 + 名字、按钮、「每天都在」、归他的卡(拍板 19),右下角倒着一个小头像;deal = 打开首页、从老师页回来,发牌 */
   const renderDeck = (H, list, deal) => {
     const box = $('#deck');
@@ -932,7 +971,7 @@ __REEL_JS__
     for (const [n, el] of K.els) if (!K.order.includes(n)) { el.remove(); K.els.delete(n); }
     K.order.forEach((n, slot) => {
       const { t, card } = list.find((x) => x.t.name === n);
-      const buttons = Array.isArray(card.props.buttons) ? card.props.buttons : [];
+      const buttons = pvButtons(n, Array.isArray(card.props.buttons) ? card.props.buttons : []);
       const owned = (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind !== 'tutor' && c.owner === n);
       const sig = JSON.stringify([t.avatar, t.subject, t.display, t.available, buttons, owned, t.extras, S.talkLast && S.talkLast.id, H.home]);
       let el = K.els.get(n);
@@ -957,6 +996,7 @@ __REEL_JS__
       } else el.querySelector('.pc-hd .av').classList.remove('draw'); // 之后的刷新摘掉(动画早放完了,摘了也不会重放)
       el.classList.toggle('front', n === front);
       el.classList.toggle('off', !t.available);
+      if (PREVIEW) for (const b of el.querySelectorAll('.bt')) b.classList.toggle('pv-sel', Boolean(S.pv && S.pv.tutor === n && S.pv.sel !== null && S.pv.sel !== undefined && String(S.pv.sel) === b.dataset.bid));
       const dot = Boolean(card.props.news) && n !== front && !seen.includes(n);
       const hd = el.querySelector('.pc-hd'), had = hd.querySelector('.dot');
       if (dot && !had) hd.append(h('span', { class: 'dot' })); else if (!dot && had) had.remove();
@@ -977,7 +1017,7 @@ __REEL_JS__
     if (!H || K.busy || !K.geo || i < 0 || i === N - 1) return;
     const next = K.order.filter((x) => x !== n).concat([n]);
     const el = K.els.get(n);
-    const done = () => { K.busy = false; K.order = next; markSeen(H.home, n); renderHome(); };
+    const done = () => { K.busy = false; K.order = next; markSeen(H.home, n); renderHome(); if (PREVIEW) pvTell({ act: 'front', tutor: n }); };
     if (reduced()) { done(); el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: 'ease-out' }); return; }
     K.busy = true;
     const g = K.geo, b = deckBase(i, N), f = deckBase(N - 1, N), [SH, UP] = DECK_SHADOW[g.axis];
@@ -3510,6 +3550,7 @@ __REEL_DOCK_JS__
   // ---- 启动与心跳:不通就头像灰,什么都不报 ----
   if (PARENT && debug.get('date')) S.pdate = debug.get('date');
   if (REEL) reelBoot();
+  else if (PREVIEW) loadHome().then(() => { const f = debug.get('front'); if (f) window.cotutorPreviewSet({ front: f }); pvTell({ act: 'ready', order: K.order ? [...K.order] : [] }); });
   else loadHome().then(() => {
     let resume = null; try { resume = sessionStorage.getItem('kid-resume'); sessionStorage.removeItem('kid-resume'); } catch {}
     const open = debug.get('tutor') || resume;
@@ -3549,7 +3590,7 @@ __REEL_DOCK_JS__
   setInterval(() => { staleReload(); if (S.tutor) { if (!S.pending) loadDay(true); } else loadHome(); }, 5000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) (S.tutor ? loadDay(true) : loadHome()); });
   // 孩子端刷新(手动的、Safari 自己重载的)回到手上这位老师;在首页刷新就回首页。只读回放不记(重载回来是今天的)
-  if (!PARENT && !REEL) window.addEventListener('pagehide', () => { try { if (S.tutor && !S.readonly) sessionStorage.setItem('kid-resume', S.tutor.name); else sessionStorage.removeItem('kid-resume'); } catch {} });
+  if (!PARENT && !REEL && !PREVIEW) window.addEventListener('pagehide', () => { try { if (S.tutor && !S.readonly) sessionStorage.setItem('kid-resume', S.tutor.name); else sessionStorage.removeItem('kid-resume'); } catch {} });
 })();
 </script>
 </html>
@@ -3566,6 +3607,8 @@ export interface KidPageMode {
   synth?: boolean;
   /** 录像里孩子的屏幕(/reel,《家长录像设计.md》拍板 6):孩子端的样子,数据是 /reel 给的一个话题,只读、不记、点不动 */
   reel?: boolean;
+  /** 家长端「首页」里的预览(/preview,《家长板书页设计.md》拍板 33):孩子端首页本身,点了告诉家长页,不跳走、不记看过了 */
+  preview?: boolean;
   /** 家长端清单上的跳转(听写的录像、口语课的回看):只在家长模式由服务端填,孩子端页面里永远没有家长端的路径 */
   links?: { dictationReel: string; talkReel: string };
 }

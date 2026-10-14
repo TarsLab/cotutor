@@ -16,7 +16,9 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>单词听写</title>
 <style>
-  :root { --ink:#2b2b2b; --dim:#66625b; --line:#e2dfd6; --paper:#faf9f4; --card:#ffffff; --tutor:#fff3d6; --tutor-ink:#5a3a08; --green:#1f8a4c; --accent:#e8743b; }
+  :root { --ink:#2b2b2b; --dim:#66625b; --line:#e2dfd6; --paper:#faf9f4; --card:#ffffff; --accent:#e8743b;
+    /* 学科色(《wip/听写设想.md》拍板 20):这次听写那位老师的颜色,页面读到老师后换(缺省英语绿);按钮、气泡、当前那格都跟它 */
+    --sc:#1f8a4c; --green:var(--sc); --tutor:color-mix(in srgb, var(--sc) 10%, #fff); --tutor-line:color-mix(in srgb, var(--sc) 32%, #fff); --tutor-ink:color-mix(in srgb, var(--sc) 62%, #000); --tutor-ink2:color-mix(in srgb, var(--sc) 78%, #000); }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   [hidden] { display:none !important; }
   html,body { margin:0; min-height:100%; background:var(--paper); color:var(--ink); font:17px/1.5 -apple-system,"PingFang SC","Hiragino Sans GB",sans-serif; overscroll-behavior:none; -webkit-user-select:none; user-select:none; }
@@ -32,11 +34,11 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .ttl { font-size:22px; font-weight:700; }
   .dots { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .dots i { width:14px; height:14px; border-radius:7px; background:var(--line); }
-  .dots i.d { background:#8fd0aa; }
+  .dots i.d { background:var(--tutor-line); }
   .dots i.c { width:30px; background:var(--green); }
   .bubble { display:flex; align-items:center; gap:14px; padding:14px 22px; background:var(--tutor); border-radius:22px; border-top-left-radius:6px; align-self:flex-start; }
   .bubble b { display:block; font-size:22px; color:var(--tutor-ink); }
-  .bubble small { display:block; font-size:15px; color:#7a5212; min-height:22px; }
+  .bubble small { display:block; font-size:15px; color:var(--tutor-ink2); min-height:22px; }
   .pad { width:100%; aspect-ratio:16 / 7; background:#fff; border:2px solid var(--line); border-radius:18px; touch-action:none; display:block; }
   .tools { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
   .center { display:flex; flex-direction:column; align-items:center; gap:18px; padding-top:40px; text-align:center; }
@@ -50,7 +52,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .row .ft small { color:var(--dim); font-size:14px; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip { min-height:44px; padding:0 16px; border-radius:22px; border:1.5px solid var(--line); background:#fff; font-size:18px; }
-  .chip.on { background:#e6f5ed; border-color:#8fd0aa; color:#14532d; font-weight:600; }
+  .chip.on { background:var(--tutor); border-color:var(--tutor-line); color:var(--tutor-ink); font-weight:600; }
   .add { display:flex; gap:8px; }
   .add input { flex:1; min-width:0; min-height:48px; padding:0 14px; border-radius:14px; border:1.5px solid var(--line); font-size:18px; -webkit-user-select:text; user-select:text; }
   .snapbtns { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; }
@@ -62,7 +64,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .shotin { position:relative; display:inline-block; border-radius:12px; overflow:hidden; background:#2b2b2b; }
   .shotin img { display:block; max-width:100%; max-height:46vh; }
   .ebx { position:absolute; border-radius:6px; border:3px dashed rgba(120,115,105,.85); background:transparent; padding:0; cursor:pointer; }
-  .ebx.on { border-style:solid; border-color:var(--green); background:rgba(31,138,76,.16); }
+  .ebx.on { border-style:solid; border-color:var(--green); background:color-mix(in srgb, var(--sc) 16%, transparent); }
   .ebx.unsure.on { border-color:var(--accent); background:rgba(232,116,59,.18); }
   .pgo { display:flex; justify-content:center; gap:12px; }
   /* 今天没写完的拍照听写(拍板 17):拍照屏最上面一块,点了接着写 */
@@ -154,7 +156,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   ${TUTOR_FACE_JS}
   var BACK = backCapsule(goHome); document.body.append(BACK.el);
   var TUTORS = null;
-  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (TUTORS && name) BACK.set(TUTORS.filter(function (t) { return t.name === name; })[0] || null); };
+  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; BACK.set(t); if (t) document.documentElement.style.setProperty('--sc', tutorColor(t.subject || t.display)); };
 
   // ---------- 念:配了音色放音频,没有退浏览器的英文合成声 ----------
   var audio = new Audio(); audio.preload = 'auto';

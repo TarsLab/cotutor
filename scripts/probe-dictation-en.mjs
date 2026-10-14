@@ -82,6 +82,7 @@ try {
   await tap('#w-undo');
   ok('撤销撤一笔', (await evaluate(`document.querySelectorAll('#w-pad .eni path').length`)) === 2);
   await shot('en-02-write');
+  ok('学科色:写好了是英语老师的绿(拍板 20)', await evaluate(`getComputedStyle(document.querySelector('#w-done')).backgroundColor === 'rgb(31, 138, 76)'`));
   ok('出口同老师页:左上角「‹ 头像」胶囊带英语老师的脸;按钮叫「再念」', await evaluate(`(() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('.tfav .face') && b.getBoundingClientRect().left < 30 && !document.body.innerText.includes('回首页') && document.querySelector('#w-again').textContent === '再念'; })()`));
   await tap('#w-done');
   ok('写好了:到第 2 个', await waitFor(`document.querySelector('#w-who').textContent.includes('第 2 个') && document.querySelectorAll('#w-pad .eni path').length === 0`));

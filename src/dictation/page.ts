@@ -16,7 +16,9 @@ export const DICTATION_PAGE = `<!doctype html>
 <title>听写</title>
 <style>
   :root { --ink:#2b2b2b; --dim:#66625b; --line:#e2dfd6; --paper:#faf9f4; --card:#ffffff; --sand:#d8c7a0; --sand2:#e2d4b4;
-    --tutor:#fff3d6; --tutor-ink:#5a3a08; --clay:#c4561f; --accent:#e8743b; --blue:#4f86d1; }
+    --accent:#e8743b; --blue:#4f86d1;
+    /* 学科色(《wip/听写设想.md》拍板 20):这次听写那位老师的颜色,页面读到老师后换(缺省语文);按钮、气泡、当前那格都跟它。橙色只留给「正在写的那一笔」 */
+    --sc:#c43c74; --clay:var(--sc); --tutor:color-mix(in srgb, var(--sc) 10%, #fff); --tutor-line:color-mix(in srgb, var(--sc) 32%, #fff); --tutor-ink:color-mix(in srgb, var(--sc) 62%, #000); --tutor-ink2:color-mix(in srgb, var(--sc) 78%, #000); }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { margin:0; height:100%; background:var(--paper); color:var(--ink); font:17px/1.5 -apple-system,"PingFang SC","Hiragino Sans GB",sans-serif; overscroll-behavior:none; -webkit-user-select:none; user-select:none; }
   button { font:inherit; color:inherit; cursor:pointer; }
@@ -34,16 +36,16 @@ export const DICTATION_PAGE = `<!doctype html>
   .dots i { width:14px; height:14px; border-radius:7px; background:var(--line); }
   .dots i.d { background:#8fb4e3; }
   .dots i.c { width:30px; background:var(--accent); }
-  .av { width:64px; height:64px; border-radius:32px; background:var(--tutor); border:2px solid #f0d9a0; display:grid; place-items:center; font-size:26px; color:#8a5a12; flex:none; }
+  .av { width:64px; height:64px; border-radius:32px; background:var(--tutor); border:2px solid var(--tutor-line); display:grid; place-items:center; font-size:26px; color:var(--tutor-ink); flex:none; }
   .bubble { display:flex; align-items:center; gap:16px; padding:16px 24px; background:var(--tutor); border-radius:24px; border-top-left-radius:6px; }
   .bubble b { display:block; font-size:24px; color:var(--tutor-ink); }
-  .bubble small { display:block; font-size:15px; color:#7a5212; min-height:22px; }
+  .bubble small { display:block; font-size:15px; color:var(--tutor-ink2); min-height:22px; }
   .bubble svg { width:32px; height:32px; flex:none; }
   .say { display:flex; align-items:center; gap:16px; align-self:center; flex-wrap:wrap; justify-content:center; }
   .pads { display:flex; gap:24px; justify-content:center; align-items:center; flex-wrap:wrap; }
   .padbox { position:relative; width:var(--pad, 300px); height:var(--pad, 300px); flex:none; }
   .padbox svg { display:block; width:100%; height:100%; touch-action:none; }
-  .padbox.act { box-shadow:0 0 0 4px rgba(232,116,59,.28); border-radius:6px; }
+  .padbox.act { box-shadow:0 0 0 4px var(--tutor-line); border-radius:6px; }
   .grid rect { fill:#fff; stroke:var(--sand); stroke-width:10; }
   .grid line { stroke:var(--sand2); stroke-width:6; stroke-dasharray:28 20; }
   .ink path { fill:none; stroke:var(--ink); stroke-width:34; stroke-linecap:round; stroke-linejoin:round; }
@@ -72,21 +74,21 @@ export const DICTATION_PAGE = `<!doctype html>
   .book .bh b { font-size:20px; }
   .book .bh span { font-size:14px; color:var(--dim); }
   .brow { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:14px; }
-  .brow.cur { background:#fff3e8; }
+  .brow.cur { background:var(--tutor); }
   .brow .no { width:24px; text-align:right; color:var(--dim); font-size:15px; flex:none; }
   .brow.cur .no { color:#b9531c; font-weight:700; }
   .brow .padbox { width:58px; height:58px; }
   .brow .padbox.ahead { opacity:.45; }
-  .brow .padbox.here { box-shadow:0 0 0 4px rgba(232,116,59,.45); border-radius:4px; }
+  .brow .padbox.here { box-shadow:0 0 0 4px var(--tutor-line); border-radius:4px; }
   .desk { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; gap:12px; }
   .bar2 { display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .chip { display:flex; align-items:center; gap:12px; padding:6px 16px 6px 6px; background:var(--tutor); border-radius:28px; min-width:0; }
   .chip .av { width:44px; height:44px; font-size:18px; }
   .chip svg { width:26px; height:26px; flex:none; }
   .chip b { display:block; font-size:18px; color:var(--tutor-ink); white-space:nowrap; }
-  .chip small { display:block; font-size:14px; color:#7a5212; white-space:nowrap; min-height:20px; }
+  .chip small { display:block; font-size:14px; color:var(--tutor-ink2); white-space:nowrap; min-height:20px; }
   .big { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
-  .tool.reveal { border:2px solid #e8a26f; background:#fff8f2; color:#8f3c14; font-weight:600; }
+  .tool.reveal { border:2px solid var(--tutor-line); background:#fff; color:var(--tutor-ink); font-weight:600; }
   .std.trace path { fill:#d9d5cc; fill-opacity:1; }
   @media (orientation: portrait) { #v-listen { flex-direction:column; } .book { width:auto; max-height:210px; flex:none; } }
   /* 开始 */
@@ -210,7 +212,7 @@ ${TUTOR_FACE_CSS}
     <div class="bar2">
       <div class="chip">
         <div class="av" id="l-av"></div>
-        <svg viewBox="0 0 24 24" fill="none" stroke="#8a5a12" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:var(--tutor-ink)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg>
         <div style="min-width:0"><b id="l-what"></b><small id="l-status"></small></div>
       </div>
       <div class="row" style="flex:none">
@@ -309,7 +311,7 @@ ${TUTOR_FACE_CSS}
   ${TUTOR_FACE_JS}
   var BACK = backCapsule(goHome); document.body.append(BACK.el);
   var TUTORS = null;
-  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (TUTORS && name) BACK.set(TUTORS.filter(function (t) { return t.name === name; })[0] || null); };
+  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; BACK.set(t); if (t) document.documentElement.style.setProperty('--sc', tutorColor(t.subject || t.display)); };
 
   var api = function (method, path, body) {
     return fetch(path, { method: method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' })

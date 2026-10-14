@@ -82,6 +82,15 @@ try {
   await sleep(400);
   const pane = await evaluate(`({ shown: getComputedStyle(document.querySelector('#pdetail')).display, sel: document.querySelectorAll('.pt .tr.on').length, reel: document.body.classList.contains('reel'), heads: [...document.querySelectorAll('#pdetail .ds h3')].map((x) => x.textContent), lines: document.querySelectorAll('#pdetail .pv-l').length, marks: document.querySelectorAll('#pdetail .pv-tl i').length, rowStars: getComputedStyle(document.querySelector('.pt .tr .stars')).display, del: document.querySelector('#pdetail .del')?.textContent })`);
   ok('宽屏:右栏有概要(老师最后说的、进度条上的点、给家长的、记住了、删掉这个话题);点一行只选中、不进录像;行上不放星与删', pane.shown === 'flex' && pane.sel === 1 && !pane.reel && pane.heads.includes('给家长的') && pane.heads.includes('记住了') && pane.lines > 0 && pane.marks > 0 && pane.rowStars === 'none' && pane.del === '删掉这个话题', JSON.stringify(pane));
+  const nulls = [];
+  for (let k = 0; k < await evaluate(`document.querySelectorAll('.pt .tr:not(.tr-x)').length`); k++) {
+    await evaluate(`document.querySelectorAll('.pt .tr:not(.tr-x)')[${k}].click()`);
+    for (let i = 0; i < 20; i++) { if (await evaluate(`document.querySelectorAll('#pdetail .pv-l').length > 0`)) break; await sleep(250); }
+    nulls.push(await evaluate(`/null|undefined/.test(document.querySelector('#pdetail').textContent)`));
+  }
+  ok('宽屏:每个话题的右栏里都没有字「null」「undefined」', nulls.length > 1 && nulls.every((x) => !x), JSON.stringify(nulls));
+  await evaluate(`document.querySelector('.pt[data-tutor="chinese-tutor"] .tr').click()`);
+  await sleep(400);
   console.log('  ', await shot('parent-list-tablet.png'));
   await evaluate(`document.querySelector('#pdetail .pv').click()`);
   for (let i = 0; i < 20; i++) { if (await evaluate(`document.body.classList.contains('reel')`)) break; await sleep(250); }

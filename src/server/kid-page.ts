@@ -1192,7 +1192,8 @@ __REEL_JS__
     const mem = msgs.flatMap((m) => m.remembered || []);
     const meta = [t.display, clock(th.at) + (rl ? '–' + hhmm(rl.endAt) : ''), waited >= 3000 ? '等老师约 ' + reelDuration(waited) : '', thought >= 3000 ? '孩子想了约 ' + reelDuration(thought) : ''].filter(Boolean).join(' · ');
     const marks = rl ? rl.marks.filter((m) => m.kind === 'said' || m.kind === 'ask').map((m) => h('i', { class: m.kind, style: 'left:' + Math.min(100, Math.max(0, ((m.at - rl.startAt) / span) * 100)).toFixed(1) + '%' })) : [];
-    pane.replaceChildren(
+    // replaceChildren 不跳过 null(会当成字「null」插进去),没有的块先滤掉
+    pane.replaceChildren(...[
       h('div', { class: 'dh' }, avatarEl(t), h('div', { class: 'who' }, h('b', {}, th.title || '(没有话)'), h('small', {}, meta))),
       h('button', { type: 'button', class: 'pv', 'aria-label': '看录像', on: { click: () => openReel(t, th.thread, H.date) } },
         h('span', { class: 'pv-b' },
@@ -1202,7 +1203,8 @@ __REEL_JS__
         h('span', { class: 'pv-bar' }, h('span', { class: 'pv-go', html: ICON.play }), h('span', { class: 'pv-tx' }, h('span', {}, '看录像 · 停在最后一帧,往前拖看经过'), h('span', { class: 'pv-tl' }, ...marks)), h('span', { class: 'pv-d' }, rl ? reelDuration(span) : ''))),
       tails.length ? h('div', { class: 'ds' }, h('h3', {}, '给家长的'), ...tails.map((x) => h('p', {}, x))) : null,
       mem.length ? h('div', { class: 'ds' }, h('h3', {}, '记住了'), ...mem.map((x) => h('p', { class: 'mem' }, x))) : null,
-      h('div', { class: 'df' }, h('span', {}, '打星'), stars(t, th), ...chips(t, th), th.stoppedAt === 'writing' ? null : delBtn('conversations', t, th, '删掉这个话题')));
+      h('div', { class: 'df' }, h('span', {}, '打星'), stars(t, th), ...chips(t, th), th.stoppedAt === 'writing' ? null : delBtn('conversations', t, th, '删掉这个话题')),
+    ].filter(Boolean));
   };
   const setOffline = (off) => {
     if (S.offline === off) return;

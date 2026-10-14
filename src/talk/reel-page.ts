@@ -1,7 +1,7 @@
 /**
  * /parent/talk/reel?id=<id>:家长看口语课的录像(《wip/口语课设想.md》§8.3;播放器同《家长录像设计.md》拍板 13–15,录数据不录屏幕)。
  * 上半是孩子的屏幕——口语课孩子那一屏以录像模式开在 iframe 里(/talk?reel=<id>),把录下的消息原样喂回它自己的处理函数;
- * 下半是录像栏(src/server/reel-dock.ts),只经 iframe 交过来的把手说话。声音是 call.wav(两边按时刻混好),用这一页的 Audio(家长第一次点就解锁)。
+ * 下半是录像栏(src/server/reel-dock.ts),只经 iframe 交过来的把手说话。家长端记录里口语课那一行点进来就是这里(同话题、听写,《家长录像设计.md》拍板 16;没有录像的老记录换到回看页)。声音是 call.wav(两边按时刻混好),用这一页的 Audio(家长第一次点就解锁)。
  * 内联脚本里不写反斜杠、不写反引号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
 import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from '../server/reel-dock.ts';
@@ -47,7 +47,9 @@ ${REEL_DOCK_JS}
   };
   window.cotutorReelFail = () => blank('这一次还没打,没有录像。');
   fetch('/api/talk/' + encodeURIComponent(id) + '/reel', { cache: 'no-store' }).then((r) => {
-    if (!r.ok) { blank(r.status === 404 ? '这一次没有录像(录像是 10 月 14 日以后打的才有)。' : '读不到这一次。'); return; }
+    // 10 月 14 日以前打的没有录像:记录点进来的就换到回看页(字与两边的原声),不留一页空的
+    if (r.status === 404) { location.replace('/parent/talk#/review/' + encodeURIComponent(id)); return; }
+    if (!r.ok) { blank('读不到这一次。'); return; }
     $('#rl-screen').hidden = false;
     $('#rl-frame').src = '/talk?' + new URLSearchParams({ reel: id });
   }, () => blank('读不到这一次。'));

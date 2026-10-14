@@ -145,6 +145,16 @@ try {
   ok('点播放:声音是 call.wav、在走,进度往前', await untilFn(async () => evaluate(`!!window.__cotutorAudio && window.__cotutorAudio.src.includes('/audio/call') && document.querySelector('#rl-frame').contentWindow.cotutorReel.get().playing`), 20), await evaluate(`JSON.stringify({ src: window.__cotutorAudio && window.__cotutorAudio.src, paused: window.__cotutorAudio && window.__cotutorAudio.paused })`));
   const callWav = await fetch(`${base}/api/talk/${id}/audio/call`);
   ok('call.wav 拿得到', callWav.ok && (callWav.headers.get('content-type') || '').includes('audio/wav'));
+  // 家长端记录:口语课那一行点进去就是录像(《家长录像设计.md》拍板 19)
+  await send('Page.navigate', { url: `${base}/parent` });
+  const row = `a.tr-x[href="/parent/talk/reel?id=${id}"]`;
+  ok('记录里口语课那一行连到录像', await until(`!!document.querySelector(${JSON.stringify(row)})`, 60), await evaluate(`[...document.querySelectorAll('a.tr-x')].map((a) => a.getAttribute('href')).join(' ')`));
+  await click(row);
+  ok('点进去是录像,停在最后一帧', await until(`location.pathname === '/parent/talk/reel' && !!(document.querySelector('#rl-frame') || {}).contentWindow?.cotutorReel?.get()`, 60));
+  // 没有录像的老记录(10 月 14 日以前打的):换到回看页
+  rmSync(join(wsRoot, 'talk', id, 'reel.json'));
+  await send('Page.navigate', { url: `${base}/parent/talk/reel?id=${id}` });
+  ok('没有录像的老记录:换到回看页', await until(`location.pathname === '/parent/talk' && location.hash === '#/review/${id}' && document.querySelector('#review').classList.contains('on') && !document.querySelector('#r-reel')`, 40), await evaluate(`location.href`));
   console.log(bad ? `${bad} 项没过` : '全过');
 } finally {
   if (browser) browser.kill();

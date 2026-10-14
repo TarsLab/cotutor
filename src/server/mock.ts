@@ -484,7 +484,7 @@ for: ${today}
 \`\`\`dictation english-tutor
 red
 yellow yellow, a yellow bus
-bus
+🚌 bus
 \`\`\`
 
 ## 为什么这么排
@@ -502,7 +502,7 @@ const MOCK_PHOTO: PhotoItem[] = [
 ];
 const MOCK_FULL = ['池塘 里 有 一群 小蝌蚪 , 大大的 脑袋 , 黑灰色 的 身子 。', '小蝌蚪 游 哇 游 , 过了 几天 , 长出 两条 后腿 。', '他们 看见 鲤鱼 妈妈 在 教 小鲤鱼 捕食 。'];
 /** 英文单词的假识别(英语老师卡上的拍照听写):一页单词表 */
-const MOCK_PHOTO_EN: PhotoItem[] = ['red', 'yellow', 'green', 'bus'].map((text, i): PhotoItem => ({ text, kind: 'word', pick: true, box: [80 + i * 200, 600, 240 + i * 200, 660], sure: true, say: `${text}, a ${text} ${text === 'bus' ? 'stop' : 'car'}` }));
+const MOCK_PHOTO_EN: PhotoItem[] = ['red', 'yellow', 'green', 'bus'].map((text, i): PhotoItem => ({ text, kind: 'word', pick: true, box: [80 + i * 200, 600, 240 + i * 200, 660], sure: true, say: `${text}, a ${text} ${text === 'bus' ? 'stop' : 'car'}`, ...(text === 'bus' ? { emoji: '🚌' } : {}) }));
 const MOCK_FULL_EN = ['What colour is it', "It's yellow", 'I can see a red bus'];
 const mockRecognize: Recognize = async (_image, onProgress, lang) => {
   const t0 = Date.now();

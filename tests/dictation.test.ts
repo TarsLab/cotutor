@@ -364,7 +364,7 @@ try {
   check('边界:cotutor 别处不引用 src/dictation/(只有 app.ts、mock.ts 接一行)', offenders.length === 0, offenders.join());
   // ---- 英文单词听写(《wip/听写设想.md》拍板 15):一个单词一格,不逐字母比,孩子自己对 ----
   {
-    const enHome = await publish('```dictation english-tutor\nred\nyellow yellow, a yellow bus\n```\n\n## 为什么这么排\n\n英语\n');
+    const enHome = await publish('```dictation english-tutor\nred\n🟡 yellow yellow, a yellow bus\n```\n\n## 为什么这么排\n\n英语\n');
     const kh2 = (await call('GET', '/api/kid/home')).json;
     const ec = kh2.cards.find((c: J) => c.kind === 'dictation');
     check('英文听写卡:孩子端带 lang en、几个单词、没有字;归英语老师', ec?.props.lang === 'en' && ec.props.count === 2 && ec.owner === 'english-tutor' && !JSON.stringify(kh2).includes('yellow'), JSON.stringify(ec));
@@ -372,7 +372,7 @@ try {
     check('GET /dictation?lang=en 是英文那页(四线三格),内联脚本能解析;家长页、录像页也能解析', parses(page) && (page ?? '').includes('单词听写') && (page ?? '').includes('EN_LINES') && parses((await call('GET', '/parent/dictation')).html) && parses((await call('GET', '/parent/dictation/reel')).html));
     const st = await call('POST', '/api/dictation', { home: enHome, n: 0 });
     const id = st.json.id as string;
-    check('开始:lang en、一个单词一格、交卷前没有字', st.status === 201 && st.json.lang === 'en' && st.json.sizes.join() === '1,1' && !JSON.stringify(st.json).includes('red'), JSON.stringify(st.json));
+    check('开始:lang en、一个单词一格、交卷前没有字也没有 emoji(拍板 21:只在对一对出)', st.status === 201 && st.json.lang === 'en' && st.json.sizes.join() === '1,1' && !JSON.stringify(st.json).includes('red') && !JSON.stringify(st.json).includes('🟡'), JSON.stringify(st.json));
     const stroke = [[100, 300, 10], [400, 320, 50]];
     check('写:一个单词交一格;格数不对 400', (await call('PUT', `/api/dictation/${id}/first/0`, { chars: [{ strokes: [stroke], undos: 1 }] })).status === 200 && (await call('PUT', `/api/dictation/${id}/first/1`, { chars: [{ strokes: [stroke], undos: 0 }, { strokes: [], undos: 0 }] })).status === 400);
     const rv = await call('POST', `/api/dictation/${id}/reveal/1`, { char: 0, t: 500 });
@@ -380,6 +380,7 @@ try {
     await call('PUT', `/api/dictation/${id}/first/1`, { chars: [{ strokes: [stroke], undos: 0, revealed: true }] });
     const ck = await call('POST', `/api/dictation/${id}/check`);
     check('交卷:不逐字母比,一个都不问「再写一遍?」;答案是整个单词、他写的笔、看没看答案', ck.json.answers.map((a: J) => a.chars).join() === 'red,yellow' && ck.json.answers.every((a: J) => !a.ask) && ck.json.answers[1].revealed && ck.json.answers[0].ink[0].length === 1, JSON.stringify(ck.json.answers));
+    check('交了卷:配了 emoji 的单词带着它,没配的没有', ck.json.answers[1].emoji === '🟡' && ck.json.answers[0].emoji === undefined, JSON.stringify(ck.json.answers.map((a: J) => a.emoji)));
     const full = (await call('GET', `/api/dictation/${id}`)).json;
     check('存下的:lang en、不比对(judges 空)、没问', full.lang === 'en' && full.first[0].judges.length === 0 && full.asked.length === 0);
     const rw = await call('POST', `/api/dictation/${id}/rewrites/0`, { chars: [{ strokes: [stroke], undos: 0 }], self: true });
@@ -392,7 +393,9 @@ try {
     check('列表一行带 lang 与老师', list?.lang === 'en' && list.tutor === 'english-tutor', JSON.stringify(list));
     const { parseWords } = await import('../src/dictation/route.ts');
     check('拍照开始的词:英文只收英文单词,汉字只收汉字,不混', parseWords([{ chars: 'red' }, { chars: "don't" }], 'en')?.length === 2 && parseWords([{ chars: '春天' }], 'en') === null && parseWords([{ chars: 'red' }], 'zh') === null && parseWords([{ chars: 'red apple' }], 'en') === null);
+    check('拍照开始的词带 emoji:英文收、不是 emoji 的丢;汉字的不收', JSON.stringify(parseWords([{ chars: 'bus', emoji: ' 🚌 ' }, { chars: 'like', emoji: 'x' }], 'en')) === JSON.stringify([{ chars: 'bus', emoji: '🚌' }, { chars: 'like' }]) && parseWords([{ chars: '春天', emoji: '🌸' }], 'zh')?.[0].emoji === undefined);
     const { parseItem, photoPrompt: pp, splitWords: sw2, LineReader: LR } = await import('../src/dictation/recognize.ts');
+    check('认英文的一项带 emoji(认词那次顺带回);汉字的、不是 emoji 的不收', parseItem({ text: 'bus', emoji: '🚌' }, 'en')?.emoji === '🚌' && parseItem({ text: 'like', emoji: 'like' }, 'en')?.emoji === undefined && parseItem({ text: '春天', emoji: '🌸' }, 'zh')?.emoji === undefined && pp(undefined, 'en').includes('emoji'));
     const r2 = new LR(() => {}, 'en');
     r2.push('{"lesson": "Unit 3"}\n{"text": "yellow", "kind": "word", "pick": true, "box": [1,2,30,40], "sure": true, "say": "yellow, a yellow bus"}\n{"text": "春天", "kind": "word"}\n{"full": "What colour is it? It\'s yellow."}\n');
     r2.end();

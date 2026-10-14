@@ -11,7 +11,7 @@
 import { chatUrl, qianwenKeys, qianwenLine } from '../lib/qianwen.ts';
 import { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT, DICTATION_DEFAULT } from '../schema/index.ts';
 import { fillSlots } from '../lib/activity.ts';
-import { DICTATION_SAY_MAX, dictationWordLang, type DictationLang } from '../cards/index.ts';
+import { DICTATION_SAY_MAX, dictationEmoji, dictationWordLang, type DictationLang } from '../cards/index.ts';
 
 export const VISION_TIMEOUT_MS = 120_000;
 
@@ -32,6 +32,8 @@ export interface PhotoItem {
   sure: boolean;
   /** 老师怎么念 */
   say: string | null;
+  /** 英文单词配的 emoji(拍板 21,只在对一对时出);汉字的、抽象的词没有 */
+  emoji?: string;
 }
 
 /** 认到这时为止的全部:挑出的字词、课名、全文(一行一个字符串,词之间空一格) */
@@ -62,13 +64,14 @@ export const FORMAT = `回答的格式:一行一段 JSON,不要别的字、不�
 export const FORMAT_EN = `回答的格式:一行一段 JSON,不要别的字、不要代码块。按这个顺序写:
 1. 第一行写单元名:{"lesson": "Unit 3 Colours"},没有写 {"lesson": null}。
 2. 挑出的单词,一项一行,默认选上的先写:
-{"text": "yellow", "kind": "word", "pick": true, "box": [左, 上, 右, 下], "sure": true, "say": "yellow, a yellow bus"}
+{"text": "yellow", "kind": "word", "pick": true, "box": [左, 上, 右, 下], "sure": true, "say": "yellow, a yellow bus", "emoji": "🟡"}
    - text:一个英文单词,只写字母(可以带 - 和 '),不带空格;照课本的大小写。
    - kind:要会写的单词写 word;只要会认、会读的写 read;别的写 other。
    - pick:默认选不选(true / false)。
    - box:这一项在照片上的位置,按照片宽、高的千分比,0 到 1000 的整数。
    - sure:看清了 true;糊、反光、被挡住、拿不准写 false。
    - say:念法,英文。
+   - emoji:能画出来的东西配一个 emoji(👵 🚌 🍎);抽象的词(like、the、is)不写这一栏。孩子写完对答案时才看到。
 3. 最后是全文:照片上的正文照原样一行写一行 {"full": "What colour is it? It's yellow."};不要页码、栏目名。`;
 
 /** 交给模型的整段:cotutor.json 的要求 + 格式 */
@@ -112,7 +115,8 @@ export function parseItem(v: unknown, lang: DictationLang = 'zh'): PhotoItem | n
   const box = b && b[2] > b[0] && b[3] > b[1] ? (b as PhotoItem['box']) : null;
   const say = str(v.say);
   const pick = typeof v.pick === 'boolean' ? v.pick : PICK_BY_KIND.includes(kind);
-  return { text: t, kind, pick, box, sure: v.sure !== false, say: say && Array.from(say).length <= DICTATION_SAY_MAX ? say : null };
+  const emoji = lang === 'en' ? dictationEmoji(v.emoji) : undefined;
+  return { text: t, kind, pick, box, sure: v.sure !== false, say: say && Array.from(say).length <= DICTATION_SAY_MAX ? say : null, ...(emoji ? { emoji } : {}) };
 }
 
 /**

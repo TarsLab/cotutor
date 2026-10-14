@@ -102,9 +102,10 @@ export function setTutorButtons(md: string, name: string, buttons: readonly Tuto
 }
 
 /** 这位老师的听写卡(`dictation <老师>`):words 空 = 删掉;没有就紧跟在他的老师卡后面加一张 */
-export function setTutorDictation(md: string, name: string, words: readonly { chars: string; say?: string }[]): string {
+export function setTutorDictation(md: string, name: string, words: readonly { chars: string; say?: string; emoji?: string }[]): string {
   const p = splitHomeMd(md);
-  const body = words.map((w) => (w.say ? `${w.chars} ${w.say}` : w.chars));
+  // 英文单词配的 emoji 写在最前面(同单词卡的「🍎 apple」,cards/dictation)
+  const body = words.map((w) => [w.emoji, w.chars, w.say].filter(Boolean).join(' '));
   const at = p.segs.findIndex((s) => s.kind === 'fence' && s.card === 'dictation' && s.mods[0] === name);
   if (at >= 0) {
     if (body.length) (p.segs[at] as Extract<HomeSeg, { kind: 'fence' }>).body = body;

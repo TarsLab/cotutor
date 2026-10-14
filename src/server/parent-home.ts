@@ -16,6 +16,7 @@ import { AGENT_NAME_RE, KID_LISTEN, POLICY_DEFAULTS, TUTOR_EXTRAS, tutorExtras, 
 import type { AppContext, RouteResult } from './app.ts';
 import { editPublished, readPublished, type PublishResult } from './home.ts';
 import { patchConfig } from './store.ts';
+import { wordEmoji } from './word-emoji.ts';
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const bad = (message: string): RouteResult => ({ status: 400, json: { error: 'bad_request', message } });
@@ -35,7 +36,7 @@ export interface ParentHomeTutor {
   /** 首页里这位老师的按钮(文件里的,带讲法与留到) */
   buttons: TutorButton[];
   /** 这周的词:写了这位老师的听写卡;没有 = null */
-  dictation: { chars: string; say?: string }[] | null;
+  dictation: { chars: string; say?: string; emoji?: string }[] | null;
   /** 他的听写是哪种:学科「英语」= en(英文单词),别的 zh */
   lang: DictationLang;
 }
@@ -61,7 +62,7 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
       extras: tutorExtras(t),
       extrasSet: t.extras ?? null,
       buttons: ((card?.props.buttons ?? []) as TutorButton[]),
-      dictation: dict ? ((dict.props.words ?? []) as { chars: string; say?: string }[]) : null,
+      dictation: dict ? ((dict.props.words ?? []) as { chars: string; say?: string; emoji?: string }[]) : null,
       lang: t.subject === '英语' ? 'en' : 'zh',
     };
   });
@@ -108,6 +109,20 @@ function parseWords(v: unknown, lang: DictationLang): { chars: string; say?: str
   return out;
 }
 
+/**
+ * 英文单词配 emoji(《wip/听写设想.md》拍板 21,只在对一对时出):已发布的那张卡上同一个单词配过的照用,剩下的问一次 qwen3.8-flash;问不到就不配。
+ * COTUTOR_EMOJI_ENDPOINT:测试与探针指到假的千问(同口语课的 COTUTOR_TALK_ENDPOINT)
+ */
+async function withEmoji(ctx: AppContext, name: string, words: { chars: string; say?: string }[]): Promise<{ chars: string; say?: string; emoji?: string }[]> {
+  const { home } = await readPublished(ctx.ws);
+  const had = new Map<string, string>();
+  for (const c of home?.cards ?? []) if (c.kind === 'dictation' && c.props.tutor === name) for (const w of (c.props.words ?? []) as { chars: string; emoji?: string }[]) if (w.emoji) had.set(w.chars, w.emoji);
+  const ask = [...new Set(words.map((w) => w.chars).filter((w) => !had.has(w)))];
+  const fake = process.env.COTUTOR_EMOJI_ENDPOINT;
+  const got = ask.length ? await wordEmoji(ask, fake ? { endpoint: fake, env: { DASHSCOPE_API_KEY: 'sk-fake' } } : {}) : {};
+  return words.map((w) => { const e = had.get(w.chars) ?? got[w.chars]; return e ? { ...w, emoji: e } : w; });
+}
+
 /** 发布的结果:有「要改」的不发,把检查说的回给页面 */
 function published(r: PublishResult | null): RouteResult {
   if (r && !r.ok) return { status: 400, json: { error: 'home_check', message: r.check.issues.filter((i) => i.level === 'fix').map((i) => i.text).join(';') || '首页检查没过' } };
@@ -128,8 +143,10 @@ export async function parentHomeRoute(method: string, p: string, ctx: AppContext
       if (typeof buttons === 'string') return bad(buttons);
       return published(await editPublished(ctx.ws, (md) => setTutorButtons(md, name, buttons), ctx.now()));
     }
-    const words = parseWords(b.words, ctx.ws.config.tutors[name].subject === '英语' ? 'en' : 'zh');
-    if (typeof words === 'string') return bad(words);
+    const lang = ctx.ws.config.tutors[name].subject === '英语' ? 'en' : 'zh';
+    const parsed = parseWords(b.words, lang);
+    if (typeof parsed === 'string') return bad(parsed);
+    const words = lang === 'en' ? await withEmoji(ctx, name, parsed) : parsed;
     return published(await editPublished(ctx.ws, (md) => setTutorDictation(md, name, words), ctx.now()));
   }
   if (p === '/api/parent/home/order') {

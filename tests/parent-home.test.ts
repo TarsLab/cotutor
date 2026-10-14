@@ -112,6 +112,20 @@ try {
   check('这周的词:发布了;读回来词与念法;孩子端那张听写卡归语文、只给几个词', w.status === 200 && JSON.stringify(g2.tutors.find((t) => t.name === 'chinese-tutor')!.dictation) === JSON.stringify([{ chars: '春天' }, { chars: '叶', say: '树叶的叶' }]) && dc?.owner === 'chinese-tutor' && dc.props.count === 2 && !JSON.stringify(k2).includes('春天') && history().length === 2, JSON.stringify(dc));
   check('词不对 400:不是汉字、超过四个字', (await call('PUT', '/api/parent/home/tutors/chinese-tutor/dictation', { words: [{ chars: 'red' }] })).status === 400 && (await call('PUT', '/api/parent/home/tutors/chinese-tutor/dictation', { words: [{ chars: '画蛇添足啊' }] })).status === 400);
 
+  // 英语老师的这周的词配 emoji(拍板 21):假千问回一段 JSON,数它被问了几次
+  const { createServer } = await import('node:http');
+  let asked: string[] = [];
+  const fakeQw = createServer((req, res) => { let b = ''; req.on('data', (d) => (b += d)).on('end', () => { asked.push(b); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ choices: [{ message: { content: '好的:{"Grandmother": "👵", "bus": "🚌", "like": "x"}' } }] })); }); });
+  await new Promise<void>((r) => fakeQw.listen(0, '127.0.0.1', () => r()));
+  process.env.COTUTOR_EMOJI_ENDPOINT = `http://127.0.0.1:${(fakeQw.address() as { port: number }).port}/v1/chat/completions`;
+  await call('PUT', '/api/parent/home/tutors/english-tutor/dictation', { words: [{ chars: 'grandmother' }, { chars: 'bus', say: 'a red bus' }, { chars: 'like' }] });
+  const md1 = readFileSync(join(root, (await readPublished(ctx.ws)).home!.source), 'utf8');
+  check('英文单词配 emoji:问一次千问,配到的写在单词前面,抽象的(假千问回了不是 emoji 的)不配', asked.length === 1 && md1.includes('👵 grandmother\n🚌 bus a red bus\nlike\n'), md1);
+  await call('PUT', '/api/parent/home/tutors/english-tutor/dictation', { words: [{ chars: 'grandmother' }, { chars: 'bus', say: 'a red bus' }, { chars: 'like' }, { chars: 'sister' }] });
+  check('再存:配过的照用,只问还没配的(新加的 sister、上次没配上的 like)', asked.length === 2 && asked[1].includes('单词:like, sister"') && readFileSync(join(root, (await readPublished(ctx.ws)).home!.source), 'utf8').includes('👵 grandmother'));
+  await call('PUT', '/api/parent/home/tutors/english-tutor/dictation', { words: [] });
+  delete process.env.COTUTOR_EMOJI_ENDPOINT; fakeQw.close();
+
   // 英语老师的这周的词:英文单词(学科「英语」)
   const we = await call('PUT', '/api/parent/home/tutors/english-tutor/dictation', { words: [{ chars: 'red' }, { chars: 'yellow', say: 'yellow, a yellow bus' }] });
   const ke = (await kid()).cards.find((c) => c.kind === 'dictation' && c.owner === 'english-tutor') as { props: { lang?: string; count?: number } } | undefined;

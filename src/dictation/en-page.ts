@@ -61,11 +61,14 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .center b { font-size:28px; }
   .center span { color:var(--dim); }
   .model { font-size:44px; font-family:"Chalkboard SE","Comic Sans MS","Marker Felt",sans-serif; color:#2f6fd6; text-align:center; }
-  .rows { display:flex; flex-direction:column; gap:14px; }
+  /* 对一对(拍板 20):不限 1000 宽,一行两格(窄了一格);格子上下留白后变高,一列只看得到一个半 */
+  #v-check { max-width:none; }
+  .rows { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap:14px; }
   .row { background:#fff; border:1.5px solid var(--line); border-radius:18px; padding:12px; display:flex; flex-direction:column; gap:8px; }
   .row svg { width:100%; aspect-ratio:16 / 7; display:block; }
   .row .ft { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-  .row .ft small { color:var(--dim); font-size:14px; }
+  .row .ft small { color:var(--dim); font-size:14px; margin-right:auto; }
+  .row .ft .em { font-size:30px; line-height:1; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip { min-height:44px; padding:0 16px; border-radius:22px; border:1.5px solid var(--line); background:#fff; font-size:18px; }
   .chip.on { background:var(--tutor); border-color:var(--tutor-line); color:var(--tutor-ink); font-weight:600; }
@@ -276,7 +279,8 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
       (a.ink[0] || []).forEach(function (s) { if (s.length) g.append(sv('path', { d: pathD(s) })); });
       svg.append(enLines(sv), g); if (!S.hide) svg.append(enWord(sv, a.chars));
       var again = h('button', { 'class': 'tool', type: 'button', on: { click: function () { rewrite(i); } } }, '再写一遍');
-      rows.append(h('div', { 'class': 'row' }, svg, h('div', { 'class': 'ft' }, h('small', { text: (i + 1) + (a.revealed ? ' · 看了答案,照着写的' : a.rewrote ? ' · 又写了一遍' : '') }), again)));
+      // emoji 只在对一对出(拍板 21):写的时候看不到,写完了当个提示放在这一行的左下
+      rows.append(h('div', { 'class': 'row' }, svg, h('div', { 'class': 'ft' }, a.emoji ? h('span', { 'class': 'em', text: a.emoji }) : null, h('small', { text: (i + 1) + (a.revealed ? ' · 看了答案,照着写的' : a.rewrote ? ' · 又写了一遍' : '') }), again)));
     });
     show('check');
   };
@@ -315,7 +319,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     });
   };
   var WORD = /^[A-Za-z][A-Za-z'-]*$/;
-  var chosen = function () { var out = []; P.items.forEach(function (it) { if (P.on[it.text]) out.push({ chars: it.text, say: it.say || undefined }); }); P.extra.forEach(function (w) { if (P.on[w] && !out.some(function (x) { return x.chars === w; })) out.push({ chars: w }); }); return out.slice(0, 20); };
+  var chosen = function () { var out = []; P.items.forEach(function (it) { if (P.on[it.text]) out.push({ chars: it.text, say: it.say || undefined, emoji: it.emoji || undefined }); }); P.extra.forEach(function (w) { if (P.on[w] && !out.some(function (x) { return x.chars === w; })) out.push({ chars: w }); }); return out.slice(0, 20); };
   var drawChips = function (rec) {
     if (rec) P.rec = rec; else rec = P.rec;
     drawBoxes();

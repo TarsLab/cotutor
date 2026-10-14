@@ -23,6 +23,7 @@
 - 同音的、单个字的词,都写上念法。例如 `叶 树叶的叶`。
 - 念法是孩子听到的全部。它会被念两遍。
 - 最多 20 个词。
+- 英文单词前面可以配一个 emoji,如 `🚌 bus a red bus`。能画出来的东西才配,抽象的词(like、the)不配。孩子写完对答案时才看到。
 
 ## 例子
 
@@ -43,11 +44,11 @@
 
 英文单词,英语老师的声音念:
 
-<!-- expect {"kind":"dictation","props":{"tutor":"english-tutor","lang":"en","words":[{"chars":"red"},{"chars":"yellow","say":"yellow, a yellow bus"},{"chars":"ice-cream"}]}} -->
+<!-- expect {"kind":"dictation","props":{"tutor":"english-tutor","lang":"en","words":[{"chars":"red"},{"chars":"yellow","say":"yellow, a yellow bus"},{"chars":"ice-cream","emoji":"🍦"}]}} -->
 ```dictation english-tutor
 red
 yellow yellow, a yellow bus
-ice-cream
+🍦 ice-cream
 ```
 
 ## 反例
@@ -85,7 +86,7 @@ red
 5. 少写了笔、多写了笔、空着的词,卡上问一句「这个再写一遍?」,不画叉,不打分。看过答案的词不再问。
 6. 孩子可以对任何一个词说「我想再写」。
 
-英文单词:一个单词一个四线三格,写整个单词;写完正确的单词淡淡叠在上面,孩子自己对,不逐个字母比,也不问「再写一遍?」,想再写自己点。
+英文单词:一个单词一个四线三格,写整个单词;写完正确的单词淡淡叠在上面,配了 emoji 的放在旁边,孩子自己对,不逐个字母比,也不问「再写一遍?」,想再写自己点。
 
 ## 你会收回什么
 

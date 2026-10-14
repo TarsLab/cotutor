@@ -76,6 +76,7 @@ try {
   ok('进英文那页:开始屏「单词听写 · 3 个单词」', await waitFor(`location.search.includes('lang=en') && document.querySelector('#v-start.on #s-title')?.textContent === '单词听写 · 3 个单词'`));
   await tap('#s-go');
   ok('写:第 1 个,四线三格(四条线、第三条基线),气泡里没有单词', await waitFor(`document.querySelector('.view.on')?.id === 'v-write' && document.querySelectorAll('#w-pad .enl line').length === 4 && document.querySelectorAll('#w-pad .enl line.base').length === 1 && !document.body.innerText.includes('red')`));
+  ok('写字屏不出 emoji', await evaluate(`!document.body.innerText.includes('🚌')`));
   await writeWord('#w-pad');
   ok('写了三笔', (await evaluate(`document.querySelectorAll('#w-pad .eni path').length`)) === 3);
   ok('第一笔冒出最上面那条线,出格的那截照样画着(拍板 22)', await evaluate(`(() => { const b = document.querySelector('#w-pad .eni path').getBBox(); return b.y < -60 && b.y > -192; })()`));
@@ -100,6 +101,7 @@ try {
   ok('都写完了:交上去', await waitFor(`document.querySelector('.view.on')?.id === 'v-submit'`));
   await tap('#u-go');
   ok('对一对:三行,蓝字叠着(red / yellow / bus),没有「再写一遍?」的问', await waitFor(`document.querySelector('.view.on')?.id === 'v-check' && document.querySelectorAll('#c-rows .row').length === 3 && [...document.querySelectorAll('#c-rows .enw')].map((t) => t.textContent).join() === 'red,yellow,bus' && !document.body.innerText.includes('这个再写一遍')`));
+  ok('emoji 只在对一对出:bus 那行左下有 🚌,别的行没有(拍板 21)', await evaluate(`(() => { const r = [...document.querySelectorAll('#c-rows .row')]; return r.length === 3 && r[2].querySelector('.em')?.textContent === '🚌' && !r[0].querySelector('.em') && !r[1].querySelector('.em'); })()`));
   ok('看过答案的那个写着', await evaluate(`document.querySelectorAll('#c-rows .row')[1].innerText.includes('看了答案')`));
   ok('页面上没有叉、没有分数、没有对错的字', await evaluate(`!/[×✗✘]|分数|错|对了/.test(document.body.innerText.replace('对一对', '').replace('对好了', ''))`));
   await shot('en-04-check');

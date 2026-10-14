@@ -34,7 +34,7 @@ export { paint, PaintPropsSchema, PAINT_PANELS_MAX, type PaintCast, type PaintPr
 export { tianzige, HAN, TIANZIGE_MAX, type TianzigeProps } from './tianzige.ts';
 export { word, wordChunks, WORD_MAX, WORD_MAX_WORDS, WORD_RE, type WordProps } from './word.ts';
 export { tutor, BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, type TutorButton, type TutorProps } from './tutor.ts';
-export { dictation, dictationWordLang, DictationPropsSchema, DICTATION_EN_MAX, DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, EN_WORD_RE, type DictationLang, type DictationProps, type DictationWord } from './dictation.ts';
+export { dictation, dictationEmoji, dictationWordLang, DictationPropsSchema, DICTATION_EN_MAX, DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, EN_WORD_RE, type DictationLang, type DictationProps, type DictationWord } from './dictation.ts';
 
 /** 全部种类:先板书的十二种(注册表顺序即技能里的顺序),再首页专属的 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

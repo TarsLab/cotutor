@@ -25,7 +25,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, DictationPropsSchema, dictationWordLang, type DictationLang, type DictationProps, type DictationWord } from '../cards/index.ts';
+import { DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, DictationPropsSchema, dictationEmoji, dictationWordLang, type DictationLang, type DictationProps, type DictationWord } from '../cards/index.ts';
 import { localDate } from '../lib/conversation.ts';
 import type { AppContext, RouteResult } from '../server/app.ts';
 import { readPublished } from '../server/home.ts';
@@ -213,6 +213,7 @@ export function kidView(s: Session, display: string): unknown {
     answers: s.checkedAt
       ? s.words.map((w, i) => ({
           chars: w.chars,
+          ...(w.emoji ? { emoji: w.emoji } : {}),
           ask: s.asked.includes(i) && !s.rewrites.some((r) => r.word === i),
           revealed: (s.first[i]?.chars ?? []).some((c) => c.revealed === true),
           rewrote: s.rewrites.some((r) => r.word === i),
@@ -240,7 +241,8 @@ export function parseWords(v: unknown, lang: DictationLang = 'zh'): DictationWor
     const chars = lang === 'en' ? w.chars.trim() : w.chars.replace(/\s+/g, '');
     if (dictationWordLang(chars) !== lang) return null;
     const say = typeof w.say === 'string' && w.say.trim() && Array.from(w.say.trim()).length <= DICTATION_SAY_MAX ? w.say.trim() : undefined;
-    out.push({ chars, ...(say ? { say } : {}) });
+    const emoji = lang === 'en' ? dictationEmoji(w.emoji) : undefined;
+    out.push({ chars, ...(say ? { say } : {}), ...(emoji ? { emoji } : {}) });
   }
   return out;
 }

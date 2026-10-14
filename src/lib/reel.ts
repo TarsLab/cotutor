@@ -285,7 +285,7 @@ export function reelSaid(m: Pick<ConversationMessage, 'text' | 'via' | 'action'>
 }
 
 /**
- * 推算一个话题的录像;话题里一句孩子的话都没有 → null。
+ * 推算一个话题的录像;话题里一轮都没有 → null。孩子一句都没说的话题(系统开头的、备课的、课文件页)只有老师那一轨:每轮从它自己的时刻起念(拍板 17)。
  * 孩子第一次开口之前的轮(2026-10-05 前交给孩子的课文件)是孩子打开话题时一节一节念的,时刻没记:从孩子第一次开口往前倒推,一节接一节;
  * 某节的卡有状态文件、时刻更早,就把这节往前挪到念完时正好是那一刻。之后的轮按开口时刻、每拍就绪、mp3 时长顺着排;
  * 下一次开口时这节没念完的句不念了(孩子端发消息就停声音)。
@@ -332,10 +332,10 @@ export function reelMissRuns(holds: readonly ReelHold[], sentAt: readonly number
 
 export function buildReel(input: ReelInput): Reel | null {
   const turns = input.messages.filter((m) => !m.bookkeep && !m.tidy);
+  if (!turns.length) return null;
   const firstKid = turns.findIndex((m) => m.from === 'kid');
-  if (firstKid < 0) return null;
-  const pre = turns.slice(0, firstKid);
-  const live = turns.slice(firstKid);
+  const pre = firstKid < 0 ? [] : turns.slice(0, firstKid);
+  const live = firstKid < 0 ? turns : turns.slice(firstKid);
   const tracks: ReelTrack[] = [];
   const says: ReelSay[] = [];
   const notes: ReelNote[] = [];

@@ -27,7 +27,13 @@ const E1 = ev([
 // S2:一张卡一句,整块来的(没有事件),配音 20 秒才齐
 const S2: BoardSection = { cards: [card('C')], lines: [line('讲 C', 0, 'd.mp3')] };
 
-check('话题里孩子一句都没说(只有系统起的轮)→ 没有录像', buildReel(input([msg('p1', { from: 'system', section: S2 })])) === null);
+check('一轮都没有 → 没有录像', buildReel(input([])) === null);
+{
+  // 孩子一句都没说(系统起的轮、备课、课文件页):只有老师那一轨,从这轮自己的时刻起念(拍板 17)
+  const r0 = buildReel(input([msg('p1', { from: 'system', section: S2 })]));
+  const last = r0 ? reelFrameAt(r0, r0.endAt) : null;
+  check('孩子一句都没说:照样有录像,只有老师那一轨;最后一帧整节都在', !!r0 && r0.tracks.length === 1 && r0.marks.length >= 1 && r0.says.length > 0 && !!last && last.sections.length === 1 && last.sections[0].cards === S2.cards.length, JSON.stringify(r0?.marks));
+}
 
 {
   const m1 = msg('1', { text: '7 减 9', timing: { startedAt: iso(T) }, section: S1 });

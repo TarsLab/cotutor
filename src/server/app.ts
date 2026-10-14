@@ -305,7 +305,7 @@ async function audioMs(file: string): Promise<number | null> {
 
 /**
  * 家长端看录像(《家长录像设计.md》):这个话题的轨道(lib/reel.ts 推算)+ 这个话题的家长条目(录像栏的说明用)+ 孩子端条目(孩子的屏幕照它画,
- * 和 /api/kid 一样剥了答案,拍板 6)+ 孩子那台设备(屏幕多大)与老师的脸(孩子屏幕左上角)。没有孩子开口的话题 → null
+ * 和 /api/kid 一样剥了答案,拍板 6)+ 孩子那台设备(屏幕多大)与老师的脸(孩子屏幕左上角)。话题一轮都没有 → null;孩子没开过口的也有(只有老师一轨,拍板 17)
  */
 export interface ParentReel {
   tutor: string;
@@ -960,7 +960,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const date = tail === 'today' ? localDate(ctx.now()) : tail;
       if (date > localDate(ctx.now()) || Number.isNaN(Date.parse(date))) return { status: 400, json: { error: 'bad_request', message: '日期要是今天或以前' } };
       const r = await parentReel(ctx, tutor, date, decodeURIComponent(raw));
-      return r ? { status: 200, json: r } : { status: 404, json: { error: 'no_reel', message: '这个话题孩子没开过口,没有录像' } };
+      return r ? { status: 200, json: r } : { status: 404, json: { error: 'no_reel', message: '这个话题没有录像' } };
     }
     // 删掉一个话题(家长板书页清单上的「删」,2026-09-22):那个话题还有轮在跑就 409;这个话题写进记忆、日记的一起撤(store.deleteThread,2026-10-05),回撤了多少
     const del = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)$/.exec(p);

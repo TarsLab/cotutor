@@ -3,7 +3,7 @@
  * 听写(《wip/听写设想.md》)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock,Chrome 开孩子端首页(iPad 横屏 1180×820)→ 点听写卡进 /dictation → 开始 →
  * 照 hanzi-writer-data 的中线用鼠标写:春天写对、鼓励的鼓少写第 7 笔、叶写成页 → 每个词「写好了」→ 对答案:
- * 三张词卡、书上的字叠着、鼓励与叶问「这个再写一遍?」、春天不问;拿开 / 叠上蓝字 → 点鼓逐笔看:13 个方块、写到最后 →
+ * 三张词卡、书上的字叠着、鼓励与叶问「这个再写一遍?」、春天不问;拿开 / 叠上蓝字 → 点鼓逐笔看:一共 13 笔、写到最后 →
  * 我再写一遍:范字、两个空格,写全了交 → 鼓励不再问 → 对好了回首页 → 家长页 /parent/dictation:少了第 7 笔、可能写成了别的字。
  * 手指走 CDP 的 Input.dispatchMouseEvent(经命中判定),不用 dispatchEvent。
  *
@@ -111,9 +111,9 @@ try {
   ok('第三个词一个格', await waitFor(`document.querySelector('#l-what').textContent === '第三个词 · 一个字'`));
   await shot('03b-stuck');
   await tapText('不会写,给答案');
-  ok('给答案:书上的「叶」在大格里一笔一笔写,下面 5 个方块', await waitFor(`!document.querySelector('#l-foot-order').hidden && document.querySelectorAll('#l-sqs i').length === 5 && document.querySelector('#l-what').textContent === '看「叶」一笔一笔写'`));
+  ok('给答案:书上的「叶」在大格里一笔一笔写,气泡里写第几笔、一共 5 笔(没有数字方块)', await waitFor(`!document.querySelector('#l-foot-order').hidden && /一共 5 笔/.test(document.querySelector('#l-status').textContent) && !document.querySelector('.sqs') && document.querySelector('#l-what').textContent === '看「叶」一笔一笔写'`));
   await sleep(2500);
-  ok('写着写着:前面的笔变蓝', (await evaluate(`document.querySelectorAll('#l-sqs i.d').length`)) >= 1);
+  ok('写着写着:前面的笔变蓝,气泡跟着数', (await evaluate(`document.querySelectorAll('#l-big .std path.sd').length`)) >= 1 && !/^第 1 笔/.test(await evaluate(`document.querySelector('#l-status').textContent`)));
   await shot('03c-answer');
   await tapText('我来写');
   ok('我来写:灰色描红打底,「给答案」换成「再看笔顺」', await waitFor(`document.querySelector('#l-big .std').classList.contains('trace') && document.querySelector('#l-big .std').children.length === 5 && document.querySelector('#l-reveal').hidden && !document.querySelector('#l-reorder').hidden`));
@@ -137,9 +137,9 @@ try {
 
   // ---- 逐笔看 ----
   await tap('.wc:nth-child(2) .padbox:nth-child(1)');
-  ok('点鼓:逐笔看,13 个方块,一笔一笔往下写', await waitFor(`document.querySelector('#v-order.on') && document.querySelectorAll('#r-sqs i').length === 13`));
+  ok('点鼓:逐笔看,一共 13 笔,一笔一笔往下写', await waitFor(`document.querySelector('#v-order.on') && /一共 13 笔/.test(document.querySelector('#r-count').textContent)`));
   await sleep(4500);
-  const k = await evaluate(`document.querySelectorAll('#r-sqs i.d').length`);
+  const k = await evaluate(`document.querySelectorAll('#r-pad .std path.sd').length`);
   ok('写着写着:前面的笔变蓝', k >= 3, `已写 ${k} 笔`);
   await tap('#r-next');
   await shot('06-stroke-order');

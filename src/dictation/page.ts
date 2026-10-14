@@ -131,10 +131,6 @@ export const DICTATION_PAGE = `<!doctype html>
   .side .ttl { font-size:28px; }
   .count { font-size:20px; }
   .count b { color:#b9531c; }
-  .sqs { display:flex; flex-wrap:wrap; gap:8px; }
-  .sqs i { width:30px; height:30px; border-radius:8px; display:grid; place-items:center; font-size:13px; font-style:normal; background:#fff; color:var(--dim); border:1px solid #d8d4ca; }
-  .sqs i.d { background:#9dbde6; color:#173b6b; border-color:#9dbde6; }
-  .sqs i.c { background:var(--accent); color:#fff; font-weight:700; border-color:var(--accent); }
   .row { display:flex; gap:12px; flex-wrap:wrap; }
   /* 再写一遍 */
   #v-rewrite .grow { flex-direction:row; align-items:center; justify-content:center; gap:56px; flex-wrap:wrap; }
@@ -245,7 +241,7 @@ ${TUTOR_FACE_CSS}
       <button class="main" id="l-next">这个字写好了</button>
     </div>
     <div class="foot" id="l-foot-order" hidden>
-      <div class="tools"><div class="sqs" id="l-sqs"></div><button class="tool" id="l-again-order">再看一遍</button></div>
+      <div class="tools"><button class="tool" id="l-again-order">再看一遍</button></div>
       <button class="main" id="l-trace">我来写</button>
     </div>
   </div>
@@ -268,7 +264,6 @@ ${TUTOR_FACE_CSS}
     <div class="side">
       <div><div class="ttl">看它一笔一笔写</div><div class="hint">蓝笔在你写的字上面写一遍,正在写的那一笔是橙色的。</div></div>
       <div class="count" id="r-count"></div>
-      <div class="sqs" id="r-sqs"></div>
       <div class="row">
         <button class="tool" id="r-prev" aria-label="上一笔"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></button>
         <button class="tool" id="r-play" style="flex:1">接着写</button>
@@ -430,6 +425,8 @@ ${TUTOR_FACE_CSS}
   ${UNLOCK_JS}
   var stopSay = function () { clearTimeout(S.sayTimer); S.sayTok = (S.sayTok || 0) + 1; try { audio.pause(); } catch (e) {} try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {} };
   var status = function (t) { $('#l-status').textContent = t; };
+  /** 看笔顺放到第几笔,一行字(拍板 24:不画一排数字方块,字本身的蓝、橙、淡就是进度) */
+  var strokeAt = function (k, n) { return k < n ? '第 ' + (k + 1) + ' 笔 · 一共 ' + n + ' 笔' : '写完了 · 一共 ' + n + ' 笔'; };
   /** 念第 i 个词,念 times 遍,两遍之间停一下;没有音频(没配音色、合成失败)退浏览器合成声 */
   var sayWord = function (i, times) {
     stopSay();
@@ -757,10 +754,10 @@ ${TUTOR_FACE_CSS}
     event('order', S.i, w.c);
     var tok = (w.otok = (w.otok || 0) + 1);
     pad.top.replaceChildren();
-    var paths = pad.std.children, n = d.strokes.length, k = 0, sq = $('#l-sqs');
+    var paths = pad.std.children, n = d.strokes.length, k = 0;
     var paint = function (cur, anim) {
       for (var i = 0; i < paths.length; i++) paths[i].setAttribute('class', i < cur ? 'sd' : i === cur && !anim ? 'sc' : 'sf');
-      sq.replaceChildren(); for (var j = 0; j < n; j++) sq.append(h('i', { 'class': j < cur ? 'd' : j === cur ? 'c' : '' }, String(j + 1)));
+      status(strokeAt(cur, n));
     };
     var step = function () {
       if (tok !== w.otok) return;
@@ -854,8 +851,6 @@ ${TUTOR_FACE_CSS}
     var n = R.d.strokes.length; R.k = Math.max(0, Math.min(k, n)); R.playing = Boolean(play);
     var paths = R.pad.std.children;
     var paint = function (cur, animating) { for (var i = 0; i < paths.length; i++) paths[i].setAttribute('class', i < cur ? 'sd' : i === cur && !animating ? 'sc' : 'sf'); };
-    var sq = $('#r-sqs'); sq.replaceChildren();
-    for (var i = 0; i < n; i++) sq.append(h('i', { 'class': i < R.k ? 'd' : i === R.k ? 'c' : '' }, String(i + 1)));
     $('#r-count').innerHTML = R.k < n ? '<b>第 ' + (R.k + 1) + ' 笔</b> · 一共 ' + n + ' 笔' : '写完了 · 一共 ' + n + ' 笔';
     $('#r-play').textContent = R.k >= n ? '再写一遍' : '接着写';
     if (R.k >= n) { paint(n, false); R.playing = false; return; }
@@ -922,9 +917,8 @@ ${TUTOR_FACE_CSS}
     }
     return d.strokes.length;
   };
-  var paintOrder = function (pad, d, k, sqs) {
+  var paintOrder = function (pad, d, k) {
     var ps = pad.std.children; for (var i = 0; i < ps.length; i++) ps[i].setAttribute('class', i < k ? 'sd' : i === k ? 'sc' : 'sf');
-    sqs.replaceChildren(); for (var j = 0; j < d.strokes.length; j++) sqs.append(h('i', { 'class': j < k ? 'd' : j === k ? 'c' : '' }, String(j + 1)));
   };
   /** 一个格这一刻的笔:点数变了才重画 */
   var reelInk = function (pad, strokes) {
@@ -960,12 +954,12 @@ ${TUTOR_FACE_CSS}
       RL.std = sk;
       RL.big.std.setAttribute('class', 'std' + (f.mode === 'trace' ? ' trace' : ''));
       RL.big.std.replaceChildren();
-      if (d) { fillStd(RL.big, d, f.mode === 'trace' ? 'trace' : ''); if (f.mode === 'order') paintOrder(RL.big, d, k, $('#l-sqs')); }
+      if (d) { fillStd(RL.big, d, f.mode === 'trace' ? 'trace' : ''); if (f.mode === 'order') paintOrder(RL.big, d, k); }
     }
     $('#l-foot-write').hidden = f.mode === 'order'; $('#l-foot-order').hidden = f.mode !== 'order';
     $('#l-reveal').hidden = f.mode === 'trace'; $('#l-reorder').hidden = f.mode !== 'trace';
     $('#l-what').textContent = f.mode === 'order' ? '看「' + ch + '」一笔一笔写' : f.mode === 'trace' ? '照着灰色的「' + ch + '」写一遍' : R.chars[f.word].length === 1 ? '第' + cn(f.word + 1) + '个词 · 一个字' : '第' + cn(f.word + 1) + '个词的第' + cn(f.char + 1) + '个字';
-    status(f.mode !== 'write' ? '' : f.say ? '正在念 · 第 ' + f.say.n + ' 遍' : f.said === 1 ? '再听一遍' : f.said > 1 ? '听完了就写' : '');
+    status(f.mode === 'order' ? (d ? strokeAt(k, d.strokes.length) : '') : f.mode !== 'write' ? '' : f.say ? '正在念 · 第 ' + f.say.n + ' 遍' : f.said === 1 ? '再听一遍' : f.said > 1 ? '听完了就写' : '');
   };
   var reelCheck = function (f, rebuild) {
     var R = RL.r;
@@ -1001,7 +995,7 @@ ${TUTOR_FACE_CSS}
     var k = orderStep(d, RL.t - f.orderAt), n = d.strokes.length;
     if (RL.std === 'r' + k) return;
     RL.std = 'r' + k;
-    paintOrder(RL.opad, d, k, $('#r-sqs'));
+    paintOrder(RL.opad, d, k);
     $('#r-count').innerHTML = k < n ? '<b>第 ' + (k + 1) + ' 笔</b> · 一共 ' + n + ' 笔' : '写完了 · 一共 ' + n + ' 笔';
     $('#r-play').textContent = k >= n ? '再写一遍' : '接着写';
   };

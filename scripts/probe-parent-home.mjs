@@ -3,7 +3,7 @@
  * 家长端「首页」(/parent/home,《家长板书页设计.md》拍板 20)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 临时 workspace + HTTP serve → 手机尺寸开 /parent/home → 点牌上的「加一个开场按钮」给英语老师加一个(字、讲法、只今天)→ 发布了、孩子端看得到 →
  * 设语文这周的词 → 把数学调到第一 → 孩子端的先后跟着变 → 宽屏三栏(拍板 27、28):点牌上的按钮在右栏就地改、左栏拖着排先后 →
- * 「记录」有两个标签,听写那一行挂在语文下面;截图。
+ * 「记录」有两个标签,时间线上有这次听写;截图。
  *
  * 用法:node scripts/probe-parent-home.mjs [--out <截图目录>] [--keep]
  */
@@ -136,7 +136,7 @@ try {
   const st = await api('POST', '/api/dictation', { home: h0, n });
   ok('开一次听写(孩子端点「听写」)', st.status === 201, JSON.stringify(st.json).slice(0, 120));
   await tap(`[...document.querySelectorAll('.seg a')].find((a) => a.textContent === '记录')`);
-  ok('「记录」:有两个标签,「记录」亮着;听写那一行挂在语文下面,点了去录像', await until(`location.pathname === '/parent' && document.querySelector('#ptabs .on')?.textContent === '记录' && !!document.querySelector('.pt[data-tutor="chinese-tutor"] a.tr-x[href^="/parent/dictation/reel?id="]')`, 80));
+  ok('「记录」:有两个标签,「记录」亮着;时间线上有这次听写(语文老师的),点了去录像', await until(`location.pathname === '/parent' && document.querySelector('#ptabs .on')?.textContent === '记录' && [...document.querySelectorAll('#ptl .pev')].some((e) => e.querySelector('.pv-who').lastChild.textContent === '语文老师' && e.querySelector('a.kid[href^="/parent/dictation/reel?id="]'))`, 80));
   console.log('  ', await shot('parent-record.png'));
   await tap(`[...document.querySelectorAll('#ptabs a')].find((a) => a.textContent === '首页')`);
   ok('「首页」标签回到 /parent/home', await until(`location.pathname === '/parent/home'`));

@@ -32,10 +32,26 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .main { display:inline-flex; align-items:center; justify-content:center; min-height:60px; padding:0 40px; border-radius:30px; border:0; background:var(--green); color:#fff; font-size:20px; font-weight:600; }
   .main:disabled { opacity:.45; }
   .ttl { font-size:22px; font-weight:700; }
-  .dots { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .dots i { width:14px; height:14px; border-radius:7px; background:var(--line); }
-  .dots i.d { background:var(--tutor-line); }
-  .dots i.c { width:30px; background:var(--green); }
+  /* 写字屏(拍板 20):不限 1000 宽,四线格占满宽度(高度不够时按 16 : 7 收窄);听写本横排,一个单词一小条 */
+  #v-write { max-width:none; gap:14px; }
+  .wbook { flex:1; min-width:0; display:flex; align-items:center; gap:10px; padding:6px 12px; background:#fff; border:1px solid var(--line); border-radius:18px; overflow-x:auto; }
+  .wbook > b { flex:none; font-size:16px; padding-right:4px; }
+  .wbook .bk { flex:none; display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .wbook .bk svg { width:112px; height:auto; aspect-ratio:16 / 7; display:block; background:#fff; border:1.5px solid var(--line); border-radius:6px; }
+  .wbook .bk .enl line { stroke-width:12; }
+  .wbook .bk .eni path { stroke-width:40; }
+  .wbook .bk.c svg { border-color:var(--tutor-line); box-shadow:0 0 0 3px var(--tutor-line); }
+  .wbook .bk.a { opacity:.55; }
+  .wbook .bk small { font-size:12px; color:var(--dim); line-height:1.2; }
+  .wbook .bk.c small { color:var(--tutor-ink); font-weight:700; }
+  .say2 { display:flex; align-items:center; gap:12px; }
+  .say2 .bubble { border-top-left-radius:22px; }
+  .say2 .bubble svg { width:24px; height:24px; flex:none; color:var(--tutor-ink); }
+  #v-write .pad { width:min(100%, calc((100vh - 330px) * 16 / 7)); width:min(100%, calc((100dvh - 330px) * 16 / 7)); align-self:center; }
+  .wtools { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .wtools .tools { justify-content:flex-start; }
+  .wtools .main { margin-left:auto; }
+  .tool.rv { border:2px solid var(--tutor-line); color:var(--tutor-ink); font-weight:600; }
   .bubble { display:flex; align-items:center; gap:14px; padding:14px 22px; background:var(--tutor); border-radius:22px; border-top-left-radius:6px; align-self:flex-start; }
   .bubble b { display:block; font-size:22px; color:var(--tutor-ink); }
   .bubble small { display:block; font-size:15px; color:var(--tutor-ink2); min-height:22px; }
@@ -95,15 +111,20 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   </div>
 </div>
 <div class="view" id="v-write">
-  <div class="bar"><span class="bk-slot"></span><div class="dots" id="w-dots"></div><button class="layer-x" type="button" id="w-x" aria-label="回到对一对" hidden>${LAYER_X}</button></div>
-  <div class="bubble"><div><b id="w-who">老师在念</b><small id="w-status"></small></div></div>
+  <!-- 写字(拍板 20):听写本横排在上面,气泡与再念一行,四线格占满宽度,按钮一行 -->
+  <div class="bar"><span class="bk-slot"></span><div class="wbook" id="w-book"></div><button class="layer-x" type="button" id="w-x" aria-label="回到对一对" hidden>${LAYER_X}</button></div>
+  <div class="say2">
+    <div class="bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg><div><b id="w-who">老师在念</b><small id="w-status"></small></div></div>
+    <button class="tool" type="button" id="w-again">再念</button>
+  </div>
   <div class="model" id="w-model" hidden></div>
   <svg class="pad" id="w-pad" viewBox="0 -192 2048 896"></svg>
-  <div class="tools">
-    <button class="tool" type="button" id="w-again">再念</button>
-    <button class="tool" type="button" id="w-undo">撤销</button>
-    <button class="tool" type="button" id="w-clear">擦掉</button>
-    <button class="tool" type="button" id="w-reveal">不会写,给答案</button>
+  <div class="wtools">
+    <div class="tools">
+      <button class="tool" type="button" id="w-undo">撤销</button>
+      <button class="tool" type="button" id="w-clear">擦掉</button>
+      <button class="tool rv" type="button" id="w-reveal">不会写,给答案</button>
+    </div>
     <button class="main" type="button" id="w-done">写好了</button>
   </div>
 </div>
@@ -212,13 +233,27 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
       status('照着灰色的单词写一遍');
     }, function () { b.disabled = false; toast('没连上,再点一次'); });
   });
-  var dots = function () { var box = $('#w-dots'); box.replaceChildren(); for (var k = 0; k < S.v.sizes.length; k++) box.append(h('i', { 'class': k === S.i ? 'c' : S.v.written[k] ? 'd' : '' })); };
+  /** 横排的听写本:一个单词一小条四线格,写过的画上孩子的笔,当前那条学科色描边;inkOf(k) 回写过的笔(没写回 null) */
+  var renderBook = function (cur, inkOf) {
+    var box = $('#w-book'); box.replaceChildren(h('b', {}, '听写本'));
+    var here = null;
+    for (var k = 0; k < S.v.sizes.length; k++) {
+      var ink = inkOf(k), svg = sv('svg', { viewBox: EN_VIEW }), g = sv('g', { 'class': 'eni' });
+      (ink || []).forEach(function (st) { if (st.length) g.append(sv('path', { d: pathD(st) })); });
+      svg.append(enLines(sv), g);
+      var el = h('div', { 'class': 'bk ' + (k === cur ? 'c' : ink ? 'd' : 'a') }, svg, h('small', {}, String(k + 1)));
+      if (k === cur) here = el;
+      box.append(el);
+    }
+    if (here && here.scrollIntoView) here.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  };
+  var mineOf = function (k) { var m = S.v.mine && S.v.mine[k]; return m && m[0] ? m[0].strokes : null; };
   var openWord = function (i) {
     S.i = i; S.strokes = []; S.undos = 0; S.gone = []; S.revealed = false; S.mode = 'first';
     trace.replaceChildren(); drawInk(); $('#w-model').hidden = true;
     $('#w-who').textContent = (S.v.tutor || '老师') + '念第 ' + (i + 1) + ' 个';
     $('#w-reveal').disabled = false; $('#w-reveal').hidden = false; $('#w-done').disabled = false; $('#w-x').hidden = true;
-    dots(); show('write'); event('show', i); sayWord(i, 2);
+    $('#w-book').hidden = false; renderBook(i, mineOf); show('write'); event('show', i); sayWord(i, 2);
   };
   var nextWord = function () { for (var k = 0; k < S.v.written.length; k++) if (!S.v.written[k]) return openWord(k); stopSay(); show('submit'); };
   $('#w-done').addEventListener('click', function () {
@@ -229,7 +264,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
       api('POST', '/api/dictation/' + S.v.id + '/rewrites/' + i, { chars: chars, self: true }).then(function (v) { setView(v); stopSay(); openCheck(); }, function () { b.disabled = false; toast('没连上,再点一次'); });
       return;
     }
-    api('PUT', '/api/dictation/' + S.v.id + '/first/' + i, { chars: chars }).then(function () { event('done', i); S.v.written[i] = true; nextWord(); }, function () { b.disabled = false; toast('没连上,再点一次'); });
+    api('PUT', '/api/dictation/' + S.v.id + '/first/' + i, { chars: chars }).then(function () { event('done', i); S.v.written[i] = true; S.v.mine = S.v.mine || []; S.v.mine[i] = [{ strokes: S.strokes }]; nextWord(); }, function () { b.disabled = false; toast('没连上,再点一次'); });
   });
 
   // ---------- 交卷、对一对 ----------
@@ -252,7 +287,7 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
     trace.replaceChildren(); drawInk();
     var m = $('#w-model'); m.textContent = S.v.answers[i].chars; m.hidden = false;
     $('#w-who').textContent = '再写一遍'; status('看着上面的单词写'); $('#w-reveal').hidden = true; $('#w-done').disabled = false;
-    $('#w-dots').replaceChildren(); $('#w-x').hidden = false; show('write'); sayWord(i, 1);
+    $('#w-book').hidden = true; $('#w-x').hidden = false; show('write'); sayWord(i, 1);
   };
   $('#w-x').addEventListener('click', function () { event('close', S.i); stopSay(); S.mode = 'first'; openCheck(); });
   $('#c-done').addEventListener('click', function () { api('POST', '/api/dictation/' + S.v.id + '/done').then(goHome, goHome); });
@@ -394,8 +429,8 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
       $('#w-who').textContent = view === 'rewrite' ? '再写一遍' : (S.v.tutor || '老师') + '念第 ' + (wi + 1) + ' 个';
       $('#w-reveal').hidden = view === 'rewrite'; $('#w-reveal').disabled = view === 'write' && f.mode !== 'write';
       $('#w-x').hidden = view !== 'rewrite';
-      var box = $('#w-dots'); box.replaceChildren();
-      if (view === 'write') for (var k = 0; k < R.chars.length; k++) box.append(h('i', { 'class': k === wi ? 'c' : k < wi ? 'd' : '' }));
+      $('#w-book').hidden = view !== 'write';
+      if (view === 'write') renderBook(wi, function (k) { var x = k < wi && f.ink[k] && f.ink[k][0]; return x && x.length ? x : null; });
       RL.inkO = { sig: '' };
     }
     reelPaths(RL.inkO, ink, view === 'rewrite' ? (f.rewrite && f.rewrite[0]) || [] : f.ink[wi][0]);

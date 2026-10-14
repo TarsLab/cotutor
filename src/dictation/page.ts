@@ -66,9 +66,9 @@ export const DICTATION_PAGE = `<!doctype html>
   .foot .tools { display:flex; gap:12px; flex-wrap:wrap; }
   [hidden] { display:none !important; }
   /* 写字(原型 v2 的 C):左边听写本,右边放大写一个字 */
-  #v-listen { flex-direction:row; gap:20px; padding:calc(env(safe-area-inset-top) + 10px) 20px 20px; height:100vh; height:100dvh; }
-  /* 左上角的胶囊(回首页)浮在听写本、照片上面:它们从胶囊下面开始 */
-  #v-listen .book, #v-pick .shot { margin-top:58px; }
+  #v-listen { flex-direction:row; gap:24px; padding:calc(env(safe-area-inset-top) + 10px) 20px 20px; height:100vh; height:100dvh; }
+  /* 左上角的胶囊(回首页)浮在左边一栏、照片上面:它们从胶囊下面开始 */
+  #v-pick .shot { margin-top:58px; }
   .book { width:300px; flex:none; min-height:0; display:flex; flex-direction:column; gap:4px; padding:14px 10px; background:#fff; border:1px solid var(--line); border-radius:22px; overflow:auto; }
   .book .bh { display:flex; align-items:baseline; justify-content:space-between; padding:0 8px 6px; }
   .book .bh b { font-size:20px; }
@@ -80,17 +80,37 @@ export const DICTATION_PAGE = `<!doctype html>
   .brow .padbox { width:58px; height:58px; }
   .brow .padbox.ahead { opacity:.45; }
   .brow .padbox.here { box-shadow:0 0 0 4px var(--tutor-line); border-radius:4px; }
-  .desk { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; gap:12px; }
-  .bar2 { display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .chip { display:flex; align-items:center; gap:12px; padding:6px 16px 6px 6px; background:var(--tutor); border-radius:28px; min-width:0; }
-  .chip .av { width:44px; height:44px; font-size:18px; }
   .chip svg { width:26px; height:26px; flex:none; }
   .chip b { display:block; font-size:18px; color:var(--tutor-ink); white-space:nowrap; }
   .chip small { display:block; font-size:14px; color:var(--tutor-ink2); white-space:nowrap; min-height:20px; }
   .big { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
   .tool.reveal { border:2px solid var(--tutor-line); background:#fff; color:var(--tutor-ink); font-weight:600; }
   .std.trace path { fill:#d9d5cc; fill-opacity:1; }
-  @media (orientation: portrait) { #v-listen { flex-direction:column; } .book { width:auto; max-height:210px; flex:none; } }
+  /* 写字的左边一栏(拍板 20):气泡与再念、听写本、按钮都在这;右边 .big 整块高度只放田字格 */
+  #v-listen .side3 { width:300px; flex:none; min-height:0; display:flex; flex-direction:column; gap:12px; padding-top:58px; }
+  #v-listen .side3 .book { width:auto; flex:1 1 auto; }
+  #v-listen .chip { padding:8px 8px 8px 14px; border-radius:22px; }
+  #v-listen .chip .ct { flex:1; min-width:0; }
+  #v-listen .chip .ct b { white-space:normal; line-height:1.3; }
+  #v-listen .chip .tool { flex:none; min-height:44px; padding:0 14px; }
+  #v-listen .foot { flex-direction:column; align-items:stretch; gap:8px; flex-wrap:nowrap; }
+  #v-listen .foot .tools { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
+  #v-listen .foot .tool { min-height:52px; padding:0 12px; font-size:16px; }
+  #v-listen .foot .tool.reveal, #v-listen #l-reorder { grid-column:span 2; }
+  #v-listen .foot .main { width:100%; padding:0 16px; }
+  #v-listen #l-foot-order .tools { display:flex; flex-direction:column; gap:10px; }
+  /* 竖着(iPad 竖放、手机):一栏拆开,从上到下是气泡、听写本、田字格、按钮 */
+  @media (orientation: portrait) {
+    #v-listen { flex-direction:column; gap:12px; }
+    #v-listen .side3 { display:contents; }
+    #v-listen .chip { order:1; margin-left:100px; }
+    #v-listen .side3 .book { order:2; flex:none; max-height:180px; }
+    #v-listen .big { order:3; }
+    #v-listen .foot { order:4; flex-direction:row; align-items:center; flex-wrap:wrap; }
+    #v-listen .foot .tools { display:flex; flex-wrap:wrap; }
+    #v-listen .foot .main { width:auto; margin-left:auto; padding:0 32px; }
+  }
   /* 开始 */
   #v-start .grow { align-items:center; text-align:center; }
   #v-start .big { font-size:30px; font-weight:700; }
@@ -207,19 +227,14 @@ ${TUTOR_FACE_CSS}
 </div>
 
 <div class="view" id="v-listen">
-  <div class="book" id="l-book"></div>
-  <div class="desk">
-    <div class="bar2">
-      <div class="chip">
-        <div class="av" id="l-av"></div>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:var(--tutor-ink)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg>
-        <div style="min-width:0"><b id="l-what"></b><small id="l-status"></small></div>
-      </div>
-      <div class="row" style="flex:none">
-        <button class="tool sm" id="l-again"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>再念</button>
-      </div>
+  <!-- 写字(拍板 20):左边一栏是气泡与再念、听写本、按钮;右边整块高度只放田字格 -->
+  <div class="side3">
+    <div class="chip">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:var(--tutor-ink)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg>
+      <div class="ct"><b id="l-what"></b><small id="l-status"></small></div>
+      <button class="tool sm" id="l-again"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>再念</button>
     </div>
-    <div class="big" id="l-big"></div>
+    <div class="book" id="l-book"></div>
     <div class="foot" id="l-foot-write">
       <div class="tools">
         <button class="tool" data-undo="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"></path><path d="M4 9h11a5 5 0 0 1 0 10h-3"></path></svg>撤销</button>
@@ -230,10 +245,11 @@ ${TUTOR_FACE_CSS}
       <button class="main" id="l-next">这个字写好了</button>
     </div>
     <div class="foot" id="l-foot-order" hidden>
-      <div class="tools" style="align-items:center"><div class="sqs" id="l-sqs"></div><button class="tool" id="l-again-order">再看一遍</button></div>
+      <div class="tools"><div class="sqs" id="l-sqs"></div><button class="tool" id="l-again-order">再看一遍</button></div>
       <button class="main" id="l-trace">我来写</button>
     </div>
   </div>
+  <div class="big" id="l-big"></div>
 </div>
 
 <div class="view" id="v-check">
@@ -679,6 +695,9 @@ ${TUTOR_FACE_CSS}
     var prev = S.w.inks[S.w.c];
     S.w.inks[S.w.c] = { strokes: S.w.pad.strokes, undos: S.w.pad.undos, gone: S.w.pad.gone, revealed: S.w.mode === 'trace' || Boolean(prev && prev.revealed) };
   };
+  /** 右边的田字格占满 .big(拍板 20:纵向尽量大);转屏时跟着改 */
+  var fitPad = function (el) { var r = $('#l-big').getBoundingClientRect(); el.style.width = el.style.height = Math.max(240, Math.min(900, Math.floor(Math.min(r.width, r.height)) - 10)) + 'px'; };
+  window.addEventListener('resize', function () { if (!$('#v-listen').classList.contains('on')) return; var el = $('#l-big').firstElementChild; if (el) { el.style.width = el.style.height = '0px'; fitPad(el); } });
   var openChar = function (c) {
     stash(); S.w.otok = (S.w.otok || 0) + 1;
     S.w.c = c;
@@ -689,8 +708,7 @@ ${TUTOR_FACE_CSS}
     pad.onUp = updateHere;
     S.w.pad = pad; S.pads = [pad]; S.stack = pad.strokes.map(function () { return pad; });
     var big = $('#l-big'); big.replaceChildren(pad.el);
-    var r = big.getBoundingClientRect();
-    pad.el.style.width = pad.el.style.height = Math.max(240, Math.min(640, Math.floor(Math.min(r.width, r.height)) - 10)) + 'px';
+    fitPad(pad.el);
     setActive(pad);
     if (S.w.mode === 'trace') glyph(S.w.chars[c]).then(function (d) { if (S.w && S.w.pad === pad) fillStd(pad, d, 'trace'); });
     renderFoot(); renderBook();
@@ -701,7 +719,6 @@ ${TUTOR_FACE_CSS}
     S.i = k;
     var inks = []; for (var c = 0; c < S.v.sizes[k]; c++) inks.push(null);
     S.w = { i: k, c: 0, inks: inks, done: [], chars: {}, mode: 'write', pad: null };
-    $('#l-av').textContent = avatarText();
     show('listen');
     event('show', k);
     openChar(0);
@@ -921,7 +938,6 @@ ${TUTOR_FACE_CSS}
     var R = RL.r, ch = R.chars[f.word][f.char];
     if (rebuild) {
       show('listen');
-      $('#l-av').textContent = avatarText();
       var rows = [h('div', { 'class': 'bh' }, h('b', {}, '听写本'), h('span', {}, cn(R.chars.length) + '个词'))];
       RL.cells = R.chars.map(function (cs, wi) {
         var row = h('div', { 'class': 'brow' + (wi === f.word ? ' cur' : '') }, h('div', { 'class': 'no' }, String(wi + 1)));
@@ -931,8 +947,7 @@ ${TUTOR_FACE_CSS}
       var b = $('#l-book'); b.replaceChildren.apply(b, rows);
       var cur = b.querySelector('.brow.cur'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
       var big = $('#l-big'); RL.big = makePad({}); big.replaceChildren(RL.big.el);
-      var r = big.getBoundingClientRect();
-      RL.big.el.style.width = RL.big.el.style.height = Math.max(240, Math.min(640, Math.floor(Math.min(r.width, r.height)) - 10)) + 'px';
+      fitPad(RL.big.el);
       setActive(RL.big);
       RL.std = '';
     }

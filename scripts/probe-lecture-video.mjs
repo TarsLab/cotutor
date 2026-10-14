@@ -127,14 +127,17 @@ try {
 
   const pb = await (await fetch(`${base}/api/conversations/math-tutor/today/board`)).json();
   const pm = pb.messages.find((m) => m.lecture?.video)?.lecture?.marks?.[0];
-  await send('Page.navigate', { url: `${base}/parent?tutor=math-tutor` });
-  await until(`document.querySelector('#tutor').classList.contains('on') && document.querySelectorAll('#board .sec').length > 0`);
-  await evaluate(`document.querySelector('#reel-btn').click()`);
+  await send('Page.navigate', { url: `${base}/parent` });
+  await until(`document.querySelectorAll('.pt[data-tutor="math-tutor"] .tr').length > 0`, 40);
+  await evaluate(`[...document.querySelectorAll('.pt[data-tutor="math-tutor"] .tr')].pop().click()`);
+  await until(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden`, 40);
+  // 记录点进来停在最后一帧(拍板 16);这里要从头看,拖回开头
+  await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
   // 录像里孩子的屏幕在 iframe(#rl-frame)里,小课堂的播放器在它里面的 #lc-frame(拍板 6)
   const KF = `document.querySelector('#rl-frame').contentDocument.querySelector('#lc-frame')`;
   const KD = `${KF}?.contentDocument`;
   const reelOn = await until(`document.body.classList.contains('reel') && Boolean(document.querySelector('#rl-frame').contentDocument) && !${KF}?.hidden && Boolean(${KD}?.querySelector('.lc video.lc-video'))`, 80);
-  await evaluate(`document.querySelector('#rl-play').click()`);
+  // 记录点进来本来就停着(原来一进来就放,这里点一下是为了停)
   await evaluate(`document.querySelector('#rl-marks i.circle').click()`);
   await sleep(1000);
   const rr = await evaluate(`({ t: ${KD}.querySelector('video').currentTime, ink: ${KD}.querySelectorAll('.lc-over .lc-ink path').length, sub: document.querySelector('#rl-cap').textContent })`);

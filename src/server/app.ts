@@ -316,6 +316,8 @@ export interface ParentReel {
   kid: KidMessage[];
   /** 孩子发这个话题最后一句时的设备;没记 → null(页面按 iPad 横屏) */
   device: Device | null;
+  /** 今天的话题:还会长(老师在写、孩子还会接着说),录像停在最后时隔几秒重拿(拍板 16) */
+  live: boolean;
   face: { name: string; display: string; avatar: string | null; subject: string | null };
 }
 export async function parentReel(ctx: AppContext, tutor: string, date: string, thread: string): Promise<ParentReel | null> {
@@ -348,7 +350,8 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const device = [...mine].reverse().find((m) => m.device)?.device ?? null;
   const t = ctx.ws.config.tutors[tutor];
   const face = { name: tutor, display: t?.display ?? tutor, avatar: t?.avatar ?? null, subject: t?.subject ?? null };
-  return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread), kid: kid.messages.filter((m) => m.thread === thread), device, face };
+  const live = date === localDate(ctx.now()) || mine.some((m) => m.result === 'running');
+  return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread), kid: kid.messages.filter((m) => m.thread === thread), device, face, live };
 }
 
 /**

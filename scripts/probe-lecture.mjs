@@ -207,9 +207,12 @@ try {
   ok('家长端:那条的圈带着算出来的那段话(圈住了散的 3 根)', Boolean(pm?.text?.includes('第 1 步画的 3 条线')), pm?.text ?? JSON.stringify(pb.messages.map((m) => m.lecture)));
 
   // 家长看录像(第 5 步):看小课堂那一段也在
-  await send('Page.navigate', { url: `${base}/parent?tutor=math-tutor` });
-  await until(`document.querySelector('#tutor').classList.contains('on') && document.querySelectorAll('#board .sec').length > 0`);
-  await evaluate(`document.querySelector('#reel-btn').click()`);
+  await send('Page.navigate', { url: `${base}/parent` });
+  await until(`document.querySelectorAll('.pt[data-tutor="math-tutor"] .tr').length > 0`, 40);
+  await evaluate(`[...document.querySelectorAll('.pt[data-tutor="math-tutor"] .tr')].pop().click()`);
+  await until(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden`, 40);
+  // 记录点进来停在最后一帧(拍板 16);这里要从头看,拖回开头
+  await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
   // 录像里孩子的屏幕在 iframe(#rl-frame)里,小课堂的播放器在它里面的 #lc-frame(拍板 6)
   const KF = `document.querySelector('#rl-frame').contentDocument.querySelector('#lc-frame')`;
   const KD = `${KF}?.contentDocument`;
@@ -217,7 +220,7 @@ try {
   const r0 = await evaluate(`({ kinds: [...document.querySelectorAll('#rl-marks i')].map((i) => i.className).join(' '), sub: document.querySelector('#rl-cap').textContent, back: Boolean(${KD}.querySelector('.lc-back')), start: Boolean(${KD}.querySelector('.lc-start')), h: Math.round(${KF}.getBoundingClientRect().height) })`);
   ok('录像从看小课堂开始:进度条上「看小课堂」「圈了一处」的点;孩子的屏幕上铺着播放器、只看(没有回去、没有开始看);录像栏写在看小课堂', reelOn && r0.kinds.startsWith('lecture') && r0.kinds.includes('circle') && !r0.back && !r0.start && r0.h > 500 && /^[▷⏸] /.test(r0.sub), JSON.stringify(r0));
   await shot('reel-lecture.png');
-  await evaluate(`document.querySelector('#rl-play').click()`);
+  // 记录点进来本来就停着(原来一进来就放,这里点一下是为了停)
   await evaluate(`document.querySelector('#rl-marks i.circle').click()`);
   await sleep(800);
   const r1 = await evaluate(`({ time: ${KD}.querySelector('.lc-time span').textContent, ink: ${KD}.querySelectorAll('.lc-ink path').length, marks: ${KD}.querySelectorAll('.lc-mark').length, sub: document.querySelector('#rl-cap').textContent })`);

@@ -71,8 +71,6 @@ export const DICTATION_EN_PAGE = String.raw`<!doctype html>
   .muted { color:var(--dim); font-size:15px; }
   #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:16px; display:none; z-index:9; }
   #toast.on { display:block; }
-  /* 录像里(?reel=):孩子当时的样子,点不动 */
-  body.rlk { pointer-events:none; }
   ${EN_BOX_CSS}
   ${TUTOR_FACE_CSS}
 </style></head><body>

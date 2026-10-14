@@ -67,6 +67,8 @@ ${DICT_REEL_JS}
     // 直接打开(不在外壳里):去外壳
     if (!host) { location.replace('/dictation/reel?id=' + encodeURIComponent(REEL_ID)); return; }
     document.body.classList.add('rlk');
+    // 点不动,只能上下翻:点、按在捕获阶段挡掉(滚动不受影响)
+    ['click', 'pointerdown', 'pointerup', 'dblclick', 'contextmenu'].forEach(function (k) { document.addEventListener(k, function (e) { e.stopPropagation(); if (k !== 'pointerdown' && k !== 'pointerup') e.preventDefault(); }, true); });
     var path = '/api/dictation/' + encodeURIComponent(REEL_ID);
     Promise.all([api('GET', path), api('GET', path + '/kid')]).then(function (x) {
       S.v = x[1]; showFace();
@@ -74,6 +76,8 @@ ${DICT_REEL_JS}
       if (!r.first.length && !r.says_.length) { host.cotutorReelFail(); return; }
       RL = { s: x[0], r: r, p: 0, t: 0, playing: false, seeking: false, speed: 1, real: false, last: 0, timer: 0, key: '', gl: 0, f: null, std: '' };
       RL.clock = drClock(r, false);
+      // 停在最后一帧(拍板 16:家长从记录点进来,最后一帧信息最多;要看过程往前拖)
+      RL.p = RL.clock.total;
       reelTick();
       window.cotutorReel = reelApi;
       host.cotutorReelReady(reelApi, { size: RL.f.size || [1180, 820] });

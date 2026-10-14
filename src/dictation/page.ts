@@ -161,8 +161,6 @@ export const DICTATION_PAGE = `<!doctype html>
   .seg.no { cursor:default; color:var(--dim); padding:2px 1px; }
   @media (orientation: portrait) { #v-pick { flex-direction:column; } .side2 { width:auto; flex:0 0 42%; } }
   @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
-  /* 录像里(?reel=):孩子当时的样子,点不动 */
-  body.rlk { pointer-events:none; }
 ${TUTOR_FACE_CSS}
 </style></head>
 <body>

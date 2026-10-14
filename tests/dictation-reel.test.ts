@@ -81,6 +81,15 @@ const sq = drClock(r, false), real = drClock(r, true);
 check('跳过空白:总长短得多(38 分钟压成 1.5 秒),来回换算对得上', sq.total < 60_000 && real.total === r.end && Math.abs(sq.toWall(sq.toPlay(back + 5100)) - (back + 5100)) < 1, `${sq.total} / ${real.total}`);
 check('空白里的一刻压在 1.5 秒里', sq.toPlay(back) - sq.toPlay(away) === 1500);
 
+// 比对(拍板 16):这个词写好那一刻进经过,孩子的屏幕上没有
+{
+  const J = { judged: true, empty: false, std: 5, wrote: 4, matched: [0, 1, 2, 3], missing: [4], extra: [], order: true, backwards: [], place: { size: 0.6, dx: 0, dy: 0 }, ask: true };
+  const sj = { ...s, first: s.first.map((a, w) => (a && w === 0 ? { ...a, judges: [J, { ...J, missing: [], wrote: 5, matched: [0, 1, 2, 3, 4], ask: false, place: null }] } : a)) } as unknown as Session;
+  const rj = drBuild(sj);
+  const cmp = rj.notes.filter((n) => n.chip === '比对');
+  check('比对:冬少了第 5 笔、写得偏小,在第一个词写好那一刻;天没毛病不出', cmp.length === 1 && cmp[0].text === '「冬」少了第 5 笔;「冬」写得偏小' && cmp[0].t === 7001 && cmp[0].kind === 'err', JSON.stringify(cmp));
+}
+
 // 老数据:事件没有 t、没有擦掉的笔,也排得出来
 const old = { ...s, events: s.events.map(({ t: _t, ...e }) => e), first: s.first.map((a) => a && { ...a, chars: a.chars.map(({ gone: _g, ...c }) => c) }) } as unknown as Session;
 const ro = drBuild(old);

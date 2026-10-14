@@ -67,18 +67,38 @@ try {
   await device(1180, 820, 1, false);
   await send('Page.navigate', { url: `${base}/parent` });
   await until(`document.querySelectorAll('.pt').length > 0`);
+  // ---- 记录里点话题:就是录像,停在最后一帧(拍板 16) ----
   await evaluate(`document.querySelector('.pt[data-tutor="chinese-tutor"] .tr').click()`);
-  await until(`document.querySelectorAll('#board .sec').length >= 2`);
-  await sleep(300);
-  const before = await evaluate(`({ btn: !document.querySelector('#reel-btn').hidden, secs: document.querySelectorAll('#board .sec').length })`);
-  ok('孩子的话题:顶上有「看录像」', before.btn && before.secs === 2, JSON.stringify(before));
-
-  // ---- 进录像 ----
-  await evaluate(`document.querySelector('#reel-btn').click()`);
   await until(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden`);
+  await until(`(() => { const d = document.querySelector('#rl-frame').contentDocument; return !!d && d.querySelectorAll('#board .sec').length === 2; })()`, 40);
+  await sleep(400);
+  const e0 = await evaluate(`({ src: document.querySelector('#rl-frame').getAttribute('src'), v: Number(document.querySelector('#rl-seek').value), max: Number(document.querySelector('#rl-seek').max), play: document.querySelector('#rl-play').getAttribute('aria-label'), log: document.querySelector('#rl-log').hidden, notes: document.querySelectorAll('.notes').length })`);
+  const ek = await kid(`({ secs: document.querySelectorAll('#board .sec').length, pend: document.querySelectorAll('#board .sec .c.pend').length })`);
+  ok('点记录里的话题:直接是录像(src 带 end=1)、停在最后一帧不放(两节、卡都露着)、经过收着;没有板书页的旁注', e0.src.includes('end=1') && e0.v >= e0.max - 100 && e0.play === '播放' && e0.log && e0.notes === 0 && ek.secs === 2 && ek.pend === 0, JSON.stringify({ e0, ek }));
+  // 停着能翻:滚轮在孩子的屏幕上翻板书;点卡没反应(开不了弹窗)
+  const fr = await evaluate(`(() => { const r = document.querySelector('#rl-frame').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  // mock 的两节一屏放得下:板尾垫一块高的,让它有得翻(只为测滚轮进得去)
+  await kid(`(() => { const b = document.querySelector('#board'); const x = document.createElement('div'); x.style.height = '1600px'; x.style.flex = 'none'; b.append(x); b.scrollTo({ top: b.scrollHeight, behavior: 'instant' }); })()`);
+  await sleep(300);
+  const top0 = await kid(`document.querySelector('#board').scrollTop`);
+  await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: fr.x, y: fr.y, deltaX: 0, deltaY: -600 });
+  await sleep(500);
+  const top1 = await kid(`document.querySelector('#board').scrollTop`);
+  ok('停着能翻:滚轮往上,孩子屏幕上的板书翻上去', top0 > 0 && top1 < top0, `${top0} → ${top1}`);
+  await kid(`(() => { const b = document.querySelector('#board'); b.lastElementChild.remove(); })()`);
+  const cardAt = await evaluate(`(() => { const f = document.querySelector('#rl-frame'), fr = f.getBoundingClientRect(), k = fr.width / f.offsetWidth; const c = f.contentDocument.querySelector('#board .sec .c[data-card]'); if (!c) return null; c.scrollIntoView({ block: 'center' }); const r = c.getBoundingClientRect(); return { x: fr.left + (r.left + r.width / 2) * k, y: fr.top + (r.top + r.height / 2) * k }; })()`);
+  if (cardAt) { await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: cardAt.x, y: cardAt.y, button: 'left', clickCount: 1 }); await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: cardAt.x, y: cardAt.y, button: 'left', clickCount: 1 }); await sleep(400); }
+  ok('点卡没反应:弹窗不开', !!cardAt && !(await kid(`document.querySelector('#stage').classList.contains('on')`)));
+  await evaluate(`document.querySelector('#rl-more').click()`);
+  await sleep(300);
+  const lg = await evaluate(`document.querySelector('#rl-log').innerText`);
+  ok('经过里有板书页原来的旁注:答案', lg.includes('答案'), lg.slice(0, 300));
+  await evaluate(`document.querySelector('#rl-more').click()`);
+  // 回到开头,下面照旧从头放
+  await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); document.querySelector('#rl-play').click(); })()`);
   await sleep(300);
   const s0 = await evaluate(`({ board: getComputedStyle(document.querySelector('#wrap')).display, screen: !document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), fw: document.querySelector('#rl-frame').style.width, scale: document.querySelector('#rl-frame').style.transform, max: Number(document.querySelector('#rl-seek').max), marks: [...document.querySelectorAll('#rl-marks i')].map((i) => i.className), cap: document.querySelector('#rl-cap').textContent, clock: document.querySelector('#rl-clock').textContent, sub: document.querySelector('#rl-sub').textContent, tag: !document.querySelector('#rl-tag').hidden, fill: (() => { const a = document.querySelector('#rl-screen').getBoundingClientRect(), b = document.querySelector('#rl-frame').getBoundingClientRect(); return Math.abs(a.width - b.width) < 2 || Math.abs(a.height - b.height) < 2; })() })`);
-  ok('进录像:家长页的板书收起来,上半是孩子的屏幕(/reel,按 iPad 横屏 1180 宽开、等比缩到铺满),下半录像栏;时间是「放到哪 / 一共多久」、下面小字当时几点;标「推算」', s0.board === 'none' && s0.screen && s0.src.startsWith('/reel?') && s0.fw === '1180px' && /scale\(0\.\d+\)/.test(s0.scale) && s0.tag && /^\d+:\d\d \/ \d+:\d\d$/.test(s0.clock) && /^当时 \d\d:\d\d:\d\d$/.test(s0.sub) && s0.fill, JSON.stringify(s0));
+  ok('进录像:家长页的老师页收起来,上半是孩子的屏幕(/reel,按 iPad 横屏 1180 宽开、等比缩到铺满),下半录像栏;时间是「放到哪 / 一共多久」、下面小字当时几点;标「推算」', s0.board === 'none' && s0.screen && s0.src.startsWith('/reel?') && s0.fw === '1180px' && /scale\(0\.\d+\)/.test(s0.scale) && s0.tag && /^\d+:\d\d \/ \d+:\d\d$/.test(s0.clock) && /^当时 \d\d:\d\d:\d\d$/.test(s0.sub) && s0.fill, JSON.stringify(s0));
   ok('进度条上的点:两次开口、停下等孩子', s0.marks.filter((c) => c === 'said').length === 2 && s0.marks.includes('ask') && s0.max > 0, JSON.stringify(s0.marks));
   const k0 = await kid(`({ rlk: document.body.classList.contains('rlk'), pill: !document.querySelector('#pill').hidden, bar: getComputedStyle(document.querySelector('#bar')).pointerEvents, secs: document.querySelectorAll('#board .sec').length, pend: document.querySelectorAll('#board > .sh.said.pend').length, wait: document.querySelectorAll('#board > .wait-card').length, notes: document.querySelectorAll('.notes').length, reelUi: !document.querySelector('#reel').hidden, mo: document.querySelector('#c-mo').hidden, back: document.querySelector('#back-today').hidden })`);
   ok('孩子的屏幕:孩子端的样子——输入条露着(点不动)、没有旁注、没有录像栏、没有「以前的」「回到今天」', k0.rlk && k0.pill && k0.bar === 'none' && k0.notes === 0 && !k0.reelUi && k0.mo && k0.back, JSON.stringify(k0));
@@ -139,9 +159,9 @@ try {
   // ---- 录像里的弹窗(实录,§4.7):注入的实录——第一节念完 0.5 秒后打开选择题的弹窗,4 秒选 B、6 秒改 A、8 秒关上。关掉「跳过空白」按真实时间逐个时刻拖 ----
   await device(1180, 820, 1, false);
   await evaluate(`document.querySelector('#rl-x').click()`);
-  await until(`!document.body.classList.contains('reel') && document.querySelectorAll('#board .sec').length === 2`);
+  await until(`!document.body.classList.contains('reel') && !document.querySelector('#tutor').classList.contains('on')`);
   await evaluate(`window.__patchStage = true`);
-  await evaluate(`document.querySelector('#reel-btn').click()`);
+  await evaluate(`document.querySelector('.pt[data-tutor="chinese-tutor"] .tr').click()`);
   await until(`document.body.classList.contains('reel') && window.__X !== undefined && !document.querySelector('#reel').hidden`);
   await evaluate(`document.querySelector('#rl-play').click()`);
   await evaluate(`document.querySelector('#rl-skip').click()`);
@@ -150,7 +170,7 @@ try {
   const b0 = await at(-300);
   ok('弹窗打开之前:没开', !b0.on, JSON.stringify(b0));
   const b1 = await at(2000);
-  ok('打开了、孩子还没动:弹窗是那张选择题、一项都没选、点不动;录像栏「⏱ 弹窗开着还没动 · 想了 2 秒」', b1.on && b1.picked === '000' && b1.pe === 'none' && b1.cap === '⏱ 弹窗开着还没动 · 想了 2 秒', JSON.stringify(b1));
+  ok('打开了、孩子还没动:弹窗是那张选择题、一项都没选;录像栏「⏱ 弹窗开着还没动 · 想了 2 秒」', b1.on && b1.picked === '000' && b1.cap === '⏱ 弹窗开着还没动 · 想了 2 秒', JSON.stringify(b1));
   console.log('  ', await shot('reel-stage.png'));
   const b2 = await at(4500);
   ok('4 秒时选了 B:弹窗里 B 亮,板上那张卡也是', b2.on && b2.picked === '010' && b2.board === '010', JSON.stringify(b2));
@@ -163,9 +183,9 @@ try {
 
   // ---- 退出 ----
   await evaluate(`document.querySelector('#rl-x').click()`);
-  await until(`!document.body.classList.contains('reel') && document.querySelectorAll('#board .sec').length === 2`);
-  const s5 = await evaluate(`({ reel: document.body.classList.contains('reel'), screen: document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), secs: document.querySelectorAll('#board .sec').length, btn: !document.querySelector('#reel-btn').hidden, mo: document.querySelector('#c-mo').textContent })`);
-  ok('退出:孩子的屏幕撤了,原样重开这个话题(两节、按钮回来、标签没有「录像」)', !s5.reel && s5.screen && s5.src === 'about:blank' && s5.secs === 2 && s5.btn && !s5.mo.includes('录像'), JSON.stringify(s5));
+  await until(`!document.body.classList.contains('reel') && !document.querySelector('#tutor').classList.contains('on')`);
+  const s5 = await evaluate(`({ reel: document.body.classList.contains('reel'), screen: document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), rows: document.querySelectorAll('.pt .tr').length })`);
+  ok('退出:孩子的屏幕撤了,回到记录清单', !s5.reel && s5.screen && s5.src === 'about:blank' && s5.rows > 0, JSON.stringify(s5));
   ok('页面没抛异常', errors.length === 0, errors.join(' | '));
   console.log(bad ? `${bad} 项没过` : '全过');
 } finally {

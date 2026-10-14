@@ -120,6 +120,8 @@ try {
   await shot('en-05-parent');
   await send('Page.navigate', { url: `${base}/dictation/reel?id=${s?.id}` });
   const K = `document.querySelector('#rl-frame').contentDocument`;
+  await waitFor(`!document.querySelector('#reel').hidden`, 10000);
+  await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
   ok('录像:外壳里上半是英文页的录像模式(四线三格)、下半录像栏;一个单词一章(三章 + 对一对)', await waitFor(`!document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').getAttribute('src') || '').includes('lang=en') && ${K}?.querySelector('.view.on')?.id === 'v-write' && ${K}.querySelectorAll('#w-pad .enl line').length === 4 && document.querySelectorAll('#rl-chaps i').length === 3`, 10000), await evaluate(`JSON.stringify({ src: document.querySelector('#rl-frame').getAttribute('src'), chaps: document.querySelectorAll('#rl-chaps i').length })`));
   await tap('#rl-marks i.rv');
   ok('点「给答案」的点:yellow 灰灰地打底,录像栏写给答案', await waitFor(`${K}.querySelector('#w-pad .enw.trace')?.textContent === 'yellow' && document.querySelector('#rl-cap').textContent.includes('给答案')`), await evaluate(`document.querySelector('#rl-cap').textContent`));

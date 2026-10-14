@@ -115,11 +115,11 @@ try {
   ok('家长端清单:这个话题上写「⚠ 按住说话连着 4 次没发出去」', flag.includes('⚠ 按住说话连着 4 次没发出去'), JSON.stringify(flag));
 
   // ---- 家长端看录像 ----
-  await send('Page.navigate', { url: `${base}/parent?tutor=chinese-tutor` });
-  await until(`document.querySelector('#tutor')?.classList.contains('on') && !document.querySelector('#reel-btn').hidden`, 40);
-  await evaluate(`document.querySelector('#reel-btn').click()`);
+  await send('Page.navigate', { url: `${base}/parent?tutor=chinese-tutor&thread=${thread}` });
   await until(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden`, 40);
-  await evaluate(`document.querySelector('#rl-play').click()`);
+  // 记录点进来停在最后一帧(拍板 16);这里要从头看,拖回开头
+  await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
+  // 记录点进来本来就停着(原来一进来就放,这里点一下是为了停)
   await sleep(300);
   const kid = (expr) => evaluate(`(() => { const document = window.document.querySelector('#rl-frame').contentDocument; return (${expr}); })()`);
   const seekAt = async (w) => { await evaluate(`document.querySelector('#rl-frame').contentWindow.cotutorReel.seekAt(${w})`); await sleep(350); };

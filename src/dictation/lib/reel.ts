@@ -5,7 +5,7 @@
  * 页面是 ES5 写的,内联进去的名字都带 dr 前缀,别撞上页面里的。
  */
 import type { DictationEvent, InkGone, Session } from '../store.ts';
-import type { InkPoint } from './match.ts';
+import type { CharJudge, InkPoint } from './match.ts';
 
 /** 停多久算空白(压成 1.5 秒,「跳过空白」关掉就照真实时间) */
 export const DR_GAP_MS = 4000;
@@ -59,6 +59,28 @@ const drSecs = (ms: number): string => {
   return Math.floor(s / 3600) + ' 小时 ' + Math.floor((s % 3600) / 60) + ' 分';
 };
 const drTenth = (ms: number): string => (ms < 10000 ? Math.round(ms / 100) / 10 : Math.round(ms / 1000)) + ' 秒';
+
+/** 比对一个字的几句话(同家长页 parent-page.ts 的 charNotes,擦过几次另有「擦掉」那几条):只进录像栏的「经过」,孩子的屏幕上没有 */
+export function drCharNotes(ch: string, j: CharJudge): string[] {
+  const nums = (xs: number[]): string => xs.map((x) => x + 1).join('、');
+  const out: string[] = [];
+  if (!j.judged) return out;
+  if (j.empty) return ['「' + ch + '」空着'];
+  if (j.missing.length >= Math.ceil(j.std / 2)) out.push('「' + ch + '」和书上的字大半对不上(写了 ' + j.wrote + ' 笔,书上 ' + j.std + ' 笔),可能写成了别的字');
+  else if (j.missing.length) out.push('「' + ch + '」少了第 ' + nums(j.missing) + ' 笔' + (j.extra.length ? ',有 ' + j.extra.length + ' 笔对不上' : ''));
+  else if (j.extra.length) out.push('「' + ch + '」多了 ' + j.extra.length + ' 笔对不上的');
+  if (!j.order) out.push('「' + ch + '」笔顺:写的先后是 ' + j.matched.filter((m): m is number => m !== null).map((m) => m + 1).join(' ') + '(书上是 1 到 ' + j.std + ' 依次)');
+  if (j.backwards.length) out.push('「' + ch + '」第 ' + nums(j.backwards) + ' 笔写反了方向');
+  const p = j.place;
+  if (p) {
+    const bits: string[] = [];
+    if (p.size < 0.7) bits.push('偏小'); else if (p.size > 1.3) bits.push('偏大');
+    const v = p.dy > 140 ? '上' : p.dy < -140 ? '下' : '', h = p.dx < -140 ? '左' : p.dx > 140 ? '右' : '';
+    if (v || h) bits.push('偏' + h + v);
+    if (bits.length) out.push('「' + ch + '」写得' + bits.join('、'));
+  }
+  return out;
+}
 
 /** 一次听写 → 轨道 */
 export function drBuild(s: Session): DrReel {
@@ -204,6 +226,17 @@ export function drBuild(s: Session): DrReel {
     if (!kept.length && checkedAt !== null) notes.push({ t: checkedAt - 1, kind: '', chip: '空着', text: '「' + ch(w, c) + '」一笔没写' });
   }
   for (const r of rewrites) notes.push({ t: r.to, kind: 'tail', chip: '写好了', text: '再写的「' + s.words[r.word].chars + '」交了' });
+  // 比对(拍板 16):第一遍在这个词写好(交上去)的那一刻,再写的在交上去那一刻;家长页的逐字那几句,孩子的屏幕上没有
+  s.first.forEach((a, w) => {
+    if (!a) return;
+    const lastDone = steps.filter((x) => x.k === 'done' && x.word === w).pop();
+    const t = lastDone ? lastDone.t : wallT(a.at) ?? 0;
+    a.judges.forEach((j, c) => { const xs = drCharNotes(ch(w, c), j); if (xs.length) notes.push({ t: t + 1, kind: j.ask ? 'err' : '', chip: '比对', text: xs.join(';') }); });
+  });
+  s.rewrites.forEach((rw, k) => {
+    const t = rewrites[k] ? rewrites[k].to : 0;
+    rw.attempt.judges.forEach((j, c) => { const xs = drCharNotes(ch(rw.word, c), j); if (xs.length) notes.push({ t: t + 1, kind: j.ask ? 'err' : '', chip: '重写比对', text: xs.join(';') }); });
+  });
   for (const g of gaps) {
     if (g.kind === 'away') { marks.push({ t: g.from, kind: 'away', label: '切到别处 ' + drSecs(g.to - g.from) }); notes.push({ t: g.from, kind: 'miss', chip: '切到别处', text: drSecs(g.to - g.from) }); }
     else notes.push({ t: g.from, kind: '', chip: '停', text: '停了 ' + drSecs(g.to - g.from) + (g.view === 'listen' ? ',一笔没写' : '') });

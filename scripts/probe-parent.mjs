@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 /**
- * 家长板书页(《家长板书页设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
+ * 家长端「记录」(《家长板书页设计.md》,拍板 22;《家长录像设计.md》拍板 16)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock → Chrome 开 /parent:清单(每位老师一块、语文老师一个话题、英语老师「今天没聊」)→
- * 点话题进板书:卡锁着、没有「更多」、喇叭缺省关、节前有「孩子」旁注、节尾有「给家长」「记住了」、选择题下面有答案 →
- * 家长端只看:没有输入条(2026-10-05 删了备课与家长真发;家长要试老师到孩子端当一回孩子,回来删话题)→ 回清单打星、记账、删话题 → 昨天的清单 →
- * 手机与平板各截一张。孩子端 `/` 上没有旁注、没有答案(护栏)。
+ * 点话题就是录像:停在最后一帧不放、经过收着,展开有原来板书页的旁注(孩子、答案、给家长、记住了)→ 退出回清单 →
+ * 打星、记账、删话题 → 昨天的清单 → ?tutor=&thread= 直接开那个话题的录像。手机与平板各截一张。孩子端 `/` 上没有答案(护栏)。
  *
- * 用法:node scripts/probe-parent-board.mjs [--out <截图目录>] [--keep](留下 mock)
+ * 用法:node scripts/probe-parent.mjs [--out <截图目录>] [--keep](留下 mock)
  */
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -58,34 +57,26 @@ try {
   ok('清单:标题带「家长」、今天;四位老师(含口播老师);语文老师一个话题停在末句问句;英语老师今天没聊', list.title.endsWith('· 家长') && list.date === '今天' && list.tutors.length === 4 && list.tutors[0].rows.length === 1 && list.tutors[0].rows[0].includes('停下等孩子') && list.tutors[2].none === '今天没聊', JSON.stringify(list));
   console.log('  ', await shot('parent-list-phone.png'));
 
-  // ---- 点话题进板书 ----
+  // ---- 点话题:就是录像,停在最后一帧(拍板 16) ----
   await evaluate(`document.querySelector('.pt[data-tutor="chinese-tutor"] .tr').click()`);
-  for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelectorAll('#board .notes.pre').length > 0 && document.querySelectorAll('#board .sec').length > 0`)) break; await sleep(250); }
+  for (let i = 0; i < 40; i++) { if (await evaluate(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').contentDocument?.querySelectorAll('#board .sec').length ?? 0) > 0`)) break; await sleep(250); }
   await sleep(500);
-  const board = await evaluate(`(() => ({
-    on: document.querySelector('#tutor').classList.contains('on'),
-    pill: document.querySelector('#pill').hidden, backToday: document.querySelector('#back-today').hidden, more: document.querySelector('#more-btn').hidden,
-    spk: document.querySelector('#spk').classList.contains('on'),
-    mo: document.querySelector('#c-mo').textContent,
-    order: [...document.querySelectorAll('#board > *')].map((el) => (el.classList.contains('sec') ? 'sec' : el.classList.contains('notes') ? 'notes.' + el.classList[1] : el.className)),
-    pre: [...document.querySelectorAll('#board .notes.pre .note')].map((n) => n.querySelector('.tg').textContent + ':' + n.querySelector('.tx').textContent),
-    post: [...document.querySelectorAll('#board .notes.post .note')].map((n) => n.querySelector('.tg').textContent),
-    ans: [...document.querySelectorAll('#board .c .note-ans')].map((n) => n.textContent),
-  }))()`);
-  ok('板书:只看的 chrome(没有输入条、没有「回到今天」、没有「更多」),喇叭缺省关,头上是「今天 时间」', board.on && board.pill && board.backToday && board.more && !board.spk && /^今天 · \d\d:\d\d$/.test(board.mo), JSON.stringify({ pill: board.pill, backToday: board.backToday, more: board.more, spk: board.spk, mo: board.mo }));
-  const locked = await evaluate(`(() => { const c = document.querySelector('#board .c-choice'); c.click(); return { stage: document.querySelector('#stage').classList.contains('on') }; })()`);
-  ok('卡锁着:点选择题不开舞台', !locked.stage, JSON.stringify(locked));
-  ok('顺序:节前旁注 → 节 → 节尾旁注', board.order.slice(0, 3).join('|') === 'notes.pre|sec|notes.post', JSON.stringify(board.order));
-  ok('节前:孩子的话;节尾:给家长、记住了', board.pre.length === 1 && board.pre[0].startsWith('孩子:') && board.post.join() === '给家长,记住了', JSON.stringify({ pre: board.pre, post: board.post }));
-  ok('选择题下面一行答案', board.ans.length === 1 && board.ans[0].startsWith('答案:'), JSON.stringify(board.ans));
-  console.log('  ', await shot('parent-board-phone.png'));
+  const rl = await evaluate(`({ src: document.querySelector('#rl-frame').getAttribute('src'), v: Number(document.querySelector('#rl-seek').value), max: Number(document.querySelector('#rl-seek').max), play: document.querySelector('#rl-play').getAttribute('aria-label'), log: document.querySelector('#rl-log').hidden, board: getComputedStyle(document.querySelector('#wrap')).display, notes: document.querySelectorAll('.notes').length })`);
+  ok('点话题:直接是录像,停在最后一帧不放;经过收着;家长页上没有板书与旁注', rl.src.includes('end=1') && rl.max > 0 && rl.v >= rl.max - 100 && rl.play === '播放' && rl.log && rl.board === 'none' && rl.notes === 0, JSON.stringify(rl));
+  await evaluate(`document.querySelector('#rl-more').click()`);
+  await sleep(300);
+  const chips = await evaluate(`[...document.querySelectorAll('#rl-log li .rl-k')].map((x) => x.textContent)`);
+  ok('经过展开:原来板书页的旁注都在(孩子、答案、给家长、记住了)', ['孩子', '答案', '给家长', '记住了'].every((x) => chips.includes(x)), JSON.stringify(chips));
+  console.log('  ', await shot('parent-reel-phone.png'));
+  await evaluate(`document.querySelector('#rl-more').click()`);
   await device(1180, 820, 1, false);
   await sleep(400);
-  console.log('  ', await shot('parent-board-tablet.png'));
+  console.log('  ', await shot('parent-reel-tablet.png'));
+  await evaluate(`document.querySelector('#rl-x').click()`);
+  for (let i = 0; i < 20; i++) { if (await evaluate(`!document.querySelector('#tutor').classList.contains('on')`)) break; await sleep(250); }
+  ok('退出:回到清单', await evaluate(`!document.body.classList.contains('reel') && document.querySelectorAll('.pt .tr').length > 0`));
 
   // ---- 回清单:打星;翻到昨天 ----
-  await evaluate(`document.querySelector('#back').click()`);
-  await sleep(500);
   await evaluate(`document.querySelector('.pt[data-tutor="chinese-tutor"] .stars .st:nth-child(4)').click()`);
   for (let i = 0; i < 20; i++) { if (await evaluate(`document.querySelectorAll('.pt[data-tutor="chinese-tutor"] .stars .st.on').length === 4`)) break; await sleep(250); }
   ok('清单上打星:点第四颗 → 亮四颗', await evaluate(`document.querySelectorAll('.pt[data-tutor="chinese-tutor"] .stars .st.on').length === 4`));
@@ -106,14 +97,16 @@ try {
   const y = await evaluate(`(() => ({ date: document.querySelector('#pdate b')?.textContent, rows: [...document.querySelectorAll('.pt .tr b')].map((b) => b.textContent), next: document.querySelector('#pdate button:last-child').disabled }))()`);
   ok('昨天的清单:以前的话题在,「后一天」能点', y.date.startsWith('昨天') && y.rows.some((r) => r.startsWith('昨天问的')) && !y.next, JSON.stringify(y));
 
-  // ---- 直接开在某个话题上(重载回来靠它) ----
-  await open(`${base}/parent?tutor=math-tutor`, `document.querySelector('#tutor').classList.contains('on') && document.querySelectorAll('#board .notes.pre').length > 0`);
-  ok('?tutor= 直接开在那位老师今天的话题上', await evaluate(`document.querySelector('#tutor').classList.contains('on') && document.querySelector('#c-av').textContent.length > 0`));
+  // ---- 直接开某个话题的录像(重载回来靠它) ----
+  const ov = await (await fetch(`${base}/api/overview/today`)).json();
+  const th = ov.tutors.find((t) => t.name === 'chinese-tutor')?.threads[0]?.thread;
+  await open(`${base}/parent?tutor=chinese-tutor&thread=${th}`, `document.body.classList.contains('reel') && !document.querySelector('#reel').hidden`);
+  ok('?tutor=&thread= 直接开那个话题的录像', await evaluate(`document.body.classList.contains('reel') && (document.querySelector('#rl-frame').getAttribute('src') || '').includes('thread=${th}')`), String(th));
 
   // ---- 护栏:孩子端没有旁注、没有答案 ----
   await open(`${base}/?tutor=chinese-tutor`, `document.querySelectorAll('#board .sec').length > 0`);
-  const kid = await evaluate(`({ notes: document.querySelectorAll('#board .notes').length, ans: document.querySelectorAll('#board .note-ans').length, pill: document.querySelector('#pill').hidden, more: document.querySelector('#more-btn').hidden })`);
-  ok('孩子端:没有旁注、没有答案、输入条与「更多」都在', kid.notes === 0 && kid.ans === 0 && !kid.pill && !kid.more, JSON.stringify(kid));
+  const kid = await evaluate(`({ ans: /答案/.test(document.querySelector('#board').innerText), pill: document.querySelector('#pill').hidden, more: document.querySelector('#more-btn').hidden })`);
+  ok('孩子端:没有答案、输入条与「更多」都在', !kid.ans && !kid.pill && !kid.more, JSON.stringify(kid));
 } finally {
   browser?.kill();
   await sleep(600); // Chrome 退出还在写 profile,立刻删会 ENOTEMPTY

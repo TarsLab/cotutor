@@ -82,7 +82,7 @@ try {
   await send('Page.navigate', { url: `${base}/parent` });
   await until(`document.querySelectorAll('.pt').length > 0`);
   await evaluate(`document.querySelector('.pt[data-tutor="chinese-tutor"] .tr').click()`);
-  await until(`document.querySelectorAll('#board .sec').length > 0`);
+  await until(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden`);
   await sleep(800);
   await evaluate(`window.dispatchEvent(new Event('pagehide'))`);
   await sleep(300);

@@ -234,15 +234,37 @@ const PAGE = `<!doctype html>
   .ptabs { display:flex; padding:3px; border-radius:12px; background:#e9e6de; }
   .ptabs a { flex:1; height:36px; border-radius:9px; font-size:15px; color:var(--dim); display:flex; align-items:center; justify-content:center; text-decoration:none; }
   .ptabs a.on { background:#fff; color:var(--ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  /* 顶上:名字、两个标签、记账(窄屏一样一行,宽屏并成一行) */
+  #phead { display:flex; flex-wrap:wrap; align-items:center; gap:12px 20px; }
+  #phead #title { flex:1 0 100%; margin:0; }
+  #phead .ptabs { flex:1 0 100%; }
+  #pbook { flex:1 0 100%; display:flex; align-items:center; gap:10px; font-size:13px; color:var(--dim); }
+  #pbook span { flex:1; }
+  #pbook .book { flex:none; height:36px; padding:0 16px; border-radius:10px; background:var(--ink); color:#fff; font-size:14px; font-weight:600; }
+  #pbook .book.arm { background:#b3541e; }
+  /* 七天日期条(拍板 24):每天下面学科色的点 = 那天有动静的老师 */
+  #pweek { display:flex; align-items:center; gap:2px; padding:4px; border-radius:16px; background:var(--card); border:1px solid var(--line); }
+  #pweek .nv { flex:none; width:32px; height:54px; font-size:20px; color:var(--dim); }
+  #pweek .dy { flex:1; min-width:0; height:54px; border-radius:11px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; }
+  #pweek .dy small { font-size:11px; line-height:1.2; color:var(--dim); }
+  #pweek .dy b { font-size:15px; line-height:1.2; font-weight:600; }
+  #pweek .dy.on { background:var(--ink); color:#fff; }
+  #pweek .dy.on small { color:#d9d5cc; }
+  #pweek .wd { display:flex; gap:2px; height:5px; }
+  #pweek .wd i { width:5px; height:5px; border-radius:50%; }
+  #pweek .dy.on .wd i { box-shadow:0 0 0 1px #fff; }
   .pt a.tr-x { text-decoration:none; color:var(--ink); }
   .pt .tr-x b { padding-right:0; }
-  .pt .tr-x .xk { font-size:12px; font-weight:600; padding:2px 7px; margin-right:8px; border-radius:6px; background:#fcebf2; color:#9c2c5a; vertical-align:2px; }
-  #pdate { display:flex; align-items:center; gap:12px; font-size:15px; color:var(--dim); }
-  #pdate b { font-weight:600; color:var(--ink); min-width:5em; text-align:center; }
-  #pdate button { width:36px; height:36px; border-radius:50%; background:var(--card); border:1px solid var(--line); font-size:18px; display:grid; place-items:center; }
-  #pdate button:disabled { opacity:.3; }
-  #pdate .book { width:auto; margin-left:auto; padding:0 14px; border-radius:18px; font-size:14px; font-weight:600; color:var(--ink); }
-  #pdate .book.arm { background:#b3541e; color:#fff; border-color:#b3541e; }
+  /* 行头的种类(拍板 26):对话 / 小课堂 / 听写 / 口语课 */
+  .pt .xk { font-size:12px; font-weight:600; padding:2px 7px; margin-right:8px; border-radius:6px; vertical-align:2px; background:#f3efe6; color:#6b4a12; }
+  .pt .xk.lec { background:#e9f1fd; color:#2459b0; }
+  .pt .xk.dict { background:#fcebf2; color:#9c2c5a; }
+  .pt .xk.oral { background:#e6f5ed; color:#1b5e38; }
+  .pt .tr .rt { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .chip { font-size:12px; line-height:1.5; padding:2px 8px; border-radius:999px; background:#f3efe6; color:var(--dim); display:inline-flex; align-items:center; gap:5px; }
+  .chip.live { background:#fff4e8; color:#a0480f; }
+  .chip.live i { width:6px; height:6px; border-radius:50%; background:#e8743b; }
+  .chip.ask { background:#eef3fb; color:#2f5ba8; }
   .pt { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 16px; display:flex; flex-direction:column; gap:8px; }
   .pt .hd { display:flex; align-items:center; gap:12px; }
   .pt .hd .av { width:44px; height:44px; font-size:20px; }
@@ -257,9 +279,51 @@ const PAGE = `<!doctype html>
   .pt .tr .del:disabled { opacity:.35; }
   .pt .tr small { font-size:13px; color:var(--dim); }
   .pt .none { color:var(--dim); font-size:14px; padding:2px 0; }
-  .pt .stars { display:flex; gap:2px; margin-top:2px; }
-  .pt .stars .st { font-size:20px; line-height:1; padding:4px 3px; color:var(--line); cursor:pointer; }
-  .pt .stars .st.on { color:#e0a520; }
+  .stars { display:flex; gap:2px; margin-top:2px; }
+  .stars .st { font-size:20px; line-height:1; padding:4px 3px; color:var(--line); cursor:pointer; }
+  .stars .st.on { color:#e0a520; }
+  /* 宽屏右栏(拍板 25):选中那个话题的概要,「看录像」才进录像;窄屏没有它,点一行就是录像 */
+  #pdetail { display:none; }
+  #pdetail .dh { display:flex; align-items:center; gap:12px; }
+  #pdetail .dh .av { width:44px; height:44px; font-size:20px; }
+  #pdetail .dh .who { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  #pdetail .dh b { font-size:19px; }
+  #pdetail .dh small { font-size:13px; color:var(--dim); line-height:1.45; }
+  #pdetail .pv { display:flex; flex-direction:column; width:100%; min-height:200px; border-radius:14px; background:var(--paper); overflow:hidden; text-align:left; }
+  #pdetail .pv-b { flex:1; display:flex; flex-direction:column; gap:8px; padding:16px 18px; font-size:15px; line-height:1.55; }
+  #pdetail .pv-k { color:var(--dim); font-size:14px; }
+  #pdetail .pv-k i { font-style:normal; font-size:12px; font-weight:600; padding:1px 6px; margin-right:6px; border-radius:6px; background:#e9e6de; }
+  #pdetail .pv-l.dim { color:var(--dim); }
+  #pdetail .pv-bar { display:flex; align-items:center; gap:12px; padding:12px 16px; background:#2b2b2b; color:#fff; }
+  #pdetail .pv-go { flex:none; width:40px; height:40px; border-radius:50%; background:#fff; color:#2b2b2b; display:grid; place-items:center; }
+  #pdetail .pv-tx { flex:1; min-width:0; display:flex; flex-direction:column; gap:7px; font-size:13px; font-weight:600; }
+  #pdetail .pv-tl { position:relative; height:4px; border-radius:2px; background:#ffffff55; }
+  #pdetail .pv-tl i { position:absolute; top:-3px; width:10px; height:10px; margin-left:-5px; border-radius:50%; background:#e8743b; }
+  #pdetail .pv-tl i.ask { background:#8db4f0; }
+  #pdetail .pv-d { flex:none; font-size:13px; }
+  #pdetail .ds { display:flex; flex-direction:column; gap:6px; }
+  #pdetail .ds h3 { margin:0; font-size:13px; font-weight:500; color:var(--dim); }
+  #pdetail .ds p { margin:0; font-size:15px; line-height:1.6; white-space:pre-line; }
+  #pdetail .ds .mem { font-size:14px; background:#eef6ef; color:#3f4a3a; border-radius:10px; padding:8px 12px; }
+  #pdetail .df { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:auto; border-top:1px solid var(--line); padding-top:14px; font-size:13px; color:var(--dim); }
+  #pdetail .df .stars .st { font-size:26px; }
+  #pdetail .df .del { margin-left:auto; height:40px; padding:0 14px; border:1.5px solid var(--line); border-radius:12px; color:#a33a26; font-size:14px; }
+  #pdetail .df .del.arm { background:#b3541e; color:#fff; border-color:#b3541e; }
+  #pdetail .none { color:var(--dim); font-size:15px; padding:40px 0; text-align:center; }
+  @media (min-width:1000px) {
+    #home:has(#pcols) { max-width:1180px; }
+    #phead #title { flex:0 0 auto; }
+    #phead .ptabs { flex:0 0 260px; }
+    #pbook { flex:1 1 auto; justify-content:flex-end; }
+    #pbook span { flex:none; }
+    #home #pcols { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px; align-items:start; }
+    #home #pcols .tutors { grid-template-columns:minmax(0,1fr); gap:12px; }
+    #pcols .pt .tr { border:2px solid transparent; }
+    #pcols .pt .tr.on { border-color:var(--ink); background:var(--card); }
+    #pcols .pt .tr .stars, #pcols .pt .tr .del { display:none; }
+    #pcols .pt .tr b { padding-right:0; }
+    #pdetail { display:flex; flex-direction:column; gap:16px; position:sticky; top:16px; max-height:calc(100vh - 32px); overflow:auto; padding:20px 22px; border-radius:18px; background:var(--card); border:1px solid var(--line); }
+  }
   #pill .ic[hidden] { display:none; }
   #wrap { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
   /* 板书顶上一条渐隐:滚上去的内容在两角按钮那一带淡成纸色,不和胶囊、话题标签叠字。只是盖一层颜色,不占位置、不收触摸;
@@ -979,12 +1043,14 @@ __REEL_JS__
   };
   const hhmm = (iso) => { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
   const ymd = (iso) => { const d = new Date(iso); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  /** 听写、口语课挂在哪位老师下:记了老师的照记的,没记的给常驻它的老师,都没有单列一块(':听写') */
+  const modOwner = (H, kind, tutor) => (tutor && H.tutors.some((t) => t.name === tutor) ? tutor : (H.tutors.find((t) => (t.extras || []).includes(kind)) || {}).name || ':' + (kind === 'talk' ? '口语课' : '听写'));
   const modRows = (H) => {
     modFetch();
     const out = new Map();
     const put = (k, el) => { if (!out.has(k)) out.set(k, []); out.get(k).push(el); };
-    const owner = (kind, tutor) => (tutor && H.tutors.some((t) => t.name === tutor) ? tutor : (H.tutors.find((t) => (t.extras || []).includes(kind)) || {}).name || ':' + (kind === 'talk' ? '口语课' : '听写'));
-    const xrow = (tag, href, title, sub) => h('a', { class: 'tr tr-x', href }, h('b', {}, h('span', { class: 'xk' }, tag), title), h('small', {}, sub));
+    const owner = (kind, tutor) => modOwner(H, kind, tutor);
+    const xrow = (tag, href, title, sub) => h('a', { class: 'tr tr-x', href }, h('b', {}, h('span', { class: 'xk ' + (tag === '口语课' ? 'oral' : 'dict') }, tag), title), h('small', {}, sub));
     const M = S.mods || { dictation: [], talks: [] };
     for (const x of M.dictation.filter((x) => ymd(x.startedAt) === H.date)) {
       const sub = [hhmm(x.startedAt), x.revealed ? '看了答案 ' + x.revealed + ' 个' : '', x.asked ? '再写 ' + x.asked + ' 个' : '', x.done ? '对好了' : x.checked ? '交了' : '还在写'].filter(Boolean).join(' · ');
@@ -996,21 +1062,47 @@ __REEL_JS__
     }
     return out;
   };
+  /** 宽屏:清单与右栏的概要并排(拍板 25);窄屏点一行就是录像 */
+  const WIDE = window.matchMedia('(min-width:1000px)');
+  WIDE.addEventListener('change', () => { if (PARENT && S.home && !S.tutor) renderOverview(); });
+  const WEEKDAY = '日一二三四五六';
   const renderOverview = () => {
     const H = S.home;
     document.title = H.title + ' · 家长'; $('#title').textContent = H.title;
     // 家长端两块:首页(设孩子的首页)与记录(这一页)。这段也在孩子端的 html 里:不写家长端的路径,从这一页的地址拼
-    if (!$('#ptabs')) $('#title').after(h('nav', { id: 'ptabs', class: 'ptabs' }, h('a', { href: (location.pathname + '/home').replace('//', '/') }, '首页'), h('a', { class: 'on', href: location.pathname }, '记录')));
+    if (!$('#phead')) {
+      const head = h('div', { id: 'phead' });
+      $('#title').before(head);
+      head.append($('#title'), h('nav', { id: 'ptabs', class: 'ptabs' }, h('a', { href: (location.pathname + '/home').replace('//', '/') }, '首页'), h('a', { class: 'on', href: location.pathname }, '记录')), h('div', { id: 'pbook' }));
+      head.after(h('div', { id: 'pweek' }));
+      const cols = h('div', { id: 'pcols' });
+      $('#tutors').before(cols);
+      cols.append($('#tutors'), h('aside', { id: 'pdetail', 'aria-label': '这个话题' }));
+    }
     // 有按钮正在「确定?」那一下(删、记账),这一轮心跳先不重画,免得把它抹掉
     if ($('#home .arm')) return;
-    let bar = $('#pdate');
-    if (!bar) { bar = h('div', { id: 'pdate' }); $('#ptabs').after(bar); }
-    const go = (n) => { S.pdate = shiftDate(H.date, n); if (S.pdate === H.today) S.pdate = null; loadHome(); };
+    const goTo = (d) => { if (d > H.today) d = H.today; S.pdate = d === H.today ? null : d; loadHome(); };
+    // 七天日期条(拍板 24):接口给每天有话题的老师,听写、口语课从模块的记录补
+    const M = S.mods || { dictation: [], talks: [] };
+    const days = new Map((H.week || []).map((w) => [w.date, new Set(w.tutors)]));
+    for (const x of M.dictation) { const set = days.get(ymd(x.startedAt)); if (set) set.add(modOwner(H, 'dictation', x.tutor)); }
+    for (const x of M.talks) { const set = x.call ? days.get(ymd(x.createdAt)) : null; if (set) set.add(modOwner(H, 'talk', null)); }
+    const week = H.week || [];
+    $('#pweek').replaceChildren(
+      h('button', { type: 'button', class: 'nv', 'aria-label': '往前七天', on: { click: () => goTo(shiftDate(H.date, -7)) } }, '‹'),
+      ...week.map((w) => {
+        const [y, mo, da] = w.date.split('-').map(Number);
+        const set = days.get(w.date);
+        const dots = [...H.tutors.filter((t) => set.has(t.name)).map((t) => colorOf(t)), ...[...set].filter((n) => n.startsWith(':')).map(() => colorOf(null))];
+        return h('button', { type: 'button', class: 'dy' + (w.date === H.date ? ' on' : ''), 'aria-pressed': w.date === H.date ? 'true' : 'false', 'aria-label': mo + ' 月 ' + da + ' 日', on: { click: () => goTo(w.date) } },
+          h('small', {}, w.date === H.today ? '今天' : '周' + WEEKDAY[new Date(y, mo - 1, da).getDay()]), h('b', {}, String(da)), h('span', { class: 'wd' }, ...dots.map((c) => h('i', { style: 'background:' + c }))));
+      }),
+      h('button', { type: 'button', class: 'nv', 'aria-label': '往后七天', disabled: !week.length || week[week.length - 1].date >= H.today ? '' : null, on: { click: () => goTo(shiftDate(H.date, 7)) } }, '›'));
     // 记账(《obsidian仓库设计.md》§4,原来只在工作台):这天每位老师还没记过的话题各起一轮,老师回「## 记账」段,应用写日记。花钱,所以两下确认;老师在写或在记就灰
     const booking = H.tutors.some((t) => t.booking);
     const writing = H.tutors.some((t) => t.threads.some((th) => th.stoppedAt === 'writing'));
-    const bookable = H.tutors.some((t) => t.threads.some((th) => !th.booked && th.sections > 0));
-    const bookBtn = h('button', { type: 'button', class: 'book', disabled: booking || writing || !bookable ? '' : null }, booking ? '记账中…' : '记账');
+    const left = H.tutors.reduce((n, t) => n + t.threads.filter((th) => !th.booked && th.sections > 0).length, 0);
+    const bookBtn = h('button', { type: 'button', class: 'book', disabled: booking || writing || !left ? '' : null }, booking ? '记账中…' : '记账');
     let bookTimer = null;
     bookBtn.addEventListener('click', async () => {
       if (!bookBtn.classList.contains('arm')) { bookBtn.classList.add('arm'); bookBtn.textContent = '确定记?要花钱'; bookTimer = setTimeout(() => { bookBtn.classList.remove('arm'); bookBtn.textContent = '记账'; }, 4000); return; }
@@ -1023,19 +1115,19 @@ __REEL_JS__
       toast(n ? '记 ' + n + ' 个话题,老师在写;记好了行上会亮「已记账」' : '没有要记的话题');
       loadHome();
     });
-    bar.replaceChildren(h('button', { type: 'button', 'aria-label': '前一天', on: { click: () => go(-1) } }, '‹'), h('b', {}, dateLabel(H.date, H.today) + (H.date === H.today ? '' : ' ' + H.date.slice(5).replace('-', '/'))), h('button', { type: 'button', 'aria-label': '后一天', disabled: H.date >= H.today ? '' : null, on: { click: () => go(1) } }, '›'), bookBtn);
-    const stopped = (t) => (t.stoppedAt === 'writing' ? ' · 老师在写' : t.stoppedAt === 'ask' ? ' · 停下等孩子' : '');
-    // 打星(《obsidian仓库设计.md》§4:单位是话题,够 keepScore 记账时才沉淀摘要):行尾五颗,点同一颗取消;记账仍在家长端(这段注释也在孩子端的 html 里,别写家长端的路径)
+    const anyThread = H.tutors.some((t) => t.threads.some((th) => th.sections > 0));
+    $('#pbook').replaceChildren(h('span', {}, booking ? '老师在记账' : left ? (H.date === H.today ? '今天' : '这天') + '还有 ' + left + ' 个话题没记进日记' : anyThread ? '话题都记进日记了' : ''), bookBtn);
+    // 打星(《obsidian仓库设计.md》§4:单位是话题,够 keepScore 记账时才沉淀摘要):五颗,点同一颗取消;记账仍在家长端(这段注释也在孩子端的 html 里,别写家长端的路径)
     const rate = async (t, th, i) => { try { await api('PUT', '/api/conversations/' + encodeURIComponent(t.name) + '/' + H.date + '/threads/' + encodeURIComponent(th.thread) + '/rating', { rating: th.rating === i ? null : i }); } catch {} loadHome(); };
     const stars = (t, th) => h('div', { class: 'stars', 'aria-label': '打星' }, ...[1, 2, 3, 4, 5].map((i) => h('span', { class: 'st' + (th.rating && i <= th.rating ? ' on' : ''), on: { click: (e) => { e.stopPropagation(); rate(t, th, i); } } }, '★')));
-    // 删掉一个话题:行角上一个「删」,点一下变「确定删?」(3 秒内再点才真删,没有弹窗);老师还在写的服务端会 409,行留着。
+    // 删掉一个话题:点一下变「确定删?」(3 秒内再点才真删,没有弹窗);老师还在写的服务端会 409,行留着。
     // 这个话题写进记忆、日记的一起撤(家长在孩子端试过再来删),撤了多少、哪条没撤成弹一句
-    const delBtn = (kind, t, th) => {
-      const b = h('button', { type: 'button', class: 'del', 'aria-label': '删掉这个话题' }, '删');
+    const delBtn = (kind, t, th, label) => {
+      const b = h('button', { type: 'button', class: 'del', 'aria-label': '删掉这个话题' }, label);
       let timer = null;
       b.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = '确定删?'; timer = setTimeout(() => { b.classList.remove('arm'); b.textContent = '删'; }, 3000); return; }
+        if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = '确定删?'; timer = setTimeout(() => { b.classList.remove('arm'); b.textContent = label; }, 3000); return; }
         clearTimeout(timer); b.classList.remove('arm'); b.disabled = true; // 先摘掉 arm:renderOverview 见到 .arm 会跳过重画
         try {
           const r = await api('DELETE', '/api/' + kind + '/' + encodeURIComponent(t.name) + '/' + H.date + '/threads/' + encodeURIComponent(th.thread));
@@ -1046,11 +1138,28 @@ __REEL_JS__
       });
       return b;
     };
-    const row = (t, th) => h('div', { class: 'tr', on: { click: () => openReel(t, th.thread, H.date) } },
-      h('b', {}, th.title || '(没有话)'),
-      h('small', {}, clock(th.at) + ' · ' + th.sections + ' 节 · ' + th.cards + ' 张卡' + stopped(th) + (th.booked ? ' · 已记账' : t.booking && th.sections > 0 ? ' · 记账中' : ''), th.misses ? h('span', { class: 'miss' }, ' · ⚠ 按住说话连着 ' + th.misses + ' 次没发出去') : null),
-      stars(t, th), th.stoppedAt === 'writing' ? null : delBtn('conversations', t, th));
-    // 听写与口语课(《家长板书页设计.md》拍板 20):挂在常驻它们的老师下面,点了去各自的结果页 / 回放;没人常驻的单列一块
+    // 状态做成标签(拍板 26):行头种类,行尾停在哪与记账
+    const chips = (t, th) => [
+      th.stoppedAt === 'writing' ? h('span', { class: 'chip live' }, h('i'), '老师在写') : th.stoppedAt === 'ask' ? h('span', { class: 'chip ask' }, '停下等孩子') : null,
+      th.booked ? h('span', { class: 'chip' }, '已记账') : t.booking && th.sections > 0 ? h('span', { class: 'chip' }, '记账中') : null,
+    ].filter(Boolean);
+    // 选中的话题(宽屏右栏):换了天、删掉了就落回第一个
+    const all = H.tutors.flatMap((t) => t.threads.map((th) => ({ t, th })));
+    let cur = S.psel && S.psel.date === H.date ? all.find((x) => x.t.name === S.psel.tutor && x.th.thread === S.psel.thread) : null;
+    if (!cur) cur = all[0] || null;
+    S.psel = cur ? { tutor: cur.t.name, thread: cur.th.thread, date: H.date } : null;
+    const pick = (t, th) => { if (!WIDE.matches) { openReel(t, th.thread, H.date); return; } S.psel = { tutor: t.name, thread: th.thread, date: H.date }; renderOverview(); };
+    const KIND = { talk: ['对话', 'talk'], lecture: ['小课堂', 'lec'] };
+    const row = (t, th) => {
+      const k = KIND[th.kind] || KIND.talk;
+      const c = chips(t, th);
+      return h('div', { class: 'tr' + (cur && cur.th === th ? ' on' : ''), on: { click: () => pick(t, th) } },
+        h('b', {}, h('span', { class: 'xk ' + k[1] }, k[0]), th.title || '(没有话)'),
+        h('small', {}, clock(th.at) + ' · ' + th.sections + ' 节 · ' + th.cards + ' 张卡', th.misses ? h('span', { class: 'miss' }, ' · ⚠ 按住说话连着 ' + th.misses + ' 次没发出去') : null),
+        h('div', { class: 'rt' }, stars(t, th), ...c),
+        th.stoppedAt === 'writing' ? null : delBtn('conversations', t, th, '删'));
+    };
+    // 听写与口语课(《家长板书页设计.md》拍板 20):挂在常驻它们的老师下面,点了去各自的录像 / 回看;没人常驻的单列一块
     const mods = modRows(H);
     const block = (t, rows) => h('div', { class: 'pt', 'data-tutor': t.name },
       h('div', { class: 'hd' }, avatarEl(t), h('div', { class: 'who' }, h('span', { class: 'nm' }, t.display), t.turns ? h('small', {}, h('span', {}, t.turns + ' 轮'), ...(t.kouboYuan ? [' ', h('span', {}, '· koubo ¥' + t.kouboYuan.toFixed(2))] : [])) : null)),
@@ -1058,6 +1167,42 @@ __REEL_JS__
     $('#tutors').replaceChildren(...H.tutors.map((t) => block(t, [...t.threads.map((th) => row(t, th)), ...(mods.get(t.name) || [])])),
       ...[...mods.entries()].filter(([k]) => k.startsWith(':')).map(([k, rows]) => block({ name: k, display: k.slice(1), subject: k.slice(1) }, rows)));
     $('#hcards').replaceChildren();
+    // ---- 右栏:选中话题的概要(拍板 25)。录像接口一个话题拿一次,节数或停的地方变了再拿 ----
+    const pane = $('#pdetail');
+    if (!WIDE.matches) { pane.replaceChildren(); return; }
+    if (!cur) { S.pdet = null; pane.replaceChildren(h('div', { class: 'none' }, H.date === H.today ? '今天还没有话题' : '这天没有话题')); return; }
+    const { t, th } = cur;
+    const key = [t.name, H.date, th.thread, th.sections, th.stoppedAt].join('|');
+    if (!S.pdet || S.pdet.key !== key) {
+      S.pdet = { key, d: null };
+      api('GET', '/api/conversations/' + encodeURIComponent(t.name) + '/' + H.date + '/threads/' + encodeURIComponent(th.thread) + '/reel')
+        .then((d) => d, () => false)
+        .then((d) => { if (S.pdet && S.pdet.key === key) { S.pdet.d = d; if (S.home && !S.tutor) renderOverview(); } });
+    }
+    const d = S.pdet.d;
+    const msgs = (d && d.messages) || [];
+    const rl = d ? d.reel : null;
+    const span = rl ? Math.max(1, rl.endAt - rl.startAt) : 0;
+    const waited = rl ? rl.waits.reduce((n, w) => n + (w.to - w.from), 0) : 0;
+    const thought = rl ? rl.gaps.filter((g) => g.kind === 'think').reduce((n, g) => n + g.ms, 0) : 0;
+    const secs = msgs.filter((m) => m.section && m.section.lines && m.section.lines.length);
+    const lastLines = secs.length ? secs[secs.length - 1].section.lines.slice(-2).map((l) => l.text) : [];
+    const said = msgs.filter((m) => m.question).pop();
+    const tails = msgs.map((m) => (m.parentText || '').replace('## 家长', '').trim()).filter(Boolean);
+    const mem = msgs.flatMap((m) => m.remembered || []);
+    const meta = [t.display, clock(th.at) + (rl ? '–' + hhmm(rl.endAt) : ''), waited >= 3000 ? '等老师约 ' + reelDuration(waited) : '', thought >= 3000 ? '孩子想了约 ' + reelDuration(thought) : ''].filter(Boolean).join(' · ');
+    const marks = rl ? rl.marks.filter((m) => m.kind === 'said' || m.kind === 'ask').map((m) => h('i', { class: m.kind, style: 'left:' + Math.min(100, Math.max(0, ((m.at - rl.startAt) / span) * 100)).toFixed(1) + '%' })) : [];
+    pane.replaceChildren(
+      h('div', { class: 'dh' }, avatarEl(t), h('div', { class: 'who' }, h('b', {}, th.title || '(没有话)'), h('small', {}, meta))),
+      h('button', { type: 'button', class: 'pv', 'aria-label': '看录像', on: { click: () => openReel(t, th.thread, H.date) } },
+        h('span', { class: 'pv-b' },
+          said ? h('span', { class: 'pv-k' }, h('i', {}, said.from === 'system' ? '系统' : said.via ? '首页' : '孩子'), said.question) : null,
+          ...lastLines.map((x) => h('span', { class: 'pv-l' }, x)),
+          d === null ? h('span', { class: 'pv-l dim' }, '…') : d === false ? h('span', { class: 'pv-l dim' }, '读不到这个话题') : null),
+        h('span', { class: 'pv-bar' }, h('span', { class: 'pv-go', html: ICON.play }), h('span', { class: 'pv-tx' }, h('span', {}, '看录像 · 停在最后一帧,往前拖看经过'), h('span', { class: 'pv-tl' }, ...marks)), h('span', { class: 'pv-d' }, rl ? reelDuration(span) : ''))),
+      tails.length ? h('div', { class: 'ds' }, h('h3', {}, '给家长的'), ...tails.map((x) => h('p', {}, x))) : null,
+      mem.length ? h('div', { class: 'ds' }, h('h3', {}, '记住了'), ...mem.map((x) => h('p', { class: 'mem' }, x))) : null,
+      h('div', { class: 'df' }, h('span', {}, '打星'), stars(t, th), ...chips(t, th), th.stoppedAt === 'writing' ? null : delBtn('conversations', t, th, '删掉这个话题')));
   };
   const setOffline = (off) => {
     if (S.offline === off) return;

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
  * 家长端「记录」(《家长板书页设计.md》,拍板 22;《家长录像设计.md》拍板 16)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
- * 起 cotutor mock → Chrome 开 /parent:清单(每位老师一块、语文老师一个话题、英语老师「今天没聊」)→
+ * 起 cotutor mock → Chrome 开 /parent:七天日期条、清单(每位老师一块、语文老师一个话题、英语老师「今天没聊」)→
  * 点话题就是录像:停在最后一帧不放、经过收着,展开有原来板书页的旁注(孩子、答案、给家长、记住了)→ 退出回清单 →
- * 打星、记账、删话题 → 昨天的清单 → ?tutor=&thread= 直接开那个话题的录像。手机与平板各截一张。孩子端 `/` 上没有答案(护栏)。
+ * 宽屏右栏的概要(拍板 25)→ 打星、记账、删话题 → 点昨天、往前七天 → ?tutor=&thread= 直接开那个话题的录像。手机与平板各截一张。孩子端 `/` 上没有答案(护栏)。
  *
  * 用法:node scripts/probe-parent.mjs [--out <截图目录>] [--keep](留下 mock)
  */
@@ -53,8 +53,8 @@ try {
   // ---- 清单 ----
   await device(390, 844, 2, true);
   await open(`${base}/parent`, `document.querySelectorAll('.pt').length > 0`);
-  const list = await evaluate(`(() => ({ title: document.title, date: document.querySelector('#pdate b')?.textContent, tutors: [...document.querySelectorAll('.pt')].map((b) => ({ who: b.dataset.tutor, rows: [...b.querySelectorAll('.tr')].map((r) => r.querySelector('small').textContent), none: b.querySelector('.none')?.textContent })), more: document.querySelector('#more-btn').hidden }))()`);
-  ok('清单:标题带「家长」、今天;四位老师(含口播老师);语文老师一个话题停在末句问句;英语老师今天没聊', list.title.endsWith('· 家长') && list.date === '今天' && list.tutors.length === 4 && list.tutors[0].rows.length === 1 && list.tutors[0].rows[0].includes('停下等孩子') && list.tutors[2].none === '今天没聊', JSON.stringify(list));
+  const list = await evaluate(`(() => ({ title: document.title, date: document.querySelector('#pweek .dy.on small')?.textContent, days: document.querySelectorAll('#pweek .dy').length, dots: document.querySelectorAll('#pweek .dy.on .wd i').length, tutors: [...document.querySelectorAll('.pt')].map((b) => ({ who: b.dataset.tutor, rows: [...b.querySelectorAll('.tr')].map((r) => r.textContent), none: b.querySelector('.none')?.textContent })), more: document.querySelector('#more-btn').hidden, pane: getComputedStyle(document.querySelector('#pdetail')).display }))()`);
+  ok('清单:标题带「家长」;七天日期条停在今天、今天有点;四位老师(含口播老师);语文老师一个话题,对话、停下等孩子;英语老师今天没聊;窄屏没有右栏', list.title.endsWith('· 家长') && list.date === '今天' && list.days === 7 && list.dots > 0 && list.tutors.length === 4 && list.tutors[0].rows.length === 1 && list.tutors[0].rows[0].startsWith('对话') && list.tutors[0].rows[0].includes('停下等孩子') && list.tutors[2].none === '今天没聊' && list.pane === 'none', JSON.stringify(list));
   console.log('  ', await shot('parent-list-phone.png'));
 
   // ---- 点话题:就是录像,停在最后一帧(拍板 16) ----
@@ -76,26 +76,44 @@ try {
   for (let i = 0; i < 20; i++) { if (await evaluate(`!document.querySelector('#tutor').classList.contains('on')`)) break; await sleep(250); }
   ok('退出:回到清单', await evaluate(`!document.body.classList.contains('reel') && document.querySelectorAll('.pt .tr').length > 0`));
 
+  // ---- 宽屏:清单与右栏概要并排(拍板 25),点一行只是选中,「看录像」才进录像 ----
+  for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelectorAll('#pdetail .ds').length > 0`)) break; await sleep(250); }
+  await evaluate(`document.querySelector('.pt[data-tutor="chinese-tutor"] .tr').click()`);
+  await sleep(400);
+  const pane = await evaluate(`({ shown: getComputedStyle(document.querySelector('#pdetail')).display, sel: document.querySelectorAll('.pt .tr.on').length, reel: document.body.classList.contains('reel'), heads: [...document.querySelectorAll('#pdetail .ds h3')].map((x) => x.textContent), lines: document.querySelectorAll('#pdetail .pv-l').length, marks: document.querySelectorAll('#pdetail .pv-tl i').length, rowStars: getComputedStyle(document.querySelector('.pt .tr .stars')).display, del: document.querySelector('#pdetail .del')?.textContent })`);
+  ok('宽屏:右栏有概要(老师最后说的、进度条上的点、给家长的、记住了、删掉这个话题);点一行只选中、不进录像;行上不放星与删', pane.shown === 'flex' && pane.sel === 1 && !pane.reel && pane.heads.includes('给家长的') && pane.heads.includes('记住了') && pane.lines > 0 && pane.marks > 0 && pane.rowStars === 'none' && pane.del === '删掉这个话题', JSON.stringify(pane));
+  console.log('  ', await shot('parent-list-tablet.png'));
+  await evaluate(`document.querySelector('#pdetail .pv').click()`);
+  for (let i = 0; i < 20; i++) { if (await evaluate(`document.body.classList.contains('reel')`)) break; await sleep(250); }
+  ok('宽屏:点「看录像」进录像', await evaluate(`document.body.classList.contains('reel') && (document.querySelector('#rl-frame').getAttribute('src') || '').includes('end=1')`));
+  await evaluate(`document.querySelector('#rl-x').click()`);
+  for (let i = 0; i < 20; i++) { if (await evaluate(`!document.querySelector('#tutor').classList.contains('on')`)) break; await sleep(250); }
+  await device(390, 844, 2, true);
+
   // ---- 回清单:打星;翻到昨天 ----
   await evaluate(`document.querySelector('.pt[data-tutor="chinese-tutor"] .stars .st:nth-child(4)').click()`);
   for (let i = 0; i < 20; i++) { if (await evaluate(`document.querySelectorAll('.pt[data-tutor="chinese-tutor"] .stars .st.on').length === 4`)) break; await sleep(250); }
   ok('清单上打星:点第四颗 → 亮四颗', await evaluate(`document.querySelectorAll('.pt[data-tutor="chinese-tutor"] .stars .st.on').length === 4`));
   // 记账:顶上的「记账」两下确认 → 每位老师 POST bookkeep(mock 立刻记上)→ 行上「已记账」、按钮灰
-  const bk0 = await evaluate(`(() => { const b = document.querySelector('#pdate .book'); b.click(); return { text: b.textContent, disabled: b.disabled }; })()`);
-  await evaluate(`document.querySelector('#pdate .book').click()`);
-  for (let i = 0; i < 20; i++) { if (await evaluate(`[...document.querySelectorAll('.pt .tr small')].some((s) => s.textContent.includes('已记账'))`)) break; await sleep(250); }
-  const bk1 = await evaluate(`({ booked: [...document.querySelectorAll('.pt .tr small')].filter((s) => s.textContent.includes('已记账')).length, disabled: document.querySelector('#pdate .book').disabled })`);
-  ok('记账:第一下「确定记?要花钱」,第二下记上 → 两个话题「已记账」,按钮灰(没有要记的了)', bk0.text === '确定记?要花钱' && !bk0.disabled && bk1.booked === 2 && bk1.disabled, JSON.stringify({ bk0, bk1 }));
+  const bk0 = await evaluate(`(() => { const b = document.querySelector('#pbook .book'); b.click(); return { text: b.textContent, disabled: b.disabled }; })()`);
+  await evaluate(`document.querySelector('#pbook .book').click()`);
+  for (let i = 0; i < 20; i++) { if (await evaluate(`[...document.querySelectorAll('.pt .tr .chip')].some((s) => s.textContent === '已记账')`)) break; await sleep(250); }
+  const bk1 = await evaluate(`({ booked: [...document.querySelectorAll('.pt .tr .chip')].filter((s) => s.textContent === '已记账').length, disabled: document.querySelector('#pbook .book').disabled, hint: document.querySelector('#pbook span').textContent })`);
+  ok('记账:第一下「确定记?要花钱」,第二下记上 → 两个话题「已记账」,按钮灰(没有要记的了)', bk0.text === '确定记?要花钱' && !bk0.disabled && bk1.booked === 2 && bk1.disabled && bk1.hint === '话题都记进日记了', JSON.stringify({ bk0, bk1 }));
   // 删话题:点一下只是变「确定删?」,再点才删;删完那位老师块下「今天没聊」
   const armed = await evaluate(`(() => { const b = document.querySelector('.pt[data-tutor="math-tutor"] .tr .del'); b.click(); return { text: b.textContent, rows: document.querySelectorAll('.pt[data-tutor="math-tutor"] .tr').length }; })()`);
   await evaluate(`document.querySelector('.pt[data-tutor="math-tutor"] .tr .del').click()`);
   for (let i = 0; i < 20; i++) { if (await evaluate(`document.querySelector('.pt[data-tutor="math-tutor"] .none') !== null`)) break; await sleep(250); }
   const gone = await evaluate(`({ rows: document.querySelectorAll('.pt[data-tutor="math-tutor"] .tr').length, none: document.querySelector('.pt[data-tutor="math-tutor"] .none')?.textContent })`);
   ok('删话题:第一下只是「确定删?」、行还在;第二下删掉,数学老师块「今天没聊」', armed.text === '确定删?' && armed.rows === 1 && gone.rows === 0 && gone.none === '今天没聊', JSON.stringify({ armed, gone }));
-  await evaluate(`document.querySelector('#pdate button').click()`);
-  for (let i = 0; i < 20; i++) { if (await evaluate(`document.querySelector('#pdate b')?.textContent.startsWith('昨天')`)) break; await sleep(250); }
-  const y = await evaluate(`(() => ({ date: document.querySelector('#pdate b')?.textContent, rows: [...document.querySelectorAll('.pt .tr b')].map((b) => b.textContent), next: document.querySelector('#pdate button:last-child').disabled }))()`);
-  ok('昨天的清单:以前的话题在,「后一天」能点', y.date.startsWith('昨天') && y.rows.some((r) => r.startsWith('昨天问的')) && !y.next, JSON.stringify(y));
+  await evaluate(`document.querySelectorAll('#pweek .dy')[5].click()`);
+  for (let i = 0; i < 20; i++) { if (await evaluate(`document.querySelectorAll('#pweek .dy')[5]?.classList.contains('on')`)) break; await sleep(250); }
+  const y = await evaluate(`(() => ({ day: document.querySelector('#pweek .dy.on small')?.textContent, today: document.querySelectorAll('#pweek .dy')[6].querySelector('small').textContent, rows: [...document.querySelectorAll('.pt .tr b')].map((b) => b.textContent), next: document.querySelector('#pweek .nv:last-child').disabled }))()`);
+  ok('点昨天:以前的话题在;日期条还是以今天结尾的七天,「往后七天」灰', /^周/.test(y.day) && y.today === '今天' && y.rows.some((r) => r.includes('昨天问的')) && y.next, JSON.stringify(y));
+  await evaluate(`document.querySelector('#pweek .nv').click()`);
+  for (let i = 0; i < 20; i++) { if (await evaluate(`!document.querySelector('#pweek .nv:last-child').disabled`)) break; await sleep(250); }
+  const w = await evaluate(`({ last: document.querySelectorAll('#pweek .dy')[6].querySelector('small').textContent, on: document.querySelectorAll('#pweek .dy.on').length })`);
+  ok('「往前七天」:翻到上一段,今天不在条上,「往后七天」能点', w.last !== '今天' && w.on === 1, JSON.stringify(w));
 
   // ---- 直接开某个话题的录像(重载回来靠它) ----
   const ov = await (await fetch(`${base}/api/overview/today`)).json();

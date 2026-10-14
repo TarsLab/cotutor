@@ -12,10 +12,11 @@
 import { DICTATION_EN_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, dictationWordLang, type DictationLang, type TutorButton } from '../cards/index.ts';
 import { localDate } from '../lib/conversation.ts';
 import { orderTutors, setTutorButtons, setTutorDictation } from '../lib/home-edit.ts';
-import { AGENT_NAME_RE, KID_LISTEN, POLICY_DEFAULTS, TUTOR_EXTRAS, tutorExtras, type CotutorConfig } from '../schema/index.ts';
+import { AGENT_NAME_RE, KID_LISTEN, POLICY_DEFAULTS, TUTOR_EXTRAS, subjectLang, tutorExtras, type CotutorConfig } from '../schema/index.ts';
 import type { AppContext, RouteResult } from './app.ts';
 import { editPublished, readPublished, type PublishResult } from './home.ts';
 import { patchConfig } from './store.ts';
+import { tutorColors } from '../lib/tutor-color.ts';
 import { wordEmoji } from './word-emoji.ts';
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -37,8 +38,10 @@ export interface ParentHomeTutor {
   buttons: TutorButton[];
   /** 这周的词:写了这位老师的听写卡;没有 = null */
   dictation: { chars: string; say?: string; emoji?: string }[] | null;
-  /** 他的听写是哪种:学科「英语」= en(英文单词),别的 zh */
+  /** 他的听写是哪种:学科是英语(含别名)= en(英文单词),别的 zh */
   lang: DictationLang;
+  /** 学科色(src/lib/tutor-color.ts) */
+  color: string;
 }
 
 export async function parentHome(ctx: AppContext): Promise<Record<string, unknown>> {
@@ -46,6 +49,7 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
   const { home } = await readPublished(ctx.ws);
   const cards = home?.cards ?? [];
   const names = faceTutors(c);
+  const colors = tutorColors(c.tutors);
   // 先后 = 首页里老师卡的先后,没写卡的照 cotutor.json 的顺序排在后面
   const written = cards.filter((x) => x.kind === 'tutor').map((x) => String(x.props.tutor)).filter((n, i, a) => names.includes(n) && a.indexOf(n) === i);
   const order = [...written, ...names.filter((n) => !written.includes(n))];
@@ -63,7 +67,8 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
       extrasSet: t.extras ?? null,
       buttons: ((card?.props.buttons ?? []) as TutorButton[]),
       dictation: dict ? ((dict.props.words ?? []) as { chars: string; say?: string; emoji?: string }[]) : null,
-      lang: t.subject === '英语' ? 'en' : 'zh',
+      lang: subjectLang(t.subject),
+      color: colors[name],
     };
   });
   return {
@@ -143,7 +148,7 @@ export async function parentHomeRoute(method: string, p: string, ctx: AppContext
       if (typeof buttons === 'string') return bad(buttons);
       return published(await editPublished(ctx.ws, (md) => setTutorButtons(md, name, buttons), ctx.now()));
     }
-    const lang = ctx.ws.config.tutors[name].subject === '英语' ? 'en' : 'zh';
+    const lang = subjectLang(ctx.ws.config.tutors[name].subject);
     const parsed = parseWords(b.words, lang);
     if (typeof parsed === 'string') return bad(parsed);
     const words = lang === 'en' ? await withEmoji(ctx, name, parsed) : parsed;

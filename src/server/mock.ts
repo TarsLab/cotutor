@@ -20,7 +20,8 @@ import { parseCardState, stripSecrets, DictationPropsSchema } from '../cards/ind
 import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { sendFile } from './send-file.ts';
-import { tutorExtras, type ConversationMessage } from '../schema/index.ts';
+import { subjectLang, tutorExtras, type ConversationMessage } from '../schema/index.ts';
+import { NEUTRAL_COLOR, tutorColors } from '../lib/tutor-color.ts';
 import { enrichLectures, ensureBaked, lectureFrameSvg, parseRing, parseSvgMs, readLecture, storedMarks, type Lecture } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { handleDictation, type DictationDeps } from '../dictation/route.ts';
@@ -612,7 +613,9 @@ export function createMock(opts: MockOptions = {}): Mock {
     return { ...rest, section };
   };
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
-  const tutorsJson = () => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, motto: t.motto, hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') }));
+  // 学科色同真服务:按老师的先后定(src/lib/tutor-color.ts)
+  const colors = tutorColors(Object.fromEntries(MOCK_TUTORS.map((t) => [t.name, { subject: t.subject }])));
+  const tutorsJson = () => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], lang: subjectLang(t.subject), motto: t.motto, hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') }));
   /** 小课堂:样本课包与样本视频在仓库里(tests/fixtures/bundles/、lectures/),起来时和真服务一样读一遍(readLecture)、记住 */
   const lectures = new Map<string, Lecture>();
   const lecturesLoaded = (async () => {
@@ -761,7 +764,7 @@ export function createMock(opts: MockOptions = {}): Mock {
           if (n) th.misses = n;
         }
         const recorded = list.reduce((n, m) => n + Object.keys(m.states ?? {}).filter((k) => m.section?.cards[Number(k)]?.kind === 'record').length, 0);
-        return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], booking: false, ...(recorded ? { kouboYuan: recorded * 0.015 } : {}), extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') };
+        return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], booking: false, ...(recorded ? { kouboYuan: recorded * 0.015 } : {}), extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') };
       });
       return { status: 200, json: { title, date, today, tutors } };
     }
@@ -824,7 +827,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const kidDay = await route('GET', `/api/kid/conversations/${name}/${tail === localDate(now()) ? 'today' : tail}`);
       const kid = kidDay.status === 200 ? (kidDay.json as { messages: { thread: string }[] }).messages.filter((m) => m.thread === thread) : [];
       const tt = MOCK_TUTORS.find((x) => x.name === name);
-      const face = { name, display: tt?.display ?? name, avatar: tt?.avatar ?? null, subject: tt?.subject ?? null };
+      const face = { name, display: tt?.display ?? name, avatar: tt?.avatar ?? null, subject: tt?.subject ?? null, color: colors[name] ?? NEUTRAL_COLOR };
       return reel ? { status: 200, json: { tutor: name, date: day.date, thread, reel, messages: mine, kid, device: null, face } } : { status: 404, json: { error: 'no_reel' } };
     }
     // 记账(家长端清单上的「记账」):这天还没记过的话题都算记了(真服务是每个话题起一轮老师;mock 立刻记上)

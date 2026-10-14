@@ -28,7 +28,7 @@
  */
 import { createHash } from 'node:crypto';
 import { wordDrawJs } from './word-draw.ts';
-import { TUTOR_FIXED, TUTOR_PALETTE } from './tutor-face.ts';
+import { NEUTRAL_COLOR } from '../lib/tutor-color.ts';
 import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from './reel-dock.ts';
 import { inlineScript } from './inline-lib.ts';
 
@@ -597,14 +597,12 @@ __REEL_JS__
     return r.json();
   };
   let bootId = null, stale = false;
-  const PALETTE = __TUTOR_PALETTE__; // 颜色在 src/server/tutor-face.ts,听写页共用
-  // 学科色调深过(《首页设计.md》拍板 21):白字按钮压在上面要看得清
-  const FIXED = __TUTOR_FIXED__;
-  const color = (s) => { if (FIXED[s]) return FIXED[s]; let x = 0; for (const ch of s || '') x = (x * 31 + ch.codePointAt(0)) >>> 0; return PALETTE[x % PALETTE.length]; };
+  // 学科色:服务端定好随老师下发(t.color,src/lib/tutor-color.ts);不归哪位老师的块用中性的灰
+  const colorOf = (t) => (t && t.color) || __NEUTRAL_COLOR__;
   /** 老师头像:学科色的 C 形开口环 + 白底圆里的图或字(样子见 .av 的样式);cls 'draw' = 一笔画出来,delay 是错开的秒数 */
   const AV_RING = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>';
   const avatarEl = (t, cls, delay) => {
-    const el = h('span', { class: 'av ' + (cls || ''), style: 'color:' + color(t.subject || t.display) + (delay ? ';--d:' + delay + 's' : '') });
+    const el = h('span', { class: 'av ' + (cls || ''), style: 'color:' + colorOf(t) + (delay ? ';--d:' + delay + 's' : '') });
     el.innerHTML = AV_RING;
     const face = h('span', { class: 'face' });
     if (t.avatar && /\.(png|jpe?g|webp|svg)$/i.test(t.avatar)) face.append(h('img', { src: '/api/kid/avatar/' + t.name, alt: '' }));
@@ -719,8 +717,8 @@ __REEL_JS__
     h('span', { class: 'dr' }, h('span', { class: 'lb' }, h('span', { class: 'btx' }, label), h('small', { class: 'ln' }, sub)), h('span', { class: 'go' }, '去写')));
   /** 拍照听写(《wip/听写设想.md》拍板 19):图标是一小格——语文的田字格写个「字」、英语的四线格写个「Aa」,右下角学科色的相机;孩子看格子就分得出是写汉字还是写英文 */
   const photoBtn = (t) => {
-    const en = t.subject === '英语';
-    return h('a', { class: 'bt bt-extra bt-x-photo' + (en ? ' en' : ''), href: '/dictation?tutor=' + encodeURIComponent(t.name) + (en ? '&lang=en' : ''), style: '--sc:' + color(t.subject || t.display) },
+    const en = t.lang === 'en';
+    return h('a', { class: 'bt bt-extra bt-x-photo' + (en ? ' en' : ''), href: '/dictation?tutor=' + encodeURIComponent(t.name) + (en ? '&lang=en' : ''), style: '--sc:' + colorOf(t) },
       h('span', { class: 'pg', 'aria-hidden': 'true' }, h('i', {}, en ? 'Aa' : '字'), h('span', { class: 'cam', html: EXTRA_ICON.photo })),
       h('span', { class: 'lb' }, h('span', { class: 'btx' }, '拍照听写'), h('small', { class: 'ln' }, en ? '拍英语书上要写的单词' : '拍语文书上要写的词')));
   };
@@ -758,7 +756,7 @@ __REEL_JS__
   // 孩子看到的字都在 .btx 里(探针按它读)
   const tutorButton = (t, b) => {
     const on = { click: () => pickButton(t, b) };
-    if (b.kind === 'new') return h('button', { type: 'button', class: 'bt bt-new', style: '--sc:' + color(t.subject || t.display), on }, h('span', { class: 'lb' }, h('span', { class: 'btx' }, b.label), h('small', { class: 'ln' }, '想问我什么?')), h('span', { class: 'bi', html: ICON.spark }));
+    if (b.kind === 'new') return h('button', { type: 'button', class: 'bt bt-new', style: '--sc:' + colorOf(t), on }, h('span', { class: 'lb' }, h('span', { class: 'btx' }, b.label), h('small', { class: 'ln' }, '想问我什么?')), h('span', { class: 'bi', html: ICON.spark }));
     if (b.kind === 'lecture') return h('button', { type: 'button', class: 'bt bt-lecture', on }, lecturePic(b),
       h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, b.label), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null));
     return h('button', { type: 'button', class: 'bt bt-' + b.kind, on }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] }), h('span', { class: 'btx' }, b.label));
@@ -861,7 +859,7 @@ __REEL_JS__
       }
       if (deal || el.dataset.sig !== sig) {
         el.dataset.sig = sig;
-        el.style.borderColor = color(t.subject || t.display);
+        el.style.borderColor = colorOf(t);
         const extras = extrasFor(t, H);
         const others = owned.filter((c) => c.kind !== 'dictation');
         el.replaceChildren(...[
@@ -1092,7 +1090,7 @@ __REEL_JS__
   /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」 */
   const blankBoard = (title, resume) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor, 'draw') : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, S.tutor && S.tutor.motto ? h('span', { class: 'mo' }, S.tutor.motto) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null, resume && S.tutor ? resumeChip(resume) : null);
   // ---- 接着今天的(《wip/activity设计.md》§八,设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm):首页不再有「接着刚才的」,进来都是新话题 ----
-  const tutorColor = () => color(S.tutor.subject || S.tutor.display);
+  const tutorColor = () => colorOf(S.tutor);
   /** 回到今天的那个话题:照旧铺开、不重播(同「以前的」里点今天的一行) */
   const resumeThread = (thread) => { S.ask = null; switchThread(null, thread); };
   /** 新话题空白板上的胶囊:今天最后一个自由话题;孩子一开口(发出去)空白板连它一起收起 */
@@ -1574,7 +1572,7 @@ __WORD_DRAW_JS__
   const lcFrame = $('#lc-frame');
   const lcPost = (m) => { try { lcFrame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
   /** 播放器左上「‹ 头像」用的老师头像(和老师页的返回胶囊一样;照 avatarEl 画法拆成图或字 + 颜色) */
-  const lcTutor = () => { const t = S.tutor; if (!t) return null; const av = avatarEl(t), img = av.querySelector('img'); return { color: color(t.subject || t.display), ...(img ? { img: img.getAttribute('src') } : { text: av.textContent }) }; };
+  const lcTutor = () => { const t = S.tutor; if (!t) return null; const av = avatarEl(t), img = av.querySelector('img'); return { color: colorOf(t), ...(img ? { img: img.getAttribute('src') } : { text: av.textContent }) }; };
   /** 小课堂在哪:课包 /api/bundles/<id>/;视频 /api/kid/lectures/<id>/(lecture.json + video.mp4) */
   const lcBundleUrl = (bundle, video) => (video ? '/api/kid/lectures/' : '/api/bundles/') + encodeURIComponent(bundle) + '/';
   let lcShowing = null;
@@ -3387,7 +3385,7 @@ __REEL_DOCK_JS__
 </html>
 `;
 
-const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__TUTOR_PALETTE__', () => JSON.stringify(TUTOR_PALETTE)).replace('__TUTOR_FIXED__', () => JSON.stringify(TUTOR_FIXED));
+const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR));
 export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 
 export interface KidPageMode {

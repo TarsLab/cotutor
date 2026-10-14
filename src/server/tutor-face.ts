@@ -1,17 +1,11 @@
 /**
- * 老师的脸:学科色 + C 形开口环 + 白底圆里的图或字。孩子端(kid-page.ts)与听写页(src/dictation/)共用颜色;
- * 听写页另用这里的「‹ 头像」胶囊回首页(《wip/听写设想.md》拍板 16),样子照 kid-page.ts 的 #back,两处改要一起改。
+ * 老师的脸:学科色 + C 形开口环 + 白底圆里的图或字。学科色服务端定好随老师下发(t.color,src/lib/tutor-color.ts)。
+ * 听写页用这里的「‹ 头像」胶囊回首页(《wip/听写设想.md》拍板 16),样子照 kid-page.ts 的 #back,两处改要一起改。
  * 脚本是 ES5、没有反斜杠与反引号(插进各页的模板字符串)。
  */
 
-/** 没有固定色的学科按名字散列到这几种 */
-export const TUTOR_PALETTE = ['#e8743b', '#3b82e8', '#2fa36b', '#b45fd1', '#d9a520', '#e0508a'];
-export const TUTOR_FIXED: Readonly<Record<string, string>> = { '语文': '#c43c74', '数学': '#2f6fd6', '英语': '#1f8a4c' };
-
-/** 听写页用:tutorColor、backCapsule(onClick) → { el, set(t) };t = /api/kid/home 里 tutors 的一项(name、display、subject、avatar) */
+/** 听写页用:backCapsule(onClick) → { el, set(t) };t = /api/kid/home 里 tutors 的一项(name、display、avatar、color) */
 export const TUTOR_FACE_JS = `
-  var TUTOR_PALETTE = ${JSON.stringify(TUTOR_PALETTE)}, TUTOR_FIXED = ${JSON.stringify(TUTOR_FIXED)};
-  var tutorColor = function (s) { if (TUTOR_FIXED[s]) return TUTOR_FIXED[s]; var x = 0; Array.from(s || '').forEach(function (ch) { x = (x * 31 + ch.codePointAt(0)) >>> 0; }); return TUTOR_PALETTE[x % TUTOR_PALETTE.length]; };
   var backCapsule = function (onClick) {
     var el = document.createElement('button'); el.type = 'button'; el.id = 'back'; el.setAttribute('aria-label', '回首页');
     el.innerHTML = '<i class="bk-ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></i>';
@@ -19,7 +13,7 @@ export const TUTOR_FACE_JS = `
     var set = function (t) {
       var old = el.querySelector('.tfav'); if (old) old.remove();
       if (!t) return;
-      var av = document.createElement('span'); av.className = 'tfav'; av.style.color = tutorColor(t.subject || t.display);
+      var av = document.createElement('span'); av.className = 'tfav'; av.style.color = t.color;
       av.innerHTML = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>';
       var face = document.createElement('span'); face.className = 'face';
       if (t.avatar && /[.](png|jpe?g|webp|svg)$/i.test(t.avatar)) { var img = document.createElement('img'); img.src = '/api/kid/avatar/' + encodeURIComponent(t.name); img.alt = ''; face.append(img); }

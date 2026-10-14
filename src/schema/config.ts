@@ -81,6 +81,8 @@ export const TutorSchema = z.object({
   subject: z.string().optional().describe('学科:与课程表的学科列、观察的 subject、vault 入口文件的 subject 属性对齐即归到这位老师'),
   /** 头像:一个 emoji 或图片相对路径 */
   avatar: z.string().optional().describe('头像:一个 emoji,或 workspace 根以内的图片相对路径(如 avatars/math-tutor.png;figshot pick --workspace 会写这个)'),
+  /** 学科色(《首页设计.md》拍板 26):头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮;不写 = 自动(src/lib/tutor-color.ts) */
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, '要 #rrggbb').optional().describe('学科色 #rrggbb:头像的环、牌的边、新话题气泡(白字压在上面,要够深,doctor 会查)、听写页的按钮;不写 = 语文粉、数学蓝、英语绿,其余按先后自动分、不撞色'),
   /** voxtell 音色 id(2026-09-08 拍板);没有 = 用 voxtell 缺省 */
   voice: z.string().optional().describe('voxtell 音色 id(voxtell voices 可查);不配就不配音,孩子端用浏览器的声'),
   enabled: z.boolean().default(true).describe('开关:false 时两端都不见'),
@@ -95,10 +97,27 @@ export const TutorSchema = z.object({
 });
 export type Tutor = z.infer<typeof TutorSchema>;
 
+/** 三门主科的别名(《首页设计.md》拍板 26):学科写「英文」「English」也认作英语,颜色、听写用英文、语文缺省带听写都照它 */
+const SUBJECT_ALIASES: Readonly<Record<string, string>> = {
+  语文: '语文', 中文: '语文', 国语: '语文', chinese: '语文',
+  数学: '数学', math: '数学', maths: '数学', mathematics: '数学',
+  英语: '英语', 英文: '英语', english: '英语',
+};
+/** 学科的标准名:三门主科的别名归一(语文 / 数学 / 英语),别的原样(去两头空白);没写 null */
+export function canonicalSubject(subject: string | null | undefined): string | null {
+  const s = subject?.trim();
+  if (!s) return null;
+  return SUBJECT_ALIASES[s.toLowerCase()] ?? s;
+}
+/** 这位老师的听写写哪种:学科是英语(含别名)= en(四线三格写英文单词),别的 zh */
+export function subjectLang(subject: string | null | undefined): 'zh' | 'en' {
+  return canonicalSubject(subject) === '英语' ? 'en' : 'zh';
+}
+
 /** 这位老师卡上的常驻入口:配了照配的;没配按学科(语文 = 听写) */
 export function tutorExtras(t: Pick<Tutor, 'extras' | 'subject'>): TutorExtra[] {
   if (t.extras) return [...new Set(t.extras)];
-  return t.subject === '语文' ? ['dictation'] : [];
+  return canonicalSubject(t.subject) === '语文' ? ['dictation'] : [];
 }
 
 /**

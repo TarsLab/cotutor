@@ -83,6 +83,11 @@ const history = (): string[] => { try { return readdirSync(join(root, 'home', 'h
 
 try {
   const g0 = await get();
+  {
+    const kt = ((await call('GET', '/api/kid/home')).json as { tutors: { name: string; color: string; lang: string }[] }).tutors;
+    const pt = (g0 as unknown as { tutors: { name: string; color: string }[] }).tutors;
+    check('学科色服务端定好随老师下发:孩子端、家长端一样;英语老师 lang en(拍板 26)', kt.length > 0 && kt.every((t) => /^#[0-9a-f]{6}$/.test(t.color) && pt.find((x) => x.name === t.name)?.color === t.color) && kt.find((t) => t.name === 'english-tutor')?.lang === 'en' && kt.find((t) => t.name === 'chinese-tutor')?.color === '#c43c74', JSON.stringify(kt.map((t) => [t.name, t.color, t.lang])));
+  }
   check('没发布过:老师按 cotutor.json 的顺序,没有按钮;语文常驻听写(没写 extras 走缺省)', g0.home === null && g0.tutors.map((t) => t.name).join() === 'chinese-tutor,english-tutor,math-tutor' && g0.tutors.every((t) => !t.buttons.length) && g0.tutors[0].extras.join() === 'dictation' && g0.tutors[0].extrasSet === null && g0.today === '2026-10-10', JSON.stringify(g0.tutors.map((t) => [t.name, t.extras])));
 
   // 加一个开场按钮(只今天)

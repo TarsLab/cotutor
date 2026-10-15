@@ -114,10 +114,13 @@ export function subjectLang(subject: string | null | undefined): 'zh' | 'en' {
   return canonicalSubject(subject) === '英语' ? 'en' : 'zh';
 }
 
-/** 这位老师卡上的常驻入口:配了照配的;没配按学科(语文 = 听写) */
-export function tutorExtras(t: Pick<Tutor, 'extras' | 'subject'>): TutorExtra[] {
+/**
+ * 这位老师卡上的常驻入口:配了照配的;没配按学科——语文 = 听写;英语 = 口语课,要口语课开着(talkOn = talk.enabled,《口语课设计.md》拍板 20)
+ */
+export function tutorExtras(t: Pick<Tutor, 'extras' | 'subject'>, talkOn = false): TutorExtra[] {
   if (t.extras) return [...new Set(t.extras)];
-  return canonicalSubject(t.subject) === '语文' ? ['dictation'] : [];
+  const s = canonicalSubject(t.subject);
+  return s === '语文' ? ['dictation'] : s === '英语' && talkOn ? ['talk'] : [];
 }
 
 /**
@@ -394,7 +397,7 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
       enabled: t.enabled,
       hidden: t.hidden,
       policy: resolvePolicy(config, name),
-      extras: tutorExtras(t),
+      extras: tutorExtras(t, config.talk.enabled),
     }));
 }
 

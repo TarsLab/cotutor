@@ -63,7 +63,7 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
       avatar: t.avatar ?? null,
       subject: t.subject ?? null,
       hidden: t.hidden,
-      extras: tutorExtras(t),
+      extras: tutorExtras(t, c.talk.enabled),
       extrasSet: t.extras ?? null,
       buttons: ((card?.props.buttons ?? []) as TutorButton[]),
       dictation: dict ? ((dict.props.words ?? []) as { chars: string; say?: string; emoji?: string }[]) : null,

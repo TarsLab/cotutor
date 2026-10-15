@@ -1,7 +1,8 @@
-/** 主屏幕图标与 manifest:iPad「添加到主屏幕」用的两样——PNG 现画(尺寸 / 签名 / 像素对得上)、清单是 standalone。 */
+/** 主屏幕图标与 manifest:iPad「添加到主屏幕」用的两样——PNG 现画(尺寸 / 签名 / 三色 C 的像素对得上)、清单是 standalone。 */
 import { inflateSync } from 'node:zlib';
 import { createMock } from '../src/server/mock.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../src/lib/icon.ts';
+import { SUBJECT_COLORS } from '../src/lib/tutor-color.ts';
 import { check, done } from './_check.ts';
 
 /** 极简 PNG 解码:只认本模块写出来的那种(8 位真彩、filter 0) */
@@ -49,17 +50,23 @@ function crc32(buf: Buffer): number {
 }
 
 {
+  // 三色 C(《产品规划.md》拍板 20):纸色底,C 占边长的 62%,环心半径 27.25 / 64
   const png = appIconPng(180);
   const img = decode(png);
   check('180 见方', img.w === 180 && img.h === 180);
   const near = (a: [number, number, number], b: [number, number, number]) => a.every((v, i) => Math.abs(v - b[i]) <= 2);
-  check('四角是橙底(--accent)', near(img.at(2, 2), [0xe8, 0x74, 0x3b]) && near(img.at(177, 177), [0xe8, 0x74, 0x3b]), img.at(2, 2).join());
-  check('中间偏上是纸色面板(--card)', near(img.at(90, 72), [0xff, 0xfd, 0xf8]), img.at(90, 72).join());
-  check('第二条讲稿线是墨色(--ink)', near(img.at(90, 90), [0x2b, 0x2b, 0x2b]), img.at(90, 90).join());
-  check('圆角抗锯齿:边上有中间色', (() => {
-    for (let y = 25; y < 40; y++) {
-      const [r, g, b] = img.at(28, y);
-      if (!near([r, g, b], [0xe8, 0x74, 0x3b]) && !near([r, g, b], [0xff, 0xfd, 0xf8])) return true;
+  const hex = (h: string): [number, number, number] => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16)) as [number, number, number];
+  const ring = Math.round(27.25 * ((180 * 0.62) / 64));
+  check('四角是纸色(--paper)', near(img.at(2, 2), [0xfa, 0xf9, 0xf4]) && near(img.at(177, 177), [0xfa, 0xf9, 0xf4]), img.at(2, 2).join());
+  check('中间是空着的白脸', near(img.at(90, 90), [0xff, 0xff, 0xff]), img.at(90, 90).join());
+  check('上面一段是数学', near(img.at(90, 90 - ring), hex(SUBJECT_COLORS['数学'])), img.at(90, 90 - ring).join());
+  check('左边一段是语文', near(img.at(90 - ring, 90), hex(SUBJECT_COLORS['语文'])), img.at(90 - ring, 90).join());
+  check('下面一段是英语', near(img.at(90, 90 + ring), hex(SUBJECT_COLORS['英语'])), img.at(90, 90 + ring).join());
+  check('右边开口是纸色', near(img.at(90 + ring, 90), [0xfa, 0xf9, 0xf4]), img.at(90 + ring, 90).join());
+  check('抗锯齿:环边上有中间色', (() => {
+    for (let y = 0; y < 90; y++) {
+      const c = img.at(70, y);
+      if (!near(c, [0xfa, 0xf9, 0xf4]) && !near(c, hex(SUBJECT_COLORS['数学']))) return true;
     }
     return false;
   })());

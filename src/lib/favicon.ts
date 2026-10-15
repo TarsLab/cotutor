@@ -3,10 +3,10 @@
  * 画法照孩子端的头像(老师颜色的 C 形开口环、开口朝右 72°,白底圆里放头像),只为标签上的 16 px 把环加粗。
  * 三色 C:三门主科色,从右上起逆时针数学、语文、英语,段间留缝。
  * SVG 给认 SVG 的浏览器,脸里画 emoji / 首字 / 缩到 64×64 内联的头像图(图标里的 SVG 读不了别的地址);
- * PNG 给不认的(Safari),没有字体,只画环与白底圆,脸空着。
+ * PNG 给不认的浏览器,没有字体,只画环与白底圆,脸空着。主屏幕图标(icon.ts)也是这里画的三色 C,纸色底、环细回孩子端的比例。
  */
 import { inflateSync } from 'node:zlib';
-import { encodePng } from './icon.ts';
+import { encodePng } from './png.ts';
 import { SUBJECT_COLORS } from './tutor-color.ts';
 
 /** 三色 C 的三段,顺时针从下面的开口端起:英语(下)、语文(左)、数学(上) */
@@ -36,15 +36,25 @@ export async function faviconResponse(path: string, tutor: string | null, face: 
   return { body: faviconPng(f ? [f.color] : HOME_RING), contentType: 'image/png' };
 }
 
-// ---- 几何:64 见方,按标签上的 16 px 那一档 ----
+// ---- 几何:64 见方 ----
 
-const SW = 10; // 环粗(孩子端头像是直径的 7%,16 px 时不到 1 个像素)
-const R = 26; // 环心半径
-const FACE_R = 19.5;
+interface Geom {
+  sw: number; // 环粗
+  R: number; // 环心半径
+  faceR: number;
+  gap: number; // 三色段间的缝(度)
+}
+/** 标签上的 16 px 那一档(孩子端头像的环是直径的 7%,16 px 时不到 1 个像素) */
+const TAB: Geom = { sw: 10, R: 26, faceR: 19.5, gap: 13 };
+/** 大图(主屏幕):环细回孩子端头像的比例 */
+const BIG: Geom = { sw: 7.5, R: 27.25, faceR: 21, gap: 9 };
+const { sw: SW, R, faceR: FACE_R } = TAB;
 const A0 = 36; // 开口朝右 72°:环从 36° 顺时针画到 324°(SVG 角度,0 = 右、90 = 下)
 const A1 = 324;
-const GAP = 13; // 三色段间的缝(度)
 const PAPER = '#ffffff';
+/** 主屏幕图标的底:孩子端的纸色(--paper);C 占边长的 62%,iOS 切圆角、安卓切圆都切不到 */
+const HOME_BG = '#faf9f4';
+const HOME_BOX = 0.62;
 
 interface Seg {
   a1: number;
@@ -52,12 +62,12 @@ interface Seg {
   color: string;
 }
 /** 环分几段就几种颜色;段内平头,两个开口端另画圆头 */
-function segs(colors: readonly string[]): Seg[] {
+function segs(colors: readonly string[], gap = TAB.gap): Seg[] {
   const span = (A1 - A0) / colors.length;
-  return colors.map((color, i) => ({ a1: A0 + i * span + (i === 0 ? 0 : GAP / 2), a2: A0 + (i + 1) * span - (i === colors.length - 1 ? 0 : GAP / 2), color }));
+  return colors.map((color, i) => ({ a1: A0 + i * span + (i === 0 ? 0 : gap / 2), a2: A0 + (i + 1) * span - (i === colors.length - 1 ? 0 : gap / 2), color }));
 }
 const f2 = (n: number): number => Math.round(n * 100) / 100;
-const at = (deg: number): [number, number] => [32 + R * Math.cos((deg * Math.PI) / 180), 32 + R * Math.sin((deg * Math.PI) / 180)];
+const at = (deg: number, r = R): [number, number] => [32 + r * Math.cos((deg * Math.PI) / 180), 32 + r * Math.sin((deg * Math.PI) / 180)];
 
 // ---- SVG ----
 
@@ -232,7 +242,7 @@ export function shrinkPng(buf: Buffer, n: number): Buffer | null {
   return encodePng(n, out, 4);
 }
 
-// ---- PNG:环与白底圆,4×4 超采样,透明底 ----
+// ---- PNG:环与白底圆,4×4 超采样 ----
 
 const rgb = (hex: string): [number, number, number] => {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex);
@@ -242,54 +252,67 @@ const rgb = (hex: string): [number, number, number] => {
 const SS = 4;
 const pngCache = new Map<string, Buffer>();
 
+/** 网页图标的 PNG:标签那一档的环,透明底 */
 export function faviconPng(colors: readonly string[], size = 32): Buffer {
   const n = Math.min(256, Math.max(16, Math.round(size)));
   const key = `${colors.join(',')}@${n}`;
   const hit = pngCache.get(key);
   if (hit) return hit;
-  const ss = segs(colors).map((s) => ({ ...s, c: rgb(s.color) }));
-  const [sx, sy] = at(A0);
-  const [ex, ey] = at(A1);
+  const out = ringPng(n, colors, TAB, 1, null);
+  pngCache.set(key, out);
+  return out;
+}
+
+/** 主屏幕图标:纸色底上的三色 C(大图那一档),不透明;缓存在 icon.ts */
+export function homeScreenPng(n: number): Buffer {
+  return ringPng(n, HOME_RING, BIG, HOME_BOX, rgb(HOME_BG));
+}
+
+/** box = 64 见方的画布占边长多少;bg 给了就是不透明 RGB,不给是透明 RGBA */
+function ringPng(n: number, colors: readonly string[], g: Geom, box: number, bg: [number, number, number] | null): Buffer {
+  const ss = segs(colors, g.gap).map((s) => ({ ...s, c: rgb(s.color) }));
+  const [sx, sy] = at(A0, g.R);
+  const [ex, ey] = at(A1, g.R);
   const paper = rgb(PAPER);
-  const half = SW / 2;
+  const half = g.sw / 2;
   const colorAt = (u: number, v: number): [number, number, number] | null => {
     const dx = u - 32;
     const dy = v - 32;
     const d = Math.hypot(dx, dy);
-    if (d <= FACE_R) return paper;
+    if (d <= g.faceR) return paper;
     if (Math.hypot(u - sx, v - sy) <= half) return ss[0].c;
     if (Math.hypot(u - ex, v - ey) <= half) return ss[ss.length - 1].c;
-    if (Math.abs(d - R) > half) return null;
+    if (Math.abs(d - g.R) > half) return null;
     const deg = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
     return ss.find((s) => deg >= s.a1 && deg <= s.a2)?.c ?? null;
   };
-  const px = Buffer.alloc(n * n * 4);
+  const ch = bg ? 3 : 4;
+  const unit = 64 / box / n; // 一个像素是画布上多少
+  const px = Buffer.alloc(n * n * ch);
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
       let r = 0;
-      let g = 0;
+      let gg = 0;
       let b = 0;
       let k = 0;
       for (let sy2 = 0; sy2 < SS; sy2++) {
         for (let sx2 = 0; sx2 < SS; sx2++) {
-          const c = colorAt(((x + (sx2 + 0.5) / SS) / n) * 64, ((y + (sy2 + 0.5) / SS) / n) * 64);
+          const c = colorAt(32 + (x + (sx2 + 0.5) / SS - n / 2) * unit, 32 + (y + (sy2 + 0.5) / SS - n / 2) * unit) ?? bg;
           if (!c) continue;
           r += c[0];
-          g += c[1];
+          gg += c[1];
           b += c[2];
           k++;
         }
       }
-      const o = (y * n + x) * 4;
+      const o = (y * n + x) * ch;
       if (k) {
         px[o] = Math.round(r / k);
-        px[o + 1] = Math.round(g / k);
+        px[o + 1] = Math.round(gg / k);
         px[o + 2] = Math.round(b / k);
       }
-      px[o + 3] = Math.round((255 * k) / (SS * SS));
+      if (!bg) px[o + 3] = Math.round((255 * k) / (SS * SS));
     }
   }
-  const out = encodePng(n, px, 4);
-  pngCache.set(key, out);
-  return out;
+  return encodePng(n, px, ch);
 }

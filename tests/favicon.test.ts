@@ -10,7 +10,7 @@ process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
 const { HOME_RING, faviconLinks, faviconPng, homeFaviconSvg, shrinkPng, tutorFaviconSvg } = await import('../src/lib/favicon.ts');
-const { encodePng } = await import('../src/lib/icon.ts');
+const { encodePng } = await import('../src/lib/png.ts');
 const { SUBJECT_COLORS } = await import('../src/lib/tutor-color.ts');
 const { createMock } = await import('../src/server/mock.ts');
 const { initWorkspace } = await import('../src/cli/init.ts');

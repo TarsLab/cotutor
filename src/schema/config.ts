@@ -205,13 +205,13 @@ export const KID_LISTEN = ['browser', 'omni'] as const;
  * 口语课(《口语课设计.md》):家长拍一张今天学的,孩子先跟读、再和 realtime 模型用这些词聊。出厂关着;要百炼 key 与业务空间 id。
  * 不进老师团:没有老师文件、板书、记忆;音色是 realtime 自己那套(Tina / Serena…),和 voxtell 的不是一家。
  */
-export const TALK_READ_DEFAULT = { waitMs: 5000, again: 2, endMs: 900, pass: 0.5 };
+export const TALK_READ_DEFAULT = { waitMs: 5000, again: 0, endMs: 900, pass: 0.5 };
 /** 跟我读不用按(《口语课设计.md》§8.1):孩子读完自动下一句、几秒没出声老师再读 */
 export const TalkReadSchema = z.object({
-  waitMs: z.number().int().min(1000).max(30000).default(TALK_READ_DEFAULT.waitMs).describe('老师读完多久没开口就再读一遍'),
-  again: z.number().int().min(0).max(5).default(TALK_READ_DEFAULT.again).describe('一句里自动再读最多几遍;用完了不再催,等孩子'),
+  waitMs: z.number().int().min(1000).max(30000).default(TALK_READ_DEFAULT.waitMs).describe('老师读完多久没开口:again 是 0 时孩子端「再听一遍」亮一下,大于 0 时老师再读一遍'),
+  again: z.number().int().min(0).max(5).default(TALK_READ_DEFAULT.again).describe('一句里自动再读最多几遍;缺省 0 = 只读一遍,读得不全也往下走(《口语课设计.md》拍板 15)'),
   endMs: z.number().int().min(300).max(3000).default(TALK_READ_DEFAULT.endMs).describe('孩子开口之后静多久算读完'),
-  pass: z.number().min(0).max(1).default(TALK_READ_DEFAULT.pass).describe('转写里有这句的词占多少算读完;不到就老师再读一遍'),
+  pass: z.number().min(0).max(1).default(TALK_READ_DEFAULT.pass).describe('转写里有这句的词占多少算读完;不到且 again 还有就老师再读一遍'),
 });
 export const TALK_DEFAULT = { enabled: false, model: 'qwen3.8-omni-flash-realtime', listModel: 'qwen3.8-omni-flash', voice: 'Serena', minutes: 5, silenceMs: 1200, interrupt: false, read: TALK_READ_DEFAULT };
 export const TalkSchema = z.object({
@@ -222,7 +222,7 @@ export const TalkSchema = z.object({
   minutes: z.number().int().min(1).max(20).default(TALK_DEFAULT.minutes).describe('聊那段几分钟;到了老师收尾'),
   silenceMs: z.number().int().min(400).max(4000).default(TALK_DEFAULT.silenceMs).describe('聊那段 VAD 判「说完了」的静音毫秒;孩子想词慢就调长'),
   interrupt: z.boolean().default(false).describe('聊那段老师说话时麦克风开不开:false = 老师说完才听(没有回声问题,但孩子插不了嘴);true = 全双工,靠设备的回声消除'),
-  read: TalkReadSchema.default(TALK_READ_DEFAULT).describe('跟我读:读完自动下一句、没出声老师再读的几个数'),
+  read: TalkReadSchema.default(TALK_READ_DEFAULT).describe('跟我读:读完自动下一句、没出声怎么办的几个数'),
   note: z.string().max(600).optional().describe('家长给口语课老师的话(这周学什么、想多聊什么);跟读与聊的系统提示都带上,孩子看不到'),
 });
 export type TalkConfig = z.infer<typeof TalkSchema>;

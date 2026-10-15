@@ -20,10 +20,10 @@
  */
 import type { TalkConfig } from '../schema/config.ts';
 import { readInit, readLeft, readStep, vadInit, vadStep, type ReadEvent, type ReadState, type Vad } from './lib/read-flow.ts';
-import { appears, itemsOf, type Line, type ListItem } from './lib/used.ts';
+import { appears, itemsOf, type Line } from './lib/used.ts';
 import { mixCall, type Chunk } from './lib/mix.ts';
 import { rms } from './lib/wav.ts';
-import { chatCloseCue, chatInstructions, chatOpenCue, readAgainCue, readCue, readInstructions, readLastCue, readNextCue, readSummary } from './prompt.ts';
+import { chatCloseCue, chatInstructions, chatOpenCue, readAgainCue, readCue, readInstructions, readLastCue, readNextCue, readSummary, type ReadItem } from './prompt.ts';
 import { INPUT_RATE, OUTPUT_RATE, RealtimeSession, type Usage } from './realtime.ts';
 import { finishCall, type TalkMeta } from './store.ts';
 import type { ServerSocket } from './ws.ts';
@@ -55,7 +55,7 @@ const READ_TICK_MS = 200;
 export class TalkCall {
   private phase: Phase = 'read';
   private i = 0;
-  private readonly items: ListItem[];
+  private readonly items: ReadItem[];
   private session: RealtimeSession | null = null;
   private speaking = false;
   /** 跟读段:一句的状态、响度判开口、开口前垫的几块、在不在往模型推、读完最后一句要开聊 */
@@ -96,7 +96,7 @@ export class TalkCall {
     this.meta = meta;
     this.sock = sock;
     this.deps = deps;
-    this.items = itemsOf(meta.list);
+    this.items = itemsOf(meta.list).map((it, k) => ({ ...it, word: k < meta.list.words.length }));
     this.startedAt = (deps.now ?? (() => new Date()))();
   }
 

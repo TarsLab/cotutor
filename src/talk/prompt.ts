@@ -21,18 +21,21 @@ const persona = (kid: string): string => `你是一位教一年级孩子的英�
 /** 跟读那条会话的系统提示 */
 export function readInstructions(list: TalkList, kid = '', note = ''): string {
   return `${persona(kid)}
-现在是跟读:我会告诉你「读这句:…」,你就只把那句英文读一遍(先英文,再轻轻说一遍中文意思),然后停下等孩子读。
+现在是跟读:我会告诉你「读这个词:…」或「读这句:…」。读这个词:把英文读一遍,再轻轻说一遍我给的中文意思;读这句:只把那句英文读一遍,不说中文(中文印在他的卡上)。读完停下等孩子读。
 孩子读完,我会告诉你他读了什么、下一句是什么:你先用一两个词接(Nice! / Good job! / Great!),紧接着读下一句,一口气说完。
 我说「再读一遍这句」,你就说 Listen again 再读一遍那句。不要讲别的,不要问问题,不说他读得对不对。
 今天的口语单:
 ${listText(list)}${noteText(note)}`;
 }
 
+/** 跟读的一项:word = 口语单上的单词(后面说中文意思),否则是句子(只读英文,《口语课设计.md》拍板 15) */
+export type ReadItem = ListItem & { word?: boolean };
+const what = (item: ReadItem): string => (item.word ? `这个词:${item.en}${item.zh ? `(中文意思:${item.zh})` : ''}` : `这句:${item.en}`);
 /** 跟读段塞给模型的那句 */
-export const readCue = (item: ListItem): string => `读这句:${item.en}`;
-export const readAgainCue = (item: ListItem): string => `再读一遍这句:${item.en}`;
-/** 孩子读完了(《口语课设计.md》§8.1):接一两个词 + 下一句,一次回答说完 */
-export const readNextCue = (heard: string, next: ListItem): string => `孩子读了「${heard}」。先用一两个词接,再读下一句:${next.en}`;
+export const readCue = (item: ReadItem): string => `读${what(item)}`;
+export const readAgainCue = (item: ReadItem): string => `再读一遍${what(item)}`;
+/** 孩子读完了(《口语课设计.md》§8.1):接一两个词 + 下一项,一次回答说完 */
+export const readNextCue = (heard: string, next: ReadItem): string => `孩子读了「${heard}」。先用一两个词接,再读下一个,${what(next)}`;
 /** 最后一句读完:夸一句、说要聊了;说完应用开聊的会话 */
 export const readLastCue = (heard: string): string => `孩子读了「${heard}」。跟读完了:用一句英文夸他,再说 Now let's talk!`;
 

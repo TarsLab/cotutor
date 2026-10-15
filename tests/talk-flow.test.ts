@@ -146,7 +146,7 @@ const last = (k: { msgs: Msg[] }, t: string): Msg | undefined => [...k.msgs].rev
   const st = k.msgs.find((m) => m.t === 'state' && m.item)!;
   const c1 = fake.conns[0];
   k.ws.send(JSON.stringify({ t: 'view', w: 1180, h: 820 }));
-  check('接通:跟读的会话(手动、人设带 Ray 与口语单)、第一句 cue、状态(第 1/3 句)、老师的声音与字到孩子端', ok1 && c1.session?.turn_detection === null && String(c1.session?.instructions).includes('Ray') && String(c1.session?.instructions).includes('bus(公共汽车)') && c1.items[0]?.content?.[0]?.text === '读这句:red' && st.phase === 'read' && st.i === 0 && st.n === 3 && st.item.en === 'red' && st.interrupt === false && k.bins[0] === 4800 && last(k, 'tutor')?.done === "It's a red car.", JSON.stringify({ st, items: c1.items, bins: k.bins }).slice(0, 400));
+  check('接通:跟读的会话(手动、人设带 Ray 与口语单)、第一句 cue、状态(第 1/3 句)、老师的声音与字到孩子端', ok1 && c1.session?.turn_detection === null && String(c1.session?.instructions).includes('Ray') && String(c1.session?.instructions).includes('bus(公共汽车)') && c1.items[0]?.content?.[0]?.text === '读这个词:red(中文意思:红色)' && st.phase === 'read' && st.i === 0 && st.n === 3 && st.item.en === 'red' && st.interrupt === false && k.bins[0] === 4800 && last(k, 'tutor')?.done === "It's a red car.", JSON.stringify({ st, items: c1.items, bins: k.bins }).slice(0, 400));
   // ---- 跟我读不用按(《口语课设计.md》§8.1;数是 cfg.talk.read:等 1 秒、再读 2 遍、静 300 毫秒算读完) ----
   const rdMode = (): string | undefined => last(k, 'state')?.rd?.mode;
   /** 孩子读一遍:响三块(300 毫秒)、静三块(300 毫秒) */
@@ -156,15 +156,15 @@ const last = (k: { msgs: Msg[] }, t: string): Msg | undefined => [...k.msgs].rev
   const stL = last(k, 'state')!;
   check('老师的声音放完 → 等孩子(rd listen,倒计时不到 1 秒、一共 1 秒),这时什么都没推给模型', okL && stL.rd.left > 0 && stL.rd.left <= 1000 && stL.rd.wait === 1000 && c1.commits === 0 && c1.audio === 0, JSON.stringify(stL.rd));
   speak('hello');
-  const okA = await until(() => cues().includes('再读一遍这句:red'));
+  const okA = await until(() => cues().includes('再读一遍这个词:red(中文意思:红色)'));
   check('不用按:响了推给模型(带前垫)、静了 commit 拿转写;读的不沾这句 → 老师再读一遍', okA && c1.commits === 1 && c1.audio === 6 * 3200 && last(k, 'kid')?.text === 'hello' && c1.creates === 2, JSON.stringify({ audio: c1.audio, commits: c1.commits, creates: c1.creates }));
   await k.wait(() => rdMode() === 'listen');
   speak('Red!');
-  const okN = await k.wait(() => k.msgs.some((m) => m.t === 'state' && m.i === 1 && m.item?.en === 'bus') && cues().includes('孩子读了「Red!」。先用一两个词接,再读下一句:bus'));
+  const okN = await k.wait(() => k.msgs.some((m) => m.t === 'state' && m.i === 1 && m.item?.en === 'bus') && cues().includes('孩子读了「Red!」。先用一两个词接,再读下一个,这个词:bus(中文意思:公共汽车)'));
   check('读到了 → 下一句(接一两个词 + 下一句,一次回答)', okN && c1.commits === 2, JSON.stringify(cues()));
   const t0 = Date.now();
   const okW = await k.wait(() => rdMode() === 'wait', 6000);
-  const agains = cues().filter((t) => t === '再读一遍这句:bus').length;
+  const agains = cues().filter((t) => t === '再读一遍这个词:bus(中文意思:公共汽车)').length;
   check('不出声:等 1 秒老师再读,两遍后不再催(wait,没有倒计时)', okW && agains === 2 && last(k, 'state')!.rd.left === null && Date.now() - t0 >= 2000, JSON.stringify({ agains, ms: Date.now() - t0 }));
   speak('banana');
   const okM = await k.wait(() => k.msgs.some((m) => m.t === 'state' && m.i === 2));

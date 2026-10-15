@@ -130,8 +130,11 @@ ${SNAP_CSS}
   #kid .tk-rd.tutor { background:var(--sc-soft); color:var(--sc-ink); }
   #kid .tk-rd.listen, #kid .tk-rd.speech, #kid .tk-rd.wait { background:#fff; color:var(--blue-ink); padding-left:8px; box-shadow:0 0 0 3px #9cc3ef, 0 2px 8px rgba(0,0,0,.08); }
   #kid .tk-rd.heard { background:var(--grey); color:var(--dim); }
-  #kid .tk-rd .ring { position:relative; width:48px; height:48px; display:grid; place-items:center; flex:none; }
-  #kid .tk-rd .ring svg.r { position:absolute; inset:0; transform:rotate(-90deg); }
+  #kid .tk-rd .mic { width:40px; height:48px; display:grid; place-items:center; flex:none; }
+  /* 5 秒没出声(拍板 15):老师不再读,「再听一遍」描上老师的颜色、轻轻跳一下 */
+  #kid #k-again.nudge { border:2px solid var(--sc); color:var(--sc-ink); box-shadow:0 0 0 6px color-mix(in srgb, var(--sc) 15%, transparent); animation:tk-nudge .9s ease-out 1; }
+  @keyframes tk-nudge { 0% { transform:scale(1); } 30% { transform:scale(1.08); } 100% { transform:scale(1); } }
+  @media (prefers-reduced-motion: reduce) { #kid #k-again.nudge { animation:none; } }
   #kid .tk-rd .lv2 { display:flex; align-items:center; gap:4px; height:28px; }
   #kid .tk-rd .lv2 i { width:5px; height:6px; border-radius:3px; background:currentColor; opacity:.85; transition:height .08s; }
   #kid .back { display:inline-flex; align-items:center; gap:6px; height:48px; padding:0 8px 0 12px; border-radius:24px; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.12); color:var(--dim); text-decoration:none; }
@@ -514,35 +517,23 @@ __WORD_DRAW_JS__
   }
   // ---- 跟我读:现在轮到谁(服务端的 rd 说了算,lib/read-flow.ts) ----
   const ICON_SPK = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>';
-  const RING_C = 131.9;
-  const ringHtml = '<svg class="r" width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21" fill="none" stroke="#dbe6f5" stroke-width="4"/><circle id="k-ring" cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + RING_C + '" stroke-dashoffset="0"/></svg><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
-  let rdUntil = null, rdWait = 5000;
+  const ICON_MIC = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+  /** 只读一遍(拍板 15):老师读完轮到孩子;5 秒没出声转成 wait,老师不再读,「再听一遍」亮一下;没有倒计时的圈 */
   function renderRd(st) {
     const rd = st.rd, el = $('#k-rd');
+    $('#k-again').classList.toggle('nudge', Boolean(rd) && rd.mode === 'wait');
     if (!rd) { el.hidden = true; return; }
     el.hidden = false;
     const mode = rd.mode;
     el.className = 'tk-rd ' + mode;
-    rdUntil = rd.left === null || rd.left === undefined ? null : nowMs() + rd.left;
-    rdWait = rd.wait || 5000;
-    if (mode === 'tutor') el.replaceChildren(h('span', { html: ICON_SPK }), rd.again ? '老师再读一遍,听完跟着读' : '先听老师读');
+    if (mode === 'tutor') el.replaceChildren(h('span', { html: ICON_SPK }), '先听老师读');
     else if (mode === 'heard') el.replaceChildren('听到了…');
     else {
       if (mode === 'speech') $('#k-heard').textContent = '';
       const lv = h('span', { class: 'lv2' }, h('i'), h('i'), h('i'), h('i'), h('i'));
-      el.replaceChildren(h('span', { class: 'ring', html: ringHtml }), mode === 'speech' ? '在听你读…' : mode === 'wait' ? '想读就读' : '轮到你,跟着读一遍', lv);
-      if (mode !== 'listen') { const r = $('#k-ring'); if (r) r.style.opacity = mode === 'speech' ? '1' : '0'; }
+      el.replaceChildren(h('span', { class: 'mic', html: ICON_MIC }), mode === 'speech' ? '在听你读…' : mode === 'wait' ? '想读就读,想再听就点「再听一遍」' : '轮到你,跟着读一遍', lv);
     }
-    drawRing();
   }
-  /** 等孩子时外圈一点点走完:走完老师再读一遍 */
-  function drawRing() {
-    const r = $('#k-ring');
-    if (!r || rdUntil === null) return;
-    const left = Math.max(0, rdUntil - nowMs());
-    r.setAttribute('stroke-dashoffset', String(RING_C * (1 - left / rdWait)));
-  }
-  setInterval(drawRing, 100);
   /** reel = 录像模式:不开麦、不连,声音是替身(老师在不在出声照录像的时段),消息由录像喂进 C.handle */
   function makeCall(id, reel, A0, opened) {
     const A = reel ? { play() {}, flush() {}, close() {}, open: async () => {}, playing: () => Boolean(RL) && tkIn(RL.r.playing, RL.t), muted: true, onChunk: null, onLevel: null } : (A0 || makeAudio());
@@ -589,8 +580,8 @@ __WORD_DRAW_JS__
     };
     C.tick = () => {
       if (!C.st) return;
-      if (C.st.phase === 'chat' && C.deadline !== null) { const left = Math.max(0, C.deadline - (nowMs() - C.startedAt)); $('#k-chip').textContent = '打电话 · 还有 ' + Math.floor(left / 60000) + ':' + String(Math.floor((left % 60000) / 1000)).padStart(2, '0'); }
-      if (C.st.phase === 'read') setHint(C.st.rd && C.st.rd.mode === 'wait' ? '想读就读,或者点「下一句」' : C.st.rd && C.st.rd.mode === 'listen' ? '读完停一下就好' : '');
+      // 打电话不显示剩下几分钟(拍板 18):右上角只写「打电话」,计时在服务端
+      if (C.st.phase === 'read') setHint(C.st.rd && C.st.rd.mode === 'listen' ? '读完停一下就好' : '');
       else if (C.st.phase === 'chat') setHint(A.playing() ? '' : '说完停一下老师就接');
     };
     /** 屏幕多大(录像按它开 iframe);转屏、键盘起落后停手 300 毫秒再报,变了才报 */
@@ -607,8 +598,11 @@ __WORD_DRAW_JS__
         if (C.ended) return;
         if (A.playing() && tries++ < 75) { setTimeout(go, 200); return; }
         const u = new SpeechSynthesisUtterance(w); u.lang = 'en-US'; u.rate = 0.9;
-        const off = () => { C.saying = false; btn.classList.remove('on'); clearTimeout(guard); };
-        const guard = setTimeout(off, 4000);
+        // 念完多等 300 毫秒再推麦(外放的尾音、Safari 的念完来得早);念完一直不来,按字数给个上限(拍板 17)
+        // 连着点:前一个被 cancel 掉也会报念完,只认最后一次
+        let done = false; const tok = C.sayTok = (C.sayTok || 0) + 1;
+        const off = () => { if (done) return; done = true; clearTimeout(guard); btn.classList.remove('on'); setTimeout(() => { if (tok === C.sayTok) C.saying = false; }, 300); };
+        const guard = setTimeout(off, 2500 + w.length * 120);
         u.onend = off; u.onerror = off;
         C.saying = true; btn.classList.add('on'); C.send({ t: 'say', w });
         ss.cancel(); ss.speak(u);
@@ -674,7 +668,6 @@ __TALK_REEL_JS__
     RL.t = t; RL.at = t;
     const C = RL.C;
     if (C.st) C.tick();
-    drawRing();
     // 底部条与头像照录像的时段:老师在出声 / 孩子在出声
     const tutor = tkIn(RL.r.playing, t), kidOn = tkIn(RL.r.kidVoice, t);
     $('#k-av').classList.toggle('talk', tutor); $('#k-av').classList.toggle('listen', kidOn && !tutor);

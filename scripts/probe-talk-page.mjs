@@ -129,13 +129,13 @@ try {
   ok('老师放完:状态条轮到孩子', await until(`/listen|speech|heard/.test(document.querySelector('#k-rd').className)`, 60), await evaluate(`document.querySelector('#k-rd').className + ' ' + document.querySelector('#k-rd').textContent`));
   ok('什么都不按:孩子读的推上去、静了 commit、转写回来、自动到第 2 句', await untilFn(async () => (real || c1.commits >= 1) && (await evaluate(`document.querySelector('#k-card').dataset.en === 'It is a red car.' && !!document.querySelector('#k-dots i.done')`)), 120), JSON.stringify(real ? await pageStats(evaluate) : { commits: c1.commits, audio: c1.audio, items: c1.items.map((i) => i.content[0].text) }));
   ok('第 2 句是句子:点读卡的一行,带中文', await evaluate(`!!document.querySelector('#k-card .c-read .rd') && document.querySelector('#k-card').textContent.includes('这是一辆红色的车')`));
-  if (!real) ok('读到了 → 老师接一两个词 + 下一句,一次回答', c1.items.some((i) => i.content[0].text === "孩子读了「It's a red car.」。先用一两个词接,再读下一句:It is a red car."));
+  if (!real) ok('读到了 → 老师接一两个词 + 下一句,一次回答', c1.items.some((i) => i.content[0].text === "孩子读了「It's a red car.」。先用一两个词接,再读下一个,这句:It is a red car."));
   await click('#k-again');
   if (!real) ok('点「再听一遍」→ 再读一遍的 cue', await untilFn(async () => c1.items.some((i) => i.content[0].text === '再读一遍这句:It is a red car.')));
 
   // ---- 读完开聊 ----
   const played1 = await evaluate(`window.__played`);
-  ok('第 2 句也自己读完 → 老师说要聊了 → 深色聊天页、倒计时、第二条会话(semantic_vad)、开聊 cue', await untilFn(async () => (real || (fake.conns.length === 2 && fake.conns[1].items.length >= 1)) && (await evaluate(`document.querySelector('#kid').classList.contains('chat') && !document.querySelector('#k-chat').hidden && document.querySelector('#k-chip').textContent.includes('还有')`)), 120), JSON.stringify(real ? {} : { conns: fake.conns.length, td: fake.conns[1]?.session?.turn_detection?.type, items: c1.items.map((i) => i.content[0].text) }));
+  ok('第 2 句也自己读完 → 老师说要聊了 → 打电话页、右上角只写「打电话」(不显示剩下几分钟)、第二条会话(semantic_vad)、开聊 cue', await untilFn(async () => (real || (fake.conns.length === 2 && fake.conns[1].items.length >= 1)) && (await evaluate(`document.querySelector('#kid').classList.contains('chat') && !document.querySelector('#k-chat').hidden && document.querySelector('#k-chip').textContent === '打电话'`)), 120), JSON.stringify(real ? {} : { conns: fake.conns.length, td: fake.conns[1]?.session?.turn_detection?.type, items: c1.items.map((i) => i.content[0].text) }));
   const c2 = fake.conns[1];
   ok('打电话:不是深色屏;底下一排单词卡(口语单上的词,四线三格 + 「听」);老师讲到 red → 那张亮', await until(`getComputedStyle(document.querySelector('#kid')).backgroundColor !== 'rgb(43, 58, 74)' && document.querySelectorAll('#k-words .c-word').length === 1 && !!document.querySelector('#k-words .c-word .wg svg') && !!document.querySelector('#k-words .c-word .rc-pl') && !!document.querySelector('#k-words .c-word.now')`, 60), await evaluate(`document.querySelector('#k-words').outerHTML.slice(0, 200)`));
   await shot('talk-02-call');

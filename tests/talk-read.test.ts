@@ -34,9 +34,24 @@ type St = ReturnType<typeof readInit>;
   check('coverage:短词差一个字母不算(car / cat)、空的是 0', coverage('car', 'cat') === 0 && coverage('', 'x') === 0 && coverage('red', '') === 0);
 }
 
-// ---- 一句的状态机 ----
+// ---- 一句的状态机:缺省只读一遍(《口语课设计.md》拍板 15)----
 {
-  const R = READ_RULES;
+  const run = (evs: Parameters<typeof readStep>[1][], s: St = readInit()): { s: St; acts: string[] } => {
+    const acts: string[] = [];
+    for (const e of evs) { const r = readStep(s, e); s = r.s; if (r.act) acts.push(r.act); }
+    return { s, acts };
+  };
+  const target = 'red';
+  check('缺省 again 0、等 5 秒', READ_RULES.again === 0 && READ_RULES.waitMs === 5000);
+  const quiet = run([{ e: 'cue', t: 0, fresh: true }, { e: 'idle', t: 1000 }, { e: 'tick', t: 5999 }, { e: 'tick', t: 6000 }, { e: 'tick', t: 60000 }]);
+  check('老师读完先轮到孩子(listen);5 秒没出声 → wait,老师不再读、没有倒计时', quiet.acts.length === 0 && quiet.s.mode === 'wait' && readLeft(quiet.s, 60000) === null && run([{ e: 'idle', t: 1000 }]).s.mode === 'listen', JSON.stringify(quiet.s));
+  check('wait 里开口照样走', run([{ e: 'start', t: 70000 }, { e: 'stop', t: 71000 }, { e: 'text', t: 71200, text: 'red', target }], quiet.s).acts.join(' ') === 'commit next');
+  check('读得不全、不沾也往下走', run([{ e: 'idle', t: 0 }, { e: 'start', t: 100 }, { e: 'stop', t: 900 }, { e: 'text', t: 1000, text: 'red car', target: "It's a red car." }]).acts.join(' ') === 'commit next' && run([{ e: 'idle', t: 0 }, { e: 'start', t: 100 }, { e: 'stop', t: 900 }, { e: 'text', t: 1000, text: '我不会', target }]).acts.join(' ') === 'commit next');
+}
+
+// ---- 一句的状态机:家长把 again 调大(cotutor.json 的 talk.read.again)就回到自动再读 ----
+{
+  const R = { ...READ_RULES, again: 2 };
   const run = (evs: Parameters<typeof readStep>[1][], s: St = readInit()): { s: St; acts: string[] } => {
     const acts: string[] = [];
     for (const e of evs) { const r = readStep(s, e, R); s = r.s; if (r.act) acts.push(r.act); }
@@ -56,7 +71,7 @@ type St = ReturnType<typeof readInit>;
   const off = run([{ e: 'idle', t: 0 }, { e: 'start', t: 100 }, { e: 'stop', t: 900 }, { e: 'text', t: 1000, text: '我不会', target }]);
   check('读的跟这句不沾 → 老师再读一遍(记一次)', off.acts.join(' ') === 'commit again' && off.s.again === 1);
   const half = run([{ e: 'idle', t: 0 }, { e: 'start', t: 100 }, { e: 'stop', t: 900 }, { e: 'text', t: 1000, text: 'red car', target: "It's a red car." }]);
-  check('读了不到一半 → 老师再读一遍(不另等,《口语课设想》§8.5 待定 2 定了不要)', half.acts.join(' ') === 'commit again');
+  check('读了不到一半 → 老师再读一遍(不另等,《口语课设计.md》§8.5 待定 2 定了不要)', half.acts.join(' ') === 'commit again');
   const used = run([{ e: 'idle', t: 0 }, { e: 'start', t: 100 }, { e: 'stop', t: 900 }, { e: 'text', t: 1000, text: 'hello', target }], { mode: 'tutor', since: 0, again: 2 });
   check('自动再读用完了还不沾 → 往下走(不卡在一句上)', used.acts.join(' ') === 'commit next');
   const blank = run([{ e: 'idle', t: 0 }, { e: 'start', t: 100 }, { e: 'stop', t: 900 }, { e: 'text', t: 1000, text: '  ', target }]);

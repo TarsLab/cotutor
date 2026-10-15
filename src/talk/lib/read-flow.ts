@@ -17,7 +17,8 @@ export interface ReadRules {
   /** 转写里有这句的词占多少算读完(单词就是那个词) */
   pass: number;
 }
-export const READ_RULES: ReadRules = { waitMs: 5000, again: 2, endMs: 900, pass: 0.5 };
+/** 缺省只读一遍、不自动再读(《口语课设计.md》拍板 15):没出声等 waitMs 转成 wait(孩子端「再听一遍」亮一下),读得不全也往下走;again 调大就回到自动再读 */
+export const READ_RULES: ReadRules = { waitMs: 5000, again: 0, endMs: 900, pass: 0.5 };
 
 // ---- 开口 / 停 ----
 
@@ -85,7 +86,7 @@ export function coverage(target: string, heard: string): number {
 
 // ---- 一句的状态机 ----
 
-/** tutor 老师在读(声音没放完)· listen 等孩子 · speech 孩子在读 · heard 等转写 · wait 自动再读用完了,只等孩子 */
+/** tutor 老师在读(声音没放完)· listen 等孩子 · speech 孩子在读 · heard 等转写 · wait 等了 waitMs 没出声、不再自动读了,只等孩子 */
 export type ReadMode = 'tutor' | 'listen' | 'speech' | 'heard' | 'wait';
 export interface ReadState { mode: ReadMode; since: number; again: number }
 export type ReadEvent =
@@ -106,12 +107,12 @@ export function readStep(s: ReadState, ev: ReadEvent, rules: ReadRules = READ_RU
   const keep = { s, act: null };
   switch (ev.e) {
     case 'cue': return { s: { mode: 'tutor', since: ev.t, again: ev.fresh ? 0 : s.again }, act: null };
-    case 'idle': return s.mode === 'tutor' ? { s: { ...s, mode: s.again >= rules.again ? 'wait' : 'listen', since: ev.t }, act: null } : keep;
+    case 'idle': return s.mode === 'tutor' ? { s: { ...s, mode: 'listen', since: ev.t }, act: null } : keep;
     case 'start': return s.mode === 'listen' || s.mode === 'wait' ? { s: { ...s, mode: 'speech', since: ev.t }, act: null } : keep;
     case 'stop': return s.mode === 'speech' ? { s: { ...s, mode: 'heard', since: ev.t }, act: 'commit' } : keep;
     case 'text': {
       if (s.mode !== 'heard') return keep;
-      if (!ev.text.trim()) return { s: { ...s, mode: s.again >= rules.again ? 'wait' : 'listen', since: ev.t }, act: null };
+      if (!ev.text.trim()) return { s: { ...s, mode: 'listen', since: ev.t }, act: null };
       if (coverage(ev.target, ev.text) >= rules.pass || s.again >= rules.again) return { s: { ...s, mode: 'tutor', since: ev.t }, act: 'next' };
       return { s: { mode: 'tutor', since: ev.t, again: s.again + 1 }, act: 'again' };
     }

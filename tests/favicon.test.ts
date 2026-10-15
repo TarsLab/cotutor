@@ -90,6 +90,10 @@ const hex = (c: number[]) => '#' + c.slice(0, 3).map((v) => v.toString(16).padSt
   }
   const kid = (await mock.route('GET', '/')).html ?? '';
   check('孩子端进老师 / 回首页换图标', kid.includes('const setFavicon') && kid.includes('unlock(); setFavicon(t);') && kid.includes('setFavicon(null);'));
+  for (const path of ['/dictation', '/dictation?lang=en']) {
+    const html = (await mock.route('GET', path)).html ?? '';
+    check(`${path} 认出老师就换成他的图标`, html.includes('var setFavicon = function (t)') && html.includes('BACK.set(t); setFavicon(t);'), path);
+  }
   const svg = await mock.route('GET', '/favicon.svg');
   check('/favicon.svg 是三色 C、no-cache', svg.status === 200 && (svg.contentType ?? '').startsWith('image/svg+xml') && Buffer.from(svg.body!).toString() === homeFaviconSvg() && svg.cacheControl === 'no-cache');
   const math = Buffer.from((await mock.route('GET', '/favicon.svg?tutor=math-tutor')).body!).toString();

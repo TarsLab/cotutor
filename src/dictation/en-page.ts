@@ -193,7 +193,7 @@ ${faviconLinks()}
   ${TUTOR_FACE_JS}
   var BACK = backCapsule(goHome); document.body.append(BACK.el);
   var TUTORS = null;
-  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; BACK.set(t); $('#snap-av').replaceChildren(t ? tutorAvatar(t) : ''); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
+  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; BACK.set(t); setFavicon(t); $('#snap-av').replaceChildren(t ? tutorAvatar(t) : ''); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
 
   // ---------- 念:配了音色放音频,没有退浏览器的英文合成声 ----------
   var audio = new Audio(); audio.preload = 'auto';

@@ -2,12 +2,12 @@
  * /talk 与 /api/talk/*:口语课的页面与接口(《口语课设计.md》)。
  * cotutor 只在 app.ts 的 route() 里接一行、serve.ts 的 upgrade 里接一行;这里引用 cotutor 的东西,cotutor 别处不引用这里。拆掉 = 删 src/talk/ 和那两行。
  *
- *   GET    /talk                       页面(家长与孩子同一页,按 hash 切)
+ *   GET    /talk                       孩子端的页面:拍照、看口语单、跟读与聊(按 hash 切;家长端没有这一页,《口语课设计.md》拍板 13)
  *   GET    /api/talk                   开关、有没有 key、设置、全部口语课(新的在前)
- *   POST   /api/talk                   {photo?: dataURL} 开一次;有照片就交给 omni 读口语单
- *                                      {from: 'latest'} 孩子从首页的「口语课」进来:最近那份口语单还没聊过就用它,聊过了照它再开一次(404 = 还没有口语单)
+ *   POST   /api/talk                   {photo?: dataURL} 开一次;有照片就交给 omni 读口语单(孩子拍的,读完才回)
+ *                                      {from: 'latest'} 拍照屏的「接着上」:最近那份口语单还没聊过就用它,聊过了照它再开一次(404 = 还没有口语单)
  *   GET    /api/talk/<id>              一次的全部(口语单、通话的字、有没有声音)
- *   PUT    /api/talk/<id>/list         {words, sentences, ready?} 家长改口语单;ready = 给孩子
+ *   PUT    /api/talk/<id>/list         {words, sentences, ready?} 孩子(或帮忙的家长)改过的口语单;ready = 开始跟读
  *   DELETE /api/talk/<id>
  *   GET    /api/talk/<id>/photo        那页照片
  *   GET    /api/talk/<id>/audio/<who>  kid / tutor 的声音(wav);call = 录像的那一条(两边按时刻混好)
@@ -52,7 +52,7 @@ export function photoData(v: unknown): { data: Buffer; mime: string } | undefine
   return { data: Buffer.from(m[2], 'base64'), mime };
 }
 
-/** 家长改的口语单:两组各最多 12 / 8 条,去空去重;词带回来的 emoji 与分段再过一遍单词卡的 parse(家长改了词,旧分段拼不回就丢) */
+/** 改过的口语单:两组各最多 12 / 8 条,去空去重;词带回来的 emoji 与分段再过一遍单词卡的 parse(改了词,旧分段拼不回就丢) */
 export function parseItems(v: unknown, max: number, card = false): ListItem[] | null {
   if (!Array.isArray(v) || v.length > 50) return null;
   const out: ListItem[] = [];
@@ -72,10 +72,8 @@ export function parseItems(v: unknown, max: number, card = false): ListItem[] | 
 export function makeTalkRoute(deps: TalkDeps = { readList }) {
   return async function talkRoute(method: string, url: URL, ctx: AppContext, body: unknown): Promise<RouteResult | null> {
     const p = url.pathname;
-    // 孩子端只有跟读与聊那一屏(#/kid/<id>);拍口语单、改口语单、回看在家长端 /parent/talk(同一份页面,家长递给孩子也在那里)
-    if (p === '/talk' || p === '/talk/') return method === 'GET' ? { status: 200, html: talkPage(true) } : { status: 405, json: { error: 'method_not_allowed' } };
+    if (p === '/talk' || p === '/talk/') return method === 'GET' ? { status: 200, html: talkPage() } : { status: 405, json: { error: 'method_not_allowed' } };
     if (p === '/parent/talk/reel') return method === 'GET' ? { status: 200, html: TALK_REEL_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
-    if (p === '/parent/talk' || p === '/parent/talk/') return method === 'GET' ? { status: 200, html: talkPage(false) } : { status: 405, json: { error: 'method_not_allowed' } };
     if (p !== '/api/talk' && !p.startsWith('/api/talk/')) return null;
     const ws = ctx.ws;
     const cfg = ws.config.talk;
@@ -170,7 +168,12 @@ export function makeTalkUpgrade(deps: TalkDeps = { readList }) {
   };
 }
 
-/** 探针用:COTUTOR_TALK_ENDPOINT 指向假 realtime(tests/_fake-realtime.ts),不花钱 */
-const PROBE_DEPS: TalkDeps = { readList, ...(process.env.COTUTOR_TALK_ENDPOINT ? { endpoint: process.env.COTUTOR_TALK_ENDPOINT, env: { ...process.env, DASHSCOPE_API_KEY: process.env.DASHSCOPE_API_KEY ?? 'sk-probe' } } : {}) };
+/** 探针用的假读口语单(COTUTOR_TALK_FAKE_LIST=1):不看照片,0.8 秒后回一个词一句 */
+const fakeReadList: typeof readList = async () => {
+  await new Promise((r) => setTimeout(r, 800));
+  return { ok: true, list: { words: [{ en: 'red', zh: '红色', emoji: '🔴' }], sentences: [{ en: 'It is a red car.', zh: '这是一辆红色的车。' }] }, model: 'fake', ms: 800 };
+};
+/** 探针用:COTUTOR_TALK_ENDPOINT 指向假 realtime(tests/_fake-realtime.ts),COTUTOR_TALK_FAKE_LIST 换假的读口语单,不花钱 */
+const PROBE_DEPS: TalkDeps = { readList: process.env.COTUTOR_TALK_FAKE_LIST ? fakeReadList : readList, ...(process.env.COTUTOR_TALK_ENDPOINT ? { endpoint: process.env.COTUTOR_TALK_ENDPOINT, env: { ...process.env, DASHSCOPE_API_KEY: process.env.DASHSCOPE_API_KEY ?? 'sk-probe' } } : {}) };
 export const talkRoute = makeTalkRoute(PROBE_DEPS);
 export const talkUpgrade = makeTalkUpgrade(PROBE_DEPS);

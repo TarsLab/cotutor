@@ -114,7 +114,7 @@ ${faviconLinks()}
   <div class="center"><b id="s-title">单词听写</b><span id="s-sub">老师念,你来写</span><button class="main" type="button" id="s-go">开始</button></div>
 </div>
 <div class="view" id="v-snap">
-  ${snapHtml({ en: true, id: 'p-pick', cam: 'p-cam', lib: 'p-lib' })}
+  ${snapHtml({ kind: 'en', id: 'p-pick', cam: 'p-cam', lib: 'p-lib' })}
   <div id="p-list" hidden>
     <div class="shotwrap"><div class="shotin"><img id="p-img" alt="拍的照片"><div id="p-boxes"></div></div></div>
     <div class="pside">

@@ -189,7 +189,7 @@ ${TUTOR_FACE_CSS}
 </div>
 
 <div class="view" id="v-snap">
-  ${snapHtml({ en: false, id: 'snap-hero', cam: 'snap-cam', lib: 'snap-lib' })}
+  ${snapHtml({ kind: 'zh', id: 'snap-hero', cam: 'snap-cam', lib: 'snap-lib' })}
 </div>
 
 <div class="view" id="v-pick">

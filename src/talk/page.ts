@@ -1,6 +1,7 @@
 /**
- * /talk(孩子端)与 /parent/talk(家长端):口语课的页面(《口语课设计.md》;原型 https://claude.ai/artifact/9cC72r5d8Jyhayikz3rYaP)。
- * 家长与孩子同一份页面,按 hash 切;/talk 只认孩子那一屏,别的 hash 回孩子端首页:#/ 拍照与讲过的(家长)、#/list/<id> 改口语单(家长)、#/kid/<id> 跟读与聊(孩子,家长递过去)、#/review/<id> 回看(家长)。
+ * /talk:口语课的页面,孩子端(《口语课设计.md》拍板 12;设计稿 https://claude.ai/artifact/6uL5XfzhFEfX74cmeWbF9c)。家长端没有这一页(拍板 13),回放从记录进录像。
+ * 按 hash 切三屏:#/ 拍照(同拍照听写的骨架,photo-ui.ts;上次的口语单给「接着上」)、#/list/<id> 照片在左、口语单在右(孩子能改、能补、能删)、#/kid/<id> 跟读与聊。
+ * 「开始跟读」「接着上」点下去就开麦开始(这一下就是开麦要的那次点击),不再过开始屏;开始屏只在刷新了跟读那一屏时出来。
  * 孩子那一屏的样子和老师页一样(《口语课设计.md》§8.2):装孩子端的 /kid/theme.css,今天的词用单词卡(cards/word,画法 word-draw.ts)、句子用点读卡的行(cards/read);
  * 自己的类名别撞主题的(.rd 是点读卡的行,自己的状态胶囊叫 .tk-rd)。
  * 声音:getUserMedia → AudioWorklet 降到 16k PCM16,100 毫秒一块走 WebSocket 二进制帧上去;下来的 24k PCM16 一块块排进 AudioContext 放。
@@ -9,7 +10,7 @@
 import { inlineScript } from '../server/inline-lib.ts';
 import { wordDrawJs } from '../server/word-draw.ts';
 import { TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
-import { albumSvg, cameraSvg } from '../server/photo-ui.ts';
+import { SNAP_CSS, cameraSvg, snapHtml } from '../server/photo-ui.ts';
 import { faviconLinks } from '../lib/favicon.ts';
 
 /** 录像的轨道(lib/reel.ts),内联进录像模式 */
@@ -57,33 +58,49 @@ ${faviconLinks()}
   .toast.on { display:block; }
   svg { flex:none; }
 
-  /* 家长:拍照与讲过的 */
-  #home .shoot { margin-top:16px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; min-height:260px; border-radius:20px; background:var(--ink); color:rgba(255,255,255,.85); text-align:center; padding:28px; position:relative; }
-  #home .shoot .frame { position:absolute; left:20px; right:20px; top:20px; bottom:20px; border:2px dashed rgba(255,255,255,.5); border-radius:14px; pointer-events:none; }
-  #home .shoot label { display:inline-flex; align-items:center; gap:10px; height:52px; padding:0 22px; border-radius:26px; background:#fff; color:var(--ink); font-weight:700; cursor:pointer; }
-  #home .shoot label.alt { background:#ffffff1f; color:#fff; border:1px solid #ffffff33; }
-  #home .shoot input { display:none; }
-  #home .past { margin-top:22px; display:flex; flex-direction:column; gap:10px; }
-  #home .past .row { display:flex; align-items:center; gap:12px; padding:14px 16px; cursor:pointer; }
-  #home .past .row .t { flex:1; min-width:0; }
-  #home .past .row b { display:block; }
-  #home .off { margin-top:16px; padding:16px 18px; }
-  #home .off code { background:var(--grey); padding:2px 6px; border-radius:6px; font-size:15px; }
-
-  /* 家长:口语单 */
-  #list .sec { margin-top:14px; font-size:13px; font-weight:700; color:var(--dim); padding-left:4px; }
-  #list .row { display:flex; align-items:center; gap:10px; min-height:54px; padding:6px 6px 6px 14px; margin-top:8px; }
-  #list .row.sent { flex-wrap:wrap; }
-  #list .row input { flex:1; min-width:0; border:0; outline:0; background:none; padding:4px 0; }
-  #list .row input.en { font-size:19px; font-weight:600; }
-  #list .row input.zh { color:var(--dim); font-size:15px; flex:1; }
-  #list .row.sent input.en { flex-basis:100%; }
-  #list .row .x { width:40px; height:40px; display:grid; place-items:center; color:var(--dim); }
-  #list .add { margin-top:10px; display:inline-flex; align-items:center; gap:8px; height:44px; padding:0 12px; color:var(--blue-ink); font-weight:600; }
-  #list .foot { margin-top:auto; padding-top:16px; display:flex; flex-direction:column; gap:10px; }
-  #list .foot .meta { display:flex; justify-content:space-between; color:var(--dim); font-size:14px; }
-  #list .go { height:56px; border-radius:28px; background:var(--ink); color:#fff; font-size:18px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:10px; }
-  #list .warn { margin-top:10px; padding:12px 14px; background:var(--tutor); border:1px solid var(--tutor-line); border-radius:12px; color:var(--tutor-ink); font-size:15px; }
+  /* 孩子:拍照(photo-ui.ts,同拍照听写)。.main 是主按钮:老师的颜色 */
+  .main { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:60px; padding:0 30px; border-radius:30px; background:var(--sc); color:#fff; font-size:20px; font-weight:600; }
+  .main:disabled { opacity:.45; }
+  #snap { padding:calc(env(safe-area-inset-top) + 10px) 24px calc(env(safe-area-inset-bottom) + 24px); }
+${SNAP_CSS}
+  /* 孩子:照片在左、口语单在右(竖着照片在上);读的时候照片上一道扫过的光,右边先用浅灰占好位置 */
+  #pick { height:100vh; height:100dvh; }
+  #pick .pwrap { flex:1; min-height:0; display:flex; gap:20px; padding:calc(env(safe-area-inset-top) + 10px) 20px calc(env(safe-area-inset-bottom) + 16px) 24px; }
+  .tk-shot { flex:1; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; padding-top:48px; }
+  .tk-shotin { position:relative; display:inline-block; max-width:100%; border-radius:12px; overflow:hidden; background:#2b2b2b; }
+  .tk-shotin img { display:block; max-width:100%; max-height:calc(100vh - 100px); max-height:calc(100dvh - 100px); min-width:160px; min-height:160px; }
+  .tk-scan { position:absolute; left:0; right:0; top:0; height:30%; background:linear-gradient(180deg, transparent, color-mix(in srgb, var(--sc) 28%, transparent), transparent); animation:tk-scan 1.6s ease-in-out infinite alternate; pointer-events:none; }
+  @keyframes tk-scan { from { transform:translateY(-40%); } to { transform:translateY(270%); } }
+  .tk-side { width:420px; flex:none; min-height:0; display:flex; flex-direction:column; gap:10px; }
+  .tk-hd { display:flex; align-items:center; gap:14px; }
+  .tk-hd .tfav { width:52px; height:52px; font-size:24px; }
+  .tk-hd b { display:block; font-size:22px; } .tk-hd small { display:block; font-size:15px; color:var(--dim); }
+  .tk-scroll { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:8px; padding:2px; }
+  .tk-sec { font-size:14px; font-weight:700; color:var(--dim); margin-top:6px; }
+  .tk-ws { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
+  .tk-it { display:flex; align-items:center; gap:8px; min-height:62px; padding:6px 4px 6px 12px; background:#fff; border:1.5px solid var(--line); border-radius:16px; }
+  .tk-it .tx { flex:1; min-width:0; text-align:left; display:flex; align-items:center; gap:10px; min-height:48px; }
+  .tk-it .tx > span { min-width:0; }
+  .tk-it .en { display:block; font-size:21px; font-weight:600; line-height:1.2; overflow-wrap:anywhere; }
+  .tk-it.w .en { font-family:"Chalkboard SE","Comic Sans MS","Marker Felt",sans-serif; font-weight:400; font-size:23px; }
+  .tk-it .zh { display:block; font-size:13px; color:var(--dim); }
+  .tk-it .em { font-size:26px; line-height:1; flex:none; }
+  .tk-it .x { flex:none; width:44px; height:44px; border-radius:22px; display:grid; place-items:center; color:var(--dim); }
+  .tk-it.ed { border:2px solid var(--sc); box-shadow:0 0 0 4px color-mix(in srgb, var(--sc) 15%, transparent); }
+  .tk-it.ed .x { color:var(--sc); }
+  .tk-it input { display:block; width:100%; border:0; border-bottom:2px solid var(--sc); background:transparent; padding:2px 0; outline:0; font-size:20px; }
+  .tk-it input.zh { border-bottom:1px solid var(--line); font-size:14px; color:var(--dim); margin-top:4px; }
+  .tk-sk { background:#ebe8e0; border-radius:16px; min-height:62px; }
+  .tk-add { align-self:flex-start; display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:0 6px; color:var(--sc-ink); font-weight:600; }
+  .tk-go { display:flex; gap:10px; }
+  .tk-go .pill { height:60px; border-radius:30px; }
+  .tk-go .main { flex:1; padding:0 16px; }
+  @media (orientation: portrait) {
+    #pick .pwrap { flex-direction:column; }
+    .tk-shot { flex:none; padding-top:52px; }
+    .tk-shotin img { max-height:36vh; }
+    .tk-side { width:auto; flex:1; }
+  }
 
   /* 孩子:跟读 */
   #kid { background:var(--paper); }
@@ -153,19 +170,6 @@ ${faviconLinks()}
   #kid #k-card .rd { font-size:40px; font-weight:700; line-height:1.3; cursor:default; }
   #kid #k-card .rd .zh { display:block; font-size:20px; font-weight:400; color:var(--dim); }
 
-  /* 家长:回看 */
-  #review .lines { display:flex; flex-direction:column; gap:10px; margin-top:14px; }
-  #review .ln { max-width:80%; padding:10px 16px; border-radius:18px; font-size:17px; }
-  #review .ln.tutor { align-self:flex-start; background:var(--tutor); border:1px solid var(--tutor-line); }
-  #review .ln.kid { align-self:flex-end; background:var(--kid); }
-  #review .ln small { display:block; color:var(--dim); font-size:12px; }
-  #review .ph { margin:12px 0 0; display:flex; gap:6px; flex-wrap:wrap; }
-  #review .used { margin-top:16px; display:flex; flex-wrap:wrap; gap:8px; }
-  #review .used span { padding:4px 12px; border-radius:12px; background:var(--grey); color:var(--dim); font-size:15px; }
-  #review .used span.y { background:#e5f4ea; color:#1f8a4c; }
-  #review .play { display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
-  #review audio { width:100%; max-width:420px; }
-
   @media (max-width:600px) {
     #kid .rc { padding:26px 20px 22px; }
     #kid .rc .en { font-size:40px; }
@@ -180,37 +184,23 @@ ${faviconLinks()}
   __TUTOR_FACE_CSS__
 </style></head>
 <body>
-<div id="home" class="view"><div class="wrap">
-  <div class="top"><b style="font-size:22px">口语课</b><span class="muted small" id="h-date"></span></div>
-  <div class="muted">拍今天学的那页,老师读出单词和句子;孩子先跟读,再用这些词和老师聊</div>
-  <div class="card off" id="h-off" hidden></div>
-  <div class="shoot" id="h-shoot">
-    <div class="frame"></div>
-    ${cameraSvg(40, 1.8)}
-    <div>对准课本的单词表或今天学的句子<br><span class="small" style="color:rgba(255,255,255,.6)">印刷的字读得准,手写的先别拍</span></div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
-      <label>${cameraSvg(22, 2.2)}拍照<input type="file" accept="image/*" capture="environment" id="h-cam"></label>
-      <label class="alt">${albumSvg(22, 2.2)}相册<input type="file" accept="image/*" id="h-pick"></label>
-      <button class="pill" id="h-blank" type="button">不拍,自己填</button>
-    </div>
-  </div>
-  <div class="past" id="h-past"></div>
-</div></div>
+<div id="snap" class="view">
+  ${snapHtml({ kind: 'talk', id: 'snap-hero', cam: 'p-cam', lib: 'p-lib' })}
+</div>
 
-<div id="list" class="view"><div class="wrap">
-  <div class="top"><a class="pill" href="#/" id="l-back">‹ 重拍</a><b style="font-size:18px">今天的口语单</b><span style="width:80px"></span></div>
-  <div class="muted small" style="text-align:center">老师从照片里读出来的,不对就改;孩子只看到你改好的</div>
-  <div class="warn" id="l-warn" hidden></div>
-  <div class="sec">单词 · <span id="l-nw">0</span></div>
-  <div id="l-words"></div>
-  <button class="add" type="button" id="l-addw"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>补一个单词</button>
-  <div class="sec">句子 · <span id="l-ns">0</span></div>
-  <div id="l-sents"></div>
-  <button class="add" type="button" id="l-adds"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>补一句</button>
-  <div class="foot">
-    <div class="meta"><span id="l-meta"></span><a href="#/" class="muted">看照片</a></div>
-    <button class="go" type="button" id="l-go">给孩子<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
-    <div class="muted small" style="text-align:center">他先跟读这几句,再和老师用它们聊</div>
+<div id="pick" class="view"><div class="pwrap">
+  <div class="tk-shot"><div class="tk-shotin"><img id="p-img" alt="拍的那一页"><div class="tk-scan" id="p-scan" hidden></div></div></div>
+  <div class="tk-side">
+    <div class="tk-hd"><span id="p-av"></span><div><b id="p-title">老师在看这一页…</b><small id="p-sub">找出单词和句子,一会儿就好</small></div></div>
+    <div class="tk-scroll">
+      <div class="tk-sec">单词 · <span id="p-nw">0</span></div>
+      <div class="tk-ws" id="p-words"></div>
+      <button class="tk-add" type="button" id="p-addw"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>补一个单词</button>
+      <div class="tk-sec">句子 · <span id="p-ns">0</span></div>
+      <div id="p-sents" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button class="tk-add" type="button" id="p-adds"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>补一句</button>
+    </div>
+    <div class="tk-go"><button class="pill" type="button" id="p-again">${cameraSvg()}重拍</button><button class="main" type="button" id="p-go" disabled>开始跟读</button></div>
   </div>
 </div></div>
 
@@ -249,13 +239,6 @@ ${faviconLinks()}
   <div class="hint" id="k-hint"></div>
 </div></div>
 
-<div id="review" class="view"><div class="wrap">
-  <div class="top"><a class="pill" href="#/">‹ 口语课</a><b style="font-size:18px" id="r-title">回看</b><button class="pill red" type="button" id="r-del">删掉</button></div>
-  <div class="muted small" id="r-meta"></div>
-  <div class="play" id="r-play"></div>
-  <div class="used" id="r-used"></div>
-  <div class="lines" id="r-lines"></div>
-</div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -269,68 +252,60 @@ ${faviconLinks()}
 __WORD_DRAW_JS__
   let toastTimer = null;
   const toast = (s) => { const t = $('#toast'); t.textContent = s; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2400); };
-  const fmtDate = (iso) => { const d = new Date(iso); return (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
-  const STATUS = { draft: '还在改', ready: '等孩子', done: '聊过了' };
   let info = null;
 
-  // ---- 路由 ----
-  const views = ['home', 'list', 'kid', 'review'];
-  const show = (name) => { for (const v of views) $('#' + v).classList.toggle('on', v === name); BACK.el.hidden = name !== 'kid' || Boolean(REEL_ID); };
-  // 左上角「‹ 头像」胶囊同老师页(《首页设计.md》拍板 27):头像是口语课挂的那位老师;点了挂断,从首页来的回首页,家长递过去的回清单
+  // ---- 路由:#/ 拍照、#/list/<id> 看口语单、#/kid/<id> 跟读与聊 ----
+  const views = ['snap', 'pick', 'kid'];
+  const show = (name) => { for (const v of views) $('#' + v).classList.toggle('on', v === name); BACK.el.hidden = Boolean(REEL_ID); };
+  // 左上角「‹ 头像」胶囊同老师页(《首页设计.md》拍板 27):头像是口语课挂的那位老师;点了挂断、回首页
   __TUTOR_FACE_JS__
-  const BACK = backCapsule(() => { if (call) call.hangup('left'); if (FROM_HOME) location.href = '/'; else location.hash = '#/'; });
+  const BACK = backCapsule(() => { if (call) call.hangup('left'); location.href = '/'; });
   BACK.el.hidden = true; document.body.append(BACK.el);
-  /** 口语课挂的那位老师:首页链接带 ?tutor=,没带就找卡上有口语课的,再没有找英语老师(家长递过去的);换上他的颜色、头像、名字 */
+  let OWNER = null;
+  /** 口语课挂的那位老师:首页链接带 ?tutor=,没带就找卡上有口语课的,再没有找英语老师;换上他的颜色、头像、名字 */
   const wearOwner = async () => {
     let ts = [];
     try { ts = (await api('GET', '/api/kid/home')).tutors || []; } catch { return; }
     const want = new URLSearchParams(location.search).get('tutor');
     const t = ts.find((x) => x.name === want) || ts.find((x) => (x.extras || []).includes('talk')) || ts.find((x) => x.lang === 'en');
     if (!t) return;
+    OWNER = t;
     document.documentElement.style.setProperty('--sc', t.color);
     BACK.set(t);
+    if (!REEL_ID) setFavicon(t);
+    $('#snap-av').replaceChildren(tutorAvatar(t));
+    $('#p-av').replaceChildren(tutorAvatar(t));
     $('#k-sav').replaceWith(Object.assign(tutorAvatar(t), { id: 'k-sav' }));
     $('#k-sname').textContent = t.display;
     $('#k-av .face').replaceChildren(tutorAvatar(t));
   };
   const go = (hash) => { location.hash = hash; };
-  /** 孩子从首页英语老师卡上的「口语课」进来(《首页设计.md》拍板 18):「回去」与打完都回首页,不进家长的那几屏 */
-  const KID_ONLY = __TALK_KID_ONLY__;
   /** 录像模式(?reel=<id>,《口语课设计.md》§8.3):开在家长端录像外壳的 iframe 里,照录下的消息画孩子那一屏 */
   const REEL_ID = new URLSearchParams(location.search).get('reel');
-  /** 回看页「看录像」去哪(只在家长端那份里有;孩子端是空的) */
-  const REEL_HREF = '__TALK_REEL_HREF__';
   let RL = null;
   /** 现在几毫秒:平时是钟;录像里是录像放到的那一刻(离通话开始) */
   const nowMs = () => (RL ? RL.t : Date.now());
-  const FROM_HOME = KID_ONLY || new URLSearchParams(location.search).get('home') === '1';
   const route = () => {
-    const m = /^#\\/(list|kid|review)\\/([^/]+)/.exec(location.hash);
-    if (KID_ONLY && (!m || m[1] !== 'kid')) { location.replace('/'); return; }
-    if (!m) { show('home'); void home(); return; }
-    if (m[1] === 'list') { show('list'); void list(m[2]); }
-    else if (m[1] === 'kid') { show('kid'); void kid(m[2]); }
-    else { show('review'); void review(m[2]); }
+    const m = /^#\\/(list|kid)\\/([^/]+)/.exec(location.hash);
+    if (!m) { show('snap'); void snap(); return; }
+    if (m[1] === 'list') { show('pick'); void pick(m[2]); }
+    else { show('kid'); void kid(m[2]); }
   };
-  window.addEventListener('hashchange', () => { if (REEL_ID) return; if (call && !location.hash.startsWith('#/kid/')) call.hangup('left'); route(); });
+  window.addEventListener('hashchange', () => { if (REEL_ID) return; if (call) call.hangup('left'); route(); });
 
-  // ---- 家长:拍照与讲过的 ----
-  async function home() {
-    const d = new Date(); $('#h-date').textContent = (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日';
-    try { info = await api('GET', '/api/talk'); } catch (e) { toast('读不到:' + e.message); return; }
-    const off = $('#h-off');
-    if (!info.enabled) { off.hidden = false; off.innerHTML = '口语课还关着。在 cotutor.json 里加 <code>"talk": { "enabled": true }</code>(存了就生效)。'; }
-    else if (!info.auth) { off.hidden = false; off.innerHTML = '没有百炼的 key 或业务空间 id:设环境变量 <code>DASHSCOPE_API_KEY</code> 与 <code>DASHSCOPE_WORKSPACE_ID</code>(或在 voxtell 的配置里),重起 serve。'; }
-    else off.hidden = true;
-    $('#h-shoot').style.display = info.enabled ? '' : 'none';
-    const past = $('#h-past'); past.replaceChildren();
-    for (const t of info.talks) {
-      const n = t.list.words.length + t.list.sentences.length;
-      past.append(h('div', { class: 'card row', on: { click: () => go(t.status === 'done' ? '#/review/' + t.id : '#/list/' + t.id) } },
-        h('div', { class: 't' }, h('b', {}, fmtDate(t.createdAt)), h('span', { class: 'muted small' }, n + ' 条' + (t.listError ? ' · 照片没读出来' : '') + (t.call ? ' · 聊了 ' + Math.round(t.call.ms / 60000) + ' 分钟' : ''))),
-        h('span', { class: 'chip' + (t.status === 'ready' ? ' blue' : '') }, STATUS[t.status] || t.status)));
-    }
+  // ---- 拍照(《口语课设计.md》拍板 12、14):同拍照听写的骨架;上次的口语单在最上面给「接着上」 ----
+  const lastList = () => (info && info.enabled ? (info.talks || []).find((x) => (x.status === 'ready' || x.status === 'done') && x.list.words.length + x.list.sentences.length > 0) : null) || null;
+  async function snap() {
+    try { info = await api('GET', '/api/talk'); } catch (e) { info = null; }
+    if (info && !info.enabled) { location.replace('/'); return; }
+    const last = lastList();
+    $('#snap-resume').hidden = !last;
+    $('#snap-cam-btn').classList.toggle('alt', Boolean(last));
+    if (!last) return;
+    const d = new Date(last.createdAt), nw = last.list.words.length, ns = last.list.sentences.length;
+    $('#snap-resume-sub').textContent = (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日拍的 · ' + [nw ? nw + ' 个单词' : '', ns ? ns + ' 句' : ''].filter(Boolean).join('、');
   }
+  $('#snap-resume-go').addEventListener('click', (e) => { startWith(async () => (await api('POST', '/api/talk', { from: 'latest' })).id, e.currentTarget); });
   const shrink = (file) => new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -338,48 +313,102 @@ __WORD_DRAW_JS__
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('这张图打不开')); };
     img.src = url;
   });
+
+  // ---- 看口语单(拍板 12):照片在左;读的时候「老师在看这一页…」,读完原地填上;点一项改字、× 去掉、能补 ----
+  const MAX = { words: 12, sentences: 8 };
+  let P = { id: null, meta: null, waiting: false, failed: false, edit: null };
   async function shoot(file) {
     if (!file) return;
-    toast('老师在读这一页…');
-    try { const photo = await shrink(file); const t = await api('POST', '/api/talk', { photo }); go('#/list/' + t.id); }
-    catch (e) { toast('没成:' + e.message); }
+    if (P.url) URL.revokeObjectURL(P.url);
+    P = { id: null, meta: null, waiting: true, failed: false, edit: null, url: URL.createObjectURL(file) };
+    $('#p-img').src = P.url;
+    history.replaceState(null, '', location.pathname + location.search + '#/list/');
+    show('pick'); renderPick();
+    try {
+      const photo = await shrink(file);
+      const m = await api('POST', '/api/talk', { photo });
+      P.id = m.id; P.meta = m;
+      history.replaceState(null, '', location.pathname + location.search + '#/list/' + m.id);
+    } catch (e) { P.failed = true; }
+    P.waiting = false; renderPick();
   }
-  $('#h-cam').addEventListener('change', (e) => { shoot(e.target.files[0]); e.target.value = ''; });
-  $('#h-pick').addEventListener('change', (e) => { shoot(e.target.files[0]); e.target.value = ''; });
-  $('#h-blank').addEventListener('click', async () => { try { const t = await api('POST', '/api/talk', {}); go('#/list/' + t.id); } catch (e) { toast('没成:' + e.message); } });
-
-  // ---- 家长:口语单 ----
-  let L = null;
+  $('#p-cam').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; shoot(f); });
+  $('#p-lib').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; shoot(f); });
+  async function pick(id) {
+    if (P.id === id && P.meta) { renderPick(); return; }
+    P = { id: null, meta: null, waiting: true, failed: false, edit: null };
+    renderPick();
+    try { P.meta = (await api('GET', '/api/talk/' + id)).meta; P.id = id; } catch (e) { go('#/'); return; }
+    if (P.meta.photo) $('#p-img').src = '/api/talk/' + id + '/photo'; else $('#p-img').removeAttribute('src');
+    P.waiting = false; renderPick();
+  }
   const ICON_X = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
-  function rowOf(kind, it, idx) {
-    const en = h('input', { class: 'en', value: it.en, placeholder: kind === 'words' ? '单词' : '英文句子', autocapitalize: 'off', autocorrect: 'off' });
-    const zh = h('input', { class: 'zh', value: it.zh, placeholder: '中文' });
-    en.addEventListener('input', () => { it.en = en.value; });
-    zh.addEventListener('input', () => { it.zh = zh.value; });
-    return h('div', { class: 'card row' + (kind === 'sentences' ? ' sent' : '') }, en, zh, h('button', { class: 'x', type: 'button', 'aria-label': '删掉', html: ICON_X, on: { click: () => { L.list[kind].splice(idx, 1); renderList(); } } }));
+  const ICON_OK = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
+  /** 改完一项:英文空了就去掉 */
+  const doneEdit = () => {
+    const e = P.edit; P.edit = null;
+    if (!e || !P.meta) return;
+    const arr = P.meta.list[e.kind], it = arr[e.i];
+    if (it) { it.en = it.en.replace(/\\s+/g, ' ').trim(); it.zh = (it.zh || '').trim(); if (!it.en) arr.splice(e.i, 1); }
+  };
+  function itemEl(kind, it, i) {
+    const word = kind === 'words';
+    const editing = P.edit && P.edit.kind === kind && P.edit.i === i;
+    if (editing) {
+      const en = h('input', { class: 'en', value: it.en, placeholder: word ? '单词' : '英文句子', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false', 'aria-label': '英文' });
+      const zh = h('input', { class: 'zh', value: it.zh || '', placeholder: '中文意思(可以不写)', 'aria-label': '中文' });
+      en.addEventListener('input', () => { it.en = en.value; renderGo(); });
+      zh.addEventListener('input', () => { it.zh = zh.value; });
+      for (const x of [en, zh]) x.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { doneEdit(); renderPick(); } });
+      const el = h('div', { class: 'tk-it ed' + (word ? ' w' : '') }, h('div', { class: 'tx', style: 'display:block' }, en, zh), h('button', { class: 'x', type: 'button', 'aria-label': '改好了', html: ICON_OK, on: { click: () => { doneEdit(); renderPick(); } } }));
+      setTimeout(() => { if (!en.value) en.focus(); }, 0);
+      return el;
+    }
+    return h('div', { class: 'tk-it' + (word ? ' w' : '') },
+      h('button', { class: 'tx', type: 'button', 'aria-label': '改 ' + it.en, on: { click: () => { doneEdit(); P.edit = { kind, i: P.meta.list[kind].indexOf(it) }; renderPick(); } } },
+        word && it.emoji ? h('span', { class: 'em' }, it.emoji) : null, h('span', {}, h('span', { class: 'en' }, it.en), it.zh ? h('span', { class: 'zh' }, it.zh) : null)),
+      h('button', { class: 'x', type: 'button', 'aria-label': '不要 ' + it.en, html: ICON_X, on: { click: () => { doneEdit(); const k = P.meta.list[kind].indexOf(it); if (k >= 0) P.meta.list[kind].splice(k, 1); renderPick(); } } }));
   }
-  function renderList() {
-    $('#l-nw').textContent = L.list.words.length; $('#l-ns').textContent = L.list.sentences.length;
-    $('#l-words').replaceChildren(...L.list.words.map((it, i) => rowOf('words', it, i)));
-    $('#l-sents').replaceChildren(...L.list.sentences.map((it, i) => rowOf('sentences', it, i)));
-    const w = $('#l-warn');
-    if (L.listError) { w.hidden = false; w.textContent = '照片没读出来(' + L.listError + '),自己填几条也行'; }
-    else if (!L.photo) { w.hidden = false; w.textContent = '没拍照片,自己填'; }
-    else w.hidden = true;
-    $('#l-meta').textContent = '聊 ' + (info ? info.minutes : 5) + ' 分钟 · 音色 ' + (info ? info.voice : '') + (L.listBy === 'omni' ? ' · 老师读了 ' + Math.round((L.listMs || 0) / 100) / 10 + ' 秒' : '');
+  const filled = () => (P.meta ? P.meta.list.words.filter((x) => x.en.trim()).length + P.meta.list.sentences.filter((x) => x.en.trim()).length : 0);
+  function renderGo() {
+    const n = filled();
+    $('#p-go').disabled = !P.id || !n || P.waiting;
+    $('#p-go').textContent = n ? '开始跟读 · ' + n + ' 个' : '开始跟读';
   }
-  async function list(id) {
-    if (!info) { try { info = await api('GET', '/api/talk'); } catch (e) {} }
-    try { L = (await api('GET', '/api/talk/' + id)).meta; } catch (e) { toast('没有这一次'); go('#/'); return; }
-    renderList();
+  function renderPick() {
+    $('#p-scan').hidden = !P.waiting;
+    const L = P.meta ? P.meta.list : null;
+    const n = L ? L.words.length + L.sentences.length : 0;
+    $('#p-title').textContent = P.waiting ? '老师在看这一页…' : '今天的口语单';
+    $('#p-sub').textContent = P.waiting ? '找出单词和句子,一会儿就好' : P.failed ? '这张没传上去,再拍一张试试' : n ? '点一项改字,不要的点 ×' : '这一页没看到英文,换一页拍,或者自己补几个';
+    if (P.waiting || !L) {
+      $('#p-nw').textContent = '…'; $('#p-ns').textContent = '…';
+      $('#p-words').replaceChildren(...[0, 1, 2, 3].map(() => h('div', { class: 'tk-sk' })));
+      $('#p-sents').replaceChildren(h('div', { class: 'tk-sk' }), h('div', { class: 'tk-sk' }));
+      $('#p-addw').hidden = true; $('#p-adds').hidden = true;
+    } else {
+      $('#p-nw').textContent = L.words.length; $('#p-ns').textContent = L.sentences.length;
+      $('#p-words').replaceChildren(...L.words.map((it, i) => itemEl('words', it, i)));
+      $('#p-sents').replaceChildren(...L.sentences.map((it, i) => itemEl('sentences', it, i)));
+      $('#p-addw').hidden = !P.id || L.words.length >= MAX.words; $('#p-adds').hidden = !P.id || L.sentences.length >= MAX.sentences;
+    }
+    renderGo();
   }
-  const addRow = (kind) => { L.list[kind].push({ en: '', zh: '' }); renderList(); const rows = $('#l-' + (kind === 'words' ? 'words' : 'sents')).querySelectorAll('.row'); const last = rows[rows.length - 1]; if (last) last.querySelector('input').focus(); };
-  $('#l-addw').addEventListener('click', () => addRow('words'));
-  $('#l-adds').addEventListener('click', () => addRow('sentences'));
-  $('#l-go').addEventListener('click', async () => {
-    const words = L.list.words.filter((x) => x.en.trim()), sentences = L.list.sentences.filter((x) => x.en.trim());
-    if (!words.length && !sentences.length) { toast('先填一条'); return; }
-    try { L = await api('PUT', '/api/talk/' + L.id + '/list', { words, sentences, ready: true }); go('#/kid/' + L.id); } catch (e) { toast('没存上:' + e.message); }
+  const addItem = (kind) => { if (!P.meta) return; doneEdit(); const arr = P.meta.list[kind]; arr.push({ en: '', zh: '' }); P.edit = { kind, i: arr.length - 1 }; renderPick(); };
+  $('#p-addw').addEventListener('click', () => addItem('words'));
+  $('#p-adds').addEventListener('click', () => addItem('sentences'));
+  $('#p-again').addEventListener('click', () => {
+    // 这张不要了:还没开始的那份删掉,不留在 talk/ 里
+    if (P.id && P.meta && P.meta.status === 'draft') api('DELETE', '/api/talk/' + P.id).catch(() => {});
+    P = { id: null, meta: null, waiting: false, failed: false, edit: null };
+    go('#/');
+  });
+  $('#p-go').addEventListener('click', (e) => {
+    doneEdit();
+    const words = P.meta.list.words.filter((x) => x.en.trim()), sentences = P.meta.list.sentences.filter((x) => x.en.trim());
+    if (!words.length && !sentences.length) return;
+    const id = P.id;
+    startWith(async () => { P.meta = await api('PUT', '/api/talk/' + id + '/list', { words, sentences, ready: true }); return id; }, e.currentTarget);
   });
 
   // ---- 声音:采集(16k PCM16 上去)与播放(24k PCM16 下来) ----
@@ -515,14 +544,14 @@ __WORD_DRAW_JS__
   }
   setInterval(drawRing, 100);
   /** reel = 录像模式:不开麦、不连,声音是替身(老师在不在出声照录像的时段),消息由录像喂进 C.handle */
-  function makeCall(id, reel) {
-    const A = reel ? { play() {}, flush() {}, close() {}, open: async () => {}, playing: () => Boolean(RL) && tkIn(RL.r.playing, RL.t), muted: true, onChunk: null, onLevel: null } : makeAudio();
+  function makeCall(id, reel, A0, opened) {
+    const A = reel ? { play() {}, flush() {}, close() {}, open: async () => {}, playing: () => Boolean(RL) && tkIn(RL.r.playing, RL.t), muted: true, onChunk: null, onLevel: null } : (A0 || makeAudio());
     const C = { id, ws: null, st: null, deadline: null, saying: false, tutorLine: '', tutorDone: true, interrupt: false, timer: null, ended: false, startedAt: 0 };
     const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/talk/' + id + '/ws';
     C.send = (o) => { if (C.ws && C.ws.readyState === 1) C.ws.send(JSON.stringify(o)); };
     C.start = async () => {
       setHint('打开麦克风…');
-      try { await A.open(); } catch (e) { setHint('麦克风打不开:' + (e && e.message ? e.message : e)); return; }
+      try { await (opened || A.open()); } catch (e) { setHint('麦克风打不开:' + (e && e.message ? e.message : e)); return; }
       A.onChunk = (ab) => {
         if (!C.st || C.saying) return;
         // 跟读段不用按:老师放声时不推(没有回声),其余时间都推,开口 / 停由服务端判
@@ -592,8 +621,8 @@ __WORD_DRAW_JS__
       clearInterval(C.timer); A.close(); window.removeEventListener('resize', C.onResize);
       try { if (C.ws && C.ws.readyState <= 1) C.ws.close(1000, why); } catch (e) {}
       call = null;
-      // 孩子从首页进来的(?home=1):打完回首页;家长递过去的:打完到回看
-      if (location.hash.startsWith('#/kid/')) { if (FROM_HOME) location.href = '/'; else { justEnded = C.id; go('#/review/' + C.id); } }
+      // 打完回首页(回放在家长端的记录里)
+      if (!reel) location.href = '/';
     };
     return C;
   }
@@ -607,41 +636,32 @@ __WORD_DRAW_JS__
   }
   async function kid(id) {
     kidReset();
-    try { K = await api('GET', '/api/talk/' + id); } catch (e) { toast('没有这一次'); go('#/'); return; }
+    try { K = await api('GET', '/api/talk/' + id); } catch (e) { go('#/'); return; }
     const n = K.meta.list.words.length + K.meta.list.sentences.length;
-    $('#k-start-hint').textContent = n ? '先跟我读 ' + n + ' 句,再打个电话聊一聊' : '口语单是空的,直接打电话聊';
-    if (K.meta.status === 'done') $('#k-start-hint').textContent = '这一次已经聊过了;再打一次会盖掉上次的记录';
+    $('#k-start-hint').textContent = n ? '先跟我读 ' + n + ' 句,再打个电话聊一聊' : '直接打个电话聊一聊';
   }
-  $('#k-go').addEventListener('click', async () => { if (call) return; try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) {} call = makeCall(K.meta.id); $('#k-go').disabled = true; await call.start(); $('#k-go').disabled = false; });
+  /**
+   * 开始一次(拍板 12):这一下点击里先把声音与麦打开(AudioContext、getUserMedia 要在点击里起),再拿 id(存口语单 / 接着上),
+   * 换到跟读那一屏(replaceState,不走 hashchange)接上
+   */
+  async function startWith(getId, btn) {
+    if (call) return;
+    try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) {}
+    const A = makeAudio(); const opened = A.open(); opened.catch(() => {});
+    if (btn) btn.disabled = true;
+    let id;
+    try { id = await getId(); } catch (e) { if (btn) btn.disabled = false; A.close(); toast('没连上,再点一次'); return; }
+    history.replaceState(null, '', location.pathname + location.search + '#/kid/' + id);
+    show('kid'); await kid(id); $('#k-start').hidden = true;
+    call = makeCall(id, false, A, opened);
+    await call.start();
+    if (btn) btn.disabled = false;
+  }
+  $('#k-go').addEventListener('click', (e) => { if (K) startWith(async () => K.meta.id, e.currentTarget); });
   $('#k-again').addEventListener('click', () => { if (call) call.send({ t: 'again' }); });
   $('#k-next').addEventListener('click', () => { if (call) { $('#k-next').disabled = true; $('#k-heard').textContent = ''; call.send({ t: 'next' }); } });
   $('#k-skip').addEventListener('click', () => { if (call) call.send({ t: 'chat' }); });
   $('#k-hang').addEventListener('click', () => { if (call) call.hangup('bye'); });
-
-  // ---- 家长:回看 ----
-  /** 刚挂的那一次:服务端还在落盘(混录像的声音要一会儿),字没好就隔 0.4 秒再拿,最多 6 秒 */
-  let justEnded = null;
-  async function review(id, tries = 0) {
-    let d; try { d = await api('GET', '/api/talk/' + id); } catch (e) { toast('没有这一次'); go('#/'); return; }
-    if (!d.transcript && justEnded === id && tries < 15) { setTimeout(() => { if (location.hash === '#/review/' + id) void review(id, tries + 1); }, 400); return; }
-    const t = d.transcript;
-    $('#r-title').textContent = fmtDate(d.meta.createdAt);
-    $('#r-meta').textContent = t ? '聊了 ' + Math.round(t.ms / 1000) + ' 秒 · ' + ({ bye: '孩子挂的', time: '到点了', idle: '半天没说话', left: '离开了页面' }[t.why] || t.why) + ' · token 进 ' + t.usage.input + ' 出 ' + t.usage.output : '还没聊';
-    const play = $('#r-play'); play.replaceChildren();
-    if (d.hasReel && REEL_HREF) play.append(h('a', { class: 'pill dark', href: REEL_HREF + encodeURIComponent(id), id: 'r-reel' }, '▶ 看录像'));
-    if (d.hasTutorAudio) play.append(h('div', {}, h('div', { class: 'muted small' }, '老师'), h('audio', { controls: '', preload: 'none', src: '/api/talk/' + id + '/audio/tutor' })));
-    if (d.hasKidAudio) play.append(h('div', {}, h('div', { class: 'muted small' }, '孩子'), h('audio', { controls: '', preload: 'none', src: '/api/talk/' + id + '/audio/kid' })));
-    const used = $('#r-used'); used.replaceChildren();
-    if (t) for (const u of [].concat(t.used.words, t.used.sentences)) used.append(h('span', { class: u.kid ? 'y' : '' }, u.en + (u.kid ? ' · 孩子说了 ' + u.kid + ' 次' : u.tutor ? ' · 老师提了' : '')));
-    const lines = $('#r-lines'); lines.replaceChildren();
-    if (!t) { lines.append(h('a', { class: 'pill', href: '#/kid/' + id }, '让孩子打这个电话'), h('a', { class: 'pill', href: '#/list/' + id }, '改口语单')); return; }
-    let phase = '';
-    for (const l of t.lines) {
-      if (l.phase !== phase) { phase = l.phase; lines.append(h('div', { class: 'ph' }, h('span', { class: 'chip ' + (phase === 'read' ? 'plum' : 'blue') }, phase === 'read' ? '跟读' : '聊'))); }
-      lines.append(h('div', { class: 'ln ' + l.who }, l.text, h('small', {}, (l.who === 'tutor' ? '老师' : '孩子') + ' · ' + Math.round(l.at / 1000) + ' 秒')));
-    }
-  }
-  $('#r-del').addEventListener('click', async () => { const id = location.hash.split('/')[2]; if (!id || !confirm('删掉这一次?声音和字都没了')) return; try { await api('DELETE', '/api/talk/' + id); go('#/'); } catch (e) { toast('没删掉:' + e.message); } });
 
   // ---- 录像模式:轨道是 lib/reel.ts(tkBuild / tkClock / tkCaption,内联在下面);把手照《家长录像设计.md》的录像栏(reel-dock.ts) ----
 __TALK_REEL_JS__
@@ -732,9 +752,6 @@ __TALK_REEL_JS__
 </script>
 </body></html>`;
 
-/** kidOnly = 孩子端 /talk:只有跟读与聊那一屏;家长端 /parent/talk 全有 */
-export function talkPage(kidOnly: boolean): string {
-  return TALK_PAGE.replace('__TALK_KID_ONLY__', kidOnly ? 'true' : 'false').replace('__TUTOR_FACE_JS__', () => TUTOR_FACE_JS).replace('__TUTOR_FACE_CSS__', () => TUTOR_FACE_CSS).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__TALK_REEL_JS__', () => TALK_REEL_JS)
-    // 回看页的「看录像」只在家长端那份里有地址(孩子端页面的源码里不出现 /parent)
-    .replace('__TALK_REEL_HREF__', kidOnly ? '' : '/parent/talk/reel?id=');
+export function talkPage(): string {
+  return TALK_PAGE.replace('__TUTOR_FACE_JS__', () => TUTOR_FACE_JS).replace('__TUTOR_FACE_CSS__', () => TUTOR_FACE_CSS).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__TALK_REEL_JS__', () => TALK_REEL_JS);
 }

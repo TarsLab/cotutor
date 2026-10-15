@@ -36,7 +36,7 @@ ${REEL_DOCK_JS}
   const toast = (text) => { const t = $('#toast'); t.textContent = text; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4000); };
   const blank = (text) => { $('#rl-screen').hidden = true; reelDock.close(); const b = document.createElement('div'); b.className = 'blank'; b.textContent = text; document.body.prepend(b); };
   const id = new URLSearchParams(location.search).get('id') || '';
-  const exit = () => { if (history.length > 1) history.back(); else location.href = '/parent/talk#/review/' + encodeURIComponent(id); };
+  const exit = () => { if (history.length > 1) history.back(); else location.href = '/parent'; };
   // 孩子的屏幕放的声音用这一个 Audio:家长第一次点这一页时放一段静音解锁
   const audio = new Audio(); audio.preload = 'auto';
   window.__cotutorAudio = audio;
@@ -49,8 +49,8 @@ ${REEL_DOCK_JS}
   };
   window.cotutorReelFail = () => blank('这一次还没打,没有录像。');
   fetch('/api/talk/' + encodeURIComponent(id) + '/reel', { cache: 'no-store' }).then((r) => {
-    // 10 月 14 日以前打的没有录像:记录点进来的就换到回看页(字与两边的原声),不留一页空的
-    if (r.status === 404) { location.replace('/parent/talk#/review/' + encodeURIComponent(id)); return; }
+    // 10 月 14 日以前打的没有录像;回看页随 /parent/talk 删了(《口语课设计.md》拍板 13)
+    if (r.status === 404) { blank('这一次没有录像。'); return; }
     if (!r.ok) { blank('读不到这一次。'); return; }
     $('#rl-screen').hidden = false;
     $('#rl-frame').src = '/talk?' + new URLSearchParams({ reel: id });

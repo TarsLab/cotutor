@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * 口语课页面(家长端 /parent/talk,孩子那一屏 /talk)的手动验收,不花钱:真 serve(临时 workspace,talk.enabled)+ 假 realtime(tests/_fake-realtime.ts,COTUTOR_TALK_ENDPOINT 指过去)
- * + 无头 Chrome(假麦克风放 say 念的一句英文)。走一遍:不拍自己填 → 口语单 → 给孩子 → 开始 → 跟我读(什么都不按)→ 聊 → 挂断 → 回看。
+ * 口语课页面(孩子端 /talk,《口语课设计.md》拍板 12)的手动验收,不花钱:真 serve(临时 workspace,talk.enabled)+ 假 realtime(tests/_fake-realtime.ts,COTUTOR_TALK_ENDPOINT 指过去)
+ * + 假的读口语单(COTUTOR_TALK_FAKE_LIST)+ 无头 Chrome(假麦克风放 say 念的一句英文)。走一遍:拍照屏 → 相册选一张 → 老师在看 → 口语单(改字、补、删)→ 开始跟读 → 跟我读(什么都不按)→ 聊 → 挂断回首页 → 家长看录像 → 接着上。
  * 逐项:页面连上、第一句 cue、跟我读不用按(老师放完就听、静了算读完、自己往下走)、老师的声音排进 AudioContext、再听一遍、开聊(第二条会话)、聊里孩子出声老师被掐、挂断后回看有字。
  * 用法:node scripts/probe-talk-page.mjs [--keep] [--real] [--out <截图目录>]
  *   --real 不起假百炼,真连 realtime(要本机的 key 与业务空间 id,一次几分钱):看不到服务端那头的事,只验页面上看得见的——声音放了、孩子的字回来了、聊起来了、回看有字。
@@ -44,7 +44,7 @@ cfg.talk = { enabled: true, minutes: 1 };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
 try { await fetch(`${base}/api/health`); console.error(`端口 ${port} 上已经有东西,先停掉`); process.exit(2); } catch {}
-const serveEnv = real ? { ...process.env, COTUTOR_WORKSPACE: wsRoot } : { ...process.env, COTUTOR_TALK_ENDPOINT: fake.endpoint, DASHSCOPE_API_KEY: 'sk-probe', COTUTOR_WORKSPACE: wsRoot };
+const serveEnv = real ? { ...process.env, COTUTOR_WORKSPACE: wsRoot, COTUTOR_TALK_FAKE_LIST: '1' } : { ...process.env, COTUTOR_TALK_ENDPOINT: fake.endpoint, DASHSCOPE_API_KEY: 'sk-probe', COTUTOR_WORKSPACE: wsRoot, COTUTOR_TALK_FAKE_LIST: '1' };
 const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', wsRoot, '--port', String(port), '--http'], { stdio: process.env.PROBE_LOG ? 'inherit' : 'ignore', env: serveEnv });
 for (let i = 0; i < 60; i++) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch {} await sleep(250); }
 
@@ -87,30 +87,43 @@ try {
   await quiet(send);
   await send('Page.addScriptToEvaluateOnNewDocument', { source: INJECT });
 
-  // ---- 家长:不拍自己填 → 口语单 ----
-  await send('Page.navigate', { url: `${base}/parent/talk` });
-  ok('首页:开着,有拍照与「不拍,自己填」', await until(`document.querySelector('#home').classList.contains('on') && document.querySelector('#h-off').hidden && document.querySelector('#h-blank')`));
-  await click('#h-blank');
-  ok('开一次 → 口语单页', await until(`document.querySelector('#list').classList.contains('on') && location.hash.startsWith('#/list/')`));
-  await click('#l-addw');
-  await evaluate(`(() => { const r = document.querySelector('#l-words .row'); const [en, zh] = r.querySelectorAll('input'); en.value = 'red'; en.dispatchEvent(new Event('input')); zh.value = '红色'; zh.dispatchEvent(new Event('input')); return true; })()`);
-  await click('#l-adds');
-  await evaluate(`(() => { const r = document.querySelector('#l-sents .row'); const [en, zh] = r.querySelectorAll('input'); en.value = 'It is a red car.'; en.dispatchEvent(new Event('input')); zh.value = '这是一辆红色的车。'; zh.dispatchEvent(new Event('input')); return true; })()`);
-  await click('#l-go');
-  ok('给孩子 → 孩子页,写着先跟读 2 句', await until(`document.querySelector('#kid').classList.contains('on') && document.querySelector('#k-start-hint').textContent.includes('2 句')`));
-  ok('孩子页挂在英语老师下(《首页设计.md》拍板 27):左上角「‹ 头像」胶囊、开始屏是他的头像和名字、开始键是他的学科色', await until(`(() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('.tfav .face') && b.getBoundingClientRect().left < 30 && !!document.querySelector('#k-sav.tfav') && document.querySelector('#k-sname').textContent === '英语老师' && getComputedStyle(document.querySelector('#k-go')).backgroundColor === 'rgb(31, 138, 76)' && !document.querySelector('#k-back'); })()`));
-  await shot('talk-01-start');
+  // ---- 孩子:拍照屏(同拍照听写的骨架)→ 相册选一张 → 老师在看 → 口语单 ----
+  await send('Page.navigate', { url: `${base}/talk?tutor=english-tutor` });
+  ok('拍照屏:英语老师的大头像、对话气泡「Hi」与「口语课」、拍照 / 相册,没有上次的就没有「接着上」', await until(`document.querySelector('#snap').classList.contains('on') && !!document.querySelector('#snap-av .tfav') && document.querySelector('.pg.talk i')?.textContent === 'Hi' && document.querySelector('.snap-ttl h1').textContent === '口语课' && !!document.querySelector('#p-cam') && !!document.querySelector('#p-lib') && document.querySelector('#snap-resume').hidden`));
+  await shot('talk-00-snap');
+  const doc = await send('DOM.getDocument', {});
+  const pngAt = join(tmp, 'page.png');
+  writeFileSync(pngAt, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
+  const lib = await send('DOM.querySelector', { nodeId: doc.result.root.nodeId, selector: '#p-lib' });
+  await send('DOM.setFileInputFiles', { nodeId: lib.result.nodeId, files: [pngAt] });
+  ok('选了照片:照片放左边,右边「老师在看这一页…」、浅灰占位、开始跟读点不了', await until(`document.querySelector('#pick').classList.contains('on') && document.querySelector('#p-title').textContent.includes('老师在看') && document.querySelectorAll('#p-words .tk-sk').length === 4 && document.querySelector('#p-go').disabled`, 20));
+  ok('读完原地填上:red(带 emoji、中文)与一句,地址换成 #/list/<id>', await until(`document.querySelector('#p-title').textContent === '今天的口语单' && document.querySelectorAll('#p-words .tk-it').length === 1 && document.querySelector('#p-words .tk-it .en').textContent === 'red' && document.querySelectorAll('#p-sents .tk-it').length === 1 && /^#\\/list\\/[^/]+$/.test(location.hash)`, 40));
+  ok('开始跟读 · 2 个', await evaluate(`!document.querySelector('#p-go').disabled && document.querySelector('#p-go').textContent === '开始跟读 · 2 个'`));
+  await shot('talk-01-list');
+  // 孩子能改字(拍板 12):补一个 blue,再 × 掉;点 red 改中文
+  await click('#p-addw');
+  ok('补一个单词:新的一格是输入框,光标在里面', await until(`document.querySelectorAll('#p-words .tk-it').length === 2 && document.activeElement && document.activeElement.classList.contains('en')`));
+  await evaluate(`(() => { const i = document.activeElement; i.value = 'blue'; i.dispatchEvent(new Event('input')); return true; })()`);
+  await click('#p-words .tk-it.ed .x');
+  ok('改好了:blue 进来,开始跟读 · 3 个', await until(`[...document.querySelectorAll('#p-words .tk-it .en')].map((x) => x.textContent).join() === 'red,blue' && document.querySelector('#p-go').textContent === '开始跟读 · 3 个'`));
+  await click('#p-words .tk-it:nth-child(2) .x');
+  ok('× 去掉 blue:又是 2 个', await until(`document.querySelectorAll('#p-words .tk-it').length === 1 && document.querySelector('#p-go').textContent === '开始跟读 · 2 个'`));
+  await click('#p-words .tk-it .tx');
+  await evaluate(`(() => { const z = document.querySelector('#p-words .tk-it.ed input.zh'); z.value = '红'; z.dispatchEvent(new Event('input')); return true; })()`);
+  await click('#p-words .tk-it.ed .x');
+  ok('点 red 改中文成「红」', await until(`document.querySelector('#p-words .tk-it .zh').textContent === '红'`));
+  await click('#p-go');
+  ok('开始跟读:不过开始屏,直接到跟读那一屏;胶囊挂英语老师、头像是他', await until(`document.querySelector('#kid').classList.contains('on') && document.querySelector('#k-start').hidden && /^#\\/kid\\//.test(location.hash) && (() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('.tfav .face'); })()`, 40));
   const id = await evaluate(`location.hash.split('/')[2]`);
   const meta = await (await fetch(`${base}/api/talk/${id}`)).json();
-  ok('口语单存上了(ready,家长填的)', meta.meta.status === 'ready' && meta.meta.listBy === 'parent' && meta.meta.list.words[0].en === 'red', JSON.stringify(meta.meta.list));
+  ok('口语单存上了(ready,孩子改过的:red 的中文是「红」,没有 blue)', meta.meta.listBy === 'parent' && meta.meta.list.words.length === 1 && meta.meta.list.words[0].zh === '红' && meta.meta.list.words[0].emoji === '🔴', JSON.stringify(meta.meta.list));
 
-  // ---- 孩子:开始 → 跟我读(不用按,《口语课设计.md》§8.1):假麦克风一直在念,老师放完就听、静了算读完、自己往下走 ----
+  // ---- 孩子:跟我读(开始跟读那一下就开麦接上;不用按,《口语课设计.md》§8.1):假麦克风一直在念,老师放完就听、静了算读完、自己往下走 ----
   const heardRe = real ? /\S/ : /It's a red car\./;
   const sawKid = (sel) => evaluate(`(() => { const t = document.querySelector(${JSON.stringify(sel)}).textContent; return t.includes('你说的') ? t.replace('你说的:', '') : ''; })()`);
-  await click('#k-go');
   ok('开始:麦克风开了、接上了、第一句 red 在卡上、老师的声音排进去放了', await untilFn(async () => (await evaluate(`window.__gum > 0 && !document.querySelector('#k-read').hidden && document.querySelector('#k-card').dataset.en === 'red' && window.__played > 0`)) && (real || (fake.conns.length === 1 && fake.conns[0].items.length >= 1)), 60), JSON.stringify(real ? await pageStats(evaluate) : { conns: fake.conns.length, items: fake.conns[0]?.items.map((i) => i.content[0].text) }));
   const c1 = fake.conns[0];
-  if (!real) ok('跟读的会话:手动轮次(开口 / 停由服务端按响度判),人设带 Ray 和 red', c1.session?.turn_detection === null && String(c1.session?.instructions).includes('Ray') && String(c1.session?.instructions).includes('red(红色)'));
+  if (!real) ok('跟读的会话:手动轮次(开口 / 停由服务端按响度判),人设带 Ray 和 red', c1.session?.turn_detection === null && String(c1.session?.instructions).includes('Ray') && String(c1.session?.instructions).includes('red(红)'));
   ok('第 1 句是词:单词卡的四线三格(舞台那么大),没有中文', await evaluate(`!!document.querySelector('#k-card.c-word .wg svg .grid') && !document.querySelector('#k-card').textContent.includes('红色')`));
   ok('页面上没有「按住」', await evaluate(`!document.querySelector('#k-hold') && !document.querySelector('#kid').textContent.includes('按住')`));
   ok('老师放完:状态条轮到孩子', await until(`/listen|speech|heard/.test(document.querySelector('#k-rd').className)`, 60), await evaluate(`document.querySelector('#k-rd').className + ' ' + document.querySelector('#k-rd').textContent`));
@@ -132,16 +145,15 @@ try {
 
   // ---- 挂断 → 回看 ----
   await click('#k-hang');
-  ok('挂断 → 回看页:聊过、分两段、有老师和孩子的话、有两段声音', await until(`document.querySelector('#review').classList.contains('on') && document.querySelectorAll('#r-lines .ln.tutor').length > 0 && document.querySelectorAll('#r-lines .ln.kid').length > 0 && document.querySelectorAll('#r-lines .ph').length === 2 && document.querySelectorAll('#r-play audio').length === 2`), 40);
-  ok('回看页是家长的:胶囊收起', await evaluate(`document.querySelector('#back').hidden`));
+  ok('挂断 → 回首页(回放在家长端的记录里)', await until(`location.pathname === '/'`, 40), await evaluate(`location.href`));
+  for (let i = 0; i < 30 && !(await (await fetch(`${base}/api/talk/${id}`)).json()).transcript; i++) await sleep(300);
   const after = await (await fetch(`${base}/api/talk/${id}`)).json();
   ok('落盘:done、why bye、用到的词', after.meta.status === 'done' && after.transcript.why === 'bye' && after.hasKidAudio && after.hasTutorAudio && (real || after.transcript.used.words[0].kid >= 1), JSON.stringify({ why: after.transcript?.why, used: after.transcript?.used, usage: after.transcript?.usage }));
   if (real) console.log('老师说过的:\n' + after.transcript.lines.filter((l) => l.who === 'tutor').map((l) => '  ' + l.text).join('\n') + '\n孩子转写:\n' + after.transcript.lines.filter((l) => l.who === 'kid').map((l) => '  ' + l.text).join('\n'));
   if (!real) ok('两条 realtime 会话都关了', c1.closed && c2.closed);
 
   // ---- 家长:看录像(《口语课设计.md》§8.3:录下的消息喂回孩子那一屏,声音是 call.wav) ----
-  ok('回看页有「看录像」', await until(`!!document.querySelector('#r-reel')`));
-  await click('#r-reel');
+  await send('Page.navigate', { url: `${base}/parent/talk/reel?id=${id}` });
   ok('录像外壳:上半是孩子那一屏(/talk?reel=)、下半录像栏', await until(`location.pathname === '/parent/talk/reel' && !!document.querySelector('#rl-frame') && document.querySelector('#rl-frame').src.includes('/talk?reel=') && !!(document.querySelector('#rl-frame').contentWindow || {}).cotutorReel`, 60));
   const inF = (expr) => evaluate(`(() => { const w = document.querySelector('#rl-frame').contentWindow; const d = w.document; return (${expr}); })()`);
   ok('一进来停在最后一帧:打电话那一屏、单词卡在、章 3 个(跟我读两句 + 打电话)、不放', await inF(`!d.querySelector('#k-chat').hidden && d.querySelectorAll('#k-words .c-word').length === 1 && w.cotutorReel.chapters().length === 3 && !w.cotutorReel.get().playing`), await inF(`JSON.stringify({ chat: !d.querySelector('#k-chat').hidden, words: d.querySelectorAll('#k-words .c-word').length, ch: w.cotutorReel.chapters().map((c) => c.title) })`));
@@ -155,19 +167,29 @@ try {
   ok('call.wav 拿得到', callWav.ok && (callWav.headers.get('content-type') || '').includes('audio/wav'));
   // 家长端记录:口语课那一行点进去就是录像(《家长录像设计.md》拍板 19)
   await send('Page.navigate', { url: `${base}/parent` });
-  const row = `a.tr-x[href="/parent/talk/reel?id=${id}"]`;
-  ok('记录里口语课那一行连到录像', await until(`!!document.querySelector(${JSON.stringify(row)})`, 60), await evaluate(`[...document.querySelectorAll('a.tr-x')].map((a) => a.getAttribute('href')).join(' ')`));
+  const row = `a.kid[href="/parent/talk/reel?id=${id}"]`;
+  ok('记录里口语课那一行连到录像', await until(`!!document.querySelector(${JSON.stringify(row)})`, 60), await evaluate(`[...document.querySelectorAll('a.kid')].map((a) => a.getAttribute('href')).join(' ')`));
   await click(row);
   ok('点进去是录像,停在最后一帧', await until(`location.pathname === '/parent/talk/reel' && !!(document.querySelector('#rl-frame') || {}).contentWindow?.cotutorReel?.get()`, 60));
-  // 没有录像的老记录(10 月 14 日以前打的):换到回看页
+  // 没有录像的老记录(10 月 14 日以前打的):回看页随 /parent/talk 删了,外壳只说没有录像
   rmSync(join(wsRoot, 'talk', id, 'reel.json'));
   await send('Page.navigate', { url: `${base}/parent/talk/reel?id=${id}` });
-  ok('没有录像的老记录:换到回看页', await until(`location.pathname === '/parent/talk' && location.hash === '#/review/${id}' && document.querySelector('#review').classList.contains('on') && !document.querySelector('#r-reel')`, 40), await evaluate(`location.href`));
+  ok('没有录像的老记录:外壳说「这一次没有录像」', await until(`document.body.textContent.includes('这一次没有录像')`, 40), await evaluate(`location.href`));
+  ok('/parent/talk 删了', (await fetch(`${base}/parent/talk`)).status === 404);
+
+  // ---- 接着上(拍板 14):再进口语课,最上面是上次的口语单,点了直接开始 ----
+  await send('Page.navigate', { url: `${base}/talk?tutor=english-tutor` });
+  ok('再进口语课:「上次的口语单 · 几月几日拍的 · 1 个单词、1 句」,拍照让成白底', await until(`!document.querySelector('#snap-resume').hidden && /日拍的 · 1 个单词、1 句$/.test(document.querySelector('#snap-resume-sub').textContent) && document.querySelector('#snap-cam-btn').classList.contains('alt')`), await evaluate(`document.querySelector('#snap-resume-sub').textContent`));
+  await shot('talk-03-resume');
+  const conns0 = fake.conns.length;
+  await click('#snap-resume-go');
+  ok('点「接着上」:直接到跟读那一屏、接上了、第一句 red', await until(`document.querySelector('#kid').classList.contains('on') && !document.querySelector('#k-read').hidden && document.querySelector('#k-card').dataset.en === 'red'`, 60) && (real || fake.conns.length > conns0));
+  await click('#k-hang');
   console.log(bad ? `${bad} 项没过` : '全过');
 } finally {
   if (browser) browser.kill();
   fake.close();
   if (!keep) { serve.kill(); await sleep(300); try { rmSync(tmp, { recursive: true, force: true }); } catch {} }
-  else { serve.unref(); console.log(`serve 留着:${base}/parent/talk  workspace ${wsRoot}`); }
+  else { serve.unref(); console.log(`serve 留着:${base}/talk  workspace ${wsRoot}`); }
 }
 process.exit(bad ? 1 : 0);

@@ -795,7 +795,7 @@ __REEL_JS__
   /** 小课堂的课长:「1 分 40 秒」 */
   const lcLen = (ms) => { const s = Math.floor(ms / 1000); return s >= 60 ? Math.floor(s / 60) + ' 分' + (s % 60 ? ' ' + (s % 60) + ' 秒' : '') : s + ' 秒'; };
   // ---- 常驻入口(《首页设计.md》拍板 18):听写、拍照听写、口语课一直在那位老师的卡上,不经首页发布 ----
-  const EXTRA_ICON = { dictation: SVG('<path d="M4 20l4-1 11-11-3-3L5 16z"></path><path d="M14 7l3 3"></path>', 20), photo: __CAMERA_20__, talk: SVG('<path d="M4 5h16v11H9l-5 4z"></path><path d="M8 10h8"></path>', 20) };
+  const EXTRA_ICON = { dictation: SVG('<path d="M4 20l4-1 11-11-3-3L5 16z"></path><path d="M14 7l3 3"></path>', 20), photo: __CAMERA_20__ };
   const extraBtn = (kind, label, sub, on) => h(on.href ? 'a' : 'button', { type: on.href ? null : 'button', class: 'bt bt-extra bt-x-' + kind, href: on.href || null, on: on.click ? { click: on.click } : {} },
     h('span', { class: 'bi', html: EXTRA_ICON[kind === 'photo' ? 'photo' : kind] }), h('span', { class: 'lb' }, h('span', { class: 'btx' }, label), sub ? h('small', { class: 'ln' }, sub) : null));
   /** 听写(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):一整条,上面一排空格子,几个词几格(最多 6,英文是四线三格),下面「听写 · 几个词」和「去写」 */
@@ -809,21 +809,25 @@ __REEL_JS__
       h('span', { class: 'pg', 'aria-hidden': 'true' }, h('i', {}, en ? 'Aa' : '字'), h('span', { class: 'cam', html: EXTRA_ICON.photo })),
       h('span', { class: 'lb' }, h('span', { class: 'btx' }, '拍照听写'), h('small', { class: 'ln' }, en ? '拍英语书上要写的单词' : '拍语文书上要写的词')));
   };
-  /** 口语课:有给孩子的口语单才出现(/api/talk,30 秒读一次);点了用最近那份开一次(聊过了就照它再开) */
+  /** 口语课(《口语课设计.md》拍板 12、14):开着就一直在,点进去先拍照;有上次的口语单,小字写「接着上 · 几月几日的」。/api/talk 30 秒读一次 */
   const talkInfo = () => {
     if (S.talkAt && Date.now() - S.talkAt < 30000) return S.talkLast;
     S.talkAt = Date.now();
     api('GET', '/api/talk').then((j) => {
       const last = j && j.enabled ? (j.talks || []).find((x) => (x.status === 'ready' || x.status === 'done') && x.list.words.length + x.list.sentences.length > 0) : null;
-      const was = S.talkLast; S.talkLast = last || null;
-      if (Boolean(was) !== Boolean(S.talkLast) && S.home && !S.tutor) renderHome();
+      const next = j && j.enabled ? { last: last || null } : null;
+      const sig = (x) => (x ? 'on:' + (x.last ? x.last.id : '') : '');
+      const was = sig(S.talkLast); S.talkLast = next;
+      if (was !== sig(next) && S.home && !S.tutor) renderHome();
     }, () => {});
     return S.talkLast;
   };
-  const openTalk = async (el, t) => {
-    el.disabled = true;
-    try { const m = await api('POST', '/api/talk', { from: 'latest' }); stashFront(el); location.href = '/talk?home=1&tutor=' + encodeURIComponent(t.name) + '#/kid/' + encodeURIComponent(m.id); }
-    catch { el.disabled = false; S.talkAt = 0; talkInfo(); }
+  /** 口语课的按钮:用途图是对话气泡「Hi」带相机角标,和拍照听写的四线格「Aa」挨着、分得开(《首页设计.md》拍板 29) */
+  const talkBtn = (t, info) => {
+    const d = info.last ? new Date(info.last.createdAt) : null;
+    return h('a', { class: 'bt bt-extra bt-x-talk', href: '/talk?tutor=' + encodeURIComponent(t.name), style: '--sc:' + colorOf(t) },
+      h('span', { class: 'pg', 'aria-hidden': 'true' }, h('i', {}, 'Hi'), h('span', { class: 'cam', html: EXTRA_ICON.photo })),
+      h('span', { class: 'lb' }, h('span', { class: 'btx' }, '口语课'), h('small', { class: 'ln' }, d ? '接着上 · ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日的,或者拍新的' : '拍今天学的那页,先跟读再聊')));
   };
   /** 这位老师卡上「每天都在」那栏:归他的听写卡(《首页设计.md》拍板 19)、常驻的拍照听写与口语课(拍板 18) */
   const extrasFor = (t, H) => {
@@ -833,10 +837,7 @@ __REEL_JS__
     // 英文单词听写(《wip/听写设想.md》拍板 15):卡上的词是英文单词,或者英语老师卡上的拍照听写 → /dictation?lang=en
     for (const c of all) if (c.owner === t.name) { const en = c.props.lang === 'en', n = c.props.count || 0; out.push(dictationBtn(en ? '单词听写' : '听写', n + (en ? ' 个单词' : ' 个词') + ' · 老师念,你来写', n, en, '/dictation?home=' + encodeURIComponent(H.home || '') + '&n=' + all.indexOf(c) + (en ? '&lang=en' : ''))); }
     if (extras.includes('dictation')) out.push(photoBtn(t));
-    if (extras.includes('talk')) {
-      const last = talkInfo();
-      if (last) { const n = last.list.words.length + last.list.sentences.length; const b = extraBtn('talk', '口语课', n + ' 句 · 先跟我读,再聊', { click: () => openTalk(b, t) }); out.push(b); }
-    }
+    if (extras.includes('talk')) { const info = talkInfo(); if (info) out.push(talkBtn(t, info)); }
     return out;
   };
   // 牌上的按钮(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):新话题是头像下面一个学科色大气泡(不带尖角);小课堂是带预览图的海报;其余是大胶囊。
@@ -975,7 +976,7 @@ __REEL_JS__
       const { t, card } = list.find((x) => x.t.name === n);
       const buttons = pvButtons(n, Array.isArray(card.props.buttons) ? card.props.buttons : []);
       const owned = (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind !== 'tutor' && c.owner === n);
-      const sig = JSON.stringify([t.avatar, t.subject, t.display, t.available, buttons, owned, t.extras, S.talkLast && S.talkLast.id, H.home]);
+      const sig = JSON.stringify([t.avatar, t.subject, t.display, t.available, buttons, owned, t.extras, S.talkLast && (S.talkLast.last ? S.talkLast.last.id : 'on'), H.home]);
       let el = K.els.get(n);
       if (!el) {
         const pc = h('div', { class: 'c c-tutor pc', 'data-tutor': n, on: { click: (e) => { if (e.target.closest && e.target.closest('a[href]')) stashFront(pc); if (!pc.classList.contains('front')) pickTutor(n); } } });
@@ -1205,9 +1206,10 @@ __REEL_JS__
     }
     for (const x of M.talks.filter((x) => x.call && ymd(x.call.startedAt) === H.date)) {
       const n = x.list.words.length + x.list.sentences.length;
-      const look = h('span', { class: 'bt bt-extra bt-x-talk' }, h('span', { class: 'bi', html: EXTRA_ICON.talk }), h('span', { class: 'lb' }, h('span', { class: 'btx' }, '口语课'), h('small', { class: 'ln' }, n + ' 句口语单')));
+      const tt = tutorOf(modOwner(H, 'talk', null));
+      const look = h('span', { class: 'bt bt-extra bt-x-talk', style: '--sc:' + colorOf(tt) }, h('span', { class: 'pg', 'aria-hidden': 'true' }, h('i', {}, 'Hi'), h('span', { class: 'cam', html: EXTRA_ICON.photo })), h('span', { class: 'lb' }, h('span', { class: 'btx' }, '口语课'), h('small', { class: 'ln' }, n + ' 句口语单')));
       const at = Date.parse(x.call.startedAt);
-      evs.push({ at, end: at + x.call.ms, t: tutorOf(modOwner(H, 'talk', null)), kid: h('a', { class: 'kid c-tutor', href: MODE.links.talkReel + encodeURIComponent(x.id), 'aria-label': '看录像' }, look), pf: [h('span', {}, '跟读 ' + x.call.read + '/' + x.call.items + ' 句 · 聊了 ' + mins(x.call.ms))] });
+      evs.push({ at, end: at + x.call.ms, t: tt, kid: h('a', { class: 'kid c-tutor', href: MODE.links.talkReel + encodeURIComponent(x.id), 'aria-label': '看录像' }, look), pf: [h('span', {}, '跟读 ' + x.call.read + '/' + x.call.items + ' 句 · 聊了 ' + mins(x.call.ms))] });
     }
     evs.sort((p, q) => (p.at || 0) - (q.at || 0));
     const [y0, m0, d0] = H.date.split('-').map(Number);

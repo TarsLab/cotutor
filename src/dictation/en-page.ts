@@ -10,11 +10,13 @@ import { EN_BOX_CSS, EN_BOX_JS } from './en-box.ts';
 import { UNLOCK_JS } from './unlock.ts';
 import { REEL_MODE_JS } from './reel-mode.ts';
 import { SNAP_CSS, cameraSvg, snapHtml } from '../server/photo-ui.ts';
+import { faviconLinks } from '../lib/favicon.ts';
 
 export const DICTATION_EN_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
+${faviconLinks()}
 <title>单词听写</title>
 <style>
   :root { --ink:#2b2b2b; --dim:#66625b; --line:#e2dfd6; --paper:#faf9f4; --card:#ffffff; --accent:#e8743b;

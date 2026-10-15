@@ -6,6 +6,7 @@
  * 没有脚本;打印(⌘P)只留卡面,可以贴书桌。不在孩子端的入口里。
  */
 import { qrNotes, qrSvg } from '../lib/qr-svg.ts';
+import { faviconLinks } from '../lib/favicon.ts';
 
 export interface ListenInfo {
   /** https://<本机名>.local:<端口>/ */
@@ -38,6 +39,7 @@ export function qrPage(title: string, info: ListenInfo, via: 'name' | 'ip' = 'na
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+${faviconLinks()}
 <title>扫码打开 · ${esc(title)}${to === 'parent' ? ' · 家长' : ''}</title>
 <style>
   body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:#f4f1ea; color:#222; font:16px/1.6 -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif; }

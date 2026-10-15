@@ -93,7 +93,7 @@ export function webManifest(title: string, opts: { startUrl?: string; scope?: st
   };
 }
 
-// ---- 最小 PNG 编码器(8 位真彩,每行 filter 0) ----
+// ---- 最小 PNG 编码器(8 位真彩,可带 alpha;每行 filter 0);网页图标(favicon.ts)也用 ----
 
 const CRC_TABLE = (() => {
   const t = new Int32Array(256);
@@ -120,8 +120,8 @@ function chunk(type: string, data: Buffer): Buffer {
   return out;
 }
 
-function encodePng(n: number, px: Buffer): Buffer {
-  const stride = n * 3;
+export function encodePng(n: number, px: Buffer, channels: 3 | 4 = 3): Buffer {
+  const stride = n * channels;
   const raw = Buffer.alloc(n * (stride + 1));
   for (let y = 0; y < n; y++) {
     raw[y * (stride + 1)] = 0;
@@ -131,7 +131,7 @@ function encodePng(n: number, px: Buffer): Buffer {
   ihdr.writeUInt32BE(n, 0);
   ihdr.writeUInt32BE(n, 4);
   ihdr[8] = 8; // 位深
-  ihdr[9] = 2; // 真彩,无 alpha
+  ihdr[9] = channels === 4 ? 6 : 2; // 真彩,6 = 带 alpha
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk('IHDR', ihdr),

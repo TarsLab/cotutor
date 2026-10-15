@@ -5,10 +5,12 @@
  * 内联脚本里不写反斜杠、不写反引号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
 import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from '../server/reel-dock.ts';
+import { faviconLinks } from '../lib/favicon.ts';
 
 export const TALK_REEL_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+${faviconLinks()}
 <title>口语课录像</title>
 <style>
   :root { --paper:#faf9f4; --ink:#2b2b2b; --dim:#8a8781; --line:#e2dfd6; --accent:#e8743b; --grey:#eeece6; --purple:#efe9fb; --purple-ink:#7a4fc9; --ok:#e8f6ee; --ok-ink:#1f8a4c; }

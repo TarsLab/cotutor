@@ -82,8 +82,9 @@ function crc32(buf: Buffer): number {
   const page = (await mock.route('GET', '/')).html ?? '';
   check('页面没留占位符', !page.includes('__TITLE__') && !page.includes('__SHORT__'));
   check('主屏幕三件套 meta 都在', page.includes('name="apple-mobile-web-app-capable" content="yes"') && page.includes('apple-mobile-web-app-status-bar-style') && page.includes('name="apple-mobile-web-app-title" content="小明的老师们"'));
+  // 192 / 512 只在清单里(标签上的图标是 /favicon.*,见 favicon.test)
   for (const href of ['/manifest.webmanifest', '/icon-180.png', '/icon-192.png']) {
-    check(`页面引了 ${href}`, page.includes(`href="${href}"`));
+    if (href !== '/icon-192.png') check(`页面引了 ${href}`, page.includes(`href="${href}"`));
     const r = await mock.route('GET', href);
     check(`${href} 给得出`, r.status === 200, JSON.stringify(r.status));
     if (href.endsWith('.png')) check(`${href} 是 PNG`, r.contentType === 'image/png' && Buffer.from(r.body!).subarray(1, 4).toString('ascii') === 'PNG');

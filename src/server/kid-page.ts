@@ -31,6 +31,7 @@
 import { createHash } from 'node:crypto';
 import { wordDrawJs } from './word-draw.ts';
 import { NEUTRAL_COLOR } from '../lib/tutor-color.ts';
+import { faviconLinks } from '../lib/favicon.ts';
 import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from './reel-dock.ts';
 import { inlineScript } from './inline-lib.ts';
 import { albumSvg, cameraSvg } from './photo-ui.ts';
@@ -50,7 +51,7 @@ const PAGE = `<!doctype html>
 <meta name="theme-color" content="#faf9f4">
 <link rel="manifest" href="__MANIFEST__">
 <link rel="apple-touch-icon" href="/icon-180.png">
-<link rel="icon" href="/icon-192.png">
+${faviconLinks()}
 <link rel="stylesheet" href="/kid/theme.css">
 <title>__TITLE__</title>
 <style>
@@ -1272,8 +1273,15 @@ __REEL_JS__
    * intent(首页的按钮定的):new = 空白新话题;thread = 今天的那个话题;today = 今天的当前话题(调试入口 ?tutor=)。
    * via = 哪个按钮(下一条消息带上);send = 打开就发出去的字(开场 / 接着按钮);cont = 接着的是哪天(头部写「接着 9 月 16 日」)
    */
+  /** 网页图标跟着老师换(src/lib/favicon.ts):进了哪位老师是他的头像,回首页(t 空)是三色 C */
+  const setFavicon = (t) => {
+    const q = t && t.name ? '?tutor=' + encodeURIComponent(t.name) : '';
+    const png = document.getElementById('fav-png'), svg = document.getElementById('fav-svg');
+    if (png) png.href = '/favicon-32.png' + q;
+    if (svg) svg.href = '/favicon.svg' + q;
+  };
   const openTutor = (t, intent) => {
-    unlock();
+    unlock(); setFavicon(t);
     intent = intent || { kind: 'new' };
     S.tutor = t; micWarm(); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
@@ -1310,7 +1318,7 @@ __REEL_JS__
     if (ask.lecture) { S.lecture = { ...ask.lecture, watch: null, sent: false, marks: [], flying: [], log: [] }; renderBar(); renderHeader(); openLecture(); }
     else { renderBar(); send(ask.send); }
   };
-  const closeTutor = () => { hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit', 'speaking', 'nod'); S.homeDraw = true; loadHome(); };
+  const closeTutor = () => { setFavicon(null); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit', 'speaking', 'nod'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -3023,7 +3031,7 @@ __REEL_DOCK_JS__
   };
   /** 家长从记录点进一个话题就是录像(拍板 16):停在最后一帧,不放;要看过程往前拖。退出回清单 */
   const openReel = (t, thread, date) => {
-    unlock();
+    unlock(); setFavicon(t);
     S.tutor = t; S.thread = thread; S.hist = date || S.pdate || null; S.readonly = true; S.newThread = false;
     S.reel = { frame: true };
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));

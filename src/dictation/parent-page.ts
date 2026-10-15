@@ -6,10 +6,12 @@
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」;下面两处插进来的是 en-box.ts 的画法)。
  */
 import { EN_BOX_CSS, EN_BOX_JS } from './en-box.ts';
+import { faviconLinks } from '../lib/favicon.ts';
 
 export const DICTATION_PARENT_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+${faviconLinks()}
 <title>听写的结果</title>
 <style>
   :root { --ink:#2b2b2b; --dim:#66625b; --line:#e2dfd6; --paper:#faf9f4; --card:#fff; --sand:#d8c7a0; --sand2:#e2d4b4; --blue:#4f86d1; }

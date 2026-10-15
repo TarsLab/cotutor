@@ -67,6 +67,7 @@ import { qrPage, type ListenInfo } from './qr-page.ts';
 import { USER_CERT_DIR } from '../cli/workspace.ts';
 import { kidThreads } from '../lib/kid-view.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
+import { faviconResponse } from '../lib/favicon.ts';
 import { kidPage } from './kid-page.ts';
 import { arrangeHome, homeOwners, kidButtons, parseHome } from '../lib/home.ts';
 import type { TutorButton } from '../cards/index.ts';
@@ -526,10 +527,12 @@ export interface MockRouteResult {
   html?: string;
   /** 静态文件(舞台包、课包) */
   file?: string;
-  /** 现生成的二进制(主屏幕图标) */
+  /** 现生成的二进制(主屏幕图标、网页图标) */
   body?: Uint8Array;
   /** html / file / body / json 的 content-type */
   contentType?: string;
+  /** body 的缓存策略;不给 = 一小时 */
+  cacheControl?: string;
 }
 
 export interface MockOptions {
@@ -728,6 +731,12 @@ export function createMock(opts: MockOptions = {}): Mock {
       const n = Number(icon[1]);
       return (ICON_SIZES as readonly number[]).includes(n) ? { status: 200, body: appIconPng(n), contentType: 'image/png' } : { status: 404, json: { error: 'not_found' } };
     }
+    // 网页图标:mock 的老师头像都是字
+    const fav = await faviconResponse(p, url.searchParams.get('tutor'), async (name) => {
+      const t = MOCK_TUTORS.find((x) => x.name === name);
+      return t ? { color: colors[t.name] ?? NEUTRAL_COLOR, avatar: t.avatar, subject: t.subject, display: t.display } : null;
+    });
+    if (fav) return { status: 200, ...fav, cacheControl: 'no-cache' };
     if (p === '/api/health') return { status: 200, json: { ok: scenario !== 'offline', mock: true, scenario } };
     if (scenario === 'offline' && p.startsWith('/api/')) return { status: 500, json: { error: 'mock_offline' } };
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: home() };
@@ -1037,7 +1046,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : undefined; } catch { body = undefined; }
       const r = await route(req.method ?? 'GET', req.url ?? '/', body);
       if (r.file !== undefined) await sendFile(req, res, { status: r.status, file: r.file, contentType: r.contentType, cacheControl: 'private, max-age=3600' });
-      else if (r.body !== undefined) { res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=3600' }); res.end(Buffer.from(r.body)); }
+      else if (r.body !== undefined) { res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': r.cacheControl ?? 'private, max-age=3600' }); res.end(Buffer.from(r.body)); }
       else if (r.html !== undefined) { res.writeHead(r.status, { 'content-type': r.contentType ?? 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(r.html); }
       else { res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(r.json ?? null)); }
     })().catch((err) => { res.writeHead(500, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'internal', message: String(err) })); });

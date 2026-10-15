@@ -10,6 +10,7 @@ import { inlineScript } from '../server/inline-lib.ts';
 import { wordDrawJs } from '../server/word-draw.ts';
 import { TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
 import { albumSvg, cameraSvg } from '../server/photo-ui.ts';
+import { faviconLinks } from '../lib/favicon.ts';
 
 /** 录像的轨道(lib/reel.ts),内联进录像模式 */
 const TALK_REEL_JS = inlineScript(new URL('./lib/reel.ts', import.meta.url));
@@ -18,6 +19,7 @@ const TALK_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
+${faviconLinks()}
 <title>口语课</title>
 <link rel="stylesheet" href="/kid/theme.css">
 <style>

@@ -4,10 +4,13 @@
  * 画板自己一张 canvas(不进舞台包);一笔 = 颜色 + 粗细 + [x, y, 离开始讲的毫秒];原声 MediaRecorder,同时浏览器一句一句地认。
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
+import { faviconLinks } from '../lib/favicon.ts';
+
 export const XLAOSHI_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
+${faviconLinks()}
 <title>小老师</title>
 <style>
   :root { --ink:#2b2b2b; --dim:#66625b; --line:#e2dfd6; --line2:#d8d4c9; --bg:#f6f4ef; --paper:#fffdf8; --card:#ffffff;

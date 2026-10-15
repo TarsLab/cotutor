@@ -7,11 +7,14 @@
  * iframe 一挪地方就会重新加载:它在 #pv 里常驻,重画只动 #pv-under 与 #body。
  * 用 String.raw:脚本里的反斜杠原样留着;脚本里不写反引号和 ${。
  */
+import { faviconLinks } from '../lib/favicon.ts';
+
 export const PARENT_HOME_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="/parent/manifest.webmanifest">
+${faviconLinks()}
 <title>家长 · 首页</title>
 <style>
   :root { --paper:#f6f5f1; --ink:#2b2b2b; --dim:#6b675f; --mute:#8a8781; --line:#efece5; --card:#fff; --accent:#b4531f; --ok:#2fa36b; --red:#c0392b; }

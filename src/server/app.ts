@@ -25,6 +25,7 @@ import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } 
 import { tutorStatuses } from '../cli/tutors.ts';
 import { configGapsOf, upgradeConfig } from '../cli/migrate.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
+import { faviconResponse } from '../lib/favicon.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { kidPage } from './kid-page.ts';
 import { kidHomeView, messageVia, resolveVia } from './home.ts';
@@ -61,10 +62,10 @@ export interface RouteResult {
   html?: string;
   /** 静态文件(配音);handler 流式发 */
   file?: string;
-  /** 现生成的二进制(主屏幕图标) */
+  /** 现生成的二进制(主屏幕图标、网页图标) */
   body?: Uint8Array;
   contentType?: string;
-  /** file 的缓存策略;不给 = 一天(配音、课包这些不会变);头像会被 figshot 换掉,给 no-cache。json 不给 = no-store(笔顺数据例外,给一天) */
+  /** file / body 的缓存策略;不给 = 一天(配音、课包这些不会变);头像会被 figshot 换掉,给 no-cache。json 不给 = no-store(笔顺数据例外,给一天) */
   cacheControl?: string;
 }
 
@@ -1147,6 +1148,18 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!(ICON_SIZES as readonly number[]).includes(n)) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, body: appIconPng(n), contentType: 'image/png' };
     }
+    // 网页图标(src/lib/favicon.ts):?tutor= 是那位老师的头像,不给或查不到是三色 C;头像图越界、不是图就不读(退回首字)。
+    // no-cache:figshot 换了脸要马上见到
+    const fav = await faviconResponse(p, url.searchParams.get('tutor'), async (name) => {
+      const t = ws.config.tutors[name];
+      if (!t) return null;
+      const rel = t.avatar ?? '';
+      const file = resolve(ws.root, rel);
+      const type = IMAGE_TYPES[IMAGE_EXT.exec(rel)?.[1]?.toLowerCase() ?? ''];
+      const image = rel && !rel.startsWith('/') && file.startsWith(ws.root + sep) && type ? await readFile(file).then((data) => ({ data, type }), () => null) : null;
+      return { color: tutorColors(ws.config.tutors)[name] ?? NEUTRAL_COLOR, avatar: t.avatar, subject: t.subject, display: t.display, image };
+    });
+    if (fav) return { status: 200, ...fav, cacheControl: 'no-cache' };
     if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title), {}, await stageVersion()) };
     // 家长端(《家长板书页设计.md》):也是孩子端页面本身,数据走家长接口(答案在、家长的话在),卡锁着;自己的清单,加到主屏幕才不会拿到孩子端那份
     if (p === '/parent') return { status: 200, html: kidPage(esc(ws.config.title), { parent: true }, await stageVersion()) };
@@ -1205,7 +1218,7 @@ export function createHandler(ctx: AppContext): (req: IncomingMessage, res: Serv
       }
       if (r.file !== undefined) await sendFile(req, res, r as RouteResult & { file: string });
       else if (r.body !== undefined) {
-        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': 'private, max-age=86400' });
+        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/octet-stream', 'cache-control': r.cacheControl ?? 'private, max-age=86400' });
         res.end(Buffer.from(r.body));
       } else if (r.html !== undefined) {
         res.writeHead(r.status, { 'content-type': r.contentType ?? 'text/html; charset=utf-8', 'cache-control': 'no-store' });

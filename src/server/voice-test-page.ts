@@ -4,9 +4,12 @@
  * 每次按住的事件时间线当场列出来,也发到 /api/kid/voice-diag(where: 'test',带 cfg;照旧不带字与声音)。
  * 内联脚本里不写反斜杠、不写模板字符串(见 CLAUDE.md「坑」)。
  */
+import { faviconLinks } from '../lib/favicon.ts';
+
 export const VOICE_TEST_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+${faviconLinks()}
 <title>按住说话 · 试验</title>
 <style>
   :root { --ink:#1d2433; --dim:#6b7488; --line:#e3e7ef; --bg:#f6f7fa; --blue:#3b82e8; --ok:#2fa36b; --bad:#d9534f; }

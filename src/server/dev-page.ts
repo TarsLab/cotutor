@@ -9,10 +9,13 @@
  * 放在 .ts 里而不是 .html,是因为 tsc 不拷贝静态文件,dist 里就少一份。
  * 改这里注意:整份是模板字符串——页面脚本里不要用反引号与 ${},换行写 \\n,正则里别写 \\/。
  */
+import { faviconLinks } from '../lib/favicon.ts';
+
 export const DEV_PAGE = `<!doctype html>
 <html lang="zh-CN">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+${faviconLinks()}
 <title>cotutor 工作台</title>
 <style>
   :root {

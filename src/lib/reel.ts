@@ -316,6 +316,26 @@ export function reelHolds(plays: readonly PlayRecord[], diag: readonly ReelDiag[
   return holds.sort((a, b) => a.from - b.from);
 }
 
+/** 前奏一段接一段:后一段开始前多久以内结束的前一段算连着(按住说话没认出来、马上又按一次) */
+export const REEL_LEAD_GAP_MS = 1500;
+/**
+ * 每章的章尾(《家长录像设计.md》拍板 21):上一章 / 下一章落在这里,不落章头。章尾 = 下一章的前奏开始之前;最后一章是 endAt。
+ * starts = 每章开头(墙钟,升序);leads = 孩子为开口做的动作的时段(按住说话、打字、发照片屏);前奏 = 跨过下一章开头、或在它前面
+ * REEL_LEAD_GAP_MS 以内结束的那一段,再一段段往前连。章尾不早于这一章的开头
+ */
+export function reelChapterEnds(starts: readonly number[], leads: readonly { from: number; to: number }[], endAt: number): number[] {
+  return starts.map((s, i) => {
+    if (i === starts.length - 1) return Math.max(s, endAt);
+    let t = starts[i + 1];
+    for (;;) {
+      const x = leads.reduce((m, l) => (l.from < t && l.to >= t - REEL_LEAD_GAP_MS ? Math.min(m, l.from) : m), t);
+      if (x >= t) break;
+      t = x;
+    }
+    return Math.max(s, t - 1);
+  });
+}
+
 /** 连着没发出去的几串(拍板 10):按时间走,发出去的一次或中间孩子发成了一句(sentAt:开口、打字发出去的时刻)就断开;够 REEL_MISS_STREAK 次才算 */
 export function reelMissRuns(holds: readonly ReelHold[], sentAt: readonly number[]): { from: number; to: number; n: number }[] {
   const out: { from: number; to: number; n: number }[] = [];

@@ -87,9 +87,30 @@ try {
   const dark = await evaluate(`(() => { const x = document.querySelector('#rl-x').getBoundingClientRect(), sc = document.querySelector('#rl-screen').getBoundingClientRect(); return { dark: document.documentElement.classList.contains('rl-dark'), bg: getComputedStyle(document.body).backgroundColor, x: [Math.round(x.left), Math.round(x.top), Math.round(x.bottom)], above: x.bottom <= sc.top, ttl: document.querySelector('#rl-ttl').textContent, fill: document.querySelector('#rl-seek').style.getPropertyValue('--fill') }; })()`);
   ok('录像深底(《家长录像设计.md》拍板 20):整页深色,「退出录像」在孩子屏幕外的左上角,旁边写哪位老师的哪件事;进度条走过的那段跟着写', dark.dark && dark.bg === 'rgb(28, 28, 28)' && dark.x[0] < 40 && dark.above && dark.ttl.startsWith('语文老师 · 新话题') && dark.fill === '100.00%', JSON.stringify(dark));
   console.log('  ', await shot('parent-reel-tablet.png'));
-  await evaluate(`document.querySelector('#rl-x').click()`);
+  // 快捷键(《家长录像设计.md》拍板 22):? 一张表、Esc 关上;空格放 / 停;上一章(只有一章)回开头;Esc 退出
+  const key = async (k, code) => { for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key: k, code, ...(type === 'keyDown' && k.length === 1 ? { text: k } : {}) }); await sleep(300); };
+  await key('?', 'Slash');
+  const kz = await evaluate(`!document.querySelector('#rl-keys').hidden && document.querySelector('#rl-keys').textContent.includes('上一章,落在那一章讲完')`);
+  await key('Escape', 'Escape');
+  ok('快捷键:? 打开那张表,Esc 关上(还在录像里)', kz && await evaluate(`document.querySelector('#rl-keys').hidden && document.body.classList.contains('reel')`));
+  await key(' ', 'Space');
+  const sp1 = await evaluate(`document.querySelector('#rl-play').getAttribute('aria-label')`);
+  await key(' ', 'Space');
+  const sp2 = await evaluate(`document.querySelector('#rl-play').getAttribute('aria-label')`);
+  ok('空格:放,再按停', sp1 === '暂停' && sp2 === '播放', sp1 + ' / ' + sp2);
+  // 在末尾放会从头放:停下时在开头附近,先 End 回最后一帧
+  await key('End', 'End');
+  const pr0 = await evaluate(`({ v: Number(document.querySelector('#rl-seek').value), max: Number(document.querySelector('#rl-seek').max) })`);
+  ok('End:回到最后一帧', pr0.v >= pr0.max - 100, JSON.stringify(pr0));
+  await evaluate(`document.querySelector('#rl-prev').click()`);
+  await sleep(300);
+  ok('上一章:只有一章,回到开头;下一章能点', await evaluate(`Number(document.querySelector('#rl-seek').value) === 0 && !document.querySelector('#rl-next').disabled && document.querySelector('#rl-prev').disabled`), JSON.stringify({ pr0, after: await evaluate(`({ v: document.querySelector('#rl-seek').value, prev: document.querySelector('#rl-prev').disabled, next: document.querySelector('#rl-next').disabled })`) }));
+  await evaluate(`document.querySelector('#rl-next').click()`);
+  await sleep(300);
+  ok('下一章:落在这一章讲完 = 末尾', await evaluate(`Number(document.querySelector('#rl-seek').value) >= Number(document.querySelector('#rl-seek').max) - 100`));
+  await key('Escape', 'Escape');
   for (let i = 0; i < 20; i++) { if (await evaluate(`!document.querySelector('#tutor').classList.contains('on')`)) break; await sleep(250); }
-  ok('退出:回到记录,深底去掉', await evaluate(`!document.body.classList.contains('reel') && document.querySelectorAll('#ptl .pev').length > 0 && !document.documentElement.classList.contains('rl-dark')`));
+  ok('退出:Esc 回到记录,深底去掉', await evaluate(`!document.body.classList.contains('reel') && document.querySelectorAll('#ptl .pev').length > 0 && !document.documentElement.classList.contains('rl-dark')`));
 
   // ---- 宽屏:时间线与「这一天」并排(拍板 31),卡上有的右栏不重复 ----
   await sleep(400);

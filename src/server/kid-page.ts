@@ -2918,7 +2918,13 @@ __WORD_DRAW_JS__
     seek: (p) => reelSeek(p),
     speeds: REEL_SPEEDS,
     /** 章:孩子每开口一次是一轮(拍板 13) */
-    chapters: () => { const R = S.reel; return R ? R.d.reel.marks.filter((m) => m.kind === 'said').map((m, i) => ({ p: R.clock.toPlay(m.at), title: '第 ' + (i + 1) + ' 轮' })) : []; },
+    chapters: () => {
+      const R = S.reel; if (!R) return [];
+      const rl = R.d.reel, said = rl.marks.filter((m) => m.kind === 'said');
+      // 章尾(拍板 21):下一章的前奏(按住说话、打字、发照片屏)开始之前;上一章 / 下一章落在这里
+      const ends = reelChapterEnds(said.map((m) => m.at), [...rl.holds, ...rl.types, ...rl.photoScreens], rl.endAt);
+      return said.map((m, i) => ({ p: R.clock.toPlay(m.at), end: R.clock.toPlay(ends[i]), title: '第 ' + (i + 1) + ' 轮' }));
+    },
     /** 这个话题的经过(录像栏展开后的列表):孩子做的每件事、等了多久、给家长的,一条一行,按时间排 */
     events: () => {
       const R = S.reel; if (!R) return [];
@@ -3005,6 +3011,8 @@ __WORD_DRAW_JS__
     reelTick();
     window.cotutorReel = reelApi;
     if (host) host.cotutorReelReady(reelApi, { size: S.reel.size });
+    // 焦点在孩子的屏幕里时按键也认(《家长录像设计.md》拍板 22):交给外面的录像栏,它认了就不让这一页再处理
+    if (host) document.addEventListener('keydown', (e) => { try { if (host.cotutorReelKey && host.cotutorReelKey({ key: e.key, shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey })) e.preventDefault(); } catch {} });
     else reelDock.open(reelApi, { toast, tagHint: REEL_HINT });
   };
 

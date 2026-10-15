@@ -6,7 +6,8 @@
  *   get()        → {p, total, wall, playing, speed, real, precise, cap: {text, cls}, size?, stale?};p、total 是录像里的毫秒(跳过空白开着时是压过的),wall 是这一刻的墙钟
  *   marks()      → [{kind, label, p, pTo?}] 进度条上的点(kind 当类名)
  *   events()     → [{p, kind, chip, text}] 经过,一条一行
- *   chapters?()  → [{p, title}] 章(话题一轮、听写一个词);进度条上断开一点,说明那行左边写在哪一章
+ *   chapters?()  → [{p, title, end?}] 章(话题一轮、听写一个词);进度条上断开一点,说明那行左边写在哪一章;
+ *                  end = 章尾(上一章 / 下一章落在这里,拍板 21),没给就是下一章开头之前,最后一章是末尾
  *   speeds?      → 倍速轮哪几档,缺省 1 / 1.5 / 2
  *   play(on) / seek(p) / drag(p) / real(on) / speed(x) / stop()
  * open(把手, {exit, toast, tagHint, title}):title 写在左上角「退出录像」旁边(是谁的哪件事);开着时整页深底(html.rl-dark,拍板 20)。
@@ -124,6 +125,28 @@ export const REEL_DOCK_CSS = `
   html.rl-dark .rl-sw i { background:#4a4845; }
   html.rl-dark .rl-sw input:checked + i { background:var(--accent); }
   html.rl-dark #rl-chaps i { background:#1c1c1c; }
+  /* 上一章 / 下一章(拍板 21):播放键两边 */
+  .rl-row .rl-jb { width:40px; height:40px; border-radius:20px; color:var(--ink); }
+  .rl-row .rl-jb:disabled { opacity:.3; }
+  html.rl-dark .rl-row .rl-jb { color:#f4f2ec; }
+  #rl-keyb { flex:none; height:32px; padding:0 12px; border:1px solid #4a4845; border-radius:16px; background:transparent; color:#f4f2ec; font-size:13px; cursor:pointer; white-space:nowrap; }
+  #rl-keyb kbd, #rl-keys kbd { font-family:ui-monospace,Menlo,monospace; font-size:12px; border:1px solid #9b978e; border-radius:4px; padding:0 4px; }
+  @media (max-width:600px), (hover:none) and (pointer:coarse) { #rl-keyb { display:none; } }
+  /* 快捷键那张表(拍板 22) */
+  #rl-keys { position:fixed; inset:0; z-index:20; background:#000a; display:grid; place-items:center; }
+  #rl-keys[hidden] { display:none; }
+  #rl-keys .pn { width:min(860px, calc(100% - 32px)); max-height:calc(100% - 32px); overflow:auto; box-sizing:border-box; border-radius:20px; background:#f6f5f1; color:#2b2b2b; padding:22px 26px; display:flex; flex-direction:column; gap:16px; }
+  #rl-keys .hd { display:flex; align-items:center; }
+  #rl-keys .hd b { flex:1; font-size:19px; }
+  #rl-keys .hd button { width:36px; height:36px; border:0; border-radius:50%; background:#e9e6de; color:#2b2b2b; cursor:pointer; }
+  #rl-keys .cols { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:24px; }
+  #rl-keys dl { margin:0; display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px 16px; align-items:center; font-size:15px; }
+  #rl-keys dt { white-space:nowrap; font-size:13px; color:#6b675f; }
+  #rl-keys dd { margin:0; }
+  #rl-keys kbd { display:inline-block; min-width:18px; text-align:center; background:#fff; border-color:#d9d5cc; box-shadow:0 2px 0 #d9d5cc; padding:3px 6px; color:#2b2b2b; }
+  #rl-keys .mk { display:flex; flex-direction:column; gap:12px; font-size:13px; color:#6b675f; }
+  #rl-keys .mk b { color:#2b2b2b; font-size:14px; }
+  #rl-keys .mk p { margin:0; line-height:1.6; }
   /* 进度条:深色的轨道,走过的那段橙色(--fill 由脚本跟着写),白色圆头 */
   html.rl-dark #rl-seek { -webkit-appearance:none; appearance:none; }
   html.rl-dark #rl-seek::-webkit-slider-runnable-track { height:6px; border-radius:3px; background:linear-gradient(to right, var(--accent) var(--fill, 0%), #3a3835 var(--fill, 0%)); }
@@ -133,13 +156,14 @@ export const REEL_DOCK_CSS = `
   html.rl-dark #rl-seek::-moz-range-thumb { width:18px; height:18px; border:0; border-radius:50%; background:#fff; box-shadow:0 0 0 3px #1c1c1c; }
 `;
 
-export const REEL_DOCK_HTML = `<div id="rl-top"><button id="rl-x" type="button" hidden aria-label="退出录像"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>退出录像</button><span id="rl-ttl"></span><span id="rl-only">孩子的屏幕 · 只看,点不动</span></div>
+export const REEL_DOCK_HTML = `<div id="rl-top"><button id="rl-x" type="button" hidden aria-label="退出录像"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>退出录像</button><span id="rl-ttl"></span><span id="rl-only">孩子的屏幕 · 只看,点不动</span><button id="rl-keyb" type="button" aria-haspopup="dialog">快捷键 <kbd>?</kbd></button></div>
+    <div id="rl-keys" hidden role="dialog" aria-label="快捷键"><div class="pn"><div class="hd"><b>快捷键</b><button id="rl-keys-x" type="button" aria-label="关上">✕</button></div><div class="cols"><dl><dt><kbd>空格</kbd> 或 <kbd>K</kbd></dt><dd>放 / 停</dd><dt><kbd>⇧ ←</kbd> 或 <kbd>[</kbd></dt><dd>上一章,落在那一章讲完</dd><dt><kbd>⇧ →</kbd> 或 <kbd>]</kbd></dt><dd>下一章,落在那一章讲完</dd><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>往回 / 往前 5 秒</dd><dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>开头 / 最后一帧</dd><dt><kbd>S</kbd></dt><dd>跳过空白 开 / 关</dd><dt><kbd>⇧ ,</kbd> <kbd>⇧ .</kbd></dt><dd>慢一档 / 快一档</dd><dt><kbd>E</kbd></dt><dd>经过 展开 / 收起</dd><dt><kbd>Esc</kbd></dt><dd>退出录像</dd><dt><kbd>?</kbd></dt><dd>这一张</dd></dl><div class="mk"><b>耳机、键盘上的媒体键、iPad 控制中心</b><dl><dt><kbd>⏯</kbd></dt><dd>放 / 停</dd><dt><kbd>⏮</kbd></dt><dd>上一章(章尾)</dd><dt><kbd>⏭</kbd></dt><dd>下一章(章尾)</dd></dl><p>iPad 只在录像真在出声时才把这几个键交给这一页,停着或放到没声音的地方时可能不认。在孩子的屏幕里点过也照样认;在输入框里打字时不接管。</p></div></div></div></div>
     <div id="reel" hidden>
       <button id="rl-grab" type="button" aria-label="收起录像栏" aria-expanded="true"><i></i></button>
       <div id="rl-log" hidden><ol></ol></div>
       <div class="rl-caprow" id="rl-caprow"><span id="rl-chap" hidden></span><div id="rl-cap"></div><button id="rl-more" type="button" aria-expanded="false">经过 ▴</button></div>
       <div class="rl-trow"><button class="rl-mini" id="rl-mplay" type="button" aria-label="播放"></button><div class="rl-track"><div id="rl-marks"></div><div id="rl-chaps"></div><input id="rl-seek" type="range" min="0" max="1000" step="100" value="0" aria-label="录像进度"></div><span class="rl-mini" id="rl-mclock"></span><button class="rl-mini ic" id="rl-unfold" type="button" aria-label="展开录像栏"></button></div>
-      <div class="rl-row"><button id="rl-play" type="button" aria-label="播放"></button><span class="rl-when"><span id="rl-clock"></span><span class="rl-subrow"><span id="rl-sub"></span><button id="rl-tag" type="button" hidden>推算</button><button id="rl-ver" type="button" hidden>画法已更新</button></span></span><span class="rl-sp"></span><label class="rl-sw" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就是完整版,按真实时间放"><input type="checkbox" id="rl-skip" role="switch" checked><i></i>跳过空白</label><button class="tx" id="rl-speed" type="button">1×</button><button class="ic" id="rl-fold" type="button" aria-label="收起录像栏"></button></div>
+      <div class="rl-row"><button class="ic rl-jb" id="rl-prev" type="button" aria-label="上一章(落在那一章讲完)" title="上一章 ⇧←"></button><button id="rl-play" type="button" aria-label="播放"></button><button class="ic rl-jb" id="rl-next" type="button" aria-label="下一章(落在那一章讲完)" title="下一章 ⇧→"></button><span class="rl-when"><span id="rl-clock"></span><span class="rl-subrow"><span id="rl-sub"></span><button id="rl-tag" type="button" hidden>推算</button><button id="rl-ver" type="button" hidden>画法已更新</button></span></span><span class="rl-sp"></span><label class="rl-sw" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就是完整版,按真实时间放"><input type="checkbox" id="rl-skip" role="switch" checked><i></i>跳过空白</label><button class="tx" id="rl-speed" type="button">1×</button><button class="ic" id="rl-fold" type="button" aria-label="收起录像栏"></button></div>
     </div>`;
 
 export const REEL_DOCK_JS = `
@@ -156,7 +180,7 @@ export const REEL_DOCK_JS = `
     const keep = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
     const pct = (p, total) => (100 * p / Math.max(1, total)).toFixed(2) + '%';
     const li = (cls, text) => { const e = document.createElement('span'); e.className = cls; e.textContent = text; return e; };
-    let RE = null, O = {}, timer = 0, real = null, playing = null, dragging = false, ev = [], cur = -2, chaps = [], size = null, speeds = [1, 1.5, 2];
+    let RE = null, O = {}, timer = 0, real = null, playing = null, dragging = false, ev = [], cur = -2, chaps = [], lands = [], size = null, speeds = [1, 1.5, 2];
     /** 上半:孩子的屏幕按它的尺寸等比缩到铺满(拍板 15),窗口不够高才按高度缩 */
     const fit = () => {
       const sc = q('#rl-screen'), fr = q('#rl-frame');
@@ -204,15 +228,19 @@ export const REEL_DOCK_JS = `
           return i;
         }));
         chaps = RE.chapters ? RE.chapters() : [];
+        // 章尾(拍板 21):上一章 / 下一章落在这里;没给就是下一章开头之前,最后一章是末尾
+        lands = chaps.map((c, i) => (typeof c.end === 'number' ? c.end : i + 1 < chaps.length ? chaps[i + 1].p - 1 : st.total)).map((x) => Math.max(0, Math.min(st.total, x))).filter((x, i, a) => !i || x > a[i - 1]);
+        if (!lands.length) lands = [st.total];
         q('#rl-chaps').replaceChildren(...chaps.slice(1).map((c) => { const i = document.createElement('i'); i.style.left = pct(c.p, st.total); return i; }));
         q('#rl-skip').checked = !st.real;
       }
       if (!dragging) q('#rl-seek').value = String(Math.round(st.p));
       q('#rl-seek').style.setProperty('--fill', pct(Number(q('#rl-seek').value), st.total));
+      q('#rl-prev').disabled = st.p <= JUMP_TOL; q('#rl-next').disabled = !lands.some((x) => x > st.p + JUMP_TOL);
       const t = pos(st.p) + ' / ' + pos(st.total);
       q('#rl-clock').textContent = t; q('#rl-mclock').textContent = t;
       q('#rl-sub').textContent = '当时 ' + hms(st.wall);
-      let ch = null; chaps.forEach((c) => { if (c.p <= st.p + 1) ch = c; });
+      let ch = null; chaps.forEach((c) => { if (c.p <= st.p + 0.5) ch = c; }); // 章尾在下一章开头前 1 毫秒(拍板 21):那一刻还算这一章
       q('#rl-chap').hidden = !ch; if (ch && q('#rl-chap').textContent !== ch.title) q('#rl-chap').textContent = ch.title;
       if (st.playing !== playing) {
         playing = st.playing;
@@ -225,8 +253,72 @@ export const REEL_DOCK_JS = `
     };
     if (window.ResizeObserver && q('#rl-screen')) new ResizeObserver(fit).observe(q('#rl-screen')); else window.addEventListener('resize', fit);
     q('#rl-fold').innerHTML = SV('<path d="M6 9l6 6 6-6"></path>', 2.2);
+    q('#rl-prev').innerHTML = SV('<path d="M6 5v14"></path><path d="M19 5L9 12l10 7z" fill="currentColor"></path>', 2.4);
+    q('#rl-next').innerHTML = SV('<path d="M18 5v14"></path><path d="M5 5l10 7-10 7z" fill="currentColor"></path>', 2.4);
     q('#rl-unfold').innerHTML = SV('<path d="M6 15l6-6 6 6"></path>', 2.2);
     const toggle = () => { if (RE) { const st = RE.get(); if (st) RE.play(!st.playing); } };
+    /** 上一章 / 下一章(拍板 21):落在章尾,不落章头;离章尾 1 秒以内算已经在那儿;再往前没有就回开头。跳过去停着,看那一章讲完的样子 */
+    const JUMP_TOL = 1000;
+    const jump = (dir) => {
+      if (!RE) return;
+      const st = RE.get(); if (!st) return;
+      let to;
+      if (dir > 0) { to = lands.find((x) => x > st.p + JUMP_TOL); if (to === undefined) return; }
+      else { const back = lands.filter((x) => x < st.p - JUMP_TOL); to = back.length ? back[back.length - 1] : 0; }
+      if (st.playing) RE.play(false);
+      RE.seek(to);
+    };
+    const seekBy = (ms) => { if (!RE) return; const st = RE.get(); if (st) RE.seek(Math.max(0, Math.min(st.total, st.p + ms))); };
+    const speedBy = (d) => { if (!RE) return; const st = RE.get(); const i = Math.max(0, Math.min(speeds.length - 1, speeds.indexOf(st.speed) + d)); RE.speed(speeds[i]); q('#rl-speed').textContent = speeds[i] + '×'; };
+    const keys = (open) => { q('#rl-keys').hidden = !open; };
+    /** 快捷键(拍板 22):这一页的、孩子屏幕里转上来的(window.cotutorReelKey)走同一个;在输入框里打字时不接管 */
+    const onKey = (e) => {
+      if (!RE || e.metaKey || e.ctrlKey || e.altKey) return false;
+      const t = e.target;
+      if (t && t.tagName && (t.isContentEditable || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || (t.tagName === 'INPUT' && t.type !== 'range' && t.type !== 'checkbox'))) return false;
+      const k = e.key, open = !q('#rl-keys').hidden;
+      if (k === 'Escape') { if (open) keys(false); else if (O.exit) O.exit(); return true; }
+      if (k === '?') { keys(!open); return true; }
+      if (open) return false;
+      if (k === ' ' || k === 'k' || k === 'K') toggle();
+      else if ((k === 'ArrowLeft' && e.shiftKey) || k === '[') jump(-1);
+      else if ((k === 'ArrowRight' && e.shiftKey) || k === ']') jump(1);
+      else if (k === 'ArrowLeft') seekBy(-5000);
+      else if (k === 'ArrowRight') seekBy(5000);
+      else if (k === 'Home') RE.seek(0);
+      else if (k === 'End') { const st = RE.get(); if (st) RE.seek(st.total); }
+      else if (k === 's' || k === 'S') { const c = q('#rl-skip'); c.checked = !c.checked; RE.real(!c.checked); }
+      else if (k === '<') speedBy(-1);
+      else if (k === '>') speedBy(1);
+      else if (k === 'e' || k === 'E') more(q('#rl-log').hidden);
+      else return false;
+      return true;
+    };
+    document.addEventListener('keydown', (e) => {
+      if (!onKey(e)) return;
+      e.preventDefault();
+      // 空格落在按钮上松手时还会点一下:先把焦点拿走,免得放了又停
+      if (document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur();
+    });
+    window.cotutorReelKey = (e) => onKey(e);
+    /** 耳机、媒体键、控制中心(Media Session):放停、上一章 / 下一章;锁屏写这是哪件事、第几章 */
+    const media = (on) => {
+      const ms = navigator.mediaSession; if (!ms) return;
+      const set = (a, f) => { try { ms.setActionHandler(a, on ? f : null); } catch (x) {} };
+      set('play', () => { if (RE) RE.play(true); });
+      set('pause', () => { if (RE) RE.play(false); });
+      set('previoustrack', () => jump(-1));
+      set('nexttrack', () => jump(1));
+      set('seekbackward', () => seekBy(-5000));
+      set('seekforward', () => seekBy(5000));
+      if (!on) { ms.metadata = null; return; }
+      try { if (window.MediaMetadata) ms.metadata = new MediaMetadata({ title: O.title || '录像', artist: '录像' }); } catch (x) {}
+    };
+    q('#rl-prev').addEventListener('click', () => jump(-1));
+    q('#rl-next').addEventListener('click', () => jump(1));
+    q('#rl-keyb').addEventListener('click', () => keys(true));
+    q('#rl-keys-x').addEventListener('click', () => keys(false));
+    q('#rl-keys').addEventListener('click', (e) => { if (e.target === q('#rl-keys')) keys(false); });
     q('#rl-play').addEventListener('click', toggle);
     q('#rl-mplay').addEventListener('click', toggle);
     q('#rl-x').addEventListener('click', () => { if (O.exit) O.exit(); });
@@ -261,12 +353,13 @@ export const REEL_DOCK_JS = `
         q('#rl-tag').hidden = st.precise; q('#rl-x').hidden = !O.exit;
         q('#rl-ttl').textContent = O.title || '';
         document.documentElement.classList.add('rl-dark');
+        media(true);
         q('#reel').hidden = false;
         more(kept('parent-reel-log') === '1'); fold(kept('parent-reel-min') === '1');
         clearInterval(timer); timer = setInterval(render, 100);
         render();
       },
-      close: () => { clearInterval(timer); RE = null; size = null; q('#reel').hidden = true; document.documentElement.classList.remove('rl-dark'); },
+      close: () => { clearInterval(timer); RE = null; size = null; q('#reel').hidden = true; keys(false); media(false); document.documentElement.classList.remove('rl-dark'); },
       /** 孩子屏幕的尺寸(CSS 像素):上半照它缩 */
       frame: (sz) => { size = sz; fit(); },
     };

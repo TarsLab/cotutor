@@ -1,5 +1,5 @@
 /** 录像(《家长录像设计.md》):推算轨道、某一刻的样子、空白压缩与播放时钟。纯函数,手搭的节,时刻都算得准。 */
-import { buildReel, playRecordOk, reelCardTook, reelClock, reelDuration, reelFrameAt, reelSaid, REEL_GAP_PLAY_MS, type PlayRecord, type ReelDiag, type ReelInput } from '../src/lib/reel.ts';
+import { buildReel, playRecordOk, reelCardTook, reelChapterEnds, reelClock, reelDuration, reelFrameAt, reelSaid, REEL_GAP_PLAY_MS, type PlayRecord, type ReelDiag, type ReelInput } from '../src/lib/reel.ts';
 import type { BoardSection } from '../src/lib/kid-board.ts';
 import type { RunEvent } from '../src/lib/events.ts';
 import type { ConversationMessage } from '../src/schema/conversation.ts';
@@ -215,5 +215,15 @@ check('一轮都没有 → 没有录像', buildReel(input([])) === null);
 check('实录的形状:好的收、坏的丢', playRecordOk({ at: 1, k: 'play', job: '1620-1', line: 0, status: 'playing' }) && playRecordOk({ at: 1, k: 'play', job: null, line: -1, status: 'idle' }) && playRecordOk({ at: 1, k: 'stage', job: '1620-1', card: 2, open: true }) && !playRecordOk({ at: 1, k: 'stage', job: '../x', card: 2, open: true }) && !playRecordOk({ at: 'x', k: 'visible', on: true }) && !playRecordOk({ at: 1, k: 'eval', on: true }) && !playRecordOk(null));
 check('进度条上怎么写孩子这句', reelSaid({ text: 'x', action: 'continue' }) === '继续' && reelSaid({ text: '', action: 'submit', via: { home: 'h', button: 'new', label: '6 的口诀' } }) === '交给老师' && reelSaid({ text: 'x', via: { home: 'h', button: 0, label: '开场' } }) === '开场' && reelSaid({ text: '原话' }) === '原话');
 check('时长的写法', reelDuration(23400) === '23 秒' && reelDuration(130000) === '2 分 10 秒' && reelDuration(120000) === '2 分' && reelDuration(3_900_000) === '1 小时 5 分');
+
+{
+  // 章尾(《家长录像设计.md》拍板 21):下一章的前奏开始之前;前奏一段段往前连(没认出来马上又按一次);最后一章是录像末尾
+  const ends = reelChapterEnds([1000, 10_000, 20_000], [{ from: 8000, to: 9000 }, { from: 9500, to: 10_200 }, { from: 3000, to: 3500 }, { from: 19_000, to: 19_800 }], 30_000);
+  check('章尾:第 1 章落在两次按住说话(连着)之前;中间那次早早没发出去的不算;第 2 章落在下一次按住之前;最后一章是末尾', JSON.stringify(ends) === '[7999,18999,30000]', JSON.stringify(ends));
+  const bare = reelChapterEnds([0, 5000], [], 9000);
+  check('章尾:没有前奏(听写、口语课、打字的老数据)就是下一章开头之前', JSON.stringify(bare) === '[4999,9000]', JSON.stringify(bare));
+  const tight = reelChapterEnds([5000, 5200], [{ from: 4000, to: 5300 }], 6000);
+  check('章尾:前奏比这一章开头还早,不早于这一章的开头', tight[0] === 5000, JSON.stringify(tight));
+}
 
 done();

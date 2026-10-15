@@ -81,6 +81,8 @@ ${DICT_REEL_JS}
       reelTick();
       window.cotutorReel = reelApi;
       host.cotutorReelReady(reelApi, { size: RL.f.size || [1180, 820] });
+      // 焦点在孩子的屏幕里时按键也认(《家长录像设计.md》拍板 22):交给外面的录像栏,它认了就不让这一页再处理
+      document.addEventListener('keydown', function (e) { try { if (host.cotutorReelKey && host.cotutorReelKey({ key: e.key, shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey })) e.preventDefault(); } catch (x) {} });
     }, function () { host.cotutorReelFail(); });
   };
 

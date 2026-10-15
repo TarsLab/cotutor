@@ -168,6 +168,23 @@ try {
   const K = `document.querySelector('#rl-frame').contentDocument`;
   const endOk = await waitFor(`Number(document.querySelector('#rl-seek').max) > 1000 && Number(document.querySelector('#rl-seek').value) >= Number(document.querySelector('#rl-seek').max) - 100 && document.querySelector('#rl-play').getAttribute('aria-label') === '播放' && !!document.querySelector('#rl-frame').contentDocument?.querySelector('#v-check.on')`, 10000);
   ok('一进来停在最后一帧:进度在头、不放、孩子的屏幕是对一对', endOk, await evaluate(`JSON.stringify({ v: document.querySelector('#rl-seek').value, max: document.querySelector('#rl-seek').max, play: document.querySelector('#rl-play').getAttribute('aria-label'), view: document.querySelector('#rl-frame').contentDocument?.querySelector('.view.on')?.id })`));
+  // 上一章 / 下一章落在章尾(《家长录像设计.md》拍板 21):从最后一帧(对一对)往前一章是第 3 个词写完、还没交卷;键盘 [ ] 也行,焦点在孩子的屏幕里也认(拍板 22)
+  const key = async (k, code) => { for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key: k, code, ...(type === 'keyDown' && k.length === 1 ? { text: k } : {}) }); await sleep(300); };
+  const at = `({ chap: document.querySelector('#rl-chap').textContent, v: Number(document.querySelector('#rl-seek').value), max: Number(document.querySelector('#rl-seek').max), play: document.querySelector('#rl-play').getAttribute('aria-label'), check: !!${K}.querySelector('#v-check.on'), prev: document.querySelector('#rl-prev').disabled, next: document.querySelector('#rl-next').disabled })`;
+  const j0 = await evaluate(at);
+  await tap('#rl-prev');
+  const j1 = await evaluate(at);
+  ok('上一章:从最后一帧落到第 3 个词写完(还没交卷、不放);下一章能点了', j0.next && !j0.prev && j1.chap.startsWith('第 3 个词') && !j1.check && j1.v < j1.max && j1.play === '播放' && !j1.next, JSON.stringify({ j0, j1 }));
+  await key('[', 'BracketLeft');
+  const j2 = await evaluate(at);
+  ok('键盘 [:再往前一章,第 2 个词写完', j2.chap.startsWith('第 2 个词') && j2.v < j1.v, JSON.stringify(j2));
+  await tap('#rl-frame');
+  await key(']', 'BracketRight');
+  const j3 = await evaluate(at);
+  ok('焦点在孩子的屏幕里按 ]:照样往后一章,第 3 个词写完', j3.chap.startsWith('第 3 个词') && Math.abs(j3.v - j1.v) < 50, JSON.stringify(j3));
+  await tap('#rl-next');
+  const j4 = await evaluate(at);
+  ok('下一章:最后一章的章尾是末尾,下一章灰了', j4.v >= j4.max - 100 && j4.next, JSON.stringify(j4));
   await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
   ok('录像:外壳里上半是听写页的录像模式、下半录像栏;时间是「放到哪 / 一共多久」;一个词一章(三章 + 对一对)', await waitFor(`location.pathname === '/parent/dictation/reel' && !document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').getAttribute('src') || '').startsWith('/dictation?reel=') && !!${K}?.querySelector('#v-listen.on') && /^\\d+:\\d\\d \\/ \\d+:\\d\\d$/.test(document.querySelector('#rl-clock').textContent) && document.querySelectorAll('#rl-chaps i').length === 3`, 10000), await evaluate(`JSON.stringify({ src: document.querySelector('#rl-frame').getAttribute('src'), clock: document.querySelector('#rl-clock').textContent, chaps: document.querySelectorAll('#rl-chaps i').length, chap: document.querySelector('#rl-chap').textContent })`));
   ok('孩子的屏幕:听写本三行(2、2、1 格)、右边大格;录像模式(点不动)', await evaluate(`[...${K}.querySelectorAll('#l-book .brow')].map((r) => r.querySelectorAll('.padbox').length).join() === '2,2,1' && ${K}.querySelectorAll('#l-big .padbox').length === 1 && ${K}.body.classList.contains('rlk')`));

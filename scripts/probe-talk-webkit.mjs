@@ -65,12 +65,13 @@ try {
   const stats = () => page.evaluate(() => ({ played: window.__played, gum: window.__gum, chunks: window.__chunks, sentBin: window.__sentBin, err: window.__err, hint: document.querySelector('#k-hint').textContent, sr: null }));
   const untilFn = async (f, n = 40) => { for (let i = 0; i < n; i++) { if (await f()) return true; await sleep(250); } return false; };
 
-  await page.goto(`${base}/talk#/kid/${t.id}`);
-  await untilFn(() => page.evaluate(() => document.querySelector('#kid').classList.contains('on') && document.querySelector('#k-start-hint').textContent.includes('2 句')));
-  ok('孩子页:只露「打电话」那块,跟读 / 聊 / 两条按钮栏都藏着', (await visible('#k-start')) && !(await visible('#k-read')) && !(await visible('#k-chat')) && !(await visible('#k-bar')) && !(await visible('#k-bar2')));
-  await page.click('#k-go');
+  // 孩子看口语单那一屏(《口语课设计.md》拍板 12):「开始跟读」这一下点击里起 AudioContext 与麦,再存口语单,接着就是跟读(Safari 只认点击里起的声音)
+  await page.goto(`${base}/talk#/list/${t.id}`);
+  await untilFn(() => page.evaluate(() => document.querySelector('#pick').classList.contains('on') && document.querySelector('#p-go').textContent === '开始跟读 · 2 个' && !document.querySelector('#p-go').disabled));
+  ok('看口语单:跟读 / 聊 / 两条按钮栏都藏着([hidden] 真的藏起来)', (await visible('#pick')) && !(await visible('#kid')) && !(await visible('#k-read')) && !(await visible('#k-chat')) && !(await visible('#k-bar')) && !(await visible('#k-bar2')));
+  await page.click('#p-go');
   const up = await untilFn(async () => fake.conns.length === 1 && (await visible('#k-read')) && (await page.evaluate(() => document.querySelector('#k-card').dataset.en === 'red' && window.__played > 0)), 60);
-  ok('打电话:麦克风(假)开了、AudioWorklet 起了、接上、第一句在卡上、老师的声音排进去放了;打电话那块藏起来', up && !(await visible('#k-start')) && (await visible('#k-bar')), JSON.stringify(await stats()));
+  ok('开始跟读:麦克风(假)开了、AudioWorklet 起了、接上、第一句在卡上、老师的声音排进去放了;没有开始屏', up && !(await visible('#k-start')) && (await visible('#k-bar')), JSON.stringify(await stats()));
   const c1 = fake.conns[0];
   // 跟我读不用按(《口语课设计.md》§8.1):老师放完就听;振荡器响着 = 孩子在读,__mute = 读完了
   ok('老师放完:轮到孩子,页面上没有「按住」', await untilFn(() => page.evaluate(() => /listen|speech/.test(document.querySelector('#k-rd').className) && !document.querySelector('#k-hold'))), JSON.stringify(await stats()));
@@ -82,7 +83,7 @@ try {
   await page.evaluate(() => window.__unmute());
   // 第 2 句点「下一句」:手动那条路,直接开聊
   await page.click('#k-next');
-  ok('读完开聊:聊那块露出来、跟读那块藏起来、倒计时', await untilFn(async () => fake.conns.length === 2 && (await visible('#k-chat')) && !(await visible('#k-read')) && (await page.evaluate(() => document.querySelector('#k-chip').textContent.includes('还有')))), JSON.stringify(await stats()));
+  ok('读完开聊:聊那块露出来、跟读那块藏起来、右上角只写「打电话」', await untilFn(async () => fake.conns.length === 2 && (await visible('#k-chat')) && !(await visible('#k-read')) && (await page.evaluate(() => document.querySelector('#k-chip').textContent === '打电话'))), JSON.stringify(await stats()));
   const c2 = fake.conns[1];
   await untilFn(() => c2.audio > 3200 * 5, 60);
   await page.evaluate(() => window.__mute());

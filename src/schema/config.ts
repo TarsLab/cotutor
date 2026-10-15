@@ -202,11 +202,11 @@ export type VaultPolicy = z.infer<typeof VaultPolicySchema>;
 export const KID_LISTEN = ['browser', 'omni'] as const;
 
 /**
- * 口语课(《wip/口语课设想.md》):家长拍一张今天学的,孩子先跟读、再和 realtime 模型用这些词聊。出厂关着;要百炼 key 与业务空间 id。
+ * 口语课(《口语课设计.md》):家长拍一张今天学的,孩子先跟读、再和 realtime 模型用这些词聊。出厂关着;要百炼 key 与业务空间 id。
  * 不进老师团:没有老师文件、板书、记忆;音色是 realtime 自己那套(Tina / Serena…),和 voxtell 的不是一家。
  */
 export const TALK_READ_DEFAULT = { waitMs: 5000, again: 2, endMs: 900, pass: 0.5 };
-/** 跟我读不用按(《wip/口语课设想.md》§8.1):孩子读完自动下一句、几秒没出声老师再读 */
+/** 跟我读不用按(《口语课设计.md》§8.1):孩子读完自动下一句、几秒没出声老师再读 */
 export const TalkReadSchema = z.object({
   waitMs: z.number().int().min(1000).max(30000).default(TALK_READ_DEFAULT.waitMs).describe('老师读完多久没开口就再读一遍'),
   again: z.number().int().min(0).max(5).default(TALK_READ_DEFAULT.again).describe('一句里自动再读最多几遍;用完了不再催,等孩子'),

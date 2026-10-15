@@ -1,5 +1,5 @@
 /**
- * 口语课的底层(《wip/口语课设想.md》§三),不花钱:
+ * 口语课的底层(《口语课设计.md》§三),不花钱:
  * ws.ts 的帧与握手(Node 自带的 WebSocket 客户端连上来,文本 / 二进制 / 分片 / close);
  * realtime.ts 对一个假百炼:连上先 session.update、updated 才算好;喂音频、commit、response.create;声音与字幕回调;转写;cancel 只在有回答时发;
  * setTurn 的成与败;连接时报错、服务端断线都不抛。

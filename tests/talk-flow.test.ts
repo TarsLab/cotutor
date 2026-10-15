@@ -1,5 +1,5 @@
 /**
- * 口语课整条线(《wip/口语课设想.md》),假百炼、假 omni,不花钱:
+ * 口语课整条线(《口语课设计.md》),假百炼、假 omni,不花钱:
  * 接口(开关、开一次 + 照片读口语单、家长改、给孩子、照片、删);
  * 通话中转(孩子端的 WebSocket ↔ 假 realtime):跟读不用按(响了推、静了 commit、读到了下一句、不沾再读、不出声再读两遍后不催、点再听不算次数)、读完开聊(第二条会话,semantic_vad)、聊里孩子开口掐老师、挂断落盘(字、用量、用到的词、两段 wav);
  * 关着时 404、升级被拒;照片 → 口语单的解析。
@@ -147,7 +147,7 @@ const last = (k: { msgs: Msg[] }, t: string): Msg | undefined => [...k.msgs].rev
   const c1 = fake.conns[0];
   k.ws.send(JSON.stringify({ t: 'view', w: 1180, h: 820 }));
   check('接通:跟读的会话(手动、人设带 Ray 与口语单)、第一句 cue、状态(第 1/3 句)、老师的声音与字到孩子端', ok1 && c1.session?.turn_detection === null && String(c1.session?.instructions).includes('Ray') && String(c1.session?.instructions).includes('bus(公共汽车)') && c1.items[0]?.content?.[0]?.text === '读这句:red' && st.phase === 'read' && st.i === 0 && st.n === 3 && st.item.en === 'red' && st.interrupt === false && k.bins[0] === 4800 && last(k, 'tutor')?.done === "It's a red car.", JSON.stringify({ st, items: c1.items, bins: k.bins }).slice(0, 400));
-  // ---- 跟我读不用按(《wip/口语课设想.md》§8.1;数是 cfg.talk.read:等 1 秒、再读 2 遍、静 300 毫秒算读完) ----
+  // ---- 跟我读不用按(《口语课设计.md》§8.1;数是 cfg.talk.read:等 1 秒、再读 2 遍、静 300 毫秒算读完) ----
   const rdMode = (): string | undefined => last(k, 'state')?.rd?.mode;
   /** 孩子读一遍:响三块(300 毫秒)、静三块(300 毫秒) */
   const speak = (text: string): void => { fake.kidText = text; for (let i = 0; i < 3; i++) k.ws.send(loud()); for (let i = 0; i < 3; i++) k.ws.send(quiet()); };

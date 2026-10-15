@@ -1,5 +1,5 @@
 /**
- * 口语课的数据:workspace/talk/<id>/,一次一个目录(《wip/口语课设想.md》§四)。
+ * 口语课的数据:workspace/talk/<id>/,一次一个目录(《口语课设计.md》§四)。
  * 不进对话索引、不进录像、不算每日条数、不写 vault;cotutor 别处不读这里。
  *
  *   talk.json        口语单(读出来的 + 家长改过的)、状态、用的模型音色、通话的几样数
@@ -97,7 +97,7 @@ export async function listTalks(root: string): Promise<TalkMeta[]> {
 export const deleteTalk = (root: string, id: string): Promise<void> => rm(dirOf(root, id), { recursive: true, force: true });
 
 /**
- * 录像的数据(《wip/口语课设想.md》§8.3):发给孩子端 / 孩子端发来的每条消息带毫秒、老师出声的时段、孩子有声的时段、屏幕多大;
+ * 录像的数据(《口语课设计.md》§8.3):发给孩子端 / 孩子端发来的每条消息带毫秒、老师出声的时段、孩子有声的时段、屏幕多大;
  * 声音另在 call.wav(两边按到达时刻混成一条,24k 单声道,lib/mix.ts)
  */
 export interface TalkReel { v: 1; startedAt: string; ms: number; view: [number, number] | null; msgs: [number, 'o' | 'i', Record<string, unknown>][]; playing: [number, number][]; kidVoice: [number, number][] }

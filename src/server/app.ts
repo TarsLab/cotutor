@@ -1129,7 +1129,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     const xl = await xlaoshiRoute(method, url, ctx, body); if (xl) return xl;
     // 家长端「首页」的接口(/api/parent/*)
     const phr = await parentHomeRoute(method, p, ctx, body); if (phr) return phr;
-    // 口语课(代码都在 src/talk/,《wip/口语课设想.md》):/talk 与 /api/talk/* 交给它;通话的 WebSocket 在 serve.ts 的 upgrade 里接
+    // 口语课(代码都在 src/talk/,《口语课设计.md》):/talk 与 /api/talk/* 交给它;通话的 WebSocket 在 serve.ts 的 upgrade 里接
     const tk = await talkRoute(method, url, ctx, body); if (tk) return tk;
     // 听写(代码都在 src/dictation/,《wip/听写设想.md》):/dictation 与 /api/dictation/* 交给它;首页的听写卡在 kid-page 画
     const tx = await dictationRoute(method, url, ctx, body); if (tx) return tx;

@@ -1,7 +1,7 @@
 /**
- * /talk(孩子端)与 /parent/talk(家长端):口语课的页面(《wip/口语课设想.md》;原型 https://claude.ai/artifact/9cC72r5d8Jyhayikz3rYaP)。
+ * /talk(孩子端)与 /parent/talk(家长端):口语课的页面(《口语课设计.md》;原型 https://claude.ai/artifact/9cC72r5d8Jyhayikz3rYaP)。
  * 家长与孩子同一份页面,按 hash 切;/talk 只认孩子那一屏,别的 hash 回孩子端首页:#/ 拍照与讲过的(家长)、#/list/<id> 改口语单(家长)、#/kid/<id> 跟读与聊(孩子,家长递过去)、#/review/<id> 回看(家长)。
- * 孩子那一屏的样子和老师页一样(《wip/口语课设想.md》§8.2):装孩子端的 /kid/theme.css,今天的词用单词卡(cards/word,画法 word-draw.ts)、句子用点读卡的行(cards/read);
+ * 孩子那一屏的样子和老师页一样(《口语课设计.md》§8.2):装孩子端的 /kid/theme.css,今天的词用单词卡(cards/word,画法 word-draw.ts)、句子用点读卡的行(cards/read);
  * 自己的类名别撞主题的(.rd 是点读卡的行,自己的状态胶囊叫 .tk-rd)。
  * 声音:getUserMedia → AudioWorklet 降到 16k PCM16,100 毫秒一块走 WebSocket 二进制帧上去;下来的 24k PCM16 一块块排进 AudioContext 放。
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
@@ -108,7 +108,7 @@ ${faviconLinks()}
   #kid .bar { display:flex; align-items:center; justify-content:center; gap:24px; padding:8px 0 10px; flex-wrap:wrap; }
   #kid .bar.small { gap:12px; }
   #kid .rc.now { border:2px solid var(--accent); box-shadow:0 6px 22px rgba(232,116,59,.16); }
-  /* 跟我读不用按(《wip/口语课设想.md》§8.1):现在轮到谁,一颗胶囊 */
+  /* 跟我读不用按(《口语课设计.md》§8.1):现在轮到谁,一颗胶囊 */
   #kid .tk-rd { display:inline-flex; align-items:center; gap:12px; min-height:64px; padding:0 26px 0 22px; border-radius:32px; font-size:20px; font-weight:600; }
   #kid .tk-rd.tutor { background:var(--sc-soft); color:var(--sc-ink); }
   #kid .tk-rd.listen, #kid .tk-rd.speech, #kid .tk-rd.wait { background:#fff; color:var(--blue-ink); padding-left:8px; box-shadow:0 0 0 3px #9cc3ef, 0 2px 8px rgba(0,0,0,.08); }
@@ -296,7 +296,7 @@ __WORD_DRAW_JS__
   const go = (hash) => { location.hash = hash; };
   /** 孩子从首页英语老师卡上的「口语课」进来(《首页设计.md》拍板 18):「回去」与打完都回首页,不进家长的那几屏 */
   const KID_ONLY = __TALK_KID_ONLY__;
-  /** 录像模式(?reel=<id>,《wip/口语课设想.md》§8.3):开在家长端录像外壳的 iframe 里,照录下的消息画孩子那一屏 */
+  /** 录像模式(?reel=<id>,《口语课设计.md》§8.3):开在家长端录像外壳的 iframe 里,照录下的消息画孩子那一屏 */
   const REEL_ID = new URLSearchParams(location.search).get('reel');
   /** 回看页「看录像」去哪(只在家长端那份里有;孩子端是空的) */
   const REEL_HREF = '__TALK_REEL_HREF__';

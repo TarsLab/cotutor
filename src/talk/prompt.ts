@@ -1,5 +1,5 @@
 /**
- * 口语课的提示词(《wip/口语课设想.md》§三):人设、英文为主中文为辅的三条、不评对错、口语单。纯函数。
+ * 口语课的提示词(《口语课设计.md》§三):人设、英文为主中文为辅的三条、不评对错、口语单。纯函数。
  * 跟读与聊各一条会话,各一份;跟读段每句由应用塞「读这句」,聊那段开头塞「开聊」、到点塞「收尾」。
  */
 import { itemsOf, type ListItem, type TalkList } from './lib/used.ts';
@@ -31,7 +31,7 @@ ${listText(list)}${noteText(note)}`;
 /** 跟读段塞给模型的那句 */
 export const readCue = (item: ListItem): string => `读这句:${item.en}`;
 export const readAgainCue = (item: ListItem): string => `再读一遍这句:${item.en}`;
-/** 孩子读完了(《wip/口语课设想.md》§8.1):接一两个词 + 下一句,一次回答说完 */
+/** 孩子读完了(《口语课设计.md》§8.1):接一两个词 + 下一句,一次回答说完 */
 export const readNextCue = (heard: string, next: ListItem): string => `孩子读了「${heard}」。先用一两个词接,再读下一句:${next.en}`;
 /** 最后一句读完:夸一句、说要聊了;说完应用开聊的会话 */
 export const readLastCue = (heard: string): string => `孩子读了「${heard}」。跟读完了:用一句英文夸他,再说 Now let's talk!`;

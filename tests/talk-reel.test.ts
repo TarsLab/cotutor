@@ -1,5 +1,5 @@
 /**
- * 口语课录像的轨道(src/talk/lib/reel.ts,《wip/口语课设想.md》§8.3):章、点、经过、空白、钟、这一刻那一行。纯函数。
+ * 口语课录像的轨道(src/talk/lib/reel.ts,《口语课设计.md》§8.3):章、点、经过、空白、钟、这一刻那一行。纯函数。
  */
 import { check, done } from './_check.ts';
 

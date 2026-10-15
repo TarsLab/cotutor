@@ -72,7 +72,7 @@ try {
   const up = await untilFn(async () => fake.conns.length === 1 && (await visible('#k-read')) && (await page.evaluate(() => document.querySelector('#k-card').dataset.en === 'red' && window.__played > 0)), 60);
   ok('打电话:麦克风(假)开了、AudioWorklet 起了、接上、第一句在卡上、老师的声音排进去放了;打电话那块藏起来', up && !(await visible('#k-start')) && (await visible('#k-bar')), JSON.stringify(await stats()));
   const c1 = fake.conns[0];
-  // 跟我读不用按(《wip/口语课设想.md》§8.1):老师放完就听;振荡器响着 = 孩子在读,__mute = 读完了
+  // 跟我读不用按(《口语课设计.md》§8.1):老师放完就听;振荡器响着 = 孩子在读,__mute = 读完了
   ok('老师放完:轮到孩子,页面上没有「按住」', await untilFn(() => page.evaluate(() => /listen|speech/.test(document.querySelector('#k-rd').className) && !document.querySelector('#k-hold'))), JSON.stringify(await stats()));
   const a0 = c1.audio;
   const got = await untilFn(() => c1.audio >= a0 + 3200 * 6, 40);

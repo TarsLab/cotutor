@@ -1,5 +1,5 @@
 /**
- * 跟我读不用按(src/talk/lib/read-flow.ts,《wip/口语课设想.md》§8.1):响度判开口 / 停、读到了多少、一句的状态机。纯函数,不起服务。
+ * 跟我读不用按(src/talk/lib/read-flow.ts,《口语课设计.md》§8.1):响度判开口 / 停、读到了多少、一句的状态机。纯函数,不起服务。
  */
 import { check, done } from './_check.ts';
 

@@ -1,5 +1,5 @@
 /**
- * 一次通话的中转:孩子端的 WebSocket ↔ 百炼 realtime(《wip/口语课设想.md》§三)。
+ * 一次通话的中转:孩子端的 WebSocket ↔ 百炼 realtime(《口语课设计.md》§三)。
  * 跟读与聊各一条 realtime 会话(silence 喂过音频改不了,见 realtime.ts);两边的声音与字都记下,挂了落盘(store.finishCall)。
  *
  * 孩子端 → 这里:二进制帧 = PCM16 16k 单声道一块;文本帧 = JSON

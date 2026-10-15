@@ -1,5 +1,5 @@
 /**
- * 口语课录像的声音(src/talk/lib/mix.ts,《wip/口语课设想.md》§8.3):两边按到达时刻摆成一条、老师的块照孩子端的排法排、flush 截断、老师出声的时段。纯函数。
+ * 口语课录像的声音(src/talk/lib/mix.ts,《口语课设计.md》§8.3):两边按到达时刻摆成一条、老师的块照孩子端的排法排、flush 截断、老师出声的时段。纯函数。
  */
 import { check, done } from './_check.ts';
 

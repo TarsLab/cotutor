@@ -1,5 +1,5 @@
 /**
- * /talk 与 /api/talk/*:口语课的页面与接口(《wip/口语课设想.md》)。
+ * /talk 与 /api/talk/*:口语课的页面与接口(《口语课设计.md》)。
  * cotutor 只在 app.ts 的 route() 里接一行、serve.ts 的 upgrade 里接一行;这里引用 cotutor 的东西,cotutor 别处不引用这里。拆掉 = 删 src/talk/ 和那两行。
  *
  *   GET    /talk                       页面(家长与孩子同一页,按 hash 切)

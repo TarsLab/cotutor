@@ -104,7 +104,7 @@ try {
   const meta = await (await fetch(`${base}/api/talk/${id}`)).json();
   ok('口语单存上了(ready,家长填的)', meta.meta.status === 'ready' && meta.meta.listBy === 'parent' && meta.meta.list.words[0].en === 'red', JSON.stringify(meta.meta.list));
 
-  // ---- 孩子:开始 → 跟我读(不用按,《wip/口语课设想.md》§8.1):假麦克风一直在念,老师放完就听、静了算读完、自己往下走 ----
+  // ---- 孩子:开始 → 跟我读(不用按,《口语课设计.md》§8.1):假麦克风一直在念,老师放完就听、静了算读完、自己往下走 ----
   const heardRe = real ? /\S/ : /It's a red car\./;
   const sawKid = (sel) => evaluate(`(() => { const t = document.querySelector(${JSON.stringify(sel)}).textContent; return t.includes('你说的') ? t.replace('你说的:', '') : ''; })()`);
   await click('#k-go');
@@ -139,7 +139,7 @@ try {
   if (real) console.log('老师说过的:\n' + after.transcript.lines.filter((l) => l.who === 'tutor').map((l) => '  ' + l.text).join('\n') + '\n孩子转写:\n' + after.transcript.lines.filter((l) => l.who === 'kid').map((l) => '  ' + l.text).join('\n'));
   if (!real) ok('两条 realtime 会话都关了', c1.closed && c2.closed);
 
-  // ---- 家长:看录像(《wip/口语课设想.md》§8.3:录下的消息喂回孩子那一屏,声音是 call.wav) ----
+  // ---- 家长:看录像(《口语课设计.md》§8.3:录下的消息喂回孩子那一屏,声音是 call.wav) ----
   ok('回看页有「看录像」', await until(`!!document.querySelector('#r-reel')`));
   await click('#r-reel');
   ok('录像外壳:上半是孩子那一屏(/talk?reel=)、下半录像栏', await until(`location.pathname === '/parent/talk/reel' && !!document.querySelector('#rl-frame') && document.querySelector('#rl-frame').src.includes('/talk?reel=') && !!(document.querySelector('#rl-frame').contentWindow || {}).cotutorReel`, 60));

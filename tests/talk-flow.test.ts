@@ -91,7 +91,10 @@ writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 const fakeRead = (photo: { data: Buffer; mime: string }, opts: Record<string, unknown>) => readList(photo, { ...opts, endpoint: omniEndpoint });
 const finished: [string, string][] = [];
-const deps = { readList: fakeRead as typeof readList, endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (id: string, why: string) => finished.push([id, why]) };
+/** 提示卡(《口语课设计.md》拍板 16):假的,记下老师说完的每一句 */
+const hintSeen: string[] = [];
+const fakeHint = async (line: string): Promise<{ hint: { zh: string; en: string; opts: string[] }; by: 'model' }> => { hintSeen.push(line); return { hint: { zh: '说一说:它是什么颜色的?', en: "It's ___.", opts: ['red'] }, by: 'model' }; };
+const deps = { readList: fakeRead as typeof readList, endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (id: string, why: string) => finished.push([id, why]), hint: fakeHint };
 const talkRoute = makeTalkRoute(deps);
 const talkUpgrade = makeTalkUpgrade(deps);
 const call = (method: string, path: string, body?: unknown) => { void ctx.reload(); return talkRoute(method, new URL(path, 'http://x'), ctx, body); };
@@ -192,6 +195,14 @@ const last = (k: { msgs: Msg[] }, t: string): Msg | undefined => [...k.msgs].rev
   check('聊:孩子开口 → 孩子端 flush;停了 → 转写回来、老师自动接', ok7 && ok8 && k.msgs.filter((m) => m.t === 'flush').length > nFlush, JSON.stringify({ cancels: c2.cancels, creates: c2.creates, flush: k.msgs.filter((m) => m.t === 'flush').length - nFlush }));
   const cards = k.msgs.filter((m) => m.t === 'card');
   check('聊:老师的字里出现口语单上的词 → {t:card, i}(red 亮;bus 没说不亮;一次回答一个词只亮一次)', cards.some((m) => m.i === 0) && !cards.some((m) => m.i === 1) && cards.length <= c2.creates, JSON.stringify(cards));
+  // 提示卡:聊那段老师每说完一句发一张;跟读那段不出;孩子端的出来 / 翻面记进录像
+  const okH = await k.wait(() => k.msgs.some((m) => m.t === 'hint'));
+  const hints = k.msgs.filter((m) => m.t === 'hint');
+  const chatAt = k.msgs.findIndex((m) => m.t === 'state' && m.phase === 'chat');
+  check('聊:老师说完一句 → 提示卡 {t:hint, n, zh, en, opts, by}(只在聊那段)', okH && hints.every((m) => k.msgs.indexOf(m) > chatAt && typeof m.n === 'number' && m.zh && m.en === "It's ___." && m.opts[0] === 'red' && m.by === 'model') && hintSeen.length >= hints.length, JSON.stringify({ hints: hints.length, seen: hintSeen }));
+  k.ws.send(JSON.stringify({ t: 'hint', e: 'show', n: hints[0].n, why: 'auto', zh: hints[0].zh, en: hints[0].en }));
+  k.ws.send(JSON.stringify({ t: 'hint', e: 'flip', v: true, n: hints[0].n, zh: hints[0].zh, en: hints[0].en }));
+  await sleep(50);
   // 挂断 → 落盘
   k.ws.send(JSON.stringify({ t: 'bye' }));
   const ok9 = await until(() => finished.length === 1, 5000);
@@ -204,6 +215,7 @@ const last = (k: { msgs: Msg[] }, t: string): Msg | undefined => [...k.msgs].rev
   const reel = JSON.parse(readFileSync(join(dir, 'reel.json'), 'utf8')) as Record<string, any>;
   const callWav = pcmOfWav(readFileSync(join(dir, 'call.wav')));
   const has = (dir_: string, t: string): boolean => reel.msgs.some((m: any) => m[1] === dir_ && m[2].t === t);
+  check('录像:提示卡发出去的(o)与孩子端的出来、翻面(i)都记了', has('o', 'hint') && reel.msgs.filter((m: any) => m[1] === 'i' && m[2].t === 'hint').length === 2);
   check('录像的数据:reel.json 记了发出去的每条(state、老师的字、亮卡、end)与孩子端发来的(again、bye),时刻不倒退;屏幕多大;call.wav 24k、和通话一样长;老师出声的时段', reel.v === 1 && reel.ms === tr.ms && has('o', 'state') && has('o', 'tutor') && has('o', 'card') && has('o', 'end') && has('i', 'again') && has('i', 'bye') && reel.msgs.every((m: any, i: number) => i === 0 || m[0] >= reel.msgs[i - 1][0]) && JSON.stringify(reel.view) === '[1180,820]' && callWav?.rate === 24000 && Math.abs(callWav.pcm.length / 48 - reel.ms) <= 1 && reel.playing.length > 0 && reel.playing.every((p: number[]) => p[1] > p[0]), JSON.stringify({ n: reel.msgs.length, ms: reel.ms, view: reel.view, wav: callWav?.pcm.length, playing: reel.playing.slice(0, 3) }));
   const ok10 = await until(() => k.closed !== null);
   check('孩子端的连接关了(1000 bye)', ok10 && k.closed?.code === 1000, JSON.stringify(k.closed));

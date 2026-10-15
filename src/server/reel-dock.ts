@@ -45,6 +45,7 @@ export const REEL_DOCK_CSS = `
   #rl-log li .rl-k.card { background:var(--purple); color:var(--purple-ink); }
   #rl-log li .rl-k.miss, #rl-log li .rl-k.err { background:#fbe0d6; color:#b3541e; }
   #rl-log li .rl-k.tail { background:var(--ok); color:var(--ok-ink); }
+  #rl-log li .rl-k.hint { background:#fff1c7; color:#7a5b12; }
   #rl-log li .rl-t { min-width:0; overflow-wrap:anywhere; }
   #rl-log li.fut { opacity:.45; }
   #rl-log li.cur { background:#fdeee4; }
@@ -64,6 +65,7 @@ export const REEL_DOCK_CSS = `
   #rl-marks i.error, #rl-marks i.rv { background:#b3541e; border-radius:2px; }
   #rl-marks i.lecture { background:#c95a22; border-radius:2px; }
   #rl-marks i.circle { background:#2f6fd6; }
+  #rl-marks i.hint { background:#d9a520; }
   #rl-marks i.erase { background:#b9b4a8; width:7px; height:7px; margin-left:-3.5px; top:1px; }
   /* 按住说话没发出去:每次一个淡点;连着几次的一串是一条橙色的带(拍板 10) */
   #rl-marks i.miss { background:#b9b4a8; width:7px; height:7px; margin-left:-3.5px; top:1px; }

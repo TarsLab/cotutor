@@ -4,10 +4,11 @@
  *
  * 孩子端 → 这里:二进制帧 = PCM16 16k 单声道一块;文本帧 = JSON
  *   {t:'again'} 再听老师读 · {t:'next'} 下一句(到头开聊)· {t:'chat'} 直接开聊 · {t:'bye'} 挂断
- *   只记进录像的:{t:'say', w} 孩子点了单词卡上的「听」(浏览器的声,不经这里)· {t:'view', w, h} 屏幕多大
+ *   只记进录像的:{t:'say', w} 孩子点了单词卡上的「听」(浏览器的声,不经这里)· {t:'view', w, h} 屏幕多大 · {t:'hint', e: show|flip|fill|hide, n, w?} 提示卡出来、翻面、填词、收起
  * 这里 → 孩子端:二进制帧 = PCM16 24k 老师的声音;文本帧 = JSON
  *   {t:'state', phase, i, n, item, speaking, deadline, interrupt, rd} · {t:'tutor', delta} / {t:'tutor', done} · {t:'kid', text} · {t:'flush'}(清播放队列)· {t:'err', msg} · {t:'end', why}
  *   {t:'card', i}(聊那段老师讲到口语单上第 i 个词:那张单词卡亮、写一遍;由这里从老师的字里认,录像照它放)
+ *   {t:'hint', n, zh, en, opts, by}(聊那段老师说完一句的提示卡,hint.ts;孩子端 4 秒没出声或点小灯泡才露出来)
  *   rd(跟读段)= {mode: tutor|listen|speech|heard|wait, left: 离自动再读还有几毫秒 | null, wait: 一共等几毫秒, again: 这句自动再读了几遍}
  *
  * 录像(§8.3,录数据不录屏幕):发给孩子端的每条消息、孩子端发来的每条都带毫秒记下(reel.json),两边的声音照到达时刻混成 call.wav(lib/mix.ts);
@@ -23,6 +24,7 @@ import { readInit, readLeft, readStep, vadInit, vadStep, type ReadEvent, type Re
 import { appears, itemsOf, type Line } from './lib/used.ts';
 import { mixCall, type Chunk } from './lib/mix.ts';
 import { rms } from './lib/wav.ts';
+import { makeHint } from './hint.ts';
 import { chatCloseCue, chatInstructions, chatOpenCue, readAgainCue, readCue, readInstructions, readLastCue, readNextCue, readSummary, type ReadItem } from './prompt.ts';
 import { INPUT_RATE, OUTPUT_RATE, RealtimeSession, type Usage } from './realtime.ts';
 import { finishCall, type TalkMeta } from './store.ts';
@@ -38,6 +40,8 @@ export interface CallDeps {
   now?: () => Date;
   /** 落盘完了(测试等它) */
   onFinished?(why: string): void;
+  /** 打电话的提示卡(hint.ts;测试换假的) */
+  hint?: typeof makeHint;
 }
 
 type Phase = 'read' | 'chat' | 'ended';
@@ -135,7 +139,7 @@ export class TalkCall {
         this.sock.sendBinary(pcm);
       },
       onTutorText: (delta, done) => {
-        if (done !== null) { this.note('tutor', done.trim()); this.send({ t: 'tutor', done: done.trim() }); return; }
+        if (done !== null) { this.note('tutor', done.trim()); this.send({ t: 'tutor', done: done.trim() }); if (this.phase === 'chat' && !this.closing) void this.hintFor(done.trim()); return; }
         if (!delta) return;
         this.send({ t: 'tutor', delta });
         if (this.phase === 'chat') this.litCards(delta);
@@ -235,7 +239,7 @@ export class TalkCall {
     if (this.ended) return;
     let m: { t?: unknown };
     try { m = JSON.parse(raw) as { t?: unknown }; } catch { return; }
-    if (typeof m.t === 'string' && ['again', 'next', 'chat', 'bye', 'say', 'view'].includes(m.t)) this.rec.push([this.ms(), 'i', m as Record<string, unknown>]);
+    if (typeof m.t === 'string' && ['again', 'next', 'chat', 'bye', 'say', 'view', 'hint'].includes(m.t)) this.rec.push([this.ms(), 'i', m as Record<string, unknown>]);
     switch (m.t) {
       case 'again':
         // 孩子点的「再听一遍」不算自动再读的次数
@@ -327,6 +331,15 @@ export class TalkCall {
     this.timers.push(setTimeout(() => this.wrapUp(), cfg.minutes * 60_000));
     this.timers.push(setInterval(() => { if (this.phase === 'chat' && this.ms() - this.lastKidAudioAt > IDLE_MS) void this.end('idle'); }, 10_000));
     this.cue(chatOpenCue);
+  }
+
+  /** 老师说完一句 → 提示卡(拍板 16);老师又说了下一句,旧的就不发了 */
+  private hintN = 0;
+  private async hintFor(line: string): Promise<void> {
+    const n = ++this.hintN;
+    const r = await (this.deps.hint ?? makeHint)(line, this.meta.list, { env: this.deps.env });
+    if (!r || this.ended || this.closing || this.phase !== 'chat' || n !== this.hintN) return;
+    this.send({ t: 'hint', n, zh: r.hint.zh, en: r.hint.en, opts: r.hint.opts, by: r.by });
   }
 
   /** 到点:让老师收尾,说完就挂 */

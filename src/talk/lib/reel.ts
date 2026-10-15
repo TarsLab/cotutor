@@ -46,6 +46,10 @@ export function tkBuild(d: TkReelData, words: { en: string }[]): TkReel {
       const tap: Record<string, string> = { again: '点了「再听一遍」', next: '点了「下一句」', chat: '点了「直接打电话」', bye: '点了「挂断」' };
       if (typeof k === 'string' && tap[k]) notes.push({ t, kind: 'tap', chip: '点', text: tap[k] });
       else if (k === 'say') notes.push({ t, kind: 'tap', chip: '点', text: '点了「听」:' + String(m.w ?? '') });
+      // 提示卡(《口语课设计.md》拍板 16):出来(自己浮出来 / 他点的小灯泡)、翻过来、填了哪个词
+      else if (k === 'hint' && m.e === 'show') { notes.push({ t, kind: 'hint', chip: '提示', text: (m.why === 'tap' ? '他点了「不知道怎么说?」:' : '没出声,提示卡浮出来:') + String(m.zh ?? '') }); marks.push({ t, kind: 'hint', label: '提示卡' }); }
+      else if (k === 'hint' && m.e === 'flip' && m.v) notes.push({ t, kind: 'hint', chip: '提示', text: '翻过来看英文:' + String(m.en ?? '') });
+      else if (k === 'hint' && m.e === 'fill') notes.push({ t, kind: 'hint', chip: '提示', text: '填了 ' + String(m.w ?? '') });
       continue;
     }
     if (k === 'state') {

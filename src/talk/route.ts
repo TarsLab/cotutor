@@ -21,6 +21,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AppContext, RouteResult } from '../server/app.ts';
 import type { ListItem } from './lib/used.ts';
+import { makeHint } from './hint.ts';
 import { readList, wordCardOf } from './list.ts';
 import { talkPage } from './page.ts';
 import { TALK_REEL_PAGE } from './reel-page.ts';
@@ -36,6 +37,8 @@ export interface TalkDeps {
   endpoint?: string;
   env?: NodeJS.ProcessEnv;
   onFinished?(id: string, why: string): void;
+  /** 打电话的提示卡(测试、探针换假的) */
+  hint?: typeof makeHint;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -162,7 +165,7 @@ export function makeTalkUpgrade(deps: TalkDeps = { readList }) {
       onBinary: (b) => call?.onAudio(b),
       onClose: () => call?.onSocketClose(),
     });
-    call = new TalkCall(meta, sock, { root: ws.root, config: cfg, kidName: ws.config.kid.name ?? '', env: deps.env, endpoint: deps.endpoint, now: ctx.now, onFinished: (why) => deps.onFinished?.(id, why) });
+    call = new TalkCall(meta, sock, { root: ws.root, config: cfg, kidName: ws.config.kid.name ?? '', env: deps.env, endpoint: deps.endpoint, now: ctx.now, onFinished: (why) => deps.onFinished?.(id, why), hint: deps.hint });
     void call.start();
     return true;
   };
@@ -173,7 +176,9 @@ const fakeReadList: typeof readList = async () => {
   await new Promise((r) => setTimeout(r, 800));
   return { ok: true, list: { words: [{ en: 'red', zh: '红色', emoji: '🔴' }], sentences: [{ en: 'It is a red car.', zh: '这是一辆红色的车。' }] }, model: 'fake', ms: 800 };
 };
-/** 探针用:COTUTOR_TALK_ENDPOINT 指向假 realtime(tests/_fake-realtime.ts),COTUTOR_TALK_FAKE_LIST 换假的读口语单,不花钱 */
-const PROBE_DEPS: TalkDeps = { readList: process.env.COTUTOR_TALK_FAKE_LIST ? fakeReadList : readList, ...(process.env.COTUTOR_TALK_ENDPOINT ? { endpoint: process.env.COTUTOR_TALK_ENDPOINT, env: { ...process.env, DASHSCOPE_API_KEY: process.env.DASHSCOPE_API_KEY ?? 'sk-probe' } } : {}) };
+/** 探针用的假提示卡:老师说什么都回同一张 */
+const fakeHint: typeof makeHint = async () => ({ hint: { zh: '说一说:它是什么颜色的?', en: "It's ___.", opts: ['red'] }, by: 'model' });
+/** 探针用:COTUTOR_TALK_ENDPOINT 指向假 realtime(tests/_fake-realtime.ts),COTUTOR_TALK_FAKE_LIST 换假的读口语单与提示卡,不花钱 */
+const PROBE_DEPS: TalkDeps = { readList: process.env.COTUTOR_TALK_FAKE_LIST ? fakeReadList : readList, ...(process.env.COTUTOR_TALK_FAKE_LIST ? { hint: fakeHint } : {}), ...(process.env.COTUTOR_TALK_ENDPOINT ? { endpoint: process.env.COTUTOR_TALK_ENDPOINT, env: { ...process.env, DASHSCOPE_API_KEY: process.env.DASHSCOPE_API_KEY ?? 'sk-probe' } } : {}) };
 export const talkRoute = makeTalkRoute(PROBE_DEPS);
 export const talkUpgrade = makeTalkUpgrade(PROBE_DEPS);

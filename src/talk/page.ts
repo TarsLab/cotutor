@@ -152,6 +152,28 @@ ${SNAP_CSS}
   #kid .tk-av > .face { position:relative; width:116px; height:116px; border-radius:50%; background:#fff; display:grid; place-items:center; box-shadow:0 2px 10px rgba(0,0,0,.08); }
   #kid .tk-tt { width:100%; max-width:976px; padding:18px 28px; border-radius:22px; background:#fff; border:1px solid var(--line); font-size:30px; font-weight:700; line-height:1.3; min-height:84px; }
   #kid .tk-tt .zh { display:block; font-size:17px; font-weight:400; color:var(--dim); margin-top:4px; }
+  /* 提示卡(《口语课设计.md》拍板 16):字幕卡角上的小灯泡;卡正面中文,翻过来英文句型带空,点词填进去;不出声 */
+  #kid .tk-ttw { position:relative; width:100%; max-width:976px; }
+  #kid .tk-bulb { position:absolute; right:14px; bottom:-20px; display:inline-flex; align-items:center; gap:6px; height:42px; padding:0 16px; border-radius:21px; background:#fff8e6; border:1.5px solid #efcf7a; color:#7a5b12; font-size:15px; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  #kid .tk-hc { width:100%; max-width:640px; margin-top:22px; padding:16px 20px; border-radius:22px; background:#fff8e6; border:2px solid #efcf7a; box-shadow:0 6px 18px rgba(201,154,42,.15); text-align:left; animation:tk-up .25s ease-out; }
+  @keyframes tk-up { from { transform:translateY(8px); opacity:0; } to { transform:none; opacity:1; } }
+  #kid .tk-hc .fr { display:flex; align-items:center; gap:16px; width:100%; text-align:left; }
+  #kid .tk-hc .ic { width:52px; height:52px; border-radius:26px; background:#fde9b0; color:#9a6b00; display:grid; place-items:center; flex:none; }
+  #kid .tk-hc .fr b { display:block; font-size:22px; line-height:1.3; }
+  #kid .tk-hc .fr small { display:block; font-size:15px; color:#7a5b12; margin-top:2px; }
+  #kid .tk-hc .bh { display:flex; align-items:center; gap:8px; }
+  #kid .tk-hc .bh span { flex:1; font-size:15px; color:#7a5b12; }
+  #kid .tk-hc .flip { width:44px; height:44px; border-radius:22px; display:grid; place-items:center; color:#9a6b00; flex:none; }
+  #kid .tk-hc .pat { display:flex; justify-content:center; align-items:baseline; flex-wrap:wrap; gap:4px 10px; font-family:"Chalkboard SE","Comic Sans MS","Marker Felt",sans-serif; font-size:38px; line-height:1.3; margin:2px 0 12px; }
+  #kid .tk-hc .bl { min-width:120px; text-align:center; border-bottom:3px dashed #c99a2a; color:var(--sc-ink); }
+  #kid .tk-hc .ops { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+  #kid .tk-hc .op { display:inline-flex; align-items:center; gap:8px; min-height:48px; padding:0 18px; border-radius:24px; background:#fff; border:1.5px solid var(--line); font-family:"Chalkboard SE","Comic Sans MS","Marker Felt",sans-serif; font-size:24px; }
+  #kid .tk-hc .op.on { border-color:#c99a2a; box-shadow:0 0 0 3px #efcf7a66; }
+  /* 卡出来时头像缩小,iPad 横着一屏放得下(字幕、卡、孩子那句、单词卡、底部条) */
+  #kid.hinting .tk-av { width:76px; height:76px; } #kid.hinting .tk-av > .face { width:60px; height:60px; } #kid.hinting .tk-av > .face > .tfav { font-size:24px; }
+  #kid.hinting .mid { gap:10px; }
+  @media (max-height:760px) { #kid.hinting .tk-av { display:none; } #kid.hinting .tk-hc { margin-top:20px; padding:12px 18px; } #kid.hinting .tk-hc .pat { font-size:32px; margin-bottom:8px; } }
+  @media (prefers-reduced-motion: reduce) { #kid .tk-hc { animation:none; } }
   #kid #k-heard2 { align-self:flex-end; max-width:80%; margin-right:max(0px, calc((100% - 976px) / 2)); }
   #kid .tk-words { width:100%; max-width:976px; display:flex; gap:10px; overflow-x:auto; padding:4px 2px 8px; margin-top:auto; scrollbar-width:none; }
   #kid .tk-words::-webkit-scrollbar { display:none; }
@@ -227,7 +249,8 @@ ${SNAP_CSS}
   </div>
   <div class="mid" id="k-chat" hidden>
     <div class="tk-av" id="k-av"><i class="o1"></i><i class="o2"></i><span class="face"><svg style="color:var(--sc)" width="84" height="84" viewBox="0 0 48 48" aria-hidden="true"><path d="M40.4 12.5A20 20 0 1 0 40.4 35.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><text x="24" y="30" text-anchor="middle" font-size="15" font-weight="700" fill="currentColor">英</text></svg></span></div>
-    <div class="tk-tt" id="k-tt"></div>
+    <div class="tk-ttw"><div class="tk-tt" id="k-tt"></div><button class="tk-bulb" type="button" id="k-bulb" hidden><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"/></svg>不知道怎么说?</button></div>
+    <div class="tk-hc" id="k-hc" hidden></div>
     <div class="heard" id="k-heard2"></div>
     <div class="tk-words" id="k-words"></div>
   </div>
@@ -517,6 +540,8 @@ __WORD_DRAW_JS__
   }
   // ---- 跟我读:现在轮到谁(服务端的 rd 说了算,lib/read-flow.ts) ----
   const ICON_SPK = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>';
+  const ICON_BULB = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"/></svg>';
+  const ICON_FLIP = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/></svg>';
   const ICON_MIC = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
   /** 只读一遍(拍板 15):老师读完轮到孩子;5 秒没出声转成 wait,老师不再读,「再听一遍」亮一下;没有倒计时的圈 */
   function renderRd(st) {
@@ -537,7 +562,7 @@ __WORD_DRAW_JS__
   /** reel = 录像模式:不开麦、不连,声音是替身(老师在不在出声照录像的时段),消息由录像喂进 C.handle */
   function makeCall(id, reel, A0, opened) {
     const A = reel ? { play() {}, flush() {}, close() {}, open: async () => {}, playing: () => Boolean(RL) && tkIn(RL.r.playing, RL.t), muted: true, onChunk: null, onLevel: null } : (A0 || makeAudio());
-    const C = { id, ws: null, st: null, deadline: null, saying: false, tutorLine: '', tutorDone: true, interrupt: false, timer: null, ended: false, startedAt: 0 };
+    const C = { id, ws: null, st: null, deadline: null, saying: false, tutorLine: '', tutorDone: true, interrupt: false, timer: null, ended: false, startedAt: 0, hint: null, hs: null, hintAt: 0, lastPlayAt: 0, lastKidAt: 0 };
     const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/talk/' + id + '/ws';
     C.send = (o) => { if (C.ws && C.ws.readyState === 1) C.ws.send(JSON.stringify(o)); };
     C.start = async () => {
@@ -549,7 +574,7 @@ __WORD_DRAW_JS__
         if (C.st.phase === 'read') { if (!A.playing()) C.ws.send(ab); return; }
         if (C.st.phase === 'chat') { if (C.interrupt || !A.playing()) C.ws.send(ab); }
       };
-      A.onLevel = (v) => { const rb = document.querySelectorAll('#k-rd .lv2 i'); for (let i = 0; i < rb.length; i++) { const w = 1 - Math.abs(i - 2) / 3; rb[i].style.height = Math.round(6 + 22 * Math.min(1, v * 6) * w) + 'px'; } const bars = $('#k-lv').children; const k = Math.min(1, v * 6); for (let i = 0; i < bars.length; i++) { const w = 1 - Math.abs(i - 2) / 3; bars[i].style.height = Math.round(6 + 22 * k * w) + 'px'; } if (C.st && C.st.phase === 'chat') { const you = !A.playing() && !C.saying; $('#k-av').classList.toggle('listen', k > 0.12 && you); $('#k-call').classList.toggle('you', you); $('#k-callst').textContent = you ? '轮到你说' : C.saying ? '在念这个词…' : (C.interrupt ? '老师在说,想插嘴就直接说' : '老师在说,等她说完你再说'); } };
+      A.onLevel = (v) => { const rb = document.querySelectorAll('#k-rd .lv2 i'); for (let i = 0; i < rb.length; i++) { const w = 1 - Math.abs(i - 2) / 3; rb[i].style.height = Math.round(6 + 22 * Math.min(1, v * 6) * w) + 'px'; } const bars = $('#k-lv').children; const k = Math.min(1, v * 6); for (let i = 0; i < bars.length; i++) { const w = 1 - Math.abs(i - 2) / 3; bars[i].style.height = Math.round(6 + 22 * k * w) + 'px'; } if (C.st && C.st.phase === 'chat') { const you = !A.playing() && !C.saying; if (you && k > 0.12) C.lastKidAt = Date.now(); $('#k-av').classList.toggle('listen', k > 0.12 && you); $('#k-call').classList.toggle('you', you); $('#k-callst').textContent = you ? '轮到你说' : C.saying ? '在念这个词…' : (C.interrupt ? '老师在说,想插嘴就直接说' : '老师在说,等她说完你再说'); } };
       setHint('接通中…');
       const ws = new WebSocket(wsUrl); ws.binaryType = 'arraybuffer'; C.ws = ws;
       ws.onopen = () => { A.muted = false; C.startedAt = Date.now(); setHint(''); C.timer = setInterval(C.tick, 500); C.view(); };
@@ -566,7 +591,8 @@ __WORD_DRAW_JS__
       if (m.t === 'state') { const was = C.st && C.st.phase; C.st = m; if (m.phase === 'chat' && m.deadline !== null) C.deadline = m.deadline; C.interrupt = Boolean(m.interrupt); if (m.phase === 'chat' && was !== 'chat') { A.flush(); C.tutorLine = ''; C.tutorDone = true; $('#k-tt').textContent = ''; $('#k-heard2').textContent = ''; } if (m.phase !== 'ended') renderState(m); }
       else if (m.t === 'tutor') {
         // 一次回答一行:上一句 done 了,下一句的第一截来时从头记
-        if (m.done !== undefined) { C.tutorLine = m.done; C.tutorDone = true; } else { if (C.tutorDone) { C.tutorLine = ''; C.tutorDone = false; } C.tutorLine += m.delta; }
+        // 老师说下一句了:上一句的提示卡收起(孩子照着卡读的时候不收,老师接话才收)
+        if (m.done !== undefined) { C.tutorLine = m.done; C.tutorDone = true; } else { if (C.tutorDone) { C.tutorLine = ''; C.tutorDone = false; C.hintClear(); } C.tutorLine += m.delta; }
         const en = C.tutorLine.replace(/[\\u4e00-\\u9fff].*$/, '').trim() || C.tutorLine;
         const zh = C.tutorLine.slice(en.length).trim();
         if (C.st && C.st.phase === 'chat') $('#k-tt').replaceChildren(en, ...(zh && zh !== C.tutorLine ? [h('span', { class: 'zh' }, zh)] : []));
@@ -574,12 +600,19 @@ __WORD_DRAW_JS__
       }
       else if (m.t === 'kid') { const chat = C.st && C.st.phase === 'chat'; (chat ? $('#k-heard2') : $('#k-heard')).replaceChildren(h('span', { class: 'muted' }, chat ? '你说的:' : '你读的'), h('span', {}, m.text)); }
       else if (m.t === 'card') lightCard(m.i);
+      else if (m.t === 'hint') { C.hint = m; C.hs = { shown: false, flipped: false, fill: null, auto: false }; C.hintAt = nowMs(); $('#k-bulb').hidden = false; C.hintRender(); }
       else if (m.t === 'flush') A.flush();
       else if (m.t === 'err') setHint(m.msg);
       else if (m.t === 'end') { if (!reel) C.finish(m.why); }
     };
     C.tick = () => {
       if (!C.st) return;
+      // 提示卡(拍板 16):老师说完、孩子 4 秒没出声,自己浮出来一次(录像里照记下的放)
+      if (!reel && C.st.phase === 'chat') {
+        const now = Date.now();
+        if (A.playing() || C.saying) C.lastPlayAt = now;
+        if (C.hint && C.hs && !C.hs.shown && !C.hs.auto && now - Math.max(C.lastPlayAt, C.lastKidAt, C.hintAt) >= 4000) { C.hs.auto = true; C.hintAct({ e: 'show', why: 'auto' }); }
+      }
       // 打电话不显示剩下几分钟(拍板 18):右上角只写「打电话」,计时在服务端
       if (C.st.phase === 'read') setHint(C.st.rd && C.st.rd.mode === 'listen' ? '读完停一下就好' : '');
       else if (C.st.phase === 'chat') setHint(A.playing() ? '' : '说完停一下老师就接');
@@ -609,6 +642,30 @@ __WORD_DRAW_JS__
       };
       go();
     };
+    /** 提示卡:正面中文,点一下翻过来是英文句型带空,点词填进去;出来、翻面、填词都记进录像(孩子端发 {t:'hint'}) */
+    C.hintRender = () => {
+      const el = $('#k-hc'), m = C.hint, st = C.hs;
+      const on = Boolean(m && st && st.shown);
+      el.hidden = !on; kidEl.classList.toggle('hinting', on);
+      if (!on) return;
+      if (!st.flipped) {
+        el.replaceChildren(h('button', { class: 'fr', type: 'button', on: { click: () => C.hintAct({ e: 'flip', v: true }) } }, h('span', { class: 'ic', html: ICON_BULB }), h('span', { style: 'flex:1' }, h('b', {}, m.zh), h('small', {}, '点一下,看英文怎么说')), h('span', { class: 'flip', html: ICON_FLIP })));
+        return;
+      }
+      const parts = m.en.split('___');
+      const pat = h('div', { class: 'pat' }, ...(parts.length === 2 ? [parts[0].trim() ? h('span', {}, parts[0].trim()) : null, h('span', { class: 'bl' }, st.fill || ' '), parts[1].trim() ? h('span', { style: /^[.?!,]/.test(parts[1].trim()) ? 'margin-left:-8px' : null }, parts[1].trim()) : null] : [h('span', {}, m.en)]));
+      const words = K ? K.meta.list.words : [];
+      const ops = parts.length === 2 && m.opts.length ? h('div', { class: 'ops' }, ...m.opts.map((w) => { const it = words.find((x) => x.en === w); return h('button', { class: 'op' + (st.fill === w ? ' on' : ''), type: 'button', on: { click: () => C.hintAct({ e: 'fill', w }) } }, it && it.emoji ? h('span', {}, it.emoji) : null, w); })) : null;
+      el.replaceChildren(h('div', { class: 'bh' }, h('span', {}, '你可以这样说'), h('button', { class: 'flip', type: 'button', 'aria-label': '翻回中文', html: ICON_FLIP, on: { click: () => C.hintAct({ e: 'flip', v: false }) } })), pat, ops);
+    };
+    /** 一下动作 → 屏上(录像模式只走这个) */
+    C.hintUi = (e) => {
+      if (!C.hint || !C.hs || (e.n && e.n !== C.hint.n)) return;
+      if (e.e === 'show') C.hs.shown = true; else if (e.e === 'hide') C.hs.shown = false; else if (e.e === 'flip') C.hs.flipped = Boolean(e.v); else if (e.e === 'fill') C.hs.fill = e.w;
+      C.hintRender();
+    };
+    C.hintAct = (e) => { if (!C.hint) return; const x = Object.assign({ t: 'hint', n: C.hint.n }, e, e.e === 'show' || e.e === 'flip' ? { zh: C.hint.zh, en: C.hint.en } : {}); C.hintUi(x); C.send(x); };
+    C.hintClear = () => { C.hint = null; C.hs = null; $('#k-bulb').hidden = true; C.hintRender(); };
     C.hangup = (why) => { C.send({ t: 'bye' }); C.finish(why || 'bye'); };
     C.finish = (why) => {
       if (C.ended) return; C.ended = true;
@@ -626,7 +683,7 @@ __WORD_DRAW_JS__
     $('#k-start').hidden = false; $('#k-read').hidden = true; $('#k-chat').hidden = true; $('#k-bar').hidden = true; $('#k-bar2').hidden = true; setHint('');
     cardI = -1; cardGrid = null; lastMode = ''; wordsBuilt = false; $('#k-words').replaceChildren(); $('#k-card').replaceChildren();
     $('#k-chip').textContent = '跟我读'; $('#k-chip').className = 'chip plum'; $('#k-dots').replaceChildren(); $('#k-heard').textContent = ''; $('#k-heard2').textContent = '';
-    $('#k-tt').textContent = ''; $('#k-say').textContent = ''; $('#k-av').className = 'tk-av'; $('#k-call').className = 'tk-call';
+    $('#k-tt').textContent = ''; $('#k-say').textContent = ''; $('#k-hc').hidden = true; $('#k-bulb').hidden = true; $('#k-av').className = 'tk-av'; $('#k-call').className = 'tk-call';
   }
   async function kid(id) {
     kidReset();
@@ -656,6 +713,7 @@ __WORD_DRAW_JS__
   $('#k-next').addEventListener('click', () => { if (call) { $('#k-next').disabled = true; $('#k-heard').textContent = ''; call.send({ t: 'next' }); } });
   $('#k-skip').addEventListener('click', () => { if (call) call.send({ t: 'chat' }); });
   $('#k-hang').addEventListener('click', () => { if (call) call.hangup('bye'); });
+  $('#k-bulb').addEventListener('click', () => { if (call && call.hint) call.hintAct({ e: 'show', why: 'tap' }); });
 
   // ---- 录像模式:轨道是 lib/reel.ts(tkBuild / tkClock / tkCaption,内联在下面);把手照《家长录像设计.md》的录像栏(reel-dock.ts) ----
 __TALK_REEL_JS__
@@ -664,7 +722,7 @@ __TALK_REEL_JS__
   const reelApply = (t) => {
     if (t < RL.at) { kidReset(); RL.C = makeCall(REEL_ID, true); RL.C.startedAt = 0; RL.k = 0; }
     const msgs = RL.r.msgs;
-    while (RL.k < msgs.length && msgs[RL.k][0] <= t) { const x = msgs[RL.k++]; RL.t = x[0]; if (x[1] === 'o') RL.C.handle(x[2]); }
+    while (RL.k < msgs.length && msgs[RL.k][0] <= t) { const x = msgs[RL.k++]; RL.t = x[0]; if (x[1] === 'o') RL.C.handle(x[2]); else if (x[2] && x[2].t === 'hint') RL.C.hintUi(x[2]); }
     RL.t = t; RL.at = t;
     const C = RL.C;
     if (C.st) C.tick();

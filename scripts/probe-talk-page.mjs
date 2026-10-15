@@ -144,6 +144,18 @@ try {
   ok('聊:孩子的声音推上去了(老师放完才推),转写回来、老师接了', await untilFn(async () => (real || (c2.audio > 0 && c2.creates >= 2)) && heardRe.test(await sawKid('#k-heard2')), 100), JSON.stringify(real ? { kid: await sawKid('#k-heard2'), tutor: await evaluate(`document.querySelector('#k-tt').textContent`) } : { audio: c2.audio, creates: c2.creates, cancels: c2.cancels }));
 
   // ---- 挂断 → 回看 ----
+  // ---- 提示卡(拍板 16):老师说完一句,小灯泡「不知道怎么说?」出来;点了是正面中文,点一下翻过来英文句型带空,点词填进去 ----
+  ok('老师说完一句:小灯泡出来了', await until(`!document.querySelector('#k-bulb').hidden`, 60));
+  await click('#k-bulb');
+  const front = await evaluate(`(() => { const c = document.querySelector('#k-hc'); return !c.hidden && c.querySelector('.fr b') ? c.querySelector('.fr b').textContent : null; })()`);
+  await click('#k-hc .fr');
+  const back = await evaluate(`(() => { const c = document.querySelector('#k-hc'); return c.hidden ? null : { pat: c.querySelector('.pat') ? c.querySelector('.pat').textContent : '', ops: [...c.querySelectorAll('.op')].map((x) => x.textContent) }; })()`);
+  await click('#k-hc .op');
+  const filled = await evaluate(`(() => { const b = document.querySelector('#k-hc .bl'); return b ? b.textContent : null; })()`);
+  await sleep(400); await shot('talk-02b-hint');
+  const fits = await evaluate(`(() => { const top = document.querySelector('#k-tt').getBoundingClientRect().top, bot = document.querySelector('#k-call').getBoundingClientRect().bottom; return { ok: top >= 0 && bot <= innerHeight, top, bot, h: innerHeight }; })()`);
+  ok('卡出来了一屏放得下:字幕没被顶出去、底部条在屏里(矮屏头像收起)', fits.ok, JSON.stringify(fits));
+  ok('点小灯泡 → 正面中文;点一下 → 英文句型带空、能填 red;点 red 填进空里', front === '说一说:它是什么颜色的?' && back && back.pat.startsWith("It's") && back.ops.join() === '🔴red' && filled === 'red', JSON.stringify({ front, back, filled }));
   await click('#k-hang');
   ok('挂断 → 回首页(回放在家长端的记录里)', await until(`location.pathname === '/'`, 40), await evaluate(`location.href`));
   for (let i = 0; i < 30 && !(await (await fetch(`${base}/api/talk/${id}`)).json()).transcript; i++) await sleep(300);
@@ -158,7 +170,7 @@ try {
   const inF = (expr) => evaluate(`(() => { const w = document.querySelector('#rl-frame').contentWindow; const d = w.document; return (${expr}); })()`);
   ok('一进来停在最后一帧:打电话那一屏、单词卡在、章 3 个(跟我读两句 + 打电话)、不放', await inF(`!d.querySelector('#k-chat').hidden && d.querySelectorAll('#k-words .c-word').length === 1 && w.cotutorReel.chapters().length === 3 && !w.cotutorReel.get().playing`), await inF(`JSON.stringify({ chat: !d.querySelector('#k-chat').hidden, words: d.querySelectorAll('#k-words .c-word').length, ch: w.cotutorReel.chapters().map((c) => c.title) })`));
   const ev = await inF(`JSON.stringify(w.cotutorReel.events().map((e) => e.chip + ':' + e.text))`);
-  ok('经过:老师说的、孩子读的、点的「再听一遍」、讲到 red、换到打电话、挂断', ['读:', '点:点了「再听一遍」', '卡:讲到 red', '打电话:跟我读完了', '挂断:'].every((x) => ev.includes(x)), ev.slice(0, 300));
+  ok('经过:老师说的、孩子读的、点的「再听一遍」、讲到 red、换到打电话、提示卡(点的、翻过来、填了 red)、挂断', ['读:', '点:点了「再听一遍」', '卡:讲到 red', '打电话:跟我读完了', '提示:他点了「不知道怎么说?」', '提示:翻过来看英文', '提示:填了 red', '挂断:'].every((x) => ev.includes(x)), ev.slice(0, 300));
   const t1 = await inF(`w.cotutorReel.chapters()[0].p + 300`);
   ok('拖回开头:跟我读第一句,单词卡 red', await inF(`(w.cotutorReel.seekAt(${t1}), !d.querySelector('#k-read').hidden && d.querySelector('#k-card').dataset.en === 'red' && d.querySelector('#k-chat').hidden)`), await inF(`JSON.stringify({ read: !d.querySelector('#k-read').hidden, en: d.querySelector('#k-card').dataset.en })`));
   await click('#rl-play');

@@ -139,8 +139,9 @@ export class TalkCall {
         this.sock.sendBinary(pcm);
       },
       onTutorText: (delta, done) => {
-        if (done !== null) { this.note('tutor', done.trim()); this.send({ t: 'tutor', done: done.trim() }); if (this.phase === 'chat' && !this.closing) void this.hintFor(done.trim()); return; }
+        if (done !== null) { if (!this.lineOpen) this.lineN++; this.lineOpen = false; this.note('tutor', done.trim()); this.send({ t: 'tutor', done: done.trim() }); if (this.phase === 'chat' && !this.closing) void this.hintFor(done.trim()); return; }
         if (!delta) return;
+        if (!this.lineOpen) { this.lineOpen = true; this.lineN++; }
         this.send({ t: 'tutor', delta });
         if (this.phase === 'chat') this.litCards(delta);
       },
@@ -333,12 +334,14 @@ export class TalkCall {
     this.cue(chatOpenCue);
   }
 
-  /** 老师说完一句 → 提示卡(拍板 16);老师又说了下一句,旧的就不发了 */
-  private hintN = 0;
+  /** 老师第几句(一开口就算下一句)、这一句还在说 */
+  private lineN = 0;
+  private lineOpen = false;
+  /** 老师说完一句 → 提示卡(拍板 16);卡回来时老师已经开口说下一句了,旧的就不发(2026-10-15 真连看到:模型 1–2 秒回来,老师已经在说下一句) */
   private async hintFor(line: string): Promise<void> {
-    const n = ++this.hintN;
+    const n = this.lineN;
     const r = await (this.deps.hint ?? makeHint)(line, this.meta.list, { env: this.deps.env });
-    if (!r || this.ended || this.closing || this.phase !== 'chat' || n !== this.hintN) return;
+    if (!r || this.ended || this.closing || this.phase !== 'chat' || n !== this.lineN || this.lineOpen) return;
     this.send({ t: 'hint', n, zh: r.hint.zh, en: r.hint.en, opts: r.hint.opts, by: r.by });
   }
 

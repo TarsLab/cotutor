@@ -4,7 +4,8 @@
  * + 假的读口语单(COTUTOR_TALK_FAKE_LIST)+ 无头 Chrome(假麦克风放 say 念的一句英文)。走一遍:拍照屏 → 相册选一张 → 老师在看 → 口语单(改字、补、删)→ 开始跟读 → 跟我读(什么都不按)→ 聊 → 挂断回首页 → 家长看录像 → 接着上。
  * 逐项:页面连上、第一句 cue、跟我读不用按(老师放完就听、静了算读完、自己往下走)、老师的声音排进 AudioContext、再听一遍、开聊(第二条会话)、聊里孩子出声老师被掐、挂断后回看有字。
  * 用法:node scripts/probe-talk-page.mjs [--keep] [--real] [--out <截图目录>]
- *   --real 不起假百炼,真连 realtime(要本机的 key 与业务空间 id,一次几分钱):看不到服务端那头的事,只验页面上看得见的——声音放了、孩子的字回来了、聊起来了、回看有字。
+ *   --real 不起假百炼、不用假的读口语单与提示卡,全真连(要本机的 key 与业务空间 id,一次几毛钱):照片是现画的一页印刷体课本(Unit 3 Colours:red、It is a red car.),
+ *          omni 真读;读出来的多余项在页面上 × 掉,剩 red 和那一句再往下走;看不到服务端那头的事,只验页面上看得见的与落盘的(老师说的、孩子转写、提示卡)。
  */
 import { execFileSync } from 'node:child_process';
 import { probeDir, spawn } from './_guard.mjs';
@@ -44,7 +45,7 @@ cfg.talk = { enabled: true, minutes: 1 };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
 try { await fetch(`${base}/api/health`); console.error(`端口 ${port} 上已经有东西,先停掉`); process.exit(2); } catch {}
-const serveEnv = real ? { ...process.env, COTUTOR_WORKSPACE: wsRoot, COTUTOR_TALK_FAKE_LIST: '1' } : { ...process.env, COTUTOR_TALK_ENDPOINT: fake.endpoint, DASHSCOPE_API_KEY: 'sk-probe', COTUTOR_WORKSPACE: wsRoot, COTUTOR_TALK_FAKE_LIST: '1' };
+const serveEnv = real ? { ...process.env, COTUTOR_WORKSPACE: wsRoot } : { ...process.env, COTUTOR_TALK_ENDPOINT: fake.endpoint, DASHSCOPE_API_KEY: 'sk-probe', COTUTOR_WORKSPACE: wsRoot, COTUTOR_TALK_FAKE_LIST: '1' };
 const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', wsRoot, '--port', String(port), '--http'], { stdio: process.env.PROBE_LOG ? 'inherit' : 'ignore', env: serveEnv });
 for (let i = 0; i < 60; i++) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch {} await sleep(250); }
 
@@ -93,10 +94,34 @@ try {
   await shot('talk-00-snap');
   const doc = await send('DOM.getDocument', {});
   const pngAt = join(tmp, 'page.png');
-  writeFileSync(pngAt, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
+  if (real) {
+    // 真读:现画一页印刷体课本,截下来当照片(另开一个标签页画,不动这一页)
+    const tab = await (await fetch(`http://127.0.0.1:${cdp}/json/new?about:blank`, { method: 'PUT' })).json();
+    const tws = new WebSocket(tab.webSocketDebuggerUrl); await new Promise((r) => { tws.onopen = r; });
+    let tseq = 0; const tp = new Map(); tws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id && tp.has(m.id)) { tp.get(m.id)(m); tp.delete(m.id); } };
+    const tsend = (method, params = {}) => new Promise((r) => { const i = ++tseq; tp.set(i, r); tws.send(JSON.stringify({ id: i, method, params })); });
+    const page = '<body style="margin:0;background:#fdfcf7;font-family:Helvetica,Arial,sans-serif;color:#222"><div style="width:900px;height:1200px;padding:70px;box-sizing:border-box"><div style="font-size:30px;color:#c0392b;font-weight:bold">Unit 3</div><div style="font-size:64px;font-weight:bold;margin:10px 0 60px">Colours</div><div style="display:flex;align-items:center;gap:40px;margin-bottom:70px"><div style="width:180px;height:180px;border-radius:90px;background:#d9443a"></div><div style="font-size:80px;font-weight:bold">red</div></div><div style="font-size:52px">It is a red car.</div><div style="margin-top:420px;text-align:center;font-size:24px;color:#999">18</div></div></body>';
+    await tsend('Emulation.setDeviceMetricsOverride', { width: 900, height: 1200, deviceScaleFactor: 1, mobile: false });
+    await tsend('Page.navigate', { url: 'data:text/html;charset=utf-8,' + encodeURIComponent(page) }); await sleep(800);
+    writeFileSync(pngAt, Buffer.from((await tsend('Page.captureScreenshot', { format: 'png' })).result.data, 'base64'));
+    tws.close(); await fetch(`http://127.0.0.1:${cdp}/json/close/${tab.id}`);
+  } else writeFileSync(pngAt, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
   const lib = await send('DOM.querySelector', { nodeId: doc.result.root.nodeId, selector: '#p-lib' });
   await send('DOM.setFileInputFiles', { nodeId: lib.result.nodeId, files: [pngAt] });
   ok('选了照片:照片放左边,右边「老师在看这一页…」、浅灰占位、开始跟读点不了', await until(`document.querySelector('#pick').classList.contains('on') && document.querySelector('#p-title').textContent.includes('老师在看') && document.querySelectorAll('#p-words .tk-sk').length === 4 && document.querySelector('#p-go').disabled`, 20));
+  if (real) {
+    // 真读:等 omni 读完(最长 40 秒),读出来的照印出来;red 与那一句要在,多余的 × 掉
+    const readOk = await until(`document.querySelector('#p-title').textContent === '今天的口语单'`, 200);
+    const got = await evaluate(`JSON.stringify({ words: [...document.querySelectorAll('#p-words .tk-it')].map((x) => x.textContent), sents: [...document.querySelectorAll('#p-sents .tk-it')].map((x) => x.textContent), sub: document.querySelector('#p-sub').textContent, hash: location.hash })`);
+    const lm = (await (await fetch(`${base}/api/talk/${(JSON.parse(got).hash.split('/')[2] || '')}`)).json()).meta || {};
+    console.log('  omni 读出来的:' + JSON.stringify(lm.list) + '  用了 ' + lm.listMs + ' 毫秒' + (lm.listError ? '  错:' + lm.listError : ''));
+    ok('真读:omni 读完了,有 red、有 It is a red car.', readOk && (lm.list?.words || []).some((w) => w.en.toLowerCase() === 'red') && (lm.list?.sentences || []).some((x) => /red car/i.test(x.en)), got);
+    for (let i = 0; i < 12; i++) {
+      const sel = await evaluate(`(() => { const ws = [...document.querySelectorAll('#p-words .tk-it')]; const w = ws.findIndex((x) => x.querySelector('.en').textContent.toLowerCase() !== 'red'); if (w >= 0) return '#p-words .tk-it:nth-child(' + (w + 1) + ') .x'; const ss = [...document.querySelectorAll('#p-sents .tk-it')]; const k = ss.findIndex((x, j) => !/red car/i.test(x.querySelector('.en').textContent) || j > ss.findIndex((y) => /red car/i.test(y.querySelector('.en').textContent))); return k >= 0 ? '#p-sents .tk-it:nth-child(' + (k + 1) + ') .x' : null; })()`);
+      if (!sel) break;
+      await click(sel); await sleep(150);
+    }
+  }
   ok('读完原地填上:red(带 emoji、中文)与一句,地址换成 #/list/<id>', await until(`document.querySelector('#p-title').textContent === '今天的口语单' && document.querySelectorAll('#p-words .tk-it').length === 1 && document.querySelector('#p-words .tk-it .en').textContent === 'red' && document.querySelectorAll('#p-sents .tk-it').length === 1 && /^#\\/list\\/[^/]+$/.test(location.hash)`, 40));
   ok('开始跟读 · 2 个', await evaluate(`!document.querySelector('#p-go').disabled && document.querySelector('#p-go').textContent === '开始跟读 · 2 个'`));
   await shot('talk-01-list');
@@ -116,7 +141,8 @@ try {
   ok('开始跟读:不过开始屏,直接到跟读那一屏;胶囊挂英语老师、头像是他', await until(`document.querySelector('#kid').classList.contains('on') && document.querySelector('#k-start').hidden && /^#\\/kid\\//.test(location.hash) && (() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('.tfav .face'); })()`, 40));
   const id = await evaluate(`location.hash.split('/')[2]`);
   const meta = await (await fetch(`${base}/api/talk/${id}`)).json();
-  ok('口语单存上了(ready,孩子改过的:red 的中文是「红」,没有 blue)', meta.meta.listBy === 'parent' && meta.meta.list.words.length === 1 && meta.meta.list.words[0].zh === '红' && meta.meta.list.words[0].emoji === '🔴', JSON.stringify(meta.meta.list));
+  ok('口语单存上了(ready,孩子改过的:red 的中文是「红」,没有 blue;emoji 留着)', meta.meta.listBy === 'parent' && meta.meta.list.words.length === 1 && meta.meta.list.words[0].zh === '红' && (real ? Boolean(meta.meta.list.words[0].emoji) : meta.meta.list.words[0].emoji === '🔴'), JSON.stringify(meta.meta.list));
+  const sent = meta.meta.list.sentences[0];
 
   // ---- 孩子:跟我读(开始跟读那一下就开麦接上;不用按,《口语课设计.md》§8.1):假麦克风一直在念,老师放完就听、静了算读完、自己往下走 ----
   const heardRe = real ? /\S/ : /It's a red car\./;
@@ -127,8 +153,8 @@ try {
   ok('第 1 句是词:单词卡的四线三格(舞台那么大),没有中文', await evaluate(`!!document.querySelector('#k-card.c-word .wg svg .grid') && !document.querySelector('#k-card').textContent.includes('红色')`));
   ok('页面上没有「按住」', await evaluate(`!document.querySelector('#k-hold') && !document.querySelector('#kid').textContent.includes('按住')`));
   ok('老师放完:状态条轮到孩子', await until(`/listen|speech|heard/.test(document.querySelector('#k-rd').className)`, 60), await evaluate(`document.querySelector('#k-rd').className + ' ' + document.querySelector('#k-rd').textContent`));
-  ok('什么都不按:孩子读的推上去、静了 commit、转写回来、自动到第 2 句', await untilFn(async () => (real || c1.commits >= 1) && (await evaluate(`document.querySelector('#k-card').dataset.en === 'It is a red car.' && !!document.querySelector('#k-dots i.done')`)), 120), JSON.stringify(real ? await pageStats(evaluate) : { commits: c1.commits, audio: c1.audio, items: c1.items.map((i) => i.content[0].text) }));
-  ok('第 2 句是句子:点读卡的一行,带中文', await evaluate(`!!document.querySelector('#k-card .c-read .rd') && document.querySelector('#k-card').textContent.includes('这是一辆红色的车')`));
+  ok('什么都不按:孩子读的推上去、静了 commit、转写回来、自动到第 2 句', await untilFn(async () => (real || c1.commits >= 1) && (await evaluate(`document.querySelector('#k-card').dataset.en === ${JSON.stringify(sent.en)} && !!document.querySelector('#k-dots i.done')`)), 120), JSON.stringify(real ? await pageStats(evaluate) : { commits: c1.commits, audio: c1.audio, items: c1.items.map((i) => i.content[0].text) }));
+  ok('第 2 句是句子:点读卡的一行,带中文', await evaluate(`!!document.querySelector('#k-card .c-read .rd') && document.querySelector('#k-card').textContent.includes(${JSON.stringify(sent.zh)})`));
   if (!real) ok('读到了 → 老师接一两个词 + 下一句,一次回答', c1.items.some((i) => i.content[0].text === "孩子读了「It's a red car.」。先用一两个词接,再读下一个,这句:It is a red car."));
   await click('#k-again');
   if (!real) ok('点「再听一遍」→ 再读一遍的 cue', await untilFn(async () => c1.items.some((i) => i.content[0].text === '再读一遍这句:It is a red car.')));
@@ -145,23 +171,43 @@ try {
 
   // ---- 挂断 → 回看 ----
   // ---- 提示卡(拍板 16):老师说完一句,小灯泡「不知道怎么说?」出来;点了是正面中文,点一下翻过来英文句型带空,点词填进去 ----
-  ok('老师说完一句:小灯泡出来了', await until(`!document.querySelector('#k-bulb').hidden`, 60));
-  await click('#k-bulb');
-  const front = await evaluate(`(() => { const c = document.querySelector('#k-hc'); return !c.hidden && c.querySelector('.fr b') ? c.querySelector('.fr b').textContent : null; })()`);
-  await click('#k-hc .fr');
-  const back = await evaluate(`(() => { const c = document.querySelector('#k-hc'); return c.hidden ? null : { pat: c.querySelector('.pat') ? c.querySelector('.pat').textContent : '', ops: [...c.querySelectorAll('.op')].map((x) => x.textContent) }; })()`);
-  await click('#k-hc .op');
-  const filled = await evaluate(`(() => { const b = document.querySelector('#k-hc .bl'); return b ? b.textContent : null; })()`);
-  await sleep(400); await shot('talk-02b-hint');
-  const fits = await evaluate(`(() => { const top = document.querySelector('#k-tt').getBoundingClientRect().top, bot = document.querySelector('#k-call').getBoundingClientRect().bottom; return { ok: top >= 0 && bot <= innerHeight, top, bot, h: innerHeight }; })()`);
-  ok('卡出来了一屏放得下:字幕没被顶出去、底部条在屏里(矮屏头像收起)', fits.ok, JSON.stringify(fits));
-  ok('点小灯泡 → 正面中文;点一下 → 英文句型带空、能填 red;点 red 填进空里', front === '说一说:它是什么颜色的?' && back && back.pat.startsWith("It's") && back.ops.join() === '🔴red' && filled === 'red', JSON.stringify({ front, back, filled }));
+  // 真连时假麦克风一直念同一句,老师多半只回「Nice!」不再提问(不是问话不出卡,对的);等不到小灯泡就以落盘里发过的卡为准
+  const bulb = await until(`!document.querySelector('#k-bulb').hidden`, real ? 120 : 60);
+  if (real && !bulb) console.log('  (这一段老师没再提问,小灯泡没出来;提示卡看下面落盘的)');
+  else {
+    ok('老师说完一句:小灯泡出来了', bulb);
+    // 老师接下一句时卡会收起(拍板 16),点到一半收了就等下一张再来,最多三次
+    const tap = async (sel) => { const at = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`); if (!at) return false; await mouse('mousePressed', at); await mouse('mouseReleased', at); return true; };
+    let front = null, back = null, filled = null;
+    for (let k = 0; k < 3; k++) {
+      if (!(await until(`!document.querySelector('#k-bulb').hidden`, 60))) break;
+      if (!(await tap('#k-bulb'))) continue;
+      front = await evaluate(`(() => { const c = document.querySelector('#k-hc'); return !c.hidden && c.querySelector('.fr b') ? c.querySelector('.fr b').textContent : null; })()`);
+      if (!front || !(await tap('#k-hc .fr'))) continue;
+      back = await evaluate(`(() => { const c = document.querySelector('#k-hc'); return c.hidden || !c.querySelector('.pat') ? null : { pat: c.querySelector('.pat').textContent, ops: [...c.querySelectorAll('.op')].map((x) => x.textContent) }; })()`);
+      if (!back) continue;
+      if (back.ops.length && !(await tap('#k-hc .op'))) continue;
+      filled = await evaluate(`(() => { const b = document.querySelector('#k-hc .bl'); return b ? b.textContent : null; })()`);
+      if (!back.ops.length || filled) break;
+    }
+    await sleep(400); await shot('talk-02b-hint');
+    const fits = await evaluate(`(() => { const top = document.querySelector('#k-tt').getBoundingClientRect().top, bot = document.querySelector('#k-call').getBoundingClientRect().bottom; return { ok: top >= 0 && bot <= innerHeight, top, bot, h: innerHeight }; })()`);
+    ok('卡出来了一屏放得下:字幕没被顶出去、底部条在屏里(矮屏头像收起)', fits.ok, JSON.stringify(fits));
+    if (real) ok('真的提示卡:点小灯泡 → 正面中文;翻过来是英文;有空就能填词', Boolean(front) && back && /[a-z]/i.test(back.pat) && (!back.ops.length || Boolean(filled && filled.trim())), JSON.stringify({ front, back, filled }));
+    else ok('点小灯泡 → 正面中文;点一下 → 英文句型带空、能填 red;点 red 填进空里', front === '说一说:它是什么颜色的?' && back && back.pat.startsWith("It's") && back.ops.join() === '🔴red' && filled === 'red', JSON.stringify({ front, back, filled }));
+  }
   await click('#k-hang');
   ok('挂断 → 回首页(回放在家长端的记录里)', await until(`location.pathname === '/'`, 40), await evaluate(`location.href`));
   for (let i = 0; i < 30 && !(await (await fetch(`${base}/api/talk/${id}`)).json()).transcript; i++) await sleep(300);
   const after = await (await fetch(`${base}/api/talk/${id}`)).json();
   ok('落盘:done、why bye、用到的词', after.meta.status === 'done' && after.transcript.why === 'bye' && after.hasKidAudio && after.hasTutorAudio && (real || after.transcript.used.words[0].kid >= 1), JSON.stringify({ why: after.transcript?.why, used: after.transcript?.used, usage: after.transcript?.usage }));
-  if (real) console.log('老师说过的:\n' + after.transcript.lines.filter((l) => l.who === 'tutor').map((l) => '  ' + l.text).join('\n') + '\n孩子转写:\n' + after.transcript.lines.filter((l) => l.who === 'kid').map((l) => '  ' + l.text).join('\n'));
+  if (real) console.log('老师说过的:\n' + after.transcript.lines.filter((l) => l.who === 'tutor').map((l) => '  [' + l.phase + '] ' + l.text).join('\n') + '\n孩子转写:\n' + after.transcript.lines.filter((l) => l.who === 'kid').map((l) => '  [' + l.phase + '] ' + l.text).join('\n'));
+  if (real) {
+    const reel = JSON.parse(readFileSync(join(wsRoot, 'talk', id, 'reel.json'), 'utf8'));
+    const hs = reel.msgs.filter((m) => m[1] === 'o' && m[2].t === 'hint').map((m) => m[2]);
+    console.log('提示卡(真的):\n' + hs.map((x) => '  [' + x.by + '] ' + x.zh + '  ' + x.en + (x.opts.length ? '  [' + x.opts.join(', ') + ']' : '')).join('\n'));
+    ok('真的提示卡:聊那段发过,至少一张是模型现出的', hs.length > 0 && hs.some((x) => x.by === 'model'), JSON.stringify(hs.map((x) => x.by)));
+  }
   if (!real) ok('两条 realtime 会话都关了', c1.closed && c2.closed);
 
   // ---- 家长:看录像(《口语课设计.md》§8.3:录下的消息喂回孩子那一屏,声音是 call.wav) ----
@@ -170,7 +216,8 @@ try {
   const inF = (expr) => evaluate(`(() => { const w = document.querySelector('#rl-frame').contentWindow; const d = w.document; return (${expr}); })()`);
   ok('一进来停在最后一帧:打电话那一屏、单词卡在、章 3 个(跟我读两句 + 打电话)、不放', await inF(`!d.querySelector('#k-chat').hidden && d.querySelectorAll('#k-words .c-word').length === 1 && w.cotutorReel.chapters().length === 3 && !w.cotutorReel.get().playing`), await inF(`JSON.stringify({ chat: !d.querySelector('#k-chat').hidden, words: d.querySelectorAll('#k-words .c-word').length, ch: w.cotutorReel.chapters().map((c) => c.title) })`));
   const ev = await inF(`JSON.stringify(w.cotutorReel.events().map((e) => e.chip + ':' + e.text))`);
-  ok('经过:老师说的、孩子读的、点的「再听一遍」、讲到 red、换到打电话、提示卡(点的、翻过来、填了 red)、挂断', ['读:', '点:点了「再听一遍」', '卡:讲到 red', '打电话:跟我读完了', '提示:他点了「不知道怎么说?」', '提示:翻过来看英文', '提示:填了 red', '挂断:'].every((x) => ev.includes(x)), ev.slice(0, 300));
+  const want = real ? ['读:', '点:点了「再听一遍」', '打电话:跟我读完了', '挂断:'].concat(bulb ? ['提示:他点了「不知道怎么说?」'] : []) : ['读:', '点:点了「再听一遍」', '卡:讲到 red', '打电话:跟我读完了', '提示:他点了「不知道怎么说?」', '提示:翻过来看英文', '提示:填了 red', '挂断:'];
+  ok('经过:老师说的、孩子读的、点的「再听一遍」、讲到 red、换到打电话、提示卡(点的、翻过来、填了 red)、挂断', want.every((x) => ev.includes(x)), ev.slice(0, 300));
   const t1 = await inF(`w.cotutorReel.chapters()[0].p + 300`);
   ok('拖回开头:跟我读第一句,单词卡 red', await inF(`(w.cotutorReel.seekAt(${t1}), !d.querySelector('#k-read').hidden && d.querySelector('#k-card').dataset.en === 'red' && d.querySelector('#k-chat').hidden)`), await inF(`JSON.stringify({ read: !d.querySelector('#k-read').hidden, en: d.querySelector('#k-card').dataset.en })`));
   await click('#rl-play');

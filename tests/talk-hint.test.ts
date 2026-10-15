@@ -1,6 +1,6 @@
 /**
  * 打电话的提示卡(《口语课设计.md》拍板 16,src/talk/hint.ts),不花钱:
- * 模型回的 → 卡(只收口语单上的词、一个空、空和词对得上);不是问话 → 不出;兜底从口语单挑最沾的一句;
+ * 模型回的 → 卡(只收口语单上的词、最多一个空;有空没词可填也收,他自己说);不是问话 → 不出;兜底只在问话时、从口语单挑有词重合的一句;
  * 对一个假的千问:不想、提示词带老师这句与口语单;回坏的、超时、没 key → 兜底。
  */
 import { createServer } from 'node:http';
@@ -18,8 +18,9 @@ const list = {
   check('模型回的 → 卡:空统一成三个下划线、opts 只收口语单上的词(大小写照口语单、去重,blue 不在单上丢掉)', ok !== null && ok !== 'skip' && ok.en === `It's ${BLANK}.` && JSON.stringify(ok.opts) === '["red","yellow"]' && ok.zh.startsWith('说一说'), JSON.stringify(ok));
   check('不是问话 → skip', parseHint('{"skip": true}', list) === 'skip');
   check('整句、没有空 → opts 清空', JSON.stringify(parseHint('{"zh":"说一说:你好","en":"Hello!","opts":["red"]}', list)) === JSON.stringify({ zh: '说一说:你好', en: 'Hello!', opts: [] }));
-  check('有空但没有能填的词 → 不出;两个空 → 不出;不是 JSON、缺字段、英文里没有字母 → 不出',
-    parseHint('{"zh":"说一说","en":"It\'s ___.","opts":["blue"]}', list) === null && parseHint('{"zh":"说一说","en":"___ and ___.","opts":["red"]}', list) === null
+  check('有空、口语单上没有能填的词 → 收下(他自己说:I am ___ years old.),opts 空', JSON.stringify(parseHint('{"zh":"说一说:你几岁?","en":"I am ___ years old.","opts":["seven"]}', list)) === JSON.stringify({ zh: '说一说:你几岁?', en: 'I am ___ years old.', opts: [] }));
+  check('两个空 → 不出;不是 JSON、缺字段、英文里没有字母 → 不出',
+    parseHint('{"zh":"说一说","en":"___ and ___.","opts":["red"]}', list) === null
     && parseHint('看不懂', list) === null && parseHint('{"en":"Hi"}', list) === null && parseHint('{"zh":"说一说","en":"___","opts":["red"]}', list) === null);
   const p = hintPrompt("What colour is the bus?", list);
   check('提示词:老师这句、口语单的单词与中文、句子、skip 与 JSON 的样子', p.includes('What colour is the bus?') && p.includes('red(红色)') && p.includes('I can see a red bus.') && p.includes('"skip": true') && p.includes(BLANK));
@@ -29,7 +30,7 @@ const list = {
 {
   const fb = fallbackHint('Can you see a bus?', list);
   check('兜底:口语单上和老师这句最沾的一句,中文写成「说一说:…」', fb !== null && fb.en === 'I can see a red bus.' && fb.zh === '说一说:我看见一辆红色的公共汽车。' && fb.opts.length === 0, JSON.stringify(fb));
-  check('兜底:都不沾就第一句;没有句子就不出', fallbackHint('Hello Ray!', list)?.en === 'What colour is it?' && fallbackHint('Hi', { words: list.words, sentences: [] }) === null);
+  check('兜底:一个实词都不沾、没有句子、不是问话(没有问号)都不出(How old are you? 不配 It is a red car.)', fallbackHint('How old are you?', list) === null && fallbackHint('What is it?', list) === null && fallbackHint('Hi?', { words: list.words, sentences: [] }) === null && fallbackHint('Great job! Red is a bright color.', list) === null && fallbackHint('Is the bus red?', list)?.en === 'I can see a red bus.');
 }
 
 // ---- 问一次 ----

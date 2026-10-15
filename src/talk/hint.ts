@@ -1,7 +1,7 @@
 /**
  * 打电话的提示卡(《口语课设计.md》拍板 16):老师在聊那段每说完一句,问一次 qwen3.8-flash——孩子要回答,可以怎么说;
  * 回一张卡:正面中文(说一说:…),翻过来英文句型带一个空(It's ___.),空下面是口语单上能填的词。老师这句不是在问他(夸、打招呼、再见)就不出卡。
- * 模型没回来(没 key、超时、回的不对)就从口语单挑一句和老师这句最沾的当卡。卡不出声;孩子什么时候看到由孩子端定(4 秒没出声,或点小灯泡)。
+ * 模型没回来(没 key、超时、回的不对)、老师这句又是问话(带问号),就从口语单挑一句和老师这句最沾的当卡;不是问话不兜底(猜错了比没有卡更乱)。卡不出声;孩子什么时候看到由孩子端定(4 秒没出声,或点小灯泡)。
  * 不抛:出错都当没有,不挡通话。
  */
 import { chatUrl, qianwenKeys, qianwenLine } from '../lib/qianwen.ts';
@@ -9,7 +9,8 @@ import { wordsOf } from './lib/read-flow.ts';
 import type { TalkList } from './lib/used.ts';
 
 export const HINT_MODEL = 'qwen3.8-flash';
-export const HINT_TIMEOUT_MS = 4000;
+/** 孩子静了 4 秒卡才浮出来,老师的声音还在放:6 秒回来都赶得上(2026-10-15 真连,qwen3.8-flash 多在 0.5–1.8 秒,偶尔 4 秒多) */
+export const HINT_TIMEOUT_MS = 6000;
 /** 句型里的空 */
 export const BLANK = '___';
 
@@ -30,9 +31,10 @@ export function hintPrompt(line: string, list: TalkList): string {
     `今天的口语单:${w ? `单词 ${w}` : ''}${w && s ? ';' : ''}${s ? `句子 ${s}` : ''}`,
     '孩子不知道怎么回答时,给他一张提示卡:',
     '- zh:一句中文,告诉他要说什么,以「说一说:」开头,16 个字以内(说一说:公共汽车是什么颜色的?);',
-    `- en:他照着能说的一句简单英文,6 个词以内;要他自己挑的那个词写成 ${BLANK},只留一个空;不用挑就写整句;`,
+    `- en:他回答老师的一句简单英文(是他的回答,不是把老师的问题再说一遍),6 个词以内;要他自己挑的那个词写成 ${BLANK},只留一个空;不用挑就写整句;`,
     '- opts:能填进空里的词,只从口语单的单词里挑,2 到 4 个;没有空就是 []。',
-    '老师这句不是在问他(只是夸他、打招呼、说再见)就回 {"skip": true}。',
+    '老师问了他(带问号,或者请他说、请他讲)就一定出卡;口语单上的词用不上就写一句他能答的简单整句,opts 是 []。',
+    '老师这句没有在问他、也没有请他说什么(只是夸他、接他的话、重复一遍、打招呼、说再见)就回 {"skip": true}。',
     `只回一个 JSON,不要别的字:{"zh":"说一说:它是什么颜色的?","en":"It's ${BLANK}.","opts":["red","yellow"]}`,
   ].join('\n');
 }
@@ -53,22 +55,23 @@ export function parseHint(text: string, list: TalkList): Hint | 'skip' | null {
   const opts = [...new Set((Array.isArray(o.opts) ? o.opts : []).map((x) => (typeof x === 'string' ? known.get(x.trim().toLowerCase()) : undefined)).filter((x): x is string => Boolean(x)))].slice(0, 4);
   const blanks = en.split(BLANK).length - 1;
   if (blanks > 1) return null;
-  // 有空没词可填:空换成第一个词也说不通,不如不出;有词没空:词丢掉
-  if (blanks === 1 && !opts.length) return null;
+  // 有词没空:词丢掉;有空没词可填(I am ___ years old.):留着,他自己说(2026-10-15 真连看到的)
   if (blanks === 0) return { zh, en, opts: [] };
   en = en.replace(BLANK, ` ${BLANK} `).replace(/\s+/g, ' ').replace(/ ([.?!,])/g, '$1').trim();
   return { zh, en, opts };
 }
 
-/** 兜底:口语单上和老师这句最沾的一句(没有沾的就第一句);没有句子就不出 */
+/** 兜底:老师这句是问话(带问号)才出,口语单上和它最沾的一句;一个词都不沾就不出(How old are you? 配 It is a red car. 是答非所问) */
+const SMALL = new Set(['a', 'an', 'the', 'is', 'it', 'you', 'i', 'do', 'does', 'what', 'can', 'are', 'am', 'to', 'of', 'this', 'that', 'yes', 'no']);
 export function fallbackHint(line: string, list: TalkList): Hint | null {
-  if (!list.sentences.length) return null;
-  const said = new Set(wordsOf(line));
-  let best = list.sentences[0], score = -1;
+  if (!list.sentences.length || !/[?？]/.test(line)) return null;
+  const said = new Set(wordsOf(line).filter((w) => !SMALL.has(w)));
+  let best = list.sentences[0], score = 0;
   for (const s of list.sentences) {
     const n = wordsOf(s.en).filter((w) => said.has(w)).length;
     if (n > score) { best = s; score = n; }
   }
+  if (!score) return null;
   return { zh: best.zh ? `说一说:${best.zh}` : '照着说一说', en: best.en, opts: [] };
 }
 

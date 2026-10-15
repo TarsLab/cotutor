@@ -8,7 +8,7 @@
  * 用法:node scripts/probe-xlaoshi.mjs [服务地址] [workspace 根]
  *   XLAOSHI_WAV=<16k 单声道 wav> 当麦克风的声音(不给就是 Chrome 的假哔声)
  */
-import { spawn } from 'node:child_process';
+import { spawn } from './_guard.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';

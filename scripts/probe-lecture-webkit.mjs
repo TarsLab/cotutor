@@ -9,7 +9,7 @@
  * 用法:PLAYWRIGHT_CORE=<含 node_modules/playwright-core 的目录> node scripts/probe-lecture-webkit.mjs [截图.png]
  */
 import { createRequire } from 'node:module';
-import { spawn } from 'node:child_process';
+import { spawn } from './_guard.mjs';
 import { fileURLToPath } from 'node:url';
 import { LOUD, SILENT_SPEECH } from './_quiet.mjs';
 const require = createRequire(import.meta.url);

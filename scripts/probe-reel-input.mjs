@@ -9,9 +9,8 @@
  *
  * 用法:node scripts/probe-reel-input.mjs [--out <截图目录>] [--keep](留下 mock)
  */
-import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { probeDir, spawn } from './_guard.mjs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
@@ -44,7 +43,7 @@ const FAKE = `(() => {
   window.fetch = (url, init) => { if (String(url).endsWith('/play') && init && init.body) { try { window.__play.push(...JSON.parse(init.body).records); } catch {} } return f(url, init); };
 })();`;
 
-const tmp = mkdtempSync(join(tmpdir(), 'cotutor-probe-reel-input-'));
+const tmp = probeDir('cotutor-probe-reel-input-');
 const shots = outAt > 0 ? process.argv[outAt + 1] : join(tmp, 'shots');
 mkdirSync(shots, { recursive: true });
 const mock = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'mock', '--port', String(port), '--http', '--delay', '0'], { stdio: 'ignore', detached: keep });

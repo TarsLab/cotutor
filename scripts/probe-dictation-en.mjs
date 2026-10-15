@@ -8,9 +8,8 @@
  *
  * 用法:node scripts/probe-dictation-en.mjs [--out <截图目录>] [--keep](留下 mock)
  */
-import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { probeDir, spawn } from './_guard.mjs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
@@ -31,7 +30,7 @@ const ok = (name, cond, detail = '') => { if (!cond) fails++; console.log(`${con
 const mock = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'mock', '--port', String(port), '--http', '--delay', '0'], { stdio: 'ignore', detached: keep });
 for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch {} await sleep(250); }
 
-const home = mkdtempSync(join(tmpdir(), 'cotutor-probe-dictation-en-'));
+const home = probeDir('cotutor-probe-dictation-en-');
 const browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(home, 'chrome')}`, `${base}/`], { stdio: 'ignore' });
 try {
   let wsUrl = null;

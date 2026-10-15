@@ -7,9 +7,8 @@
  *
  * 用法:node scripts/probe-avatar.mjs [--shots <目录>] [--keep]
  */
-import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { probeDir, spawn } from './_guard.mjs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
@@ -24,7 +23,7 @@ const base = `https://127.0.0.1:${port}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0;
 const ok = (name, cond, detail = '') => { if (!cond) fails++; console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`); };
-const tmp = mkdtempSync(join(tmpdir(), 'cotutor-probe-avatar-'));
+const tmp = probeDir('cotutor-probe-avatar-');
 const shots = arg('--shots') ?? join(tmp, 'shots');
 mkdirSync(shots, { recursive: true });
 

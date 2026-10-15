@@ -5,10 +5,9 @@
  * 本仓不装 playwright:借一份 playwright-core 和它配套的 WebKit(见 probe-lecture-webkit.mjs)。
  * 用法:PLAYWRIGHT_CORE=<含 node_modules/playwright-core 的目录> node scripts/probe-talk-webkit.mjs
  */
-import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { probeDir, spawn } from './_guard.mjs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,7 +24,7 @@ const ok = (name, cond, detail = '') => { if (!cond) bad++; console.log(`${cond 
 const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
 const { initWorkspace } = await import(join(repo, 'src', 'cli', 'init.ts'));
 const fake = await startFakeRealtime();
-const tmp = mkdtempSync(join(tmpdir(), 'cotutor-probe-talk-webkit-'));
+const tmp = probeDir('cotutor-probe-talk-webkit-');
 const wsRoot = join(tmp, 'ws');
 await initWorkspace({ slug: 'probe', name: 'Ray', dir: wsRoot });
 const cfgFile = join(wsRoot, 'cotutor.json');

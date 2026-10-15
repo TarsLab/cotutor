@@ -7,9 +7,8 @@
  *
  * 用法:node scripts/probe-parent.mjs [--out <截图目录>] [--keep](留下 mock)
  */
-import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { probeDir, spawn } from './_guard.mjs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
@@ -24,7 +23,7 @@ const base = `http://127.0.0.1:${port}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ok = (name, cond, detail = '') => console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`);
 
-const tmp = mkdtempSync(join(tmpdir(), 'cotutor-probe-parent-'));
+const tmp = probeDir('cotutor-probe-parent-');
 const shots = outAt > 0 ? process.argv[outAt + 1] : join(tmp, 'shots');
 mkdirSync(shots, { recursive: true });
 

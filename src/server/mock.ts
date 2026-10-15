@@ -9,7 +9,7 @@
  * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有开场与接着昨天的按钮,数学老师有开场,英语老师没写(补一张);
  * 发消息带 via 时照真服务的规则换成按钮上的字、定话题。
  */
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { createServer as createHttp, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttps } from 'node:https';
@@ -648,8 +648,15 @@ export function createMock(opts: MockOptions = {}): Mock {
   };
   const mockHomeId = (): string => `${yesterday()}-2130`;
   let dictationRoot: string | null = null;
+  // 听写的暂存放临时目录,进程退出时删掉(不删每起一次 mock 留一个,攒到上千个)
+  const dictationDir = (): string => {
+    if (dictationRoot) return dictationRoot;
+    const dir = (dictationRoot = mkdtempSync(join(tmpdir(), 'cotutor-mock-dictation-')));
+    process.once('exit', () => rmSync(dir, { recursive: true, force: true }));
+    return dir;
+  };
   const dictationDeps = (): DictationDeps => ({
-    root: (dictationRoot ??= mkdtempSync(join(tmpdir(), 'cotutor-mock-dictation-'))),
+    root: dictationDir(),
     now,
     card: async (home, n) => {
       if (home !== mockHomeId()) return null;

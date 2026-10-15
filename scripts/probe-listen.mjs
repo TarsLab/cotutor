@@ -8,9 +8,9 @@
  *   omni 没听出字、也没有识别 → 「没听清」,不发。
  * 用法:node scripts/probe-listen.mjs [--audio x.wav] [--keep]
  */
-import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { probeDir, spawn } from './_guard.mjs';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
@@ -26,7 +26,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let bad = 0;
 const ok = (name, cond, detail = '') => { if (!cond) bad++; console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`); };
 
-const tmp = mkdtempSync(join(tmpdir(), 'cotutor-probe-listen-'));
+const tmp = probeDir('cotutor-probe-listen-');
 let wav = ai > 0 ? process.argv[ai + 1] : null;
 if (!wav) {
   // 句子前后留白:假麦克风循环放,按住的那几秒里要有一整句

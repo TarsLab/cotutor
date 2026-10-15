@@ -6,9 +6,9 @@
  * 用法:node scripts/probe-talk-page.mjs [--keep] [--real] [--out <截图目录>]
  *   --real 不起假百炼,真连 realtime(要本机的 key 与业务空间 id,一次几分钱):看不到服务端那头的事,只验页面上看得见的——声音放了、孩子的字回来了、聊起来了、回看有字。
  */
-import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { probeDir, spawn } from './_guard.mjs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
@@ -27,7 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let bad = 0;
 const ok = (name, cond, detail = '') => { if (!cond) bad++; console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`); };
 
-const tmp = mkdtempSync(join(tmpdir(), 'cotutor-probe-talk-'));
+const tmp = probeDir('cotutor-probe-talk-');
 // 假麦克风:循环放一句英文(前后留白,让 VAD 判得出停)
 execFileSync('say', ['-r', '150', '-o', join(tmp, 'say.aiff'), '[[slnc 500]] It is a red car. [[slnc 1500]]']);
 execFileSync('afconvert', ['-f', 'WAVE', '-d', 'LEI16@16000', '-c', '1', join(tmp, 'say.aiff'), join(tmp, 'say.wav')]);

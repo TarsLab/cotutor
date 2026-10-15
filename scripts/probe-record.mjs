@@ -8,7 +8,7 @@
  * 用法:node scripts/probe-record.mjs [页面 URL] [--wav <16k 或任意格式的录音>] [--shots <目录>]
  *   缺省 http://127.0.0.1:8790/?tutor=koubo-tutor&step=0.0&stage=0.1(先给口播老师发一条消息,mock 里第一节就有了)
  */
-import { spawn } from 'node:child_process';
+import { spawn } from './_guard.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';

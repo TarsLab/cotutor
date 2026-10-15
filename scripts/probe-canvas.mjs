@@ -7,7 +7,7 @@
  * 用法:node scripts/probe-canvas.mjs [页面 URL]
  *   缺省 http://127.0.0.1:8790/?tutor=chinese-tutor&step=2.1&stage=2.1(mock 里语文老师第三节的画板卡;先发两条消息把节推到那里)
  */
-import { spawn } from 'node:child_process';
+import { spawn } from './_guard.mjs';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
 
 const url = process.argv[2] ?? 'http://127.0.0.1:8790/?tutor=chinese-tutor&step=2.1&stage=2.1';

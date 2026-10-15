@@ -10,9 +10,8 @@
  *
  * 用法:node scripts/probe-lecture.mjs [--shots <目录>] [--keep]
  */
-import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { probeDir, spawn } from './_guard.mjs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
@@ -26,7 +25,7 @@ const cdp = 9341;
 const base = `https://127.0.0.1:${port}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ok = (name, cond, detail = '') => console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`);
-const tmp = mkdtempSync(join(tmpdir(), 'cotutor-probe-lecture-'));
+const tmp = probeDir('cotutor-probe-lecture-');
 const shots = arg('--shots') ?? join(tmp, 'shots');
 mkdirSync(shots, { recursive: true });
 

@@ -7,7 +7,7 @@
  *
  * 用法:node scripts/probe-voices.mjs [--base http://127.0.0.1:5180] [--shots <目录>] [--keep-voice](不改回去)
  */
-import { spawn } from 'node:child_process';
+import { spawn } from './_guard.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';

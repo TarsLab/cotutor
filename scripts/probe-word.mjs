@@ -7,9 +7,8 @@
  *
  * 用法:node scripts/probe-word.mjs [--out <截图目录>] [--keep](留下 mock)
  */
-import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { probeDir, spawn } from './_guard.mjs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
@@ -25,7 +24,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let bad = 0;
 const ok = (name, cond, detail = '') => { if (!cond) bad++; console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`); };
 
-const tmp = mkdtempSync(join(tmpdir(), 'cotutor-probe-word-'));
+const tmp = probeDir('cotutor-probe-word-');
 const shots = outAt > 0 ? process.argv[outAt + 1] : join(tmp, 'shots');
 mkdirSync(shots, { recursive: true });
 

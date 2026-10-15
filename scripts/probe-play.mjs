@@ -6,9 +6,8 @@
  *
  * 用法:node scripts/probe-play.mjs [--keep](留下 mock)
  */
-import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { probeDir, spawn } from './_guard.mjs';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
@@ -32,7 +31,7 @@ const TAP = `(() => {
   navigator.sendBeacon = (url, data) => { if (String(url).endsWith('/play')) data.text().then((t) => window.__play.push(JSON.parse(t))); return b ? b(url, data) : true; };
 })();`;
 
-const tmp = mkdtempSync(join(tmpdir(), 'cotutor-probe-play-'));
+const tmp = probeDir('cotutor-probe-play-');
 const mock = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'mock', '--port', String(port), '--http', '--delay', '0'], { stdio: 'ignore', detached: keep });
 for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch {} await sleep(250); }
 

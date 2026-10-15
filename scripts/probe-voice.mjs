@@ -7,9 +7,8 @@
  *
  * 用法:node scripts/probe-voice.mjs [--keep](留下 mock)
  */
-import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { probeDir, spawn } from './_guard.mjs';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
@@ -40,7 +39,7 @@ const FAKE_SR = `(() => {
   window.fetch = (url, init) => { if (String(url).endsWith('/messages') && init && init.body) window.__sent.push(JSON.parse(init.body)); return f(url, init); };
 })();`;
 
-const tmp = mkdtempSync(join(tmpdir(), 'cotutor-probe-voice-'));
+const tmp = probeDir('cotutor-probe-voice-');
 const mock = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'mock', '--port', String(port), '--http', '--delay', '0'], { stdio: 'ignore', detached: keep });
 for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch {} await sleep(250); }
 

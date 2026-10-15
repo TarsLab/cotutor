@@ -9,9 +9,8 @@
  *
  * 用法:node scripts/probe-photo.mjs [--keep](留下临时 workspace 与 serve 不杀,自己再看)[--shots <目录>](发照片屏:刚打开 / 裁剪中 / 编辑完配了话 三张截图)
  */
-import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { probeDir, spawn } from './_guard.mjs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUIET_ARGS, quiet } from './_quiet.mjs';
@@ -28,7 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ok = (name, cond, detail = '') => console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`);
 
 // ---- 临时 workspace:假 CLI 当老师、端口 8792 ----
-const home = mkdtempSync(join(tmpdir(), 'cotutor-probe-photo-'));
+const home = probeDir('cotutor-probe-photo-');
 const root = join(home, 'ws');
 const run = (args, opts = {}) => new Promise((resolve, reject) => { const p = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), ...args], { env: { ...process.env, HOME: home, COTUTOR_WORKSPACE: '' }, stdio: 'pipe', ...opts }); let out = ''; p.stdout.on('data', (d) => (out += d)); p.stderr.on('data', (d) => (out += d)); p.on('exit', (c) => (c === 0 ? resolve(out) : reject(new Error(out)))); });
 await run(['init', 'probe', '--dir', root, '--name', '小探']);

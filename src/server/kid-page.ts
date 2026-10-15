@@ -50,7 +50,6 @@ const PAGE = `<!doctype html>
 <meta name="apple-mobile-web-app-title" content="__SHORT__">
 <meta name="theme-color" content="#faf9f4">
 <link rel="manifest" href="__MANIFEST__">
-<link rel="apple-touch-icon" href="/icon-180.png">
 ${faviconLinks()}
 <link rel="stylesheet" href="/kid/theme.css">
 <title>__TITLE__</title>

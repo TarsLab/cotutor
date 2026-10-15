@@ -5,7 +5,7 @@
  */
 import { deflateSync } from 'node:zlib';
 
-/** 页面上给出的尺寸:180 = apple-touch-icon,192 / 512 = manifest */
+/** 给得出的尺寸:192 / 512 进 manifest(主屏幕从这里取);180 是 apple-touch-icon 的尺寸,页面不再引——Safari 标签有它就不用网页图标(《产品规划.md》拍板 20),路由留着给老的主屏幕快捷方式 */
 export const ICON_SIZES = [180, 192, 512] as const;
 
 type RGB = readonly [number, number, number];

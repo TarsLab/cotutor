@@ -6,9 +6,11 @@
  * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
@@ -30,6 +32,8 @@ import { qrPage, type ListenInfo } from './qr-page.ts';
 import { kidPage } from './kid-page.ts';
 import { kidHomeView, messageVia, resolveVia } from './home.ts';
 import { DEV_PAGE } from './dev-page.ts';
+import { devOverview } from './dev-overview.ts';
+import { doctorWorkspace } from '../cli/doctor.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
 import { listenOmni, type Transcribe } from './listen.ts';
@@ -107,6 +111,16 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
   };
   return ctx;
 }
+
+/** 服务起来的时刻与版本:工作台侧栏「起了多久 · v」 */
+const STARTED = new Date().toISOString();
+const VERSION = ((): string | null => {
+  try {
+    return (JSON.parse(readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8')) as { version: string }).version;
+  } catch {
+    return null;
+  }
+})();
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
 
@@ -663,7 +677,13 @@ export async function route(method: string, path: string, ctx: AppContext, body?
   const url = new URL(path, 'http://x');
   const p = url.pathname;
   try {
-    if (p === '/api/health') return { status: 200, json: { ok: true, configError: ctx.configError } };
+    if (p === '/api/health') return { status: 200, json: { ok: true, configError: ctx.configError, started: STARTED, version: VERSION } };
+    // 工作台概览(《工作台设计.md》):近七天的轮数、今天各老师、用量、要看一眼的轮次;体检 = doctor 不带 --live(不花钱)
+    if (p === '/api/dev/overview' && method === 'GET') return { status: 200, json: await devOverview(ws) };
+    if (p === '/api/dev/doctor' && method === 'POST') {
+      const r = await doctorWorkspace(ws.root, { live: false });
+      return { status: 200, json: { ok: r.ok, at: new Date().toISOString(), checks: r.checks.map((c) => ({ name: c.name, ok: c.ok, required: c.required, detail: redactHome(c.detail), fix: c.fix })) } };
+    }
     if (p === '/api/workspace' && method === 'GET') return { status: 200, json: workspaceReport(ws) };
     if (p === '/api/config') {
       if (method === 'GET') {
@@ -671,6 +691,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           status: 200,
           json: {
             title: ws.config.title,
+            root: redactHome(ws.root),
             kid: ws.config.kid,
             server: ws.config.server,
             runtime: ws.config.runtimes.default,

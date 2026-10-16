@@ -16,6 +16,8 @@ const { ConversationIndexSchema } = await import('../src/schema/conversation.ts'
 const { devOverview, SLOW_FIRST_MS } = await import('../src/server/dev-overview.ts');
 const { localDate } = await import('../src/lib/conversation.ts');
 const { DEV_PAGE } = await import('../src/server/dev-page.ts');
+const { qrPage } = await import('../src/server/qr-page.ts');
+const { VOICE_TEST_PAGE } = await import('../src/server/voice-test-page.ts');
 const { DEV_CSS } = await import('../src/server/dev-theme.ts');
 
 try {
@@ -68,7 +70,7 @@ try {
   check('POST /api/dev/doctor:不带 --live 的体检', dr.status === 200 && (dr.json as { checks: { name: string }[] }).checks.some((k) => k.name === 'workspace'));
 
   check('页面:侧栏五个标签,概览打头', ['overview', 'chat', 'team', 'voices', 'settings'].every((t) => DEV_PAGE.includes(`data-tab="${t}"`)) && DEV_PAGE.indexOf('data-tab="overview"') < DEV_PAGE.indexOf('data-tab="chat"') && DEV_PAGE.includes('<aside id="side">'));
-  check('工作台页面用共用色板', DEV_PAGE.includes(DEV_CSS));
+  check('工作台三页共用一份色板', [DEV_PAGE, qrPage('t', { name: 'https://m.local:5180/', ip: 'https://192.168.1.9:5180/', https: true }), VOICE_TEST_PAGE].every((p) => p.includes(DEV_CSS)));
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

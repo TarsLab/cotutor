@@ -2,9 +2,10 @@
  * `/voice-test`:按住说话的试验页(给家长 / 开发者在真机上试,不是孩子端)。
  * 同一个浏览器识别,换着策略按:松手怎么停、continuous、要不要旁边再开一路麦克风画真波形;
  * 每次按住的事件时间线当场列出来,也发到 /api/kid/voice-diag(where: 'test',带 cfg;照旧不带字与声音)。
- * 内联脚本里不写反斜杠、不写模板字符串(见 CLAUDE.md「坑」)。
+ * 内联脚本里不写反斜杠、不写模板字符串(见 CLAUDE.md「坑」)。样子用工作台的色板(dev-theme.ts),下面的短名只是它的别名。
  */
 import { faviconLinks } from '../lib/favicon.ts';
+import { DEV_CSS } from './dev-theme.ts';
 
 export const VOICE_TEST_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -12,28 +13,29 @@ export const VOICE_TEST_PAGE = `<!doctype html>
 ${faviconLinks()}
 <title>按住说话 · 试验</title>
 <style>
-  :root { --ink:#1d2433; --dim:#6b7488; --line:#e3e7ef; --bg:#f6f7fa; --blue:#3b82e8; --ok:#2fa36b; --bad:#d9534f; }
-  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); font:16px/1.5 -apple-system,"PingFang SC",sans-serif; }
+${DEV_CSS}
+  :root { --dim:var(--muted); --bg:var(--ground); --blue:var(--accent); --bad:var(--err); }
+  * { -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); font:16px/1.5 var(--sans); }
   body { display:flex; flex-direction:column; -webkit-user-select:none; user-select:none; }
   header { padding:14px 16px 6px; }
-  h1 { margin:0; font-size:19px; }
+  h1 { margin:0; font-size:22px; font-weight:650; }
   header small { color:var(--dim); }
   #cfg { display:flex; flex-wrap:wrap; gap:8px 18px; padding:8px 16px 12px; border-bottom:1px solid var(--line); }
   #cfg .g { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   #cfg .g > b { font-size:13px; color:var(--dim); font-weight:500; margin-right:2px; }
-  #cfg button { font:inherit; font-size:14px; padding:6px 12px; border-radius:16px; border:1px solid var(--line); background:#fff; color:var(--ink); }
-  #cfg button.on { background:var(--blue); border-color:var(--blue); color:#fff; }
+  #cfg button { font:inherit; font-size:13.5px; padding:6px 12px; border-radius:999px; border:0; box-shadow:0 0 0 1px var(--line); background:var(--surface); color:var(--ink); }
+  #cfg button.on { background:var(--ink); box-shadow:none; color:#fff; }
   #sum { padding:8px 16px; font-size:14px; color:var(--dim); border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
   #sum b { color:var(--ink); }
-  #sum button { margin-left:auto; font:inherit; font-size:13px; padding:4px 10px; border-radius:12px; border:1px solid var(--line); background:#fff; color:var(--dim); }
+  #sum button { margin-left:auto; font:inherit; font-size:13px; padding:4px 10px; border-radius:8px; border:0; box-shadow:0 0 0 1px var(--line); background:var(--surface); color:var(--dim); }
   #log { flex:1; min-height:0; overflow:auto; padding:10px 16px; display:flex; flex-direction:column; gap:8px; -webkit-overflow-scrolling:touch; }
-  .row { background:#fff; border:1px solid var(--line); border-left:4px solid var(--dim); border-radius:10px; padding:8px 12px; font-size:13px; }
-  .row.ok { border-left-color:var(--ok); } .row.bad { border-left-color:var(--bad); }
+  .row { background:var(--surface); border-radius:var(--r-item); padding:9px 13px; font-size:13px; }
+  .row.ok .hd b { color:var(--ok); } .row.bad .hd b { color:var(--bad); }
   .row .hd { display:flex; gap:8px; align-items:baseline; font-size:14px; }
   .row .hd b { font-size:15px; } .row .hd small { color:var(--dim); margin-left:auto; }
   .row .tx { font-size:16px; margin:2px 0; }
-  .row .ev { color:var(--dim); font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-word; }
+  .row .ev { color:var(--dim); font-family:var(--mono); font-size:12px; word-break:break-word; }
   .row .ev em { font-style:normal; color:var(--bad); }
   #live { padding:10px 16px 0; min-height:64px; text-align:center; }
   #state { font-size:15px; color:var(--dim); }
@@ -41,8 +43,8 @@ ${faviconLinks()}
   #wave { display:flex; align-items:center; justify-content:center; gap:3px; height:44px; }
   #wave i { width:4px; height:4px; border-radius:2px; background:var(--blue); opacity:.35; }
   #wave.on i { opacity:1; }
-  #btn { margin:8px 16px calc(env(safe-area-inset-bottom) + 16px); height:72px; border-radius:36px; background:var(--blue); color:#fff; font-size:19px; display:flex; align-items:center; justify-content:center; touch-action:none; }
-  #btn.down { background:#2f6fd6; transform:scale(.98); }
+  #btn { margin:8px 16px calc(env(safe-area-inset-bottom) + 16px); height:72px; border-radius:36px; background:var(--blue); color:#fff; font-size:19px; font-weight:600; display:flex; align-items:center; justify-content:center; touch-action:none; }
+  #btn.down { background:var(--accent-hover); transform:scale(.98); }
   #btn.tail { background:var(--dim); }
   #btn.off { background:var(--line); color:var(--dim); }
 </style></head><body>

@@ -67,7 +67,7 @@ for (const s of SHIPPED_SKILLS) {
   const dir = skillSourceDir(s as { name: string; source: 'cotutor' | 'drawtell' });
   need(dir !== null && existsSync(join(dir, 'SKILL.md')), `${s.source} 里没有 ${s.name}/SKILL.md(${dir ?? '解析不到包'})`);
 }
-need(existsSync(FONTS_DIR), `node_modules 里没有 excalidraw 的字体目录(${FONTS_DIR});/stage/fonts/ 会 404,舞台里中文字形回退`);
+need(existsSync(FONTS_DIR), `dist/stage/fonts/ 与 node_modules 的 excalidraw 里都没有字体目录(${FONTS_DIR});/stage/fonts/ 会 404,舞台里中文字形回退`);
 
 // 6. 依赖不能带 link:(link 的包发出去装不上)
 const deps = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }).dependencies;

@@ -80,9 +80,14 @@ try {
   const font = await get('/stage/fonts/Xiaolai/Xiaolai-Regular-019d66dcad46dc156b162d267f981c20.woff2');
   // 字体目录是从 @excalidraw/excalidraw 的包入口**现解析**的,不是写死的 `<包根>/node_modules/`——
   // npm 扁平安装时依赖不在本包下,写死的话装出来的 /stage/fonts/ 全 404(2026-09-11 发版前用 tgz 装出来撞见)
-  const { FONTS_DIR } = await import('../src/server/stage.ts');
+  const { FONTS_DIR, fontsDir } = await import('../src/server/stage.ts');
   check('字体从 excalidraw 包里给,目录现解析', font.status === 200 && font.contentType === 'font/woff2' && font.file?.includes('@excalidraw') === true
     && FONTS_DIR === join(dirname(createRequire(import.meta.url).resolve('@excalidraw/excalidraw')), 'fonts') + sep, JSON.stringify(font));
+  // 部署包把字体拷进 dist/stage/fonts/、去掉 excalidraw 依赖(docs/wip/deploy/):舞台包里带了就用它
+  const fakeStage = mkdtempSync(join(tmpdir(), 'cotutor-stage-'));
+  mkdirSync(join(fakeStage, 'fonts'));
+  check('舞台包里带了字体就用它,不找 excalidraw', fontsDir(fakeStage) === join(fakeStage, 'fonts') + sep && fontsDir(join(fakeStage, 'nope')) === FONTS_DIR);
+  rmSync(fakeStage, { recursive: true, force: true });
   check('舞台包越界 / 不存在 404', (await get('/stage/../package.json')).status === 404 && (await get('/stage/nope.js')).status === 404 && (await get('/stage/fonts/../../package.json')).status === 404);
   check('课包:还没有 → 404', (await get('/api/bundles/2026-09-04-guilv5/scene.json')).status === 404);
   cpSync(fileURLToPath(new URL('./fixtures/bundles/2026-09-04-guilv5', import.meta.url)), join(root, 'bundles', '2026-09-04-guilv5'), { recursive: true });

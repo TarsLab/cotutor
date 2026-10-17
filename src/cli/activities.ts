@@ -137,6 +137,40 @@ export async function upgradeActivities(root: string, opts: { force?: string[] }
   return steps;
 }
 
+/**
+ * 只把一个出厂 activity 换回出厂那份(工作台「恢复出厂」,与 upgrade --force 老师/名 同一条路,但不碰别的):
+ * 现在那份和出厂不一样就先存 .bak。不是出厂的 → UsageError。返回 .bak 的路径(没存就是 null)
+ */
+export async function restoreActivity(root: string, tutor: string, name: string): Promise<{ bak: string | null }> {
+  const ref = (await shippedActivities()).find((a) => a.tutor === tutor && a.name === name);
+  if (!ref) throw new UsageError(`${tutor}/${name} 不是出厂的 activity,没有出厂那份可换`);
+  const manifest = await readManifest(root);
+  const file = activityFile(root, tutor, name);
+  const cur = await readFile(file, 'utf8').catch(() => null);
+  let bak: string | null = null;
+  if (cur !== null && cur !== (await readFile(ref.file, 'utf8'))) {
+    bak = `${file}.bak`;
+    await writeFile(bak, cur);
+  }
+  await installOne(root, ref, manifest);
+  await writeManifest(root, manifest);
+  return { bak };
+}
+
+/** 出厂那份的原文;不是出厂的 → null */
+export async function shippedActivityText(tutor: string, name: string): Promise<string | null> {
+  const ref = (await shippedActivities()).find((a) => a.tutor === tutor && a.name === name);
+  return ref ? readFile(ref.file, 'utf8') : null;
+}
+
+/** workspace 里一个 activity 现在的状态(出厂的看新旧;自家加的是 untracked) */
+export async function activityStatusOf(root: string, tutor: string, name: string): Promise<ActivityStatus> {
+  const ref = (await shippedActivities()).find((a) => a.tutor === tutor && a.name === name);
+  if (ref) return readState(root, ref, await readManifest(root));
+  const file = activityFile(root, tutor, name);
+  return { key: `${tutor}/${name}`, state: (await lstat(file).catch(() => null)) ? 'untracked' : 'missing', file };
+}
+
 export interface ActivityCheck {
   tutor: string;
   name: string;

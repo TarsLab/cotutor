@@ -27,6 +27,8 @@ import { tianzigeData } from './tianzige.ts';
 import { handleDictation, type DictationDeps } from '../dictation/route.ts';
 import type { PhotoItem, PhotoProgress, Recognize } from '../dictation/recognize.ts';
 import { lettersData } from './letters.ts';
+// 回给页面的形状直接用真服务的(app.ts):真接口加字段、改字段,这里不跟就红(2026-10-17;以前 mock 自己拼对象,motto 这种真服务没有的字段只在 mock 下显示)
+import type { KidDay, KidHistory, KidHome, KidTutor, Overview, OverviewThread, OverviewTutor } from './app.ts';
 
 /** 看完小课堂的第一问,mock 老师这样答:对着圈的地方说,放课里拆开那一捆的那一段(《小课堂设计.md》§六);视频的放轮着分那一段 */
 const MOCK_VIDEO_LECTURE_REPLY = [
@@ -65,7 +67,7 @@ import { weekOf, type CardStates } from '../lib/conversation.ts';
 import { lanAddresses, listenInfo } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { USER_CERT_DIR } from '../cli/workspace.ts';
-import { kidThreads } from '../lib/kid-view.ts';
+import { kidThreads, type KidMessage } from '../lib/kid-view.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { faviconResponse } from '../lib/favicon.ts';
 import { kidPage } from './kid-page.ts';
@@ -83,7 +85,6 @@ export interface MockTutor {
   display: string;
   subject: string;
   avatar: string;
-  motto: string;
   /** 每轮一节:老师会写的那种正文(段落 = 讲稿,围栏 = 卡),与真老师的样本同一种写法(tests/fixtures/board/) */
   script: string[];
   /** 打开页面时已经讲过的轮数(取脚本前几节) */
@@ -137,7 +138,6 @@ export const MOCK_TUTORS: MockTutor[] = [
     display: '语文老师',
     subject: '语文',
     avatar: '语',
-    motto: '故事里都有道理',
     preloaded: 1,
     firstQuestion: '画蛇添足是什么意思?',
     script: [
@@ -248,7 +248,6 @@ export const MOCK_TUTORS: MockTutor[] = [
     display: '数学老师',
     subject: '数学',
     avatar: '数',
-    motto: '不懂的都来问我',
     preloaded: 1,
     firstQuestion: '勾股定理是什么?',
     script: [
@@ -333,7 +332,6 @@ export const MOCK_TUTORS: MockTutor[] = [
     display: '英语老师',
     subject: '英语',
     avatar: '英',
-    motto: '一起大声读',
     preloaded: 0,
     firstQuestion: '',
     script: [
@@ -373,7 +371,6 @@ Which one do you want to try first, [apple], [banana], or [orange]? 你先读哪
     display: '口播老师',
     subject: '口播',
     avatar: '播',
-    motto: '一个字一个字来',
     preloaded: 0,
     firstQuestion: '',
     script: [
@@ -608,7 +605,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     return { ...section, cards: section.cards.map((c, n) => (c.kind !== 'paint' ? c : { ...c, props: { ...c.props, drawn: drawing ? 'drawing' : 'done', ...(drawing ? {} : { pic: `mock-paint/${m.job}-${n}.png` }), ...(parent ? { note: drawing ? '在画(mock)' : '画好了:qwen-image-2.0-pro,15 秒(mock 的占位图)' } : {}) } })) };
   };
   /** 下发孩子端的形状:答案剥掉、状态并到卡上、小课堂卡补那一段的起止(样本课包在仓库里) */
-  const kidMessage = async (m: MockMessage) => {
+  const kidMessage = async (m: MockMessage): Promise<KidMessage> => {
     const { states, action: _a, lectureWatch: _w, lectureLog: _l, ...rest } = m;
     if (rest.lecture?.marks) rest.lecture = { ...rest.lecture, marks: rest.lecture.marks.map(({ text: _t, ...k }) => k) };
     const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => (states && i in states ? { ...c, state: states[i] } : c)) } : null;
@@ -618,7 +615,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
   // 学科色同真服务:按老师的先后定(src/lib/tutor-color.ts)
   const colors = tutorColors(Object.fromEntries(MOCK_TUTORS.map((t) => [t.name, { subject: t.subject }])));
-  const tutorsJson = () => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], lang: subjectLang(t.subject), motto: t.motto, hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') }));
+  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') }));
   /** 小课堂:样本课包与样本视频在仓库里(tests/fixtures/bundles/、lectures/),起来时和真服务一样读一遍(readLecture)、记住 */
   const lectures = new Map<string, Lecture>();
   const lecturesLoaded = (async () => {
@@ -627,7 +624,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     }
   })();
   const mockLecture = (id: string): (Lecture & { ms: number }) | null => { const l = lectures.get(id); return l ? { ...l, ms: l.clock.total } : null; };
-  const home = () => {
+  const home = (): KidHome => {
     const d = now();
     const parsed = parseHome(mockHomeMd(localDate(d), yesterday())).cards;
     const names = MOCK_TUTORS.map((t) => t.name);
@@ -762,9 +759,9 @@ export function createMock(opts: MockOptions = {}): Mock {
       const date = ov[1] === 'today' ? today : ov[1];
       if (date > today) return { status: 400, json: { error: 'bad_request' } };
       const listOf = (name: string, d = date): MockMessage[] => (d === today ? messages.get(name) : d === yesterday() ? past.get(name) : undefined) ?? [];
-      const tutors = MOCK_TUTORS.map((t) => {
+      const tutors: OverviewTutor[] = MOCK_TUTORS.map((t) => {
         const list = listOf(t.name);
-        const by = new Map<string, { thread: string; at: string; title: string; from: 'kid'; via: null; start: { kind: 'new'; label: string }; said: string | null; endAt: string | null; notes: string[]; remembered: string[]; sections: number; cards: number; stoppedAt: 'writing' | 'ask' | null; rating: number | null; booked: boolean; misses?: number }>();
+        const by = new Map<string, OverviewThread>();
         for (const m of list) {
           let th = by.get(m.thread);
           if (!th) {
@@ -786,7 +783,8 @@ export function createMock(opts: MockOptions = {}): Mock {
         return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], booking: false, ...(recorded ? { kouboYuan: recorded * 0.015 } : {}), extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') };
       });
       const week = weekOf(date, today).map((d) => ({ date: d, tutors: MOCK_TUTORS.filter((t) => listOf(t.name, d).length).map((t) => t.name) }));
-      return { status: 200, json: { title, date, today, tutors, week } };
+      const out: Overview = { title, date, today, tutors, week };
+      return { status: 200, json: out };
     }
     const pb = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|\d{4}-\d{2}-\d{2})\/board$/.exec(p);
     if (pb && method === 'GET') {
@@ -907,20 +905,23 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (tail === 'today' && method === 'GET') {
         const shown = (messages.get(name) ?? []);
         const pending = shown.find((m) => m.pending);
-        return { status: 200, json: { tutor: name, date, messages: await Promise.all(shown.map(kidMessage)), remaining: remaining(name), pending: pending ? pending.job : null, thread: shown.length ? shown[shown.length - 1].thread : null } };
+        const out: KidDay = { tutor: name, date, messages: await Promise.all(shown.map(kidMessage)), remaining: remaining(name), pending: pending ? pending.job : null, thread: shown.length ? shown[shown.length - 1].thread : null };
+        return { status: 200, json: out };
       }
       if (tail === 'history' && method === 'GET') {
-        const days: { date: string; threads: unknown[] }[] = [];
+        const days: KidHistory['days'] = [];
         const todayThreads = kidThreads(await Promise.all((messages.get(name) ?? []).map(kidMessage))).reverse();
         if (todayThreads.length) days.push({ date, threads: todayThreads });
         const old = past.get(name) ?? [];
         if (old.length) days.push({ date: yesterday(), threads: kidThreads(old) });
-        return { status: 200, json: { tutor: name, today: date, days } };
+        const out: KidHistory = { tutor: name, today: date, days };
+        return { status: 200, json: out };
       }
       if (/^\d{4}-/.test(tail) && method === 'GET') {
         if (tail > date) return { status: 400, json: { error: 'bad_request' } };
         const old = tail === yesterday() ? (past.get(name) ?? []) : [];
-        return { status: 200, json: { tutor: name, date: tail, messages: await Promise.all(old.map(kidMessage)), remaining: remaining(name), pending: null, thread: old.length ? old[old.length - 1].thread : null } };
+        const out: KidDay = { tutor: name, date: tail, messages: await Promise.all(old.map(kidMessage)), remaining: remaining(name), pending: null, thread: old.length ? old[old.length - 1].thread : null };
+        return { status: 200, json: out };
       }
       if (tail === 'messages' && method === 'POST') {
         if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };

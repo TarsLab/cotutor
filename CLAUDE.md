@@ -33,7 +33,7 @@
 - 改 `src/paint/` 或画图卡先过 `tests/paint.test.ts`(假百炼、假老师全流程),页面走 `scripts/probe-paint.mjs`;真画按张计费,一天最多 `paint.daily` 张
 - 改孩子端播放(谁念、谁停、谁打断谁)先改《工作流程.md》的仲裁表,再改 `tests/player.test.ts`,最后改 `kid-board.ts` 的 `step`;页面只 `dispatch`
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`
-- 手动验收走 `scripts/probe-*.mjs`(CDP);舞台里的东西用 CDP 驱动;截图也走 CDP(`Page.captureScreenshot`),孩子端、工作台在轮询,无头 Chrome 的 `--screenshot` 会挂;手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`;探针不出声:起 Chrome 加 `QUIET_ARGS`、连上先 `quiet(send)`(`scripts/_quiet.mjs`,mock 的合成声走系统语音服务,`--mute-audio` 静不了它),要听加 `COTUTOR_PROBE_SOUND=1`
+- 页面里的 JS 有两个 CDP 探针进了 `pnpm test`(`tests/probe.test.ts` 起 `probe-layout`、`probe-play`,走 mock;要本机 Chrome,没有就跳过;`COTUTOR_SKIP_PROBES=1` 跳过),改 `kid-page.ts` 先看它们红不红;其余手动验收走 `scripts/probe-*.mjs`(CDP);舞台里的东西用 CDP 驱动;截图也走 CDP(`Page.captureScreenshot`),孩子端、工作台在轮询,无头 Chrome 的 `--screenshot` 会挂;手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`;探针不出声:起 Chrome 加 `QUIET_ARGS`、连上先 `quiet(send)`(`scripts/_quiet.mjs`,mock 的合成声走系统语音服务,`--mute-audio` 静不了它),要听加 `COTUTOR_PROBE_SOUND=1`
 
 ## 坑(不可推导的)
 

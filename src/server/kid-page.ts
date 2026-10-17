@@ -209,7 +209,6 @@ ${faviconLinks()}
   .blank { flex:1; grid-column:1 / -1; min-height:50vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; padding:40px 20px; color:var(--dim); }
   .blank .av { width:96px; height:96px; font-size:44px; margin-bottom:4px; }
   .blank .nm { font-size:26px; font-weight:700; color:var(--ink); }
-  .blank .mo { font-size:15px; margin-bottom:14px; }
   .blank b { font-size:22px; font-weight:600; color:var(--ink); }
   .blank .resume { margin-top:24px; min-height:48px; padding:0 20px; border-radius:24px; border:1.5px solid; background:#fff; display:inline-flex; align-items:center; gap:10px; font:inherit; font-size:17px; font-weight:500; box-shadow:0 2px 10px #0000000f; cursor:pointer; max-width:100%; }
   .blank .resume .ic { display:grid; } .blank .resume small { font-size:14px; color:var(--dim); }
@@ -1299,7 +1298,7 @@ __REEL_JS__
     viewKey = ''; viewNote();
   };
   /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」 */
-  const blankBoard = (title, resume) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor, 'draw') : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, S.tutor && S.tutor.motto ? h('span', { class: 'mo' }, S.tutor.motto) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null, resume && S.tutor ? resumeChip(resume) : null);
+  const blankBoard = (title, resume) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor, 'draw') : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null, resume && S.tutor ? resumeChip(resume) : null);
   // ---- 接着今天的(《wip/activity设计.md》§八,设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm):首页不再有「接着刚才的」,进来都是新话题 ----
   const tutorColor = () => colorOf(S.tutor);
   /** 回到今天的那个话题:照旧铺开、不重播(同「以前的」里点今天的一行) */

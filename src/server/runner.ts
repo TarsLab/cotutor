@@ -512,9 +512,23 @@ export class Runner {
     if (!text) throw new UsageError('消息是空的');
     const busy = this.active.get(tutor);
     if (busy) throw new BusyError(tutor, busy.job);
-
     const now = (this.opts.now ?? (() => new Date()))();
     const date = input.date ?? localDate(now);
+    // 占位要在第一个 await 之前(2026-10-17):查完 busy 到 spawn 之间十几个 await,孩子连点两下两条都过检查、算出同一个 job、起两个进程。
+    // 占位先进 map,job 等读了索引再填;起不来(索引坏、话题不在、CLI 没起)就放掉占位
+    const active: Active = { job: '(准备中)', date, partial: null, done: new Promise<never>(() => {}) };
+    this.active.set(tutor, active);
+    try {
+      return await this.begin(ws, tutor, input, { t, now, date, photos, seen, text }, active);
+    } catch (err) {
+      if (this.active.get(tutor) === active) this.active.delete(tutor);
+      throw err;
+    }
+  }
+
+  /** send 的后半:占位已在 active 里,这里读索引、拼包、起进程;抛了由 send 放掉占位 */
+  private async begin(ws: Workspace, tutor: string, input: SendInput, prep: { t: Workspace['config']['tutors'][string]; now: Date; date: string; photos: string[]; seen: string[]; text: string }, active: Active): Promise<SendStarted> {
+    const { t, now, date, photos, seen, text } = prep;
     const index = await readIndex(ws, tutor, date);
     const job = jobId(now, index.messages.length + 1);
     // 话题:新开(newThread / 没指定话题的系统消息 / 今天第一条)= 自己的 job;指定的要在这天的索引里;缺省接当前话题。会话按话题 resume
@@ -589,15 +603,14 @@ export class Runner {
 
     // 预热的进程:resume 的接那个位置(对得上 = 这个话题从它起来之后没人写过),新开的接 fresh;对不上(或这轮不走 stdin)就杀掉
     const spare = this.spares.claim(tutor, plan.resume ? 'resume' : 'fresh', { argv: plan.argv, env: plan.env, cwd: join(ws.dirs.agents, tutor), date, lastJob: plan.resume ? lastJobOf(index, thread) : null });
-    const active: Active = { job, date, partial: null, done: Promise.resolve(started) };
+    active.job = job;
     // 断流后接着跑:同一运行时 resume 这个会话,消息换成 stallPrompt
     const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent, prompt: stallPrompt(open), agentBody, systemBody, boardFile, agentsFile, runtime: plan.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
     active.done = this.spawn(ws, tutor, date, job, plan, policy, active, resumePlan, spare).finally(() => {
-      this.active.delete(tutor);
+      if (this.active.get(tutor) === active) this.active.delete(tutor);
       // 孩子 / 家长这轮完了,马上起好下一轮的进程;系统轮(记账、整理记忆)之后孩子多半不在,不起
       if (input.from !== 'system' && !input.replayOf && !input.eval) void this.prewarm(tutor).catch(() => {});
     });
-    this.active.set(tutor, active);
     return { tutor, date, job, thread, plan, done: active.done };
   }
 

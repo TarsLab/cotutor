@@ -594,6 +594,18 @@ try {
   const p3 = await route('PATCH', '/api/config', ctx, { tutors: { 'math-tutor': { enabled: true, policy: { replyMaxChars: null } } } });
   check('null 删键:政策覆盖撤掉回到继承', p3.status === 200 && ctx.ws.config.tutors['math-tutor'].policy?.replyMaxChars === undefined && ctx.ws.config.tutors['math-tutor'].enabled === true);
 
+  // ---- 同时两条(2026-10-17):占位在第一个 await 之前,第二条立刻 409;以前两条都过检查、算出同一个 job、起两个进程 ----
+  {
+    const today = `2026-09-${String(now.getDate()).padStart(2, '0')}`;
+    const before = ((await day('math-tutor', today)).json as Day).index.messages.length;
+    const [a, b] = await Promise.all([post('math-tutor', { text: '同时一', from: 'kid' }), post('math-tutor', { text: '同时二', from: 'kid' })]);
+    const codes = [a.status, b.status].sort();
+    check('同时两条:一条 202 一条 409', codes[0] === 202 && codes[1] === 409, JSON.stringify([a.json, b.json]));
+    await wait('math-tutor');
+    const after = ((await day('math-tutor', today)).json as Day).index.messages;
+    check('索引只多一条,job 不重', after.length === before + 1 && new Set(after.map((m) => m.job)).size === after.length, `${before} → ${after.length}`);
+  }
+
   // ---- 家长在编辑器改文件 → 下个请求自动重读;改坏了留旧的并在 health 上响 ----
   const edited = JSON.parse(readFileSync(cfgFile, 'utf8')) as { title: string };
   edited.title = '改过的标题';

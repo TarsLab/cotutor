@@ -50,7 +50,8 @@ ${BTN_CSS}
   .wsay svg { width:22px; height:22px; flex:none; color:var(--tutor-ink); }
   .wsay b { font-size:16px; } .wsay small { font-size:13px; min-height:0; }
   .wsay .tool { min-height:44px; padding:0 16px; border-color:var(--tutor-line); }
-  #v-write .model { flex:1; min-width:0; font-size:36px; text-align:left; padding-left:6px; }
+  #v-write .model { flex:1; min-width:0; height:56px; display:flex; align-items:center; padding-left:6px; }
+  #v-write .model .enm { height:56px; width:auto; max-width:100%; display:block; }
   /* 格子铺满剩下的高(拍板 23);看得到尺子的哪一段由 fitPad 按格子大小定 */
   #v-write .pad { flex:1 1 0; min-height:0; width:100%; height:auto; aspect-ratio:auto; margin:auto 0; }
   .wtools { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
@@ -64,7 +65,6 @@ ${BTN_CSS}
   .center { display:flex; flex-direction:column; align-items:center; gap:18px; padding-top:40px; text-align:center; }
   .center b { font-size:28px; }
   .center span { color:var(--dim); }
-  .model { font-size:44px; font-family:"Chalkboard SE","Comic Sans MS","Marker Felt",sans-serif; color:#2f6fd6; text-align:center; }
   /* 对一对(拍板 20):不限 1000 宽,一行两格(窄了一格);格子上下留白后变高,一列只看得到一个半 */
   #v-check { max-width:none; }
   .rows { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap:14px; }
@@ -317,7 +317,7 @@ ${BTN_JS}
     event('self', i);
     S.i = i; S.strokes = []; S.undos = 0; S.gone = []; S.revealed = false; S.mode = 'rewrite';
     trace.replaceChildren(); drawInk();
-    var m = $('#w-model'); m.textContent = S.v.answers[i].chars; m.hidden = false;
+    var m = $('#w-model'); m.replaceChildren(enModel(sv, S.v.answers[i].chars)); m.hidden = false;
     $('#w-who').textContent = '再写一遍'; status('看着上面的单词写'); $('#w-reveal').hidden = true; $('#w-done').disabled = false;
     $('#w-book').hidden = true; $('#w-x').hidden = false; show('write'); sayWord(i, 1);
   };
@@ -458,7 +458,7 @@ ${BTN_JS}
       S.mode = view === 'rewrite' ? 'rewrite' : 'first'; S.i = wi;
       show('write');
       trace.replaceChildren(); if (view === 'write' && f.mode !== 'write') trace.append(enWord(sv, R.chars[wi][0], 'enw trace', PV.w - 120));
-      var m = $('#w-model'); m.hidden = view !== 'rewrite'; m.textContent = view === 'rewrite' ? R.chars[wi][0] : '';
+      var m = $('#w-model'); m.hidden = view !== 'rewrite'; if (view === 'rewrite') m.replaceChildren(enModel(sv, R.chars[wi][0])); else m.replaceChildren();
       $('#w-who').textContent = view === 'rewrite' ? '再写一遍' : (S.v.tutor || '老师') + '念第 ' + (wi + 1) + ' 个';
       $('#w-reveal').hidden = view === 'rewrite'; $('#w-reveal').disabled = view === 'write' && f.mode !== 'write';
       $('#w-x').hidden = view !== 'rewrite';

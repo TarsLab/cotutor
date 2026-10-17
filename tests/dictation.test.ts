@@ -404,6 +404,29 @@ try {
     check('认英文:只收英文单词、全文去掉标点按词分;提示词换英文的格式', parseItem({ text: 'red' }, 'en')?.text === 'red' && parseItem({ text: '红' }, 'en') === null && r2.items.map((x) => x.text).join() === 'yellow' && r2.full[0] === "What colour is it It's yellow" && sw2('a, b!', 'en') === 'a b' && pp(['x'], 'en').includes('一个英文单词'), JSON.stringify(r2.full));
     check('cotutor.json 有英文的认词要求(缺省填上)', Array.isArray(ctx.ws.config.dictation.promptEn) && ctx.ws.config.dictation.promptEn.join('').includes('英文单词'));
   }
+  // ---- 英文单词的样子照四线三格(《wip/听写设想.md》拍板 29):单词卡那套字形,不用字体 ----
+  {
+    const { EN_BOX_JS } = await import('../src/dictation/en-box.ts');
+    type El = { tag: string; attrs: Record<string, string>; kids: El[]; text: string; append: (...c: El[]) => void; setAttribute: (k: string, v: string) => void; getAttribute: (k: string) => string | null };
+    const sv = (tag: string, attrs: Record<string, unknown> = {}): El => {
+      const el: El = { tag, attrs: {}, kids: [], text: '', append: (...c) => { el.kids.push(...c); }, setAttribute: (k, v) => { el.attrs[k] = v; }, getAttribute: (k) => el.attrs[k] ?? null };
+      for (const [k, v] of Object.entries(attrs)) el.attrs[k] = String(v);
+      Object.defineProperty(el, 'textContent', { set: (v: string) => { el.text = v; } });
+      return el;
+    };
+    const box = new Function('sv', `${EN_BOX_JS}; return { enWord: enWord, enModel: enModel };`)(sv) as { enWord: (s: typeof sv, w: string, cls?: string, maxW?: number) => El; enModel: (s: typeof sv, w: string) => El };
+    const ys = (g: El): number[] => g.kids.flatMap((p) => [...(p.attrs.d ?? '').matchAll(/[ML] ?(-?[\d.]+) (-?[\d.]+)|A[\d.]+ [\d.]+ 0 0 [01] (-?[\d.]+) (-?[\d.]+)/g)].map((m) => Number(m[2] ?? m[4])));
+    const bike = box.enWord(sv, 'bike');
+    check('bike:一笔一条 path(b 两笔、i 两笔、k 两笔、e 一笔),b 与 k 的竖顶第一线(80)、坐在基线(320)上', bike.tag === 'g' && bike.kids.length === 7 && Math.min(...ys(bike)) === 80 && Math.max(...ys(bike)) === 320 && bike.attrs['data-word'] === 'bike', `${bike.kids.length} 笔,y ${Math.min(...ys(bike))}–${Math.max(...ys(bike))}`);
+    const yellow = box.enWord(sv, 'yellow');
+    check('yellow:y 的尾巴到第四线(440)', Math.max(...ys(yellow)) === 440, String(Math.max(...ys(yellow))));
+    const long = box.enWord(sv, 'grandmother', 'enw trace', 900);
+    check('长单词横着压进给的宽(笔画不变粗细,只压坐标)', Number(long.attrs['data-w']) <= 900 && Number(long.attrs['data-w']) >= 880, long.attrs['data-w']);
+    const odd = box.enWord(sv, 'No.1');
+    check('字形包里没有的字(数字、点):整个词退回字体', odd.tag === 'text' && odd.text === 'No.1' && odd.attrs.class.includes('font'));
+    const model = box.enModel(sv, 'red');
+    check('再写一遍上面照着看的:一小条四线格,视窗框住单词', model.tag === 'svg' && model.attrs['aria-label'] === 'red' && /^\d+ 40 \d+ 440$/.test(model.attrs.viewBox), model.attrs.viewBox);
+  }
   // ---- 两页的按钮同一套(《wip/听写设想.md》拍板 28):英文页从第一版起没有图标,修了几次又漂开,这里拦着 ----
   {
     const { DICTATION_PAGE } = await import('../src/dictation/page.ts');

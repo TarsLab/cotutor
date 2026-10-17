@@ -92,7 +92,9 @@ try {
   ok('写好了:到第 2 个', await waitFor(`document.querySelector('#w-who').textContent.includes('第 2 个') && document.querySelectorAll('#w-pad .eni path').length === 0`));
   ok('横排的听写本:第 1 条画着刚写的笔,第 2 条描边(拍板 20)', await evaluate(`document.querySelectorAll('#w-book .bk').length === 3 && document.querySelectorAll('#w-book .bk.d .eni path').length === 2 && document.querySelector('#w-book .bk.c small').textContent === '2'`));
   await tap('#w-reveal');
-  ok('给答案:灰色的 yellow 打底', await waitFor(`document.querySelector('#w-pad .enw.trace')?.textContent === 'yellow'`));
+  ok('给答案:灰色的 yellow 打底', await waitFor(`document.querySelector('#w-pad .enw.trace')?.getAttribute('data-word') === 'yellow'`));
+  const tb = await evaluate(`(() => { const b = document.querySelector('#w-pad .enw.trace').getBBox(); return { top: Math.round(b.y), bottom: Math.round(b.y + b.height), paths: document.querySelectorAll('#w-pad .enw.trace path').length }; })()`);
+  ok('打底的单词照四线三格(拍板 29):l 顶第一线(80)、y 到第四线(440),一笔一条线', tb.top <= 82 && tb.top >= 70 && tb.bottom >= 436 && tb.bottom <= 452 && tb.paths >= 6, JSON.stringify(tb));
   await tap('#w-done');
   ok('没照着写就点写好了:不让过', await waitFor(`document.querySelector('#w-who').textContent.includes('第 2 个') && document.querySelector('#w-status').textContent.includes('照着')`));
   await writeWord('#w-pad', 2);
@@ -103,7 +105,7 @@ try {
   await tap('#w-done');
   ok('都写完了:交上去', await waitFor(`document.querySelector('.view.on')?.id === 'v-submit'`));
   await tap('#u-go');
-  ok('对一对:三行,蓝字叠着(red / yellow / bus),没有「再写一遍?」的问', await waitFor(`document.querySelector('.view.on')?.id === 'v-check' && document.querySelectorAll('#c-rows .row').length === 3 && [...document.querySelectorAll('#c-rows .enw')].map((t) => t.textContent).join() === 'red,yellow,bus' && !document.body.innerText.includes('这个再写一遍')`));
+  ok('对一对:三行,蓝字叠着(red / yellow / bus),没有「再写一遍?」的问', await waitFor(`document.querySelector('.view.on')?.id === 'v-check' && document.querySelectorAll('#c-rows .row').length === 3 && [...document.querySelectorAll('#c-rows .enw')].map((t) => t.getAttribute('data-word')).join() === 'red,yellow,bus' && !document.body.innerText.includes('这个再写一遍')`));
   ok('emoji 只在对一对出:bus 那行左下有 🚌,别的行没有(拍板 21)', await evaluate(`(() => { const r = [...document.querySelectorAll('#c-rows .row')]; return r.length === 3 && r[2].querySelector('.em')?.textContent === '🚌' && !r[0].querySelector('.em') && !r[1].querySelector('.em'); })()`));
   ok('看过答案的那个写着', await evaluate(`document.querySelectorAll('#c-rows .row')[1].innerText.includes('看了答案')`));
   ok('页面上没有叉、没有分数、没有对错的字', await evaluate(`!/[×✗✘]|分数|错|对了/.test(document.body.innerText.replace('对一对', '').replace('对好了', ''))`));
@@ -112,7 +114,7 @@ try {
   ok('拿开蓝字', await waitFor(`document.querySelectorAll('#c-rows .enw').length === 0`));
   await tap('#c-hide');
   await tap('#c-rows .row:first-child .tool');
-  ok('自己点再写一遍:上面是 red,下面空格', await waitFor(`document.querySelector('.view.on')?.id === 'v-write' && document.querySelector('#w-model').textContent === 'red' && !document.querySelector('#w-model').hidden`));
+  ok('自己点再写一遍:上面是 red,下面空格', await waitFor(`document.querySelector('.view.on')?.id === 'v-write' && document.querySelector('#w-model .enm')?.getAttribute('aria-label') === 'red' && !document.querySelector('#w-model').hidden`));
   ok('再写一遍是一层:胶囊收起,右上角 ×,听写本收起', await evaluate(`document.querySelector('#back').hidden && !document.querySelector('#w-x').hidden && document.querySelector('#w-book').hidden`));
   await writeWord('#w-pad', 2);
   await tap('#w-done');
@@ -133,12 +135,12 @@ try {
   await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
   ok('录像:外壳里上半是英文页的录像模式(四线三格)、下半录像栏;一个单词一章(三章 + 对一对)', await waitFor(`!document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').getAttribute('src') || '').includes('lang=en') && ${K}?.querySelector('.view.on')?.id === 'v-write' && ${K}.querySelectorAll('#w-pad .enl line').length === 4 && document.querySelectorAll('#rl-chaps i').length === 3`, 10000), await evaluate(`JSON.stringify({ src: document.querySelector('#rl-frame').getAttribute('src'), chaps: document.querySelectorAll('#rl-chaps i').length })`));
   await tap('#rl-marks i.rv');
-  ok('点「给答案」的点:yellow 灰灰地打底,录像栏写给答案', await waitFor(`${K}.querySelector('#w-pad .enw.trace')?.textContent === 'yellow' && document.querySelector('#rl-cap').textContent.includes('给答案')`), await evaluate(`document.querySelector('#rl-cap').textContent`));
+  ok('点「给答案」的点:yellow 灰灰地打底,录像栏写给答案', await waitFor(`${K}.querySelector('#w-pad .enw.trace')?.getAttribute('data-word') === 'yellow' && document.querySelector('#rl-cap').textContent.includes('给答案')`), await evaluate(`document.querySelector('#rl-cap').textContent`));
   await tap('#rl-more');
   ok('经过:给答案、照着写、交卷、再写一遍', await waitFor(`(() => { const t = document.querySelector('#rl-log').innerText; return ['给答案', '照着写', '交卷', '再写一遍「red」'].every((x) => t.includes(x)); })()`), await evaluate(`document.querySelector('#rl-log').innerText.slice(0, 500)`));
   await evaluate(`[...document.querySelectorAll('#rl-log li')].find((li) => li.textContent.includes('再写一遍「red」')).setAttribute('data-probe-li', '1')`);
   await tap('[data-probe-li]');
-  ok('点经过里的「再写一遍」:上面是 red,右上角 ×', await waitFor(`${K}.querySelector('.view.on')?.id === 'v-write' && ${K}.querySelector('#w-model').textContent === 'red' && !${K}.querySelector('#w-x').hidden`));
+  ok('点经过里的「再写一遍」:上面是 red,右上角 ×', await waitFor(`${K}.querySelector('.view.on')?.id === 'v-write' && ${K}.querySelector('#w-model .enm')?.getAttribute('aria-label') === 'red' && !${K}.querySelector('#w-x').hidden`));
   await shot('en-06-reel');
   // ---- 拍照开始(英语老师卡上的拍照听写):拍 → 一项一项认出单词 → 点选 → 开始 ----
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });

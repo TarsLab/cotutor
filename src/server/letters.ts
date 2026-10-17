@@ -19,13 +19,14 @@ export interface LettersData {
   space: number;
 }
 
-const EXTRA: Record<string, LetterGlyph> = {
+/** 字形包里没有的两个:连字符、撇号(单词听写的四线格也用,src/dictation/en-box.ts) */
+export const EXTRA: Record<string, LetterGlyph> = {
   '-': { advance: 0.5, strokes: [[[0.05, -0.5], [0.45, -0.5]]] },
   "'": { advance: 0.15, strokes: [[[0.08, -2], [0.08, -1.55]]] },
 };
 
 /** 字间距(x 高为 1):drawtell 缺省 0.22,笔画粗 0.2,两个圈挨着的字母(a p)几乎碰上;孩子认字要松一点 */
-const GAP = 0.35;
+export const GAP = 0.35;
 
 const round = (v: number): number => Math.round(v * 1000) / 1000;
 const cache = new Map<string, LetterGlyph>();

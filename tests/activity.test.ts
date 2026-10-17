@@ -34,6 +34,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('包里出厂:语文老师的你说我画、看图说话与它们的例子;语文、数学、英语各一份小课堂', shipped.map((x) => `${x.tutor}/${x.name}`).join(' ') === 'chinese-tutor/你说我画 chinese-tutor/你说我画.例子 chinese-tutor/听写 chinese-tutor/小课堂 chinese-tutor/看图说话 chinese-tutor/看图说话.例子 english-tutor/听写 english-tutor/小课堂 math-tutor/小课堂 math-tutor/小课堂.例子', JSON.stringify(shipped));
   const kantu = readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', '看图说话.md'), 'utf8');
   check('出厂的看图说话过检查(老师的卡照出厂 cotutor.json)', lintActivity(kantu, { fileName: '看图说话', tutorCards: factoryCards }).issues.length === 0, JSON.stringify(lintActivity(kantu, { fileName: '看图说话', tutorCards: factoryCards }).issues));
+  check('看图说话:老师收到的那节不说「点一下能听」(《看图说话设计.md》拍板 17)', !(renderTutorSection(parseActivity(kantu).activity, { cards: ['read', 'image'] }) ?? '点一下能听').includes('点一下能听'));
   const teacher = readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor.md'), 'utf8');
   check('语文老师文件只留人设与学科功夫:没有看图说话、你说我画的流程', !/^#{2,4}\s*(看图说话|你说我画)/m.test(teacher) && !teacher.includes('这是你说的话,点一下能听') && teacher.includes('### 孩子问怎么写'));
   for (const cards of [undefined, factoryCards]) {

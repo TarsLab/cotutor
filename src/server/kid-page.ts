@@ -1176,7 +1176,7 @@ __REEL_JS__
       });
       return b;
     };
-    // ---- 这一天的事,从早到晚(拍板 29、30):话题、听写、口语课 ----
+    // ---- 这一天的事,最新的在上(拍板 29、35):话题、听写、口语课 ----
     const evs = [];
     for (const t of H.tutors) for (const th of t.threads) {
       const at = atMs(th.at), end = Date.parse(th.endAt || '');
@@ -1210,17 +1210,18 @@ __REEL_JS__
       const at = Date.parse(x.call.startedAt);
       evs.push({ at, end: at + x.call.ms, t: tt, kid: h('a', { class: 'kid c-tutor', href: MODE.links.talkReel + encodeURIComponent(x.id), 'aria-label': '看录像' }, look), pf: [h('span', {}, '跟读 ' + x.call.read + '/' + x.call.items + ' 句 · 聊了 ' + mins(x.call.ms))] });
     }
-    evs.sort((p, q) => (p.at || 0) - (q.at || 0));
+    evs.sort((p, q) => (q.at || 0) - (p.at || 0));
     const [y0, m0, d0] = H.date.split('-').map(Number);
     const tl = [];
     if (evs.length) {
-      const last = evs[evs.length - 1];
-      tl.push(h('div', { class: 'hd' }, h('b', {}, m0 + ' 月 ' + d0 + ' 日 周' + WEEKDAY[new Date(y0, m0 - 1, d0).getDay()]), h('small', {}, hhmm(evs[0].at) + ' – ' + hhmm(last.end || last.at) + ' · ' + evs.length + ' 件事 · 点一件看录像')));
+      const first = evs[evs.length - 1], last = evs[0];
+      tl.push(h('div', { class: 'hd' }, h('b', {}, m0 + ' 月 ' + d0 + ' 日 周' + WEEKDAY[new Date(y0, m0 - 1, d0).getDay()]), h('small', {}, hhmm(first.at) + ' – ' + hhmm(last.end || last.at) + ' · ' + evs.length + ' 件事 · 点一件看录像')));
     } else tl.push(h('div', { class: 'none' }, H.date === H.today ? '今天还没开始' : '这天没聊'));
     evs.forEach((e, i) => {
-      const prev = evs[i - 1];
-      const gap = prev ? e.at - (prev.end || prev.at) : 0;
-      if (prev && gap >= 5 * 60000) tl.push(h('div', { class: 'pgap' }, '隔了 ' + mins(gap)));
+      // 上面那件(更晚的)开始之前,这件结束之后,隔得久写一行
+      const later = evs[i - 1];
+      const gap = later ? later.at - (e.end || e.at) : 0;
+      if (later && gap >= 5 * 60000) tl.push(h('div', { class: 'pgap' }, '隔了 ' + mins(gap)));
       tl.push(h('div', { class: 'pev', style: '--c:' + colorOf(e.t) },
         h('div', { class: 'pv-tm' }, hhmm(e.at), e.end && e.end > e.at ? h('small', {}, mins(e.end - e.at)) : null),
         h('div', { class: 'pv-rail' }, h('div', { class: 'pv-who' }, h('span', { class: 'pv-at' }, hhmm(e.at), e.end && e.end > e.at ? h('small', {}, mins(e.end - e.at)) : null), avatarEl(e.t), e.t.display), h('div', { class: 'pent' }, e.kid, h('div', { class: 'pf' }, ...e.pf)))));

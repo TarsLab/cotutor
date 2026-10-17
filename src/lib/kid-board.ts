@@ -163,6 +163,8 @@ export function cardTexts(card: BoardCard): string[] {
       return [str(p.show) || (p.mode === 'pinyin' ? '' : str(p.text))];
     case 'paint':
       return [str(p.ask), ...strs(p.panels), ...strs(p.words)];
+    case 'photo':
+      return [str(p.text)];
     default:
       return Object.values(p).flatMap((v) => (typeof v === 'string' ? [v] : strs(v)));
   }
@@ -242,6 +244,7 @@ export function tintFor(card: BoardCard): string {
     case 'fill':
     case 'canvas':
     case 'record':
+    case 'photo':
       return 'plum';
     case 'read':
       return 'sand';
@@ -287,9 +290,9 @@ export function penFor(card: BoardCard, phrase: string): PenName {
 /** 一行最多几张:明写的并排(课文件 / 老师的 same)能到 3 张;按宽度排的最多 2 张(半宽 + 半宽) */
 export const MAX_CARDS_PER_ROW = 3;
 
-/** 独占一行的卡:标题行、提问卡、画板、录音卡、小课堂、画图(选择题、填空题量得下就能半宽,2026-10-01) */
+/** 独占一行的卡:标题行、提问卡、画板、录音卡、小课堂、画图、拍给我看(选择题、填空题量得下就能半宽,2026-10-01) */
 export function standsAlone(card: BoardCard): boolean {
-  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'record' || card.kind === 'lecture' || card.kind === 'paint';
+  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'record' || card.kind === 'lecture' || card.kind === 'paint' || card.kind === 'photo';
 }
 
 const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice', 'fill'];
@@ -647,6 +650,8 @@ export interface KidSaid {
   text: string;
   full: string;
   voice: boolean;
+  /** 答拍给我看卡时拍来的照片:进那张卡的答案栏,节头不再回显 */
+  photos?: string[];
 }
 
 export interface BoardEntry extends BoardSection {
@@ -674,16 +679,25 @@ export function tidySpoken(text: string): string {
   return t || text.trim();
 }
 
-/** 一节的问题卡:末句是问句(不交给小课堂)、它锚着的是文字卡(不是小节标题),或解析器补的提问卡;没有 = null。孩子开口答的写进它的答案栏 */
+/**
+ * 一节的问题卡:孩子下一条答的写进它的答案栏;没有 = null。
+ * 有拍给我看卡就是它(最后那张),末句问不问都算:老师要的是照片;
+ * 否则末句是问句(不交给小课堂)、它锚着的是文字卡(不是小节标题),或解析器补的提问卡。
+ */
 export function askCard(section: Pick<BoardSection, 'cards' | 'lines' | 'partial'>): number | null {
+  if (section.partial) return null;
+  for (let k = section.cards.length - 1; k >= 0; k--) if (section.cards[k].kind === 'photo') return k;
   const last = section.lines[section.lines.length - 1];
-  if (section.partial || !last || !last.ask || last.cues.length) return null;
+  if (!last || !last.ask || last.cues.length) return null;
   const n = section.cards.length;
   if (n && section.cards[n - 1].kind === 'text' && section.cards[n - 1].props?.ask === true) return n - 1;
   const t = lineTarget(last);
   const c = t === null ? undefined : section.cards[t];
   return c && c.kind === 'text' && !isHeading(c) ? t : null;
 }
+
+/** 只发了照片、没说话时服务端补的那句(runner.ts:「(拍了一张)」「(拍了 N 张)」) */
+const PHOTO_ONLY = /^\(拍了(?:一| \d+ )张\)$/;
 
 /**
  * 每条孩子的话放在板上哪(《工作流程.md》§二):交卡、首页按钮、空的不放;答的是上一节的问题卡就进那张卡的答案栏(on),
@@ -694,10 +708,13 @@ export function kidSaid(messages: readonly BoardMessage[]): Map<string, { said: 
   let prev: BoardMessage | null = null;
   for (const m of messages) {
     const q = (m.question ?? '').trim();
-    if (q && !m.action && !m.fromHome) {
+    const card = prev && prev.section && !m.lecture ? askCard(prev.section) : null;
+    // 答拍给我看卡的照片跟着话进答案栏;只发了照片没说话(服务端补的「(拍了一张)」)就只有照片
+    const photos = card !== null && prev!.section!.cards[card].kind === 'photo' && m.photos?.length ? m.photos : null;
+    const words = photos && PHOTO_ONLY.test(q) ? '' : q;
+    if ((q || photos) && !m.action && !m.fromHome) {
       const voice = m.spoken === true;
-      const card = prev && prev.section && !m.lecture ? askCard(prev.section) : null;
-      out.set(m.job, { said: { text: voice ? tidySpoken(q) : q, full: q, voice }, on: prev && card !== null ? { job: prev.job, card } : null });
+      out.set(m.job, { said: { text: voice ? tidySpoken(words) : words, full: words, voice, ...(photos ? { photos } : {}) }, on: prev && card !== null ? { job: prev.job, card } : null });
     }
     if (m.section && !m.section.partial && !m.pending && (m.section.cards.length || m.section.lines.length)) prev = m;
   }
@@ -713,7 +730,7 @@ export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEn
   const says = kidSaid(messages);
   for (const m of messages) {
     const k = says.get(m.job);
-    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}) };
+    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length && !k?.said.photos ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}) };
     if (m.pending) {
       if (m.section && m.section.partial && (m.section.cards.length || (m.section.voiced ?? 0) > 0)) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.voiced ? { voiced: m.section.voiced } : {}), ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;

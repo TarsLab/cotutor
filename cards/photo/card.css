@@ -1,0 +1,15 @@
+/* 拍给我看卡(cards/photo/card.md):相机 + 要拍什么;最后一节时下沿是答案栏「等你拍…」带拍照、相册,拍来的照片缩在下沿 */
+.c.c-photo { gap:6px; }
+.pc-row { display:flex; align-items:center; gap:14px; }
+.pc-ic { flex:none; width:52px; height:52px; border-radius:50%; background:#ffffff; border:1.5px solid var(--tint-plum-line); color:var(--tint-plum-head); display:inline-flex; align-items:center; justify-content:center; }
+.pc-ic svg { width:28px; height:28px; }
+.pc-t { font-size:22px; font-weight:600; line-height:1.4; }
+/* 等你拍:不等老师停下(末句不一定是问句),孩子刚发出去、在等老师时收起 */
+.kid-ans.snap { display:flex; flex-wrap:wrap; font-weight:400; color:var(--dim); cursor:default; }
+body.pending .kid-ans.snap { display:none; }
+.kid-ans.snap .ka-w { flex:1 1 auto; }
+.pc-go { display:inline-flex; align-items:center; gap:6px; height:44px; padding:0 18px; border-radius:22px; background:var(--tint-plum-head); color:#ffffff; font-size:16px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.pc-go.alt { background:#ffffff; color:var(--tint-plum-head); border:1.5px solid var(--tint-plum-line); }
+.pc-go svg { width:20px; height:20px; }
+/* 拍来的照片:缩在答案栏里,点开看大图 */
+.kid-ans .kp { flex:none; height:64px; width:auto; max-width:160px; border-radius:8px; object-fit:cover; border:1px solid var(--line); background:#ffffff; cursor:zoom-in; }

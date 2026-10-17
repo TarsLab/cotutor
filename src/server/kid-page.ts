@@ -1338,7 +1338,7 @@ __REEL_JS__
         // 提问卡:末句那一问(解析器补的),和选择题的问题一个字重;问题卡下沿是孩子的答案栏(《工作流程.md》§二)
         const a = board ? ansFor(secIdx, idx) : null;
         const el = box(isAskCard(c) ? 'text c-ask' : 'text', title, body, a ? ansEl(a) : null);
-        if (a) el.dataset.ans = a.wait ? 'wait' : a.text;
+        if (a) el.dataset.ans = ansKey(a);
         return el;
       }
       case 'read':
@@ -1410,6 +1410,14 @@ __REEL_JS__
         const mine = sec ? recPill(ICON.play, '我的 · ' + sec.toFixed(1) + ' 秒', (e) => playMine(c, e.currentTarget)) : h('span', { class: 'rc-no' }, S.readonly ? '没录' : '没录 · 点开来录');
         const el = box('record', t, py, h('div', { class: 'rc-row' }, demo, mine, locked && sec ? h('span', { class: 'rc-lk', html: ICON.lock + '交给老师了' }) : null));
         if (locked) el.classList.add('locked');
+        return el;
+      }
+      case 'photo': {
+        // 拍给我看(cards/photo/card.md):相机 + 要拍什么;下沿是答案栏:等你拍(拍照、相册)或拍来的照片。点卡不开舞台,点下沿的按钮拍
+        const a = board ? ansFor(secIdx, idx) : null;
+        const el = h('div', { class: 'c c-photo', 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c) },
+          h('div', { class: 'pc-row' }, h('span', { class: 'pc-ic', html: ICON.camera }), h('div', { class: 'pc-t' }, p.text || '')), a ? ansEl(a) : null, board ? againBtn() : null);
+        if (a) el.dataset.ans = ansKey(a);
         return el;
       }
       case 'code':
@@ -1879,9 +1887,12 @@ __WORD_DRAW_JS__
   });
   // ---- 一个话题一节(《工作流程.md》§二):孩子端节头只留板上第一节、带照片的节与孩子单独说了话的节(他的话就是节头,拍板 19);孩子的话答问题卡的进卡的答案栏 ----
   const headOf = (s, i) => (i === 0 || (s.photos && s.photos.length) ? sectionHead(s) : null);
-  const saidBody = (sd, on = {}) => [sd.voice ? h('span', { class: 'ka-mic', html: ICON.micSm }) : null, h('span', { class: 'ka-t', on }, sd.text)];
+  const saidBody = (sd, on = {}) => [sd.voice ? h('span', { class: 'ka-mic', html: ICON.micSm }) : null,
+    // 答拍给我看卡拍来的照片(kidSaid 的 photos):缩在答案栏里,点开看大图;只发了照片没说话就没有字
+    ...(sd.photos || []).map((p, k) => h('img', { class: 'kp', src: '/api/kid/image?p=' + encodeURIComponent(p), alt: '', loading: 'lazy', on: { click: (e) => { e.stopPropagation(); openLb(sd.photos, k); } } })),
+    sd.text ? h('span', { class: 'ka-t', on }, sd.text) : null];
   /** 点开看原话(语音的显示是去了口头禅的),再点收起 */
-  const toggleSaid = (sd) => (e) => { e.stopPropagation(); const el = e.currentTarget.closest('.kid-ans, .sh'); const open = el.classList.toggle('open'); el.querySelector('.ka-t').textContent = open ? sd.full : sd.text; };
+  const toggleSaid = (sd) => (e) => { e.stopPropagation(); const el = e.currentTarget.closest('.kid-ans, .sh'); const t = el.querySelector('.ka-t'); if (!t) return; const open = el.classList.toggle('open'); t.textContent = open ? sd.full : sd.text; };
   /** 孩子单独说的那句当节头(拍板 19):话 —— 线 —— [时间] [照片] 再听;meta = false 只要话和线(刚发出去挂在板尾的、小课堂卡下面的) */
   const saidHead = (s, sd, meta, first) => h('div', { class: 'sh said', on: meta ? { click: (e) => againAt(e.currentTarget, 'all') } : {} }, ...saidBody(sd, { click: toggleSaid(sd) }), h('span', { class: 'ln' }), ...(meta ? [first && s.at ? clock(s.at) : null, ...headPhotos(s), headAgain()] : []));
   /** 一节开头:孩子没单独说话 → 原来的节头(只留第一节与带照片的);说了 → 他的话就是节头;看完小课堂后的第一问写在小课堂卡下面 */
@@ -1898,10 +1909,24 @@ __WORD_DRAW_JS__
     if (!sec) return null;
     for (const s of S.sections) if (s.said && s.saidOn && s.saidOn.job === sec.job && s.saidOn.card === k) return s.said;
     if (S.pendSaid && S.pendSaid.on && S.pendSaid.on.job === sec.job && S.pendSaid.on.card === k) return S.pendSaid.said;
-    if ((!S.readonly || REEL) && !S.pendSaid && j === S.sections.length - 1 && askCard(sec) === k) return { wait: true };
+    if ((!S.readonly || REEL) && !S.pendSaid && j === S.sections.length - 1 && askCard(sec) === k) return sec.cards[k].kind === 'photo' ? { wait: true, snap: true } : { wait: true };
     return null;
   };
-  const ansEl = (a) => (a.wait ? h('div', { class: 'kid-ans wait' }, '等你说…') : h('button', { type: 'button', class: 'kid-ans', on: { click: toggleSaid(a) } }, ...saidBody(a)));
+  /** 答案栏画的是什么(data-ans):变了才重画那张卡 */
+  const ansKey = (a) => (a.snap ? 'snap' : a.wait ? 'wait' : (a.text || '') + '|' + (a.photos || []).join(','));
+  /** 拍给我看卡上的拍照 / 相册:一个藏起来的 file input,和输入条的相机同一套(wireFile) */
+  const snapBtn = (camera) => {
+    const f = h('input', camera ? { type: 'file', accept: 'image/*', capture: 'environment' } : { type: 'file', accept: 'image/*', multiple: '' });
+    wireFile(f);
+    return h('label', { class: 'pc-go' + (camera ? '' : ' alt'), on: { click: (e) => e.stopPropagation() } }, h('span', { html: camera ? ICON.camera : ICON.album }), camera ? '拍照' : '相册', f);
+  };
+  const ansEl = (a) => (a.snap ? h('div', { class: 'kid-ans snap' }, h('span', { class: 'ka-w' }, '等你拍…'), snapBtn(true), snapBtn(false))
+    : a.wait ? h('div', { class: 'kid-ans wait' }, '等你说…') : h('button', { type: 'button', class: 'kid-ans', on: { click: toggleSaid(a) } }, ...saidBody(a)));
+  /** 拿起相机老师就停(同点卡开舞台);拍完 / 选完进发照片屏。相册最多 4 张,多的只取前 4 张。输入条、加号面板、拍给我看卡都走这里 */
+  const wireFile = (f) => {
+    f.addEventListener('click', () => dispatch({ type: 'stageOpen' }));
+    f.addEventListener('change', () => { $('#sheet').classList.remove('on'); const files = Array.from(f.files || []).slice(0, f.multiple ? PHOTO_ALBUM_MAX : 1); f.value = ''; psOpen(files); });
+  };
   /** 答案栏跟着数据走:哪张卡该有的和画着的(data-ans)不一样就重画那张卡 */
   const syncAnswers = () => {
     const want = new Set();
@@ -1916,7 +1941,7 @@ __WORD_DRAW_JS__
       const el = $('#board').querySelector('[data-sec="' + j + '"] .c[data-card="' + k + '"]');
       if (!el) continue;
       const a = ansFor(j, k);
-      if ((el.dataset.ans || '') !== (a ? (a.wait ? 'wait' : a.text) : '')) repaintCard(j, k);
+      if ((el.dataset.ans || '') !== (a ? ansKey(a) : '')) repaintCard(j, k);
     }
   };
   /** 刚发出去、老师还没写出这一节:不答卡的那句先挂在板尾(占位卡前) */
@@ -3451,11 +3476,7 @@ __REEL_DOCK_JS__
     playRec({ k: 'ps', e: 'open' });
     psMode('view');
   };
-  // 拿起相机老师就停(同点卡开舞台);拍完 / 选完进发照片屏。相册最多 4 张,多的只取前 4 张
-  for (const f of document.querySelectorAll('input[type=file]')) {
-    f.addEventListener('click', () => dispatch({ type: 'stageOpen' }));
-    f.addEventListener('change', () => { $('#sheet').classList.remove('on'); const files = Array.from(f.files || []).slice(0, f.multiple ? PHOTO_ALBUM_MAX : 1); f.value = ''; psOpen(files); });
-  }
+  for (const f of document.querySelectorAll('input[type=file]')) wireFile(f);
   $('#ps-t-crop').addEventListener('click', () => { playRec({ k: 'ps', e: 'tool', tool: 'crop' }); psMode('crop'); });
   $('#ps-t-pen').addEventListener('click', () => { playRec({ k: 'ps', e: 'tool', tool: 'pen' }); psMode('pen'); });
   $('#ps-t-rot').addEventListener('click', () => { playRec({ k: 'ps', e: 'tool', tool: 'rot' }); psEdit(rotateEdit(psCur().edit)); psRender(); });

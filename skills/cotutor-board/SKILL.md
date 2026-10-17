@@ -1,6 +1,6 @@
 ---
 name: cotutor-board
-description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / word / lecture / canvas / record / paint / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
+description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / word / lecture / canvas / record / paint / photo / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
 disable-model-invocation: true
 ---
 
@@ -18,6 +18,7 @@ disable-model-invocation: true
 - **只有末句会停。** 中间的问句念完,接着念下一句,不等孩子。
 - 末句这一问能选,就配一张 `choice` 卡;能填,就配一张 `fill` 卡。卡在前,问句在后。
 - 开放的问题不用配卡。应用会把末句那一问补成板上的一张提问卡,你别自己再写一张。
+- 要孩子拍照片给你看,在节尾放一张 `photo` 卡,写要拍什么。末句请他拍下来发给你。
 
 ## 围栏 = 板上的卡
 
@@ -335,6 +336,21 @@ shi2 si4 shi4 shi2 si4
 词: 播种、睡大觉、满满、羞愧
 1. 春天的早上,小熊在地里播种;小猴坐在树下吃桃子。
 2. 小猴低着头,脸红红的。
+```
+
+### photo — 拍给我看
+
+请孩子拍一张照片发给你:看图说话的那幅图、写好的那一页、做完的那道题。
+
+- 正文一行:要拍什么,最多 30 个字。
+- 放在一节的最后。一节只放一张。
+- 讲稿末句请孩子拍下来发给你。应用不再补提问卡。
+
+```photo
+看图说话的那幅图
+```
+```photo
+写好的那一页
 ```
 
 ### code — 代码或原样的文字

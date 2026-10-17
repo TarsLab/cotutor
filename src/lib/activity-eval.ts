@@ -50,6 +50,7 @@ export const GRADERS: Readonly<Record<string, string>> = {
   问到: '老师的讲稿里出现过这个词(「问到: 画家」)',
   并排: '有一张 read 卡同时有这两句里的字(「并排: 睡大觉 | 浇了水」)',
   卡上有: '老师写的卡上出现过这几个说法(「卡上有: 先看清」,如顺口溜)',
+  出拍给我看卡: '写过拍给我看卡(photo):要孩子拍照片发来时',
   词落到幅: '参数「词」里至少这么多个原样出现在分幅里(「词落到幅: 2」);只适合画得出来的词,「羞愧」「满满」老师会照规矩换成看得见的样子',
 };
 
@@ -206,6 +207,10 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
           return t.section?.cards.length && n > 1 ? [`第 ${k + 1} 轮问了 ${n} 个`] : [];
         });
         return { check, pass: !bad.length, ...(bad.length ? { why: bad.join(';') } : {}) };
+      }
+      case '出拍给我看卡': {
+        const ok = turns.some((t) => (t.section?.cards ?? []).some((c) => c.kind === 'photo'));
+        return { check, pass: ok, ...(ok ? {} : { why: `${turns.length} 轮都没写拍给我看卡` }) };
       }
       case '卡上有': {
         const cards = turns.flatMap((t) => (t.section?.cards ?? []).map((c) => JSON.stringify(c.props)));

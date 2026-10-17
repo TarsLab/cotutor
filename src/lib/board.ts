@@ -224,8 +224,9 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
   const lastLine = out[out.length - 1];
   if (!partial && (opts.place ?? 'board') === 'board' && lastLine?.ask && !lastLine.cues.length) {
     const t = lineTarget(lastLine);
-    const answerable = (c: BoardCard | undefined): boolean => Boolean(c && hasState(c));
-    if (!answerable(t === null ? undefined : cards[t]) && !answerable(cards[cards.length - 1])) {
+    // 拍给我看卡也算能答:孩子拍来的照片进它的答案栏(kid-board.ts 的 askCard)
+    const answerable = (c: BoardCard | undefined): boolean => Boolean(c && (hasState(c) || c.kind === 'photo'));
+    if (!cards.some((c) => c.kind === 'photo') && !answerable(t === null ? undefined : cards[t]) && !answerable(cards[cards.length - 1])) {
       cards.push({ kind: 'text', props: { text: lastLine.text, ask: true } });
       cardSpans.push([kept[kept.length - 1].line, kept[kept.length - 1].line]);
     }

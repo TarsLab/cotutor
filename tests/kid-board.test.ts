@@ -267,6 +267,24 @@ check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人�
   check('kidSaid:话题第一句、上一节问在填空上 → 单独一行(on = null)', lone.get('x')?.on === null && lone.get('y')?.on === null);
   const es = sectionsFromMessages(msgs);
   check('sectionsFromMessages:节带上 said / saidOn', es.find((e) => e.job === 'b')?.saidOn?.job === 'a' && es.find((e) => e.job === 'b')?.said?.text === '每个人两个吧' && es.find((e) => e.job === 'a')?.said === undefined);
+  // 拍给我看卡(cards/photo/card.md):末句问不问都是它;拍来的照片进它的答案栏,节头不再回显;只发照片时补的「(拍了一张)」不写
+  const snap: BoardSection = { cards: [q('看图说话'), { kind: 'photo', props: { text: '看图说话的那幅图' } }], lines: [L('把那幅图拍下来,发给我。', { anchor: 1 })] };
+  const snapAsk: BoardSection = { ...snap, lines: [L('把那幅图拍下来,好吗?', { anchor: 0 })] };
+  check('askCard:有拍给我看卡就是它(末句不是问句、问句锚着别的卡都算);还在写 → 没有', askCard(snap) === 1 && askCard(snapAsk) === 1 && askCard({ ...snap, partial: true }) === null);
+  const pm = [
+    { job: 'p', question: '我要看图说话', reply: 'x', pending: false, fromHome: true, section: snap },
+    { job: 'r', question: '(拍了一张)', reply: 'x', pending: false, photos: ['captures/2026-10-18/0900-1.jpg'], section: told },
+  ];
+  const ps = kidSaid(pm);
+  check('kidSaid:答拍给我看卡的照片进那张卡,补的「(拍了一张)」不写', ps.get('r')?.on?.job === 'p' && ps.get('r')?.on?.card === 1 && ps.get('r')?.said.photos?.join() === 'captures/2026-10-18/0900-1.jpg' && ps.get('r')?.said.text === '', JSON.stringify([...ps]));
+  const withWords = kidSaid([pm[0], { ...pm[1], question: '这是第三幅' }]);
+  check('kidSaid:配了话的,话和照片一起进', withWords.get('r')?.said.text === '这是第三幅' && withWords.get('r')?.said.photos?.length === 1);
+  const talkBack = kidSaid([pm[0], { job: 'r', question: '我找不到那幅图', reply: 'x', pending: false, section: told }]);
+  check('kidSaid:没拍、直接说话,那句也进拍给我看卡的答案栏', talkBack.get('r')?.on?.card === 1 && talkBack.get('r')?.said.text === '我找不到那幅图' && !talkBack.get('r')?.said.photos);
+  const pe = sectionsFromMessages(pm).find((e) => e.job === 'r');
+  check('sectionsFromMessages:照片进了答案栏,节头不再带 photos', pe?.saidOn?.card === 1 && pe.photos === undefined);
+  const notSnap = sectionsFromMessages([{ ...pm[0], section: asks }, pm[1]]).find((e) => e.job === 'r');
+  check('sectionsFromMessages:答的不是拍给我看卡,照片照旧在节头', notSnap?.photos?.length === 1 && !notSnap.said?.photos);
 }
 
 done();

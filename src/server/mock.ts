@@ -363,6 +363,14 @@ ap-ple
 This is how we write it: a, p, p, l, e. 看我写一遍。
 
 Which one do you want to try first, [apple], [banana], or [orange]? 你先读哪一个?`,
+      // 拍给我看卡(cards/photo/card.md):末句不是问句,下沿照样是「等你拍…」带拍照、相册
+      `Good job! 读得真好。
+
+~~~photo
+家里的一种水果
+~~~
+
+Find a fruit at home. 找一个家里的水果,拍下来给我看。`,
     ],
   },
   {

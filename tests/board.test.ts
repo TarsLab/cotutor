@@ -124,5 +124,10 @@ for (const f of fixtures) {
   check('提问卡:老师还在写(partial)不补', streaming.section.cards.length === 1);
   const home = parseBoard('```text\n今天读什么?\n```\n\n读什么?\n', { place: 'home' });
   check('提问卡:首页不补', home.section.cards.length === 1);
+  // 拍给我看卡(cards/photo/card.md):孩子拍来的照片进它的答案栏,末句问不问都不再补提问卡(原来补了,孩子端写「等你说…」)
+  const snap = parseBoard('今天来看图说话。\n\n```photo\n看图说话的那幅图\n```\n\n把那幅图拍下来,好吗?\n');
+  check('提问卡:有拍给我看卡 → 不补;卡解析成 photo', snap.section.cards.length === 1 && snap.section.cards[0].kind === 'photo' && snap.section.cards[0].props.text === '看图说话的那幅图' && snap.warnings.length === 0, JSON.stringify(snap.section.cards));
+  const snapFirst = parseBoard('```photo\n写好的那一页\n```\n\n```text\n写一句\n```\n\n写好了拍给我看,好吗?\n');
+  check('提问卡:拍给我看卡不在最后、末句锚着文字卡 → 也不补', snapFirst.section.cards.length === 2, JSON.stringify(snapFirst.section.cards));
 }
 done();

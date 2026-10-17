@@ -136,7 +136,13 @@ ${faviconLinks()}
   .count b { color:#b9531c; }
   .row { display:flex; gap:12px; flex-wrap:wrap; }
   /* 再写一遍 */
-  #v-rewrite .grow { flex-direction:row; align-items:center; justify-content:center; gap:56px; flex-wrap:wrap; }
+  /* 整词并排,格子按范字旁边(竖着是下面)剩的地方放到最大(《wip/听写设想.md》拍板 27,rowFit) */
+  #v-rewrite { height:100vh; height:100dvh; }
+  #v-rewrite .grow { flex-direction:row; align-items:center; justify-content:center; gap:40px; flex-wrap:nowrap; min-height:0; }
+  #v-rewrite #w-pads { flex-wrap:nowrap; }
+  /* 横着:范字竖着排成左边窄窄一栏,宽度都给写字的格子;竖着:范字一排在上 */
+  @media (orientation: landscape) { #v-rewrite .models { padding:16px 14px; } #v-rewrite .models .pads { flex-direction:column; } #v-rewrite .models .hint { text-align:center; font-size:15px; line-height:1.4; } #v-rewrite .models .hint i { display:none; } #v-rewrite .models .hint span { display:block; white-space:nowrap; } }
+  @media (orientation: portrait) { #v-rewrite .grow { flex-direction:column; gap:24px; } }
   .models { display:flex; flex-direction:column; align-items:center; gap:12px; padding:20px; background:var(--card); border:1px solid var(--line); border-radius:20px; }
   .models .pads { gap:10px; flex-wrap:nowrap; }
   .models .padbox { cursor:pointer; }
@@ -265,7 +271,7 @@ ${TUTOR_FACE_CSS}
 <div class="view" id="v-rewrite">
   <div class="bar"><span class="ttl" id="w-title">再写一遍</span><button class="layer-x" type="button" id="w-skip" aria-label="回到对一对">${LAYER_X}</button></div>
   <div class="grow">
-    <div class="models"><span class="hint">照着看 · 点一下看笔顺</span><div class="pads" id="w-models"></div></div>
+    <div class="models"><span class="hint"><span>照着看</span><i> · </i><span>点一下看笔顺</span></span><div class="pads" id="w-models"></div></div>
     <div class="pads" id="w-pads"></div>
   </div>
   <div class="foot">
@@ -396,14 +402,30 @@ ${TUTOR_FACE_CSS}
   var us = document.querySelectorAll('[data-undo]'); for (var i1 = 0; i1 < us.length; i1++) us[i1].addEventListener('click', undo);
   var cs = document.querySelectorAll('[data-clear]'); for (var i2 = 0; i2 < cs.length; i2++) cs[i2].addEventListener('click', clearActive);
   var padsOut = function () { return { chars: S.pads.map(function (p) { return { strokes: p.strokes, undos: p.undos, gone: p.gone }; }) }; };
-  /** 一排写字的格多大:屏幕放得下、不超过 340 */
-  var padSize = function (count, wFrac, hRoom) { var w = Math.floor((window.innerWidth * wFrac - 48 - (count - 1) * 24) / count); return Math.max(120, Math.min(340, w, window.innerHeight - hRoom)); };
-  var writePads = function (box, count, hRoom, wFrac) {
-    S.pads = []; S.stack = []; setActive(null);
-    var size = padSize(count, wFrac || 1, hRoom);
+  /**
+   * 再写一遍那一排格子多大(《wip/听写设想.md》拍板 27):先把格子缩成 0,量范字旁边(竖着是下面)剩多少,整词并排放得下的最大;
+   * 上限同写字屏的 900。原来按屏幕估、封顶 340,iPad 横放只有写字屏格子的一半大
+   */
+  var rowFit = function (box, count) {
+    box.style.setProperty('--pad', '0px');
+    var grow = box.parentNode, cs = getComputedStyle(grow), models = grow.querySelector('.models'), mbox = models.querySelector('.pads');
+    var row = cs.flexDirection === 'row';
+    // 范字:横着竖排在左边一栏,一栏放不下就缩(最小 64)
+    var mp = window.innerWidth < 700 ? 90 : 140;
+    if (row) { mbox.style.setProperty('--pad', '0px'); mp = Math.max(64, Math.min(mp, Math.floor((grow.getBoundingClientRect().height - models.getBoundingClientRect().height) / count))); }
+    mbox.style.setProperty('--pad', mp + 'px');
+    var g = grow.getBoundingClientRect(), m = models.getBoundingClientRect();
+    var w = row ? g.width - m.width - (parseFloat(cs.columnGap) || 0) : g.width;
+    var hh = row ? g.height : g.height - m.height - (parseFloat(cs.rowGap) || 0);
+    var size = Math.max(120, Math.min(900, Math.floor(Math.min((w - (count - 1) * 24) / count, hh)) - 10));
     box.style.setProperty('--pad', size + 'px');
+  };
+  window.addEventListener('resize', function () { if ($('#v-rewrite').classList.contains('on')) rowFit($('#w-pads'), $('#w-pads').children.length); });
+  var writePads = function (box, count) {
+    S.pads = []; S.stack = []; setActive(null);
     for (var k = 0; k < count; k++) S.pads.push(makePad({ write: true }));
     box.replaceChildren.apply(box, S.pads.map(function (p) { return p.el; }));
+    rowFit(box, count);
     setActive(S.pads[0]);
   };
 
@@ -864,8 +886,7 @@ ${TUTOR_FACE_CSS}
       mbox.append(pad.el);
     });
     show('rewrite');
-    var land = window.innerWidth > window.innerHeight;
-    writePads($('#w-pads'), chars.length, land ? 260 : 520, land ? 0.62 : 1);
+    writePads($('#w-pads'), chars.length);
   };
   /** 范字点一下:淡下去,一笔一笔重新写出来 */
   var writeModel = function (pad) {
@@ -993,10 +1014,10 @@ ${TUTOR_FACE_CSS}
       $('#w-title').textContent = '再写一遍:' + cs.join('');
       var mbox = $('#w-models'); mbox.style.setProperty('--pad', (window.innerWidth < 700 ? 90 : 140) + 'px');
       mbox.replaceChildren.apply(mbox, cs.map(function (ch) { var p = makePad({}); var d = reelGlyph(ch); if (d) fillStd(p, d, 'model'); return p.el; }));
-      var land = window.innerWidth > window.innerHeight, box = $('#w-pads');
-      box.style.setProperty('--pad', padSize(cs.length, land ? 0.62 : 1, land ? 260 : 520) + 'px');
+      var box = $('#w-pads');
       RL.rpads = cs.map(function () { return makePad({}); });
       box.replaceChildren.apply(box, RL.rpads.map(function (p) { return p.el; }));
+      rowFit(box, cs.length);
     }
     RL.rpads.forEach(function (p, ci) { reelInk(p, (f.rewrite && f.rewrite[ci]) || []); });
   };

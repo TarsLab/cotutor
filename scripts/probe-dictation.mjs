@@ -147,6 +147,15 @@ try {
 
   // ---- 再写一遍 ----
   ok('再写一遍:范字两个、空格两个', await waitFor(`document.querySelector('#v-rewrite.on') && document.querySelectorAll('#w-models .padbox').length === 2 && document.querySelectorAll('#w-pads .padbox').length === 2`));
+  const rw = await evaluate(`(() => { const ps = [...document.querySelectorAll('#w-pads .padbox')].map((p) => p.getBoundingClientRect()); const foot = document.querySelector('#v-rewrite .foot').getBoundingClientRect(); return { w: Math.round(ps[0].width), right: Math.round(ps[1].right), bottom: Math.round(ps[0].bottom), foot: Math.round(foot.top), vw: innerWidth }; })()`);
+  ok('再写一遍的格子按剩的地方放大(拍板 27):两个字并排 ≥ 400,不出屏、不压按钮', rw.w >= 400 && rw.right <= rw.vw && rw.bottom <= rw.foot, JSON.stringify(rw));
+  const rwMeasure = `(() => { const ps = [...document.querySelectorAll('#w-pads .padbox')].map((p) => p.getBoundingClientRect()); const m = document.querySelector('#w-models .padbox').getBoundingClientRect(); const foot = document.querySelector('#v-rewrite .foot').getBoundingClientRect(); return { w: Math.round(ps[0].width), right: Math.round(ps[1].right), top: Math.round(ps[0].top), mBottom: Math.round(m.bottom), bottom: Math.round(ps[0].bottom), foot: Math.round(foot.top), vw: innerWidth }; })()`;
+  await send('Emulation.setDeviceMetricsOverride', { width: 820, height: 1180, deviceScaleFactor: 1, mobile: false });
+  await sleep(400);
+  const rwp = await evaluate(rwMeasure);
+  ok('竖着:范字一排在上,格子在下面跟着重算,不出屏、不压按钮', rwp.top > rwp.mBottom && rwp.w >= 300 && rwp.right <= rwp.vw && rwp.bottom <= rwp.foot, JSON.stringify(rwp));
+  await send('Emulation.clearDeviceMetricsOverride');
+  await sleep(400);
   await tap('#w-models .padbox:nth-child(1)');
   await writeChar('#w-pads .padbox:nth-child(1)', '鼓');
   await writeChar('#w-pads .padbox:nth-child(2)', '励');

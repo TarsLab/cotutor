@@ -47,7 +47,7 @@ const EFFORT: Record<Policy['effort'], string> = { low: 'none', medium: 'low', h
  * 带工具的轮次(作业照片、记账)至少想一点:2026-10-09 真跑,同一道照片题 none 那次 read_file 都没调、请孩子说是哪页;
  * low 那次读了图、认出题目(11 秒)。孩子随口的话不带工具,不想照旧(3–6 秒)
  */
-const levelOf = (effort: Policy['effort'], tools: ToolSet): string => (tools === 'on' && EFFORT[effort] === 'none' ? 'low' : EFFORT[effort]);
+const levelOf = (effort: Policy['effort'], tools: ToolSet): string => (tools !== 'off' && EFFORT[effort] === 'none' ? 'low' : EFFORT[effort]);
 
 /** settings.json 里写的占位;qwen 读配置时拿子进程环境展开 */
 const BASE_ENV = 'COTUTOR_QWEN_BASE_URL';
@@ -98,16 +98,17 @@ export const qwen: CliAdapter = {
   name: 'qwen',
   parse: parseStreamJson,
   stdinMessage: streamJsonUserMessage,
-  toolList: (set) => (set === 'on' ? READ_TOOLS.join(',') : ''),
+  // qwen 的带工具只有只读一档(read / on 一样):shell 与写本来就不给
+  toolList: (set) => (set !== 'off' ? READ_TOOLS.join(',') : ''),
   // --core-tools 是白名单,不带时也要给一个(给空等于不限),再把它排除掉;非核心工具不归 --core-tools 管,总要排除。
   // 只读那轮把 workspace 根与 vault 加进可读范围:会话 cwd 是老师目录,作业照片(captures/)与教材在它外面,读外面要征得同意——
   // 消息走 stdin 时它就停在那儿等,一直等到 --max-wall-time(2026-10-09 真跑,开了思考的那次读照片挂住)
   toolArgs: (set: ToolSet, { readDirs }) =>
-    set === 'on'
+    set !== 'off'
       ? ['--core-tools', READ_TOOLS.join(','), '--exclude-tools', NON_CORE.join(','), ...readDirs.flatMap((d) => ['--include-directories', d])]
       : ['--core-tools', 'read_file', '--exclude-tools', ['read_file', ...NON_CORE].join(',')],
   toolKind: (name) => KINDS[name] ?? 'other',
-  expectedTools: (set) => (set === 'on' ? READ_TOOLS : []),
+  expectedTools: (set) => (set !== 'off' ? READ_TOOLS : []),
   planEnv: ({ root, effort, tools }): Record<string, string> =>
     root ? { QWEN_HOME: homeOf(root), QWEN_RUNTIME_DIR: join(root, QWEN_DIR, 'runtime'), QWEN_CODE_SYSTEM_SETTINGS_PATH: effortFile(root, levelOf(effort, tools)) } : {},
   async prepare(root) {

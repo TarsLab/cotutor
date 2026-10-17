@@ -545,7 +545,7 @@ try {
   {
     // 孩子的话缺省不带工具;带照片的那条要 Read 看图,照旧带白名单,vault 的路径也在
     const argv = (phRun as unknown as { argv: string[] }).argv;
-    check('孩子带照片的那条:带工具(--tools 白名单)、上下文包有 vault:', argv[argv.indexOf('--tools') + 1] === 'Bash,Read,Grep,Glob' && phRun.prompt.includes('\n  vault:'), argv.join(' ').slice(0, 300));
+    check('孩子带照片的那条:带只读工具(--tools 没有 Bash,拍板 20)、上下文包有 vault:', argv[argv.indexOf('--tools') + 1] === 'Read,Grep,Glob' && phRun.prompt.includes('\n  vault:'), argv.join(' ').slice(0, 300));
     const r1Run = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${(r1.json as { job: string }).job}.run.json`), 'utf8')) as { prompt: string; argv: string[] };
     check('孩子没带照片的那条:不带工具(--tools 填空),上下文包没有 refs: / vault:', r1Run.argv[r1Run.argv.indexOf('--tools') + 1] === '' && !r1Run.prompt.includes('\n  refs:') && !r1Run.prompt.includes('\n  vault:'), r1Run.prompt.slice(0, 500));
   }

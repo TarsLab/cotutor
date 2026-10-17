@@ -24,7 +24,7 @@ import { activityCards, parseActivity, renderTutorSection } from '../lib/activit
 import { activityFile } from '../cli/activities.ts';
 import { activityState, paintGate, paintTool, readActivity, threadActivity } from './activity-state.ts';
 import { KouboQueue } from './koubo.ts';
-import { controlsTools, parserOf, prepareCli, processEnv, toolsOf, unexpectedTools } from '../clis/index.ts';
+import { controlsTools, parserOf, prepareCli, processEnv, toolsOf, unexpectedTools, type ToolSet } from '../clis/index.ts';
 import { parseBoard } from '../lib/board.ts';
 import { readyBeats, beatsOf, voicedLines, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
@@ -556,9 +556,10 @@ export class Runner {
     const pack = session ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
     const noteWarnings = pack.entry?.startsWith('缺:') && !input.bookkeep ? [`入口文件${pack.entry}——在 vault 里给这位老师建一篇(cotutor doctor 有写法)`] : [];
     if (policy.board === 'off') pack.board = 'off';
-    // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的(要 Read 看图)、系统任务照旧带。
+    // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的(要 Read 看图)、系统任务带只读的(《工作流程.md》拍板 20,2026-10-17:
+    // 以前是整份白名单,照片里一句话就能让老师拿 Bash 读写 workspace 外);policy.tools: on 的老师(口播老师要跑 koubo)总是整份。
     // 不带的那轮,只有工具才用得上的路径(refs / vault)不进包;模板管不了工具的运行时(没有 {tools} / {toolArgs}),照旧
-    const tools = policy.tools === 'on' || input.from !== 'kid' || seen.length > 0 ? ('on' as const) : ('off' as const);
+    const tools: ToolSet = policy.tools === 'on' ? 'on' : input.from !== 'kid' || seen.length > 0 ? 'read' : 'off';
     const bare = tools === 'off' && controlsTools(runtime);
     if (bare) { delete pack.refs; delete pack.vault; }
     // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带

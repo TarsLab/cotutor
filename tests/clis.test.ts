@@ -31,6 +31,7 @@ const j = (o: unknown): string => JSON.stringify(o);
   const filled = fillArgs(claude, ['claude', '--tools', '{tools}', '{toolArgs}', '--effort', '{effort}'], { agent: 'a', prompt: 'p', tools: 'off' });
   check('{tools} 填工具名单,{toolArgs} 展开成几个参数,{effort} 没给用缺省', j(filled) === j(['claude', '--tools', '', '--tools', '', '--effort', 'low']), j(filled));
   check('不给 tools = 带', fillArgs(claude, ['{tools}'], { agent: 'a', prompt: 'p' })[0] === 'Bash,Read,Grep,Glob');
+  check('只读那档(照片、记账):没有 Bash;qwen 的 read 与 on 一样', fillArgs(claude, ['{tools}', '{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'read' }).join(' ') === 'Read,Grep,Glob --tools Read,Grep,Glob' && j(fillArgs(qwen, ['{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'read', readDirs: ['/ws'] })) === j(fillArgs(qwen, ['{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'on', readDirs: ['/ws'] })));
   check('{toolArgs} 展开成零个参数也行', j(fillArgs({ ...STREAM_JSON, toolArgs: () => [] }, ['x', '{toolArgs}', 'y'], { agent: 'a', prompt: 'p' })) === j(['x', 'y']));
   check('模板管得了工具:{tools} 或独占参数的 {toolArgs}', controlsTools({ run: ['a', '--tools', '{tools}'], resume: ['a'] }) && controlsTools({ run: ['a'], resume: ['a', '{toolArgs}'] }) && !controlsTools({ run: ['a'], resume: ['a'] }));
 }

@@ -6,10 +6,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { NO_AGENTS_FILE, type Runtime } from '../schema/index.ts';
 import { parseStreamJson, streamJsonUserMessage } from './stream-json.ts';
-import type { CliAdapter, ToolKind } from './types.ts';
+import type { CliAdapter, ToolKind, ToolSet } from './types.ts';
 
-/** 老师带工具时的白名单(`--tools`):Bash 查教材、裁作业照片;Read / Grep / Glob 读 vault 与技能文件 */
-export const CLAUDE_TUTOR_TOOLS = 'Bash,Read,Grep,Glob';
+/** 只读那轮的白名单(`--tools`,2026-10-17):Read 看照片、读 vault 与技能文件,Grep / Glob 查教材。带照片的那条、系统任务走它 */
+export const CLAUDE_READ_TOOLS = 'Read,Grep,Glob';
+/** policy.tools: on 的老师(口播老师要跑 koubo 命令)多一个 Bash。Bash 不再给缺省的带工具轮:作业照片里一句话就能让老师读 ~/.ssh、写 workspace 外 */
+export const CLAUDE_TUTOR_TOOLS = `Bash,${CLAUDE_READ_TOOLS}`;
+const toolsOf = (set: ToolSet): string => (set === 'on' ? CLAUDE_TUTOR_TOOLS : set === 'read' ? CLAUDE_READ_TOOLS : '');
 
 const KINDS: Record<string, ToolKind> = { Read: 'read', Bash: 'shell', Grep: 'search', Glob: 'search', Edit: 'edit', Write: 'edit', NotebookEdit: 'edit', MultiEdit: 'edit', Skill: 'skill' };
 
@@ -17,8 +20,8 @@ export const claude: CliAdapter = {
   name: 'claude',
   parse: parseStreamJson,
   stdinMessage: streamJsonUserMessage,
-  toolList: (set) => (set === 'on' ? CLAUDE_TUTOR_TOOLS : ''),
-  toolArgs: (set) => ['--tools', set === 'on' ? CLAUDE_TUTOR_TOOLS : ''],
+  toolList: toolsOf,
+  toolArgs: (set) => ['--tools', toolsOf(set)],
   toolKind: (name) => KINDS[name] ?? 'other',
   // activity 话题以外 --agents 指的那份空定义
   async prepare(root) {
@@ -39,7 +42,7 @@ export const claude: CliAdapter = {
     // CLI 升版本还会带进新工具——2.1.275 真跑里老师去调了 Artifact、ToolSearch,每次白花一个来回。Skill 也不给:板书写法与守则由应用递,别的技能按路径 Read
     // --strict-mcp-config(2026-10-04):--setting-sources 管不到账号上的 claude.ai 连接器,真跑里每位老师的会话都带着 8 个 Claude Docs 的 MCP 工具(--tools "" 也去不掉);
     // 加了它、又不给 --mcp-config,就一个 MCP 都不进
-    // --tools {tools}(2026-10-04):孩子说的话缺省不带工具({tools} 填成空,工具定义都不发),带照片的、记账的填整份白名单;政策 tools: on 的老师总是带
+    // --tools {tools}(2026-10-04):孩子说的话缺省不带工具({tools} 填成空,工具定义都不发),带照片的、记账的填只读那三样(2026-10-17 起不带 Bash);政策 tools: on 的老师总是带整份
     // --effort {effort}:老师政策里的 effort(缺省 low),见 schema 的 PolicySchema.effort
     // 板书写法由应用递给老师,递法看模板(《agent层设计.md》拍板 11):{boardFile} = 板书技能 SKILL.md 的绝对路径,claude 用 --append-system-prompt-file 追加进系统提示
     // (落在「工具 → 系统」这段缓存前缀里,同一位老师的各话题共享);{systemBody} = 老师正文 + 板书写法,给只收一段系统提示文字的 CLI;

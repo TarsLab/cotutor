@@ -404,6 +404,25 @@ try {
     check('认英文:只收英文单词、全文去掉标点按词分;提示词换英文的格式', parseItem({ text: 'red' }, 'en')?.text === 'red' && parseItem({ text: '红' }, 'en') === null && r2.items.map((x) => x.text).join() === 'yellow' && r2.full[0] === "What colour is it It's yellow" && sw2('a, b!', 'en') === 'a b' && pp(['x'], 'en').includes('一个英文单词'), JSON.stringify(r2.full));
     check('cotutor.json 有英文的认词要求(缺省填上)', Array.isArray(ctx.ws.config.dictation.promptEn) && ctx.ws.config.dictation.promptEn.join('').includes('英文单词'));
   }
+  // ---- 两页的按钮同一套(《wip/听写设想.md》拍板 28):英文页从第一版起没有图标,修了几次又漂开,这里拦着 ----
+  {
+    const { DICTATION_PAGE } = await import('../src/dictation/page.ts');
+    const { DICTATION_EN_PAGE } = await import('../src/dictation/en-page.ts');
+    const { BTN_CSS, WRITE_TOOLS } = await import('../src/dictation/ui.ts');
+    for (const [name, page] of [['语文', DICTATION_PAGE], ['英文', DICTATION_EN_PAGE]] as const) {
+      const bare = [...page.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].filter((m) => !m[1].includes('<svg')).map((m) => m[0].slice(0, 80));
+      check(`${name}页:写死的按钮都带图标`, bare.length === 0, bare.join(' | '));
+      // 脚本里现建的:class 是 x(×)、seg(全文的词)、chip(单词)、bx / ebx(照片上的框)的不算按钮样式
+      const made = page.split("h('button'").slice(1).map((x) => x.slice(0, 400)).filter((x) => !/^, \{ 'class': '(x|seg|chip|e?bx)[ '"]/.test(x));
+      const noIcon = made.filter((x) => !x.includes('ico('));
+      check(`${name}页:脚本里现建的按钮都带图标(ico)`, made.length > 0 && noIcon.length === 0, noIcon.map((x) => x.slice(0, 90)).join(' | '));
+      const missing = WRITE_TOOLS.filter((t) => !page.includes(`<span>${t}</span>`));
+      check(`${name}页:写字那排是 ${WRITE_TOOLS.join(' / ')}`, missing.length === 0, missing.join(' '));
+      const old = ['擦掉重写', '擦掉这一格', '这个字写好了', '放回蓝字'].filter((t) => page.includes(`<span>${t}</span>`) || page.includes(`'${t}'`));
+      check(`${name}页:没有各叫各的旧字`, old.length === 0, old.join(' '));
+      check(`${name}页:按钮的样式只有 ui.ts 那一份`, page.includes(BTN_CSS) && page.split('.tool { display').length === 2 && page.split('.main { display').length === 2);
+    }
+  }
 } finally {
   done();
 }

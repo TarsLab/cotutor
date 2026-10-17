@@ -9,8 +9,9 @@ import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts'
 import { EN_BOX_CSS, EN_BOX_JS } from './en-box.ts';
 import { UNLOCK_JS } from './unlock.ts';
 import { REEL_MODE_JS } from './reel-mode.ts';
-import { SNAP_CSS, cameraSvg, snapHtml } from '../server/photo-ui.ts';
+import { SNAP_CSS, snapHtml } from '../server/photo-ui.ts';
 import { faviconLinks } from '../lib/favicon.ts';
+import { BTN_CSS, BTN_JS, btn } from './ui.ts';
 
 export const DICTATION_EN_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -30,10 +31,8 @@ ${faviconLinks()}
   .view { display:none; flex-direction:column; gap:18px; max-width:1000px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 10px) 20px calc(env(safe-area-inset-bottom) + 28px); }
   .view.on { display:flex; }
   .bar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-  .tool { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:52px; padding:0 18px; border-radius:26px; border:1px solid var(--line); background:#fff; font-size:17px; }
-  .tool:disabled { opacity:.4; }
-  .main { display:inline-flex; align-items:center; justify-content:center; min-height:60px; padding:0 40px; border-radius:30px; border:0; background:var(--green); color:#fff; font-size:20px; font-weight:600; }
-  .main:disabled { opacity:.45; }
+  /* 按钮两页同一份(拍板 28,ui.ts) */
+${BTN_CSS}
   .ttl { font-size:22px; font-weight:700; }
   /* 写字屏(拍板 20):不限 1000 宽,四线格占满宽度(高度不够时按 16 : 7 收窄);听写本横排,一个单词一小条 */
   #v-write { max-width:none; gap:12px; height:100vh; height:100dvh; padding-bottom:calc(env(safe-area-inset-bottom) + 16px); }
@@ -57,7 +56,6 @@ ${faviconLinks()}
   .wtools { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
   .wtools .tools { justify-content:flex-start; }
   .wtools .main { margin-left:auto; }
-  .tool.rv { border:2px solid var(--tutor-line); color:var(--tutor-ink); font-weight:600; }
   .bubble { display:flex; align-items:center; gap:14px; padding:14px 22px; background:var(--tutor); border-radius:22px; border-top-left-radius:6px; align-self:flex-start; }
   .bubble b { display:block; font-size:22px; color:var(--tutor-ink); }
   .bubble small { display:block; font-size:15px; color:var(--tutor-ink2); min-height:22px; }
@@ -111,7 +109,7 @@ ${faviconLinks()}
 </style></head><body>
 <div class="view" id="v-start">
   <div class="bar"><span class="bk-slot"></span></div>
-  <div class="center"><b id="s-title">单词听写</b><span id="s-sub">老师念,你来写</span><button class="main" type="button" id="s-go">开始</button></div>
+  <div class="center"><b id="s-title">单词听写</b><span id="s-sub">老师念,你来写</span>${btn('main', 'start', '开始', 'id="s-go"')}</div>
 </div>
 <div class="view" id="v-snap">
   ${snapHtml({ kind: 'en', id: 'p-pick', cam: 'p-cam', lib: 'p-lib' })}
@@ -123,36 +121,36 @@ ${faviconLinks()}
         <div class="chips" id="p-chips"></div>
         <div class="muted">照片上还有这些,点一下加进来:</div>
         <div class="chips" id="p-more"></div>
-        <div class="add"><input id="p-add" placeholder="自己加单词,空格分开" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="tool" type="button" id="p-add-go">加</button></div>
+        <div class="add"><input id="p-add" placeholder="自己加单词,空格分开" autocomplete="off" autocapitalize="off" spellcheck="false">${btn('tool', 'add', '加', 'id="p-add-go"')}</div>
       </div>
-      <div class="pgo"><button class="tool" type="button" id="p-again">${cameraSvg()}重拍</button><button class="main" type="button" id="p-go" disabled>开始听写</button></div>
+      <div class="pgo">${btn('tool', 'camera', '重拍', 'id="p-again"')}${btn('main', 'start', '开始听写', 'id="p-go" disabled')}</div>
     </div>
   </div>
 </div>
 <div class="view" id="v-write">
   <!-- 写字(拍板 23,iPad 实拍后放大):胶囊、听写本、气泡与再念并成一行,格子铺满中间,按钮一行 -->
   <div class="bar wtop"><span class="bk-slot"></span><div class="wbook" id="w-book"></div><div class="model" id="w-model" hidden></div>
-    <div class="bubble wsay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg><div><b id="w-who">老师在念</b><small id="w-status"></small></div><button class="tool" type="button" id="w-again">再念</button></div>
+    <div class="bubble wsay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg><div><b id="w-who">老师在念</b><small id="w-status"></small></div>${btn('tool', 'again', '再念', 'id="w-again"')}</div>
     <button class="layer-x" type="button" id="w-x" aria-label="回到对一对" hidden>${LAYER_X}</button></div>
   <svg class="pad" id="w-pad" viewBox="0 -192 2048 896"></svg>
   <div class="wtools">
     <div class="tools">
-      <button class="tool" type="button" id="w-undo">撤销</button>
-      <button class="tool" type="button" id="w-clear">擦掉</button>
-      <button class="tool rv" type="button" id="w-reveal">不会写,给答案</button>
+      ${btn('tool', 'undo', '撤销', 'id="w-undo"')}
+      ${btn('tool', 'clear', '擦掉', 'id="w-clear"')}
+      ${btn('tool reveal', 'reveal', '不会写,给答案', 'id="w-reveal"')}
     </div>
-    <button class="main" type="button" id="w-done">写好了</button>
+    ${btn('main', 'done', '写好了', 'id="w-done"')}
   </div>
 </div>
 <div class="view" id="v-check">
-  <div class="bar"><span class="bk-slot"></span><span class="ttl">对一对</span><button class="tool" type="button" id="c-hide">拿开蓝字</button></div>
+  <div class="bar"><span class="bk-slot"></span><span class="ttl">对一对</span>${btn('tool', 'overlay', '拿开蓝字', 'id="c-hide"')}</div>
   <div class="muted">蓝色的是书上的单词,看看你写的一样不一样。想再写哪个就点「再写一遍」。</div>
   <div class="rows" id="c-rows"></div>
-  <div style="display:flex;justify-content:center"><button class="main" type="button" id="c-done">对好了</button></div>
+  <div style="display:flex;justify-content:center">${btn('main', 'done', '对好了', 'id="c-done"')}</div>
 </div>
 <div class="view" id="v-submit">
   <div class="bar"><span class="bk-slot"></span></div>
-  <div class="center"><b>都写完了</b><span>交上去,看看书上的单词</span><button class="main" type="button" id="u-go">交上去</button></div>
+  <div class="center"><b>都写完了</b><span>交上去,看看书上的单词</span>${btn('main', 'send', '交上去', 'id="u-go"')}</div>
 </div>
 <div id="toast"></div>
 <script>
@@ -162,6 +160,7 @@ ${faviconLinks()}
   var NS = 'http://www.w3.org/2000/svg';
   var sv = function (tag, attrs) { var el = document.createElementNS(NS, tag); for (var k in (attrs || {})) el.setAttribute(k, String(attrs[k])); return el; };
   var h = function (tag, attrs) { var el = document.createElement(tag); attrs = attrs || {}; for (var k in attrs) { if (k === 'on') { for (var ev in attrs.on) el.addEventListener(ev, attrs.on[ev]); } else if (k === 'text') el.textContent = attrs[k]; else if (attrs[k] !== null && attrs[k] !== undefined) el.setAttribute(k, attrs[k]); } for (var i = 2; i < arguments.length; i++) if (arguments[i]) el.append(arguments[i]); return el; };
+${BTN_JS}
   var api = function (method, path, body) { return fetch(path, { method: method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined }).then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); }); };
   var toastTimer = 0;
   var toast = function (t) { var el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.classList.remove('on'); }, 2600); };
@@ -307,13 +306,13 @@ ${faviconLinks()}
       var svg = sv('svg', { viewBox: EN_VIEW }); var g = sv('g', { 'class': 'eni' });
       (a.ink[0] || []).forEach(function (s) { if (s.length) g.append(sv('path', { d: pathD(s) })); });
       svg.append(enLines(sv), g); if (!S.hide) svg.append(enWord(sv, a.chars));
-      var again = h('button', { 'class': 'tool', type: 'button', on: { click: function () { rewrite(i); } } }, '再写一遍');
+      var again = h('button', { 'class': 'tool', type: 'button', on: { click: function () { rewrite(i); } } }, ico('write'), lbl('再写一遍'));
       // emoji 只在对一对出(拍板 21):写的时候看不到,写完了当个提示放在这一行的左下
       rows.append(h('div', { 'class': 'row' }, svg, h('div', { 'class': 'ft' }, a.emoji ? h('span', { 'class': 'em', text: a.emoji }) : null, h('small', { text: (i + 1) + (a.revealed ? ' · 看了答案,照着写的' : a.rewrote ? ' · 又写了一遍' : '') }), again)));
     });
     show('check');
   };
-  $('#c-hide').addEventListener('click', function () { S.hide = !S.hide; $('#c-hide').textContent = S.hide ? '放回蓝字' : '拿开蓝字'; openCheck(); });
+  $('#c-hide').addEventListener('click', function () { S.hide = !S.hide; $('#c-hide span').textContent = S.hide ? '叠上蓝字' : '拿开蓝字'; openCheck(); });
   var rewrite = function (i) {
     event('self', i);
     S.i = i; S.strokes = []; S.undos = 0; S.gone = []; S.revealed = false; S.mode = 'rewrite';
@@ -332,7 +331,7 @@ ${faviconLinks()}
     $('#s-title').textContent = '单词听写 · ' + v.sizes.length + ' 个单词';
     var wrote = v.written.filter(Boolean).length;
     $('#s-sub').textContent = wrote ? '写到第 ' + (wrote + 1) + ' 个了' : (v.tutor || '老师') + '念,你来写';
-    $('#s-go').textContent = wrote ? '接着写' : '开始';
+    $('#s-go span').textContent = wrote ? '接着写' : '开始';
     show('start');
   };
   $('#s-go').addEventListener('click', function () { nextWord(); });
@@ -447,7 +446,7 @@ ${faviconLinks()}
           svg.append(enLines(sv), g, enWord(sv, cs[0]));
           var a = RL.s.first[i]; var rv = Boolean(a && a.chars[0] && a.chars[0].revealed);
           var rw = R.rewrites.some(function (x) { return x.word === i && x.to <= RL.t; });
-          rows.append(h('div', { 'class': 'row' }, svg, h('div', { 'class': 'ft' }, h('small', { text: (i + 1) + (rv ? ' · 看了答案,照着写的' : rw ? ' · 又写了一遍' : '') }), h('button', { 'class': 'tool', type: 'button' }, '再写一遍'))));
+          rows.append(h('div', { 'class': 'row' }, svg, h('div', { 'class': 'ft' }, h('small', { text: (i + 1) + (rv ? ' · 看了答案,照着写的' : rw ? ' · 又写了一遍' : '') }), h('button', { 'class': 'tool', type: 'button' }, ico('write'), lbl('再写一遍')))));
           return { g: g, sig: '' };
         });
         S.mode = 'first'; show('check');

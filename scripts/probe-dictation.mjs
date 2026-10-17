@@ -82,29 +82,31 @@ try {
   ok('听写中:听写本三行(2、2、1 格)、右边一个大格;气泡里没有字', await waitFor(`document.querySelectorAll('#l-book .brow').length === 3 && document.querySelectorAll('#l-big .padbox').length === 1`) && (await evaluate(`[...document.querySelectorAll('#l-book .brow')].map((r) => r.querySelectorAll('.padbox').length).join() === '2,2,1' && document.querySelector('#l-what').textContent === '第一个词的第一个字' && !document.body.innerText.includes('春')`)));
   const bigSize = await evaluate(`Math.round(document.querySelector('#l-big .padbox').getBoundingClientRect().width)`);
   ok('大格放得大(≥ 480)', bigSize >= 480, `${bigSize}px`);
+  const btnsZh = await evaluate(`(() => { const bs = [...document.querySelectorAll('.view.on button.tool, .view.on button.main')].filter((b) => b.getClientRects().length); return { bare: bs.filter((b) => !b.querySelector('svg')).map((b) => b.textContent.trim()), labels: bs.map((b) => b.textContent.trim()) }; })()`);
+  ok('写字屏的按钮都带图标,字同英文页:再念 撤销 擦掉 不会写,给答案 写好了(《wip/听写设想.md》拍板 28)', btnsZh.bare.length === 0 && ['再念', '撤销', '擦掉', '不会写,给答案', '写好了'].every((t) => btnsZh.labels.includes(t)), JSON.stringify(btnsZh));
   await writeChar('#l-big .padbox', '春');
   ok('写:大格里 9 笔,听写本上当前这格跟着画', (await inkCount('#l-big .ink')) === 9 && (await inkCount('#l-book .here .ink')) === 9);
   await shot('03-listen');
   ok('学科色:写好了是语文老师的粉(拍板 20)', await waitFor(`getComputedStyle(document.querySelector('#l-next')).backgroundColor === 'rgb(196, 60, 116)'`));
   ok('出口同老师页:左上角「‹ 头像」胶囊带语文老师的脸,没有「先停一下」', await waitFor(`(() => { const b = document.querySelector('#back'); if (!b || b.hidden) return false; const r = b.getBoundingClientRect(); return r.left < 30 && r.top < 30 && !!b.querySelector('.tfav .face') && !document.body.innerText.includes('先停一下'); })()`));
-  await tapText('这个字写好了');
-  ok('这个字写好了:同一个词的第二个字', await waitFor(`document.querySelector('#l-what').textContent === '第一个词的第二个字'`) && (await inkCount('#l-big .ink')) === 0);
+  await tapText('写好了');
+  ok('写好了:同一个词的第二个字', await waitFor(`document.querySelector('#l-what').textContent === '第一个词的第二个字'`) && (await inkCount('#l-big .ink')) === 0);
   await writeChar('#l-big .padbox', '天');
-  await tapText('这个字写好了');
+  await tapText('写好了');
   ok('一个词写完:念下一个词,听写本上第一行留着写的字', await waitFor(`document.querySelector('#l-what').textContent === '第二个词的第一个字'`) && (await evaluate(`[...document.querySelectorAll('#l-book .brow')[0].querySelectorAll('.ink')].map((g) => g.children.length).join()`)) === '9,4');
   await writeChar('#l-big .padbox', '鼓', [6]);
-  await tapText('这个字写好了');
+  await tapText('写好了');
   await writeChar('#l-big .padbox', '励');
   await tapText('撤销');
   const afterUndo = await inkCount('#l-big .ink');
-  await tapText('擦掉重写');
+  await tapText('擦掉');
   const afterClear = await inkCount('#l-big .ink');
   await writeChar('#l-big .padbox', '励');
   ok('撤销撤最后一笔、擦掉重写清这个字', afterUndo === 6 && afterClear === 0 && (await inkCount('#l-big .ink')) === 7, `${afterUndo}/${afterClear}`);
   await tap('#l-book .brow.cur .padbox:nth-child(2)');
   ok('点听写本上这个词的第一格:回去看「鼓」', await waitFor(`document.querySelector('#l-what').textContent === '第二个词的第一个字'`) && (await inkCount('#l-big .ink')) === 12);
   await tap('#l-book .brow.cur .padbox:nth-child(3)');
-  await tapText('这个字写好了');
+  await tapText('写好了');
 
   // ---- 不会写,给答案:看笔顺,照着描红写一遍 ----
   ok('第三个词一个格', await waitFor(`document.querySelector('#l-what').textContent === '第三个词 · 一个字'`));
@@ -116,11 +118,11 @@ try {
   await shot('03c-answer');
   await tapText('我来写');
   ok('我来写:灰色描红打底,「给答案」换成「再看笔顺」', await waitFor(`document.querySelector('#l-big .std').classList.contains('trace') && document.querySelector('#l-big .std').children.length === 5 && document.querySelector('#l-reveal').hidden && !document.querySelector('#l-reorder').hidden`));
-  await tapText('这个字写好了');
+  await tapText('写好了');
   ok('没照着写就点写好了:不让过,提示照着写', await evaluate(`document.querySelector('#l-status').textContent.includes('照着灰色的写一遍')`) && (await evaluate(`!!document.querySelector('#v-listen.on')`)));
   await writeChar('#l-big .padbox', '叶');
   await shot('03d-trace');
-  await tapText('这个字写好了');
+  await tapText('写好了');
 
   // ---- 对答案 ----
   ok('交卷:进对答案,三张词卡', await waitFor(`document.querySelector('#v-check.on') && document.querySelectorAll('.wc').length === 3`));

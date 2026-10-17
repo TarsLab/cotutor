@@ -15,6 +15,8 @@ const svg = (paths: string, size: number, sw = 2): string =>
 export const cameraSvg = (size = 22, sw = 2): string => svg(CAMERA_PATHS, size, sw);
 /** 相册图标 */
 export const albumSvg = (size = 22, sw = 2): string => svg(ALBUM_PATHS, size, sw);
+/** 播放:「接着写」「接着上」,听写页的「开始」同一个(src/dictation/ui.ts) */
+export const playSvg = (size = 22, sw = 1.8): string => svg('<path d="M8 5.5v13l10.5-6.5z"></path>', size, sw);
 
 /** 拍照屏的三种场景:语文听写、英语听写、口语课;按钮一样,用途图、标题、一句话不同 */
 export type SnapKind = 'zh' | 'en' | 'talk';
@@ -28,7 +30,7 @@ const SNAP: Record<SnapKind, { pg: string; title: string; say: string; more: str
 export const snapHtml = (o: { kind: SnapKind; id: string; cam: string; lib: string }): string => {
   const k = SNAP[o.kind];
   return `<div class="snap" id="${o.id}">
-    <div class="resume" id="snap-resume" hidden><div><b>${k.resume}</b><small id="snap-resume-sub"></small></div><button class="main" type="button" id="snap-resume-go">${k.go}</button></div>
+    <div class="resume" id="snap-resume" hidden><div><b>${k.resume}</b><small id="snap-resume-sub"></small></div><button class="main" type="button" id="snap-resume-go">${playSvg()}<span>${k.go}</span></button></div>
     <span class="snap-av" id="snap-av" aria-hidden="true"></span>
     <div class="snap-ttl">${k.pg}<span class="cam">${cameraSvg(17, 2.4)}</span></span><h1>${k.title}</h1></div>
     <div class="snap-sub"><b>${k.say}</b><span>${k.more}</span></div>

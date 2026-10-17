@@ -11,7 +11,7 @@ import type { PhotoItem } from './recognize.ts';
 
 export const ID_RE = /^\d{4}-\d{2}-\d{2}-\d{4}(?:-\d{1,2})?$/;
 
-/** 擦掉的一笔:什么时候擦的(离开始多少毫秒,撤销、擦掉重写、点「给答案」清掉的都算) */
+/** 擦掉的一笔:什么时候擦的(离开始多少毫秒,撤销、擦掉、点「给答案」清掉的都算) */
 export interface InkGone {
   t: number;
   pts: InkPoint[];

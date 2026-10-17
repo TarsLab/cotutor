@@ -261,7 +261,7 @@ function drView(steps: DrStep[], t: number, sizes: number[]): { view: DrView; wo
     else if (x.k === 'reveal' || x.k === 'order') { word = x.word; char = x.char; mode = 'order'; orderAt = x.t; revealed.add(x.word + ':' + x.char); }
     else if (x.k === 'trace') { mode = 'trace'; }
     else if (x.k === 'done') {
-      // 写好了:换到这个词下一个还没写好的格(page.ts 的「这个字写好了」);都写好了就停在这儿,等下一个词
+      // 写好了:换到这个词下一个还没写好的格(page.ts 的「写好了」);都写好了就停在这儿,等下一个词
       done.add(x.word + ':' + x.char);
       const n = sizes[x.word] ?? 1;
       for (let k = 1; k <= n; k++) { const c = (x.char + k) % n; if (!done.has(x.word + ':' + c)) { word = x.word; char = c; mode = revealed.has(word + ':' + c) ? 'trace' : 'write'; break; } }

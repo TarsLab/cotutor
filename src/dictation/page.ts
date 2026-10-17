@@ -8,8 +8,9 @@
 import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
 import { UNLOCK_JS } from './unlock.ts';
 import { REEL_MODE_JS } from './reel-mode.ts';
-import { SNAP_CSS, cameraSvg, snapHtml } from '../server/photo-ui.ts';
+import { SNAP_CSS, snapHtml } from '../server/photo-ui.ts';
 import { faviconLinks } from '../lib/favicon.ts';
+import { BTN_CSS, BTN_JS, btn } from './ui.ts';
 
 export const DICTATION_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -29,11 +30,8 @@ ${faviconLinks()}
   .view.on { display:flex; }
   .bar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .bar .l { display:flex; align-items:center; gap:14px; min-width:0; }
-  .tool { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:56px; padding:0 20px; border-radius:28px; border:1px solid var(--line); background:#fff; font-size:17px; }
-  .tool.sm { min-height:48px; font-size:15px; padding:0 16px; }
-  .tool svg { width:22px; height:22px; }
-  .main { display:inline-flex; align-items:center; justify-content:center; min-height:64px; padding:0 44px; border-radius:32px; border:0; background:var(--clay); color:#fff; font-size:20px; font-weight:600; }
-  .main:disabled { opacity:.5; }
+  /* 按钮两页同一份(拍板 28,ui.ts) */
+${BTN_CSS}
   .ttl { font-size:22px; font-weight:700; }
   .dots { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .dots i { width:14px; height:14px; border-radius:7px; background:var(--line); }
@@ -88,7 +86,6 @@ ${faviconLinks()}
   .chip b { display:block; font-size:18px; color:var(--tutor-ink); white-space:nowrap; }
   .chip small { display:block; font-size:14px; color:var(--tutor-ink2); white-space:nowrap; min-height:20px; }
   .big { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
-  .tool.reveal { border:2px solid var(--tutor-line); background:#fff; color:var(--tutor-ink); font-weight:600; }
   .std.trace path { fill:#d9d5cc; fill-opacity:1; }
   /* 写字的左边一栏(拍板 20):气泡与再念、听写本、按钮都在这;右边 .big 整块高度只放田字格 */
   #v-listen .side3 { width:300px; flex:none; min-height:0; display:flex; flex-direction:column; gap:12px; padding-top:58px; }
@@ -125,8 +122,9 @@ ${faviconLinks()}
   .wc .pads { gap:10px; flex-wrap:nowrap; }
   .wc .padbox { cursor:pointer; }
   .ask { display:flex; align-items:center; gap:12px; padding:6px 6px 6px 16px; background:var(--tutor); border-radius:24px; font-size:17px; color:var(--tutor-ink); }
-  .ask button { min-height:44px; padding:0 20px; border-radius:22px; border:0; background:var(--clay); color:#fff; font-weight:600; }
-  .self { min-height:44px; padding:0 16px; border-radius:22px; border:1px solid var(--line); background:#fff; font-size:15px; color:var(--dim); }
+  .ask button { display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:0 20px; border-radius:22px; border:0; background:var(--clay); color:#fff; font-weight:600; }
+  .self { display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:0 16px; border-radius:22px; border:1px solid var(--line); background:#fff; font-size:15px; color:var(--dim); }
+  .ask button svg, .self svg { width:18px; height:18px; flex:none; }
   .hint { color:var(--dim); font-size:17px; }
   /* 逐笔看 */
   #v-order .grow { flex-direction:row; align-items:center; justify-content:center; gap:48px; flex-wrap:wrap; }
@@ -205,12 +203,12 @@ ${TUTOR_FACE_CSS}
     <div class="hint" style="font-size:15px">点照片上的框:蓝的会念,虚线的不念。橙的没认准,改一下字。</div>
     <div class="wl">
       <div id="p-list" style="display:flex;flex-direction:column;gap:8px"></div>
-      <div class="add"><input id="p-add" placeholder="自己加词,空格分开" aria-label="自己加词"><button class="tool sm" id="p-add-go">加</button></div>
+      <div class="add"><input id="p-add" placeholder="自己加词,空格分开" aria-label="自己加词">${btn('tool sm', 'add', '加', 'id="p-add-go"')}</div>
       <div class="fulltxt" id="p-full" hidden><div class="fh">照片上的字 · 点一个词加进来</div><div id="p-lines"></div></div>
     </div>
     <div class="row">
-      <button class="tool" id="p-again">${cameraSvg()}重拍</button>
-      <button class="main" id="p-go" style="flex:1">开始听写</button>
+      ${btn('tool', 'camera', '重拍', 'id="p-again"')}
+      ${btn('main', 'start', '开始听写', 'id="p-go" style="flex:1"')}
     </div>
   </div>
 </div>
@@ -221,21 +219,21 @@ ${TUTOR_FACE_CSS}
     <div class="chip">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:var(--tutor-ink)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg>
       <div class="ct"><b id="l-what"></b><small id="l-status"></small></div>
-      <button class="tool sm" id="l-again"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>再念</button>
+      ${btn('tool sm', 'again', '再念', 'id="l-again"')}
     </div>
     <div class="book" id="l-book"></div>
     <div class="foot" id="l-foot-write">
       <div class="tools">
-        <button class="tool" data-undo="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"></path><path d="M4 9h11a5 5 0 0 1 0 10h-3"></path></svg>撤销</button>
-        <button class="tool" data-clear="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20H8l-4-4 10-10 6 6-6 6"></path></svg>擦掉重写</button>
-        <button class="tool reveal" id="l-reveal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"></path><path d="M10 21h4"></path><path d="M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"></path></svg>不会写,给答案</button>
-        <button class="tool" id="l-reorder" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>再看笔顺</button>
+        ${btn('tool', 'undo', '撤销', 'data-undo="1"')}
+        ${btn('tool', 'clear', '擦掉', 'data-clear="1"')}
+        ${btn('tool reveal', 'reveal', '不会写,给答案', 'id="l-reveal"')}
+        ${btn('tool', 'order', '再看笔顺', 'id="l-reorder" hidden')}
       </div>
-      <button class="main" id="l-next">这个字写好了</button>
+      ${btn('main', 'done', '写好了', 'id="l-next"')}
     </div>
     <div class="foot" id="l-foot-order" hidden>
-      <div class="tools"><button class="tool" id="l-again-order">再看一遍</button></div>
-      <button class="main" id="l-trace">我来写</button>
+      <div class="tools">${btn('tool', 'replay', '再看一遍', 'id="l-again-order"')}</div>
+      ${btn('main', 'write', '我来写', 'id="l-trace"')}
     </div>
   </div>
   <div class="big" id="l-big"></div>
@@ -244,10 +242,10 @@ ${TUTOR_FACE_CSS}
 <div class="view" id="v-check">
   <div class="bar">
     <div class="l"><span class="bk-slot"></span><div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span class="ttl">写完啦,自己对一对</span><span class="hint">淡蓝的是书上的字,叠在你写的上面。点一个字,看它一笔一笔怎么写。</span></div></div>
-    <button class="tool sm" id="c-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="#4f86d1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="13" height="13" rx="2"></rect><rect x="8" y="8" width="13" height="13" rx="2"></rect></svg><span>拿开蓝字</span></button>
+    ${btn('tool sm', 'overlay', '拿开蓝字', 'id="c-toggle"')}
   </div>
   <div class="cards" id="c-cards"></div>
-  <div class="foot"><span></span><button class="main" id="c-done">对好了</button></div>
+  <div class="foot"><span></span>${btn('main', 'done', '对好了', 'id="c-done"')}</div>
 </div>
 
 <div class="view" id="v-order">
@@ -258,12 +256,12 @@ ${TUTOR_FACE_CSS}
       <div><div class="ttl">看它一笔一笔写</div><div class="hint">蓝笔在你写的字上面写一遍,正在写的那一笔是橙色的。</div></div>
       <div class="count" id="r-count"></div>
       <div class="row">
-        <button class="tool" id="r-prev" aria-label="上一笔"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></button>
-        <button class="tool" id="r-play" style="flex:1">接着写</button>
-        <button class="tool" id="r-next" aria-label="下一笔"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"></path></svg></button>
-        <button class="tool" id="r-zero">从头写</button>
+        ${btn('tool', 'prev', '', 'id="r-prev" aria-label="上一笔"')}
+        ${btn('tool', 'start', '接着写', 'id="r-play" style="flex:1"')}
+        ${btn('tool', 'next', '', 'id="r-next" aria-label="下一笔"')}
+        ${btn('tool', 'replay', '从头写', 'id="r-zero"')}
       </div>
-      <button class="main" id="r-rewrite">我再写一遍</button>
+      ${btn('main', 'write', '我再写一遍', 'id="r-rewrite"')}
     </div>
   </div>
 </div>
@@ -276,10 +274,10 @@ ${TUTOR_FACE_CSS}
   </div>
   <div class="foot">
     <div class="tools">
-      <button class="tool" data-undo="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"></path><path d="M4 9h11a5 5 0 0 1 0 10h-3"></path></svg>撤销</button>
-      <button class="tool" data-clear="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20H8l-4-4 10-10 6 6-6 6"></path></svg>擦掉这一格</button>
+      ${btn('tool', 'undo', '撤销', 'data-undo="1"')}
+      ${btn('tool', 'clear', '擦掉', 'data-clear="1"')}
     </div>
-    <button class="main" id="w-done">写好了</button>
+    ${btn('main', 'done', '写好了', 'id="w-done"')}
   </div>
 </div>
 
@@ -297,6 +295,7 @@ ${TUTOR_FACE_CSS}
     for (var i = 2; i < arguments.length; i++) add(arguments[i]);
     return el;
   };
+${BTN_JS}
   var CN = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
   var cn = function (n) { return n <= 10 ? CN[n] : n < 20 ? '十' + CN[n - 10] : CN[Math.floor(n / 10)] + '十' + (n % 10 ? CN[n % 10] : ''); };
 
@@ -468,13 +467,13 @@ ${TUTOR_FACE_CSS}
     var acts = $('#s-acts');
     if (v.done) {
       $('#s-sub').textContent = '今天写过了';
-      acts.replaceChildren(h('button', { 'class': 'main', on: { click: function () { start(true); } } }, '再听写一次'), h('button', { 'class': 'tool', on: { click: openCheck } }, '看看写的'));
+      acts.replaceChildren(h('button', { 'class': 'main', on: { click: function () { start(true); } } }, ico('start'), lbl('再听写一次')), h('button', { 'class': 'tool', on: { click: openCheck } }, ico('look'), lbl('看看写的')));
     } else if (wrote > 0) {
       $('#s-sub').textContent = '写到第' + cn(wrote + 1) + '个了';
-      acts.replaceChildren(h('button', { 'class': 'main', on: { click: function () { openListen(); } } }, '接着写'));
+      acts.replaceChildren(h('button', { 'class': 'main', on: { click: function () { openListen(); } } }, ico('start'), lbl('接着写')));
     } else {
       $('#s-sub').textContent = v.tutor + '念,你在田字格里写';
-      acts.replaceChildren(h('button', { 'class': 'main', on: { click: function () { openListen(); } } }, '开始'));
+      acts.replaceChildren(h('button', { 'class': 'main', on: { click: function () { openListen(); } } }, ico('start'), lbl('开始')));
     }
     show('start');
   };
@@ -485,7 +484,7 @@ ${TUTOR_FACE_CSS}
     }, function () {
       $('#s-big').textContent = '首页换过了';
       $('#s-sub').textContent = '回首页看看';
-      $('#s-acts').replaceChildren(h('button', { 'class': 'main', on: { click: goHome } }, '回首页'));
+      $('#s-acts').replaceChildren(h('button', { 'class': 'main', on: { click: goHome } }, ico('home'), lbl('回首页')));
       show('start');
     });
   };
@@ -731,7 +730,7 @@ ${TUTOR_FACE_CSS}
     sayWord(k, 2);
   };
   $('#l-again').addEventListener('click', function () { event('again', S.i); sayWord(S.i, 1); });
-  /** 这个字写好了:下一个没写的字;这个词都写了就交这个词,念下一个 */
+  /** 写好了(这个字):下一个没写的字;这个词都写了就交这个词,念下一个 */
   $('#l-next').addEventListener('click', function () {
     var w = S.w; if (!w) return;
     if (w.mode === 'trace' && !w.pad.strokes.length) { status('照着灰色的写一遍,再点写好了'); return; }
@@ -808,8 +807,8 @@ ${TUTOR_FACE_CSS}
         row.append(pad.el);
       });
       var tail = w.ask
-        ? h('div', { 'class': 'ask' }, '这个再写一遍?', h('button', { on: { click: function () { event('rewrite', wi); openRewrite(wi, false); } } }, '好'))
-        : h('button', { 'class': 'self', on: { click: function () { event('self', wi); openRewrite(wi, true); } } }, w.rewrote ? '再写一次' : '我想再写');
+        ? h('div', { 'class': 'ask' }, '这个再写一遍?', h('button', { on: { click: function () { event('rewrite', wi); openRewrite(wi, false); } } }, ico('write'), lbl('好')))
+        : h('button', { 'class': 'self', on: { click: function () { event('self', wi); openRewrite(wi, true); } } }, ico('write'), lbl(w.rewrote ? '再写一次' : '我想再写'));
       box.append(h('div', { 'class': 'wc' }, row, tail));
     });
     show('check');
@@ -861,7 +860,7 @@ ${TUTOR_FACE_CSS}
     var paths = R.pad.std.children;
     var paint = function (cur, animating) { for (var i = 0; i < paths.length; i++) paths[i].setAttribute('class', i < cur ? 'sd' : i === cur && !animating ? 'sc' : 'sf'); };
     $('#r-count').innerHTML = R.k < n ? '<b>第 ' + (R.k + 1) + ' 笔</b> · 一共 ' + n + ' 笔' : '写完了 · 一共 ' + n + ' 笔';
-    $('#r-play').textContent = R.k >= n ? '再写一遍' : '接着写';
+    setLbl($('#r-play'), R.k >= n ? '再写一遍' : '接着写', R.k >= n ? 'replay' : 'start');
     if (R.k >= n) { paint(n, false); R.playing = false; return; }
     if (!play) { paint(R.k, false); return; }
     paint(R.k, true);
@@ -980,7 +979,7 @@ ${TUTOR_FACE_CSS}
         var row = h('div', { 'class': 'pads' }); row.style.setProperty('--pad', size + 'px');
         var pads = cs.map(function (ch) { var p = makePad({}); var d = reelGlyph(ch); if (d) fillStd(p, d, ''); row.append(p.el); return p; });
         var rewrote = R.rewrites.some(function (x) { return x.word === wi && x.to <= RL.t; });
-        var tail = RL.s.asked.indexOf(wi) >= 0 && !rewrote ? h('div', { 'class': 'ask' }, '这个再写一遍?', h('button', {}, '好')) : h('button', { 'class': 'self' }, rewrote ? '再写一次' : '我想再写');
+        var tail = RL.s.asked.indexOf(wi) >= 0 && !rewrote ? h('div', { 'class': 'ask' }, '这个再写一遍?', h('button', {}, ico('write'), lbl('好'))) : h('button', { 'class': 'self' }, ico('write'), lbl(rewrote ? '再写一次' : '我想再写'));
         return { pads: pads, el: h('div', { 'class': 'wc' }, row, tail) };
       });
       box.replaceChildren.apply(box, RL.cards.map(function (c) { return c.el; }));
@@ -1005,7 +1004,7 @@ ${TUTOR_FACE_CSS}
     RL.std = 'r' + k;
     paintOrder(RL.opad, d, k);
     $('#r-count').innerHTML = k < n ? '<b>第 ' + (k + 1) + ' 笔</b> · 一共 ' + n + ' 笔' : '写完了 · 一共 ' + n + ' 笔';
-    $('#r-play').textContent = k >= n ? '再写一遍' : '接着写';
+    setLbl($('#r-play'), k >= n ? '再写一遍' : '接着写', k >= n ? 'replay' : 'start');
   };
   var reelRewrite = function (f, rebuild) {
     var cs = RL.r.chars[f.open.word];

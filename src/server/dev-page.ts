@@ -404,6 +404,108 @@ ${DEV_CSS}
   .vrow .tags { display:flex; gap:6px; flex-wrap:wrap; }
   .vrow .pick { font-size:12.5px; height:30px; padding:0 10px; }
 
+  /* ---------- activity(《工作台设计.md》拍板 6–9):列表 / 原文 / 检查·预览·和出厂比 ---------- */
+  .act-wrap { max-width:none; }
+  .act { display:grid; grid-template-columns:212px minmax(0,1fr) minmax(300px,380px); gap:16px; align-items:start; }
+  .alist { display:flex; flex-direction:column; gap:10px; position:sticky; top:0; }
+  .alist .grp { display:flex; flex-direction:column; gap:2px; }
+  .alist .gh { display:flex; align-items:center; gap:8px; padding:4px 10px 6px; font-size:12.5px; color:var(--muted); }
+  .alist .note { margin:4px 10px 0; line-height:1.6; }
+  .ai { display:flex; align-items:center; gap:8px; width:100%; padding:8px 10px; border:0; border-radius:var(--r-item); background:none; text-align:left; cursor:pointer; color:var(--ink); }
+  .ai:hover { background:rgba(255,255,255,.6); }
+  .ai.on { background:var(--surface); box-shadow:0 0 0 1px var(--line); }
+  .ai .tx { display:flex; flex-direction:column; min-width:0; flex:1; }
+  .ai b { font-size:14px; font-weight:500; }
+  .ai.on b { font-weight:600; }
+  .ai small { font:400 11px/1.5 var(--mono); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ai .st { flex:none; font-size:11.5px; }
+  .ed { display:flex; flex-direction:column; min-width:0; overflow:clip; }
+  .ed .banner { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; padding:12px 18px; background:var(--warn-soft); }
+  .ed .banner[hidden] { display:none; }
+  .ed .banner .tx { flex:1 1 260px; min-width:0; font-size:13px; color:var(--ink-2); }
+  .ed .banner .st { background:var(--surface); color:var(--warn); }
+  .ehead { display:flex; flex-direction:column; gap:6px; padding:16px 18px 12px; }
+  .ehead .l1 { display:flex; align-items:center; flex-wrap:wrap; gap:8px 10px; }
+  .ehead h2 { margin:0; font-size:20px; font-weight:650; }
+  .ehead .right { margin-left:auto; display:flex; align-items:center; gap:8px; }
+  .ehead .dirty { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--accent); }
+  .ehead .dirty::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--accent); }
+  .ehead .clean { font-size:12.5px; color:var(--muted); }
+  .ehead .l2 { font:400 12px/1.5 var(--mono); color:var(--muted); word-break:break-all; }
+  .ehead .l3 { font-size:13px; color:var(--ink-2); }
+  .secs { display:flex; gap:4px; overflow-x:auto; padding:8px 12px; background:var(--surface-2); border-top:1px solid var(--line-soft); border-bottom:1px solid var(--line-soft); position:sticky; top:0; z-index:2; }
+  .secs button { flex:none; display:flex; flex-direction:column; padding:5px 10px; border:0; border-radius:9px; background:none; cursor:pointer; text-align:left; color:var(--ink); }
+  .secs button:hover { background:rgba(255,255,255,.7); }
+  .secs button.on { background:var(--surface); box-shadow:0 0 0 1px var(--line); }
+  .secs button b { font-size:12.5px; font-weight:400; white-space:nowrap; }
+  .secs button.on b { font-weight:600; }
+  .secs button small { font-size:10.5px; color:var(--muted); white-space:nowrap; }
+  /* 原文:透明的 textarea 叠在逐行底色层上,两层同字、同宽、同折行;textarea 跟着内容长高,不自己滚 */
+  .code { position:relative; }
+  .code .bd, .code .eta { font:13.5px/24px var(--sans); white-space:pre-wrap; overflow-wrap:anywhere; word-break:normal; letter-spacing:0; tab-size:4; }
+  .code .bd { position:absolute; inset:0; padding:10px 18px 14px 0; pointer-events:none; color:transparent; }
+  .code .eta { display:block; position:relative; z-index:1; width:100%; min-height:240px; margin:0; border:0; outline:0; resize:none; overflow:hidden; background:transparent; padding:10px 18px 14px 58px; color:var(--ink); caret-color:var(--accent); }
+  .ln { position:relative; padding-left:58px; min-height:24px; }
+  .ln .no { position:absolute; left:0; top:0; width:44px; text-align:right; font:400 11.5px/24px var(--mono); color:var(--faint); }
+  .ln .dt { position:absolute; left:48px; top:9px; width:6px; height:6px; border-radius:50%; }
+  .ln .tx { color:transparent; }
+  .ln.cur { background:#FBFAF7; }
+  .ln.head { background:var(--surface-2); }
+  .ln.head .no { color:var(--ink-2); }
+  .ln.mod { background:#FDF6F1; } .ln.mod .no { color:var(--accent); } .ln.mod .dt { background:var(--accent); }
+  .ln.warn { background:var(--warn-soft); } .ln.warn .no { color:var(--warn); } .ln.warn .dt { background:var(--warn-dot); }
+  .ln.bad { background:#FDF4F2; } .ln.bad .no { color:var(--err); } .ln.bad .dt { background:var(--err); }
+  .ebar { display:flex; align-items:center; flex-wrap:wrap; gap:6px 14px; padding:9px 18px; background:var(--surface-2); border-top:1px solid var(--line-soft); font-size:12px; color:var(--muted); }
+  .ebar .bad { color:var(--err); } .ebar .ok { color:var(--ok); }
+  .aside { position:sticky; top:0; max-height:calc(100vh - 40px); overflow:auto; }
+  .aside .tabs { padding:12px 14px; border-bottom:1px solid var(--line-soft); position:sticky; top:0; background:var(--surface); z-index:1; }
+  .aside .tabs .seg { display:flex; width:100%; }
+  .aside .tabs .seg > * { flex:1; justify-content:center; }
+  .aside .body { padding:16px 18px 18px; display:flex; flex-direction:column; gap:12px; }
+  .aside h3 { margin:0; font-size:13.5px; font-weight:600; }
+  .aside .srow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .ilist { display:flex; flex-direction:column; gap:6px; }
+  .iss { display:flex; gap:10px; align-items:flex-start; width:100%; text-align:left; padding:9px 11px; border:0; border-radius:11px; background:var(--surface-2); box-shadow:0 0 0 1px var(--line-soft); cursor:pointer; color:var(--ink); }
+  .iss:hover { box-shadow:0 0 0 1px var(--accent-line); }
+  .iss b { flex:none; width:52px; font-size:11.5px; line-height:20px; color:var(--warn); }
+  .iss.fix b { color:var(--err); }
+  .iss span { font-size:12.5px; line-height:20px; color:var(--ink-2); word-break:break-word; }
+  .kv2 { display:grid; grid-template-columns:72px minmax(0,1fr); gap:7px 10px; font-size:12.5px; }
+  .kv2 .k { color:var(--muted); }
+  .kv2 .v { font-size:12px; word-break:break-word; }
+  .hb { display:flex; gap:10px; align-items:flex-start; padding:9px 11px; border-radius:11px; background:var(--ground); }
+  .hb .tx { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
+  .hb b { font-size:13px; font-weight:600; }
+  .hb small { font-size:12px; color:var(--muted); word-break:break-word; }
+  .hb .st { flex:none; }
+  .cmd { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px; background:var(--ground); }
+  .cmd code { flex:1; min-width:0; font:400 12px/1.5 var(--mono); word-break:break-all; }
+  .pv { margin:0; max-height:52vh; overflow:auto; padding:12px 14px; border-radius:12px; background:var(--surface-2); box-shadow:0 0 0 1px var(--line-soft); font:12.5px/1.75 var(--sans); white-space:pre-wrap; word-break:break-word; color:var(--ink); }
+  .pv.tool { font:12px/1.7 var(--mono); }
+  .pvf { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .pvf .wide { grid-column:1/-1; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .hunk { border-radius:11px; overflow:hidden; box-shadow:0 0 0 1px var(--line-soft); }
+  .hunk .hh { display:block; width:100%; text-align:left; border:0; padding:5px 11px; background:var(--surface-2); font:400 11.5px/1.5 var(--mono); color:var(--muted); cursor:pointer; }
+  .hunk .hh:hover { color:var(--accent); }
+  .hl { display:grid; grid-template-columns:18px minmax(0,1fr); padding:4px 10px; font-size:12.5px; line-height:1.6; }
+  .hl b { font-family:var(--mono); }
+  .hl span { word-break:break-word; white-space:pre-wrap; }
+  .hl.del { background:var(--err-soft); } .hl.del b { color:var(--err); }
+  .hl.add { background:var(--ok-soft); } .hl.add b { color:var(--ok); }
+  .modal { position:fixed; inset:0; background:rgba(43,43,43,.28); display:grid; place-items:center; padding:16px; z-index:40; }
+  .dlg { width:100%; max-width:480px; max-height:80vh; overflow:auto; background:var(--surface); border-radius:var(--r-card); padding:22px 24px 18px; display:flex; flex-direction:column; gap:12px; box-shadow:0 18px 50px -20px rgba(43,43,43,.45); }
+  .dlg h3 { margin:0; font-size:17px; font-weight:650; }
+  .dlg p { margin:0; font-size:13.5px; line-height:1.7; color:var(--ink-2); }
+  .dlg ul { margin:0; padding-left:20px; font-size:13.5px; line-height:1.8; color:var(--ink-2); }
+  .dlg .acts { display:flex; justify-content:flex-end; gap:8px; margin-top:4px; }
+  .av.xs { width:22px; height:22px; } .av.xs .face { font-size:10px; }
+  #side nav a .badge.err { background:var(--err); }
+  @media (max-width:1180px) {
+    .act { grid-template-columns:200px minmax(0,1fr); }
+    .act > .aside { grid-column:1/-1; position:static; max-height:none; }
+  }
+
   @media (max-width:760px) {
     body { grid-template-columns:1fr; grid-template-rows:auto minmax(0,1fr); }
     #side { flex-direction:row; align-items:center; padding:10px 12px; gap:10px; overflow-x:auto; overflow-y:hidden; border-bottom:1px solid var(--line); }
@@ -428,6 +530,8 @@ ${DEV_CSS}
     .vrow .tags { grid-column:2; }
     .voices .vlist { max-height:none; }
     #composer .row .hint { display:none; }
+    .act { grid-template-columns:1fr; }
+    .alist { position:static; }
     .voices header .sub .cmd { display:none; }
   }
 </style>
@@ -439,6 +543,7 @@ ${DEV_CSS}
     <a href="#chat" data-tab="chat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg>对话<span class="badge" id="busy" hidden></span></a>
     <span class="grp">老师</span>
     <a href="#team" data-tab="team"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c1.8.7 3 2.4 3.5 5.2"/></svg>老师团</a>
+    <a href="#activity" data-tab="activity" title="孩子从首页一个按钮进去的一种做法:看、改、检查、看老师收到什么"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5M9.5 12.5h6M9.5 16h4"/></svg>activity<span class="badge err" id="act-bad" hidden></span></a>
     <a href="#voices" data-tab="voices"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h1.5M7 8.5v7M11 5v14M15 8v8M19 10.5v3"/></svg>音色</a>
     <span class="grp">工具</span>
     <a href="/dev/qr" target="_blank" title="iPad / iPhone 用相机扫,不用输地址"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1"/><path d="M14 14h3v3h-3zM20.5 14v.5M17 20.5h3.5V17"/></svg>扫码打开<span class="out">↗</span></a>
@@ -478,6 +583,7 @@ ${DEV_CSS}
   </section>
 </main>
 <main id="team"></main>
+<main id="activity"></main>
 <main id="voices"></main>
 <main id="settings"></main>
 <div id="drawer"></div>
@@ -512,11 +618,13 @@ ${DEV_CSS}
     a.remove();
   };
 
-  const TABS = ['overview', 'chat', 'team', 'voices', 'settings'];
+  const TABS = ['overview', 'chat', 'team', 'activity', 'voices', 'settings'];
   const hashState = () => {
-    const parts = location.hash.split('?raw=');
-    const tab = (parts[0] || '#overview').slice(1) || 'overview';
-    return { tab: TABS.includes(tab) ? tab : 'overview', raw: parts[1] || null };
+    // #chat?raw=<job> 开某一轮的看原文;#activity?a=<老师>/<名> 开某个 activity
+    const parts = location.hash.slice(1).split('?');
+    const tab = parts[0] || 'overview';
+    const q = new URLSearchParams(parts[1] || '');
+    return { tab: TABS.includes(tab) ? tab : 'overview', raw: q.get('raw'), a: q.get('a') };
   };
   const state = { config: null, tutor: null, date: null, today: null, dates: [], view: null, timer: null, tab: hashState().tab, raw: null, rawJob: null, station: 'source' };
 
@@ -526,6 +634,7 @@ ${DEV_CSS}
     for (const a of document.querySelectorAll('#side a[data-tab]')) a.classList.toggle('on', a.dataset.tab === tab);
     for (const m of document.querySelectorAll('main')) m.classList.toggle('on', m.id === tab);
     if (tab === 'overview') renderOverview();
+    if (tab === 'activity') renderActivities();
     if (tab === 'team') renderTeam();
     if (tab === 'voices') renderVoices();
     if (tab === 'settings') renderSettings();
@@ -1524,6 +1633,430 @@ ${DEV_CSS}
     $('#overview').replaceChildren(h('div', { class: 'wrap' }, head, tiles, h('div', { class: 'cols3' }, todayBox, weekBox, useBox), h('div', { class: 'cols2' }, teamBox, issueBox)));
   };
 
+  // ---- activity(《工作台设计.md》拍板 6–9):看、改、边改边查(不落盘)、老师收到什么、和出厂比、恢复出厂;存要带读进来时的 hash ----
+  const FENCE = String.fromCharCode(96, 96, 96);
+  const act = { list: null, cur: null, saved: '', hash: '', text: '', diff: [], check: null, tab: 'check', pick: 'auto', params: {}, seq: 0, timer: 0, conflict: false, caret: 1, msg: '', msgBad: false, el: null };
+  const STATE_TAG = { latest: ['出厂', ''], upgradable: ['可升级', 'info'], custom: ['改过', 'accent'], untracked: ['自家的', ''], missing: ['不在', 'err'], broken: ['读不出', 'err'] };
+  const actUrl = (t, n) => '/api/dev/activities/' + t + '/' + encodeURIComponent(n);
+  const rowOf = (c) => (act.list || []).find((r) => r.tutor === c.tutor && r.name === c.name) || null;
+
+  /** 两份原文按行比(LCS),连着改的合成一块:at = 在 b 里的行号(1 起) */
+  const diffLines = (a, b) => {
+    const A = a.split('\\n'), B = b.split('\\n'), n = A.length, m = B.length;
+    if (n * m > 4000000) return a === b ? [] : [{ at: 1, old: A, now: B }];
+    const dp = [];
+    for (let i = 0; i <= n; i++) dp.push(new Int32Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = A[i] === B[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    const out = [];
+    let cur = null, i = 0, j = 0;
+    while (i < n || j < m) {
+      if (i < n && j < m && A[i] === B[j]) { if (cur) { out.push(cur); cur = null; } i++; j++; continue; }
+      if (!cur) cur = { at: j + 1, old: [], now: [] };
+      if (j >= m || (i < n && dp[i + 1][j] >= dp[i][j + 1])) cur.old.push(A[i++]);
+      else cur.now.push(B[j++]);
+    }
+    if (cur) out.push(cur);
+    return out;
+  };
+  const dirtyCount = () => act.diff.length;
+  const changedLines = () => {
+    const s = new Set();
+    for (const d of act.diff) { if (d.now.length) for (let k = 0; k < d.now.length; k++) s.add(d.at - 1 + k); else s.add(Math.max(0, d.at - 2)); }
+    return s;
+  };
+
+  /** 确认框:第一行是一句,后面几行列成点;回 true = 点了 ok */
+  const ask = (title, lines, okLabel, noLabel) => new Promise((resolve) => {
+    const done = (v) => { box.remove(); resolve(v); };
+    const ok = h('button', { class: 'btn primary', type: 'button', on: { click: () => done(true) } }, okLabel);
+    const box = h('div', { class: 'modal', on: { click: (e) => { if (e.target === box) done(false); } } },
+      h('div', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+        h('h3', {}, title),
+        lines[0] ? h('p', {}, lines[0]) : null,
+        lines.length > 1 ? h('ul', {}, ...lines.slice(1).map((l) => h('li', {}, l))) : null,
+        h('div', { class: 'acts' }, h('button', { class: 'btn', type: 'button', on: { click: () => done(false) } }, noLabel), ok)));
+    document.body.append(box);
+    ok.focus();
+  });
+  const showHunks = (title, lead, hunks) => {
+    const box = h('div', { class: 'modal', on: { click: (e) => { if (e.target === box) box.remove(); } } },
+      h('div', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+        h('h3', {}, title), h('p', {}, lead),
+        ...(hunks.length ? hunks.map((d) => hunkEl(d, false)) : [h('p', {}, '一样,没有不同的行。')]),
+        h('div', { class: 'acts' }, h('button', { class: 'btn primary', type: 'button', on: { click: () => box.remove() } }, '知道了'))));
+    document.body.append(box);
+  };
+  const hunkEl = (d, jump) => h('div', { class: 'hunk' },
+    h('button', { type: 'button', class: 'hh', on: { click: () => { if (jump) jumpTo(d.at); } } }, '第 ' + d.at + ' 行'),
+    ...d.old.map((l) => h('div', { class: 'hl del' }, h('b', {}, '−'), h('span', {}, l || ' '))),
+    ...d.now.map((l) => h('div', { class: 'hl add' }, h('b', {}, '+'), h('span', {}, l || ' '))));
+
+  const loadActivities = async () => {
+    act.list = await api('GET', '/api/dev/activities');
+    const bad = act.list.filter((r) => r.fixes).length;
+    $('#act-bad').hidden = !bad;
+    $('#act-bad').textContent = bad ? String(bad) : '';
+  };
+  const actHead = () => h('header', { class: 'ph' }, h('h1', {}, 'activity'), h('span', { class: 'sub' }, '孩子从首页一个按钮进去的一种做法;一个 activity 一个文件,在老师的家里'));
+
+  const renderActivities = async () => {
+    if (!act.list) {
+      $('#activity').replaceChildren(h('div', { class: 'wrap act-wrap' }, actHead(), h('p', { class: 'note' }, '在列……')));
+      try { await loadActivities(); } catch (e) { $('#activity').replaceChildren(h('div', { class: 'wrap act-wrap' }, actHead(), h('p', { class: 'fb bad' }, '列不出来:' + e.message))); return; }
+    }
+    if (state.tab !== 'activity') return;
+    if (act.cur) return buildActivity();
+    const want = hashState().a;
+    const first = (want && act.list.find((r) => r.tutor + '/' + r.name === want)) || act.list[0];
+    if (first) return openActivity(first.tutor, first.name, true);
+    $('#activity').replaceChildren(h('div', { class: 'wrap act-wrap' }, actHead(), h('p', { class: 'note' }, '这个 workspace 里还没有 activity(agents/<老师>/activities/<名>.md);cotutor upgrade 会补上出厂的。')));
+  };
+
+  const openActivity = async (t, n, force) => {
+    if (!force && act.cur && dirtyCount() && !(await ask('「' + act.cur.name + '」还有 ' + dirtyCount() + ' 处没存', ['换过去就丢掉这些改动。'], '丢掉,换过去', '留下'))) return;
+    let d;
+    try { d = await api('GET', actUrl(t, n)); } catch (e) { alert('读不出来:' + e.message); return; }
+    Object.assign(act, { cur: d, saved: d.text, text: d.text, hash: d.hash, diff: [], check: null, conflict: false, pick: 'auto', params: {}, caret: 1, msg: '', msgBad: false });
+    history.replaceState(null, '', '#activity?a=' + encodeURIComponent(t + '/' + n));
+    if (state.tab !== 'activity') return;
+    buildActivity();
+    runCheck();
+  };
+
+  const buildActivity = () => {
+    const c = act.cur;
+    const ta = h('textarea', { class: 'eta', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', 'aria-label': c.name + '.md 原文' });
+    ta.value = act.text;
+    ta.addEventListener('input', () => {
+      act.text = ta.value;
+      act.diff = diffLines(act.saved, act.text);
+      act.msg = '';
+      fit();
+      caretLine();
+      paintLines();
+      paintHead();
+      paintBar();
+      clearTimeout(act.timer);
+      act.timer = setTimeout(runCheck, 300);
+    });
+    for (const ev of ['keyup', 'click', 'select']) ta.addEventListener(ev, caretMoved);
+    ta.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); saveActivity(); }
+    });
+    act.el = {
+      ta,
+      bd: h('div', { class: 'bd', 'aria-hidden': 'true' }),
+      head: h('div', { class: 'ehead' }),
+      secs: h('nav', { class: 'secs', 'aria-label': '节' }),
+      bar: h('footer', { class: 'ebar' }),
+      side: h('aside', { class: 'aside card-w' }),
+      banner: h('div', { class: 'banner', role: 'alert', hidden: true }),
+      list: h('nav', { class: 'alist', 'aria-label': 'activity 列表' }),
+    };
+    const ed = h('section', { class: 'ed card-w' }, act.el.banner, act.el.head, act.el.secs, h('div', { class: 'code' }, act.el.bd, ta), act.el.bar);
+    $('#activity').replaceChildren(h('div', { class: 'wrap act-wrap' }, actHead(), h('div', { class: 'act' }, act.el.list, ed, act.el.side)));
+    paintList();
+    paintAll();
+    fit();
+  };
+  const paintAll = () => { paintHead(); paintLines(); paintSecs(); paintSide(); paintBar(); paintBanner(); };
+
+  /** textarea 跟着内容长高(不自己滚,底色层才对得齐);量的时候页面别跳 */
+  const fit = () => {
+    const ta = act.el && act.el.ta;
+    if (!ta) return;
+    const sc = $('#activity');
+    const top = sc.scrollTop;
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+    sc.scrollTop = top;
+  };
+  const caretLine = () => { const ta = act.el.ta; act.caret = ta.value.slice(0, ta.selectionStart).split('\\n').length; };
+  const caretMoved = () => {
+    const before = act.caret;
+    caretLine();
+    if (before === act.caret) return;
+    for (const el of act.el.bd.querySelectorAll('.ln.cur')) el.classList.remove('cur');
+    const el = act.el.bd.children[act.caret - 1];
+    if (el) el.classList.add('cur');
+    paintSecs();
+    paintBar();
+  };
+  const jumpTo = (line) => {
+    const lines = act.text.split('\\n');
+    let pos = 0;
+    for (let k = 0; k < line - 1 && k < lines.length; k++) pos += lines[k].length + 1;
+    const ta = act.el.ta;
+    ta.focus({ preventScroll: true });
+    ta.setSelectionRange(pos, pos + (lines[line - 1] || '').length);
+    act.caret = line;
+    paintLines();
+    paintSecs();
+    paintBar();
+    const el = act.el.bd.children[line - 1];
+    if (el) el.scrollIntoView({ block: 'center' });
+  };
+
+  const paintList = () => {
+    const groups = [];
+    for (const r of act.list) {
+      let g = groups.find((x) => x.tutor === r.tutor);
+      if (!g) groups.push((g = { tutor: r.tutor, rows: [] }));
+      g.rows.push(r);
+    }
+    const item = (r) => {
+      const on = act.cur && act.cur.tutor === r.tutor && act.cur.name === r.name;
+      const tag = r.fixes ? [r.fixes + ' 处要改', 'err'] : STATE_TAG[r.state] || [r.state, ''];
+      const sub = r.page ? '不起老师 · 进' + r.page.split(' ')[0] : ['首页 ' + r.buttons, r.examples ? '例子 ' + r.examples : null].filter(Boolean).join(' · ');
+      return h('button', { type: 'button', class: 'ai' + (on ? ' on' : ''), title: r.description, on: { click: () => openActivity(r.tutor, r.name) } },
+        h('span', { class: 'tx' }, h('b', {}, r.name), h('small', {}, sub)), h('span', { class: 'st ' + tag[1] }, tag[0]));
+    };
+    act.el.list.replaceChildren(
+      ...groups.map((g) => { const t = tutorOf(g.tutor); return h('div', { class: 'grp' }, h('div', { class: 'gh' }, avatarEl(Object.assign({ name: g.tutor }, t), 'xs'), h('span', {}, t.display)), ...g.rows.map(item)); }),
+      h('p', { class: 'note' }, '新建、改名、删一个 activity,在 workspace 里和 Claude Code 说;这里只改已有的。'));
+  };
+
+  const paintHead = () => {
+    const c = act.cur;
+    const row = rowOf(c);
+    const d = dirtyCount();
+    const fixes = act.check ? act.check.issues.filter((i) => i.level === 'fix').length : 0;
+    const tag = STATE_TAG[c.state] || [c.state, ''];
+    act.el.head.replaceChildren(
+      h('div', { class: 'l1' },
+        h('h2', {}, c.name),
+        h('span', { class: 'st ' + tag[1] }, tag[0] + (c.state === 'custom' && c.basedOn ? ' · 基于 v' + c.basedOn : '')),
+        fixes ? h('span', { class: 'st err' }, fixes + ' 处要改') : null,
+        h('span', { class: 'right' },
+          d ? h('span', { class: 'dirty' }, d + ' 处没存') : h('span', { class: 'clean' }, '都存了'),
+          h('button', { class: 'btn', type: 'button', disabled: !d, on: { click: undoActivity } }, '撤销'),
+          h('button', { class: 'btn primary', type: 'button', disabled: !d || act.conflict, title: '⌘/Ctrl + S', on: { click: saveActivity } }, '保存'))),
+      h('div', { class: 'l2' }, c.path + ' · 首页 ' + (row ? row.buttons : 0) + ' 个按钮 · ' + c.examples + ' 个例子'),
+      row && row.description ? h('div', { class: 'l3' }, row.description) : null);
+  };
+
+  const paintLines = () => {
+    const changed = changedLines();
+    const marks = {};
+    for (const i of act.check ? act.check.issues : []) if (i.line) marks[i.line] = marks[i.line] === 'fix' ? 'fix' : i.level;
+    let fence = false;
+    act.el.bd.replaceChildren(...act.text.split('\\n').map((t, k) => {
+      const n = k + 1;
+      const isFence = t.startsWith(FENCE);
+      const head = !fence && t.startsWith('## ');
+      if (isFence) fence = !fence;
+      const cls = 'ln' + (n === act.caret ? ' cur' : '') + (head ? ' head' : '') + (marks[n] === 'fix' ? ' bad' : marks[n] === 'note' ? ' warn' : changed.has(k) ? ' mod' : '');
+      return h('div', { class: cls }, h('span', { class: 'no' }, String(n)), h('i', { class: 'dt' }), h('span', { class: 'tx' }, t || ' '));
+    }));
+  };
+
+  const paintSecs = () => {
+    const secs = act.check ? act.check.sections : [];
+    let on = -1;
+    secs.forEach((s, k) => { if (s.line <= act.caret) on = k; });
+    act.el.secs.replaceChildren(...secs.map((s, k) => h('button', { type: 'button', class: k === on ? 'on' : '', on: { click: () => jumpTo(s.line) } }, h('b', {}, s.title), h('small', {}, s.reader))));
+  };
+
+  const paintBar = () => {
+    const here = act.check ? act.check.issues.filter((i) => i.line === act.caret) : [];
+    act.el.bar.replaceChildren(
+      h('span', { class: 'num' }, '第 ' + act.caret + ' 行 · 共 ' + act.text.split('\\n').length + ' 行'),
+      here.length ? h('span', { class: here.some((i) => i.level === 'fix') ? 'bad' : '' }, here.map((i) => i.text).join(';'))
+        : act.msg ? h('span', { class: act.msgBad ? 'bad' : 'ok' }, act.msg)
+          : h('span', {}, '存了就生效:下一轮起照新的带,正在进行的话题也换'));
+  };
+
+  const paintBanner = () => {
+    const b = act.el.banner;
+    b.hidden = !act.conflict;
+    if (!act.conflict) return b.replaceChildren();
+    const c = act.cur;
+    b.replaceChildren(
+      h('span', { class: 'st' }, '撞车'),
+      h('span', { class: 'tx' }, '这份文件在别处改过了(比如在 workspace 里用 Claude Code 改的)。你还有 ' + dirtyCount() + ' 处没存,直接存会盖掉那边的,所以「保存」先停了。'),
+      h('span', { class: 'acts' },
+        h('button', { class: 'btn small', type: 'button', on: { click: async () => {
+          try { const d = await api('GET', actUrl(c.tutor, c.name)); showHunks('那边改了什么', '和你读进来的那份比(没算你还没存的改动):', diffLines(act.saved, d.text)); } catch (e) { alert(e.message); }
+        } } }, '看那边改了什么'),
+        ' ',
+        h('button', { class: 'btn ink small', type: 'button', on: { click: () => openActivity(c.tutor, c.name, true) } }, '丢掉我的,重读')));
+  };
+
+  /** 预览用哪份参数:首页某个按钮的,或自己填的 */
+  const previewParams = () => {
+    if (act.pick.startsWith('btn:')) { const b = act.check && act.check.buttons[Number(act.pick.slice(4))]; return b ? b.params : {}; }
+    return act.pick === 'own' ? act.params : {};
+  };
+  const runCheck = async () => {
+    const c = act.cur;
+    if (!c) return;
+    const seq = ++act.seq;
+    let r;
+    try { r = await api('POST', actUrl(c.tutor, c.name) + '/check', { text: act.text, params: previewParams() }); } catch (e) { act.msg = '检查没跑成:' + e.message; act.msgBad = true; if (act.el) paintBar(); return; }
+    if (seq !== act.seq || c !== act.cur) return;
+    act.check = r;
+    // 预览缺省按首页上参数最多的那个按钮看;没有按钮就自己填
+    if (act.pick === 'auto') {
+      if (r.buttons.length) {
+        let best = 0;
+        r.buttons.forEach((b, k) => { if (Object.keys(b.params).length > Object.keys(r.buttons[best].params).length) best = k; });
+        act.pick = 'btn:' + best;
+        if (Object.keys(r.buttons[best].params).length) return runCheck();
+      } else act.pick = 'own';
+    }
+    if (state.tab !== 'activity' || !act.el) return;
+    paintHead();
+    paintLines();
+    paintSecs();
+    paintSide();
+    paintBar();
+  };
+
+  const paintSide = () => {
+    const r = act.check;
+    const tabs = [['check', '检查'], ['preview', '老师收到什么'], ['diff', '和出厂比']];
+    const seg = h('div', { class: 'seg', role: 'tablist' }, ...tabs.map(([k, label]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(act.tab === k), class: act.tab === k ? 'on' : '', on: { click: () => { act.tab = k; paintSide(); } } }, label)));
+    const body = h('div', { class: 'body' });
+    const parts = !r ? [h('p', { class: 'note' }, '在查……')] : act.tab === 'check' ? sideCheck(r) : act.tab === 'preview' ? sidePreview(r) : sideDiff(r);
+    body.append(...parts.filter(Boolean));
+    act.el.side.replaceChildren(h('div', { class: 'tabs' }, seg), body);
+  };
+  const rule = () => h('div', { class: 'rule' });
+
+  const sideCheck = (r) => {
+    const c = act.cur;
+    const fx = r.issues.filter((i) => i.level === 'fix');
+    const nt = r.issues.filter((i) => i.level === 'note');
+    const s = r.summary;
+    const kv = (k, v) => [h('span', { class: 'k' }, k), h('span', { class: 'v num' }, v || '无')];
+    const param = (p) => p.name + '(' + p.type + (p.optional ? ',可空' : '') + (p.default !== undefined ? ',缺省 ' + p.default : '') + (p.min !== undefined && p.max !== undefined ? ',' + p.min + '–' + p.max : '') + ')';
+    return [
+      h('div', { class: 'srow' }, fx.length ? h('span', { class: 'st err' }, fx.length + ' 处要改') : h('span', { class: 'st ok' }, '都对得上'), nt.length ? h('span', { class: 'st warn' }, nt.length + ' 条提醒') : null, h('span', { class: 'note' }, r.issues.length ? '点一条跳到那一行' : '边改边查,不落盘')),
+      r.issues.length ? h('div', { class: 'ilist' }, ...r.issues.map((i) => h('button', { type: 'button', class: 'iss' + (i.level === 'fix' ? ' fix' : ''), on: { click: () => { if (i.line) jumpTo(i.line); } } }, h('b', { class: 'num' }, i.line ? '第 ' + i.line + ' 行' : '整份'), h('span', {}, i.text)))) : null,
+      h('div', { class: 'kv2' }, ...kv('家长填的', s.params.map(param).join(' · ')), ...kv('应用算的', s.state.join(' · ')), ...kv('应用拦的', s.gates.join(' · ')), ...kv('卡', s.cards.join(' ')), ...kv('工具人', s.tools.map((t) => t.tool + (t.slots.length ? '(' + t.slots.join(' ') + ')' : '')).join(' · ')), ...(s.page ? kv('不起老师', '进' + s.page) : [])),
+      rule(),
+      h('h3', {}, '首页上用到它的'),
+      ...(r.buttons.length ? r.buttons.map((b) => h('div', { class: 'hb' }, h('span', { class: 'tx' }, h('b', {}, (b.kind === 'lecture' ? '小课堂 · ' : '') + b.label), h('small', {}, b.detail)), h('span', { class: 'st ' + (b.ok ? 'ok' : 'err') }, b.ok ? '对得上' : '孩子端不出'))) : [h('p', { class: 'note' }, '已发布的首页上没有按钮用它。')]),
+      fx.length && r.buttons.length ? h('p', { class: 'note' }, '写坏的 activity,孩子端不出它的按钮;改好就回来。孩子点不进一个写坏的。') : null,
+      rule(),
+      h('h3', {}, '老师带得好不好'),
+      c.examples
+        ? h('p', { class: 'note' }, '检查只管写法。要看老师照新的带得怎样,在终端跑回归:' + c.examples + ' 个例子各跑 3 次,花钱。')
+        : h('p', { class: 'note' }, '这个 activity 还没有例子文件(' + c.name + '.例子.md),回归跑不了;想看效果在终端真发一条:'),
+      h('div', { class: 'cmd' }, h('code', {}, c.examples ? 'cotutor activity eval ' + c.tutor + ' ' + c.name : 'cotutor send ' + c.tutor + ' --activity ' + c.name), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(e.target.previousSibling.textContent, e.target) } }, '复制')),
+    ];
+  };
+
+  const sidePreview = (r) => {
+    const s = r.summary;
+    const pv = r.preview;
+    const out = [];
+    if (r.buttons.length || s.params.length) {
+      out.push(h('div', { class: 'field' }, h('label', {}, '按哪个按钮看'),
+        h('select', { on: { change: (e) => { act.pick = e.target.value; if (act.pick === 'own') act.params = Object.assign({}, previewParams()); runCheck(); } } },
+          ...r.buttons.map((b, k) => h('option', { value: 'btn:' + k, selected: act.pick === 'btn:' + k }, '首页 · ' + b.label + (Object.keys(b.params).length ? '(' + Object.keys(b.params).join('、') + ')' : ''))),
+          h('option', { value: 'own', selected: act.pick === 'own' }, '自己填参数'))));
+      if (s.params.length) {
+        const cur = previewParams();
+        out.push(h('div', { class: 'pvf' }, ...s.params.map((p) => h('div', { class: 'field' + (p.type === '词表' || p.type === '字' ? ' wide' : '') },
+          h('label', {}, p.name + ' · ' + p.type + (p.min !== undefined && p.max !== undefined ? ',' + p.min + '–' + p.max : '')),
+          h('input', { type: 'text', value: cur[p.name] || '', placeholder: p.default !== undefined ? '缺省 ' + p.default : p.optional ? '可空' : '要填', on: { change: (e) => { act.params = Object.assign({}, previewParams(), { [p.name]: e.target.value.trim() }); if (!act.params[p.name]) delete act.params[p.name]; act.pick = 'own'; runCheck(); } } })))));
+      }
+    }
+    if (pv.text === null) out.push(h('p', { class: 'note' }, s.page ? '不起老师:孩子点了进' + s.page + '。' : '没有「老师怎么带」这一节,这个 activity 不起老师。'));
+    else {
+      out.push(h('div', { class: 'chips' },
+        h('span', { class: 'tag' }, '老师那节 ' + pv.chars.toLocaleString() + ' 字'),
+        h('span', { class: 'tag' }, '+ 板书写法 ' + pv.cards.join(' ')),
+        ...Object.entries(pv.values).map(([k, v]) => h('span', { class: 'tag' }, k + ' ' + v)),
+        ...pv.paramIssues.map((x) => h('span', { class: 'st err' }, x))));
+      out.push(h('pre', { class: 'pv' }, pv.text));
+      out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是这个话题老师的系统提示(qwen 的 systemBody、claude 的 --agents):不读老师文件,注释已剥,后面再接这几种卡的板书写法。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
+    }
+    for (const t of pv.tools) {
+      out.push(rule(), h('h3', {}, t.tool + '收到什么'), h('p', { class: 'note' }, '{{插槽}} 由应用在交出去那一刻填。'), h('pre', { class: 'pv tool' }, t.prompt));
+      if (t.negative) out.push(h('p', { class: 'note' }, '不要:' + t.negative));
+    }
+    return out;
+  };
+
+  const sideDiff = (r) => {
+    const c = act.cur;
+    if (!r.diff) return [h('p', { class: 'note' }, '自家加的 activity,没有出厂那份可比。')];
+    const out = [h('div', { class: 'srow' }, r.diff.length ? h('span', { class: 'st accent' }, '和出厂不一样 ' + r.diff.length + ' 处') : h('span', { class: 'st ok' }, '和出厂一样'), h('span', { class: 'note' }, '含没存的')),
+      ...r.diff.map((d) => hunkEl(d, true))];
+    out.push(h('p', { class: 'note' }, c.state === 'upgradable' ? '这份没改过,是旧版出厂的;cotutor upgrade 会换成新的。' : c.state === 'latest' ? '存下以后就算改过的出厂件:cotutor upgrade 不再自动换新版,只报 diff。' : '改过的出厂件,cotutor upgrade 不再自动换新版,只报 diff。'));
+    out.push(rule(), h('div', { class: 'srow' },
+      h('button', { class: 'btn danger', type: 'button', disabled: !r.diff.length && !dirtyCount(), on: { click: restoreActivityBtn } }, '恢复出厂'),
+      h('span', { class: 'note' }, c.state === 'latest' ? '磁盘上那份就是出厂的,恢复只是丢掉没存的改动。' : '换回出厂那份;你这份存成 ' + c.name + '.md.bak。别的 activity 不碰。')));
+    return out;
+  };
+
+  const undoActivity = () => {
+    act.text = act.saved;
+    act.el.ta.value = act.text;
+    act.diff = [];
+    act.msg = '';
+    fit();
+    paintAll();
+    runCheck();
+  };
+
+  const saveActivity = async () => {
+    const c = act.cur;
+    if (!c || !dirtyCount() || act.conflict) return;
+    let r;
+    try { r = await api('POST', actUrl(c.tutor, c.name) + '/check', { text: act.text, params: previewParams() }); } catch (e) { alert(e.message); return; }
+    act.check = r;
+    const fx = r.issues.filter((i) => i.level === 'fix');
+    if (fx.length && !(await ask('还有 ' + fx.length + ' 处要改,先存吗?', ['存下就生效。改好之前:', ...(r.buttons.length ? ['首页上用到它的 ' + r.buttons.length + ' 个按钮,孩子端先不出'] : []), '正在进行的「' + c.name + '」话题,下一轮老师照这份带'], '仍然保存', '回去改'))) { paintAll(); return; }
+    const res = await fetch(actUrl(c.tutor, c.name), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: act.text, base: act.hash }) });
+    const j = await res.json().catch(() => null);
+    if (res.status === 409) { act.conflict = true; paintAll(); return; }
+    if (!res.ok) { act.msg = '没存上:' + ((j && j.message) || res.status); act.msgBad = true; paintBar(); return; }
+    act.saved = act.text;
+    act.hash = j.hash;
+    c.state = j.state;
+    act.diff = [];
+    act.msg = '存好了 · 下一轮起照新的带' + (j.fixes ? ';改好之前首页上用它的按钮孩子端不出' : '');
+    act.msgBad = Boolean(j.fixes);
+    try { await loadActivities(); } catch (e) {}
+    paintList();
+    paintAll();
+  };
+
+  const restoreActivityBtn = async () => {
+    const c = act.cur;
+    const lead = c.state === 'latest' ? '磁盘上那份就是出厂的;没存的 ' + dirtyCount() + ' 处丢掉。' : '你这份存成 ' + c.name + '.md.bak' + (dirtyCount() ? ',没存的 ' + dirtyCount() + ' 处一起丢掉' : '') + '。和 cotutor upgrade --force ' + c.tutor + '/' + c.name + ' 同一条路,别的 activity 不碰。';
+    if (!(await ask('换回出厂那份?', [lead], '恢复出厂', '算了'))) return;
+    let r;
+    try { r = await api('POST', actUrl(c.tutor, c.name) + '/restore', {}); } catch (e) { alert(e.message); return; }
+    try { await loadActivities(); } catch (e) {}
+    await openActivity(c.tutor, c.name, true);
+    act.msg = r.bak ? '换回出厂了 · 你那份在 ' + r.bak : '换回出厂了';
+    act.msgBad = false;
+    paintBar();
+  };
+
+  /** 别处(Claude Code、编辑器)改了这份:没改动就悄悄读进来,有改动就亮撞车条、停住保存 */
+  const checkDisk = async () => {
+    const c = act.cur;
+    if (!c || act.conflict || state.tab !== 'activity') return;
+    let d;
+    try { d = await api('GET', actUrl(c.tutor, c.name)); } catch (e) { return; }
+    if (c !== act.cur || d.hash === act.hash) return;
+    if (dirtyCount()) { act.conflict = true; paintAll(); return; }
+    Object.assign(act, { cur: d, saved: d.text, text: d.text, hash: d.hash, diff: [], msg: '别处改过了,已读进新的那份', msgBad: false });
+    act.el.ta.value = d.text;
+    fit();
+    try { await loadActivities(); } catch (e) {}
+    paintList();
+    paintAll();
+    runCheck();
+  };
+  window.addEventListener('focus', checkDisk);
+  window.addEventListener('beforeunload', (e) => { if (act.cur && dirtyCount()) { e.preventDefault(); e.returnValue = ''; } });
+
   // ---- 启动 ----
   (async () => {
     await refreshHealth();
@@ -1541,6 +2074,7 @@ ${DEV_CSS}
       await loadConfig();
       if (JSON.stringify(state.config.tutors) !== before && state.tab === 'team') renderTeam();
       if (state.tab === 'overview') renderOverview();
+      if (state.tab === 'activity') checkDisk();
     }, 10000);
   })().catch((e) => { $('#msgs').replaceChildren(h('p', { class: 'empty' }, '加载失败:' + e.message)); });
 })();

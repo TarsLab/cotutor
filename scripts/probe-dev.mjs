@@ -2,7 +2,8 @@
 /**
  * 工作台 /dev 的手动验收(不进 pnpm test,要本机 Chrome 与一个跑着的 serve;只看不改,不发消息、不花钱):
  * 概览(数字与 /api/dev/overview 对得上、跑一次体检)→ 对话(选第一位有话的老师,板书与轮次出来)→ 看原文(六站、原文行)→
- * 老师团(展开第一行)→ 音色 → 设置;每屏桌面截一张,概览与对话再截手机尺寸。工作台的样子见《工作台设计.md》。
+ * 老师团(展开第一行)→ activity(原文与底色层对齐、改一处标出要改的行、预览、和出厂比、撤销,不存)→ 音色 → 设置;
+ * 每屏桌面截一张,概览与对话再截手机尺寸。工作台的样子见《工作台设计.md》。
  *
  * 用法:node scripts/probe-dev.mjs [--base http://127.0.0.1:5180] [--shots <目录>]
  */
@@ -56,6 +57,12 @@ const click = async (selector) => {
   if (!box) throw new Error('点不到 ' + selector);
   for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 });
 };
+// 按一段表达式找元素再点(按文字找按钮用)
+const clickEl = async (expr) => {
+  const box = await evaluate(`(() => { const el = ${expr}; if (!el) return null; el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+  if (!box) throw new Error('点不到 ' + expr);
+  for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 });
+};
 
 try {
   await send('Runtime.enable');
@@ -101,6 +108,35 @@ try {
   await click('#team .roster .row');
   ok('展开一行', await waitFor(`[...document.querySelectorAll('#team .rowbody')].some((b) => b.style.display !== 'none')`));
   await shot('dev-team.png');
+  // activity:只看,改了不存,最后撤销
+  await click('#side a[data-tab=activity]');
+  ok('activity:列表与原文出来了', await waitFor(`document.querySelectorAll('#activity .ai').length > 0 && document.querySelector('#activity .eta') !== null`));
+  if (await evaluate(`[...document.querySelectorAll('#activity .ai')].some((b) => b.textContent.includes('你说我画'))`)) {
+    await clickEl(`[...document.querySelectorAll('#activity .ai')].find((b) => b.textContent.includes('你说我画'))`);
+    await waitFor(`document.querySelector('#activity .ehead h2')?.textContent === '你说我画'`);
+  }
+  ok('activity:检查跑完、节出来了', await waitFor(`document.querySelector('#activity .aside .srow .st') !== null && document.querySelectorAll('#activity .secs button').length > 1`));
+  ok('activity:原文与底色层同高(折行对得齐)', await evaluate(`(() => { const ta = document.querySelector('#activity .eta'); const bd = document.querySelector('#activity .bd'); return Math.abs(ta.offsetHeight - bd.scrollHeight) <= 2 && bd.children.length === ta.value.split('\\n').length; })()`));
+  const name = await evaluate(`document.querySelector('#activity .ehead h2').textContent`);
+  const tutor = await evaluate(`new URLSearchParams(location.hash.split('?')[1]).get('a').split('/')[0]`);
+  const diskBefore = (await (await fetch(`${base}/api/dev/activities/${tutor}/${encodeURIComponent(name)}`)).json()).text;
+  await shot('dev-activity.png');
+  const edited = await evaluate(`(() => { const ta = document.querySelector('#activity .eta'); if (!ta.value.includes('## 老师怎么带\\n')) return false; ta.value = ta.value.replace('## 老师怎么带\\n', '## 老师怎么带\\n{{有 探针}}\\n{{/有}}\\n'); ta.dispatchEvent(new Event('input')); return true; })()`);
+  if (edited) {
+    ok('activity:改一处 → 标出要改的行、页头写没存', await waitFor(`document.querySelector('#activity .ln.bad') !== null && document.querySelector('#activity .iss.fix') !== null && document.querySelector('#activity .ehead .dirty') !== null`));
+    await shot('dev-activity-bad.png');
+    await click('#activity .aside .seg button:nth-child(2)');
+    ok('activity:老师收到什么', await waitFor(`document.querySelector('#activity .pv') !== null || document.querySelector('#activity .aside .note') !== null`));
+    await shot('dev-activity-preview.png');
+    await click('#activity .aside .seg button:nth-child(3)');
+    ok('activity:和出厂比有这一处', await waitFor(`document.querySelector('#activity .hunk') !== null || document.querySelector('#activity .aside .body .note') !== null`));
+    await shot('dev-activity-diff.png');
+    await clickEl(`[...document.querySelectorAll('#activity .ehead .btn')].find((b) => b.textContent === '撤销')`);
+    ok('activity:撤销后都存了', await waitFor(`document.querySelector('#activity .ehead .dirty') === null && document.querySelector('#activity .ln.bad') === null`));
+  }
+  const diskAfter = (await (await fetch(`${base}/api/dev/activities/${tutor}/${encodeURIComponent(name)}`)).json()).text;
+  ok('activity:磁盘上那份没动', diskAfter === diskBefore);
+
   await click('#side a[data-tab=voices]');
   ok('音色页出来了', await waitFor(`document.querySelector('#voices .panel') !== null`));
   await sleep(1500);

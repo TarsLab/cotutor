@@ -16,6 +16,7 @@ const { loadWorkspace } = await import('../src/cli/workspace.ts');
 const { createContext, route } = await import('../src/server/app.ts');
 const { publishHome } = await import('../src/server/home.ts');
 const { diffHunks, activitySections } = await import('../src/server/dev-activities.ts');
+const { DEV_PAGE } = await import('../src/server/dev-page.ts');
 
 try {
   const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
@@ -87,6 +88,8 @@ try {
   writeFileSync(join(root, 'agents', 'math-tutor', 'activities', '自家的.md'), '---\nname: 自家的\ndescription: 试\ncards: read\n---\n\n## 老师怎么带\n\n你是数学老师。\n');
   const own = '/api/dev/activities/math-tutor/' + encodeURIComponent('自家的');
   check('自家加的:列得出、没有出厂那份可比、恢复出厂 400', ((await route('GET', own, ctx)).json as { state: string; shipped: boolean }).state === 'untracked' && ((await route('POST', own + '/check', ctx, { text: '---\nname: 自家的\n---\n' })).json as Chk).diff === null && (await route('POST', own + '/restore', ctx, {})).status === 400);
+
+  check('页面:侧栏有 activity 标签,地址能直达某一个', DEV_PAGE.includes('data-tab="activity"') && DEV_PAGE.includes("q.get('a')"));
 
 } finally {
   rmSync(home, { recursive: true, force: true });

@@ -108,6 +108,9 @@ const tutors: Record<string, HomeTutorInfo> = {
   const acts = [{ kind: 'lecture', label: '分一分', bundle: 'b1' }, { kind: 'lecture', label: '看图', bundle: 'b1', activity: '看图说话' }, { kind: 'activity', label: '画', activity: '你说我画', params: {} }] as never[];
   const only = (names: string[]) => kidButtons(acts, { alive, activity: (n) => names.includes(n) }).map((b) => b.label).slice(1).join();
   check('activity 文件不在的按钮不出:小课堂看完照「小课堂」,挂了的照挂的', only(['小课堂', '看图说话', '你说我画']) === '分一分,看图,画' && only(['看图说话']) === '看图' && only(['小课堂']) === '分一分');
+  const seen: string[] = [];
+  kidButtons([{ kind: 'activity', label: '出题', activity: '你说我画', params: { 词: '春风' } }, { kind: 'lecture', label: '课', bundle: 'b1' }] as never[], { alive, activity: (n, p) => { seen.push(n + JSON.stringify(p)); return true; } });
+  check('判断用不用得了时带上按钮的参数(小课堂挂的不带)', seen.join(' ') === '你说我画{"词":"春风"} 小课堂{}', seen.join(' '));
   const msg = (job: string, thread: string, at: string, from: string, text: string, extra: Record<string, unknown> = {}) => ({ job, thread, at, from, text, ...extra });
   const tr = todayResumes([
     msg('0900-1', '0900-1', '2026-09-17T09:00:00Z', 'kid', '鼓励怎么写', { via: { home: null, button: 'new', label: '新话题' } }),

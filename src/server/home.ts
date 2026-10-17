@@ -92,6 +92,14 @@ export async function checkHome(ws: Workspace, md: string, now: Date): Promise<H
   return { doc, issues, fixes: issues.filter((i) => i.level === 'fix').length };
 }
 
+/** 孩子端能不能用这个 activity:文件在、检查没有「要改」(提醒不算);用不了 → null */
+export async function usableActivity(ws: Workspace, tutor: string, name: string): Promise<Activity | null> {
+  const text = await readFile(activityFile(ws.root, tutor, name), 'utf8').catch(() => null);
+  if (text === null) return null;
+  const { activity, issues } = lintActivity(text, { fileName: name, tutorCards: ws.config.tutors[tutor]?.cards });
+  return issues.some((i) => i.level === 'fix') ? null : activity;
+}
+
 /** 已发布那份里现在还坏着的引用(doctor 与家长端用) */
 export async function publishedIssues(ws: Workspace, home: PublishedHome, now: Date): Promise<HomeIssue[]> {
   const doc: HomeDoc = { cards: home.cards, cardLines: [], note: home.note, issues: [] };
@@ -230,9 +238,12 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     lectures.set(id, l);
     if (l && !l.video && !l.baked) bakeSoon(ws.dirs.bundles, id);
   }
-  // 按钮引用的 activity 文件在不在(不在的按钮孩子端不出)
-  const hasActivity = new Set<string>();
-  for (const a of homeActivities({ cards })) if (await readFile(activityFile(ws.root, a.tutor, a.name), 'utf8').then(() => true, () => false)) hasActivity.add(`${a.tutor}/${a.name}`);
+  // 按钮引用的 activity 用不用得了:文件在、检查没有要改的;参数再按按钮各自解析(工作台能存下写坏的 activity,《工作台设计.md》拍板 7)
+  const usable = new Map<string, Activity>();
+  for (const a of homeActivities({ cards })) {
+    const act = await usableActivity(ws, a.tutor, a.name);
+    if (act) usable.set(`${a.tutor}/${a.name}`, act);
+  }
   const ownerOf = homeOwners(cards, tutors);
   const owners = new Map(cards.map((c, i) => [c, ownerOf[i]]));
   const out: KidHomeCard[] = [];
@@ -246,7 +257,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
       resumes: await resumesOf(ws, name, today),
       alive: (date, thread) => alive.has(threadKey(name, date, thread)),
       lecture: (bundle) => Boolean(lectures.get(bundle)),
-      activity: (a) => hasActivity.has(`${name}/${a}`),
+      activity: (a, params) => { const act = usable.get(`${name}/${a}`); return Boolean(act) && resolveParams(act!, params).issues.length === 0; },
       keepBriefs: opts.keepBriefs,
       today,
     }).map((b) => { const l = b.kind === 'lecture' ? lectures.get(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.clock.total, ...(l.video ? { video: true as const } : {}) } : b; });

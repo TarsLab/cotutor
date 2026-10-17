@@ -310,7 +310,7 @@ export function todayResumes(messages: readonly { thread?: string; job: string; 
  * 新话题、activity、小课堂三种按钮带上 resume(今天同一个入口的话题),孩子端在空白板上接。
  * 接着按钮指的话题现在找不到(alive 说没有)就不出现。keepBriefs = 家长预览(讲法留着)。
  */
-export function kidButtons(buttons: readonly TutorButton[], opts: { resumes?: ReadonlyMap<string, Resume>; alive: (date: string, thread: string) => boolean; lecture?: (bundle: string) => boolean; activity?: (name: string) => boolean; keepBriefs?: boolean; today?: string }): KidHomeButton[] {
+export function kidButtons(buttons: readonly TutorButton[], opts: { resumes?: ReadonlyMap<string, Resume>; alive: (date: string, thread: string) => boolean; lecture?: (bundle: string) => boolean; activity?: (name: string, params: Readonly<Record<string, string>>) => boolean; keepBriefs?: boolean; today?: string }): KidHomeButton[] {
   const resume = (key: string): { resume?: Resume } => { const r = opts.resumes?.get(key); return r ? { resume: r } : {}; };
   const out: KidHomeButton[] = [{ id: 'new', kind: 'new', label: NEW_THREAD_LABEL, ...resume('free') }];
   buttons.forEach((b, k) => {
@@ -318,10 +318,10 @@ export function kidButtons(buttons: readonly TutorButton[], opts: { resumes?: Re
     if (b.until && opts.today && b.until < opts.today) return;
     const brief = opts.keepBriefs && b.brief ? { brief: b.brief } : {};
     // activity 按钮在孩子那边就是开场按钮:点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查
-    // activity 文件不在(家长删了、老 workspace 没升级),按钮不出:不让孩子点进一个没人带的话题;小课堂看完照它聊,同样
-    const hasActivity = (name: string): boolean => opts.activity?.(name) ?? true;
+    // activity 用不了(文件不在、写坏了、这个按钮的参数按现在的文件解析不出),按钮不出:不让孩子点进一个没人带或带不了的话题;小课堂看完照它聊,同样
+    const hasActivity = (name: string, params: Readonly<Record<string, string>> = {}): boolean => opts.activity?.(name, params) ?? true;
     if (b.kind === 'start') out.push({ id: k, kind: 'start', label: b.label, ...brief });
-    else if (b.kind === 'activity') { if (hasActivity(b.activity)) out.push({ id: k, kind: 'start', label: b.label, ...brief, ...resume(`activity:${b.activity}`) }); }
+    else if (b.kind === 'activity') { if (hasActivity(b.activity, b.params)) out.push({ id: k, kind: 'start', label: b.label, ...brief, ...resume(`activity:${b.activity}`) }); }
     else if (b.kind === 'lecture') { if ((opts.lecture?.(b.bundle) ?? true) && hasActivity(b.activity ?? LECTURE_ACTIVITY)) out.push({ id: k, kind: 'lecture', label: b.label, bundle: b.bundle, ...brief, ...resume(`lecture:${b.bundle}`) }); }
     else if (opts.alive(b.date, b.thread)) out.push({ id: k, kind: 'continue', label: b.label, date: b.date, thread: b.thread, ...brief });
   });

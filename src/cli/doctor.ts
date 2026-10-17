@@ -23,6 +23,7 @@ import { parseArtifactEvents } from '../lib/ledger.ts';
 import { parseTimetable } from '../lib/timetable.ts';
 import { configGapsOf } from './migrate.ts';
 import { httpsFiles } from './serve.ts';
+import { readPin } from '../server/access.ts';
 import { DIRS } from './skeleton.ts';
 import { tutorStatuses } from './tutors.ts';
 import {
@@ -553,6 +554,10 @@ export async function doctorWorkspace(
     } catch {
       push({ name: 'timetable', ok: true, required: false, detail: `没有课程表(${redactHome(ws.paths.timetable)});孩子端「今天」只画老师,不画时段` });
     }
+
+    // ---- 家长端与工作台的锁(src/server/access.ts):机器级 PIN;没设不算错,提一句 ----
+    const pin = await readPin();
+    push({ name: 'server.access', ok: pin !== null, required: false, detail: pin ? '设了 PIN:家长端 /parent 与工作台 /dev 要输一次,本机免密' : 'serve 对局域网全开,家长端 /parent 与工作台 /dev 没有锁:孩子在 iPad 上输 /parent 能看到答案,输 /dev 能改配置。家长在旁边、用完收回 iPad 的可以不设', fix: pin ? undefined : 'cotutor pin(机器级,所有 workspace 共用;cotutor pin off 撤掉)' });
 
     // ---- HTTPS:iPad 上录音要;没有只提醒 ----
     const tls = httpsFiles(ws);

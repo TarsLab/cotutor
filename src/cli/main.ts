@@ -12,6 +12,7 @@ import { constants as osConstants } from 'node:os';
 import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
 import { makeCert } from './cert.ts';
+import { PIN_RE, USER_PIN_FILE, clearPin, readPin, setPin } from '../server/access.ts';
 import { addTutorFile, upgradeTutors } from './tutors.ts';
 import { activityRunFor, checkActivities, upgradeActivities } from './activities.ts';
 import { configGapsOf, upgradeConfig } from './migrate.ts';
@@ -98,7 +99,7 @@ async function printQr(page: string, open: boolean): Promise<void> {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'listen', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'listen', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -328,6 +329,26 @@ export async function main(argv: string[]): Promise<void> {
           process.stdout.write(fixes ? `有 ${fixes} 条要改\n` : '都对得上\n');
         }
         if (fixes) process.exitCode = 1;
+        return;
+      }
+      case 'pin': {
+        // cotutor pin [off | status] [--pin <数字>]:家长端与工作台的锁(src/server/access.ts)。机器级,不要 workspace;没设就全开
+        const arg = positionals[0];
+        if (arg === 'off') await clearPin();
+        else if (arg !== 'status') {
+          let pin = typeof flags.pin === 'string' ? flags.pin : '';
+          if (!pin && arg === undefined && interactive(json)) {
+            const rl = createInterface({ input: process.stdin, output: process.stdout });
+            try { pin = (await rl.question('家长 PIN(4 到 8 位数字;iPad 上开 /parent、/dev 时输一次,留空只看现状):')).trim(); } finally { rl.close(); }
+          }
+          if (pin) {
+            if (!PIN_RE.test(pin)) throw new UsageError('PIN 要 4 到 8 位数字:cotutor pin --pin 2468');
+            await setPin(pin);
+          } else if (arg !== undefined) throw new UsageError(`不认识 ${arg}:cotutor pin [off | status] [--pin <数字>]`);
+        }
+        const rec = await readPin();
+        if (json) process.stdout.write(`${JSON.stringify({ pin: rec !== null, at: rec?.at ?? null, file: redactHome(USER_PIN_FILE) }, null, 2)}\n`);
+        else process.stdout.write(rec ? `设了 PIN(${rec.at.slice(0, 10)},${redactHome(USER_PIN_FILE)}):iPad 上开 /parent、/dev 要输一次,这台电脑免密;刚改过的话以前登录过的设备要重输。撤掉:cotutor pin off\n` : '没设 PIN:家长端与工作台对局域网全开(家长在旁边、用完收回 iPad 可以这样)。设一个:cotutor pin --pin 2468\n');
         return;
       }
       case 'cert': {

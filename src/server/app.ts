@@ -28,6 +28,7 @@ import { tutorStatuses } from '../cli/tutors.ts';
 import { configGapsOf, upgradeConfig } from '../cli/migrate.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { faviconResponse } from '../lib/favicon.ts';
+import { createAccess, gatePage, isKidPath, type Access, type Who } from './access.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { kidPage } from './kid-page.ts';
 import { kidHomeView, messageVia, resolveVia } from './home.ts';
@@ -71,6 +72,8 @@ export interface RouteResult {
   contentType?: string;
   /** file / body 的缓存策略;不给 = 一天(配音、课包这些不会变);头像会被 figshot 换掉,给 no-cache。json 不给 = no-store(笔顺数据例外,给一天) */
   cacheControl?: string;
+  /** 要种的 cookie(/api/auth 对了 PIN) */
+  setCookie?: string;
 }
 
 export interface AppContext {
@@ -86,9 +89,11 @@ export interface AppContext {
   transcribe: Transcribe;
   /** 重读 cotutor.json(改了才读) */
   reload(): Promise<void>;
+  /** 家长端与工作台的锁(access.ts):机器级 PIN,没设就全开;测试可注入 */
+  access: Access;
 }
 
-export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean; transcribe?: Transcribe; draw?: Draw } = {}): AppContext {
+export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean; transcribe?: Transcribe; draw?: Draw; access?: Access } = {}): AppContext {
   let mtime = -1;
   const ctx: AppContext = {
     ws,
@@ -97,6 +102,7 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
     configError: null,
     listen: null,
     transcribe: opts.transcribe ?? ((audio) => listenOmni(audio, { env: opts.env })),
+    access: opts.access ?? createAccess({ now: () => ctx.now() }),
     async reload() {
       try {
         const r = await reloadIfChanged(ctx.ws, mtime);
@@ -671,13 +677,25 @@ function warmOpts(url: URL): { throttleMs: number; thread?: string } {
   return { throttleMs: 30_000, ...(thread ? { thread } : {}) };
 }
 
-export async function route(method: string, path: string, ctx: AppContext, body?: unknown): Promise<RouteResult> {
+/** who:请求是谁发的(createHandler 按来源地址与 cookie 算);直接调 route 的测试与 CLI 缺省 local = 本机免密 */
+export async function route(method: string, path: string, ctx: AppContext, body?: unknown, who: Who = 'local'): Promise<RouteResult> {
   await ctx.reload();
   const ws = ctx.ws;
   const url = new URL(path, 'http://x');
   const p = url.pathname;
   try {
     if (p === '/api/health') return { status: 200, json: { ok: true, configError: ctx.configError, started: STARTED, version: VERSION } };
+    // 家长端与工作台的锁(access.ts):对 PIN 换 cookie;设了 PIN、没凭证的设备,孩子端以外的页面回输 PIN 的页、接口回 401。没设 PIN 什么都不拦
+    if (p === '/api/auth') {
+      if (method === 'GET') return { status: 200, json: { who, pin: await ctx.access.pinSet() } };
+      if (method !== 'POST') return { status: 405, json: { error: 'method_not_allowed' } };
+      const r = await ctx.access.login(isObj(body) && typeof body.pin === 'string' ? body.pin : '', { secure: Boolean(ctx.listen?.().https) });
+      if (r.ok) return { status: 200, json: { ok: true }, setCookie: r.cookie };
+      return { status: r.retryMs ? 429 : 401, json: { error: r.retryMs ? 'locked' : 'pin', ...(r.retryMs ? { retryMs: r.retryMs } : {}) } };
+    }
+    if (who === 'anon' && !isKidPath(p) && (await ctx.access.pinSet())) {
+      return method === 'GET' && !p.startsWith('/api/') ? { status: 401, html: gatePage(ws.config.title) } : { status: 401, json: { error: 'auth', message: '要家长 PIN:在 /parent 或 /dev 上输一次' } };
+    }
     // 工作台概览(《工作台设计.md》):近七天的轮数、今天各老师、用量、要看一眼的轮次;体检 = doctor 不带 --live(不花钱)
     if (p === '/api/dev/overview' && method === 'GET') return { status: 200, json: await devOverview(ws) };
     if (p === '/api/dev/doctor' && method === 'POST') {
@@ -1232,7 +1250,7 @@ export function createHandler(ctx: AppContext): (req: IncomingMessage, res: Serv
       try {
         const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readBody(req);
         // HEAD 照 GET 走路由;Node 对 HEAD 的响应本来就不发正文
-        r = await route(req.method === 'HEAD' ? 'GET' : (req.method ?? 'GET'), req.url ?? '/', ctx, body);
+        r = await route(req.method === 'HEAD' ? 'GET' : (req.method ?? 'GET'), req.url ?? '/', ctx, body, await ctx.access.whoOf(req));
       } catch (err) {
         r = err instanceof UsageError ? { status: 400, json: { error: 'usage', message: err.message } } : { status: 500, json: { error: 'internal', message: err instanceof Error ? err.message : String(err) } };
         if (r.status === 500) console.error(err);
@@ -1245,7 +1263,7 @@ export function createHandler(ctx: AppContext): (req: IncomingMessage, res: Serv
         res.writeHead(r.status, { 'content-type': r.contentType ?? 'text/html; charset=utf-8', 'cache-control': 'no-store' });
         res.end(r.html);
       } else {
-        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': r.cacheControl ?? 'no-store', 'x-cotutor-boot': BOOT });
+        res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': r.cacheControl ?? 'no-store', 'x-cotutor-boot': BOOT, ...(r.setCookie ? { 'set-cookie': r.setCookie } : {}) });
         res.end(JSON.stringify(r.json ?? null));
       }
     })();

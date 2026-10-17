@@ -4,7 +4,7 @@
 
 本文件只写怎么在这个仓干活,不记历史、不记拍板:
 
-- 设计在 `docs/`:《产品规划.md》定位、两个端;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡;《首页设计.md》孩子端首页与 cotutor-home;《作业照片设计.md》孩子端拍照、编辑与发;《家长板书页设计.md》家长端 `/parent`;《工作台设计.md》工作台 `/dev` 的样子(纸面控制台)与概览的数;《家长录像设计.md》家长端看录像:录数据不录屏幕;《小课堂设计.md》做好的课(课包或视频)孩子看完再聊:播放器、圈、圈的卡、老师放课里一段;《口播老师设计.md》koubo 接进来:录音卡、评测时机、workspace jack;《看图说话设计.md》语文老师一问一答带看图说话;《口语课设计.md》英语老师的口语课:孩子拍一页、跟读、打电话聊;《接一个 CLI.md》再接一家 agent CLI(写给开源开发者)
+- 设计在 `docs/`:《产品规划.md》定位、两个端;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡;《首页设计.md》孩子端首页与 cotutor-home;《作业照片设计.md》孩子端拍照、编辑与发;《家长板书页设计.md》家长端 `/parent`;《工作台设计.md》工作台 `/dev` 的样子(纸面控制台)、概览的数、activity 页;《家长录像设计.md》家长端看录像:录数据不录屏幕;《小课堂设计.md》做好的课(课包或视频)孩子看完再聊:播放器、圈、圈的卡、老师放课里一段;《口播老师设计.md》koubo 接进来:录音卡、评测时机、workspace jack;《看图说话设计.md》语文老师一问一答带看图说话;《口语课设计.md》英语老师的口语课:孩子拍一页、跟读、打电话聊;《接一个 CLI.md》再接一家 agent CLI(写给开源开发者)
 - 各设计文档末尾有「拍板记录」,带日期。**带日期的决定都是可推翻的**;一条约定要在两轮以上迭代里活下来才进本文件末尾的「约定」
 - 改 `agents/`、`skills/`、`cards/` 下的 md 的字先看《写提示词.md》;自造的词查《词表.md》
 - 《开发者手册.md》怎么跑;给用的人看的是《家长手册.md》《iPad与iPhone.md》。模块的来龙去脉与真跑数据不另存,看 git log 与各设计文档
@@ -29,7 +29,7 @@
 - 改了 `cards/` 下的 md、`src/lib/*-doc.ts` 跑 `pnpm run gen:skills`(不跑 skills.test 会红);改了 `src/stage/` 跑 `pnpm run build:stage`(dist 不在 git,没打包时舞台开不了)
 - 改解析器或卡先过 `tests/board.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」;改 `src/clis/` 先过 `tests/clis.test.ts` 与 `tests/qwen.test.ts`(假 CLI 有 qwen 方言);改 `src/talk/` 先过 `tests/talk*.test.ts`(假百炼 `tests/_fake-realtime.ts`),页面走 `scripts/probe-talk-page.mjs`(加 `--real` 真连一次几分钱),Safari 的音频路径走 `scripts/probe-talk-webkit.mjs`(WebKit,假麦克风是振荡器),协议走 `scripts/probe-talk.mjs`
 - 改 activity 文件或 `src/lib/activity.ts` 先过 `tests/activity.test.ts`(出厂那份画家的画风要和 `paint.prompt` 缺省一字不差),workspace 里的跑 `cotutor activity check`
-- 改工作台(`src/server/dev-*.ts`、`qr-page.ts`、`voice-test-page.ts`)先过 `tests/dev-overview.test.ts`,颜色只用 `dev-theme.ts` 的变量;页面走 `scripts/probe-dev.mjs`(只看不改)
+- 改工作台(`src/server/dev-*.ts`、`qr-page.ts`、`voice-test-page.ts`)先过 `tests/dev-overview.test.ts` 与 `tests/dev-activities.test.ts`,颜色只用 `dev-theme.ts` 的变量;页面走 `scripts/probe-dev.mjs`(只看不改)
 - 改 `src/paint/` 或画图卡先过 `tests/paint.test.ts`(假百炼、假老师全流程),页面走 `scripts/probe-paint.mjs`;真画按张计费,一天最多 `paint.daily` 张
 - 改孩子端播放(谁念、谁停、谁打断谁)先改《工作流程.md》的仲裁表,再改 `tests/player.test.ts`,最后改 `kid-board.ts` 的 `step`;页面只 `dispatch`
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`

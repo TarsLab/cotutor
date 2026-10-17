@@ -238,7 +238,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     lectures.set(id, l);
     if (l && !l.video && !l.baked) bakeSoon(ws.dirs.bundles, id);
   }
-  // 按钮引用的 activity 用不用得了:文件在、检查没有要改的;参数再按按钮各自解析(工作台能存下写坏的 activity,《工作台设计.md》拍板 7)
+  // 按钮引用的 activity 用不用得了:文件在、检查没有要改的;参数再按按钮各自解析(工作台能存下写坏的 activity,《首页设计.md》拍板 30、《工作台设计.md》拍板 8)
   const usable = new Map<string, Activity>();
   for (const a of homeActivities({ cards })) {
     const act = await usableActivity(ws, a.tutor, a.name);

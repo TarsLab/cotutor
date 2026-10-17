@@ -318,7 +318,7 @@ export function kidButtons(buttons: readonly TutorButton[], opts: { resumes?: Re
     if (b.until && opts.today && b.until < opts.today) return;
     const brief = opts.keepBriefs && b.brief ? { brief: b.brief } : {};
     // activity 按钮在孩子那边就是开场按钮:点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查
-    // activity 用不了(文件不在、写坏了、这个按钮的参数按现在的文件解析不出),按钮不出:不让孩子点进一个没人带或带不了的话题;小课堂看完照它聊,同样
+    // activity 用不了(文件不在、写坏了、这个按钮的参数按现在的文件解析不出),按钮不出(《首页设计.md》拍板 30):不让孩子点进一个没人带或带不了的话题;小课堂看完照它聊,同样
     const hasActivity = (name: string, params: Readonly<Record<string, string>> = {}): boolean => opts.activity?.(name, params) ?? true;
     if (b.kind === 'start') out.push({ id: k, kind: 'start', label: b.label, ...brief });
     else if (b.kind === 'activity') { if (hasActivity(b.activity, b.params)) out.push({ id: k, kind: 'start', label: b.label, ...brief, ...resume(`activity:${b.activity}`) }); }

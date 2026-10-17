@@ -703,7 +703,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const r = await doctorWorkspace(ws.root, { live: false });
       return { status: 200, json: { ok: r.ok, at: new Date().toISOString(), checks: r.checks.map((c) => ({ name: c.name, ok: c.ok, required: c.required, detail: redactHome(c.detail), fix: c.fix })) } };
     }
-    // 工作台改 activity(《工作台设计.md》拍板 6–9):只认 workspace 里列得出的名字;存要带读进来时的 hash,对不上 409
+    // 工作台改 activity(《工作台设计.md》拍板 7–10):只认 workspace 里列得出的名字;存要带读进来时的 hash,对不上 409
     if (p === '/api/dev/activities' && method === 'GET') return { status: 200, json: await listDevActivities(ws) };
     const da = /^\/api\/dev\/activities\/([a-z0-9][a-z0-9-]*)\/([^/]+?)(\/check|\/restore)?$/.exec(p);
     if (da) {

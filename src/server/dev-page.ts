@@ -404,7 +404,7 @@ ${DEV_CSS}
   .vrow .tags { display:flex; gap:6px; flex-wrap:wrap; }
   .vrow .pick { font-size:12.5px; height:30px; padding:0 10px; }
 
-  /* ---------- activity(《工作台设计.md》拍板 6–9):列表 / 原文 / 检查·预览·和出厂比 ---------- */
+  /* ---------- activity(《工作台设计.md》拍板 7–10):列表 / 原文 / 检查·预览·和出厂比 ---------- */
   .act-wrap { max-width:none; }
   .act { display:grid; grid-template-columns:212px minmax(0,1fr) minmax(300px,380px); gap:16px; align-items:start; }
   .alist { display:flex; flex-direction:column; gap:10px; position:sticky; top:0; }
@@ -1633,7 +1633,7 @@ ${DEV_CSS}
     $('#overview').replaceChildren(h('div', { class: 'wrap' }, head, tiles, h('div', { class: 'cols3' }, todayBox, weekBox, useBox), h('div', { class: 'cols2' }, teamBox, issueBox)));
   };
 
-  // ---- activity(《工作台设计.md》拍板 6–9):看、改、边改边查(不落盘)、老师收到什么、和出厂比、恢复出厂;存要带读进来时的 hash ----
+  // ---- activity(《工作台设计.md》拍板 7–10):看、改、边改边查(不落盘)、老师收到什么、和出厂比、恢复出厂;存要带读进来时的 hash ----
   const FENCE = String.fromCharCode(96, 96, 96);
   const act = { list: null, cur: null, saved: '', hash: '', text: '', diff: [], check: null, tab: 'check', pick: 'auto', params: {}, seq: 0, timer: 0, conflict: false, caret: 1, msg: '', msgBad: false, el: null };
   const STATE_TAG = { latest: ['出厂', ''], upgradable: ['可升级', 'info'], custom: ['改过', 'accent'], untracked: ['自家的', ''], missing: ['不在', 'err'], broken: ['读不出', 'err'] };

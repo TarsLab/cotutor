@@ -2,7 +2,7 @@
 /**
  * 工作台 /dev 的手动验收(不进 pnpm test,要本机 Chrome 与一个跑着的 serve;只看不改,不发消息、不花钱):
  * 概览(数字与 /api/dev/overview 对得上、跑一次体检)→ 对话(选第一位有话的老师,板书与轮次出来)→ 看原文(六站、原文行)→
- * 老师团(展开第一行)→ activity(原文与底色层对齐、改一处标出要改的行、预览、和出厂比、撤销,不存)→ 音色 → 设置;
+ * 老师团(展开第一行)→ activity(原文与底色层对齐、改一处标出要改的行、预览、和出厂比、撤销,不存;新话题 = 老师文件同样走一遍,老师团跳过来)→ 音色 → 设置;
  * 每屏桌面截一张,概览与对话再截手机尺寸。工作台的样子见《工作台设计.md》。
  *
  * 用法:node scripts/probe-dev.mjs [--base http://127.0.0.1:5180] [--shots <目录>]
@@ -136,6 +136,31 @@ try {
   }
   const diskAfter = (await (await fetch(`${base}/api/dev/activities/${tutor}/${encodeURIComponent(name)}`)).json()).text;
   ok('activity:磁盘上那份没动', diskAfter === diskBefore);
+  // 新话题(老师文件,拍板 11):同一个编辑器;改坏 name 标要改、保存拦住,预览是去掉 frontmatter 的正文,撤销,不存
+  await clickEl(`document.querySelector('#activity .ai.tf')`);
+  ok('新话题:点开老师文件', await waitFor(`document.querySelector('#activity .ehead h2')?.textContent === '新话题' && document.querySelector('#activity .ehead .l2').textContent.includes('.claude/agents/')`));
+  const tfTutor = await evaluate(`new URLSearchParams(location.hash.split('?')[1]).get('a')`);
+  const tfBefore = (await (await fetch(`${base}/api/dev/tutor-files/${tfTutor}`)).json()).text;
+  ok('新话题:检查跑完、节有头和开头', await waitFor(`document.querySelector('#activity .aside .srow .st') !== null && [...document.querySelectorAll('#activity .secs b')].map((b) => b.textContent).slice(0, 2).join() === '头,开头'`));
+  await click('#activity .aside .seg button:nth-child(2)');
+  ok('新话题:老师收到什么是正文,不带 frontmatter', await waitFor(`(() => { const pv = document.querySelector('#activity .aside .pv'); return pv !== null && !pv.textContent.startsWith('---') && !pv.textContent.includes('maxTurns'); })()`));
+  await shot('dev-tutorfile-preview.png');
+  await evaluate(`(() => { const ta = document.querySelector('#activity .eta'); ta.value = ta.value.replace(/^name: .*$/m, 'name: 改坏了'); ta.dispatchEvent(new Event('input')); })()`);
+  await click('#activity .aside .seg button:nth-child(1)');
+  ok('新话题:改坏 name → 标要改', await waitFor(`document.querySelector('#activity .ln.bad') !== null && document.querySelector('#activity .iss.fix') !== null`));
+  await clickEl(`[...document.querySelectorAll('#activity .ehead .btn')].find((b) => b.textContent === '保存')`);
+  ok('新话题:要改的不存,底栏说为什么', await waitFor(`document.querySelector('#activity .ebar .bad')?.textContent.includes('改好才能存')`));
+  await shot('dev-tutorfile-bad.png');
+  await clickEl(`[...document.querySelectorAll('#activity .ehead .btn')].find((b) => b.textContent === '撤销')`);
+  ok('新话题:撤销后都存了', await waitFor(`document.querySelector('#activity .ehead .dirty') === null`));
+  ok('新话题:磁盘上那份没动', (await (await fetch(`${base}/api/dev/tutor-files/${tfTutor}`)).json()).text === tfBefore);
+  // 老师团的「改老师文件 →」跳到这位老师的新话题
+  await click('#side a[data-tab=team]');
+  await waitFor(`document.querySelector('#team .roster .row') !== null`);
+  await click('#team .roster .row');
+  await waitFor(`[...document.querySelectorAll('#team .btn')].some((b) => b.textContent === '改老师文件 →' && b.offsetParent)`);
+  await clickEl(`[...document.querySelectorAll('#team .btn')].find((b) => b.textContent === '改老师文件 →' && b.offsetParent)`);
+  ok('老师团:改老师文件 → 跳到 activity 的新话题', await waitFor(`location.hash.startsWith('#activity') && document.querySelector('#activity .ehead h2')?.textContent === '新话题' && document.querySelector('#activity .ai.tf.on') !== null`));
 
   await click('#side a[data-tab=voices]');
   ok('音色页出来了', await waitFor(`document.querySelector('#voices .panel') !== null`));

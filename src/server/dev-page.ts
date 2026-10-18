@@ -404,7 +404,7 @@ ${DEV_CSS}
   .vrow .tags { display:flex; gap:6px; flex-wrap:wrap; }
   .vrow .pick { font-size:12.5px; height:30px; padding:0 10px; }
 
-  /* ---------- activity(《工作台设计.md》拍板 7–10):列表 / 原文 / 检查·预览·和出厂比 ---------- */
+  /* ---------- activity(《工作台设计.md》拍板 7–11):列表(每位老师先是新话题 = 老师文件)/ 原文 / 检查·预览·和出厂比 ---------- */
   .act-wrap { max-width:none; }
   .act { display:grid; grid-template-columns:212px minmax(0,1fr) minmax(300px,380px); gap:16px; align-items:start; }
   .alist { display:flex; flex-direction:column; gap:10px; position:sticky; top:0; }
@@ -419,6 +419,10 @@ ${DEV_CSS}
   .ai.on b { font-weight:600; }
   .ai small { font:400 11px/1.5 var(--mono); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .ai .st { flex:none; font-size:11.5px; }
+  .ai.tf:not(:last-child) { margin-bottom:2px; box-shadow:inset 0 -1px 0 var(--line-soft); border-radius:var(--r-item) var(--r-item) 0 0; }
+  .ai.tf.on { box-shadow:0 0 0 1px var(--line); border-radius:var(--r-item); }
+  .aside details summary { cursor:pointer; font-size:12.5px; color:var(--ink-2); padding:4px 0; }
+  .aside details[open] summary { margin-bottom:6px; }
   .ed { display:flex; flex-direction:column; min-width:0; overflow:clip; }
   .ed .banner { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; padding:12px 18px; background:var(--warn-soft); }
   .ed .banner[hidden] { display:none; }
@@ -1210,30 +1214,12 @@ ${DEV_CSS}
     return out;
   };
 
-  const fileEditor = (t, card) => {
-    const ta = h('textarea', { spellcheck: 'false', style: 'display:none' });
-    const origin = h('span', { class: 'foot' });
-    const save = h('button', { class: 'btn', type: 'button', style: 'display:none', on: { click: async () => {
-      try {
-        const f = await api('PUT', '/api/tutors/' + t.name + '/file', { text: ta.value });
-        feedback(card, true, '老师文件已写入');
-        origin.textContent = f.state === 'own' ? '自家加的老师' : '自定义';
-      } catch (e) { feedback(card, false, e.message); }
-    } } }, '保存老师文件');
-    const btn = h('button', { class: 'btn', type: 'button', on: { click: async () => {
-      const on = ta.style.display === 'none';
-      ta.style.display = on ? 'block' : 'none';
-      save.style.display = on ? 'inline-block' : 'none';
-      if (on && !ta.value) {
-        try {
-          const f = await api('GET', '/api/tutors/' + t.name + '/file');
-          ta.value = f.text;
-          origin.textContent = f.state === 'own' ? '自家加的老师' : f.state === 'latest' ? '出厂件,最新' : f.state === 'upgradable' ? '出厂件,可升级' : '自定义' + (f.basedOn ? '(基于 ' + f.basedOn + ')' : '');
-        } catch (e) { feedback(card, false, e.message); }
-      }
-    } } }, '老师文件');
-    return [btn, save, origin, ta];
-  };
+  /** 老师文件在 activity 页改(拍板 11):和 activity 同一个编辑器,带检查、预览、和出厂比、撞车保护 */
+  const fileEditor = (t) => [h('button', { class: 'btn', type: 'button', title: '到 activity 页的「' + (t.name.endsWith('-tutor') ? '新话题' : '老师文件') + '」改:新话题照它带', on: { click: () => {
+    act.want = { tutor: t.name, name: t.name.endsWith('-tutor') ? '新话题' : '老师文件', kind: 'tutor' };
+    location.hash = '#activity?a=' + encodeURIComponent(t.name);
+    showTab('activity');
+  } } }, '改老师文件 →')];
 
   const renderTeam = () => {
     const c = state.config;
@@ -1288,7 +1274,7 @@ ${DEV_CSS}
         h('div', { class: 'field chk' }, h('input', { type: 'checkbox', 'data-f': 'hidden', checked: t.hidden }), h('label', {}, '孩子端不露')),
         ...policyFields(patch, t.policy, { inherit: true }));
       const saveBtn = h('button', { class: 'btn primary', type: 'button' }, '保存');
-      const full = h('div', { class: 'full' }, saveBtn, ...fileEditor(t, card), h('span', { class: 'fb' }));
+      const full = h('div', { class: 'full' }, saveBtn, ...fileEditor(t), h('span', { class: 'fb' }));
       if (!c.shipped.includes(t.name)) full.append(h('button', { class: 'btn danger', type: 'button', style: 'margin-left:auto', on: { click: async () => {
         if (!confirm('删掉 ' + t.display + '?老师文件改名保留,会话与记忆不动。')) return;
         try { await api('DELETE', '/api/tutors/' + t.name); await loadConfig(); renderTeam(); }
@@ -1633,12 +1619,16 @@ ${DEV_CSS}
     $('#overview').replaceChildren(h('div', { class: 'wrap' }, head, tiles, h('div', { class: 'cols3' }, todayBox, weekBox, useBox), h('div', { class: 'cols2' }, teamBox, issueBox)));
   };
 
-  // ---- activity(《工作台设计.md》拍板 7–10):看、改、边改边查(不落盘)、老师收到什么、和出厂比、恢复出厂;存要带读进来时的 hash ----
+  // ---- activity(《工作台设计.md》拍板 7–11):看、改、边改边查(不落盘)、老师收到什么、和出厂比、恢复出厂;存要带读进来时的 hash。老师文件(新话题)同一个编辑器 ----
   const FENCE = String.fromCharCode(96, 96, 96);
-  const act = { list: null, cur: null, saved: '', hash: '', text: '', diff: [], check: null, tab: 'check', pick: 'auto', params: {}, seq: 0, timer: 0, conflict: false, caret: 1, msg: '', msgBad: false, el: null };
-  const STATE_TAG = { latest: ['出厂', ''], upgradable: ['可升级', 'info'], custom: ['改过', 'accent'], untracked: ['自家的', ''], missing: ['不在', 'err'], broken: ['读不出', 'err'] };
+  // 老师文件(拍板 11):kind 'tutor' 的那份是「新话题」照的提示词,同一个编辑器;act.tfiles 是它们的行,act.want = 别的页点过来要开的那份
+  const act = { list: null, tfiles: null, want: null, cur: null, saved: '', hash: '', text: '', diff: [], check: null, tab: 'check', pick: 'auto', params: {}, seq: 0, timer: 0, conflict: false, caret: 1, msg: '', msgBad: false, el: null };
+  const STATE_TAG = { latest: ['出厂', ''], upgradable: ['可升级', 'info'], custom: ['改过', 'accent'], untracked: ['自家的', ''], own: ['自家的', ''], missing: ['不在', 'err'], broken: ['读不出', 'err'] };
   const actUrl = (t, n) => '/api/dev/activities/' + t + '/' + encodeURIComponent(n);
-  const rowOf = (c) => (act.list || []).find((r) => r.tutor === c.tutor && r.name === c.name) || null;
+  const isTutorFile = (c) => Boolean(c) && c.kind === 'tutor';
+  const docUrl = (c) => (isTutorFile(c) ? '/api/dev/tutor-files/' + c.tutor : actUrl(c.tutor, c.name));
+  const sameDoc = (a, b) => Boolean(a && b) && a.tutor === b.tutor && isTutorFile(a) === isTutorFile(b) && (isTutorFile(a) || a.name === b.name);
+  const rowOf = (c) => (isTutorFile(c) ? act.tfiles || [] : act.list || []).find((r) => sameDoc(r, c)) || null;
 
   /** 两份原文按行比(LCS),连着改的合成一块:at = 在 b 里的行号(1 起) */
   const diffLines = (a, b) => {
@@ -1692,12 +1682,14 @@ ${DEV_CSS}
     ...d.now.map((l) => h('div', { class: 'hl add' }, h('b', {}, '+'), h('span', {}, l || ' '))));
 
   const loadActivities = async () => {
-    act.list = await api('GET', '/api/dev/activities');
-    const bad = act.list.filter((r) => r.fixes).length;
+    const [list, tfiles] = await Promise.all([api('GET', '/api/dev/activities'), api('GET', '/api/dev/tutor-files')]);
+    act.list = list;
+    act.tfiles = tfiles;
+    const bad = list.concat(tfiles).filter((r) => r.fixes).length;
     $('#act-bad').hidden = !bad;
     $('#act-bad').textContent = bad ? String(bad) : '';
   };
-  const actHead = () => h('header', { class: 'ph' }, h('h1', {}, 'activity'), h('span', { class: 'sub' }, '孩子从首页一个按钮进去的一种做法;一个 activity 一个文件,在老师的家里'));
+  const actHead = () => h('header', { class: 'ph' }, h('h1', {}, 'activity'), h('span', { class: 'sub' }, '孩子从首页一个按钮进去的一种做法;一个 activity 一个文件,在老师的家里;「新话题」照老师文件带'));
 
   const renderActivities = async () => {
     if (!act.list) {
@@ -1705,19 +1697,27 @@ ${DEV_CSS}
       try { await loadActivities(); } catch (e) { $('#activity').replaceChildren(h('div', { class: 'wrap act-wrap' }, actHead(), h('p', { class: 'fb bad' }, '列不出来:' + e.message))); return; }
     }
     if (state.tab !== 'activity') return;
+    if (act.want) {
+      const w = act.want;
+      act.want = null;
+      if (!sameDoc(w, act.cur)) return openActivity(w.tutor, w.name, !act.cur, w.kind);
+    }
     if (act.cur) return buildActivity();
+    // #activity?a=<老师>/<名> 是 activity,a=<老师> 是这位老师的老师文件;都没有就开列表上的第一行
     const want = hashState().a;
-    const first = (want && act.list.find((r) => r.tutor + '/' + r.name === want)) || act.list[0];
-    if (first) return openActivity(first.tutor, first.name, true);
+    const rows = listRows();
+    const first = (want && rows.find((r) => (isTutorFile(r) ? r.tutor : r.tutor + '/' + r.name) === want)) || rows[0];
+    if (first) return openActivity(first.tutor, first.name, true, first.kind);
     $('#activity').replaceChildren(h('div', { class: 'wrap act-wrap' }, actHead(), h('p', { class: 'note' }, '这个 workspace 里还没有 activity(agents/<老师>/activities/<名>.md);cotutor upgrade 会补上出厂的。')));
   };
 
-  const openActivity = async (t, n, force) => {
+  const openActivity = async (t, n, force, kind) => {
     if (!force && act.cur && dirtyCount() && !(await ask('「' + act.cur.name + '」还有 ' + dirtyCount() + ' 处没存', ['换过去就丢掉这些改动。'], '丢掉,换过去', '留下'))) return;
+    const ref = { tutor: t, name: n, kind };
     let d;
-    try { d = await api('GET', actUrl(t, n)); } catch (e) { alert('读不出来:' + e.message); return; }
+    try { d = await api('GET', docUrl(ref)); } catch (e) { alert('读不出来:' + e.message); return; }
     Object.assign(act, { cur: d, saved: d.text, text: d.text, hash: d.hash, diff: [], check: null, conflict: false, pick: 'auto', params: {}, caret: 1, msg: '', msgBad: false });
-    history.replaceState(null, '', '#activity?a=' + encodeURIComponent(t + '/' + n));
+    history.replaceState(null, '', '#activity?a=' + encodeURIComponent(isTutorFile(ref) ? t : t + '/' + n));
     if (state.tab !== 'activity') return;
     buildActivity();
     runCheck();
@@ -1725,7 +1725,7 @@ ${DEV_CSS}
 
   const buildActivity = () => {
     const c = act.cur;
-    const ta = h('textarea', { class: 'eta', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', 'aria-label': c.name + '.md 原文' });
+    const ta = h('textarea', { class: 'eta', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', 'aria-label': (isTutorFile(c) ? c.path : c.name + '.md') + ' 原文' });
     ta.value = act.text;
     ta.addEventListener('input', () => {
       act.text = ta.value;
@@ -1797,23 +1797,29 @@ ${DEV_CSS}
     if (el) el.scrollIntoView({ block: 'center' });
   };
 
-  const paintList = () => {
+  /** 列表按老师分组:每组先是这位老师的老师文件(新话题),再是 activity;老师按 cotutor.json 的顺序 */
+  const listGroups = () => {
     const groups = [];
-    for (const r of act.list) {
+    for (const r of (act.tfiles || []).concat(act.list || [])) {
       let g = groups.find((x) => x.tutor === r.tutor);
       if (!g) groups.push((g = { tutor: r.tutor, rows: [] }));
       g.rows.push(r);
     }
+    return groups;
+  };
+  const listRows = () => listGroups().flatMap((g) => g.rows);
+  const paintList = () => {
+    const groups = listGroups();
     const item = (r) => {
-      const on = act.cur && act.cur.tutor === r.tutor && act.cur.name === r.name;
+      const on = sameDoc(act.cur, r);
       const tag = r.fixes ? [r.fixes + ' 处要改', 'err'] : STATE_TAG[r.state] || [r.state, ''];
-      const sub = r.page ? '不起老师 · 进' + r.page.split(' ')[0] : ['首页 ' + r.buttons, r.examples ? '例子 ' + r.examples : null].filter(Boolean).join(' · ');
-      return h('button', { type: 'button', class: 'ai' + (on ? ' on' : ''), title: r.description, on: { click: () => openActivity(r.tutor, r.name) } },
+      const sub = isTutorFile(r) ? '老师文件 · 首页 ' + r.buttons : r.page ? '不起老师 · 进' + r.page.split(' ')[0] : ['首页 ' + r.buttons, r.examples ? '例子 ' + r.examples : null].filter(Boolean).join(' · ');
+      return h('button', { type: 'button', class: 'ai' + (on ? ' on' : '') + (isTutorFile(r) ? ' tf' : ''), title: r.description, on: { click: () => openActivity(r.tutor, r.name, false, r.kind) } },
         h('span', { class: 'tx' }, h('b', {}, r.name), h('small', {}, sub)), h('span', { class: 'st ' + tag[1] }, tag[0]));
     };
     act.el.list.replaceChildren(
       ...groups.map((g) => { const t = tutorOf(g.tutor); return h('div', { class: 'grp' }, h('div', { class: 'gh' }, avatarEl(Object.assign({ name: g.tutor }, t), 'xs'), h('span', {}, t.display)), ...g.rows.map(item)); }),
-      h('p', { class: 'note' }, '新建、改名、删一个 activity,在 workspace 里和 Claude Code 说;这里只改已有的。'));
+      h('p', { class: 'note' }, '「新话题」改的是老师文件:首页的新话题、开场按钮都照它带。新建、改名、删一个 activity,在 workspace 里和 Claude Code 说;这里只改已有的。'));
   };
 
   const paintHead = () => {
@@ -1831,7 +1837,7 @@ ${DEV_CSS}
           d ? h('span', { class: 'dirty' }, d + ' 处没存') : h('span', { class: 'clean' }, '都存了'),
           h('button', { class: 'btn', type: 'button', disabled: !d, on: { click: undoActivity } }, '撤销'),
           h('button', { class: 'btn primary', type: 'button', disabled: !d || act.conflict, title: '⌘/Ctrl + S', on: { click: saveActivity } }, '保存'))),
-      h('div', { class: 'l2' }, c.path + ' · 首页 ' + (row ? row.buttons : 0) + ' 个按钮 · ' + c.examples + ' 个例子'),
+      h('div', { class: 'l2' }, c.path + (isTutorFile(c) ? ' · 首页上照它带的按钮 ' + (row ? row.buttons : 0) + ' 个' : ' · 首页 ' + (row ? row.buttons : 0) + ' 个按钮 · ' + c.examples + ' 个例子')),
       row && row.description ? h('div', { class: 'l3' }, row.description) : null);
   };
 
@@ -1863,7 +1869,7 @@ ${DEV_CSS}
       h('span', { class: 'num' }, '第 ' + act.caret + ' 行 · 共 ' + act.text.split('\\n').length + ' 行'),
       here.length ? h('span', { class: here.some((i) => i.level === 'fix') ? 'bad' : '' }, here.map((i) => i.text).join(';'))
         : act.msg ? h('span', { class: act.msgBad ? 'bad' : 'ok' }, act.msg)
-          : h('span', {}, '存了就生效:下一轮起照新的带,正在进行的话题也换'));
+          : h('span', {}, isTutorFile(act.cur) ? '存了就生效:新开的话题照新的带;正在聊的那个,老师可能还照旧的' : '存了就生效:下一轮起照新的带,正在进行的话题也换'));
   };
 
   const paintBanner = () => {
@@ -1876,10 +1882,10 @@ ${DEV_CSS}
       h('span', { class: 'tx' }, '这份文件在别处改过了(比如在 workspace 里用 Claude Code 改的)。你还有 ' + dirtyCount() + ' 处没存,直接存会盖掉那边的,所以「保存」先停了。'),
       h('span', { class: 'acts' },
         h('button', { class: 'btn small', type: 'button', on: { click: async () => {
-          try { const d = await api('GET', actUrl(c.tutor, c.name)); showHunks('那边改了什么', '和你读进来的那份比(没算你还没存的改动):', diffLines(act.saved, d.text)); } catch (e) { alert(e.message); }
+          try { const d = await api('GET', docUrl(c)); showHunks('那边改了什么', '和你读进来的那份比(没算你还没存的改动):', diffLines(act.saved, d.text)); } catch (e) { alert(e.message); }
         } } }, '看那边改了什么'),
         ' ',
-        h('button', { class: 'btn ink small', type: 'button', on: { click: () => openActivity(c.tutor, c.name, true) } }, '丢掉我的,重读')));
+        h('button', { class: 'btn ink small', type: 'button', on: { click: () => openActivity(c.tutor, c.name, true, c.kind) } }, '丢掉我的,重读')));
   };
 
   /** 预览用哪份参数:首页某个按钮的,或自己填的 */
@@ -1892,11 +1898,11 @@ ${DEV_CSS}
     if (!c) return;
     const seq = ++act.seq;
     let r;
-    try { r = await api('POST', actUrl(c.tutor, c.name) + '/check', { text: act.text, params: previewParams() }); } catch (e) { act.msg = '检查没跑成:' + e.message; act.msgBad = true; if (act.el) paintBar(); return; }
+    try { r = await api('POST', docUrl(c) + '/check', { text: act.text, params: previewParams() }); } catch (e) { act.msg = '检查没跑成:' + e.message; act.msgBad = true; if (act.el) paintBar(); return; }
     if (seq !== act.seq || c !== act.cur) return;
     act.check = r;
-    // 预览缺省按首页上参数最多的那个按钮看;没有按钮就自己填
-    if (act.pick === 'auto') {
+    // 预览缺省按首页上参数最多的那个按钮看;没有按钮就自己填(老师文件没有参数)
+    if (act.pick === 'auto' && !isTutorFile(c)) {
       if (r.buttons.length) {
         let best = 0;
         r.buttons.forEach((b, k) => { if (Object.keys(b.params).length > Object.keys(r.buttons[best].params).length) best = k; });
@@ -1917,7 +1923,8 @@ ${DEV_CSS}
     const tabs = [['check', '检查'], ['preview', '老师收到什么'], ['diff', '和出厂比']];
     const seg = h('div', { class: 'seg', role: 'tablist' }, ...tabs.map(([k, label]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(act.tab === k), class: act.tab === k ? 'on' : '', on: { click: () => { act.tab = k; paintSide(); } } }, label)));
     const body = h('div', { class: 'body' });
-    const parts = !r ? [h('p', { class: 'note' }, '在查……')] : act.tab === 'check' ? sideCheck(r) : act.tab === 'preview' ? sidePreview(r) : sideDiff(r);
+    const tf = isTutorFile(act.cur);
+    const parts = !r ? [h('p', { class: 'note' }, '在查……')] : act.tab === 'check' ? (tf ? sideCheckTutor(r) : sideCheck(r)) : act.tab === 'preview' ? (tf ? sidePreviewTutor(r) : sidePreview(r)) : sideDiff(r);
     body.append(...parts.filter(Boolean));
     act.el.side.replaceChildren(h('div', { class: 'tabs' }, seg), body);
   };
@@ -1982,13 +1989,60 @@ ${DEV_CSS}
 
   const sideDiff = (r) => {
     const c = act.cur;
-    if (!r.diff) return [h('p', { class: 'note' }, '自家加的 activity,没有出厂那份可比。')];
+    const tf = isTutorFile(c);
+    if (!r.diff) return [h('p', { class: 'note' }, tf ? '自家加的老师,没有出厂那份可比。' : '自家加的 activity,没有出厂那份可比。')];
     const out = [h('div', { class: 'srow' }, r.diff.length ? h('span', { class: 'st accent' }, '和出厂不一样 ' + r.diff.length + ' 处') : h('span', { class: 'st ok' }, '和出厂一样'), h('span', { class: 'note' }, '含没存的')),
       ...r.diff.map((d) => hunkEl(d, true))];
     out.push(h('p', { class: 'note' }, c.state === 'upgradable' ? '这份没改过,是旧版出厂的;cotutor upgrade 会换成新的。' : c.state === 'latest' ? '存下以后就算改过的出厂件:cotutor upgrade 不再自动换新版,只报 diff。' : '改过的出厂件,cotutor upgrade 不再自动换新版,只报 diff。'));
     out.push(rule(), h('div', { class: 'srow' },
       h('button', { class: 'btn danger', type: 'button', disabled: !r.diff.length && !dirtyCount(), on: { click: restoreActivityBtn } }, '恢复出厂'),
-      h('span', { class: 'note' }, c.state === 'latest' ? '磁盘上那份就是出厂的,恢复只是丢掉没存的改动。' : '换回出厂那份;你这份存成 ' + c.name + '.md.bak。别的 activity 不碰。')));
+      h('span', { class: 'note' }, c.state === 'latest' ? '磁盘上那份就是出厂的,恢复只是丢掉没存的改动。' : '换回出厂那份;你这份存成 ' + bakName(c) + '。' + (tf ? '别的老师、这位老师的 activity 都不碰。' : '别的 activity 不碰。'))));
+    return out;
+  };
+
+  const bakName = (c) => (isTutorFile(c) ? c.path.split('/').pop() : c.name + '.md') + '.bak';
+
+  /** 老师文件的检查:写法、首页上哪些按钮照它带、怎么看效果 */
+  const sideCheckTutor = (r) => {
+    const c = act.cur;
+    const fx = r.issues.filter((i) => i.level === 'fix');
+    const nt = r.issues.filter((i) => i.level === 'note');
+    const faced = c.name === '新话题';
+    return [
+      h('div', { class: 'srow' }, fx.length ? h('span', { class: 'st err' }, fx.length + ' 处要改') : h('span', { class: 'st ok' }, '都对得上'), nt.length ? h('span', { class: 'st warn' }, nt.length + ' 条提醒') : null, h('span', { class: 'note' }, r.issues.length ? '点一条跳到那一行' : '边改边查,不落盘')),
+      r.issues.length ? h('div', { class: 'ilist' }, ...r.issues.map((i) => h('button', { type: 'button', class: 'iss' + (i.level === 'fix' ? ' fix' : ''), on: { click: () => { if (i.line) jumpTo(i.line); } } }, h('b', { class: 'num' }, i.line ? '第 ' + i.line + ' 行' : '整份'), h('span', {}, i.text)))) : null,
+      fx.length ? h('p', { class: 'note' }, '老师文件写坏了这位老师整个起不来,所以改好才能存(activity 写坏了还能先存)。') : null,
+      rule(),
+      h('h3', {}, '照它带的'),
+      faced
+        ? h('p', { class: 'note' }, '不走 activity 的话题:首页的「新话题」、开场按钮,隔天「接着」一个不是 activity 的话题。点 activity 按钮进去的话题不读它。')
+        : h('p', { class: 'note' }, '工具人:没有新话题按钮,由应用在幕后起;正文就是它每次的系统提示。'),
+      ...(faced ? (r.buttons.length ? r.buttons.map((b) => h('div', { class: 'hb' }, h('span', { class: 'tx' }, h('b', {}, b.label), h('small', {}, b.kind === 'new' ? '孩子自己开口,应用放在第一个' : '开场:按钮上的字当孩子的第一句')), h('span', { class: 'st ok' }, '首页上'))) : [h('p', { class: 'note' }, '已发布的首页上没有这位老师的卡,孩子端看不到他的新话题。')]) : []),
+      rule(),
+      h('h3', {}, '老师带得好不好'),
+      h('p', { class: 'note' }, '检查只管写法。要看老师照新的讲得怎样:拿以前的一轮按现在的提示词再跑一遍对照(job 在「对话」页的看原文里),或真发一条;都花钱。'),
+      h('div', { class: 'cmd' }, h('code', {}, 'cotutor replay ' + c.tutor + ' <job>'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(e.target.previousSibling.textContent, e.target) } }, '复制')),
+      h('div', { class: 'cmd' }, h('code', {}, 'cotutor send ' + c.tutor + ' --new "…"'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(e.target.previousSibling.textContent, e.target) } }, '复制')),
+    ];
+  };
+
+  /** 老师文件:新话题里老师收到什么——系统提示(正文 + 板书写法)与话题第一条的守则 */
+  const sidePreviewTutor = (r) => {
+    const c = act.cur;
+    const pv = r.preview;
+    const out = [h('div', { class: 'chips' },
+      h('span', { class: 'tag' }, '正文 ' + pv.chars.toLocaleString() + ' 字'),
+      pv.board ? h('span', { class: 'tag', title: pv.board.cards.length ? '这位老师的卡:' + pv.board.cards.join(' ') : '全部的卡' }, '+ 板书写法 ' + pv.board.chars.toLocaleString() + ' 字') : null,
+      pv.rules ? h('span', { class: 'tag' }, '+ 守则 ' + pv.rules.chars.toLocaleString() + ' 字') : null)];
+    out.push(h('pre', { class: 'pv' }, pv.text || '(空)'));
+    out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是新话题里老师的系统提示(qwen 的 systemBody、claude 的 --agent):老师文件去掉 frontmatter' + (pv.board ? ',后面再接板书写法' : '') + '。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
+    if (pv.rules) {
+      out.push(rule(), h('h3', {}, '话题第一条还带守则'),
+        h('p', { class: 'note' }, '有脸的老师共用的 ' + pv.rules.path + ',机器件,cotutor upgrade 每次覆盖,这里不改。这位老师要不一样的做法,写进上面的老师文件,它优先。'),
+        h('details', {}, h('summary', {}, '看守则原文'), h('pre', { class: 'pv tool' }, pv.rules.text)));
+    }
+    out.push(rule(), h('p', { class: 'note' }, '档案、日记、计划这些每轮现拼进上下文包,不在这里;看一轮会拼成什么(不花钱):'),
+      h('div', { class: 'cmd' }, h('code', {}, 'cotutor pack ' + c.tutor + ' "…"'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(e.target.previousSibling.textContent, e.target) } }, '复制')));
     return out;
   };
 
@@ -2006,11 +2060,12 @@ ${DEV_CSS}
     const c = act.cur;
     if (!c || !dirtyCount() || act.conflict) return;
     let r;
-    try { r = await api('POST', actUrl(c.tutor, c.name) + '/check', { text: act.text, params: previewParams() }); } catch (e) { alert(e.message); return; }
+    try { r = await api('POST', docUrl(c) + '/check', { text: act.text, params: previewParams() }); } catch (e) { alert(e.message); return; }
     act.check = r;
     const fx = r.issues.filter((i) => i.level === 'fix');
+    if (fx.length && isTutorFile(c)) { act.msg = '还有 ' + fx.length + ' 处要改,改好才能存:老师文件写坏了,这位老师就起不来'; act.msgBad = true; paintAll(); return; }
     if (fx.length && !(await ask('还有 ' + fx.length + ' 处要改,先存吗?', ['存下就生效。改好之前:', ...(r.buttons.length ? ['首页上用到它的 ' + r.buttons.length + ' 个按钮,孩子端先不出'] : []), '正在进行的「' + c.name + '」话题,下一轮老师照这份带'], '仍然保存', '回去改'))) { paintAll(); return; }
-    const res = await fetch(actUrl(c.tutor, c.name), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: act.text, base: act.hash }) });
+    const res = await fetch(docUrl(c), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: act.text, base: act.hash }) });
     const j = await res.json().catch(() => null);
     if (res.status === 409) { act.conflict = true; paintAll(); return; }
     if (!res.ok) { act.msg = '没存上:' + ((j && j.message) || res.status); act.msgBad = true; paintBar(); return; }
@@ -2018,7 +2073,7 @@ ${DEV_CSS}
     act.hash = j.hash;
     c.state = j.state;
     act.diff = [];
-    act.msg = '存好了 · 下一轮起照新的带' + (j.fixes ? ';改好之前首页上用它的按钮孩子端不出' : '');
+    act.msg = isTutorFile(c) ? '存好了 · 新开的话题照新的带' : '存好了 · 下一轮起照新的带' + (j.fixes ? ';改好之前首页上用它的按钮孩子端不出' : '');
     act.msgBad = Boolean(j.fixes);
     try { await loadActivities(); } catch (e) {}
     paintList();
@@ -2027,12 +2082,13 @@ ${DEV_CSS}
 
   const restoreActivityBtn = async () => {
     const c = act.cur;
-    const lead = c.state === 'latest' ? '磁盘上那份就是出厂的;没存的 ' + dirtyCount() + ' 处丢掉。' : '你这份存成 ' + c.name + '.md.bak' + (dirtyCount() ? ',没存的 ' + dirtyCount() + ' 处一起丢掉' : '') + '。和 cotutor upgrade --force ' + c.tutor + '/' + c.name + ' 同一条路,别的 activity 不碰。';
+    const tf = isTutorFile(c);
+    const lead = c.state === 'latest' ? '磁盘上那份就是出厂的;没存的 ' + dirtyCount() + ' 处丢掉。' : '你这份存成 ' + bakName(c) + (dirtyCount() ? ',没存的 ' + dirtyCount() + ' 处一起丢掉' : '') + '。和 cotutor upgrade --force ' + c.tutor + (tf ? '' : '/' + c.name) + ' 同一条路,' + (tf ? '别的老师不碰。' : '别的 activity 不碰。');
     if (!(await ask('换回出厂那份?', [lead], '恢复出厂', '算了'))) return;
     let r;
-    try { r = await api('POST', actUrl(c.tutor, c.name) + '/restore', {}); } catch (e) { alert(e.message); return; }
+    try { r = await api('POST', docUrl(c) + '/restore', {}); } catch (e) { alert(e.message); return; }
     try { await loadActivities(); } catch (e) {}
-    await openActivity(c.tutor, c.name, true);
+    await openActivity(c.tutor, c.name, true, c.kind);
     act.msg = r.bak ? '换回出厂了 · 你那份在 ' + r.bak : '换回出厂了';
     act.msgBad = false;
     paintBar();
@@ -2043,7 +2099,7 @@ ${DEV_CSS}
     const c = act.cur;
     if (!c || act.conflict || state.tab !== 'activity') return;
     let d;
-    try { d = await api('GET', actUrl(c.tutor, c.name)); } catch (e) { return; }
+    try { d = await api('GET', docUrl(c)); } catch (e) { return; }
     if (c !== act.cur || d.hash === act.hash) return;
     if (dirtyCount()) { act.conflict = true; paintAll(); return; }
     Object.assign(act, { cur: d, saved: d.text, text: d.text, hash: d.hash, diff: [], msg: '别处改过了,已读进新的那份', msgBad: false });

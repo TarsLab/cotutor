@@ -35,6 +35,7 @@ import { kidHomeView, messageVia, resolveVia } from './home.ts';
 import { DEV_PAGE } from './dev-page.ts';
 import { devOverview } from './dev-overview.ts';
 import { ActivityConflict, checkDevActivity, findDevActivity, listDevActivities, readDevActivity, restoreDevActivity, saveDevActivity } from './dev-activities.ts';
+import { checkDevTutorFile, hasDevTutorFile, listDevTutorFiles, readDevTutorFile, restoreDevTutorFile, saveDevTutorFile } from './dev-tutor-files.ts';
 import { doctorWorkspace } from '../cli/doctor.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { BusyError, Runner } from './runner.ts';
@@ -727,6 +728,29 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         }
       }
       if (sub === '/restore' && method === 'POST') return { status: 200, json: await restoreDevActivity(ws, tutor, name) };
+      return { status: 405, json: { error: 'method_not_allowed' } };
+    }
+    // 工作台改老师文件(拍板 11):「新话题」照的提示词;和 activity 同一套(存带 hash、对不上 409),检查有要改的不存(400)
+    if (p === '/api/dev/tutor-files' && method === 'GET') return { status: 200, json: await listDevTutorFiles(ws) };
+    const dt = /^\/api\/dev\/tutor-files\/([a-z0-9][a-z0-9-]*)(\/check|\/restore)?$/.exec(p);
+    if (dt) {
+      const [, tutor, sub] = dt;
+      if (!(await hasDevTutorFile(ws, tutor))) return { status: 404, json: { error: 'no_such_tutor', tutor } };
+      if (!sub && method === 'GET') return { status: 200, json: await readDevTutorFile(ws, tutor) };
+      if (sub === '/check' && method === 'POST') {
+        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text}' } };
+        return { status: 200, json: await checkDevTutorFile(ws, tutor, body.text) };
+      }
+      if (!sub && method === 'PUT') {
+        if (!isObj(body) || typeof body.text !== 'string' || typeof body.base !== 'string') return { status: 400, json: { error: 'bad_request', message: '要 {text, base}' } };
+        try {
+          return { status: 200, json: await saveDevTutorFile(ws, tutor, body.text, body.base) };
+        } catch (err) {
+          if (err instanceof ActivityConflict) return { status: 409, json: { error: 'conflict', message: '这份文件在别处改过了', hash: err.hash } };
+          throw err;
+        }
+      }
+      if (sub === '/restore' && method === 'POST') return { status: 200, json: await restoreDevTutorFile(ws, tutor) };
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
     if (p === '/api/workspace' && method === 'GET') return { status: 200, json: workspaceReport(ws) };

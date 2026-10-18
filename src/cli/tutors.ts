@@ -296,3 +296,29 @@ export async function removeTutorFile(root: string, name: string): Promise<{ mov
     return { moved: null };
   }
 }
+
+/** 出厂那份老师文件的原文;不是出厂的 → null */
+export async function shippedTutorText(name: string): Promise<string | null> {
+  const a = (await shippedAgents()).find((x) => x.name === name);
+  return a ? readFile(a.file, 'utf8') : null;
+}
+
+/**
+ * 只把一位出厂老师的文件换回出厂那份(工作台「恢复出厂」,与 upgrade --force <老师> 同一条路,但不碰别的老师):
+ * 现在那份和出厂不一样就先存 .bak。不是出厂的 → UsageError。返回 .bak 的路径(没存就是 null)
+ */
+export async function restoreTutor(root: string, name: string): Promise<{ bak: string | null }> {
+  const a = (await shippedAgents()).find((x) => x.name === name);
+  if (!a) throw new UsageError(`${name} 是自家加的老师,没有出厂那份可换`);
+  const manifest = await readManifest(root);
+  const { claude } = tutorFiles(root, name);
+  const cur = await readFile(claude, 'utf8').catch(() => null);
+  let bak: string | null = null;
+  if (cur !== null && cur !== (await readFile(a.file, 'utf8'))) {
+    bak = `${claude}.bak`;
+    await writeFile(bak, cur);
+  }
+  await installOne(root, a, manifest);
+  await writeManifest(root, manifest);
+  return { bak };
+}

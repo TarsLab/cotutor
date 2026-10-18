@@ -38,7 +38,7 @@ export interface Attempt {
  * 写的时候 show 出了这个词、say 老师念了一遍(n 第几遍)、again 点了再念、reveal 点了「给答案」(服务端记)、order 看了一遍笔顺、done 写好了这个字;
  * 对答案时 strokeOrder 点开一个字逐笔看、rewrite 问了再写一遍点「好」、self 自己说「我想再写」。
  * 录像要的(《家长录像设计.md》拍板 13):trace 给答案后点「我来写」、open 点听写本上的一格回去改、close 从逐笔看 / 再写一遍回到对一对、
- * view 屏幕多大(w、h,进页面与转屏)、away / back 切到别处 / 回来。
+ * view 屏幕多大(w、h,进页面与转屏)与写字格的档(pad,换档也记)、away / back 切到别处 / 回来。
  */
 export const EVENT_KINDS = ['show', 'say', 'again', 'reveal', 'order', 'done', 'strokeOrder', 'rewrite', 'self', 'trace', 'open', 'close', 'view', 'away', 'back'] as const;
 export interface DictationEvent {
@@ -54,6 +54,8 @@ export interface DictationEvent {
   /** view:孩子屏幕的 CSS 尺寸 */
   w?: number;
   h?: number;
+  /** view:写字格的档(《wip/听写设想.md》拍板 30,l 铺满 / m 500 / s 380);老数据没有,按 l */
+  pad?: 'l' | 'm' | 's';
 }
 
 export interface Session {

@@ -37,7 +37,7 @@ export interface DrReel {
   marks: DrMark[];
   notes: DrNote[];
   chapters: DrChapter[];
-  views: { t: number; w: number; h: number }[];
+  views: { t: number; w: number; h: number; pad: 'l' | 'm' | 's' }[];
   checkedAt: number | null;
   doneAt: number | null;
 }
@@ -245,7 +245,7 @@ export function drBuild(s: Session): DrReel {
   notes.sort((a, b) => a.t - b.t);
   marks.sort((a, b) => a.t - b.t);
 
-  const views = evs.filter((x) => x.e.kind === 'view' && x.e.w && x.e.h).map((x) => ({ t: x.t, w: x.e.w!, h: x.e.h! }));
+  const views = evs.filter((x) => x.e.kind === 'view' && x.e.w && x.e.h).map((x) => ({ t: x.t, w: x.e.w!, h: x.e.h!, pad: x.e.pad ?? ('l' as const) }));
   return { startAt, end, lang, chars, says, first, rewrites, steps, says_, gaps, marks, notes, chapters, views, checkedAt, doneAt };
 }
 
@@ -297,6 +297,8 @@ export interface DrFrame {
   writing: { word: number; char: number } | null;
   gap: DrGap | null;
   size: [number, number] | null;
+  /** 写字格的档(拍板 30):照这一刻之前最后一条 view,没有就 l */
+  pad: 'l' | 'm' | 's';
 }
 
 const drCut = (pts: InkPoint[], t: number): InkPoint[] => { let k = 0; while (k < pts.length && pts[k][2] <= t) k++; return k === pts.length ? pts : pts.slice(0, k); };
@@ -321,10 +323,10 @@ export function drFrameAt(r: DrReel, t: number): DrFrame {
   let say: DrFrame['say'] = null, said = 0;
   for (const x of r.says_) { if (x.t > t || x.word !== v.word) continue; if (t < x.t + x.d) say = { n: x.n, word: x.word, t: x.t }; else said = Math.max(said, x.n); }
   const gap = r.gaps.find((g) => t > g.from && t < g.to) ?? null;
-  let size: [number, number] | null = null;
-  for (const x of r.views) if (x.t <= t || !size) size = [x.w, x.h];
+  let size: [number, number] | null = null, pad: DrFrame['pad'] = 'l';
+  for (const x of r.views) if (x.t <= t || !size) { size = [x.w, x.h]; pad = x.pad; }
   const allDone = r.chars.every((cs, w) => cs.every((_c, c) => v.done.has(w + ':' + c)));
-  return { view: v.view, word: v.word, char: v.char, mode: v.mode, orderAt: v.orderAt, open: v.open, allDone, ink, rewrite, latest, say, said, writing, gap, size };
+  return { view: v.view, word: v.word, char: v.char, mode: v.mode, orderAt: v.orderAt, open: v.open, allDone, ink, rewrite, latest, say, said, writing, gap, size, pad };
 }
 
 /** 这一刻录像栏上那一行字 */

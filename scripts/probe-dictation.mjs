@@ -82,6 +82,17 @@ try {
   ok('听写中:听写本三行(2、2、1 格)、右边一个大格;气泡里没有字', await waitFor(`document.querySelectorAll('#l-book .brow').length === 3 && document.querySelectorAll('#l-big .padbox').length === 1`) && (await evaluate(`[...document.querySelectorAll('#l-book .brow')].map((r) => r.querySelectorAll('.padbox').length).join() === '2,2,1' && document.querySelector('#l-what').textContent === '第一个词的第一个字' && !document.body.innerText.includes('春')`)));
   const bigSize = await evaluate(`Math.round(document.querySelector('#l-big .padbox').getBoundingClientRect().width)`);
   ok('大格放得大(≥ 480)', bigSize >= 480, `${bigSize}px`);
+  // 听写本拼起来、写字格三档(《wip/听写设想.md》拍板 30)
+  const bk = await evaluate(`(() => { const rs = [...document.querySelectorAll('#l-book .brow')].map((r) => r.getBoundingClientRect()); const cs = [...document.querySelectorAll('#l-book .brow')[0].querySelectorAll('.padbox')].map((c) => c.getBoundingClientRect()); return { tops: rs.map((r) => Math.round(r.top)), seam: Math.round(cs[1].left - cs[0].right) }; })()`);
+  ok('听写本:一个词的格子拼在一起,前两个词(各两格)排在同一行', bk.seam === 0 && bk.tops[0] === bk.tops[1] && bk.tops[2] > bk.tops[0], JSON.stringify(bk));
+  ok('写字格档位:右上角三颗,缺省大', (await evaluate(`[...document.querySelectorAll('#l-size button')].map((b) => b.dataset.pad + (b.getAttribute('aria-pressed') === 'true' ? '*' : '')).join()`)) === 's,m,l*');
+  await tap('#l-size [data-pad="s"]');
+  const small = await evaluate(`({ w: Math.round(document.querySelector('#l-big .padbox').getBoundingClientRect().width), c: document.cookie })`);
+  ok('点小:写字格 380,cookie 记下', small.w === 380 && small.c.includes('cotutor_dict_pad=s'), JSON.stringify(small));
+  await tap('#l-size [data-pad="m"]');
+  ok('点中:写字格 500', (await evaluate(`Math.round(document.querySelector('#l-big .padbox').getBoundingClientRect().width)`)) === 500);
+  await tap('#l-size [data-pad="l"]');
+  ok('点大:回到铺满', (await evaluate(`Math.round(document.querySelector('#l-big .padbox').getBoundingClientRect().width)`)) === bigSize && (await evaluate('document.cookie')).includes('cotutor_dict_pad=l'));
   const btnsZh = await evaluate(`(() => { const bs = [...document.querySelectorAll('.view.on button.tool, .view.on button.main')].filter((b) => b.getClientRects().length); return { bare: bs.filter((b) => !b.querySelector('svg')).map((b) => b.textContent.trim()), labels: bs.map((b) => b.textContent.trim()) }; })()`);
   ok('写字屏的按钮都带图标,字同英文页:再念 撤销 擦掉 不会写,给答案 写好了(《wip/听写设想.md》拍板 28)', btnsZh.bare.length === 0 && ['再念', '撤销', '擦掉', '不会写,给答案', '写好了'].every((t) => btnsZh.labels.includes(t)), JSON.stringify(btnsZh));
   await writeChar('#l-big .padbox', '春');
@@ -103,9 +114,9 @@ try {
   const afterClear = await inkCount('#l-big .ink');
   await writeChar('#l-big .padbox', '励');
   ok('撤销撤最后一笔、擦掉重写清这个字', afterUndo === 6 && afterClear === 0 && (await inkCount('#l-big .ink')) === 7, `${afterUndo}/${afterClear}`);
-  await tap('#l-book .brow.cur .padbox:nth-child(2)');
+  await tap('#l-book .brow.cur .padbox:nth-child(1)');
   ok('点听写本上这个词的第一格:回去看「鼓」', await waitFor(`document.querySelector('#l-what').textContent === '第二个词的第一个字'`) && (await inkCount('#l-big .ink')) === 12);
-  await tap('#l-book .brow.cur .padbox:nth-child(3)');
+  await tap('#l-book .brow.cur .padbox:nth-child(2)');
   await tapText('写好了');
 
   // ---- 不会写,给答案:看笔顺,照着描红写一遍 ----

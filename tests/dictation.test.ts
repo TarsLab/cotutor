@@ -210,6 +210,12 @@ try {
     const st = [await okEv({ kind: 'view', word: 0, t: 10, w: 1180, h: 820 }), await okEv({ kind: 'trace', word: 1, char: 0, t: 20 }), await okEv({ kind: 'open', word: 1, char: 1, t: 30 }), await okEv({ kind: 'close', word: 1, t: 40 }), await okEv({ kind: 'away', word: 1, t: 50 }), await okEv({ kind: 'back', word: 1, t: 60 }), await okEv({ kind: 'view', word: 0, t: 70 })];
     const fv = (await call('GET', `/api/dictation/${fid}`)).json.events.find((e: J) => e.kind === 'view');
     check('事件:view 带屏幕尺寸;trace / open / close / away / back 都收;view 没尺寸 400', st.join() === '200,200,200,200,200,200,400' && fv.w === 1180 && fv.h === 820, st.join());
+    // 写字格的档(《wip/听写设想.md》拍板 30):view 顺带记,认不得的档不记
+    await okEv({ kind: 'view', word: 0, t: 80, w: 1180, h: 820, pad: 's' }); await okEv({ kind: 'view', word: 0, t: 90, w: 1180, h: 820, pad: 'x' });
+    const pv = (await call('GET', `/api/dictation/${fid}`)).json.events.filter((e: J) => e.kind === 'view');
+    check('事件:view 带写字格的档(s),认不得的不记;老的那条没有', pv.length === 3 && pv[0].pad === undefined && pv[1].pad === 's' && pv[2].pad === undefined, JSON.stringify(pv));
+    const zh = (await import('../src/dictation/page.ts')).DICTATION_PAGE;
+    check('写字屏有三档写字格(小 中 大),cookie 记 cotutor_dict_pad;再写一遍也照档封顶', ['s', 'm', 'l'].every((k) => zh.includes(`data-pad="${k}"`)) && zh.includes('cotutor_dict_pad=') && zh.includes('Math.min(PAD_CAP[S.padl], Math.floor(Math.min((w - (count - 1) * 24)'));
     const reelPage = (await call('GET', '/dictation?reel=' + fid)).html ?? '';
     check('听写页内联了录像(drBuild / drFrameAt / drClock),脚本能解析;录像外壳带录像栏', parses(reelPage) && reelPage.includes('function drBuild(') && reelPage.includes('function drFrameAt(') && reelPage.includes('function drClock(') && !reelPage.includes('/parent') && ((await call('GET', '/parent/dictation/reel')).html ?? '').includes('id="rl-seek"'));
   }

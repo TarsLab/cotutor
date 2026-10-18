@@ -464,8 +464,9 @@ async function handleSession(method: string, url: URL, deps: DictationDeps, body
     const n = body.n === undefined ? undefined : num(body.n, 1, 99) && Number.isInteger(body.n) ? body.n : null;
     if (t === null || n === null) return bad('t 是离开始的毫秒,n 是第几遍');
     // view:孩子屏幕的 CSS 尺寸(录像按它开)
-    const size = kind === 'view' && num(body.w, 200, 4000) && num(body.h, 200, 4000) ? { w: Math.round(body.w), h: Math.round(body.h) } : kind === 'view' ? null : {};
-    if (size === null) return bad('view 要 {w, h}');
+    const pad = body.pad === 'l' || body.pad === 'm' || body.pad === 's' ? { pad: body.pad as 'l' | 'm' | 's' } : {};
+    const size = kind === 'view' && num(body.w, 200, 4000) && num(body.h, 200, 4000) ? { w: Math.round(body.w), h: Math.round(body.h), ...pad } : kind === 'view' ? null : {};
+    if (size === null) return bad('view 要 {w, h, pad?}');
     if (s.events.length < 4000) s.events.push({ at: now.toISOString(), kind, word: body.word as number, ...(ch !== undefined ? { char: ch as number } : {}), ...(t !== undefined ? { t } : {}), ...(n !== undefined ? { n } : {}), ...size });
     await writeSession(root, s);
     return { status: 200, json: { ok: true } };

@@ -12,6 +12,9 @@ import { SNAP_CSS, snapHtml } from '../server/photo-ui.ts';
 import { faviconLinks } from '../lib/favicon.ts';
 import { BTN_CSS, BTN_JS, btn } from './ui.ts';
 
+/** 写字格三档的按钮(拍板 30):档、图标边长、读屏的名字;越下越大 */
+const PAD_SIZES: [string, number, string][] = [['s', 14, '小'], ['m', 20, '中'], ['l', 28, '大']];
+
 export const DICTATION_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
@@ -70,22 +73,35 @@ ${BTN_CSS}
   #v-listen { flex-direction:row; gap:24px; padding:calc(env(safe-area-inset-top) + 10px) 20px 20px; height:100vh; height:100dvh; }
   /* 左上角的胶囊(回首页)浮在左边一栏、照片上面:它们从胶囊下面开始 */
   #v-pick .shot { margin-top:58px; }
-  .book { width:300px; flex:none; min-height:0; display:flex; flex-direction:column; gap:4px; padding:14px 10px; background:#fff; border:1px solid var(--line); border-radius:22px; overflow:auto; }
-  .book .bh { display:flex; align-items:baseline; justify-content:space-between; padding:0 8px 6px; }
+  /* 听写本(拍板 30):一个词的格子拼成一条(字与字共用一条线),词挨着排、排满换行 */
+  .book { width:300px; flex:none; min-height:0; display:flex; flex-flow:row wrap; align-content:flex-start; gap:8px 6px; padding:14px 8px; background:#fff; border:1px solid var(--line); border-radius:22px; overflow:auto; }
+  .book .bh { flex:0 0 100%; display:flex; align-items:baseline; justify-content:space-between; padding:0 8px 2px; }
   .book .bh b { font-size:20px; }
   .book .bh span { font-size:14px; color:var(--dim); }
-  .brow { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:14px; }
-  .brow.cur { background:var(--tutor); }
-  .brow .no { width:24px; text-align:right; color:var(--dim); font-size:15px; flex:none; }
+  .brow { display:flex; align-items:flex-start; gap:3px; }
+  .brow.ahead { opacity:.45; }
+  .brow .no { width:14px; text-align:right; color:var(--dim); font-size:12px; line-height:1; padding-top:3px; flex:none; }
   .brow.cur .no { color:#b9531c; font-weight:700; }
+  .brow .strip { display:flex; border:1px solid var(--sand); background:#fff; }
+  .brow.cur .strip { border-color:var(--sc); box-shadow:0 0 0 1px var(--sc); }
   .brow .padbox { width:58px; height:58px; }
-  .brow .padbox.ahead { opacity:.45; }
-  .brow .padbox.here { box-shadow:0 0 0 4px var(--tutor-line); border-radius:4px; }
+  .brow .padbox + .padbox { border-left:1px solid var(--sand); }
+  .brow .grid rect { stroke:none; }
+  .brow .padbox.here .grid rect { fill:var(--tutor); }
   .chip { display:flex; align-items:center; gap:12px; padding:6px 16px 6px 6px; background:var(--tutor); border-radius:28px; min-width:0; }
   .chip svg { width:26px; height:26px; flex:none; }
   .chip b { display:block; font-size:18px; color:var(--tutor-ink); white-space:nowrap; }
   .chip small { display:block; font-size:14px; color:var(--tutor-ink2); white-space:nowrap; min-height:20px; }
   .big { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
+  /* 写字格三档(拍板 30):写字区右上角一竖排,越下越大;选的记在 cookie(cotutor_dict_pad) */
+  .bigw { flex:1; min-height:0; min-width:0; position:relative; display:flex; }
+  .padsz { position:absolute; right:0; top:0; display:flex; flex-direction:column; gap:4px; padding:6px 4px; background:#fff; border:1px solid var(--line); border-radius:16px; }
+  .padsz button { width:44px; height:44px; border:0; border-radius:12px; background:none; display:grid; place-items:center; padding:0; }
+  .padsz svg { display:block; }
+  .padsz rect { fill:#fff; stroke:var(--sand); stroke-width:1.5; }
+  .padsz line { stroke:var(--sand2); stroke-width:1; }
+  .padsz button[aria-pressed="true"] { background:var(--tutor); }
+  .padsz button[aria-pressed="true"] rect { stroke:var(--sc); }
   .std.trace path { fill:#d9d5cc; fill-opacity:1; }
   /* 写字的左边一栏(拍板 20):气泡与再念、听写本、按钮都在这;右边 .big 整块高度只放田字格 */
   #v-listen .side3 { width:300px; flex:none; min-height:0; display:flex; flex-direction:column; gap:12px; padding-top:58px; }
@@ -106,7 +122,7 @@ ${BTN_CSS}
     #v-listen .side3 { display:contents; }
     #v-listen .chip { order:1; margin-left:100px; }
     #v-listen .side3 .book { order:2; flex:none; max-height:180px; }
-    #v-listen .big { order:3; }
+    #v-listen .bigw { order:3; }
     #v-listen .foot { order:4; flex-direction:row; align-items:center; flex-wrap:wrap; }
     #v-listen .foot .tools { display:flex; flex-wrap:wrap; }
     #v-listen .foot .main { width:auto; margin-left:auto; padding:0 32px; }
@@ -236,7 +252,10 @@ ${TUTOR_FACE_CSS}
       ${btn('main', 'write', '我来写', 'id="l-trace"')}
     </div>
   </div>
-  <div class="big" id="l-big"></div>
+  <div class="bigw">
+    <div class="big" id="l-big"></div>
+    <div class="padsz" id="l-size" role="group" aria-label="写字格大小">${PAD_SIZES.map(([k, px, name]) => `<button type="button" data-pad="${k}" aria-label="${name}" aria-pressed="false"><svg width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" aria-hidden="true"><rect x="0.75" y="0.75" width="${px - 1.5}" height="${px - 1.5}" rx="2"></rect><line x1="${px / 2}" y1="1.5" x2="${px / 2}" y2="${px - 1.5}"></line><line x1="1.5" y1="${px / 2}" x2="${px - 1.5}" y2="${px / 2}"></line></svg></button>`).join('')}</div>
+  </div>
 </div>
 
 <div class="view" id="v-check">
@@ -304,6 +323,10 @@ ${BTN_JS}
   /** 家长看录像时,这一页开在录像外壳的 iframe 里:只照记录画,不发事件、不念、点不动(《家长录像设计.md》拍板 13) */
   var REEL_ID = q.get('reel');
   var S = { v: null, base: Date.now(), i: 0, w: null, pads: [], stack: [], active: null, sawPen: false, noAudio: false, sayTimer: 0, order: null, rw: null };
+  /** 写字格多大(拍板 30):l 铺满写字区(上限 900)、m 500、s 380;再写一遍也照它封顶。孩子选的记在 cookie,录像照记录 */
+  var PAD_CAP = { l: 900, m: 500, s: 380 };
+  var readPad = function () { var m = /(?:^|; )cotutor_dict_pad=([lms])/.exec(document.cookie); return m ? m[1] : 'l'; };
+  S.padl = REEL_ID ? 'l' : readPad();
   /** 点与事件的时刻:离这次听写开始(startedAt)多少毫秒;孩子端的钟,录像只看先后与间隔 */
   var now = function () { return Math.max(0, Date.now() - S.base); };
   var setView = function (v) { var fresh = !S.v || S.v.id !== v.id; S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); if (fresh) { S.vw = 0; sendView(); } };
@@ -339,12 +362,12 @@ ${BTN_JS}
   /** 记一件事(录像按它排);发不出去就算了 */
   var event = function (kind, word, ch, n, more) {
     if (!S.v || REEL_ID) return;
-    var b = { kind: kind, word: word, t: now() }; if (ch !== undefined) b.char = ch; if (n !== undefined) b.n = n; if (more) { b.w = more.w; b.h = more.h; }
+    var b = { kind: kind, word: word, t: now() }; if (ch !== undefined) b.char = ch; if (n !== undefined) b.n = n; if (more) { b.w = more.w; b.h = more.h; b.pad = more.pad; }
     try { fetch('/api/dictation/' + S.v.id + '/events', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b), keepalive: true }).catch(function () {}); } catch (e) {}
   };
-  /** 录像要的:屏幕多大(进来、转屏,停手 300 毫秒,变了才记)、切到别处 / 回来 */
+  /** 录像要的:屏幕多大与写字格的档(进来、转屏停手 300 毫秒、换档,变了才记)、切到别处 / 回来 */
   var viewTimer = 0;
-  var sendView = function () { if (!S.v || S.v.done) return; var w = window.innerWidth, hh = window.innerHeight; if (w === S.vw && hh === S.vh) return; S.vw = w; S.vh = hh; event('view', S.i || 0, undefined, undefined, { w: w, h: hh }); };
+  var sendView = function () { if (!S.v || S.v.done) return; var w = window.innerWidth, hh = window.innerHeight; if (w === S.vw && hh === S.vh && S.padl === S.vp) return; S.vw = w; S.vh = hh; S.vp = S.padl; event('view', S.i || 0, undefined, undefined, { w: w, h: hh, pad: S.padl }); };
   window.addEventListener('resize', function () { clearTimeout(viewTimer); viewTimer = setTimeout(sendView, 300); });
   document.addEventListener('visibilitychange', function () { if (S.v && !S.v.done) event(document.hidden ? 'away' : 'back', S.i || 0); });
 
@@ -403,7 +426,7 @@ ${BTN_JS}
   var padsOut = function () { return { chars: S.pads.map(function (p) { return { strokes: p.strokes, undos: p.undos, gone: p.gone }; }) }; };
   /**
    * 再写一遍那一排格子多大(《wip/听写设想.md》拍板 27):先把格子缩成 0,量范字旁边(竖着是下面)剩多少,整词并排放得下的最大;
-   * 上限同写字屏的 900。原来按屏幕估、封顶 340,iPad 横放只有写字屏格子的一半大
+   * 上限同写字屏(选的档,拍板 30)。原来按屏幕估、封顶 340,iPad 横放只有写字屏格子的一半大
    */
   var rowFit = function (box, count) {
     box.style.setProperty('--pad', '0px');
@@ -416,7 +439,7 @@ ${BTN_JS}
     var g = grow.getBoundingClientRect(), m = models.getBoundingClientRect();
     var w = row ? g.width - m.width - (parseFloat(cs.columnGap) || 0) : g.width;
     var hh = row ? g.height : g.height - m.height - (parseFloat(cs.rowGap) || 0);
-    var size = Math.max(120, Math.min(900, Math.floor(Math.min((w - (count - 1) * 24) / count, hh)) - 10));
+    var size = Math.max(120, Math.min(PAD_CAP[S.padl], Math.floor(Math.min((w - (count - 1) * 24) / count, hh)) - 10));
     box.style.setProperty('--pad', size + 'px');
   };
   window.addEventListener('resize', function () { if ($('#v-rewrite').classList.contains('on')) rowFit($('#w-pads'), $('#w-pads').children.length); });
@@ -668,18 +691,19 @@ ${BTN_JS}
     var el = $('#l-book .here .ink'); if (!el || !S.w) return;
     el.replaceChildren.apply(el, S.w.pad.strokes.filter(function (x) { return x.length; }).map(function (x) { return sv('path', { d: pathD(x) }); }));
   };
+  /** 听写本上一个词:编号 + 拼成一条的格子(.strip,格子往里放) */
+  var bookRow = function (wi, cur) { return h('div', { 'class': 'brow' + (wi === cur ? ' cur' : wi > cur ? ' ahead' : '') }, h('div', { 'class': 'no' }, String(wi + 1)), h('div', { 'class': 'strip' })); };
   var renderBook = function () {
     var b = $('#l-book');
     var rows = [h('div', { 'class': 'bh' }, h('b', {}, '听写本'), h('span', {}, cn(S.v.sizes.length) + '个词'))];
     S.v.sizes.forEach(function (size, wi) {
-      var row = h('div', { 'class': 'brow' + (wi === S.i ? ' cur' : '') }, h('div', { 'class': 'no' }, String(wi + 1)));
+      var row = bookRow(wi, S.i), strip = row.lastChild;
       for (var c = 0; c < size; c++) {
         (function (c) {
           var mine = wi === S.i ? (c === S.w.c ? { strokes: S.w.pad.strokes } : S.w.inks[c]) : S.v.mine[wi] ? S.v.mine[wi][c] : null;
           var cell = makePad({ ink: mine ? mine.strokes : [], onTap: wi === S.i ? function () { if (S.w.mode !== 'order' && c !== S.w.c) { event('open', S.i, c); openChar(c); } } : null });
-          if (wi > S.i) cell.el.classList.add('ahead');
           if (wi === S.i && c === S.w.c) cell.el.classList.add('here');
-          row.append(cell.el);
+          strip.append(cell.el);
         })(c);
       }
       rows.push(row);
@@ -700,9 +724,18 @@ ${BTN_JS}
     var prev = S.w.inks[S.w.c];
     S.w.inks[S.w.c] = { strokes: S.w.pad.strokes, undos: S.w.pad.undos, gone: S.w.pad.gone, revealed: S.w.mode === 'trace' || Boolean(prev && prev.revealed) };
   };
-  /** 右边的田字格占满 .big(拍板 20:纵向尽量大);转屏时跟着改 */
-  var fitPad = function (el) { var r = $('#l-big').getBoundingClientRect(); el.style.width = el.style.height = Math.max(240, Math.min(900, Math.floor(Math.min(r.width, r.height)) - 10)) + 'px'; };
-  window.addEventListener('resize', function () { if (!$('#v-listen').classList.contains('on')) return; var el = $('#l-big').firstElementChild; if (el) { el.style.width = el.style.height = '0px'; fitPad(el); } });
+  /** 右边的田字格占满 .big(拍板 20:纵向尽量大),再按选的档封顶(拍板 30);两边让出右上角那排档位按钮;转屏时跟着改 */
+  var fitPad = function (el) { var r = $('#l-big').getBoundingClientRect(); el.style.width = el.style.height = Math.max(240, Math.min(PAD_CAP[S.padl], Math.floor(Math.min(r.width - 112, r.height)) - 10)) + 'px'; };
+  var refit = function () { var el = $('#l-big').firstElementChild; if (el) { el.style.width = el.style.height = '0px'; fitPad(el); } };
+  window.addEventListener('resize', function () { if ($('#v-listen').classList.contains('on')) refit(); });
+  var paintSize = function () { var bs = document.querySelectorAll('#l-size button'); for (var i = 0; i < bs.length; i++) bs[i].setAttribute('aria-pressed', String(bs[i].getAttribute('data-pad') === S.padl)); };
+  paintSize();
+  $('#l-size').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b || REEL_ID) return;
+    S.padl = b.getAttribute('data-pad');
+    try { document.cookie = 'cotutor_dict_pad=' + S.padl + '; Max-Age=31536000; Path=/; SameSite=Lax'; } catch (err) {}
+    paintSize(); refit(); sendView();
+  });
   var openChar = function (c) {
     stash(); S.w.otok = (S.w.otok || 0) + 1;
     S.w.c = c;
@@ -941,13 +974,14 @@ ${BTN_JS}
       show('listen');
       var rows = [h('div', { 'class': 'bh' }, h('b', {}, '听写本'), h('span', {}, cn(R.chars.length) + '个词'))];
       RL.cells = R.chars.map(function (cs, wi) {
-        var row = h('div', { 'class': 'brow' + (wi === f.word ? ' cur' : '') }, h('div', { 'class': 'no' }, String(wi + 1)));
+        var row = bookRow(wi, f.word), strip = row.lastChild;
         rows.push(row);
-        return cs.map(function (x, ci) { var p = makePad({}); if (wi > f.word) p.el.classList.add('ahead'); if (wi === f.word && ci === f.char) p.el.classList.add('here'); row.append(p.el); return p; });
+        return cs.map(function (x, ci) { var p = makePad({}); if (wi === f.word && ci === f.char) p.el.classList.add('here'); strip.append(p.el); return p; });
       });
       var b = $('#l-book'); b.replaceChildren.apply(b, rows);
       var cur = b.querySelector('.brow.cur'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
       var big = $('#l-big'); RL.big = makePad({}); big.replaceChildren(RL.big.el);
+      S.padl = f.pad; paintSize();
       fitPad(RL.big.el);
       setActive(RL.big);
       RL.std = '';
@@ -1016,14 +1050,14 @@ ${BTN_JS}
       var box = $('#w-pads');
       RL.rpads = cs.map(function () { return makePad({}); });
       box.replaceChildren.apply(box, RL.rpads.map(function (p) { return p.el; }));
-      rowFit(box, cs.length);
+      S.padl = f.pad; rowFit(box, cs.length);
     }
     RL.rpads.forEach(function (p, ci) { reelInk(p, (f.rewrite && f.rewrite[ci]) || []); });
   };
   /** 这一刻的屏幕:哪一屏、哪个词哪一格、什么样子变了就整屏重画,笔每次对一下 */
   var reelDraw = function (f) {
     var done = RL.r.rewrites.filter(function (x) { return x.to <= RL.t; }).length;
-    var key = [f.view, f.word, f.char, f.view === 'listen' ? '' : f.mode, f.open ? f.open.word + ':' + f.open.char : '', f.view === 'check' ? done : 0, RL.gl, window.innerWidth, window.innerHeight].join('|');
+    var key = [f.view, f.word, f.char, f.view === 'listen' ? '' : f.mode, f.open ? f.open.word + ':' + f.open.char : '', f.view === 'check' ? done : 0, f.pad, RL.gl, window.innerWidth, window.innerHeight].join('|');
     var rebuild = key !== RL.key; RL.key = key;
     if (f.view === 'check') reelCheck(f, rebuild);
     else if (f.view === 'order' && f.open) reelOrder(f, rebuild);

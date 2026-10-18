@@ -37,6 +37,8 @@ const s = {
     ev(7600, 'show', 1), ev(7700, 'say', 1, { n: 1 }), ev(9300, 'say', 1, { n: 2 }),
     // 9300 + 念 → 想了 10 秒才动笔(22000);两笔之后停住,24000 点给答案
     { at: iso(24000), t: 24000, kind: 'reveal', word: 1, char: 0 }, ev(24300, 'order', 1, { char: 0 }), ev(26500, 'trace', 1, { char: 0 }),
+    // 26600 换成小档写字格(拍板 30)
+    ev(26600, 'view', 1, { w: 1180, h: 820, pad: 's' }),
     ev(28000, 'done', 1, { char: 0 }), ev(33000, 'done', 1, { char: 1 }),
     ev(34000, 'show', 2), ev(34300, 'say', 2, { n: 1 }), ev(36800, 'say', 2, { n: 2 }),
     ev(away, 'away', 2), ev(back, 'back', 2), ev(back + 200, 'show', 2), ev(back + 500, 'say', 2, { n: 1 }), ev(back + 3000, 'say', 2, { n: 2 }),
@@ -72,6 +74,7 @@ check('自己要再写冬天:再写那一屏,笔一笔一笔出来', f3.view ===
 const f4 = at(back + 20500);
 check('交了:回对一对,冬天换成再写的', f4.view === 'check' && f4.latest[0][0].length === 1 && f4.latest[0][0][0][0][2] === back + 14000);
 check('屏幕尺寸照 view', JSON.stringify(f1.size) === '[1180,820]');
+check('写字格的档照 view:老记录没有就是 l,换档之后是 s', f1.pad === 'l' && at(26500).pad === 'l' && at(27000).pad === 's' && at(back + 14100).pad === 's', [f1.pad, at(26500).pad, at(27000).pad].join());
 
 const notes = r.notes.map((n) => n.chip + ':' + n.text);
 check('经过:给答案(写了的 2 笔清掉了)、照着写、擦掉、切到别处、停了、对好了', notes.some((x) => x === '给答案:点了「不会写,给答案」:雪(写了的 2 笔清掉了)') && notes.some((x) => x.startsWith('照着写:「雪」· 2 笔')) && notes.some((x) => x === '擦掉:「白」撤销了一笔') && notes.some((x) => x === '切到别处:38 分') && notes.some((x) => x.startsWith('停:停了 ')) && notes.some((x) => x.startsWith('对好了')), notes.join('\n'));

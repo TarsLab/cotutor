@@ -247,9 +247,9 @@ ${TUTOR_FACE_CSS}
       </div>
       ${btn('main', 'done', '写好了', 'id="l-next"')}
     </div>
+    <!-- 看笔顺(拍板 31):没有「我来写」;放完或一落笔就换成照着写 -->
     <div class="foot" id="l-foot-order" hidden>
       <div class="tools">${btn('tool', 'replay', '再看一遍', 'id="l-again-order"')}</div>
-      ${btn('main', 'write', '我来写', 'id="l-trace"')}
     </div>
   </div>
   <div class="bigw">
@@ -331,7 +331,7 @@ ${BTN_JS}
   var now = function () { return Math.max(0, Date.now() - S.base); };
   var setView = function (v) { var fresh = !S.v || S.v.id !== v.id; S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); if (fresh) { S.vw = 0; sendView(); } };
 
-  var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'order' || name === 'rewrite'; window.scrollTo(0, 0); };
+  var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'order' || name === 'rewrite'; window.scrollTo(0, 0); if (!REEL_ID) guard(); };
   var goHome = function () { stopSay(); location.href = '/'; };
   // ---- 左上角「‹ 头像」胶囊,同老师页(《wip/听写设想.md》拍板 16):听写这次的老师,没开始时是从哪位老师卡上进来的 ----
   ${TUTOR_FACE_JS}
@@ -401,6 +401,7 @@ ${BTN_JS}
     pad.svg.addEventListener('pointerdown', function (e) {
       if (e.pointerType === 'pen') S.sawPen = true; else if (e.pointerType === 'touch' && S.sawPen) return; // 用过笔就不认手掌
       if (cur) return;
+      if (pad.onDown) pad.onDown();
       try { pad.svg.setPointerCapture(e.pointerId); } catch (x) {}
       var pts = [pos(e)];
       cur = { id: e.pointerId, pts: pts, path: sv('path', { d: pathD(pts) }) };
@@ -744,12 +745,13 @@ ${BTN_JS}
     var pad = makePad({ write: true, ink: prev ? prev.strokes : [] });
     pad.strokes = prev ? prev.strokes.slice() : []; pad.undos = prev ? prev.undos : 0; pad.gone = prev && prev.gone ? prev.gone.slice() : [];
     pad.onUp = updateHere;
+    pad.onDown = function () { if (S.w && S.w.pad === pad && S.w.mode === 'order') toTrace(); };
     S.w.pad = pad; S.pads = [pad]; S.stack = pad.strokes.map(function () { return pad; });
     var big = $('#l-big'); big.replaceChildren(pad.el);
     fitPad(pad.el);
     setActive(pad);
     if (S.w.mode === 'trace') glyph(S.w.chars[c]).then(function (d) { if (S.w && S.w.pad === pad) fillStd(pad, d, 'trace'); });
-    renderFoot(); renderBook();
+    renderFoot(); renderBook(); guard();
   };
   var openListen = function () {
     var k = S.v.written.indexOf(false);
@@ -787,7 +789,7 @@ ${BTN_JS}
       w.chars[w.c] = j.ch; w.mode = 'order';
       w.pad.strokes.forEach(function (st) { drop(w.pad, st); }); w.pad.strokes = []; w.pad.ink.replaceChildren(); S.stack = []; updateHere();
       renderFoot();
-      glyph(j.ch).then(function (d) { w.d = d; fillStd(w.pad, d, ''); playOrder(); });
+      glyph(j.ch).then(function (d) { w.d = d; if (w.mode === 'order') { fillStd(w.pad, d, ''); playOrder(); } else fillStd(w.pad, d, 'trace'); });
     });
   });
   var playOrder = function () {
@@ -802,21 +804,24 @@ ${BTN_JS}
     };
     var step = function () {
       if (tok !== w.otok) return;
-      if (k >= n) { paint(n, false); return; }
+      if (k >= n) { paint(n, false); setTimeout(function () { if (tok === w.otok && w.mode === 'order') toTrace(); }, 900); return; }
       paint(k, true);
       animStroke(pad, d, k, 'o', function () { if (tok !== w.otok) return; paint(k, false); k++; setTimeout(step, 380); });
     };
     step();
   };
   $('#l-again-order').addEventListener('click', playOrder);
-  /** 我来写:描红打底,必须照着写一遍才能写好了(拍板 8) */
-  $('#l-trace').addEventListener('click', function () {
+  /**
+   * 换成照着写:描红打底,必须照着写一遍才能写好了(拍板 8)。看笔顺放完、或看的时候一落笔就换(拍板 31:原来要点「我来写」,
+   * 10-18 孩子看着淡字直接写完了,还得点「我来写」,再在同一个位置点「写好了」);动画停下,写的这一笔照常留着
+   */
+  var toTrace = function () {
     var w = S.w; w.otok++; w.pad.top.replaceChildren();
     event('trace', S.i, w.c);
-    w.mode = 'trace'; fillStd(w.pad, w.d, 'trace');
+    w.mode = 'trace'; if (w.d) fillStd(w.pad, w.d, 'trace');
     var ps = w.pad.std.children; for (var i = 0; i < ps.length; i++) ps[i].removeAttribute('class');
-    renderFoot(); status('');
-  });
+    renderFoot(); status(''); guard();
+  };
   $('#l-reorder').addEventListener('click', function () { var w = S.w; if (!w.d) return glyph(w.chars[w.c]).then(function (d) { w.d = d; $('#l-reorder').click(); }); w.mode = 'order'; fillStd(w.pad, w.d, ''); renderFoot(); playOrder(); });
   var submitAll = function () {
     persist('POST', '/api/dictation/' + S.v.id + '/check', null, $('#l-next')).then(function (v) { setView(v); openCheck(); });

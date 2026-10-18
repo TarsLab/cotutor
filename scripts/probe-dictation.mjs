@@ -50,7 +50,7 @@ try {
   const shot = async (name) => { if (!out) return; const r = await send('Page.captureScreenshot', { format: 'png' }); writeFileSync(join(out, `${name}.png`), Buffer.from(r.result.data, 'base64')); };
   const waitFor = async (expr, ms = 8000) => { for (let i = 0; i < ms / 100; i++) { if (await evaluate(expr)) return true; await sleep(100); } return false; };
   const rect = (sel) => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
-  const tap = async (sel) => { const r = await rect(sel); if (!r) throw new Error(`点不到 ${sel}`); const x = r.x + r.w / 2, y = r.y + r.h / 2; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 }); await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 }); await sleep(150); };
+  const tap = async (sel) => { await waitFor(`!document.querySelector('.main.arm')`, 1500); /* 主按钮换了意思后的半秒保护(拍板 31):等它亮了再点 */ const r = await rect(sel); if (!r) throw new Error(`点不到 ${sel}`); const x = r.x + r.w / 2, y = r.y + r.h / 2; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 }); await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 }); await sleep(150); };
   const tapText = async (text) => { const sel = await evaluate(`(() => { document.querySelectorAll('[data-probe]').forEach((x) => x.removeAttribute('data-probe')); const b = [...document.querySelectorAll('.view.on button, .view.on a')].find((x) => x.textContent.trim() === ${JSON.stringify(text)}); if (!b) return null; b.setAttribute('data-probe', ${JSON.stringify(text)}); return '[data-probe=' + JSON.stringify(${JSON.stringify(text)}) + ']'; })()`); if (!sel) throw new Error(`找不到按钮 ${text}`); await tap(sel); };
   /** 在第 k 个格里照中线写一个字(skip:不写的笔);鼠标按下、沿中线移动、松开 */
   const writeChar = async (padSel, ch, skip = []) => {
@@ -127,8 +127,19 @@ try {
   await sleep(2500);
   ok('写着写着:前面的笔变蓝,气泡跟着数', (await evaluate(`document.querySelectorAll('#l-big .std path.sd').length`)) >= 1 && !/^第 1 笔/.test(await evaluate(`document.querySelector('#l-status').textContent`)));
   await shot('03c-answer');
-  await tapText('我来写');
-  ok('我来写:灰色描红打底,「给答案」换成「再看笔顺」', await waitFor(`document.querySelector('#l-big .std').classList.contains('trace') && document.querySelector('#l-big .std').children.length === 5 && document.querySelector('#l-reveal').hidden && !document.querySelector('#l-reorder').hidden`));
+  // 看笔顺时一落笔就换成照着写,没有「我来写」(《wip/听写设想.md》拍板 31);紧接着点「写好了」在半秒保护里,不算
+  ok('看笔顺时没有「我来写」', !(await evaluate(`document.body.innerText.includes('我来写')`)));
+  await writeChar('#l-big .padbox', '叶', [1, 2, 3, 4]);
+  { const r = await rect('#l-next'); const x = r.x + r.w / 2, y = r.y + r.h / 2; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 }); await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 }); }
+  await sleep(200);
+  const traced = `document.querySelector('#l-big .std').classList.contains('trace') && document.querySelector('#l-big .std').children.length === 5 && !document.querySelector('#l-big .top').children.length && document.querySelector('#l-reveal').hidden && !document.querySelector('#l-reorder').hidden && !document.querySelector('#l-foot-write').hidden && document.querySelector('#l-what').textContent === '照着灰色的「叶」写一遍'`;
+  ok('看笔顺时落笔:动画停下,换成灰色描红,这一笔留着;紧接着点「写好了」不算(半秒保护)', (await evaluate(traced)) && (await inkCount('#l-big .ink')) === 1 && (await evaluate(`!!document.querySelector('#v-listen.on')`)));
+  await sleep(600);
+  await tapText('再看笔顺');
+  ok('再看笔顺:又放一遍', await waitFor(`!document.querySelector('#l-foot-order').hidden && document.querySelector('#l-what').textContent === '看「叶」一笔一笔写'`));
+  ok('放完自己换成照着写,刚才那一笔还在', await waitFor(traced, 15000) && (await inkCount('#l-big .ink')) === 1);
+  await tapText('擦掉');
+  await sleep(600);
   await tapText('写好了');
   ok('没照着写就点写好了:不让过,提示照着写', await evaluate(`document.querySelector('#l-status').textContent.includes('照着灰色的写一遍')`) && (await evaluate(`!!document.querySelector('#v-listen.on')`)));
   await writeChar('#l-big .padbox', '叶');
@@ -209,7 +220,7 @@ try {
   await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
   ok('录像:外壳里上半是听写页的录像模式、下半录像栏;时间是「放到哪 / 一共多久」;一个词一章(三章 + 对一对)', await waitFor(`location.pathname === '/parent/dictation/reel' && !document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').getAttribute('src') || '').startsWith('/dictation?reel=') && !!${K}?.querySelector('#v-listen.on') && /^\\d+:\\d\\d \\/ \\d+:\\d\\d$/.test(document.querySelector('#rl-clock').textContent) && document.querySelectorAll('#rl-chaps i').length === 3`, 10000), await evaluate(`JSON.stringify({ src: document.querySelector('#rl-frame').getAttribute('src'), clock: document.querySelector('#rl-clock').textContent, chaps: document.querySelectorAll('#rl-chaps i').length, chap: document.querySelector('#rl-chap').textContent })`));
   ok('孩子的屏幕:听写本三行(2、2、1 格)、右边大格;录像模式(点不动)', await evaluate(`[...${K}.querySelectorAll('#l-book .brow')].map((r) => r.querySelectorAll('.padbox').length).join() === '2,2,1' && ${K}.querySelectorAll('#l-big .padbox').length === 1 && ${K}.body.classList.contains('rlk')`));
-  ok('进度条上的点:给答案一个、撤销与擦掉重写两个', await evaluate(`document.querySelectorAll('#rl-marks i.rv').length === 1 && document.querySelectorAll('#rl-marks i.erase').length === 2`), await evaluate(`[...document.querySelectorAll('#rl-marks i')].map((i) => i.className).join()`));
+  ok('进度条上的点:给答案一个、撤销与擦掉三个(励撤销、励擦掉、叶擦掉)', await evaluate(`document.querySelectorAll('#rl-marks i.rv').length === 1 && document.querySelectorAll('#rl-marks i.erase').length === 3`), await evaluate(`[...document.querySelectorAll('#rl-marks i')].map((i) => i.className).join()`));
   await tap('#rl-play');
   await sleep(2500);
   ok('播放:进度往前走,第一格里一笔一笔出来', await evaluate(`Number(document.querySelector('#rl-seek').value) > 1000 && ${K}.querySelectorAll('#l-big .ink path').length > 0`), await evaluate(`JSON.stringify({ v: document.querySelector('#rl-seek').value, ink: ${K}.querySelectorAll('#l-big .ink path').length, cap: document.querySelector('#rl-cap').textContent })`));

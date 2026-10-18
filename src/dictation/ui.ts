@@ -27,7 +27,7 @@ export const ICON = {
   replay: svg('<path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path>'),
   /** 开始、接着写:播放(拍照屏「接着写」同一个) */
   start: playSvg(),
-  /** 我来写、再写一遍:笔 */
+  /** 再写一遍:笔 */
   write: svg('<path d="M4 20h4L19 9l-4-4L4 16v4z"></path><path d="M13.5 6.5l4 4"></path>'),
   /** 拿开蓝字 / 叠上蓝字:两张叠着的纸,蓝的 */
   overlay: svg('<rect x="3" y="3" width="13" height="13" rx="2"></rect><rect x="8" y="8" width="13" height="13" rx="2"></rect>', '#4f86d1'),
@@ -57,6 +57,18 @@ export const btn = (cls: string, icon: IconName, label: string, attrs = ''): str
 
 /** 脚本里现建的按钮:h('button', {...}, ico('write'), lbl('再写一遍'));换字用 setLbl(按钮, 字, 图标) */
 export const BTN_JS = `
+  /**
+   * 主按钮换了意思之后半秒内点不动(《wip/听写设想.md》拍板 31):换屏、换字、看笔顺换成照着写时调 guard();
+   * 连点、手快时第二下不落到新的意思上(10-18 孩子「我来写」原地变「写好了」)。样子是先淡着再亮,不出字;录像里不调
+   */
+  var guardUntil = 0, guardTimer = 0;
+  var guard = function () {
+    guardUntil = Date.now() + 500;
+    var ms = document.querySelectorAll('.main'); for (var i = 0; i < ms.length; i++) ms[i].classList.add('arm');
+    clearTimeout(guardTimer);
+    guardTimer = setTimeout(function () { var ms = document.querySelectorAll('.main.arm'); for (var i = 0; i < ms.length; i++) ms[i].classList.remove('arm'); }, 500);
+  };
+  document.addEventListener('click', function (e) { if (Date.now() < guardUntil && e.target.closest && e.target.closest('.main')) { e.stopPropagation(); e.preventDefault(); } }, true);
   var ICON = { ${Object.entries(ICON).map(([k, v]) => `${k}: '${v}'`).join(', ')} };
   var ico = function (n) { var t = document.createElement('template'); t.innerHTML = ICON[n]; return t.content.firstChild; };
   var lbl = function (t) { var s = document.createElement('span'); s.textContent = t; return s; };
@@ -73,4 +85,6 @@ export const BTN_CSS = `
   .main { display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:64px; padding:0 40px; border-radius:32px; border:0; background:var(--sc); color:#fff; font-size:20px; font-weight:600; }
   .main svg { width:24px; height:24px; flex:none; stroke-width:2.2; }
   .main:disabled { opacity:.45; }
+  .main { transition:opacity .25s; }
+  .main.arm { opacity:.45; transition:none; }
 `;

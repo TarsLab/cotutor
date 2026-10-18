@@ -174,7 +174,7 @@ ${BTN_JS}
   var S = { v: null, base: Date.now(), i: 0, strokes: [], undos: 0, gone: [], revealed: false, word: null, sawPen: false, mode: 'first', hide: false, noAudio: false, tok: 0, timer: 0 };
   var now = function () { return Math.max(0, Date.now() - S.base); };
   var setView = function (v) { var fresh = !S.v || S.v.id !== v.id; S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); if (fresh) { S.vw = 0; sendView(); } };
-  var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'write' && S.mode === 'rewrite'; if (name === 'write') fitPad(); window.scrollTo(0, 0); };
+  var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'write' && S.mode === 'rewrite'; if (name === 'write') fitPad(); window.scrollTo(0, 0); if (!REEL_ID) guard(); };
   var event = function (kind, word, n, more) {
     if (!S.v || REEL_ID) return;
     var b = { kind: kind, word: word, t: now() }; if (n) b.n = n; if (more) { b.w = more.w; b.h = more.h; }

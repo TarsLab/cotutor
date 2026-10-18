@@ -197,7 +197,7 @@ export function drBuild(s: Session): DrReel {
       notes.push({ t: x.t, kind: 'err', chip: '给答案', text: '点了「不会写,给答案」:' + ch(x.word, x.char) + (cleared ? '(写了的 ' + cleared + ' 笔清掉了)' : '') });
     }
     if (x.k === 'order') notes.push({ t: x.t, kind: '', chip: '看笔顺', text: '「' + ch(x.word, x.char) + '」一笔一笔写' });
-    if (x.k === 'trace') notes.push({ t: x.t, kind: '', chip: '我来写', text: '照着灰色的「' + ch(x.word, x.char) + '」写' });
+    if (x.k === 'trace') notes.push({ t: x.t, kind: '', chip: '照着写', text: '照着灰色的「' + ch(x.word, x.char) + '」写' });
     if (x.k === 'check') notes.push({ t: x.t, kind: 'tail', chip: '交卷', text: '写完了,自己对一对' });
     if (x.k === 'strokeOrder') notes.push({ t: x.t, kind: 'card', chip: '看笔顺', text: '点开「' + ch(x.word, x.char) + '」一笔一笔看' });
     if (x.k === 'rewrite') notes.push({ t: x.t, kind: 'card', chip: '再写', text: '再写一遍「' + s.words[x.word].chars + '」' });

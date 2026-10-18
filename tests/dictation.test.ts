@@ -215,6 +215,7 @@ try {
     const pv = (await call('GET', `/api/dictation/${fid}`)).json.events.filter((e: J) => e.kind === 'view');
     check('事件:view 带写字格的档(s),认不得的不记;老的那条没有', pv.length === 3 && pv[0].pad === undefined && pv[1].pad === 's' && pv[2].pad === undefined, JSON.stringify(pv));
     const zh = (await import('../src/dictation/page.ts')).DICTATION_PAGE;
+    check('看笔顺(拍板 31):没有「我来写」;落笔、放完都换成照着写,换字也半秒保护', !zh.includes('<span>我来写</span>') && !zh.includes('l-trace') && zh.includes("pad.onDown = function () { if (S.w && S.w.pad === pad && S.w.mode === 'order') toTrace(); }") && zh.includes("w.mode === 'order') toTrace(); }, 900)") && zh.includes('renderFoot(); renderBook(); guard();'));
     check('写字屏有三档写字格(小 中 大),cookie 记 cotutor_dict_pad;再写一遍也照档封顶', ['s', 'm', 'l'].every((k) => zh.includes(`data-pad="${k}"`)) && zh.includes('cotutor_dict_pad=') && zh.includes('Math.min(PAD_CAP[S.padl], Math.floor(Math.min((w - (count - 1) * 24)'));
     const reelPage = (await call('GET', '/dictation?reel=' + fid)).html ?? '';
     check('听写页内联了录像(drBuild / drFrameAt / drClock),脚本能解析;录像外壳带录像栏', parses(reelPage) && reelPage.includes('function drBuild(') && reelPage.includes('function drFrameAt(') && reelPage.includes('function drClock(') && !reelPage.includes('/parent') && ((await call('GET', '/parent/dictation/reel')).html ?? '').includes('id="rl-seek"'));
@@ -449,6 +450,7 @@ try {
       check(`${name}页:写字那排是 ${WRITE_TOOLS.join(' / ')}`, missing.length === 0, missing.join(' '));
       const old = ['擦掉重写', '擦掉这一格', '这个字写好了', '放回蓝字'].filter((t) => page.includes(`<span>${t}</span>`) || page.includes(`'${t}'`));
       check(`${name}页:没有各叫各的旧字`, old.length === 0, old.join(' '));
+      check(`${name}页:换屏时主按钮半秒保护(拍板 31)`, /var show = function \(name\) \{[^\n]*if \(!REEL_ID\) guard\(\); \};/.test(page) && page.includes('var guard = function'));
       check(`${name}页:按钮的样式只有 ui.ts 那一份`, page.includes(BTN_CSS) && page.split('.tool { display').length === 2 && page.split('.main { display').length === 2);
     }
   }

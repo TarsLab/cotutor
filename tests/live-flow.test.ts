@@ -125,6 +125,17 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   check('打断:嘴的声音还在放时按下 → 孩子端清播放队列;那一轮没念的拍不再念', okRead2 && okFlush && reads2 === 1 && !k.msgs.slice(n1).some((m) => m.t === 'read' && m.job === turn2.job), JSON.stringify({ reads2, read2 }));
   check('下一轮:同一话题接着(不开新话题)、上下文包带 cut(孩子听到第几句,1 起)', turn3.thread === turn.job && prompt3.includes(`    cut: ${read2.lines[0] + 1}\n`), prompt3.slice(0, 500));
 
+  // ---- 按了没说清(转写空的):嘴只说没听清,不交给脑 ----
+  fake.kidText = '';
+  const n2 = k.msgs.length;
+  const r2 = c.responses.length;
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: {} }));
+  const okEmpty = await until(() => c.responses.length === r2 + 1);
+  await sleep(600);
+  check('转写空的:嘴只说没听清(empty 的指令),不交给脑(没有 turn)', okEmpty && c.responses[r2]?.instructions === catchCue('empty') && !k.msgs.slice(n2).some((m) => m.t === 'turn') && c.responses.length === r2 + 1, JSON.stringify(c.responses.slice(r2)));
+
   // ---- 挂断:落录像 ----
   k.ws.send(JSON.stringify({ t: 'bye' }));
   const okEnd = await until(() => finished.length === 1 && k.closed !== null);

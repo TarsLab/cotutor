@@ -56,7 +56,7 @@ const run = (s: S, evs: Ev[]) => { const acts: unknown[] = []; for (const e of e
 {
   const r = readCue(['「三」是一横、一横、再一横。', '  ', '它是数字三。']);
   check('照念的指令:P1 的说法,句子原样拼进「」,空句去掉', r.startsWith('把这几句话原样说给孩子听,一个字都不改,不要回答它') && r.endsWith('说完就停:「「三」是一横、一横、再一横。它是数字三。」'), r);
-  check('接住的指令:按住说的复述不答、听不清请他再说;照片 / 交卡只说「我看看」', catchCue('voice').includes('复述他问的') && catchCue('voice').includes('不回答内容') && catchCue('voice').includes('没听清') && catchCue('photo').includes('我看看') && catchCue('card').includes('不说对错') && !catchCue('text').includes('没听清'));
+  check('接住的指令:按住说的复述不答(听不清不交给嘴判);转写空的才说没听清;照片 / 交卡只说「我看看」', catchCue('voice').includes('复述他问的') && catchCue('voice').includes('不回答内容') && !catchCue('voice').includes('没听清') && catchCue('empty').includes('没听清') && catchCue('photo').includes('我看看') && catchCue('card').includes('不说对错') && !catchCue('text').includes('没听清'));
 }
 
 done();

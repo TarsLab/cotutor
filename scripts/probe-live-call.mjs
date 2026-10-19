@@ -1,0 +1,110 @@
+#!/usr/bin/env node
+/**
+ * 实时老师整条线真跑一遍(《wip/实时老师开发计划.md》P2,孩子端页面之前):临时 workspace(语文老师开实时),本进程起服务,
+ * 孩子是 Ray 的真录音(conversations/<老师>/<日期>.<job>.voice.webm,按真实节奏 100 毫秒一块推),嘴是真百炼 realtime,脑是真 qwen 语文老师。
+ * 量:松手 → 嘴接住的首包、松手 → 第一拍照念的首包、讲完;嘴念的字与讲稿对不对得上;嘴的声音存成 wav 听。一轮几分钱。
+ * 用法:node scripts/probe-live-call.mjs [--ws ~/cotutor/ray] [--out <目录>] [--voice Serena] [--say 2026-10-18/1205-2,2026-10-18/1206-3]
+ *   --say:按顺序发哪几段录音(<日期>/<job>,语文老师的),缺省「老师三明治怎么写」「能吃的三」两段,第二段接着同一话题
+ */
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const repo = fileURLToPath(new URL('..', import.meta.url));
+const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
+const src = arg('--ws', join(homedir(), 'cotutor', 'ray'));
+const out = arg('--out', mkdtempSync(join(tmpdir(), 'cotutor-probe-live-call-')));
+const voice = arg('--voice', 'Serena');
+const says = arg('--say', '2026-10-18/1205-2,2026-10-18/1206-3').split(',').map((x) => x.split('/'));
+mkdirSync(out, { recursive: true });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const until = async (f, ms) => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(20); return f(); };
+
+const { initWorkspace } = await import(join(repo, 'src', 'cli', 'init.ts'));
+const { loadWorkspace } = await import(join(repo, 'src', 'cli', 'workspace.ts'));
+const { createContext, createHandler } = await import(join(repo, 'src', 'server', 'app.ts'));
+const { makeLiveUpgrade } = await import(join(repo, 'src', 'live', 'route.ts'));
+const { wavOfPcm } = await import(join(repo, 'src', 'live', 'lib', 'wav.ts'));
+
+// ---- 临时 workspace:出厂老师(qwen),语文老师开实时 ----
+const wsRoot = join(out, 'ws');
+await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot, proxy: false });
+const cfgFile = join(wsRoot, 'cotutor.json');
+const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
+cfg.live = { enabled: true, voices: { 'chinese-tutor': voice } };
+cfg.kid.name = 'Ray';
+writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
+const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
+await ctx.reload();
+const server = createServer(createHandler(ctx));
+const upgrade = makeLiveUpgrade({});
+server.on('upgrade', (req, socket, head) => { void upgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
+await new Promise((r) => server.listen(0, '127.0.0.1', r));
+const port = server.address().port;
+
+// ---- 孩子端:连上、按住推录音、松手 ----
+const ws = new WebSocket(`ws://127.0.0.1:${port}/api/live/chinese-tutor/ws`);
+ws.binaryType = 'arraybuffer';
+const msgs = [];
+const audio = [];
+let t0 = Date.now();
+const T = () => Date.now() - t0;
+ws.onmessage = (e) => {
+  if (typeof e.data === 'string') { const m = JSON.parse(e.data); m.at = T(); msgs.push(m); if (m.t !== 'tutor' || m.done !== undefined) console.log(`${String(m.at).padStart(6)} ms  ${JSON.stringify(m)}`); }
+  else audio.push({ at: T(), pcm: Buffer.from(e.data) });
+};
+await new Promise((r) => { ws.onopen = r; ws.onerror = r; });
+const ready = await until(() => msgs.some((m) => m.t === 'ready' || m.t === 'fallback'), 15000);
+if (!ready || msgs.some((m) => m.t === 'fallback')) { console.log('嘴没连上', JSON.stringify(msgs)); process.exit(1); }
+
+const report = [`# 实时老师整条线真跑(${new Date().toLocaleString('zh-CN')})`, '', `嘴 ${voice},脑 qwen 语文老师(临时 workspace \`${wsRoot}\`)`, ''];
+let first = true;
+for (const [date, job] of says) {
+  const idx = JSON.parse(readFileSync(join(src, 'conversations', 'chinese-tutor', `${date}.json`), 'utf8'));
+  const m = idx.messages.find((x) => x.job === job);
+  const pcm = execFileSync('ffmpeg', ['-v', 'error', '-i', join(src, 'conversations', 'chinese-tutor', m.voice.audio), '-ac', '1', '-ar', '16000', '-f', 's16le', '-'], { maxBuffer: 64 << 20 });
+  const n0 = msgs.length;
+  const a0 = audio.length;
+  ws.send(JSON.stringify({ t: 'hold' }));
+  for (let p = 0; p < pcm.length; p += 3200) { ws.send(pcm.subarray(p, p + 3200)); await sleep(100); }
+  t0 = Date.now();
+  ws.send(JSON.stringify({ t: 'release', body: first ? { newThread: true } : {} }));
+  first = false;
+  // 等这一轮讲完:脑写完、讲稿都念到、最后一段声音放完
+  await until(() => msgs.slice(n0).some((x) => x.t === 'turn'), 20000);
+  const turn = msgs.slice(n0).find((x) => x.t === 'turn');
+  await until(() => turn && ctx.runner.running('chinese-tutor') === null, 90000);
+  const today = new Intl.DateTimeFormat('sv-SE').format(new Date());
+  const sec = JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${today}.json`), 'utf8')).messages.find((x) => x.job === turn?.job)?.section;
+  const lines = (sec?.lines ?? []).map((l) => l.text);
+  await until(() => msgs.slice(n0).filter((x) => x.t === 'read').flatMap((x) => x.lines).length >= lines.length, 60000);
+  await sleep(4000);
+  const mine = msgs.slice(n0);
+  const pcmOut = Buffer.concat(audio.slice(a0).map((x) => x.pcm));
+  const wav = `turn-${job}.wav`;
+  writeFileSync(join(out, wav), wavOfPcm(pcmOut, 24000));
+  const firstAudio = audio.slice(a0).find((x) => x.at >= 0)?.at ?? null;
+  const reads = mine.filter((x) => x.t === 'read');
+  const firstRead = reads[0]?.at ?? null;
+  const dones = mine.filter((x) => x.t === 'tutor' && typeof x.done === 'string').map((x) => x.done);
+  const kid = mine.find((x) => x.t === 'kid')?.text;
+  report.push(`## Ray ${date} ${job}(当时认的「${m.text}」)`, '',
+    `- realtime 认的:${kid}`,
+    `- 嘴接住:「${dones[0] ?? ''}」,松手到首包 ${firstAudio} ms`,
+    `- 脑:${turn?.job},讲稿 ${lines.length} 句、${sec?.cards?.length ?? 0} 张卡(${(sec?.cards ?? []).map((c) => c.kind).join('、')})`,
+    `- 松手到第一拍开念 ${firstRead} ms;念了 ${reads.length} 拍`,
+    `- 嘴念的:${dones.slice(1).join('')}`,
+    `- 讲稿:${lines.join('')}`,
+    `- 对得上:${dones.slice(1).join('').replace(/[\s,，。!！?？、;；:：「」“”"']/g, '') === lines.join('').replace(/[\s,，。!！?？、;；:：「」“”"']/g, '') ? '一字不差' : '有出入'}`,
+    `- 声音:${wav}(${(pcmOut.length / 48000).toFixed(1)} 秒)`, '');
+}
+ws.send(JSON.stringify({ t: 'bye' }));
+await sleep(500);
+writeFileSync(join(out, 'report.md'), report.join('\n') + '\n');
+console.log('\n' + report.join('\n'));
+console.log(`\n报告:${join(out, 'report.md')}`);
+server.close();
+process.exit(0);

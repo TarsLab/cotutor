@@ -40,6 +40,8 @@ export interface LiveDeps {
 
 /** 嘴接住的那句最多等多久再把孩子的话交给脑(接住的字一般 1 秒内齐) */
 const CATCH_WAIT_MS = 1500;
+/** 松手后等孩子那句的转写最多多久再让嘴接住(转写一般 0.3 秒回来;空的就说没听清,不交给脑) */
+const HEAR_WAIT_MS = 800;
 /** 多久看一次排队(放完了没有) */
 const TICK_MS = 100;
 /** 嘴的声音放完再多等一点才算放完(孩子端排队起步 60 毫秒,网络也慢一点) */
@@ -69,8 +71,8 @@ export class LiveCall {
   /** 脑在忙时孩子又说的:等它写完合并成一条 */
   private waiting: Record<string, unknown>[] = [];
   private turnSeq = 0;
-  /** 按住说的这一轮还在等转写 */
-  private pendingVoice: { seq: number; body: Record<string, unknown> } | null = null;
+  /** 按住说的这一轮还在等转写;caught = 嘴已经开始接住了(等转写等过了点) */
+  private pendingVoice: { seq: number; body: Record<string, unknown>; caught: boolean; timer: NodeJS.Timeout | null } | null = null;
   private readonly timers: NodeJS.Timeout[] = [];
   private offEvents: (() => void) | null = null;
   private ended = false;
@@ -204,12 +206,19 @@ export class LiveCall {
     }
   }
 
-  /** 一轮开始:嘴接住;孩子的话齐了(说的等转写)交给脑 */
+  /** 一轮开始:嘴接住,孩子的话交给脑。说的先等转写(最多 HEAR_WAIT_MS):空的只说没听清;等过了点照常接住,转写回来再交给脑 */
   private turn(kind: CatchKind, body: Record<string, unknown>, text?: string): void {
     const seq = ++this.turnSeq;
     this.caught = '';
     this.caughtDone = false;
-    this.pendingVoice = kind === 'voice' ? { seq, body } : null;
+    if (this.pendingVoice?.timer) clearTimeout(this.pendingVoice.timer);
+    this.pendingVoice = null;
+    if (kind === 'voice') {
+      const p = { seq, body, caught: false, timer: null as NodeJS.Timeout | null };
+      p.timer = setTimeout(() => { p.timer = null; if (this.pendingVoice === p && !p.caught) { p.caught = true; this.speak('catch', catchCue('voice')); } }, HEAR_WAIT_MS);
+      this.pendingVoice = p;
+      return;
+    }
     this.speak('catch', catchCue(kind));
     if (text !== undefined) void this.toBrain(seq, { ...body, text });
   }
@@ -219,7 +228,10 @@ export class LiveCall {
     this.send({ t: 'kid', text });
     const v = this.pendingVoice;
     this.pendingVoice = null;
-    if (!v || !text.trim()) return;
+    if (!v) return;
+    if (v.timer) clearTimeout(v.timer);
+    if (!text.trim()) { if (!v.caught) this.speak('catch', catchCue('empty')); return; }
+    if (!v.caught) this.speak('catch', catchCue('voice'));
     void this.toBrain(v.seq, { ...v.body, text });
   }
 

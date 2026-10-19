@@ -3,7 +3,7 @@
  * 一轮:孩子按住说 → 松手,嘴马上接住(很短地复述他问的,不答内容)→ 孩子那句的转写交给脑(实时轮:讲稿不配音)→ 脑的讲稿定稿一句交一句,
  * 嘴一空就把排着的几句一起交给它照念(lib/queue.ts,流水线:嘴出完上一段就交下一段,声音在孩子端接着排)→ 讲完就停。
  * 按句不按拍(2026-10-19):卡宁缺毋滥以后一节常常只有一拍、甚至没卡,按拍要等脑整段写完才念;卡只管自己闭合了就铺,和念哪句不挂钩。
- * 转写是空的(按了没说清):嘴在说就掐掉,改说「没听清」,不交给脑。孩子在嘴的声音还在放时按下 = 打断:掐掉、孩子端清播放队列,
+ * 转写是空的(按了没说清):嘴在说就掐掉,改说「没听清」,不交给脑;按着时声音不到 100 毫秒(不 commit)、commit 没收下也一样。孩子在嘴的声音还在放时按下 = 打断:掐掉、孩子端清播放队列,
  * 没念的拍丢掉,孩子听到第几句(lib/playback.ts 按声音排到哪算)进下一轮的上下文包 live:。嘴只接住、只照念,不讲新内容(2026-10-19 P1)。
  *
  * 孩子端 → 这里:二进制帧 = PCM16 16k 单声道一块(按着时才推);文本帧 = JSON
@@ -32,7 +32,7 @@ import { queueInit, queueStep, type Beat, type QueueEvent, type QueueState } fro
 import { MIX_RATE } from './lib/mix.ts';
 import { wavOfPcm } from './lib/wav.ts';
 import { mouthInstructions } from './prompt.ts';
-import { OUTPUT_RATE, RealtimeSession } from './realtime.ts';
+import { INPUT_RATE, OUTPUT_RATE, RealtimeSession } from './realtime.ts';
 import { CallRecorder } from './recorder.ts';
 import type { ServerSocket } from './ws.ts';
 
@@ -48,6 +48,8 @@ export interface LiveDeps {
 /** 嘴接住的那句最多等多久再把孩子的话交给脑(接住的字一般 1 秒内齐;脑知道嘴说了什么,第一句就不再复述) */
 const CATCH_WAIT_MS = 1500;
 const BYTES_PER_MS = (OUTPUT_RATE * 2) / 1000;
+/** 按着时到的声音不到 100 毫秒就不 commit:百炼回「buffer too small, or have no audio」,不会有转写(2026-10-19 iPad 麦克风没开,嘴照样接住说了「你想问什么」) */
+const MIN_COMMIT_BYTES = (INPUT_RATE * 2 * 100) / 1000;
 
 /** 嘴这次回答是什么:接住(孩子这一轮)或照念哪几句 */
 type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat };
@@ -59,6 +61,8 @@ export class LiveCall {
   /** 嘴的声音在孩子端排到哪(按它的排法算),每段带它是接住还是哪一拍 */
   private play: Playback<Said> = playbackInit();
   private holding = false;
+  /** 这一次按着推进去多少字节的声音 */
+  private heldBytes = 0;
   /** 要了还没出完的那次回答;afterDone = 它出完(或被掐)之后再做的 */
   private said: Said | null = null;
   private afterDone: (() => void) | null = null;
@@ -173,7 +177,11 @@ export class LiveCall {
         else this.step({ e: 'done' });
         this.state();
       },
-      onError: (m) => this.send({ t: 'err', status: 502, error: m }),
+      onError: (m) => {
+        this.send({ t: 'err', status: 502, error: m });
+        // commit 没收下(声音太少):这一句不会有转写,照转写是空的办
+        if (this.pendingVoice && /committing input audio buffer/i.test(m)) this.heard('');
+      },
       // 连上以后断了才收;还在连的时候断(配会话报错)由 start 告诉孩子端走板书
       onClose: (r) => { if (!this.ended && this.session) void this.end(`dropped:${r}`); },
     });
@@ -258,6 +266,7 @@ export class LiveCall {
         if (!this.session) return;
         this.pre = [{ at: Date.now(), ev: { lane: 'mouth', kind: 'hold' } }];
         this.holding = true;
+        this.heldBytes = 0;
         this.session.clearAudio();
         this.interrupt();
         this.state();
@@ -266,9 +275,16 @@ export class LiveCall {
       case 'release': {
         if (!this.session || !this.holding) return;
         this.holding = false;
-        this.session.commit();
         this.pre.push({ at: Date.now(), ev: { lane: 'mouth', kind: 'release', how: 'voice' } });
-        this.turn('voice', isObj(m.body) ? m.body : {});
+        const body = isObj(m.body) ? m.body : {};
+        if (this.heldBytes < MIN_COMMIT_BYTES) {
+          this.session.clearAudio();
+          this.send({ t: 'kid', text: '' });
+          this.turn('empty', body);
+          break;
+        }
+        this.session.commit();
+        this.turn('voice', body);
         break;
       }
       case 'hush': {
@@ -385,6 +401,7 @@ export class LiveCall {
   onAudio(pcm: Buffer): void {
     if (this.ended || !this.holding || !this.session?.isReady) return;
     this.rec.kid(pcm);
+    this.heldBytes += pcm.length;
     this.session.appendAudio(pcm);
   }
 

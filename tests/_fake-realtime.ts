@@ -1,7 +1,8 @@
 /**
  * 假百炼 realtime(口语课的测试与探针用,不花钱):一个 http 服务,升级后照 realtime 的事件说话。
  *   session.created → 收 session.update 回 session.updated(喂过音频再改 silence 就报错,和真的一样)
- *   append 记字节;手动 commit → committed + 孩子转写;response.create → created、一块声音(缺省 100 毫秒 = 4800 字节,audioMs 改)、字幕、done(带 usage)
+ *   append 记字节;手动 commit → committed + 孩子转写(缓冲不到 100 毫秒、或 failCommit,同真的回 error「buffer too small」,没有转写);
+ *   response.create → created、一块声音(缺省 100 毫秒 = 4800 字节,audioMs 改)、字幕、done(带 usage)
  *   VAD 会话(turn_detection 非空):收到有声的块 → speech_started;有声之后收到全零的块 → speech_stopped、committed、转写、自动回一次
  *   long = true 时回答只出一半、不 done(等 cancel);cancel 在有回答时回 done:cancelled,没有就报错
  *   response.create 带 response.instructions(实时老师):记进 responses;指令里有「说完就停:「…」」(照念)就把引号里的当字幕说,别的照旧
@@ -37,6 +38,8 @@ export interface FakeRealtime {
   dropEarly: boolean;
   /** 孩子那句转写成什么 */
   kidText: string;
+  /** commit 一律回「buffer too small」 */
+  failCommit: boolean;
   /** 每次回答的声音多长(毫秒,24k 单声道);探针拉长了好在嘴说着时按下 */
   audioMs: number;
   close(): void;
@@ -44,11 +47,13 @@ export interface FakeRealtime {
 
 export async function startFakeRealtime(): Promise<FakeRealtime> {
   const server: Server = createServer((_req, res) => { res.writeHead(404); res.end(); });
-  const fake: FakeRealtime = { endpoint: '', conns: [], long: false, failUpdate: false, dropEarly: false, kidText: "It's a red car.", audioMs: 100, close: () => { for (const c of fake.conns) c.sock.close(); server.close(); } };
+  const fake: FakeRealtime = { endpoint: '', conns: [], long: false, failUpdate: false, dropEarly: false, kidText: "It's a red car.", failCommit: false, audioMs: 100, close: () => { for (const c of fake.conns) c.sock.close(); server.close(); } };
   server.on('upgrade', (req, socket, head) => {
     if (!isUpgrade(req)) { socket.destroy(); return; }
     let active = 0;
     let speaking = false;
+    /** 缓冲里还没 commit / clear 的字节 */
+    let buffered = 0;
     const c: FakeConn = { sock: null as unknown as ServerSocket, session: null, updates: [], audio: 0, images: 0, items: [], commits: 0, clears: 0, creates: 0, cancels: 0, responses: [], closed: false };
     const send = (o: unknown): boolean => c.sock.sendText(JSON.stringify(o));
     const respond = (response: { instructions?: string } | null = null): void => {
@@ -83,13 +88,19 @@ export async function startFakeRealtime(): Promise<FakeRealtime> {
         } else if (m.type === 'input_audio_buffer.append') {
           const buf = Buffer.from(String(m.audio), 'base64');
           c.audio += buf.length;
+          buffered += buf.length;
           if (c.session?.turn_detection) {
             const loud = buf.some((b) => b !== 0);
             if (loud && !speaking) { speaking = true; send({ type: 'input_audio_buffer.speech_started' }); }
             else if (!loud && speaking) { speaking = false; send({ type: 'input_audio_buffer.speech_stopped' }); transcribe(); respond(); }
           }
-        } else if (m.type === 'input_audio_buffer.commit') { c.commits++; transcribe(); }
-        else if (m.type === 'input_audio_buffer.clear') c.clears++;
+        } else if (m.type === 'input_audio_buffer.commit') {
+          c.commits++;
+          const small = buffered < 3200 || fake.failCommit;
+          buffered = 0;
+          if (small) send({ type: 'error', error: { message: 'Error committing input audio buffer: buffer too small, or have no audio.' } });
+          else transcribe();
+        } else if (m.type === 'input_audio_buffer.clear') { c.clears++; buffered = 0; }
         else if (m.type === 'conversation.item.create') c.items.push(m.item);
         else if (m.type === 'input_image_buffer.append') c.images++;
         else if (m.type === 'response.cancel') { c.cancels++; if (active) { active--; send({ type: 'response.done', response: { status: 'cancelled' } }); } else send({ type: 'error', error: { message: 'no active response' } }); }

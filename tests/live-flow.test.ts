@@ -179,6 +179,30 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await sleep(600);
   check('转写空的:嘴先照常接住(松手就接,不等转写),转写回来是空的再改说没听清;不交给脑(没有 turn)', okEmpty && c.responses[r2]?.instructions === catchCue('voice') && c.responses[r2 + 1]?.instructions === catchCue('empty') && !k.msgs.slice(n2).some((m) => m.t === 'turn') && c.responses.length === r2 + 2, JSON.stringify(c.responses.slice(r2)));
 
+  // ---- 按着一块声音都没到(2026-10-19 iPad 麦克风没开):不 commit,嘴直接说没听清 ----
+  {
+    fake.kidText = '不该有这句';
+    const n = k.msgs.length, r = c.responses.length, cm = c.commits;
+    k.ws.send(JSON.stringify({ t: 'hold' }));
+    k.ws.send(JSON.stringify({ t: 'release', body: {} }));
+    const ok = await until(() => c.responses.length === r + 1);
+    await sleep(400);
+    check('按着没声音:不 commit、嘴只说没听清(一次)、孩子端收到空的转写、不交给脑', ok && c.commits === cm && c.responses[r]?.instructions === catchCue('empty') && c.responses.length === r + 1 && has({ msgs: k.msgs.slice(n) }, (m) => m.t === 'kid' && m.text === '') && !k.msgs.slice(n).some((m) => m.t === 'turn'), JSON.stringify({ commits: c.commits - cm, r: c.responses.slice(r) }));
+  }
+
+  // ---- commit 没收下(百炼回 buffer too small):照转写空的办 ----
+  {
+    fake.failCommit = true;
+    const n = k.msgs.length, r = c.responses.length;
+    k.ws.send(JSON.stringify({ t: 'hold' }));
+    k.ws.send(loud());
+    k.ws.send(JSON.stringify({ t: 'release', body: {} }));
+    const ok = await until(() => c.responses.length === r + 2);
+    await sleep(400);
+    fake.failCommit = false;
+    check('commit 没收下:接住改说没听清、不交给脑', ok && c.responses[r]?.instructions === catchCue('voice') && c.responses[r + 1]?.instructions === catchCue('empty') && c.responses.length === r + 2 && !k.msgs.slice(n).some((m) => m.t === 'turn'), JSON.stringify(c.responses.slice(r)));
+  }
+
   // ---- 拍照(P2.7):嘴说「我看看」,照片交给脑(嘴不看图);只有照片没有字也行 ----
   {
     await until(() => ctx.runner.running('chinese-tutor') === null, 15000);

@@ -106,6 +106,8 @@ export interface KidMessage {
   action?: 'submit' | 'continue';
   spoken?: true;
   fromHome?: true;
+  /** 这一轮是实时的(《wip/实时老师设想.md》):讲稿不配音、嘴照念;不出卡的一轮板上留讲稿的字(拍板 8),还在跑时有句就出节 */
+  live?: true;
 }
 
 /** 索引里的小课堂 → 孩子端(圈不带那段话)/ 家长端(带) */
@@ -136,7 +138,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     if (question === null && reply === null && !pending) continue;
     const withState = cardsWithState(m, states, assets);
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
-    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.voice ? { spoken: true as const } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}) });
+    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.voice ? { spoken: true as const } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}), ...(m.live ? { live: true as const } : {}) });
   }
   return out;
 }

@@ -643,6 +643,8 @@ export interface BoardMessage {
   spoken?: boolean;
   /** 首页按钮发的:按钮上的字,不是孩子说的 */
   fromHome?: boolean;
+  /** 实时的一轮(讲稿嘴照念,不配音) */
+  live?: boolean;
 }
 
 /** 板上孩子的一句话(《工作流程.md》§二「一个话题一节」):text 是显示的(语音去了口头禅),full 是原话 */
@@ -666,6 +668,8 @@ export interface BoardEntry extends BoardSection {
   /** 孩子引出这一节的那句话;saidOn = 它答的是哪一节的哪张问题卡(写进那张卡的答案栏),没有 = 在这一节开头单独一行 */
   said?: KidSaid;
   saidOn?: { job: string; card: number };
+  /** 实时的一轮:卡闭合了就铺(不按拍);不出卡的板上留讲稿的字 */
+  live?: true;
 }
 
 /** 口头禅:单独的语气词随处去掉;「那个」「就是」「然后」只在句首或标点旁去掉(句中的「就是 4」「那个是七」留着),连说两遍以上的随处去掉 */
@@ -723,16 +727,16 @@ export function kidSaid(messages: readonly BoardMessage[]): Map<string, { said: 
 
 /**
  * 孩子端条目 → 板书节(没有 section 的条目不出节);
- * 孩子的话挂在它引出的那一节上(said / saidOn,kidSaid);还在跑的只有带 partial 板书(流式,已有卡或已有配好的句)才出节且标 partial,其余不出。
+ * 孩子的话挂在它引出的那一节上(said / saidOn,kidSaid);还在跑的只有带 partial 板书(流式,已有卡或已有配好的句;实时的有句就算)才出节且标 partial,其余不出。
  */
 export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEntry[] {
   const out: BoardEntry[] = [];
   const says = kidSaid(messages);
   for (const m of messages) {
     const k = says.get(m.job);
-    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length && !k?.said.photos ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}) };
+    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length && !k?.said.photos ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}), ...(m.live ? { live: true as const } : {}) };
     if (m.pending) {
-      if (m.section && m.section.partial && (m.section.cards.length || (m.section.voiced ?? 0) > 0)) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.voiced ? { voiced: m.section.voiced } : {}), ...(m.section.layout ? { layout: m.section.layout } : {}) });
+      if (m.section && m.section.partial && (m.section.cards.length || (m.section.voiced ?? 0) > 0 || (m.live && m.section.lines.length))) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.voiced ? { voiced: m.section.voiced } : {}), ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;
     }
     if (m.section && (m.section.cards.length || m.section.lines.length)) {

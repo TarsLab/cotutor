@@ -15,6 +15,8 @@
  * 一轮回复 = 一节:卡整块铺出,讲稿逐句播(有 mp3 放 mp3,没有就不出声、按字数计时;浏览器合成声只在 mock 里用,《工作流程.md》拍板 18),
  * 播到哪句就在卡上画标注、滚到那张卡;末句是问句就停下等孩子答。
  * 输入条照豆包通用版:相机 | 发消息或按住说话 | 加号(相册)。平板横屏:板书两列(最宽 1040 居中),没有左栏。
+ * 实时的老师(《工作流程.md》§孩子端「实时老师」,body.live):嘴照念讲稿、声音从 WebSocket 下来,孩子端不念;横屏左栏大头像 + 字幕、板在右边一块白板,
+ * 卡角是「?」;谁出声谁停走 ../lib/live-board.ts 的 liveStep(同样剥类型内联);连不上回到上面的板书。
  *
  * 交互逻辑在 ../lib/kid-board.ts(纯函数,有测试),这里把它剥掉类型内联进页面,两处一份源码。卡按 kind 渲染(text / read / choice / fill / code),
  * 每种卡的紧凑态只读;点卡开舞台(盖住板书那块,顶栏是卡的名字 + 关闭,讲稿暂停):选择题在舞台里点大按钮,选了就 PUT 状态,
@@ -35,9 +37,10 @@ import { faviconLinks } from '../lib/favicon.ts';
 import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from './reel-dock.ts';
 import { inlineScript } from './inline-lib.ts';
 import { albumSvg, cameraSvg } from './photo-ui.ts';
+import { AUDIO_CLIENT_JS } from '../live/audio-client.ts';
 
 /** 读 src/lib/<name> 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
-function libSource(name: 'kid-board' | 'photo-edit' | 'reel'): string {
+function libSource(name: 'kid-board' | 'photo-edit' | 'reel' | 'live-board'): string {
   return inlineScript(new URL(`../lib/${name}.ts`, import.meta.url));
 }
 
@@ -544,6 +547,38 @@ __REEL_DOCK_CSS__
   button:disabled, .hb.dim { opacity:.35; }
   button:disabled:active { transform:none; filter:none; }
   @media (prefers-reduced-motion:reduce) { #back, .tb .hb, .again, .so, .rd, .hz, #board .c, #hist .tr, #sheet label, #menu .panel button, #ps .tools button, #ps .foot button, .c-tutor .bt, .c-tutor .tt { transition:none; } *:active { transform:none !important; } }
+  /* ---- 实时的老师(《工作流程.md》§孩子端「实时老师」;原型 https://claude.ai/artifact/Xkjo2tN8D942ujEafpNo5f 的 A「老师站在板边」):
+     字幕行换成 #lv——竖屏、手机在输入条上方一行(小头像 + 在说的那句),横屏是左栏(大头像 + 字幕,在说的大、上一句淡),板是右边一块白板;
+     嘴在说头像外两圈亮(老师的颜色 --tc),孩子按着变蓝、「在听你说」;卡角是「?」(问这张卡),朗读卡、单词卡、录音卡没有 ---- */
+  #lv { display:none; }
+  body.live #sub, body.live #spk { display:none; }
+  body.live #lv { display:flex; align-items:center; gap:14px; padding:8px 20px 4px; min-height:60px; }
+  #lv-av { position:relative; flex:0 0 auto; width:44px; height:44px; }
+  #lv-av .av { width:100%; height:100%; font-size:20px; }
+  #lv-av::before, #lv-av::after { content:""; position:absolute; border-radius:50%; border:3px solid var(--tc, var(--accent)); opacity:0; pointer-events:none; transition:opacity .3s; }
+  #lv-av::before { inset:-12%; } #lv-av::after { inset:-26%; }
+  body.speaking #lv-av::before { opacity:.32; animation:lv-ring 1.6s ease-in-out infinite; }
+  body.speaking #lv-av::after { opacity:.16; animation:lv-ring 1.6s ease-in-out .3s infinite; }
+  body.listening #lv-av::before, body.listening #lv-av::after { border-color:#3d7fd9; }
+  body.listening #lv-av::before { opacity:.36; animation:lv-ring 1.2s ease-in-out infinite; }
+  body.listening #lv-av::after { opacity:.18; animation:lv-ring 1.2s ease-in-out .25s infinite; }
+  @keyframes lv-ring { 0%,100% { transform:scale(1); } 50% { transform:scale(1.05); } }
+  body.nod #lv-av .ring circle { animation:av-nod .9s ease-in-out; }
+  body.speaking #lv-av .ring circle { animation:av-talk 1.6s ease-in-out infinite; }
+  body.pending #lv-av .ring circle { animation:av-spin 2.4s linear infinite, av-breathe 1.2s ease-in-out infinite; }
+  body.listening #lv-av .ring circle { animation:av-turn .35s ease-out both, av-listen 1.6s ease-in-out .35s infinite; }
+  #lv-chip { display:none; height:32px; padding:0 14px; border-radius:16px; background:#eaf2fd; color:#2a5ea8; font-size:15px; align-items:center; }
+  #lv-cap { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  #lv-cap .p { display:none; }
+  #lv-cap .c { font-size:18px; line-height:1.45; font-weight:600; color:var(--ink); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  #lv-cap .c.nm { font-weight:500; color:var(--dim); }
+  #lv-cap.done .c, #lv-cap .c.cut { color:#a39f96; font-weight:500; }
+  .c > .again.ask { display:inline-flex; color:var(--tc, var(--accent)); font-size:16px; font-weight:700; line-height:1; }
+  /* 不出卡的一轮:板上留讲稿的字(设想稿拍板 8),念到哪露到哪 */
+  .sec > .says { display:flex; flex-direction:column; gap:6px; padding:2px 4px 4px 40px; font-size:19px; line-height:1.6; color:var(--ink); }
+  .sec > .says p { margin:0; }
+  .sec > .says p.pend { display:none; }
+  @media (prefers-reduced-motion:reduce) { #lv-av::before, #lv-av::after { animation:none !important; } }
   /* ---- 平板横屏 ---- */
   @media (min-width:900px) and (orientation:landscape) {
     #home { max-width:1040px; padding:calc(env(safe-area-inset-top) + 40px) 48px 40px; gap:24px; }
@@ -554,6 +589,26 @@ __REEL_DOCK_CSS__
     #menu .panel { right:calc(env(safe-area-inset-right) + 20px); }
     #board { width:100%; max-width:1040px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 68px) 32px 24px; }
     #sub, #bar, #reel { width:100%; max-width:1040px; margin:0 auto; padding-left:32px; padding-right:32px; }
+    /* 实时的老师:左栏 340(大头像 + 字幕)| 右边白板;输入条横跨 */
+    body.live #main { display:grid; grid-template-columns:340px minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto; column-gap:28px; padding:0 calc(env(safe-area-inset-right) + 40px) 0 calc(env(safe-area-inset-left) + 40px); }
+    body.live #wrap { grid-column:2; grid-row:1; margin-top:calc(env(safe-area-inset-top) + 76px); background:var(--card); border:1px solid var(--line); border-radius:20px; overflow:hidden; }
+    body.live #wrap::before { display:none; }
+    body.live #board { max-width:none; padding:24px 28px 28px; }
+    body.live #lv { grid-column:1; grid-row:1; flex-direction:column; justify-content:flex-start; gap:18px; padding:calc(env(safe-area-inset-top) + 120px) 0 0; min-height:0; }
+    body.live #lv-av { width:140px; height:140px; margin-bottom:22px; }
+    body.live #lv-av .av { font-size:64px; }
+    body.live #lv-av::before { inset:-16%; } body.live #lv-av::after { inset:-32%; }
+    body.live.listening #lv-chip { display:inline-flex; }
+    body.live #lv-cap { flex:0 0 auto; width:300px; gap:10px; text-align:center; }
+    body.live #lv-cap .p { font-size:17px; line-height:1.5; color:#a39f96; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    body.live #lv-cap .p:empty { display:none; }
+    body.live #lv-cap .c { font-size:26px; line-height:1.5; -webkit-line-clamp:6; }
+    body.live #bar { grid-column:1 / -1; grid-row:2; max-width:none; padding-left:0; padding-right:0; }
+    body.live .blank > .av, body.live .blank > .nm { display:none; }
+    /* 按住时输入条那颗变蓝(原型 A1):浮层收成盖在输入条上的蓝胶囊,波形在前 */
+    body.live #hold { left:calc(env(safe-area-inset-left) + 40px); right:calc(env(safe-area-inset-right) + 40px); bottom:calc(env(safe-area-inset-bottom) + 12px); height:56px; border-radius:28px; background:#3d7fd9; box-shadow:0 6px 18px #3d7fd959; flex-direction:row; justify-content:center; gap:16px; padding:0; }
+    body.live #hold .w { order:-1; }
+    body.live #hold .t { display:none; }
   }
 </style>
 <div id="home">
@@ -575,6 +630,7 @@ __REEL_DOCK_CSS__
       <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
       <div id="st-dim"></div>
     </div>
+    <div id="lv"><div id="lv-av"></div><div id="lv-chip">在听你说</div><div id="lv-cap"><div class="p"></div><div class="c"></div></div></div>
     <div id="sub"><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
       <div id="pill">
@@ -615,6 +671,8 @@ __REEL_DOCK_CSS__
 __BOARD_JS__
 __PHOTO_JS__
 __REEL_JS__
+__LIVE_JS__
+__AUDIO_JS__
 
   /** 页面的模式:{} = 孩子端;parent = 家长板书页(数据走家长接口,只读,节间插旁注);synth = 没有配音时用浏览器合成声(只有 mock) */
   const MODE = __MODE__;
@@ -704,6 +762,17 @@ __REEL_JS__
   try { S.autoplay = PARENT ? localStorage.getItem(AUTOPLAY_KEY) === '1' : localStorage.getItem(AUTOPLAY_KEY) !== '0'; } catch { S.autoplay = !PARENT; }
   /** 家长板书页:清单的日期(null = 今天) */
   S.pdate = null;
+  // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
+  // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
+  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), drain: 0, was: 'quiet', holdAt: 0 };
+  /** 实时的那节标注只画到嘴念到的那句(没念到的不先画);不是这次念的节(重开页面、以前的)照旧 */
+  const liveUpTo = (i, upTo) => {
+    const s = S.sections[i];
+    if (!LV.on || !s || !s.live) return upTo;
+    if (!LV.heard.has(s.job)) return s.partial ? -1 : upTo;
+    const n = LV.heard.get(s.job);
+    return upTo === undefined ? n : Math.min(upTo, n);
+  };
 
   // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音就不出声、按字数计时(浏览器合成声只在 mock 里,见 SYNTH) ----
   // 录像里孩子的屏幕在家长页的 iframe 里:用家长页那个 Audio(家长点「看录像」时在手势里解锁过),声音才放得出来
@@ -1287,6 +1356,7 @@ __REEL_JS__
     S.tutor = t; micWarm(); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null; S.ask = intent.ask || null;
+    if (liveWanted(t, intent)) liveOpen(); else liveClose();
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
     $('#board').replaceChildren(); pin.on = false;
@@ -1319,7 +1389,7 @@ __REEL_JS__
     if (ask.lecture) { S.lecture = { ...ask.lecture, watch: null, sent: false, marks: [], flying: [], log: [] }; renderBar(); renderHeader(); openLecture(); }
     else { renderBar(); send(ask.send); }
   };
-  const closeTutor = () => { setFavicon(null); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit', 'speaking', 'nod'); S.homeDraw = true; loadHome(); };
+  const closeTutor = () => { liveDispatch({ type: 'reset' }); liveClose(); setFavicon(null); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit', 'speaking', 'nod'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -1328,7 +1398,7 @@ __REEL_JS__
     const p = c.props || {};
     // 每张卡带底色槽与字形槽(围栏行上写的 look,没有就机械规则);名字对不上主题的,CSS 落回 paper / plain
     const board = !stage && secIdx !== null;
-    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), on: board ? { click: () => openStage(secIdx, idx) } : {} }, ...kids, board ? againBtn() : null);
+    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), on: board ? { click: () => openStage(secIdx, idx) } : {} }, ...kids, board ? againBtn(c) : null);
     switch (c.kind) {
       case 'text': {
         if (isHeading(c)) return h('div', { class: 'heading', 'data-card': idx }, p.title || '');
@@ -1416,7 +1486,7 @@ __REEL_JS__
         // 拍给我看(cards/photo/card.md):相机 + 要拍什么;下沿是答案栏:等你拍(拍照、相册)或拍来的照片。点卡不开舞台,点下沿的按钮拍
         const a = board ? ansFor(secIdx, idx) : null;
         const el = h('div', { class: 'c c-photo', 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c) },
-          h('div', { class: 'pc-row' }, h('span', { class: 'pc-ic', html: ICON.camera }), h('div', { class: 'pc-t' }, p.text || '')), a ? ansEl(a) : null, board ? againBtn() : null);
+          h('div', { class: 'pc-row' }, h('span', { class: 'pc-ic', html: ICON.camera }), h('div', { class: 'pc-t' }, p.text || '')), a ? ansEl(a) : null, board ? againBtn(c) : null);
         if (a) el.dataset.ans = ansKey(a);
         return el;
       }
@@ -1426,7 +1496,8 @@ __REEL_JS__
         // 轻卡,没有舞台:点字就写,不开舞台;讲到它时 setNow 写一遍
         const el = h('div', { class: 'c c-tianzige', 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), 'data-ch': String(p.chars || '') });
         for (const ch of Array.from(String(p.chars || ''))) el.append(tianzigeBox(ch));
-        if (board) el.append(againBtn());
+        const ab = board ? againBtn(c) : null;
+        if (ab) el.append(ab);
         return el;
       }
       case 'dictation': {
@@ -1530,8 +1601,7 @@ __REEL_JS__
 __WORD_DRAW_JS__
   /** 念这个词:服务端配好的 1.mp3(老师的音色)按 rate 倍速放(音高不变),没好就等它到(cardClip);念完调 then(被打断不调) */
   const wordSay = (card, btn, rate, then) => {
-    if (S.rec) return;
-    dispatch({ type: 'segment' });
+    if (S.rec || !cardSoundOk()) return;
     const token = ++voiceToken;
     for (const x of document.querySelectorAll('.c-word .rc-pl.on')) x.classList.remove('on');
     if (btn) btn.classList.add('on');
@@ -1568,10 +1638,11 @@ __WORD_DRAW_JS__
       const run = ++wordRun;
       const live = () => run === wordRun && S.stage;
       // 念和写同时开始(2026-10-01:念完再写,孩子听的时候格子是空的,对不上)
-      wordSay(card, btn, WORD_SLOW.rate);
+      // 实时时卡的声音不自己响(《工作流程.md》§孩子端「实时老师」):只写,点「再听一遍」才念
+      if (!LV.on) wordSay(card, btn, WORD_SLOW.rate);
       wordWrite(grid, true, null, () => {
         if (!live()) return;
-        const again = () => { if (live()) wordSay(card, btn, WORD_SLOW.rate); };
+        const again = () => { if (live() && !LV.on) wordSay(card, btn, WORD_SLOW.rate); };
         if (chunks) { wordMerge(grid, true); setTimeout(again, 600); } else setTimeout(again, 300);
       });
     }
@@ -1579,7 +1650,7 @@ __WORD_DRAW_JS__
   };
   /** 点读:点哪段念哪段——服务端配好的段(card.assets 里有 <段号>.mp3)放 mp3,没好的等它到(cardClip);讲稿在播就先停下 */
   const readSegment = (el, card, k, seg) => {
-    dispatch({ type: 'segment' });
+    if (!cardSoundOk()) return;
     for (const x of document.querySelectorAll('.rd.on')) x.classList.remove('on');
     el.classList.add('on');
     const off = () => el.classList.remove('on');
@@ -1601,8 +1672,7 @@ __WORD_DRAW_JS__
   const recPill = (icon, label, onClick) => h('button', { type: 'button', class: 'rc-pl', html: icon, on: { click: (e) => { e.stopPropagation(); onClick(e); } } }, label);
   /** 放一段声音(示范音的 mp3、自己的录音);被别的声音打断不回调 */
   const playClip = (src, btn, fallbackText) => {
-    if (S.rec) return;
-    dispatch({ type: 'segment' });
+    if (S.rec || !cardSoundOk()) return;
     const token = ++voiceToken;
     const off = () => { if (btn) btn.classList.remove('on'); };
     if (btn) btn.classList.add('on');
@@ -1619,8 +1689,7 @@ __WORD_DRAW_JS__
     const a = S.tutor ? segmentAudio(card, 0) : null;
     const say = card.props.show || (card.props.mode === 'pinyin' ? '' : card.props.text || '');
     if (a || SYNTH || !S.tutor) return playClip(a ? audioUrl(a) : '', btn, say);
-    if (S.rec) return;
-    dispatch({ type: 'segment' });
+    if (S.rec || !cardSoundOk()) return;
     if (btn) btn.classList.add('on');
     const off = () => { if (btn) btn.classList.remove('on'); };
     cardClip(card, 0, ++voiceToken, (x) => playClip(audioUrl(x), btn, say), off, off);
@@ -1676,6 +1745,7 @@ __WORD_DRAW_JS__
     Object.assign(r, { chunks: [], t0: Date.now(), cancel: false, mr: null, timer: 0, stopped: false, keep: false, ms: 0 });
     S.rec = r; avListen();
     dispatch({ type: 'recStart' });
+    if (LV.on) liveDispatch({ type: 'recStart' });
     r.el.classList.add('rec'); r.lb.textContent = '松手就停'; r.tm.textContent = '0:00';
     r.timer = setInterval(() => { const ms = Date.now() - r.t0; r.tm.textContent = recClock(ms); if (ms >= REC_MAX_MS) recStop(true); }, 200);
     let ok = true;
@@ -1703,7 +1773,7 @@ __WORD_DRAW_JS__
   };
   /** 收尾:dispatch recEnd(压住的接着念);够长就存——本地先有回放,PUT 上去服务端落盘、换成路径、起评测 */
   const recDone = (r) => {
-    if (S.rec === r) { S.rec = null; avListen(); dispatch({ type: 'recEnd' }); }
+    if (S.rec === r) { S.rec = null; avListen(); dispatch({ type: 'recEnd' }); if (LV.on) liveDispatch({ type: 'recEnd' }); }
     const sec = S.sections[r.secIdx];
     const card = sec && sec.cards[r.idx];
     if (card && r.keep && r.ms >= REC_MIN_MS && r.chunks.length) {
@@ -1960,7 +2030,7 @@ __WORD_DRAW_JS__
    * 之后每次 poll 只铺新就绪的拍的卡(一行一张,没有排版)、把 lines 换成最新的(配音名填进来),播到头等着(thinking)的就接上。
    * 铺卡在拍就绪时而不是围栏闭合时:铺的时候声音已齐,不会先素后彩地闪
    */
-  const liveCardsOf = (e) => { const bs = beatsOf(e).slice(0, e.ready || 0); let n = 0; for (const b of bs) if (b.card !== null) n = Math.max(n, b.card + 1); return n; };
+  const liveCardsOf = (e) => { if (e.live) return e.cards.length; const bs = beatsOf(e).slice(0, e.ready || 0); let n = 0; for (const b of bs) if (b.card !== null) n = Math.max(n, b.card + 1); return n; };
   /** 一张卡落到行里:和前面的卡并一行(半宽 + 半宽,或明写的并排)就进那一行,否则新起一行;只看这张和前面的,后面的卡不影响前面的行 */
   // ---- 跟到底:新露出来的卡在板的最后 → 板滚到底(连底下留的空一起露);之后这一节再长高(问题卡的「等你说…」、图片载完、排版量完),
   //      只要孩子没自己往上翻,就再滚到底。原来是 scrollIntoView nearest:只把卡的下沿贴到可视区下沿,之后长高的那截就在屏幕外
@@ -2011,15 +2081,19 @@ __WORD_DRAW_JS__
     if (!S.partial || S.partial.job !== e.job) { if (S.partial) S.partial.el.remove(); const idx = S.sections.length; S.partial = { job: e.job, idx, live: false, shown: 0, el: h('div', { class: 'sec', 'data-sec': idx, 'data-job': e.job }, ...headEls(e, idx)) }; $('#board').append(S.partial.el); }
     const P = S.partial, idx = P.idx;
     // 第一句配好就开播(《工作流程.md》拍板 15):卡还是一拍就绪才铺,先出声、后出卡
-    if (!(e.ready > 0) && !(e.voiced > 0)) return;
+    // 实时的一轮:卡闭合了就铺、有句就出节(讲稿嘴在念,不等拍)
+    if (!(e.ready > 0) && !(e.voiced > 0) && !(e.live && (e.cards.length || e.lines.length))) return;
     const sec = { ...e, partial: true };
     const wasLive = P.live;
     if (!wasLive) { P.live = true; S.played.add(e.job); S.sections.push(sec); }
     else S.sections[idx] = sec;
     const n = liveCardsOf(sec);
     if (n > P.shown) { const g = $('#board > .wait-card'); if (g) g.remove(); }
+    const placed = n > P.shown;
     for (; P.shown < n; P.shown++) follow(placeCard(P, sec, P.shown, idx));
     dispatch({ type: wasLive ? 'liveBeat' : 'liveStart', section: idx });
+    if (LV.on && placed) liveDispatch({ type: 'cards' });
+    if (e.live) syncSays(idx);
   };
   /** 老师写完了:live 的那节换成正式的(带标注 / 样子、每句配音),不重播——没铺的卡补上,铺过的换样子并把已播过的标注补画;等着的接上 */
   const finalizeLive = (e) => {
@@ -2036,6 +2110,8 @@ __WORD_DRAW_JS__
     }
     // 定稿的句下标对不上时按文字找回位置、再听让路、等着的接上:都在 step 的 liveFinal
     dispatch({ type: 'liveFinal', section: idx, prevLines });
+    if (LV.on) liveDispatch({ type: 'cards' });
+    if (sec.live) syncSays(idx);
   };
   /** 一张卡的状态变了:紧凑态原地重画(标注会掉,重画本节已播到的;选中态照旧) */
   const repaintCard = (secIdx, idx) => {
@@ -2266,12 +2342,15 @@ __WORD_DRAW_JS__
     if (v.kind === 'wait' && waited < WAIT_LONG_MS) S.waitTimer = setTimeout(renderSubtitle, WAIT_LONG_MS - waited);
     // 占位卡:第一拍前、以及念着没卡的开头句时都在(第一张卡落下才撤),总在板的最后
     const board = $('#board'); let g = board.querySelector(':scope > .wait-card');
-    if (v.kind === 'wait' || (S.partial && S.partial.live && !S.partial.shown)) { if (!g) { g = waitCardEl(); board.append(g); follow(g); } else if (g !== board.lastElementChild) board.append(g); }
+    // 实时:这一轮板上已经有东西了(铺了卡、念到的讲稿露了)就不要占位卡
+    const lvShown = LV.on && S.partial && (S.partial.shown > 0 || LV.heard.has(S.partial.job));
+    if ((v.kind === 'wait' || (S.partial && S.partial.live && !S.partial.shown)) && !lvShown) { if (!g) { g = waitCardEl(); board.append(g); follow(g); } else if (g !== board.lastElementChild) board.append(g); }
     else if (g) g.remove();
     const b = $('#sub-btn');
     b.hidden = v.right === 'none';
     b.innerHTML = v.right === 'pause' ? ICON.pause : v.right === 'play' ? ICON.play : v.right === 'stop' ? ICON.stop : '';
-    document.body.classList.toggle('pending', S.pending);
+    // 实时:脑还在写时嘴在说,头像是「说」不是「想」
+    document.body.classList.toggle('pending', S.pending && !(LV.on && LV.model.status === 'mouth'));
     document.body.classList.toggle('limit', S.limit);
     // 老师等着孩子答:最后那张问题卡的答案栏露「等你说…」
     document.body.classList.toggle('waiting', ps.status === 'waiting' && !ps.replay && !S.pending);
@@ -2280,8 +2359,16 @@ __WORD_DRAW_JS__
     const settled = (S.state.status === 'waiting' || S.state.status === 'done') && !S.state.replay && !S.pending && !S.stage && !S.reel;
     if (settled && pin.was === 'playing' && Date.now() - pin.touched > 3000) { const cs = [...$('#board').querySelectorAll('.sec .c')].filter((c) => c.getClientRects().length); if (cs.length) follow(cs[cs.length - 1]); }
     pin.was = S.state.status;
-    document.body.classList.toggle('speaking', ps.status === 'playing' && !S.pending);
-    if ((ps.status === 'waiting' || ps.status === 'done') && avWas === 'playing' && !S.pending) avNod();
+    if (LV.on) {
+      // 实时:头像跟着嘴(liveStep 的状态);嘴停了、脑也写完了点一下头;字幕在左栏
+      document.body.classList.toggle('speaking', LV.model.status === 'mouth');
+      if (LV.was === 'mouth' && LV.model.status !== 'mouth' && !S.pending) avNod();
+      LV.was = LV.model.status;
+      liveCaption();
+    } else {
+      document.body.classList.toggle('speaking', ps.status === 'playing' && !S.pending);
+      if ((ps.status === 'waiting' || ps.status === 'done') && avWas === 'playing' && !S.pending) avNod();
+    }
     avWas = ps.status;
     markHeard();
   };
@@ -2328,7 +2415,10 @@ __WORD_DRAW_JS__
 
   // ---- 再听(2026-09-18):卡角喇叭 = 这张卡那几句,节头 = 整节,点字幕 = 这一句;板上安静、讲完之后才有;声音就是当时的配音,不花钱 ----
   const replayWrote = new Set();
-  const againBtn = () => h('button', { type: 'button', class: 'again', 'aria-label': '再听', html: ICON.replay, on: { click: (e) => { e.stopPropagation(); const c = e.currentTarget.closest('.c'); if (c) againAt(c, Number(c.dataset.card)); } } });
+  /** 卡角:板书时是再听的喇叭;实时时是「?」(点了 = 孩子问这张卡,同说了一句,《wip/实时老师设想.md》拍板 6),朗读卡、单词卡、录音卡自己有声音,没有 */
+  const SOUND_KINDS = ['read', 'word', 'record'];
+  const askBtn = () => h('button', { type: 'button', class: 'again ask', 'aria-label': '问这张卡', on: { click: (e) => { e.stopPropagation(); const c = e.currentTarget.closest('.c'), secEl = c && c.closest('.sec'), s = secEl && S.sections[Number(secEl.dataset.sec)]; if (s) send('讲讲这张卡', { focus: { card: s.job + '/' + c.dataset.card }, ask: true }); } } }, '?');
+  const againBtn = (card) => LV.on ? (card && SOUND_KINDS.includes(card.kind) ? null : askBtn()) : h('button', { type: 'button', class: 'again', 'aria-label': '再听', html: ICON.replay, on: { click: (e) => { e.stopPropagation(); const c = e.currentTarget.closest('.c'); if (c) againAt(c, Number(c.dataset.card)); } } });
   const againAt = (el, target) => {
     const secEl = el.closest('.sec');
     if (!secEl || !(target === 'all' ? secEl : el).classList.contains('heard')) return;
@@ -2351,7 +2441,8 @@ __WORD_DRAW_JS__
   /** 板上安静时,有讲稿的卡与节都挂上 heard(喇叭露出来,不看念没念过);念着的挂 replaying。老师还在写的节不挂;板上不安静(老师在想、正在念)全都不挂 */
   const markHeard = () => {
     const st = playView();
-    const quiet = replayQuiet(st, S.pending);
+    // 实时没有再听(讲稿没有配音,再念会盖过嘴):卡角是「?」
+    const quiet = !LV.on && replayQuiet(st, S.pending);
     const R = st.replay ? S.replayOf : null;
     for (const secEl of $('#board').querySelectorAll(':scope > .sec[data-sec]')) {
       const i = Number(secEl.dataset.sec);
@@ -2374,8 +2465,8 @@ __WORD_DRAW_JS__
       case 'stop': silence(); break;
       case 'play': playLine(); break;
       case 'render': renderSubtitle(); break;
-      case 'showNow': showNow(); break;
-      case 'paint': paintAll(f.section, f.upTo); break;
+      case 'showNow': if (!LV.on) showNow(); break;
+      case 'paint': paintAll(f.section, liveUpTo(f.section, f.upTo)); break;
       case 'unpaint': unpaintLines(f.section, f.lines); break;
       case 'replayStart': unlock(); replayWrote.clear(); break;
       case 'openStage': openStage(f.section, f.card, { delegate: true, autoplay: true }); break;
@@ -2490,7 +2581,7 @@ __WORD_DRAW_JS__
   window.addEventListener('pagehide', () => playFlush(true));
   document.addEventListener('visibilitychange', () => { playRec({ k: 'visible', on: !document.hidden }); if (document.hidden) playFlush(true); });
   const dispatch = (ev) => {
-    const r = step({ state: S.state, replayOf: S.replayOf, held: S.held }, ev, { sections: S.sections, pending: S.pending, autoplay: S.autoplay, readonly: S.readonly, stage: Boolean(S.stage), recording: Boolean(S.rec), limit: S.limit, now: Date.now() });
+    const r = step({ state: S.state, replayOf: S.replayOf, held: S.held }, ev, { sections: S.sections, pending: S.pending, autoplay: S.autoplay && !LV.on, readonly: S.readonly, stage: Boolean(S.stage), recording: Boolean(S.rec), limit: S.limit, now: Date.now() });
     S.state = r.model.state; S.replayOf = r.model.replayOf; S.held = r.model.held;
     playNote();
     syncUnfold();
@@ -2523,7 +2614,7 @@ __WORD_DRAW_JS__
         if (e.partial) { renderLive(e); continue; }
         S.played.add(e.job); S.sections.push(e); fresh.push(S.sections.length - 1);
         const idx = S.sections.length - 1;
-        if (!silent && S.autoplay) S.unfold.add(idx);
+        if (!silent && S.autoplay && !LV.on) S.unfold.add(idx);
         if (S.partial && S.partial.job === e.job) {
           // 流式时一行一张先铺着;跑完了按定稿的行整节重画,节的编号就是它现在的位置
           const el = S.partial.el; S.partial = null;
@@ -2552,6 +2643,7 @@ __WORD_DRAW_JS__
       else renderSubtitle();
       if (S.lecture) renderLecturePending();
       if (!S.sections.length && !S.partial && !stillPending && !S.readonly && !S.lecture && !$('#board .blank')) $('#board').append(blankBoard('想问什么?'));
+      S.sections.forEach((sec, i) => { if (sec.live) syncSays(i); });
       renderHeader();
       clearTimeout(S.pollTimer);
       // 画图卡还在画(老师已经说完了):隔 3 秒拉一次,图到了 props 变了就重画那张卡
@@ -2596,6 +2688,7 @@ __WORD_DRAW_JS__
   const switchThread = (date, thread) => {
     resetBoard();
     S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null; S.via = null; S.cont = null; S.lecture = null; S.ask = null;
+    if (S.readonly) liveClose(); else if (!LV.on && liveWanted(S.tutor, null)) liveOpen();
     renderBar(); renderSubtitle(); renderHeader();
     loadDay(!S.readonly);
   };
@@ -2643,6 +2736,8 @@ __WORD_DRAW_JS__
     if (!text && !opts.action && !(opts.photos && opts.photos.length)) return;
     if (!S.tutor || !canSend() || S.limit) return;
     unlock();
+    // 实时:不是按住说的(打字、拍照、交卡、卡上的「?」)也走那条连接,嘴先接住
+    if (LV.on && LV.ready && !opts.voice) { liveSendNow(text, opts); return; }
     dispatch({ type: 'send' });
     S.pending = true; S.waitSince = Date.now(); renderSubtitle();
     const body = { text, device: S.device };
@@ -3113,7 +3208,7 @@ __REEL_DOCK_JS__
   const srDied = () => { srDead = true; try { sessionStorage.setItem('kid-sr-dead', '1'); } catch {} const ph = $('#ph'); if (ph) ph.textContent = PH_IDLE(); };
   // kid.listen: omni(首页接口给):松手后原声交给服务端的 omni 再听一遍、发它听的;浏览器没有识别(或一起就断)也能按住,只录不认
   const omniOn = () => Boolean(S.home && S.home.listen === 'omni') && Boolean(window.MediaRecorder) && Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-  const holdOk = () => srOk() || omniOn();
+  const holdOk = () => (LV.on && LV.ready) || srOk() || omniOn();
   const PH_IDLE = () => (holdOk() ? '发消息或按住说话…' : '发消息…');
   /** kid.listen 跟着首页接口来(改 cotutor.json 不用刷新页面):输入条上是空闲那句就按现在的重写,「没听清」那几秒不动 */
   const phIdle = () => { const ph = $('#ph'); if (ph && /^发消息/.test(ph.textContent)) ph.textContent = PH_IDLE(); };
@@ -3175,7 +3270,7 @@ __REEL_DOCK_JS__
   };
   const micWarm = () => {
     let ok = false; try { ok = localStorage.getItem('kid-mic-ok') === '1'; } catch {}
-    if (!ok || !holdOk() || !S.tutor || !canSend() || document.hidden || micLive()) return;
+    if (!ok || !(LV.on || holdOk()) || !S.tutor || !canSend() || document.hidden || micLive()) return;
     micOpen().catch(() => {});
   };
   document.addEventListener('visibilitychange', () => { if (document.hidden) { if (!mic.opening) micDrop(); } else micWarm(); });
@@ -3296,6 +3391,215 @@ __REEL_DOCK_JS__
   const holdLevel = (v) => { holdLvRec(v); $('#hold').classList.add('real'); holdLv.shift(); holdLv.push(v); for (let i = 0; i < 25; i++) holdBars[i].style.height = Math.round(4 + holdLv[i] * 24) + 'px'; };
   // 按住时认出的字:浮层上跟着出,太长只留最后 60 个字
   const holdText = (t) => { $('#hold .t').textContent = t.length > 60 ? '…' + t.slice(-60) : t; };
+  // ---- 实时的老师(《工作流程.md》§孩子端「实时老师」,《wip/实时老师设想.md》):嘴是 realtime,讲稿由它照念,声音从 WebSocket /api/live/<老师>/ws 下来,
+  //      孩子端不念讲稿(板书的 step 照旧收事件、只是不自动念);卡照旧从「今天」拉,闭合了就铺。谁出声、谁停走 liveDispatch → liveStep(live-board.ts),
+  //      这里只照单执行。按住说话推 PCM(常开那路麦克风,makeAudio().use),不走浏览器识别;连不上、断了 → 这位老师这一次回到板书 ----
+  /** 这次进老师页走不走实时:这位老师开了实时、孩子端今天能说话的话题;以前的、家长端、录像、预览不走,首页按钮开场、小课堂、activity 先走板书 */
+  const liveWanted = (t, intent) => Boolean(t && t.live) && !PARENT && !REEL && !PREVIEW && !S.readonly && !S.lecture && !S.ask && !(intent && intent.send);
+  const lvSend = (o) => { if (LV.ws && LV.ws.readyState === 1) LV.ws.send(JSON.stringify(o)); };
+  /** 实时时改「谁出声」的事都走这里,页面里不许再直接改 LV.model(tests/live-player.test.ts 数着)。data = release / send 的 body、audio 的那块声音 */
+  const liveDispatch = (ev, data) => {
+    const r = liveStep(LV.model, ev);
+    LV.model = r.model;
+    for (const f of r.effects) {
+      switch (f.kind) {
+        case 'hold': lvSend({ t: 'hold' }); break;
+        case 'release': lvSend({ t: 'release', body: data }); break;
+        case 'hush': lvSend({ t: 'hush' }); break;
+        case 'send': lvSend({ t: 'send', body: data }); break;
+        case 'enqueue': if (LV.audio) LV.audio.play(data); liveDrainWatch(); break;
+        case 'flush': if (LV.audio) LV.audio.flush(); break;
+        case 'stopCard': silence(); break;
+        case 'board': liveClose(); break;
+        case 'render': renderSubtitle(); break;
+      }
+    }
+    return r.effects;
+  };
+  /** 嘴在说时每 150 毫秒看一眼孩子端的队列放完没有 */
+  const liveDrainWatch = () => {
+    if (LV.drain) return;
+    LV.drain = setInterval(() => {
+      if (LV.model.status === 'mouth' && LV.audio && LV.audio.playing()) return;
+      clearInterval(LV.drain); LV.drain = 0;
+      if (LV.model.status === 'mouth') liveDispatch({ type: 'drained' });
+    }, 150);
+  };
+  /** 卡上的声音(点读、单词、示范、回放)要响:实时时问 liveStep(嘴在说、孩子按着、在录都不响);板书时停讲稿(segment) */
+  const cardSoundOk = () => {
+    if (LV.on) return liveDispatch({ type: 'cardTap' }).some((f) => f.kind === 'playCard');
+    dispatch({ type: 'segment' });
+    return true;
+  };
+  for (const k of ['ended', 'error']) audioEl.addEventListener(k, () => { if (LV.on && LV.model.status === 'card') liveDispatch({ type: 'cardEnded' }); });
+  /** 字幕:在说的那句、上一句;被打断的那句淡、加省略号;什么都还没说写老师的名字;到了上限写上限那句 */
+  const liveCaption = () => {
+    const cap = $('#lv-cap'), c = cap.querySelector('.c');
+    cap.querySelector('.p').textContent = LV.cap.prev;
+    const cut = Boolean(LV.cap.cut) && LV.cap.cut === LV.cap.cur;
+    const limit = S.limit ? subtitleFor({ state: S.state, sections: [], pending: false, waitedMs: 0, limit: true }).text : '';
+    c.textContent = limit || (LV.cap.cur ? LV.cap.cur + (cut ? '……' : '') : (S.tutor ? S.tutor.display : ''));
+    c.classList.toggle('cut', cut && !limit);
+    c.classList.toggle('nm', !limit && !LV.cap.cur);
+    cap.classList.toggle('done', LV.model.status !== 'mouth' && !limit);
+  };
+  /** 字幕换一句:上一句挪上去 */
+  const liveSay = (text) => { if (!text) return; if (LV.cap.cur && LV.cap.cur !== text) LV.cap.prev = LV.cap.cur; LV.cap.cur = text; renderSubtitle(); };
+  /** 不出卡的一轮(设想稿拍板 8):板上留讲稿的字,念到哪露到哪;不是这次念的(重开页面、以前的)整段都在 */
+  const syncSays = (i) => {
+    const s = S.sections[i], secEl = $('#board').querySelector(':scope > .sec[data-sec="' + i + '"]');
+    if (!s || !secEl) return;
+    let el = secEl.querySelector(':scope > .says');
+    if (!s.live || s.cards.length || !s.lines.length) { if (el) el.remove(); return; }
+    const key = s.lines.map((l) => l.text).join('|');
+    if (!el || el.dataset.k !== key) {
+      const fresh = h('div', { class: 'says', 'data-k': key }, ...s.lines.map((l, k) => h('p', { 'data-line': k }, plainLine(l.text))));
+      if (el) el.replaceWith(fresh); else secEl.append(fresh);
+      el = fresh;
+    }
+    const upTo = LV.heard.has(s.job) ? LV.heard.get(s.job) : s.partial ? -1 : s.lines.length - 1;
+    for (const p of el.children) p.classList.toggle('pend', Number(p.dataset.line) > upTo);
+  };
+  /** 讲到某句:它锚的卡描边,田字格、单词卡这时写一遍(这一页只写一次) */
+  const liveNow = (i, k) => {
+    for (const x of document.querySelectorAll('#board .c.now')) x.classList.remove('now');
+    const el = $('#board').querySelector('[data-sec="' + i + '"] [data-card="' + k + '"]');
+    if (!el) return null;
+    el.classList.add('now');
+    if ((el.classList.contains('c-tianzige') || el.classList.contains('c-word')) && !el.dataset.wrote) { el.dataset.wrote = '1'; if (el.classList.contains('c-word')) wordWrite(el.querySelector('.wg'), false, null); else tianzigePlay(el); }
+    return el;
+  };
+  /** 服务端说:这一句开始放了(按孩子端的排法算好的时刻)。字幕换成它;那一节露到它、画它的标注、它锚的卡描边 */
+  const liveRead = (job, line, text) => {
+    if (!LV.heard.has(job) || line > LV.heard.get(job)) LV.heard.set(job, line);
+    const i = S.sections.findIndex((s) => s.job === job);
+    if (i >= 0) {
+      syncSays(i);
+      const ln = S.sections[i].lines[line];
+      let target = null;
+      if (ln) {
+        for (const mk of ln.marks) target = applyMark(i, mk, true) || target;
+        const at = lineTarget(ln);
+        if (at !== null) target = liveNow(i, at) || target;
+        else target = $('#board').querySelector('[data-sec="' + i + '"] .says p[data-line="' + line + '"]') || target;
+      }
+      if (target) follow(target);
+    }
+    liveSay(text);
+  };
+  /** 脑开始写这一轮:话题定下来,拉今天(卡、讲稿从那里来) */
+  const liveTurn = (m) => {
+    if (m.thread) S.thread = m.thread;
+    S.newThread = false; S.via = null;
+    { const b = $('#board .blank'); if (b) b.remove(); }
+    S.pending = true; if (!S.waitSince) S.waitSince = Date.now();
+    renderHeader(); renderSubtitle();
+    clearTimeout(S.pollTimer); S.pollTimer = setTimeout(() => loadDay(false), 300);
+  };
+  const liveMsg = (m) => {
+    switch (m.t) {
+      case 'ready': LV.ready = true; phIdle(); break;
+      case 'fallback': case 'end': liveDispatch({ type: 'drop' }); break;
+      case 'tutor':
+        // 嘴接住的字一到就上字幕;照念的字幕跟 read 走(到点才亮)
+        if (m.of !== 'catch') break;
+        if (typeof m.done === 'string') { LV.cap.catching = false; if (m.done) LV.cap.cur = m.done; renderSubtitle(); break; }
+        if (!m.delta) break;
+        if (!LV.cap.catching) { LV.cap.catching = true; if (LV.cap.cur) LV.cap.prev = LV.cap.cur; LV.cap.cur = ''; }
+        LV.cap.cur += m.delta; renderSubtitle();
+        break;
+      case 'read': liveRead(String(m.job || ''), Number(m.line), String(m.text || '')); break;
+      // 转写是空的(按了没说清):嘴说没听清,不会有这一轮
+      case 'kid': if (!String(m.text || '').trim()) { S.pending = false; renderSubtitle(); } break;
+      case 'turn': liveTurn(m); break;
+      case 'flush': liveDispatch({ type: 'flush' }); break;
+      case 'err': S.pending = false; if (m.status === 429) S.limit = true; renderSubtitle(); break;
+      default: break;
+    }
+  };
+  /** 连嘴(进老师页时,在那一下点击里起 AudioContext);连上之前按住说话还走浏览器识别 */
+  const liveOpen = () => {
+    if (LV.ws) liveClose();
+    liveDispatch({ type: 'reset' });
+    LV.on = true; LV.ready = false; LV.cap = { prev: '', cur: '', cut: '', catching: false }; LV.heard = new Map();
+    document.body.classList.add('live');
+    $('#tutor').style.setProperty('--tc', tutorColor());
+    $('#lv-av').replaceChildren(avatarEl(S.tutor));
+    if (!LV.audio) {
+      LV.audio = makeAudio();
+      LV.audio.muted = false;
+      LV.audio.onChunk = (ab) => { if (LV.model.status === 'holding' && LV.ws && LV.ws.readyState === 1) LV.ws.send(ab); };
+      LV.audio.onLevel = (v) => { if (LV.model.status === 'holding') holdLevel(Math.min(1, v * 4)); };
+    }
+    LV.audio.wake().catch(() => {});
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/live/' + encodeURIComponent(S.tutor.name) + '/ws');
+    ws.binaryType = 'arraybuffer';
+    LV.ws = ws;
+    ws.onopen = () => { if (LV.ws === ws) lvSend({ t: 'view', w: innerWidth, h: innerHeight }); };
+    ws.onmessage = (e) => {
+      if (LV.ws !== ws) return;
+      if (typeof e.data !== 'string') { liveDispatch({ type: 'audio' }, e.data); return; }
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      liveMsg(m);
+    };
+    ws.onclose = () => { if (LV.ws === ws) liveDispatch({ type: 'drop' }); };
+    micWarm();
+  };
+  /** 收:告诉服务端挂了、关连接、清嘴的声音;页面回到板书的样子(按着的那一下作废) */
+  const liveClose = () => {
+    const ws = LV.ws; LV.ws = null; LV.ready = false;
+    if (ws) { ws.onclose = null; try { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'bye' })); ws.close(); } catch {} }
+    if (LV.audio) LV.audio.flush();
+    clearInterval(LV.drain); LV.drain = 0;
+    if (!LV.on) return;
+    LV.on = false;
+    document.body.classList.remove('live', 'speaking');
+    if (press && press.live) { clearTimeout(press.timer); press = null; holdEnd('cancel'); setBar(barNext(S.bar, 'holdCancel')); }
+    phIdle();
+    if (S.tutor) renderSubtitle();
+  };
+  /** 按满 150 毫秒:嘴、卡的声音停(liveStep),告诉服务端 hold,开始推声音(常开那路麦克风接到采音节点上,第一次要等它开好) */
+  const liveHold = () => {
+    setBar(barNext(S.bar, 'holdStart'));
+    dispatch({ type: 'halt' });
+    hold.audio = false; hold.tail = false; renderHold(); holdText('');
+    holdRec('down');
+    LV.holdAt = Date.now();
+    liveDispatch({ type: 'press' });
+    if (LV.model.cut) LV.cap.cut = LV.cap.cur;
+    renderSubtitle();
+    micOpen().then(() => (mic.stream && LV.audio ? LV.audio.use(mic.stream) : Promise.reject(new Error('no mic')))).then(() => { if (press && press.live) { hold.audio = true; renderHold(); holdRec('audio'); } }, () => {});
+  };
+  /** 松手:告诉服务端 release(嘴马上接住);上滑、太短(不到 0.4 秒)、麦克风没开上 = 作废(hush) */
+  const liveRelease = (cancelled) => {
+    const keep = !cancelled && hold.audio && Date.now() - LV.holdAt >= 400;
+    holdEnd(keep ? 'sent' : 'cancel');
+    setBar(barNext(S.bar, keep ? 'holdEnd' : 'holdCancel'));
+    if (LV.audio) LV.audio.wake().catch(() => {});
+    if (!LV.on) return;
+    if (!keep) { liveDispatch({ type: 'cancel' }); renderSubtitle(); return; }
+    const body = { device: S.device };
+    if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
+    if (S.via) body.via = S.via;
+    if (S.stage) body.focus = { card: S.stage.id };
+    liveDispatch({ type: 'release' }, body);
+    S.pending = true; S.waitSince = Date.now(); renderSubtitle();
+  };
+  /** 打字、拍照、交卡、卡上的「?」:同说了一句,嘴先接住、脑写(liveStep 的 send / ask) */
+  const liveSendNow = (text, opts) => {
+    dispatch({ type: 'send' });
+    const body = { text, device: S.device };
+    if (opts.action) body.action = opts.action;
+    if (opts.photos && opts.photos.length) body.photos = opts.photos;
+    const focus = opts.focus || (S.stage ? { card: S.stage.id } : null);
+    if (focus) body.focus = focus;
+    if (opts.ask && focus) body.ask = true;
+    if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
+    if (S.via) body.via = S.via;
+    liveDispatch({ type: body.ask ? 'ask' : 'send' }, body);
+    if (LV.model.cut) LV.cap.cut = LV.cap.cur;
+    S.pending = true; S.waitSince = Date.now(); renderSubtitle();
+  };
   const startRec = () => {
     finalText = ''; hold.audio = false; hold.tail = false; renderHold(); holdText('');
     holdRec('down');
@@ -3338,7 +3642,14 @@ __REEL_DOCK_JS__
     if (S.bar === 'typing') return;
     e.preventDefault(); unlock();
     if (rec || hearing) return; // 上一句还在收尾(omni 还在听)
-    press = { y: e.clientY, cancelled: false, held: false, timer: setTimeout(() => { if (!press || !holdOk()) return; press.held = true; setBar(barNext(S.bar, 'holdStart')); dispatch({ type: 'halt' }); startRec(); }, 150) };
+    if (LV.audio && LV.on) LV.audio.wake().catch(() => {});
+    press = { y: e.clientY, cancelled: false, held: false, live: false, timer: setTimeout(() => {
+      if (!press) return;
+      // 实时:按住推声音给嘴(不走浏览器识别);到了上限不接
+      if (LV.on && LV.ready) { if (S.limit) return; press.held = true; press.live = true; liveHold(); return; }
+      if (!holdOk()) return;
+      press.held = true; setBar(barNext(S.bar, 'holdStart')); dispatch({ type: 'halt' }); startRec();
+    }, 150) };
     try { mid.setPointerCapture(e.pointerId); } catch {}
   });
   mid.addEventListener('pointermove', (e) => { if (press && press.held) { const up = press.y - e.clientY > 60; if (up !== press.cancelled) { press.cancelled = up; renderHold(); holdRec('slide', { on: up }); } } });
@@ -3347,6 +3658,7 @@ __REEL_DOCK_JS__
     clearTimeout(press.timer);
     const p = press; press = null;
     if (!p.held) { setBar(barNext(S.bar, 'tap')); return; }
+    if (p.live) { liveRelease(p.cancelled); return; }
     if (p.cancelled || !rec) { holdEnd('cancel'); setBar(barNext(S.bar, 'holdCancel')); if (rec) { const r = rec; rec = null; r.abort(); } return; }
     // 松手发送:浮层留到识别停下(onEnd 里收),这段时间在收尾
     holdRec('up'); hold.tail = true; renderHold(); settle(rec);
@@ -3636,7 +3948,7 @@ __REEL_DOCK_JS__
 </html>
 `;
 
-const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR))
+const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__LIVE_JS__', () => libSource('live-board')).replace('__AUDIO_JS__', () => AUDIO_CLIENT_JS).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR))
   .replace('__CAMERA_22__', () => JSON.stringify(cameraSvg(22))).replace('__CAMERA_28__', () => JSON.stringify(cameraSvg(28))).replace('__CAMERA_20__', () => JSON.stringify(cameraSvg(20))).replace('__ALBUM_28__', () => JSON.stringify(albumSvg(28)));
 export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 

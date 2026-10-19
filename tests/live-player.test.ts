@@ -2,6 +2,7 @@
  * 实时老师的孩子端仲裁(live-board.ts 的 liveStep):表的每格一条 + 随机事件序列跑不变式。
  * 表的中文版在《工作流程.md》§孩子端「实时老师」;改规则先改表、再改这里、最后改 liveStep。
  */
+import { readFileSync } from 'node:fs';
 import { initialLive, liveStep, type LiveEffect, type LiveEvent, type LiveModel, type LiveStatus } from '../src/lib/live-board.ts';
 import { check, done } from './_check.ts';
 
@@ -120,5 +121,12 @@ function run(seed: number, steps: number): string | null {
 const failures: string[] = [];
 for (let seed = 1; seed <= 3000 && failures.length < 3; seed++) { const f = run(seed, 150); if (f) failures.push(f); }
 check('随机事件序列 3000 条 × 150 步:不变式都成立', failures.length === 0, failures.join('\n'));
+
+// ---- 页面不绕过 liveStep:实时的状态只在 liveDispatch 里写;卡上的声音都先过 cardSoundOk(板书时那里停讲稿,实时时问 liveStep)----
+const page = readFileSync(new URL('../src/server/kid-page.ts', import.meta.url), 'utf8');
+const count = (re: RegExp) => (page.match(re) ?? []).length;
+check('页面:LV.model 只在 liveDispatch 里写一次', count(/LV\.model = /g) === 1 && count(/LV\.model\.\w+ = /g) === 0, String(count(/LV\.model = /g)));
+check('页面:卡上的声音(点读、单词、示范、回放)都先过 cardSoundOk;segment 只剩它里面那一处', count(/dispatch\(\{ type: 'segment' \}\)/g) === 1 && count(/cardSoundOk\(\)/g) === 4, `${count(/dispatch\(\{ type: 'segment' \}\)/g)} ${count(/cardSoundOk\(\)/g)}`);
+check('页面:WebSocket 上发出去的 hold / release / hush / send 只在 liveDispatch 里', count(/lvSend\(\{ t: '(hold|release|hush|send)'/g) === 4 && count(/t: 'hold'/g) === 1, String(count(/lvSend\(\{ t: '(hold|release|hush|send)'/g)));
 
 done();

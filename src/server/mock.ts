@@ -623,7 +623,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
   // 学科色同真服务:按老师的先后定(src/lib/tutor-color.ts)
   const colors = tutorColors(Object.fromEntries(MOCK_TUTORS.map((t) => [t.name, { subject: t.subject }])));
-  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') }));
+  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk'), live: false }));
   /** 小课堂:样本课包与样本视频在仓库里(tests/fixtures/bundles/、lectures/),起来时和真服务一样读一遍(readLecture)、记住 */
   const lectures = new Map<string, Lecture>();
   const lecturesLoaded = (async () => {

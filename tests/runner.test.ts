@@ -406,6 +406,20 @@ try {
   check('首句就绪(拍板 15):第一句配好就记,发 ready:speak,不晚于第一拍就绪', (() => { const t = (mS as { timing?: { firstReadyMs?: number; beats?: { readyMs?: number }[] } }).timing; const sp = evFile.filter((e) => e.lane === 'ready' && e.kind === 'speak'); return sp.length === 1 && typeof t?.firstReadyMs === 'number' && t.firstReadyMs <= (t.beats?.[0]?.readyMs ?? Infinity); })(), JSON.stringify((mS as { timing?: unknown }).timing));
   check('事件:格式化成一行(相对秒 · 道 · 一句话)', /^\s*\d+\.\d\d main\s+起 .*(新会话|resume)/.test(formatEvent(evFile[0])) && formatEvent(evFile.find((e) => e.kind === 'card')!).includes('卡 0 text'), formatEvent(evFile[0]));
   check('跑完:正式一节(不带 partial)、2 张卡 3 句、每句 mp3(流式时已在路上)、子代理的增量没混进来', mS.section?.cards.length === 2 && !('partial' in mS.section) && mS.section.lines.length === 3 && mS.section.lines.every((l, i) => l.audio === `2026-09-09.${jobS2}.${i + 1}.mp3`) && !mS.kidText?.includes('子代理') && mS.kidText?.includes('第一次说:流式 板书') === true, JSON.stringify(mS));
+  // ---- 实时轮(《wip/实时老师开发计划.md》P2.3):讲稿不配音、拍关就就绪;消息记 live;上下文包带 live: ----
+  {
+    const evL: { job: string; lane: string; kind: string }[] = [];
+    const offL = ctx.runner.onEvent((e) => evL.push({ job: e.job, lane: e.event.lane, kind: e.event.kind }));
+    const sl = await ctx.runner.send('math-tutor', { from: 'kid', text: '流式 板书 实时', runtime: 'stream', live: { caught: '你问的这个,我写给你看。', cut: 2 } });
+    await sl.done;
+    offL();
+    const ml = ((await day('math-tutor', sl.date)).json as Day).index.messages.find((m) => m.job === sl.job) as BoardMsg & { live?: boolean };
+    const kl = evL.filter((e) => e.job === sl.job).map((e) => `${e.lane}:${e.kind}`);
+    const promptL = (JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${sl.date}.${sl.job}.run.json`), 'utf8')) as { prompt: string }).prompt;
+    check('实时轮:消息记 live、板书照常(卡与句都在)、讲稿不配音(句没有 mp3、没有 tts 事件)', ml.live === true && (ml.section?.cards.length ?? 0) > 0 && (ml.section?.lines.length ?? 0) > 0 && ml.section!.lines.every((l) => !l.audio) && !kl.some((k) => k.startsWith('tts:')) && !existsSync(join(root, 'conversations', 'math-tutor', `${sl.date}.${sl.job}.1.mp3`)), JSON.stringify({ lines: ml.section?.lines.map((l) => l.audio), kl }));
+    check('实时轮:拍关就就绪,ready:beat 在 exit 之前(不等配音)', kl.includes('ready:beat') && kl.indexOf('ready:beat') < kl.indexOf('main:exit'), kl.join(' '));
+    check('实时轮:上下文包带 live:(嘴接住时说的、上一轮念到第几句被打断)', promptL.includes('  live:\n    caught: "你问的这个,我写给你看。"\n    cut: 2\n'), promptL.slice(0, 600));
+  }
   // ---- 板上只有老师自己写的:没有后期这道工序,卡没写样子就没有 look,标注是老师的 [词](没 pen) ----
   type PostMsg = { result: string; device?: string; section?: { layout?: { for: string; rows: number[][] }; cards: { look?: { tint?: string; emoji?: string } }[]; lines: { marks: { phrase: string; pen?: string }[] }[] } };
   const mP = mS as unknown as PostMsg;

@@ -91,6 +91,8 @@ export interface SendInput {
   via?: MessageVia;
   /** 按钮的字与家长备好的讲法(服务端从发布件查的),进上下文包 home: 段 */
   home?: { button: string; brief?: string };
+  /** 这一轮走实时(《wip/实时老师设想.md》):讲稿不配音(拍关就就绪)、交给嘴照念;消息记 live,上下文包带 live:(嘴接住时说的、上一轮念到第几句被打断) */
+  live?: { caught?: string; cut?: number };
   /** 接着以前哪天的哪个话题:这条开新话题时上下文包带那个话题的尾巴(continue: 段),消息记 continues;pack 给了就不现读(回放从原 workspace 读好的) */
   continues?: { date: string; thread: string; pack?: NonNullable<ContextPack['continue']> };
 }
@@ -112,6 +114,8 @@ interface Active {
   done: Promise<ConversationIndex>;
   /** 还在说的时候已经解析出来的板书(卡只增不改;讲稿句已按 replyMaxChars 截) */
   partial: BoardSection | null;
+  /** 这一轮走实时:讲稿不配音 */
+  live?: boolean;
 }
 
 /**
@@ -587,6 +591,7 @@ export class Runner {
     const lectureWarn = input.lecture && !lecture ? [`小课堂:${input.lecture.bundle} 读不出来(bundles/ 与 lectures/ 下都没有能放的),老师没拿到课的内容`] : [];
     const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
     if (continued) pack.continue = continued;
+    if (input.live) pack.live = { ...(input.live.caught ? { caught: input.live.caught } : {}), ...(input.live.cut ? { cut: input.live.cut } : {}) };
     const prompt = buildContextPack(pack, text, policy.contextPack);
     const plan = planRun(ws.config, { session }, { agent, prompt, agentBody, systemBody, boardFile, agentsFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
 
@@ -596,7 +601,7 @@ export class Runner {
       const file = conversationFiles(ws.dirs.conversations, tutor, date).voice(job, input.voice.ext);
       if (await mkdir(join(ws.dirs.conversations, tutor), { recursive: true }).then(() => writeFile(file, input.voice!.data)).then(() => true, () => false)) voice = { audio: basename(file), seconds: Math.round(input.voice.seconds * 10) / 10 };
     }
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.listened ? { listened: input.listened } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(noteWarnings.length || lectureWarn.length || activityWarn.length ? { warnings: [...noteWarnings, ...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.listened ? { listened: input.listened } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(noteWarnings.length || lectureWarn.length || activityWarn.length ? { warnings: [...noteWarnings, ...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
     // 这个 CLI 在 workspace 里要的机器文件(qwen 的隔离家目录):备不好这轮照起,起不来的原因会在 err.log
@@ -605,6 +610,7 @@ export class Runner {
     // 预热的进程:resume 的接那个位置(对得上 = 这个话题从它起来之后没人写过),新开的接 fresh;对不上(或这轮不走 stdin)就杀掉
     const spare = this.spares.claim(tutor, plan.resume ? 'resume' : 'fresh', { argv: plan.argv, env: plan.env, cwd: join(ws.dirs.agents, tutor), date, lastJob: plan.resume ? lastJobOf(index, thread) : null });
     active.job = job;
+    if (input.live) active.live = true;
     // 断流后接着跑:同一运行时 resume 这个会话,消息换成 stallPrompt
     const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent, prompt: stallPrompt(open), agentBody, systemBody, boardFile, agentsFile, runtime: plan.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
     active.done = this.spawn(ws, tutor, date, job, plan, policy, active, resumePlan, spare).finally(() => {
@@ -731,7 +737,8 @@ export class Runner {
       }
     };
     emit({ lane: 'main', kind: 'start', cli: plan.argv[0].slice(plan.argv[0].lastIndexOf('/') + 1), runtime: plan.runtime, resume: plan.resume, ...(spare ? { warmMs: t0 - spare.bornAt } : {}) });
-    const voice = ws.config.tutors[tutor]?.voice;
+    // 实时轮的讲稿由嘴照念,不配音:当没配音色走,拍关就就绪
+    const voice = active.live ? undefined : ws.config.tutors[tutor]?.voice;
     const queue = voice ? new DubQueue(ws.config.tts, voice, files.err(job), this.opts.env) : null;
     if (queue) queue.report = (e) => emit(e.kind === 'queued' ? { lane: 'tts', kind: 'queued', label: e.label } : e.kind === 'done' ? { lane: 'tts', kind: 'done', label: e.label, ms: e.ms, file: e.file ?? '' } : { lane: 'tts', kind: 'failed', label: e.label, ms: e.ms, error: e.error ?? '?' });
     const dubber = queue ? new LineDubber(queue, (n) => files.lineAudio(job, n)) : null;

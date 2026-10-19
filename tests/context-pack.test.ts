@@ -49,4 +49,7 @@ const withGuide = buildContextPack({ at: '2026-09-19T10:00', plan: [], recent: [
 check('boardGuide:紧跟 rules 一行;原文用 <cotutor-board path=…>(出厂件,不带 role),排在守则后面', withGuide.includes('  rules: r.md\n  boardGuide: ".claude/skills/cotutor-board/SKILL.md"\n') && withGuide.includes('<cotutor-board path=".claude/skills/cotutor-board/SKILL.md">\n# 板书怎么写\n</cotutor-board>') && withGuide.indexOf('<cotutor-rules') < withGuide.indexOf('<cotutor-board'), withGuide);
 const withFiles = buildContextPack({ at: '2026-09-14T16:20', plan: [], recent: [], photos: ['captures/2026-09-14/1620-1.jpg'], photoFiles: ['/ws/captures/2026-09-14/1620-1.jpg'] }, '(拍了一张)', { recent: 10, planLines: 10 });
 check('photoFiles 段:紧跟 photos,同一张的绝对路径;没有就不写', withFiles.endsWith('  photos:\n    - "captures/2026-09-14/1620-1.jpg"\n  photoFiles:\n    - "/ws/captures/2026-09-14/1620-1.jpg"\n---\n(拍了一张)\n') && !withPhotos.includes('photoFiles'), withFiles);
+const withLive = renderContextPack({ at: '2026-10-19T16:00', plan: [], recent: [], live: { caught: '三明治怎么写,我写给你看。', cut: 3 } });
+check('live 段:嘴接住时说的那句、上一轮念到第几句被打断', withLive.endsWith('  live:\n    caught: "三明治怎么写,我写给你看。"\n    cut: 3'), withLive);
+check('live 段:两样都没有就只写 live: true;没有 live 不写', renderContextPack({ at: '2026-10-19T16:00', plan: [], recent: [], live: {} }).endsWith('  live: true') && !minimal.includes('live'));
 done();

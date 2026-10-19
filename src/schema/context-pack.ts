@@ -71,6 +71,8 @@ export const ContextPackSchema = z.object({
       index: z.string().min(1),
     })
     .optional(),
+  /** 这一轮走实时(《wip/实时老师设想.md》):嘴(realtime 模型)已经替老师接住了孩子,讲稿交给嘴照念、不配音。caught = 嘴接住时说的那句;cut = 上一轮的讲稿念到第几句被孩子打断(1 起,没打断不写) */
+  live: z.object({ caught: z.string().optional(), cut: z.number().int().positive().optional() }).optional(),
   /**
    * 孩子从首页的 activity 进来的话题(《wip/activity设计.md》):哪个 activity、家长填的参数(点的那一刻,补了缺省)、应用算的值。
    * 话题里每条都带;放在 YAML 块最后,键序固定(name、params、state;参数照文件「家长填的」的顺序)

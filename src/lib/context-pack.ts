@@ -72,6 +72,14 @@ export function renderContextPack(pack: ContextPack): string {
     }
     out.push(`    index: ${yamlScalar(c.index)}`);
   }
+  if (p.live) {
+    if (!p.live.caught && !p.live.cut) out.push('  live: true');
+    else {
+      out.push('  live:');
+      if (p.live.caught) out.push(`    caught: ${yamlScalar(p.live.caught)}`);
+      if (p.live.cut) out.push(`    cut: ${p.live.cut}`);
+    }
+  }
   if (p.cards?.length) {
     out.push('  cards:');
     for (const c of p.cards) out.push(`    - ${yamlScalar(c)}`);

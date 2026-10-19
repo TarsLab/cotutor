@@ -81,7 +81,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   for (let i = 0; i < 4; i++) k.ws.send(loud());
   k.ws.send(JSON.stringify({ t: 'release', body: { newThread: true } }));
   const okCatch = await until(() => c.responses.length >= 1 && has(k, (m) => m.t === 'kid'));
-  check('松手:推了按着时的声音、commit、嘴接住(接住的指令,不答内容)、孩子那句的转写到孩子端', okCatch && c.audio === 4 * 3200 && c.commits === 1 && c.responses[0]?.instructions === catchCue('voice') && has(k, (m) => m.t === 'kid' && m.text === '老师板书怎么写'), JSON.stringify({ audio: c.audio, commits: c.commits, r: c.responses[0] }));
+  check('松手:推了按着时的声音、commit、嘴马上接住(接住的指令,不答内容)、孩子那句的转写到孩子端', okCatch && c.audio === 4 * 3200 && c.commits === 1 && c.responses[0]?.instructions === catchCue('voice') && has(k, (m) => m.t === 'kid' && m.text === '老师板书怎么写'), JSON.stringify({ audio: c.audio, commits: c.commits, r: c.responses[0] }));
   const okTurn = await until(() => has(k, (m) => m.t === 'turn'));
   const turn = k.msgs.find((m) => m.t === 'turn')!;
   const okRun = await until(() => ctx.runner.running('chinese-tutor') === null && c.responses.length >= 3, 15000);
@@ -125,6 +125,17 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   check('打断:嘴的声音还在放时按下 → 孩子端清播放队列;那一轮没念的拍不再念', okRead2 && okFlush && reads2 === 1 && !k.msgs.slice(n1).some((m) => m.t === 'read' && m.job === turn2.job), JSON.stringify({ reads2, read2 }));
   check('下一轮:同一话题接着(不开新话题)、上下文包带 cut(孩子听到第几句,1 起)', turn3.thread === turn.job && prompt3.includes(`    cut: ${read2.lines[0] + 1}\n`), prompt3.slice(0, 500));
 
+  // ---- 卡上的「?」:一轮普通的(嘴接住说讲给你听,脑拿到 focus 那张卡) ----
+  const na = k.msgs.length;
+  const ra = c.responses.length;
+  k.ws.send(JSON.stringify({ t: 'send', body: { text: '我想问这张卡', focus: { card: `${turn.job}/0` }, ask: true } }));
+  const okAsk = await until(() => k.msgs.slice(na).some((m) => m.t === 'turn'), 10000);
+  const turnA = k.msgs.slice(na).find((m) => m.t === 'turn')!;
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  const promptA = (JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${today}.${turnA.job}.run.json`), 'utf8')) as { prompt: string }).prompt;
+  check('卡上的「?」:嘴接住用问卡的那句、脑这一轮的上下文包带 focus 那张卡、消息正文是孩子端给的', okAsk && c.responses[ra]?.instructions === catchCue('ask') && promptA.includes(`  focus:\n    card: "${turn.job}/0"`) && promptA.trimEnd().endsWith('我想问这张卡'), promptA.slice(0, 300));
+  await sleep(800);
+
   // ---- 按了没说清(转写空的):嘴只说没听清,不交给脑 ----
   fake.kidText = '';
   const n2 = k.msgs.length;
@@ -132,9 +143,9 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   k.ws.send(JSON.stringify({ t: 'hold' }));
   k.ws.send(loud());
   k.ws.send(JSON.stringify({ t: 'release', body: {} }));
-  const okEmpty = await until(() => c.responses.length === r2 + 1);
+  const okEmpty = await until(() => c.responses.length === r2 + 2);
   await sleep(600);
-  check('转写空的:嘴只说没听清(empty 的指令),不交给脑(没有 turn)', okEmpty && c.responses[r2]?.instructions === catchCue('empty') && !k.msgs.slice(n2).some((m) => m.t === 'turn') && c.responses.length === r2 + 1, JSON.stringify(c.responses.slice(r2)));
+  check('转写空的:嘴先照常接住(松手就接,不等转写),转写回来是空的再改说没听清;不交给脑(没有 turn)', okEmpty && c.responses[r2]?.instructions === catchCue('voice') && c.responses[r2 + 1]?.instructions === catchCue('empty') && !k.msgs.slice(n2).some((m) => m.t === 'turn') && c.responses.length === r2 + 2, JSON.stringify(c.responses.slice(r2)));
 
   // ---- 挂断:落录像 ----
   k.ws.send(JSON.stringify({ t: 'bye' }));

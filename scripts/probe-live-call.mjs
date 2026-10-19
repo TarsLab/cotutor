@@ -81,7 +81,9 @@ for (const [date, job] of says) {
   const sec = JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${today}.json`), 'utf8')).messages.find((x) => x.job === turn?.job)?.section;
   const lines = (sec?.lines ?? []).map((l) => l.text);
   await until(() => msgs.slice(n0).filter((x) => x.t === 'read').flatMap((x) => x.lines).length >= lines.length, 60000);
-  await sleep(4000);
+  // 等这一轮的声音在孩子端放完再按下一轮(2026-10-19 第一版只等 4 秒,把最后一段掐了):不再来声音了,按收到的字节算放到哪
+  await until(() => audio.length > a0 && T() - audio[audio.length - 1].at > 1000, 60000);
+  { const got = audio.slice(a0); const playEnd = got[0].at + got.reduce((n, x) => n + x.pcm.length, 0) / 48; while (T() < playEnd + 500) await sleep(100); }
   const mine = msgs.slice(n0);
   const pcmOut = Buffer.concat(audio.slice(a0).map((x) => x.pcm));
   const wav = `turn-${job}.wav`;
@@ -89,13 +91,15 @@ for (const [date, job] of says) {
   const firstAudio = audio.slice(a0).find((x) => x.at >= 0)?.at ?? null;
   const reads = mine.filter((x) => x.t === 'read');
   const firstRead = reads[0]?.at ?? null;
+  const totalMs = Math.round(pcmOut.length / 48);
   const dones = mine.filter((x) => x.t === 'tutor' && typeof x.done === 'string').map((x) => x.done);
   const kid = mine.find((x) => x.t === 'kid')?.text;
   report.push(`## Ray ${date} ${job}(当时认的「${m.text}」)`, '',
     `- realtime 认的:${kid}`,
     `- 嘴接住:「${dones[0] ?? ''}」,松手到首包 ${firstAudio} ms`,
     `- 脑:${turn?.job},讲稿 ${lines.length} 句、${sec?.cards?.length ?? 0} 张卡(${(sec?.cards ?? []).map((c) => c.kind).join('、')})`,
-    `- 松手到第一拍开念 ${firstRead} ms;念了 ${reads.length} 拍`,
+    `- 松手到第一段开始放 ${firstRead} ms(孩子端放到那一刻发 {t:read});念了 ${reads.length} 次`,
+    `- 嘴的声音一共 ${(totalMs / 1000).toFixed(1)} 秒;松手到放完约 ${((audio.slice(a0)[0]?.at ?? 0) / 1000 + totalMs / 1000).toFixed(1)} 秒(声音接着排、中间不空时)`,
     `- 嘴念的:${dones.slice(1).join('')}`,
     `- 讲稿:${lines.join('')}`,
     `- 对得上:${dones.slice(1).join('').replace(/[\s,，。!！?？、;；:：「」“”"']/g, '') === lines.join('').replace(/[\s,，。!！?？、;；:：「」“”"']/g, '') ? '一字不差' : '有出入'}`,

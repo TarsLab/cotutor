@@ -1,7 +1,8 @@
 /**
- * 照念的排队(《wip/实时老师开发计划.md》P2.4):脑一拍一拍写完的讲稿,等嘴有空再交给它念。纯函数,时间都是通话的毫秒。
- * 嘴有空 = 孩子没按着、嘴没在出回答、上一段声音估计已经放完,再静 GAP_MS(Qwen-Live-Harness injector 的窗口)。
- * 孩子按下 = 打断:没念完的拍都丢,那一轮(job)后面再来的拍也丢;报一句孩子听到哪(cut,讲稿第几句,1 起),下一轮进上下文包 live:。
+ * 照念的排队(《wip/实时老师开发计划.md》P2.4):脑写完的讲稿一拍一拍进来,嘴一空就交给它。纯函数。
+ * 2026-10-19 改成流水线:原来等上一段声音放完再交,段与段之间静 1.3 秒;嘴出字比念快得多(一段字 1.9 秒出完、声音要放 11.6 秒),
+ * 现在嘴出完上一段就交下一段,声音在孩子端接着排,中间不空。排着的几拍一次交(同一轮的并成一段念)。
+ * 孩子按下 = 打断:排着的都丢,那一轮后面再来的拍也丢;孩子听到哪由调用方按声音排到哪算(lib/playback.ts)。
  */
 
 /** 一拍的讲稿:哪一轮、讲稿第几句(0 起)、句子 */
@@ -9,64 +10,48 @@ export interface Beat { job: string; lines: number[]; texts: string[] }
 
 export interface QueueState {
   pending: Beat[];
-  /** 交给嘴、嘴还在出的那一拍 */
-  reading: Beat | null;
-  /** 这一轮最后交给嘴的那一拍(嘴出完了声音可能还在放);孩子松手开新一轮时清掉 */
-  last: Beat | null;
+  /** 嘴有一次回答要了还没出完(接住或照念) */
+  busy: boolean;
   holding: boolean;
-  responding: boolean;
-  /** 嘴的声音估计放到哪一刻 */
-  playedAt: number;
   /** 最近交进来的那一轮;打断时它后面再来的拍都丢 */
   lastJob: string | null;
   dropJob: string | null;
 }
 
 export type QueueEvent =
-  | { e: 'beat'; t: number; beat: Beat }
+  | { e: 'beat'; beat: Beat }
   /** drop = 这一刻正在答的那一轮(调用方知道,它的拍可能还没来):打断后它的拍都丢 */
-  | { e: 'hold'; t: number; drop?: string | null }
-  | { e: 'release'; t: number }
-  | { e: 'created'; t: number }
-  | { e: 'done'; t: number; playedAt: number }
-  | { e: 'tick'; t: number };
+  | { e: 'hold'; drop?: string | null }
+  | { e: 'release' }
+  /** 调用方让嘴说了一句别的(接住):嘴出完之前不交讲稿 */
+  | { e: 'asked' }
+  | { e: 'done' };
 
-/** read = 把这一拍交给嘴;cut = 孩子打断了:嘴在说就掐、孩子端清播放队列,line 是孩子听到的讲稿第几句(没在念讲稿就是 null) */
-export type QueueAction = { kind: 'read'; beat: Beat } | { kind: 'cut'; line: number | null; speaking: boolean } | null;
+/** read = 把这几句交给嘴;dropped = 按下时还排着没交的(调用方算孩子听到哪) */
+export type QueueAction = { kind: 'read'; beat: Beat } | { kind: 'dropped'; beats: Beat[] } | null;
 
-/** 放完再静多久才交下一拍 */
-export const GAP_MS = 300;
+export const queueInit = (): QueueState => ({ pending: [], busy: false, holding: false, lastJob: null, dropJob: null });
 
-export const queueInit = (): QueueState => ({ pending: [], reading: null, last: null, holding: false, responding: false, playedAt: 0, lastJob: null, dropJob: null });
-
-function drain(s: QueueState, t: number): { s: QueueState; act: QueueAction } {
-  if (s.holding || s.responding || s.reading || !s.pending.length || t < s.playedAt + GAP_MS) return { s, act: null };
-  const [beat, ...rest] = s.pending;
-  return { s: { ...s, pending: rest, reading: beat, last: beat }, act: { kind: 'read', beat } };
+function drain(s: QueueState): { s: QueueState; act: QueueAction } {
+  if (s.holding || s.busy || !s.pending.length) return { s, act: null };
+  const job = s.pending[0].job;
+  const take = s.pending.filter((b) => b.job === job);
+  const beat: Beat = { job, lines: take.flatMap((b) => b.lines), texts: take.flatMap((b) => b.texts) };
+  return { s: { ...s, pending: s.pending.filter((b) => b.job !== job), busy: true }, act: { kind: 'read', beat } };
 }
 
 export function queueStep(s: QueueState, ev: QueueEvent): { s: QueueState; act: QueueAction } {
   switch (ev.e) {
     case 'beat':
       if (ev.beat.job === s.dropJob || !ev.beat.texts.some((x) => x.trim())) return { s, act: null };
-      return drain({ ...s, pending: [...s.pending, ev.beat], lastJob: ev.beat.job }, ev.t);
-    case 'hold': {
-      const playing = s.responding || ev.t < s.playedAt;
-      // 孩子听到哪:声音还在出 / 在放,就是正在念的那拍的第一句(接住孩子的那句在放时不算讲稿,null);
-      // 没在出声、还有排着的,就是排着的第一句(一句没听到)
-      const at = playing ? (s.reading ?? s.last) : (s.pending[0] ?? null);
-      const line = at ? at.lines[0] + 1 : null;
-      const busy = playing || s.reading !== null || s.pending.length > 0;
-      const next: QueueState = { ...s, holding: true, pending: [], reading: null, dropJob: ev.drop ?? (busy ? s.lastJob : s.dropJob), playedAt: Math.min(s.playedAt, ev.t) };
-      return { s: next, act: busy ? { kind: 'cut', line, speaking: playing } : null };
-    }
+      return drain({ ...s, pending: [...s.pending, ev.beat], lastJob: ev.beat.job });
+    case 'hold':
+      return { s: { ...s, holding: true, pending: [], dropJob: ev.drop ?? s.lastJob }, act: s.pending.length ? { kind: 'dropped', beats: s.pending } : null };
     case 'release':
-      return { s: { ...s, holding: false, last: null }, act: null };
-    case 'created':
-      return { s: { ...s, responding: true }, act: null };
+      return drain({ ...s, holding: false });
+    case 'asked':
+      return { s: { ...s, busy: true }, act: null };
     case 'done':
-      return drain({ ...s, responding: false, reading: null, playedAt: Math.max(s.playedAt, ev.playedAt) }, ev.t);
-    case 'tick':
-      return drain(s, ev.t);
+      return drain({ ...s, busy: false });
   }
 }

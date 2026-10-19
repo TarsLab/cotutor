@@ -408,15 +408,19 @@ try {
   check('跑完:正式一节(不带 partial)、2 张卡 3 句、每句 mp3(流式时已在路上)、子代理的增量没混进来', mS.section?.cards.length === 2 && !('partial' in mS.section) && mS.section.lines.length === 3 && mS.section.lines.every((l, i) => l.audio === `2026-09-09.${jobS2}.${i + 1}.mp3`) && !mS.kidText?.includes('子代理') && mS.kidText?.includes('第一次说:流式 板书') === true, JSON.stringify(mS));
   // ---- 实时轮(《wip/实时老师开发计划.md》P2.3):讲稿不配音、拍关就就绪;消息记 live;上下文包带 live: ----
   {
-    const evL: { job: string; lane: string; kind: string }[] = [];
-    const offL = ctx.runner.onEvent((e) => evL.push({ job: e.job, lane: e.event.lane, kind: e.event.kind }));
-    const sl = await ctx.runner.send('math-tutor', { from: 'kid', text: '流式 板书 实时', runtime: 'stream', live: { caught: '你问的这个,我写给你看。', cut: 2 } });
+    const evL: { job: string; lane: string; kind: string; label: string }[] = [];
+    const offL = ctx.runner.onEvent((e) => evL.push({ job: e.job, lane: e.event.lane, kind: e.event.kind, label: 'label' in e.event ? String(e.event.label) : '' }));
+    const sl = await ctx.runner.send('math-tutor', { from: 'kid', text: '流式 板书 点读 实时', runtime: 'stream', live: { caught: '你问的这个,我写给你看。', cut: 2 } });
     await sl.done;
+    await ctx.runner.flush();
     offL();
     const ml = ((await day('math-tutor', sl.date)).json as Day).index.messages.find((m) => m.job === sl.job) as unknown as BoardMsg & { live?: boolean };
     const kl = evL.filter((e) => e.job === sl.job).map((e) => `${e.lane}:${e.kind}`);
     const promptL = (JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${sl.date}.${sl.job}.run.json`), 'utf8')) as { prompt: string }).prompt;
-    check('实时轮:消息记 live、板书照常(卡与句都在)、讲稿不配音(句没有 mp3、没有 tts 事件)', ml.live === true && (ml.section?.cards.length ?? 0) > 0 && (ml.section?.lines.length ?? 0) > 0 && ml.section!.lines.every((l) => !l.audio) && !kl.some((k) => k.startsWith('tts:')) && !existsSync(join(root, 'conversations', 'math-tutor', `${sl.date}.${sl.job}.1.mp3`)), JSON.stringify({ lines: ml.section?.lines.map((l) => l.audio), kl }));
+    const ttsL = evL.filter((e) => e.job === sl.job && e.lane === 'tts');
+    check('实时轮:消息记 live、板书照常(卡与句都在)、讲稿不配音(句没有 mp3、tts 只有卡的)', ml.live === true && (ml.section?.cards.length ?? 0) > 0 && (ml.section?.lines.length ?? 0) > 0 && ml.section!.lines.every((l) => !l.audio) && ttsL.every((e) => e.label.startsWith('第 ')) && !existsSync(join(root, 'conversations', 'math-tutor', `${sl.date}.${sl.job}.1.mp3`)), JSON.stringify({ lines: ml.section?.lines.map((l) => l.audio), tts: ttsL.map((e) => e.label) }));
+    const readAt = ml.section?.cards.findIndex((c) => c.kind === 'read') ?? -1;
+    check('实时轮:点读卡的声音照配(卡自己的声音,设想稿拍板 6)', readAt >= 0 && existsSync(join(root, 'conversations', 'math-tutor', `${sl.date}.${sl.job}.cards`, String(readAt), '1.mp3')), JSON.stringify({ readAt, tts: ttsL.map((e) => e.label) }));
     check('实时轮:拍关就就绪,ready:beat 在 exit 之前(不等配音)', kl.includes('ready:beat') && kl.indexOf('ready:beat') < kl.indexOf('main:exit'), kl.join(' '));
     check('实时轮:上下文包带 live:(嘴接住时说的、上一轮念到第几句被打断)', promptL.includes('  live:\n    caught: "你问的这个,我写给你看。"\n    cut: 2\n'), promptL.slice(0, 600));
   }

@@ -738,10 +738,12 @@ export class Runner {
     };
     emit({ lane: 'main', kind: 'start', cli: plan.argv[0].slice(plan.argv[0].lastIndexOf('/') + 1), runtime: plan.runtime, resume: plan.resume, ...(spare ? { warmMs: t0 - spare.bornAt } : {}) });
     // 实时轮的讲稿由嘴照念,不配音:当没配音色走,拍关就就绪
-    const voice = active.live ? undefined : ws.config.tutors[tutor]?.voice;
-    const queue = voice ? new DubQueue(ws.config.tts, voice, files.err(job), this.opts.env) : null;
+    // 实时轮讲稿不配音(嘴照念);卡自己的声音(点读段、单词、录音卡的示范,《wip/实时老师设想.md》拍板 6)照配
+    const cardVoice = ws.config.tutors[tutor]?.voice;
+    const voice = active.live ? undefined : cardVoice;
+    const queue = cardVoice ? new DubQueue(ws.config.tts, cardVoice, files.err(job), this.opts.env) : null;
     if (queue) queue.report = (e) => emit(e.kind === 'queued' ? { lane: 'tts', kind: 'queued', label: e.label } : e.kind === 'done' ? { lane: 'tts', kind: 'done', label: e.label, ms: e.ms, file: e.file ?? '' } : { lane: 'tts', kind: 'failed', label: e.label, ms: e.ms, error: e.error ?? '?' });
-    const dubber = queue ? new LineDubber(queue, (n) => files.lineAudio(job, n)) : null;
+    const dubber = queue && voice ? new LineDubber(queue, (n) => files.lineAudio(job, n)) : null;
     // 读输出:按这轮 CLI 的适配器把每行读成统一事件(src/clis/),一行只解析一次,同一批事件给流式拼正文、工具、会话 id 用。
     // 工具调用发一条事件(子代理的标 sub);顺手记哪些顶层工具还没回结果:工具在跑时进程不吐字是正常的,断流看门狗不算这段
     const parse = parserOf(plan.cli);

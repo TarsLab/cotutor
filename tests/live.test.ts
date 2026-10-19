@@ -36,13 +36,13 @@ function masked(opcode: number, payload: Buffer, fin = true): Buffer {
 }
 
 // ---- 假百炼:一个 http 服务,升级后照 realtime 的样子回事件 ----
-type Seen = { session?: Record<string, unknown>; updates: unknown[]; audio: number; images: string[]; items: unknown[]; commits: number; creates: number; cancels: number };
+type Seen = { session?: Record<string, unknown>; updates: unknown[]; audio: number; images: string[]; items: unknown[]; commits: number; creates: number; cancels: number; responses: unknown[] };
 const conns: { sock: ServerSocket; seen: Seen }[] = [];
 let mode: 'ok' | 'error-on-update' | 'close-after-created' = 'ok';
 const server = createServer((_req, res) => { res.writeHead(404); res.end(); });
 server.on('upgrade', (req, socket, head) => {
   if (!isUpgrade(req)) { socket.destroy(); return; }
-  const seen: Seen = { updates: [], audio: 0, images: [], items: [], commits: 0, creates: 0, cancels: 0 };
+  const seen: Seen = { updates: [], audio: 0, images: [], items: [], commits: 0, creates: 0, cancels: 0, responses: [] };
   let active = 0;
   const sock = acceptWebSocket(req, socket, head, {
     onText: (text) => {
@@ -63,6 +63,7 @@ server.on('upgrade', (req, socket, head) => {
       else if (m.type === 'response.cancel') { seen.cancels++; if (active) { active--; send({ type: 'response.done', response: { status: 'cancelled' } }); } else send({ type: 'error', error: { message: 'no active response' } }); }
       else if (m.type === 'response.create') {
         seen.creates++;
+        seen.responses.push(m.response ?? null);
         active++;
         send({ type: 'response.created' });
         const long = seen.items.some((it: any) => String(it?.content?.[0]?.text ?? '').includes('LONG'));
@@ -139,6 +140,10 @@ const endpoint = `ws://127.0.0.1:${port}/api-ws/v1/realtime?model=test`;
   const item = c.seen.items[0] as Record<string, any>;
   check('addText 的形状:user 消息,input_text', item?.type === 'message' && item.role === 'user' && item.content?.[0]?.type === 'input_text' && item.content[0].text.startsWith('读这句'), JSON.stringify(item));
   check('没有回答在出时 cancel 不发', !s.cancel() && c.seen.cancels === 0 && !s.responding);
+  s.createResponse('原样说:你好。');
+  await until(() => c.seen.responses.length === 2);
+  check('createResponse 带指令:放在 response.instructions(不进对话);不带就没有 response', c.seen.responses[0] === null && (c.seen.responses[1] as any)?.instructions === '原样说:你好。', JSON.stringify(c.seen.responses));
+  await until(() => !s.responding);
   s.addText('LONG');
   s.createResponse();
   await until(() => s.responding);

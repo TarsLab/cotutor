@@ -233,7 +233,8 @@ export class RealtimeSession {
   /** 手动轮次:松手 */
   commit(): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.commit' }); }
   clearAudio(): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.clear' }); }
-  createResponse(): boolean { return this.isReady && this.sendRaw({ type: 'response.create' }); }
+  /** 让老师说;instructions = 只管这一次回答的指令(response.instructions,不进对话历史、不改系统提示) */
+  createResponse(instructions?: string): boolean { return this.isReady && this.sendRaw({ type: 'response.create', ...(instructions ? { response: { instructions } } : {}) }); }
   /** 老师正在说就掐掉(没在说不发,服务端会报错) */
   cancel(): boolean { return this.isReady && this.active > 0 && this.sendRaw({ type: 'response.cancel' }); }
   /** 应用塞一条文字进对话(口语课跟读段「现在读这句」、切段的指令);role 缺省 user */

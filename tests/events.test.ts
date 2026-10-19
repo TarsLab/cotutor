@@ -27,4 +27,12 @@ const sp = timelineSpans(run);
 const of = (lane: string) => sp.filter((x) => x.lane === lane);
 check('时间线的段:老师 0→1500;配音两段(一段 fail);瞬时的 to = from;按起点排序', of('main')[0].from === 0 && of('main')[0].to === 1500 && of('tts').length === 2 && of('tts')[1].state === 'fail' && of('ready').every((x) => x.from === x.to) && sp.every((x, i) => i === 0 || x.from >= sp[i - 1].from), JSON.stringify(sp.map((x) => [x.lane, x.from, x.to, x.state])));
 check('没收尾的段画到最后一条事件并标 warn', timelineSpans(run.slice(0, 4)).some((x) => x.lane === 'tts' && x.state === 'warn' && x.label.includes('没收尾')));
+{
+  // 嘴这一道(实时老师,src/live/call.ts 事后补进来):t 负的排在老师进程起来之前;一句话写清
+  const text = [{ t: 0, lane: 'main', kind: 'start', cli: 'qwen', runtime: 'qwen', resume: false }, { t: 3000, lane: 'mouth', kind: 'read', line: 0 }, { t: -1200, lane: 'mouth', kind: 'hold' }, { t: -400, lane: 'mouth', kind: 'release', how: 'voice' }, { t: 200, lane: 'mouth', kind: 'catch', text: '你问三明治' }, { t: 5000, lane: 'mouth', kind: 'cut', line: 1 }].map((e) => JSON.stringify(e)).join('\n');
+  const evs = parseEvents(text);
+  check('嘴这一道:读进来按 t 排(事后补的负 t 排在最前)', evs.map((e) => e.t).join() === '-1200,-400,0,200,3000,5000', evs.map((e) => e.t).join());
+  check('嘴这一道:一句话', evs.map(describeEvent).filter((_x, i) => evs[i].lane === 'mouth').join(' / ') === '孩子按下 / 松手 / 嘴接住「你问三明治」(开始放) / 嘴念第 1 句(开始放) / 孩子按下,打断(念到第 2 句)', evs.map(describeEvent).join(' / '));
+}
+
 done();

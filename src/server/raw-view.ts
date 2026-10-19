@@ -83,7 +83,8 @@ export interface RawView {
   tools: (ToolCall & { kind: ToolKind })[];
   /** 时间线:这轮的事件(<日期>.<job>.events.jsonl;2026-09-13 之前的轮次没有 → 空)+ 甘特的段 + 控制台那种一行一条 */
   events: RunEvent[];
-  timeline: { spans: TimelineSpan[]; lines: string[]; total: number };
+  /** from = 最早一条的 t(嘴这一道在老师进程起来之前,负的;没有就是 0);total = 最晚一条 */
+  timeline: { spans: TimelineSpan[]; lines: string[]; total: number; from: number };
   device: string | null;
   /** stderr 尾巴 */
   err: string;
@@ -174,9 +175,14 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
   const events = parseEvents(await readFile(files.events(job), 'utf8').catch(() => ''));
   const warnCount = ann.warnings.length + (m.warnings?.length ?? 0);
   const dubbed = lines.filter((l) => l.audioOk).length;
+  // 实时的轮:松手(或发出)到嘴接住开始放、到第一句开始放(嘴这一道的事件)
+  const rel = events.find((e) => e.lane === 'mouth' && e.kind === 'release');
+  const caughtEv = events.find((e) => e.lane === 'mouth' && e.kind === 'catch');
+  const read0 = events.find((e) => e.lane === 'mouth' && e.kind === 'read');
+  const mouthNote = rel ? `${caughtEv ? ` · 松手到接住 ${secs(caughtEv.t - rel.t)}` : ''}${read0 ? ` · 松手到第一句 ${secs(read0.t - rel.t)}` : ''}` : '';
   const stations: RawStation[] = [
     { id: 'pack', title: '上下文包', note: pack ? `${pack.prompt.length} 字 · ${pack.resume ? 'resume' : '新开'}` : '这一轮没落(老 workspace)', state: pack ? 'ok' : 'none' },
-    { id: 'timeline', title: '时间线', note: events.length ? `${events.length} 条事件${m.timing?.firstReadyMs !== undefined ? ` · 首句就绪 ${secs(m.timing.firstReadyMs)}` : ''}${m.timing?.doneMs !== undefined ? ` · 老师写完 ${secs(m.timing.doneMs)}` : ''}${m.timing?.dubbedMs !== undefined ? ` · 配音齐 ${secs(m.timing.dubbedMs)}` : ''}` : '这轮没有事件(2026-09-13 之前的轮次)', state: events.length ? (events.some((e) => (e.lane === 'tts' && e.kind === 'failed') || (e.lane === 'main' && e.kind === 'exit' && !e.ok)) ? 'warn' : 'ok') : 'none' },
+    { id: 'timeline', title: '时间线', note: events.length ? `${events.length} 条事件${mouthNote}${m.timing?.firstReadyMs !== undefined ? ` · 首句就绪 ${secs(m.timing.firstReadyMs)}` : ''}${m.timing?.doneMs !== undefined ? ` · 老师写完 ${secs(m.timing.doneMs)}` : ''}${m.timing?.dubbedMs !== undefined ? ` · 配音齐 ${secs(m.timing.dubbedMs)}` : ''}` : '这轮没有事件(2026-09-13 之前的轮次)', state: events.length ? (events.some((e) => (e.lane === 'tts' && e.kind === 'failed') || (e.lane === 'main' && e.kind === 'exit' && !e.ok)) ? 'warn' : 'ok') : 'none' },
     { id: 'source', title: '老师原文', note: `${src ? src.split('\n').length : 0} 行 · 顶层 ${blocks.length} 段${dropped.length ? ` · 丢 ${dropped.length} 段` : ''}`, state: src ? 'ok' : 'none' },
     { id: 'parse', title: '解析结果', note: `${ann.section.cards.length} 卡 · ${ann.section.lines.length} 句${warnCount ? ` · ${warnCount} 提醒` : ''}${same ? '' : ' · 与索引不同'}`, state: warnCount || !same ? 'warn' : 'ok' },
     { id: 'kid', title: '下发给孩子', note: `${lines.length} 句${lines.some((l) => l.cut) ? ` · 截了 ${lines.filter((l) => l.cut).length} 句` : ''} · ${cards.length} 卡`, state: lines.length || cards.length ? 'ok' : 'none' },
@@ -210,7 +216,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     tools,
     err: err.slice(-4000),
     events,
-    timeline: { spans: timelineSpans(events), lines: events.map(formatEvent), total: Math.max(1, ...events.map((e) => e.t)) },
+    timeline: { spans: timelineSpans(events), lines: events.map(formatEvent), total: Math.max(1, ...events.map((e) => e.t)), from: Math.min(0, ...events.map((e) => e.t)) },
     device: m.device ?? null,
     files: { log: `${date}.${job}.log`, run: pack ? `${date}.${job}.run.json` : null },
   };

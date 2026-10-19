@@ -1,12 +1,13 @@
 /**
  * 一轮运行的事件(《工作流程.md》§四):runner 在每道工序的关键点发一条,追加到 <日期>.<job>.events.jsonl,
  * 也给内存里的订阅者(cotutor send 现场打印、serve --trace、以后的时间线站)。三个消费者共用一份事件,不各自再算。
- * 道(lane):main 老师 / tts 配音 / ready 就绪 / index 索引 / ledger 账本(老事件里的 scene 道读的时候滤掉)。t = 从老师进程起算的毫秒。
+ * 道(lane):main 老师 / tts 配音 / ready 就绪 / index 索引 / ledger 账本 / mouth 实时老师的嘴(老事件里的 scene 道读的时候滤掉)。t = 从老师进程起算的毫秒;
+ * mouth 道是通话(src/live/call.ts)补进来的,孩子按下、松手、嘴接住都在老师进程起来之前,t 是负的。
  * 这里只有形状与格式化,纯函数;发事件的在 server/runner.ts。
  */
 
-export type Lane = 'main' | 'tts' | 'ready' | 'index' | 'ledger';
-export const LANES: readonly Lane[] = ['main', 'tts', 'ready', 'index', 'ledger'];
+export type Lane = 'main' | 'tts' | 'ready' | 'index' | 'ledger' | 'mouth';
+export const LANES: readonly Lane[] = ['main', 'tts', 'ready', 'index', 'ledger', 'mouth'];
 
 export type RunEvent = { t: number } & (
   /** warmMs:用的是提前起好的进程(预热),它等了多久 */
@@ -27,6 +28,13 @@ export type RunEvent = { t: number } & (
   | { lane: 'index'; kind: 'written'; warnings: number }
   /** 记账:话题的一段写进了 vault 的日记(file 是日记文件名) */
   | { lane: 'ledger'; kind: 'diary'; thread: string; file: string }
+  /** 实时老师的嘴(《wip/实时老师设想.md》):孩子按下 · 松手(voice)或发了不是说的(text / photo / card / ask)· 嘴接住的声音开始在孩子端放 ·
+   *  讲稿第几句开始放 · 孩子按下打断了这一轮(line = 正念到第几句,0 起;还没念到讲稿 = null) */
+  | { lane: 'mouth'; kind: 'hold' }
+  | { lane: 'mouth'; kind: 'release'; how: 'voice' | 'text' | 'photo' | 'card' | 'ask' }
+  | { lane: 'mouth'; kind: 'catch'; text: string }
+  | { lane: 'mouth'; kind: 'read'; line: number }
+  | { lane: 'mouth'; kind: 'cut'; line: number | null }
 );
 
 /** 发事件时给的形状:少一个 t(runner 补);Omit 直接套在联合上会塌成公共键,所以逐个分发 */
@@ -65,6 +73,12 @@ export function describeEvent(e: RunEvent): string {
       return `写入${e.warnings ? ` · 提醒 ${e.warnings}` : ''}`;
     case 'ledger':
       return `日记 ${e.file} 记了话题 ${e.thread}`;
+    case 'mouth':
+      if (e.kind === 'hold') return '孩子按下';
+      if (e.kind === 'release') return e.how === 'voice' ? '松手' : `发了(${{ text: '打字', photo: '照片', card: '交卡', ask: '卡上的「?」' }[e.how]})`;
+      if (e.kind === 'catch') return `嘴接住「${e.text}」(开始放)`;
+      if (e.kind === 'read') return `嘴念第 ${e.line + 1} 句(开始放)`;
+      return `孩子按下,打断${e.line === null ? '(讲稿还没念到)' : `(念到第 ${e.line + 1} 句)`}`;
   }
 }
 
@@ -79,7 +93,7 @@ export function laneFilter(spec: string | undefined): (e: RunEvent) => boolean {
   return set.size ? (e) => set.has(e.lane) : () => true;
 }
 
-/** events.jsonl → 事件(坏行跳过,不抛) */
+/** events.jsonl → 事件(坏行跳过,不抛);按 t 排(嘴这一道是事后补的,t 比文件里前面的还早) */
 export function parseEvents(text: string): RunEvent[] {
   const out: RunEvent[] = [];
   for (const line of text.split('\n')) {
@@ -91,7 +105,7 @@ export function parseEvents(text: string): RunEvent[] {
       /* 坏行跳过 */
     }
   }
-  return out;
+  return out.sort((a, b) => a.t - b.t);
 }
 
 /** 一拍的埋点(从事件推,不另记账):关 = 下一张卡出现(末拍 = 老师退出)、配音齐 = 这拍最后一句配完、就绪 */

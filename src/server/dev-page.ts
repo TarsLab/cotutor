@@ -1038,21 +1038,23 @@ ${DEV_CSS}
       const ev = raw.events || [];
       if (!ev.length) { box.append(h('p', { class: 'hintline' }, raw.stations.find((x) => x.id === 'timeline')?.note || '这轮没有事件。')); return box; }
       const spans = raw.timeline.spans;
-      const total = raw.timeline.total;
-      const lanes = ['main', 'tts', 'ready', 'index', 'ledger'].filter((l) => spans.some((x) => x.lane === l));
+      // 嘴这一道(实时)从老师进程起来之前开始:t 是负的,整条往右挪 lo
+      const lo = raw.timeline.from || 0;
+      const total = raw.timeline.total - lo;
+      const lanes = ['mouth', 'main', 'tts', 'ready', 'index', 'ledger'].filter((l) => spans.some((x) => x.lane === l));
       const detail = h('p', { class: 'hintline' }, '点一段看它是什么');
       const g = h('div', { class: 'gantt' });
       for (const l of lanes) {
         const tr = h('div', { class: 'tr' });
         for (const x of spans.filter((x) => x.lane === l)) {
-          const left = (x.from / total) * 100, w = Math.max(0.4, ((x.to - x.from) / total) * 100);
+          const left = ((x.from - lo) / total) * 100, w = Math.max(0.4, ((x.to - x.from) / total) * 100);
           const el = h('div', { class: 'sp ' + x.state + (x.to === x.from ? ' tick' : ''), style: 'left:' + left.toFixed(2) + '%;width:' + w.toFixed(2) + '%', title: (x.from / 1000).toFixed(2) + 's ' + x.label, on: { click: () => { for (const o of g.querySelectorAll('.sp.on')) o.classList.remove('on'); el.classList.add('on'); detail.textContent = (x.from / 1000).toFixed(2) + 's → ' + (x.to / 1000).toFixed(2) + 's · ' + l + ' · ' + x.label; } } });
           tr.append(el);
         }
         g.append(h('div', { class: 'ln' }, l), tr);
       }
-      g.append(h('div', { class: 'ax' }, h('span', {}, '0s'), h('span', {}, (total / 2000).toFixed(1) + 's'), h('span', {}, (total / 1000).toFixed(1) + 's')));
-      box.append(h('h5', {}, '时间线:每道工序什么时候起、什么时候回(从老师进程起算)'), g, detail);
+      g.append(h('div', { class: 'ax' }, h('span', {}, (lo / 1000).toFixed(1) + 's'), h('span', {}, ((lo + total / 2) / 1000).toFixed(1) + 's'), h('span', {}, ((lo + total) / 1000).toFixed(1) + 's')));
+      box.append(h('h5', {}, '时间线:每道工序什么时候起、什么时候回(从老师进程起算;实时的嘴这一道从孩子按下起,负的)'), g, detail);
       if (raw.timing && raw.timing.beats && raw.timing.beats.length) box.append(h('h5', {}, '每拍'), h('pre', {}, raw.timing.beats.map((b, i) => '拍 ' + i + (b.card === null ? '(没有卡)' : '(卡 ' + b.card + ')') + ':关 ' + (b.closedMs !== undefined ? (b.closedMs / 1000).toFixed(2) + 's' : '-') + ' · 配音齐 ' + (b.dubbedMs !== undefined ? (b.dubbedMs / 1000).toFixed(2) + 's' : '-') + ' · 就绪 ' + (b.readyMs !== undefined ? (b.readyMs / 1000).toFixed(2) + 's' : '-')).join('\\n')));
       box.append(h('details', {}, h('summary', {}, '全部事件 ' + ev.length + ' 条'), h('pre', {}, raw.timeline.lines.join('\\n'))));
       return box;

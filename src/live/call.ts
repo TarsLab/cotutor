@@ -16,11 +16,14 @@
  *   后面几句等这段的声音出齐、按字数比例摊)· {t:'flush'} 清播放队列
  *   {t:'state', speaking, holding} · {t:'err', status, error} 发不出去(429 limit / 400 …)· {t:'end', why}
  * 录像:进出的消息、两边的声音都记(CallRecorder),挂了落在 conversations/<老师>/<日期>.live/<时分秒>.reel.json / .wav。
+ * 事件:嘴这一道(mouth:按下、松手 / 发了、接住开始放、第几句开始放、打断)补进那一轮的 events.jsonl(Runner.noteEvent),工作台的时间线上看;
+ * 按下、松手、接住在脑起来之前,先攒着,等那一轮的老师进程起来(main:start)再按它的起点换成相对毫秒(负的)。
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { kidSendInput, type AppContext } from '../server/app.ts';
 import { BusyError, type SendStarted } from '../server/runner.ts';
+import type { RunEvent } from '../lib/events.ts';
 import { readIndex } from '../server/store.ts';
 import { localDate } from '../lib/conversation.ts';
 import { catchCue, readCue, type CatchKind } from './lib/cue.ts';
@@ -69,6 +72,9 @@ export class LiveCall {
   private lastRead: { job: string; line: number } | null = null;
   /** 一段里第二句起的 read(按字数摊的时刻);打断时撤 */
   private readTimers: NodeJS.Timeout[] = [];
+  /** 嘴这一道的事件:每一轮老师进程起来的墙钟(换相对毫秒用)、日期;还没到那一轮的先攒在 pre(墙钟) */
+  private readonly runT0 = new Map<string, { t0: number; date: string }>();
+  private pre: { at: number; ev: MouthEvent }[] = [];
   /** 正在写的那一轮(脑)与已经交给排队的讲稿句数 */
   private job: string | null = null;
   private linesQueued = 0;
@@ -91,6 +97,14 @@ export class LiveCall {
   }
 
   private ms(): number { return this.rec.ms(); }
+  /** 通话里的毫秒 → 墙钟 */
+  private wall(ms: number): number { return this.rec.startedAt.getTime() + ms; }
+  /** 记嘴这一道的一条:那一轮起来了就补进它的事件,还不知道是哪一轮(job = null)就先攒着 */
+  private mouth(job: string | null, at: number, ev: MouthEvent): void {
+    const r = job ? this.runT0.get(job) : undefined;
+    if (job && r) void this.deps.ctx.runner.noteEvent(this.deps.tutor, r.date, job, { t: at - r.t0, ...ev } as RunEvent);
+    else if (!job) this.pre.push({ at, ev });
+  }
   private send(o: Record<string, unknown>): void {
     this.rec.out(o);
     this.sock.sendText(JSON.stringify(o));
@@ -124,8 +138,9 @@ export class LiveCall {
         const said: Said = this.said ?? { kind: 'catch' };
         const r = addChunk(this.play, said, this.ms(), pcm.length / BYTES_PER_MS);
         this.play = r.p;
-        // 照念的第一块:到它在孩子端开始放的那一刻,告诉孩子端这段的第一句
+        // 照念的第一块:到它在孩子端开始放的那一刻,告诉孩子端这段的第一句;接住的第一块记一条(开始放的时刻)
         if (firstOfAnswer && said.kind === 'read') this.readAt(said.beat, 0, r.start);
+        if (firstOfAnswer && said.kind === 'catch' && this.holding === false) this.mouth(null, this.wall(r.start), { lane: 'mouth', kind: 'catch', text: '' });
         firstOfAnswer = false;
         this.rec.tutor(pcm);
         this.sock.sendBinary(pcm);
@@ -133,7 +148,7 @@ export class LiveCall {
       onTutorText: (delta, done) => {
         const of = this.said?.kind ?? 'catch';
         if (done !== null) {
-          if (of === 'catch') { this.caught = done.trim(); this.caughtDone = true; }
+          if (of === 'catch') { this.caught = done.trim(); this.caughtDone = true; const c = [...this.pre].reverse().find((x) => x.ev.kind === 'catch'); if (c && c.ev.kind === 'catch') c.ev.text = this.caught; }
           this.send({ t: 'tutor', of, done: done.trim() });
           return;
         }
@@ -168,6 +183,11 @@ export class LiveCall {
     this.session = s;
     this.offEvents = ctx.runner.onEvent((e) => {
       if (e.tutor !== tutor || e.job !== this.job) return;
+      // 这一轮的老师进程起来了:攒着的按下、松手、接住按它的起点补进它的事件
+      if (e.event.lane === 'main' && e.event.kind === 'start') {
+        this.runT0.set(e.job, { t0: Date.now() - e.event.t, date: e.date });
+        for (const x of this.pre.splice(0)) this.mouth(e.job, x.at, x.ev);
+      }
       // 讲稿定稿一句(partial 解析器压着没换行的最后一句,发出来的都是定稿的)就交给排队
       if (e.event.lane === 'main' && e.event.kind === 'line') this.linesUpTo([{ i: e.event.line, text: e.event.text }]);
     });
@@ -180,6 +200,7 @@ export class LiveCall {
       if (this.ended || this.q.dropJob === beat.job) return;
       this.lastRead = { job: beat.job, line: beat.lines[k] };
       this.send({ t: 'read', job: beat.job, line: beat.lines[k], text: beat.texts[k] });
+      this.mouth(beat.job, Date.now(), { lane: 'mouth', kind: 'read', line: beat.lines[k] });
     }, Math.max(0, at - this.ms()));
     (k === 0 ? this.timers : this.readTimers).push(t);
   }
@@ -217,6 +238,7 @@ export class LiveCall {
     const heard = at?.kind === 'read' ? at.beat : this.said?.kind === 'read' ? this.said.beat : dropped[0];
     // 孩子端在放的那段里亮到了哪句就报哪句;那段还没亮(声音没到孩子端)报段首
     if (heard) this.cut = (this.lastRead && this.lastRead.job === heard.job && heard.lines.includes(this.lastRead.line) ? this.lastRead.line : heard.lines[0]) + 1;
+    if (playing && this.job) this.mouth(this.job, Date.now(), { lane: 'mouth', kind: 'cut', line: at?.kind === 'read' && this.lastRead?.job === this.job ? this.lastRead.line : null });
     for (const t of this.readTimers.splice(0)) clearTimeout(t);
     this.afterDone = null;
     if (this.session?.responding) this.session.cancel();
@@ -234,6 +256,7 @@ export class LiveCall {
     switch (m.t) {
       case 'hold': {
         if (!this.session) return;
+        this.pre = [{ at: Date.now(), ev: { lane: 'mouth', kind: 'hold' } }];
         this.holding = true;
         this.session.clearAudio();
         this.interrupt();
@@ -244,6 +267,7 @@ export class LiveCall {
         if (!this.session || !this.holding) return;
         this.holding = false;
         this.session.commit();
+        this.pre.push({ at: Date.now(), ev: { lane: 'mouth', kind: 'release', how: 'voice' } });
         this.turn('voice', isObj(m.body) ? m.body : {});
         break;
       }
@@ -260,6 +284,7 @@ export class LiveCall {
         const body = m.body;
         const kind: CatchKind = body.ask === true && isObj(body.focus) ? 'ask' : body.action === 'submit' ? 'card' : Array.isArray(body.photos) && body.photos.length ? 'photo' : 'text';
         this.interrupt();
+        this.pre = [{ at: Date.now(), ev: { lane: 'mouth', kind: 'release', how: kind === 'ask' || kind === 'card' || kind === 'photo' ? kind : 'text' } }];
         this.turn(kind, body, typeof body.text === 'string' ? body.text : '');
         break;
       }
@@ -396,3 +421,6 @@ export class LiveCall {
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** 嘴这一道的一条(没有 t;补进事件时按那一轮的起点换) */
+type MouthEvent = Extract<RunEvent, { lane: 'mouth' }> extends infer E ? (E extends RunEvent ? Omit<E, 't'> : never) : never;

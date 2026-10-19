@@ -404,6 +404,8 @@ export class Runner {
   private readonly getWs: () => Workspace;
   private readonly opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number; warm?: boolean; draw?: Draw };
   private readonly listeners = new Set<(e: RunEventEnvelope) => void>();
+  /** noteEvent 每个事件文件一条追加链 */
+  private readonly notes = new Map<string, Promise<void>>();
   /** 预热的老师进程(《工作流程.md》§四「预热」):一位老师最多一个 */
   readonly spares: WarmPool;
   /** 页面拉今天时的预热:每位老师(与带的话题)上次看的时刻 */
@@ -446,6 +448,23 @@ export class Runner {
   onEvent(fn: (e: RunEventEnvelope) => void): () => void {
     this.listeners.add(fn);
     return () => void this.listeners.delete(fn);
+  }
+
+  /** 别处给某一轮补事件(实时老师的嘴,src/live/call.ts;t 已经换成离这一轮老师进程起来的毫秒):追加到 events.jsonl、给订阅者;这一轮跑完了也行 */
+  async noteEvent(tutor: string, date: string, job: string, event: RunEvent): Promise<void> {
+    const file = conversationFiles(this.getWs().dirs.conversations, tutor, date).events(job);
+    // 同一个文件按序追加(几条一起来时不乱序)
+    const chain = (this.notes.get(file) ?? Promise.resolve()).then(() => appendFile(file, `${JSON.stringify(event)}\n`)).catch(() => {});
+    this.notes.set(file, chain);
+    void chain.finally(() => { if (this.notes.get(file) === chain) this.notes.delete(file); });
+    await chain;
+    for (const fn of this.listeners) {
+      try {
+        fn({ tutor, date, job, event });
+      } catch {
+        /* 订阅者的错不影响 */
+      }
+    }
   }
 
   /** 杀掉所有预热的进程(测试收尾;服务退出时它们的 stdin 断了会自己退) */

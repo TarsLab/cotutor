@@ -185,6 +185,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('判:画图卡前放过整段', g['画图卡前放过整段'].pass && !gradeRun(['画图卡前放过整段'], [turns[0], turns[2]])[0].pass);
   check('判:分幅里的「高兴」报出来', !g['分幅没有看不见的词'].pass && g['分幅没有看不见的词'].why!.includes('高兴'));
   check('判:每节末句问句、不说、问到、并排、词落到幅', g['每节末句是问句'].pass && g['不说: 错了'].pass && g['问到: 画家'].pass && g['并排: 睡大觉 | 浇了水'].pass && g['词落到幅: 1'].pass && !gradeRun(['词落到幅: 2'], turns, { 词: ['播种', '羞愧'] })[0].pass);
+  check('判:收尾不问——只看最后一轮的末句', gradeRun(['收尾不问'], [{ kid: 'x', section: sec(['你来数数?'], [story]) }, { kid: 'y', section: sec(['对,就是 5 个。']) }])[0].pass && !gradeRun(['收尾不问'], [{ kid: 'x', section: sec(['好的。']) }, { kid: 'y', section: sec(['你教教我?']) }])[0].pass);
   check('判:有卡的节末句不是问句报哪轮;没卡的随口一句不查', !gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。'], [story]) }])[0].pass && gradeRun(['每节末句是问句'], [{ kid: 'x', section: sec(['好的。']) }])[0].pass);
   check('判:一节一问(有卡的节最多一个问号;没卡的不查)', gradeRun(['一节一问'], [{ kid: 'x', section: sec(['这是你说的话。', '他们在哪里呀?'], [story]) }])[0].pass && !gradeRun(['一节一问'], [{ kid: 'x', section: sec(['在哪里?', '什么时候?'], [story]) }])[0].pass && gradeRun(['一节一问'], [{ kid: 'x', section: sec(['在哪里?什么时候?']) }])[0].pass);
   check('判:卡上有', gradeRun(['卡上有: 浇了水、西瓜'], turns)[0].pass && !gradeRun(['卡上有: 先看清'], turns)[0].pass);

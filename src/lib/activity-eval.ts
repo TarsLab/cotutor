@@ -43,6 +43,7 @@ export const GRADERS: Readonly<Record<string, string>> = {
   画图卡带题干和词: '每张画图卡都写了「题:」和「词:」(我来出题)',
   每节末句是问句: '有卡的每一节(讲解),最后一句讲稿以问号结尾;没卡的随口问答不查(守则:问答一两句、没有卡)',
   一节一问: '有卡的每一节,讲稿里最多一个问号(看图说话:一节只问一个问题)',
+  收尾不问: '最后一轮的末句不是问句(守则「答完就停」:答案出来了、孩子说懂了,一句收住,不再考他)',
   不说: '老师的讲稿里没有这几个说法(「不说: 你没说清楚、错了」)',
   说到: '老师的讲稿里出现过这几个说法(「说到: 圈」;同「问到」,不要求是问句)',
   放课里一段: '写过 lecture 卡(放小课堂里的一段)',
@@ -200,6 +201,12 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
           return t.section?.cards.length && !/[?？]$/.test(last) ? [`第 ${k + 1} 轮末句「${last}」`] : [];
         });
         return { check, pass: !bad.length, ...(bad.length ? { why: bad.join(';') } : {}) };
+      }
+      case '收尾不问': {
+        const k = turns.length - 1;
+        const last = turns[k]?.section?.lines.at(-1)?.text.trim() ?? '';
+        const asked = /[?？]$/.test(last);
+        return { check, pass: !asked, ...(asked ? { why: `第 ${k + 1} 轮(最后一轮)末句「${last}」` } : {}) };
       }
       case '一节一问': {
         const bad = turns.flatMap((t, k) => {

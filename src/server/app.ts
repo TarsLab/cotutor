@@ -38,7 +38,7 @@ import { ActivityConflict, checkDevActivity, findDevActivity, listDevActivities,
 import { checkDevTutorFile, hasDevTutorFile, listDevTutorFiles, readDevTutorFile, restoreDevTutorFile, saveDevTutorFile } from './dev-tutor-files.ts';
 import { doctorWorkspace } from '../cli/doctor.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
-import { BusyError, Runner } from './runner.ts';
+import { BusyError, Runner, type SendInput } from './runner.ts';
 import { listenOmni, type Transcribe } from './listen.ts';
 import { sendFile } from './send-file.ts';
 import { xlaoshiRoute } from '../xlaoshi/route.ts';
@@ -255,6 +255,84 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
   for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichPaints(ctx.ws, tutor, date, m.job, m.at, await enrichLectures(ctx.ws, m.section)); }
   const remaining = Math.max(0, policy.dailyMessages - kidMessageCount(index));
   return { tutor, date, messages, remaining, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
+}
+
+/**
+ * 孩子端发一条(POST /api/kid/conversations/<老师>/messages 与实时老师的那条线共用,《wip/实时老师开发计划.md》P2.4):
+ * 验正文、每日上限、话题、首页按钮、小课堂、activity、照片,拼成 Runner.send 的入参;不对就回该回的错(400 / 429)。不起老师
+ */
+export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown, date: string): Promise<{ input: SendInput } | { error: RouteResult }> {
+  const ws = ctx.ws;
+  if (!isObj(body) || typeof body.text !== 'string') return { error: { status: 400, json: { error: 'bad_request' } } };
+  const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
+  if (focus && !focus.success) return { error: { status: 400, json: { error: 'bad_request' } } };
+  const action = body.action === undefined ? undefined : body.action === 'continue' || body.action === 'submit' ? body.action : null;
+  if (action === null) return { error: { status: 400, json: { error: 'bad_request' } } };
+  const photos = await photosOf(ws, body.photos);
+  if (photos === null) return { error: { status: 400, json: { error: 'bad_request' } } };
+  const policy = resolvePolicy(ws.config, tutor);
+  // 「继续」不计每日上限:到了上限也能把老师讲完的听完
+  if (action !== 'continue' && kidMessageCount(await readIndex(ws, tutor, date)) >= policy.dailyMessages) return { error: { status: 429, json: { error: 'limit', remaining: 0 } } };
+  const thread = body.thread === undefined ? undefined : typeof body.thread === 'string' && /^\d{4}-\d+$/.test(body.thread) ? body.thread : null;
+  if (thread === null) return { error: { status: 400, json: { error: 'bad_request' } } };
+  const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
+  if (device && !device.success) return { error: { status: 400, json: { error: 'bad_request' } } };
+  // 首页的按钮(《首页设计.md》§5.2):via 只带 id,按钮是什么、讲法是什么都从服务端的发布件查;对不上就 400(孩子端刷新首页)
+  const via = body.via === undefined ? undefined : HomeViaSchema.safeParse(body.via);
+  if (via && !via.success) return { error: { status: 400, json: { error: 'bad_request' } } };
+  const button = via ? await resolveVia(ws, tutor, via.data!) : null;
+  if (via && !button) return { error: { status: 400, json: { error: 'bad_via' } } };
+  let text = body.text;
+  let newThread = body.newThread === true;
+  let pick = thread;
+  let home: { button: string; brief?: string } | undefined;
+  let continues: { date: string; thread: string } | undefined;
+  let activity: { name: string; params: Record<string, ActivityValue> } | undefined;
+  // 小课堂(《小课堂设计.md》):看完才能开口——这一条要带 lecture(哪份课包、看完了、看了多久、停过几次、圈过的几处),字是孩子说的;新开话题。
+  // 问过以后「再看一遍」:同一话题的下一条带 lecture(新圈的、又看的过程;话题得是从这份课包开始的)
+  let lecture: (NonNullable<ReturnType<typeof lectureOf>> & { again?: true }) | null | undefined = lectureOf(body.lecture);
+  if (lecture === null) return { error: { status: 400, json: { error: 'bad_request' } } };
+  if (lecture) {
+    const shots = lecture.marks.flatMap((k) => (k.image ? [k.image] : []));
+    if (shots.length + (photos?.length ?? 0) > 9) return { error: { status: 400, json: { error: 'bad_request', message: '照片和圈的截图一共最多 9 张' } } };
+    for (const x of shots) if (!(await capturePathOk(ws, x))) return { error: { status: 400, json: { error: 'bad_request' } } };
+  }
+  if (lecture && button?.kind !== 'lecture') {
+    const idx = thread && !via ? await readIndex(ws, tutor, date) : null;
+    const ths = idx ? threads(idx.messages) : [];
+    const from = idx?.messages.find((m, i) => ths[i] === thread && m.lecture && !m.lecture.again);
+    if (!from || from.lecture?.bundle !== lecture.bundle || (!lecture.marks.length && !lecture.log.length)) return { error: { status: 400, json: { error: 'bad_request' } } };
+    lecture = { ...lecture, again: true };
+  }
+  if (button?.kind === 'lecture') {
+    if (!lecture || lecture.bundle !== button.bundle || !lecture.finished) return { error: { status: 400, json: { error: 'bad_request', message: '小课堂要看完才能问' } } };
+    home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
+    if (button.activity) activity = button.activity;
+    newThread = true;
+    pick = undefined;
+  }
+  if (button && (button.kind === 'start' || button.kind === 'continue')) {
+    text = button.label;
+    home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
+    if (button.kind === 'continue' && button.date === date) {
+      newThread = false;
+      pick = button.thread;
+    } else {
+      newThread = true;
+      pick = undefined;
+      if (button.kind === 'continue') continues = { date: button.date, thread: button.thread };
+    }
+  }
+  // activity 按钮(《wip/activity设计.md》):和开场按钮一样新开话题、发按钮上的字;参数是 resolveVia 按 activity 文件解析好的,记在这条消息上
+  if (button?.kind === 'activity') {
+    text = button.label;
+    home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
+    newThread = true;
+    pick = undefined;
+    activity = { name: button.activity, params: button.params };
+  }
+  if (!text.trim() && !action && !photos?.length) return { error: { status: 400, json: { error: 'bad_request' } } };
+  return { input: { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(listenedOf(body.listened) ? { listened: listenedOf(body.listened) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 
 /** 家长板书页的一天(《家长板书页设计.md》§4.1):形状同 KidDay 少 remaining;答案不剥,系统发的也在 */
@@ -892,76 +970,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         return { status: 200, json: await kidHistory(ctx, tutor, days) };
       }
       if (tail === 'messages' && method === 'POST') {
-        if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
-        const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
-        if (focus && !focus.success) return { status: 400, json: { error: 'bad_request' } };
-        const action = body.action === undefined ? undefined : body.action === 'continue' || body.action === 'submit' ? body.action : null;
-        if (action === null) return { status: 400, json: { error: 'bad_request' } };
-        const photos = await photosOf(ws, body.photos);
-        if (photos === null) return { status: 400, json: { error: 'bad_request' } };
-        const policy = resolvePolicy(ws.config, tutor);
-        // 「继续」不计每日上限:到了上限也能把老师讲完的听完
-        if (action !== 'continue' && kidMessageCount(await readIndex(ws, tutor, date)) >= policy.dailyMessages) return { status: 429, json: { error: 'limit', remaining: 0 } };
-        const thread = body.thread === undefined ? undefined : typeof body.thread === 'string' && /^\d{4}-\d+$/.test(body.thread) ? body.thread : null;
-        if (thread === null) return { status: 400, json: { error: 'bad_request' } };
-        const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
-        if (device && !device.success) return { status: 400, json: { error: 'bad_request' } };
-        // 首页的按钮(《首页设计.md》§5.2):via 只带 id,按钮是什么、讲法是什么都从服务端的发布件查;对不上就 400(孩子端刷新首页)
-        const via = body.via === undefined ? undefined : HomeViaSchema.safeParse(body.via);
-        if (via && !via.success) return { status: 400, json: { error: 'bad_request' } };
-        const button = via ? await resolveVia(ws, tutor, via.data!) : null;
-        if (via && !button) return { status: 400, json: { error: 'bad_via' } };
-        let text = body.text;
-        let newThread = body.newThread === true;
-        let pick = thread;
-        let home: { button: string; brief?: string } | undefined;
-        let continues: { date: string; thread: string } | undefined;
-        let activity: { name: string; params: Record<string, ActivityValue> } | undefined;
-        // 小课堂(《小课堂设计.md》):看完才能开口——这一条要带 lecture(哪份课包、看完了、看了多久、停过几次、圈过的几处),字是孩子说的;新开话题。
-        // 问过以后「再看一遍」:同一话题的下一条带 lecture(新圈的、又看的过程;话题得是从这份课包开始的)
-        let lecture: (NonNullable<ReturnType<typeof lectureOf>> & { again?: true }) | null | undefined = lectureOf(body.lecture);
-        if (lecture === null) return { status: 400, json: { error: 'bad_request' } };
-        if (lecture) {
-          const shots = lecture.marks.flatMap((k) => (k.image ? [k.image] : []));
-          if (shots.length + (photos?.length ?? 0) > 9) return { status: 400, json: { error: 'bad_request', message: '照片和圈的截图一共最多 9 张' } };
-          for (const x of shots) if (!(await capturePathOk(ws, x))) return { status: 400, json: { error: 'bad_request' } };
-        }
-        if (lecture && button?.kind !== 'lecture') {
-          const idx = thread && !via ? await readIndex(ws, tutor, date) : null;
-          const ths = idx ? threads(idx.messages) : [];
-          const from = idx?.messages.find((m, i) => ths[i] === thread && m.lecture && !m.lecture.again);
-          if (!from || from.lecture?.bundle !== lecture.bundle || (!lecture.marks.length && !lecture.log.length)) return { status: 400, json: { error: 'bad_request' } };
-          lecture = { ...lecture, again: true };
-        }
-        if (button?.kind === 'lecture') {
-          if (!lecture || lecture.bundle !== button.bundle || !lecture.finished) return { status: 400, json: { error: 'bad_request', message: '小课堂要看完才能问' } };
-          home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
-          if (button.activity) activity = button.activity;
-          newThread = true;
-          pick = undefined;
-        }
-        if (button && (button.kind === 'start' || button.kind === 'continue')) {
-          text = button.label;
-          home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
-          if (button.kind === 'continue' && button.date === date) {
-            newThread = false;
-            pick = button.thread;
-          } else {
-            newThread = true;
-            pick = undefined;
-            if (button.kind === 'continue') continues = { date: button.date, thread: button.thread };
-          }
-        }
-        // activity 按钮(《wip/activity设计.md》):和开场按钮一样新开话题、发按钮上的字;参数是 resolveVia 按 activity 文件解析好的,记在这条消息上
-        if (button?.kind === 'activity') {
-          text = button.label;
-          home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
-          newThread = true;
-          pick = undefined;
-          activity = { name: button.activity, params: button.params };
-        }
-        if (!text.trim() && !action && !photos?.length) return { status: 400, json: { error: 'bad_request' } };
-        const started = await ctx.runner.send(tutor, { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(listenedOf(body.listened) ? { listened: listenedOf(body.listened) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) });
+        const r = await kidSendInput(ctx, tutor, body, date);
+        if ('error' in r) return r.error;
+        const started = await ctx.runner.send(tutor, r.input);
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
       }
       return { status: 405, json: { error: 'method_not_allowed' } };

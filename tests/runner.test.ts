@@ -413,7 +413,7 @@ try {
     const sl = await ctx.runner.send('math-tutor', { from: 'kid', text: '流式 板书 实时', runtime: 'stream', live: { caught: '你问的这个,我写给你看。', cut: 2 } });
     await sl.done;
     offL();
-    const ml = ((await day('math-tutor', sl.date)).json as Day).index.messages.find((m) => m.job === sl.job) as BoardMsg & { live?: boolean };
+    const ml = ((await day('math-tutor', sl.date)).json as Day).index.messages.find((m) => m.job === sl.job) as unknown as BoardMsg & { live?: boolean };
     const kl = evL.filter((e) => e.job === sl.job).map((e) => `${e.lane}:${e.kind}`);
     const promptL = (JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${sl.date}.${sl.job}.run.json`), 'utf8')) as { prompt: string }).prompt;
     check('实时轮:消息记 live、板书照常(卡与句都在)、讲稿不配音(句没有 mp3、没有 tts 事件)', ml.live === true && (ml.section?.cards.length ?? 0) > 0 && (ml.section?.lines.length ?? 0) > 0 && ml.section!.lines.every((l) => !l.audio) && !kl.some((k) => k.startsWith('tts:')) && !existsSync(join(root, 'conversations', 'math-tutor', `${sl.date}.${sl.job}.1.mp3`)), JSON.stringify({ lines: ml.section?.lines.map((l) => l.audio), kl }));

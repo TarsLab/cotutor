@@ -2,8 +2,9 @@
 /**
  * 小课堂在 WebKit(Safari 的内核,iPad 上就是它)里的手动验收:Chrome 里好好的、iPad 上坏的几处(2026-10-06 真机报的)——
  * 一、SVG 放进页面后 Safari 让 SMIL 时间轴重新走,没点「开始看」画面就自己画、没有声音;
- * 二、真手指(不是 dispatchEvent)圈得上:舞台页装着孩子端的 theme.css,同名的类会把 pointer-events 关掉;
- * 三、圈的卡的缩略图(克隆的 SVG)停在那一刻、不自己走。
+ * 二、真手指(不是 dispatchEvent)画得上:舞台页装着孩子端的 theme.css,同名的类会把 pointer-events 关掉;同一刻画两笔还是一处;
+ * 三、画的卡的缩略图是播放器截的图(2026-10-19 起):烤好的画面(frame.svg,字体与背景图内嵌)画进 canvas、叠上两笔、出 jpeg——Safari 不把 canvas 标成跨源、字体画得出。
+ *    给了截图路径(argv[2])就在旁边存一份那张 jpeg(<名>-mark.jpg),对着看字体。
  * 本仓不装 playwright:借一份 playwright-core 和它配套的 WebKit(在那个目录里跑 node node_modules/playwright-core/cli.js install webkit)。
  *
  * 用法:PLAYWRIGHT_CORE=<含 node_modules/playwright-core 的目录> node scripts/probe-lecture-webkit.mjs [截图.png]
@@ -45,7 +46,7 @@ try {
   await fr.locator('.lc-play').click();
   const d = await st(); await sleep(1500); const e = await st();
   ok('暂停:画面停住', d.t === e.t && d.time === e.time, JSON.stringify([d, e]));
-  // 真鼠标圈一圈
+  // 真鼠标画一圈,同一刻再打个钩
   const box = await fr.locator('.lc-canvas').boundingBox();
   const cx = box.x + box.width * 0.45, cy = box.y + box.height * 0.45;
   await page.mouse.move(cx + 60, cy);
@@ -53,13 +54,32 @@ try {
   for (let k = 1; k <= 24; k++) { const g = k / 24 * Math.PI * 2; await page.mouse.move(cx + 60 * Math.cos(g), cy + 45 * Math.sin(g)); }
   await page.mouse.up();
   await sleep(300);
-  ok('圈了一处', (await fr.locator('.lc-mark').count()) === 1);
+  await page.mouse.move(cx + 90, cy);
+  await page.mouse.down();
+  for (const [x, y] of [[100, 15], [110, 25], [140, -30]]) await page.mouse.move(cx + x, cy + y, { steps: 4 });
+  await page.mouse.up();
+  await sleep(600);
+  ok('画了两笔:同一刻,还是一处', (await fr.locator('.lc-mark').count()) === 1 && (await fr.locator('.lc-ink path').count()) === 2);
   const sb = await fr.locator('.lc-seg').nth(5).boundingBox();
   await page.mouse.click(sb.x + 2, sb.y + sb.height / 2);
   await fr.locator('.lc-play').click();
+  // 放完停在最后一帧(拍板 37),「去问老师」淡入了才回板书
+  await fr.locator('.lc-askbtn').waitFor({ timeout: 60000 });
+  await fr.locator('.lc-askbtn').click();
   await page.waitForSelector('.lc-pending .c-mark img.mk-svg', { timeout: 30000 });
   await page.waitForFunction(() => (document.querySelector('.lc-pending .c-mark img.mk-svg')?.naturalWidth ?? 0) > 0, null, { timeout: 30000 });
-  const th = await page.evaluate(() => { const i = document.querySelector('.lc-pending .c-mark img.mk-svg'); return { w: i.naturalWidth, src: i.src.includes('/frame.svg?svg=') && i.src.includes('ring=') }; });
-  ok('圈的卡的缩略图:服务端现画的一张图(frame.svg,带圈),Safari 里显示得出', th.w > 0 && th.src, JSON.stringify(th));
-  if (process.argv[2]) await page.screenshot({ path: process.argv[2] });
+  // 截图:jpeg、1280 宽;数像素:蓝的(画的两笔)、深色的(课包的字与线)
+  const th = await page.evaluate(async () => {
+    const i = document.querySelector('.lc-pending .c-mark img.mk-svg');
+    const px = { blue: 0, dark: 0 };
+    const cv = document.createElement('canvas'); cv.width = i.naturalWidth; cv.height = i.naturalHeight; const g = cv.getContext('2d'); g.drawImage(i, 0, 0);
+    const d = g.getImageData(0, 0, cv.width, cv.height).data;
+    for (let k = 0; k < d.length; k += 4) { if (Math.abs(d[k] - 47) + Math.abs(d[k + 1] - 111) + Math.abs(d[k + 2] - 214) < 90) px.blue++; else if (d[k] + d[k + 1] + d[k + 2] < 200) px.dark++; }
+    return { jpeg: i.src.startsWith('data:image/jpeg;base64,'), w: i.naturalWidth, h: i.naturalHeight, px, src: i.src.startsWith('data:') ? i.src : '' };
+  });
+  ok('画的卡的缩略图是截图(Safari 能把烤好的画面画进 canvas 导出 jpeg):1280 宽,画面上的字与线在,叠着两笔', th.jpeg && th.w === 1280 && th.px.blue > 1500 && th.px.dark > 2000, JSON.stringify({ ...th, src: undefined }));
+  if (process.argv[2]) {
+    await page.screenshot({ path: process.argv[2] });
+    if (th.src) { const { writeFileSync } = await import('node:fs'); const f = process.argv[2].replace(/\.png$/, '') + '-mark.jpg'; writeFileSync(f, Buffer.from(th.src.split(',')[1], 'base64')); console.log('  ' + f); }
+  }
 } finally { await browser.close(); mock.kill(); }

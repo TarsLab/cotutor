@@ -34,7 +34,7 @@ export const TutorButtonSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('start'), label, brief: z.string().min(1).optional(), until }),
   /** 接着:那天的那个话题;今天的 resume,以前的新开会话、上下文包带那个话题的尾巴 */
   z.object({ kind: z.literal('continue'), label, date: z.string().regex(DAY_RE), thread: z.string().regex(THREAD_RE), brief: z.string().min(1).optional(), until }),
-  /** 小课堂:孩子点了先看这份课包(铺满、一口气放完),看完才能开口;开口那条新开话题,老师拿到课的每句与孩子圈的地方 */
+  /** 小课堂:孩子点了先看这份课包(铺满、一口气放完),看完才能开口;开口那条新开话题,老师拿到课的每句与孩子画的地方 */
   z.object({ kind: z.literal('lecture'), label, bundle: z.string().regex(BUNDLE_ID_RE), brief: z.string().min(1).optional(), until, activity: z.string().min(1).optional() }),
   /** activity:孩子点了新开话题、把 label 发给老师;老师照那个 activity 文件带,params 是家长填的(原文,对不对由首页检查读 activity 文件查) */
   z.object({ kind: z.literal('activity'), label, activity: z.string().min(1), params: z.record(z.string(), z.string()), brief: z.string().min(1).optional(), until }),

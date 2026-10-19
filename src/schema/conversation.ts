@@ -9,6 +9,13 @@ import { BookkeepingSchema } from './sections.ts';
 import { MessageViaSchema } from './home.ts';
 import { ActivityRunSchema } from './activity.ts';
 
+/** 2026-10-19 以前小课堂的圈一笔一处(path);改成一处几笔(strokes)后照读 */
+const legacyMark = (v: unknown): unknown => {
+  if (typeof v !== 'object' || v === null || 'strokes' in v || !Array.isArray((v as { path?: unknown }).path)) return v;
+  const { path, ...rest } = v as { path: unknown[] };
+  return { ...rest, strokes: [path] };
+};
+
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export const TimingSchema = z.object({
@@ -104,8 +111,8 @@ const MessageObjectSchema = z.object({
   /** 这一轮走实时(《wip/实时老师设想.md》):讲稿没配音,由 realtime 模型(嘴)照念;孩子端放的是嘴的声音,以前的话题里这几句不出声 */
   live: z.literal(true).optional(),
   /**
-   * 这条是孩子看完小课堂后的第一条(《小课堂设计.md》§七):哪份课包、课名、看了多久、看完没、停过几次、圈过的几处;节前的小课堂卡与圈的卡从这里画。
-   * again = 问过以后「再看一遍」又圈了,这条只为带上新圈的(节前只画圈的卡)。圈:时刻、SVG 停在哪(缩略图)、路径(课包坐标)、算出来的那段话
+   * 这条是孩子看完小课堂后的第一条(《小课堂设计.md》§七):哪份课包、课名、看了多久、看完没、停过几次、画过的几处;节前的小课堂卡与画的卡从这里画。
+   * again = 问过以后「再看一遍」又画了,这条只为带上新画的(节前只画画的卡)。一处画:时刻、SVG 停在哪(缩略图)、几笔(课包坐标)、给老师的那段话、截图
    */
   lecture: z
     .object({
@@ -117,11 +124,11 @@ const MessageObjectSchema = z.object({
       again: z.literal(true).optional(),
       /** 视频小课堂(lectures/<id>/);没有 = 课包 */
       video: z.literal(true).optional(),
-      /** 视频的圈带一张截图(captures/ 里,已叠上圈;路径相对 workspace 根) */
-      marks: z.array(z.object({ atMs: z.number().nonnegative(), svgMs: z.number().nonnegative(), path: z.array(z.tuple([z.number(), z.number()])), text: z.string().optional(), image: z.string().optional(), t: z.number().optional() })).optional(),
+      /** 一处 = 停在同一刻画的几笔;截图在 captures/ 里(画面叠上那几笔;路径相对 workspace 根)。2026-10-19 以前一笔一处(path),读成一笔的 strokes */
+      marks: z.array(z.preprocess(legacyMark, z.object({ atMs: z.number().nonnegative(), svgMs: z.number().nonnegative(), strokes: z.array(z.array(z.tuple([z.number(), z.number()]))), text: z.string().optional(), image: z.string().optional(), t: z.number().optional() }))).optional(),
       /**
        * 看的过程(录像用,《小课堂设计.md》§八第 5 步):放 / 停 / 拖到哪 / 放完,一次一条。t = 离这条消息发出去多少毫秒(≤ 0,孩子端自己的钟算,
-       * 不用对钟);pos = 那时停在课里的哪一刻;play = 那之后在放。圈的 t 同理(圈下去的那一刻)
+       * 不用对钟);pos = 那时停在课里的哪一刻;play = 那之后在放。画的 t 同理(这一处第一笔画下去的那一刻)
        */
       log: z.array(z.object({ t: z.number(), pos: z.number().nonnegative(), play: z.boolean() })).optional(),
     })

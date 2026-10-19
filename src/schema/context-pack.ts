@@ -47,7 +47,7 @@ export const ContextPackSchema = z.object({
   board: z.enum(['auto', 'off']).optional(),
   /** 上一轮之后孩子改过状态的卡,每张一句(「<job>/<n> choice「问题」 选了「B …」(答案:「…」)」) */
   cards: z.array(z.string()).optional(),
-  /** 孩子刚看完小课堂(《小课堂设计.md》§六):课名、哪份课包、课长、每句的起点与原话、看的情况、圈过的几处;看完后的第一条,和问过以后再看一遍又圈了的那条 */
+  /** 孩子刚看完小课堂(《小课堂设计.md》§六):课名、哪份课包、课长、每句的起点与原话、看的情况、画过的几处;看完后的第一条,和问过以后再看一遍又画了的那条 */
   lecture: z
     .object({
       title: z.string().min(1),
@@ -55,7 +55,7 @@ export const ContextPackSchema = z.object({
       length: z.string().min(1),
       lines: z.array(z.string()).default([]),
       watched: z.string().min(1),
-      /** 孩子圈过的几处,每处一段话(describeMark):时刻、那时在讲哪句、圈住了什么 */
+      /** 孩子画过的几处,每处一段话(storedMarks):时刻、那时在讲哪句、截图是 photos 第几张、课包的再说画的地方盖着什么 */
       marks: z.array(z.string()).default([]),
     })
     .optional(),

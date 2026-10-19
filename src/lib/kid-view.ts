@@ -100,7 +100,7 @@ export interface KidMessage {
   section?: BoardSection | null;
   /** 孩子这条带的作业照片(相对 workspace 根;页面经 /api/kid/image?p= 取);只在孩子自己的问句上 */
   photos?: string[];
-  /** 这条是看完小课堂后的第一条:哪份课包、课名、圈过的几处(节前的小课堂卡与圈的卡从这里画);again = 再看一遍又圈的那条,节前只画圈的卡 */
+  /** 这条是看完小课堂后的第一条:哪份课包、课名、画过的几处(节前的小课堂卡与画的卡从这里画);again = 再看一遍又画的那条,节前只画画的卡 */
   lecture?: KidLecture;
   /** 孩子的话怎么上板(《工作流程.md》§二「一个话题一节」):交卡 / 老数据的「继续」不写;按住说话的去口头禅;首页按钮发的(正文就是按钮上的字)不写,从按钮进来后孩子自己说的照写 */
   action?: 'submit' | 'continue';
@@ -110,9 +110,9 @@ export interface KidMessage {
   live?: true;
 }
 
-/** 索引里的小课堂 → 孩子端(圈不带那段话)/ 家长端(带) */
+/** 索引里的小课堂 → 孩子端(画不带那段话)/ 家长端(带) */
 function lectureView(l: NonNullable<ConversationMessage['lecture']>, parent: boolean): KidLecture {
-  return { bundle: l.bundle, title: l.title, ...(l.again ? { again: true as const } : {}), ...(l.video ? { video: true as const } : {}), ...(l.marks?.length ? { marks: l.marks.map((m) => ({ atMs: m.atMs, svgMs: m.svgMs, path: m.path, ...(m.image ? { image: m.image } : {}), ...(parent && m.text ? { text: m.text } : {}) })) } : {}) };
+  return { bundle: l.bundle, title: l.title, ...(l.again ? { again: true as const } : {}), ...(l.video ? { video: true as const } : {}), ...(l.marks?.length ? { marks: l.marks.map((m) => ({ atMs: m.atMs, svgMs: m.svgMs, strokes: m.strokes, ...(m.image ? { image: m.image } : {}), ...(parent && m.text ? { text: m.text } : {}) })) } : {}) };
 }
 
 /** 孩子做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到这轮的卡上;都没有就原样 */

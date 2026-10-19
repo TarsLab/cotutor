@@ -131,11 +131,11 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
       const tokens = { in: 0, out: 0 };
       let error: string | undefined;
       // 第一句是按钮上的字(activity 的名字),和孩子点首页按钮一样;照片随第一句写死的孩子的话发。
-      // 先看小课堂的:第一句就是孩子看完问的那句(写死的第一句),带着 lecture(看完了、停过几次、圈的几处)
+      // 先看小课堂的:第一句就是孩子看完问的那句(写死的第一句),带着 lecture(看完了、停过几次、画的几处)
       let scripted = e.lecture ? 1 : 0;
       let say: string | null = e.lecture ? e.kid[0] : name;
       let photos: string[] = [];
-      let lecture = e.lecture ? { bundle: e.lecture.bundle, watchedMs: 0, finished: true, pauses: e.lecture.pauses, marks: e.lecture.marks.map((m) => ({ atMs: m.atMs, path: [] as [number, number][], hit: m.text })) } : undefined;
+      let lecture = e.lecture ? { bundle: e.lecture.bundle, watchedMs: 0, finished: true, pauses: e.lecture.pauses, marks: e.lecture.marks.map((m) => ({ atMs: m.atMs, strokes: [] as [number, number][][], hit: m.text })) } : undefined;
       while (say !== null && turns.length < e.maxTurns) {
         const started = await runner.send(tutor, { from: 'kid', text: say, eval: true, ...(photos.length ? { photos } : {}), ...(lecture ? { lecture } : {}), ...(thread ? { thread } : { newThread: true, activity: run }) });
         photos = [];

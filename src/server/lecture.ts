@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { BUNDLE_ID_RE } from '../cards/kind.ts';
 import { mp4DurationMs } from './mp4.ts';
-import { LECTURE_FILE, LECTURE_VIDEO, clockLabel, describeMark, lectureAt, lectureClock, lectureLines, lectureRange, parseLectureDoc, videoClock, type LectureClock, type LectureMark, type LecturePicture } from '../lib/lecture.ts';
+import { LECTURE_FILE, LECTURE_VIDEO, MARK_MAX_POINTS, clockLabel, inkHint, lectureAt, lectureClock, lectureLines, lectureRange, markHead, parseLectureDoc, videoClock, type LectureClock, type LectureMark, type LecturePicture } from '../lib/lecture.ts';
 import { bakeMatches, BundleError, elementsAtSvgTime, parseBundle, renderFrameSvg, type LessonBundle } from 'drawtell/core';
 import type { ContextPack } from '../schema/index.ts';
 import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
@@ -20,7 +20,7 @@ export interface Lecture {
   /** 课包的科目(scene.json 的 subject);没写 = null */
   subject: string | null;
   clock: LectureClock;
-  /** 画面的语义(课包的 groups、blocks 与 build 时量好的 bounds):圈住了什么靠它说;视频没有 */
+  /** 画面的语义(课包的 groups、blocks 与 build 时量好的 bounds):画的地方盖着什么靠它说;视频没有 */
   picture: LecturePicture;
   /** 视频(lectures/<id>/video.mp4);false = 课包 */
   video: boolean;
@@ -83,7 +83,7 @@ async function readBundleLecture(ws: LectureDirs, id: string): Promise<{ lecture
   return { lecture: { id, title: scene.title, problem: scene.problem, subject: scene.subject ?? null, clock, picture, video: false, baked } };
 }
 
-/** 孩子看完带来的:看了多久、看完没、停过几次;again = 问过以后「再看一遍」又圈了(这条只为带圈) */
+/** 孩子看完带来的:看了多久、看完没、停过几次;again = 问过以后「再看一遍」又画了(这条只为带画的) */
 export interface LectureWatch {
   watchedMs: number;
   finished: boolean;
@@ -91,45 +91,43 @@ export interface LectureWatch {
   again?: boolean;
 }
 
-/** 孩子带来的一处圈;视频的带一张截好的图(captures/ 里,已经叠上了圈) */
+/** 孩子带来的一处画;一处一张截好的图(captures/ 里,画面叠上这一刻的几笔;截不出来就没有) */
 export interface IncomingMark extends LectureMark {
   image?: string;
-  /** 圈住了什么,写死的(cotutor activity eval 的例子「圈:」):不按路径现算,时刻与那句讲稿照接 */
+  /** 画的地方盖着什么,写死的(cotutor activity eval 的例子「画:」):不按笔画现算,时刻与那句讲稿照接 */
   hit?: string;
-  /** 圈下去的那一刻:离这条消息发出去多少毫秒(≤ 0;录像用) */
+  /** 画下去的那一刻:离这条消息发出去多少毫秒(≤ 0;录像用) */
   t?: number;
 }
 
-/** 落盘的一处圈:时刻、SVG 停在哪(画缩略图用,毫秒)、路径(课包坐标;视频是视频自己的像素坐标)、算出来的那段话(读不出来时没有)、视频的截图 */
+/** 落盘的一处画:时刻、SVG 停在哪(画缩略图用,毫秒)、几笔(课包坐标;视频是视频自己的像素坐标)、给老师的那段话(读不出来时没有)、截图 */
 export interface StoredMark extends IncomingMark {
   svgMs: number;
   text?: string;
 }
 
 /**
- * 孩子带来的圈 → 落盘的样子(《小课堂设计.md》§四):课包的 SVG 时刻与那段话由课包现算;
- * 视频算不出圈住了什么,那段话只说那时在讲哪句、截图是上下文包 photos 的第几张(photoBase = 前面已经有几张孩子自己拍的)。读不出来就只留时刻与路径
+ * 孩子带来的画 → 落盘的样子(《小课堂设计.md》§四):那段话 = 时刻与那时在讲哪句 + 截图是上下文包 photos 的第几张(photoBase = 前面已经有几张孩子自己拍的)
+ * + 课包的再说画的地方盖着什么(按课包现算,用课里的叫法)。读不出来就只留时刻与笔画
  */
 export function storedMarks(l: Lecture | null, marks: readonly IncomingMark[], photoBase = 0): StoredMark[] {
   let k = photoBase;
   return marks.map((m) => {
     const shot = m.image ? ++k : null;
-    const base = { atMs: m.atMs, svgMs: l && !l.video ? Math.round(lectureAt(l.clock, m.atMs).svgMs * 10) / 10 : 0, path: m.path, ...(m.image ? { image: m.image } : {}), ...(m.t !== undefined ? { t: m.t } : {}) };
+    const base = { atMs: m.atMs, svgMs: l && !l.video ? Math.round(lectureAt(l.clock, m.atMs).svgMs * 10) / 10 : 0, strokes: m.strokes, ...(m.image ? { image: m.image } : {}), ...(m.t !== undefined ? { t: m.t } : {}) };
     if (!l) return base;
-    if (m.hit !== undefined) {
-      const line = l.clock.segments[lectureAt(l.clock, m.atMs).index]?.line.trim() ?? '';
-      return { ...base, text: `${clockLabel(m.atMs)} 圈的${line ? `,那时在讲『${line}』` : ''}${m.hit ? `;${m.hit}` : ''}` };
-    }
-    if (!l.video) return { ...base, text: describeMark(l.clock, m, l.picture).text };
-    const line = l.clock.segments[lectureAt(l.clock, m.atMs).index]?.line.trim() ?? '';
-    return { ...base, text: `${clockLabel(m.atMs)} 圈的${line ? `,那时在讲『${line}』` : ''};${shot ? `圈在截图上(photos 第 ${shot} 张)` : '没有截图,看不出圈的是什么'}` };
+    const head = markHead(l.clock, m.atMs);
+    if (m.hit !== undefined) return { ...base, text: `${head}${m.hit ? `;${m.hit}` : ''}` };
+    const pic = shot ? `画在截图上(photos 第 ${shot} 张)` : l.video ? '没有截图,看不出画的是什么' : '没有截图';
+    const hint = l.video ? '' : inkHint(l.clock, m, l.picture).text;
+    return { ...base, text: `${head};${pic}${hint ? `;${hint}` : ''}` };
   });
 }
 
-/** 上下文包 lecture: 段:标题、来源、课长、每句起点与原话、看的情况、圈过的几处 */
+/** 上下文包 lecture: 段:标题、来源、课长、每句起点与原话、看的情况、画过的几处 */
 export function lecturePack(l: Lecture, w: LectureWatch, marks: readonly StoredMark[] = []): NonNullable<ContextPack['lecture']> {
   const seen = w.finished ? (w.again ? '又看完了一遍' : '看完了') : `${w.again ? '又看了一遍,' : ''}看到 ${clockLabel(w.watchedMs)}`;
-  const watched = `${seen}${w.pauses ? `,停过 ${w.pauses} 次` : ''}${marks.length ? `,圈了 ${marks.length} 处` : ''}`;
+  const watched = `${seen}${w.pauses ? `,停过 ${w.pauses} 次` : ''}${marks.length ? `,画了 ${marks.length} 处` : ''}`;
   return { title: l.title, source: `${l.video ? 'video' : 'bundle'} ${l.id}`, length: clockLabel(l.clock.total), lines: lectureLines(l.clock), watched, marks: marks.flatMap((m) => (m.text ? [m.text] : [])) };
 }
 
@@ -199,11 +197,11 @@ export function bakeSectionSoon(bundlesDir: string, section: BoardSection): void
 }
 
 /**
- * 课包在 SVG 时刻 svgMs 的画面(圈的卡、lecture 卡的缩略图;《小课堂设计.md》§五):用烤好的画面(bake.json)在服务端现画成一张 SVG,
- * 有圈就叠上圈(课包坐标,加上导出时的平移)。没烤过、画面改过没重烤:给了 bake(路由给 ensureBaked)就先烤再画,烤不了 → null。
+ * 课包在 SVG 时刻 svgMs 的画面(画的卡、lecture 卡的缩略图,播放器截图的底;《小课堂设计.md》§五):用烤好的画面(bake.json)在服务端现画成一张 SVG,
+ * 有画就叠上那几笔(课包坐标,加上导出时的平移)。没烤过、画面改过没重烤:给了 bake(路由给 ensureBaked)就先烤再画,烤不了 → null。
  * 背景图内嵌成 data URI:SVG 当 <img> 用时不去取外面的文件。
  */
-export async function lectureFrameSvg(ws: Pick<LectureDirs, 'dirs'>, id: string, svgMs: number, ring: readonly [number, number][] = [], opts: { bake?: (bundlesDir: string, id: string) => Promise<boolean> } = {}): Promise<string | null> {
+export async function lectureFrameSvg(ws: Pick<LectureDirs, 'dirs'>, id: string, svgMs: number, ink: readonly (readonly [number, number][])[] = [], opts: { bake?: (bundlesDir: string, id: string) => Promise<boolean> } = {}): Promise<string | null> {
   if (!BUNDLE_ID_RE.test(id)) return null;
   const dir = join(ws.dirs.bundles, id);
   try {
@@ -218,7 +216,8 @@ export async function lectureFrameSvg(ws: Pick<LectureDirs, 'dirs'>, id: string,
     const { scene: parsed } = parseBundle(scene, JSON.parse(manifestRaw));
     const clock = lectureClock(parsed.skeletons, parsed.steps);
     const [dx, dy] = baked.offset;
-    const overlay = ring.length >= 2 ? `<path d="${ring.map((p, i) => `${i ? 'L' : 'M'}${p[0] + dx} ${p[1] + dy}`).join(' ')}" fill="none" stroke="#2f6fd6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` : '';
+    const d = ink.filter((st) => st.length >= 2).map((st) => st.map((p, i) => `${i ? 'L' : 'M'}${p[0] + dx} ${p[1] + dy}`).join(' ')).join(' ');
+    const overlay = d ? `<path d="${d}" fill="none" stroke="#2f6fd6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` : '';
     // 背景图(换过画板的课每块板一张)内嵌成 data URI;画哪块板、淡没淡由 drawtell 按那一刻算
     const hrefs = new Map<string, string>();
     for (const b of (baked.boards ?? [baked]).map((x) => x.background)) {
@@ -239,9 +238,17 @@ export function parseSvgMs(s: string | null): number {
   return s === 'end' ? Infinity : Number(s) || 0;
 }
 
-/** frame.svg 的 ring 参数:「x,y;x,y;…」(课包坐标,取整);认不出来 = 没有 */
-export function parseRing(s: string | null): [number, number][] {
+/** frame.svg 的 ring 参数:一笔「x,y;x,y;…」,笔与笔之间「~」(课包坐标,取整;一共最多 MARK_MAX_POINTS 个点);认不出来 = 没有 */
+export function parseRing(s: string | null): [number, number][][] {
   if (!s) return [];
-  const pts = s.split(';').slice(0, 400).map((p) => p.split(',').map(Number));
-  return pts.every((p) => p.length === 2 && p.every((x) => Number.isFinite(x) && Math.abs(x) < 1e5)) ? (pts as [number, number][]) : [];
+  let left = MARK_MAX_POINTS;
+  const strokes: [number, number][][] = [];
+  for (const one of s.split('~')) {
+    if (left <= 0) break;
+    const pts = one.split(';').slice(0, left).map((p) => p.split(',').map(Number));
+    if (!pts.every((p) => p.length === 2 && p.every((x) => Number.isFinite(x) && Math.abs(x) < 1e5))) return [];
+    left -= pts.length;
+    strokes.push(pts as [number, number][]);
+  }
+  return strokes;
 }

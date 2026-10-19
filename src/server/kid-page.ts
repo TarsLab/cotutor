@@ -112,7 +112,7 @@ ${faviconLinks()}
   .lc-ask b { font-size:26px; }
   .lc-ask span { font-size:16px; color:var(--dim); }
   .lc-ask.sm { padding:8px 0 4px; }
-  /* 圈的卡(《小课堂设计.md》§五):孩子做的卡;缩略图是那一刻的画面(同一份 SVG 停在那一刻)再叠蓝圈 */
+  /* 画的卡(《小课堂设计.md》§五):孩子做的卡;缩略图是那张截图(画面叠上孩子画的几笔;没截图的课包现画那一刻再叠上) */
   .mk-row { display:flex; flex-wrap:wrap; gap:12px; margin:10px 0; }
   .c.c-mark { position:relative; flex-direction:column; gap:8px; padding:10px 12px; border:2px solid #2f6fd6; border-radius:16px; background:#fff; max-width:100%; }
   .c-mark .mk-main { display:flex; align-items:center; gap:12px; cursor:pointer; padding-right:34px; }
@@ -1248,7 +1248,7 @@ __AUDIO_JS__
     for (const t of H.tutors) for (const th of t.threads) {
       const at = atMs(th.at), end = Date.parse(th.endAt || '');
       const L = th.lecture;
-      const what = [L ? (L.finished ? '看完了' : '看了 ' + lcLen(L.watchedMs)) + (L.marks ? ' · 圈了 ' + L.marks + ' 处' : '') : '', th.sections + ' 节 · ' + th.cards + ' 张卡'].filter(Boolean).join(' · ');
+      const what = [L ? (L.finished ? '看完了' : '看了 ' + lcLen(L.watchedMs)) + (L.marks ? ' · 画了 ' + L.marks + ' 处' : '') : '', th.sections + ' 节 · ' + th.cards + ' 张卡'].filter(Boolean).join(' · ');
       const pf = [h('span', {}, what), th.misses ? h('span', { class: 'miss' }, '⚠ 按住说话连着 ' + th.misses + ' 次没发出去') : null,
         th.stoppedAt === 'writing' ? h('span', { class: 'chip live' }, h('i'), '老师在写') : th.stoppedAt === 'ask' ? h('span', { class: 'chip ask' }, '停下等孩子') : null,
         th.booked ? h('span', { class: 'chip' }, '已记账') : t.booking && th.sections > 0 ? h('span', { class: 'chip' }, '记账中') : null,
@@ -1855,8 +1855,8 @@ __WORD_DRAW_JS__
   /** 一节 = 头一行(时间 · 节名)+ 若干行;行按卡量出来的宽度排(rowsFor) */
   // ---- 小课堂(《小课堂设计.md》):首页按钮 → 舞台包铺满整页放(#lc-frame);看完 → 板书顶上一张小课堂卡 + 「看完了!有什么想问老师的?」,输入条亮;
   //      孩子第一句带上看的情况(body.lecture),那条的节前画小课堂卡;「再看一遍」再铺开,关了回板书 ----
-  //      圈(§四、§五):播放器里停住了能圈,整张单子发回来(S.lecture.marks,页面是圈的主人);看完那排圈的卡能删,孩子开口时一起带上;
-  //      问过以后「再看一遍」又圈了,下一条带上(again)。圈的卡的缩略图 = 同一份 SVG 停在那一刻再叠圈(录数据不录屏幕) ----
+  //      画(§四、§五):播放器里停住了能画,停在同一刻画的几笔算一处,整张单子发回来(S.lecture.marks,页面是画的主人,带着截图);
+  //      看完那排画的卡能删,孩子开口时一起带上;问过以后「再看一遍」又画了,下一条带上(again)。画的卡的缩略图是截图 ----
   const lcFrame = $('#lc-frame');
   const lcPost = (m) => { try { lcFrame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
   /** 播放器左上「‹ 头像」用的老师头像(和老师页的返回胶囊一样;照 avatarEl 画法拆成图或字 + 颜色) */
@@ -1864,11 +1864,11 @@ __WORD_DRAW_JS__
   /** 小课堂在哪:课包 /api/bundles/<id>/;视频 /api/kid/lectures/<id>/(lecture.json + video.mp4) */
   const lcBundleUrl = (bundle, video) => (video ? '/api/kid/lectures/' : '/api/bundles/') + encodeURIComponent(bundle) + '/';
   let lcShowing = null;
-  /** 正在放的就是孩子手上这一课(圈记到 S.lecture) */
+  /** 正在放的就是孩子手上这一课(画记到 S.lecture) */
   const lcMine = () => Boolean(S.lecture && lcShowing && lcShowing.bundle === S.lecture.bundle && !S.readonly);
   const openLecture = (l) => {
     const L = l || S.lecture; if (!L) return;
-    // 问过以后(刷新过、或从别处回来,手上没有 S.lecture)从节前的小课堂卡再看一遍:这个话题接着收圈,下一条带上
+    // 问过以后(刷新过、或从别处回来,手上没有 S.lecture)从节前的小课堂卡再看一遍:这个话题接着收画的,下一条带上
     if (l && !S.readonly && !S.newThread && (!S.lecture || S.lecture.bundle !== l.bundle)) {
       const own = S.sections.find((x) => x.lecture && !x.lecture.again && x.lecture.bundle === l.bundle);
       if (own) S.lecture = { bundle: l.bundle, title: l.title, ...(own.lecture.video ? { video: true } : {}), watch: { watchedMs: 0, finished: true, pauses: 0 }, sent: true, firstJob: own.job, job: own.job, marks: [], flying: [], log: [] };
@@ -1879,28 +1879,30 @@ __WORD_DRAW_JS__
   const hideLecture = () => { lcShowing = null; lcFrame.hidden = true; lcFrame.src = 'about:blank'; };
   /** 「分:秒」(同 src/lib/lecture.ts 的 clockLabel) */
   const lcClock = (ms) => { const t = Math.max(0, Math.floor(ms / 1000)); const hh = Math.floor(t / 3600), mm = Math.floor((t % 3600) / 60), ss = String(t % 60).padStart(2, '0'); return hh ? hh + ':' + String(mm).padStart(2, '0') + ':' + ss : mm + ':' + ss; };
-  /** 课包那一刻的画面(圈的卡、小课堂卡的缩略图):服务端用烤好的画面现画(frame.svg,SVG 时刻 + 圈;没烤过的服务端先烤),一张 <img> */
-  const lcStill = (bundle, svgMs, path, cls) => {
+  /** 课包那一刻的画面(没截图的画的卡、小课堂卡的缩略图):服务端用烤好的画面现画(frame.svg,SVG 时刻 + 几笔;没烤过的服务端先烤),一张 <img>。
+   *  几笔写进地址(笔间「~」),缩略图用不着那么细:一共抽到 400 个点以内,地址不会太长 */
+  const lcStill = (bundle, svgMs, strokes, cls) => {
     const box = h('div', { class: cls });
-    const ring = path && path.length ? '&ring=' + encodeURIComponent(path.map((p) => Math.round(p[0]) + ',' + Math.round(p[1])).join(';')) : '';
+    const all = (strokes || []).filter((st) => st && st.length >= 2), n = all.reduce((a, st) => a + st.length, 0), step = Math.max(1, Math.ceil(n / 400));
+    const ring = all.length ? '&ring=' + all.map((st) => st.filter((_, i) => i % step === 0 || i === st.length - 1).map((p) => Math.round(p[0]) + ',' + Math.round(p[1])).join(';')).join('~') : '';
     const img = h('img', { class: 'mk-svg', alt: '', src: lcBundleUrl(bundle) + 'frame.svg?svg=' + (svgMs === 'end' ? 'end' : Math.round((svgMs || 0) * 10) / 10) + ring });
     box.append(img);
     return box;
   };
-  /** 圈的卡的缩略图:视频的是截下来的那张(还没发的是 data URL,发了是 captures/ 路径);课包的现画 */
+  /** 画的卡的缩略图:截下来的那张(还没发的是 data URL,发了是 captures/ 路径);没截图的课包现画 */
   /** 视频那一段末尾的一帧(小课堂卡的缩略图):<video> 停在 end 前一点,不出声 */
   const lcVideoStill = (bundle, end) => {
     const v = h('video', { class: 'lc-still', src: lcBundleUrl(bundle, true) + 'video.mp4#t=' + Math.max(0, (end - 200) / 1000).toFixed(2), playsinline: '', preload: 'metadata' });
     v.muted = true;
     return v;
   };
-  const markThumb = (l, mk) => mk.image ? h('div', { class: 'mk-th' }, h('img', { class: 'mk-svg', alt: '', src: mk.image.startsWith('data:') ? mk.image : '/api/kid/image?p=' + encodeURIComponent(mk.image) })) : lcStill(l.bundle, mk.svgMs, mk.path, 'mk-th');
-  /** 一张圈的卡:缩略图 + 「你圈的」+ 时刻;点了从那一刻停着打开小课堂;del = 看完还没交出去的能删 */
+  const markThumb = (l, mk) => mk.image ? h('div', { class: 'mk-th' }, h('img', { class: 'mk-svg', alt: '', src: mk.image.startsWith('data:') ? mk.image : '/api/kid/image?p=' + encodeURIComponent(mk.image) })) : lcStill(l.bundle, mk.svgMs, mk.strokes, 'mk-th');
+  /** 一张画的卡:缩略图 + 「你画的」+ 时刻;点了从那一刻停着打开小课堂;del = 看完还没交出去的能删 */
   const markCard = (l, mk, del) => h('div', { class: 'c c-mark', 'data-at': String(mk.atMs) },
-    h('div', { class: 'mk-main', on: { click: (e) => { e.stopPropagation(); openLecture({ bundle: l.bundle, title: l.title, at: mk.atMs, ...(l.video ? { video: true } : {}) }); } } }, markThumb(l, mk), h('div', { class: 'mk-t' }, h('small', {}, '你圈的'), h('b', {}, lcClock(mk.atMs)))),
-    del ? h('button', { type: 'button', class: 'x', 'aria-label': '删掉这个圈', on: { click: (e) => { e.stopPropagation(); del(); } } }, '×') : null);
+    h('div', { class: 'mk-main', on: { click: (e) => { e.stopPropagation(); openLecture({ bundle: l.bundle, title: l.title, at: mk.atMs, ...(l.video ? { video: true } : {}) }); } } }, markThumb(l, mk), h('div', { class: 'mk-t' }, h('small', {}, '你画的'), h('b', {}, lcClock(mk.atMs)))),
+    del ? h('button', { type: 'button', class: 'x', 'aria-label': '删掉这一处', on: { click: (e) => { e.stopPropagation(); del(); } } }, '×') : null);
   const markRow = (l, marks, del) => h('div', { class: 'mk-row' }, ...marks.map((k) => markCard(l, k, del ? () => del(k) : null)));
-  /** 板书顶上的小课堂卡:最后一帧的缩略图、课名、看完了、圈了几处、「再看一遍」(done = 孩子已经问过,卡画在那一节前面);缩略图点了也是再看一遍(拍板 37) */
+  /** 板书顶上的小课堂卡:最后一帧的缩略图、课名、看完了、画了几处、「再看一遍」(done = 孩子已经问过,卡画在那一节前面);缩略图点了也是再看一遍(拍板 37) */
   const lectureCard = (l, done) => {
     const n = (l.marks || []).length;
     const again = (e) => { e.stopPropagation(); openLecture({ bundle: l.bundle, title: l.title, ...(l.video ? { video: true } : {}) }); };
@@ -1908,15 +1910,15 @@ __WORD_DRAW_JS__
     const still = l.video ? (l.endMs ? lcVideoStill(l.bundle, l.endMs) : null) : lcStill(l.bundle, 'end', null, 'th');
     return h('div', { class: 'c c-lc', 'data-lecture': l.bundle },
       still ? h('button', { type: 'button', class: 'lc-th', 'aria-label': '再看一遍', on: { click: again } }, still) : null,
-      h('div', { class: 'lt' }, h('small', {}, '小课堂'), h('b', {}, l.title || ''), h('span', {}, '看完了' + (n ? ' · 圈了 ' + n + ' 处' : done ? '' : ' · 有不懂的就问老师'))),
+      h('div', { class: 'lt' }, h('small', {}, '小课堂'), h('b', {}, l.title || ''), h('span', {}, '看完了' + (n ? ' · 画了 ' + n + ' 处' : done ? '' : ' · 有不懂的就问老师'))),
       h('button', { type: 'button', class: 're', on: { click: again } }, '再看一遍'));
   };
-  /** 一节前面的小课堂:第一问那节是小课堂卡 + 圈的卡;再看一遍又圈的那节只有圈的卡 */
+  /** 一节前面的小课堂:第一问那节是小课堂卡 + 画的卡;再看一遍又画的那节只有画的卡 */
   const lectureHead = (s) => !s.lecture ? [] : [s.lecture.again ? null : lectureCard(s.lecture, true), s.lecture.marks && s.lecture.marks.length ? markRow(s.lecture, s.lecture.marks, null) : null];
   /**
-   * 板书上还没落进哪一节的小课堂(S.lecture):看完、还没开口 → 顶上小课堂卡 + 一排圈的卡(能删)+「看完了!有什么想问老师的?」;
-   * 问了、那一节还没回来 → 卡与发出去的圈留着(不能删了),提示撤掉;那一节回来了(节前画着)→ 撤掉。
-   * 问过以后再看一遍又圈了 → 板书末尾一排圈的卡(能删)+ 一句「下次说话会一起带给老师」
+   * 板书上还没落进哪一节的小课堂(S.lecture):看完、还没开口 → 顶上小课堂卡 + 一排画的卡(能删)+「看完了!有什么想问老师的?」;
+   * 问了、那一节还没回来 → 卡与发出去的画留着(不能删了),提示撤掉;那一节回来了(节前画着)→ 撤掉。
+   * 问过以后再看一遍又画了 → 板书末尾一排画的卡(能删)+ 一句「下次说话会一起带给老师」
    */
   const renderLecturePending = () => {
     const old = $('#board .lc-pending');
@@ -1926,11 +1928,11 @@ __WORD_DRAW_JS__
     const flying = L && waiting ? (L.flying || []) : [];
     const marks = L && L.watch ? (L.marks || []) : [];
     if (!L || (!showCard && !flying.length && !marks.length)) { if (old) old.remove(); return; }
-    const key = JSON.stringify([showCard, L.sent, flying.map((k) => k.atMs), marks.map((k) => k.atMs + ':' + k.path.length)]);
+    const key = JSON.stringify([showCard, L.sent, flying.map((k) => k.atMs), marks.map((k) => k.atMs + ':' + k.strokes.length + (k.image ? ':i' : ''))]);
     if (old && old.getAttribute('data-key') === key) return;
     const del = (k) => { L.marks = L.marks.filter((x) => x !== k); renderLecturePending(); };
-    const ask = !L.sent ? h('div', { class: 'lc-ask' }, h('b', {}, '看完了!有什么想问老师的?'), h('span', {}, marks.length ? '圈的 ' + marks.length + ' 处,问的时候会一起带给老师;不想带的点 × 去掉' : '按住说话,或者打字'))
-      : marks.length ? h('div', { class: 'lc-ask sm' }, h('span', {}, '又圈了 ' + marks.length + ' 处,下次说话会一起带给老师;不想带的点 × 去掉')) : null;
+    const ask = !L.sent ? h('div', { class: 'lc-ask' }, h('b', {}, '看完了!有什么想问老师的?'), h('span', {}, marks.length ? '画的 ' + marks.length + ' 处,问的时候会一起带给老师;不想带的点 × 去掉' : '按住说话,或者打字'))
+      : marks.length ? h('div', { class: 'lc-ask sm' }, h('span', {}, '又画了 ' + marks.length + ' 处,下次说话会一起带给老师;不想带的点 × 去掉')) : null;
     const el = h('div', { class: 'lc-pending', 'data-key': key }, showCard ? lectureCard({ bundle: L.bundle, title: L.title, video: L.video, endMs: L.watch && L.watch.watchedMs, marks: L.sent ? flying : marks }, false) : null,
       flying.length || marks.length ? h('div', { class: 'mk-row' }, ...flying.map((k) => markCard(L, k, null)), ...marks.map((k) => markCard(L, k, () => del(k)))) : null, ask);
     if (old) old.remove();
@@ -1941,7 +1943,7 @@ __WORD_DRAW_JS__
     if (!m || m.source !== STAGE_SOURCE || e.source !== lcFrame.contentWindow || !lcShowing) return;
     if (m.type === 'ready') {
       lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, tutor: lcTutor(), marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}), ...(lcShowing.follow ? { follow: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
-      // 录像(follow):播放器这时才在听,录像停着不会再发,把最近那条 follow 再发一次(之前那条它没收到;2026-10-19 停着点「圈了一处」一直停在 0:00)
+      // 录像(follow):播放器这时才在听,录像停着不会再发,把最近那条 follow 再发一次(之前那条它没收到;2026-10-19 停着点「圈了一处」(现在叫「画了一处」)一直停在 0:00)
       if (lcShowing.follow && lcShowing.followMsg) lcPost(lcShowing.followMsg);
     }
     else if (m.type === 'marks') { if (lcMine()) S.lecture.marks = m.marks; }
@@ -2758,15 +2760,15 @@ __WORD_DRAW_JS__
     if (focus) body.focus = focus;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
-    // 小课堂:看完后的第一条带看的情况与圈;问过以后再看一遍又圈了,下一条带新圈的
+    // 小课堂:看完后的第一条带看的情况与画的;问过以后再看一遍又画了,下一条带新画的
     const L = S.lecture;
-    // 视频的圈带截图:先传成 captures/ 里的文件(同照片),换成路径;传不上就不带这张图
+    // 画的一处带截图:先传成 captures/ 里的文件(同照片),换成路径;传不上就不带这张图
     if (L && L.marks && L.marks.some((k) => k.image && k.image.startsWith('data:'))) {
       for (const k of L.marks) if (k.image && k.image.startsWith('data:')) { try { const r = await api('POST', CONV + S.tutor.name + '/photos', { image: k.image }); k.image = r.path; } catch { delete k.image; } }
     }
-    // 时刻换成离发出去多少毫秒(孩子端自己的钟,不用对钟);问过以后又看了(圈了或只是看了)也带上
+    // 时刻换成离发出去多少毫秒(孩子端自己的钟,不用对钟);问过以后又看了(画了或只是看了)也带上
     const sentAt = Date.now();
-    if (L && L.watch && (!L.sent || L.marks.length || L.log.length)) body.lecture = { bundle: L.bundle, ...(L.sent ? (L.rewatch || { watchedMs: 0, finished: false, pauses: 0 }) : L.watch), ...(L.marks.length ? { marks: L.marks.map((k) => ({ atMs: k.atMs, path: k.path, ...(k.image ? { image: k.image } : {}), ...(k.at ? { t: Math.min(0, k.at - sentAt) } : {}) })) } : {}), ...(L.log.length ? { log: L.log.map((e) => ({ t: Math.min(0, e.at - sentAt), pos: e.pos, play: e.play })) } : {}) };
+    if (L && L.watch && (!L.sent || L.marks.length || L.log.length)) body.lecture = { bundle: L.bundle, ...(L.sent ? (L.rewatch || { watchedMs: 0, finished: false, pauses: 0 }) : L.watch), ...(L.marks.length ? { marks: L.marks.map((k) => ({ atMs: k.atMs, strokes: k.strokes, ...(k.image ? { image: k.image } : {}), ...(k.at ? { t: Math.min(0, k.at - sentAt) } : {}) })) } : {}), ...(L.log.length ? { log: L.log.map((e) => ({ t: Math.min(0, e.at - sentAt), pos: e.pos, play: e.play })) } : {}) };
     try {
       const r = await api('POST', CONV + S.tutor.name + '/messages', body);
       S.via = null;
@@ -3028,7 +3030,7 @@ __WORD_DRAW_JS__
     const R = S.reel, x = f.lecture;
     if (!x) { if (R.lc) { R.lc = null; hideLecture(); } return; }
     if (!R.lc || R.lc !== x.job) { R.lc = x.job; openLecture({ bundle: x.bundle, title: x.title, follow: true, ...(x.video ? { video: true } : {}) }); }
-    const msg = { type: 'follow', ms: x.pos, playing: x.playing && R.playing && !R.seeking, rate: R.speed, marks: x.marks.map((k) => ({ atMs: k.atMs, svgMs: k.svgMs, path: k.path, ...(k.image ? { image: k.image } : {}) })) };
+    const msg = { type: 'follow', ms: x.pos, playing: x.playing && R.playing && !R.seeking, rate: R.speed, marks: x.marks.map((k) => ({ atMs: k.atMs, svgMs: k.svgMs, strokes: k.strokes, ...(k.image ? { image: k.image } : {}) })) };
     if (lcShowing) lcShowing.followMsg = msg;
     lcPost(msg);
   };
@@ -3093,7 +3095,7 @@ __WORD_DRAW_JS__
         if (m.kind === 'said') { const pm = msgOf(m.job); add(m.at, 'said', pm && pm.via ? '首页' : pm && pm.from === 'system' ? '系统' : '孩子', m.label + (pm && pm.voice ? ' · 原声 ' + Math.round(pm.voice.seconds * 10) / 10 + ' 秒' : '')); if (pm && pm.cards && pm.cards.length) add(m.at + 1, 'card', '做了', pm.cards.map((c) => c.text + took(c.took)).join(';')); }
         else if (m.kind === 'ask') add(m.at, 'wait', '等孩子', m.label);
         else if (m.kind === 'error') add(m.at, 'err', '没成', m.label);
-        else if (m.kind === 'lecture' || m.kind === 'circle') add(m.at, 'card', '小课堂', m.label);
+        else if (m.kind === 'lecture' || m.kind === 'ink') add(m.at, 'card', '小课堂', m.label);
         else if (m.kind === 'miss') add(m.at, 'miss', '没发出去', m.label.replace('按住说话没发出去 · ', '按住说话 · '));
         else if (m.kind === 'misses') add(m.at - 1, 'miss', '⚠ 连着', m.label);
       }
@@ -3108,7 +3110,7 @@ __WORD_DRAW_JS__
         if (pm.parentText) add(n.postAt, 'tail', '给家长', pm.parentText.replace('## 家长', '').trim());
         if (pm.remembered && pm.remembered.length) add(n.postAt, 'tail', '记住了', pm.remembered.join(';'));
       }
-      // 家长板书页别的旁注(拍板 16):两份听写、答案、口播评测、画图给家长的、圈的那段话、提醒;记账与整理记忆那两轮不进录像,记在最后
+      // 家长板书页别的旁注(拍板 16):两份听写、答案、口播评测、画图给家长的、小课堂里画的那段话、提醒;记账与整理记忆那两轮不进录像,记在最后
       for (const pm of R.d.messages) {
         const tr = rl.tracks.find((x) => x.job === pm.job), nt = rl.notes.find((x) => x.job === pm.job);
         const own = reelParse(pm.timing && pm.timing.startedAt), at0 = nt ? nt.at : tr ? tr.at : Math.min(rl.endAt, Number.isNaN(own) ? rl.endAt : own);
@@ -3124,7 +3126,7 @@ __WORD_DRAW_JS__
           if (hd) add(post, 'card', '口播评测', hd.ok ? [hd.verdict, '句 ' + Math.round(hd.accuracy || 0)].concat((hd.chars || []).filter((x) => !x.ok).map((x) => x.ch + (x.readAs ? ' 读成 ' + x.readAs + '?' : ' ' + Math.round(x.score)))).join(' · ') : '没评上' + (hd.error ? ':' + hd.error : ''));
         }
         const lec = rl.lectures.find((x) => x.job === pm.job);
-        ((pm.lecture && pm.lecture.marks) || []).forEach((mk, k) => add(lec && lec.marks[k] ? lec.marks[k].at + 1 : at0, 'card', '圈的', lcClock(mk.atMs) + ' · ' + (mk.text || '(课包读不出来,没算出圈住了什么)')));
+        ((pm.lecture && pm.lecture.marks) || []).forEach((mk, k) => add(lec && lec.marks[k] ? lec.marks[k].at + 1 : at0, 'card', '画的', lcClock(mk.atMs) + ' · ' + (mk.text || '(课读不出来,没给老师那段话)')));
         if (pm.warnings && pm.warnings.length) add(post + 2, 'err', '提醒', pm.warnings.join(';'));
         if (pm.bookkeep) add(Math.min(rl.endAt, at0), 'tail', '记账', pm.pending ? '记账中' : pm.error ? '记账没成:' + pm.error : '已记进日记');
         if ((pm.bookkeep || pm.tidy) && pm.remembered && pm.remembered.length) add(Math.min(rl.endAt, at0) + 1, 'tail', pm.tidy ? '整理了记忆' : '记住了', pm.remembered.join(';'));

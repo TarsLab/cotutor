@@ -1,11 +1,11 @@
 /**
- * 小课堂(《小课堂设计.md》)的纯函数:服务端(课长、上下文包 lecture: 的每句起点、圈住了什么)与舞台包(播放器)共用。
+ * 小课堂(《小课堂设计.md》)的纯函数:服务端(课长、上下文包 lecture: 的每句起点、画的地方盖着什么)与舞台包(播放器)共用。
  *
- * 课包的时钟、几何、圈住了什么都在 drawtell/core(纯计算,不带 React,服务端能 import):一段 = 一步,段长 = max(画, 配音),
+ * 课包的时钟、几何、圈住了什么(这里拿来说画的地方盖着什么)都在 drawtell/core(纯计算,不带 React,服务端能 import):一段 = 一步,段长 = max(画, 配音),
  * 课的 0 毫秒对着 SVG 的 START_MS;笔画按配音拉伸,和 buildAnimatedSvg 画出来的同一份时间。这里用小课堂的名字转出来
  * (视频也有时钟,videoClock),外加小课堂自己的:时间怎么写、上下文包的每句、老师放的那一段、视频的 lecture.md。
  */
-import { circleHits, clockAt, describeCircle, type LessonPicture } from 'drawtell/core';
+import { circleHits, clockAt, hitPhrase, type LessonPicture } from 'drawtell/core';
 import type { LessonClock, LessonSegment } from 'drawtell/core';
 
 export { lessonClock as lectureClock, clockAt as lectureAt, START_MS as DRAW_START_MS } from 'drawtell/core';
@@ -46,23 +46,70 @@ export function lectureNext(clock: Pick<LectureClock, 'segments' | 'total'>, cur
   return Math.min(clock.total, Math.max(cur, s.start + voice.posMs));
 }
 
-// ---- 圈(《小课堂设计.md》§四):孩子暂停后在画面上圈的一处 → 一段话(那一刻在讲哪句、圈住了什么)。只认课包 ----
+// ---- 画(《小课堂设计.md》§四):孩子停住了在画面上画的一处(停在同一刻画的几笔)→ 一张截图 + 一段话(那一刻在讲哪句、画的地方盖着什么) ----
 
-/** 一处圈:课里的时刻 + 一条路径(课包画面坐标,即 scene.json 的坐标系) */
+/** 一处画:课里的时刻 + 几笔(课包画面坐标,即 scene.json 的坐标系;视频是视频自己的像素坐标) */
 export interface LectureMark {
   atMs: number;
-  path: [number, number][];
+  strokes: [number, number][][];
+}
+
+/** 一堂课最多画几处(播放器与路由都拦):一处一张截图,和孩子拍的照片一共不过 9 张 */
+export const MARK_MAX = 6;
+/** 一处最多几笔、一共几个点;一笔的点抽到 MARK_STROKE_POINTS 以内 */
+export const MARK_MAX_STROKES = 60;
+export const MARK_MAX_POINTS = 1200;
+export const MARK_STROKE_POINTS = 300;
+
+/** 「0:26 画的,那时在讲『…』」:一处画给老师、家长的那段话的头 */
+export function markHead(clock: LectureClock, atMs: number): string {
+  const line = clock.segments[clockAt(clock, atMs).index]?.line.trim() ?? '';
+  return `${clockLabel(atMs)} 画的${line ? `,那时在讲『${line}』` : ''}`;
+}
+
+/** 太细的一处(一条线、一个点)给 circleHits 的框至少多宽(课包坐标) */
+const MIN_RING = 24;
+
+/**
+ * 几笔 → 给 drawtell circleHits 的一圈:所有点的凸包(圈了一圈就是那一圈,没封口的也合上);
+ * 太细的(划一道、点一下)用外框,各边放宽到 MIN_RING。没有点 = []。
+ */
+export function inkRing(strokes: readonly (readonly [number, number][])[]): [number, number][] {
+  const pts = strokes.flat().slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (!pts.length) return [];
+  // 凸包(Andrew 单调链)
+  const cross = (o: [number, number], a: [number, number], b: [number, number]): number => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = (list: [number, number][]): [number, number][] => {
+    const h: [number, number][] = [];
+    for (const p of list) { while (h.length >= 2 && cross(h[h.length - 2], h[h.length - 1], p) <= 0) h.pop(); h.push(p); }
+    h.pop();
+    return h;
+  };
+  const hull = [...half(pts), ...half(pts.slice().reverse())];
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  if (hull.length >= 3 && x1 - x0 >= MIN_RING && y1 - y0 >= MIN_RING) return hull;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, hw = Math.max(x1 - x0, MIN_RING) / 2, hh = Math.max(y1 - y0, MIN_RING) / 2;
+  return [[cx - hw, cy - hh], [cx + hw, cy - hh], [cx + hw, cy + hh], [cx - hw, cy + hh]];
 }
 
 /**
- * 一处圈 → 一段话给老师(上下文包 lecture.marks)与家长(圈的卡下面那行):
- * 「0:26 圈的,那时在讲『…』;圈住了:散的 3 根小棒;文字『3』」。
- * 圈住了什么由 drawtell 的 circleHits 认(分组 > 命中块 > 带 label 的元素 > 文字 > 没字的按第几步、什么、颜色归堆),这里只拼上时刻与那句讲稿。
+ * 画的地方盖着什么(只给课包,老师对着截图时的提示,用课里的叫法):「画的地方盖着:散的 3 根小棒;文字『3』」/「画在文字『3』旁边」/
+ * 「画的地方那时还没画东西」。认的是 drawtell 的 circleHits(分组 > 命中块 > 带 label 的元素 > 文字 > 没字的按第几步、什么、颜色归堆),圈是 inkRing。
  */
+export function inkHint(clock: LectureClock, mark: LectureMark, picture: LessonPicture = {}): { text: string; ids: string[] } {
+  const ring = inkRing(mark.strokes);
+  if (!ring.length) return { text: '', ids: [] };
+  const r = circleHits(clock, mark.atMs, ring, picture);
+  const say = (h: Parameters<typeof hitPhrase>[0]): string => hitPhrase(h).replace('(圈住了其中', '(盖着其中');
+  const text = r.kind === 'hit' ? `画的地方盖着:${r.hits.map(say).join(';')}` : r.kind === 'near' && r.near ? `画在${say(r.near)}旁边` : r.kind === 'empty' ? '画的地方那时还没画东西' : '';
+  return { text, ids: r.ids };
+}
+
+/** 一处画说成一段话(不带截图那半):「0:26 画的,那时在讲『…』;画的地方盖着:…」 */
 export function describeMark(clock: LectureClock, mark: LectureMark, picture: LessonPicture = {}): { text: string; ids: string[] } {
-  const r = circleHits(clock, mark.atMs, mark.path, picture);
-  const line = r.line.trim();
-  return { text: `${clockLabel(mark.atMs)} 圈的${line ? `,那时在讲『${line}』` : ''};${describeCircle(r)}`, ids: r.ids };
+  const h = inkHint(clock, mark, picture);
+  return { text: `${markHead(clock, mark.atMs)}${h.text ? `;${h.text}` : ''}`, ids: h.ids };
 }
 
 // ---- 老师放课里的一段(《小课堂设计.md》§六):lecture 卡写「<课包 id> 0:19-0:30」 ----

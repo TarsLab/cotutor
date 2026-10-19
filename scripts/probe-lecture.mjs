@@ -2,11 +2,12 @@
 /**
  * 小课堂(《小课堂设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱;样本课包 tests/fixtures/bundles/2026-09-18-po13-jian-8 没有配音,按配音时长走):
  * 首页数学老师卡上的小课堂按钮(课长、「看完再问老师」)→ 点了铺满:「开始看」→ 放着:字幕、进度条一段段走、时间走 → 拖到中间:画面跟着、不出声 →
- * 暂停 → 竖栏「圈一圈」变蓝、「擦掉」灰 → 在画面上圈散的 3 根小棒:进度条上一个蓝记号、字幕行「圈好了,记在 0:2x」→ 擦掉再圈 → 接着看 → 放着点「圈一圈」= 停下拿起笔 →
- * 点进度条第 6 段放到结尾 → 停在最后一帧不收,话音落了约 1 秒播放钮换成「再看一遍」、右头淡入「去问老师」 → 点「去问老师」→ 看完:铺满的收起,板书顶上小课堂卡(圈了 1 处)+ 一张圈的卡(缩略图是那一刻的画面 + 蓝圈,能删)+「看完了!有什么想问老师的?」,输入条亮、头上「小课堂」→
- * 从输入条问一句 → 老师那一节的节前画着小课堂卡与圈的卡(不能删了),提示撤掉;老师那一节有一张小课堂卡(放课里 0:19–0:30,缩略图是那一段的末帧),
- * 讲稿念到 [[play]] 自己铺满放那一段、放到 0:30 停在末帧、舞台不关、接着念下一句;家长端那条的圈带着算出来的那段话;
- * 家长看录像:从看小课堂开始,进度条上有「看小课堂」「圈了一处」的点,看课那一段播放器铺在板书上跟着录像走(只看),点「圈了一处」停在圈的那一刻、画着那一圈。iPad 横屏,每步截图。
+ * 暂停 → 竖栏「画一画」变蓝、「擦掉」灰 → 在画面上圈散的 3 根小棒:进度条上一个蓝记号、字幕行「画好了,记在 0:2x」→ 擦掉再圈 → 同一刻再画一笔:还是一处、两笔 →
+ * 接着看 → 放着点「画一画」= 停下拿起笔 →
+ * 点进度条第 6 段放到结尾 → 停在最后一帧不收,话音落了约 1 秒播放钮换成「再看一遍」、右头淡入「去问老师」 → 点「去问老师」→ 看完:铺满的收起,板书顶上小课堂卡(画了 1 处)+ 一张画的卡(缩略图是截图:那一刻的画面 + 两笔,能删)+「看完了!有什么想问老师的?」,输入条亮、头上「小课堂」→
+ * 从输入条问一句 → 老师那一节的节前画着小课堂卡与画的卡(不能删了),提示撤掉;老师那一节有一张小课堂卡(放课里 0:19–0:30,缩略图是那一段的末帧),
+ * 讲稿念到 [[play]] 自己铺满放那一段、放到 0:30 停在末帧、舞台不关、接着念下一句;家长端那条的画带着给老师的那段话(截图第几张、画的地方盖着什么);
+ * 家长看录像:从看小课堂开始,进度条上有「看小课堂」「画了一处」的点,看课那一段播放器铺在板书上跟着录像走(只看),点「画了一处」停在画的那一刻、画着那两笔。iPad 横屏,每步截图。
  *
  * 用法:node scripts/probe-lecture.mjs [--shots <目录>] [--keep]
  */
@@ -103,7 +104,20 @@ try {
   await evaluate(`${D}.querySelector('.lc-play').click()`);
   await sleep(300);
   const tools = await evaluate(`[...${D}.querySelectorAll('.lc-tool')].map((b) => b.textContent.trim() + (b.disabled ? '(灰)' : '')).join(' ') + ' | ' + ${D}.querySelector('.lc-play').textContent.trim()`);
-  ok('暂停:「圈一圈」「擦掉」出来(这一刻没圈过,擦掉是灰的),播放钮写「接着看」', tools === '圈一圈 擦掉(灰) | 接着看', tools);
+  ok('暂停:「画一画」「擦掉」出来(这一刻没画过,擦掉是灰的),播放钮写「接着看」', tools === '画一画 擦掉(灰) | 接着看', tools);
+  /** 在画面上画一笔:课包坐标的折线(屏幕点由 SVG 的 getScreenCTM 正算) */
+  const line = async (bundlePts) => {
+    const pts = await evaluate(`(() => {
+    const d = ${D}, svg = d.querySelector('.lc-svg');
+    const g = [...svg.children].find((e) => e.tagName === 'g'); const m0 = /translate\\(([-\\d.]+) ([-\\d.]+)/.exec(g.getAttribute('transform'));
+    const dx = Number(m0[1]) - 450, dy = Number(m0[2]) - 22;
+    const ctm = svg.getScreenCTM();
+    return ${JSON.stringify(bundlePts)}.map(([x, y]) => { const p = new DOMPoint(x + dx, y + dy).matrixTransform(ctm); return { x: p.x, y: p.y }; });
+  })()`);
+    await drag(pts);
+    await sleep(300);
+    return evaluate(`(() => { const d = ${D}; return { marks: d.querySelectorAll('.lc-mark').length, line: d.querySelector('.lc-line').textContent, count: d.querySelector('.lc-time small')?.textContent ?? '', ink: d.querySelectorAll('.lc-ink path').length }; })()`);
+  };
   const circle = async (cx, cy, rx, ry) => {
     const pts = await evaluate(`(() => {
     const d = ${D}, svg = d.querySelector('.lc-svg');
@@ -118,23 +132,27 @@ try {
     return evaluate(`(() => { const d = ${D}; return { marks: d.querySelectorAll('.lc-mark').length, line: d.querySelector('.lc-line').textContent, count: d.querySelector('.lc-time small')?.textContent ?? '', ink: d.querySelectorAll('.lc-ink path').length }; })()`);
   };
   const c1 = await circle(334, 120, 45, 50);
-  ok('圈了一处:进度条上一个蓝记号、字幕行「圈好了,记在 0:2x」、「圈了 1 处」、画面上留着那一圈', c1.marks === 1 && /^圈好了,记在 0:2\d。/.test(c1.line) && c1.count === '圈了 1 处' && c1.ink === 1, JSON.stringify(c1));
+  ok('画了一处:进度条上一个蓝记号、字幕行「画好了,记在 0:2x」、「画了 1 处」、画面上留着那一圈', c1.marks === 1 && /^画好了,记在 0:2\d。/.test(c1.line) && c1.count === '画了 1 处' && c1.ink === 1, JSON.stringify(c1));
   await shot('lecture-circle.png');
   await evaluate(`[...${D}.querySelectorAll('.lc-tool')][1].click()`);
   await sleep(200);
   const erased = await evaluate(`({ marks: ${D}.querySelectorAll('.lc-mark').length, ink: ${D}.querySelectorAll('.lc-ink path').length })`);
   const c2 = await circle(334, 120, 45, 50);
   ok('擦掉:记号与画面上的圈都没了;再圈一处又有了', erased.marks === 0 && erased.ink === 0 && c2.marks === 1, JSON.stringify({ erased, c2 }));
+  // 同一刻再画一笔(旁边打个钩):并进这一处,不多一处
+  const c2b = await line([[372, 100], [384, 116], [410, 70]]);
+  ok('同一刻再画一笔:还是一处(一个记号、「画了 1 处」),画面上两笔', c2b.marks === 1 && c2b.count === '画了 1 处' && c2b.ink === 2, JSON.stringify(c2b));
+  await shot('lecture-two-strokes.png');
   await evaluate(`${D}.querySelector('.lc-play').click()`);
   await sleep(500);
   const resumed = await evaluate(`({ ink: ${D}.querySelectorAll('.lc-ink path').length, tools: [...${D}.querySelectorAll('.lc-tool')].map((b) => b.textContent.trim() + (b.disabled ? '(灰)' : '') + (b.classList.contains('on') ? '(蓝)' : '')).join(' '), pen: Boolean(${D}.querySelector('.lc-canvas.lc-pen')), line: ${D}.querySelector('.lc-line').textContent })`);
-  ok('接着看:圈从画面上收起、字幕回到讲稿;竖栏里工具还在(圈一圈能点、擦掉灰);记号还在进度条上', resumed.ink === 0 && resumed.tools === '圈一圈 擦掉(灰)' && !resumed.pen && !resumed.line.startsWith('圈好了') && await evaluate(`${D}.querySelectorAll('.lc-mark').length === 1`), JSON.stringify(resumed));
-  // 放着点「圈一圈」= 停下并拿起笔(拍板 38)
+  ok('接着看:画的从画面上收起、字幕回到讲稿;竖栏里工具还在(画一画能点、擦掉灰);记号还在进度条上', resumed.ink === 0 && resumed.tools === '画一画 擦掉(灰)' && !resumed.pen && !resumed.line.startsWith('画好了') && await evaluate(`${D}.querySelectorAll('.lc-mark').length === 1`), JSON.stringify(resumed));
+  // 放着点「画一画」= 停下并拿起笔(拍板 38)
   const t0 = await evaluate(`${D}.querySelector('.lc-time span').textContent`);
   await evaluate(`${D}.querySelector('.lc-tool').click()`);
   await sleep(1200);
   const grab = await evaluate(`({ play: ${D}.querySelector('.lc-play').textContent.trim(), on: ${D}.querySelector('.lc-tool').classList.contains('on'), pen: Boolean(${D}.querySelector('.lc-canvas.lc-pen')), t0: ${JSON.stringify(t0)}, t1: ${D}.querySelector('.lc-time span').textContent })`);
-  ok('放着点「圈一圈」:停下(播放钮写「接着看」、时间不走)、圈一圈变蓝、画面能圈', grab.play === '接着看' && grab.on && grab.pen && grab.t1 === (await evaluate(`${D}.querySelector('.lc-time span').textContent`)), JSON.stringify(grab));
+  ok('放着点「画一画」:停下(播放钮写「接着看」、时间不走)、画一画变蓝、画面能画', grab.play === '接着看' && grab.on && grab.pen && grab.t1 === (await evaluate(`${D}.querySelector('.lc-time span').textContent`)), JSON.stringify(grab));
   await shot('lecture-grab-pen.png');
   await evaluate(`${D}.querySelector('.lc-play').click()`);
   await sleep(300);
@@ -145,7 +163,7 @@ try {
   const hold = await evaluate(`({ shown: !${F}.hidden, ask: Boolean(${D}.querySelector('.lc-askbtn')), hint: Boolean(${D}.querySelector('.lc-hint')), play: ${D}.querySelector('.lc-play').textContent.trim(), time: ${D}.querySelector('.lc-time span').textContent })`);
   const faded = await until(`Boolean(${D}.querySelector('.lc-askbtn'))`, 12);
   const endUi = await evaluate(`({ shown: !${F}.hidden, play: ${D}.querySelector('.lc-play').textContent.trim(), ask: ${D}.querySelector('.lc-askbtn').textContent.trim(), tools: [...${D}.querySelectorAll('.lc-tools .lc-tool')].map((b) => b.textContent.trim() + (b.disabled ? '(灰)' : '')).join(' '), line: ${D}.querySelector('.lc-line').textContent })`);
-  ok('放到结尾:停在最后一帧不收;右头一格先空着;约 1 秒后播放钮换成「再看一遍」、右头淡入「去问老师」,竖栏里圈一圈能点,字幕留着最后一句', atEnd && hold.shown && !hold.ask && !hold.hint && hold.play === '' && /^0:4\d \/ 0:4\d$/.test(hold.time) && faded && endUi.shown && endUi.play === '再看一遍' && endUi.ask === '去问老师' && endUi.tools === '圈一圈 擦掉(灰)' && endUi.line.startsWith('所以,13 减 8 等于 5'), JSON.stringify({ hold, endUi }));
+  ok('放到结尾:停在最后一帧不收;右头一格先空着;约 1 秒后播放钮换成「再看一遍」、右头淡入「去问老师」,竖栏里画一画能点,字幕留着最后一句', atEnd && hold.shown && !hold.ask && !hold.hint && hold.play === '' && /^0:4\d \/ 0:4\d$/.test(hold.time) && faded && endUi.shown && endUi.play === '再看一遍' && endUi.ask === '去问老师' && endUi.tools === '画一画 擦掉(灰)' && endUi.line.startsWith('所以,13 减 8 等于 5'), JSON.stringify({ hold, endUi }));
   await shot('lecture-end.png');
   await evaluate(`${D}.querySelector('.lc-askbtn').click()`);
   const finished = await until(`${F}.hidden && Boolean(document.querySelector('.lc-pending'))`, 60);
@@ -155,15 +173,22 @@ try {
   const thSvg = await evaluate(`(async () => { const img = document.querySelector('.lc-pending .c-lc .lc-th img'); const t = await (await fetch(img.src)).text(); return { end: img.src.includes('svg=end'), len: t.length }; })()`);
   ok('小课堂卡的缩略图是最后一帧(frame.svg?svg=end)', th && thSvg.end && thSvg.len > 1000, JSON.stringify(thSvg));
   await until(`(document.querySelector('.lc-pending .c-mark img.mk-svg')?.naturalWidth ?? 0) > 0`, 60);
-  // 缩略图是服务端用烤好的画面现画的(frame.svg):停在圈的那一刻(第 3 步画到一半,不是全画完)、叠着蓝圈
-  const mk = await evaluate(`(async () => { const c = document.querySelector('.lc-pending .c-mark'); const img = c?.querySelector('img.mk-svg'); const svg = img ? await (await fetch(img.src)).text() : ''; return { n: document.querySelectorAll('.lc-pending .c-mark').length, label: c?.querySelector('.mk-t')?.textContent, x: Boolean(c?.querySelector('.x')), sub: document.querySelector('.lc-pending .c-lc .lt span')?.textContent, hint: document.querySelector('.lc-ask span')?.textContent, frame: Boolean(img?.src.includes('/frame.svg?svg=')), ring: svg.includes('stroke="#2f6fd6"'), crossed: (svg.match(/#e8590c/g) || []).length, red: (svg.match(/#e03131/g) || []).length, w: img ? Math.round(img.getBoundingClientRect().width) : 0 }; })()`);
-  ok('看完那排:一张圈的卡(「你圈的 0:2x」、能删),缩略图是服务端现画的那一刻(第 3 步的橙色斜线画上了、第 4 步的红圈还没有)、带蓝圈;小课堂卡写「圈了 1 处」;提示说会一起带给老师', mk.n === 1 && /^你圈的0:2\d$/.test(mk.label) && mk.x && mk.sub === '看完了 · 圈了 1 处' && mk.hint.startsWith('圈的 1 处,问的时候会一起带给老师') && mk.frame && mk.ring && mk.crossed >= 1 && mk.red === 0 && mk.w > 100, JSON.stringify(mk));
+  // 缩略图是播放器截的图(给老师的那张):那一刻的画面(服务端烤好的 frame.svg,第 3 步画到一半,不是全画完)叠上两笔。数一数像素:蓝的(画的)、橙的(第 3 步的斜线)、红的(第 4 步的圈,不该有)、深色的字
+  const mk = await evaluate(`(async () => { const c = document.querySelector('.lc-pending .c-mark'); const img = c?.querySelector('img.mk-svg'); const px = { blue: 0, orange: 0, red: 0, dark: 0, w: 0, h: 0 };
+    if (img) { const im = new Image(); im.src = img.src; await im.decode(); const cv = document.createElement('canvas'); cv.width = px.w = im.naturalWidth; cv.height = px.h = im.naturalHeight; const g = cv.getContext('2d'); g.drawImage(im, 0, 0); const d = g.getImageData(0, 0, cv.width, cv.height).data;
+      const near = (i, r, gg, b) => Math.abs(d[i] - r) + Math.abs(d[i + 1] - gg) + Math.abs(d[i + 2] - b) < 90;
+      for (let i = 0; i < d.length; i += 4) { if (near(i, 47, 111, 214)) px.blue++; else if (near(i, 232, 89, 12)) px.orange++; else if (near(i, 224, 49, 49)) px.red++; else if (d[i] + d[i + 1] + d[i + 2] < 200) px.dark++; } }
+    return { n: document.querySelectorAll('.lc-pending .c-mark').length, label: c?.querySelector('.mk-t')?.textContent, x: Boolean(c?.querySelector('.x')), sub: document.querySelector('.lc-pending .c-lc .lt span')?.textContent, hint: document.querySelector('.lc-ask span')?.textContent, jpeg: Boolean(img?.src.startsWith('data:image/jpeg')), px, shown: img ? Math.round(img.getBoundingClientRect().width) : 0 }; })()`);
+  ok('看完那排:一张画的卡(「你画的 0:2x」、能删),缩略图是截图(1280 宽 jpeg):那一刻的画面(第 3 步的橙色斜线有、第 4 步的红圈没有、字在)叠着蓝色的两笔;小课堂卡写「画了 1 处」;提示说会一起带给老师', mk.n === 1 && /^你画的0:2\d$/.test(mk.label) && mk.x && mk.sub === '看完了 · 画了 1 处' && mk.hint.startsWith('画的 1 处,问的时候会一起带给老师') && mk.jpeg && mk.px.w === 1280 && mk.px.blue > 1500 && mk.px.orange > 100 && mk.px.red < 50 && mk.px.dark > 2000 && mk.shown > 100, JSON.stringify(mk));
   await shot('lecture-done.png');
+  // 给老师的那张截图原样存一份(看字体、背景、笔画对不对位)
+  const shotUrl = await evaluate(`document.querySelector('.lc-pending .c-mark img.mk-svg')?.src ?? ''`);
+  if (shotUrl.startsWith('data:image/jpeg;base64,')) { writeFileSync(join(shots, 'mark-shot.jpg'), Buffer.from(shotUrl.slice(23), 'base64')); console.log(`   ${join(shots, 'mark-shot.jpg')}`); }
 
   await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = '为什么要拆开那一捆'; document.querySelector('#go').click(); return true; })()`);
   const answered = await until(`document.querySelectorAll('#board .sec .c-lc').length === 1 && !document.querySelector('.lc-pending')`, 80);
   const secMk = await evaluate(`({ n: document.querySelectorAll('#board .sec .c-mark').length, x: document.querySelectorAll('#board .sec .c-mark .x').length, sub: document.querySelector('#board .sec .c-lc .lt span')?.textContent })`);
-  ok('问了一句:老师那一节的节前画着小课堂卡(圈了 1 处)与圈的卡(不能删了),提示撤掉', answered && secMk.n === 1 && secMk.x === 0 && secMk.sub === '看完了 · 圈了 1 处', JSON.stringify(secMk));
+  ok('问了一句:老师那一节的节前画着小课堂卡(画了 1 处)与画的卡(不能删了),提示撤掉', answered && secMk.n === 1 && secMk.x === 0 && secMk.sub === '看完了 · 画了 1 处', JSON.stringify(secMk));
   await shot('lecture-answered.png');
 
   // 老师放课里的一段(§六):节里一张小课堂卡,讲稿 [[play]] 交给它
@@ -180,7 +205,7 @@ try {
   await shot('lecture-seg-done.png');
   await evaluate(`document.querySelector('#st-x').click()`);
   await sleep(300);
-  // 问过以后「再看一遍」:停在某处又圈了一处 → 回板书,末尾一排(能删)+「又圈了 1 处」→ 再问一句,那一节节前只有圈的卡
+  // 问过以后「再看一遍」:停在某处又画了一处 → 回板书,末尾一排(能删)+「又画了 1 处」→ 再问一句,那一节节前只有画的卡
   await until(`!document.body.classList.contains('pending')`, 60);
   await evaluate(`document.querySelector('#board .sec .c-lc .re').click()`);
   await until(`!${F}.hidden && Boolean(${D}?.querySelector('.lc-start'))`);
@@ -194,16 +219,16 @@ try {
   await evaluate(`${D}.querySelector('.lc-back').click()`);
   const back = await until(`${F}.hidden && Boolean(document.querySelector('.lc-pending .c-mark'))`, 40);
   const tail = await evaluate(`({ last: document.querySelector('#board').lastElementChild?.className, x: document.querySelectorAll('.lc-pending .c-mark .x').length, card: document.querySelectorAll('.lc-pending .c-lc').length, hint: document.querySelector('.lc-pending .lc-ask span')?.textContent })`);
-  ok('再看一遍又圈了一处:回板书,末尾一排圈的卡(能删,没有小课堂卡)+「又圈了 1 处,下次说话会一起带给老师」', c3.marks === 1 && back && tail.last === 'lc-pending' && tail.x === 1 && tail.card === 0 && tail.hint?.startsWith('又圈了 1 处,下次说话会一起带给老师'), JSON.stringify({ c3, tail }));
+  ok('再看一遍又画了一处:回板书,末尾一排画的卡(能删,没有小课堂卡)+「又画了 1 处,下次说话会一起带给老师」', c3.marks === 1 && back && tail.last === 'lc-pending' && tail.x === 1 && tail.card === 0 && tail.hint?.startsWith('又画了 1 处,下次说话会一起带给老师'), JSON.stringify({ c3, tail }));
   await shot('lecture-again.png');
   await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = '这里为什么是 5'; document.querySelector('#go').click(); return true; })()`);
   const again = await until(`document.querySelectorAll('#board .sec').length === 2 && !document.querySelector('.lc-pending')`, 80);
   const sec2 = await evaluate(`(() => { const s = document.querySelectorAll('#board .sec')[1]; return { lecture: s.querySelectorAll('.c-lc').length, marks: s.querySelectorAll('.c-mark').length }; })()`);
-  ok('再问一句:带上了新圈的,那一节节前只有圈的卡', again && sec2.lecture === 0 && sec2.marks === 1, JSON.stringify(sec2));
+  ok('再问一句:带上了新画的,那一节节前只有画的卡', again && sec2.lecture === 0 && sec2.marks === 1, JSON.stringify(sec2));
 
   const pb = await (await fetch(`${base}/api/conversations/math-tutor/today/board`)).json();
   const pm = pb.messages.find((m) => m.lecture)?.lecture?.marks?.[0];
-  ok('家长端:那条的圈带着算出来的那段话(圈住了散的 3 根)', Boolean(pm?.text?.includes('第 1 步画的 3 条线')), pm?.text ?? JSON.stringify(pb.messages.map((m) => m.lecture)));
+  ok('家长端:那条的画带着给老师的那段话(截图是第 1 张、画的地方盖着散的 3 根)', Boolean(pm?.text?.includes('画在截图上(photos 第 1 张)') && pm.text.includes('画的地方盖着:') && pm.text.includes('第 1 步画的 3 条线') && pm.strokes?.length === 2), pm?.text ?? JSON.stringify(pb.messages.map((m) => m.lecture)));
 
   // 家长看录像(第 5 步):看小课堂那一段也在
   await send('Page.navigate', { url: `${base}/parent` });
@@ -221,13 +246,13 @@ try {
   const KD = `${KF}?.contentDocument`;
   const reelOn = await until(`document.body.classList.contains('reel') && Boolean(document.querySelector('#rl-frame').contentDocument) && !${KF}?.hidden && Boolean(${KD}?.querySelector('.lc .lc-svg'))`, 80);
   const r0 = await evaluate(`({ kinds: [...document.querySelectorAll('#rl-marks i')].map((i) => i.className).join(' '), sub: document.querySelector('#rl-cap').textContent, back: Boolean(${KD}.querySelector('.lc-back')), start: Boolean(${KD}.querySelector('.lc-start')), h: Math.round(${KF}.getBoundingClientRect().height) })`);
-  ok('录像从看小课堂开始:进度条上「看小课堂」「圈了一处」的点;孩子的屏幕上铺着播放器、只看(没有回去、没有开始看);录像栏写在看小课堂', reelOn && r0.kinds.startsWith('lecture') && r0.kinds.includes('circle') && !r0.back && !r0.start && r0.h > 500 && /^[▷⏸] /.test(r0.sub), JSON.stringify(r0));
+  ok('录像从看小课堂开始:进度条上「看小课堂」「画了一处」的点;孩子的屏幕上铺着播放器、只看(没有回去、没有开始看);录像栏写在看小课堂', reelOn && r0.kinds.startsWith('lecture') && r0.kinds.includes('ink') && !r0.back && !r0.start && r0.h > 500 && /^[▷⏸] /.test(r0.sub), JSON.stringify(r0));
   await shot('reel-lecture.png');
   // 记录点进来本来就停着(原来一进来就放,这里点一下是为了停)
-  await evaluate(`document.querySelector('#rl-marks i.circle').click()`);
+  await evaluate(`document.querySelector('#rl-marks i.ink').click()`);
   await sleep(800);
   const r1 = await evaluate(`({ time: ${KD}.querySelector('.lc-time span').textContent, ink: ${KD}.querySelectorAll('.lc-ink path').length, marks: ${KD}.querySelectorAll('.lc-mark').length, sub: document.querySelector('#rl-cap').textContent })`);
-  ok('点「圈了一处」:录像停在圈下去那一刻,播放器停在课里圈的那一刻(0:23),画面上画着那一圈', /^0:2[2-4] \/ 0:46$/.test(r1.time) && r1.ink === 1 && r1.marks >= 1 && r1.sub.startsWith('⏸ 小课堂停在 0:2'), JSON.stringify(r1));
+  ok('点「画了一处」:录像停在画下去那一刻,播放器停在课里画的那一刻(0:23),画面上画着那两笔', /^0:2[2-4] \/ 0:46$/.test(r1.time) && r1.ink === 2 && r1.marks >= 1 && r1.sub.startsWith('⏸ 小课堂停在 0:2'), JSON.stringify(r1));
   await shot('reel-circle.png');
 } finally {
   browser?.kill();

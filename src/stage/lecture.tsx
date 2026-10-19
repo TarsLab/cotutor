@@ -4,26 +4,26 @@
  * 画面:课包烤过(bake.json,和 scene.json 的画面对得上)就用 drawtell/render 按这一刻每个元素画了多少现画,不用 excalidraw、不用 SMIL;
  * 没烤过的课包在浏览器里现烤一份(drawtell/bake,按需装 excalidraw),画法一样;不再有 SMIL。
  * 能拖到任意一刻(拖的时候不出声),气口不停,放到结尾一次就算看完(发给页面)。
- * 圈(§四):停住了就能在画面上圈,一笔一处;记那一刻(课里的毫秒)与路径(课包坐标:屏幕点经 getScreenCTM 反算到 SVG,再减掉导出时的平移),
- * 进度条上那一刻留一个蓝色记号;圈了、擦了都把整张单子发给页面(页面是圈的主人,带给老师、画圈的卡)。
- * 界面照原型:顶上回去 + 课名,中间画面,下面字幕、进度条(步骤点、圈的记号、拖动、时间)、一行提示。没有错误文案:装不上就发 error。
+ * 画(§四):停住了就能在画面上画,停在同一刻画的几笔算一处;记那一刻(课里的毫秒)与几笔(课包坐标:屏幕点经 getScreenCTM 反算到 SVG,再减掉导出时的平移),
+ * 每画一笔重截一张图(画面 + 这一刻的几笔,给老师看);进度条上那一刻留一个蓝色记号;画了、擦了都把整张单子发给页面(页面是画的主人,带给老师、画画的卡)。
+ * 界面照原型:顶上回去 + 课名,中间画面,下面字幕、进度条(步骤点、画的记号、拖动、时间)、一行提示。没有错误文案:装不上就发 error。
  * 老师放课里的一段(§六,板书上的小课堂卡,range):舞台的顶栏与字幕行是页面的,这里只有画面与进度条;从那一段的开头放(讲稿交来的自己放),
  * 放到那一段的末尾一次就停在末帧、发 done;放着 / 停着 / 放完都发 phase(页面字幕行显示课里那句)。iPad 不让出声就停着等孩子点「放这一段」。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { frameAt } from 'drawtell/core';
 import { mountBaked } from 'drawtell/render';
-import { clockLabel, lectureAt, lectureClock, lectureNext, type LectureClock } from '../lib/lecture.ts';
+import { MARK_MAX, MARK_MAX_POINTS, MARK_MAX_STROKES, MARK_STROKE_POINTS, clockLabel, lectureAt, lectureClock, lectureNext, type LectureClock } from '../lib/lecture.ts';
 import { loadBaked, loadBundle } from './bundle.ts';
 
-/** 一处圈(页面与舞台之间传的样子):课里的时刻、SVG 停在哪(画缩略图)、路径(课包坐标) */
+/** 一处画(页面与舞台之间传的样子):课里的时刻、SVG 停在哪(画缩略图)、停在这一刻画的几笔(课包坐标;视频是视频自己的像素坐标) */
 export interface StageMark {
   atMs: number;
   svgMs: number;
-  path: [number, number][];
-  /** 视频的圈:那一帧叠上圈的截图(data URL;页面发消息前传成 captures/ 里的文件,换成路径) */
+  strokes: [number, number][][];
+  /** 画面叠上这几笔的截图(data URL;页面发消息前传成 captures/ 里的文件,换成路径);刚画完还在截、截不出来就没有 */
   image?: string;
-  /** 圈下去的那一刻(Date.now();录像用,页面发消息时换成离发出去多少毫秒) */
+  /** 这一处第一笔画下去的那一刻(Date.now();录像用,页面发消息时换成离发出去多少毫秒) */
   at?: number;
 }
 
@@ -70,11 +70,11 @@ export interface LectureWatch {
 export interface LectureStageProps {
   bundleUrl: string;
   title: string;
-  /** 页面手上还没交出去的圈(再看一遍时接着画在进度条上) */
+  /** 页面手上还没交出去的画(再看一遍时接着画在进度条上) */
   marks: StageMark[];
-  /** 从这一刻停着打开(点了圈的卡);不给 = 从头、先点「开始看」 */
+  /** 从这一刻停着打开(点了画的卡);不给 = 从头、先点「开始看」 */
   at?: number;
-  /** 只看不圈(家长端、以前的话题) */
+  /** 只看不画(家长端、以前的话题) */
   view?: boolean;
   onMarks(marks: StageMark[]): void;
   onFinished(w: LectureWatch): void;
@@ -82,7 +82,7 @@ export interface LectureStageProps {
   /** 放完了,孩子点「去问老师」(拍板 37);不给就不画这个按钮 */
   onAsk?(w: LectureWatch): void;
   onError(message: string): void;
-  /** 板书上的小课堂卡:只放这一段(毫秒);有它就是卡的样子(没有顶栏、字幕行、提示,只看不圈) */
+  /** 板书上的小课堂卡:只放这一段(毫秒);有它就是卡的样子(没有顶栏、字幕行、提示,只看不画) */
   range?: { start: number; end: number };
   /** 讲稿交来的:装好就放 */
   autoplay?: boolean;
@@ -123,18 +123,12 @@ export interface LectureStageHandle {
 const END_UI_MS = 1000;
 /** 声音和画面差多少就把声音拉回来(毫秒) */
 const RESYNC_MS = 300;
-/** 停在离一处圈多近算「这一刻的圈」(画在画面上、擦得掉) */
+/** 停在离一处画多近算「这一刻的」(画在画面上、接着画并进这一处、擦得掉) */
 const MARK_NEAR_MS = 400;
-/** 最多圈几处(路由也拦);视频的每处带一张截图,和照片一共不过 9 张,少一些 */
-const MAX_MARKS = 12;
-const MAX_VIDEO_MARKS = 6;
 /** 截图的长边 */
 const SHOT_SIDE = 1280;
-/** 一笔算一处圈:至少几个点、多大(SVG 单位) */
-const MIN_POINTS = 4;
-const MIN_SIZE = 12;
-/** 一处圈最多留几个点 */
-const MAX_POINTS = 300;
+/** 截图里课包的纸色(画面外是透明的,jpeg 会变黑) */
+const PAPER = '#fffdf8';
 const INK = '#2f6fd6';
 /** 进度条段与段之间空多少(像素) */
 const SEG_GAP = 3;
@@ -157,10 +151,10 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const blocked = useRef(false);
   const [marks, setMarks] = useState<StageMark[]>(initialMarks);
   const [pen, setPen] = useState(true);
-  /** 刚圈好的那一处的时刻:字幕行换成「圈好了,记在 0:26」 */
+  /** 刚画的那一处的时刻:字幕行换成「画好了,记在 0:26」 */
   const [fresh, setFresh] = useState<number | null>(null);
-  /** 圈满了还在画:字幕说圈满了(圈的数一变、一放就收) */
-  const [full, setFull] = useState(false);
+  /** 画满了还在画:marks = 一堂画满了几处,here = 这一处点太多(字幕说画满了;画的数一变、一放就收) */
+  const [full, setFull] = useState<'marks' | 'here' | null>(null);
   /** 放完了,按钮淡入了没有 */
   const [endUi, setEndUi] = useState(false);
   const shift = useRef({ dx: 0, dy: 0 });
@@ -171,7 +165,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   /** 画到课里的某一刻(课包;buildLecture 给的) */
   const drawRef = useRef<((ms: number) => void) | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
-  /** 视频小课堂:画面与声音都是它;svgRef 是叠在上面圈用的那层(viewBox = 视频自己的像素) */
+  /** 视频小课堂:画面与声音都是它;svgRef 是叠在上面画用的那层(viewBox = 视频自己的像素) */
   const vid = useRef<HTMLVideoElement | null>(null);
   const box = useRef<HTMLDivElement | null>(null);
   const hush = (): void => { audio.current?.pause(); vid.current?.pause(); };
@@ -209,7 +203,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
         const b = document.createElement('div');
         b.className = 'lc-vbox';
         b.append(v, over);
-        // 画框按视频的宽高比铺在画面里(圈那层与视频严丝合缝)
+        // 画框按视频的宽高比铺在画面里(画的那层与视频严丝合缝)
         const fit = (): void => { const hb = host.current?.getBoundingClientRect(); if (!hb) return; const k = Math.min(hb.width / W, hb.height / H); b.style.width = `${Math.floor(W * k)}px`; b.style.height = `${Math.floor(H * k)}px`; };
         host.current?.replaceChildren(b);
         fit();
@@ -352,9 +346,9 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     if (!clock) return;
     setStarted(true);
     setFresh(null);
-    setFull(false);
+    setFull(null);
     blocked.current = false;
-    // 视频:停下时时钟对到视频真停的那一帧(圈与截图是同一刻)
+    // 视频:停下时时钟对到视频真停的那一帧(画与截图是同一刻)
     if (playing) { setPlaying(false); hush(); if (vid.current) paint(clock, vid.current.currentTime * 1000, false); watch.current.pauses++; return; }
     if (t.current >= clock.total) paint(clock, 0);
     syncAudio(clock, t.current, true);
@@ -386,7 +380,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   }, [clock, playing, atIndex, started]);
   // 录像:页面的时钟是准的;差 300 毫秒以上(拖了、压过一段空白)就挪过去,放着就自己按倍速走(画面每帧都画)。
   // 课还没装好(clock 还没有:视频的元数据、课包在路上)时来的先记着,装好了照最后那条对上——
-  // 2026-10-19:家长在录像停着时点「圈了一处」,播放器这时才打开,页面只发那一条,丢了就一直停在 0:00、没有圈
+  // 2026-10-19:家长在录像停着时点「圈了一处」(现在叫「画了一处」),播放器这时才打开,页面只发那一条,丢了就一直停在 0:00、没有圈
   const pendingFollow = useRef<{ ms: number; play: boolean; r: number; marks: StageMark[] } | null>(null);
   const applyFollow = useCallback((ms: number, play: boolean, r: number, ms2: StageMark[]) => {
     if (!clock) { pendingFollow.current = { ms, play, r, marks: ms2 }; return; }
@@ -449,14 +443,21 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
 
   useEffect(() => () => { audio.current?.pause(); vid.current?.pause(); }, []);
 
-  // ---- 圈 ----
-  const changeMarks = (next: StageMark[]): void => { setMarks(next); onMarks(next); setFull(false); };
+  // ---- 画 ----
+  /** 最新的单子(截图是异步的,截好时按最新的找那一处) */
+  const marksRef = useRef(marks);
+  marksRef.current = marks;
+  const changeMarks = (next: StageMark[]): void => { marksRef.current = next; setMarks(next); onMarks(next); setFull(null); };
   const here = (m: StageMark): boolean => Math.abs(m.atMs - now) <= MARK_NEAR_MS;
-  const markCap = video ? MAX_VIDEO_MARKS : MAX_MARKS;
-  /** 拿着笔(「圈一圈」亮着):画面上手指只画、不滚动,画面描一圈蓝。圈满了也还拿着,只是画不进去、字幕说圈满了——
+  const pointsOf = (m: StageMark): number => m.strokes.reduce((n, st) => n + st.length, 0);
+  /** 停着的这一刻已经画过的那一处(接着画并进它;离得最近的那处) */
+  const hereOf = (list: readonly StageMark[], ms: number): StageMark | undefined => list.filter((m) => Math.abs(m.atMs - ms) <= MARK_NEAR_MS).sort((a, b) => Math.abs(a.atMs - ms) - Math.abs(b.atMs - ms))[0];
+  const cur = hereOf(marks, now);
+  /** 拿着笔(「画一画」亮着):画面上手指只画、不滚动,画面描一圈蓝。画满了也还拿着,只是画不进去、字幕说画满了——
    *  2026-10-19 真机:视频圈满 6 处以后笔还亮着,画面却没了 touch-action: none,孩子接着画变成了上下滚动 */
   const penOn = Boolean(clock) && started && !playing && pen && !view;
-  const canDraw = penOn && marks.length < markCap;
+  const blockedBy: 'marks' | 'here' | null = cur ? (pointsOf(cur) >= MARK_MAX_POINTS - 1 || cur.strokes.length >= MARK_MAX_STROKES ? 'here' : null) : marks.length >= MARK_MAX ? 'marks' : null;
+  const canDraw = penOn && !blockedBy;
   /** 屏幕点 → SVG 坐标(viewBox 里,怎么缩放都对) */
   const toSvg = (clientX: number, clientY: number): [number, number] | null => {
     const m = svgRef.current?.getScreenCTM();
@@ -477,19 +478,19 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     el.setAttribute('opacity', '0.9');
     return el;
   };
-  // 画面上的圈:停着的时候画出这一刻的(课包坐标 + 平移 = SVG 坐标);放着不画
+  // 画面上画的:停着的时候画出这一刻的几笔(课包坐标 + 平移 = SVG 坐标);放着不画
   useEffect(() => {
     const g = ink.current;
     if (!g) return;
     const { dx, dy } = shift.current;
     if (playing && !g.childNodes.length) return;
     const shown = playing ? [] : marks.filter(here);
-    g.replaceChildren(...shown.map((m) => inkPath(m.path.map(([x, y]) => [x + dx, y + dy] as [number, number]))), ...(stroke.current ? [stroke.current.el] : []));
+    g.replaceChildren(...shown.flatMap((m) => m.strokes.map((st) => inkPath(st.map(([x, y]) => [x + dx, y + dy] as [number, number])))), ...(stroke.current ? [stroke.current.el] : []));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marks, now, playing, clock]);
   const penDown = (e: React.PointerEvent): void => {
     if (!penOn || !clock) return;
-    if (!canDraw) { e.preventDefault(); setFresh(null); setFull(true); return; }
+    if (!canDraw) { e.preventDefault(); setFresh(null); setFull(blockedBy); return; }
     const p = toSvg(e.clientX, e.clientY);
     if (!p) return;
     try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* 合成的指针(探针)捕获不了,不碍事 */ }
@@ -512,39 +513,101 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     stroke.current = null;
     if (!s || !clock) return;
     s.el.remove();
-    const xs = s.pts.map((p) => p[0]), ys = s.pts.map((p) => p[1]);
-    if (s.pts.length < MIN_POINTS || Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) < MIN_SIZE) { setMarks((m) => [...m]); return; }
-    const step = Math.ceil(s.pts.length / MAX_POINTS);
+    // 点一下没动不算一笔
+    if (s.pts.length < 2) { setMarks((m) => [...m]); return; }
+    const list = marksRef.current;
+    const old = hereOf(list, t.current);
+    // 一笔的点抽到这一处还剩的份以内(一笔最多 MARK_STROKE_POINTS,一处一共 MARK_MAX_POINTS)
+    const room = Math.max(2, Math.min(MARK_STROKE_POINTS, MARK_MAX_POINTS - (old ? pointsOf(old) : 0)));
+    const step = Math.ceil(s.pts.length / room);
     const { dx, dy } = shift.current;
-    const path = s.pts.filter((_, i) => i % step === 0 || i === s.pts.length - 1).map(([x, y]) => [Math.round(x - dx), Math.round(y - dy)] as [number, number]);
-    const at = Math.round(t.current);
-    const image = vid.current ? shot(vid.current, path) : undefined;
-    changeMarks([...marks, { atMs: at, svgMs: vid.current ? 0 : Math.round(lectureAt(clock, at).svgMs * 10) / 10, path, ...(image ? { image } : {}), at: Date.now() }].sort((a, b) => a.atMs - b.atMs));
+    const pts = s.pts.filter((_, i) => i % step === 0 || i === s.pts.length - 1).slice(-room).map(([x, y]) => [Math.round(x - dx), Math.round(y - dy)] as [number, number]);
+    const at = old ? old.atMs : Math.round(t.current);
+    const strokes = [...(old?.strokes ?? []), pts];
+    const svgMs = old ? old.svgMs : vid.current ? 0 : svgMsAt(clock, at);
+    // 截图:视频这一帧现截;课包用拿起笔时取好的那一刻的画面,还没取好就先不带(免得带着少一笔的旧图),取好了补上。都叠上这一处的几笔
+    const f = vid.current ? undefined : ready.current.get(svgMs);
+    const image = vid.current ? shot(vid.current, strokes) : f ? frameShot(f, strokes) : undefined;
+    const mark: StageMark = { atMs: at, svgMs, strokes, ...(image ? { image } : {}), at: old?.at ?? Date.now() };
+    changeMarks([...list.filter((m) => m !== old), mark].sort((a, b) => a.atMs - b.atMs));
     setFresh(at);
+    if (!vid.current && !image) void reshoot(at, svgMs);
   };
-  /** 视频的圈:这一帧画到 canvas 上,叠上圈(视频像素坐标),出一张 jpeg;画不出来(没帧)就不带图 */
-  const shot = (v: HTMLVideoElement, path: readonly [number, number][]): string | undefined => {
+  /** 一张截图:画面画进 w × h 的 canvas,叠上几笔(at = 笔画坐标 → canvas 坐标),出一张 jpeg;画不出来就不带图 */
+  const compose = (w: number, h: number, paint: (g: CanvasRenderingContext2D) => void, strokes: readonly (readonly [number, number][])[], at: (p: readonly [number, number]) => [number, number]): string | undefined => {
     try {
-      const W = v.videoWidth, H = v.videoHeight;
-      if (!W || !H) return undefined;
-      const k = Math.min(1, SHOT_SIDE / Math.max(W, H));
+      if (!(w >= 1 && h >= 1)) return undefined;
       const cv = document.createElement('canvas');
-      cv.width = Math.round(W * k);
-      cv.height = Math.round(H * k);
+      cv.width = Math.round(w);
+      cv.height = Math.round(h);
       const g = cv.getContext('2d');
       if (!g) return undefined;
-      g.drawImage(v, 0, 0, cv.width, cv.height);
+      paint(g);
       g.strokeStyle = INK;
       g.lineWidth = Math.max(3, Math.round(cv.width / 160));
       g.lineCap = 'round';
       g.lineJoin = 'round';
       g.beginPath();
-      path.forEach(([x, y], i) => (i ? g.lineTo(x * k, y * k) : g.moveTo(x * k, y * k)));
+      for (const st of strokes) st.forEach((p, i) => { const [x, y] = at(p); if (i) g.lineTo(x, y); else g.moveTo(x, y); });
       g.stroke();
       return cv.toDataURL('image/jpeg', 0.85);
     } catch {
       return undefined;
     }
+  };
+  /** 视频:这一帧(视频自己的像素,长边超过 SHOT_SIDE 才缩)叠上几笔 */
+  const shot = (v: HTMLVideoElement, strokes: readonly (readonly [number, number][])[]): string | undefined => {
+    const k = Math.min(1, SHOT_SIDE / Math.max(v.videoWidth || 1, v.videoHeight || 1));
+    return compose(v.videoWidth * k, v.videoHeight * k, (g) => g.drawImage(v, 0, 0, g.canvas.width, g.canvas.height), strokes, ([x, y]) => [x * k, y * k]);
+  };
+  /** 课包那一刻的画面:服务端用烤好的画面现画的 frame.svg(和画的卡的缩略图同一份,字体、背景图都内嵌),一刻取一次;取好的放 ready(画完一笔当场就能截) */
+  type Frame = { img: HTMLImageElement; vb: number[] };
+  const frames = useRef(new Map<number, Promise<Frame | null>>());
+  const ready = useRef(new Map<number, Frame>());
+  const svgMsAt = (c: LectureClock, ms: number): number => Math.round(lectureAt(c, ms).svgMs * 10) / 10;
+  const frameOf = (svgMs: number): Promise<Frame | null> => {
+    let p = frames.current.get(svgMs);
+    if (!p) {
+      p = (async () => {
+        const r = await fetch(new URL(`frame.svg?svg=${svgMs}`, new URL(bundleUrl, location.href)).href);
+        if (!r.ok) return null;
+        const text = await r.text();
+        const m = /<svg[^>]*\sviewBox="([^"]+)"/.exec(text);
+        const vb = m ? m[1].trim().split(/[\s,]+/).map(Number) : [];
+        if (vb.length !== 4 || !(vb[2] > 0 && vb[3] > 0)) return null;
+        // 根上没有宽高:按截图的大小写上(没有固有尺寸的 SVG,Safari 会按 300×150 画)
+        const k = SHOT_SIDE / Math.max(vb[2], vb[3]);
+        const sized = text.replace(/<svg\b/, `<svg width="${Math.round(vb[2] * k)}" height="${Math.round(vb[3] * k)}"`);
+        const img = new Image();
+        img.src = URL.createObjectURL(new Blob([sized], { type: 'image/svg+xml' }));
+        await img.decode();
+        const f = { img, vb };
+        ready.current.set(svgMs, f);
+        return f;
+      })().catch(() => null);
+      frames.current.set(svgMs, p);
+    }
+    return p;
+  };
+  // 拿起笔就先取这一刻的画面
+  useEffect(() => {
+    if (penOn && clock && !video) void frameOf(svgMsAt(clock, Math.round(now)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [penOn, now, clock]);
+  /** 课包的截图:那一刻的画面(纸色打底)叠上几笔(课包坐标 + 平移 = SVG 坐标,再按 viewBox 换到 canvas) */
+  const frameShot = (f: Frame, strokes: readonly (readonly [number, number][])[]): string | undefined => {
+    const { dx, dy } = shift.current;
+    const [vx, vy, vw, vh] = f.vb;
+    const k = SHOT_SIDE / Math.max(vw, vh);
+    return compose(vw * k, vh * k, (g) => { g.fillStyle = PAPER; g.fillRect(0, 0, g.canvas.width, g.canvas.height); g.drawImage(f.img, 0, 0, g.canvas.width, g.canvas.height); }, strokes, ([x, y]) => [(x + dx - vx) * k, (y + dy - vy) * k]);
+  };
+  /** 画面还没取好时画的:取好了补上截图;那时那一处已经有图(后来的一笔截好了)、擦掉了就不管 */
+  const reshoot = async (atMs: number, svgMs: number): Promise<void> => {
+    const f = await frameOf(svgMs);
+    const m = marksRef.current.find((x) => x.atMs === atMs);
+    if (!f || !m || m.image) return;
+    const image = frameShot(f, m.strokes);
+    if (image) changeMarks(marksRef.current.map((x) => (x === m ? { ...x, image } : x)));
   };
   const erase = (): void => { changeMarks(marks.filter((m) => !here(m))); setFresh(null); };
   const showMark = (m: StageMark): void => {
@@ -575,9 +638,9 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     return () => clearTimeout(id);
   }, [ended]);
   const herePen = marks.filter(here).length;
-  const say = fresh !== null ? `圈好了,记在 ${clockLabel(fresh)}。问老师的时候,圈的地方会一起带上。` : full ? `已经圈了 ${markCap} 处,圈满了。去问老师吧,圈的地方会一起带上。` : started ? line : '';
+  const say = fresh !== null ? `画好了,记在 ${clockLabel(fresh)}。问老师的时候,画的地方会一起带上。` : full === 'marks' ? `已经画了 ${MARK_MAX} 处,画满了。去问老师吧,画的地方会一起带上。` : full === 'here' ? '这一处画满了。去问老师吧,画的地方会一起带上。' : started ? line : '';
 
-  /** 圈一圈:停着 = 拿起 / 放下笔;放着 = 停下并拿起笔(少按一次暂停) */
+  /** 画一画:停着 = 拿起 / 放下笔;放着 = 停下并拿起笔(少按一次暂停) */
   const penTool = (): void => {
     if (!clock) return;
     if (playing) { toggle(); setPen(true); return; }
@@ -596,8 +659,8 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
         <div className="lc-name"><span className="lc-tag">小课堂</span><span className="lc-title">{title}</span></div>
         {!view && <div className="lc-tools">
           <button type="button" className={'lc-tool' + (paused && pen ? ' on' : '')} aria-pressed={paused && pen} disabled={!clock || !started} onClick={penTool}>
-            <svg width="26" height="26" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><ellipse cx="10" cy="10" rx="7.5" ry="6" /></svg>
-            圈一圈
+            <svg width="26" height="26" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 16.5l1-4 9-9 3 3-9 9z" /><path d="M11.5 5.5l3 3" /></svg>
+            画一画
           </button>
           <button type="button" className="lc-tool" disabled={!paused || !herePen} onClick={erase}>
             <svg width="24" height="24" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12.5 9.5 6l4 4L7 16.5H3.5z" /><path d="M9 16.5h6" /></svg>
@@ -633,13 +696,13 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
           </div>
           {clock && range && <div className="lc-range" style={{ left: posOf(range.start), width: `calc(${posOf(range.end)} - ${posOf(range.start)})` }} />}
           {clock && marks.map((m) => (
-            <button key={`${m.atMs}-${m.path.length}`} type="button" className="lc-mark" style={{ left: posOf(m.atMs) }} aria-label={`看 ${clockLabel(m.atMs)} 圈的`} onPointerDown={(e) => e.stopPropagation()} onClick={() => showMark(m)} />
+            <button key={m.atMs} type="button" className="lc-mark" style={{ left: posOf(m.atMs) }} aria-label={`看 ${clockLabel(m.atMs)} 画的`} onPointerDown={(e) => e.stopPropagation()} onClick={() => showMark(m)} />
           ))}
           <div className="lc-knob" style={{ left: posOf(now) }} />
         </div>
         <div className="lc-time">
           <span>{clockLabel(now)} / {clock ? clockLabel(clock.total) : '0:00'}</span>
-          {marks.length ? <small>圈了 {marks.length} 处</small> : null}
+          {marks.length ? <small>画了 {marks.length} 处</small> : null}
         </div>
         {/* 「看完就能问老师」与「去问老师」占同一个位置:放完了话音落了一会儿才换(拍板 37) */}
         {!card && !follow && <div className="lc-slot">

@@ -2,10 +2,11 @@
  * 小课堂全流程(假 CLI,不花钱,《小课堂设计.md》):首页草稿写 `小课堂 <课包 id> <字>` → 检查(课包不在要改)→ 发布 →
  * 孩子端首页的小课堂按钮带课名与课长 → 没看完不能开口(400)→ 看完开口:新话题、上下文包 lecture:(每句起点与原话、看的情况)、
  * 消息记 lecture → 孩子端那一条带小课堂、家长端多看到看的情况。
- * 圈:第一条带两处圈 → 上下文包 marks:(每处一段话)、消息记圈(SVG 时刻、那段话)、孩子端不带那段话、家长端带;
- * 问过以后再看一遍又圈了 → 同一话题下一条带上(again);不是这份课包开头的话题、没带圈、没带话题都 400。
- * 视频来源(第 4 步):lectures/<id>/ 的按钮(课长从 mp4)、坏的 lecture.md 首页检查说清楚;圈带截图(先传进 captures/)→ 上下文包 source: video、
- * photos: 带截图、marks: 说「圈在截图上(photos 第 1 张)」;消息的 photos 不记截图;截图不在 captures/ 400。
+ * 画:第一条带两处(一处两笔带截图、一处是 2026-10-19 以前的一笔 path)→ 上下文包 photos: 带截图、这一轮带只读工具、marks:(每处一段话:
+ * 时刻、那时在讲哪句、截图第几张、画的地方盖着什么)、消息记画(SVG 时刻、几笔、那段话)、孩子端不带那段话、家长端带;
+ * 问过以后再看一遍又画了 → 同一话题下一条带上(again);不是这份课包开头的话题、没带画、没带话题都 400。
+ * 视频来源(第 4 步):lectures/<id>/ 的按钮(课长从 mp4)、坏的 lecture.md 首页检查说清楚;画带截图(先传进 captures/)→ 上下文包 source: video、
+ * photos: 带截图、marks: 说「画在截图上(photos 第 1 张)」;消息的 photos 不记截图;截图不在 captures/ 400。
  */
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -62,9 +63,14 @@ try {
   const via = { home: kh.home, button: btn!.id };
   const watch = { bundle: BUNDLE, watchedMs: 47_000, finished: true, pauses: 2 };
   check('按小课堂按钮开口:没带看的情况 400;没看完 400;课包对不上 400;不是小课堂按钮却带了 400', (await send({ text: '问', via })).status === 400 && (await send({ text: '问', via, lecture: { ...watch, finished: false } })).status === 400 && (await send({ text: '问', via, lecture: { ...watch, bundle: 'other-one' } })).status === 400 && (await send({ text: '问', via: { home: kh.home, button: 'new' }, lecture: watch })).status === 400 && (await send({ text: '问', via, lecture: { bundle: BUNDLE } })).status === 400);
-  const ring = (cx: number, cy: number, rx: number, ry: number): [number, number][] => Array.from({ length: 20 }, (_, k) => [Math.round(cx + rx * Math.cos((k / 20) * 2 * Math.PI)), Math.round(cy + ry * Math.sin((k / 20) * 2 * Math.PI))] as [number, number]);
-  const marks = [{ atMs: 26_000, path: ring(334, 120, 45, 50) }, { atMs: 46_000, path: ring(600, 214, 40, 20) }];
-  check('圈的形状不对 400:点太少、坐标不是数、多过 12 处', (await send({ text: '问', via, lecture: { ...watch, marks: [{ atMs: 1, path: [[1, 1], [2, 2]] }] } })).status === 400 && (await send({ text: '问', via, lecture: { ...watch, marks: [{ atMs: 1, path: [[1, 'x'], [2, 2], [3, 3]] }] } })).status === 400 && (await send({ text: '问', via, lecture: { ...watch, marks: Array.from({ length: 13 }, () => marks[0]) } })).status === 400);
+  const ring = (cx: number, cy: number, rx: number, ry: number, from = 0, to = 19): [number, number][] => Array.from({ length: to - from + 1 }, (_, i) => [Math.round(cx + rx * Math.cos(((from + i) / 20) * 2 * Math.PI)), Math.round(cy + ry * Math.sin(((from + i) / 20) * 2 * Math.PI))] as [number, number]);
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const up = await route('POST', '/api/kid/conversations/math-tutor/photos', ctx, { image: PNG });
+  const shotPath = (up.json as { path: string }).path;
+  // 一处两笔(各画半圈)带截图;一处是 2026-10-19 以前一笔一处的 path,没截图
+  const marks = [{ atMs: 26_000, strokes: [ring(334, 120, 45, 50, 0, 10), ring(334, 120, 45, 50, 10, 20)], image: shotPath }, { atMs: 46_000, path: ring(600, 214, 40, 20) }];
+  const many = { atMs: 1, strokes: Array.from({ length: 5 }, () => ring(334, 120, 45, 50).concat(...Array.from({ length: 14 }, () => ring(334, 120, 45, 50)))) };
+  check('画的形状不对 400:一笔只有一个点、坐标不是数、多过 6 处、一处点太多', (await send({ text: '问', via, lecture: { ...watch, marks: [{ atMs: 1, strokes: [[[1, 1]]] }] } })).status === 400 && (await send({ text: '问', via, lecture: { ...watch, marks: [{ atMs: 1, strokes: [[[1, 'x'], [2, 2]]] }] } })).status === 400 && (await send({ text: '问', via, lecture: { ...watch, marks: Array.from({ length: 7 }, () => marks[1]) } })).status === 400 && (await send({ text: '问', via, lecture: { ...watch, marks: [many] } })).status === 400);
   const log = [{ t: -60_000, pos: 0, play: true }, { t: -40_000, pos: 20_000, play: false }, { t: -30_000, pos: 20_000, play: true }, { t: -4_000, pos: 46_600, play: false }];
   check('看的过程形状不对 400:t 在发出去之后、pos 不是数', (await send({ text: '问', via, lecture: { ...watch, log: [{ t: 5, pos: 0, play: true }] } })).status === 400 && (await send({ text: '问', via, lecture: { ...watch, log: [{ t: -5, pos: 'x', play: true }] } })).status === 400);
   const r = await send({ text: '为什么要拆开那一捆', via, lecture: { ...watch, marks: marks.map((k, i) => ({ ...k, t: -50_000 + i * 1000 })), log } });
@@ -75,37 +81,38 @@ try {
   check('看完开口:202、新话题、字是孩子说的、记 via 与 lecture(课名从课包来)', r.status === 202 && thread === job && m?.text === '为什么要拆开那一捆' && m.via?.label === '13 减 8 怎么拆' && m.lecture?.bundle === BUNDLE && m.lecture.title === '13 − 8 破十法' && m.lecture.pauses === 2 && m.lecture.finished, JSON.stringify(m));
   const run = await readRunFile(ctx.ws, 'math-tutor', date, job);
   const prompt = run?.prompt ?? '';
-  check('上下文包 lecture:课名、来源、课长、每句起点与原话、看的情况;home: 带讲法', prompt.includes('  lecture:\n    title: "13 − 8 破十法"\n    source: "bundle 2026-09-18-po13-jian-8"\n    length: ') && prompt.includes('      - "0:00 先看 13 减 8。') && prompt.includes('    watched: "看完了,停过 2 次,圈了 2 处"') && prompt.includes('    brief: "他常把 13 当成 1 和 3"') && prompt.includes('---\n为什么要拆开那一捆'), prompt.slice(0, 1600));
-  const lines = prompt.split('\n').filter((l) => /^ {6}- "\d+:\d\d /.test(l) && !l.includes(' 圈的,'));
+  check('上下文包 lecture:课名、来源、课长、每句起点与原话、看的情况;home: 带讲法', prompt.includes('  lecture:\n    title: "13 − 8 破十法"\n    source: "bundle 2026-09-18-po13-jian-8"\n    length: ') && prompt.includes('      - "0:00 先看 13 减 8。') && prompt.includes('    watched: "看完了,停过 2 次,画了 2 处"') && prompt.includes('    brief: "他常把 13 当成 1 和 3"') && prompt.includes('---\n为什么要拆开那一捆'), prompt.slice(0, 1600));
+  const lines = prompt.split('\n').filter((l) => /^ {6}- "\d+:\d\d /.test(l) && !l.includes(' 画的,'));
   check('每句一行,六句,起点递增', lines.length === 6, JSON.stringify(lines));
-  check('上下文包 marks:每处一段话(时刻、那时在讲哪句、圈住了什么);watched 带圈了几处', prompt.includes('    watched: "看完了,停过 2 次,圈了 2 处"\n    marks:\n      - "0:26 圈的,那时在讲『那就拆开这一捆') && prompt.includes('第 1 步画的 3 条线(旁边写着『3』)') && prompt.includes('      - "0:46 圈的,') && prompt.includes('文字『5』'), prompt.slice(prompt.indexOf('  lecture:'), prompt.indexOf('  lecture:') + 1400));
-  check('消息记看的过程(录像用)与圈下去的那一刻', JSON.stringify(m?.lecture?.log) === JSON.stringify(log) && m?.lecture?.marks?.[0].t === -50_000, JSON.stringify(m?.lecture?.log));
-  check('消息记圈:时刻、SVG 停在哪、路径、那段话', m?.lecture?.marks?.length === 2 && m.lecture.marks[0].atMs === 26_000 && m.lecture.marks[0].svgMs > 1000 && m.lecture.marks[0].path.length === 20 && (m.lecture.marks[0].text ?? '').startsWith('0:26 圈的'), JSON.stringify(m?.lecture?.marks?.[0]).slice(0, 300));
+  check('上下文包 marks:每处一段话(时刻、那时在讲哪句、截图第几张、画的地方盖着什么);watched 带画了几处', prompt.includes('    watched: "看完了,停过 2 次,画了 2 处"\n    marks:\n      - "0:26 画的,那时在讲『那就拆开这一捆') && prompt.includes(';画在截图上(photos 第 1 张);画的地方盖着:第 1 步画的 3 条线(旁边写着『3』)"') && /\n {6}- "0:46 画的,[^\n]*;没有截图;画的地方盖着:[^\n]*文字『5』/.test(prompt), prompt.slice(prompt.indexOf('  lecture:'), prompt.indexOf('  lecture:') + 1400));
+  check('课包的画带截图:上下文包 photos: 与 photoFiles: 带它(这一轮带只读工具读图,同照片);消息的 photos 不记截图', prompt.includes(`  photos:\n    - "${shotPath}"\n  photoFiles:\n`) && !m?.photos);
+  check('消息记看的过程(录像用)与画下去的那一刻', JSON.stringify(m?.lecture?.log) === JSON.stringify(log) && m?.lecture?.marks?.[0].t === -50_000, JSON.stringify(m?.lecture?.log));
+  check('消息记画:时刻、SVG 停在哪、几笔(旧的 path 读成一笔)、截图、那段话', m?.lecture?.marks?.length === 2 && m.lecture.marks[0].atMs === 26_000 && m.lecture.marks[0].svgMs > 1000 && m.lecture.marks[0].strokes.length === 2 && m.lecture.marks[0].strokes[0].length === 11 && m.lecture.marks[0].image === shotPath && m.lecture.marks[1].strokes.length === 1 && m.lecture.marks[1].strokes[0].length === 20 && (m.lecture.marks[0].text ?? '').startsWith('0:26 画的'), JSON.stringify(m?.lecture?.marks?.[0]).slice(0, 300));
   const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; lecture?: { bundle: string; title: string } }[] };
   const pb = (await route('GET', '/api/conversations/math-tutor/today/board', ctx)).json as { messages: { job: string; lecture?: unknown; lectureWatch?: { watchedMs: number; pauses: number } }[] };
-  const kl = kd.messages.find((x) => x.job === job)?.lecture as { bundle: string; title: string; marks?: { atMs: number; svgMs: number; path: unknown[]; text?: string }[] } | undefined;
+  const kl = kd.messages.find((x) => x.job === job)?.lecture as { bundle: string; title: string; marks?: { atMs: number; svgMs: number; strokes: unknown[]; image?: string; text?: string }[] } | undefined;
   const pl = pb.messages.find((x) => x.job === job) as { lecture?: { marks?: { text?: string }[] } } | undefined;
-  check('孩子端那一条带小课堂(课包、课名、圈:时刻 / SVG 时刻 / 路径),不带看的情况、不带那段话', kl?.bundle === BUNDLE && kl.title === '13 − 8 破十法' && kl.marks?.length === 2 && kl.marks[0].svgMs > 0 && kl.marks[0].path.length === 20 && kl.marks.every((k) => !('text' in k)) && !('lectureWatch' in (kd.messages.find((x) => x.job === job) ?? {})), JSON.stringify(kl).slice(0, 300));
-  check('家长端多看到看了多久、停过几次,圈带那段话', pb.messages.find((x) => x.job === job)?.lectureWatch?.pauses === 2 && (pl?.lecture?.marks?.[0]?.text ?? '').includes('第 1 步画的 3 条线'));
+  check('孩子端那一条带小课堂(课包、课名、画:时刻 / SVG 时刻 / 几笔 / 截图),不带看的情况、不带那段话', kl?.bundle === BUNDLE && kl.title === '13 − 8 破十法' && kl.marks?.length === 2 && kl.marks[0].svgMs > 0 && kl.marks[0].strokes.length === 2 && kl.marks[0].image === shotPath && kl.marks.every((k) => !('text' in k)) && !('lectureWatch' in (kd.messages.find((x) => x.job === job) ?? {})), JSON.stringify(kl).slice(0, 300));
+  check('家长端多看到看了多久、停过几次,画带那段话', pb.messages.find((x) => x.job === job)?.lectureWatch?.pauses === 2 && (pl?.lecture?.marks?.[0]?.text ?? '').includes('第 1 步画的 3 条线'));
   const r2 = await send({ text: '还有呢', thread });
   await wait();
   const run2 = await readRunFile(ctx.ws, 'math-tutor', date, (r2.json as { job: string }).job);
   check('同一话题再问:普通的一条,不再带 lecture:', r2.status === 202 && !(run2?.prompt ?? '').includes('  lecture:'));
 
-  // 问过以后再看一遍又圈了:同一话题下一条带上新圈的
-  const again = { bundle: BUNDLE, watchedMs: 30_000, finished: false, pauses: 1, marks: [{ atMs: 40_000, path: ring(600, 160, 40, 18) }] };
-  check('再看一遍的圈:没带话题 400、话题不是这份课包开头的 400、没圈也没看的过程 400、课包对不上 400', (await send({ text: '这里', lecture: again })).status === 400 && (await send({ text: '这里', thread: '0800-9', lecture: again })).status === 400 && (await send({ text: '这里', thread, lecture: { ...again, marks: [] } })).status === 400 && (await send({ text: '这里', thread, lecture: { ...again, bundle: '2026-01-01-other' } })).status === 400);
+  // 问过以后再看一遍又画了:同一话题下一条带上新画的
+  const again = { bundle: BUNDLE, watchedMs: 30_000, finished: false, pauses: 1, marks: [{ atMs: 40_000, strokes: [ring(600, 160, 40, 18)] }] };
+  check('再看一遍的画:没带话题 400、话题不是这份课包开头的 400、没画也没看的过程 400、课包对不上 400', (await send({ text: '这里', lecture: again })).status === 400 && (await send({ text: '这里', thread: '0800-9', lecture: again })).status === 400 && (await send({ text: '这里', thread, lecture: { ...again, marks: [] } })).status === 400 && (await send({ text: '这里', thread, lecture: { ...again, bundle: '2026-01-01-other' } })).status === 400);
   const r3 = await send({ text: '这里为什么是 2', thread, lecture: again });
   await wait();
   const j3 = (r3.json as { job: string; thread: string }).job;
   const m3 = (await readIndex(ctx.ws, 'math-tutor', date)).messages.find((x) => x.job === j3);
   const p3 = (await readRunFile(ctx.ws, 'math-tutor', date, j3))?.prompt ?? '';
-  check('再看一遍的圈:同一话题、记 again 与新圈、上下文包 watched 说又看了一遍、marks 一处', r3.status === 202 && (r3.json as { thread: string }).thread === thread && m3?.lecture?.again === true && m3.lecture.marks?.length === 1 && p3.includes('    watched: "又看了一遍,看到 0:30,停过 1 次,圈了 1 处"') && p3.includes('      - "0:40 圈的,'), p3.slice(p3.indexOf('  lecture:'), p3.indexOf('  lecture:') + 900));
+  check('再看一遍的画:同一话题、记 again 与新画的、上下文包 watched 说又看了一遍、marks 一处', r3.status === 202 && (r3.json as { thread: string }).thread === thread && m3?.lecture?.again === true && m3.lecture.marks?.length === 1 && p3.includes('    watched: "又看了一遍,看到 0:30,停过 1 次,画了 1 处"') && p3.includes('      - "0:40 画的,'), p3.slice(p3.indexOf('  lecture:'), p3.indexOf('  lecture:') + 900));
 
   const r5 = await send({ text: '我又看了一遍', thread, lecture: { bundle: BUNDLE, watchedMs: 46_600, finished: true, pauses: 0, log: [{ t: -50_000, pos: 0, play: true }, { t: -3_000, pos: 46_600, play: false }] } });
   await wait();
   const m5 = (await readIndex(ctx.ws, 'math-tutor', date)).messages.find((x) => x.job === (r5.json as { job: string }).job);
-  check('问过以后又看了一遍、没圈:下一条也带上(again,只有看的过程),录像里有这一段', r5.status === 202 && m5?.lecture?.again === true && !m5.lecture.marks && m5.lecture.log?.length === 2);
+  check('问过以后又看了一遍、没画:下一条也带上(again,只有看的过程),录像里有这一段', r5.status === 202 && m5?.lecture?.again === true && !m5.lecture.marks && m5.lecture.log?.length === 2);
 
   // ---- 视频来源 ----
   const VID = '2026-10-06-pingjunfen';
@@ -123,22 +130,19 @@ try {
   const lj = (await route('GET', `/api/kid/lectures/${VID}/lecture.json`, ctx)).json as { total: number; segments: { start: number; line: string }[] };
   const mp4 = await route('GET', `/api/kid/lectures/${VID}/video.mp4`, ctx);
   check('舞台要的:lecture.json(课长、一句一段)与 video.mp4;课包的 id 在这里 404', lj.total === 18_000 && lj.segments.length === 3 && lj.segments[1].start === 5000 && mp4.status === 200 && (mp4 as { file?: string }).file?.endsWith('video.mp4') === true && (await route('GET', `/api/kid/lectures/${BUNDLE}/lecture.json`, ctx)).status === 404);
-  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-  const up = await route('POST', '/api/kid/conversations/math-tutor/photos', ctx, { image: PNG });
-  const shotPath = (up.json as { path: string }).path;
   const vvia = { home: kh2.home, button: vbtn!.id };
-  const vmark = { atMs: 12_600, path: ring(160, 90, 48, 32), image: shotPath };
-  check('视频的圈:截图不在 captures/ 400', (await send({ text: '问', via: vvia, lecture: { bundle: VID, watchedMs: 18_000, finished: true, pauses: 1, marks: [{ ...vmark, image: 'captures/nope.jpg' }] } })).status === 400);
+  const vmark = { atMs: 12_600, strokes: [ring(160, 90, 48, 32)], image: shotPath };
+  check('视频的画:截图不在 captures/ 400', (await send({ text: '问', via: vvia, lecture: { bundle: VID, watchedMs: 18_000, finished: true, pauses: 1, marks: [{ ...vmark, image: 'captures/nope.jpg' }] } })).status === 400);
   const r4 = await send({ text: '为什么要轮着分', via: vvia, lecture: { bundle: VID, watchedMs: 18_000, finished: true, pauses: 1, marks: [vmark] } });
   await wait();
   const j4 = (r4.json as { job: string }).job;
   const m4 = (await readIndex(ctx.ws, 'math-tutor', date)).messages.find((x) => x.job === j4);
   const p4 = (await readRunFile(ctx.ws, 'math-tutor', date, j4))?.prompt ?? '';
-  check('视频的圈:上下文包 source: video、photos: 带截图、marks: 说那时在讲哪句与截图是第几张', r4.status === 202 && p4.includes(`    source: "video ${VID}"`) && p4.includes(`  photos:\n    - "${shotPath}"`) && p4.includes('      - "0:12 圈的,那时在讲『分完了,每人 4 块,一样多。这就是平均分。』;圈在截图上(photos 第 1 张)"'), p4.slice(0, 1500));
-  check('消息记 lecture.video 与圈的截图;消息的 photos 不记截图', m4?.lecture?.video === true && m4.lecture.marks?.[0].image === shotPath && !m4.photos, JSON.stringify(m4?.lecture));
+  check('视频的画:上下文包 source: video、photos: 带截图、marks: 说那时在讲哪句与截图是第几张', r4.status === 202 && p4.includes(`    source: "video ${VID}"`) && p4.includes(`  photos:\n    - "${shotPath}"`) && p4.includes('      - "0:12 画的,那时在讲『分完了,每人 4 块,一样多。这就是平均分。』;画在截图上(photos 第 1 张)"'), p4.slice(0, 1500));
+  check('消息记 lecture.video 与画的截图;消息的 photos 不记截图', m4?.lecture?.video === true && m4.lecture.marks?.[0].image === shotPath && !m4.photos, JSON.stringify(m4?.lecture));
   const kd4 = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; lecture?: { video?: boolean; marks?: { image?: string; text?: string }[] } }[] };
   const kl4 = kd4.messages.find((x) => x.job === j4)?.lecture;
-  check('孩子端那一条带 video 与截图路径(圈的卡画这张),不带那段话', kl4?.video === true && kl4.marks?.[0].image === shotPath && !kl4.marks[0].text);
+  check('孩子端那一条带 video 与截图路径(画的卡画这张),不带那段话', kl4?.video === true && kl4.marks?.[0].image === shotPath && !kl4.marks[0].text);
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

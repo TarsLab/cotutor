@@ -133,11 +133,11 @@ export interface ReelGap {
 }
 
 /**
- * 进度条上的点:said 孩子 / 家长开口、card 孩子改了一张卡、ask 老师停下等孩子、error 这轮没成、lecture 开始看小课堂、circle 在小课堂上圈了一处、
+ * 进度条上的点:said 孩子 / 家长开口、card 孩子改了一张卡、ask 老师停下等孩子、error 这轮没成、lecture 开始看小课堂、ink 在小课堂上画了一处、
  * miss 按住说话没发出去(淡,偶尔一两次不算事)、misses 连着 REEL_MISS_STREAK 次以上没发出去(拍板 10;to 是这一串的末尾)
  */
 export interface ReelMark {
-  kind: 'said' | 'card' | 'ask' | 'error' | 'lecture' | 'circle' | 'miss' | 'misses';
+  kind: 'said' | 'card' | 'ask' | 'error' | 'lecture' | 'ink' | 'miss' | 'misses';
   to?: number;
   at: number;
   job: string;
@@ -146,7 +146,7 @@ export interface ReelMark {
 
 /**
  * 看小课堂的一段(《小课堂设计.md》§八第 5 步):孩子开口那条消息带来的看的过程,换成墙钟。log 每条:那一刻停在课里的哪儿、之后在不在放;
- * marks:圈下去的那一刻(at)、圈在课里的哪一刻(atMs)与路径(没记 t 的圈当在这段末尾)
+ * marks:画下去的那一刻(at)、画在课里的哪一刻(atMs)与几笔(没记 t 的当在这段末尾)
  */
 export interface ReelLecture {
   job: string;
@@ -156,7 +156,7 @@ export interface ReelLecture {
   from: number;
   to: number;
   log: { at: number; pos: number; play: boolean }[];
-  marks: { at: number; atMs: number; svgMs: number; path: [number, number][]; image?: string }[];
+  marks: { at: number; atMs: number; svgMs: number; strokes: [number, number][][]; image?: string }[];
 }
 
 /** 按住说话的一次(拍板 6):按下 → 话筒开 → 认出的字一段段 → 松手 → 收尾。diag = 老话题从 voice-diag.jsonl 推的(没有字、没有音量,只有没发出去的) */
@@ -526,10 +526,10 @@ export function buildReel(input: ReelInput): Reel | null {
     const log = [...l.log].sort((a, b) => a.t - b.t).map((e) => ({ at: t0 + Math.min(0, e.t), pos: e.pos, play: e.play }));
     const from = log[0].at;
     const to = log[log.length - 1].at;
-    const lm = (l.marks ?? []).map((x) => ({ at: x.t !== undefined ? t0 + Math.min(0, x.t) : to, atMs: x.atMs, svgMs: x.svgMs, path: x.path, ...(x.image ? { image: x.image } : {}) }));
+    const lm = (l.marks ?? []).map((x) => ({ at: x.t !== undefined ? t0 + Math.min(0, x.t) : to, atMs: x.atMs, svgMs: x.svgMs, strokes: x.strokes, ...(x.image ? { image: x.image } : {}) }));
     lectures.push({ job: m.job, bundle: l.bundle, title: l.title, video: Boolean(l.video), from, to, log, marks: lm });
     marks.push({ kind: 'lecture', at: from, job: m.job, label: `${l.again ? '又看小课堂' : '看小课堂'} · ${l.title}` });
-    for (const x of lm) marks.push({ kind: 'circle', at: x.at, job: m.job, label: `圈了一处(课里 ${reelLecClock(x.atMs)})` });
+    for (const x of lm) marks.push({ kind: 'ink', at: x.at, job: m.job, label: `画了一处(课里 ${reelLecClock(x.atMs)})` });
   }
 
   // ---- 孩子开口之前的轮:从第一次开口往前倒推 ----
@@ -713,7 +713,7 @@ export function buildReel(input: ReelInput): Reel | null {
     ...holds.map((x): [number, number] => [x.from, x.to + (x.result === 'unclear' ? REEL_UNCLEAR_MS : 0)]),
     ...types.map((x): [number, number] => [x.from, x.to]),
     ...photoScreens.map((x): [number, number] => [x.from, x.to]),
-    // 小课堂在放的时段;停着的不算(孩子停下来想、圈,太久照样压)
+    // 小课堂在放的时段;停着的不算(孩子停下来想、画,太久照样压)
     ...lectures.flatMap((x) => x.log.flatMap((e, i): [number, number][] => (e.play ? [[e.at, i + 1 < x.log.length ? x.log[i + 1].at : x.to]] : []))),
   ];
   const acts: [number, number][] = [
@@ -804,7 +804,7 @@ export interface ReelFrame {
   thinking: { job: string; card: number; ms: number } | null;
   /** 孩子切到别处了(页面在后台) */
   away: boolean;
-  /** 在看小课堂:看的是哪一课、停在课里的哪一刻、在不在放、到这一刻圈过的几处 */
+  /** 在看小课堂:看的是哪一课、停在课里的哪一刻、在不在放、到这一刻画过的几处 */
   lecture: { job: string; bundle: string; title: string; video: boolean; pos: number; playing: boolean; marks: ReelLecture['marks'] } | null;
   /**
    * 孩子按着说话(拍板 6):wait = 话筒还没开(「等一下…」)、live = 在听、tail = 松手了在收尾(「正在听清…」);text = 到这一刻认出的字;

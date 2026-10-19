@@ -32,9 +32,9 @@ import { mockLiveUpgrade } from './mock-live.ts';
 // 回给页面的形状直接用真服务的(app.ts):真接口加字段、改字段,这里不跟就红(2026-10-17;以前 mock 自己拼对象,motto 这种真服务没有的字段只在 mock 下显示)
 import type { KidDay, KidHistory, KidHome, KidTutor, Overview, OverviewThread, OverviewTutor } from './app.ts';
 
-/** 看完小课堂的第一问,mock 老师这样答:对着圈的地方说,放课里拆开那一捆的那一段(《小课堂设计.md》§六);视频的放轮着分那一段 */
+/** 看完小课堂的第一问,mock 老师这样答:对着画的地方说,放课里拆开那一捆的那一段(《小课堂设计.md》§六);视频的放轮着分那一段 */
 const MOCK_VIDEO_LECTURE_REPLY = [
-  '你圈的是轮着分的那一下。',
+  '你画的是轮着分的那一下。',
   '',
   '```lecture',
   '2026-10-06-pingjunfen 0:05-0:11',
@@ -46,7 +46,7 @@ const MOCK_VIDEO_LECTURE_REPLY = [
   '每人分到几块?',
 ].join('\n');
 const MOCK_LECTURE_REPLY = [
-  '你圈的是右边散的 3 根。8 根要从哪儿拿?',
+  '你画的是右边散的 3 根。8 根要从哪儿拿?',
   '',
   '```lecture',
   '2026-09-18-po13-jian-8 0:19-0:30',
@@ -447,7 +447,7 @@ interface MockMessage {
   states?: Record<number, unknown>;
   /** 孩子这条带的照片(假路径;/api/kid/image 给占位图) */
   photos?: string[];
-  /** 看完小课堂后的第一条:节前画小课堂卡与圈的卡(圈带那段话;孩子端下发时摘掉) */
+  /** 看完小课堂后的第一条:节前画小课堂卡与画的卡(画带那段话;孩子端下发时摘掉) */
   lecture?: KidLecture;
   /** 家长端多看到的看的情况 */
   lectureWatch?: { watchedMs: number; finished: boolean; pauses: number };
@@ -948,8 +948,9 @@ export function createMock(opts: MockOptions = {}): Mock {
         let said = body.text;
         let newThread = body.newThread === true;
         let wantThread = body.thread;
-        // 小课堂:看完才能开口,字是孩子说的,新话题;圈的那几处现算成一段话(同 runner)。问过以后再看一遍又圈了:同一话题的下一条带上(again)
-        const marksIn = isObj(body.lecture) && Array.isArray(body.lecture.marks) ? (body.lecture.marks as { atMs: number; path: [number, number][]; image?: string; t?: number }[]) : [];
+        // 小课堂:看完才能开口,字是孩子说的,新话题;画的那几处现算成一段话(同 runner)。问过以后再看一遍又画了:同一话题的下一条带上(again)
+        // 一处几笔(strokes);2026-10-19 以前一笔一处(path),照读
+        const marksIn = isObj(body.lecture) && Array.isArray(body.lecture.marks) ? (body.lecture.marks as { atMs: number; strokes?: [number, number][][]; path?: [number, number][]; image?: string; t?: number }[]).map(({ path, strokes, ...m }) => ({ ...m, strokes: strokes ?? (path ? [path] : []) })) : [];
         const logIn = isObj(body.lecture) && Array.isArray(body.lecture.log) ? (body.lecture.log as { t: number; pos: number; play: boolean }[]) : [];
         const lec = isObj(body.lecture) && typeof body.lecture.bundle === 'string' ? { bundle: body.lecture.bundle, finished: body.lecture.finished === true, again: false, watchedMs: Number(body.lecture.watchedMs) || 0, pauses: Number(body.lecture.pauses) || 0 } : null;
         if (lec && (typeof button !== 'object' || button === null || button.kind !== 'lecture')) {

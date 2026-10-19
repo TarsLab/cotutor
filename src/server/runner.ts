@@ -85,7 +85,7 @@ export interface SendInput {
   replayOf?: string;
   /** cotutor activity eval 跑的一轮:不写记忆、不预热(画照画,画家由 eval 换成假的) */
   eval?: true;
-  /** 孩子看完小课堂后的第一条(《小课堂设计.md》§六):上下文包带 lecture:(课的每句、看的情况、圈过的几处),消息记 lecture;again = 问过以后再看一遍又圈了 */
+  /** 孩子看完小课堂后的第一条(《小课堂设计.md》§六):上下文包带 lecture:(课的每句、看的情况、画过的几处),消息记 lecture;again = 问过以后再看一遍又画了 */
   lecture?: { bundle: string; watchedMs: number; finished: boolean; pauses: number; again?: boolean; marks?: IncomingMark[]; log?: { t: number; pos: number; play: boolean }[] };
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2),记进消息 */
   via?: MessageVia;
@@ -528,7 +528,7 @@ export class Runner {
     if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
     if (!t.enabled) throw new UsageError(`${t.display} 已关闭(cotutor.json tutors.${tutor}.enabled = false),打开再发`);
     const photos = input.photos?.filter(Boolean) ?? [];
-    // 视频小课堂的圈带截图(《小课堂设计.md》拍板 4):和照片一样进上下文包 photos:(排在孩子拍的后面),这一轮带工具读图;消息的 photos 只记孩子拍的
+    // 小课堂画的一处带一张截图(《小课堂设计.md》拍板 41):和照片一样进上下文包 photos:(排在孩子拍的后面),这一轮带工具读图;消息的 photos 只记孩子拍的
     const shots = input.lecture?.marks?.flatMap((m) => (m.image ? [m.image] : [])) ?? [];
     const seen = [...photos, ...shots];
     const text = input.text.trim() || (input.action === 'continue' ? '继续' : input.action === 'submit' ? '(交了答案,没说话)' : photos.length ? (photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`) : '');

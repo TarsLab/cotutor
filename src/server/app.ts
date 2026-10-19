@@ -59,6 +59,7 @@ import { themeFiles } from './theme.ts';
 import { enrichPaints } from '../paint/painter.ts';
 import type { Draw } from '../paint/draw.ts';
 import { enrichLectures, inspectLecture, bakeSectionSoon, ensureBaked, lectureFrameSvg, parseRing, parseSvgMs, type IncomingMark } from './lecture.ts';
+import { MARK_MAX, MARK_MAX_POINTS, MARK_MAX_STROKES } from '../lib/lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { lettersData } from './letters.ts';
 import { fixtureOf, rawView } from './raw-view.ts';
@@ -293,13 +294,13 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
   let home: { button: string; brief?: string } | undefined;
   let continues: { date: string; thread: string } | undefined;
   let activity: { name: string; params: Record<string, ActivityValue> } | undefined;
-  // 小课堂(《小课堂设计.md》):看完才能开口——这一条要带 lecture(哪份课包、看完了、看了多久、停过几次、圈过的几处),字是孩子说的;新开话题。
-  // 问过以后「再看一遍」:同一话题的下一条带 lecture(新圈的、又看的过程;话题得是从这份课包开始的)
+  // 小课堂(《小课堂设计.md》):看完才能开口——这一条要带 lecture(哪份课包、看完了、看了多久、停过几次、画过的几处),字是孩子说的;新开话题。
+  // 问过以后「再看一遍」:同一话题的下一条带 lecture(新画的、又看的过程;话题得是从这份课包开始的)
   let lecture: (NonNullable<ReturnType<typeof lectureOf>> & { again?: true }) | null | undefined = lectureOf(body.lecture);
   if (lecture === null) return { error: { status: 400, json: { error: 'bad_request' } } };
   if (lecture) {
     const shots = lecture.marks.flatMap((k) => (k.image ? [k.image] : []));
-    if (shots.length + (photos?.length ?? 0) > 9) return { error: { status: 400, json: { error: 'bad_request', message: '照片和圈的截图一共最多 9 张' } } };
+    if (shots.length + (photos?.length ?? 0) > 9) return { error: { status: 400, json: { error: 'bad_request', message: '照片和画的截图一共最多 9 张' } } };
     for (const x of shots) if (!(await capturePathOk(ws, x))) return { error: { status: 400, json: { error: 'bad_request' } } };
   }
   if (lecture && button?.kind !== 'lecture') {
@@ -739,9 +740,8 @@ function listenedOf(v: unknown): NonNullable<ConversationMessage['listened']> | 
   return Object.keys(kept).length ? kept : undefined;
 }
 
-/** 一条消息最多带几处圈、一处圈最多几个点(《小课堂设计.md》§四) */
-const MAX_MARKS = 12;
-const MAX_MARK_POINTS = 400;
+/** 一处画里一笔最多几个点(播放器抽到 MARK_STROKE_POINTS,这里松一点);一条消息最多几处、一处几笔几个点见 src/lib/lecture.ts(《小课堂设计.md》§四) */
+const MAX_STROKE_POINTS = 400;
 /** 看的过程最多几条(拖进度条只记松手那一下,一堂课几十条) */
 const MAX_WATCH_LOG = 500;
 type WatchLog = { t: number; pos: number; play: boolean }[];
@@ -753,18 +753,28 @@ function lectureOf(v: unknown): { bundle: string; watchedMs: number; finished: b
   const pauses = v.pauses === undefined ? 0 : v.pauses;
   if (typeof pauses !== 'number' || !Number.isInteger(pauses) || pauses < 0 || pauses > 999) return null;
   const raw = v.marks === undefined ? [] : v.marks;
-  if (!Array.isArray(raw) || raw.length > MAX_MARKS) return null;
+  if (!Array.isArray(raw) || raw.length > MARK_MAX) return null;
   const marks: IncomingMark[] = [];
+  const point = (p: unknown): [number, number] | null => (Array.isArray(p) && p.length === 2 && p.every((x) => typeof x === 'number' && Number.isFinite(x) && Math.abs(x) < 1e5) ? [Math.round(p[0] as number), Math.round(p[1] as number)] : null);
   for (const m of raw as unknown[]) {
-    if (!isObj(m) || typeof m.atMs !== 'number' || !(m.atMs >= 0) || m.atMs > 6 * 3600_000 || !Array.isArray(m.path) || m.path.length < 3 || m.path.length > MAX_MARK_POINTS) return null;
-    const path = (m.path as unknown[]).map((p) => (Array.isArray(p) && p.length === 2 && p.every((x) => typeof x === 'number' && Number.isFinite(x) && Math.abs(x) < 1e5) ? [Math.round(p[0] as number), Math.round(p[1] as number)] as [number, number] : null));
-    if (path.some((p) => p === null)) return null;
-    // 视频的圈带一张截图(先 POST photos 拿到的 captures/ 路径;在不在由路由再查)
+    if (!isObj(m) || typeof m.atMs !== 'number' || !(m.atMs >= 0) || m.atMs > 6 * 3600_000) return null;
+    // 一处 = 停在同一刻画的几笔(strokes);2026-10-19 以前一笔一处(path),照读
+    const rawStrokes = Array.isArray(m.strokes) ? (m.strokes as unknown[]) : Array.isArray(m.path) ? [m.path] : null;
+    if (!rawStrokes || !rawStrokes.length || rawStrokes.length > MARK_MAX_STROKES) return null;
+    const strokes: [number, number][][] = [];
+    for (const st of rawStrokes) {
+      if (!Array.isArray(st) || st.length < 2 || st.length > MAX_STROKE_POINTS) return null;
+      const pts = st.map(point);
+      if (pts.some((p) => p === null)) return null;
+      strokes.push(pts as [number, number][]);
+    }
+    if (strokes.reduce((n, st) => n + st.length, 0) > MARK_MAX_POINTS) return null;
+    // 截图(先 POST photos 拿到的 captures/ 路径;在不在由路由再查)
     if (m.image !== undefined && (typeof m.image !== 'string' || m.image.length > 200)) return null;
-    // 圈下去的那一刻(离发出去多少毫秒,≤ 0;录像用)
+    // 画下去的那一刻(离发出去多少毫秒,≤ 0;录像用)
     const t = m.t === undefined ? undefined : typeof m.t === 'number' && Number.isFinite(m.t) && m.t <= 0 && m.t > -6 * 3600_000 ? Math.round(m.t) : null;
     if (t === null) return null;
-    marks.push({ atMs: Math.round(m.atMs), path: path as [number, number][], ...(typeof m.image === 'string' ? { image: m.image } : {}), ...(t !== undefined ? { t } : {}) });
+    marks.push({ atMs: Math.round(m.atMs), strokes, ...(typeof m.image === 'string' ? { image: m.image } : {}), ...(t !== undefined ? { t } : {}) });
   }
   // 看的过程(录像用):放 / 停 / 拖到哪,一次一条,t ≤ 0
   const rawLog = v.log === undefined ? [] : v.log;
@@ -1266,7 +1276,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const f = await stageAsset(p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
-    // 课包某一刻的画面(圈的卡、lecture 卡的缩略图):烤过的课包服务端现画;没烤过 404,页面退回自己克隆
+    // 课包某一刻的画面(画的卡、lecture 卡的缩略图、播放器截图的底):烤过的课包服务端现画;没烤过先烤,烤不了 404
     const frame = /^\/api\/bundles\/([a-z0-9][a-z0-9-]*)\/frame\.svg$/.exec(p);
     if (method === 'GET' && frame) {
       const svg = await lectureFrameSvg(ws, frame[1], parseSvgMs(url.searchParams.get('svg')), parseRing(url.searchParams.get('ring')), { bake: ensureBaked });

@@ -616,14 +616,13 @@ export function isQuestion(text: string): boolean {
 }
 
 /** 孩子端条目里页面用到的字段(与 kid-view 的 KidMessage 兼容) */
-/** 孩子端一条带的小课堂(《小课堂设计.md》§五):圈的卡现画那一刻的画面再叠圈;家长端的圈多一段老师拿到的话(text);again = 再看一遍又圈的那条 */
+/** 孩子端一条带的小课堂(《小课堂设计.md》§五):画的卡是截下来的图(没截图的课包现画那一刻再叠那几笔);家长端的画多一段老师拿到的话(text);again = 再看一遍又画的那条 */
 export interface KidLecture {
   bundle: string;
   title: string;
   again?: true;
-  /** 视频小课堂:圈的卡是截下来的图(image),不现画 */
   video?: true;
-  marks?: { atMs: number; svgMs: number; path: [number, number][]; text?: string; image?: string }[];
+  marks?: { atMs: number; svgMs: number; strokes: [number, number][][]; text?: string; image?: string }[];
 }
 
 export interface BoardMessage {

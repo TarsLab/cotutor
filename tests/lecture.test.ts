@@ -1,12 +1,12 @@
 /**
  * 小课堂的纯函数(src/lib/lecture.ts):时钟用 drawtell/core(它自己的测试对过 timeline 与拉伸,这里只看接得对)、
- * 时间显示、上下文包的每句、一处圈说成一段话(时刻 + 那时在讲的那句 + drawtell 说圈住了什么;课包有分组就说组名)。
+ * 时间显示、上下文包的每句、一处画说成一段话(时刻 + 那时在讲的那句 + 画的地方盖着什么:几笔的凸包交给 drawtell 认;课包有分组就说组名)。
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { computeStepWindows, frameAt } from 'drawtell/core';
-import { DRAW_START_MS, VOICE_STALL_MS, clockLabel, describeMark, lectureAt, lectureClock, lectureLines, lectureNext, lectureRange, parseClock, parseLectureDoc, videoClock, type LectureSkeleton, type LectureStep } from '../src/lib/lecture.ts';
+import { DRAW_START_MS, VOICE_STALL_MS, clockLabel, describeMark, inkRing, lectureAt, lectureClock, lectureLines, lectureNext, lectureRange, parseClock, parseLectureDoc, videoClock, type LectureSkeleton, type LectureStep } from '../src/lib/lecture.ts';
 import { check, done } from './_check.ts';
 
 const dir = fileURLToPath(new URL('./fixtures/bundles/2026-09-18-po13-jian-8/', import.meta.url));
@@ -36,16 +36,21 @@ check('上下文包的每句起点', lines.length === 6 && lines[0].startsWith('
   check('不越过课尾', lectureNext(v, v.total - 5, 16, null) === v.total);
 }
 
-// ---- 圈(describeMark):时刻 + 那时在讲的那句 + drawtell 说圈住了什么 ----
-const ring = (cx: number, cy: number, rx: number, ry: number): [number, number][] => Array.from({ length: 24 }, (_, k) => [Math.round(cx + rx * Math.cos((k / 24) * 2 * Math.PI)), Math.round(cy + ry * Math.sin((k / 24) * 2 * Math.PI))] as [number, number]);
+// ---- 画(describeMark):时刻 + 那时在讲的那句 + 画的地方盖着什么(drawtell circleHits,圈是几笔的凸包) ----
+const ring = (cx: number, cy: number, rx: number, ry: number, from = 0, to = 24): [number, number][] => Array.from({ length: to - from + 1 }, (_, i) => { const k = from + i; return [Math.round(cx + rx * Math.cos((k / 24) * 2 * Math.PI)), Math.round(cy + ry * Math.sin((k / 24) * 2 * Math.PI))] as [number, number]; });
 const s3 = clock.segments[2];
 {
   // 第 3 段(拆开一捆)中间,圈右边散的 3 根小棒(s-1..s-3,x 312–356,y 84–156)
-  const d = describeMark(clock, { atMs: s3.start + 2000, path: ring(334, 120, 45, 50) });
-  check('没有分组:「0:2x 圈的,那时在讲『…』;圈住了:第 1 步画的 3 条线(旁边写着『3』)」', d.text === `${clockLabel(s3.start + 2000)} 圈的,那时在讲『${steps[2].line}』;圈住了:第 1 步画的 3 条线(旁边写着『3』)` && JSON.stringify(d.ids) === JSON.stringify(['s-1', 's-2', 's-3']), d.text);
-  const named = describeMark(clock, { atMs: s3.start + 2000, path: ring(334, 70, 52, 110) }, { groups: [{ id: 'loose', label: '散的 3 根小棒', elementIds: ['s-1', 's-2', 's-3'] }] });
-  check('课包有分组:说组名,连上面的『3』', named.text.endsWith(';圈住了:散的 3 根小棒;文字『3』'), named.text);
-  check('那一刻还没画到 / 太小:照实说', describeMark(clock, { atMs: 500, path: ring(130, 115, 85, 30) }).text.endsWith(';圈的地方那时还没画东西') && describeMark(clock, { atMs: 0, path: [[1, 1], [2, 2]] }).text.endsWith('圈得太小,看不出圈的是什么'));
+  const d = describeMark(clock, { atMs: s3.start + 2000, strokes: [ring(334, 120, 45, 50)] });
+  check('一笔圈一圈:「0:2x 画的,那时在讲『…』;画的地方盖着:第 1 步画的 3 条线(旁边写着『3』)」', d.text === `${clockLabel(s3.start + 2000)} 画的,那时在讲『${steps[2].line}』;画的地方盖着:第 1 步画的 3 条线(旁边写着『3』)` && JSON.stringify(d.ids) === JSON.stringify(['s-1', 's-2', 's-3']), d.text);
+  const two = describeMark(clock, { atMs: s3.start + 2000, strokes: [ring(334, 120, 45, 50, 0, 12), ring(334, 120, 45, 50, 12, 24)] });
+  check('两笔各画半圈:合成一处,和一笔圈住的一样', two.text === d.text, two.text);
+  const named = describeMark(clock, { atMs: s3.start + 2000, strokes: [ring(334, 70, 52, 110)] }, { groups: [{ id: 'loose', label: '散的 3 根小棒', elementIds: ['s-1', 's-2', 's-3'] }] });
+  check('课包有分组:说组名,连上面的『3』', named.text.endsWith(';画的地方盖着:散的 3 根小棒;文字『3』'), named.text);
+  const under = describeMark(clock, { atMs: s3.start + 2000, strokes: [[[312, 168], [334, 169], [356, 168]]] });
+  check('划一道(太细,用放宽的外框):没盖住东西,说画在什么旁边', /;画在.+旁边$/.test(under.text), under.text);
+  check('那一刻还没画到:照实说', describeMark(clock, { atMs: 500, strokes: [ring(130, 115, 85, 30)] }).text.endsWith(';画的地方那时还没画东西'));
+  check('凸包:没封口的也合上;一个点放宽成框', inkRing([[[0, 0], [100, 0], [100, 100]], [[0, 100], [50, 50]]]).length === 4 && JSON.stringify(inkRing([[[10, 10], [11, 10]]])) === JSON.stringify([[-1.5, -2], [22.5, -2], [22.5, 22], [-1.5, 22]]) && inkRing([]).length === 0, JSON.stringify(inkRing([[[10, 10], [11, 10]]])));
 }
 {
   // 服务端读课包:分组与 bounds 从 scene.json、命中块从 manifest.json(drawtell build 就这么放)
@@ -72,12 +77,12 @@ const s3 = clock.segments[2];
     const fresh = await readLecture({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8');
     check('样本课包烤过:baked', fresh?.baked === true);
     const s3mid = clock.segments[2].drawStart + 2000;
-    const svg = await lectureFrameSvg({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8', s3mid, [[300, 80], [360, 80], [360, 160]]) ?? '';
-    check('frame.svg:那一刻画到第 3 步一半(橙色斜线有、第 4 步的红圈没有),叠着蓝圈(加了平移),字体内嵌', svg.startsWith('<svg') && svg.includes('#e8590c') && !svg.includes('#e03131') && svg.includes('stroke="#2f6fd6"') && svg.includes('M284 94 L344 94') && svg.includes('@font-face'), svg.slice(0, 200));
+    const svg = await lectureFrameSvg({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8', s3mid, [[[300, 80], [360, 80], [360, 160]], [[400, 80], [410, 90]]]) ?? '';
+    check('frame.svg:那一刻画到第 3 步一半(橙色斜线有、第 4 步的红圈没有),叠着画的两笔(加了平移),字体内嵌', svg.startsWith('<svg') && svg.includes('#e8590c') && !svg.includes('#e03131') && svg.includes('stroke="#2f6fd6"') && svg.includes('M284 94 L344 94 L344 174 M384 94 L394 104') && svg.includes('@font-face'), svg.slice(0, 200));
     const end = await lectureFrameSvg({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8', parseSvgMs('end')) ?? '';
     check('frame.svg?svg=end:最后一帧(小课堂卡的缩略图,拍板 37),第 4 步的红圈也画上了;认不出来的 svg = 0', end.includes('#e03131') && parseSvgMs('end') === Infinity && parseSvgMs('x') === 0 && parseSvgMs(null) === 0 && parseSvgMs('1500') === 1500);
     check('frame.svg:画面改过没重烤、id 不对 → null(页面退回自己克隆)', (await lectureFrameSvg({ dirs: { bundles: tmp } }, 'po', 2000)) === null && (await lectureFrameSvg({ dirs: { bundles: tmp } }, '../x', 2000)) === null);
-    check('ring 参数:「x,y;x,y」,认不出来就当没有', JSON.stringify(parseRing('1,2;3,4')) === '[[1,2],[3,4]]' && parseRing('1,2;x').length === 0 && parseRing(null).length === 0);
+    check('ring 参数:一笔「x,y;x,y」、笔间「~」,认不出来就当没有,一共最多 1200 个点', JSON.stringify(parseRing('1,2;3,4')) === '[[[1,2],[3,4]]]' && JSON.stringify(parseRing('1,2;3,4~5,6;7,8')) === '[[[1,2],[3,4]],[[5,6],[7,8]]]' && parseRing('1,2;x').length === 0 && parseRing(null).length === 0 && parseRing(Array.from({ length: 5 }, () => Array.from({ length: 300 }, () => '1,1').join(';')).join('~')).flat().length === 1200);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

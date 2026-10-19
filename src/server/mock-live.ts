@@ -82,7 +82,7 @@ export function mockLiveUpgrade(mock: Mock) {
           if (!isObj(x.body)) return;
           const b = x.body;
           interrupt();
-          void begin(b, b.ask === true ? '这张卡呀,我讲给你听' : Array.isArray(b.photos) && b.photos.length ? '我看看' : b.action === 'submit' ? '我看看你选的' : '嗯,我讲给你听');
+          void begin(b, b.ask === true ? '这张卡呀,我讲给你听' : Array.isArray(b.photos) && b.photos.length ? '我看看' : b.action === 'submit' ? '我看看你选的' : isObj(b.via) ? '好,我们开始吧' : '嗯,我讲给你听');
           break;
         }
         case 'bye': sock.close(1000, 'bye'); break;

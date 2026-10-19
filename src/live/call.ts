@@ -82,6 +82,8 @@ export class LiveCall {
   private caughtDone = false;
   /** 上一轮讲稿念到第几句被打断(1 起);交给脑时带上,带了就清 */
   private cut: number | undefined;
+  /** 最近开始放的那句是问句:孩子再开口就是在答(接住只「嗯」一声,cue 的 answer) */
+  private asked = false;
   /** 最近告诉孩子端开始放的那句;打断时报它 */
   private lastRead: { job: string; line: number } | null = null;
   /** 一段里第二句起的 read(按字数摊的时刻);打断时撤 */
@@ -278,6 +280,7 @@ export class LiveCall {
     const t = setTimeout(() => {
       if (this.ended || this.q.dropJob === beat.job) return;
       this.lastRead = { job: beat.job, line: beat.lines[k] };
+      this.asked = /[?？]\s*$/.test(beat.texts[k] ?? '');
       this.send({ t: 'read', job: beat.job, line: beat.lines[k], text: beat.texts[k] });
       this.mouth(beat.job, Date.now(), { lane: 'mouth', kind: 'read', line: beat.lines[k] });
     }, Math.max(0, at - this.ms()));
@@ -369,7 +372,7 @@ export class LiveCall {
           break;
         }
         this.session.commit();
-        this.turn('voice', body);
+        this.turn(this.asked && body.newThread !== true ? 'answer' : 'voice', body);
         break;
       }
       case 'hush': {
@@ -383,7 +386,7 @@ export class LiveCall {
       case 'send': {
         if (!this.session || !isObj(m.body)) return;
         const body = m.body;
-        const kind: CatchKind = body.ask === true && isObj(body.focus) ? 'ask' : body.action === 'submit' ? 'card' : Array.isArray(body.photos) && body.photos.length ? 'photo' : 'text';
+        const kind: CatchKind = body.ask === true && isObj(body.focus) ? 'ask' : body.action === 'submit' ? 'card' : Array.isArray(body.photos) && body.photos.length ? 'photo' : isObj(body.via) ? 'start' : 'text';
         this.interrupt();
         this.pre = [{ at, ev: { lane: 'mouth', kind: 'release', how: kind === 'ask' || kind === 'card' || kind === 'photo' ? kind : 'text' } }];
         this.turn(kind, body, typeof body.text === 'string' ? body.text : '');
@@ -401,7 +404,7 @@ export class LiveCall {
     this.caught = '';
     this.caughtDone = false;
     this.q = queueStep(this.q, { e: 'release' }).s;
-    this.pendingVoice = kind === 'voice' ? { seq, body } : null;
+    this.pendingVoice = kind === 'voice' || kind === 'answer' ? { seq, body } : null;
     const go = (): void => this.ask({ kind: 'catch' }, catchCue(kind));
     if (this.said) this.afterDone = go; else go();
     if (text !== undefined) void this.toBrain(seq, { ...body, text });

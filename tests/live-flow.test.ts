@@ -3,7 +3,7 @@
  * 连上(手动轮次、嘴的人设)→ 按住说、松手 → 嘴先接住 → 转写交给脑(实时轮,消息记 live、上下文包带 caught)→ 一拍一拍照念(念的字就是讲稿)→
  * 念的时候按下 = 打断(清队列,下一轮上下文包带 cut)→ 挂了落录像;没开 / 不在 live.voices 拒升级;嘴连不上告诉孩子端走板书。
  */
-import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -230,6 +230,43 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   const reel = files.find((f) => f.endsWith('.reel.json'));
   const rj = reel ? JSON.parse(readFileSync(join(liveDir, reel), 'utf8')) : null;
   check('挂断:嘴关了、孩子端收到 end、落录像(reel.json 记进出的消息、屏幕尺寸,call.wav)', okEnd && finished[0][1] === 'bye' && c.closed && has(k, (m) => m.t === 'end') && files.some((f) => f.endsWith('.wav')) && rj?.view?.[0] === 1180 && rj.msgs.some((m: Msg) => m[1] === 'i' && m[2].t === 'hold'), JSON.stringify({ files, view: rj?.view }));
+}
+
+{
+  // ---- activity 也走实时(P3.1):首页按钮的开场 → 嘴说「我们开始吧」、脑照 activity 带;上一句念的是问句,孩子再开口嘴只「嗯」一声 ----
+  const { publishHome } = await import('../src/server/home.ts');
+  mkdirSync(join(wsRoot, 'home'), { recursive: true });
+  writeFileSync(join(wsRoot, 'home', 'draft.md'), '```tutor chinese-tutor\nactivity 看图说话\n```\n\n## 为什么这么排\n\n试实时\n');
+  const pub = await publishHome(ctx.ws, { now: ctx.now() });
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  const k = await connect('chinese-tutor');
+  await until(() => has(k, (m) => m.t === 'ready'));
+  const c = fake.conns.at(-1)!;
+  k.ws.send(JSON.stringify({ t: 'send', body: { text: '看图说话', newThread: true, via: { home: pub.home?.id, button: 0 } } }));
+  const okTurn = await until(() => has(k, (m) => m.t === 'turn'), 10000);
+  const turn = k.msgs.find((m) => m.t === 'turn')!;
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  const m0 = indexOf(localDate(ctx.now())).messages.find((m) => m.job === turn?.job);
+  check('首页按钮开的 activity:嘴接住用开场那句、脑照 activity 带(消息记 via 与 activity)、实时轮', pub.ok && okTurn && c.responses[0]?.instructions === catchCue('start') && m0?.activity?.name === '看图说话' && m0?.via?.button === 0 && m0?.live === true, JSON.stringify({ ok: pub.ok, r: c.responses[0], activity: m0?.activity, via: m0?.via, live: m0?.live }));
+
+  // 脑这一轮末句是问句,念完了孩子再开口:接住是答问那句;不是问句就是通用那句
+  fake.kidText = '你先问我吧?';
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: { thread: turn.thread } }));
+  const lastQ = await until(() => k.msgs.some((m) => m.t === 'read' && String(m.text).endsWith('你先问我吧?')), 15000);
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  await sleep(300);
+  const r = c.responses.length;
+  fake.kidText = '有一个男孩';
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: { thread: turn.thread } }));
+  await until(() => c.responses.length > r);
+  check('上一句念的是问句:孩子开口,接住用答问那句(「嗯」一声);之前的那轮用通用那句', lastQ && c.responses[r]?.instructions === catchCue('answer') && c.responses.some((x) => x?.instructions === catchCue('voice')), JSON.stringify(c.responses.slice(r)));
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  k.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => k.closed !== null);
 }
 
 {

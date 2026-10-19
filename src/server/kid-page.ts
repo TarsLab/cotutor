@@ -764,7 +764,7 @@ __AUDIO_JS__
   S.pdate = null;
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
-  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null };
+  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null };
   /** 实时的一节露到 / 画到第几句:这次连着念的轮(jobs)只到嘴念到的那句(脑写完了、嘴还没念到的不先露;被打断没念到的就不露);
    *  别的(重开页面、以前的、板书的)整节 → undefined */
   const liveHeard = (s) => (s && s.live && LV.on && LV.jobs.has(s.job) ? (LV.heard.has(s.job) ? LV.heard.get(s.job) : -1) : undefined);
@@ -1355,7 +1355,7 @@ __AUDIO_JS__
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null; S.ask = intent.ask || null;
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
-    if (liveWanted(t, intent)) liveOpen(); else { liveClose(); micWarm(); }
+    if (liveWanted(t)) liveOpen(); else { liveClose(); micWarm(); }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
     $('#board').replaceChildren(); pin.on = false;
@@ -2699,7 +2699,7 @@ __WORD_DRAW_JS__
   const switchThread = (date, thread) => {
     resetBoard();
     S.hist = date; S.readonly = Boolean(date); S.thread = thread; S.newThread = false; S.threadAt = null; S.via = null; S.cont = null; S.lecture = null; S.ask = null;
-    if (S.readonly) liveClose(); else if (!LV.on && liveWanted(S.tutor, null)) liveOpen();
+    if (S.readonly) liveClose(); else if (!LV.on && liveWanted(S.tutor)) liveOpen();
     renderBar(); renderSubtitle(); renderHeader();
     loadDay(!S.readonly);
   };
@@ -2747,8 +2747,8 @@ __WORD_DRAW_JS__
     if (!text && !opts.action && !(opts.photos && opts.photos.length)) return;
     if (!S.tutor || !canSend() || S.limit) return;
     unlock();
-    // 实时:不是按住说的(打字、拍照、交卡、卡上的「?」)也走那条连接,嘴先接住
-    if (LV.on && LV.ready && !opts.voice) { liveSendNow(text, opts); return; }
+    // 实时:不是按住说的(打字、拍照、交卡、卡上的「?」、首页按钮的开场)也走那条连接,嘴先接住;嘴还没连上(刚进来就发开场)等它
+    if (LV.on && !opts.voice) { if (LV.ready) liveSendNow(text, opts); else LV.queued = [text, opts]; return; }
     dispatch({ type: 'send' });
     S.pending = true; S.waitSince = Date.now(); renderSubtitle();
     const body = { text, device: S.device };
@@ -3442,7 +3442,7 @@ __REEL_DOCK_JS__
   //      孩子端不念讲稿(板书的 step 照旧收事件、只是不自动念);卡照旧从「今天」拉,闭合了就铺。谁出声、谁停走 liveDispatch → liveStep(live-board.ts),
   //      这里只照单执行。按住说话推 PCM(常开那路麦克风,makeAudio().use),不走浏览器识别;连不上、断了 → 这位老师这一次回到板书 ----
   /** 这次进老师页走不走实时:这位老师开了实时、孩子端今天能说话的话题;以前的、家长端、录像、预览不走,首页按钮开场、小课堂、activity 先走板书 */
-  const liveWanted = (t, intent) => Boolean(t && t.live) && !PARENT && !REEL && !PREVIEW && !S.readonly && !S.lecture && !S.ask && !(intent && intent.send);
+  const liveWanted = (t) => Boolean(t && t.live) && !PARENT && !REEL && !PREVIEW && !S.readonly && !S.lecture && !(S.ask && S.ask.lecture);
   const lvSend = (o) => { if (LV.ws && LV.ws.readyState === 1) LV.ws.send(JSON.stringify(o)); };
   /** 实时时改「谁出声」的事都走这里,页面里不许再直接改 LV.model(tests/live-player.test.ts 数着)。data = release / send 的 body、audio 的那块声音 */
   const liveDispatch = (ev, data) => {
@@ -3457,7 +3457,8 @@ __REEL_DOCK_JS__
         case 'enqueue': if (LV.audio) LV.audio.play(data); liveDrainWatch(); break;
         case 'flush': if (LV.audio) LV.audio.flush(); break;
         case 'stopCard': silence(); break;
-        case 'board': liveClose(); break;
+        // 连不上、断了:回板书;等着嘴连上才发的那条(开场)走板书发
+        case 'board': { const q = LV.queued; liveClose(); if (q) send(q[0], q[1]); break; }
         case 'render': renderSubtitle(); break;
       }
     }
@@ -3541,7 +3542,7 @@ __REEL_DOCK_JS__
   };
   const liveMsg = (m) => {
     switch (m.t) {
-      case 'ready': LV.ready = true; phIdle(); break;
+      case 'ready': { LV.ready = true; phIdle(); const q = LV.queued; LV.queued = null; if (q) liveSendNow(q[0], q[1]); break; }
       case 'fallback': case 'end': liveDispatch({ type: 'drop' }); break;
       case 'tutor':
         // 嘴接住的字一到就上字幕;照念的字幕跟 read 走(到点才亮)
@@ -3599,7 +3600,7 @@ __REEL_DOCK_JS__
   document.addEventListener('visibilitychange', () => { if (document.hidden) liveAudioDrop(); });
   /** 收:告诉服务端挂了、关连接、清嘴的声音、关实时那个 AudioContext;页面回到板书的样子(按着的那一下作废) */
   const liveClose = () => {
-    const ws = LV.ws; LV.ws = null; LV.ready = false;
+    const ws = LV.ws; LV.ws = null; LV.ready = false; LV.queued = null;
     if (ws) { ws.onclose = null; try { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'bye' })); ws.close(); } catch {} }
     liveAudioDrop();
     clearInterval(LV.drain); LV.drain = 0;

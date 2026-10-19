@@ -4,7 +4,8 @@
  * 本进程起服务(临时 workspace,语文老师开实时;老师是 tests/_fake-cli.ts --stream,嘴是 tests/_fake-realtime.ts,一次回答的声音拉长到 1.5 秒),
  * 无头 Chrome 带假麦克风开孩子端语文老师(新话题):
  *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴接住(字幕)→ 脑写的卡铺上、卡角是「?」、讲稿一句一句上字幕;
- *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点「?」= 问这张卡的一轮;不出卡的一轮板上留讲稿的字;嘴连不上回到板书。
+ *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点「?」= 问这张卡的一轮;不出卡的一轮板上留讲稿的字;嘴连不上回到板书;
+ *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1)。
  * iPad 横屏、手机各截一张。
  * 用法:node scripts/probe-live-page.mjs [--out <截图目录>] [--keep]
  */
@@ -33,6 +34,8 @@ const { loadWorkspace } = await import(join(repo, 'src', 'cli', 'workspace.ts'))
 const { createContext, createHandler } = await import(join(repo, 'src', 'server', 'app.ts'));
 const { makeLiveUpgrade } = await import(join(repo, 'src', 'live', 'route.ts'));
 const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
+const { publishHome } = await import(join(repo, 'src', 'server', 'home.ts'));
+const { catchCue } = await import(join(repo, 'src', 'live', 'lib', 'cue.ts'));
 
 // ---- 临时 workspace:老师都是假 CLI(流式),语文老师开实时;嘴是假百炼 ----
 const fake = await startFakeRealtime();
@@ -201,7 +204,7 @@ try {
   const wav = callSays[0] ? await fetch(`${base}/api/audio/chinese-tutor/${callSays[0].audio}`, { headers: { range: 'bytes=0-99' } }) : null;
   ok('挂了:落通话录像;话题的录像是实时的(realtime)、讲稿每句从通话的声音里放(带 seek)、嘴接住与孩子按住各是一段、通话的 wav 取得到(支持 Range)', ended && rj.realtime === true && callSays.length >= 3 && callSays.every((x) => typeof x.seek === 'number') && mouth.length >= 3 && voice.length >= 2 && wav?.status === 206 && wav.headers.get('content-type') === 'audio/wav', JSON.stringify({ realtime: rj.realtime, says: callSays.length, mouth: mouth.map((c) => c.text), voice: voice.length, wav: wav?.status }));
   await send('Page.navigate', { url: `${base}/reel?tutor=chinese-tutor&date=${day.date}&thread=${encodeURIComponent(day.thread)}&end=1` });
-  await until(`document.body.classList.contains('rlk')`, 40);
+  await until(`Boolean(document.body && document.body.classList.contains('rlk'))`, 40);
   await sleep(1500);
   const rv = await evaluate(`(() => ({ live: document.body.classList.contains('live'), cur: document.querySelector('#lv-cap .lv-cur').textContent, asks: document.querySelectorAll('#board .c > .again.ask').length, speakers: [...document.querySelectorAll('#board .c > .again:not(.ask)')].filter((b) => getComputedStyle(b).display !== 'none').length, says: [...document.querySelectorAll('#board .says p')].filter((p) => getComputedStyle(p).display !== 'none').map((p) => p.textContent) }))()`);
   ok('录像里孩子的屏幕:实时老师页的样子(左栏字幕停在最后一句、卡角「?」、没有喇叭);不出卡那轮念到的字露着', rv.live && rv.cur.endsWith('一加一等于几') && rv.asks >= 4 && rv.speakers === 0 && rv.says.some((x) => x.endsWith('一加一等于几')), JSON.stringify(rv));
@@ -214,6 +217,27 @@ try {
   const fell = await until(`!document.body.classList.contains('live')`, 40);
   fake.failUpdate = false;
   ok('嘴连不上:回到板书的样子(没有 body.live、字幕行回来)', fell && (await evaluate(`getComputedStyle(document.querySelector('#sub')).display`)) !== 'none');
+
+  // ---- activity 也走实时(P3.1):首页点「看图说话」→ 开实时、开场那条等嘴连上走那条连接发(嘴说开场那句)、脑照 activity 带 ----
+  mkdirSync(join(wsRoot, 'home'), { recursive: true });
+  writeFileSync(join(wsRoot, 'home', 'draft.md'), '```tutor chinese-tutor\nactivity 看图说话\n```\n\n## 为什么这么排\n\n试实时\n');
+  const pub = await publishHome(ctx.ws, { now: new Date() });
+  // 先回首页再换地址:老师页离开时记着这位老师(sessionStorage 的 kid-resume),直接换地址会把老师页恢复回来
+  await evaluate(`document.querySelector('#back').click()`);
+  await sleep(300);
+  const nc = fake.conns.length;
+  await send('Page.navigate', { url: `${base}/` });
+  await until(`Boolean([...document.querySelectorAll('#deck .pc[data-tutor="chinese-tutor"] .bt')].find((b) => b.textContent.includes('看图说话')))`, 40);
+  await sleep(1200);
+  const bt = await evaluate(`(() => { const b = [...document.querySelectorAll('#deck .pc[data-tutor="chinese-tutor"] .bt')].find((x) => x.textContent.includes('看图说话')); b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: bt.x, y: bt.y, button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1 });
+  const liveOn = await until(`document.body.classList.contains('live')`, 40);
+  const started = await untilNode(() => fake.conns.length > nc && conn().responses.some((r) => r?.instructions === catchCue('start')), 10000);
+  const sec = await until(`document.querySelectorAll('#board .sec').length >= 1`, 80);
+  const today = await (await fetch(`${base}/api/kid/conversations/chinese-tutor/today`)).json();
+  const idx = JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${today.date}.json`), 'utf8'));
+  const first = idx.messages.find((m) => m.thread === today.thread && m.from === 'kid');
+  ok('首页点 activity:开实时;开场那条走嘴的连接(嘴说开场那句)、脑照 activity 带、实时轮', pub.ok && liveOn && started && sec && first?.activity?.name === '看图说话' && first?.live === true, JSON.stringify({ pub: pub.ok, liveOn, started, sec, activity: first?.activity?.name, live: first?.live }));
 
   ok('页面没有报错', errors.length === 0, errors.slice(0, 3).join(' | '));
 } finally {

@@ -8,6 +8,7 @@
  * 场景:normal(缺省)/ limit(每日上限已到)/ offline(接口全 500,页面该灰)。
  * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有开场与接着昨天的按钮,数学老师有开场,英语老师没写(补一张);
  * 发消息带 via 时照真服务的规则换成按钮上的字、定话题。
+ * --live:语文、数学老师走实时老师页,那条 WebSocket 是 mock-live.ts 的假嘴(照脚本「念」静音的声音,不花钱)。
  */
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
@@ -27,6 +28,7 @@ import { tianzigeData } from './tianzige.ts';
 import { handleDictation, type DictationDeps } from '../dictation/route.ts';
 import type { PhotoItem, PhotoProgress, Recognize } from '../dictation/recognize.ts';
 import { lettersData } from './letters.ts';
+import { mockLiveUpgrade } from './mock-live.ts';
 // 回给页面的形状直接用真服务的(app.ts):真接口加字段、改字段,这里不跟就红(2026-10-17;以前 mock 自己拼对象,motto 这种真服务没有的字段只在 mock 下显示)
 import type { KidDay, KidHistory, KidHome, KidTutor, Overview, OverviewThread, OverviewTutor } from './app.ts';
 
@@ -451,6 +453,8 @@ interface MockMessage {
   lectureWatch?: { watchedMs: number; finished: boolean; pauses: number };
   /** 看的过程(录像用;孩子端不下发) */
   lectureLog?: { t: number; pos: number; play: boolean }[];
+  /** 实时的一轮(mock 的假嘴发的) */
+  live?: true;
 }
 
 /** mock 的首页原文(昨晚 21:30 发布的那份;接着按钮指向 past 里昨天的话题,job = 0930-<老师名长度>) */
@@ -549,12 +553,16 @@ export interface MockOptions {
   /** 按住说话怎么听(同 cotutor.json 的 kid.listen);omni 时 /api/kid/listen 真去问百炼(要 key,不然回 502、孩子端退回浏览器认的字) */
   listen?: 'browser' | 'omni';
   transcribe?: Transcribe;
+  /** 语文、数学老师走实时老师页(mock-live.ts 的假嘴) */
+  live?: boolean;
 }
 
 export interface Mock {
   route(method: string, path: string, body?: unknown): Promise<MockRouteResult>;
   /** 等所有还在「想」的老师答完(测试用) */
   settle(): Promise<void>;
+  /** 等这一轮的老师答完(mock 的假嘴等它写完再「念」) */
+  settleJob(job: string): Promise<void>;
   handler(req: IncomingMessage, res: ServerResponse): void;
   /** 在哪个地址上听着(serveMock 在 listen 之后填;扫码页 /dev/qr 每次现问) */
   listen: (() => ListenInfo) | null;
@@ -623,7 +631,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
   // 学科色同真服务:按老师的先后定(src/lib/tutor-color.ts)
   const colors = tutorColors(Object.fromEntries(MOCK_TUTORS.map((t) => [t.name, { subject: t.subject }])));
-  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk'), live: false }));
+  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk'), live: Boolean(opts.live) && (t.name === 'chinese-tutor' || t.name === 'math-tutor') }));
   /** 小课堂:样本课包与样本视频在仓库里(tests/fixtures/bundles/、lectures/),起来时和真服务一样读一遍(readLecture)、记住 */
   const lectures = new Map<string, Lecture>();
   const lecturesLoaded = (async () => {
@@ -973,7 +981,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         const lt = lec ? mockLecture(lec.bundle) : null;
         const marks = lt ? storedMarks(lt, marksIn, photos.length) : [];
         sentAt.set(job, Date.now());
-        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(action ? { action } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(body.live === true ? { live: true as const } : {}), ...(action ? { action } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
         list.push(m);
         const done = think(t, m, cursor).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);
@@ -1067,7 +1075,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       else { res.writeHead(r.status, { 'content-type': r.contentType ?? 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(r.json ?? null)); }
     })().catch((err) => { res.writeHead(500, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'internal', message: String(err) })); });
   };
-  const mock: Mock = { route, settle, handler, listen: null };
+  const settleJob = async (job: string): Promise<void> => { await inflight.get(job); };
+  const mock: Mock = { route, settle, settleJob, handler, listen: null };
   return mock;
 }
 
@@ -1099,6 +1108,7 @@ export async function serveMock(opts: ServeMockOptions = {}): Promise<ServeMockR
     }
   }
   const server = tls ? createHttps(tls, mock.handler) : createHttp(mock.handler);
+  if (opts.live) { const up = mockLiveUpgrade(mock); server.on('upgrade', (req, socket, head) => { if (!up(req, socket, head)) socket.destroy(); }); }
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(opts.port ?? 8790, opts.host ?? '0.0.0.0', () => resolve());

@@ -186,10 +186,10 @@ export async function main(argv: string[]): Promise<void> {
         if (delayMs !== undefined && !(Number.isInteger(delayMs) && delayMs >= 0)) throw new UsageError('--delay 要是非负整数(毫秒)');
         const listen = typeof flags.listen === 'string' ? flags.listen : 'browser';
         if (listen !== 'browser' && listen !== 'omni') throw new UsageError('--listen 只能是 browser / omni');
-        const r = await serveMock({ port, scenario: scenario as MockScenario, delayMs, http: flags.http === true, listen });
+        const r = await serveMock({ port, scenario: scenario as MockScenario, delayMs, http: flags.http === true, listen, live: flags.live === true });
         // 被杀(Ctrl-C、探针收尾)也走 exit,mock 的临时目录才删得掉
         for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.once(s, () => process.exit(128 + osConstants.signals[s]));
-        process.stdout.write(`cotutor mock 场景 ${scenario}(不经真实老师与配音;配音退回浏览器合成声)\n`);
+        process.stdout.write(`cotutor mock 场景 ${scenario}(不经真实老师与配音;配音退回浏览器合成声)${flags.live === true ? ';语文、数学老师走实时(假嘴念静音的声音)' : ''}\n`);
         if (!r.https) process.stdout.write('  ! HTTP:iPad / iPhone 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write('  孩子端 /,家长端 /parent;直接开某位老师并停在某句:/?tutor=chinese-tutor&step=0.3\n');

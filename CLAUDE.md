@@ -28,11 +28,11 @@
 
 - `pnpm typecheck`;`pnpm test`;`node bin/cotutor.js --help`(bin 直跑 src,Node ≥ 22.18)
 - 改了 `cards/` 下的 md、`src/lib/*-doc.ts` 跑 `pnpm run gen:skills`(不跑 skills.test 会红);改了 `src/stage/` 跑 `pnpm run build:stage`(dist 不在 git,没打包时舞台开不了)
-- 改解析器或卡先过 `tests/board.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」;改 `src/clis/` 先过 `tests/clis.test.ts` 与 `tests/qwen.test.ts`(假 CLI 有 qwen 方言);改 `src/talk/` 或 `src/live/` 先过 `tests/talk*.test.ts` 与 `tests/live*.test.ts`(假百炼 `tests/_fake-realtime.ts`),页面走 `scripts/probe-talk-page.mjs`(加 `--real` 真连一次几分钱),Safari 的音频路径走 `scripts/probe-talk-webkit.mjs`(WebKit,假麦克风是振荡器),协议走 `scripts/probe-talk.mjs`
+- 改解析器或卡先过 `tests/board.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」;改 `src/clis/` 先过 `tests/clis.test.ts` 与 `tests/qwen.test.ts`(假 CLI 有 qwen 方言);改 `src/talk/` 或 `src/live/` 先过 `tests/talk*.test.ts` 与 `tests/live*.test.ts`(假百炼 `tests/_fake-realtime.ts`),页面走 `scripts/probe-talk-page.mjs`(加 `--real` 真连一次几分钱),Safari 的音频路径走 `scripts/probe-talk-webkit.mjs`(WebKit,假麦克风是振荡器),协议走 `scripts/probe-talk.mjs`;实时老师页走 `scripts/probe-live-page.mjs`(假百炼 + 假老师 + 无头 Chrome 假麦克风),Safari 走 `probe-live-webkit.mjs`,整条线真跑走 `probe-live-call.mjs`
 - 改 activity 文件或 `src/lib/activity.ts` 先过 `tests/activity.test.ts`(出厂那份画家的画风要和 `paint.prompt` 缺省一字不差),workspace 里的跑 `cotutor activity check`
 - 改工作台(`src/server/dev-*.ts`、`qr-page.ts`、`voice-test-page.ts`)先过 `tests/dev-overview.test.ts`、`tests/dev-activities.test.ts` 与 `tests/dev-tutor-files.test.ts`,颜色只用 `dev-theme.ts` 的变量;页面走 `scripts/probe-dev.mjs`(只看不改)
 - 改 `src/paint/` 或画图卡先过 `tests/paint.test.ts`(假百炼、假老师全流程),页面走 `scripts/probe-paint.mjs`;真画按张计费,一天最多 `paint.daily` 张
-- 改孩子端播放(谁念、谁停、谁打断谁)先改《工作流程.md》的仲裁表,再改 `tests/player.test.ts`,最后改 `kid-board.ts` 的 `step`;页面只 `dispatch`
+- 改孩子端播放(谁念、谁停、谁打断谁)先改《工作流程.md》的仲裁表,再改 `tests/player.test.ts`,最后改 `kid-board.ts` 的 `step`;页面只 `dispatch`。实时的老师是另一张表(嘴、卡的声音、孩子),对 `tests/live-player.test.ts` 与 `live-board.ts` 的 `liveStep`,页面只 `liveDispatch`
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`
 - 页面里的 JS 有两个 CDP 探针进了 `pnpm test`(`tests/probe.test.ts` 起 `probe-layout`、`probe-play`,走 mock;要本机 Chrome,没有就跳过;`COTUTOR_SKIP_PROBES=1` 跳过),改 `kid-page.ts` 先看它们红不红;其余手动验收走 `scripts/probe-*.mjs`(CDP);舞台里的东西用 CDP 驱动;截图也走 CDP(`Page.captureScreenshot`),孩子端、工作台在轮询,无头 Chrome 的 `--screenshot` 会挂;手机尺寸要 `--force-device-scale-factor=2 --window-size=780,1688`;探针不出声:起 Chrome 加 `QUIET_ARGS`、连上先 `quiet(send)`(`scripts/_quiet.mjs`,mock 的合成声走系统语音服务,`--mute-audio` 静不了它),要听加 `COTUTOR_PROBE_SOUND=1`
 

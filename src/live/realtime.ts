@@ -26,6 +26,7 @@ export const OUTPUT_RATE = 24000;
 /** 服务端一帧最多 262144 字节(2026-10-19 真连:超了就 close 1009,整条连接没了);一张图的 base64 连同 JSON 的壳得在这以内 */
 export const MAX_IMAGE_B64 = 262144 - 1024;
 const TRANSCRIBE_MODEL = 'qwen3-asr-flash-realtime';
+const HEARTBEAT_PCM = Buffer.alloc(INPUT_RATE * 2);
 
 export type TurnMode = 'manual' | 'semantic_vad' | 'server_vad';
 
@@ -178,6 +179,8 @@ export class RealtimeSession {
           if (!this.ready) { finish(msg); this.close('error'); return; }
           if (this.pendingUpdate) { clearTimeout(this.pendingUpdate.timer); this.pendingUpdate.resolve(false); this.pendingUpdate = null; }
           this.ev.onError?.(msg);
+          // user_idle_timeout / response_idle_timeout:服务端说会话关了,连接却还开着,再发什么都没回音(2026-10-19 ray 那次挂了 10 分钟才 close),当场关
+          if (err?.code?.endsWith('_idle_timeout')) this.close(`idle:${err.code}`);
           return;
         }
         this.handle(e);
@@ -233,6 +236,12 @@ export class RealtimeSession {
   /** 手动轮次:松手 */
   commit(): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.commit' }); }
   clearAudio(): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.clear' }); }
+  /**
+   * 心跳:1 秒全零的声音接着 clear,不 commit、不要回答(照 Qwen-Live-Harness 的静音心跳)。百炼 300 秒没输入就关会话(user_idle_timeout)。
+   * 2026-10-20 真连(scripts/probe-live-idle.mjs,手动轮次,每 30 秒一次):不发的 302 秒被关;只 append 不 clear 的 300 秒报 response_idle_timeout
+   * (缓冲里有输入一直没回答),会话就死了;append 完马上 clear 的过了 400 秒照常说话。
+   */
+  heartbeat(): boolean { return this.appendAudio(HEARTBEAT_PCM) && this.clearAudio(); }
   /** 让老师说;instructions = 只管这一次回答的指令(response.instructions,不进对话历史、不改系统提示) */
   createResponse(instructions?: string): boolean { return this.isReady && this.sendRaw({ type: 'response.create', ...(instructions ? { response: { instructions } } : {}) }); }
   /** 老师正在说就掐掉(没在说不发,服务端会报错) */

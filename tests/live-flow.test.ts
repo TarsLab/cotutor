@@ -47,7 +47,9 @@ writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();
 const finished: [string, string][] = [];
-const liveUpgrade = makeLiveUpgrade({ endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) });
+// 心跳缺省 30 秒,前面几段跑不到;断线那段改短
+const liveDeps: { endpoint: string; env: NodeJS.ProcessEnv; heartbeatMs?: number; keepAliveMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) };
+const liveUpgrade = makeLiveUpgrade(liveDeps);
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
 await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
@@ -228,6 +230,66 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   const reel = files.find((f) => f.endsWith('.reel.json'));
   const rj = reel ? JSON.parse(readFileSync(join(liveDir, reel), 'utf8')) : null;
   check('挂断:嘴关了、孩子端收到 end、落录像(reel.json 记进出的消息、屏幕尺寸,call.wav)', okEnd && finished[0][1] === 'bye' && c.closed && has(k, (m) => m.t === 'end') && files.some((f) => f.endsWith('.wav')) && rj?.view?.[0] === 1180 && rj.msgs.some((m: Msg) => m[1] === 'i' && m[2].t === 'hold'), JSON.stringify({ files, view: rj?.view }));
+}
+
+{
+  // ---- 嘴断了(百炼 300 秒没输入就关):心跳;断了电话不挂,下次按下现连、按着说的照序补;现连不上走板书 ----
+  liveDeps.heartbeatMs = 100;
+  const k = await connect('chinese-tutor');
+  await until(() => has(k, (m) => m.t === 'ready'));
+  const c = fake.conns.at(-1)!;
+  const a0 = c.audio, cl0 = c.clears;
+  await sleep(450);
+  check('心跳:孩子没按着时一次推 1 秒静音(32000 字节)接着 clear;不 commit、不要回答', c.audio - a0 >= 2 * 32000 && (c.audio - a0) % 32000 === 0 && c.clears - cl0 >= 2 && c.commits === 0 && c.responses.length === 0, JSON.stringify({ audio: c.audio - a0, clears: c.clears - cl0 }));
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  await sleep(50);
+  const a1 = c.audio;
+  await sleep(350);
+  check('按着时不跳', c.audio === a1, JSON.stringify({ more: c.audio - a1 }));
+  k.ws.send(JSON.stringify({ t: 'hush' }));
+
+  // 百炼报 idle 超时(会话其实没了,连接还开着):当场关;电话还通着,孩子端不知道
+  const n = k.msgs.length, nc = fake.conns.length;
+  c.sock.sendText(JSON.stringify({ type: 'error', error: { code: 'response_idle_timeout', message: 'Your session was closed because no response was generated for 300 seconds.' } }));
+  const okClosed = await until(() => c.closed);
+  await sleep(200);
+  check('idle 超时:嘴的会话当场关;孩子端没收到 end / fallback,电话还通着,也不马上重连', okClosed && !k.msgs.slice(n).some((m) => m.t === 'end' || m.t === 'fallback') && k.closed === null && fake.conns.length === nc, JSON.stringify(k.msgs.slice(n)));
+
+  // 下次按下:现连一条新会话,连上之前按着说的照序补过去,松手照常一轮
+  fake.kidText = '再讲一个字';
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  for (let i = 0; i < 3; i++) k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: {} }));
+  const okNew = await until(() => fake.conns.length === nc + 1 && fake.conns[nc].commits === 1 && fake.conns[nc].responses.length >= 1);
+  const c2 = fake.conns[nc];
+  const okTurn = await until(() => k.msgs.slice(n).some((m) => m.t === 'turn'), 10000);
+  check('断了以后按下:现连,按着说的三块都补过去、commit、嘴接住,转写交给脑开一轮', okNew && (c2.audio - 3 * 3200) % 32000 === 0 && c2.audio >= 3 * 3200 && c2.responses[0]?.instructions === catchCue('voice') && okTurn && !k.msgs.slice(n).some((m) => m.t === 'end'), JSON.stringify({ conns: fake.conns.length - nc, audio: c2?.audio, commits: c2?.commits, r: c2?.responses[0] }));
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  await sleep(500);
+
+  // 又断了,现连两次都连不上:告诉孩子端走板书,挂掉
+  const nf = k.msgs.length;
+  c2.sock.sendText(JSON.stringify({ type: 'error', error: { code: 'user_idle_timeout', message: 'Your session was closed because no user input was received for 300 seconds.' } }));
+  await until(() => c2.closed);
+  fake.failUpdate = true;
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  const okFb = await until(() => has({ msgs: k.msgs.slice(nf) }, (m) => m.t === 'fallback') && k.closed !== null);
+  fake.failUpdate = false;
+  check('现连两次都连不上:孩子端收到 fallback,电话挂掉', okFb && fake.conns.length === nc + 3, JSON.stringify({ msgs: k.msgs.slice(nf), conns: fake.conns.length - nc }));
+
+  // 孩子走开久了(最后一次动静过了 keepAliveMs)就不跳,让百炼关
+  liveDeps.keepAliveMs = 250;
+  const k4 = await connect('chinese-tutor');
+  await until(() => has(k4, (m) => m.t === 'ready'));
+  const c4 = fake.conns.at(-1)!;
+  await sleep(500);
+  const a4 = c4.audio;
+  await sleep(500);
+  check('最后一次动静过了 keepAliveMs 就停跳', a4 > 0 && c4.audio === a4, JSON.stringify({ before: a4, after: c4.audio }));
+  k4.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => k4.closed !== null);
+  liveDeps.heartbeatMs = undefined;
+  liveDeps.keepAliveMs = undefined;
 }
 
 {

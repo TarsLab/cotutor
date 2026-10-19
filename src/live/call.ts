@@ -15,6 +15,8 @@
  *   {t:'turn', job, thread} 脑开始写这一轮 · {t:'read', job, line, text} 讲稿这一句开始放(一句一个,按孩子端放到的时刻发:一段里第一句在段首,
  *   后面几句等这段的声音出齐、按字数比例摊)· {t:'flush'} 清播放队列
  *   {t:'state', speaking, holding} · {t:'err', status, error} 发不出去(429 limit / 400 …)· {t:'end', why}
+ * 嘴的会话断了(百炼 300 秒没输入就关,2026-10-20 照 Qwen-Live-Harness 的换连接):电话不挂、孩子端不知道;下次按下或发来时现连,
+ *   连上之前来的照序攒着补(录像里记一条 {t:'lost'},只记不发)。平时孩子没按着就 30 秒一次心跳,最后一次动静 15 分钟后停跳。
  * 录像:进出的消息、两边的声音都记(CallRecorder),挂了落在 conversations/<老师>/<日期>.live/<时分秒>.reel.json / .wav。
  * 事件:嘴这一道(mouth:按下、松手 / 发了、接住开始放、第几句开始放、打断)补进那一轮的 events.jsonl(Runner.noteEvent),工作台的时间线上看;
  * 按下、松手、接住在脑起来之前,先攒着,等那一轮的老师进程起来(main:start)再按它的起点换成相对毫秒(负的)。
@@ -42,6 +44,9 @@ export interface LiveDeps {
   /** 测试:realtime 的端点与环境 */
   endpoint?: string;
   env?: NodeJS.ProcessEnv;
+  /** 测试:心跳间隔、孩子多久没动静就不跳 */
+  heartbeatMs?: number;
+  keepAliveMs?: number;
   onFinished?(why: string): void;
 }
 
@@ -50,6 +55,11 @@ const CATCH_WAIT_MS = 1500;
 const BYTES_PER_MS = (OUTPUT_RATE * 2) / 1000;
 /** 按着时到的声音不到 100 毫秒就不 commit:百炼回「buffer too small, or have no audio」,不会有转写(2026-10-19 iPad 麦克风没开,嘴照样接住说了「你想问什么」) */
 const MIN_COMMIT_BYTES = (INPUT_RATE * 2 * 100) / 1000;
+/** 心跳间隔(Qwen-Live-Harness 也是 30 秒);孩子最后一次动静之后跳多久(过了就让百炼 300 秒后关,回来按下再连,连一次约半秒) */
+const HEARTBEAT_MS = 30_000;
+const KEEP_ALIVE_MS = 15 * 60_000;
+/** 现连时攒着的声音最多一分钟(同 Qwen-Live-Harness 的 MAX_RECOVERY_AUDIO_BYTES) */
+const MAX_BACKLOG_BYTES = INPUT_RATE * 2 * 60;
 
 /** 嘴这次回答是什么:接住(孩子这一轮)或照念哪几句 */
 type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat };
@@ -89,6 +99,15 @@ export class LiveCall {
   /** 按住说的这一轮还在等转写 */
   private pendingVoice: { seq: number; body: Record<string, unknown> } | null = null;
   private readonly timers: NodeJS.Timeout[] = [];
+  /** 孩子最近一次按下、松手、发来,或嘴说完一次的墙钟(心跳看它) */
+  private lastActive = Date.now();
+  /** 第一次连上了:之后嘴没了是断了要现连,不是连不上 */
+  private opened = false;
+  /** 正在现连;连上之前孩子端来的按下、松手、发来、按着的声音照到达的顺序攒着 */
+  private reviving: Promise<boolean> | null = null;
+  private backlog: ({ m: Record<string, unknown>; at: number } | { pcm: Buffer })[] = [];
+  private backlogBytes = 0;
+  private backlogHolding = false;
   private offEvents: (() => void) | null = null;
   private ended = false;
   private readonly sock: ServerSocket;
@@ -133,12 +152,34 @@ export class LiveCall {
 
   /** 连嘴;连不上告诉孩子端走板书 */
   async start(): Promise<void> {
+    const why = await this.connectMouth();
+    if (this.ended) return;
+    if (why !== null) { this.send({ t: 'fallback', why }); await this.end(`connect:${why}`); return; }
+    this.opened = true;
+    const { ctx, tutor } = this.deps;
+    this.offEvents = ctx.runner.onEvent((e) => {
+      if (e.tutor !== tutor || e.job !== this.job) return;
+      // 这一轮的老师进程起来了:攒着的按下、松手、接住按它的起点补进它的事件
+      if (e.event.lane === 'main' && e.event.kind === 'start') {
+        this.runT0.set(e.job, { t0: Date.now() - e.event.t, date: e.date });
+        for (const x of this.pre.splice(0)) this.mouth(e.job, x.at, x.ev);
+      }
+      // 讲稿定稿一句(partial 解析器压着没换行的最后一句,发出来的都是定稿的)就交给排队
+      if (e.event.lane === 'main' && e.event.kind === 'line') this.linesUpTo([{ i: e.event.line, text: e.event.text }]);
+    });
+    this.timers.push(setInterval(() => this.keepAlive(), this.deps.heartbeatMs ?? HEARTBEAT_MS));
+    this.send({ t: 'ready' });
+  }
+
+  /** 开一条嘴的会话(第一次、断了以后现连都走这里);连上了才换成 this.session,别的会话的回调都不认 */
+  private async connectMouth(): Promise<string | null> {
     const { ctx, tutor } = this.deps;
     const cfg = ctx.ws.config;
     const t = cfg.tutors[tutor];
     let firstOfAnswer = true;
-    const s = new RealtimeSession({ instructions: mouthInstructions({ display: t?.display ?? tutor, kidName: cfg.kid.name ?? cfg.kid.slug }), voice: cfg.live.voices[tutor], model: cfg.live.model, turn: 'manual', endpoint: this.deps.endpoint, env: this.deps.env }, {
+    const s: RealtimeSession = new RealtimeSession({ instructions: mouthInstructions({ display: t?.display ?? tutor, kidName: cfg.kid.name ?? cfg.kid.slug }), voice: cfg.live.voices[tutor], model: cfg.live.model, turn: 'manual', endpoint: this.deps.endpoint, env: this.deps.env }, {
       onAudio: (pcm) => {
+        if (this.session !== s) return;
         const said: Said = this.said ?? { kind: 'catch' };
         const r = addChunk(this.play, said, this.ms(), pcm.length / BYTES_PER_MS);
         this.play = r.p;
@@ -150,6 +191,7 @@ export class LiveCall {
         this.sock.sendBinary(pcm);
       },
       onTutorText: (delta, done) => {
+        if (this.session !== s) return;
         const of = this.said?.kind ?? 'catch';
         if (done !== null) {
           if (of === 'catch') { this.caught = done.trim(); this.caughtDone = true; const c = [...this.pre].reverse().find((x) => x.ev.kind === 'catch'); if (c && c.ev.kind === 'catch') c.ev.text = this.caught; }
@@ -158,8 +200,9 @@ export class LiveCall {
         }
         if (delta) this.send({ t: 'tutor', of, delta });
       },
-      onKidText: (text) => this.heard(text),
+      onKidText: (text) => { if (this.session === s) this.heard(text); },
       onResponse: (st, status) => {
+        if (this.session !== s) return;
         if (st === 'created') {
           firstOfAnswer = true;
           if (this.cancelOnCreate) { this.cancelOnCreate = false; this.session?.cancel(); }
@@ -170,6 +213,7 @@ export class LiveCall {
         else if (this.said?.kind === 'read') this.readRest(this.said);
         if (this.said?.kind === 'catch') this.caughtDone = true;
         this.said = null;
+        this.lastActive = Date.now();
         this.q = { ...this.q, busy: false };
         const next = this.afterDone;
         this.afterDone = null;
@@ -178,28 +222,55 @@ export class LiveCall {
         this.state();
       },
       onError: (m) => {
+        if (this.session !== s) return;
         this.send({ t: 'err', status: 502, error: m });
         // commit 没收下(声音太少):这一句不会有转写,照转写是空的办
         if (this.pendingVoice && /committing input audio buffer/i.test(m)) this.heard('');
       },
-      // 连上以后断了才收;还在连的时候断(配会话报错)由 start 告诉孩子端走板书
-      onClose: (r) => { if (!this.ended && this.session) void this.end(`dropped:${r}`); },
+      // 连上以后断了才收;还在连的时候断(配会话报错)由调用方处理
+      onClose: (r) => { if (!this.ended && this.session === s) this.lost(r); },
     });
     const why = await s.connect();
-    if (this.ended) { s.close(); return; }
-    if (why !== null) { this.send({ t: 'fallback', why }); await this.end(`connect:${why}`); return; }
-    this.session = s;
-    this.offEvents = ctx.runner.onEvent((e) => {
-      if (e.tutor !== tutor || e.job !== this.job) return;
-      // 这一轮的老师进程起来了:攒着的按下、松手、接住按它的起点补进它的事件
-      if (e.event.lane === 'main' && e.event.kind === 'start') {
-        this.runT0.set(e.job, { t0: Date.now() - e.event.t, date: e.date });
-        for (const x of this.pre.splice(0)) this.mouth(e.job, x.at, x.ev);
-      }
-      // 讲稿定稿一句(partial 解析器压着没换行的最后一句,发出来的都是定稿的)就交给排队
-      if (e.event.lane === 'main' && e.event.kind === 'line') this.linesUpTo([{ i: e.event.line, text: e.event.text }]);
-    });
-    this.send({ t: 'ready' });
+    if (this.ended) { s.close(); return 'ended'; }
+    if (why === null) this.session = s;
+    return why;
+  }
+
+  /** 嘴的会话断了(百炼 300 秒没输入就关、网断了):电话不挂;讲稿还排着就马上连、接着念,不然等孩子下次按下或发来再连 */
+  private lost(why: string): void {
+    this.session = null;
+    // 只记进录像,孩子端不知道
+    this.rec.out({ t: 'lost', why });
+    if (this.said?.kind === 'catch') this.caughtDone = true;
+    if (this.said) { this.said = null; this.afterDone = null; this.cancelOnCreate = false; this.q = { ...this.q, busy: false }; }
+    // 按着时断的:推过去的声音跟着那条会话没了,松手就说没听清
+    this.heldBytes = 0;
+    if (this.q.pending.length) void this.revive();
+  }
+
+  /** 现连嘴(最多两次);连上了把攒着的照到达的顺序补上、排着的讲稿接着念;连不上告诉孩子端走板书、挂掉 */
+  private revive(): Promise<boolean> {
+    this.reviving ??= (async () => {
+      let why: string | null = 'ended';
+      for (let i = 0; i < 2 && !this.ended && why !== null; i++) why = await this.connectMouth();
+      this.reviving = null;
+      if (this.ended) return false;
+      if (why !== null) { this.send({ t: 'fallback', why }); await this.end(`reconnect:${why}`); return false; }
+      const items = this.backlog.splice(0);
+      this.backlogBytes = 0;
+      this.backlogHolding = false;
+      for (const x of items) { if ('pcm' in x) this.pushAudio(x.pcm); else this.handle(x.m, x.at); }
+      if (!this.said) this.step({ e: 'done' });
+      return true;
+    })();
+    return this.reviving;
+  }
+
+  /** 心跳(RealtimeSession.heartbeat):嘴连着、孩子没按着、嘴没在说、最近有动静;孩子走开久了就不跳,让百炼关,回来按下再连 */
+  private keepAlive(): void {
+    const s = this.session;
+    if (!s?.isReady || this.holding || s.responding || Date.now() - this.lastActive > (this.deps.keepAliveMs ?? KEEP_ALIVE_MS)) return;
+    s.heartbeat();
   }
 
   /** 到 at(孩子端放到的时刻)告诉孩子端:这一段的第 k 句开始放了 */
@@ -261,10 +332,24 @@ export class LiveCall {
     try { m = JSON.parse(raw) as Record<string, unknown>; } catch { return; }
     if (typeof m.t !== 'string') return;
     this.rec.in(m);
+    // 嘴断了:按下、松手、发来的先攒着,现连,连上了照序补
+    if (!this.session && this.opened && INPUTS.has(m.t)) {
+      this.backlog.push({ m, at: Date.now() });
+      if (m.t === 'hold') this.backlogHolding = true;
+      else if (m.t === 'release' || m.t === 'hush') this.backlogHolding = false;
+      void this.revive();
+      return;
+    }
+    this.handle(m, Date.now());
+  }
+
+  /** 一条孩子端的消息;at = 到的墙钟(现连时补的那几条照原来到的时刻记事件) */
+  private handle(m: Record<string, unknown>, at: number): void {
+    if (typeof m.t === 'string' && INPUTS.has(m.t)) this.lastActive = Date.now();
     switch (m.t) {
       case 'hold': {
         if (!this.session) return;
-        this.pre = [{ at: Date.now(), ev: { lane: 'mouth', kind: 'hold' } }];
+        this.pre = [{ at, ev: { lane: 'mouth', kind: 'hold' } }];
         this.holding = true;
         this.heldBytes = 0;
         this.session.clearAudio();
@@ -275,7 +360,7 @@ export class LiveCall {
       case 'release': {
         if (!this.session || !this.holding) return;
         this.holding = false;
-        this.pre.push({ at: Date.now(), ev: { lane: 'mouth', kind: 'release', how: 'voice' } });
+        this.pre.push({ at, ev: { lane: 'mouth', kind: 'release', how: 'voice' } });
         const body = isObj(m.body) ? m.body : {};
         if (this.heldBytes < MIN_COMMIT_BYTES) {
           this.session.clearAudio();
@@ -300,7 +385,7 @@ export class LiveCall {
         const body = m.body;
         const kind: CatchKind = body.ask === true && isObj(body.focus) ? 'ask' : body.action === 'submit' ? 'card' : Array.isArray(body.photos) && body.photos.length ? 'photo' : 'text';
         this.interrupt();
-        this.pre = [{ at: Date.now(), ev: { lane: 'mouth', kind: 'release', how: kind === 'ask' || kind === 'card' || kind === 'photo' ? kind : 'text' } }];
+        this.pre = [{ at, ev: { lane: 'mouth', kind: 'release', how: kind === 'ask' || kind === 'card' || kind === 'photo' ? kind : 'text' } }];
         this.turn(kind, body, typeof body.text === 'string' ? body.text : '');
         break;
       }
@@ -397,10 +482,20 @@ export class LiveCall {
     void this.dispatch({ ...last, text: all.map((b) => String(b.text ?? '').trim()).filter(Boolean).join('\n') });
   }
 
-  /** 孩子端的一块声音:按着才推 */
+  /** 孩子端的一块声音:按着才推;嘴在现连时按着说的先攒着(最多一分钟) */
   onAudio(pcm: Buffer): void {
-    if (this.ended || !this.holding || !this.session?.isReady) return;
+    if (this.ended) return;
+    if (!this.session) {
+      if (this.backlogHolding && this.backlogBytes + pcm.length <= MAX_BACKLOG_BYTES) { this.rec.kid(pcm); this.backlog.push({ pcm }); this.backlogBytes += pcm.length; }
+      return;
+    }
+    if (!this.holding || !this.session.isReady) return;
     this.rec.kid(pcm);
+    this.pushAudio(pcm);
+  }
+
+  private pushAudio(pcm: Buffer): void {
+    if (!this.holding || !this.session?.isReady) return;
     this.heldBytes += pcm.length;
     this.session.appendAudio(pcm);
   }
@@ -438,6 +533,8 @@ export class LiveCall {
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+/** 孩子这边的动作(嘴断了要攒着补的那几种) */
+const INPUTS = new Set(['hold', 'release', 'hush', 'send']);
 
 /** 嘴这一道的一条(没有 t;补进事件时按那一轮的起点换) */
 type MouthEvent = Extract<RunEvent, { lane: 'mouth' }> extends infer E ? (E extends RunEvent ? Omit<E, 't'> : never) : never;

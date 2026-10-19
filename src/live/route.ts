@@ -12,6 +12,9 @@ export interface LiveRouteDeps {
   /** realtime 端点(测试、探针换假的);不给用真的 */
   endpoint?: string;
   env?: NodeJS.ProcessEnv;
+  /** 测试:心跳间隔、多久没动静停跳 */
+  heartbeatMs?: number;
+  keepAliveMs?: number;
   onFinished?(tutor: string, why: string): void;
 }
 
@@ -31,7 +34,7 @@ export function makeLiveUpgrade(deps: LiveRouteDeps = {}) {
       onBinary: (b) => call?.onAudio(b),
       onClose: () => call?.onSocketClose(),
     });
-    call = new LiveCall(sock, { ctx, tutor, endpoint: deps.endpoint, env: deps.env, onFinished: (why) => deps.onFinished?.(tutor, why) });
+    call = new LiveCall(sock, { ctx, tutor, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, onFinished: (why) => deps.onFinished?.(tutor, why) });
     void call.start();
     return true;
   };

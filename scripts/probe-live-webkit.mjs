@@ -49,15 +49,20 @@ server.on('upgrade', (req, socket, head) => { void upgrade(req, socket, head, ct
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
-// 假麦克风:一路 440Hz 的振荡器;数 getUserMedia 调了几次、AudioContext 排了几块声音、worklet 出了几块、WebSocket 发了几块二进制
+// 假麦克风:一路 440Hz 的振荡器(resume 不等:不在点击里时 WebKit 的 resume() 一直不回,真 getUserMedia 不会这样);数 getUserMedia 调了几次、AudioContext 排了几块声音、worklet 出了几块、WebSocket 发了几块二进制
 const INJECT = `(() => {
   window.__played = 0; window.__gum = 0; window.__chunks = 0; window.__sentBin = 0; window.__err = [];
   window.addEventListener('error', (e) => window.__err.push(String(e.message)));
   window.addEventListener('unhandledrejection', (e) => window.__err.push(String(e.reason && e.reason.message || e.reason)));
   const AC = window.AudioContext || window.webkitAudioContext;
+  // 页面自己起了几个 AudioContext(假麦克风用的不算):实时时只该一个——iPad 上同一路麦克风接进两个,先接的那个就只读到 0
+  window.__ctx = 0;
+  const Counted = class extends AC { constructor(...a) { super(...a); window.__ctx++; } };
+  window.AudioContext = Counted; if (window.webkitAudioContext) window.webkitAudioContext = Counted;
   const orig = AC.prototype.createBufferSource;
   AC.prototype.createBufferSource = function () { const s = orig.call(this); const st = s.start; s.start = function () { window.__played++; return st.apply(this, arguments); }; return s; };
-  navigator.mediaDevices.getUserMedia = async () => { window.__gum++; const ctx = new AC(); const osc = ctx.createOscillator(); osc.frequency.value = 440; const dst = ctx.createMediaStreamDestination(); osc.connect(dst); osc.start(); await ctx.resume(); return dst.stream; };
+  // 盖在原型上:只盖实例的话,页面切过后台再回来 WebKit 会走原型上真的那个(无头 WebKit 没有麦克风,一直不回)
+  MediaDevices.prototype.getUserMedia = async () => { window.__gum++; const ctx = new AC(); const osc = ctx.createOscillator(); osc.frequency.value = 440; const dst = ctx.createMediaStreamDestination(); osc.connect(dst); osc.start(); ctx.resume().catch(() => {}); return dst.stream; };
   const d = Object.getOwnPropertyDescriptor(MessagePort.prototype, 'onmessage');
   Object.defineProperty(MessagePort.prototype, 'onmessage', { set(f) { d.set.call(this, (e) => { window.__chunks++; f(e); }); }, get() { return d.get.call(this); } });
   const ws = WebSocket.prototype.send;
@@ -68,6 +73,7 @@ const browser = await webkit.launch();
 try {
   const page = await browser.newPage({ viewport: { width: 1180, height: 820 } });
   await page.addInitScript(INJECT);
+  if (process.env.PROBE_DEBUG) { page.on('console', (m) => console.log('  [page]', m.type(), m.text())); page.on('pageerror', (e) => console.log('  [pageerror]', e.message)); }
   // 先到首页记下给过麦克风权限(进老师页就先把常开那路开好,micWarm),再用 ?tutor= 进老师页的新话题
   await page.goto(`${base}/`);
   await page.waitForSelector('#tutors .c-tutor, #deck .c-tutor', { timeout: 10000 });
@@ -82,9 +88,13 @@ try {
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await sleep(1500);
-  const held = await page.evaluate(() => ({ gum: window.__gum, chunks: window.__chunks, sent: window.__sentBin, listening: document.body.classList.contains('listening') }));
+  const held = await page.evaluate(() => ({ gum: window.__gum, ctx: window.__ctx, chunks: window.__chunks, sent: window.__sentBin, listening: document.body.classList.contains('listening') }));
   await page.mouse.up();
-  ok('按住:常开那路麦克风接到采音节点(只 getUserMedia 一次)、worklet 出块、推上去了', held.gum === 1 && held.chunks > 0 && held.sent > 0 && held.listening && fake.conns.at(-1).audio > 0, JSON.stringify({ ...held, server: fake.conns.at(-1).audio }));
+  ok('按住:常开那路麦克风接到采音节点(只 getUserMedia 一次、页面只一个 AudioContext:自检与采音同一个)、worklet 出块、推上去了', held.gum === 1 && held.ctx === 1 && held.chunks > 0 && held.sent > 0 && held.listening && fake.conns.at(-1).audio > 0, JSON.stringify({ ...held, server: fake.conns.at(-1).audio }));
+  await sleep(500);
+  const diag = (() => { try { return readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.where === 'live'); } catch { return []; } })();
+  const dl = diag.at(-1);
+  ok('诊断:这一次按住记一行(麦克风怎么开的、能推声音、音量峰值、松手发了)', Boolean(dl) && dl.tutor === 'chinese-tutor' && dl.ev.some((e) => e[0] === 'mic') && dl.ev.some((e) => e[0] === 'audio') && dl.ev.some((e) => e[0] === 'up' && e[2] === 'sent') && dl.peak > 0, JSON.stringify(dl));
   const caught = await page.waitForFunction(() => document.querySelector('#lv-cap .lv-cur').textContent === "It's a red car.", null, { timeout: 8000 }).then(() => true, () => false);
   const played = await page.waitForFunction(() => window.__played >= 2, null, { timeout: 15000 }).then(() => true, () => false);
   const st = await page.evaluate(() => ({ played: window.__played, cap: document.querySelector('#lv-cap .lv-cur').textContent, err: window.__err, cards: document.querySelectorAll('#board .sec .c').length }));
@@ -92,6 +102,19 @@ try {
   await page.waitForFunction(() => document.querySelector('#lv-cap .lv-cur').textContent.startsWith('第一次说'), null, { timeout: 20000 }).catch(() => {});
   const end = await page.evaluate(() => ({ cap: document.querySelector('#lv-cap .lv-cur').textContent, gum: window.__gum, err: window.__err }));
   ok('讲稿念到最后一句;从头到尾只 getUserMedia 一次;页面没报错', end.cap.startsWith('第一次说') && end.gum === 1 && end.err.length === 0, JSON.stringify(end));
+
+  // 切到后台再回来(2026-10-19 真机:回来以后麦克风自检一直 dead、按住说的发不出去):实时那个 AudioContext 关掉、回来起新的,麦克风重开在新的里;再按住照样推得上去
+  await sleep(1500);
+  const vis = (hidden) => page.evaluate((hd) => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => hd }); Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (hd ? 'hidden' : 'visible') }); document.dispatchEvent(new Event('visibilitychange')); }, hidden);
+  await vis(true); await sleep(300); await vis(false); await sleep(800);
+  const a0 = fake.conns.at(-1).audio, s0 = await page.evaluate(() => window.__sentBin);
+  await page.mouse.down(); await sleep(1500);
+  const back = await page.evaluate(() => ({ gum: window.__gum, ctx: window.__ctx, listening: document.body.classList.contains('listening') }));
+  await page.mouse.up(); await sleep(600);
+  const sent2 = (await page.evaluate(() => window.__sentBin)) - s0;
+  const dl2 = (() => { try { return readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.where === 'live').at(-1); } catch { return null; } })();
+  if (process.env.PROBE_DEBUG) console.log(readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => { const r = JSON.parse(l); return `${r.at.slice(11, 23)} ${r.where} ${JSON.stringify(r.ev)}`; }).join('\n'));
+  ok('切后台再回来:麦克风重开(第二次 getUserMedia)、实时那个 AudioContext 换了一个新的,再按住照样推得上去、诊断记「发了」', back.gum === 2 && back.ctx === 2 && back.listening && sent2 > 0 && fake.conns.at(-1).audio > a0 && dl2?.ev.some((e) => e[0] === 'up' && e[2] === 'sent') && dl2.peak > 0, JSON.stringify({ ...back, sent2, server: fake.conns.at(-1).audio - a0, diag: dl2 }));
 } finally {
   await browser.close();
   server.close();

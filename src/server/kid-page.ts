@@ -764,7 +764,7 @@ __AUDIO_JS__
   S.pdate = null;
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
-  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0 };
+  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null };
   /** 实时的一节露到 / 画到第几句:这次连着念的轮(jobs)只到嘴念到的那句(脑写完了、嘴还没念到的不先露;被打断没念到的就不露);
    *  别的(重开页面、以前的、板书的)整节 → undefined */
   const liveHeard = (s) => (s && s.live && LV.on && LV.jobs.has(s.job) ? (LV.heard.has(s.job) ? LV.heard.get(s.job) : -1) : undefined);
@@ -1351,10 +1351,11 @@ __AUDIO_JS__
   const openTutor = (t, intent) => {
     unlock(); setFavicon(t);
     intent = intent || { kind: 'new' };
-    S.tutor = t; micWarm(); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
+    S.tutor = t; S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null; S.ask = intent.ask || null;
-    if (liveWanted(t, intent)) liveOpen(); else liveClose();
+    // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
+    if (liveWanted(t, intent)) liveOpen(); else { liveClose(); micWarm(); }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
     $('#board').replaceChildren(); pin.on = false;
@@ -3252,7 +3253,12 @@ __REEL_DOCK_JS__
   // 这一路画音量条;按住说话时也在它上面录下原声,随那句话发给服务端,只给家长端(《家长录像设计.md》拍板 4)。每次开麦克风也记一行诊断(where: 'mic')
   const mic = { stream: null, ac: null, an: null, buf: null, opening: null, ok: true };
   const micLive = () => { const t = mic.stream && mic.stream.getAudioTracks()[0]; return Boolean(t && t.readyState === 'live' && !t.muted && mic.ok); };
-  const micDrop = () => { if (mic.stream) { for (const t of mic.stream.getTracks()) t.stop(); } if (mic.ac) { try { mic.ac.close(); } catch {} } mic.stream = mic.ac = mic.an = mic.buf = null; };
+  /** 实时开着时,麦克风的自检(分析器)也开在实时那个 AudioContext 里,页面上只有一个 AudioContext(口语课一直只用一个)。
+   *  2026-10-19 真机:实时页切到后台再回来,实时那个 AudioContext 还留着,之后每次开麦克风自检都读到 0(dead),按住说的话发不出去。
+   *  所以实时那个切后台、离开实时就关(liveAudioDrop),回来先起一个新的再开麦克风(liveCtxEnsure) */
+  const liveCtx = () => (LV.on && LV.audio && LV.audio.ctx) || null;
+  const liveCtxEnsure = () => { if (!LV.on || !LV.audio) return null; if (!LV.audio.ctx) LV.audio.wake().catch(() => {}); return LV.audio.ctx; };
+  const micDrop = () => { if (mic.stream) { for (const t of mic.stream.getTracks()) t.stop(); } if (mic.ac && mic.ac !== liveCtx()) { try { mic.ac.close(); } catch {} } mic.stream = mic.ac = mic.an = mic.buf = null; };
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   /** 这一路有没有声:600ms 里采样全是 0 = 哑的(安静也有底噪);没有分析器就当它有 */
   const micProbe = async () => {
@@ -3274,9 +3280,11 @@ __REEL_DOCK_JS__
     try { localStorage.setItem('kid-mic-ok', '1'); } catch {}
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
-      mic.ac = new AC(); mic.an = mic.ac.createAnalyser(); mic.an.fftSize = 512; mic.buf = new Float32Array(512);
+      mic.ac = liveCtxEnsure() || new AC(); mic.an = mic.ac.createAnalyser(); mic.an.fftSize = 512; mic.buf = new Float32Array(512);
       mic.ac.createMediaStreamSource(st).connect(mic.an);
-      if (mic.ac.state === 'suspended') await mic.ac.resume().catch(() => {});
+      // 实时那个可能是不在点击里起的(切后台回来):Safari 的 resume() 要等到下一次点击才回,这里等它麦克风就一直「在开」,按住说的全发不出去。
+      // 不等:没跑起来时自检本来就跳过(micProbe),下一次点击 wake() 会让它跑起来
+      if (mic.ac.state === 'suspended') { const r = mic.ac.resume().catch(() => {}); if (mic.ac !== liveCtx()) await r; }
     } catch { mic.an = null; }
   };
   /** 要一路有声的麦克风:hot(本来就开着)/ open(新开的,自检过)/ dead(重开 3 回还是哑的)/ none(浏览器没有);同时只开一次 */
@@ -3556,9 +3564,11 @@ __REEL_DOCK_JS__
       LV.audio = makeAudio();
       LV.audio.muted = false;
       LV.audio.onChunk = (ab) => { if (LV.model.status === 'holding' && LV.ws && LV.ws.readyState === 1) LV.ws.send(ab); };
-      LV.audio.onLevel = (v) => { if (LV.model.status === 'holding') holdLevel(Math.min(1, v * 4)); };
+      LV.audio.onLevel = (v) => { if (LV.model.status !== 'holding') return; holdLevel(Math.min(1, v * 4)); if (LV.diag && v > LV.diag.peak) LV.diag.peak = v; };
     }
     LV.audio.wake().catch(() => {});
+    // 麦克风之前开在别的 AudioContext 里(板书页开的):放掉,下面 micWarm 重开在实时这个里
+    if (mic.ac && mic.ac !== LV.audio.ctx) micDrop();
     const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/live/' + encodeURIComponent(S.tutor.name) + '/ws');
     ws.binaryType = 'arraybuffer';
     LV.ws = ws;
@@ -3572,11 +3582,18 @@ __REEL_DOCK_JS__
     ws.onclose = () => { if (LV.ws === ws) liveDispatch({ type: 'drop' }); };
     micWarm();
   };
-  /** 收:告诉服务端挂了、关连接、清嘴的声音;页面回到板书的样子(按着的那一下作废) */
+  /** 实时那个 AudioContext 关掉(连着它的麦克风也放掉);下次要用(进实时、开麦克风、按住)再起新的 */
+  const liveAudioDrop = () => {
+    if (!LV.audio || !LV.audio.ctx) return;
+    if (mic.ac === LV.audio.ctx) micDrop();
+    LV.audio.close();
+  };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) liveAudioDrop(); });
+  /** 收:告诉服务端挂了、关连接、清嘴的声音、关实时那个 AudioContext;页面回到板书的样子(按着的那一下作废) */
   const liveClose = () => {
     const ws = LV.ws; LV.ws = null; LV.ready = false;
     if (ws) { ws.onclose = null; try { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'bye' })); ws.close(); } catch {} }
-    if (LV.audio) LV.audio.flush();
+    liveAudioDrop();
     clearInterval(LV.drain); LV.drain = 0;
     if (!LV.on) return;
     LV.on = false;
@@ -3585,6 +3602,9 @@ __REEL_DOCK_JS__
     phIdle();
     if (S.tutor) renderSubtitle();
   };
+  /** 实时的一次按住记一行诊断(/api/kid/voice-diag,where: live):麦克风怎么开的、多久能推声音、推上去的音量峰值、松手时怎么收的;真机上出错是静默的,只有这份能说清 */
+  const liveDiagOf = () => { const t0 = Date.now(); const d = { where: 'live', tutor: S.tutor ? S.tutor.name : null, ua: navigator.userAgent, peak: 0, ev: [] }; d.mark = (k, v) => d.ev.push(v === undefined ? [k, Date.now() - t0] : [k, Date.now() - t0, v]); return d; };
+  const liveDiagSend = (d) => { if (!d) return; const { mark: _m, ...row } = d; row.peak = Math.round(row.peak * 100) / 100; try { fetch('/api/kid/voice-diag', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(row), keepalive: true }).catch(() => {}); } catch {} };
   /** 按满 150 毫秒:嘴、卡的声音停(liveStep),告诉服务端 hold,开始推声音(常开那路麦克风接到采音节点上,第一次要等它开好) */
   const liveHold = () => {
     setBar(barNext(S.bar, 'holdStart'));
@@ -3592,19 +3612,28 @@ __REEL_DOCK_JS__
     hold.audio = false; hold.tail = false; renderHold(); holdText('');
     holdRec('down');
     LV.holdAt = Date.now();
+    const d = LV.diag = liveDiagOf();
     liveDispatch({ type: 'press' });
     if (LV.model.cut) LV.cap.cut = LV.cap.cur;
     renderSubtitle();
-    micOpen().then(() => (mic.stream && LV.audio ? LV.audio.use(mic.stream) : Promise.reject(new Error('no mic')))).then(() => { if (press && press.live) { hold.audio = true; renderHold(); holdRec('audio'); } }, () => {});
+    micOpen().then((how) => { d.mark('mic', how); return mic.stream && LV.audio ? LV.audio.use(mic.stream) : Promise.reject(new Error('no mic')); }).then(() => { d.mark('audio', LV.audio.ctx ? LV.audio.ctx.state : ''); if (press && press.live) { hold.audio = true; renderHold(); holdRec('audio'); } }, (e) => d.mark('fail', String(e && (e.name || e.message))));
   };
-  /** 松手:告诉服务端 release(嘴马上接住);上滑、太短(不到 0.4 秒)、麦克风没开上 = 作废(hush) */
+  /** 松手:告诉服务端 release(嘴马上接住);上滑、太短(不到 0.4 秒)、麦克风没开上 = 作废(hush)——麦克风没开上时输入条上说「没听清」,不能什么都不出(2026-10-19 真机:按了几次都没反应) */
   const liveRelease = (cancelled) => {
-    const keep = !cancelled && hold.audio && Date.now() - LV.holdAt >= 400;
-    holdEnd(keep ? 'sent' : 'cancel');
+    const long = Date.now() - LV.holdAt >= 400;
+    const keep = !cancelled && hold.audio && long;
+    const d = LV.diag; LV.diag = null;
+    if (d) { d.mark('up', keep ? 'sent' : cancelled ? 'slide' : !long ? 'short' : 'nomic'); liveDiagSend(d); }
+    holdEnd(keep ? 'sent' : cancelled ? 'cancel' : 'unclear');
     setBar(barNext(S.bar, keep ? 'holdEnd' : 'holdCancel'));
     if (LV.audio) LV.audio.wake().catch(() => {});
     if (!LV.on) return;
-    if (!keep) { liveDispatch({ type: 'cancel' }); renderSubtitle(); return; }
+    if (!keep) {
+      liveDispatch({ type: 'cancel' });
+      if (!cancelled && long) { $('#ph').textContent = '没听清,再按住说一次'; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = PH_IDLE(); }, 2500); }
+      renderSubtitle();
+      return;
+    }
     const body = { device: S.device };
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;

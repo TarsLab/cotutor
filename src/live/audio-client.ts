@@ -56,7 +56,7 @@ export const AUDIO_CLIENT_JS = `
     };
     A.playing = () => Boolean(A.ctx) && A.playAt > A.ctx.currentTime + 0.02;
     A.flush = () => { for (const s of A.sources) { try { s.stop(); } catch (e) {} } A.sources = []; A.playAt = 0; };
-    A.close = () => { A.flush(); if (A.own && A.stream) for (const t of A.stream.getTracks()) t.stop(); if (A.ctx) A.ctx.close().catch(() => {}); A.ctx = null; A.stream = null; A.src = null; A.node = null; A.nodeReady = null; };
+    A.close = () => { A.flush(); if (A.own && A.stream) for (const t of A.stream.getTracks()) t.stop(); if (A.ctx) { try { A.ctx.close().catch(() => {}); } catch (e) {} } A.ctx = null; A.stream = null; A.src = null; A.node = null; A.nodeReady = null; };
     return A;
   }
 `;

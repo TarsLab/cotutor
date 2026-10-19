@@ -88,14 +88,15 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   const today = localDate(ctx.now());
   const msg = indexOf(today).messages.find((m) => m.job === turn.job)!;
   const lines: string[] = (msg.section?.lines ?? []).map((l: Msg) => String(l.text));
-  // 脑写完了,嘴还在一拍一拍念:等讲稿都念到
-  const okAll = await until(() => k.msgs.filter((m) => m.t === 'read' && m.job === turn.job).flatMap((m) => m.lines).length === lines.length && c.responses.length === 1 + k.msgs.filter((m) => m.t === 'read').length, 10000);
-  await until(() => k.bins >= 1 + k.msgs.filter((m) => m.t === 'read').length);
+  // 脑写完了,嘴还在一段一段念:等讲稿每句都亮过
+  const okAll = await until(() => k.msgs.filter((m) => m.t === 'read' && m.job === turn.job).length === lines.length, 10000);
+  await until(() => k.bins >= c.responses.length);
   const said = c.responses.slice(1).map((r) => quoted(r?.instructions)).join('');
   check('脑:实时轮(消息记 live、讲稿没配音)、开了新话题', okTurn && okRun && msg.live === true && msg.thread === turn.job && turn.thread === turn.job && lines.length >= 2 && msg.section.lines.every((l: Msg) => !l.audio), JSON.stringify({ live: msg.live, lines }));
   check('照念:一拍一拍交给嘴,念的字拼起来就是讲稿,一句不多一句不少', okAll && said === lines.join(''), JSON.stringify({ said, lines }));
   const reads = k.msgs.filter((m) => m.t === 'read');
-  check('孩子端:每拍念之前收到 {t:read, job, lines},序号连起来是全部讲稿', reads.length >= 2 && reads.every((m) => m.job === turn.job) && reads.flatMap((m) => m.lines).join() === lines.map((_l, i) => i).join(), JSON.stringify(reads));
+  check('孩子端:每句开始放时收到 {t:read, job, line, text},一句一个、序号连起来是全部讲稿、字就是讲稿', reads.length >= 2 && reads.every((m) => m.job === turn.job) && reads.map((m) => m.line).join() === lines.map((_l, i) => i).join() && reads.every((m) => m.text === lines[m.line]), JSON.stringify(reads));
+  check('孩子端:嘴的字标着是接住还是照念', has(k, (m) => m.t === 'tutor' && m.of === 'catch' && typeof m.done === 'string') && has(k, (m) => m.t === 'tutor' && m.of === 'read' && m.done === lines[0]));
   const runFile = JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${today}.${turn.job}.run.json`), 'utf8')) as { prompt: string };
   check('上下文包带 live:(嘴接住时说的那句);第一轮没有 cut', runFile.prompt.includes("  live:\n    caught: \"It's a red car.\"") && !runFile.prompt.includes('    cut:'), runFile.prompt.slice(0, 400));
   check('嘴的声音、字幕都到孩子端', k.bins >= 3 && has(k, (m) => m.t === 'tutor' && typeof m.done === 'string'));
@@ -110,7 +111,6 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   const turn2 = k.msgs.slice(n0).find((m) => m.t === 'turn')!;
   // 第二轮第一拍一交给嘴(声音还在放的那 400 毫秒里)就按下
   const okRead2 = await until(() => k.msgs.slice(n0).some((m) => m.t === 'read' && m.job === turn2.job), 15000);
-  const read2 = k.msgs.slice(n0).find((m) => m.t === 'read' && m.job === turn2.job)!;
   fake.kidText = '我懂了';
   const n1 = k.msgs.length;
   k.ws.send(JSON.stringify({ t: 'hold' }));
@@ -121,9 +121,22 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   const turn3 = k.msgs.slice(n1).find((m) => m.t === 'turn')!;
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   const prompt3 = (JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${today}.${turn3.job}.run.json`), 'utf8')) as { prompt: string }).prompt;
-  const reads2 = k.msgs.slice(n0, n1).filter((m) => m.t === 'read' && m.job === turn2.job).length;
-  check('打断:嘴的声音还在放时按下 → 孩子端清播放队列;那一轮没念的拍不再念', okRead2 && okFlush && reads2 === 1 && !k.msgs.slice(n1).some((m) => m.t === 'read' && m.job === turn2.job), JSON.stringify({ reads2, read2 }));
-  check('下一轮:同一话题接着(不开新话题)、上下文包带 cut(孩子听到第几句,1 起)', turn3.thread === turn.job && prompt3.includes(`    cut: ${read2.lines[0] + 1}\n`), prompt3.slice(0, 500));
+  // 按下那一刻之前亮到的最后一句(服务端先发的 read 先到;flush 之后不该再有这一轮的 read)
+  const fl = k.msgs.findIndex((m, i) => i >= n1 && m.t === 'flush');
+  const read2 = k.msgs.slice(n0, fl).filter((m) => m.t === 'read' && m.job === turn2.job).at(-1);
+  check('打断:嘴的声音还在放时按下 → 孩子端清播放队列;那一轮没念的句不再亮、不再念', okRead2 && okFlush && Boolean(read2) && !k.msgs.slice(fl).some((m) => m.t === 'read' && m.job === turn2.job), JSON.stringify({ read2 }));
+  check('下一轮:同一话题接着(不开新话题)、上下文包带 cut(孩子听到第几句,1 起:按下前亮到的那句)', turn3.thread === turn.job && prompt3.includes(`    cut: ${(read2?.line ?? -9) + 1}\n`), prompt3.slice(0, 500));
+
+  // ---- 上滑取消(hush):按下又作废 → 不 commit、不接住、不交给脑 ----
+  {
+    await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+    const nh = k.msgs.length, rh = c.responses.length, ch = c.commits, clr = c.clears;
+    k.ws.send(JSON.stringify({ t: 'hold' }));
+    k.ws.send(loud());
+    k.ws.send(JSON.stringify({ t: 'hush' }));
+    await sleep(400);
+    check('上滑取消:hush → 声音缓冲清掉、不 commit、嘴不接住、没有新一轮', c.commits === ch && c.clears >= clr + 2 && c.responses.length === rh && !k.msgs.slice(nh).some((m) => m.t === 'turn') && has(k, (m) => m.t === 'state' && m.holding === false), JSON.stringify({ commits: c.commits - ch, clears: c.clears - clr, responses: c.responses.length - rh }));
+  }
 
   // ---- 卡上的「?」:一轮普通的(嘴接住说讲给你听,脑拿到 focus 那张卡) ----
   const na = k.msgs.length;

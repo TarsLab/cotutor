@@ -81,7 +81,7 @@ for (const [date, job] of says) {
   const today = new Intl.DateTimeFormat('sv-SE').format(new Date());
   const sec = JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${today}.json`), 'utf8')).messages.find((x) => x.job === turn?.job)?.section;
   const lines = (sec?.lines ?? []).map((l) => l.text);
-  await until(() => msgs.slice(n0).filter((x) => x.t === 'read').flatMap((x) => x.lines).length >= lines.length, 60000);
+  await until(() => msgs.slice(n0).filter((x) => x.t === 'read').length >= lines.length, 60000);
   // 等这一轮的声音在孩子端放完再按下一轮(2026-10-19 第一版只等 4 秒,把最后一段掐了):不再来声音了,按收到的字节算放到哪
   await until(() => audio.length > a0 && T() - audio[audio.length - 1].at > 1000, 60000);
   // 照孩子端的排法算(到达 + 60 毫秒或上一块放完,取晚的):接住和第一段之间等脑的那几秒不能当成在放
@@ -101,7 +101,7 @@ for (const [date, job] of says) {
     `- realtime 认的:${kid}`,
     `- 嘴接住:「${dones[0] ?? ''}」,松手到首包 ${firstAudio} ms`,
     `- 脑:${turn?.job},讲稿 ${lines.length} 句、${sec?.cards?.length ?? 0} 张卡(${(sec?.cards ?? []).map((c) => c.kind).join('、')})`,
-    `- 松手到第一段开始放 ${firstRead} ms(孩子端放到那一刻发 {t:read});念了 ${reads.length} 次`,
+    `- 松手到第一句开始放 ${firstRead} ms(孩子端放到那一刻发 {t:read},一句一个);嘴念了 ${dones.length - 1} 段`,
     `- 嘴的声音一共 ${(totalMs / 1000).toFixed(1)} 秒;松手到放完 ${(audio.slice(a0).reduce((p, x) => addChunk(p, 0, x.at, x.pcm.length / 48).p, playbackInit()).end / 1000).toFixed(1)} 秒(照孩子端的排法算)`,
     `- 嘴念的:${dones.slice(1).join('')}`,
     `- 讲稿:${lines.join('')}`,

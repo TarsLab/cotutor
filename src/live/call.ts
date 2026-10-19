@@ -8,10 +8,12 @@
  *
  * 孩子端 → 这里:二进制帧 = PCM16 16k 单声道一块(按着时才推);文本帧 = JSON
  *   {t:'hold'} 按下 · {t:'release', body} 松手(body 同 POST /api/kid/conversations/<老师>/messages 少 text:thread / newThread / device…)
+ *   {t:'hush'} 停下不开新一轮(上滑取消、按下录音卡的录音键):嘴在出就掐、孩子端清了、没念的丢掉
  *   {t:'send', body} 不是说的(打字、拍照、交卡、首页按钮;卡上的「?」带 focus.card 与 ask: true):body 同那条 POST · {t:'view', w, h} 屏幕多大 · {t:'bye'}
  * 这里 → 孩子端:二进制帧 = PCM16 24k 嘴的声音;文本帧 = JSON
- *   {t:'ready'} 嘴连上了 · {t:'fallback', why} 连不上(这一句走板书)· {t:'kid', text} 孩子那句的转写 · {t:'tutor', delta} / {t:'tutor', done} 嘴的字
- *   {t:'turn', job, thread} 脑开始写这一轮 · {t:'read', job, lines} 讲稿的这几句开始放(按孩子端放到的时刻发)· {t:'flush'} 清播放队列
+ *   {t:'ready'} 嘴连上了 · {t:'fallback', why} 连不上(这一句走板书)· {t:'kid', text} 孩子那句的转写 · {t:'tutor', of, delta} / {t:'tutor', of, done} 嘴的字(of:catch 接住 / read 照念)
+ *   {t:'turn', job, thread} 脑开始写这一轮 · {t:'read', job, line, text} 讲稿这一句开始放(一句一个,按孩子端放到的时刻发:一段里第一句在段首,
+ *   后面几句等这段的声音出齐、按字数比例摊)· {t:'flush'} 清播放队列
  *   {t:'state', speaking, holding} · {t:'err', status, error} 发不出去(429 limit / 400 …)· {t:'end', why}
  * 录像:进出的消息、两边的声音都记(CallRecorder),挂了落在 conversations/<老师>/<日期>.live/<时分秒>.reel.json / .wav。
  */
@@ -63,6 +65,10 @@ export class LiveCall {
   private caughtDone = false;
   /** 上一轮讲稿念到第几句被打断(1 起);交给脑时带上,带了就清 */
   private cut: number | undefined;
+  /** 最近告诉孩子端开始放的那句;打断时报它 */
+  private lastRead: { job: string; line: number } | null = null;
+  /** 一段里第二句起的 read(按字数摊的时刻);打断时撤 */
+  private readTimers: NodeJS.Timeout[] = [];
   /** 正在写的那一轮(脑)与已经交给排队的讲稿句数 */
   private job: string | null = null;
   private linesQueued = 0;
@@ -118,22 +124,20 @@ export class LiveCall {
         const said: Said = this.said ?? { kind: 'catch' };
         const r = addChunk(this.play, said, this.ms(), pcm.length / BYTES_PER_MS);
         this.play = r.p;
-        // 照念的第一块:到它在孩子端开始放的那一刻,告诉孩子端亮哪几句
-        if (firstOfAnswer && said.kind === 'read') {
-          const beat = said.beat;
-          this.timers.push(setTimeout(() => { if (!this.ended && this.q.dropJob !== beat.job) this.send({ t: 'read', job: beat.job, lines: beat.lines }); }, Math.max(0, r.start - this.ms())));
-        }
+        // 照念的第一块:到它在孩子端开始放的那一刻,告诉孩子端这段的第一句
+        if (firstOfAnswer && said.kind === 'read') this.readAt(said.beat, 0, r.start);
         firstOfAnswer = false;
         this.rec.tutor(pcm);
         this.sock.sendBinary(pcm);
       },
       onTutorText: (delta, done) => {
+        const of = this.said?.kind ?? 'catch';
         if (done !== null) {
-          if (this.said?.kind === 'catch') { this.caught = done.trim(); this.caughtDone = true; }
-          this.send({ t: 'tutor', done: done.trim() });
+          if (of === 'catch') { this.caught = done.trim(); this.caughtDone = true; }
+          this.send({ t: 'tutor', of, done: done.trim() });
           return;
         }
-        if (delta) this.send({ t: 'tutor', delta });
+        if (delta) this.send({ t: 'tutor', of, delta });
       },
       onKidText: (text) => this.heard(text),
       onResponse: (st, status) => {
@@ -144,6 +148,7 @@ export class LiveCall {
           return;
         }
         if (status === 'cancelled') this.play = flushAt(this.play, this.ms());
+        else if (this.said?.kind === 'read') this.readRest(this.said);
         if (this.said?.kind === 'catch') this.caughtDone = true;
         this.said = null;
         this.q = { ...this.q, busy: false };
@@ -169,6 +174,30 @@ export class LiveCall {
     this.send({ t: 'ready' });
   }
 
+  /** 到 at(孩子端放到的时刻)告诉孩子端:这一段的第 k 句开始放了 */
+  private readAt(beat: Beat, k: number, at: number): void {
+    const t = setTimeout(() => {
+      if (this.ended || this.q.dropJob === beat.job) return;
+      this.lastRead = { job: beat.job, line: beat.lines[k] };
+      this.send({ t: 'read', job: beat.job, line: beat.lines[k], text: beat.texts[k] });
+    }, Math.max(0, at - this.ms()));
+    (k === 0 ? this.timers : this.readTimers).push(t);
+  }
+
+  /** 一段照念的声音出齐了:这段在孩子端从哪放到哪已知,第二句起按字数比例摊开各发一个 read */
+  private readRest(said: Said & { kind: 'read' }): void {
+    const { beat } = said;
+    const span = this.play.spans.find((x) => x.tag === said);
+    if (!span || beat.lines.length < 2) return;
+    const lens = beat.texts.map((x) => Math.max(1, x.length));
+    const total = lens.reduce((a, b) => a + b, 0);
+    let before = lens[0];
+    for (let k = 1; k < beat.lines.length; k++) {
+      this.readAt(beat, k, span.start + ((span.end - span.start) * before) / total);
+      before += lens[k];
+    }
+  }
+
   /** 讲稿又定稿了几句:按序号接着交给排队(重复的、跳号的不收) */
   private linesUpTo(lines: { i: number; text: string }[]): void {
     if (!this.job) return;
@@ -186,7 +215,9 @@ export class LiveCall {
     const at = playingAt(this.play, now)?.tag;
     const dropped = this.step({ e: 'hold', drop: this.job });
     const heard = at?.kind === 'read' ? at.beat : this.said?.kind === 'read' ? this.said.beat : dropped[0];
-    if (heard) this.cut = heard.lines[0] + 1;
+    // 孩子端在放的那段里亮到了哪句就报哪句;那段还没亮(声音没到孩子端)报段首
+    if (heard) this.cut = (this.lastRead && this.lastRead.job === heard.job && heard.lines.includes(this.lastRead.line) ? this.lastRead.line : heard.lines[0]) + 1;
+    for (const t of this.readTimers.splice(0)) clearTimeout(t);
     this.afterDone = null;
     if (this.session?.responding) this.session.cancel();
     else if (this.said) this.cancelOnCreate = true;
@@ -214,6 +245,14 @@ export class LiveCall {
         this.holding = false;
         this.session.commit();
         this.turn('voice', isObj(m.body) ? m.body : {});
+        break;
+      }
+      case 'hush': {
+        if (!this.session) return;
+        if (this.holding) { this.holding = false; this.session.clearAudio(); }
+        this.interrupt();
+        this.q = queueStep(this.q, { e: 'release' }).s;
+        this.state();
         break;
       }
       case 'send': {
@@ -328,7 +367,7 @@ export class LiveCall {
   async end(why: string): Promise<void> {
     if (this.ended) return;
     this.ended = true;
-    for (const t of this.timers) { clearTimeout(t); clearInterval(t); }
+    for (const t of [...this.timers, ...this.readTimers]) { clearTimeout(t); clearInterval(t); }
     this.offEvents?.();
     const s = this.session;
     this.session = null;

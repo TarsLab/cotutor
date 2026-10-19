@@ -14,6 +14,8 @@ export interface FakeConn {
   session: Record<string, any> | null;
   updates: unknown[];
   audio: number;
+  /** 收到几块图(input_image_buffer.append) */
+  images: number;
   items: Record<string, any>[];
   commits: number;
   clears: number;
@@ -47,7 +49,7 @@ export async function startFakeRealtime(): Promise<FakeRealtime> {
     if (!isUpgrade(req)) { socket.destroy(); return; }
     let active = 0;
     let speaking = false;
-    const c: FakeConn = { sock: null as unknown as ServerSocket, session: null, updates: [], audio: 0, items: [], commits: 0, clears: 0, creates: 0, cancels: 0, responses: [], closed: false };
+    const c: FakeConn = { sock: null as unknown as ServerSocket, session: null, updates: [], audio: 0, images: 0, items: [], commits: 0, clears: 0, creates: 0, cancels: 0, responses: [], closed: false };
     const send = (o: unknown): boolean => c.sock.sendText(JSON.stringify(o));
     const respond = (response: { instructions?: string } | null = null): void => {
       c.creates++;
@@ -89,6 +91,7 @@ export async function startFakeRealtime(): Promise<FakeRealtime> {
         } else if (m.type === 'input_audio_buffer.commit') { c.commits++; transcribe(); }
         else if (m.type === 'input_audio_buffer.clear') c.clears++;
         else if (m.type === 'conversation.item.create') c.items.push(m.item);
+        else if (m.type === 'input_image_buffer.append') c.images++;
         else if (m.type === 'response.cancel') { c.cancels++; if (active) { active--; send({ type: 'response.done', response: { status: 'cancelled' } }); } else send({ type: 'error', error: { message: 'no active response' } }); }
         else if (m.type === 'response.create') respond(m.response ?? null);
       },

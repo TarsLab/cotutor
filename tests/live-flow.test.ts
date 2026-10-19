@@ -160,6 +160,23 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await sleep(600);
   check('转写空的:嘴先照常接住(松手就接,不等转写),转写回来是空的再改说没听清;不交给脑(没有 turn)', okEmpty && c.responses[r2]?.instructions === catchCue('voice') && c.responses[r2 + 1]?.instructions === catchCue('empty') && !k.msgs.slice(n2).some((m) => m.t === 'turn') && c.responses.length === r2 + 2, JSON.stringify(c.responses.slice(r2)));
 
+  // ---- 拍照(P2.7):嘴说「我看看」,照片交给脑(嘴不看图);只有照片没有字也行 ----
+  {
+    await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+    await sleep(300);
+    const JPEG = 'data:image/jpeg;base64,' + Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0xff, 0xd9]).toString('base64');
+    const up = await fetch(`http://127.0.0.1:${port}/api/kid/conversations/chinese-tutor/photos`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: JPEG }) });
+    const photo = ((await up.json()) as { path: string }).path;
+    const np = k.msgs.length, rp = c.responses.length;
+    k.ws.send(JSON.stringify({ t: 'send', body: { text: '', photos: [photo] } }));
+    const okPhoto = await until(() => k.msgs.slice(np).some((m) => m.t === 'turn'), 10000);
+    const turnP = k.msgs.slice(np).find((m) => m.t === 'turn')!;
+    await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+    const mp = indexOf(localDate(ctx.now())).messages.find((m) => m.job === turnP?.job);
+    const promptP = turnP ? (JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${localDate(ctx.now())}.${turnP.job}.run.json`), 'utf8')) as { prompt: string }).prompt : '';
+    check('拍照:嘴先「我看看」(拍照的接住)、照片交给脑(消息记 photos、上下文包带 photos:)、嘴的会话里没塞图', up.status === 201 && okPhoto && c.responses[rp]?.instructions === catchCue('photo') && mp?.photos?.join() === photo && promptP.includes(`  photos:\n    - ${JSON.stringify(photo)}`) && c.images === 0, JSON.stringify({ status: up.status, catch: c.responses[rp], photos: mp?.photos }));
+  }
+
   // ---- 挂断:落录像 ----
   k.ws.send(JSON.stringify({ t: 'bye' }));
   const okEnd = await until(() => finished.length === 1 && k.closed !== null);

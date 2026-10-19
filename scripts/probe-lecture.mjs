@@ -207,9 +207,11 @@ try {
 
   // 家长看录像(第 5 步):看小课堂那一段也在
   await send('Page.navigate', { url: `${base}/parent` });
-  await until(`document.querySelectorAll('.pt[data-tutor="math-tutor"] .tr').length > 0`, 40);
-  await evaluate(`[...document.querySelectorAll('.pt[data-tutor="math-tutor"] .tr')].pop().click()`);
-  await until(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden`, 40);
+  // 清单是一天的时间线(《家长板书页设计.md》拍板 22、35,最新的在上):数学老师最新那件的 .kid 开录像
+  const MATH_EV = `[...document.querySelectorAll('.pev')].find((p) => (p.querySelector('.pv-who')?.textContent ?? '').includes('数学'))?.querySelector('.kid')`;
+  await until(`Boolean(${MATH_EV})`, 40);
+  await evaluate(`${MATH_EV}.click()`);
+  await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`, 40);
   // 记录点进来停在最后一帧(拍板 16);这里要从头看,拖回开头
   await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
   // 录像里孩子的屏幕在 iframe(#rl-frame)里,小课堂的播放器在它里面的 #lc-frame(拍板 6)

@@ -101,6 +101,22 @@ try {
   ok('在视频上圈了一处:进度条上一个蓝记号、「圈好了」、画面上留着那一圈', marked.marks === 1 && marked.line.startsWith('圈好了,记在 0:1') && marked.ink === 1, JSON.stringify(marked));
   await shot('video-circle.png');
 
+  // 圈满了(视频最多 6 处,2026-10-19 真机:满了以后笔还亮着、画面却变成上下滚动):再画,笔还拿着、画面还是不滚动,字幕说圈满了;擦掉这一刻的、重画一处,后面照一处走
+  const count = `(${D}.querySelector('.lc-time small')?.textContent ?? '')`;
+  for (let k = 1; k <= 5; k++) { await drag(ring.map((p, i) => ({ x: p.x + (k - 3) * 40, y: p.y + (i % 2) * k }))); await sleep(300); }
+  const six = await evaluate(count);
+  await drag(ring.map((p) => ({ x: p.x, y: p.y - 30 })));
+  await sleep(300);
+  const fullV = await evaluate(`(() => { const d = ${D}; const c = d.querySelector('.lc-canvas'); return { count: ${count}, pen: c.classList.contains('lc-pen'), ta: getComputedStyle(c).touchAction, tool: d.querySelector('.lc-tool').classList.contains('on'), line: d.querySelector('.lc-line').textContent, ink: d.querySelector('.lc-line').classList.contains('ink') }; })()`);
+  ok('圈满 6 处再画:「圈一圈」还亮着、画面还拿着笔(描蓝、touch-action: none,手指不会变成滚动),画不进去,字幕说圈满了', six === '圈了 6 处' && fullV.count === '圈了 6 处' && fullV.pen && fullV.ta === 'none' && fullV.tool && fullV.line.startsWith('已经圈了 6 处,圈满了') && fullV.ink, JSON.stringify({ six, ...fullV }));
+  await shot('video-full.png');
+  await evaluate(`[...${D}.querySelectorAll('.lc-tool')].find((b) => b.textContent.includes('擦掉')).click()`);
+  await sleep(300);
+  await drag(ring);
+  await sleep(300);
+  const back1 = await evaluate(`({ count: ${count}, line: ${D}.querySelector('.lc-line').textContent })`);
+  ok('擦掉这一刻圈的,能接着圈:又是一处、「圈好了」', back1.count === '圈了 1 处' && back1.line.startsWith('圈好了'), JSON.stringify(back1));
+
   // 放到结尾(点第 3 个句子点再放完)
   await evaluate(`${D}.querySelector('.lc-play').click()`);
   // 放完停在最后一帧(拍板 37),「去问老师」淡入了才回板书
@@ -127,9 +143,11 @@ try {
   const pb = await (await fetch(`${base}/api/conversations/math-tutor/today/board`)).json();
   const pm = pb.messages.find((m) => m.lecture?.video)?.lecture?.marks?.[0];
   await send('Page.navigate', { url: `${base}/parent` });
-  await until(`document.querySelectorAll('.pt[data-tutor="math-tutor"] .tr').length > 0`, 40);
-  await evaluate(`[...document.querySelectorAll('.pt[data-tutor="math-tutor"] .tr')].pop().click()`);
-  await until(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden`, 40);
+  // 清单是一天的时间线(《家长板书页设计.md》拍板 22、35,最新的在上):数学老师最新那件的 .kid 开录像
+  const MATH_EV = `[...document.querySelectorAll('.pev')].find((p) => (p.querySelector('.pv-who')?.textContent ?? '').includes('数学'))?.querySelector('.kid')`;
+  await until(`Boolean(${MATH_EV})`, 40);
+  await evaluate(`${MATH_EV}.click()`);
+  await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`, 40);
   // 记录点进来停在最后一帧(拍板 16);这里要从头看,拖回开头
   await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
   // 录像里孩子的屏幕在 iframe(#rl-frame)里,小课堂的播放器在它里面的 #lc-frame(拍板 6)

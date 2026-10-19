@@ -66,6 +66,8 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .lc-start { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); height: 72px; padding: 0 32px 0 26px; border-radius: 36px; border: none; background: #c95a22; color: #ffffff; font: inherit; font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 10px; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.15); }
 /* 不叫 .pen:舞台页也装了孩子端的 theme.css,那里 .pen 是标注的笔(pointer-events: none),圈就收不到手指了。拿着笔:画面描一圈蓝,是这页唯一的线 */
 .lc-canvas.lc-pen { cursor: crosshair; touch-action: none; }
+/* 铺满整页的小课堂,画面上手指从来不该滚页面(拿没拿笔都一样);板书上的小课堂卡另说 */
+.lc-full .lc-canvas { touch-action: none; }
 .lc-canvas.lc-pen .lc-vbox { border-radius: 10px; box-shadow: 0 0 0 3px #2f6fd6; }
 .lc-line { min-height: 1.4em; text-align: center; font-size: 22px; line-height: 1.4; padding: 0 40px; }
 .lc-line.ink { color: #2f6fd6; font-weight: 500; }

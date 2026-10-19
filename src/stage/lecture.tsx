@@ -159,6 +159,8 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const [pen, setPen] = useState(true);
   /** 刚圈好的那一处的时刻:字幕行换成「圈好了,记在 0:26」 */
   const [fresh, setFresh] = useState<number | null>(null);
+  /** 圈满了还在画:字幕说圈满了(圈的数一变、一放就收) */
+  const [full, setFull] = useState(false);
   /** 放完了,按钮淡入了没有 */
   const [endUi, setEndUi] = useState(false);
   const shift = useRef({ dx: 0, dy: 0 });
@@ -350,6 +352,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     if (!clock) return;
     setStarted(true);
     setFresh(null);
+    setFull(false);
     blocked.current = false;
     // 视频:停下时时钟对到视频真停的那一帧(圈与截图是同一刻)
     if (playing) { setPlaying(false); hush(); if (vid.current) paint(clock, vid.current.currentTime * 1000, false); watch.current.pauses++; return; }
@@ -440,9 +443,13 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   useEffect(() => () => { audio.current?.pause(); vid.current?.pause(); }, []);
 
   // ---- 圈 ----
-  const changeMarks = (next: StageMark[]): void => { setMarks(next); onMarks(next); };
+  const changeMarks = (next: StageMark[]): void => { setMarks(next); onMarks(next); setFull(false); };
   const here = (m: StageMark): boolean => Math.abs(m.atMs - now) <= MARK_NEAR_MS;
-  const canDraw = Boolean(clock) && started && !playing && pen && !view && marks.length < (video ? MAX_VIDEO_MARKS : MAX_MARKS);
+  const markCap = video ? MAX_VIDEO_MARKS : MAX_MARKS;
+  /** 拿着笔(「圈一圈」亮着):画面上手指只画、不滚动,画面描一圈蓝。圈满了也还拿着,只是画不进去、字幕说圈满了——
+   *  2026-10-19 真机:视频圈满 6 处以后笔还亮着,画面却没了 touch-action: none,孩子接着画变成了上下滚动 */
+  const penOn = Boolean(clock) && started && !playing && pen && !view;
+  const canDraw = penOn && marks.length < markCap;
   /** 屏幕点 → SVG 坐标(viewBox 里,怎么缩放都对) */
   const toSvg = (clientX: number, clientY: number): [number, number] | null => {
     const m = svgRef.current?.getScreenCTM();
@@ -474,7 +481,8 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marks, now, playing, clock]);
   const penDown = (e: React.PointerEvent): void => {
-    if (!canDraw || !clock) return;
+    if (!penOn || !clock) return;
+    if (!canDraw) { e.preventDefault(); setFresh(null); setFull(true); return; }
     const p = toSvg(e.clientX, e.clientY);
     if (!p) return;
     try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* 合成的指针(探针)捕获不了,不碍事 */ }
@@ -560,7 +568,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     return () => clearTimeout(id);
   }, [ended]);
   const herePen = marks.filter(here).length;
-  const say = fresh !== null ? `圈好了,记在 ${clockLabel(fresh)}。问老师的时候,圈的地方会一起带上。` : started ? line : '';
+  const say = fresh !== null ? `圈好了,记在 ${clockLabel(fresh)}。问老师的时候,圈的地方会一起带上。` : full ? `已经圈了 ${markCap} 处,圈满了。去问老师吧,圈的地方会一起带上。` : started ? line : '';
 
   /** 圈一圈:停着 = 拿起 / 放下笔;放着 = 停下并拿起笔(少按一次暂停) */
   const penTool = (): void => {
@@ -590,7 +598,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
           </button>
         </div>}
       </div>}
-      <div className={'lc-canvas' + (canDraw ? ' lc-pen' : '')} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp}>
+      <div className={'lc-canvas' + (penOn ? ' lc-pen' : '')} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp}>
         <div className="lc-host" ref={host} />
         {!clock && <div className="stage-wait">课还在路上…</div>}
         {clock && !started && !follow && (
@@ -600,7 +608,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
           </button>
         )}
       </div>
-      {!card && <div className={'lc-line' + (fresh !== null ? ' ink' : '')}>{say}</div>}
+      {!card && <div className={'lc-line' + (fresh !== null || full ? ' ink' : '')}>{say}</div>}
       <div className="lc-bar">
         <button type="button" className={'lc-play' + (again ? ' again' : paused && clock && now < clock.total ? ' go' : '')} aria-label={playing ? '暂停' : '播放'} onClick={toggle} disabled={!clock}>
           {playing

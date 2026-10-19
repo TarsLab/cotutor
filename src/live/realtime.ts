@@ -23,6 +23,8 @@ export const REALTIME_MODEL = 'qwen3.8-omni-flash-realtime';
 export const REALTIME_VOICE = 'Serena';
 export const INPUT_RATE = 16000;
 export const OUTPUT_RATE = 24000;
+/** 服务端一帧最多 262144 字节(2026-10-19 真连:超了就 close 1009,整条连接没了);一张图的 base64 连同 JSON 的壳得在这以内 */
+export const MAX_IMAGE_B64 = 262144 - 1024;
 const TRANSCRIBE_MODEL = 'qwen3-asr-flash-realtime';
 
 export type TurnMode = 'manual' | 'semantic_vad' | 'server_vad';
@@ -223,8 +225,11 @@ export class RealtimeSession {
 
   /** 一块孩子的声音(PCM16 16k 单声道) */
   appendAudio(pcm: Buffer): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.append', audio: pcm.toString('base64') }); }
-  /** 一张图(JPEG)跟着这一段声音交:百炼要先有声音再有图(Qwen-Live-Harness 也这样),commit 时一起进对话 */
-  appendImage(jpeg: Buffer): boolean { return this.isReady && this.sendRaw({ type: 'input_image_buffer.append', image: jpeg.toString('base64') }); }
+  /** 一张图(JPEG)跟着这一段声音交:百炼要先有声音再有图(Qwen-Live-Harness 也这样),commit 时一起进对话;太大(见 MAX_IMAGE_B64)不发、回 false,调用方先缩 */
+  appendImage(jpeg: Buffer): boolean {
+    const image = jpeg.toString('base64');
+    return this.isReady && image.length <= MAX_IMAGE_B64 && this.sendRaw({ type: 'input_image_buffer.append', image });
+  }
   /** 手动轮次:松手 */
   commit(): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.commit' }); }
   clearAudio(): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.clear' }); }

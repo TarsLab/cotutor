@@ -7,7 +7,7 @@
 import { createServer } from 'node:http';
 import { check, done } from './_check.ts';
 import { acceptWebSocket, decodeFrame, encodeFrame, isUpgrade, acceptKey, type ServerSocket } from '../src/live/ws.ts';
-import { RealtimeSession, sessionConfig, turnDetection, endpointOf, type Usage } from '../src/live/realtime.ts';
+import { MAX_IMAGE_B64, RealtimeSession, sessionConfig, turnDetection, endpointOf, type Usage } from '../src/live/realtime.ts';
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const until = async (f: () => boolean, ms = 3000): Promise<boolean> => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(10); return f(); };
@@ -135,6 +135,7 @@ const endpoint = `ws://127.0.0.1:${port}/api-ws/v1/realtime?model=test`;
   const ok3 = await until(() => resp.some((r) => r[0] === 'done'));
   check('喂音频按字节到了;commit → 孩子转写(去空白);response.create → 声音块、字幕 delta 与整句、done 带 usage', ok3 && c.seen.audio === 4800 && c.seen.commits === 1 && kid[0] === 'It\'s a red car.' && audio[0]?.length === 4800 && tutor.filter((t) => t[1] === null).map((t) => t[0]).join('') === 'It\'s a red car.' && tutor.at(-1)?.[1] === 'It\'s a red car.' && resp[0][0] === 'created' && resp[1][1] === 'completed' && resp[1][2]?.input === 865 && resp[1][2]?.outputAudio === 20, JSON.stringify({ audio: c.seen.audio, kid, tutor, resp }).slice(0, 400));
   check('appendImage:input_image_buffer.append,image 是 base64 的 JPEG(不带 data: 头)', c.seen.images.length === 1 && c.seen.images[0] === Buffer.from([0xff, 0xd8, 0xff, 0xe0]).toString('base64'), JSON.stringify(c.seen.images));
+  check('appendImage:base64 超过一帧的上限就不发(发了服务端会断整条连接)', !s.appendImage(Buffer.alloc(Math.ceil((MAX_IMAGE_B64 + 4) * 3 / 4))) && c.seen.images.length === 1);
   const item = c.seen.items[0] as Record<string, any>;
   check('addText 的形状:user 消息,input_text', item?.type === 'message' && item.role === 'user' && item.content?.[0]?.type === 'input_text' && item.content[0].text.startsWith('读这句'), JSON.stringify(item));
   check('没有回答在出时 cancel 不发', !s.cancel() && c.seen.cancels === 0 && !s.responding);

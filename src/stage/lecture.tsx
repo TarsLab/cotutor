@@ -384,21 +384,28 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
     sayPhase(clock, playing ? 'drawing' : 'paused');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clock, playing, atIndex, started]);
+  // 录像:页面的时钟是准的;差 300 毫秒以上(拖了、压过一段空白)就挪过去,放着就自己按倍速走(画面每帧都画)。
+  // 课还没装好(clock 还没有:视频的元数据、课包在路上)时来的先记着,装好了照最后那条对上——
+  // 2026-10-19:家长在录像停着时点「圈了一处」,播放器这时才打开,页面只发那一条,丢了就一直停在 0:00、没有圈
+  const pendingFollow = useRef<{ ms: number; play: boolean; r: number; marks: StageMark[] } | null>(null);
+  const applyFollow = useCallback((ms: number, play: boolean, r: number, ms2: StageMark[]) => {
+    if (!clock) { pendingFollow.current = { ms, play, r, marks: ms2 }; return; }
+    pendingFollow.current = null;
+    rate.current = r;
+    setStarted(true);
+    setMarks((cur) => (cur.length === ms2.length ? cur : ms2));
+    if (!play || Math.abs(t.current - ms) > RESYNC_MS) { paint(clock, ms); seg.current = -1; }
+    if (play && !playing) { syncAudio(clock, ms, true); setPlaying(true); }
+    else if (!play && playing) { setPlaying(false); hush(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clock, playing, paint, syncAudio]);
+  useEffect(() => { const f = pendingFollow.current; if (clock && f) applyFollow(f.ms, f.play, f.r, f.marks); }, [clock, applyFollow]);
   useImperativeHandle(ref, () => ({
     control(action: string) {
       if (action === 'toggle' || (action === 'play' && !playing) || (action === 'pause' && playing)) toggle();
     },
-    // 录像:页面的时钟是准的;差 300 毫秒以上(拖了、压过一段空白)就挪过去,放着就自己按倍速走(画面每帧都画)
-    follow(ms: number, play: boolean, r: number, ms2: StageMark[]) {
-      if (!clock) return;
-      rate.current = r;
-      setStarted(true);
-      setMarks((cur) => (cur.length === ms2.length ? cur : ms2));
-      if (!play || Math.abs(t.current - ms) > RESYNC_MS) { paint(clock, ms); seg.current = -1; }
-      if (play && !playing) { syncAudio(clock, ms, true); setPlaying(true); }
-      else if (!play && playing) { setPlaying(false); hush(); }
-    },
-  }), [toggle, playing, clock, paint, syncAudio]);
+    follow: applyFollow,
+  }), [toggle, playing, applyFollow]);
 
   // ---- 看的过程(录像用):放 / 停变了记一条;拖完、跳、点记号挪了位置也记 ----
   const logOf = useRef(onLog);

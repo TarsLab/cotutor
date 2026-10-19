@@ -212,6 +212,8 @@ try {
   await until(`Boolean(${MATH_EV})`, 40);
   await evaluate(`${MATH_EV}.click()`);
   await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`, 40);
+  // 孩子的屏幕(#rl-frame 里的录像页)装好了再拖进度条,没装好时拖的会丢
+  await until(`Boolean(document.querySelector('#rl-frame').contentWindow.cotutorReel)`, 40);
   // 记录点进来停在最后一帧(拍板 16);这里要从头看,拖回开头
   await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
   // 录像里孩子的屏幕在 iframe(#rl-frame)里,小课堂的播放器在它里面的 #lc-frame(拍板 6)

@@ -148,17 +148,18 @@ try {
   await until(`Boolean(${MATH_EV})`, 40);
   await evaluate(`${MATH_EV}.click()`);
   await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`, 40);
-  // 记录点进来停在最后一帧(拍板 16);这里要从头看,拖回开头
-  await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
-  // 录像里孩子的屏幕在 iframe(#rl-frame)里,小课堂的播放器在它里面的 #lc-frame(拍板 6)
+  // 孩子的屏幕(#rl-frame 里的录像页)装好了再动(没装好时拖进度条会丢);小课堂的播放器在它里面的 #lc-frame(拍板 6)
+  await until(`Boolean(document.querySelector('#rl-frame').contentWindow.cotutorReel)`, 40);
   const KF = `document.querySelector('#rl-frame').contentDocument.querySelector('#lc-frame')`;
   const KD = `${KF}?.contentDocument`;
-  const reelOn = await until(`document.body.classList.contains('reel') && Boolean(document.querySelector('#rl-frame').contentDocument) && !${KF}?.hidden && Boolean(${KD}?.querySelector('.lc video.lc-video'))`, 80);
-  // 记录点进来本来就停着(原来一进来就放,这里点一下是为了停)
+  // 记录点进来停在最后一帧(拍板 16),看小课堂那一段在前面,播放器还没开;停着直接点「圈了一处」——播放器这时才打开
+  // (2026-10-19:页面只发一条 follow,播放器还没在听,一直停在 0:00、没有圈)
+  const closedBefore = await evaluate(`Boolean(${KF}?.hidden)`);
   await evaluate(`document.querySelector('#rl-marks i.circle').click()`);
-  await sleep(1000);
+  const reelOn = await until(`!${KF}?.hidden && Boolean(${KD}?.querySelector('.lc video.lc-video')) && ${KD}.querySelector('video').currentTime > 11.5`, 60);
+  await sleep(500);
   const rr = await evaluate(`({ t: ${KD}.querySelector('video').currentTime, ink: ${KD}.querySelectorAll('.lc-over .lc-ink path').length, sub: document.querySelector('#rl-cap').textContent })`);
-  ok('家长看录像:看视频那一段铺在板书上,点「圈了一处」视频停在圈的那一刻、画着那一圈', reelOn && rr.t > 12 && rr.t < 13.5 && rr.ink === 1 && rr.sub.startsWith('⏸ 小课堂停在 0:1'), JSON.stringify(rr));
+  ok('家长看录像:停在最后时点「圈了一处」,播放器这时才打开,也停在圈的那一刻、画着那一圈', closedBefore && reelOn && rr.t > 12 && rr.t < 13.5 && rr.ink === 1 && rr.sub.startsWith('⏸ 小课堂停在 0:1'), JSON.stringify(rr));
   await shot('video-reel.png');
   ok('家长端:圈带着那段话(那时在讲哪句、截图是 photos 第 1 张)与截图路径', /^0:1\d 圈的,那时在讲『分完了/.test(pm?.text ?? '') && pm.text.endsWith('圈在截图上(photos 第 1 张)') && /^captures\//.test(pm.image ?? ''), JSON.stringify(pm));
 } finally {

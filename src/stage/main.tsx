@@ -34,6 +34,8 @@ function App(): JSX.Element {
   const [card, setCard] = useState<Card | null>(null);
   const canvas = useRef<CanvasStageHandle>(null);
   const lecture = useRef<LectureStageHandle>(null);
+  /** 录像的 follow 比播放器先到(卡刚到、还没挂上):记着最后那条,挂上了交给它(它自己再等课装好) */
+  const pendingFollow = useRef<Extract<ToStage, { type: 'follow' }> | null>(null);
 
   useEffect(() => {
     // 调试 / 截图:?bundle=<课包 URL> 不用页面也能开小课堂(mock:/stage/?bundle=/api/bundles/<id>/)
@@ -44,13 +46,18 @@ function App(): JSX.Element {
       const m = e.data;
       if (!m || m.source !== STAGE_SOURCE) return;
       if (m.type === 'card') setCard(m);
-      else if (m.type === 'follow') lecture.current?.follow(m.ms, m.playing, m.rate, m.marks as StageMark[]);
+      else if (m.type === 'follow') { if (lecture.current) lecture.current.follow(m.ms, m.playing, m.rate, m.marks as StageMark[]); else pendingFollow.current = m; }
       else if (m.type === 'control') { if (m.action === 'submit') canvas.current?.submit(); else lecture.current?.control(m.action); }
     };
     window.addEventListener('message', onMsg);
     post({ type: 'ready' });
     return () => window.removeEventListener('message', onMsg);
   }, []);
+
+  useEffect(() => {
+    const f = pendingFollow.current;
+    if (f && lecture.current) { pendingFollow.current = null; lecture.current.follow(f.ms, f.playing, f.rate, f.marks as StageMark[]); }
+  });
 
   const onError = useCallback((message: string) => post({ type: 'error', message }), []);
   const onInk = useCallback((ink: Record<string, unknown>[]) => post({ type: 'state', state: { ink } }), []);

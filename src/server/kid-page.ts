@@ -1939,7 +1939,11 @@ __WORD_DRAW_JS__
   window.addEventListener('message', (e) => {
     const m = e.data;
     if (!m || m.source !== STAGE_SOURCE || e.source !== lcFrame.contentWindow || !lcShowing) return;
-    if (m.type === 'ready') lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, tutor: lcTutor(), marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}), ...(lcShowing.follow ? { follow: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
+    if (m.type === 'ready') {
+      lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, tutor: lcTutor(), marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}), ...(lcShowing.follow ? { follow: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
+      // 录像(follow):播放器这时才在听,录像停着不会再发,把最近那条 follow 再发一次(之前那条它没收到;2026-10-19 停着点「圈了一处」一直停在 0:00)
+      if (lcShowing.follow && lcShowing.followMsg) lcPost(lcShowing.followMsg);
+    }
     else if (m.type === 'marks') { if (lcMine()) S.lecture.marks = m.marks; }
     // 看的过程(录像用):孩子开口时一起带上(拍板 11:没开口之前哪里都不记)
     else if (m.type === 'watch') { if (lcMine() && S.lecture.log.length < 500) S.lecture.log.push({ at: m.at, pos: m.pos, play: m.play }); }
@@ -3024,7 +3028,9 @@ __WORD_DRAW_JS__
     const R = S.reel, x = f.lecture;
     if (!x) { if (R.lc) { R.lc = null; hideLecture(); } return; }
     if (!R.lc || R.lc !== x.job) { R.lc = x.job; openLecture({ bundle: x.bundle, title: x.title, follow: true, ...(x.video ? { video: true } : {}) }); }
-    lcPost({ type: 'follow', ms: x.pos, playing: x.playing && R.playing && !R.seeking, rate: R.speed, marks: x.marks.map((k) => ({ atMs: k.atMs, svgMs: k.svgMs, path: k.path, ...(k.image ? { image: k.image } : {}) })) });
+    const msg = { type: 'follow', ms: x.pos, playing: x.playing && R.playing && !R.seeking, rate: R.speed, marks: x.marks.map((k) => ({ atMs: k.atMs, svgMs: k.svgMs, path: k.path, ...(k.image ? { image: k.image } : {}) })) };
+    if (lcShowing) lcShowing.followMsg = msg;
+    lcPost(msg);
   };
   const reelTick = () => {
     const R = S.reel; if (!R) return;

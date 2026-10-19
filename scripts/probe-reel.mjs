@@ -65,10 +65,13 @@ try {
 
   await device(1180, 820, 1, false);
   await send('Page.navigate', { url: `${base}/parent` });
-  await until(`document.querySelectorAll('.pt').length > 0`);
+  // 清单是一天的时间线(《家长板书页设计.md》拍板 22、35,最新的在上):语文老师最新那件的 .kid 开录像
+  const ZH_EV = `[...document.querySelectorAll('.pev')].find((p) => (p.querySelector('.pv-who')?.textContent ?? '').includes('语文'))?.querySelector('.kid')`;
+  await until(`Boolean(${ZH_EV})`);
   // ---- 记录里点话题:就是录像,停在最后一帧(拍板 16) ----
-  await evaluate(`document.querySelector('.pt[data-tutor="chinese-tutor"] .tr').click()`);
-  await until(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden`);
+  await evaluate(`${ZH_EV}.click()`);
+  await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`);
+  await until(`Boolean(document.querySelector('#rl-frame').contentWindow.cotutorReel)`, 40);
   await until(`(() => { const d = document.querySelector('#rl-frame').contentDocument; return !!d && d.querySelectorAll('#board .sec').length === 2; })()`, 40);
   await sleep(400);
   const e0 = await evaluate(`({ src: document.querySelector('#rl-frame').getAttribute('src'), v: Number(document.querySelector('#rl-seek').value), max: Number(document.querySelector('#rl-seek').max), play: document.querySelector('#rl-play').getAttribute('aria-label'), log: document.querySelector('#rl-log').hidden, notes: document.querySelectorAll('.notes').length })`);
@@ -160,8 +163,9 @@ try {
   await evaluate(`document.querySelector('#rl-x').click()`);
   await until(`!document.body.classList.contains('reel') && !document.querySelector('#tutor').classList.contains('on')`);
   await evaluate(`window.__patchStage = true`);
-  await evaluate(`document.querySelector('.pt[data-tutor="chinese-tutor"] .tr').click()`);
-  await until(`document.body.classList.contains('reel') && window.__X !== undefined && !document.querySelector('#reel').hidden`);
+  await until(`Boolean(${ZH_EV})`);
+  await evaluate(`${ZH_EV}.click()`);
+  await until(`document.body.classList.contains('reel') && window.__X !== undefined && !document.querySelector('#rl-screen').hidden`);
   await evaluate(`document.querySelector('#rl-play').click()`);
   await evaluate(`document.querySelector('#rl-skip').click()`);
   const X = await evaluate(`window.__X`);
@@ -183,7 +187,7 @@ try {
   // ---- 退出 ----
   await evaluate(`document.querySelector('#rl-x').click()`);
   await until(`!document.body.classList.contains('reel') && !document.querySelector('#tutor').classList.contains('on')`);
-  const s5 = await evaluate(`({ reel: document.body.classList.contains('reel'), screen: document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), rows: document.querySelectorAll('.pt .tr').length })`);
+  const s5 = await evaluate(`({ reel: document.body.classList.contains('reel'), screen: document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), rows: document.querySelectorAll('.pev').length })`);
   ok('退出:孩子的屏幕撤了,回到记录清单', !s5.reel && s5.screen && s5.src === 'about:blank' && s5.rows > 0, JSON.stringify(s5));
   ok('页面没抛异常', errors.length === 0, errors.join(' | '));
   console.log(bad ? `${bad} 项没过` : '全过');

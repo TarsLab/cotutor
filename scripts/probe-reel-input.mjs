@@ -109,13 +109,16 @@ try {
 
   // ---- 家长端清单:这个话题上露「连着没发出去」 ----
   await send('Page.navigate', { url: `${base}/parent` });
-  await until(`document.querySelectorAll('.pt').length > 0`);
-  const flag = await evaluate(`(document.querySelector('.pt[data-tutor="chinese-tutor"] .tr small .miss') || {}).textContent || ''`);
+  // 清单是一天的时间线(《家长板书页设计.md》拍板 22、35):语文老师那件的「经过」一行里
+  await until(`document.querySelectorAll('.pev').length > 0`);
+  const flag = await evaluate(`([...document.querySelectorAll('.pev')].find((p) => (p.querySelector('.pv-who')?.textContent ?? '').includes('语文'))?.querySelector('.pf .miss') || {}).textContent || ''`);
   ok('家长端清单:这个话题上写「⚠ 按住说话连着 4 次没发出去」', flag.includes('⚠ 按住说话连着 4 次没发出去'), JSON.stringify(flag));
 
   // ---- 家长端看录像 ----
   await send('Page.navigate', { url: `${base}/parent?tutor=chinese-tutor&thread=${thread}` });
-  await until(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden`, 40);
+  await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`, 40);
+  // 孩子的屏幕(#rl-frame 里的录像页)装好了再拖进度条,没装好时拖的会丢
+  await until(`Boolean(document.querySelector('#rl-frame').contentWindow.cotutorReel)`, 40);
   // 记录点进来停在最后一帧(拍板 16);这里要从头看,拖回开头
   await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
   // 记录点进来本来就停着(原来一进来就放,这里点一下是为了停)

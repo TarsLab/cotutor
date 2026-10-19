@@ -1,4 +1,4 @@
-/** PCM16 单声道 ↔ WAV,纯函数(口语课落盘两边的声音,探针也用) */
+/** PCM16 单声道 ↔ WAV,纯函数(录像落盘两边的声音,探针也用) */
 
 export function wavOfPcm(pcm: Buffer, rate: number): Buffer {
   const h = Buffer.alloc(44);

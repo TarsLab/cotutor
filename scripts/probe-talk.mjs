@@ -22,7 +22,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let bad = 0;
 const ok = (name, cond, detail = '') => { if (!cond) bad++; console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`); };
 
-const { RealtimeSession, OUTPUT_RATE, INPUT_RATE } = await import(join(repo, 'src', 'talk', 'realtime.ts'));
+const { RealtimeSession, OUTPUT_RATE, INPUT_RATE } = await import(join(repo, 'src', 'live', 'realtime.ts'));
 const { listenOmni } = await import(join(repo, 'src', 'server', 'listen.ts'));
 
 // ---- 素材:say 念的英文当孩子的声音 → 16k 单声道 PCM16 ----

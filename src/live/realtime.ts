@@ -1,6 +1,6 @@
 /**
- * 口语课的那头:百炼 Qwen-Omni-Realtime 的 WebSocket 客户端(《口语课设计.md》§三)。
- * 一次通话一条会话。服务端连,key 不出服务端;孩子端的声音由 relay 推进来,老师的声音从这里出去。
+ * 百炼 Qwen-Omni-Realtime 的 WebSocket 客户端:口语课(src/talk/,《口语课设计.md》§三)和实时老师(《wip/实时老师设想.md》)共用。
+ * 一次通话一条会话。服务端连,key 不出服务端;孩子端的声音由调用方推进来,老师的声音从这里出去。
  *
  * 协议(OpenAI realtime 同族,2026-10-10 真连核对):
  *   连上先收 session.created;发 session.update,收 session.updated 后才能喂音频。
@@ -11,7 +11,7 @@
  *         input_audio_buffer.speech_started / speech_stopped(VAD);response.done {response: {status, usage}};error。
  *   端点要业务空间 id:wss://<WorkspaceId>.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=…(公网域名 dashscope.aliyuncs.com 连上 1 秒就被关)。
  *
- * 轮次:manual = 手动(跟读段:relay 按响度判出开口才 append、停了 commit 拿转写,下一步由应用塞 cue + response.create,见 relay.ts);semantic_vad / server_vad = 服务端判(聊那段)。
+ * 轮次:manual = 手动(口语课的跟读段:relay 按响度判出开口才 append、停了 commit 拿转写,下一步由应用塞 cue + response.create,见 src/talk/relay.ts);semantic_vad / server_vad = 服务端判(聊那段)。
  *   服务端的规矩(2026-10-10 真连):turn_detection 的 silence_duration_ms 喂过音频就不能再改(切成 null 再切回来也回到缺省 800),
  *   type 在 null 与 vad 之间随时能切。所以跟读与聊各开一条会话(跟读手动;聊 semantic_vad 带自己的 silence),setTurn 只在不改 silence 时用。
  * 不抛:连不上、断了、服务端报错都走 onClose / onError;send 在没连上时丢弃并回 false。
@@ -19,8 +19,8 @@
 import { homedir } from 'node:os';
 import { qianwenKeys, voxtellConfig } from '../lib/qianwen.ts';
 
-export const TALK_MODEL = 'qwen3.8-omni-flash-realtime';
-export const TALK_VOICE = 'Serena';
+export const REALTIME_MODEL = 'qwen3.8-omni-flash-realtime';
+export const REALTIME_VOICE = 'Serena';
 export const INPUT_RATE = 16000;
 export const OUTPUT_RATE = 24000;
 const TRANSCRIBE_MODEL = 'qwen3-asr-flash-realtime';
@@ -28,7 +28,7 @@ const TRANSCRIBE_MODEL = 'qwen3-asr-flash-realtime';
 export type TurnMode = 'manual' | 'semantic_vad' | 'server_vad';
 
 export interface RealtimeOptions {
-  /** 系统提示(人设 + 口语单 + 规矩) */
+  /** 系统提示(人设 + 规矩;口语课还有口语单) */
   instructions: string;
   voice?: string;
   model?: string;
@@ -119,8 +119,8 @@ export class RealtimeSession {
   constructor(opts: RealtimeOptions, ev: RealtimeEvents = {}) {
     this.opts = opts;
     this.ev = ev;
-    this.model = opts.model ?? TALK_MODEL;
-    this.voice = opts.voice ?? TALK_VOICE;
+    this.model = opts.model ?? REALTIME_MODEL;
+    this.voice = opts.voice ?? REALTIME_VOICE;
     this.turn = opts.turn ?? 'manual';
     this.silenceMs = opts.silenceMs ?? 1200;
   }
@@ -229,7 +229,7 @@ export class RealtimeSession {
   createResponse(): boolean { return this.isReady && this.sendRaw({ type: 'response.create' }); }
   /** 老师正在说就掐掉(没在说不发,服务端会报错) */
   cancel(): boolean { return this.isReady && this.active > 0 && this.sendRaw({ type: 'response.cancel' }); }
-  /** 应用塞一条文字进对话(跟读段「现在读这句」、切段的指令);role 缺省 user */
+  /** 应用塞一条文字进对话(口语课跟读段「现在读这句」、切段的指令);role 缺省 user */
   addText(text: string, role: 'user' | 'system' = 'user'): boolean {
     return this.isReady && this.sendRaw({ type: 'conversation.item.create', item: { type: 'message', role, content: [{ type: 'input_text', text }] } });
   }

@@ -1,0 +1,51 @@
+/**
+ * 孩子端的声音(口语课与实时老师共用,插进各页的内联脚本):getUserMedia → AudioWorklet 降到 16k PCM16,100 毫秒一块交给 onChunk(静音时不交);
+ * 下来的 24k PCM16 一块块排进 AudioContext 放(上一块放完或现在 + 60 毫秒,取晚的;录像的混音 lib/mix.ts 照这个排法)。
+ * makeAudio() 回一个对象:open()(要在一次点击里调,Safari 才给起 AudioContext 与麦)、play(ArrayBuffer)、playing()、flush()、close(),
+ * 回调 onChunk(ArrayBuffer) / onLevel(0–1),muted 缺省 true(连上了再放开)。没有 AudioWorklet 的退到 ScriptProcessor。
+ * 脚本里不写反斜杠、反引号、美元加花括号(插进去的地方是模板字符串,见 CLAUDE.md「坑」)。
+ */
+export const AUDIO_CLIENT_JS = `
+  const WORKLET = 'class P extends AudioWorkletProcessor { constructor() { super(); this.buf = []; this.n = 0; this.acc = 0; } process(inputs) { const ch = inputs[0] && inputs[0][0]; if (!ch) return true; const ratio = sampleRate / 16000; const out = []; for (let i = 0; i < ch.length; i++) { this.acc += 1; if (this.acc >= ratio) { this.acc -= ratio; out.push(ch[i]); } } for (const v of out) { this.buf.push(v); } if (this.buf.length >= 1600) { const n = 1600; const pcm = new Int16Array(n); let s = 0; for (let i = 0; i < n; i++) { const v = Math.max(-1, Math.min(1, this.buf[i])); pcm[i] = v < 0 ? v * 32768 : v * 32767; s += v * v; } this.buf = this.buf.slice(n); this.port.postMessage({ pcm: pcm.buffer, rms: Math.sqrt(s / n) }, [pcm.buffer]); } return true; } } registerProcessor("cotutor-pcm16", P);';
+  function makeAudio() {
+    const A = { ctx: null, stream: null, node: null, playAt: 0, sources: [], onChunk: null, onLevel: null, muted: true };
+    A.open = async () => {
+      A.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      await A.ctx.resume();
+      A.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      const src = A.ctx.createMediaStreamSource(A.stream);
+      if (A.ctx.audioWorklet) {
+        const url = URL.createObjectURL(new Blob([WORKLET], { type: 'application/javascript' }));
+        await A.ctx.audioWorklet.addModule(url);
+        A.node = new AudioWorkletNode(A.ctx, 'cotutor-pcm16', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1 });
+        A.node.port.onmessage = (e) => { if (A.onLevel) A.onLevel(e.data.rms); if (!A.muted && A.onChunk) A.onChunk(e.data.pcm); };
+        src.connect(A.node);
+        const sink = A.ctx.createGain(); sink.gain.value = 0; A.node.connect(sink); sink.connect(A.ctx.destination);
+      } else {
+        const sp = A.ctx.createScriptProcessor(4096, 1, 1);
+        let buf = [], acc = 0;
+        sp.onaudioprocess = (e) => {
+          const ch = e.inputBuffer.getChannelData(0); const ratio = A.ctx.sampleRate / 16000;
+          for (let i = 0; i < ch.length; i++) { acc += 1; if (acc >= ratio) { acc -= ratio; buf.push(ch[i]); } }
+          while (buf.length >= 1600) { const pcm = new Int16Array(1600); let s = 0; for (let i = 0; i < 1600; i++) { const v = Math.max(-1, Math.min(1, buf[i])); pcm[i] = v < 0 ? v * 32768 : v * 32767; s += v * v; } buf = buf.slice(1600); if (A.onLevel) A.onLevel(Math.sqrt(s / 1600)); if (!A.muted && A.onChunk) A.onChunk(pcm.buffer); }
+        };
+        src.connect(sp); const sink = A.ctx.createGain(); sink.gain.value = 0; sp.connect(sink); sink.connect(A.ctx.destination);
+        A.node = sp;
+      }
+    };
+    A.play = (ab) => {
+      if (!A.ctx) return;
+      const i16 = new Int16Array(ab); const n = i16.length; if (!n) return;
+      const buf = A.ctx.createBuffer(1, n, 24000); const d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = i16[i] / 32768;
+      const s = A.ctx.createBufferSource(); s.buffer = buf; s.connect(A.ctx.destination);
+      const now = A.ctx.currentTime; if (A.playAt < now + 0.06) A.playAt = now + 0.06;
+      s.start(A.playAt); A.playAt += buf.duration; A.sources.push(s);
+      s.onended = () => { const k = A.sources.indexOf(s); if (k >= 0) A.sources.splice(k, 1); };
+    };
+    A.playing = () => Boolean(A.ctx) && A.playAt > A.ctx.currentTime + 0.02;
+    A.flush = () => { for (const s of A.sources) { try { s.stop(); } catch (e) {} } A.sources = []; A.playAt = 0; };
+    A.close = () => { A.flush(); if (A.stream) for (const t of A.stream.getTracks()) t.stop(); if (A.ctx) A.ctx.close().catch(() => {}); A.ctx = null; A.stream = null; };
+    return A;
+  }
+`;

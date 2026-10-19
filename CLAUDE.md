@@ -20,14 +20,15 @@
 - `src/schema/` 契约(zod,类型即文档);`src/lib/` 纯函数,离屏可测;`src/cards/` 卡的注册表;`src/clis/` 各 agent CLI 的适配器(一家一个文件,读输出、关工具、环境、出厂模板都在里面,别处只认统一事件)
 - `src/paint/` 你说我画的画图卡在后台画(百炼文生图,同步接口):拼提示词、画、落盘到卡的资产目录、下发时补画好没有;runner 一轮跑完起它,app 的孩子 / 家长那天接一行;设计在 `docs/wip/你说我画设想.md`
 - `src/stage/` 舞台包(React,esbuild 打到 `dist/stage/`);`src/cli/` 命令;`src/server/` 服务、runner、页面,地址按端分:孩子端 `/`、`/dictation`、`/talk`(孩子自己拍口语单、跟读、打电话);家长端都在 `/parent` 下(记录 `/parent`、设首页 `/parent/home`、听写 `/parent/dictation`、口语课录像 `/parent/talk/reel`、小老师 `/parent/xlaoshi`);工作台都在 `/dev` 下(扫码 `/dev/qr`、按住说话试验页 `/dev/voice-test`)。录像里孩子的屏幕(`/reel`、`/dictation?reel=`)与家长「首页」里的预览(`/preview`)是孩子端页面本身,只开在家长端的 iframe 里;孩子端页面的源码里不出现 `/parent`,家长清单上的跳转由服务端只在家长模式塞进 `MODE.links`、mock;家长端与工作台的锁在 `src/server/access.ts`(机器级 PIN,`cotutor pin`;没设就全开;孩子端新加的路径要在那里的白名单登记,`tests/access.test.ts` 盯着)
-- 一个场景一个目录、cotutor 只在 app.ts 接一行的模块:`src/xlaoshi/`(小老师,`/parent/xlaoshi`)、`src/talk/`(口语课,孩子 `/talk`、家长只有录像 `/parent/talk/reel`:百炼 realtime 直连,自带零依赖 WebSocket 服务端,serve.ts 的 upgrade 多接一行)、`src/dictation/`(听写,`/dictation`:从首页的 `dictation` 卡点进来,所以多了卡的注册、kid-page 画卡、mock 接一行;老师卡上常驻「拍照听写」,照片交百炼视觉模型流式认词;英文单词听写是另一页 `/dictation?lang=en`(四线三格,不逐字母比);比对照搬 hanzi-writer 的一笔像不像,改它先过 `tests/dictation.test.ts`,页面走 `scripts/probe-dictation.mjs` 与 `probe-dictation-en.mjs`);设计在 `docs/wip/`
+- `src/live/` realtime 那条线的共用件:百炼 realtime 客户端、零依赖 WebSocket 服务端、录像记录(`CallRecorder`:进出消息带毫秒、两边声音按到达时刻混成 `call.wav`)、孩子端采音放音的内联源;口语课用它,实时老师(`docs/wip/实时老师设想.md`)也用它
+- 一个场景一个目录、cotutor 只在 app.ts 接一行的模块:`src/xlaoshi/`(小老师,`/parent/xlaoshi`)、`src/talk/`(口语课,孩子 `/talk`、家长只有录像 `/parent/talk/reel`:百炼 realtime 直连,那条线用 `src/live/`,serve.ts 的 upgrade 多接一行)、`src/dictation/`(听写,`/dictation`:从首页的 `dictation` 卡点进来,所以多了卡的注册、kid-page 画卡、mock 接一行;老师卡上常驻「拍照听写」,照片交百炼视觉模型流式认词;英文单词听写是另一页 `/dictation?lang=en`(四线三格,不逐字母比);比对照搬 hanzi-writer 的一笔像不像,改它先过 `tests/dictation.test.ts`,页面走 `scripts/probe-dictation.mjs` 与 `probe-dictation-en.mjs`);设计在 `docs/wip/`
 - `tests/` 一文件一子进程,零依赖 `check()`;`_fake-cli.ts` / `_fake-tts.ts` 让全流程不花钱;`fixtures/board/` 真跑样本
 
 ## 运行与验证
 
 - `pnpm typecheck`;`pnpm test`;`node bin/cotutor.js --help`(bin 直跑 src,Node ≥ 22.18)
 - 改了 `cards/` 下的 md、`src/lib/*-doc.ts` 跑 `pnpm run gen:skills`(不跑 skills.test 会红);改了 `src/stage/` 跑 `pnpm run build:stage`(dist 不在 git,没打包时舞台开不了)
-- 改解析器或卡先过 `tests/board.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」;改 `src/clis/` 先过 `tests/clis.test.ts` 与 `tests/qwen.test.ts`(假 CLI 有 qwen 方言);改 `src/talk/` 先过 `tests/talk*.test.ts`(假百炼 `tests/_fake-realtime.ts`),页面走 `scripts/probe-talk-page.mjs`(加 `--real` 真连一次几分钱),Safari 的音频路径走 `scripts/probe-talk-webkit.mjs`(WebKit,假麦克风是振荡器),协议走 `scripts/probe-talk.mjs`
+- 改解析器或卡先过 `tests/board.test.ts`;改页面模板后 mock.test 兜「内联脚本能解析」;改 `src/clis/` 先过 `tests/clis.test.ts` 与 `tests/qwen.test.ts`(假 CLI 有 qwen 方言);改 `src/talk/` 或 `src/live/` 先过 `tests/talk*.test.ts` 与 `tests/live*.test.ts`(假百炼 `tests/_fake-realtime.ts`),页面走 `scripts/probe-talk-page.mjs`(加 `--real` 真连一次几分钱),Safari 的音频路径走 `scripts/probe-talk-webkit.mjs`(WebKit,假麦克风是振荡器),协议走 `scripts/probe-talk.mjs`
 - 改 activity 文件或 `src/lib/activity.ts` 先过 `tests/activity.test.ts`(出厂那份画家的画风要和 `paint.prompt` 缺省一字不差),workspace 里的跑 `cotutor activity check`
 - 改工作台(`src/server/dev-*.ts`、`qr-page.ts`、`voice-test-page.ts`)先过 `tests/dev-overview.test.ts`、`tests/dev-activities.test.ts` 与 `tests/dev-tutor-files.test.ts`,颜色只用 `dev-theme.ts` 的变量;页面走 `scripts/probe-dev.mjs`(只看不改)
 - 改 `src/paint/` 或画图卡先过 `tests/paint.test.ts`(假百炼、假老师全流程),页面走 `scripts/probe-paint.mjs`;真画按张计费,一天最多 `paint.daily` 张

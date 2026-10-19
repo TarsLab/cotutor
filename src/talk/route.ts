@@ -25,10 +25,10 @@ import { makeHint } from './hint.ts';
 import { readList, wordCardOf } from './list.ts';
 import { talkPage } from './page.ts';
 import { TALK_REEL_PAGE } from './reel-page.ts';
-import { dashscopeAuth } from './realtime.ts';
+import { dashscopeAuth } from '../live/realtime.ts';
 import { TalkCall } from './relay.ts';
 import { ID_RE, createTalk, deleteTalk, dirOf, listTalks, readMeta, readTalk, writeMeta } from './store.ts';
-import { acceptWebSocket, isUpgrade } from './ws.ts';
+import { acceptWebSocket, isUpgrade } from '../live/ws.ts';
 
 export interface TalkDeps {
   /** 照片 → 口语单(测试换假的) */

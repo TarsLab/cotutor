@@ -6,7 +6,7 @@
  *   long = true 时回答只出一半、不 done(等 cancel);cancel 在有回答时回 done:cancelled,没有就报错
  */
 import { createServer, type Server } from 'node:http';
-import { acceptWebSocket, isUpgrade, type ServerSocket } from '../src/talk/ws.ts';
+import { acceptWebSocket, isUpgrade, type ServerSocket } from '../src/live/ws.ts';
 
 export interface FakeConn {
   sock: ServerSocket;

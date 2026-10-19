@@ -23,7 +23,7 @@ const { createContext, createHandler } = await import('../src/server/app.ts');
 const { makeTalkRoute, makeTalkUpgrade, parseItems, photoData } = await import('../src/talk/route.ts');
 const { parseList, readList } = await import('../src/talk/list.ts');
 const { appears, usedIn } = await import('../src/talk/lib/used.ts');
-const { pcmOfWav, wavOfPcm, rms } = await import('../src/talk/lib/wav.ts');
+const { pcmOfWav, wavOfPcm, rms } = await import('../src/live/lib/wav.ts');
 const { readInstructions, chatInstructions, readSummary } = await import('../src/talk/prompt.ts');
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));

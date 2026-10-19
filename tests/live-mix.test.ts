@@ -1,9 +1,11 @@
 /**
- * 口语课录像的声音(src/talk/lib/mix.ts,《口语课设计.md》§8.3):两边按到达时刻摆成一条、老师的块照孩子端的排法排、flush 截断、老师出声的时段。纯函数。
+ * 录像的声音(src/live/lib/mix.ts,《口语课设计.md》§8.3):两边按到达时刻摆成一条、老师的块照孩子端的排法排、flush 截断、老师出声的时段。纯函数。
+ * 录像记录(src/live/recorder.ts):进出的消息带毫秒、flush 消息记成清队列、开口前垫的块带自己的时刻、屏幕尺寸、finish 拼出 reel.json 与声音。
  */
 import { check, done } from './_check.ts';
 
-const { MIX_RATE, mixCall, playingOf, scheduleTutor } = await import('../src/talk/lib/mix.ts');
+const { MIX_RATE, mixCall, playingOf, scheduleTutor } = await import('../src/live/lib/mix.ts');
+const { CallRecorder } = await import('../src/live/recorder.ts');
 
 /** 一块 PCM16:n 毫秒、值 v(rate 采样率) */
 const block = (ms: number, v: number, rate: number): Buffer => { const n = Math.round((ms * rate) / 1000); const b = Buffer.alloc(n * 2); for (let i = 0; i < n; i++) b.writeInt16LE(v, i * 2); return b; };
@@ -27,6 +29,28 @@ const at = (pcm: Buffer, ms: number): number => pcm.readInt16LE(Math.round((ms *
   check('挂断那一刻还没放完的不要;出声的时段截到挂断', end.pcm.length === 1000 * 48 && JSON.stringify(end.playing) === '[[960,1000]]', JSON.stringify(end.playing));
   const loud = mixCall({ kid: [{ t: 100, pcm: block(100, 30000, 16000) }], tutor: [{ t: 0, pcm: block(200, 30000, MIX_RATE) }], flushes: [], ms: 300 });
   check('两边叠在一起削顶,不绕回', at(loud.pcm, 80) === 32767, String(at(loud.pcm, 80)));
+}
+
+{
+  // 假钟:每一步自己拨
+  let clock = Date.parse('2026-10-19T10:00:00.000Z');
+  const rec = new CallRecorder(() => new Date(clock));
+  clock += 500; rec.in({ t: 'view', w: 1180.4, h: 820 });
+  rec.view(1180.4, 820);
+  rec.view(-1, 'x');
+  clock += 500; rec.out({ t: 'tutor', delta: '你好' });
+  rec.tutor(block(200, 2000, MIX_RATE));
+  clock += 300; rec.kid(block(100, 1000, 16000), 900);
+  clock += 200; rec.out({ t: 'flush' });
+  clock += 100; rec.flush();
+  clock += 400;
+  const take = rec.finish();
+  check('录像记录:消息带离开始的毫秒与方向', JSON.stringify(take.reel.msgs.map((m) => [m[0], m[1], m[2].t])) === '[[500,"i","view"],[1000,"o","tutor"],[1500,"o","flush"]]', JSON.stringify(take.reel.msgs));
+  check('录像记录:屏幕尺寸取整、不像样的不记;开始时刻、时长', JSON.stringify(take.reel.view) === '[1180,820]' && take.reel.startedAt === '2026-10-19T10:00:00.000Z' && take.ms === 2000 && take.reel.ms === 2000, JSON.stringify([take.reel.view, take.reel.startedAt, take.ms]));
+  // 老师的块 1000 到、1060 起放 200 毫秒;1500 那条 flush 把 1260 之后的截掉(本来就放完了),1600 又清一次
+  check('录像记录:flush 消息与页面自己清都截老师的声音;出声时段', JSON.stringify(take.reel.playing) === '[[1060,1260]]', JSON.stringify(take.reel.playing));
+  check('录像记录:开口前垫的块按它自己的时刻摆(900 到,声音在 800–900)', at(take.callPcm, 850) === 1000 && at(take.callPcm, 950) === 0, `${at(take.callPcm, 850)} ${at(take.callPcm, 950)}`);
+  check('录像记录:两边各自首尾相接的原声', take.kidPcm.length === 100 * 16 * 2 && take.tutorPcm.length === 200 * 24 * 2 && take.callPcm.length === 2000 * 48);
 }
 
 done();

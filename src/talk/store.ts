@@ -11,10 +11,11 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Usage } from './realtime.ts';
+import type { Usage } from '../live/realtime.ts';
+import type { CallReel } from '../live/recorder.ts';
 import { usedIn, type Line, type TalkList, type Used } from './lib/used.ts';
-import { MIX_RATE } from './lib/mix.ts';
-import { wavOfPcm } from './lib/wav.ts';
+import { MIX_RATE } from '../live/lib/mix.ts';
+import { wavOfPcm } from '../live/lib/wav.ts';
 
 export const ID_RE = /^\d{4}-\d{2}-\d{2}-\d{4}(?:-\d{1,2})?$/;
 
@@ -96,11 +97,8 @@ export async function listTalks(root: string): Promise<TalkMeta[]> {
 
 export const deleteTalk = (root: string, id: string): Promise<void> => rm(dirOf(root, id), { recursive: true, force: true });
 
-/**
- * 录像的数据(《口语课设计.md》§8.3):发给孩子端 / 孩子端发来的每条消息带毫秒、老师出声的时段、孩子有声的时段、屏幕多大;
- * 声音另在 call.wav(两边按到达时刻混成一条,24k 单声道,lib/mix.ts)
- */
-export interface TalkReel { v: 1; startedAt: string; ms: number; view: [number, number] | null; msgs: [number, 'o' | 'i', Record<string, unknown>][]; playing: [number, number][]; kidVoice: [number, number][] }
+/** 录像的数据(《口语课设计.md》§8.3):形状见 src/live/recorder.ts;声音另在 call.wav */
+export type TalkReel = CallReel;
 
 /** 通话完了:字、用量、用到的词、两边的声音、录像一起落盘;meta 标 done */
 export async function finishCall(root: string, meta: TalkMeta, call: { startedAt: string; ms: number; why: string; model: string; voice: string; items: number; read: number; lines: Line[]; usage: Usage; kidPcm: Buffer; tutorPcm: Buffer; kidRate: number; tutorRate: number; reel?: TalkReel; callPcm?: Buffer }): Promise<void> {

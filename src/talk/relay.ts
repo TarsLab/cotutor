@@ -11,7 +11,7 @@
  *   {t:'hint', n, zh, en, opts, by}(聊那段老师说完一句的提示卡,hint.ts;孩子端 4 秒没出声或点小灯泡才露出来)
  *   rd(跟读段)= {mode: tutor|listen|speech|heard|wait, left: 离自动再读还有几毫秒 | null, wait: 一共等几毫秒, again: 这句自动再读了几遍}
  *
- * 录像(§8.3,录数据不录屏幕):发给孩子端的每条消息、孩子端发来的每条都带毫秒记下(reel.json),两边的声音照到达时刻混成 call.wav(lib/mix.ts);
+ * 录像(§8.3,录数据不录屏幕):发给孩子端的每条消息、孩子端发来的每条都带毫秒记下(reel.json),两边的声音照到达时刻混成 call.wav(src/live/recorder.ts);
  *   录像模式把这些消息原样喂回孩子端页面自己的处理函数,画出来就是孩子当时看到的。
  *
  * 轮次:跟读段手动轮次,但不用按(§8.1,lib/read-flow.ts)——孩子端在老师放声时不推,这里按响度判开口 / 停:开口起把声音(带 300 毫秒前垫)推给模型,
@@ -22,13 +22,14 @@
 import type { TalkConfig } from '../schema/config.ts';
 import { readInit, readLeft, readStep, vadInit, vadStep, type ReadEvent, type ReadState, type Vad } from './lib/read-flow.ts';
 import { appears, itemsOf, type Line } from './lib/used.ts';
-import { mixCall, type Chunk } from './lib/mix.ts';
-import { rms } from './lib/wav.ts';
+import type { Chunk } from '../live/lib/mix.ts';
+import { rms } from '../live/lib/wav.ts';
+import { CallRecorder } from '../live/recorder.ts';
 import { makeHint } from './hint.ts';
 import { chatCloseCue, chatInstructions, chatOpenCue, readAgainCue, readCue, readInstructions, readLastCue, readNextCue, readSummary, type ReadItem } from './prompt.ts';
-import { INPUT_RATE, OUTPUT_RATE, RealtimeSession, type Usage } from './realtime.ts';
+import { INPUT_RATE, OUTPUT_RATE, RealtimeSession, type Usage } from '../live/realtime.ts';
 import { finishCall, type TalkMeta } from './store.ts';
-import type { ServerSocket } from './ws.ts';
+import type { ServerSocket } from '../live/ws.ts';
 
 export interface CallDeps {
   root: string;
@@ -77,15 +78,9 @@ export class TalkCall {
   private idleTimer: NodeJS.Timeout | null = null;
   private readonly lines: Line[] = [];
   private readonly kidLines: string[] = [];
-  /** 两边的声音,每块带到达的毫秒(混 call.wav 用) */
-  private readonly kidPcm: Chunk[] = [];
-  private readonly tutorPcm: Chunk[] = [];
-  /** 录像:发出去 / 收进来的每条消息 [毫秒, o|i, 消息];孩子端清播放队列的时刻;屏幕多大 */
-  private readonly rec: [number, 'o' | 'i', Record<string, unknown>][] = [];
-  private readonly flushes: number[] = [];
-  private view: [number, number] | null = null;
+  /** 录像:进出的每条消息、两边的声音、清播放队列的时刻、屏幕多大(也是这次通话的钟) */
+  private readonly rec: CallRecorder;
   private usage: Usage = { input: 0, output: 0, inputAudio: 0, outputAudio: 0 };
-  private readonly startedAt: Date;
   private deadline: number | null = null;
   private closing = false;
   private ended = false;
@@ -101,14 +96,12 @@ export class TalkCall {
     this.sock = sock;
     this.deps = deps;
     this.items = itemsOf(meta.list).map((it, k) => ({ ...it, word: k < meta.list.words.length }));
-    this.startedAt = (deps.now ?? (() => new Date()))();
+    this.rec = new CallRecorder(deps.now);
   }
 
-  private ms(): number { return (this.deps.now ?? (() => new Date()))().getTime() - this.startedAt.getTime(); }
+  private ms(): number { return this.rec.ms(); }
   private send(o: Record<string, unknown>): void {
-    const t = this.ms();
-    this.rec.push([t, 'o', o]);
-    if (o.t === 'flush') this.flushes.push(t);
+    this.rec.out(o);
     this.sock.sendText(JSON.stringify(o));
   }
   private state(): void {
@@ -135,7 +128,7 @@ export class TalkCall {
       onAudio: (pcm) => {
         if (this.firstAudioAt === null) this.firstAudioAt = this.ms();
         this.answerBytes += pcm.length;
-        this.tutorPcm.push({ t: this.ms(), pcm });
+        this.rec.tutor(pcm);
         this.sock.sendBinary(pcm);
       },
       onTutorText: (delta, done) => {
@@ -240,7 +233,7 @@ export class TalkCall {
     if (this.ended) return;
     let m: { t?: unknown };
     try { m = JSON.parse(raw) as { t?: unknown }; } catch { return; }
-    if (typeof m.t === 'string' && ['again', 'next', 'chat', 'bye', 'say', 'view', 'hint'].includes(m.t)) this.rec.push([this.ms(), 'i', m as Record<string, unknown>]);
+    if (typeof m.t === 'string' && ['again', 'next', 'chat', 'bye', 'say', 'view', 'hint'].includes(m.t)) this.rec.in(m as Record<string, unknown>);
     switch (m.t) {
       case 'again':
         // 孩子点的「再听一遍」不算自动再读的次数
@@ -260,7 +253,7 @@ export class TalkCall {
         break;
       case 'view': {
         const v = m as { w?: unknown; h?: unknown };
-        if (typeof v.w === 'number' && typeof v.h === 'number' && v.w > 0 && v.h > 0) this.view = [Math.round(v.w), Math.round(v.h)];
+        this.rec.view(v.w, v.h);
         break;
       }
       default: break;
@@ -272,7 +265,7 @@ export class TalkCall {
     if (this.ended || !this.session?.isReady) return;
     if (this.phase === 'read') { this.readAudio(pcm); return; }
     this.lastKidAudioAt = this.ms();
-    this.kidPcm.push({ t: this.ms(), pcm });
+    this.rec.kid(pcm);
     this.session.appendAudio(pcm);
   }
 
@@ -297,12 +290,12 @@ export class TalkCall {
     this.vad = v;
     if (ev === 'start') {
       this.pushing = true;
-      for (const b of [...this.preroll, { t: now, pcm }]) { this.kidPcm.push(b); this.session?.appendAudio(b.pcm); }
+      for (const b of [...this.preroll, { t: now, pcm }]) { this.rec.kid(b.pcm, b.t); this.session?.appendAudio(b.pcm); }
       this.preroll.length = 0;
       this.readEvent({ e: 'start', t: this.ms() });
       return;
     }
-    if (this.pushing) { this.kidPcm.push({ t: now, pcm }); this.session?.appendAudio(pcm); }
+    if (this.pushing) { this.rec.kid(pcm, now); this.session?.appendAudio(pcm); }
     else { this.preroll.push({ t: now, pcm }); if (this.preroll.length > PREROLL) this.preroll.shift(); }
     if (ev === 'stop') this.readEvent({ e: 'stop', t: this.ms() });
   }
@@ -319,7 +312,7 @@ export class TalkCall {
     old?.close('read-done');
     this.phase = 'chat';
     // 孩子端换到聊那一刻清播放队列(页面收到 phase chat 就 A.flush)
-    this.flushes.push(this.ms());
+    this.rec.flush();
     this.state();
     const cfg = this.deps.config;
     const s = new RealtimeSession({ instructions: chatInstructions(this.meta.list, this.deps.kidName, cfg.minutes, readSummary(this.meta.list, read, this.kidLines), cfg.note ?? ''), voice: cfg.voice, model: cfg.model, turn: 'semantic_vad', silenceMs: cfg.silenceMs, endpoint: this.deps.endpoint, env: this.deps.env }, this.events());
@@ -368,12 +361,10 @@ export class TalkCall {
     this.phase = 'ended';
     this.send({ t: 'end', why });
     try {
-      const ms = this.ms();
-      const mix = mixCall({ kid: this.kidPcm, tutor: this.tutorPcm, flushes: this.flushes, ms });
+      const take = this.rec.finish();
       await finishCall(this.deps.root, this.meta, {
-        startedAt: this.startedAt.toISOString(), ms, why, model: this.deps.config.model, voice: this.deps.config.voice, items: this.items.length, read, lines: this.lines, usage: this.usage,
-        kidPcm: Buffer.concat(this.kidPcm.map((c) => c.pcm)), tutorPcm: Buffer.concat(this.tutorPcm.map((c) => c.pcm)), kidRate: INPUT_RATE, tutorRate: OUTPUT_RATE,
-        reel: { v: 1, startedAt: this.startedAt.toISOString(), ms, view: this.view, msgs: this.rec, playing: mix.playing, kidVoice: mix.kidVoice }, callPcm: mix.pcm,
+        startedAt: take.reel.startedAt, ms: take.ms, why, model: this.deps.config.model, voice: this.deps.config.voice, items: this.items.length, read, lines: this.lines, usage: this.usage,
+        kidPcm: take.kidPcm, tutorPcm: take.tutorPcm, kidRate: INPUT_RATE, tutorRate: OUTPUT_RATE, reel: take.reel, callPcm: take.callPcm,
       });
     } catch (err) {
       console.error('talk: 落盘失败', err);

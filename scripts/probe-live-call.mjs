@@ -28,6 +28,7 @@ const { loadWorkspace } = await import(join(repo, 'src', 'cli', 'workspace.ts'))
 const { createContext, createHandler } = await import(join(repo, 'src', 'server', 'app.ts'));
 const { makeLiveUpgrade } = await import(join(repo, 'src', 'live', 'route.ts'));
 const { wavOfPcm } = await import(join(repo, 'src', 'live', 'lib', 'wav.ts'));
+const { addChunk, playbackInit } = await import(join(repo, 'src', 'live', 'lib', 'playback.ts'));
 
 // ---- 临时 workspace:出厂老师(qwen),语文老师开实时 ----
 const wsRoot = join(out, 'ws');
@@ -83,7 +84,9 @@ for (const [date, job] of says) {
   await until(() => msgs.slice(n0).filter((x) => x.t === 'read').flatMap((x) => x.lines).length >= lines.length, 60000);
   // 等这一轮的声音在孩子端放完再按下一轮(2026-10-19 第一版只等 4 秒,把最后一段掐了):不再来声音了,按收到的字节算放到哪
   await until(() => audio.length > a0 && T() - audio[audio.length - 1].at > 1000, 60000);
-  { const got = audio.slice(a0); const playEnd = got[0].at + got.reduce((n, x) => n + x.pcm.length, 0) / 48; while (T() < playEnd + 500) await sleep(100); }
+  // 照孩子端的排法算(到达 + 60 毫秒或上一块放完,取晚的):接住和第一段之间等脑的那几秒不能当成在放
+  const playEnd = audio.slice(a0).reduce((p, x) => addChunk(p, 0, x.at, x.pcm.length / 48).p, playbackInit()).end;
+  while (T() < playEnd + 500) await sleep(100);
   const mine = msgs.slice(n0);
   const pcmOut = Buffer.concat(audio.slice(a0).map((x) => x.pcm));
   const wav = `turn-${job}.wav`;
@@ -99,7 +102,7 @@ for (const [date, job] of says) {
     `- 嘴接住:「${dones[0] ?? ''}」,松手到首包 ${firstAudio} ms`,
     `- 脑:${turn?.job},讲稿 ${lines.length} 句、${sec?.cards?.length ?? 0} 张卡(${(sec?.cards ?? []).map((c) => c.kind).join('、')})`,
     `- 松手到第一段开始放 ${firstRead} ms(孩子端放到那一刻发 {t:read});念了 ${reads.length} 次`,
-    `- 嘴的声音一共 ${(totalMs / 1000).toFixed(1)} 秒;松手到放完约 ${((audio.slice(a0)[0]?.at ?? 0) / 1000 + totalMs / 1000).toFixed(1)} 秒(声音接着排、中间不空时)`,
+    `- 嘴的声音一共 ${(totalMs / 1000).toFixed(1)} 秒;松手到放完 ${(audio.slice(a0).reduce((p, x) => addChunk(p, 0, x.at, x.pcm.length / 48).p, playbackInit()).end / 1000).toFixed(1)} 秒(照孩子端的排法算)`,
     `- 嘴念的:${dones.slice(1).join('')}`,
     `- 讲稿:${lines.join('')}`,
     `- 对得上:${dones.slice(1).join('').replace(/[\s,，。!！?？、;；:：「」“”"']/g, '') === lines.join('').replace(/[\s,，。!！?？、;；:：「」“”"']/g, '') ? '一字不差' : '有出入'}`,

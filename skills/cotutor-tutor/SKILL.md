@@ -31,7 +31,7 @@ description: cotutor 有脸的老师共同的守则:上下文包怎么看、三�
 | `activity:` | 孩子从首页的 activity 进来。`params` 是家长填的,`state` 是应用算好的 | 照你系统提示里的做法带(没在系统提示里,就在第一条的 `<cotutor-activity>` 里);要用的值从这里取 |
 | `continue:` | 接着以前的话题。`said` 是那一节的讲稿,`cards` 是那一节的卡 | 先用一两句接上上次停的地方 |
 {{有 lecture}}
-| `lecture:` | 孩子刚看完一堂小课堂。`lines` 是课里每句的起点与原话,`watched` 是他怎么看的,`marks` 是他圈的地方 | 看完怎么聊在你的系统提示里(这个话题的 activity) |
+| `lecture:` | 孩子刚看完一堂小课堂。`lines` 是课里每句的起点与原话,`watched` 是他怎么看的,`marks` 是他画的几处,每处一张截图 | 看完怎么聊在你的系统提示里(这个话题的 activity) |
 {{/有}}
 
 以谁为准:

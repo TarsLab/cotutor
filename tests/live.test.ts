@@ -36,13 +36,13 @@ function masked(opcode: number, payload: Buffer, fin = true): Buffer {
 }
 
 // ---- 假百炼:一个 http 服务,升级后照 realtime 的样子回事件 ----
-type Seen = { session?: Record<string, unknown>; updates: unknown[]; audio: number; items: unknown[]; commits: number; creates: number; cancels: number };
+type Seen = { session?: Record<string, unknown>; updates: unknown[]; audio: number; images: string[]; items: unknown[]; commits: number; creates: number; cancels: number };
 const conns: { sock: ServerSocket; seen: Seen }[] = [];
 let mode: 'ok' | 'error-on-update' | 'close-after-created' = 'ok';
 const server = createServer((_req, res) => { res.writeHead(404); res.end(); });
 server.on('upgrade', (req, socket, head) => {
   if (!isUpgrade(req)) { socket.destroy(); return; }
-  const seen: Seen = { updates: [], audio: 0, items: [], commits: 0, creates: 0, cancels: 0 };
+  const seen: Seen = { updates: [], audio: 0, images: [], items: [], commits: 0, creates: 0, cancels: 0 };
   let active = 0;
   const sock = acceptWebSocket(req, socket, head, {
     onText: (text) => {
@@ -57,6 +57,7 @@ server.on('upgrade', (req, socket, head) => {
         if (seen.audio > 0 && td && td.silence_duration_ms) { send({ type: 'error', error: { message: 'turn_detection.silence_duration_ms cannot change after audio append' } }); return; }
         send({ type: 'session.updated', session: { turn_detection: td ?? null } });
       } else if (m.type === 'input_audio_buffer.append') seen.audio += Buffer.from(String(m.audio), 'base64').length;
+      else if (m.type === 'input_image_buffer.append') seen.images.push(String(m.image));
       else if (m.type === 'input_audio_buffer.commit') { seen.commits++; send({ type: 'input_audio_buffer.committed' }); send({ type: 'conversation.item.input_audio_transcription.completed', transcript: ' It\'s a red car. ' }); }
       else if (m.type === 'conversation.item.create') seen.items.push(m.item);
       else if (m.type === 'response.cancel') { seen.cancels++; if (active) { active--; send({ type: 'response.done', response: { status: 'cancelled' } }); } else send({ type: 'error', error: { message: 'no active response' } }); }
@@ -120,7 +121,7 @@ const endpoint = `ws://127.0.0.1:${port}/api-ws/v1/realtime?model=test`;
   const s = new RealtimeSession({ instructions: '你是英语老师', voice: 'Serena', turn: 'manual', endpoint, env: { DASHSCOPE_API_KEY: 'sk-x' } }, {
     onAudio: (b) => audio.push(b), onTutorText: (d, w) => tutor.push([d, w]), onKidText: (t) => kid.push(t), onResponse: (st, status, u) => resp.push([st, status, u]), onError: (m) => errors.push(m), onClose: (r) => { closed = r; },
   });
-  check('没连上时发什么都回 false', !s.appendAudio(Buffer.alloc(10)) && !s.commit() && !s.createResponse() && !s.addText('x') && !s.isReady);
+  check('没连上时发什么都回 false', !s.appendAudio(Buffer.alloc(10)) && !s.appendImage(Buffer.from('jpg')) && !s.commit() && !s.createResponse() && !s.addText('x') && !s.isReady);
   const why = await s.connect();
   const c = conns[conns.length - 1];
   const sess = c.seen.session as Record<string, any>;
@@ -128,10 +129,12 @@ const endpoint = `ws://127.0.0.1:${port}/api-ws/v1/realtime?model=test`;
   s.addText('读这句:It\'s a red car.');
   s.appendAudio(Buffer.alloc(3200, 5));
   s.appendAudio(Buffer.alloc(1600, 5));
+  s.appendImage(Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
   s.commit();
   s.createResponse();
   const ok3 = await until(() => resp.some((r) => r[0] === 'done'));
   check('喂音频按字节到了;commit → 孩子转写(去空白);response.create → 声音块、字幕 delta 与整句、done 带 usage', ok3 && c.seen.audio === 4800 && c.seen.commits === 1 && kid[0] === 'It\'s a red car.' && audio[0]?.length === 4800 && tutor.filter((t) => t[1] === null).map((t) => t[0]).join('') === 'It\'s a red car.' && tutor.at(-1)?.[1] === 'It\'s a red car.' && resp[0][0] === 'created' && resp[1][1] === 'completed' && resp[1][2]?.input === 865 && resp[1][2]?.outputAudio === 20, JSON.stringify({ audio: c.seen.audio, kid, tutor, resp }).slice(0, 400));
+  check('appendImage:input_image_buffer.append,image 是 base64 的 JPEG(不带 data: 头)', c.seen.images.length === 1 && c.seen.images[0] === Buffer.from([0xff, 0xd8, 0xff, 0xe0]).toString('base64'), JSON.stringify(c.seen.images));
   const item = c.seen.items[0] as Record<string, any>;
   check('addText 的形状:user 消息,input_text', item?.type === 'message' && item.role === 'user' && item.content?.[0]?.type === 'input_text' && item.content[0].text.startsWith('读这句'), JSON.stringify(item));
   check('没有回答在出时 cancel 不发', !s.cancel() && c.seen.cancels === 0 && !s.responding);

@@ -4,7 +4,7 @@
  *
  * 协议(OpenAI realtime 同族,2026-10-10 真连核对):
  *   连上先收 session.created;发 session.update,收 session.updated 后才能喂音频。
- *   上行:input_audio_buffer.append {audio: base64 PCM16 16k 单声道} / commit / clear;response.create / cancel;
+ *   上行:input_audio_buffer.append {audio: base64 PCM16 16k 单声道} / commit / clear;input_image_buffer.append {image: base64 JPEG}(先有声音再有图,commit 时一起交);response.create / cancel;
  *         conversation.item.create {item: {type: message, role, content: [{type: input_text, text}]}}。
  *   下行:response.audio.delta {delta: base64 PCM16 24k};response.audio_transcript.delta / .done(老师的字);
  *         conversation.item.input_audio_transcription.completed {transcript}(孩子那句,qwen3-asr-flash-realtime 转的);
@@ -223,6 +223,8 @@ export class RealtimeSession {
 
   /** 一块孩子的声音(PCM16 16k 单声道) */
   appendAudio(pcm: Buffer): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.append', audio: pcm.toString('base64') }); }
+  /** 一张图(JPEG)跟着这一段声音交:百炼要先有声音再有图(Qwen-Live-Harness 也这样),commit 时一起进对话 */
+  appendImage(jpeg: Buffer): boolean { return this.isReady && this.sendRaw({ type: 'input_image_buffer.append', image: jpeg.toString('base64') }); }
   /** 手动轮次:松手 */
   commit(): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.commit' }); }
   clearAudio(): boolean { return this.isReady && this.sendRaw({ type: 'input_audio_buffer.clear' }); }

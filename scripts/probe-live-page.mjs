@@ -5,12 +5,12 @@
  * 无头 Chrome 带假麦克风开孩子端语文老师(新话题):
  *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴接住(字幕)→ 脑写的卡铺上、卡角是「?」、讲稿一句一句上字幕;
  *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点「?」= 问这张卡的一轮;不出卡的一轮板上留讲稿的字;嘴连不上回到板书;
- *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1)。
+ *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1);讲稿的 [[play]] 念完铺满放小课堂那一段,放完嘴才接着念(P3.2)。
  * iPad 横屏、手机各截一张。
  * 用法:node scripts/probe-live-page.mjs [--out <截图目录>] [--keep]
  */
 import { probeDir, spawn } from './_guard.mjs';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -238,6 +238,28 @@ try {
   const idx = JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${today.date}.json`), 'utf8'));
   const first = idx.messages.find((m) => m.thread === today.thread && m.from === 'kid');
   ok('首页点 activity:开实时;开场那条走嘴的连接(嘴说开场那句)、脑照 activity 带、实时轮', pub.ok && liveOn && started && sec && first?.activity?.name === '看图说话' && first?.live === true, JSON.stringify({ pub: pub.ok, liveOn, started, sec, activity: first?.activity?.name, live: first?.live }));
+
+  // ---- 讲稿的 [[play]](小课堂,P3.2):念完那句孩子端铺满放那一段,放完舞台停在末帧、告诉服务端,嘴才接着念后面的 ----
+  cpSync(join(repo, 'tests', 'fixtures', 'bundles', '2026-09-18-po13-jian-8'), join(wsRoot, 'bundles', '2026-09-18-po13-jian-8'), { recursive: true });
+  await evaluate(`document.querySelector('#back').click()`);
+  await sleep(300);
+  await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&new=1` });
+  await until(`Boolean(document.body && document.body.classList.contains('live'))`, 40);
+  await untilNode(() => Boolean(conn()?.session), 8000);
+  await sleep(400);
+  fake.kidText = '放课';
+  const said = (re) => conn().responses.some((r) => re.test(r?.instructions ?? ''));
+  const pp = await center('#mid');
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pp.x, y: pp.y, button: 'left', buttons: 1, clickCount: 1 });
+  await sleep(900);
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pp.x, y: pp.y, button: 'left', buttons: 0, clickCount: 1 });
+  const staged = await until(`Boolean(document.querySelector('#stage.on')) && document.querySelector('#st-kd').textContent === '小课堂'`, 120);
+  await sleep(1500);
+  const during = { rest: said(/拿走 8 根/), first: said(/我们回到那里再看一遍/) };
+  console.log('  ', await shot('live-lecture-ipad.png'));
+  const resumed = await untilNode(() => said(/拿走 8 根/), 30000);
+  const stillOpen = await evaluate(`Boolean(document.querySelector('#stage.on'))`);
+  ok('[[play]]:念完那句铺满放小课堂那一段,放着时嘴不往下念;放完舞台停在末帧不关、嘴接着念后面的', staged && during.first && !during.rest && resumed && stillOpen, JSON.stringify({ staged, during, resumed, stillOpen }));
 
   ok('页面没有报错', errors.length === 0, errors.slice(0, 3).join(' | '));
 } finally {

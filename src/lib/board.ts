@@ -141,6 +141,11 @@ function rawLine(line: string, cards: readonly BoardCard[], at: number): RawLine
   return { text, anchor, cues, line: at };
 }
 
+/** 这句的 [[play]] 锚着小课堂卡:念完放卡上那一段(实时时服务端在这句之后等孩子端放完再交讲稿,src/live/lib/queue.ts) */
+export function playsLecture(line: { cues?: readonly BoardCue[] }, cards: readonly BoardCard[]): boolean {
+  return (line.cues ?? []).some((c) => c.name === 'play' && cards[c.card]?.kind === 'lecture');
+}
+
 export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBoard {
   const partial = opts.partial === true;
   const all = text.split('\n');

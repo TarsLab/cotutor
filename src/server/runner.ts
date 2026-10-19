@@ -25,7 +25,7 @@ import { activityFile } from '../cli/activities.ts';
 import { activityState, paintGate, paintTool, readActivity, threadActivity } from './activity-state.ts';
 import { KouboQueue } from './koubo.ts';
 import { controlsTools, parserOf, prepareCli, processEnv, toolsOf, unexpectedTools, type ToolSet } from '../clis/index.ts';
-import { parseBoard } from '../lib/board.ts';
+import { parseBoard, playsLecture } from '../lib/board.ts';
 import { readyBeats, beatsOf, voicedLines, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
 import { createPartialReader } from '../lib/stream.ts';
@@ -818,7 +818,7 @@ export class Runner {
       active.partial = section.cards.length || lines.length ? { cards: section.cards, lines, partial: true, ready: readySeen, ...(voiced ? { voiced } : {}) } : null;
       if (section.cards.length && timing.firstCardMs === undefined) timing.firstCardMs = since();
       for (; cardsSeen < section.cards.length; cardsSeen++) emit({ lane: 'main', kind: 'card', card: cardsSeen, label: `${section.cards[cardsSeen].kind} ${cardLabel(section.cards[cardsSeen])}`.trim() });
-      for (; linesSeen < lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: lines[linesSeen].text });
+      for (; linesSeen < lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: lines[linesSeen].text, ...(playsLecture(lines[linesSeen], section.cards) ? { play: true as const } : {}) });
       if (dubber) lines.forEach((l, i) => { const p = dubber.add(i, l.text); if (p) void p.then((name) => { if (name && active.partial && active.partial.lines[i]) { lineAudio.set(i, name); active.partial.lines[i].audio = name; settleReady(); } }, () => {}); });
       settleReady();
     };
@@ -949,7 +949,7 @@ export class Runner {
     // 整块出的(没走流式):卡与句这时才第一次见到,也发一遍
     if (kidView.section) {
       for (; cardsSeen < kidView.section.cards.length; cardsSeen++) emit({ lane: 'main', kind: 'card', card: cardsSeen, label: `${kidView.section.cards[cardsSeen].kind} ${cardLabel(kidView.section.cards[cardsSeen])}`.trim() });
-      for (; linesSeen < kidView.section.lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: kidView.section.lines[linesSeen].text });
+      for (; linesSeen < kidView.section.lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: kidView.section.lines[linesSeen].text, ...(playsLecture(kidView.section.lines[linesSeen], kidView.section.cards) ? { play: true as const } : {}) });
     }
     // 配音:老师配了音色才合成;失败不响,孩子端用浏览器的声。
     // 逐句配(流式时大多已在路上,这里只等没配完的)。

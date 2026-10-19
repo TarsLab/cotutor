@@ -34,6 +34,20 @@ const run = (s: S, evs: Ev[]) => { const acts: any[] = []; for (const e of evs) 
   check('按着的时候来的拍不交;松手之后交', run(queueInit(), [{ e: 'hold' }, { e: 'beat', beat: b('j3', [0]) }]).acts[1] === null && run(queueInit(), [{ e: 'hold' }, { e: 'beat', beat: b('j3', [0]) }, { e: 'release' }]).acts[2]?.kind === 'read');
 }
 {
+  // 小课堂(讲稿的 [[play]]):并段到那句为止;交出去关闸,孩子端放完(staged)才交后面的;按下开闸
+  const pb = (job: string, i: number) => ({ ...b(job, [i]), play: true });
+  const r = run(queueInit(), [{ e: 'asked' }, { e: 'beat', beat: b('j1', [0]) }, { e: 'beat', beat: pb('j1', 1) }, { e: 'beat', beat: b('j1', [2]) }, { e: 'done' }]);
+  check('[[play]]:排着的并段到那句为止,那段带 play、关闸;后面的留着', r.acts[4]?.kind === 'read' && r.acts[4].beat.lines.join() === '0,1' && r.acts[4].beat.play === true && r.s.gated && r.s.pending.length === 1, JSON.stringify(r.acts[4]));
+  const r2 = run(r.s, [{ e: 'done' }, { e: 'beat', beat: b('j1', [3]) }]);
+  check('[[play]]:嘴出完那段、又来了拍,闸关着都不交', r2.acts.every((a) => a === null) && r2.s.pending.length === 2);
+  const r3 = run(r2.s, [{ e: 'staged' }]);
+  check('[[play]]:孩子端放完(staged)→ 开闸,后面的并成一段交', r3.acts[0]?.kind === 'read' && r3.acts[0].beat.lines.join() === '2,3' && !r3.acts[0].beat.play && !r3.s.gated, JSON.stringify(r3.acts[0]));
+  const r4 = run(r.s, [{ e: 'done' }, { e: 'hold', drop: 'j1' }]);
+  check('[[play]]:闸关着时孩子按下 → 排着的丢、闸开(下一轮照常)', r4.acts[1]?.kind === 'dropped' && !r4.s.gated && r4.s.pending.length === 0);
+  const r5 = run(queueInit(), [{ e: 'beat', beat: pb('j2', 0) }]);
+  check('[[play]]:嘴空着时来的那拍直接交、关闸', r5.acts[0]?.kind === 'read' && r5.acts[0].beat.play === true && r5.s.gated);
+}
+{
   // 声音:两次回答的块到达 1000、1010(各 200 毫秒)与 1100(100 毫秒):接着排,中间不空
   let p = playbackInit<string>();
   const a1 = addChunk(p, 'catch', 1000, 200); p = a1.p;

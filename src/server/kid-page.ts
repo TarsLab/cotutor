@@ -764,7 +764,7 @@ __AUDIO_JS__
   S.pdate = null;
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
-  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null };
+  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, lcPending: false };
   /** 实时的一节露到 / 画到第几句:这次连着念的轮(jobs)只到嘴念到的那句(脑写完了、嘴还没念到的不先露;被打断没念到的就不露);
    *  别的(重开页面、以前的、板书的)整节 → undefined */
   const liveHeard = (s) => (s && s.live && LV.on && LV.jobs.has(s.job) ? (LV.heard.has(s.job) ? LV.heard.get(s.job) : -1) : undefined);
@@ -2246,7 +2246,7 @@ __WORD_DRAW_JS__
     else if (m.type === 'submit') { card.state = m.state; const id = S.stage.id; const job = S.sections[S.stage.section].job; const idx = S.stage.card; closeStage(); api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id } })); }
     else if (m.type === 'close' || m.type === 'error') { const d = S.stage; closeStage(); if (d.delegate) resumeAfter(d); }
   });
-  const resumeAfter = () => dispatch({ type: 'stageDone' });
+  const resumeAfter = () => { if (LV.on) liveDispatch({ type: 'lectureDone' }); else dispatch({ type: 'stageDone' }); };
   const closeStage = () => { if (S.stage && S.sections[S.stage.section]) playRec({ k: 'stage', job: S.sections[S.stage.section].job, card: S.stage.card, open: false }); recStop(false);
     // 单词卡舞台:自动那一遍停下,慢念也停
     for (const v of document.querySelectorAll('#st-body video')) { try { v.pause(); } catch {} }
@@ -2742,6 +2742,26 @@ __WORD_DRAW_JS__
     } catch { ls.replaceChildren(); }
   });
   const blobDataUrl = (blob) => new Promise((resolve, reject) => { const fr = new FileReader(); fr.onload = () => resolve(fr.result); fr.onerror = () => reject(fr.error); fr.readAsDataURL(blob); });
+  /**
+   * 小课堂:看完后的第一条带看的情况与画的;问过以后再看一遍又画了,下一条带新画的(板书、实时都走这里)。
+   * 画的一处带截图:先传成 captures/ 里的文件(同照片),换成路径;传不上就不带这张图。时刻换成离发出去多少毫秒(孩子端自己的钟,不用对钟)
+   */
+  const lectureBody = async () => {
+    const L = S.lecture;
+    if (!L || !L.watch) return null;
+    if (L.marks && L.marks.some((k) => k.image && k.image.startsWith('data:'))) {
+      for (const k of L.marks) if (k.image && k.image.startsWith('data:')) { try { const r = await api('POST', CONV + S.tutor.name + '/photos', { image: k.image }); k.image = r.path; } catch { delete k.image; } }
+    }
+    const sentAt = Date.now();
+    if (L.sent && !L.marks.length && !L.log.length) return null;
+    return { bundle: L.bundle, ...(L.sent ? (L.rewatch || { watchedMs: 0, finished: false, pauses: 0 }) : L.watch), ...(L.marks.length ? { marks: L.marks.map((k) => ({ atMs: k.atMs, strokes: k.strokes, ...(k.image ? { image: k.image } : {}), ...(k.at ? { t: Math.min(0, k.at - sentAt) } : {}) })) } : {}), ...(L.log.length ? { log: L.log.map((e) => ({ t: Math.min(0, e.at - sentAt), pos: e.pos, play: e.play })) } : {}) };
+  };
+  /** 带着小课堂的那条发出去了:画的挪到「飞着的」(画在回答它的那节前面),job 是那一轮(实时的到 turn 才知道,先 null) */
+  const lectureSent = (job) => {
+    const L = S.lecture;
+    if (!L) return;
+    L.flying = L.marks; L.marks = []; L.log = []; if (!L.sent) L.firstJob = job; L.sent = true; L.job = job; L.rewatch = null; renderLecturePending();
+  };
   const send = async (text, opts = {}) => {
     text = (text || '').trim();
     if (!text && !opts.action && !(opts.photos && opts.photos.length)) return;
@@ -2760,19 +2780,12 @@ __WORD_DRAW_JS__
     if (focus) body.focus = focus;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
-    // 小课堂:看完后的第一条带看的情况与画的;问过以后再看一遍又画了,下一条带新画的
-    const L = S.lecture;
-    // 画的一处带截图:先传成 captures/ 里的文件(同照片),换成路径;传不上就不带这张图
-    if (L && L.marks && L.marks.some((k) => k.image && k.image.startsWith('data:'))) {
-      for (const k of L.marks) if (k.image && k.image.startsWith('data:')) { try { const r = await api('POST', CONV + S.tutor.name + '/photos', { image: k.image }); k.image = r.path; } catch { delete k.image; } }
-    }
-    // 时刻换成离发出去多少毫秒(孩子端自己的钟,不用对钟);问过以后又看了(画了或只是看了)也带上
-    const sentAt = Date.now();
-    if (L && L.watch && (!L.sent || L.marks.length || L.log.length)) body.lecture = { bundle: L.bundle, ...(L.sent ? (L.rewatch || { watchedMs: 0, finished: false, pauses: 0 }) : L.watch), ...(L.marks.length ? { marks: L.marks.map((k) => ({ atMs: k.atMs, strokes: k.strokes, ...(k.image ? { image: k.image } : {}), ...(k.at ? { t: Math.min(0, k.at - sentAt) } : {}) })) } : {}), ...(L.log.length ? { log: L.log.map((e) => ({ t: Math.min(0, e.at - sentAt), pos: e.pos, play: e.play })) } : {}) };
+    const lb = await lectureBody();
+    if (lb) body.lecture = lb;
     try {
       const r = await api('POST', CONV + S.tutor.name + '/messages', body);
       S.via = null;
-      if (body.lecture && L) { L.flying = L.marks; L.marks = []; L.log = []; if (!L.sent) L.firstJob = r && r.job; L.sent = true; L.job = r && r.job; L.rewatch = null; renderLecturePending(); }
+      if (body.lecture) lectureSent(r && r.job);
       if (r && r.thread) S.thread = r.thread;
       S.newThread = false; { const blank = $('#board .blank'); if (blank) blank.remove(); }
       renderHeader();
@@ -3442,7 +3455,7 @@ __REEL_DOCK_JS__
   //      孩子端不念讲稿(板书的 step 照旧收事件、只是不自动念);卡照旧从「今天」拉,闭合了就铺。谁出声、谁停走 liveDispatch → liveStep(live-board.ts),
   //      这里只照单执行。按住说话推 PCM(常开那路麦克风,makeAudio().use),不走浏览器识别;连不上、断了 → 这位老师这一次回到板书 ----
   /** 这次进老师页走不走实时:这位老师开了实时、孩子端今天能说话的话题;以前的、家长端、录像、预览不走,首页按钮开场、小课堂、activity 先走板书 */
-  const liveWanted = (t) => Boolean(t && t.live) && !PARENT && !REEL && !PREVIEW && !S.readonly && !S.lecture && !(S.ask && S.ask.lecture);
+  const liveWanted = (t) => Boolean(t && t.live) && !PARENT && !REEL && !PREVIEW && !S.readonly;
   const lvSend = (o) => { if (LV.ws && LV.ws.readyState === 1) LV.ws.send(JSON.stringify(o)); };
   /** 实时时改「谁出声」的事都走这里,页面里不许再直接改 LV.model(tests/live-player.test.ts 数着)。data = release / send 的 body、audio 的那块声音 */
   const liveDispatch = (ev, data) => {
@@ -3450,13 +3463,17 @@ __REEL_DOCK_JS__
     LV.model = r.model;
     for (const f of r.effects) {
       switch (f.kind) {
-        case 'hold': lvSend({ t: 'hold' }); break;
+        case 'hold': LV.playLine = null; lvSend({ t: 'hold' }); break;
         case 'release': lvSend({ t: 'release', body: data }); break;
         case 'hush': lvSend({ t: 'hush' }); break;
         case 'send': lvSend({ t: 'send', body: data }); break;
         case 'enqueue': if (LV.audio) LV.audio.play(data); liveDrainWatch(); break;
-        case 'flush': if (LV.audio) LV.audio.flush(); break;
+        case 'flush': LV.playLine = null; if (LV.audio) LV.audio.flush(); break;
         case 'stopCard': silence(); break;
+        case 'openLecture': liveLecture(); break;
+        // 小课堂那一段停下:舞台停在那一帧,不再算讲稿委托的(放完 / 关了不再回 staged)
+        case 'stopLecture': if (S.stage && S.stage.delegate) { S.stage.delegate = false; postStage({ type: 'control', action: 'pause' }); } break;
+        case 'staged': lvSend({ t: 'staged' }); break;
         // 连不上、断了:回板书;等着嘴连上才发的那条(开场)走板书发
         case 'board': { const q = LV.queued; liveClose(); if (q) send(q[0], q[1]); break; }
         case 'render': renderSubtitle(); break;
@@ -3470,7 +3487,7 @@ __REEL_DOCK_JS__
     LV.drain = setInterval(() => {
       if (LV.model.status === 'mouth' && LV.audio && LV.audio.playing()) return;
       clearInterval(LV.drain); LV.drain = 0;
-      if (LV.model.status === 'mouth') liveDispatch({ type: 'drained' });
+      if (LV.model.status === 'mouth') liveDispatch({ type: 'drained', ...(LV.playLine ? { play: livePlayable(LV.playLine) ? 'open' : 'skip' } : {}) });
     }, 150);
   };
   /** 卡上的声音(点读、单词、示范、回放)要响:实时时问 liveStep(嘴在说、孩子按着、在录都不响);板书时停讲稿(segment) */
@@ -3513,7 +3530,25 @@ __REEL_DOCK_JS__
     return el;
   };
   /** 服务端说:这一句开始放了(按孩子端的排法算好的时刻)。字幕换成它;那一节露到它、画它的标注、它锚的卡描边 */
-  const liveRead = (job, line, text) => {
+  /** 讲稿 [[play]] 那句锚的小课堂卡:板上的第几节、第几张;节还没拉到 → null */
+  const livePlayAt = (pl) => {
+    const i = S.sections.findIndex((x) => x.job === pl.job);
+    const ln = i >= 0 ? S.sections[i].lines[pl.line] : null;
+    const cue = ln ? ln.cues.find((c) => c.name === 'play') : null;
+    const card = cue ? S.sections[i].cards[cue.card] : null;
+    return card && card.kind === 'lecture' ? { section: i, card: cue.card, ready: lectureReady(card) } : null;
+  };
+  /** 放得了吗:节还没拉到也先当放得了(liveLecture 再拉一次);课包读不出来就不放 */
+  const livePlayable = (pl) => { const at = livePlayAt(pl); return !at || at.ready; };
+  /** 铺满放 [[play]] 那一段(同板书的「交给小课堂」:舞台不关、停在末帧);节还没拉到先拉一次,还没有就算放完了 */
+  const liveLecture = () => {
+    const pl = LV.playLine; LV.playLine = null;
+    const open = () => { const at = pl && livePlayAt(pl); if (at && at.ready) { openStage(at.section, at.card, { delegate: true, autoplay: true }); return true; } return false; };
+    if (open()) return;
+    loadDay(false).then(() => { if (LV.model.status === 'lecture' && !open()) liveDispatch({ type: 'lectureDone' }); }, () => { if (LV.model.status === 'lecture') liveDispatch({ type: 'lectureDone' }); });
+  };
+  const liveRead = (job, line, text, play) => {
+    LV.playLine = play ? { job, line } : null;
     if (!LV.heard.has(job) || line > LV.heard.get(job)) LV.heard.set(job, line);
     const i = S.sections.findIndex((s) => s.job === job);
     if (i >= 0) {
@@ -3533,6 +3568,8 @@ __REEL_DOCK_JS__
   /** 脑开始写这一轮:话题定下来,拉今天(卡、讲稿从那里来) */
   const liveTurn = (m) => {
     if (m.job) LV.jobs.add(m.job);
+    // 带着小课堂的那条:这时才知道是哪一轮
+    if (LV.lcPending && S.lecture && m.job) { LV.lcPending = false; const L = S.lecture; if (!L.firstJob) L.firstJob = m.job; L.job = m.job; renderLecturePending(); }
     if (m.thread) S.thread = m.thread;
     S.newThread = false; S.via = null;
     { const b = $('#board .blank'); if (b) b.remove(); }
@@ -3552,7 +3589,7 @@ __REEL_DOCK_JS__
         if (!LV.cap.catching) { LV.cap.catching = true; if (LV.cap.cur) LV.cap.prev = LV.cap.cur; LV.cap.cur = ''; }
         LV.cap.cur += m.delta; renderSubtitle();
         break;
-      case 'read': liveRead(String(m.job || ''), Number(m.line), String(m.text || '')); break;
+      case 'read': liveRead(String(m.job || ''), Number(m.line), String(m.text || ''), m.play === true); break;
       // 转写是空的(按了没说清):嘴说没听清,不会有这一轮
       case 'kid': if (!String(m.text || '').trim()) { S.pending = false; renderSubtitle(); } break;
       case 'turn': liveTurn(m); break;
@@ -3647,8 +3684,13 @@ __REEL_DOCK_JS__
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
     if (S.stage) body.focus = { card: S.stage.id };
-    liveDispatch({ type: 'release' }, body);
-    S.pending = true; S.waitSince = Date.now(); renderSubtitle();
+    // 小课堂看完问的:带上看的情况与画的(截图先传上去)
+    const go = (lb) => {
+      if (lb) { body.lecture = lb; lectureSent(null); LV.lcPending = true; }
+      liveDispatch({ type: 'release' }, body);
+      S.pending = true; S.waitSince = Date.now(); renderSubtitle();
+    };
+    if (S.lecture) lectureBody().then(go, () => go(null)); else go(null);
   };
   /** 打字、拍照、交卡、卡上的「?」:同说了一句,嘴先接住、脑写(liveStep 的 send / ask) */
   const liveSendNow = (text, opts) => {
@@ -3661,9 +3703,13 @@ __REEL_DOCK_JS__
     if (opts.ask && focus) body.ask = true;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
-    liveDispatch({ type: body.ask ? 'ask' : 'send' }, body);
-    if (LV.model.cut) LV.cap.cut = LV.cap.cur;
-    S.pending = true; S.waitSince = Date.now(); renderSubtitle();
+    const go = (lb) => {
+      if (lb) { body.lecture = lb; lectureSent(null); LV.lcPending = true; }
+      liveDispatch({ type: body.ask ? 'ask' : 'send' }, body);
+      if (LV.model.cut) LV.cap.cut = LV.cap.cur;
+      S.pending = true; S.waitSince = Date.now(); renderSubtitle();
+    };
+    if (S.lecture) lectureBody().then(go, () => go(null)); else go(null);
   };
   const startRec = () => {
     finalText = ''; hold.audio = false; hold.tail = false; renderHold(); holdText('');

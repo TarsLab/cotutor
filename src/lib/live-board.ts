@@ -5,8 +5,8 @@
  * 改规则的顺序:先改表 → 再改 tests/live-player.test.ts → 最后改这里。
  */
 
-/** quiet 安静 · holding 孩子按着说话 · mouth 嘴的声音在放(或还在来)· card 卡的声音在念 · recording 录音卡在录 */
-export type LiveStatus = 'quiet' | 'holding' | 'mouth' | 'card' | 'recording';
+/** quiet 安静 · holding 孩子按着说话 · mouth 嘴的声音在放(或还在来)· card 卡的声音在念 · recording 录音卡在录 · lecture 在放小课堂卡上那一段(讲稿的 [[play]]) */
+export type LiveStatus = 'quiet' | 'holding' | 'mouth' | 'card' | 'recording' | 'lecture';
 
 export interface LiveModel {
   status: LiveStatus;
@@ -17,7 +17,8 @@ export interface LiveModel {
 /**
  * 孩子做的:press 按满 150 毫秒 · release 松手 · cancel 上滑松手 · cardTap 点卡上的声音 · ask 点卡上的「?」· send 打字发出、交答案、发照片 ·
  * stage 开 / 关舞台、拿起相机 · recStart 按下录音键 · recEnd 松手、上滑、关舞台(停录);
- * 声音的:audio 嘴的一块声音到了 · drained 孩子端的队列放完了 · cardEnded 卡的声音念完 / 停了;
+ * 声音的:audio 嘴的一块声音到了 · drained 孩子端的队列放完了(play:刚念完的那句 [[play]] 到小课堂卡,open = 能放、skip = 课包读不出来)·
+ * cardEnded 卡的声音念完 / 停了 · lectureDone 小课堂那一段放完 / 孩子关了;
  * 服务端的:flush 清播放队列 · cards 卡铺上来、老师写完 · drop 连不上 / 断了;页面的:reset 换老师、关老师页
  */
 export type LiveEvent =
@@ -25,7 +26,8 @@ export type LiveEvent =
   | { type: 'release' }
   | { type: 'cancel' }
   | { type: 'audio' }
-  | { type: 'drained' }
+  | { type: 'drained'; play?: 'open' | 'skip' }
+  | { type: 'lectureDone' }
   | { type: 'flush' }
   | { type: 'cardTap' }
   | { type: 'cardEnded' }
@@ -40,7 +42,8 @@ export type LiveEvent =
 
 /**
  * 要做的事,按顺序执行。hold / release / hush / send = 告诉服务端(send 的 body 页面带上);enqueue = 放刚到的这块嘴的声音(没有就丢掉);
- * flush = 清掉孩子端没放的嘴的声音;stopCard / playCard = 停 / 念卡上的声音;board = 这位老师这一次回到板书;render = 重画字幕与头像
+ * flush = 清掉孩子端没放的嘴的声音;stopCard / playCard = 停 / 念卡上的声音;openLecture / stopLecture = 铺满放 / 停下小课堂那一段(舞台停在那一帧);
+ * staged = 告诉服务端那一段放完了(后面的讲稿接着交给嘴);board = 这位老师这一次回到板书;render = 重画字幕与头像
  */
 export type LiveEffect =
   | { kind: 'hold' }
@@ -51,6 +54,9 @@ export type LiveEffect =
   | { kind: 'flush' }
   | { kind: 'stopCard' }
   | { kind: 'playCard' }
+  | { kind: 'openLecture' }
+  | { kind: 'stopLecture' }
+  | { kind: 'staged' }
   | { kind: 'board' }
   | { kind: 'render' };
 
@@ -58,10 +64,11 @@ export function initialLive(): LiveModel {
   return { status: 'quiet', cut: false };
 }
 
-/** 停掉孩子端在出的声音:嘴的清掉、卡的停 */
+/** 停掉孩子端在出的声音:嘴的清掉、卡的停、小课堂那一段停下 */
 function hushLocal(m: LiveModel, fx: LiveEffect[]): void {
   if (m.status === 'mouth') fx.push({ kind: 'flush' });
   if (m.status === 'card') fx.push({ kind: 'stopCard' });
+  if (m.status === 'lecture') fx.push({ kind: 'stopLecture' });
 }
 
 export function liveStep(model: LiveModel, ev: LiveEvent): { model: LiveModel; effects: LiveEffect[] } {
@@ -90,11 +97,20 @@ export function liveStep(model: LiveModel, ev: LiveEvent): { model: LiveModel; e
       // 按着、在录:按下前已经在路上的那几块丢掉
       if (m.status === 'holding' || m.status === 'recording') break;
       if (m.status === 'card') fx.push({ kind: 'stopCard' });
+      if (m.status === 'lecture') fx.push({ kind: 'stopLecture' });
       fx.push({ kind: 'enqueue' });
       if (m.status !== 'mouth') { to('mouth', { cut: false }); fx.push({ kind: 'render' }); }
       break;
     case 'drained':
       if (m.status !== 'mouth') break;
+      // [[play]]:那句念完了铺满放那一段;放不了就告诉服务端接着交
+      if (ev.play === 'open') { fx.push({ kind: 'openLecture' }); to('lecture'); }
+      else { if (ev.play === 'skip') fx.push({ kind: 'staged' }); to('quiet'); }
+      fx.push({ kind: 'render' });
+      break;
+    case 'lectureDone':
+      if (m.status !== 'lecture') break;
+      fx.push({ kind: 'staged' });
       to('quiet');
       fx.push({ kind: 'render' });
       break;
@@ -132,11 +148,11 @@ export function liveStep(model: LiveModel, ev: LiveEvent): { model: LiveModel; e
       if (m.status === 'recording') { to('quiet'); fx.push({ kind: 'render' }); }
       break;
     case 'drop':
-      fx.push({ kind: 'flush' }, { kind: 'stopCard' }, { kind: 'board' });
+      fx.push({ kind: 'flush' }, { kind: 'stopCard' }, { kind: 'stopLecture' }, { kind: 'board' });
       m = initialLive();
       break;
     case 'reset':
-      fx.push({ kind: 'flush' }, { kind: 'stopCard' });
+      fx.push({ kind: 'flush' }, { kind: 'stopCard' }, { kind: 'stopLecture' });
       m = initialLive();
       break;
   }

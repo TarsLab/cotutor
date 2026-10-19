@@ -264,6 +264,24 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   k.ws.send(JSON.stringify({ t: 'release', body: { thread: turn.thread } }));
   await until(() => c.responses.length > r);
   check('上一句念的是问句:孩子开口,接住用答问那句(「嗯」一声);之前的那轮用通用那句', lastQ && c.responses[r]?.instructions === catchCue('answer') && c.responses.some((x) => x?.instructions === catchCue('voice')), JSON.stringify(c.responses.slice(r)));
+
+  // 讲稿的 [[play]](小课堂,P3.2):念完那句先停,read 带 play;孩子端回 staged 才接着念后面的
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  await sleep(300);
+  fake.kidText = '放课';
+  const np = k.msgs.length;
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: { thread: turn.thread } }));
+  const okPlay = await until(() => k.msgs.slice(np).some((m) => m.t === 'read' && m.play === true), 15000);
+  const playRead = k.msgs.slice(np).find((m) => m.t === 'read' && m.play === true);
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  await sleep(600);
+  const before = k.msgs.slice(np).filter((m) => m.t === 'read' && m.job === playRead?.job).map((m) => m.line);
+  k.ws.send(JSON.stringify({ t: 'staged' }));
+  const okRest = await until(() => k.msgs.slice(np).filter((m) => m.t === 'read' && m.job === playRead?.job).length === 3, 10000);
+  const after = k.msgs.slice(np).filter((m) => m.t === 'read' && m.job === playRead?.job).map((m) => m.line);
+  check('[[play]]:念完那句(read 带 play)就停,脑写完了也不往下念;孩子端回 staged 才接着念后面的', okPlay && playRead?.line === 0 && playRead?.text === '我们回到那里再看一遍。' && before.join() === '0' && okRest && after.join() === '0,1,2', JSON.stringify({ before, after, playRead }));
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   k.ws.send(JSON.stringify({ t: 'bye' }));
   await until(() => k.closed !== null);

@@ -10,9 +10,10 @@
  *   {t:'hold'} 按下 · {t:'release', body} 松手(body 同 POST /api/kid/conversations/<老师>/messages 少 text:thread / newThread / device…)
  *   {t:'hush'} 停下不开新一轮(上滑取消、按下录音卡的录音键):嘴在出就掐、孩子端清了、没念的丢掉
  *   {t:'send', body} 不是说的(打字、拍照、交卡、首页按钮;卡上的「?」带 focus.card 与 ask: true):body 同那条 POST · {t:'view', w, h} 屏幕多大 · {t:'bye'}
+ *   {t:'staged'} 讲稿 [[play]] 的小课堂那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
  * 这里 → 孩子端:二进制帧 = PCM16 24k 嘴的声音;文本帧 = JSON
  *   {t:'ready'} 嘴连上了 · {t:'fallback', why} 连不上(这一句走板书)· {t:'kid', text} 孩子那句的转写 · {t:'tutor', of, delta} / {t:'tutor', of, done} 嘴的字(of:catch 接住 / read 照念)
- *   {t:'turn', job, thread} 脑开始写这一轮 · {t:'read', job, line, text} 讲稿这一句开始放(一句一个,按孩子端放到的时刻发:一段里第一句在段首,
+ *   {t:'turn', job, thread} 脑开始写这一轮 · {t:'read', job, line, text, play?} 讲稿这一句开始放(play = 念完放小课堂那一段;一句一个,按孩子端放到的时刻发:一段里第一句在段首,
  *   后面几句等这段的声音出齐、按字数比例摊)· {t:'flush'} 清播放队列
  *   {t:'state', speaking, holding} · {t:'err', status, error} 发不出去(429 limit / 400 …)· {t:'end', why}
  * 嘴的会话断了(百炼 300 秒没输入就关,2026-10-20 照 Qwen-Live-Harness 的换连接):电话不挂、孩子端不知道;下次按下或发来时现连,
@@ -28,6 +29,7 @@ import { BusyError, type SendStarted } from '../server/runner.ts';
 import type { RunEvent } from '../lib/events.ts';
 import { readIndex } from '../server/store.ts';
 import { localDate } from '../lib/conversation.ts';
+import { playsLecture } from '../lib/board.ts';
 import { catchCue, readCue, type CatchKind } from './lib/cue.ts';
 import { addChunk, flushAt, playbackInit, playingAt, type Playback } from './lib/playback.ts';
 import { queueInit, queueStep, type Beat, type QueueEvent, type QueueState } from './lib/queue.ts';
@@ -58,6 +60,8 @@ const MIN_COMMIT_BYTES = (INPUT_RATE * 2 * 100) / 1000;
 /** 心跳间隔(Qwen-Live-Harness 也是 30 秒);孩子最后一次动静之后跳多久(过了就让百炼 300 秒后关,回来按下再连,连一次约半秒) */
 const HEARTBEAT_MS = 30_000;
 const KEEP_ALIVE_MS = 15 * 60_000;
+/** 讲稿的 [[play]]:孩子端放小课堂那一段,最多等它这么久就接着念(孩子端没回 staged 时不卡死) */
+const GATE_MS = 180_000;
 /** 现连时攒着的声音最多一分钟(同 Qwen-Live-Harness 的 MAX_RECOVERY_AUDIO_BYTES) */
 const MAX_BACKLOG_BYTES = INPUT_RATE * 2 * 60;
 
@@ -141,7 +145,11 @@ export class LiveCall {
   private step(ev: QueueEvent): Beat[] {
     const { s, act } = queueStep(this.q, ev);
     this.q = s;
-    if (act?.kind === 'read') this.ask({ kind: 'read', beat: act.beat }, readCue(act.beat.texts));
+    if (act?.kind === 'read') {
+      this.ask({ kind: 'read', beat: act.beat }, readCue(act.beat.texts));
+      // 这段最后一句念完孩子端放小课堂那一段:排队关着闸,等 staged;孩子端一直没回也别卡死
+      if (act.beat.play) this.timers.push(setTimeout(() => { if (!this.ended && this.q.gated) this.step({ e: 'staged' }); }, GATE_MS));
+    }
     return act?.kind === 'dropped' ? act.beats : [];
   }
 
@@ -167,7 +175,7 @@ export class LiveCall {
         for (const x of this.pre.splice(0)) this.mouth(e.job, x.at, x.ev);
       }
       // 讲稿定稿一句(partial 解析器压着没换行的最后一句,发出来的都是定稿的)就交给排队
-      if (e.event.lane === 'main' && e.event.kind === 'line') this.linesUpTo([{ i: e.event.line, text: e.event.text }]);
+      if (e.event.lane === 'main' && e.event.kind === 'line') this.linesUpTo([{ i: e.event.line, text: e.event.text, play: e.event.play === true }]);
     });
     this.timers.push(setInterval(() => this.keepAlive(), this.deps.heartbeatMs ?? HEARTBEAT_MS));
     this.send({ t: 'ready' });
@@ -281,7 +289,8 @@ export class LiveCall {
       if (this.ended || this.q.dropJob === beat.job) return;
       this.lastRead = { job: beat.job, line: beat.lines[k] };
       this.asked = /[?？]\s*$/.test(beat.texts[k] ?? '');
-      this.send({ t: 'read', job: beat.job, line: beat.lines[k], text: beat.texts[k] });
+      // play:这句念完孩子端放小课堂那一段(放完回 staged)
+      this.send({ t: 'read', job: beat.job, line: beat.lines[k], text: beat.texts[k], ...(beat.play && k === beat.lines.length - 1 ? { play: true } : {}) });
       this.mouth(beat.job, Date.now(), { lane: 'mouth', kind: 'read', line: beat.lines[k] });
     }, Math.max(0, at - this.ms()));
     (k === 0 ? this.timers : this.readTimers).push(t);
@@ -302,12 +311,12 @@ export class LiveCall {
   }
 
   /** 讲稿又定稿了几句:按序号接着交给排队(重复的、跳号的不收) */
-  private linesUpTo(lines: { i: number; text: string }[]): void {
+  private linesUpTo(lines: { i: number; text: string; play?: boolean }[]): void {
     if (!this.job) return;
     for (const l of lines) {
       if (l.i !== this.linesQueued) continue;
       this.linesQueued++;
-      this.step({ e: 'beat', beat: { job: this.job, lines: [l.i], texts: [l.text] } });
+      this.step({ e: 'beat', beat: { job: this.job, lines: [l.i], texts: [l.text], ...(l.play ? { play: true } : {}) } });
     }
   }
 
@@ -392,6 +401,8 @@ export class LiveCall {
         this.turn(kind, body, typeof body.text === 'string' ? body.text : '');
         break;
       }
+      // 孩子端放完了小课堂那一段(或放不了、被关):后面的讲稿接着交给嘴
+      case 'staged': this.step({ e: 'staged' }); break;
       case 'view': this.rec.view(m.w, m.h); break;
       case 'bye': void this.end('bye'); break;
       default: break;
@@ -458,7 +469,8 @@ export class LiveCall {
     void started.done.then(async (index) => {
       // 收尾:整块出的运行时、或流式时没发出来的最后几句,从正式的一节补上
       const m = index.messages.find((x) => x.job === job) ?? (await readIndex(ctx.ws, tutor, started.date)).messages.find((x) => x.job === job);
-      if (m?.section && this.job === job) this.linesUpTo(m.section.lines.map((l, i) => ({ i, text: l.text })));
+      const sec = m?.section;
+      if (sec && this.job === job) this.linesUpTo(sec.lines.map((l, i) => ({ i, text: l.text, play: playsLecture(l, sec.cards) })));
     }, () => {}).finally(() => {
       if (this.running === started) this.running = null;
       this.flushWaiting();
@@ -537,7 +549,7 @@ export class LiveCall {
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 /** 孩子这边的动作(嘴断了要攒着补的那几种) */
-const INPUTS = new Set(['hold', 'release', 'hush', 'send']);
+const INPUTS = new Set(['hold', 'release', 'hush', 'send', 'staged']);
 
 /** 嘴这一道的一条(没有 t;补进事件时按那一轮的起点换) */
 type MouthEvent = Extract<RunEvent, { lane: 'mouth' }> extends infer E ? (E extends RunEvent ? Omit<E, 't'> : never) : never;

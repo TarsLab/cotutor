@@ -123,6 +123,8 @@ if (fail) {
   if (msg.includes('录音卡')) parts.push('```record focus=sh_s\n老师上【山】看【树】\n```\n\n```record\n慢慢读这一句\n```\n\n```record pinyin\nshi2 si4\n【十】四\n```\n\n一句一句录,录完交给我。');
   // 画图卡(你说我画):四幅、两个角色、出题版带题干与词
   if (msg.includes('画图')) parts.push('说得真清楚,画家开始画了。\n\n```paint\n题: 图上画了谁?他们在干什么?\n词: 播种、羞愧\n角色: 小熊:棕色,戴黄草帽\n1. 早上,小熊在地里播种。\n2. 中午,小猴躺在树下睡大觉。\n3. 夏天,小熊的地里结满西瓜。\n4. 小猴低着头,脸红红的。\n```\n\n你猜画家会怎么画?');
+  // 小课堂卡(讲稿 [[play]] 锚到它):实时时念完那句等孩子端放完那一段
+  if (msg.includes('放课')) parts.push('```lecture\n2026-09-18-po13-jian-8 0:19-0:30\n再看一遍拆开那一捆。\n```\n\n我们回到那里再看一遍。[[play]]\n\n拿走 8 根,这一捆还剩几根?');
   if (msg.includes('整段')) parts.push('```read\n小熊种西瓜。\n小猴睡大觉。\n西瓜熟了。\n```\n\n你看着连起来说一遍?');
   if (msg.includes('板书')) parts.push('```text\n# 三角形\n拼一拼\n```\n\n先看[三角形]。\n\n```choice\n三角形有几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n三角形有几个角?' + (msg.includes('坏卡') ? '\n\n```choice\n没选项\n```' : '') + (msg.includes('点读') ? '\n\n```read\napple 苹果\nbanana 香蕉\n```\n\n点一下听一下。' : '') + (msg.includes('图片') ? '\n\n```image\nvault/pic.png\n看这张图\n```' : ''));
   // 作业照片(R5):上下文包有 photos: 段就「看图」——回显看到了哪张,板书 image 卡引用原图、canvas 卡照片做底

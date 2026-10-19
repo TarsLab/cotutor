@@ -13,7 +13,8 @@ export type RunEvent = { t: number } & (
   /** warmMs:用的是提前起好的进程(预热),它等了多久 */
   | { lane: 'main'; kind: 'start'; cli: string; runtime: string; resume: boolean; warmMs?: number }
   | { lane: 'main'; kind: 'card'; card: number; label: string }
-  | { lane: 'main'; kind: 'line'; line: number; text: string }
+  /** play:这句的 [[play]] 锚着小课堂卡(念完放那一段;实时时服务端等孩子端放完再交后面的句子) */
+  | { lane: 'main'; kind: 'line'; line: number; text: string; play?: true }
   | { lane: 'main'; kind: 'tool'; name: string; sub: boolean }
   | { lane: 'main'; kind: 'exit'; ok: boolean; reason?: string; costUsd?: number; turns?: number }
   /** 断流:老师进程 idleMs 没吐一个字节(工具不在跑),杀掉;retry = 接着跑第几次(0 = 次数用完,不再跑),kept = 断前已写出的正文字数 */

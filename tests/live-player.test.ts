@@ -8,7 +8,7 @@ import { check, done } from './_check.ts';
 
 const M = (status: LiveStatus, cut = false): LiveModel => ({ ...initialLive(), status, cut });
 const kinds = (fx: LiveEffect[]) => fx.map((f) => f.kind).join(',');
-const ALL: LiveStatus[] = ['quiet', 'holding', 'mouth', 'card', 'recording'];
+const ALL: LiveStatus[] = ['quiet', 'holding', 'mouth', 'card', 'recording', 'lecture'];
 
 // ---- 表:正在…… × 来了……(一行一格)----
 interface Row { name: string; from: LiveStatus | LiveStatus[]; ev: LiveEvent; want: (m: LiveModel, fx: string) => boolean }
@@ -27,8 +27,16 @@ const rows: Row[] = [
   { name: '嘴在说 + 又一块声音 → 接着排', from: 'mouth', ev: { type: 'audio' }, want: (m, fx) => m.status === 'mouth' && fx === 'enqueue' },
   { name: '被打断后嘴再出声 → 字幕不再标被打断', from: 'quiet', ev: { type: 'audio' }, want: (m) => !m.cut },
   { name: '嘴在说 + 放完了 → 安静', from: 'mouth', ev: { type: 'drained' }, want: (m, fx) => m.status === 'quiet' && fx === 'render' },
+  { name: '嘴在说 + 放完了、刚念完的那句 [[play]] 到能放的小课堂 → 铺满放那一段,在放小课堂', from: 'mouth', ev: { type: 'drained', play: 'open' }, want: (m, fx) => m.status === 'lecture' && fx === 'openLecture,render' },
+  { name: '嘴在说 + 放完了、那句 [[play]] 的小课堂放不了 → staged(服务端接着交),安静', from: 'mouth', ev: { type: 'drained', play: 'skip' }, want: (m, fx) => m.status === 'quiet' && fx === 'staged,render' },
+  { name: '在放小课堂 + 那一段放完 / 孩子关了 → staged,安静', from: 'lecture', ev: { type: 'lectureDone' }, want: (m, fx) => m.status === 'quiet' && fx === 'staged,render' },
+  { name: '没在放小课堂 + 放完 / 关了(按下时已经停了)→ 什么都不做', from: ['quiet', 'holding', 'mouth', 'card', 'recording'], ev: { type: 'lectureDone' }, want: (_m, fx) => fx === '' },
+  { name: '在放小课堂 + 按住说话 → 那一段停下,hold', from: 'lecture', ev: { type: 'press' }, want: (m, fx) => m.status === 'holding' && fx === 'stopLecture,hold' && !m.cut },
+  { name: '在放小课堂 + 点「?」/ 打字发出 → 那一段停下,send', from: 'lecture', ev: { type: 'send' }, want: (m, fx) => m.status === 'quiet' && fx === 'stopLecture,send,render' },
+  { name: '在放小课堂 + 按下录音键 → 那一段停下、hush,在录', from: 'lecture', ev: { type: 'recStart' }, want: (m, fx) => m.status === 'recording' && fx === 'stopLecture,hush,render' },
+  { name: '在放小课堂 + 嘴的声音到了 → 那一段停下,放嘴的', from: 'lecture', ev: { type: 'audio' }, want: (m, fx) => m.status === 'mouth' && fx === 'stopLecture,enqueue,render' },
   { name: '嘴在说 + 服务端 flush → 清掉没放的,安静', from: 'mouth', ev: { type: 'flush' }, want: (m, fx) => m.status === 'quiet' && fx === 'flush,render' },
-  { name: '嘴在说 / 孩子按着 / 在录 + 点卡上的声音 → 不响', from: ['mouth', 'holding', 'recording'], ev: { type: 'cardTap' }, want: (_m, fx) => fx === '' },
+  { name: '嘴在说 / 孩子按着 / 在录 / 在放小课堂 + 点卡上的声音 → 不响', from: ['mouth', 'holding', 'recording', 'lecture'], ev: { type: 'cardTap' }, want: (_m, fx) => fx === '' },
   { name: '安静 + 点卡上的声音 → 念它,卡在念', from: 'quiet', ev: { type: 'cardTap' }, want: (m, fx) => m.status === 'card' && fx === 'playCard' },
   { name: '卡在念 + 点卡上的(另一个)声音 → 换成这个', from: 'card', ev: { type: 'cardTap' }, want: (m, fx) => m.status === 'card' && fx === 'playCard' },
   { name: '卡在念 + 念完 → 安静', from: 'card', ev: { type: 'cardEnded' }, want: (m, fx) => m.status === 'quiet' && fx === '' },
@@ -41,8 +49,8 @@ const rows: Row[] = [
   { name: '嘴在说 + 按下录音键 → 嘴没放完的清掉、hush,在录', from: 'mouth', ev: { type: 'recStart' }, want: (m, fx) => m.status === 'recording' && fx === 'flush,hush,render' },
   { name: '安静 + 按下录音键 → hush(脑还在写的不再念),在录', from: 'quiet', ev: { type: 'recStart' }, want: (m, fx) => m.status === 'recording' && fx === 'hush,render' },
   { name: '在录 + 停录 → 安静', from: 'recording', ev: { type: 'recEnd' }, want: (m, fx) => m.status === 'quiet' && fx === 'render' },
-  { name: '任何 + 连不上 / 断了 → 声音清掉,回到板书', from: ALL, ev: { type: 'drop' }, want: (m, fx) => m.status === 'quiet' && fx === 'flush,stopCard,board' },
-  { name: '任何 + 换老师 / 关老师页 → 声音清掉', from: ALL, ev: { type: 'reset' }, want: (m, fx) => m.status === 'quiet' && fx === 'flush,stopCard' },
+  { name: '任何 + 连不上 / 断了 → 声音清掉,回到板书', from: ALL, ev: { type: 'drop' }, want: (m, fx) => m.status === 'quiet' && fx === 'flush,stopCard,stopLecture,board' },
+  { name: '任何 + 换老师 / 关老师页 → 声音清掉', from: ALL, ev: { type: 'reset' }, want: (m, fx) => m.status === 'quiet' && fx === 'flush,stopCard,stopLecture' },
 ];
 for (const r of rows) {
   for (const st of Array.isArray(r.from) ? r.from : [r.from]) {
@@ -61,7 +69,7 @@ const KID = new Set(['press', 'release', 'cancel', 'ask', 'send', 'recStart']);
 function run(seed: number, steps: number): string | null {
   const r = rng(seed);
   // 世界:孩子端两样声音在不在出、服务端以为孩子按没按着、孩子手指在不在按钮上
-  const w = { m: initialLive(), mouth: false, card: false, serverHold: false, finger: false, log: [] as string[] };
+  const w = { m: initialLive(), mouth: false, card: false, lecture: false, serverHold: false, finger: false, log: [] as string[] };
   const dispatch = (ev: LiveEvent): string | null => {
     const before = w.m;
     const { model, effects } = liveStep(before, ev);
@@ -71,14 +79,19 @@ function run(seed: number, steps: number): string | null {
     if (effects.some((f) => f.kind === 'playCard') && ev.type !== 'cardTap') return '卡的声音自己响了';
     // 不变式 2:状态机不替孩子发话(hold / release / hush / send 只跟着孩子的动作)
     if (effects.some((f) => f.kind === 'hold' || f.kind === 'release' || f.kind === 'hush' || f.kind === 'send') && !KID.has(ev.type)) return '状态机替孩子发了话';
+    // 不变式 7:小课堂那一段只在嘴放完、刚念完 [[play]] 那句才放;staged 只在那一段放完 / 被关 / 放不了时发
+    if (effects.some((f) => f.kind === 'openLecture') && !(ev.type === 'drained' && ev.play === 'open')) return '小课堂自己放了';
+    if (effects.some((f) => f.kind === 'staged') && !(ev.type === 'lectureDone' || (ev.type === 'drained' && ev.play === 'skip'))) return '没放完就说 staged';
     // 不变式 3:卡铺上来、开舞台不打断谁
     if ((ev.type === 'cards' || ev.type === 'stage') && effects.length) return '卡铺上来 / 开舞台动了声音';
     // 照单执行
     for (const f of effects) {
-      if (f.kind === 'enqueue') { if (w.card) return '卡还在念就放了嘴的'; w.mouth = true; }
+      if (f.kind === 'enqueue') { if (w.card) return '卡还在念就放了嘴的'; if (w.lecture) return '小课堂还在放就放了嘴的'; w.mouth = true; }
+      if (f.kind === 'openLecture') { if (w.mouth || w.card) return '嘴 / 卡在响时放了小课堂'; w.lecture = true; }
+      if (f.kind === 'stopLecture' || f.kind === 'staged') w.lecture = false;
       if (f.kind === 'flush') w.mouth = false;
       if (f.kind === 'stopCard') w.card = false;
-      if (f.kind === 'playCard') { if (w.mouth) return '嘴在说时念了卡'; w.card = true; }
+      if (f.kind === 'playCard') { if (w.mouth) return '嘴在说时念了卡'; if (w.lecture) return '小课堂在放时念了卡'; w.card = true; }
       // 不变式 4:每次按下告诉服务端一次,之后一定跟一个 release 或 hush;release 只跟在 hold 后面
       if (f.kind === 'hold') { if (w.serverHold) return 'hold 了两次中间没有 release / hush'; w.serverHold = true; }
       if (f.kind === 'release') { if (!w.serverHold) return '没 hold 就 release'; w.serverHold = false; }
@@ -88,10 +101,12 @@ function run(seed: number, steps: number): string | null {
     if (ev.type === 'reset') w.serverHold = false; // 关页 = 连接关了
     // 不变式 5:两样声音不同时响;按着、在录时不出声
     if (w.mouth && w.card) return '嘴和卡同时响';
-    if ((model.status === 'holding' || model.status === 'recording') && (w.mouth || w.card)) return '按着 / 在录时还在出声';
+    if (w.lecture && (w.mouth || w.card)) return '小课堂和嘴 / 卡同时响';
+    if ((model.status === 'holding' || model.status === 'recording') && (w.mouth || w.card || w.lecture)) return '按着 / 在录时还在出声';
     // 不变式 6:状态说的就是在响的
     if ((model.status === 'mouth') !== w.mouth) return `状态 ${model.status} 和嘴在不在响对不上`;
     if ((model.status === 'card') !== w.card) return `状态 ${model.status} 和卡在不在响对不上`;
+    if ((model.status === 'lecture') !== w.lecture) return `状态 ${model.status} 和小课堂在不在放对不上`;
     if (w.serverHold && model.status !== 'holding') return '服务端以为按着,孩子端不在按着';
     w.m = model;
     return null;
@@ -102,10 +117,10 @@ function run(seed: number, steps: number): string | null {
     if (x < 0.1) { ev = { type: 'press' }; w.finger = true; }
     else if (x < 0.18) { ev = { type: r() < 0.75 ? 'release' : 'cancel' }; w.finger = false; }
     else if (x < 0.4) ev = { type: 'audio' };
-    else if (x < 0.48) { if (!w.mouth) continue; w.mouth = false; ev = { type: 'drained' }; }
+    else if (x < 0.48) { if (!w.mouth) continue; w.mouth = false; const p = r(); ev = p < 0.6 ? { type: 'drained' } : { type: 'drained', play: p < 0.85 ? 'open' : 'skip' }; }
     else if (x < 0.52) ev = { type: 'flush' };
     else if (x < 0.62) ev = { type: 'cardTap' };
-    else if (x < 0.68) { if (!w.card) continue; w.card = false; ev = { type: 'cardEnded' }; }
+    else if (x < 0.68) { if (w.card && r() < 0.6) { w.card = false; ev = { type: 'cardEnded' }; } else if (w.lecture || r() < 0.1) ev = { type: 'lectureDone' }; else continue; }
     else if (x < 0.72) ev = { type: r() < 0.5 ? 'ask' : 'send' };
     else if (x < 0.8) ev = { type: 'cards' };
     else if (x < 0.85) ev = { type: 'stage' };

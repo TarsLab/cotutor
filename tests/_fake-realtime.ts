@@ -4,6 +4,7 @@
  *   append 记字节;手动 commit → committed + 孩子转写;response.create → created、一块 4800 字节的声音、字幕、done(带 usage)
  *   VAD 会话(turn_detection 非空):收到有声的块 → speech_started;有声之后收到全零的块 → speech_stopped、committed、转写、自动回一次
  *   long = true 时回答只出一半、不 done(等 cancel);cancel 在有回答时回 done:cancelled,没有就报错
+ *   response.create 带 response.instructions(实时老师):记进 responses;指令里有「说完就停:「…」」(照念)就把引号里的当字幕说,别的照旧
  */
 import { createServer, type Server } from 'node:http';
 import { acceptWebSocket, isUpgrade, type ServerSocket } from '../src/live/ws.ts';
@@ -18,6 +19,8 @@ export interface FakeConn {
   clears: number;
   creates: number;
   cancels: number;
+  /** 每次 response.create 带的 response(没带是 null) */
+  responses: ({ instructions?: string } | null)[];
   closed: boolean;
 }
 
@@ -42,17 +45,21 @@ export async function startFakeRealtime(): Promise<FakeRealtime> {
     if (!isUpgrade(req)) { socket.destroy(); return; }
     let active = 0;
     let speaking = false;
-    const c: FakeConn = { sock: null as unknown as ServerSocket, session: null, updates: [], audio: 0, items: [], commits: 0, clears: 0, creates: 0, cancels: 0, closed: false };
+    const c: FakeConn = { sock: null as unknown as ServerSocket, session: null, updates: [], audio: 0, items: [], commits: 0, clears: 0, creates: 0, cancels: 0, responses: [], closed: false };
     const send = (o: unknown): boolean => c.sock.sendText(JSON.stringify(o));
-    const respond = (): void => {
+    const respond = (response: { instructions?: string } | null = null): void => {
       c.creates++;
+      c.responses.push(response);
       active++;
+      const ins = response?.instructions ?? '';
+      const at = ins.indexOf('说完就停:「');
+      const said = at >= 0 && ins.endsWith('」') ? ins.slice(at + '说完就停:「'.length, -1) : "It's a red car.";
       send({ type: 'response.created' });
       send({ type: 'response.audio.delta', delta: Buffer.alloc(4800, 1).toString('base64') });
-      send({ type: 'response.audio_transcript.delta', delta: "It's a " });
+      send({ type: 'response.audio_transcript.delta', delta: said.slice(0, 7) });
       if (fake.long) return;
-      send({ type: 'response.audio_transcript.delta', delta: 'red car.' });
-      send({ type: 'response.audio_transcript.done', transcript: "It's a red car." });
+      send({ type: 'response.audio_transcript.delta', delta: said.slice(7) });
+      send({ type: 'response.audio_transcript.done', transcript: said });
       active--;
       send({ type: 'response.done', response: { status: 'completed', usage: { input_tokens: 865, output_tokens: 28, input_token_details: { audio_tokens: 30 }, output_token_details: { audio_tokens: 20 } } } });
     };
@@ -81,7 +88,7 @@ export async function startFakeRealtime(): Promise<FakeRealtime> {
         else if (m.type === 'input_audio_buffer.clear') c.clears++;
         else if (m.type === 'conversation.item.create') c.items.push(m.item);
         else if (m.type === 'response.cancel') { c.cancels++; if (active) { active--; send({ type: 'response.done', response: { status: 'cancelled' } }); } else send({ type: 'error', error: { message: 'no active response' } }); }
-        else if (m.type === 'response.create') respond();
+        else if (m.type === 'response.create') respond(m.response ?? null);
       },
       onClose: () => { c.closed = true; },
     });

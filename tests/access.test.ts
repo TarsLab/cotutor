@@ -41,7 +41,7 @@ try {
   try { await setPin('12'); } catch (e) { threw = (e as Error).message; }
   check('PIN 要 4–8 位数字', threw.includes('4 到 8 位'));
   await setPin('2468');
-  check('设了:孩子端白名单照旧开', (await Promise.all(['/', '/api/kid/home', '/api/kid/conversations/math-tutor/today', '/api/health', '/dictation', '/talk', '/api/dictation', '/api/talk', '/stage/', '/kid/theme.css', '/favicon.svg', '/icon-180.png', '/manifest.webmanifest'].map((p) => anon('GET', p)))).every((r) => r.status !== 401));
+  check('设了:孩子端白名单照旧开', (await Promise.all(['/', '/api/kid/home', '/api/kid/conversations/math-tutor/today', '/api/health', '/dictation', '/talk', '/api/dictation', '/api/talk', '/api/live/chinese-tutor/ws', '/stage/', '/kid/theme.css', '/favicon.svg', '/icon-180.png', '/manifest.webmanifest'].map((p) => anon('GET', p)))).every((r) => r.status !== 401));
   const gate = await anon('GET', '/parent');
   check('设了:匿名开家长端是输 PIN 的页(401 + html),页面不含孩子端以外的路径泄露', gate.status === 401 && (gate.html ?? '').includes('家长的页') && (gate.html ?? '').includes("fetch('/api/auth'"), String(gate.status));
   check('输 PIN 页的脚本能解析', (() => { const js = /<script>([\s\S]*?)<\/script>/.exec(gate.html ?? '')?.[1] ?? ''; try { new Function(js); return js.length > 0; } catch { return false; } })());

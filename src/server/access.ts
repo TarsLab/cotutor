@@ -34,7 +34,7 @@ interface PinRecord {
 
 /** 孩子端的路径:设了 PIN 也开;别的都要凭证。改孩子端加了新接口要来这里登记(tests/access.test.ts 盯着孩子端页面源码里用到的每条) */
 const KID_EXACT = new Set(['/', '/manifest.webmanifest', '/favicon.svg', '/favicon-32.png', '/favicon.ico', '/api/health', '/api/auth', '/dictation', '/dictation/', '/talk', '/talk/', '/api/dictation', '/api/talk']);
-const KID_PREFIX = ['/kid/', '/stage/', '/api/kid/', '/api/audio/', '/api/bundles/', '/api/dictation/', '/api/talk/'];
+const KID_PREFIX = ['/kid/', '/stage/', '/api/kid/', '/api/audio/', '/api/bundles/', '/api/dictation/', '/api/talk/', '/api/live/'];
 export function isKidPath(p: string): boolean {
   return KID_EXACT.has(p) || KID_PREFIX.some((x) => p.startsWith(x)) || /^\/icon-\d{2,4}\.png$/.test(p);
 }

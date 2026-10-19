@@ -1,7 +1,7 @@
 /**
  * 假百炼 realtime(口语课的测试与探针用,不花钱):一个 http 服务,升级后照 realtime 的事件说话。
  *   session.created → 收 session.update 回 session.updated(喂过音频再改 silence 就报错,和真的一样)
- *   append 记字节;手动 commit → committed + 孩子转写;response.create → created、一块 4800 字节的声音、字幕、done(带 usage)
+ *   append 记字节;手动 commit → committed + 孩子转写;response.create → created、一块声音(缺省 100 毫秒 = 4800 字节,audioMs 改)、字幕、done(带 usage)
  *   VAD 会话(turn_detection 非空):收到有声的块 → speech_started;有声之后收到全零的块 → speech_stopped、committed、转写、自动回一次
  *   long = true 时回答只出一半、不 done(等 cancel);cancel 在有回答时回 done:cancelled,没有就报错
  *   response.create 带 response.instructions(实时老师):记进 responses;指令里有「说完就停:「…」」(照念)就把引号里的当字幕说,别的照旧
@@ -35,12 +35,14 @@ export interface FakeRealtime {
   dropEarly: boolean;
   /** 孩子那句转写成什么 */
   kidText: string;
+  /** 每次回答的声音多长(毫秒,24k 单声道);探针拉长了好在嘴说着时按下 */
+  audioMs: number;
   close(): void;
 }
 
 export async function startFakeRealtime(): Promise<FakeRealtime> {
   const server: Server = createServer((_req, res) => { res.writeHead(404); res.end(); });
-  const fake: FakeRealtime = { endpoint: '', conns: [], long: false, failUpdate: false, dropEarly: false, kidText: "It's a red car.", close: () => { for (const c of fake.conns) c.sock.close(); server.close(); } };
+  const fake: FakeRealtime = { endpoint: '', conns: [], long: false, failUpdate: false, dropEarly: false, kidText: "It's a red car.", audioMs: 100, close: () => { for (const c of fake.conns) c.sock.close(); server.close(); } };
   server.on('upgrade', (req, socket, head) => {
     if (!isUpgrade(req)) { socket.destroy(); return; }
     let active = 0;
@@ -55,7 +57,7 @@ export async function startFakeRealtime(): Promise<FakeRealtime> {
       const at = ins.indexOf('说完就停:「');
       const said = at >= 0 && ins.endsWith('」') ? ins.slice(at + '说完就停:「'.length, -1) : "It's a red car.";
       send({ type: 'response.created' });
-      send({ type: 'response.audio.delta', delta: Buffer.alloc(4800, 1).toString('base64') });
+      send({ type: 'response.audio.delta', delta: Buffer.alloc(Math.round(fake.audioMs * 48), 1).toString('base64') });
       send({ type: 'response.audio_transcript.delta', delta: said.slice(0, 7) });
       if (fake.long) return;
       send({ type: 'response.audio_transcript.delta', delta: said.slice(7) });

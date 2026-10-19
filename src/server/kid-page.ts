@@ -548,7 +548,7 @@ __REEL_DOCK_CSS__
   button:disabled:active { transform:none; filter:none; }
   @media (prefers-reduced-motion:reduce) { #back, .tb .hb, .again, .so, .rd, .hz, #board .c, #hist .tr, #sheet label, #menu .panel button, #ps .tools button, #ps .foot button, .c-tutor .bt, .c-tutor .tt { transition:none; } *:active { transform:none !important; } }
   /* ---- 实时的老师(《工作流程.md》§孩子端「实时老师」;原型 https://claude.ai/artifact/Xkjo2tN8D942ujEafpNo5f 的 A「老师站在板边」):
-     字幕行换成 #lv——竖屏、手机在输入条上方一行(小头像 + 在说的那句),横屏是左栏(大头像 + 字幕,在说的大、上一句淡),板是右边一块白板;
+     字幕行换成 #lv(类名带 lv-:卡是 .c,撞名会套上卡的边框)——竖屏、手机在输入条上方一行(小头像 + 在说的那句),横屏是左栏(大头像 + 字幕,在说的大、上一句淡),板是右边一块白板;
      嘴在说头像外两圈亮(老师的颜色 --tc),孩子按着变蓝、「在听你说」;卡角是「?」(问这张卡),朗读卡、单词卡、录音卡没有 ---- */
   #lv { display:none; }
   body.live #sub, body.live #spk { display:none; }
@@ -569,10 +569,10 @@ __REEL_DOCK_CSS__
   body.listening #lv-av .ring circle { animation:av-turn .35s ease-out both, av-listen 1.6s ease-in-out .35s infinite; }
   #lv-chip { display:none; height:32px; padding:0 14px; border-radius:16px; background:#eaf2fd; color:#2a5ea8; font-size:15px; align-items:center; }
   #lv-cap { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
-  #lv-cap .p { display:none; }
-  #lv-cap .c { font-size:18px; line-height:1.45; font-weight:600; color:var(--ink); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-  #lv-cap .c.nm { font-weight:500; color:var(--dim); }
-  #lv-cap.done .c, #lv-cap .c.cut { color:#a39f96; font-weight:500; }
+  #lv-cap .lv-prev { display:none; }
+  #lv-cap .lv-cur { font-size:18px; line-height:1.45; font-weight:600; color:var(--ink); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  #lv-cap .lv-cur.nm { font-weight:500; color:var(--dim); }
+  #lv-cap.done .lv-cur, #lv-cap .lv-cur.cut { color:#a39f96; font-weight:500; }
   .c > .again.ask { display:inline-flex; color:var(--tc, var(--accent)); font-size:16px; font-weight:700; line-height:1; }
   /* 不出卡的一轮:板上留讲稿的字(设想稿拍板 8),念到哪露到哪 */
   .sec > .says { display:flex; flex-direction:column; gap:6px; padding:2px 4px 4px 40px; font-size:19px; line-height:1.6; color:var(--ink); }
@@ -595,14 +595,14 @@ __REEL_DOCK_CSS__
     body.live #wrap::before { display:none; }
     body.live #board { max-width:none; padding:24px 28px 28px; }
     body.live #lv { grid-column:1; grid-row:1; flex-direction:column; justify-content:flex-start; gap:18px; padding:calc(env(safe-area-inset-top) + 120px) 0 0; min-height:0; }
-    body.live #lv-av { width:140px; height:140px; margin-bottom:22px; }
+    body.live #lv-av { width:140px; height:140px; margin-bottom:40px; }
     body.live #lv-av .av { font-size:64px; }
     body.live #lv-av::before { inset:-16%; } body.live #lv-av::after { inset:-32%; }
     body.live.listening #lv-chip { display:inline-flex; }
     body.live #lv-cap { flex:0 0 auto; width:300px; gap:10px; text-align:center; }
-    body.live #lv-cap .p { font-size:17px; line-height:1.5; color:#a39f96; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-    body.live #lv-cap .p:empty { display:none; }
-    body.live #lv-cap .c { font-size:26px; line-height:1.5; -webkit-line-clamp:6; }
+    body.live #lv-cap .lv-prev { font-size:17px; line-height:1.5; color:#a39f96; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    body.live #lv-cap .lv-prev:empty { display:none; }
+    body.live #lv-cap .lv-cur { font-size:26px; line-height:1.5; -webkit-line-clamp:6; }
     body.live #bar { grid-column:1 / -1; grid-row:2; max-width:none; padding-left:0; padding-right:0; }
     body.live .blank > .av, body.live .blank > .nm { display:none; }
     /* 按住时输入条那颗变蓝(原型 A1):浮层收成盖在输入条上的蓝胶囊,波形在前 */
@@ -630,7 +630,7 @@ __REEL_DOCK_CSS__
       <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
       <div id="st-dim"></div>
     </div>
-    <div id="lv"><div id="lv-av"></div><div id="lv-chip">在听你说</div><div id="lv-cap"><div class="p"></div><div class="c"></div></div></div>
+    <div id="lv"><div id="lv-av"></div><div id="lv-chip">在听你说</div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div></div>
     <div id="sub"><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
       <div id="pill">
@@ -764,15 +764,11 @@ __AUDIO_JS__
   S.pdate = null;
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
-  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), drain: 0, was: 'quiet', holdAt: 0 };
-  /** 实时的那节标注只画到嘴念到的那句(没念到的不先画);不是这次念的节(重开页面、以前的)照旧 */
-  const liveUpTo = (i, upTo) => {
-    const s = S.sections[i];
-    if (!LV.on || !s || !s.live) return upTo;
-    if (!LV.heard.has(s.job)) return s.partial ? -1 : upTo;
-    const n = LV.heard.get(s.job);
-    return upTo === undefined ? n : Math.min(upTo, n);
-  };
+  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0 };
+  /** 实时的一节露到 / 画到第几句:这次连着念的轮(jobs)只到嘴念到的那句(脑写完了、嘴还没念到的不先露;被打断没念到的就不露);
+   *  别的(重开页面、以前的、板书的)整节 → undefined */
+  const liveHeard = (s) => (s && s.live && LV.on && LV.jobs.has(s.job) ? (LV.heard.has(s.job) ? LV.heard.get(s.job) : -1) : undefined);
+  const liveUpTo = (i, upTo) => { const n = liveHeard(S.sections[i]); return n === undefined ? upTo : upTo === undefined ? n : Math.min(upTo, n); };
 
   // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音就不出声、按字数计时(浏览器合成声只在 mock 里,见 SYNTH) ----
   // 录像里孩子的屏幕在家长页的 iframe 里:用家长页那个 Audio(家长点「看录像」时在手势里解锁过),声音才放得出来
@@ -2024,7 +2020,13 @@ __WORD_DRAW_JS__
     const g = $('#board > .wait-card');
     if (g) g.before(el); else $('#board').append(el);
   };
-  const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i, 'data-job': s.job }, ...headEls(s, i), ...rowEls(s, s.cards.map((c, k) => renderCard(c, k, i, false))).map((r) => r.el));
+  /** 不出卡的实时一轮(设想稿拍板 8):板上留讲稿的字;这次连着念的轮念到哪露到哪(liveHeard),别的整段都在。别的节 null */
+  const saysEl = (s) => {
+    if (!s.live || s.cards.length || !s.lines.length) return null;
+    const n = liveHeard(s), upTo = n === undefined ? s.lines.length - 1 : n;
+    return h('div', { class: 'says', 'data-k': s.lines.map((l) => l.text).join('|') }, ...s.lines.map((l, k) => h('p', { 'data-line': k, class: k > upTo ? 'pend' : '' }, plainLine(l.text))));
+  };
+  const renderSection = (s, i) => h('div', { class: 'sec', 'data-sec': i, 'data-job': s.job }, ...headEls(s, i), ...rowEls(s, s.cards.map((c, k) => renderCard(c, k, i, false))).map((r) => r.el), saysEl(s));
   /**
    * 老师还在说(2026-09-13,一拍一就绪):第一拍就绪前板上只有占位卡(字幕行「我写给你看」,见 renderSubtitle);就绪了就把这条转成 S.sections 里的一节(live)开播,
    * 之后每次 poll 只铺新就绪的拍的卡(一行一张,没有排版)、把 lines 换成最新的(配音名填进来),播到头等着(thinking)的就接上。
@@ -2157,8 +2159,8 @@ __WORD_DRAW_JS__
     const hw = halfWidth();
     if (d !== S.device || hw !== S.layHalf) {
       S.device = d; S.layHalf = hw;
-      S.sections.forEach((s, i) => { const old = $('#board').querySelector('[data-sec="' + i + '"]'); if (old && !(S.partial && S.partial.el === old)) { old.replaceWith(renderSection(s, i)); const upTo = S.state.section === i ? S.state.line : S.state.section > i ? undefined : -1; if (upTo !== -1) paintAll(i, upTo); } });
-      if (S.stage) setNow(S.stage.section, S.stage.card); else showNow();
+      S.sections.forEach((s, i) => { const old = $('#board').querySelector('[data-sec="' + i + '"]'); if (old && !(S.partial && S.partial.el === old)) { old.replaceWith(renderSection(s, i)); const upTo = S.state.section === i ? S.state.line : S.state.section > i ? undefined : -1; if (upTo !== -1) paintAll(i, liveUpTo(i, upTo)); } });
+      if (S.stage) setNow(S.stage.section, S.stage.card); else if (!LV.on) showNow();
       markHeard();
     } else for (const span of document.querySelectorAll('#board .mk[data-pen]')) { const card = span.closest('.c'); if (card && LINE_PENS.includes(span.dataset.pen)) drawPen(span, card, span.dataset.pen, false); }
   };
@@ -3434,8 +3436,8 @@ __REEL_DOCK_JS__
   for (const k of ['ended', 'error']) audioEl.addEventListener(k, () => { if (LV.on && LV.model.status === 'card') liveDispatch({ type: 'cardEnded' }); });
   /** 字幕:在说的那句、上一句;被打断的那句淡、加省略号;什么都还没说写老师的名字;到了上限写上限那句 */
   const liveCaption = () => {
-    const cap = $('#lv-cap'), c = cap.querySelector('.c');
-    cap.querySelector('.p').textContent = LV.cap.prev;
+    const cap = $('#lv-cap'), c = cap.querySelector('.lv-cur');
+    cap.querySelector('.lv-prev').textContent = LV.cap.prev;
     const cut = Boolean(LV.cap.cut) && LV.cap.cut === LV.cap.cur;
     const limit = S.limit ? subtitleFor({ state: S.state, sections: [], pending: false, waitedMs: 0, limit: true }).text : '';
     c.textContent = limit || (LV.cap.cur ? LV.cap.cur + (cut ? '……' : '') : (S.tutor ? S.tutor.display : ''));
@@ -3445,20 +3447,15 @@ __REEL_DOCK_JS__
   };
   /** 字幕换一句:上一句挪上去 */
   const liveSay = (text) => { if (!text) return; if (LV.cap.cur && LV.cap.cur !== text) LV.cap.prev = LV.cap.cur; LV.cap.cur = text; renderSubtitle(); };
-  /** 不出卡的一轮(设想稿拍板 8):板上留讲稿的字,念到哪露到哪;不是这次念的(重开页面、以前的)整段都在 */
+  /** 一节的讲稿留字跟上(saysEl):句变了重画,念到的露出来;出了卡就撤 */
   const syncSays = (i) => {
     const s = S.sections[i], secEl = $('#board').querySelector(':scope > .sec[data-sec="' + i + '"]');
     if (!s || !secEl) return;
-    let el = secEl.querySelector(':scope > .says');
-    if (!s.live || s.cards.length || !s.lines.length) { if (el) el.remove(); return; }
-    const key = s.lines.map((l) => l.text).join('|');
-    if (!el || el.dataset.k !== key) {
-      const fresh = h('div', { class: 'says', 'data-k': key }, ...s.lines.map((l, k) => h('p', { 'data-line': k }, plainLine(l.text))));
-      if (el) el.replaceWith(fresh); else secEl.append(fresh);
-      el = fresh;
-    }
-    const upTo = LV.heard.has(s.job) ? LV.heard.get(s.job) : s.partial ? -1 : s.lines.length - 1;
-    for (const p of el.children) p.classList.toggle('pend', Number(p.dataset.line) > upTo);
+    const el = secEl.querySelector(':scope > .says'), fresh = saysEl(s);
+    if (!fresh) { if (el) el.remove(); return; }
+    if (!el) secEl.append(fresh);
+    else if (el.dataset.k !== fresh.dataset.k) el.replaceWith(fresh);
+    else for (const p of el.children) p.classList.toggle('pend', fresh.children[Number(p.dataset.line)].classList.contains('pend'));
   };
   /** 讲到某句:它锚的卡描边,田字格、单词卡这时写一遍(这一页只写一次) */
   const liveNow = (i, k) => {
@@ -3489,6 +3486,7 @@ __REEL_DOCK_JS__
   };
   /** 脑开始写这一轮:话题定下来,拉今天(卡、讲稿从那里来) */
   const liveTurn = (m) => {
+    if (m.job) LV.jobs.add(m.job);
     if (m.thread) S.thread = m.thread;
     S.newThread = false; S.via = null;
     { const b = $('#board .blank'); if (b) b.remove(); }
@@ -3521,7 +3519,7 @@ __REEL_DOCK_JS__
   const liveOpen = () => {
     if (LV.ws) liveClose();
     liveDispatch({ type: 'reset' });
-    LV.on = true; LV.ready = false; LV.cap = { prev: '', cur: '', cut: '', catching: false }; LV.heard = new Map();
+    LV.on = true; LV.ready = false; LV.cap = { prev: '', cur: '', cut: '', catching: false }; LV.heard = new Map(); LV.jobs = new Set();
     document.body.classList.add('live');
     $('#tutor').style.setProperty('--tc', tutorColor());
     $('#lv-av').replaceChildren(avatarEl(S.tutor));

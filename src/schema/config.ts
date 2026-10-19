@@ -231,6 +231,21 @@ export const TalkSchema = z.object({
 export type TalkConfig = z.infer<typeof TalkSchema>;
 
 /**
+ * 实时老师(《wip/实时老师设想.md》):老师用 realtime 模型开口(嘴),老师 CLI 在后面写板书(脑);讲稿不配音,交给嘴照念。
+ * 出厂关着;要百炼 key 与业务空间 id(同口语课)。voices 里列着的老师,他的新话题走实时;activity 话题照旧板书。
+ */
+export const LIVE_DEFAULT = { enabled: false, model: 'qwen3.8-omni-flash-realtime', voices: {} as Record<string, string> };
+export const LiveSchema = z.object({
+  enabled: z.boolean().default(false).describe('开不开实时老师;关着全走板书'),
+  model: z.string().min(1).default(LIVE_DEFAULT.model).describe('嘴用的 realtime 模型'),
+  voices: z
+    .record(z.string().regex(AGENT_NAME_RE), z.string().min(1))
+    .default({})
+    .describe('哪几位老师的新话题走实时、嘴用哪个 realtime 音色(这个模型认 Tina、Serena、Jennifer、Ryan、Dylan、Sunny、Kiki、Momo);不在这里的老师照旧板书'),
+});
+export type LiveConfig = z.infer<typeof LiveSchema>;
+
+/**
  * 听写(《wip/听写设想.md》):拍照认词表用哪个模型。挑词的要求在听写 activity 文件「认字收到什么」(《wip/activity设计.md》拍板 21);
  * prompt / promptEn 是老 workspace 的要求:和出厂的一样就当没写,改过就以它为准(doctor 提示挪进 activity 文件)。
  * 回什么格式(一行一段 JSON)由应用接在后面(src/dictation/recognize.ts 的 FORMAT),改 prompt 不会把解析改坏。
@@ -327,8 +342,12 @@ export const CotutorConfigSchema = z
     dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型(改了不用重起服务);挑词的要求在听写 activity 文件「认字收到什么」'),
     paint: PaintSchema.default(PAINT_DEFAULT).describe('你说我画:画图卡(paint)用的文生图模型、尺寸、一天几张(改了不用重起服务);画风在 activity 文件「画家收到什么」'),
     talk: TalkSchema.default(TALK_DEFAULT).describe('口语课(/talk):家长拍一张今天学的,孩子先跟读、再和 realtime 模型用这些词聊;enabled 出厂 false;要百炼 key 与业务空间 id(DASHSCOPE_WORKSPACE_ID 或 voxtell 的配置)'),
+    live: LiveSchema.default(LIVE_DEFAULT).describe('实时老师:voices 里列着的老师,新话题由 realtime 模型开口、老师 CLI 在后面写板书(讲稿不配音、嘴照念);enabled 出厂 false;要百炼 key 与业务空间 id'),
   })
   .superRefine((c, ctx) => {
+    for (const name of Object.keys(c.live.voices)) {
+      if (!(name in c.tutors) || !name.endsWith('-tutor')) ctx.addIssue({ code: 'custom', path: ['live', 'voices', name], message: `"${name}" 不是有脸的老师(tutors 里键以 -tutor 结尾的);只有老师能走实时` });
+    }
     if (!(c.runtimes.default in c.runtimes) || c.runtimes.default === 'default') {
       ctx.addIssue({
         code: 'custom',

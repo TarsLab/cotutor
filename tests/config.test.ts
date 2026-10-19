@@ -32,6 +32,13 @@ const kidOnly = listTutors(withHelper, { kidOnly: true });
 check('孩子端不见 hidden 与关着的', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'helper' || t.name === 'koubo-tutor'));
 check('列表带有效政策', listTutors(cfg)[0].policy.replyMaxChars === 60);
 
+check('实时老师出厂关着、没有老师', cfg.live.enabled === false && Object.keys(cfg.live.voices).length === 0 && cfg.live.model === 'qwen3.8-omni-flash-realtime');
+const liveOn = CotutorConfigSchema.safeParse({ ...raw, live: { enabled: true, voices: { 'chinese-tutor': 'Serena' } } });
+check('实时:列一位老师和音色', liveOn.success && liveOn.data.live.voices['chinese-tutor'] === 'Serena');
+const liveBad = CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, helper: { display: '工具人', hidden: true } }, live: { enabled: true, voices: { 'nobody-tutor': 'Serena', helper: 'Tina' } } });
+const liveLines = liveBad.success ? [] : explainIssues(liveBad.error.issues);
+check('实时:没有这位老师、不是有脸的老师都报,点名到 live.voices.<名>', !liveBad.success && liveLines.some((l) => l.startsWith('live.voices.nobody-tutor')) && liveLines.some((l) => l.startsWith('live.voices.helper')), liveLines.join(' | '));
+
 const bad = CotutorConfigSchema.safeParse({ version: 2, kid: { slug: 'Bad Slug' }, tutors: { x: { display: '' } }, runtimes: { default: 'nope' } });
 check('坏配置不过', !bad.success);
 const lines = bad.success ? [] : explainIssues(bad.error.issues);

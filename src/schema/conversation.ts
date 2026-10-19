@@ -101,6 +101,8 @@ const MessageObjectSchema = z.object({
   replayOf: z.string().min(1).optional(),
   /** 这条是 cotutor activity eval 跑的(落在 evals/,模拟孩子):同回放,不写记忆、不预热 */
   eval: z.literal(true).optional(),
+  /** 这一轮走实时(《wip/实时老师设想.md》):讲稿没配音,由 realtime 模型(嘴)照念;孩子端放的是嘴的声音,以前的话题里这几句不出声 */
+  live: z.literal(true).optional(),
   /**
    * 这条是孩子看完小课堂后的第一条(《小课堂设计.md》§七):哪份课包、课名、看了多久、看完没、停过几次、圈过的几处;节前的小课堂卡与圈的卡从这里画。
    * again = 问过以后「再看一遍」又圈了,这条只为带上新圈的(节前只画圈的卡)。圈:时刻、SVG 停在哪(缩略图)、路径(课包坐标)、算出来的那段话

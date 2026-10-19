@@ -469,7 +469,7 @@ export async function updateVaultMemory(ws: Workspace, agent: string, display: s
 }
 
 /** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 运行时模板走编辑器 */
-export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'agents', 'paths', 'server', 'tts', 'vault'] as const;
+export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'agents', 'paths', 'server', 'tts', 'vault', 'live'] as const;
 
 const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 

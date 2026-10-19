@@ -7,7 +7,7 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { appendFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +22,8 @@ import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../li
 import { audioData } from '../lib/audio-data.ts';
 import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall, type ReelDiag } from '../lib/reel.ts';
 import type { CallReel } from '../live/recorder.ts';
+import { isRealtimeVoice, REALTIME_VOICES } from '../live/voices.ts';
+import { previewVoice } from '../live/preview.ts';
 import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, subjectLang, type ActivityValue, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../schema/index.ts';
 import type { BoardCard, Device } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
@@ -871,6 +873,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             paths: ws.config.paths,
             resolvedPaths: Object.fromEntries(Object.entries(ws.paths).map(([k, v]) => [k, redactHome(v)])),
             tts: ws.config.tts,
+            /** 实时老师(《wip/实时老师设想.md》):总开关、嘴的模型、哪几位老师走实时用哪个音色(工作台音色页「实时的嘴」改) */
+            live: ws.config.live,
             theme: ws.config.kid.theme,
             https: ws.config.server.https ?? null,
             shipped: (await tutorStatuses(ws.root)).map((s) => s.name),
@@ -1095,6 +1099,27 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const inUse: Record<string, string[]> = {};
       for (const [name, t] of Object.entries(ws.config.tutors)) if (t.voice) (inUse[t.voice] ??= []).push(name);
       return { status: 200, json: { ok: !list.error, error: list.error, count: list.voices.length, voices: list.voices, inUse, sample: PREVIEW_TEXT } };
+    }
+    // 嘴的音色(工作台音色页「实时的嘴」):这个 realtime 模型认的 56 个(src/live/voices.ts)、谁在用、总开关
+    if (p === '/api/tts/realtime' && method === 'GET') {
+      const inUse: Record<string, string[]> = {};
+      for (const [name, voice] of Object.entries(ws.config.live.voices)) (inUse[voice] ??= []).push(name);
+      return { status: 200, json: { voices: REALTIME_VOICES, inUse, enabled: ws.config.live.enabled, model: ws.config.live.model, sample: PREVIEW_TEXT } };
+    }
+    // 试听嘴的一个音色:真连一次 realtime 照念这一句(几分钱),存在 .cotutor/live-preview/,同一句同一音色以后直接给文件
+    if (p === '/api/tts/realtime/preview' && method === 'GET') {
+      const voice = url.searchParams.get('voice')?.trim() ?? '';
+      if (!isRealtimeVoice(voice)) return { status: 400, json: { error: 'bad_voice', message: `这个模型不认「${voice}」这个音色` } };
+      const text = url.searchParams.get('text')?.trim().slice(0, 200) || PREVIEW_TEXT;
+      const dir = join(ws.root, '.cotutor', 'live-preview');
+      const file = join(dir, `${createHash('sha1').update(`${ws.config.live.model}\n${voice}\n${text}`).digest('hex').slice(0, 20)}.wav`);
+      if (!(await stat(file).catch(() => null))?.isFile()) {
+        const r = await previewVoice({ voice, text, model: ws.config.live.model, env: process.env, endpoint: process.env.COTUTOR_LIVE_ENDPOINT });
+        if ('error' in r) return { status: 502, json: { error: 'realtime_failed', voice, message: r.error } };
+        await mkdir(dir, { recursive: true });
+        await writeFile(file, r.wav);
+      }
+      return { status: 200, file, contentType: 'audio/wav' };
     }
     // 试听一个音色:同一句同一音色合成一次就存在 .cotutor/tts-preview/,之后直接给文件;失败回 JSON 说原因(页面拿 message 显示)
     if (p === '/api/tts/preview' && method === 'GET') {

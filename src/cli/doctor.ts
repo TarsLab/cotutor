@@ -3,6 +3,7 @@
  * 静默失败摆到明面:配置坏了、老师链断了、账本有坏行、角色指向踩空。
  * exit 约定同 drawtell / voxtell doctor:必需项全过 exit 0,否则 1;--json 带 ok 与整份 checks。
  */
+import { isRealtimeVoice } from '../live/voices.ts';
 import { detectProxy } from '../lib/proxy.ts';
 import { adapterFor, parserOf, prepareCli, processEnv } from '../clis/index.ts';
 import { execFile } from 'node:child_process';
@@ -576,6 +577,14 @@ export async function doctorWorkspace(
         if (inRun !== inResume) push({ name: `runtime.${name}.board`, ok: false, required: false, detail: `板书写法的预载只在 ${inRun ? 'run' : 'resume'} 模板里,两边不一致(压缩后系统提示按 resume 的旗标重建)`, fix: 'cotutor upgrade --config 补旗标,或手改 cotutor.json 让两条模板一致' });
         else push({ name: `runtime.${name}.board`, ok: true, required: false, detail: inRun ? `板书写法预载进系统提示(${how}),各话题共享缓存` : '板书写法由应用放进每个话题第一条(<cotutor-board>);这个 CLI 能从文件或参数收系统提示的话,模板里用 {boardFile} / {systemBody} 更省' });
       }
+    }
+
+    // ---- 实时老师的嘴(《wip/实时老师设想.md》):音色写错了连接照样连得上,第一次开口才报错,孩子那边嘴一直不出声 ----
+    const lv = ws.config.live;
+    if (lv.enabled || Object.keys(lv.voices).length) {
+      const bad = Object.entries(lv.voices).filter(([, v]) => !isRealtimeVoice(v));
+      const who = Object.entries(lv.voices).map(([t, v]) => `${t} 用 ${v}`).join('、') || '没有老师挑嘴的音色(全走板书)';
+      push({ name: 'live.voices', ok: !bad.length, required: false, detail: bad.length ? `${bad.map(([t, v]) => `${t} 的「${v}」`).join('、')}:这个模型不认,嘴会一直不出声` : `实时${lv.enabled ? '开着' : '关着'}:${who}`, fix: bad.length ? '工作台「音色」页「实时的嘴」里换一个(这个模型认的 56 个在 src/live/voices.ts),或改 cotutor.json 的 live.voices' : undefined });
     }
 
     // ---- 运行时的 CLI 在不在 ----

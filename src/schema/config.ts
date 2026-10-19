@@ -241,7 +241,7 @@ export const LiveSchema = z.object({
   voices: z
     .record(z.string().regex(AGENT_NAME_RE), z.string().min(1))
     .default({})
-    .describe('哪几位老师的新话题走实时、嘴用哪个 realtime 音色(这个模型认 Tina、Serena、Jennifer、Ryan、Dylan、Sunny、Kiki、Momo);不在这里的老师照旧板书'),
+    .describe('哪几位老师的新话题走实时、嘴用哪个 realtime 音色(这个模型认的 56 个在 src/live/voices.ts,工作台音色页「实时的嘴」听着挑;写错了第一次开口才报错,doctor 的 live.voices 会提示);不在这里的老师照旧板书'),
 });
 export type LiveConfig = z.infer<typeof LiveSchema>;
 

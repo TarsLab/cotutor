@@ -1271,7 +1271,7 @@ ${DEV_CSS}
         colorField(t, c),
         h('div', { class: 'field' }, h('label', {}, '头像(emoji,或图片路径如 avatars/' + t.name + '.png)'), h('input', { type: 'text', 'data-f': 'avatar', value: t.avatar || '' })),
         h('div', { class: 'field' }, h('label', {}, '音色(voxtell id)'), h('div', { class: 'withbtn' }, h('input', { type: 'text', 'data-f': 'voice', value: t.voice || '' }),
-          h('button', { class: 'btn', type: 'button', title: '到音色页听着挑', on: { click: () => { voiceState.for = t.name; location.hash = '#voices'; showTab('voices'); } } }, '去挑'))),
+          h('button', { class: 'btn', type: 'button', title: '到音色页听着挑', on: { click: () => { voiceState.for = t.name; voiceState.kind = 'tts'; location.hash = '#voices'; showTab('voices'); } } }, '去挑'))),
         h('div', { class: 'field chk' }, h('input', { type: 'checkbox', 'data-f': 'enabled', checked: t.enabled }), h('label', {}, '开启')),
         h('div', { class: 'field chk' }, h('input', { type: 'checkbox', 'data-f': 'hidden', checked: t.hidden }), h('label', {}, '孩子端不露')),
         ...policyFields(patch, t.policy, { inherit: true }));
@@ -1308,25 +1308,28 @@ ${DEV_CSS}
     $('#team').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '老师团'), h('span', { class: 'sub' }, '按 cotutor.json 里有谁走;键以 -tutor 结尾的是有脸的老师')), top, roster));
   };
 
-  // ---- 音色:tts.voices 列出全部音色,先听再挑;挑中的写进 cotutor.json 的 tutors.<名>.voice ----
+  // ---- 音色:两样声音,页头切——板书配音(tts.voices 列出全部音色,挑中的写进 tutors.<名>.voice;讲稿与卡的声音)、
+  //      实时的嘴(百炼 realtime 认的 56 个,挑中的写进 live.voices.<名>,见下面 renderLiveVoices)。都是先听再挑 ----
   const AGE_BANDS = [['', '全部年龄'], ['kid', '12 岁以下'], ['young', '13–25 岁'], ['adult', '26–40 岁'], ['senior', '41 岁以上']];
   const inBand = (age, band) => !band || (typeof age === 'number' && (band === 'kid' ? age <= 12 : band === 'young' ? age >= 13 && age <= 25 : band === 'adult' ? age >= 26 && age <= 40 : age >= 41));
-  const voiceState = { list: null, error: null, sample: '', inUse: {}, q: '', gender: '', band: '', text: '', for: null, playing: null, audio: null, loading: false };
+  const voiceState = { kind: 'tts', list: null, error: null, sample: '', inUse: {}, q: '', gender: '', band: '', text: '', for: null, playing: null, audio: null, loading: false };
+  /** 页头的切换:板书配音 / 实时的嘴 */
+  const kindSeg = () => h('span', { class: 'seg', role: 'tablist' }, ...[['tts', '板书配音'], ['live', '实时的嘴']].map(([k, label]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(voiceState.kind === k), class: voiceState.kind === k ? 'on' : '', on: { click: () => { if (voiceState.kind === k) return; stopPreview(); voiceState.kind = k; renderVoices(); } } }, label)));
   const stopPreview = () => {
     if (voiceState.audio) { voiceState.audio.pause(); voiceState.audio = null; }
     const b = voiceState.playing;
     voiceState.playing = null;
     if (b) { b.textContent = '▶ 试听'; b.classList.remove('on'); b.disabled = false; }
   };
-  /** 点一下合成(服务端同句同音色只合成一次)并播;再点停;换一个点就切过去 */
-  const preview = async (btn, voice, panel) => {
+  /** 点一下合成(服务端同句同音色只合成一次)并播;再点停;换一个点就切过去。base = 板书配音 / 实时的嘴各自的试听接口 */
+  const preview = async (btn, voice, panel, base = '/api/tts/preview') => {
     if (voiceState.playing === btn) return stopPreview();
     stopPreview();
     voiceState.playing = btn;
     btn.textContent = '合成中…';
     btn.classList.add('on');
     try {
-      const r = await fetch('/api/tts/preview?voice=' + encodeURIComponent(voice) + (voiceState.text ? '&text=' + encodeURIComponent(voiceState.text) : ''));
+      const r = await fetch(base + '?voice=' + encodeURIComponent(voice) + (voiceState.text ? '&text=' + encodeURIComponent(voiceState.text) : ''));
       if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.message) || (r.status + ' ' + r.statusText)); }
       const url = URL.createObjectURL(await r.blob());
       if (voiceState.playing !== btn) { URL.revokeObjectURL(url); return; }
@@ -1362,10 +1365,11 @@ ${DEV_CSS}
   const renderVoices = async () => {
     const c = state.config;
     if (!c) return;
+    if (voiceState.kind === 'live') return renderLiveVoices();
     if (!voiceState.list && !voiceState.loading) {
-      $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色')), h('div', { class: 'panel' }, h('p', { class: 'hint', style: 'padding:16px 20px' }, '在列音色……'))));
+      $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), kindSeg()), h('div', { class: 'panel' }, h('p', { class: 'hint', style: 'padding:16px 20px' }, '在列音色……'))));
       await loadVoices(false);
-      if (state.tab !== 'voices') return;
+      if (state.tab !== 'voices' || voiceState.kind !== 'tts') return;
     }
     if (voiceState.loading) return;
     const who = voiceTutor();
@@ -1414,8 +1418,79 @@ ${DEV_CSS}
     };
     renderVoiceList();
     panel.append(filters, list);
-    panel.append(h('p', { class: 'hint' }, '试听是真合成一次(voxtell 有缓存,同一句同一个音色以后不再花钱);挑中就写进 cotutor.json,老师下一句话起用新声音。'));
-    $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), h('span', { class: 'sub' }, '先听再挑,挑中的写进 cotutor.json')), panel));
+    panel.append(h('p', { class: 'hint' }, '试听是真合成一次(voxtell 有缓存,同一句同一个音色以后不再花钱);挑中就写进 cotutor.json,老师下一句话起用新声音。板书时讲稿与卡的声音都是它;实时的老师只有卡自己的声音(朗读卡、单词卡、录音卡)用它。'));
+    $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), kindSeg(), h('span', { class: 'sub' }, '先听再挑,挑中的写进 cotutor.json')), panel));
+  };
+  // ---- 实时的嘴(《wip/实时老师设想.md》):百炼 realtime 认的 56 个音色(src/live/voices.ts);试听是真连一次照念这一句(几分钱,存着)。
+  //      挑中的写进 live.voices.<老师>:总开关开着、这里有音色的有脸老师,孩子的新话题走实时;清掉 = 回到板书 ----
+  const liveVoiceState = { data: null, error: null, q: '', lang: '', loading: false };
+  const loadLiveVoices = async () => {
+    liveVoiceState.loading = true;
+    try { liveVoiceState.data = await api('GET', '/api/tts/realtime'); liveVoiceState.error = null; } catch (e) { liveVoiceState.error = e.message; }
+    liveVoiceState.loading = false;
+  };
+  const renderLiveVoices = async () => {
+    const c = state.config;
+    const page = (panel) => $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), kindSeg(), h('span', { class: 'sub' }, '实时的老师开口用的声音,挑中的写进 cotutor.json 的 live.voices')), panel));
+    if (!liveVoiceState.data && !liveVoiceState.loading) {
+      page(h('div', { class: 'panel' }, h('p', { class: 'hint', style: 'padding:16px 20px' }, '在列音色……')));
+      await loadLiveVoices();
+      if (state.tab !== 'voices' || voiceState.kind !== 'live') return;
+    }
+    if (liveVoiceState.loading) return;
+    const L = c.live || { enabled: false, voices: {} };
+    const list = (liveVoiceState.data && liveVoiceState.data.voices) || [];
+    // 实时只给有脸的老师(live.voices 的键要是 -tutor 结尾的老师)
+    const faces = c.tutors.filter((t) => t.name.endsWith('-tutor'));
+    const who = faces.find((t) => t.name === voiceState.for) || faces.find((t) => L.voices[t.name]) || faces.find((t) => t.enabled && !t.hidden) || faces[0] || null;
+    if (who) voiceState.for = who.name;
+    const panel = h('div', { class: 'panel voices' });
+    const fb = h('span', { class: 'fb' });
+    const forSel = h('select', { id: 'v-for', title: '挑中的音色给谁', on: { change: (e) => { voiceState.for = e.target.value; renderVoices(); } } },
+      ...faces.map((t) => h('option', { value: t.name, selected: who && t.name === who.name }, t.display + (L.voices[t.name] ? ' · 实时' : '') + (t.enabled ? '' : '(已关闭)'))));
+    panel.append(h('header', {}, h('h4', {}, '实时的嘴'), h('span', { class: 'sub' }, list.length + ' 个', h('span', { class: 'cmd' }, ' · ' + (L.model || ''))),
+      h('span', { class: 'right' }, fb, h('label', { class: 'for' }, '给谁挑', forSel))));
+    if (liveVoiceState.error) panel.append(h('p', { class: 'fb bad', style: 'padding:12px 16px 0' }, '列不出音色:' + liveVoiceState.error));
+    // 总开关
+    const onOff = (on) => h('button', { type: 'button', class: L.enabled === on ? 'on' : '', 'aria-pressed': String(L.enabled === on), on: { click: () => { if (L.enabled !== on) { stopPreview(); patchAndReload(panel, { live: { enabled: on } }, renderVoices); } } } }, on ? '开' : '关');
+    panel.append(h('div', { class: 'now' }, h('b', {}, '实时'), h('span', { class: 'seg' }, onOff(true), onOff(false)),
+      h('span', { class: 'muted' }, L.enabled ? '开着:挑了嘴的音色的老师,孩子的新话题走实时(连不上自动回到板书)' : '关着:全走板书;挑好的音色留着,开了就用')));
+    if (who) {
+      const curV = L.voices[who.name];
+      const cur = list.find((x) => x.voice === curV);
+      panel.append(h('div', { class: 'now' }, avatarEl(who), h('b', {}, who.display),
+        curV ? h('span', {}, '嘴用 ', h('b', {}, cur ? cur.name : curV), h('small', {}, ' ' + curV), cur ? null : h('span', { class: 'fb bad' }, ' 这个模型不认这个音色,嘴会不出声,换一个')) : h('span', { class: 'muted' }, '还没挑:这位老师走板书'),
+        curV ? h('button', { class: 'btn', type: 'button', on: { click: () => { stopPreview(); patchAndReload(panel, { live: { voices: { [who.name]: null } } }, renderVoices); } } }, '清掉(回到板书)') : null));
+    }
+    const langs = [...new Set(list.map((x) => x.lang))];
+    const filters = h('div', { class: 'filters' },
+      h('input', { type: 'search', placeholder: '搜名字 / 特质,比如 温柔、知性、少年', value: liveVoiceState.q, on: { input: (e) => { liveVoiceState.q = e.target.value.trim().toLowerCase(); renderList(); } } }),
+      h('select', { on: { change: (e) => { liveVoiceState.lang = e.target.value; renderList(); } } }, h('option', { value: '', selected: !liveVoiceState.lang }, '普通话与方言都列'), ...langs.map((g) => h('option', { value: g, selected: liveVoiceState.lang === g }, g))),
+      h('input', { type: 'text', class: 'sample', placeholder: '试听句:' + ((liveVoiceState.data && liveVoiceState.data.sample) || ''), value: voiceState.text, title: '空 = 用缺省那句;每句每个音色只念一次', on: { change: (e) => { voiceState.text = e.target.value.trim().slice(0, 200); stopPreview(); } } }));
+    const box = h('div', { class: 'vlist' });
+    const renderList = () => {
+      const rows = [];
+      const q = liveVoiceState.q;
+      for (const x of list) {
+        if (liveVoiceState.lang && x.lang !== liveVoiceState.lang) continue;
+        if (q && ![x.name, x.voice, x.trait, x.lang].some((y) => y && y.toLowerCase().includes(q))) continue;
+        const mine = who && L.voices[who.name] === x.voice;
+        const users = Object.entries(L.voices).filter(([, v]) => v === x.voice).map(([n]) => (c.tutors.find((t) => t.name === n) || { display: n }).display);
+        const play = h('button', { class: 'btn play', type: 'button', on: { click: () => preview(play, x.voice, panel, '/api/tts/realtime/preview') } }, '▶ 试听');
+        rows.push(h('div', { class: 'vrow' + (mine ? ' mine' : '') }, play,
+          h('span', { class: 'vname' }, h('b', {}, x.name), h('span', {}, x.voice)),
+          h('span', { class: 'vmeta' }, x.lang),
+          h('span', { class: 'vtrait' }, x.trait),
+          h('span', { class: 'vscene' }, ''),
+          h('span', { class: 'tags' }, ...users.map((d) => h('span', { class: 'tag' + (mine ? ' tuned' : '') }, d + ' 在用'))),
+          who ? (mine ? h('span', { class: 'tag tuned' }, '就是这个') : h('button', { class: 'btn primary pick', type: 'button', on: { click: () => { stopPreview(); patchAndReload(panel, { live: { voices: { [who.name]: x.voice } } }, renderVoices); } } }, '给' + who.display + '用')) : null));
+      }
+      box.replaceChildren(...(rows.length ? rows : [h('p', { class: 'hint', style: 'padding:14px 16px' }, '没有匹配的音色,换个词')]));
+    };
+    renderList();
+    panel.append(filters, box);
+    panel.append(h('p', { class: 'hint' }, '试听是真连一次百炼的实时模型照念这一句(几分钱;同一句同一个音色只念一次,存在 .cotutor/live-preview/)。挑中就写进 cotutor.json 的 live.voices,孩子下一个新话题起用。这个模型没有童声;方言、外国口音的不适合教课。'));
+    page(panel);
   };
 
   // ---- 设置:路径 / 服务 / 配音;文件仍是真相 ----

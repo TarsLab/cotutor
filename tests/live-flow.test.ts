@@ -223,6 +223,30 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   check('live.enabled 关了:升级被拒', k3.refused);
 }
 
+{
+  // 工作台音色页「实时的嘴」:列 56 个、谁在用;试听真连一次(这里是假百炼)照念这一句,存着第二次不再连;不认的音色 400;挑 / 清掉走 PATCH /api/config 的 live
+  const http = (path: string, init?: RequestInit) => fetch(`http://127.0.0.1:${port}${path}`, init);
+  const list = (await (await http('/api/tts/realtime')).json()) as { voices: { voice: string }[]; inUse: Record<string, string[]>; enabled: boolean };
+  check('实时的嘴:列 56 个音色、谁在用、总开关', list.voices.length === 56 && list.voices.some((x) => x.voice === 'Liora Mira') && list.inUse.Serena?.join() === 'chinese-tutor' && list.enabled === false, JSON.stringify({ n: list.voices.length, inUse: list.inUse }));
+  process.env.COTUTOR_LIVE_ENDPOINT = fake.endpoint;
+  const n0 = fake.conns.length;
+  const p1 = await http(`/api/tts/realtime/preview?voice=${encodeURIComponent('Theo Calm')}&text=${encodeURIComponent('你好呀')}`);
+  const wav = Buffer.from(await p1.arrayBuffer());
+  const n1 = fake.conns.length;
+  const p2 = await http(`/api/tts/realtime/preview?voice=${encodeURIComponent('Theo Calm')}&text=${encodeURIComponent('你好呀')}`);
+  const bad = await http('/api/tts/realtime/preview?voice=Bella');
+  delete process.env.COTUTOR_LIVE_ENDPOINT;
+  const said = fake.conns[n0]?.responses[0]?.instructions ?? '';
+  check('试听:真连一次照念这一句(音色带上)、回 wav;同一句同一音色第二次不再连;不认的音色 400', p1.status === 200 && p1.headers.get('content-type') === 'audio/wav' && wav.subarray(0, 4).toString() === 'RIFF' && n1 === n0 + 1 && fake.conns[n0].session?.voice === 'Theo Calm' && said.endsWith('「你好呀」') && p2.status === 200 && fake.conns.length === n1 && bad.status === 400, JSON.stringify({ s1: p1.status, s2: p2.status, bad: bad.status, conns: [n0, n1, fake.conns.length], voice: fake.conns[n0]?.session?.voice }));
+  const patch = (body: unknown) => http('/api/config', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const r1 = await patch({ live: { voices: { 'math-tutor': 'Maia' }, enabled: true } });
+  const c1 = (await (await http('/api/config')).json()) as { live: { enabled: boolean; voices: Record<string, string> } };
+  const r2 = await patch({ live: { voices: { 'math-tutor': null } } });
+  const c2 = (await (await http('/api/config')).json()) as { live: { voices: Record<string, string> } };
+  const r3 = await patch({ live: { voices: { 'not-a-tutor': 'Tina' } } });
+  check('挑 / 清掉:PATCH 能改 live(开总开关、给数学老师挑、清掉回板书);不是有脸老师的键不写', r1.status === 200 && c1.live.enabled && c1.live.voices['math-tutor'] === 'Maia' && c1.live.voices['chinese-tutor'] === 'Serena' && r2.status === 200 && !('math-tutor' in c2.live.voices) && r3.status >= 400, JSON.stringify({ r: [r1.status, r2.status, r3.status], c1: c1.live, c2: c2.live }));
+}
+
 server.close();
 fake.close();
 done();

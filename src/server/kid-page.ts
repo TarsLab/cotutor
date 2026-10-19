@@ -769,6 +769,8 @@ __AUDIO_JS__
    *  别的(重开页面、以前的、板书的)整节 → undefined */
   const liveHeard = (s) => (s && s.live && LV.on && LV.jobs.has(s.job) ? (LV.heard.has(s.job) ? LV.heard.get(s.job) : -1) : undefined);
   const liveUpTo = (i, upTo) => { const n = liveHeard(S.sections[i]); return n === undefined ? upTo : upTo === undefined ? n : Math.min(upTo, n); };
+  /** 页面是实时老师的样子:正连着嘴,或录像里放的是有实时轮的话题(卡角「?」、没有再听) */
+  const liveLook = () => LV.on || Boolean(S.reel && S.reel.realtime);
 
   // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音就不出声、按字数计时(浏览器合成声只在 mock 里,见 SYNTH) ----
   // 录像里孩子的屏幕在家长页的 iframe 里:用家长页那个 Audio(家长点「看录像」时在手势里解锁过),声音才放得出来
@@ -2420,7 +2422,7 @@ __WORD_DRAW_JS__
   /** 卡角:板书时是再听的喇叭;实时时是「?」(点了 = 孩子问这张卡,同说了一句,《wip/实时老师设想.md》拍板 6),朗读卡、单词卡、录音卡自己有声音,没有 */
   const SOUND_KINDS = ['read', 'word', 'record'];
   const askBtn = () => h('button', { type: 'button', class: 'again ask', 'aria-label': '问这张卡', on: { click: (e) => { e.stopPropagation(); const c = e.currentTarget.closest('.c'), secEl = c && c.closest('.sec'), s = secEl && S.sections[Number(secEl.dataset.sec)]; if (s) send('讲讲这张卡', { focus: { card: s.job + '/' + c.dataset.card }, ask: true }); } } }, '?');
-  const againBtn = (card) => LV.on ? (card && SOUND_KINDS.includes(card.kind) ? null : askBtn()) : h('button', { type: 'button', class: 'again', 'aria-label': '再听', html: ICON.replay, on: { click: (e) => { e.stopPropagation(); const c = e.currentTarget.closest('.c'); if (c) againAt(c, Number(c.dataset.card)); } } });
+  const againBtn = (card) => liveLook() ? (card && SOUND_KINDS.includes(card.kind) ? null : askBtn()) : h('button', { type: 'button', class: 'again', 'aria-label': '再听', html: ICON.replay, on: { click: (e) => { e.stopPropagation(); const c = e.currentTarget.closest('.c'); if (c) againAt(c, Number(c.dataset.card)); } } });
   const againAt = (el, target) => {
     const secEl = el.closest('.sec');
     if (!secEl || !(target === 'all' ? secEl : el).classList.contains('heard')) return;
@@ -2444,7 +2446,7 @@ __WORD_DRAW_JS__
   const markHeard = () => {
     const st = playView();
     // 实时没有再听(讲稿没有配音,再念会盖过嘴):卡角是「?」
-    const quiet = !LV.on && replayQuiet(st, S.pending);
+    const quiet = !liveLook() && replayQuiet(st, S.pending);
     const R = st.replay ? S.replayOf : null;
     for (const secEl of $('#board').querySelectorAll(':scope > .sec[data-sec]')) {
       const i = Number(secEl.dataset.sec);
@@ -2849,6 +2851,9 @@ __WORD_DRAW_JS__
         row.classList.toggle('pend', !any);
       }
       if (fs.spoken > (R.painted[fs.job] || 0)) { paintAll(i, fs.spoken - 1); R.painted[fs.job] = fs.spoken; }
+      // 不出卡的实时一轮:讲稿的字念到哪露到哪
+      const sy = el.querySelector(':scope > .says');
+      if (sy) for (const p of sy.children) p.classList.toggle('pend', Number(p.dataset.line) >= fs.spoken);
     });
     // 念到哪张亮哪张
     const at = f.saying || f.last;
@@ -2883,6 +2888,25 @@ __WORD_DRAW_JS__
     R.view = st; S.pending = Boolean(f.wait);
     S.waitSince = f.wait ? Date.now() - waitMs : null;
     renderSubtitle();
+  };
+  /** 有实时轮的话题:左栏字幕照这一刻——最近开始的一句讲稿或嘴接住的那句在说、它前一句淡;嘴在出声(念句、接住)头像外的圈亮 */
+  const reelLiveCap = (f, t) => {
+    const R = S.reel;
+    if (!R.realtime) return;
+    if (R.capOf !== R.d) {
+      R.capOf = R.d;
+      const text = (job, line) => { const e = R.entries.find((x) => x.job === job); return e && e.lines[line] ? plainLine(e.lines[line].text) : ''; };
+      R.cap = [...R.d.reel.says.filter((x) => !x.replay).map((x) => ({ at: x.from, text: text(x.job, x.line) })), ...R.d.reel.clips.filter((c) => c.kind === 'mouth').map((c) => ({ at: c.from, text: c.text || '' }))].filter((x) => x.text).sort((a, b) => a.at - b.at);
+    }
+    let i = -1; while (i + 1 < R.cap.length && R.cap[i + 1].at <= t) i++;
+    const speaking = Boolean(f.saying || (f.clip && f.clip.kind === 'mouth'));
+    const key = i + '/' + speaking;
+    document.body.classList.toggle('speaking', speaking);
+    if (key === R.capKey) return;
+    R.capKey = key;
+    $('#lv-cap .lv-prev').textContent = i > 0 ? R.cap[i - 1].text : '';
+    const c = $('#lv-cap .lv-cur'); c.textContent = i >= 0 ? R.cap[i].text : S.tutor.display; c.classList.toggle('nm', i < 0);
+    $('#lv-cap').classList.toggle('done', !speaking);
   };
   /** 按住说话:有实录(hold)照它画——话筒没开「等一下…」、在听、上滑「松手取消」、松手「正在听清…」,认出的字到这一刻为止,波形照记下的音量;
    *  老话题没有实录:原声那一段就是孩子按着的时候,认成的字按原声的进度一点点露、波形是浮层的假波形(推算);voice-diag 推出来的没发出去的那几次也在 f.hold 里 */
@@ -2964,7 +2988,9 @@ __WORD_DRAW_JS__
     const x = f.saying || f.clip;
     if (!R.playing || R.seeking || !x || !x.audio) return;
     audioEl.onended = null; audioEl.onerror = null; audioEl.onplaying = null;
-    audioEl.src = AUDIO + S.tutor.name + '/' + x.audio.split('/').map(encodeURIComponent).join('/') + (x.offset > 300 ? '#t=' + (x.offset / 1000).toFixed(2) : '');
+    // seek:实时的轮整次通话是一条声音,这句 / 这段在里面从哪开始
+    const off = (x.seek || 0) + x.offset;
+    audioEl.src = AUDIO + S.tutor.name + '/' + x.audio.split('/').map(encodeURIComponent).join('/') + (off > 300 ? '#t=' + (off / 1000).toFixed(2) : '');
     audioEl.defaultPlaybackRate = R.speed; audioEl.playbackRate = R.speed;
     audioEl.play().catch(() => {});
   };
@@ -2981,6 +3007,7 @@ __WORD_DRAW_JS__
     if (f.photoScreen) return { text: '📷 发照片屏' + ({ crop: ' · 在裁剪', pen: ' · 在圈画', rot: ' · 转了一下' }[f.photoScreen.tool] || ''), cls: 'kid' };
     if (f.lecture) return { text: (f.lecture.playing ? '▷ 在看小课堂 ' : '⏸ 小课堂停在 ') + lcClock(f.lecture.pos) + (f.gap ? ' · 停了 ' + reelDuration(f.gap.ms) : ''), cls: f.lecture.playing ? 'line' : 'gap' };
     if (f.clip && f.clip.kind === 'voice') return { text: '🎙 孩子按住说话 · 认成「' + (f.clip.text || '') + '」', cls: 'kid' };
+    if (f.clip && f.clip.kind === 'mouth') return { text: '🔊 老师接住:「' + (f.clip.text || '') + '」', cls: 'line' };
     if (f.clip) return { text: '🎙 孩子的录音', cls: 'kid' };
     if (f.saying) return { text: '🔊 老师在念', cls: 'line' };
     if (f.wait) return { text: '⏳ 等老师 ' + reelDuration(f.wait.ms), cls: 'gap' };
@@ -3006,7 +3033,7 @@ __WORD_DRAW_JS__
     const t = R.clock.toWall(R.p);
     const f = reelFrameAt(R.d.reel, t);
     R.f = f; R.t = t;
-    reelDraw(f); reelScroll(f, t); reelKidSub(f, t); reelHold(f); reelInput(f); reelKbd(f); reelPs(f); reelVoice(f); reelLecture(f);
+    reelDraw(f); reelScroll(f, t); reelKidSub(f, t); reelLiveCap(f, t); reelHold(f); reelInput(f); reelKbd(f); reelPs(f); reelVoice(f); reelLecture(f);
     if (R.playing && R.p >= R.clock.total) reelPlay(false);
   };
   const reelPlay = (on) => {
@@ -3115,12 +3142,14 @@ __WORD_DRAW_JS__
     document.body.classList.add('rlk');
     S.tutor = d.face; S.thread = d.thread; S.hist = d.date; S.readonly = true; S.autoplay = true;
     $('#c-av').replaceWith(Object.assign(avatarEl(S.tutor), { id: 'c-av' }));
+    // 有实时轮的话题:孩子当时看到的是实时老师页(左栏大头像 + 字幕、卡角「?」),字幕照这一刻(reelLiveCap)
+    if (d.realtime) { document.body.classList.add('live'); $('#tutor').style.setProperty('--tc', colorOf(d.face)); $('#lv-av').replaceChildren(avatarEl(S.tutor)); }
     $('#tutor').classList.add('on');
     renderSpk(); renderBar(); setBar('idle');
     const v0 = d.reel.views[0];
     // 示意的键盘(打字时垫在底下):三排字母一排空格,不画真键盘
     document.body.append(h('div', { id: 'rl-kbd' }, ...['qwertyuiop', 'asdfghjkl', 'zxcvbnm', ' '].map((r) => h('div', { class: 'r' }, ...[...r].map((k) => h('span', { class: k === ' ' ? 'sp' : '' }, k === ' ' ? '拼音' : k))))));
-    S.reel = { d, entries: sectionsFromMessages(d.kid), said: kidSaid(d.kid), size: v0 ? [v0.w, v0.h] : REEL_SIZES[d.device] || REEL_SIZES['tablet-landscape'], barsH: holdBars.map((b) => b.style.height), kb: 0, inKey: '', psKey: '', scrollAt: undefined, real: false, speed: 1, p: 0, playing: false, seeking: false, last: 0, key: '', painted: {}, now: '', voice: null, timer: null, clock: null, seen: 0, follow: false, pend: null, subKey: '', hold: null, f: null, t: 0 };
+    S.reel = { d, entries: sectionsFromMessages(d.kid), said: kidSaid(d.kid), size: v0 ? [v0.w, v0.h] : REEL_SIZES[d.device] || REEL_SIZES['tablet-landscape'], barsH: holdBars.map((b) => b.style.height), kb: 0, inKey: '', psKey: '', scrollAt: undefined, real: false, speed: 1, p: 0, playing: false, seeking: false, last: 0, key: '', painted: {}, now: '', voice: null, timer: null, clock: null, seen: 0, follow: false, pend: null, subKey: '', hold: null, f: null, t: 0, realtime: Boolean(d.realtime), cap: null, capOf: null, capKey: '' };
     reelSetClock();
     // ?at=时:分:秒 停在那一刻(调试、截图);那天的日期从录像起点取
     const at = /^(\\d{1,2}):(\\d{2})(?::(\\d{2}))?$/.exec(debug.get('at') || '');

@@ -187,8 +187,27 @@ try {
   ok('手机:字幕一行在输入条上方(小头像 44),不横向滚;换了排版讲稿的留字还在', Math.abs(ph.lvBottom - ph.barTop) <= 2 && ph.av === 44 && ph.w <= 390 && ph.says === 1, JSON.stringify(ph));
   console.log('  ', await shot('live-phone.png'));
 
-  // ---- 嘴连不上:回到板书 ----
+  // ---- 录像(P2.8):挂了落通话的录像;家长端这个话题的录像照它放(嘴、孩子的声音在通话那一条里),孩子的屏幕是实时老师页的样子 ----
   await device(1180, 820, 1, false);
+  const day = await (await fetch(`${base}/api/kid/conversations/chinese-tutor/today`)).json();
+  await send('Page.navigate', { url: 'about:blank' });
+  const ended = await untilNode(() => conn()?.closed === true, 8000);
+  await sleep(800);
+  const rj = await (await fetch(`${base}/api/conversations/chinese-tutor/${day.date}/threads/${day.thread}/reel`)).json();
+  if (process.env.PROBE_DEBUG) console.log(JSON.stringify({ says: rj.reel?.says, clips: rj.reel?.clips }, null, 0).slice(0, 3000));
+  const callSays = (rj.reel?.says ?? []).filter((x) => /\.live\/\d{6}\.wav$/.test(x.audio ?? ''));
+  const mouth = (rj.reel?.clips ?? []).filter((c) => c.kind === 'mouth');
+  const voice = (rj.reel?.clips ?? []).filter((c) => c.kind === 'voice');
+  const wav = callSays[0] ? await fetch(`${base}/api/audio/chinese-tutor/${callSays[0].audio}`, { headers: { range: 'bytes=0-99' } }) : null;
+  ok('挂了:落通话录像;话题的录像是实时的(realtime)、讲稿每句从通话的声音里放(带 seek)、嘴接住与孩子按住各是一段、通话的 wav 取得到(支持 Range)', ended && rj.realtime === true && callSays.length >= 3 && callSays.every((x) => typeof x.seek === 'number') && mouth.length >= 3 && voice.length >= 2 && wav?.status === 206 && wav.headers.get('content-type') === 'audio/wav', JSON.stringify({ realtime: rj.realtime, says: callSays.length, mouth: mouth.map((c) => c.text), voice: voice.length, wav: wav?.status }));
+  await send('Page.navigate', { url: `${base}/reel?tutor=chinese-tutor&date=${day.date}&thread=${encodeURIComponent(day.thread)}&end=1` });
+  await until(`document.body.classList.contains('rlk')`, 40);
+  await sleep(1500);
+  const rv = await evaluate(`(() => ({ live: document.body.classList.contains('live'), cur: document.querySelector('#lv-cap .lv-cur').textContent, asks: document.querySelectorAll('#board .c > .again.ask').length, speakers: [...document.querySelectorAll('#board .c > .again:not(.ask)')].filter((b) => getComputedStyle(b).display !== 'none').length, says: [...document.querySelectorAll('#board .says p')].filter((p) => getComputedStyle(p).display !== 'none').map((p) => p.textContent) }))()`);
+  ok('录像里孩子的屏幕:实时老师页的样子(左栏字幕停在最后一句、卡角「?」、没有喇叭);不出卡那轮念到的字露着', rv.live && rv.cur.endsWith('一加一等于几') && rv.asks >= 4 && rv.speakers === 0 && rv.says.some((x) => x.endsWith('一加一等于几')), JSON.stringify(rv));
+  console.log('  ', await shot('live-reel-ipad.png'));
+
+  // ---- 嘴连不上:回到板书 ----
   fake.failUpdate = true;
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&new=1` });
   await until(`Boolean(document.querySelector('#board .blank'))`);

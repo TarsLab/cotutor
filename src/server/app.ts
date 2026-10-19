@@ -6,7 +6,7 @@
  * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
@@ -20,7 +20,8 @@ import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../lib/tutor-color.ts';
 import { audioData } from '../lib/audio-data.ts';
-import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelDiag } from '../lib/reel.ts';
+import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall, type ReelDiag } from '../lib/reel.ts';
+import type { CallReel } from '../live/recorder.ts';
 import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, subjectLang, type ActivityValue, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../schema/index.ts';
 import type { BoardCard, Device } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
@@ -427,6 +428,8 @@ export interface ParentReel {
   device: Device | null;
   /** 今天的话题:还会长(老师在写、孩子还会接着说),录像停在最后时隔几秒重拿(拍板 16) */
   live: boolean;
+  /** 这个话题有实时的轮(《wip/实时老师设想.md》):孩子的屏幕是实时老师页的样子(左栏大头像 + 字幕、卡角「?」) */
+  realtime: boolean;
   face: { name: string; display: string; avatar: string | null; subject: string | null; color: string };
 }
 export async function parentReel(ctx: AppContext, tutor: string, date: string, thread: string): Promise<ParentReel | null> {
@@ -452,7 +455,8 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const cards = Object.fromEntries(Object.entries(states).filter(([job]) => jobs.has(job)));
   const plays = await readPlays(ctx.ws, tutor, date, jobs);
   const diag = plays.some((r) => r.k === 'hold') ? [] : (await diagOfDay(ctx, date)).filter((x) => x.tutor === tutor && x.thread === thread).map((x) => x.d);
-  const reel = buildReel({ messages: mine, events, cards, durations, tutor, now: ctx.now().getTime(), plays, diag });
+  const calls = mine.some((m) => m.live) ? await liveCalls(ctx, tutor, date, jobs) : [];
+  const reel = buildReel({ messages: mine, events, cards, durations, tutor, now: ctx.now().getTime(), plays, diag, calls });
   if (!reel) return null;
   const day = await parentDay(ctx, tutor, date);
   const kid = await kidDay(ctx, tutor, date);
@@ -460,7 +464,23 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const t = ctx.ws.config.tutors[tutor];
   const face = { name: tutor, display: t?.display ?? tutor, avatar: t?.avatar ?? null, subject: t?.subject ?? null, color: tutorColors(ctx.ws.config.tutors)[tutor] ?? NEUTRAL_COLOR };
   const live = date === localDate(ctx.now()) || mine.some((m) => m.result === 'running');
-  return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread), kid: kid.messages.filter((m) => m.thread === thread), device, face, live };
+  return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread), kid: kid.messages.filter((m) => m.thread === thread), device, face, live, realtime: mine.some((m) => m.live) };
+}
+
+/** 这一天实时老师的通话录像(<日期>.live/<时分秒>.reel.json,src/live/call.ts 落的)里有这几轮的;声音是同名的 .wav。坏的、没声音的跳过 */
+async function liveCalls(ctx: AppContext, tutor: string, date: string, jobs: Set<string>): Promise<ReelCall[]> {
+  const dir = join(ctx.ws.dirs.conversations, tutor, `${date}.live`);
+  const out: ReelCall[] = [];
+  for (const f of (await readdir(dir).catch(() => [] as string[])).filter((x) => /^\d{6}\.reel\.json$/.test(x)).sort()) {
+    const r = await readFile(join(dir, f), 'utf8').then((t) => JSON.parse(t) as Partial<CallReel>, () => null);
+    const startAt = Date.parse(r?.startedAt ?? '');
+    if (!r || !Array.isArray(r.msgs) || !Array.isArray(r.playing) || Number.isNaN(startAt)) continue;
+    if (!r.msgs.some((x) => Array.isArray(x) && x[1] === 'o' && x[2]?.t === 'turn' && jobs.has(String(x[2].job)))) continue;
+    const wav = f.replace(/\.reel\.json$/, '.wav');
+    if (!existsSync(join(dir, wav))) continue;
+    out.push({ audio: `${date}.live/${wav}`, startAt, msgs: r.msgs, playing: r.playing });
+  }
+  return out;
 }
 
 /**
@@ -667,6 +687,8 @@ const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+(?:\.\d+|\.cards\/\d+\/\d+)?
 /** 录音卡的录音(回放):<日期>.<job>.cards/<n>/rec-<k>.<ext>;按住说话的原声:<日期>.<job>.voice.<ext>(《家长录像设计.md》拍板 4) */
 const REC_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.(?:cards\/\d+\/rec-\d+|voice)\.(webm|m4a|ogg|wav)$/;
 const REC_TYPES: Record<string, string> = { webm: 'audio/webm', m4a: 'audio/mp4', ogg: 'audio/ogg', wav: 'audio/wav' };
+/** 实时老师一次通话的声音(两边混好的,src/live/call.ts):<日期>.live/<时分秒>.wav;录像里实时的轮从这里放 */
+const LIVE_CALL_RE = /^\d{4}-\d{2}-\d{2}\.live\/\d{6}\.wav$/;
 const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
 
 /** 作业照片一张最多这么大(解码后;页面先缩到长边 PHOTO_MAX_SIDE 的 jpeg,通常几百 KB) */
@@ -1032,10 +1054,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (audio && method === 'GET') {
       const [, tutor, name] = audio;
       const rec = REC_FILE_RE.exec(name);
-      if (!ws.config.tutors[tutor] || (!AUDIO_FILE_RE.test(name) && !rec)) return { status: 404, json: { error: 'not_found' } };
+      const call = LIVE_CALL_RE.test(name);
+      if (!ws.config.tutors[tutor] || (!AUDIO_FILE_RE.test(name) && !rec && !call)) return { status: 404, json: { error: 'not_found' } };
       const file = join(ws.dirs.conversations, tutor, name);
       if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
-      return { status: 200, file, contentType: rec ? REC_TYPES[rec[1]] : 'audio/mpeg' };
+      return { status: 200, file, contentType: rec ? REC_TYPES[rec[1]] : call ? 'audio/wav' : 'audio/mpeg' };
     }
 
     // 看原文(2026-09-11):一轮拆成六站,一个接口给全;/fixture 是原文原样一份,开发者放进 tests/fixtures/board/

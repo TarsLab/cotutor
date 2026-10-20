@@ -15,6 +15,7 @@ check('老师刚问了:「嗯」「对」是回答,收下', j('嗯。', true).ta
 check('一两个字的回答不当回声(碰巧在嘴的话里)', j('操场', false).take && j('下课', false).take);
 check('嘴的话被麦克风收回来(转写是嘴说过的,哪怕只认出一截):放过 echo', (j('小朋友们都跑到操场上') as { why: string }).why === 'echo' && (j('下课的时候,小朋友们') as { why: string }).why === 'echo');
 check('孩子说的和嘴说的沾一点边不算回声:收下', j('他们在操场上跳绳') .take && j('老师三明治怎么写').take, JSON.stringify(overlap('他们在操场上跳绳', said[0].text)));
+check('嘴停了以后孩子照着说一遍(跟读、复述):字一样也收下,不当回声', judge('小朋友们都跑到操场上', { asked: false, said, now, mouthOn: false }).take && judge('the duck is under the bus', { asked: false, said: [{ text: 'The duck is under the bus.', at: now }], now, mouthOn: false }).take);
 check(`回声只比 ${ECHO_WINDOW_MS / 1000} 秒以内嘴说过的`, j('小朋友们都跑到操场上', false, [{ text: said[0].text, at: now - ECHO_WINDOW_MS - 1 }]).take);
 check('中英夹着的也比得上', (j('the duck is under the bus', false, [{ text: '你看,The duck is under the bus.', at: now }]) as { why: string }).why === 'echo' && j('I like the bus', false, [{ text: '你看,The duck is under the bus.', at: now }]).take);
 done();

@@ -149,6 +149,8 @@ export class LiveCall {
   /** 一直听:VAD 判着孩子在说、开口的时刻(通话毫秒);说完了在等转写的(说完的时刻) */
   private vadOn = false;
   private vadFrom = 0;
+  /** 孩子开口那一刻嘴的声音还在放(或刚放完 300 毫秒内):只有这时才可能是回声 */
+  private vadOverMouth = false;
   private vadAwait: number | null = null;
   /** 一直听:嘴的声音让孩子端压低着 */
   private ducked = false;
@@ -621,6 +623,7 @@ export class LiveCall {
     if (st === 'started') {
       this.vadOn = true;
       this.vadFrom = this.ms();
+      this.vadOverMouth = this.playing() || this.ms() < this.play.end + 300;
       this.q = queueStep(this.q, { e: 'pause' }).s;
       if (this.playing() && !this.ducked) { this.ducked = true; this.send({ t: 'duck' }); }
       this.send({ t: 'vad', on: true });
@@ -646,7 +649,7 @@ export class LiveCall {
     const to = this.vadAwait ?? this.ms();
     this.vadOn = false;
     this.vadAwait = null;
-    const v = text === null ? { take: false as const, why: failed ?? 'rejected' } : judge(text, { asked: this.asked, said: this.saidLog, now: Date.now() });
+    const v = text === null ? { take: false as const, why: failed ?? 'rejected' } : judge(text, { asked: this.asked, said: this.saidLog, now: Date.now(), mouthOn: this.vadOverMouth });
     if (!v.take) {
       this.send({ t: 'skip', why: v.why, text: text ?? '' });
       this.resume();

@@ -50,7 +50,7 @@ try {
   type Row = { tutor: string; name: string; state: string; fixes: number; buttons: number; examples: number; page: string | null };
   const list = (await route('GET', '/api/dev/activities', ctx)).json as Row[];
   const row = (t: string, n: string) => list.find((r) => r.tutor === t && r.name === n);
-  check('列:出厂七个,例子文件不算 activity', list.length === 7 && !list.some((r) => r.name.endsWith('.例子')), JSON.stringify(list.map((r) => r.tutor + '/' + r.name)));
+  check('列:出厂八个,例子文件不算 activity', list.length === 8 && !list.some((r) => r.name.endsWith('.例子')), JSON.stringify(list.map((r) => r.tutor + '/' + r.name)));
   check('列:你说我画 出厂最新、首页 2 个按钮、5 个例子', row('chinese-tutor', '你说我画')?.state === 'latest' && row('chinese-tutor', '你说我画')?.buttons === 2 && row('chinese-tutor', '你说我画')?.examples === 5, JSON.stringify(row('chinese-tutor', '你说我画')));
   check('列:听写不起老师,标出进哪一页', (row('chinese-tutor', '听写')?.page ?? '').includes('/dictation'));
 

@@ -305,6 +305,8 @@ __WORD_DRAW_JS__
     $('#k-sav').replaceWith(Object.assign(tutorAvatar(t), { id: 'k-sav' }));
     $('#k-sname').textContent = t.display;
     $('#k-av .face').replaceChildren(tutorAvatar(t));
+    // 老师开没开实时定了按钮上的字
+    if (P.meta) renderGo();
   };
   const go = (hash) => { location.hash = hash; };
   /** 录像模式(?reel=<id>,《口语课设计.md》§8.3):开在家长端录像外壳的 iframe 里,照录下的消息画孩子那一屏 */
@@ -332,7 +334,7 @@ __WORD_DRAW_JS__
     const d = new Date(last.createdAt), nw = last.list.words.length, ns = last.list.sentences.length;
     $('#snap-resume-sub').textContent = (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日拍的 · ' + [nw ? nw + ' 个单词' : '', ns ? ns + ' 句' : ''].filter(Boolean).join('、');
   }
-  $('#snap-resume-go').addEventListener('click', (e) => { startWith(async () => (await api('POST', '/api/talk', { from: 'latest' })).id, e.currentTarget); });
+  $('#snap-resume-go').addEventListener('click', (e) => { (toLive() ? handoff : startWith)(async () => (await api('POST', '/api/talk', { from: 'latest' })).id, e.currentTarget); });
   const shrink = (file) => new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -400,7 +402,8 @@ __WORD_DRAW_JS__
   function renderGo() {
     const n = filled();
     $('#p-go').disabled = !P.id || !n || P.waiting;
-    $('#p-go').textContent = n ? '开始跟读 · ' + n + ' 个' : '开始跟读';
+    const label = toLive() ? '先热身,再打电话' : '开始跟读';
+    $('#p-go').textContent = n ? label + ' · ' + n + ' 个' : label;
   }
   function renderPick() {
     $('#p-scan').hidden = !P.waiting;
@@ -435,11 +438,21 @@ __WORD_DRAW_JS__
     const words = P.meta.list.words.filter((x) => x.en.trim()), sentences = P.meta.list.sentences.filter((x) => x.en.trim());
     if (!words.length && !sentences.length) return;
     const id = P.id;
-    startWith(async () => { P.meta = await api('PUT', '/api/talk/' + id + '/list', { words, sentences, ready: true }); return id; }, e.currentTarget);
+    (toLive() ? handoff : startWith)(async () => { P.meta = await api('PUT', '/api/talk/' + id + '/list', { words, sentences, ready: true }); return id; }, e.currentTarget);
   });
 
   // ---- 声音:采集(16k PCM16 上去)与播放(24k PCM16 下来),src/live/audio-client.ts ----
   __AUDIO_CLIENT_JS__
+
+  // ---- 英语老师开了实时(《wip/口语课改实时老师设计.md》拍板 1、2):口语单拍好就去他的实时页上课,先热身、再打电话;没开照旧在这一页跟读 + 打电话 ----
+  const toLive = () => Boolean(OWNER && OWNER.live);
+  /** 存好口语单(或接着上),换到老师页;那边点「先热身,再打电话」那一下才起声音 */
+  async function handoff(getId, btn) {
+    if (btn) btn.disabled = true;
+    let id;
+    try { id = await getId(); } catch (e) { if (btn) btn.disabled = false; toast('没连上,再点一次'); return; }
+    location.href = '/?tutor=' + encodeURIComponent(OWNER.name) + '&talk=' + encodeURIComponent(id);
+  }
 
   // ---- 孩子:跟读与聊 ----
   let K = null, call = null;

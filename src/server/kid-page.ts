@@ -767,7 +767,7 @@ __AUDIO_JS__
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), unfold: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, held: false, rec: null, submitted: new Set(), pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, reel: null, pendSaid: null, homeDraw: true };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), unfold: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, held: false, rec: null, submitted: new Set(), pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, talk: null, talkWait: false, reel: null, pendSaid: null, homeDraw: true };
   // 家长板书页看的模式缺省不念(家长想听哪句点哪句);开关各记一个键,不和孩子的搅
   try { S.autoplay = PARENT ? localStorage.getItem(AUTOPLAY_KEY) === '1' : localStorage.getItem(AUTOPLAY_KEY) !== '0'; } catch { S.autoplay = !PARENT; }
   /** 家长板书页:清单的日期(null = 今天) */
@@ -1368,12 +1368,15 @@ __AUDIO_JS__
     S.tutor = t; S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null; S.ask = intent.ask || null;
+    // 口语课页拍好了口语单(《wip/口语课改实时老师设计.md》§三之一):先等孩子点「先热身,再打电话」(那一下起声音),发出去的第一条带 talk
+    S.talk = intent.talk || null; S.talkWait = Boolean(intent.talk);
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else { liveClose(); micWarm(); }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
     $('#board').replaceChildren(); pin.on = false;
     if (S.ask) $('#board').append(askBoard(S.ask));
+    else if (S.talkWait) $('#board').append(talkBoard());
     else if (S.newThread && !intent.send && !S.lecture) $('#board').append(blankBoard('想问什么?', intent.resume));
     $('#tutor').classList.add('on');
     setBar('idle');
@@ -1396,6 +1399,16 @@ __AUDIO_JS__
         h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.again }), '接着刚才那个'), h('span', { class: 's' }, ask.resume.title || '刚开了个头'), h('small', {}, clock(ask.resume.at))),
       h('button', { type: 'button', class: 'ask-go fresh', style: 'background:' + tutorColor(), on: { click: () => startFresh(ask) } },
         h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.spark }), ask.lecture ? '从头看一遍' : '重新开始'), h('span', { class: 's' }, ask.lecture ? ask.lecture.title : ask.label))));
+  /** 口语课页过来的:口语单拍好了,点一下开始(这一下点击起声音、开麦;不点不开讲) */
+  const talkBoard = () => h('div', { class: 'blank ask' }, avatarEl(S.tutor, 'draw'), h('span', { class: 'nm' }, S.tutor.display), h('b', {}, '口语单拍好啦'),
+    h('div', { class: 'ask-row' },
+      h('button', { type: 'button', class: 'ask-go fresh', id: 'talk-go', style: 'background:' + tutorColor(), on: { click: () => {
+        unlock(); if (LV.audio) LV.audio.wake().catch(() => {}); liveMicOn();
+        S.talkWait = false; renderBar();
+        const b = $('#board .blank'); if (b) b.remove();
+        send('口语课');
+      } } },
+        h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.spark }), '先热身,再打电话'), h('span', { class: 's' }, '先跟老师热热身,再打个电话聊一聊'))));
   const startFresh = (ask) => {
     S.ask = null;
     const b = $('#board .blank'); if (b) b.remove();
@@ -2705,7 +2718,7 @@ __WORD_DRAW_JS__
   // 家长端的 chrome:只看(S.readonly:选择 / 填空 / 画板不开、没有「继续」)、没有输入条、没有「回到今天」(回清单走左上角)、没有「更多」。
   // 家长要试老师,到孩子端当一回孩子,用完回清单删那个话题(写进记忆、日记的一起撤)
   /** 能不能发消息:孩子端 = 不只读;家长端不发 */
-  const canSend = () => !S.readonly && !S.ask && !(S.lecture && !S.lecture.watch);
+  const canSend = () => !S.readonly && !S.ask && !S.talkWait && !(S.lecture && !S.lecture.watch);
   const renderBar = () => { $('#pill').hidden = !canSend() && !REEL; $('#back-today').hidden = !S.readonly || PARENT || REEL; };
   $('#more-btn').hidden = PARENT;
   const resetBoard = () => { dispatch({ type: 'halt' }); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.partial = null; pin.on = false; $('#board').replaceChildren(); };
@@ -2794,6 +2807,7 @@ __WORD_DRAW_JS__
     if (focus) body.focus = focus;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
+    if (S.talk) { body.talk = { id: S.talk }; S.talk = null; }
     const lb = await lectureBody();
     if (lb) body.lecture = lb;
     try {
@@ -2807,7 +2821,7 @@ __WORD_DRAW_JS__
     } catch (e) {
       // 忙 / 上限 / 不通:什么都不报;刷新一下让状态说话
       S.pending = false;
-      if (e && e.status === 429) { S.limit = true; renderSubtitle(); } else if (e && e.status === 409) loadDay(true); else if (e && e.status === 400 && S.via) { S.via = null; closeTutor(); } else setOffline(true);
+      if (e && e.status === 429) { S.limit = true; renderSubtitle(); } else if (e && e.status === 409) loadDay(true); else if (e && e.status === 400 && (S.via || body.talk)) { S.via = null; closeTutor(); } else setOffline(true);
     }
   };
 
@@ -3658,10 +3672,11 @@ __REEL_DOCK_JS__
   const liveOpen = (intent) => {
     if (LV.ws) liveClose();
     liveDispatch({ type: 'reset' });
-    const greet = Boolean(intent && intent.listen);
-    LV.greet = greet;
+    // 口语课页过来的也一直听,但不招呼(点了开始,嘴说「好,我们先热热身!」)
+    const listen = Boolean(intent && intent.listen);
+    LV.greet = listen && !intent.talk;
     LV.gateOn = false;
-    liveDispatch({ type: 'listen', open: greet || livePref(S.tutor) });
+    liveDispatch({ type: 'listen', open: listen || livePref(S.tutor) });
     LV.on = true; LV.ready = false; LV.cap = { prev: '', cur: '', cut: '', catching: false }; LV.heard = new Map(); LV.jobs = new Set();
     document.body.classList.add('live');
     $('#tutor').style.setProperty('--tc', tutorColor());
@@ -3774,6 +3789,7 @@ __REEL_DOCK_JS__
     if (opts.ask && focus) body.ask = true;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
+    if (S.talk) { body.talk = { id: S.talk }; S.talk = null; }
     const go = (lb) => {
       if (lb) { body.lecture = lb; lectureSent(null); LV.lcPending = true; }
       liveDispatch({ type: body.ask ? 'ask' : 'send' }, body);
@@ -4101,7 +4117,9 @@ __REEL_DOCK_JS__
     try { const q = new URLSearchParams(); if (debug.get('device')) q.set('device', debug.get('device')); const rest = q.toString(); if (location.search !== (rest ? '?' + rest : '')) history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '')); } catch {}
     if (open && S.home) {
       const t = S.home.tutors.find((x) => x.name === open);
-      if (t) {
+      const talk = debug.get('talk');
+      if (t && talk) openTutor(t, { kind: 'new', talk, listen: true });
+      else if (t) {
         openTutor(t, { kind: 'today' });
         // 调试:&new=1 新话题空白态;&hist=<日期>.<话题> 只读回放以前的;&panel=1 打开「以前的」面板
         setTimeout(() => {

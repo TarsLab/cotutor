@@ -24,7 +24,7 @@ import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type Pl
 import type { CallReel } from '../live/recorder.ts';
 import { isRealtimeVoice, REALTIME_VOICES } from '../live/voices.ts';
 import { previewVoice } from '../live/preview.ts';
-import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, subjectLang, type ActivityValue, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../schema/index.ts';
+import { DATE_RE, FREE_ACTIVITIES, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, subjectLang, type ActivityValue, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../schema/index.ts';
 import type { BoardCard, Device } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
 import { tutorStatuses } from '../cli/tutors.ts';
@@ -35,6 +35,8 @@ import { createAccess, gatePage, isKidPath, type Access, type Who } from './acce
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { kidPage } from './kid-page.ts';
 import { kidHomeView, messageVia, resolveVia } from './home.ts';
+import { threadActivity } from './activity-state.ts';
+import { talkRun } from './talk-run.ts';
 import { DEV_PAGE } from './dev-page.ts';
 import { devOverview } from './dev-overview.ts';
 import { ActivityConflict, checkDevActivity, findDevActivity, listDevActivities, readDevActivity, restoreDevActivity, saveDevActivity } from './dev-activities.ts';
@@ -282,10 +284,12 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
   const photos = await photosOf(ws, body.photos);
   if (photos === null) return { error: { status: 400, json: { error: 'bad_request' } } };
   const policy = resolvePolicy(ws.config, tutor);
-  // 「继续」不计每日上限:到了上限也能把老师讲完的听完
-  if (action !== 'continue' && kidMessageCount(await readIndex(ws, tutor, date)) >= policy.dailyMessages) return { error: { status: 429, json: { error: 'limit', remaining: 0 } } };
   const thread = body.thread === undefined ? undefined : typeof body.thread === 'string' && /^\d{4}-\d+$/.test(body.thread) ? body.thread : null;
   if (thread === null) return { error: { status: 400, json: { error: 'bad_request' } } };
+  // 「继续」不计每日上限:到了上限也能把老师讲完的听完;口语课(开课那条、它的话题里)也不计(FREE_ACTIVITIES)
+  const today = await readIndex(ws, tutor, date);
+  const free = body.talk !== undefined || (thread !== undefined && FREE_ACTIVITIES.includes(threadActivity(today.messages, thread)?.name ?? ''));
+  if (action !== 'continue' && !free && kidMessageCount(today) >= policy.dailyMessages) return { error: { status: 429, json: { error: 'limit', remaining: 0 } } };
   const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
   if (device && !device.success) return { error: { status: 400, json: { error: 'bad_request' } } };
   // 首页的按钮(《首页设计.md》§5.2):via 只带 id,按钮是什么、讲法是什么都从服务端的发布件查;对不上就 400(孩子端刷新首页)
@@ -342,8 +346,18 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
     pick = undefined;
     activity = { name: button.activity, params: button.params };
   }
+  // 口语课(《wip/口语课改实时老师设计.md》§三之六):口语课页拍好、改好的那份口语单,新开话题跑这位老师的 activity「口语课」
+  let talk: string | undefined;
+  if (body.talk !== undefined) {
+    const t = await talkRun(ws, tutor, body.talk);
+    if (!t) return { error: { status: 400, json: { error: 'bad_talk' } } };
+    newThread = true;
+    pick = undefined;
+    activity = t.run;
+    talk = t.id;
+  }
   if (!text.trim() && !action && !photos?.length) return { error: { status: 400, json: { error: 'bad_request' } } };
-  return { input: { from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(listenedOf(body.listened) ? { listened: listenedOf(body.listened) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
+  return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(listenedOf(body.listened) ? { listened: listenedOf(body.listened) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 
 /** 家长板书页的一天(《家长板书页设计.md》§4.1):形状同 KidDay 少 remaining;答案不剥,系统发的也在 */

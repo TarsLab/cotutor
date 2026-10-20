@@ -52,6 +52,9 @@ export const ACTIVITY_TOOL_SECTION_RE = /^(.+?)收到什么$/;
 /** 首页按钮下面已经占用的行名,参数不能叫这些 */
 export const ACTIVITY_RESERVED_PARAMS = ['讲法', '留到'] as const;
 
+/** 不算每天条数的 activity:口语课一堂十几轮(《wip/口语课改实时老师设计.md》拍板 3 认了 §六 2) */
+export const FREE_ACTIVITIES: readonly string[] = ['口语课'];
+
 /** 小课堂按钮没写 `activity:` 时,看完照这位老师的这个 activity 聊(《wip/activity设计.md》拍板 17、18) */
 export const LECTURE_ACTIVITY = '小课堂';
 

@@ -32,7 +32,7 @@ const { createContext, createHandler } = await import(join(repo, 'src', 'server'
 const { makeLiveUpgrade } = await import(join(repo, 'src', 'live', 'route.ts'));
 const { wavOfPcm } = await import(join(repo, 'src', 'live', 'lib', 'wav.ts'));
 const { addChunk, playbackInit } = await import(join(repo, 'src', 'live', 'lib', 'playback.ts'));
-const { spoken } = await import(join(repo, 'src', 'live', 'lib', 'cue.ts'));
+const { spoken, FILL_LINE } = await import(join(repo, 'src', 'live', 'lib', 'cue.ts'));
 
 // ---- 临时 workspace:出厂老师(qwen),语文老师开实时 ----
 const wsRoot = join(out, 'ws');
@@ -107,6 +107,9 @@ for (const [date, job] of says) {
   const firstRead = reads[0]?.at ?? null;
   const totalMs = Math.round(pcmOut.length / 48);
   const dones = mine.filter((x) => x.t === 'tutor' && typeof x.done === 'string').map((x) => x.done);
+  // 嘴念的 = 接住、垫话之外的(垫话是脑想得久时嘴垫的那句,设想稿拍板 12)
+  const fillAt = mine.find((x) => x.t === 'tutor' && x.done === FILL_LINE)?.at;
+  const readDones = dones.slice(1).filter((d) => d !== FILL_LINE);
   const kid = mine.find((x) => x.t === 'kid')?.text;
   const ev = readFileSync(join(wsRoot, 'conversations', tutor, `${today}.${turn?.job}.events.jsonl`), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
   const line0 = ev.find((e) => e.lane === 'main' && e.kind === 'line' && e.line === 0)?.t;
@@ -115,11 +118,11 @@ for (const [date, job] of says) {
     `- realtime 认的:${kid}`,
     `- 嘴接住:「${dones[0] ?? ''}」,松手到首包 ${firstAudio} ms`,
     `- 脑:${turn?.job},讲稿 ${lines.length} 句、${sec?.cards?.length ?? 0} 张卡(${(sec?.cards ?? []).map((c) => c.kind).join('、')});进程起来到第一句定稿 ${line0 ?? '?'} ms${startEv?.warmMs !== undefined ? '(预热的)' : '(冷起)'}`,
-    `- 松手到第一句开始放 ${firstRead} ms(孩子端放到那一刻发 {t:read},一句一个);嘴念了 ${dones.length - 1} 段`,
+    `- 松手到第一句开始放 ${firstRead} ms(孩子端放到那一刻发 {t:read},一句一个);嘴念了 ${readDones.length} 段${fillAt !== undefined ? `;${fillAt} ms 垫了一句` : ''}`,
     `- 嘴的声音一共 ${(totalMs / 1000).toFixed(1)} 秒;松手到放完 ${(audio.slice(a0).reduce((p, x) => addChunk(p, 0, x.at, x.pcm.length / 48).p, playbackInit()).end / 1000).toFixed(1)} 秒(照孩子端的排法算)`,
-    `- 嘴念的:${dones.slice(1).join('')}`,
+    `- 嘴念的:${readDones.join('')}`,
     `- 讲稿:${lines.join('')}`,
-    `- 对得上(讲稿换成念法再比):${dones.slice(1).join('').replace(/[\s,，。!！?？、;；:：「」“”"']/g, '') === lines.map(spoken).join('').replace(/[\s,，。!！?？、;；:：「」“”"']/g, '') ? '一字不差' : '有出入'}`,
+    `- 对得上(讲稿换成念法再比):${readDones.join('').replace(/[\s,，。!！?？、;；:：「」“”"']/g, '') === lines.map(spoken).join('').replace(/[\s,，。!！?？、;；:：「」“”"']/g, '') ? '一字不差' : '有出入'}`,
     `- 声音:${wav}(${(pcmOut.length / 48000).toFixed(1)} 秒)`, '');
 }
 ws.send(JSON.stringify({ t: 'bye' }));

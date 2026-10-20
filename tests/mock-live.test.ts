@@ -20,7 +20,7 @@ const r = await serveMock({ port: 0, http: true, live: true, delayMs: 60 });
 const base = `127.0.0.1:${r.port}`;
 try {
   const home = (await (await fetch(`http://${base}/api/kid/home`)).json()) as { tutors: { name: string; live: boolean }[] };
-  check('--live:首页接口里语文、数学老师是实时的,别的不是', home.tutors.filter((t) => t.live).map((t) => t.name).sort().join() === 'chinese-tutor,math-tutor', JSON.stringify(home.tutors.map((t) => [t.name, t.live])));
+  check('--live:首页接口里语文、数学、英语老师是实时的,口播老师不是', home.tutors.filter((t) => t.live).map((t) => t.name).sort().join() === 'chinese-tutor,english-tutor,math-tutor', JSON.stringify(home.tutors.map((t) => [t.name, t.live])));
 
   const ws = new WebSocket(`ws://${base}/api/live/chinese-tutor/ws`);
   ws.binaryType = 'arraybuffer';

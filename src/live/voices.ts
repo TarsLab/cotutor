@@ -3,6 +3,8 @@
  * 「Qwen3.8-Omni 系列」那 56 个(2026-10-19 照抄;每个都真连过一次让它说一个字,都出声)。trait 是官方描述的概括,lang 是除外语以外会说的(都另会 28 种外语)。
  * 旧模型的 Bella、Pip、Chelsie、Ethan 这个模型不认:连接照样连得上,第一次开口才报 InvalidParameter——所以写错的音色要在配置这一头拦(工作台、doctor)。
  * 工作台音色页「实时的嘴」那一半照这张表列、试听、挑(写进 cotutor.json 的 live.voices)。
+ * 英语老师的讲稿是中文里夹英文(「apple 苹果,banana 香蕉」):2026-10-20 真连(照念 → 转写回字)Serena、Tina、Maia、Liora Mira、Mione、Theo Calm 都念对,
+ * Jennifer、Mia 的中文带英文腔(Jennifer:「腿」成了 tway,「它是什么颜色」没了),trait 里记着。
  */
 
 export interface RealtimeVoice {
@@ -24,7 +26,7 @@ export const REALTIME_VOICES: readonly RealtimeVoice[] = [
   v('Zane', '泽恩', '磁性迷人'),
   v('Katerina', '卡捷琳娜', '御姐音,韵律感强'),
   v('Ryan', '甜茶', '节奏感强,戏感足'),
-  v('Mia', '舒然', '细腻,生活美学风格的温柔博主'),
+  v('Mia', '舒然', '细腻,生活美学风格的温柔博主;中英夹着说时中文带英文腔'),
   v('Cici', '绵绵', '邻家妹妹,活泼软糯'),
   v('Theo Calm', '予安', '沉静,治愈感'),
   v('Serena', '苏瑶', '温柔小姐姐'),
@@ -37,7 +39,7 @@ export const REALTIME_VOICES: readonly RealtimeVoice[] = [
   v('Li Cassian', '李公公', '话中有留白,善察言观色'),
   v('Joyner', '阿逗', '搞笑、夸张、接地气'),
   v('Gold', '金爷', '西海岸黑人说唱歌手风格'),
-  v('Jennifer', '詹妮弗', '电影质感的美语女声'),
+  v('Jennifer', '詹妮弗', '电影质感的美语女声;中英夹着说时中文带英文腔(苹果念成 pingguo)'),
   v('Aiden', '艾登', '精通厨艺的美语大男孩'),
   v('Mione', '敏儿', '成熟知性的英国邻家妹妹'),
   v('Sunny', '晴儿', '甜美的川妹子', '四川话'),

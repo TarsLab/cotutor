@@ -17,6 +17,8 @@ export interface BoardCard {
   props: Record<string, unknown>;
   state?: unknown;
   assets?: string[];
+  /** 交给老师过了(服务端按今天交答案那几条算,kid-view 的 submittedCards):锁住,不能改、不能再交 */
+  submitted?: boolean;
   /** 样子(围栏行上写的 tint= / look= / emoji=;没有就走机械规则 tintFor / lookFor):底色槽、字形槽、emoji,名字来自主题清单 */
   look?: CardLook;
 }

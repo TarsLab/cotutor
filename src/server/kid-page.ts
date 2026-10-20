@@ -388,6 +388,8 @@ ${faviconLinks()}
   #pill .ic { color:var(--ink); display:grid; place-items:center; width:32px; height:44px; }
   /* 一直听(《wip/实时老师常开麦设计.md》):右上角的开关、输入条里的麦克风(点它关麦 / 开麦,外圈跟着音量) */
   #pill #lv-mic { display:none; }
+  /* 交给老师了(选择、填空、画板;录音卡有自己的 .rc-lk):锁住,不能改、不能再交 */
+  .c > .lk { display:inline-flex; align-items:center; gap:4px; align-self:flex-end; font-size:14px; color:var(--dim); }
   body.live.lv-open #pill #lv-mic { display:grid; width:44px; border-radius:50%; color:#2a5ea8; box-shadow:0 0 0 calc(var(--lv, 0) * 10px) #3d7fd933; transition:box-shadow .1s; }
   body.live.lv-open #pill #lv-mic.hear { background:#3d7fd9; color:#fff; }
   body.live.lv-open #pill #lv-mic.off { color:var(--dim); box-shadow:none; }
@@ -1420,7 +1422,8 @@ __AUDIO_JS__
     const p = c.props || {};
     // 每张卡带底色槽与字形槽(围栏行上写的 look,没有就机械规则);名字对不上主题的,CSS 落回 paper / plain
     const board = !stage && secIdx !== null;
-    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), on: board ? { click: () => openStage(secIdx, idx) } : {} }, ...kids, board ? againBtn(c) : null);
+    const lk = board && c.submitted && c.kind !== 'record' ? h('span', { class: 'lk', html: ICON.lock + '交给老师了' }) : null;
+    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), on: board ? { click: () => openStage(secIdx, idx) } : {} }, ...kids, lk, board ? againBtn(c) : null);
     switch (c.kind) {
       case 'text': {
         if (isHeading(c)) return h('div', { class: 'heading', 'data-card': idx }, p.title || '');
@@ -1467,7 +1470,7 @@ __AUDIO_JS__
         const got = filledAnswers(c);
         if (stage) {
           body.classList.add('fq');
-          parts.forEach((t, i) => { body.append(t); if (i < parts.length - 1) body.append(h('input', { class: 'fi', type: 'text', value: got[i] || '', autocomplete: 'off', enterkeyhint: 'done', on: { input: (e) => fillIn(secIdx, idx, i, e.target.value), keydown: (e) => { if (e.key === 'Enter') e.target.blur(); }, click: (e) => e.stopPropagation() } })); });
+          parts.forEach((t, i) => { body.append(t); if (i < parts.length - 1) body.append(h('input', { class: 'fi', type: 'text', value: got[i] || '', autocomplete: 'off', enterkeyhint: 'done', readonly: c.submitted ? '' : null, on: { input: (e) => fillIn(secIdx, idx, i, e.target.value), keydown: (e) => { if (e.key === 'Enter') e.target.blur(); }, click: (e) => e.stopPropagation() } })); });
           return el;
         }
         parts.forEach((t, i) => { body.append(t); if (i < parts.length - 1) body.append(h('span', { class: 'bl' + (got[i] ? ' f' : '') }, got[i] || '\\u200b')); });
@@ -2237,7 +2240,10 @@ __WORD_DRAW_JS__
     const act = $('#st-act'); act.hidden = !hasState(card);
     $('#st-go').textContent = GO_LABEL[card.kind] || '交给老师';
     $('#st-go').disabled = !stateSummary(card).length;
+    $('#st-go').hidden = false;
     $('#st-note').textContent = card.kind === 'canvas' ? stateSummary(card).join('、') : '';
+    // 交过的卡锁住:只看,没有「交给老师」(录音卡一节一锁,在下面)
+    if (card.submitted && card.kind !== 'record') { act.hidden = S.readonly; $('#st-go').hidden = true; $('#st-note').innerHTML = ICON.lock + ' 交给老师了'; }
     if (card.kind === 'record') {
       // 这一节还有没录的:「下一句」;都录了:「交给老师」;交了就锁住,只剩回放
       const sec = S.sections[S.stage.section];
@@ -2254,7 +2260,7 @@ __WORD_DRAW_JS__
   const stageCard = (card) => {
     const b = card.kind === 'lecture' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null;
     const im = card.kind === 'canvas' && card.props.base && typeof card.props.base.image === 'string' ? card.props.base.image : null;
-    return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, bundleUrl: b ? lcBundleUrl(b, card.kind === 'lecture' && card.props.video === true) : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
+    return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, readonly: Boolean(card.submitted), bundleUrl: b ? lcBundleUrl(b, card.kind === 'lecture' && card.props.video === true) : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
   };
   /** 舞台包说话:ready → 把卡发过去;phase → 字幕行;state → 存;done 且是讲稿委托的 → 关舞台接着念 */
   window.addEventListener('message', (e) => {
@@ -2268,8 +2274,8 @@ __WORD_DRAW_JS__
       if (m.phase === 'done' && card.kind === 'lecture') { S.stage.playing = null; if (S.stage.delegate) { S.stage.delegate = false; resumeAfter(); } }
       renderSubtitle();
     }
-    else if (m.type === 'state') { card.state = m.state; $('#st-go').disabled = !stateSummary(card).length; $('#st-note').textContent = stateSummary(card).join('、'); repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, m.state); }
-    else if (m.type === 'submit') { card.state = m.state; const id = S.stage.id; const job = S.sections[S.stage.section].job; const idx = S.stage.card; closeStage(); api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id } })); }
+    else if (m.type === 'state') { if (card.submitted) return; card.state = m.state; $('#st-go').disabled = !stateSummary(card).length; $('#st-note').textContent = stateSummary(card).join('、'); repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, m.state); }
+    else if (m.type === 'submit') { if (card.submitted) return; card.state = m.state; card.submitted = true; const id = S.stage.id; const secI = S.stage.section, job = S.sections[secI].job; const idx = S.stage.card; closeStage(); repaintCard(secI, idx); api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id } })); }
     else if (m.type === 'close' || m.type === 'error') { const d = S.stage; closeStage(); if (d.delegate) resumeAfter(d); }
   });
   const resumeAfter = () => { if (LV.on) liveDispatch({ type: 'lectureDone' }); else dispatch({ type: 'stageDone' }); };
@@ -2285,6 +2291,7 @@ __WORD_DRAW_JS__
   /** 选择题:点一项 → 本地改状态、重画、PUT 到服务端(失败不响,下次再点再存) */
   const pick = (secIdx, idx, i) => {
     const card = S.sections[secIdx].cards[idx];
+    if (card.submitted) return;
     const cur = (card.state && Array.isArray(card.state.picked)) ? card.state.picked : [];
     card.state = { picked: togglePick(cur, i, Boolean(card.props.multi)) };
     renderStage(); repaintCard(secIdx, idx);
@@ -2294,6 +2301,7 @@ __WORD_DRAW_JS__
   $('#st-go').addEventListener('click', () => {
     if (!S.stage) return;
     const card = S.sections[S.stage.section].cards[S.stage.card];
+    if (card.submitted && card.kind !== 'record') return;
     if (isHeavy(card)) { postStage({ type: 'control', action: 'submit' }); return; } // 画板:让舞台包导出 png 再交
     if (!stateSummary(card).length) return;
     if (card.kind === 'record') {
@@ -2308,9 +2316,12 @@ __WORD_DRAW_JS__
       send('', { action: 'submit', focus: { card: id } });
       return;
     }
-    const id = S.stage.id;
-    clearTimeout(fillTimer); if (card.kind === 'fill') saveState(S.sections[S.stage.section].job, S.stage.card, card.state);
+    if (card.submitted) return;
+    const id = S.stage.id, secI = S.stage.section, idx = S.stage.card;
+    clearTimeout(fillTimer); if (card.kind === 'fill') saveState(S.sections[secI].job, idx, card.state);
+    card.submitted = true;
     closeStage();
+    repaintCard(secI, idx);
     send('', { action: 'submit', focus: { card: id } });
   });
   const NS = 'http://www.w3.org/2000/svg';

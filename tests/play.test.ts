@@ -76,6 +76,14 @@ try {
   const r2 = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '', action: 'submit', focus: { card: `${job}/1` } });
   const job2 = (r2.json as { job: string }).job;
   await wait();
+  {
+    // 交过的卡锁住(kid-view 的 submittedCards):再改、再交都 409;孩子端下发的卡带 submitted
+    const again = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '', action: 'submit', focus: { card: `${job}/1` } });
+    const edit = await route('PUT', `/api/kid/conversations/math-tutor/cards/${job}/1`, ctx, { picked: [0] });
+    const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; section?: { cards: { submitted?: boolean }[] } }[] };
+    const cs = kd.messages.find((m) => m.job === job)?.section?.cards ?? [];
+    check('交过的卡锁住:再交 409、再改 409;下发时这张卡 submitted,别的卡没有', again.status === 409 && (again.json as { error: string }).error === 'submitted' && edit.status === 409 && cs[1]?.submitted === true && !cs[0]?.submitted, JSON.stringify({ again: again.status, edit: edit.status, cs: cs.map((c) => c.submitted ?? false) }));
+  }
 
   // ---- 家长板书页:「做了」带想了多久、改过几次 ----
   type PB = { messages: { job: string; cards?: { card: string; text: string; took?: { think: number | null; changes: number } }[] }[] };

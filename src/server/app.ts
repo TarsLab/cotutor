@@ -15,7 +15,7 @@ import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
 import { conversationFiles, currentThread, lastJobOf, localDate, threads, weekOf } from '../lib/conversation.ts';
-import { kidConversation, kidMessageCount, kidThreads, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
+import { kidConversation, kidMessageCount, kidThreads, submittedCards, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../lib/tutor-color.ts';
@@ -298,6 +298,8 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
   const today = await readIndex(ws, tutor, date);
   const free = body.talk !== undefined || (thread !== undefined && FREE_ACTIVITIES.includes(threadActivity(today.messages, thread)?.name ?? ''));
   if (action !== 'continue' && !free && remainingOf(ctx, tutor, policy.dailyMessages, today) === 0) return { error: { status: 429, json: { error: 'limit', remaining: 0 } } };
+  // 交过的卡不能再交(kid-view 的 submittedCards)
+  if (action === 'submit' && focus?.data?.card && submittedCards(today).has(focus.data.card)) return { error: { status: 409, json: { error: 'submitted' } } };
   const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
   if (device && !device.success) return { error: { status: 400, json: { error: 'bad_request' } } };
   // 首页的按钮(《首页设计.md》§5.2):via 只带 id,按钮是什么、讲法是什么都从服务端的发布件查;对不上就 400(孩子端刷新首页)
@@ -683,6 +685,8 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
   const msg = index.messages.find((m) => m.job === job);
   const target = msg?.result === 'ok' ? msg.section?.cards[n] : undefined;
   if (!target) return { status: 404, json: { error: 'no_such_card' } };
+  // 交过的卡锁住了,不能再改
+  if (submittedCards(index).has(`${job}/${n}`)) return { status: 409, json: { error: 'submitted' } };
   let state = body;
   /** 录音卡这次带来的新录音(相对 workspace 根):存好状态后起评测 */
   let fresh: string | null = null;

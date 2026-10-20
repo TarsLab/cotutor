@@ -8,7 +8,7 @@ export const STAGE_SOURCE = 'cotutor-stage';
 
 /** 页面 → 舞台 */
 export type ToStage =
-  | { source: typeof STAGE_SOURCE; type: 'card'; id: string; kind: string; props: Record<string, unknown>; state: unknown; /** 课包目录 URL(小课堂、画板的底),如 /api/bundles/<id>/ */ bundleUrl?: string; /** 画板底图是一张图(照片)时它的 URL,如 /api/kid/image?p=captures/… */ imageUrl?: string; /** 装好就播(讲稿 [[play]] 委托) */ autoplay?: boolean }
+  | { source: typeof STAGE_SOURCE; type: 'card'; id: string; kind: string; props: Record<string, unknown>; state: unknown; /** 课包目录 URL(小课堂、画板的底),如 /api/bundles/<id>/ */ bundleUrl?: string; /** 画板底图是一张图(照片)时它的 URL,如 /api/kid/image?p=captures/… */ imageUrl?: string; /** 装好就播(讲稿 [[play]] 委托) */ autoplay?: boolean; /** 交给老师过了:画板只看,不能再画 */ readonly?: boolean }
   | { source: typeof STAGE_SOURCE; type: 'control'; action: 'toggle' | 'next' | 'prev' | 'play' | 'pause' | 'submit' }
   /** 家长看录像时的小课堂(card props.follow):录像这一刻停在课里的哪儿、在不在放、倍速、到这一刻画过的几处;页面每 100 毫秒发一次 */
   | { source: typeof STAGE_SOURCE; type: 'follow'; ms: number; playing: boolean; rate: number; marks: unknown[] };

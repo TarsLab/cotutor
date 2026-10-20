@@ -23,6 +23,8 @@ export interface CanvasStageProps {
   imageUrl?: string;
   prompt?: string;
   ink: Record<string, unknown>[];
+  /** 交给老师过了:只看(Excalidraw 的 view 模式),没有工具条 */
+  readonly?: boolean;
   onState(ink: Record<string, unknown>[]): void;
   onSubmit(ink: Record<string, unknown>[], image: string): void;
   onError(message: string): void;
@@ -95,7 +97,7 @@ const ICON = {
   chevron: '<path d="M6 9l6 6 6-6"></path>',
 };
 
-export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(function CanvasStage({ base, bundleUrl, imageUrl, prompt, ink, onState, onSubmit, onError }, ref) {
+export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(function CanvasStage({ base, bundleUrl, imageUrl, prompt, ink, readonly, onState, onSubmit, onError }, ref) {
   const [initial, setInitial] = useState<Base | null>(null);
   const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
   const [color, setColor] = useState<string>(INK_COLORS[0]);
@@ -191,7 +193,7 @@ export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(funct
         </div>
       ) : null}
       <div className="canvas-main">
-        <div className="canvas-tools" data-count={count}>
+        {readonly ? null : <div className="canvas-tools" data-count={count}>
           {btn('tool', tool === 'pen', () => usePen(color), '笔', svg(ICON.pen))}
           {btn('tool', tool === 'eraser', useEraser, '橡皮', svg(ICON.eraser))}
           <span className="canvas-sep" />
@@ -199,12 +201,13 @@ export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(funct
           <span className="canvas-sep" />
           {btn('tool', false, undo, '撤销上一笔', svg(ICON.undo))}
           {btn(`tool${confirmClear ? ' danger' : ''}`, false, clear, confirmClear ? '再点一下就清空' : '清空', svg(ICON.trash))}
-        </div>
+        </div>}
         <div className="canvas-board">
           <Excalidraw
             excalidrawAPI={(a) => { api.current = a; (window as unknown as { __excalidraw?: ExcalidrawImperativeAPI }).__excalidraw = a; /* 探针用(scripts/probe-photo.mjs 从 iframe 里查场景元素) */ }}
             initialData={{ elements: initial.elements, files: initial.files, appState: { viewBackgroundColor: '#fffdf8', currentItemStrokeColor: color, currentItemStrokeWidth: 2, currentItemRoughness: 0, activeTool: { type: 'freedraw', customType: null, locked: true, lastActiveTool: null } }, scrollToContent: true }}
             onChange={onChange}
+            viewModeEnabled={readonly === true}
             zenModeEnabled
             gridModeEnabled={false}
             UIOptions={{ canvasActions: { export: false, loadScene: false, saveToActiveFile: false, saveAsImage: false, clearCanvas: false, changeViewBackgroundColor: false, toggleTheme: false }, tools: { image: false } }}

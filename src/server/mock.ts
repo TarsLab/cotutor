@@ -444,6 +444,8 @@ interface MockMessage {
   section: BoardSection | null;
   /** 孩子端的动作(继续不计次数) */
   action?: 'continue' | 'submit';
+  /** 交答案时交的是哪张卡(<job>/<n>):交过的卡锁住(同真服务 kid-view 的 submittedCards) */
+  submitted?: string;
   /** 卡下标 → 孩子做的事(PUT 进来的) */
   states?: Record<number, unknown>;
   /** 孩子这条带的照片(假路径;/api/kid/image 给占位图) */
@@ -624,9 +626,11 @@ export function createMock(opts: MockOptions = {}): Mock {
   };
   /** 下发孩子端的形状:答案剥掉、状态并到卡上、小课堂卡补那一段的起止(样本课包在仓库里) */
   const kidMessage = async (m: MockMessage): Promise<KidMessage> => {
-    const { states, action: _a, lectureWatch: _w, lectureLog: _l, ...rest } = m;
+    const { states, action: _a, submitted: _s, lectureWatch: _w, lectureLog: _l, ...rest } = m;
     if (rest.lecture?.marks) rest.lecture = { ...rest.lecture, marks: rest.lecture.marks.map(({ text: _t, ...k }) => k) };
-    const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => (states && i in states ? { ...c, state: states[i] } : c)) } : null;
+    const mine = [...messages.values()].find((l) => l.includes(m)) ?? [];
+    const done = new Set(mine.flatMap((x) => (x.submitted ? [x.submitted] : [])));
+    const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => ({ ...c, ...(done.has(`${m.job}/${i}`) ? { submitted: true } : {}), ...(states && i in states ? { state: states[i] } : {}) })) } : null;
     const section = withState ? mockPaints(await enrichLectures(MOCK_LECTURE_DIRS, stripSecrets(withState)), m) : null;
     return { ...rest, section };
   };
@@ -969,6 +973,8 @@ export function createMock(opts: MockOptions = {}): Mock {
         if (!said.trim() && !action && !photos.length) return { status: 400, json: { error: 'bad_request' } };
         if (action !== 'continue' && remaining(name) <= 0) return { status: 429, json: { error: 'limit', remaining: 0 } };
         if (list.some((m) => m.pending)) return { status: 409, json: { error: 'busy' } };
+        const focusCard = isObj(body.focus) && typeof body.focus.card === 'string' ? body.focus.card : null;
+        if (action === 'submit' && focusCard && list.some((x) => x.submitted === focusCard)) return { status: 409, json: { error: 'submitted' } };
         const text = said.trim() || (action === 'continue' ? '继续' : action === 'submit' ? '(交了答案,没说话)' : photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`);
         const job = nextJob();
         // 话题:newThread → 自己的 job;指定的要在今天的列表里;缺省接当前(末条)的
@@ -982,7 +988,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         const lt = lec ? mockLecture(lec.bundle) : null;
         const marks = lt ? storedMarks(lt, marksIn, photos.length) : [];
         sentAt.set(job, Date.now());
-        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(body.live === true ? { live: true as const } : {}), ...(action ? { action } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(body.live === true ? { live: true as const } : {}), ...(action ? { action } : {}), ...(action === 'submit' && focusCard ? { submitted: focusCard } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
         list.push(m);
         const done = think(t, m, cursor).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);
@@ -998,6 +1004,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const target = m?.section?.cards[Number(n)];
       if (!target) return { status: 404, json: { error: 'no_such_card' } };
       if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
+      if ((messages.get(name) ?? []).some((x) => x.submitted === `${job}/${n}`)) return { status: 409, json: { error: 'submitted' } };
       // 录音卡:data:audio 存在内存里,状态换成真服务那样的路径(/api/audio 从内存回放);mock 不评测
       let raw = body;
       if (target.kind === 'record' && isObj(body) && typeof body.audio === 'string' && body.audio.startsWith('data:')) {

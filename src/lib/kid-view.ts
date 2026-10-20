@@ -116,10 +116,11 @@ function lectureView(l: NonNullable<ConversationMessage['lecture']>, parent: boo
 }
 
 /** 孩子做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到这轮的卡上;都没有就原样 */
-function cardsWithState(m: ConversationMessage, states: CardStates, assets: CardAssets): BoardSection | null | undefined {
+function cardsWithState(m: ConversationMessage, states: CardStates, assets: CardAssets, submitted: ReadonlySet<string> = new Set()): BoardSection | null | undefined {
   const per = states[m.job];
   const files = assets[m.job];
-  return m.section && (per || files) ? { ...m.section, cards: m.section.cards.map((c, n) => ({ ...c, ...(per?.[n] ? { state: per[n].state } : {}), ...(files?.[n]?.length ? { assets: files[n] } : {}) })) } : m.section;
+  const done = [...submitted].some((id) => id.startsWith(`${m.job}/`));
+  return m.section && (per || files || done) ? { ...m.section, cards: m.section.cards.map((c, n) => ({ ...c, ...(submitted.has(`${m.job}/${n}`) ? { submitted: true } : {}), ...(per?.[n] ? { state: per[n].state } : {}), ...(files?.[n]?.length ? { assets: files[n] } : {}) })) } : m.section;
 }
 
 /**
@@ -129,6 +130,7 @@ function cardsWithState(m: ConversationMessage, states: CardStates, assets: Card
 export function kidConversation(index: { messages: readonly ConversationMessage[] }, states: CardStates = {}, assets: CardAssets = {}): KidMessage[] {
   const out: KidMessage[] = [];
   const ths = threads(index.messages);
+  const submitted = submittedCards(index);
   for (const [i, m] of index.messages.entries()) {
     // 记账那轮是家长晚上起的任务,老师回的「记好了」不是给孩子的话
     if (m.bookkeep || m.tidy) continue;
@@ -136,7 +138,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     const reply = m.result === 'ok' ? (m.kidText ?? null) : null;
     const pending = m.result === 'running';
     if (question === null && reply === null && !pending) continue;
-    const withState = cardsWithState(m, states, assets);
+    const withState = cardsWithState(m, states, assets, submitted);
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
     out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.voice ? { spoken: true as const } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}), ...(m.live ? { live: true as const } : {}) });
   }
@@ -222,6 +224,14 @@ export function kidThreads(messages: readonly KidMessage[]): KidThread[] {
     by.set(m.thread, t);
   }
   return [...by.values()].filter((t) => t.asked).map(({ asked: _a, ...t }) => t);
+}
+
+/**
+ * 今天交给老师过的卡(`<job>/<n>`):交答案那条的 focus.card。交过的卡锁住——不能改、不能再交(2026-10-21,Jack:
+ * 孩子改了交过的卡的答案又交一次,老师再答一遍,孩子糊涂)。录音卡另有一节一锁(kid-board 的 recordLocked)
+ */
+export function submittedCards(index: { messages: readonly ConversationMessage[] }): Set<string> {
+  return new Set(index.messages.flatMap((m) => (m.action === 'submit' && m.focus?.card ? [m.focus.card] : [])));
 }
 
 /** 今天孩子已发的条数(每日上限按它算;系统任务不算,「继续」不算,交答案算;删了的话题自然不算;口语课这种 activity 的话题不算,FREE_ACTIVITIES) */

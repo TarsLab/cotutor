@@ -74,6 +74,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const sub = await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'submit', focus: { card: `${mj}/${ci}` } });
   await m.settle();
   const md4 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
+  check('交过的卡锁住(同真服务):再交 409、再改 409、下发带 submitted', (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'submit', focus: { card: `${mj}/${ci}` } })).status === 409 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: [1] })).status === 409 && (md4.messages[0].section!.cards[ci] as { submitted?: boolean }).submitted === true);
   check('交给老师:空文本 + action 也 202,问句是「(交了答案,没说话)」,下一节追加(反过来想 + 填空)', sub.status === 202 && md4.messages[1].question === '(交了答案,没说话)' && md4.messages[1].reply !== null && !('action' in md4.messages[1]) && md4.messages[1].section?.cards.some((c) => c.kind === 'fill') === true, JSON.stringify(md4.messages[1]));
   const before = md4.remaining;
   await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'continue' });

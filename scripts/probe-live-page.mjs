@@ -6,7 +6,8 @@
  *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴接住(字幕)→ 脑写的卡铺上、卡角是「?」、讲稿一句一句上字幕;
  *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点「?」= 问这张卡的一轮;不出卡的一轮板上留讲稿的字;嘴连不上回到板书;
  *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1);讲稿的 [[play]] 念完铺满放小课堂那一段,放完嘴才接着念(P3.2);
- *   右上角「一直听」:换一条开 VAD 的连接、不用按声音一直推、关麦就不推、一段声音收下了就是一轮(《wip/实时老师常开麦设计.md》)。
+ *   右上角「一直听」:换一条开 VAD 的连接、不用按声音一直推、关麦就不推、一段声音收下了就是一轮(《wip/实时老师常开麦设计.md》);
+ *   首页新话题旁边的「一直听」:进新话题就是一直听、嘴先招呼一句。
  * iPad 横屏、手机各截一张。
  * 用法:node scripts/probe-live-page.mjs [--out <截图目录>] [--keep]
  */
@@ -292,9 +293,30 @@ try {
   await tap('#lv-mic');
   const r0 = conn().responses.length;
   fake.kidTexts = ['老师一直听怎么写'];
-  const took = await untilNode(() => conn().responses.slice(r0).some((r) => r?.instructions === catchCue('voice')), 10000);
+  const took = await untilNode(() => conn().responses.slice(r0).some((r) => r?.instructions === catchCue('voice') || r?.instructions === catchCue('answer')), 10000);
   const turned = await until(`[...document.querySelectorAll('#board .sec .sh')].some((x) => x.textContent.includes('老师一直听怎么写'))`, 80);
   ok('一直听:一段声音转写收下 → 嘴接住、脑开一轮,节头是孩子那句(没按过)', took && turned, JSON.stringify({ took, turned }));
+
+  // ---- 首页语文老师卡上新话题旁边的「一直听」(拍板 2):点了进新话题、麦开着、嘴先招呼一句 ----
+  await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  cfg.tutors['chinese-tutor'].extras = ['dictation', 'listen'];
+  writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
+  await ctx.reload();
+  // 回到按住说(上一段把这台设备记成了一直听),看首页这颗是不是不靠设备的记法也能开一直听
+  await evaluate(`localStorage.setItem('kid-live-listen', 'hold')`);
+  await evaluate(`document.querySelector('#back').click()`);
+  await sleep(300);
+  await send('Page.navigate', { url: `${base}/` });
+  const hasBtn = await until(`Boolean(document.querySelector('#deck .pc[data-tutor="chinese-tutor"] .nl .bt-listen'))`, 40);
+  await sleep(1200);
+  const ncG = fake.conns.length;
+  const lbt = await evaluate(`(() => { const b = document.querySelector('#deck .pc[data-tutor="chinese-tutor"] .bt-listen'); b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  console.log('  ', await shot('home-listen-ipad.png'));
+  for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: lbt.x, y: lbt.y, button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1 });
+  const liveOpen = await until(`document.body.classList.contains('live') && document.body.classList.contains('lv-open')`, 40);
+  const greeted = await untilNode(() => fake.conns.length > ncG && conn().session?.turn_detection?.type === 'semantic_vad' && conn().responses.some((r) => r?.instructions === catchCue('greet')), 10000);
+  const pref = await evaluate(`localStorage.getItem('kid-live-listen')`);
+  ok('首页新话题旁边有「一直听」;点了进新话题、一直听(开 VAD 的连接)、嘴先招呼一句;设备上记的还是按住说', hasBtn && liveOpen && greeted && pref === 'hold', JSON.stringify({ hasBtn, liveOpen, greeted, pref }));
 
   ok('页面没有报错', errors.length === 0, errors.slice(0, 3).join(' | '));
 } finally {

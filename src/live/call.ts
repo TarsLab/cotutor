@@ -23,6 +23,7 @@
  *   嘴的会话开 VAD(live.vad、live.silenceMs),create_response / interrupt_response 关着:开口(speech_started)先暂停照念、嘴在放就让孩子端压低({t:'duck'}),
  *   转写回来 lib/listen.ts 判收下 / 放过——收下才算按下 + 松手(打断、接住、交给脑;交给脑之前孩子停一下又开口的并成一句),放过的恢复音量接着念({t:'skip', why} / {t:'unduck'})。
  *   孩子那一句的上下文(话题、设备、舞台上的卡)孩子端开口时报一次 {t:'ctx', body}。换模式 = 安静时换一条连接(silence 只有新连接能给)。
+ *   从首页「一直听」进来,孩子端连上后发 {t:'greet'}:嘴先招呼一句「想问我什么?直接说就行」(不进脑、不算一条)。
  *   commit 了不回答 300 秒百炼就关(response_idle_timeout,探针 probe-live-vad):放过的多了,离上次回答 IDLE_SWAP_MS 就在安静时换连接。
  * 录像:进出的消息、两边的声音都记(CallRecorder),挂了落在 conversations/<老师>/<日期>.live/<时分秒>.reel.json / .wav。
  * 事件:嘴这一道(mouth:按下、松手 / 发了、接住开始放、第几句开始放、打断)补进那一轮的 events.jsonl(Runner.noteEvent),工作台的时间线上看;
@@ -87,8 +88,8 @@ const MERGE_WAIT_MS = 8000;
 /** 一直听:commit 了没回答,离上次回答这么久就在安静时换连接(百炼 300 秒报 response_idle_timeout) */
 const IDLE_SWAP_MS = 240_000;
 
-/** 嘴这次回答是什么:接住(孩子这一轮)、照念哪几句、脑想得久时垫的一句 */
-type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat } | { kind: 'fill' };
+/** 嘴这次回答是什么:接住(孩子这一轮)、照念哪几句、脑想得久时垫的一句、一直听进来先招呼的一句 */
+type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat } | { kind: 'fill' } | { kind: 'greet' };
 
 export class LiveCall {
   private session: RealtimeSession | null = null;
@@ -541,6 +542,8 @@ export class LiveCall {
         }
         break;
       }
+      // 从首页「一直听」进来:嘴先招呼一句(不进脑、不算一条);嘴在说、孩子在说、按住说时都不招呼
+      case 'greet': if (this.session && this.mouthOpen && !this.said && !this.session.responding && !this.vadOn) this.ask({ kind: 'greet' }, catchCue('greet')); break;
       // 孩子端换了模式:安静时换一条连接(silence 只有新连接能给)
       case 'listen': {
         if (typeof m.open !== 'boolean') break;

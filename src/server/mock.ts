@@ -633,7 +633,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   const colors = tutorColors(Object.fromEntries(MOCK_TUTORS.map((t) => [t.name, { subject: t.subject }])));
   /** --live:有脸的三位老师走实时老师页(口播老师是工具人式的,照旧板书) */
   const LIVE_TUTORS = new Set(['chinese-tutor', 'math-tutor', 'english-tutor']);
-  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk'), live: Boolean(opts.live) && LIVE_TUTORS.has(t.name), listen: 'hold' }));
+  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: [...tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk'), ...(opts.live && t.name === 'chinese-tutor' ? ['listen' as const] : [])], live: Boolean(opts.live) && LIVE_TUTORS.has(t.name), listen: 'hold' }));
   /** 小课堂:样本课包与样本视频在仓库里(tests/fixtures/bundles/、lectures/),起来时和真服务一样读一遍(readLecture)、记住 */
   const lectures = new Map<string, Lecture>();
   const lecturesLoaded = (async () => {

@@ -175,7 +175,7 @@ ${faviconLinks()}
     if (!t) return;
     if (t.name !== cur) choose(t.name, true);
     if (ev.act === 'button') { if (ev.id === 'new') toast('「新话题」是应用自己加的,一直在第一个,这里改不了'); else if (typeof ev.id === 'number') pick(ev.id); }
-    else if (ev.act === 'extra') { if (ev.kind === 'dictation') editWords(t); else { const el = $('#daily-talk'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
+    else if (ev.act === 'extra') { if (ev.kind === 'dictation') editWords(t); else { const el = $(ev.kind === 'listen' ? '#daily-listen' : '#daily-talk'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
   };
   for (const b of document.querySelectorAll('#pvdev button')) b.addEventListener('click', () => { dev = picked = b.dataset.d; try { localStorage.setItem('parent-home-dev', dev); } catch (e) {} fit(); });
   window.addEventListener('resize', fit);
@@ -276,6 +276,8 @@ ${faviconLinks()}
     daily.push(h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '听写'), h('small', {}, '拍照听写一直在;设了这周的词,孩子点「听写」直接写')), sw(has('dictation'), '听写', () => setExtras(t, 'dictation', !has('dictation')))));
     if (has('dictation') || t.dictation) daily.push(h('button', { type: 'button', class: 'it', on: { click: () => editWords(t) } }, h('span', { class: 'tx' }, h('b', {}, '这周的词'), h('small', {}, t.dictation && t.dictation.length ? t.dictation.length + ' 个词:' + t.dictation.map((w) => w.chars).join('、') : '还没设')), h('span', { class: 'chev', html: CHEV })));
     daily.push(h('div', { class: 'it', id: 'daily-talk' }, h('span', { class: 'tx' }, h('b', {}, '口语课'), h('small', {}, D.talk.enabled ? '孩子自己拍今天学的那页,先跟读再打电话' : '口语课没开(cotutor.json 的 talk.enabled)')), sw(has('talk'), '口语课', () => setExtras(t, 'talk', !has('talk')), !D.talk.enabled && !has('talk'))));
+    // 一直听(《wip/实时老师常开麦设计.md》拍板 2):新话题旁边一颗,点了不用按住说话、老师先招呼;只对实时的老师
+    daily.push(h('div', { class: 'it', id: 'daily-listen' }, h('span', { class: 'tx' }, h('b', {}, '一直听'), h('small', {}, t.live ? '新话题旁边一颗:点了不用按住说话,老师先招呼一句' : '这位老师没开实时(工作台「音色」页「实时的嘴」)')), sw(has('listen'), '一直听', () => setExtras(t, 'listen', !has('listen')), !t.live && !has('listen'))));
     if (has('talk')) {
       const note = h('textarea', { class: 'fld', rows: '3', placeholder: '这周学什么、想让老师多聊什么(孩子看不到)' }); note.value = D.talk.note;
       const mins = h('b', {}, String(D.talk.minutes));

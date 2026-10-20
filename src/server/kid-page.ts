@@ -774,7 +774,7 @@ __AUDIO_JS__
   S.pdate = null;
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
-  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, lcPending: false };
+  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, lcPending: false, greet: false };
   /** 实时的一节露到 / 画到第几句:这次连着念的轮(jobs)只到嘴念到的那句(脑写完了、嘴还没念到的不先露;被打断没念到的就不露);
    *  别的(重开页面、以前的、板书的)整节 → undefined */
   const liveHeard = (s) => (s && s.live && LV.on && LV.jobs.has(s.job) ? (LV.heard.has(s.job) ? LV.heard.get(s.job) : -1) : undefined);
@@ -926,12 +926,16 @@ __AUDIO_JS__
       h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, b.label), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null));
     return h('button', { type: 'button', class: 'bt bt-' + b.kind, 'data-bid': String(b.id), on }, h('span', { class: 'bi', html: ICON[BUTTON_ICON[b.kind]] || ICON.start }), h('span', { class: 'btx' }, b.label));
   };
-  /** 挨着的几个小课堂收进一格(平板上两张海报并排,手机上一张一行) */
+  /** 新话题旁边的「一直听」(《wip/实时老师常开麦设计.md》拍板 2;常驻入口 extras 的 listen,实时的老师才有):同一个新话题,进去麦开着、不用按,老师先招呼一句 */
+  const listenBtn = (t, b) => h('button', { type: 'button', class: 'bt bt-listen', style: '--sc:' + colorOf(t), on: { click: () => openTutor(t, { kind: 'new', via: { home: S.home.home, button: b.id }, resume: b.resume, listen: true }) } },
+    h('span', { class: 'bi', html: ICON.micMd }), h('span', { class: 'lb' }, h('span', { class: 'btx' }, '一直听'), h('small', { class: 'ln' }, '不用按,直接说')));
+  /** 挨着的几个小课堂收进一格(平板上两张海报并排,手机上一张一行);新话题旁边要「一直听」的两颗并一行 */
   const buttonRuns = (t, buttons) => {
     const out = [];
     for (const b of buttons) {
       const el = tutorButton(t, b), last = out[out.length - 1];
-      if (b.kind !== 'lecture') out.push(el);
+      if (b.kind === 'new' && t.live && (t.extras || []).includes('listen')) out.push(h('div', { class: 'nl' }, el, listenBtn(t, b)));
+      else if (b.kind !== 'lecture') out.push(el);
       else if (last && last.classList.contains('lcs')) last.append(el);
       else out.push(h('div', { class: 'lcs' }, el));
     }
@@ -1039,7 +1043,7 @@ __AUDIO_JS__
       if (!bt) return;
       const bid = bt.dataset.bid;
       if (bid !== undefined) pvTell({ act: 'button', tutor: pc.dataset.tutor, id: bid === 'new' || bid === 'draft' ? bid : Number(bid) });
-      else pvTell({ act: 'extra', tutor: pc.dataset.tutor, kind: bt.classList.contains('bt-x-talk') ? 'talk' : 'dictation' });
+      else pvTell({ act: 'extra', tutor: pc.dataset.tutor, kind: bt.classList.contains('bt-x-talk') ? 'talk' : bt.classList.contains('bt-listen') ? 'listen' : 'dictation' });
     }, true);
   }
   /** 每位老师一张牌:头像 + 名字、按钮、「每天都在」、归他的卡(拍板 19),右下角倒着一个小头像;deal = 打开首页、从老师页回来,发牌 */
@@ -1365,7 +1369,7 @@ __AUDIO_JS__
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null; S.ask = intent.ask || null;
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
-    if (liveWanted(t)) liveOpen(); else { liveClose(); micWarm(); }
+    if (liveWanted(t)) liveOpen(intent); else { liveClose(); micWarm(); }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
     $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
     $('#board').replaceChildren(); pin.on = false;
@@ -3604,7 +3608,7 @@ __REEL_DOCK_JS__
   };
   const liveMsg = (m) => {
     switch (m.t) {
-      case 'ready': { LV.ready = true; phIdle(); liveMicOn(); const q = LV.queued; LV.queued = null; if (q) liveSendNow(q[0], q[1]); break; }
+      case 'ready': { LV.ready = true; phIdle(); liveMicOn(); if (LV.greet) { LV.greet = false; lvSend({ t: 'greet' }); } const q = LV.queued; LV.queued = null; if (q) liveSendNow(q[0], q[1]); break; }
       // 一直听:服务端说孩子开口 / 说完;开口时报一次这一轮的上下文(话题、舞台上的卡),收下时当松手的 body
       case 'vad': if (m.on) lvSend({ t: 'ctx', body: liveBody() }); liveDispatch({ type: 'vad', on: Boolean(m.on) }); break;
       case 'duck': liveDispatch({ type: 'duck' }); break;
@@ -3643,10 +3647,13 @@ __REEL_DOCK_JS__
     if (S.stage) body.focus = { card: S.stage.id };
     return body;
   };
-  const liveOpen = () => {
+  /** intent.listen = 从首页「一直听」进来:这一次就是一直听(不记进设备),连上后嘴先招呼一句 */
+  const liveOpen = (intent) => {
     if (LV.ws) liveClose();
     liveDispatch({ type: 'reset' });
-    liveDispatch({ type: 'listen', open: livePref(S.tutor) });
+    const greet = Boolean(intent && intent.listen);
+    LV.greet = greet;
+    liveDispatch({ type: 'listen', open: greet || livePref(S.tutor) });
     LV.on = true; LV.ready = false; LV.cap = { prev: '', cur: '', cut: '', catching: false }; LV.heard = new Map(); LV.jobs = new Set();
     document.body.classList.add('live');
     $('#tutor').style.setProperty('--tc', tutorColor());

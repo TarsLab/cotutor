@@ -16,6 +16,16 @@
 .c-tutor .bt-new .ln { font-size:15px; font-weight:400; opacity:.9; }
 .c-tutor .bt-new .bi { margin-left:auto; width:40px; height:40px; color:#fff; }
 .c-tutor .bt-new .bi svg { width:36px; height:36px; }
+/* 新话题旁边的「一直听」(《wip/实时老师常开麦设计.md》拍板 2):白底、学科色边和麦克风;和新话题并一行,窄了就换行 */
+.c-tutor .nl { display:flex; flex-wrap:wrap; gap:12px; }
+.c-tutor .nl > .bt-new { flex:1 1 260px; width:auto; }
+.c-tutor .nl > .bt-listen { flex:1 0 150px; width:auto; }
+.c-tutor .bt-listen { min-height:84px; border-radius:24px; border:2px solid var(--sc, var(--accent)); }
+.c-tutor .bt-listen .bi { color:var(--sc, var(--accent)); }
+.c-tutor .bt-listen .lb { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.c-tutor .bt-listen .btx { font-size:22px; font-weight:700; }
+.c-tutor .bt-listen .ln { font-size:14px; font-weight:400; color:var(--dim); }
+.c-tutor.off .bt-listen { border-color:var(--line); }
 /* 新话题打头的名字首字(《首页设计.md》拍板 28):平板横着叠时后面的牌露出来的那一格就是它;右边一道竖线隔开「新话题」 */
 .c-tutor .bt-new .fc { flex:none; width:40px; padding-right:14px; border-right:2px solid rgba(255,255,255,.45); font-size:38px; font-weight:800; line-height:44px; text-align:center; box-sizing:content-box; }
 .c-tutor.off { pointer-events:none; }

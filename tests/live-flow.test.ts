@@ -443,6 +443,13 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   const c = fake.conns[nc];
   const td = c.session?.turn_detection;
   check('一直听:嘴的会话开 VAD(semantic_vad、silence 1600),服务端不自己回、不自己掐', td?.type === 'semantic_vad' && td.silence_duration_ms === 1600 && td.create_response === false && td.interrupt_response === false, JSON.stringify(td));
+  // 从首页「一直听」进来:孩子端连上发 greet,嘴先招呼一句(不进脑、不开一轮)
+  k.ws.send(JSON.stringify({ t: 'greet' }));
+  const okGreet = await until(() => c.responses.some((r) => r?.instructions === catchCue('greet')));
+  await sleep(200);
+  check('首页「一直听」进来:嘴先招呼一句,不开一轮', okGreet && c.responses.length === 1 && !has(k, (m) => m.t === 'turn'), JSON.stringify(c.responses));
+  await until(() => k.bins >= 1);
+  await sleep(300);
 
   // 开口 → 说完 → 转写收下:同按下 + 松手(嘴接住、交给脑),孩子端先后收到 vad 开 / 关、kid
   fake.kidTexts = ['老师三明治怎么写'];
@@ -451,7 +458,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   say(k);
   const okTurn = await until(() => k.msgs.slice(n0).some((m) => m.t === 'turn'), 10000);
   const after = k.msgs.slice(n0).map((m) => m.t);
-  check('一直听:不用按,开口(vad 开)→ 说完(vad 关)→ 收下(kid)→ 嘴接住 → 脑开一轮(新话题,用孩子端报的上下文)', okTurn && after.indexOf('vad') < after.indexOf('kid') && has({ msgs: k.msgs.slice(n0) }, (m) => m.t === 'kid' && m.text === '老师三明治怎么写') && c.responses[0]?.instructions === catchCue('voice') && c.commits === 0, JSON.stringify({ after, err: k.msgs.slice(n0).find((m) => m.t === "err") }));
+  check('一直听:不用按,开口(vad 开)→ 说完(vad 关)→ 收下(kid)→ 嘴接住 → 脑开一轮(新话题,用孩子端报的上下文)', okTurn && after.indexOf('vad') < after.indexOf('kid') && has({ msgs: k.msgs.slice(n0) }, (m) => m.t === 'kid' && m.text === '老师三明治怎么写') && c.responses[1]?.instructions === catchCue('voice') && c.commits === 0, JSON.stringify({ after, err: k.msgs.slice(n0).find((m) => m.t === "err") }));
   const turnA = k.msgs.slice(n0).find((m) => m.t === 'turn')!;
   await idle();
   const today = localDate(ctx.now());
@@ -545,6 +552,10 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await until(() => has(k3, (m) => m.t === 'ready'));
   const nc3 = fake.conns.length;
   check('按住说进来:嘴的会话手动轮次', fake.conns[nc3 - 1].session?.turn_detection === null);
+  const g0 = fake.conns[nc3 - 1].responses.length;
+  k3.ws.send(JSON.stringify({ t: 'greet' }));
+  await sleep(300);
+  check('按住说时 greet 不理(只有一直听进来才招呼)', fake.conns[nc3 - 1].responses.length === g0);
   k3.ws.send(JSON.stringify({ t: 'listen', open: true }));
   const okSwitch = await until(() => has(k3, (m) => m.t === 'listen' && m.open === true) && fake.conns.length === nc3 + 1);
   check('切到一直听:安静时换一条开 VAD 的连接,孩子端收到 listen', okSwitch && fake.conns[nc3].session?.turn_detection?.type === 'semantic_vad' && fake.conns[nc3 - 1].closed, JSON.stringify({ conns: fake.conns.length - nc3 }));

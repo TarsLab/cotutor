@@ -72,7 +72,7 @@ export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 /** 老师卡上的常驻入口(《首页设计.md》拍板 18):不经首页发布、一直在那位老师的卡上 */
-export const TUTOR_EXTRAS = ['dictation', 'talk'] as const;
+export const TUTOR_EXTRAS = ['dictation', 'talk', 'listen'] as const;
 export type TutorExtra = (typeof TUTOR_EXTRAS)[number];
 
 export const TutorSchema = z.object({
@@ -93,7 +93,7 @@ export const TutorSchema = z.object({
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
   /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。要更大预算与时限的老师配一个自己的 */
   runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——预算、时限不同的老师配自己的'),
-  extras: z.array(z.enum(TUTOR_EXTRAS)).optional().describe('老师卡上的常驻入口:dictation 听写(含拍照听写)、talk 口语课(要 talk.enabled);不写按学科给缺省:语文有听写,其余没有;[] = 都不要'),
+  extras: z.array(z.enum(TUTOR_EXTRAS)).optional().describe('老师卡上的常驻入口:dictation 听写(含拍照听写)、talk 口语课(要 talk.enabled)、listen「一直听」(新话题旁边,点了不用按、老师先招呼;要这位老师开着实时);不写按学科给缺省:语文有听写,其余没有;[] = 都不要'),
 });
 export type Tutor = z.infer<typeof TutorSchema>;
 

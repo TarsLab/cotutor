@@ -3,7 +3,7 @@
  *   session.created → 收 session.update 回 session.updated(喂过音频再改 silence 就报错,和真的一样)
  *   append 记字节;手动 commit → committed + 孩子转写(缓冲不到 100 毫秒、或 failCommit,同真的回 error「buffer too small」,没有转写);
  *   response.create → created、一块声音(缺省 100 毫秒 = 4800 字节,audioMs 改)、字幕、done(带 usage)
- *   VAD 会话(turn_detection 非空):收到有声的块 → speech_started;有声之后收到全零的块 → speech_stopped、committed、转写、自动回一次(create_response:false 不回);
+ *   VAD 会话(turn_detection 非空):收到有声的块(有采样过 300)→ speech_started;有声之后收到安静的块 → speech_stopped、committed、转写、自动回一次(create_response:false 不回);
  *   kidTexts 排着的先用(一段一句),vadReject > 0 这一段回「not accepted by semantic turn detection」(没有 committed),failTranscript 回转写失败
  *   long = true 时回答只出一半、不 done(等 cancel);cancel 在有回答时回 done:cancelled,没有就报错
  *   response.create 带 response.instructions(实时老师):记进 responses;指令里有「说完就停:「…」」(照念)就把引号里的当字幕说,别的照旧
@@ -100,7 +100,9 @@ export async function startFakeRealtime(): Promise<FakeRealtime> {
           c.audio += buf.length;
           buffered += buf.length;
           if (c.session?.turn_detection) {
-            const loud = buf.some((b) => b !== 0);
+            // 有声 = 有一个采样过 300(约 -40 dBFS):Chrome 假麦克风开着音频处理时,两声嘀之间不是纯零、是很小的底噪(2026-10-20 probe-live-page 一直听那段)
+            let loud = false;
+            for (let i = 0; i + 1 < buf.length && !loud; i += 2) loud = Math.abs(buf.readInt16LE(i)) > 300;
             if (loud && !speaking) { speaking = true; send({ type: 'input_audio_buffer.speech_started' }); }
             else if (!loud && speaking) {
               speaking = false;

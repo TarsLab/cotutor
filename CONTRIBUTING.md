@@ -27,3 +27,7 @@ pnpm typecheck && pnpm test && pnpm build && pnpm smoke
 ## 加一位出厂老师
 
 在 `agents/<name>.md` 写文件(frontmatter:name / description / maxTurns / permissionMode,正文即系统提示,只写人设与这一科的做法,照现有几位有脸的老师,写法见 `docs/写提示词.md`;公共守则在 `skills/cotutor-tutor/SKILL.md`,名字要以 `-tutor` 结尾才拿得到),`src/cli/skeleton.ts` 的 `TUTOR_DEFAULTS` 加人设缺省。用户侧加老师不用改仓库:`cotutor add`。
+
+## 许可
+
+贡献的代码按 [LICENSE](LICENSE) 授权:Apache-2.0 加三条附加条件。提交即同意其中第 3 条(贡献):项目方以后可以调整许可,贡献也可用于商业目的。

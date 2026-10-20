@@ -63,4 +63,12 @@ node bin/cotutor.js --help        # bin 在仓库内直跑 src,零构建
 pnpm build && pnpm smoke          # 出厂检查:体检要发的那份
 ```
 
-MIT。
+## 许可
+
+cotutor 按 Apache-2.0 加附加条件授权,全文见 [LICENSE](LICENSE)。白话说:
+
+- 家里自己用、自己改都行,几个孩子几个 workspace 都算自己家。
+- 替别的家庭或别人运营 cotutor(收不收钱都算),要先拿到书面许可。
+- 家长端页脚和工作台的 cotutor 标记不能去掉(自己家用也一样);主题、老师的名字与头像、标题照常改。
+
+这段只是说明,以 LICENSE 原文为准。要许可或商业授权,到仓库开 issue。

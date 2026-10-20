@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "description": "家里的 AI 老师团,和家长一起教:老师 = 可直接对话的 agent 文件 + 自己的会话;一孩一 workspace",
   "type": "module",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": "github:TarsLab/cotutor",
   "homepage": "https://github.com/TarsLab/cotutor#readme",
   "bugs": "https://github.com/TarsLab/cotutor/issues",
@@ -43,7 +43,8 @@
     "cards",
     "skills",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "gen:skills": "node --experimental-strip-types scripts/gen-skills.ts",

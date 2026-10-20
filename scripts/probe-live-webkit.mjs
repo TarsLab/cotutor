@@ -123,7 +123,7 @@ try {
   await page.mouse.click(lb.x, lb.y);
   await sleep(2000);
   const open = await page.evaluate(() => ({ gum: window.__gum, sent: window.__sentBin, lvOpen: document.body.classList.contains('lv-open'), err: window.__err }));
-  ok('一直听:点开关换一条开 VAD 的连接;不按也推;还是那一路麦克风(没再 getUserMedia);页面没报错', open.lvOpen && fake.conns.length > nc && fake.conns.at(-1).session?.turn_detection?.type === 'semantic_vad' && open.sent > g0.sent && open.gum === g0.gum && open.err.length === 0, JSON.stringify({ ...open, before: g0, conns: fake.conns.length - nc }));
+  ok('一直听:点开关换一条开 VAD 的连接;不按也推;还是那一路麦克风(没再 getUserMedia);页面没报错', open.lvOpen && fake.conns.length > nc && fake.conns.at(-1).session?.turn_detection?.type === 'server_vad' && open.sent > g0.sent && open.gum === g0.gum && open.err.length === 0, JSON.stringify({ ...open, before: g0, conns: fake.conns.length - nc }));
 } finally {
   await browser.close();
   server.close();

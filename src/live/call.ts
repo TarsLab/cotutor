@@ -20,7 +20,7 @@
  *   连上之前来的照序攒着补(录像里记一条 {t:'lost'},只记不发)。平时孩子没按着就 30 秒一次心跳,最后一次动静 15 分钟后停跳。
  * 换连接:嘴的历史越长每次回答越贵,输入过了 SWAP_TOKENS 就在安静时换一条新的(录像里记 {t:'swap'},只记不发)。
  * 一直听(《wip/实时老师常开麦设计.md》,连接带 ?listen=open,或孩子端发 {t:'listen', open}):孩子端一直推声音(卡的声音、录音、小课堂、关麦时不推,{t:'gate', on} 告诉这里),
- *   嘴的会话开 VAD(live.vad、live.silenceMs),create_response / interrupt_response 关着:开口(speech_started)先暂停照念、嘴在放就让孩子端压低({t:'duck'}),
+ *   嘴的会话开 VAD(live.vad 缺省 server_vad、live.silenceMs),create_response / interrupt_response 关着:开口(speech_started)先暂停照念、嘴在放就让孩子端压低({t:'duck'}),
  *   转写回来 lib/listen.ts 判收下 / 放过——收下才算按下 + 松手(打断、接住、交给脑;交给脑之前孩子停一下又开口的并成一句),放过的恢复音量接着念({t:'skip', why} / {t:'unduck'})。
  *   孩子那一句的上下文(话题、设备、舞台上的卡)孩子端开口时报一次 {t:'ctx', body}。换模式 = 安静时换一条连接(silence 只有新连接能给)。
  *   从首页「一直听」进来,孩子端连上后发 {t:'greet'}:嘴先招呼一句「想问我什么?直接说就行」(不进脑、不算一条)。
@@ -643,7 +643,7 @@ export class LiveCall {
     this.maybeSwap();
   }
 
-  /** 一直听:一句的转写回来了(null = semantic_vad 不收、转写失败)。收下 = 按下 + 松手;放过的什么都不做,照念接着走 */
+  /** 一直听:一句的转写回来了(null = VAD 不收、转写失败)。收下 = 按下 + 松手;放过的什么都不做,照念接着走 */
   private verdict(text: string | null, failed?: 'rejected' | 'failed'): void {
     const from = this.vadFrom;
     const to = this.vadAwait ?? this.ms();

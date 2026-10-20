@@ -442,7 +442,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await until(() => has(k, (m) => m.t === 'ready'));
   const c = fake.conns[nc];
   const td = c.session?.turn_detection;
-  check('一直听:嘴的会话开 VAD(semantic_vad、silence 1600),服务端不自己回、不自己掐', td?.type === 'semantic_vad' && td.silence_duration_ms === 1600 && td.create_response === false && td.interrupt_response === false, JSON.stringify(td));
+  check('一直听:嘴的会话开 VAD(server_vad、silence 1600),服务端不自己回、不自己掐', td?.type === 'server_vad' && td.silence_duration_ms === 1600 && td.create_response === false && td.interrupt_response === false, JSON.stringify(td));
   // 从首页「一直听」进来:孩子端连上发 greet,嘴先招呼一句(不进脑、不开一轮)
   k.ws.send(JSON.stringify({ t: 'greet' }));
   const okGreet = await until(() => c.responses.some((r) => r?.instructions === catchCue('greet')));
@@ -467,7 +467,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await until(() => !k.msgs.length || k.bins >= c.responses.length, 3000);
   await sleep(300);
 
-  // 咳嗽(转写是空的)、只有「嗯」、semantic_vad 不收:放过,嘴不出声、不开新一轮、孩子端不报错
+  // 咳嗽(转写是空的)、只有「嗯」、VAD 不收:放过,嘴不出声、不开新一轮、孩子端不报错
   const r0 = c.responses.length;
   const n1 = k.msgs.length;
   fake.kidTexts = ['', '嗯。'];
@@ -541,7 +541,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   fake.kidTexts = [''];
   say(k2);
   const okIdle = await until(() => fake.conns.length === nc2 + 1, 3000);
-  check('一直听:放过的句子攒着没回答,到点安静时换连接(新的还是 VAD)', okIdle && fake.conns[nc2]?.session?.turn_detection?.type === 'semantic_vad', JSON.stringify({ conns: fake.conns.length - nc2 }));
+  check('一直听:放过的句子攒着没回答,到点安静时换连接(新的还是 VAD)', okIdle && fake.conns[nc2]?.session?.turn_detection?.type === 'server_vad', JSON.stringify({ conns: fake.conns.length - nc2 }));
   liveDeps.idleSwapMs = undefined;
   liveDeps.heartbeatMs = undefined;
   k2.ws.send(JSON.stringify({ t: 'bye' }));
@@ -558,7 +558,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   check('按住说时 greet 不理(只有一直听进来才招呼)', fake.conns[nc3 - 1].responses.length === g0);
   k3.ws.send(JSON.stringify({ t: 'listen', open: true }));
   const okSwitch = await until(() => has(k3, (m) => m.t === 'listen' && m.open === true) && fake.conns.length === nc3 + 1);
-  check('切到一直听:安静时换一条开 VAD 的连接,孩子端收到 listen', okSwitch && fake.conns[nc3].session?.turn_detection?.type === 'semantic_vad' && fake.conns[nc3 - 1].closed, JSON.stringify({ conns: fake.conns.length - nc3 }));
+  check('切到一直听:安静时换一条开 VAD 的连接,孩子端收到 listen', okSwitch && fake.conns[nc3].session?.turn_detection?.type === 'server_vad' && fake.conns[nc3 - 1].closed, JSON.stringify({ conns: fake.conns.length - nc3 }));
   k3.ws.send(JSON.stringify({ t: 'listen', open: false }));
   const okBack = await until(() => has(k3, (m) => m.t === 'listen' && m.open === false) && fake.conns.length === nc3 + 2);
   check('切回按住说:再换回手动轮次', okBack && fake.conns[nc3 + 1].session?.turn_detection === null);

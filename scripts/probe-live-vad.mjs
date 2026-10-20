@@ -113,8 +113,8 @@ const brief = (x) => {
 
 // ---- vad ----
 async function vad(recs) {
-  say('## vad:semantic_vad + create_response:false + interrupt_response:false');
-  const c = await open(semantic(), 'vad');
+  say(`## vad:${arg('--type', 'semantic_vad')} + create_response:false + interrupt_response:false`);
+  const c = await open(semantic({ type: arg('--type', 'semantic_vad') }), 'vad');
   say(`连上:${c.why ?? 'ok'};session.updated 回的 turn_detection:\`${JSON.stringify(c.updated)}\``);
   if (c.why) return;
   say('');

@@ -110,7 +110,10 @@ try {
   const a0 = conn().audio;
   const p = await center('#mid');
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p.x, y: p.y, button: 'left', buttons: 1, clickCount: 1 });
-  await sleep(1400);
+  // 第一次按下才开麦克风:开完自检 600 毫秒,假麦克风一秒嘀一声,赶上两声之间就判成哑的、重开一回(约 1.6 秒),等它接上再看
+  await sleep(400);
+  await until(`/松手/.test(document.querySelector('#hold').textContent)`, 20);
+  await sleep(800);
   const holding = { listening: await body('listening'), hold: await evaluate(`document.querySelector('#hold').classList.contains('on')`), chip: await evaluate(`getComputedStyle(document.querySelector('#lv-chip')).display`), pushed: conn().audio - a0, holdText: await evaluate(`document.querySelector('#hold span').textContent`) };
   console.log('  ', await shot('live-hold-ipad.png'));
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button: 'left', buttons: 0, clickCount: 1 });
@@ -253,7 +256,10 @@ try {
   const said = (re) => conn().responses.some((r) => re.test(r?.instructions ?? ''));
   const pp = await center('#mid');
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pp.x, y: pp.y, button: 'left', buttons: 1, clickCount: 1 });
-  await sleep(900);
+  // 新开的页面第一次按下才开麦克风(假麦克风赶上两声嘀之间要重开一回):接上了再松手
+  await sleep(400);
+  await until(`/松手/.test(document.querySelector('#hold').textContent)`, 20);
+  await sleep(500);
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pp.x, y: pp.y, button: 'left', buttons: 0, clickCount: 1 });
   const staged = await until(`Boolean(document.querySelector('#stage.on')) && document.querySelector('#st-kd').textContent === '小课堂'`, 120);
   await sleep(1500);
@@ -275,7 +281,7 @@ try {
   fake.kidText = '';
   const nOpen = fake.conns.length;
   await tap('#lv-listen');
-  const switched = await untilNode(() => fake.conns.length > nOpen && conn().session?.turn_detection?.type === 'semantic_vad', 8000);
+  const switched = await untilNode(() => fake.conns.length > nOpen && conn().session?.turn_detection?.type === 'server_vad', 8000);
   await sleep(600);
   const ui = await evaluate(`({ open: document.body.classList.contains('lv-open'), pressed: document.querySelector('#lv-listen').getAttribute('aria-pressed'), mic: getComputedStyle(document.querySelector('#lv-mic')).display, ph: document.querySelector('#ph').textContent })`);
   const a1 = conn().audio;
@@ -314,7 +320,7 @@ try {
   console.log('  ', await shot('home-listen-ipad.png'));
   for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: lbt.x, y: lbt.y, button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1 });
   const liveOpen = await until(`document.body.classList.contains('live') && document.body.classList.contains('lv-open')`, 40);
-  const greeted = await untilNode(() => fake.conns.length > ncG && conn().session?.turn_detection?.type === 'semantic_vad' && conn().responses.some((r) => r?.instructions === catchCue('greet')), 10000);
+  const greeted = await untilNode(() => fake.conns.length > ncG && conn().session?.turn_detection?.type === 'server_vad' && conn().responses.some((r) => r?.instructions === catchCue('greet')), 10000);
   const pref = await evaluate(`localStorage.getItem('kid-live-listen')`);
   ok('首页新话题旁边有「一直听」;点了进新话题、一直听(开 VAD 的连接)、嘴先招呼一句;设备上记的还是按住说', hasBtn && liveOpen && greeted && pref === 'hold', JSON.stringify({ hasBtn, liveOpen, greeted, pref }));
 

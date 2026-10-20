@@ -194,7 +194,7 @@ export async function kidTutors(ctx: AppContext, date: string): Promise<KidTutor
   for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
     const used = kidMessageCount(await readIndex(ctx.ws, t.name, date));
     const remaining = Math.max(0, t.policy.dailyMessages - used);
-    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), remaining, available: remaining > 0, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled) && (x !== 'listen' || liveOf(ctx, t.name))), live: liveOf(ctx, t.name), listen: ctx.ws.config.live.listen });
+    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), remaining, available: remaining > 0, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), live: liveOf(ctx, t.name), listen: ctx.ws.config.live.listen });
   }
   return out;
 }
@@ -653,7 +653,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
     }
     const booking = index.messages.some((m) => (m.bookkeep || m.tidy) && m.result === 'running');
     const kouboYuan = await kouboYuanOfDay(join(ctx.ws.dirs.conversations, t.name), date);
-    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name] ?? NEUTRAL_COLOR, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], booking, ...(kouboYuan > 0 ? { kouboYuan } : {}), extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled) && (x !== 'listen' || liveOf(ctx, t.name))) });
+    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name] ?? NEUTRAL_COLOR, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], booking, ...(kouboYuan > 0 ? { kouboYuan } : {}), extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)) });
   }
   const today = localDate(ctx.now());
   const names = tutors.map((t) => t.name);

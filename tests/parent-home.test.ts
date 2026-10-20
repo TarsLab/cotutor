@@ -157,17 +157,8 @@ try {
   check('extras null = 回到按学科的缺省(字段删掉);给老师的话清空 = 删掉', !('extras' in c2.tutors['english-tutor']) && !('note' in c2.talk));
   check('设置不对 400:不认识的常驻、听法、老师', (await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: ['x'] } } })).status === 400 && (await call('PATCH', '/api/parent/settings', { listen: 'ear' })).status === 400 && (await call('PATCH', '/api/parent/settings', { tutors: { 'nobody-tutor': {} } })).status === 400 && (await call('PATCH', '/api/parent/settings', { dailyMessages: -1 })).status === 400);
 
-  // 一直听(《wip/实时老师常开麦设计.md》拍板 2):常驻入口 listen;只对实时的老师,不是实时的孩子端不出这颗
-  const s3 = await call('PATCH', '/api/parent/settings', { tutors: { 'chinese-tutor': { extras: ['dictation', 'listen'] } } });
-  const notLive = (await kid()).tutors.find((t) => t.name === 'chinese-tutor')!.extras.join('+');
-  const c3 = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
-  c3.live = { enabled: true, voices: { 'chinese-tutor': 'Serena' } };
-  writeFileSync(cfgFile, JSON.stringify(c3, null, 2));
-  await ctx.reload();
-  const liveKid = (await kid()).tutors.find((t) => t.name === 'chinese-tutor')!.extras.join('+');
-  const g4 = (await call('GET', '/api/parent/home')).json as { tutors: { name: string; live: boolean; extras: string[] }[] };
-  check('一直听:家长端开关写进 extras;语文没开实时时孩子端不出,开了才出;家长端知道谁是实时的', s3.status === 200 && notLive === 'dictation' && liveKid === 'dictation+listen' && g4.tutors.find((t) => t.name === 'chinese-tutor')!.live && !g4.tutors.find((t) => t.name === 'math-tutor')!.live, JSON.stringify({ notLive, liveKid }));
-  await call('PATCH', '/api/parent/settings', { tutors: { 'chinese-tutor': { extras: null } } });
+  // 一直听不再是常驻入口(《wip/实时老师常开麦设计.md》拍板 4):孩子端没有入口,家长端也开不了
+  check('一直听不是常驻入口:extras 写 listen 回 400', (await call('PATCH', '/api/parent/settings', { tutors: { 'chinese-tutor': { extras: ['dictation', 'listen'] } } })).status === 400);
 
   // 页面
   const page = (await call('GET', '/parent/home')).html ?? '';

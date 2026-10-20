@@ -72,7 +72,7 @@ export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 /** 老师卡上的常驻入口(《首页设计.md》拍板 18):不经首页发布、一直在那位老师的卡上 */
-export const TUTOR_EXTRAS = ['dictation', 'talk', 'listen'] as const;
+export const TUTOR_EXTRAS = ['dictation', 'talk'] as const;
 export type TutorExtra = (typeof TUTOR_EXTRAS)[number];
 
 export const TutorSchema = z.object({
@@ -93,7 +93,7 @@ export const TutorSchema = z.object({
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
   /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。要更大预算与时限的老师配一个自己的 */
   runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——预算、时限不同的老师配自己的'),
-  extras: z.array(z.enum(TUTOR_EXTRAS)).optional().describe('老师卡上的常驻入口:dictation 听写(含拍照听写)、talk 口语课(要 talk.enabled)、listen「一直听」(新话题旁边,点了不用按、老师先招呼;要这位老师开着实时);不写按学科给缺省:语文有听写,其余没有;[] = 都不要'),
+  extras: z.array(z.enum(TUTOR_EXTRAS)).optional().describe('老师卡上的常驻入口:dictation 听写(含拍照听写)、talk 口语课(要 talk.enabled);不写按学科给缺省:语文有听写,其余没有;[] = 都不要'),
 });
 export type Tutor = z.infer<typeof TutorSchema>;
 
@@ -242,8 +242,9 @@ export const LiveSchema = z.object({
     .record(z.string().regex(AGENT_NAME_RE), z.string().min(1))
     .default({})
     .describe('哪几位老师的新话题走实时、嘴用哪个 realtime 音色(这个模型认的 56 个在 src/live/voices.ts,工作台音色页「实时的嘴」听着挑;写错了第一次开口才报错,doctor 的 live.voices 会提示);不在这里的老师照旧板书'),
-  // 一直听(《wip/实时老师常开麦设计.md》):孩子不用按,百炼的 VAD 判开口 / 说完,应用判收下 / 放过;老师说话时也在听(全双工)
-  listen: z.enum(['hold', 'open']).default(LIVE_DEFAULT.listen).describe('实时老师页缺省怎么说话:hold 按住说、open 一直听;孩子在老师页右上角能切,记在这台设备上'),
+  // 一直听(《wip/实时老师常开麦设计.md》):孩子不用按,百炼的 VAD 判开口 / 说完,应用判收下 / 放过;老师说话时也在听(全双工)。
+  // 孩子端没有开关(拍板 4):10-20 真跑,一问一答以外孩子的停顿、语气词、旁边的话都被当成一句;口语课自己开,不看这里
+  listen: z.enum(['hold', 'open']).default(LIVE_DEFAULT.listen).describe('实时老师页怎么说话:hold 按住说(缺省)、open 一直听(试验;孩子停一下就算说完、旁边的话也会当成一句)。孩子端没有开关;口语课总是一直听,不看这里'),
   // 缺省 server_vad(2026-10-20,《wip/实时老师常开麦设计.md》拍板 3):semantic_vad 听不见一两个字的回答(好的、Yes,问过也一样,probe-live-vad context)
   vad: z.enum(['semantic_vad', 'server_vad']).default(LIVE_DEFAULT.vad).describe('一直听时谁判说完:server_vad 按静音(缺省;一两个字的回答也认,「嗯」、笑声也会让老师小声一下);semantic_vad 按语义(切得少、不理「嗯」和笑声,但「好的」「Yes」这类短回答听不见)'),
   silenceMs: z.number().int().min(500).max(4000).default(LIVE_DEFAULT.silenceMs).describe('一直听时停多久算说完(毫秒;孩子一句话中间停一下接着说,太短会切碎)'),

@@ -19,11 +19,10 @@
  * 嘴的会话断了(百炼 300 秒没输入就关,2026-10-20 照 Qwen-Live-Harness 的换连接):电话不挂、孩子端不知道;下次按下或发来时现连,
  *   连上之前来的照序攒着补(录像里记一条 {t:'lost'},只记不发)。平时孩子没按着就 30 秒一次心跳,最后一次动静 15 分钟后停跳。
  * 换连接:嘴的历史越长每次回答越贵,输入过了 SWAP_TOKENS 就在安静时换一条新的(录像里记 {t:'swap'},只记不发)。
- * 一直听(《wip/实时老师常开麦设计.md》,连接带 ?listen=open,或孩子端发 {t:'listen', open}):孩子端一直推声音(卡的声音、录音、小课堂、关麦时不推,{t:'gate', on} 告诉这里),
+ * 一直听(《wip/实时老师常开麦设计.md》;孩子端只在口语课、或 live.listen 是 open 时连接带 ?listen=open,中途发 {t:'listen', open} 也能换):孩子端一直推声音(卡的声音、录音、小课堂、关麦时不推,{t:'gate', on} 告诉这里),
  *   嘴的会话开 VAD(live.vad 缺省 server_vad、live.silenceMs),create_response / interrupt_response 关着:开口(speech_started)先暂停照念、嘴在放就让孩子端压低({t:'duck'}),
  *   转写回来 lib/listen.ts 判收下 / 放过——收下才算按下 + 松手(打断、接住、交给脑;交给脑之前孩子停一下又开口的并成一句),放过的恢复音量接着念({t:'skip', why} / {t:'unduck'})。
  *   孩子那一句的上下文(话题、设备、舞台上的卡)孩子端开口时报一次 {t:'ctx', body}。换模式 = 安静时换一条连接(silence 只有新连接能给)。
- *   从首页「一直听」进来,孩子端连上后发 {t:'greet'}:嘴先招呼一句「想问我什么?直接说就行」(不进脑、不算一条)。
  *   commit 了不回答 300 秒百炼就关(response_idle_timeout,探针 probe-live-vad):放过的多了,离上次回答 IDLE_SWAP_MS 就在安静时换连接。
  * 口语课(《wip/口语课改实时老师设计.md》§三):先热身、再打电话。热身是脑一轮写完的跟读,讲稿的 [[echo 词]] / [[say 词]] 那句念完关闸(lib/queue.ts),
  *   孩子说完(像跟读,lib/warm.ts)开闸下一拍,不接住、不交脑;对老师说的照收下办(打断、接住、交脑);ECHO_WAIT_MS 没开口接着走,连着两拍没开口停下交脑(app: quiet)。
@@ -103,7 +102,7 @@ const QUIET_BEATS = 2;
 const RING_MS = 3000;
 
 /** 嘴这次回答是什么:接住(孩子这一轮)、照念哪几句、脑想得久时垫的一句、一直听进来先招呼的一句 */
-type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat } | { kind: 'fill' } | { kind: 'greet' };
+type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat } | { kind: 'fill' };
 
 export class LiveCall {
   private session: RealtimeSession | null = null;
@@ -595,7 +594,6 @@ export class LiveCall {
         break;
       }
       // 从首页「一直听」进来:嘴先招呼一句(不进脑、不算一条);嘴在说、孩子在说、按住说时都不招呼
-      case 'greet': if (this.session && this.mouthOpen && !this.said && !this.session.responding && !this.vadOn) this.ask({ kind: 'greet' }, catchCue('greet')); break;
       // 孩子端换了模式:安静时换一条连接(silence 只有新连接能给)
       case 'listen': {
         if (typeof m.open !== 'boolean') break;

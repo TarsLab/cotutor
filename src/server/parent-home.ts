@@ -42,8 +42,6 @@ export interface ParentHomeTutor {
   lang: DictationLang;
   /** 学科色(src/lib/tutor-color.ts) */
   color: string;
-  /** 走实时(live.enabled 且挑了嘴的音色):「一直听」只对实时的老师有用 */
-  live: boolean;
 }
 
 export async function parentHome(ctx: AppContext): Promise<Record<string, unknown>> {
@@ -71,7 +69,6 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
       dictation: dict ? ((dict.props.words ?? []) as { chars: string; say?: string; emoji?: string }[]) : null,
       lang: subjectLang(t.subject),
       color: colors[name],
-      live: c.live.enabled && Boolean(c.live.voices[name]),
     };
   });
   return {

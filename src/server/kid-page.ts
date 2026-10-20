@@ -774,7 +774,7 @@ __AUDIO_JS__
   S.pdate = null;
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
-  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, lcPending: false, greet: false };
+  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, lcPending: false, greet: false, gateOn: false };
   /** 实时的一节露到 / 画到第几句:这次连着念的轮(jobs)只到嘴念到的那句(脑写完了、嘴还没念到的不先露;被打断没念到的就不露);
    *  别的(重开页面、以前的、板书的)整节 → undefined */
   const liveHeard = (s) => (s && s.live && LV.on && LV.jobs.has(s.job) ? (LV.heard.has(s.job) ? LV.heard.get(s.job) : -1) : undefined);
@@ -3494,7 +3494,7 @@ __REEL_DOCK_JS__
         case 'board': { const q = LV.queued; liveClose(); if (q) send(q[0], q[1]); break; }
         case 'render': renderSubtitle(); break;
         case 'listen': lvSend({ t: 'listen', open: LV.model.open }); break;
-        case 'gate': lvSend({ t: 'gate', on: f.on }); break;
+        case 'gate': liveGateSync(); break;
         case 'duck': case 'unduck': if (LV.audio) LV.audio.duck(f.kind === 'duck' ? 0.3 : 1); break;
       }
     }
@@ -3634,6 +3634,13 @@ __REEL_DOCK_JS__
   /** 连嘴(进老师页时,在那一下点击里起 AudioContext);连上之前按住说话还走浏览器识别 */
   /** 一直听还是按住说:这台设备上孩子切过的为准,没切过照 cotutor.json 的 live.listen */
   const livePref = (t) => { let v = null; try { v = localStorage.getItem('kid-live-listen'); } catch {} return v ? v === 'open' : Boolean(t && t.listen === 'open'); };
+  /** 一直听时推不推:liveStep 的(关麦、卡的声音、录音、小课堂那一段)再加页面的——这会儿能不能发(小课堂还没看完、「接着那个还是重新开始」、只读)、到了每天的上限;
+   *  变了才告诉服务端 gate(关的时候孩子说到一半的那句作废)。每块声音来时看一眼,能不能发变了不用另外通知 */
+  const liveGateSync = () => {
+    const on = liveGate(LV.model) && canSend() && !S.limit;
+    if (on !== LV.gateOn) { LV.gateOn = on; lvSend({ t: 'gate', on }); }
+    return on;
+  };
   /** 一直听要那路常开的麦克风接到采音节点上(按住说是按下时才接) */
   const liveMicOn = () => {
     if (!LV.on || !LV.model.open || !LV.audio) return;
@@ -3653,6 +3660,7 @@ __REEL_DOCK_JS__
     liveDispatch({ type: 'reset' });
     const greet = Boolean(intent && intent.listen);
     LV.greet = greet;
+    LV.gateOn = false;
     liveDispatch({ type: 'listen', open: greet || livePref(S.tutor) });
     LV.on = true; LV.ready = false; LV.cap = { prev: '', cur: '', cut: '', catching: false }; LV.heard = new Map(); LV.jobs = new Set();
     document.body.classList.add('live');
@@ -3662,10 +3670,10 @@ __REEL_DOCK_JS__
       LV.audio = makeAudio();
       LV.audio.muted = false;
       // 按着才推;一直听时推不推看 liveGate(关麦、卡的声音、录音、小课堂时不推)
-      LV.audio.onChunk = (ab) => { if ((LV.model.status === 'holding' || liveGate(LV.model)) && LV.ws && LV.ws.readyState === 1) LV.ws.send(ab); };
+      LV.audio.onChunk = (ab) => { if ((LV.model.status === 'holding' || liveGateSync()) && LV.ws && LV.ws.readyState === 1) LV.ws.send(ab); };
       LV.audio.onLevel = (v) => {
         if (LV.model.status === 'holding') { holdLevel(Math.min(1, v * 4)); if (LV.diag && v > LV.diag.peak) LV.diag.peak = v; return; }
-        if (liveGate(LV.model)) $('#lv-mic').style.setProperty('--lv', String(Math.min(1, v * 6)));
+        if (LV.gateOn) $('#lv-mic').style.setProperty('--lv', String(Math.min(1, v * 6)));
       };
     }
     LV.audio.wake().catch(() => {});

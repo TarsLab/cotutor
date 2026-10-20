@@ -1,6 +1,7 @@
 /**
  * 实时老师的那条 WebSocket(《wip/实时老师开发计划.md》P2.5):WS /api/live/<老师>/ws,一次连接一个 LiveCall(call.ts)。
  * serve.ts 的 upgrade 里接一行;没开(live.enabled)、老师不在 live.voices、老师关着都回 404,孩子端就走板书。
+ * ?listen=open = 一直听(孩子不用按,《wip/实时老师常开麦设计.md》);缺省按住说。
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
@@ -17,6 +18,7 @@ export interface LiveRouteDeps {
   keepAliveMs?: number;
   swapTokens?: number;
   fillMs?: number;
+  idleSwapMs?: number;
   onFinished?(tutor: string, why: string): void;
 }
 
@@ -36,7 +38,8 @@ export function makeLiveUpgrade(deps: LiveRouteDeps = {}) {
       onBinary: (b) => call?.onAudio(b),
       onClose: () => call?.onSocketClose(),
     });
-    call = new LiveCall(sock, { ctx, tutor, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, fillMs: deps.fillMs, onFinished: (why) => deps.onFinished?.(tutor, why) });
+    const listen = new URL(req.url ?? '', 'http://x').searchParams.get('listen') === 'open' ? 'open' : 'hold';
+    call = new LiveCall(sock, { ctx, tutor, listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, fillMs: deps.fillMs, idleSwapMs: deps.idleSwapMs, onFinished: (why) => deps.onFinished?.(tutor, why) });
     void call.start();
     return true;
   };

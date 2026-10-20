@@ -14,6 +14,13 @@ const b = (job: string, lines: number[], texts = lines.map((i) => `第 ${i + 1} 
 const run = (s: S, evs: Ev[]) => { const acts: any[] = []; for (const e of evs) { const r = queueStep(s, e); s = r.s; acts.push(r.act); } return { s, acts }; };
 
 {
+  // 一直听:孩子开口先 pause(不交新的、排着的不丢),放过了 release 接着交;收下了才 hold(丢)
+  const r = run(queueInit(), [{ e: 'beat', beat: b('j1', [0]) }, { e: 'pause' }, { e: 'beat', beat: b('j1', [1]) }, { e: 'done' }, { e: 'release' }]);
+  check('一直听:开口 pause 时来的拍、嘴出完都不交,排着不丢;release 接着交', r.acts[0]?.kind === 'read' && r.acts[1] === null && r.acts[2] === null && r.acts[3] === null && r.acts[4]?.kind === 'read' && r.acts[4].beat.lines.join() === '1', JSON.stringify(r.acts));
+  const r2 = run(queueInit(), [{ e: 'asked' }, { e: 'beat', beat: b('j1', [0]) }, { e: 'pause' }, { e: 'hold', drop: 'j1' }]);
+  check('一直听:pause 后收下(hold)丢掉排着的', r2.acts[3]?.kind === 'dropped' && r2.s.pending.length === 0, JSON.stringify(r2.acts));
+}
+{
   // 接住在出:拍来了先排着;接住出完马上交(不等声音放完)
   const r = run(queueInit(), [{ e: 'asked' }, { e: 'beat', beat: b('j1', [0]) }, { e: 'done' }]);
   check('接住在出时来的拍排着;嘴一出完就交,不等声音放完', r.acts[1] === null && r.acts[2]?.kind === 'read' && r.acts[2].beat.lines.join() === '0' && r.s.busy, JSON.stringify(r.acts));

@@ -32,7 +32,8 @@ export type RunEvent = { t: number } & (
   /** 实时老师的嘴(《wip/实时老师设想.md》):孩子按下 · 松手(voice)或发了不是说的(text / photo / card / ask)· 嘴接住的声音开始在孩子端放 ·
    *  讲稿第几句开始放 · 孩子按下打断了这一轮(line = 正念到第几句,0 起;还没念到讲稿 = null) */
   | { lane: 'mouth'; kind: 'hold' }
-  | { lane: 'mouth'; kind: 'release'; how: 'voice' | 'text' | 'photo' | 'card' | 'ask' }
+  /** vad = 一直听时孩子说完(服务端 VAD 判的、应用收下了) */
+  | { lane: 'mouth'; kind: 'release'; how: 'voice' | 'vad' | 'text' | 'photo' | 'card' | 'ask' }
   | { lane: 'mouth'; kind: 'catch'; text: string }
   | { lane: 'mouth'; kind: 'read'; line: number }
   | { lane: 'mouth'; kind: 'cut'; line: number | null }
@@ -77,8 +78,8 @@ export function describeEvent(e: RunEvent): string {
     case 'ledger':
       return `日记 ${e.file} 记了话题 ${e.thread}`;
     case 'mouth':
-      if (e.kind === 'hold') return '孩子按下';
-      if (e.kind === 'release') return e.how === 'voice' ? '松手' : `发了(${{ text: '打字', photo: '照片', card: '交卡', ask: '卡上的「?」' }[e.how]})`;
+      if (e.kind === 'hold') return '孩子按下 / 开口';
+      if (e.kind === 'release') return e.how === 'voice' ? '松手' : e.how === 'vad' ? '说完(一直听)' : `发了(${{ text: '打字', photo: '照片', card: '交卡', ask: '卡上的「?」' }[e.how]})`;
       if (e.kind === 'catch') return `嘴接住「${e.text}」(开始放)`;
       if (e.kind === 'read') return `嘴念第 ${e.line + 1} 句(开始放)`;
       if (e.kind === 'fill') return `脑还在想,嘴垫了一句「${e.text}」(开始放)`;

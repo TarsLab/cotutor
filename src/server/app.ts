@@ -179,6 +179,8 @@ export interface KidTutor {
   extras: TutorExtra[];
   /** 新话题走实时(《wip/实时老师设想.md》):live.enabled 且这位老师在 live.voices 里;孩子端连 /api/live/<老师>/ws,连不上回到板书 */
   live: boolean;
+  /** 实时老师页缺省怎么说话(live.listen):hold 按住说、open 一直听;孩子切过的记在设备上,以那个为准 */
+  listen: 'hold' | 'open';
 }
 
 export async function kidTutors(ctx: AppContext, date: string): Promise<KidTutor[]> {
@@ -187,7 +189,7 @@ export async function kidTutors(ctx: AppContext, date: string): Promise<KidTutor
   for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
     const used = kidMessageCount(await readIndex(ctx.ws, t.name, date));
     const remaining = Math.max(0, t.policy.dailyMessages - used);
-    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), remaining, available: remaining > 0, extras: t.extras.filter((x) => x !== 'talk' || ctx.ws.config.talk.enabled), live: ctx.ws.config.live.enabled && Boolean(ctx.ws.config.live.voices[t.name]) });
+    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), remaining, available: remaining > 0, extras: t.extras.filter((x) => x !== 'talk' || ctx.ws.config.talk.enabled), live: ctx.ws.config.live.enabled && Boolean(ctx.ws.config.live.voices[t.name]), listen: ctx.ws.config.live.listen });
   }
   return out;
 }

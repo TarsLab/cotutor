@@ -33,6 +33,7 @@ check('孩子端不见 hidden 与关着的', kidOnly.length === 3 && !kidOnly.so
 check('列表带有效政策', listTutors(cfg)[0].policy.replyMaxChars === 60);
 
 check('实时老师出厂关着、没有老师', cfg.live.enabled === false && Object.keys(cfg.live.voices).length === 0 && cfg.live.model === 'qwen3.8-omni-flash-realtime');
+check('一直听:缺省按住说、semantic_vad、停 1.6 秒算说完', cfg.live.listen === 'hold' && cfg.live.vad === 'semantic_vad' && cfg.live.silenceMs === 1600);
 const liveOn = CotutorConfigSchema.safeParse({ ...raw, live: { enabled: true, voices: { 'chinese-tutor': 'Serena' } } });
 check('实时:列一位老师和音色', liveOn.success && liveOn.data.live.voices['chinese-tutor'] === 'Serena');
 const liveBad = CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, helper: { display: '工具人', hidden: true } }, live: { enabled: true, voices: { 'nobody-tutor': 'Serena', helper: 'Tina' } } });

@@ -48,7 +48,7 @@ const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();
 const finished: [string, string][] = [];
 // 心跳缺省 30 秒,前面几段跑不到;断线那段改短
-const liveDeps: { endpoint: string; env: NodeJS.ProcessEnv; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; fillMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) };
+const liveDeps: { endpoint: string; env: NodeJS.ProcessEnv; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; fillMs?: number; idleSwapMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) };
 const liveUpgrade = makeLiveUpgrade(liveDeps);
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
@@ -56,8 +56,8 @@ await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
 const port = (server.address() as { port: number }).port;
 
 type Msg = Record<string, any>;
-async function connect(tutor: string) {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/api/live/${tutor}/ws`);
+async function connect(tutor: string, query = '') {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/api/live/${tutor}/ws${query}`);
   ws.binaryType = 'arraybuffer';
   const k = { ws, msgs: [] as Msg[], bins: 0, closed: null as { code: number; reason: string } | null, refused: false };
   ws.onmessage = (e) => { if (typeof e.data === 'string') k.msgs.push(JSON.parse(e.data)); else k.bins++; };
@@ -429,6 +429,130 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await until(() => k4.closed !== null);
   liveDeps.heartbeatMs = undefined;
   liveDeps.keepAliveMs = undefined;
+}
+
+{
+  // ---- 一直听(《wip/实时老师常开麦设计.md》):VAD 判开口 / 说完,应用判收下 / 放过 ----
+  const quiet = (): Uint8Array => new Uint8Array(3200);
+  const say = (k: { ws: WebSocket }, n = 3): void => { for (let i = 0; i < n; i++) k.ws.send(loud()); k.ws.send(quiet()); };
+  const idle = () => until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  await idle();
+  const nc = fake.conns.length;
+  const k = await connect('chinese-tutor', '?listen=open');
+  await until(() => has(k, (m) => m.t === 'ready'));
+  const c = fake.conns[nc];
+  const td = c.session?.turn_detection;
+  check('一直听:嘴的会话开 VAD(semantic_vad、silence 1600),服务端不自己回、不自己掐', td?.type === 'semantic_vad' && td.silence_duration_ms === 1600 && td.create_response === false && td.interrupt_response === false, JSON.stringify(td));
+
+  // 开口 → 说完 → 转写收下:同按下 + 松手(嘴接住、交给脑),孩子端先后收到 vad 开 / 关、kid
+  fake.kidTexts = ['老师三明治怎么写'];
+  k.ws.send(JSON.stringify({ t: 'ctx', body: { newThread: true, device: 'tablet-landscape' } }));
+  const n0 = k.msgs.length;
+  say(k);
+  const okTurn = await until(() => k.msgs.slice(n0).some((m) => m.t === 'turn'), 10000);
+  const after = k.msgs.slice(n0).map((m) => m.t);
+  check('一直听:不用按,开口(vad 开)→ 说完(vad 关)→ 收下(kid)→ 嘴接住 → 脑开一轮(新话题,用孩子端报的上下文)', okTurn && after.indexOf('vad') < after.indexOf('kid') && has({ msgs: k.msgs.slice(n0) }, (m) => m.t === 'kid' && m.text === '老师三明治怎么写') && c.responses[0]?.instructions === catchCue('voice') && c.commits === 0, JSON.stringify({ after, err: k.msgs.slice(n0).find((m) => m.t === "err") }));
+  const turnA = k.msgs.slice(n0).find((m) => m.t === 'turn')!;
+  await idle();
+  const today = localDate(ctx.now());
+  const msgA = indexOf(today).messages.find((m) => m.job === turnA.job)!;
+  check('一直听:那一轮的消息就是孩子说的那句、开了新话题、记 live', msgA?.text === '老师三明治怎么写' && msgA.live === true && msgA.thread === turnA.job, JSON.stringify(msgA).slice(0, 200));
+  await until(() => !k.msgs.length || k.bins >= c.responses.length, 3000);
+  await sleep(300);
+
+  // 咳嗽(转写是空的)、只有「嗯」、semantic_vad 不收:放过,嘴不出声、不开新一轮、孩子端不报错
+  const r0 = c.responses.length;
+  const n1 = k.msgs.length;
+  fake.kidTexts = ['', '嗯。'];
+  say(k);
+  say(k);
+  fake.vadReject = 1;
+  say(k);
+  await until(() => k.msgs.slice(n1).filter((m) => m.t === 'skip').length >= 3);
+  await sleep(200);
+  // 假百炼的 vadReject 是推之前就设的,哪一段被拒看到达顺序;只比有哪三种
+  const skips = k.msgs.slice(n1).filter((m) => m.t === 'skip').map((m) => m.why).sort().join();
+  check('一直听:空的、语气词、VAD 不收都放过(skip 带原因),嘴不出声、没有新一轮、没有 err', skips === 'empty,filler,rejected' && c.responses.length === r0 && !k.msgs.slice(n1).some((m) => m.t === 'turn' || m.t === 'err' || m.t === 'kid'), JSON.stringify(k.msgs.slice(n1)));
+
+  // 停一下接着说:还没交给脑时又开口,两句并成一条交给脑
+  fake.kidTexts = ['他们在跳绳', '还有踢毽子'];
+  k.ws.send(JSON.stringify({ t: 'ctx', body: { thread: turnA.job } }));
+  const n2 = k.msgs.length;
+  say(k);
+  say(k);
+  const okMerge = await until(() => k.msgs.slice(n2).some((m) => m.t === 'turn'), 10000);
+  await idle();
+  const turnB = k.msgs.slice(n2).find((m) => m.t === 'turn')!;
+  const msgB = indexOf(today).messages.find((m) => m.job === turnB?.job);
+  check('一直听:停一下接着说的两句并成一条交给脑(嘴只接住一次)', okMerge && k.msgs.slice(n2).filter((m) => m.t === 'turn').length === 1 && msgB?.text === '他们在跳绳,还有踢毽子' && c.responses.slice(r0).filter((r) => r?.instructions === catchCue('voice') || r?.instructions === catchCue('answer')).length === 1, JSON.stringify({ text: msgB?.text, turns: k.msgs.slice(n2).filter((m) => m.t === 'turn').length }));
+  await sleep(300);
+
+  // 全双工:嘴在说时孩子开口 → 先压低(duck);是回声 → 恢复(unduck)不掐;是孩子的话 → 掐(flush)、开新一轮
+  fake.audioMs = 3000;
+  fake.kidTexts = ['还有呢'];
+  const n3 = k.msgs.length;
+  say(k);
+  await until(() => k.msgs.slice(n3).some((m) => m.t === 'turn'), 10000);
+  const turnC = k.msgs.slice(n3).find((m) => m.t === 'turn')!;
+  await until(() => k.msgs.slice(n3).some((m) => m.t === 'read' && m.job === turnC.job), 15000);
+  const firstRead = k.msgs.slice(n3).find((m) => m.t === 'read' && m.job === turnC.job)!;
+  fake.kidTexts = [String(firstRead.text)];
+  const n4 = k.msgs.length;
+  say(k);
+  await until(() => k.msgs.slice(n4).some((m) => m.t === 'skip'));
+  const echo = k.msgs.slice(n4);
+  check('全双工:嘴在说时开口先压低;转写是嘴自己的话(回声)→ 放过、恢复,不掐', echo.some((m) => m.t === 'duck') && echo.some((m) => m.t === 'skip' && m.why === 'echo') && echo.some((m) => m.t === 'unduck') && !echo.some((m) => m.t === 'flush'), JSON.stringify(echo.map((m) => m.t)));
+  fake.kidTexts = ['我懂了'];
+  const n5 = k.msgs.length;
+  say(k);
+  const okCut = await until(() => k.msgs.slice(n5).some((m) => m.t === 'turn'), 10000);
+  const cut = k.msgs.slice(n5);
+  check('全双工:嘴在说时孩子插嘴 → 压低 → 收下 → 掐(flush)、开新一轮', okCut && cut.some((m) => m.t === 'duck') && cut.findIndex((m) => m.t === 'flush') < cut.findIndex((m) => m.t === 'turn') && cut.some((m) => m.t === 'flush'), JSON.stringify(cut.map((m) => m.t)));
+  await idle();
+  fake.audioMs = 100;
+  await sleep(500);
+
+  // 关麦:说到一半孩子端停推(gate off),那一句作废(clear)
+  const clears = c.clears;
+  const n6 = k.msgs.length;
+  k.ws.send(loud());
+  await until(() => k.msgs.slice(n6).some((m) => m.t === 'vad' && m.on === true));
+  k.ws.send(JSON.stringify({ t: 'gate', on: false }));
+  const okGate = await until(() => k.msgs.slice(n6).some((m) => m.t === 'vad' && m.on === false));
+  check('关麦:说到一半停推,那一句作废(clear、vad 关)、不开新一轮', okGate && c.clears > clears && !k.msgs.slice(n6).some((m) => m.t === 'turn'), JSON.stringify(k.msgs.slice(n6)));
+  k.ws.send(JSON.stringify({ t: 'gate', on: true }));
+  k.ws.send(quiet());
+
+  // 放过的句子攒着没回答:离上次回答 idleSwapMs 就在安静时换连接(防 response_idle_timeout)
+  liveDeps.idleSwapMs = 300;
+  liveDeps.heartbeatMs = 100;
+  k.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => k.closed !== null);
+  const k2 = await connect('chinese-tutor', '?listen=open');
+  await until(() => has(k2, (m) => m.t === 'ready'));
+  const nc2 = fake.conns.length;
+  fake.kidTexts = [''];
+  say(k2);
+  const okIdle = await until(() => fake.conns.length === nc2 + 1, 3000);
+  check('一直听:放过的句子攒着没回答,到点安静时换连接(新的还是 VAD)', okIdle && fake.conns[nc2]?.session?.turn_detection?.type === 'semantic_vad', JSON.stringify({ conns: fake.conns.length - nc2 }));
+  liveDeps.idleSwapMs = undefined;
+  liveDeps.heartbeatMs = undefined;
+  k2.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => k2.closed !== null);
+
+  // 按住说进来,孩子端切到一直听:换一条开 VAD 的连接,告诉孩子端 listen
+  const k3 = await connect('chinese-tutor');
+  await until(() => has(k3, (m) => m.t === 'ready'));
+  const nc3 = fake.conns.length;
+  check('按住说进来:嘴的会话手动轮次', fake.conns[nc3 - 1].session?.turn_detection === null);
+  k3.ws.send(JSON.stringify({ t: 'listen', open: true }));
+  const okSwitch = await until(() => has(k3, (m) => m.t === 'listen' && m.open === true) && fake.conns.length === nc3 + 1);
+  check('切到一直听:安静时换一条开 VAD 的连接,孩子端收到 listen', okSwitch && fake.conns[nc3].session?.turn_detection?.type === 'semantic_vad' && fake.conns[nc3 - 1].closed, JSON.stringify({ conns: fake.conns.length - nc3 }));
+  k3.ws.send(JSON.stringify({ t: 'listen', open: false }));
+  const okBack = await until(() => has(k3, (m) => m.t === 'listen' && m.open === false) && fake.conns.length === nc3 + 2);
+  check('切回按住说:再换回手动轮次', okBack && fake.conns[nc3 + 1].session?.turn_detection === null);
+  k3.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => k3.closed !== null);
 }
 
 {

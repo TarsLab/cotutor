@@ -3,7 +3,8 @@
  *   session.created → 收 session.update 回 session.updated(喂过音频再改 silence 就报错,和真的一样)
  *   append 记字节;手动 commit → committed + 孩子转写(缓冲不到 100 毫秒、或 failCommit,同真的回 error「buffer too small」,没有转写);
  *   response.create → created、一块声音(缺省 100 毫秒 = 4800 字节,audioMs 改)、字幕、done(带 usage)
- *   VAD 会话(turn_detection 非空):收到有声的块 → speech_started;有声之后收到全零的块 → speech_stopped、committed、转写、自动回一次
+ *   VAD 会话(turn_detection 非空):收到有声的块 → speech_started;有声之后收到全零的块 → speech_stopped、committed、转写、自动回一次(create_response:false 不回);
+ *   kidTexts 排着的先用(一段一句),vadReject > 0 这一段回「not accepted by semantic turn detection」(没有 committed),failTranscript 回转写失败
  *   long = true 时回答只出一半、不 done(等 cancel);cancel 在有回答时回 done:cancelled,没有就报错
  *   response.create 带 response.instructions(实时老师):记进 responses;指令里有「说完就停:「…」」(照念)就把引号里的当字幕说,别的照旧
  */
@@ -36,8 +37,13 @@ export interface FakeRealtime {
   failUpdate: boolean;
   /** 发了 created 就断 */
   dropEarly: boolean;
-  /** 孩子那句转写成什么 */
+  /** 孩子那句转写成什么;kidTexts 排着的先用(VAD 会话一段一句) */
   kidText: string;
+  kidTexts: string[];
+  /** VAD 会话:接下来几段 semantic_vad 不收 */
+  vadReject: number;
+  /** VAD 会话:下一段 commit 了转写失败 */
+  failTranscript: boolean;
   /** commit 一律回「buffer too small」 */
   failCommit: boolean;
   /** 每次回答的声音多长(毫秒,24k 单声道);探针拉长了好在嘴说着时按下 */
@@ -47,7 +53,7 @@ export interface FakeRealtime {
 
 export async function startFakeRealtime(): Promise<FakeRealtime> {
   const server: Server = createServer((_req, res) => { res.writeHead(404); res.end(); });
-  const fake: FakeRealtime = { endpoint: '', conns: [], long: false, failUpdate: false, dropEarly: false, kidText: "It's a red car.", failCommit: false, audioMs: 100, close: () => { for (const c of fake.conns) c.sock.close(); server.close(); } };
+  const fake: FakeRealtime = { endpoint: '', conns: [], long: false, failUpdate: false, dropEarly: false, kidText: "It's a red car.", kidTexts: [], vadReject: 0, failTranscript: false, failCommit: false, audioMs: 100, close: () => { for (const c of fake.conns) c.sock.close(); server.close(); } };
   server.on('upgrade', (req, socket, head) => {
     if (!isUpgrade(req)) { socket.destroy(); return; }
     let active = 0;
@@ -72,7 +78,11 @@ export async function startFakeRealtime(): Promise<FakeRealtime> {
       active--;
       send({ type: 'response.done', response: { status: 'completed', usage: { input_tokens: 865, output_tokens: 28, input_token_details: { audio_tokens: 30 }, output_token_details: { audio_tokens: 20 } } } });
     };
-    const transcribe = (): void => { send({ type: 'input_audio_buffer.committed' }); send({ type: 'conversation.item.input_audio_transcription.completed', transcript: ` ${fake.kidText} ` }); };
+    const transcribe = (): void => {
+      send({ type: 'input_audio_buffer.committed' });
+      if (fake.failTranscript) { fake.failTranscript = false; send({ type: 'conversation.item.input_audio_transcription.failed', error: { message: 'asr failed' } }); return; }
+      send({ type: 'conversation.item.input_audio_transcription.completed', transcript: ` ${fake.kidTexts.length ? fake.kidTexts.shift() : fake.kidText} ` });
+    };
     c.sock = acceptWebSocket(req, socket, head, {
       onText: (text) => {
         const m = JSON.parse(text) as Record<string, any>;
@@ -92,7 +102,12 @@ export async function startFakeRealtime(): Promise<FakeRealtime> {
           if (c.session?.turn_detection) {
             const loud = buf.some((b) => b !== 0);
             if (loud && !speaking) { speaking = true; send({ type: 'input_audio_buffer.speech_started' }); }
-            else if (!loud && speaking) { speaking = false; send({ type: 'input_audio_buffer.speech_stopped' }); transcribe(); respond(); }
+            else if (!loud && speaking) {
+              speaking = false;
+              buffered = 0;
+              if (fake.vadReject > 0) { fake.vadReject--; send({ type: 'error', error: { code: 'invalid_request_error', message: 'Input speech was not accepted by semantic turn detection.' } }); }
+              else { send({ type: 'input_audio_buffer.speech_stopped' }); transcribe(); if (c.session?.turn_detection?.create_response !== false) respond(); }
+            }
           }
         } else if (m.type === 'input_audio_buffer.commit') {
           c.commits++;

@@ -45,7 +45,12 @@ export class CallRecorder {
   }
 
   /** 孩子端发来的一条 */
-  in(m: Record<string, unknown>): void { this.msgs.push([this.ms(), 'i', m]); }
+  in(m: Record<string, unknown>, t = this.ms()): void {
+    // 一直听时孩子那一句的开口 / 说完(补记的 hold / release)要记回它当时的时刻,按时刻插进去,录像按顺序读
+    let i = this.msgs.length;
+    while (i > 0 && this.msgs[i - 1][0] > t) i--;
+    this.msgs.splice(i, 0, [t, 'i', m]);
+  }
 
   /** 孩子端清了播放队列,但没有一条 flush 消息(比如换段时页面自己清) */
   flush(): void { this.flushes.push(this.ms()); }

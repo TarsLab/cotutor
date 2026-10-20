@@ -11,7 +11,9 @@
  *         input_audio_buffer.speech_started / speech_stopped(VAD);response.done {response: {status, usage}};error。
  *   端点要业务空间 id:wss://<WorkspaceId>.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=…(公网域名 dashscope.aliyuncs.com 连上 1 秒就被关)。
  *
- * 轮次:manual = 手动(口语课的跟读段:relay 按响度判出开口才 append、停了 commit 拿转写,下一步由应用塞 cue + response.create,见 src/talk/relay.ts);semantic_vad / server_vad = 服务端判(聊那段)。
+ * 轮次:manual = 手动(口语课的跟读段:relay 按响度判出开口才 append、停了 commit 拿转写,下一步由应用塞 cue + response.create,见 src/talk/relay.ts);semantic_vad / server_vad = 服务端判(聊那段;实时老师的一直听也是,但 create_response / interrupt_response 关着,回不回、掐不掐由应用定)。
+ *   一直听的真连(2026-10-20,scripts/probe-live-vad.mjs):孩子还在说时就有 conversation.item.created(不算收下)、转写片段;speech_stopped 与 committed 同一刻,
+ *   转写约 0.2 秒后到;semantic_vad 不收的一段回 error「not accepted by semantic turn detection」(走 onRejected,不是错);commit 了 300 秒没回答报 response_idle_timeout,会话死。
  *   服务端的规矩(2026-10-10 真连):turn_detection 的 silence_duration_ms 喂过音频就不能再改(切成 null 再切回来也回到缺省 800),
  *   type 在 null 与 vad 之间随时能切。所以跟读与聊各开一条会话(跟读手动;聊 semantic_vad 带自己的 silence),setTurn 只在不改 silence 时用。
  * 不抛:连不上、断了、服务端报错都走 onClose / onError;send 在没连上时丢弃并回 false。
@@ -29,6 +31,8 @@ const TRANSCRIBE_MODEL = 'qwen3-asr-flash-realtime';
 const HEARTBEAT_PCM = Buffer.alloc(INPUT_RATE * 2);
 
 export type TurnMode = 'manual' | 'semantic_vad' | 'server_vad';
+/** VAD 判出说完以后服务端自己做不做:回一次(create_response)、孩子开口时掐掉在出的回答(interrupt_response);缺省都做(口语课聊那段) */
+export interface VadOptions { createResponse?: boolean; interruptResponse?: boolean }
 
 export interface RealtimeOptions {
   /** 系统提示(人设 + 规矩;口语课还有口语单) */
@@ -38,6 +42,8 @@ export interface RealtimeOptions {
   turn?: TurnMode;
   /** VAD 判「说完了」的静音毫秒(一年级孩子想词慢,缺省比百炼的 800 长) */
   silenceMs?: number;
+  /** VAD 判出说完以后服务端自己回不回、掐不掐(实时老师的一直听两样都关,由应用定) */
+  vad?: VadOptions;
   /** 测试用:整个端点(含 ?model=);不给就按 workspaceId 拼 */
   endpoint?: string;
   env?: NodeJS.ProcessEnv;
@@ -56,6 +62,10 @@ export interface RealtimeEvents {
   onKidText?(text: string): void;
   /** VAD:孩子开口 / 停了 */
   onSpeech?(state: 'started' | 'stopped'): void;
+  /** semantic_vad 判出这一段不算一句(附和声、噪声):不会有 committed 与转写;不是错 */
+  onRejected?(): void;
+  /** 孩子那句 commit 了,转写失败 */
+  onKidFailed?(): void;
   /** 老师一次回答开始 / 结束(status 来自服务端:completed / cancelled / incomplete / failed) */
   onResponse?(state: 'created' | 'done', status: string | null, usage: Usage | null): void;
   onError?(message: string): void;
@@ -72,13 +82,13 @@ export function dashscopeAuth(env: NodeJS.ProcessEnv = process.env): { key: stri
 export const endpointOf = (workspaceId: string, model: string): string => `wss://${workspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=${model}`;
 
 /** 轮次模式 → session.turn_detection */
-export function turnDetection(turn: TurnMode, silenceMs: number): Record<string, unknown> | null {
+export function turnDetection(turn: TurnMode, silenceMs: number, vad: VadOptions = {}): Record<string, unknown> | null {
   if (turn === 'manual') return null;
-  return { type: turn, threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: silenceMs, create_response: true, interrupt_response: true };
+  return { type: turn, threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: silenceMs, create_response: vad.createResponse ?? true, interrupt_response: vad.interruptResponse ?? true };
 }
 
 /** session.update 的正文 */
-export function sessionConfig(o: { instructions: string; voice: string; turn: TurnMode; silenceMs: number }): Record<string, unknown> {
+export function sessionConfig(o: { instructions: string; voice: string; turn: TurnMode; silenceMs: number; vad?: VadOptions }): Record<string, unknown> {
   return {
     modalities: ['text', 'audio'],
     instructions: o.instructions,
@@ -87,7 +97,7 @@ export function sessionConfig(o: { instructions: string; voice: string; turn: Tu
       input: { format: { type: 'pcm', sample_rate: INPUT_RATE, sample_format: 's16le', channels: 1 } },
       output: { voice: o.voice, format: { type: 'pcm', sample_rate: OUTPUT_RATE } },
     },
-    turn_detection: turnDetection(o.turn, o.silenceMs),
+    turn_detection: turnDetection(o.turn, o.silenceMs, o.vad),
     input_audio_transcription: { model: TRANSCRIBE_MODEL },
   };
 }
@@ -167,7 +177,7 @@ export class RealtimeSession {
       ws.onmessage = (m) => {
         let e: ServerEvent;
         try { e = JSON.parse(String(m.data)) as ServerEvent; } catch { return; }
-        if (e.type === 'session.created') { this.sendRaw({ type: 'session.update', session: sessionConfig({ instructions: this.opts.instructions, voice: this.voice, turn: this.turn, silenceMs: this.silenceMs }) }); return; }
+        if (e.type === 'session.created') { this.sendRaw({ type: 'session.update', session: sessionConfig({ instructions: this.opts.instructions, voice: this.voice, turn: this.turn, silenceMs: this.silenceMs, vad: this.opts.vad }) }); return; }
         if (e.type === 'session.updated') {
           if (!this.ready) { this.ready = true; finish(null); }
           if (this.pendingUpdate) { clearTimeout(this.pendingUpdate.timer); this.pendingUpdate.resolve(true); this.pendingUpdate = null; }
@@ -178,6 +188,8 @@ export class RealtimeSession {
           const msg = `${err?.code ? `${err.code}: ` : ''}${err?.message ?? JSON.stringify(e).slice(0, 200)}`;
           if (!this.ready) { finish(msg); this.close('error'); return; }
           if (this.pendingUpdate) { clearTimeout(this.pendingUpdate.timer); this.pendingUpdate.resolve(false); this.pendingUpdate = null; }
+          // semantic_vad 不收的一段(2026-10-20 照 Qwen-Live-Harness:不致命,回到在听)
+          if (/not accepted by semantic turn detection/i.test(err?.message ?? '')) { this.ev.onRejected?.(); return; }
           this.ev.onError?.(msg);
           // user_idle_timeout / response_idle_timeout:服务端说会话关了,连接却还开着,再发什么都没回音(2026-10-19 ray 那次挂了 10 分钟才 close),当场关
           if (err?.code?.endsWith('_idle_timeout')) this.close(`idle:${err.code}`);
@@ -207,6 +219,7 @@ export class RealtimeSession {
       case 'conversation.item.input_audio_transcription.completed':
         if (typeof e.transcript === 'string') this.ev.onKidText?.(e.transcript.trim());
         break;
+      case 'conversation.item.input_audio_transcription.failed': this.ev.onKidFailed?.(); break;
       case 'input_audio_buffer.speech_started': this.ev.onSpeech?.('started'); break;
       case 'input_audio_buffer.speech_stopped': this.ev.onSpeech?.('stopped'); break;
       case 'response.created': this.active++; this.ev.onResponse?.('created', null, null); break;

@@ -160,6 +160,8 @@ const endpoint = `ws://127.0.0.1:${port}/api-ws/v1/realtime?model=test`;
 {
   const td = turnDetection('semantic_vad', 1200) as Record<string, unknown>;
   check('turnDetection / sessionConfig:VAD 带 silence 与 interrupt;手动是 null', td.type === 'semantic_vad' && td.silence_duration_ms === 1200 && td.interrupt_response === true && turnDetection('manual', 800) === null && (sessionConfig({ instructions: 'x', voice: 'Tina', turn: 'server_vad', silenceMs: 900 }).turn_detection as Record<string, unknown>).silence_duration_ms === 900);
+  const off = turnDetection('semantic_vad', 1600, { createResponse: false, interruptResponse: false }) as Record<string, unknown>;
+  check('turnDetection:一直听把 create_response / interrupt_response 关掉,缺省(口语课)开着', off.create_response === false && off.interrupt_response === false && off.silence_duration_ms === 1600 && td.create_response === true && (sessionConfig({ instructions: 'x', voice: 'Tina', turn: 'semantic_vad', silenceMs: 1600, vad: { createResponse: false } }).turn_detection as Record<string, unknown>).create_response === false, JSON.stringify(off));
   check('端点按业务空间拼', endpointOf('llm-abc', 'm1') === 'wss://llm-abc.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=m1');
   const noAuth = new RealtimeSession({ instructions: 'x', env: { HOME: '/nonexistent' } });
   check('没 key / 业务空间 id:connect 回 no_auth', (await noAuth.connect()) === 'no_auth');

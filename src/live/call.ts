@@ -19,6 +19,11 @@
  * 嘴的会话断了(百炼 300 秒没输入就关,2026-10-20 照 Qwen-Live-Harness 的换连接):电话不挂、孩子端不知道;下次按下或发来时现连,
  *   连上之前来的照序攒着补(录像里记一条 {t:'lost'},只记不发)。平时孩子没按着就 30 秒一次心跳,最后一次动静 15 分钟后停跳。
  * 换连接:嘴的历史越长每次回答越贵,输入过了 SWAP_TOKENS 就在安静时换一条新的(录像里记 {t:'swap'},只记不发)。
+ * 一直听(《wip/实时老师常开麦设计.md》,连接带 ?listen=open,或孩子端发 {t:'listen', open}):孩子端一直推声音(卡的声音、录音、小课堂、关麦时不推,{t:'gate', on} 告诉这里),
+ *   嘴的会话开 VAD(live.vad、live.silenceMs),create_response / interrupt_response 关着:开口(speech_started)先暂停照念、嘴在放就让孩子端压低({t:'duck'}),
+ *   转写回来 lib/listen.ts 判收下 / 放过——收下才算按下 + 松手(打断、接住、交给脑;交给脑之前孩子停一下又开口的并成一句),放过的恢复音量接着念({t:'skip', why} / {t:'unduck'})。
+ *   孩子那一句的上下文(话题、设备、舞台上的卡)孩子端开口时报一次 {t:'ctx', body}。换模式 = 安静时换一条连接(silence 只有新连接能给)。
+ *   commit 了不回答 300 秒百炼就关(response_idle_timeout,探针 probe-live-vad):放过的多了,离上次回答 IDLE_SWAP_MS 就在安静时换连接。
  * 录像:进出的消息、两边的声音都记(CallRecorder),挂了落在 conversations/<老师>/<日期>.live/<时分秒>.reel.json / .wav。
  * 事件:嘴这一道(mouth:按下、松手 / 发了、接住开始放、第几句开始放、打断)补进那一轮的 events.jsonl(Runner.noteEvent),工作台的时间线上看;
  * 按下、松手、接住在脑起来之前,先攒着,等那一轮的老师进程起来(main:start)再按它的起点换成相对毫秒(负的)。
@@ -33,6 +38,7 @@ import { judgeCard } from '../cards/index.ts';
 import { localDate } from '../lib/conversation.ts';
 import { playsLecture } from '../lib/board.ts';
 import { catchCue, FILL_LINE, readCue, type CatchKind } from './lib/cue.ts';
+import { judge } from './lib/listen.ts';
 import { addChunk, flushAt, playbackInit, playingAt, type Playback } from './lib/playback.ts';
 import { queueInit, queueStep, type Beat, type QueueEvent, type QueueState } from './lib/queue.ts';
 import { MIX_RATE } from './lib/mix.ts';
@@ -53,6 +59,9 @@ export interface LiveDeps {
   keepAliveMs?: number;
   swapTokens?: number;
   fillMs?: number;
+  /** 一直听:进来就是(连接带 ?listen=open);测试:放过的句子攒着多久没回答就换连接 */
+  listen?: 'hold' | 'open';
+  idleSwapMs?: number;
   onFinished?(why: string): void;
 }
 
@@ -70,8 +79,13 @@ const FILL_MS = 5000;
 const SWAP_TOKENS = 3000;
 /** 讲稿的 [[play]]:孩子端放小课堂那一段,最多等它这么久就接着念(孩子端没回 staged 时不卡死) */
 const GATE_MS = 180_000;
-/** 现连时攒着的声音最多一分钟(同 Qwen-Live-Harness 的 MAX_RECOVERY_AUDIO_BYTES) */
+/** 现连时攒着的声音最多一分钟(同 Qwen-Live-Harness 的 MAX_RECOVERY_AUDIO_BYTES);一直听时只留最近 10 秒(更早的孩子早不等了) */
 const MAX_BACKLOG_BYTES = INPUT_RATE * 2 * 60;
+const MAX_OPEN_BACKLOG_BYTES = INPUT_RATE * 2 * 10;
+/** 一直听:收下一句以后,孩子停一下又开口(或刚说完在等转写),交给脑最多再等这么久,收下的并进来 */
+const MERGE_WAIT_MS = 8000;
+/** 一直听:commit 了没回答,离上次回答这么久就在安静时换连接(百炼 300 秒报 response_idle_timeout) */
+const IDLE_SWAP_MS = 240_000;
 
 /** 嘴这次回答是什么:接住(孩子这一轮)、照念哪几句、脑想得久时垫的一句 */
 type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat } | { kind: 'fill' };
@@ -128,6 +142,26 @@ export class LiveCall {
   private backlog: ({ m: Record<string, unknown>; at: number } | { pcm: Buffer })[] = [];
   private backlogBytes = 0;
   private backlogHolding = false;
+  /** 一直听:孩子端要的(open)与嘴这条会话开着 VAD 没有(mouthOpen);不一样就在安静时换连接 */
+  private open: boolean;
+  private mouthOpen = false;
+  /** 一直听:VAD 判着孩子在说、开口的时刻(通话毫秒);说完了在等转写的(说完的时刻) */
+  private vadOn = false;
+  private vadFrom = 0;
+  private vadAwait: number | null = null;
+  /** 一直听:嘴的声音让孩子端压低着 */
+  private ducked = false;
+  /** 一直听:孩子端开口时报的这一轮上下文(话题、设备、via、舞台上的卡),收下时当松手的 body */
+  private ctxBody: Record<string, unknown> = {};
+  /** 嘴最近说过的话(比回声),at = 那段在孩子端放完的墙钟 */
+  private saidLog: { text: string; at: number }[] = [];
+  /** 一直听:收下了还没交给脑的几句(孩子停一下接着说的并进来) */
+  private draft: { seq: number; texts: string[] } | null = null;
+  /** 一直听:孩子的声音最后到的墙钟、上次回答以后有没有 commit 过、上次回答(或连上)的墙钟、孩子端关着麦 */
+  private lastAudioAt = 0;
+  private committedSince = false;
+  private lastResponseAt = Date.now();
+  private gated = false;
   private offEvents: (() => void) | null = null;
   private ended = false;
   private readonly sock: ServerSocket;
@@ -137,6 +171,7 @@ export class LiveCall {
     this.sock = sock;
     this.deps = deps;
     this.rec = new CallRecorder(deps.ctx.now);
+    this.open = deps.listen === 'open';
   }
 
   private ms(): number { return this.rec.ms(); }
@@ -196,12 +231,13 @@ export class LiveCall {
   }
 
   /** 开一条嘴的会话(第一次、断了以后现连、换连接都走这里);不是 this.session 的会话,回调都不认 */
-  private async openMouth(): Promise<{ why: string | null; s: RealtimeSession }> {
+  private async openMouth(): Promise<{ why: string | null; s: RealtimeSession; open: boolean }> {
     const { ctx, tutor } = this.deps;
     const cfg = ctx.ws.config;
     const t = cfg.tutors[tutor];
     let firstOfAnswer = true;
-    const s: RealtimeSession = new RealtimeSession({ instructions: mouthInstructions({ display: t?.display ?? tutor, kidName: cfg.kid.name ?? cfg.kid.slug }), voice: cfg.live.voices[tutor], model: cfg.live.model, turn: 'manual', endpoint: this.deps.endpoint, env: this.deps.env }, {
+    const open = this.open;
+    const s: RealtimeSession = new RealtimeSession({ instructions: mouthInstructions({ display: t?.display ?? tutor, kidName: cfg.kid.name ?? cfg.kid.slug }), voice: cfg.live.voices[tutor], model: cfg.live.model, turn: open ? cfg.live.vad : 'manual', silenceMs: cfg.live.silenceMs, vad: { createResponse: false, interruptResponse: false }, endpoint: this.deps.endpoint, env: this.deps.env }, {
       onAudio: (pcm) => {
         if (this.session !== s) return;
         const said: Said = this.said ?? { kind: 'catch' };
@@ -221,13 +257,17 @@ export class LiveCall {
         // 垫的那句在孩子端同接住的字一样上字幕
         const of = kind === 'read' ? 'read' : 'catch';
         if (done !== null) {
+          if (done.trim()) this.saidLog = [...this.saidLog.slice(-5), { text: done.trim(), at: Date.now() }];
           if (kind === 'catch') { this.caught = done.trim(); this.caughtDone = true; const c = [...this.pre].reverse().find((x) => x.ev.kind === 'catch'); if (c && c.ev.kind === 'catch') c.ev.text = this.caught; }
           this.send({ t: 'tutor', of, done: done.trim() });
           return;
         }
         if (delta) this.send({ t: 'tutor', of, delta });
       },
-      onKidText: (text) => { if (this.session === s) this.heard(text); },
+      onKidText: (text) => { if (this.session !== s) return; if (this.mouthOpen) this.verdict(text); else this.heard(text); },
+      onSpeech: (st) => { if (this.session === s && this.mouthOpen) this.speech(st); },
+      onRejected: () => { if (this.session === s && this.mouthOpen) this.verdict(null, 'rejected'); },
+      onKidFailed: () => { if (this.session === s) this.kidFailed(); },
       onResponse: (st, status, usage) => {
         if (this.session !== s) return;
         if (st === 'done' && usage) this.lastInput = usage.input;
@@ -239,6 +279,11 @@ export class LiveCall {
         }
         if (status === 'cancelled') this.play = flushAt(this.play, this.ms());
         else if (this.said?.kind === 'read') this.readRest(this.said);
+        // 比回声按这段在孩子端放完的时刻算(字早就出完了,声音要放十几秒)
+        const last = this.saidLog[this.saidLog.length - 1];
+        if (last && status !== 'cancelled') last.at = Math.max(last.at, this.wall(this.play.end));
+        this.lastResponseAt = Date.now();
+        this.committedSince = false;
         if (this.said?.kind === 'catch') this.caughtDone = true;
         this.said = null;
         this.lastActive = Date.now();
@@ -260,20 +305,32 @@ export class LiveCall {
       onClose: (r) => { if (!this.ended && this.session === s) this.lost(r); },
     });
     const why = await s.connect();
-    if (this.ended) { s.close(); return { why: 'ended', s }; }
-    return { why, s };
+    if (this.ended) { s.close(); return { why: 'ended', s, open }; }
+    return { why, s, open };
   }
 
   /** 开一条嘴的会话并换上(第一次、断了以后现连) */
   private async connectMouth(): Promise<string | null> {
-    const { why, s } = await this.openMouth();
-    if (why === null) this.session = s;
+    const { why, s, open } = await this.openMouth();
+    if (why === null) this.mounted(s, open);
     return why;
+  }
+
+  /** 换上一条嘴的会话:一直听的状态都从头来 */
+  private mounted(s: RealtimeSession, open: boolean): void {
+    this.session = s;
+    if (this.mouthOpen !== open) this.send({ t: 'listen', open });
+    this.mouthOpen = open;
+    this.vadOn = false;
+    this.vadAwait = null;
+    this.committedSince = false;
+    this.lastResponseAt = Date.now();
+    if (this.ducked) { this.ducked = false; this.send({ t: 'unduck' }); }
   }
 
   /** 安静:孩子没按着、嘴没在说也没要说的、讲稿没排着、脑没在写、没在现连 / 换连接 */
   private quiet(): boolean {
-    return !this.holding && !this.said && !this.session?.responding && !this.q.pending.length && !this.q.gated && !this.running && !this.reviving && !this.swapping;
+    return !this.holding && !this.vadOn && this.vadAwait === null && !this.said && !this.session?.responding && !this.q.pending.length && !this.q.gated && !this.running && !this.reviving && !this.swapping;
   }
 
   /**
@@ -281,15 +338,18 @@ export class LiveCall {
    * 首包不变,只是钱);嘴每次都给词、不靠前情,安静时开一条新的换上就行,不用摘要。开的时候孩子动了就作废这次。
    */
   private maybeSwap(): void {
-    if (this.ended || !this.session || this.lastInput < (this.deps.swapTokens ?? SWAP_TOKENS) || !this.quiet()) return;
+    if (this.ended || !this.session) return;
+    // 换的三种:历史长了;孩子端换了模式(按住说 ↔ 一直听);一直听放过的句子攒着没回答,快到百炼的 response_idle_timeout
+    const why = this.open !== this.mouthOpen ? 'listen' : this.lastInput >= (this.deps.swapTokens ?? SWAP_TOKENS) ? 'tokens' : this.mouthOpen && this.committedSince && Date.now() - this.lastResponseAt > (this.deps.idleSwapMs ?? IDLE_SWAP_MS) ? 'idle' : null;
+    if (!why || !this.quiet()) return;
     this.swapping = true;
-    void this.openMouth().then(({ why, s }) => {
+    void this.openMouth().then(({ why: failed, s, open }) => {
       this.swapping = false;
-      if (why !== null) return;
+      if (failed !== null) return;
       if (this.ended || !this.session || !this.quiet()) { s.close('swap-abort'); return; }
       const old = this.session;
-      this.session = s;
-      this.rec.out({ t: 'swap', input: this.lastInput });
+      this.rec.out({ t: 'swap', input: this.lastInput, why });
+      this.mounted(s, open);
       this.lastInput = 0;
       old.close('swap');
     });
@@ -304,7 +364,12 @@ export class LiveCall {
     if (this.said) { this.said = null; this.afterDone = null; this.cancelOnCreate = false; this.q = { ...this.q, busy: false }; }
     // 按着时断的:推过去的声音跟着那条会话没了,松手就说没听清
     this.heldBytes = 0;
-    if (this.q.pending.length) void this.revive();
+    // 一直听时孩子说到一半断的:那一句跟着会话没了
+    this.vadOn = false;
+    this.vadAwait = null;
+    if (this.ducked) { this.ducked = false; this.send({ t: 'unduck' }); }
+    // 一直听、声音还在推:没有「下次按下」,马上连
+    if (this.q.pending.length || (this.open && Date.now() - this.lastAudioAt < 5000)) void this.revive();
   }
 
   /** 现连嘴(最多两次);连上了把攒着的照到达的顺序补上、排着的讲稿接着念;连不上告诉孩子端走板书、挂掉 */
@@ -328,7 +393,10 @@ export class LiveCall {
   /** 心跳(RealtimeSession.heartbeat):嘴连着、孩子没按着、嘴没在说、最近有动静;孩子走开久了就不跳,让百炼关,回来按下再连 */
   private keepAlive(): void {
     const s = this.session;
-    if (!s?.isReady || this.holding || s.responding || Date.now() - this.lastActive > (this.deps.keepAliveMs ?? KEEP_ALIVE_MS)) return;
+    this.maybeSwap();
+    if (!s?.isReady || this.holding || this.vadOn || s.responding || Date.now() - this.lastActive > (this.deps.keepAliveMs ?? KEEP_ALIVE_MS)) return;
+    // 一直听、声音一直在推:本来就有输入,不用跳
+    if (this.mouthOpen && Date.now() - this.lastAudioAt < 5000) return;
     s.heartbeat();
   }
 
@@ -457,6 +525,31 @@ export class LiveCall {
       }
       // 孩子端放完了小课堂那一段(或放不了、被关):后面的讲稿接着交给嘴
       case 'staged': this.step({ e: 'staged' }); break;
+      // 一直听:孩子端开口时报的上下文(收下时当松手的 body)
+      case 'ctx': if (isObj(m.body)) this.ctxBody = m.body; break;
+      // 一直听:孩子端停推(关麦、卡的声音、录音、小课堂)/ 接着推;停的时候孩子正说到一半,那一句作废
+      case 'gate': {
+        this.gated = m.on === false;
+        if (!this.gated) break;
+        this.lastActive = Date.now();
+        if (this.vadOn || this.vadAwait !== null) {
+          this.session?.clearAudio();
+          this.vadOn = false;
+          this.vadAwait = null;
+          this.send({ t: 'vad', on: false });
+          this.resume();
+        }
+        break;
+      }
+      // 孩子端换了模式:安静时换一条连接(silence 只有新连接能给)
+      case 'listen': {
+        if (typeof m.open !== 'boolean') break;
+        this.open = m.open;
+        this.lastActive = Date.now();
+        if (!this.session && this.opened) void this.revive();
+        else this.maybeSwap();
+        break;
+      }
       case 'view': this.rec.view(m.w, m.h); break;
       case 'bye': void this.end('bye'); break;
       default: break;
@@ -485,7 +578,8 @@ export class LiveCall {
     this.caught = '';
     this.caughtDone = false;
     this.q = queueStep(this.q, { e: 'release' }).s;
-    this.pendingVoice = kind === 'voice' || kind === 'answer' ? { seq, body } : null;
+    // 按住说的等转写回来(heard);一直听的转写已经有了(text)
+    this.pendingVoice = (kind === 'voice' || kind === 'answer') && text === undefined ? { seq, body } : null;
     const go = (): void => this.ask({ kind: 'catch' }, catchCue(kind));
     if (this.said) this.afterDone = go; else go();
     if (this.fillTimer) clearTimeout(this.fillTimer);
@@ -497,7 +591,8 @@ export class LiveCall {
   /** 垫一句:还是这一轮、脑还欠着它的第一句、孩子没按着、嘴空着 */
   private fill(seq: number): void {
     this.fillTimer = null;
-    if (this.ended || seq !== this.turnSeq || this.owed !== seq || !this.session || this.holding || this.said || this.session.responding) return;
+    // 一直听时孩子又开口了:不垫(他接着说的会并进这一轮)
+    if (this.ended || seq !== this.turnSeq || this.owed !== seq || !this.session || this.holding || this.vadOn || this.said || this.session.responding) return;
     this.ask({ kind: 'fill' }, catchCue('fill'));
   }
 
@@ -517,11 +612,81 @@ export class LiveCall {
     if (this.playing()) { this.play = flushAt(this.play, this.ms()); this.send({ t: 'flush' }); }
   }
 
+  /** 一直听:VAD 判出孩子开口 / 说完。开口先暂停照念(不丢)、嘴在放就让孩子端压低;说完了等转写 */
+  private speech(st: 'started' | 'stopped'): void {
+    this.lastActive = Date.now();
+    if (st === 'started') {
+      this.vadOn = true;
+      this.vadFrom = this.ms();
+      this.q = queueStep(this.q, { e: 'pause' }).s;
+      if (this.playing() && !this.ducked) { this.ducked = true; this.send({ t: 'duck' }); }
+      this.send({ t: 'vad', on: true });
+      return;
+    }
+    if (!this.vadOn) return;
+    this.vadOn = false;
+    this.vadAwait = this.ms();
+    this.committedSince = true;
+    this.send({ t: 'vad', on: false });
+  }
+
+  /** 一直听:放过一句(或孩子端关麦作废了一句),照念接着走、压低的恢复 */
+  private resume(): void {
+    if (this.ducked) { this.ducked = false; this.send({ t: 'unduck' }); }
+    if (!this.holding) this.step({ e: 'release' });
+    this.maybeSwap();
+  }
+
+  /** 一直听:一句的转写回来了(null = semantic_vad 不收、转写失败)。收下 = 按下 + 松手;放过的什么都不做,照念接着走 */
+  private verdict(text: string | null, failed?: 'rejected' | 'failed'): void {
+    const from = this.vadFrom;
+    const to = this.vadAwait ?? this.ms();
+    this.vadOn = false;
+    this.vadAwait = null;
+    const v = text === null ? { take: false as const, why: failed ?? 'rejected' } : judge(text, { asked: this.asked, said: this.saidLog, now: Date.now() });
+    if (!v.take) {
+      this.send({ t: 'skip', why: v.why, text: text ?? '' });
+      this.resume();
+      return;
+    }
+    const said = text ?? '';
+    this.lastActive = Date.now();
+    this.send({ t: 'kid', text: said });
+    // 录像按孩子端的按下 / 松手画这一句:补记开口、说完两条(当时的时刻)
+    this.rec.in({ t: 'hold', vad: true }, from);
+    this.rec.in({ t: 'release', vad: true, body: this.ctxBody }, to);
+    // 停一下接着说的:上一句还没交给脑,并进去
+    if (this.draft && this.draft.seq === this.turnSeq) {
+      this.draft.texts.push(said);
+      if (this.ducked) { this.ducked = false; this.send({ t: 'unduck' }); }
+      if (!this.holding) this.step({ e: 'release' });
+      return;
+    }
+    this.pre = [{ at: this.wall(from), ev: { lane: 'mouth', kind: 'hold' } }, { at: this.wall(to), ev: { lane: 'mouth', kind: 'release', how: 'vad' } }];
+    this.ducked = false;
+    this.interrupt();
+    const body = { ...this.ctxBody };
+    this.turn(this.asked && body.newThread !== true ? 'answer' : 'voice', body, said);
+    this.draft = { seq: this.turnSeq, texts: [said] };
+  }
+
+  /** 孩子那句转写失败:按住说的照转写是空的办;一直听时不到 1 秒的放过,长的嘴说没听清 */
+  private kidFailed(): void {
+    if (!this.mouthOpen) { this.heard(''); return; }
+    const long = (this.vadAwait ?? this.ms()) - this.vadFrom >= 1000;
+    this.verdict(null, 'failed');
+    if (long && !this.said && this.session) this.ask({ kind: 'catch' }, catchCue('empty'));
+  }
+
   /** 等嘴接住(最多 CATCH_WAIT_MS),交给脑;脑在忙就排着,它写完合并发 */
   private async toBrain(seq: number, body: Record<string, unknown>): Promise<void> {
     const until = Date.now() + CATCH_WAIT_MS;
     while (!this.caughtDone && Date.now() < until && !this.ended && seq === this.turnSeq) await new Promise((r) => setTimeout(r, 20));
+    // 一直听:孩子停一下又开口了(或刚说完在等转写),等这一句判完,收下的并进来(probe-live-vad:句与句之间常常只隔 0–300 毫秒)
+    const more = Date.now() + MERGE_WAIT_MS;
+    while (this.draft?.seq === seq && (this.vadOn || this.vadAwait !== null) && Date.now() < more && !this.ended && seq === this.turnSeq) await new Promise((r) => setTimeout(r, 20));
     if (this.ended || seq !== this.turnSeq) return;
+    if (this.draft?.seq === seq) { body = { ...body, text: this.draft.texts.join(',') }; this.draft = null; }
     if (this.running) { this.waiting.push(body); return; }
     await this.dispatch(body);
   }
@@ -582,21 +747,35 @@ export class LiveCall {
     void this.dispatch({ ...last, text: all.map((b) => String(b.text ?? '').trim()).filter(Boolean).join('\n') });
   }
 
-  /** 孩子端的一块声音:按着才推;嘴在现连时按着说的先攒着(最多一分钟) */
+  /** 孩子端的一块声音:按着才推,一直听时一直推;嘴在现连时按着说的先攒着(最多一分钟),一直听的只留最近 10 秒 */
   onAudio(pcm: Buffer): void {
     if (this.ended) return;
+    if (this.open) this.lastAudioAt = Date.now();
     if (!this.session) {
+      if (this.open && this.opened) {
+        this.rec.kid(pcm);
+        this.backlog.push({ pcm });
+        this.backlogBytes += pcm.length;
+        while (this.backlogBytes > MAX_OPEN_BACKLOG_BYTES) {
+          const i = this.backlog.findIndex((x) => 'pcm' in x);
+          if (i < 0) break;
+          this.backlogBytes -= (this.backlog[i] as { pcm: Buffer }).pcm.length;
+          this.backlog.splice(i, 1);
+        }
+        void this.revive();
+        return;
+      }
       if (this.backlogHolding && this.backlogBytes + pcm.length <= MAX_BACKLOG_BYTES) { this.rec.kid(pcm); this.backlog.push({ pcm }); this.backlogBytes += pcm.length; }
       return;
     }
-    if (!this.holding || !this.session.isReady) return;
+    if (!(this.holding || this.mouthOpen) || !this.session.isReady) return;
     this.rec.kid(pcm);
     this.pushAudio(pcm);
   }
 
   private pushAudio(pcm: Buffer): void {
-    if (!this.holding || !this.session?.isReady) return;
-    this.heldBytes += pcm.length;
+    if (!(this.holding || this.mouthOpen) || !this.session?.isReady) return;
+    if (this.holding) this.heldBytes += pcm.length;
     this.session.appendAudio(pcm);
   }
 

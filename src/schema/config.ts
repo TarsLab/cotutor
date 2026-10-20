@@ -234,7 +234,7 @@ export type TalkConfig = z.infer<typeof TalkSchema>;
  * 实时老师(《wip/实时老师设想.md》):老师用 realtime 模型开口(嘴),老师 CLI 在后面写板书(脑);讲稿不配音,交给嘴照念。
  * 出厂关着;要百炼 key 与业务空间 id(同口语课)。voices 里列着的老师,他的新话题走实时;activity 话题照旧板书。
  */
-export const LIVE_DEFAULT = { enabled: false, model: 'qwen3.8-omni-flash-realtime', voices: {} as Record<string, string> };
+export const LIVE_DEFAULT = { enabled: false, model: 'qwen3.8-omni-flash-realtime', voices: {} as Record<string, string>, listen: 'hold' as const, vad: 'semantic_vad' as const, silenceMs: 1600 };
 export const LiveSchema = z.object({
   enabled: z.boolean().default(false).describe('开不开实时老师;关着全走板书'),
   model: z.string().min(1).default(LIVE_DEFAULT.model).describe('嘴用的 realtime 模型'),
@@ -242,6 +242,10 @@ export const LiveSchema = z.object({
     .record(z.string().regex(AGENT_NAME_RE), z.string().min(1))
     .default({})
     .describe('哪几位老师的新话题走实时、嘴用哪个 realtime 音色(这个模型认的 56 个在 src/live/voices.ts,工作台音色页「实时的嘴」听着挑;写错了第一次开口才报错,doctor 的 live.voices 会提示);不在这里的老师照旧板书'),
+  // 一直听(《wip/实时老师常开麦设计.md》):孩子不用按,百炼的 VAD 判开口 / 说完,应用判收下 / 放过;老师说话时也在听(全双工)
+  listen: z.enum(['hold', 'open']).default(LIVE_DEFAULT.listen).describe('实时老师页缺省怎么说话:hold 按住说、open 一直听;孩子在老师页右上角能切,记在这台设备上'),
+  vad: z.enum(['semantic_vad', 'server_vad']).default(LIVE_DEFAULT.vad).describe('一直听时谁判说完:semantic_vad 按语义(切得少,「好的」这类短的会丢);server_vad 按静音(短的也认,长话切得碎)'),
+  silenceMs: z.number().int().min(500).max(4000).default(LIVE_DEFAULT.silenceMs).describe('一直听时停多久算说完(毫秒;孩子一句话中间停一下接着说,太短会切碎)'),
 });
 export type LiveConfig = z.infer<typeof LiveSchema>;
 

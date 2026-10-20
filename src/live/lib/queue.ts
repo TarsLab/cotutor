@@ -4,6 +4,7 @@
  * 现在嘴出完上一段就交下一段,声音在孩子端接着排,中间不空。排着的几拍一次交(同一轮的并成一段念)。
  * 孩子按下 = 打断:排着的都丢,那一轮后面再来的拍也丢;孩子听到哪由调用方按声音排到哪算(lib/playback.ts)。
  * 讲稿的 [[play]](小课堂,P3.2):并段到那句为止;交出去以后关闸,孩子端放完那一段(staged)才交后面的。
+ * 一直听(《wip/实时老师常开麦设计.md》):孩子开口先 pause(不交新的、也不丢),判出这句是对老师说的才 hold(丢),放过就 release 接着交。
  */
 
 /** 一拍的讲稿:哪一轮、讲稿第几句(0 起)、句子;play = 最后一句念完孩子端放小课堂那一段 */
@@ -25,6 +26,8 @@ export type QueueEvent =
   | { e: 'beat'; beat: Beat }
   /** drop = 这一刻正在答的那一轮(调用方知道,它的拍可能还没来):打断后它的拍都丢 */
   | { e: 'hold'; drop?: string | null }
+  /** 一直听时孩子开口:还不知道是不是对老师说的,先不交新的、排着的不丢;release 接着交 */
+  | { e: 'pause' }
   | { e: 'release' }
   /** 调用方让嘴说了一句别的(接住):嘴出完之前不交讲稿 */
   | { e: 'asked' }
@@ -58,6 +61,8 @@ export function queueStep(s: QueueState, ev: QueueEvent): { s: QueueState; act: 
       return drain({ ...s, pending: [...s.pending, ev.beat], lastJob: ev.beat.job });
     case 'hold':
       return { s: { ...s, holding: true, pending: [], gated: false, dropJob: ev.drop ?? s.lastJob }, act: s.pending.length ? { kind: 'dropped', beats: s.pending } : null };
+    case 'pause':
+      return { s: { ...s, holding: true }, act: null };
     case 'release':
       return drain({ ...s, holding: false });
     case 'asked':

@@ -7,9 +7,10 @@
 /**
  * 孩子这一轮是怎么来的:按住说的、打字的、拍的照片、交的卡、点了卡上的「?」、点了首页的按钮(activity 的开场、接着);
  * answer = 按住说的、上一句念给他的是问句(看图说话这种一问一答);right = 交的卡应用判了是对的;empty = 按住了但转写是空的;
- * fill = 不是接住:接住以后脑想得久,讲稿还一句没有,嘴再垫一句;greet = 也不是接住:从首页「一直听」进来,嘴先招呼一句(孩子知道麦开着、可以说了)
+ * fill = 不是接住:接住以后脑想得久,讲稿还一句没有,嘴再垫一句;greet = 也不是接住:从首页「一直听」进来,嘴先招呼一句(孩子知道麦开着、可以说了);
+ * warm = 口语单拍好、进来上口语课(《wip/口语课改实时老师设计.md》§三之一),嘴先说要热身
  */
-export type CatchKind = 'voice' | 'answer' | 'text' | 'photo' | 'card' | 'right' | 'ask' | 'start' | 'empty' | 'fill' | 'greet';
+export type CatchKind = 'voice' | 'answer' | 'text' | 'photo' | 'card' | 'right' | 'ask' | 'start' | 'empty' | 'fill' | 'greet' | 'warm';
 
 /** 嘴垫的那句(数学老师接住以后要想 11–16 秒,《wip/实时老师设想.md》拍板 12);孩子说的不一定是一道题,不说「这道题」 */
 export const FILL_LINE = '我想一想怎么讲';
@@ -34,11 +35,31 @@ const CATCH: Record<CatchKind, string> = {
   fill: `孩子在等你讲,你还要想一会儿。只说一句「${FILL_LINE}」,说完就停。`,
   // 首页点「一直听」进来(《wip/实时老师常开麦设计.md》拍板 2):麦开着,孩子不知道什么时候能说,老师先开口;不进脑、不算一条
   greet: '孩子刚打开和你说话的页面,麦一直开着,不用按。只说一句「想问我什么?直接说就行」,说完就停。',
+  warm: '孩子拍好了今天的口语单,要开始上口语课。只说一句「好,我们先热热身!」,说完就停。',
 };
 
-/** 接住孩子这一轮 */
-export function catchCue(kind: CatchKind): string {
-  return CATCH[kind];
+/**
+ * 口语课打电话那段(《wip/口语课改实时老师设计.md》§三之五):老师说英文,接住也换英文。孩子说中文也用英文接(一两个词孩子听得懂);
+ * 指令照旧用中文写(嘴听得懂),要它说的是英文
+ */
+const CATCH_EN: Record<CatchKind, string> = {
+  voice: '孩子刚说了一句。只用一两个很短的英文词接住他,比如「Okay!」「Mm-hm.」「Let me see.」。他说的是中文也用英文接。不重复他的话,不回答内容,不评对错,不问问题,说完就停。',
+  answer: '孩子在答你刚才问他的。只用一两个英文词接住他,比如「Mm-hm.」「Okay!」。他答的是中文也用英文接。不重复他的话,不回答内容,不评对错,不问问题,说完就停。',
+  empty: '孩子说了,但什么都没说清。只说一句「Sorry? Say it again.」,说完就停。',
+  text: '孩子打字发来一句。只说一句「Let me see.」,说完就停。',
+  photo: '孩子拍来了照片。只说一句「Let me see.」,不说你看到了什么,说完就停。',
+  card: '孩子把卡上的答案交给你了。只说一句「Let me see.」,不说对错,说完就停。',
+  right: '孩子把卡上的答案交给你了,答对了。只说一句「Yes!」,说完就停。',
+  ask: '孩子点了卡上的问号,想问这张卡。只说一句「Let me tell you.」,说完就停。',
+  start: '孩子点了一个按钮,要开始一件事。只说一句「Okay, let\'s go!」,说完就停。',
+  fill: '孩子在等你讲,你还要想一会儿。只说一句「Let me think.」,说完就停。',
+  greet: '孩子刚打开和你说话的页面。只说一句「Hi! I\'m listening.」,说完就停。',
+  warm: '孩子要开始上口语课。只说一句「Okay, let\'s start!」,说完就停。',
+};
+
+/** 接住孩子这一轮;en = 口语课打电话那段 */
+export function catchCue(kind: CatchKind, lang: 'zh' | 'en' = 'zh'): string {
+  return (lang === 'en' ? CATCH_EN : CATCH)[kind];
 }
 
 /**

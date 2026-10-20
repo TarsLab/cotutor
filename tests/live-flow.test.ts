@@ -48,7 +48,7 @@ const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();
 const finished: [string, string][] = [];
 // 心跳缺省 30 秒,前面几段跑不到;断线那段改短
-const liveDeps: { endpoint: string; env: NodeJS.ProcessEnv; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; fillMs?: number; idleSwapMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) };
+const liveDeps: { endpoint: string; env: NodeJS.ProcessEnv; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; fillMs?: number; idleSwapMs?: number; echoWaitMs?: number; ringMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) };
 const liveUpgrade = makeLiveUpgrade(liveDeps);
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
@@ -564,6 +564,106 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   check('切回按住说:再换回手动轮次', okBack && fake.conns[nc3 + 1].session?.turn_detection === null);
   k3.ws.send(JSON.stringify({ t: 'bye' }));
   await until(() => k3.closed !== null);
+}
+
+{
+  // ---- 口语课热身(《wip/口语课改实时老师设计.md》§三之四):[[echo 词]] / [[say 词]] 念完等孩子跟,[[call]] 念完进打电话 ----
+  const quiet = (): Uint8Array => new Uint8Array(3200);
+  const say = (k: { ws: WebSocket }, n = 3): void => { for (let i = 0; i < n; i++) k.ws.send(loud()); k.ws.send(quiet()); };
+  const idle = () => until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  const promptOf = (job: string): string => (JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${localDate(ctx.now())}.${job}.run.json`), 'utf8')) as { prompt: string }).prompt;
+  const said = (c: { responses: ({ instructions?: string } | null)[] }): string[] => c.responses.map((r) => quoted(r?.instructions));
+  const turns = (k: { msgs: Msg[] }): Msg[] => k.msgs.filter((m) => m.t === 'turn');
+  await idle();
+
+  // A:没开口等够了接着下一拍,连着两拍没开口停下交脑(app: quiet);对老师说的打断热身交脑;脑回 [[call]] 进打电话
+  liveDeps.echoWaitMs = 500;
+  liveDeps.ringMs = 300;
+  const na = fake.conns.length;
+  const a = await connect('chinese-tutor', '?listen=open');
+  await until(() => has(a, (m) => m.t === 'ready'));
+  const ca = fake.conns[na];
+  a.ws.send(JSON.stringify({ t: 'send', body: { text: '热身', newThread: true, device: 'tablet-landscape' } }));
+  const okQuiet = await until(() => turns(a).length >= 2, 15000);
+  const t1 = turns(a)[0], t2 = turns(a)[1];
+  check('热身:开头嘴接住、第一拍并段念到 [[echo]] 那句;没开口等够了接着念第二拍', said(ca).some((x) => x.endsWith('我先来:duck!')) && said(ca).some((x) => x === '小声一点:duck…'), JSON.stringify(said(ca)));
+  await idle();
+  const pq = t2 ? promptOf(t2.job) : '';
+  const mq = t2 ? indexOf(localDate(ctx.now())).messages.find((m) => m.job === t2.job) : null;
+  check('热身:连着两拍没开口 → 停下,应用起一轮交脑(app: quiet,摸底两拍没开口,接在同一话题),你先说那句没念', okQuiet && t2.thread === t1.thread && pq.includes('    app: quiet\n') && pq.includes('    warmup:\n      - "跟 duck:没开口"\n      - "跟 duck:没开口"\n') && mq?.text === '(没出声)' && !said(ca).some((x) => x.includes('你先说')), JSON.stringify({ said: said(ca), pq: pq.slice(0, 600) }));
+  await until(() => a.bins >= ca.responses.length, 3000);
+  await sleep(300);
+  // 又一堂:第一拍时孩子说的是对老师说的 → 打断(嘴接住、交脑,摸底带上这一笔);脑回 [[call]] → 念完响铃,应用起一轮(app: call)
+  a.ws.send(JSON.stringify({ t: 'send', body: { text: '再热身', newThread: true, device: 'tablet-landscape' } }));
+  await until(() => said(ca).filter((x) => x.endsWith('我先来:duck!')).length >= 2, 15000);
+  await sleep(150);
+  fake.kidTexts = ['那我们直接打电话吧'];
+  a.ws.send(JSON.stringify({ t: 'ctx', body: { device: 'tablet-landscape' } }));
+  const nt = turns(a).length;
+  say(a);
+  const okTalk = await until(() => turns(a).length >= nt + 2, 15000);
+  const tt = turns(a)[nt], tc = turns(a)[nt + 1];
+  const pt = tt ? promptOf(tt.job) : '';
+  check('热身:孩子说的不像跟读 → 收下(kid)、嘴接住(中文)、交脑,摸底带「没跟,对你说」', okTalk && has(a, (m) => m.t === 'kid' && m.text === '那我们直接打电话吧') && pt.includes('      - "跟 duck:没跟,对你说「那我们直接打电话吧」"\n') && pt.trimEnd().endsWith('那我们直接打电话吧'), pt.slice(0, 700));
+  await idle();
+  const pc = tc ? promptOf(tc.job) : '';
+  check('[[call]] 念完:孩子端收到 read 带 call,应用起一轮(app: call、带摸底、打电话 0 分钟)', has(a, (m) => m.t === 'read' && m.call === true && String(m.text).includes('现在就打电话')) && pc.includes('    app: call\n') && pc.includes('    phone: 0\n') && pc.includes('    warmup:\n'), pc.slice(0, 700));
+  a.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => a.closed !== null);
+
+  // B:跟了两拍、你先说一拍 → [[call]] 那句念完,后面那句不念;铃响够了才念英文开场;打电话里接住说英文
+  liveDeps.echoWaitMs = 5000;
+  liveDeps.ringMs = 600;
+  await idle();
+  const nb = fake.conns.length;
+  const b = await connect('chinese-tutor', '?listen=open');
+  await until(() => has(b, (m) => m.t === 'ready'));
+  const cb = fake.conns[nb];
+  b.ws.send(JSON.stringify({ t: 'send', body: { text: '热身', newThread: true, device: 'tablet-landscape' } }));
+  await until(() => said(cb).some((x) => x.endsWith('我先来:duck!')), 15000);
+  await until(() => b.bins >= cb.responses.length, 3000);
+  await sleep(200);
+  const n1 = turns(b).length;
+  b.ws.send(JSON.stringify({ t: 'ctx', body: { device: 'tablet-landscape' } }));
+  fake.kidTexts = ['duck'];
+  say(b);
+  const ok2 = await until(() => said(cb).includes('小声一点:duck…'), 5000);
+  check('热身:孩子跟了(像跟读)→ 开闸念下一拍,不接住、不交脑、不报 kid', ok2 && turns(b).length === n1 && !has(b, (m) => m.t === 'kid' && m.text === 'duck') && cb.responses.filter((r) => r?.instructions === catchCue('voice') || r?.instructions === catchCue('answer')).length === 0, JSON.stringify(said(cb)));
+  await until(() => b.bins >= cb.responses.length, 3000);
+  await sleep(200);
+  fake.kidTexts = ['Duck!'];
+  say(b);
+  await until(() => said(cb).some((x) => x.includes('你先说')), 5000);
+  await until(() => b.bins >= cb.responses.length, 3000);
+  await sleep(200);
+  fake.kidTexts = ['鸭子'];
+  say(b);
+  const okCall = await until(() => turns(b).length >= n1 + 1, 8000);
+  const callRead = cb.responses.findIndex((r) => quoted(r?.instructions).includes('老师给你打个电话'));
+  check('你先说答中文(三个字以内)也算跟了;[[call]] 那句念了,后面那句不念', okCall && callRead >= 0 && !said(cb).some((x) => x.includes('这句不该念')) && turns(b).length === n1 + 1, JSON.stringify(said(cb)));
+  const tcb = turns(b)[n1];
+  const pcb = tcb ? promptOf(tcb.job) : '';
+  check('打电话那一轮的摸底:跟了两拍、你先说答了中文', pcb.includes('      - "跟 duck:说了「duck」,开口') && pcb.includes('      - "跟 duck:说了「Duck!」') && pcb.includes('      - "自己说 duck:说了「鸭子」(转写里没有 duck),带中文'), pcb.slice(0, 900));
+  const tCall = Date.now();
+  const okOpen = await until(() => said(cb).some((x) => x.startsWith('Hello Ray! Where are the ducks?')), 10000);
+  check('铃响够了才念英文开场(ringMs)', okOpen && Date.now() - tCall >= 300, JSON.stringify([Date.now() - tCall, said(cb)]));
+  await until(() => b.bins >= cb.responses.length, 3000);
+  await sleep(200);
+  fake.kidTexts = ['Under the bus'];
+  const nr = cb.responses.length;
+  say(b);
+  const okEn = await until(() => cb.responses.length > nr, 5000);
+  // 假老师在英文开场后面还回显一句「接着说:(打电话)」,末句不是问句,接住是 voice
+  check('打电话里孩子说话:嘴用英文接住', okEn && cb.responses[nr]?.instructions === catchCue('voice', 'en'), JSON.stringify(cb.responses[nr]));
+  await idle();
+  b.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => b.closed !== null);
+  await sleep(300);
+  const liveDir = join(wsRoot, 'conversations', 'chinese-tutor', `${localDate(ctx.now())}.live`);
+  const reels = readdirSync(liveDir).filter((f) => f.endsWith('.reel.json')).map((f) => readFileSync(join(liveDir, f), 'utf8'));
+  check('录像里有热身的每一拍({t:"echo"},只记不发)', reels.some((r) => r.includes('"t":"echo"') && r.includes('"outcome":"said"')) && !has(b, (m) => m.t === 'echo'));
+  liveDeps.echoWaitMs = undefined;
+  liveDeps.ringMs = undefined;
 }
 
 {

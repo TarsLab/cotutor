@@ -19,6 +19,8 @@ export interface LiveRouteDeps {
   swapTokens?: number;
   fillMs?: number;
   idleSwapMs?: number;
+  echoWaitMs?: number;
+  ringMs?: number;
   onFinished?(tutor: string, why: string): void;
 }
 
@@ -39,7 +41,7 @@ export function makeLiveUpgrade(deps: LiveRouteDeps = {}) {
       onClose: () => call?.onSocketClose(),
     });
     const listen = new URL(req.url ?? '', 'http://x').searchParams.get('listen') === 'open' ? 'open' : 'hold';
-    call = new LiveCall(sock, { ctx, tutor, listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, fillMs: deps.fillMs, idleSwapMs: deps.idleSwapMs, onFinished: (why) => deps.onFinished?.(tutor, why) });
+    call = new LiveCall(sock, { ctx, tutor, listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, fillMs: deps.fillMs, idleSwapMs: deps.idleSwapMs, echoWaitMs: deps.echoWaitMs, ringMs: deps.ringMs, onFinished: (why) => deps.onFinished?.(tutor, why) });
     void call.start();
     return true;
   };

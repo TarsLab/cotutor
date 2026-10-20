@@ -73,11 +73,18 @@ export function renderContextPack(pack: ContextPack): string {
     out.push(`    index: ${yamlScalar(c.index)}`);
   }
   if (p.live) {
-    if (!p.live.caught && !p.live.cut) out.push('  live: true');
+    const l = p.live;
+    if (!l.caught && !l.cut && !l.warmup?.length && l.phone === undefined && !l.app) out.push('  live: true');
     else {
       out.push('  live:');
-      if (p.live.caught) out.push(`    caught: ${yamlScalar(p.live.caught)}`);
-      if (p.live.cut) out.push(`    cut: ${p.live.cut}`);
+      if (l.caught) out.push(`    caught: ${yamlScalar(l.caught)}`);
+      if (l.cut) out.push(`    cut: ${l.cut}`);
+      if (l.app) out.push(`    app: ${l.app}`);
+      if (l.phone !== undefined) out.push(`    phone: ${l.phone}`);
+      if (l.warmup?.length) {
+        out.push('    warmup:');
+        for (const x of l.warmup) out.push(`      - ${yamlScalar(x)}`);
+      }
     }
   }
   if (p.cards?.length) {

@@ -91,8 +91,8 @@ export interface SendInput {
   via?: MessageVia;
   /** 按钮的字与家长备好的讲法(服务端从发布件查的),进上下文包 home: 段 */
   home?: { button: string; brief?: string };
-  /** 这一轮走实时(《wip/实时老师设想.md》):讲稿不配音(拍关就就绪)、交给嘴照念;消息记 live,上下文包带 live:(嘴接住时说的、上一轮念到第几句被打断) */
-  live?: { caught?: string; cut?: number };
+  /** 这一轮走实时(《wip/实时老师设想.md》):讲稿不配音(拍关就就绪)、交给嘴照念;消息记 live,上下文包带 live:(嘴接住时说的、上一轮念到第几句被打断;口语课的摸底、打电话几分钟、应用起的这一轮) */
+  live?: NonNullable<ContextPack['live']>;
   /** 接着以前哪天的哪个话题:这条开新话题时上下文包带那个话题的尾巴(continue: 段),消息记 continues;pack 给了就不现读(回放从原 workspace 读好的) */
   continues?: { date: string; thread: string; pack?: NonNullable<ContextPack['continue']> };
 }
@@ -610,7 +610,10 @@ export class Runner {
     const lectureWarn = input.lecture && !lecture ? [`小课堂:${input.lecture.bundle} 读不出来(bundles/ 与 lectures/ 下都没有能放的),老师没拿到课的内容`] : [];
     const continued = input.continues && fresh ? (input.continues.pack ?? (await continueContext(ws, tutor, input.continues.date, input.continues.thread))) : null;
     if (continued) pack.continue = continued;
-    if (input.live) pack.live = { ...(input.live.caught ? { caught: input.live.caught } : {}), ...(input.live.cut ? { cut: input.live.cut } : {}) };
+    if (input.live) {
+      const l = input.live;
+      pack.live = { ...(l.caught ? { caught: l.caught } : {}), ...(l.cut ? { cut: l.cut } : {}), ...(l.warmup?.length ? { warmup: l.warmup } : {}), ...(l.phone !== undefined ? { phone: l.phone } : {}), ...(l.app ? { app: l.app } : {}) };
+    }
     const prompt = buildContextPack(pack, text, policy.contextPack);
     const plan = planRun(ws.config, { session }, { agent, prompt, agentBody, systemBody, boardFile, agentsFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
 

@@ -2,7 +2,7 @@
 /**
  * 实时老师整条线真跑一遍(《wip/实时老师开发计划.md》P2,孩子端页面之前):临时 workspace(语文老师开实时),本进程起服务,
  * 孩子是 Ray 的真录音(conversations/<老师>/<日期>.<job>.voice.webm,按真实节奏 100 毫秒一块推),嘴是真百炼 realtime,脑是真 qwen 语文老师。
- * 量:松手 → 嘴接住的首包、松手 → 第一拍照念的首包、讲完;嘴念的字与讲稿对不对得上;嘴的声音存成 wav 听。一轮几分钱。
+ * 量:松手 → 嘴的首包(多半就是第一拍照念;拍照先说一句「我看一看图片」)、松手 → 第一拍照念的首包、讲完;嘴念的字与讲稿对不对得上;嘴的声音存成 wav 听。一轮几分钱。
  * 用法:node scripts/probe-live-call.mjs [--ws ~/cotutor/ray] [--out <目录>] [--voice Serena] [--tutor chinese-tutor] [--say 2026-10-18/1205-2,2026-10-18/1206-3]
  *   --say:按顺序发那位老师的哪几条(<日期>/<job>):按住说的推录音,拍照的那条把照片拷进临时 workspace 走 send;缺省语文老师「老师三明治怎么写」「能吃的三」两段,
  *   第二条起接着同一话题。数学:--tutor math-tutor --say 2026-10-18/1133-7,2026-10-18/1135-8,2026-10-18/1140-14(拍题、不会做、我才一年级)
@@ -35,7 +35,7 @@ const { createContext, createHandler } = await import(join(repo, 'src', 'server'
 const { makeLiveUpgrade } = await import(join(repo, 'src', 'live', 'route.ts'));
 const { wavOfPcm } = await import(join(repo, 'src', 'live', 'lib', 'wav.ts'));
 const { addChunk, playbackInit } = await import(join(repo, 'src', 'live', 'lib', 'playback.ts'));
-const { spoken, FILL_LINE } = await import(join(repo, 'src', 'live', 'lib', 'cue.ts'));
+const { spoken } = await import(join(repo, 'src', 'live', 'lib', 'cue.ts'));
 
 // ---- 临时 workspace:出厂老师(qwen),语文老师开实时 ----
 const wsRoot = join(out, 'ws');
@@ -120,10 +120,9 @@ for (const [date, job] of says) {
   const reads = mine.filter((x) => x.t === 'read');
   const firstRead = reads[0]?.at ?? null;
   const totalMs = Math.round(pcmOut.length / 48);
-  const dones = mine.filter((x) => x.t === 'tutor' && typeof x.done === 'string').map((x) => x.done);
-  // 嘴念的 = 接住、垫话之外的(垫话是脑想得久时嘴垫的那句,设想稿拍板 12)
-  const fillAt = mine.find((x) => x.t === 'tutor' && x.done === FILL_LINE)?.at;
-  const readDones = dones.slice(1).filter((d) => d !== FILL_LINE);
+  // 嘴念的 = 照念的那几段(嘴先说的那句标 of: catch,只有拍照、没听清有,设想稿拍板 14)
+  const caught = mine.filter((x) => x.t === 'tutor' && x.of === 'catch' && typeof x.done === 'string').map((x) => x.done);
+  const readDones = mine.filter((x) => x.t === 'tutor' && x.of === 'read' && typeof x.done === 'string').map((x) => x.done);
   const kid = mine.find((x) => x.t === 'kid')?.text;
   const ev = readFileSync(join(wsRoot, 'conversations', tutor, `${today}.${turn?.job}.events.jsonl`), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
   const line0 = ev.find((e) => e.lane === 'main' && e.kind === 'line' && e.line === 0)?.t;
@@ -132,9 +131,9 @@ for (const [date, job] of says) {
   report.push(`## Ray ${date} ${job}(当时认的「${m.text}」${m.photos?.length ? ',拍照' : ''}${open ? ',一直听:「松手」= 录音推完' : ''})`, '',
     ...(open ? [`- 一直听:vad 开 ${mine.filter((x) => x.t === 'vad' && x.on).length} 次、放过 ${skips.length} 句${skips.length ? `(${skips.join(' ')})` : ''}、压低 ${mine.filter((x) => x.t === 'duck').length} 次`] : []),
     `- realtime 认的:${kid}`,
-    `- 嘴接住:「${dones[0] ?? ''}」,松手到首包 ${firstAudio} ms`,
+    `- 嘴先说的:${caught.length ? `「${caught.join('」「')}」` : '没有'};松手到首包 ${firstAudio} ms`,
     `- 脑:${turn?.job},讲稿 ${lines.length} 句、${sec?.cards?.length ?? 0} 张卡(${(sec?.cards ?? []).map((c) => c.kind).join('、')});进程起来到第一句定稿 ${line0 ?? '?'} ms${startEv?.warmMs !== undefined ? '(预热的)' : '(冷起)'}`,
-    `- 松手到第一句开始放 ${firstRead} ms(孩子端放到那一刻发 {t:read},一句一个);嘴念了 ${readDones.length} 段${fillAt !== undefined ? `;${fillAt} ms 垫了一句` : ''}`,
+    `- 松手到第一句开始放 ${firstRead} ms(孩子端放到那一刻发 {t:read},一句一个);嘴念了 ${readDones.length} 段`,
     `- 嘴的声音一共 ${(totalMs / 1000).toFixed(1)} 秒;松手到放完 ${(audio.slice(a0).reduce((p, x) => addChunk(p, 0, x.at, x.pcm.length / 48).p, playbackInit()).end / 1000).toFixed(1)} 秒(照孩子端的排法算)`,
     `- 嘴念的:${readDones.join('')}`,
     `- 讲稿:${lines.join('')}`,

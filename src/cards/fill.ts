@@ -18,8 +18,6 @@ export const FillStateSchema = z.object({
 export type FillState = z.infer<typeof FillStateSchema>;
 
 const BLANK = /_{2,}/g;
-/** 比答案前:全角半角统一、去掉空白、不分大小写 */
-const norm = (t: string): string => t.normalize('NFKC').replace(/\s+/g, '').toLowerCase();
 const ANSWER = /^=\s*(.*)$/;
 
 export const fill: CardKind<FillProps, FillState> = {
@@ -46,12 +44,6 @@ export const fill: CardKind<FillProps, FillState> = {
     return rest;
   },
   state: FillStateSchema,
-  judge(p, s) {
-    if (!p.answers || p.answers.length < p.blanks) return null;
-    const got = Array.from({ length: p.blanks }, (_, i) => norm(s.answers[i] ?? ''));
-    if (got.some((g) => !g)) return null;
-    return got.every((g, i) => g === norm(p.answers![i]));
-  },
   describe(p, s) {
     const parts: string[] = [];
     for (let i = 0; i < p.blanks; i++) {

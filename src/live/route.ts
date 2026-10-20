@@ -13,11 +13,10 @@ export interface LiveRouteDeps {
   /** realtime 端点(测试、探针换假的);不给用真的 */
   endpoint?: string;
   env?: NodeJS.ProcessEnv;
-  /** 测试:心跳间隔、多久没动静停跳、输入多少 token 换连接、多久没讲稿垫一句 */
+  /** 测试:心跳间隔、多久没动静停跳、输入多少 token 换连接 */
   heartbeatMs?: number;
   keepAliveMs?: number;
   swapTokens?: number;
-  fillMs?: number;
   idleSwapMs?: number;
   echoWaitMs?: number;
   ringMs?: number;
@@ -41,7 +40,7 @@ export function makeLiveUpgrade(deps: LiveRouteDeps = {}) {
       onClose: () => call?.onSocketClose(),
     });
     const listen = new URL(req.url ?? '', 'http://x').searchParams.get('listen') === 'open' ? 'open' : 'hold';
-    call = new LiveCall(sock, { ctx, tutor, listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, fillMs: deps.fillMs, idleSwapMs: deps.idleSwapMs, echoWaitMs: deps.echoWaitMs, ringMs: deps.ringMs, onFinished: (why) => deps.onFinished?.(tutor, why) });
+    call = new LiveCall(sock, { ctx, tutor, listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, idleSwapMs: deps.idleSwapMs, echoWaitMs: deps.echoWaitMs, ringMs: deps.ringMs, onFinished: (why) => deps.onFinished?.(tutor, why) });
     void call.start();
     return true;
   };

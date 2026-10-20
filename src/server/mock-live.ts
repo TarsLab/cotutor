@@ -47,10 +47,10 @@ export function mockLiveUpgrade(mock: Mock) {
       if (playEnd > Date.now()) send({ t: 'flush' });
       playEnd = 0;
     };
-    /** 一轮:接住、交给 mock 的老师、写完了一句一句念 */
-    const begin = async (body: Record<string, unknown>, caught: string): Promise<void> => {
+    /** 一轮:(拍照先说一句)交给 mock 的老师、写完了一句一句念;别的嘴不先说(《wip/实时老师设想.md》拍板 14) */
+    const begin = async (body: Record<string, unknown>, caught: string | null): Promise<void> => {
       const my = turn;
-      say('catch', caught);
+      if (caught) say('catch', caught);
       const { ask: _ask, ...rest } = body;
       const r = await mock.route('POST', `/api/kid/conversations/${tutor}/messages`, { ...rest, live: true });
       if (my !== turn) return;
@@ -83,7 +83,7 @@ export function mockLiveUpgrade(mock: Mock) {
           if (!holding) return;
           holding = false;
           send({ t: 'kid', text: MOCK_LIVE_SAID });
-          void begin({ ...(isObj(x.body) ? x.body : {}), text: MOCK_LIVE_SAID }, '嗯,你问的这个,我讲给你听');
+          void begin({ ...(isObj(x.body) ? x.body : {}), text: MOCK_LIVE_SAID }, null);
           break;
         case 'hush': holding = false; interrupt(); break;
         case 'staged': { const r = rest; rest = null; r?.(); break; }
@@ -91,7 +91,7 @@ export function mockLiveUpgrade(mock: Mock) {
           if (!isObj(x.body)) return;
           const b = x.body;
           interrupt();
-          void begin(b, b.ask === true ? '这张卡呀,我讲给你听' : Array.isArray(b.photos) && b.photos.length ? '我看看' : b.action === 'submit' ? '我看看你选的' : isObj(b.via) ? '好,我们开始吧' : '嗯,我讲给你听');
+          void begin(b, Array.isArray(b.photos) && b.photos.length ? '我看一看图片' : null);
           break;
         }
         case 'bye': sock.close(1000, 'bye'); break;

@@ -35,7 +35,7 @@ try {
   ws.send(JSON.stringify({ t: 'release', body: { newThread: true, device: 'tablet-landscape' } }));
   const okTurn = await until(() => msgs.some((m) => m.t === 'turn'));
   const turn = msgs.find((m) => m.t === 'turn')!;
-  check('松手:先接住(字幕 + 声音)、孩子那句、脑开写', okTurn && msgs.some((m) => m.t === 'tutor' && m.of === 'catch') && msgs.some((m) => m.t === 'kid' && m.text === MOCK_LIVE_SAID) && bins >= 1 && turn.thread === turn.job, JSON.stringify(msgs.slice(0, 6)));
+  check('松手:嘴不先说(没有接住)、孩子那句、脑开写', okTurn && !msgs.some((m) => m.t === 'tutor' && m.of === 'catch') && msgs.some((m) => m.t === 'kid' && m.text === MOCK_LIVE_SAID) && turn.thread === turn.job, JSON.stringify(msgs.slice(0, 6)));
   const day = (await (await fetch(`http://${base}/api/kid/conversations/chinese-tutor/today`)).json()) as { messages: Msg[] };
   await r.mock.settleJob(turn.job);
   const day2 = (await (await fetch(`http://${base}/api/kid/conversations/chinese-tutor/today`)).json()) as { messages: Msg[] };
@@ -53,10 +53,14 @@ try {
   check('念着时按下:孩子端清播放队列、没念的不再念', okFlush && msgs.filter((m) => m.t === 'read' && m.job === turn.job).length === reads && reads < lines.length, JSON.stringify({ reads, lines: lines.length }));
   ws.send(JSON.stringify({ t: 'hush' }));
 
-  // 卡上的「?」:问卡的接住
+  // 卡上的「?」:嘴不先说,新一轮
   const n1 = msgs.length;
   ws.send(JSON.stringify({ t: 'send', body: { text: '讲讲这张卡', focus: { card: `${turn.job}/0` }, ask: true, thread: turn.thread } }));
-  check('卡上的「?」:问卡的接住、新一轮', await until(() => msgs.slice(n1).some((m) => m.t === 'tutor' && m.of === 'catch' && String(m.done).includes('这张卡')) && msgs.slice(n1).some((m) => m.t === 'turn')));
+  check('卡上的「?」:新一轮、嘴不先说', await until(() => msgs.slice(n1).some((m) => m.t === 'turn')) && !msgs.slice(n1).some((m) => m.t === 'tutor' && m.of === 'catch'));
+  // 拍照:嘴先说「我看一看图片」
+  const n2 = msgs.length;
+  ws.send(JSON.stringify({ t: 'send', body: { text: '', photos: ['mock-photo.jpg'], thread: turn.thread } }));
+  check('拍照:嘴先说「我看一看图片」', await until(() => msgs.slice(n2).some((m) => m.t === 'tutor' && m.of === 'catch' && m.done === '我看一看图片')));
   ws.close();
 } finally {
   r.server.close();

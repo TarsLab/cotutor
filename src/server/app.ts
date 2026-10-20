@@ -175,7 +175,8 @@ export interface KidTutor {
   /** 他的听写写哪种:学科是英语(含别名)= en */
   lang: 'zh' | 'en';
   hasVoice: boolean;
-  remaining: number;
+  /** 今天还能发几条;null = 不限(实时的老师) */
+  remaining: number | null;
   available: boolean;
   /** 卡上的常驻入口(《首页设计.md》拍板 18):dictation 听写与拍照听写、talk 口语课(要 talk.enabled) */
   extras: TutorExtra[];
@@ -188,13 +189,19 @@ export interface KidTutor {
 /** 这位老师走不走实时:总开关开着、挑了嘴的音色 */
 const liveOf = (ctx: AppContext, name: string): boolean => ctx.ws.config.live.enabled && Boolean(ctx.ws.config.live.voices[name]);
 
+/**
+ * 今天还能发几条;null = 不限。实时的老师不限(《wip/实时老师设想.md》拍板 15):一条变得很小(交一张卡、一句「老师。」都算),
+ * 10-20 晚语文老师 32 分钟就用完了 30 条
+ */
+const remainingOf = (ctx: AppContext, name: string, daily: number, index: { messages: readonly ConversationMessage[] }): number | null =>
+  liveOf(ctx, name) ? null : Math.max(0, daily - kidMessageCount(index));
+
 export async function kidTutors(ctx: AppContext, date: string): Promise<KidTutor[]> {
   const out: KidTutor[] = [];
   const colors = tutorColors(ctx.ws.config.tutors);
   for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
-    const used = kidMessageCount(await readIndex(ctx.ws, t.name, date));
-    const remaining = Math.max(0, t.policy.dailyMessages - used);
-    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), remaining, available: remaining > 0, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), live: liveOf(ctx, t.name), listen: ctx.ws.config.live.listen });
+    const remaining = remainingOf(ctx, t.name, t.policy.dailyMessages, await readIndex(ctx.ws, t.name, date));
+    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), remaining, available: remaining === null || remaining > 0, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), live: liveOf(ctx, t.name), listen: ctx.ws.config.live.listen });
   }
   return out;
 }
@@ -225,7 +232,8 @@ export interface KidDay {
   tutor: string;
   date: string;
   messages: KidMessage[];
-  remaining: number;
+  /** 今天还能发几条;null = 不限(实时的老师) */
+  remaining: number | null;
   /** 老师正在回的那条 job */
   pending: string | null;
   /** 当前话题(末条消息所在);还没说过话 → null */
@@ -266,7 +274,7 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
   }
   // 小课堂卡:课读不读得出、那一段的起止,每次现读
   for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichPaints(ctx.ws, tutor, date, m.job, m.at, await enrichLectures(ctx.ws, m.section)); }
-  const remaining = Math.max(0, policy.dailyMessages - kidMessageCount(index));
+  const remaining = remainingOf(ctx, tutor, policy.dailyMessages, index);
   return { tutor, date, messages, remaining, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
 }
 
@@ -286,10 +294,10 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
   const policy = resolvePolicy(ws.config, tutor);
   const thread = body.thread === undefined ? undefined : typeof body.thread === 'string' && /^\d{4}-\d+$/.test(body.thread) ? body.thread : null;
   if (thread === null) return { error: { status: 400, json: { error: 'bad_request' } } };
-  // 「继续」不计每日上限:到了上限也能把老师讲完的听完;口语课(开课那条、它的话题里)也不计(FREE_ACTIVITIES)
+  // 「继续」不计每日上限:到了上限也能把老师讲完的听完;口语课(开课那条、它的话题里)也不计(FREE_ACTIVITIES);实时的老师不限
   const today = await readIndex(ws, tutor, date);
   const free = body.talk !== undefined || (thread !== undefined && FREE_ACTIVITIES.includes(threadActivity(today.messages, thread)?.name ?? ''));
-  if (action !== 'continue' && !free && kidMessageCount(today) >= policy.dailyMessages) return { error: { status: 429, json: { error: 'limit', remaining: 0 } } };
+  if (action !== 'continue' && !free && remainingOf(ctx, tutor, policy.dailyMessages, today) === 0) return { error: { status: 429, json: { error: 'limit', remaining: 0 } } };
   const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
   if (device && !device.success) return { error: { status: 400, json: { error: 'bad_request' } } };
   // 首页的按钮(《首页设计.md》§5.2):via 只带 id,按钮是什么、讲法是什么都从服务端的发布件查;对不上就 400(孩子端刷新首页)

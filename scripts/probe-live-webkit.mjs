@@ -95,10 +95,10 @@ try {
   const diag = (() => { try { return readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.where === 'live'); } catch { return []; } })();
   const dl = diag.at(-1);
   ok('诊断:这一次按住记一行(麦克风怎么开的、能推声音、音量峰值、松手发了)', Boolean(dl) && dl.tutor === 'chinese-tutor' && dl.ev.some((e) => e[0] === 'mic') && dl.ev.some((e) => e[0] === 'audio') && dl.ev.some((e) => e[0] === 'up' && e[2] === 'sent') && dl.peak > 0, JSON.stringify(dl));
-  const caught = await page.waitForFunction(() => document.querySelector('#lv-cap .lv-cur').textContent === "It's a red car.", null, { timeout: 8000 }).then(() => true, () => false);
+  const firstLine = await page.waitForFunction(() => document.querySelector('#lv-cap .lv-cur').textContent === '先看三角形。', null, { timeout: 15000 }).then(() => true, () => false);
   const played = await page.waitForFunction(() => window.__played >= 2, null, { timeout: 15000 }).then(() => true, () => false);
   const st = await page.evaluate(() => ({ played: window.__played, cap: document.querySelector('#lv-cap .lv-cur').textContent, err: window.__err, cards: document.querySelectorAll('#board .sec .c').length }));
-  ok('松手:嘴接住上字幕;嘴的声音排进 AudioContext 放(接住 + 照念)', caught && played && st.played >= 2, JSON.stringify(st));
+  ok('松手:嘴不先说,讲稿第一句上字幕;嘴的声音排进 AudioContext 放(照念)', firstLine && played && st.played >= 2, JSON.stringify(st));
   await page.waitForFunction(() => document.querySelector('#lv-cap .lv-cur').textContent.startsWith('第一次说'), null, { timeout: 20000 }).catch(() => {});
   const end = await page.evaluate(() => ({ cap: document.querySelector('#lv-cap .lv-cur').textContent, gum: window.__gum, err: window.__err }));
   ok('讲稿念到最后一句;从头到尾只 getUserMedia 一次;页面没报错', end.cap.startsWith('第一次说') && end.gum === 1 && end.err.length === 0, JSON.stringify(end));

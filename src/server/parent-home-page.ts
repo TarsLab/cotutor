@@ -292,7 +292,7 @@ ${faviconLinks()}
     // 孩子端(所有老师一份)
     const day = h('b', {}, String(D.dailyMessages));
     const kid = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '孩子端(所有老师)')), h('div', { class: 'grp' },
-      h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '每天能问几条'), h('small', {}, '一位老师一天;到了头像变灰')), h('span', { class: 'step' },
+      h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '每天能问几条'), h('small', {}, '一位老师一天;到了头像变灰。实时的老师不限')), h('span', { class: 'step' },
         h('button', { type: 'button', 'aria-label': '少五条', on: { click: () => save('PATCH', '/api/parent/settings', { dailyMessages: Math.max(0, D.dailyMessages - 5) }) } }, '−'), day,
         h('button', { type: 'button', 'aria-label': '多五条', on: { click: () => save('PATCH', '/api/parent/settings', { dailyMessages: D.dailyMessages + 5 }) } }, '+'))),
       h('div', { class: 'box' }, h('div', { class: 'row2' }, h('span', {}, '按住说话怎么听'), h('span', { class: 'seg', style: 'width:180px' },

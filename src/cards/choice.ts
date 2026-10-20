@@ -56,12 +56,6 @@ export const choice: CardKind<ChoiceProps, ChoiceState> = {
     return rest;
   },
   state: ChoiceStateSchema,
-  judge(p, s) {
-    if (!p.answer?.length || !s.picked.length) return null;
-    const picked = [...new Set(s.picked)].sort((a, b) => a - b);
-    const key = [...new Set(p.answer)].sort((a, b) => a - b);
-    return picked.length === key.length && picked.every((x, i) => x === key[i]);
-  },
   describe(p, s) {
     const picked = s.picked.filter((i) => i < p.options.length);
     if (!picked.length) return '没选';

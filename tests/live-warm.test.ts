@@ -28,6 +28,6 @@ check('摸底:句子说出几个词(按去重的词数)', lines[3] === '跟 The 
 check('摸底:你先说没开口', lines[4] === '自己说 bus:没开口', lines[4]);
 check('摸底:没跟、对老师说的', lines[5] === '跟 duck:没跟,对你说「那我们直接打电话吧」', lines[5]);
 
-check('接住:缺省中文;打电话那段英文(孩子说中文也英文接)', catchCue('answer').includes('「嗯」') && catchCue('answer', 'en').includes('Mm-hm.') && catchCue('voice', 'en').includes('中文也用英文接') && catchCue('warm').includes('热热身'));
+check('嘴先说的:缺省中文;打电话那段英文;说话不出声', catchCue('photo')!.includes('看一看图片') && catchCue('photo', 'en')!.includes('picture') && catchCue('empty', 'en')!.includes('Say it again') && catchCue('voice', 'en') === null && catchCue('warm')!.includes('热热身'));
 
 done();

@@ -299,7 +299,6 @@ __WORD_DRAW_JS__
     OWNER = t;
     document.documentElement.style.setProperty('--sc', t.color);
     BACK.set(t);
-    if (!REEL_ID) setFavicon(t);
     $('#snap-av').replaceChildren(tutorAvatar(t));
     $('#p-av').replaceChildren(tutorAvatar(t));
     $('#k-sav').replaceWith(Object.assign(tutorAvatar(t), { id: 'k-sav' }));

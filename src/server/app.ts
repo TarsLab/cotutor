@@ -1328,17 +1328,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!(ICON_SIZES as readonly number[]).includes(n)) return { status: 404, json: { error: 'not_found' } };
       return { status: 200, body: appIconPng(n), contentType: 'image/png' };
     }
-    // 网页图标(src/lib/favicon.ts):?tutor= 是那位老师的头像,不给或查不到是三色 C;头像图越界、不是图就不读(退回首字)。
-    // no-cache:figshot 换了脸要马上见到
-    const fav = await faviconResponse(p, url.searchParams.get('tutor'), async (name) => {
-      const t = ws.config.tutors[name];
-      if (!t) return null;
-      const rel = t.avatar ?? '';
-      const file = resolve(ws.root, rel);
-      const type = IMAGE_TYPES[IMAGE_EXT.exec(rel)?.[1]?.toLowerCase() ?? ''];
-      const image = rel && !rel.startsWith('/') && file.startsWith(ws.root + sep) && type ? await readFile(file).then((data) => ({ data, type }), () => null) : null;
-      return { color: tutorColors(ws.config.tutors)[name] ?? NEUTRAL_COLOR, avatar: t.avatar, subject: t.subject, display: t.display, image };
-    });
+    // 网页图标(src/lib/favicon.ts):所有页面都是 cotutor 的双 C;no-cache:换了 logo 马上见到
+    const fav = faviconResponse(p);
     if (fav) return { status: 200, ...fav, cacheControl: 'no-cache' };
     if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title), {}, await stageVersion()) };
     // 家长端(《家长板书页设计.md》):也是孩子端页面本身,数据走家长接口(答案在、家长的话在),卡锁着;自己的清单,加到主屏幕才不会拿到孩子端那份

@@ -4,10 +4,11 @@
  * 录像的两页(/parent/talk/reel、/parent/dictation/reel)是全屏播放器,不放。
  * 哪几页带它见 tests/brand.test.ts:每页都带、孩子端一个都不带。
  *
- * logo 是「一起教」(《产品规划.md》拍板 23):大 C 是家长、小 C 是老师,开口都朝右,和老师头像的 C 形开口环同一套几何
- * (开口 72°、圆头,《首页设计.md》拍板 15)。大号时小 C 侧头 28°,像正要点头;24 px 以下两圈加粗、小 C 摆正(侧头小了看不出)。
+ * logo 是「一起教」双 C(《产品规划.md》拍板 23,几何在 src/lib/logo.ts):大 C 是家长、小 C 是老师,开口都朝右;大号时小 C 侧头 28°,像正要点头。
  * 会动的只有两个 C 的转角,小 C 先动、大 C 慢一拍小一号地跟:ct-draw 画出来(打开的第一下)、链接悬停时点一下头(该你了)。
  */
+
+import { logoBody, logoGeom } from '../lib/logo.ts';
 
 export const BRAND_NAME = 'cotutor';
 export const BRAND_URL = 'https://github.com/TarsLab/cotutor';
@@ -23,23 +24,9 @@ export interface BrandLogoOpts {
   innerOpacity?: number;
 }
 
-/** 两档几何:大号照设计稿,24 px 以下加粗、小 C 半径收一点、不侧头 */
-const BIG = { outW: 10, inR: 19, inW: 9, tilt: 28 };
-const SMALL = { outW: 13, inR: 17, inW: 12, tilt: 0 };
-const OUT_R = 40;
-/** 描 80%、留 20%(开口 72°),转 36° 让开口居中在右 */
-const dash = (r: number): string => {
-  const c = 2 * Math.PI * r;
-  return `${(c * 0.8).toFixed(2)} ${c.toFixed(2)}`;
-};
-
-/** logo 的 SVG:外层 g.ct-go / g.ct-gi 是动作挂的地方(BRAND_CSS),侧头在里面一层,动的时候不丢 */
+/** logo 的 SVG(几何在 src/lib/logo.ts,网页图标与主屏幕图标同一份) */
 export function brandLogo({ size = 18, outer = 'currentColor', inner = outer, innerOpacity = 1 }: BrandLogoOpts = {}): string {
-  const g = size > 24 ? BIG : SMALL;
-  const op = innerOpacity < 1 ? ` opacity="${innerOpacity}"` : '';
-  return `<svg class="ct-logo" width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" stroke-linecap="round" aria-hidden="true">`
-    + `<g class="ct-go"><circle class="ct-out" cx="50" cy="50" r="${OUT_R}" stroke="${outer}" stroke-width="${g.outW}" stroke-dasharray="${dash(OUT_R)}" transform="rotate(36 50 50)"/></g>`
-    + `<g class="ct-gi"><g transform="rotate(${g.tilt} 50 50)"><circle class="ct-in" cx="50" cy="50" r="${g.inR}" stroke="${inner}" stroke-width="${g.inW}" stroke-dasharray="${dash(g.inR)}" transform="rotate(36 50 50)"${op}/></g></g></svg>`;
+  return `<svg class="ct-logo" width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">${logoBody(logoGeom(size), { outer, inner, innerOpacity })}</svg>`;
 }
 
 /** logo 的动作(类名带 ct- 前缀):.ct-draw 画出来一次;放在 a.ct-hover 里的 logo,悬停时点一下头。「减弱动态效果」就都不动 */

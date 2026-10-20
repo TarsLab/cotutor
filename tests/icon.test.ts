@@ -1,11 +1,13 @@
-/** 主屏幕图标与 manifest:iPad「添加到主屏幕」用的两样——PNG 现画(尺寸 / 签名 / 三色 C 的像素对得上)、清单是 standalone。 */
+/** 主屏幕图标与 manifest:iPad「添加到主屏幕」用的两样——PNG 现画(尺寸 / 签名 / 双 C 的像素对得上)、清单是 standalone。 */
 import { inflateSync } from 'node:zlib';
 import { createMock } from '../src/server/mock.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../src/lib/icon.ts';
-import { SUBJECT_COLORS } from '../src/lib/tutor-color.ts';
+import { LOGO_CLAY } from '../src/lib/logo.ts';
 import { check, done } from './_check.ts';
 
 /** 极简 PNG 解码:只认本模块写出来的那种(8 位真彩、filter 0) */
+const hex = (h: string): [number, number, number] => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16)) as [number, number, number];
+
 function decode(png: Buffer): { w: number; h: number; at: (x: number, y: number) => [number, number, number] } {
   check('PNG 签名', png.subarray(0, 8).toString('hex') === '89504e470d0a1a0a');
   check('IHDR 在第一块', png.subarray(12, 16).toString('ascii') === 'IHDR');
@@ -50,23 +52,27 @@ function crc32(buf: Buffer): number {
 }
 
 {
-  // 三色 C(《产品规划.md》拍板 20):纸色底,C 占边长的 62%,环心半径 27.25 / 64
+  // 双 C(《产品规划.md》拍板 20、23):陶土色底、白线,两个 C 占 100 见方画布的 0.62,大号那一档(小 C 侧头 28°)
   const png = appIconPng(180);
   const img = decode(png);
   check('180 见方', img.w === 180 && img.h === 180);
   const near = (a: [number, number, number], b: [number, number, number]) => a.every((v, i) => Math.abs(v - b[i]) <= 2);
-  const hex = (h: string): [number, number, number] => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16)) as [number, number, number];
-  const ring = Math.round(27.25 * ((180 * 0.62) / 64));
-  check('四角是纸色(--paper)', near(img.at(2, 2), [0xfa, 0xf9, 0xf4]) && near(img.at(177, 177), [0xfa, 0xf9, 0xf4]), img.at(2, 2).join());
-  check('中间是空着的白脸', near(img.at(90, 90), [0xff, 0xff, 0xff]), img.at(90, 90).join());
-  check('上面一段是数学', near(img.at(90, 90 - ring), hex(SUBJECT_COLORS['数学'])), img.at(90, 90 - ring).join());
-  check('左边一段是语文', near(img.at(90 - ring, 90), hex(SUBJECT_COLORS['语文'])), img.at(90 - ring, 90).join());
-  check('下面一段是英语', near(img.at(90, 90 + ring), hex(SUBJECT_COLORS['英语'])), img.at(90, 90 + ring).join());
-  check('右边开口是纸色', near(img.at(90 + ring, 90), [0xfa, 0xf9, 0xf4]), img.at(90 + ring, 90).join());
+  const clay = hex(LOGO_CLAY);
+  const white: [number, number, number] = [255, 255, 255];
+  const soft = clay.map((v) => Math.round(v + (255 - v) * 0.75)) as [number, number, number];
+  // 100 见方的坐标 → 像素(两个 C 缩到 0.62,围着中心)
+  const at = (u: number, v: number) => img.at(Math.floor((50 + (u - 50) * 0.62) * 1.8), Math.floor((50 + (v - 50) * 0.62) * 1.8));
+  const deg = (a: number, r: number): [number, number] => [50 + r * Math.cos((a * Math.PI) / 180), 50 + r * Math.sin((a * Math.PI) / 180)];
+  check('四角是陶土色', near(img.at(2, 2), clay) && near(img.at(177, 177), clay), img.at(2, 2).join());
+  check('中间是陶土色', near(at(50, 50), clay), at(50, 50).join());
+  check('上面、左边是白的大 C', near(at(50, 10), white) && near(at(10, 50), white), at(50, 10).join());
+  check('右边开口是陶土色', near(at(90, 50), clay), at(90, 50).join());
+  check('小 C 淡一档的白', near(at(50, 31), soft), at(50, 31).join());
+  check('小 C 侧头 28°:开口在右下', near(at(...deg(28, 19)), clay) && near(at(...deg(0, 19)), soft), at(...deg(28, 19)).join());
   check('抗锯齿:环边上有中间色', (() => {
     for (let y = 0; y < 90; y++) {
-      const c = img.at(70, y);
-      if (!near(c, [0xfa, 0xf9, 0xf4]) && !near(c, hex(SUBJECT_COLORS['数学']))) return true;
+      const c = img.at(90, y);
+      if (!near(c, clay) && !near(c, white)) return true;
     }
     return false;
   })());

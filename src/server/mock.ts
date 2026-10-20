@@ -753,11 +753,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const n = Number(icon[1]);
       return (ICON_SIZES as readonly number[]).includes(n) ? { status: 200, body: appIconPng(n), contentType: 'image/png' } : { status: 404, json: { error: 'not_found' } };
     }
-    // 网页图标:mock 的老师头像都是字
-    const fav = await faviconResponse(p, url.searchParams.get('tutor'), async (name) => {
-      const t = MOCK_TUTORS.find((x) => x.name === name);
-      return t ? { color: colors[t.name] ?? NEUTRAL_COLOR, avatar: t.avatar, subject: t.subject, display: t.display } : null;
-    });
+    const fav = faviconResponse(p);
     if (fav) return { status: 200, ...fav, cacheControl: 'no-cache' };
     if (p === '/api/health') return { status: 200, json: { ok: scenario !== 'offline', mock: true, scenario } };
     if (scenario === 'offline' && p.startsWith('/api/')) return { status: 500, json: { error: 'mock_offline' } };

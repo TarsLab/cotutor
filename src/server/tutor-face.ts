@@ -4,7 +4,7 @@
  * 脚本是 ES5、没有反斜杠与反引号(插进各页的模板字符串)。
  */
 
-/** 听写页、口语课用:tutorAvatar(t) → 一个 .tfav(大小由所在处的样式定);setFavicon(t) 换网页图标;backCapsule(onClick) → { el, set(t) };t = /api/kid/home 里 tutors 的一项(name、display、avatar、color) */
+/** 听写页、口语课用:tutorAvatar(t) → 一个 .tfav(大小由所在处的样式定);backCapsule(onClick) → { el, set(t) };t = /api/kid/home 里 tutors 的一项(name、display、avatar、color) */
 export const TUTOR_FACE_JS = `
   var tutorAvatar = function (t) {
     var av = document.createElement('span'); av.className = 'tfav'; av.style.color = t.color;
@@ -14,13 +14,6 @@ export const TUTOR_FACE_JS = `
     else face.textContent = t.avatar || (t.subject || t.display || '?').slice(0, 1);
     av.append(face);
     return av;
-  };
-  /** 网页图标换成这位老师的头像(src/lib/favicon.ts;孩子端老师页的 setFavicon 同一个做法);t 空 = 三色 C */
-  var setFavicon = function (t) {
-    var q = t && t.name ? '?tutor=' + encodeURIComponent(t.name) : '';
-    var png = document.getElementById('fav-png'), svg = document.getElementById('fav-svg');
-    if (png) png.href = '/favicon-32.png' + q;
-    if (svg) svg.href = '/favicon.svg' + q;
   };
   var backCapsule = function (onClick) {
     var el = document.createElement('button'); el.type = 'button'; el.id = 'back'; el.setAttribute('aria-label', '回首页');

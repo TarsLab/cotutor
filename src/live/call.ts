@@ -18,6 +18,7 @@
  *   {t:'state', speaking, holding} · {t:'err', status, error} 发不出去(429 limit / 400 …)· {t:'end', why}
  * 嘴的会话断了(百炼 300 秒没输入就关,2026-10-20 照 Qwen-Live-Harness 的换连接):电话不挂、孩子端不知道;下次按下或发来时现连,
  *   连上之前来的照序攒着补(录像里记一条 {t:'lost'},只记不发)。平时孩子没按着就 30 秒一次心跳,最后一次动静 15 分钟后停跳。
+ * 换连接:嘴的历史越长每次回答越贵,输入过了 SWAP_TOKENS 就在安静时换一条新的(录像里记 {t:'swap'},只记不发)。
  * 录像:进出的消息、两边的声音都记(CallRecorder),挂了落在 conversations/<老师>/<日期>.live/<时分秒>.reel.json / .wav。
  * 事件:嘴这一道(mouth:按下、松手 / 发了、接住开始放、第几句开始放、打断)补进那一轮的 events.jsonl(Runner.noteEvent),工作台的时间线上看;
  * 按下、松手、接住在脑起来之前,先攒着,等那一轮的老师进程起来(main:start)再按它的起点换成相对毫秒(负的)。
@@ -46,9 +47,10 @@ export interface LiveDeps {
   /** 测试:realtime 的端点与环境 */
   endpoint?: string;
   env?: NodeJS.ProcessEnv;
-  /** 测试:心跳间隔、孩子多久没动静就不跳 */
+  /** 测试:心跳间隔、孩子多久没动静就不跳、输入多少 token 换连接 */
   heartbeatMs?: number;
   keepAliveMs?: number;
+  swapTokens?: number;
   onFinished?(why: string): void;
 }
 
@@ -60,6 +62,8 @@ const MIN_COMMIT_BYTES = (INPUT_RATE * 2 * 100) / 1000;
 /** 心跳间隔(Qwen-Live-Harness 也是 30 秒);孩子最后一次动静之后跳多久(过了就让百炼 300 秒后关,回来按下再连,连一次约半秒) */
 const HEARTBEAT_MS = 30_000;
 const KEEP_ALIVE_MS = 15 * 60_000;
+/** 嘴最近一次回答的输入过了这么多 token,安静时换一条新连接(约 9 轮一换) */
+const SWAP_TOKENS = 3000;
 /** 讲稿的 [[play]]:孩子端放小课堂那一段,最多等它这么久就接着念(孩子端没回 staged 时不卡死) */
 const GATE_MS = 180_000;
 /** 现连时攒着的声音最多一分钟(同 Qwen-Live-Harness 的 MAX_RECOVERY_AUDIO_BYTES) */
@@ -107,6 +111,9 @@ export class LiveCall {
   private readonly timers: NodeJS.Timeout[] = [];
   /** 孩子最近一次按下、松手、发来,或嘴说完一次的墙钟(心跳看它) */
   private lastActive = Date.now();
+  /** 嘴最近一次回答的输入 token(连接的历史越长越多);过了 SWAP_TOKENS 安静时换连接 */
+  private lastInput = 0;
+  private swapping = false;
   /** 第一次连上了:之后嘴没了是断了要现连,不是连不上 */
   private opened = false;
   /** 正在现连;连上之前孩子端来的按下、松手、发来、按着的声音照到达的顺序攒着 */
@@ -181,8 +188,8 @@ export class LiveCall {
     this.send({ t: 'ready' });
   }
 
-  /** 开一条嘴的会话(第一次、断了以后现连都走这里);连上了才换成 this.session,别的会话的回调都不认 */
-  private async connectMouth(): Promise<string | null> {
+  /** 开一条嘴的会话(第一次、断了以后现连、换连接都走这里);不是 this.session 的会话,回调都不认 */
+  private async openMouth(): Promise<{ why: string | null; s: RealtimeSession }> {
     const { ctx, tutor } = this.deps;
     const cfg = ctx.ws.config;
     const t = cfg.tutors[tutor];
@@ -211,8 +218,9 @@ export class LiveCall {
         if (delta) this.send({ t: 'tutor', of, delta });
       },
       onKidText: (text) => { if (this.session === s) this.heard(text); },
-      onResponse: (st, status) => {
+      onResponse: (st, status, usage) => {
         if (this.session !== s) return;
+        if (st === 'done' && usage) this.lastInput = usage.input;
         if (st === 'created') {
           firstOfAnswer = true;
           if (this.cancelOnCreate) { this.cancelOnCreate = false; this.session?.cancel(); }
@@ -230,6 +238,7 @@ export class LiveCall {
         if (next) next();
         else this.step({ e: 'done' });
         this.state();
+        this.maybeSwap();
       },
       onError: (m) => {
         if (this.session !== s) return;
@@ -241,9 +250,39 @@ export class LiveCall {
       onClose: (r) => { if (!this.ended && this.session === s) this.lost(r); },
     });
     const why = await s.connect();
-    if (this.ended) { s.close(); return 'ended'; }
+    if (this.ended) { s.close(); return { why: 'ended', s }; }
+    return { why, s };
+  }
+
+  /** 开一条嘴的会话并换上(第一次、断了以后现连) */
+  private async connectMouth(): Promise<string | null> {
+    const { why, s } = await this.openMouth();
     if (why === null) this.session = s;
     return why;
+  }
+
+  /** 安静:孩子没按着、嘴没在说也没要说的、讲稿没排着、脑没在写、没在现连 / 换连接 */
+  private quiet(): boolean {
+    return !this.holding && !this.said && !this.session?.responding && !this.q.pending.length && !this.q.gated && !this.running && !this.reviving && !this.swapping;
+  }
+
+  /**
+   * 换连接(《wip/实时老师开发计划.md》P3.3):嘴的输入每次回答都带着整条连接的历史,一轮约多 230 token(2026-10-20 真连 15 轮:843 涨到 5468,
+   * 首包不变,只是钱);嘴每次都给词、不靠前情,安静时开一条新的换上就行,不用摘要。开的时候孩子动了就作废这次。
+   */
+  private maybeSwap(): void {
+    if (this.ended || !this.session || this.lastInput < (this.deps.swapTokens ?? SWAP_TOKENS) || !this.quiet()) return;
+    this.swapping = true;
+    void this.openMouth().then(({ why, s }) => {
+      this.swapping = false;
+      if (why !== null) return;
+      if (this.ended || !this.session || !this.quiet()) { s.close('swap-abort'); return; }
+      const old = this.session;
+      this.session = s;
+      this.rec.out({ t: 'swap', input: this.lastInput });
+      this.lastInput = 0;
+      old.close('swap');
+    });
   }
 
   /** 嘴的会话断了(百炼 300 秒没输入就关、网断了):电话不挂;讲稿还排着就马上连、接着念,不然等孩子下次按下或发来再连 */
@@ -474,6 +513,7 @@ export class LiveCall {
     }, () => {}).finally(() => {
       if (this.running === started) this.running = null;
       this.flushWaiting();
+      this.maybeSwap();
     });
   }
 

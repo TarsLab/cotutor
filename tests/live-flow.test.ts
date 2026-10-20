@@ -48,7 +48,7 @@ const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();
 const finished: [string, string][] = [];
 // 心跳缺省 30 秒,前面几段跑不到;断线那段改短
-const liveDeps: { endpoint: string; env: NodeJS.ProcessEnv; heartbeatMs?: number; keepAliveMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) };
+const liveDeps: { endpoint: string; env: NodeJS.ProcessEnv; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) };
 const liveUpgrade = makeLiveUpgrade(liveDeps);
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
@@ -285,6 +285,36 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   k.ws.send(JSON.stringify({ t: 'bye' }));
   await until(() => k.closed !== null);
+}
+
+{
+  // ---- 换连接(P3.3):嘴最近一次回答的输入过了线,安静时换一条新的;孩子端不知道,下一轮在新连接上 ----
+  liveDeps.swapTokens = 800; // 假百炼每次回答报输入 865
+  const k = await connect('chinese-tutor');
+  await until(() => has(k, (m) => m.t === 'ready'));
+  const n0 = fake.conns.length;
+  const c = fake.conns[n0 - 1];
+  fake.kidText = '老师你好';
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: { newThread: true } }));
+  await until(() => has(k, (m) => m.t === 'turn'), 10000);
+  const swapped = await until(() => fake.conns.length > n0 && c.closed, 15000);
+  const nk = k.msgs.length;
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  await sleep(500);
+  const cur = fake.conns.at(-1)!;
+  const cm = cur.commits;
+  fake.kidText = '再说一句';
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: {} }));
+  const okNext = await until(() => cur.commits === cm + 1 && cur.responses.length >= 1, 8000);
+  check('换连接:一轮讲完、安静了换上新的,旧的关掉;孩子端没收到 end / fallback;下一轮落在新连接上', swapped && okNext && !k.msgs.some((m) => m.t === 'end' || m.t === 'fallback') && k.closed === null, JSON.stringify({ conns: fake.conns.length - n0, oldClosed: c.closed, commits: cur.commits - cm, after: k.msgs.slice(nk).map((m) => m.t).join(',') }));
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  k.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => k.closed !== null);
+  liveDeps.swapTokens = undefined;
 }
 
 {

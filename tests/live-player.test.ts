@@ -3,15 +3,15 @@
  * 表的中文版在《工作流程.md》§孩子端「实时老师」;改规则先改表、再改这里、最后改 liveStep。
  */
 import { readFileSync } from 'node:fs';
-import { initialLive, liveStep, type LiveEffect, type LiveEvent, type LiveModel, type LiveStatus } from '../src/lib/live-board.ts';
+import { initialLive, liveGate, liveStep, type LiveEffect, type LiveEvent, type LiveModel, type LiveStatus } from '../src/lib/live-board.ts';
 import { check, done } from './_check.ts';
 
 const M = (status: LiveStatus, cut = false): LiveModel => ({ ...initialLive(), status, cut });
-const kinds = (fx: LiveEffect[]) => fx.map((f) => f.kind).join(',');
+const kinds = (fx: LiveEffect[]) => fx.map((f) => (f.kind === 'gate' ? `gate:${f.on ? 'on' : 'off'}` : f.kind)).join(',');
 const ALL: LiveStatus[] = ['quiet', 'holding', 'mouth', 'card', 'recording', 'lecture'];
 
 // ---- 表:正在…… × 来了……(一行一格)----
-interface Row { name: string; from: LiveStatus | LiveStatus[]; ev: LiveEvent; want: (m: LiveModel, fx: string) => boolean }
+interface Row { name: string; from: LiveStatus | LiveStatus[]; ev: LiveEvent; want: (m: LiveModel, fx: string) => boolean; base?: Partial<LiveModel> }
 const rows: Row[] = [
   { name: '安静 + 按住说话 → 告诉服务端 hold,孩子按着', from: 'quiet', ev: { type: 'press' }, want: (m, fx) => m.status === 'holding' && fx === 'hold' && !m.cut },
   { name: '嘴在说 + 按住说话 → 嘴没放完的清掉,hold;那句记成被打断', from: 'mouth', ev: { type: 'press' }, want: (m, fx) => m.status === 'holding' && fx === 'flush,hold' && m.cut },
@@ -51,10 +51,31 @@ const rows: Row[] = [
   { name: '在录 + 停录 → 安静', from: 'recording', ev: { type: 'recEnd' }, want: (m, fx) => m.status === 'quiet' && fx === 'render' },
   { name: '任何 + 连不上 / 断了 → 声音清掉,回到板书', from: ALL, ev: { type: 'drop' }, want: (m, fx) => m.status === 'quiet' && fx === 'flush,stopCard,stopLecture,board' },
   { name: '任何 + 换老师 / 关老师页 → 声音清掉', from: ALL, ev: { type: 'reset' }, want: (m, fx) => m.status === 'quiet' && fx === 'flush,stopCard,stopLecture' },
+  // ---- 一直听 ----
+  { name: '按住说 + 点「一直听」→ listen,开始推声音', from: 'quiet', ev: { type: 'listen', open: true }, want: (m, fx) => m.open && fx === 'listen,render,gate:on' },
+  { name: '一直听 + 点掉「一直听」→ listen,不推了', from: 'quiet', base: { open: true }, ev: { type: 'listen', open: false }, want: (m, fx) => !m.open && fx === 'listen,render,gate:off' },
+  { name: '一直听、压低着 + 点掉「一直听」→ 音量恢复', from: 'mouth', base: { open: true, ducked: true }, ev: { type: 'listen', open: false }, want: (m, fx) => !m.ducked && fx === 'listen,unduck,render,gate:off' },
+  { name: '按着说话时点「一直听」→ 那一下作废(hush),换模式', from: 'holding', ev: { type: 'listen', open: true }, want: (m, fx) => m.status === 'quiet' && m.open && fx === 'hush,listen,render,gate:on' },
+  { name: '一直听 + 按输入条 → 不接', from: ['quiet', 'mouth'], base: { open: true }, ev: { type: 'press' }, want: (m, fx) => m.status !== 'holding' && fx === '' },
+  { name: '一直听 + 点胶囊关麦 → 不推了', from: ['quiet', 'mouth'], base: { open: true }, ev: { type: 'mute' }, want: (m, fx) => m.muted && fx === 'render,gate:off' },
+  { name: '一直听、关着麦 + 点胶囊 → 接着推', from: 'quiet', base: { open: true, muted: true }, ev: { type: 'unmute' }, want: (m, fx) => !m.muted && fx === 'render,gate:on' },
+  { name: '一直听 + 服务端 vad 开 → 在听你说(不改谁出声)', from: ['quiet', 'mouth'], base: { open: true }, ev: { type: 'vad', on: true }, want: (m, fx) => m.hearing && fx === 'render' },
+  { name: '一直听、在听你说 + 服务端 vad 关 → 回到我在听', from: 'quiet', base: { open: true, hearing: true }, ev: { type: 'vad', on: false }, want: (m, fx) => !m.hearing && fx === 'render' },
+  { name: '按住说 + 服务端 vad(换连接前的)→ 不理', from: 'quiet', ev: { type: 'vad', on: true }, want: (m, fx) => !m.hearing && fx === '' },
+  { name: '嘴在说 + 服务端 duck → 嘴的声音压到三成', from: 'mouth', base: { open: true }, ev: { type: 'duck' }, want: (m, fx) => m.ducked && m.status === 'mouth' && fx === 'duck' },
+  { name: '压低着 + 服务端 unduck → 恢复', from: 'mouth', base: { open: true, ducked: true }, ev: { type: 'unduck' }, want: (m, fx) => !m.ducked && fx === 'unduck' },
+  { name: '压低着 + 服务端 flush → 清掉、恢复,安静', from: 'mouth', base: { open: true, ducked: true }, ev: { type: 'flush' }, want: (m, fx) => !m.ducked && m.status === 'quiet' && fx === 'flush,unduck,render' },
+  { name: '一直听 + 点卡上的声音 → 念它,不推了', from: 'quiet', base: { open: true }, ev: { type: 'cardTap' }, want: (m, fx) => m.status === 'card' && fx === 'playCard,gate:off' },
+  { name: '一直听、卡在念 + 念完 → 接着推', from: 'card', base: { open: true }, ev: { type: 'cardEnded' }, want: (m, fx) => m.status === 'quiet' && fx === 'gate:on' },
+  { name: '一直听 + 按下录音键 → hush、不推了', from: 'quiet', base: { open: true }, ev: { type: 'recStart' }, want: (m, fx) => m.status === 'recording' && fx === 'hush,render,gate:off' },
+  { name: '一直听、在录 + 停录 → 接着推', from: 'recording', base: { open: true }, ev: { type: 'recEnd' }, want: (_m, fx) => fx === 'render,gate:on' },
+  { name: '一直听、嘴在说 + 放完到 [[play]] 的小课堂 → 放那一段、不推了', from: 'mouth', base: { open: true }, ev: { type: 'drained', play: 'open' }, want: (m, fx) => m.status === 'lecture' && fx === 'openLecture,render,gate:off' },
+  { name: '一直听、在放小课堂 + 那一段放完 → staged、接着推', from: 'lecture', base: { open: true }, ev: { type: 'lectureDone' }, want: (_m, fx) => fx === 'staged,render,gate:on' },
+  { name: '按住说 + 点卡上的声音 → 没有 gate', from: 'quiet', ev: { type: 'cardTap' }, want: (_m, fx) => fx === 'playCard' },
 ];
 for (const r of rows) {
   for (const st of Array.isArray(r.from) ? r.from : [r.from]) {
-    const out = liveStep(M(st), r.ev);
+    const out = liveStep({ ...M(st), ...r.base }, r.ev);
     check(`表:${r.name}${Array.isArray(r.from) ? `(${st})` : ''}`, r.want(out.model, kinds(out.effects)), `${JSON.stringify(out.model)} | ${kinds(out.effects)}`);
   }
 }
@@ -64,12 +85,13 @@ function rng(seed: number): () => number {
   let a = seed >>> 0;
   return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
-const KID = new Set(['press', 'release', 'cancel', 'ask', 'send', 'recStart']);
+const KID = new Set(['press', 'release', 'cancel', 'ask', 'send', 'recStart', 'listen']);
+const SERVER_DUCK = new Set(['duck', 'unduck', 'flush', 'listen', 'reset', 'drop']);
 
 function run(seed: number, steps: number): string | null {
   const r = rng(seed);
   // 世界:孩子端两样声音在不在出、服务端以为孩子按没按着、孩子手指在不在按钮上
-  const w = { m: initialLive(), mouth: false, card: false, lecture: false, serverHold: false, finger: false, log: [] as string[] };
+  const w = { m: initialLive(), mouth: false, card: false, lecture: false, serverHold: false, finger: false, gate: false, ducked: false, log: [] as string[] };
   const dispatch = (ev: LiveEvent): string | null => {
     const before = w.m;
     const { model, effects } = liveStep(before, ev);
@@ -82,6 +104,10 @@ function run(seed: number, steps: number): string | null {
     // 不变式 7:小课堂那一段只在嘴放完、刚念完 [[play]] 那句才放;staged 只在那一段放完 / 被关 / 放不了时发
     if (effects.some((f) => f.kind === 'openLecture') && !(ev.type === 'drained' && ev.play === 'open')) return '小课堂自己放了';
     if (effects.some((f) => f.kind === 'staged') && !(ev.type === 'lectureDone' || (ev.type === 'drained' && ev.play === 'skip'))) return '没放完就说 staged';
+    // 不变式 8(一直听):listen 只跟着孩子点开关;一直听时没有 hold / release;duck / unduck 只跟着服务端(换模式时恢复)
+    if (effects.some((f) => f.kind === 'listen') && ev.type !== 'listen') return 'listen 不是孩子点的';
+    if (before.open && effects.some((f) => f.kind === 'hold' || f.kind === 'release')) return '一直听时发了 hold / release';
+    if (effects.some((f) => f.kind === 'duck' || f.kind === 'unduck') && !SERVER_DUCK.has(ev.type)) return '自己压低 / 恢复了';
     // 不变式 3:卡铺上来、开舞台不打断谁
     if ((ev.type === 'cards' || ev.type === 'stage') && effects.length) return '卡铺上来 / 开舞台动了声音';
     // 照单执行
@@ -97,7 +123,16 @@ function run(seed: number, steps: number): string | null {
       if (f.kind === 'release') { if (!w.serverHold) return '没 hold 就 release'; w.serverHold = false; }
       if (f.kind === 'hush') w.serverHold = false;
       if (f.kind === 'board') w.serverHold = false;
+      // 不变式 9:gate 只在推不推变了时发
+      if (f.kind === 'gate') { if (f.on === w.gate) return `gate ${f.on} 发了两次`; w.gate = f.on; }
+      if (f.kind === 'duck') w.ducked = true;
+      if (f.kind === 'unduck') w.ducked = false;
     }
+    // 不变式 10:推不推 = 一直听、没关麦、卡没在念、没在录、小课堂没在放;服务端知道的和孩子端推的一样
+    const push = model.open && !model.muted && !w.card && !w.lecture && model.status !== 'recording' && model.status !== 'holding';
+    if (liveGate(model) !== push) return `推不推算错了(${liveGate(model)})`;
+    if (liveGate(model) !== w.gate) return '孩子端推不推和告诉服务端的对不上';
+    if (w.ducked !== model.ducked) return '压没压低对不上';
     if (ev.type === 'reset') w.serverHold = false; // 关页 = 连接关了
     // 不变式 5:两样声音不同时响;按着、在录时不出声
     if (w.mouth && w.card) return '嘴和卡同时响';
@@ -125,9 +160,12 @@ function run(seed: number, steps: number): string | null {
     else if (x < 0.8) ev = { type: 'cards' };
     else if (x < 0.85) ev = { type: 'stage' };
     else if (x < 0.89) ev = { type: 'recStart' };
-    else if (x < 0.94) ev = { type: 'recEnd' };
-    else if (x < 0.97) ev = { type: 'reset' };
-    else ev = { type: 'drop' };
+    else if (x < 0.92) ev = { type: 'recEnd' };
+    else if (x < 0.935) ev = { type: r() < 0.5 ? 'reset' : 'drop' };
+    else if (x < 0.95) ev = { type: 'listen', open: r() < 0.7 };
+    else if (x < 0.965) ev = { type: r() < 0.5 ? 'mute' : 'unmute' };
+    else if (x < 0.98) ev = { type: 'vad', on: r() < 0.5 };
+    else ev = { type: r() < 0.6 ? 'duck' : 'unduck' };
     const bad = dispatch(ev);
     if (bad) return `种子 ${seed} 第 ${i} 步:${bad}\n  ${w.log.slice(-8).join('\n  ')}`;
   }
@@ -136,6 +174,14 @@ function run(seed: number, steps: number): string | null {
 const failures: string[] = [];
 for (let seed = 1; seed <= 3000 && failures.length < 3; seed++) { const f = run(seed, 150); if (f) failures.push(f); }
 check('随机事件序列 3000 条 × 150 步:不变式都成立', failures.length === 0, failures.join('\n'));
+
+// ---- 两份状态机都内联进孩子端页面(libSource):顶层的名字撞了,后一份的函数声明会盖掉前一份(2026-10-20 live-board 的 step 盖了 kid-board 的 step,板书页整个不动)----
+{
+  const names = (f: string) => new Set([...readFileSync(new URL(`../src/lib/${f}`, import.meta.url), 'utf8').matchAll(/^(?:export )?(?:function|const|let|class) ([A-Za-z_$][\w$]*)/gm)].map((x) => x[1]));
+  const kb = names('kid-board.ts');
+  const both = [...names('live-board.ts')].filter((n) => kb.has(n));
+  check('live-board.ts 与 kid-board.ts 顶层的名字不撞', both.length === 0, both.join());
+}
 
 // ---- 页面不绕过 liveStep:实时的状态只在 liveDispatch 里写;卡上的声音都先过 cardSoundOk(板书时那里停讲稿,实时时问 liveStep)----
 const page = readFileSync(new URL('../src/server/kid-page.ts', import.meta.url), 'utf8');

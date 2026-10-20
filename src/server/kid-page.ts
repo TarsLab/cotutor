@@ -385,6 +385,13 @@ ${faviconLinks()}
   #bar { padding:8px 16px calc(env(safe-area-inset-bottom) + 12px); }
   #pill { display:flex; align-items:center; gap:12px; height:56px; padding:0 14px; border-radius:28px; background:#fff; border:1px solid var(--line); box-shadow:0 2px 10px #00000010; }
   #pill .ic { color:var(--ink); display:grid; place-items:center; width:32px; height:44px; }
+  /* 一直听(《wip/实时老师常开麦设计.md》):右上角的开关、输入条里的麦克风(点它关麦 / 开麦,外圈跟着音量) */
+  #lv-listen, #pill #lv-mic { display:none; }
+  body.live .tb #lv-listen { display:inline-flex; width:auto; padding:0 14px 0 10px; gap:6px; align-items:center; border-radius:22px; font-size:15px; color:var(--dim); }
+  body.live .tb #lv-listen.on { color:#2a5ea8; background:#eef5fe; border-color:#9cc0ee; }
+  body.live.lv-open #pill #lv-mic { display:grid; width:44px; border-radius:50%; color:#2a5ea8; box-shadow:0 0 0 calc(var(--lv, 0) * 10px) #3d7fd933; transition:box-shadow .1s; }
+  body.live.lv-open #pill #lv-mic.hear { background:#3d7fd9; color:#fff; }
+  body.live.lv-open #pill #lv-mic.off { color:var(--dim); box-shadow:none; }
   #mid { flex:1; min-width:0; min-height:44px; display:flex; align-items:center; font-size:17px; color:var(--dim); touch-action:none; }
   #typed { flex:1; min-width:0; font:inherit; font-size:18px; color:var(--ink); border:0; outline:0; background:none; -webkit-user-select:text; user-select:text; }
   #typed[hidden] { display:none; }
@@ -624,7 +631,7 @@ __REEL_DOCK_CSS__
 <section id="tutor">
   <div id="main">
     <div class="tb l"><button id="back" type="button" aria-label="回首页"><i id="back-ic"></i><span class="av" id="c-av"></span></button><span id="c-mo" hidden></span></div>
-    <div class="tb r"><button class="hb on" id="spk" type="button" aria-label="老师念不念"></button><button class="hb" id="more-btn" type="button" aria-label="更多"></button></div>
+    <div class="tb r"><button class="hb" id="lv-listen" type="button" aria-pressed="false" aria-label="一直听:开着就不用按住说话"></button><button class="hb on" id="spk" type="button" aria-label="老师念不念"></button><button class="hb" id="more-btn" type="button" aria-label="更多"></button></div>
     <div id="wrap">
       <div id="board"></div>
       <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
@@ -636,6 +643,7 @@ __REEL_DOCK_CSS__
       <div id="pill">
         <label class="ic" id="cam"><input type="file" accept="image/*" capture="environment"></label>
         <div id="mid"><span id="ph">发消息或按住说话…</span><input id="typed" type="text" autocomplete="off" hidden></div>
+        <button class="ic" id="lv-mic" type="button" aria-label="关麦"></button>
         <button id="go" type="button" hidden></button>
         <button class="ic" id="plus" type="button"></button>
       </div>
@@ -718,6 +726,8 @@ __AUDIO_JS__
     mute: SVG('<path d="M4 10v4h4l5 4V6L8 10z"></path><path d="M17 9l4 6M21 9l-4 6"></path>', 24),
     send: SVG('<path d="M12 19V5M5 12l7-7 7 7"></path>', 20, 2.4),
     micSm: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 16, 2.2),
+    micMd: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 22, 2),
+    micOff: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"></path>', 22, 2),
     image: SVG('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 16l5-5 4 4 3-3 6 6"></path><circle cx="16" cy="9" r="1.5"></circle>', 36, 1.6),
     album: __ALBUM_28__,
     close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
@@ -2048,7 +2058,7 @@ __WORD_DRAW_JS__
   //      (2026-10-08 真机:新卡要手动往上滑才看全;mock 量出来每轮停下等答时最后一张卡被截 45px,其余 4–7px) ----
   const pin = { on: false, touched: 0 };
   /** 老师页左上的头像跟着谁在说走(.av 的样式):孩子按住说话、录音卡在录 = 听;刚念完停下等孩子 = 点一下头(body.nod 一秒后摘掉,下回再加才会再点) */
-  const avListen = () => document.body.classList.toggle('listening', S.bar === 'holding' || Boolean(S.rec));
+  const avListen = () => document.body.classList.toggle('listening', S.bar === 'holding' || Boolean(S.rec) || (LV.on && LV.model.open && LV.model.hearing));
   let avWas = 'idle', nodTimer = 0;
   const avNod = () => { const b = document.body; b.classList.remove('nod'); void b.offsetWidth; b.classList.add('nod'); clearTimeout(nodTimer); nodTimer = setTimeout(() => b.classList.remove('nod'), 1000); };
   /** 让孩子看到 el:它是板上最后看得见的东西就滚到底并跟着(pin);不是(念到上面另一张卡)就照旧 nearest,不跟;比可视区还高的露上沿 */
@@ -3262,9 +3272,9 @@ __REEL_DOCK_JS__
   // kid.listen: omni(首页接口给):松手后原声交给服务端的 omni 再听一遍、发它听的;浏览器没有识别(或一起就断)也能按住,只录不认
   const omniOn = () => Boolean(S.home && S.home.listen === 'omni') && Boolean(window.MediaRecorder) && Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   const holdOk = () => (LV.on && LV.ready) || srOk() || omniOn();
-  const PH_IDLE = () => (holdOk() ? '发消息或按住说话…' : '发消息…');
+  const PH_IDLE = () => (LV.on && LV.model.open ? (LV.model.muted ? '麦关了,点右边的麦克风再听' : '我在听,直接说就行…') : holdOk() ? '发消息或按住说话…' : '发消息…');
   /** kid.listen 跟着首页接口来(改 cotutor.json 不用刷新页面):输入条上是空闲那句就按现在的重写,「没听清」那几秒不动 */
-  const phIdle = () => { const ph = $('#ph'); if (ph && /^发消息/.test(ph.textContent)) ph.textContent = PH_IDLE(); };
+  const phIdle = () => { const ph = $('#ph'); if (ph && /^(发消息|我在听|麦关了)/.test(ph.textContent)) ph.textContent = PH_IDLE(); };
   $('#ph').textContent = PH_IDLE();
   let press = null, rec = null, finalText = '';
   // 麦克风常开(真机诊断 2026-09-19,/voice-test)。这台 iPad 上的三条事实:
@@ -3298,6 +3308,8 @@ __REEL_DOCK_JS__
       navigator.mediaDevices.getUserMedia({ audio: true }).then((x) => { clearTimeout(timer); if (late) { for (const t of x.getTracks()) t.stop(); } else resolve(x); }, (e) => { clearTimeout(timer); reject(e); });
     });
     mic.stream = st;
+    // 一直听靠设备的回声消除:开没开记进诊断(getUserMedia 要的是缺省,两家浏览器缺省都开,真开了没有看这里)
+    try { const s0 = st.getAudioTracks()[0].getSettings(); mic.aec = s0.echoCancellation; } catch { mic.aec = undefined; }
     try { localStorage.setItem('kid-mic-ok', '1'); } catch {}
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -3317,7 +3329,7 @@ __REEL_DOCK_JS__
     const job = (async () => {
       for (let i = 0; i < 4; i++) {
         micDrop(); if (i) { mark('retry', i); await wait(400 * i); }
-        await micOpenOnce(); mark('open');
+        await micOpenOnce(); mark('open'); mark('aec', String(mic.aec));
         mic.ok = await micProbe(); mark(mic.ok ? 'alive' : 'dead');
         if (mic.ok) return 'open';
       }
@@ -3477,6 +3489,9 @@ __REEL_DOCK_JS__
         // 连不上、断了:回板书;等着嘴连上才发的那条(开场)走板书发
         case 'board': { const q = LV.queued; liveClose(); if (q) send(q[0], q[1]); break; }
         case 'render': renderSubtitle(); break;
+        case 'listen': lvSend({ t: 'listen', open: LV.model.open }); break;
+        case 'gate': lvSend({ t: 'gate', on: f.on }); break;
+        case 'duck': case 'unduck': if (LV.audio) LV.audio.duck(f.kind === 'duck' ? 0.3 : 1); break;
       }
     }
     return r.effects;
@@ -3498,7 +3513,17 @@ __REEL_DOCK_JS__
   };
   for (const k of ['ended', 'error']) audioEl.addEventListener(k, () => { if (LV.on && LV.model.status === 'card') liveDispatch({ type: 'cardEnded' }); });
   /** 字幕:在说的那句、上一句;被打断的那句淡、加省略号;什么都还没说写老师的名字;到了上限写上限那句 */
+  /** 一直听的样子:右上角开关、输入条里的麦克风(关着 / 在听你说)、左栏「在听你说」、输入条上那句 */
+  const liveListenUi = () => {
+    const open = LV.on && LV.model.open;
+    document.body.classList.toggle('lv-open', open);
+    const b = $('#lv-listen'); b.classList.toggle('on', open); b.setAttribute('aria-pressed', open ? 'true' : 'false');
+    const m = $('#lv-mic'); m.innerHTML = LV.model.muted ? ICON.micOff : ICON.micMd; m.classList.toggle('off', LV.model.muted); m.classList.toggle('hear', open && LV.model.hearing); m.setAttribute('aria-label', LV.model.muted ? '开麦' : '关麦');
+    avListen();
+    phIdle();
+  };
   const liveCaption = () => {
+    liveListenUi();
     const cap = $('#lv-cap'), c = cap.querySelector('.lv-cur');
     cap.querySelector('.lv-prev').textContent = LV.cap.prev;
     const cut = Boolean(LV.cap.cut) && LV.cap.cut === LV.cap.cur;
@@ -3579,7 +3604,11 @@ __REEL_DOCK_JS__
   };
   const liveMsg = (m) => {
     switch (m.t) {
-      case 'ready': { LV.ready = true; phIdle(); const q = LV.queued; LV.queued = null; if (q) liveSendNow(q[0], q[1]); break; }
+      case 'ready': { LV.ready = true; phIdle(); liveMicOn(); const q = LV.queued; LV.queued = null; if (q) liveSendNow(q[0], q[1]); break; }
+      // 一直听:服务端说孩子开口 / 说完;开口时报一次这一轮的上下文(话题、舞台上的卡),收下时当松手的 body
+      case 'vad': if (m.on) lvSend({ t: 'ctx', body: liveBody() }); liveDispatch({ type: 'vad', on: Boolean(m.on) }); break;
+      case 'duck': liveDispatch({ type: 'duck' }); break;
+      case 'unduck': liveDispatch({ type: 'unduck' }); break;
       case 'fallback': case 'end': liveDispatch({ type: 'drop' }); break;
       case 'tutor':
         // 嘴接住的字一到就上字幕;照念的字幕跟 read 走(到点才亮)
@@ -3591,7 +3620,7 @@ __REEL_DOCK_JS__
         break;
       case 'read': liveRead(String(m.job || ''), Number(m.line), String(m.text || ''), m.play === true); break;
       // 转写是空的(按了没说清):嘴说没听清,不会有这一轮
-      case 'kid': if (!String(m.text || '').trim()) { S.pending = false; renderSubtitle(); } break;
+      case 'kid': if (!String(m.text || '').trim()) { S.pending = false; renderSubtitle(); } else if (LV.model.open) { S.pending = true; if (!S.waitSince) S.waitSince = Date.now(); renderSubtitle(); } break;
       case 'turn': liveTurn(m); break;
       case 'flush': liveDispatch({ type: 'flush' }); break;
       case 'err': S.pending = false; if (m.status === 429) S.limit = true; renderSubtitle(); break;
@@ -3599,9 +3628,25 @@ __REEL_DOCK_JS__
     }
   };
   /** 连嘴(进老师页时,在那一下点击里起 AudioContext);连上之前按住说话还走浏览器识别 */
+  /** 一直听还是按住说:这台设备上孩子切过的为准,没切过照 cotutor.json 的 live.listen */
+  const livePref = (t) => { let v = null; try { v = localStorage.getItem('kid-live-listen'); } catch {} return v ? v === 'open' : Boolean(t && t.listen === 'open'); };
+  /** 一直听要那路常开的麦克风接到采音节点上(按住说是按下时才接) */
+  const liveMicOn = () => {
+    if (!LV.on || !LV.model.open || !LV.audio) return;
+    micOpen().then(() => (mic.stream && LV.audio ? LV.audio.use(mic.stream) : null)).catch(() => {});
+  };
+  /** 孩子这一句的上下文(话题、设备、首页按钮、舞台上的卡):按住说松手时带上,一直听开口时报一次 */
+  const liveBody = () => {
+    const body = { device: S.device };
+    if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
+    if (S.via) body.via = S.via;
+    if (S.stage) body.focus = { card: S.stage.id };
+    return body;
+  };
   const liveOpen = () => {
     if (LV.ws) liveClose();
     liveDispatch({ type: 'reset' });
+    liveDispatch({ type: 'listen', open: livePref(S.tutor) });
     LV.on = true; LV.ready = false; LV.cap = { prev: '', cur: '', cut: '', catching: false }; LV.heard = new Map(); LV.jobs = new Set();
     document.body.classList.add('live');
     $('#tutor').style.setProperty('--tc', tutorColor());
@@ -3609,13 +3654,17 @@ __REEL_DOCK_JS__
     if (!LV.audio) {
       LV.audio = makeAudio();
       LV.audio.muted = false;
-      LV.audio.onChunk = (ab) => { if (LV.model.status === 'holding' && LV.ws && LV.ws.readyState === 1) LV.ws.send(ab); };
-      LV.audio.onLevel = (v) => { if (LV.model.status !== 'holding') return; holdLevel(Math.min(1, v * 4)); if (LV.diag && v > LV.diag.peak) LV.diag.peak = v; };
+      // 按着才推;一直听时推不推看 liveGate(关麦、卡的声音、录音、小课堂时不推)
+      LV.audio.onChunk = (ab) => { if ((LV.model.status === 'holding' || liveGate(LV.model)) && LV.ws && LV.ws.readyState === 1) LV.ws.send(ab); };
+      LV.audio.onLevel = (v) => {
+        if (LV.model.status === 'holding') { holdLevel(Math.min(1, v * 4)); if (LV.diag && v > LV.diag.peak) LV.diag.peak = v; return; }
+        if (liveGate(LV.model)) $('#lv-mic').style.setProperty('--lv', String(Math.min(1, v * 6)));
+      };
     }
     LV.audio.wake().catch(() => {});
     // 麦克风之前开在别的 AudioContext 里(板书页开的):放掉,下面 micWarm 重开在实时这个里
     if (mic.ac && mic.ac !== LV.audio.ctx) micDrop();
-    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/live/' + encodeURIComponent(S.tutor.name) + '/ws');
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/live/' + encodeURIComponent(S.tutor.name) + '/ws' + (LV.model.open ? '?listen=open' : ''));
     ws.binaryType = 'arraybuffer';
     LV.ws = ws;
     ws.onopen = () => { if (LV.ws === ws) lvSend({ t: 'view', w: innerWidth, h: innerHeight }); };
@@ -3634,7 +3683,17 @@ __REEL_DOCK_JS__
     if (mic.ac === LV.audio.ctx) micDrop();
     LV.audio.close();
   };
-  document.addEventListener('visibilitychange', () => { if (document.hidden) liveAudioDrop(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) liveAudioDrop(); else liveMicOn(); });
+  // 右上角「一直听」:点了换模式(服务端安静时换一条连接),记在这台设备上;输入条里的麦克风:关麦 / 开麦
+  $('#lv-listen').innerHTML = ICON.micSm + '<span>一直听</span>';
+  $('#lv-listen').addEventListener('click', () => {
+    if (!LV.on) return;
+    if (LV.audio) LV.audio.wake().catch(() => {});
+    liveDispatch({ type: 'listen', open: !LV.model.open });
+    try { localStorage.setItem('kid-live-listen', LV.model.open ? 'open' : 'hold'); } catch {}
+    liveMicOn();
+  });
+  $('#lv-mic').addEventListener('click', (e) => { e.stopPropagation(); if (LV.on) liveDispatch({ type: LV.model.muted ? 'unmute' : 'mute' }); });
   /** 收:告诉服务端挂了、关连接、清嘴的声音、关实时那个 AudioContext;页面回到板书的样子(按着的那一下作废) */
   const liveClose = () => {
     const ws = LV.ws; LV.ws = null; LV.ready = false; LV.queued = null;
@@ -3643,7 +3702,7 @@ __REEL_DOCK_JS__
     clearInterval(LV.drain); LV.drain = 0;
     if (!LV.on) return;
     LV.on = false;
-    document.body.classList.remove('live', 'speaking');
+    document.body.classList.remove('live', 'speaking', 'lv-open');
     if (press && press.live) { clearTimeout(press.timer); press = null; holdEnd('cancel'); setBar(barNext(S.bar, 'holdCancel')); }
     phIdle();
     if (S.tutor) renderSubtitle();
@@ -3680,10 +3739,7 @@ __REEL_DOCK_JS__
       renderSubtitle();
       return;
     }
-    const body = { device: S.device };
-    if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
-    if (S.via) body.via = S.via;
-    if (S.stage) body.focus = { card: S.stage.id };
+    const body = liveBody();
     // 小课堂看完问的:带上看的情况与画的(截图先传上去)
     const go = (lb) => {
       if (lb) { body.lecture = lb; lectureSent(null); LV.lcPending = true; }
@@ -3757,7 +3813,8 @@ __REEL_DOCK_JS__
     press = { y: e.clientY, cancelled: false, held: false, live: false, timer: setTimeout(() => {
       if (!press) return;
       // 实时:按住推声音给嘴(不走浏览器识别);到了上限不接
-      if (LV.on && LV.ready) { if (S.limit) return; press.held = true; press.live = true; liveHold(); return; }
+      // 一直听:那条不是按住说话,按久了也当点了一下(打字)
+      if (LV.on && LV.ready) { if (S.limit || LV.model.open) return; press.held = true; press.live = true; liveHold(); return; }
       if (!holdOk()) return;
       press.held = true; setBar(barNext(S.bar, 'holdStart')); dispatch({ type: 'halt' }); startRec();
     }, 150) };

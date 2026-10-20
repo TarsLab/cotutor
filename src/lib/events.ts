@@ -78,7 +78,7 @@ export function describeEvent(e: RunEvent): string {
     case 'ledger':
       return `日记 ${e.file} 记了话题 ${e.thread}`;
     case 'mouth':
-      if (e.kind === 'hold') return '孩子按下 / 开口';
+      if (e.kind === 'hold') return '孩子按下';
       if (e.kind === 'release') return e.how === 'voice' ? '松手' : e.how === 'vad' ? '说完(一直听)' : `发了(${{ text: '打字', photo: '照片', card: '交卡', ask: '卡上的「?」' }[e.how]})`;
       if (e.kind === 'catch') return `嘴接住「${e.text}」(开始放)`;
       if (e.kind === 'read') return `嘴念第 ${e.line + 1} 句(开始放)`;

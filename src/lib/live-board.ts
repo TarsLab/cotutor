@@ -3,6 +3,7 @@
  * 实时时孩子端不念讲稿(嘴照念,声音从 WebSocket 下来,src/live/call.ts);出声的只有嘴和卡自己的声音(朗读卡点读、单词卡、录音卡的示范与回放)。
  * 和板书的 step(kid-board.ts)是两个状态机,页面按这位老师这一次是不是实时 dispatch 到其中一个。
  * 改规则的顺序:先改表 → 再改 tests/live-player.test.ts → 最后改这里。
+ * 一直听(《wip/实时老师常开麦设计.md》,全双工):孩子不用按,服务端的 VAD 判开口 / 说完;推不推孩子的声音是状态的函数(liveGate),一变就告诉服务端 gate。
  */
 
 /** quiet 安静 · holding 孩子按着说话 · mouth 嘴的声音在放(或还在来)· card 卡的声音在念 · recording 录音卡在录 · lecture 在放小课堂卡上那一段(讲稿的 [[play]]) */
@@ -12,6 +13,11 @@ export interface LiveModel {
   status: LiveStatus;
   /** 孩子按下时嘴正在说:字幕上那句变淡、加省略号;嘴再出声就清 */
   cut: boolean;
+  /** 一直听(右上角那颗开着);hearing = 服务端说孩子在说;ducked = 嘴的声音压低着;muted = 孩子点胶囊关了麦 */
+  open: boolean;
+  hearing: boolean;
+  ducked: boolean;
+  muted: boolean;
 }
 
 /**
@@ -19,7 +25,8 @@ export interface LiveModel {
  * stage 开 / 关舞台、拿起相机 · recStart 按下录音键 · recEnd 松手、上滑、关舞台(停录);
  * 声音的:audio 嘴的一块声音到了 · drained 孩子端的队列放完了(play:刚念完的那句 [[play]] 到小课堂卡,open = 能放、skip = 课包读不出来)·
  * cardEnded 卡的声音念完 / 停了 · lectureDone 小课堂那一段放完 / 孩子关了;
- * 服务端的:flush 清播放队列 · cards 卡铺上来、老师写完 · drop 连不上 / 断了;页面的:reset 换老师、关老师页
+ * 服务端的:flush 清播放队列 · cards 卡铺上来、老师写完 · drop 连不上 / 断了;页面的:reset 换老师、关老师页;
+ * 一直听:listen 孩子点右上角的开关 · mute / unmute 点麦克风胶囊 · vad 服务端说孩子开口 / 说完 · duck / unduck 服务端让嘴的声音压低 / 恢复
  */
 export type LiveEvent =
   | { type: 'press' }
@@ -38,12 +45,19 @@ export type LiveEvent =
   | { type: 'recStart' }
   | { type: 'recEnd' }
   | { type: 'drop' }
-  | { type: 'reset' };
+  | { type: 'reset' }
+  | { type: 'listen'; open: boolean }
+  | { type: 'mute' }
+  | { type: 'unmute' }
+  | { type: 'vad'; on: boolean }
+  | { type: 'duck' }
+  | { type: 'unduck' };
 
 /**
  * 要做的事,按顺序执行。hold / release / hush / send = 告诉服务端(send 的 body 页面带上);enqueue = 放刚到的这块嘴的声音(没有就丢掉);
  * flush = 清掉孩子端没放的嘴的声音;stopCard / playCard = 停 / 念卡上的声音;openLecture / stopLecture = 铺满放 / 停下小课堂那一段(舞台停在那一帧);
- * staged = 告诉服务端那一段放完了(后面的讲稿接着交给嘴);board = 这位老师这一次回到板书;render = 重画字幕与头像
+ * staged = 告诉服务端那一段放完了(后面的讲稿接着交给嘴);board = 这位老师这一次回到板书;render = 重画字幕与头像;
+ * 一直听:listen = 告诉服务端换了模式;gate = 告诉服务端推 / 不推了(on);duck / unduck = 嘴的声音压到三成 / 恢复
  */
 export type LiveEffect =
   | { kind: 'hold' }
@@ -58,10 +72,19 @@ export type LiveEffect =
   | { kind: 'stopLecture' }
   | { kind: 'staged' }
   | { kind: 'board' }
-  | { kind: 'render' };
+  | { kind: 'render' }
+  | { kind: 'listen' }
+  | { kind: 'gate'; on: boolean }
+  | { kind: 'duck' }
+  | { kind: 'unduck' };
 
 export function initialLive(): LiveModel {
-  return { status: 'quiet', cut: false };
+  return { status: 'quiet', cut: false, open: false, hearing: false, ducked: false, muted: false };
+}
+
+/** 一直听时推不推孩子的声音:没关麦,卡没在念、没在录、小课堂没在放(这些时候进麦的不是对老师说的) */
+export function liveGate(m: LiveModel): boolean {
+  return m.open && !m.muted && m.status !== 'card' && m.status !== 'recording' && m.status !== 'lecture' && m.status !== 'holding';
 }
 
 /** 停掉孩子端在出的声音:嘴的清掉、卡的停、小课堂那一段停下 */
@@ -72,13 +95,21 @@ function hushLocal(m: LiveModel, fx: LiveEffect[]): void {
 }
 
 export function liveStep(model: LiveModel, ev: LiveEvent): { model: LiveModel; effects: LiveEffect[] } {
+  const r = liveTransition(model, ev);
+  // 推不推变了就告诉服务端(一直听;关的时候孩子说到一半的那句作废)
+  if (liveGate(model) !== liveGate(r.model)) r.effects.push({ kind: 'gate', on: liveGate(r.model) });
+  return r;
+}
+
+/** 名字别和 kid-board.ts 的 step 撞:两份都内联进孩子端页面 */
+function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; effects: LiveEffect[] } {
   const fx: LiveEffect[] = [];
   let m = model;
   const to = (status: LiveStatus, extra: Partial<LiveModel> = {}): void => { m = { ...m, status, ...extra }; };
   switch (ev.type) {
     case 'press':
-      // 在录时输入条那颗不接(录音卡自己的键在录)
-      if (m.status === 'recording' || m.status === 'holding') break;
+      // 在录时输入条那颗不接(录音卡自己的键在录);一直听时那条是胶囊,不是按住说话
+      if (m.status === 'recording' || m.status === 'holding' || m.open) break;
       hushLocal(m, fx);
       fx.push({ kind: 'hold' });
       to('holding', { cut: m.status === 'mouth' });
@@ -116,6 +147,7 @@ export function liveStep(model: LiveModel, ev: LiveEvent): { model: LiveModel; e
       break;
     case 'flush':
       fx.push({ kind: 'flush' });
+      if (m.ducked) { fx.push({ kind: 'unduck' }); m = { ...m, ducked: false }; }
       if (m.status === 'mouth') { to('quiet'); fx.push({ kind: 'render' }); }
       break;
     case 'cardTap':
@@ -149,11 +181,43 @@ export function liveStep(model: LiveModel, ev: LiveEvent): { model: LiveModel; e
       break;
     case 'drop':
       fx.push({ kind: 'flush' }, { kind: 'stopCard' }, { kind: 'stopLecture' }, { kind: 'board' });
-      m = initialLive();
+      if (m.ducked) fx.push({ kind: 'unduck' });
+      // 一直听是孩子选的说话方式,不是声音的状态:清了也留着
+      m = { ...initialLive(), open: m.open };
       break;
     case 'reset':
       fx.push({ kind: 'flush' }, { kind: 'stopCard' }, { kind: 'stopLecture' });
-      m = initialLive();
+      if (m.ducked) fx.push({ kind: 'unduck' });
+      m = { ...initialLive(), open: m.open };
+      break;
+    case 'listen':
+      // 手还按着就换了模式:那一下作废
+      if (m.status === 'holding') { fx.push({ kind: 'hush' }); to('quiet'); }
+      fx.push({ kind: 'listen' });
+      if (m.ducked) fx.push({ kind: 'unduck' });
+      m = { ...m, open: ev.open, hearing: false, ducked: false, muted: false };
+      fx.push({ kind: 'render' });
+      break;
+    case 'mute':
+    case 'unmute':
+      if (!m.open || m.muted === (ev.type === 'mute')) break;
+      m = { ...m, muted: ev.type === 'mute', hearing: false };
+      fx.push({ kind: 'render' });
+      break;
+    case 'vad':
+      if (!m.open || m.hearing === ev.on) break;
+      m = { ...m, hearing: ev.on };
+      fx.push({ kind: 'render' });
+      break;
+    case 'duck':
+      if (m.ducked) break;
+      m = { ...m, ducked: true };
+      fx.push({ kind: 'duck' });
+      break;
+    case 'unduck':
+      if (!m.ducked) break;
+      m = { ...m, ducked: false };
+      fx.push({ kind: 'unduck' });
       break;
   }
   return { model: m, effects: fx };

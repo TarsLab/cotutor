@@ -115,6 +115,15 @@ try {
   const dl2 = (() => { try { return readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.where === 'live').at(-1); } catch { return null; } })();
   if (process.env.PROBE_DEBUG) console.log(readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => { const r = JSON.parse(l); return `${r.at.slice(11, 23)} ${r.where} ${JSON.stringify(r.ev)}`; }).join('\n'));
   ok('切后台再回来:麦克风重开(第二次 getUserMedia)、实时那个 AudioContext 换了一个新的,再按住照样推得上去、诊断记「发了」', back.gum === 2 && back.ctx === 2 && back.listening && sent2 > 0 && fake.conns.at(-1).audio > a0 && dl2?.ev.some((e) => e[0] === 'up' && e[2] === 'sent') && dl2.peak > 0, JSON.stringify({ ...back, sent2, server: fake.conns.at(-1).audio - a0, diag: dl2 }));
+
+  // 一直听(《wip/实时老师常开麦设计.md》):点右上角的开关 → 不按也推;还是那一路麦克风(iPad 上再 getUserMedia 一次会把先开的那路弄哑)
+  const g0 = await page.evaluate(() => ({ gum: window.__gum, sent: window.__sentBin }));
+  const nc = fake.conns.length;
+  const lb = await page.evaluate(() => { const r = document.querySelector('#lv-listen').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  await page.mouse.click(lb.x, lb.y);
+  await sleep(2000);
+  const open = await page.evaluate(() => ({ gum: window.__gum, sent: window.__sentBin, lvOpen: document.body.classList.contains('lv-open'), err: window.__err }));
+  ok('一直听:点开关换一条开 VAD 的连接;不按也推;还是那一路麦克风(没再 getUserMedia);页面没报错', open.lvOpen && fake.conns.length > nc && fake.conns.at(-1).session?.turn_detection?.type === 'semantic_vad' && open.sent > g0.sent && open.gum === g0.gum && open.err.length === 0, JSON.stringify({ ...open, before: g0, conns: fake.conns.length - nc }));
 } finally {
   await browser.close();
   server.close();

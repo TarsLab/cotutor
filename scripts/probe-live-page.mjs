@@ -5,7 +5,8 @@
  * 无头 Chrome 带假麦克风开孩子端语文老师(新话题):
  *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴接住(字幕)→ 脑写的卡铺上、卡角是「?」、讲稿一句一句上字幕;
  *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点「?」= 问这张卡的一轮;不出卡的一轮板上留讲稿的字;嘴连不上回到板书;
- *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1);讲稿的 [[play]] 念完铺满放小课堂那一段,放完嘴才接着念(P3.2)。
+ *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1);讲稿的 [[play]] 念完铺满放小课堂那一段,放完嘴才接着念(P3.2);
+ *   右上角「一直听」:换一条开 VAD 的连接、不用按声音一直推、关麦就不推、一段声音收下了就是一轮(《wip/实时老师常开麦设计.md》)。
  * iPad 横屏、手机各截一张。
  * 用法:node scripts/probe-live-page.mjs [--out <截图目录>] [--keep]
  */
@@ -260,6 +261,40 @@ try {
   const resumed = await untilNode(() => said(/拿走 8 根/), 30000);
   const stillOpen = await evaluate(`Boolean(document.querySelector('#stage.on'))`);
   ok('[[play]]:念完那句铺满放小课堂那一段,放着时嘴不往下念;放完舞台停在末帧不关、嘴接着念后面的', staged && during.first && !during.rest && resumed && stillOpen, JSON.stringify({ staged, during, resumed, stillOpen }));
+
+  // ---- 一直听(《wip/实时老师常开麦设计.md》):右上角开关 → 换一条开 VAD 的连接;不用按,假麦克风的声音一直推;关麦就不推;一段声音收下了就是一轮 ----
+  await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  await evaluate(`document.querySelector('#back').click()`);
+  await sleep(300);
+  await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&new=1` });
+  await until(`Boolean(document.body && document.body.classList.contains('live'))`, 40);
+  await untilNode(() => Boolean(conn()?.session), 8000);
+  await sleep(400);
+  // 假麦克风是一秒一声的嘀:嘀一声 = 一段;先都转写成空的(当咳嗽放过)
+  fake.kidText = '';
+  const nOpen = fake.conns.length;
+  await tap('#lv-listen');
+  const switched = await untilNode(() => fake.conns.length > nOpen && conn().session?.turn_detection?.type === 'semantic_vad', 8000);
+  await sleep(600);
+  const ui = await evaluate(`({ open: document.body.classList.contains('lv-open'), pressed: document.querySelector('#lv-listen').getAttribute('aria-pressed'), mic: getComputedStyle(document.querySelector('#lv-mic')).display, ph: document.querySelector('#ph').textContent })`);
+  const a1 = conn().audio;
+  await sleep(1500);
+  const pushedOpen = conn().audio - a1;
+  ok('点「一直听」:换一条开 VAD 的连接;右上角亮、输入条里有麦克风、写「我在听」;不用按,声音一直推', switched && ui.open && ui.pressed === 'true' && ui.mic !== 'none' && ui.ph.startsWith('我在听') && pushedOpen > 3200, JSON.stringify({ switched, ui, pushedOpen }));
+  console.log('  ', await shot('live-open-ipad.png'));
+  await tap('#lv-mic');
+  await sleep(300);
+  const a2 = conn().audio;
+  await sleep(1200);
+  const pushedMuted = conn().audio - a2;
+  const mutedUi = await evaluate(`({ off: document.querySelector('#lv-mic').classList.contains('off'), ph: document.querySelector('#ph').textContent })`);
+  ok('点麦克风关麦:不推了、写「麦关了」', pushedMuted === 0 && mutedUi.off && mutedUi.ph.startsWith('麦关了'), JSON.stringify({ pushedMuted, mutedUi }));
+  await tap('#lv-mic');
+  const r0 = conn().responses.length;
+  fake.kidTexts = ['老师一直听怎么写'];
+  const took = await untilNode(() => conn().responses.slice(r0).some((r) => r?.instructions === catchCue('voice')), 10000);
+  const turned = await until(`[...document.querySelectorAll('#board .sec .sh')].some((x) => x.textContent.includes('老师一直听怎么写'))`, 80);
+  ok('一直听:一段声音转写收下 → 嘴接住、脑开一轮,节头是孩子那句(没按过)', took && turned, JSON.stringify({ took, turned }));
 
   ok('页面没有报错', errors.length === 0, errors.slice(0, 3).join(' | '));
 } finally {

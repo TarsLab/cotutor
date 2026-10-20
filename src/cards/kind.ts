@@ -15,6 +15,8 @@ export interface CardKind<P = Record<string, unknown>, S = unknown> {
   props: z.ZodType<P>;
   /** 围栏正文 + 标签后的修饰词 → props;抛错 = 没解析成(退成文字卡显示原文,家长视图报一行) */
   parse(body: string, mods: readonly string[]): P;
+  /** 解析成了、但正文有一部分没用上(田字格的拼音对不上字数):给家长视图的一句;没有 / null = 不报 */
+  note?(body: string, props: P): string | null;
   /** 剥掉不下发孩子端的字段(答案);没有 = 全给 */
   strip?(props: P): P;
   /** 孩子在卡上做的事的形状;没有 = 这种卡没有状态,PUT 一律 400 */

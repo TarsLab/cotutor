@@ -58,6 +58,8 @@ for (const f of fixtures) {
   check('卡写在句子后面,标注也认(整节找)', r.section.lines[0].marks[0]?.card === 0 && r.section.lines[0].anchor === null);
   const bad = parseBoard('```choice\n只有问题没有选项?\n```\n\n```text\n\n```\n\n一句。\n');
   check('解析不出的卡退成文字卡显示原文 + warning;孩子端什么都不报', bad.section.cards.length === 2 && bad.section.cards[0].kind === 'text' && bad.section.cards[0].props.text === '只有问题没有选项?' && bad.section.cards[1].kind === 'text' && bad.warnings.length === 2 && bad.warnings[0].text.includes('choice') && bad.warnings[1].text.includes('text'), JSON.stringify(bad));
+  const hz = parseBoard('```tianzige\n长大\nzhǎng dà\n```\n\n```tianzige\n鼓励\ngu li4 zz\n```\n\n「长」在这里读 zhǎng。\n');
+  check('田字格带拼音:对得上的进 props;对不上的卡照常只写字,记一句 warning(不是 fallback)', JSON.stringify(hz.section.cards.map((c) => c.props)) === '[{"chars":"长大","pinyin":["zhǎng","dà"]},{"chars":"鼓励"}]' && hz.warnings.length === 1 && hz.warnings[0].text.includes('拼音') && !hz.warnings[0].fallback, JSON.stringify(hz));
   const open = parseBoard('一句。\n```choice\n问?\n- [x] 对\n');
   check('围栏没闭合(最终文本):当到文末成卡,记一句 warning', open.section.cards.length === 1 && open.section.cards[0].kind === 'choice' && open.warnings[0].text.includes('没闭合'), JSON.stringify(open));
 }

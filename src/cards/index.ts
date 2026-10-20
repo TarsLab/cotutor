@@ -100,7 +100,8 @@ export function parseCard(tag: string, body: string, place: CardPlace = 'board')
   const um = TEXTUAL.has(kind.name) ? unmark(body) : { body, had: false };
   try {
     const props = kind.props.parse(kind.parse(um.body, mods)) as Record<string, unknown>;
-    return { card: { kind: kind.name, props }, ...(um.had ? { warning: `卡里的方括号去掉了:${name} — [词] 标注只写在讲稿句里,不写在卡里` } : {}) };
+    const notes = [um.had ? `卡里的方括号去掉了:${name} — [词] 标注只写在讲稿句里,不写在卡里` : null, kind.note?.(um.body, props) ?? null].filter((x): x is string => Boolean(x));
+    return { card: { kind: kind.name, props }, ...(notes.length ? { warning: notes.join(';') } : {}) };
   } catch (err) {
     const why = err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join('.')}:${i.message}`).join(';') : err instanceof Error ? err.message : String(err);
     return asText(`卡片没解析成:${name} — ${why}`);

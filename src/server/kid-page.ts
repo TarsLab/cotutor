@@ -1517,7 +1517,10 @@ __AUDIO_JS__
       case 'tianzige': {
         // 轻卡,没有舞台:点字就写,不开舞台;讲到它时 setNow 写一遍
         const el = h('div', { class: 'c c-tianzige', 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), 'data-ch': String(p.chars || '') });
-        for (const ch of Array.from(String(p.chars || ''))) el.append(tianzigeBox(ch));
+        // 带拼音的:每个字一列,拼音在格子上方(像课本);老师写的是一字一个,对不上解析时就没要
+        const chs = Array.from(String(p.chars || ''));
+        const py = Array.isArray(p.pinyin) && p.pinyin.length === chs.length ? p.pinyin : null;
+        for (const [i, ch] of chs.entries()) el.append(py ? h('div', { class: 'hzc' }, h('span', { class: 'py' }, String(py[i])), tianzigeBox(ch)) : tianzigeBox(ch));
         const ab = board ? againBtn(c) : null;
         if (ab) el.append(ab);
         return el;

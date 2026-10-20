@@ -207,6 +207,7 @@ export const MOCK_TUTORS: MockTutor[] = [
 你来画一条蛇,画好了给我看看。`,
       `~~~tianzige
 鼓励
+gǔ lì
 ~~~
 
 你说的是加油打气的那个鼓励吧,看,鼓先写,励后写。
@@ -484,6 +485,7 @@ for: ${today}
 
 \`\`\`tianzige
 塘脑袋
+táng nǎo dai
 \`\`\`
 
 \`\`\`dictation chinese-tutor

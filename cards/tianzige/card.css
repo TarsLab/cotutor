@@ -8,6 +8,10 @@
 .hz .ghost.done { fill:var(--ink); }
 .hz .ink { stroke:var(--ink); stroke-width:200; fill:none; stroke-linecap:round; stroke-linejoin:round; }
 .hz .n { position:absolute; right:6px; bottom:2px; font-size:11px; color:#8a857c; line-height:1; }
+/* 带拼音的:一字一列,拼音在格子上方,像课本 */
+.hzc { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.hzc .py { font-size:20px; line-height:1.2; color:var(--ink); letter-spacing:.5px; font-family:-apple-system,"Helvetica Neue",Arial,sans-serif; }
 #st-body .hz { width:180px; height:180px; }
+#st-body .hzc .py { font-size:26px; }
 #st-body .hz .n { font-size:13px; }
-@media (max-width: 480px) { .hz { width:96px; height:96px; } }
+@media (max-width: 480px) { .hz { width:96px; height:96px; } .hzc .py { font-size:18px; } }

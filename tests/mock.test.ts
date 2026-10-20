@@ -37,7 +37,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '鼓励怎么写' });
   await m.settle();
   const dh = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('田字格卡:第四节第一张是 tianzige「鼓励」,没有状态、不剥东西', dh.messages[3].section?.cards[0].kind === 'tianzige' && dh.messages[3].section?.cards[0].props.chars === '鼓励' && dh.messages[3].section?.cards[1].kind === 'text', JSON.stringify(dh.messages[3].section?.cards));
+  check('田字格卡:第四节第一张是 tianzige「鼓励」带拼音,没有状态、不剥东西', dh.messages[3].section?.cards[0].kind === 'tianzige' && dh.messages[3].section?.cards[0].props.chars === '鼓励' && JSON.stringify(dh.messages[3].section?.cards[0].props.pinyin) === '["gǔ","lì"]' && dh.messages[3].section?.cards[1].kind === 'text', JSON.stringify(dh.messages[3].section?.cards));
   const hzOk = await get('/api/kid/tianzige/' + encodeURIComponent('鼓'));
   const hzNo = await get('/api/kid/tianzige/' + encodeURIComponent('ab'));
   check('笔顺数据:鼓 13 笔、每笔轮廓与中线成对;不是汉字 404', hzOk.status === 200 && (hzOk.json as { strokes: string[]; medians: number[][][] }).strokes.length === 13 && (hzOk.json as { medians: number[][][] }).medians.length === 13 && hzNo.status === 404, JSON.stringify(hzNo));

@@ -45,6 +45,18 @@ import { check, done } from './_check.ts';
   check('word:emoji、词、分段;中文悄悄去掉不报;资产一段 1.mp3 念这个词;标题是词', wd.card.kind === 'word' && JSON.stringify(wd.card.props) === '{"word":"apple","chunks":["ap","ple"],"emoji":"🍎"}' && !wd.warning && JSON.stringify(cardAssets(wd.card)) === '[{"file":"1.mp3","text":"apple"}]' && cardLabel(wd.card) === 'apple', JSON.stringify(wd));
   check('word 分段:空格、连字符跟前一段;拼不回这个词 / 只有一段就不要分段', JSON.stringify(wordChunks('ice cream', 'ice cr-ea-m')) === '["ice ","cr","ea","m"]' && JSON.stringify(wordChunks('T-shirt', 'T-sh-ir-t')) === '["T-","sh","ir","t"]' && wordChunks('apple', 'a-pl') === undefined && wordChunks('apple', 'apple') === undefined && wordChunks('apple', '苹-果') === undefined && !('chunks' in parseCard('word', 'apple\na-pl').card.props));
   check('word 退文字卡:只有中文、整句、数字、太长', ['苹果', 'I like apples very much', 'room 101', 'supercalifragilistic'].every((b) => parseCard('word', b).card.kind === 'text' && parseCard('word', b).warning?.includes('word') === true) && parseCard('word', "don't").card.props.word === "don't" && parseCard('word', 'apple (苹果)').card.props.word === 'apple');
+  {
+    // 田字格带拼音(2026-10-21):第二行一字一个音节,调号或数字调;对不上卡照常只写字 + warning
+    const tz = (b: string) => parseCard('tianzige', b);
+    check('tianzige:第二行拼音,调号原样、数字调转调号、v 当 ü', JSON.stringify(tz('鼓励\ngǔ lì').card.props) === '{"chars":"鼓励","pinyin":["gǔ","lì"]}' && JSON.stringify(tz('长大\nzhang3 da4').card.props.pinyin) === '["zhǎng","dà"]' && JSON.stringify(tz('绿\nlv4').card.props.pinyin) === '["lǜ"]' && !tz('鼓励\ngǔ lì').warning);
+    check('tianzige:轻声不写数字也认(脑袋 nǎo dai)', JSON.stringify(tz('脑袋\nnǎo dai').card.props.pinyin) === '["nǎo","dai"]');
+    check('tianzige:没有拼音那行照旧合法、没 warning;字分两行照旧连起来', JSON.stringify(tz('鼓励').card.props) === '{"chars":"鼓励"}' && !tz('鼓励').warning && tz('鼓\n励').card.props.chars === '鼓励');
+    const short = tz('鼓励\ngǔlì');
+    const junk = tz('鼓励\ngu3 li9');
+    const mixed = tz('鼓励\ngǔ3 lì');
+    check('tianzige:音节数对不上、不像拼音、调号数字混写 → 卡照常只写字 + warning(不退文字卡)', [short, junk, mixed].every((r) => r.card.kind === 'tianzige' && r.card.props.chars === '鼓励' && !('pinyin' in r.card.props) && r.warning?.includes('拼音') === true && !r.fallback), JSON.stringify([short, junk, mixed]));
+    check('tianzige:拼音和字同一行 → 文字卡(fallback)', tz('鼓励 gǔ lì').card.kind === 'text' && tz('鼓励 gǔ lì').fallback === true);
+  }
   const rd = parseCard('read', 'apple 苹果\nbanana 香蕉');
   check('read 资产:一段一个 <k>.mp3', JSON.stringify(cardAssets(rd.card)) === '[{"file":"1.mp3","text":"apple 苹果"},{"file":"2.mp3","text":"banana 香蕉"}]' && cardAssets({ kind: 'text', props: { text: 'x' } }).length === 0 && cardAssets({ kind: 'read', props: {} }).length === 0);
   const im = parseCard('image', 'captures/2026-09-10/a.jpg\n看第二行\n那里错了');

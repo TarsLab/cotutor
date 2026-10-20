@@ -28,7 +28,8 @@ import { join } from 'node:path';
 import { kidSendInput, type AppContext } from '../server/app.ts';
 import { BusyError, type SendStarted } from '../server/runner.ts';
 import type { RunEvent } from '../lib/events.ts';
-import { readIndex } from '../server/store.ts';
+import { readCardStates, readIndex } from '../server/store.ts';
+import { judgeCard } from '../cards/index.ts';
 import { localDate } from '../lib/conversation.ts';
 import { playsLecture } from '../lib/board.ts';
 import { catchCue, readCue, type CatchKind } from './lib/cue.ts';
@@ -437,7 +438,10 @@ export class LiveCall {
         const kind: CatchKind = body.ask === true && isObj(body.focus) ? 'ask' : body.action === 'submit' ? 'card' : Array.isArray(body.photos) && body.photos.length ? 'photo' : isObj(body.via) ? 'start' : 'text';
         this.interrupt();
         this.pre = [{ at, ev: { lane: 'mouth', kind: 'release', how: kind === 'ask' || kind === 'card' || kind === 'photo' ? kind : 'text' } }];
-        this.turn(kind, body, typeof body.text === 'string' ? body.text : '');
+        const text = typeof body.text === 'string' ? body.text : '';
+        // 交卡:应用先判(选择、填空有答案的),对了嘴当场说「对啦」
+        if (kind === 'card') { void this.judged(body).then((right) => { if (!this.ended) this.turn(right ? 'right' : 'card', body, text); }); break; }
+        this.turn(kind, body, text);
         break;
       }
       // 孩子端放完了小课堂那一段(或放不了、被关):后面的讲稿接着交给嘴
@@ -445,6 +449,22 @@ export class LiveCall {
       case 'view': this.rec.view(m.w, m.h); break;
       case 'bye': void this.end('bye'); break;
       default: break;
+    }
+  }
+
+  /** 交的那张卡对不对(focus.card = <job>/<n>,今天的;判不了、找不到都算 false,照旧「我看看」) */
+  private async judged(body: Record<string, unknown>): Promise<boolean> {
+    try {
+      const id = isObj(body.focus) && typeof body.focus.card === 'string' ? body.focus.card : '';
+      const m = /^(\d{4}-\d+)\/(\d+)$/.exec(id);
+      if (!m) return false;
+      const { ctx, tutor } = this.deps;
+      const date = localDate(ctx.now());
+      const card = (await readIndex(ctx.ws, tutor, date)).messages.find((x) => x.job === m[1])?.section?.cards[Number(m[2])];
+      const state = (await readCardStates(ctx.ws, tutor, date))[m[1]]?.[Number(m[2])]?.state;
+      return card ? judgeCard(card, state) === true : false;
+    } catch {
+      return false;
     }
   }
 

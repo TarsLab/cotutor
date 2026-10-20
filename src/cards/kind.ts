@@ -21,6 +21,11 @@ export interface CardKind<P = Record<string, unknown>, S = unknown> {
   state?: z.ZodType<S>;
   /** props + state → 给老师看的一句(不含卡的标题,那句由注册表拼);没有 = 状态原样 JSON。extra = 服务端另备的(录音卡的评测结果),孩子端没有 */
   describe?(props: P, state: S, extra?: unknown): string;
+  /**
+   * 孩子交的对不对:true 对、false 不对、null 判不了(老师没写答案、没做完)。只给实时老师交卡时嘴当场说「对啦」用
+   * (《wip/实时老师设想.md》拍板 11:对了当场说,不对照旧「我看看」等老师讲);卡上照旧不画对错
+   */
+  judge?(props: P, state: S): boolean | null;
   /** 这张卡要在后台预生成的配音资产(点读的段):文件名相对这张卡的资产目录 <日期>.<job>.cards/<n>/,text 是要念的字 */
   assets?(props: P): { file: string; text: string }[];
 }

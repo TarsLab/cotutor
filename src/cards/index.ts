@@ -148,6 +148,14 @@ export function parseCardState(card: BoardCard, raw: unknown): CardStateResult {
   return { ok: true, state: r.data };
 }
 
+/** 孩子交的这张卡对不对(卡的 judge;props 要用索引里带答案的):true / false / null 判不了 */
+export function judgeCard(card: BoardCard, state: unknown): boolean | null {
+  const k = cardKind(card.kind);
+  if (!k?.judge || !k.state) return null;
+  const r = k.state.safeParse(state);
+  return r.success ? k.judge(card.props, r.data) : null;
+}
+
 /**
  * 给老师的一句:「choice「问题」 选了「B …」(答案:「…」)」。props 用索引里的(带答案),状态是孩子的;
  * 没有 describe 的种类把状态原样 JSON。id 由调用方拼在前面(<job>/<n>)。extra = 服务端另备的(录音卡的评测结果,见 record.ts)

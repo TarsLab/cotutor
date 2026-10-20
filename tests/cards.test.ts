@@ -1,5 +1,5 @@
 /** 卡的注册表:每种卡的解析 / 剥秘密 / 语法表;不认识的标签;解析失败的退路。 */
-import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, kindsFor, parseCard, parseCardState, stripSecrets, tutorCardKinds, wordChunks } from '../src/cards/index.ts';
+import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, judgeCard, kindsFor, parseCard, parseCardState, stripSecrets, tutorCardKinds, wordChunks } from '../src/cards/index.ts';
 import { BOARD_CARD_KINDS } from '../src/schema/config.ts';
 import { boardSkillDoc, boardSyntaxDoc } from '../src/cards/docs.ts';
 import { check, done } from './_check.ts';
@@ -28,6 +28,15 @@ import { check, done } from './_check.ts';
   check('老对话里存下的 scene 卡:下发孩子前退成一段字,只留老师那句,题面 / 讲法与课包 id 不下发', JSON.stringify(stripSecrets({ cards: [{ kind: 'scene', props: { bundle: '2026-09-09-guilv', text: '我去画出来。', brief: '题面:x\n讲法:y' } }], lines: [] }).cards) === '[{"kind":"text","props":{"text":"我去画出来。"}}]');
   const br = parseCard('text', '# 认边\n两条短边叫[直角边],最长的一条叫[斜边]');
   check('卡里写了讲稿的 [词] 语法:括号剥掉 + warning(孩子端不显示括号)', br.card.props.text === '两条短边叫直角边,最长的一条叫斜边' && br.card.props.title === '认边' && br.warning?.includes('方括号') === true, JSON.stringify(br));
+  {
+    // 交卡时应用判对错(实时老师嘴当场说「对啦」;《wip/实时老师设想.md》拍板 11):有答案才判,没做完、没答案 = null
+    const ch = parseCard('choice', '三角形有几个角?\n- [x] 三个\n- [ ] 四个').card;
+    const multi = parseCard('choice', '哪些是双数?\n- [x] 2\n- [ ] 3\n- [x] 4').card;
+    const noKey = parseCard('choice', '你喜欢哪个?\n- [ ] 猫\n- [ ] 狗').card;
+    check('选择题判对错:选的正好是答案那几项才对(多选少选都不对);没选、老师没标答案判不了', judgeCard(ch, { picked: [0] }) === true && judgeCard(ch, { picked: [1] }) === false && judgeCard(ch, { picked: [0, 1] }) === false && judgeCard(multi, { picked: [2, 0] }) === true && judgeCard(multi, { picked: [0] }) === false && judgeCard(ch, { picked: [] }) === null && judgeCard(noKey, { picked: [0] }) === null && judgeCard(ch, { picked: 'x' }) === null);
+    const fl = parseCard('fill', '2×4 = ___,4+4 = ___\n= 8\n= ８').card;
+    check('填空判对错:每空对上才对(全角半角、空格、大小写不算);没填完、没写答案判不了', judgeCard(fl, { answers: [' 8', '8'] }) === true && judgeCard(fl, { answers: ['8', '9'] }) === false && judgeCard(fl, { answers: ['8', ''] }) === null && judgeCard(parseCard('fill', '___ 加 1\n').card, { answers: ['1'] }) === null && judgeCard(parseCard('fill', 'Hello ___\n= World').card, { answers: ['world'] }) === true && judgeCard(parseCard('text', '一段字').card, {}) === null);
+  }
   const brc = parseCard('choice', '[斜边]是多少?\n- [ ] 6\n- [x] 5');
   check('choice 的 - [ ] / - [x] 不被当成标注剥掉;问题里的括号剥', brc.card.props.question === '斜边是多少?' && JSON.stringify(brc.card.props.answer) === '[1]' && (brc.card.props.options as string[]).join() === '6,5', JSON.stringify(brc));
   check('code / canvas 的正文不动方括号(JSON 里有 [ ])', parseCard('python', 'a = [1, 2]').card.props.text === 'a = [1, 2]' && !parseCard('canvas', '{"skeletons":[{"type":"rectangle","x":0,"y":0,"width":10,"height":10}]}').warning && parseCard('text', '一段没有括号的话').warning === undefined);

@@ -6,9 +6,9 @@
 
 /**
  * 孩子这一轮是怎么来的:按住说的、打字的、拍的照片、交的卡、点了卡上的「?」、点了首页的按钮(activity 的开场、接着);
- * answer = 按住说的、上一句念给他的是问句(看图说话这种一问一答);empty = 按住了但转写是空的
+ * answer = 按住说的、上一句念给他的是问句(看图说话这种一问一答);right = 交的卡应用判了是对的;empty = 按住了但转写是空的
  */
-export type CatchKind = 'voice' | 'answer' | 'text' | 'photo' | 'card' | 'ask' | 'start' | 'empty';
+export type CatchKind = 'voice' | 'answer' | 'text' | 'photo' | 'card' | 'right' | 'ask' | 'start' | 'empty';
 
 const CATCH: Record<CatchKind, string> = {
   // 说接下来做什么,不复述(2026-10-20,《wip/实时老师设想.md》拍板 10;照 Qwen-Live-Harness 的 Tool Preambles):照字复述会把认错的字念出来
@@ -22,6 +22,8 @@ const CATCH: Record<CatchKind, string> = {
   text: '孩子打字发来一句。只说一句「我看看你写的」,说完就停。',
   photo: '孩子拍来了照片。只说一句「我看看」,不说你看到了什么,说完就停。',
   card: '孩子把卡上的答案交给你了。只说一句「我看看」,不说对错,说完就停。',
+  // 选择、填空交了,应用判了是对的(答案在服务端):当场说;不对的照旧「我看看」,等老师讲(《wip/实时老师设想.md》拍板 11)
+  right: '孩子把卡上的答案交给你了,答对了。只说一句「对啦」,说完就停。',
   ask: '孩子点了卡上的问号,想问这张卡。只说一句「这张卡呀,我讲给你听」,说完就停。',
   // 首页按钮发的那条是按钮上的字,不是孩子说的;脑第一句要等它读完 activity 起来
   start: '孩子点了首页上的一个按钮,要开始一件事。只说一句「好,我们开始吧」,说完就停。',

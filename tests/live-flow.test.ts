@@ -288,6 +288,35 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 {
+  // ---- 交卡(P4.4,设想稿拍板 11):应用判了对的,嘴当场说「对啦」;不对的照旧「我看看」等老师 ----
+  const k = await connect('chinese-tutor');
+  await until(() => has(k, (m) => m.t === 'ready'));
+  const c = fake.conns.at(-1)!;
+  fake.kidText = '老师板书再来一遍';
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: { newThread: true } }));
+  await until(() => has(k, (m) => m.t === 'turn'), 10000);
+  const job = k.msgs.find((m) => m.t === 'turn')!.job as string;
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  await sleep(400);
+  const submit = async (picked: number[]): Promise<string | undefined> => {
+    const put = await fetch(`http://127.0.0.1:${port}/api/kid/conversations/chinese-tutor/cards/${job}/1`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ picked }) });
+    const r = c.responses.length;
+    k.ws.send(JSON.stringify({ t: 'send', body: { text: '', action: 'submit', focus: { card: `${job}/1` } } }));
+    await until(() => c.responses.length > r, 5000);
+    await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+    await sleep(400);
+    return put.ok ? c.responses[r]?.instructions : `put ${put.status}`;
+  };
+  const right = await submit([0]);
+  const wrong = await submit([1]);
+  check('交卡:选对了嘴当场说「对啦」;选错了照旧「我看看」', right === catchCue('right') && wrong === catchCue('card'), JSON.stringify({ right, wrong }));
+  k.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => k.closed !== null);
+}
+
+{
   // ---- 换连接(P3.3):嘴最近一次回答的输入过了线,安静时换一条新的;孩子端不知道,下一轮在新连接上 ----
   liveDeps.swapTokens = 800; // 假百炼每次回答报输入 865
   const k = await connect('chinese-tutor');

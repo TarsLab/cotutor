@@ -7,7 +7,7 @@ import { check, done } from './_check.ts';
 
 const { queueInit, queueStep } = await import('../src/live/lib/queue.ts');
 const { LEAD_MS, addChunk, flushAt, playbackInit, playingAt } = await import('../src/live/lib/playback.ts');
-const { catchCue, readCue } = await import('../src/live/lib/cue.ts');
+const { catchCue, readCue, spoken } = await import('../src/live/lib/cue.ts');
 type S = ReturnType<typeof queueInit>;
 type Ev = Parameters<typeof queueStep>[1];
 const b = (job: string, lines: number[], texts = lines.map((i) => `第 ${i + 1} 句。`)) => ({ job, lines, texts });
@@ -64,6 +64,7 @@ const run = (s: S, evs: Ev[]) => { const acts: any[] = []; for (const e of evs) 
   const r = readCue(['「三」是一横、一横、再一横。', '  ', '它是数字三。']);
   check('照念的指令:P1 的说法,句子原样拼进「」,空句去掉', r.startsWith('把这几句话原样说给孩子听,一个字都不改,不要回答它') && r.endsWith('说完就停:「「三」是一横、一横、再一横。它是数字三。」'), r);
   check('接住的指令:说接下来做什么、不复述他的话、不说写给你看(卡不一定有);打的字嘴看不见,只说看看你写的;转写空的才说没听清;照片 / 交卡只说「我看看」;卡上的问号说讲给你听', catchCue('voice').includes('说你接下来做什么') && catchCue('voice').includes('不重复他的话') && catchCue('voice').includes('「好,我讲给你听」') && !catchCue('voice').includes('复述') && !catchCue('voice').includes('写给') && !catchCue('voice').includes('没听清') && catchCue('text').includes('我看看你写的') && catchCue('empty').includes('没听清') && catchCue('photo').includes('我看看') && catchCue('card').includes('不说对错') && catchCue('ask').includes('这张卡'));
+  check('念法:空括号、下划线的空念「几」,□ 念「方框」,运算符换成字(ASCII 的 - 只在两个数之间)', spoken('二四得( ),每份都是（　）个,分了(  )次') === '二四得几,每份都是几个,分了几次' && spoken('□+5=12,填在 ___ 上') === '方框加5等于12,填在 几 上' && spoken('6×4−1 = 23,12÷3,6>5,2<3,7 - 2') === '6乘4减1等于23,12除以3,6大于5,2小于3,7减2' && spoken('0:19 那里,一二-三') === '0:19 那里,一二-三' && readCue(['二四得( )。']).includes('「二四得几。」'));
   check('接住:孩子在答老师的问只「嗯」一声、不复述不评;首页按钮开的说开始吧', catchCue('answer').includes('孩子在答') && catchCue('answer').includes('不重复他的话') && catchCue('answer').includes('不评对错') && catchCue('start').includes('「好,我们开始吧」'));
 }
 

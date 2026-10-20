@@ -32,8 +32,29 @@ export function catchCue(kind: CatchKind): string {
   return CATCH[kind];
 }
 
-/** 照念脑写的这一拍讲稿(几句连着念);句子原样拼起来放进「」 */
+/**
+ * 交给嘴之前,把它念不好的写法换成念法(板上、字幕照旧是原文)。2026-10-20 真连(照念 → 声音转写回字):× + − = ÷ > 1/2 都念对;
+ * 空括号念成「空格」「括号」(「每份都是( )个」成了「每份都是空格」),□ 念得含糊(「□+5=12」听成「正五等于十二」)。
+ * 空括号、下划线的空照数学老师的说法念「几」(「二四得几」「每份都是几个」),□ 念「方框」;换了以后「方框+5」的 + 念成「正」,
+ * 所以运算符一律换成字(+ 加、− 减、× 乘、÷ 除以、= 等于、> 大于、< 小于;ASCII 的 - 只在两个数之间算减)。
+ */
+export function spoken(text: string): string {
+  return text
+    .replace(/[(（][\s\u3000]*[)）]/g, '几')
+    .replace(/_{2,}/g, '几')
+    .replace(/□/g, '方框')
+    .replace(/\s*[+＋]\s*/g, '加')
+    .replace(/\s*[−－]\s*/g, '减')
+    .replace(/(\d)\s*-\s*(?=\d)/g, '$1减')
+    .replace(/\s*[×✕]\s*/g, '乘')
+    .replace(/\s*÷\s*/g, '除以')
+    .replace(/\s*[=＝]\s*/g, '等于')
+    .replace(/\s*[>＞]\s*/g, '大于')
+    .replace(/\s*[<＜]\s*/g, '小于');
+}
+
+/** 照念脑写的这一拍讲稿(几句连着念);句子换成念法(spoken)、原样拼起来放进「」 */
 export function readCue(texts: readonly string[]): string {
-  const said = texts.map((t) => t.trim()).filter(Boolean).join('');
+  const said = texts.map((t) => spoken(t.trim())).filter(Boolean).join('');
   return `把这几句话原样说给孩子听,一个字都不改,不要回答它,不加别的话,说完就停:「${said}」`;
 }

@@ -210,7 +210,8 @@ export async function activityRunFor(root: string, tutor: string, name: string, 
   if (text === null) throw new UsageError(`${file} 不在;cotutor activity check ${tutor} 看这位老师有哪些`);
   const params: Record<string, string> = {};
   for (const pair of raw.split(/[;；]/).map((x) => x.trim()).filter(Boolean)) {
-    const m = /^([^=]+)=(.*)$/.exec(pair);
+    // 值可以有几行(口语课的口语单)
+    const m = /^([^=]+)=([\s\S]*)$/.exec(pair);
     if (!m) throw new UsageError(`--param 写成「名=值」,几个用 ; 隔开,如 --param '词=播种、羞愧;最多画=1'(「${pair}」不对)`);
     params[m[1].trim()] = m[2].trim();
   }

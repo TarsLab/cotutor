@@ -13,6 +13,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { USER_CONFIG } from '../cli/workspace.ts';
 import { DEV_CSS } from './dev-theme.ts';
+import { BRAND_FOOTER } from './brand.ts';
 
 /** 请求是谁发的:local = 本机(免密);parent = 带着有效 cookie;anon = 别的设备、没凭证 */
 export type Who = 'local' | 'parent' | 'anon';
@@ -160,7 +161,7 @@ export function gatePage(title: string): string {
 <title>${esc(title)} · 家长</title>
 <style>
 ${DEV_CSS}
-  body { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px 16px; }
+  body { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px 16px; }
   .gate { width:100%; max-width:360px; padding:28px 24px; box-shadow:var(--lift); }
   .gate h1 { margin:0 0 4px; font:600 18px/1.3 var(--sans); }
   .gate p { margin:0 0 18px; color:var(--muted); font-size:13px; }
@@ -179,6 +180,7 @@ ${DEV_CSS}
   <div class="msg" id="msg" role="alert"></div>
   <small>忘了?在电脑上重设:<code>cotutor pin</code>;不想要锁:<code>cotutor pin off</code>。</small>
 </form>
+${BRAND_FOOTER}
 <script>
 (() => {
   const f = document.getElementById('gate'), pin = document.getElementById('pin'), msg = document.getElementById('msg');

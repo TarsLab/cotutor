@@ -7,6 +7,7 @@
  */
 import { EN_BOX_CSS, EN_BOX_JS } from './en-box.ts';
 import { faviconLinks } from '../lib/favicon.ts';
+import { BRAND_FOOTER } from '../server/brand.ts';
 
 export const DICTATION_PARENT_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -61,6 +62,7 @@ ${EN_BOX_CSS}
   <div><div class="muted">家长 · 听写</div><h1>听写的结果</h1></div>
   <div class="dates" id="dates"></div>
   <div id="body"></div>
+  ${BRAND_FOOTER}
 </main>
 <script>
 (function () {

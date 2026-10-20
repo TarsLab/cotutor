@@ -5,6 +5,7 @@
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
 import { faviconLinks } from '../lib/favicon.ts';
+import { BRAND_FOOTER } from '../server/brand.ts';
 
 export const XLAOSHI_PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -136,6 +137,7 @@ ${faviconLinks()}
     </div>
     <div id="sessions"></div>
   </div>
+  ${BRAND_FOOTER}
 </section>
 
 <section class="view" id="v-talk">

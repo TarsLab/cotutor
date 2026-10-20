@@ -36,6 +36,7 @@ import { NEUTRAL_COLOR } from '../lib/tutor-color.ts';
 import { faviconLinks } from '../lib/favicon.ts';
 import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from './reel-dock.ts';
 import { inlineScript } from './inline-lib.ts';
+import { BRAND_FOOTER } from './brand.ts';
 import { albumSvg, cameraSvg } from './photo-ui.ts';
 import { AUDIO_CLIENT_JS } from '../live/audio-client.ts';
 
@@ -632,6 +633,7 @@ __REEL_DOCK_CSS__
   <div class="tutors" id="tutors"></div>
   <p id="rest">老师们休息中</p>
   <a class="c c-figshot" id="figshot" hidden><span class="avs"></span><span class="tx"><b>给老师们换个样子</b><span>帽子、脸、衣服,都由你来挑</span></span><span class="go">去搭</span></a>
+  __BRAND__
 </div>
 <div id="toast"></div>
 <iframe id="lc-frame" hidden title="小课堂"></iframe>
@@ -4220,5 +4222,5 @@ export interface KidPageMode {
 export function kidPage(title: string, mode: KidPageMode = {}, stageV = '0'): string {
   const shown = mode.parent ? `${title} · 家长` : title;
   const m: KidPageMode = mode.parent ? { ...mode, links: { dictationReel: '/parent/dictation/reel?id=', talkReel: '/parent/talk/reel?id=' } } : mode;
-  return KID_PAGE.replaceAll('__TITLE__', shown).replace('__SHORT__', shown).replace('__MODE__', JSON.stringify(m)).replace('__STAGE_V__', stageV).replace('__MANIFEST__', mode.parent ? '/parent/manifest.webmanifest' : '/manifest.webmanifest');
+  return KID_PAGE.replaceAll('__TITLE__', shown).replace('__SHORT__', shown).replace('__MODE__', JSON.stringify(m)).replace('__STAGE_V__', stageV).replace('__MANIFEST__', mode.parent ? '/parent/manifest.webmanifest' : '/manifest.webmanifest').replace('__BRAND__', mode.parent ? BRAND_FOOTER : '');
 }

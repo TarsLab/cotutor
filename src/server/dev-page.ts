@@ -11,6 +11,7 @@
  */
 import { faviconLinks } from '../lib/favicon.ts';
 import { DEV_CSS } from './dev-theme.ts';
+import { BRAND_NAME, BRAND_URL, brandLogo } from './brand.ts';
 
 export const DEV_PAGE = `<!doctype html>
 <html lang="zh-CN">
@@ -24,7 +25,7 @@ ${DEV_CSS}
 
   /* ---------- 侧栏:坐在纸上,当前那项白底浮起 ---------- */
   #side { display:flex; flex-direction:column; gap:14px; padding:18px 12px 16px 14px; overflow:auto; min-height:0; }
-  #side .brand { display:flex; align-items:center; gap:9px; padding:2px 8px; }
+  #side .brand { display:flex; align-items:center; gap:9px; padding:2px 8px; color:inherit; text-decoration:none; }
   #side .brand .logo { width:30px; height:30px; border-radius:9px; background:var(--accent); display:grid; place-items:center; flex:none; }
   #side .brand b { font-size:17px; font-weight:700; letter-spacing:-.01em; }
   #side .brand small { font-size:13px; color:var(--muted); }
@@ -540,7 +541,7 @@ ${DEV_CSS}
   }
 </style>
 <aside id="side">
-  <div class="brand"><span class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M7 9h6M7 12.5h9M9 21l3-4 3 4"/></svg></span><b>cotutor</b><small>工作台</small></div>
+  <a class="brand" href="${BRAND_URL}" target="_blank" rel="noopener" data-cotutor-brand><span class="logo">${brandLogo('#fff')}</span><b>${BRAND_NAME}</b><small>工作台</small></a>
   <div class="ws"><span class="ini" id="ws-ini">·</span><span><b id="title">cotutor</b><small id="ws-root"></small></span></div>
   <nav>
     <a href="#overview" data-tab="overview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.5 12 3.5l8.5 7V20a1 1 0 0 1-1 1h-4.5v-6h-6v6H4.5a1 1 0 0 1-1-1z"/></svg>概览</a>

@@ -8,6 +8,7 @@
  * 用 String.raw:脚本里的反斜杠原样留着;脚本里不写反引号和 ${。
  */
 import { faviconLinks } from '../lib/favicon.ts';
+import { BRAND_FOOTER } from './brand.ts';
 
 export const PARENT_HOME_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -119,6 +120,7 @@ ${faviconLinks()}
     </section>
     <div id="body"></div>
   </div>
+  ${BRAND_FOOTER}
 </div>
 <div class="sheet" id="sheet"><div class="wrap" id="sheet-in"></div></div>
 <div id="toast"></div>

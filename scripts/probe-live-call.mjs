@@ -6,6 +6,8 @@
  * 用法:node scripts/probe-live-call.mjs [--ws ~/cotutor/ray] [--out <目录>] [--voice Serena] [--tutor chinese-tutor] [--say 2026-10-18/1205-2,2026-10-18/1206-3]
  *   --say:按顺序发那位老师的哪几条(<日期>/<job>):按住说的推录音,拍照的那条把照片拷进临时 workspace 走 send;缺省语文老师「老师三明治怎么写」「能吃的三」两段,
  *   第二条起接着同一话题。数学:--tutor math-tutor --say 2026-10-18/1133-7,2026-10-18/1135-8,2026-10-18/1140-14(拍题、不会做、我才一年级)
+ *   --open:一直听(《wip/实时老师常开麦设计.md》):连接带 ?listen=open,不按;一直推声音(录音之间推静音),真百炼的 VAD 判开口 / 说完;
+ *   「松手」那一刻换成录音推完的那一刻(录音尾巴上本来就有一点静音)。
  */
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -22,6 +24,7 @@ const out = arg('--out', mkdtempSync(join(tmpdir(), 'cotutor-probe-live-call-'))
 const voice = arg('--voice', 'Serena');
 const tutor = arg('--tutor', 'chinese-tutor');
 const says = arg('--say', '2026-10-18/1205-2,2026-10-18/1206-3').split(',').map((x) => x.split('/'));
+const open = process.argv.includes('--open');
 mkdirSync(out, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const until = async (f, ms) => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(20); return f(); };
@@ -51,7 +54,7 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
 
 // ---- 孩子端:连上、按住推录音、松手 ----
-const ws = new WebSocket(`ws://127.0.0.1:${port}/api/live/${tutor}/ws`);
+const ws = new WebSocket(`ws://127.0.0.1:${port}/api/live/${tutor}/ws${open ? '?listen=open' : ''}`);
 ws.binaryType = 'arraybuffer';
 const msgs = [];
 const audio = [];
@@ -64,6 +67,9 @@ ws.onmessage = (e) => {
 await new Promise((r) => { ws.onopen = r; ws.onerror = r; });
 const ready = await until(() => msgs.some((m) => m.t === 'ready' || m.t === 'fallback'), 15000);
 if (!ready || msgs.some((m) => m.t === 'fallback')) { console.log('嘴没连上', JSON.stringify(msgs)); process.exit(1); }
+// 一直听:录音之间也一直推(静音),同孩子端开着麦
+let feeding = false;
+if (open) setInterval(() => { if (!feeding && ws.readyState === 1) ws.send(Buffer.alloc(3200)); }, 100);
 
 const report = [`# 实时老师整条线真跑(${new Date().toLocaleString('zh-CN')})`, '', `嘴 ${voice},脑 qwen ${tutor}(临时 workspace \`${wsRoot}\`)`, ''];
 let first = true;
@@ -74,10 +80,18 @@ for (const [date, job] of says) {
   const a0 = audio.length;
   if (m.voice) {
     const pcm = execFileSync('ffmpeg', ['-v', 'error', '-i', join(src, 'conversations', tutor, m.voice.audio), '-ac', '1', '-ar', '16000', '-f', 's16le', '-'], { maxBuffer: 64 << 20 });
-    ws.send(JSON.stringify({ t: 'hold' }));
-    for (let p = 0; p < pcm.length; p += 3200) { ws.send(pcm.subarray(p, p + 3200)); await sleep(100); }
-    t0 = Date.now();
-    ws.send(JSON.stringify({ t: 'release', body: first ? { newThread: true } : {} }));
+    if (open) {
+      ws.send(JSON.stringify({ t: 'ctx', body: first ? { newThread: true } : {} }));
+      feeding = true;
+      for (let p = 0; p < pcm.length; p += 3200) { ws.send(pcm.subarray(p, p + 3200)); await sleep(100); }
+      feeding = false;
+      t0 = Date.now();
+    } else {
+      ws.send(JSON.stringify({ t: 'hold' }));
+      for (let p = 0; p < pcm.length; p += 3200) { ws.send(pcm.subarray(p, p + 3200)); await sleep(100); }
+      t0 = Date.now();
+      ws.send(JSON.stringify({ t: 'release', body: first ? { newThread: true } : {} }));
+    }
   } else {
     // 拍照的那条:照片拷进临时 workspace 同一位置,走 send(同孩子端拍了发)
     for (const ph of m.photos ?? []) { mkdirSync(dirname(join(wsRoot, ph)), { recursive: true }); copyFileSync(join(src, ph), join(wsRoot, ph)); }
@@ -114,7 +128,9 @@ for (const [date, job] of says) {
   const ev = readFileSync(join(wsRoot, 'conversations', tutor, `${today}.${turn?.job}.events.jsonl`), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
   const line0 = ev.find((e) => e.lane === 'main' && e.kind === 'line' && e.line === 0)?.t;
   const startEv = ev.find((e) => e.lane === 'main' && e.kind === 'start');
-  report.push(`## Ray ${date} ${job}(当时认的「${m.text}」${m.photos?.length ? ',拍照' : ''})`, '',
+  const skips = mine.filter((x) => x.t === 'skip').map((x) => `${x.why}「${x.text}」`);
+  report.push(`## Ray ${date} ${job}(当时认的「${m.text}」${m.photos?.length ? ',拍照' : ''}${open ? ',一直听:「松手」= 录音推完' : ''})`, '',
+    ...(open ? [`- 一直听:vad 开 ${mine.filter((x) => x.t === 'vad' && x.on).length} 次、放过 ${skips.length} 句${skips.length ? `(${skips.join(' ')})` : ''}、压低 ${mine.filter((x) => x.t === 'duck').length} 次`] : []),
     `- realtime 认的:${kid}`,
     `- 嘴接住:「${dones[0] ?? ''}」,松手到首包 ${firstAudio} ms`,
     `- 脑:${turn?.job},讲稿 ${lines.length} 句、${sec?.cards?.length ?? 0} 张卡(${(sec?.cards ?? []).map((c) => c.kind).join('、')});进程起来到第一句定稿 ${line0 ?? '?'} ms${startEv?.warmMs !== undefined ? '(预热的)' : '(冷起)'}`,

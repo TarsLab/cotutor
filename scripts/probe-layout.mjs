@@ -105,7 +105,7 @@ try {
   await sleep(600);
   const n0 = await evaluate(`document.querySelectorAll('#board > .sec').length`);
   await evaluate(`window.__track = { sec: ${n0}, first: {} }; window.__moved = []; (() => { const t = document.querySelector('#typed'); t.value = '反过来呢?'; document.querySelector('#go').click(); return true; })()`);
-  // 前两张出来就拍一张(第三张是填空题,出来后会自己弹舞台)
+  // 前两张出来就拍一张(第三张是选择题,出来后会自己弹舞台)
   if (await until(`document.querySelectorAll('#board > .sec[data-sec="${n0}"] .row > [data-card]').length >= 2`, 80)) {
     await evaluate(`document.querySelector('#board > .sec[data-sec="${n0}"]').scrollIntoView({ block: 'start', behavior: 'instant' })`);
     console.log('  ', await shot('layout-live.png'));

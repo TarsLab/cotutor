@@ -12,6 +12,11 @@ export interface CardKind<P = Record<string, unknown>, S = unknown> {
   name: string;
   /** 能用在哪;缺省只板书。首页专属的卡(tutor 等)不进 cotutor-board 技能,老师写了退文字卡 */
   where?: readonly CardPlace[];
+  /**
+   * 停用了(fill,《卡片协议.md》拍板 3):哪儿都不能用(where 是空的),不进板书写法;旧记录里的照旧显示。
+   * 老师还写,就按它解析了退成文字卡,这里给文字卡上那句(答案不放进去)
+   */
+  retired?(props: P): string;
   props: z.ZodType<P>;
   /** 围栏正文 + 标签后的修饰词 → props;抛错 = 没解析成(退成文字卡显示原文,家长视图报一行) */
   parse(body: string, mods: readonly string[]): P;

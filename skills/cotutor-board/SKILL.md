@@ -1,6 +1,6 @@
 ---
 name: cotutor-board
-description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / fill / image / tianzige / word / lecture / canvas / record / paint / photo / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
+description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / image / tianzige / word / lecture / canvas / record / paint / photo / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
 disable-model-invocation: true
 ---
 
@@ -18,7 +18,8 @@ disable-model-invocation: true
 - 末句写成问句,孩子就得答你。什么时候问,见守则「答完就停」。
 - 末句是问句,播放器就停下等孩子。
 - **只有末句会停。** 中间的问句念完,接着念下一句,不等孩子。
-- 末句这一问能选,就配一张 `choice` 卡;能填,就配一张 `fill` 卡。卡在前,问句在后。
+- 末句这一问能选,就配一张 `choice` 卡。卡在前,问句在后。
+- 答案是一个数、一个词,不配卡:孩子开口说。
 - 开放的问题不用配卡。应用会把末句那一问补成板上的一张提问卡,你别自己再写一张。
 - 要孩子拍照片给你看,在节尾放一张 `photo` 卡,写要拍什么。末句请他拍下来发给你。
 
@@ -168,22 +169,6 @@ orange 橘子
 - [x] 苹果
 - [ ] 香蕉
 - [x] 西瓜
-```
-
-### fill — 填空
-
-句子里留空让孩子填;答案只有你知道。孩子在舞台里逐空打字(或按住说),「交给老师」就到你下一轮的上下文包里。
-
-句子里用 `___`(三个下划线)留空,下一行 `= 答案`;多个空按顺序各一行 `= 答案`。答案孩子看不到。
-
-```fill
-三角形的面积等于底乘高再除以___。
-= 2
-```
-```fill
-3、4、___ 和 5、12、13 都是勾股数组;一个直角三角形两条直角边是 3 和 4,斜边是 ___。
-= 3
-= 5
 ```
 
 ### image — 图片

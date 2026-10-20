@@ -1463,16 +1463,11 @@ __AUDIO_JS__
         return box('choice', h('div', { class: 'ch-q' }, p.question || ''), h('div', { class: 'ch-os' + (short ? ' short' : '') }, ...(p.options || []).map((o, i) => h('div', { class: 'ch-o' + (picked.includes(i) ? ' on' : '') }, h('i', {}, 'ABCDEFGH'[i] || ''), o))));
       }
       case 'fill': {
-        // 句子与空放在一个 .cb 里(卡本身是 flex 列,直接塞文字节点会一段一行)
-        const body = h('div', { class: 'cb' });
+        // 填空停用了(《卡片协议.md》拍板 3):旧记录里的只看,舞台里也没有输入框;句子与空放在一个 .cb 里(卡本身是 flex 列,直接塞文字节点会一段一行)
+        const body = h('div', { class: 'cb' + (stage ? ' fq' : '') });
         const el = box('fill', body);
         const parts = String(p.text || '').split(/_{2,}/);
         const got = filledAnswers(c);
-        if (stage) {
-          body.classList.add('fq');
-          parts.forEach((t, i) => { body.append(t); if (i < parts.length - 1) body.append(h('input', { class: 'fi', type: 'text', value: got[i] || '', autocomplete: 'off', enterkeyhint: 'done', readonly: c.submitted ? '' : null, on: { input: (e) => fillIn(secIdx, idx, i, e.target.value), keydown: (e) => { if (e.key === 'Enter') e.target.blur(); }, click: (e) => e.stopPropagation() } })); });
-          return el;
-        }
         parts.forEach((t, i) => { body.append(t); if (i < parts.length - 1) body.append(h('span', { class: 'bl' + (got[i] ? ' f' : '') }, got[i] || '\\u200b')); });
         return el;
       }
@@ -1683,17 +1678,6 @@ __WORD_DRAW_JS__
     el.classList.add('on');
     const off = () => el.classList.remove('on');
     cardClip(card, k, ++voiceToken, (a) => say({ text: seg, audio: a }, off), () => say({ text: seg, audio: null }, off), off);
-  };
-  /** 填空:改一个空 → 本地状态、紧凑态重画、400ms 后 PUT(打字中不刷舞台,免得输入框失焦) */
-  let fillTimer = null;
-  const fillIn = (secIdx, idx, i, value) => {
-    const card = S.sections[secIdx].cards[idx];
-    const answers = filledAnswers(card); answers[i] = value;
-    card.state = { answers };
-    $('#st-go').disabled = !stateSummary(card).length;
-    repaintCard(secIdx, idx);
-    clearTimeout(fillTimer);
-    fillTimer = setTimeout(() => saveState(S.sections[secIdx].job, idx, card.state), 400);
   };
   // ---- 录音卡:示范音、回放、舞台里按住录(《口播老师设计.md》§3;仲裁走 dispatch 的 recStart / recEnd) ----
   const REC_MAX_MS = 60000, REC_MIN_MS = 500, REC_CANCEL_PX = 60;
@@ -2318,7 +2302,6 @@ __WORD_DRAW_JS__
     }
     if (card.submitted) return;
     const id = S.stage.id, secI = S.stage.section, idx = S.stage.card;
-    clearTimeout(fillTimer); if (card.kind === 'fill') saveState(S.sections[secI].job, idx, card.state);
     card.submitted = true;
     closeStage();
     repaintCard(secI, idx);

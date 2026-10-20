@@ -1,4 +1,7 @@
-/** 填空卡:句子里 ___ 留空;答案行 `= 答案` 只有老师知道,不下发孩子端。状态 = 孩子按空的顺序填的字(舞台在步 5)。 */
+/**
+ * 填空卡:句子里 ___ 留空;答案行 `= 答案` 只有老师知道,不下发孩子端。状态 = 孩子按空的顺序填的字。
+ * 2026-10-21 停用(《卡片协议.md》拍板 3):要孩子在 iPad 上打字,拼音的声调打不出来。留着是为了旧记录照旧显示;老师再写退成文字卡(只留句子)
+ */
 import { z } from 'zod';
 import type { CardKind } from './kind.ts';
 
@@ -22,6 +25,8 @@ const ANSWER = /^=\s*(.*)$/;
 
 export const fill: CardKind<FillProps, FillState> = {
   name: 'fill',
+  where: [],
+  retired: (p) => p.text,
   props: FillPropsSchema,
   parse(body) {
     const textLines: string[] = [];

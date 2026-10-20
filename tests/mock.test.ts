@@ -31,7 +31,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   check('想的时候再发 → 409', (await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '再问' })).status === 409);
   await m.settle();
   const d2 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('想完 → 追加下一节(脚本第二节),孩子的话在 question 里不在卡上', d2.pending === null && d2.messages[1].section?.cards[0].kind === 'text' && d2.messages[1].section?.cards[0].props.text === '先画完的人本来就赢了' && d2.messages[1].section?.cards[2].kind === 'fill' && d2.messages[1].question === '不画脚呢?' && d2.messages[1].reply === '你来填一填:画蛇添足,就是做到了还要什么?', JSON.stringify(d2.messages[1].section?.cards[0]));
+  check('想完 → 追加下一节(脚本第二节),孩子的话在 question 里不在卡上', d2.pending === null && d2.messages[1].section?.cards[0].kind === 'text' && d2.messages[1].section?.cards[0].props.text === '先画完的人本来就赢了' && d2.messages[1].section?.cards[2].kind === 'choice' && d2.messages[1].question === '不画脚呢?' && d2.messages[1].reply === '你来选一选:画蛇添足,就是做到了还要怎样?', JSON.stringify(d2.messages[1].section?.cards[0]));
   await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '继续' });
   await m.settle();
   await m.route('POST', '/api/kid/conversations/chinese-tutor/messages', { text: '鼓励怎么写' });
@@ -75,7 +75,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   await m.settle();
   const md4 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   check('交过的卡锁住(同真服务):再交 409、再改 409、下发带 submitted', (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'submit', focus: { card: `${mj}/${ci}` } })).status === 409 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: [1] })).status === 409 && (md4.messages[0].section!.cards[ci] as { submitted?: boolean }).submitted === true);
-  check('交给老师:空文本 + action 也 202,问句是「(交了答案,没说话)」,下一节追加(反过来想 + 填空)', sub.status === 202 && md4.messages[1].question === '(交了答案,没说话)' && md4.messages[1].reply !== null && !('action' in md4.messages[1]) && md4.messages[1].section?.cards.some((c) => c.kind === 'fill') === true, JSON.stringify(md4.messages[1]));
+  check('交给老师:空文本 + action 也 202,问句是「(交了答案,没说话)」,下一节追加(反过来想 + 选择题)', sub.status === 202 && md4.messages[1].question === '(交了答案,没说话)' && md4.messages[1].reply !== null && !('action' in md4.messages[1]) && md4.messages[1].section?.cards.some((c) => c.kind === 'choice') === true, JSON.stringify(md4.messages[1]));
   const before = md4.remaining;
   await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'continue' });
   await m.settle();
@@ -98,11 +98,11 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   check('孩子端页面拼进了字母宽表(52 个字母 + 连字符、撇号)、字间距与接口一致:单词卡同步排得出大小', !pg.includes('__WORD_ADV__') && advJ !== null && Object.keys(advJ.adv).length === 54 && advJ.adv.a === lj.glyphs.a.advance && advJ.gap === lj.gap && advJ.space === lj.space, adv?.[1].slice(0, 120));
   const img = await get('/api/kid/image?p=' + encodeURIComponent('captures/2026-09-10/fruits.png'));
   check('图片卡的图:mock 给占位 svg', img.status === 200 && img.contentType === 'image/svg+xml' && img.html?.includes('<svg') === true && img.html.includes('fruits.png'));
-  const fillJob = d2.messages[1].job;
-  const fi = d2.messages[1].section!.cards.findIndex((c) => c.kind === 'fill');
-  const putFill = await m.route('PUT', `/api/kid/conversations/chinese-tutor/cards/${fillJob}/${fi}`, { answers: ['多做一步'] });
+  const chJob = d2.messages[1].job;
+  const chi = d2.messages[1].section!.cards.findIndex((c) => c.kind === 'choice');
+  const putCh = await m.route('PUT', `/api/kid/conversations/chinese-tutor/cards/${chJob}/${chi}`, { picked: [0] });
   const dF = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
-  check('填空状态 PUT 假存、读回,答案仍剥', putFill.status === 200 && JSON.stringify(dF.messages[1].section!.cards[fi].state) === '{"answers":["多做一步"]}' && !('answers' in dF.messages[1].section!.cards[fi].props) && (await m.route('PUT', `/api/kid/conversations/chinese-tutor/cards/${fillJob}/${fi}`, { answers: 'x' })).status === 400);
+  check('选择题状态 PUT 假存、读回,答案仍剥;坏状态 400', putCh.status === 200 && JSON.stringify(dF.messages[1].section!.cards[chi].state) === '{"picked":[0]}' && !('answer' in dF.messages[1].section!.cards[chi].props) && (await m.route('PUT', `/api/kid/conversations/chinese-tutor/cards/${chJob}/${chi}`, { picked: 'x' })).status === 400);
   check('空消息 400;没这位老师 404;配音 404', (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400 && (await get('/api/kid/conversations/nobody/today')).status === 404 && (await get('/api/audio/math-tutor/x.mp3')).status === 404);
   const page = await get('/');
   check('页面:标题、按住说话、内联了板书逻辑、舞台、没有家长入口、没有「错误」', page.html?.includes('小明的老师们') === true && page.html?.includes('发消息或按住说话') === true && page.html?.includes('function subtitleFor(') === true && page.html?.includes('id="stage"') === true && page.html?.includes('交给老师') === true && !page.html?.includes('export ') && !page.html?.includes('/parent') && !page.html?.includes('错误'), String(page.html?.length));

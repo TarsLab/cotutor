@@ -82,7 +82,7 @@ for (const f of fixtures) {
 {
   check('讲稿清洗:标题号、列表号、引用号、粗体号去掉;整行注释不算话', cleanSpeech('# 标题一句') === '标题一句' && cleanSpeech('- 列表一句') === '列表一句' && cleanSpeech('1. 编号一句') === '编号一句' && cleanSpeech('> 引用一句') === '引用一句' && cleanSpeech('**粗体**的话') === '粗体的话' && cleanSpeech('<!-- 注释 -->') === '' && cleanSpeech('   ') === '');
   const r = parseBoard('~~~read\napple 苹果\nbanana 香蕉\n~~~\n\n~~~fill\n三角形面积 = 底 × 高 ÷ ___,记住了___?\n= 2\n= 记住了\n~~~\n');
-  check('~~~ 围栏也认;read 一行一段;fill 数空、收答案', r.section.cards[0].kind === 'read' && (r.section.cards[0].props.segments as string[]).length === 2 && r.section.cards[1].kind === 'fill' && r.section.cards[1].props.blanks === 2 && JSON.stringify(r.section.cards[1].props.answers) === '["2","记住了"]', JSON.stringify(r.section.cards));
+  check('~~~ 围栏也认;read 一行一段;fill 停用了 → 文字卡、只留句子(答案不下发)、warning', r.section.cards[0].kind === 'read' && (r.section.cards[0].props.segments as string[]).length === 2 && r.section.cards[1].kind === 'text' && r.section.cards[1].props.text === '三角形面积 = 底 × 高 ÷ ___,记住了___?' && !JSON.stringify(r.section.cards[1]).includes('记住了"') && r.warnings.some((w) => JSON.stringify(w).includes('fill 卡停用了')), JSON.stringify(r.section.cards));
 }
 {
   // spans:卡与句在原文里的行号(家长端「看原文」靠它在原文旁边标解析结果)
@@ -132,7 +132,7 @@ for (const f of fixtures) {
   check('提问卡:末句的锚点不动、没有 warning', r.section.lines.length === 2 && r.section.lines[0].anchor === 0 && r.section.lines[1].anchor === 0 && r.warnings.length === 0, JSON.stringify(r.section.lines.map((l) => l.anchor)));
   const withChoice = parseBoard('讲一句。\n\n```choice\n几个?\n- [x] 3\n- [ ] 4\n```\n\n几个?\n');
   check('提问卡:末句锚着选择题 → 不补', withChoice.section.cards.length === 1, JSON.stringify(withChoice.section.cards));
-  const before = parseBoard('几个?\n\n```fill\n有 ___ 个\n```\n');
+  const before = parseBoard('几个?\n\n```choice\n有几个?\n- [x] 3\n- [ ] 4\n```\n');
   check('提问卡:问句写在能答的卡前面 → 不补', before.section.cards.length === 1, JSON.stringify(before.section.cards));
   const notLast = parseBoard('```text\n记住\n```\n\n对不对?\n\n对的。\n');
   check('提问卡:末句不是问句 → 不补', notLast.section.cards.length === 1);

@@ -66,7 +66,7 @@ export function tutorCardKinds(cards: readonly string[] | undefined): string[] |
 }
 
 /** 正文是「字」的卡:老师把讲稿的 [词] 标注语法写进这些卡时,把括号剥掉(2026-09-11 真跑:孩子看到了「[直角边]」);choice 的 - [ ] / - [x] 不动 */
-const TEXTUAL = new Set(['text', 'read', 'choice', 'fill', 'image', 'word', 'paint']);
+const TEXTUAL = new Set(['text', 'read', 'choice', 'image', 'word', 'paint']);
 const MARK_IN_CARD = /\[([^\[\]\n]+)\]/g;
 function unmark(body: string): { body: string; had: boolean } {
   let had = false;
@@ -96,6 +96,15 @@ export function parseCard(tag: string, body: string, place: CardPlace = 'board')
   if (!name) return place === 'board' ? { card: { kind: 'code', props: code.parse(body, []) } } : asText('围栏没写种类');
   const kind = cardKind(name.toLowerCase());
   if (!kind) return place === 'board' ? { card: { kind: 'code', props: code.parse(body, [name]) } } : asText(`不认识的卡:${name}`);
+  // 停用的卡:解析得出就退成文字卡、只留题面(答案不下发);解析不出也把「= 答案」那几行去掉
+  if (kind.retired) {
+    const why = `${name} 卡停用了,退成文字卡(《卡片协议.md》拍板 3)`;
+    try {
+      return { card: { kind: 'text', props: { text: kind.retired(kind.props.parse(kind.parse(body, mods))) } }, warning: why, fallback: true };
+    } catch {
+      return { card: { kind: 'text', props: { text: body.split('\n').filter((l) => !/^\s*=/.test(l)).join('\n').trim() || name } }, warning: why, fallback: true };
+    }
+  }
   if (!usableIn(kind, place)) return asText(place === 'board' ? `${name} 是首页的卡,板书里不能用` : `首页放不了 ${name} 卡(它要交给某位老师,只能在板书里)`);
   const um = TEXTUAL.has(kind.name) ? unmark(body) : { body, had: false };
   try {

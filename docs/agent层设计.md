@@ -143,7 +143,7 @@ claude 与 qwen 的输出同族(Claude Code 的 stream-json),共用一个读法,
     - **配在条目顶层,不在 `policy`**:政策是一层层盖的旋钮,卡的清单是这位老师教什么,数组也不好「在缺省上加一张」。
     - **只裁写法,解析器不动**:清单外的卡照常解析、照常显示,这轮记一条提醒。按老师裁的写法从包里现拼(和解析器同一版),写到 `.cotutor/board/<老师>-<hash>.md` 给 `{boardFile}`;hash 进文件名,改了清单预热进程自然作废。没写 `cards` = 全部、递出厂的 SKILL.md,老 workspace 不改也照旧。
     - **手写段落用守卫**:`{{有 x y}}` … `{{/有}}`(`src/lib/card-guards.ts`),板书写法里「能选配 choice、能填配 fill」那句、作业照片一节、作业上用画板那段,守则里小课堂那几段。「一节长什么样」的例子照常留。
-    - **出厂清单**:数学 text choice fill image lecture canvas code;语文 text read choice fill image tianzige lecture canvas;英语 text read choice fill image word lecture;口播 text read record。按老师文件与学科估的,没有真跑数据;`cotutor upgrade --config` 给老 workspace 补。
+    - **出厂清单**:数学 text choice image lecture canvas code;语文 text read choice image tianzige lecture canvas;英语 text read choice image word lecture(fill 2026-10-21 停了,《卡片协议.md》拍板 3);口播 text read record。按老师文件与学科估的,没有真跑数据;`cotutor upgrade --config` 给老 workspace 补。
     - **没做的**:按这一轮的上下文裁(有照片才给作业照片)——写法预载在系统提示里,预热在孩子开口前就起好进程,同一话题系统提示一变缓存也作废。给 `record` 设「配了 koubo 才给」的门——koubo 的评测模板有缺省值,从配置看不出能不能用。
     没验证的:裁了以后老师出卡的样子变没变,要 ray 的真跑;清单外的卡多不多,看提醒。
 15. CLI 的差别收进适配器,接上 qwen code(2026-10-09)。起因:cotutor 要开源,开发者要能接各家 agent CLI;原来「认得某个 CLI」的知识散在十几个文件里(读输出流、写 stdin、工具名 `Read` / `Skill`、`--tools` 白名单、代理、嵌套变量、费用),而且都默认 claude 的 stream-json,qwen 碰巧同族才跑得通。改成一个 CLI 一个适配器(§6,`src/clis/`),先抽 claude、行为不变,再写 qwen。qwen code 0.25 的定法(同日真跑与读它的打包代码):

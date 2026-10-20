@@ -12,6 +12,7 @@ import {
   ACTIVITY_TOOLS,
   ACTIVITY_TOOL_SECTION_RE,
   BOARD_CARD_KINDS,
+  RETIRED_CARD_KINDS,
   type Activity,
   type ActivityGate,
   type ActivityParam,
@@ -184,7 +185,8 @@ export function parseActivity(text: string): ParsedActivity {
   const activity: Activity = {
     name: frontmatter.name ?? '',
     description: frontmatter.description ?? '',
-    cards: (frontmatter.cards ?? '').split(/[\s,，、]+/).filter(Boolean),
+    // 停用的卡(fill)读的时候丢掉:workspace 里还没 upgrade 的 activity 照样能用
+    cards: (frontmatter.cards ?? '').split(/[\s,，、]+/).filter((k) => k && !RETIRED_CARD_KINDS.includes(k)),
     ...(frontmatter.page?.trim() ? { page: frontmatter.page.trim() } : {}),
     params: [],
     state: [],

@@ -486,9 +486,9 @@ export function penPath(pen: PenName, w: number, h: number, seed: string): strin
   return '';
 }
 
-/** 有舞台交互(能改状态、能「交给老师」)的种类;其余点开只是放大看 */
+/** 有舞台交互(能改状态、能「交给老师」)的种类;其余点开只是放大看。填空停用了(《卡片协议.md》拍板 3),旧的只看 */
 export function hasState(card: BoardCard): boolean {
-  return card.kind === 'choice' || card.kind === 'fill' || card.kind === 'canvas' || card.kind === 'record';
+  return card.kind === 'choice' || card.kind === 'canvas' || card.kind === 'record';
 }
 
 /** 画板上画了几笔(状态里的 ink 元素数) */

@@ -5,9 +5,9 @@
  * 把服务自己画的 /icon-192.png 当「照片」传上去(POST …/photos)→ 只带照片发一条 → 假老师「看图」:Read 那张、板书出 image 卡 + canvas 卡照片做底 →
  * 用 Chrome DevTools 协议开孩子端:节头有缩略图、直开画板舞台、iframe 里 excalidraw 的场景有一个 image 元素(底图)与一份 files →
  * 画一笔「给老师看」→ .cards/<n>.png 落盘;家长端那轮的问句下有缩略图。
- * 再走发照片屏(《作业照片设计.md》):相册选 2 张 → 裁一张、画一笔、打一句 → 一条消息两张 jpg;点节头小图看大图不是再听。
+ * 再走发照片屏(《作业照片设计.md》):相册选 2 张 → 裁一张、画一笔(没有配一句话那条了,拍板 10)→ 一条消息两张 jpg;点节头小图看大图不是再听。
  *
- * 用法:node scripts/probe-photo.mjs [--keep](留下临时 workspace 与 serve 不杀,自己再看)[--shots <目录>](发照片屏:刚打开 / 裁剪中 / 编辑完配了话 三张截图)
+ * 用法:node scripts/probe-photo.mjs [--keep](留下临时 workspace 与 serve 不杀,自己再看)[--shots <目录>](发照片屏:刚打开 / 裁剪中 / 编辑完 三张截图)
  */
 import { probeDir, spawn } from './_guard.mjs';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -35,6 +35,8 @@ const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 const fake = join(repo, 'tests', '_fake-cli.ts');
 cfg.runtimes.default = 'fake';
+// 出厂老师写死了 runtime(qwen):去掉,都走假老师(不然这里叫的是真 qwen)
+for (const t of Object.values(cfg.tutors)) delete t.runtime;
 cfg.runtimes.fake = { run: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '{prompt}'], resume: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '--resume', '{session}', '{prompt}'] };
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
@@ -132,18 +134,16 @@ try {
     pe(cv, 'pointerdown', r.left + 20, r.top + 20); for (const k of [40, 60, 80]) { pe(cv, 'pointermove', r.left + k, r.top + k); await tick(); } pe(cv, 'pointerup', r.left + 80, r.top + 80);
     const undo = !document.querySelector('#ps-p-undo').disabled;
     document.querySelector('#ps-p-ok').click(); await tick();
-    const say = document.querySelector('#ps-say'); pe(say, 'pointerdown', 10, 10); pe(say, 'pointerup', 10, 10); await tick();
-    const t = document.querySelector('#ps-typed'); const typing = !t.hidden; t.value = '第 3 题不会'; t.blur(); await tick();
-    return { ratio, undo, typing, said: document.querySelector('#ps-said').textContent };
+    return { ratio, undo, noSay: !document.querySelector('#ps-say') && !document.querySelector('#ps input[type=text]') };
   })()`);
-  ok('裁掉右边 → 看到的那块变窄;圈了一笔能撤销;点一下打字、字回显', cropped && cropped.ratio < 0.95 && cropped.undo && cropped.typing && cropped.said === '第 3 题不会', JSON.stringify(cropped));
+  ok('裁掉右边 → 看到的那块变窄;圈了一笔能撤销;没有配一句话(按住说 / 打字)那条', cropped && cropped.ratio < 0.95 && cropped.undo && cropped.noSay, JSON.stringify(cropped));
   await shot('edited');
   const before = (await api('GET', '/api/kid/conversations/math-tutor/today')).json?.messages.length ?? 0;
   await evaluate(`document.querySelector('#ps-go').click()`);
   let mine = null;
   for (let i = 0; i < 80 && !mine; i++) { const d = (await api('GET', '/api/kid/conversations/math-tutor/today')).json; const m = d?.messages[before]; if (m && !m.pending) mine = m; else await sleep(250); }
   const closed = await evaluate(`!document.querySelector('#ps').classList.contains('on')`);
-  ok('发出去:屏关、一条消息、问句是那句话、两张照片都是 jpg', closed && mine?.question === '第 3 题不会' && mine?.photos?.length === 2 && mine.photos.every((p) => /^captures\/\d{4}-\d{2}-\d{2}\/\d{4}-\d+\.jpg$/.test(p)), JSON.stringify({ closed, q: mine?.question, photos: mine?.photos }));
+  ok('发出去:屏关、一条消息、只有照片(问句是「拍了 2 张」)、两张照片都是 jpg', closed && mine?.question === '(拍了 2 张)' && mine?.photos?.length === 2 && mine.photos.every((p) => /^captures\/\d{4}-\d{2}-\d{2}\/\d{4}-\d+\.jpg$/.test(p)), JSON.stringify({ closed, q: mine?.question, photos: mine?.photos }));
   const sizes = await evaluate(`Promise.all(${JSON.stringify(mine?.photos ?? [])}.map((p) => new Promise((r) => { const im = new Image(); im.onload = () => r([im.naturalWidth, im.naturalHeight]); im.onerror = () => r(null); im.src = '/api/kid/image?p=' + encodeURIComponent(p); })))`);
   ok('第一张是裁过的(宽 < 高)、第二张没改(512 见方,不放大)', sizes?.[0] && sizes[0][0] < sizes[0][1] && sizes[0][1] === 192 && sizes?.[1]?.[0] === 512 && sizes[1][1] === 512, JSON.stringify(sizes));
   const lb = await evaluate(`(async () => {

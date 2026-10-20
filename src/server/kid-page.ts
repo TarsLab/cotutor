@@ -479,15 +479,6 @@ __REEL_DOCK_CSS__
   #ps .tools button { min-width:76px; height:48px; padding:0 14px; border-radius:24px; background:#ffffff1f; color:#fff; font-size:16px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
   #ps .tools button.ok { background:#fff; color:#1d1c1a; }
   #ps .tools button:disabled { opacity:.35; }
-  #ps-say { display:flex; align-items:center; gap:10px; margin:6px 16px 0; min-height:52px; padding:0 8px 0 18px; border-radius:26px; background:#fff; color:var(--ink); touch-action:none; }
-  #ps-say[hidden] { display:none; }
-  #ps-say.rec { background:#3b82e8; color:#fff; }
-  #ps-said { flex:1; min-width:0; font-size:17px; line-height:1.4; padding:12px 0; }
-  #ps-said.ph { color:var(--dim); }
-  #ps-say.rec #ps-said { color:#fff; }
-  #ps-typed { flex:1; min-width:0; font:inherit; font-size:18px; color:var(--ink); border:0; outline:0; background:none; -webkit-user-select:text; user-select:text; }
-  #ps-typed[hidden], #ps-clear[hidden] { display:none; }
-  #ps-clear { width:36px; height:36px; display:grid; place-items:center; color:var(--dim); }
   #ps .foot { display:flex; gap:12px; padding:12px 16px calc(env(safe-area-inset-bottom) + 14px); }
   #ps .foot[hidden] { display:none; }
   #ps .foot button { flex:1; height:54px; border-radius:27px; font-size:17px; font-weight:600; }
@@ -509,7 +500,7 @@ __REEL_DOCK_CSS__
   /* ---- 按压反馈(全局关了系统的点击高亮,这里统一补):三种手感,按下快(60ms)、松开慢(200ms)。
      圆钮与胶囊:缩到 94% + 暗一档;深色屏上的钮:缩 + 变淡;大块面:缩到 98.5% + 暗一点;行内文字:变淡。
      板书里的卡在滚动容器里,按下延迟 80ms 才显(不然一滑整屏都在闪);卡里的小钮按着时卡自己不动。交互不是皮肤,写在页面里,主题不用跟 ---- */
-  #back, .tb .hb, #hist-x, #st-x, #st-go, #sub-btn, #pill .ic, #go, #back-today, .again, #ps-clear, .c-tutor .bt,
+  #back, .tb .hb, #hist-x, #st-x, #st-go, #sub-btn, #pill .ic, #go, #back-today, .again, .c-tutor .bt,
   #ps .tools button, #ps .foot button, #ps-strip .x, #lb .x, #lb .nav,
   #menu .panel button, #sheet label, #hist .tr, .so, .rd, .hz, .c-tutor .tt, #ps-strip .t,
   .sec.heard > .sh, #sub-text.line { transition:transform .2s ease-out, filter .2s ease-out, opacity .2s ease-out, background-color .2s ease-out; }
@@ -547,7 +538,7 @@ __REEL_DOCK_CSS__
   @media (hover:hover) {
     #back:hover, .tb .hb:hover, #hist-x:hover, #st-x:hover, #sub-btn:hover, #pill .ic:hover, #back-today:hover, .again:hover, #menu .panel button:hover, #sheet label:hover, #hist .tr:hover, .so:hover, .rd:hover, .c-tutor .bt:hover, #board .c:not(.c-tianzige):hover { filter:brightness(.97); }
   }
-  #back:active, .tb .hb:active, #hist-x:active, #st-x:active, #st-go:active, #sub-btn:active, #pill .ic:active, #go:active, #back-today:active, .again:active, #ps-clear:active, .c-tutor .bt:active, .blank .resume:active, .ask-go:active { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
+  #back:active, .tb .hb:active, #hist-x:active, #st-x:active, #st-go:active, #sub-btn:active, #pill .ic:active, #go:active, #back-today:active, .again:active, .c-tutor .bt:active, .blank .resume:active, .ask-go:active { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
   #ps .tools button:active, #ps .foot button:active, #ps-strip .x:active, #lb .x:active, #lb .nav:active { transform:scale(.94); opacity:.65; transition-duration:.06s; }
   #menu .panel button:active, #sheet label:active, #hist .tr:active, .so:active, .rd:active, .hz:active, .c-tutor .tt:active, #ps-strip .t:active { transform:scale(.985); filter:brightness(.95); transition-duration:.06s; }
   #board .c:not(.c-tianzige):active:not(:has(button:active, .hz:active)) { transform:scale(.985); filter:brightness(.96); transition-duration:.06s; transition-delay:.08s; }
@@ -678,7 +669,6 @@ __REEL_DOCK_CSS__
     <div class="tools" id="ps-tools"><button type="button" id="ps-t-crop">裁剪</button><button type="button" id="ps-t-pen">圈画</button><button type="button" id="ps-t-rot">转 90°</button></div>
     <div class="tools" id="ps-crop-bar" hidden><button type="button" id="ps-c-full">整张</button><button type="button" class="ok" id="ps-c-ok">好了</button></div>
     <div class="tools" id="ps-pen-bar" hidden><button type="button" id="ps-p-undo">撤销</button><button type="button" id="ps-p-clear">清空</button><button type="button" class="ok" id="ps-p-ok">好了</button></div>
-    <div id="ps-say"><span id="ps-said"></span><input id="ps-typed" type="text" autocomplete="off" enterkeyhint="done" hidden><button type="button" id="ps-clear" hidden></button></div>
     <div class="foot" id="ps-foot"><button type="button" id="ps-cancel">取消</button><button type="button" id="ps-go">发给老师</button></div>
   </div>
   <div id="lb"><div class="zoom"><img alt=""></div><button type="button" class="x" id="lb-x"></button><button type="button" class="nav l" id="lb-l">‹</button><button type="button" class="nav r" id="lb-r">›</button><div class="n" id="lb-n"></div></div>
@@ -3893,8 +3883,8 @@ __REEL_DOCK_JS__
 
   // ---- 发照片屏(《作业照片设计.md》):拍 / 选了先到这里——看一眼、裁剪 / 圈画 / 转 90°、配一句话,再一条消息发出去 ----
   // 坐标都在 photo-edit(内联在上面),这里只管画和点。原图只留 objectURL,导出时再解一次(几张 12MP 常驻内存 iPad 吃不消)
-  const PS = { items: [], at: 0, mode: 'view', text: '', busy: false, work: null, drag: null, pen: null, sc: 1, R: null, raf: 0 };
-  const psEl = $('#ps'), cv = $('#ps-cv'), cropEl = $('#ps-crop'), sayEl = $('#ps-say'), psTyped = $('#ps-typed');
+  const PS = { items: [], at: 0, mode: 'view', busy: false, work: null, drag: null, pen: null, sc: 1, R: null, raf: 0 };
+  const psEl = $('#ps'), cv = $('#ps-cv'), cropEl = $('#ps-crop');
   const loadImg = (url) => new Promise((resolve, reject) => { const im = new Image(); im.onload = () => resolve(im); im.onerror = () => reject(new Error('图读不出')); im.src = url; });
   /** 一张:解一次拿宽高,留一张长边 ≤ 2048 的显示用底图;解不出 → null(不进缩略图条,不当成不通) */
   const psItem = async (file) => {
@@ -3964,11 +3954,6 @@ __REEL_DOCK_JS__
     const strip = $('#ps-strip');
     strip.replaceChildren(...(PS.items.length > 1 ? PS.items.map((it, i) => h('div', { class: 't' + (i === PS.at ? ' on' : ''), on: { click: () => { if (PS.busy || i === PS.at) return; PS.at = i; psUi(); psRender(); } } }, h('img', { src: it.url, alt: '' }), h('button', { type: 'button', class: 'x', 'aria-label': '去掉这张', html: ICON.closeSm, on: { click: (e) => { e.stopPropagation(); psDrop(i); } } }))) : []));
     strip.style.display = PS.mode === 'view' && PS.items.length > 1 ? '' : 'none';
-    const said = $('#ps-said');
-    said.textContent = PS.text || (srOk() ? '按住说一句,或点一下打字' : '点这里打一句');
-    said.classList.toggle('ph', !PS.text);
-    said.hidden = !psTyped.hidden;
-    $('#ps-clear').hidden = !PS.text || !psTyped.hidden;
     $('#ps-go').disabled = PS.busy;
     const n = psCur() ? psCur().edit.strokes.length : 0;
     $('#ps-p-undo').disabled = !n; $('#ps-p-clear').disabled = !n;
@@ -3980,16 +3965,14 @@ __REEL_DOCK_JS__
     psEl.classList.toggle('ps-drawing', mode === 'pen');
     cropEl.hidden = mode !== 'crop';
     $('#ps-tools').hidden = mode !== 'view'; $('#ps-crop-bar').hidden = mode !== 'crop'; $('#ps-pen-bar').hidden = mode !== 'pen';
-    sayEl.hidden = mode !== 'view'; $('#ps-foot').hidden = mode !== 'view';
+    $('#ps-foot').hidden = mode !== 'view';
     psUi(); psRender();
   };
   /** 改了这张:之前传上去的不作数 */
   const psEdit = (e) => { const it = psCur(); it.edit = e; it.path = null; };
   const psReset = () => {
     for (const it of PS.items) URL.revokeObjectURL(it.url);
-    if (psRec) { try { psRec.onend = null; psRec.abort(); } catch {} psRec = null; }
-    Object.assign(PS, { items: [], at: 0, mode: 'view', text: '', busy: false, work: null, drag: null, pen: null });
-    psTyped.value = ''; psTyped.hidden = true; sayEl.classList.remove('rec');
+    Object.assign(PS, { items: [], at: 0, mode: 'view', busy: false, work: null, drag: null, pen: null });
   };
   const psClose = () => { psReset(); psEl.classList.remove('on'); };
   const psDrop = (i) => {
@@ -4047,37 +4030,10 @@ __REEL_DOCK_JS__
   const penUp = (e) => { if (PS.pen && PS.pen.id === e.pointerId) PS.pen = null; };
   cv.addEventListener('pointerup', penUp); cv.addEventListener('pointercancel', penUp);
   window.addEventListener('resize', () => { if (psEl.classList.contains('on')) psRender(); });
-  // 配一句话:按住说(认出的字替换原来的),点一下打字,× 清掉
-  let psPress = null, psRec = null;
-  sayEl.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('#ps-clear') || !psTyped.hidden || PS.busy || psRec) return;
-    e.preventDefault(); unlock();
-    psPress = { held: false, timer: setTimeout(() => {
-      if (!psPress || !srOk()) return;
-      psPress.held = true; sayEl.classList.add('rec');
-      psRec = listen((t) => { PS.text = t.trim(); psUi(); }, () => { psRec = null; sayEl.classList.remove('rec'); psUi(); }, 'photo');
-      if (!psRec) sayEl.classList.remove('rec');
-    }, 150) };
-    try { sayEl.setPointerCapture(e.pointerId); } catch {}
-  });
-  const psRelease = () => {
-    if (!psPress) return;
-    clearTimeout(psPress.timer);
-    const held = psPress.held; psPress = null;
-    if (held) { if (psRec) settle(psRec); return; }
-    psTyped.value = PS.text; psTyped.hidden = false; psUi(); psTyped.focus();
-  };
-  sayEl.addEventListener('pointerup', psRelease);
-  sayEl.addEventListener('pointercancel', psRelease);
-  sayEl.addEventListener('contextmenu', (e) => e.preventDefault());
-  psTyped.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); psTyped.blur(); } });
-  psTyped.addEventListener('blur', () => { PS.text = psTyped.value.trim(); psTyped.hidden = true; psUi(); });
-  $('#ps-clear').addEventListener('click', () => { PS.text = ''; psUi(); });
   $('#ps-cancel').addEventListener('click', () => { if (!PS.busy) { playRec({ k: 'ps', e: 'cancel' }); psClose(); } });
   // 发:逐张导出(转 → 裁 → 画 → 缩到长边 PHOTO_MAX_SIDE)上传拿 path,全拿到再发一条 {text, photos};传不上去屏不关、编辑留着,再点一次只传没传上的
   $('#ps-go').addEventListener('click', async () => {
     if (PS.busy || !PS.items.length) return;
-    if (!psTyped.hidden) psTyped.blur();
     if (!S.tutor || !canSend() || S.limit || S.pending) return;
     PS.busy = true; psUi();
     const name = S.tutor.name;
@@ -4088,10 +4044,11 @@ __REEL_DOCK_JS__
       if (e && e.status === 404) { psClose(); closeTutor(); }
       return;
     }
-    const photos = PS.items.map((it) => it.path), text = PS.text;
+    const photos = PS.items.map((it) => it.path);
     playRec({ k: 'ps', e: 'send' });
     psClose();
-    if (S.tutor && S.tutor.name === name) send(text, { photos });
+    // 只发照片(2026-10-21 撤了配一句话:孩子一次都没用过;实时老师先说「我看一看图片」,孩子接着说就行)
+    if (S.tutor && S.tutor.name === name) send('', { photos });
   });
 
   // ---- 看大图:节头的小图点开;双指缩放、双击复位;几张就左右翻。不碰播放 ----
@@ -4103,7 +4060,7 @@ __REEL_DOCK_JS__
     $('#lb-n').textContent = LB.list.length > 1 ? (LB.at + 1) + ' / ' + LB.list.length : '';
   };
   const openLb = (list, at) => { LB.list = list; LB.at = at; $('#lb').classList.add('on'); lbShow(); };
-  $('#lb-x').innerHTML = ICON.close; $('#ps-clear').innerHTML = ICON.closeSm;
+  $('#lb-x').innerHTML = ICON.close;
   $('#lb-x').addEventListener('click', () => $('#lb').classList.remove('on'));
   $('#lb-l').addEventListener('click', () => { if (LB.at > 0) { LB.at--; lbShow(); } });
   $('#lb-r').addEventListener('click', () => { if (LB.at < LB.list.length - 1) { LB.at++; lbShow(); } });
@@ -4160,7 +4117,7 @@ __REEL_DOCK_JS__
   /** 服务换了新代码:孩子手上没事时重载,回到原来那位老师。正按着、在打字、在等老师、老师正在念、舞台或发照片屏开着,都先不动 */
   const staleReload = () => {
     if (!stale || document.hidden || REEL) return;
-    if (press || rec || psRec || S.pending || S.stage || lcShowing || S.bar !== 'idle' || S.state.status === 'playing' || psEl.classList.contains('on')) return;
+    if (press || rec || S.pending || S.stage || lcShowing || S.bar !== 'idle' || S.state.status === 'playing' || psEl.classList.contains('on')) return;
     if (PARENT) { if (S.tutor) { const q = new URLSearchParams({ tutor: S.tutor.name }); if (S.hist) q.set('date', S.hist); if (S.thread) q.set('thread', S.thread); location.replace(location.pathname + '?' + q); } else location.reload(); return; }
     try { if (S.tutor && !S.readonly) sessionStorage.setItem('kid-resume', S.tutor.name); } catch {}
     location.reload();

@@ -309,6 +309,22 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 {
+  // ---- 实时的讲稿不截(replyMaxChars 60 只管板书):超过 60 字的一句原样交给嘴、原样上字幕 ----
+  const k = await connect('chinese-tutor');
+  await until(() => has(k, (m) => m.t === 'ready'));
+  const long = '我们一个一个来,登在白日依山尽前面那首诗的标题里,登鹳雀楼,读登,声母是d,韵母是eng,题目已经给了d,你补上eng就行了';
+  fake.kidText = long;
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: { newThread: true } }));
+  const okLong = await until(() => k.msgs.some((m) => m.t === 'read' && String(m.text).endsWith('你补上eng就行了')), 15000);
+  check('实时的讲稿不截:超过 60 字的一句原样交给嘴、原样上字幕(没有「…」)', okLong && Array.from(long).length > 60 && !k.msgs.some((m) => m.t === 'read' && String(m.text).endsWith('…')), JSON.stringify(k.msgs.filter((m) => m.t === 'read').map((m) => m.text)));
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  k.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => k.closed !== null);
+}
+
+{
   // ---- 交卡(设想稿拍板 14,改拍板 11):嘴不当场说「对啦」,也不说「我看看」;第一句就是脑的 ----
   const k = await connect('chinese-tutor');
   await until(() => has(k, (m) => m.t === 'ready'));

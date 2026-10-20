@@ -637,7 +637,9 @@ export class Runner {
     if (input.live) active.live = true;
     // 断流后接着跑:同一运行时 resume 这个会话,消息换成 stallPrompt
     const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent, prompt: stallPrompt(open), agentBody, systemBody, boardFile, agentsFile, runtime: plan.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
-    active.done = this.spawn(ws, tutor, date, job, plan, policy, active, resumePlan, spare).finally(() => {
+    // 实时的一轮讲稿是嘴念的,不按 replyMaxChars 截(截了孩子听到半句:10-20「题目已经…」后面「你补上 ēng 就行」没了)
+    const runPolicy = input.live ? { ...policy, replyMaxChars: Number.MAX_SAFE_INTEGER } : policy;
+    active.done = this.spawn(ws, tutor, date, job, plan, runPolicy, active, resumePlan, spare).finally(() => {
       if (this.active.get(tutor) === active) this.active.delete(tutor);
       // 孩子 / 家长这轮完了,马上起好下一轮的进程;系统轮(记账、整理记忆)之后孩子多半不在,不起
       if (input.from !== 'system' && !input.replayOf && !input.eval) void this.prewarm(tutor).catch(() => {});

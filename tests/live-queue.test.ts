@@ -55,6 +55,29 @@ const run = (s: S, evs: Ev[]) => { const acts: any[] = []; for (const e of evs) 
   check('[[play]]:嘴空着时来的那拍直接交、关闸', r5.acts[0]?.kind === 'read' && r5.acts[0].beat.play === true && r5.s.gated);
 }
 {
+  // 热身(讲稿的 [[echo 词]] / [[say 词]]):同 [[play]] 并段到那句、关闸;孩子跟完(echoed)才交后面的。各开各的闸
+  const eb = (job: string, i: number, word: string, say?: true) => ({ ...b(job, [i]), echo: { word, ...(say ? { say } : {}) } });
+  const r = run(queueInit(), [{ e: 'asked' }, { e: 'beat', beat: b('j1', [0]) }, { e: 'beat', beat: eb('j1', 1, 'duck') }, { e: 'beat', beat: eb('j1', 2, 'duck') }, { e: 'done' }]);
+  check('[[echo]]:并段到那句为止,那段带 echo、关闸;后面的留着', r.acts[4]?.kind === 'read' && r.acts[4].beat.lines.join() === '0,1' && r.acts[4].beat.echo?.word === 'duck' && r.s.gated === 'echo' && r.s.pending.length === 1, JSON.stringify(r.acts[4]));
+  const r2 = run(r.s, [{ e: 'done' }, { e: 'staged' }]);
+  check('[[echo]]:嘴出完、小课堂的 staged 都开不了等孩子跟的闸', r2.acts.every((a) => a === null) && r2.s.gated === 'echo');
+  const r3 = run(r2.s, [{ e: 'echoed' }]);
+  check('[[echo]]:孩子跟完(echoed)→ 开闸,下一拍单独一段(它自己也带 echo)', r3.acts[0]?.kind === 'read' && r3.acts[0].beat.lines.join() === '2' && r3.acts[0].beat.echo?.word === 'duck' && r3.s.gated === 'echo', JSON.stringify(r3.acts[0]));
+  const r4 = run(queueInit(), [{ e: 'beat', beat: { ...b('j2', [0]), play: true } }, { e: 'done' }, { e: 'echoed' }]);
+  check('[[play]] 的闸 echoed 开不了', r4.acts[2] === null && r4.s.gated === 'play');
+  const r5 = run(queueInit(), [{ e: 'beat', beat: eb('j3', 0, 'bus', true) }]);
+  check('[[say]]:嘴空着时直接交、带 say、关闸', r5.acts[0]?.kind === 'read' && r5.acts[0].beat.echo?.say === true && r5.s.gated === 'echo');
+  const r6 = run(r5.s, [{ e: 'done' }, { e: 'pause' }, { e: 'hold', drop: 'j3' }]);
+  check('[[echo]]:关闸时收下孩子对老师说的(hold)→ 闸开、那一轮后面的丢', !r6.s.gated && r6.s.dropJob === 'j3');
+}
+{
+  // [[call]]:并段到那句为止;那一轮排着的、后面再来的拍都不要(打电话那段是下一轮写的)
+  const r = run(queueInit(), [{ e: 'asked' }, { e: 'beat', beat: b('j1', [0]) }, { e: 'beat', beat: { ...b('j1', [1]), call: true } }, { e: 'beat', beat: b('j1', [2]) }, { e: 'done' }]);
+  check('[[call]]:并段到那句为止,那段带 call;后面排着的丢', r.acts[4]?.kind === 'read' && r.acts[4].beat.lines.join() === '0,1' && r.acts[4].beat.call === true && r.s.pending.length === 0 && !r.s.gated, JSON.stringify(r.acts[4]));
+  const r2 = run(r.s, [{ e: 'done' }, { e: 'beat', beat: b('j1', [3]) }, { e: 'beat', beat: b('j2', [0]) }]);
+  check('[[call]]:那一轮再来的拍不要;下一轮照常念', r2.acts[1] === null && r2.acts[2]?.kind === 'read' && r2.acts[2].beat.job === 'j2');
+}
+{
   // 声音:两次回答的块到达 1000、1010(各 200 毫秒)与 1100(100 毫秒):接着排,中间不空
   let p = playbackInit<string>();
   const a1 = addChunk(p, 'catch', 1000, 200); p = a1.p;

@@ -27,6 +27,10 @@ export const BoardLineSchema = z.object({
   ask: z.boolean(),
   anchor: z.number().int().nonnegative().nullable(),
   cues: z.array(BoardCueSchema),
+  /** 热身的 [[echo 词]] / [[say 词]]:念完等孩子说 word(say = 你先说) */
+  echo: z.object({ word: z.string(), say: z.literal(true).optional() }).optional(),
+  /** [[call]]:念完进打电话 */
+  call: z.literal(true).optional(),
 });
 export const BoardSectionSchema = z.object({
   cards: z.array(BoardCardSchema),

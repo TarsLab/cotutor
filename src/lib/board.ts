@@ -119,7 +119,16 @@ interface RawLine {
   anchor: number | null;
   cues: BoardCue[];
   line: number;
+  echo?: BoardLine['echo'];
+  call?: true;
 }
+
+/**
+ * 热身的记号(《wip/口语课改实时老师设计.md》§三之四):不锚卡,记在这句上。[[echo 词]] 跟我说、[[say 词]] 你先说(念完等孩子说「词」),[[call]] 念完进打电话。
+ * echo 没写词就取这句里的英文;一句写了几个,算最后一个
+ */
+const LINE_MARKS = new Set(['echo', 'say', 'call']);
+const englishIn = (text: string): string => (text.match(/[A-Za-z][A-Za-z']*/g) ?? []).join(' ');
 
 /** 句子锚到上一张卡;小节标题行不算卡,跳过它 */
 function lastCard(cards: readonly BoardCard[]): number | null {
@@ -130,15 +139,27 @@ function lastCard(cards: readonly BoardCard[]): number | null {
 function rawLine(line: string, cards: readonly BoardCard[], at: number): RawLine {
   const anchor = lastCard(cards);
   const cues: BoardCue[] = [];
+  let mark: { name: string; arg: string } | null = null;
   const text = line
     .replace(CUE, (_, inner: string) => {
       const [name, ...rest] = inner.trim().split(/\s+/);
-      if (name && anchor !== null) cues.push({ card: anchor, name: name.toLowerCase(), ...(rest.length ? { arg: rest.join(' ') } : {}) });
+      const n = (name ?? '').toLowerCase();
+      if (LINE_MARKS.has(n)) mark = { name: n, arg: rest.join(' ') };
+      else if (name && anchor !== null) cues.push({ card: anchor, name: n, ...(rest.length ? { arg: rest.join(' ') } : {}) });
       return '';
     })
     .replace(/\s{2,}/g, ' ')
     .trim();
-  return { text, anchor, cues, line: at };
+  const m = mark as { name: string; arg: string } | null;
+  if (!m) return { text, anchor, cues, line: at };
+  if (m.name === 'call') return { text, anchor, cues, line: at, call: true };
+  const word = m.arg || (m.name === 'echo' ? englishIn(text) : '');
+  return { text, anchor, cues, line: at, echo: { word, ...(m.name === 'say' ? { say: true as const } : {}) } };
+}
+
+/** 一句讲稿交给嘴时要带的:[[play]] 到小课堂卡、热身的 echo / say、call(runner 的 line 事件、mock 的假嘴都用它) */
+export function lineFlags(line: { cues?: readonly BoardCue[]; echo?: BoardLine['echo']; call?: true }, cards: readonly BoardCard[]): { play?: true; echo?: NonNullable<BoardLine['echo']>; call?: true } {
+  return { ...(playsLecture(line, cards) ? { play: true as const } : {}), ...(line.echo ? { echo: line.echo } : {}), ...(line.call ? { call: true as const } : {}) };
 }
 
 /** 这句的 [[play]] 锚着小课堂卡:念完放卡上那一段(实时时服务端在这句之后等孩子端放完再交讲稿,src/live/lib/queue.ts) */
@@ -208,7 +229,7 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
   const out: BoardLine[] = kept.map((r) => {
     const marks = anchorMarks(cards, phrasesIn(r.text));
     const plain = plainLine(r.text);
-    return { text: plain, audio: null, marks, ask: isQuestion(plain), anchor: r.anchor, cues: r.cues };
+    return { text: plain, audio: null, marks, ask: isQuestion(plain), anchor: r.anchor, cues: r.cues, ...(r.echo ? { echo: r.echo } : {}), ...(r.call ? { call: true as const } : {}) };
   });
   // 排版:有卡写了 same 才排行(明写的并排,其余孩子端按宽度排);接不上(上一行满了、有独占一行的卡)就另起一行并提醒。提问卡(下面补的)不在行里,rowsFor 认前缀
   let layout: BoardSection['layout'];
@@ -227,7 +248,7 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
   // 末句的锚点不动(还在它讲的那张卡的拍里);提问卡自己一拍、没有讲稿。
   // 老师还在写(partial)时不补:这时的末句不一定是最后一句。首页没有讲稿,不管
   const lastLine = out[out.length - 1];
-  if (!partial && (opts.place ?? 'board') === 'board' && lastLine?.ask && !lastLine.cues.length) {
+  if (!partial && (opts.place ?? 'board') === 'board' && lastLine?.ask && !lastLine.cues.length && !lastLine.echo && !lastLine.call) {
     const t = lineTarget(lastLine);
     // 拍给我看卡也算能答:孩子拍来的照片进它的答案栏(kid-board.ts 的 askCard)
     const answerable = (c: BoardCard | undefined): boolean => Boolean(c && (hasState(c) || c.kind === 'photo'));

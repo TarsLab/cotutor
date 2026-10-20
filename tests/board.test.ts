@@ -40,6 +40,20 @@ for (const f of fixtures) {
   check('没有 warning', r.warnings.length === 0, r.warnings.map((w) => w.text).join());
 }
 {
+  // 热身的记号(《wip/口语课改实时老师设计.md》§三之四):不是卡的动作,记在句子上;不锚卡也认
+  const r = parseBoard('好,我们先热热身!\n\n```word\n🦆 duck\nd-u-ck\n```\n\n我说一个英文,你学一个。我先来:duck! [[echo duck]]\n\n小声一点,像小老鼠:duck… [[echo]]\n\n你先说:鸭子,英文怎么说? [[say duck]]\n\n热身好啦!老师给你打个电话。 [[call]]\n');
+  const { lines, cards } = r.section;
+  check('[[echo 词]] → 句子的 echo,不进 cues,句子里不留痕', lines[1].echo?.word === 'duck' && !lines[1].echo?.say && lines[1].cues.length === 0 && lines[1].text === '我说一个英文,你学一个。我先来:duck!', JSON.stringify(lines[1]));
+  check('[[echo]] 没写词:取这句里的英文', lines[2].echo?.word === 'duck', JSON.stringify(lines[2].echo));
+  check('[[say 词]] → echo 带 say;问句末尾也不补提问卡', lines[3].echo?.word === 'duck' && lines[3].echo?.say === true && lines[3].ask && cards.every((c) => c.props.ask !== true), JSON.stringify([lines[3], cards.map((c) => c.kind)]));
+  check('[[call]] → 句子的 call', lines[4].call === true && lines[4].text === '热身好啦!老师给你打个电话。' && !lines[4].echo, JSON.stringify(lines[4]));
+  const bare = parseBoard('好,那我们现在就打电话! [[call]]\n');
+  check('[[call]] 前面没有卡也认(收掉热身那一轮常常没卡)', bare.section.lines[0].call === true && bare.section.cards.length === 0, JSON.stringify(bare.section));
+  const last = parseBoard('```word\n🚌 bus\nb-u-s\n```\n\n公共汽车呢? [[say bus]]\n');
+  check('末句是 [[say]] 的问句:不补提问卡', last.section.cards.length === 1 && last.section.lines[0].echo?.say === true, JSON.stringify(last.section.cards));
+  check('[[play]] 照旧是卡的动作', parseBoard('```text\n课\n```\n\n看这段 [[play]]。\n').section.lines[0].cues[0]?.name === 'play');
+}
+{
   const r = parseBoard('先说这个词:[平行四边形]。\n\n```text\n平行四边形\n```\n');
   check('卡写在句子后面,标注也认(整节找)', r.section.lines[0].marks[0]?.card === 0 && r.section.lines[0].anchor === null);
   const bad = parseBoard('```choice\n只有问题没有选项?\n```\n\n```text\n\n```\n\n一句。\n');

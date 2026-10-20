@@ -66,6 +66,10 @@ export interface BoardLine {
   /** 这句上面最近的一张卡(没有 = null);播到这句就滚到它,不依赖老师打括号 */
   anchor: number | null;
   cues: BoardCue[];
+  /** 热身(讲稿的 [[echo 词]] / [[say 词]]):念完等孩子说 word;say = 你先说(老师没说出来) */
+  echo?: { word: string; say?: true };
+  /** 讲稿的 [[call]]:念完进打电话 */
+  call?: true;
 }
 
 /** 一节板书 = 一轮回复:卡整块铺,讲稿逐句播;partial = 还在流式生成 */
@@ -691,7 +695,7 @@ export function askCard(section: Pick<BoardSection, 'cards' | 'lines' | 'partial
   if (section.partial) return null;
   for (let k = section.cards.length - 1; k >= 0; k--) if (section.cards[k].kind === 'photo') return k;
   const last = section.lines[section.lines.length - 1];
-  if (!last || !last.ask || last.cues.length) return null;
+  if (!last || !last.ask || last.cues.length || last.echo || last.call) return null;
   const n = section.cards.length;
   if (n && section.cards[n - 1].kind === 'text' && section.cards[n - 1].props?.ask === true) return n - 1;
   const t = lineTarget(last);

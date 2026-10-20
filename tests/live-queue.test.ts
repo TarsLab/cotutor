@@ -73,9 +73,11 @@ const run = (s: S, evs: Ev[]) => { const acts: any[] = []; for (const e of evs) 
 {
   // [[call]]:并段到那句为止;那一轮排着的、后面再来的拍都不要(打电话那段是下一轮写的)
   const r = run(queueInit(), [{ e: 'asked' }, { e: 'beat', beat: b('j1', [0]) }, { e: 'beat', beat: { ...b('j1', [1]), call: true } }, { e: 'beat', beat: b('j1', [2]) }, { e: 'done' }]);
-  check('[[call]]:并段到那句为止,那段带 call;后面排着的丢', r.acts[4]?.kind === 'read' && r.acts[4].beat.lines.join() === '0,1' && r.acts[4].beat.call === true && r.s.pending.length === 0 && !r.s.gated, JSON.stringify(r.acts[4]));
-  const r2 = run(r.s, [{ e: 'done' }, { e: 'beat', beat: b('j1', [3]) }, { e: 'beat', beat: b('j2', [0]) }]);
-  check('[[call]]:那一轮再来的拍不要;下一轮照常念', r2.acts[1] === null && r2.acts[2]?.kind === 'read' && r2.acts[2].beat.job === 'j2');
+  check('[[call]]:并段到那句为止,那段带 call、关闸(孩子端响铃);后面排着的丢', r.acts[4]?.kind === 'read' && r.acts[4].beat.lines.join() === '0,1' && r.acts[4].beat.call === true && r.s.pending.length === 0 && r.s.gated === 'call', JSON.stringify(r.acts[4]));
+  const r2 = run(r.s, [{ e: 'done' }, { e: 'beat', beat: b('j1', [3]) }, { e: 'beat', beat: b('j2', [0]) }, { e: 'pause' }, { e: 'release' }, { e: 'staged' }, { e: 'echoed' }]);
+  check('[[call]]:那一轮再来的拍不要;打电话那一轮的先排着,孩子开口的暂停 / 放过、staged、echoed 都开不了闸', r2.acts.every((a) => a === null) && r2.s.pending.length === 1 && r2.s.gated === 'call', JSON.stringify(r2.acts));
+  const r3 = run(r2.s, [{ e: 'rung' }]);
+  check('[[call]]:铃响够了(rung)→ 开闸,念打电话那一轮', r3.acts[0]?.kind === 'read' && r3.acts[0].beat.job === 'j2' && !r3.s.gated);
 }
 {
   // 声音:两次回答的块到达 1000、1010(各 200 毫秒)与 1100(100 毫秒):接着排,中间不空

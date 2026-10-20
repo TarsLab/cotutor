@@ -894,9 +894,8 @@ export class LiveCall {
   private startPhone(): void {
     if (this.phoneAt !== null) return;
     this.phoneAt = this.wall(this.play.end);
-    // 铃响够之前排着的英文开场先不交(同孩子开口时的暂停,不丢)
-    this.q = queueStep(this.q, { e: 'pause' }).s;
-    this.timers.push(setTimeout(() => { if (!this.ended && !this.holding && !this.vadOn && this.vadAwait === null) this.step({ e: 'release' }); }, Math.max(0, this.play.end - this.ms()) + (this.deps.ringMs ?? RING_MS)));
+    // 铃响够之前英文开场先不交(排队在 [[call]] 那句关着闸,rung 才开;孩子开口的暂停 / 放过开不了它)
+    this.timers.push(setTimeout(() => { if (!this.ended) this.step({ e: 'rung' }); }, Math.max(0, this.play.end - this.ms()) + (this.deps.ringMs ?? RING_MS)));
     this.appTurn('(打电话)', 'call');
   }
 

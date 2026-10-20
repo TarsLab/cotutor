@@ -6,7 +6,7 @@
  * 讲稿的 [[play]](小课堂,P3.2):并段到那句为止;交出去以后关闸,孩子端放完那一段(staged)才交后面的。
  * 一直听(《wip/实时老师常开麦设计.md》):孩子开口先 pause(不交新的、也不丢),判出这句是对老师说的才 hold(丢),放过就 release 接着交。
  * 热身(《wip/口语课改实时老师设计.md》§三之四):讲稿的 [[echo 词]] / [[say 词]] 同 [[play]],并段到那句为止、交出去关闸,孩子跟完(或等够了)echoed 才交后面的;
- * [[call]] 并段到那句为止,那一轮后面再来的拍都不要(打电话那段由下一轮写)。
+ * [[call]] 并段到那句为止、交出去关闸(孩子端响铃),铃响够了 rung 才交打电话那一轮的;那一轮后面再来的拍都不要(打电话那段由下一轮写)。
  */
 
 /** 热身那句要孩子说的:word = 记号里的词;say = 你先说(老师没说出这个词) */
@@ -23,8 +23,8 @@ export interface QueueState {
   /** 最近交进来的那一轮;打断时它后面再来的拍都丢 */
   lastJob: string | null;
   dropJob: string | null;
-  /** 交给嘴的那段最后一句要放小课堂(play:孩子端放完 staged 之前不交下一段)、要孩子跟(echo:孩子跟完 echoed 之前不交) */
-  gated: false | 'play' | 'echo';
+  /** 交给嘴的那段最后一句要放小课堂(play:孩子端放完 staged 之前不交下一段)、要孩子跟(echo:孩子跟完 echoed 之前不交)、进打电话(call:铃响够了 rung 之前不交) */
+  gated: false | 'play' | 'echo' | 'call';
   /** 念过 [[call]] 的那一轮:后面再来的拍都不要 */
   closedJob: string | null;
 }
@@ -42,7 +42,9 @@ export type QueueEvent =
   /** 孩子端放完了小课堂那一段(或放不了、被关) */
   | { e: 'staged' }
   /** 孩子跟完了 [[echo]] / [[say]] 那句(或等够了没开口) */
-  | { e: 'echoed' };
+  | { e: 'echoed' }
+  /** [[call]] 那句放完、铃响够了 */
+  | { e: 'rung' };
 
 /** read = 把这几句交给嘴;dropped = 按下时还排着没交的(调用方算孩子听到哪) */
 export type QueueAction = { kind: 'read'; beat: Beat } | { kind: 'dropped'; beats: Beat[] } | null;
@@ -65,7 +67,7 @@ function drain(s: QueueState): { s: QueueState; act: QueueAction } {
   const beat: Beat = { job, lines: take.flatMap((b) => b.lines), texts: take.flatMap((b) => b.texts), ...(last.play ? { play: true } : {}), ...(last.echo ? { echo: last.echo } : {}), ...(last.call ? { call: true as const } : {}) };
   // [[call]]:那一轮排着的、后面再来的都不要
   const pending = s.pending.filter((b) => !take.includes(b) && !(last.call && b.job === job));
-  return { s: { ...s, pending, busy: true, gated: last.play ? 'play' : last.echo ? 'echo' : false, ...(last.call ? { closedJob: job } : {}) }, act: { kind: 'read', beat } };
+  return { s: { ...s, pending, busy: true, gated: last.play ? 'play' : last.echo ? 'echo' : last.call ? 'call' : false, ...(last.call ? { closedJob: job } : {}) }, act: { kind: 'read', beat } };
 }
 
 export function queueStep(s: QueueState, ev: QueueEvent): { s: QueueState; act: QueueAction } {
@@ -83,10 +85,12 @@ export function queueStep(s: QueueState, ev: QueueEvent): { s: QueueState; act: 
       return { s: { ...s, busy: true }, act: null };
     case 'done':
       return drain({ ...s, busy: false });
-    // 各开各的闸:小课堂放完开不了等孩子跟的闸,反过来也一样
+    // 各开各的闸:小课堂放完开不了等孩子跟的闸,反过来也一样;没关闸时照常交
     case 'staged':
-      return s.gated === 'echo' ? { s, act: null } : drain({ ...s, gated: false });
+      return s.gated && s.gated !== 'play' ? { s, act: null } : drain({ ...s, gated: false });
     case 'echoed':
-      return s.gated === 'play' ? { s, act: null } : drain({ ...s, gated: false });
+      return s.gated && s.gated !== 'echo' ? { s, act: null } : drain({ ...s, gated: false });
+    case 'rung':
+      return s.gated && s.gated !== 'call' ? { s, act: null } : drain({ ...s, gated: false });
   }
 }

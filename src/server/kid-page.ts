@@ -561,6 +561,13 @@ __REEL_DOCK_CSS__
   body.live #sub, body.live #spk { display:none; }
   body.live #lv { display:flex; align-items:center; gap:14px; padding:8px 20px 4px; min-height:60px; }
   #lv-av { position:relative; flex:0 0 auto; width:44px; height:44px; }
+  /* 口语课(《wip/口语课改实时老师设计.md》§三之一):热身那拍念完,那张卡一圈慢慢呼吸的光 = 轮到你;孩子开口光变实。打电话前头像晃着响铃 */
+  #board .c.lv-turn { animation:lv-turn 2.4s ease-in-out infinite; }
+  #board .c.lv-turn.hear { animation:none; box-shadow:0 0 0 4px #3d7fd9, 0 0 0 10px #3d7fd933; }
+  @keyframes lv-turn { 0%,100% { box-shadow:0 0 0 3px #3d7fd966, 0 0 0 10px #3d7fd914; } 50% { box-shadow:0 0 0 6px #3d7fd999, 0 0 0 20px #3d7fd90f; } }
+  #lv-av.ring { animation:lv-phone 1.2s ease-in-out infinite; }
+  @keyframes lv-phone { 0%,70%,100% { transform:rotate(0); } 10% { transform:rotate(-10deg); } 25% { transform:rotate(9deg); } 40% { transform:rotate(-6deg); } 55% { transform:rotate(3deg); } }
+  @media (prefers-reduced-motion: reduce) { #board .c.lv-turn { animation:none; box-shadow:0 0 0 4px #3d7fd966; } #lv-av.ring { animation:none; } }
   #lv-av .av { width:100%; height:100%; font-size:20px; }
   #lv-av::before, #lv-av::after { content:""; position:absolute; border-radius:50%; border:3px solid var(--tc, var(--accent)); opacity:0; pointer-events:none; transition:opacity .3s; }
   #lv-av::before { inset:-12%; } #lv-av::after { inset:-26%; }
@@ -774,7 +781,7 @@ __AUDIO_JS__
   S.pdate = null;
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
-  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, lcPending: false, greet: false, gateOn: false };
+  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, endLine: null, ring: null, ringEnd: 0, lcPending: false, greet: false, gateOn: false };
   /** 实时的一节露到 / 画到第几句:这次连着念的轮(jobs)只到嘴念到的那句(脑写完了、嘴还没念到的不先露;被打断没念到的就不露);
    *  别的(重开页面、以前的、板书的)整节 → undefined */
   const liveHeard = (s) => (s && s.live && LV.on && LV.jobs.has(s.job) ? (LV.heard.has(s.job) ? LV.heard.get(s.job) : -1) : undefined);
@@ -3493,12 +3500,12 @@ __REEL_DOCK_JS__
     LV.model = r.model;
     for (const f of r.effects) {
       switch (f.kind) {
-        case 'hold': LV.playLine = null; lvSend({ t: 'hold' }); break;
+        case 'hold': LV.playLine = null; LV.endLine = null; lvSend({ t: 'hold' }); break;
         case 'release': lvSend({ t: 'release', body: data }); break;
         case 'hush': lvSend({ t: 'hush' }); break;
         case 'send': lvSend({ t: 'send', body: data }); break;
         case 'enqueue': if (LV.audio) LV.audio.play(data); liveDrainWatch(); break;
-        case 'flush': LV.playLine = null; if (LV.audio) LV.audio.flush(); break;
+        case 'flush': LV.playLine = null; LV.endLine = null; if (LV.audio) LV.audio.flush(); break;
         case 'stopCard': silence(); break;
         case 'openLecture': liveLecture(); break;
         // 小课堂那一段停下:舞台停在那一帧,不再算讲稿委托的(放完 / 关了不再回 staged)
@@ -3510,9 +3517,48 @@ __REEL_DOCK_JS__
         case 'listen': lvSend({ t: 'listen', open: LV.model.open }); break;
         case 'gate': liveGateSync(); break;
         case 'duck': case 'unduck': if (LV.audio) LV.audio.duck(f.kind === 'duck' ? 0.3 : 1); break;
+        case 'ring': liveRing(); break;
+        case 'stopRing': liveRingStop(); break;
       }
     }
     return r.effects;
+  };
+  /** 口语课 [[call]] 那句放完:孩子端自己响铃(440 + 480 赫兹,响两下停两秒,最多 15 秒),头像晃;嘴一出声铃停(liveStep) */
+  const RING_MAX_MS = 15000;
+  const liveRing = () => {
+    liveRingStop();
+    $('#lv-av').classList.add('ring');
+    LV.ringEnd = setTimeout(() => { liveRingStop(); if (LV.model.status === 'ring') liveDispatch({ type: 'ringEnd' }); }, RING_MAX_MS);
+    const ac = LV.audio && LV.audio.ctx;
+    if (!ac) return;
+    try {
+      const g = ac.createGain(); g.gain.value = 0; g.connect(ac.destination);
+      const o1 = ac.createOscillator(), o2 = ac.createOscillator();
+      o1.frequency.value = 440; o2.frequency.value = 480; o1.connect(g); o2.connect(g);
+      const t0 = ac.currentTime + 0.05;
+      for (let b = t0; b < t0 + RING_MAX_MS / 1000; b += 3) for (const [a, d] of [[0, 0.4], [0.6, 0.4]]) { g.gain.setValueAtTime(0.06, b + a); g.gain.setValueAtTime(0, b + a + d); }
+      o1.start(t0); o2.start(t0);
+      LV.ring = { o1, o2, g };
+    } catch {}
+  };
+  const liveRingStop = () => {
+    clearTimeout(LV.ringEnd);
+    $('#lv-av').classList.remove('ring');
+    const r = LV.ring; LV.ring = null;
+    if (r) { try { r.o1.stop(); r.o2.stop(); r.g.disconnect(); } catch {} }
+  };
+  /** 热身那拍(讲稿 [[echo]] / [[say]])锚的卡:板上的那个元素;节还没拉到 → null */
+  const liveLineCard = (l) => {
+    const i = S.sections.findIndex((x) => x.job === l.job);
+    const ln = i >= 0 ? S.sections[i].lines[l.line] : null;
+    const k = ln ? lineTarget(ln) : null;
+    return k === null ? null : $('#board').querySelector('[data-sec="' + i + '"] [data-card="' + k + '"]');
+  };
+  /** 轮到孩子跟:那张卡亮着(liveStep 的 turn);在听你说时光变实 */
+  const liveTurnUi = () => {
+    const el = LV.on && LV.model.turn && LV.endLine && LV.endLine.echo ? liveLineCard(LV.endLine) : null;
+    for (const x of document.querySelectorAll('#board .c.lv-turn')) if (x !== el) x.classList.remove('lv-turn', 'hear');
+    if (el) { el.classList.add('lv-turn'); el.classList.toggle('hear', LV.model.hearing); }
   };
   /** 嘴在说时每 150 毫秒看一眼孩子端的队列放完没有 */
   const liveDrainWatch = () => {
@@ -3520,7 +3566,7 @@ __REEL_DOCK_JS__
     LV.drain = setInterval(() => {
       if (LV.model.status === 'mouth' && LV.audio && LV.audio.playing()) return;
       clearInterval(LV.drain); LV.drain = 0;
-      if (LV.model.status === 'mouth') liveDispatch({ type: 'drained', ...(LV.playLine ? { play: livePlayable(LV.playLine) ? 'open' : 'skip' } : {}) });
+      if (LV.model.status === 'mouth') liveDispatch({ type: 'drained', ...(LV.playLine ? { play: livePlayable(LV.playLine) ? 'open' : 'skip' } : LV.endLine && LV.endLine.echo ? { echo: true } : LV.endLine && LV.endLine.call ? { call: true } : {}) });
     }, 150);
   };
   /** 卡上的声音(点读、单词、示范、回放)要响:实时时问 liveStep(嘴在说、孩子按着、在录都不响);板书时停讲稿(segment) */
@@ -3542,6 +3588,7 @@ __REEL_DOCK_JS__
   };
   const liveCaption = () => {
     liveListenUi();
+    liveTurnUi();
     const cap = $('#lv-cap'), c = cap.querySelector('.lv-cur');
     cap.querySelector('.lv-prev').textContent = LV.cap.prev;
     const cut = Boolean(LV.cap.cut) && LV.cap.cut === LV.cap.cur;
@@ -3590,8 +3637,10 @@ __REEL_DOCK_JS__
     if (open()) return;
     loadDay(false).then(() => { if (LV.model.status === 'lecture' && !open()) liveDispatch({ type: 'lectureDone' }); }, () => { if (LV.model.status === 'lecture') liveDispatch({ type: 'lectureDone' }); });
   };
-  const liveRead = (job, line, text, play) => {
+  const liveRead = (job, line, text, play, echo, call) => {
     LV.playLine = play ? { job, line } : null;
+    // 热身那拍([[echo]] / [[say]])、打电话那句([[call]]):放完了亮卡 / 响铃
+    LV.endLine = echo || call ? { job, line, echo, call } : null;
     if (!LV.heard.has(job) || line > LV.heard.get(job)) LV.heard.set(job, line);
     const i = S.sections.findIndex((s) => s.job === job);
     if (i >= 0) {
@@ -3633,10 +3682,11 @@ __REEL_DOCK_JS__
         if (m.of !== 'catch') break;
         if (typeof m.done === 'string') { LV.cap.catching = false; if (m.done) LV.cap.cur = m.done; renderSubtitle(); break; }
         if (!m.delta) break;
-        if (!LV.cap.catching) { LV.cap.catching = true; if (LV.cap.cur) LV.cap.prev = LV.cap.cur; LV.cap.cur = ''; }
+        // 接住开始:上一句念的热身那拍、打电话那句不再算(放完的是接住,不亮卡、不响铃)
+        if (!LV.cap.catching) { LV.cap.catching = true; LV.endLine = null; LV.playLine = null; if (LV.cap.cur) LV.cap.prev = LV.cap.cur; LV.cap.cur = ''; }
         LV.cap.cur += m.delta; renderSubtitle();
         break;
-      case 'read': liveRead(String(m.job || ''), Number(m.line), String(m.text || ''), m.play === true); break;
+      case 'read': liveRead(String(m.job || ''), Number(m.line), String(m.text || ''), m.play === true, m.echo === true, m.call === true); break;
       // 转写是空的(按了没说清):嘴说没听清,不会有这一轮
       case 'kid': if (!String(m.text || '').trim()) { S.pending = false; renderSubtitle(); } else if (LV.model.open) { S.pending = true; if (!S.waitSince) S.waitSince = Date.now(); renderSubtitle(); } break;
       case 'turn': liveTurn(m); break;

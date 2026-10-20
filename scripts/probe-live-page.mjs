@@ -7,7 +7,8 @@
  *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点「?」= 问这张卡的一轮;不出卡的一轮板上留讲稿的字;嘴连不上回到板书;
  *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1);讲稿的 [[play]] 念完铺满放小课堂那一段,放完嘴才接着念(P3.2);
  *   右上角「一直听」:换一条开 VAD 的连接、不用按声音一直推、关麦就不推、一段声音收下了就是一轮(《wip/实时老师常开麦设计.md》);
- *   首页新话题旁边的「一直听」:进新话题就是一直听、嘴先招呼一句。
+ *   首页新话题旁边的「一直听」:进新话题就是一直听、嘴先招呼一句;
+ *   口语课(《wip/口语课改实时老师设计.md》):口语单页过来点一下开始,热身那拍念完卡亮「轮到你」、孩子跟了下一拍,[[call]] 念完响铃、老师说英文。
  * iPad 横屏、手机各截一张。
  * 用法:node scripts/probe-live-page.mjs [--out <截图目录>] [--keep]
  */
@@ -323,6 +324,51 @@ try {
   const greeted = await untilNode(() => fake.conns.length > ncG && conn().session?.turn_detection?.type === 'server_vad' && conn().responses.some((r) => r?.instructions === catchCue('greet')), 10000);
   const pref = await evaluate(`localStorage.getItem('kid-live-listen')`);
   ok('首页新话题旁边有「一直听」;点了进新话题、一直听(开 VAD 的连接)、嘴先招呼一句;设备上记的还是按住说', hasBtn && liveOpen && greeted && pref === 'hold', JSON.stringify({ hasBtn, liveOpen, greeted, pref }));
+
+  // ---- 口语课(《wip/口语课改实时老师设计.md》):口语单拍好进英语老师页,点一下开始;热身那拍念完卡亮「轮到你」,孩子跟了下一拍;[[call]] 念完响铃,铃响够了老师说英文 ----
+  await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  const talkId = '2026-10-17-1106';
+  mkdirSync(join(wsRoot, 'talk', talkId), { recursive: true });
+  writeFileSync(join(wsRoot, 'talk', talkId, 'talk.json'), JSON.stringify({ id: talkId, createdAt: '2026-10-17T03:06:13.381Z', status: 'ready', list: { words: [{ en: 'duck', zh: '鸭子', emoji: '🦆', chunks: ['d', 'u', 'c', 'k'] }], sentences: [{ en: 'The ducks are under the bus.', zh: '鸭子们在公交车下面。' }] } }));
+  cfg.live.voices['english-tutor'] = 'Theo Calm';
+  cfg.talk = { ...(cfg.talk ?? {}), enabled: true };
+  writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
+  await ctx.reload();
+  fake.kidText = '';
+  fake.kidTexts = [];
+  await evaluate(`document.querySelector('#back').click()`);
+  await sleep(300);
+  const ncT = fake.conns.length;
+  await send('Page.navigate', { url: `${base}/?tutor=english-tutor&talk=${talkId}` });
+  const talkBoard = await until(`Boolean(document.querySelector('#talk-go'))`, 40);
+  await untilNode(() => fake.conns.length > ncT && Boolean(conn()?.session), 8000);
+  const tb = await evaluate(`({ go: document.querySelector('#talk-go').textContent, pill: document.querySelector('#pill').hidden, open: document.body.classList.contains('lv-open') })`);
+  const greetedT = conn().responses.some((r) => r?.instructions === catchCue('greet'));
+  ok('口语单页过来:英语老师页、一直听、板上一颗「先热身,再打电话」,没点之前输入条收着、嘴不招呼', talkBoard && tb.go.includes('先热身,再打电话') && tb.pill && tb.open && !greetedT, JSON.stringify({ ...tb, greetedT }));
+  console.log('  ', await shot('talk-start-ipad.png'));
+  await tap('#talk-go');
+  const warmCaught = await untilNode(() => conn().responses.some((r) => r?.instructions === catchCue('warm')), 10000);
+  const turnLit = await until(`Boolean(document.querySelector('#board .c.lv-turn'))`, 120);
+  const firstEcho = conn().responses.some((r) => (r?.instructions ?? '').includes('我先来:duck!'));
+  ok('点开始:嘴说「好,我们先热热身!」、脑写热身;第一拍念完,那张单词卡亮「轮到你」(服务端在等,不往下念)', warmCaught && firstEcho && turnLit && !conn().responses.some((r) => (r?.instructions ?? '').includes('小声一点')), JSON.stringify({ warmCaught, firstEcho, turnLit }));
+  console.log('  ', await shot('talk-turn-ipad.png'));
+  // 孩子跟:假麦克风嘀一声转写成 duck(开头那几声赶上嘴还在出声的会当回声放过,接着嘀)
+  fake.kidText = 'duck';
+  const nextBeat = await untilNode(() => conn().responses.some((r) => (r?.instructions ?? '').includes('小声一点')), 15000);
+  ok('孩子跟了:下一拍接着念(不接住、不开新一轮)', nextBeat && !conn().responses.some((r) => r?.instructions === catchCue('voice') || r?.instructions === catchCue('answer')));
+  // 你先说那拍也答 duck;念到打电话那句就不说了(那句还在放时孩子说话是对老师说的,会打断、不响铃)
+  await untilNode(() => conn().responses.some((r) => (r?.instructions ?? '').includes('老师给你打个电话')), 20000);
+  fake.kidText = '';
+  const rang = await until(`document.querySelector('#lv-av').classList.contains('ring')`, 120);
+  ok('[[call]] 那句念完:头像晃着响铃', rang);
+  if (rang) console.log('  ', await shot('talk-ring-ipad.png'));
+  const opened = await untilNode(() => conn().responses.some((r) => (r?.instructions ?? '').includes('Hello Ray!')), 20000);
+  const stopped = await until(`!document.querySelector('#lv-av').classList.contains('ring')`, 40);
+  ok('铃响够了:老师说英文开场,铃停', opened && stopped, JSON.stringify({ opened, stopped }));
+  const todayT = await (await fetch(`${base}/api/kid/conversations/english-tutor/today`)).json();
+  const idxT = JSON.parse(readFileSync(join(wsRoot, 'conversations', 'english-tutor', `${todayT.date}.json`), 'utf8'));
+  const firstT = idxT.messages.find((m) => m.from === 'kid' && m.talk === talkId);
+  ok('那个话题跑 activity 口语课、记着口语单是哪份', firstT?.activity?.name === '口语课' && String(firstT.activity.params?.口语单 ?? '').includes('🦆 duck'), JSON.stringify(firstT?.activity ?? null).slice(0, 200));
 
   ok('页面没有报错', errors.length === 0, errors.slice(0, 3).join(' | '));
 } finally {

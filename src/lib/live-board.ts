@@ -4,10 +4,11 @@
  * 和板书的 step(kid-board.ts)是两个状态机,页面按这位老师这一次是不是实时 dispatch 到其中一个。
  * 改规则的顺序:先改表 → 再改 tests/live-player.test.ts → 最后改这里。
  * 一直听(《wip/实时老师常开麦设计.md》,全双工):孩子不用按,服务端的 VAD 判开口 / 说完;推不推孩子的声音是状态的函数(liveGate),一变就告诉服务端 gate。
+ * 口语课(《wip/口语课改实时老师设计.md》§三之四):热身的 [[echo]] / [[say]] 那句放完,那张卡亮「轮到你」(turn);[[call]] 那句放完响铃(孩子端自己的声音),嘴一出声铃停。
  */
 
-/** quiet 安静 · holding 孩子按着说话 · mouth 嘴的声音在放(或还在来)· card 卡的声音在念 · recording 录音卡在录 · lecture 在放小课堂卡上那一段(讲稿的 [[play]]) */
-export type LiveStatus = 'quiet' | 'holding' | 'mouth' | 'card' | 'recording' | 'lecture';
+/** quiet 安静 · holding 孩子按着说话 · mouth 嘴的声音在放(或还在来)· card 卡的声音在念 · recording 录音卡在录 · lecture 在放小课堂卡上那一段(讲稿的 [[play]])· ring 在响铃(讲稿的 [[call]]) */
+export type LiveStatus = 'quiet' | 'holding' | 'mouth' | 'card' | 'recording' | 'lecture' | 'ring';
 
 export interface LiveModel {
   status: LiveStatus;
@@ -18,13 +19,15 @@ export interface LiveModel {
   hearing: boolean;
   ducked: boolean;
   muted: boolean;
+  /** 口语课热身:刚放完 [[echo]] / [[say]] 那句,那张卡亮着「轮到你」 */
+  turn: boolean;
 }
 
 /**
  * 孩子做的:press 按满 150 毫秒 · release 松手 · cancel 上滑松手 · cardTap 点卡上的声音 · ask 点卡上的「?」· send 打字发出、交答案、发照片 ·
  * stage 开 / 关舞台、拿起相机 · recStart 按下录音键 · recEnd 松手、上滑、关舞台(停录);
- * 声音的:audio 嘴的一块声音到了 · drained 孩子端的队列放完了(play:刚念完的那句 [[play]] 到小课堂卡,open = 能放、skip = 课包读不出来)·
- * cardEnded 卡的声音念完 / 停了 · lectureDone 小课堂那一段放完 / 孩子关了;
+ * 声音的:audio 嘴的一块声音到了 · drained 孩子端的队列放完了(play:刚念完的那句 [[play]] 到小课堂卡,open = 能放、skip = 课包读不出来;
+ * echo:刚念完的是热身的 [[echo]] / [[say]];call:刚念完的是 [[call]])· cardEnded 卡的声音念完 / 停了 · lectureDone 小课堂那一段放完 / 孩子关了 · ringEnd 铃响够了;
  * 服务端的:flush 清播放队列 · cards 卡铺上来、老师写完 · drop 连不上 / 断了;页面的:reset 换老师、关老师页;
  * 一直听:listen 孩子点右上角的开关 · mute / unmute 点麦克风胶囊 · vad 服务端说孩子开口 / 说完 · duck / unduck 服务端让嘴的声音压低 / 恢复
  */
@@ -33,8 +36,9 @@ export type LiveEvent =
   | { type: 'release' }
   | { type: 'cancel' }
   | { type: 'audio' }
-  | { type: 'drained'; play?: 'open' | 'skip' }
+  | { type: 'drained'; play?: 'open' | 'skip'; echo?: true; call?: true }
   | { type: 'lectureDone' }
+  | { type: 'ringEnd' }
   | { type: 'flush' }
   | { type: 'cardTap' }
   | { type: 'cardEnded' }
@@ -57,7 +61,8 @@ export type LiveEvent =
  * 要做的事,按顺序执行。hold / release / hush / send = 告诉服务端(send 的 body 页面带上);enqueue = 放刚到的这块嘴的声音(没有就丢掉);
  * flush = 清掉孩子端没放的嘴的声音;stopCard / playCard = 停 / 念卡上的声音;openLecture / stopLecture = 铺满放 / 停下小课堂那一段(舞台停在那一帧);
  * staged = 告诉服务端那一段放完了(后面的讲稿接着交给嘴);board = 这位老师这一次回到板书;render = 重画字幕与头像;
- * 一直听:listen = 告诉服务端换了模式;gate = 告诉服务端推 / 不推了(on);duck / unduck = 嘴的声音压到三成 / 恢复
+ * 一直听:listen = 告诉服务端换了模式;gate = 告诉服务端推 / 不推了(on);duck / unduck = 嘴的声音压到三成 / 恢复;
+ * 口语课:ring / stopRing = 响铃 / 铃停(卡亮不亮看 turn,随 render 画)
  */
 export type LiveEffect =
   | { kind: 'hold' }
@@ -76,22 +81,25 @@ export type LiveEffect =
   | { kind: 'listen' }
   | { kind: 'gate'; on: boolean }
   | { kind: 'duck' }
-  | { kind: 'unduck' };
+  | { kind: 'unduck' }
+  | { kind: 'ring' }
+  | { kind: 'stopRing' };
 
 export function initialLive(): LiveModel {
-  return { status: 'quiet', cut: false, open: false, hearing: false, ducked: false, muted: false };
+  return { status: 'quiet', cut: false, open: false, hearing: false, ducked: false, muted: false, turn: false };
 }
 
-/** 一直听时推不推孩子的声音:没关麦,卡没在念、没在录、小课堂没在放(这些时候进麦的不是对老师说的) */
+/** 一直听时推不推孩子的声音:没关麦,卡没在念、没在录、小课堂没在放、没在响铃(这些时候进麦的不是对老师说的) */
 export function liveGate(m: LiveModel): boolean {
-  return m.open && !m.muted && m.status !== 'card' && m.status !== 'recording' && m.status !== 'lecture' && m.status !== 'holding';
+  return m.open && !m.muted && m.status !== 'card' && m.status !== 'recording' && m.status !== 'lecture' && m.status !== 'ring' && m.status !== 'holding';
 }
 
-/** 停掉孩子端在出的声音:嘴的清掉、卡的停、小课堂那一段停下 */
+/** 停掉孩子端在出的声音:嘴的清掉、卡的停、小课堂那一段停下、铃停 */
 function hushLocal(m: LiveModel, fx: LiveEffect[]): void {
   if (m.status === 'mouth') fx.push({ kind: 'flush' });
   if (m.status === 'card') fx.push({ kind: 'stopCard' });
   if (m.status === 'lecture') fx.push({ kind: 'stopLecture' });
+  if (m.status === 'ring') fx.push({ kind: 'stopRing' });
 }
 
 export function liveStep(model: LiveModel, ev: LiveEvent): { model: LiveModel; effects: LiveEffect[] } {
@@ -129,14 +137,21 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
       if (m.status === 'holding' || m.status === 'recording') break;
       if (m.status === 'card') fx.push({ kind: 'stopCard' });
       if (m.status === 'lecture') fx.push({ kind: 'stopLecture' });
+      if (m.status === 'ring') fx.push({ kind: 'stopRing' });
       fx.push({ kind: 'enqueue' });
-      if (m.status !== 'mouth') { to('mouth', { cut: false }); fx.push({ kind: 'render' }); }
+      if (m.status !== 'mouth') { to('mouth', { cut: false, turn: false }); fx.push({ kind: 'render' }); }
       break;
     case 'drained':
       if (m.status !== 'mouth') break;
-      // [[play]]:那句念完了铺满放那一段;放不了就告诉服务端接着交
+      // [[play]]:那句念完了铺满放那一段;放不了就告诉服务端接着交。[[call]]:响铃。[[echo]] / [[say]]:安静,那张卡亮「轮到你」
       if (ev.play === 'open') { fx.push({ kind: 'openLecture' }); to('lecture'); }
-      else { if (ev.play === 'skip') fx.push({ kind: 'staged' }); to('quiet'); }
+      else if (ev.call) { fx.push({ kind: 'ring' }); to('ring'); }
+      else { if (ev.play === 'skip') fx.push({ kind: 'staged' }); to('quiet', ev.echo ? { turn: true } : {}); }
+      fx.push({ kind: 'render' });
+      break;
+    case 'ringEnd':
+      if (m.status !== 'ring') break;
+      to('quiet');
       fx.push({ kind: 'render' });
       break;
     case 'lectureDone':
@@ -148,7 +163,7 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
     case 'flush':
       fx.push({ kind: 'flush' });
       if (m.ducked) { fx.push({ kind: 'unduck' }); m = { ...m, ducked: false }; }
-      if (m.status === 'mouth') { to('quiet'); fx.push({ kind: 'render' }); }
+      if (m.status === 'mouth' || m.turn) { to(m.status === 'mouth' ? 'quiet' : m.status, { turn: false }); fx.push({ kind: 'render' }); }
       break;
     case 'cardTap':
       if (m.status !== 'quiet' && m.status !== 'card') break;
@@ -164,7 +179,7 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
       if (m.status === 'holding') fx.push({ kind: 'hush' });
       hushLocal(m, fx);
       fx.push({ kind: 'send' });
-      to('quiet', { cut: m.status === 'mouth' });
+      to('quiet', { cut: m.status === 'mouth', turn: false });
       fx.push({ kind: 'render' });
       break;
     case 'cards':
@@ -173,20 +188,20 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
     case 'recStart':
       hushLocal(m, fx);
       fx.push({ kind: 'hush' });
-      to('recording');
+      to('recording', { turn: false });
       fx.push({ kind: 'render' });
       break;
     case 'recEnd':
       if (m.status === 'recording') { to('quiet'); fx.push({ kind: 'render' }); }
       break;
     case 'drop':
-      fx.push({ kind: 'flush' }, { kind: 'stopCard' }, { kind: 'stopLecture' }, { kind: 'board' });
+      fx.push({ kind: 'flush' }, { kind: 'stopCard' }, { kind: 'stopLecture' }, { kind: 'stopRing' }, { kind: 'board' });
       if (m.ducked) fx.push({ kind: 'unduck' });
       // 一直听是孩子选的说话方式,不是声音的状态:清了也留着
       m = { ...initialLive(), open: m.open };
       break;
     case 'reset':
-      fx.push({ kind: 'flush' }, { kind: 'stopCard' }, { kind: 'stopLecture' });
+      fx.push({ kind: 'flush' }, { kind: 'stopCard' }, { kind: 'stopLecture' }, { kind: 'stopRing' });
       if (m.ducked) fx.push({ kind: 'unduck' });
       m = { ...initialLive(), open: m.open };
       break;

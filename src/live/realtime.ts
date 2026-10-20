@@ -14,6 +14,7 @@
  * 轮次:manual = 手动(口语课的跟读段:relay 按响度判出开口才 append、停了 commit 拿转写,下一步由应用塞 cue + response.create,见 src/talk/relay.ts);semantic_vad / server_vad = 服务端判(聊那段;实时老师的一直听也是,但 create_response / interrupt_response 关着,回不回、掐不掐由应用定)。
  *   一直听的真连(2026-10-20,scripts/probe-live-vad.mjs):孩子还在说时就有 conversation.item.created(不算收下)、转写片段;speech_stopped 与 committed 同一刻,
  *   转写约 0.2 秒后到;semantic_vad 不收的一段回 error「not accepted by semantic turn detection」(走 onRejected,不是错);commit 了 300 秒没回答报 response_idle_timeout,会话死。
+ *   semantic_vad 一两个词的回答(好的、Yes、Red)不报开口,嘴先问了也不报;噪声、「嗯」、笑声也不报。server_vad 短的都收,「嗯」、笑声也报(噪声不报)。
  *   服务端的规矩(2026-10-10 真连):turn_detection 的 silence_duration_ms 喂过音频就不能再改(切成 null 再切回来也回到缺省 800),
  *   type 在 null 与 vad 之间随时能切。所以跟读与聊各开一条会话(跟读手动;聊 semantic_vad 带自己的 silence),setTurn 只在不改 silence 时用。
  * 不抛:连不上、断了、服务端报错都走 onClose / onError;send 在没连上时丢弃并回 false。

@@ -12,7 +12,15 @@ export type Verdict = { take: true } | { take: false; why: Skip };
 export const ECHO_WINDOW_MS = 10_000;
 /** 重合到这么多算回声 */
 const ECHO_RATIO = 0.6;
-const FILLERS = new Set(['嗯', '啊', '哦', '呃', '哈', '额', '唔', '噢', '诶', '欸', '哎', '嗯嗯', '啊啊', '哦哦', '嗯啊', 'um', 'uh', 'hmm', 'mm']);
+/** 语气词与笑声:中文按字(全是这些字就算,「哈哈哈」「嗯嗯」也算),英文按词(server_vad 把「嗯」转成 And.,2026-10-20 探针) */
+const FILLER_CHARS = new Set([...'嗯啊哦呃哈额唔噢诶欸哎呵嘿']);
+const FILLER_WORDS = new Set(['um', 'uh', 'hmm', 'mm', 'mhm', 'ah', 'oh', 'eh', 'en', 'and', 'haha', 'hahaha']);
+const isFiller = (text: string): boolean => {
+  const t = bare(text);
+  if (t && [...t].every((c) => FILLER_CHARS.has(c))) return true;
+  const words = text.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  return words.length > 0 && words.length <= 3 && words.every((w) => FILLER_WORDS.has(w)) && !/[\u4e00-\u9fff]/.test(text);
+};
 
 /** 只留字:去标点、空白,英文小写 */
 export const bare = (s: string): string => s.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
@@ -39,7 +47,7 @@ export function overlap(text: string, said: string): number {
 export function judge(text: string, o: { asked: boolean; said: { text: string; at: number }[]; now: number; mouthOn?: boolean }): Verdict {
   const t = bare(text);
   if (!t) return { take: false, why: 'empty' };
-  if (!o.asked && t.length <= 2 && FILLERS.has(t)) return { take: false, why: 'filler' };
+  if (!o.asked && isFiller(text)) return { take: false, why: 'filler' };
   const recent = o.said.filter((x) => o.now - x.at <= ECHO_WINDOW_MS).map((x) => x.text).join('');
   // 两个字以内的不比回声(「对」「好的」碰巧在嘴的话里也常见)
   if (o.mouthOn !== false && recent && t.length > 2 && overlap(t, recent) >= ECHO_RATIO) return { take: false, why: 'echo' };

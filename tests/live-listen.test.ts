@@ -11,6 +11,7 @@ const j = (text: string, asked = false, s = said) => judge(text, { asked, said: 
 
 check('空的、只有标点:放过 empty', !j('').take && (j('。') as { why: string }).why === 'empty' && (j('   ') as { why: string }).why === 'empty');
 check('老师没问时只有「嗯」「啊」:放过 filler', (j('嗯。') as { why: string }).why === 'filler' && (j('啊啊') as { why: string }).why === 'filler' && (j('Um.') as { why: string }).why === 'filler');
+check('笑声、一串语气词、server_vad 转成英文的「嗯」(And.)也放过', (j('哈哈哈。') as { why: string }).why === 'filler' && (j('嗯嗯嗯') as { why: string }).why === 'filler' && (j('And.') as { why: string }).why === 'filler' && (j('Oh, um.') as { why: string }).why === 'filler' && j('And then?').take === true && j('Red.').take);
 check('老师刚问了:「嗯」「对」是回答,收下', j('嗯。', true).take && j('对。', true).take && j('好的', true).take);
 check('一两个字的回答不当回声(碰巧在嘴的话里)', j('操场', false).take && j('下课', false).take);
 check('嘴的话被麦克风收回来(转写是嘴说过的,哪怕只认出一截):放过 echo', (j('小朋友们都跑到操场上') as { why: string }).why === 'echo' && (j('下课的时候,小朋友们') as { why: string }).why === 'echo');

@@ -48,7 +48,7 @@ const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();
 const finished: [string, string][] = [];
 // 心跳缺省 30 秒,前面几段跑不到;断线那段改短
-const liveDeps: { endpoint: string; env: NodeJS.ProcessEnv; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) };
+const liveDeps: { endpoint: string; env: NodeJS.ProcessEnv; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; fillMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) };
 const liveUpgrade = makeLiveUpgrade(liveDeps);
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
@@ -285,6 +285,31 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   k.ws.send(JSON.stringify({ t: 'bye' }));
   await until(() => k.closed !== null);
+}
+
+{
+  // ---- 垫话(P4,设想稿拍板 12):接住以后脑想得久(讲稿一句还没有),嘴垫一句;一轮一次,讲稿照常念完 ----
+  liveDeps.fillMs = 400;
+  const k = await connect('chinese-tutor');
+  await until(() => has(k, (m) => m.t === 'ready'));
+  const c = fake.conns.at(-1)!;
+  fake.kidText = '工具慢,板书讲讲三角形';
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: { newThread: true } }));
+  const okFill = await until(() => c.responses.some((r) => r?.instructions === catchCue('fill')), 5000);
+  await until(() => has(k, (m) => m.t === 'turn'), 10000);
+  const turn = k.msgs.find((m) => m.t === 'turn')!;
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  const lines: string[] = (indexOf(localDate(ctx.now())).messages.find((m) => m.job === turn.job)?.section?.lines ?? []).map((l: Msg) => String(l.text));
+  const okRead = await until(() => k.msgs.filter((m) => m.t === 'read' && m.job === turn.job).length === lines.length, 10000);
+  const kinds = c.responses.map((r) => (r?.instructions === catchCue('voice') ? '接住' : r?.instructions === catchCue('fill') ? '垫' : '念')).join(',');
+  const evFile = join(wsRoot, 'conversations', 'chinese-tutor', `${localDate(ctx.now())}.${turn.job}.events.jsonl`);
+  await until(() => readFileSync(evFile, 'utf8').includes('"kind":"fill"'), 2000);
+  check('垫话:接住以后讲稿一句还没有,嘴垫一句(一次)、字幕当接住的字上;之后讲稿照常念完;事件记一条 fill', okFill && okRead && lines.length >= 2 && kinds.startsWith('接住,垫,念') && kinds.split(',').filter((x) => x === '垫').length === 1 && has(k, (m) => m.t === 'tutor' && m.of === 'catch' && typeof m.done === 'string') && readFileSync(evFile, 'utf8').includes('"kind":"fill","text":"我想一想怎么讲"'), JSON.stringify({ kinds, okFill, okRead, lines }));
+  k.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => k.closed !== null);
+  liveDeps.fillMs = undefined;
 }
 
 {

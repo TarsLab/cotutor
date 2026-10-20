@@ -258,6 +258,11 @@ check('时长的写法', reelDuration(23400) === '23 秒' && reelDuration(130000
   // 孩子端的播放器实时时只收事件不念:它的 play 记录(thinking / done)不该把照通话放的句抹掉
   const withPlays = buildReel(input([L1, L2, L3], { events: evL, calls: [call as unknown as NonNullable<ReelInput['calls']>[number]], plays: [{ at: T + 2400, k: 'play', job: 'L1', line: -1, status: 'thinking' }, { at: T + 6400, k: 'play', job: 'L1', line: 1, status: 'done' }] }))!;
   check('实时:有孩子端的 play 记录也照通话放(实录不改照通话的轮)', withPlays.says.map((x) => `${x.job}:${x.line}:${x.from - T}`).join() === 'L1:0:6000,L1:1:8000,L2:0:16000,L2:1:18000' && withPlays.tracks.find((x) => x.job === 'L1')?.doneAt === T + 10000, JSON.stringify(withPlays.says));
+  // 脑想得久,嘴垫了一句(第一句之前的第二段嘴的声音):也是 mouth 的一段,带它说的
+  const fillCall = { audio: call.audio, startAt: T, msgs: [[100, 'i', { t: 'hold' }], [1500, 'i', { t: 'release', body: {} }], [2000, 'o', { t: 'tutor', of: 'catch', done: '嗯,我听到了' }], [2300, 'o', { t: 'turn', job: 'L1', thread: 'th' }], [6600, 'o', { t: 'tutor', of: 'catch', done: '我想一想怎么讲' }], [12000, 'o', { t: 'read', job: 'L1', line: 0, text: '一' }], [14000, 'o', { t: 'read', job: 'L1', line: 1, text: '二' }]], playing: [[2100, 2700], [6500, 7600], [12000, 16000]] };
+  const rf = buildReel(input([L1], { events: evL, calls: [fillCall as unknown as NonNullable<ReelInput['calls']>[number]] }))!;
+  const fclips = rf.clips.map((c) => `${c.kind}:${c.from - T}-${c.to - T}${c.text ? ':' + c.text : ''}`).join(' ');
+  check('实时:嘴垫的那句也是嘴的一段(带它说的),等老师只算松手到接住', fclips === 'voice:100-1500:三明治怎么写 mouth:2100-2700:嗯,我听到了 mouth:6500-7600:我想一想怎么讲' && rf.waits.map((w) => `${w.from - T}-${w.to - T}`).join() === '1500-2100', fclips);
   const noCall = buildReel(input([L1]))!;
   check('实时的轮没有通话的录像:照推算(不出声)', noCall.says.length === 2 && noCall.says.every((x) => x.audio === null && x.seek === undefined));
 }

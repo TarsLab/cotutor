@@ -36,6 +36,8 @@ export type RunEvent = { t: number } & (
   | { lane: 'mouth'; kind: 'catch'; text: string }
   | { lane: 'mouth'; kind: 'read'; line: number }
   | { lane: 'mouth'; kind: 'cut'; line: number | null }
+  /** 脑想得久(松手几秒了讲稿还一句没有),嘴垫了一句(开始放) */
+  | { lane: 'mouth'; kind: 'fill'; text: string }
 );
 
 /** 发事件时给的形状:少一个 t(runner 补);Omit 直接套在联合上会塌成公共键,所以逐个分发 */
@@ -79,6 +81,7 @@ export function describeEvent(e: RunEvent): string {
       if (e.kind === 'release') return e.how === 'voice' ? '松手' : `发了(${{ text: '打字', photo: '照片', card: '交卡', ask: '卡上的「?」' }[e.how]})`;
       if (e.kind === 'catch') return `嘴接住「${e.text}」(开始放)`;
       if (e.kind === 'read') return `嘴念第 ${e.line + 1} 句(开始放)`;
+      if (e.kind === 'fill') return `脑还在想,嘴垫了一句「${e.text}」(开始放)`;
       return `孩子按下,打断${e.line === null ? '(讲稿还没念到)' : `(念到第 ${e.line + 1} 句)`}`;
   }
 }

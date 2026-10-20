@@ -32,7 +32,7 @@ import { readCardStates, readIndex } from '../server/store.ts';
 import { judgeCard } from '../cards/index.ts';
 import { localDate } from '../lib/conversation.ts';
 import { playsLecture } from '../lib/board.ts';
-import { catchCue, readCue, type CatchKind } from './lib/cue.ts';
+import { catchCue, FILL_LINE, readCue, type CatchKind } from './lib/cue.ts';
 import { addChunk, flushAt, playbackInit, playingAt, type Playback } from './lib/playback.ts';
 import { queueInit, queueStep, type Beat, type QueueEvent, type QueueState } from './lib/queue.ts';
 import { MIX_RATE } from './lib/mix.ts';
@@ -48,10 +48,11 @@ export interface LiveDeps {
   /** 测试:realtime 的端点与环境 */
   endpoint?: string;
   env?: NodeJS.ProcessEnv;
-  /** 测试:心跳间隔、孩子多久没动静就不跳、输入多少 token 换连接 */
+  /** 测试:心跳间隔、孩子多久没动静就不跳、输入多少 token 换连接、多久没讲稿垫一句 */
   heartbeatMs?: number;
   keepAliveMs?: number;
   swapTokens?: number;
+  fillMs?: number;
   onFinished?(why: string): void;
 }
 
@@ -63,6 +64,8 @@ const MIN_COMMIT_BYTES = (INPUT_RATE * 2 * 100) / 1000;
 /** 心跳间隔(Qwen-Live-Harness 也是 30 秒);孩子最后一次动静之后跳多久(过了就让百炼 300 秒后关,回来按下再连,连一次约半秒) */
 const HEARTBEAT_MS = 30_000;
 const KEEP_ALIVE_MS = 15 * 60_000;
+/** 松手 / 发来这么久讲稿还一句没有、脑还在想,嘴垫一句(一轮一次;数学老师接住以后要想 11–16 秒,设想稿拍板 12) */
+const FILL_MS = 5000;
 /** 嘴最近一次回答的输入过了这么多 token,安静时换一条新连接(约 9 轮一换) */
 const SWAP_TOKENS = 3000;
 /** 讲稿的 [[play]]:孩子端放小课堂那一段,最多等它这么久就接着念(孩子端没回 staged 时不卡死) */
@@ -70,8 +73,8 @@ const GATE_MS = 180_000;
 /** 现连时攒着的声音最多一分钟(同 Qwen-Live-Harness 的 MAX_RECOVERY_AUDIO_BYTES) */
 const MAX_BACKLOG_BYTES = INPUT_RATE * 2 * 60;
 
-/** 嘴这次回答是什么:接住(孩子这一轮)或照念哪几句 */
-type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat };
+/** 嘴这次回答是什么:接住(孩子这一轮)、照念哪几句、脑想得久时垫的一句 */
+type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat } | { kind: 'fill' };
 
 export class LiveCall {
   private session: RealtimeSession | null = null;
@@ -115,6 +118,9 @@ export class LiveCall {
   /** 嘴最近一次回答的输入 token(连接的历史越长越多);过了 SWAP_TOKENS 安静时换连接 */
   private lastInput = 0;
   private swapping = false;
+  /** 这一轮垫话的钟(新一轮、孩子按下就撤);owed = 脑还欠着第一句的那一轮(turnSeq),第一句交进排队、脑跑完、转写是空的、出错就清 */
+  private fillTimer: NodeJS.Timeout | null = null;
+  private owed = 0;
   /** 第一次连上了:之后嘴没了是断了要现连,不是连不上 */
   private opened = false;
   /** 正在现连;连上之前孩子端来的按下、松手、发来、按着的声音照到达的顺序攒着 */
@@ -164,7 +170,7 @@ export class LiveCall {
   /** 让嘴说一次;接住要先告诉排队,嘴出完之前别交讲稿 */
   private ask(said: Said, instructions: string): void {
     this.said = said;
-    if (said.kind === 'catch') this.q = queueStep(this.q, { e: 'asked' }).s;
+    if (said.kind !== 'read') this.q = queueStep(this.q, { e: 'asked' }).s;
     this.session?.createResponse(instructions);
   }
 
@@ -204,15 +210,18 @@ export class LiveCall {
         // 照念的第一块:到它在孩子端开始放的那一刻,告诉孩子端这段的第一句;接住的第一块记一条(开始放的时刻)
         if (firstOfAnswer && said.kind === 'read') this.readAt(said.beat, 0, r.start);
         if (firstOfAnswer && said.kind === 'catch' && this.holding === false) this.mouth(null, this.wall(r.start), { lane: 'mouth', kind: 'catch', text: '' });
+        if (firstOfAnswer && said.kind === 'fill' && this.job) this.mouth(this.job, this.wall(r.start), { lane: 'mouth', kind: 'fill', text: FILL_LINE });
         firstOfAnswer = false;
         this.rec.tutor(pcm);
         this.sock.sendBinary(pcm);
       },
       onTutorText: (delta, done) => {
         if (this.session !== s) return;
-        const of = this.said?.kind ?? 'catch';
+        const kind = this.said?.kind ?? 'catch';
+        // 垫的那句在孩子端同接住的字一样上字幕
+        const of = kind === 'read' ? 'read' : 'catch';
         if (done !== null) {
-          if (of === 'catch') { this.caught = done.trim(); this.caughtDone = true; const c = [...this.pre].reverse().find((x) => x.ev.kind === 'catch'); if (c && c.ev.kind === 'catch') c.ev.text = this.caught; }
+          if (kind === 'catch') { this.caught = done.trim(); this.caughtDone = true; const c = [...this.pre].reverse().find((x) => x.ev.kind === 'catch'); if (c && c.ev.kind === 'catch') c.ev.text = this.caught; }
           this.send({ t: 'tutor', of, done: done.trim() });
           return;
         }
@@ -356,6 +365,7 @@ export class LiveCall {
     for (const l of lines) {
       if (l.i !== this.linesQueued) continue;
       this.linesQueued++;
+      this.owed = 0;
       this.step({ e: 'beat', beat: { job: this.job, lines: [l.i], texts: [l.text], ...(l.play ? { play: true } : {}) } });
     }
   }
@@ -371,6 +381,7 @@ export class LiveCall {
     if (heard) this.cut = (this.lastRead && this.lastRead.job === heard.job && heard.lines.includes(this.lastRead.line) ? this.lastRead.line : heard.lines[0]) + 1;
     if (playing && this.job) this.mouth(this.job, Date.now(), { lane: 'mouth', kind: 'cut', line: at?.kind === 'read' && this.lastRead?.job === this.job ? this.lastRead.line : null });
     for (const t of this.readTimers.splice(0)) clearTimeout(t);
+    if (this.fillTimer) { clearTimeout(this.fillTimer); this.fillTimer = null; }
     this.afterDone = null;
     if (this.session?.responding) this.session.cancel();
     else if (this.said) this.cancelOnCreate = true;
@@ -477,7 +488,17 @@ export class LiveCall {
     this.pendingVoice = kind === 'voice' || kind === 'answer' ? { seq, body } : null;
     const go = (): void => this.ask({ kind: 'catch' }, catchCue(kind));
     if (this.said) this.afterDone = go; else go();
+    if (this.fillTimer) clearTimeout(this.fillTimer);
+    this.owed = kind === 'empty' ? 0 : seq;
+    this.fillTimer = kind === 'empty' ? null : setTimeout(() => this.fill(seq), this.deps.fillMs ?? FILL_MS);
     if (text !== undefined) void this.toBrain(seq, { ...body, text });
+  }
+
+  /** 垫一句:还是这一轮、脑还欠着它的第一句、孩子没按着、嘴空着 */
+  private fill(seq: number): void {
+    this.fillTimer = null;
+    if (this.ended || seq !== this.turnSeq || this.owed !== seq || !this.session || this.holding || this.said || this.session.responding) return;
+    this.ask({ kind: 'fill' }, catchCue('fill'));
   }
 
   /** 孩子那句的转写回来了:空的改说没听清、不交给脑;不空交给脑 */
@@ -487,6 +508,7 @@ export class LiveCall {
     this.pendingVoice = null;
     if (!v || v.seq !== this.turnSeq) return;
     if (text.trim()) { void this.toBrain(v.seq, { ...v.body, text }); return; }
+    this.owed = 0;
     const sorry = (): void => this.ask({ kind: 'catch' }, catchCue('empty'));
     if (!this.said) { sorry(); return; }
     // 接住还在要 / 在出:掐掉,出完(被掐)再说没听清
@@ -508,7 +530,7 @@ export class LiveCall {
     const { ctx, tutor } = this.deps;
     const { ask: _ask, ...rest } = body;
     const r = await kidSendInput(ctx, tutor, rest, localDate(ctx.now()));
-    if ('error' in r) { this.send({ t: 'err', status: r.error.status, error: (r.error.json as { error?: string } | undefined)?.error ?? 'error' }); return; }
+    if ('error' in r) { this.owed = 0; this.send({ t: 'err', status: r.error.status, error: (r.error.json as { error?: string } | undefined)?.error ?? 'error' }); return; }
     const live = { ...(this.caught ? { caught: this.caught } : {}), ...(this.cut ? { cut: this.cut } : {}) };
     this.cut = undefined;
     let started: SendStarted;
@@ -517,6 +539,7 @@ export class LiveCall {
     } catch (err) {
       // 别处(页面、工作台)正在让这位老师写:排着,它写完再发
       if (err instanceof BusyError) { this.waiting.push(body); this.afterBusy(); return; }
+      this.owed = 0;
       this.send({ t: 'err', status: 500, error: err instanceof Error ? err.message : String(err) });
       return;
     }
@@ -532,6 +555,8 @@ export class LiveCall {
       if (sec && this.job === job) this.linesUpTo(sec.lines.map((l, i) => ({ i, text: l.text, play: playsLecture(l, sec.cards) })));
     }, () => {}).finally(() => {
       if (this.running === started) this.running = null;
+      // 跑完了还没讲稿(空的、出错):不欠了;脑忙时孩子又说的排着,那一轮还欠着
+      if (!this.waiting.length) this.owed = 0;
       this.flushWaiting();
       this.maybeSwap();
     });
@@ -580,6 +605,7 @@ export class LiveCall {
     if (this.ended) return;
     this.ended = true;
     for (const t of [...this.timers, ...this.readTimers]) { clearTimeout(t); clearInterval(t); }
+    if (this.fillTimer) clearTimeout(this.fillTimer);
     this.offEvents?.();
     const s = this.session;
     this.session = null;

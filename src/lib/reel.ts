@@ -427,13 +427,16 @@ export function buildReel(input: ReelInput): Reel | null {
     marks.push({ kind: 'said', at: W(ct.from), job: m.job, label: reelSaid(m) });
     if (ct.voice && ct.sent > ct.from) clips.push({ kind: 'voice', job: m.job, card: null, from: W(ct.from), to: W(ct.sent), audio: call.audio, seek: ct.from, text: m.text });
     const reads = call.msgs.filter(([t, d, x]) => d === 'o' && x.t === 'read' && x.job === m.job && typeof x.line === 'number' && t < stop).map(([t, , x]) => ({ t, line: x.line as number }));
-    // 接住:松手 / 发出后第一段嘴的声音,到第一句开始放为止(两段连着时 playing 并成了一段)
-    const caught = call.playing.find(([a]) => a >= ct.sent && a < stop);
+    // 接住:松手 / 发出后第一段嘴的声音,到第一句开始放为止(两段连着时 playing 并成了一段);
+    // 脑想得久时嘴垫的那句(call.ts 的 fill)是第一句之前的又一段,同样是嘴的声音,字是它开始放之后的那条 tutor
+    const firstRead = Math.min(reads[0]?.t ?? Infinity, stop);
+    const before = call.playing.filter(([a]) => a >= ct.sent && a < firstRead);
     const said = [...call.msgs].reverse().find(([t, d, x]) => d === 'o' && x.t === 'tutor' && x.of === 'catch' && typeof x.done === 'string' && t >= ct.sent && t <= ct.turnAt)?.[2].done;
-    if (caught) {
-      clips.push({ kind: 'mouth', job: m.job, card: null, from: W(caught[0]), to: W(Math.min(caught[1], reads[0]?.t ?? Infinity, stop)), audio: call.audio, seek: caught[0], ...(typeof said === 'string' && said ? { text: said } : {}) });
-      if (caught[0] > ct.sent) waits.push({ job: m.job, from: W(ct.sent), to: W(caught[0]) });
-    }
+    before.forEach(([a, b], i) => {
+      const text = i === 0 ? said : call.msgs.find(([t, d, x]) => d === 'o' && x.t === 'tutor' && x.of === 'catch' && typeof x.done === 'string' && t >= a && t < firstRead)?.[2].done;
+      clips.push({ kind: 'mouth', job: m.job, card: null, from: W(a), to: W(Math.min(b, firstRead)), audio: call.audio, seek: a, ...(typeof text === 'string' && text ? { text } : {}) });
+    });
+    if (before[0] && before[0][0] > ct.sent) waits.push({ job: m.job, from: W(ct.sent), to: W(before[0][0]) });
     const s = sectionOf(m);
     if (!s) { notes.push({ job: m.job, at: t0, postAt: Math.min(next, Math.max(t0, W(ct.turnAt))) }); return; }
     reads.forEach((r, i) => {

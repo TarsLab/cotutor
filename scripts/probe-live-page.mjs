@@ -114,9 +114,10 @@ try {
   fake.createDelayMs = 0;
   const connected = await untilNode(() => Boolean(conn()?.session), 8000);
   await sleep(400);
-  const lay = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), wrap = r('#wrap'), hold = r('#lv-hold'), back = r('#back'), more = r('#more-btn'), tools = r('#lv-tools'); const av = document.querySelector('#lv-hold .vb-av .av'); const st = getComputedStyle(document.querySelector('#lv')); return { lv: [Math.round(lv.left), Math.round(lv.top), Math.round(lv.width), Math.round(innerHeight - lv.bottom)], pos: st.position, lvBg: st.backgroundColor, lvRadius: st.borderTopRightRadius, wrap: [Math.round(wrap.left), Math.round(wrap.top), Math.round(wrap.width)], phoneAv: getComputedStyle(document.querySelector('#lv-av')).display, av: av ? Math.round(av.getBoundingClientRect().width) : 0, hold: [Math.round(hold.width), Math.round(hold.height), Math.round(innerHeight - hold.bottom), Math.round((hold.top + hold.height / 2) / innerHeight * 100)], toolsBottom: Math.round(innerHeight - tools.bottom), voice: document.querySelector('#lv-hold').dataset.voice, backIn: back.left >= lv.left && back.right <= lv.right && back.top >= lv.top, more: [Math.round(innerWidth - more.right), Math.round(more.top), more.left > lv.right], tools: [...document.querySelectorAll('#lv-tools button')].map((b) => b.textContent), bar: getComputedStyle(document.querySelector('#bar')).display, sub: getComputedStyle(document.querySelector('#sub')).display, bg: getComputedStyle(document.querySelector('#wrap')).backgroundColor, padL: parseInt(getComputedStyle(document.querySelector('#board')).paddingLeft), cap: document.querySelector('#lv-cap .lv-cur').textContent, blank: Boolean(document.querySelector('#board .blank')) }; })()`);
+  const lay = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), wrap = r('#wrap'), hold = r('#lv-hold'), back = r('#back'), more = r('#more-btn'), tools = r('#lv-tools'); const av = document.querySelector('#lv-hold .vb-av .av'); const st = getComputedStyle(document.querySelector('#lv')); return { lv: [Math.round(lv.left), Math.round(lv.top), Math.round(lv.width), Math.round(innerHeight - lv.bottom)], pos: st.position, lvBg: st.backgroundColor, lvRadius: st.borderTopRightRadius, wrap: [Math.round(wrap.left), Math.round(wrap.top), Math.round(wrap.width)], phoneAv: getComputedStyle(document.querySelector('#lv-av')).display, av: av ? Math.round(av.getBoundingClientRect().width) : 0, hold: [Math.round(hold.width), Math.round(hold.height), Math.round(innerHeight - hold.bottom), Math.round((hold.top + hold.height / 2) / innerHeight * 100)], toolsBottom: Math.round(innerHeight - tools.bottom), voice: document.querySelector('#lv-hold').dataset.voice, backIn: back.left >= lv.left && back.right <= lv.right && back.top >= lv.top, more: [Math.round(innerWidth - more.right), Math.round(more.top), more.left > lv.right], tools: [...document.querySelectorAll('#lv-tools button')].map((b) => b.textContent), bar: getComputedStyle(document.querySelector('#bar')).display, sub: getComputedStyle(document.querySelector('#sub')).display, bg: getComputedStyle(document.querySelector('#wrap')).backgroundColor, padL: parseInt(getComputedStyle(document.querySelector('#board')).paddingLeft), cap: getComputedStyle(document.querySelector('#lv-cap')).display, blank: Boolean(document.querySelector('#board .blank')), blankShown: getComputedStyle(document.querySelector('#board .blank')).display !== 'none', opening: document.body.classList.contains('lv-opening'), ask: document.querySelector('#lv-ask b').textContent, askIn: (() => { const a = r('#lv-ask'); return a.width > 0 && a.left >= lv.left && a.right <= lv.right && a.top > back.bottom && a.bottom < hold.top; })(), name: document.querySelector('#tutor').innerText.includes('语文老师') }; })()`);
   ok('进老师页:body.live、连上了嘴(配了会话)', connected, JSON.stringify(conn()?.session?.voice ?? null));
-  ok('横屏(1180×760,Safari 带地址栏的高):板占满整屏(纸色、不套卡片框);左栏是贴边的白纸(上、左、下不留边,宽 360,不带圆角),回首页在白纸顶上、「更多」浮在右上;头像和按住说话是一颗按钮 312×120(头像 72 在按钮里,手机那颗藏着),下沿离屏底 ≥ 150、中心在屏高六成多;最底下一排拍照 / 相册 / 打字离底边 ~20;输入条与板书的字幕行收起;没说话时字幕写老师的名字、按钮是「按住说话」', lay.pos === 'absolute' && lay.lv[0] === 0 && lay.lv[1] === 0 && lay.lv[2] === 360 && lay.lv[3] === 0 && lay.lvBg === 'rgb(255, 255, 255)' && lay.lvRadius === '0px' && lay.wrap[0] === 0 && lay.wrap[1] === 0 && lay.wrap[2] === 1180 && lay.bg === 'rgba(0, 0, 0, 0)' && lay.padL >= 380 && lay.backIn && lay.more[0] <= 24 && lay.more[2] && lay.phoneAv === 'none' && lay.av === 72 && lay.hold[0] === 312 && lay.hold[1] === 120 && lay.hold[2] >= 150 && lay.hold[3] >= 60 && lay.hold[3] <= 72 && lay.toolsBottom >= 16 && lay.toolsBottom <= 28 && lay.voice === 'idle' && lay.tools.join() === '拍照,相册,打字' && lay.bar === 'none' && lay.sub === 'none' && lay.blank && lay.cap === '语文老师', JSON.stringify(lay));
+  ok('横屏(1180×760,Safari 带地址栏的高):板占满整屏(纸色、不套卡片框);左栏是贴边的白纸(上、左、下不留边,宽 360,不带圆角),回首页在白纸顶上、「更多」浮在右上;头像和按住说话是一颗按钮 312×120(头像 72 在按钮里,手机那颗藏着),下沿离屏底 ≥ 150、中心在屏高六成多;最底下一排拍照 / 相册 / 打字离底边 ~20;输入条与板书的字幕行收起;空板(《wip/实时老师设想.md》拍板 24):开场那句「换个话题吧,想问什么?」在左栏字幕位、板上那块收着(板是干净的纸),页面上没有「语文老师」那行字;按钮是「按住说话」', lay.pos === 'absolute' && lay.lv[0] === 0 && lay.lv[1] === 0 && lay.lv[2] === 360 && lay.lv[3] === 0 && lay.lvBg === 'rgb(255, 255, 255)' && lay.lvRadius === '0px' && lay.wrap[0] === 0 && lay.wrap[1] === 0 && lay.wrap[2] === 1180 && lay.bg === 'rgba(0, 0, 0, 0)' && lay.padL >= 380 && lay.backIn && lay.more[0] <= 24 && lay.more[2] && lay.phoneAv === 'none' && lay.av === 72 && lay.hold[0] === 312 && lay.hold[1] === 120 && lay.hold[2] >= 150 && lay.hold[3] >= 60 && lay.hold[3] <= 72 && lay.toolsBottom >= 16 && lay.toolsBottom <= 28 && lay.voice === 'idle' && lay.tools.join() === '拍照,相册,打字' && lay.bar === 'none' && lay.sub === 'none' && lay.blank && !lay.blankShown && lay.opening && lay.ask === '换个话题吧,想问什么?' && lay.askIn && lay.cap === 'none' && !lay.name, JSON.stringify(lay));
+  console.log('  ', await shot('live-open-new-ipad.png'));
 
   // ---- 按下反馈(10-21 Jack:拍照、相册、打字按着、长按都没变化):CDP 强制 :active,看样子(缩放、明暗、透明、字色)变没变;part = 变的是里面哪一块 ----
   await send('DOM.enable'); await send('CSS.enable');
@@ -357,7 +358,7 @@ try {
   await until(`Boolean(document.querySelector('#board .blank'))`);
   const fell = await until(`!document.body.classList.contains('live')`, 40);
   fake.failUpdate = false;
-  ok('嘴连不上:回到板书的样子(没有 body.live、字幕行回来)', fell && (await evaluate(`getComputedStyle(document.querySelector('#sub')).display`)) !== 'none');
+  ok('嘴连不上:回到板书的样子(没有 body.live、字幕行回来、空板那块回到板中间)', fell && (await evaluate(`getComputedStyle(document.querySelector('#sub')).display`)) !== 'none' && (await evaluate(`getComputedStyle(document.querySelector('#board > .blank')).display`)) !== 'none');
 
   // ---- activity 也走实时(P3.1):首页点「看图说话」→ 开实时、开场那条等嘴连上走那条连接发(嘴说开场那句)、脑照 activity 带 ----
   mkdirSync(join(wsRoot, 'home'), { recursive: true });
@@ -379,6 +380,49 @@ try {
   const idx = JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${today.date}.json`), 'utf8'));
   const first = idx.messages.find((m) => m.thread === today.thread && m.from === 'kid');
   ok('首页点 activity:开实时;开场那条走嘴的连接(嘴照念脑的第一句)、脑照 activity 带、实时轮', pub.ok && liveOn && started && sec && first?.activity?.name === '看图说话' && first?.live === true, JSON.stringify({ pub: pub.ok, liveOn, started, sec, activity: first?.activity?.name, live: first?.live }));
+
+  // ---- 空板(《wip/实时老师设想.md》拍板 24,原型 F 排):老师对孩子说的话都在左栏,板是干净的纸 ----
+  // F2 新话题、今天聊过:首页点「新话题」,「接着刚才的」跟在开场那句下面
+  await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  /** 回首页,点语文老师牌上写着 label 的那颗 */
+  const homeTap = async (label) => {
+    const find = `[...document.querySelectorAll('#deck .pc[data-tutor="chinese-tutor"] .bt')].find((x) => x.textContent.includes(${JSON.stringify(label)}))`;
+    await evaluate(`document.querySelector('#back').click()`);
+    await until(`Boolean(${find})`, 40);
+    await sleep(1200);
+    const p = await evaluate(`(() => { const b = ${find}; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: p.x, y: p.y, button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1 });
+    await until(`document.body.classList.contains('live') && document.querySelector('#tutor').classList.contains('on')`, 40);
+    await sleep(800);
+  };
+  const OPEN = `(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'); return { opening: document.body.classList.contains('lv-opening'), ask: document.querySelector('#lv-ask b').textContent, small: document.querySelector('#lv-ask small').textContent, acts: [...document.querySelectorAll('#lv-acts .lv-go')].map((b) => ({ cls: b.className, k: [...b.querySelectorAll('.k')].map((x) => x.textContent).join('/'), s: b.querySelector('.s').textContent, tm: b.querySelector('.tm')?.textContent ?? '', w: Math.round(b.getBoundingClientRect().width), border: getComputedStyle(b).borderTopColor, bg: getComputedStyle(b).backgroundColor })), inLv: [...document.querySelectorAll('#lv-ask, #lv-acts .lv-go')].every((e) => { const b = e.getBoundingClientRect(); return b.width > 0 && b.left >= lv.left && b.right <= lv.right; }), blankShown: [...document.querySelectorAll('#board > .blank')].some((b) => getComputedStyle(b).display !== 'none'), secs: document.querySelectorAll('#board .sec').length, cap: getComputedStyle(document.querySelector('#lv-cap')).display, name: document.querySelector('#tutor').innerText.includes('语文老师'), voice: document.querySelector('#lv-hold').dataset.voice, big: document.querySelector('#lv-hold .vb-big')?.textContent ?? '', hold: getComputedStyle(document.querySelector('#lv-hold')).display, tools: getComputedStyle(document.querySelector('#lv-tools')).opacity, pill: document.querySelector('#pill').hidden }; })()`;
+  const ROSE = 'rgb(196, 60, 116)';
+  await homeTap('新话题');
+  const f2 = await evaluate(OPEN);
+  ok('F2 新话题、今天聊过:左栏是「想问什么?」,下面一颗「接着刚才的」(语文老师的粉描边、↻、话题名、几点);板上那块收着、没有「语文老师」,按钮照旧「按住说话」', f2.opening && f2.ask === '想问什么?' && f2.acts.length === 1 && f2.acts[0].cls.includes('back') && f2.acts[0].s.length > 0 && /^\d\d:\d\d$/.test(f2.acts[0].tm) && f2.acts[0].border === ROSE && f2.acts[0].w === 312 && f2.inLv && !f2.blankShown && f2.cap === 'none' && !f2.name && f2.voice === 'idle', JSON.stringify(f2));
+  console.log('  ', await shot('live-open-resume-ipad.png'));
+  // F5 手机:开场那句在字幕行小头像旁(大、粗),「接着刚才的」在它上面一条
+  await device(390, 844, 2, true);
+  await sleep(400);
+  const f5 = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const av = r('#lv-av'), ask = r('#lv-ask'), go = r('#lv-acts .lv-go'), bar = r('#bar'); const st = getComputedStyle(document.querySelector('#lv-ask b')); return { ask: document.querySelector('#lv-ask b').textContent, size: st.fontSize, weight: st.fontWeight, beside: ask.left >= av.right && Math.abs((ask.top + ask.height / 2) - (av.top + av.height / 2)) < 16, above: go.bottom <= Math.min(av.top, ask.top), wide: Math.round(go.width), barBelow: bar.top >= ask.bottom - 2, blankShown: getComputedStyle(document.querySelector('#board > .blank')).display !== 'none', w: document.documentElement.scrollWidth, name: document.querySelector('#tutor').innerText.includes('语文老师') }; })()`);
+  ok('F5 手机:「想问什么?」在字幕行小头像旁(20 粗),「接着刚才的」整宽一条在它上面,输入条在下面;板上那块收着、不横向滚、没有「语文老师」', f5.ask === '想问什么?' && f5.size === '20px' && Number(f5.weight) >= 700 && f5.beside && f5.above && f5.wide >= 340 && f5.barBelow && !f5.blankShown && f5.w <= 390 && !f5.name, JSON.stringify(f5));
+  console.log('  ', await shot('live-open-phone.png'));
+  await device(1180, 760, 1, false);
+  // F3 今天点过同一个按钮:「接着刚才那个 / 重新开始」也在左栏;点之前按钮灰着「点上面开始」、不接,底下那排淡着
+  const ncA = fake.conns.length;
+  await homeTap('看图说话');
+  await untilNode(() => fake.conns.length > ncA && Boolean(conn()?.session), 8000);
+  await sleep(400);
+  const f3 = await evaluate(OPEN);
+  console.log('  ', await shot('live-ask-ipad.png'));
+  const rA = conn().responses.length;
+  await tap(HOLD);
+  await sleep(300);
+  const f3press = { voice: await evaluate(`document.querySelector('#lv-hold').dataset.voice`), listening: await body('listening'), said: conn().responses.length - rA };
+  ok('F3 今天点过「看图说话」:左栏「今天点过「看图说话」啦」,下面「接着刚才那个」(描边)和「重新开始 · 看图说话」(实心粉);按钮灰着写「点上面开始」、按了不接,底下那排淡着;没有输入条、嘴不出声', f3.opening && f3.ask === '今天点过「看图说话」啦' && f3.acts.length === 2 && f3.acts[0].k === '接着刚才那个' && f3.acts[0].border === ROSE && f3.acts[1].k === '重新开始' && f3.acts[1].s === '看图说话' && f3.acts[1].bg === ROSE && f3.inLv && !f3.blankShown && !f3.name && f3.voice === 'choose' && f3.big === '点上面开始' && f3.hold === 'flex' && f3.tools === '0.45' && f3.pill && f3press.voice === 'choose' && !f3press.listening && f3press.said === 0, JSON.stringify({ f3, f3press }));
+  await tap('#lv-acts .lv-go.back');
+  const backTo = await until(`!document.body.classList.contains('lv-opening') && document.querySelectorAll('#board .sec').length >= 1 && document.querySelector('#lv-hold').dataset.voice !== 'choose'`, 40);
+  ok('点「接着刚才那个」:回到那个话题,左栏换回字幕、按钮能按', backTo);
 
   // ---- 讲稿的 [[play]](小课堂,P3.2):念完那句孩子端铺满放那一段,放完舞台停在末帧、告诉服务端,嘴才接着念后面的 ----
   cpSync(join(repo, 'tests', 'fixtures', 'bundles', '2026-09-18-po13-jian-8'), join(wsRoot, 'bundles', '2026-09-18-po13-jian-8'), { recursive: true });
@@ -461,10 +505,14 @@ try {
   await send('Page.navigate', { url: `${base}/?tutor=english-tutor&talk=${talkId}` });
   const talkBoard = await until(`Boolean(document.querySelector('#talk-go'))`, 40);
   await untilNode(() => fake.conns.length > ncT && Boolean(conn()?.session), 8000);
-  const tb = await evaluate(`({ go: document.querySelector('#talk-go').textContent, pill: document.querySelector('#pill').hidden, hold: getComputedStyle(document.querySelector('#lv-hold')).display, open: document.body.classList.contains('lv-open') })`);
-  const spoke = conn().responses.length;
-  ok('口语单页过来:英语老师页、一直听(live.listen 是 hold 也一样)、板上一颗「先热身,再打电话」,没点之前输入条与左栏那块都收着、嘴不出声', talkBoard && tb.go.includes('先热身,再打电话') && tb.pill && tb.hold === 'none' && tb.open && spoke === 0, JSON.stringify({ ...tb, spoke }));
+  await sleep(600);
+  const tb = await evaluate(`({ go: document.querySelector('#talk-go').textContent, inLv: Boolean(document.querySelector('#lv #talk-go')), pill: document.querySelector('#pill').hidden, hold: getComputedStyle(document.querySelector('#lv-hold')).display, voice: document.querySelector('#lv-hold').dataset.voice, big: document.querySelector('#lv-hold .vb-big').textContent, tools: getComputedStyle(document.querySelector('#lv-tools')).opacity, open: document.body.classList.contains('lv-open'), ask: document.querySelector('#lv-ask b').textContent, small: document.querySelector('#lv-ask small').textContent, blankShown: getComputedStyle(document.querySelector('#board > .blank')).display !== 'none', name: document.querySelector('#tutor').innerText.includes('英语老师') })`);
   console.log('  ', await shot('talk-start-ipad.png'));
+  await tap(HOLD);
+  await sleep(300);
+  tb.afterPress = await evaluate(`document.querySelector('#lv-hold').dataset.voice`);
+  const spoke = conn().responses.length;
+  ok('口语单页过来(F4,拍板 24):英语老师页、一直听(live.listen 是 hold 也一样);左栏「口语单拍好啦」、「1 个单词、1 个句子」,下面一颗「先热身,再打电话」,板上那块收着、没有「英语老师」;没点之前输入条收着,左栏那颗灰着写「点上面开始」、按了不接(不开关麦),底下那排淡着,嘴不出声', talkBoard && tb.go.includes('先热身,再打电话') && tb.inLv && tb.ask === '口语单拍好啦' && tb.small === '1 个单词、1 个句子' && !tb.blankShown && !tb.name && tb.pill && tb.hold === 'flex' && tb.voice === 'choose' && tb.big === '点上面开始' && tb.afterPress === 'choose' && tb.tools === '0.45' && tb.open && spoke === 0 && conn().responses.length === 0, JSON.stringify({ ...tb, spoke }));
   await tap('#talk-go');
   const warmCaught = await untilNode(() => conn().responses.some((r) => r?.instructions === catchCue('warm')), 10000);
   const turnLit = await until(`Boolean(document.querySelector('#board .c.lv-turn'))`, 120);
@@ -495,7 +543,7 @@ try {
   await until(`Boolean(document.body && document.body.classList.contains('live') && document.body.classList.contains('hand-left'))`, 40);
   await untilNode(() => Boolean(conn()?.session), 8000);
   await sleep(600);
-  const mir = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), back = r('#back'), more = r('#more-btn'), av = r('#lv-hold .vb-av'), hold = r('#lv-hold'); const mc = document.elementFromPoint(more.left + more.width / 2, more.top + more.height / 2), bc = document.elementFromPoint(back.left + back.width / 2, back.top + back.height / 2); return { lv: [Math.round(lv.left), Math.round(innerWidth - lv.right), Math.round(lv.width), Math.round(lv.top), Math.round(innerHeight - lv.bottom)], padR: parseInt(getComputedStyle(document.querySelector('#board')).paddingRight), padL: parseInt(getComputedStyle(document.querySelector('#board')).paddingLeft), back: [Math.round(back.left), Math.round(back.top)], backTop: Boolean(bc && bc.closest('#back')), avRight: av.left > hold.left + hold.width / 2, moreTop: Boolean(mc && mc.closest('#more-btn')), moreRight: Math.round(innerWidth - more.right) }; })()`);
+  const mir = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), back = r('#back'), more = r('#more-btn'), av = r('#lv-hold .vb-av'), hold = r('#lv-hold'); const mc = document.elementFromPoint(more.left + more.width / 2, more.top + more.height / 2), bc = document.elementFromPoint(back.left + back.width / 2, back.top + back.height / 2); return { lv: [Math.round(lv.left), Math.round(innerWidth - lv.right), Math.round(lv.width), Math.round(lv.top), Math.round(innerHeight - lv.bottom)], padR: parseInt(getComputedStyle(document.querySelector('#board')).paddingRight), padL: parseInt(getComputedStyle(document.querySelector('#board')).paddingLeft), back: [Math.round(back.left), Math.round(back.top)], backTop: Boolean(bc && bc.closest('#back')), avRight: av.left > hold.left + hold.width / 2, moreTop: Boolean(mc && mc.closest('#more-btn')), moreRight: Math.round(innerWidth - more.right), ask: (() => { const a = r('#lv-ask'); return document.body.classList.contains('lv-opening') && a.width > 0 && a.left >= lv.left && a.right <= lv.right; })() }; })()`);
   const pm = await center(HOLD);
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pm.x, y: pm.y, button: 'left', buttons: 1, clickCount: 1 });
   await sleep(400);
@@ -507,7 +555,7 @@ try {
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pm.x, y: pm.y - 130, button: 'left', buttons: 0, clickCount: 1 });
   await sleep(500);
   console.log('  ', await shot('live-mirror-ipad.png'));
-  ok('左撇子镜像:白纸贴右边(宽 360、上下不留边)、板从左边排起、按钮里头像在右头;回首页在左上点得到、「更多」在右上点得到;按着时按钮变蓝、竖条往右头的头像走', hp.status === 200 && mir.lv[1] === 0 && mir.lv[2] === 360 && mir.lv[3] === 0 && mir.lv[4] === 0 && mir.padR >= 380 && mir.padL <= 64 && mir.back[0] <= 40 && mir.back[1] <= 30 && mir.backTop && mir.avRight && mir.moreTop && mir.moreRight <= 24 && mir.hold.voice === 'hold' && mir.hold.right && mir.hold.bars > 0, JSON.stringify(mir));
+  ok('左撇子镜像:白纸贴右边(宽 360、上下不留边)、板从左边排起、按钮里头像在右头;回首页在左上点得到、「更多」在右上点得到;开场那句跟着在右边的白纸里;按着时按钮变蓝、竖条往右头的头像走', hp.status === 200 && mir.lv[1] === 0 && mir.lv[2] === 360 && mir.lv[3] === 0 && mir.lv[4] === 0 && mir.padR >= 380 && mir.padL <= 64 && mir.back[0] <= 40 && mir.back[1] <= 30 && mir.backTop && mir.avRight && mir.moreTop && mir.moreRight <= 24 && mir.ask && mir.hold.voice === 'hold' && mir.hold.right && mir.hold.bars > 0, JSON.stringify(mir));
 
   ok('页面没有报错', errors.length === 0, errors.slice(0, 3).join(' | '));
 } finally {

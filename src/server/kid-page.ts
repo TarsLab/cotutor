@@ -512,7 +512,7 @@ __BRAND_CSS__
   #back, .tb .hb, #hist-x, #st-x, #st-go, #sub-btn, #pill .ic, #go, #back-today, .again, .c-tutor .bt,
   #ps .tools button, #ps .foot button, #ps-strip .x, #lb .x, #lb .nav,
   #menu .panel button, #sheet label, #hist .tr, .so, .rd, .hz, .c-tutor .tt, #ps-strip .t,
-  .sec.heard > .sh, #sub-text.line, #lv-tools button, #lv-tools .ic, #lv-replay { transition:transform .2s ease-out, filter .2s ease-out, opacity .2s ease-out, background-color .2s ease-out; }
+  .sec.heard > .sh, #sub-text.line, #lv-tools button, #lv-tools .ic, #lv-replay, .lv-go { transition:transform .2s ease-out, filter .2s ease-out, opacity .2s ease-out, background-color .2s ease-out; }
   #board .pend { display:none; }
   #lay-probe { position:fixed; left:-10000px; top:0; visibility:hidden; pointer-events:none; }
   #board .c { transition:transform .2s ease-out, filter .2s ease-out, border-color .2s, box-shadow .2s; }
@@ -545,7 +545,7 @@ __BRAND_CSS__
   }
   @media (prefers-reduced-motion:reduce) { #menu, #sheet, #hist, #ps, #lb, #stage, #st-dim, #menu .dimmer, #sheet .dimmer, #hist .dimmer, #menu .panel, #sheet .panel, #hist .panel { transition:none; } }
   @media (hover:hover) {
-    #back:hover, .tb .hb:hover, #hist-x:hover, #st-x:hover, #sub-btn:hover, #pill .ic:hover, #back-today:hover, .again:hover, #menu .panel button:hover, #sheet label:hover, #hist .tr:hover, .so:hover, .rd:hover, .c-tutor .bt:hover, #board .c:not(.c-tianzige):hover, #lv-tools button:hover .ic, #lv-replay:hover { filter:brightness(.97); }
+    #back:hover, .tb .hb:hover, #hist-x:hover, #st-x:hover, #sub-btn:hover, #pill .ic:hover, #back-today:hover, .again:hover, #menu .panel button:hover, #sheet label:hover, #hist .tr:hover, .so:hover, .rd:hover, .c-tutor .bt:hover, #board .c:not(.c-tianzige):hover, #lv-tools button:hover .ic, #lv-replay:hover, .lv-go:hover { filter:brightness(.97); }
   }
   #back:active, .tb .hb:active, #hist-x:active, #st-x:active, #st-go:active, #sub-btn:active, #pill .ic:active, #go:active, #back-today:active, .again:active, .c-tutor .bt:active, .blank .resume:active, .ask-go:active { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
   #ps .tools button:active, #ps .foot button:active, #ps-strip .x:active, #lb .x:active, #lb .nav:active { transform:scale(.94); opacity:.65; transition-duration:.06s; }
@@ -553,7 +553,7 @@ __BRAND_CSS__
   #lv-tools button:active .ic { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
   #lv-tools button:active { color:var(--ink); transition-duration:.06s; }
   #lv-replay:active { opacity:.55; transition-duration:.06s; }
-  #menu .panel button:active, #sheet label:active, #hist .tr:active, .so:active, .rd:active, .hz:active, .c-tutor .tt:active, #ps-strip .t:active { transform:scale(.985); filter:brightness(.95); transition-duration:.06s; }
+  #menu .panel button:active, #sheet label:active, #hist .tr:active, .so:active, .rd:active, .hz:active, .c-tutor .tt:active, #ps-strip .t:active, .lv-go:active { transform:scale(.985); filter:brightness(.95); transition-duration:.06s; }
   #board .c:not(.c-tianzige):active:not(:has(button:active, .hz:active)) { transform:scale(.985); filter:brightness(.96); transition-duration:.06s; transition-delay:.08s; }
   .sec.heard > .sh:active:not(:has(button:active, .ph:active)), #sub-text.line:active { opacity:.55; transition-duration:.06s; }
   button:disabled, .hb.dim { opacity:.35; }
@@ -588,7 +588,27 @@ __VOICE_CSS__
   #lv-replay .tx { display:none; }
   #lv-cap .lv-cur .rp { display:inline-flex; vertical-align:-2px; margin-right:6px; color:var(--dim); }
   #lv-cap.rp .lv-cur { color:#4d4a44; font-weight:600; }
-  body.live .blank > .av { display:none; }
+  /* 空板(《wip/实时老师设想.md》拍板 24,原型 F 排):老师对孩子说的话都在左栏(手机是字幕行),板只放板书——板上的 .blank 收着,
+     开场那句(+「比如」)在 #lv-ask、老师给的选择(接着刚才的、接着那个 / 重新开始、先热身)在 #lv-acts;这时字幕、孩子那句、再听一遍让开。
+     手机(F5):开场那句在小头像旁(大一点、粗),选择在它上面一条 */
+  #lv-ask, #lv-acts { display:none; }
+  body.live #board > .blank { display:none; }
+  body.live.lv-opening #lv-cap, body.live.lv-opening #lv-kid, body.live.lv-opening #lv-replay { display:none; }
+  body.live.lv-opening #lv { flex-wrap:wrap; }
+  body.live.lv-opening #lv-ask { display:flex; flex:1; min-width:0; flex-direction:column; gap:2px; }
+  #lv-ask b { font-size:20px; line-height:1.4; font-weight:700; color:var(--ink); }
+  #lv-ask small { display:none; font-size:16px; line-height:1.5; color:#8a8781; }
+  body.live.lv-opening #lv-acts:not(:empty) { display:flex; order:-1; flex:0 0 100%; gap:10px; }
+  .lv-go { flex:1 1 0; min-width:0; display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:20px; border:1.5px solid var(--tc, var(--line)); background:#fff; color:var(--ink); font:inherit; text-align:left; }
+  .lv-go .ic { flex:none; display:grid; color:var(--tc, var(--dim)); }
+  .lv-go .ic svg { width:22px; height:22px; }
+  .lv-go .tx { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .lv-go .k { font-size:13px; color:var(--tc, var(--dim)); }
+  .lv-go .s { font-size:18px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lv-go .tm { flex:none; font-size:14px; color:#8a8781; }
+  .lv-go.fresh { border-color:transparent; background:var(--tc, var(--ink)); color:#fff; }
+  .lv-go.fresh .ic, .lv-go.fresh .k { color:#ffffffd9; }
+  .lv-go.talk { padding-top:14px; padding-bottom:14px; }
   /* 实时的板是脑写的(设想稿拍板 20):节头是脑写的那张「# 标题」文字卡(一行摘要 —— 线 —— 板上第一节带时间);没写节头的一轮接着上一节画,不留节间空 */
   .sh.lh { gap:12px; padding:14px 4px 2px; white-space:normal; }
   .sh.lh::after { display:none; }
@@ -635,7 +655,14 @@ __VOICE_CSS__
     body.live #lv-replay { display:flex; flex:none; align-self:flex-start; width:auto; height:44px; padding:0 12px 0 0; border-radius:22px; align-items:center; gap:6px; font-size:15px; color:#6f6b63; }
     body.live #lv-replay .tx { display:inline; }
     body.live #lv-replay.stop { height:40px; padding:0 14px; border:1px solid var(--line); background:#fff; color:var(--ink); }
-    body.live .blank > .nm { display:none; }
+    /* 空板(拍板 24):开场那句是左栏字幕位的第一句,选择一个个跟在下面、占满白纸宽 */
+    body.live.lv-opening #lv-ask { flex:none; margin-top:8px; gap:10px; }
+    body.live #lv-ask b { font-size:30px; }
+    body.live #lv-ask[data-kind=ask] b { font-size:27px; }
+    body.live #lv-ask small:not(:empty) { display:block; }
+    body.live.lv-opening #lv-acts:not(:empty) { order:0; flex:none; flex-direction:column; margin-top:12px; }
+    body.live .lv-go { flex:none; }
+    body.live .lv-go .s { font-size:19px; }
     /* 按住说话那颗按钮(头像 + 声音,样子在 voice-ui.ts):挨着字幕往下顶到底下那排上面;下沿离屏底 = 底下那排 + 13vh 的空 */
     body.live #lv-hold { display:flex; flex:none; align-self:center; margin-top:auto; }
     body.live #lv-tools { display:flex; flex:none; justify-content:center; gap:36px; margin-top:clamp(36px, 13vh, 150px); }
@@ -644,7 +671,9 @@ __VOICE_CSS__
     /* 老师在想:按钮自己画灰(voice-view 的 think),照样接按(按了晃一下说为什么);底下那排不接 */
     body.live.pending #lv-tools, body.live.limit #lv-tools { opacity:.45; pointer-events:none; }
     body.live.limit #lv-hold { opacity:.45; pointer-events:none; }
-    body.live.nosend #lv-hold, body.live.nosend #lv-tools { display:none; }
+    body.live.nosend:not(.choose) #lv-hold, body.live.nosend:not(.choose) #lv-tools { display:none; }
+    /* 先点上面一个(口语单拍好、今天点过同一个按钮):按钮灰着写「点上面开始」(voice-view 的 choose),底下那排淡着不接 */
+    body.live.choose #lv-tools { opacity:.45; pointer-events:none; }
     body.live #bar { display:none; }
     body.live.typing #bar { display:block; position:fixed; left:0; right:0; bottom:var(--kb, 0px); z-index:25; max-width:none; padding:10px calc(env(safe-area-inset-right) + 40px) 10px calc(env(safe-area-inset-left) + 40px); background:#faf9f4f5; }
     body.live #cam, body.live #plus, body.live #lv-mic { display:none !important; }
@@ -678,7 +707,7 @@ __VOICE_CSS__
       <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
       <div id="st-dim"></div>
     </div>
-    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
+    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
     <div id="sub"><span class="av" id="sub-av"></span><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
       <div id="pill">
@@ -1430,8 +1459,12 @@ ${BACK_TINT_JS}
     if (S.lecture) openLecture();
     viewKey = ''; viewNote();
   };
-  /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」 */
-  const blankBoard = (title, resume) => h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor, 'draw') : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null, resume && S.tutor ? resumeChip(resume) : null);
+  /** 空板:没有顶栏了,老师是谁写在这里(头像、名字、口头禅),下面才是「想问什么」。
+   *  三种空板(这个、askBoard、talkBoard)都把老师要说的挂在 _open 上:实时时板上这块收着,左栏照它画(openSync,《wip/实时老师设想.md》拍板 24) */
+  const blankBoard = (title, resume) => withOpen(h('div', { class: 'blank' }, S.tutor ? avatarEl(S.tutor, 'draw') : null, S.tutor ? h('span', { class: 'nm' }, S.tutor.display) : null, h('b', {}, title), S.tutor && S.tutor.firstQuestion ? h('small', {}, '比如:' + S.tutor.firstQuestion) : null, resume && S.tutor ? resumeChip(resume) : null),
+    { kind: 'new', big: title, small: S.tutor && S.tutor.firstQuestion ? '比如:' + S.tutor.firstQuestion : '', acts: resume && S.tutor ? [{ cls: 'back', icon: 'again', k: resume.title ? '接着刚才的' : '', s: resume.title || '接着刚才的', tm: clock(resume.at), go: () => resumeThread(resume.thread) }] : [] });
+  /** 空板挂上老师要说的(开场那句 big、下面一行 small、选择 acts:{cls, icon, k 上面的小字, s 大字, sub 下面的小字, tm 时刻, id, go}) */
+  const withOpen = (el, o) => { el._open = o; return el; };
   // ---- 接着今天的(《wip/activity设计.md》§八,设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm):首页不再有「接着刚才的」,进来都是新话题 ----
   const tutorColor = () => colorOf(S.tutor);
   /** 回到今天的那个话题:照旧铺开、不重播(同「以前的」里点今天的一行) */
@@ -1439,28 +1472,59 @@ ${BACK_TINT_JS}
   /** 新话题空白板上的胶囊:今天最后一个自由话题;孩子一开口(发出去)空白板连它一起收起 */
   const resumeChip = (r) => h('button', { type: 'button', class: 'resume', style: 'color:' + tutorColor() + ';border-color:' + tutorColor(), on: { click: () => resumeThread(r.thread) } }, h('span', { class: 'ic', html: ICON.again }), h('span', {}, r.title ? '接着刚才的:' + r.title : '接着刚才的'), h('small', {}, clock(r.at)));
   /** activity、小课堂今天点过同一个:先问接着那个,还是重新开始(不点就不开讲、不算一条) */
-  const askBoard = (ask) => h('div', { class: 'blank ask' }, avatarEl(S.tutor, 'draw'), h('span', { class: 'nm' }, S.tutor.display), h('b', {}, '今天点过「' + ask.label + '」啦'),
+  const askBoard = (ask) => withOpen(h('div', { class: 'blank ask' }, avatarEl(S.tutor, 'draw'), h('span', { class: 'nm' }, S.tutor.display), h('b', {}, '今天点过「' + ask.label + '」啦'),
     h('div', { class: 'ask-row' },
       h('button', { type: 'button', class: 'ask-go back', style: 'color:' + tutorColor() + ';border-color:' + tutorColor(), on: { click: () => resumeThread(ask.resume.thread) } },
         h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.again }), '接着刚才那个'), h('span', { class: 's' }, ask.resume.title || '刚开了个头'), h('small', {}, clock(ask.resume.at))),
       h('button', { type: 'button', class: 'ask-go fresh', style: 'background:' + tutorColor(), on: { click: () => startFresh(ask) } },
-        h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.spark }), ask.lecture ? '从头看一遍' : '重新开始'), h('span', { class: 's' }, ask.lecture ? ask.lecture.title : ask.label))));
+        h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.spark }), ask.lecture ? '从头看一遍' : '重新开始'), h('span', { class: 's' }, ask.lecture ? ask.lecture.title : ask.label)))),
+    { kind: 'ask', big: '今天点过「' + ask.label + '」啦', small: '', acts: [
+      { cls: 'back', icon: 'again', k: '接着刚才那个', s: ask.resume.title || '刚开了个头', tm: clock(ask.resume.at), go: () => resumeThread(ask.resume.thread) },
+      { cls: 'fresh', icon: 'spark', k: ask.lecture ? '从头看一遍' : '重新开始', s: ask.lecture ? ask.lecture.title : ask.label, go: () => startFresh(ask) }] });
   /** 口语课页过来的:口语单拍好了,点一下开始(这一下点击起声音、开麦;不点不开讲) */
-  const talkBoard = () => h('div', { class: 'blank ask' }, avatarEl(S.tutor, 'draw'), h('span', { class: 'nm' }, S.tutor.display), h('b', {}, '口语单拍好啦'),
-    h('div', { class: 'ask-row' },
-      h('button', { type: 'button', class: 'ask-go fresh', id: 'talk-go', style: 'background:' + tutorColor(), on: { click: () => {
-        unlock(); if (LV.audio) LV.audio.wake().catch(() => {}); liveMicOn();
-        S.talkWait = false; renderBar();
-        const b = $('#board .blank'); if (b) b.remove();
-        send('口语课');
-      } } },
-        h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.spark }), '先热身,再打电话'), h('span', { class: 's' }, '先跟老师热热身,再打个电话聊一聊'))));
+  const talkGo = () => {
+    unlock(); if (LV.audio) LV.audio.wake().catch(() => {}); liveMicOn();
+    S.talkWait = false; renderBar();
+    const b = $('#board .blank'); if (b) b.remove();
+    send('口语课');
+  };
+  const talkBoard = () => {
+    const el = withOpen(h('div', { class: 'blank ask' }, avatarEl(S.tutor, 'draw'), h('span', { class: 'nm' }, S.tutor.display), h('b', {}, '口语单拍好啦'),
+      h('div', { class: 'ask-row' },
+        h('button', { type: 'button', class: 'ask-go fresh', style: 'background:' + tutorColor(), on: { click: talkGo } },
+          h('span', { class: 't' }, h('span', { class: 'ic', html: ICON.spark }), '先热身,再打电话'), h('span', { class: 's' }, '先跟老师热热身,再打个电话聊一聊')))),
+      { kind: 'talk', big: '口语单拍好啦', small: '', acts: [{ cls: 'fresh talk', icon: 'play', s: '先热身,再打电话', sub: '点一下开始', id: 'talk-go', go: talkGo }] });
+    // 左栏那句下面写几个单词、几个句子(读不到就不写)
+    if (S.talk) api('GET', '/api/talk/' + encodeURIComponent(S.talk)).then((j) => {
+      const l = j && j.meta && j.meta.list; if (!l) return;
+      el._open.small = [l.words.length ? l.words.length + ' 个单词' : '', l.sentences.length ? l.sentences.length + ' 个句子' : ''].filter(Boolean).join('、');
+      if (LO.el === el) { LO.el = undefined; openSync(); }
+    }, () => {});
+    return el;
+  };
   const startFresh = (ask) => {
     S.ask = null;
     const b = $('#board .blank'); if (b) b.remove();
     if (ask.lecture) { S.lecture = { ...ask.lecture, watch: null, sent: false, marks: [], flying: [], log: [] }; renderBar(); renderHeader(); openLecture(); }
     else { renderBar(); send(ask.send); }
   };
+  /** 空板上老师对孩子说的话挪进左栏(实时;《wip/实时老师设想.md》拍板 24,原型 F 排):照板上那块 .blank 的 _open 画 #lv-ask、#lv-acts。
+   *  板上那块一换、一收(进老师页、换话题、孩子开口、点了选择……十来处)都是 #board 的子节点在变:盯着它,一处跟上 */
+  const LO = { el: undefined };
+  const lvGo = (a) => h('button', { type: 'button', class: 'lv-go ' + a.cls, id: a.id || null, on: { click: a.go } }, h('span', { class: 'ic', html: ICON[a.icon] }),
+    h('span', { class: 'tx' }, a.k ? h('span', { class: 'k' }, a.k) : null, h('span', { class: 's' }, a.s), a.sub ? h('span', { class: 'k' }, a.sub) : null), a.tm ? h('span', { class: 'tm' }, a.tm) : null);
+  function openSync() {
+    const b = $('#board > .blank'), o = b && b._open ? b._open : null;
+    if (LO.el === b) return;
+    LO.el = b;
+    document.body.classList.toggle('lv-opening', Boolean(o));
+    const ask = $('#lv-ask');
+    ask.dataset.kind = o ? o.kind : '';
+    ask.querySelector('b').textContent = o ? o.big : '';
+    ask.querySelector('small').textContent = o ? o.small : '';
+    $('#lv-acts').replaceChildren(...(o ? o.acts.map(lvGo) : []));
+  }
+  new MutationObserver(openSync).observe($('#board'), { childList: true });
   const closeTutor = () => { liveDispatch({ type: 'reset' }); liveClose(); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit', 'speaking', 'nod'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
@@ -2769,7 +2833,9 @@ __WORD_DRAW_JS__
   // 家长要试老师,到孩子端当一回孩子,用完回清单删那个话题(写进记忆、日记的一起撤)
   /** 能不能发消息:孩子端 = 不只读;家长端不发 */
   const canSend = () => !S.readonly && !S.ask && !S.talkWait && !(S.lecture && !S.lecture.watch);
-  const renderBar = () => { $('#pill').hidden = !canSend() && !REEL; document.body.classList.toggle('nosend', !canSend() && !REEL); $('#back-today').hidden = !S.readonly || PARENT || REEL; };
+  /** 空板上等孩子先点上面一个(今天点过同一个按钮、口语单拍好):点之前不发;实时左栏那颗灰着写「点上面开始」 */
+  const choosing = () => Boolean(S.ask || S.talkWait) && !S.readonly && !REEL;
+  const renderBar = () => { $('#pill').hidden = !canSend() && !REEL; document.body.classList.toggle('nosend', !canSend() && !REEL); document.body.classList.toggle('choose', choosing()); $('#back-today').hidden = !S.readonly || PARENT || REEL; voiceSync(); };
   $('#more-btn').hidden = PARENT;
   const resetBoard = () => { dispatch({ type: 'halt' }); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.partial = null; pin.on = false; $('#board').replaceChildren(); };
   /** 换到某天的某个话题:今天的能接着聊;以前的只读回放(从第一句播) */
@@ -3003,7 +3069,7 @@ __WORD_DRAW_JS__
     if (key === R.capKey) return;
     R.capKey = key;
     $('#lv-cap .lv-prev').textContent = i > 0 ? R.cap[i - 1].text : '';
-    const c = $('#lv-cap .lv-cur'); c.textContent = i >= 0 ? R.cap[i].text : S.tutor.display; c.classList.toggle('nm', i < 0);
+    const c = $('#lv-cap .lv-cur'); c.textContent = i >= 0 ? R.cap[i].text : ''; c.classList.toggle('nm', i < 0);
     $('#lv-cap').classList.toggle('done', !speaking);
   };
   /** 按住说话:有实录(hold)照它画——话筒没开「等一下…」、在听、上滑「松手取消」、松手「正在听清…」,认出的字到这一刻为止,波形照记下的音量;
@@ -3646,7 +3712,7 @@ __REEL_DOCK_JS__
       return voiceIn({ status: rh ? 'holding' : VB.reelSpeak ? 'mouth' : 'quiet', pending: S.pending, holdAudio: Boolean(rh && rh.phase !== 'wait'), cancel: Boolean(rh && rh.slide) });
     }
     const m = LV.model, holding = m.status === 'holding';
-    return voiceIn({ status: m.status, open: m.open, hearing: m.hearing, ducked: m.ducked, muted: m.muted, turn: m.turn, pending: S.pending, photo: VB.photo, ready: LV.ready, holdAudio: holding && hold.audio, cancel: holding && Boolean(press && press.cancelled), silentMs: holding && hold.audio ? Date.now() - Math.max(VB.loudAt, LV.holdAt) : 0, hint: VB.hint });
+    return voiceIn({ status: m.status, open: m.open, hearing: m.hearing, ducked: m.ducked, muted: m.muted, turn: m.turn, pending: S.pending, photo: VB.photo, ready: LV.ready, choose: choosing(), holdAudio: holding && hold.audio, cancel: holding && Boolean(press && press.cancelled), silentMs: holding && hold.audio ? Date.now() - Math.max(VB.loudAt, LV.holdAt) : 0, hint: VB.hint });
   };
   /** 按钮换成这一刻的样子;手机那颗小头像(#lv-av)的动作跟同一份。按着没声音满 3 秒要换小字:到点再来一次 */
   function voiceSync() {
@@ -3746,7 +3812,7 @@ __REEL_DOCK_JS__
     cap.querySelector('.lv-prev').textContent = LV.cap.prev;
     const cut = Boolean(LV.cap.cut) && LV.cap.cut === LV.cap.cur;
     const limit = S.limit ? subtitleFor({ state: S.state, sections: [], pending: false, waitedMs: 0, limit: true }).text : '';
-    c.textContent = limit || (LV.cap.cur ? LV.cap.cur + (cut ? '……' : '') : (S.tutor ? S.tutor.display : ''));
+    c.textContent = limit || (LV.cap.cur ? LV.cap.cur + (cut ? '……' : '') : '');
     c.classList.toggle('cut', cut && !limit);
     c.classList.toggle('nm', !limit && !LV.cap.cur);
     cap.classList.toggle('done', LV.model.status !== 'mouth' && !limit);
@@ -4012,6 +4078,8 @@ __REEL_DOCK_JS__
   el.addEventListener('pointerdown', (e) => {
     if (S.bar === 'typing') return;
     e.preventDefault(); unlock();
+    // 先点上面一个(按钮写着「点上面开始」):不接,晃一下
+    if (choosing()) { VB.btn.shake(); return; }
     // 嘴还没连上:不接,说一声(不掉进板书的浏览器识别)
     if (LV.on && !LV.ready) { connectingHint(); return; }
     // 老师在想:不接,说一声(busyHint);嘴一出声 body.pending 就摘掉,能按。一直听时这颗是开关麦,照旧接

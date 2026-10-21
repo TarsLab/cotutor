@@ -29,7 +29,8 @@ check('上滑优先于没声音', V({ status: 'holding', holdAudio: true, silent
 check('老师在想:不接、按了说为什么', V({ pending: true }).press === 'hint');
 check('嘴还没连上:不接(不掉进板书的识别)', V({ ready: false }).press === 'hint' && V({ ready: false, status: 'mouth' }).key === 'connecting');
 check('录音卡在录:不接、整颗淡', (() => { const v = V({ status: 'recording' }); return v.press === 'off' && v.faded; })());
-check('一直听:都是开关麦', VOICE_SCENES.filter((s) => s.input.open).every((s) => V(s.input).press === 'toggle'));
+check('一直听:都是开关麦(点上面开始之前除外)', VOICE_SCENES.filter((s) => s.input.open && !s.input.choose).every((s) => V(s.input).press === 'toggle'));
+check('先点上面一个:灰着写「点上面开始」、不接;压过嘴没连上与一直听', (() => { const v = V({ choose: true }); return v.tone === 'grey' && v.big === '点上面开始' && v.press === 'hint' && v.face === 'still' && v.flow === 'none' && V({ choose: true, ready: false }).key === 'choose' && V({ choose: true, open: true }).key === 'choose'; })());
 check('一直听时点一下没按住的提示不出(点一下就是开关麦)', V({ open: true, hint: 'tap' }).key === 'open');
 
 // 提示:晃一下;平时不晃

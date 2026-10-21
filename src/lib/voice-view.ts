@@ -36,6 +36,8 @@ export interface VoiceIn {
   photo: boolean;
   /** 嘴连上了(页面的 LV.ready) */
   ready: boolean;
+  /** 空板上等孩子先点上面一个(口语单拍好的「先热身,再打电话」、今天点过同一个按钮的「接着那个 / 重新开始」):点之前不接(《wip/实时老师设想.md》拍板 24) */
+  choose: boolean;
   /** 按着:麦克风开上了没有、往上滑过门限没有、多久没声音(毫秒) */
   holdAudio: boolean;
   cancel: boolean;
@@ -71,12 +73,14 @@ export interface VoiceView {
 export const VOICE_SILENT_MS = 3000;
 
 export function voiceIn(p: Partial<VoiceIn> = {}): VoiceIn {
-  return { status: 'quiet', open: false, hearing: false, ducked: false, muted: false, turn: false, pending: false, photo: false, ready: true, holdAudio: false, cancel: false, silentMs: 0, hint: '', ...p };
+  return { status: 'quiet', open: false, hearing: false, ducked: false, muted: false, turn: false, pending: false, photo: false, ready: true, choose: false, holdAudio: false, cancel: false, silentMs: 0, hint: '', ...p };
 }
 
 const voiceLook = (o: Partial<VoiceView> & { key: string }): VoiceView => ({ tone: 'white', face: 'still', flow: 'none', dots: false, big: '', icon: '', wait: false, small: '', shake: false, breathe: false, faded: false, press: 'hold', ...o });
 
 export function voiceView(i: VoiceIn): VoiceView {
+  // 先点上面一个:按钮灰着写「点上面开始」,不接(按了晃一下);嘴连没连上、一直听不一直听都一样
+  if (i.choose) return voiceLook({ key: 'choose', tone: 'grey', big: '点上面开始', press: 'hint' });
   // 刚才那一下的提示:晃一下、字留 2 秒(页面管时长)
   if (i.hint === 'busy') return voiceLook({ key: 'busy', tone: 'grey', face: 'think', big: '老师在想,等一下再说', shake: true, press: 'hint' });
   if (i.hint === 'connecting' || !i.ready) return voiceLook({ key: 'connecting', tone: 'grey', face: 'dim', big: '正在叫老师', wait: true, shake: i.hint === 'connecting', press: 'hint' });

@@ -45,6 +45,7 @@ import {
   startReplay,
   sectionTitle,
   sectionsFromMessages,
+  liveHead,
   askCard,
   kidSaid,
   tidySpoken,
@@ -285,6 +286,25 @@ check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人�
   check('sectionsFromMessages:照片进了答案栏,节头不再带 photos', pe?.saidOn?.card === 1 && pe.photos === undefined);
   const notSnap = sectionsFromMessages([{ ...pm[0], section: asks }, pm[1]]).find((e) => e.job === 'r');
   check('sectionsFromMessages:答的不是拍给我看卡,照片照旧在节头', notSnap?.photos?.length === 1 && !notSnap.said?.photos);
+  // 实时(《wip/实时老师设想.md》拍板 20):节头是脑写的那张 # 标题卡,没写就接着上一节;孩子的话照旧挂在 said 上(给左栏),不是节头
+  const head: BoardSection = { cards: [{ kind: 'text', props: { title: '补读音:瀑、布、穷、尽', text: '', heading: true } }, q('瀑 pù')], lines: [L('先看「瀑」。')] };
+  const plain: BoardSection = { cards: [q('布 bù')], lines: [L('对,pù。')] };
+  const talkOnly: BoardSection = { cards: [], lines: [L('嗯,我在。')] };
+  const lm = [
+    { job: 'h', question: '(拍了一张)', reply: 'x', pending: false, live: true, photos: ['captures/x.jpg'], section: head },
+    { job: 'i', question: '没见过', reply: 'x', pending: false, live: true, spoken: true, section: plain },
+    { job: 'j', question: '老师。', reply: 'x', pending: false, live: true, spoken: true, section: talkOnly },
+    { job: 'k', question: '写好了', reply: null, pending: true, live: true, section: { cards: [head.cards[0]], lines: [], partial: true } },
+    { job: 'l', question: '为什么', reply: 'x', pending: false, section: head },
+  ];
+  const le = sectionsFromMessages(lm);
+  const by = (j: string) => le.find((e) => e.job === j);
+  check('实时:开头是节头卡 → head 是它的标题,不 cont', by('h')?.head === '补读音:瀑、布、穷、尽' && by('h')?.cont === undefined, JSON.stringify(by('h')));
+  check('实时:没写节头 → cont,没有 head;孩子那句照旧在 said(给左栏)', by('i')?.cont === true && by('i')?.head === undefined && by('i')?.said?.text === '没见过', JSON.stringify(by('i')));
+  check('实时:只有讲稿的一轮也是 cont', by('j')?.cont === true);
+  check('实时:还在写的一轮,节头卡先到了就有 head', by('k')?.partial === true && by('k')?.head === '补读音:瀑、布、穷、尽');
+  check('板书模式:不带 head / cont', by('l')?.head === undefined && by('l')?.cont === undefined);
+  check('liveHead:节头标题是空的不算', 'cont' in liveHead({ cards: [{ kind: 'text', props: { title: ' ', text: '', heading: true } }] }));
 }
 
 done();

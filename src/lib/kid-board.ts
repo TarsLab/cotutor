@@ -670,11 +670,24 @@ export interface BoardEntry extends BoardSection {
   photos?: string[];
   /** 这一节答的是看完小课堂后的第一问:节前画小课堂卡 */
   lecture?: KidLecture;
-  /** 孩子引出这一节的那句话;saidOn = 它答的是哪一节的哪张问题卡(写进那张卡的答案栏),没有 = 在这一节开头单独一行 */
+  /** 孩子引出这一节的那句话;saidOn = 它答的是哪一节的哪张问题卡(写进那张卡的答案栏),没有 = 在这一节开头单独一行。实时的节头不是它(看 head),它只给左栏用 */
   said?: KidSaid;
   saidOn?: { job: string; card: number };
   /** 实时的一轮:卡闭合了就铺(不按拍);不出卡的板上留讲稿的字 */
   live?: true;
+  /** 实时:这一轮开头是脑写的节头(只有一行 # 标题的文字卡),从这里起新的一件事,head 是它的标题(liveHead) */
+  head?: string;
+  /** 实时:这一轮开头没写节头,接着上一节画 */
+  cont?: true;
+}
+
+/**
+ * 实时的一节怎么接(《wip/实时老师设想.md》拍板 20):新一节的开头由脑定,不再机械是孩子那句。
+ * 这一轮第一张卡是节头 → head;没写(只有讲稿、开头是别的卡、还没写出卡)→ cont,接着上一节。一轮中间的节头卡,是从那张卡起新一节
+ */
+export function liveHead(s: Pick<BoardSection, 'cards'>): { head: string } | { cont: true } {
+  const first = s.cards[0];
+  return first && isHeading(first) && str(first.props.title).trim() ? { head: str(first.props.title).trim() } : { cont: true };
 }
 
 /** 口头禅:单独的语气词随处去掉;「那个」「就是」「然后」只在句首或标点旁去掉(句中的「就是 4」「那个是七」留着),连说两遍以上的随处去掉 */
@@ -739,7 +752,7 @@ export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEn
   const says = kidSaid(messages);
   for (const m of messages) {
     const k = says.get(m.job);
-    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length && !k?.said.photos ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}), ...(m.live ? { live: true as const } : {}) };
+    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length && !k?.said.photos ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}), ...(m.live ? { live: true as const, ...liveHead(m.section ?? { cards: [] }) } : {}) };
     if (m.pending) {
       if (m.section && m.section.partial && (m.section.cards.length || (m.section.voiced ?? 0) > 0 || (m.live && m.section.lines.length))) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.voiced ? { voiced: m.section.voiced } : {}), ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;

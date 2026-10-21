@@ -37,6 +37,8 @@ export interface FakeRealtime {
   failUpdate: boolean;
   /** 发了 created 就断 */
   dropEarly: boolean;
+  /** 连上后晚这么多毫秒才回 session.created(孩子端「正在叫老师」那一两秒,探针在这时按) */
+  createDelayMs: number;
   /** 孩子那句转写成什么;kidTexts 排着的先用(VAD 会话一段一句) */
   kidText: string;
   kidTexts: string[];
@@ -53,7 +55,7 @@ export interface FakeRealtime {
 
 export async function startFakeRealtime(): Promise<FakeRealtime> {
   const server: Server = createServer((_req, res) => { res.writeHead(404); res.end(); });
-  const fake: FakeRealtime = { endpoint: '', conns: [], long: false, failUpdate: false, dropEarly: false, kidText: "It's a red car.", kidTexts: [], vadReject: 0, failTranscript: false, failCommit: false, audioMs: 100, close: () => { for (const c of fake.conns) c.sock.close(); server.close(); } };
+  const fake: FakeRealtime = { endpoint: '', conns: [], long: false, failUpdate: false, dropEarly: false, createDelayMs: 0, kidText: "It's a red car.", kidTexts: [], vadReject: 0, failTranscript: false, failCommit: false, audioMs: 100, close: () => { for (const c of fake.conns) c.sock.close(); server.close(); } };
   server.on('upgrade', (req, socket, head) => {
     if (!isUpgrade(req)) { socket.destroy(); return; }
     let active = 0;
@@ -126,7 +128,8 @@ export async function startFakeRealtime(): Promise<FakeRealtime> {
       onClose: () => { c.closed = true; },
     });
     fake.conns.push(c);
-    send({ type: 'session.created', session: { voice: 'Tina' } });
+    if (fake.createDelayMs > 0) setTimeout(() => send({ type: 'session.created', session: { voice: 'Tina' } }), fake.createDelayMs);
+    else send({ type: 'session.created', session: { voice: 'Tina' } });
     if (fake.dropEarly) setTimeout(() => c.sock.close(1011, 'bye'), 30);
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));

@@ -89,7 +89,7 @@ try {
   await until(`document.body.classList.contains('pending')`, 20);
   // 第一句问出去、老师还没开口时板还空着:那张脸是板中间的大头像(字幕行那颗不露);有了内容就是字幕行那颗
   const think = await evaluate(`(() => { const sub = document.querySelector('#sub-av'), shown = getComputedStyle(sub).display !== 'none', face = shown ? sub : document.querySelector('#board > .blank > .av'); const moving = [...document.querySelectorAll('#main .av')].filter((e) => e.getClientRects().length > 0 && getComputedStyle(e.querySelector('.ring circle')).animationName !== 'none').length; return { which: shown ? 'sub' : 'blank', face: (${AV})(face), moving, others: document.querySelectorAll('.wait-card .av, #sub-text .av, #back .av').length }; })()`);
-  ok('等的时候:看得见的那张脸在「想」(转圈 + 一呼一吸),只有它在动;等待卡、字幕字里、左上胶囊都没有头像', think.face && think.face.anim === 'av-spin, av-breathe' && think.moving === 1 && think.others === 0, JSON.stringify(think));
+  ok('等的时候:看得见的那张脸在「想」(转圈 + 一呼一吸),只有它在动;等待卡、字幕字里、左上胶囊都没有头像', think.face && think.face.anim === 'vb-spin, vb-breathe' && think.moving === 1 && think.others === 0, JSON.stringify(think));
   await sleep(600); await shot('avatar-think.png');
   // 念:采样字幕行那颗头像的动画,直到停下
   const seen = new Set(); let nod = false;
@@ -100,13 +100,13 @@ try {
     if (nod && !s.speaking) break;
     await sleep(150);
   }
-  ok('念的时候「说」(开口一张一合)', seen.has('av-talk'), [...seen].join(' '));
+  ok('念的时候「说」(开口一张一合)', seen.has('vb-mouth'), [...seen].join(' '));
   ok('念完停下「该你了」点一下头,一秒后摘掉', nod && await until(`!document.body.classList.contains('nod')`, 8), [...seen].join(' '));
   await shot('avatar-settled.png');
 
   // 听:孩子按住说话(无头 Chrome 没有识别,直接加类看样式)
   const listen = await evaluate(`(async () => { document.body.classList.add('listening'); await new Promise((r) => setTimeout(r, 900)); const c = getComputedStyle(document.querySelector('#sub-av .ring circle')); const r = { anim: c.animationName, transform: c.transform }; document.body.classList.remove('listening'); return r; })()`);
-  ok('听:开口转向下面(126° 附近),一呼一吸', listen.anim === 'av-turn, av-listen' && /matrix\(-0\.[5-7]/.test(listen.transform), JSON.stringify(listen));
+  ok('听:开口转向下面(126° 附近),一呼一吸', listen.anim === 'vb-turn, vb-listen' && /matrix\(-0\.[5-7]/.test(listen.transform), JSON.stringify(listen));
 
   // 减弱动态效果:都不动
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });

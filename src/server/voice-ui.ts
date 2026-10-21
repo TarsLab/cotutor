@@ -35,7 +35,7 @@ export const VOICE_TUNE = {
   arcLag: 80,
   /** 老师的音量(放出去那条链上的 RMS)乘这个到 0–1 */
   arcGain: 5,
-  /** 嘴停、孩子按下时三道弧收掉的时长(毫秒) */
+  /** 嘴停、孩子按下时三道弧收掉的时长;往上滑取消时路上的竖条原地淡掉也是这么久(毫秒) */
   arcFade: 150,
   /** 插话时老师的弧淡到几成 */
   duck: 0.3,
@@ -90,7 +90,7 @@ export const VOICE_CSS = `
   .vb.vb-faded { opacity:.45; }
   .vb-av { position:relative; flex:none; width:96px; height:96px; display:grid; place-items:center; border-radius:50%; --vb-h1:6px; --vb-h2:-2px; transition:box-shadow .2s; }
   .vb-av > .av { width:72px; height:72px; font-size:34px; }
-  .vb-side { position:relative; flex:1; align-self:stretch; min-width:0; }
+  .vb-side { position:relative; z-index:1; flex:1; align-self:stretch; min-width:0; }
   .vb-big { position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); display:flex; align-items:center; gap:8px; font-size:20px; font-weight:600; line-height:1.3; }
   .vb-big[hidden], .vb-small[hidden] { display:none; }
   .vb-right .vb-big { justify-content:flex-end; }
@@ -107,7 +107,7 @@ export const VOICE_CSS = `
   .vb[data-tone=blue] .vb-small { color:#ffffffe6; }
   .vb[data-tone=light] .vb-small { color:#4d74a8; }
   .vb[data-tone=cancel] .vb-small { color:#4d5563; }
-  .vb-track { position:absolute; left:96px; right:18px; top:50%; height:56px; margin-top:-28px; pointer-events:none; }
+  .vb-track { position:absolute; z-index:0; left:96px; right:18px; top:50%; height:56px; margin-top:-28px; pointer-events:none; }
   .vb-right .vb-track { left:18px; right:96px; }
   .vb.vb-shake { animation:vb-shake .5s ease-in-out; }
   .vb.vb-breathe { animation:vb-glow 2.4s ease-in-out infinite; }
@@ -176,6 +176,7 @@ export const VOICE_JS = `
     var kick = function () { if (!S.raf) { S.last = 0; S.raf = requestAnimationFrame(frame); } };
     var travelOf = function () { return Math.max(1, cv.clientWidth - 4); };
     var barX = function (b, now) {
+      if (b.fade) return b.fade[0];
       if (b.rush) return b.rush[0] * (1 - Math.min(1, (now - b.rush[1]) / T.rush));
       return travelOf() * (1 - Math.min(1, (now - b.t0) / b.dur));
     };
@@ -248,9 +249,11 @@ export const VOICE_JS = `
         var trav = travelOf(), keep = [];
         for (var j = 0; j < S.bars.length; j++) {
           var b = S.bars[j], x = barX(b, now), p = 1 - x / trav;
+          var fx = b.fade ? (now - b.fade[1]) / T.arcFade : 0;
+          if (fx >= 1) continue;
           if (x <= 0.5) { if (!b.dot) recv(now); continue; }
           keep.push(b);
-          var al = p < 0.12 ? p / 0.12 : p < 0.8 ? 1 : Math.max(0, 1 - (p - 0.8) / 0.2);
+          var al = (p < 0.12 ? p / 0.12 : p < 0.8 ? 1 : Math.max(0, 1 - (p - 0.8) / 0.2)) * (1 - fx);
           var sy = p > 0.8 ? 1 - (p - 0.8) / 0.2 * 0.8 : 1;
           g.globalAlpha = Math.max(0, Math.min(1, al));
           bar(g, x, cy, Math.max(b.dot ? T.dotH : 3, b.h * sy));
@@ -283,8 +286,11 @@ export const VOICE_JS = `
           voiceFace(av, v.face);
           if (v.shake) shake();
           var hadIn = prev && (prev.flow === 'in' || prev.flow === 'both'), hasIn = v.flow === 'in' || v.flow === 'both';
-          // 松手:路上剩下的竖条加快走进头像
-          if (hadIn && !hasIn) { var now = performance.now(); for (var i = 0; i < S.bars.length; i++) if (!S.bars[i].rush) S.bars[i].rush = [barX(S.bars[i], now), now]; }
+          // 松手:路上剩下的竖条加快走进头像;往上滑要取消:原地淡掉(没交给老师,不进头像)
+          if (hadIn && !hasIn) {
+            var now = performance.now(), drop = v.key === 'cancel';
+            for (var i = 0; i < S.bars.length; i++) { var bb = S.bars[i]; if (bb.rush || bb.fade) continue; if (drop) bb.fade = [barX(bb, now), now]; else bb.rush = [barX(bb, now), now]; }
+          }
         }
         kick();
       },

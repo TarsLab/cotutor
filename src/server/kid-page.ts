@@ -39,9 +39,10 @@ import { inlineScript } from './inline-lib.ts';
 import { BACK_LOGO, BRAND_CSS, BRAND_FOOTER, BRAND_JS, titleLogo } from './brand.ts';
 import { albumSvg, cameraSvg } from './photo-ui.ts';
 import { AUDIO_CLIENT_JS } from '../live/audio-client.ts';
+import { VOICE_CSS, VOICE_JS } from './voice-ui.ts';
 
 /** 读 src/lib/<name> 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
-function libSource(name: 'kid-board' | 'photo-edit' | 'reel' | 'live-board'): string {
+function libSource(name: 'kid-board' | 'photo-edit' | 'reel' | 'live-board' | 'voice-view'): string {
   return inlineScript(new URL(`../lib/${name}.ts`, import.meta.url));
 }
 
@@ -86,16 +87,11 @@ ${faviconLinks()}
   /* 板书模式字幕行开头那颗(#sub-av,《产品规划.md》拍板 24:原来是左上返回胶囊里那颗,胶囊换了 logo)跟着播放走(body 上的类,renderSubtitle / setBar 记):
      该你了 = 点一下头,说 = 开口一张一合,想 = 慢慢转圈、开口一呼一吸,听 = 开口转向下面的输入条;同时有几样时后写的赢(听 > 想 > 说 > 该你了)。
      一页只有一张会动的脸:实时的字幕行藏着,脸在 #lv-av;空板时板中间的大头像就是那张脸(字幕行这颗不露),跟着一起动(第一句问出去、等老师那几秒板还空着);等待卡不再带头像 */
-  body.nod #sub-av .ring circle, body.nod:not(.live) #board > .blank > .av .ring circle { animation:av-nod .9s ease-in-out; }
-  body.speaking #sub-av .ring circle, body.speaking:not(.live) #board > .blank > .av .ring circle { animation:av-talk 1.6s ease-in-out infinite; }
-  body.pending #sub-av .ring circle, body.pending:not(.live) #board > .blank > .av .ring circle { animation:av-spin 2.4s linear infinite, av-breathe 1.2s ease-in-out infinite; }
-  body.listening #sub-av .ring circle, body.listening:not(.live) #board > .blank > .av .ring circle { animation:av-turn .35s ease-out both, av-listen 1.6s ease-in-out .35s infinite; }
-  @keyframes av-nod { 0%,100% { transform:rotate(36deg); } 30% { transform:rotate(60deg); } 60% { transform:rotate(26deg); } 80% { transform:rotate(41deg); } }
-  @keyframes av-talk { 0%,46%,100% { stroke-dasharray:221.17 55.29; transform:rotate(36deg); } 12% { stroke-dasharray:187.99 88.47; transform:rotate(57.6deg); } 22% { stroke-dasharray:226.7 49.76; transform:rotate(32.4deg); } 34% { stroke-dasharray:193.52 82.94; transform:rotate(54deg); } 58% { stroke-dasharray:182.46 94; transform:rotate(61.2deg); } 70% { stroke-dasharray:215.64 60.82; transform:rotate(39.6deg); } 82% { stroke-dasharray:199.05 77.41; transform:rotate(50.4deg); } }
-  @keyframes av-spin { from { transform:rotate(36deg); } to { transform:rotate(396deg); } }
-  @keyframes av-breathe { 0%,100% { stroke-dasharray:221.17 55.29; } 50% { stroke-dasharray:204.58 71.88; } }
-  @keyframes av-turn { to { transform:rotate(126deg); } }
-  @keyframes av-listen { 0%,100% { stroke-dasharray:221.17 55.29; transform:rotate(126deg); } 50% { stroke-dasharray:204.58 71.88; transform:rotate(136.8deg); } }
+  /* 关键帧(vb-nod / vb-mouth / vb-spin / vb-breathe / vb-turn / vb-listen)在 src/server/voice-ui.ts 的 VOICE_CSS(头像的动作只写那一处,拍板 23) */
+  body.nod #sub-av .ring circle, body.nod:not(.live) #board > .blank > .av .ring circle { animation:vb-nod .9s ease-in-out; }
+  body.speaking #sub-av .ring circle, body.speaking:not(.live) #board > .blank > .av .ring circle { animation:vb-mouth 1.6s ease-in-out infinite; }
+  body.pending #sub-av .ring circle, body.pending:not(.live) #board > .blank > .av .ring circle { animation:vb-spin 2.4s linear infinite, vb-breathe 1.2s ease-in-out infinite; }
+  body.listening #sub-av .ring circle, body.listening:not(.live) #board > .blank > .av .ring circle { animation:vb-turn .35s ease-out both, vb-listen 1.6s ease-in-out .35s infinite; }
   @media (prefers-reduced-motion:reduce) { .av .ring circle, .av .face { animation:none !important; transition:none; } }
   .hcards { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
   .hcards:empty { display:none; }
@@ -555,9 +551,10 @@ __BRAND_CSS__
   button:disabled, .hb.dim { opacity:.35; }
   button:disabled:active { transform:none; filter:none; }
   @media (prefers-reduced-motion:reduce) { #back, .tb .hb, .again, .so, .rd, .hz, #board .c, #hist .tr, #sheet label, #menu .panel button, #ps .tools button, #ps .foot button, .c-tutor .bt, .c-tutor .tt { transition:none; } *:active { transform:none !important; } }
+__VOICE_CSS__
   /* ---- 实时的老师(《工作流程.md》§孩子端「实时老师」;原型 https://claude.ai/artifact/Xkjo2tN8D942ujEafpNo5f 的 A「老师站在板边」):
      字幕行换成 #lv(类名带 lv-:卡是 .c,撞名会套上卡的边框)——竖屏、手机在输入条上方一行(小头像 + 在说的那句),横屏是左栏(大头像 + 字幕,在说的大、上一句淡),板是右边一块白板;
-     嘴在说头像外两圈亮(老师的颜色 --tc),孩子按着变蓝、「在听你说」;卡角没有再听的喇叭,也没有别的钮(拍板 18:想问某张卡,点开它再按住说) ---- */
+     平板横屏是左栏一整张白纸 + 头像和按住说话合成的一颗按钮(拍板 23,src/server/voice-ui.ts);卡角没有再听的喇叭,也没有别的钮(拍板 18:想问某张卡,点开它再按住说) ---- */
   #lv { display:none; }
   body.live #sub, body.live #spk { display:none; }
   body.live #lv { display:flex; align-items:center; gap:14px; padding:8px 20px 4px; min-height:60px; }
@@ -566,30 +563,16 @@ __BRAND_CSS__
   #board .c.lv-turn { animation:lv-turn 2.4s ease-in-out infinite; }
   #board .c.lv-turn.hear { animation:none; box-shadow:0 0 0 4px #3d7fd9, 0 0 0 10px #3d7fd933; }
   @keyframes lv-turn { 0%,100% { box-shadow:0 0 0 3px #3d7fd966, 0 0 0 10px #3d7fd914; } 50% { box-shadow:0 0 0 6px #3d7fd999, 0 0 0 20px #3d7fd90f; } }
-  #lv-av.ring { animation:lv-phone 1.2s ease-in-out infinite; }
-  @keyframes lv-phone { 0%,70%,100% { transform:rotate(0); } 10% { transform:rotate(-10deg); } 25% { transform:rotate(9deg); } 40% { transform:rotate(-6deg); } 55% { transform:rotate(3deg); } }
-  @media (prefers-reduced-motion: reduce) { #board .c.lv-turn { animation:none; box-shadow:0 0 0 4px #3d7fd966; } #lv-av.ring { animation:none; } }
+  @media (prefers-reduced-motion: reduce) { #board .c.lv-turn { animation:none; box-shadow:0 0 0 4px #3d7fd966; } }
   #lv-av .av { width:100%; height:100%; font-size:20px; }
-  #lv-av::before, #lv-av::after { content:""; position:absolute; border-radius:50%; border:3px solid var(--tc, var(--accent)); opacity:0; pointer-events:none; transition:opacity .3s; }
-  #lv-av::before { inset:-12%; } #lv-av::after { inset:-26%; }
-  body.speaking #lv-av::before { opacity:.32; animation:lv-ring 1.6s ease-in-out infinite; }
-  body.speaking #lv-av::after { opacity:.16; animation:lv-ring 1.6s ease-in-out .3s infinite; }
-  body.listening #lv-av::before, body.listening #lv-av::after { border-color:#3d7fd9; }
-  body.listening #lv-av::before { opacity:.36; animation:lv-ring 1.2s ease-in-out infinite; }
-  body.listening #lv-av::after { opacity:.18; animation:lv-ring 1.2s ease-in-out .25s infinite; }
-  @keyframes lv-ring { 0%,100% { transform:scale(1); } 50% { transform:scale(1.05); } }
-  body.nod #lv-av .ring circle { animation:av-nod .9s ease-in-out; }
-  body.speaking #lv-av .ring circle { animation:av-talk 1.6s ease-in-out infinite; }
-  body.pending #lv-av .ring circle { animation:av-spin 2.4s linear infinite, av-breathe 1.2s ease-in-out infinite; }
-  body.listening #lv-av .ring circle { animation:av-turn .35s ease-out both, av-listen 1.6s ease-in-out .35s infinite; }
-  #lv-chip { display:none; height:32px; padding:0 14px; border-radius:16px; background:#eaf2fd; color:#2a5ea8; font-size:15px; align-items:center; }
+  /* 手机字幕行那颗头像的动作(在说 / 在听 / 在想 / 响铃)同按钮里那颗,走 voice-ui.ts 的 voiceFace(.vb-halo 是外圈) */
   #lv-cap { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
   #lv-cap .lv-prev { display:none; }
   #lv-cap .lv-cur { font-size:18px; line-height:1.45; font-weight:600; color:var(--ink); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   #lv-cap .lv-cur.nm { font-weight:500; color:var(--dim); }
   #lv-cap.done .lv-cur, #lv-cap .lv-cur.cut { color:#a39f96; font-weight:500; }
-  /* 孩子刚说的那句、按住说话那块、拍照 / 相册 / 打字:只在平板横屏的左栏浮层里(见下面「平板横屏」);竖屏、手机照旧输入条。
-     一页一张脸:实时的脸在 #lv-av,空板中间那颗不露 */
+  /* 孩子刚说的那句、按住说话那颗按钮、拍照 / 相册 / 打字:只在平板横屏的左栏里(见下面「平板横屏」);竖屏、手机照旧输入条。
+     一页一张脸:实时的脸是按钮里那颗(手机是 #lv-av),空板中间那颗不露 */
   #lv-kid, #lv-hold, #lv-tools { display:none; }
   /* 字幕重放(设想稿拍板 21):家长提醒着用的,不做大按钮——手机是字幕行右边一颗小钮,平板横屏是字幕下面一行小字「↺ 再听一遍」;放着时是「■ 停」 */
   #lv-replay { flex:none; width:40px; height:40px; border-radius:50%; display:grid; place-items:center; color:var(--dim); }
@@ -607,7 +590,6 @@ __BRAND_CSS__
   .sh.lh .ln { flex:1 1 12px; min-width:12px; height:1px; background:var(--line); }
   .sh.lh .tm { flex:none; font-size:13px; color:var(--dim); }
   .sec + .sec.cont { margin-top:0; }
-  @media (prefers-reduced-motion:reduce) { #lv-av::before, #lv-av::after { animation:none !important; } }
   /* ---- 平板横屏 ---- */
   @media (min-width:900px) and (orientation:landscape) {
     #home { max-width:1040px; padding:calc(env(safe-area-inset-top) + 40px) 48px 40px; gap:24px; }
@@ -618,69 +600,54 @@ __BRAND_CSS__
     #menu .panel { right:calc(env(safe-area-inset-right) + 20px); }
     #board { width:100%; max-width:1040px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 68px) 32px 24px; }
     #sub, #bar, #reel { width:100%; max-width:1040px; margin:0 auto; padding-left:32px; padding-right:32px; }
-    /* 实时的老师(《wip/实时老师页改版设计.md》§二,设想稿拍板 22,原型 https://claude.ai/artifact/RNjBdhuvRmnsBjKn521fkE):
-       板是主体——占满整屏、纸色、不套卡片框,内容从浮层右边排起,往下翻时从浮着的东西底下过去;
-       左栏是浮在板上一层的面板(离屏边 16、宽 340):顶上回首页胶囊,上半是老师(头像、孩子刚说的那句、字幕),下半是孩子(按住说话、拍照 / 相册 / 打字);
-       按住说话那块的下沿离屏底 250(平板横放在桌上,底边太贴桌、手指往下会碰 iPadOS 底部手势);右上角「更多」照旧浮在板上。
-       面板在舞台遮罩(z 4)上面:舞台开着孩子照样能说话 */
-    body.live #board { max-width:none; padding:calc(env(safe-area-inset-top) + 68px) calc(env(safe-area-inset-right) + 48px) 28px calc(env(safe-area-inset-left) + 404px); }
-    body.live #stage { left:calc(env(safe-area-inset-left) + 372px); right:calc(env(safe-area-inset-right) + 16px); width:auto; transform:none; }
-    body.live .tb.l { left:calc(env(safe-area-inset-left) + 28px); top:calc(env(safe-area-inset-top) + 28px); z-index:6; }
-    body.live #back { background:var(--paper); box-shadow:none; }
-    body.live #lv { position:absolute; z-index:5; left:calc(env(safe-area-inset-left) + 16px); top:calc(env(safe-area-inset-top) + 16px); bottom:calc(env(safe-area-inset-bottom) + 16px); width:340px; box-sizing:border-box; flex-direction:column; justify-content:flex-start; align-items:center; gap:14px; padding:104px 20px 354px; min-height:0; overflow:hidden; border-radius:24px; background:#fffffff2; box-shadow:0 12px 32px #46371e24, 0 1px 3px #46371e1a; }
-    body.live #lv-av { width:104px; height:104px; margin:0 0 26px; }
-    body.live #lv-av .av { font-size:48px; }
-    body.live #lv-av::before { inset:-14%; } body.live #lv-av::after { inset:-30%; }
-    body.live.listening #lv-chip { display:inline-flex; }
-    body.live #lv-kid { display:flex; flex:none; align-items:flex-start; justify-content:center; gap:8px; width:300px; font-size:19px; line-height:1.4; font-weight:600; color:#2a5ea8; }
-    body.live #lv-kid:empty, body.live.listening #lv-kid { display:none; }
+    /* 实时的老师(《wip/实时老师页改版设计.md》§二、§二之二,设想稿拍板 22、23,原型 https://claude.ai/artifact/RNjBdhuvRmnsBjKn521fkE 的 D 排):
+       板是主体——占满整屏、纸色,内容从左栏右边排起,往下翻时从浮着的「更多」底下过去;
+       左栏是贴边的一整张白纸(上、左、下不留边,右边一道细线加很淡的影子),宽 360:顶上回首页,字幕占回首页下面到按钮上面
+       (孩子刚说的那句、上一句、在说那句、再听一遍;跟着视口高走——iPad Safari 有地址栏时只有 ~760 高,10-21 真机上按 820 写死的把字幕挤没了);
+       头像和按住说话是一颗按钮(src/server/voice-ui.ts),中心约在屏高三分之二、离底边约 200(平板横放在桌上,底边太贴桌、手指往下会碰 iPadOS 底部手势);
+       拍照、相册、打字在最底下。左栏在舞台遮罩(z 4)上面:舞台开着孩子照样能说话 */
+    body.live #board { max-width:none; padding:calc(env(safe-area-inset-top) + 68px) calc(env(safe-area-inset-right) + 48px) 28px calc(env(safe-area-inset-left) + 400px); }
+    body.live #stage { left:calc(env(safe-area-inset-left) + 376px); right:calc(env(safe-area-inset-right) + 16px); width:auto; transform:none; }
+    body.live .tb.l { left:calc(env(safe-area-inset-left) + 24px); top:calc(env(safe-area-inset-top) + 16px); z-index:6; }
+    body.live #back { background:#f4f2ec; box-shadow:none; }
+    body.live #lv { position:absolute; z-index:5; left:0; top:0; bottom:0; width:calc(env(safe-area-inset-left) + 360px); box-sizing:border-box; flex-direction:column; justify-content:flex-start; align-items:stretch; gap:12px; padding:calc(env(safe-area-inset-top) + 96px) 24px calc(env(safe-area-inset-bottom) + 20px) calc(env(safe-area-inset-left) + 24px); min-height:0; overflow:hidden; background:#fff; box-shadow:1px 0 0 #efece4, 6px 0 24px #46371e0d; }
+    body.live #lv-av { display:none; }
+    body.live #lv-kid { display:flex; flex:none; align-items:flex-start; gap:8px; font-size:20px; line-height:1.4; font-weight:600; color:#2a5ea8; }
+    body.live #lv-kid:empty { display:none; }
     #lv-kid .mi { flex:none; width:26px; height:26px; margin-top:1px; border-radius:50%; background:#dbeeff; display:grid; place-items:center; }
     #lv-kid .mi svg { width:14px; height:14px; }
     #lv-kid .tx { min-width:0; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-    body.live #lv-kid.old { font-size:16px; font-weight:400; color:#6f93c4; }
+    body.live #lv-kid.old { font-size:17px; font-weight:400; color:#6f93c4; }
     body.live #lv-kid.old .mi { width:22px; height:22px; background:#e8f1fc; }
-    body.live #lv-cap { flex:0 1 auto; min-height:0; width:300px; gap:10px; text-align:center; }
-    body.live #lv-cap .lv-prev { font-size:17px; line-height:1.5; color:#a39f96; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    body.live #lv-cap { flex:0 1 auto; min-height:0; overflow:hidden; gap:12px; text-align:left; }
+    body.live #lv-cap .lv-prev { font-size:18px; line-height:1.55; color:#a39f96; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
     body.live #lv-cap .lv-prev:empty { display:none; }
-    body.live #lv-cap .lv-cur { font-size:24px; line-height:1.5; -webkit-line-clamp:6; }
+    body.live #lv-cap .lv-cur { font-size:26px; line-height:1.5; -webkit-line-clamp:8; }
     body.live #lv-cap.rp .lv-prev { font-size:15px; color:#8a8781; }
-    body.live #lv-replay { display:flex; width:auto; height:44px; padding:0 14px; border-radius:22px; align-items:center; gap:6px; font-size:15px; color:#6f6b63; }
+    body.live #lv-replay { display:flex; flex:none; align-self:flex-start; width:auto; height:44px; padding:0 12px 0 0; border-radius:22px; align-items:center; gap:6px; font-size:15px; color:#6f6b63; }
     body.live #lv-replay .tx { display:inline; }
-    body.live #lv-replay.stop { height:40px; border:1px solid var(--line); background:#fff; color:var(--ink); }
+    body.live #lv-replay.stop { height:40px; padding:0 14px; border:1px solid var(--line); background:#fff; color:var(--ink); }
     body.live .blank > .nm { display:none; }
-    /* 下半:按住说话那块(下沿离屏底 250)、下面一排拍照 / 相册 / 打字;输入条收起,只在打字时贴着软键盘上沿横跨全屏(--kb 是软键盘的高) */
-    body.live #lv-hold { display:flex; position:absolute; left:20px; bottom:234px; width:300px; height:104px; box-sizing:border-box; align-items:center; justify-content:center; gap:14px; border-radius:28px; border:1.5px solid var(--line); background:#fff; box-shadow:0 4px 14px #0000000f; font-size:22px; color:var(--ink); touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
-    #lv-hold .mi { flex:none; display:grid; place-items:center; }
-    #lv-hold .tx { display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
-    #lv-hold b { font-weight:inherit; }
-    #lv-hold small { font-size:14px; font-weight:400; color:#4d74a8; }
-    #lv-hold small:empty { display:none; }
-    body.live #lv-tools { display:flex; position:absolute; left:20px; right:20px; bottom:130px; justify-content:center; gap:28px; }
+    /* 按住说话那颗按钮(头像 + 声音,样子在 voice-ui.ts):挨着字幕往下顶到底下那排上面;下沿离屏底 = 底下那排 + 13vh 的空 */
+    body.live #lv-hold { display:flex; flex:none; align-self:center; margin-top:auto; }
+    body.live #lv-tools { display:flex; flex:none; justify-content:center; gap:36px; margin-top:clamp(36px, 13vh, 150px); }
     #lv-tools button { display:flex; flex-direction:column; align-items:center; gap:6px; font-size:13px; color:#6f6b63; }
-    #lv-tools .ic { width:60px; height:60px; box-sizing:border-box; border-radius:50%; border:1px solid var(--line); background:#fff; display:grid; place-items:center; color:#6f6b63; }
-    body.live.pending #lv-hold, body.live.pending #lv-tools, body.live.limit #lv-hold, body.live.limit #lv-tools { opacity:.45; }
-    body.live.pending #lv-tools, body.live.limit #lv-hold, body.live.limit #lv-tools { pointer-events:none; }
+    #lv-tools .ic { width:56px; height:56px; box-sizing:border-box; border-radius:50%; border:1px solid var(--line); background:#fff; display:grid; place-items:center; color:#6f6b63; }
+    /* 老师在想:按钮自己画灰(voice-view 的 think),照样接按(按了晃一下说为什么);底下那排不接 */
+    body.live.pending #lv-tools, body.live.limit #lv-tools { opacity:.45; pointer-events:none; }
+    body.live.limit #lv-hold { opacity:.45; pointer-events:none; }
     body.live.nosend #lv-hold, body.live.nosend #lv-tools { display:none; }
-    body.live.lv-open #lv-hold { background:#eaf2fd; border-color:#bcd6f5; color:#2a5ea8; font-size:20px; font-weight:600; }
-    body.live.lv-open #lv-hold .mi { width:56px; height:56px; border-radius:50%; background:#3d7fd9; color:#fff; box-shadow:0 0 0 calc(var(--lv, 0) * 12px) #3d7fd940; transition:box-shadow .1s; }
-    body.live.lv-open #lv-hold.off { background:#fff; border-color:var(--line); color:var(--dim); }
-    body.live.lv-open #lv-hold.off .mi { background:var(--paper); color:var(--dim); box-shadow:none; }
     body.live #bar { display:none; }
     body.live.typing #bar { display:block; position:fixed; left:0; right:0; bottom:var(--kb, 0px); z-index:25; max-width:none; padding:10px calc(env(safe-area-inset-right) + 40px) 10px calc(env(safe-area-inset-left) + 40px); background:#faf9f4f5; }
     body.live #cam, body.live #plus, body.live #lv-mic { display:none !important; }
-    /* 按住时那块变蓝:#hold 盖在它上面(同一个位置),波形在前,「在听你说 · 松手发送,上移取消」 */
-    body.live #hold { left:calc(env(safe-area-inset-left) + 36px); right:auto; width:300px; bottom:calc(env(safe-area-inset-bottom) + 250px); height:104px; border-radius:28px; background:#3d7fd9; box-shadow:0 8px 22px #3d7fd961; flex-direction:row; justify-content:center; align-items:center; gap:14px; padding:0; }
-    body.live #hold .w { order:-1; gap:2px; }
-    body.live #hold .t { display:none; }
-    body.live #hold span { display:flex; flex-direction:column; gap:2px; font-size:14px; color:#ffffffe6; }
-    body.live #hold span::before { content:"在听你说"; font-size:22px; font-weight:600; color:#fff; }
-    /* 左撇子镜像(cotutor.json 的 kid.hand: left,工作台切):浮层挪到右边、板在左边;回首页在浮层顶上,「更多」照旧在右上、压在浮层的角上 */
-    body.live.hand-left #board { padding-left:calc(env(safe-area-inset-left) + 48px); padding-right:calc(env(safe-area-inset-right) + 404px); }
-    body.live.hand-left #stage { left:calc(env(safe-area-inset-left) + 16px); right:calc(env(safe-area-inset-right) + 372px); }
-    body.live.hand-left #lv { left:auto; right:calc(env(safe-area-inset-right) + 16px); }
-    body.live.hand-left .tb.l { left:calc(100% - env(safe-area-inset-right) - 344px); }
+    /* 按着时按钮自己变蓝(voice-view 的 hold),不再盖一块 #hold 上去 */
+    body.live #hold { display:none !important; }
+    /* 左撇子镜像(cotutor.json 的 kid.hand: left,工作台切):白纸挪到右边、板在左边、按钮里头像在右头;回首页、「更多」的位置同右手(回首页浮在板的左上) */
+    body.live.hand-left #board { padding-left:calc(env(safe-area-inset-left) + 48px); padding-right:calc(env(safe-area-inset-right) + 400px); }
+    body.live.hand-left #stage { left:calc(env(safe-area-inset-left) + 16px); right:calc(env(safe-area-inset-right) + 376px); }
+    body.live.hand-left #lv { left:auto; right:0; width:calc(env(safe-area-inset-right) + 360px); padding-top:calc(env(safe-area-inset-top) + 80px); padding-left:24px; padding-right:calc(env(safe-area-inset-right) + 24px); box-shadow:-1px 0 0 #efece4, -6px 0 24px #46371e0d; }
+    body.live.hand-left #back { background:#fffffff0; box-shadow:0 2px 10px #46371e2e; }
     body.live.hand-left .tb.r { z-index:6; }
-    body.live.hand-left #hold { left:auto; right:calc(env(safe-area-inset-right) + 36px); }
   }
 </style>
 <div id="home">
@@ -703,7 +670,7 @@ __BRAND_CSS__
       <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
       <div id="st-dim"></div>
     </div>
-    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-chip">在听你说</div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"><span class="mi"></span><span class="tx"><b></b><small></small></span></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
+    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
     <div id="sub"><span class="av" id="sub-av"></span><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
       <div id="pill">
@@ -746,6 +713,8 @@ __PHOTO_JS__
 __REEL_JS__
 __LIVE_JS__
 __AUDIO_JS__
+__VOICE_VIEW_JS__
+__VOICE_JS__
 __BRAND_JS__
 
   /** 页面的模式:{} = 孩子端;parent = 家长板书页(数据走家长接口,只读,节间插旁注);synth = 没有配音时用浏览器合成声(只有 mock) */
@@ -844,11 +813,17 @@ __BRAND_JS__
   S.pdate = null;
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
-  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, endLine: null, ring: null, ringEnd: 0, lcPending: false, gateOn: false, hint: false, hintT: 0 };
+  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, endLine: null, ring: null, ringEnd: 0, lcPending: false, gateOn: false };
   /** 标注画到第几句:实时的一节不跟句子(设想稿拍板 20,卡落下时整节都画),板书照播放的位置 */
   const liveUpTo = (i, upTo) => (S.sections[i] && S.sections[i].live ? undefined : upTo);
   /** 页面是实时老师的样子:正连着嘴,或录像里放的是有实时轮的话题(卡角没有钮、没有再听) */
   const liveLook = () => LV.on || Boolean(S.reel && S.reel.realtime);
+  /** 按住说话那颗按钮(平板横屏左栏;头像 + 声音,《wip/实时老师设想.md》拍板 23):样子是 voice-view.ts 的 voiceView 给的、画法在 voice-ui.ts,
+   *  这里只在一处(voiceSync)把状态凑好交过去、把音量喂进去。hint = 刚才那一下的提示(留 2 秒);photo = 这一轮发的是照片;loudAt = 按着时最近一次有声音;
+   *  reelHold / reelSpeak = 录像里孩子的屏幕这一刻(按着没有、嘴在不在出声) */
+  const VB = { btn: voiceButton($('#lv-hold'), { side: 'left' }), hint: '', hintT: 0, loudAt: 0, photo: false, silentT: 0, side: 'left', reelHold: null, reelSpeak: false };
+  VB.btn.tutorSource(() => (LV.audio && LV.audio.outLevel ? LV.audio.outLevel() : 0));
+  $('#lv-av').classList.add('vb-halo');
 
   // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音就不出声、按字数计时(浏览器合成声只在 mock 里,见 SYNTH) ----
   // 录像里孩子的屏幕在家长页的 iframe 里:用家长页那个 Audio(家长点「看录像」时在手势里解锁过),声音才放得出来
@@ -2129,6 +2104,8 @@ __WORD_DRAW_JS__
   const avListen = () => document.body.classList.toggle('listening', S.bar === 'holding' || Boolean(S.rec) || (LV.on && LV.model.open && LV.model.hearing));
   let avWas = 'idle', nodTimer = 0;
   const avNod = () => { const b = document.body; b.classList.remove('nod'); void b.offsetWidth; b.classList.add('nod'); clearTimeout(nodTimer); nodTimer = setTimeout(() => b.classList.remove('nod'), 1000); };
+  /** 实时:老师说完这一轮点一下头——按钮里那颗、手机那颗(动作在 voice-ui.ts) */
+  const liveNod = () => { VB.btn.nod(); const a = $('#lv-av'); a.classList.remove('vb-nod'); void a.offsetWidth; a.classList.add('vb-nod'); setTimeout(() => a.classList.remove('vb-nod'), 950); };
   /** 让孩子看到 el:它是板上最后看得见的东西就滚到底并跟着(pin);不是(念到上面另一张卡)就照旧 nearest,不跟;比可视区还高的露上沿 */
   const follow = (el) => {
     const b = $('#board'); if (!el || !b.contains(el)) return;
@@ -2457,9 +2434,9 @@ __WORD_DRAW_JS__
     if (settled && pin.was === 'playing' && Date.now() - pin.touched > 3000) { const cs = [...$('#board').querySelectorAll('.sec .c')].filter((c) => c.getClientRects().length); if (cs.length) follow(cs[cs.length - 1]); }
     pin.was = S.state.status;
     if (LV.on) {
-      // 实时:头像跟着嘴(liveStep 的状态);嘴停了、脑也写完了点一下头;字幕在左栏
+      // 实时:头像跟着嘴(liveStep 的状态,按钮的样子在 voiceSync);嘴停了、脑也写完了点一下头;字幕在左栏
       document.body.classList.toggle('speaking', LV.model.status === 'mouth');
-      if (LV.was === 'mouth' && LV.model.status !== 'mouth' && !S.pending) avNod();
+      if (LV.was === 'mouth' && LV.model.status !== 'mouth' && !S.pending) liveNod();
       LV.was = LV.model.status;
       liveCaption();
     } else {
@@ -2468,6 +2445,7 @@ __WORD_DRAW_JS__
     }
     avWas = ps.status;
     markHeard();
+    voiceSync();
   };
   $('#sub-btn').addEventListener('click', () => {
     if (S.stage && S.stage.playing) { postStage({ type: 'control', action: 'toggle' }); return; }
@@ -3007,6 +2985,7 @@ __WORD_DRAW_JS__
     const speaking = Boolean(f.saying || (f.clip && f.clip.kind === 'mouth'));
     const key = i + '/' + speaking;
     document.body.classList.toggle('speaking', speaking);
+    if (VB.reelSpeak !== speaking) { VB.reelSpeak = speaking; voiceSync(); }
     if (key === R.capKey) return;
     R.capKey = key;
     $('#lv-cap .lv-prev').textContent = i > 0 ? R.cap[i - 1].text : '';
@@ -3020,6 +2999,10 @@ __WORD_DRAW_JS__
     const recorded = R.d.reel.holds.some((x) => !x.diag);
     const c = !f.hold && !recorded && f.clip && f.clip.kind === 'voice' ? f.clip : null;
     const on = Boolean(f.hold || c);
+    // 平板横屏的按钮照这一刻画(按着、话筒开没开、上滑);孩子的竖条照录下的音量(最新那一格)。嘴的音量录像里没有,老师的弧只按最低深浅画
+    const rh = f.hold ? { phase: f.hold.phase, slide: Boolean(f.hold.slide) } : c ? { phase: c.offset < 900 ? 'wait' : 'live', slide: false } : null;
+    if (JSON.stringify(rh) !== JSON.stringify(VB.reelHold)) { VB.reelHold = rh; voiceSync(); }
+    if (f.hold && f.hold.lv) VB.btn.level('kid', Number(f.hold.lv[f.hold.lv.length - 1] || 0) / 9);
     $('#hold').classList.toggle('on', on);
     if (!on) { if (R.hold) { R.hold = false; $('#hold .t').textContent = ''; $('#hold').classList.remove('real'); holdBars.forEach((b, i) => { b.style.height = R.barsH[i]; }); } return; }
     R.hold = true;
@@ -3250,7 +3233,7 @@ __WORD_DRAW_JS__
     S.tutor = d.face; S.thread = d.thread; S.hist = d.date; S.readonly = true; S.autoplay = true;
     $('#sub-av').replaceWith(Object.assign(avatarEl(S.tutor), { id: 'sub-av' }));
     // 有实时轮的话题:孩子当时看到的是实时老师页(左栏大头像 + 字幕、卡角没有钮),字幕照这一刻(reelLiveCap)
-    if (d.realtime) { document.body.classList.add('live'); $('#tutor').style.setProperty('--tc', colorOf(d.face)); $('#lv-av').replaceChildren(avatarEl(S.tutor)); }
+    if (d.realtime) { document.body.classList.add('live'); $('#tutor').style.setProperty('--tc', colorOf(d.face)); $('#lv-av').replaceChildren(avatarEl(S.tutor)); VB.btn.avatar(avatarEl(S.tutor)); VB.btn.color(colorOf(d.face)); }
     $('#tutor').classList.add('on');
     renderSpk(); renderBar(); setBar('idle');
     const v0 = d.reel.views[0];
@@ -3536,6 +3519,7 @@ __REEL_DOCK_JS__
   const renderHold = () => {
     $('#hold').classList.toggle('wait', !hold.audio || hold.tail);
     $('#hold span').textContent = hold.tail ? '正在听清…' : press && press.cancelled ? '松手取消' : hold.audio ? '松手发送,上移取消' : '等一下…';
+    voiceSync();
   };
   let phTimer = 0;
   // 真音量:25 根条往左滚;没有麦克风那一路(老浏览器、没授权)就还是原来的假波形
@@ -3584,7 +3568,6 @@ __REEL_DOCK_JS__
   const RING_MAX_MS = 15000;
   const liveRing = () => {
     liveRingStop();
-    $('#lv-av').classList.add('ring');
     LV.ringEnd = setTimeout(() => { liveRingStop(); if (LV.model.status === 'ring') liveDispatch({ type: 'ringEnd' }); }, RING_MAX_MS);
     const ac = LV.audio && LV.audio.ctx;
     if (!ac) return;
@@ -3600,7 +3583,6 @@ __REEL_DOCK_JS__
   };
   const liveRingStop = () => {
     clearTimeout(LV.ringEnd);
-    $('#lv-av').classList.remove('ring');
     const r = LV.ring; LV.ring = null;
     if (r) { try { r.o1.stop(); r.o2.stop(); r.g.disconnect(); } catch {} }
   };
@@ -3639,27 +3621,47 @@ __REEL_DOCK_JS__
     const open = LV.on && LV.model.open;
     document.body.classList.toggle('lv-open', open);
     const m = $('#lv-mic'); m.innerHTML = LV.model.muted ? ICON.micOff : ICON.micMd; m.classList.toggle('off', LV.model.muted); m.classList.toggle('hear', open && LV.model.hearing); m.setAttribute('aria-label', LV.model.muted ? '开麦' : '关麦');
-    lvHoldUi();
+    voiceSync();
     avListen();
     phIdle();
   };
-  /** 平板横屏左栏浮层里那块:平时「按住说话」;一直听时是麦克风开关(同输入条里的 #lv-mic);点了一下没按住时提示一下 */
-  const lvHoldUi = () => {
-    const el = $('#lv-hold'), open = LV.on && LV.model.open, muted = open && LV.model.muted;
-    const [icon, big, small, label] = open ? [muted ? ICON.micOff : ICON.micMd, muted ? '麦关了' : '我在听,直接说', muted ? '点一下开麦' : '点一下关麦', muted ? '开麦' : '关麦']
-      : [ICON.micLg, LV.hint === 'busy' ? '老师在想,等一下再说' : LV.hint ? '按住不放,说完再松手' : '按住说话', '', '按住说话'];
-    const key = icon + big + small;
-    if (el.dataset.k !== key) { el.dataset.k = key; el.querySelector('.mi').innerHTML = icon; el.querySelector('b').textContent = big; el.querySelector('small').textContent = small; }
-    el.classList.toggle('off', muted); el.setAttribute('aria-label', label);
+  /** 这一刻的状态凑成 VoiceIn(voice-view.ts);录像里孩子的屏幕照录像这一刻(没有一直听、嘴的音量取不到——老师的弧只按最低深浅画) */
+  const voiceNow = () => {
+    if (!LV.on) {
+      const rh = VB.reelHold;
+      return voiceIn({ status: rh ? 'holding' : VB.reelSpeak ? 'mouth' : 'quiet', pending: S.pending, holdAudio: Boolean(rh && rh.phase !== 'wait'), cancel: Boolean(rh && rh.slide) });
+    }
+    const m = LV.model, holding = m.status === 'holding';
+    return voiceIn({ status: m.status, open: m.open, hearing: m.hearing, ducked: m.ducked, muted: m.muted, turn: m.turn, pending: S.pending, photo: VB.photo, ready: LV.ready, holdAudio: holding && hold.audio, cancel: holding && Boolean(press && press.cancelled), silentMs: holding && hold.audio ? Date.now() - Math.max(VB.loudAt, LV.holdAt) : 0, hint: VB.hint });
   };
-  /** 老师在想(脑在写、嘴没在说;板书模式是老师在想)时按了按住说话:不接,但要让孩子知道——10-20 晚孩子几次想打断按不动,那时这块关着 pointer-events,按了什么都不发生。
-   *  那块(手机、板书是输入条)写两秒「老师在想,等一下再说」,记一笔 voice-diag(where: busy)看一晚碰到几次、等了多久 */
-  const busyHint = () => {
-    clearTimeout(LV.hintT); LV.hint = 'busy'; lvHoldUi(); LV.hintT = setTimeout(() => { LV.hint = false; lvHoldUi(); }, 2000);
-    $('#ph').textContent = '老师在想,等一下再说'; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = PH_IDLE(); }, 2000);
-    const row = { where: 'busy', tutor: S.tutor ? S.tutor.name : null, live: LV.on, st: LV.model.status, waited: S.waitSince ? Date.now() - S.waitSince : null, ua: navigator.userAgent };
+  /** 按钮换成这一刻的样子;手机那颗小头像(#lv-av)的动作跟同一份。按着没声音满 3 秒要换小字:到点再来一次 */
+  function voiceSync() {
+    if (!liveLook()) return;
+    if (!S.pending) VB.photo = false;
+    const side = document.body.classList.contains('hand-left') ? 'right' : 'left';
+    if (VB.side !== side) { VB.side = side; VB.btn.side(side); }
+    const v = voiceView(voiceNow());
+    VB.btn.set(v);
+    voiceFace($('#lv-av'), v.face);
+    clearTimeout(VB.silentT);
+    if (v.key === 'hold') { const left = VOICE_SILENT_MS - (Date.now() - Math.max(VB.loudAt, LV.holdAt)); if (left > 0) VB.silentT = setTimeout(voiceSync, left + 30); }
+  }
+  /** 刚才那一下的提示:按钮晃一下(每按一次都晃)、字留 2 秒;ph = 手机、板书模式输入条上那行字 */
+  const voiceHint = (k, ph) => {
+    VB.hint = k; clearTimeout(VB.hintT); VB.hintT = setTimeout(() => { VB.hint = ''; voiceSync(); }, 2000);
+    voiceSync();
+    VB.btn.shake();
+    if (ph) { $('#ph').textContent = ph; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = PH_IDLE(); }, 2000); }
+  };
+  /** 实时老师页按了按住说话却不接的那几下记一笔 voice-diag(where: busy):看一晚碰到几次、等了多久;st = 嘴那时的状态,还没连上记 connecting */
+  const busyDiag = (st) => {
+    const row = { where: 'busy', tutor: S.tutor ? S.tutor.name : null, live: LV.on, st, waited: S.waitSince ? Date.now() - S.waitSince : null, ua: navigator.userAgent };
     try { fetch('/api/kid/voice-diag', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(row), keepalive: true }).catch(() => {}); } catch {}
   };
+  /** 老师在想(脑在写、嘴没在说;板书模式是老师在想)时按了按住说话:不接,但要让孩子知道——10-20 晚孩子几次想打断按不动,那时这块关着 pointer-events,按了什么都不发生 */
+  const busyHint = () => { voiceHint('busy', '老师在想,等一下再说'); busyDiag(LV.model.status); };
+  /** 嘴还没连上(刚进老师页、换连接那一两秒)时按了:不接,也不掉进板书的浏览器识别(原来 LV.on 而没 ready 时会走 holdOk 那条路) */
+  const connectingHint = () => { voiceHint('connecting', '正在叫老师,等一下'); busyDiag('connecting'); };
   /** 孩子刚说的那句(平板横屏左栏,字幕上面):节头不再是孩子的话(设想稿拍板 20),他说了什么在这里看;老师开口了(或这一轮写完了)变淡,下次说话换掉 */
   const lvKid = () => {
     const el = $('#lv-kid');
@@ -3777,7 +3779,7 @@ __REEL_DOCK_JS__
   };
   const liveMsg = (m) => {
     switch (m.t) {
-      case 'ready': { LV.ready = true; phIdle(); liveMicOn(); const q = LV.queued; LV.queued = null; if (q) liveSendNow(q[0], q[1]); break; }
+      case 'ready': { LV.ready = true; phIdle(); voiceSync(); liveMicOn(); const q = LV.queued; LV.queued = null; if (q) liveSendNow(q[0], q[1]); break; }
       // 一直听:服务端说孩子开口 / 说完;开口时报一次这一轮的上下文(话题、舞台上的卡),收下时当松手的 body
       case 'vad': if (m.on) lvSend({ t: 'ctx', body: liveBody() }); liveDispatch({ type: 'vad', on: Boolean(m.on) }); break;
       case 'duck': liveDispatch({ type: 'duck' }); break;
@@ -3835,14 +3837,22 @@ __REEL_DOCK_JS__
     document.body.classList.add('live');
     $('#tutor').style.setProperty('--tc', tutorColor());
     $('#lv-av').replaceChildren(avatarEl(S.tutor));
+    VB.btn.avatar(avatarEl(S.tutor)); VB.btn.color(tutorColor());
     if (!LV.audio) {
       LV.audio = makeAudio();
       LV.audio.muted = false;
       // 按着才推;一直听时推不推看 liveGate(关麦、卡的声音、录音、小课堂时不推)
       LV.audio.onChunk = (ab) => { if ((LV.model.status === 'holding' || liveGateSync()) && LV.ws && LV.ws.readyState === 1) LV.ws.send(ab); };
       LV.audio.onLevel = (v) => {
-        if (LV.model.status === 'holding') { holdLevel(Math.min(1, v * 4)); if (LV.diag && v > LV.diag.peak) LV.diag.peak = v; return; }
-        if (LV.gateOn) { const lv = String(Math.min(1, v * 6)); $('#lv-mic').style.setProperty('--lv', lv); $('#lv-hold').style.setProperty('--lv', lv); }
+        if (LV.model.status === 'holding') {
+          const lv = Math.min(1, v * 4);
+          holdLevel(lv); VB.btn.level('kid', lv);
+          // 有声音了:3 秒没声音那句小字收回
+          if (lv > 0.12) { VB.loudAt = Date.now(); if (VB.btn.el.dataset.voice === 'hold-silent') voiceSync(); }
+          if (LV.diag && v > LV.diag.peak) LV.diag.peak = v;
+          return;
+        }
+        if (LV.gateOn) { const lv = Math.min(1, v * 6); $('#lv-mic').style.setProperty('--lv', String(lv)); VB.btn.level('kid', lv); }
       };
     }
     LV.audio.wake().catch(() => {});
@@ -3912,7 +3922,7 @@ __REEL_DOCK_JS__
     if (!LV.on) return;
     if (!keep) {
       liveDispatch({ type: 'cancel' });
-      if (!cancelled && long) { $('#ph').textContent = '没听清,再按住说一次'; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = PH_IDLE(); }, 2500); }
+      if (!cancelled) voiceHint('unclear', long ? '没听清,再按住说一次' : '');
       renderSubtitle();
       return;
     }
@@ -3930,7 +3940,7 @@ __REEL_DOCK_JS__
     dispatch({ type: 'send' });
     const body = { text, device: S.device };
     if (opts.action) body.action = opts.action;
-    if (opts.photos && opts.photos.length) body.photos = opts.photos;
+    if (opts.photos && opts.photos.length) { body.photos = opts.photos; VB.photo = true; }
     const focus = opts.focus || (S.stage ? { card: S.stage.id } : null);
     if (focus) body.focus = focus;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
@@ -3988,8 +3998,10 @@ __REEL_DOCK_JS__
   el.addEventListener('pointerdown', (e) => {
     if (S.bar === 'typing') return;
     e.preventDefault(); unlock();
-    // 老师在想:不接,说一声(busyHint);嘴一出声 body.pending 就摘掉,能按
-    if (document.body.classList.contains('pending') && !document.body.classList.contains('limit')) { busyHint(); return; }
+    // 嘴还没连上:不接,说一声(不掉进板书的浏览器识别)
+    if (LV.on && !LV.ready) { connectingHint(); return; }
+    // 老师在想:不接,说一声(busyHint);嘴一出声 body.pending 就摘掉,能按。一直听时这颗是开关麦,照旧接
+    if (document.body.classList.contains('pending') && !document.body.classList.contains('limit') && !(LV.on && LV.model.open)) { busyHint(); return; }
     if (rec || hearing) return; // 上一句还在收尾(omni 还在听)
     if (LV.audio && LV.on) LV.audio.wake().catch(() => {});
     press = { y: e.clientY, cancelled: false, held: false, live: false, cancelPx, onTap, timer: setTimeout(() => {
@@ -4020,12 +4032,12 @@ __REEL_DOCK_JS__
   el.addEventListener('contextmenu', (e) => e.preventDefault());
   };
   bindHold(mid, 60, () => setBar(barNext(S.bar, 'tap')));
-  bindHold($('#lv-hold'), 104, () => {
+  bindHold($('#lv-hold'), 120, () => {
     if (LV.on && LV.model.open) { liveDispatch({ type: LV.model.muted ? 'unmute' : 'mute' }); return; }
-    // 点了一下没按住:提示一下,不打字(打字是下面那颗)
-    clearTimeout(LV.hintT); LV.hint = true; lvHoldUi(); LV.hintT = setTimeout(() => { LV.hint = false; lvHoldUi(); }, 1800);
+    // 点了一下没按住:晃一下提示,不打字(打字是下面那颗)
+    voiceHint('tap');
   });
-  // 浮层下面那排:拍照、相册走输入条与加号面板的那两个 file input(wireFile),打字同点输入条中间那段
+  // 左栏最底下那排:拍照、相册走输入条与加号面板的那两个 file input(wireFile),打字同点输入条中间那段
   $('#lv-cam .ic').innerHTML = ICON.cameraLg; $('#lv-album .ic').innerHTML = ICON.album; $('#lv-type .ic').innerHTML = ICON.keyboard;
   $('#lv-cam').addEventListener('click', () => $('#cam input').click());
   $('#lv-album').addEventListener('click', () => $('#sheet input[multiple]').click());
@@ -4281,7 +4293,7 @@ __REEL_DOCK_JS__
 </html>
 `;
 
-const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__LIVE_JS__', () => libSource('live-board')).replace('__AUDIO_JS__', () => AUDIO_CLIENT_JS).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR)).replace('__BRAND_CSS__', () => BRAND_CSS).replace('__BACK_LOGO__', () => BACK_LOGO).replace('__BRAND_JS__', () => BRAND_JS)
+const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__LIVE_JS__', () => libSource('live-board')).replace('__AUDIO_JS__', () => AUDIO_CLIENT_JS).replace('__VOICE_VIEW_JS__', () => libSource('voice-view')).replace('__VOICE_JS__', () => VOICE_JS).replace('__VOICE_CSS__', () => VOICE_CSS).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR)).replace('__BRAND_CSS__', () => BRAND_CSS).replace('__BACK_LOGO__', () => BACK_LOGO).replace('__BRAND_JS__', () => BRAND_JS)
   .replace('__CAMERA_22__', () => JSON.stringify(cameraSvg(22))).replace('__CAMERA_28__', () => JSON.stringify(cameraSvg(28))).replace('__CAMERA_20__', () => JSON.stringify(cameraSvg(20))).replace('__ALBUM_28__', () => JSON.stringify(albumSvg(28)));
 export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 

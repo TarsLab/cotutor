@@ -98,14 +98,25 @@ try {
   await quiet(send);
 
   // ---- 进老师页:新话题,连上嘴 ----
-  await device(1180, 820, 1, false);
+  await device(1180, 760, 1, false);
+  fake.createDelayMs = 2500;
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&new=1` });
   await until(`document.body.classList.contains('live')`);
+  // 嘴还没连上(正在叫老师,《工作流程.md》实时那张表):按了不接、不掉进板书的浏览器识别;按钮晃一下写「正在叫老师」,voice-diag 记 busy(connecting)
+  const VOICE = `document.querySelector('#lv-hold').dataset.voice`;
+  const diagRow = (where) => { try { return readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((x) => x.where === where).pop() ?? null; } catch { return null; } };
+  const connPre = await evaluate(VOICE);
+  await press(HOLD, 300);
+  const connAfter = { voice: await evaluate(VOICE), shake: await evaluate(`document.querySelector('#lv-hold').classList.contains('vb-shake')`), text: await evaluate(`document.querySelector('#lv-hold .vb-big b').textContent`), listening: await body('listening'), holdOn: await evaluate(`document.querySelector('#hold').classList.contains('on')`) };
+  await sleep(300);
+  const connRow = diagRow('busy');
+  ok('嘴还没连上时按:不接(不在听、没起板书的识别)、按钮是「正在叫老师」并晃一下、voice-diag 记 busy(connecting)', connPre === 'connecting' && connAfter.voice === 'connecting' && connAfter.shake && connAfter.text === '正在叫老师' && !connAfter.listening && !connAfter.holdOn && connRow?.st === 'connecting', JSON.stringify({ connPre, ...connAfter, row: connRow && connRow.st }));
+  fake.createDelayMs = 0;
   const connected = await untilNode(() => Boolean(conn()?.session), 8000);
   await sleep(400);
-  const lay = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), wrap = r('#wrap'), av = r('#lv-av'), hold = r('#lv-hold'), back = r('#back'), more = r('#more-btn'); const tools = [...document.querySelectorAll('#lv-tools button')].map((b) => b.textContent); return { lv: [Math.round(lv.left), Math.round(lv.top), Math.round(lv.width), Math.round(innerHeight - lv.bottom)], pos: getComputedStyle(document.querySelector('#lv')).position, wrap: [Math.round(wrap.left), Math.round(wrap.top), Math.round(wrap.width), Math.round(wrap.height)], av: Math.round(av.width), hold: [Math.round(hold.width), Math.round(hold.height), Math.round(innerHeight - hold.bottom), Math.round((hold.top + hold.height / 2) / innerHeight * 100)], backIn: back.left >= lv.left && back.right <= lv.right && back.top >= lv.top, more: [Math.round(innerWidth - more.right), Math.round(more.top), more.left > lv.right], tools, bar: getComputedStyle(document.querySelector('#bar')).display, sub: getComputedStyle(document.querySelector('#sub')).display, bg: getComputedStyle(document.querySelector('#wrap')).backgroundColor, padL: parseInt(getComputedStyle(document.querySelector('#board')).paddingLeft), cap: document.querySelector('#lv-cap .lv-cur').textContent, blank: Boolean(document.querySelector('#board .blank')) }; })()`);
+  const lay = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), wrap = r('#wrap'), hold = r('#lv-hold'), back = r('#back'), more = r('#more-btn'), tools = r('#lv-tools'); const av = document.querySelector('#lv-hold .vb-av .av'); const st = getComputedStyle(document.querySelector('#lv')); return { lv: [Math.round(lv.left), Math.round(lv.top), Math.round(lv.width), Math.round(innerHeight - lv.bottom)], pos: st.position, lvBg: st.backgroundColor, lvRadius: st.borderTopRightRadius, wrap: [Math.round(wrap.left), Math.round(wrap.top), Math.round(wrap.width)], phoneAv: getComputedStyle(document.querySelector('#lv-av')).display, av: av ? Math.round(av.getBoundingClientRect().width) : 0, hold: [Math.round(hold.width), Math.round(hold.height), Math.round(innerHeight - hold.bottom), Math.round((hold.top + hold.height / 2) / innerHeight * 100)], toolsBottom: Math.round(innerHeight - tools.bottom), voice: document.querySelector('#lv-hold').dataset.voice, backIn: back.left >= lv.left && back.right <= lv.right && back.top >= lv.top, more: [Math.round(innerWidth - more.right), Math.round(more.top), more.left > lv.right], tools: [...document.querySelectorAll('#lv-tools button')].map((b) => b.textContent), bar: getComputedStyle(document.querySelector('#bar')).display, sub: getComputedStyle(document.querySelector('#sub')).display, bg: getComputedStyle(document.querySelector('#wrap')).backgroundColor, padL: parseInt(getComputedStyle(document.querySelector('#board')).paddingLeft), cap: document.querySelector('#lv-cap .lv-cur').textContent, blank: Boolean(document.querySelector('#board .blank')) }; })()`);
   ok('进老师页:body.live、连上了嘴(配了会话)', connected, JSON.stringify(conn()?.session?.voice ?? null));
-  ok('横屏:板占满整屏(纸色、不套卡片框),左栏是浮在上面的面板(离边 16、宽 340、头像 104),回首页胶囊在面板顶上、「更多」浮在右上;按住说话那块 300×104、下沿离屏底 ≥ 150、中心在屏高六成多,下面一排拍照 / 相册 / 打字;输入条与板书的字幕行收起;没说话时字幕写老师的名字', lay.pos === 'absolute' && lay.lv[0] === 16 && lay.lv[1] === 16 && lay.lv[2] === 340 && lay.lv[3] === 16 && lay.av === 104 && lay.wrap[0] === 0 && lay.wrap[1] === 0 && lay.wrap[2] === 1180 && lay.bg === 'rgba(0, 0, 0, 0)' && lay.padL >= 380 && lay.backIn && lay.more[0] <= 24 && lay.more[2] && lay.hold[0] === 300 && lay.hold[1] === 104 && lay.hold[2] >= 150 && lay.hold[3] >= 60 && lay.tools.join() === '拍照,相册,打字' && lay.bar === 'none' && lay.sub === 'none' && lay.blank && lay.cap === '语文老师', JSON.stringify(lay));
+  ok('横屏(1180×760,Safari 带地址栏的高):板占满整屏(纸色、不套卡片框);左栏是贴边的白纸(上、左、下不留边,宽 360,不带圆角),回首页在白纸顶上、「更多」浮在右上;头像和按住说话是一颗按钮 312×120(头像 72 在按钮里,手机那颗藏着),下沿离屏底 ≥ 150、中心在屏高六成多;最底下一排拍照 / 相册 / 打字离底边 ~20;输入条与板书的字幕行收起;没说话时字幕写老师的名字、按钮是「按住说话」', lay.pos === 'absolute' && lay.lv[0] === 0 && lay.lv[1] === 0 && lay.lv[2] === 360 && lay.lv[3] === 0 && lay.lvBg === 'rgb(255, 255, 255)' && lay.lvRadius === '0px' && lay.wrap[0] === 0 && lay.wrap[1] === 0 && lay.wrap[2] === 1180 && lay.bg === 'rgba(0, 0, 0, 0)' && lay.padL >= 380 && lay.backIn && lay.more[0] <= 24 && lay.more[2] && lay.phoneAv === 'none' && lay.av === 72 && lay.hold[0] === 312 && lay.hold[1] === 120 && lay.hold[2] >= 150 && lay.hold[3] >= 60 && lay.hold[3] <= 72 && lay.toolsBottom >= 16 && lay.toolsBottom <= 28 && lay.voice === 'idle' && lay.tools.join() === '拍照,相册,打字' && lay.bar === 'none' && lay.sub === 'none' && lay.blank && lay.cap === '语文老师', JSON.stringify(lay));
 
   // ---- 按住说话 → 松手:嘴不先说(头像在想、板上没有占位卡)、脑写卡、讲稿一句一句上字幕 ----
   fake.kidText = '老师板书怎么写';
@@ -116,29 +127,36 @@ try {
   await sleep(400);
   await until(`/松手/.test(document.querySelector('#hold').textContent)`, 20);
   await sleep(800);
-  const holding = { listening: await body('listening'), hold: await evaluate(`document.querySelector('#hold').classList.contains('on')`), chip: await evaluate(`getComputedStyle(document.querySelector('#lv-chip')).display`), pushed: conn().audio - a0, holdText: await evaluate(`document.querySelector('#hold span').textContent`) };
+  const holding = { listening: await body('listening'), voice: await evaluate(VOICE), tone: await evaluate(`document.querySelector('#lv-hold').dataset.tone`), overlay: await evaluate(`getComputedStyle(document.querySelector('#hold')).display`), drawn: await evaluate(`document.querySelector('#lv-hold').vb.drawn()`), pushed: conn().audio - a0 };
   console.log('  ', await shot('live-hold-ipad.png'));
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button: 'left', buttons: 0, clickCount: 1 });
-  ok('按住:头像变蓝(listening)、「在听你说」、输入条上的蓝胶囊;假麦克风的声音推上去了', holding.listening && holding.hold && holding.chip !== 'none' && holding.pushed > 3200, JSON.stringify(holding));
+  ok('按住:按钮自己整块变蓝(不再盖一块上去)、孩子的竖条在轨道上往头像走、老师的弧收掉;假麦克风的声音推上去了', holding.listening && holding.voice === 'hold' && holding.tone === 'blue' && holding.overlay === 'none' && holding.drawn.bars > 0 && holding.drawn.arcs.length === 0 && holding.pushed > 3200, JSON.stringify(holding));
   // 一页只有一张脸(《产品规划.md》拍板 24):左上胶囊是 logo、字幕行那颗在实时藏着,看得见的老师头像只有左栏那颗
   const FACES = `[...document.querySelectorAll('#main .av')].filter((e) => e.getClientRects().length > 0).length`;
   const pend = await until(`document.body.classList.contains('pending')`, 20);
   const waitCard = await evaluate(`Boolean(document.querySelector('#board > .wait-card'))`);
   const firstSaid = conn().responses.length ? String(conn().responses[0]?.instructions) : '';
-  ok('松手:commit 一次、嘴不先说(第一次开口就是照念)、等脑时头像在想(body.pending)、板上没有占位卡', pend && !waitCard && conn().commits === 1 && (!firstSaid || firstSaid.startsWith('把这几句话原样说给孩子听')), JSON.stringify({ ...(await cap()), firstSaid: firstSaid.slice(0, 30) }));
+  const thinkVoice = await evaluate(VOICE);
+  console.log('  ', await shot('live-think-ipad.png'));
+  ok('松手:commit 一次、嘴不先说(第一次开口就是照念)、等脑时按钮是「老师在想」(头像转圈)、板上没有占位卡', thinkVoice === 'think' && pend && !waitCard && conn().commits === 1 && (!firstSaid || firstSaid.startsWith('把这几句话原样说给孩子听')), JSON.stringify({ ...(await cap()), firstSaid: firstSaid.slice(0, 30) }));
   // 老师在想时按住说话(10-20 晚孩子几次想打断按不动,那时这块关着 pointer-events、什么都不发生):不接,那块写「老师在想,等一下再说」,voice-diag 记 busy
   const busyPre = await body('pending');
   await press(HOLD, 300);
-  const busy = { pre: busyPre, text: await evaluate(`document.querySelector('#lv-hold b').textContent`), listening: await body('listening'), commits: conn().commits };
+  const busy = { pre: busyPre, voice: await evaluate(VOICE), text: await evaluate(`document.querySelector('#lv-hold .vb-big b').textContent`), listening: await body('listening'), commits: conn().commits };
   await sleep(300);
   const busyRow = readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((x) => x.where === 'busy').pop() ?? null;
-  ok('老师在想时按住说话:不接(不在听、不多 commit)、那块写「老师在想,等一下再说」、voice-diag 记 busy', busy.pre && busy.text === '老师在想,等一下再说' && !busy.listening && busy.commits === 1 && busyRow?.live === true, JSON.stringify({ ...busy, row: busyRow && { st: busyRow.st, waited: busyRow.waited } }));
+  ok('老师在想时按住说话:不接(不在听、不多 commit)、按钮晃一下写「老师在想,等一下再说」、voice-diag 记 busy', busy.pre && busy.voice === 'busy' && busy.text === '老师在想,等一下再说' && !busy.listening && busy.commits === 1 && busyRow?.live === true, JSON.stringify({ ...busy, row: busyRow && { st: busyRow.st, waited: busyRow.waited } }));
   const cards = await until(`document.querySelectorAll('#board .sec .c').length >= 2`, 60);
   const board1 = await evaluate(`(() => { const sec = document.querySelector('#board .sec'); return { said: sec.querySelector('.sh')?.textContent ?? '', kidHead: document.querySelectorAll('#board .sh.said').length, marks: sec.querySelectorAll('.c .mk').length, now: document.querySelectorAll('#board .c.now').length, cards: sec.querySelectorAll('.c').length, corner: sec.querySelectorAll('.c > .again').length, qmark: [...sec.querySelectorAll('.c')].filter((c) => [...c.children].some((x) => x.textContent === '?')).length }; })()`);
   board1.faces = await evaluate(FACES); board1.backLogo = await evaluate(`Boolean(document.querySelector('#back svg.ct-logo'))`);
   ok('脑写的卡铺上:没写节头的第一节只挂时间、孩子那句不当节头(在左栏);卡落下时标注就画好了、不描边;卡角没有钮(没有「?」、没有再听的喇叭);左上是 logo,看得见的老师头像只有左栏一颗', cards && /^\d\d:\d\d$/.test(board1.said) && board1.kidHead === 0 && board1.marks >= 1 && board1.now === 0 && board1.cards >= 2 && board1.corner === 0 && board1.qmark === 0 && board1.faces === 1 && board1.backLogo, JSON.stringify(board1));
-  const speaking = await until(`document.body.classList.contains('speaking')`, 40);
-  ok('嘴在说:头像外的圈亮(body.speaking)', speaking);
+  const speaking = await until(`document.body.classList.contains('speaking') && document.querySelector('#lv-hold').dataset.voice === 'tutor'`, 40);
+  await sleep(250);
+  const arcs1 = await evaluate(`document.querySelector('#lv-hold').vb.drawn().arcs`);
+  await sleep(300);
+  const arcs2 = await evaluate(`document.querySelector('#lv-hold').vb.drawn().arcs`);
+  const halo = await evaluate(`(() => { const s = getComputedStyle(document.querySelector('#lv-hold .vb-av'), '::before'); return { anim: s.animationName, op: s.opacity }; })()`);
+  ok('嘴在说:按钮是「老师在说」——头像旁三道小弧(半径 9 / 17 / 25,不走、不放大,深浅在 0.12–0.45 之间),头像只有一道淡淡的静止外圈(不一圈圈放大)', speaking && arcs1.length === 3 && arcs1.map((a) => a.r).join() === '9,17,25' && arcs2.map((a) => a.r).join() === '9,17,25' && [...arcs1, ...arcs2].every((a) => a.a >= 0.1 && a.a <= 0.46) && halo.anim === 'none' && Number(halo.op) > 0 && Number(halo.op) <= 0.2, JSON.stringify({ arcs1, arcs2, halo }));
   const kidLine = await until(`document.querySelector('#lv-kid').textContent === '老师板书怎么写' && document.querySelector('#lv-kid').classList.contains('old')`, 40);
   ok('孩子刚说的那句在左栏字幕上面(老师开口了变淡)', kidLine, await evaluate(`document.querySelector('#lv-kid').outerHTML`));
   console.log('  ', await shot('live-speak-ipad.png'));
@@ -152,6 +170,15 @@ try {
   ok('讲完就停:圈不亮了、字幕变淡', quietDone, JSON.stringify(await cap()));
   await sleep(300);
   console.log('  ', await shot('live-board-ipad.png'));
+  // 字幕很长时:字幕不压到按钮上(超出的截掉),按钮离底边 ≥ 150;1180×760(Safari 带地址栏)与 1366×790(大 iPad 的 Safari)各看一次
+  const fits = {};
+  for (const [w, hh] of [[1180, 760], [1366, 790]]) {
+    await device(w, hh, 1, false);
+    fits[w + 'x' + hh] = await evaluate(`(() => { const c = document.querySelector('#lv-cap .lv-cur'), was = c.textContent; c.textContent = '先看三角形。三角形有三条边、三个角,你数一数板上这个三角形有几个角?再想一想,正方形是不是也有角,它有几个?我们一个一个来数,不着急,数完告诉老师。'; const cap = document.querySelector('#lv-cap').getBoundingClientRect(), hold = document.querySelector('#lv-hold').getBoundingClientRect(), tools = document.querySelector('#lv-tools').getBoundingClientRect(); const r = { capBottom: Math.round(cap.bottom), holdTop: Math.round(hold.top), holdGap: Math.round(innerHeight - hold.bottom), toolsGap: Math.round(innerHeight - tools.bottom), center: Math.round((hold.top + hold.height / 2) / innerHeight * 100) }; c.textContent = was; return r; })()`);
+  }
+  console.log('  ', await shot('live-1366-ipad.png'));
+  await device(1180, 760, 1, false);
+  ok('长字幕也不压按钮:1180×760 与 1366×790 字幕都在按钮上沿以上、按钮离底边 ≥ 150、最底下那排离底边 ~20', Object.values(fits).every((f) => f.capBottom <= f.holdTop && f.holdGap >= 150 && f.toolsGap >= 16 && f.toolsGap <= 28), JSON.stringify(fits));
 
   // ---- 字幕重放(拍板 21):安静了字幕下面露「再听一遍」;点了从这一轮第一句放(服务端留的那份嘴的声音)、字幕跟着走、上面一行「再听一遍 · 第 n 句,共 m 句」,头像不动;点「停」停;按住说话也停 ----
   const rpShown = await until(`!document.querySelector('#lv-replay').hidden && document.querySelector('#lv-replay').textContent === '再听一遍'`, 40);
@@ -278,7 +305,7 @@ try {
   console.log('  ', await shot('live-phone.png'));
 
   // ---- 录像(P2.8):挂了落通话的录像;家长端这个话题的录像照它放(嘴、孩子的声音在通话那一条里),孩子的屏幕是实时老师页的样子 ----
-  await device(1180, 820, 1, false);
+  await device(1180, 760, 1, false);
   const day = await (await fetch(`${base}/api/kid/conversations/chinese-tutor/today`)).json();
   await send('Page.navigate', { url: 'about:blank' });
   const ended = await untilNode(() => conn()?.closed === true, 8000);
@@ -369,19 +396,19 @@ try {
   await until(`Boolean(document.body && document.body.classList.contains('live'))`, 40);
   const switched = await untilNode(() => fake.conns.length > nOpen && conn().session?.turn_detection?.type === 'server_vad', 8000);
   await sleep(600);
-  const ui = await evaluate(`({ open: document.body.classList.contains('lv-open'), hold: document.querySelector('#lv-hold').textContent, ph: document.querySelector('#ph').textContent })`);
+  const ui = await evaluate(`({ open: document.body.classList.contains('lv-open'), voice: document.querySelector('#lv-hold').dataset.voice, tone: document.querySelector('#lv-hold').dataset.tone, small: document.querySelector('#lv-hold .vb-small').textContent, ph: document.querySelector('#ph').textContent })`);
   const a1 = conn().audio;
   await sleep(1500);
   const pushedOpen = conn().audio - a1;
-  ok('一直听:孩子端没有开关、首页没有入口;live.listen 开着就连开 VAD 的连接,左栏那块是麦克风开关、写「我在听」;不用按,声音一直推', noSwitch && switched && ui.open && ui.hold.startsWith('我在听') && ui.ph.startsWith('我在听') && pushedOpen > 3200, JSON.stringify({ noSwitch, switched, ui, pushedOpen }));
+  ok('一直听:孩子端没有开关、首页没有入口;live.listen 开着就连开 VAD 的连接,左栏那颗是麦克风开关(淡蓝、「点一下关麦」;假麦克风一直嘀,多半是「孩子在说」)、输入条写「我在听」;不用按,声音一直推', noSwitch && switched && ui.open && ['open', 'open-kid'].includes(ui.voice) && ui.tone === 'light' && ui.small === '点一下关麦' && ui.ph.startsWith('我在听') && pushedOpen > 3200, JSON.stringify({ noSwitch, switched, ui, pushedOpen }));
   console.log('  ', await shot('live-open-ipad.png'));
   await tap(HOLD);
   await sleep(300);
   const a2 = conn().audio;
   await sleep(1200);
   const pushedMuted = conn().audio - a2;
-  const mutedUi = await evaluate(`({ off: document.querySelector('#lv-hold').classList.contains('off'), hold: document.querySelector('#lv-hold').textContent, ph: document.querySelector('#ph').textContent })`);
-  ok('点左栏那块关麦:不推了、写「麦关了」', pushedMuted === 0 && mutedUi.off && mutedUi.hold.startsWith('麦关了') && mutedUi.ph.startsWith('麦关了'), JSON.stringify({ pushedMuted, mutedUi }));
+  const mutedUi = await evaluate(`({ voice: document.querySelector('#lv-hold').dataset.voice, hold: document.querySelector('#lv-hold .vb-big b').textContent, ph: document.querySelector('#ph').textContent })`);
+  ok('点左栏那颗关麦:不推了、写「麦关了」', pushedMuted === 0 && mutedUi.voice === 'muted' && mutedUi.hold === '麦关了' && mutedUi.ph.startsWith('麦关了'), JSON.stringify({ pushedMuted, mutedUi }));
   await tap(HOLD);
   const r0 = conn().responses.length;
   fake.kidTexts = ['老师一直听怎么写'];
@@ -427,36 +454,36 @@ try {
   // 你先说那拍也答 duck;念到打电话那句就不说了(那句还在放时孩子说话是对老师说的,会打断、不响铃)
   await untilNode(() => conn().responses.some((r) => (r?.instructions ?? '').includes('老师给你打个电话')), 20000);
   fake.kidText = '';
-  const rang = await until(`document.querySelector('#lv-av').classList.contains('ring')`, 120);
-  ok('[[call]] 那句念完:头像晃着响铃', rang);
+  const rang = await until(`document.querySelector('#lv-hold').dataset.voice === 'ring' && document.querySelector('#lv-hold .vb-av').classList.contains('vb-ring')`, 120);
+  ok('[[call]] 那句念完:按钮是「老师打电话来了」、头像晃着响铃', rang);
   if (rang) console.log('  ', await shot('talk-ring-ipad.png'));
   const opened = await untilNode(() => conn().responses.some((r) => (r?.instructions ?? '').includes('Hello Ray!')), 20000);
-  const stopped = await until(`!document.querySelector('#lv-av').classList.contains('ring')`, 40);
+  const stopped = await until(`document.querySelector('#lv-hold').dataset.voice !== 'ring'`, 40);
   ok('铃响够了:老师说英文开场,铃停', opened && stopped, JSON.stringify({ opened, stopped }));
   const todayT = await (await fetch(`${base}/api/kid/conversations/english-tutor/today`)).json();
   const idxT = JSON.parse(readFileSync(join(wsRoot, 'conversations', 'english-tutor', `${todayT.date}.json`), 'utf8'));
   const firstT = idxT.messages.find((m) => m.from === 'kid' && m.talk === talkId);
   ok('那个话题跑 activity 口语课、记着口语单是哪份', firstT?.activity?.name === '口语课' && String(firstT.activity.params?.口语单 ?? '').includes('🦆 duck'), JSON.stringify(firstT?.activity ?? null).slice(0, 200));
 
-  // ---- 左撇子镜像(kid.hand: left,工作台设置页切;拍板 22):浮层挪到右边、板在左边,回首页在浮层顶上,「更多」照旧在右上(压在浮层角上、点得到);按着时蓝块盖在那块上 ----
+  // ---- 左撇子镜像(kid.hand: left,工作台设置页切;拍板 22、23):白纸挪到右边、板在左边、按钮里头像在右头;回首页、「更多」的位置同右手(回首页浮在板的左上,「更多」在右上点得到) ----
   const hp = await fetch(`${base}/api/config`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kid: { hand: 'left' } }) });
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&new=1` });
   await until(`Boolean(document.body && document.body.classList.contains('live') && document.body.classList.contains('hand-left'))`, 40);
   await untilNode(() => Boolean(conn()?.session), 8000);
   await sleep(600);
-  const mir = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), back = r('#back'), more = r('#more-btn'); const mc = document.elementFromPoint(more.left + more.width / 2, more.top + more.height / 2); return { lv: [Math.round(lv.left), Math.round(innerWidth - lv.right), Math.round(lv.width)], padR: parseInt(getComputedStyle(document.querySelector('#board')).paddingRight), padL: parseInt(getComputedStyle(document.querySelector('#board')).paddingLeft), backIn: back.left >= lv.left && back.right <= lv.right, moreTop: Boolean(mc && mc.closest('#more-btn')), moreRight: Math.round(innerWidth - more.right) }; })()`);
+  const mir = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), back = r('#back'), more = r('#more-btn'), av = r('#lv-hold .vb-av'), hold = r('#lv-hold'); const mc = document.elementFromPoint(more.left + more.width / 2, more.top + more.height / 2), bc = document.elementFromPoint(back.left + back.width / 2, back.top + back.height / 2); return { lv: [Math.round(lv.left), Math.round(innerWidth - lv.right), Math.round(lv.width), Math.round(lv.top), Math.round(innerHeight - lv.bottom)], padR: parseInt(getComputedStyle(document.querySelector('#board')).paddingRight), padL: parseInt(getComputedStyle(document.querySelector('#board')).paddingLeft), back: [Math.round(back.left), Math.round(back.top)], backTop: Boolean(bc && bc.closest('#back')), avRight: av.left > hold.left + hold.width / 2, moreTop: Boolean(mc && mc.closest('#more-btn')), moreRight: Math.round(innerWidth - more.right) }; })()`);
   const pm = await center(HOLD);
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pm.x, y: pm.y, button: 'left', buttons: 1, clickCount: 1 });
   await sleep(400);
   await until(`/松手/.test(document.querySelector('#hold').textContent)`, 20);
-  mir.holdOver = await evaluate(`(() => { const a = document.querySelector('#hold').getBoundingClientRect(), b = document.querySelector('#lv-hold').getBoundingClientRect(); return Math.abs(a.left - b.left) <= 2 && Math.abs(a.top - b.top) <= 2 && Math.abs(a.width - b.width) <= 2; })()`);
+  mir.hold = await evaluate(`({ voice: document.querySelector('#lv-hold').dataset.voice, right: document.querySelector('#lv-hold').classList.contains('vb-right'), bars: document.querySelector('#lv-hold').vb.drawn().bars })`);
   console.log('  ', await shot('live-mirror-hold-ipad.png'));
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: pm.x, y: pm.y - 130, button: 'left', buttons: 1 });
   await sleep(150);
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pm.x, y: pm.y - 130, button: 'left', buttons: 0, clickCount: 1 });
   await sleep(500);
   console.log('  ', await shot('live-mirror-ipad.png'));
-  ok('左撇子镜像:浮层在右边(离边 16、宽 340)、板从左边排起,回首页在浮层顶上,「更多」在右上点得到;按着时蓝块盖在那块上', hp.status === 200 && mir.lv[1] === 16 && mir.lv[2] === 340 && mir.padR >= 380 && mir.padL <= 64 && mir.backIn && mir.moreTop && mir.moreRight <= 24 && mir.holdOver, JSON.stringify(mir));
+  ok('左撇子镜像:白纸贴右边(宽 360、上下不留边)、板从左边排起、按钮里头像在右头;回首页在左上点得到、「更多」在右上点得到;按着时按钮变蓝、竖条往右头的头像走', hp.status === 200 && mir.lv[1] === 0 && mir.lv[2] === 360 && mir.lv[3] === 0 && mir.lv[4] === 0 && mir.padR >= 380 && mir.padL <= 64 && mir.back[0] <= 40 && mir.back[1] <= 30 && mir.backTop && mir.avRight && mir.moreTop && mir.moreRight <= 24 && mir.hold.voice === 'hold' && mir.hold.right && mir.hold.bars > 0, JSON.stringify(mir));
 
   ok('页面没有报错', errors.length === 0, errors.slice(0, 3).join(' | '));
 } finally {

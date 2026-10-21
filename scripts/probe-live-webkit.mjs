@@ -61,6 +61,10 @@ const INJECT = `(() => {
   window.AudioContext = Counted; if (window.webkitAudioContext) window.webkitAudioContext = Counted;
   const orig = AC.prototype.createBufferSource;
   AC.prototype.createBufferSource = function () { const s = orig.call(this); const st = s.start; s.start = function () { window.__played++; return st.apply(this, arguments); }; return s; };
+  // 老师在说时按钮旁三道小弧的深浅取自放嘴那条链上的 AnalyserNode(voice-ui.ts):数建了几个、读了几次
+  window.__an = 0; window.__anRead = 0;
+  const origAn = AC.prototype.createAnalyser;
+  AC.prototype.createAnalyser = function () { const a = origAn.call(this); window.__an++; const rd = a.getByteTimeDomainData; a.getByteTimeDomainData = function () { window.__anRead++; return rd.apply(this, arguments); }; return a; };
   // 盖在原型上:只盖实例的话,页面切过后台再回来 WebKit 会走原型上真的那个(无头 WebKit 没有麦克风,一直不回)
   MediaDevices.prototype.getUserMedia = async () => { window.__gum++; const ctx = new AC(); const osc = ctx.createOscillator(); osc.frequency.value = 440; const dst = ctx.createMediaStreamDestination(); osc.connect(dst); osc.start(); ctx.resume().catch(() => {}); return dst.stream; };
   const d = Object.getOwnPropertyDescriptor(MessagePort.prototype, 'onmessage');
@@ -88,8 +92,9 @@ try {
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await sleep(1500);
-  const held = await page.evaluate(() => ({ gum: window.__gum, ctx: window.__ctx, chunks: window.__chunks, sent: window.__sentBin, listening: document.body.classList.contains('listening') }));
+  const held = await page.evaluate(() => ({ gum: window.__gum, ctx: window.__ctx, chunks: window.__chunks, sent: window.__sentBin, listening: document.body.classList.contains('listening'), voice: document.querySelector('#lv-hold').dataset.voice, bars: document.querySelector('#lv-hold').vb.drawn().bars }));
   await page.mouse.up();
+  ok('按住时按钮(canvas)在画孩子的竖条:整块变蓝、竖条往头像走(WebKit 的 canvas 与振荡器假麦克风的音量)', held.voice === 'hold' && held.bars > 0, JSON.stringify({ voice: held.voice, bars: held.bars }));
   ok('按住:常开那路麦克风接到采音节点(只 getUserMedia 一次、页面只一个 AudioContext:自检与采音同一个)、worklet 出块、推上去了', held.gum === 1 && held.ctx === 1 && held.chunks > 0 && held.sent > 0 && held.listening && fake.conns.at(-1).audio > 0, JSON.stringify({ ...held, server: fake.conns.at(-1).audio }));
   await sleep(500);
   const diag = (() => { try { return readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.where === 'live'); } catch { return []; } })();
@@ -99,6 +104,8 @@ try {
   const played = await page.waitForFunction(() => window.__played >= 2, null, { timeout: 15000 }).then(() => true, () => false);
   const st = await page.evaluate(() => ({ played: window.__played, cap: document.querySelector('#lv-cap .lv-cur').textContent, err: window.__err, cards: document.querySelectorAll('#board .sec .c').length }));
   ok('松手:嘴不先说,讲稿第一句上字幕;嘴的声音排进 AudioContext 放(照念)', firstLine && played && st.played >= 2, JSON.stringify(st));
+  const sp = await page.evaluate(() => ({ voice: document.querySelector('#lv-hold').dataset.voice, arcs: document.querySelector('#lv-hold').vb.drawn().arcs, an: window.__an, anRead: window.__anRead }));
+  ok('嘴在说:按钮旁三道小弧(canvas),深浅从放嘴那条链上的 AnalyserNode 读(WebKit 建得出、读得到)', sp.voice === 'tutor' && sp.arcs.length === 3 && sp.an >= 1 && sp.anRead > 0, JSON.stringify(sp));
   await page.waitForFunction(() => document.querySelector('#lv-cap .lv-cur').textContent.startsWith('第一次说'), null, { timeout: 20000 }).catch(() => {});
   const end = await page.evaluate(() => ({ cap: document.querySelector('#lv-cap .lv-cur').textContent, gum: window.__gum, err: window.__err }));
   ok('讲稿念到最后一句;从头到尾只 getUserMedia 一次;页面没报错', end.cap.startsWith('第一次说') && end.gum === 1 && end.err.length === 0, JSON.stringify(end));

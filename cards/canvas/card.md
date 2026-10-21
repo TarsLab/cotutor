@@ -55,7 +55,7 @@ captures/2026-09-14/1620-1.jpg
 
 ## 你会收回什么
 
-`<job>/<n> canvas「题目」 画了 12 笔,图:conversations/math-tutor/2026-09-10.1620-1.cards/3.png(用 Read 看)`。能看图的运行时用 Read 看;看不了图就靠笔数。
+`<job>/<n> canvas「题目」 画了 12 笔,图:/…/conversations/math-tutor/2026-09-10.1620-1.cards/3.png(用 Read 看)`。图是绝对路径,交了画的那轮有 Read,先看图再回;看不了图就靠笔数。
 
 ## 状态的形状
 

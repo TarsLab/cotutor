@@ -581,28 +581,34 @@ export class Runner {
     const pack = session ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
     const noteWarnings = pack.entry?.startsWith('缺:') && !input.bookkeep ? [`入口文件${pack.entry}——在 vault 里给这位老师建一篇(cotutor doctor 有写法)`] : [];
     if (policy.board === 'off') pack.board = 'off';
-    // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的(要 Read 看图)、系统任务带只读的(《工作流程.md》拍板 20,2026-10-17:
-    // 以前是整份白名单,照片里一句话就能让老师拿 Bash 读写 workspace 外);policy.tools: on 的老师(口播老师要跑 koubo)总是整份。
-    // 不带的那轮,只有工具才用得上的路径(refs / vault)不进包;模板管不了工具的运行时(没有 {tools} / {toolArgs}),照旧
-    const tools: ToolSet = policy.tools === 'on' ? 'on' : input.from !== 'kid' || seen.length > 0 ? 'read' : 'off';
-    const bare = tools === 'off' && controlsTools(runtime);
-    if (bare) { delete pack.refs; delete pack.vault; }
     // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
     // 录音卡:评测结果接在那一行后面(存录音时就起了,这里取;还在跑就等,最多等到存录音之后 timeoutMs;回放不起新的)
+    // 画板交上来的图(状态里是相对 workspace 根的路径):包里那行换成绝对路径(Read 只认绝对路径,老师的 cwd 在 agents/<名>/),消息里照旧记相对的
     const changed = fresh || input.bookkeep ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread);
-    const cards = await Promise.all(changed.map(async (c) => {
+    let drawings = 0;
+    const cards: { card: string; text: string; pack?: string }[] = await Promise.all(changed.map(async (c) => {
       const card = index.messages.find((m) => m.job === c.job)?.section?.cards[c.n];
       const id = cardId(c.job, c.n);
       const audio = (c.file.state as { audio?: unknown } | null)?.audio;
       const extra = card?.kind === 'record' && typeof audio === 'string' ? await this.koubo.take(ws.root, ws.config.koubo, join(ws.root, audio), card.props as RecordProps, { noStart: Boolean(input.replayOf) }) : undefined;
-      return { card: id, text: card ? describeCard(card, c.file.state, extra) : JSON.stringify(c.file.state) };
+      if (!card) return { card: id, text: JSON.stringify(c.file.state) };
+      const image = card.kind === 'canvas' ? (c.file.state as { image?: unknown } | null)?.image : undefined;
+      if (typeof image !== 'string') return { card: id, text: describeCard(card, c.file.state, extra) };
+      drawings++;
+      return { card: id, text: describeCard(card, c.file.state, extra), pack: describeCard(card, { ...(c.file.state as object), image: join(ws.root, image) }, extra) };
     }));
+    // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的、交了画的(要 Read 看图,《工作流程.md》拍板 21)、
+    // 系统任务带只读的(拍板 20,2026-10-17:以前是整份白名单,照片里一句话就能让老师拿 Bash 读写 workspace 外);policy.tools: on 的老师(口播老师要跑 koubo)总是整份。
+    // 不带的那轮,只有工具才用得上的路径(refs / vault)不进包;模板管不了工具的运行时(没有 {tools} / {toolArgs}),照旧
+    const tools: ToolSet = policy.tools === 'on' ? 'on' : input.from !== 'kid' || seen.length > 0 || drawings > 0 ? 'read' : 'off';
+    const bare = tools === 'off' && controlsTools(runtime);
+    if (bare) { delete pack.refs; delete pack.vault; }
     // 画图卡(《wip/你说我画设想.md》):这个话题上一节有画图卡,告诉老师画好没有(老师看不到图)
     if (!fresh && !input.bookkeep) {
       const prevAt = index.messages.map((m, i) => ({ m, th: known[i] })).reverse().find((x) => x.th === thread && x.m.result === 'ok' && x.m.section);
       if (prevAt?.m.section?.cards.some((c) => c.kind === 'paint')) for (const line of await paintLines(ws, tutor, date, prevAt.m.job, prevAt.m.section)) cards.push({ card: line.slice(0, line.indexOf(' ')), text: line.slice(line.indexOf(' ') + 1) });
     }
-    if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.text}`);
+    if (cards.length) pack.cards = cards.map((c) => `${c.card} ${c.pack ?? c.text}`);
     if (seen.length) { pack.photos = seen; pack.photoFiles = seen.map((p) => join(ws.root, p)); }
     if (input.home) pack.home = input.home;
     // 小课堂:课包现读;读不出来(删了、坏了)就不带,这条照发,家长端提醒
@@ -625,7 +631,7 @@ export class Runner {
       const file = conversationFiles(ws.dirs.conversations, tutor, date).voice(job, input.voice.ext);
       if (await mkdir(join(ws.dirs.conversations, tutor), { recursive: true }).then(() => writeFile(file, input.voice!.data)).then(() => true, () => false)) voice = { audio: basename(file), seconds: Math.round(input.voice.seconds * 10) / 10 };
     }
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.listened ? { listened: input.listened } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && input.talk ? { talk: input.talk } : {}), ...(noteWarnings.length || lectureWarn.length || activityWarn.length ? { warnings: [...noteWarnings, ...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(voice ? { voice } : {}), ...(input.listened ? { listened: input.listened } : {}), ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards: cards.map(({ card, text }) => ({ card, text })) } : {}), ...(photos.length ? { photos } : {}), ...(input.device ? { device: input.device } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && input.talk ? { talk: input.talk } : {}), ...(noteWarnings.length || lectureWarn.length || activityWarn.length ? { warnings: [...noteWarnings, ...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
     // 这个 CLI 在 workspace 里要的机器文件(qwen 的隔离家目录):备不好这轮照起,起不来的原因会在 err.log

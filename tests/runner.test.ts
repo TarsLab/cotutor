@@ -583,6 +583,20 @@ try {
   await wait('math-tutor');
   const phM2 = ((await day('math-tutor', phDate)).json as PhotoDay).index.messages.find((m) => m.job === (phR2.json as { job: string }).job)!;
   check('家长端带字带图:text 照写、photos 记下,接着同一话题', phR2.status === 202 && phM2.text === '这道呢' && phM2.photos?.join() === phTwo && (phR2.json as { thread: string }).thread === phJ.thread, JSON.stringify(phM2));
+  {
+    // 交了画板(《工作流程.md》拍板 21):那轮没带照片也要 Read 看图——带只读工具,包里那行是图的绝对路径;消息里记的照旧是相对路径(家长看的)
+    // 10-21 Ray 交画那轮工具表是空的,qwen 把 Read 写成了正文,嘴念了 25 秒
+    const cvN = phCards.findIndex((c) => c.kind === 'canvas');
+    const PNG = 'data:image/png;base64,' + Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64');
+    const cvPut = await route('PUT', `/api/kid/conversations/math-tutor/cards/${phJ.job}/${cvN}`, ctx, { ink: [{ id: 'a' }, { id: 'b' }], image: PNG });
+    const cvRel = `conversations/math-tutor/${phDate}.${phJ.job}.cards/${cvN}.png`;
+    const cvR = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '画好了' });
+    await wait('math-tutor');
+    const cvJob = (cvR.json as { job: string }).job;
+    const cvRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${cvJob}.run.json`), 'utf8')) as { prompt: string; argv: string[] };
+    const cvM = ((await day('math-tutor', phDate)).json as { index: { messages: { job: string; cards?: { card: string; text: string }[] }[] } }).index.messages.find((m) => m.job === cvJob)!;
+    check('交了画板的那条:带只读工具,包里是图的绝对路径,消息里是相对的', cvPut.status === 200 && existsSync(join(root, cvRel)) && cvR.status === 202 && cvRun.argv[cvRun.argv.indexOf('--tools') + 1] === 'Read,Grep,Glob' && cvRun.prompt.includes(`画了 2 笔,图:${join(root, cvRel)}(用 Read 看)`) && cvM.cards?.[0]?.text.endsWith(`画了 2 笔,图:${cvRel}(用 Read 看)`) === true, JSON.stringify({ put: cvPut.status, tools: cvRun.argv[cvRun.argv.indexOf('--tools') + 1], cards: cvM.cards, prompt: cvRun.prompt.slice(0, 600) }));
+  }
   await route('PUT', rateUrl(phJ.thread), ctx, { rating: 4 });
   const phBk = await route('POST', `/api/conversations/math-tutor/${phDate}/bookkeep`, ctx, { threads: [phJ.thread] });
   await ctx.runner.flush();

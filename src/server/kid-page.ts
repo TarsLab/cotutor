@@ -431,7 +431,9 @@ __BRAND_CSS__
   #rl-ps-img { position:absolute; inset:0; margin:auto; max-width:100%; max-height:100%; object-fit:contain; }
   body.rlk #ps-cv { visibility:hidden; }
   body.rlk #ps { pointer-events:none; }
-  body.limit #pill, body.pending #pill { opacity:.45; pointer-events:none; }
+  body.limit #pill, body.pending #pill { opacity:.45; }
+  /* 老师在想时中间那段照旧接按(按了说「老师在想,等一下再说」,busyHint),相机、加号不接 */
+  body.limit #pill, body.pending #pill > :not(#mid) { pointer-events:none; }
   #hold { position:absolute; left:0; right:0; bottom:0; height:300px; background:linear-gradient(180deg,#3b82e800 0%,#3b82e8cc 45%,#2f6fd6 100%); display:none; flex-direction:column; align-items:center; justify-content:flex-end; gap:22px; padding-bottom:calc(env(safe-area-inset-bottom) + 70px); color:#fff; pointer-events:none; z-index:20; }
   #hold.on { display:flex; }
   #hold .w { display:flex; align-items:center; gap:3px; height:28px; }
@@ -656,7 +658,8 @@ __BRAND_CSS__
     body.live #lv-tools { display:flex; position:absolute; left:20px; right:20px; bottom:130px; justify-content:center; gap:28px; }
     #lv-tools button { display:flex; flex-direction:column; align-items:center; gap:6px; font-size:13px; color:#6f6b63; }
     #lv-tools .ic { width:60px; height:60px; box-sizing:border-box; border-radius:50%; border:1px solid var(--line); background:#fff; display:grid; place-items:center; color:#6f6b63; }
-    body.live.pending #lv-hold, body.live.pending #lv-tools, body.live.limit #lv-hold, body.live.limit #lv-tools { opacity:.45; pointer-events:none; }
+    body.live.pending #lv-hold, body.live.pending #lv-tools, body.live.limit #lv-hold, body.live.limit #lv-tools { opacity:.45; }
+    body.live.pending #lv-tools, body.live.limit #lv-hold, body.live.limit #lv-tools { pointer-events:none; }
     body.live.nosend #lv-hold, body.live.nosend #lv-tools { display:none; }
     body.live.lv-open #lv-hold { background:#eaf2fd; border-color:#bcd6f5; color:#2a5ea8; font-size:20px; font-weight:600; }
     body.live.lv-open #lv-hold .mi { width:56px; height:56px; border-radius:50%; background:#3d7fd9; color:#fff; box-shadow:0 0 0 calc(var(--lv, 0) * 12px) #3d7fd940; transition:box-shadow .1s; }
@@ -3644,10 +3647,18 @@ __REEL_DOCK_JS__
   const lvHoldUi = () => {
     const el = $('#lv-hold'), open = LV.on && LV.model.open, muted = open && LV.model.muted;
     const [icon, big, small, label] = open ? [muted ? ICON.micOff : ICON.micMd, muted ? '麦关了' : '我在听,直接说', muted ? '点一下开麦' : '点一下关麦', muted ? '开麦' : '关麦']
-      : [ICON.micLg, LV.hint ? '按住不放,说完再松手' : '按住说话', '', '按住说话'];
+      : [ICON.micLg, LV.hint === 'busy' ? '老师在想,等一下再说' : LV.hint ? '按住不放,说完再松手' : '按住说话', '', '按住说话'];
     const key = icon + big + small;
     if (el.dataset.k !== key) { el.dataset.k = key; el.querySelector('.mi').innerHTML = icon; el.querySelector('b').textContent = big; el.querySelector('small').textContent = small; }
     el.classList.toggle('off', muted); el.setAttribute('aria-label', label);
+  };
+  /** 老师在想(脑在写、嘴没在说;板书模式是老师在想)时按了按住说话:不接,但要让孩子知道——10-20 晚孩子几次想打断按不动,那时这块关着 pointer-events,按了什么都不发生。
+   *  那块(手机、板书是输入条)写两秒「老师在想,等一下再说」,记一笔 voice-diag(where: busy)看一晚碰到几次、等了多久 */
+  const busyHint = () => {
+    clearTimeout(LV.hintT); LV.hint = 'busy'; lvHoldUi(); LV.hintT = setTimeout(() => { LV.hint = false; lvHoldUi(); }, 2000);
+    $('#ph').textContent = '老师在想,等一下再说'; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = PH_IDLE(); }, 2000);
+    const row = { where: 'busy', tutor: S.tutor ? S.tutor.name : null, live: LV.on, st: LV.model.status, waited: S.waitSince ? Date.now() - S.waitSince : null, ua: navigator.userAgent };
+    try { fetch('/api/kid/voice-diag', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(row), keepalive: true }).catch(() => {}); } catch {}
   };
   /** 孩子刚说的那句(平板横屏左栏,字幕上面):节头不再是孩子的话(设想稿拍板 20),他说了什么在这里看;老师开口了(或这一轮写完了)变淡,下次说话换掉 */
   const lvKid = () => {
@@ -3977,6 +3988,8 @@ __REEL_DOCK_JS__
   el.addEventListener('pointerdown', (e) => {
     if (S.bar === 'typing') return;
     e.preventDefault(); unlock();
+    // 老师在想:不接,说一声(busyHint);嘴一出声 body.pending 就摘掉,能按
+    if (document.body.classList.contains('pending') && !document.body.classList.contains('limit')) { busyHint(); return; }
     if (rec || hearing) return; // 上一句还在收尾(omni 还在听)
     if (LV.audio && LV.on) LV.audio.wake().catch(() => {});
     press = { y: e.clientY, cancelled: false, held: false, live: false, cancelPx, onTap, timer: setTimeout(() => {

@@ -126,6 +126,13 @@ try {
   const waitCard = await evaluate(`Boolean(document.querySelector('#board > .wait-card'))`);
   const firstSaid = conn().responses.length ? String(conn().responses[0]?.instructions) : '';
   ok('松手:commit 一次、嘴不先说(第一次开口就是照念)、等脑时头像在想(body.pending)、板上没有占位卡', pend && !waitCard && conn().commits === 1 && (!firstSaid || firstSaid.startsWith('把这几句话原样说给孩子听')), JSON.stringify({ ...(await cap()), firstSaid: firstSaid.slice(0, 30) }));
+  // 老师在想时按住说话(10-20 晚孩子几次想打断按不动,那时这块关着 pointer-events、什么都不发生):不接,那块写「老师在想,等一下再说」,voice-diag 记 busy
+  const busyPre = await body('pending');
+  await press(HOLD, 300);
+  const busy = { pre: busyPre, text: await evaluate(`document.querySelector('#lv-hold b').textContent`), listening: await body('listening'), commits: conn().commits };
+  await sleep(300);
+  const busyRow = readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((x) => x.where === 'busy').pop() ?? null;
+  ok('老师在想时按住说话:不接(不在听、不多 commit)、那块写「老师在想,等一下再说」、voice-diag 记 busy', busy.pre && busy.text === '老师在想,等一下再说' && !busy.listening && busy.commits === 1 && busyRow?.live === true, JSON.stringify({ ...busy, row: busyRow && { st: busyRow.st, waited: busyRow.waited } }));
   const cards = await until(`document.querySelectorAll('#board .sec .c').length >= 2`, 60);
   const board1 = await evaluate(`(() => { const sec = document.querySelector('#board .sec'); return { said: sec.querySelector('.sh')?.textContent ?? '', kidHead: document.querySelectorAll('#board .sh.said').length, marks: sec.querySelectorAll('.c .mk').length, now: document.querySelectorAll('#board .c.now').length, cards: sec.querySelectorAll('.c').length, corner: sec.querySelectorAll('.c > .again').length, qmark: [...sec.querySelectorAll('.c')].filter((c) => [...c.children].some((x) => x.textContent === '?')).length }; })()`);
   board1.faces = await evaluate(FACES); board1.backLogo = await evaluate(`Boolean(document.querySelector('#back svg.ct-logo'))`);

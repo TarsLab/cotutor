@@ -80,6 +80,7 @@ import { packageTheme } from '../cli/themes.ts';
 import { cardsCss } from '../cards/docs.ts';
 import { audioData } from '../lib/audio-data.ts';
 import { listenOmni, type Transcribe } from './listen.ts';
+import { VOICE_GALLERY_PAGE } from './voice-gallery-page.ts';
 
 export type MockScenario = 'normal' | 'limit' | 'offline' | 'nopost';
 
@@ -750,6 +751,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     const p = url.pathname;
     if (p === '/') return { status: 200, html: kidPage(title, { synth: true }, await stageVersion()) };
     if (p === '/dev/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
+    if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
     // 家长端(《家长板书页设计.md》):同一个页面,家长模式;清单与一天的板书(答案不剥,第一节带一条给家长的尾巴与记忆,看旁注的样子)。mock 没有工作台 /dev
     if (p === '/parent') return { status: 200, html: kidPage(title, { parent: true, synth: true }, await stageVersion()) };

@@ -43,6 +43,7 @@ import { ActivityConflict, checkDevActivity, findDevActivity, listDevActivities,
 import { checkDevTutorFile, hasDevTutorFile, listDevTutorFiles, readDevTutorFile, restoreDevTutorFile, saveDevTutorFile } from './dev-tutor-files.ts';
 import { doctorWorkspace } from '../cli/doctor.ts';
 import { VOICE_TEST_PAGE } from './voice-test-page.ts';
+import { VOICE_GALLERY_PAGE } from './voice-gallery-page.ts';
 import { BusyError, Runner, type SendInput } from './runner.ts';
 import { listenOmni, type Transcribe } from './listen.ts';
 import { sendFile } from './send-file.ts';
@@ -1356,6 +1357,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (p === '/dev/qr') return ctx.listen ? { status: 200, html: qrPage(ws.config.title, ctx.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     // 按住说话的试验页(真机上比策略用;不在孩子端与家长端的入口里)
     if (p === '/dev/voice-test') return { status: 200, html: VOICE_TEST_PAGE };
+    // 按钮样张(《wip/实时老师设想.md》拍板 23):老师页那颗「头像 + 按住说话」的每一种样子,调动画时看这一页
+    if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
     // 主屏幕(iPad「添加到主屏幕」):清单与图标都按标题现生成,没有静态资源
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(ws.config.title), contentType: 'application/manifest+json; charset=utf-8' };
     const icon = /^\/icon-(\d{2,4})\.png$/.exec(p);

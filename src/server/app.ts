@@ -175,7 +175,7 @@ export interface KidTutor {
   subject: string | null;
   /** 学科色(服务端定好,src/lib/tutor-color.ts;页面不自己算) */
   color: string;
-  /** 板书底纹上写哪个学科字(《产品规划.md》拍板 27,board-mark.ts):三门主科各一个,别的老师 null 只铺纸 */
+  /** 板书底纹上写哪个学科字(《产品规划.md》拍板 27,board-mark.ts):三门主科各一个,别的老师 null 不写字 */
   mark: BoardMarkId | null;
   /** 他的听写写哪种:学科是英语(含别名)= en */
   lang: 'zh' | 'en';

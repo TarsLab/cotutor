@@ -191,7 +191,7 @@ ${faviconLinks()}
   /* ---- 老师页 = 板书页 ---- */
   #tutor { position:fixed; inset:0; background:var(--paper); display:none; z-index:10; }
   #tutor.on { display:flex; }
-  /* 板是一张有质感的纸,三门主科在右边竖着写一个很淡的学科名(《产品规划.md》拍板 27,board-mark.ts) */
+  /* 三门主科在板右边竖着写一个很淡的学科名(《产品规划.md》拍板 27,board-mark.ts) */
 ${BOARD_MARK_CSS}
   #main { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
   /* 没有顶栏:左上角一颗胶囊「‹ logo」(整颗点了回首页;《产品规划.md》拍板 24 起放 logo,老师的脸在字幕行 / 实时的左栏),右上角喇叭 + 更多;浮在板书上面、舞台遮罩(z 4)下面,舞台开了就被压暗盖住 */
@@ -349,9 +349,9 @@ ${BACK_TINT_CSS}
   }
   #pill .ic[hidden] { display:none; }
   #wrap { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
-  /* 板书顶上一条渐隐:滚上去的内容在两角按钮那一带淡成纸色,不和胶囊、话题标签叠字。盖的是同一张纸(纹理对得上 #tutor 的,渐隐靠 mask),不占位置、不收触摸;
+  /* 板书顶上一条渐隐:滚上去的内容在两角按钮那一带淡成纸色,不和胶囊、话题标签叠字。只是盖一层颜色,不占位置、不收触摸;
      夹在板书(卡上的「再听」z 1)与两角按钮(z 3)之间。滚到顶时第一节在 68px 以下,基本碰不到它 */
-  #wrap::before { content:""; position:absolute; left:0; right:0; top:0; height:calc(env(safe-area-inset-top) + 72px); z-index:2; pointer-events:none; background:var(--paper-tex, none), var(--paper); -webkit-mask-image:linear-gradient(#000 calc(env(safe-area-inset-top) + 16px), transparent); mask-image:linear-gradient(#000 calc(env(safe-area-inset-top) + 16px), transparent); }
+  #wrap::before { content:""; position:absolute; left:0; right:0; top:0; height:calc(env(safe-area-inset-top) + 72px); z-index:2; pointer-events:none; background:linear-gradient(var(--paper) calc(env(safe-area-inset-top) + 16px), transparent); }
   /* 舞台的遮罩:板书与顶栏压暗,点一下 = 点 ×;字幕行与输入条不盖(舞台开着孩子照样能说话) */
   #st-dim { position:absolute; left:0; right:0; bottom:0; top:-100vh; z-index:4; background:#00000073; display:none; }
   #stage.on ~ #st-dim { display:block; }
@@ -839,7 +839,7 @@ __BRAND_JS__
   // 回首页胶囊带上老师(tutorInitial 同首页牌上的首字,backTint 填颜色;《产品规划.md》拍板 26)
 ${BACK_TINT_JS}
   const tintBack = (t) => backTint($('#back'), t ? { color: colorOf(t), display: t.display } : null);
-  // 板书底纹的学科字(三门主科,《产品规划.md》拍板 27):老师换了跟着换,别的老师只铺纸
+  // 板书底纹的学科字(三门主科,《产品规划.md》拍板 27):老师换了跟着换,别的老师不写字
 ${BOARD_MARK_JS}
   /** 老师头像:学科色的 C 形开口环 + 白底圆里的图或字(样子见 .av 的样式);cls 'draw' = 一笔画出来,delay 是错开的秒数 */
   const AV_RING = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>';

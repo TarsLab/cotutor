@@ -1,6 +1,6 @@
 /**
- * 板书底纹(src/server/board-mark.ts,《产品规划.md》拍板 27):三门主科照课本封面在板右边竖写学科名,别的老师只铺纸;
- * 字是烤好的轮廓(board-mark-art.ts,scripts/bake-board-marks.py),纸是能平铺的 SVG;老师页三处换老师都跟着换字,首页数据带 mark。
+ * 板书底纹(src/server/board-mark.ts,《产品规划.md》拍板 27):三门主科照课本封面在板右边竖写学科名,别的老师不写字;
+ * 字是烤好的轮廓(board-mark-art.ts,scripts/bake-board-marks.py);板不铺纸纹(拍板 28);老师页三处换老师都跟着换字,首页数据带 mark。
  */
 import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,7 +11,7 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-board-mark-home-')
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { boardMarkOf, BOARD_MARK_PLACE, BOARD_MARK_JS, BOARD_MARK_CSS, PAPER_SVG } = await import('../src/server/board-mark.ts');
+const { boardMarkOf, BOARD_MARK_PLACE, BOARD_MARK_JS, BOARD_MARK_CSS } = await import('../src/server/board-mark.ts');
 const { BOARD_MARK_ART } = await import('../src/server/board-mark-art.ts');
 const { initWorkspace } = await import('../src/cli/init.ts');
 const { loadWorkspace } = await import('../src/cli/workspace.ts');
@@ -35,13 +35,6 @@ for (const id of ids) {
   check(`${id} 很淡`, BOARD_MARK_PLACE[id as keyof typeof BOARD_MARK_PLACE].o <= 0.08);
 }
 
-// ---- 纸:两层噪声拼缝不露,纤维整根在块里 ----
-check('纸的两层噪声都 stitchTiles', (PAPER_SVG.match(/stitchTiles="stitch"/g) ?? []).length === 2);
-const fib = (PAPER_SVG.match(/<path d="([^"]+)"/) ?? [])[1] ?? '';
-const fibNums = (fib.match(/-?\d+/g) ?? []).map(Number);
-check('纤维一百来根', (fib.match(/M/g) ?? []).length >= 100, String((fib.match(/M/g) ?? []).length));
-check('纤维整根落在块里(平铺不断)', fibNums.length > 0 && Math.min(...fibNums) >= 0 && Math.max(...fibNums) <= 800, `${Math.min(...fibNums)}..${Math.max(...fibNums)}`);
-
 // ---- 插进老师页的脚本与样式 ----
 check('脚本没有反斜杠与反引号', !/[\\`]/.test(BOARD_MARK_JS));
 check('样式没有反斜杠与反引号', !/[\\`]/.test(BOARD_MARK_CSS));
@@ -59,7 +52,7 @@ const el = fakeEl();
 markBoard(el, { name: 'chinese-tutor', mark: 'yuwen' });
 check('语文老师:板上有字', !el.hidden && el.attrs['data-mark'] === 'yuwen' && el.innerHTML.includes('<path') && el.props['--bm-o'] === String(BOARD_MARK_PLACE.yuwen.o), JSON.stringify({ h: el.hidden, a: el.attrs }));
 markBoard(el, { name: 'koubo-tutor', mark: null });
-check('口播老师:收起来、只铺纸', el.hidden && !('data-mark' in el.attrs) && el.textContent === '', JSON.stringify(el.attrs));
+check('口播老师:收起来、不写字', el.hidden && !('data-mark' in el.attrs) && el.textContent === '', JSON.stringify(el.attrs));
 markBoard(el, null);
 check('还不知道是谁:收起来', el.hidden);
 
@@ -69,7 +62,7 @@ const ctx = createContext(loadWorkspace(root));
 const page = await route('GET', '/', ctx);
 const html = typeof page.html === 'string' ? page.html : '';
 check('老师页有垫底的 #bmark', html.includes('<div id="bmark" hidden></div>'));
-check('纸铺在老师页上', html.includes('--paper-tex:url("data:image/svg+xml,') && html.includes('background:var(--paper-tex, none), var(--paper)'));
+check('板不铺纸纹(拍板 28):平的纸色,没有 SVG 噪声', !html.includes('feTurbulence') && !html.includes('--paper-tex'));
 check('换老师的三处都跟着换字(开老师、录像、家长开录像)', (html.match(/markBoard\(\$\('#bmark'\), /g) ?? []).length === 3, String((html.match(/markBoard\(\$\('#bmark'\), /g) ?? []).length));
 check('左撇子横屏字挪到左边', html.includes('body.live.hand-left #bmark svg'));
 const kh = (await route('GET', '/api/kid/home', ctx)).json as { tutors: { name: string; mark: string | null }[] };

@@ -87,6 +87,16 @@ try {
   check('listReplays:一条,指向原轮', rows.length === 1 && rows[0].replayOf === orig.job && rows[0].evalJob === rp.evalJob);
   check('listReplays:按 job 过滤', (await listReplays(ws, 'math-tutor', '2026-09-08', 'nope')).length === 0);
 
+  // 原轮是实时的:回放也按实时写(消息带 live、上下文包有 live:),新规矩才验得到(《wip/实时老师设想.md》拍板 20)
+  const lv = await runner.send('math-tutor', { from: 'kid', text: '讲讲板书', newThread: true, live: {} });
+  await lv.done;
+  await runner.flush();
+  const lrp = await startReplay(ws, 'math-tutor', '2026-09-08', lv.job, { now: () => now });
+  await lrp.done;
+  const lnext = (await readIndex(evalWorkspace(ws), 'math-tutor', '2026-09-08')).messages.find((m) => m.job === lrp.evalJob)!;
+  const lprompt = (await compareReplay(ws, 'math-tutor', '2026-09-08', lrp.evalJob))?.next.prompt ?? '';
+  check('实时的原轮:回放也是实时(消息带 live,上下文包有 live:)', lnext?.live === true && /^\s*live:/m.test(lprompt), JSON.stringify({ live: lnext?.live, prompt: lprompt.slice(0, 300) }));
+
   // 记账那轮不回放
   let refused = '';
   try { await startReplay(ws, 'math-tutor', '2026-09-08', 'nope'); } catch (e) { refused = (e as Error).message; }

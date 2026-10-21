@@ -86,6 +86,8 @@ export async function startReplay(ws: Workspace, tutor: string, date: string, jo
     ...(m.via && typeof m.via.button === 'number' ? { home: { button: m.via.label, ...(button?.brief ? { brief: button.brief } : {}) } } : {}),
     ...(m.continues && continued ? { continues: { ...m.continues, pack: continued } } : {}),
     ...(activity ? { activity } : {}),
+    // 原轮是实时的:回放也按实时写(上下文包带 live:、不补提问卡);嘴不在,接住与打断的 caught / cut 不带
+    ...(m.live ? { live: {} } : {}),
   });
   return { tutor, date, job, evalJob: started.job, done: started.done.then(() => runner.flush()) };
 }

@@ -3,7 +3,7 @@
  * 孩子端实时老师页(《工作流程.md》§孩子端「实时老师」,《wip/实时老师开发计划.md》P2.6)的手动验收(不进 pnpm test,要本机 Chrome;假百炼 + 假老师,不花钱):
  * 本进程起服务(临时 workspace,语文老师开实时;老师是 tests/_fake-cli.ts --stream,嘴是 tests/_fake-realtime.ts,一次回答的声音拉长到 1.5 秒),
  * 无头 Chrome 带假麦克风开孩子端语文老师(新话题):
- *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴不先说、板上占位卡(老师在想)→ 脑写的卡铺上、卡角没有钮(拍板 18 撤了「?」)、讲稿一句一句上字幕;
+ *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴不先说、头像在想(板上没有占位卡,拍板 19)→ 脑写的卡铺上、卡角没有钮(拍板 18 撤了「?」)、讲稿一句一句上字幕;
  *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点开一张卡再按住说 = 问这张卡(消息带 focus);不出卡的一轮板上留讲稿的字;嘴连不上回到板书;
  *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1);讲稿的 [[play]] 念完铺满放小课堂那一段,放完嘴才接着念(P3.2);
  *   一直听(《wip/实时老师常开麦设计.md》;孩子端没有开关,家长在 live.listen 开):连接开 VAD、不用按声音一直推、关麦就不推、一段声音收下了就是一轮;
@@ -105,7 +105,7 @@ try {
   ok('进老师页:body.live、连上了嘴(配了会话)', connected, JSON.stringify(conn()?.session?.voice ?? null));
   ok('横屏:左栏 340(大头像 140)、右边白板、输入条横跨、板书的字幕行收起;没说话时字幕写老师的名字', lay.lv[1] === 340 && lay.av === 140 && lay.wrap[0] > lay.lv[0] + 340 && lay.bg === 'rgb(255, 255, 255)' && lay.bar > 1000 && lay.sub === 'none' && lay.blank && lay.cap === '语文老师', JSON.stringify(lay));
 
-  // ---- 按住说话 → 松手:嘴不先说(板上占位卡)、脑写卡、讲稿一句一句上字幕 ----
+  // ---- 按住说话 → 松手:嘴不先说(头像在想、板上没有占位卡)、脑写卡、讲稿一句一句上字幕 ----
   fake.kidText = '老师板书怎么写';
   const a0 = conn().audio;
   const p = await center('#mid');
@@ -118,9 +118,10 @@ try {
   console.log('  ', await shot('live-hold-ipad.png'));
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button: 'left', buttons: 0, clickCount: 1 });
   ok('按住:头像变蓝(listening)、「在听你说」、输入条上的蓝胶囊;假麦克风的声音推上去了', holding.listening && holding.hold && holding.chip !== 'none' && holding.pushed > 3200, JSON.stringify(holding));
-  const waitCard = await until(`Boolean(document.querySelector('#board > .wait-card'))`, 20);
+  const pend = await until(`document.body.classList.contains('pending')`, 20);
+  const waitCard = await evaluate(`Boolean(document.querySelector('#board > .wait-card'))`);
   const firstSaid = conn().responses.length ? String(conn().responses[0]?.instructions) : '';
-  ok('松手:commit 一次、嘴不先说(第一次开口就是照念)、等脑时板上有占位卡(老师在想)', waitCard && conn().commits === 1 && (!firstSaid || firstSaid.startsWith('把这几句话原样说给孩子听')), JSON.stringify({ ...(await cap()), firstSaid: firstSaid.slice(0, 30) }));
+  ok('松手:commit 一次、嘴不先说(第一次开口就是照念)、等脑时头像在想(body.pending)、板上没有占位卡', pend && !waitCard && conn().commits === 1 && (!firstSaid || firstSaid.startsWith('把这几句话原样说给孩子听')), JSON.stringify({ ...(await cap()), firstSaid: firstSaid.slice(0, 30) }));
   const cards = await until(`document.querySelectorAll('#board .sec .c').length >= 2`, 60);
   const board1 = await evaluate(`(() => { const sec = document.querySelector('#board .sec'); return { said: sec.querySelector('.sh')?.textContent ?? '', cards: sec.querySelectorAll('.c').length, corner: sec.querySelectorAll('.c > .again').length, qmark: [...sec.querySelectorAll('.c')].filter((c) => [...c.children].some((x) => x.textContent === '?')).length }; })()`);
   ok('脑写的卡铺上:节头是孩子那句、卡角没有钮(没有「?」、没有再听的喇叭)', cards && board1.said.includes('老师板书怎么写') && board1.cards >= 2 && board1.corner === 0 && board1.qmark === 0, JSON.stringify(board1));

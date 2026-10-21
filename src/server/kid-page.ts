@@ -2371,11 +2371,10 @@ __WORD_DRAW_JS__
     else t.textContent = v.text;
     clearTimeout(S.waitTimer);
     if (v.kind === 'wait' && waited < WAIT_LONG_MS) S.waitTimer = setTimeout(renderSubtitle, WAIT_LONG_MS - waited);
-    // 占位卡:第一拍前、以及念着没卡的开头句时都在(第一张卡落下才撤),总在板的最后
+    // 占位卡:第一拍前、以及念着没卡的开头句时都在(第一张卡落下才撤),总在板的最后。
+    // 实时没有占位卡(《wip/实时老师设想.md》拍板 19):卡不一定有,等脑时看左栏头像在想(body.pending)
     const board = $('#board'); let g = board.querySelector(':scope > .wait-card');
-    // 实时:这一轮板上已经有东西了(铺了卡、念到的讲稿露了)就不要占位卡
-    const lvShown = LV.on && S.partial && (S.partial.shown > 0 || LV.heard.has(S.partial.job));
-    if ((v.kind === 'wait' || (S.partial && S.partial.live && !S.partial.shown)) && !lvShown) { if (!g) { g = waitCardEl(); board.append(g); follow(g); } else if (g !== board.lastElementChild) board.append(g); }
+    if (!liveLook() && (v.kind === 'wait' || (S.partial && S.partial.live && !S.partial.shown))) { if (!g) { g = waitCardEl(); board.append(g); follow(g); } else if (g !== board.lastElementChild) board.append(g); }
     else if (g) g.remove();
     const b = $('#sub-btn');
     b.hidden = v.right === 'none';

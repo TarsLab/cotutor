@@ -36,7 +36,7 @@ import { NEUTRAL_COLOR } from '../lib/tutor-color.ts';
 import { faviconLinks } from '../lib/favicon.ts';
 import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from './reel-dock.ts';
 import { inlineScript } from './inline-lib.ts';
-import { BRAND_FOOTER } from './brand.ts';
+import { BRAND_CSS, BRAND_FOOTER, BRAND_JS, titleLogo } from './brand.ts';
 import { albumSvg, cameraSvg } from './photo-ui.ts';
 import { AUDIO_CLIENT_JS } from '../live/audio-client.ts';
 
@@ -66,6 +66,10 @@ ${faviconLinks()}
   /* ---- 首页 ---- */
   #home { min-height:100%; padding:calc(env(safe-area-inset-top) + 16px) 20px calc(env(safe-area-inset-bottom) + 40px); max-width:960px; margin:0 auto; display:flex; flex-direction:column; gap:18px; overflow-x:clip; }
   h1 { font-size:20px; font-weight:600; margin:0; color:var(--dim); }
+  /* 标题前那颗 logo(src/server/brand.ts titleLogo,《首页设计.md》拍板 33):不在标题里面(#title 的字会整段换掉);孩子端跟标题同色,家长端彩色 */
+  #ttl { display:flex; align-items:center; gap:10px; }
+  #ct-mark { display:flex; color:var(--dim); -webkit-tap-highlight-color:transparent; }
+  #ct-mark .ct-go, #ct-mark .ct-gi { transition:transform .45s cubic-bezier(.3,1.6,.5,1); }
   .tutors { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
   /* 老师头像 = C 形开口环(Cotutor 的 C,开口朝右、朝着老师说出来的话;《首页设计.md》拍板 15):环是 r=44 的圆(周长 276.46),
      描 80% 留 20%,转 36° 让缺口居中在右;环是学科色(currentColor),里面一个白底圆放图或字。会动的只改 dasharray 与转角 */
@@ -180,6 +184,8 @@ ${faviconLinks()}
   body.offline .c-tutor { pointer-events:none; }
   body.offline .c-tutor .av { filter:grayscale(1); opacity:.4; }
   body.offline .c-tutor .av .ring circle { transform:rotate(126deg); }
+  body.offline #ct-mark { filter:grayscale(1); opacity:.4; }
+  body.offline #ct-mark .ct-go, body.offline #ct-mark .ct-gi { transform:rotate(90deg); }
   body.offline .c-tutor .nm, body.offline .c-tutor .bt { color:var(--dim); }
   body.offline .c-tutor .bt-new { background:var(--grey); }
   /* ---- 老师页 = 板书页 ---- */
@@ -244,7 +250,7 @@ ${faviconLinks()}
   .ptabs a.on { background:#fff; color:var(--ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.08); }
   /* 顶上:名字与两个标签(窄屏各一行,宽屏并成一行);记账在「这一天」那块(拍板 31) */
   #phead { display:flex; flex-wrap:wrap; align-items:center; gap:12px 20px; }
-  #phead #title { flex:1 0 100%; margin:0; }
+  #phead #ttl { flex:1 0 100%; }
   #phead .ptabs { flex:1 0 100%; }
   /* 七天日期条(拍板 24):每天下面学科色的点 = 那天有动静的老师 */
   #pweek { display:flex; align-items:center; gap:2px; padding:4px; border-radius:16px; background:var(--card); border:1px solid var(--line); }
@@ -332,7 +338,7 @@ ${faviconLinks()}
   #pcols { display:flex; flex-direction:column; gap:20px; }
   @media (min-width:1000px) {
     #home:has(#pcols) { max-width:1180px; }
-    #phead #title { flex:0 0 auto; }
+    #phead #ttl { flex:0 0 auto; }
     #phead .ptabs { flex:0 0 260px; }
     #home #pcols { display:grid; grid-template-columns:minmax(0,640px) minmax(0,1fr); gap:20px; align-items:start; }
     #pday { position:sticky; top:16px; max-height:calc(100vh - 32px); overflow:auto; }
@@ -400,6 +406,7 @@ ${faviconLinks()}
   #go[hidden] { display:none; }
   /* 看录像(《家长录像设计.md》,只在家长端):孩子的屏幕与录像栏的样式在 reel-dock.ts,话题与听写共用;下面是老师页自己的 */
 __REEL_DOCK_CSS__
+__BRAND_CSS__
   body.reel #bar, body.reel #sub-btn { display:none; }
   /* 录像里的弹窗是孩子当时的样子:只看,点不动,没有关闭钮,跟着实录关 */
   body.reel #st-x, body.reel #st-act { display:none; }
@@ -618,7 +625,7 @@ __REEL_DOCK_CSS__
   }
 </style>
 <div id="home">
-  <h1 id="title">__TITLE__</h1>
+  <div id="ttl"><span id="ct-mark" class="ct-draw">__MARK__</span><h1 id="title">__TITLE__</h1></div>
   <div class="hcards" id="hcards"></div>
   <div class="deck" id="deck" hidden></div>
   <div class="tutors" id="tutors"></div>
@@ -680,6 +687,7 @@ __PHOTO_JS__
 __REEL_JS__
 __LIVE_JS__
 __AUDIO_JS__
+__BRAND_JS__
 
   /** 页面的模式:{} = 孩子端;parent = 家长板书页(数据走家长接口,只读,节间插旁注);synth = 没有配音时用浏览器合成声(只有 mock) */
   const MODE = __MODE__;
@@ -698,6 +706,8 @@ __AUDIO_JS__
   const CONV = '/api/kid/conversations/';
   const AUDIO = '/api/audio/';
   const AUTOPLAY_KEY = PARENT ? 'parent-autoplay' : 'kid-autoplay';
+  // 家长端在电脑上,标题前的 logo 悬停也点一下头;孩子端只有点一下
+  if (PARENT && ctMark) ctMark.classList.add('ct-hover');
   const $ = (s) => document.querySelector(s);
   const h = (tag, attrs = {}, ...kids) => {
     const el = document.createElement(tag);
@@ -1139,6 +1149,7 @@ __AUDIO_JS__
     // 换牌的那 900 ms 里不动牌堆(下一轮刷新补上);发牌只在打开首页、从老师页回来时发一次
     if (names.length && !K.busy) {
       const deal = S.homeDraw; S.homeDraw = false;
+      if (deal) ctReplay(ctMark, 'ct-draw'); // 发牌之前先把 logo 画出来
       // 老师变了(开了、关了、换了一份首页的排法)就按家长排的重来:排第一的在最前
       if (!K.order || K.order.length !== names.length || names.some((x) => !K.order.includes(x))) {
         const f = K.order ? null : takeFront();
@@ -1204,8 +1215,8 @@ __AUDIO_JS__
     // 家长端两块:首页(设孩子的首页)与记录(这一页)。这段也在孩子端的 html 里:不写家长端的路径,从这一页的地址拼
     if (!$('#phead')) {
       const head = h('div', { id: 'phead' });
-      $('#title').before(head);
-      head.append($('#title'), h('nav', { id: 'ptabs', class: 'ptabs' }, h('a', { href: (location.pathname + '/home').replace('//', '/') }, '首页'), h('a', { class: 'on', href: location.pathname }, '记录')));
+      $('#ttl').before(head);
+      head.append($('#ttl'), h('nav', { id: 'ptabs', class: 'ptabs' }, h('a', { href: (location.pathname + '/home').replace('//', '/') }, '首页'), h('a', { class: 'on', href: location.pathname }, '记录')));
       head.after(h('div', { id: 'pweek' }));
       const cols = h('div', { id: 'pcols' }, h('div', { id: 'ptl' }), h('aside', { id: 'pday', 'aria-label': '这一天老师跟你说的' }));
       $('#tutors').before(cols);
@@ -4131,7 +4142,7 @@ __REEL_DOCK_JS__
 </html>
 `;
 
-const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__LIVE_JS__', () => libSource('live-board')).replace('__AUDIO_JS__', () => AUDIO_CLIENT_JS).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR))
+const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__LIVE_JS__', () => libSource('live-board')).replace('__AUDIO_JS__', () => AUDIO_CLIENT_JS).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR)).replace('__BRAND_CSS__', () => BRAND_CSS).replace('__BRAND_JS__', () => BRAND_JS)
   .replace('__CAMERA_22__', () => JSON.stringify(cameraSvg(22))).replace('__CAMERA_28__', () => JSON.stringify(cameraSvg(28))).replace('__CAMERA_20__', () => JSON.stringify(cameraSvg(20))).replace('__ALBUM_28__', () => JSON.stringify(albumSvg(28)));
 export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 
@@ -4152,5 +4163,5 @@ export interface KidPageMode {
 export function kidPage(title: string, mode: KidPageMode = {}, stageV = '0'): string {
   const shown = mode.parent ? `${title} · 家长` : title;
   const m: KidPageMode = mode.parent ? { ...mode, links: { dictationReel: '/parent/dictation/reel?id=', talkReel: '/parent/talk/reel?id=' } } : mode;
-  return KID_PAGE.replaceAll('__TITLE__', shown).replace('__SHORT__', shown).replace('__MODE__', JSON.stringify(m)).replace('__STAGE_V__', stageV).replace('__MANIFEST__', mode.parent ? '/parent/manifest.webmanifest' : '/manifest.webmanifest').replace('__BRAND__', mode.parent ? BRAND_FOOTER : '');
+  return KID_PAGE.replaceAll('__TITLE__', shown).replace('__SHORT__', shown).replace('__MODE__', JSON.stringify(m)).replace('__STAGE_V__', stageV).replace('__MANIFEST__', mode.parent ? '/parent/manifest.webmanifest' : '/manifest.webmanifest').replace('__BRAND__', mode.parent ? BRAND_FOOTER : '').replace('__MARK__', titleLogo(Boolean(mode.parent)));
 }

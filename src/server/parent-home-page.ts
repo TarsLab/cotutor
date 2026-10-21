@@ -8,7 +8,7 @@
  * 用 String.raw:脚本里的反斜杠原样留着;脚本里不写反引号和 ${。
  */
 import { faviconLinks } from '../lib/favicon.ts';
-import { BRAND_FOOTER } from './brand.ts';
+import { BRAND_CSS, BRAND_FOOTER, BRAND_JS, titleLogo } from './brand.ts';
 
 export const PARENT_HOME_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -25,6 +25,10 @@ ${faviconLinks()}
   .wrap { max-width:640px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 20px) 16px calc(env(safe-area-inset-bottom) + 40px); display:flex; flex-direction:column; gap:16px; }
   .top { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:12px 20px; }
   .top b { font-size:20px; }
+  /* 标题前那颗 logo(《首页设计.md》拍板 33):彩色,打开时画出来、悬停点一下头 */
+  .top .ttl { display:inline-flex; align-items:center; gap:10px; align-self:center; }
+  #ct-mark { display:flex; }
+${BRAND_CSS}
   .top small { color:var(--mute); font-size:13px; }
   .top .seg { order:3; flex:1 0 100%; }
   .seg { display:flex; padding:3px; border-radius:12px; background:#e9e6de; }
@@ -111,7 +115,7 @@ ${faviconLinks()}
   }
 </style></head><body>
 <div class="wrap" id="main">
-  <div class="top"><b id="title">家长</b><nav class="seg"><a class="on" href="/parent/home">首页</a><a href="/parent">记录</a></nav><small id="pub"></small></div>
+  <div class="top"><span class="ttl"><span id="ct-mark" class="ct-draw ct-hover">${titleLogo(true)}</span><b id="title">家长</b></span><nav class="seg"><a class="on" href="/parent/home">首页</a><a href="/parent">记录</a></nav><small id="pub"></small></div>
   <div class="main">
     <section id="pv" aria-label="孩子看到的首页">
       <div class="pvh"><span>孩子看到的首页 · 点牌上的按钮改它,点后面那张换老师</span><span class="seg" id="pvdev"><button type="button" data-d="tablet">iPad</button><button type="button" data-d="phone">手机</button></span></div>
@@ -126,6 +130,7 @@ ${faviconLinks()}
 <div id="toast"></div>
 <script>
 (() => {
+${BRAND_JS}
   const $ = (s) => document.querySelector(s);
   const h = (tag, attrs, ...kids) => { const el = document.createElement(tag); for (const k in attrs || {}) { const v = attrs[k]; if (k === 'class') el.className = v; else if (k === 'on') { for (const e in v) el.addEventListener(e, v[e]); } else if (k === 'html') el.innerHTML = v; else if (v !== null && v !== undefined && v !== false) el.setAttribute(k, v === true ? '' : v); } for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) el.append(c); return el; };
   const api = async (method, path, body) => { const r = await fetch(path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => null); if (!r.ok) throw new Error((j && (j.message || j.error)) || ('HTTP ' + r.status)); return j; };

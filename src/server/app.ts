@@ -219,6 +219,8 @@ export interface KidHome {
   figshot: { port: number } | null;
   /** 按住说话怎么听(cotutor.json 的 kid.listen):omni = 松手后原声交给 /api/kid/listen 再听一遍 */
   listen: 'browser' | 'omni';
+  /** 孩子的惯用手(cotutor.json 的 kid.hand,缺省 right):left = 平板横屏实时老师页的浮层挪到右边 */
+  hand: 'right' | 'left';
 }
 
 export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
@@ -226,7 +228,7 @@ export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
   const date = localDate(now);
   const view = await kidHomeView(ws, now);
   const figshot = ws.config.figshot ? { port: ws.config.figshot.port } : null;
-  return { title: ws.config.title, date, tutors: await kidTutors(ctx, date), home: view.home, cards: view.cards, figshot, listen: ws.config.kid.listen };
+  return { title: ws.config.title, date, tutors: await kidTutors(ctx, date), home: view.home, cards: view.cards, figshot, listen: ws.config.kid.listen, hand: ws.config.kid.hand ?? 'right' };
 }
 
 export interface KidDay {
@@ -935,7 +937,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       }
       if (method === 'PATCH') {
         if (!isObj(body)) return { status: 400, json: { error: 'bad_request', message: '要一个 JSON 对象' } };
-        await patchConfig(ws, body);
+        // 工作台能改孩子那段的只有 kid.hand(左撇子镜像,《wip/实时老师设想.md》拍板 22);kid 的别的字段照旧直接编辑文件
+        const handOnly = isObj(body.kid) && Object.keys(body.kid).length > 0 && Object.keys(body.kid).every((k) => k === 'hand');
+        await patchConfig(ws, body, handOnly ? { also: ['kid'] } : {});
         await ctx.reload();
         return { status: 200, json: { ok: true, tutors: listTutors(ctx.ws.config), runtime: ctx.ws.config.runtimes.default } };
       }

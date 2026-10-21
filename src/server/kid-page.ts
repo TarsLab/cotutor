@@ -671,6 +671,13 @@ __BRAND_CSS__
     body.live #hold .t { display:none; }
     body.live #hold span { display:flex; flex-direction:column; gap:2px; font-size:14px; color:#ffffffe6; }
     body.live #hold span::before { content:"在听你说"; font-size:22px; font-weight:600; color:#fff; }
+    /* 左撇子镜像(cotutor.json 的 kid.hand: left,工作台切):浮层挪到右边、板在左边;回首页在浮层顶上,「更多」照旧在右上、压在浮层的角上 */
+    body.live.hand-left #board { padding-left:calc(env(safe-area-inset-left) + 48px); padding-right:calc(env(safe-area-inset-right) + 404px); }
+    body.live.hand-left #stage { left:calc(env(safe-area-inset-left) + 16px); right:calc(env(safe-area-inset-right) + 372px); }
+    body.live.hand-left #lv { left:auto; right:calc(env(safe-area-inset-right) + 16px); }
+    body.live.hand-left .tb.l { left:calc(100% - env(safe-area-inset-right) - 344px); }
+    body.live.hand-left .tb.r { z-index:6; }
+    body.live.hand-left #hold { left:auto; right:calc(env(safe-area-inset-right) + 36px); }
   }
 </style>
 <div id="home">
@@ -1223,7 +1230,7 @@ __BRAND_JS__
     fetch(url + 'api/health', { mode: 'no-cors', cache: 'no-store' }).then(() => { el.hidden = false; }, () => { el.hidden = true; });
   };
   const loadHome = async () => {
-    try { S.home = await api('GET', PARENT ? '/api/overview/' + (S.pdate || 'today') : '/api/kid/home'); setOffline(false); if (PARENT) renderOverview(); else { renderHome(); phIdle(); } }
+    try { S.home = await api('GET', PARENT ? '/api/overview/' + (S.pdate || 'today') : '/api/kid/home'); setOffline(false); document.body.classList.toggle('hand-left', !PARENT && S.home.hand === 'left'); if (PARENT) renderOverview(); else { renderHome(); phIdle(); } }
     catch { setOffline(true); }
   };
   // ---- 家长板书页的清单(《家长板书页设计.md》§2.2):日期、每位老师一块、一行一个话题,点了进板书 ----

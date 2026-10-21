@@ -609,6 +609,12 @@ try {
   check('不合契约的补丁 422 且不落盘', p2.status === 422 && (JSON.parse(readFileSync(cfgFile, 'utf8')) as typeof raw).tutors['math-tutor'].display === '数学老师', JSON.stringify(p2.json));
   check('改运行时模板被拒', (await route('PATCH', '/api/config', ctx, { runtimes: { fake: { run: ['x'], resume: ['x'] } } })).status === 422);
   check('改 kid 被拒', (await route('PATCH', '/api/config', ctx, { kid: { slug: 'x' } })).status === 422);
+  // 工作台能改孩子那段的只有惯用手(kid.hand,左撇子镜像;《wip/实时老师设想.md》拍板 22):写进文件、孩子端首页接口带出去;null 删键回到缺省右手
+  const ph = await route('PATCH', '/api/config', ctx, { kid: { hand: 'left' } });
+  check('工作台改 kid.hand:写进文件、首页接口带 hand', ph.status === 200 && (JSON.parse(readFileSync(cfgFile, 'utf8')) as { kid: { hand?: string } }).kid.hand === 'left' && ((await route('GET', '/api/kid/home', ctx)).json as { hand: string }).hand === 'left', JSON.stringify(ph.json));
+  check('kid.hand 和别的 kid 字段一起改照旧被拒', (await route('PATCH', '/api/config', ctx, { kid: { hand: 'right', slug: 'x' } })).status === 422);
+  const ph2 = await route('PATCH', '/api/config', ctx, { kid: { hand: null } });
+  check('kid.hand 删掉回到缺省右手、文件里不留', ph2.status === 200 && !('hand' in (JSON.parse(readFileSync(cfgFile, 'utf8')) as { kid: object }).kid) && ((await route('GET', '/api/kid/home', ctx)).json as { hand: string }).hand === 'right');
   const p3 = await route('PATCH', '/api/config', ctx, { tutors: { 'math-tutor': { enabled: true, policy: { replyMaxChars: null } } } });
   check('null 删键:政策覆盖撤掉回到继承', p3.status === 200 && ctx.ws.config.tutors['math-tutor'].policy?.replyMaxChars === undefined && ctx.ws.config.tutors['math-tutor'].enabled === true);
 

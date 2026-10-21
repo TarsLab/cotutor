@@ -431,6 +431,26 @@ try {
   const firstT = idxT.messages.find((m) => m.from === 'kid' && m.talk === talkId);
   ok('那个话题跑 activity 口语课、记着口语单是哪份', firstT?.activity?.name === '口语课' && String(firstT.activity.params?.口语单 ?? '').includes('🦆 duck'), JSON.stringify(firstT?.activity ?? null).slice(0, 200));
 
+  // ---- 左撇子镜像(kid.hand: left,工作台设置页切;拍板 22):浮层挪到右边、板在左边,回首页在浮层顶上,「更多」照旧在右上(压在浮层角上、点得到);按着时蓝块盖在那块上 ----
+  const hp = await fetch(`${base}/api/config`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kid: { hand: 'left' } }) });
+  await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&new=1` });
+  await until(`Boolean(document.body && document.body.classList.contains('live') && document.body.classList.contains('hand-left'))`, 40);
+  await untilNode(() => Boolean(conn()?.session), 8000);
+  await sleep(600);
+  const mir = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), back = r('#back'), more = r('#more-btn'); const mc = document.elementFromPoint(more.left + more.width / 2, more.top + more.height / 2); return { lv: [Math.round(lv.left), Math.round(innerWidth - lv.right), Math.round(lv.width)], padR: parseInt(getComputedStyle(document.querySelector('#board')).paddingRight), padL: parseInt(getComputedStyle(document.querySelector('#board')).paddingLeft), backIn: back.left >= lv.left && back.right <= lv.right, moreTop: Boolean(mc && mc.closest('#more-btn')), moreRight: Math.round(innerWidth - more.right) }; })()`);
+  const pm = await center(HOLD);
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pm.x, y: pm.y, button: 'left', buttons: 1, clickCount: 1 });
+  await sleep(400);
+  await until(`/松手/.test(document.querySelector('#hold').textContent)`, 20);
+  mir.holdOver = await evaluate(`(() => { const a = document.querySelector('#hold').getBoundingClientRect(), b = document.querySelector('#lv-hold').getBoundingClientRect(); return Math.abs(a.left - b.left) <= 2 && Math.abs(a.top - b.top) <= 2 && Math.abs(a.width - b.width) <= 2; })()`);
+  console.log('  ', await shot('live-mirror-hold-ipad.png'));
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: pm.x, y: pm.y - 130, button: 'left', buttons: 1 });
+  await sleep(150);
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pm.x, y: pm.y - 130, button: 'left', buttons: 0, clickCount: 1 });
+  await sleep(500);
+  console.log('  ', await shot('live-mirror-ipad.png'));
+  ok('左撇子镜像:浮层在右边(离边 16、宽 340)、板从左边排起,回首页在浮层顶上,「更多」在右上点得到;按着时蓝块盖在那块上', hp.status === 200 && mir.lv[1] === 16 && mir.lv[2] === 340 && mir.padR >= 380 && mir.padL <= 64 && mir.backIn && mir.moreTop && mir.moreRight <= 24 && mir.holdOver, JSON.stringify(mir));
+
   ok('页面没有报错', errors.length === 0, errors.slice(0, 3).join(' | '));
 } finally {
   if (browser) browser.kill();

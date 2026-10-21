@@ -388,6 +388,8 @@ ${BRAND_CSS}
   .voices .now { display:flex; align-items:center; gap:10px; padding:12px 20px; border-bottom:1px solid var(--line-soft); flex-wrap:wrap; }
   .voices .now small { font:400 12px/1.4 var(--mono); color:var(--muted); }
   .voices .now .muted { color:var(--muted); }
+  .handrow { display:flex; align-items:center; gap:10px; padding:12px 20px; flex-wrap:wrap; }
+  .handrow .muted { color:var(--muted); }
   .voices .filters { display:flex; gap:8px; padding:12px 20px; border-bottom:1px solid var(--line-soft); flex-wrap:wrap; background:var(--surface-2); }
   .voices .filters input, .voices .filters select { height:34px; font-size:13.5px; padding:0 10px; border:0; box-shadow:0 0 0 1px var(--line); border-radius:9px; background:var(--surface); }
   .voices .filters input[type=search] { flex:1 1 220px; min-width:0; }
@@ -1580,10 +1582,22 @@ ${BRAND_CSS}
           btn.disabled = false;
         } } }, '试一句「今天我们讲勾股定理」'),
         tryFb)));
-    tts.append(h('p', { class: 'hint' }, '用第一位配了音色的老师试;voxtell 不在 PATH 就把第一项写成完整路径。kid、version、运行时模板请直接编辑 cotutor.json。'));
+    tts.append(h('p', { class: 'hint' }, '用第一位配了音色的老师试;voxtell 不在 PATH 就把第一项写成完整路径。kid 的别的字段、version、运行时模板请直接编辑 cotutor.json。'));
+
+    // 孩子端:惯用手(kid.hand,《wip/实时老师设想.md》拍板 22)——左撇子时平板横屏实时老师页的浮层(按住说话)挪到右边;孩子端下次进老师页生效
+    const kid = h('div', { class: 'panel' });
+    const left = (c.kid && c.kid.hand) === 'left';
+    const handBtn = (v, label) => h('button', { type: 'button', class: left === (v === 'left') ? 'on' : '', 'aria-pressed': String(left === (v === 'left')), on: { click: async () => {
+      if (left === (v === 'left')) return;
+      try { await api('PATCH', '/api/config', { kid: { hand: v === 'left' ? 'left' : null } }); await loadConfig(); renderSettings(); }
+      catch (e) { feedback(kid, false, e.message); }
+    } } }, label);
+    kid.append(h('header', {}, h('h4', {}, '孩子端'), h('span', { class: 'sub' }, 'kid.hand · 孩子下次进老师页生效'), h('span', { class: 'right' }, h('span', { class: 'fb' }))),
+      h('div', { class: 'handrow' }, h('b', {}, '惯用手'), h('span', { class: 'seg' }, handBtn('right', '右手'), handBtn('left', '左撇子')),
+        h('span', { class: 'muted' }, left ? '平板横屏的实时老师页:按住说话那一栏在右边,左手写字' : '平板横屏的实时老师页:按住说话那一栏在左边,右手写字')));
 
     const mig = migratePanel();
-    $('#settings').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '设置'), h('span', { class: 'sub' }, '路径、服务、配音;文件仍是真相,这页只是改它的一个口子')), ...(mig ? [mig] : []), paths, server, tts));
+    $('#settings').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '设置'), h('span', { class: 'sub' }, '路径、服务、配音;文件仍是真相,这页只是改它的一个口子')), ...(mig ? [mig] : []), paths, server, tts, kid));
   };
 
   // ---- 概览(《工作台设计.md》):近七天的数字、今天各老师、要看一眼的轮次、体检(doctor 不带 --live) ----

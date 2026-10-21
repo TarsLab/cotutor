@@ -227,6 +227,8 @@ try {
   ok('上滑松手:作废,不 commit、不开新一轮', commits === 2 && !(await body('listening')), String(commits));
 
   // ---- 打字:点浮层下面那颗「打字」,输入条贴着软键盘上沿横跨全屏出来、拿到焦点;收起键盘(失焦、没字)就回去 ----
+  // 上面打断的那一轮脑可能还在写(body.pending 时那排不接),等它写完再点,不然时快时慢地红
+  await until(`!document.body.classList.contains('pending')`, 80);
   await tap('#lv-type');
   await sleep(300);
   const typing = await evaluate(`(() => { const b = document.querySelector('#bar').getBoundingClientRect(); return { shown: getComputedStyle(document.querySelector('#bar')).display !== 'none', w: Math.round(b.width), focus: document.activeElement === document.querySelector('#typed'), cam: getComputedStyle(document.querySelector('#cam')).display }; })()`);

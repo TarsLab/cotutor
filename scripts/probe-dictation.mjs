@@ -99,7 +99,7 @@ try {
   ok('写:大格里 9 笔,听写本上当前这格跟着画', (await inkCount('#l-big .ink')) === 9 && (await inkCount('#l-book .here .ink')) === 9);
   await shot('03-listen');
   ok('学科色:写好了是语文老师的粉(拍板 20)', await waitFor(`getComputedStyle(document.querySelector('#l-next')).backgroundColor === 'rgb(196, 60, 116)'`));
-  ok('出口同老师页:左上角「‹ 头像」胶囊带语文老师的脸,没有「先停一下」', await waitFor(`(() => { const b = document.querySelector('#back'); if (!b || b.hidden) return false; const r = b.getBoundingClientRect(); return r.left < 30 && r.top < 30 && !!b.querySelector('.tfav .face') && !document.body.innerText.includes('先停一下'); })()`));
+  ok('出口同老师页:左上角「‹ logo」胶囊(《产品规划.md》拍板 24:不放老师的脸),没有「先停一下」', await waitFor(`(() => { const b = document.querySelector('#back'); if (!b || b.hidden) return false; const r = b.getBoundingClientRect(); return r.left < 30 && r.top < 30 && !!b.querySelector('svg.ct-logo') && !b.querySelector('.tfav') && !document.body.innerText.includes('先停一下'); })()`));
   await tapText('写好了');
   ok('写好了:同一个词的第二个字', await waitFor(`document.querySelector('#l-what').textContent === '第一个词的第二个字'`) && (await inkCount('#l-big .ink')) === 0);
   await writeChar('#l-big .padbox', '天');

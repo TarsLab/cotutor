@@ -14,6 +14,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { frameAt } from 'drawtell/core';
 import { mountBaked } from 'drawtell/render';
 import { MARK_MAX, MARK_MAX_POINTS, MARK_MAX_STROKES, MARK_STROKE_POINTS, clockLabel, lectureAt, lectureClock, lectureNext, type LectureClock } from '../lib/lecture.ts';
+import { LOGO_BIG, logoBody } from '../lib/logo.ts';
 import { loadBaked, loadBundle } from './bundle.ts';
 
 /** 一处画(页面与舞台之间传的样子):课里的时刻、SVG 停在哪(画缩略图)、停在这一刻画的几笔(课包坐标;视频是视频自己的像素坐标) */
@@ -94,15 +95,10 @@ export interface LectureStageProps {
   onLog?(e: WatchEntry): void;
   /** 家长看录像:只看,时钟跟着页面(follow) */
   follow?: boolean;
-  /** 左上返回胶囊里的老师头像(和老师页的「‹ 头像」一样):图或一个字,圈的颜色;不给只画箭头 */
-  tutor?: LectureTutor;
 }
 
-export interface LectureTutor {
-  color: string;
-  img?: string;
-  text?: string;
-}
+/** 左上返回胶囊里的 logo(和老师页的「‹ logo」同一颗:brand.ts 的 BACK_LOGO,28 px 大号那档;单色、不动;《产品规划.md》拍板 24) */
+const BACK_LOGO_BODY = logoBody(LOGO_BIG, { outer: 'currentColor', inner: 'currentColor' });
 
 /** 视频小课堂的时钟:服务端按 lecture.md 拼好的一句一段 */
 async function loadVideoClock(url: string): Promise<LectureClock> {
@@ -134,7 +130,7 @@ const INK = '#2f6fd6';
 const SEG_GAP = 3;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onFinished, onClose, onAsk, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false, tutor }, ref): JSX.Element {
+export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onFinished, onClose, onAsk, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false }, ref): JSX.Element {
   const card = range !== undefined;
   const view = rawView || card || follow;
   /** 录像跟着放:倍速 */
@@ -650,10 +646,10 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
 
   return (
     <div className={'lc' + (card ? ' lc-card' : ' lc-full') + (video ? ' lc-vid' : '')}>
-      {/* 左上「‹ 头像」浮在上面,和老师页的返回胶囊一个样子(拍板 39) */}
+      {/* 左上「‹ logo」浮在上面,和老师页的返回胶囊一个样子(拍板 39;《产品规划.md》拍板 24 起放 logo、不放老师头像) */}
       {!card && !follow && <button type="button" className="lc-back" aria-label="回首页" onClick={() => { log(false); onClose({ ...watch.current }); }}>
         <i className="lc-back-ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg></i>
-        {tutor && <span className="lc-av" style={{ color: tutor.color }}><svg className="lc-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44" /></svg><span className="lc-face">{tutor.img ? <img src={tutor.img} alt="" /> : tutor.text}</span></span>}
+        <svg className="lc-logo" width="28" height="28" viewBox="0 0 100 100" aria-hidden="true" dangerouslySetInnerHTML={{ __html: BACK_LOGO_BODY }} />
       </button>}
       {!card && <div className={'lc-rail' + (follow ? '' : ' lc-under')}>
         <div className="lc-name"><span className="lc-tag">小课堂</span><span className="lc-title">{title}</span></div>

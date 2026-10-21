@@ -284,7 +284,7 @@ __WORD_DRAW_JS__
   // ---- 路由:#/ 拍照、#/list/<id> 看口语单、#/kid/<id> 跟读与聊 ----
   const views = ['snap', 'pick', 'kid'];
   const show = (name) => { for (const v of views) $('#' + v).classList.toggle('on', v === name); BACK.el.hidden = Boolean(REEL_ID); };
-  // 左上角「‹ 头像」胶囊同老师页(《首页设计.md》拍板 27):头像是口语课挂的那位老师;点了挂断、回首页
+  // 左上角「‹ logo」胶囊同老师页(《首页设计.md》拍板 27,《产品规划.md》拍板 24):点了挂断、回首页
   __TUTOR_FACE_JS__
   const BACK = backCapsule(() => { if (call) call.hangup('left'); location.href = '/'; });
   BACK.el.hidden = true; document.body.append(BACK.el);
@@ -298,7 +298,6 @@ __WORD_DRAW_JS__
     if (!t) return;
     OWNER = t;
     document.documentElement.style.setProperty('--sc', t.color);
-    BACK.set(t);
     $('#snap-av').replaceChildren(tutorAvatar(t));
     $('#p-av').replaceChildren(tutorAvatar(t));
     $('#k-sav').replaceWith(Object.assign(tutorAvatar(t), { id: 'k-sav' }));

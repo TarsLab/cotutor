@@ -188,11 +188,11 @@ ${BTN_JS}
   document.addEventListener('visibilitychange', function () { if (S.v && !S.v.done) event(document.hidden ? 'away' : 'back', S.i || 0); });
   var drop = function (pts) { if (S.gone.length < 200) S.gone.push({ t: now(), pts: pts }); };
   var goHome = function () { stopSay(); location.href = '/'; };
-  // ---- 左上角「‹ 头像」胶囊,同老师页(《wip/听写设想.md》拍板 16);再写一遍是叠在对一对上的一层,右上角 × 回去 ----
+  // ---- 左上角「‹ logo」胶囊,同老师页(《wip/听写设想.md》拍板 16,《产品规划.md》拍板 24);再写一遍是叠在对一对上的一层,右上角 × 回去 ----
   ${TUTOR_FACE_JS}
   var BACK = backCapsule(goHome); document.body.append(BACK.el);
   var TUTORS = null;
-  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; BACK.set(t); $('#snap-av').replaceChildren(t ? tutorAvatar(t) : ''); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
+  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; $('#snap-av').replaceChildren(t ? tutorAvatar(t) : ''); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
 
   // ---------- 念:配了音色放音频,没有退浏览器的英文合成声 ----------
   var audio = new Audio(); audio.preload = 'auto';

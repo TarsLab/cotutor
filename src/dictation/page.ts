@@ -333,11 +333,11 @@ ${BTN_JS}
 
   var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'order' || name === 'rewrite'; window.scrollTo(0, 0); if (!REEL_ID) guard(); };
   var goHome = function () { stopSay(); location.href = '/'; };
-  // ---- 左上角「‹ 头像」胶囊,同老师页(《wip/听写设想.md》拍板 16):听写这次的老师,没开始时是从哪位老师卡上进来的 ----
+  // ---- 左上角「‹ logo」胶囊,同老师页(《wip/听写设想.md》拍板 16,《产品规划.md》拍板 24);拍照屏的大头像是听写这次的老师,没开始时是从哪位老师卡上进来的 ----
   ${TUTOR_FACE_JS}
   var BACK = backCapsule(goHome); document.body.append(BACK.el);
   var TUTORS = null;
-  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; BACK.set(t); $('#snap-av').replaceChildren(t ? tutorAvatar(t) : ''); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
+  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; $('#snap-av').replaceChildren(t ? tutorAvatar(t) : ''); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
 
   var api = function (method, path, body) {
     return fetch(path, { method: method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' })

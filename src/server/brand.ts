@@ -2,6 +2,7 @@
  * cotutor 的品牌标记(LICENSE 附加条件第 2 条):logo、名字、仓库链接,只在这里定义一份。
  * 家长端各页的页脚用 BRAND_FOOTER,工作台的页头用 brandLogo + BRAND_CSS;「XX的老师们」前面的那颗用 titleLogo(孩子端首页、家长端记录与首页,
  * 《首页设计.md》拍板 33):家长端彩色;孩子端跟标题同色、不带链接(首页的颜色是分给老师的,孩子端也没有外链)。
+ * 孩子端回首页的胶囊「‹ logo」用 BACK_LOGO(《产品规划.md》拍板 24):单色、不带链接、不动。
  * 录像的两页(/parent/talk/reel、/parent/dictation/reel)是全屏播放器,不放。
  * 哪几页带它见 tests/brand.test.ts:每页都带、孩子端一个都不带。
  *
@@ -29,6 +30,10 @@ export interface BrandLogoOpts {
 export function brandLogo({ size = 18, outer = 'currentColor', inner = outer, innerOpacity = 1 }: BrandLogoOpts = {}): string {
   return `<svg class="ct-logo" width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">${logoBody(logoGeom(size), { outer, inner, innerOpacity })}</svg>`;
 }
+
+/** 回首页那颗胶囊「‹ logo」里的(《产品规划.md》拍板 24):单色、不动(不挂 ct-draw / ct-nod / ct-hover),颜色随所在处(胶囊里是墨色);
+ *  老师页、听写、口语课共用这一份,小课堂舞台用 logo.ts 画同一颗(28 px 是大号那档,和这里一样) */
+export const BACK_LOGO = brandLogo({ size: 28 });
 
 /** 「XX的老师们」前面那颗:家长端彩色;孩子端单色,颜色随所在处(跟标题同色) */
 export function titleLogo(parent: boolean): string {

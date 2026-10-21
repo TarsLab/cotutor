@@ -36,7 +36,7 @@ import { NEUTRAL_COLOR } from '../lib/tutor-color.ts';
 import { faviconLinks } from '../lib/favicon.ts';
 import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from './reel-dock.ts';
 import { inlineScript } from './inline-lib.ts';
-import { BRAND_CSS, BRAND_FOOTER, BRAND_JS, titleLogo } from './brand.ts';
+import { BACK_LOGO, BRAND_CSS, BRAND_FOOTER, BRAND_JS, titleLogo } from './brand.ts';
 import { albumSvg, cameraSvg } from './photo-ui.ts';
 import { AUDIO_CLIENT_JS } from '../live/audio-client.ts';
 
@@ -192,12 +192,12 @@ ${faviconLinks()}
   #tutor { position:fixed; inset:0; background:var(--paper); display:none; z-index:10; }
   #tutor.on { display:flex; }
   #main { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
-  /* 没有顶栏:左上角一颗胶囊「‹ 头像」(整颗点了回首页),右上角喇叭 + 更多;浮在板书上面、舞台遮罩(z 4)下面,舞台开了就被压暗盖住 */
+  /* 没有顶栏:左上角一颗胶囊「‹ logo」(整颗点了回首页;《产品规划.md》拍板 24 起放 logo,老师的脸在字幕行 / 实时的左栏),右上角喇叭 + 更多;浮在板书上面、舞台遮罩(z 4)下面,舞台开了就被压暗盖住 */
   .tb { position:absolute; top:calc(env(safe-area-inset-top) + 10px); z-index:3; display:flex; align-items:center; gap:10px; }
   .tb.l { left:calc(env(safe-area-inset-left) + 12px); } .tb.r { right:calc(env(safe-area-inset-right) + 12px); }
   #back { display:flex; align-items:center; gap:2px; height:48px; padding:0 4px 0 8px; border-radius:24px; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; }
-  #back .av { width:40px; height:40px; font-size:19px; }
-  #back .av .ring circle, .pt .hd .av .ring circle, .wait-card .av .ring circle { stroke-width:8; }
+  #back .ct-logo { color:var(--ink); margin:0 8px 0 4px; }
+  .pt .hd .av .ring circle, .wait-card .av .ring circle { stroke-width:8; }
   #back-ic { width:24px; height:24px; color:var(--dim); display:grid; place-items:center; }
   #c-mo { font-size:13px; color:var(--dim); background:#fffffff0; border:1px solid var(--line); border-radius:14px; padding:4px 12px; box-shadow:0 2px 10px #00000010; white-space:nowrap; }
   #c-mo[hidden] { display:none; }
@@ -636,7 +636,7 @@ __BRAND_CSS__
 <iframe id="lc-frame" hidden title="小课堂"></iframe>
 <section id="tutor">
   <div id="main">
-    <div class="tb l"><button id="back" type="button" aria-label="回首页"><i id="back-ic"></i><span class="av" id="c-av"></span></button><span id="c-mo" hidden></span></div>
+    <div class="tb l"><button id="back" type="button" aria-label="回首页"><i id="back-ic"></i>__BACK_LOGO__</button><span id="c-mo" hidden></span></div>
     <div class="tb r"><button class="hb on" id="spk" type="button" aria-label="老师念不念"></button><button class="hb" id="more-btn" type="button" aria-label="更多"></button></div>
     <div id="wrap">
       <div id="board"></div>
@@ -1371,7 +1371,6 @@ __BRAND_JS__
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else { liveClose(); micWarm(); }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
-    $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
     $('#board').replaceChildren(); pin.on = false;
     if (S.ask) $('#board').append(askBoard(S.ask));
     else if (S.talkWait) $('#board').append(talkBoard());
@@ -1872,8 +1871,6 @@ __WORD_DRAW_JS__
   //      看完那排画的卡能删,孩子开口时一起带上;问过以后「再看一遍」又画了,下一条带上(again)。画的卡的缩略图是截图 ----
   const lcFrame = $('#lc-frame');
   const lcPost = (m) => { try { lcFrame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
-  /** 播放器左上「‹ 头像」用的老师头像(和老师页的返回胶囊一样;照 avatarEl 画法拆成图或字 + 颜色) */
-  const lcTutor = () => { const t = S.tutor; if (!t) return null; const av = avatarEl(t), img = av.querySelector('img'); return { color: colorOf(t), ...(img ? { img: img.getAttribute('src') } : { text: av.textContent }) }; };
   /** 小课堂在哪:课包 /api/bundles/<id>/;视频 /api/kid/lectures/<id>/(lecture.json + video.mp4) */
   const lcBundleUrl = (bundle, video) => (video ? '/api/kid/lectures/' : '/api/bundles/') + encodeURIComponent(bundle) + '/';
   let lcShowing = null;
@@ -1955,7 +1952,7 @@ __WORD_DRAW_JS__
     const m = e.data;
     if (!m || m.source !== STAGE_SOURCE || e.source !== lcFrame.contentWindow || !lcShowing) return;
     if (m.type === 'ready') {
-      lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, tutor: lcTutor(), marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}), ...(lcShowing.follow ? { follow: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
+      lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}), ...(lcShowing.follow ? { follow: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
       // 录像(follow):播放器这时才在听,录像停着不会再发,把最近那条 follow 再发一次(之前那条它没收到;2026-10-19 停着点「圈了一处」(现在叫「画了一处」)一直停在 0:00)
       if (lcShowing.follow && lcShowing.followMsg) lcPost(lcShowing.followMsg);
     }
@@ -3181,7 +3178,6 @@ __WORD_DRAW_JS__
     if (!d) { if (host) { try { host.cotutorReelFail(); } catch {} } else document.body.append(h('div', { class: 'blank' }, h('b', {}, '这个话题没有录像'))); return; }
     document.body.classList.add('rlk');
     S.tutor = d.face; S.thread = d.thread; S.hist = d.date; S.readonly = true; S.autoplay = true;
-    $('#c-av').replaceWith(Object.assign(avatarEl(S.tutor), { id: 'c-av' }));
     // 有实时轮的话题:孩子当时看到的是实时老师页(左栏大头像 + 字幕、卡角没有钮),字幕照这一刻(reelLiveCap)
     if (d.realtime) { document.body.classList.add('live'); $('#tutor').style.setProperty('--tc', colorOf(d.face)); $('#lv-av').replaceChildren(avatarEl(S.tutor)); }
     $('#tutor').classList.add('on');
@@ -3234,7 +3230,6 @@ __REEL_DOCK_JS__
     unlock();
     S.tutor = t; S.thread = thread; S.hist = date || S.pdate || null; S.readonly = true; S.newThread = false;
     S.reel = { frame: true };
-    $('#c-av').replaceWith(Object.assign(avatarEl(t), { id: 'c-av' }));
     $('#board').replaceChildren();
     $('#tutor').classList.add('on');
     const fr = $('#rl-frame');
@@ -4140,7 +4135,7 @@ __REEL_DOCK_JS__
 </html>
 `;
 
-const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__LIVE_JS__', () => libSource('live-board')).replace('__AUDIO_JS__', () => AUDIO_CLIENT_JS).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR)).replace('__BRAND_CSS__', () => BRAND_CSS).replace('__BRAND_JS__', () => BRAND_JS)
+const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__LIVE_JS__', () => libSource('live-board')).replace('__AUDIO_JS__', () => AUDIO_CLIENT_JS).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR)).replace('__BRAND_CSS__', () => BRAND_CSS).replace('__BACK_LOGO__', () => BACK_LOGO).replace('__BRAND_JS__', () => BRAND_JS)
   .replace('__CAMERA_22__', () => JSON.stringify(cameraSvg(22))).replace('__CAMERA_28__', () => JSON.stringify(cameraSvg(28))).replace('__CAMERA_20__', () => JSON.stringify(cameraSvg(20))).replace('__ALBUM_28__', () => JSON.stringify(albumSvg(28)));
 export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 

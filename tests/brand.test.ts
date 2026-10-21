@@ -49,6 +49,19 @@ for (const p of ['/', '/reel', '/preview']) {
   const m = mark(await html(p));
   check(`${p} 标题前是单色的 logo(跟标题同色)`, m.includes('stroke="currentColor"') && !m.includes(LOGO_CLAY), p);
 }
+// 回首页的胶囊「‹ logo」(《产品规划.md》拍板 24):老师页、听写、口语课、小课堂舞台同一颗单色 logo,不放老师头像、不动
+const { BACK_LOGO } = await import('../src/server/brand.ts');
+const { TUTOR_FACE_JS } = await import('../src/server/tutor-face.ts');
+const { readFileSync } = await import('node:fs');
+check('胶囊的 logo 单色、不挂动作', BACK_LOGO.includes('stroke="currentColor"') && !BACK_LOGO.includes(LOGO_CLAY) && !/ct-(draw|nod|hover)/.test(BACK_LOGO));
+const backOf = (h: string): string => /<button id="back"[^>]*>([\s\S]*?)<\/button>/.exec(h)?.[1] ?? '';
+for (const p of ['/', '/reel']) {
+  const b = backOf(await html(p));
+  check(`${p} 老师页的胶囊里是那颗 logo、没有老师头像`, b.includes(BACK_LOGO) && !b.includes('c-av') && !b.includes('class="av"'), b.slice(0, 120));
+}
+check('听写、口语课的胶囊里是同一颗 logo、不塞老师头像', TUTOR_FACE_JS.includes(BACK_LOGO) && !/backCapsule[\s\S]*tutorAvatar\(/.test(TUTOR_FACE_JS.slice(TUTOR_FACE_JS.indexOf('var backCapsule'))));
+const lecture = readFileSync(new URL('../src/stage/lecture.tsx', import.meta.url), 'utf8');
+check('小课堂舞台的胶囊画同一颗 logo(logo.ts 大号那档、单色)、没有老师头像', /logoBody\(LOGO_BIG, \{ outer: 'currentColor', inner: 'currentColor' \}\)/.test(lecture) && lecture.includes('className="lc-logo"') && !lecture.includes('lc-av'));
 check('家长端的占位符换掉了', !(await html('/parent')).includes('__BRAND__') && !(await html('/')).includes('__BRAND__') && !(await html('/')).includes('__MARK__') && !(await html('/parent')).includes('__MARK__'));
 
 done();

@@ -509,7 +509,7 @@ __BRAND_CSS__
   #back, .tb .hb, #hist-x, #st-x, #st-go, #sub-btn, #pill .ic, #go, #back-today, .again, .c-tutor .bt,
   #ps .tools button, #ps .foot button, #ps-strip .x, #lb .x, #lb .nav,
   #menu .panel button, #sheet label, #hist .tr, .so, .rd, .hz, .c-tutor .tt, #ps-strip .t,
-  .sec.heard > .sh, #sub-text.line { transition:transform .2s ease-out, filter .2s ease-out, opacity .2s ease-out, background-color .2s ease-out; }
+  .sec.heard > .sh, #sub-text.line, #lv-tools button, #lv-tools .ic, #lv-replay { transition:transform .2s ease-out, filter .2s ease-out, opacity .2s ease-out, background-color .2s ease-out; }
   #board .pend { display:none; }
   #lay-probe { position:fixed; left:-10000px; top:0; visibility:hidden; pointer-events:none; }
   #board .c { transition:transform .2s ease-out, filter .2s ease-out, border-color .2s, box-shadow .2s; }
@@ -542,10 +542,14 @@ __BRAND_CSS__
   }
   @media (prefers-reduced-motion:reduce) { #menu, #sheet, #hist, #ps, #lb, #stage, #st-dim, #menu .dimmer, #sheet .dimmer, #hist .dimmer, #menu .panel, #sheet .panel, #hist .panel { transition:none; } }
   @media (hover:hover) {
-    #back:hover, .tb .hb:hover, #hist-x:hover, #st-x:hover, #sub-btn:hover, #pill .ic:hover, #back-today:hover, .again:hover, #menu .panel button:hover, #sheet label:hover, #hist .tr:hover, .so:hover, .rd:hover, .c-tutor .bt:hover, #board .c:not(.c-tianzige):hover { filter:brightness(.97); }
+    #back:hover, .tb .hb:hover, #hist-x:hover, #st-x:hover, #sub-btn:hover, #pill .ic:hover, #back-today:hover, .again:hover, #menu .panel button:hover, #sheet label:hover, #hist .tr:hover, .so:hover, .rd:hover, .c-tutor .bt:hover, #board .c:not(.c-tianzige):hover, #lv-tools button:hover .ic, #lv-replay:hover { filter:brightness(.97); }
   }
   #back:active, .tb .hb:active, #hist-x:active, #st-x:active, #st-go:active, #sub-btn:active, #pill .ic:active, #go:active, #back-today:active, .again:active, .c-tutor .bt:active, .blank .resume:active, .ask-go:active { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
   #ps .tools button:active, #ps .foot button:active, #ps-strip .x:active, #lb .x:active, #lb .nav:active { transform:scale(.94); opacity:.65; transition-duration:.06s; }
+  /* 左栏(实时老师页白纸)最底下那排:圆钮同输入条上的圆钮(缩到 94% + 暗一档),字跟着深一档;「再听一遍」是行内文字,变淡。合成的那颗按钮在 voice-ui.ts */
+  #lv-tools button:active .ic { transform:scale(.94); filter:brightness(.92); transition-duration:.06s; }
+  #lv-tools button:active { color:var(--ink); transition-duration:.06s; }
+  #lv-replay:active { opacity:.55; transition-duration:.06s; }
   #menu .panel button:active, #sheet label:active, #hist .tr:active, .so:active, .rd:active, .hz:active, .c-tutor .tt:active, #ps-strip .t:active { transform:scale(.985); filter:brightness(.95); transition-duration:.06s; }
   #board .c:not(.c-tianzige):active:not(:has(button:active, .hz:active)) { transform:scale(.985); filter:brightness(.96); transition-duration:.06s; transition-delay:.08s; }
   .sec.heard > .sh:active:not(:has(button:active, .ph:active)), #sub-text.line:active { opacity:.55; transition-duration:.06s; }

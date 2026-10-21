@@ -81,13 +81,16 @@ const ICONS: Record<string, string> = {
 
 export const VOICE_CSS = `
   /* ---- 按住说话那颗按钮(头像 + 声音,src/server/voice-ui.ts,设想稿拍板 23):底色在 data-tone,哪种样子在 data-voice,头像的动作是 .vb-face 上的 .vb-<face> ---- */
-  .vb { position:relative; display:flex; align-items:center; gap:10px; width:312px; height:120px; box-sizing:border-box; padding:0 18px 0 12px; border-radius:32px; border:1.5px solid #e2dfd6; background:#fff; box-shadow:0 4px 16px #00000012; color:#2b2b2b; font:inherit; text-align:left; touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; transition:background-color .15s, border-color .15s, box-shadow .15s, color .15s, opacity .15s; }
+  .vb { position:relative; display:flex; align-items:center; gap:10px; width:312px; height:120px; box-sizing:border-box; padding:0 18px 0 12px; border-radius:32px; border:1.5px solid #e2dfd6; background:#fff; box-shadow:0 4px 16px #00000012; color:#2b2b2b; font:inherit; text-align:left; touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; transition:background-color .15s, border-color .15s, box-shadow .15s, color .15s, opacity .15s, transform .2s ease-out, filter .2s ease-out; }
   .vb.vb-right { flex-direction:row-reverse; padding:0 12px 0 18px; text-align:right; }
   .vb[data-tone=blue] { background:#3d7fd9; border-color:#3d7fd9; color:#fff; box-shadow:0 8px 22px #3d7fd961; }
   .vb[data-tone=grey] { background:#f7f6f2; border-color:#ebe8df; color:#8a8781; box-shadow:none; }
   .vb[data-tone=cancel] { background:#e9ecf1; border-color:#d5dbe4; color:#4d5563; box-shadow:none; }
   .vb[data-tone=light] { background:#eaf2fd; border-color:#bcd6f5; color:#2a5ea8; box-shadow:none; }
   .vb.vb-faded { opacity:.45; }
+  /* 按下反馈,同孩子端大块面那一档(缩到 98.5% + 暗一点):按上去马上有手感;满 150 毫秒才算按住说话、变蓝(轻碰不打断老师) */
+  .vb:active:not(.vb-faded) { transform:scale(.985); filter:brightness(.97); transition-duration:.06s; }
+  @media (hover:hover) { .vb:hover:not(.vb-faded) { filter:brightness(.98); } }
   .vb-av { position:relative; flex:none; width:96px; height:96px; display:grid; place-items:center; border-radius:50%; --vb-h1:6px; --vb-h2:-2px; transition:box-shadow .2s; }
   .vb-av > .av { width:72px; height:72px; font-size:34px; }
   .vb-side { position:relative; z-index:1; flex:1; align-self:stretch; min-width:0; }

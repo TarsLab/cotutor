@@ -118,6 +118,26 @@ try {
   ok('进老师页:body.live、连上了嘴(配了会话)', connected, JSON.stringify(conn()?.session?.voice ?? null));
   ok('横屏(1180×760,Safari 带地址栏的高):板占满整屏(纸色、不套卡片框);左栏是贴边的白纸(上、左、下不留边,宽 360,不带圆角),回首页在白纸顶上、「更多」浮在右上;头像和按住说话是一颗按钮 312×120(头像 72 在按钮里,手机那颗藏着),下沿离屏底 ≥ 150、中心在屏高六成多;最底下一排拍照 / 相册 / 打字离底边 ~20;输入条与板书的字幕行收起;没说话时字幕写老师的名字、按钮是「按住说话」', lay.pos === 'absolute' && lay.lv[0] === 0 && lay.lv[1] === 0 && lay.lv[2] === 360 && lay.lv[3] === 0 && lay.lvBg === 'rgb(255, 255, 255)' && lay.lvRadius === '0px' && lay.wrap[0] === 0 && lay.wrap[1] === 0 && lay.wrap[2] === 1180 && lay.bg === 'rgba(0, 0, 0, 0)' && lay.padL >= 380 && lay.backIn && lay.more[0] <= 24 && lay.more[2] && lay.phoneAv === 'none' && lay.av === 72 && lay.hold[0] === 312 && lay.hold[1] === 120 && lay.hold[2] >= 150 && lay.hold[3] >= 60 && lay.hold[3] <= 72 && lay.toolsBottom >= 16 && lay.toolsBottom <= 28 && lay.voice === 'idle' && lay.tools.join() === '拍照,相册,打字' && lay.bar === 'none' && lay.sub === 'none' && lay.blank && lay.cap === '语文老师', JSON.stringify(lay));
 
+  // ---- 按下反馈(10-21 Jack:拍照、相册、打字按着、长按都没变化):CDP 强制 :active,看样子(缩放、明暗、透明、字色)变没变;part = 变的是里面哪一块 ----
+  await send('DOM.enable'); await send('CSS.enable');
+  const pressLook = async (sel, part = sel) => {
+    const doc = await send('DOM.getDocument', { depth: 0 });
+    const nodeId = (await send('DOM.querySelector', { nodeId: doc.result.root.nodeId, selector: sel })).result?.nodeId;
+    if (!nodeId) return { sel, missing: true };
+    const look = () => evaluate(`(() => { const s = getComputedStyle(document.querySelector(${JSON.stringify(part)})); return [s.transform, s.filter, s.opacity, s.color].join('|'); })()`);
+    const before = await look();
+    await send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: ['active'] });
+    await sleep(300);
+    const after = await look();
+    await send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] });
+    await sleep(250);
+    return { sel, changed: before !== after };
+  };
+  const PRESS = [['#lv-hold'], ['#lv-cam', '#lv-cam .ic'], ['#lv-album', '#lv-album .ic'], ['#lv-type', '#lv-type .ic'], ['#back'], ['#more-btn']];
+  const pressed = [];
+  for (const [sel, part] of PRESS) pressed.push(await pressLook(sel, part));
+  ok('按下反馈:合成的按钮、拍照 / 相册 / 打字、回首页、「更多」按着都有样子变化(缩、暗或变淡)', pressed.every((x) => x.changed), JSON.stringify(pressed.filter((x) => !x.changed)));
+
   // ---- 按住说话 → 松手:嘴不先说(头像在想、板上没有占位卡)、脑写卡、讲稿一句一句上字幕 ----
   fake.kidText = '老师板书怎么写';
   const a0 = conn().audio;
@@ -182,6 +202,8 @@ try {
 
   // ---- 字幕重放(拍板 21):安静了字幕下面露「再听一遍」;点了从这一轮第一句放(服务端留的那份嘴的声音)、字幕跟着走、上面一行「再听一遍 · 第 n 句,共 m 句」,头像不动;点「停」停;按住说话也停 ----
   const rpShown = await until(`!document.querySelector('#lv-replay').hidden && document.querySelector('#lv-replay').textContent === '再听一遍'`, 40);
+  const rpPress = await pressLook('#lv-replay');
+  ok('按下反馈:「再听一遍」按着变淡', rpPress.changed, JSON.stringify(rpPress));
   await tap('#lv-replay');
   const rpOn = await until(`document.querySelector('#lv-cap').classList.contains('rp') && /^再听一遍 · 第 1 句,共 3 句$/.test(document.querySelector('#lv-cap .lv-prev').textContent)`, 20);
   const rpFirst = await evaluate(`document.querySelector('#lv-cap .lv-cur').textContent`);

@@ -16,7 +16,7 @@
  * 播到哪句就在卡上画标注、滚到那张卡;末句是问句就停下等孩子答。
  * 输入条照豆包通用版:相机 | 发消息或按住说话 | 加号(相册)。平板横屏:板书两列(最宽 1040 居中),没有左栏。
  * 实时的老师(《工作流程.md》§孩子端「实时老师」,body.live):嘴照念讲稿、声音从 WebSocket 下来,孩子端不念;横屏左栏大头像 + 字幕、板在右边一块白板,
- * 卡角是「?」;谁出声谁停走 ../lib/live-board.ts 的 liveStep(同样剥类型内联);连不上回到上面的板书。
+ * 卡角没有钮(《wip/实时老师设想.md》拍板 18);谁出声谁停走 ../lib/live-board.ts 的 liveStep(同样剥类型内联);连不上回到上面的板书。
  *
  * 交互逻辑在 ../lib/kid-board.ts(纯函数,有测试),这里把它剥掉类型内联进页面,两处一份源码。卡按 kind 渲染(text / read / choice / fill / code),
  * 每种卡的紧凑态只读;点卡开舞台(盖住板书那块,顶栏是卡的名字 + 关闭,讲稿暂停):选择题在舞台里点大按钮,选了就 PUT 状态,
@@ -555,7 +555,7 @@ __BRAND_CSS__
   @media (prefers-reduced-motion:reduce) { #back, .tb .hb, .again, .so, .rd, .hz, #board .c, #hist .tr, #sheet label, #menu .panel button, #ps .tools button, #ps .foot button, .c-tutor .bt, .c-tutor .tt { transition:none; } *:active { transform:none !important; } }
   /* ---- 实时的老师(《工作流程.md》§孩子端「实时老师」;原型 https://claude.ai/artifact/Xkjo2tN8D942ujEafpNo5f 的 A「老师站在板边」):
      字幕行换成 #lv(类名带 lv-:卡是 .c,撞名会套上卡的边框)——竖屏、手机在输入条上方一行(小头像 + 在说的那句),横屏是左栏(大头像 + 字幕,在说的大、上一句淡),板是右边一块白板;
-     嘴在说头像外两圈亮(老师的颜色 --tc),孩子按着变蓝、「在听你说」;卡角是「?」(问这张卡),朗读卡、单词卡、录音卡没有 ---- */
+     嘴在说头像外两圈亮(老师的颜色 --tc),孩子按着变蓝、「在听你说」;卡角没有再听的喇叭,也没有别的钮(拍板 18:想问某张卡,点开它再按住说) ---- */
   #lv { display:none; }
   body.live #sub, body.live #spk { display:none; }
   body.live #lv { display:flex; align-items:center; gap:14px; padding:8px 20px 4px; min-height:60px; }
@@ -586,7 +586,6 @@ __BRAND_CSS__
   #lv-cap .lv-cur { font-size:18px; line-height:1.45; font-weight:600; color:var(--ink); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   #lv-cap .lv-cur.nm { font-weight:500; color:var(--dim); }
   #lv-cap.done .lv-cur, #lv-cap .lv-cur.cut { color:#a39f96; font-weight:500; }
-  .c > .again.ask { display:inline-flex; color:var(--tc, var(--accent)); font-size:16px; font-weight:700; line-height:1; }
   /* 不出卡的一轮:板上留讲稿的字(设想稿拍板 8),念到哪露到哪 */
   .sec > .says { display:flex; flex-direction:column; gap:6px; padding:2px 4px 4px 40px; font-size:19px; line-height:1.6; color:var(--ink); }
   .sec > .says p { margin:0; }
@@ -788,7 +787,7 @@ __BRAND_JS__
    *  别的(重开页面、以前的、板书的)整节 → undefined */
   const liveHeard = (s) => (s && s.live && LV.on && LV.jobs.has(s.job) ? (LV.heard.has(s.job) ? LV.heard.get(s.job) : -1) : undefined);
   const liveUpTo = (i, upTo) => { const n = liveHeard(S.sections[i]); return n === undefined ? upTo : upTo === undefined ? n : Math.min(upTo, n); };
-  /** 页面是实时老师的样子:正连着嘴,或录像里放的是有实时轮的话题(卡角「?」、没有再听) */
+  /** 页面是实时老师的样子:正连着嘴,或录像里放的是有实时轮的话题(卡角没有钮、没有再听) */
   const liveLook = () => LV.on || Boolean(S.reel && S.reel.realtime);
 
   // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音就不出声、按字数计时(浏览器合成声只在 mock 里,见 SYNTH) ----
@@ -1424,7 +1423,7 @@ __BRAND_JS__
     // 每张卡带底色槽与字形槽(围栏行上写的 look,没有就机械规则);名字对不上主题的,CSS 落回 paper / plain
     const board = !stage && secIdx !== null;
     const lk = board && c.submitted && c.kind !== 'record' ? h('span', { class: 'lk', html: ICON.lock + '交给老师了' }) : null;
-    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), on: board ? { click: () => openStage(secIdx, idx) } : {} }, ...kids, lk, board ? againBtn(c) : null);
+    const box = (cls, ...kids) => h('div', { class: 'c c-' + cls, 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c), on: board ? { click: () => openStage(secIdx, idx) } : {} }, ...kids, lk, board ? againBtn() : null);
     switch (c.kind) {
       case 'text': {
         if (isHeading(c)) return h('div', { class: 'heading', 'data-card': idx }, p.title || '');
@@ -1507,7 +1506,7 @@ __BRAND_JS__
         // 拍给我看(cards/photo/card.md):相机 + 要拍什么;下沿是答案栏:等你拍(拍照、相册)或拍来的照片。点卡不开舞台,点下沿的按钮拍
         const a = board ? ansFor(secIdx, idx) : null;
         const el = h('div', { class: 'c c-photo', 'data-card': idx, 'data-tint': tintFor(c), 'data-look': lookFor(c) },
-          h('div', { class: 'pc-row' }, h('span', { class: 'pc-ic', html: ICON.camera }), h('div', { class: 'pc-t' }, p.text || '')), a ? ansEl(a) : null, board ? againBtn(c) : null);
+          h('div', { class: 'pc-row' }, h('span', { class: 'pc-ic', html: ICON.camera }), h('div', { class: 'pc-t' }, p.text || '')), a ? ansEl(a) : null, board ? againBtn() : null);
         if (a) el.dataset.ans = ansKey(a);
         return el;
       }
@@ -1520,7 +1519,7 @@ __BRAND_JS__
         const chs = Array.from(String(p.chars || ''));
         const py = Array.isArray(p.pinyin) && p.pinyin.length === chs.length ? p.pinyin : null;
         for (const [i, ch] of chs.entries()) el.append(py ? h('div', { class: 'hzc' }, h('span', { class: 'py' }, String(py[i])), tianzigeBox(ch)) : tianzigeBox(ch));
-        const ab = board ? againBtn(c) : null;
+        const ab = board ? againBtn() : null;
         if (ab) el.append(ab);
         return el;
       }
@@ -2447,10 +2446,8 @@ __WORD_DRAW_JS__
 
   // ---- 再听(2026-09-18):卡角喇叭 = 这张卡那几句,节头 = 整节,点字幕 = 这一句;板上安静、讲完之后才有;声音就是当时的配音,不花钱 ----
   const replayWrote = new Set();
-  /** 卡角:板书时是再听的喇叭;实时时是「?」(点了 = 孩子问这张卡,同说了一句,《wip/实时老师设想.md》拍板 6),朗读卡、单词卡、录音卡自己有声音,没有 */
-  const SOUND_KINDS = ['read', 'word', 'record'];
-  const askBtn = () => h('button', { type: 'button', class: 'again ask', 'aria-label': '问这张卡', on: { click: (e) => { e.stopPropagation(); const c = e.currentTarget.closest('.c'), secEl = c && c.closest('.sec'), s = secEl && S.sections[Number(secEl.dataset.sec)]; if (s) send('讲讲这张卡', { focus: { card: s.job + '/' + c.dataset.card }, ask: true }); } } }, '?');
-  const againBtn = (card) => liveLook() ? (card && SOUND_KINDS.includes(card.kind) ? null : askBtn()) : h('button', { type: 'button', class: 'again', 'aria-label': '再听', html: ICON.replay, on: { click: (e) => { e.stopPropagation(); const c = e.currentTarget.closest('.c'); if (c) againAt(c, Number(c.dataset.card)); } } });
+  /** 卡角:板书时是再听的喇叭;实时时什么都没有(《wip/实时老师设想.md》拍板 18 撤掉了「?」:想问某张卡,点开它再按住说,消息带 focus),朗读卡、单词卡、录音卡、田字格的声音在卡里 */
+  const againBtn = () => liveLook() ? null : h('button', { type: 'button', class: 'again', 'aria-label': '再听', html: ICON.replay, on: { click: (e) => { e.stopPropagation(); const c = e.currentTarget.closest('.c'); if (c) againAt(c, Number(c.dataset.card)); } } });
   const againAt = (el, target) => {
     const secEl = el.closest('.sec');
     if (!secEl || !(target === 'all' ? secEl : el).classList.contains('heard')) return;
@@ -2473,7 +2470,7 @@ __WORD_DRAW_JS__
   /** 板上安静时,有讲稿的卡与节都挂上 heard(喇叭露出来,不看念没念过);念着的挂 replaying。老师还在写的节不挂;板上不安静(老师在想、正在念)全都不挂 */
   const markHeard = () => {
     const st = playView();
-    // 实时没有再听(讲稿没有配音,再念会盖过嘴):卡角是「?」
+    // 实时没有再听(讲稿没有配音,再念会盖过嘴)
     const quiet = !liveLook() && replayQuiet(st, S.pending);
     const R = st.replay ? S.replayOf : null;
     for (const secEl of $('#board').querySelectorAll(':scope > .sec[data-sec]')) {
@@ -2788,7 +2785,7 @@ __WORD_DRAW_JS__
     if (!text && !opts.action && !(opts.photos && opts.photos.length)) return;
     if (!S.tutor || !canSend() || S.limit) return;
     unlock();
-    // 实时:不是按住说的(打字、拍照、交卡、卡上的「?」、首页按钮的开场)也走那条连接,嘴先接住;嘴还没连上(刚进来就发开场)等它
+    // 实时:不是按住说的(打字、拍照、交卡、首页按钮的开场)也走那条连接,嘴先接住;嘴还没连上(刚进来就发开场)等它
     if (LV.on && !opts.voice) { if (LV.ready) liveSendNow(text, opts); else LV.queued = [text, opts]; return; }
     dispatch({ type: 'send' });
     S.pending = true; S.waitSince = Date.now(); renderSubtitle();
@@ -3186,7 +3183,7 @@ __WORD_DRAW_JS__
     document.body.classList.add('rlk');
     S.tutor = d.face; S.thread = d.thread; S.hist = d.date; S.readonly = true; S.autoplay = true;
     $('#c-av').replaceWith(Object.assign(avatarEl(S.tutor), { id: 'c-av' }));
-    // 有实时轮的话题:孩子当时看到的是实时老师页(左栏大头像 + 字幕、卡角「?」),字幕照这一刻(reelLiveCap)
+    // 有实时轮的话题:孩子当时看到的是实时老师页(左栏大头像 + 字幕、卡角没有钮),字幕照这一刻(reelLiveCap)
     if (d.realtime) { document.body.classList.add('live'); $('#tutor').style.setProperty('--tc', colorOf(d.face)); $('#lv-av').replaceChildren(avatarEl(S.tutor)); }
     $('#tutor').classList.add('on');
     renderSpk(); renderBar(); setBar('idle');
@@ -3804,7 +3801,7 @@ __REEL_DOCK_JS__
     };
     if (S.lecture) lectureBody().then(go, () => go(null)); else go(null);
   };
-  /** 打字、拍照、交卡、卡上的「?」:同说了一句,嘴先接住、脑写(liveStep 的 send / ask) */
+  /** 打字、拍照、交卡:同说了一句,脑写(liveStep 的 send);舞台开着带 focus 那张卡 */
   const liveSendNow = (text, opts) => {
     dispatch({ type: 'send' });
     const body = { text, device: S.device };
@@ -3812,13 +3809,12 @@ __REEL_DOCK_JS__
     if (opts.photos && opts.photos.length) body.photos = opts.photos;
     const focus = opts.focus || (S.stage ? { card: S.stage.id } : null);
     if (focus) body.focus = focus;
-    if (opts.ask && focus) body.ask = true;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
     if (S.talk) { body.talk = { id: S.talk }; S.talk = null; }
     const go = (lb) => {
       if (lb) { body.lecture = lb; lectureSent(null); LV.lcPending = true; }
-      liveDispatch({ type: body.ask ? 'ask' : 'send' }, body);
+      liveDispatch({ type: 'send' }, body);
       if (LV.model.cut) LV.cap.cut = LV.cap.cur;
       S.pending = true; S.waitSince = Date.now(); renderSubtitle();
     };

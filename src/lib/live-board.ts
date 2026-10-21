@@ -24,7 +24,7 @@ export interface LiveModel {
 }
 
 /**
- * 孩子做的:press 按满 150 毫秒 · release 松手 · cancel 上滑松手 · cardTap 点卡上的声音 · ask 点卡上的「?」· send 打字发出、交答案、发照片 ·
+ * 孩子做的:press 按满 150 毫秒 · release 松手 · cancel 上滑松手 · cardTap 点卡上的声音 · send 打字发出、交答案、发照片 ·
  * stage 开 / 关舞台、拿起相机 · recStart 按下录音键 · recEnd 松手、上滑、关舞台(停录);
  * 声音的:audio 嘴的一块声音到了 · drained 孩子端的队列放完了(play:刚念完的那句 [[play]] 到小课堂卡,open = 能放、skip = 课包读不出来;
  * echo:刚念完的是热身的 [[echo]] / [[say]];call:刚念完的是 [[call]])· cardEnded 卡的声音念完 / 停了 · lectureDone 小课堂那一段放完 / 孩子关了 · ringEnd 铃响够了;
@@ -42,7 +42,6 @@ export type LiveEvent =
   | { type: 'flush' }
   | { type: 'cardTap' }
   | { type: 'cardEnded' }
-  | { type: 'ask' }
   | { type: 'send' }
   | { type: 'cards' }
   | { type: 'stage' }
@@ -173,7 +172,6 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
     case 'cardEnded':
       if (m.status === 'card') to('quiet');
       break;
-    case 'ask':
     case 'send':
       // 同说了一句:手还按着(两根手指)先把那一下作废
       if (m.status === 'holding') fx.push({ kind: 'hush' });

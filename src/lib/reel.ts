@@ -400,7 +400,7 @@ export function buildReel(input: ReelInput): Reel | null {
     return end;
   };
 
-  // ---- 实时的轮:在哪次通话里(脑开写 turn 的那条带 job);孩子那一下按住的从按下起、打字拍照点「?」从发出起 ----
+  // ---- 实时的轮:在哪次通话里(脑开写 turn 的那条带 job);孩子那一下按住的从按下起、打字拍照交卡从发出起 ----
   const callOf = new Map<string, { call: ReelCall; turnAt: number }>();
   for (const call of input.calls ?? []) for (const [t, d, x] of call.msgs) if (d === 'o' && x.t === 'turn' && typeof x.job === 'string') callOf.set(x.job, { call, turnAt: t });
   const callTurn = (m: ConversationMessage): { call: ReelCall; turnAt: number; from: number; sent: number; voice: boolean } | null => {

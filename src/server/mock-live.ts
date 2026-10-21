@@ -1,6 +1,6 @@
 /**
  * mock 的实时老师(`cotutor mock --live`,《wip/实时老师开发计划.md》P2.9):不经百炼、不花钱看实时老师页。
- * 协议同 src/live/call.ts:松手(或打字、拍照、交卡、点「?」)马上接住一句 → 发一条消息给 mock 的老师(照脚本出节,带 live)→ 老师写完,讲稿一句一句「念」:
+ * 协议同 src/live/call.ts:松手(或打字、拍照、交卡)马上接住一句 → 发一条消息给 mock 的老师(照脚本出节,带 live)→ 老师写完,讲稿一句一句「念」:
  * 字幕 + 静音的声音(按字数估长短,孩子端照常排着放),read 按孩子端的排法算好时刻发;按下 = 打断(清了,没念的不念)。
  * 讲稿的 [[play]]:那句念完先停,孩子端放完小课堂那一段(staged)再接着念。没有转写:按住说的当成「(按住说的话)」。
  */
@@ -51,8 +51,7 @@ export function mockLiveUpgrade(mock: Mock) {
     const begin = async (body: Record<string, unknown>, caught: string | null): Promise<void> => {
       const my = turn;
       if (caught) say('catch', caught);
-      const { ask: _ask, ...rest } = body;
-      const r = await mock.route('POST', `/api/kid/conversations/${tutor}/messages`, { ...rest, live: true });
+      const r = await mock.route('POST', `/api/kid/conversations/${tutor}/messages`, { ...body, live: true });
       if (my !== turn) return;
       if (r.status !== 202) { send({ t: 'err', status: r.status, error: (r.json as { error?: string } | undefined)?.error ?? 'error' }); return; }
       const { job, thread } = r.json as { job: string; thread: string };

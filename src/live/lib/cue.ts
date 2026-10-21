@@ -5,11 +5,11 @@
  */
 
 /**
- * 孩子这一轮是怎么来的:按住说的、打字的、拍的照片、交的卡、点了卡上的「?」、点了首页的按钮(activity 的开场、接着);
+ * 孩子这一轮是怎么来的:按住说的、打字的、拍的照片、交的卡、点了首页的按钮(activity 的开场、接着);
  * answer = 按住说的、上一句念给他的是问句(看图说话这种一问一答);empty = 按住了但转写是空的;
  * warm = 口语单拍好、进来上口语课(《wip/口语课改实时老师设计.md》§三之一),嘴先说要热身
  */
-export type CatchKind = 'voice' | 'answer' | 'text' | 'photo' | 'card' | 'ask' | 'start' | 'empty' | 'warm';
+export type CatchKind = 'voice' | 'answer' | 'text' | 'photo' | 'card' | 'start' | 'empty' | 'warm';
 
 /**
  * 嘴先说的那句;没写的那几种嘴不出声,等脑的第一句(《wip/实时老师设想.md》拍板 14)。

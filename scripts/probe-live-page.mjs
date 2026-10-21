@@ -3,8 +3,8 @@
  * 孩子端实时老师页(《工作流程.md》§孩子端「实时老师」,《wip/实时老师开发计划.md》P2.6)的手动验收(不进 pnpm test,要本机 Chrome;假百炼 + 假老师,不花钱):
  * 本进程起服务(临时 workspace,语文老师开实时;老师是 tests/_fake-cli.ts --stream,嘴是 tests/_fake-realtime.ts,一次回答的声音拉长到 1.5 秒),
  * 无头 Chrome 带假麦克风开孩子端语文老师(新话题):
- *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴不先说、板上占位卡(老师在想)→ 脑写的卡铺上、卡角是「?」、讲稿一句一句上字幕;
- *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点「?」= 问这张卡的一轮;不出卡的一轮板上留讲稿的字;嘴连不上回到板书;
+ *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴不先说、板上占位卡(老师在想)→ 脑写的卡铺上、卡角没有钮(拍板 18 撤了「?」)、讲稿一句一句上字幕;
+ *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点开一张卡再按住说 = 问这张卡(消息带 focus);不出卡的一轮板上留讲稿的字;嘴连不上回到板书;
  *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1);讲稿的 [[play]] 念完铺满放小课堂那一段,放完嘴才接着念(P3.2);
  *   一直听(《wip/实时老师常开麦设计.md》;孩子端没有开关,家长在 live.listen 开):连接开 VAD、不用按声音一直推、关麦就不推、一段声音收下了就是一轮;
  *   口语课(《wip/口语课改实时老师设计.md》):口语单页过来点一下开始,热身那拍念完卡亮「轮到你」、孩子跟了下一拍,[[call]] 念完响铃、老师说英文。
@@ -12,7 +12,7 @@
  * 用法:node scripts/probe-live-page.mjs [--out <截图目录>] [--keep]
  */
 import { probeDir, spawn } from './_guard.mjs';
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -122,8 +122,8 @@ try {
   const firstSaid = conn().responses.length ? String(conn().responses[0]?.instructions) : '';
   ok('松手:commit 一次、嘴不先说(第一次开口就是照念)、等脑时板上有占位卡(老师在想)', waitCard && conn().commits === 1 && (!firstSaid || firstSaid.startsWith('把这几句话原样说给孩子听')), JSON.stringify({ ...(await cap()), firstSaid: firstSaid.slice(0, 30) }));
   const cards = await until(`document.querySelectorAll('#board .sec .c').length >= 2`, 60);
-  const board1 = await evaluate(`(() => { const sec = document.querySelector('#board .sec'); return { said: sec.querySelector('.sh')?.textContent ?? '', cards: sec.querySelectorAll('.c').length, asks: sec.querySelectorAll('.c > .again.ask').length, askVisible: [...sec.querySelectorAll('.c > .again.ask')].every((b) => getComputedStyle(b).display !== 'none'), speakers: sec.querySelectorAll('.c > .again:not(.ask)').length }; })()`);
-  ok('脑写的卡铺上:节头是孩子那句、卡角都是「?」(看得见)、没有再听的喇叭', cards && board1.said.includes('老师板书怎么写') && board1.asks === board1.cards && board1.askVisible && board1.speakers === 0, JSON.stringify(board1));
+  const board1 = await evaluate(`(() => { const sec = document.querySelector('#board .sec'); return { said: sec.querySelector('.sh')?.textContent ?? '', cards: sec.querySelectorAll('.c').length, corner: sec.querySelectorAll('.c > .again').length, qmark: [...sec.querySelectorAll('.c')].filter((c) => [...c.children].some((x) => x.textContent === '?')).length }; })()`);
+  ok('脑写的卡铺上:节头是孩子那句、卡角没有钮(没有「?」、没有再听的喇叭)', cards && board1.said.includes('老师板书怎么写') && board1.cards >= 2 && board1.corner === 0 && board1.qmark === 0, JSON.stringify(board1));
   const speaking = await until(`document.body.classList.contains('speaking')`, 40);
   ok('嘴在说:头像外的圈亮(body.speaking)', speaking);
   const lastLine = await until(`document.querySelector('#lv-cap .lv-cur').textContent === '第一次说:老师板书怎么写'`, 80);
@@ -159,15 +159,25 @@ try {
   const commits = conn().commits;
   ok('上滑松手:作废,不 commit、不开新一轮', commits === 2 && !(await body('listening')), String(commits));
 
-  // ---- 点「?」:问这张卡 ----
+  // ---- 问某张卡:点开它(舞台),再按住说 → 这一轮带 focus 那张卡(拍板 18 撤了卡上的「?」) ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  await until(`!document.body.classList.contains('speaking')`, 40);
   const secs0 = await evaluate(`document.querySelectorAll('#board .sec').length`);
-  await evaluate(`document.querySelector('#board .sec .c > .again.ask').scrollIntoView({ block: 'center', behavior: 'instant' })`);
+  const focusCard = await evaluate(`(() => { const c = document.querySelector('#board .sec .c'); c.scrollIntoView({ block: 'center', behavior: 'instant' }); return c.closest('.sec').dataset.job + '/' + c.dataset.card; })()`);
   await sleep(200);
-  await tap('#board .sec .c > .again.ask');
+  await tap('#board .sec .c');
+  const stageOn = await until(`document.querySelector('#stage').classList.contains('on')`, 20);
+  fake.kidText = '这张卡我没看懂';
+  await press('#mid', 900);
   const asked = await until(`document.querySelectorAll('#board .sec').length > ${secs0}`, 60);
-  const askHead = await evaluate(`[...document.querySelectorAll('#board .sec')].at(-1).querySelector('.sh')?.textContent ?? ''`);
-  ok('点「?」:新一节的节头是「讲讲这张卡」(脑拿到 focus);嘴不先说', asked && askHead.includes('讲讲这张卡') && !conn().responses.some((r) => String(r?.instructions ?? '').includes('这张卡呀')), JSON.stringify({ askHead }));
+  await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  const askJob = await evaluate(`[...document.querySelectorAll('#board .sec')].at(-1).dataset.job`);
+  const runDir = join(wsRoot, 'conversations', 'chinese-tutor');
+  const runFile = readdirSync(runDir).find((f) => f.endsWith(`.${askJob}.run.json`));
+  const askPrompt = runFile ? JSON.parse(readFileSync(join(runDir, runFile), 'utf8')).prompt : '';
+  ok('点开一张卡再按住说:这一轮的上下文包带 focus 那张卡;嘴不先说', stageOn && asked && askPrompt.includes(`card: "${focusCard}"`) && !conn().responses.some((r) => String(r?.instructions ?? '').includes('这张卡呀')), JSON.stringify({ focusCard, askJob, runFile: Boolean(runFile) }));
+  await tap('#st-x');
+  await until(`!document.querySelector('#stage').classList.contains('on')`, 20);
 
   // ---- 不出卡的一轮:板上留讲稿的字 ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
@@ -205,8 +215,8 @@ try {
   await send('Page.navigate', { url: `${base}/reel?tutor=chinese-tutor&date=${day.date}&thread=${encodeURIComponent(day.thread)}&end=1` });
   await until(`Boolean(document.body && document.body.classList.contains('rlk'))`, 40);
   await sleep(1500);
-  const rv = await evaluate(`(() => ({ live: document.body.classList.contains('live'), cur: document.querySelector('#lv-cap .lv-cur').textContent, asks: document.querySelectorAll('#board .c > .again.ask').length, speakers: [...document.querySelectorAll('#board .c > .again:not(.ask)')].filter((b) => getComputedStyle(b).display !== 'none').length, says: [...document.querySelectorAll('#board .says p')].filter((p) => getComputedStyle(p).display !== 'none').map((p) => p.textContent) }))()`);
-  ok('录像里孩子的屏幕:实时老师页的样子(左栏字幕停在最后一句、卡角「?」、没有喇叭);不出卡那轮念到的字露着', rv.live && rv.cur.endsWith('一加一等于几') && rv.asks >= 4 && rv.speakers === 0 && rv.says.some((x) => x.endsWith('一加一等于几')), JSON.stringify(rv));
+  const rv = await evaluate(`(() => ({ live: document.body.classList.contains('live'), cur: document.querySelector('#lv-cap .lv-cur').textContent, corner: document.querySelectorAll('#board .c > .again').length, says: [...document.querySelectorAll('#board .says p')].filter((p) => getComputedStyle(p).display !== 'none').map((p) => p.textContent) }))()`);
+  ok('录像里孩子的屏幕:实时老师页的样子(左栏字幕停在最后一句、卡角没有钮);不出卡那轮念到的字露着', rv.live && rv.cur.endsWith('一加一等于几') && rv.corner === 0 && rv.says.some((x) => x.endsWith('一加一等于几')), JSON.stringify(rv));
   console.log('  ', await shot('live-reel-ipad.png'));
 
   // ---- 嘴连不上:回到板书 ----

@@ -460,7 +460,7 @@ export interface ParentReel {
   device: Device | null;
   /** 今天的话题:还会长(老师在写、孩子还会接着说),录像停在最后时隔几秒重拿(拍板 16) */
   live: boolean;
-  /** 这个话题有实时的轮(《wip/实时老师设想.md》):孩子的屏幕是实时老师页的样子(左栏大头像 + 字幕、卡角「?」) */
+  /** 这个话题有实时的轮(《wip/实时老师设想.md》):孩子的屏幕是实时老师页的样子(左栏大头像 + 字幕、卡角没有钮) */
   realtime: boolean;
   face: { name: string; display: string; avatar: string | null; subject: string | null; color: string };
 }

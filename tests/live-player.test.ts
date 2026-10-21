@@ -32,7 +32,7 @@ const rows: Row[] = [
   { name: '在放小课堂 + 那一段放完 / 孩子关了 → staged,安静', from: 'lecture', ev: { type: 'lectureDone' }, want: (m, fx) => m.status === 'quiet' && fx === 'staged,render' },
   { name: '没在放小课堂 + 放完 / 关了(按下时已经停了)→ 什么都不做', from: ['quiet', 'holding', 'mouth', 'card', 'recording'], ev: { type: 'lectureDone' }, want: (_m, fx) => fx === '' },
   { name: '在放小课堂 + 按住说话 → 那一段停下,hold', from: 'lecture', ev: { type: 'press' }, want: (m, fx) => m.status === 'holding' && fx === 'stopLecture,hold' && !m.cut },
-  { name: '在放小课堂 + 点「?」/ 打字发出 → 那一段停下,send', from: 'lecture', ev: { type: 'send' }, want: (m, fx) => m.status === 'quiet' && fx === 'stopLecture,send,render' },
+  { name: '在放小课堂 + 打字发出 → 那一段停下,send', from: 'lecture', ev: { type: 'send' }, want: (m, fx) => m.status === 'quiet' && fx === 'stopLecture,send,render' },
   { name: '在放小课堂 + 按下录音键 → 那一段停下、hush,在录', from: 'lecture', ev: { type: 'recStart' }, want: (m, fx) => m.status === 'recording' && fx === 'stopLecture,hush,render' },
   { name: '在放小课堂 + 嘴的声音到了 → 那一段停下,放嘴的', from: 'lecture', ev: { type: 'audio' }, want: (m, fx) => m.status === 'mouth' && fx === 'stopLecture,enqueue,render' },
   { name: '嘴在说 + 服务端 flush → 清掉没放的,安静', from: 'mouth', ev: { type: 'flush' }, want: (m, fx) => m.status === 'quiet' && fx === 'flush,render' },
@@ -40,10 +40,10 @@ const rows: Row[] = [
   { name: '安静 + 点卡上的声音 → 念它,卡在念', from: 'quiet', ev: { type: 'cardTap' }, want: (m, fx) => m.status === 'card' && fx === 'playCard' },
   { name: '卡在念 + 点卡上的(另一个)声音 → 换成这个', from: 'card', ev: { type: 'cardTap' }, want: (m, fx) => m.status === 'card' && fx === 'playCard' },
   { name: '卡在念 + 念完 → 安静', from: 'card', ev: { type: 'cardEnded' }, want: (m, fx) => m.status === 'quiet' && fx === '' },
-  { name: '嘴在说 + 点卡上的「?」→ 嘴没放完的清掉,send(ask + focus)', from: 'mouth', ev: { type: 'ask' }, want: (m, fx) => m.status === 'quiet' && fx === 'flush,send,render' && m.cut },
-  { name: '卡在念 + 点「?」→ 卡的声音停,send', from: 'card', ev: { type: 'ask' }, want: (m, fx) => m.status === 'quiet' && fx === 'stopCard,send,render' },
+  { name: '嘴在说 + 打字发出 / 交答案 → 嘴没放完的清掉,send(舞台开着带 focus)', from: 'mouth', ev: { type: 'send' }, want: (m, fx) => m.status === 'quiet' && fx === 'flush,send,render' && m.cut },
+  { name: '卡在念 + 打字发出 → 卡的声音停,send', from: 'card', ev: { type: 'send' }, want: (m, fx) => m.status === 'quiet' && fx === 'stopCard,send,render' },
   { name: '安静 + 打字发出 / 交答案 / 发照片 → send', from: 'quiet', ev: { type: 'send' }, want: (m, fx) => m.status === 'quiet' && fx === 'send,render' },
-  { name: '(两根手指)按着 + 点「?」→ 先 hush 那一下,再 send', from: 'holding', ev: { type: 'ask' }, want: (m, fx) => m.status === 'quiet' && fx === 'hush,send,render' },
+  { name: '(两根手指)按着 + 交答案 → 先 hush 那一下,再 send', from: 'holding', ev: { type: 'send' }, want: (m, fx) => m.status === 'quiet' && fx === 'hush,send,render' },
   { name: '任何 + 卡铺上来、老师写完 → 不出声、不打断谁', from: ALL, ev: { type: 'cards' }, want: (_m, fx) => fx === '' },
   { name: '任何 + 开舞台 / 关舞台 / 拿起相机 → 嘴接着说', from: ALL, ev: { type: 'stage' }, want: (_m, fx) => fx === '' },
   { name: '嘴在说 + 按下录音键 → 嘴没放完的清掉、hush,在录', from: 'mouth', ev: { type: 'recStart' }, want: (m, fx) => m.status === 'recording' && fx === 'flush,hush,render' },
@@ -76,7 +76,7 @@ const rows: Row[] = [
   { name: '嘴在说 + 放完了、刚念完的那句是热身的 [[echo]] / [[say]] → 安静,那句锚的卡亮「轮到你」', from: 'mouth', ev: { type: 'drained', echo: true }, want: (m, fx) => m.status === 'quiet' && m.turn && fx === 'render' },
   { name: '等孩子跟 + 服务端 vad 开 → 光变实(在听你说)', from: 'quiet', base: { open: true, turn: true }, ev: { type: 'vad', on: true }, want: (m, fx) => m.turn && m.hearing && fx === 'render' },
   { name: '等孩子跟 + 嘴的声音到了(下一拍)→ 光收,放嘴的', from: 'quiet', base: { turn: true }, ev: { type: 'audio' }, want: (m, fx) => m.status === 'mouth' && !m.turn && fx === 'enqueue,render' },
-  { name: '等孩子跟 + 打字发出 / 点「?」→ 光收,send', from: 'quiet', base: { turn: true }, ev: { type: 'send' }, want: (m, fx) => !m.turn && fx === 'send,render' },
+  { name: '等孩子跟 + 打字发出 → 光收,send', from: 'quiet', base: { turn: true }, ev: { type: 'send' }, want: (m, fx) => !m.turn && fx === 'send,render' },
   { name: '等孩子跟 + 服务端 flush → 光收', from: 'quiet', base: { turn: true }, ev: { type: 'flush' }, want: (m, fx) => !m.turn && fx === 'flush,render' },
   { name: '等孩子跟 + 按住说话 → 光留着(他在跟),hold', from: 'quiet', base: { turn: true }, ev: { type: 'press' }, want: (m, fx) => m.status === 'holding' && m.turn && fx === 'hold' },
   { name: '嘴在说 + 放完了、刚念完的那句是 [[call]] → 响铃', from: 'mouth', ev: { type: 'drained', call: true }, want: (m, fx) => m.status === 'ring' && fx === 'ring,render' },
@@ -102,7 +102,7 @@ function rng(seed: number): () => number {
   let a = seed >>> 0;
   return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
-const KID = new Set(['press', 'release', 'cancel', 'ask', 'send', 'recStart', 'listen']);
+const KID = new Set(['press', 'release', 'cancel', 'send', 'recStart', 'listen']);
 const SERVER_DUCK = new Set(['duck', 'unduck', 'flush', 'listen', 'reset', 'drop']);
 
 function run(seed: number, steps: number): string | null {
@@ -181,7 +181,7 @@ function run(seed: number, steps: number): string | null {
     else if (x < 0.52) ev = { type: 'flush' };
     else if (x < 0.62) ev = { type: 'cardTap' };
     else if (x < 0.68) { if (w.card && r() < 0.6) { w.card = false; ev = { type: 'cardEnded' }; } else if (w.ring && r() < 0.5) { w.ring = false; ev = { type: 'ringEnd' }; } else if (w.lecture || r() < 0.1) ev = { type: 'lectureDone' }; else continue; }
-    else if (x < 0.72) ev = { type: r() < 0.5 ? 'ask' : 'send' };
+    else if (x < 0.72) ev = { type: 'send' };
     else if (x < 0.8) ev = { type: 'cards' };
     else if (x < 0.85) ev = { type: 'stage' };
     else if (x < 0.89) ev = { type: 'recStart' };

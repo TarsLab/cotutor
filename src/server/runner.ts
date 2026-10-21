@@ -950,7 +950,7 @@ export class Runner {
       transcript.items.push({ kind: 'done', text: `本轮没有收尾(${transcript.final.reason}),看 ${date}.${job}.err.log` });
     }
     emit({ lane: 'main', kind: 'exit', ok: transcript.final.ok, ...(transcript.final.reason ? { reason: transcript.final.reason } : {}), ...(transcript.final.costUsd !== undefined ? { costUsd: transcript.final.costUsd } : {}), ...(transcript.final.numTurns !== undefined ? { turns: transcript.final.numTurns } : {}) });
-    const kidView = deriveKidView(transcript, { replyMaxChars });
+    const kidView = deriveKidView(transcript, { replyMaxChars }, { live: active.live });
     if (unexpected.length) kidView.warnings.push(`${plan.cli} 起来时带着这轮不该有的工具:${unexpected.join('、')}(${plan.tools === 'off' ? '这轮应该一个工具都不带' : '这轮只该带只读的几样'});关工具的旗标可能随 CLI 升级失效了,看 src/clis/${plan.cli}.ts`);
     if (stalls) kidView.warnings.push(`API 流断了 ${stalls} 次(每次 ${policy.stall.ms / 1000} 秒没动静),应用杀掉进程、resume 会话接着写的${exit.stalled ? ';次数用完还断,这轮没收尾' : ''}`);
     // 整块出的(没走流式):卡与句这时才第一次见到,也发一遍

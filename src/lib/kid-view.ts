@@ -64,11 +64,12 @@ export function kidSource(t: Transcript): string | null {
   return [...kept, last].join('\n\n');
 }
 
-export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }): KidView {
+/** opts.live = 实时的一轮:解析器不补提问卡(src/lib/board.ts) */
+export function deriveKidView(t: Transcript, policy: { replyMaxChars: number }, opts: { live?: boolean } = {}): KidView {
   if (!t.final) return none(false);
   if (!t.final.ok || !t.final.text) return none(t.final.ok);
   const { body, bookkeeping, memory } = parseSections(kidSource(t) ?? t.final.text);
-  const board = parseBoard(body);
+  const board = parseBoard(body, { live: opts.live });
   const { cards, lines } = board.section;
   if (!cards.length && !lines.length) return { ...none(true, bookkeeping), memory, warnings: board.warnings.map((w) => w.text), parentText: board.tail };
   let truncated = false;

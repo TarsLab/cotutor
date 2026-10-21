@@ -145,5 +145,23 @@ for (const f of fixtures) {
   check('提问卡:有拍给我看卡 → 不补;卡解析成 photo', snap.section.cards.length === 1 && snap.section.cards[0].kind === 'photo' && snap.section.cards[0].props.text === '看图说话的那幅图' && snap.warnings.length === 0, JSON.stringify(snap.section.cards));
   const snapFirst = parseBoard('```photo\n写好的那一页\n```\n\n```text\n写一句\n```\n\n写好了拍给我看,好吗?\n');
   check('提问卡:拍给我看卡不在最后、末句锚着文字卡 → 也不补', snapFirst.section.cards.length === 2, JSON.stringify(snapFirst.section.cards));
+  // 实时的一轮(《wip/实时老师设想.md》拍板 20):板上放什么由脑定,末句问话不补成提问卡;只有一行 # 标题的文字卡是节头,解析成 heading
+  const live = parseBoard('```text\n# 补读音:瀑、布、穷、尽\n```\n\n先看「瀑」。\n你读读看,「瀑」怎么念?\n', { live: true });
+  check('实时:末句问句不补提问卡', live.section.cards.length === 1 && live.section.cards.every((c) => c.props.ask !== true) && live.section.lines[1].ask, JSON.stringify(live.section.cards));
+  check('实时:节头是 heading 文字卡,标题照写', live.section.cards[0].kind === 'text' && live.section.cards[0].props.heading === true && live.section.cards[0].props.title === '补读音:瀑、布、穷、尽', JSON.stringify(live.section.cards[0]));
+  check('实时:annotate 也不标补提问卡', !annotateSource('先看「瀑」。\n你读读看?\n', { live: true }).rows.some((r) => (r.label ?? '').includes('补提问卡')));
+}
+{
+  // 文字卡里的「= 答案」(10-20 21:24):正文有空才算答案——家长那份留着、报一句,孩子那份剥掉;没有空的算式照旧
+  const { stripSecrets } = await import('../src/cards/index.ts');
+  const r = parseBoard('```text\n( )穷( )尽,填两个字。\n= 山\n= 水\n```\n\n你试试填上。\n', { live: true });
+  const card = r.section.cards[0];
+  check('答案行:家长那份原样、报一句', card.kind === 'text' && String(card.props.text).includes('= 山') && r.warnings.some((w) => w.text.includes('像答案')), JSON.stringify([card, r.warnings]));
+  const kid = stripSecrets(r.section).cards[0];
+  check('答案行:孩子那份剥掉「= 」行', kid.props.text === '( )穷( )尽,填两个字。', JSON.stringify(kid.props));
+  const blank = stripSecrets(parseBoard('```text\n遥读 y___\n= áo\n```\n').section).cards[0];
+  check('答案行:___ 也算空', blank.props.text === '遥读 y___', JSON.stringify(blank.props));
+  const math = parseBoard('```text formula\n6 × 4 ÷ 2\n= 24 ÷ 2\n= 12\n```\n');
+  check('答案行:没有空的算式照旧,不报', String(stripSecrets(math.section).cards[0].props.text).includes('= 12') && math.warnings.length === 0, JSON.stringify([math.section.cards[0], math.warnings]));
 }
 done();

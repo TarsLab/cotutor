@@ -139,7 +139,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
   const blocks = (transcript?.items ?? []).filter((i) => i.kind === 'text' && !i.sub).map((i) => i.text.trim());
   const src = (transcript ? kidSource(transcript) : null) ?? '';
   const dropped = blocks.filter((b) => b && !src.includes(b));
-  const ann = annotateSource(src);
+  const ann = annotateSource(src, { live: m.live });
   const stored = m.section ?? null;
   // 索引里的讲稿已经按 replyMaxChars 截过,重解的还没有——比之前先截,免得每句都报「不同」
   const freshCut: BoardSection = { ...ann.section, lines: ann.section.lines.map((l) => ({ ...l, text: truncateReply(l.text, policy.replyMaxChars).text })) };

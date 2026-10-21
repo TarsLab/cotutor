@@ -17,6 +17,8 @@ export interface ParseBoardOptions {
   place?: CardPlace;
   /** 围栏行上写了排版修饰词(same)时,排出来的行是给哪个端的(layout.for);缺省平板横屏 */
   device?: Device;
+  /** 实时的一轮(《wip/实时老师设想.md》拍板 20):板是脑写的笔记与练习,末句的问话不补成提问卡(字幕上就是这句) */
+  live?: boolean;
 }
 
 /**
@@ -246,9 +248,9 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
   }
   // 提问卡(2026-09-21):末句问句是孩子要答的那句,念完不能只剩字幕——没配能答的卡(choice / fill / canvas)就在节尾补一张文字卡写着这句。
   // 末句的锚点不动(还在它讲的那张卡的拍里);提问卡自己一拍、没有讲稿。
-  // 老师还在写(partial)时不补:这时的末句不一定是最后一句。首页没有讲稿,不管
+  // 老师还在写(partial)时不补:这时的末句不一定是最后一句。首页没有讲稿,不管;实时不补(板上放什么由脑定)
   const lastLine = out[out.length - 1];
-  if (!partial && (opts.place ?? 'board') === 'board' && lastLine?.ask && !lastLine.cues.length && !lastLine.echo && !lastLine.call) {
+  if (!partial && !opts.live && (opts.place ?? 'board') === 'board' && lastLine?.ask && !lastLine.cues.length && !lastLine.echo && !lastLine.call) {
     const t = lineTarget(lastLine);
     // 拍给我看卡也算能答:孩子拍来的照片进它的答案栏(kid-board.ts 的 askCard)
     const answerable = (c: BoardCard | undefined): boolean => Boolean(c && (hasState(c) || c.kind === 'photo'));
@@ -311,10 +313,10 @@ const SECTION_HEAD = /^##\s+(.+?)\s*$/;
  * 家长端「看原文」用:把老师原文的每一行标上解析器怎么读的。
  * 不另写一套解析——真跑 parseSections + parseBoard,再把它们的行号映回原文,所以永远不会和真解析漂开。
  */
-export function annotateSource(text: string): AnnotatedSource {
+export function annotateSource(text: string, opts: Pick<ParseBoardOptions, 'live'> = {}): AnnotatedSource {
   const src = text.split('\n');
   const { body, lineMap } = parseSections(text);
-  const board = parseBoard(body);
+  const board = parseBoard(body, opts);
   const rows: SourceRow[] = src.map((t, line) => ({ line, text: t, role: t.trim() ? 'drop' : 'blank' }));
   // 固定段吃掉的行:不在 lineMap 里的非空行,标题从上面最近的那个 H2 取
   const keptSet = new Set(lineMap);

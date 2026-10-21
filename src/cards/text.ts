@@ -22,6 +22,20 @@ export const TextPropsSchema = z.object({
 });
 export type TextProps = z.infer<typeof TextPropsSchema>;
 
+/**
+ * 文字卡里的答案行(《wip/实时老师设想.md》拍板 20):老师把填空卡的「= 答案」写进了文字卡(10-20 21:24「( )穷( )尽,填两个字。= 山 = 水」),
+ * 文字卡原来不剥,答案上了孩子的板。正文里有空(___、( ))时,「= 」开头的行算答案:下发前剥掉,家长视图报一句。
+ * 没有空的照旧(算式一步一步往下写「= 24 ÷ 2」是正文)
+ */
+const ANSWER_LINE = /^\s*=\s/;
+const BLANK = /_{2,}|[(（][\s　]*[)）]/;
+function answerLines(text: string): { kept: string; dropped: number } {
+  const lines = text.split('\n');
+  const kept = lines.filter((l) => !ANSWER_LINE.test(l));
+  if (kept.length === lines.length || !BLANK.test(kept.join('\n'))) return { kept: text, dropped: 0 };
+  return { kept: kept.join('\n').trim(), dropped: lines.length - kept.length };
+}
+
 export const text: CardKind<TextProps> = {
   name: 'text',
   where: ['board', 'home'],
@@ -38,5 +52,13 @@ export const text: CardKind<TextProps> = {
       return rest ? { title, text: rest } : { title, text: '', heading: true };
     }
     return { ...(style ? { style } : {}), text: trimmed.trim() };
+  },
+  note(_body, p) {
+    const { dropped } = answerLines(p.text);
+    return dropped ? `文字卡里 ${dropped} 行「= …」像答案,孩子端不显示(要孩子做的出 choice 卡,或请他开口说)` : null;
+  },
+  strip(p) {
+    const { kept, dropped } = answerLines(p.text);
+    return dropped ? { ...p, text: kept } : p;
   },
 };

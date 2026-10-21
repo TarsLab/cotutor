@@ -3775,12 +3775,13 @@ __REEL_DOCK_JS__
     renderSubtitle();
     micOpen().then((how) => { d.mark('mic', how); return mic.stream && LV.audio ? LV.audio.use(mic.stream) : Promise.reject(new Error('no mic')); }).then(() => { d.mark('audio', LV.audio.ctx ? LV.audio.ctx.state : ''); if (press && press.live) { hold.audio = true; renderHold(); holdRec('audio'); } }, (e) => d.mark('fail', String(e && (e.name || e.message))));
   };
-  /** 松手:告诉服务端 release(嘴马上接住);上滑、太短(不到 0.4 秒)、麦克风没开上 = 作废(hush)——麦克风没开上时输入条上说「没听清」,不能什么都不出(2026-10-19 真机:按了几次都没反应) */
-  const liveRelease = (cancelled) => {
+  /** 松手:告诉服务端 release(嘴马上接住);上滑、太短(不到 0.4 秒)、麦克风没开上 = 作废(hush)——麦克风没开上时输入条上说「没听清」,不能什么都不出(2026-10-19 真机:按了几次都没反应)。
+   *  sys = 不是孩子松的手,是系统抢走了这次触摸(pointercancel:iPadOS 底部手势等);行为照旧发出去,voice-diag 记 cancel 不记 up,好分清(《wip/实时老师设想.md》拍板 22) */
+  const liveRelease = (cancelled, sys) => {
     const long = Date.now() - LV.holdAt >= 400;
     const keep = !cancelled && hold.audio && long;
     const d = LV.diag; LV.diag = null;
-    if (d) { d.mark('up', keep ? 'sent' : cancelled ? 'slide' : !long ? 'short' : 'nomic'); liveDiagSend(d); }
+    if (d) { d.mark(sys ? 'cancel' : 'up', keep ? 'sent' : cancelled ? 'slide' : !long ? 'short' : 'nomic'); liveDiagSend(d); }
     holdEnd(keep ? 'sent' : cancelled ? 'cancel' : 'unclear');
     setBar(barNext(S.bar, keep ? 'holdEnd' : 'holdCancel'));
     if (LV.audio) LV.audio.wake().catch(() => {});
@@ -3873,15 +3874,17 @@ __REEL_DOCK_JS__
     try { mid.setPointerCapture(e.pointerId); } catch {}
   });
   mid.addEventListener('pointermove', (e) => { if (press && press.held) { const up = press.y - e.clientY > 60; if (up !== press.cancelled) { press.cancelled = up; renderHold(); holdRec('slide', { on: up }); } } });
-  const release = () => {
+  /** pointerup = 孩子松手;pointercancel = 系统抢走了触摸(iPadOS 底部手势),照旧当松手,实录与 voice-diag 分开记 */
+  const release = (e) => {
     if (!press) return;
+    const sys = Boolean(e && e.type === 'pointercancel');
     clearTimeout(press.timer);
     const p = press; press = null;
     if (!p.held) { setBar(barNext(S.bar, 'tap')); return; }
-    if (p.live) { liveRelease(p.cancelled); return; }
+    if (p.live) { liveRelease(p.cancelled, sys); return; }
     if (p.cancelled || !rec) { holdEnd('cancel'); setBar(barNext(S.bar, 'holdCancel')); if (rec) { const r = rec; rec = null; r.abort(); } return; }
     // 松手发送:浮层留到识别停下(onEnd 里收),这段时间在收尾
-    holdRec('up'); hold.tail = true; renderHold(); settle(rec);
+    holdRec('up', sys ? { cancel: true } : undefined); hold.tail = true; renderHold(); settle(rec);
   };
   mid.addEventListener('pointerup', release);
   mid.addEventListener('pointercancel', release);

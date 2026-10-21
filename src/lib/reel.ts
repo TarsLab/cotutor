@@ -33,7 +33,7 @@ export type ReelHoldResult = 'sent' | 'unclear' | 'cancel' | 'dead';
  * play = 播放器的位置变了(job = 那一节的 job;status 同 PlayerState;replay = 在再听);stage = 弹窗开 / 关;autoplay = 喇叭;
  * visible = 页面切到后台 / 回来;card = 卡的一次存(服务端在 putCardState 里记,孩子端不发)。
  * 改版(拍板 6、7,孩子看到什么记什么):view = 孩子屏幕的 CSS 尺寸、键盘高、页面版本;
- * hold = 按住说话的一步(down 按下 / audio 话筒开了 / text 认出的字变了 / slide 上滑取消 on 或滑回来 / up 松手 / end 收尾,r 见 ReelHoldResult,lv = 按下起每 100 毫秒一位的音量 0–9);
+ * hold = 按住说话的一步(down 按下 / audio 话筒开了 / text 认出的字变了 / slide 上滑取消 on 或滑回来 / up 松手,cancel = 不是孩子松的手、是系统抢走了触摸(pointercancel,iPadOS 底部手势),照旧当松手 / end 收尾,r 见 ReelHoldResult,lv = 按下起每 100 毫秒一位的音量 0–9);
  * type = 打字(focus 点进输入框 / v 值变了 / send 发了 / blur 收起);ps = 发照片屏(open / tool:crop 裁剪 · pen 圈画 · rot 转 / send / cancel);
  * scroll = 孩子自己翻到哪(锚在卡上:那张卡的上沿离板书上沿 dy 像素)
  */
@@ -44,7 +44,7 @@ export type PlayRecord = { at: number } & (
   | { k: 'visible'; on: boolean }
   | { k: 'card'; job: string; card: number; state: unknown }
   | { k: 'view'; w: number; h: number; kb: number; v: string }
-  | { k: 'hold'; e: 'down' | 'audio' | 'text' | 'slide' | 'up' | 'end'; text?: string; on?: boolean; r?: ReelHoldResult; lv?: string }
+  | { k: 'hold'; e: 'down' | 'audio' | 'text' | 'slide' | 'up' | 'end'; text?: string; on?: boolean; r?: ReelHoldResult; lv?: string; cancel?: true }
   | { k: 'type'; e: 'focus' | 'v' | 'send' | 'blur'; v?: string }
   | { k: 'ps'; e: 'open' | 'tool' | 'send' | 'cancel'; tool?: string }
   | { k: 'scroll'; job: string; card: number; dy: number }
@@ -66,7 +66,7 @@ export function playRecordOk(x: unknown): x is PlayRecord {
     case 'visible': return typeof r.on === 'boolean';
     case 'card': return job(r.job) && int(r.card) && 'state' in r;
     case 'view': return px(r.w, 100, 4000) && px(r.h, 100, 4000) && px(r.kb, 0, 2000) && typeof r.v === 'string' && r.v.length <= 16;
-    case 'hold': return ['down', 'audio', 'text', 'slide', 'up', 'end'].includes(r.e as string) && text(r.text) && (r.on === undefined || typeof r.on === 'boolean') && (r.r === undefined || ['sent', 'unclear', 'cancel', 'dead'].includes(r.r as string)) && (r.lv === undefined || (typeof r.lv === 'string' && /^[0-9]{0,600}$/.test(r.lv)));
+    case 'hold': return ['down', 'audio', 'text', 'slide', 'up', 'end'].includes(r.e as string) && text(r.text) && (r.on === undefined || typeof r.on === 'boolean') && (r.r === undefined || ['sent', 'unclear', 'cancel', 'dead'].includes(r.r as string)) && (r.lv === undefined || (typeof r.lv === 'string' && /^[0-9]{0,600}$/.test(r.lv))) && (r.cancel === undefined || r.cancel === true);
     case 'type': return ['focus', 'v', 'send', 'blur'].includes(r.e as string) && text(r.v);
     case 'ps': return ['open', 'tool', 'send', 'cancel'].includes(r.e as string) && (r.tool === undefined || (typeof r.tool === 'string' && r.tool.length <= 12));
     case 'scroll': return job(r.job) && int(r.card) && px(r.dy, -20000, 20000);

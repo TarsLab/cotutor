@@ -180,6 +180,22 @@ try {
   await tap('#st-x');
   await until(`!document.querySelector('#stage').classList.contains('on')`, 20);
 
+  // ---- 系统抢走触摸(pointercancel,iPadOS 底部手势;拍板 22):照旧发出去,voice-diag 记 cancel 不记 up ----
+  await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  await until(`!document.body.classList.contains('speaking')`, 40);
+  await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+  fake.kidText = '我读了一段';
+  const cc0 = conn().commits;
+  const pc = await center('#mid');
+  await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: pc.x, y: pc.y }] });
+  await sleep(900);
+  await send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+  await sleep(800);
+  await send('Emulation.setTouchEmulationEnabled', { enabled: false });
+  const diagRows = readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((x) => x.where === 'live');
+  const lastDiag = diagRows.at(-1);
+  ok('系统抢走触摸(touchCancel → pointercancel):照旧发出去(commit 一次)、voice-diag 记 cancel 不记 up', conn().commits === cc0 + 1 && Boolean(lastDiag?.ev.some((x) => x[0] === 'cancel' && x[2] === 'sent')) && !lastDiag?.ev.some((x) => x[0] === 'up'), JSON.stringify({ commits: conn().commits - cc0, ev: lastDiag?.ev }));
+
   // ---- 不出卡的一轮:板上留讲稿的字 ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   await until(`!document.body.classList.contains('speaking')`, 40);

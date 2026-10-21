@@ -23,6 +23,7 @@ import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { sendFile } from './send-file.ts';
 import { subjectLang, tutorExtras, type ConversationMessage } from '../schema/index.ts';
 import { NEUTRAL_COLOR, tutorColors } from '../lib/tutor-color.ts';
+import { backTutorOf } from './tutor-face.ts';
 import { enrichLectures, ensureBaked, lectureFrameSvg, parseRing, parseSvgMs, readLecture, storedMarks, type Lecture } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
 import { handleDictation, type DictationDeps } from '../dictation/route.ts';
@@ -694,6 +695,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     // 同真服务:卡上写的(或拍照听写从哪位老师卡上进来的)老师在就用他,不然语文老师
     reader: (t) => (t && MOCK_TUTORS.some((x) => x.name === t) ? t : 'chinese-tutor'),
     display: (t) => MOCK_TUTORS.find((x) => x.name === t)?.display ?? '老师',
+    face: (t) => backTutorOf(Object.fromEntries(MOCK_TUTORS.map((x) => [x.name, { display: x.display, subject: x.subject }])), t),
     say: async () => null,
     medians: async (ch) => (await tianzigeData(ch))?.medians ?? null,
     recognize: mockRecognize,

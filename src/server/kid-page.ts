@@ -41,6 +41,7 @@ import { albumSvg, cameraSvg } from './photo-ui.ts';
 import { AUDIO_CLIENT_JS } from '../live/audio-client.ts';
 import { VOICE_CSS, VOICE_JS } from './voice-ui.ts';
 import { KID_NAV_JS } from './kid-nav.ts';
+import { BACK_TINT_CSS, BACK_TINT_JS } from './tutor-face.ts';
 
 /** 读 src/lib/<name> 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
 function libSource(name: 'kid-board' | 'photo-edit' | 'reel' | 'live-board' | 'voice-view'): string {
@@ -195,6 +196,8 @@ ${faviconLinks()}
   .tb.l { left:calc(env(safe-area-inset-left) + 12px); } .tb.r { right:calc(env(safe-area-inset-right) + 12px); }
   #back { display:flex; align-items:center; gap:2px; height:48px; padding:0 4px 0 8px; border-radius:24px; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; }
   #back .ct-logo { color:var(--ink); margin:0 8px 0 4px; }
+  /* 胶囊带上老师:填这位老师的颜色、logo 后面接首字(《产品规划.md》拍板 26,同听写、口语课一份,tutor-face.ts) */
+${BACK_TINT_CSS}
   .pt .hd .av .ring circle, #sub-av .ring circle { stroke-width:8; }
   #back-ic { width:24px; height:24px; color:var(--dim); display:grid; place-items:center; }
   #c-mo { font-size:13px; color:var(--dim); background:#fffffff0; border:1px solid var(--line); border-radius:14px; padding:4px 12px; box-shadow:0 2px 10px #00000010; white-space:nowrap; }
@@ -614,7 +617,7 @@ __VOICE_CSS__
     body.live #board { max-width:none; padding:calc(env(safe-area-inset-top) + 68px) calc(env(safe-area-inset-right) + 48px) 28px calc(env(safe-area-inset-left) + 400px); }
     body.live #stage { left:calc(env(safe-area-inset-left) + 376px); right:calc(env(safe-area-inset-right) + 16px); width:auto; transform:none; }
     body.live .tb.l { left:calc(env(safe-area-inset-left) + 24px); top:calc(env(safe-area-inset-top) + 16px); z-index:6; }
-    body.live #back { background:#f4f2ec; box-shadow:none; }
+    body.live #back { box-shadow:none; } body.live #back:not(.tinted) { background:#f4f2ec; }
     body.live #lv { position:absolute; z-index:5; left:0; top:0; bottom:0; width:calc(env(safe-area-inset-left) + 360px); box-sizing:border-box; flex-direction:column; justify-content:flex-start; align-items:stretch; gap:12px; padding:calc(env(safe-area-inset-top) + 96px) 24px calc(env(safe-area-inset-bottom) + 20px) calc(env(safe-area-inset-left) + 24px); min-height:0; overflow:hidden; background:#fff; box-shadow:1px 0 0 #efece4, 6px 0 24px #46371e0d; }
     body.live #lv-av { display:none; }
     body.live #lv-kid { display:flex; flex:none; align-items:flex-start; gap:8px; font-size:20px; line-height:1.4; font-weight:600; color:#2a5ea8; }
@@ -651,7 +654,7 @@ __VOICE_CSS__
     body.live.hand-left #board { padding-left:calc(env(safe-area-inset-left) + 48px); padding-right:calc(env(safe-area-inset-right) + 400px); }
     body.live.hand-left #stage { left:calc(env(safe-area-inset-left) + 16px); right:calc(env(safe-area-inset-right) + 376px); }
     body.live.hand-left #lv { left:auto; right:0; width:calc(env(safe-area-inset-right) + 360px); padding-top:calc(env(safe-area-inset-top) + 80px); padding-left:24px; padding-right:calc(env(safe-area-inset-right) + 24px); box-shadow:-1px 0 0 #efece4, -6px 0 24px #46371e0d; }
-    body.live.hand-left #back { background:#fffffff0; box-shadow:0 2px 10px #46371e2e; }
+    body.live.hand-left #back { box-shadow:0 2px 10px #46371e2e; } body.live.hand-left #back:not(.tinted) { background:#fffffff0; }
     body.live.hand-left .tb.r { z-index:6; }
   }
 </style>
@@ -799,6 +802,9 @@ __BRAND_JS__
   let bootId = null, stale = false;
   // 学科色:服务端定好随老师下发(t.color,src/lib/tutor-color.ts);不归哪位老师的块用中性的灰
   const colorOf = (t) => (t && t.color) || __NEUTRAL_COLOR__;
+  // 回首页胶囊带上老师(tutorInitial 同首页牌上的首字,backTint 填颜色;《产品规划.md》拍板 26)
+${BACK_TINT_JS}
+  const tintBack = (t) => backTint($('#back'), t ? { color: colorOf(t), display: t.display } : null);
   /** 老师头像:学科色的 C 形开口环 + 白底圆里的图或字(样子见 .av 的样式);cls 'draw' = 一笔画出来,delay 是错开的秒数 */
   const AV_RING = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>';
   const avatarEl = (t, cls, delay) => {
@@ -970,7 +976,7 @@ __BRAND_JS__
   // 孩子看到的字都在 .btx 里(探针按它读)。新话题打头印名字的首字(.fc,拍板 28):平板横着叠时后面的牌只露左边一格,露出来的那截气泡就是这个字;手机也印,两处一样
   const tutorButton = (t, b) => {
     const on = { click: () => pickButton(t, b) };
-    const fc = Array.from(t.display || '')[0];
+    const fc = tutorInitial(t);
     if (b.kind === 'new') return h('button', { type: 'button', class: 'bt bt-new', 'data-bid': String(b.id), style: '--sc:' + colorOf(t), on }, fc ? h('span', { class: 'fc', 'aria-hidden': 'true' }, fc) : null, h('span', { class: 'lb' }, h('span', { class: 'btx' }, b.label), h('small', { class: 'ln' }, '想问我什么?')), h('span', { class: 'bi', html: ICON.spark }));
     if (b.kind === 'lecture') return h('button', { type: 'button', class: 'bt bt-lecture', 'data-bid': String(b.id), on }, lecturePic(b),
       h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, b.label), b.ms ? h('small', { class: 'ln' }, lcLen(b.ms)) : null));
@@ -1242,7 +1248,7 @@ __BRAND_JS__
   /** 孩子端那颗按钮(cards/tutor/card.css 的 .bt,原样),这里只画不点:点的是外面那一整块 */
   const kidLook = (t, th) => {
     const k = th.start ? th.start.kind : 'new';
-    if (k === 'new') return h('span', { class: 'bt bt-new', style: '--sc:' + colorOf(t) }, h('span', { class: 'fc', 'aria-hidden': 'true' }, Array.from(t.display || '')[0] || ''), h('span', { class: 'lb' }, h('span', { class: 'btx' }, '新话题'), h('small', { class: 'ln' }, th.said ? '「' + th.said + '」' : '想问我什么?')), h('span', { class: 'bi', html: ICON.spark }));
+    if (k === 'new') return h('span', { class: 'bt bt-new', style: '--sc:' + colorOf(t) }, h('span', { class: 'fc', 'aria-hidden': 'true' }, tutorInitial(t)), h('span', { class: 'lb' }, h('span', { class: 'btx' }, '新话题'), h('small', { class: 'ln' }, th.said ? '「' + th.said + '」' : '想问我什么?')), h('span', { class: 'bi', html: ICON.spark }));
     if (k === 'lecture' && th.lecture) { const L = th.lecture; return h('span', { class: 'bt bt-lecture' }, lecturePic({ bundle: L.bundle, video: L.video, ms: L.watchedMs }), h('span', { class: 'lm' }, h('small', { class: 'tg' }, '小课堂'), h('span', { class: 'btx' }, L.title || th.start.label), h('small', { class: 'ln' }, lcLen(L.watchedMs)))); }
     if (k === 'system') return h('span', { class: 'bt bt-start' }, h('span', { class: 'btx' }, th.title));
     return h('span', { class: 'bt bt-' + (k === 'continue' ? 'continue' : 'start') }, h('span', { class: 'bi', html: ICON[k === 'continue' ? 'again' : 'start'] }), h('span', { class: 'btx' }, th.start.label || th.title));
@@ -1413,7 +1419,7 @@ __BRAND_JS__
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else { liveClose(); micWarm(); }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
-    $('#sub-av').replaceWith(Object.assign(avatarEl(t), { id: 'sub-av' }));
+    $('#sub-av').replaceWith(Object.assign(avatarEl(t), { id: 'sub-av' })); tintBack(t);
     $('#board').replaceChildren(); pin.on = false;
     if (S.ask) $('#board').append(askBoard(S.ask));
     else if (S.talkWait) $('#board').append(talkBoard());
@@ -1995,7 +2001,7 @@ __WORD_DRAW_JS__
     const m = e.data;
     if (!m || m.source !== STAGE_SOURCE || e.source !== lcFrame.contentWindow || !lcShowing) return;
     if (m.type === 'ready') {
-      lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}), ...(lcShowing.follow ? { follow: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
+      lcPost({ type: 'card', id: 'lecture', kind: 'lecture', props: { title: lcShowing.title, back: S.tutor ? { color: colorOf(S.tutor), initial: tutorInitial(S.tutor) } : null, marks: lcMine() ? S.lecture.marks : [], ...(lcShowing.at !== undefined ? { at: lcShowing.at } : {}), ...(lcMine() ? {} : { view: true }), ...(lcShowing.video ? { video: true } : {}), ...(lcShowing.follow ? { follow: true } : {}) }, state: null, bundleUrl: lcBundleUrl(lcShowing.bundle, lcShowing.video) });
       // 录像(follow):播放器这时才在听,录像停着不会再发,把最近那条 follow 再发一次(之前那条它没收到;2026-10-19 停着点「圈了一处」(现在叫「画了一处」)一直停在 0:00)
       if (lcShowing.follow && lcShowing.followMsg) lcPost(lcShowing.followMsg);
     }
@@ -2751,7 +2757,8 @@ __WORD_DRAW_JS__
     let mo = '';
     if (S.hist && today) mo = '以前的 · ' + dateLabel(S.hist, S.hist === today ? '' : today) + ' ' + clock(S.threadAt);
     else if (S.cont && today) { const d = dateLabel(S.cont, today); mo = '接着' + (d === '昨天' ? d : ' ' + d + ' ') + '的话题'; }
-    else if (S.newThread) mo = S.lecture ? '小课堂' : '新话题';
+    // 新话题不挂小标签(空板本身就说明了,《产品规划.md》拍板 26);小课堂照旧
+    else if (S.newThread && S.lecture) mo = '小课堂';
     else if (S.thread && S.day && S.thread !== S.day.thread) mo = '今天的话题 · ' + clock(S.threadAt);
     $('#c-mo').textContent = mo; $('#c-mo').hidden = !mo;
     const nb = $('#new-btn');
@@ -3238,7 +3245,7 @@ __WORD_DRAW_JS__
     if (!d) { if (host) { try { host.cotutorReelFail(); } catch {} } else document.body.append(h('div', { class: 'blank' }, h('b', {}, '这个话题没有录像'))); return; }
     document.body.classList.add('rlk');
     S.tutor = d.face; S.thread = d.thread; S.hist = d.date; S.readonly = true; S.autoplay = true;
-    $('#sub-av').replaceWith(Object.assign(avatarEl(S.tutor), { id: 'sub-av' }));
+    $('#sub-av').replaceWith(Object.assign(avatarEl(S.tutor), { id: 'sub-av' })); tintBack(S.tutor);
     // 有实时轮的话题:孩子当时看到的是实时老师页(左栏大头像 + 字幕、卡角没有钮),字幕照这一刻(reelLiveCap)
     if (d.realtime) { document.body.classList.add('live'); $('#tutor').style.setProperty('--tc', colorOf(d.face)); $('#lv-av').replaceChildren(avatarEl(S.tutor)); VB.btn.avatar(avatarEl(S.tutor)); VB.btn.color(colorOf(d.face)); }
     $('#tutor').classList.add('on');
@@ -3291,7 +3298,7 @@ __REEL_DOCK_JS__
     unlock();
     S.tutor = t; S.thread = thread; S.hist = date || S.pdate || null; S.readonly = true; S.newThread = false;
     S.reel = { frame: true };
-    $('#sub-av').replaceWith(Object.assign(avatarEl(t), { id: 'sub-av' }));
+    $('#sub-av').replaceWith(Object.assign(avatarEl(t), { id: 'sub-av' })); tintBack(t);
     $('#board').replaceChildren();
     $('#tutor').classList.add('on');
     const fr = $('#rl-frame');

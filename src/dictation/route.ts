@@ -38,6 +38,7 @@ import { listActivities } from '../cli/activities.ts';
 import { parseActivity } from '../lib/activity.ts';
 import { DICTATION_PAGE } from './page.ts';
 import { DICTATION_EN_PAGE } from './en-page.ts';
+import { backTutorJson, backTutorOf } from '../server/tutor-face.ts';
 import { DICTATION_PARENT_PAGE } from './parent-page.ts';
 import { DICTATION_REEL_PAGE } from './reel-page.ts';
 import { EVENT_KINDS, ID_RE, createPhoto, createSession, listSessions, photoFile, readPhotoRecord, readSession, writePhotoRecord, writeSession, type PhotoRecord, type Attempt, type CharInk, type InkGone, type Session, type DictationEvent } from './store.ts';
@@ -52,6 +53,8 @@ export interface DictationDeps {
   reader(tutor: string | undefined): string | null;
   /** 老师的显示名(听写页的气泡上) */
   display(tutor: string | null): string;
+  /** 胶囊上的老师:颜色、首字、名字(《产品规划.md》拍板 26);没有这位老师 → null */
+  face(tutor: string | null): { color: string; initial: string; display: string } | null;
   /** 合成一句的音频文件;没有音色、合成失败 → null */
   say(text: string, tutor: string | null): Promise<string | null>;
   /** 一个字的笔画中线(hanzi-writer-data);数据里没有 → null */
@@ -82,6 +85,9 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
     },
     display(tutor) {
       return (tutor && ws().config.tutors[tutor]?.display) || '老师';
+    },
+    face(tutor) {
+      return backTutorOf(ws().config.tutors, tutor);
     },
     async say(text, tutor) {
       const voice = tutor ? ws().config.tutors[tutor]?.voice : undefined;
@@ -315,7 +321,19 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
   const p = url.pathname;
   if (!isOurs(p)) return null;
   // 英文单词听写另一页(四线三格写整个单词,《wip/听写设想.md》拍板 15)
-  if (p === '/dictation' || p === '/dictation/') return method === 'GET' ? { status: 200, html: url.searchParams.get('lang') === 'en' ? DICTATION_EN_PAGE : DICTATION_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
+  if (p === '/dictation' || p === '/dictation/') {
+    if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
+    // 胶囊带上念的老师(《产品规划.md》拍板 26):听写一定有念的老师——老师牌「拍照听写」带 ?tutor=,首页听写卡上写了谁就是谁、没写的公共卡 reader() 给语文老师;
+    // 出页面时就插进去,打开就是他的颜色和首字。录像(?reel=)里胶囊藏着,不用
+    const q = url.searchParams;
+    let who: string | null = null;
+    if (!q.get('reel')) {
+      if (q.get('home') !== null) who = deps.reader((await deps.card(q.get('home'), Number(q.get('n')) || 0))?.tutor);
+      else who = deps.reader(q.get('tutor') ?? undefined);
+    }
+    const page = q.get('lang') === 'en' ? DICTATION_EN_PAGE : DICTATION_PAGE;
+    return { status: 200, html: page.replace('__BACK_TUTOR__', () => backTutorJson(deps.face(who))) };
+  }
   if (p === '/parent/dictation') return method === 'GET' ? { status: 200, html: DICTATION_PARENT_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
   if (p === '/parent/dictation/reel') return method === 'GET' ? { status: 200, html: DICTATION_REEL_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
   if (!p.startsWith('/api/')) return { status: 404, json: { error: 'not_found' } };

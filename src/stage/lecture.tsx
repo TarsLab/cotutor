@@ -10,7 +10,7 @@
  * 老师放课里的一段(§六,板书上的小课堂卡,range):舞台的顶栏与字幕行是页面的,这里只有画面与进度条;从那一段的开头放(讲稿交来的自己放),
  * 放到那一段的末尾一次就停在末帧、发 done;放着 / 停着 / 放完都发 phase(页面字幕行显示课里那句)。iPad 不让出声就停着等孩子点「放这一段」。
  */
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { frameAt } from 'drawtell/core';
 import { mountBaked } from 'drawtell/render';
 import { MARK_MAX, MARK_MAX_POINTS, MARK_MAX_STROKES, MARK_STROKE_POINTS, clockLabel, lectureAt, lectureClock, lectureNext, type LectureClock } from '../lib/lecture.ts';
@@ -95,6 +95,13 @@ export interface LectureStageProps {
   onLog?(e: WatchEntry): void;
   /** 家长看录像:只看,时钟跟着页面(follow) */
   follow?: boolean;
+  /** 左上返回胶囊上的老师(《产品规划.md》拍板 26):填他的颜色、logo 后面接首字,同老师页的 #back(src/server/tutor-face.ts 的 backTint);不给浅底只放 logo */
+  back?: LectureBack | null;
+}
+
+export interface LectureBack {
+  color: string;
+  initial: string;
 }
 
 /** 左上返回胶囊里的 logo(和老师页的「‹ logo」同一颗:brand.ts 的 BACK_LOGO,28 px 大号那档;单色、不动;《产品规划.md》拍板 24) */
@@ -130,7 +137,7 @@ const INK = '#2f6fd6';
 const SEG_GAP = 3;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onFinished, onClose, onAsk, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false }, ref): JSX.Element {
+export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(function LectureStage({ bundleUrl, title, marks: initialMarks, at: rawAt, view: rawView = false, onMarks, onFinished, onClose, onAsk, onError, range, autoplay = false, onPhase, video = false, onLog, follow = false, back = null }, ref): JSX.Element {
   const card = range !== undefined;
   const view = rawView || card || follow;
   /** 录像跟着放:倍速 */
@@ -646,10 +653,11 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
 
   return (
     <div className={'lc' + (card ? ' lc-card' : ' lc-full') + (video ? ' lc-vid' : '')}>
-      {/* 左上「‹ logo」浮在上面,和老师页的返回胶囊一个样子(拍板 39;《产品规划.md》拍板 24 起放 logo、不放老师头像) */}
-      {!card && !follow && <button type="button" className="lc-back" aria-label="回首页" onClick={() => { log(false); onClose({ ...watch.current }); }}>
+      {/* 左上「‹ logo 首字」浮在上面,和老师页的返回胶囊一个样子(拍板 39;《产品规划.md》拍板 24 起放 logo、不放老师头像,拍板 26 起填老师的颜色、接首字) */}
+      {!card && !follow && <button type="button" className={'lc-back' + (back ? ' lc-tinted' : '')} style={back ? ({ '--bk': back.color } as CSSProperties) : undefined} aria-label="回首页" onClick={() => { log(false); onClose({ ...watch.current }); }}>
         <i className="lc-back-ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg></i>
         <svg className="lc-logo" width="28" height="28" viewBox="0 0 100 100" aria-hidden="true" dangerouslySetInnerHTML={{ __html: BACK_LOGO_BODY }} />
+        {back && <span className="lc-ini" aria-hidden="true">{back.initial}</span>}
       </button>}
       {!card && <div className={'lc-rail' + (follow ? '' : ' lc-under')}>
         <div className="lc-name"><span className="lc-tag">小课堂</span><span className="lc-title">{title}</span></div>

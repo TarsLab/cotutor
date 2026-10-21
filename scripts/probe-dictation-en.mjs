@@ -39,7 +39,8 @@ try {
   const ws = new WebSocket(wsUrl);
   await new Promise((r) => { ws.onopen = r; });
   let seq = 0; const pending = new Map();
-  ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } };
+  const held = []; // 挡住的 /api/kid/home(Fetch.requestPaused)
+  ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } if (m.method === 'Fetch.requestPaused') held.push(m.params.requestId); };
   const send = (method, params = {}) => new Promise((resolve) => { const id = ++seq; pending.set(id, resolve); ws.send(JSON.stringify({ id, method, params })); });
   const evaluate = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails.exception?.description ?? r.result.exceptionDetails)); return r.result?.result?.value; };
   await send('Runtime.enable');
@@ -66,6 +67,18 @@ try {
     }
   };
   const view = () => evaluate(`document.querySelector('.view.on')?.id ?? null`);
+  /** 胶囊打开就是念的老师(《产品规划.md》拍板 26):挡住 /api/kid/home 再打开 url,这时胶囊已经是他的颜色和首字(服务端出页面时插进来的,不等老师名单) */
+  const capsuleBeforeHome = async (url) => {
+    await send('Fetch.enable', { patterns: [{ urlPattern: '*/api/kid/home*' }] });
+    await send('Page.navigate', { url });
+    await waitFor(`!!document.querySelector('#back') && document.readyState !== 'loading'`);
+    await sleep(600);
+    const b = await evaluate(`(() => { const b = document.querySelector('#back'); return { tinted: b.classList.contains('tinted'), bg: getComputedStyle(b).backgroundColor, ini: b.querySelector('.bk-ini')?.textContent ?? '' }; })()`);
+    const n = held.length;
+    for (const id of held.splice(0)) await send('Fetch.continueRequest', { requestId: id });
+    await send('Fetch.disable');
+    return { ...b, held: n };
+  };
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: `${base}/` });
   await waitFor(`!!document.querySelector('#deck .pc[data-tutor="english-tutor"] .pc-hd .av')`);
@@ -74,6 +87,7 @@ try {
   await shot('en-01-home');
   await tap('#deck .pc.front .bt-x-dictation');
   ok('进英文那页:开始屏「单词听写 · 3 个单词」', await waitFor(`location.search.includes('lang=en') && document.querySelector('#v-start.on #s-title')?.textContent === '单词听写 · 3 个单词'`));
+  const enUrl = await evaluate('location.href');
   await tap('#s-go');
   ok('写:第 1 个,四线三格(四条线、第三条基线),气泡里没有单词', await waitFor(`document.querySelector('.view.on')?.id === 'v-write' && document.querySelectorAll('#w-pad .enl line').length === 4 && document.querySelectorAll('#w-pad .enl line.base').length === 1 && !document.body.innerText.includes('red')`));
   ok('写字屏不出 emoji', await evaluate(`!document.body.innerText.includes('🚌')`));
@@ -87,7 +101,7 @@ try {
   const btnsEn = await evaluate(`(() => { const bs = [...document.querySelectorAll('.view.on button.tool, .view.on button.main')].filter((b) => b.getClientRects().length); return { bare: bs.filter((b) => !b.querySelector('svg')).map((b) => b.textContent.trim()), labels: bs.map((b) => b.textContent.trim()) }; })()`);
   ok('写字屏的按钮都带图标,字同语文页:再念 撤销 擦掉 不会写,给答案 写好了(《wip/听写设想.md》拍板 28)', btnsEn.bare.length === 0 && ['再念', '撤销', '擦掉', '不会写,给答案', '写好了'].every((t) => btnsEn.labels.includes(t)), JSON.stringify(btnsEn));
   ok('学科色:写好了是英语老师的绿(拍板 20)', await evaluate(`getComputedStyle(document.querySelector('#w-done')).backgroundColor === 'rgb(31, 138, 76)'`));
-  ok('出口同老师页:左上角「‹ logo」胶囊(不放老师的脸,《产品规划.md》拍板 24);按钮叫「再念」', await evaluate(`(() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('svg.ct-logo') && !b.querySelector('.tfav') && b.getBoundingClientRect().left < 30 && !document.body.innerText.includes('回首页') && document.querySelector('#w-again').textContent === '再念'; })()`));
+  ok('出口同老师页:左上角「‹ logo 英」胶囊,填英语老师的绿(不放老师的脸,《产品规划.md》拍板 24、26);按钮叫「再念」', await evaluate(`(() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('svg.ct-logo') && !b.querySelector('.tfav') && b.classList.contains('tinted') && b.querySelector('.bk-ini').textContent === '英' && getComputedStyle(b).backgroundColor === 'rgb(31, 138, 76)' && b.getBoundingClientRect().left < 30 && !document.body.innerText.includes('回首页') && document.querySelector('#w-again').textContent === '再念'; })()`));
   await tap('#w-done');
   ok('写好了:到第 2 个', await waitFor(`document.querySelector('#w-who').textContent.includes('第 2 个') && document.querySelectorAll('#w-pad .eni path').length === 0`));
   ok('横排的听写本:第 1 条画着刚写的笔,第 2 条描边(拍板 20)', await evaluate(`document.querySelectorAll('#w-book .bk').length === 3 && document.querySelectorAll('#w-book .bk.d .eni path').length === 2 && document.querySelector('#w-book .bk.c small').textContent === '2'`));
@@ -173,6 +187,11 @@ try {
   await shot('en-08-resume');
   await tap('#snap-resume-go');
   ok('点接着写:写第 1 个', await waitFor(`!!document.querySelector('#v-write.on') && document.querySelector('#w-who').textContent.includes('第 1 个')`));
+  // 胶囊打开就是念的老师(《产品规划.md》拍板 26);放在最后:再开一次那张卡会把录像的开头拉长
+  const capEn = await capsuleBeforeHome(enUrl);
+  ok('挡住 /api/kid/home 时胶囊已经是英语老师的绿、首字「英」(首页听写卡进来)', capEn.held >= 1 && capEn.tinted && capEn.ini === '英' && capEn.bg === 'rgb(31, 138, 76)', JSON.stringify(capEn));
+  const capEnPhoto = await capsuleBeforeHome(`${base}/dictation?tutor=english-tutor&lang=en`);
+  ok('老师牌上「拍照听写」进来(?tutor=):打开就是「英」', capEnPhoto.held >= 1 && capEnPhoto.tinted && capEnPhoto.ini === '英', JSON.stringify(capEnPhoto));
   ws.close();
 } finally {
   browser.kill();

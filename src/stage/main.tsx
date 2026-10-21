@@ -5,7 +5,14 @@
  */
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LectureStage, type LectureStageHandle, type LectureWatch, type StageMark, type WatchEntry } from './lecture.tsx';
+import { LectureStage, type LectureBack, type LectureStageHandle, type LectureWatch, type StageMark, type WatchEntry } from './lecture.tsx';
+
+/** 页面发来的胶囊上的老师(颜色、首字,《产品规划.md》拍板 26);形状不对就浅底只放 logo */
+const backOf = (v: unknown): LectureBack | null => {
+  if (!v || typeof v !== 'object') return null;
+  const b = v as Record<string, unknown>;
+  return typeof b.color === 'string' && typeof b.initial === 'string' && b.initial ? { color: b.color, initial: b.initial } : null;
+};
 import type { CanvasStageHandle } from './canvas.tsx';
 import '@excalidraw/excalidraw/dist/prod/index.css';
 import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
@@ -72,7 +79,7 @@ function App(): JSX.Element {
     const range = { start: card.props.start, end: card.props.end };
     return <LectureStage ref={lecture} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={[]} range={range} autoplay={card.autoplay} video={card.props.video === true} onPhase={onLecturePhase} onMarks={noop} onFinished={noop} onClose={noop} onError={onError} />;
   }
-  if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage ref={lecture} follow={card.props.follow === true} onLog={onWatch} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} video={card.props.video === true} onMarks={onMarks} onFinished={onLectureDone} onClose={onLectureClose} onAsk={onLectureAsk} onError={onError} />;
+  if (card.kind === 'lecture' && card.bundleUrl) return <LectureStage ref={lecture} follow={card.props.follow === true} back={backOf(card.props.back)} onLog={onWatch} bundleUrl={card.bundleUrl} title={String(card.props.title ?? '')} marks={Array.isArray(card.props.marks) ? (card.props.marks as StageMark[]) : []} at={typeof card.props.at === 'number' ? card.props.at : undefined} view={card.props.view === true} video={card.props.video === true} onMarks={onMarks} onFinished={onLectureDone} onClose={onLectureClose} onAsk={onLectureAsk} onError={onError} />;
   if (card.kind === 'canvas') {
     const st = (card.state ?? {}) as { ink?: Record<string, unknown>[] };
     const base = (card.props.base ?? null) as { bundle: string } | { skeletons: Record<string, unknown>[] } | { image: string } | null;

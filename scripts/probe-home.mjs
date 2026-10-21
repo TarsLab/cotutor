@@ -144,7 +144,7 @@ for: ${day}
   await evaluate(`document.querySelector('#deck .pc.front .bt-new').click()`);
   await sleep(600);
   const blank = await evaluate(`({ on: document.querySelector('#tutor').classList.contains('on'), blank: document.querySelector('#board .blank b')?.textContent, mo: document.querySelector('#c-mo').textContent })`);
-  ok('新话题:空白老师页,等孩子开口', blank.on && blank.blank === '想问什么?' && blank.mo === '新话题', JSON.stringify(blank));
+  ok('新话题:空白老师页,等孩子开口;胶囊旁不挂「新话题」小标签(《产品规划.md》拍板 26)', blank.on && blank.blank === '想问什么?' && blank.mo === '', JSON.stringify(blank));
   await evaluate(`document.querySelector('#back').click()`);
   await sleep(1500);
   ok('从老师页回来:还是数学在最前', (await stack()).card === 'math-tutor');

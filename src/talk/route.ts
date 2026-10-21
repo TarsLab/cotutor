@@ -24,6 +24,7 @@ import type { ListItem } from './lib/used.ts';
 import { makeHint } from './hint.ts';
 import { readList, wordCardOf } from './list.ts';
 import { talkPage } from './page.ts';
+import { backTutorOf } from '../server/tutor-face.ts';
 import { TALK_REEL_PAGE } from './reel-page.ts';
 import { dashscopeAuth } from '../live/realtime.ts';
 import { TalkCall } from './relay.ts';
@@ -75,7 +76,7 @@ export function parseItems(v: unknown, max: number, card = false): ListItem[] | 
 export function makeTalkRoute(deps: TalkDeps = { readList }) {
   return async function talkRoute(method: string, url: URL, ctx: AppContext, body: unknown): Promise<RouteResult | null> {
     const p = url.pathname;
-    if (p === '/talk' || p === '/talk/') return method === 'GET' ? { status: 200, html: talkPage() } : { status: 405, json: { error: 'method_not_allowed' } };
+    if (p === '/talk' || p === '/talk/') return method === 'GET' ? { status: 200, html: talkPage(url.searchParams.get('reel') ? null : backTutorOf(ctx.ws.config.tutors, url.searchParams.get('tutor'))) } : { status: 405, json: { error: 'method_not_allowed' } };
     if (p === '/parent/talk/reel') return method === 'GET' ? { status: 200, html: TALK_REEL_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
     if (p !== '/api/talk' && !p.startsWith('/api/talk/')) return null;
     const ws = ctx.ws;

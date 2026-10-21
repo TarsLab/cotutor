@@ -138,7 +138,7 @@ try {
   await click('#p-words .tk-it.ed .x');
   ok('点 red 改中文成「红」', await until(`document.querySelector('#p-words .tk-it .zh').textContent === '红'`));
   await click('#p-go');
-  ok('开始跟读:不过开始屏,直接到跟读那一屏;左上是「‹ logo」胶囊(不放老师的脸,《产品规划.md》拍板 24)', await until(`document.querySelector('#kid').classList.contains('on') && document.querySelector('#k-start').hidden && /^#\\/kid\\//.test(location.hash) && (() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('svg.ct-logo') && !b.querySelector('.tfav'); })()`, 40));
+  ok('开始跟读:不过开始屏,直接到跟读那一屏;左上是「‹ logo 英」胶囊,填英语老师的绿(不放老师的脸,《产品规划.md》拍板 24、26)', await until(`document.querySelector('#kid').classList.contains('on') && document.querySelector('#k-start').hidden && /^#\\/kid\\//.test(location.hash) && (() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('svg.ct-logo') && !b.querySelector('.tfav') && b.classList.contains('tinted') && b.querySelector('.bk-ini').textContent === '英' && getComputedStyle(b).backgroundColor === 'rgb(31, 138, 76)'; })()`, 40));
   const id = await evaluate(`location.hash.split('/')[2]`);
   const meta = await (await fetch(`${base}/api/talk/${id}`)).json();
   ok('口语单存上了(ready,孩子改过的:red 的中文是「红」,没有 blue;emoji 留着)', meta.meta.listBy === 'parent' && meta.meta.list.words.length === 1 && meta.meta.list.words[0].zh === '红' && (real ? Boolean(meta.meta.list.words[0].emoji) : meta.meta.list.words[0].emoji === '🔴'), JSON.stringify(meta.meta.list));

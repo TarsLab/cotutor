@@ -338,9 +338,11 @@ ${BTN_JS}
   var goHome = function () { stopSay(); kidGo('/'); };
   // ---- 左上角「‹ logo」胶囊,同老师页(《wip/听写设想.md》拍板 16,《产品规划.md》拍板 24);拍照屏的大头像是听写这次的老师,没开始时是从哪位老师卡上进来的 ----
   ${TUTOR_FACE_JS}
-  var BACK = backCapsule(goHome); document.body.append(BACK.el);
+  // 胶囊带上念的老师(《产品规划.md》拍板 26):服务端出页面时就按 ?tutor= 或首页那张卡的 reader 插进来(BACK_TUTOR),打开就是他的颜色和首字,不先浅底再变色;一位能念的老师都没有才是 null
+  var BACK_TUTOR = __BACK_TUTOR__;
+  var BACK = backCapsule(goHome); BACK.set(BACK_TUTOR); document.body.append(BACK.el);
   var TUTORS = null;
-  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; $('#snap-av').replaceChildren(t ? tutorAvatar(t) : ''); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
+  var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; if (t) BACK.set(t); $('#snap-av').replaceChildren(t ? tutorAvatar(t) : ''); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
 
   var api = function (method, path, body) {
     return fetch(path, { method: method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' })

@@ -78,8 +78,8 @@ try {
   await evaluate(`document.querySelector('#deck .pc.front .bt-new').click()`);
   await until(`document.querySelector('#tutor.on .blank .av')`);
   const blank = await evaluate(`(${AV})(document.querySelector('.blank .av'))`);
-  const back = await evaluate(`(() => { const b = document.querySelector('#back'); return { logo: !!b.querySelector('svg.ct-logo'), av: b.querySelectorAll('.av').length, sub: getComputedStyle(document.querySelector('#sub-av')).display }; })()`);
-  ok('空白板的头像画出来;左上返回胶囊是 logo、没有头像;字幕行那颗不露(一页一张脸)', blank && blank.draw && blank.anim === 'av-draw' && back.logo && back.av === 0 && back.sub === 'none', JSON.stringify({ blank, back }));
+  const back = await evaluate(`(() => { const b = document.querySelector('#back'); return { logo: !!b.querySelector('svg.ct-logo'), av: b.querySelectorAll('.av').length, ini: b.querySelector('.bk-ini')?.textContent ?? '', bg: getComputedStyle(b).backgroundColor, sub: getComputedStyle(document.querySelector('#sub-av')).display }; })()`);
+  ok('空白板的头像画出来;左上返回胶囊是「‹ logo 数」、填数学老师的蓝、没有头像(《产品规划.md》拍板 26:首字不动);字幕行那颗不露(一页一张脸)', blank && blank.draw && blank.anim === 'av-draw' && back.logo && back.av === 0 && back.ini === '数' && back.bg === 'rgb(47, 111, 214)' && back.sub === 'none', JSON.stringify({ blank, back }));
   await sleep(1300); await shot('avatar-blank.png');
 
   // 从输入条问一句(页面外 POST 的回答不播放)

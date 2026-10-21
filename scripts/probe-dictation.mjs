@@ -41,7 +41,8 @@ try {
   const ws = new WebSocket(wsUrl);
   await new Promise((r) => { ws.onopen = r; });
   let seq = 0; const pending = new Map();
-  ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } };
+  const held = []; // 挡住的 /api/kid/home(Fetch.requestPaused)
+  ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } if (m.method === 'Fetch.requestPaused') held.push(m.params.requestId); };
   const send = (method, params = {}) => new Promise((resolve) => { const id = ++seq; pending.set(id, resolve); ws.send(JSON.stringify({ id, method, params })); });
   const evaluate = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails.exception?.description ?? r.result.exceptionDetails)); return r.result?.result?.value; };
   await send('Runtime.enable');
@@ -68,6 +69,18 @@ try {
     }
   };
   const view = () => evaluate(`document.querySelector('.view.on')?.id ?? null`);
+  /** 胶囊打开就是念的老师(《产品规划.md》拍板 26):挡住 /api/kid/home 再打开 url,这时胶囊已经是他的颜色和首字(服务端出页面时插进来的,不等老师名单) */
+  const capsuleBeforeHome = async (url) => {
+    await send('Fetch.enable', { patterns: [{ urlPattern: '*/api/kid/home*' }] });
+    await send('Page.navigate', { url });
+    await waitFor(`!!document.querySelector('#back') && document.readyState !== 'loading'`);
+    await sleep(600);
+    const b = await evaluate(`(() => { const b = document.querySelector('#back'); return { tinted: b.classList.contains('tinted'), bg: getComputedStyle(b).backgroundColor, ini: b.querySelector('.bk-ini')?.textContent ?? '' }; })()`);
+    const n = held.length;
+    for (const id of held.splice(0)) await send('Fetch.continueRequest', { requestId: id });
+    await send('Fetch.disable');
+    return { ...b, held: n };
+  };
 
   // ---- 首页的听写卡 ----
   ok('首页:听写卡写了念的老师(语文),收在语文老师的卡里,写着「听写」与几个词,没有字', await waitFor(`!!document.querySelector('#deck .pc.front[data-tutor="chinese-tutor"] .bt-x-dictation')`) && (await evaluate(`(() => { const c = document.querySelector('#deck .pc.front .bt-x-dictation'); return c.textContent.includes('3 个词') && !c.textContent.includes('鼓') && c.getAttribute('href').startsWith('/dictation?home='); })()`)));
@@ -75,6 +88,7 @@ try {
   await tap('#deck .pc.front .bt-x-dictation');
   ok('点卡:进 /dictation,开始屏「听写 · 三个词」', await waitFor(`location.pathname === '/dictation' && document.querySelector('#v-start.on') && document.querySelector('#s-big').textContent === '听写 · 三个词'`));
   await shot('02-start');
+  const dictUrl = await evaluate('location.href');
 
   // ---- 听写(左边听写本,右边一次写一个字)----
   const inkCount = (sel) => evaluate(`document.querySelector(${JSON.stringify(sel)})?.children.length ?? -1`);
@@ -99,7 +113,7 @@ try {
   ok('写:大格里 9 笔,听写本上当前这格跟着画', (await inkCount('#l-big .ink')) === 9 && (await inkCount('#l-book .here .ink')) === 9);
   await shot('03-listen');
   ok('学科色:写好了是语文老师的粉(拍板 20)', await waitFor(`getComputedStyle(document.querySelector('#l-next')).backgroundColor === 'rgb(196, 60, 116)'`));
-  ok('出口同老师页:左上角「‹ logo」胶囊(《产品规划.md》拍板 24:不放老师的脸),没有「先停一下」', await waitFor(`(() => { const b = document.querySelector('#back'); if (!b || b.hidden) return false; const r = b.getBoundingClientRect(); return r.left < 30 && r.top < 30 && !!b.querySelector('svg.ct-logo') && !b.querySelector('.tfav') && !document.body.innerText.includes('先停一下'); })()`));
+  ok('出口同老师页:左上角「‹ logo 语」胶囊,填语文老师的粉(《产品规划.md》拍板 24、26:不放老师的脸),没有「先停一下」', await waitFor(`(() => { const b = document.querySelector('#back'); if (!b || b.hidden) return false; const r = b.getBoundingClientRect(); return r.left < 30 && r.top < 30 && !!b.querySelector('svg.ct-logo') && !b.querySelector('.tfav') && b.classList.contains('tinted') && b.querySelector('.bk-ini').textContent === '语' && !document.body.innerText.includes('先停一下'); })()`));
   await tapText('写好了');
   ok('写好了:同一个词的第二个字', await waitFor(`document.querySelector('#l-what').textContent === '第一个词的第二个字'`) && (await inkCount('#l-big .ink')) === 0);
   await writeChar('#l-big .padbox', '天');
@@ -288,6 +302,13 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 1400, deviceScaleFactor: 2, mobile: true });
   await sleep(300);
   await shot('10-parent-phone');
+  // 放在最后:再开一次那张卡会把录像的开头拉长
+  const capZh = await capsuleBeforeHome(dictUrl);
+  ok('胶囊打开就是念的老师(《产品规划.md》拍板 26):挡住 /api/kid/home 时胶囊已经是语文老师的粉、首字「语」', capZh.held >= 1 && capZh.tinted && capZh.ini === '语' && capZh.bg === 'rgb(196, 60, 116)', JSON.stringify(capZh));
+  const capPub = await capsuleBeforeHome(dictUrl.replace(/([?&]n=)\d+/, '$199'));
+  ok('卡上拿不到念的老师(同首页没写老师的公共听写卡那条路):缺省语文老师,打开就是「语」', capPub.held >= 1 && capPub.tinted && capPub.ini === '语', JSON.stringify(capPub));
+  const capPhoto = await capsuleBeforeHome(`${base}/dictation?tutor=chinese-tutor`);
+  ok('老师牌上「拍照听写」进来(?tutor=):打开就是「语」', capPhoto.held >= 1 && capPhoto.tinted && capPhoto.ini === '语', JSON.stringify(capPhoto));
   ws.close();
 } finally {
   browser.kill();

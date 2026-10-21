@@ -118,13 +118,16 @@ try {
   console.log('  ', await shot('live-hold-ipad.png'));
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button: 'left', buttons: 0, clickCount: 1 });
   ok('按住:头像变蓝(listening)、「在听你说」、输入条上的蓝胶囊;假麦克风的声音推上去了', holding.listening && holding.hold && holding.chip !== 'none' && holding.pushed > 3200, JSON.stringify(holding));
+  // 一页只有一张脸(《产品规划.md》拍板 24):左上胶囊是 logo、字幕行那颗在实时藏着,看得见的老师头像只有左栏那颗
+  const FACES = `[...document.querySelectorAll('#main .av')].filter((e) => e.getClientRects().length > 0).length`;
   const pend = await until(`document.body.classList.contains('pending')`, 20);
   const waitCard = await evaluate(`Boolean(document.querySelector('#board > .wait-card'))`);
   const firstSaid = conn().responses.length ? String(conn().responses[0]?.instructions) : '';
   ok('松手:commit 一次、嘴不先说(第一次开口就是照念)、等脑时头像在想(body.pending)、板上没有占位卡', pend && !waitCard && conn().commits === 1 && (!firstSaid || firstSaid.startsWith('把这几句话原样说给孩子听')), JSON.stringify({ ...(await cap()), firstSaid: firstSaid.slice(0, 30) }));
   const cards = await until(`document.querySelectorAll('#board .sec .c').length >= 2`, 60);
   const board1 = await evaluate(`(() => { const sec = document.querySelector('#board .sec'); return { said: sec.querySelector('.sh')?.textContent ?? '', cards: sec.querySelectorAll('.c').length, corner: sec.querySelectorAll('.c > .again').length, qmark: [...sec.querySelectorAll('.c')].filter((c) => [...c.children].some((x) => x.textContent === '?')).length }; })()`);
-  ok('脑写的卡铺上:节头是孩子那句、卡角没有钮(没有「?」、没有再听的喇叭)', cards && board1.said.includes('老师板书怎么写') && board1.cards >= 2 && board1.corner === 0 && board1.qmark === 0, JSON.stringify(board1));
+  board1.faces = await evaluate(FACES); board1.backLogo = await evaluate(`Boolean(document.querySelector('#back svg.ct-logo'))`);
+  ok('脑写的卡铺上:节头是孩子那句、卡角没有钮(没有「?」、没有再听的喇叭);左上是 logo,看得见的老师头像只有左栏一颗', cards && board1.said.includes('老师板书怎么写') && board1.cards >= 2 && board1.corner === 0 && board1.qmark === 0 && board1.faces === 1 && board1.backLogo, JSON.stringify(board1));
   const speaking = await until(`document.body.classList.contains('speaking')`, 40);
   ok('嘴在说:头像外的圈亮(body.speaking)', speaking);
   const lastLine = await until(`document.querySelector('#lv-cap .lv-cur').textContent === '第一次说:老师板书怎么写'`, 80);
@@ -213,7 +216,8 @@ try {
   // ---- 手机竖屏:字幕在输入条上方一行 ----
   await device(390, 844, 2, true);
   const ph = await evaluate(`(() => { const lv = document.querySelector('#lv').getBoundingClientRect(), bar = document.querySelector('#bar').getBoundingClientRect(), av = document.querySelector('#lv-av').getBoundingClientRect(); const s = [...document.querySelectorAll('#board .sec')].at(-1); return { lvBottom: Math.round(lv.bottom), barTop: Math.round(bar.top), av: Math.round(av.width), w: document.documentElement.scrollWidth, says: [...s.querySelectorAll('.says p')].filter((p) => getComputedStyle(p).display !== 'none').length }; })()`);
-  ok('手机:字幕一行在输入条上方(小头像 44),不横向滚;换了排版讲稿的留字还在', Math.abs(ph.lvBottom - ph.barTop) <= 2 && ph.av === 44 && ph.w <= 390 && ph.says === 1, JSON.stringify(ph));
+  ph.faces = await evaluate(FACES);
+  ok('手机:字幕一行在输入条上方(小头像 44),不横向滚;换了排版讲稿的留字还在;看得见的老师头像只有字幕行那颗', Math.abs(ph.lvBottom - ph.barTop) <= 2 && ph.av === 44 && ph.w <= 390 && ph.says === 1 && ph.faces === 1, JSON.stringify(ph));
   console.log('  ', await shot('live-phone.png'));
 
   // ---- 录像(P2.8):挂了落通话的录像;家长端这个话题的录像照它放(嘴、孩子的声音在通话那一条里),孩子的屏幕是实时老师页的样子 ----
@@ -235,7 +239,8 @@ try {
   await until(`Boolean(document.body && document.body.classList.contains('rlk'))`, 40);
   await sleep(1500);
   const rv = await evaluate(`(() => ({ live: document.body.classList.contains('live'), cur: document.querySelector('#lv-cap .lv-cur').textContent, corner: document.querySelectorAll('#board .c > .again').length, says: [...document.querySelectorAll('#board .says p')].filter((p) => getComputedStyle(p).display !== 'none').map((p) => p.textContent) }))()`);
-  ok('录像里孩子的屏幕:实时老师页的样子(左栏字幕停在最后一句、卡角没有钮);不出卡那轮念到的字露着', rv.live && rv.cur.endsWith('一加一等于几') && rv.corner === 0 && rv.says.some((x) => x.endsWith('一加一等于几')), JSON.stringify(rv));
+  rv.faces = await evaluate(FACES);
+  ok('录像里孩子的屏幕:实时老师页的样子(左栏字幕停在最后一句、卡角没有钮);不出卡那轮念到的字露着;老师头像只有左栏一颗', rv.live && rv.cur.endsWith('一加一等于几') && rv.corner === 0 && rv.says.some((x) => x.endsWith('一加一等于几')) && rv.faces === 1, JSON.stringify(rv));
   console.log('  ', await shot('live-reel-ipad.png'));
 
   // ---- 嘴连不上:回到板书 ----

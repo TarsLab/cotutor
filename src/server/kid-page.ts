@@ -83,12 +83,13 @@ ${faviconLinks()}
   .av.draw .face { animation:av-pop .5s ease-out calc(var(--d, 0s) + .35s) backwards; }
   @keyframes av-draw { from { stroke-dasharray:0 276.46; stroke-dashoffset:-221.17; } to { stroke-dasharray:221.17 276.46; stroke-dashoffset:0; } }
   @keyframes av-pop { from { opacity:0; transform:scale(.7); } to { opacity:1; transform:scale(1); } }
-  /* 老师页左上那颗跟着播放走(body 上的类,renderSubtitle / setBar 记):该你了 = 点一下头,说 = 开口一张一合,想 = 慢慢转圈、开口一呼一吸,
-     听 = 开口转向下面的输入条;同时有几样时后写的赢(听 > 想 > 说 > 该你了)。等待卡与字幕里的小头像只在等的时候出现,一直是「想」 */
-  body.nod #c-av .ring circle { animation:av-nod .9s ease-in-out; }
-  body.speaking #c-av .ring circle { animation:av-talk 1.6s ease-in-out infinite; }
-  body.pending #c-av .ring circle, .wait-card .av .ring circle, #sub-text .av .ring circle { animation:av-spin 2.4s linear infinite, av-breathe 1.2s ease-in-out infinite; }
-  body.listening #c-av .ring circle { animation:av-turn .35s ease-out both, av-listen 1.6s ease-in-out .35s infinite; }
+  /* 板书模式字幕行开头那颗(#sub-av,《产品规划.md》拍板 24:原来是左上返回胶囊里那颗,胶囊换了 logo)跟着播放走(body 上的类,renderSubtitle / setBar 记):
+     该你了 = 点一下头,说 = 开口一张一合,想 = 慢慢转圈、开口一呼一吸,听 = 开口转向下面的输入条;同时有几样时后写的赢(听 > 想 > 说 > 该你了)。
+     一页只有一张会动的脸:实时的字幕行藏着,脸在 #lv-av;空板时板中间的大头像就是那张脸(字幕行这颗不露),跟着一起动(第一句问出去、等老师那几秒板还空着);等待卡不再带头像 */
+  body.nod #sub-av .ring circle, body.nod:not(.live) #board > .blank > .av .ring circle { animation:av-nod .9s ease-in-out; }
+  body.speaking #sub-av .ring circle, body.speaking:not(.live) #board > .blank > .av .ring circle { animation:av-talk 1.6s ease-in-out infinite; }
+  body.pending #sub-av .ring circle, body.pending:not(.live) #board > .blank > .av .ring circle { animation:av-spin 2.4s linear infinite, av-breathe 1.2s ease-in-out infinite; }
+  body.listening #sub-av .ring circle, body.listening:not(.live) #board > .blank > .av .ring circle { animation:av-turn .35s ease-out both, av-listen 1.6s ease-in-out .35s infinite; }
   @keyframes av-nod { 0%,100% { transform:rotate(36deg); } 30% { transform:rotate(60deg); } 60% { transform:rotate(26deg); } 80% { transform:rotate(41deg); } }
   @keyframes av-talk { 0%,46%,100% { stroke-dasharray:221.17 55.29; transform:rotate(36deg); } 12% { stroke-dasharray:187.99 88.47; transform:rotate(57.6deg); } 22% { stroke-dasharray:226.7 49.76; transform:rotate(32.4deg); } 34% { stroke-dasharray:193.52 82.94; transform:rotate(54deg); } 58% { stroke-dasharray:182.46 94; transform:rotate(61.2deg); } 70% { stroke-dasharray:215.64 60.82; transform:rotate(39.6deg); } 82% { stroke-dasharray:199.05 77.41; transform:rotate(50.4deg); } }
   @keyframes av-spin { from { transform:rotate(36deg); } to { transform:rotate(396deg); } }
@@ -197,7 +198,7 @@ ${faviconLinks()}
   .tb.l { left:calc(env(safe-area-inset-left) + 12px); } .tb.r { right:calc(env(safe-area-inset-right) + 12px); }
   #back { display:flex; align-items:center; gap:2px; height:48px; padding:0 4px 0 8px; border-radius:24px; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; }
   #back .ct-logo { color:var(--ink); margin:0 8px 0 4px; }
-  .pt .hd .av .ring circle, .wait-card .av .ring circle { stroke-width:8; }
+  .pt .hd .av .ring circle, #sub-av .ring circle { stroke-width:8; }
   #back-ic { width:24px; height:24px; color:var(--dim); display:grid; place-items:center; }
   #c-mo { font-size:13px; color:var(--dim); background:#fffffff0; border:1px solid var(--line); border-radius:14px; padding:4px 12px; box-shadow:0 2px 10px #00000010; white-space:nowrap; }
   #c-mo[hidden] { display:none; }
@@ -357,15 +358,14 @@ ${faviconLinks()}
   #sub { display:flex; align-items:center; gap:12px; padding:8px 16px 4px; min-height:52px; }
   #sub-text { flex:1; font-size:15px; line-height:1.45; color:#5a5650; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   #sub-text.wait, #sub-text.gap { color:var(--dim); }
-  #sub-text .av { display:inline-grid; width:22px; height:22px; font-size:12px; vertical-align:middle; margin-right:8px; }
-  #sub-text .av .ring circle { stroke-width:10; }
+  #sub-av { width:36px; height:36px; font-size:17px; }
+  #main:has(#board > .blank) #sub-av { display:none; }
   .dots { display:inline-flex; gap:4px; margin-left:6px; vertical-align:middle; }
   .dots i { width:5px; height:5px; border-radius:50%; background:var(--accent); opacity:.3; animation:dot 1.2s ease-in-out infinite; }
   .dots i:nth-child(2) { animation-delay:.2s; } .dots i:nth-child(3) { animation-delay:.4s; }
   @keyframes dot { 0%,100% { opacity:.25; transform:translateY(0); } 40% { opacity:1; transform:translateY(-3px); } }
-  /* 第一拍前板上的占位卡:老师头像的 C 慢慢转(「想」),一支笔慢慢地写;第一拍就绪就撤,真卡落在同一个位置 */
+  /* 第一拍前板上的占位卡:一支笔慢慢地写(老师在想看字幕行开头那颗);第一拍就绪就撤,真卡落在同一个位置 */
   .wait-card { flex:0 0 auto; height:118px; border-radius:16px; border:1.5px dashed var(--line); background:var(--card); display:flex; align-items:center; justify-content:center; gap:14px; }
-  .wait-card .av { width:36px; height:36px; font-size:18px; }
   .wait-card svg { width:120px; height:34px; overflow:visible; }
   .wait-card path { fill:none; stroke:var(--accent); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:260; stroke-dashoffset:260; animation:write 5s ease-in-out infinite; }
   .wait-card path + path { stroke-width:2.5; opacity:.55; animation-delay:.6s; }
@@ -644,7 +644,7 @@ __BRAND_CSS__
       <div id="st-dim"></div>
     </div>
     <div id="lv"><div id="lv-av"></div><div id="lv-chip">在听你说</div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div></div>
-    <div id="sub"><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
+    <div id="sub"><span class="av" id="sub-av"></span><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
       <div id="pill">
         <label class="ic" id="cam"><input type="file" accept="image/*" capture="environment"></label>
@@ -1371,6 +1371,7 @@ __BRAND_JS__
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else { liveClose(); micWarm(); }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
+    $('#sub-av').replaceWith(Object.assign(avatarEl(t), { id: 'sub-av' }));
     $('#board').replaceChildren(); pin.on = false;
     if (S.ask) $('#board').append(askBoard(S.ask));
     else if (S.talkWait) $('#board').append(talkBoard());
@@ -2348,7 +2349,7 @@ __WORD_DRAW_JS__
     return card;
   };
   const waitCardEl = () => {
-    const g = h('div', { class: 'wait-card' }, avatarEl(S.tutor));
+    const g = h('div', { class: 'wait-card' });
     g.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 120 34"><path d="M4 22 C 14 6, 22 30, 32 16 S 48 6, 56 20 S 72 30, 80 14 S 98 8, 112 18"/><path d="M10 30 L 70 30"/></svg>');
     return g;
   };
@@ -2362,7 +2363,7 @@ __WORD_DRAW_JS__
     if (S.stage && S.stage.playing && !S.limit) v = stageSubtitle(S.stage.playing.phase, S.stage.playing.line);
     const t = $('#sub-text'); t.className = v.kind;
     const dots = () => h('span', { class: 'dots' }, h('i'), h('i'), h('i'));
-    if (v.kind === 'wait') t.replaceChildren(avatarEl(S.tutor), v.text, dots());
+    if (v.kind === 'wait') t.replaceChildren(v.text, dots());
     else if (v.kind === 'gap') t.replaceChildren(v.text, dots());
     else if (v.kind === 'replay') t.replaceChildren(h('span', { class: 'rp', html: ICON.replay }), v.text);
     else t.textContent = v.text;
@@ -3178,6 +3179,7 @@ __WORD_DRAW_JS__
     if (!d) { if (host) { try { host.cotutorReelFail(); } catch {} } else document.body.append(h('div', { class: 'blank' }, h('b', {}, '这个话题没有录像'))); return; }
     document.body.classList.add('rlk');
     S.tutor = d.face; S.thread = d.thread; S.hist = d.date; S.readonly = true; S.autoplay = true;
+    $('#sub-av').replaceWith(Object.assign(avatarEl(S.tutor), { id: 'sub-av' }));
     // 有实时轮的话题:孩子当时看到的是实时老师页(左栏大头像 + 字幕、卡角没有钮),字幕照这一刻(reelLiveCap)
     if (d.realtime) { document.body.classList.add('live'); $('#tutor').style.setProperty('--tc', colorOf(d.face)); $('#lv-av').replaceChildren(avatarEl(S.tutor)); }
     $('#tutor').classList.add('on');
@@ -3230,6 +3232,7 @@ __REEL_DOCK_JS__
     unlock();
     S.tutor = t; S.thread = thread; S.hist = date || S.pdate || null; S.readonly = true; S.newThread = false;
     S.reel = { frame: true };
+    $('#sub-av').replaceWith(Object.assign(avatarEl(t), { id: 'sub-av' }));
     $('#board').replaceChildren();
     $('#tutor').classList.add('on');
     const fr = $('#rl-frame');

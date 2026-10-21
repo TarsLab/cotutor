@@ -4,15 +4,15 @@ import { tintFor, type BoardSection } from '../src/lib/kid-board.ts';
 import { check, done } from './_check.ts';
 
 interface Msg { job: string; question: string | null; reply: string | null; pending: boolean; section: BoardSection | null; action?: string }
-interface Day { messages: Msg[]; remaining: number; pending: string | null }
+interface Day { messages: Msg[]; pending: string | null }
 
 {
   const m = createMock({ delayMs: 0, now: () => new Date('2026-09-10T16:30:00') });
   const get = (p: string) => m.route('GET', p);
   type HomeCard = { kind: string; props: { tutor?: string; buttons?: { id: string | number; kind: string; label: string; date?: string; thread?: string; resume?: { title: string } }[] } };
-  const home = (await get('/api/kid/home')).json as { title: string; home: string; tutors: { name: string; available: boolean }[]; cards: HomeCard[] };
+  const home = (await get('/api/kid/home')).json as { title: string; home: string; tutors: { name: string }[]; cards: HomeCard[] };
   const tc = home.cards.filter((c) => c.kind === 'tutor');
-  check('首页:四位老师(含口播);老师卡置顶(语文、数学照原文,英语、口播各补一张),其余卡照原文顺序;听写卡没有字(中文一张、英文单词一张)', home.title === '小明的老师们' && home.tutors.length === 4 && home.tutors.every((t) => t.available) && home.home === '2026-09-09-2130' && tc.map((c) => c.props.tutor).join() === 'chinese-tutor,math-tutor,english-tutor,koubo-tutor' && home.cards.slice(4).map((c) => c.kind).join() === 'text,tianzige,dictation,dictation' && !JSON.stringify(home.cards[6]).includes('鼓励') && (home.cards[7].props as { lang?: string }).lang === 'en' && !JSON.stringify(home.cards[7]).includes('yellow'), JSON.stringify(home.cards.map((c) => c.kind)));
+  check('首页:四位老师(含口播);老师卡置顶(语文、数学照原文,英语、口播各补一张),其余卡照原文顺序;听写卡没有字(中文一张、英文单词一张)', home.title === '小明的老师们' && home.tutors.length === 4 && home.tutors.every((t) => !('available' in t) && !('remaining' in t)) && home.home === '2026-09-09-2130' && tc.map((c) => c.props.tutor).join() === 'chinese-tutor,math-tutor,english-tutor,koubo-tutor' && home.cards.slice(4).map((c) => c.kind).join() === 'text,tianzige,dictation,dictation' && !JSON.stringify(home.cards[6]).includes('鼓励') && (home.cards[7].props as { lang?: string }).lang === 'en' && !JSON.stringify(home.cards[7]).includes('yellow'), JSON.stringify(home.cards.map((c) => c.kind)));
   check('老师卡的按钮:新话题第一(今天聊过的挂在它的 resume 上,空白板上接)、然后是原文的开场与接着;没写的只有新话题;讲法不下发', tc[0].props.buttons?.map((b) => b.id).join() === 'new,0,1' && tc[0].props.buttons?.[0].resume?.title === '画蛇添足是什么意思?' && tc[0].props.buttons?.[2].kind === 'continue' && tc[0].props.buttons?.[2].date === '2026-09-09' && tc[2].props.buttons?.map((b) => b.id).join() === 'new' && !JSON.stringify(home).includes('第 22 课') && !JSON.stringify(home).includes('brief'), JSON.stringify(tc[0].props.buttons));
   const d0 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
   check('语文老师已讲过一节:卡 + 讲稿 + 标注 + 末句问句(脚本过真解析器)', d0.messages.length === 1 && d0.messages[0].section !== null && d0.messages[0].section.cards.map((c) => c.kind).join() === 'text,text,read,choice' && d0.messages[0].section.lines.length === 5 && d0.messages[0].section.lines[1].marks[0]?.card === 1 && d0.messages[0].section.lines[4].ask === true, JSON.stringify(d0.messages[0].section?.lines[1]));
@@ -52,7 +52,7 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   await m.settle();
   const d3 = (await get('/api/kid/conversations/chinese-tutor/today')).json as Day;
   check('脚本用完 → 只有一句收尾话(一节只有讲稿;末句是问句,补了提问卡)', d3.messages.length === 6 && d3.messages[2].section?.cards[0].kind === 'text' && d3.messages[5].section?.cards.length === 1 && d3.messages[5].section?.cards[0].props.ask === true && d3.messages[5].section?.lines.length === 1 && d3.messages[5].reply === '这个我们明天接着说,好不好?');
-  check('剩余次数只数孩子发的', d3.remaining === 30 - 6);
+  check('不限每天几条:今天没有剩几条', !('remaining' in d3));
   // 卡的状态:数学老师首节有选择题 → PUT 状态假存、today 里并回卡上、答案仍剥;交给老师 → 下一节;「继续」不计次数
   const md = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   const mj = md.messages[0].job;
@@ -76,11 +76,10 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   const md4 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   check('交过的卡锁住(同真服务):再交 409、再改 409、下发带 submitted', (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'submit', focus: { card: `${mj}/${ci}` } })).status === 409 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: [1] })).status === 409 && (md4.messages[0].section!.cards[ci] as { submitted?: boolean }).submitted === true);
   check('交给老师:空文本 + action 也 202,问句是「(交了答案,没说话)」,下一节追加(反过来想 + 选择题)', sub.status === 202 && md4.messages[1].question === '(交了答案,没说话)' && md4.messages[1].reply !== null && !('action' in md4.messages[1]) && md4.messages[1].section?.cards.some((c) => c.kind === 'choice') === true, JSON.stringify(md4.messages[1]));
-  const before = md4.remaining;
   await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'continue' });
   await m.settle();
   const md5 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
-  check('「继续」不计次数,空文本没 action 400;第三节有小课堂卡', md5.remaining === before && md5.messages[2].question === '继续' && md5.messages[2].section?.cards.some((c) => c.kind === 'lecture') === true && (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400, `${before} ${md5.remaining}`);
+  check('「继续」空文本也行,空文本没 action 400;第三节有小课堂卡', md5.messages[2].question === '继续' && md5.messages[2].section?.cards.some((c) => c.kind === 'lecture') === true && (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400);
   await m.route('POST', '/api/kid/conversations/english-tutor/messages', { text: 'apple' });
   await m.settle();
   const rd = ((await get('/api/kid/conversations/english-tutor/today')).json as Day).messages[0];
@@ -147,12 +146,6 @@ interface Day { messages: Msg[]; remaining: number; pending: string | null }
   await m.settle();
   const fin = ((await m.route('GET', '/api/kid/conversations/math-tutor/today')).json as Day).messages[1];
   check('想的期间见到过 partial 板书,卡数只增不减;想完 partial 没了、卡齐了', seen.length > 0 && seen.every((n, i) => i === 0 || n >= seen[i - 1]) && seen[0] < 3 && partialOk && !fin.pending && fin.section?.partial === undefined && fin.section?.cards.length === 3, JSON.stringify(seen));
-}
-{
-  const m = createMock({ scenario: 'limit', delayMs: 0 });
-  const home = (await m.route('GET', '/api/kid/home')).json as { tutors: { available: boolean; remaining: number }[] };
-  check('上限场景:头像全灰,remaining 0', home.tutors.every((t) => !t.available && t.remaining === 0));
-  check('上限场景:发消息 429', (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '1+1' })).status === 429);
 }
 {
   const m = createMock({ scenario: 'offline', delayMs: 0 });

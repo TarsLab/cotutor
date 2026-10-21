@@ -916,13 +916,12 @@ export interface SubtitleInput {
   pending: boolean;
   /** 孩子发出后等了多久(毫秒):第一拍前等久了换一句 */
   waitedMs: number;
-  limit: boolean;
 }
 
 export interface SubtitleView {
   text: string;
   /** wait = 第一拍前(板上有占位卡);gap = 拍与拍之间(留着刚念那句,变暗加点);replay = 再听(淡一档、前面一个小喇叭,和老师正在说的分开) */
-  kind: 'line' | 'wait' | 'gap' | 'replay' | 'limit' | 'empty';
+  kind: 'line' | 'wait' | 'gap' | 'replay' | 'empty';
   /** stop = 再听时的钮(停,回原位置),和暂停 / 播放长得不一样;等答时没有钮(「继续」2026-10-08 去掉了) */
   right: 'pause' | 'play' | 'stop' | 'none';
 }
@@ -930,9 +929,8 @@ export interface SubtitleView {
 /** 第一拍前等过这么久,字幕从「我写给你看」换成「再等我一下下」 */
 export const WAIT_LONG_MS = 8000;
 
-/** 字幕行:上限 > 等老师 > 当前句(按播放状态定右侧的钮) */
+/** 字幕行:等老师 > 当前句(按播放状态定右侧的钮) */
 export function subtitleFor(i: SubtitleInput): SubtitleView {
-  if (i.limit) return { text: '今天聊够啦,明天再来', kind: 'limit', right: 'none' };
   const line = i.sections[i.state.section]?.lines[i.state.line];
   const text = line ? plainLine(line.text) : '';
   // 老师还在写:正在播已就绪的句子就照常出字幕;这节念过几句了就留着刚念那句等下一拍;一句还没念(第一拍前)才出等的话
@@ -980,7 +978,6 @@ export interface PlayerCtx {
   stage: boolean;
   /** 录音卡的舞台里正按着录音键:这时不出任何声音、不推答题卡 */
   recording?: boolean;
-  limit: boolean;
   now: number;
 }
 
@@ -1115,7 +1112,7 @@ export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { mod
       const st = m.state;
       const s = secs[st.section];
       if (ctx.stage || ctx.pending || !s || s.partial || st.line < 0 || st.replay || !(st.status === 'paused' || st.status === 'waiting' || st.status === 'done')) break;
-      if (subtitleFor({ state: st, sections: secs, pending: ctx.pending, waitedMs: 0, limit: ctx.limit }).kind !== 'line') break;
+      if (subtitleFor({ state: st, sections: secs, pending: ctx.pending, waitedMs: 0 }).kind !== 'line') break;
       m = beginReplay(m, ctx, fx, st.section, [st.line], 'line');
       break;
     }

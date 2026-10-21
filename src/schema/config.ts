@@ -9,8 +9,6 @@ import { z } from 'zod';
 export const PolicySchema = z.object({
   /** 老师说给孩子听的每一句的字数上限;超出在句末截断(《cotutor契约草案.md》§4;板书后按句算) */
   replyMaxChars: z.number().int().positive().describe('老师说给孩子听的每一句的字数上限(板书讲稿一行一句,按句截);超出在句末截断'),
-  /** 每孩每日消息上限;超限老师头像灰掉 */
-  dailyMessages: z.number().int().nonnegative().describe('孩子端每日可发消息条数(系统任务不算,删掉的话题退回);到了头像灰'),
   /** 上下文包的三个数:最近观察条数(从日记的「- 观察:」行抽,最近 14 天)、计划行数、档案 / 入口文件 / 记忆原文各带多少字 */
   contextPack: z.object({
     recent: z.number().int().nonnegative().describe('上下文包带最近几条观察(最近 14 天日记里本学科的「- 观察:」行,取最新的)'),
@@ -44,7 +42,6 @@ export type Policy = z.infer<typeof PolicySchema>;
 /** 政策补丁:老师条目与 policyDefaults 都是补丁,逐层盖在 POLICY_DEFAULTS 上 */
 export const PolicyPatchSchema = z.object({
   replyMaxChars: PolicySchema.shape.replyMaxChars.optional(),
-  dailyMessages: PolicySchema.shape.dailyMessages.optional(),
   contextPack: z.object({ recent: z.number().int().nonnegative().optional(), planLines: z.number().int().nonnegative().optional(), entryChars: z.number().int().positive().optional() }).optional(),
   effort: PolicySchema.shape.effort.optional(),
   tools: PolicySchema.shape.tools.optional(),
@@ -53,10 +50,9 @@ export const PolicyPatchSchema = z.object({
 });
 export type PolicyPatch = z.infer<typeof PolicyPatchSchema>;
 
-/** 缺省:60 字、30 条/日、上下文包观察与计划各 10、原文各 4000 字、30 秒没动静算断流 */
+/** 缺省:60 字、上下文包观察与计划各 10、原文各 4000 字、30 秒没动静算断流 */
 export const POLICY_DEFAULTS: Policy = {
   replyMaxChars: 60,
-  dailyMessages: 30,
   contextPack: { recent: 10, planLines: 10, entryChars: 4000 },
   effort: 'low',
   tools: 'off',
@@ -341,7 +337,7 @@ export const CotutorConfigSchema = z
       .default({ port: 5180 }),
     paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;diary / plans / profile / timetable / textbooks / reference 相对 vault(缺省 日记 / 计划 / 孩子.md / 课程表.md / 教材 / 参考),不配 vault 就相对 workspace 根;profile 只是 init 新建档案的位置,老师按 cotutor: profile 属性找;captures(作业照片)相对 workspace 根'),
     vault: VaultPolicySchema.default({ keepScore: 4 }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4)'),
-    policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 30 条 / 板书 auto / 观察 10 条、计划 10 行、原文 4000 字)'),
+    policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 板书 auto / 观察 10 条、计划 10 行、原文 4000 字)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
     runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {systemBody} {boardFile} {agentsFile} {prompt} {session};模型、预算、时限写在这里'),
     proxy: z
@@ -389,7 +385,6 @@ export function resolvePolicy(config: CotutorConfig, tutor: string): Policy {
   const out: Policy = { ...POLICY_DEFAULTS, contextPack: { ...POLICY_DEFAULTS.contextPack }, stall: { ...POLICY_DEFAULTS.stall } };
   for (const p of layers) {
     if (p.replyMaxChars !== undefined) out.replyMaxChars = p.replyMaxChars;
-    if (p.dailyMessages !== undefined) out.dailyMessages = p.dailyMessages;
     if (p.contextPack?.recent !== undefined) out.contextPack.recent = p.contextPack.recent;
     if (p.contextPack?.planLines !== undefined) out.contextPack.planLines = p.contextPack.planLines;
     if (p.contextPack?.entryChars !== undefined) out.contextPack.entryChars = p.contextPack.entryChars;

@@ -305,7 +305,7 @@ export interface ThreadUndo {
  * 删掉一天里的一个话题(家长板书页清单上的「删」,2026-09-22):索引里它的消息、会话、星、记账标记都去掉,
  * 这些轮的文件(转录、run、事件、配音、卡的状态与资产)按 <日期>.<job>.* 整个删。
  * 这个话题留下的痕迹一起撤(2026-10-05,家长在孩子端试过再删):各轮写进 vault 记忆的行(memoryLines)倒着撤、记账写进日记的那段(diaryBlock)摘掉;
- * 每日上限按索引数,消息删了自然退回。不动的:captures/ 里的照片。跑着的轮由路由先挡(409)。
+ * 不动的:captures/ 里的照片。跑着的轮由路由先挡(409)。
  */
 export async function deleteThread(ws: Workspace, tutor: string, date: string, thread: string): Promise<{ index: ConversationIndex; undo: ThreadUndo }> {
   const index = await readIndex(ws, tutor, date);

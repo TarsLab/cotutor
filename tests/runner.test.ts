@@ -44,6 +44,7 @@ cfg.paths = { vault: 'vault', plans: '计划', timetable: '课程表.md' };
 cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, 'voices', '--json'] };
 (cfg.tutors as Record<string, Record<string, unknown>>)['math-tutor'].voice = 'v-math';
 (cfg.tutors as Record<string, Record<string, unknown>>)['english-tutor'].voice = 'fail';
+// 老 workspace 写着的每天条数(10-21 起不认):写 1 也不拦
 (cfg.tutors as Record<string, Record<string, unknown>>)['chinese-tutor'].policy = { dailyMessages: 1 };
 // 工具人(只和系统、家长打交道的,孩子端不露):测守则只给有脸的、记忆文件、hidden、系统消息开话题
 (cfg.tutors as Record<string, Record<string, unknown>>).helper = { display: '小帮手', avatar: '🧰', enabled: true, hidden: true };
@@ -278,11 +279,11 @@ try {
   check('没有入口文件:这条消息带提醒(家长端看得到),起不来的尾巴没把它盖掉', (dm.index.messages[0] as { warnings?: string[] }).warnings?.[0]?.startsWith('入口文件缺:vault 里没有 cotutor: subject、subject: 语文') === true, JSON.stringify(dm.index.messages[0]));
   check('起不来 → error 指向 err.log,尾巴带原因', dm.index.messages[0].result === 'error' && String(dm.index.messages[0].error).startsWith('spawn:') && dm.errors[dm.index.messages[0].job]?.includes('起不来'), JSON.stringify({ m: dm.index.messages[0], e: dm.errors }));
 
-  // ---- 孩子端接口:首页、过滤后的会话、发消息、每日上限、配音文件 ----
-  const home = (await route('GET', '/api/kid/home', ctx)).json as { title: string; tutors: { name: string; available: boolean; remaining: number; hasVoice: boolean }[]; home: string | null; cards: { kind: string; props: { tutor?: string } }[] };
+  // ---- 孩子端接口:首页、过滤后的会话、发消息、不限条数、配音文件 ----
+  const home = (await route('GET', '/api/kid/home', ctx)).json as { title: string; tutors: { name: string; hasVoice: boolean }[]; home: string | null; cards: { kind: string; props: { tutor?: string } }[] };
   check('首页:标题、孩子端老师(无 helper)、没有课程表那一栏;没发布过 = 缺省首页(每位老师一张卡)', home.title === '小明的老师们' && !('timetable' in home) && home.tutors.length === 3 && !home.tutors.some((t) => t.name === 'helper') && home.home === null && home.cards.map((c) => c.props.tutor).join() === 'chinese-tutor,english-tutor,math-tutor', JSON.stringify(home.cards));
-  check('老师带 hasVoice 与剩余条数(今天 09-09 孩子还没发过)', home.tutors.find((t) => t.name === 'math-tutor')?.hasVoice === true && home.tutors.find((t) => t.name === 'math-tutor')?.remaining === 30, JSON.stringify(home.tutors));
-  const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null; reply: string | null; audio: string | null }[]; remaining: number; pending: string | null };
+  check('老师带 hasVoice,不带剩几条', home.tutors.find((t) => t.name === 'math-tutor')?.hasVoice === true && home.tutors.every((t) => !('remaining' in t) && !('available' in t)), JSON.stringify(home.tutors));
+  const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null; reply: string | null; audio: string | null }[]; pending: string | null };
   check('孩子视图:系统发的只见回复,搜不到工具、错误、家长尾巴', kd.messages.length === 1 && kd.messages[0].question === null && kd.messages[0].reply === '第一次说:新的一天' && !/工具|error|holdup|handoff|costUsd|Read/.test(JSON.stringify(kd)), JSON.stringify(kd));
   check('hidden 的 helper 对孩子端不存在', (await route('GET', '/api/kid/conversations/helper/today', ctx)).status === 404);
   const kp = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '孩子问的' });
@@ -295,16 +296,16 @@ try {
   const au = await route('GET', '/api/audio/math-tutor/2026-09-09.0800-2.1.mp3', ctx);
   check('配音文件能取', au.status === 200 && au.file !== undefined && au.contentType === 'audio/mpeg' && readFileSync(au.file!, 'utf8').includes('接着说:孩子问的'), JSON.stringify(au));
   check('配音路径校验', (await route('GET', '/api/audio/math-tutor/../cotutor.json', ctx)).status === 404 && (await route('GET', '/api/audio/math-tutor/2026-09-09.0800-9.mp3', ctx)).status === 404);
-  // 语文老师 dailyMessages = 1:孩子发一条后头像灰、再发 429;系统任务不算
-  check('语文老师上限前可用', (await route('GET', '/api/kid/home', ctx)).status === 200 && ((await route('GET', '/api/kid/home', ctx)).json as typeof home).tutors.find((t) => t.name === 'chinese-tutor')?.available === true);
+  // 语文老师的 policy 写着老的 dailyMessages = 1:不认,第二条照发(《产品规划.md》拍板 29)
   check('孩子发第一条 202', (await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '一' })).status === 202);
   await wait('chinese-tutor');
-  const limited = await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '二' });
-  check('到上限 → 429,头像灰', limited.status === 429 && ((await route('GET', '/api/kid/home', ctx)).json as typeof home).tutors.find((t) => t.name === 'chinese-tutor')?.available === false, JSON.stringify(limited.json));
-  check('工作台照发不受孩子上限(只有孩子端的接口查上限);旧客户端带 from: parent 也收,当孩子', (await post('chinese-tutor', { text: '家长的', from: 'parent' })).status === 202);
+  const more = await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '二' });
+  check('不限每天几条:老配置写 1,第二条照样 202', more.status === 202, JSON.stringify(more.json));
   await wait('chinese-tutor');
-  const kdZh = (await route('GET', '/api/kid/conversations/chinese-tutor/today', ctx)).json as { messages: { question: string | null }[]; remaining: number };
-  check('工作台发的算孩子的话:问句孩子看得到,remaining 0', kdZh.messages.filter((m) => m.question !== null).length === 2 && kdZh.remaining === 0, JSON.stringify(kdZh));
+  check('旧客户端带 from: parent 也收,当孩子', (await post('chinese-tutor', { text: '家长的', from: 'parent' })).status === 202);
+  await wait('chinese-tutor');
+  const kdZh = (await route('GET', '/api/kid/conversations/chinese-tutor/today', ctx)).json as { messages: { question: string | null }[] };
+  check('工作台发的算孩子的话:问句孩子看得到', kdZh.messages.filter((m) => m.question !== null).length === 3, JSON.stringify(kdZh));
   check('孩子端页面在,没有「错误」字样', ((await route('GET', '/', ctx)).html ?? '').includes('小明的老师们') && !((await route('GET', '/', ctx)).html ?? '').includes('错误'));
 
   // ---- 板书:最终文本 → section 进索引、逐句配音、孩子端剥答案、家长尾巴与提醒 ----
@@ -357,11 +358,11 @@ try {
   const mAgain = ma.index.messages.find((m) => m.job === (again.json as { job: string }).job)!;
   check('下一条没改卡就不再带', mAgain.cards === undefined && !mAgain.kidText?.includes('看到卡'), JSON.stringify(mAgain));
   check('坏 action 400;空文本没 action 400', (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '', action: 'jump' })).status === 400 && (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '' })).status === 400);
-  // 语文老师到了上限(dailyMessages = 1):「继续」照样能发,交答案不行
+  // 「继续」:空文本 + action continue
   now = new Date(2026, 8, 9, 9, 7);
   const cont = await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '', action: 'continue' });
   await wait('chinese-tutor');
-  check('上限后「继续」202、文本「继续」、不计次数;交答案 429', cont.status === 202 && ((await route('GET', '/api/kid/conversations/chinese-tutor/today', ctx)).json as { remaining: number; messages: { question: string | null }[] }).remaining === 0 && (await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '', action: 'submit' })).status === 429, JSON.stringify(cont.json));
+  check('「继续」202', cont.status === 202, JSON.stringify(cont.json));
   const dz = (await day('chinese-tutor', '2026-09-09')).json as { index: { messages: SubMsg[] } };
   check('「继续」在索引里:text 继续、action continue', dz.index.messages.some((m) => m.text === '继续' && m.action === 'continue'));
 

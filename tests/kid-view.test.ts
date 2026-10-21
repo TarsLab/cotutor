@@ -1,5 +1,5 @@
 /** 孩子视图:最终文本剥段后正文即板书(段落 = 讲稿,围栏 = 卡),每句按上限截;家长尾巴不进;答案剥掉;出错什么都没有。 */
-import { deriveKidView, kidConversation, kidMessageCount, kidSource, kidThreads, parentConversation, truncateReply } from '../src/lib/kid-view.ts';
+import { deriveKidView, kidConversation, kidSource, kidThreads, parentConversation, truncateReply } from '../src/lib/kid-view.ts';
 import { parseBoard } from '../src/lib/board.ts';
 import { parseTranscript } from '../src/lib/transcript.ts';
 import { check, done } from './_check.ts';
@@ -83,12 +83,10 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   check('出错:问句在、没有回复、没有原因', v[2].question === '又问' && v[2].reply === null && !('error' in v[2]) && !('result' in v[2]));
   check('还在跑 → pending', v[3].pending && v[3].reply === null);
   check('序列化后搜不到工具 / 错误 / 家长尾巴 / 费用 / 答案', !/工具|error|家长的话|costUsd|result|answer/.test(JSON.stringify(v)), JSON.stringify(v));
-  check('每日计数只算孩子的', kidMessageCount(idx) === 4);
   const withStates = kidConversation(idx, { '7': { 0: { at: 'x', turn: '7', state: { picked: [1] } } } });
   check('孩子做的状态并到卡上(答案还是剥掉),没做过的卡没有 state', JSON.stringify(withStates[4].section?.cards[0].state) === '{"picked":[1]}' && !('answer' in withStates[4].section!.cards[0].props) && !('state' in withStates[4].section!.cards[1]), JSON.stringify(withStates[4].section));
   const withAssets = kidConversation(idx, {}, { '7': { 1: ['2026-09-09.7.cards/1/1.mp3'] } });
   check('生成好的资产并到卡上;没资产的卡没有 assets', JSON.stringify(withAssets[4].section?.cards[1].assets) === '["2026-09-09.7.cards/1/1.mp3"]' && !('assets' in withAssets[4].section!.cards[0]) && !('state' in withAssets[4].section!.cards[1]));
-  check('「继续」不计每日上限,交答案计', kidMessageCount({ messages: [{ ...base, job: 'a', from: 'kid' as const, text: '继续', action: 'continue' as const, result: 'ok' as const }, { ...base, job: 'b', from: 'kid' as const, text: '(交了答案,没说话)', action: 'submit' as const, result: 'ok' as const }] }) === 1);
 }
 {
   // 「以前的」分组:按 thread 聚,名字 = 孩子第一句截 20 字;没有孩子问过的话题不列;pending / 出错的不算节

@@ -264,7 +264,6 @@ for: 2026-09-18
     mkdirSync(join(root, 'vault', '记忆'), { recursive: true });
     const memBefore = '---\ncotutor: memory\nagent: math-tutor\n---\n\n家长写在开头的话。\n\n- 2026-09-01 讲慢点他跟得上\n- 2026-09-01 爱用手指数\n- 2026-09-02 喜欢乐高\n';
     writeFileSync(memFile, memBefore);
-    const left0 = ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { remaining: number }).remaining;
     const s1 = await kidSend('math-tutor', { text: '板书 记住它', newThread: true });
     await wait('math-tutor');
     const { date: day, thread: th } = s1.json as { date: string; thread: string };
@@ -281,16 +280,14 @@ for: 2026-09-18
     const bkMsg = i2.messages.find((m) => m.thread === th && m.bookkeep);
     const diary1 = exists(diaryFile) ? readFileSync(diaryFile, 'utf8') : '';
     check('记账:日记里有这个话题一段,原文记在记账那轮的 diaryBlock', Boolean(bkMsg?.diaryBlock) && diary1.includes(bkMsg!.diaryBlock!.trim()), diary1);
-    const left1 = ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { remaining: number }).remaining;
     const del = await route('DELETE', `/api/conversations/math-tutor/${day}/threads/${encodeURIComponent(th)}`, ctx);
     const undo = (del.json as { undo: { memory: number; diary: number; misses: string[] } }).undo;
     const mem2 = readFileSync(memFile, 'utf8');
     const diary2 = exists(diaryFile) ? readFileSync(diaryFile, 'utf8') : '';
     const after = await readIndex(ctx.ws, 'math-tutor', day);
     const files = readdirSync(convDir).filter((f) => mine.some((m) => f.startsWith(`${day}.${m.job}.`)));
-    const left2 = ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { remaining: number }).remaining;
     check('删话题:撤了 4 行记忆(加的删掉、改的换回、删的接回末尾)、日记那段摘掉;家长写的与整理那轮加的不动', del.status === 200 && undo.memory === 4 && undo.diary === 1 && !mem2.includes('讲角用手指比划他马上懂') && !mem2.includes('家长说别出选择题') && mem2.includes('- 2026-09-01 讲慢点他跟得上') && mem2.includes('- 2026-09-01 爱用手指数') && mem2.includes('家长写在开头的话。') && mem2.includes('喜欢乐高') && !diary2.includes(bkMsg!.diaryBlock!.trim()), JSON.stringify({ undo, mem2, diary2 }));
-    check('删话题:索引、会话、记账标记、文件都没了;用掉的次数退回来;再删 404', !after.messages.some((m) => m.thread === th) && !(th in after.sessions) && !(th in after.booked) && files.length === 0 && left1 === left0 - 2 && left2 === left0 && (await route('DELETE', `/api/conversations/math-tutor/${day}/threads/${encodeURIComponent(th)}`, ctx)).status === 404, JSON.stringify({ left0, left1, left2, files }));
+    check('删话题:索引、会话、记账标记、文件都没了;再删 404', !after.messages.some((m) => m.thread === th) && !(th in after.sessions) && !(th in after.booked) && files.length === 0 && (await route('DELETE', `/api/conversations/math-tutor/${day}/threads/${encodeURIComponent(th)}`, ctx)).status === 404, JSON.stringify({ files }));
     // 工作台 / cotutor send 发的也是孩子的话(没有 from: parent 了;旧客户端带 parent 也当 kid)
     const dv = await route('POST', '/api/conversations/math-tutor/messages', ctx, { text: '工作台问一句', from: 'parent', newThread: true });
     await wait('math-tutor');

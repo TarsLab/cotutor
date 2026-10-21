@@ -295,11 +295,7 @@ ${BRAND_JS}
     const self = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '这位老师')), h('div', { class: 'grp' },
       h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '在孩子的首页上')), sw(!t.hidden, '在首页上', () => save('PATCH', '/api/parent/settings', { tutors: { [t.name]: { hidden: !t.hidden } } })))));
     // 孩子端(所有老师一份)
-    const day = h('b', {}, String(D.dailyMessages));
     const kid = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '孩子端(所有老师)')), h('div', { class: 'grp' },
-      h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '每天能问几条'), h('small', {}, '一位老师一天;到了头像变灰。实时的老师不限')), h('span', { class: 'step' },
-        h('button', { type: 'button', 'aria-label': '少五条', on: { click: () => save('PATCH', '/api/parent/settings', { dailyMessages: Math.max(0, D.dailyMessages - 5) }) } }, '−'), day,
-        h('button', { type: 'button', 'aria-label': '多五条', on: { click: () => save('PATCH', '/api/parent/settings', { dailyMessages: D.dailyMessages + 5 }) } }, '+'))),
       h('div', { class: 'box' }, h('div', { class: 'row2' }, h('span', {}, '按住说话怎么听'), h('span', { class: 'seg', style: 'width:180px' },
         ...[['browser', '浏览器'], ['omni', 'omni']].map(([v, l]) => h('button', { type: 'button', class: D.listen === v ? 'on' : '', on: { click: () => { if (D.listen !== v) save('PATCH', '/api/parent/settings', { listen: v }); } } }, l)))),
         h('div', { class: 'note', style: 'padding:0' }, 'omni:松手后原声交给百炼再听一遍,认得更准,要百炼的 key'))));

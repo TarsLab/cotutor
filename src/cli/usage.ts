@@ -23,7 +23,7 @@ export const USAGE = `用法:
   cotutor home show [--json]                                          现在发布的是哪份、几天前、每个按钮被点了几次(哪天、哪个话题)
   cotutor activity check [<老师> [<名>]] [--json]                      检查 activity 文件(agents/<老师>/activities/<名>.md):家长填的、应用算的、应用拦的、裁段、插槽、正文用的卡、第一句与收(带行号);不花钱
   cotutor activity eval <老师> <名> [--runs <n>] [--only <例子>] [--kid-model <千问模型>] [--json]   照 <名>.例子.md 跑:真老师 + 模拟孩子(千问,缺省 qwen3.8-flash,有 Token Plan 走它)多轮,判只看板书;一个例子跑 n 次(缺省 3)次次都过才算过;落 evals/,画家是假的;花钱
-  cotutor mock [--port <n>] [--scenario normal|limit|offline|nopost] [--delay <ms>] [--http] [--listen omni] [--live]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace;nopost = 没写样子的素版;--listen omni 按住说话的原声真交给百炼 omni 听写,要 key;--live 语文、数学、英语老师走实时老师页,假嘴照脚本念静音的声音)
+  cotutor mock [--port <n>] [--scenario normal|offline|nopost] [--delay <ms>] [--http] [--listen omni] [--live]   不经真实老师与配音,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace;nopost = 没写样子的素版;--listen omni 按住说话的原声真交给百炼 omni 听写,要 key;--live 语文、数学、英语老师走实时老师页,假嘴照脚本念静音的声音)
   cotutor --version | --help
 workspace解析:--workspace > COTUTOR_WORKSPACE > cwd 或祖先有 cotutor.json > ~/.config/cotutor/config.json > ~/cotutor/ 下唯一的孩子目录
 `;

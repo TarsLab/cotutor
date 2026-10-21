@@ -5,7 +5,7 @@
  * 正文取自 kidSource:带卡 / 带固定段的顶层文本段 + 最后一段(老师板书之后又用了工具也不丢)。
  */
 import { stripSecrets } from '../cards/index.ts';
-import { FREE_ACTIVITIES, type Bookkeeping, type ConversationMessage } from '../schema/index.ts';
+import { type Bookkeeping, type ConversationMessage } from '../schema/index.ts';
 import { parseBoard } from './board.ts';
 import { threads, type CardAssets, type CardStates } from './conversation.ts';
 import type { BoardSection, KidLecture } from './kid-board.ts';
@@ -235,9 +235,3 @@ export function submittedCards(index: { messages: readonly ConversationMessage[]
   return new Set(index.messages.flatMap((m) => (m.action === 'submit' && m.focus?.card ? [m.focus.card] : [])));
 }
 
-/** 今天孩子已发的条数(每日上限按它算;系统任务不算,「继续」不算,交答案算;删了的话题自然不算;口语课这种 activity 的话题不算,FREE_ACTIVITIES) */
-export function kidMessageCount(index: { messages: readonly ConversationMessage[] }): number {
-  const ths = threads(index.messages);
-  const free = new Set(index.messages.flatMap((m, i) => (m.activity && FREE_ACTIVITIES.includes(m.activity.name) ? [ths[i]] : [])));
-  return index.messages.filter((m, i) => m.from === 'kid' && m.action !== 'continue' && !free.has(ths[i])).length;
-}

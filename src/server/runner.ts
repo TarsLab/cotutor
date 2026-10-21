@@ -61,7 +61,7 @@ export interface SendInput {
   /** 带 action 时可以是空的:继续 → 「继续」;交给老师 → 「(交了答案,没说话)」 */
   text: string;
   focus?: Focus;
-  /** 孩子端的动作:继续(不计每日上限)/ 交给老师(把改过的卡交出去) */
+  /** 孩子端的动作:继续 / 交给老师(把改过的卡交出去) */
   action?: 'continue' | 'submit';
   /** 运行时名,缺省 cotutor.json 的 runtimes.default */
   runtime?: string;

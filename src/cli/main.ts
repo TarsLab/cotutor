@@ -181,7 +181,7 @@ export async function main(argv: string[]): Promise<void> {
         const port = typeof flags.port === 'string' ? Number(flags.port) : undefined;
         if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) throw new UsageError('--port 要是 1–65535 的整数');
         const scenario = typeof flags.scenario === 'string' ? flags.scenario : 'normal';
-        if (!['normal', 'limit', 'offline', 'nopost'].includes(scenario)) throw new UsageError('--scenario 只能是 normal / limit / offline / nopost');
+        if (!['normal', 'offline', 'nopost'].includes(scenario)) throw new UsageError('--scenario 只能是 normal / offline / nopost');
         const delayMs = typeof flags.delay === 'string' ? Number(flags.delay) : undefined;
         if (delayMs !== undefined && !(Number.isInteger(delayMs) && delayMs >= 0)) throw new UsageError('--delay 要是非负整数(毫秒)');
         const listen = typeof flags.listen === 'string' ? flags.listen : 'browser';

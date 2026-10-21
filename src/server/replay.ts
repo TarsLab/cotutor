@@ -4,7 +4,7 @@
  * 读了什么文件、费用与用时。只有 CLI(`cotutor replay` / `cotutor compare`),家长端不露;给在 workspace 里开 Claude Code 分析用。
  *
  * 落在 workspace 的 evals/(和 conversations/ 同一套文件:索引 / run.json / log / events),不进孩子的对话、
- * 不算每日上限;永远新话题新会话;不配音。做法是给 Runner 一个改了目录与配置的 Workspace,
+ * 永远新话题新会话;不配音。做法是给 Runner 一个改了目录与配置的 Workspace,
  * 跑的仍是同一条路(gatherContext → buildContextPack → spawn → 解析 → 物化),所以看到的就是真跑会看到的。
  */
 import { readFile } from 'node:fs/promises';

@@ -75,7 +75,7 @@ let now = new Date(2026, 9, 10, 20, 0);
 const ctx = createContext(loadWorkspace(root), { now: () => now });
 const call = (method: string, path: string, body?: unknown) => route(method, path, ctx, body);
 type T = { name: string; hidden: boolean; extras: string[]; extrasSet: string[] | null; buttons: { kind: string; label: string; brief?: string; until?: string }[]; dictation: { chars: string; say?: string }[] | null };
-type PH = { home: { id: string } | null; tutors: T[]; talk: { enabled: boolean; note: string; minutes: number }; listen: string; dailyMessages: number; today: string };
+type PH = { home: { id: string } | null; tutors: T[]; talk: { enabled: boolean; note: string; minutes: number }; listen: string; today: string };
 const get = async (): Promise<PH> => (await call('GET', '/api/parent/home')).json as PH;
 type KH = { cards: { kind: string; owner?: string | null; props: { tutor?: string; buttons?: { id: string | number; label: string }[]; count?: number } }[]; tutors: { name: string; extras: string[] }[] };
 const kid = async (): Promise<KH> => (await call('GET', '/api/kid/home')).json as KH;
@@ -147,15 +147,15 @@ try {
 
   // 开关与设置
   const s1 = await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: ['dictation'], hidden: false }, 'math-tutor': { hidden: true } }, talk: { note: '  这周学颜色  ', minutes: 7 }, listen: 'omni', dailyMessages: 40 });
-  const c1 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { extras?: string[]; hidden?: boolean }>; talk: { note?: string; minutes: number }; kid: { listen: string; slug: string }; policyDefaults: { dailyMessages?: number } };
-  check('设置写回 cotutor.json:常驻、藏起来、给老师的话(去掉首尾空白)、聊几分钟、怎么听、每天几条;孩子的别的字段不丢', s1.status === 200 && c1.tutors['english-tutor'].extras?.join() === 'dictation' && c1.tutors['math-tutor'].hidden === true && c1.talk.note === '这周学颜色' && c1.talk.minutes === 7 && c1.kid.listen === 'omni' && c1.kid.slug === 'ming' && c1.policyDefaults.dailyMessages === 40, JSON.stringify(c1.talk));
+  const c1 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { extras?: string[]; hidden?: boolean }>; talk: { note?: string; minutes: number }; kid: { listen: string; slug: string }; policyDefaults?: Record<string, unknown> };
+  check('设置写回 cotutor.json:常驻、藏起来、给老师的话(去掉首尾空白)、聊几分钟、怎么听;孩子的别的字段不丢;老页面交来的每天几条不认(不限条数)', s1.status === 200 && c1.tutors['english-tutor'].extras?.join() === 'dictation' && c1.tutors['math-tutor'].hidden === true && c1.talk.note === '这周学颜色' && c1.talk.minutes === 7 && c1.kid.listen === 'omni' && c1.kid.slug === 'ming' && c1.policyDefaults?.dailyMessages === undefined, JSON.stringify(c1.talk));
   const g3 = s1.json as PH;
-  check('回的是改过的样子;藏起来的老师家长端还列着', g3.listen === 'omni' && g3.dailyMessages === 40 && g3.talk.note === '这周学颜色' && g3.tutors.find((t) => t.name === 'math-tutor')!.hidden && g3.tutors.find((t) => t.name === 'english-tutor')!.extras.join() === 'dictation');
+  check('回的是改过的样子;藏起来的老师家长端还列着', g3.listen === 'omni' && !('dailyMessages' in g3) && g3.talk.note === '这周学颜色' && g3.tutors.find((t) => t.name === 'math-tutor')!.hidden && g3.tutors.find((t) => t.name === 'english-tutor')!.extras.join() === 'dictation');
   check('孩子端:藏起来的数学不见了,英语多了听写', (await kid()).tutors.map((t) => t.name + ':' + t.extras.join('+')).join() === 'chinese-tutor:dictation,english-tutor:dictation', (await kid()).tutors.map((t) => t.name + ':' + t.extras.join('+')).join());
   await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: null }, 'math-tutor': { hidden: false } }, talk: { note: '' } });
   const c2 = JSON.parse(readFileSync(cfgFile, 'utf8')) as { tutors: Record<string, { extras?: string[] }>; talk: { note?: string } };
   check('extras null = 回到按学科的缺省(字段删掉);给老师的话清空 = 删掉', !('extras' in c2.tutors['english-tutor']) && !('note' in c2.talk));
-  check('设置不对 400:不认识的常驻、听法、老师', (await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: ['x'] } } })).status === 400 && (await call('PATCH', '/api/parent/settings', { listen: 'ear' })).status === 400 && (await call('PATCH', '/api/parent/settings', { tutors: { 'nobody-tutor': {} } })).status === 400 && (await call('PATCH', '/api/parent/settings', { dailyMessages: -1 })).status === 400);
+  check('设置不对 400:不认识的常驻、听法、老师', (await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: ['x'] } } })).status === 400 && (await call('PATCH', '/api/parent/settings', { listen: 'ear' })).status === 400 && (await call('PATCH', '/api/parent/settings', { tutors: { 'nobody-tutor': {} } })).status === 400);
 
   // 一直听不再是常驻入口(《wip/实时老师常开麦设计.md》拍板 4):孩子端没有入口,家长端也开不了
   check('一直听不是常驻入口:extras 写 listen 回 400', (await call('PATCH', '/api/parent/settings', { tutors: { 'chinese-tutor': { extras: ['dictation', 'listen'] } } })).status === 400);

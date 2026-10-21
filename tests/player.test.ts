@@ -35,7 +35,7 @@ const lecture: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-18-po13-
 const withLecture: BoardSection = { cards: [lecture], lines: [L('我们回到拆开那一捆的地方', 0, { cues: [{ card: 0, name: 'play' }] }), L('剩下几根?', 0)] };
 const withLectureOff: BoardSection = { cards: [{ kind: 'lecture', props: { bundle: 'gone', ready: false } }], lines: [L('看看', 0, { cues: [{ card: 0, name: 'play' }] }), L('接着说', 0)] };
 
-const ctxOf = (sections: BoardSection[], over: Partial<PlayerCtx> = {}): PlayerCtx => ({ sections, pending: false, autoplay: true, readonly: false, stage: false, limit: false, now: 10_000, ...over });
+const ctxOf = (sections: BoardSection[], over: Partial<PlayerCtx> = {}): PlayerCtx => ({ sections, pending: false, autoplay: true, readonly: false, stage: false, now: 10_000, ...over });
 const M = (state: PlayerState, over: Partial<PlayerModel> = {}): PlayerModel => ({ ...initialPlayer(), state, ...over });
 const kinds = (fx: PlayerEffect[]) => fx.map((f) => f.kind).join(',');
 
@@ -152,7 +152,7 @@ function run(seed: number, steps: number): string | null {
   const w: World = { m: initialPlayer(), sections: [], pending: false, autoplay: r() < 0.8, stage: false, recording: false, now: 1_000, log: [] };
   let target: BoardSection | null = null; // 老师在写的这一节(写完的样子)
   let nth = 0;
-  const ctx = (): PlayerCtx => ({ sections: w.sections, pending: w.pending, autoplay: w.autoplay, readonly: false, stage: w.stage, recording: w.recording, limit: false, now: w.now });
+  const ctx = (): PlayerCtx => ({ sections: w.sections, pending: w.pending, autoplay: w.autoplay, readonly: false, stage: w.stage, recording: w.recording, now: w.now });
   // 开头:已经有一两节(打开页面、不出声)
   w.sections.push(reply(r, nth++));
   if (r() < 0.5) w.sections.push(reply(r, nth++));

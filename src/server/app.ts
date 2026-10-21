@@ -2,7 +2,7 @@
  * 服务的路由层:route(method, path, ctx, body) → {status, json|html},测试不用起端口。
  * R1 的查询接口照旧;R2 加:对话(列日期、看一天的家长视图、发消息)、cotutor.json 补丁(老师团页)、工作台 /dev(2026-09-22 之前叫家长页 /parent;
  * 现在 /parent 是家长端 = 家长板书页,给不懂技术的家长日常用,《家长板书页设计.md》拍板 13)。
- * R3 加:孩子端 `/`(kidPage)与 /api/kid/*(首页:课程表 + 老师卡 + 家长发布的首页卡;对话:服务端过滤后的孩子视图;发消息:from 固定 kid、每日上限 429)、配音文件 /api/audio。
+ * R3 加:孩子端 `/`(kidPage)与 /api/kid/*(首页:课程表 + 老师卡 + 家长发布的首页卡;对话:服务端过滤后的孩子视图;发消息:from 固定 kid)、配音文件 /api/audio。
  * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
 import { createHash } from 'node:crypto';
@@ -15,7 +15,7 @@ import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
 import { conversationFiles, currentThread, lastJobOf, localDate, threads, weekOf } from '../lib/conversation.ts';
-import { kidConversation, kidMessageCount, kidThreads, submittedCards, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
+import { kidConversation, kidThreads, submittedCards, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../lib/tutor-color.ts';
@@ -25,7 +25,7 @@ import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type Pl
 import type { CallReel } from '../live/recorder.ts';
 import { isRealtimeVoice, REALTIME_VOICES } from '../live/voices.ts';
 import { previewVoice } from '../live/preview.ts';
-import { DATE_RE, FREE_ACTIVITIES, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, resolvePolicy, subjectLang, type ActivityValue, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../schema/index.ts';
+import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, subjectLang, type ActivityValue, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../schema/index.ts';
 import type { BoardCard, Device } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
 import { tutorStatuses } from '../cli/tutors.ts';
@@ -36,7 +36,6 @@ import { createAccess, gatePage, isKidPath, type Access, type Who } from './acce
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { kidPage } from './kid-page.ts';
 import { kidHomeView, messageVia, resolveVia } from './home.ts';
-import { threadActivity } from './activity-state.ts';
 import { talkRun } from './talk-run.ts';
 import { DEV_PAGE } from './dev-page.ts';
 import { devOverview } from './dev-overview.ts';
@@ -167,7 +166,7 @@ export async function dayView(ctx: AppContext, tutor: string, date: string): Pro
 
 const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 
-/** 孩子端看到的老师:enabled 且不 hidden;每日上限用完 available = false(头像灰) */
+/** 孩子端看到的老师:enabled 且不 hidden */
 export interface KidTutor {
   name: string;
   display: string;
@@ -180,9 +179,6 @@ export interface KidTutor {
   /** 他的听写写哪种:学科是英语(含别名)= en */
   lang: 'zh' | 'en';
   hasVoice: boolean;
-  /** 今天还能发几条;null = 不限(实时的老师) */
-  remaining: number | null;
-  available: boolean;
   /** 卡上的常驻入口(《首页设计.md》拍板 18):dictation 听写与拍照听写、talk 口语课(要 talk.enabled) */
   extras: TutorExtra[];
   /** 新话题走实时(《wip/实时老师设想.md》):live.enabled 且这位老师在 live.voices 里;孩子端连 /api/live/<老师>/ws,连不上回到板书 */
@@ -194,19 +190,11 @@ export interface KidTutor {
 /** 这位老师走不走实时:总开关开着、挑了嘴的音色 */
 const liveOf = (ctx: AppContext, name: string): boolean => ctx.ws.config.live.enabled && Boolean(ctx.ws.config.live.voices[name]);
 
-/**
- * 今天还能发几条;null = 不限。实时的老师不限(《wip/实时老师设想.md》拍板 15):一条变得很小(交一张卡、一句「老师。」都算),
- * 10-20 晚语文老师 32 分钟就用完了 30 条
- */
-const remainingOf = (ctx: AppContext, name: string, daily: number, index: { messages: readonly ConversationMessage[] }): number | null =>
-  liveOf(ctx, name) ? null : Math.max(0, daily - kidMessageCount(index));
-
-export async function kidTutors(ctx: AppContext, date: string): Promise<KidTutor[]> {
+export async function kidTutors(ctx: AppContext): Promise<KidTutor[]> {
   const out: KidTutor[] = [];
   const colors = tutorColors(ctx.ws.config.tutors);
   for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
-    const remaining = remainingOf(ctx, t.name, t.policy.dailyMessages, await readIndex(ctx.ws, t.name, date));
-    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), remaining, available: remaining === null || remaining > 0, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), live: liveOf(ctx, t.name), listen: ctx.ws.config.live.listen });
+    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), live: liveOf(ctx, t.name), listen: ctx.ws.config.live.listen });
   }
   return out;
 }
@@ -232,15 +220,13 @@ export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
   const date = localDate(now);
   const view = await kidHomeView(ws, now);
   const figshot = ws.config.figshot ? { port: ws.config.figshot.port } : null;
-  return { title: ws.config.title, date, tutors: await kidTutors(ctx, date), home: view.home, cards: view.cards, figshot, listen: ws.config.kid.listen, hand: ws.config.kid.hand ?? 'right' };
+  return { title: ws.config.title, date, tutors: await kidTutors(ctx), home: view.home, cards: view.cards, figshot, listen: ws.config.kid.listen, hand: ws.config.kid.hand ?? 'right' };
 }
 
 export interface KidDay {
   tutor: string;
   date: string;
   messages: KidMessage[];
-  /** 今天还能发几条;null = 不限(实时的老师) */
-  remaining: number | null;
   /** 老师正在回的那条 job */
   pending: string | null;
   /** 当前话题(末条消息所在);还没说过话 → null */
@@ -269,7 +255,6 @@ export async function kidHistory(ctx: AppContext, tutor: string, days: number): 
 
 export async function kidDay(ctx: AppContext, tutor: string, date: string): Promise<KidDay> {
   const index = await readIndex(ctx.ws, tutor, date);
-  const policy = resolvePolicy(ctx.ws.config, tutor);
   const active = ctx.runner.running(tutor);
   const { states, assets } = await scanCards(ctx.ws, tutor, date);
   const messages = kidConversation(index, states, assets);
@@ -281,13 +266,12 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
   }
   // 小课堂卡:课读不读得出、那一段的起止,每次现读
   for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichPaints(ctx.ws, tutor, date, m.job, m.at, await enrichLectures(ctx.ws, m.section)); }
-  const remaining = remainingOf(ctx, tutor, policy.dailyMessages, index);
-  return { tutor, date, messages, remaining, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
+  return { tutor, date, messages, pending: active && active.date === date ? active.job : null, thread: currentThread(index) };
 }
 
 /**
  * 孩子端发一条(POST /api/kid/conversations/<老师>/messages 与实时老师的那条线共用,《wip/实时老师开发计划.md》P2.4):
- * 验正文、每日上限、话题、首页按钮、小课堂、activity、照片,拼成 Runner.send 的入参;不对就回该回的错(400 / 429)。不起老师
+ * 验正文、话题、首页按钮、小课堂、activity、照片,拼成 Runner.send 的入参;不对就回该回的错(400 / 409)。不起老师
  */
 export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown, date: string): Promise<{ input: SendInput } | { error: RouteResult }> {
   const ws = ctx.ws;
@@ -298,13 +282,9 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
   if (action === null) return { error: { status: 400, json: { error: 'bad_request' } } };
   const photos = await photosOf(ws, body.photos);
   if (photos === null) return { error: { status: 400, json: { error: 'bad_request' } } };
-  const policy = resolvePolicy(ws.config, tutor);
   const thread = body.thread === undefined ? undefined : typeof body.thread === 'string' && /^\d{4}-\d+$/.test(body.thread) ? body.thread : null;
   if (thread === null) return { error: { status: 400, json: { error: 'bad_request' } } };
-  // 「继续」不计每日上限:到了上限也能把老师讲完的听完;口语课(开课那条、它的话题里)也不计(FREE_ACTIVITIES);实时的老师不限
   const today = await readIndex(ws, tutor, date);
-  const free = body.talk !== undefined || (thread !== undefined && FREE_ACTIVITIES.includes(threadActivity(today.messages, thread)?.name ?? ''));
-  if (action !== 'continue' && !free && remainingOf(ctx, tutor, policy.dailyMessages, today) === 0) return { error: { status: 429, json: { error: 'limit', remaining: 0 } } };
   // 交过的卡不能再交(kid-view 的 submittedCards)
   if (action === 'submit' && focus?.data?.card && submittedCards(today).has(focus.data.card)) return { error: { status: 409, json: { error: 'submitted' } } };
   const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
@@ -377,7 +357,7 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
   return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(listenedOf(body.listened) ? { listened: listenedOf(body.listened) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 
-/** 家长板书页的一天(《家长板书页设计.md》§4.1):形状同 KidDay 少 remaining;答案不剥,系统发的也在 */
+/** 家长板书页的一天(《家长板书页设计.md》§4.1):形状同 KidDay;答案不剥,系统发的也在 */
 export interface ParentDay {
   tutor: string;
   date: string;

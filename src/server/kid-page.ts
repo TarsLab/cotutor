@@ -165,8 +165,6 @@ ${faviconLinks()}
   #deck .pc .kcards { margin-top:4px; }
   /* 家长端预览里正在改的那颗(拍板 33) */
   #deck .pc .bt.pv-sel { outline:4px solid var(--ink); outline-offset:3px; }
-  #deck .pc.off { pointer-events:auto; }
-  #deck .pc.off.front .bts { pointer-events:none; }
   body.offline #deck .pc { pointer-events:none; }
   .tutors:empty { display:none; }
   @media (prefers-reduced-motion:reduce) { #deck .pc:active { transform:var(--tf) !important; } }
@@ -434,9 +432,9 @@ __BRAND_CSS__
   #rl-ps-img { position:absolute; inset:0; margin:auto; max-width:100%; max-height:100%; object-fit:contain; }
   body.rlk #ps-cv { visibility:hidden; }
   body.rlk #ps { pointer-events:none; }
-  body.limit #pill, body.pending #pill { opacity:.45; }
+  body.pending #pill { opacity:.45; }
   /* 老师在想时中间那段照旧接按(按了说「老师在想,等一下再说」,busyHint),相机、加号不接 */
-  body.limit #pill, body.pending #pill > :not(#mid) { pointer-events:none; }
+  body.pending #pill > :not(#mid) { pointer-events:none; }
   #hold { position:absolute; left:0; right:0; bottom:0; height:300px; background:linear-gradient(180deg,#3b82e800 0%,#3b82e8cc 45%,#2f6fd6 100%); display:none; flex-direction:column; align-items:center; justify-content:flex-end; gap:22px; padding-bottom:calc(env(safe-area-inset-bottom) + 70px); color:#fff; pointer-events:none; z-index:20; }
   #hold.on { display:flex; }
   #hold .w { display:flex; align-items:center; gap:3px; height:28px; }
@@ -672,8 +670,7 @@ __VOICE_CSS__
     #lv-tools button { display:flex; flex-direction:column; align-items:center; gap:6px; font-size:13px; color:#6f6b63; }
     #lv-tools .ic { width:56px; height:56px; box-sizing:border-box; border-radius:50%; border:1px solid var(--line); background:#fff; display:grid; place-items:center; color:#6f6b63; }
     /* 老师在想:按钮自己画灰(voice-view 的 think),照样接按(按了晃一下说为什么);底下那排不接 */
-    body.live.pending #lv-tools, body.live.limit #lv-tools { opacity:.45; pointer-events:none; }
-    body.live.limit #lv-hold { opacity:.45; pointer-events:none; }
+    body.live.pending #lv-tools { opacity:.45; pointer-events:none; }
     body.live.nosend:not(.choose) #lv-hold, body.live.nosend:not(.choose) #lv-tools { display:none; }
     /* 先点上面一个(口语单拍好、今天点过同一个按钮):按钮灰着写「点上面开始」(voice-view 的 choose),底下那排淡着不接 */
     body.live.choose #lv-tools { opacity:.45; pointer-events:none; }
@@ -855,7 +852,7 @@ ${BOARD_MARK_JS}
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), unfold: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, held: false, rec: null, submitted: new Set(), pending: false, waitSince: null, waitTimer: null, limit: false, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, talk: null, talkWait: false, reel: null, pendSaid: null, homeDraw: true };
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), unfold: new Set(), state: { section: -1, line: -1, status: 'idle' }, replayOf: null, held: false, rec: null, submitted: new Set(), pending: false, waitSince: null, waitTimer: null, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, talk: null, talkWait: false, reel: null, pendSaid: null, homeDraw: true };
   // 家长板书页看的模式缺省不念(家长想听哪句点哪句);开关各记一个键,不和孩子的搅
   try { S.autoplay = PARENT ? localStorage.getItem(AUTOPLAY_KEY) === '1' : localStorage.getItem(AUTOPLAY_KEY) !== '0'; } catch { S.autoplay = !PARENT; }
   /** 家长板书页:清单的日期(null = 今天) */
@@ -1144,7 +1141,7 @@ ${BOARD_MARK_JS}
       const { t, card } = list.find((x) => x.t.name === n);
       const buttons = pvButtons(n, Array.isArray(card.props.buttons) ? card.props.buttons : []);
       const owned = (Array.isArray(H.cards) ? H.cards : []).filter((c) => c.kind !== 'tutor' && c.owner === n);
-      const sig = JSON.stringify([t.avatar, t.subject, t.display, t.available, buttons, owned, t.extras, S.talkLast && (S.talkLast.last ? S.talkLast.last.id : 'on'), H.home]);
+      const sig = JSON.stringify([t.avatar, t.subject, t.display, buttons, owned, t.extras, S.talkLast && (S.talkLast.last ? S.talkLast.last.id : 'on'), H.home]);
       let el = K.els.get(n);
       if (!el) {
         const pc = h('div', { class: 'c c-tutor pc', 'data-tutor': n, on: { click: (e) => { if (e.target.closest && e.target.closest('a[href]')) stashFront(pc); if (!pc.classList.contains('front')) pickTutor(n); } } });
@@ -1166,7 +1163,6 @@ ${BOARD_MARK_JS}
         for (const img of el.querySelectorAll('img')) if (!img.complete) img.addEventListener('load', layoutDeck, { once: true });
       } else el.querySelector('.pc-hd .av').classList.remove('draw'); // 之后的刷新摘掉(动画早放完了,摘了也不会重放)
       el.classList.toggle('front', n === front);
-      el.classList.toggle('off', !t.available);
       if (PREVIEW) for (const b of el.querySelectorAll('.bt')) b.classList.toggle('pv-sel', Boolean(S.pv && S.pv.tutor === n && S.pv.sel !== null && S.pv.sel !== undefined && String(S.pv.sel) === b.dataset.bid));
       const dot = Boolean(card.props.news) && n !== front && !seen.includes(n);
       const hd = el.querySelector('.pc-hd'), had = hd.querySelector('.dot');
@@ -1447,7 +1443,7 @@ ${BOARD_MARK_JS}
   const openTutor = (t, intent) => {
     unlock();
     intent = intent || { kind: 'new' };
-    S.tutor = t; S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.limit = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
+    S.tutor = t; S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null; S.ask = intent.ask || null;
     // 口语课页拍好了口语单(《wip/口语课改实时老师设计.md》§三之一):先等孩子点「先热身,再打电话」(那一下起声音),发出去的第一条带 talk
@@ -1532,7 +1528,7 @@ ${BOARD_MARK_JS}
     $('#lv-acts').replaceChildren(...(o ? o.acts.map(lvGo) : []));
   }
   new MutationObserver(openSync).observe($('#board'), { childList: true });
-  const closeTutor = () => { liveDispatch({ type: 'reset' }); liveClose(); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'limit', 'speaking', 'nod'); S.homeDraw = true; loadHome(); };
+  const closeTutor = () => { liveDispatch({ type: 'reset' }); liveClose(); hideLecture(); S.lecture = null; reelStop(); clearTimeout(S.pollTimer); dispatch({ type: 'halt' }); psClose(); $('#menu').classList.remove('on'); $('#lb').classList.remove('on'); S.tutor = null; S.via = null; S.cont = null; S.ask = null; $('#tutor').classList.remove('on'); document.body.classList.remove('pending', 'speaking', 'nod'); S.homeDraw = true; loadHome(); };
   $('#back').addEventListener('click', closeTutor);
   $('#back-ic').innerHTML = ICON.back;
 
@@ -2489,8 +2485,8 @@ __WORD_DRAW_JS__
     if (!S.pending) S.waitSince = null;
     const waited = S.waitSince ? Date.now() - S.waitSince : 0;
     const ps = playView();
-    let v = subtitleFor({ state: ps, sections: S.sections, pending: S.pending, waitedMs: waited, limit: S.limit });
-    if (S.stage && S.stage.playing && !S.limit) v = stageSubtitle(S.stage.playing.phase, S.stage.playing.line);
+    let v = subtitleFor({ state: ps, sections: S.sections, pending: S.pending, waitedMs: waited });
+    if (S.stage && S.stage.playing) v = stageSubtitle(S.stage.playing.phase, S.stage.playing.line);
     const t = $('#sub-text'); t.className = v.kind;
     const dots = () => h('span', { class: 'dots' }, h('i'), h('i'), h('i'));
     if (v.kind === 'wait') t.replaceChildren(v.text, dots());
@@ -2509,7 +2505,6 @@ __WORD_DRAW_JS__
     b.innerHTML = v.right === 'pause' ? ICON.pause : v.right === 'play' ? ICON.play : v.right === 'stop' ? ICON.stop : '';
     // 实时:脑还在写时嘴在说,头像是「说」不是「想」
     document.body.classList.toggle('pending', S.pending && !(LV.on && LV.model.status === 'mouth'));
-    document.body.classList.toggle('limit', S.limit);
     // 老师等着孩子答:最后那张问题卡的答案栏露「等你说…」
     document.body.classList.toggle('waiting', ps.status === 'waiting' && !ps.replay && !S.pending);
     // 老师停下来了(等孩子答、念完):板上最后那张卡整张露出来——念最后几句时滚去了上面的卡,问题卡在底下只露半截。孩子 3 秒内自己翻过就不拉
@@ -2738,7 +2733,7 @@ __WORD_DRAW_JS__
   window.addEventListener('pagehide', () => playFlush(true));
   document.addEventListener('visibilitychange', () => { playRec({ k: 'visible', on: !document.hidden }); if (document.hidden) playFlush(true); });
   const dispatch = (ev) => {
-    const r = step({ state: S.state, replayOf: S.replayOf, held: S.held }, ev, { sections: S.sections, pending: S.pending, autoplay: S.autoplay && !LV.on, readonly: S.readonly, stage: Boolean(S.stage), recording: Boolean(S.rec), limit: S.limit, now: Date.now() });
+    const r = step({ state: S.state, replayOf: S.replayOf, held: S.held }, ev, { sections: S.sections, pending: S.pending, autoplay: S.autoplay && !LV.on, readonly: S.readonly, stage: Boolean(S.stage), recording: Boolean(S.rec), now: Date.now() });
     S.state = r.model.state; S.replayOf = r.model.replayOf; S.held = r.model.held;
     playNote();
     syncUnfold();
@@ -2753,7 +2748,6 @@ __WORD_DRAW_JS__
       const d = await api('GET', CONV + S.tutor.name + '/' + (S.hist || 'today') + warmHint);
       setOffline(false);
       S.day = d;
-      S.limit = typeof d.remaining === 'number' && d.remaining <= 0;
       // 话题:没选过就是当前(末条所在)的;板书只铺这个话题的节。新话题空白态什么都不铺,发出第一句才有话题
       if (!S.thread && !S.newThread) S.thread = d.thread;
       const mine = S.newThread ? [] : d.messages.filter((m) => m.thread === S.thread);
@@ -2915,7 +2909,7 @@ __WORD_DRAW_JS__
   const send = async (text, opts = {}) => {
     text = (text || '').trim();
     if (!text && !opts.action && !(opts.photos && opts.photos.length)) return;
-    if (!S.tutor || !canSend() || S.limit) return;
+    if (!S.tutor || !canSend()) return;
     unlock();
     // 实时:不是按住说的(打字、拍照、交卡、首页按钮的开场)也走那条连接,嘴先接住;嘴还没连上(刚进来就发开场)等它
     if (LV.on && !opts.voice) { if (LV.ready) liveSendNow(text, opts); else LV.queued = [text, opts]; return; }
@@ -2944,7 +2938,7 @@ __WORD_DRAW_JS__
     } catch (e) {
       // 忙 / 上限 / 不通:什么都不报;刷新一下让状态说话
       S.pending = false;
-      if (e && e.status === 429) { S.limit = true; renderSubtitle(); } else if (e && e.status === 409) loadDay(true); else if (e && e.status === 400 && (S.via || body.talk)) { S.via = null; closeTutor(); } else setOffline(true);
+      if (e && e.status === 409) loadDay(true); else if (e && e.status === 400 && (S.via || body.talk)) { S.via = null; closeTutor(); } else setOffline(true);
     }
   };
 
@@ -3770,7 +3764,7 @@ __REEL_DOCK_JS__
     const s = LV.on ? replaySec() : null;
     if (s && RP.job !== s.job && LV.model.status !== 'replay') { RP.job = s.job; RP.data = null; RP.miss = false; }
     const playing = LV.on && LV.model.status === 'replay';
-    const quiet = LV.on && LV.model.status === 'quiet' && !S.pending && !S.limit && !S.readonly;
+    const quiet = LV.on && LV.model.status === 'quiet' && !S.pending && !S.readonly;
     if (quiet && s && !RP.data && !RP.miss && !RP.loading && S.day && S.tutor) {
       RP.loading = true;
       const job = s.job;
@@ -3818,11 +3812,10 @@ __REEL_DOCK_JS__
     const cap = $('#lv-cap'), c = cap.querySelector('.lv-cur');
     cap.querySelector('.lv-prev').textContent = LV.cap.prev;
     const cut = Boolean(LV.cap.cut) && LV.cap.cut === LV.cap.cur;
-    const limit = S.limit ? subtitleFor({ state: S.state, sections: [], pending: false, waitedMs: 0, limit: true }).text : '';
-    c.textContent = limit || (LV.cap.cur ? LV.cap.cur + (cut ? '……' : '') : '');
-    c.classList.toggle('cut', cut && !limit);
-    c.classList.toggle('nm', !limit && !LV.cap.cur);
-    cap.classList.toggle('done', LV.model.status !== 'mouth' && !limit);
+    c.textContent = LV.cap.cur ? LV.cap.cur + (cut ? '……' : '') : '';
+    c.classList.toggle('cut', cut);
+    c.classList.toggle('nm', !LV.cap.cur);
+    cap.classList.toggle('done', LV.model.status !== 'mouth');
   };
   /** 字幕换一句:上一句挪上去 */
   const liveSay = (text) => { if (!text) return; if (LV.cap.cur && LV.cap.cur !== text) LV.cap.prev = LV.cap.cur; LV.cap.cur = text; renderSubtitle(); };
@@ -3886,7 +3879,7 @@ __REEL_DOCK_JS__
       case 'kid': if (!String(m.text || '').trim()) { S.pending = false; renderSubtitle(); } else if (LV.model.open) { S.pending = true; if (!S.waitSince) S.waitSince = Date.now(); renderSubtitle(); } break;
       case 'turn': liveTurn(m); break;
       case 'flush': liveDispatch({ type: 'flush' }); break;
-      case 'err': S.pending = false; if (m.status === 429) S.limit = true; renderSubtitle(); break;
+      case 'err': S.pending = false; renderSubtitle(); break;
       default: break;
     }
   };
@@ -3894,7 +3887,7 @@ __REEL_DOCK_JS__
   /** 一直听时推不推:liveStep 的(关麦、卡的声音、录音、小课堂那一段)再加页面的——这会儿能不能发(小课堂还没看完、「接着那个还是重新开始」、只读)、到了每天的上限;
    *  变了才告诉服务端 gate(关的时候孩子说到一半的那句作废)。每块声音来时看一眼,能不能发变了不用另外通知 */
   const liveGateSync = () => {
-    const on = liveGate(LV.model) && canSend() && !S.limit;
+    const on = liveGate(LV.model) && canSend();
     if (on !== LV.gateOn) { LV.gateOn = on; lvSend({ t: 'gate', on }); }
     return on;
   };
@@ -4090,14 +4083,14 @@ __REEL_DOCK_JS__
     // 嘴还没连上:不接,说一声(不掉进板书的浏览器识别)
     if (LV.on && !LV.ready) { connectingHint(); return; }
     // 老师在想:不接,说一声(busyHint);嘴一出声 body.pending 就摘掉,能按。一直听时这颗是开关麦,照旧接
-    if (document.body.classList.contains('pending') && !document.body.classList.contains('limit') && !(LV.on && LV.model.open)) { busyHint(); return; }
+    if (document.body.classList.contains('pending') && !(LV.on && LV.model.open)) { busyHint(); return; }
     if (rec || hearing) return; // 上一句还在收尾(omni 还在听)
     if (LV.audio && LV.on) LV.audio.wake().catch(() => {});
     press = { y: e.clientY, cancelled: false, held: false, live: false, cancelPx, onTap, timer: setTimeout(() => {
       if (!press) return;
       // 实时:按住推声音给嘴(不走浏览器识别);到了上限不接
       // 一直听:那条不是按住说话,按久了也当点了一下(打字)
-      if (LV.on && LV.ready) { if (S.limit || LV.model.open) return; press.held = true; press.live = true; liveHold(); return; }
+      if (LV.on && LV.ready) { if (LV.model.open) return; press.held = true; press.live = true; liveHold(); return; }
       if (!holdOk()) return;
       press.held = true; setBar(barNext(S.bar, 'holdStart')); dispatch({ type: 'halt' }); startRec();
     }, 150) };
@@ -4235,7 +4228,7 @@ __REEL_DOCK_JS__
     psUi(); psRender();
   };
   const psOpen = async (files) => {
-    if (!files.length || !S.tutor || !canSend() || S.limit || S.pending) return;
+    if (!files.length || !S.tutor || !canSend() || S.pending) return;
     dispatch({ type: 'stageOpen' });
     const items = (await Promise.all(files.map(psItem))).filter(Boolean);
     if (!items.length || !S.tutor) return;
@@ -4285,7 +4278,7 @@ __REEL_DOCK_JS__
   // 发:逐张导出(转 → 裁 → 画 → 缩到长边 PHOTO_MAX_SIDE)上传拿 path,全拿到再发一条 {text, photos};传不上去屏不关、编辑留着,再点一次只传没传上的
   $('#ps-go').addEventListener('click', async () => {
     if (PS.busy || !PS.items.length) return;
-    if (!S.tutor || !canSend() || S.limit || S.pending) return;
+    if (!S.tutor || !canSend() || S.pending) return;
     PS.busy = true; psUi();
     const name = S.tutor.name;
     try {

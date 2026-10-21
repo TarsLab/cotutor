@@ -14,15 +14,15 @@ check('enabled 缺省 true;口播老师出厂关着(要 koubo)', cfg.tutors['mat
 check('运行时 claude/qwen 都在', 'claude' in cfg.runtimes && 'qwen' in cfg.runtimes && cfg.runtimes.default === 'claude');
 
 const pol = resolvePolicy(cfg, 'math-tutor');
-check('政策缺省 60/30/10/10/4000', pol.replyMaxChars === 60 && pol.dailyMessages === 30 && pol.contextPack.recent === 10 && pol.contextPack.planLines === 10 && pol.contextPack.entryChars === 4000 && !('reviewGate' in pol) && !('forms' in pol));
+check('政策缺省 60/10/10/4000,没有每天条数', pol.replyMaxChars === 60 && !('dailyMessages' in pol) && pol.contextPack.recent === 10 && pol.contextPack.planLines === 10 && pol.contextPack.entryChars === 4000 && !('reviewGate' in pol) && !('forms' in pol));
 
 const layered = CotutorConfigSchema.parse({
   ...raw,
   policyDefaults: { replyMaxChars: 80, contextPack: { recent: 3 } },
-  tutors: { ...raw.tutors, 'math-tutor': { ...raw.tutors['math-tutor'], policy: { dailyMessages: 5, board: 'off' } } },
+  tutors: { ...raw.tutors, 'math-tutor': { ...raw.tutors['math-tutor'], policy: { dailyMessages: 5, board: 'off' } as Record<string, unknown> } },
 });
 const p2 = resolvePolicy(layered, 'math-tutor');
-check('政策逐层覆盖', p2.replyMaxChars === 80 && p2.contextPack.recent === 3 && p2.contextPack.planLines === 10 && p2.dailyMessages === 5 && p2.board === 'off');
+check('政策逐层覆盖;老 workspace 写着的 dailyMessages 读得进、不起作用', p2.replyMaxChars === 80 && p2.contextPack.recent === 3 && p2.contextPack.planLines === 10 && !('dailyMessages' in p2) && p2.board === 'off');
 check('别的老师不受影响', resolvePolicy(layered, 'chinese-tutor').board === 'auto' && resolvePolicy(layered, 'chinese-tutor').replyMaxChars === 80);
 
 check('出厂老师带卡的清单(text 总在);口播只有 text / read / record', cfg.tutors['math-tutor'].cards?.join() === 'text,choice,image,lecture,canvas,code' && cfg.tutors['koubo-tutor'].cards?.join() === 'text,read,record' && Object.values(cfg.tutors).every((t) => t.cards?.includes('text')));

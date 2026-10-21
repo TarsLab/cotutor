@@ -5,7 +5,7 @@
  * 没有配音文件(/api/audio 一律 404),页面退回浏览器自带的合成声(页面模式 synth,只有这里给;真服务的孩子端不用合成声),所以逐句节奏是真的。
  * 老师「想」的期间按流式模拟:卡在 delay 里一张张出现(pending 条目带 partial 板书),想完才有讲稿与声音。
  * 卡的状态 PUT 假存在内存里(过真的 state 契约),today 里并回卡上;发消息接 {text, action, focus},「交给老师」后照常追加下一节。
- * 场景:normal(缺省)/ limit(每日上限已到)/ offline(接口全 500,页面该灰)。
+ * 场景:normal(缺省)/ offline(接口全 500,页面该灰)。
  * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有开场与接着昨天的按钮,数学老师有开场,英语老师没写(补一张);
  * 发消息带 via 时照真服务的规则换成按钮上的字、定话题。
  * --live:语文、数学老师走实时老师页,那条 WebSocket 是 mock-live.ts 的假嘴(照脚本「念」静音的声音,不花钱)。
@@ -84,7 +84,7 @@ import { audioData } from '../lib/audio-data.ts';
 import { listenOmni, type Transcribe } from './listen.ts';
 import { VOICE_GALLERY_PAGE } from './voice-gallery-page.ts';
 
-export type MockScenario = 'normal' | 'limit' | 'offline' | 'nopost';
+export type MockScenario = 'normal' | 'offline' | 'nopost';
 
 export interface MockTutor {
   name: string;
@@ -616,8 +616,6 @@ export function createMock(opts: MockOptions = {}): Mock {
       past.set(t.name, [{ job, thread: job, at: `${yesterday()}T09:30`, question: '昨天问的:' + t.firstQuestion, reply: section.lines[section.lines.length - 1]?.text ?? null, pending: false, artifacts: [], section }]);
     }
   }
-  const dailyLimit = 30;
-  const used = (name: string): number => (messages.get(name) ?? []).filter((m) => m.question !== null && m.action !== 'continue').length;
   /** 话题打星(家长端清单上):<老师>/<话题> → 1–5;记过账的话题(同样的键) */
   const ratings = new Map<string, number>();
   /** 录音卡的录音(<老师>/<日期>.<job>.cards/<n>/rec-<k>.<ext> → 字节),只在内存里 */
@@ -642,12 +640,11 @@ export function createMock(opts: MockOptions = {}): Mock {
     const section = withState ? mockPaints(await enrichLectures(MOCK_LECTURE_DIRS, stripSecrets(withState)), m) : null;
     return { ...rest, section };
   };
-  const remaining = (name: string): number => (scenario === 'limit' ? 0 : Math.max(0, dailyLimit - used(name)));
   // 学科色同真服务:按老师的先后定(src/lib/tutor-color.ts)
   const colors = tutorColors(Object.fromEntries(MOCK_TUTORS.map((t) => [t.name, { subject: t.subject }])));
   /** --live:有脸的三位老师走实时老师页(口播老师是工具人式的,照旧板书) */
   const LIVE_TUTORS = new Set(['chinese-tutor', 'math-tutor', 'english-tutor']);
-  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk'), live: Boolean(opts.live) && LIVE_TUTORS.has(t.name), listen: 'hold' }));
+  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: false, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk'), live: Boolean(opts.live) && LIVE_TUTORS.has(t.name), listen: 'hold' }));
   /** 小课堂:样本课包与样本视频在仓库里(tests/fixtures/bundles/、lectures/),起来时和真服务一样读一遍(readLecture)、记住 */
   const lectures = new Map<string, Lecture>();
   const lecturesLoaded = (async () => {
@@ -935,7 +932,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (tail === 'today' && method === 'GET') {
         const shown = (messages.get(name) ?? []);
         const pending = shown.find((m) => m.pending);
-        const out: KidDay = { tutor: name, date, messages: await Promise.all(shown.map(kidMessage)), remaining: remaining(name), pending: pending ? pending.job : null, thread: shown.length ? shown[shown.length - 1].thread : null };
+        const out: KidDay = { tutor: name, date, messages: await Promise.all(shown.map(kidMessage)), pending: pending ? pending.job : null, thread: shown.length ? shown[shown.length - 1].thread : null };
         return { status: 200, json: out };
       }
       if (tail === 'history' && method === 'GET') {
@@ -950,7 +947,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (/^\d{4}-/.test(tail) && method === 'GET') {
         if (tail > date) return { status: 400, json: { error: 'bad_request' } };
         const old = tail === yesterday() ? (past.get(name) ?? []) : [];
-        const out: KidDay = { tutor: name, date: tail, messages: await Promise.all(old.map(kidMessage)), remaining: remaining(name), pending: null, thread: old.length ? old[old.length - 1].thread : null };
+        const out: KidDay = { tutor: name, date: tail, messages: await Promise.all(old.map(kidMessage)), pending: null, thread: old.length ? old[old.length - 1].thread : null };
         return { status: 200, json: out };
       }
       if (tail === 'messages' && method === 'POST') {
@@ -981,7 +978,6 @@ export function createMock(opts: MockOptions = {}): Mock {
           else { newThread = true; wantThread = undefined; }
         }
         if (!said.trim() && !action && !photos.length) return { status: 400, json: { error: 'bad_request' } };
-        if (action !== 'continue' && remaining(name) <= 0) return { status: 429, json: { error: 'limit', remaining: 0 } };
         if (list.some((m) => m.pending)) return { status: 409, json: { error: 'busy' } };
         const focusCard = isObj(body.focus) && typeof body.focus.card === 'string' ? body.focus.card : null;
         if (action === 'submit' && focusCard && list.some((x) => x.submitted === focusCard)) return { status: 409, json: { error: 'submitted' } };

@@ -13,7 +13,7 @@ delete process.env.COTUTOR_WORKSPACE;
 delete process.env.DASHSCOPE_API_KEY;
 delete process.env.QWENCLOUD_TOKEN_PLAN_API_KEY;
 
-const { paintPrompt, paintLayout, paintSize, PAINT_NEGATIVE } = await import('../src/paint/prompt.ts');
+const { paintPrompt, paintLayout, paintSize, paintStyleCustom, PAINT_NEGATIVE } = await import('../src/paint/prompt.ts');
 const { makeDraw } = await import('../src/paint/draw.ts');
 const { startPaints, enrichPaints, paintLines, paintedToday, paintNote, PAINT_STALE_MS } = await import('../src/paint/painter.ts');
 const { parseCard } = await import('../src/cards/index.ts');
@@ -42,6 +42,8 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   check('题干与词语宝库不进画(画面里不要字)', !prompt.includes('题') && !prompt.includes('词语宝库'));
   check('家长改的画风换掉缺省那几行,版式与分幅照接', paintPrompt(p, ['剪纸风']).includes('剪纸风') && !paintPrompt(p, ['剪纸风']).includes(PAINT_DEFAULT.prompt[0]) && paintPrompt(p, ['剪纸风']).includes('第 1 格'));
   check('三格横排、两格横排、一幅一张画', paintLayout(3).includes('三格从左到右横着排') && paintLayout(2).includes('依次是第 1、2 格') && paintLayout(1) === '一张画。' && paintPrompt({ panels: ['小熊在地里。'] }).includes('画面:小熊在地里。'));
+  check('圆圈数字只在多格的版式里提,一幅的整段不提(提了就往图上点 ①③Ⓐ)', paintLayout(4).includes('圆圈数字') && paintLayout(2).includes('圆圈数字') && !paintPrompt({ panels: ['小熊在地里。'] }).includes('圆圈') && !PAINT_DEFAULT.prompt.join().includes('圆圈'), paintPrompt({ panels: ['小熊在地里。'] }));
+  check('老 workspace 写着 10-21 前出厂的画风,不算改过;真改了才算', !paintStyleCustom([...PAINT_DEFAULT.prompt.slice(0, 2), '除了圆圈数字,画面里不要任何文字、对话气泡、拟声词。']) && !paintStyleCustom(PAINT_DEFAULT.prompt) && !paintStyleCustom(undefined) && paintStyleCustom(['剪纸风']));
   check('尺寸:四格与一幅照配置,两三格换宽的', paintSize(4, '1280*1280') === '1280*1280' && paintSize(1, '1024*1024') === '1024*1024' && paintSize(3, '1280*1280') === '1664*928');
   check('反向提示词不超过 500 字符、不要字', PAINT_NEGATIVE.length < 500 && PAINT_NEGATIVE.startsWith('文字'));
   check('五幅解析不成、退文字卡', parseCard('paint', '1. a\n2. b\n3. c\n4. d\n5. e').card.kind === 'text');

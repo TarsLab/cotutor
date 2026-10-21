@@ -300,11 +300,12 @@ export type DictationConfig = z.infer<typeof DictationSchema>;
  * 改过就以它为准(doctor 提示挪进 activity 文件);不在 activity 话题里画也照它。版式、角色、分幅由应用接(src/paint/prompt.ts)。
  * 2026-10-11 拿「小熊和小猴种西瓜」四格试:qwen-image-2.0 4 秒、qwen-image-2.0-pro 15 秒,四格里角色都对得上;pro 的表情(低头、脸红)更到位。
  * 2026-10-13 缺省换 qwen-image-3.0-pro:千问 Token Plan 有它(一张约 50 Credits),2.0 系列没有;同一个四格 10 秒,画风照提示词,角色分到哪格有几处没对上。
+ * 2026-10-21「除了圆圈数字」挪进多格的版式:写在画风里一幅的图也收到,宇宙那张散着画了 ①③Ⓐ。
  */
 export const PAINT_PROMPT_DEFAULT = [
   '儿童绘本插画,水彩加干净的线条,颜色明亮柔和,像小学二年级语文练习册里的看图写话插图。',
   '人物是可爱的卡通形象,表情和动作夸张一点,一眼看得出在干什么、心情怎样。',
-  '除了圆圈数字,画面里不要任何文字、对话气泡、拟声词。',
+  '画面里不要任何文字、对话气泡、拟声词。',
 ];
 export const PAINT_DEFAULT = { model: 'qwen-image-3.0-pro', size: '1280*1280', daily: 2, prompt: PAINT_PROMPT_DEFAULT };
 export const PaintSchema = z.object({

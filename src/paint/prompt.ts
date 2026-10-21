@@ -11,10 +11,10 @@ import { PAINT_PROMPT_DEFAULT } from '../schema/index.ts';
 /** 反向提示词(百炼限 500 字符) */
 export const PAINT_NEGATIVE = '文字,字母,水印,对话气泡,拟声词,写实照片,恐怖,血腥,武器,畸形的手,多余的肢体,格子数量不对';
 
-const FRAME = '格子之间留白边,每格有细圆角边框。';
+const FRAME = '格子之间留白边,每格有细圆角边框。除了这几个圆圈数字,画面里没有别的字。';
 const NUMS = ['1', '2', '3', '4'];
 
-/** 几格怎么排:四格 2×2(练习册的样子),两三格横排,一幅就是一张画 */
+/** 几格怎么排:四格 2×2(练习册的样子),两三格横排,一幅就是一张画(不提编号:提了模型就往一幅的图上点圆圈数字) */
 export function paintLayout(n: number): string {
   if (n >= 4) return `一张四格连环画,四格按 2×2 排,从左上到右下依次是第 1、2、3、4 格,每格左上角一个圆圈数字。${FRAME}`;
   if (n > 1) return `一张${n === 3 ? '三' : '两'}格连环画,${n === 3 ? '三' : '两'}格从左到右横着排,依次是第 ${NUMS.slice(0, n).join('、')} 格,每格左上角一个圆圈数字。${FRAME}`;
@@ -47,7 +47,13 @@ export function paintPromptFrom(template: string, p: Pick<PaintProps, 'panels' |
   return fillSlots(template, paintSlots(p));
 }
 
-/** cotutor.json 的 paint.prompt 改过(和出厂的不一样):老 workspace 家长改的画风,以它为准 */
+/** 出厂过的画风:老 workspace 的 cotutor.json 里写着其中一份,也当没改过 */
+const PAINT_PROMPT_SHIPPED = [
+  PAINT_PROMPT_DEFAULT,
+  [...PAINT_PROMPT_DEFAULT.slice(0, 2), '除了圆圈数字,画面里不要任何文字、对话气泡、拟声词。'], // 2026-10-21 前
+].map((s) => JSON.stringify(s));
+
+/** cotutor.json 的 paint.prompt 改过(和出厂过的都不一样):老 workspace 家长改的画风,以它为准 */
 export function paintStyleCustom(style: readonly string[] | undefined): boolean {
-  return style !== undefined && JSON.stringify(style) !== JSON.stringify(PAINT_PROMPT_DEFAULT);
+  return style !== undefined && !PAINT_PROMPT_SHIPPED.includes(JSON.stringify(style));
 }

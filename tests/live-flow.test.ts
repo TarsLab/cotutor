@@ -309,6 +309,46 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 {
+  // ---- 脑还没写出第一句就被打断:这一轮的讲稿全丢;孩子那句排着,脑写完再交;下一轮上下文包带 cut: 0(孩子一句没听到)----
+  const k = await connect('chinese-tutor');
+  await until(() => has(k, (m) => m.t === 'ready'));
+  const today = localDate(ctx.now());
+  fake.kidText = '工具慢,板书讲讲三角形';
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: { newThread: true } }));
+  await until(() => has(k, (m) => m.t === 'turn'), 10000);
+  const jobA = k.msgs.find((m) => m.t === 'turn')!.job as string;
+  const nA = k.msgs.length;
+  fake.kidText = '我不会';
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: {} }));
+  const okB = await until(() => k.msgs.slice(nA).some((m) => m.t === 'turn'), 15000);
+  const jobB = k.msgs.slice(nA).find((m) => m.t === 'turn')?.job as string;
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  const promptB = jobB ? (JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${today}.${jobB}.run.json`), 'utf8')) as { prompt: string }).prompt : '';
+  check('第一句之前被打断:那一轮一句都不念;孩子那句等脑写完再交;下一轮上下文包带 cut: 0', okB && !k.msgs.some((m) => m.t === 'read' && m.job === jobA) && promptB.includes('  live:\n    cut: 0\n'), promptB.slice(0, 300));
+  // 这一轮念完了再按:孩子都听到了,不带 cut
+  const linesB = (indexOf(today).messages.find((m) => m.job === jobB)?.section?.lines ?? []).length;
+  await until(() => k.msgs.filter((m) => m.t === 'read' && m.job === jobB).length === linesB, 10000);
+  await until(() => !k.msgs.length || k.bins >= fake.conns.at(-1)!.responses.length, 3000);
+  await sleep(1200);
+  const nC = k.msgs.length;
+  fake.kidText = '懂了';
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: {} }));
+  await until(() => k.msgs.slice(nC).some((m) => m.t === 'turn'), 15000);
+  const jobC = k.msgs.slice(nC).find((m) => m.t === 'turn')?.job as string;
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  const promptC = jobC ? (JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${today}.${jobC}.run.json`), 'utf8')) as { prompt: string }).prompt : '';
+  check('上一轮念完了再按:不带 cut', Boolean(jobC) && !promptC.includes('cut:'), promptC.slice(0, 300));
+  k.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => k.closed !== null);
+}
+
+{
   // ---- 实时的讲稿不截(replyMaxChars 60 只管板书):超过 60 字的一句原样交给嘴、原样上字幕 ----
   const k = await connect('chinese-tutor');
   await until(() => has(k, (m) => m.t === 'ready'));

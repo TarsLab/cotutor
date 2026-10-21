@@ -72,14 +72,14 @@ export const ContextPackSchema = z.object({
     })
     .optional(),
   /**
-   * 这一轮走实时(《wip/实时老师设想.md》):嘴(realtime 模型)已经替老师接住了孩子,讲稿交给嘴照念、不配音。caught = 嘴接住时说的那句;cut = 上一轮的讲稿念到第几句被孩子打断(1 起,没打断不写)。
+   * 这一轮走实时(《wip/实时老师设想.md》):嘴(realtime 模型)已经替老师接住了孩子,讲稿交给嘴照念、不配音。caught = 嘴接住时说的那句;cut = 上一轮的讲稿念到第几句被孩子打断(1 起;0 = 一句都没念到就被打断了;没打断不写)。
    * 口语课(《wip/口语课改实时老师设计.md》):warmup = 热身的摸底,一拍一行(应用按转写记);phone = 打电话打了几分钟(0 起,还没打不写);
    * app = 这一轮不是孩子说的:call = 你念了 [[call]],现在开始打电话;quiet = 热身里孩子连着两拍没开口
    */
   live: z
     .object({
       caught: z.string().optional(),
-      cut: z.number().int().positive().optional(),
+      cut: z.number().int().nonnegative().optional(),
       warmup: z.array(z.string()).optional(),
       phone: z.number().int().nonnegative().optional(),
       app: z.enum(['call', 'quiet']).optional(),

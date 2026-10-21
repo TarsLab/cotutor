@@ -74,11 +74,11 @@ export function renderContextPack(pack: ContextPack): string {
   }
   if (p.live) {
     const l = p.live;
-    if (!l.caught && !l.cut && !l.warmup?.length && l.phone === undefined && !l.app) out.push('  live: true');
+    if (!l.caught && l.cut === undefined && !l.warmup?.length && l.phone === undefined && !l.app) out.push('  live: true');
     else {
       out.push('  live:');
       if (l.caught) out.push(`    caught: ${yamlScalar(l.caught)}`);
-      if (l.cut) out.push(`    cut: ${l.cut}`);
+      if (l.cut !== undefined) out.push(`    cut: ${l.cut}`);
       if (l.app) out.push(`    app: ${l.app}`);
       if (l.phone !== undefined) out.push(`    phone: ${l.phone}`);
       if (l.warmup?.length) {

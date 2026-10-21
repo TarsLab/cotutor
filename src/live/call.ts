@@ -476,6 +476,9 @@ export class LiveCall {
     const heard = at?.kind === 'read' ? at.beat : this.said?.kind === 'read' ? this.said.beat : dropped[0];
     // 孩子端在放的那段里亮到了哪句就报哪句;那段还没亮(声音没到孩子端)报段首
     if (heard) this.cut = (this.lastRead && this.lastRead.job === heard.job && heard.lines.includes(this.lastRead.line) ? this.lastRead.line : heard.lines[0]) + 1;
+    // 脑这一轮还一句都没念到(还没写出第一句)就被打断:报 0,下一轮脑才知道孩子一句没听到
+    // (10-20 21:18 连着两轮在第一句之前被按掉,脑以为提示给过了,下一轮直接讲了答案)
+    else if (this.job && this.lastRead?.job !== this.job) this.cut = 0;
     if (playing && this.job) this.mouth(this.job, Date.now(), { lane: 'mouth', kind: 'cut', line: at?.kind === 'read' && this.lastRead?.job === this.job ? this.lastRead.line : null });
     for (const t of this.readTimers.splice(0)) clearTimeout(t);
     // 热身不等了(排着的那几拍跟着丢了;摸底留着)
@@ -741,7 +744,7 @@ export class LiveCall {
     // 口语课:热身的摸底一直带着;打了电话带打了几分钟;应用起的这一轮说明为什么
     const live = {
       ...(this.caught ? { caught: this.caught } : {}),
-      ...(this.cut ? { cut: this.cut } : {}),
+      ...(this.cut !== undefined ? { cut: this.cut } : {}),
       ...(this.warm.length ? { warmup: warmLines(this.warm) } : {}),
       ...(this.phoneAt !== null ? { phone: Math.max(0, Math.floor((Date.now() - this.phoneAt) / 60_000)) } : {}),
       ...(app === 'call' || app === 'quiet' ? { app: app as 'call' | 'quiet' } : {}),

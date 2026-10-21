@@ -2,7 +2,7 @@
  * 假 CLI:模仿 claude / qwen 的 stream-json 无头输出,给 runner 测试用(不花钱、不联网)。
  * 用法(运行时模板里):node --experimental-strip-types _fake-cli.ts [--resume <id>] [--agent <name>] [--fail] [--stream] <prompt>
  * --stream:最终文本先按行以 stream_event(content_block_delta)吐出来,每行歇 80ms(模仿 claude --include-partial-messages),再发 assistant 与 result。
- * 行为:回显 prompt 的最后一行;含「录音卡」出三张录音卡(第二张的句子带「慢」);上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);prompt 含「段在前」就在最终文本前加一段「## 记账」;含「想要小课堂」出一张写着 scene 的旧式卡(场景卡删了,该当代码卡)和一段「## 想要小课堂」;含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);含「画图」出一张四幅的画图卡;含「整段」出一张三行的点读卡(你说我画的整段故事);含「热身」或「口语课」出口语课的热身(两拍 [[echo]]、一拍 [[say]]、[[call]]),「直接打电话」回一句带 [[call]],「(打电话)」回英文开场;含「家长段」加「## 家长」;含「记住它」「改记忆」回「## 记忆」(加两条 / 改一条删一条);
+ * 行为:回显 prompt 的最后一行;含「录音卡」出三张录音卡(第二张的句子带「慢」);上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);prompt 含「段在前」就在最终文本前加一段「## 记账」;含「想要小课堂」出一张写着 scene 的旧式卡(场景卡删了,该当代码卡)和一段「## 想要小课堂」;含「节头」先出一张只有一行 # 标题的文字卡(实时的节头);含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);含「画图」出一张四幅的画图卡;含「整段」出一张三行的点读卡(你说我画的整段故事);含「热身」或「口语课」出口语课的热身(两拍 [[echo]]、一拍 [[say]]、[[call]]),「直接打电话」回一句带 [[call]],「(打电话)」回英文开场;含「家长段」加「## 家长」;含「记住它」「改记忆」回「## 记忆」(加两条 / 改一条删一条);
  * --resume 时 session_id 沿用给的 id,否则新造;--fail 出 error_max_turns。
  * --input-format stream-json(预热,2026-09-29):消息不在 argv,从 stdin 读第一行 {"type":"user","message":{"content":…}};读到之前一个字节不吐(同真 claude),
  * init 带 waitedMs(起来到收到消息等了多久);回完 result 等 stdin 关了才退。
@@ -130,6 +130,8 @@ if (fail) {
   if (msg.includes('直接打电话')) parts.push('好,那我们现在就打电话! [[call]]');
   if (msg.includes('(打电话)')) parts.push('Hello Ray! Where are the ducks?');
   if (msg.includes('整段')) parts.push('```read\n小熊种西瓜。\n小猴睡大觉。\n西瓜熟了。\n```\n\n你看着连起来说一遍?');
+  // 含「节头」:板书前先一张只有一行 # 标题的文字卡(实时的节头,设想稿拍板 20)
+  if (msg.includes('节头')) parts.push('```text\n# 认识三角形\n```');
   if (msg.includes('板书')) parts.push('```text\n# 三角形\n拼一拼\n```\n\n先看[三角形]。\n\n```choice\n三角形有几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n三角形有几个角?' + (msg.includes('坏卡') ? '\n\n```choice\n没选项\n```' : '') + (msg.includes('点读') ? '\n\n```read\napple 苹果\nbanana 香蕉\n```\n\n点一下听一下。' : '') + (msg.includes('图片') ? '\n\n```image\nvault/pic.png\n看这张图\n```' : ''));
   // 作业照片(R5):上下文包有 photos: 段就「看图」——回显看到了哪张,板书 image 卡引用原图、canvas 卡照片做底
   const photosAt = prompt.indexOf('\n  photos:\n');

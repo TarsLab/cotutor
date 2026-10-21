@@ -53,6 +53,8 @@ export interface ConversationFiles {
   play: (job: string) => string;
   /** 板书讲稿第 n 句的配音(n 从 1 起) */
   lineAudio: (job: string, n: number) => string;
+  /** 实时那一轮嘴照念的声音 <date>.<job>.mouth.wav 与每句的起点 .mouth.json(字幕重放,src/live/lib/mouth.ts;删话题时按 <date>.<job>.* 一起删) */
+  mouth: (job: string, ext: 'wav' | 'json') => string;
   /** 这一轮各张卡的状态目录 <date>.<job>.cards/ */
   cardsDir: (job: string) => string;
   /** 第 n 张卡(0 起)的状态文件 <date>.<job>.cards/<n>.json */
@@ -75,6 +77,7 @@ export function conversationFiles(conversationsDir: string, tutor: string, date:
     voice: (job, ext) => `${base}.${job}.voice.${ext}`,
     play: (job) => `${base}.${job}.play.jsonl`,
     lineAudio: (job, n) => `${base}.${job}.${n}.mp3`,
+    mouth: (job, ext) => `${base}.${job}.mouth.${ext}`,
     cardsDir: (job) => `${base}.${job}.cards`,
     card: (job, n) => `${base}.${job}.cards/${n}.json`,
     cardAssetsDir: (job, n) => `${base}.${job}.cards/${n}`,

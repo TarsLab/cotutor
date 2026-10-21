@@ -68,6 +68,7 @@ import { fixtureOf, rawView } from './raw-view.ts';
 import { DeviceSchema } from '../schema/index.ts';
 import { listVoices, synthesize, type VoiceInfo } from './tts.ts';
 import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
+import type { MouthIndex } from '../live/lib/mouth.ts';
 
 export interface RouteResult {
   status: number;
@@ -723,6 +724,8 @@ const REC_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.(?:cards\/\d+\/rec-\d+|voice
 const REC_TYPES: Record<string, string> = { webm: 'audio/webm', m4a: 'audio/mp4', ogg: 'audio/ogg', wav: 'audio/wav' };
 /** 实时老师一次通话的声音(两边混好的,src/live/call.ts):<日期>.live/<时分秒>.wav;录像里实时的轮从这里放 */
 const LIVE_CALL_RE = /^\d{4}-\d{2}-\d{2}\.live\/\d{6}\.wav$/;
+/** 实时那一轮嘴照念的声音(字幕重放,src/live/call.ts 落的):<日期>.<job>.mouth.wav */
+const MOUTH_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.mouth\.wav$/;
 const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
 
 /** 作业照片一张最多这么大(解码后;页面先缩到长边 PHOTO_MAX_SIDE 的 jpeg,通常几百 KB) */
@@ -1046,6 +1049,22 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
+    // 字幕重放(《wip/实时老师设想.md》拍板 21):实时那一轮嘴照念的声音在哪、多长、讲稿每句从哪开始(毫秒);只给实时的轮,没落过声音 404
+    const mouth = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/mouth\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d+)$/.exec(p);
+    if (mouth) {
+      const [, tutor, d, job] = mouth;
+      const t = ws.config.tutors[tutor];
+      if (!t || !t.enabled || t.hidden) return { status: 404, json: { error: 'no_such_tutor' } };
+      if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
+      const m = (await readIndex(ws, tutor, d)).messages.find((x) => x.job === job);
+      if (m?.live !== true) return { status: 404, json: { error: 'not_found' } };
+      const raw = await readFile(conversationFiles(ws.dirs.conversations, tutor, d).mouth(job, 'json'), 'utf8').catch(() => null);
+      // 正在重落的那一下可能读到半截:当没有
+      let idx: MouthIndex | null = null;
+      try { idx = raw === null ? null : (JSON.parse(raw) as MouthIndex); } catch { idx = null; }
+      if (!idx?.lines?.length) return { status: 404, json: { error: 'not_found' } };
+      return { status: 200, json: { audio: `/api/audio/${tutor}/${d}.${job}.mouth.wav`, ms: idx.ms, lines: idx.lines } };
+    }
     // 卡的状态:孩子在舞台里选了、填了 → 存 <日期>.<job>.cards/<n>.json,不起老师;下一条消息带给老师
     const card = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/cards\/(\d{4}-\d+)\/(\d+)$/.exec(p);
     if (card) {
@@ -1099,11 +1118,12 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (audio && method === 'GET') {
       const [, tutor, name] = audio;
       const rec = REC_FILE_RE.exec(name);
-      const call = LIVE_CALL_RE.test(name);
+      const call = LIVE_CALL_RE.test(name) || MOUTH_FILE_RE.test(name);
       if (!ws.config.tutors[tutor] || (!AUDIO_FILE_RE.test(name) && !rec && !call)) return { status: 404, json: { error: 'not_found' } };
       const file = join(ws.dirs.conversations, tutor, name);
       if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
-      return { status: 200, file, contentType: rec ? REC_TYPES[rec[1]] : call ? 'audio/wav' : 'audio/mpeg' };
+      // 嘴照念的那份一段一段重落(这一轮还在念时就取得到),别让孩子端拿到缓存里的半截
+      return { status: 200, file, contentType: rec ? REC_TYPES[rec[1]] : call ? 'audio/wav' : 'audio/mpeg', ...(MOUTH_FILE_RE.test(name) ? { cacheControl: 'no-cache' } : {}) };
     }
 
     // 看原文(2026-09-11):一轮拆成六站,一个接口给全;/fixture 是原文原样一份,开发者放进 tests/fixtures/board/

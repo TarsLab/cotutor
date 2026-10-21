@@ -79,6 +79,7 @@ try {
   const used = new Set([...KID_PAGE.matchAll(/'(\/api\/[a-z-]+(?:\/[a-z-]+)?)/g)].map((m) => m[1]));
   const kidOnly = [...used].filter((p) => !/^\/api\/(conversations|overview)/.test(p));
   check('孩子端源码里的接口前缀都在白名单里(/api/conversations、/api/overview 是家长模式才用)', kidOnly.every((p) => isKidPath(p) || isKidPath(`${p}/`)), kidOnly.filter((p) => !isKidPath(p) && !isKidPath(`${p}/`)).join(' '));
+  check('字幕重放(《wip/实时老师设想.md》拍板 21)的两条在白名单里:每句起点、嘴照念的声音', isKidPath('/api/kid/conversations/chinese-tutor/mouth/2026-10-21/2100-5') && isKidPath('/api/audio/chinese-tutor/2026-10-21.2100-5.mouth.wav'));
   check('白名单不放家长与工作台的路径', !isKidPath('/parent') && !isKidPath('/dev') && !isKidPath('/api/config') && !isKidPath('/api/conversations/x') && !isKidPath('/api/parent/home') && !isKidPath('/api/xlaoshi') && !isKidPath('/reel') && !isKidPath('/preview'));
 } finally {
   rmSync(home, { recursive: true, force: true });

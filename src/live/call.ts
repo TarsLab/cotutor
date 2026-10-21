@@ -29,6 +29,8 @@
  *   每拍记进摸底(录像 {t:'echo'},只记不发),交脑时带上(live.warmup)。[[call]] 那句念完孩子端响铃,这里马上交脑一轮(app: call,不接住),
  *   之后的接住换英文(cue.ts 的 CATCH_EN),交脑带打电话几分钟(live.phone)。孩子端连上发来的第一条带 talk(口语单)时嘴先说「好,我们先热热身!」。
  * 录像:进出的消息、两边的声音都记(CallRecorder),挂了落在 conversations/<老师>/<日期>.live/<时分秒>.reel.json / .wav。
+ * 字幕重放(《wip/实时老师设想.md》拍板 21):嘴照念的声音按轮另留一份,出了的都留(孩子按下时清掉、没放出来的也在),
+ *   一段出完(或被掐、断了)就落 <日期>.<job>.mouth.wav 与每句的起点 .mouth.json(lib/mouth.ts);接住那句不在里面。孩子端从 /api/kid/conversations/<老师>/mouth/<日期>/<job> 取。
  * 事件:嘴这一道(mouth:按下、松手 / 发了、接住开始放、第几句开始放、打断)补进那一轮的 events.jsonl(Runner.noteEvent),工作台的时间线上看;
  * 按下、松手、接住在脑起来之前,先攒着,等那一轮的老师进程起来(main:start)再按它的起点换成相对毫秒(负的)。
  */
@@ -38,7 +40,7 @@ import { kidSendInput, type AppContext } from '../server/app.ts';
 import { BusyError, type SendStarted } from '../server/runner.ts';
 import type { RunEvent } from '../lib/events.ts';
 import { readIndex } from '../server/store.ts';
-import { localDate } from '../lib/conversation.ts';
+import { conversationFiles, localDate } from '../lib/conversation.ts';
 import { lineFlags } from '../lib/board.ts';
 import { catchCue, readCue, type CatchKind } from './lib/cue.ts';
 import { judge } from './lib/listen.ts';
@@ -47,6 +49,7 @@ import { coverage } from '../lib/en-words.ts';
 import { addChunk, flushAt, playbackInit, playingAt, type Playback } from './lib/playback.ts';
 import { queueInit, queueStep, type Beat, type Echo, type QueueEvent, type QueueState } from './lib/queue.ts';
 import { MIX_RATE } from './lib/mix.ts';
+import { mouthIndex, type MouthSeg } from './lib/mouth.ts';
 import { wavOfPcm } from './lib/wav.ts';
 import { mouthInstructions } from './prompt.ts';
 import { INPUT_RATE, OUTPUT_RATE, RealtimeSession } from './realtime.ts';
@@ -99,8 +102,14 @@ const QUIET_BEATS = 2;
 /** 打电话:[[call]] 那句放完先响这么久的铃,脑的英文开场来得再早也等它(孩子听得到在打电话) */
 const RING_MS = 3000;
 
+/** 字幕重放的声音最多留几轮在内存里(一轮约 1–2 MB;落了盘就只为接着往后接) */
+const MOUTH_KEEP = 3;
+
 /** 嘴这次回答是什么:接住(孩子这一轮)、照念哪几句、脑想得久时垫的一句、一直听进来先招呼的一句 */
 type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat };
+
+/** 一轮嘴照念的声音(字幕重放):每段是一次照念的回答;writing 把这一轮的落盘串起来 */
+interface MouthTake { date: string; segs: (MouthSeg & { said: Said; pcm: Buffer[] })[]; writing: Promise<void> }
 
 export class LiveCall {
   private session: RealtimeSession | null = null;
@@ -184,6 +193,8 @@ export class LiveCall {
   private phoneAt: number | null = null;
   /** 脑最近写的那一轮的话题(应用起的那一轮接在它后面) */
   private thread: string | null = null;
+  /** 字幕重放:最近几轮嘴照念的声音(job → 那一轮的几段) */
+  private readonly takes = new Map<string, MouthTake>();
   private offEvents: (() => void) | null = null;
   private ended = false;
   private readonly sock: ServerSocket;
@@ -270,6 +281,9 @@ export class LiveCall {
         if (firstOfAnswer && said.kind === 'read') this.readAt(said.beat, 0, r.start);
         if (firstOfAnswer && said.kind === 'catch' && this.holding === false) this.mouth(null, this.wall(r.start), { lane: 'mouth', kind: 'catch', text: '' });
         firstOfAnswer = false;
+        // 字幕重放:照念的声音另留一份(孩子端放没放都留)
+        const seg = this.mouthSeg(said);
+        if (seg) { seg.pcm.push(pcm); seg.bytes += pcm.length; }
         this.rec.tutor(pcm);
         this.sock.sendBinary(pcm);
       },
@@ -284,7 +298,12 @@ export class LiveCall {
           this.send({ t: 'tutor', of, done: done.trim() });
           return;
         }
-        if (delta) this.send({ t: 'tutor', of, delta });
+        if (delta) {
+          // 字幕重放:这段没出齐就停了的话,按出了几个字摊每句的起点
+          const seg = this.said ? this.mouthSeg(this.said, false) : null;
+          if (seg) seg.heard += delta.length;
+          this.send({ t: 'tutor', of, delta });
+        }
       },
       onKidText: (text) => { if (this.session !== s) return; if (this.mouthOpen) this.verdict(text); else this.heard(text); },
       onSpeech: (st) => { if (this.session === s && this.mouthOpen) this.speech(st); },
@@ -299,6 +318,7 @@ export class LiveCall {
           this.state();
           return;
         }
+        if (this.said?.kind === 'read') this.mouthEnd(this.said, status !== 'cancelled');
         if (status === 'cancelled') this.play = flushAt(this.play, this.ms());
         else if (this.said?.kind === 'read') {
           this.readRest(this.said);
@@ -387,6 +407,8 @@ export class LiveCall {
     this.session = null;
     // 只记进录像,孩子端不知道
     this.rec.out({ t: 'lost', why });
+    // 照念到一半断了:出了的那截留着
+    if (this.said?.kind === 'read') this.mouthEnd(this.said, false);
     if (this.said?.kind === 'catch') this.caughtDone = true;
     if (this.said) { this.said = null; this.afterDone = null; this.cancelOnCreate = false; this.q = { ...this.q, busy: false }; }
     // 热身那句没出齐就断了:从现在起等孩子,别卡死
@@ -455,6 +477,37 @@ export class LiveCall {
       this.readAt(beat, k, span.start + ((span.end - span.start) * before) / total);
       before += lens[k];
     }
+  }
+
+  /** 字幕重放:这次照念在它那一轮里的那一段(第一块声音到时开;make = false 只找不开);接住、那一轮不在内存里的不留 */
+  private mouthSeg(said: Said, make = true): (MouthSeg & { said: Said; pcm: Buffer[] }) | null {
+    if (said.kind !== 'read') return null;
+    const take = this.takes.get(said.beat.job);
+    if (!take) return null;
+    const last = take.segs[take.segs.length - 1];
+    if (last?.said === said) return last;
+    if (!make) return null;
+    const seg = { lines: [...said.beat.lines], texts: [...said.beat.texts], bytes: 0, heard: 0, done: false, said, pcm: [] as Buffer[] };
+    take.segs.push(seg);
+    return seg;
+  }
+
+  /** 字幕重放:一段出完了(done)/ 被掐了、断了:这一轮整份重落一次(接在前面的落盘后面,不并发写) */
+  private mouthEnd(said: Said, done: boolean): void {
+    const seg = this.mouthSeg(said, false);
+    if (!seg || said.kind !== 'read') return;
+    seg.done = done;
+    const job = said.beat.job;
+    const take = this.takes.get(job)!;
+    const pcm = Buffer.concat(take.segs.flatMap((s) => s.pcm));
+    const index = mouthIndex(take.segs, BYTES_PER_MS);
+    const f = conversationFiles(this.deps.ctx.ws.dirs.conversations, this.deps.tutor, take.date);
+    take.writing = take.writing
+      .then(async () => {
+        await writeFile(f.mouth(job, 'wav'), wavOfPcm(pcm, OUTPUT_RATE));
+        await writeFile(f.mouth(job, 'json'), JSON.stringify(index));
+      })
+      .catch((err) => console.error('live: 嘴的声音落盘失败', err));
   }
 
   /** 讲稿又定稿了几句:按序号接着交给排队(重复的、跳号的不收) */
@@ -763,6 +816,9 @@ export class LiveCall {
     this.job = started.job;
     this.thread = started.thread;
     this.linesQueued = 0;
+    // 字幕重放:这一轮的声音从这里接;更早的几轮落过盘了,内存里只留最近几轮
+    this.takes.set(started.job, { date: started.date, segs: [], writing: Promise.resolve() });
+    for (const old of [...this.takes.keys()].slice(0, -MOUTH_KEEP)) this.takes.delete(old);
     this.send({ t: 'turn', job: started.job, thread: started.thread });
     const job = started.job;
     void started.done.then(async (index) => {
@@ -923,6 +979,9 @@ export class LiveCall {
     this.session = null;
     s?.close('end');
     this.send({ t: 'end', why });
+    // 字幕重放:挂的时候嘴还在出的那段,出了的那截也落;等这几轮都落完
+    if (this.said?.kind === 'read') this.mouthEnd(this.said, false);
+    await Promise.all([...this.takes.values()].map((x) => x.writing));
     try {
       const take = this.rec.finish();
       if (take.reel.msgs.length > 2) {

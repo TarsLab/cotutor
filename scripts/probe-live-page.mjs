@@ -89,6 +89,8 @@ try {
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y - dy, button: 'left', buttons: 0, clickCount: 1 });
   };
   const tap = async (sel) => press(sel, 40);
+  /** 平板横屏实时:按住说话在左栏浮层里那块(《wip/实时老师页改版设计.md》§二) */
+  const HOLD = '#lv-hold';
   const cap = () => evaluate(`({ p: document.querySelector('#lv-cap .lv-prev').textContent, c: document.querySelector('#lv-cap .lv-cur').textContent, cut: document.querySelector('#lv-cap .lv-cur').classList.contains('cut'), done: document.querySelector('#lv-cap').classList.contains('done') })`);
   const body = (cls) => evaluate(`document.body.classList.contains(${JSON.stringify(cls)})`);
   await send('Runtime.enable');
@@ -101,14 +103,14 @@ try {
   await until(`document.body.classList.contains('live')`);
   const connected = await untilNode(() => Boolean(conn()?.session), 8000);
   await sleep(400);
-  const lay = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), wrap = r('#wrap'), av = r('#lv-av'), bar = r('#bar'); return { lv: [Math.round(lv.left), Math.round(lv.width)], wrap: [Math.round(wrap.left), Math.round(wrap.top), Math.round(wrap.width)], av: Math.round(av.width), bar: Math.round(bar.width), sub: getComputedStyle(document.querySelector('#sub')).display, bg: getComputedStyle(document.querySelector('#wrap')).backgroundColor, cap: document.querySelector('#lv-cap .lv-cur').textContent, blank: Boolean(document.querySelector('#board .blank')) }; })()`);
+  const lay = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), wrap = r('#wrap'), av = r('#lv-av'), hold = r('#lv-hold'), back = r('#back'), more = r('#more-btn'); const tools = [...document.querySelectorAll('#lv-tools button')].map((b) => b.textContent); return { lv: [Math.round(lv.left), Math.round(lv.top), Math.round(lv.width), Math.round(innerHeight - lv.bottom)], pos: getComputedStyle(document.querySelector('#lv')).position, wrap: [Math.round(wrap.left), Math.round(wrap.top), Math.round(wrap.width), Math.round(wrap.height)], av: Math.round(av.width), hold: [Math.round(hold.width), Math.round(hold.height), Math.round(innerHeight - hold.bottom), Math.round((hold.top + hold.height / 2) / innerHeight * 100)], backIn: back.left >= lv.left && back.right <= lv.right && back.top >= lv.top, more: [Math.round(innerWidth - more.right), Math.round(more.top), more.left > lv.right], tools, bar: getComputedStyle(document.querySelector('#bar')).display, sub: getComputedStyle(document.querySelector('#sub')).display, bg: getComputedStyle(document.querySelector('#wrap')).backgroundColor, padL: parseInt(getComputedStyle(document.querySelector('#board')).paddingLeft), cap: document.querySelector('#lv-cap .lv-cur').textContent, blank: Boolean(document.querySelector('#board .blank')) }; })()`);
   ok('进老师页:body.live、连上了嘴(配了会话)', connected, JSON.stringify(conn()?.session?.voice ?? null));
-  ok('横屏:左栏 340(大头像 140)、右边白板、输入条横跨、板书的字幕行收起;没说话时字幕写老师的名字', lay.lv[1] === 340 && lay.av === 140 && lay.wrap[0] > lay.lv[0] + 340 && lay.bg === 'rgb(255, 255, 255)' && lay.bar > 1000 && lay.sub === 'none' && lay.blank && lay.cap === '语文老师', JSON.stringify(lay));
+  ok('横屏:板占满整屏(纸色、不套卡片框),左栏是浮在上面的面板(离边 16、宽 340、头像 104),回首页胶囊在面板顶上、「更多」浮在右上;按住说话那块 300×104、下沿离屏底 ≥ 150、中心在屏高六成多,下面一排拍照 / 相册 / 打字;输入条与板书的字幕行收起;没说话时字幕写老师的名字', lay.pos === 'absolute' && lay.lv[0] === 16 && lay.lv[1] === 16 && lay.lv[2] === 340 && lay.lv[3] === 16 && lay.av === 104 && lay.wrap[0] === 0 && lay.wrap[1] === 0 && lay.wrap[2] === 1180 && lay.bg === 'rgba(0, 0, 0, 0)' && lay.padL >= 380 && lay.backIn && lay.more[0] <= 24 && lay.more[2] && lay.hold[0] === 300 && lay.hold[1] === 104 && lay.hold[2] >= 150 && lay.hold[3] >= 60 && lay.tools.join() === '拍照,相册,打字' && lay.bar === 'none' && lay.sub === 'none' && lay.blank && lay.cap === '语文老师', JSON.stringify(lay));
 
   // ---- 按住说话 → 松手:嘴不先说(头像在想、板上没有占位卡)、脑写卡、讲稿一句一句上字幕 ----
   fake.kidText = '老师板书怎么写';
   const a0 = conn().audio;
-  const p = await center('#mid');
+  const p = await center(HOLD);
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p.x, y: p.y, button: 'left', buttons: 1, clickCount: 1 });
   // 第一次按下才开麦克风:开完自检 600 毫秒,假麦克风一秒嘀一声,赶上两声之间就判成哑的、重开一回(约 1.6 秒),等它接上再看
   await sleep(400);
@@ -130,6 +132,9 @@ try {
   ok('脑写的卡铺上:节头是孩子那句、卡角没有钮(没有「?」、没有再听的喇叭);左上是 logo,看得见的老师头像只有左栏一颗', cards && board1.said.includes('老师板书怎么写') && board1.cards >= 2 && board1.corner === 0 && board1.qmark === 0 && board1.faces === 1 && board1.backLogo, JSON.stringify(board1));
   const speaking = await until(`document.body.classList.contains('speaking')`, 40);
   ok('嘴在说:头像外的圈亮(body.speaking)', speaking);
+  const kidLine = await until(`document.querySelector('#lv-kid').textContent === '老师板书怎么写' && document.querySelector('#lv-kid').classList.contains('old')`, 40);
+  ok('孩子刚说的那句在左栏字幕上面(老师开口了变淡)', kidLine, await evaluate(`document.querySelector('#lv-kid').outerHTML`));
+  console.log('  ', await shot('live-speak-ipad.png'));
   const lastLine = await until(`document.querySelector('#lv-cap .lv-cur').textContent === '第一次说:老师板书怎么写'`, 80);
   const c1 = await cap();
   const capBox = await evaluate(`(() => { const st = getComputedStyle(document.querySelector('#lv-cap .lv-cur')); return st.borderTopWidth + ' ' + st.backgroundColor; })()`);
@@ -144,24 +149,35 @@ try {
   // ---- 嘴在说时按下 = 打断;上滑松手作废 ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   fake.kidText = '再讲一遍板书';
-  await press('#mid', 900);
+  await press(HOLD, 900);
   await until(`document.body.classList.contains('speaking')`, 60);
   // 第二轮的讲稿念起来(上字幕)以后按下
   await until(`document.querySelector('#lv-cap .lv-cur').textContent === '先看三角形。' && document.body.classList.contains('speaking')`, 80);
   const h0 = conn().cancels, holds0 = conn().clears;
-  const p2 = await center('#mid');
+  const p2 = await center(HOLD);
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p2.x, y: p2.y, button: 'left', buttons: 1, clickCount: 1 });
   await sleep(500);
   const cutView = { speaking: await body('speaking'), listening: await body('listening'), ...(await cap()), clears: conn().clears - holds0 };
   console.log('  ', await shot('live-cut-ipad.png'));
-  // 往上滑 80 再松:这一下作废
-  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p2.x, y: p2.y - 80, button: 'left', buttons: 1 });
+  // 往上滑过那块的高(104)再松:这一下作废
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p2.x, y: p2.y - 130, button: 'left', buttons: 1 });
   await sleep(150);
-  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p2.x, y: p2.y - 80, button: 'left', buttons: 0, clickCount: 1 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p2.x, y: p2.y - 130, button: 'left', buttons: 0, clickCount: 1 });
   await sleep(600);
   ok('嘴在说时按下:声音停了(不再 speaking)、在听;字幕那句淡、加省略号;服务端清了缓冲', !cutView.speaking && cutView.listening && cutView.cut && cutView.c === '先看三角形。……' && cutView.clears >= 1, JSON.stringify(cutView));
   const commits = conn().commits;
   ok('上滑松手:作废,不 commit、不开新一轮', commits === 2 && !(await body('listening')), String(commits));
+
+  // ---- 打字:点浮层下面那颗「打字」,输入条贴着软键盘上沿横跨全屏出来、拿到焦点;收起键盘(失焦、没字)就回去 ----
+  await tap('#lv-type');
+  await sleep(300);
+  const typing = await evaluate(`(() => { const b = document.querySelector('#bar').getBoundingClientRect(); return { shown: getComputedStyle(document.querySelector('#bar')).display !== 'none', w: Math.round(b.width), focus: document.activeElement === document.querySelector('#typed'), cam: getComputedStyle(document.querySelector('#cam')).display }; })()`);
+  await evaluate(`document.querySelector('#typed').value = '老师,瀑布有多高?'`);
+  console.log('  ', await shot('live-type-ipad.png'));
+  await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = ''; t.blur(); })()`);
+  await sleep(200);
+  const typedBack = await evaluate(`getComputedStyle(document.querySelector('#bar')).display === 'none'`);
+  ok('打字:点「打字」输入条横跨全屏出来、#typed 拿到焦点(相机、加号在浮层里,不重复);失焦没字就收回去', typing.shown && typing.w >= 1180 && typing.focus && typing.cam === 'none' && typedBack, JSON.stringify({ ...typing, typedBack }));
 
   // ---- 问某张卡:点开它(舞台),再按住说 → 这一轮带 focus 那张卡(拍板 18 撤了卡上的「?」) ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
@@ -172,7 +188,7 @@ try {
   await tap('#board .sec .c');
   const stageOn = await until(`document.querySelector('#stage').classList.contains('on')`, 20);
   fake.kidText = '这张卡我没看懂';
-  await press('#mid', 900);
+  await press(HOLD, 900);
   const asked = await until(`document.querySelectorAll('#board .sec').length > ${secs0}`, 60);
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   const askJob = await evaluate(`[...document.querySelectorAll('#board .sec')].at(-1).dataset.job`);
@@ -189,7 +205,7 @@ try {
   await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
   fake.kidText = '我读了一段';
   const cc0 = conn().commits;
-  const pc = await center('#mid');
+  const pc = await center(HOLD);
   await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: pc.x, y: pc.y }] });
   await sleep(900);
   await send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
@@ -204,7 +220,7 @@ try {
   await until(`!document.body.classList.contains('speaking')`, 40);
   fake.kidText = '一加一等于几';
   const secs1 = await evaluate(`document.querySelectorAll('#board .sec').length`);
-  await press('#mid', 900);
+  await press(HOLD, 900);
   await until(`document.querySelectorAll('#board .sec').length > ${secs1}`, 60);
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   const says = await until(`(() => { const s = [...document.querySelectorAll('#board .sec')].at(-1); const ps = s ? [...s.querySelectorAll('.says p')].filter((p) => getComputedStyle(p).display !== 'none') : []; return ps.length >= 1 && ps.at(-1).textContent.endsWith('一加一等于几'); })()`, 80);
@@ -282,7 +298,7 @@ try {
   await sleep(400);
   fake.kidText = '放课';
   const said = (re) => conn().responses.some((r) => re.test(r?.instructions ?? ''));
-  const pp = await center('#mid');
+  const pp = await center(HOLD);
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pp.x, y: pp.y, button: 'left', buttons: 1, clickCount: 1 });
   // 新开的页面第一次按下才开麦克风(假麦克风赶上两声嘀之间要重开一回):接上了再松手
   await sleep(400);
@@ -312,20 +328,20 @@ try {
   await until(`Boolean(document.body && document.body.classList.contains('live'))`, 40);
   const switched = await untilNode(() => fake.conns.length > nOpen && conn().session?.turn_detection?.type === 'server_vad', 8000);
   await sleep(600);
-  const ui = await evaluate(`({ open: document.body.classList.contains('lv-open'), mic: getComputedStyle(document.querySelector('#lv-mic')).display, ph: document.querySelector('#ph').textContent })`);
+  const ui = await evaluate(`({ open: document.body.classList.contains('lv-open'), hold: document.querySelector('#lv-hold').textContent, ph: document.querySelector('#ph').textContent })`);
   const a1 = conn().audio;
   await sleep(1500);
   const pushedOpen = conn().audio - a1;
-  ok('一直听:孩子端没有开关、首页没有入口;live.listen 开着就连开 VAD 的连接,输入条里有麦克风、写「我在听」;不用按,声音一直推', noSwitch && switched && ui.open && ui.mic !== 'none' && ui.ph.startsWith('我在听') && pushedOpen > 3200, JSON.stringify({ noSwitch, switched, ui, pushedOpen }));
+  ok('一直听:孩子端没有开关、首页没有入口;live.listen 开着就连开 VAD 的连接,左栏那块是麦克风开关、写「我在听」;不用按,声音一直推', noSwitch && switched && ui.open && ui.hold.startsWith('我在听') && ui.ph.startsWith('我在听') && pushedOpen > 3200, JSON.stringify({ noSwitch, switched, ui, pushedOpen }));
   console.log('  ', await shot('live-open-ipad.png'));
-  await tap('#lv-mic');
+  await tap(HOLD);
   await sleep(300);
   const a2 = conn().audio;
   await sleep(1200);
   const pushedMuted = conn().audio - a2;
-  const mutedUi = await evaluate(`({ off: document.querySelector('#lv-mic').classList.contains('off'), ph: document.querySelector('#ph').textContent })`);
-  ok('点麦克风关麦:不推了、写「麦关了」', pushedMuted === 0 && mutedUi.off && mutedUi.ph.startsWith('麦关了'), JSON.stringify({ pushedMuted, mutedUi }));
-  await tap('#lv-mic');
+  const mutedUi = await evaluate(`({ off: document.querySelector('#lv-hold').classList.contains('off'), hold: document.querySelector('#lv-hold').textContent, ph: document.querySelector('#ph').textContent })`);
+  ok('点左栏那块关麦:不推了、写「麦关了」', pushedMuted === 0 && mutedUi.off && mutedUi.hold.startsWith('麦关了') && mutedUi.ph.startsWith('麦关了'), JSON.stringify({ pushedMuted, mutedUi }));
+  await tap(HOLD);
   const r0 = conn().responses.length;
   fake.kidTexts = ['老师一直听怎么写'];
   const took = await untilNode(() => conn().responses.slice(r0).some((r) => String(r?.instructions).startsWith('把这几句话原样说给孩子听')), 10000);
@@ -353,9 +369,9 @@ try {
   await send('Page.navigate', { url: `${base}/?tutor=english-tutor&talk=${talkId}` });
   const talkBoard = await until(`Boolean(document.querySelector('#talk-go'))`, 40);
   await untilNode(() => fake.conns.length > ncT && Boolean(conn()?.session), 8000);
-  const tb = await evaluate(`({ go: document.querySelector('#talk-go').textContent, pill: document.querySelector('#pill').hidden, open: document.body.classList.contains('lv-open') })`);
+  const tb = await evaluate(`({ go: document.querySelector('#talk-go').textContent, pill: document.querySelector('#pill').hidden, hold: getComputedStyle(document.querySelector('#lv-hold')).display, open: document.body.classList.contains('lv-open') })`);
   const spoke = conn().responses.length;
-  ok('口语单页过来:英语老师页、一直听(live.listen 是 hold 也一样)、板上一颗「先热身,再打电话」,没点之前输入条收着、嘴不出声', talkBoard && tb.go.includes('先热身,再打电话') && tb.pill && tb.open && spoke === 0, JSON.stringify({ ...tb, spoke }));
+  ok('口语单页过来:英语老师页、一直听(live.listen 是 hold 也一样)、板上一颗「先热身,再打电话」,没点之前输入条与左栏那块都收着、嘴不出声', talkBoard && tb.go.includes('先热身,再打电话') && tb.pill && tb.hold === 'none' && tb.open && spoke === 0, JSON.stringify({ ...tb, spoke }));
   console.log('  ', await shot('talk-start-ipad.png'));
   await tap('#talk-go');
   const warmCaught = await untilNode(() => conn().responses.some((r) => r?.instructions === catchCue('warm')), 10000);

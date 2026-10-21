@@ -586,6 +586,10 @@ __BRAND_CSS__
   #lv-cap .lv-cur { font-size:18px; line-height:1.45; font-weight:600; color:var(--ink); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   #lv-cap .lv-cur.nm { font-weight:500; color:var(--dim); }
   #lv-cap.done .lv-cur, #lv-cap .lv-cur.cut { color:#a39f96; font-weight:500; }
+  /* 孩子刚说的那句、按住说话那块、拍照 / 相册 / 打字:只在平板横屏的左栏浮层里(见下面「平板横屏」);竖屏、手机照旧输入条。
+     一页一张脸:实时的脸在 #lv-av,空板中间那颗不露 */
+  #lv-kid, #lv-hold, #lv-tools { display:none; }
+  body.live .blank > .av { display:none; }
   /* 不出卡的一轮:板上留讲稿的字(设想稿拍板 8),念到哪露到哪 */
   .sec > .says { display:flex; flex-direction:column; gap:6px; padding:2px 4px 4px 40px; font-size:19px; line-height:1.6; color:var(--ink); }
   .sec > .says p { margin:0; }
@@ -601,26 +605,57 @@ __BRAND_CSS__
     #menu .panel { right:calc(env(safe-area-inset-right) + 20px); }
     #board { width:100%; max-width:1040px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 68px) 32px 24px; }
     #sub, #bar, #reel { width:100%; max-width:1040px; margin:0 auto; padding-left:32px; padding-right:32px; }
-    /* 实时的老师:左栏 340(大头像 + 字幕)| 右边白板;输入条横跨 */
-    body.live #main { display:grid; grid-template-columns:340px minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto; column-gap:28px; padding:0 calc(env(safe-area-inset-right) + 40px) 0 calc(env(safe-area-inset-left) + 40px); }
-    body.live #wrap { grid-column:2; grid-row:1; margin-top:calc(env(safe-area-inset-top) + 76px); background:var(--card); border:1px solid var(--line); border-radius:20px; overflow:hidden; }
-    body.live #wrap::before { display:none; }
-    body.live #board { max-width:none; padding:24px 28px 28px; }
-    body.live #lv { grid-column:1; grid-row:1; flex-direction:column; justify-content:flex-start; gap:18px; padding:calc(env(safe-area-inset-top) + 120px) 0 0; min-height:0; }
-    body.live #lv-av { width:140px; height:140px; margin-bottom:40px; }
-    body.live #lv-av .av { font-size:64px; }
-    body.live #lv-av::before { inset:-16%; } body.live #lv-av::after { inset:-32%; }
+    /* 实时的老师(《wip/实时老师页改版设计.md》§二,设想稿拍板 22,原型 https://claude.ai/artifact/RNjBdhuvRmnsBjKn521fkE):
+       板是主体——占满整屏、纸色、不套卡片框,内容从浮层右边排起,往下翻时从浮着的东西底下过去;
+       左栏是浮在板上一层的面板(离屏边 16、宽 340):顶上回首页胶囊,上半是老师(头像、孩子刚说的那句、字幕),下半是孩子(按住说话、拍照 / 相册 / 打字);
+       按住说话那块的下沿离屏底 250(平板横放在桌上,底边太贴桌、手指往下会碰 iPadOS 底部手势);右上角「更多」照旧浮在板上。
+       面板在舞台遮罩(z 4)上面:舞台开着孩子照样能说话 */
+    body.live #board { max-width:none; padding:calc(env(safe-area-inset-top) + 68px) calc(env(safe-area-inset-right) + 48px) 28px calc(env(safe-area-inset-left) + 404px); }
+    body.live #stage { left:calc(env(safe-area-inset-left) + 372px); right:calc(env(safe-area-inset-right) + 16px); width:auto; transform:none; }
+    body.live .tb.l { left:calc(env(safe-area-inset-left) + 28px); top:calc(env(safe-area-inset-top) + 28px); z-index:6; }
+    body.live #back { background:var(--paper); box-shadow:none; }
+    body.live #lv { position:absolute; z-index:5; left:calc(env(safe-area-inset-left) + 16px); top:calc(env(safe-area-inset-top) + 16px); bottom:calc(env(safe-area-inset-bottom) + 16px); width:340px; box-sizing:border-box; flex-direction:column; justify-content:flex-start; align-items:center; gap:14px; padding:104px 20px 354px; min-height:0; overflow:hidden; border-radius:24px; background:#fffffff2; box-shadow:0 12px 32px #46371e24, 0 1px 3px #46371e1a; }
+    body.live #lv-av { width:104px; height:104px; margin:0 0 26px; }
+    body.live #lv-av .av { font-size:48px; }
+    body.live #lv-av::before { inset:-14%; } body.live #lv-av::after { inset:-30%; }
     body.live.listening #lv-chip { display:inline-flex; }
-    body.live #lv-cap { flex:0 0 auto; width:300px; gap:10px; text-align:center; }
+    body.live #lv-kid { display:flex; flex:none; align-items:flex-start; justify-content:center; gap:8px; width:300px; font-size:19px; line-height:1.4; font-weight:600; color:#2a5ea8; }
+    body.live #lv-kid:empty, body.live.listening #lv-kid { display:none; }
+    #lv-kid .mi { flex:none; width:26px; height:26px; margin-top:1px; border-radius:50%; background:#dbeeff; display:grid; place-items:center; }
+    #lv-kid .mi svg { width:14px; height:14px; }
+    #lv-kid .tx { min-width:0; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+    body.live #lv-kid.old { font-size:16px; font-weight:400; color:#6f93c4; }
+    body.live #lv-kid.old .mi { width:22px; height:22px; background:#e8f1fc; }
+    body.live #lv-cap { flex:0 1 auto; min-height:0; width:300px; gap:10px; text-align:center; }
     body.live #lv-cap .lv-prev { font-size:17px; line-height:1.5; color:#a39f96; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     body.live #lv-cap .lv-prev:empty { display:none; }
-    body.live #lv-cap .lv-cur { font-size:26px; line-height:1.5; -webkit-line-clamp:6; }
-    body.live #bar { grid-column:1 / -1; grid-row:2; max-width:none; padding-left:0; padding-right:0; }
-    body.live .blank > .av, body.live .blank > .nm { display:none; }
-    /* 按住时输入条那颗变蓝(原型 A1):浮层收成盖在输入条上的蓝胶囊,波形在前 */
-    body.live #hold { left:calc(env(safe-area-inset-left) + 40px); right:calc(env(safe-area-inset-right) + 40px); bottom:calc(env(safe-area-inset-bottom) + 12px); height:56px; border-radius:28px; background:#3d7fd9; box-shadow:0 6px 18px #3d7fd959; flex-direction:row; justify-content:center; gap:16px; padding:0; }
-    body.live #hold .w { order:-1; }
+    body.live #lv-cap .lv-cur { font-size:24px; line-height:1.5; -webkit-line-clamp:6; }
+    body.live .blank > .nm { display:none; }
+    /* 下半:按住说话那块(下沿离屏底 250)、下面一排拍照 / 相册 / 打字;输入条收起,只在打字时贴着软键盘上沿横跨全屏(--kb 是软键盘的高) */
+    body.live #lv-hold { display:flex; position:absolute; left:20px; bottom:234px; width:300px; height:104px; box-sizing:border-box; align-items:center; justify-content:center; gap:14px; border-radius:28px; border:1.5px solid var(--line); background:#fff; box-shadow:0 4px 14px #0000000f; font-size:22px; color:var(--ink); touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+    #lv-hold .mi { flex:none; display:grid; place-items:center; }
+    #lv-hold .tx { display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
+    #lv-hold b { font-weight:inherit; }
+    #lv-hold small { font-size:14px; font-weight:400; color:#4d74a8; }
+    #lv-hold small:empty { display:none; }
+    body.live #lv-tools { display:flex; position:absolute; left:20px; right:20px; bottom:130px; justify-content:center; gap:28px; }
+    #lv-tools button { display:flex; flex-direction:column; align-items:center; gap:6px; font-size:13px; color:#6f6b63; }
+    #lv-tools .ic { width:60px; height:60px; box-sizing:border-box; border-radius:50%; border:1px solid var(--line); background:#fff; display:grid; place-items:center; color:#6f6b63; }
+    body.live.pending #lv-hold, body.live.pending #lv-tools, body.live.limit #lv-hold, body.live.limit #lv-tools { opacity:.45; pointer-events:none; }
+    body.live.nosend #lv-hold, body.live.nosend #lv-tools { display:none; }
+    body.live.lv-open #lv-hold { background:#eaf2fd; border-color:#bcd6f5; color:#2a5ea8; font-size:20px; font-weight:600; }
+    body.live.lv-open #lv-hold .mi { width:56px; height:56px; border-radius:50%; background:#3d7fd9; color:#fff; box-shadow:0 0 0 calc(var(--lv, 0) * 12px) #3d7fd940; transition:box-shadow .1s; }
+    body.live.lv-open #lv-hold.off { background:#fff; border-color:var(--line); color:var(--dim); }
+    body.live.lv-open #lv-hold.off .mi { background:var(--paper); color:var(--dim); box-shadow:none; }
+    body.live #bar { display:none; }
+    body.live.typing #bar { display:block; position:fixed; left:0; right:0; bottom:var(--kb, 0px); z-index:25; max-width:none; padding:10px calc(env(safe-area-inset-right) + 40px) 10px calc(env(safe-area-inset-left) + 40px); background:#faf9f4f5; }
+    body.live #cam, body.live #plus, body.live #lv-mic { display:none !important; }
+    /* 按住时那块变蓝:#hold 盖在它上面(同一个位置),波形在前,「在听你说 · 松手发送,上移取消」 */
+    body.live #hold { left:calc(env(safe-area-inset-left) + 36px); right:auto; width:300px; bottom:calc(env(safe-area-inset-bottom) + 250px); height:104px; border-radius:28px; background:#3d7fd9; box-shadow:0 8px 22px #3d7fd961; flex-direction:row; justify-content:center; align-items:center; gap:14px; padding:0; }
+    body.live #hold .w { order:-1; gap:2px; }
     body.live #hold .t { display:none; }
+    body.live #hold span { display:flex; flex-direction:column; gap:2px; font-size:14px; color:#ffffffe6; }
+    body.live #hold span::before { content:"在听你说"; font-size:22px; font-weight:600; color:#fff; }
   }
 </style>
 <div id="home">
@@ -643,7 +678,7 @@ __BRAND_CSS__
       <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
       <div id="st-dim"></div>
     </div>
-    <div id="lv"><div id="lv-av"></div><div id="lv-chip">在听你说</div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div></div>
+    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-chip">在听你说</div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><button id="lv-hold" type="button"><span class="mi"></span><span class="tx"><b></b><small></small></span></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
     <div id="sub"><span class="av" id="sub-av"></span><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
       <div id="pill">
@@ -735,6 +770,8 @@ __BRAND_JS__
     send: SVG('<path d="M12 19V5M5 12l7-7 7 7"></path>', 20, 2.4),
     micSm: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 16, 2.2),
     micMd: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 22, 2),
+    micLg: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 30, 1.8),
+    keyboard: SVG('<rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M7 10h1M11 10h1M15 10h1M8 15h8"></path>', 26, 1.8),
     micOff: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"></path>', 22, 2),
     image: SVG('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 16l5-5 4 4 3-3 6 6"></path><circle cx="16" cy="9" r="1.5"></circle>', 36, 1.6),
     album: __ALBUM_28__,
@@ -782,7 +819,7 @@ __BRAND_JS__
   S.pdate = null;
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
-  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, endLine: null, ring: null, ringEnd: 0, lcPending: false, gateOn: false };
+  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, endLine: null, ring: null, ringEnd: 0, lcPending: false, gateOn: false, hint: false, hintT: 0 };
   /** 实时的一节露到 / 画到第几句:这次连着念的轮(jobs)只到嘴念到的那句(脑写完了、嘴还没念到的不先露;被打断没念到的就不露);
    *  别的(重开页面、以前的、板书的)整节 → undefined */
   const liveHeard = (s) => (s && s.live && LV.on && LV.jobs.has(s.job) ? (LV.heard.has(s.job) ? LV.heard.get(s.job) : -1) : undefined);
@@ -2707,7 +2744,7 @@ __WORD_DRAW_JS__
   // 家长要试老师,到孩子端当一回孩子,用完回清单删那个话题(写进记忆、日记的一起撤)
   /** 能不能发消息:孩子端 = 不只读;家长端不发 */
   const canSend = () => !S.readonly && !S.ask && !S.talkWait && !(S.lecture && !S.lecture.watch);
-  const renderBar = () => { $('#pill').hidden = !canSend() && !REEL; $('#back-today').hidden = !S.readonly || PARENT || REEL; };
+  const renderBar = () => { $('#pill').hidden = !canSend() && !REEL; document.body.classList.toggle('nosend', !canSend() && !REEL); $('#back-today').hidden = !S.readonly || PARENT || REEL; };
   $('#more-btn').hidden = PARENT;
   const resetBoard = () => { dispatch({ type: 'halt' }); if (S.stage) closeStage(); clearTimeout(S.pollTimer); S.sections = []; S.played = new Set(); S.unfold = new Set(); dispatch({ type: 'reset' }); S.partial = null; pin.on = false; $('#board').replaceChildren(); };
   /** 换到某天的某个话题:今天的能接着聊;以前的只读回放(从第一句播) */
@@ -3257,8 +3294,13 @@ __REEL_DOCK_JS__
     S.bar = mode; avListen();
     $('#ph').hidden = mode === 'typing'; $('#typed').hidden = mode !== 'typing'; $('#go').hidden = mode !== 'typing';
     $('#hold').classList.toggle('on', mode === 'holding');
+    // 平板横屏实时:输入条平时收着,打字时贴着软键盘上沿出来(先露出来才 focus 得上)
+    document.body.classList.toggle('typing', mode === 'typing');
     if (mode === 'typing') $('#typed').focus();
   };
+  /** 软键盘的高(--kb):打字时输入条贴着它上沿;visualViewport 没有就当 0 */
+  const kbSync = () => { const vv = window.visualViewport; const kb = vv ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0; document.documentElement.style.setProperty('--kb', kb + 'px'); };
+  if (window.visualViewport) { window.visualViewport.addEventListener('resize', kbSync); window.visualViewport.addEventListener('scroll', kbSync); }
   const mid = $('#mid'), typed = $('#typed');
   $('#go').addEventListener('click', () => { const t = typed.value; typeHeard.put(t); typeRec('send'); typed.value = ''; setBar(barNext(S.bar, 'sent')); send(t); });
   typed.addEventListener('input', () => typeHeard.put(typed.value));
@@ -3563,12 +3605,34 @@ __REEL_DOCK_JS__
     const open = LV.on && LV.model.open;
     document.body.classList.toggle('lv-open', open);
     const m = $('#lv-mic'); m.innerHTML = LV.model.muted ? ICON.micOff : ICON.micMd; m.classList.toggle('off', LV.model.muted); m.classList.toggle('hear', open && LV.model.hearing); m.setAttribute('aria-label', LV.model.muted ? '开麦' : '关麦');
+    lvHoldUi();
     avListen();
     phIdle();
+  };
+  /** 平板横屏左栏浮层里那块:平时「按住说话」;一直听时是麦克风开关(同输入条里的 #lv-mic);点了一下没按住时提示一下 */
+  const lvHoldUi = () => {
+    const el = $('#lv-hold'), open = LV.on && LV.model.open, muted = open && LV.model.muted;
+    const [icon, big, small, label] = open ? [muted ? ICON.micOff : ICON.micMd, muted ? '麦关了' : '我在听,直接说', muted ? '点一下开麦' : '点一下关麦', muted ? '开麦' : '关麦']
+      : [ICON.micLg, LV.hint ? '按住不放,说完再松手' : '按住说话', '', '按住说话'];
+    const key = icon + big + small;
+    if (el.dataset.k !== key) { el.dataset.k = key; el.querySelector('.mi').innerHTML = icon; el.querySelector('b').textContent = big; el.querySelector('small').textContent = small; }
+    el.classList.toggle('off', muted); el.setAttribute('aria-label', label);
+  };
+  /** 孩子刚说的那句(平板横屏左栏,字幕上面):节头不再是孩子的话(设想稿拍板 20),他说了什么在这里看;老师开口了(或这一轮写完了)变淡,下次说话换掉 */
+  const lvKid = () => {
+    const el = $('#lv-kid');
+    const last = S.sections[S.sections.length - 1];
+    const p = S.pendSaid ? { job: S.pendSaid.job, sd: S.pendSaid.said } : last && last.live && last.said ? { job: last.job, sd: last.said } : null;
+    if (!p || !p.sd || !p.sd.text) { if (el.firstChild) el.replaceChildren(); delete el.dataset.k; return; }
+    const old = LV.heard.has(p.job) || !S.pending;
+    const key = p.job + '|' + p.sd.text;
+    if (el.dataset.k !== key) { el.dataset.k = key; el.replaceChildren(...(p.sd.voice ? [h('span', { class: 'mi', html: ICON.micSm })] : []), h('span', { class: 'tx' }, p.sd.text)); }
+    el.classList.toggle('old', old);
   };
   const liveCaption = () => {
     liveListenUi();
     liveTurnUi();
+    lvKid();
     const cap = $('#lv-cap'), c = cap.querySelector('.lv-cur');
     cap.querySelector('.lv-prev').textContent = LV.cap.prev;
     const cut = Boolean(LV.cap.cut) && LV.cap.cut === LV.cap.cur;
@@ -3716,7 +3780,7 @@ __REEL_DOCK_JS__
       LV.audio.onChunk = (ab) => { if ((LV.model.status === 'holding' || liveGateSync()) && LV.ws && LV.ws.readyState === 1) LV.ws.send(ab); };
       LV.audio.onLevel = (v) => {
         if (LV.model.status === 'holding') { holdLevel(Math.min(1, v * 4)); if (LV.diag && v > LV.diag.peak) LV.diag.peak = v; return; }
-        if (LV.gateOn) $('#lv-mic').style.setProperty('--lv', String(Math.min(1, v * 6)));
+        if (LV.gateOn) { const lv = String(Math.min(1, v * 6)); $('#lv-mic').style.setProperty('--lv', lv); $('#lv-hold').style.setProperty('--lv', lv); }
       };
     }
     LV.audio.wake().catch(() => {});
@@ -3856,12 +3920,15 @@ __REEL_DOCK_JS__
     if (text) send(text, { ...(v ? { voice: v } : {}), listened });
     else { $('#ph').textContent = '没听清,再按住说一次'; clearTimeout(phTimer); phTimer = setTimeout(() => { $('#ph').textContent = PH_IDLE(); }, 2500); }
   };
-  mid.addEventListener('pointerdown', (e) => {
+  /** 按住说话的那块:输入条中间那段(点一下 = 打字)、平板横屏实时左栏浮层里那块(点一下 = 一直听时关麦 / 开麦,别的时候提示要按住);
+   *  上滑过 cancelPx 松手取消(浮层那块大,门限放宽到它的高) */
+  const bindHold = (el, cancelPx, onTap) => {
+  el.addEventListener('pointerdown', (e) => {
     if (S.bar === 'typing') return;
     e.preventDefault(); unlock();
     if (rec || hearing) return; // 上一句还在收尾(omni 还在听)
     if (LV.audio && LV.on) LV.audio.wake().catch(() => {});
-    press = { y: e.clientY, cancelled: false, held: false, live: false, timer: setTimeout(() => {
+    press = { y: e.clientY, cancelled: false, held: false, live: false, cancelPx, onTap, timer: setTimeout(() => {
       if (!press) return;
       // 实时:按住推声音给嘴(不走浏览器识别);到了上限不接
       // 一直听:那条不是按住说话,按久了也当点了一下(打字)
@@ -3869,24 +3936,36 @@ __REEL_DOCK_JS__
       if (!holdOk()) return;
       press.held = true; setBar(barNext(S.bar, 'holdStart')); dispatch({ type: 'halt' }); startRec();
     }, 150) };
-    try { mid.setPointerCapture(e.pointerId); } catch {}
+    try { el.setPointerCapture(e.pointerId); } catch {}
   });
-  mid.addEventListener('pointermove', (e) => { if (press && press.held) { const up = press.y - e.clientY > 60; if (up !== press.cancelled) { press.cancelled = up; renderHold(); holdRec('slide', { on: up }); } } });
+  el.addEventListener('pointermove', (e) => { if (press && press.held) { const up = press.y - e.clientY > press.cancelPx; if (up !== press.cancelled) { press.cancelled = up; renderHold(); holdRec('slide', { on: up }); } } });
   /** pointerup = 孩子松手;pointercancel = 系统抢走了触摸(iPadOS 底部手势),照旧当松手,实录与 voice-diag 分开记 */
   const release = (e) => {
     if (!press) return;
     const sys = Boolean(e && e.type === 'pointercancel');
     clearTimeout(press.timer);
     const p = press; press = null;
-    if (!p.held) { setBar(barNext(S.bar, 'tap')); return; }
+    if (!p.held) { p.onTap(); return; }
     if (p.live) { liveRelease(p.cancelled, sys); return; }
     if (p.cancelled || !rec) { holdEnd('cancel'); setBar(barNext(S.bar, 'holdCancel')); if (rec) { const r = rec; rec = null; r.abort(); } return; }
     // 松手发送:浮层留到识别停下(onEnd 里收),这段时间在收尾
     holdRec('up', sys ? { cancel: true } : undefined); hold.tail = true; renderHold(); settle(rec);
   };
-  mid.addEventListener('pointerup', release);
-  mid.addEventListener('pointercancel', release);
-  mid.addEventListener('contextmenu', (e) => e.preventDefault());
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+  };
+  bindHold(mid, 60, () => setBar(barNext(S.bar, 'tap')));
+  bindHold($('#lv-hold'), 104, () => {
+    if (LV.on && LV.model.open) { liveDispatch({ type: LV.model.muted ? 'unmute' : 'mute' }); return; }
+    // 点了一下没按住:提示一下,不打字(打字是下面那颗)
+    clearTimeout(LV.hintT); LV.hint = true; lvHoldUi(); LV.hintT = setTimeout(() => { LV.hint = false; lvHoldUi(); }, 1800);
+  });
+  // 浮层下面那排:拍照、相册走输入条与加号面板的那两个 file input(wireFile),打字同点输入条中间那段
+  $('#lv-cam .ic').innerHTML = ICON.cameraLg; $('#lv-album .ic').innerHTML = ICON.album; $('#lv-type .ic').innerHTML = ICON.keyboard;
+  $('#lv-cam').addEventListener('click', () => $('#cam input').click());
+  $('#lv-album').addEventListener('click', () => $('#sheet input[multiple]').click());
+  $('#lv-type').addEventListener('click', () => setBar(barNext(S.bar, 'tap')));
 
   // ---- 发照片屏(《作业照片设计.md》):拍 / 选了先到这里——看一眼、裁剪 / 圈画 / 转 90°、配一句话,再一条消息发出去 ----
   // 坐标都在 photo-edit(内联在上面),这里只管画和点。原图只留 objectURL,导出时再解一次(几张 12MP 常驻内存 iPad 吃不消)

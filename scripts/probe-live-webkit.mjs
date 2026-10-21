@@ -84,7 +84,7 @@ try {
   await sleep(500);
   ok('进老师页:body.live、连上了嘴', Boolean(fake.conns.at(-1)?.session));
 
-  const box = await page.locator('#mid').boundingBox();
+  const box = await page.locator('#lv-hold').boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await sleep(1500);

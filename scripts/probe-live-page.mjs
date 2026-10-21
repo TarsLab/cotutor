@@ -228,7 +228,9 @@ try {
   const mouth = (rj.reel?.clips ?? []).filter((c) => c.kind === 'mouth');
   const voice = (rj.reel?.clips ?? []).filter((c) => c.kind === 'voice');
   const wav = callSays[0] ? await fetch(`${base}/api/audio/chinese-tutor/${callSays[0].audio}`, { headers: { range: 'bytes=0-99' } }) : null;
-  ok('挂了:落通话录像;话题的录像是实时的(realtime)、讲稿每句从通话的声音里放(带 seek)、嘴接住与孩子按住各是一段、通话的 wav 取得到(支持 Range)', ended && rj.realtime === true && callSays.length >= 3 && callSays.every((x) => typeof x.seek === 'number') && mouth.length >= 3 && voice.length >= 2 && wav?.status === 206 && wav.headers.get('content-type') === 'audio/wav', JSON.stringify({ realtime: rj.realtime, says: callSays.length, mouth: mouth.map((c) => c.text), voice: voice.length, wav: wav?.status }));
+  // 拍板 14 以后这几轮嘴都不先说,没有接住那段;照念的第一块声音比 read 早排一两毫秒,reel 会切出 1–2 毫秒的 mouth 段(没字),不算
+  const caught = mouth.filter((c) => c.to - c.from >= 100);
+  ok('挂了:落通话录像;话题的录像是实时的(realtime)、讲稿每句从通话的声音里放(带 seek)、孩子按住是一段原声、嘴不先说(没有接住那段)、通话的 wav 取得到(支持 Range)', ended && rj.realtime === true && callSays.length >= 3 && callSays.every((x) => typeof x.seek === 'number') && caught.length === 0 && voice.length >= 2 && wav?.status === 206 && wav.headers.get('content-type') === 'audio/wav', JSON.stringify({ realtime: rj.realtime, says: callSays.length, mouth: mouth.map((c) => `${c.to - c.from}ms ${c.text ?? ''}`), voice: voice.length, wav: wav?.status }));
   await send('Page.navigate', { url: `${base}/reel?tutor=chinese-tutor&date=${day.date}&thread=${encodeURIComponent(day.thread)}&end=1` });
   await until(`Boolean(document.body && document.body.classList.contains('rlk'))`, 40);
   await sleep(1500);

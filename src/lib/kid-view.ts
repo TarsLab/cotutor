@@ -60,7 +60,8 @@ export function kidSource(t: Transcript): string | null {
   if (!t.final?.text) return null;
   const last = t.final.text.trim();
   const blocks = t.items.filter((i) => i.kind === 'text' && !i.sub).map((i) => i.text.trim());
-  const kept = blocks.filter((b) => b !== last && FENCE_OR_H2.test(b));
+  // 已经拼在最后一段里的(工具调用写成正文那次的正文,runner 接在 resume 那次前面)不再算一次
+  const kept = blocks.filter((b) => !last.includes(b) && FENCE_OR_H2.test(b));
   return [...kept, last].join('\n\n');
 }
 

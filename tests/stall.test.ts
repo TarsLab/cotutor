@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
 import { parseEvents } from '../src/lib/events.ts';
-import { stallPrompt } from '../src/lib/run-plan.ts';
+import { stallPrompt, toolLeakPrompt } from '../src/lib/run-plan.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-stall-home-')));
 process.env.HOME = home;
@@ -62,6 +62,21 @@ try {
     check('断一次:事件 stall retry 1、已写 9 字(含换行)', stall?.retry === 1 && stall.kept === 9, JSON.stringify(stall));
     const starts = es.filter((e) => e.kind === 'start') as { resume: boolean }[];
     check('断一次:第二次起是 resume', starts.length === 2 && !starts[0].resume && starts[1].resume, JSON.stringify(starts));
+  }
+  // 工具调用写成了正文、停在那里(《工作流程.md》拍板 21):resume 同一会话叫它直接回孩子,一次;那块不进板书,前面那句留着
+  {
+    const m = await send('math-tutor', '写成正文');
+    const starts = events('math-tutor', m.job).filter((e) => e.kind === 'start') as { resume: boolean }[];
+    const lines = events('math-tutor', m.job).filter((e) => e.kind === 'line') as { text: string }[];
+    check('写成正文:resume 一次,孩子拿到前面那句加这次的回答', m.result === 'ok' && m.kidText === '我先看看。\n看到你的画了,楼画得真高!' && starts.length === 2 && starts[1].resume, JSON.stringify([m.result, m.kidText, starts]));
+    check('写成正文:嘴那边一行 <tool_call> 都没收到', lines.length === 2 && lines.every((l) => !l.text.includes('<')), JSON.stringify(lines));
+    check('写成正文:家长看得到两句提醒(解析器剥了哪块、应用 resume 了)', (m.warnings ?? []).some((w) => w.includes('写成了正文(Read)')) && (m.warnings ?? []).some((w) => w.includes('resume 同一个会话')), JSON.stringify(m.warnings));
+    check('写成正文:提示语不带「工具调用和写完的段」那句(断流的),说没执行', toolLeakPrompt().includes('没有执行') && !toolLeakPrompt().includes('网络断了'));
+    const again = await send('math-tutor', '一直写成正文');
+    const s2 = events('math-tutor', again.job).filter((e) => e.kind === 'start');
+    check('一直写成正文:只 resume 一次,板上什么都不出', again.result === 'ok' && s2.length === 2 && !again.kidText, JSON.stringify([again.result, again.kidText, s2.length]));
+    const plain = await send('math-tutor', '平常一句');
+    check('平常的一轮不 resume', events('math-tutor', plain.job).filter((e) => e.kind === 'start').length === 1);
   }
   // 工具在跑时静默 1 秒(> 400ms)不算断流
   {

@@ -1,7 +1,7 @@
 /** 板书解析器:真跑样本逐个过 + 围栏 / 段落 / cue / 锚点 / 未知标签 / 解析失败 / partial / H2 尾巴。 */
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { annotateSource, cleanSpeech, parseBoard } from '../src/lib/board.ts';
+import { annotateSource, cleanSpeech, endsWithToolCall, parseBoard } from '../src/lib/board.ts';
 import { check, done } from './_check.ts';
 
 const KNOWN = ['text', 'read', 'choice', 'fill'];
@@ -163,5 +163,24 @@ for (const f of fixtures) {
   check('答案行:___ 也算空', blank.props.text === '遥读 y___', JSON.stringify(blank.props));
   const math = parseBoard('```text formula\n6 × 4 ÷ 2\n= 24 ÷ 2\n= 12\n```\n');
   check('答案行:没有空的算式照旧,不报', String(stripSecrets(math.section).cards[0].props.text).includes('= 12') && math.warnings.length === 0, JSON.stringify([math.section.cards[0], math.warnings]));
+}
+{
+  // 写成正文的工具调用(10-21 Ray 交画那轮,原文一字不差;《工作流程.md》拍板 21):板上不出、嘴不念,报一句;回复停在它上面 = 没写完
+  const leak = '<tool_call>\n<function=Read>\n<parameter=file_path>\nconversations/chinese-tutor/2026-10-21.2059-10.cards/0.png\n</parameter>\n</function>\n</tool_call>';
+  const r = parseBoard(leak, { live: true });
+  check('工具调用:整块不进板书,报一句点名工具', r.section.lines.length === 0 && r.section.cards.length === 0 && r.warnings.length === 1 && r.warnings[0].text.includes('Read') && r.warnings[0].line === 0 && JSON.stringify(r.spans.toolCalls) === '[[0,6]]', JSON.stringify([r.section, r.warnings, r.spans]));
+  check('工具调用:回复停在它上面', endsWithToolCall(leak) && endsWithToolCall(leak + '\n\n'));
+  const json = parseBoard('我先看看你的画。\n<tool_call>\n{"name": "read_file", "arguments": {"absolute_path": "/x/0.png"}}\n</tool_call>\n');
+  check('工具调用:JSON 那种也认,前面的话照念', json.section.lines.map((l) => l.text).join() === '我先看看你的画。' && json.warnings[0]?.text.includes('read_file') === true && endsWithToolCall('我先看看你的画。\n<tool_call>\n{"name": "read_file"}\n</tool_call>\n'), JSON.stringify([json.section.lines, json.warnings]));
+  const mid = '先看这句。\n<function=Grep>\n<parameter=pattern>\n瀑\n</parameter>\n</function>\n再讲这句。\n';
+  check('工具调用:不带外层的 <function=…> 也认;后面还有话就不算停在上面', parseBoard(mid).section.lines.map((l) => l.text).join('|') === '先看这句。|再讲这句。' && !endsWithToolCall(mid), JSON.stringify(parseBoard(mid).section.lines));
+  const open = parseBoard('好的。\n<tool_call>\n<function=Read>\n<parameter=file_path>\n', { partial: true });
+  check('工具调用:流式时没收尾的块压着,前面的照出', open.section.lines.map((l) => l.text).join() === '好的。' && open.warnings.length === 0, JSON.stringify([open.section.lines, open.warnings]));
+  const cut = parseBoard('<function=Read>\n<parameter=file_path>\nx.png\n');
+  check('工具调用:定稿时没收尾,当到文末', cut.section.lines.length === 0 && cut.warnings.length === 1 && endsWithToolCall('<function=Read>\n<parameter=file_path>\nx.png\n'), JSON.stringify([cut.section.lines, cut.warnings]));
+  const fenced = parseBoard('```text\n<tool_call>\n```\n');
+  check('工具调用:围栏里的不管,是卡的字', fenced.section.cards[0]?.props.text === '<tool_call>' && fenced.spans.toolCalls.length === 0, JSON.stringify(fenced.section.cards));
+  const rows = annotateSource(leak).rows;
+  check('看原文:整块是 drop,开头那行点名', rows.every((x) => x.role === 'drop') && rows[0].label === '写成正文的工具调用 · 不进板书', JSON.stringify(rows.slice(0, 2)));
 }
 done();

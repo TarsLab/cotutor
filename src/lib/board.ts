@@ -77,6 +77,8 @@ export interface BoardSpans {
   lines: LineSpan[];
   /** 第一个 H2 起到文末 */
   tail: LineSpan | null;
+  /** 写成正文的工具调用(TOOL_OPEN 起到收尾行),不进板书 */
+  toolCalls: LineSpan[];
 }
 
 export interface ParsedBoard {
@@ -102,6 +104,22 @@ const CUE = /\[\[([^\[\]]+)\]\]/g;
 function fenceClose(line: string, fence: string): boolean {
   const m = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line);
   return Boolean(m && m[1][0] === fence[0] && m[1].length >= fence.length);
+}
+
+/**
+ * 写成正文的工具调用:这轮没有那个工具时,qwen 照它自己的格式把调用写进正文——`<tool_call>` 独占一行起、`</tool_call>` 止
+ * (中间是 `<function=Read>` `<parameter=…>` 几行或一行 JSON),也见过不带外层的 `<function=名>` … `</function>`。
+ * 整块不是讲稿:板上不出、嘴不念(10-21 Ray 交画那轮,这 7 行在板上、嘴念了 25 秒,《工作流程.md》拍板 21)
+ */
+const TOOL_OPEN = /^\s*<(tool_call|function=[^>\s]+)>\s*$/;
+const toolClose = (open: string): RegExp => (open === 'tool_call' ? /^\s*<\/tool_call>\s*$/ : /^\s*<\/function>\s*$/);
+/** 块里调的是哪个工具:`<function=名>` 或 JSON 的 "name" */
+function toolName(block: readonly string[]): string {
+  for (const l of block) {
+    const m = /<function=([^>\s]+)>/.exec(l) ?? /"name"\s*:\s*"([^"]+)"/.exec(l);
+    if (m) return m[1];
+  }
+  return '?';
 }
 
 /** 讲稿一行的清洗:去掉老师不该写但常写的标题号、列表号、引用号、粗体号;整行的 HTML 注释不算话 */
@@ -179,6 +197,7 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
   const mods: CardMods[] = [];
   const raws: RawLine[] = [];
   const warnings: BoardWarning[] = [];
+  const toolCalls: LineSpan[] = [];
   let tail: string[] | null = null;
   let tailFrom = -1;
   let i = 0;
@@ -187,6 +206,19 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
     if (tail) {
       tail.push(line);
       i++;
+      continue;
+    }
+    const call = TOOL_OPEN.exec(line);
+    if (call) {
+      const close = toolClose(call[1]);
+      let j = i + 1;
+      while (j < lines.length && !close.test(lines[j])) j++;
+      // 和围栏一样:流式时没收尾的块压着,后面的也不出
+      if (j >= lines.length && partial) break;
+      const end = Math.min(j, lines.length - 1);
+      toolCalls.push([i, end]);
+      warnings.push({ text: `老师把工具调用写成了正文(${toolName(lines.slice(i, end + 1))}),不进板书`, line: i });
+      i = end + 1;
       continue;
     }
     const open = FENCE_OPEN.exec(line);
@@ -267,8 +299,16 @@ export function parseBoard(text: string, opts: ParseBoardOptions = {}): ParsedBo
       cards: cardSpans,
       lines: kept.map((r): LineSpan => [r.line, r.line]),
       tail: tail ? [tailFrom, tailTo(lines, tailFrom)] : null,
+      toolCalls,
     },
   };
+}
+
+/** 回复停在写成正文的工具调用上(后面只剩空行):老师在等工具的结果,这一轮其实没写完(runner 据此 resume 一次) */
+export function endsWithToolCall(text: string): boolean {
+  const { spans } = parseBoard(text);
+  const last = spans.toolCalls[spans.toolCalls.length - 1];
+  return Boolean(last) && text.split('\n').slice(last[1] + 1).every((l) => !l.trim());
 }
 
 /** 原文一行的角色:解析器把它当什么了 */
@@ -355,6 +395,11 @@ export function annotateSource(text: string, opts: Pick<ParseBoardOptions, 'live
     const asked = waits && board.section.cards.some(isAskCard);
     rows[i].label = `讲稿 ${n + 1}${waits ? ` · 问句,停下等${asked ? '(补提问卡)' : ''}` : ' · 播'}`;
   });
+  // 整块照旧是 drop,开头那行点名
+  for (const span of board.spans.toolCalls) {
+    const i = at(span[0]);
+    if (i !== undefined) rows[i].label = '写成正文的工具调用 · 不进板书';
+  }
   if (board.spans.tail) {
     for (let b = board.spans.tail[0]; b <= board.spans.tail[1]; b++) {
       const i = at(b);

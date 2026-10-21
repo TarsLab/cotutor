@@ -6,12 +6,13 @@
  * --resume 时 session_id 沿用给的 id,否则新造;--fail 出 error_max_turns。
  * --input-format stream-json(预热,2026-09-29):消息不在 argv,从 stdin 读第一行 {"type":"user","message":{"content":…}};读到之前一个字节不吐(同真 claude),
  * init 带 waitedMs(起来到收到消息等了多久);回完 result 等 stdin 关了才退。
- * 含「断流」/「一直断」/「工具慢」的见下面断流那段(stall.test)。
+ * 含「断流」/「一直断」/「工具慢」/「写成正文」/「一直写成正文」的见下面断流那段(stall.test)。
  * qwen 方言(命令行里有 --core-tools,qwen 适配器的 {toolArgs} 展开出来的):init 报工具表(核心工具按 --core-tools 留、非核心的照带,再减 --exclude-tools;
  * 环境变量 FAKE_QWEN_LEAK 里的工具总在,模仿关不掉的)、带 QWEN_HOME 与思考量配置的路径,每轮一条 goal_state 与一段思考增量,收尾没有钱数只有 token;
  * 消息含「超时」就以 55 退出、不吐 result(同 qwen 的 --max-wall-time)。
  */
 export {};
+import { existsSync as fsExists, rmSync as fsRm, writeFileSync as fsWrite } from 'node:fs';
 const argv = process.argv.slice(2);
 let session: string | null = null;
 let fail = false;
@@ -97,6 +98,24 @@ if (prompt.includes('起就卡')) {
     emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.01, result: text });
     process.exit(0);
   }
+  // 工具调用写成正文(qwen 没那个工具时,10-21):「写成正文」先说一句再写一块 <tool_call>,停在那里;resume 来的「(应用注)…没有执行」照常回一句。「一直写成正文」每次都写
+  const leak = (said: string): never => {
+    const text = `${said}<tool_call>\n<function=Read>\n<parameter=file_path>\nconversations/x.cards/0.png\n</parameter>\n</function>\n</tool_call>`;
+    start(); delta(text);
+    emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'text', text }] } });
+    emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.01, result: text });
+    process.exit(0);
+  };
+  if (prompt.includes('(应用注)') && prompt.includes('没有执行')) {
+    if (fsExists('.always-leak')) leak('');
+    const text = '看到你的画了,楼画得真高!';
+    start(); delta(text);
+    emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'text', text }] } });
+    emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.01, result: text });
+    process.exit(0);
+  }
+  if (prompt.includes('一直写成正文')) { fsWrite('.always-leak', ''); leak(''); }
+  if (prompt.includes('写成正文')) { fsRm('.always-leak', { force: true }); leak('我先看看。\n'); }
   if (prompt.includes('工具慢')) {
     emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 'toolu_slow', name: 'Bash', input: { command: 'sleep 1' } }] } });
     await sleep(1000);

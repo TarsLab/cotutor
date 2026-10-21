@@ -25,13 +25,13 @@ import { activityFile } from '../cli/activities.ts';
 import { activityState, paintGate, paintTool, readActivity, threadActivity } from './activity-state.ts';
 import { KouboQueue } from './koubo.ts';
 import { controlsTools, parserOf, prepareCli, processEnv, toolsOf, unexpectedTools, type ToolSet } from '../clis/index.ts';
-import { lineFlags, parseBoard } from '../lib/board.ts';
+import { endsWithToolCall, lineFlags, parseBoard } from '../lib/board.ts';
 import { readyBeats, beatsOf, voicedLines, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
 import { createPartialReader } from '../lib/stream.ts';
 import { parseSections } from '../lib/sections.ts';
 import { isoWeek, parsePlan, planLinesFor } from '../lib/plan.ts';
-import { getRuntime, planRun, runtimeUses, stallPrompt, type RunPlan, boardPreloaded } from '../lib/run-plan.ts';
+import { getRuntime, planRun, runtimeUses, stallPrompt, toolLeakPrompt, type RunPlan, boardPreloaded } from '../lib/run-plan.ts';
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
@@ -641,8 +641,8 @@ export class Runner {
     const spare = this.spares.claim(tutor, plan.resume ? 'resume' : 'fresh', { argv: plan.argv, env: plan.env, cwd: join(ws.dirs.agents, tutor), date, lastJob: plan.resume ? lastJobOf(index, thread) : null });
     active.job = job;
     if (input.live) active.live = true;
-    // 断流后接着跑:同一运行时 resume 这个会话,消息换成 stallPrompt
-    const resumePlan = (id: string, open: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent, prompt: stallPrompt(open), agentBody, systemBody, boardFile, agentsFile, runtime: plan.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
+    // 断流后接着跑、工具调用写成了正文:同一运行时 resume 这个会话,消息换成 stallPrompt / toolLeakPrompt
+    const resumePlan = (id: string, prompt: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent, prompt, agentBody, systemBody, boardFile, agentsFile, runtime: plan.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
     // 实时的一轮讲稿是嘴念的,不按 replyMaxChars 截(截了孩子听到半句:10-20「题目已经…」后面「你补上 ēng 就行」没了)
     const runPolicy = input.live ? { ...policy, replyMaxChars: Number.MAX_SAFE_INTEGER } : policy;
     active.done = this.spawn(ws, tutor, date, job, plan, runPolicy, active, resumePlan, spare).finally(() => {
@@ -742,7 +742,7 @@ export class Runner {
     return { index: { ...index, messages, booked: { ...index.booked, [thread]: job } }, file, warnings: [] };
   }
 
-  private async spawn(ws: Workspace, tutor: string, date: string, job: string, plan: RunPlan, policy: Policy, active: Active, resumePlan: (session: string, open: string) => RunPlan, spare: Spare | null = null): Promise<ConversationIndex> {
+  private async spawn(ws: Workspace, tutor: string, date: string, job: string, plan: RunPlan, policy: Policy, active: Active, resumePlan: (session: string, prompt: string) => RunPlan, spare: Spare | null = null): Promise<ConversationIndex> {
     const replyMaxChars = policy.replyMaxChars;
     const files = conversationFiles(ws.dirs.conversations, tutor, date);
     const cwd = join(ws.dirs.agents, tutor);
@@ -933,7 +933,20 @@ export class Runner {
       reader = createPartialReader();
       toolsRunning.clear();
       // 会话还没落盘(进程起来就卡住、一条整的回复都没有):原样从头再起一次;落了盘就 resume 接着写
-      const next = persisted && session ? resumePlan(session, open) : plan;
+      const next = persisted && session ? resumePlan(session, stallPrompt(open)) : plan;
+      emit({ lane: 'main', kind: 'start', cli: next.argv[0].slice(next.argv[0].lastIndexOf('/') + 1), runtime: next.runtime, resume: next.resume });
+      exit = await runOnce(next);
+    }
+    // 回复停在写成正文的工具调用上(这轮没给它那个工具,qwen 照自己的格式写出来;板书解析器已剥掉,孩子没看到):老师在等结果,
+    // resume 同一个会话告诉它不会有结果、接着回孩子,只一次(《工作流程.md》拍板 21)。这次的正文接在前面那段后面
+    let leaked = '';
+    if (!exit.stalled && exit.code === 0 && session && endsWithToolCall(parseSections(liveText()).body)) {
+      leaked = liveText();
+      carried = leaked;
+      open = '';
+      reader = createPartialReader();
+      toolsRunning.clear();
+      const next = resumePlan(session, toolLeakPrompt());
       emit({ lane: 'main', kind: 'start', cli: next.argv[0].slice(next.argv[0].lastIndexOf('/') + 1), runtime: next.runtime, resume: next.resume });
       exit = await runOnce(next);
     }
@@ -947,6 +960,7 @@ export class Runner {
     // 断流接着跑的:断在半截的那段没进会话、也不在最后的 result 里,拼回最后一段前面(老师是从断处接着写的)
     // (result 的正文被 trim 过,断在句末 / 围栏上的补回换行,免得两句粘成一行)
     if (open && transcript.final?.text) transcript.final.text = open + (/[。!\uFF01?\uFF1F;\uFF1B`\n]\s*$/.test(open) ? '\n' : '') + transcript.final.text;
+    if (leaked && transcript.final?.text) transcript.final.text = `${leaked}\n\n${transcript.final.text}`;
     if (exit.stalled && !transcript.final) transcript.final = { text: null, ok: false, reason: `stalled:${stalls} 次断流(每次 ${policy.stall.ms}ms 没输出),接着跑的次数用完了` };
     // 这轮用了哪些工具、读了什么:从 .log 抽出来物化(家长端「看原文」一站、cotutor show)
     const tools = toolCalls(logText, parse).slice(0, 200);
@@ -958,6 +972,7 @@ export class Runner {
     emit({ lane: 'main', kind: 'exit', ok: transcript.final.ok, ...(transcript.final.reason ? { reason: transcript.final.reason } : {}), ...(transcript.final.costUsd !== undefined ? { costUsd: transcript.final.costUsd } : {}), ...(transcript.final.numTurns !== undefined ? { turns: transcript.final.numTurns } : {}) });
     const kidView = deriveKidView(transcript, { replyMaxChars }, { live: active.live });
     if (unexpected.length) kidView.warnings.push(`${plan.cli} 起来时带着这轮不该有的工具:${unexpected.join('、')}(${plan.tools === 'off' ? '这轮应该一个工具都不带' : '这轮只该带只读的几样'});关工具的旗标可能随 CLI 升级失效了,看 src/clis/${plan.cli}.ts`);
+    if (leaked) kidView.warnings.push('老师把工具调用写成了正文、停在那里等结果(板上没出、嘴没念),应用 resume 同一个会话叫它直接回孩子');
     if (stalls) kidView.warnings.push(`API 流断了 ${stalls} 次(每次 ${policy.stall.ms / 1000} 秒没动静),应用杀掉进程、resume 会话接着写的${exit.stalled ? ';次数用完还断,这轮没收尾' : ''}`);
     // 整块出的(没走流式):卡与句这时才第一次见到,也发一遍
     if (kidView.section) {

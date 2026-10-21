@@ -11,6 +11,7 @@ import { inlineScript } from '../server/inline-lib.ts';
 import { wordDrawJs } from '../server/word-draw.ts';
 import { AUDIO_CLIENT_JS } from '../live/audio-client.ts';
 import { TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
+import { KID_NAV_JS } from '../server/kid-nav.ts';
 import { SNAP_CSS, cameraSvg, snapHtml } from '../server/photo-ui.ts';
 import { faviconLinks } from '../lib/favicon.ts';
 
@@ -286,7 +287,9 @@ __WORD_DRAW_JS__
   const show = (name) => { for (const v of views) $('#' + v).classList.toggle('on', v === name); BACK.el.hidden = Boolean(REEL_ID); };
   // 左上角「‹ logo」胶囊同老师页(《首页设计.md》拍板 27,《产品规划.md》拍板 24):点了挂断、回首页
   __TUTOR_FACE_JS__
-  const BACK = backCapsule(() => { if (call) call.hangup('left'); location.href = '/'; });
+  // 孩子端不往浏览器历史里加东西(kid-nav.ts,《产品规划.md》拍板 25):回首页、交给老师页都是替换当前页
+  __KID_NAV_JS__
+  const BACK = backCapsule(() => { if (call) call.hangup('left'); kidGo('/'); });
   BACK.el.hidden = true; document.body.append(BACK.el);
   let OWNER = null;
   /** 口语课挂的那位老师:首页链接带 ?tutor=,没带就找卡上有口语课的,再没有找英语老师;换上他的颜色、头像、名字 */
@@ -449,7 +452,7 @@ __WORD_DRAW_JS__
     if (btn) btn.disabled = true;
     let id;
     try { id = await getId(); } catch (e) { if (btn) btn.disabled = false; toast('没连上,再点一次'); return; }
-    location.href = '/?tutor=' + encodeURIComponent(OWNER.name) + '&talk=' + encodeURIComponent(id);
+    kidGo('/?tutor=' + encodeURIComponent(OWNER.name) + '&talk=' + encodeURIComponent(id));
   }
 
   // ---- 孩子:跟读与聊 ----
@@ -644,7 +647,7 @@ __WORD_DRAW_JS__
       try { if (C.ws && C.ws.readyState <= 1) C.ws.close(1000, why); } catch (e) {}
       call = null;
       // 打完回首页(回放在家长端的记录里)
-      if (!reel) location.href = '/';
+      if (!reel) kidGo('/');
     };
     return C;
   }
@@ -775,5 +778,5 @@ __TALK_REEL_JS__
 </body></html>`;
 
 export function talkPage(): string {
-  return TALK_PAGE.replace('__AUDIO_CLIENT_JS__', () => AUDIO_CLIENT_JS).replace('__TUTOR_FACE_JS__', () => TUTOR_FACE_JS).replace('__TUTOR_FACE_CSS__', () => TUTOR_FACE_CSS).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__TALK_REEL_JS__', () => TALK_REEL_JS);
+  return TALK_PAGE.replace('__AUDIO_CLIENT_JS__', () => AUDIO_CLIENT_JS).replace('__TUTOR_FACE_JS__', () => TUTOR_FACE_JS).replace('__KID_NAV_JS__', () => KID_NAV_JS).replace('__TUTOR_FACE_CSS__', () => TUTOR_FACE_CSS).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__TALK_REEL_JS__', () => TALK_REEL_JS);
 }

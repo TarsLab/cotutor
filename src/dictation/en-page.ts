@@ -6,6 +6,7 @@
  * 孩子端:没有对错、没有分数、没有报错的字。用 String.raw:脚本里不写反斜杠转义与反引号。
  */
 import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
+import { KID_NAV_JS } from '../server/kid-nav.ts';
 import { EN_BOX_CSS, EN_BOX_JS } from './en-box.ts';
 import { UNLOCK_JS } from './unlock.ts';
 import { REEL_MODE_JS } from './reel-mode.ts';
@@ -187,7 +188,9 @@ ${BTN_JS}
   window.addEventListener('resize', function () { clearTimeout(viewTimer); viewTimer = setTimeout(sendView, 300); });
   document.addEventListener('visibilitychange', function () { if (S.v && !S.v.done) event(document.hidden ? 'away' : 'back', S.i || 0); });
   var drop = function (pts) { if (S.gone.length < 200) S.gone.push({ t: now(), pts: pts }); };
-  var goHome = function () { stopSay(); location.href = '/'; };
+  // 孩子端不往浏览器历史里加东西(kid-nav.ts,《产品规划.md》拍板 25):回首页是替换当前页
+  ${KID_NAV_JS}
+  var goHome = function () { stopSay(); kidGo('/'); };
   // ---- 左上角「‹ logo」胶囊,同老师页(《wip/听写设想.md》拍板 16,《产品规划.md》拍板 24);再写一遍是叠在对一对上的一层,右上角 × 回去 ----
   ${TUTOR_FACE_JS}
   var BACK = backCapsule(goHome); document.body.append(BACK.el);

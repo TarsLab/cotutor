@@ -6,6 +6,7 @@
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
 import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
+import { KID_NAV_JS } from '../server/kid-nav.ts';
 import { UNLOCK_JS } from './unlock.ts';
 import { REEL_MODE_JS } from './reel-mode.ts';
 import { SNAP_CSS, snapHtml } from '../server/photo-ui.ts';
@@ -332,7 +333,9 @@ ${BTN_JS}
   var setView = function (v) { var fresh = !S.v || S.v.id !== v.id; S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); if (fresh) { S.vw = 0; sendView(); } };
 
   var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'order' || name === 'rewrite'; window.scrollTo(0, 0); if (!REEL_ID) guard(); };
-  var goHome = function () { stopSay(); location.href = '/'; };
+  // 孩子端不往浏览器历史里加东西(kid-nav.ts,《产品规划.md》拍板 25):回首页是替换当前页
+  ${KID_NAV_JS}
+  var goHome = function () { stopSay(); kidGo('/'); };
   // ---- 左上角「‹ logo」胶囊,同老师页(《wip/听写设想.md》拍板 16,《产品规划.md》拍板 24);拍照屏的大头像是听写这次的老师,没开始时是从哪位老师卡上进来的 ----
   ${TUTOR_FACE_JS}
   var BACK = backCapsule(goHome); document.body.append(BACK.el);

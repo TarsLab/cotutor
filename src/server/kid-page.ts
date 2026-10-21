@@ -40,6 +40,7 @@ import { BACK_LOGO, BRAND_CSS, BRAND_FOOTER, BRAND_JS, titleLogo } from './brand
 import { albumSvg, cameraSvg } from './photo-ui.ts';
 import { AUDIO_CLIENT_JS } from '../live/audio-client.ts';
 import { VOICE_CSS, VOICE_JS } from './voice-ui.ts';
+import { KID_NAV_JS } from './kid-nav.ts';
 
 /** 读 src/lib/<name> 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
 function libSource(name: 'kid-board' | 'photo-edit' | 'reel' | 'live-board' | 'voice-view'): string {
@@ -730,6 +731,8 @@ __BRAND_JS__
   /** 录像里孩子的屏幕(/reel,《家长录像设计.md》拍板 6):孩子端的样子,数据是 /reel 给的一个话题;只读、不记、点不动,由录像的时钟驱动 */
   const REEL = MODE.reel === true;
   const PREVIEW = MODE.preview === true;
+  // 孩子端不往浏览器历史里加东西(kid-nav.ts,《产品规划.md》拍板 25):去听写、口语课的链接都是替换当前页;家长端、录像、预览照常
+  if (!PARENT && !REEL && !PREVIEW) { ${KID_NAV_JS} }
   /** 孩子端对话接口的前缀(messages / photos / cards / history);家长端只看,一天的板书走自己的路 */
   const CONV = '/api/kid/conversations/';
   const AUDIO = '/api/audio/';

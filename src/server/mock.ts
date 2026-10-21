@@ -63,7 +63,8 @@ export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bund
 /** mock 的视频小课堂目录:仓库里的样本(tests/fixtures/lectures/) */
 export const MOCK_LECTURES_DIR = fileURLToPath(new URL('../../tests/fixtures/lectures/', import.meta.url));
 const MOCK_LECTURE_DIRS = { dirs: { bundles: MOCK_BUNDLES_DIR, lectures: MOCK_LECTURES_DIR } };
-import { lineDurationMs, readyBeats, type BoardSection, type KidLecture, type PenName } from '../lib/kid-board.ts';
+import { lineDurationMs, plainLine, readyBeats, type BoardSection, type KidLecture, type PenName } from '../lib/kid-board.ts';
+import { wavOfPcm } from '../live/lib/wav.ts';
 import { REEL_LINE_GAP_MS, buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord } from '../lib/reel.ts';
 import { weekOf, type CardStates } from '../lib/conversation.ts';
 import { lanAddresses, listenInfo } from '../cli/serve.ts';
@@ -1065,6 +1066,21 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p.startsWith('/api/bundles/') && method === 'GET') {
       const f = await bundleAsset(MOCK_BUNDLES_DIR, p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
+    }
+    // 字幕重放(《wip/实时老师设想.md》拍板 21):真服务端给 src/live/call.ts 落的那份嘴的声音;mock 没有嘴,每句按字数估多长、放一段静音(--live 看「再听一遍」)
+    const mouth = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/mouth\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d+)$/.exec(p);
+    if (mouth && method === 'GET') {
+      const day = (await route('GET', `/api/kid/conversations/${mouth[1]}/today`)).json as KidDay | undefined;
+      const m = day?.messages.find((x) => x.job === mouth[3]);
+      const said = m && m.live && m.section ? m.section.lines : [];
+      if (!said.length) return { status: 404, json: { error: 'not_found' } };
+      let at = 0;
+      const lines = said.map((l, line) => { const r = { line, ms: at }; at += lineDurationMs(plainLine(l.text)); return r; });
+      return { status: 200, json: { audio: `/api/mock/silence.wav?ms=${at}`, ms: at, lines } };
+    }
+    if (p === '/api/mock/silence.wav' && method === 'GET') {
+      const ms = Math.min(120_000, Math.max(0, Number(url.searchParams.get('ms')) || 0));
+      return { status: 200, contentType: 'audio/wav', body: wavOfPcm(Buffer.alloc(Math.round(ms * 24) * 2), 24000) };
     }
     if (p.startsWith('/api/audio/')) {
       const rec = recordings.get(decodeURIComponent(p.slice('/api/audio/'.length)));

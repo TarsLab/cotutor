@@ -146,6 +146,30 @@ try {
   await sleep(300);
   console.log('  ', await shot('live-board-ipad.png'));
 
+  // ---- 字幕重放(拍板 21):安静了字幕下面露「再听一遍」;点了从这一轮第一句放(服务端留的那份嘴的声音)、字幕跟着走、上面一行「再听一遍 · 第 n 句,共 m 句」,头像不动;点「停」停;按住说话也停 ----
+  const rpShown = await until(`!document.querySelector('#lv-replay').hidden && document.querySelector('#lv-replay').textContent === '再听一遍'`, 40);
+  await tap('#lv-replay');
+  const rpOn = await until(`document.querySelector('#lv-cap').classList.contains('rp') && /^再听一遍 · 第 1 句,共 3 句$/.test(document.querySelector('#lv-cap .lv-prev').textContent)`, 20);
+  const rpFirst = await evaluate(`document.querySelector('#lv-cap .lv-cur').textContent`);
+  const rpAdv = await until(`/^再听一遍 · 第 [23] 句/.test(document.querySelector('#lv-cap .lv-prev').textContent)`, 60);
+  const rpView = { first: rpFirst, prev: await evaluate(`document.querySelector('#lv-cap .lv-prev').textContent`), stop: await evaluate(`document.querySelector('#lv-replay').classList.contains('stop')`), speaking: await body('speaking'), playing: await evaluate(`(() => { const a = [...document.querySelectorAll('audio')]; return true; })()`) };
+  console.log('  ', await shot('live-replay-ipad.png'));
+  ok('再听一遍:安静了露出来;点了从这一轮第一句放、字幕跟着走(上面「再听一遍 · 第 n 句,共 3 句」),那行变「停」,头像不动', rpShown && rpOn && rpFirst === '先看三角形。' && rpAdv && rpView.stop && !rpView.speaking, JSON.stringify(rpView));
+  await tap('#lv-replay');
+  const rpStopped = await until(`!document.querySelector('#lv-cap').classList.contains('rp') && !document.querySelector('#lv-replay').classList.contains('stop')`, 20);
+  await tap('#lv-replay');
+  await until(`document.querySelector('#lv-cap').classList.contains('rp')`, 20);
+  const c0 = conn().commits;
+  const pr = await center(HOLD);
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pr.x, y: pr.y, button: 'left', buttons: 1, clickCount: 1 });
+  await sleep(500);
+  const rpHeld = { rp: await evaluate(`document.querySelector('#lv-cap').classList.contains('rp')`), listening: await body('listening'), hidden: await evaluate(`document.querySelector('#lv-replay').hidden`) };
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: pr.x, y: pr.y - 130, button: 'left', buttons: 1 });
+  await sleep(150);
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pr.x, y: pr.y - 130, button: 'left', buttons: 0, clickCount: 1 });
+  await sleep(500);
+  ok('点「停」停了;再放时按住说话:重放停、在听(上滑松手作废,不开新一轮)', rpStopped && !rpHeld.rp && rpHeld.listening && rpHeld.hidden && conn().commits === c0, JSON.stringify({ rpStopped, ...rpHeld, commits: conn().commits - c0 }));
+
   // ---- 嘴在说时按下 = 打断;上滑松手作废 ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   fake.kidText = '再讲一遍板书';

@@ -589,6 +589,12 @@ __BRAND_CSS__
   /* 孩子刚说的那句、按住说话那块、拍照 / 相册 / 打字:只在平板横屏的左栏浮层里(见下面「平板横屏」);竖屏、手机照旧输入条。
      一页一张脸:实时的脸在 #lv-av,空板中间那颗不露 */
   #lv-kid, #lv-hold, #lv-tools { display:none; }
+  /* 字幕重放(设想稿拍板 21):家长提醒着用的,不做大按钮——手机是字幕行右边一颗小钮,平板横屏是字幕下面一行小字「↺ 再听一遍」;放着时是「■ 停」 */
+  #lv-replay { flex:none; width:40px; height:40px; border-radius:50%; display:grid; place-items:center; color:var(--dim); }
+  #lv-replay[hidden] { display:none !important; }
+  #lv-replay .tx { display:none; }
+  #lv-cap .lv-cur .rp { display:inline-flex; vertical-align:-2px; margin-right:6px; color:var(--dim); }
+  #lv-cap.rp .lv-cur { color:#4d4a44; font-weight:600; }
   body.live .blank > .av { display:none; }
   /* 实时的板是脑写的(设想稿拍板 20):节头是脑写的那张「# 标题」文字卡(一行摘要 —— 线 —— 板上第一节带时间);没写节头的一轮接着上一节画,不留节间空 */
   .sh.lh { gap:12px; padding:14px 4px 2px; white-space:normal; }
@@ -635,6 +641,10 @@ __BRAND_CSS__
     body.live #lv-cap .lv-prev { font-size:17px; line-height:1.5; color:#a39f96; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     body.live #lv-cap .lv-prev:empty { display:none; }
     body.live #lv-cap .lv-cur { font-size:24px; line-height:1.5; -webkit-line-clamp:6; }
+    body.live #lv-cap.rp .lv-prev { font-size:15px; color:#8a8781; }
+    body.live #lv-replay { display:flex; width:auto; height:44px; padding:0 14px; border-radius:22px; align-items:center; gap:6px; font-size:15px; color:#6f6b63; }
+    body.live #lv-replay .tx { display:inline; }
+    body.live #lv-replay.stop { height:40px; border:1px solid var(--line); background:#fff; color:var(--ink); }
     body.live .blank > .nm { display:none; }
     /* 下半:按住说话那块(下沿离屏底 250)、下面一排拍照 / 相册 / 打字;输入条收起,只在打字时贴着软键盘上沿横跨全屏(--kb 是软键盘的高) */
     body.live #lv-hold { display:flex; position:absolute; left:20px; bottom:234px; width:300px; height:104px; box-sizing:border-box; align-items:center; justify-content:center; gap:14px; border-radius:28px; border:1.5px solid var(--line); background:#fff; box-shadow:0 4px 14px #0000000f; font-size:22px; color:var(--ink); touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
@@ -683,7 +693,7 @@ __BRAND_CSS__
       <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
       <div id="st-dim"></div>
     </div>
-    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-chip">在听你说</div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><button id="lv-hold" type="button"><span class="mi"></span><span class="tx"><b></b><small></small></span></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
+    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-chip">在听你说</div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"><span class="mi"></span><span class="tx"><b></b><small></small></span></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
     <div id="sub"><span class="av" id="sub-av"></span><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
       <div id="pill">
@@ -3554,6 +3564,8 @@ __REEL_DOCK_JS__
         case 'duck': case 'unduck': if (LV.audio) LV.audio.duck(f.kind === 'duck' ? 0.3 : 1); break;
         case 'ring': liveRing(); break;
         case 'stopRing': liveRingStop(); break;
+        case 'playReplay': replayPlay(); break;
+        case 'stopReplay': replayStop(); break;
       }
     }
     return r.effects;
@@ -3641,10 +3653,61 @@ __REEL_DOCK_JS__
     if (el.dataset.k !== key) { el.dataset.k = key; el.replaceChildren(...(p.sd.voice ? [h('span', { class: 'mi', html: ICON.micSm })] : []), h('span', { class: 'tx' }, p.sd.text)); }
     el.classList.toggle('old', old);
   };
+  // ---- 字幕重放(《wip/实时老师设想.md》拍板 21):这一轮老师说的,从第一句放(家长的用法是「老师刚讲过了」);声音是服务端留的那份嘴的声音
+  //      (孩子按下时清掉、没放出来的也在),没有(以前的轮、mock 以外没念过)就不露。谁让谁在 liveStep;这里只取、放、让字幕跟着走 ----
+  const RP = { job: null, data: null, miss: false, loading: false, el: null, timer: 0, line: -1 };
+  /** 这一轮:板上最后一节实时的、有讲稿的 */
+  const replaySec = () => { for (let i = S.sections.length - 1; i >= 0; i--) { const s = S.sections[i]; if (s.live && s.lines.length) return s; } return null; };
+  const replayUi = () => {
+    const b = $('#lv-replay');
+    const s = LV.on ? replaySec() : null;
+    if (s && RP.job !== s.job && LV.model.status !== 'replay') { RP.job = s.job; RP.data = null; RP.miss = false; }
+    const playing = LV.on && LV.model.status === 'replay';
+    const quiet = LV.on && LV.model.status === 'quiet' && !S.pending && !S.limit && !S.readonly;
+    if (quiet && s && !RP.data && !RP.miss && !RP.loading && S.day && S.tutor) {
+      RP.loading = true;
+      const job = s.job;
+      api('GET', '/api/kid/conversations/' + S.tutor.name + '/mouth/' + S.day.date + '/' + job).then((d) => { RP.loading = false; if (RP.job === job && d && d.audio && Array.isArray(d.lines) && d.lines.length) { RP.data = d; renderSubtitle(); } else if (RP.job === job) RP.miss = true; }, () => { RP.loading = false; if (RP.job === job) RP.miss = true; });
+    }
+    const show = playing || (quiet && Boolean(RP.data));
+    b.hidden = !show;
+    if (!show) return;
+    const key = playing ? 'stop' : 'again';
+    if (b.dataset.k !== key) { b.dataset.k = key; b.querySelector('.ic').innerHTML = playing ? ICON.stop : ICON.again; b.querySelector('.tx').textContent = playing ? '停' : '再听一遍'; b.setAttribute('aria-label', playing ? '停,不听了' : '再听一遍老师这一轮说的'); }
+    b.classList.toggle('stop', playing);
+  };
+  /** 放:从第一句的起点往前让 200 毫秒(段里的起点按字数摊,差一点);字幕跟着 lines[].ms 走;放完告诉 liveStep */
+  const replayPlay = () => {
+    const d = RP.data;
+    if (!d) { setTimeout(() => liveDispatch({ type: 'replayEnded' }), 0); return; }
+    const a = RP.el || (RP.el = new Audio());
+    const from = Math.max(0, d.lines[0].ms - 200);
+    a.onended = () => { clearInterval(RP.timer); RP.line = -1; if (LV.model.status === 'replay') liveDispatch({ type: 'replayEnded' }); };
+    a.src = d.audio + (from ? '#t=' + (from / 1000).toFixed(2) : '');
+    RP.line = 0;
+    const p = a.play(); if (p && p.catch) p.catch(() => { if (LV.model.status === 'replay') liveDispatch({ type: 'replayEnded' }); });
+    clearInterval(RP.timer);
+    RP.timer = setInterval(() => { const t = a.currentTime * 1000; let k = 0; for (let j = 0; j < d.lines.length; j++) if (d.lines[j].ms <= t + 150) k = j; if (k !== RP.line) { RP.line = k; renderSubtitle(); } }, 120);
+    renderSubtitle();
+  };
+  const replayStop = () => { clearInterval(RP.timer); RP.line = -1; if (RP.el) { RP.el.onended = null; RP.el.pause(); } renderSubtitle(); };
+  $('#lv-replay').addEventListener('click', () => { if (!LV.on) return; unlock(); liveDispatch(LV.model.status === 'replay' ? { type: 'replayStop' } : { type: 'replay', pending: S.pending }); });
   const liveCaption = () => {
     liveListenUi();
     liveTurnUi();
     lvKid();
+    replayUi();
+    // 在重放:上面一行「再听一遍 · 第 n 句,共 m 句」,在说那句前面一个小喇叭;头像不动(不是嘴在说)
+    if (LV.model.status === 'replay' && RP.data && RP.line >= 0) {
+      const sec = S.sections.find((x) => x.job === RP.job), ln = RP.data.lines[RP.line], line = sec && ln ? sec.lines[ln.line] : null;
+      const cap = $('#lv-cap');
+      cap.classList.add('rp'); cap.classList.remove('done');
+      cap.querySelector('.lv-prev').textContent = '再听一遍 · 第 ' + (RP.line + 1) + ' 句,共 ' + RP.data.lines.length + ' 句';
+      const c = cap.querySelector('.lv-cur'); c.classList.remove('cut', 'nm');
+      c.replaceChildren(h('span', { class: 'rp', html: ICON.replay }), line ? plainLine(line.text) : '');
+      return;
+    }
+    $('#lv-cap').classList.remove('rp');
     const cap = $('#lv-cap'), c = cap.querySelector('.lv-cur');
     cap.querySelector('.lv-prev').textContent = LV.cap.prev;
     const cut = Boolean(LV.cap.cut) && LV.cap.cut === LV.cap.cur;

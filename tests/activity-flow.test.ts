@@ -82,15 +82,16 @@ try {
   {
     const c1 = await checkHome(ctx.ws, HOME('activity 你画我说'), now);
     check('activity 文件不在:要改', c1.issues.some((i) => i.level === 'fix' && i.text.includes('你画我说.md 不在')), JSON.stringify(c1.issues));
-    const c2 = await checkHome(ctx.ws, HOME('activity 你说我画\n单词: 春风\n最多画: 9'), now);
-    check('参数不对:不认得的、超出范围的都报', c2.issues.some((i) => i.text.includes('「单词」不是 你说我画 的参数')) && c2.issues.some((i) => i.text.includes('1 到 4 之间')), JSON.stringify(c2.issues));
+    const c2 = await checkHome(ctx.ws, HOME('activity 你说我画\n单词: 春风\n最多画: 两'), now);
+    check('参数不对:不认得的、不是整数的都报', c2.issues.some((i) => i.text.includes('「单词」不是 你说我画 的参数')) && c2.issues.some((i) => i.text.includes('整数')), JSON.stringify(c2.issues));
     const c3 = await checkHome(ctx.ws, HOME('activity 你说我画\nactivity 你说我画 我来出题\n词: 播种、睡大觉、羞愧\n讲法: 羞愧要落到一幅上'), now);
     check('写对了:没有要改的', c3.fixes === 0, JSON.stringify(c3.issues));
     const { out } = await run(['home', 'check']).catch(() => ({ out: '', code: 1 }));
     void out;
   }
 
-  draft(HOME('activity 你说我画\nactivity 你说我画 我来出题\n词: 播种、睡大觉、羞愧\n讲法: 羞愧要落到一幅上'));
+  // 你说我画那颗家长设了最多画 2(第 3 期拿它试拦法);我来出题没设 = 不限
+  draft(HOME('activity 你说我画\n最多画: 2\nactivity 你说我画 我来出题\n词: 播种、睡大觉、羞愧\n讲法: 羞愧要落到一幅上'));
   const pub = await publishHome(ctx.ws, { now });
   check('发布了', pub.ok, JSON.stringify(pub.check.issues));
   const homeId = pub.home!.id;
@@ -108,10 +109,10 @@ try {
   let index = await readIndex(ctx.ws, 'chinese-tutor', DATE);
   const m1 = index.messages.find((m) => m.job === j1)!;
   check('新话题,发的是按钮上的字', t1 === j1 && m1.text === '我来出题');
-  check('第一条记下 activity:参数是解析好的,补了缺省', JSON.stringify(m1.activity) === JSON.stringify({ name: '你说我画', params: { 词: ['播种', '睡大觉', '羞愧'], 最多画: 2 } }), JSON.stringify(m1.activity));
+  check('第一条记下 activity:参数是解析好的;没设最多画就没有(不限)', JSON.stringify(m1.activity) === JSON.stringify({ name: '你说我画', params: { 词: ['播种', '睡大觉', '羞愧'] } }), JSON.stringify(m1.activity));
   const p1 = (await readRunFile(ctx.ws, 'chinese-tutor', DATE, j1))!.prompt;
   const yaml = p1.slice(0, p1.indexOf('\n<'));
-  check('上下文包:activity: 在 YAML 最后,参数一行一个、词表是列表,state 跟在后面', yaml.endsWith('  activity:\n    name: "你说我画"\n    params:\n      "词":\n        - "播种"\n        - "睡大觉"\n        - "羞愧"\n      "最多画": 2\n    state:\n      "还能画": 2\n      "缺": ""'), yaml.slice(-200));
+  check('上下文包:activity: 在 YAML 最后,参数一行一个、词表是列表,state 跟在后面;不限张数就没有还能画', yaml.endsWith('  activity:\n    name: "你说我画"\n    params:\n      "词":\n        - "播种"\n        - "睡大觉"\n        - "羞愧"\n    state:\n      "缺": ""'), yaml.slice(-200));
   check('上下文包:activityGuide 指到文件', p1.includes('  activityGuide: "agents/chinese-tutor/activities/你说我画.md"\n'));
   check('上下文包:home: 照旧带按钮字与讲法', p1.includes('  home:\n    button: "我来出题"\n    brief: "羞愧要落到一幅上"'));
   const guide = p1.slice(p1.indexOf('<cotutor-activity path='), p1.indexOf('</cotutor-activity>'));
@@ -153,7 +154,7 @@ try {
   const r5 = await kidSend('chinese-tutor', { text: '', via: { home: pub2.home!.id, button: 0 } });
   await wait('chinese-tutor');
   const p5 = (await readRunFile(ctx.ws, 'chinese-tutor', DATE, (r5.json as { job: string }).job))!.prompt;
-  check('你说我画(没填词):没有出题那段,参数只有缺省的最多画', !p5.includes('### 我来出题') && p5.includes('    params:\n      "最多画": 2\n') && !p5.includes('      "词":'));
+  check('你说我画(没填词):没有出题那段,参数只有家长设的最多画', !p5.includes('### 我来出题') && p5.includes('    params:\n      "最多画": 2\n') && !p5.includes('      "词":'));
 
   // ---- 发布后 activity 文件写坏了:那个按钮点不了(400,孩子端刷新首页)----
   const file = join(root, 'agents', 'chinese-tutor', 'activities', '你说我画.md');
@@ -166,7 +167,7 @@ try {
   // ---- 终端:pack / send --activity ----
   const pk = await run(['pack', 'chinese-tutor', '--activity', '你说我画', '--param', '词=春风、柳树;最多画=1']);
   check('pack --activity:看得到 activity 那两段', pk.code === 0 && pk.out.includes('name: "你说我画"') && pk.out.includes('"最多画": 1') && pk.out.includes('<cotutor-activity path='), pk.out.slice(0, 300));
-  const pkBad = await run(['pack', 'chinese-tutor', '--activity', '你说我画', '--param', '最多画=7']).catch((e: Error) => ({ out: e.message, code: 2 }));
+  const pkBad = await run(['pack', 'chinese-tutor', '--activity', '你说我画', '--param', '最多画=两']).catch((e: Error) => ({ out: e.message, code: 2 }));
   check('pack --activity 参数不对:用法错误退出', pkBad.code === 2, String(pkBad.code));
   const sd = await run(['send', 'chinese-tutor', '--activity', '你说我画', '--quiet']);
   index = await readIndex(ctx.ws, 'chinese-tutor', DATE);
@@ -179,7 +180,7 @@ try {
   const ev = (await readRunFile({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'chinese-tutor', DATE, rp.evalJob))!.prompt;
   check('回放:新会话,activity 那段整篇带', ev.includes('<cotutor-activity path=') && ev.includes('    name: "你说我画"'));
 
-  // ---- 第 3 期:应用算的、应用拦的(你说我画,最多画 2;一天 2 张)----
+  // ---- 第 3 期:应用算的、应用拦的(你说我画,家长设了最多画 2)----
   {
     const send = async (body: unknown): Promise<{ job: string; prompt: string }> => {
       const r = await kidSend('chinese-tutor', body);
@@ -194,7 +195,7 @@ try {
     };
     const p0 = await send({ text: '', via: { home: pub2.home!.id, button: 0 } });
     const th = p0.job;
-    check('第一条:state 有还能画 2(最多画 2、今天还没画)、缺是空的', stateOf(p0.prompt).includes('"还能画": 2') && stateOf(p0.prompt).includes('"缺": ""'), stateOf(p0.prompt));
+    check('第一条:state 有还能画 2(最多画 2、还没画)、缺是空的', stateOf(p0.prompt).includes('"还能画": 2') && stateOf(p0.prompt).includes('"缺": ""'), stateOf(p0.prompt));
     const a1 = await send({ text: '画图', thread: th });
     const rec1 = await recOf(a1.job);
     check('没放过整段、孩子没连着说:拦下,不交给画家', rec1?.state === 'none' && rec1.error === 'gate:连说过一遍' && drew === 0, JSON.stringify(rec1));

@@ -18,7 +18,7 @@ export type ActivityParamType = (typeof ACTIVITY_PARAM_TYPES)[number];
 
 /** 应用会算的值(名 → 类型);activity 文件「应用算的」只能列这里有的 */
 export const ACTIVITY_STATE: Readonly<Record<string, ActivityParamType>> = {
-  /** 这个话题还能画几张:参数「最多画」减已画,再和今天剩的(paint.daily)取小的(src/server/activity-state.ts) */
+  /** 这个话题还能画几张:参数「最多画」减已画;没填最多画 = 不限,不写(src/server/activity-state.ts) */
   还能画: '数',
   /** 上一张画图卡没画的原因(「应用拦的」哪一条没过);画了就是空的 */
   缺: '字',
@@ -27,7 +27,7 @@ export const ACTIVITY_STATE: Readonly<Record<string, ActivityParamType>> = {
 /** 应用认得的拦法(规则名 → 一句话);判断在 src/lib/activity.ts gatePasses,画图前由 src/server/activity-state.ts 接上。activity 文件「应用拦的」只能列这里有的 */
 export const ACTIVITY_GATES: Readonly<Record<string, string>> = {
   连说过一遍: '话题里有一张三行以上的 read 卡,孩子在它后面开过口',
-  还能画: '还能画大于 0',
+  还能画: '还能画大于 0;不限时照过',
 };
 
 /** 工具人与它认得的插槽(都要在模板里出现) */

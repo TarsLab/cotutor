@@ -34,7 +34,7 @@ try {
 
   // ---- 护栏:孩子端只出用得了的 activity 按钮 ----
   check('好好的:两个按钮都出', (await labels()) === '新话题,你说我画,我来出题', await labels());
-  writeFileSync(file, shipped.replace('最多画: 数,缺省 2,1 到 4', '最多画: 整数,缺省 2'));
+  writeFileSync(file, shipped.replace('最多画: 数,可空', '最多画: 整数,可空'));
   check('写坏了(检查有要改):两个都不出', (await labels()) === '新话题', await labels());
   writeFileSync(file, shipped.replace('词: 词表,可空', '词: 数,可空'));
   check('参数解析不出(「词」改成了数):只有带词的那个不出', (await labels()) === '新话题,你说我画', await labels());
@@ -62,7 +62,7 @@ try {
 
   // ---- 边改边查(不落盘) ----
   type Chk = { issues: { level: string; line?: number }[]; buttons: { label: string; ok: boolean; detail: string }[]; diff: { at: number; old: string[]; now: string[] }[] | null; preview: { text: string | null; cards: string[] }; summary: { params: { name: string }[] } };
-  const broken = shipped.replace('最多画: 数,缺省 2,1 到 4', '最多画: 整数,缺省 2');
+  const broken = shipped.replace('最多画: 数,可空', '最多画: 整数,可空');
   const c1 = (await route('POST', base + '/check', ctx, { text: broken })).json as Chk;
   check('查:要改的带行号', c1.issues.some((i) => i.level === 'fix' && i.line === 20), JSON.stringify(c1.issues));
   check('查:首页两个按钮都标孩子端不出', c1.buttons.length === 2 && c1.buttons.every((b) => !b.ok && b.detail.includes('不出')), JSON.stringify(c1.buttons));
@@ -71,7 +71,7 @@ try {
   const c2 = (await route('POST', base + '/check', ctx, { text: shipped, params: { 词: '播种、羞愧' } })).json as Chk;
   const c3 = (await route('POST', base + '/check', ctx, { text: shipped })).json as Chk;
   check('预览:填了词「我来出题」那段在,没填不在;注释剥了;卡带上 text', (c2.preview.text ?? '').includes('### 我来出题') && !(c3.preview.text ?? '').includes('### 我来出题') && !(c2.preview.text ?? '').includes('<!--') && c2.preview.cards.join(' ') === 'text read paint', JSON.stringify(c2.preview.cards));
-  check('查:按钮解析好的值(补缺省)', c3.buttons[1].ok && c3.buttons[1].detail.includes('最多画 2(缺省)'), JSON.stringify(c3.buttons));
+  check('查:按钮解析好的值(没设最多画就不列)', c3.buttons[1].ok && c3.buttons[1].detail.includes('词') && !c3.buttons[1].detail.includes('最多画'), JSON.stringify(c3.buttons));
 
   // ---- 存 ----
   const edited = shipped.replace('请孩子先说是谁的故事。', '先问孩子:这是谁的故事?');

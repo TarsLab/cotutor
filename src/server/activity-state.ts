@@ -7,8 +7,8 @@ import type { Workspace } from '../cli/workspace.ts';
 import { activityFile } from '../cli/activities.ts';
 import { failingGate, parseActivity } from '../lib/activity.ts';
 import { threads } from '../lib/conversation.ts';
-import { PAINT_DEFAULT, type Activity, type ActivityRun, type ActivityValue, type ConversationMessage } from '../schema/index.ts';
-import { paintRecordAt, paintedToday } from '../paint/painter.ts';
+import { type Activity, type ActivityRun, type ActivityValue, type ConversationMessage } from '../schema/index.ts';
+import { paintRecordAt } from '../paint/painter.ts';
 
 /** 这个话题是从哪个 activity 起的:话题里第一条带 activity 的消息(只记在第一条);没有 → null */
 export function threadActivity(messages: readonly ConversationMessage[], thread: string): ActivityRun | null {
@@ -30,7 +30,7 @@ function paintCards(messages: readonly ConversationMessage[], thread: string): {
 
 /**
  * 应用算的值,只算 activity 文件「应用算的」里列了的:
- *   还能画 = 参数「最多画」减这个话题画了的(画好的与在画的),再和今天剩的(paint.daily 减今天各老师画了的)取小的,不小于 0
+ *   还能画 = 参数「最多画」减这个话题画了的(画好的与在画的),不小于 0;家长没填最多画 = 不限,不写这一项(拦法「还能画」照过)
  *   缺 = 这个话题最后一张画图卡被哪条拦法拦下了;画了、没被拦、还没有画图卡 → 空
  */
 export async function activityState(ws: Workspace, tutor: string, date: string, messages: readonly ConversationMessage[], thread: string, run: ActivityRun, a: Pick<Activity, 'state'>, now: number = Date.now()): Promise<Record<string, ActivityValue>> {
@@ -41,9 +41,7 @@ export async function activityState(ws: Workspace, tutor: string, date: string, 
   const records = await Promise.all(cards.map((c) => paintRecordAt(ws, tutor, date, c.job, c.n, now)));
   if (want.has('还能画')) {
     const drawn = records.filter((r) => r?.state === 'done' || r?.state === 'drawing').length;
-    const max = typeof run.params.最多画 === 'number' ? run.params.最多画 : Infinity;
-    const daily = Math.max(0, (ws.config.paint ?? PAINT_DEFAULT).daily - (await paintedToday(ws, date, now)));
-    out.还能画 = Math.max(0, Math.min(max - drawn, daily));
+    if (typeof run.params.最多画 === 'number') out.还能画 = Math.max(0, run.params.最多画 - drawn);
   }
   if (want.has('缺')) {
     const last = records[records.length - 1];

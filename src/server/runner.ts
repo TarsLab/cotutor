@@ -1013,7 +1013,7 @@ export class Runner {
         void bg.finally(() => this.background.delete(bg));
       }
     }
-    // 画图卡:后台画,一张一张排着(一天 paint.daily 张);回放不画
+    // 画图卡:后台画,一张一张排着;回放不画
     if (kidView.section?.cards.some((c) => c.kind === 'paint')) {
       const clock = (): number => (this.opts.now?.() ?? new Date()).getTime();
       const gate = await paintGate(ws, tutor, date, job, clock).catch(() => null);

@@ -45,7 +45,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('头:name、description、cards', a.name === '你说我画' && a.description.length > 0 && a.cards.join(' ') === 'read paint');
   const [ci, most] = a.params;
   check('家长填的:词(词表,可空)', a.params.length === 2 && ci.name === '词' && ci.type === '词表' && ci.optional && ci.default === undefined && ci.line === lineOf('词: 词表'));
-  check('家长填的:最多画(数,缺省 2,1 到 4)', most.name === '最多画' && most.type === '数' && !most.optional && most.default === '2' && most.min === 1 && most.max === 4 && Boolean(most.note));
+  check('家长填的:最多画(数,可空,不填不限)', most.name === '最多画' && most.type === '数' && most.optional && most.default === undefined && most.min === undefined && most.max === undefined && Boolean(most.note));
   check('应用算的:还能画、缺', a.state.map((s) => `${s.name}:${s.type}`).join(' ') === '还能画:数 缺:字');
   check('应用拦的:连说过一遍、还能画', a.gates.map((g) => g.rule).join(' ') === '连说过一遍 还能画' && a.gates.every((g) => g.note));
   check('老师那节从「## 老师怎么带」下一行起', a.tutor !== null && a.tutor.line > lineOf('## 老师怎么带') && !a.tutor.text.includes('## 画家收到什么'));
@@ -91,9 +91,9 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('类型不认得', has(fixesAfter('词: 词表,可空', '词: 词组,可空'), '类型「词组」不认得', lineOf('词: 词表')));
   check('参数写法不认得', has(fixesAfter('词: 词表,可空', '词: 词表,可以空'), '「可以空」不认得', lineOf('词: 词表')));
   check('参数那行不是「名: 类型」', has(fixesAfter('词: 词表,可空 ——', '这周的词 ——'), '参数写成', lineOf('词: 词表')));
-  check('缺省超出范围', has(fixesAfter('缺省 2,1 到 4', '缺省 9,1 到 4'), '不在 1 到 4 里', lineOf('最多画:')));
-  check('缺省不是整数', has(fixesAfter('缺省 2,', '缺省 两,'), '不是整数'));
-  check('范围反了', has(fixesAfter('1 到 4', '4 到 1'), '反了'));
+  check('缺省超出范围', has(fixesAfter('最多画: 数,可空', '最多画: 数,缺省 9,1 到 4'), '不在 1 到 4 里', lineOf('最多画:')));
+  check('缺省不是整数', has(fixesAfter('最多画: 数,可空', '最多画: 数,缺省 两'), '不是整数'));
+  check('范围反了', has(fixesAfter('最多画: 数,可空', '最多画: 数,可空,4 到 1'), '反了'));
   check('参数写了两次', has(fixesAfter('最多画: 数', '词: 数'), '写了两次', lineOf('最多画:')));
   check('参数不能叫讲法', has(fixesAfter('最多画: 数', '讲法: 数'), '不能叫「讲法」'));
   check('参数不能和卡同名', has(fixesAfter('最多画: 数', 'paint: 数'), '和卡的种类同名'));
@@ -129,9 +129,10 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
 {
   const { activity: a } = parseActivity(text);
   const ok = resolveParams(a, { 词: '播种、睡大觉, 满满 羞愧' });
-  check('词表:顿号、逗号、空格都分;最多画补缺省 2,是数', JSON.stringify(ok) === JSON.stringify({ values: { 词: ['播种', '睡大觉', '满满', '羞愧'], 最多画: 2 }, issues: [] }), JSON.stringify(ok));
-  check('可空的没填:不出现', JSON.stringify(resolveParams(a, {}).values) === JSON.stringify({ 最多画: 2 }) && resolveParams(a, { 词: ' ' }).issues.length === 0);
-  check('数:不是整数、超出范围都报', resolveParams(a, { 最多画: '两' }).issues[0]?.includes('整数') && resolveParams(a, { 最多画: '5' }).issues[0]?.includes('1 到 4'));
+  check('词表:顿号、逗号、空格都分;最多画没填就没有(不限)', JSON.stringify(ok) === JSON.stringify({ values: { 词: ['播种', '睡大觉', '满满', '羞愧'] }, issues: [] }), JSON.stringify(ok));
+  check('可空的没填:不出现;填了的是数', JSON.stringify(resolveParams(a, {}).values) === '{}' && resolveParams(a, { 最多画: '3' }).values.最多画 === 3 && resolveParams(a, { 词: ' ' }).issues.length === 0);
+  const ranged = parseActivity(text.replace('最多画: 数,可空', '最多画: 数,可空,1 到 4')).activity;
+  check('数:不是整数、超出范围都报', resolveParams(a, { 最多画: '两' }).issues[0]?.includes('整数') && resolveParams(ranged, { 最多画: '5' }).issues[0]?.includes('1 到 4'));
   check('不认得的参数报一条,列出有哪些', resolveParams(a, { 单词: 'x' }).issues[0]?.includes('有:词、最多画'));
   const must = parseActivity(text.replace('词: 词表,可空', '词: 词表')).activity;
   check('要填的没填:报', resolveParams(must, {}).issues[0]?.includes('要填「词」'));
@@ -147,7 +148,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('连说过一遍:整段只有两行 → 不过', !gatePasses('连说过一遍', { thread: t({ job: '1', from: 'kid', section: story(2) }, { job: '2', from: 'kid' }), job: '2', state: S }));
   check('连说过一遍:整段和画图卡在同一节 → 不过(孩子还没开口)', !gatePasses('连说过一遍', { thread: t({ job: '1', from: 'kid', section: story(4) }), job: '1', state: S }));
   check('连说过一遍:后面只按了继续 → 不过', !gatePasses('连说过一遍', { thread: t({ job: '1', from: 'kid', section: story(3) }, { job: '2', from: 'kid', action: 'continue' }), job: '2', state: S }));
-  check('还能画:大于 0 才过,没算出来不过', gatePasses('还能画', { thread: t(), job: 'x', state: { 还能画: 2 } }) && !gatePasses('还能画', { thread: t(), job: 'x', state: { 还能画: 0 } }) && !gatePasses('还能画', { thread: t(), job: 'x', state: {} }));
+  check('还能画:大于 0 才过;没有还能画(家长没设最多画,不限)照过', gatePasses('还能画', { thread: t(), job: 'x', state: { 还能画: 2 } }) && !gatePasses('还能画', { thread: t(), job: 'x', state: { 还能画: 0 } }) && gatePasses('还能画', { thread: t(), job: 'x', state: {} }));
   const { activity: a } = parseActivity(text);
   check('failingGate:照文件里的顺序报第一条没过的', failingGate(a, { thread: t(), job: 'x', state: { 还能画: 0 } }) === '连说过一遍' && failingGate({ gates: [{ rule: '还能画', line: 1 }] }, { thread: t(), job: 'x', state: { 还能画: 0 } }) === '还能画' && failingGate({ gates: [] }, { thread: t(), job: 'x', state: {} }) === null);
 }
@@ -241,7 +242,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     check('再 init 不动', (await installActivities(root))[0].action === 'exists');
 
     check('没改过:已是最新', (await upgradeActivities(root))[0].action === 'latest');
-    const mine = text.replace('最多画: 数,缺省 2', '最多画: 数,缺省 1');
+    const mine = text.replace('最多画: 数,可空', '最多画: 数,缺省 1');
     writeFileSync(file, mine);
     const kept = (await upgradeActivities(root))[0];
     check('改过的:保留,报 diff', kept.action === 'kept-custom' && readFileSync(file, 'utf8') === mine && Boolean(kept.diff?.some((l) => l.includes('缺省 1'))));

@@ -424,7 +424,8 @@ const STORY_LINES = 3;
 
 /** 一条拦法过没过(规则名见 ACTIVITY_GATES;不认得的当过,activity check 会报) */
 export function gatePasses(rule: string, input: GateInput): boolean {
-  if (rule === '还能画') return typeof input.state.还能画 === 'number' && input.state.还能画 > 0;
+  // 没有还能画 = 家长没设最多画,不限(《产品规划.md》拍板 29)
+  if (rule === '还能画') return typeof input.state.还能画 !== 'number' || input.state.还能画 > 0;
   if (rule === '连说过一遍') {
     const at = input.thread.findIndex((m) => m.job === input.job);
     const end = at < 0 ? input.thread.length - 1 : at;

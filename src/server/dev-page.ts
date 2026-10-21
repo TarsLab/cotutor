@@ -112,9 +112,6 @@ ${BRAND_CSS}
   .meter .t { display:flex; align-items:baseline; gap:8px; }
   .meter .t b { font-size:13px; font-weight:600; }
   .meter .t span { margin-left:auto; font:400 12px/1 var(--mono); color:var(--muted); }
-  .meter .track { height:6px; border-radius:999px; background:var(--sunk); overflow:hidden; }
-  .meter .track i { display:block; height:100%; background:var(--accent); border-radius:999px; }
-  .meter .track i.full { background:var(--err); }
   .tbl { overflow-x:auto; margin:0 -22px; }
   .tbl .tr { display:grid; grid-template-columns:minmax(170px,2fr) 104px 52px 84px 64px 84px; gap:12px; align-items:center; padding:9px 22px; border-bottom:1px solid var(--line-soft); min-width:600px; color:var(--ink); }
   .tbl .tr.th { font-size:12px; color:var(--muted); padding-top:4px; }
@@ -1674,13 +1671,11 @@ ${BRAND_CSS}
           h('span', {}, String(x.turns)), h('i', { style: 'height:' + Math.round((x.turns / max) * 104) + 'px' })))),
       h('div', { class: 'axis' }, ...d.days.map((x) => h('span', { class: x.date === d.today ? 'today' : '' }, x.date === d.today ? '今天' : x.date.slice(5)))));
 
-    const paintPct = d.paint.daily ? Math.min(100, Math.round((d.paint.today / d.paint.daily) * 100)) : 0;
     const useBox = h('section', { class: 'blk' },
       h('div', { class: 'hd' }, h('h2', {}, '用量'), h('span', { class: 'sub' }, '近 7 天,按运行时')),
       ...(d.usage.length ? d.usage.slice(0, 4).map((u) => h('div', { class: 'meter' }, h('div', { class: 't' }, h('b', { class: 'num' }, u.runtime), h('span', {}, u.turns + ' 轮 · ' + (u.costUsd ? '$' + u.costUsd.toFixed(2) : kTok(u.tokensIn) + ' / ' + kTok(u.tokensOut) + ' token'))))) : [h('p', { class: 'note' }, '七天里没跑过老师')]),
       h('div', { class: 'rule' }),
-      h('div', { class: 'meter' }, h('div', { class: 't' }, h('b', {}, '画图 · 今天'), h('span', {}, d.paint.today + ' / ' + d.paint.daily + ' 张')),
-        h('div', { class: 'track' }, h('i', { class: paintPct >= 100 ? 'full' : '', style: 'width:' + paintPct + '%' }))));
+      h('div', { class: 'meter' }, h('div', { class: 't' }, h('b', {}, '画图 · 今天'), h('span', {}, d.paint.today + ' 张'))));
 
     const tbl = h('div', { class: 'tbl' }, h('div', { class: 'tr th' }, h('span', {}, '老师'), h('span', {}, '运行时'), h('span', { class: 'r' }, '轮'), h('span', { class: 'r' }, '首句中位'), h('span', { class: 'r' }, '最近'), h('span', {}, '孩子端')),
       ...d.tutors.filter((r) => r.enabled).map((r) => {

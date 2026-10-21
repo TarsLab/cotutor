@@ -1,6 +1,6 @@
 /**
  * 工作台概览(2026-10-16,《工作台设计.md》):把近七天各老师的会话索引读一遍,算成一页数字。
- * 只读不写;只看 conversations/ 下的索引(回放在 evals/,不算)与今天画了几张。
+ * 只读不写;只看 conversations/ 下的索引(回放在 evals/,不算)与今天画了几张(不限张数,只数)。
  * 「轮」只算孩子的话(from: kid);记账、整理记忆这类应用派的任务(from: system)单记,钱和 token 照算进用量。
  */
 import { localDate, weekOf } from '../lib/conversation.ts';
@@ -55,7 +55,7 @@ export interface DevOverview {
   tutors: DevTutorRow[];
   /** 近七天,按运行时分:报钱数的记美元,只报 token 的记 token */
   usage: { runtime: string; turns: number; costUsd: number; tokensIn: number; tokensOut: number }[];
-  paint: { today: number; daily: number };
+  paint: { today: number };
   issues: DevIssue[];
 }
 
@@ -134,7 +134,7 @@ export async function devOverview(ws: Workspace, now: Date = new Date()): Promis
     slow,
     tutors: rows,
     usage: [...usage.values()].sort((a, b) => b.turns - a.turns),
-    paint: { today: await paintedToday(ws, today, now.getTime()).catch(() => 0), daily: ws.config.paint.daily },
+    paint: { today: await paintedToday(ws, today, now.getTime()).catch(() => 0) },
     issues: issues.slice(0, MAX_ISSUES),
   };
 }

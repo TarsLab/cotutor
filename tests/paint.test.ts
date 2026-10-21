@@ -93,10 +93,11 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   const { root } = await initWorkspace({ slug: 'paint', name: '小画', dir: join(home, 'ws-paint') });
   const cfgFile = join(root, 'cotutor.json');
   const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
+  // 老 workspace 写着的一天几张(10-21 起不认,《产品规划.md》拍板 29)
   cfg.paint = { daily: 2 };
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   const ws = loadWorkspace(root);
-  check('出厂:paint 只跟着你说我画 activity(语文老师的卡里没有);paint 缺省 pro、1280、一天 2 张', !(ws.config.tutors['chinese-tutor'].cards ?? []).includes('paint') && ws.config.paint.model === 'qwen-image-3.0-pro' && ws.config.paint.size === '1280*1280' && ws.config.paint.daily === 2);
+  check('出厂:paint 只跟着你说我画 activity(语文老师的卡里没有);paint 缺省 pro、1280,没有一天几张', !(ws.config.tutors['chinese-tutor'].cards ?? []).includes('paint') && ws.config.paint.model === 'qwen-image-3.0-pro' && ws.config.paint.size === '1280*1280' && !('daily' in ws.config.paint));
   const asked: string[] = [];
   const fakeDraw: Draw = async ({ prompt, model, size }) => { asked.push(`${model} ${size} ${prompt.split('\n')[0]}`); return prompt.includes('画不出') ? { ok: false, error: 'http_400:DataInspectionFailed', ms: 5 } : { ok: true, data: PNG, model, ms: 1234 }; };
   const sec = (panels: string[]): BoardSection => ({ cards: [{ kind: 'text', props: { text: '先说' } }, parseCard('paint', panels.map((t, i) => `${i + 1}. ${t}`).join('\n')).card], lines: [{ text: '画家开始画了。', audio: null }] } as unknown as BoardSection);
@@ -116,10 +117,13 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   await startPaints(ws, 'chinese-tutor', date, '1002-1', sec(['第二张。']), { draw: fakeDraw, now: () => now });
   await startPaints(ws, 'chinese-tutor', date, '1003-1', sec(['第三张。']), { draw: fakeDraw, now: () => now });
   const rec4 = JSON.parse(readFileSync(join(dir('1003-1', 1), 'paint.json'), 'utf8')) as { state: string; error: string };
-  check('一天的上限(各位老师加起来):第三张不画,记 daily:2/2', asked.length === 3 && rec4.state === 'none' && rec4.error === 'daily:2/2' && paintNote(rec4 as never).includes('今天画了 2 张'), JSON.stringify(rec4));
+  check('一天几张不限:老配置写 2,第三张照画', asked.length === 4 && rec4.state === 'done', JSON.stringify(rec4));
+  // 下面拿 1003-1 当没画成的那张
+  writeFileSync(join(dir('1003-1', 1), 'paint.json'), JSON.stringify({ state: 'none', at: '2026-10-11T10:00:00.000Z', error: 'http_400:DataInspectionFailed' }));
+  check('10-21 前的旧记录 daily:2/2:家长端照旧说得出来,说现在不限了', paintNote({ state: 'none', at: '', error: 'daily:2/2' }).includes('今天画了 2 张') && paintNote({ state: 'none', at: '', error: 'daily:2/2' }).includes('现在不限'));
   check('明天重新数', (await paintedToday(ws, '2026-10-12')) === 0);
   await startPaints(ws, 'chinese-tutor', date, '1004-1', sec(['回放的。']), { draw: fakeDraw, now: () => now, replay: true });
-  check('回放不画', asked.length === 3 && JSON.parse(readFileSync(join(dir('1004-1', 1), 'paint.json'), 'utf8')).error === 'replay');
+  check('回放不画', asked.length === 4 && JSON.parse(readFileSync(join(dir('1004-1', 1), 'paint.json'), 'utf8')).error === 'replay');
 
   // activity 文件「画家收到什么」接管画风(《wip/activity设计.md》拍板 12):给了 painter 就照它的模板与不要的
   {
@@ -133,7 +137,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
     await startPaints(ws, 'chinese-tutor', d2, '1101-1', sec(['小熊播种。']), { draw: spy, now: () => now });
     check('不在 activity 话题(没给 painter):照 cotutor.json 的画风,不要的是出厂那串', got[1]?.prompt === paintPrompt({ panels: ['小熊播种。'] }) && got[1].negative === PAINT_NEGATIVE);
     const custom = loadWorkspace(root);
-    custom.config.paint = { ...custom.config.paint, prompt: ['家长改的画风'], daily: 9 };
+    custom.config.paint = { ...custom.config.paint, prompt: ['家长改的画风'] };
     await startPaints(custom, 'chinese-tutor', d2, '1102-1', sec(['小熊播种。']), { draw: spy, now: () => now, painter });
     check('cotutor.json 的 paint.prompt 改过(老 workspace):以它为准,画家那节不起作用', got[2]?.prompt.includes('家长改的画风') && !got[2].prompt.includes('剪纸风') && got[2].negative === PAINT_NEGATIVE, got[2]?.prompt);
   }

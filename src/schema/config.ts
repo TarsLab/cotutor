@@ -303,11 +303,10 @@ export const PAINT_PROMPT_DEFAULT = [
   '人物是可爱的卡通形象,表情和动作夸张一点,一眼看得出在干什么、心情怎样。',
   '画面里不要任何文字、对话气泡、拟声词。',
 ];
-export const PAINT_DEFAULT = { model: 'qwen-image-3.0-pro', size: '1280*1280', daily: 2, prompt: PAINT_PROMPT_DEFAULT };
+export const PAINT_DEFAULT = { model: 'qwen-image-3.0-pro', size: '1280*1280', prompt: PAINT_PROMPT_DEFAULT };
 export const PaintSchema = z.object({
   model: z.string().min(1).default(PAINT_DEFAULT.model).describe('画图用的千问文生图模型(同步接口):qwen-image-3.0-pro 约 10–20 秒,Token Plan 有它;qwen-image-2.0-pro(约 15 秒)、qwen-image-2.0(约 4 秒)只有百炼按量'),
   size: z.string().regex(/^\d{3,4}\*\d{3,4}$/).default(PAINT_DEFAULT.size).describe('图多大,「宽*高」;四格是方的,缺省 1280*1280(总像素在 512*512 到 2048*2048 之间)'),
-  daily: z.number().int().nonnegative().default(PAINT_DEFAULT.daily).describe('一天最多画几张(各位老师加起来;删掉的话题退回);到了画图卡停在分好的几幅,孩子端不说;0 = 不画'),
   prompt: z.array(z.string()).min(1).default(PAINT_PROMPT_DEFAULT).describe('旧的画风(一行一个字符串)。画风现在写在 activity 文件「画家收到什么」;这里和出厂的一样就不起作用,改过就以它为准(挪进 activity 文件后删掉这一项)'),
 });
 export type PaintConfig = z.infer<typeof PaintSchema>;

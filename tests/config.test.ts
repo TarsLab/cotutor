@@ -68,4 +68,10 @@ check('没给 systemBody / boardFile 就原样留着(doctor 会报)', q.includes
   const old = CotutorConfigSchema.safeParse({ ...raw, policyDefaults: { scenes: { dailyMax: 3 } }, tutors: { ...raw.tutors, 'scene-maker': { display: '画图老师', hidden: true, runtime: 'claude', policy: { scenes: { dailyMax: 1 } } } } });
   check('老配置里的 scenes 不拦,有效政策里没有它', old.success && !('scenes' in resolvePolicy(old.data, 'math-tutor')) && !('scenes' in resolvePolicy(old.data, 'scene-maker')));
 }
+{
+  // 口语课一通电话最长几分钟(《产品规划.md》拍板 29):缺省不限,家长可以设
+  const dft = CotutorConfigSchema.parse(raw);
+  const set = CotutorConfigSchema.safeParse({ ...raw, talk: { callMaxMinutes: 45 } });
+  check('口语课一通电话:缺省不限,写了照它;0 不认', dft.talk.callMaxMinutes === undefined && set.success && set.data.talk.callMaxMinutes === 45 && !CotutorConfigSchema.safeParse({ ...raw, talk: { callMaxMinutes: 0 } }).success);
+}
 done();

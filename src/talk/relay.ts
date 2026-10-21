@@ -47,8 +47,7 @@ export interface CallDeps {
 
 type Phase = 'read' | 'chat' | 'ended';
 
-/** 整个通话最长;聊那段孩子多久不出声就收 */
-const CALL_MAX_MS = 20 * 60_000;
+/** 聊那段孩子多久不出声就收;整个通话最长几分钟看 talk.callMaxMinutes,不写不限(《产品规划.md》拍板 29) */
 const IDLE_MS = 3 * 60_000;
 /** 开口前垫上几块(100 毫秒一块):响度判出开口要 200 毫秒,头一个音别丢了 */
 const PREROLL = 3;
@@ -165,7 +164,8 @@ export class TalkCall {
 
   /** 开始:跟读那条会话;口语单空的直接聊 */
   async start(): Promise<void> {
-    this.timers.push(setTimeout(() => void this.end('max'), CALL_MAX_MS));
+    const max = this.deps.config.callMaxMinutes;
+    if (max) this.timers.push(setTimeout(() => void this.end('max'), max * 60_000));
     this.state();
     if (!this.items.length) { await this.startChat(); return; }
     const s = new RealtimeSession({ instructions: readInstructions(this.meta.list, this.deps.kidName, this.deps.config.note ?? ''), voice: this.deps.config.voice, model: this.deps.config.model, turn: 'manual', endpoint: this.deps.endpoint, env: this.deps.env }, this.events());

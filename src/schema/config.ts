@@ -225,6 +225,7 @@ export const TalkSchema = z.object({
   listModel: z.string().min(1).default(TALK_DEFAULT.listModel).describe('照片读成口语单用的模型(兼容接口,不想)'),
   voice: z.string().min(1).default(TALK_DEFAULT.voice).describe('老师的音色:realtime 音色表里的名字(Tina 缺省;Serena 温柔)'),
   minutes: z.number().int().min(1).max(20).default(TALK_DEFAULT.minutes).describe('聊那段几分钟;到了老师收尾'),
+  callMaxMinutes: z.number().int().min(1).optional().describe('一通电话(跟读加聊)最长几分钟,到了就挂;不写 = 不限(《产品规划.md》拍板 29)。聊那段孩子 3 分钟不出声照旧挂'),
   silenceMs: z.number().int().min(400).max(4000).default(TALK_DEFAULT.silenceMs).describe('聊那段 VAD 判「说完了」的静音毫秒;孩子想词慢就调长'),
   interrupt: z.boolean().default(false).describe('聊那段老师说话时麦克风开不开:false = 老师说完才听(没有回声问题,但孩子插不了嘴);true = 全双工,靠设备的回声消除'),
   read: TalkReadSchema.default(TALK_READ_DEFAULT).describe('跟我读:读完自动下一句、没出声怎么办的几个数'),

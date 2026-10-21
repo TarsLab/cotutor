@@ -42,6 +42,7 @@ import { AUDIO_CLIENT_JS } from '../live/audio-client.ts';
 import { VOICE_CSS, VOICE_JS } from './voice-ui.ts';
 import { KID_NAV_JS } from './kid-nav.ts';
 import { BACK_TINT_CSS, BACK_TINT_JS } from './tutor-face.ts';
+import { BOARD_MARK_CSS, BOARD_MARK_HAND_LEFT_CSS, BOARD_MARK_JS } from './board-mark.ts';
 
 /** 读 src/lib/<name> 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
 function libSource(name: 'kid-board' | 'photo-edit' | 'reel' | 'live-board' | 'voice-view'): string {
@@ -190,6 +191,8 @@ ${faviconLinks()}
   /* ---- 老师页 = 板书页 ---- */
   #tutor { position:fixed; inset:0; background:var(--paper); display:none; z-index:10; }
   #tutor.on { display:flex; }
+  /* 板是一张有质感的纸,三门主科在右边竖着写一个很淡的学科名(《产品规划.md》拍板 27,board-mark.ts) */
+${BOARD_MARK_CSS}
   #main { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
   /* 没有顶栏:左上角一颗胶囊「‹ logo」(整颗点了回首页;《产品规划.md》拍板 24 起放 logo,老师的脸在字幕行 / 实时的左栏),右上角喇叭 + 更多;浮在板书上面、舞台遮罩(z 4)下面,舞台开了就被压暗盖住 */
   .tb { position:absolute; top:calc(env(safe-area-inset-top) + 10px); z-index:3; display:flex; align-items:center; gap:10px; }
@@ -346,9 +349,9 @@ ${BACK_TINT_CSS}
   }
   #pill .ic[hidden] { display:none; }
   #wrap { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
-  /* 板书顶上一条渐隐:滚上去的内容在两角按钮那一带淡成纸色,不和胶囊、话题标签叠字。只是盖一层颜色,不占位置、不收触摸;
+  /* 板书顶上一条渐隐:滚上去的内容在两角按钮那一带淡成纸色,不和胶囊、话题标签叠字。盖的是同一张纸(纹理对得上 #tutor 的,渐隐靠 mask),不占位置、不收触摸;
      夹在板书(卡上的「再听」z 1)与两角按钮(z 3)之间。滚到顶时第一节在 68px 以下,基本碰不到它 */
-  #wrap::before { content:""; position:absolute; left:0; right:0; top:0; height:calc(env(safe-area-inset-top) + 72px); z-index:2; pointer-events:none; background:linear-gradient(var(--paper) calc(env(safe-area-inset-top) + 16px), transparent); }
+  #wrap::before { content:""; position:absolute; left:0; right:0; top:0; height:calc(env(safe-area-inset-top) + 72px); z-index:2; pointer-events:none; background:var(--paper-tex, none), var(--paper); -webkit-mask-image:linear-gradient(#000 calc(env(safe-area-inset-top) + 16px), transparent); mask-image:linear-gradient(#000 calc(env(safe-area-inset-top) + 16px), transparent); }
   /* 舞台的遮罩:板书与顶栏压暗,点一下 = 点 ×;字幕行与输入条不盖(舞台开着孩子照样能说话) */
   #st-dim { position:absolute; left:0; right:0; bottom:0; top:-100vh; z-index:4; background:#00000073; display:none; }
   #stage.on ~ #st-dim { display:block; }
@@ -685,6 +688,7 @@ __VOICE_CSS__
     body.live.hand-left #lv { left:auto; right:0; width:calc(env(safe-area-inset-right) + 360px); padding-top:calc(env(safe-area-inset-top) + 80px); padding-left:24px; padding-right:calc(env(safe-area-inset-right) + 24px); box-shadow:-1px 0 0 #efece4, -6px 0 24px #46371e0d; }
     body.live.hand-left #back { box-shadow:0 2px 10px #46371e2e; } body.live.hand-left #back:not(.tinted) { background:#fffffff0; }
     body.live.hand-left .tb.r { z-index:6; }
+    ${BOARD_MARK_HAND_LEFT_CSS}
   }
 </style>
 <div id="home">
@@ -703,6 +707,7 @@ __VOICE_CSS__
     <div class="tb l"><button id="back" type="button" aria-label="回首页"><i id="back-ic"></i>__BACK_LOGO__</button><span id="c-mo" hidden></span></div>
     <div class="tb r"><button class="hb on" id="spk" type="button" aria-label="老师念不念"></button><button class="hb" id="more-btn" type="button" aria-label="更多"></button></div>
     <div id="wrap">
+      <div id="bmark" hidden></div>
       <div id="board"></div>
       <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
       <div id="st-dim"></div>
@@ -834,6 +839,8 @@ __BRAND_JS__
   // 回首页胶囊带上老师(tutorInitial 同首页牌上的首字,backTint 填颜色;《产品规划.md》拍板 26)
 ${BACK_TINT_JS}
   const tintBack = (t) => backTint($('#back'), t ? { color: colorOf(t), display: t.display } : null);
+  // 板书底纹的学科字(三门主科,《产品规划.md》拍板 27):老师换了跟着换,别的老师只铺纸
+${BOARD_MARK_JS}
   /** 老师头像:学科色的 C 形开口环 + 白底圆里的图或字(样子见 .av 的样式);cls 'draw' = 一笔画出来,delay 是错开的秒数 */
   const AV_RING = '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44"></circle></svg>';
   const avatarEl = (t, cls, delay) => {
@@ -1448,7 +1455,7 @@ ${BACK_TINT_JS}
     // 先定走不走实时,再热麦克风:实时时麦克风的自检要开在实时那个 AudioContext 里(liveOpen)
     if (liveWanted(t)) liveOpen(intent); else { liveClose(); micWarm(); }
     $('#hist').classList.remove('on'); $('#menu').classList.remove('on'); renderBar(); renderHeader();
-    $('#sub-av').replaceWith(Object.assign(avatarEl(t), { id: 'sub-av' })); tintBack(t);
+    $('#sub-av').replaceWith(Object.assign(avatarEl(t), { id: 'sub-av' })); tintBack(t); markBoard($('#bmark'), t);
     $('#board').replaceChildren(); pin.on = false;
     if (S.ask) $('#board').append(askBoard(S.ask));
     else if (S.talkWait) $('#board').append(talkBoard());
@@ -3311,7 +3318,7 @@ __WORD_DRAW_JS__
     if (!d) { if (host) { try { host.cotutorReelFail(); } catch {} } else document.body.append(h('div', { class: 'blank' }, h('b', {}, '这个话题没有录像'))); return; }
     document.body.classList.add('rlk');
     S.tutor = d.face; S.thread = d.thread; S.hist = d.date; S.readonly = true; S.autoplay = true;
-    $('#sub-av').replaceWith(Object.assign(avatarEl(S.tutor), { id: 'sub-av' })); tintBack(S.tutor);
+    $('#sub-av').replaceWith(Object.assign(avatarEl(S.tutor), { id: 'sub-av' })); tintBack(S.tutor); markBoard($('#bmark'), S.tutor);
     // 有实时轮的话题:孩子当时看到的是实时老师页(左栏大头像 + 字幕、卡角没有钮),字幕照这一刻(reelLiveCap)
     if (d.realtime) { document.body.classList.add('live'); $('#tutor').style.setProperty('--tc', colorOf(d.face)); $('#lv-av').replaceChildren(avatarEl(S.tutor)); VB.btn.avatar(avatarEl(S.tutor)); VB.btn.color(colorOf(d.face)); }
     $('#tutor').classList.add('on');
@@ -3364,7 +3371,7 @@ __REEL_DOCK_JS__
     unlock();
     S.tutor = t; S.thread = thread; S.hist = date || S.pdate || null; S.readonly = true; S.newThread = false;
     S.reel = { frame: true };
-    $('#sub-av').replaceWith(Object.assign(avatarEl(t), { id: 'sub-av' })); tintBack(t);
+    $('#sub-av').replaceWith(Object.assign(avatarEl(t), { id: 'sub-av' })); tintBack(t); markBoard($('#bmark'), t);
     $('#board').replaceChildren();
     $('#tutor').classList.add('on');
     const fr = $('#rl-frame');

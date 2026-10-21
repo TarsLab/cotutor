@@ -23,6 +23,7 @@ import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { sendFile } from './send-file.ts';
 import { subjectLang, tutorExtras, type ConversationMessage } from '../schema/index.ts';
 import { NEUTRAL_COLOR, tutorColors } from '../lib/tutor-color.ts';
+import { boardMarkOf } from './board-mark.ts';
 import { backTutorOf } from './tutor-face.ts';
 import { enrichLectures, ensureBaked, lectureFrameSvg, parseRing, parseSvgMs, readLecture, storedMarks, type Lecture } from './lecture.ts';
 import { tianzigeData } from './tianzige.ts';
@@ -646,7 +647,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   const colors = tutorColors(Object.fromEntries(MOCK_TUTORS.map((t) => [t.name, { subject: t.subject }])));
   /** --live:有脸的三位老师走实时老师页(口播老师是工具人式的,照旧板书) */
   const LIVE_TUTORS = new Set(['chinese-tutor', 'math-tutor', 'english-tutor']);
-  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk'), live: Boolean(opts.live) && LIVE_TUTORS.has(t.name), listen: 'hold' }));
+  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: false, remaining: remaining(t.name), available: remaining(t.name) > 0, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk'), live: Boolean(opts.live) && LIVE_TUTORS.has(t.name), listen: 'hold' }));
   /** 小课堂:样本课包与样本视频在仓库里(tests/fixtures/bundles/、lectures/),起来时和真服务一样读一遍(readLecture)、记住 */
   const lectures = new Map<string, Lecture>();
   const lecturesLoaded = (async () => {
@@ -874,7 +875,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const kidDay = await route('GET', `/api/kid/conversations/${name}/${tail === localDate(now()) ? 'today' : tail}`);
       const kid = kidDay.status === 200 ? (kidDay.json as { messages: { thread: string }[] }).messages.filter((m) => m.thread === thread) : [];
       const tt = MOCK_TUTORS.find((x) => x.name === name);
-      const face = { name, display: tt?.display ?? name, avatar: tt?.avatar ?? null, subject: tt?.subject ?? null, color: colors[name] ?? NEUTRAL_COLOR };
+      const face = { name, display: tt?.display ?? name, avatar: tt?.avatar ?? null, subject: tt?.subject ?? null, color: colors[name] ?? NEUTRAL_COLOR, mark: boardMarkOf(tt?.subject) };
       return reel ? { status: 200, json: { tutor: name, date: day.date, thread, reel, messages: mine, kid, device: null, face } } : { status: 404, json: { error: 'no_reel' } };
     }
     // 记账(家长端清单上的「记账」):这天还没记过的话题都算记了(真服务是每个话题起一轮老师;mock 立刻记上)

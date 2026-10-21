@@ -19,6 +19,7 @@ import { kidConversation, kidMessageCount, kidThreads, submittedCards, parentCon
 import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { mp3DurationMs } from '../lib/mp3.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../lib/tutor-color.ts';
+import { boardMarkOf, type BoardMarkId } from './board-mark.ts';
 import { audioData } from '../lib/audio-data.ts';
 import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall, type ReelDiag } from '../lib/reel.ts';
 import type { CallReel } from '../live/recorder.ts';
@@ -174,6 +175,8 @@ export interface KidTutor {
   subject: string | null;
   /** 学科色(服务端定好,src/lib/tutor-color.ts;页面不自己算) */
   color: string;
+  /** 板书底纹上写哪个学科字(《产品规划.md》拍板 27,board-mark.ts):三门主科各一个,别的老师 null 只铺纸 */
+  mark: BoardMarkId | null;
   /** 他的听写写哪种:学科是英语(含别名)= en */
   lang: 'zh' | 'en';
   hasVoice: boolean;
@@ -203,7 +206,7 @@ export async function kidTutors(ctx: AppContext, date: string): Promise<KidTutor
   const colors = tutorColors(ctx.ws.config.tutors);
   for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
     const remaining = remainingOf(ctx, t.name, t.policy.dailyMessages, await readIndex(ctx.ws, t.name, date));
-    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), remaining, available: remaining === null || remaining > 0, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), live: liveOf(ctx, t.name), listen: ctx.ws.config.live.listen });
+    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), remaining, available: remaining === null || remaining > 0, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), live: liveOf(ctx, t.name), listen: ctx.ws.config.live.listen });
   }
   return out;
 }
@@ -498,7 +501,7 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const kid = await kidDay(ctx, tutor, date);
   const device = [...mine].reverse().find((m) => m.device)?.device ?? null;
   const t = ctx.ws.config.tutors[tutor];
-  const face = { name: tutor, display: t?.display ?? tutor, avatar: t?.avatar ?? null, subject: t?.subject ?? null, color: tutorColors(ctx.ws.config.tutors)[tutor] ?? NEUTRAL_COLOR };
+  const face = { name: tutor, display: t?.display ?? tutor, avatar: t?.avatar ?? null, subject: t?.subject ?? null, color: tutorColors(ctx.ws.config.tutors)[tutor] ?? NEUTRAL_COLOR, mark: boardMarkOf(t?.subject) };
   const live = date === localDate(ctx.now()) || mine.some((m) => m.result === 'running');
   return { tutor, date, thread, reel, messages: day.messages.filter((m) => m.thread === thread), kid: kid.messages.filter((m) => m.thread === thread), device, face, live, realtime: mine.some((m) => m.live) };
 }

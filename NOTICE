@@ -31,3 +31,12 @@ hanzi-writer-data package, which is derived from Make Me a Hanzi and the
 Arphic fonts and is licensed under the Arphic Public License. cotutor does
 not include that data; it reads it at runtime from the installed
 hanzi-writer-data dependency.
+
+The subject marks on the kid board (src/server/board-mark-art.ts) are glyph
+outlines baked by scripts/bake-board-marks.py from these fonts, all licensed
+under the SIL Open Font License, Version 1.1 (https://openfontlicense.org):
+
+  Ma Shan Zheng: Copyright 2018 The MaShanZheng Project Authors
+    (https://github.com/googlefonts/mashanzheng)
+  Noto Serif SC: (c) 2017-2024 Adobe (http://www.adobe.com/)
+  Barlow: Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow)

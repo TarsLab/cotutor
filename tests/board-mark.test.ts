@@ -11,7 +11,7 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-board-mark-home-')
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { boardMarkOf, BOARD_MARK_PLACE, BOARD_MARK_JS, BOARD_MARK_CSS } = await import('../src/server/board-mark.ts');
+const { boardMarkOf, BOARD_MARK_PLACE, BOARD_MARK_BOTTOM, BOARD_MARK_JS, BOARD_MARK_CSS } = await import('../src/server/board-mark.ts');
 const { BOARD_MARK_ART } = await import('../src/server/board-mark-art.ts');
 const { initWorkspace } = await import('../src/cli/init.ts');
 const { loadWorkspace } = await import('../src/cli/workspace.ts');
@@ -33,7 +33,10 @@ for (const id of ids) {
   // 外框是贴着曲线算的,控制点可以略出一点
   check(`${id} 路径坐标都在外框里`, Math.min(...nums) >= -30 && Math.max(...nums) <= Math.max(a.w, a.h) * 1000 + 30, `${Math.min(...nums)}..${Math.max(...nums)}`);
   check(`${id} 很淡`, BOARD_MARK_PLACE[id as keyof typeof BOARD_MARK_PLACE].o <= 0.08);
+  // 实时页回首页胶囊下沿 64(kid-page.ts 的 .tb、#back),「更多」更矮:字从它们下面起,空出十几 px
+  check(`${id} 从两角按钮下面起`, BOARD_MARK_PLACE[id as keyof typeof BOARD_MARK_PLACE].top >= 76, String(BOARD_MARK_PLACE[id as keyof typeof BOARD_MARK_PLACE].top));
 }
+check('字太高就缩,不出板的底边', BOARD_MARK_BOTTOM > 0 && (BOARD_MARK_CSS.match(/var\(--bm-top\) \* 1px - 16px\) \/ var\(--bm-h\)/g) ?? []).length === 2);
 
 // ---- 插进老师页的脚本与样式 ----
 check('脚本没有反斜杠与反引号', !/[\\`]/.test(BOARD_MARK_JS));

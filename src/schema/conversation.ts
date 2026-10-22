@@ -9,13 +9,6 @@ import { BookkeepingSchema } from './sections.ts';
 import { MessageViaSchema } from './home.ts';
 import { ActivityRunSchema } from './activity.ts';
 
-/** 2026-10-19 以前小课堂的圈一笔一处(path);改成一处几笔(strokes)后照读 */
-const legacyMark = (v: unknown): unknown => {
-  if (typeof v !== 'object' || v === null || 'strokes' in v || !Array.isArray((v as { path?: unknown }).path)) return v;
-  const { path, ...rest } = v as { path: unknown[] };
-  return { ...rest, strokes: [path] };
-};
-
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** 孩子端设备的编号(《孩子端流水设计.md》§二):服务端种的 cookie,随机 12 位十六进制 */
 export const DEVICE_ID_RE = /^[0-9a-f]{12}$/;
@@ -47,16 +40,13 @@ const MessageObjectSchema = z.object({
   /** 话题 id = 话题第一条消息的 job(2026-09-11 拍板:一个话题 = 一段连续问答 = 老师的一个会话;一天可多个)。旧索引没有:读时按 threadOf 现算 */
   thread: z.string().optional(),
   at: z.string().min(1),
-  /** 谁发的:孩子(孩子端、工作台、cotutor send 都算)或应用派的任务。旧索引的 parent 读时改过来(legacyFrom) */
+  /** 谁发的:孩子(孩子端、工作台、cotutor send 都算)或应用派的任务 */
   from: z.enum(MESSAGE_FROM),
   /** 消息原文(不含上下文包) */
   text: z.string(),
   focus: FocusSchema.optional(),
-  /** 孩子端的两个不打字的动作:继续 / 交给老师(把卡上的状态交出去) */
-  action: z.enum(['continue', 'submit']).optional(),
-  /** 按住说话时的原声(2026-09-29,《家长录像设计.md》拍板 4):audio = 相对 conversations/<老师>/ 的 <日期>.<job>.voice.<ext>,seconds = 按住多久。
-   *  只给家长端(录像里在开口那一刻放、旁注上能听,看识别认得对不对);孩子端、老师、上下文包都不给 */
-  voice: z.object({ audio: z.string().min(1), seconds: z.number().positive() }).optional(),
+  /** 孩子端不打字的动作:交给老师(把卡上的状态交出去) */
+  action: z.enum(['submit']).optional(),
   /** 这条消息带的作业照片(R5,2026-09-14):相对 workspace 根的路径(captures/<日期>/<HHMM>-<n>.jpg),上下文包 photos: 段原样给老师 Read;日记永不引用它 */
   photos: z.array(z.string().min(1)).optional(),
   result: z.enum(['running', 'ok', 'error']).default('running'),
@@ -126,7 +116,7 @@ const MessageObjectSchema = z.object({
       /** 视频小课堂(lectures/<id>/);没有 = 课包 */
       video: z.literal(true).optional(),
       /** 一处 = 停在同一刻画的几笔;截图在 captures/ 里(画面叠上那几笔;路径相对 workspace 根)。2026-10-19 以前一笔一处(path),读成一笔的 strokes */
-      marks: z.array(z.preprocess(legacyMark, z.object({ atMs: z.number().nonnegative(), svgMs: z.number().nonnegative(), strokes: z.array(z.array(z.tuple([z.number(), z.number()]))), text: z.string().optional(), image: z.string().optional(), t: z.number().optional() }))).optional(),
+      marks: z.array(z.object({ atMs: z.number().nonnegative(), svgMs: z.number().nonnegative(), strokes: z.array(z.array(z.tuple([z.number(), z.number()]))), text: z.string().optional(), image: z.string().optional(), t: z.number().optional() })).optional(),
       /**
        * 看的过程(录像用,《小课堂设计.md》§八第 5 步):放 / 停 / 拖到哪 / 放完,一次一条。t = 离这条消息发出去多少毫秒(≤ 0,孩子端自己的钟算,
        * 不用对钟);pos = 那时停在课里的哪一刻;play = 那之后在放。画的 t 同理(这一处第一笔画下去的那一刻)
@@ -144,15 +134,7 @@ const MessageObjectSchema = z.object({
   continues: z.object({ date: z.string().regex(DATE_RE), thread: z.string().min(1) }).optional(),
 });
 
-/**
- * 旧索引(2026-10-05 前)的 from: parent:从课文件建的那几轮(带 lessonSection)不是谁说的话,当系统消息(孩子端只出老师的话、不算上限、录像从孩子第一次开口往前倒推);
- * 其余是家长端 / 工作台发的,当孩子说的。备课、试用、课文件那几个字段不在契约里,读时丢掉
- */
-function legacyFrom(v: unknown): unknown {
-  if (!v || typeof v !== 'object' || (v as { from?: unknown }).from !== 'parent') return v;
-  return { ...v, from: typeof (v as { lessonSection?: unknown }).lessonSection === 'number' ? 'system' : 'kid' };
-}
-export const ConversationMessageSchema = z.preprocess(legacyFrom, MessageObjectSchema);
+export const ConversationMessageSchema = MessageObjectSchema;
 export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 
 export const ConversationIndexSchema = z.object({

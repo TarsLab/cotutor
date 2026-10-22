@@ -76,7 +76,7 @@ interface Day { messages: Msg[]; pending: string | null }
   const md4 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   check('交过的卡锁住(同真服务):再交 409、再改 409、下发带 submitted', (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'submit', focus: { card: `${mj}/${ci}` } })).status === 409 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: [1] })).status === 409 && (md4.messages[0].section!.cards[ci] as { submitted?: boolean }).submitted === true);
   check('交给老师:空文本 + action 也 202,问句是「(交了答案,没说话)」,下一节追加(反过来想 + 选择题)', sub.status === 202 && md4.messages[1].question === '(交了答案,没说话)' && md4.messages[1].reply !== null && !('action' in md4.messages[1]) && md4.messages[1].section?.cards.some((c) => c.kind === 'choice') === true, JSON.stringify(md4.messages[1]));
-  await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '', action: 'continue' });
+  await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '继续' });
   await m.settle();
   const md5 = (await get('/api/kid/conversations/math-tutor/today')).json as Day;
   check('「继续」空文本也行,空文本没 action 400;第三节有小课堂卡', md5.messages[2].question === '继续' && md5.messages[2].section?.cards.some((c) => c.kind === 'lecture') === true && (await m.route('POST', '/api/kid/conversations/math-tutor/messages', { text: '  ' })).status === 400);
@@ -216,7 +216,7 @@ interface Day { messages: Msg[]; pending: string | null }
   check('家长端:内联了录像(buildReel / reelFrameAt / reelClock)、底部有录像栏;没有板书页的「看录像」钮与旁注(拍板 16、18)', page.includes('function reelFrameAt(') && page.includes('function reelClock(') && !page.includes('id="reel-btn"') && !page.includes('syncNotes') && page.includes('id="rl-seek"') && page.includes("end: '1'") && !/^import /m.test(js));
   const rl = await get(`/api/conversations/chinese-tutor/today/threads/${(pb.messages[0] as PMsg & { thread: string }).thread}/reel`);
   const rj = rl.json as { reel: { tracks: unknown[]; says: unknown[]; marks: { kind: string }[]; startAt: number; endAt: number }; messages: unknown[] };
-  check('mock 的录像:一节、念了句、有开口的点、条目一条', rl.status === 200 && rj.reel.tracks.length === 1 && rj.reel.says.length > 0 && rj.reel.marks[0].kind === 'said' && rj.messages.length === 1 && rj.reel.endAt > rj.reel.startAt, JSON.stringify(rj.reel.marks));
+  check('mock 的录像:一节(不是实时的轮写完就铺上、不念)、有开口的点、条目一条', rl.status === 200 && rj.reel.tracks.length === 1 && rj.reel.says.length === 0 && rj.reel.marks[0].kind === 'said' && rj.messages.length === 1 && rj.reel.endAt > rj.reel.startAt, JSON.stringify(rj.reel.marks));
   check('mock 的录像:没这个话题 404', (await get('/api/conversations/chinese-tutor/today/threads/nope/reel')).status === 404);
   type Ov = { date: string; today: string; tutors: { name: string; threads: { title: string; sections: number; stoppedAt: string | null }[] }[] };
   const ov = (await get('/api/overview/today')).json as Ov;

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * 录像的实录(《家长录像设计.md》§4)孩子端这一段的验收(在 pnpm test 里:tests/probe.test.ts 起它,要本机 Chrome,没有就跳过;走 mock,不花钱):
- * 孩子端进语文老师 → 等老师念 → 点开选择题 → 选一项 → 关弹窗 → 页面退到后台(pagehide)→ 拦下发出去的实录:
- * 话题对、播放位置记了(带 job)、弹窗开关各一条(那张卡)、按顺序;家长端 /parent 看同一个话题什么都不发。
+ * 孩子端进语文老师 → 点开选择题 → 选一项 → 关弹窗 → 页面退到后台(pagehide)→ 拦下发出去的实录:
+ * 话题对、弹窗开关各一条(那张卡)、按顺序、不再记播放位置(讲稿不念了,《产品规划.md》拍板 30);家长端 /parent 看同一个话题什么都不发。
  *
  * 用法:node scripts/probe-play.mjs [--keep](留下 mock)
  */
@@ -71,8 +71,7 @@ try {
   const recs = sent.flatMap((b) => b.records);
   const thread = await evaluate(`(async () => (await (await fetch('/api/kid/conversations/chinese-tutor/today')).json()).thread)()`);
   ok('发出去了:话题是当前话题,带 sentAt', sent.length > 0 && sent.every((b) => b.thread === thread && typeof b.sentAt === 'number'), JSON.stringify(sent.map((b) => ({ thread: b.thread, n: b.records.length }))));
-  const plays = recs.filter((r) => r.k === 'play');
-  ok('播放位置记了:带那一节的 job、句号、状态', plays.length > 0 && plays.every((r) => typeof r.at === 'number' && (r.job === null || typeof r.job === 'string') && typeof r.status === 'string') && plays.some((r) => r.job === job), JSON.stringify(plays.slice(0, 4)));
+  ok('不再记播放位置(讲稿不念了)', !recs.some((r) => r.k === 'play' || r.k === 'autoplay'), JSON.stringify(recs.map((r) => r.k)));
   const stages = recs.filter((r) => r.k === 'stage');
   ok('弹窗开、关各一条,是那张选择题,开在关之前', stages.length === 2 && stages[0].open && !stages[1].open && stages.every((r) => r.job === job && r.card === card) && stages[0].at <= stages[1].at, JSON.stringify(stages));
   ok('孩子端不发卡的改动(服务端存卡时自己记)', !recs.some((r) => r.k === 'card'));

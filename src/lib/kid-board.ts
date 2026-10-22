@@ -619,10 +619,9 @@ export interface BoardMessage {
   photos?: string[];
   /** 看完小课堂后的第一条(《小课堂设计.md》):这一节前面是小课堂卡 */
   lecture?: KidLecture;
-  /** 孩子这条不是说的话:submit = 交卡(答案在卡上)、continue = 老数据里的「继续」 */
-  action?: 'submit' | 'continue';
+  /** 孩子这条不是说的话:submit = 交卡(答案在卡上) */
+  action?: 'submit';
   /** 按住说话的(索引里带 voice):板上去口头禅、一行截断 */
-  spoken?: boolean;
   /** 首页按钮发的:按钮上的字,不是孩子说的 */
   fromHome?: boolean;
   /** 实时的一轮(讲稿嘴照念,不配音) */
@@ -633,7 +632,6 @@ export interface BoardMessage {
 export interface KidSaid {
   text: string;
   full: string;
-  voice: boolean;
   /** 答拍给我看卡时拍来的照片:进那张卡的答案栏,节头不再回显 */
   photos?: string[];
 }
@@ -665,17 +663,6 @@ export interface BoardEntry extends BoardSection {
 export function liveHead(s: Pick<BoardSection, 'cards'>): { head: string } | { cont: true } {
   const first = s.cards[0];
   return first && isHeading(first) && str(first.props.title).trim() ? { head: str(first.props.title).trim() } : { cont: true };
-}
-
-/** 口头禅:单独的语气词随处去掉;「那个」「就是」「然后」只在句首或标点旁去掉(句中的「就是 4」「那个是七」留着),连说两遍以上的随处去掉 */
-const FILLER_ANY = /[嗯呃额唔啊哦噢]+(?=[,，。.!！?？、…\s]|$)|^[嗯呃额唔啊哦噢]+/gu;
-const FILLER_EDGE = /(^|[,，。.!！?？、…\s])(?:那个|就是|然后)+(?=[,，。.!！?？、…\s]|$)/gu;
-/** 语音识别出来的孩子的话 → 板上显示的:去口头禅、省略号与重复的标点,去掉首尾的标点;去完是空的就留原话 */
-export function tidySpoken(text: string): string {
-  let t = text.replace(/……|…|\.{3,}/g, '，');
-  for (let k = 0; k < 3; k++) t = t.replace(/(?:那个|就是|然后){2,}/gu, '，').replace(FILLER_EDGE, '$1').replace(FILLER_ANY, '');
-  t = t.replace(/\s+/g, ' ').replace(/([,，、])\s*(?=[,，、。.!！?？])/g, '').replace(/([。.!！?？])\s*[,，、]+/g, '$1').replace(/([,，、])[,，、]+/g, '$1').replace(/^[\s,，、。.!！]+|[\s,，、]+$/g, '').trim();
-  return t || text.trim();
 }
 
 /**
@@ -712,8 +699,7 @@ export function kidSaid(messages: readonly BoardMessage[]): Map<string, { said: 
     const photos = card !== null && prev!.section!.cards[card].kind === 'photo' && m.photos?.length ? m.photos : null;
     const words = photos && PHOTO_ONLY.test(q) ? '' : q;
     if ((q || photos) && !m.action && !m.fromHome) {
-      const voice = m.spoken === true;
-      out.set(m.job, { said: { text: voice ? tidySpoken(words) : words, full: words, voice, ...(photos ? { photos } : {}) }, on: prev && card !== null ? { job: prev.job, card } : null });
+      out.set(m.job, { said: { text: words, full: words, ...(photos ? { photos } : {}) }, on: prev && card !== null ? { job: prev.job, card } : null });
     }
     if (m.section && !m.section.partial && !m.pending && (m.section.cards.length || m.section.lines.length)) prev = m;
   }

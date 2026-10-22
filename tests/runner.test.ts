@@ -356,13 +356,14 @@ try {
   const mAgain = ma.index.messages.find((m) => m.job === (again.json as { job: string }).job)!;
   check('下一条没改卡就不再带', mAgain.cards === undefined && !mAgain.kidText?.includes('看到卡'), JSON.stringify(mAgain));
   check('坏 action 400;空文本没 action 400', (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '', action: 'jump' })).status === 400 && (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '' })).status === 400);
-  // 「继续」:空文本 + action continue
+  // 「继续」2026-10-08 去掉了:老页面交来的 action continue 不认;孩子说「继续」就是一句话
   now = new Date(2026, 8, 9, 9, 7);
-  const cont = await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '', action: 'continue' });
+  check('action continue 不认(400)', (await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '', action: 'continue' })).status === 400);
+  const cont = await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '继续' });
   await wait('chinese-tutor');
-  check('「继续」202', cont.status === 202, JSON.stringify(cont.json));
+  check('「继续」当一句话 202', cont.status === 202, JSON.stringify(cont.json));
   const dz = (await day('chinese-tutor', '2026-09-09')).json as { index: { messages: SubMsg[] } };
-  check('「继续」在索引里:text 继续、action continue', dz.index.messages.some((m) => m.text === '继续' && m.action === 'continue'));
+  check('「继续」在索引里:text 继续、没有 action', dz.index.messages.some((m) => m.text === '继续' && m.action === undefined));
 
 
   // ---- 流式:假 CLI --stream 按行吐增量;跑到一半孩子端 pending 条目已有前几张卡(partial、答案剥掉);跑完正式一节 + 每句 mp3 ----

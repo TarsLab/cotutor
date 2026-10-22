@@ -46,20 +46,20 @@ try {
   // ---- 孩子端报上来的一批:孩子的钟慢 5 秒 ----
   const kidNow = Date.now() - 5000;
   const res = await route('POST', '/api/kid/conversations/math-tutor/play', ctx, { thread: job, sentAt: kidNow, records: [
-    { at: kidNow, k: 'play', job, line: 0, status: 'playing' },
-    { at: kidNow + 10, k: 'play', job, line: 1, status: 'waiting' },
+    { at: kidNow, k: 'scroll', job, card: 0, dy: -10 },
     { at: kidNow + 20, k: 'stage', job, card: 1, open: true },
     { at: kidNow + 100, k: 'visible', on: false },
     { at: kidNow + 400, k: 'visible', on: true },
-    { at: kidNow + 30, k: 'play', job: '9999-9', line: 0, status: 'playing' },
+    { at: kidNow + 30, k: 'scroll', job: '9999-9', card: 0, dy: 0 },
+    { at: kidNow + 30, k: 'play', job, line: 0, status: 'playing' },
     { at: kidNow + 30, k: 'card', job, card: 1, state: { picked: [0] } },
     { at: kidNow + 30, k: 'eval', job },
     { at: 'x', k: 'visible', on: true },
   ] });
   const got = lines(play);
-  check('一批:好的 5 条收下(别的话题的 job、孩子端发的卡改动、不认识的、坏的丢掉),落在话题末条 job 的 play.jsonl', res.status === 200 && (res.json as { kept: number }).kept === 5 && got.length === 5, JSON.stringify({ res: res.json, got }));
+  check('一批:好的 4 条收下(别的话题的 job、孩子端发的卡改动、不认识的、播放位置这种不再记的、坏的丢掉),落在话题末条 job 的 play.jsonl', res.status === 200 && (res.json as { kept: number }).kept === 4 && got.length === 4, JSON.stringify({ res: res.json, got }));
   const skew = (got[0].at as number) - kidNow;
-  check('时刻按两边的钟差校到服务端(孩子的钟慢 5 秒)', skew >= 5000 && skew < 5500 && (got[2].at as number) - (got[0].at as number) === 20, String(skew));
+  check('时刻按两边的钟差校到服务端(孩子的钟慢 5 秒)', skew >= 5000 && skew < 5500 && (got[1].at as number) - (got[0].at as number) === 20, String(skew));
   check('不是今天的话题:一条都不收;形状不对 400', ((await route('POST', '/api/kid/conversations/math-tutor/play', ctx, { thread: '0000-1', sentAt: Date.now(), records: [{ at: Date.now(), k: 'visible', on: true }] })).json as { kept: number }).kept === 0 && (await route('POST', '/api/kid/conversations/math-tutor/play', ctx, { thread: job })).status === 400);
 
   // ---- 孩子在弹窗里选了 A 又改 B(服务端存卡时自己记),关弹窗、交给老师 ----
@@ -69,7 +69,7 @@ try {
   await route('PUT', `/api/kid/conversations/math-tutor/cards/${job}/1`, ctx, { picked: [1] });
   const cards = lines(play).filter((r) => r.k === 'card');
   check('孩子每存一次卡,服务端记一条(选了 A 又改 B 两条都在)', cards.length === 2 && JSON.stringify(cards.map((c) => c.state)) === '[{"picked":[0]},{"picked":[1]}]', JSON.stringify(cards));
-  const openAt = got[2].at as number;
+  const openAt = got[1].at as number;
   const think = (cards[0].at as number) - openAt - 300;
   await route('POST', '/api/kid/conversations/math-tutor/play', ctx, { thread: job, sentAt: Date.now(), records: [{ at: Date.now(), k: 'stage', job, card: 1, open: false }] });
   await sleep(50);
@@ -92,11 +92,10 @@ try {
   check('「做了」带上:弹窗打开到第一次改动、减去切到后台的 300 毫秒;改了两次', did?.card === `${job}/1` && did.took?.think === think && think > 0 && did.took.changes === 2, JSON.stringify({ did, think }));
   check('孩子端接口不带这些', !JSON.stringify((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json).includes('took'));
 
-  // ---- 录像接口:弹窗一段、两次改动、切到后台一段;第二轮没有记录,不算全程实录 ----
-  type Rl = { reel: { stages: { job: string; card: number; from: number; to: number }[]; cards: { state: unknown }[]; aways: unknown[]; precise: boolean; says: { job: string; from: number }[] } };
+  // ---- 录像接口:弹窗一段、两次改动、切到后台一段 ----
+  type Rl = { reel: { stages: { job: string; card: number; from: number; to: number }[]; cards: { state: unknown }[]; aways: unknown[] } };
   const rl = (await route('GET', `/api/conversations/math-tutor/today/threads/${job}/reel`, ctx)).json as Rl;
-  check('录像:弹窗开着的一段(开到关)、选了又改两次、切到后台一段、第一节的念句照记录', rl.reel.stages.length === 1 && rl.reel.stages[0].from === openAt && rl.reel.stages[0].to > (cards[1].at as number) && rl.reel.cards.length === 2 && rl.reel.aways.length === 1 && rl.reel.says.filter((x) => x.job === job)[0]?.from === got[0].at, JSON.stringify(rl.reel.stages));
-  check('第二轮没有记录:不是全程实录', !rl.reel.precise);
+  check('录像:弹窗开着的一段(开到关)、选了又改两次、切到后台一段', rl.reel.stages.length === 1 && rl.reel.stages[0].from === openAt && rl.reel.stages[0].to > (cards[1].at as number) && rl.reel.cards.length === 2 && rl.reel.aways.length === 1, JSON.stringify(rl.reel.stages));
 
   // ---- 删话题:实录一起删 ----
   const del = await route('DELETE', `/api/conversations/math-tutor/${date}/threads/${job}`, ctx);

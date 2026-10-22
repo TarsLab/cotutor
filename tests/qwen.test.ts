@@ -20,7 +20,6 @@ const { initWorkspace } = await import('../src/cli/init.ts');
 const { loadWorkspace } = await import('../src/cli/workspace.ts');
 const { createContext, route } = await import('../src/server/app.ts');
 const { configGaps } = await import('../src/cli/migrate.ts');
-const { qwen } = await import('../src/clis/qwen.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
 const flags = ['--system-prompt', '{systemBody}', '--input-format', 'stream-json', '--output-format', 'stream-json', '--approval-mode', 'default', '{toolArgs}', '--max-wall-time', '10m'];
@@ -29,7 +28,6 @@ const base = [process.execPath, '--experimental-strip-types', '--no-warnings', F
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown> & { runtimes: Record<string, unknown> };
-const factoryQwen = cfg.runtimes.qwen;
 cfg.runtimes = { default: 'fakeqwen', fakeqwen: { cli: 'qwen', stdin: 'stream-json', run: [...base, ...flags], resume: [...base, '--resume', '{session}', ...flags] } };
 for (const t of Object.values((cfg as unknown as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
@@ -92,17 +90,11 @@ try {
 }
 
 {
-  const old = qwen.retired!.qwen[1];
+  // 家长改过的(这里是 0.21 时代的旧模板加了 -m):不动,也不往里插旗标;缺的运行时照补
+  const old = { run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{systemBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m', '-m', 'qwen3.8-max'], resume: ['qwen', '-p', '{prompt}', '--resume', '{session}', '--append-system-prompt', '{systemBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'] };
   const raw = (rt: Record<string, unknown>): Record<string, unknown> => ({ version: 1, kid: { slug: 'ming' }, tutors: {}, runtimes: { default: 'qwen', ...rt } });
-  const g = (await configGaps(raw({ qwen: { run: [...old.run], resume: [...old.resume] } }))).find((x) => x.path === 'runtimes.qwen');
-  check('upgrade --config:没人改过的旧 qwen 模板整份换成新的', g?.kind === 'runtime' && JSON.stringify(g.value) === JSON.stringify(factoryQwen), JSON.stringify(g));
-  const last = qwen.retired!.qwen.at(-1)!;
-  const g2 = (await configGaps(raw({ qwen: { stdin: 'stream-json', run: [...last.run], resume: [...last.resume] } }))).find((x) => x.path === 'runtimes.qwen');
-  check('upgrade --config:没改过的上一版(qwen3.7-plus)也整份换成新的(qwen3.8-max)', g2?.kind === 'runtime' && JSON.stringify(g2.value) === JSON.stringify(factoryQwen) && (g2.value as { run: string[] }).run.includes('qwen3.8-max'), JSON.stringify(g2));
-  const mine = raw({ qwen: { run: [...old.run, '-m', 'qwen3.8-max'], resume: [...old.resume] } });
-  const gm = await configGaps(mine);
+  const gm = await configGaps(raw({ qwen: old }));
   check('改过的旧模板不动,也不往里插旗标', !gm.some((x) => x.path === 'runtimes.qwen' || x.path.startsWith('runtimes.qwen.')), JSON.stringify(gm));
-  check('老 workspace 没有 qwen-flash:upgrade --config 补上(英语老师的 runtime 不动)', gm.some((x) => x.path === 'runtimes.qwen-flash') && !gm.some((x) => x.path === 'tutors.english-tutor.runtime'));
+  check('缺 qwen-flash:upgrade --config 补上(英语老师的 runtime 不动)', gm.some((x) => x.path === 'runtimes.qwen-flash') && !gm.some((x) => x.path === 'tutors.english-tutor.runtime'));
 }
-
 done();

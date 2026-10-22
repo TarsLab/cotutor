@@ -67,7 +67,7 @@ export const MOCK_LECTURES_DIR = fileURLToPath(new URL('../../tests/fixtures/lec
 const MOCK_LECTURE_DIRS = { dirs: { bundles: MOCK_BUNDLES_DIR, lectures: MOCK_LECTURES_DIR } };
 import { lineDurationMs, plainLine, readyBeats, type BoardSection, type KidLecture, type PenName } from '../lib/kid-board.ts';
 import { wavOfPcm } from '../live/lib/wav.ts';
-import { REEL_LINE_GAP_MS, buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord } from '../lib/reel.ts';
+import { buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord } from '../lib/reel.ts';
 import { weekOf, type CardStates } from '../lib/conversation.ts';
 import { lanAddresses, listenInfo } from '../cli/serve.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
@@ -449,7 +449,7 @@ interface MockMessage {
   artifacts: string[];
   section: BoardSection | null;
   /** 孩子端的动作(继续不计次数) */
-  action?: 'continue' | 'submit';
+  action?: 'submit';
   /** 交答案时交的是哪张卡(<job>/<n>):交过的卡锁住(同真服务 kid-view 的 submittedCards) */
   submitted?: string;
   /** 卡下标 → 孩子做的事(PUT 进来的) */
@@ -789,7 +789,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         // 按住说话连着没发出去(拍板 10):攒着的实录里的 hold;mock 的消息没有真时刻,发成的一句只认打字发出去的
         if (date === today) for (const th of by.values()) {
           const plays = (mockPlays[t.name] ?? []).filter((x) => x.thread === th.thread).map((x) => x.rec);
-          const n = Math.max(0, ...reelMissRuns(reelHolds(plays, []), plays.filter((r) => r.k === 'type' && r.e === 'send').map((r) => r.at)).map((x) => x.n));
+          const n = Math.max(0, ...reelMissRuns(reelHolds(plays), plays.filter((r) => r.k === 'type' && r.e === 'send').map((r) => r.at)).map((x) => x.n));
           if (n) th.misses = n;
         }
         const recorded = list.reduce((n, m) => n + Object.keys(m.states ?? {}).filter((k) => m.section?.cards[Number(k)]?.kind === 'record').length, 0);
@@ -838,7 +838,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const [, name, tail, raw] = rl;
       const board = await route('GET', `/api/conversations/${name}/${tail}/board`);
       if (board.status !== 200) return board;
-      const day = board.json as { date: string; messages: (Record<string, unknown> & { job: string; thread: string; from: 'kid'; question: string | null; pending: boolean; section: BoardSection | null; action?: 'continue' | 'submit' })[] };
+      const day = board.json as { date: string; messages: (Record<string, unknown> & { job: string; thread: string; from: 'kid'; question: string | null; pending: boolean; section: BoardSection | null; action?: 'submit' })[] };
       const thread = decodeURIComponent(raw);
       const mine = day.messages.filter((m) => m.thread === thread);
       let t = now().getTime() - 10 * 60000;
@@ -847,13 +847,13 @@ export function createMock(opts: MockOptions = {}): Mock {
         const wait = k === 1 ? 14000 : 3000;
         starts.push(t);
         const startedAt = new Date(t).toISOString();
-        t += wait + (m.section?.lines ?? []).reduce((n, l) => n + lineDurationMs(l.text) + REEL_LINE_GAP_MS, 0) + (k === 0 ? 40000 : 8000);
+        t += wait + (m.section?.lines ?? []).reduce((n, l) => n + lineDurationMs(l.text) + 200, 0) + (k === 0 ? 40000 : 8000);
         return { job: m.job, thread, at: startedAt, from: m.from, text: m.question ?? '', result: m.pending ? ('running' as const) : ('ok' as const), artifacts: [], section: m.section, timing: { startedAt, doneMs: wait, dubbedMs: wait }, ...(m.action ? { action: m.action } : {}), ...lectureOfMock(m) };
       });
       const cards: CardStates = {};
       mine.forEach((m, k) => (m.section?.cards ?? []).forEach((c, n) => { if (c.state !== undefined) (cards[m.job] ??= {})[n] = { at: new Date((starts[k + 1] ?? t) - 5000).toISOString(), turn: m.job, state: c.state }; }));
       const plays = (mockPlays[name] ?? []).filter((x) => x.thread === thread).map((x) => x.rec);
-      const reel = buildReel({ messages: conv, events: {}, cards, durations: {}, tutor: name, now: now().getTime(), plays });
+      const reel = buildReel({ messages: conv, events: {}, cards, tutor: name, now: now().getTime(), plays });
       // mock 的孩子接口只认 today 是今天(写日期的走「以前的」那份)
       const kidDay = await route('GET', `/api/kid/conversations/${name}/${tail === localDate(now()) ? 'today' : tail}`);
       const kid = kidDay.status === 200 ? (kidDay.json as { messages: { thread: string }[] }).messages.filter((m) => m.thread === thread) : [];
@@ -938,7 +938,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       }
       if (tail === 'messages' && method === 'POST') {
         if (!isObj(body) || typeof body.text !== 'string') return { status: 400, json: { error: 'bad_request' } };
-        const action = body.action === 'continue' || body.action === 'submit' ? body.action : undefined;
+        const action = body.action === 'submit' ? ('submit' as const) : undefined;
         const photos = Array.isArray(body.photos) ? (body.photos as unknown[]).filter((x): x is string => typeof x === 'string') : [];
         const button = body.via === undefined ? undefined : mockButton(name, body.via);
         if (button === null) return { status: 400, json: { error: 'bad_via' } };
@@ -967,7 +967,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         if (list.some((m) => m.pending)) return { status: 409, json: { error: 'busy' } };
         const focusCard = isObj(body.focus) && typeof body.focus.card === 'string' ? body.focus.card : null;
         if (action === 'submit' && focusCard && list.some((x) => x.submitted === focusCard)) return { status: 409, json: { error: 'submitted' } };
-        const text = said.trim() || (action === 'continue' ? '继续' : action === 'submit' ? '(交了答案,没说话)' : photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`);
+        const text = said.trim() || (action === 'submit' ? '(交了答案,没说话)' : photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`);
         const job = nextJob();
         // 话题:newThread → 自己的 job;指定的要在今天的列表里;缺省接当前(末条)的
         let thread = job;

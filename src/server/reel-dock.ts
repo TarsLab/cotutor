@@ -3,14 +3,14 @@
  * 录像栏不认场景,只经 iframe 交过来的把手说话;话题(kid-page.ts 的 /reel)、听写(dictation/ 的 /dictation?reel=)都用这一份。
  *
  * 把手(iframe 起来后 parent.cotutorReelReady(把手, {size}),同源直接调):
- *   get()        → {p, total, wall, playing, speed, real, precise, cap: {text, cls}, size?, stale?};p、total 是录像里的毫秒(跳过空白开着时是压过的),wall 是这一刻的墙钟
+ *   get()        → {p, total, wall, playing, speed, real, cap: {text, cls}, size?, stale?};p、total 是录像里的毫秒(跳过空白开着时是压过的),wall 是这一刻的墙钟
  *   marks()      → [{kind, label, p, pTo?}] 进度条上的点(kind 当类名)
  *   events()     → [{p, kind, chip, text}] 经过,一条一行
  *   chapters?()  → [{p, title, end?}] 章(话题一轮、听写一个词);进度条上断开一点,说明那行左边写在哪一章;
  *                  end = 章尾(上一章 / 下一章落在这里,拍板 21),没给就是下一章开头之前,最后一章是末尾
  *   speeds?      → 倍速轮哪几档,缺省 1 / 1.5 / 2
  *   play(on) / seek(p) / drag(p) / real(on) / speed(x) / stop()
- * open(把手, {exit, toast, tagHint, title}):title 写在左上角「退出录像」旁边(是谁的哪件事);开着时整页深底(html.rl-dark,拍板 20)。
+ * open(把手, {exit, toast, title}):title 写在左上角「退出录像」旁边(是谁的哪件事);开着时整页深底(html.rl-dark,拍板 20)。
  *
  * 时间和视频一样(拍板 14):左下角是放到哪 / 一共要放多久,下面一行小字是当时几点;经过里每条写录像里的位置。
  * 上半占满宽度(拍板 15):按孩子屏幕的尺寸等比缩到铺满,窗口不够高才按高度缩;录像栏能收成一行(播放、细进度条、时间),顶上的小横条点或上下拉。
@@ -76,8 +76,8 @@ export const REEL_DOCK_CSS = `
   #rl-clock, #rl-mclock { font-variant-numeric:tabular-nums; color:var(--ink); font-size:15px; white-space:nowrap; }
   .rl-subrow { display:flex; align-items:center; gap:4px; }
   #rl-sub { font-size:11px; color:var(--dim); font-variant-numeric:tabular-nums; white-space:nowrap; }
-  #rl-tag, #rl-ver { font-size:11px; border:1px solid var(--line); border-radius:7px; padding:0 6px; background:#fff; white-space:nowrap; color:var(--dim); }
-  #rl-tag[hidden], #rl-ver[hidden], #rl-x[hidden] { display:none; }
+  #rl-ver { font-size:11px; border:1px solid var(--line); border-radius:7px; padding:0 6px; background:#fff; white-space:nowrap; color:var(--dim); }
+  #rl-ver[hidden], #rl-x[hidden] { display:none; }
   .rl-sp { flex:1; }
   /* 手机上控制行放不下一行:开关、倍速、收起、退出折到第二行,靠右 */
   @media (max-width:600px) { .rl-row { flex-wrap:wrap; row-gap:6px; } .rl-row .rl-sp { flex:1 0 100%; height:0; } .rl-row .rl-sw { margin-left:auto; } }
@@ -117,7 +117,7 @@ export const REEL_DOCK_CSS = `
   html.rl-dark #rl-cap.kid { color:#f0b48a; }
   html.rl-dark #rl-cap.miss { color:#f0a080; }
   html.rl-dark #rl-chap { color:#1c1c1c; background:#f0b48a; border-color:#f0b48a; font-weight:600; }
-  html.rl-dark #rl-more, html.rl-dark .rl-row .tx, html.rl-dark .rl-trow .tx, html.rl-dark .rl-row .ic, html.rl-dark .rl-trow .ic, html.rl-dark #rl-tag, html.rl-dark #rl-ver { background:transparent; border-color:#4a4845; color:#f4f2ec; }
+  html.rl-dark #rl-more, html.rl-dark .rl-row .tx, html.rl-dark .rl-trow .tx, html.rl-dark .rl-row .ic, html.rl-dark .rl-trow .ic, html.rl-dark #rl-ver { background:transparent; border-color:#4a4845; color:#f4f2ec; }
   html.rl-dark #rl-log { background:#262523; border-color:#3a3835; color:#f4f2ec; }
   html.rl-dark #rl-log li .rl-c { color:#a8a49c; }
   html.rl-dark #rl-log li.cur { background:#3a2c22; }
@@ -165,7 +165,7 @@ export const REEL_DOCK_HTML = `<div id="rl-top"><button id="rl-x" type="button" 
       <div id="rl-log" hidden><ol></ol></div>
       <div class="rl-caprow" id="rl-caprow"><span id="rl-chap" hidden></span><div id="rl-cap"></div><button id="rl-more" type="button" aria-expanded="false">经过 ▴</button></div>
       <div class="rl-trow"><button class="rl-mini" id="rl-mplay" type="button" aria-label="播放"></button><div class="rl-track"><div id="rl-marks"></div><div id="rl-chaps"></div><input id="rl-seek" type="range" min="0" max="1000" step="100" value="0" aria-label="录像进度"></div><span class="rl-mini" id="rl-mclock"></span><button class="rl-mini ic" id="rl-unfold" type="button" aria-label="展开录像栏"></button></div>
-      <div class="rl-row"><button class="ic rl-jb" id="rl-prev" type="button" aria-label="上一章(落在那一章讲完)" title="上一章 ⇧←"></button><button id="rl-play" type="button" aria-label="播放"></button><button class="ic rl-jb" id="rl-next" type="button" aria-label="下一章(落在那一章讲完)" title="下一章 ⇧→"></button><span class="rl-when"><span id="rl-clock"></span><span class="rl-subrow"><span id="rl-sub"></span><button id="rl-tag" type="button" hidden>推算</button><button id="rl-ver" type="button" hidden>画法已更新</button></span></span><span class="rl-sp"></span><label class="rl-sw" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就是完整版,按真实时间放"><input type="checkbox" id="rl-skip" role="switch" checked><i></i>跳过空白</label><button class="tx" id="rl-speed" type="button">1×</button><button class="ic" id="rl-fold" type="button" aria-label="收起录像栏"></button></div>
+      <div class="rl-row"><button class="ic rl-jb" id="rl-prev" type="button" aria-label="上一章(落在那一章讲完)" title="上一章 ⇧←"></button><button id="rl-play" type="button" aria-label="播放"></button><button class="ic rl-jb" id="rl-next" type="button" aria-label="下一章(落在那一章讲完)" title="下一章 ⇧→"></button><span class="rl-when"><span id="rl-clock"></span><span class="rl-subrow"><span id="rl-sub"></span><button id="rl-ver" type="button" hidden>画法已更新</button></span></span><span class="rl-sp"></span><label class="rl-sw" title="孩子想了很久、等老师很久的地方各压成 1.5 秒;关掉就是完整版,按真实时间放"><input type="checkbox" id="rl-skip" role="switch" checked><i></i>跳过空白</label><button class="tx" id="rl-speed" type="button">1×</button><button class="ic" id="rl-fold" type="button" aria-label="收起录像栏"></button></div>
     </div>`;
 
 export const REEL_DOCK_JS = `
@@ -324,7 +324,6 @@ export const REEL_DOCK_JS = `
     q('#rl-play').addEventListener('click', toggle);
     q('#rl-mplay').addEventListener('click', toggle);
     q('#rl-x').addEventListener('click', () => { if (O.exit) O.exit(); });
-    q('#rl-tag').addEventListener('click', () => { if (O.toast && O.tagHint) O.toast(O.tagHint); });
     q('#rl-ver').addEventListener('click', () => { if (O.toast) O.toast('这段是旧版孩子端录的,现在用新版的样子画:孩子做了什么照旧,样子可能和孩子当时看到的不一样'); });
     q('#rl-more').addEventListener('click', () => more(q('#rl-log').hidden));
     q('#rl-fold').addEventListener('click', () => fold(true));
@@ -346,13 +345,13 @@ export const REEL_DOCK_JS = `
     q('#rl-seek').addEventListener('input', (e) => { if (!RE) return; dragging = true; RE.drag(Number(e.target.value)); });
     q('#rl-seek').addEventListener('change', (e) => { if (!RE) return; dragging = false; RE.seek(Number(e.target.value)); });
     return {
-      /** 接上一个把手:o.exit(有就出「退出」)、o.toast、o.tagHint(「推算」点了说什么) */
+      /** 接上一个把手:o.exit(有就出「退出」)、o.toast */
       open: (api, o) => {
         RE = api; O = o || {}; real = null; playing = null; dragging = false; ev = []; chaps = [];
         speeds = api.speeds && api.speeds.length ? api.speeds : [1, 1.5, 2];
         const st = api.get();
         q('#rl-speed').textContent = st.speed + '×';
-        q('#rl-tag').hidden = st.precise; q('#rl-x').hidden = !O.exit;
+        q('#rl-x').hidden = !O.exit;
         q('#rl-ttl').textContent = O.title || '';
         document.documentElement.classList.add('rl-dark');
         media(true);

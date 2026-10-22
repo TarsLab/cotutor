@@ -22,7 +22,7 @@ import { HOME_SKILL } from '../lib/home-doc.ts';
 import { TUTOR_SKILL } from '../lib/tutor-rules.ts';
 export { ANALYZE_SKILL, BOARD_SKILL, HOME_SKILL, TUNE_SKILL, TUTOR_SKILL, VAULT_SKILL };
 import { PACKAGE_VERSION } from './skeleton.ts';
-import { pruneQwenDirs, readManifest, retireQwenLink, writeManifest, type ShippedManifest } from './tutors.ts';
+import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
 
 export interface ShippedSkill {
   name: string;
@@ -48,8 +48,8 @@ export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
   { name: 'koubo-coach', source: 'koubo', onlyWith: 'koubo-tutor' },
 ];
 
-/** 不再出厂的机器件:upgrade 时 workspace 里还有(出厂记录里有它)就删掉,免得 Claude Code 照旧技能干活。cotutor-prep:备课 2026-10-05 删了 */
-export const RETIRED_SKILLS: readonly string[] = ['cotutor-prep'];
+/** 不再出厂的机器件:upgrade 时 workspace 里还有(出厂记录里有它)就删掉,免得 Claude Code 照旧技能干活。现在没有(cotutor-prep 2026-10-22 起不再认:workspace 里都删过了) */
+export const RETIRED_SKILLS: readonly string[] = [];
 
 /** 这个 workspace 该有的出厂技能:onlyWith 的那位老师关着(或 cotutor.json 读不了)就不算 */
 export async function activeSkills(root: string): Promise<ShippedSkill[]> {
@@ -137,8 +137,8 @@ export interface SkillStatus {
   machine: boolean;
 }
 
-export function skillDirs(root: string, name: string): { claude: string; qwen: string } {
-  return { claude: join(root, '.claude', 'skills', name), qwen: join(root, '.qwen', 'skills', name) };
+export function skillDirs(root: string, name: string): { claude: string } {
+  return { claude: join(root, '.claude', 'skills', name) };
 }
 
 async function readState(root: string, skill: ShippedSkill, manifest: ShippedManifest): Promise<SkillStatus> {
@@ -204,9 +204,7 @@ export async function installSkills(root: string): Promise<SkillStep[]> {
       touched = true;
       steps.push({ item, action: 'exists', note: s.state === 'latest' ? '已按本包刷新(机器件)' : '已按本包换新(机器件,不认改动)' });
     } else steps.push({ item, action: 'exists', note: s.state === 'custom' ? `自定义(基于 ${s.basedOn})` : s.state === 'upgradable' ? '可升级(cotutor upgrade)' : s.state === 'untracked' ? '已有(没有出厂记录);升级时当自定义对待' : undefined });
-    if (await retireQwenLink(skillDirs(root, name).qwen)) steps.push({ item: `.qwen/skills/${name}`, action: 'removed', note: '链退役(qwen 的技能工具不给)' });
   }
-  await pruneQwenDirs(root);
   if (touched) await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   return steps;
 }
@@ -236,17 +234,14 @@ export async function upgradeSkills(root: string): Promise<SkillUpgradeStep[]> {
     else if (s.state === 'missing') { await installOne(root, skill, src, manifest); steps.push({ name, action: 'installed', machine }); }
     else if (s.state === 'upgradable') { await installOne(root, skill, src, manifest); steps.push({ name, action: 'upgraded', basedOn: s.basedOn, machine }); }
     else steps.push({ name, action: 'kept-custom', basedOn: s.basedOn, machine });
-    await retireQwenLink(skillDirs(root, name).qwen);
   }
   for (const name of RETIRED_SKILLS) {
     if (!manifest.skills?.[name]) continue;
-    const { claude, qwen } = skillDirs(root, name);
+    const { claude } = skillDirs(root, name);
     await rm(claude, { recursive: true, force: true });
-    await retireQwenLink(qwen);
     delete manifest.skills[name];
     steps.push({ name, action: 'retired', machine: true });
   }
-  await pruneQwenDirs(root);
   await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   return steps;
 }

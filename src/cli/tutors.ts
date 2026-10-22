@@ -9,7 +9,7 @@
  *   untracked  没有记录(旧workspace、或家长手写的老师)→ 当 custom 对待
  */
 import { createHash } from 'node:crypto';
-import { lstat, mkdir, readFile, rename, rmdir, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { PACKAGE_VERSION, shippedAgents, tutorTemplate, writeSchemaFile, type ShippedAgent, type TutorTemplateInput } from './skeleton.ts';
 import { AGENT_NAME_RE } from '../schema/index.ts';
@@ -59,9 +59,9 @@ export interface TutorStatus {
   basedOn?: string;
 }
 
-/** 老师文件在 workspace 里的位置:.claude/agents/<name>.md 是真相;qwen = 退役的 .qwen/agents/<name>.md 链的位置(老 workspace 里删它用) */
-export function tutorFiles(root: string, name: string): { claude: string; qwen: string } {
-  return { claude: join(root, '.claude', 'agents', `${name}.md`), qwen: join(root, '.qwen', 'agents', `${name}.md`) };
+/** 老师文件在 workspace 里的位置:.claude/agents/<name>.md 是真相(别的 CLI 由应用读正文递进系统提示) */
+export function tutorFiles(root: string, name: string): { claude: string } {
+  return { claude: join(root, '.claude', 'agents', `${name}.md`) };
 }
 
 async function readState(root: string, a: ShippedAgent, manifest: ShippedManifest): Promise<TutorStatus> {
@@ -99,21 +99,6 @@ async function installOne(root: string, a: ShippedAgent, manifest: ShippedManife
   manifest.tutors[a.name] = { hash: sha256(text), version: PACKAGE_VERSION };
 }
 
-/**
- * `.qwen/agents/`、`.qwen/skills/` 两套相对链退役(《agent层设计.md》拍板 15):qwen 的老师正文与板书写法由 {systemBody} 递,技能工具不给,链没人读了。
- * 是链就删(指向 .claude/ 下同名的那份,家长的真身不动);家长手放的实体文件留着。删了返回 true
- */
-export async function retireQwenLink(link: string): Promise<boolean> {
-  if (!(await lstat(link).catch(() => null))?.isSymbolicLink()) return false;
-  await unlink(link);
-  return true;
-}
-
-/** 链退役后空下来的 .qwen/agents/、.qwen/skills/、.qwen/ 删掉(不空的留着:家长自己放的东西) */
-export async function pruneQwenDirs(root: string): Promise<void> {
-  for (const d of [join(root, '.qwen', 'agents'), join(root, '.qwen', 'skills'), join(root, '.qwen')]) await rmdir(d).catch(() => {});
-}
-
 export interface InstallStep {
   item: string;
   action: 'created' | 'exists' | 'kept' | 'replaced' | 'removed';
@@ -122,7 +107,7 @@ export interface InstallStep {
 
 /**
  * init 用。出厂的:缺的拷,旧的包内链换成拷贝,家长的文件不动;
- * cotutor.json 里的每一位(含家长自己加的):补老师目录 agents/<name>/、删退役的 .qwen 链——「加老师 = 加文件 + 目录,没有注册表」,
+ * cotutor.json 里的每一位(含家长自己加的):补老师目录 agents/<name>/——「加老师 = 加文件 + 目录,没有注册表」,
  * 自己加的老师文件不在这里生成(cotutor add 生成模板),缺了由 doctor 点名。
  */
 export async function installTutors(root: string, configured: string[] = []): Promise<InstallStep[]> {
@@ -143,11 +128,9 @@ export async function installTutors(root: string, configured: string[] = []): Pr
     } else {
       steps.push({ item, action: 'exists', note: s.state === 'custom' ? `自定义(基于 ${s.basedOn})` : s.state === 'upgradable' ? `可升级(cotutor upgrade)` : undefined });
     }
-    if (await retireQwenLink(tutorFiles(root, a.name).qwen)) steps.push({ item: `.qwen/agents/${basename(a.file)}`, action: 'removed', note: '链退役(qwen 由 {systemBody} 拿老师正文)' });
   }
   for (const name of configured.filter((n) => !shipped.some((a) => a.name === n))) {
-    const { claude, qwen } = tutorFiles(root, name);
-    if (await retireQwenLink(qwen)) steps.push({ item: `.qwen/agents/${name}.md`, action: 'removed', note: '链退役(qwen 由 {systemBody} 拿老师正文)' });
+    const { claude } = tutorFiles(root, name);
     if (!(await lstat(claude).catch(() => null))) steps.push({ item: `.claude/agents/${name}.md`, action: 'kept', note: `缺:cotutor.json 里有 ${name},文件还没写;cotutor add ${name} 出模板,或自己写(frontmatter name: ${name})` });
   }
   for (const name of [...new Set([...shipped.map((a) => a.name), ...configured])]) {
@@ -160,7 +143,6 @@ export async function installTutors(root: string, configured: string[] = []): Pr
     await writeFile(join(home, '.gitkeep'), '');
     steps.push({ item: `agents/${name}/`, action: 'created' });
   }
-  await pruneQwenDirs(root);
   if (touched || !(await lstat(join(root, SHIPPED_FILE)).catch(() => null))) await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   return steps;
 }
@@ -245,9 +227,7 @@ export async function upgradeTutors(root: string, opts: { force?: string[] } = {
       const shipped = await readFile(a.file, 'utf8');
       steps.push({ name: a.name, action: 'kept-custom', basedOn: s.basedOn, diff: lineDiff(mine, shipped) });
     }
-    await retireQwenLink(tutorFiles(root, a.name).qwen);
   }
-  await pruneQwenDirs(root);
   await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   await writeSchemaFile(root);
   return steps;
@@ -285,8 +265,7 @@ export async function writeTutorFile(root: string, name: string, text: string): 
 /** 删自家加的老师文件:改名成 .removed-<时间>(不真删;记忆目录与对话不动);出厂的不让删,用开关 */
 export async function removeTutorFile(root: string, name: string): Promise<{ moved: string | null }> {
   if ((await shippedAgents()).some((a) => a.name === name)) throw new UsageError(`${name} 是出厂老师,不删文件;不想用就在老师团页关掉`);
-  const { claude, qwen } = tutorFiles(root, name);
-  await unlink(qwen).catch(() => {});
+  const { claude } = tutorFiles(root, name);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const moved = `${claude}.removed-${stamp}`;
   try {

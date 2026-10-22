@@ -48,7 +48,6 @@ export interface ConversationFiles {
   /** 这一轮的事件流 <date>.<job>.events.jsonl(lib/events.ts;控制台与时间线的唯一来源) */
   events: (job: string) => string;
   /** 孩子按住说话的原声 <date>.<job>.voice.<ext>(《家长录像设计.md》拍板 4;删话题时按 <date>.<job>.* 一起删) */
-  voice: (job: string, ext: string) => string;
   /** 录像的实录 <date>.<job>.play.jsonl(《家长录像设计.md》§4):孩子端报上来的记在话题当时的末条 job 上,卡的每次存记在卡所在那轮;删话题一起删 */
   play: (job: string) => string;
   /** 板书讲稿第 n 句的配音(n 从 1 起) */
@@ -74,7 +73,6 @@ export function conversationFiles(conversationsDir: string, tutor: string, date:
     err: (job) => `${base}.${job}.err.log`,
     run: (job) => `${base}.${job}.run.json`,
     events: (job) => `${base}.${job}.events.jsonl`,
-    voice: (job, ext) => `${base}.${job}.voice.${ext}`,
     play: (job) => `${base}.${job}.play.jsonl`,
     lineAudio: (job, n) => `${base}.${job}.${n}.mp3`,
     mouth: (job, ext) => `${base}.${job}.mouth.${ext}`,

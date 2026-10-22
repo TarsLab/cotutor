@@ -104,9 +104,8 @@ export interface KidMessage {
   photos?: string[];
   /** 这条是看完小课堂后的第一条:哪份课包、课名、画过的几处(节前的小课堂卡与画的卡从这里画);again = 再看一遍又画的那条,节前只画画的卡 */
   lecture?: KidLecture;
-  /** 孩子的话怎么上板(《工作流程.md》§二「一个话题一节」):交卡 / 老数据的「继续」不写;按住说话的去口头禅;首页按钮发的(正文就是按钮上的字)不写,从按钮进来后孩子自己说的照写 */
-  action?: 'submit' | 'continue';
-  spoken?: true;
+  /** 孩子的话怎么上板(《工作流程.md》§二「一个话题一节」):交卡不写;首页按钮发的(正文就是按钮上的字)不写,从按钮进来后孩子自己说的照写 */
+  action?: 'submit';
   fromHome?: true;
   /** 这一轮是实时的(《wip/实时老师设想.md》):讲稿不配音、嘴照念;不出卡的一轮板上留讲稿的字(拍板 8),还在跑时有句就出节 */
   live?: true;
@@ -142,7 +141,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     if (question === null && reply === null && !pending) continue;
     const withState = cardsWithState(m, states, assets, submitted);
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
-    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.voice ? { spoken: true as const } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}), ...(m.live ? { live: true as const } : {}) });
+    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}), ...(m.live ? { live: true as const } : {}) });
   }
   return out;
 }
@@ -164,8 +163,6 @@ export interface ParentMessage extends KidMessage {
   error?: string;
   bookkeep?: ConversationMessage['bookkeep'];
   tidy?: true;
-  /** 按住说话的原声(只在家长端;孩子端条目没有这个字段) */
-  voice?: ConversationMessage['voice'];
   /** 家长端多看到看的情况:看了多久、看完没、停过几次 */
   lectureWatch?: Pick<NonNullable<ConversationMessage['lecture']>, 'watchedMs' | 'finished' | 'pauses'>;
 }
@@ -192,7 +189,6 @@ export function parentConversation(index: { messages: readonly ConversationMessa
       ...(m.result === 'error' ? { error: m.error ?? '没成' } : {}),
       ...(m.bookkeep ? { bookkeep: m.bookkeep } : {}),
       ...(m.tidy ? { tidy: true as const } : {}),
-      ...(m.voice ? { voice: m.voice } : {}),
       ...(m.lecture ? { lecture: lectureView(m.lecture, true), lectureWatch: { watchedMs: m.lecture.watchedMs, finished: m.lecture.finished, pauses: m.lecture.pauses } } : {}),
     });
   }

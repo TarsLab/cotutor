@@ -162,17 +162,17 @@ try {
     // 看录像(《家长录像设计.md》):一个话题的轨道 + 这个话题的家长条目;老轮没有 timing 就按 at(分钟)放,事件的 t 从那一刻起算
     const { conversationFiles } = await import('../src/lib/conversation.ts');
     writeFileSync(conversationFiles(ctx.ws.dirs.conversations, 'math-tutor', today).events('1620-1'), `${JSON.stringify({ t: 5000, lane: 'ready', kind: 'all', cards: 1, lines: 2 })}\n`);
-    type Rl = { thread: string; reel: { tracks: { job: string; at: number }[]; marks: { kind: string; label: string }[]; precise: boolean }; messages: PMsg[] };
+    type Rl = { thread: string; reel: { tracks: { job: string; at: number }[]; says: unknown[]; marks: { kind: string; label: string }[] }; messages: PMsg[] };
     const rl = await get('/api/conversations/math-tutor/today/threads/1620-1/reel');
     const rj = rl.json as Rl;
-    check('录像接口:两节(孩子问的、家长补的)、节在 ready all 那一刻出来、两次开口、推算;条目只有这个话题的、答案不剥', rl.status === 200 && rj.thread === '1620-1' && rj.reel.tracks.map((t) => t.job).join() === '1620-1,1625-2' && rj.reel.tracks[0].at - Date.parse(`${today}T16:20`) === 5000 && rj.reel.marks.filter((m) => m.kind === 'said').map((m) => m.label).join() === '7 减 9 怎么算,换个说法' && !rj.reel.precise && rj.messages.length === 2 && JSON.stringify(rj.messages[0].section?.cards[0].props.answer) === '[0]', JSON.stringify(rj));
+    check('录像接口:两节(孩子问的、家长补的)、节在 ready all 那一刻整节铺上、不念、两次开口;条目只有这个话题的、答案不剥', rl.status === 200 && rj.thread === '1620-1' && rj.reel.tracks.map((t) => t.job).join() === '1620-1,1625-2' && rj.reel.tracks[0].at - Date.parse(`${today}T16:20`) === 5000 && rj.reel.marks.filter((m) => m.kind === 'said').map((m) => m.label).join() === '7 减 9 怎么算,换个说法' && rj.reel.says.length === 0 && rj.messages.length === 2 && JSON.stringify(rj.messages[0].section?.cards[0].props.answer) === '[0]', JSON.stringify(rj));
     // 孩子的屏幕照孩子端条目画(拍板 6):答案剥掉、孩子的话带着;老师的脸;设备没记就是 null
     const rk = rl.json as Rl & { kid: { job: string; question: string | null; section?: { cards: { props: Record<string, unknown> }[] } }[]; device: string | null; face: { name: string; display: string } };
     check('录像接口:孩子端条目(答案剥了、只有这个话题的)、老师的脸、设备', rk.kid.length === 2 && rk.kid.map((m) => m.job).join() === '1620-1,1625-2' && rk.kid[0].section?.cards[0].props.answer === undefined && rk.kid[0].question === '7 减 9 怎么算' && rk.face.name === 'math-tutor' && typeof rk.face.display === 'string' && 'device' in rk, JSON.stringify({ kid: rk.kid.map((m) => [m.job, m.question, m.section?.cards[0]?.props]), face: rk.face, device: rk.device }));
     check('录像接口:今天的话题标 live(录像停在最后时跟着长,拍板 16)', (rl.json as Rl & { live: boolean }).live === true);
     const re = (await get('/api/conversations/math-tutor/today/threads/1630-3/reel')).json as Rl;
     check('录像接口:出错的话题也有录像(开口 + 没成)', re.reel.tracks.length === 0 && re.reel.marks.map((m) => m.kind).join() === 'said,error', JSON.stringify(re));
-    // 按住说话连着没发出去(拍板 10):老话题没有 hold 实录,从 voice-diag 推;老的行不带话题,按那一刻最近开始的话题归(16:21 → 1620-1,16:31 → 1630-3)
+    // voice-diag 只是诊断日志:2026-10-22 起不再拿它补没有 hold 实录的老话题(《产品规划.md》拍板 30,老话题挪出了 workspace)
     const diagRow = (hm: string, ev: unknown[]) => JSON.stringify({ at: new Date(`${today}T${hm}`).toISOString(), where: 'bar', peak: 0, ev });
     mkdirSync(join(root, '.cotutor'), { recursive: true });
     writeFileSync(join(root, '.cotutor', 'voice-diag.jsonl'), [
@@ -182,10 +182,10 @@ try {
     ].join('\n') + '\n');
     type RlH = { reel: { holds: { result: string; diag?: true }[]; misses: { n: number }[]; marks: { kind: string }[] } };
     const rh = (await get('/api/conversations/math-tutor/today/threads/1620-1/reel')).json as RlH;
-    check('录像接口:老话题从 voice-diag 推没发出去的那几次(话筒没开的、没声音的、上滑取消的),出了字的那次不进;连着 3 次成一串', rh.reel.holds.map((x) => x.result).join() === 'unclear,unclear,cancel' && rh.reel.holds.every((x) => x.diag) && rh.reel.misses.length === 1 && rh.reel.misses[0].n === 3 && rh.reel.marks.filter((m) => m.kind === 'miss').length === 3, JSON.stringify(rh.reel.holds));
+    check('录像接口:voice-diag 里的行不再补成按住说话', rh.reel.holds.length === 0 && rh.reel.misses.length === 0 && !rh.reel.marks.some((m) => m.kind === 'miss'), JSON.stringify(rh.reel.holds));
     const ov2 = (await get('/api/overview/today')).json as { tutors: { name: string; threads: { thread: string; misses?: number }[] }[] };
     const mt2 = ov2.tutors.find((t) => t.name === 'math-tutor')!;
-    check('清单:那个话题上「连着 3 次没发出去」;另一个话题只有一次,不标', mt2.threads.find((t) => t.thread === '1620-1')?.misses === 3 && mt2.threads.find((t) => t.thread === '1630-3')?.misses === undefined, JSON.stringify(mt2.threads));
+    check('清单:没有 hold 实录就不标「连着没发出去」', mt2.threads.every((t) => t.misses === undefined), JSON.stringify(mt2.threads));
     check('录像接口:没这个话题 / 没这位老师 404,未来的日期 400', (await get('/api/conversations/math-tutor/today/threads/9999-9/reel')).status === 404 && (await get('/api/conversations/nobody/today/threads/1620-1/reel')).status === 404 && (await get('/api/conversations/math-tutor/2099-01-01/threads/1620-1/reel')).status === 400);
   }
   check('404 / 405', (await get('/nope')).status === 404 && (await route('POST', '/api/health', ctx)).status === 200 && (await route('POST', '/api/workspace', ctx)).status === 405 && (await route('PUT', '/api/config', ctx)).status === 405);

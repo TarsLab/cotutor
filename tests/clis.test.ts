@@ -1,5 +1,5 @@
 /** CLI 适配器(《agent层设计.md》§6):stream-json 读成统一事件、按运行时找适配器、填模板(含 {toolArgs})、工具类别、环境。 */
-import { ADAPTERS, STREAM_JSON, adapterFor, controlsTools, factoryRuntimes, fillArgs, isRetiredRuntime, parserForRuntime, processEnv, runtimeCli, toolKind, unexpectedTools, withoutNested } from '../src/clis/index.ts';
+import { ADAPTERS, STREAM_JSON, adapterFor, controlsTools, factoryRuntimes, fillArgs, parserForRuntime, processEnv, runtimeCli, toolKind, unexpectedTools, withoutNested } from '../src/clis/index.ts';
 import { qwen } from '../src/clis/qwen.ts';
 import { parseStreamJson } from '../src/clis/stream-json.ts';
 import { check, done } from './_check.ts';
@@ -57,8 +57,6 @@ const j = (o: unknown): string => JSON.stringify(o);
   check('qwen:effort low 不带工具不想,带工具(照片、记账)至少想一点', qwen.planEnv!({ root: '/ws', effort: 'low', tools: 'off' }).QWEN_CODE_SYSTEM_SETTINGS_PATH.endsWith('effort-none.json') && qwen.planEnv!({ root: '/ws', effort: 'low', tools: 'on' }).QWEN_CODE_SYSTEM_SETTINGS_PATH.endsWith('effort-low.json'));
   check('qwen 只读那轮把可读目录划进来', j(fillArgs(qwen, ['{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'on', readDirs: ['/ws', '/vault'] }).slice(4)) === j(['--include-directories', '/ws', '--include-directories', '/vault']) && !fillArgs(qwen, ['{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'off', readDirs: ['/ws'] }).includes('--include-directories'));
   check('qwen 体检:0.25 以下要升级', !qwen.check!({ version: '0.21.13', env: { DASHSCOPE_API_KEY: 'k' } })[0].ok && qwen.check!({ version: '0.25.0', env: { DASHSCOPE_API_KEY: 'k' } }).every((c) => c.ok));
-  const old = qwen.retired!.qwen[0];
-  check('旧出厂模板认得出;改过一个词就不算', isRetiredRuntime('qwen', old) && !isRetiredRuntime('qwen', { run: [...old.run, '-m', 'x'], resume: old.resume }) && !isRetiredRuntime('claude', old));
 }
 
 done();

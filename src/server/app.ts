@@ -16,11 +16,10 @@ import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
 import { conversationFiles, currentThread, lastJobOf, localDate, threads, weekOf } from '../lib/conversation.ts';
 import { kidConversation, kidThreads, submittedCards, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../lib/kid-view.ts';
 import { parseEvents, type RunEvent } from '../lib/events.ts';
-import { mp3DurationMs } from '../lib/mp3.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../lib/tutor-color.ts';
 import { boardMarkOf, type BoardMarkId } from './board-mark.ts';
 import { audioData } from '../lib/audio-data.ts';
-import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall, type ReelDiag } from '../lib/reel.ts';
+import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../lib/reel.ts';
 import type { CallReel } from '../live/recorder.ts';
 import { isRealtimeVoice, REALTIME_VOICES } from '../live/voices.ts';
 import { previewVoice } from '../live/preview.ts';
@@ -265,7 +264,7 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
   if (!isObj(body) || typeof body.text !== 'string') return { error: { status: 400, json: { error: 'bad_request' } } };
   const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
   if (focus && !focus.success) return { error: { status: 400, json: { error: 'bad_request' } } };
-  const action = body.action === undefined ? undefined : body.action === 'continue' || body.action === 'submit' ? body.action : null;
+  const action = body.action === undefined ? undefined : body.action === 'submit' ? ('submit' as const) : null;
   if (action === null) return { error: { status: 400, json: { error: 'bad_request' } } };
   const photos = await photosOf(ws, body.photos);
   if (photos === null) return { error: { status: 400, json: { error: 'bad_request' } } };
@@ -341,7 +340,7 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
     talk = t.id;
   }
   if (!text.trim() && !action && !photos?.length) return { error: { status: 400, json: { error: 'bad_request' } } };
-  return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
+  return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 
 /** 家长板书页的一天(《家长板书页设计.md》§4.1):形状同 KidDay;答案不剥,系统发的也在 */
@@ -409,18 +408,8 @@ async function readPlays(ws: Workspace, tutor: string, date: string, jobs?: Read
   return out.sort((a, b) => a.at - b.at);
 }
 
-/** mp3 时长(毫秒)按绝对路径缓存:配好的配音不会再变;还没落盘、读不出的不缓存,下次再读 */
-const mp3Ms = new Map<string, number>();
-async function audioMs(file: string): Promise<number | null> {
-  const hit = mp3Ms.get(file);
-  if (hit !== undefined) return hit;
-  const ms = await readFile(file).then((b) => mp3DurationMs(b), () => null);
-  if (ms !== null) mp3Ms.set(file, ms);
-  return ms;
-}
-
 /**
- * 家长端看录像(《家长录像设计.md》):这个话题的轨道(lib/reel.ts 推算)+ 这个话题的家长条目(录像栏的说明用)+ 孩子端条目(孩子的屏幕照它画,
+ * 家长端看录像(《家长录像设计.md》):这个话题的轨道(lib/reel.ts 排)+ 这个话题的家长条目(录像栏的说明用)+ 孩子端条目(孩子的屏幕照它画,
  * 和 /api/kid 一样剥了答案,拍板 6)+ 孩子那台设备(屏幕多大)与老师的脸(孩子屏幕左上角)。话题一轮都没有 → null;孩子没开过口的也有(只有老师一轨,拍板 17)
  */
 export interface ParentReel {
@@ -444,25 +433,17 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const mine = index.messages.filter((_m, i) => ths[i] === thread);
   if (!mine.length) return null;
   const files = conversationFiles(ctx.ws.dirs.conversations, tutor, date);
-  const dir = join(ctx.ws.dirs.conversations, tutor);
   const events: Record<string, RunEvent[]> = {};
-  const durations: Record<string, number> = {};
   for (const m of mine) {
     const text = await readFile(files.events(m.job), 'utf8').catch(() => null);
     if (text !== null) events[m.job] = parseEvents(text);
-    for (const l of m.section?.lines ?? []) {
-      if (!l.audio || durations[l.audio] !== undefined) continue;
-      const ms = await audioMs(join(dir, l.audio));
-      if (ms !== null) durations[l.audio] = ms;
-    }
   }
   const { states } = await scanCards(ctx.ws, tutor, date);
   const jobs = new Set(mine.map((m) => m.job));
   const cards = Object.fromEntries(Object.entries(states).filter(([job]) => jobs.has(job)));
   const plays = await readPlays(ctx.ws, tutor, date, jobs);
-  const diag = plays.some((r) => r.k === 'hold') ? [] : (await diagOfDay(ctx, date)).filter((x) => x.tutor === tutor && x.thread === thread).map((x) => x.d);
   const calls = mine.some((m) => m.live) ? await liveCalls(ctx, tutor, date, jobs) : [];
-  const reel = buildReel({ messages: mine, events, cards, durations, tutor, now: ctx.now().getTime(), plays, diag, calls });
+  const reel = buildReel({ messages: mine, events, cards, tutor, now: ctx.now().getTime(), plays, calls });
   if (!reel) return null;
   const day = await parentDay(ctx, tutor, date);
   const kid = await kidDay(ctx, tutor, date);
@@ -489,47 +470,6 @@ async function liveCalls(ctx: AppContext, tutor: string, date: string, jobs: Set
   return out;
 }
 
-/**
- * 老话题的按住说话(还没有 hold 实录,《家长录像设计.md》拍板 10):.cotutor/voice-diag.jsonl 里这一天输入条上的那几次,各归到一个话题。
- * 新的行带 tutor / thread;老的按「那一刻最近开始的话题」算(各位老师一起比:孩子同一时刻只在一个话题里)。结果照孩子当时看到的:
- * 出了字 = 发了;abort() = 上滑取消;sr-dead = 识别一起就断;其余 = 没听清
- */
-async function diagOfDay(ctx: AppContext, date: string): Promise<{ tutor: string; thread: string; d: ReelDiag }[]> {
-  const text = await readFile(join(ctx.ws.root, '.cotutor', 'voice-diag.jsonl'), 'utf8').catch(() => '');
-  if (!text) return [];
-  const starts: { tutor: string; thread: string; at: number }[] = [];
-  for (const name of Object.keys(ctx.ws.config.tutors)) {
-    const idx = await readIndex(ctx.ws, name, date).catch(() => null);
-    if (!idx) continue;
-    const ths = threads(idx.messages);
-    const seen = new Set<string>();
-    idx.messages.forEach((m, i) => {
-      if (seen.has(ths[i])) return;
-      seen.add(ths[i]);
-      const at = Date.parse(m.timing?.startedAt ?? '') || Date.parse(m.at);
-      if (Number.isFinite(at)) starts.push({ tutor: name, thread: ths[i], at });
-    });
-  }
-  starts.sort((a, b) => b.at - a.at);
-  const out: { tutor: string; thread: string; d: ReelDiag }[] = [];
-  for (const line of text.split('\n')) {
-    let row: { at?: unknown; where?: unknown; tutor?: unknown; thread?: unknown; peak?: unknown; ev?: unknown };
-    try { row = JSON.parse(line) as typeof row; } catch { continue; }
-    if (row.where !== 'bar' || typeof row.at !== 'string' || !Array.isArray(row.ev)) continue;
-    const at = Date.parse(row.at);
-    if (!Number.isFinite(at) || localDate(new Date(at)) !== date) continue;
-    const owner = typeof row.tutor === 'string' && typeof row.thread === 'string' ? { tutor: row.tutor, thread: row.thread } : starts.find((x) => x.at <= at);
-    if (!owner) continue;
-    const ev = row.ev.filter((e): e is [string, number, unknown?] => Array.isArray(e) && typeof e[0] === 'string' && typeof e[1] === 'number');
-    const end = ev.find((e) => e[0] === 'end');
-    const ms = end ? end[1] : Math.max(0, ...ev.map((e) => e[1]));
-    const len = end && typeof end[2] === 'number' ? end[2] : 0;
-    const audio = ev.find((e) => e[0] === 'audiostart');
-    const result = len > 0 ? 'sent' : ev.some((e) => e[0] === 'abort()') ? 'cancel' : ev.some((e) => e[0] === 'sr-dead') ? 'dead' : 'unclear';
-    out.push({ tutor: owner.tutor, thread: owner.thread, d: { at, ms, audioMs: audio ? audio[1] : null, result, peak: typeof row.peak === 'number' ? row.peak : -1 } });
-  }
-  return out;
-}
 
 /** 家长板书页的清单(《家长板书页设计.md》§2.2):这一天每位有脸的老师几轮、几个话题、停在哪 */
 export interface OverviewThread {
@@ -626,14 +566,13 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
         th.stoppedAt = last?.ask ? 'ask' : null;
       }
     }
-    // 按住说话连着没发出去(拍板 10):实录里的 hold,没有的老话题用 voice-diag;孩子发成的一句(开口、打字发出去)把一串断开
-    const diag = (await diagOfDay(ctx, date)).filter((x) => x.tutor === t.name);
+    // 按住说话连着没发出去(拍板 10):实录里的 hold;孩子发成的一句(开口、打字发出去)把一串断开
     for (const th of by.values()) {
       const mine = index.messages.filter((_m, i) => ths[i] === th.thread);
       const plays = await readPlays(ctx.ws, t.name, date, new Set(mine.map((m) => m.job)));
-      const holds = reelHolds(plays, diag.filter((x) => x.thread === th.thread).map((x) => x.d));
+      const holds = reelHolds(plays);
       if (!holds.length) continue;
-      const sent = [...mine.filter((m) => m.from === 'kid').map((m) => (Date.parse(m.timing?.startedAt ?? '') || Date.parse(m.at)) - (m.voice ? m.voice.seconds * 1000 : 0)), ...plays.filter((r) => r.k === 'type' && r.e === 'send').map((r) => r.at)];
+      const sent = [...mine.filter((m) => m.from === 'kid').map((m) => (Date.parse(m.timing?.startedAt ?? '') || Date.parse(m.at))), ...plays.filter((r) => r.k === 'type' && r.e === 'send').map((r) => r.at)];
       const n = Math.max(0, ...reelMissRuns(holds, sent).map((x) => x.n));
       if (n) th.misses = n;
     }
@@ -731,13 +670,6 @@ async function photosOf(ws: Workspace, v: unknown): Promise<string[] | null | un
   if (!Array.isArray(v) || v.length > 9 || !v.every((p): p is string => typeof p === 'string')) return null;
   for (const p of v) if (!(await capturePathOk(ws, p))) return null;
   return v;
-}
-
-/** 按住说话的原声(《家长录像设计.md》拍板 4):{audio: data:audio/…;base64,…, seconds};形状不对、太大就当没带——不回 400,认出的字照发 */
-function voiceOf(v: unknown): { data: Buffer; ext: string; seconds: number } | undefined {
-  if (!isObj(v) || typeof v.seconds !== 'number' || !(v.seconds > 0) || v.seconds > 600) return undefined;
-  const a = audioData(v.audio);
-  return a ? { ...a, seconds: v.seconds } : undefined;
 }
 
 /** 一处画里一笔最多几个点(播放器抽到 MARK_STROKE_POINTS,这里松一点);一条消息最多几处、一处几笔几个点见 src/lib/lecture.ts(《小课堂设计.md》§四) */
@@ -931,7 +863,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     // 政策文件补缺(与 cotutor upgrade --config 同一条路):只加缺的出厂件,家长写过的值不动
     if (p === '/api/config/migrate' && method === 'POST') {
-      const r = await upgradeConfig(ws.root, { renames: false });
+      const r = await upgradeConfig(ws.root);
       await ctx.reload();
       return { status: 200, json: { ok: true, gaps: r.gaps, applied: r.applied, installed: r.installed } };
     }
@@ -1008,7 +940,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           if (!playRecordOk(x) || x.k === 'card') continue;
           const at = Math.round(x.at + skew);
           if (at > now + 60_000 || at < now - 86_400_000) continue;
-          if ((x.k === 'play' && x.job !== null && !jobs.has(x.job)) || ((x.k === 'stage' || x.k === 'scroll') && !jobs.has(x.job))) continue;
+          if ((x.k === 'stage' || x.k === 'scroll') && !jobs.has(x.job)) continue;
           rows.push(JSON.stringify({ ...x, at }));
         }
         if (rows.length) await appendFile(conversationFiles(ws.dirs.conversations, tutor, date).play(last), `${rows.join('\n')}\n`).catch(() => {});
@@ -1278,7 +1210,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         // 工作台 /dev 不带 device,缺省当平板横屏
         const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
         if (device && !device.success) return { status: 400, json: { error: 'bad_request', message: 'device 只能是 phone / tablet' } };
-        const action = body.action === undefined ? undefined : body.action === 'continue' || body.action === 'submit' ? body.action : null;
+        const action = body.action === undefined ? undefined : body.action === 'submit' ? ('submit' as const) : null;
         if (action === null) return { status: 400, json: { error: 'bad_request', message: 'action 只能是 continue / submit' } };
         if (!body.text.trim() && !action && !photos?.length) return { status: 400, json: { error: 'bad_request', message: '要说点什么' } };
         const started = await ctx.runner.send(tutor, {
@@ -1291,7 +1223,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           thread: typeof body.thread === 'string' ? body.thread : undefined,
           photos,
           device: device?.data,
-          voice: voiceOf(body.voice),
         });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread, runtime: started.plan.runtime, resume: started.plan.resume } };
       }

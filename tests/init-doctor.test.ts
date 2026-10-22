@@ -1,5 +1,5 @@
 /** init 幂等补缺、老师文件是拷贝;doctor 把缺文件、坏配置、坏账本摆到明面。 */
-import { statSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { statSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -26,17 +26,6 @@ try {
   check('老师目录齐', ['math-tutor', 'chinese-tutor', 'english-tutor', 'koubo-tutor'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
   const link = join(ws, '.claude', 'agents', 'math-tutor.md');
   check('老师文件是拷贝,内容同本包', !lstatSync(link).isSymbolicLink() && readFileSync(link, 'utf8') === readFileSync(join(PACKAGE_AGENTS_DIR, 'math-tutor.md'), 'utf8'));
-  {
-    // 老 workspace 的 .qwen 两套链(2026-10-09 退役,《agent层设计.md》拍板 15):再 init 一次,是链就删,家长手放的实体文件留着,空了的目录删掉
-    mkdirSync(join(ws, '.qwen', 'agents'), { recursive: true });
-    mkdirSync(join(ws, '.qwen', 'skills'), { recursive: true });
-    symlinkSync('../../.claude/agents/chinese-tutor.md', join(ws, '.qwen', 'agents', 'chinese-tutor.md'));
-    symlinkSync('../../.claude/skills/cotutor-board', join(ws, '.qwen', 'skills', 'cotutor-board'));
-    writeFileSync(join(ws, '.qwen', 'agents', 'mine.md'), '家长自己的');
-    const again = await initWorkspace({ slug: 'ming', name: '小明' });
-    check('再 init:.qwen 的旧链删掉(报 removed),家长的实体文件留着,空的 skills/ 删掉', again.steps.some((x) => x.item === '.qwen/agents/chinese-tutor.md' && x.action === 'removed') && !lstatSync(join(ws, '.qwen', 'agents', 'chinese-tutor.md'), { throwIfNoEntry: false }) && !existsSync(join(ws, '.qwen', 'skills')) && readFileSync(join(ws, '.qwen', 'agents', 'mine.md'), 'utf8') === '家长自己的');
-    rmSync(join(ws, '.qwen'), { recursive: true, force: true });
-  }
   check('出厂 hash 记下', (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { tutors: Record<string, { hash: string }> }).tutors['math-tutor'].hash.startsWith('sha256:'));
   check('产物账本空文件在', existsSync(join(ws, 'ledger', 'artifacts.jsonl')));
   const skillMd = readFileSync(join(ws, '.claude', 'skills', 'cotutor-board', 'SKILL.md'), 'utf8');

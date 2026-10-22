@@ -74,20 +74,12 @@ check('卡的状态文件与 id', f.cardsDir('1620-1') === '/ws/conversations/ma
   const parsed = ConversationIndexSchema.safeParse({ tutor: 'x', date: '2026-09-08', session: { id: 's', runtime: 'claude' }, messages: [] });
   check('旧索引没有 sessions 也过契约(缺省空)', parsed.success && Object.keys(parsed.data.sessions).length === 0);
 }
-// 旧索引(2026-10-05 前):家长端开的备课话题、试用、交给孩子的课都还在盘上。读时 from: parent 当孩子,备课那几个字段丢掉,索引照样过契约
+// 2026-10-22 起不认老数据(《产品规划.md》拍板 30,板书时代的话题挪出了 workspace):from 只认 kid / system;删话题要用的 memoryLines、diaryBlock 照存
 {
-  const old = ConversationIndexSchema.parse({
-    tutor: 'x', date: '2026-10-04',
-    messages: [
-      { job: '1900-1', thread: '1900-1', at: 'x', from: 'parent', text: '课文件 平均分', prepThread: true, tryThread: true, lessonSection: 0, memoryDraft: ['想记的'], result: 'ok', artifacts: [] },
-      { job: '1901-2', thread: '1900-1', at: 'x', from: 'kid', text: '孩子说的', lessonSaid: [{ section: 1, text: '嗯' }], result: 'ok', artifacts: [], memoryLines: [{ before: null, after: '- 2026-10-04 爱抢答' }], diaryBlock: '## 数学 · 平均分\n' },
-      { job: '1902-3', thread: '1902-3', at: 'x', from: 'parent', text: '工作台发的', result: 'ok', artifacts: [] },
-    ],
-    lessons: { '1900-1': { handedAt: '2026-10-04T10:00:00Z', source: 'lessons/平均分.md' } },
-  });
-  const [a, b, c] = old.messages;
-  check('旧的 from: parent:课文件建的轮读成 system、别的读成 kid;备课、试用、课文件的字段读时丢掉;索引的 lessons 丢掉', a.from === 'system' && c.from === 'kid' && !('prepThread' in a) && !('tryThread' in a) && !('lessonSection' in a) && !('memoryDraft' in a) && !('lessonSaid' in b) && !('lessons' in old), JSON.stringify(old));
-  check('删话题要用的 memoryLines、diaryBlock 照存', b.memoryLines?.[0].after === '- 2026-10-04 爱抢答' && b.memoryLines[0].before === null && b.diaryBlock === '## 数学 · 平均分\n');
+  check('from: parent 不认了', !ConversationIndexSchema.safeParse({ tutor: 'x', date: '2026-10-04', messages: [{ job: '1902-3', thread: '1902-3', at: 'x', from: 'parent', text: '工作台发的', result: 'ok', artifacts: [] }] }).success);
+  const one = ConversationIndexSchema.parse({ tutor: 'x', date: '2026-10-22', messages: [{ job: '1901-2', thread: '1901-2', at: 'x', from: 'kid', text: '孩子说的', result: 'ok', artifacts: [], memoryLines: [{ before: null, after: '- 2026-10-22 爱抢答' }], diaryBlock: '## 数学 · 平均分\n' }] });
+  const b = one.messages[0];
+  check('删话题要用的 memoryLines、diaryBlock 照存', b.memoryLines?.[0].after === '- 2026-10-22 爱抢答' && b.memoryLines[0].before === null && b.diaryBlock === '## 数学 · 平均分\n');
 }
 
 done();

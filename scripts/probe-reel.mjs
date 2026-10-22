@@ -3,7 +3,7 @@
  * 看录像(《家长录像设计.md》,拍板 6:录像 = 孩子的屏幕 + 录像栏)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock,孩子端再发一条「继续」(话题里两轮)→ Chrome 开 /parent,点语文老师的话题 → 顶上「看录像」→
  * 上半是 iframe 里的孩子端(/reel,按 iPad 横屏开、等比缩)、下半是录像栏;孩子屏幕上是孩子端的样子(孩子的话当节头、输入条在、没有旁注);
- * 一开始孩子刚开口:话挂在板尾、占位卡、录像栏写「等老师」;播着往前走;拖到头两节都在;拖回开头又空了;
+ * 一开始孩子刚开口:话挂在板尾、占位卡、录像栏写「等老师」;播着往前走(不是实时的轮写完整节铺上、不念);拖到头两节都在;拖回开头又空了;
  * 关掉「跳过空白」变长;倍速;点进度条上的点跳过去;录像里的弹窗(注入一段实录);退出后原样重开这个话题。iPad 横屏与手机各截一张。
  *
  * 用法:node scripts/probe-reel.mjs [--out <截图目录>] [--keep](留下 mock)
@@ -35,7 +35,7 @@ for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok)
 let browser = null;
 try {
   // 孩子再说一句,话题里两轮
-  await fetch(`${base}/api/kid/conversations/chinese-tutor/messages`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: '', action: 'continue' }) });
+  await fetch(`${base}/api/kid/conversations/chinese-tutor/messages`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: '继续' }) });
   for (let i = 0; i < 40; i++) { const d = await (await fetch(`${base}/api/kid/conversations/chinese-tutor/today`)).json(); if (!d.pending && d.messages.length >= 2) break; await sleep(250); }
 
   browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(tmp, 'chrome')}`, `${base}/parent`], { stdio: 'ignore' });
@@ -58,7 +58,7 @@ try {
   send('Runtime.enable');
   ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text); });
 
-  // 弹窗那段要一段实录:mock 的录像是推算的,孩子屏幕(iframe)一起来就要 /reel,只能在每个文档最早处换掉 fetch;window.top.__patchStage 打开时才换
+  // 弹窗那段要一段实录:mock 的录像没有弹窗的实录,孩子屏幕(iframe)一起来就要 /reel,只能在每个文档最早处换掉 fetch;window.top.__patchStage 打开时才换
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `if (location.pathname === '/reel') { const f0 = window.fetch; window.fetch = async (url, init) => { const r = await f0(url, init); if (!window.top.__patchStage || !String(url).endsWith('/reel')) return r; const d = await r.json(); const R = d.reel; const tr = R.tracks[0]; const e = d.kid.find((m) => m.job === tr.job); const k = e.section.cards.findIndex((c) => c.kind === 'choice'); const X = tr.doneAt + 500; R.stages = [{ job: tr.job, card: k, from: X, to: X + 8000 }]; R.cards = [{ job: tr.job, card: k, at: X + 4000, state: { picked: [1] } }, { job: tr.job, card: k, at: X + 6000, state: { picked: [0] } }]; window.top.__X = X - R.startAt; return new Response(JSON.stringify(d), { status: 200, headers: { 'content-type': 'application/json' } }); }; }` });
   /** 在孩子的屏幕(iframe)里求值:表达式里的 document 是 iframe 的 */
   const kid = (expr) => evaluate(`(() => { const document = window.document.querySelector('#rl-frame').contentDocument; return (${expr}); })()`);
@@ -99,8 +99,8 @@ try {
   // 回到开头,下面照旧从头放
   await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); document.querySelector('#rl-play').click(); })()`);
   await sleep(300);
-  const s0 = await evaluate(`({ board: getComputedStyle(document.querySelector('#wrap')).display, screen: !document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), fw: document.querySelector('#rl-frame').style.width, scale: document.querySelector('#rl-frame').style.transform, max: Number(document.querySelector('#rl-seek').max), marks: [...document.querySelectorAll('#rl-marks i')].map((i) => i.className), cap: document.querySelector('#rl-cap').textContent, clock: document.querySelector('#rl-clock').textContent, sub: document.querySelector('#rl-sub').textContent, tag: !document.querySelector('#rl-tag').hidden, fill: (() => { const a = document.querySelector('#rl-screen').getBoundingClientRect(), b = document.querySelector('#rl-frame').getBoundingClientRect(); return Math.abs(a.width - b.width) < 2 || Math.abs(a.height - b.height) < 2; })() })`);
-  ok('进录像:家长页的老师页收起来,上半是孩子的屏幕(/reel,按 iPad 横屏 1180 宽开、等比缩到铺满),下半录像栏;时间是「放到哪 / 一共多久」、下面小字当时几点;标「推算」', s0.board === 'none' && s0.screen && s0.src.startsWith('/reel?') && s0.fw === '1180px' && /scale\(0\.\d+\)/.test(s0.scale) && s0.tag && /^\d+:\d\d \/ \d+:\d\d$/.test(s0.clock) && /^当时 \d\d:\d\d:\d\d$/.test(s0.sub) && s0.fill, JSON.stringify(s0));
+  const s0 = await evaluate(`({ board: getComputedStyle(document.querySelector('#wrap')).display, screen: !document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), fw: document.querySelector('#rl-frame').style.width, scale: document.querySelector('#rl-frame').style.transform, max: Number(document.querySelector('#rl-seek').max), marks: [...document.querySelectorAll('#rl-marks i')].map((i) => i.className), cap: document.querySelector('#rl-cap').textContent, clock: document.querySelector('#rl-clock').textContent, sub: document.querySelector('#rl-sub').textContent, fill: (() => { const a = document.querySelector('#rl-screen').getBoundingClientRect(), b = document.querySelector('#rl-frame').getBoundingClientRect(); return Math.abs(a.width - b.width) < 2 || Math.abs(a.height - b.height) < 2; })() })`);
+  ok('进录像:家长页的老师页收起来,上半是孩子的屏幕(/reel,按 iPad 横屏 1180 宽开、等比缩到铺满),下半录像栏;时间是「放到哪 / 一共多久」、下面小字当时几点', s0.board === 'none' && s0.screen && s0.src.startsWith('/reel?') && s0.fw === '1180px' && /scale\(0\.\d+\)/.test(s0.scale) && /^\d+:\d\d \/ \d+:\d\d$/.test(s0.clock) && /^当时 \d\d:\d\d:\d\d$/.test(s0.sub) && s0.fill, JSON.stringify(s0));
   ok('进度条上的点:两次开口、停下等孩子', s0.marks.filter((c) => c === 'said').length === 2 && s0.marks.includes('ask') && s0.max > 0, JSON.stringify(s0.marks));
   const k0 = await kid(`({ rlk: document.body.classList.contains('rlk'), pill: !document.querySelector('#pill').hidden, bar: getComputedStyle(document.querySelector('#bar')).pointerEvents, secs: document.querySelectorAll('#board .sec').length, pend: document.querySelectorAll('#board > .sh.said.pend').length, wait: document.querySelectorAll('#board > .wait-card').length, notes: document.querySelectorAll('.notes').length, reelUi: !document.querySelector('#reel').hidden, mo: document.querySelector('#c-mo').hidden, back: document.querySelector('#back-today').hidden })`);
   ok('孩子的屏幕:孩子端的样子——输入条露着(点不动)、没有旁注、没有录像栏、没有「以前的」「回到今天」', k0.rlk && k0.pill && k0.bar === 'none' && k0.notes === 0 && !k0.reelUi && k0.mo && k0.back, JSON.stringify(k0));
@@ -108,7 +108,8 @@ try {
   await until(`(() => { const d = document.querySelector('#rl-frame').contentDocument; return d.querySelectorAll('#board .sec .c:not(.pend)').length > 0; })()`, 60);
   const s1 = await evaluate(`({ v: Number(document.querySelector('#rl-seek').value), cap: document.querySelector('#rl-cap').textContent })`);
   const k1 = await kid(`({ secs: document.querySelectorAll('#board .sec').length, head: (document.querySelector('#board .sec .sh.said .ka-t') || {}).textContent || '', pend: document.querySelectorAll('#board > .sh.said.pend').length, shown: document.querySelectorAll('#board .sec .c:not(.pend)').length, now: document.querySelectorAll('#board .c.now').length, sub: document.querySelector('#sub-text').textContent })`);
-  ok('播着:进度往前走;第一节出来了,节头是孩子的话(挂在板尾的那句收了);念到的卡露出来亮着;字幕是讲稿', s1.v > 3500 && k1.secs === 1 && k1.head.length > 0 && k1.pend === 0 && k1.shown >= 1 && k1.now === 1 && k1.sub.length > 0 && s1.cap === '🔊 老师在念', JSON.stringify({ s1, k1 }));
+  // 不是实时的轮(mock 从接口发的):写完那一刻整节铺上、不念(《产品规划.md》拍板 30)
+  ok('播着:进度往前走;第一节写完整节出来,节头是孩子的话(挂在板尾的那句收了);不念', s1.v > 0 && k1.secs === 1 && k1.head.length > 0 && k1.pend === 0 && k1.shown >= 1 && s1.cap !== '🔊 老师在念', JSON.stringify({ s1, k1 }));
   console.log('  ', await shot('reel-ipad.png'));
 
   // ---- 拖到头 / 拖回开头 ----

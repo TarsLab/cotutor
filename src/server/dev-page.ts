@@ -918,7 +918,7 @@ ${BRAND_CSS}
     el.append(h('div', { class: 'ask from-' + m.from },
       h('span', { class: 'tag' }, FROM[m.from] || m.from),
       q,
-      h('span', { class: 'when' }, m.at.slice(11) + ' · ' + m.job + (m.action === 'continue' ? ' · 继续' : m.action === 'submit' ? ' · 交答案' : '') + (m.via ? ' · 首页「' + m.via.label + '」' : '') + (m.continues ? ' · 接着 ' + m.continues.date + ' ' + m.continues.thread : ''))));
+      h('span', { class: 'when' }, m.at.slice(11) + ' · ' + m.job + (m.action === 'submit' ? ' · 交答案' : '') + (m.via ? ' · 首页「' + m.via.label + '」' : '') + (m.continues ? ' · 接着 ' + m.continues.date + ' ' + m.continues.thread : ''))));
 
     if (m.section && (m.section.cards.length || m.section.lines.length)) el.append(boardEl(m.section));
     else if (m.result === 'ok' && m.kidText) el.append(h('div', { class: 'board' }, h('div', { class: 'line' }, h('span', { class: 'n' }, '1'), h('p', {}, m.kidText))));

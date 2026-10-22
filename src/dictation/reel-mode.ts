@@ -49,7 +49,7 @@ ${DICT_REEL_JS}
   /** 把手:录像栏(reel-dock.ts)只经它说话 */
   var reelApi = {
     speeds: [1, 2, 4],
-    get: function () { if (!RL) return null; return { p: RL.p, total: RL.clock.total, wall: RL.r.startAt + RL.t, playing: RL.playing, speed: RL.speed, real: RL.real, precise: true, cap: drCaption(RL.r, RL.f), size: RL.f.size || [1180, 820] }; },
+    get: function () { if (!RL) return null; return { p: RL.p, total: RL.clock.total, wall: RL.r.startAt + RL.t, playing: RL.playing, speed: RL.speed, real: RL.real, cap: drCaption(RL.r, RL.f), size: RL.f.size || [1180, 820] }; },
     marks: function () { return RL ? RL.r.marks.map(function (m) { return { kind: m.kind, label: m.label, p: RL.clock.toPlay(m.t) }; }) : []; },
     events: function () { return RL ? RL.r.notes.map(function (n) { return { p: RL.clock.toPlay(n.t), kind: n.kind, chip: n.chip, text: n.text }; }) : []; },
     chapters: function () { return RL ? RL.r.chapters.map(function (c) { return { p: RL.clock.toPlay(c.t), title: c.title }; }) : []; },

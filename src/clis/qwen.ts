@@ -128,24 +128,6 @@ export const qwen: CliAdapter = {
     }
     return out;
   },
-  // 0.21 时代的出厂模板(消息进 argv、--yolo、只追加系统提示,不流式);拍板 15 换掉。头一版追加的是 {agentBody},板书写法放在话题第一条(拍板 11 之前)。
-  // 最后一版是拍板 15 当天的 qwen3.7-plus,同日换成 qwen3.8-max
-  retired: {
-    qwen: [
-      {
-        run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],
-        resume: ['qwen', '-p', '{prompt}', '--resume', '{session}', '--append-system-prompt', '{agentBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],
-      },
-      {
-        run: ['qwen', '-p', '{prompt}', '--append-system-prompt', '{systemBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],
-        resume: ['qwen', '-p', '{prompt}', '--resume', '{session}', '--append-system-prompt', '{systemBody}', '--yolo', '--output-format', 'stream-json', '--max-wall-time', '10m'],
-      },
-      (() => {
-        const f = ['-m', 'qwen3.7-plus', '--system-prompt', '{systemBody}', '--input-format', 'stream-json', '--output-format', 'stream-json', '--include-partial-messages', '--approval-mode', 'default', '{toolArgs}', '--max-wall-time', '10m'];
-        return { run: ['qwen', ...f], resume: ['qwen', '--resume', '{session}', ...f] };
-      })(),
-    ],
-  },
   check: ({ version, env }) => {
     const v = /(\d+)\.(\d+)\.(\d+)/.exec(version);
     const old = !v || Number(v[1]) === 0 && Number(v[2]) < 25;

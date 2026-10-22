@@ -114,8 +114,6 @@ export interface CliAdapter {
   nestedEnv?: readonly string[];
   /** cotutor doctor 查这个 CLI 时多看几样(version 是 `--version` 的第一行);不给就只查装没装 */
   check?(ctx: { version: string; env: NodeJS.ProcessEnv }): { name: string; ok: boolean; detail: string; fix?: string }[];
-  /** 以前出厂过、现在换掉了的模板(键是运行时名):老 workspace 里一字不差(没人改过)的,`cotutor upgrade --config` 整份换新 */
-  retired?: Readonly<Record<string, readonly Pick<Runtime, 'run' | 'resume'>[]>>;
   /** 出厂运行时模板:键是运行时名 */
   runtimes(): Record<string, Runtime>;
 }

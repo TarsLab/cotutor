@@ -2,7 +2,7 @@
  * cotutor init <slug>:建 ~/cotutor/<slug>/ 骨架。语义是**幂等补缺**——已有的文件与目录一律不动,缺什么补什么。
  * 三条边界(沿 drawtell init):政策文件只在缺失时写模板;用户配置只在还没指定 workspace 时补;不动 git。
  * 老师文件**拷贝**进 .claude/agents/(2026-09-09 拍板,原来是链):拷进来就是家长的,想改就改;出厂 hash 记 .cotutor/shipped.json,
- * cotutor upgrade 据此换新或报 diff。旧workspace里指向包的链会被换成拷贝;.qwen/agents/ 的旧链删掉(2026-10-09 退役)。
+ * cotutor upgrade 据此换新或报 diff。旧workspace里指向包的链会被换成拷贝。
  */
 import { chooseProxyOnInit, type ProxyChoice } from './proxy.ts';
 import type { DetectedProxy } from '../lib/proxy.ts';

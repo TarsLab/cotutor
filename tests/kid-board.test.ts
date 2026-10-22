@@ -41,7 +41,6 @@ import {
   liveHead,
   askCard,
   kidSaid,
-  tidySpoken,
   subtitleFor,
   type BoardCard,
   type BoardLine,
@@ -198,9 +197,6 @@ check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人�
 
 // ---- 一个话题一节:孩子的话进问题卡(《工作流程.md》§二、拍板 17) ----
 {
-  check('tidySpoken:去口头禅、省略号、句末标点后的逗号;句中的「就是 4」留着;去完是空的留原话', tidySpoken('嗯……那个,要是有七个小朋友呢?就是,呃,还是十八个贴纸') === '要是有七个小朋友呢?还是十八个贴纸' && tidySpoken('嗯……每个人两个吧,呃,两个') === '每个人两个吧,两个' && tidySpoken('答案就是 4') === '答案就是 4' && tidySpoken('那个那个我不知道') === '我不知道' && tidySpoken('嗯') === '嗯' && tidySpoken('4') === '4', tidySpoken('嗯……那个,要是有七个小朋友呢?就是,呃,还是十八个贴纸'));
-  // 语音识别给的是全角标点(iPad 上「嗯,腿的英语」板上成了「,腿的英语」)
-  check('tidySpoken:全角标点也认', tidySpoken('嗯，腿的英语') === '腿的英语' && tidySpoken('那个，腿的英语？') === '腿的英语？' && tidySpoken('嗯……每个人两个吧，呃，两个') === '每个人两个吧，两个' && tidySpoken('我想……是两个！，') === '我想，是两个！', [tidySpoken('嗯，腿的英语'), tidySpoken('那个，腿的英语？'), tidySpoken('嗯……每个人两个吧，呃，两个'), tidySpoken('我想……是两个！，')].join(' | '));
   const q = (t: string, extra: Partial<BoardCard['props']> = {}): BoardCard => ({ kind: 'text', props: { text: t, ...extra } });
   const asks: BoardSection = { cards: [q('想一想')], lines: [L('分完了吗?', { anchor: 0 })] };
   const askAdded: BoardSection = { cards: [{ kind: 'code', props: { code: 'x' } }, q('还剩几个?', { ask: true })], lines: [L('还剩几个?', { anchor: 0 })] };
@@ -209,16 +205,16 @@ check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人�
   check('askCard:末句问句锚着文字卡 → 它;解析器补的提问卡 → 它;锚着填空 / 没问 / 还在写 → 没有', askCard(asks) === 0 && askCard(askAdded) === 1 && askCard(onFill) === null && askCard(told) === null && askCard({ ...asks, partial: true }) === null);
   const msgs = [
     { job: 'a', question: '分一分', reply: 'x', pending: false, fromHome: true, section: asks },
-    { job: 'b', question: '嗯……每个人两个吧', reply: 'x', pending: false, spoken: true, section: onFill },
+    { job: 'b', question: '嗯……每个人两个吧', reply: 'x', pending: false, section: onFill },
     { job: 'c', question: '', reply: 'x', pending: false, action: 'submit' as const, section: asks },
     { job: 'd', question: '4', reply: null, pending: true },
   ];
   const says = kidSaid(msgs);
-  check('kidSaid:首页按钮、交卡的不放;答问题卡的挂那张卡(语音去口头禅、原话留着);上一节问在填空上 → 单独一行;刚发出去的也有', !says.has('a') && !says.has('c') && says.get('b')?.on?.job === 'a' && says.get('b')?.on?.card === 0 && says.get('b')?.said.text === '每个人两个吧' && says.get('b')?.said.full === '嗯……每个人两个吧' && says.get('b')?.said.voice === true && says.get('d')?.on?.job === 'c' && says.get('d')?.said.text === '4', JSON.stringify([...says]));
+  check('kidSaid:首页按钮、交卡的不放;答问题卡的挂那张卡;上一节问在填空上 → 单独一行;刚发出去的也有', !says.has('a') && !says.has('c') && says.get('b')?.on?.job === 'a' && says.get('b')?.on?.card === 0 && says.get('b')?.said.text === '嗯……每个人两个吧' && says.get('d')?.on?.job === 'c' && says.get('d')?.said.text === '4', JSON.stringify([...says]));
   const lone = kidSaid([{ job: 'x', question: '有7个小朋友呢?', reply: 'x', pending: false, section: onFill }, { job: 'y', question: '我不会', reply: 'x', pending: false, section: asks }]);
   check('kidSaid:话题第一句、上一节问在填空上 → 单独一行(on = null)', lone.get('x')?.on === null && lone.get('y')?.on === null);
   const es = sectionsFromMessages(msgs);
-  check('sectionsFromMessages:节带上 said / saidOn', es.find((e) => e.job === 'b')?.saidOn?.job === 'a' && es.find((e) => e.job === 'b')?.said?.text === '每个人两个吧' && es.find((e) => e.job === 'a')?.said === undefined);
+  check('sectionsFromMessages:节带上 said / saidOn', es.find((e) => e.job === 'b')?.saidOn?.job === 'a' && es.find((e) => e.job === 'b')?.said?.text === '嗯……每个人两个吧' && es.find((e) => e.job === 'a')?.said === undefined);
   // 拍给我看卡(cards/photo/card.md):末句问不问都是它;拍来的照片进它的答案栏,节头不再回显;只发照片时补的「(拍了一张)」不写
   const snap: BoardSection = { cards: [q('看图说话'), { kind: 'photo', props: { text: '看图说话的那幅图' } }], lines: [L('把那幅图拍下来,发给我。', { anchor: 1 })] };
   const snapAsk: BoardSection = { ...snap, lines: [L('把那幅图拍下来,好吗?', { anchor: 0 })] };
@@ -243,8 +239,8 @@ check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人�
   const talkOnly: BoardSection = { cards: [], lines: [L('嗯,我在。')] };
   const lm = [
     { job: 'h', question: '(拍了一张)', reply: 'x', pending: false, live: true, photos: ['captures/x.jpg'], section: head },
-    { job: 'i', question: '没见过', reply: 'x', pending: false, live: true, spoken: true, section: plain },
-    { job: 'j', question: '老师。', reply: 'x', pending: false, live: true, spoken: true, section: talkOnly },
+    { job: 'i', question: '没见过', reply: 'x', pending: false, live: true, section: plain },
+    { job: 'j', question: '老师。', reply: 'x', pending: false, live: true, section: talkOnly },
     { job: 'k', question: '写好了', reply: null, pending: true, live: true, section: { cards: [head.cards[0]], lines: [], partial: true } },
     { job: 'l', question: '为什么', reply: 'x', pending: false, section: head },
   ];

@@ -109,8 +109,3 @@ export function unexpectedTools(cli: string, set: ToolSet, tools: readonly strin
   return want ? tools.filter((t) => !want.includes(t)) : [];
 }
 
-/** 这份模板是不是某个 CLI 以前出厂过、没人改过的(换新时整份换) */
-export function isRetiredRuntime(name: string, runtime: { run: readonly string[]; resume: readonly string[] }): boolean {
-  const same = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
-  return ADAPTERS.some((a) => (a.retired?.[name] ?? []).some((r) => same(r.run, runtime.run) && same(r.resume, runtime.resume)));
-}

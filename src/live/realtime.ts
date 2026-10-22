@@ -20,7 +20,7 @@
  * 不抛:连不上、断了、服务端报错都走 onClose / onError;send 在没连上时丢弃并回 false。
  */
 import { homedir } from 'node:os';
-import { qianwenKeys, voxtellConfig } from '../lib/qianwen.ts';
+import { cotutorBailian, qianwenKeys, voxtellConfig } from '../lib/qianwen.ts';
 
 export const REALTIME_MODEL = 'qwen3.8-omni-flash-realtime';
 export const REALTIME_VOICE = 'Serena';
@@ -47,6 +47,8 @@ export interface RealtimeOptions {
   vad?: VadOptions;
   /** 测试用:整个端点(含 ?model=);不给就按 workspaceId 拼 */
   endpoint?: string;
+  /** 指定 key 与业务空间 id(家长端「试连」还没存的那份);不给按 dashscopeAuth 找 */
+  auth?: { key: string; workspaceId: string };
   env?: NodeJS.ProcessEnv;
   /** 握手后等 session.updated 最多多久 */
   timeoutMs?: number;
@@ -73,10 +75,11 @@ export interface RealtimeEvents {
   onClose?(reason: string): void;
 }
 
-/** 百炼按量的 key 与业务空间 id(Token Plan 没有 omni realtime;key 怎么找见 src/lib/qianwen.ts,业务空间 id 先看环境再看 voxtell 的配置) */
+/** 百炼按量的 key 与业务空间 id(Token Plan 没有 omni realtime;key 怎么找见 src/lib/qianwen.ts,业务空间 id 先看家长端配的、再看环境、再看 voxtell 的配置) */
 export function dashscopeAuth(env: NodeJS.ProcessEnv = process.env): { key: string; workspaceId: string } | null {
+  const home = env.HOME || homedir();
   const key = qianwenKeys(env).payg;
-  const workspaceId = env.DASHSCOPE_WORKSPACE_ID?.trim() || voxtellConfig(env.HOME || homedir()).workspaceId;
+  const workspaceId = cotutorBailian(home).workspaceId || env.DASHSCOPE_WORKSPACE_ID?.trim() || voxtellConfig(home).workspaceId;
   return key && workspaceId ? { key, workspaceId } : null;
 }
 
@@ -151,7 +154,7 @@ export class RealtimeSession {
     let key = '';
     if (url) key = this.opts.env?.DASHSCOPE_API_KEY ?? 'sk-test';
     else {
-      const auth = dashscopeAuth(this.opts.env);
+      const auth = this.opts.auth ?? dashscopeAuth(this.opts.env);
       if (!auth) return 'no_auth';
       key = auth.key;
       url = endpointOf(auth.workspaceId, this.model);

@@ -3,7 +3,8 @@
  * 与百炼按量(`sk-` / `sk-ws-`,dashscope 域名)。两把 key 互不通用。
  * 一条线调哪个模型:Token Plan 有这个模型、本机又有它的 key 就走 Token Plan,否则走按量(2026-10-13 定)。key 只进请求头与子进程环境。
  * - Token Plan 的 key:环境变量 QWENCLOUD_TOKEN_PLAN_API_KEY(Qwen Code 官方页用的名字);DASHSCOPE_API_KEY 里放的是 `sk-sp-` 也认作它。
- * - 按量的 key:DASHSCOPE_API_KEY(不是 `sk-sp-` 时),再看本机 qwen(~/.qwen/settings.json 的 env)、voxtell(~/.config/voxtell/config.json)的配置。
+ * - 按量的 key:先看家长在家长端配的(~/.config/cotutor/bailian.json,《产品规划.md》拍板 30),再看 DASHSCOPE_API_KEY(不是 `sk-sp-` 时),
+ *   再看本机 qwen(~/.qwen/settings.json 的 env)、voxtell(~/.config/voxtell/config.json)的配置。
  */
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -63,11 +64,18 @@ export function voxtellConfig(home = homedir()): { apiKey: string | null; worksp
   return { apiKey: text(v?.apiKey), workspaceId: text(v?.workspaceId) };
 }
 
-/** 本机的两把 key:先看环境,再看 qwen、voxtell 的配置;哪处放错了套(按量的位置放了 `sk-sp-`)就挪到对的那格 */
+/** 家长端配的百炼(机器级,几个孩子的 workspace 共用;写在 src/server/bailian.ts):按量 key 与业务空间 id */
+export const bailianFile = (home = homedir()): string => join(home, '.config', 'cotutor', 'bailian.json');
+export function cotutorBailian(home = homedir()): { apiKey: string | null; workspaceId: string | null } {
+  const v = readJson(bailianFile(home));
+  return { apiKey: text(v?.apiKey), workspaceId: text(v?.workspaceId) };
+}
+
+/** 本机的两把 key:先看家长端配的,再看环境,再看 qwen、voxtell 的配置;哪处放错了套(按量的位置放了 `sk-sp-`)就挪到对的那格 */
 export function qianwenKeys(env: NodeJS.ProcessEnv = process.env): QianwenKeys {
   const home = env.HOME || homedir();
   const named = text(env[TOKEN_PLAN_KEY_ENV]);
-  const candidates = [text(env.DASHSCOPE_API_KEY), localDashscopeKey(home), voxtellConfig(home).apiKey];
+  const candidates = [cotutorBailian(home).apiKey, text(env.DASHSCOPE_API_KEY), localDashscopeKey(home), voxtellConfig(home).apiKey];
   return {
     plan: named ?? candidates.find((k) => k && isPlanKey(k)) ?? null,
     payg: candidates.find((k) => k && !isPlanKey(k)) ?? null,

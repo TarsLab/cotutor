@@ -4,6 +4,7 @@
  * exit 约定同 drawtell / voxtell doctor:必需项全过 exit 0,否则 1;--json 带 ok 与整份 checks。
  */
 import { isRealtimeVoice } from '../live/voices.ts';
+import { dashscopeAuth } from '../live/realtime.ts';
 import { detectProxy } from '../lib/proxy.ts';
 import { adapterFor, parserOf, prepareCli, processEnv } from '../clis/index.ts';
 import { execFile } from 'node:child_process';
@@ -577,6 +578,16 @@ export async function doctorWorkspace(
         if (inRun !== inResume) push({ name: `runtime.${name}.board`, ok: false, required: false, detail: `板书写法的预载只在 ${inRun ? 'run' : 'resume'} 模板里,两边不一致(压缩后系统提示按 resume 的旗标重建)`, fix: 'cotutor upgrade --config 补旗标,或手改 cotutor.json 让两条模板一致' });
         else push({ name: `runtime.${name}.board`, ok: true, required: false, detail: inRun ? `板书写法预载进系统提示(${how}),各话题共享缓存` : '板书写法由应用放进每个话题第一条(<cotutor-board>);这个 CLI 能从文件或参数收系统提示的话,模板里用 {boardFile} / {systemBody} 更省' });
       }
+    }
+
+    // ---- 百炼(《产品规划.md》拍板 30):老师靠实时模型开口,没配孩子端打不开;--live 真试连一次(握手就挂,不花钱) ----
+    const bl = dashscopeAuth(env);
+    push({ name: 'bailian', ok: Boolean(bl), required: true, detail: bl ? `百炼按量 key …${bl.key.slice(-4)}、业务空间 ${bl.workspaceId}` : '没有百炼按量的 key 或业务空间 id:孩子端打不开(只出「老师们还没到」)', fix: bl ? undefined : '家长端「首页」里配(在这台电脑上开,或者先 cotutor pin 设家长密码);Token Plan 的 sk-sp- 不行' });
+    if (bl && opts.live) {
+      const { probeRealtime } = await import('../live/preview.ts');
+      const { probeMessage } = await import('../server/bailian.ts');
+      const why = await probeRealtime({ env, model: ws.config.live.model });
+      push({ name: 'live.bailian', ok: why === null, required: true, detail: why === null ? '试连百炼实时模型:通' : probeMessage(why), fix: why === null ? undefined : '家长端「首页」里换一把 key,或查百炼控制台的余额与业务空间' });
     }
 
     // ---- 实时老师的嘴(《wip/实时老师设想.md》):音色写错了连接照样连得上,第一次开口才报错,孩子那边嘴一直不出声 ----

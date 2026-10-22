@@ -84,7 +84,7 @@ import { audioData } from '../lib/audio-data.ts';
 import { listenOmni, type Transcribe } from './listen.ts';
 import { VOICE_GALLERY_PAGE } from './voice-gallery-page.ts';
 
-export type MockScenario = 'normal' | 'offline' | 'nopost';
+export type MockScenario = 'normal' | 'offline' | 'nopost' | 'nokey';
 
 export interface MockTutor {
   name: string;
@@ -670,7 +670,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       return { kind: 'tutor', props: { tutor: name, buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { resumes, alive, lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
     });
     // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
-    return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, listen: opts.listen ?? 'browser', hand: 'right' };
+    return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, listen: opts.listen ?? 'browser', hand: 'right', ready: scenario !== 'nokey' };
   };
   const mockHomeId = (): string => `${yesterday()}-2130`;
   let dictationRoot: string | null = null;
@@ -812,7 +812,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], booking: false, ...(recorded ? { kouboYuan: recorded * 0.015 } : {}), extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') };
       });
       const week = weekOf(date, today).map((d) => ({ date: d, tutors: MOCK_TUTORS.filter((t) => listOf(t.name, d).length).map((t) => t.name) }));
-      const out: Overview = { title, date, today, tutors, week };
+      const out: Overview = { title, date, today, tutors, week, ready: scenario !== 'nokey' };
       return { status: 200, json: out };
     }
     const pb = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|\d{4}-\d{2}-\d{2})\/board$/.exec(p);

@@ -25,3 +25,11 @@ export async function previewVoice(o: { voice: string; text: string; model?: str
   if (!chunks.length) return { error: done ? '没出声' : '超时' };
   return { wav: wavOfPcm(Buffer.concat(chunks), OUTPUT_RATE) };
 }
+
+/** 试连一次(家长端配百炼、doctor --live):握手到 session.updated 就挂,不出声、不花钱;null = 通,否则是原因(no_auth / connect / timeout / 服务端的话) */
+export async function probeRealtime(o: { auth?: { key: string; workspaceId: string }; model?: string; env?: NodeJS.ProcessEnv; endpoint?: string; timeoutMs?: number } = {}): Promise<string | null> {
+  const s = new RealtimeSession({ instructions: '试连。', turn: 'manual', model: o.model, auth: o.auth, env: o.env, endpoint: o.endpoint, timeoutMs: o.timeoutMs }, {});
+  const why = await s.connect();
+  s.close('probe');
+  return why;
+}

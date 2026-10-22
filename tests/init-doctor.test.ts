@@ -8,6 +8,9 @@ const PACKAGE_SKILLS_DIR = join(import.meta.dirname, '..', 'skills');
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-init-home-')));
 process.env.HOME = home;
+// 这台电脑配好了百炼(《产品规划.md》拍板 30:没配时 doctor 的 bailian 是红的必需项)
+mkdirSync(join(home, '.config', 'cotutor'), { recursive: true });
+writeFileSync(join(home, '.config', 'cotutor', 'bailian.json'), JSON.stringify({ apiKey: 'sk-test0000000000000000', workspaceId: 'llm-test' }));
 delete process.env.COTUTOR_WORKSPACE;
 const originalCwd = process.cwd();
 

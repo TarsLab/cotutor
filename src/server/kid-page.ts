@@ -147,6 +147,11 @@ ${faviconLinks()}
   .lc-still { width:100%; height:100%; }
   .lc-still img { width:100%; height:100%; display:block; object-fit:contain; }
   #rest { display:none; text-align:center; color:var(--dim); font-size:16px; padding:12px 0; }
+  /* 百炼没配(《产品规划.md》拍板 30):老师们灰着、点不进去,下面一行叫爸爸妈妈;不说为什么 */
+  #gate { display:none; text-align:center; color:var(--dim); font-size:18px; padding:16px 0; line-height:1.6; }
+  #gate small { display:block; font-size:15px; }
+  body.gated #gate { display:block; }
+  body.gated #rest { display:none; }
   /* 首页牌堆(《首页设计.md》拍板 22):一位老师一张牌(老师卡),平着叠,最前那张在最上层。手机竖着叠:后面的牌在上面,每张往上露出头那一行;
      平板横着叠:后面的牌在左边,每张往左露出一格(左上角的头像)。位置全在 transform 里(JS 按层算,换牌用 Web Animations);--tf 是同一个值,
      给「减弱动态效果」下的 *:active { transform:none !important } 兜底。牌堆往上伸进上面的空当(换牌时抽出、浮起要地方),空的地方不收触摸 */
@@ -166,7 +171,7 @@ ${faviconLinks()}
   #deck .pc .kcards { margin-top:4px; }
   /* 家长端预览里正在改的那颗(拍板 33) */
   #deck .pc .bt.pv-sel { outline:4px solid var(--ink); outline-offset:3px; }
-  body.offline #deck .pc { pointer-events:none; }
+  body.offline #deck .pc, body.gated #deck .pc { pointer-events:none; }
   .tutors:empty { display:none; }
   @media (prefers-reduced-motion:reduce) { #deck .pc:active { transform:var(--tf) !important; } }
   /* 给老师换样子(figshot):不是首页发布的卡,是 cotutor.json 配了 figshot 就有的固定入口;figshot 没开着就不出现 */
@@ -180,13 +185,13 @@ ${faviconLinks()}
   .c-figshot .tx span { font-size:15px; color:var(--dim); }
   .c-figshot .go { flex:none; height:48px; padding:0 22px; border-radius:24px; background:#c95a22; color:#fff; font-size:17px; font-weight:600; display:flex; align-items:center; }
   body.offline #rest { display:block; }
-  body.offline .c-tutor { pointer-events:none; }
-  body.offline .c-tutor .av { filter:grayscale(1); opacity:.4; }
-  body.offline .c-tutor .av .ring circle { transform:rotate(126deg); }
-  body.offline #ct-mark { filter:grayscale(1); opacity:.4; }
-  body.offline #ct-mark .ct-go, body.offline #ct-mark .ct-gi { transform:rotate(90deg); }
-  body.offline .c-tutor .nm, body.offline .c-tutor .bt { color:var(--dim); }
-  body.offline .c-tutor .bt-new { background:var(--grey); }
+  body.offline .c-tutor, body.gated .c-tutor, body.gated .c, body.gated .hcards { pointer-events:none; }
+  body.offline .c-tutor .av, body.gated .c-tutor .av { filter:grayscale(1); opacity:.4; }
+  body.offline .c-tutor .av .ring circle, body.gated .c-tutor .av .ring circle { transform:rotate(126deg); }
+  body.offline #ct-mark, body.gated #ct-mark { filter:grayscale(1); opacity:.4; }
+  body.offline #ct-mark .ct-go, body.offline #ct-mark .ct-gi, body.gated #ct-mark .ct-go, body.gated #ct-mark .ct-gi { transform:rotate(90deg); }
+  body.offline .c-tutor .nm, body.offline .c-tutor .bt, body.gated .c-tutor .nm, body.gated .c-tutor .bt { color:var(--dim); }
+  body.offline .c-tutor .bt-new, body.gated .c-tutor .bt-new { background:var(--grey); }
   /* ---- 老师页 = 板书页 ---- */
   #tutor { position:fixed; inset:0; background:var(--paper); display:none; z-index:10; }
   #tutor.on { display:flex; }
@@ -253,6 +258,8 @@ ${BACK_TINT_CSS}
   .ptabs a.on { background:#fff; color:var(--ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.08); }
   /* 顶上:名字与两个标签(窄屏各一行,宽屏并成一行);记账在「这一天」那块(拍板 31) */
   #phead { display:flex; flex-wrap:wrap; align-items:center; gap:12px 20px; }
+  #pnokey { display:block; padding:12px 16px; border-radius:14px; background:#fff3e8; color:#b4531f; font-size:15px; text-decoration:none; }
+  #pnokey[hidden] { display:none; }
   #phead #ttl { flex:1 0 100%; }
   #phead .ptabs { flex:1 0 100%; }
   /* 七天日期条(拍板 24):每天下面学科色的点 = 那天有动静的老师 */
@@ -695,6 +702,7 @@ __VOICE_CSS__
   <div class="deck" id="deck" hidden></div>
   <div class="tutors" id="tutors"></div>
   <p id="rest">老师们休息中</p>
+  <p id="gate">老师们还没到<small>叫爸爸妈妈来看一下</small></p>
   <a class="c c-figshot" id="figshot" hidden><span class="avs"></span><span class="tx"><b>给老师们换个样子</b><span>帽子、脸、衣服,都由你来挑</span></span><span class="go">去搭</span></a>
   __BRAND__
 </div>
@@ -1259,7 +1267,7 @@ ${BOARD_MARK_JS}
     fetch(url + 'api/health', { mode: 'no-cors', cache: 'no-store' }).then(() => { el.hidden = false; }, () => { el.hidden = true; });
   };
   const loadHome = async () => {
-    try { S.home = await api('GET', PARENT ? '/api/overview/' + (S.pdate || 'today') : '/api/kid/home'); setOffline(false); document.body.classList.toggle('hand-left', !PARENT && S.home.hand === 'left'); if (PARENT) renderOverview(); else { renderHome(); phIdle(); } }
+    try { S.home = await api('GET', PARENT ? '/api/overview/' + (S.pdate || 'today') : '/api/kid/home'); setOffline(false); document.body.classList.toggle('hand-left', !PARENT && S.home.hand === 'left'); setGated(!PARENT && !REEL && S.home.ready === false); if (PARENT) renderOverview(); else { renderHome(); phIdle(); } }
     catch { setOffline(true); }
   };
   // ---- 家长板书页的清单(《家长板书页设计.md》§2.2):日期、每位老师一块、一行一个话题,点了进板书 ----
@@ -1305,7 +1313,10 @@ ${BOARD_MARK_JS}
       head.after(h('div', { id: 'pweek' }));
       const cols = h('div', { id: 'pcols' }, h('div', { id: 'ptl' }), h('aside', { id: 'pday', 'aria-label': '这一天老师跟你说的' }));
       $('#tutors').before(cols);
+      // 百炼没配(拍板 30):孩子那边打不开,顶上一行叫家长去「首页」配
+      head.after(h('a', { id: 'pnokey', href: (location.pathname + '/home').replace('//', '/'), hidden: true }, '孩子那边现在打不开:还没配百炼的 key。去「首页」配好就能用 ›'));
     }
+    $('#pnokey').hidden = H.ready !== false;
     // 有按钮正在「确定?」那一下(删、记账),这一轮心跳先不重画,免得把它抹掉
     if ($('#home .arm')) return;
     modFetch();
@@ -1433,6 +1444,13 @@ ${BOARD_MARK_JS}
       !notes.length && !mem.length && !practice.length ? h('div', { class: 'quiet' }, evs.length ? '老师这天没留话给你。' : '这天没聊。') : null,
       anyThread ? h('div', { class: 'rs dia' }, h('h3', {}, '日记'), h('div', {}, h('span', {}, booking ? '老师在记账' : left ? (done ? done + ' 个话题已记进日记,还有 ' : '还有 ') + left + ' 个没记' : '话题都记进日记了'), bookBtn)) : null,
     ].filter(Boolean));
+  };
+  /** 百炼没配(《产品规划.md》拍板 30):首页的老师灰着点不进去;在老师页上就回首页。家长配好了下一次读首页自己就好 */
+  const setGated = (on) => {
+    if (S.gated === on) return;
+    S.gated = on;
+    document.body.classList.toggle('gated', on);
+    if (on && S.tutor) closeTutor();
   };
   const setOffline = (off) => {
     if (S.offline === off) return;

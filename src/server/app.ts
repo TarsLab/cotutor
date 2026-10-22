@@ -52,6 +52,7 @@ import { sendFile } from './send-file.ts';
 import { xlaoshiRoute } from '../xlaoshi/route.ts';
 import { talkRoute } from '../talk/route.ts';
 import { parentHomeRoute } from './parent-home.ts';
+import { bailianRoute, createBailian, type Bailian } from './bailian.ts';
 import { PARENT_HOME_PAGE } from './parent-home-page.ts';
 import { dictationRoute } from '../dictation/route.ts';
 import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
@@ -103,9 +104,11 @@ export interface AppContext {
   reload(): Promise<void>;
   /** 家长端与工作台的锁(access.ts):机器级 PIN,没设就全开;测试可注入 */
   access: Access;
+  /** 百炼(bailian.ts):孩子端要它才打得开,家长端配;测试可注入 */
+  bailian: Bailian;
 }
 
-export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean; transcribe?: Transcribe; draw?: Draw; access?: Access } = {}): AppContext {
+export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean; transcribe?: Transcribe; draw?: Draw; access?: Access; bailian?: Bailian } = {}): AppContext {
   let mtime = -1;
   const ctx: AppContext = {
     ws,
@@ -115,6 +118,7 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
     listen: null,
     transcribe: opts.transcribe ?? ((audio) => listenOmni(audio, { env: opts.env })),
     access: opts.access ?? createAccess({ now: () => ctx.now() }),
+    bailian: opts.bailian ?? createBailian({ env: opts.env }),
     async reload() {
       try {
         const r = await reloadIfChanged(ctx.ws, mtime);
@@ -206,6 +210,8 @@ export interface KidHome {
   listen: 'browser' | 'omni';
   /** 孩子的惯用手(cotutor.json 的 kid.hand,缺省 right):left = 平板横屏实时老师页的浮层挪到右边 */
   hand: 'right' | 'left';
+  /** 百炼配好了(《产品规划.md》拍板 30):没配孩子端只出「老师们还没到」,家长端配 */
+  ready: boolean;
 }
 
 export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
@@ -213,7 +219,7 @@ export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
   const date = localDate(now);
   const view = await kidHomeView(ws, now);
   const figshot = ws.config.figshot ? { port: ws.config.figshot.port } : null;
-  return { title: ws.config.title, date, tutors: await kidTutors(ctx), home: view.home, cards: view.cards, figshot, listen: ws.config.kid.listen, hand: ws.config.kid.hand ?? 'right' };
+  return { title: ws.config.title, date, tutors: await kidTutors(ctx), home: view.home, cards: view.cards, figshot, listen: ws.config.kid.listen, hand: ws.config.kid.hand ?? 'right', ready: ctx.bailian.status().ready };
 }
 
 export interface KidDay {
@@ -592,6 +598,8 @@ export interface Overview {
   tutors: OverviewTutor[];
   /** 七天日期条(拍板 24):date 所在的七天,每天有话题的老师(听写、口语课页面自己从模块接口补) */
   week: { date: string; tutors: string[] }[];
+  /** 百炼配好了(《产品规划.md》拍板 30);没配清单顶上一行叫家长去「首页」配 */
+  ready: boolean;
 }
 
 export async function overview(ctx: AppContext, date: string): Promise<Overview> {
@@ -651,7 +659,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
     date: d,
     tutors: (await Promise.all(names.map(async (n) => ((await readIndex(ctx.ws, n, d)).messages.some((m) => !m.bookkeep && !m.tidy) ? n : null)))).filter((n): n is string => n !== null),
   })));
-  return { title: ctx.ws.config.title, date, today, tutors, week };
+  return { title: ctx.ws.config.title, date, today, tutors, week, ready: ctx.bailian.status().ready };
 }
 
 /**
@@ -1351,6 +1359,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     const xl = await xlaoshiRoute(method, url, ctx, body); if (xl) return xl;
     // 家长端「首页」的接口(/api/parent/*)
     const phr = await parentHomeRoute(method, p, ctx, body); if (phr) return phr;
+    const blr = await bailianRoute(method, p, ctx, body, who); if (blr) return blr;
     // 口语课(代码都在 src/talk/,《口语课设计.md》):/talk 与 /api/talk/* 交给它;通话的 WebSocket 在 serve.ts 的 upgrade 里接
     const tk = await talkRoute(method, url, ctx, body); if (tk) return tk;
     // 听写(代码都在 src/dictation/,《wip/听写设想.md》):/dictation 与 /api/dictation/* 交给它;首页的听写卡在 kid-page 画

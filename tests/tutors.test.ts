@@ -1,11 +1,14 @@
 /** 老师文件的出厂 / 自定义状态与 upgrade:没改过的换新、改过的只报 diff、--force 覆盖留 .bak、缺的补;lineDiff。 */
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-tutors-home-')));
 process.env.HOME = home;
+// 这台电脑配好了百炼(《产品规划.md》拍板 30:没配时 doctor 的 bailian 是红的必需项)
+mkdirSync(join(home, '.config', 'cotutor'), { recursive: true });
+writeFileSync(join(home, '.config', 'cotutor', 'bailian.json'), JSON.stringify({ apiKey: 'sk-test0000000000000000', workspaceId: 'llm-test' }));
 delete process.env.COTUTOR_WORKSPACE;
 
 const { initWorkspace } = await import('../src/cli/init.ts');

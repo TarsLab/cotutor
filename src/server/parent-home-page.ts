@@ -104,6 +104,11 @@ ${BRAND_CSS}
   #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); max-width:min(560px,calc(100% - 32px)); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:15px; display:none; z-index:20; white-space:pre-line; }
   #toast.on { display:block; }
   .main { display:flex; flex-direction:column; gap:18px; }
+  /* 百炼没配(《产品规划.md》拍板 30):孩子那边打不开,这块放在右栏最上面 */
+  .grp.warn { background:#fff3e8; }
+  .grp.warn .it, .grp.warn .box { background:transparent; }
+  .lbl { font-size:13px; color:var(--dim); }
+  .err { font-size:14px; color:var(--red); }
   #body > div { display:flex; flex-direction:column; gap:18px; }
   @media (min-width:1000px) {
     .wrap { max-width:1180px; padding:calc(env(safe-area-inset-top) + 22px) 28px 40px; gap:20px; }
@@ -187,8 +192,43 @@ ${BRAND_JS}
   for (const b of document.querySelectorAll('#pvdev button')) b.addEventListener('click', () => { dev = picked = b.dataset.d; try { localStorage.setItem('parent-home-dev', dev); } catch (e) {} fit(); });
   window.addEventListener('resize', fit);
 
+  // ---- 百炼(《产品规划.md》拍板 30):老师开口靠它,没配孩子那边打不开。一块常驻的元素,重画只挪它的位置,输着的 key 不会被抹掉 ----
+  const BL = { st: null, open: false, busy: false, msg: '' };
+  const blEl = h('div', { id: 'bailian' });
+  const blKey = h('input', { class: 'fld', id: 'bl-key', type: 'password', autocomplete: 'off', spellcheck: 'false', placeholder: 'sk- 开头' });
+  const blWs = h('input', { class: 'fld', id: 'bl-ws', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', placeholder: '如 llm-xxxxxxxx' });
+  const blSave = async () => {
+    BL.busy = true; BL.msg = ''; blDraw();
+    try { BL.st = await api('PUT', '/api/parent/bailian', { key: blKey.value, workspaceId: blWs.value }); blKey.value = ''; BL.open = false; toast('连上了,存好了。孩子那边几秒内就能用'); BL.busy = false; await load(); pvSync(true); return; }
+    catch (e) { BL.msg = e.message; }
+    BL.busy = false; blDraw();
+  };
+  const blTest = async () => {
+    BL.busy = true; blDraw();
+    try { const r = await api('POST', '/api/parent/bailian/test'); toast(r.ok ? '通的(' + (r.ms / 1000).toFixed(1) + ' 秒)' : '没通:' + r.message); }
+    catch (e) { toast('没试成:' + e.message); }
+    BL.busy = false; blDraw();
+  };
+  const blDraw = () => {
+    const st = BL.st;
+    if (!st) { blEl.replaceChildren(); return; }
+    const rows = [];
+    if (st.ready) rows.push(h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '配好了'), h('small', {}, (st.keyTail ? 'key …' + st.keyTail + ' · 业务空间 ' + st.workspaceId : '测试用的假百炼') + (st.from === 'machine' ? '(这台电脑上别处配的)' : ''))),
+      h('button', { type: 'button', class: 'x', disabled: BL.busy || null, on: { click: blTest } }, BL.busy && !BL.open ? '在试…' : '试连'),
+      st.canEdit ? h('button', { type: 'button', class: 'x', on: { click: () => { BL.open = !BL.open; BL.msg = ''; blDraw(); } } }, BL.open ? '收起' : '换一把') : null));
+    else rows.push(h('div', { class: 'box' }, h('b', {}, '还没配,孩子那边打不开'), h('div', { class: 'note', style: 'padding:0' }, '老师开口用的是百炼的实时模型,要百炼「按量付费」的 API key 和业务空间 id,都在百炼控制台里拿(Token Plan 的 sk-sp- 不行)。存在这台电脑上,不进孩子的文件夹。')));
+    if (!st.ready || BL.open) {
+      if (!st.canEdit) rows.push(h('div', { class: 'box' }, h('div', { class: 'note', style: 'padding:0' }, '先设家长密码:在电脑上跑 cotutor pin;或者在这台电脑上打开家长端来配。')));
+      else rows.push(h('div', { class: 'box' }, h('label', { class: 'lbl', for: 'bl-key' }, 'API key'), blKey, h('label', { class: 'lbl', for: 'bl-ws' }, '业务空间 id'), blWs,
+        BL.msg ? h('div', { class: 'err' }, BL.msg) : null,
+        h('div', { class: 'btns' }, h('button', { type: 'button', class: 'go', disabled: BL.busy || null, on: { click: blSave } }, BL.busy ? '在试连…' : '试连,通了就存'))));
+    }
+    blEl.replaceChildren(h('div', { class: 'gh' }, h('span', {}, '百炼 · 老师开口用的')), h('div', { class: 'grp' + (st.ready ? '' : ' warn') }, ...rows));
+  };
+
   const load = async () => {
     try { D = await api('GET', '/api/parent/home'); } catch (e) { toast('读不到:' + e.message); return; }
+    BL.st = await api('GET', '/api/parent/bailian').catch(() => null);
     document.title = D.title + ' · 家长';
     $('#title').textContent = D.title;
     $('#pub').textContent = D.home ? md(D.home.publishedAt.slice(0, 10)) + ' ' + new Date(D.home.publishedAt).toTimeString().slice(0, 5) + ' 发布 · 改了马上到孩子的首页' : '还没发布过';
@@ -275,7 +315,7 @@ ${BRAND_JS}
       if (t.buttons.length < BUTTONS_MAX) under.push(h('button', { type: 'button', class: 'addb', on: { click: () => pick(-1) } }, '+ 给' + t.display + '加一个开场按钮'));
     }
     $('#pv-under').replaceChildren(...under);
-    if (!t) { $('#body').replaceChildren(h('p', { class: 'note' }, '还没有老师(cotutor.json 里 -tutor 结尾、开着的)')); return; }
+    if (!t) { blDraw(); $('#body').replaceChildren(h('div', {}, blEl, h('p', { class: 'note' }, '还没有老师(cotutor.json 里 -tutor 结尾、开着的)'))); return; }
     const wide = WIDE.matches;
     // 每天都在
     const has = (k) => t.extras.includes(k);
@@ -302,7 +342,9 @@ ${BRAND_JS}
     const pane = !wide ? null : sel === null || (sel >= 0 && !t.buttons[sel])
       ? h('div', { class: 'grp hint' }, '点左边牌上的按钮,在这里改它的字和讲法;', h('br'), '改的时候牌上跟着变,点「发布」才到孩子那边。')
       : inlineForm(t, sel);
-    $('#body').replaceChildren(h('div', {}, pane, extras, self, kid));
+    blDraw();
+    const blTop = BL.st && !BL.st.ready;
+    $('#body').replaceChildren(h('div', {}, blTop ? blEl : null, pane, extras, self, kid, blTop ? null : blEl));
   };
 
   // ---- 改一个按钮的表单(k = -1 是新加的开场按钮):窄屏整屏盖上,宽屏在右栏;预览里那颗跟着变 ----

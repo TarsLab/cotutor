@@ -8,6 +8,8 @@ import type { Duplex } from 'node:stream';
 import type { AppContext } from '../server/app.ts';
 import { LiveCall } from './call.ts';
 import { acceptWebSocket, isUpgrade } from './ws.ts';
+import { cookieOf } from '../server/access.ts';
+import { DEVICE_COOKIE } from '../lib/kid-device.ts';
 
 export interface LiveRouteDeps {
   /** realtime 端点(测试、探针换假的);不给用真的 */
@@ -40,7 +42,7 @@ export function makeLiveUpgrade(deps: LiveRouteDeps = {}) {
       onClose: () => call?.onSocketClose(),
     });
     const listen = new URL(req.url ?? '', 'http://x').searchParams.get('listen') === 'open' ? 'open' : 'hold';
-    call = new LiveCall(sock, { ctx, tutor, listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, idleSwapMs: deps.idleSwapMs, echoWaitMs: deps.echoWaitMs, ringMs: deps.ringMs, onFinished: (why) => deps.onFinished?.(tutor, why) });
+    call = new LiveCall(sock, { ctx, tutor, deviceId: cookieOf(req.headers.cookie, DEVICE_COOKIE), listen, endpoint: deps.endpoint, env: deps.env, heartbeatMs: deps.heartbeatMs, keepAliveMs: deps.keepAliveMs, swapTokens: deps.swapTokens, idleSwapMs: deps.idleSwapMs, echoWaitMs: deps.echoWaitMs, ringMs: deps.ringMs, onFinished: (why) => deps.onFinished?.(tutor, why) });
     void call.start();
     return true;
   };

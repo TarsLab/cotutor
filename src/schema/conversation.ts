@@ -17,6 +17,8 @@ const legacyMark = (v: unknown): unknown => {
 };
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** 孩子端设备的编号(《孩子端流水设计.md》§二):服务端种的 cookie,随机 12 位十六进制 */
+export const DEVICE_ID_RE = /^[0-9a-f]{12}$/;
 
 export const TimingSchema = z.object({
   /** 进程起来的时刻(ISO,精确到毫秒;消息的 at 只到分钟) */
@@ -96,6 +98,8 @@ const MessageObjectSchema = z.object({
   timing: TimingSchema.optional(),
   /** 发这条时孩子端是什么端(缺省当平板横屏) */
   device: DeviceSchema.optional(),
+  /** 哪一台设备(《孩子端流水设计.md》§二):服务端种的 cookie 编号;工作台、cotutor send 发的没有 */
+  deviceId: z.string().regex(DEVICE_ID_RE).optional(),
   /** 这轮是给某个话题记账的任务(from: system,resume 那个话题的会话);跑完老师回的「## 记账」段经应用落进日记 */
   bookkeep: z.object({ thread: z.string().min(1) }).optional(),
   /** 这轮是记账后整理记忆的任务(from: system,新会话;2026-09-18):老师回「## 记忆」段的一串增 / 改 / 删,不受每轮条数上限;孩子端看不到 */

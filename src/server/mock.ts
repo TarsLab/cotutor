@@ -771,6 +771,8 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p === '/api/health') return { status: 200, json: { ok: scenario !== 'offline', mock: true, scenario } };
     if (scenario === 'offline' && p.startsWith('/api/')) return { status: 500, json: { error: 'mock_offline' } };
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: home() };
+    // 孩子端的流水(kid-log.ts):mock 照收,不落盘
+    if (p === '/api/kid/log' && method === 'POST') return { status: 200, json: { ok: true } };
     // 听写(src/dictation/,和真服务同一套接口):卡从 mock 的首页取,存在临时目录,不配音(页面退浏览器合成声)
     const tx = await handleDictation(method, url, dictationDeps(), body); if (tx) return tx;
     if (p === '/api/kid/listen' && method === 'POST') {

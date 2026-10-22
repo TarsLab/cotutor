@@ -59,6 +59,8 @@ import type { ServerSocket } from './ws.ts';
 export interface LiveDeps {
   ctx: AppContext;
   tutor: string;
+  /** 哪一台设备(升级请求里的设备 cookie,《孩子端流水设计.md》§二):孩子发的每一条记上 */
+  deviceId?: string | null;
   /** 测试:realtime 的端点与环境 */
   endpoint?: string;
   env?: NodeJS.ProcessEnv;
@@ -792,7 +794,7 @@ export class LiveCall {
   private async dispatch(body: Record<string, unknown>): Promise<void> {
     const { ctx, tutor } = this.deps;
     const { app, ...rest } = body;
-    const r = await kidSendInput(ctx, tutor, rest, localDate(ctx.now()));
+    const r = await kidSendInput(ctx, tutor, rest, localDate(ctx.now()), this.deps.deviceId);
     if ('error' in r) { this.send({ t: 'err', status: r.error.status, error: (r.error.json as { error?: string } | undefined)?.error ?? 'error' }); return; }
     // 口语课:热身的摸底一直带着;打了电话带打了几分钟;应用起的这一轮说明为什么
     const live = {

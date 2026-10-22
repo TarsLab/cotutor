@@ -32,7 +32,9 @@ import { tutorStatuses } from '../cli/tutors.ts';
 import { configGapsOf, upgradeConfig } from '../cli/migrate.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { faviconResponse } from '../lib/favicon.ts';
-import { createAccess, gatePage, isKidPath, type Access, type Who } from './access.ts';
+import { cookieOf, createAccess, gatePage, isKidPath, type Access, type Who } from './access.ts';
+import { deviceCookie, newDeviceId, parseKidLog, recordKidLog, validDevice } from './kid-log.ts';
+import { DEVICE_COOKIE } from '../lib/kid-device.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { kidPage } from './kid-page.ts';
 import { kidHomeView, messageVia, resolveVia } from './home.ts';
@@ -273,7 +275,7 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
  * 孩子端发一条(POST /api/kid/conversations/<老师>/messages 与实时老师的那条线共用,《wip/实时老师开发计划.md》P2.4):
  * 验正文、话题、首页按钮、小课堂、activity、照片,拼成 Runner.send 的入参;不对就回该回的错(400 / 409)。不起老师
  */
-export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown, date: string): Promise<{ input: SendInput } | { error: RouteResult }> {
+export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown, date: string, deviceId?: string | null): Promise<{ input: SendInput } | { error: RouteResult }> {
   const ws = ctx.ws;
   if (!isObj(body) || typeof body.text !== 'string') return { error: { status: 400, json: { error: 'bad_request' } } };
   const focus = body.focus === undefined ? undefined : FocusSchema.safeParse(body.focus);
@@ -354,7 +356,7 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
     talk = t.id;
   }
   if (!text.trim() && !action && !photos?.length) return { error: { status: 400, json: { error: 'bad_request' } } };
-  return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(listenedOf(body.listened) ? { listened: listenedOf(body.listened) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
+  return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(listenedOf(body.listened) ? { listened: listenedOf(body.listened) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 
 /** 家长板书页的一天(《家长板书页设计.md》§4.1):形状同 KidDay;答案不剥,系统发的也在 */
@@ -813,8 +815,14 @@ function warmOpts(url: URL): { throttleMs: number; thread?: string } {
   return { throttleMs: 30_000, ...(thread ? { thread } : {}) };
 }
 
+/** 请求从哪来(createHandler 从请求头取):设备 cookie(《孩子端流水设计.md》§二)、来源地址 */
+export interface RouteClient {
+  device?: string | null;
+  ip?: string;
+}
+
 /** who:请求是谁发的(createHandler 按来源地址与 cookie 算);直接调 route 的测试与 CLI 缺省 local = 本机免密 */
-export async function route(method: string, path: string, ctx: AppContext, body?: unknown, who: Who = 'local'): Promise<RouteResult> {
+export async function route(method: string, path: string, ctx: AppContext, body?: unknown, who: Who = 'local', client: RouteClient = {}): Promise<RouteResult> {
   await ctx.reload();
   const ws = ctx.ws;
   const url = new URL(path, 'http://x');
@@ -970,6 +978,15 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     // ---- 孩子端:过滤在服务端做,永远不带工具 / 错误 / 评判 ----
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: await kidHome(ctx, ctx.now()) };
     // 按住说话的诊断:识别全在浏览器里、出错静默,真机上哪一步断了只有它自己知道;只收事件码与毫秒,不收字也不收声音
+    // 孩子端的流水(《孩子端流水设计.md》):一次打开、页面脚本出错;没有设备 cookie 就种一枚
+    if (p === '/api/kid/log' && method === 'POST') {
+      const row = parseKidLog(body);
+      if (!row) return { status: 400, json: { error: 'bad_request' } };
+      const known = validDevice(client.device);
+      const device = known ?? newDeviceId();
+      await recordKidLog(ws, row, { device, ip: client.ip }, ctx.now()).catch((err) => console.error('kid-log: 落盘失败', err));
+      return { status: 200, json: { ok: true }, ...(known ? {} : { setCookie: deviceCookie(device, Boolean(ctx.listen?.().https)) }) };
+    }
     if (p === '/api/kid/voice-diag' && method === 'POST') {
       if (!isObj(body) || JSON.stringify(body).length > 4000) return { status: 400, json: { error: 'bad_request' } };
       const row = { at: ctx.now().toISOString(), ...body };
@@ -1030,7 +1047,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         return { status: 200, json: await kidHistory(ctx, tutor, days) };
       }
       if (tail === 'messages' && method === 'POST') {
-        const r = await kidSendInput(ctx, tutor, body, date);
+        const r = await kidSendInput(ctx, tutor, body, date, client.device);
         if ('error' in r) return r.error;
         const started = await ctx.runner.send(tutor, r.input);
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread } };
@@ -1404,7 +1421,7 @@ export function createHandler(ctx: AppContext): (req: IncomingMessage, res: Serv
       try {
         const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readBody(req);
         // HEAD 照 GET 走路由;Node 对 HEAD 的响应本来就不发正文
-        r = await route(req.method === 'HEAD' ? 'GET' : (req.method ?? 'GET'), req.url ?? '/', ctx, body, await ctx.access.whoOf(req));
+        r = await route(req.method === 'HEAD' ? 'GET' : (req.method ?? 'GET'), req.url ?? '/', ctx, body, await ctx.access.whoOf(req), { device: cookieOf(req.headers.cookie, DEVICE_COOKIE), ip: req.socket.remoteAddress });
       } catch (err) {
         r = err instanceof UsageError ? { status: 400, json: { error: 'usage', message: err.message } } : { status: 500, json: { error: 'internal', message: err instanceof Error ? err.message : String(err) } };
         if (r.status === 500) console.error(err);

@@ -7,6 +7,7 @@
  */
 import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
 import { KID_NAV_JS } from '../server/kid-nav.ts';
+import { KID_LOG_JS } from '../server/kid-log.ts';
 import { UNLOCK_JS } from './unlock.ts';
 import { REEL_MODE_JS } from './reel-mode.ts';
 import { SNAP_CSS, snapHtml } from '../server/photo-ui.ts';
@@ -302,6 +303,8 @@ ${TUTOR_FACE_CSS}
 </div>
 
 <script>
+// 孩子端的流水(kid-log.ts,《孩子端流水设计.md》):最先装上出错的监听
+${KID_LOG_JS}
 (function () {
   'use strict';
   var $ = function (s) { return document.querySelector(s); };
@@ -323,6 +326,8 @@ ${BTN_JS}
   var HOME = q.get('home'); var N = Number(q.get('n') || 0); var TUTOR = q.get('tutor');
   /** 家长看录像时,这一页开在录像外壳的 iframe 里:只照记录画,不发事件、不念、点不动(《家长录像设计.md》拍板 13) */
   var REEL_ID = q.get('reel');
+  // 录像里只记出错,不报打开
+  kidLog.start({ page: 'dictation', mode: REEL_ID ? 'reel' : 'kid', ctx: function () { return { tutor: TUTOR || null }; } });
   var S = { v: null, base: Date.now(), i: 0, w: null, pads: [], stack: [], active: null, sawPen: false, noAudio: false, sayTimer: 0, order: null, rw: null };
   /** 写字格多大(拍板 30):l 铺满写字区(上限 900)、m 500、s 380;再写一遍也照它封顶。孩子选的记在 cookie,录像照记录 */
   var PAD_CAP = { l: 900, m: 500, s: 380 };

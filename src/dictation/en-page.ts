@@ -7,6 +7,7 @@
  */
 import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
 import { KID_NAV_JS } from '../server/kid-nav.ts';
+import { KID_LOG_JS } from '../server/kid-log.ts';
 import { EN_BOX_CSS, EN_BOX_JS } from './en-box.ts';
 import { UNLOCK_JS } from './unlock.ts';
 import { REEL_MODE_JS } from './reel-mode.ts';
@@ -155,6 +156,8 @@ ${BTN_CSS}
 </div>
 <div id="toast"></div>
 <script>
+// 孩子端的流水(kid-log.ts,《孩子端流水设计.md》):最先装上出错的监听
+${KID_LOG_JS}
 (function () {
   'use strict';
   var $ = function (s) { return document.querySelector(s); };
@@ -172,6 +175,8 @@ ${BTN_JS}
   var HOME = q.get('home'); var N = Number(q.get('n') || 0); var TUTOR = q.get('tutor');
   /** 家长看录像时,这一页开在录像外壳的 iframe 里:只照记录画,不发事件、不念、点不动(《家长录像设计.md》拍板 13) */
   var REEL_ID = q.get('reel');
+  // 录像里只记出错,不报打开
+  kidLog.start({ page: 'dictation-en', mode: REEL_ID ? 'reel' : 'kid', ctx: function () { return { tutor: TUTOR || null }; } });
   var S = { v: null, base: Date.now(), i: 0, strokes: [], undos: 0, gone: [], revealed: false, word: null, sawPen: false, mode: 'first', hide: false, noAudio: false, tok: 0, timer: 0 };
   var now = function () { return Math.max(0, Date.now() - S.base); };
   var setView = function (v) { var fresh = !S.v || S.v.id !== v.id; S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); if (fresh) { S.vw = 0; sendView(); } };

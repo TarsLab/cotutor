@@ -12,6 +12,7 @@ import { wordDrawJs } from '../server/word-draw.ts';
 import { AUDIO_CLIENT_JS } from '../live/audio-client.ts';
 import { TUTOR_FACE_CSS, TUTOR_FACE_JS, backTutorJson } from '../server/tutor-face.ts';
 import { KID_NAV_JS } from '../server/kid-nav.ts';
+import { KID_LOG_JS } from '../server/kid-log.ts';
 import { SNAP_CSS, cameraSvg, snapHtml } from '../server/photo-ui.ts';
 import { faviconLinks } from '../lib/favicon.ts';
 
@@ -270,6 +271,8 @@ ${SNAP_CSS}
 <div class="toast" id="toast"></div>
 
 <script>
+// 孩子端的流水(kid-log.ts,《孩子端流水设计.md》):最先装上出错的监听
+__KID_LOG_JS__
 (() => {
   const $ = (s) => document.querySelector(s);
   const h = (tag, attrs, ...kids) => { const el = document.createElement(tag); for (const k in attrs || {}) { if (k === 'class') el.className = attrs[k]; else if (k === 'on') { for (const e in attrs[k]) el.addEventListener(e, attrs[k][e]); } else if (k === 'html') el.innerHTML = attrs[k]; else if (attrs[k] !== null && attrs[k] !== undefined) el.setAttribute(k, attrs[k]); } for (const c of kids.flat()) if (c !== null && c !== undefined) el.append(c); return el; };
@@ -316,6 +319,8 @@ __WORD_DRAW_JS__
   const go = (hash) => { location.hash = hash; };
   /** 录像模式(?reel=<id>,《口语课设计.md》§8.3):开在家长端录像外壳的 iframe 里,照录下的消息画孩子那一屏 */
   const REEL_ID = new URLSearchParams(location.search).get('reel');
+  // 录像里只记出错,不报打开
+  kidLog.start({ page: 'talk', mode: REEL_ID ? 'reel' : 'kid' });
   let RL = null;
   /** 现在几毫秒:平时是钟;录像里是录像放到的那一刻(离通话开始) */
   const nowMs = () => (RL ? RL.t : Date.now());
@@ -783,5 +788,5 @@ __TALK_REEL_JS__
 
 /** back:链接带的 ?tutor= 那位老师(胶囊上的颜色、首字,《产品规划.md》拍板 26);不知道 null */
 export function talkPage(back: { color: string; initial: string; display: string } | null = null): string {
-  return TALK_PAGE.replace('__AUDIO_CLIENT_JS__', () => AUDIO_CLIENT_JS).replace('__TUTOR_FACE_JS__', () => TUTOR_FACE_JS).replace('__KID_NAV_JS__', () => KID_NAV_JS).replace('__BACK_TUTOR__', () => backTutorJson(back)).replace('__TUTOR_FACE_CSS__', () => TUTOR_FACE_CSS).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__TALK_REEL_JS__', () => TALK_REEL_JS);
+  return TALK_PAGE.replace('__AUDIO_CLIENT_JS__', () => AUDIO_CLIENT_JS).replace('__TUTOR_FACE_JS__', () => TUTOR_FACE_JS).replace('__KID_LOG_JS__', () => KID_LOG_JS).replace('__KID_NAV_JS__', () => KID_NAV_JS).replace('__BACK_TUTOR__', () => backTutorJson(back)).replace('__TUTOR_FACE_CSS__', () => TUTOR_FACE_CSS).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__TALK_REEL_JS__', () => TALK_REEL_JS);
 }

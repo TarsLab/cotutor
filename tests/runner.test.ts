@@ -286,13 +286,15 @@ try {
   const kd = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null; reply: string | null; audio: string | null }[]; pending: string | null };
   check('孩子视图:系统发的只见回复,搜不到工具、错误、家长尾巴', kd.messages.length === 1 && kd.messages[0].question === null && kd.messages[0].reply === '第一次说:新的一天' && !/工具|error|holdup|handoff|costUsd|Read/.test(JSON.stringify(kd)), JSON.stringify(kd));
   check('hidden 的 helper 对孩子端不存在', (await route('GET', '/api/kid/conversations/helper/today', ctx)).status === 404);
-  const kp = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '孩子问的' });
+  const kp = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '孩子问的' }, 'local', { device: '0123456789ab' });
   check('孩子发消息 202', kp.status === 202, JSON.stringify(kp.json));
   const kdMid = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { pending: string | null; messages: { pending: boolean }[] };
   check('跑的时候 pending', kdMid.pending !== null && kdMid.messages[1].pending === true);
   await wait('math-tutor');
   const kd2 = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null; reply: string | null; audio: string | null; section?: { lines: { audio: string | null }[] } }[] };
   check('回复 + 逐句配音文件名', kd2.messages[1].question === '孩子问的' && kd2.messages[1].reply === '接着说:孩子问的' && kd2.messages[1].section?.lines[0].audio === '2026-09-09.0800-2.1.mp3', JSON.stringify(kd2.messages[1]));
+  const kidMsg = ((await day('math-tutor', '2026-09-09')).json as { index: { messages: { text: string; deviceId?: string }[] } }).index.messages.find((m) => m.text === '孩子问的');
+  check('孩子端发的消息记设备编号(服务端从 cookie 取,《孩子端流水设计.md》)', kidMsg?.deviceId === '0123456789ab', JSON.stringify(kidMsg?.deviceId));
   const au = await route('GET', '/api/audio/math-tutor/2026-09-09.0800-2.1.mp3', ctx);
   check('配音文件能取', au.status === 200 && au.file !== undefined && au.contentType === 'audio/mpeg' && readFileSync(au.file!, 'utf8').includes('接着说:孩子问的'), JSON.stringify(au));
   check('配音路径校验', (await route('GET', '/api/audio/math-tutor/../cotutor.json', ctx)).status === 404 && (await route('GET', '/api/audio/math-tutor/2026-09-09.0800-9.mp3', ctx)).status === 404);

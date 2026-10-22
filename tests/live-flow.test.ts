@@ -56,8 +56,9 @@ await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
 const port = (server.address() as { port: number }).port;
 
 type Msg = Record<string, any>;
-async function connect(tutor: string, query = '') {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/api/live/${tutor}/ws${query}`);
+async function connect(tutor: string, query = '', cookie?: string) {
+  // Node 的 WebSocket(undici)认 headers:设备 cookie 由浏览器自己带,这里手填
+  const ws = cookie ? new WebSocket(`ws://127.0.0.1:${port}/api/live/${tutor}/ws${query}`, { headers: { cookie } } as never) : new WebSocket(`ws://127.0.0.1:${port}/api/live/${tutor}/ws${query}`);
   ws.binaryType = 'arraybuffer';
   const k = { ws, msgs: [] as Msg[], bins: 0, closed: null as { code: number; reason: string } | null, refused: false };
   ws.onmessage = (e) => { if (typeof e.data === 'string') k.msgs.push(JSON.parse(e.data)); else k.bins++; };
@@ -71,7 +72,7 @@ const quoted = (ins: string | undefined): string => { const at = (ins ?? '').ind
 const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversations', 'chinese-tutor', `${date}.json`), 'utf8')) as { messages: Msg[] };
 
 {
-  const k = await connect('chinese-tutor');
+  const k = await connect('chinese-tutor', '', 'cotutor_kid=a1b2c3d4e5f6');
   const okReady = await until(() => has(k, (m) => m.t === 'ready'));
   const c = fake.conns[0];
   check('连上:手动轮次、嘴的人设(语文老师、Ray、只照做)、音色是 live.voices 的', okReady && c.session?.turn_detection === null && String(c.session?.instructions).includes('语文老师') && String(c.session?.instructions).includes('Ray') && String(c.session?.instructions).includes('原样说出来') && c.session?.voice === 'Serena', JSON.stringify(c.session).slice(0, 300));
@@ -94,7 +95,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   const okAll = await until(() => k.msgs.filter((m) => m.t === 'read' && m.job === turn.job).length === lines.length, 10000);
   await until(() => k.bins >= c.responses.length);
   const said = c.responses.map((r) => quoted(r?.instructions)).join('');
-  check('脑:实时轮(消息记 live、讲稿没配音)、开了新话题', okTurn && okRun && msg.live === true && msg.thread === turn.job && turn.thread === turn.job && lines.length >= 2 && msg.section.lines.every((l: Msg) => !l.audio), JSON.stringify({ live: msg.live, lines }));
+  check('脑:实时轮(消息记 live、讲稿没配音、升级请求里的设备)、开了新话题', okTurn && okRun && msg.live === true && msg.deviceId === 'a1b2c3d4e5f6' && msg.thread === turn.job && turn.thread === turn.job && lines.length >= 2 && msg.section.lines.every((l: Msg) => !l.audio), JSON.stringify({ live: msg.live, lines }));
   check('照念:一拍一拍交给嘴,念的字拼起来就是讲稿,一句不多一句不少', okAll && said === lines.join(''), JSON.stringify({ said, lines }));
   const reads = k.msgs.filter((m) => m.t === 'read');
   check('孩子端:每句开始放时收到 {t:read, job, line, text},一句一个、序号连起来是全部讲稿、字就是讲稿', reads.length >= 2 && reads.every((m) => m.job === turn.job) && reads.map((m) => m.line).join() === lines.map((_l, i) => i).join() && reads.every((m) => m.text === lines[m.line]), JSON.stringify(reads));

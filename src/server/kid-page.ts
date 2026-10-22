@@ -41,6 +41,7 @@ import { albumSvg, cameraSvg } from './photo-ui.ts';
 import { AUDIO_CLIENT_JS } from '../live/audio-client.ts';
 import { VOICE_CSS, VOICE_JS } from './voice-ui.ts';
 import { KID_NAV_JS } from './kid-nav.ts';
+import { KID_LOG_JS } from './kid-log.ts';
 import { BACK_TINT_CSS, BACK_TINT_JS } from './tutor-face.ts';
 import { BOARD_MARK_CSS, BOARD_MARK_HAND_LEFT_CSS, BOARD_MARK_JS } from './board-mark.ts';
 
@@ -746,6 +747,8 @@ __VOICE_CSS__
   <div id="lb"><div class="zoom"><img alt=""></div><button type="button" class="x" id="lb-x"></button><button type="button" class="nav l" id="lb-l">‹</button><button type="button" class="nav r" id="lb-r">›</button><div class="n" id="lb-n"></div></div>
 </section>
 <script>
+// 孩子端的流水(kid-log.ts,《孩子端流水设计.md》):最先装上出错的监听;打开那一下在下面 kidLog.start
+${KID_LOG_JS}
 (() => {
 __BOARD_JS__
 __PHOTO_JS__
@@ -771,6 +774,8 @@ __BRAND_JS__
   const PREVIEW = MODE.preview === true;
   // 孩子端不往浏览器历史里加东西(kid-nav.ts,《产品规划.md》拍板 25):去听写、口语课的链接都是替换当前页;家长端、录像、预览照常
   if (!PARENT && !REEL && !PREVIEW) { ${KID_NAV_JS} }
+  // 只有孩子端报「打开」、登记设备;家长端、录像、预览开在家长自己的设备上,只记出错。ctx 出错时才取(S、LV 在下面)
+  kidLog.start({ page: 'kid', mode: PARENT ? 'parent' : REEL ? 'reel' : PREVIEW ? 'preview' : 'kid', v: PAGE_V, ctx: () => ({ tutor: S.tutor ? S.tutor.name : null, thread: S.thread || null, live: Boolean(LV.on) }) });
   /** 孩子端对话接口的前缀(messages / photos / cards / history);家长端只看,一天的板书走自己的路 */
   const CONV = '/api/kid/conversations/';
   const AUDIO = '/api/audio/';

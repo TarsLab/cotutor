@@ -23,7 +23,6 @@ export function analyzeReferenceDoc(): string {
     [f.log('<job>'), '老师进程的 stdout 原样(stream-json):每次 tool_use 的完整参数、tool_result 的内容、文本、result(费用、轮数)。最大最全,别整个读,按 job 与关键字 grep'],
     [f.err('<job>'), 'stderr'],
     [f.events('<job>'), '这轮的事件流,一行一条 {t, lane, kind, …}:main 老师 / tts 配音 / ready 就绪 / index / ledger;cotutor trace 读它'],
-    [f.lineAudio('<job>', 9999).replace('9999', '<n>'), '讲稿第 n 句的配音'],
     [f.card('<job>', 9999).replace('9999', '<n>'), '第 n 张卡的状态(孩子在卡上做的):{at, turn, state}'],
     [f.cardAsset('<job>', 9999, '<k>.mp3').replace('9999', '<n>'), '卡的资产(点读段配音)'],
   ];

@@ -1,11 +1,11 @@
 /**
- * 家长端「看原文」的一轮全景(2026-09-11):把一次运行拆成六站,一个接口给全。
+ * 家长端「看原文」的一轮全景(2026-09-11):把一次运行拆成几站,一个接口给全。
  * 调试时要回答的不是「老师写了什么」,而是「这一层是谁吃掉的」——孩子没看见那张卡,可能是老师没写、
  * 可能 kidSource 没挑中那一段、可能 parseBoard 没认出那个标签、也可能 stripSecrets 剥过头。
- * 每站的数据都从盘上现读现算,不进索引:原文在 .log,发出去的在 .run.json,卡的状态在 .cards/,配音就看文件在不在。
+ * 每站的数据都从盘上现读现算,不进索引:原文在 .log,发出去的在 .run.json,卡的状态与资产在 .cards/。讲稿不配音(《产品规划.md》拍板 30),「配音」那站跟着删了,卡的资产在「下发给孩子」里。
  * 「重解」= 拿当前解析器再跑一遍原文与索引里存的比 —— 索引是物化的,改完解析器老样本会不会变,只有这样才知道。
  */
-import { readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { cardLabel, describeCard, stripSecrets } from '../cards/index.ts';
 import { annotateSource, type BoardWarning, type SourceRow } from '../lib/board.ts';
 import { conversationFiles, type CardStateFile } from '../lib/conversation.ts';
@@ -19,7 +19,7 @@ import { readErrLog, readIndex, readRunFile, readTranscript, scanCards, type Run
 import { formatEvent, parseEvents, timelineSpans, type RunEvent, type TimelineSpan } from '../lib/events.ts';
 
 export interface RawStation {
-  id: 'pack' | 'timeline' | 'source' | 'parse' | 'kid' | 'audio' | 'tools' | 'trace' | 'ledger';
+  id: 'pack' | 'timeline' | 'source' | 'parse' | 'kid' | 'tools' | 'trace' | 'ledger';
   title: string;
   /** 体量那行小字 */
   note: string;
@@ -35,9 +35,6 @@ export interface RawKidLine {
   text: string;
   /** 按 replyMaxChars 截掉的尾巴(孩子看不到、也不念);没截就是空串 */
   cut: string;
-  /** 配音文件名;null = 没有(没配音色 / 失败,孩子端退浏览器合成) */
-  audio: string | null;
-  audioOk: boolean;
 }
 
 export interface RawCard {
@@ -91,7 +88,6 @@ export interface RawView {
   files: { log: string; run: string | null };
 }
 
-const exists = async (f: string): Promise<boolean> => Boolean(await stat(f).catch(() => null));
 
 const cardOneLine = (c: BoardCard): string => `${c.kind} ${cardLabel(c)}`.trim();
 
@@ -146,7 +142,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
   const diff = diffSections(stored, freshCut);
   const same = diff.every((d) => d.s === '·');
 
-  // 下发给孩子那一份:讲稿按 replyMaxChars 截、配音文件在不在、卡剥完答案是什么样
+  // 下发给孩子那一份:讲稿按 replyMaxChars 截、卡剥完答案是什么样、卡的资产
   const shown = stripSecrets(ann.section);
   const { states, assets } = await scanCards(ws, tutor, date);
   const jobStates: Record<number, CardStateFile> = states[job] ?? {};
@@ -155,8 +151,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
   for (const [i, l] of (stored?.lines ?? freshCut.lines).entries()) {
     const full = ann.section.lines[i]?.text ?? l.text;
     const head = l.text.replace(/…$/, '');
-    const audio = l.audio ?? null;
-    lines.push({ text: l.text, cut: full.length > l.text.length && full.startsWith(head) ? full.slice(head.length) : '', audio, audioOk: audio ? await exists(files.lineAudio(job, i + 1)) : false });
+    lines.push({ text: l.text, cut: full.length > l.text.length && full.startsWith(head) ? full.slice(head.length) : '' });
   }
   const cards: RawCard[] = (stored?.cards ?? ann.section.cards).map((c, n) => ({
     n,
@@ -174,7 +169,6 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
   const toolFailed = tools.filter((t) => t.ok === false).length;
   const events = parseEvents(await readFile(files.events(job), 'utf8').catch(() => ''));
   const warnCount = ann.warnings.length + (m.warnings?.length ?? 0);
-  const dubbed = lines.filter((l) => l.audioOk).length;
   // 实时的轮:松手(或发出)到嘴接住开始放、到第一句开始放(嘴这一道的事件)
   const rel = events.find((e) => e.lane === 'mouth' && e.kind === 'release');
   const caughtEv = events.find((e) => e.lane === 'mouth' && e.kind === 'catch');
@@ -186,7 +180,6 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     { id: 'source', title: '老师原文', note: `${src ? src.split('\n').length : 0} 行 · 顶层 ${blocks.length} 段${dropped.length ? ` · 丢 ${dropped.length} 段` : ''}`, state: src ? 'ok' : 'none' },
     { id: 'parse', title: '解析结果', note: `${ann.section.cards.length} 卡 · ${ann.section.lines.length} 句${warnCount ? ` · ${warnCount} 提醒` : ''}${same ? '' : ' · 与索引不同'}`, state: warnCount || !same ? 'warn' : 'ok' },
     { id: 'kid', title: '下发给孩子', note: `${lines.length} 句${lines.some((l) => l.cut) ? ` · 截了 ${lines.filter((l) => l.cut).length} 句` : ''} · ${cards.length} 卡`, state: lines.length || cards.length ? 'ok' : 'none' },
-    { id: 'audio', title: '配音与资产', note: !lines.length ? '这轮没有讲稿' : !lines.some((l) => l.audio) ? '没配音 · 孩子端用浏览器的声' : `${dubbed} / ${lines.length} 句${m.timing?.dubbedMs !== undefined ? ` · ${secs(m.timing.dubbedMs)}` : ''}`, state: !lines.length || !lines.some((l) => l.audio) ? 'none' : dubbed === lines.length ? 'ok' : 'warn' },
     { id: 'tools', title: '读了什么', note: tools.length ? `${tools.length} 次工具${toolFiles ? ` · 读了 ${toolFiles} 个文件` : ''}${toolFailed ? ` · ${toolFailed} 次失败` : ''}${tools.some((t) => t.sub) ? ' · 有子代理' : ''}` : '没用工具(只凭上下文包答的)', state: toolFailed ? 'warn' : tools.length ? 'ok' : 'none' },
     { id: 'trace', title: '转录与报错', note: `${transcript?.items.length ?? 0} 条${err ? ' · stderr 有东西' : ''}`, state: m.result === 'error' || err ? 'warn' : 'ok' },
   ];

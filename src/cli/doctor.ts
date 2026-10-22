@@ -336,7 +336,7 @@ export async function doctorWorkspace(
       push({ name: `tutor.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建' });
       // 音色:一老师一音色走 API 是正路(《工作流程.md》§四);没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师不对孩子说话,不用音色
       const tc = ws.config.tutors[name];
-      if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),孩子端用浏览器合成声——只适合测试`, fix: '家长端「音色」页能听着挑(挑中直接写进去);终端里 voxtell voices --grep <关键词> 挑一个、voxtell preview <voice> 试听,填进 voice' });
+      if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡、录音卡的示范音)配不了——只适合测试`, fix: '家长端「音色」页能听着挑(挑中直接写进去);终端里 voxtell voices --grep <关键词> 挑一个、voxtell preview <voice> 试听,填进 voice' });
       // 卡的清单(《卡片协议.md》「谁拿到哪些卡」):有脸的老师才递板书写法;只是报一声讲哪几种
       if (takesTutorRules(name)) {
         const kinds = tutorCardKinds(tc.cards);

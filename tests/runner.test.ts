@@ -165,17 +165,17 @@ try {
     pack: { prompt: string; argv: string[]; resume: boolean; session: string | null } | null;
     source: { text: string; rows: { role: string; label?: string }[]; warnings: { text: string; line?: number }[] };
     fresh: { same: boolean; diff: { s: string }[] };
-    kid: { lines: { text: string; cut: string; audio: string | null; audioOk: boolean }[]; cards: unknown[] };
+    kid: { lines: { text: string; cut: string }[]; cards: unknown[] };
     trace: unknown[];
     stored: { kidText: string | null };
   };
   const rawR = await route('GET', `/api/conversations/math-tutor/2026-09-08/raw/${job1}`, ctx);
   const rawView1 = rawR.json as Raw;
-  check('看原文:七站都在(2026-09-15 加「读了什么」)', rawR.status === 200 && rawView1.stations.map((x) => x.id).join() === 'pack,timeline,source,parse,kid,audio,tools,trace', JSON.stringify(rawView1.stations?.map((x) => x.id)));
+  check('看原文:七站都在(2026-09-15 加「读了什么」;2026-10-22 讲稿不配音,「配音」那站去掉)', rawR.status === 200 && rawView1.stations.map((x) => x.id).join() === 'pack,timeline,source,parse,kid,tools,trace', JSON.stringify(rawView1.stations?.map((x) => x.id)));
   check('看原文:上下文包落了盘,消息正文与完整命令行都在', rawView1.pack?.prompt.includes('妈妈我不懂这一步') === true && rawView1.pack.argv.includes('--agent') && rawView1.pack.resume === false, JSON.stringify(rawView1.pack?.argv));
   check('看原文:原文逐行标了角色', rawView1.source.text.includes('第一次说') && rawView1.source.rows.some((r) => r.role === 'say' && r.label?.startsWith('讲稿') === true), JSON.stringify(rawView1.source.rows));
   check('看原文:当前解析器重解 = 索引里存的(同一版解析器,不该有差异)', rawView1.fresh.same === true && rawView1.fresh.diff.every((d) => d.s === '·'), JSON.stringify(rawView1.fresh.diff));
-  check('看原文:下发给孩子那一站讲稿没有配音', rawView1.kid.lines[0].audio === null && rawView1.kid.lines[0].cut === '', JSON.stringify(rawView1.kid.lines));
+  check('看原文:下发给孩子那一站讲稿不带配音', !('audio' in rawView1.kid.lines[0]) && rawView1.kid.lines[0].cut === '', JSON.stringify(rawView1.kid.lines));
   const fx = (await route('GET', `/api/conversations/math-tutor/2026-09-08/raw/${job1}/fixture`, ctx)).json as { name: string; text: string };
   check('看原文:fixture 是原文原样一份', fx.name === `math-tutor-2026-09-08-${job1}.md` && fx.text.includes('第一次说') && fx.text.endsWith('\n'), JSON.stringify(fx));
   check('看原文:没有这一轮 → 404', (await route('GET', '/api/conversations/math-tutor/2026-09-08/raw/9999-9', ctx)).status === 404);
@@ -429,7 +429,7 @@ try {
   const mP = mS as unknown as PostMsg;
   check('没有后期:不排行、卡没有 look、老师的标注原样(没 pen)、消息上没有 post、没落 post.json', mP.section !== undefined && mP.section.layout === undefined && mP.section.cards.every((c) => c.look === undefined) && mP.section.lines[0].marks.length === 1 && mP.section.lines[0].marks[0].pen === undefined && !('post' in (mS as object)) && !existsSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobS2}.post.json`)), JSON.stringify([mP.section?.layout, mP.section?.cards.map((c) => c.look), mP.section?.lines[0].marks]));
   const rawS = (await route('GET', `/api/conversations/math-tutor/2026-09-09/raw/${jobS2}`, ctx)).json as Raw;
-  check('看原文:八站,没有「板书后期」', rawS.stations.map((x) => x.id).join() === 'pack,timeline,source,parse,kid,audio,tools,trace', JSON.stringify(rawS.stations));
+  check('看原文:没有「板书后期」与「配音」', rawS.stations.map((x) => x.id).join() === 'pack,timeline,source,parse,kid,tools,trace', JSON.stringify(rawS.stations));
   check('看原文:时间线站有事件、甘特的段与一行一条', (rawS as unknown as { timeline: { spans: unknown[]; lines: string[] } }).timeline.spans.length > 5 && (rawS as unknown as { timeline: { lines: string[] } }).timeline.lines[0].includes('起 '), '');
   // 孩子端发消息带端:记在消息上(行由页面排);坏的端 400
   const rPhone = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '板书 手机', device: 'phone' });

@@ -39,7 +39,10 @@ for (const t of Object.values(cfg.tutors)) delete t.runtime;
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
-const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home }, stdio: 'ignore', detached: keep });
+// 老师都走实时(《产品规划.md》拍板 30):嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
+const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
+const mouth = await startFakeRealtime();
+const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home, COTUTOR_LIVE_ENDPOINT: mouth.endpoint }, stdio: 'ignore', detached: keep });
 for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch {} await sleep(250); }
 const api = async (method, path, body) => { const r = await fetch(base + path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, json: await r.json().catch(() => null) }; };
 const settle = async (tutor) => { for (let i = 0; i < 80; i++) { const d = (await api('GET', `/api/kid/conversations/${tutor}/today`)).json; if (d && !d.pending && d.messages.every((m) => !m.pending)) return d; await sleep(250); } return null; };
@@ -165,6 +168,7 @@ for: ${day}
 
   ws.close();
 } finally {
+  mouth.close();
   if (browser) browser.kill();
   if (!keep) {
     serve.kill();

@@ -3,8 +3,9 @@
  * 「接着刚才的」挪到空白板(《wip/activity设计.md》§八,设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm)的手动验收
  * (不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 临时 workspace + HTTP serve → 语文老师先有一个自由话题、一个你说我画话题 → 发布带 `activity 你说我画` 的首页 →
- * Chrome 开孩子端:牌上没有「接着刚才的」→ 新话题的空白板有胶囊,点了回到那个话题 →
- * 点你说我画:先问「接着刚才那个 / 重新开始」(输入条藏着,没发消息)→ 接着:回到那个话题 → 再点、重新开始:按钮字发出去、新话题记 activity。
+ * Chrome 开孩子端:牌上没有「接着刚才的」→ 新话题的左栏有「接着刚才的」,点了回到那个话题 →
+ * 点你说我画:先问「接着刚才那个 / 重新开始」(按钮灰着「点上面开始」,没发消息)→ 接着:回到那个话题 → 再点、重新开始:按钮字发出去、新话题记 activity。
+ * 老师都走实时(《产品规划.md》拍板 30):开场的话与选择在左栏(#lv-ask、#lv-acts),板上那块收着;嘴是假百炼。
  *
  * 用法:node scripts/probe-resume.mjs [--out <截图目录>] [--keep]
  */
@@ -40,7 +41,10 @@ for (const t of Object.values(cfg.tutors)) delete t.runtime;
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
-const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home }, stdio: 'ignore', detached: keep });
+// 老师都走实时(《产品规划.md》拍板 30):嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
+const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
+const mouth = await startFakeRealtime();
+const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home, COTUTOR_LIVE_ENDPOINT: mouth.endpoint }, stdio: 'ignore', detached: keep });
 for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch {} await sleep(250); }
 const api = async (method, path, body) => { const r = await fetch(base + path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, json: await r.json().catch(() => null) }; };
 const settle = async (tutor) => { for (let i = 0; i < 80; i++) { const d = (await api('GET', `/api/kid/conversations/${tutor}/today`)).json; if (d && !d.pending && d.messages.every((m) => !m.pending)) return d; await sleep(250); } return null; };
@@ -83,7 +87,7 @@ try {
   const tapButton = async (text) => { await evaluate(`(() => { for (const b of document.querySelectorAll('#deck .pc.front .bt')) b.toggleAttribute('data-probe', b.querySelector('.btx')?.textContent === ${JSON.stringify(text)}); })()`); await tap('#deck .pc.front .bt[data-probe]'); };
   const openHome = async () => { await send('Page.navigate', { url: `${base}/` }); for (let i = 0; i < 40; i++) { if (await evaluate(`document.querySelectorAll('#deck .pc.front .bt').length > 0`)) break; await sleep(250); } await sleep(1200); };
   const backHome = async () => { await tap('#back'); await sleep(1500); };
-  const boardState = () => evaluate(`({ secs: document.querySelectorAll('#board .sec').length, blank: !!document.querySelector('#board .blank'), chip: document.querySelector('#board .blank .resume')?.textContent ?? null, ask: document.querySelector('#board .blank.ask b')?.textContent ?? null, choices: [...document.querySelectorAll('#board .ask-go')].map((b) => b.textContent), pill: !document.querySelector('#pill').hidden, mo: document.querySelector('#c-mo').textContent })`);
+  const boardState = () => evaluate(`({ secs: document.querySelectorAll('#board .sec').length, opening: document.body.classList.contains('lv-opening'), ask: document.querySelector('#lv-ask b')?.textContent ?? null, acts: [...document.querySelectorAll('#lv-acts .lv-go')].map((b) => b.textContent), choose: document.querySelector('#lv-hold')?.dataset.voice === 'choose' })`);
   await send('Runtime.enable');
   await send('Page.enable');
   await quiet(send);
@@ -93,20 +97,19 @@ try {
   const buttons = await evaluate(`[...document.querySelectorAll('#deck .pc.front .bt:not(.bt-extra)')].map((b) => b.querySelector('.btx').textContent)`);
   ok('首页语文牌:新话题、你说我画;没有应用加的「接着刚才的」', buttons.join('|') === '新话题|你说我画', JSON.stringify(buttons));
 
-  // ---- 新话题:空白板上的胶囊 → 回到那个自由话题 ----
+  // ---- 新话题:左栏的「接着刚才的」→ 回到那个自由话题 ----
   await tapButton('新话题');
   await sleep(700);
   const b1 = await boardState();
-  ok('新话题:空白板「想问什么?」下面一个胶囊,写着那个话题孩子的第一句', b1.blank && b1.chip?.includes('接着刚才的:鼓励怎么写') && b1.pill, JSON.stringify(b1));
+  ok('新话题:左栏「想问什么?」下面一颗「接着刚才的」,写着那个话题孩子的第一句;按钮能按', b1.opening && b1.ask === '想问什么?' && b1.acts.length === 1 && b1.acts[0].includes('接着刚才的') && b1.acts[0].includes('鼓励怎么写') && !b1.choose, JSON.stringify(b1));
   console.log('  ', await shot('resume-new.png'));
   const n0 = (await index()).messages.length;
-  await tap('#board .blank .resume');
+  await tap('#lv-acts .lv-go.back');
   await sleep(1500);
   const b2 = await boardState();
-  const t2 = await evaluate(`document.querySelector('#c-mo').textContent`);
-  ok('点胶囊:回到那个话题,照旧铺开,能接着说', b2.secs >= 1 && !b2.blank && b2.pill, JSON.stringify({ b2, t2 }));
+  ok('点「接着刚才的」:回到那个话题,照旧铺开,能接着说', b2.secs >= 1 && !b2.opening && !b2.choose, JSON.stringify(b2));
   const before = (await index()).messages.length;
-  ok('点胶囊不发消息', before === n0, `${n0} → ${before}`);
+  ok('点「接着刚才的」不发消息', before === n0, `${n0} → ${before}`);
   await backHome();
 
   // ---- 你说我画:今天点过,先问 ----
@@ -114,36 +117,37 @@ try {
   await sleep(800);
   const b3 = await boardState();
   const n3 = (await index()).messages.length;
-  ok('你说我画今天点过:先问接着还是重新开始;输入条藏着;没发消息', b3.ask === '今天点过「你说我画」啦' && b3.choices.length === 2 && b3.choices[0].includes('接着刚才那个') && b3.choices[0].includes('小熊和小猴种西瓜') && b3.choices[1].includes('重新开始') && !b3.pill && n3 === before, JSON.stringify({ b3, n3, before }));
+  ok('你说我画今天点过:左栏先问接着还是重新开始;按钮灰着「点上面开始」;没发消息', b3.ask === '今天点过「你说我画」啦' && b3.acts.length === 2 && b3.acts[0].includes('接着刚才那个') && b3.acts[0].includes('小熊和小猴种西瓜') && b3.acts[1].includes('重新开始') && b3.choose && n3 === before, JSON.stringify({ b3, n3, before }));
   console.log('  ', await shot('resume-ask.png'));
-  await tap('#board .ask-go.back');
+  await tap('#lv-acts .lv-go.back');
   await sleep(1500);
   const b4 = await boardState();
-  ok('接着刚才那个:回到你说我画那个话题,输入条回来', b4.secs >= 2 && !b4.blank && b4.pill, JSON.stringify(b4));
+  ok('接着刚才那个:回到你说我画那个话题,按钮能按', b4.secs >= 2 && !b4.opening && !b4.choose, JSON.stringify(b4));
   await backHome();
 
   await tapButton('你说我画');
   await sleep(800);
-  await tap('#board .ask-go.fresh');
+  await tap('#lv-acts .lv-go.fresh');
   await settle('chinese-tutor');
   await sleep(1500);
   const idx = await index();
   const last = idx.messages.filter((m) => m.from === 'kid').pop();
   ok('重新开始:按钮上的字发出去,新话题,记着你说我画与 via', last?.text === '你说我画' && last.thread === last.job && last.activity?.name === '你说我画' && last.via?.button === 0 && last.thread !== actThread, JSON.stringify({ text: last?.text, thread: last?.thread, act: last?.activity, via: last?.via }));
   const b5 = await boardState();
-  ok('老师页铺上新的一节', b5.secs === 1 && !b5.blank, JSON.stringify(b5));
+  ok('老师页铺上新的一节', b5.secs === 1 && !b5.opening, JSON.stringify(b5));
 
-  // ---- 手机:空白板的胶囊与两个选择不挤出屏幕 ----
+  // ---- 手机:左栏的两个选择不挤出屏幕 ----
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
   await backHome();
   await tapButton('你说我画');
   await sleep(800);
-  const fit = await evaluate(`(() => { const r = [...document.querySelectorAll('#board .ask-go')].map((b) => b.getBoundingClientRect()); return r.every((x) => x.left >= 0 && x.right <= innerWidth) && document.documentElement.scrollWidth <= innerWidth; })()`);
+  const fit = await evaluate(`(() => { const r = [...document.querySelectorAll('#lv-acts .lv-go')].map((b) => b.getBoundingClientRect()); return r.every((x) => x.left >= 0 && x.right <= innerWidth) && document.documentElement.scrollWidth <= innerWidth; })()`);
   ok('手机:两个选择叠成两行,不出横向滚动', fit);
   console.log('  ', await shot('resume-ask-phone.png'));
 
   ws.close();
 } finally {
+  mouth.close();
   if (browser) browser.kill();
   if (!keep) {
     serve.kill();

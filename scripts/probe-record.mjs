@@ -6,7 +6,7 @@
  * 另查:按下时计时出来、往上滑 60px 松手不存。可选每一步截图(--shots <目录>,Page.captureScreenshot 卡住就跳过)。
  *
  * 用法:node scripts/probe-record.mjs [页面 URL] [--wav <16k 或任意格式的录音>] [--shots <目录>]
- *   缺省 http://127.0.0.1:8790/?tutor=koubo-tutor&step=0.0&stage=0.1(先给口播老师发一条消息,mock 里第一节就有了)
+ *   缺省 http://127.0.0.1:8790/?tutor=koubo-tutor&stage=0.1(先给口播老师发一条消息,mock 里第一节就有了)
  */
 import { spawn } from './_guard.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -17,7 +17,7 @@ const args = process.argv.slice(2);
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args.splice(i, 2)[1] : undefined; };
 const wav = opt('--wav');
 const shots = opt('--shots');
-const url = args[0] ?? 'http://127.0.0.1:8790/?tutor=koubo-tutor&step=0.0&stage=0.1';
+const url = args[0] ?? 'http://127.0.0.1:8790/?tutor=koubo-tutor&stage=0.1';
 const chrome = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const port = 9334;
 const flags = [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${port}`, '--window-size=390,844', '--force-device-scale-factor=2', '--user-data-dir=/tmp/cotutor-probe-record', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required', ...(wav ? [`--use-file-for-fake-audio-capture=${wav}`] : []), url];

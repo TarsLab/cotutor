@@ -5,7 +5,7 @@
  * 2026-09-11 重做:一轮 = 一张卡(问句 → 板书 → 埋点 → 孩子看到 → 通知块),板书按 kind 渲染成卡片而不是把围栏原文倒给家长;
  * 顶栏与输入框各自钉死(grid-rows auto/1fr/auto + min-height:0,不再硬算 100vh - 47px:顶栏一换行就错位,composer 被顶出视口);
  * 老师团一位一行、九项政策折叠、改过的才亮;设置分路径 / 服务 / 配音三块,配音能当场试一句。
- * 看原文 = 把一轮拆成六站(上下文包 / 老师原文 / 解析结果 / 下发给孩子 / 配音 / 转录),数据来自 /api/conversations/<老师>/<日期>/raw/<job>。
+ * 看原文 = 把一轮拆成几站(上下文包 / 时间线 / 老师原文 / 解析结果 / 下发给孩子 / 读了什么 / 转录),数据来自 /api/conversations/<老师>/<日期>/raw/<job>。
  * 放在 .ts 里而不是 .html,是因为 tsc 不拷贝静态文件,dist 里就少一份。
  * 改这里注意:整份是模板字符串——页面脚本里不要用反引号与 ${},换行写 \\n,正则里别写 \\/。
  */
@@ -928,7 +928,6 @@ ${BRAND_CSS}
       if (m.timing.firstReadyMs !== undefined) foot.append(h('span', { class: 'chip' + (m.timing.firstReadyMs > SLOW_FIRST ? ' slow' : '') }, '首句就绪 ', h('b', {}, secs(m.timing.firstReadyMs))));
       if (m.timing.firstCardMs !== undefined) foot.append(h('span', { class: 'chip' + (m.timing.firstCardMs > SLOW_FIRST ? ' slow' : '') }, '首卡 ', h('b', {}, secs(m.timing.firstCardMs))));
       if (m.timing.doneMs !== undefined) foot.append(h('span', { class: 'chip' }, '整轮 ', h('b', {}, secs(m.timing.doneMs))));
-      if (m.timing.dubbedMs !== undefined) foot.append(h('span', { class: 'chip' }, '配音 ', h('b', {}, secs(m.timing.dubbedMs))));
     }
     if (m.costUsd !== undefined) foot.append(h('span', { class: 'chip money' }, '$', h('b', {}, m.costUsd.toFixed(2))));
     else if (m.tokens) foot.append(h('span', { class: 'chip money', title: '这个运行时不报钱数,只报 token(输入 / 输出)' }, h('b', {}, m.tokens.in + ' / ' + m.tokens.out), ' token'));
@@ -1013,7 +1012,7 @@ ${BRAND_CSS}
   $('#composer').addEventListener('submit', (e) => { e.preventDefault(); const t = $('#text').value.trim(); if (t || state.photos.length) send(t); });
   $('#text').addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); $('#composer').requestSubmit(); } });
 
-  // ---- 看原文:一轮拆成六站 ----
+  // ---- 看原文:一轮拆成几站 ----
   const openRaw = async (job) => {
     state.raw = null;
     state.rawJob = job;
@@ -1122,13 +1121,12 @@ ${BRAND_CSS}
       box.append(h('details', {}, h('summary', {}, '解析出来的 JSON'), h('pre', {}, JSON.stringify(raw.fresh.section, null, 2))));
       return box;
     }
-    if (s === 'kid' || s === 'audio') {
+    if (s === 'kid') {
       const box = h('div', { class: 'dsec' });
       box.append(h('h5', {}, '讲稿(真发给孩子的那一份)'));
       raw.kid.lines.forEach((l, i) => box.append(h('div', { class: 'kline' },
         h('span', { class: 'n2' }, String(i + 1)),
-        h('span', {}, l.text, l.cut ? h('span', { class: 'cut' }, l.cut) : null),
-        h('span', { class: 'au' + (l.audio ? (l.audioOk ? '' : ' bad') : ' none') }, l.audio ? (l.audioOk ? 'mp3 ✓' : '文件不在') : '没配音 · 退浏览器合成'))));
+        h('span', {}, l.text, l.cut ? h('span', { class: 'cut' }, l.cut) : null))));
       if (!raw.kid.lines.length) box.append(h('p', { class: 'hintline' }, '这轮没有讲稿。'));
       if (raw.kid.lines.some((l) => l.cut)) box.append(h('p', { class: 'hintline' }, '删除线是按 replyMaxChars 截掉的部分:孩子看不到,也不念。'));
       box.append(h('h5', {}, '卡 ' + raw.kid.cards.length + ' 张(答案已剥,孩子拿到的就是这个)'));
@@ -1338,20 +1336,20 @@ ${BRAND_CSS}
     $('#team').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '老师团'), h('span', { class: 'sub' }, '按 cotutor.json 里有谁走;键以 -tutor 结尾的是有脸的老师')), top, roster));
   };
 
-  // ---- 音色:两样声音,页头切——板书配音(tts.voices 列出全部音色,挑中的写进 tutors.<名>.voice;讲稿与卡的声音)、
+  // ---- 音色:两样声音,页头切——卡的配音(tts.voices 列出全部音色,挑中的写进 tutors.<名>.voice;点读、单词、录音卡的声音)、
   //      实时的嘴(百炼 realtime 认的 56 个,挑中的写进 live.voices.<名>,见下面 renderLiveVoices)。都是先听再挑 ----
   const AGE_BANDS = [['', '全部年龄'], ['kid', '12 岁以下'], ['young', '13–25 岁'], ['adult', '26–40 岁'], ['senior', '41 岁以上']];
   const inBand = (age, band) => !band || (typeof age === 'number' && (band === 'kid' ? age <= 12 : band === 'young' ? age >= 13 && age <= 25 : band === 'adult' ? age >= 26 && age <= 40 : age >= 41));
   const voiceState = { kind: 'tts', list: null, error: null, sample: '', inUse: {}, q: '', gender: '', band: '', text: '', for: null, playing: null, audio: null, loading: false };
-  /** 页头的切换:板书配音 / 实时的嘴 */
-  const kindSeg = () => h('span', { class: 'seg', role: 'tablist' }, ...[['tts', '板书配音'], ['live', '实时的嘴']].map(([k, label]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(voiceState.kind === k), class: voiceState.kind === k ? 'on' : '', on: { click: () => { if (voiceState.kind === k) return; stopPreview(); voiceState.kind = k; renderVoices(); } } }, label)));
+  /** 页头的切换:卡的配音 / 实时的嘴 */
+  const kindSeg = () => h('span', { class: 'seg', role: 'tablist' }, ...[['tts', '卡的配音'], ['live', '实时的嘴']].map(([k, label]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(voiceState.kind === k), class: voiceState.kind === k ? 'on' : '', on: { click: () => { if (voiceState.kind === k) return; stopPreview(); voiceState.kind = k; renderVoices(); } } }, label)));
   const stopPreview = () => {
     if (voiceState.audio) { voiceState.audio.pause(); voiceState.audio = null; }
     const b = voiceState.playing;
     voiceState.playing = null;
     if (b) { b.textContent = '▶ 试听'; b.classList.remove('on'); b.disabled = false; }
   };
-  /** 点一下合成(服务端同句同音色只合成一次)并播;再点停;换一个点就切过去。base = 板书配音 / 实时的嘴各自的试听接口 */
+  /** 点一下合成(服务端同句同音色只合成一次)并播;再点停;换一个点就切过去。base = 卡的配音 / 实时的嘴各自的试听接口 */
   const preview = async (btn, voice, panel, base = '/api/tts/preview') => {
     if (voiceState.playing === btn) return stopPreview();
     stopPreview();

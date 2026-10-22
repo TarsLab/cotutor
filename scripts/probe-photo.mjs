@@ -5,7 +5,8 @@
  * 把服务自己画的 /icon-192.png 当「照片」传上去(POST …/photos)→ 只带照片发一条 → 假老师「看图」:Read 那张、板书出 image 卡 + canvas 卡照片做底 →
  * 用 Chrome DevTools 协议开孩子端:节头有缩略图、直开画板舞台、iframe 里 excalidraw 的场景有一个 image 元素(底图)与一份 files →
  * 画一笔「给老师看」→ .cards/<n>.png 落盘;家长端那轮的问句下有缩略图。
- * 再走发照片屏(《作业照片设计.md》):相册选 2 张 → 裁一张、画一笔(没有配一句话那条了,拍板 10)→ 一条消息两张 jpg;点节头小图看大图不是再听。
+ * 再走发照片屏(《作业照片设计.md》):相册选 2 张 → 裁一张、画一笔(没有配一句话那条了,拍板 10)→ 一条消息两张 jpg;点节头小图看大图。
+ * 老师都走实时(《产品规划.md》拍板 30):嘴是假百炼;发照片屏发的那轮是实时的,节头是老师写的、不挂照片。
  *
  * 用法:node scripts/probe-photo.mjs [--keep](留下临时 workspace 与 serve 不杀,自己再看)[--shots <目录>](发照片屏:刚打开 / 裁剪中 / 编辑完 三张截图)
  */
@@ -41,7 +42,10 @@ cfg.runtimes.fake = { run: [process.execPath, '--experimental-strip-types', '--n
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
-const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home }, stdio: 'ignore', detached: keep });
+// 老师都走实时(《产品规划.md》拍板 30):嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
+const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
+const mouth = await startFakeRealtime();
+const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home, COTUTOR_LIVE_ENDPOINT: mouth.endpoint }, stdio: 'ignore', detached: keep });
 for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch {} await sleep(250); }
 const api = async (method, path, body) => { const r = await fetch(base + path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, json: await r.json().catch(() => null) }; };
 
@@ -146,18 +150,20 @@ try {
   ok('发出去:屏关、一条消息、只有照片(问句是「拍了 2 张」)、两张照片都是 jpg', closed && mine?.question === '(拍了 2 张)' && mine?.photos?.length === 2 && mine.photos.every((p) => /^captures\/\d{4}-\d{2}-\d{2}\/\d{4}-\d+\.jpg$/.test(p)), JSON.stringify({ closed, q: mine?.question, photos: mine?.photos }));
   const sizes = await evaluate(`Promise.all(${JSON.stringify(mine?.photos ?? [])}.map((p) => new Promise((r) => { const im = new Image(); im.onload = () => r([im.naturalWidth, im.naturalHeight]); im.onerror = () => r(null); im.src = '/api/kid/image?p=' + encodeURIComponent(p); })))`);
   ok('第一张是裁过的(宽 < 高)、第二张没改(512 见方,不放大)', sizes?.[0] && sizes[0][0] < sizes[0][1] && sizes[0][1] === 192 && sizes?.[1]?.[0] === 512 && sizes[1][1] === 512, JSON.stringify(sizes));
+  // 实时的轮节头是老师写的,孩子发的照片不挂节头(《wip/实时老师设想.md》拍板 20);从接口发的那轮(第一节)还挂着小图
   const lb = await evaluate(`(async () => {
-    for (let i = 0; i < 40; i++) { const heads = document.querySelectorAll('#board .sec .sh'); const last = heads[heads.length - 1]; if (last && last.querySelectorAll('img.ph').length === 2) break; await new Promise((r) => setTimeout(r, 250)); }
-    const heads = document.querySelectorAll('#board .sec .sh'); const last = heads[heads.length - 1];
-    last.querySelectorAll('img.ph')[1].click(); await new Promise((r) => setTimeout(r, 300));
-    return { on: document.querySelector('#lb').classList.contains('on'), n: document.querySelector('#lb-n').textContent, replaying: !!document.querySelector('.sec.replaying'), img: document.querySelector('#lb .zoom img').getAttribute('src') };
+    const live = document.querySelectorAll('#board .sec .sh.lh img.ph').length;
+    const ph = document.querySelector('#board .sec .sh img.ph');
+    ph.click(); await new Promise((r) => setTimeout(r, 300));
+    return { live, on: document.querySelector('#lb').classList.contains('on'), n: document.querySelector('#lb-n').textContent, img: document.querySelector('#lb .zoom img').getAttribute('src') };
   })()`);
-  ok('点节头第二张小图 → 看大图「2 / 2」,不是再听', lb?.on && lb.n === '2 / 2' && !lb.replaying && lb.img.includes(encodeURIComponent(mine?.photos?.[1] ?? '')), JSON.stringify(lb));
+  ok('点节头的小图 → 看大图(一张不写张数);实时那轮的节头不挂照片', lb?.on && lb.n === '' && lb.live === 0 && lb.img.includes(encodeURIComponent('captures/')), JSON.stringify(lb));
   ws.close();
 } catch (err) {
   console.error('✗ 探针出错:', err instanceof Error ? err.message : err);
   process.exitCode = 1;
 } finally {
+  mouth.close();
   browser?.kill();
   if (keep) { serve.unref(); console.log(`留着:workspace ${root},serve ${base}(pid ${serve.pid},自己 kill)`); }
   else { serve.kill(); await sleep(800); rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 }); }

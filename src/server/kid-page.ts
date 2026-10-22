@@ -198,7 +198,7 @@ ${faviconLinks()}
   /* 三门主科在板右边竖着写一个很淡的学科名(《产品规划.md》拍板 27,board-mark.ts) */
 ${BOARD_MARK_CSS}
   #main { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
-  /* 没有顶栏:左上角一颗胶囊「‹ logo」(整颗点了回首页;《产品规划.md》拍板 24 起放 logo,老师的脸在字幕行 / 实时的左栏),右上角喇叭 + 更多;浮在板书上面、舞台遮罩(z 4)下面,舞台开了就被压暗盖住 */
+  /* 没有顶栏:左上角一颗胶囊「‹ logo」(整颗点了回首页;《产品规划.md》拍板 24 起放 logo,老师的脸在实时的左栏 / 手机的字幕行),右上角「更多」;浮在板书上面、舞台遮罩(z 4)下面,舞台开了就被压暗盖住 */
   .tb { position:absolute; top:calc(env(safe-area-inset-top) + 10px); z-index:3; display:flex; align-items:center; gap:10px; }
   .tb.l { left:calc(env(safe-area-inset-left) + 12px); } .tb.r { right:calc(env(safe-area-inset-right) + 12px); }
   #back { display:flex; align-items:center; gap:2px; height:48px; padding:0 4px 0 8px; border-radius:24px; background:#fffffff0; border:1px solid var(--line); box-shadow:0 2px 10px #00000018; }

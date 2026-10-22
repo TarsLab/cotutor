@@ -77,10 +77,3 @@ export function strokesIn(s: Strokes, from: number, to: number): { ink: number; 
   }
   return { ink, erase };
 }
-
-/** 最后一个点的时刻(没有笔 = 0) */
-export function lastInkMs(s: Strokes): number {
-  let m = 0;
-  for (const k of s.strokes) m = Math.max(m, k.pts[k.pts.length - 1][2], k.gone ?? 0);
-  return m;
-}

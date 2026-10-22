@@ -140,10 +140,6 @@ ${faviconLinks()}
   .kid-ans .ka-t, .sh.said .ka-t { flex:0 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .kid-ans .ka-t { flex-grow:1; }
   .kid-ans.open .ka-t, .sh.said.open .ka-t { white-space:normal; }
-  .ka-mic { flex:none; width:26px; height:26px; border-radius:50%; background:var(--kid); color:var(--tint-sky-head); display:inline-flex; align-items:center; justify-content:center; }
-  .ka-mic svg { width:14px; height:14px; }
-  .sh.said .ka-mic { width:30px; height:30px; }
-  .sh.said .ka-mic svg { width:16px; height:16px; }
   .lc-still { width:100%; height:100%; }
   .lc-still img { width:100%; height:100%; display:block; object-fit:contain; }
   #rest { display:none; text-align:center; color:var(--dim); font-size:16px; padding:12px 0; }
@@ -205,7 +201,7 @@ ${BOARD_MARK_CSS}
   #back .ct-logo { color:var(--ink); margin:0 8px 0 4px; }
   /* 胶囊带上老师:填这位老师的颜色、logo 后面接首字(《产品规划.md》拍板 26,同听写、口语课一份,tutor-face.ts) */
 ${BACK_TINT_CSS}
-  .pt .hd .av .ring circle, #sub-av .ring circle { stroke-width:8; }
+  #sub-av .ring circle { stroke-width:8; }
   #back-ic { width:24px; height:24px; color:var(--dim); display:grid; place-items:center; }
   #c-mo { font-size:13px; color:var(--dim); background:#fffffff0; border:1px solid var(--line); border-radius:14px; padding:4px 12px; box-shadow:0 2px 10px #00000010; white-space:nowrap; }
   #c-mo[hidden] { display:none; }
@@ -412,7 +408,6 @@ __BRAND_CSS__
   /* 录像里的弹窗是孩子当时的样子:只看,点不动,没有关闭钮,跟着实录关 */
   body.reel #st-x, body.reel #st-act { display:none; }
   body.reel #st-body, body.reel #st-frame, body.reel #st-dim { pointer-events:none; }
-  .pt .tr small .miss { color:#b3541e; }
   /* 录像里看小课堂的那一段:铺在板书上,字幕行与控制条露着;只看 */
   /* 家长端录像(拍板 6):上半是孩子的屏幕(iframe 里的孩子端,按孩子设备的尺寸开、等比缩),下半是录像栏;家长页自己的板书、字幕行、顶栏收起来 */
   body.reel #wrap, body.reel #sub, body.reel .tb { display:none; }
@@ -643,11 +638,8 @@ __VOICE_CSS__
     body.live #lv-av { display:none; }
     body.live #lv-kid { display:flex; flex:none; align-items:flex-start; gap:8px; font-size:20px; line-height:1.4; font-weight:600; color:#2a5ea8; }
     body.live #lv-kid:empty { display:none; }
-    #lv-kid .mi { flex:none; width:26px; height:26px; margin-top:1px; border-radius:50%; background:#dbeeff; display:grid; place-items:center; }
-    #lv-kid .mi svg { width:14px; height:14px; }
     #lv-kid .tx { min-width:0; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
     body.live #lv-kid.old { font-size:17px; font-weight:400; color:#6f93c4; }
-    body.live #lv-kid.old .mi { width:22px; height:22px; background:#e8f1fc; }
     body.live #lv-cap { flex:0 1 auto; min-height:0; overflow:hidden; gap:12px; text-align:left; }
     body.live #lv-cap .lv-prev { font-size:18px; line-height:1.55; color:#a39f96; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
     body.live #lv-cap .lv-prev:empty { display:none; }
@@ -945,8 +937,6 @@ ${BOARD_MARK_JS}
   const lcLen = (ms) => { const s = Math.floor(ms / 1000); return s >= 60 ? Math.floor(s / 60) + ' 分' + (s % 60 ? ' ' + (s % 60) + ' 秒' : '') : s + ' 秒'; };
   // ---- 常驻入口(《首页设计.md》拍板 18):听写、拍照听写、口语课一直在那位老师的卡上,不经首页发布 ----
   const EXTRA_ICON = { dictation: SVG('<path d="M4 20l4-1 11-11-3-3L5 16z"></path><path d="M14 7l3 3"></path>', 20), photo: __CAMERA_20__ };
-  const extraBtn = (kind, label, sub, on) => h(on.href ? 'a' : 'button', { type: on.href ? null : 'button', class: 'bt bt-extra bt-x-' + kind, href: on.href || null, on: on.click ? { click: on.click } : {} },
-    h('span', { class: 'bi', html: EXTRA_ICON[kind === 'photo' ? 'photo' : kind] }), h('span', { class: 'lb' }, h('span', { class: 'btx' }, label), sub ? h('small', { class: 'ln' }, sub) : null));
   /** 听写(原型 B,https://claude.ai/artifact/HhpuLJXvNr94E9PqSNv6tj):一整条,上面一排空格子,几个词几格(最多 6,英文是四线三格),下面「听写 · 几个词」和「去写」 */
   const dictationBtn = (label, sub, n, en, href) => h('a', { class: 'bt bt-extra bt-x-dictation' + (en ? ' en' : ''), href },
     h('span', { class: 'dg', 'aria-hidden': 'true' }, ...Array.from({ length: Math.max(1, Math.min(n, en ? 4 : 6)) }, () => h('i'))),
@@ -2435,7 +2425,6 @@ __WORD_DRAW_JS__
     for (const f of r.effects) runEffect(f);
   };
 
-
   const loadDay = async (silent) => {
     if (!S.tutor || S.reel) return;
     try {
@@ -2649,7 +2638,6 @@ __WORD_DRAW_JS__
     if (c.kind === 'choice' && Array.isArray(p.answer) && p.answer.length) return p.answer.map((i) => ('ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i] || String(i + 1)) + (p.options && p.options[i] ? ' ' + p.options[i] : '')).join('、');
     return '';
   };
-  const reelHms = (t) => { const d = new Date(t); const p2 = (n) => String(n).padStart(2, '0'); return p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()); };
   /** 孩子那台设备的 CSS 尺寸:孩子端还没记屏幕尺寸之前,按消息里的 device 取常见的;没记 device 的按 iPad 横屏 */
   const REEL_SIZES = { 'tablet-landscape': [1180, 820], 'tablet-portrait': [820, 1180], phone: [390, 844] };
 
@@ -3087,7 +3075,6 @@ __REEL_DOCK_JS__
   $('#hold .w').replaceChildren(...[6, 10, 16, 22, 12, 26, 18, 8, 14, 24, 20, 10, 16, 28, 12, 8, 18, 22, 10, 14, 6, 12, 20, 16, 8].map((v, i) => h('i', { style: 'height:' + v + 'px;animation-delay:' + (i * 37 % 400) + 'ms' })));
 
   // 中间那段:点 = 打字;实时老师页上按住 150ms = 说话(推给嘴),松手发,上滑 60px 取消。浏览器识别 2026-10-22 删了(《产品规划.md》拍板 30;经验归档在本机 docs/archive/浏览器识别@2026-10-22/)
-  const holdOk = () => LV.on && LV.ready;
   const PH_IDLE = () => (LV.on && LV.model.open ? (LV.model.muted ? '麦关了,点右边的麦克风再听' : '我在听,直接说就行…') : LV.on ? '发消息或按住说话…' : '发消息…');
   /** 输入条上是空闲那句就按现在的重写(实时连上、一直听开关),「没听清」那几秒不动 */
   const phIdle = () => { const ph = $('#ph'); if (ph && /^(发消息|我在听|麦关了)/.test(ph.textContent)) ph.textContent = PH_IDLE(); };

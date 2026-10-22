@@ -142,8 +142,6 @@ export function lectureRange(clock: Pick<LectureClock, 'segments' | 'total'>, fr
 
 // ---- 视频来源(《小课堂设计.md》§八第 4 步):lectures/<id>/lecture.md + video.mp4 ----
 
-/** 视频小课堂放 workspace 的这个目录;一份一个子目录 */
-export const LECTURES_DIR = 'lectures';
 export const LECTURE_FILE = 'lecture.md';
 export const LECTURE_VIDEO = 'video.mp4';
 

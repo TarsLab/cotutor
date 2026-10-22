@@ -31,7 +31,6 @@ export interface CardLook {
 
 /** 五支笔:面类 marker / tint 一下子涂上;线条类 underline / box / circle 是 SVG 路径,描出来 */
 export type PenName = 'marker' | 'tint' | 'underline' | 'box' | 'circle';
-export const PENS: readonly PenName[] = ['marker', 'tint', 'underline', 'box', 'circle'];
 export const LINE_PENS: readonly PenName[] = ['underline', 'box', 'circle'];
 
 /** 孩子端是什么端(发消息时带上;渲染器按它量卡、排行) */
@@ -861,8 +860,6 @@ export function barNext(mode: BarMode, ev: BarEvent): BarMode {
       return mode;
   }
 }
-
-
 
 /** 一句念多久(毫秒):按字数估(mock 的假嘴、录像) */
 export function lineDurationMs(text: string): number {

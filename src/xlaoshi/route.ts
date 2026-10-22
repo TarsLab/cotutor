@@ -18,7 +18,7 @@
  *   GET  /api/xlaoshi/<id>/frame.png?t=  那一刻的画面
  */
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Workspace } from '../cli/workspace.ts';
 import type { RouteResult } from '../server/app.ts';
@@ -313,9 +313,4 @@ export async function xlaoshiRoute(method: string, url: URL, ctx: { ws: Workspac
   }
 
   return { status: 405, json: { error: 'method_not_allowed' } };
-}
-
-/** 给测试:读一个文件(不存在 null) */
-export async function readXlaoshiFile(wsRoot: string, id: string, rel: string): Promise<string | null> {
-  return readFile(join(dirOf(wsRoot, id), rel), 'utf8').catch(() => null);
 }

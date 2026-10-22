@@ -49,16 +49,6 @@ export function splitMods(tag: string): { rest: string; mods: CardMods; warnings
   return { rest: rest.join(' '), mods, warnings };
 }
 
-/** 围栏行:把修饰词重新写上去(课文件回写样子用);原有的排版修饰词换掉,种类与卡自己的修饰词照旧 */
-export function withMods(fenceLine: string, mods: CardMods): string {
-  const m = FENCE_OPEN.exec(fenceLine);
-  if (!m) return fenceLine;
-  const { rest } = splitMods(m[2]);
-  const words = [rest, mods.same ? 'same' : '', mods.tint ? `tint=${mods.tint}` : '', mods.look ? `look=${mods.look}` : '', mods.emoji ? `emoji=${mods.emoji}` : ''].filter(Boolean);
-  return `${fenceLine.slice(0, fenceLine.indexOf(m[1]))}${m[1]}${words.join(' ')}`;
-}
-
-
 /** 解析提醒;line = 出问题的那一行(0 起,相对传进来的文本),没有行的就不带 */
 export interface BoardWarning {
   text: string;

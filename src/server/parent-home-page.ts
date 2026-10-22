@@ -151,7 +151,6 @@ ${BRAND_JS}
   const md = (d) => Number(d.slice(5, 7)) + '/' + Number(d.slice(8, 10));
   // 留多久:只今天 = 今天;到周日 = 这周日(今天是周日就是今天);一直 = 不写
   const sunday = (today) => { const [y, m, d] = today.split('-').map(Number); const t = new Date(y, m - 1, d); t.setDate(t.getDate() + ((7 - t.getDay()) % 7)); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); };
-  const keepTag = (b) => (!b.until ? '' : b.until === D.today ? '只今天' : b.until < D.today ? '过了' : '到 ' + md(b.until));
   const BUTTONS_MAX = 4;
   const WIDE = window.matchMedia('(min-width:1000px)');
 

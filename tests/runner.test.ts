@@ -72,7 +72,7 @@ let now = new Date(2026, 8, 8, 16, 20);
 const ctx = createContext(loadWorkspace(root), { now: () => now });
 const post = (tutor: string, body: unknown) => route('POST', `/api/conversations/${tutor}/messages`, ctx, body);
 const day = (tutor: string, date: string) => route('GET', `/api/conversations/${tutor}/${date}`, ctx);
-type Timing = { startedAt: string; firstCardMs?: number; doneMs?: number; dubbedMs?: number };
+type Timing = { startedAt: string; firstCardMs?: number; doneMs?: number };
 type Day = { index: { session: { id: string; runtime: string } | null; messages: { job: string; result: string; kidText?: string | null; timing?: Timing; artifacts?: string[]; bookkeeping?: { entries: { name: string }[] } | null; handoff?: { to: string } | null; runtime?: string; error?: string | null; audio?: string | null }[]; costUsd: number }; running: string | null; runs: Record<string, { kind: string; sub?: boolean; tools?: unknown[] }[]>; errors: Record<string, string> };
 const wait = async (tutor: string): Promise<void> => {
   // runner 没暴露 done 给路由层,这里轮询 running 直到空
@@ -126,7 +126,7 @@ try {
   const m1 = d1.index.messages[0];
   check('跑完:ok、kidText 物化、费用累计', m1.result === 'ok' && m1.kidText === '第一次说:妈妈我不懂这一步' && d1.index.costUsd === 0.05 && m1.runtime === 'fake', JSON.stringify(m1));
   check('会话记下', d1.index.session?.runtime === 'fake' && d1.index.session.id.startsWith('fake-'));
-  check('埋点:startedAt 是 ISO、整轮记了;讲稿不配音就没有配音收尾;整块出的没有首卡', typeof m1.timing?.startedAt === 'string' && !Number.isNaN(Date.parse(m1.timing.startedAt)) && typeof m1.timing.doneMs === 'number' && m1.timing.doneMs >= 0 && m1.timing.dubbedMs === undefined && m1.timing.firstCardMs === undefined, JSON.stringify(m1.timing));
+  check('埋点:startedAt 是 ISO、整轮记了;整块出的没有首卡', typeof m1.timing?.startedAt === 'string' && !Number.isNaN(Date.parse(m1.timing.startedAt)) && typeof m1.timing.doneMs === 'number' && m1.timing.doneMs >= 0 && m1.timing.firstCardMs === undefined, JSON.stringify(m1.timing));
   const log = readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${job1}.log`), 'utf8');
   const init = JSON.parse(log.split('\n')[0]) as { cwd: string; agent: string };
   check('cwd 是老师目录、--agent 填了老师名', init.cwd === join(root, 'agents', 'math-tutor') && init.agent === 'math-tutor', JSON.stringify(init));
@@ -386,7 +386,7 @@ try {
   off();
   const dS = (await day('math-tutor', '2026-09-09')).json as { index: { messages: BoardMsg[] } };
   const mS = dS.index.messages.find((m) => m.job === jobS2)!;
-  // 事件:内存订阅者与 events.jsonl 同一份;顺序 start → 卡 / 句(流式时在 exit 之前)→ exit → 配音齐 → 全部就绪 → 写入
+  // 事件:内存订阅者与 events.jsonl 同一份;顺序 start → 卡 / 句(流式时在 exit 之前)→ exit → 全部就绪 → 写入
   const evLive = live.filter((e) => e.job === jobS2);
   const evFile = parseEvents(readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobS2}.events.jsonl`), 'utf8'));
   const kinds = evFile.map((e) => `${e.lane}:${e.kind}`);
@@ -404,7 +404,7 @@ try {
   off2();
   const k2 = live2.filter((e) => e.job === jobS3).map((e) => `${e.lane}:${e.kind}`);
   check('流式 + 固定段在前:卡与句仍在 exit 之前出现;记账段照样进索引', k2.indexOf('main:card') >= 0 && k2.indexOf('main:card') < k2.indexOf('main:exit') && ((await day('math-tutor', '2026-09-09')).json as Day).index.messages.find((m) => m.job === jobS3)?.bookkeeping?.entries[0].name === '重讲', k2.join(' '));
-  check('埋点:每拍的关 / 就绪从事件推出来(讲稿不配音,没有配音齐),首拍就绪 = 拍 0 的就绪', (() => { const bs = (mS as { timing?: { beats?: { card: number | null; readyMs?: number; dubbedMs?: number }[] } }).timing?.beats; return Array.isArray(bs) && bs.length === 2 && bs.every((b) => typeof b.readyMs === 'number' && b.dubbedMs === undefined); })(), JSON.stringify((mS as { timing?: { beats?: unknown } }).timing?.beats));
+  check('埋点:每拍的关 / 就绪从事件推出来,首拍就绪 = 拍 0 的就绪', (() => { const bs = (mS as { timing?: { beats?: { card: number | null; readyMs?: number }[] } }).timing?.beats; return Array.isArray(bs) && bs.length === 2 && bs.every((b) => typeof b.readyMs === 'number'); })(), JSON.stringify((mS as { timing?: { beats?: unknown } }).timing?.beats));
   check('首句就绪(拍板 15):第一句配好就记,发 ready:speak,不晚于第一拍就绪', (() => { const t = (mS as { timing?: { firstReadyMs?: number; beats?: { readyMs?: number }[] } }).timing; const sp = evFile.filter((e) => e.lane === 'ready' && e.kind === 'speak'); return sp.length === 1 && typeof t?.firstReadyMs === 'number' && t.firstReadyMs <= (t.beats?.[0]?.readyMs ?? Infinity); })(), JSON.stringify((mS as { timing?: unknown }).timing));
   check('事件:格式化成一行(相对秒 · 道 · 一句话)', /^\s*\d+\.\d\d main\s+起 .*(新会话|resume)/.test(formatEvent(evFile[0])) && formatEvent(evFile.find((e) => e.kind === 'card')!).includes('卡 0 text'), formatEvent(evFile[0]));
   check('跑完:正式一节(不带 partial)、2 张卡 3 句、讲稿没有 mp3、子代理的增量没混进来', mS.section?.cards.length === 2 && !('partial' in mS.section) && mS.section.lines.length === 3 && mS.section.lines.every((l) => l.audio === null) && !mS.kidText?.includes('子代理') && mS.kidText?.includes('第一次说:流式 板书') === true, JSON.stringify(mS));
@@ -439,7 +439,7 @@ try {
   const phone = ((await day('math-tutor', '2026-09-09')).json as Day).index.messages.find((m) => m.job === (rPhone.json as { job: string }).job) as unknown as PostMsg | undefined;
   check('孩子端带 device=phone → 消息记了端;坏的端 400', rPhone.status === 202 && phone?.device === 'phone' && (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: 'x', device: 'watch' })).status === 400, JSON.stringify([phone?.device, phone?.section?.layout]));
   const tS = (mS as unknown as { timing?: Timing }).timing;
-  check('埋点:流式轮记了首卡,首卡 ≤ 整轮;没有配音收尾', typeof tS?.firstCardMs === 'number' && tS.firstCardMs >= 0 && typeof tS.doneMs === 'number' && tS.firstCardMs <= tS.doneMs && tS.dubbedMs === undefined, JSON.stringify(tS));
+  check('埋点:流式轮记了首卡,首卡 ≤ 整轮', typeof tS?.firstCardMs === 'number' && tS.firstCardMs >= 0 && typeof tS.doneMs === 'number' && tS.firstCardMs <= tS.doneMs, JSON.stringify(tS));
   check('跑完后 partial 没了', ctx.runner.partial('math-tutor') === null && !(((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; section?: { partial?: boolean } }[] }).messages.find((m) => m.job === jobS2)?.section?.partial));
 
   // ---- 点读资产与图片:点读段在索引写好后后台配到 .cards/<n>/<k>.mp3,孩子端卡上带 assets、/api/audio 能取;图片卡的图只认 workspace 内 ----

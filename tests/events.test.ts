@@ -12,7 +12,7 @@ const parsed = parseEvents('{"t":1,"lane":"main","kind":"start","cli":"c","runti
 check('jsonl 解析:坏行与不认识的道跳过', parsed.length === 2 && parsed[0].kind === 'start' && parsed[1].lane === 'index');
 check('老的 events.jsonl 里后期那道(已删)的行跳过', parseEvents('{"t":1,"lane":"post","kind":"start","beat":0,"card":0,"context":0}\n').length === 0);
 check('老的 events.jsonl 里画图作业那道(scene,2026-10-07 删了)的行跳过', parseEvents('{"t":1,"lane":"scene","kind":"started","bundle":"x-1","job":"1902-4"}\n').length === 0);
-// 每拍的埋点从事件推:关 = 下一张卡出现(末拍 = 退出)、配音齐 = 这拍最后一句配完、就绪(末拍取 all)
+// 每拍的埋点从事件推:关 = 下一张卡出现(末拍 = 退出)、就绪(末拍取 all);老事件里卡的配音那道(tts)不影响
 const run: RunEvent[] = [
   ev({ lane: 'main', kind: 'start', cli: 'c', runtime: 'r', resume: false }, 0),
   ev({ lane: 'main', kind: 'card', card: 0, label: 'a' }, 500), ev({ lane: 'main', kind: 'line', line: 0, text: 'x' }, 600), ev({ lane: 'tts', kind: 'queued', label: '第 1 句' }, 600),
@@ -21,8 +21,8 @@ const run: RunEvent[] = [
   ev({ lane: 'main', kind: 'line', line: 1, text: 'y' }, 1300), ev({ lane: 'tts', kind: 'queued', label: '第 2 句' }, 1300), ev({ lane: 'main', kind: 'exit', ok: true }, 1500), ev({ lane: 'tts', kind: 'failed', label: '第 2 句', ms: 400, error: 'e' }, 1700),
   ev({ lane: 'ready', kind: 'all', cards: 2, lines: 2 }, 2300), ev({ lane: 'index', kind: 'written', warnings: 0 }, 2310),
 ];
-const bt = beatTimings(run, [{ card: 0, lines: [0] }, { card: 1, lines: [1] }]);
-check('每拍埋点:拍 0 关在卡 1 出现、配音 700、就绪 1200;拍 1 关在退出、配音(失败也算落定)1700、就绪取 all', JSON.stringify(bt) === '[{"card":0,"closedMs":900,"dubbedMs":700,"readyMs":1200},{"card":1,"closedMs":1500,"dubbedMs":1700,"readyMs":2300}]', JSON.stringify(bt));
+const bt = beatTimings(run, [{ card: 0 }, { card: 1 }]);
+check('每拍埋点:拍 0 关在卡 1 出现、就绪 1200;拍 1 关在退出、就绪取 all', JSON.stringify(bt) === '[{"card":0,"closedMs":900,"readyMs":1200},{"card":1,"closedMs":1500,"readyMs":2300}]', JSON.stringify(bt));
 const sp = timelineSpans(run);
 const of = (lane: string) => sp.filter((x) => x.lane === lane);
 check('时间线的段:老师 0→1500;配音两段(一段 fail);瞬时的 to = from;按起点排序', of('main')[0].from === 0 && of('main')[0].to === 1500 && of('tts').length === 2 && of('tts')[1].state === 'fail' && of('ready').every((x) => x.from === x.to) && sp.every((x, i) => i === 0 || x.from >= sp[i - 1].from), JSON.stringify(sp.map((x) => [x.lane, x.from, x.to, x.state])));

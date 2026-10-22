@@ -538,7 +538,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       // 孩子自己说的第一句:首页开场 / 接着按钮发出去的那句(正文就是按钮上的字)不算
       if (th.said === null && m.from === 'kid' && m.text.trim() && !(typeof m.via?.button === 'number' && m.via.label === m.text)) th.said = Array.from(m.text.trim()).slice(0, 30).join('');
       const t0 = Date.parse(m.timing?.startedAt ?? '');
-      const dt = m.timing?.dubbedMs ?? m.timing?.doneMs;
+      const dt = m.timing?.doneMs;
       if (Number.isFinite(t0) && dt !== undefined) th.endAt = new Date(t0 + dt).toISOString();
       const tail = (m.parentText ?? '').replace(/^##\s*家长\s*/, '').trim();
       if (tail) th.notes.push(tail);

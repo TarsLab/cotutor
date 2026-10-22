@@ -20,14 +20,12 @@ export const TimingSchema = z.object({
   warm: z.literal(true).optional(),
   /** 流式时第一张卡闭合(孩子端第一次看到东西);整块出的运行时没有 */
   firstCardMs: z.number().int().nonnegative().optional(),
-  /** 首句就绪:孩子端能开口的那一刻(头号埋点)。2026-10-08 起是第一句配好(《工作流程.md》拍板 15),之前是第一拍配音齐 */
+  /** 首句就绪:嘴能开口的那一刻(头号埋点),第一拍关了就算(讲稿不配音,《产品规划.md》拍板 30) */
   firstReadyMs: z.number().int().nonnegative().optional(),
   /** 老师进程退出 */
   doneMs: z.number().int().nonnegative().optional(),
-  /** 讲稿配音收尾(索引写好、孩子端能播的那一刻);没配音就没有 */
-  dubbedMs: z.number().int().nonnegative().optional(),
-  /** 每拍(2026-09-13,从事件推):关、配音齐、就绪 */
-  beats: z.array(z.object({ card: z.number().int().nonnegative().nullable(), closedMs: z.number().int().nonnegative().optional(), dubbedMs: z.number().int().nonnegative().optional(), readyMs: z.number().int().nonnegative().optional() })).optional(),
+  /** 每拍(2026-09-13,从事件推):关、就绪 */
+  beats: z.array(z.object({ card: z.number().int().nonnegative().nullable(), closedMs: z.number().int().nonnegative().optional(), readyMs: z.number().int().nonnegative().optional() })).optional(),
 });
 export type Timing = z.infer<typeof TimingSchema>;
 

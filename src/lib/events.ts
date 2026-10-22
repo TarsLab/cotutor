@@ -113,34 +113,28 @@ export function parseEvents(text: string): RunEvent[] {
   return out.sort((a, b) => a.t - b.t);
 }
 
-/** 一拍的埋点(从事件推,不另记账):关 = 下一张卡出现(末拍 = 老师退出)、配音齐 = 这拍最后一句配完、就绪 */
+/** 一拍的埋点(从事件推,不另记账):关 = 下一张卡出现(末拍 = 老师退出)、就绪 */
 export interface BeatTiming {
   card: number | null;
   closedMs?: number;
-  dubbedMs?: number;
   readyMs?: number;
 }
-export function beatTimings(events: readonly RunEvent[], beats: readonly { card: number | null; lines: readonly number[] }[]): BeatTiming[] {
+export function beatTimings(events: readonly RunEvent[], beats: readonly { card: number | null }[]): BeatTiming[] {
   const cardAt = new Map<number, number>();
-  const lineDub = new Map<number, number>();
   const readyAt = new Map<number, number>();
   let exit: number | undefined;
   let all: number | undefined;
   for (const e of events) {
     if (e.lane === 'main' && e.kind === 'card') cardAt.set(e.card, e.t);
     else if (e.lane === 'main' && e.kind === 'exit') exit = e.t;
-    else if (e.lane === 'tts' && (e.kind === 'done' || e.kind === 'failed')) { const m = /^第 (\d+) 句/.exec(e.label); if (m) lineDub.set(Number(m[1]) - 1, e.t); }
     else if (e.lane === 'ready' && e.kind === 'beat') readyAt.set(e.beat, e.t);
     else if (e.lane === 'ready' && e.kind === 'all') all = e.t;
   }
   return beats.map((b, k) => {
     const next = beats[k + 1];
     const closedMs = next && next.card !== null ? cardAt.get(next.card) : exit;
-    const dubs = b.lines.map((i) => lineDub.get(i));
-    const dubbedMs = b.lines.length && dubs.every((t) => t !== undefined) ? Math.max(...(dubs as number[])) : b.lines.length ? undefined : closedMs;
     const out: BeatTiming = { card: b.card };
     if (closedMs !== undefined) out.closedMs = closedMs;
-    if (dubbedMs !== undefined) out.dubbedMs = dubbedMs;
     const ready = readyAt.get(k) ?? all;
     if (ready !== undefined) out.readyMs = ready;
     return out;

@@ -145,10 +145,10 @@ try {
     {
       // 首页开场按钮进来的话题:种类 start、按钮字;按钮发出去的那句不算孩子的第一句;有计时就有结束时刻;用完删掉,后面的检查照旧
       let ci = emptyIndex('chinese-tutor', today);
-      ci = addMessage(ci, { job: '1640-1', thread: '1640-1', at: `${today}T16:40`, from: 'kid', text: '我要看图说话', via: { home: null, button: 0, label: '我要看图说话' }, timing: { startedAt: '2026-01-01T08:40:00.000Z', doneMs: 4000, dubbedMs: 6000 }, result: 'ok', artifacts: [], kidText: '好。', section: b1 });
+      ci = addMessage(ci, { job: '1640-1', thread: '1640-1', at: `${today}T16:40`, from: 'kid', text: '我要看图说话', via: { home: null, button: 0, label: '我要看图说话' }, timing: { startedAt: '2026-01-01T08:40:00.000Z', doneMs: 4000 }, result: 'ok', artifacts: [], kidText: '好。', section: b1 });
       await writeIndex(ctx.ws, ci);
       const c0 = ((await get('/api/overview/today')).json as { tutors: { name: string; threads: { start: { kind: string; label: string }; said: string | null; endAt: string | null }[] }[] }).tutors.find((t) => t.name === 'chinese-tutor')?.threads[0];
-      check('清单:开场按钮进来的是 start + 按钮字,按钮那句不算孩子的第一句;结束时刻 = 起来 + 配好音', c0?.start.kind === 'start' && c0.start.label === '我要看图说话' && c0.said === null && c0.endAt === '2026-01-01T08:40:06.000Z', JSON.stringify(c0));
+      check('清单:开场按钮进来的是 start + 按钮字,按钮那句不算孩子的第一句;结束时刻 = 起来 + 老师写完', c0?.start.kind === 'start' && c0.start.label === '我要看图说话' && c0.said === null && c0.endAt === '2026-01-01T08:40:04.000Z', JSON.stringify(c0));
       await writeIndex(ctx.ws, emptyIndex('chinese-tutor', today));
     }
     check('清单与板书接口:未来的日期 400,没这位老师 404', (await get('/api/overview/2099-01-01')).status === 400 && (await get('/api/conversations/math-tutor/2099-01-01/board')).status === 400 && (await get('/api/conversations/nobody/today/board')).status === 404);

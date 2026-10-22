@@ -52,7 +52,7 @@ ${BRAND_CSS}
   #side .health .dot.warn { box-shadow:0 0 0 3px var(--warn-soft); }
   #side .health .dot { box-shadow:0 0 0 3px var(--ok-soft); }
   #side .health .dot.err { box-shadow:0 0 0 3px var(--err-soft); }
-  #side .health small { font:400 11.5px/1.5 var(--mono); color:var(--muted); word-break:break-all; }
+  #side .health small { font:400 11.5px/1.5 var(--mono); color:var(--muted); word-break:break-all; white-space:pre-line; }
 
   main { display:none; min-height:0; min-width:0; }
   main.on { display:block; overflow:auto; }
@@ -679,7 +679,7 @@ ${BRAND_CSS}
       el.classList.toggle('bad', Boolean(hh.configError));
       el.classList.toggle('warn', Boolean(changed));
       $('#health-dot').className = 'dot' + (hh.configError ? ' err' : changed ? ' warn' : '');
-      const ran = (hh.started ? '起了 ' + ago(hh.started) : '') + (hh.version ? ' · v' + hh.version : '') + (hh.commit ? ' · ' + hh.commit + (hh.dirty ? '*' : '') : '');
+      const ran = (hh.started ? '起了 ' + ago(hh.started) : '') + (hh.version ? ' · v' + hh.version : '') + (hh.commit ? '\\n' + hh.commit + (hh.dirty ? '*' : '') : '');
       $('#health-sub').textContent = hh.configError ? '仍用上一份:' + hh.configError.split('\\n')[0] : changed ? ran + ' · 仓里是 ' + hh.head : ran;
       $('#health-sub').title = hh.dirty ? '* = 起来时仓里有没提交的改动' : '';
     } catch (e) {

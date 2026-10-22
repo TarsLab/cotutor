@@ -37,7 +37,7 @@
   ── 做好的课(不进 git:体积大,源在家长做课的地方)
   bundles/<id>/                          课包(drawtell build、dub 后整个拷进来);snaps/ 是 drawtell snap 的截图缓存
   lectures/<id>/                         视频课:lecture.md + video.mp4
-  ── 运行记录(不进 git:有孩子的原话、原声、照片)
+  ── 运行记录(不进 git:有孩子的原话、通话录音、照片)
   conversations/<name>/<日期>.*          对话索引(session id、话题、打星 ratings、记过 booked、费用)+ 每轮的 run / events / 转录 / 配音,卡的资产在 .cards/
   evals/<name>/                          回放(cotutor replay),形状同 conversations
   captures/<日期>/                       应用拍的作业照片(paths.captures;vault 里只存老师认出的文字)

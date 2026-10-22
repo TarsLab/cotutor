@@ -42,6 +42,8 @@ export interface DevDevice {
   today: number;
   /** 近 7 天页面出错几条 */
   errors: number;
+  /** 最近一次打开时服务端的提交(7.1) */
+  commit: string | null;
 }
 
 export interface DevTutorRow {
@@ -198,7 +200,7 @@ async function kidSide(ws: Workspace, today: string, days: readonly string[]): P
   const opensToday = new Map<string, number>();
   for (const l of log) if (l.k === 'open' && localDate(new Date(l.at)) === today) opensToday.set(l.device, (opensToday.get(l.device) ?? 0) + 1);
   const all = Object.entries(table).sort((a, b) => (a[1].last < b[1].last ? 1 : -1));
-  const row = ([id, d]: [string, KidDevice]): DevDevice => ({ id, name: d.name ?? null, label: d.label, last: d.last, today: opensToday.get(id) ?? 0, errors: errorsBy.get(id) ?? 0 });
+  const row = ([id, d]: [string, KidDevice]): DevDevice => ({ id, name: d.name ?? null, label: d.label, last: d.last, today: opensToday.get(id) ?? 0, errors: errorsBy.get(id) ?? 0, commit: d.commit ?? null });
   return {
     devices: all.filter(([, d]) => d.last >= floor).map(row),
     older: all.filter(([, d]) => d.last < floor).map(row),

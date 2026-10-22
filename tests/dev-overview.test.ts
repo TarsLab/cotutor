@@ -20,6 +20,7 @@ const { qrPage } = await import('../src/server/qr-page.ts');
 const { VOICE_TEST_PAGE } = await import('../src/server/voice-test-page.ts');
 const { DEV_CSS } = await import('../src/server/dev-theme.ts');
 const { recordKidLog } = await import('../src/server/kid-log.ts');
+const { codeChanged } = await import('../src/server/build.ts');
 
 try {
   const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
@@ -92,8 +93,10 @@ try {
   const ctx = createContext(ws);
   const r = await route('GET', '/api/dev/overview', ctx);
   check('GET /api/dev/overview 200', r.status === 200 && Array.isArray((r.json as { days: unknown[] }).days));
-  const h = (await route('GET', '/api/health', ctx)).json as { started: string; version: string | null };
+  const h = (await route('GET', '/api/health', ctx)).json as { started: string; version: string | null; commit: string | null; head: string | null; changed: boolean; dirty: boolean };
   check('/api/health 带起服务的时刻与版本', typeof h.started === 'string' && !Number.isNaN(Date.parse(h.started)) && typeof h.version === 'string');
+  check('/api/health 带跑的提交与仓里现在的(仓库检出是 git 仓;测试里两个一样)', /^[0-9a-f]{7}$/.test(h.commit ?? '') && h.head === h.commit && h.changed === false && typeof h.dirty === 'boolean', JSON.stringify(h));
+  check('代码更新了:起来时与现在的提交都知道、不一样才算', codeChanged('a1', 'b2') && !codeChanged('a1', 'a1') && !codeChanged(null, 'b2') && !codeChanged('a1', null));
   const c = (await route('GET', '/api/config', ctx)).json as { root: string };
   check('/api/config 带 workspace 根(家目录写成 $HOME)', c.root === '$HOME/cotutor/ming', c.root);
   const dr = await route('POST', '/api/dev/doctor', ctx, {});

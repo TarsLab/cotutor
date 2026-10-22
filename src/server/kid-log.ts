@@ -54,7 +54,13 @@ export const KID_LOG_JS = `
 export type KidLogRow =
   | { k: 'open'; page: string; v: string; ua: string; touch: number; standalone: boolean; w: number; h: number; vw: number; vh: number; dpr: number; lang: string }
   | { k: 'error'; page: string; mode: string; v: string; msg: string; where: string; stack: string; ua: string; ctx: Record<string, unknown> | null };
-export type KidLogLine = KidLogRow & { at: string; device: string; ip?: string };
+/** 服务端那时跑的是哪份代码(打开那行补,《孩子端流水设计.md》7.1) */
+export interface KidLogSrv {
+  v: string | null;
+  commit: string | null;
+  started: string;
+}
+export type KidLogLine = KidLogRow & { at: string; device: string; ip?: string; srv?: KidLogSrv };
 
 /** 设备表的一项 */
 export interface KidDevice {
@@ -67,6 +73,8 @@ export interface KidDevice {
   label: string;
   /** 家长在工作台起的名 */
   name?: string;
+  /** 最近一次打开时服务端的提交 */
+  commit?: string;
 }
 export type KidDevices = Record<string, KidDevice>;
 
@@ -120,15 +128,15 @@ function updateDevices<T>(ws: Workspace, f: (d: KidDevices) => T): Promise<T> {
 }
 
 /** 记一行流水;是孩子端的打开就顺手登记设备 */
-export async function recordKidLog(ws: Workspace, row: KidLogRow, who: { device: string; ip?: string }, now: Date): Promise<void> {
-  const line: KidLogLine = { at: now.toISOString(), ...row, device: who.device, ...(who.ip ? { ip: who.ip } : {}) };
+export async function recordKidLog(ws: Workspace, row: KidLogRow, who: { device: string; ip?: string; srv?: KidLogSrv }, now: Date): Promise<void> {
+  const line: KidLogLine = { at: now.toISOString(), ...row, device: who.device, ...(who.ip ? { ip: who.ip } : {}), ...(row.k === 'open' && who.srv ? { srv: who.srv } : {}) };
   await mkdir(logDir(ws), { recursive: true });
   await appendFile(join(logDir(ws), `${localDate(now)}.jsonl`), `${JSON.stringify(line)}\n`);
   if (row.k !== 'open') return;
   await updateDevices(ws, (d) => {
     const was = d[who.device];
     const hint = { ua: row.ua, touch: row.touch, standalone: row.standalone };
-    d[who.device] = { first: was?.first ?? line.at, last: line.at, opens: (was?.opens ?? 0) + 1, ...hint, label: deviceLabel(hint), ...(was?.name ? { name: was.name } : {}) };
+    d[who.device] = { first: was?.first ?? line.at, last: line.at, opens: (was?.opens ?? 0) + 1, ...hint, label: deviceLabel(hint), ...(was?.name ? { name: was.name } : {}), ...(who.srv?.commit ? { commit: who.srv.commit } : {}) };
   });
 }
 

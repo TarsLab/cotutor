@@ -6,11 +6,10 @@
  * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { foldRuns, type TranscriptRow } from '../lib/transcript.ts';
 import { RuntimeError } from '../lib/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../lib/photo-edit.ts';
@@ -35,6 +34,7 @@ import { faviconResponse } from '../lib/favicon.ts';
 import { cookieOf, createAccess, gatePage, isKidPath, type Access, type Who } from './access.ts';
 import { deviceCookie, newDeviceId, parseKidLog, readDevices, recordKidLog, renameDevice, validDevice } from './kid-log.ts';
 import { DEVICE_COOKIE } from '../lib/kid-device.ts';
+import { BUILD, codeChanged, headNow, shortCommit } from './build.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { kidPage } from './kid-page.ts';
 import { kidHomeView, messageVia, resolveVia } from './home.ts';
@@ -130,15 +130,6 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
   return ctx;
 }
 
-/** 服务起来的时刻与版本:工作台侧栏「起了多久 · v」 */
-const STARTED = new Date().toISOString();
-const VERSION = ((): string | null => {
-  try {
-    return (JSON.parse(readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8')) as { version: string }).version;
-  } catch {
-    return null;
-  }
-})();
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
 
@@ -828,7 +819,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
   const url = new URL(path, 'http://x');
   const p = url.pathname;
   try {
-    if (p === '/api/health') return { status: 200, json: { ok: true, configError: ctx.configError, started: STARTED, version: VERSION } };
+    // 服务起来的时刻、版本、跑的是哪个提交;仓里的提交变了 = 代码更新了,重起才用上(build.ts,《孩子端流水设计.md》7.1)
+    if (p === '/api/health') {
+      const head = await headNow();
+      return { status: 200, json: { ok: true, configError: ctx.configError, started: BUILD.started, version: BUILD.version, commit: shortCommit(BUILD.commit), dirty: BUILD.dirty, head: shortCommit(head), changed: codeChanged(BUILD.commit, head) } };
+    }
     // 家长端与工作台的锁(access.ts):对 PIN 换 cookie;设了 PIN、没凭证的设备,孩子端以外的页面回输 PIN 的页、接口回 401。没设 PIN 什么都不拦
     if (p === '/api/auth') {
       if (method === 'GET') return { status: 200, json: { who, pin: await ctx.access.pinSet() } };
@@ -994,7 +989,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!row) return { status: 400, json: { error: 'bad_request' } };
       const known = validDevice(client.device);
       const device = known ?? newDeviceId();
-      await recordKidLog(ws, row, { device, ip: client.ip }, ctx.now()).catch((err) => console.error('kid-log: 落盘失败', err));
+      await recordKidLog(ws, row, { device, ip: client.ip, srv: { v: BUILD.version, commit: shortCommit(BUILD.commit), started: BUILD.started } }, ctx.now()).catch((err) => console.error('kid-log: 落盘失败', err));
       return { status: 200, json: { ok: true }, ...(known ? {} : { setCookie: deviceCookie(device, Boolean(ctx.listen?.().https)) }) };
     }
     if (p === '/api/kid/voice-diag' && method === 'POST') {

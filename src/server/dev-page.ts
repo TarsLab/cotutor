@@ -48,6 +48,8 @@ ${BRAND_CSS}
   #side .health div { display:flex; align-items:center; gap:8px; }
   #side .health b { font-size:13px; font-weight:600; }
   #side .health b.bad { color:var(--err); }
+  #side .health b.warn { color:var(--warn); }
+  #side .health .dot.warn { box-shadow:0 0 0 3px var(--warn-soft); }
   #side .health .dot { box-shadow:0 0 0 3px var(--ok-soft); }
   #side .health .dot.err { box-shadow:0 0 0 3px var(--err-soft); }
   #side .health small { font:400 11.5px/1.5 var(--mono); color:var(--muted); word-break:break-all; }
@@ -668,10 +670,15 @@ ${BRAND_CSS}
     const el = $('#health');
     try {
       const hh = await api('GET', '/api/health');
-      el.textContent = hh.configError ? 'cotutor.json 改坏了' : '服务正常';
+      // 仓里的提交变了:serve 还跑着起来时那份代码(build.ts,《孩子端流水设计.md》7.1)
+      const changed = !hh.configError && hh.changed;
+      el.textContent = hh.configError ? 'cotutor.json 改坏了' : changed ? '代码更新了,重起 serve 才用上' : '服务正常';
       el.classList.toggle('bad', Boolean(hh.configError));
-      $('#health-dot').className = 'dot' + (hh.configError ? ' err' : '');
-      $('#health-sub').textContent = hh.configError ? '仍用上一份:' + hh.configError.split('\\n')[0] : (hh.started ? '起了 ' + ago(hh.started) : '') + (hh.version ? ' · v' + hh.version : '');
+      el.classList.toggle('warn', Boolean(changed));
+      $('#health-dot').className = 'dot' + (hh.configError ? ' err' : changed ? ' warn' : '');
+      const ran = (hh.started ? '起了 ' + ago(hh.started) : '') + (hh.version ? ' · v' + hh.version : '') + (hh.commit ? ' · ' + hh.commit + (hh.dirty ? '*' : '') : '');
+      $('#health-sub').textContent = hh.configError ? '仍用上一份:' + hh.configError.split('\\n')[0] : changed ? ran + ' · 仓里是 ' + hh.head : ran;
+      $('#health-sub').title = hh.dirty ? '* = 起来时仓里有没提交的改动' : '';
     } catch (e) {
       el.textContent = '后端不通';
       el.classList.add('bad');
@@ -1733,7 +1740,7 @@ ${BRAND_CSS}
       } } }, dv.name || '没起名');
       return b;
     };
-    const devRow = (dv) => h('div', { class: 'dr' }, h('span', { class: 'nm' }, nameEl(dv)), h('span', { class: 'muted' }, dv.label), h('span', { class: 'r' }, when(dv.last)), h('span', { class: 'r' }, dv.today ? dv.today + ' 次' : '—'), h('span', { class: 'r' }, dv.errors ? h('span', { class: 'st err' }, '出错 ' + dv.errors) : ''));
+    const devRow = (dv) => h('div', { class: 'dr' }, h('span', { class: 'nm' }, nameEl(dv)), h('span', { class: 'muted' }, dv.label), h('span', { class: 'r', title: dv.commit ? '那次打开时服务端跑的是 ' + dv.commit : '' }, when(dv.last)), h('span', { class: 'r' }, dv.today ? dv.today + ' 次' : '—'), h('span', { class: 'r' }, dv.errors ? h('span', { class: 'st err' }, '出错 ' + dv.errors) : ''));
     const devBox = h('section', { class: 'blk' },
       h('div', { class: 'hd' }, h('h2', {}, '设备'), h('span', { class: 'sub' }, '孩子端开在哪 · 近 30 天'), h('span', { class: 'right' }, h('span', { class: 'sub' }, '点名字起名'))),
       d.devices.length ? h('div', { class: 'devs' }, h('div', { class: 'dr th' }, h('span', {}, '名字'), h('span', {}, '浏览器'), h('span', { class: 'r' }, '最近打开'), h('span', { class: 'r' }, '今天'), h('span', { class: 'r' }, '近 7 天')), ...d.devices.map(devRow))

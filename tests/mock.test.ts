@@ -61,11 +61,6 @@ interface Day { messages: Msg[]; pending: string | null }
   check('数学老师首节(勾股定理,原型样张):首张带标题、# 标题的 text 是 sky、公式 paper、选择题在末尾且答案剥掉、没有状态', ci === mc.length - 1 && mc[0].props.title === '勾股定理' && tintFor(mc[0]) === 'sky' && mc[1].props.title === '认边' && tintFor(mc[1]) === 'sky' && tintFor(mc[2]) === 'paper' && tintFor(mc[ci]) === 'plum' && !('answer' in mc[ci].props) && !('state' in mc[ci]), JSON.stringify(mc.map((c) => [c.kind, tintFor(c)])));
   const lay = md.messages[0].section as BoardSection & { layout?: { for: string; rows: number[][] } };
   check('写死的样子套上了:不排行(行归页面)、验证成 moss、一句话带 emoji、三条边画圈(带 pen)', lay.layout === undefined && lay.cards[3].look?.tint === 'moss' && lay.cards[4].look?.emoji === '💡' && lay.lines[0].marks.some((mk) => mk.phrase === '三条边' && mk.pen === 'circle') && lay.lines[1].marks.some((mk) => mk.phrase === '斜边' && mk.pen === undefined) && lay.cards[1].look === undefined, JSON.stringify([lay.layout, lay.cards.map((c) => c.look)]));
-  {
-    const plain = createMock({ delayMs: 0, scenario: 'nopost', now: () => new Date('2026-09-10T16:30:00') });
-    const pd = (await plain.route('GET', '/api/kid/conversations/math-tutor/today')).json as Day;
-    check('nopost 场景:素版,没有 layout、没有 look、标注没 pen', pd.messages[0].section?.layout === undefined && pd.messages[0].section?.cards.every((c) => c.look === undefined) === true && pd.messages[0].section?.lines.every((l) => l.marks.every((mk) => mk.pen === undefined)) === true);
-  }
   check('末句问句锚到选择题;[25] 落在「验证」卡不落在别处', md.messages[0].section!.lines[md.messages[0].section!.lines.length - 1].anchor === ci && md.messages[0].section!.lines.some((l) => l.marks.some((mk) => mk.phrase === '25' && mc[mk.card].props.title === '验证')));
   check('PUT 坏状态 400、没这张卡 404、text 卡 400', (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: 'x' })).status === 400 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/99`, { picked: [0] })).status === 404 && (await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/1`, { picked: [0] })).status === 400);
   const put = await m.route('PUT', `/api/kid/conversations/math-tutor/cards/${mj}/${ci}`, { picked: [0] });
@@ -146,10 +141,6 @@ interface Day { messages: Msg[]; pending: string | null }
   await m.settle();
   const fin = ((await m.route('GET', '/api/kid/conversations/math-tutor/today')).json as Day).messages[1];
   check('想的期间见到过 partial 板书,卡数只增不减;想完 partial 没了、卡齐了', seen.length > 0 && seen.every((n, i) => i === 0 || n >= seen[i - 1]) && seen[0] < 3 && partialOk && !fin.pending && fin.section?.partial === undefined && fin.section?.cards.length === 3, JSON.stringify(seen));
-}
-{
-  const m = createMock({ scenario: 'offline', delayMs: 0 });
-  check('离线场景:接口 500、健康报不 ok、页面照给', (await m.route('GET', '/api/kid/home')).status === 500 && ((await m.route('GET', '/api/health')).json as { ok: boolean }).ok === false && (await m.route('GET', '/')).status === 200);
 }
 {
   // 话题:today 带 thread;newThread 开新话题、缺省接当前、指定旧话题;history 今天 + 昨天;昨天的日期路由只读;坏话题 400

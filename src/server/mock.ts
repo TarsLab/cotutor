@@ -1,11 +1,11 @@
 /**
- * 模拟接口(`cotutor mock`):不经真实老师与配音,用固定的板书 JSON 把孩子端页面喂起来,
- * 专门测前端的交互逻辑与渲染效果(卡先铺、笔跟声、停下等、追问追加、上限、离线)。
+ * 模拟接口(`cotutor mock`):不经真实老师与百炼,用固定的板书 JSON 把孩子端页面喂起来,
+ * 专门测前端的交互逻辑与渲染效果(卡一张张铺、停下等、追问追加)。老师都走实时老师页,假嘴念静音的声音、字幕照走。
  * 不需要 workspace。老师的每一轮从各自的脚本里按顺序取(脚本就是老师会写的正文,过真解析器);脚本用完给一句收尾话。
- * 没有配音文件(/api/audio 一律 404),页面退回浏览器自带的合成声(页面模式 synth,只有这里给;真服务的孩子端不用合成声),所以逐句节奏是真的。
+ * 卡没有配音文件(/api/audio 一律 404),点读、单词卡退回浏览器自带的合成声(页面模式 synth,只有这里给;真服务的孩子端不用合成声)。
  * 老师「想」的期间按流式模拟:卡在 delay 里一张张出现(pending 条目带 partial 板书),想完才有讲稿与声音。
  * 卡的状态 PUT 假存在内存里(过真的 state 契约),today 里并回卡上;发消息接 {text, action, focus},「交给老师」后照常追加下一节。
- * 场景:normal(缺省)/ offline(接口全 500,页面该灰)。
+ * 场景:normal(缺省)/ nokey(没配百炼,孩子端只出「老师们还没到」)。
  * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有开场与接着昨天的按钮,数学老师有开场,英语老师没写(补一张);
  * 发消息带 via 时照真服务的规则换成按钮上的字、定话题。
  * 老师都走实时老师页(《产品规划.md》拍板 30),那条 WebSocket 是 mock-live.ts 的假嘴(照脚本「念」静音的声音,不花钱)。
@@ -82,7 +82,7 @@ import { packageTheme } from '../cli/themes.ts';
 import { cardsCss } from '../cards/docs.ts';
 import { VOICE_GALLERY_PAGE } from './voice-gallery-page.ts';
 
-export type MockScenario = 'normal' | 'offline' | 'nopost' | 'nokey';
+export type MockScenario = 'normal' | 'nokey';
 
 export interface MockTutor {
   name: string;
@@ -104,9 +104,9 @@ export function sectionFromScript(md: string): BoardSection {
 
 /**
  * 写死的样子:几节预装板书的底色 / emoji 与带笔的标注(真老师是写在围栏行与讲稿的 [词] 里的),直接套到解析出来的节上,
- * 页面走的是同一条渲染路(look 的槽、带 pen 的标注;行由页面按卡的宽度排)。键 = 老师名:脚本序号。`nopost` 场景不套。
+ * 页面走的是同一条渲染路(look 的槽、带 pen 的标注;行由页面按卡的宽度排)。键 = 老师名:脚本序号。
  */
-export const MOCK_POST: Record<string, { marks: { line: number; card: number; phrase: string; pen: PenName }[]; look: Record<string, { tint?: string; look?: string; emoji?: string }> }> = {
+export const MOCK_LOOKS: Record<string, { marks: { line: number; card: number; phrase: string; pen: PenName }[]; look: Record<string, { tint?: string; look?: string; emoji?: string }> }> = {
   // 勾股定理:验证是方法卡(moss),封面的「三条边」画圈(讲到第一句时)、16 下划线(老师自己标的 直角边 / 斜边 / 25 保留,不重复)
   'math-tutor:0': {
     marks: [{ line: 0, card: 0, phrase: '三条边', pen: 'circle' }, { line: 3, card: 3, phrase: '16', pen: 'underline' }],
@@ -116,8 +116,8 @@ export const MOCK_POST: Record<string, { marks: { line: number; card: number; ph
   'chinese-tutor:0': { marks: [{ line: 1, card: 1, phrase: '多做一步', pen: 'marker' }], look: { '1': { emoji: '💡' } } },
 };
 
-function withMockPost(section: BoardSection, tutor: string, i: number): BoardSection {
-  const out = MOCK_POST[`${tutor}:${i}`];
+function withMockLooks(section: BoardSection, tutor: string, i: number): BoardSection {
+  const out = MOCK_LOOKS[`${tutor}:${i}`];
   if (!out) return section;
   const cards = section.cards.map((c, n) => (out.look[String(n)] ? { ...c, look: { ...(c.look ?? {}), ...out.look[String(n)] } } : c));
   const lines = section.lines.map((l, n) => ({ ...l, marks: [...l.marks, ...out.marks.filter((m) => m.line === n).map(({ card, phrase, pen }) => ({ card, phrase, pen }))] }));
@@ -517,8 +517,6 @@ const localDate = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 
 export function createMock(opts: MockOptions = {}): Mock {
-  // 写死的样子:nopost 场景看素版
-  const withPost = (section: BoardSection, tutor: string, i: number): BoardSection => (opts.scenario === 'nopost' ? section : withMockPost(section, tutor, i));
   const scenario = opts.scenario ?? 'normal';
   const delay = opts.delayMs ?? 1800;
   const now = opts.now ?? (() => new Date());
@@ -536,7 +534,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   for (const t of MOCK_TUTORS) {
     const list: MockMessage[] = [];
     for (let i = 0; i < t.preloaded && i < t.script.length; i++) {
-      const section = withPost(sectionFromScript(t.script[i]), t.name, i);
+      const section = withMockLooks(sectionFromScript(t.script[i]), t.name, i);
       const job = nextJob();
       list.push({ job, thread: list[0]?.thread ?? job, at: now().toISOString(), question: i === 0 ? t.firstQuestion : '继续', reply: section.lines[section.lines.length - 1]?.text ?? null, pending: false, artifacts: [], section });
     }
@@ -657,7 +655,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     const lectureFirst = Boolean(m.lecture && !m.lecture.again);
     const step = lectureFirst ? (m.lecture?.video ? MOCK_VIDEO_LECTURE_REPLY : MOCK_LECTURE_REPLY) : t.script[i];
     if (!lectureFirst) cur.set(t.name, i + 1);
-    const full = step ? withPost(sectionFromScript(step), t.name, i) : null;
+    const full = step ? withMockLooks(sectionFromScript(step), t.name, i) : null;
     const n = full ? full.cards.length : 0;
     const tick = delay / (n + 1);
     return new Promise<void>((resolve) => {
@@ -702,8 +700,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     }
     const fav = faviconResponse(p);
     if (fav) return { status: 200, ...fav, cacheControl: 'no-cache' };
-    if (p === '/api/health') return { status: 200, json: { ok: scenario !== 'offline', mock: true, scenario } };
-    if (scenario === 'offline' && p.startsWith('/api/')) return { status: 500, json: { error: 'mock_offline' } };
+    if (p === '/api/health') return { status: 200, json: { ok: true, mock: true, scenario } };
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: home() };
     // 孩子端的流水(kid-log.ts):mock 照收,不落盘
     if (p === '/api/kid/log' && method === 'POST') return { status: 200, json: { ok: true } };
@@ -782,7 +779,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         starts.push(t);
         const startedAt = new Date(t).toISOString();
         t += wait + (m.section?.lines ?? []).reduce((n, l) => n + lineDurationMs(l.text) + 200, 0) + (k === 0 ? 40000 : 8000);
-        return { job: m.job, thread, at: startedAt, from: m.from, text: m.question ?? '', result: m.pending ? ('running' as const) : ('ok' as const), artifacts: [], section: m.section, timing: { startedAt, doneMs: wait, dubbedMs: wait }, ...(m.action ? { action: m.action } : {}), ...lectureOfMock(m) };
+        return { job: m.job, thread, at: startedAt, from: m.from, text: m.question ?? '', result: m.pending ? ('running' as const) : ('ok' as const), artifacts: [], section: m.section, timing: { startedAt, doneMs: wait }, ...(m.action ? { action: m.action } : {}), ...lectureOfMock(m) };
       });
       const cards: CardStates = {};
       mine.forEach((m, k) => (m.section?.cards ?? []).forEach((c, n) => { if (c.state !== undefined) (cards[m.job] ??= {})[n] = { at: new Date((starts[k + 1] ?? t) - 5000).toISOString(), turn: m.job, state: c.state }; }));

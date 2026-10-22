@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
  * 单词卡(cards/word/card.md)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
- * 起 cotutor mock,Chrome 开孩子端英语老师,孩子说 apple → 老师那节里有单词卡:四线三格、五个字母、卡上没有中文、右边「听」;
- * 念到它那句时一笔一笔写;点「听」按正常速度念(mock 没配音,走浏览器英文合成声);点卡开舞台:慢念(0.7 倍)与分段两色分开慢写同时开始 → 合拢、颜色退掉 → 再慢念;
- * 点第二段只写那一段;关舞台慢念停。iPad 横屏、手机各截一张。
+ * 起 cotutor mock(老师都走实时,假嘴念静音的声音),Chrome 开孩子端英语老师,孩子说 apple → 老师那节里有单词卡:四线三格、五个字母、卡上没有中文、右边「听」;
+ * 落下时一笔一笔写;嘴念完后点「听」按正常速度念(mock 没配音,走浏览器英文合成声);点卡开舞台:不自动念(《工作流程.md》实时那张表),分段两色分开慢写 → 合拢、颜色退掉;
+ * 点第二段只写那一段;关舞台。iPad 横屏、手机各截一张。
  *
  * 用法:node scripts/probe-word.mjs [--out <截图目录>] [--keep](留下 mock)
  */
@@ -59,13 +59,17 @@ try {
   await send('Page.navigate', { url: `${base}/?tutor=english-tutor` });
   await until(`Boolean(document.querySelector('#input, #bar'))`);
   await sleep(800);
-  // 从页面的输入条发(页面外调接口发的,页面当成念过了、直接停在等答)
-  await evaluate(`(() => { const t = document.querySelector('#typed'); t.value = 'apple'; document.querySelector('#go').click(); return true; })()`);
+  // 照孩子的真操作发:点左栏「打字」→ 输入 → 点「发」,都用 CDP 的真点击(页面外调接口发的,页面当成念过了;dispatchEvent 的点击不解锁声音,假嘴的静音声音放不完)
+  const tapSel = async (sel) => { const r = await evaluate(`(() => { const b = document.querySelector('${sel}'); const r = b && b.getBoundingClientRect(); return r && r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()`); if (!r) return false; for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: r.x, y: r.y, button: 'left', clickCount: 1 }); return true; };
+  if (!(await tapSel('#lv-type'))) await tapSel('#mid');
+  await until(`document.activeElement === document.querySelector('#typed')`, 20);
+  await send('Input.insertText', { text: 'apple' });
+  await tapSel('#go');
   await until(`Boolean(document.querySelector('#board .c-word .wg svg'))`, 60);
   const c0 = await evaluate(`(() => { const c = document.querySelector('#board .c-word'); return { letters: c.querySelectorAll('.lt').length, lines: c.querySelectorAll('.grid line').length, emoji: c.querySelector('.we')?.textContent, text: c.innerText, pill: c.querySelector('.rc-pl')?.textContent, han: /\\p{Script=Han}/u.test([...c.querySelectorAll('.wg, .we')].map((x) => x.textContent).join('')) }; })()`);
   ok('紧凑态:四线三格四条线、apple 五个字母、🍎、右边「听」、格里和图上没有中文', c0.letters === 5 && c0.lines === 4 && c0.emoji === '🍎' && c0.pill === '听' && !c0.han, JSON.stringify(c0));
   const wrote = await until(`window.__inked > 0`, 80);
-  ok('念到它那句:按笔顺写一遍', wrote, String(await evaluate(`window.__inked`)));
+  ok('落下时按笔顺写一遍', wrote, String(await evaluate(`window.__inked`)));
   await until(`!document.querySelector('#board .c-word .ink') && document.querySelectorAll('#board .c-word .lt.done').length === 5`, 60);
   await evaluate(`document.querySelector('#board .c-word').scrollIntoView({ block: 'center', behavior: 'instant' })`);
   await sleep(300);
@@ -74,7 +78,13 @@ try {
   const sync = await evaluate(`(() => { const c = document.querySelector('#board .c-word'); const svg = c.querySelector('.wg svg'); return { attr: Number(svg.getAttribute('width')), w: Math.round(svg.getBoundingClientRect().width), paths: c.querySelectorAll('.gh').length }; })()`);
   ok('格子按字母宽排好:svg 的宽就是它画出来的宽(没被压缩)', sync.attr > 100 && Math.abs(sync.attr - sync.w) <= 1 && sync.paths === 8, JSON.stringify(sync));
 
-  // 「听」:正常速度,英文
+  // 「听」:正常速度,英文。嘴在说时卡的声音不响(实时那张表):像孩子一样短按一下按住说话打断老师(不到 0.4 秒,作废、不发),再点
+  await until(`!document.body.classList.contains('pending')`, 120);
+  const hb = await evaluate(`(() => { const r = document.querySelector('#lv-hold').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: hb.x, y: hb.y, button: 'left', clickCount: 1 });
+  await sleep(250);
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: hb.x, y: hb.y, button: 'left', clickCount: 1 });
+  await until(`!document.body.classList.contains('speaking')`, 40);
   await evaluate(`__said.length = 0; document.querySelector('#board .c-word .rc-pl').click()`);
   await sleep(200);
   const s1 = await evaluate(`__said.slice()`);
@@ -82,14 +92,12 @@ try {
   const stayed = await evaluate(`!document.querySelector('#stage').classList.contains('on')`);
   ok('点「听」不开舞台', stayed);
 
-  // 点卡开舞台:自动慢念 → 分开慢写 → 合拢 → 再慢念
+  // 点卡开舞台:不自动念;分开慢写 → 合拢
   await sleep(1300);
   await evaluate(`__said.length = 0; __ended = 0; document.querySelector('#board .c-word').click()`);
   await until(`document.querySelector('#stage').classList.contains('on') && Boolean(document.querySelector('#st-body .c-word .wg svg'))`);
   const st0 = await evaluate(`(() => { const ls = [...document.querySelectorAll('#st-body .lt')]; return { kd: document.querySelector('#st-kd').textContent, ttl: document.querySelector('#st-ttl').textContent, k: ls.map((l) => l.dataset.k).join(''), faint: ls.filter((l) => !l.classList.contains('done')).length, x: ls.map((l) => l.style.transform), said: __said.slice() }; })()`);
-  ok('舞台:顶栏「apple · 单词」;分段 ap|ple;字先淡着;一打开就慢念(0.7 倍)', st0.kd === '单词' && st0.ttl === 'apple' && st0.k === '00111' && st0.faint === 5 && st0.said.length === 1 && st0.said[0].rate === 0.63, JSON.stringify(st0));
-  const both = await evaluate(`({ ink: Boolean(document.querySelector('#st-body .ink')), said: __said.length, ended: __ended })`);
-  ok('念和写同时开始:第一遍慢念还没念完就已经在写', both.ink && both.said === 1 && both.ended === 0, JSON.stringify(both));
+  ok('舞台:顶栏「apple · 单词」;分段 ap|ple;字先淡着;不自动念', st0.kd === '单词' && st0.ttl === 'apple' && st0.k === '00111' && st0.faint === 5 && st0.said.length === 0, JSON.stringify(st0));
   await until(`Boolean(document.querySelector('#st-body .ink'))`, 200);
   const t0 = Date.now();
   await until(`Boolean(document.querySelector('#st-body .lt.k1 .ink'))`, 200);
@@ -100,7 +108,7 @@ try {
   const writeMs = Date.now() - t0;
   await sleep(1000);
   const st1 = await evaluate(`(() => { const ls = [...document.querySelectorAll('#st-body .lt')]; return { x: ls.map((l) => l.style.transform), said: __said.slice(), k1: getComputedStyle(ls[4].querySelector('.gh')).stroke, k0: getComputedStyle(ls[0].querySelector('.gh')).stroke }; })()`);
-  ok('写完合拢(第三个字母往回挪了)、颜色退成一色、再慢念一遍', st1.x[2] !== st0.x[2] && st1.said.length === 2 && st1.said[1].rate === 0.63 && st1.k0 === st1.k1, JSON.stringify({ ...st1, writeMs }));
+  ok('写完合拢(第三个字母往回挪了)、颜色退成一色;一直没自动念', st1.x[2] !== st0.x[2] && st1.said.length === 0 && st1.k0 === st1.k1, JSON.stringify({ ...st1, writeMs }));
   ok(`慢写:整词写了 ${(writeMs / 1000).toFixed(1)} 秒(比讲到时的正常速度慢、又不拖)`, writeMs > 2500 && writeMs < 7000, String(writeMs));
   console.log('  ', await shot('word-stage-done.png'));
 

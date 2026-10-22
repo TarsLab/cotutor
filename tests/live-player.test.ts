@@ -236,7 +236,7 @@ check('随机事件序列 3000 条 × 150 步:不变式都成立', failures.leng
 const page = readFileSync(new URL('../src/server/kid-page.ts', import.meta.url), 'utf8');
 const count = (re: RegExp) => (page.match(re) ?? []).length;
 check('页面:LV.model 只在 liveDispatch 里写一次', count(/LV\.model = /g) === 1 && count(/LV\.model\.\w+ = /g) === 0, String(count(/LV\.model = /g)));
-check('页面:卡上的声音(点读、单词、示范、回放)都先过 cardSoundOk;segment 只剩它里面那一处', count(/dispatch\(\{ type: 'segment' \}\)/g) === 1 && count(/cardSoundOk\(\)/g) === 4, `${count(/dispatch\(\{ type: 'segment' \}\)/g)} ${count(/cardSoundOk\(\)/g)}`);
+check('页面:卡上的声音(点读、单词、示范、回放)都先过 cardSoundOk;不是实时时它只停别的声音(halt),板书的 segment 没了', count(/dispatch\(\{ type: 'segment' \}\)/g) === 0 && count(/cardSoundOk\(\)/g) === 4, `${count(/dispatch\(\{ type: 'segment' \}\)/g)} ${count(/cardSoundOk\(\)/g)}`);
 check('页面:WebSocket 上发出去的 hold / release / hush / send 只在 liveDispatch 里', count(/lvSend\(\{ t: '(hold|release|hush|send)'/g) === 4 && count(/t: 'hold'/g) === 1, String(count(/lvSend\(\{ t: '(hold|release|hush|send)'/g)));
 
 done();

@@ -793,7 +793,7 @@ export class Runner {
     };
     const settleReady = (): void => {
       if (!active.partial) return;
-      const n = readyBeats(active.partial, { voiced: false, done: false });
+      const n = readyBeats(active.partial, { done: false });
       if (n <= readySeen) return;
       const beats = beatsOf(active.partial);
       for (; readySeen < n; readySeen++) {

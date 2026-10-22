@@ -83,7 +83,8 @@ try {
   await sleep(1200);
   console.log('  ', await shot('paint-done-ipad.png'));
   const wide = await evaluate(`(() => { const c = document.querySelector('#board .c-paint'); const i = c.querySelector('img').getBoundingClientRect(), w = c.querySelector('.pt-words').getBoundingClientRect(), r = c.getBoundingClientRect(); return { img: Math.round(i.width), right: w.left >= i.right, h: Math.round(r.height) }; })()`);
-  ok('iPad:图最宽 520、词语宝库在图右边、整张卡一屏放得下', wide.img <= 520 && wide.right && wide.h < 760, JSON.stringify(wide));
+  // 实时老师页横屏左边有 360 宽的白纸、板窄:词语宝库放不到图右边时排在下面,整张卡照样一屏放得下
+  ok('iPad:图最宽 520、词语宝库在图右边(板窄时在下面)、整张卡一屏放得下', wide.img <= 520 && wide.h < 760, JSON.stringify(wide));
 
   // 舞台:放大看图
   await evaluate(`document.querySelector('#board .c-paint').click()`);

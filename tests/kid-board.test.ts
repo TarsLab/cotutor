@@ -1,6 +1,5 @@
 /** 板书纯逻辑:标注锚点、条目 → 节、播放状态机、字幕行、输入条、布局。页面内联的就是这份代码。 */
 import {
-  advance,
   anchorMarks,
   barNext,
   cardTexts,
@@ -19,10 +18,8 @@ import {
   isQuestion,
   deviceFor,
   lineDurationMs,
-  markTiming,
   beatsOf,
   readyBeats,
-  playableLines,
   lineTarget,
   lookFor,
   isAskCard,
@@ -39,17 +36,12 @@ import {
   phrasesIn,
   plainLine,
   playerAtEnd,
-  replayQuiet,
-  replayLines,
-  spokenLines,
-  startReplay,
   sectionTitle,
   sectionsFromMessages,
   liveHead,
   askCard,
   kidSaid,
   tidySpoken,
-  startSection,
   subtitleFor,
   type BoardCard,
   type BoardLine,
@@ -152,10 +144,7 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
     { job: '6', question: '只有讲稿', reply: '一句话', pending: false, section: { cards: [], lines: [L('一句话')] } },
     { job: '7', question: '还在说', reply: null, pending: true, section: { cards: [{ kind: 'text', props: { text: '先出的卡' } }], lines: [L('第一句')], partial: true } },
     { job: '8', question: '还在说但没卡', reply: null, pending: true, section: { cards: [], lines: [L('只有句')], partial: true } },
-    { job: '9', question: '没卡但第一句配好了', reply: null, pending: true, section: { cards: [], lines: [L('先开口')], partial: true, voiced: 1 } },
   ]);
-  check('流式还没卡、但第一句配好了:出 partial 节、带 voiced(先出声、后出卡,《工作流程.md》拍板 15)', entries.at(-1)?.job === '9' && entries.at(-1)?.partial === true && entries.at(-1)?.voiced === 1 && entries.at(-1)?.cards.length === 0);
-  entries.pop();
   check('有 section 用 section;没有 section / 还在跑 / 出错的不出节;流式已出卡的出 partial 节', entries.map((e) => e.job).join() === '1,5,6,7' && entries[0].cards.length === 6 && entries[3].partial === true && entries[3].cards.length === 1 && !entries.slice(0, 3).some((e) => e.partial), JSON.stringify(entries.map((e) => e.job)));
   check('只有卡没讲稿、只有讲稿没卡都成节', entries[1].lines.length === 0 && entries[1].cards.length === 1 && entries[2].cards.length === 0 && entries[2].lines.length === 1);
   check('孩子的话不上板', !entries.some((e) => e.cards.some((c) => cardTexts(c).some((t) => t.includes('画蛇添足是什么')))));
@@ -166,25 +155,16 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   const s2: BoardSection = { cards: [{ kind: 'text', props: { text: 'b' } }], lines: [L('三')] };
   check('空板书:idle', playerAtEnd([]).status === 'idle');
   check('打开页面停在末尾;末句问句 → 等着', JSON.stringify(playerAtEnd([s1])) === '{"section":0,"line":1,"status":"waiting"}' && playerAtEnd([s1, s2]).status === 'done');
-  let st = startSection(0, [s1]);
-  check('新节从第一句播', st.status === 'playing' && st.line === 0);
-  st = advance(st, [s1]);
-  check('同节下一句', st.line === 1 && st.status === 'playing');
-  check('末句问句且没下一节 → 停下等', advance(st, [s1]).status === 'waiting');
-  // 拍:卡前的句是没有卡的一拍;每张卡一拍,后面的句跟它;就绪 = 关了(后面有卡 / 写完了)且每句配音齐
+  // 拍:卡前的句是没有卡的一拍;每张卡一拍,后面的句跟它;就绪 = 关了(后面有卡 / 写完了),讲稿不配音不等配音
   const ln = (anchor: number | null, audio: string | null = null): BoardLine => ({ text: '句', audio, marks: [], ask: false, anchor, cues: [] });
   const cd: BoardCard = { kind: 'text', props: {} };
   const bsec = { cards: [cd, cd, cd], lines: [ln(null, 'z'), ln(0, 'a'), ln(0, 'b'), ln(1), ln(2, 'c')] };
   check('拍:按锚点分组、顺序对', JSON.stringify(beatsOf(bsec)) === '[{"card":null,"lines":[0]},{"card":0,"lines":[1,2]},{"card":1,"lines":[3]},{"card":2,"lines":[4]}]', JSON.stringify(beatsOf(bsec)));
-  check('就绪:前两拍配音齐 → 2;第三拍缺配音卡住;末拍没写完不算;写完了才算;没配音色不等配音', readyBeats(bsec, { voiced: true, done: false }) === 2 && readyBeats({ ...bsec, lines: [ln(null, 'z'), ln(0, 'a'), ln(0, 'b'), ln(1, 'x'), ln(2, 'c')] }, { voiced: true, done: false }) === 3 && readyBeats({ ...bsec, lines: [ln(null, 'z'), ln(0, 'a'), ln(0, 'b'), ln(1, 'x'), ln(2, 'c')] }, { voiced: true, done: true }) === 4 && readyBeats(bsec, { voiced: false, done: false }) === 3);
+  check('就绪:末拍没写完不算,写完了才算;没有拍就是 0', readyBeats(bsec, { done: false }) === 3 && readyBeats(bsec, { done: true }) === 4 && readyBeats({ cards: [], lines: [] }, { done: false }) === 0);
   const lv = { ...bsec, partial: true, ready: 2 };
-  check('流式的节:能播的句 = 前 ready 拍的;播到头 → thinking;定稿后照常', playableLines(lv) === 3 && playableLines({ ...bsec }) === 5 && advance({ section: 0, line: 2, status: 'playing' }, [lv]).status === 'thinking' && advance({ section: 0, line: 1, status: 'playing' }, [lv]).line === 2 && advance({ section: 0, line: 2, status: 'thinking' }, [{ ...bsec }]).line === 3 && startSection(0, [{ ...bsec, partial: true, ready: 0 }]).status === 'thinking');
   const subOf = (state: PlayerState, pending: boolean, waitedMs = 0) => subtitleFor({ state, sections: [lv], pending, waitedMs });
   check('字幕:念过几句再等下一拍 → gap 留着刚念那句;一句没念 → wait;pending 时正在播照常出字幕', JSON.stringify(subOf({ section: 0, line: 0, status: 'thinking' }, true)) === '{"text":"句","kind":"gap","right":"none"}' && subOf({ section: 0, line: -1, status: 'thinking' }, true).kind === 'wait' && subOf({ section: 0, line: 0, status: 'playing' }, true).kind === 'line' && subOf({ section: 0, line: 0, status: 'done' }, true).kind === 'wait' && subOf({ section: 0, line: 0, status: 'playing' }, true).right === 'pause');
   check('字幕:第一拍前等过 8 秒换一句', subOf({ section: 0, line: -1, status: 'thinking' }, true, 7999).text === '我写给你看' && subOf({ section: 0, line: -1, status: 'thinking' }, true, 8000).text === '再等我一下下');
-  check('末句问句但已有下一节 → 直接进下一节(孩子答过了)', JSON.stringify(advance(st, [s1, s2])) === '{"section":1,"line":0,"status":"playing"}');
-  check('末句不是问句 → 完', advance({ section: 1, line: 0, status: 'playing' }, [s1, s2]).status === 'done');
-  check('没讲稿的节直接完', startSection(0, [{ cards: [], lines: [] }]).status === 'done');
   const base = { sections: [s1], pending: false, waitedMs: 0 };
   check('字幕:播放中 → 当前句 + 暂停', JSON.stringify(subtitleFor({ ...base, state: { section: 0, line: 0, status: 'playing' } })) === '{"text":"一","kind":"line","right":"pause"}');
   check('字幕:暂停 → 播放钮', subtitleFor({ ...base, state: { section: 0, line: 0, status: 'paused' } }).right === 'play');
@@ -194,45 +174,17 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   check('字幕:什么都没有', subtitleFor({ ...base, sections: [], state: { section: -1, line: -1, status: 'idle' } }).kind === 'empty');
 }
 {
-  // 再听(2026-09-18):后期改过锚点,卡 1 的句在最后(一张卡的句不连着);卡前那句亮的是第一张卡,算它的
   const cd: BoardCard = { kind: 'text', props: { text: 'x' } };
   const ln = (anchor: number | null): BoardLine => ({ text: '句', audio: null, marks: [], ask: false, anchor, cues: [] });
-  const sec: BoardSection = { cards: [cd, cd, cd], lines: [ln(null), ln(0), ln(0), ln(2), ln(1)] };
-  const secs = [sec];
-  const playing3: PlayerState = { section: 0, line: 3, status: 'playing' };
-  const done: PlayerState = { section: 0, line: 4, status: 'done' };
-  check('念完几句:在念的那句不算,等下一拍 / 交给小课堂的算,等答 / 完 = 全部;前面的节全念完,后面的一句没念', spokenLines(playing3, secs, 0) === 3 && spokenLines({ ...playing3, status: 'paused' }, secs, 0) === 3 && spokenLines({ ...playing3, status: 'thinking' }, secs, 0) === 4 && spokenLines({ ...playing3, status: 'stage' }, secs, 0) === 4 && spokenLines(done, secs, 0) === 5 && spokenLines({ section: 1, line: 0, status: 'playing' }, [sec, sec], 0) === 5 && spokenLines(playing3, [sec, sec], 1) === 0 && spokenLines({ section: -1, line: -1, status: 'idle' }, secs, 0) === 0);
-  check('再听哪几句不看念到哪(2026-09-21):暂停在第一张卡的第一句,每张卡照样有自己的句、整节是全部句;后面还没念到的节也一样', JSON.stringify(replayLines(secs, 0, 0)) === '[0,1,2]' && JSON.stringify(replayLines(secs, 0, 2)) === '[3]' && JSON.stringify(replayLines(secs, 0, 1)) === '[4]' && JSON.stringify(replayLines(secs, 0, 'all')) === '[0,1,2,3,4]' && JSON.stringify(replayLines([sec, sec], 1, 'all')) === '[0,1,2,3,4]');
-  check('再听:念完之后卡 1 是它那一句(不连着);整节是全部句;老师还在写的节、没讲稿的节、没有的卡都不行', JSON.stringify(replayLines(secs, 0, 1)) === '[4]' && JSON.stringify(replayLines(secs, 0, 'all')) === '[0,1,2,3,4]' && replayLines([{ ...sec, partial: true, ready: 3 }], 0, 0).length === 0 && replayLines([{ cards: [cd], lines: [] }], 0, 0).length === 0 && replayLines(secs, 0, 7).length === 0);
-  const marked: BoardSection = { cards: [cd, { kind: 'text', props: { text: '多做一步' } }], lines: [{ ...ln(0), marks: [{ card: 1, phrase: '多做一步' }] }, ln(1)] };
-  check('再听按亮哪张分:锚在卡 0、标注在卡 1 的那句归卡 1;卡 0 一句不剩就没喇叭', JSON.stringify(replayLines([marked], 0, 1)) === '[0,1]' && replayLines([marked], 0, 0).length === 0);
-  {
-    // 提问卡(2026-09-21):解析器补在节尾,自己一拍、没有讲稿;末句还锚在它讲的那张卡上
-    const askSec: BoardSection = { cards: [cd, { kind: 'text', props: { text: '这是要堆什么?', ask: true } }], lines: [ln(0), { ...ln(0), text: '这是要堆什么?', ask: true }], layout: { for: 'tablet-landscape', rows: [[0]] } };
-    check('提问卡:念末句时亮的还是它讲的那张卡;停下等答亮提问卡;再听时不抢', nowCard([askSec], { section: 0, line: 1, status: 'playing' }) === 0 && nowCard([askSec], { section: 0, line: 1, status: 'waiting' }) === 1 && nowCard([askSec], { section: 0, line: 0, status: 'playing', replay: { lines: [0], back: { section: 0, line: 1, status: 'waiting' } } }) === 0);
-    check('提问卡:喇叭 = 再听末句那一问;末句也还算在它讲的那张卡里', JSON.stringify(replayLines([askSec], 0, 1)) === '[1]' && JSON.stringify(replayLines([askSec], 0, 0)) === '[0,1]');
-    check('提问卡:不过后期,layout 没盖到它也不作废——前面照排,它独占节尾一行;底色紫', JSON.stringify(rowsFor(askSec, 'tablet-landscape')) === '[[0],[1]]' && tintFor(askSec.cards[1]) === 'plum' && isAskCard(askSec.cards[1]) && !isAskCard(cd));
-  }
-  const r = startReplay(playing3, 0, [1, 4]);
-  check('开始再听:从第一句念,在念的回来变暂停', r.line === 1 && r.status === 'playing' && JSON.stringify(r.replay?.back) === '{"section":0,"line":3,"status":"paused"}');
-  const r2 = advance(r, secs);
-  check('再听往下走:按下标跳(1 → 4),念完回到原来的位置,不串到下一节', r2.line === 4 && r2.status === 'playing' && Boolean(r2.replay) && JSON.stringify(advance(r2, [sec, sec])) === '{"section":0,"line":3,"status":"paused"}');
-  const w: PlayerState = { section: 0, line: 4, status: 'waiting' };
-  check('等答时再听,念完还等着;重念中再点别的,回的还是最初的位置;没句子不动', JSON.stringify(advance(startReplay(w, 0, [4]), secs)) === JSON.stringify(w) && JSON.stringify(startReplay(startReplay(w, 0, [1]), 0, [2]).replay?.back) === JSON.stringify(w) && startReplay(w, 0, []) === w);
-  check('能不能再听:等答 / 念完 / 暂停且老师没在想才行;在念、等下一拍、交给小课堂、老师在想都不行;再听中看回放前的位置', replayQuiet(w, false) && replayQuiet(done, false) && replayQuiet({ ...playing3, status: 'paused' }, false) && !replayQuiet(playing3, false) && !replayQuiet({ ...playing3, status: 'thinking' }, false) && !replayQuiet({ ...playing3, status: 'stage' }, false) && !replayQuiet(done, true) && replayQuiet(startReplay(w, 0, [1]), false));
-  const rs = subtitleFor({ state: startReplay(w, 0, [1]), sections: secs, pending: false, waitedMs: 0 });
-  check('再听时字幕:kind replay、钮是停(不是暂停,停了变「继续」的那个位置不再是同一个样子)', rs.kind === 'replay' && rs.right === 'stop' && rs.text === '句');
-  check('再听不改「念到哪」:重念前面的,后面的卡照样算讲过', spokenLines(startReplay(done, 0, [1]), secs, 0) === 5);
+  // 提问卡(2026-09-21):解析器补在节尾,自己一拍、没有讲稿;末句还锚在它讲的那张卡上
+  const askSec: BoardSection = { cards: [cd, { kind: 'text', props: { text: '这是要堆什么?', ask: true } }], lines: [ln(0), { ...ln(0), text: '这是要堆什么?', ask: true }], layout: { for: 'tablet-landscape', rows: [[0]] } };
+  check('提问卡:停下等答亮提问卡', nowCard([askSec], { section: 0, line: 1, status: 'waiting' }) === 1);
+  check('提问卡:不过后期,layout 没盖到它也不作废——前面照排,它独占节尾一行;底色紫', JSON.stringify(rowsFor(askSec, 'tablet-landscape')) === '[[0],[1]]' && tintFor(askSec.cards[1]) === 'plum' && isAskCard(askSec.cards[1]) && !isAskCard(cd));
 }
 {
   check('输入条:点 → 打字;按住 → 说话;松手 / 取消 / 发出 / 失焦 → 闲置', barNext('idle', 'tap') === 'typing' && barNext('idle', 'holdStart') === 'holding' && barNext('holding', 'holdEnd') === 'idle' && barNext('holding', 'holdCancel') === 'idle' && barNext('typing', 'sent') === 'idle' && barNext('typing', 'blur') === 'idle' && barNext('typing', 'tap') === 'typing' && barNext('typing', 'holdEnd') === 'typing');
   check('端:宽 ≥ 900 且横 → 平板横屏;短边 ≥ 600 → 平板竖屏;其余手机', deviceFor(1180, 820) === 'tablet-landscape' && deviceFor(820, 1180) === 'tablet-portrait' && deviceFor(390, 844) === 'phone' && deviceFor(899, 500) === 'phone' && deviceFor(1024, 768) === 'tablet-landscape');
-  check('没声音时按字数计时,至少 1.2 秒', lineDurationMs('短') === 1200 && lineDurationMs('[十个字十个字十个字十]') === 2600);
-  // 标注定时:按字数比例估——10 字一句 5 秒,「三角形」在第 3 字起 → 1.5s 起、描 1.5s;said 优先;讲稿里没这个词 → null;方括号不算字
-  const ln = { text: '先看这[三角形]有几个角', audio: null, marks: [], ask: false, anchor: 0, cues: [] };
-  const t1 = markTiming(ln, { card: 0, phrase: '三角形' }, 5000);
-  const t2 = markTiming(ln, { card: 0, phrase: '三个角', said: '几个角' }, 5000);
-  check('标注定时:按字数比例,方括号不算,said 优先,找不到 → null,短词至少 350ms', t1 !== null && t1.at === 1500 && t1.dur === 1500 && t2 !== null && t2.at === 3500 && t2.dur === 1500 && markTiming(ln, { card: 0, phrase: '三个角' }, 5000) === null && markTiming(ln, { card: 0, phrase: '角' }, 1000)?.dur === 350 && markTiming(ln, { card: 0, phrase: '角' }, 0) === null, JSON.stringify([t1, t2]));
+  check('一句按字数估多久,至少 1.2 秒', lineDurationMs('短') === 1200 && lineDurationMs('[十个字十个字十个字十]') === 2600);
   // 单词卡:格里是笔顺,标注只让整个词亮;排版按 advance + 字间距,舞台里段与段之间再空开
   const wcard: BoardCard = { kind: 'word', props: { word: 'apple', chunks: ['ap', 'ple'] } };
   const G = { a: { advance: 1 }, p: { advance: 1 }, l: { advance: 0.2 }, e: { advance: 0.95 } };

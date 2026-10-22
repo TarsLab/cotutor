@@ -726,7 +726,7 @@ export function createMock(opts: MockOptions = {}): Mock {
           // 铺到第 k 张时前 k-1 张的样子与行都已定(卡带 look,layout 只到已定的那几张)
           const part = { cards: full.cards.slice(0, k).map((c, i) => (i < k - 1 ? c : (({ look: _l, ...rest }) => rest)(c))), lines: full.lines.filter((l) => l.anchor === null || l.anchor < k - 1) };
           const rows = full.layout ? full.layout.rows.map((r) => r.filter((i) => i < k - 1)).filter((r) => r.length) : [];
-          m.section = { ...part, ...(full.layout && rows.length ? { layout: { for: full.layout.for, rows } } : {}), partial: true, ready: readyBeats(part, { voiced: false, done: false }) };
+          m.section = { ...part, ...(full.layout && rows.length ? { layout: { for: full.layout.for, rows } } : {}), partial: true, ready: readyBeats(part, { done: false }) };
           setTimeout(reveal, tick);
         } else {
           answer(m, full);

@@ -2,7 +2,7 @@
 /**
  * 老师头像 C 形开口环(《首页设计.md》§5.1、拍板 15)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 首页老师卡头像是环 + 白底圆、开口朝右、打开时一笔画出来(5 秒一轮的刷新不再画)→ 进数学老师、新话题:空白板的头像画出来 →
- * 从输入条问一句:等的时候字幕行开头那颗头像「想」(转圈)、念的时候「说」、念完停下「该你了」点一下头 → 按住说话的「听」与休息(开口朝下、变灰)用类直接看样式。
+ * 从输入条问一句:等的时候看得见的那张脸「想」(转圈);休息(开口朝下、变灰)用类直接看样式。实时老师页的「说」「听」在按钮里,见 /dev/voice 与 probe-live-page。
  * 左上返回胶囊是「‹ logo」不是头像(《产品规划.md》拍板 24),一页只有一张会动的脸。
  * iPad 横屏,每步截图。
  *
@@ -91,22 +91,7 @@ try {
   const think = await evaluate(`(() => { const sub = document.querySelector('#sub-av'), shown = getComputedStyle(sub).display !== 'none', face = shown ? sub : document.querySelector('#board > .blank > .av'); const moving = [...document.querySelectorAll('#main .av')].filter((e) => e.getClientRects().length > 0 && getComputedStyle(e.querySelector('.ring circle')).animationName !== 'none').length; return { which: shown ? 'sub' : 'blank', face: (${AV})(face), moving, others: document.querySelectorAll('.wait-card .av, #sub-text .av, #back .av').length }; })()`);
   ok('等的时候:看得见的那张脸在「想」(转圈 + 一呼一吸),只有它在动;等待卡、字幕字里、左上胶囊都没有头像', think.face && think.face.anim === 'vb-spin, vb-breathe' && think.moving === 1 && think.others === 0, JSON.stringify(think));
   await sleep(600); await shot('avatar-think.png');
-  // 念:采样字幕行那颗头像的动画,直到停下
-  const seen = new Set(); let nod = false;
-  for (let i = 0; i < 160; i++) {
-    const s = await evaluate(`({ a: getComputedStyle(document.querySelector('#sub-av .ring circle')).animationName, nod: document.body.classList.contains('nod'), speaking: document.body.classList.contains('speaking'), w: document.body.classList.contains('waiting') })`);
-    seen.add(s.a); if (s.nod) nod = true;
-    if (s.speaking && !seen.has('shot')) { seen.add('shot'); await shot('avatar-talk.png'); }
-    if (nod && !s.speaking) break;
-    await sleep(150);
-  }
-  ok('念的时候「说」(开口一张一合)', seen.has('vb-mouth'), [...seen].join(' '));
-  ok('念完停下「该你了」点一下头,一秒后摘掉', nod && await until(`!document.body.classList.contains('nod')`, 8), [...seen].join(' '));
-  await shot('avatar-settled.png');
-
-  // 听:孩子按住说话(无头 Chrome 没有识别,直接加类看样式)
-  const listen = await evaluate(`(async () => { document.body.classList.add('listening'); await new Promise((r) => setTimeout(r, 900)); const c = getComputedStyle(document.querySelector('#sub-av .ring circle')); const r = { anim: c.animationName, transform: c.transform }; document.body.classList.remove('listening'); return r; })()`);
-  ok('听:开口转向下面(126° 附近),一呼一吸', listen.anim === 'vb-turn, vb-listen' && /matrix\(-0\.[5-7]/.test(listen.transform), JSON.stringify(listen));
+  // 「说」「该你了」「听」是板书页字幕行那颗头像的样子;实时老师页把它藏了,头像在按住说话那颗按钮里(样子在 /dev/voice 的样张、probe-live-page 里看)
 
   // 减弱动态效果:都不动
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });

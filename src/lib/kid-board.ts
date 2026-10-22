@@ -79,10 +79,8 @@ export interface BoardSection {
   cards: BoardCard[];
   lines: BoardLine[];
   partial?: boolean;
-  /** 流式时:前几拍已经就绪(配音齐)——页面就绪一拍铺一拍卡;定稿的节没有这个字段(全部就绪) */
+  /** 流式时:前几拍已经就绪(关了)——页面就绪一拍铺一拍卡;定稿的节没有这个字段(全部就绪) */
   ready?: number;
-  /** 流式时:讲稿从第一句起连着配好了几句——配好一句念一句,不等拍(《工作流程.md》拍板 15);没配音色的老师没有 */
-  voiced?: number;
   layout?: BoardLayout;
 }
 
@@ -109,33 +107,12 @@ export function beatsOf(section: Pick<BoardSection, 'cards' | 'lines'>): Beat[] 
 }
 
 /**
- * 流式时前几拍就绪了:一拍要「关了」(后面已经有下一张卡,或老师写完了)且它的每句配音都落了盘(老师没配音色 = 不等配音)。
- * 返回就绪的拍数(前缀:第 k 拍就绪的前提是前面都就绪,播放本来就是顺着来的)。
+ * 流式时前几拍就绪了:一拍要「关了」(后面已经有下一张卡,或老师写完了)。讲稿不配音(《产品规划.md》拍板 30),不等配音。
+ * 返回就绪的拍数(前缀:第 k 拍就绪的前提是前面都就绪)。
  */
-export function readyBeats(section: Pick<BoardSection, 'cards' | 'lines'>, opts: { voiced: boolean; done: boolean }): number {
+export function readyBeats(section: Pick<BoardSection, 'cards' | 'lines'>, opts: { done: boolean }): number {
   const beats = beatsOf(section);
-  let n = 0;
-  for (let k = 0; k < beats.length; k++) {
-    const closed = opts.done || k < beats.length - 1;
-    const dubbed = !opts.voiced || beats[k].lines.every((i) => section.lines[i].audio !== null);
-    if (!closed || !dubbed) break;
-    n++;
-  }
-  return n;
-}
-
-/** 流式的节:前 ready 拍里的句子、和连着配好的前 voiced 句,取多的能播(先出声、后出卡);定稿的节:全部 */
-export function playableLines(section: BoardSection): number {
-  if (!section.partial) return section.lines.length;
-  const beats = beatsOf(section).slice(0, section.ready ?? 0);
-  const byBeat = beats.reduce((n, b) => Math.max(n, b.lines.length ? b.lines[b.lines.length - 1] + 1 : n), 0);
-  return Math.min(section.lines.length, Math.max(byBeat, section.voiced ?? 0));
-}
-
-/** 流式时讲稿从第一句起连着配好了几句(配音文件落了盘) */
-export function voicedLines(section: Pick<BoardSection, 'lines'>): number {
-  const i = section.lines.findIndex((l) => l.audio === null);
-  return i < 0 ? section.lines.length : i;
+  return opts.done ? beats.length : Math.max(0, beats.length - 1);
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -754,7 +731,7 @@ export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEn
     const k = says.get(m.job);
     const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length && !k?.said.photos ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}), ...(m.live ? { live: true as const, ...liveHead(m.section ?? { cards: [] }) } : {}) };
     if (m.pending) {
-      if (m.section && m.section.partial && (m.section.cards.length || (m.section.voiced ?? 0) > 0 || (m.live && m.section.lines.length))) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.voiced ? { voiced: m.section.voiced } : {}), ...(m.section.layout ? { layout: m.section.layout } : {}) });
+      if (m.section && m.section.partial && (m.section.cards.length || (m.live && m.section.lines.length))) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;
     }
     if (m.section && (m.section.cards.length || m.section.lines.length)) {
@@ -779,15 +756,16 @@ export function sectionTitle(s: BoardSection): string {
   return cps.length > 14 ? `${cps.slice(0, 14).join('')}…` : cps.join('');
 }
 
-/** stage = 讲稿把这句交给了小课堂卡的舞台([[play]]),等它 done */
-/** thinking = 老师还在写,已就绪的句子播完了,等下一拍(字幕行见 subtitleFor 的 wait / gap,不出错、不响) */
+/** 板上的位置。孩子端不念讲稿了(《产品规划.md》拍板 30):讲稿由嘴照念(live-board.ts 的 liveStep),这里的状态只剩
+ *  thinking = 老师还在写 · waiting = 写完了、末句是问句 · done = 写完了 · idle = 板上还没东西。
+ *  playing / paused / stage 与 replay 只出现在录像里孩子的屏幕(reel 照记下的播放位置算的),孩子端自己不会进这几个状态 */
 export type PlayStatus = 'idle' | 'playing' | 'paused' | 'waiting' | 'done' | 'stage' | 'thinking';
 
 export interface PlayerState {
   section: number;
   line: number;
   status: PlayStatus;
-  /** 再听(2026-09-18):正在重念的句子(下标,不一定连着)与念完回到哪里 */
+  /** 录像里:那时孩子在「再听」的句子(板书时代的录像) */
   replay?: { lines: number[]; back: PlayerState };
 }
 
@@ -798,110 +776,6 @@ export function playerAtEnd(sections: readonly BoardSection[]): PlayerState {
   const line = sections[section].lines.length - 1;
   const last = sections[section].lines[line];
   return { section, line, status: last && last.ask ? 'waiting' : 'done' };
-}
-
-/** 新来一节:从它第一句开始播;没讲稿就直接算完 */
-export function startSection(index: number, sections: readonly BoardSection[]): PlayerState {
-  const s = sections[index];
-  if (!s || !s.lines.length) return { section: index, line: -1, status: s && s.partial ? 'thinking' : 'done' };
-  if (!playableLines(s)) return { section: index, line: -1, status: 'thinking' };
-  return { section: index, line: 0, status: 'playing' };
-}
-
-/**
- * 一句播完往下走:同节还有句 → 下一句;没了 → 有下一节就进下一节(孩子已经答过了,不用等);
- * 没下一节且末句是问句 → 停下等;否则完。
- */
-export function advance(state: PlayerState, sections: readonly BoardSection[]): PlayerState {
-  if (state.replay) {
-    const next = state.replay.lines[state.replay.lines.indexOf(state.line) + 1];
-    return next === undefined ? state.replay.back : { ...state, line: next, status: 'playing' };
-  }
-  const s = sections[state.section];
-  if (!s) return { ...state, status: 'done' };
-  if (state.line < playableLines(s) - 1) return { section: state.section, line: state.line + 1, status: 'playing' };
-  // 老师还在写这节:就绪的播完了就等着,下一拍就绪再从这里接上(advance 会再被叫)
-  if (s.partial) return { ...state, status: 'thinking' };
-  if (state.section < sections.length - 1) return startSection(state.section + 1, sections);
-  const last = s.lines[state.line];
-  return { ...state, status: last && last.ask ? 'waiting' : 'done' };
-}
-
-/**
- * 这节念完了几句(前缀):前面的节全念完,后面的节一句没念;本节看播放器——在念 / 暂停的那句不算,等下一拍 / 交给小课堂的那句算。
- * 再听时按回放前的位置算(重念不改「念到哪」)
- */
-export function spokenLines(state: PlayerState, sections: readonly BoardSection[], secIdx: number): number {
-  const at = state.replay ? state.replay.back : state;
-  const s = sections[secIdx];
-  if (!s || secIdx > at.section) return 0;
-  if (secIdx < at.section) return s.lines.length;
-  switch (at.status) {
-    case 'waiting':
-    case 'done':
-      return s.lines.length;
-    case 'thinking':
-    case 'stage':
-      return Math.max(0, at.line + 1);
-    case 'playing':
-    case 'paused':
-      return Math.max(0, at.line);
-    default:
-      return 0;
-  }
-}
-
-/**
- * 第一遍念的整节(2026-09-28):念到哪露到哪——露前几张卡(前缀)。
- * 念到第 i 句时,露到前 i 句里锚到、标到、[[play]] 到的最后一张;标题行这类没有讲稿的卡跟着后面第一张有讲稿的卡露;
- * 停下等答、念完 = 整节(推答题卡、节尾的提问卡这时才露)。-1 = 还没念到这节,整节不露。再听按回放前的位置算
- */
-export function shownCards(state: PlayerState, sections: readonly BoardSection[], secIdx: number): number {
-  const at = state.replay ? state.replay.back : state;
-  const s = sections[secIdx];
-  if (!s) return 0;
-  if (at.status === 'waiting' || at.status === 'done' || secIdx < at.section) return s.cards.length;
-  if (secIdx > at.section || at.status === 'idle') return -1;
-  if (at.line < 0) return s.lines.length ? 0 : s.cards.length;
-  let n = 0;
-  for (const l of s.lines.slice(0, at.line + 1)) {
-    n = Math.max(n, (l.anchor ?? -1) + 1);
-    for (const m of l.marks) n = Math.max(n, m.card + 1);
-    for (const c of l.cues) n = Math.max(n, c.card + 1);
-  }
-  return Math.min(n, s.cards.length);
-}
-
-/**
- * 再听哪几句:卡 = 第一遍念时让它亮起来的句(nowCard:标注落在哪张算哪张,没标注看锚点,标题行与卡前的句算本节第一张)——
- * 不按锚点分拍:「这个成语说的是:[多做一步]」写在卡 0 后面、标注却在卡 1,按拍算会点卡 0 的喇叭亮卡 1。
- * 'all' = 整节。不看念到哪(2026-09-21:原来要那几句都念过才行,孩子在第一张卡念到一半点暂停,整屏一个喇叭都没有);
- * 能不能再听只看板上安不安静(replayQuiet)。老师还在写的节、没讲稿的卡不能([] = 不能)
- */
-export function replayLines(sections: readonly BoardSection[], secIdx: number, target: number | 'all'): number[] {
-  const s = sections[secIdx];
-  if (!s || s.partial || !s.lines.length) return [];
-  const all = s.lines.map((_l, i) => i);
-  // 提问卡的喇叭 = 再听末句那一问(它自己一拍、没有讲稿)
-  if (target !== 'all' && s.cards[target] && isAskCard(s.cards[target])) return all.slice(-1);
-  return target === 'all' ? all : all.filter((i) => nowCard(sections, { section: secIdx, line: i, status: 'playing' }) === target);
-}
-
-/**
- * 这会儿能不能再听:板上安静才行——停下等答、念完、孩子自己暂停。老师在想、正在念(包括等下一拍、交给小课堂)都不行:
- * 再听会打断正在念的回答,同一个声音念旧内容听着像答非所问(2026-09-18 真机:念到一半点了田字格的喇叭)。再听中按回放前的位置算
- */
-export function replayQuiet(state: PlayerState, pending: boolean): boolean {
-  const at = state.replay ? state.replay.back : state;
-  return !pending && (at.status === 'waiting' || at.status === 'done' || at.status === 'paused');
-}
-
-/** 开始再听:从第一句念起;念完回到原来的位置——在念的变暂停(孩子点播放接着念),等答的还等着。重念中再点别的,回的还是最初的位置 */
-export function startReplay(state: PlayerState, secIdx: number, lines: readonly number[]): PlayerState {
-  if (!lines.length) return state;
-  const at = state.replay ? state.replay.back : state;
-  const back: PlayerState = at.status === 'playing' ? { ...at, status: 'paused' } : at;
-  return { section: secIdx, line: lines[0], status: 'playing', replay: { lines: [...lines], back } };
 }
 
 /** 播到这句该滚到哪张卡:标注所在的卡优先,其次锚点卡,再没有就 null(页面滚到本节第一张) */
@@ -953,282 +827,77 @@ export function subtitleFor(i: SubtitleInput): SubtitleView {
   }
 }
 
-// ---- 播放器(2026-09-18):页面上一切改播放状态的事都走 step,页面只照单执行它回的「要做的事」 ----
-// 为什么:以前 27 处直接改状态、20 处停声音,散在十几个事件入口里,「谁能打断谁」只能从这些地方拼出来;
-// 再听加进来漏了两处就是真机事故(新回答被打断、「继续」被误点;「继续」2026-10-08 去掉了)。仲裁表在《工作流程.md》§孩子端「播放器」,
-// 每一格在 tests/player.test.ts 里有一条;不变式用随机事件序列跑。
+// ---- 板上的节(2026-10-22 起只剩这些,《产品规划.md》拍板 30):老师开始写、又就绪一拍、写完、出错撤掉、整节到了;页面的 reset(换老师)、halt(停卡的声音)。
+// 页面只照单执行回来的「要做的事」;表在《工作流程.md》§孩子端「播放器」,每一格在 tests/player.test.ts 里有一条 ----
 
-/** 播放器的全部状态:播到哪、在再听哪个(喇叭变橙、再点一下停)、在录时被压住的(录完接着念) */
 export interface PlayerModel {
   state: PlayerState;
-  replayOf: { section: number; card: number | 'all' | 'line' } | null;
-  /** 录音卡(《口播老师设计.md》§3):按下录音键时老师在念、或在录时新的一拍到了,念的那句停成暂停;松手后接着念 */
-  held: boolean;
 }
 
 /** step 要读的页面状态(只读) */
 export interface PlayerCtx {
   sections: readonly BoardSection[];
-  /** 孩子发出了、老师还在想 */
-  pending: boolean;
-  autoplay: boolean;
-  /** 以前的话题:只读回放,不停下等答 */
-  readonly: boolean;
-  /** 舞台开着 */
-  stage: boolean;
-  /** 录音卡的舞台里正按着录音键:这时不出任何声音、不推答题卡 */
-  recording?: boolean;
-  now: number;
 }
 
-/**
- * 事件:孩子做的(tap*、segment 点读、stageOpen 点卡、send 发话)、声音的(lineEnded 一句念完、lineMissing 那句不在了)、
- * 老师的(liveStart 第一拍就绪、liveBeat 又一拍、liveFinal 写完了、liveDropped 出错撤掉、fresh 整节到了)、舞台的(stageDone 那一段放完或关了)、
- * 页面的(reset 换老师、halt 只停声音:关老师页 / 按住说话 / 清板、autoplayOff 关自动念、jump 调试跳句)、
- * 录音卡的(recStart 按下录音键、recEnd 松手 / 上滑取消 / 关舞台 / 切后台:停录)
- */
 export type PlayerEvent =
   | { type: 'reset' }
   | { type: 'halt' }
-  | { type: 'send' }
-  | { type: 'tapButton' }
-  | { type: 'tapAgain'; section: number; target: number | 'all' }
-  | { type: 'tapSubtitle' }
-  | { type: 'segment' }
-  | { type: 'stageOpen' }
-  | { type: 'stageDone' }
-  | { type: 'lineEnded' }
-  | { type: 'lineMissing' }
-  | { type: 'autoplayOff' }
   | { type: 'liveStart'; section: number }
   | { type: 'liveBeat'; section: number }
-  | { type: 'liveFinal'; section: number; prevLines: string[] }
+  | { type: 'liveFinal'; section: number }
   | { type: 'liveDropped' }
-  | { type: 'fresh'; sections: number[]; silent: boolean }
-  | { type: 'jump'; section: number; line: number }
-  | { type: 'recStart' }
-  | { type: 'recEnd' };
+  | { type: 'fresh'; sections: number[] };
 
-/**
- * 要做的事,按顺序执行。play / openStage / openAsk 会让页面再 dispatch,所以最多一个、且在最后(不变式,测试兜)。
- * stop 只停声音;paint = 把某节前 upTo+1 句的标注画齐(没 upTo 全画);unpaint = 撤掉这几句的标注(再听时重描);
- * replayStart = 解锁声音、田字格这一趟再写的记号清空;scrollLast = 滚到最后一节
- */
+/** stop 只停声音(卡的点读、单词);paint = 把某节的标注画齐;showNow = 选中态照现在的位置;scrollLast = 滚到最后一节 */
 export type PlayerEffect =
   | { kind: 'stop' }
-  | { kind: 'play' }
   | { kind: 'render' }
   | { kind: 'showNow' }
-  | { kind: 'paint'; section: number; upTo?: number }
-  | { kind: 'unpaint'; section: number; lines: number[] }
-  | { kind: 'replayStart' }
-  | { kind: 'openStage'; section: number; card: number }
-  | { kind: 'openAsk'; section: number; line: number }
+  | { kind: 'paint'; section: number }
   | { kind: 'scrollLast' };
 
 export function initialPlayer(): PlayerModel {
-  return { state: { section: -1, line: -1, status: 'idle' }, replayOf: null, held: false };
-}
-
-/** 停声音;在再听就回到再听前的位置,念过的标注补齐 */
-function halt(m: PlayerModel, ctx: PlayerCtx, fx: PlayerEffect[], stopAudio = true): PlayerModel {
-  if (stopAudio) fx.push({ kind: 'stop' });
-  const r = m.state.replay;
-  if (!r) return m;
-  const sec = m.state.section;
-  const n = spokenLines(r.back, ctx.sections, sec);
-  if (n > 0) fx.push({ kind: 'paint', section: sec, upTo: n - 1 });
-  fx.push({ kind: 'showNow' });
-  return { ...m, state: r.back, replayOf: null };
-}
-
-/** 开始再听:板上要安静、舞台没开;先停掉在念的(包括别的再听) */
-function beginReplay(m: PlayerModel, ctx: PlayerCtx, fx: PlayerEffect[], sec: number, lines: number[], target: number | 'all' | 'line'): PlayerModel {
-  if (!lines.length || ctx.stage || !replayQuiet(m.state, ctx.pending)) return m;
-  fx.push({ kind: 'replayStart' });
-  m = halt(m, ctx, fx);
-  fx.push({ kind: 'unpaint', section: sec, lines });
-  fx.push({ kind: 'play' });
-  return { ...m, replayOf: { section: sec, card: target }, state: startReplay(m.state, sec, lines) };
-}
-
-/** 状态换了:在念就念,不在念就重画字幕 */
-function playOrRender(state: PlayerState, fx: PlayerEffect[]): void {
-  fx.push({ kind: state.status === 'playing' ? 'play' : 'render' });
+  return { state: { section: -1, line: -1, status: 'idle' } };
 }
 
 export function step(model: PlayerModel, ev: PlayerEvent, ctx: PlayerCtx): { model: PlayerModel; effects: PlayerEffect[] } {
   const fx: PlayerEffect[] = [];
   let m = model;
   const secs = ctx.sections;
-  const put = (state: PlayerState): void => { m = { ...m, state }; };
-  // 在录:孩子这边能出声的都不响(喇叭、点读、回放、暂停钮;会录进去)
-  if (ctx.recording && (ev.type === 'tapButton' || ev.type === 'tapAgain' || ev.type === 'tapSubtitle' || ev.type === 'segment')) return { model: m, effects: fx };
   switch (ev.type) {
-    case 'recStart':
-      m = halt(m, ctx, fx);
-      if (m.state.status === 'playing') { put({ ...m.state, status: 'paused' }); m = { ...m, held: true }; }
-      fx.push({ kind: 'render' });
-      break;
-    case 'recEnd':
-      if (m.held && !m.state.replay && m.state.status === 'paused') { put({ ...m.state, status: 'playing' }); fx.push({ kind: 'play' }); }
-      m = { ...m, held: false };
-      break;
     case 'reset':
       m = initialPlayer();
       break;
     case 'halt':
-      m = halt(m, ctx, fx);
+      fx.push({ kind: 'stop' });
       break;
-    case 'send':
-      m = halt(m, ctx, fx);
-      if (m.state.status === 'playing' || m.state.status === 'paused' || m.state.status === 'stage') put({ ...m.state, status: 'done' });
-      break;
-    case 'segment':
-      m = halt(m, ctx, fx);
-      if (m.state.status === 'playing') { put({ ...m.state, status: 'paused' }); fx.push({ kind: 'render' }); }
-      break;
-    case 'stageOpen':
-      if (m.state.replay) m = halt(m, ctx, fx);
-      if (m.state.status === 'playing') { m = halt(m, ctx, fx); put({ ...m.state, status: 'paused' }); fx.push({ kind: 'render' }); }
-      break;
-    case 'stageDone':
-      if (m.state.status !== 'stage') break;
-      put(advance({ ...m.state, status: 'playing' }, secs));
-      playOrRender(m.state, fx);
-      break;
-    case 'tapButton':
-      if (m.state.replay) { m = halt(m, ctx, fx); fx.push({ kind: 'render' }); }
-      else if (m.state.status === 'playing') { m = halt(m, ctx, fx); put({ ...m.state, status: 'paused' }); fx.push({ kind: 'render' }); }
-      else if (m.state.status === 'paused') { put({ ...m.state, status: 'playing' }); fx.push({ kind: 'play' }); }
-      break;
-    case 'tapAgain': {
-      const r = m.replayOf;
-      if (m.state.replay && r && r.section === ev.section && r.card === ev.target) { m = halt(m, ctx, fx); fx.push({ kind: 'render' }); break; }
-      m = beginReplay(m, ctx, fx, ev.section, replayLines(secs, ev.section, ev.target), ev.target);
-      break;
-    }
-    case 'tapSubtitle': {
-      const st = m.state;
-      const s = secs[st.section];
-      if (ctx.stage || ctx.pending || !s || s.partial || st.line < 0 || st.replay || !(st.status === 'paused' || st.status === 'waiting' || st.status === 'done')) break;
-      if (subtitleFor({ state: st, sections: secs, pending: ctx.pending, waitedMs: 0 }).kind !== 'line') break;
-      m = beginReplay(m, ctx, fx, st.section, [st.line], 'line');
-      break;
-    }
-    case 'lineMissing':
-      put({ ...m.state, status: 'done' });
-      fx.push({ kind: 'render' });
-      break;
-    case 'lineEnded': {
-      const st = m.state;
-      if (st.status !== 'playing') break;
-      // 再听:只念句子,不执行 cue、不推答题卡;念完回到原来的位置
-      if (st.replay) {
-        const a = advance(st, secs);
-        if (a.replay) { put(a); fx.push({ kind: 'play' }); }
-        else { m = halt(m, ctx, fx, false); fx.push({ kind: 'render' }); }
-        break;
-      }
-      // [[play]]:念完这句铺满放小课堂卡上那一段(课里原来的声音),放完(stageDone)舞台停在末帧、接着念
-      const line = secs[st.section]?.lines[st.line];
-      const cue = line?.cues.find((c) => c.name === 'play');
-      const card = cue ? secs[st.section].cards[cue.card] : undefined;
-      if (cue && card && lectureReady(card)) { put({ ...st, status: 'stage' }); fx.push({ kind: 'openStage', section: st.section, card: cue.card }); break; }
-      let next = advance(st, secs);
-      if (ctx.readonly && next.status === 'waiting') next = { ...next, status: 'done' };
-      put(next);
-      if (next.status === 'playing') fx.push({ kind: 'play' });
-      else { fx.push({ kind: 'render' }); if (next.status === 'waiting') fx.push({ kind: 'openAsk', section: next.section, line: st.line }); }
-      break;
-    }
-    case 'autoplayOff':
-      if (m.state.status !== 'playing') break;
-      m = halt(m, ctx, fx);
-      fx.push({ kind: 'paint', section: m.state.section });
-      put(playerAtEnd(secs));
+    case 'liveStart':
+      fx.push({ kind: 'paint', section: ev.section });
+      m = { state: { section: ev.section, line: -1, status: 'thinking' } };
       fx.push({ kind: 'render' }, { kind: 'showNow' });
       break;
-    case 'liveStart': {
-      const idx = ev.section;
-      if (ctx.autoplay) { m = halt(m, ctx, fx); put(startSection(idx, secs)); playOrRender(m.state, fx); break; }
-      if (m.state.replay) m = halt(m, ctx, fx);
-      fx.push({ kind: 'paint', section: idx });
-      put({ section: idx, line: playableLines(secs[idx]) - 1, status: 'thinking' });
-      fx.push({ kind: 'render' }, { kind: 'showNow' });
+    case 'liveBeat':
+      if (m.state.section !== ev.section || m.state.status !== 'thinking') break;
+      fx.push({ kind: 'paint', section: ev.section }, { kind: 'render' });
       break;
-    }
-    case 'liveBeat': {
-      const idx = ev.section;
-      // 等下一拍时孩子在再听前面的,新的一拍到了:让给老师
-      const B = m.state.replay?.back;
-      if (B && B.section === idx && B.status === 'thinking' && playableLines(secs[idx]) > B.line + 1) m = halt(m, ctx, fx);
-      if (m.state.section !== idx || m.state.status !== 'thinking') break;
-      if (ctx.autoplay) { put(advance(m.state, secs)); playOrRender(m.state, fx); }
-      else { fx.push({ kind: 'paint', section: idx }); put({ ...m.state, line: playableLines(secs[idx]) - 1 }); fx.push({ kind: 'render' }); }
-      break;
-    }
-    case 'liveFinal': {
-      const idx = ev.section;
-      // 老师写完了,再听让给它接着念
-      if (m.state.replay && m.state.replay.back.section === idx) m = halt(m, ctx, fx);
-      // 正式节应该就是各拍的拼接;万一句的下标对不上,按正在播的那句的文字找回位置,不倒回去、不念两遍
-      const st = m.state;
-      if (st.section === idx && st.line >= 0) {
-        const cur = ev.prevLines[st.line];
-        const j = cur === undefined ? -1 : secs[idx].lines.findIndex((l) => l.text === cur);
-        if (j >= 0 && j !== st.line) put({ ...st, line: j });
-      }
-      if (m.state.section !== idx) { fx.push({ kind: 'paint', section: idx }); break; }
-      fx.push({ kind: 'paint', section: idx, upTo: m.state.line });
+    case 'liveFinal':
+      fx.push({ kind: 'paint', section: ev.section });
+      if (m.state.section !== ev.section) break;
       if (m.state.status !== 'thinking') { fx.push({ kind: 'showNow' }); break; }
-      if (!ctx.autoplay) { fx.push({ kind: 'paint', section: idx }); put(playerAtEnd(secs)); fx.push({ kind: 'render' }, { kind: 'showNow' }); break; }
-      const next = advance(m.state, secs);
-      put(next);
-      if (next.status === 'playing') { fx.push({ kind: 'showNow' }, { kind: 'play' }); break; }
+      m = { state: playerAtEnd(secs) };
       fx.push({ kind: 'render' }, { kind: 'showNow' });
-      if (next.status === 'waiting') fx.push({ kind: 'openAsk', section: idx, line: next.line });
       break;
-    }
     case 'liveDropped':
-      m = halt(m, ctx, fx);
-      put(playerAtEnd(secs));
+      fx.push({ kind: 'stop' });
+      m = { state: playerAtEnd(secs) };
       fx.push({ kind: 'render' });
       break;
-    case 'fresh': {
+    case 'fresh':
       if (!ev.sections.length) break;
-      if (ev.silent || !ctx.autoplay) {
-        // 新的一节来了,再听停下
-        if (m.state.replay) m = halt(m, ctx, fx);
-        for (const i of ev.sections) fx.push({ kind: 'paint', section: i });
-        put(playerAtEnd(secs));
-        fx.push({ kind: 'render' }, { kind: 'showNow' }, { kind: 'scrollLast' });
-        break;
-      }
-      m = halt(m, ctx, fx);
-      put(startSection(ev.sections[0], secs));
-      playOrRender(m.state, fx);
+      for (const i of ev.sections) fx.push({ kind: 'paint', section: i });
+      m = { state: playerAtEnd(secs) };
+      fx.push({ kind: 'render' }, { kind: 'showNow' }, { kind: 'scrollLast' });
       break;
-    }
-    case 'jump': {
-      m = halt(m, ctx, fx);
-      const sec = ev.section, line = ev.line;
-      for (let i = 0; i < sec; i++) fx.push({ kind: 'paint', section: i });
-      fx.push({ kind: 'paint', section: sec, upTo: line });
-      const l = secs[sec]?.lines[line];
-      const waiting = Boolean(l && l.ask && line === secs[sec].lines.length - 1 && sec === secs.length - 1);
-      put({ section: sec, line, status: waiting ? 'waiting' : 'paused' });
-      fx.push({ kind: 'render' }, { kind: 'showNow' });
-      break;
-    }
-  }
-  // 在录时老师那边来的(新的一拍、整节、写完、小课堂该放了、推答题卡)也不响:该念的那句停成暂停,松手后接着念
-  if (ctx.recording && ev.type !== 'recEnd' && fx.some((f) => f.kind === 'play' || f.kind === 'openStage' || f.kind === 'openAsk')) {
-    const kept = fx.filter((f) => f.kind !== 'play' && f.kind !== 'openStage' && f.kind !== 'openAsk');
-    if (m.state.replay) m = halt(m, ctx, kept);
-    else if (m.state.status === 'playing' || m.state.status === 'stage') { put({ ...m.state, status: 'paused' }); m = { ...m, held: true }; }
-    kept.push({ kind: 'render' });
-    return { model: m, effects: kept };
   }
   return { model: m, effects: fx };
 }
@@ -1256,23 +925,7 @@ export function barNext(mode: BarMode, ev: BarEvent): BarMode {
 
 
 
-/** 没配音也没浏览器合成时,一句停多久(毫秒):按字数估 */
+/** 一句念多久(毫秒):按字数估(mock 的假嘴、录像) */
 export function lineDurationMs(text: string): number {
   return Math.max(1200, Array.from(plainLine(text)).length * 260);
-}
-
-/**
- * 一处标注在这句里什么时候画(2026-09-13):没有字级时间戳(voxtell align 还是规划),按字数比例估——中文每字语速很均匀,
- * 20 字一句误差两三百毫秒。词取 said(讲稿里念到的那个词),没有就拿 phrase 在讲稿里找;讲稿里没这个词 → null(句首就画,同以前)。
- * totalMs = 这句声音的总时长(mp3 的 duration,或没声音时的 lineDurationMs)。dur 最短 350ms,描线不至于一闪。
- */
-export function markTiming(line: BoardLine, mark: BoardMark, totalMs: number): { at: number; dur: number } | null {
-  const text = plainLine(line.text);
-  const word = mark.said || mark.phrase;
-  const i = findPhrase(text, word);
-  if (i < 0 || !text.length || !(totalMs > 0)) return null;
-  const chars = Array.from(text).length;
-  const before = Array.from(text.slice(0, i)).length;
-  const len = Array.from(word).length;
-  return { at: Math.round((totalMs * before) / chars), dur: Math.max(350, Math.round((totalMs * len) / chars)) };
 }

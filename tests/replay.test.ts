@@ -57,7 +57,7 @@ try {
   await r1.done;
   await runner.flush();
   const orig = (await readIndex(ws, 'math-tutor', '2026-09-08')).messages[0];
-  check('原轮 ok、有卡、配了音', orig.result === 'ok' && (orig.section?.cards.length ?? 0) > 0 && orig.section?.lines.some((l) => l.audio) === true, JSON.stringify({ result: orig.result, cards: orig.section?.cards.length, audio: orig.section?.lines.map((l) => l.audio) }));
+  check('原轮 ok、有卡;讲稿不配音', orig.result === 'ok' && (orig.section?.cards.length ?? 0) > 0 && orig.section?.lines.every((l) => !l.audio) === true, JSON.stringify({ result: orig.result, cards: orig.section?.cards.length, audio: orig.section?.lines.map((l) => l.audio) }));
 
   // 改 vault 与老师文件后回放
   writeFileSync(join(root, 'vault', '孩子.md'), '---\ncotutor: profile\nschool_start: 2025-09\n---\n\n数学:人教数学一下 第 5 单元 在学\n还没学、别用:竖式\n');

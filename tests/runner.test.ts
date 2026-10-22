@@ -124,7 +124,7 @@ try {
   const m1 = d1.index.messages[0];
   check('跑完:ok、kidText 物化、费用累计', m1.result === 'ok' && m1.kidText === '第一次说:妈妈我不懂这一步' && d1.index.costUsd === 0.05 && m1.runtime === 'fake', JSON.stringify(m1));
   check('会话记下', d1.index.session?.runtime === 'fake' && d1.index.session.id.startsWith('fake-'));
-  check('埋点:startedAt 是 ISO、整轮与配音收尾都记了、整块出的没有首卡', typeof m1.timing?.startedAt === 'string' && !Number.isNaN(Date.parse(m1.timing.startedAt)) && typeof m1.timing.doneMs === 'number' && m1.timing.doneMs >= 0 && typeof m1.timing.dubbedMs === 'number' && m1.timing.dubbedMs >= m1.timing.doneMs && m1.timing.firstCardMs === undefined, JSON.stringify(m1.timing));
+  check('埋点:startedAt 是 ISO、整轮记了;讲稿不配音就没有配音收尾;整块出的没有首卡', typeof m1.timing?.startedAt === 'string' && !Number.isNaN(Date.parse(m1.timing.startedAt)) && typeof m1.timing.doneMs === 'number' && m1.timing.doneMs >= 0 && m1.timing.dubbedMs === undefined && m1.timing.firstCardMs === undefined, JSON.stringify(m1.timing));
   const log = readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${job1}.log`), 'utf8');
   const init = JSON.parse(log.split('\n')[0]) as { cwd: string; agent: string };
   check('cwd 是老师目录、--agent 填了老师名', init.cwd === join(root, 'agents', 'math-tutor') && init.agent === 'math-tutor', JSON.stringify(init));
@@ -157,7 +157,7 @@ try {
   check('课程表命中 → slot(2026-09-08 是周二 16:20)', pack.slot === '数学 16:00-17:00', String(pack.slot));
   check('时段外没有 slot', (await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: new Date(2026, 8, 8, 18, 0) })).slot === undefined);
   const m1s = m1 as typeof m1 & { section?: { lines: { audio: string | null }[] } };
-  check('配音:老师配了 voice → 讲稿逐句 mp3 落会话目录(一句话也是一句),消息层没有整段 audio', (m1 as { audio?: unknown }).audio === undefined && m1s.section?.lines[0].audio === `2026-09-08.${job1}.1.mp3` && readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${job1}.1.mp3`), 'utf8').startsWith('fake-mp3:v-math:'), JSON.stringify(m1s.section));
+  check('讲稿不配音(嘴照念,《产品规划.md》拍板 30):老师配了 voice 讲稿句也没有 mp3,消息层没有整段 audio', (m1 as { audio?: unknown }).audio === undefined && m1s.section?.lines[0].audio === null && !existsSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${job1}.1.mp3`)), JSON.stringify(m1s.section));
 
   // ---- 看原文:一轮拆成六站,一个接口给全(2026-09-11) ----
   type Raw = {
@@ -175,7 +175,7 @@ try {
   check('看原文:上下文包落了盘,消息正文与完整命令行都在', rawView1.pack?.prompt.includes('妈妈我不懂这一步') === true && rawView1.pack.argv.includes('--agent') && rawView1.pack.resume === false, JSON.stringify(rawView1.pack?.argv));
   check('看原文:原文逐行标了角色', rawView1.source.text.includes('第一次说') && rawView1.source.rows.some((r) => r.role === 'say' && r.label?.startsWith('讲稿') === true), JSON.stringify(rawView1.source.rows));
   check('看原文:当前解析器重解 = 索引里存的(同一版解析器,不该有差异)', rawView1.fresh.same === true && rawView1.fresh.diff.every((d) => d.s === '·'), JSON.stringify(rawView1.fresh.diff));
-  check('看原文:下发给孩子那一站带配音文件名与在不在', rawView1.kid.lines[0].audio === `2026-09-08.${job1}.1.mp3` && rawView1.kid.lines[0].audioOk === true && rawView1.kid.lines[0].cut === '', JSON.stringify(rawView1.kid.lines));
+  check('看原文:下发给孩子那一站讲稿没有配音', rawView1.kid.lines[0].audio === null && rawView1.kid.lines[0].cut === '', JSON.stringify(rawView1.kid.lines));
   const fx = (await route('GET', `/api/conversations/math-tutor/2026-09-08/raw/${job1}/fixture`, ctx)).json as { name: string; text: string };
   check('看原文:fixture 是原文原样一份', fx.name === `math-tutor-2026-09-08-${job1}.md` && fx.text.includes('第一次说') && fx.text.endsWith('\n'), JSON.stringify(fx));
   check('看原文:没有这一轮 → 404', (await route('GET', '/api/conversations/math-tutor/2026-09-08/raw/9999-9', ctx)).status === 404);
@@ -272,7 +272,7 @@ try {
   await post('english-tutor', { text: '配音会失败' });
   await wait('english-tutor');
   const dr2 = (await day('english-tutor', '2026-09-09')).json as Day & { index: { messages: { audio?: string | null }[] } };
-  check('配音失败 → 讲稿句 audio null、对话照常、原因进 err.log', dr2.index.messages[1].result === 'ok' && (dr2.index.messages[1] as { section?: { lines: { audio: string | null }[] } }).section?.lines.every((l) => l.audio === null) === true && readFileSync(join(root, 'conversations', 'english-tutor', `2026-09-09.${dr2.index.messages[1].job}.err.log`), 'utf8').includes('没合成'), JSON.stringify(dr2.index.messages[1]));
+  check('讲稿不配音:句 audio 都是 null、对话照常', dr2.index.messages[1].result === 'ok' && (dr2.index.messages[1] as { section?: { lines: { audio: string | null }[] } }).section?.lines.every((l) => l.audio === null) === true, JSON.stringify(dr2.index.messages[1]));
   await post('chinese-tutor', { text: '起不来', runtime: 'missing', from: 'system' });
   await wait('chinese-tutor');
   const dm = (await day('chinese-tutor', '2026-09-09')).json as Day;
@@ -292,11 +292,9 @@ try {
   check('跑的时候 pending', kdMid.pending !== null && kdMid.messages[1].pending === true);
   await wait('math-tutor');
   const kd2 = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { question: string | null; reply: string | null; audio: string | null; section?: { lines: { audio: string | null }[] } }[] };
-  check('回复 + 逐句配音文件名', kd2.messages[1].question === '孩子问的' && kd2.messages[1].reply === '接着说:孩子问的' && kd2.messages[1].section?.lines[0].audio === '2026-09-09.0800-2.1.mp3', JSON.stringify(kd2.messages[1]));
+  check('回复;讲稿句没有配音文件名', kd2.messages[1].question === '孩子问的' && kd2.messages[1].reply === '接着说:孩子问的' && kd2.messages[1].section?.lines[0].audio === null, JSON.stringify(kd2.messages[1]));
   const kidMsg = ((await day('math-tutor', '2026-09-09')).json as { index: { messages: { text: string; deviceId?: string }[] } }).index.messages.find((m) => m.text === '孩子问的');
   check('孩子端发的消息记设备编号(服务端从 cookie 取,《孩子端流水设计.md》)', kidMsg?.deviceId === '0123456789ab', JSON.stringify(kidMsg?.deviceId));
-  const au = await route('GET', '/api/audio/math-tutor/2026-09-09.0800-2.1.mp3', ctx);
-  check('配音文件能取', au.status === 200 && au.file !== undefined && au.contentType === 'audio/mpeg' && readFileSync(au.file!, 'utf8').includes('接着说:孩子问的'), JSON.stringify(au));
   check('配音路径校验', (await route('GET', '/api/audio/math-tutor/../cotutor.json', ctx)).status === 404 && (await route('GET', '/api/audio/math-tutor/2026-09-09.0800-9.mp3', ctx)).status === 404);
   // 语文老师的 policy 写着老的 dailyMessages = 1:不认,第二条照发(《产品规划.md》拍板 29)
   check('孩子发第一条 202', (await route('POST', '/api/kid/conversations/chinese-tutor/messages', ctx, { text: '一' })).status === 202);
@@ -320,13 +318,11 @@ try {
   const db = (await day('math-tutor', '2026-09-09')).json as { index: { messages: BoardMsg[] } };
   const mb = db.index.messages.find((m) => m.job === jobB)!;
   check('板书:section 物化(2 张好卡 + 1 张退成文字的),讲稿 3 句,答案还在索引里', mb.section?.cards.map((c) => c.kind).join() === 'text,choice,text' && JSON.stringify(mb.section?.cards[1].props.answer) === '[0]' && mb.section?.lines.length === 3 && mb.kidText === '先看三角形。\n三角形有几个角?\n接着说:讲讲板书 坏卡 家长段', JSON.stringify(mb));
-  check('板书:逐句配音,每句一个 mp3,没有整段配音', (mb as { audio?: unknown }).audio === undefined && mb.section?.lines.every((l, i) => l.audio === `2026-09-09.${jobB}.${i + 1}.mp3`) === true && existsSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobB}.2.mp3`)) && !existsSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobB}.mp3`)), JSON.stringify(mb.section?.lines.map((l) => l.audio)));
+  check('板书:讲稿不配音,没有逐句 mp3,也没有整段', (mb as { audio?: unknown }).audio === undefined && mb.section?.lines.every((l) => l.audio === null) === true && !existsSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobB}.1.mp3`)) && !existsSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${jobB}.mp3`)), JSON.stringify(mb.section?.lines.map((l) => l.audio)));
   check('板书:家长尾巴与解析提醒进索引', mb.parentText === '## 家长\n他其实会了。' && mb.warnings?.length === 1 && mb.warnings[0].includes('choice'), JSON.stringify([mb.parentText, mb.warnings]));
   const kidB = (await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; section?: { cards: { props: Record<string, unknown> }[]; lines: { audio: string | null }[] } }[] };
   const kb = kidB.messages.find((m) => m.job === jobB)!;
-  check('孩子端:section 下发、答案剥掉、家长尾巴与提醒不下发、每句带配音', kb.section?.cards.length === 3 && !('answer' in kb.section.cards[1].props) && !JSON.stringify(kb).includes('他其实会了') && !JSON.stringify(kb).includes('没解析成') && kb.section.lines[0].audio === `2026-09-09.${jobB}.1.mp3`, JSON.stringify(kb));
-  const lineAudio = await route('GET', `/api/audio/math-tutor/2026-09-09.${jobB}.1.mp3`, ctx);
-  check('逐句配音文件能取', lineAudio.status === 200, JSON.stringify(lineAudio.status));
+  check('孩子端:section 下发、答案剥掉、家长尾巴与提醒不下发', kb.section?.cards.length === 3 && !('answer' in kb.section.cards[1].props) && !JSON.stringify(kb).includes('他其实会了') && !JSON.stringify(kb).includes('没解析成'), JSON.stringify(kb));
 
   // ---- 卡的状态:PUT 存文件 → 孩子端读回(答案仍剥)→ 交给老师:上下文包 cards 段、消息记 cards / action;「继续」不计上限 ----
   const putBad = await route('PUT', `/api/kid/conversations/math-tutor/cards/${jobB}/1`, ctx, { picked: 'x' });
@@ -394,8 +390,8 @@ try {
   const at = (k: string): number => kinds.indexOf(k);
   check('事件:订阅者收到的和文件里的一样多、同序', evLive.length === evFile.length && evLive.every((e, i) => e.lane === evFile[i].lane && e.kind === evFile[i].kind), `${evLive.length} vs ${evFile.length}`);
   check('事件:start 第一条;流式时卡与句在 exit 之前;2 张卡 3 句;工具调用与子代理各一条', kinds[0] === 'main:start' && kinds.filter((k) => k === 'main:card').length === 2 && kinds.filter((k) => k === 'main:line').length === 3 && at('main:card') < at('main:exit') && at('main:line') < at('main:exit') && evFile.some((e) => e.lane === 'main' && e.kind === 'tool' && !e.sub) && evFile.filter((e) => e.lane === 'main' && e.kind === 'tool').length === 1, kinds.join(' '));
-  check('一拍一就绪:跑到一半 partial 带 ready(只增)、就绪的句带配音名;第一拍就绪在 exit 之前;timing 记了 firstReadyMs', seen.some((x) => x.ready > 0) && seen.every((x, i) => i === 0 || x.ready >= seen[i - 1].ready) && seen.some((x) => x.audio > 0) && at('ready:beat') >= 0 && at('ready:beat') < at('main:exit') && evFile.some((e) => e.lane === 'ready' && e.kind === 'beat' && e.first) && typeof (mS as { timing?: { firstReadyMs?: number } }).timing?.firstReadyMs === 'number', JSON.stringify(seen.slice(-3)) + ' ' + kinds.join(' '));
-  check('事件:配音每句 排队 + 完成;没有后期那一道;全部就绪在 exit 之后、写入之前;时间单调不减', kinds.filter((k) => k === 'tts:queued').length === 3 && kinds.filter((k) => k === 'tts:done').length === 3 && !kinds.some((k) => k.startsWith('post:')) && at('ready:all') > at('main:exit') && at('index:written') === kinds.length - 1 && evFile.every((e, i) => i === 0 || e.t >= evFile[i - 1].t), kinds.join(' '));
+  check('一拍一就绪:跑到一半 partial 带 ready(只增)、讲稿句不带配音;第一拍就绪在 exit 之前;timing 记了 firstReadyMs', seen.some((x) => x.ready > 0) && seen.every((x, i) => i === 0 || x.ready >= seen[i - 1].ready) && seen.every((x) => x.audio === 0) && at('ready:beat') >= 0 && at('ready:beat') < at('main:exit') && evFile.some((e) => e.lane === 'ready' && e.kind === 'beat' && e.first) && typeof (mS as { timing?: { firstReadyMs?: number } }).timing?.firstReadyMs === 'number', JSON.stringify(seen.slice(-3)) + ' ' + kinds.join(' '));
+  check('事件:讲稿不排配音;没有后期那一道;全部就绪在 exit 之后、写入之前;时间单调不减', !kinds.some((k) => k.startsWith('tts:')) && !kinds.some((k) => k.startsWith('post:')) && at('ready:all') > at('main:exit') && at('index:written') === kinds.length - 1 && evFile.every((e, i) => i === 0 || e.t >= evFile[i - 1].t), kinds.join(' '));
   // 老师先写固定段(「## 记账」)再板书:流式时固定段先剥再解析,卡照样在 exit 之前露出来(以前整段被当家长尾巴,一张卡都没有)
   const live2: { job: string; lane: string; kind: string }[] = [];
   const off2 = ctx.runner.onEvent((e) => live2.push({ job: e.job, lane: e.event.lane, kind: e.event.kind }));
@@ -405,10 +401,10 @@ try {
   off2();
   const k2 = live2.filter((e) => e.job === jobS3).map((e) => `${e.lane}:${e.kind}`);
   check('流式 + 固定段在前:卡与句仍在 exit 之前出现;记账段照样进索引', k2.indexOf('main:card') >= 0 && k2.indexOf('main:card') < k2.indexOf('main:exit') && ((await day('math-tutor', '2026-09-09')).json as Day).index.messages.find((m) => m.job === jobS3)?.bookkeeping?.entries[0].name === '重讲', k2.join(' '));
-  check('埋点:每拍的关 / 配音齐 / 就绪从事件推出来,首拍就绪 = 拍 0 的就绪', (() => { const bs = (mS as { timing?: { beats?: { card: number | null; readyMs?: number; dubbedMs?: number }[] } }).timing?.beats; return Array.isArray(bs) && bs.length === 2 && bs.every((b) => typeof b.readyMs === 'number' && typeof b.dubbedMs === 'number'); })(), JSON.stringify((mS as { timing?: { beats?: unknown } }).timing?.beats));
+  check('埋点:每拍的关 / 就绪从事件推出来(讲稿不配音,没有配音齐),首拍就绪 = 拍 0 的就绪', (() => { const bs = (mS as { timing?: { beats?: { card: number | null; readyMs?: number; dubbedMs?: number }[] } }).timing?.beats; return Array.isArray(bs) && bs.length === 2 && bs.every((b) => typeof b.readyMs === 'number' && b.dubbedMs === undefined); })(), JSON.stringify((mS as { timing?: { beats?: unknown } }).timing?.beats));
   check('首句就绪(拍板 15):第一句配好就记,发 ready:speak,不晚于第一拍就绪', (() => { const t = (mS as { timing?: { firstReadyMs?: number; beats?: { readyMs?: number }[] } }).timing; const sp = evFile.filter((e) => e.lane === 'ready' && e.kind === 'speak'); return sp.length === 1 && typeof t?.firstReadyMs === 'number' && t.firstReadyMs <= (t.beats?.[0]?.readyMs ?? Infinity); })(), JSON.stringify((mS as { timing?: unknown }).timing));
   check('事件:格式化成一行(相对秒 · 道 · 一句话)', /^\s*\d+\.\d\d main\s+起 .*(新会话|resume)/.test(formatEvent(evFile[0])) && formatEvent(evFile.find((e) => e.kind === 'card')!).includes('卡 0 text'), formatEvent(evFile[0]));
-  check('跑完:正式一节(不带 partial)、2 张卡 3 句、每句 mp3(流式时已在路上)、子代理的增量没混进来', mS.section?.cards.length === 2 && !('partial' in mS.section) && mS.section.lines.length === 3 && mS.section.lines.every((l, i) => l.audio === `2026-09-09.${jobS2}.${i + 1}.mp3`) && !mS.kidText?.includes('子代理') && mS.kidText?.includes('第一次说:流式 板书') === true, JSON.stringify(mS));
+  check('跑完:正式一节(不带 partial)、2 张卡 3 句、讲稿没有 mp3、子代理的增量没混进来', mS.section?.cards.length === 2 && !('partial' in mS.section) && mS.section.lines.length === 3 && mS.section.lines.every((l) => l.audio === null) && !mS.kidText?.includes('子代理') && mS.kidText?.includes('第一次说:流式 板书') === true, JSON.stringify(mS));
   // ---- 实时轮(《wip/实时老师开发计划.md》P2.3):讲稿不配音、拍关就就绪;消息记 live;上下文包带 live: ----
   {
     const evL: { job: string; lane: string; kind: string; label: string }[] = [];
@@ -440,7 +436,7 @@ try {
   const phone = ((await day('math-tutor', '2026-09-09')).json as Day).index.messages.find((m) => m.job === (rPhone.json as { job: string }).job) as unknown as PostMsg | undefined;
   check('孩子端带 device=phone → 消息记了端;坏的端 400', rPhone.status === 202 && phone?.device === 'phone' && (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: 'x', device: 'watch' })).status === 400, JSON.stringify([phone?.device, phone?.section?.layout]));
   const tS = (mS as unknown as { timing?: Timing }).timing;
-  check('埋点:流式轮记了首卡,首卡 ≤ 整轮 ≤ 配音收尾', typeof tS?.firstCardMs === 'number' && tS.firstCardMs >= 0 && typeof tS.doneMs === 'number' && tS.firstCardMs <= tS.doneMs && typeof tS.dubbedMs === 'number' && tS.dubbedMs >= tS.doneMs, JSON.stringify(tS));
+  check('埋点:流式轮记了首卡,首卡 ≤ 整轮;没有配音收尾', typeof tS?.firstCardMs === 'number' && tS.firstCardMs >= 0 && typeof tS.doneMs === 'number' && tS.firstCardMs <= tS.doneMs && tS.dubbedMs === undefined, JSON.stringify(tS));
   check('跑完后 partial 没了', ctx.runner.partial('math-tutor') === null && !(((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; section?: { partial?: boolean } }[] }).messages.find((m) => m.job === jobS2)?.section?.partial));
 
   // ---- 点读资产与图片:点读段在索引写好后后台配到 .cards/<n>/<k>.mp3,孩子端卡上带 assets、/api/audio 能取;图片卡的图只认 workspace 内 ----

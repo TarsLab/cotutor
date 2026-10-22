@@ -151,35 +151,3 @@ export class DubQueue {
     }
   }
 }
-
-/**
- * 边讲边配:流式时讲稿每写完一句就交进来(add),整轮跑完 finish(最终句子)——同下标同文本的直接用,
- * 不一样的(极少:末句被截、partial 与最终切句不同)重配到同一个文件。失败句 null。
- */
-export class LineDubber {
-  private readonly jobs = new Map<number, { text: string; done: Promise<string | null> }>();
-  private readonly q: DubQueue;
-  private readonly lineAudio: (n: number) => string;
-  constructor(q: DubQueue, lineAudio: (n: number) => string) {
-    this.q = q;
-    this.lineAudio = lineAudio;
-  }
-
-  /** 第 i 句(0 起)定稿了;同下标同文本不重配 */
-  add(i: number, text: string): Promise<string | null> | null {
-    const t = text.trim();
-    const had = this.jobs.get(i);
-    if (!t) return null;
-    if (had && had.text === t) return had.done;
-    const after = had ? had.done.catch(() => null) : Promise.resolve(null);
-    const done = after.then(() => this.q.add(this.lineAudio(i + 1), t, `第 ${i + 1} 句`));
-    this.jobs.set(i, { text: t, done });
-    return done;
-  }
-
-  /** 最终讲稿:每句拿文件名(已配的直接用,没配的现配) */
-  async finish(lines: readonly { text: string }[]): Promise<(string | null)[]> {
-    lines.forEach((l, i) => this.add(i, l.text));
-    return Promise.all(lines.map((l, i) => (l.text.trim() ? this.jobs.get(i)!.done : Promise.resolve(null))));
-  }
-}

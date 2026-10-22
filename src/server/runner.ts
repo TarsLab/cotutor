@@ -26,7 +26,7 @@ import { activityState, paintGate, paintTool, readActivity, threadActivity } fro
 import { KouboQueue } from './koubo.ts';
 import { controlsTools, parserOf, prepareCli, processEnv, toolsOf, unexpectedTools, type ToolSet } from '../clis/index.ts';
 import { endsWithToolCall, lineFlags, parseBoard } from '../lib/board.ts';
-import { readyBeats, beatsOf, voicedLines, type BoardSection, type Device } from '../lib/kid-board.ts';
+import { readyBeats, beatsOf, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
 import { createPartialReader } from '../lib/stream.ts';
 import { parseSections } from '../lib/sections.ts';
@@ -40,7 +40,7 @@ import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { updateVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
 import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPrompt, type MemoryLine } from '../lib/vault-notes.ts';
 import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTEM, BOARD_GUIDE_PATH, boardGuideBody, boardGuideReads } from '../lib/tutor-rules.ts';
-import { DubQueue, LineDubber } from './tts.ts';
+import { DubQueue } from './tts.ts';
 import { WarmPool, type Spare } from './warm.ts';
 import { continueContext } from './home.ts';
 import { makeDraw, type Draw } from '../paint/draw.ts';
@@ -769,13 +769,10 @@ export class Runner {
       }
     };
     emit({ lane: 'main', kind: 'start', cli: plan.argv[0].slice(plan.argv[0].lastIndexOf('/') + 1), runtime: plan.runtime, resume: plan.resume, ...(spare ? { warmMs: t0 - spare.bornAt } : {}) });
-    // 实时轮的讲稿由嘴照念,不配音:当没配音色走,拍关就就绪
-    // 实时轮讲稿不配音(嘴照念);卡自己的声音(点读段、单词、录音卡的示范,《wip/实时老师设想.md》拍板 6)照配
+    // 讲稿不配音(嘴照念,《产品规划.md》拍板 30):拍关就就绪;卡自己的声音(点读段、单词、录音卡的示范,《wip/实时老师设想.md》拍板 6)照配
     const cardVoice = ws.config.tutors[tutor]?.voice;
-    const voice = active.live ? undefined : cardVoice;
     const queue = cardVoice ? new DubQueue(ws.config.tts, cardVoice, files.err(job), this.opts.env) : null;
     if (queue) queue.report = (e) => emit(e.kind === 'queued' ? { lane: 'tts', kind: 'queued', label: e.label } : e.kind === 'done' ? { lane: 'tts', kind: 'done', label: e.label, ms: e.ms, file: e.file ?? '' } : { lane: 'tts', kind: 'failed', label: e.label, ms: e.ms, error: e.error ?? '?' });
-    const dubber = queue && voice ? new LineDubber(queue, (n) => files.lineAudio(job, n)) : null;
     // 读输出:按这轮 CLI 的适配器把每行读成统一事件(src/clis/),一行只解析一次,同一批事件给流式拼正文、工具、会话 id 用。
     // 工具调用发一条事件(子代理的标 sub);顺手记哪些顶层工具还没回结果:工具在跑时进程不吐字是正常的,断流看门狗不算这段
     const parse = parserOf(plan.cli);
@@ -787,9 +784,7 @@ export class Runner {
     let unexpected: string[] = [];
     let cardsSeen = 0;
     let linesSeen = 0;
-    // 就绪(流式):每句配音落盘就填进 partial 的 audio。句:从第一句起连着配好几句就能念几句(voiced,《工作流程.md》拍板 15),
-    // 第一句配好记 firstReadyMs、发 ready:speak;拍:重算前几拍就绪(卡等它),涨了发 ready:beat。没配音色的老师按拍,第一拍就绪才算能开口
-    const lineAudio = new Map<number, string>();
+    // 就绪(流式):重算前几拍就绪(卡等它),涨了发 ready:beat;第一拍就绪记 firstReadyMs、发 ready:speak(嘴能开口了)
     let readySeen = 0;
     const speak = (): void => {
       if (timing.firstReadyMs !== undefined) return;
@@ -798,11 +793,7 @@ export class Runner {
     };
     const settleReady = (): void => {
       if (!active.partial) return;
-      if (voice) {
-        const v = voicedLines(active.partial);
-        if (v > (active.partial.voiced ?? 0)) { speak(); active.partial = { ...active.partial, voiced: v }; }
-      }
-      const n = readyBeats(active.partial, { voiced: Boolean(voice), done: false });
+      const n = readyBeats(active.partial, { voiced: false, done: false });
       if (n <= readySeen) return;
       const beats = beatsOf(active.partial);
       for (; readySeen < n; readySeen++) {
@@ -826,13 +817,11 @@ export class Runner {
       dirty = false;
       // 先剥「## 记账」再解析,和定稿的 deriveKidView 同一条路;不剥的话固定段写在前面的那轮流式时一张卡都出不来(2026-09-13 控制台里看见的)
       const { section } = parseBoard(parseSections(liveText()).body, { partial: true });
-      const lines = section.lines.map((l, i) => ({ ...l, text: truncateReply(l.text, replyMaxChars).text, audio: lineAudio.get(i) ?? null }));
-      const voiced = voice ? voicedLines({ lines }) : 0;
-      active.partial = section.cards.length || lines.length ? { cards: section.cards, lines, partial: true, ready: readySeen, ...(voiced ? { voiced } : {}) } : null;
+      const lines = section.lines.map((l) => ({ ...l, text: truncateReply(l.text, replyMaxChars).text, audio: null }));
+      active.partial = section.cards.length || lines.length ? { cards: section.cards, lines, partial: true, ready: readySeen } : null;
       if (section.cards.length && timing.firstCardMs === undefined) timing.firstCardMs = since();
       for (; cardsSeen < section.cards.length; cardsSeen++) emit({ lane: 'main', kind: 'card', card: cardsSeen, label: `${section.cards[cardsSeen].kind} ${cardLabel(section.cards[cardsSeen])}`.trim() });
       for (; linesSeen < lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: lines[linesSeen].text, ...lineFlags(lines[linesSeen], section.cards) });
-      if (dubber) lines.forEach((l, i) => { const p = dubber.add(i, l.text); if (p) void p.then((name) => { if (name && active.partial && active.partial.lines[i]) { lineAudio.set(i, name); active.partial.lines[i].audio = name; settleReady(); } }, () => {}); });
       settleReady();
     };
     // 断流看门狗:进程 stall.ms 没吐一个字节、也没有工具在跑 → 杀掉,resume 同一个会话接着写(最多 stall.retries 次)。
@@ -978,14 +967,6 @@ export class Runner {
     if (kidView.section) {
       for (; cardsSeen < kidView.section.cards.length; cardsSeen++) emit({ lane: 'main', kind: 'card', card: cardsSeen, label: `${kidView.section.cards[cardsSeen].kind} ${cardLabel(kidView.section.cards[cardsSeen])}`.trim() });
       for (; linesSeen < kidView.section.lines.length; linesSeen++) emit({ lane: 'main', kind: 'line', line: linesSeen, text: kidView.section.lines[linesSeen].text, ...lineFlags(kidView.section.lines[linesSeen], kidView.section.cards) });
-    }
-    // 配音:老师配了音色才合成;失败不响,孩子端用浏览器的声。
-    // 逐句配(流式时大多已在路上,这里只等没配完的)。
-    if (dubber && voice && kidView.section?.lines.length) {
-      const names = await dubber.finish(kidView.section.lines);
-      kidView.section.lines.forEach((l, i) => { l.audio = names[i]; });
-      timing.dubbedMs = since();
-      if (timing.firstReadyMs === undefined) timing.firstReadyMs = since();
     }
     if (timing.firstReadyMs === undefined && (kidView.section?.lines.length || kidView.kidText)) timing.firstReadyMs = since();
     if (kidView.section) emit({ lane: 'ready', kind: 'all', cards: kidView.section.cards.length, lines: kidView.section.lines.length });

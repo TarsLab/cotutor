@@ -57,7 +57,7 @@ try {
   const token = cookieOf(setCookie.split(';')[0]) ?? '';
   check('带 cookie 的别的设备是 parent;本机还是 local', (await access.whoOf(fakeReq('192.168.1.5', `${COOKIE_NAME}=${token}`))) === 'parent' && (await access.whoOf(fakeReq('192.168.1.5', `foo=bar; ${COOKIE_NAME}=${token}; x=y`))) === 'parent' && (await access.whoOf(fakeReq('127.0.0.1'))) === 'local');
   check('parent 开家长端、工作台、接口都 200', (await route('GET', '/parent', ctx, undefined, 'parent')).status === 200 && (await route('GET', '/api/overview/today', ctx, undefined, 'parent')).status === 200);
-  check('改过的、过期的、乱写的 cookie 都是 anon', (await access.whoOf(fakeReq('192.168.1.5', `${COOKIE_NAME}=${token.slice(0, -1)}0`))) === 'anon' && (await access.whoOf(fakeReq('192.168.1.5', `${COOKIE_NAME}=abc`))) === 'anon' && (await (async () => { const was = now; now = new Date(now.getTime() + 91 * 86400000); const w = await access.whoOf(fakeReq('192.168.1.5', `${COOKIE_NAME}=${token}`)); now = was; return w; })()) === 'anon');
+  check('改过的、过期的、乱写的 cookie 都是 anon', (await access.whoOf(fakeReq('192.168.1.5', `${COOKIE_NAME}=${token.slice(0, -1)}${token.endsWith('0') ? '1' : '0'}`))) === 'anon' && (await access.whoOf(fakeReq('192.168.1.5', `${COOKIE_NAME}=abc`))) === 'anon' && (await (async () => { const was = now; now = new Date(now.getTime() + 91 * 86400000); const w = await access.whoOf(fakeReq('192.168.1.5', `${COOKIE_NAME}=${token}`)); now = was; return w; })()) === 'anon');
   check('令牌:签名对、没过期才认', verifyToken('k', signToken('k', 1000), 999) && !verifyToken('k', signToken('k', 1000), 1000) && !verifyToken('k2', signToken('k', 1000), 1) && !verifyToken('k', 'x', 1));
 
   // ---- 连错锁 ----

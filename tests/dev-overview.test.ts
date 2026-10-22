@@ -19,6 +19,7 @@ const { DEV_PAGE } = await import('../src/server/dev-page.ts');
 const { qrPage } = await import('../src/server/qr-page.ts');
 const { VOICE_TEST_PAGE } = await import('../src/server/voice-test-page.ts');
 const { DEV_CSS } = await import('../src/server/dev-theme.ts');
+const { recordKidLog } = await import('../src/server/kid-log.ts');
 
 try {
   const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
@@ -59,6 +60,35 @@ try {
   check('最近一轮给「看原文」直达', ov.last?.tutor === 'math-tutor' && ov.last.job === '1544-2');
   check('画图:今天 0 张,只数不带上限', ov.paint.today === 0 && !('daily' in ov.paint));
 
+  // ---- 孩子端的流水(《孩子端流水设计.md》§五):设备卡、页面出错合成一条、改名 ----
+  {
+    const IPAD = 'Mozilla/5.0 (iPad; CPU OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Mobile/15E148 Safari/604.1';
+    const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15';
+    const open = (ua: string, touch: number) => ({ k: 'open' as const, page: 'kid', v: 'v1', ua, touch, standalone: false, w: 0, h: 0, vw: 0, vh: 0, dpr: 2, lang: 'zh-CN' });
+    const err = (msg: string, extra: Record<string, unknown> = {}) => ({ k: 'error' as const, page: 'kid', mode: 'kid', v: 'v1', msg, where: '12:3', stack: 'at f (/:12:3)', ua: IPAD, ctx: { tutor: 'chinese-tutor', thread: '1500-1' }, ...extra });
+    const ipad = 'aaaaaaaaaaaa', mac = 'bbbbbbbbbbbb', old = 'cccccccccccc';
+    await recordKidLog(ws, open(MAC, 0), { device: old }, new Date(2026, 7, 1, 9));
+    await recordKidLog(ws, open(MAC, 0), { device: mac }, new Date(2026, 9, 15, 21, 2));
+    await recordKidLog(ws, open(IPAD, 5), { device: ipad }, new Date(2026, 9, 16, 15, 0));
+    await recordKidLog(ws, open(IPAD, 5), { device: ipad }, new Date(2026, 9, 16, 15, 30));
+    await recordKidLog(ws, err('x is null'), { device: ipad }, new Date(2026, 9, 16, 15, 31));
+    await recordKidLog(ws, err('x is null'), { device: mac }, new Date(2026, 9, 16, 15, 40));
+    await recordKidLog(ws, err('y is undefined', { mode: 'parent', ctx: null }), { device: 'dddddddddddd' }, new Date(2026, 9, 16, 15, 45));
+    const o2 = await devOverview(ws, now);
+    check('设备卡:近 30 天的,最近开的在前,今天开了几次、近 7 天出错几条;更早的折起来', o2.devices.map((x) => x.id).join() === `${ipad},${mac}` && o2.devices[0].label === 'iPad · Safari 27' && o2.devices[0].today === 2 && o2.devices[0].errors === 1 && o2.devices[1].today === 0 && o2.devices[1].label === 'Mac · Safari 26' && o2.olderDevices.map((x) => x.id).join() === old, JSON.stringify(o2.devices));
+    const js = o2.issues.filter((i) => i.kind === 'js');
+    const x = js.find((i) => i.text === 'x is null');
+    check('页面出错:同一条合成一条,×2、两台设备、时刻是最近一次(本地时间)、带老师与话题', js.length === 2 && x?.js?.count === 2 && x.js.devices.join() === 'iPad · Safari 27,Mac · Safari 26' && x.at === `${today}T15:40` && x.js.first === `${today}T15:31` && x.tutor === 'chinese-tutor' && x.js.thread === '1500-1' && x.detail === 'kid · 12:3', JSON.stringify(js));
+    const y = js.find((i) => i.text === 'y is undefined');
+    check('家长端的出错照记,标上模式;设备不在表里写浏览器标签', y?.detail === 'kid(parent) · 12:3' && y.js?.devices[0] === 'iPad · Safari 27' && y.tutor === '', JSON.stringify(y));
+    check('和轮次的问题一起按时刻排,新的在前', o2.issues[0].kind === 'js' && o2.issues[0].text === 'y is undefined');
+    const c2 = createContext(ws);
+    const rn = await route('PATCH', `/api/dev/devices/${ipad}`, c2, { name: 'Ray 的 iPad' });
+    const list = (await route('GET', '/api/dev/devices', c2)).json as Record<string, { name: string | null; label: string }>;
+    check('起名:PATCH 写进设备表,GET 列名字与标签;设备卡与出错跟着写名字', rn.status === 200 && list[ipad].name === 'Ray 的 iPad' && list[mac].name === null && list[mac].label === 'Mac · Safari 26' && (await devOverview(ws, now)).issues.find((i) => i.text === 'x is null')?.js?.devices[0] === 'Ray 的 iPad');
+    check('起名:没有这台 404、不是字 400、编号不对不认', (await route('PATCH', '/api/dev/devices/ffffffffffff', c2, { name: 'x' })).status === 404 && (await route('PATCH', `/api/dev/devices/${ipad}`, c2, { name: 3 })).status === 400 && (await route('PATCH', '/api/dev/devices/../x', c2, { name: 'x' })).status !== 200 && (await route('PATCH', '/api/dev/devices/AAAA', c2, { name: 'x' })).status !== 200);
+  }
+
   const ctx = createContext(ws);
   const r = await route('GET', '/api/dev/overview', ctx);
   check('GET /api/dev/overview 200', r.status === 200 && Array.isArray((r.json as { days: unknown[] }).days));
@@ -70,6 +100,10 @@ try {
   check('POST /api/dev/doctor:不带 --live 的体检', dr.status === 200 && (dr.json as { checks: { name: string }[] }).checks.some((k) => k.name === 'workspace'));
 
   check('页面:侧栏五个标签,概览打头', ['overview', 'chat', 'team', 'voices', 'settings'].every((t) => DEV_PAGE.includes(`data-tab="${t}"`)) && DEV_PAGE.indexOf('data-tab="overview"') < DEV_PAGE.indexOf('data-tab="chat"') && DEV_PAGE.includes('<aside id="side">'));
+  const devScript = DEV_PAGE.slice(DEV_PAGE.indexOf('<script>') + 8, DEV_PAGE.lastIndexOf('</script>'));
+  let parsed = '';
+  try { new Function(devScript); } catch (e) { parsed = String(e); }
+  check('工作台页面的内联脚本能解析', devScript.length > 1000 && parsed === '', parsed);
   check('工作台三页共用一份色板', [DEV_PAGE, qrPage('t', { name: 'https://m.local:5180/', ip: 'https://192.168.1.9:5180/', https: true }), VOICE_TEST_PAGE].every((p) => p.includes(DEV_CSS)));
 } finally {
   rmSync(home, { recursive: true, force: true });

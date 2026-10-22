@@ -131,6 +131,22 @@ ${BRAND_CSS}
   .issue .tx b { font-size:13.5px; font-weight:600; }
   .issue .tx span { font-size:12.5px; color:var(--ink-2); word-break:break-word; }
   .issue .go { flex:none; font-size:12.5px; color:var(--accent); line-height:20px; }
+  .jsissue { display:flex; flex-direction:column; gap:6px; }
+  .jsmore { padding:4px 12px 8px; display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
+  .jsmore[hidden] { display:none; }
+  .jsmore pre { margin:0; max-width:100%; overflow-x:auto; font:400 11.5px/1.5 var(--mono); color:var(--ink-2); white-space:pre-wrap; word-break:break-all; }
+  .stack { display:flex; flex-direction:column; gap:16px; min-width:0; }
+  .devs { overflow-x:auto; margin:0 -22px; }
+  .devs .dr { display:grid; grid-template-columns:minmax(120px,1.2fr) minmax(160px,1.6fr) 104px 56px 72px; gap:12px; align-items:center; padding:9px 22px; border-bottom:1px solid var(--line-soft); min-width:560px; font-size:13.5px; }
+  .devs .dr.th { font-size:12px; color:var(--muted); padding-top:4px; }
+  .devs .dr .r { text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  .devs .dr .muted { font:400 12px/1.4 var(--mono); }
+  .dname { border:0; background:transparent; padding:0; font:600 14px/1.4 var(--sans); color:var(--ink); cursor:text; text-align:left; }
+  .dname.none { font-weight:400; color:var(--muted); }
+  .dname:hover { color:var(--accent); }
+  .dname-in { width:100%; height:30px; font-size:14px; padding:0 8px; border:0; box-shadow:0 0 0 1.5px var(--accent-line); border-radius:8px; background:var(--surface); }
+  .dname-in:focus { outline:0; }
+  details.older summary { font-size:12.5px; color:var(--muted); cursor:pointer; }
   .checks { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
   .probs { display:flex; flex-direction:column; gap:8px; }
   .prob { display:flex; gap:10px; align-items:flex-start; }
@@ -666,6 +682,8 @@ ${BRAND_CSS}
 
   const loadConfig = async () => {
     state.config = await api('GET', '/api/config');
+    // 孩子端的设备(《孩子端流水设计.md》§五):对话页每轮写设备名
+    state.devices = await api('GET', '/api/dev/devices').catch(() => ({}));
     $('#title').textContent = state.config.title;
     $('#ws-ini').textContent = (state.config.title || '·').slice(0, 1);
     $('#ws-root').textContent = state.config.root || '';
@@ -906,6 +924,7 @@ ${BRAND_CSS}
     if (m.costUsd !== undefined) foot.append(h('span', { class: 'chip money' }, '$', h('b', {}, m.costUsd.toFixed(2))));
     else if (m.tokens) foot.append(h('span', { class: 'chip money', title: '这个运行时不报钱数,只报 token(输入 / 输出)' }, h('b', {}, m.tokens.in + ' / ' + m.tokens.out), ' token'));
     if (m.artifacts && m.artifacts.length) foot.append(h('span', { class: 'chip' }, '课包 ' + m.artifacts.join(', ')));
+    if (m.deviceId) { const dv = (state.devices || {})[m.deviceId]; foot.append(h('span', { class: 'chip', title: '孩子端开在哪台设备上(概览的设备卡里起名)' }, dv ? dv.name || dv.label : '设备 ' + m.deviceId.slice(0, 4))); }
     const rows = v.runs[m.job] || [];
     const trace = h('div', { class: 'trace', style: 'display:none' }, ...rowsEl(rows));
     const traceBtn = h('button', { class: 'linkish', type: 'button', on: { click: () => {
@@ -1688,24 +1707,67 @@ ${BRAND_CSS}
           h('span', { class: 'r muted' }, r.lastAt ? r.lastAt.slice(11, 16) : '—'),
           h('span', { class: 'vis' + (r.hidden ? ' off' : '') }, h('span', { class: 'dot' + (r.hidden ? ' off' : '') }), r.hidden ? '不露' : '露脸'));
       }));
-    const teamBox = h('section', { class: 'blk', style: 'flex:3 1 520px' },
+    const teamBox = h('section', { class: 'blk' },
       h('div', { class: 'hd' }, h('h2', {}, '老师今天'), h('span', { class: 'sub' }, '按 cotutor.json 里有谁走'), h('span', { class: 'right' }, h('a', { href: '#team', on: { click: (e) => { e.preventDefault(); location.hash = '#team'; showTab('team'); } } }, '管理老师团'))),
       tbl);
 
+    // 设备(《孩子端流水设计.md》§五):近 30 天开过的,点名字起名(回车存、Esc 不存,空着 = 去掉名字)
+    const when = (iso) => { const t = new Date(iso); const p2 = (n) => String(n).padStart(2, '0'); return (t.toDateString() === now.toDateString() ? '今天 ' : p2(t.getMonth() + 1) + '-' + p2(t.getDate()) + ' ') + p2(t.getHours()) + ':' + p2(t.getMinutes()); };
+    const nameEl = (dv) => {
+      const b = h('button', { type: 'button', class: 'dname' + (dv.name ? '' : ' none'), title: '起个名字', on: { click: () => {
+        const inp = h('input', { type: 'text', class: 'dname-in', value: dv.name || '', maxlength: '30', placeholder: dv.label, 'aria-label': '这台设备的名字' });
+        let done = false;
+        const finish = async (keep) => {
+          if (done) return;
+          done = true;
+          if (keep && inp.value.trim() !== (dv.name || '')) {
+            try { await api('PATCH', '/api/dev/devices/' + dv.id, { name: inp.value }); state.devices = await api('GET', '/api/dev/devices'); } catch (e) {}
+          }
+          renderOverview();
+        };
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); });
+        inp.addEventListener('blur', () => finish(true));
+        b.replaceWith(inp);
+        inp.focus();
+        inp.select();
+      } } }, dv.name || '没起名');
+      return b;
+    };
+    const devRow = (dv) => h('div', { class: 'dr' }, h('span', { class: 'nm' }, nameEl(dv)), h('span', { class: 'muted' }, dv.label), h('span', { class: 'r' }, when(dv.last)), h('span', { class: 'r' }, dv.today ? dv.today + ' 次' : '—'), h('span', { class: 'r' }, dv.errors ? h('span', { class: 'st err' }, '出错 ' + dv.errors) : ''));
+    const devBox = h('section', { class: 'blk' },
+      h('div', { class: 'hd' }, h('h2', {}, '设备'), h('span', { class: 'sub' }, '孩子端开在哪 · 近 30 天'), h('span', { class: 'right' }, h('span', { class: 'sub' }, '点名字起名'))),
+      d.devices.length ? h('div', { class: 'devs' }, h('div', { class: 'dr th' }, h('span', {}, '名字'), h('span', {}, '浏览器'), h('span', { class: 'r' }, '最近打开'), h('span', { class: 'r' }, '今天'), h('span', { class: 'r' }, '近 7 天')), ...d.devices.map(devRow))
+        : h('p', { class: 'note' }, '30 天里孩子端没开过。在 iPad 上打开孩子端,这里就有一行。'),
+      d.olderDevices.length ? h('details', { class: 'older' }, h('summary', {}, '更早的 ' + d.olderDevices.length + ' 台'), h('div', { class: 'devs' }, ...d.olderDevices.map(devRow))) : null);
+
+    // 页面出错(孩子端的流水):点开在原地展开调用栈,不是哪一轮,没有看原文
+    const jsIssue = (i) => {
+      const more = h('div', { class: 'jsmore', hidden: true },
+        h('pre', {}, i.js.stack || '(没有调用栈)'),
+        h('p', { class: 'note' }, (i.js.count > 1 ? '第一次 ' + i.js.first.slice(5).replace('T', ' ') + ' · ' : '') + '最近 ' + i.at.slice(5).replace('T', ' ')),
+        i.tutor ? h('button', { type: 'button', class: 'linkish go', on: { click: () => goChat(i.tutor, i.date, null) } }, '去那天的对话') : null);
+      const btn = h('button', { type: 'button', class: 'issue', 'aria-expanded': 'false', on: { click: () => { more.hidden = !more.hidden; btn.setAttribute('aria-expanded', String(!more.hidden)); btn.querySelector('.go').textContent = more.hidden ? '展开' : '收起'; } } },
+        h('span', { class: 'st err' }, '页面'),
+        h('span', { class: 'tx' }, h('b', {}, (i.tutor ? tutorOfName(i.tutor).display + ' · ' : '') + (i.date === d.today ? '' : i.date.slice(5) + ' ') + i.at.slice(11, 16) + (i.js.count > 1 ? ' · ×' + i.js.count : '')), h('span', {}, i.text), h('span', { class: 'muted' }, i.detail + ' · ' + i.js.devices.join('、'))),
+        h('span', { class: 'go' }, '展开'));
+      return h('div', { class: 'jsissue' }, btn, more);
+    };
     const KIND = { slow: ['warn', '慢'], error: ['err', '出错'], warn: ['info', '提醒'] };
     const issueBox = h('section', { class: 'blk', style: 'flex:2 1 340px' },
       h('div', { class: 'hd' }, h('h2', {}, '要看一眼'), h('span', { class: 'sub num' }, d.issues.length ? String(d.issues.length) : ''), h('span', { class: 'sub' }, '近 7 天')),
-      ...(d.issues.length ? d.issues.map((i) => h('button', { type: 'button', class: 'issue', on: { click: () => goChat(i.tutor, i.date, i.job) } },
+      ...(d.issues.length ? d.issues.map((i) => i.kind === 'js' ? jsIssue(i) : h('button', { type: 'button', class: 'issue', on: { click: () => goChat(i.tutor, i.date, i.job) } },
         h('span', { class: 'st ' + KIND[i.kind][0] }, KIND[i.kind][1]),
         h('span', { class: 'tx' }, h('b', {}, tutorOfName(i.tutor).display + ' · ' + (i.date === d.today ? '' : i.date.slice(5) + ' ') + i.at.slice(11, 16)), h('span', {}, i.detail), h('span', { class: 'muted' }, '「' + i.text + '」')),
-        h('span', { class: 'go' }, '看原文'))) : [h('p', { class: 'note' }, '七天里没有慢的、出错的、带提醒的轮次。')]),
+        h('span', { class: 'go' }, '看原文'))) : [h('p', { class: 'note' }, '七天里没有慢的、出错的、带提醒的轮次,孩子端页面也没出过错。')]),
       h('div', { class: 'rule' }),
       h('div', { class: 'hd' }, h('h3', {}, '体检'), h('span', { class: 'sub num' }, ov.doctor && ov.doctor.at ? 'doctor · ' + ov.doctor.at.slice(11, 16) : 'doctor,不带 --live,不花钱'),
         h('span', { class: 'right' }, h('button', { class: 'btn small', type: 'button', disabled: ov.doctorBusy, on: { click: runDoctor } }, ov.doctorBusy ? '在跑……' : ov.doctor ? '再跑一次' : '跑一次'))),
       ov.doctor && ov.doctor.error ? h('p', { class: 'fb bad' }, ov.doctor.error) : null,
       ...doctorEls());
 
-    $('#overview').replaceChildren(h('div', { class: 'wrap' }, head, tiles, h('div', { class: 'cols3' }, todayBox, weekBox, useBox), h('div', { class: 'cols2' }, teamBox, issueBox)));
+    // 左边老师今天、下面设备;右边要看一眼与体检
+    const left = h('div', { class: 'stack', style: 'flex:3 1 520px' }, teamBox, devBox);
+    $('#overview').replaceChildren(h('div', { class: 'wrap' }, head, tiles, h('div', { class: 'cols3' }, todayBox, weekBox, useBox), h('div', { class: 'cols2' }, left, issueBox)));
   };
 
   // ---- activity(《工作台设计.md》拍板 7–11):看、改、边改边查(不落盘)、老师收到什么、和出厂比、恢复出厂;存要带读进来时的 hash。老师文件(新话题)同一个编辑器 ----

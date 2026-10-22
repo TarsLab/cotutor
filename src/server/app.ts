@@ -33,7 +33,7 @@ import { configGapsOf, upgradeConfig } from '../cli/migrate.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { faviconResponse } from '../lib/favicon.ts';
 import { cookieOf, createAccess, gatePage, isKidPath, type Access, type Who } from './access.ts';
-import { deviceCookie, newDeviceId, parseKidLog, recordKidLog, validDevice } from './kid-log.ts';
+import { deviceCookie, newDeviceId, parseKidLog, readDevices, recordKidLog, renameDevice, validDevice } from './kid-log.ts';
 import { DEVICE_COOKIE } from '../lib/kid-device.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { kidPage } from './kid-page.ts';
@@ -842,6 +842,16 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     }
     // 工作台概览(《工作台设计.md》):近七天的轮数、今天各老师、用量、要看一眼的轮次;体检 = doctor 不带 --live(不花钱)
     if (p === '/api/dev/overview' && method === 'GET') return { status: 200, json: await devOverview(ws) };
+    // 孩子端的设备(《孩子端流水设计.md》§五):对话页拿它给每轮写设备名;起名写进设备表,空着 = 去掉名字
+    if (p === '/api/dev/devices' && method === 'GET') {
+      const table = await readDevices(ws);
+      return { status: 200, json: Object.fromEntries(Object.entries(table).map(([id, d]) => [id, { name: d.name ?? null, label: d.label }])) };
+    }
+    const devRename = /^\/api\/dev\/devices\/([0-9a-f]{12})$/.exec(p);
+    if (devRename && method === 'PATCH') {
+      if (!isObj(body) || typeof body.name !== 'string') return { status: 400, json: { error: 'bad_request' } };
+      return (await renameDevice(ws, devRename[1], body.name)) ? { status: 200, json: { ok: true } } : { status: 404, json: { error: 'no_such_device' } };
+    }
     if (p === '/api/dev/doctor' && method === 'POST') {
       const r = await doctorWorkspace(ws.root, { live: false });
       return { status: 200, json: { ok: r.ok, at: new Date().toISOString(), checks: r.checks.map((c) => ({ name: c.name, ok: c.ok, required: c.required, detail: redactHome(c.detail), fix: c.fix })) } };

@@ -64,7 +64,7 @@ const rows: Row[] = [
   { name: '嘴在说 + 按下录音键 → 嘴没放完的清掉、hush,在录', from: 'mouth', ev: { type: 'recStart' }, want: (m, fx) => m.status === 'recording' && fx === 'flush,hush,render' },
   { name: '安静 + 按下录音键 → hush(脑还在写的不再念),在录', from: 'quiet', ev: { type: 'recStart' }, want: (m, fx) => m.status === 'recording' && fx === 'hush,render' },
   { name: '在录 + 停录 → 安静', from: 'recording', ev: { type: 'recEnd' }, want: (m, fx) => m.status === 'quiet' && fx === 'render' },
-  { name: '任何 + 连不上 / 断了 → 声音清掉,回到板书', from: ALL, ev: { type: 'drop' }, want: (m, fx) => m.status === 'quiet' && !m.turn && fx === 'flush,stopCard,stopLecture,stopRing,stopReplay,board' },
+  { name: '任何 + 连不上 / 断了 → 声音清掉,过一会儿再连(不回板书)', from: ALL, ev: { type: 'drop' }, want: (m, fx) => m.status === 'quiet' && !m.turn && fx === 'flush,stopCard,stopLecture,stopRing,stopReplay,retry' },
   { name: '任何 + 换老师 / 关老师页 → 声音清掉', from: ALL, ev: { type: 'reset' }, want: (m, fx) => m.status === 'quiet' && !m.turn && fx === 'flush,stopCard,stopLecture,stopRing,stopReplay' },
   // ---- 一直听 ----
   { name: '按住说 + 点「一直听」→ listen,开始推声音', from: 'quiet', ev: { type: 'listen', open: true }, want: (m, fx) => m.open && fx === 'listen,render,gate:on' },
@@ -164,7 +164,7 @@ function run(seed: number, steps: number): string | null {
       if (f.kind === 'hold') { if (w.serverHold) return 'hold 了两次中间没有 release / hush'; w.serverHold = true; }
       if (f.kind === 'release') { if (!w.serverHold) return '没 hold 就 release'; w.serverHold = false; }
       if (f.kind === 'hush') w.serverHold = false;
-      if (f.kind === 'board') w.serverHold = false;
+      if (f.kind === 'retry') w.serverHold = false;
       // 不变式 9:gate 只在推不推变了时发
       if (f.kind === 'gate') { if (f.on === w.gate) return `gate ${f.on} 发了两次`; w.gate = f.on; }
       if (f.kind === 'duck') w.ducked = true;

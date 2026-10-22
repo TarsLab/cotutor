@@ -1,5 +1,5 @@
 /** cotutor.json 契约:模板可解析、缺省与政策合并、错误即修复指南、运行时占位填充。 */
-import { CotutorConfigSchema, explainIssues, fillRuntime, listTutors, resolvePolicy } from '../src/schema/index.ts';
+import { CotutorConfigSchema, explainIssues, fillRuntime, listTutors, MOUTH_VOICE, mouthVoice, resolvePolicy } from '../src/schema/index.ts';
 import { configTemplate, shippedAgents } from '../src/cli/skeleton.ts';
 import { check, done } from './_check.ts';
 
@@ -32,11 +32,12 @@ const kidOnly = listTutors(withHelper, { kidOnly: true });
 check('孩子端不见 hidden 与关着的', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'helper' || t.name === 'koubo-tutor'));
 check('列表带有效政策', listTutors(cfg)[0].policy.replyMaxChars === 60);
 
-check('实时老师出厂关着、没有老师', cfg.live.enabled === false && Object.keys(cfg.live.voices).length === 0 && cfg.live.model === 'qwen3.8-omni-flash-realtime');
+check('实时没有开关;没挑的出厂三位用出厂的音色,别的老师用缺省', !('enabled' in cfg.live) && Object.keys(cfg.live.voices).length === 0 && mouthVoice(cfg.live, 'chinese-tutor') === 'Serena' && mouthVoice(cfg.live, 'math-tutor') === 'Andre' && mouthVoice(cfg.live, 'english-tutor') === 'Theo Calm' && mouthVoice(cfg.live, 'science-tutor') === MOUTH_VOICE && mouthVoice({ voices: { 'math-tutor': 'Maia' } }, 'math-tutor') === 'Maia' && cfg.live.model === 'qwen3.8-omni-flash-realtime');
+check('老配置里的 live.enabled 不认也不报错(丢掉)', CotutorConfigSchema.safeParse({ ...raw, live: { enabled: true } }).success);
 check('一直听:缺省按住说、server_vad、停 1.6 秒算说完', cfg.live.listen === 'hold' && cfg.live.vad === 'server_vad' && cfg.live.silenceMs === 1600);
-const liveOn = CotutorConfigSchema.safeParse({ ...raw, live: { enabled: true, voices: { 'chinese-tutor': 'Serena' } } });
+const liveOn = CotutorConfigSchema.safeParse({ ...raw, live: { voices: { 'chinese-tutor': 'Serena' } } });
 check('实时:列一位老师和音色', liveOn.success && liveOn.data.live.voices['chinese-tutor'] === 'Serena');
-const liveBad = CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, helper: { display: '工具人', hidden: true } }, live: { enabled: true, voices: { 'nobody-tutor': 'Serena', helper: 'Tina' } } });
+const liveBad = CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, helper: { display: '工具人', hidden: true } }, live: { voices: { 'nobody-tutor': 'Serena', helper: 'Tina' } } });
 const liveLines = liveBad.success ? [] : explainIssues(liveBad.error.issues);
 check('实时:没有这位老师、不是有脸的老师都报,点名到 live.voices.<名>', !liveBad.success && liveLines.some((l) => l.startsWith('live.voices.nobody-tutor')) && liveLines.some((l) => l.startsWith('live.voices.helper')), liveLines.join(' | '));
 

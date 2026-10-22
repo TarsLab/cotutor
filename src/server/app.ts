@@ -24,7 +24,7 @@ import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type Pl
 import type { CallReel } from '../live/recorder.ts';
 import { isRealtimeVoice, REALTIME_VOICES } from '../live/voices.ts';
 import { previewVoice } from '../live/preview.ts';
-import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, listTutors, subjectLang, type ActivityValue, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../schema/index.ts';
+import { DATE_RE, FocusSchema, HomeViaSchema, MESSAGE_FROM, MOUTH_VOICE, listTutors, mouthVoice, subjectLang, type ActivityValue, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../schema/index.ts';
 import type { BoardCard, Device } from '../lib/kid-board.ts';
 import { ConfigError, UsageError, redactHome, workspaceReport, type Workspace } from '../cli/workspace.ts';
 import { tutorStatuses } from '../cli/tutors.ts';
@@ -178,20 +178,17 @@ export interface KidTutor {
   hasVoice: boolean;
   /** 卡上的常驻入口(《首页设计.md》拍板 18):dictation 听写与拍照听写、talk 口语课(要 talk.enabled) */
   extras: TutorExtra[];
-  /** 新话题走实时(《wip/实时老师设想.md》):live.enabled 且这位老师在 live.voices 里;孩子端连 /api/live/<老师>/ws,连不上回到板书 */
+  /** 走实时(《产品规划.md》拍板 30):有脸的老师都是;孩子端连 /api/live/<老师>/ws,连不上就等着重连 */
   live: boolean;
   /** 实时老师页缺省怎么说话(live.listen):hold 按住说、open 一直听;孩子切过的记在设备上,以那个为准 */
   listen: 'hold' | 'open';
 }
 
-/** 这位老师走不走实时:总开关开着、挑了嘴的音色 */
-const liveOf = (ctx: AppContext, name: string): boolean => ctx.ws.config.live.enabled && Boolean(ctx.ws.config.live.voices[name]);
-
 export async function kidTutors(ctx: AppContext): Promise<KidTutor[]> {
   const out: KidTutor[] = [];
   const colors = tutorColors(ctx.ws.config.tutors);
   for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
-    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), live: liveOf(ctx, t.name), listen: ctx.ws.config.live.listen });
+    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), live: true, listen: ctx.ws.config.live.listen });
   }
   return out;
 }
@@ -1179,11 +1176,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       for (const [name, t] of Object.entries(ws.config.tutors)) if (t.voice) (inUse[t.voice] ??= []).push(name);
       return { status: 200, json: { ok: !list.error, error: list.error, count: list.voices.length, voices: list.voices, inUse, sample: PREVIEW_TEXT } };
     }
-    // 嘴的音色(工作台音色页「实时的嘴」):这个 realtime 模型认的 56 个(src/live/voices.ts)、谁在用、总开关
+    // 嘴的音色(工作台音色页「实时的嘴」):这个 realtime 模型认的 56 个(src/live/voices.ts)、谁在用(没挑的用缺省)
     if (p === '/api/tts/realtime' && method === 'GET') {
       const inUse: Record<string, string[]> = {};
-      for (const [name, voice] of Object.entries(ws.config.live.voices)) (inUse[voice] ??= []).push(name);
-      return { status: 200, json: { voices: REALTIME_VOICES, inUse, enabled: ws.config.live.enabled, model: ws.config.live.model, sample: PREVIEW_TEXT } };
+      for (const t of listTutors(ws.config, { kidOnly: true })) (inUse[mouthVoice(ws.config.live, t.name)] ??= []).push(t.name);
+      return { status: 200, json: { voices: REALTIME_VOICES, inUse, fallback: MOUTH_VOICE, model: ws.config.live.model, sample: PREVIEW_TEXT } };
     }
     // 试听嘴的一个音色:真连一次 realtime 照念这一句(几分钱),存在 .cotutor/live-preview/,同一句同一音色以后直接给文件
     if (p === '/api/tts/realtime/preview' && method === 'GET') {

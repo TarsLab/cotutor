@@ -39,7 +39,7 @@ const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 cfg.runtimes = { default: 'stream', stream: rt };
 for (const t of Object.values(cfg.tutors)) delete t.runtime;
-cfg.live = { enabled: true, voices: { 'chinese-tutor': 'Serena' } };
+cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();

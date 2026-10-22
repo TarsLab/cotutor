@@ -872,7 +872,7 @@ ${BOARD_MARK_JS}
   S.pdate = null;
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
-  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, endLine: null, ring: null, ringEnd: 0, lcPending: false, gateOn: false };
+  const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, endLine: null, ring: null, ringEnd: 0, lcPending: false, gateOn: false, retries: 0, retryTimer: 0 };
   /** 标注画到第几句:实时的一节不跟句子(设想稿拍板 20,卡落下时整节都画),板书照播放的位置 */
   const liveUpTo = (i, upTo) => (S.sections[i] && S.sections[i].live ? undefined : upTo);
   /** 页面是实时老师的样子:正连着嘴,或录像里放的是有实时轮的话题(卡角没有钮、没有再听) */
@@ -3657,8 +3657,8 @@ __REEL_DOCK_JS__
         // 小课堂那一段停下:舞台停在那一帧,不再算讲稿委托的(放完 / 关了不再回 staged)
         case 'stopLecture': if (S.stage && S.stage.delegate) { S.stage.delegate = false; postStage({ type: 'control', action: 'pause' }); } break;
         case 'staged': lvSend({ t: 'staged' }); break;
-        // 连不上、断了:回板书;等着嘴连上才发的那条(开场)走板书发
-        case 'board': { const q = LV.queued; liveClose(); if (q) send(q[0], q[1]); break; }
+        // 连不上、断了(《产品规划.md》拍板 30):不回板书,回到「正在叫老师」,过一会儿再连;排着的那条(开场、打字)连上再发
+        case 'retry': liveRetry(); break;
         case 'render': renderSubtitle(); break;
         case 'listen': lvSend({ t: 'listen', open: LV.model.open }); break;
         case 'gate': liveGateSync(); break;
@@ -3885,7 +3885,7 @@ __REEL_DOCK_JS__
   };
   const liveMsg = (m) => {
     switch (m.t) {
-      case 'ready': { LV.ready = true; phIdle(); voiceSync(); liveMicOn(); const q = LV.queued; LV.queued = null; if (q) liveSendNow(q[0], q[1]); break; }
+      case 'ready': { LV.ready = true; LV.retries = 0; phIdle(); voiceSync(); liveMicOn(); const q = LV.queued; LV.queued = null; if (q) liveSendNow(q[0], q[1]); break; }
       // 一直听:服务端说孩子开口 / 说完;开口时报一次这一轮的上下文(话题、舞台上的卡),收下时当松手的 body
       case 'vad': if (m.on) lvSend({ t: 'ctx', body: liveBody() }); liveDispatch({ type: 'vad', on: Boolean(m.on) }); break;
       case 'duck': liveDispatch({ type: 'duck' }); break;
@@ -3964,6 +3964,11 @@ __REEL_DOCK_JS__
     LV.audio.wake().catch(() => {});
     // 麦克风之前开在别的 AudioContext 里(板书页开的):放掉,下面 micWarm 重开在实时这个里
     if (mic.ac && mic.ac !== LV.audio.ctx) micDrop();
+    LV.retries = 0;
+    liveConnect();
+  };
+  /** 连嘴:开 WebSocket(进老师页、断了以后重连都走这里);连上(ready)之前按住说话不接,打字排着 */
+  const liveConnect = () => {
     const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/live/' + encodeURIComponent(S.tutor.name) + '/ws' + (LV.model.open ? '?listen=open' : ''));
     ws.binaryType = 'arraybuffer';
     LV.ws = ws;
@@ -3979,6 +3984,16 @@ __REEL_DOCK_JS__
     ws.onclose = () => { if (LV.ws === ws) { kidLog.live(wsOpenAt > 0, wsOpenAt ? Date.now() - wsOpenAt : 0); liveDispatch({ type: 'drop' }); } };
     micWarm();
   };
+  /** 连不上、断了(liveStep 的 retry):收掉这条连接,回到「正在叫老师」,2、4、8… 秒后再连,最长 30 秒;一直连不上就一直等(原因在家长端的流水里) */
+  const liveRetry = () => {
+    const ws = LV.ws; LV.ws = null; LV.ready = false;
+    if (ws) { ws.onclose = null; try { ws.close(); } catch {} }
+    clearTimeout(LV.retryTimer);
+    if (!LV.on || !S.tutor) return;
+    LV.retries = (LV.retries || 0) + 1;
+    phIdle(); voiceSync(); renderSubtitle();
+    LV.retryTimer = setTimeout(() => { if (LV.on && S.tutor && !LV.ws) liveConnect(); }, Math.min(30000, 1000 * 2 ** Math.min(LV.retries, 5)));
+  };
   /** 实时那个 AudioContext 关掉(连着它的麦克风也放掉);下次要用(进实时、开麦克风、按住)再起新的 */
   const liveAudioDrop = () => {
     if (!LV.audio || !LV.audio.ctx) return;
@@ -3990,7 +4005,7 @@ __REEL_DOCK_JS__
   $('#lv-mic').addEventListener('click', (e) => { e.stopPropagation(); if (LV.on) liveDispatch({ type: LV.model.muted ? 'unmute' : 'mute' }); });
   /** 收:告诉服务端挂了、关连接、清嘴的声音、关实时那个 AudioContext;页面回到板书的样子(按着的那一下作废) */
   const liveClose = () => {
-    const ws = LV.ws; LV.ws = null; LV.ready = false; LV.queued = null;
+    const ws = LV.ws; LV.ws = null; LV.ready = false; LV.queued = null; clearTimeout(LV.retryTimer);
     if (ws) { ws.onclose = null; try { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'bye' })); ws.close(); } catch {} }
     liveAudioDrop();
     clearInterval(LV.drain); LV.drain = 0;

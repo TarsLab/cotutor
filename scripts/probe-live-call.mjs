@@ -42,7 +42,7 @@ const wsRoot = join(out, 'ws');
 await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot, proxy: false });
 const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
-cfg.live = { enabled: true, voices: { [tutor]: voice } };
+cfg.live = { voices: { [tutor]: voice } };
 cfg.kid.name = 'Ray';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { warm: false });

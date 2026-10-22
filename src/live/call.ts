@@ -12,7 +12,7 @@
  *   {t:'send', body} 不是说的(打字、拍照、交卡、首页按钮;舞台开着带 focus.card):body 同那条 POST · {t:'view', w, h} 屏幕多大 · {t:'bye'}
  *   {t:'staged'} 讲稿 [[play]] 的小课堂那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
  * 这里 → 孩子端:二进制帧 = PCM16 24k 嘴的声音;文本帧 = JSON
- *   {t:'ready'} 嘴连上了 · {t:'fallback', why} 连不上(这一句走板书)· {t:'kid', text} 孩子那句的转写 · {t:'tutor', of, delta} / {t:'tutor', of, done} 嘴的字(of:catch 接住 / read 照念)
+ *   {t:'ready'} 嘴连上了 · {t:'fallback', why} 连不上(孩子端回到「正在叫老师」,过一会儿重连)· {t:'kid', text} 孩子那句的转写 · {t:'tutor', of, delta} / {t:'tutor', of, done} 嘴的字(of:catch 接住 / read 照念)
  *   {t:'turn', job, thread} 脑开始写这一轮 · {t:'read', job, line, text, play?} 讲稿这一句开始放(play = 念完放小课堂那一段;一句一个,按孩子端放到的时刻发:一段里第一句在段首,
  *   后面几句等这段的声音出齐、按字数比例摊)· {t:'flush'} 清播放队列
  *   {t:'state', speaking, holding} · {t:'err', status, error} 发不出去(400 / 409 …)· {t:'end', why}
@@ -52,6 +52,7 @@ import { MIX_RATE } from './lib/mix.ts';
 import { mouthIndex, type MouthSeg } from './lib/mouth.ts';
 import { wavOfPcm } from './lib/wav.ts';
 import { mouthInstructions } from './prompt.ts';
+import { mouthVoice } from '../schema/index.ts';
 import { INPUT_RATE, OUTPUT_RATE, RealtimeSession } from './realtime.ts';
 import { CallRecorder } from './recorder.ts';
 import type { ServerSocket } from './ws.ts';
@@ -273,7 +274,7 @@ export class LiveCall {
     const t = cfg.tutors[tutor];
     let firstOfAnswer = true;
     const open = this.open;
-    const s: RealtimeSession = new RealtimeSession({ instructions: mouthInstructions({ display: t?.display ?? tutor, kidName: cfg.kid.name ?? cfg.kid.slug }), voice: cfg.live.voices[tutor], model: cfg.live.model, turn: open ? cfg.live.vad : 'manual', silenceMs: cfg.live.silenceMs, vad: { createResponse: false, interruptResponse: false }, endpoint: this.deps.endpoint, env: this.deps.env }, {
+    const s: RealtimeSession = new RealtimeSession({ instructions: mouthInstructions({ display: t?.display ?? tutor, kidName: cfg.kid.name ?? cfg.kid.slug }), voice: mouthVoice(cfg.live, tutor), model: cfg.live.model, turn: open ? cfg.live.vad : 'manual', silenceMs: cfg.live.silenceMs, vad: { createResponse: false, interruptResponse: false }, endpoint: this.deps.endpoint, env: this.deps.env }, {
       onAudio: (pcm) => {
         if (this.session !== s) return;
         const said: Said = this.said ?? { kind: 'catch' };

@@ -1,6 +1,6 @@
 /**
  * 实时老师的那条 WebSocket(《wip/实时老师开发计划.md》P2.5):WS /api/live/<老师>/ws,一次连接一个 LiveCall(call.ts)。
- * serve.ts 的 upgrade 里接一行;没开(live.enabled)、老师不在 live.voices、老师关着都回 404,孩子端就走板书。
+ * serve.ts 的 upgrade 里接一行;有脸的老师都走这里(《产品规划.md》拍板 30),不是有脸的、关着的、藏着的回 404。
  * ?listen=open = 一直听(孩子不用按,《wip/实时老师常开麦设计.md》);缺省按住说。
  */
 import type { IncomingMessage } from 'node:http';
@@ -32,9 +32,8 @@ export function makeLiveUpgrade(deps: LiveRouteDeps = {}) {
     const tutor = m[1];
     const cfg = ctx.ws.config;
     const refuse = (status: number, why: string): boolean => { socket.end(`HTTP/1.1 ${status} ${why}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`); return true; };
-    if (!cfg.live.enabled) return refuse(404, 'live disabled');
     const t = cfg.tutors[tutor];
-    if (!t || !t.enabled || t.hidden || !cfg.live.voices[tutor]) return refuse(404, 'not live');
+    if (!tutor.endsWith('-tutor') || !t || !t.enabled || t.hidden) return refuse(404, 'not live');
     let call: LiveCall | null = null;
     const sock = acceptWebSocket(req, socket, head, {
       onText: (x) => call?.onText(x),

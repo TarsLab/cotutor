@@ -1453,7 +1453,7 @@ ${BRAND_CSS}
     $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), kindSeg(), h('span', { class: 'sub' }, '先听再挑,挑中的写进 cotutor.json')), panel));
   };
   // ---- 实时的嘴(《wip/实时老师设想.md》):百炼 realtime 认的 56 个音色(src/live/voices.ts);试听是真连一次照念这一句(几分钱,存着)。
-  //      挑中的写进 live.voices.<老师>:总开关开着、这里有音色的有脸老师,孩子的新话题走实时;清掉 = 回到板书 ----
+  //      挑中的写进 live.voices.<老师>;有脸的老师都走实时(《产品规划.md》拍板 30),没挑的用缺省音色;清掉 = 回到缺省 ----
   const liveVoiceState = { data: null, error: null, q: '', lang: '', loading: false };
   const loadLiveVoices = async () => {
     liveVoiceState.loading = true;
@@ -1469,29 +1469,27 @@ ${BRAND_CSS}
       if (state.tab !== 'voices' || voiceState.kind !== 'live') return;
     }
     if (liveVoiceState.loading) return;
-    const L = c.live || { enabled: false, voices: {} };
+    const L = c.live || { voices: {} };
+    const fallback = (liveVoiceState.data && liveVoiceState.data.fallback) || '';
     const list = (liveVoiceState.data && liveVoiceState.data.voices) || [];
     // 实时只给有脸的老师(live.voices 的键要是 -tutor 结尾的老师)
     const faces = c.tutors.filter((t) => t.name.endsWith('-tutor'));
-    const who = faces.find((t) => t.name === voiceState.for) || faces.find((t) => L.voices[t.name]) || faces.find((t) => t.enabled && !t.hidden) || faces[0] || null;
+    const who = faces.find((t) => t.name === voiceState.for) || faces.find((t) => t.enabled && !t.hidden) || faces[0] || null;
     if (who) voiceState.for = who.name;
     const panel = h('div', { class: 'panel voices' });
     const fb = h('span', { class: 'fb' });
     const forSel = h('select', { id: 'v-for', title: '挑中的音色给谁', on: { change: (e) => { voiceState.for = e.target.value; renderVoices(); } } },
-      ...faces.map((t) => h('option', { value: t.name, selected: who && t.name === who.name }, t.display + (L.voices[t.name] ? ' · 实时' : '') + (t.enabled ? '' : '(已关闭)'))));
+      ...faces.map((t) => h('option', { value: t.name, selected: who && t.name === who.name }, t.display + (t.enabled ? '' : '(已关闭)'))));
     panel.append(h('header', {}, h('h4', {}, '实时的嘴'), h('span', { class: 'sub' }, list.length + ' 个', h('span', { class: 'cmd' }, ' · ' + (L.model || ''))),
       h('span', { class: 'right' }, fb, h('label', { class: 'for' }, '给谁挑', forSel))));
     if (liveVoiceState.error) panel.append(h('p', { class: 'fb bad', style: 'padding:12px 16px 0' }, '列不出音色:' + liveVoiceState.error));
-    // 总开关
-    const onOff = (on) => h('button', { type: 'button', class: L.enabled === on ? 'on' : '', 'aria-pressed': String(L.enabled === on), on: { click: () => { if (L.enabled !== on) { stopPreview(); patchAndReload(panel, { live: { enabled: on } }, renderVoices); } } } }, on ? '开' : '关');
-    panel.append(h('div', { class: 'now' }, h('b', {}, '实时'), h('span', { class: 'seg' }, onOff(true), onOff(false)),
-      h('span', { class: 'muted' }, L.enabled ? '开着:挑了嘴的音色的老师,孩子的新话题走实时(连不上自动回到板书)' : '关着:全走板书;挑好的音色留着,开了就用')));
     if (who) {
-      const curV = L.voices[who.name];
+      const own = L.voices[who.name];
+      const curV = own || fallback;
       const cur = list.find((x) => x.voice === curV);
       panel.append(h('div', { class: 'now' }, avatarEl(who), h('b', {}, who.display),
-        curV ? h('span', {}, '嘴用 ', h('b', {}, cur ? cur.name : curV), h('small', {}, ' ' + curV), cur ? null : h('span', { class: 'fb bad' }, ' 这个模型不认这个音色,嘴会不出声,换一个')) : h('span', { class: 'muted' }, '还没挑:这位老师走板书'),
-        curV ? h('button', { class: 'btn', type: 'button', on: { click: () => { stopPreview(); patchAndReload(panel, { live: { voices: { [who.name]: null } } }, renderVoices); } } }, '清掉(回到板书)') : null));
+        curV ? h('span', {}, '嘴用 ', h('b', {}, cur ? cur.name : curV), h('small', {}, ' ' + curV + (own ? '' : '(缺省的,还没挑)')), cur ? null : h('span', { class: 'fb bad' }, ' 这个模型不认这个音色,嘴会不出声,换一个')) : null,
+        own ? h('button', { class: 'btn', type: 'button', on: { click: () => { stopPreview(); patchAndReload(panel, { live: { voices: { [who.name]: null } } }, renderVoices); } } }, '清掉(用缺省的)') : null));
     }
     const langs = [...new Set(list.map((x) => x.lang))];
     const filters = h('div', { class: 'filters' },
@@ -1505,8 +1503,8 @@ ${BRAND_CSS}
       for (const x of list) {
         if (liveVoiceState.lang && x.lang !== liveVoiceState.lang) continue;
         if (q && ![x.name, x.voice, x.trait, x.lang].some((y) => y && y.toLowerCase().includes(q))) continue;
-        const mine = who && L.voices[who.name] === x.voice;
-        const users = Object.entries(L.voices).filter(([, v]) => v === x.voice).map(([n]) => (c.tutors.find((t) => t.name === n) || { display: n }).display);
+        const mine = who && (L.voices[who.name] || fallback) === x.voice;
+        const users = ((liveVoiceState.data && liveVoiceState.data.inUse) || {})[x.voice] ? liveVoiceState.data.inUse[x.voice].map((n) => (c.tutors.find((t) => t.name === n) || { display: n }).display) : [];
         const play = h('button', { class: 'btn play', type: 'button', on: { click: () => preview(play, x.voice, panel, '/api/tts/realtime/preview') } }, '▶ 试听');
         rows.push(h('div', { class: 'vrow' + (mine ? ' mine' : '') }, play,
           h('span', { class: 'vname' }, h('b', {}, x.name), h('span', {}, x.voice)),

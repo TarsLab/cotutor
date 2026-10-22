@@ -235,16 +235,18 @@ export type TalkConfig = z.infer<typeof TalkSchema>;
 
 /**
  * 实时老师(《wip/实时老师设想.md》):老师用 realtime 模型开口(嘴),老师 CLI 在后面写板书(脑);讲稿不配音,交给嘴照念。
- * 出厂关着;要百炼 key 与业务空间 id(同口语课)。voices 里列着的老师,他的新话题走实时;activity 话题照旧板书。
+ * 有脸的老师都走实时,没有开关(《产品规划.md》拍板 30);要百炼按量 key 与业务空间 id,没配孩子端打不开。
  */
-export const LIVE_DEFAULT = { enabled: false, model: 'qwen3.8-omni-flash-realtime', voices: {} as Record<string, string>, listen: 'hold' as const, vad: 'server_vad' as const, silenceMs: 1600 };
+/** 嘴的缺省音色:出厂三位各一个(10-19 起 Ray 那里用着的),别的老师用 MOUTH_VOICE。不进 voices 的缺省值:voices 的键要是在的老师 */
+export const MOUTH_VOICE = 'Serena';
+export const SHIPPED_MOUTHS: Readonly<Record<string, string>> = { 'chinese-tutor': 'Serena', 'math-tutor': 'Andre', 'english-tutor': 'Theo Calm' };
+export const LIVE_DEFAULT = { model: 'qwen3.8-omni-flash-realtime', voices: {} as Record<string, string>, listen: 'hold' as const, vad: 'server_vad' as const, silenceMs: 1600 };
 export const LiveSchema = z.object({
-  enabled: z.boolean().default(false).describe('开不开实时老师;关着全走板书'),
   model: z.string().min(1).default(LIVE_DEFAULT.model).describe('嘴用的 realtime 模型'),
   voices: z
     .record(z.string().regex(AGENT_NAME_RE), z.string().min(1))
     .default({})
-    .describe('哪几位老师的新话题走实时、嘴用哪个 realtime 音色(这个模型认的 56 个在 src/live/voices.ts,工作台音色页「实时的嘴」听着挑;写错了第一次开口才报错,doctor 的 live.voices 会提示);不在这里的老师照旧板书'),
+    .describe(`老师的嘴用哪个 realtime 音色(这个模型认的 56 个在 src/live/voices.ts,工作台音色页「实时的嘴」听着挑;写错了第一次开口才报错,doctor 的 live.voices 会提示);没写的出厂老师用出厂的(语文 Serena、数学 Andre、英语 Theo Calm),别的用 ${MOUTH_VOICE}`),
   // 一直听(《wip/实时老师常开麦设计.md》):孩子不用按,百炼的 VAD 判开口 / 说完,应用判收下 / 放过;老师说话时也在听(全双工)。
   // 孩子端没有开关(拍板 4):10-20 真跑,一问一答以外孩子的停顿、语气词、旁边的话都被当成一句;口语课自己开,不看这里
   listen: z.enum(['hold', 'open']).default(LIVE_DEFAULT.listen).describe('实时老师页怎么说话:hold 按住说(缺省)、open 一直听(试验;孩子停一下就算说完、旁边的话也会当成一句)。孩子端没有开关;口语课总是一直听,不看这里'),
@@ -253,6 +255,8 @@ export const LiveSchema = z.object({
   silenceMs: z.number().int().min(500).max(4000).default(LIVE_DEFAULT.silenceMs).describe('一直听时停多久算说完(毫秒;孩子一句话中间停一下接着说,太短会切碎)'),
 });
 export type LiveConfig = z.infer<typeof LiveSchema>;
+/** 这位老师的嘴用哪个音色 */
+export const mouthVoice = (live: Pick<LiveConfig, 'voices'>, tutor: string): string => live.voices[tutor] ?? SHIPPED_MOUTHS[tutor] ?? MOUTH_VOICE;
 
 /**
  * 听写(《wip/听写设想.md》):拍照认词表用哪个模型。挑词的要求在听写 activity 文件「认字收到什么」(《wip/activity设计.md》拍板 21);
@@ -353,7 +357,7 @@ export const CotutorConfigSchema = z
     dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型(改了不用重起服务);挑词的要求在听写 activity 文件「认字收到什么」'),
     paint: PaintSchema.default(PAINT_DEFAULT).describe('你说我画:画图卡(paint)用的文生图模型、尺寸、一天几张(改了不用重起服务);画风在 activity 文件「画家收到什么」'),
     talk: TalkSchema.default(TALK_DEFAULT).describe('口语课(/talk):家长拍一张今天学的,孩子先跟读、再和 realtime 模型用这些词聊;enabled 出厂 false;要百炼 key 与业务空间 id(DASHSCOPE_WORKSPACE_ID 或 voxtell 的配置)'),
-    live: LiveSchema.default(LIVE_DEFAULT).describe('实时老师:voices 里列着的老师,新话题由 realtime 模型开口、老师 CLI 在后面写板书(讲稿不配音、嘴照念);enabled 出厂 false;要百炼 key 与业务空间 id'),
+    live: LiveSchema.default(LIVE_DEFAULT).describe('实时老师:有脸的老师都由 realtime 模型开口、老师 CLI 在后面写板书(讲稿不配音、嘴照念);voices 挑嘴的音色;要百炼按量 key 与业务空间 id'),
   })
   .superRefine((c, ctx) => {
     for (const name of Object.keys(c.live.voices)) {

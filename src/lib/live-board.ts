@@ -64,7 +64,7 @@ export type LiveEvent =
 /**
  * 要做的事,按顺序执行。hold / release / hush / send = 告诉服务端(send 的 body 页面带上);enqueue = 放刚到的这块嘴的声音(没有就丢掉);
  * flush = 清掉孩子端没放的嘴的声音;stopCard / playCard = 停 / 念卡上的声音;openLecture / stopLecture = 铺满放 / 停下小课堂那一段(舞台停在那一帧);
- * staged = 告诉服务端那一段放完了(后面的讲稿接着交给嘴);board = 这位老师这一次回到板书;render = 重画字幕与头像;
+ * staged = 告诉服务端那一段放完了(后面的讲稿接着交给嘴);retry = 连不上、断了:回到「正在叫老师」,过一会儿再连(不回板书,《产品规划.md》拍板 30);render = 重画字幕与头像;
  * 一直听:listen = 告诉服务端换了模式;gate = 告诉服务端推 / 不推了(on);duck / unduck = 嘴的声音压到三成 / 恢复;
  * 口语课:ring / stopRing = 响铃 / 铃停(卡亮不亮看 turn,随 render 画);重放:playReplay / stopReplay = 从这一轮第一句放 / 停(页面取服务端留的那份声音)
  */
@@ -80,7 +80,7 @@ export type LiveEffect =
   | { kind: 'openLecture' }
   | { kind: 'stopLecture' }
   | { kind: 'staged' }
-  | { kind: 'board' }
+  | { kind: 'retry' }
   | { kind: 'render' }
   | { kind: 'listen' }
   | { kind: 'gate'; on: boolean }
@@ -203,7 +203,7 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
       if (m.status === 'recording') { to('quiet'); fx.push({ kind: 'render' }); }
       break;
     case 'drop':
-      fx.push({ kind: 'flush' }, { kind: 'stopCard' }, { kind: 'stopLecture' }, { kind: 'stopRing' }, { kind: 'stopReplay' }, { kind: 'board' });
+      fx.push({ kind: 'flush' }, { kind: 'stopCard' }, { kind: 'stopLecture' }, { kind: 'stopRing' }, { kind: 'stopReplay' }, { kind: 'retry' });
       if (m.ducked) fx.push({ kind: 'unduck' });
       // 一直听是孩子选的说话方式,不是声音的状态:清了也留着
       m = { ...initialLive(), open: m.open };

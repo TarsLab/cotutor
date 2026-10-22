@@ -4,7 +4,7 @@
  * 本进程起服务(临时 workspace,语文老师开实时;老师是 tests/_fake-cli.ts --stream,嘴是 tests/_fake-realtime.ts,一次回答的声音拉长到 1.5 秒),
  * 无头 Chrome 带假麦克风开孩子端语文老师(新话题):
  *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴不先说、头像在想(板上没有占位卡,拍板 19)→ 脑写的卡铺上、卡角没有钮(拍板 18 撤了「?」)、讲稿一句一句上字幕;
- *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点开一张卡再按住说 = 问这张卡(消息带 focus);板是脑写的(节头是它那张「# 标题」卡、没写就接着上一节、孩子的话在左栏、不出卡的一轮板上不留字、卡和讲稿不同步);嘴连不上回到板书;
+ *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点开一张卡再按住说 = 问这张卡(消息带 focus);板是脑写的(节头是它那张「# 标题」卡、没写就接着上一节、孩子的话在左栏、不出卡的一轮板上不留字、卡和讲稿不同步);嘴连不上留在实时页「正在叫老师」、自己再连;
  *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1);讲稿的 [[play]] 念完铺满放小课堂那一段,放完嘴才接着念(P3.2);
  *   一直听(《wip/实时老师常开麦设计.md》;孩子端没有开关,家长在 live.listen 开):连接开 VAD、不用按声音一直推、关麦就不推、一段声音收下了就是一轮;
  *   口语课(《wip/口语课改实时老师设计.md》):口语单页过来点一下开始,热身那拍念完卡亮「轮到你」、孩子跟了下一拍,[[call]] 念完响铃、老师说英文。
@@ -50,7 +50,7 @@ const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 cfg.runtimes = { default: 'stream', stream: rt };
 for (const t of Object.values(cfg.tutors)) delete t.runtime;
-cfg.live = { enabled: true, voices: { 'chinese-tutor': 'Serena' } };
+cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 cfg.kid.name = 'Ray';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
@@ -352,13 +352,16 @@ try {
   ok('录像里孩子的屏幕:实时老师页的样子(左栏字幕停在最后一句、卡角没有钮、板上不留讲稿的字);老师头像只有左栏一颗', rv.live && rv.cur.length > 0 && rv.corner === 0 && rv.says.length === 0 && rv.faces === 1, JSON.stringify(rv));
   console.log('  ', await shot('live-reel-ipad.png'));
 
-  // ---- 嘴连不上:回到板书 ----
+  // ---- 嘴连不上(《产品规划.md》拍板 30):不回板书,留在实时页「正在叫老师」,过一会儿自己再连上 ----
   fake.failUpdate = true;
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&new=1` });
   await until(`Boolean(document.querySelector('#board .blank'))`);
-  const fell = await until(`!document.body.classList.contains('live')`, 40);
+  await sleep(1500);
+  const down = { live: await body('live'), voice: await evaluate(VOICE), text: await evaluate(`document.querySelector('#lv-hold .vb-big b').textContent`) };
+  const nConn = fake.conns.length;
   fake.failUpdate = false;
-  ok('嘴连不上:回到板书的样子(没有 body.live、字幕行回来、空板那块回到板中间)', fell && (await evaluate(`getComputedStyle(document.querySelector('#sub')).display`)) !== 'none' && (await evaluate(`getComputedStyle(document.querySelector('#board > .blank')).display`)) !== 'none');
+  const back = await until(`document.querySelector('#lv-hold').dataset.voice !== 'connecting'`, 60);
+  ok('嘴连不上:留在实时页(body.live)、按钮是「正在叫老师」;好了以后几秒内自己连上', down.live && down.voice === 'connecting' && down.text === '正在叫老师' && back && (await body('live')) && fake.conns.length > nConn, JSON.stringify({ ...down, back, conns: fake.conns.length - nConn }));
 
   // ---- activity 也走实时(P3.1):首页点「看图说话」→ 开实时、开场那条等嘴连上走那条连接发(嘴说开场那句)、脑照 activity 带 ----
   mkdirSync(join(wsRoot, 'home'), { recursive: true });

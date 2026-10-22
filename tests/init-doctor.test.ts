@@ -100,9 +100,9 @@ try {
     writeFileSync(cfgPath, before);
   }
   {
-    // 实时老师的嘴:音色写错(这个模型不认)提示,写对的报谁用什么;都没写不出这一项
+    // 实时老师的嘴:音色写错(这个模型不认)提示,写对的报谁用什么;都没写也报(用出厂的,《产品规划.md》拍板 30)
     const cfgPath = join(ws, 'cotutor.json'), before = readFileSync(cfgPath, 'utf8');
-    const cfg = JSON.parse(before); cfg.live = { enabled: true, voices: { 'chinese-tutor': 'Serena', 'math-tutor': 'Bella' } };
+    const cfg = JSON.parse(before); cfg.live = { voices: { 'chinese-tutor': 'Serena', 'math-tutor': 'Bella' } };
     writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
     const dl = await doctorWorkspace(ws, { probeEnv: false });
     const lv = dl.checks.find((c) => c.name === 'live.voices');
@@ -110,7 +110,8 @@ try {
     writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
     const lv2 = (await doctorWorkspace(ws, { probeEnv: false })).checks.find((c) => c.name === 'live.voices');
     writeFileSync(cfgPath, before);
-    check('doctor:嘴的音色写错提示(不认的点名、说去哪换、不算必需);写对了报谁用什么;没开实时不出这一项', lv?.ok === false && !lv.required && lv.detail.includes('math-tutor 的「Bella」') && !lv.detail.includes('Serena」') && Boolean(lv.fix) && lv2?.ok === true && lv2.detail.includes('math-tutor 用 Theo Calm') && !d1.checks.some((c) => c.name === 'live.voices'), JSON.stringify([lv, lv2]));
+    const lv0 = d1.checks.find((c) => c.name === 'live.voices');
+    check('doctor:嘴的音色写错提示(不认的点名、说去哪换、不算必需);写对了报谁用什么;都没写报出厂的', lv?.ok === false && !lv.required && lv.detail.includes('math-tutor 的「Bella」') && !lv.detail.includes('Serena」') && Boolean(lv.fix) && lv2?.ok === true && lv2.detail.includes('math-tutor 用 Theo Calm') && lv0?.ok === true && lv0.detail.includes('english-tutor 用 Theo Calm') && lv0.detail.includes('math-tutor 用 Andre'), JSON.stringify([lv, lv2, lv0]));
   }
   check('doctor 查主题:清单过契约、出厂件最新', d1.checks.some((c) => c.name === 'theme.manifest' && c.ok) && d1.checks.some((c) => c.name === 'theme.default.origin' && c.ok));
   check('doctor 查 skill 与 drawtell 壳', d1.checks.filter((c) => c.name.startsWith('skill.') && c.ok).length === 10 && d1.checks.some((c) => c.name === 'skill.cotutor-vault' && c.required) && d1.checks.some((c) => c.name === 'skill.cotutor-home' && c.required) && !d1.checks.some((c) => c.name === 'skill.cotutor-prep') && d1.checks.filter((c) => c.name.startsWith('skill.drawtell') && !c.required).length === 4 && d1.checks.some((c) => c.name === 'drawtell' && c.ok && !c.required));

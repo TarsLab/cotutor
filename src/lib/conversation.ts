@@ -47,7 +47,6 @@ export interface ConversationFiles {
   run: (job: string) => string;
   /** 这一轮的事件流 <date>.<job>.events.jsonl(lib/events.ts;控制台与时间线的唯一来源) */
   events: (job: string) => string;
-  /** 孩子按住说话的原声 <date>.<job>.voice.<ext>(《家长录像设计.md》拍板 4;删话题时按 <date>.<job>.* 一起删) */
   /** 录像的实录 <date>.<job>.play.jsonl(《家长录像设计.md》§4):孩子端报上来的记在话题当时的末条 job 上,卡的每次存记在卡所在那轮;删话题一起删 */
   play: (job: string) => string;
   /** 实时那一轮嘴照念的声音 <date>.<job>.mouth.wav 与每句的起点 .mouth.json(字幕重放,src/live/lib/mouth.ts;删话题时按 <date>.<job>.* 一起删) */

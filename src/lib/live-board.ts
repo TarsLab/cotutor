@@ -15,7 +15,7 @@ export interface LiveModel {
   status: LiveStatus;
   /** 孩子按下时嘴正在说:字幕上那句变淡、加省略号;嘴再出声就清 */
   cut: boolean;
-  /** 一直听(右上角那颗开着);hearing = 服务端说孩子在说;ducked = 嘴的声音压低着;muted = 孩子点胶囊关了麦 */
+  /** 一直听开着(口语课,或老师配了 live.listen);hearing = 服务端说孩子在说;ducked = 嘴的声音压低着;muted = 孩子点胶囊关了麦 */
   open: boolean;
   hearing: boolean;
   ducked: boolean;
@@ -30,7 +30,7 @@ export interface LiveModel {
  * 声音的:audio 嘴的一块声音到了 · drained 孩子端的队列放完了(play:刚念完的那句 [[play]] 到小课堂卡,open = 能放、skip = 课包读不出来;
  * echo:刚念完的是热身的 [[echo]] / [[say]];call:刚念完的是 [[call]])· cardEnded 卡的声音念完 / 停了 · lectureDone 小课堂那一段放完 / 孩子关了 · ringEnd 铃响够了;
  * 服务端的:flush 清播放队列 · cards 卡铺上来、老师写完 · drop 连不上 / 断了;页面的:reset 换老师、关老师页;
- * 一直听:listen 孩子点右上角的开关 · mute / unmute 点麦克风胶囊 · vad 服务端说孩子开口 / 说完 · duck / unduck 服务端让嘴的声音压低 / 恢复;
+ * 一直听:listen 进老师页时开或关(口语课、live.listen) · mute / unmute 点麦克风胶囊 · vad 服务端说孩子开口 / 说完 · duck / unduck 服务端让嘴的声音压低 / 恢复;
  * 重放:replay 点「再听一遍」(pending = 脑在写,不放)· replayStop 点「停」· replayEnded 放完了
  */
 export type LiveEvent =

@@ -377,18 +377,17 @@ ${BACK_TINT_CSS}
   .blank ~ .wait-card { display:none; }
   @keyframes write { 0% { stroke-dashoffset:260; opacity:1; } 65% { stroke-dashoffset:0; opacity:1; } 88% { stroke-dashoffset:0; opacity:0; } 100% { stroke-dashoffset:260; opacity:0; } }
   @media (prefers-reduced-motion:reduce) { .wait-card path { animation:none; stroke-dashoffset:0; } .dots i { animation:none; opacity:.6; } }
-  /* 再听(2026-09-18):讲完的卡右上角一个小喇叭,节头念完也有;点了重念,念着的那张喇叭变橙、轻轻跳 */
+  /* 字幕行:右边那颗只剩舞台里小课堂的暂停 / 播放 */
   #sub-text.line { cursor:pointer; }
   #sub-text .rp { display:inline-flex; vertical-align:-2px; margin-right:6px; color:var(--accent); }
   #sub-btn:disabled { opacity:.35; }
-  @keyframes again { 0%,100% { transform:scale(1); } 50% { transform:scale(1.12); } }
   #sub-btn { flex:0 0 auto; height:36px; min-width:36px; border-radius:18px; background:#fff; display:inline-flex; align-items:center; justify-content:center; gap:4px; padding:0; font-size:15px; font-weight:600; }
   #sub-btn[hidden] { display:none; }
   /* 输入条 */
   #bar { padding:8px 16px calc(env(safe-area-inset-bottom) + 12px); }
   #pill { display:flex; align-items:center; gap:12px; height:56px; padding:0 14px; border-radius:28px; background:#fff; border:1px solid var(--line); box-shadow:0 2px 10px #00000010; }
   #pill .ic { color:var(--ink); display:grid; place-items:center; width:32px; height:44px; }
-  /* 一直听(《一直听设计.md》):右上角的开关、输入条里的麦克风(点它关麦 / 开麦,外圈跟着音量) */
+  /* 一直听(《一直听设计.md》,口语课与 live.listen):输入条里的麦克风(点它关麦 / 开麦,外圈跟着音量) */
   #pill #lv-mic { display:none; }
   /* 交给老师了(选择、画板):锁住,不能改、不能再交 */
   .c > .lk { display:inline-flex; align-items:center; gap:4px; align-self:flex-end; font-size:14px; color:var(--dim); }
@@ -3055,7 +3054,7 @@ __REEL_DOCK_JS__
   // ① Safari 的识别每次自己开关话筒,常交来一路纯静音,一个字不出、一停就 aborted;页面自己先 getUserMedia 留一路,识别再起就有声(先麦克风、后识别)
   // ② 麦克风关了再开,也常开到哑的 → 开了就不关(只有页面退到后台才放,那时系统本来也会掐);开完自检 600ms,纯 0 就拆掉重开,最多 3 回
   // ③ 冷开要 1 秒多,这段时间说的字进不去 → 给过权限之后,进老师页就先开好(micWarm)
-  // 这一路画音量条;按住说话时也在它上面录下原声,随那句话发给服务端,只给家长端(《家长录像设计.md》拍板 4)。每次开麦克风也记一行诊断(where: 'mic')
+  // 这一路画音量条。每次开麦克风也记一行诊断(where: 'mic')
   const mic = { stream: null, ac: null, an: null, buf: null, opening: null, ok: true };
   const micLive = () => { const t = mic.stream && mic.stream.getAudioTracks()[0]; return Boolean(t && t.readyState === 'live' && !t.muted && mic.ok); };
   /** 实时开着时,麦克风的自检(分析器)也开在实时那个 AudioContext 里,页面上只有一个 AudioContext(口语课一直只用一个)。

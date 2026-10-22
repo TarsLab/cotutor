@@ -1,6 +1,6 @@
 /**
  * 听写(不花钱,《听写设计.md》):比对(照 hanzi-writer 的一笔像不像 + 写完一起配对)→ 听写卡的解析与剥字 →
- * 经 app.ts 的 route() 走一遍:首页发布 → 孩子端首页没有字 → 开始 / 接着 → 念(假配音、退合成声)→ 一个词一个词交 →
+ * 经 app.ts 的 route() 走一遍:首页发布 → 孩子端首页没有字 → 开始 / 接着 → 念(假配音;没音色提示叫家长)→ 一个词一个词交 →
  * 交卷前拿不到字 → 交卷:少一笔、写成别字、空着的问「再写一遍?」,笔顺只记给家长 → 再写一遍 → 对好了 → 家长看 → 首页换了 → 边界。
  * 孩子写的字用 hanzi-writer-data 的中线加抖动模拟(和真笔迹一样是 [x, y, t] 的点列,坐标 1024 见方、y 向上)。
  */
@@ -231,7 +231,8 @@ try {
 
   {
     const pages = readFileSync(new URL('../src/dictation/page.ts', import.meta.url), 'utf8') + readFileSync(new URL('../src/dictation/en-page.ts', import.meta.url), 'utf8');
-    check('听写两页不念浏览器合成声(没音色、合成失败直接提示叫家长)', !/speechSynthesis|SpeechSynthesisUtterance/.test(pages) && (pages.match(/叫爸爸妈妈来看一下/g) ?? []).length === 2);
+    const unlockJs = readFileSync(new URL('../src/dictation/unlock.ts', import.meta.url), 'utf8');
+    check('听写两页不念浏览器合成声(没音色、合成失败直接提示叫家长;解锁也不碰它)', !/speechSynthesis|SpeechSynthesisUtterance/.test(pages + unlockJs) && (pages.match(/叫爸爸妈妈来看一下/g) ?? []).length === 2);
   }
 
   // ---- 首页检查 ----

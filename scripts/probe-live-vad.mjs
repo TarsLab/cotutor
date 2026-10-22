@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * 一直听(常开麦)的第 0 步探针(《wip/实时老师常开麦设计.md》§七 A):真连百炼 realtime(几分钱),不进产品。直接走 WebSocket,事件一条不漏地记。
+ * 一直听(常开麦)的第 0 步探针(《一直听设计.md》§七 A):真连百炼 realtime(几分钱),不进产品。直接走 WebSocket,事件一条不漏地记。
  *   vad    semantic_vad + create_response:false + interrupt_response:false 收不收(看 session.updated 回的 turn_detection);
  *          Ray 的真录音前后垫静音、按真时间推(100 毫秒一块):事件的顺序与时刻,说完到 speech_stopped / committed / 转写多久;不该有 response.created
  *   pause  同几段录音中间插 1.5 秒静音:semantic_vad / server_vad 各切成几句
  *   barge  嘴在念一段长的时推一段孩子的录音:interrupt_response false / true 下,那次回答会不会被服务端掐
  *   idle   推一段录音(commit 了不回答)后一直推静音 330 秒:会不会报 response_idle_timeout(约 6 分钟)
- *   口语课(《wip/口语课改实时老师设计.md》§五之二,官方博客的「实时口语陪练」):
+ *   口语课(《口语课实时设计.md》§五之二,官方博客的「实时口语陪练」):
  *   coach   跟读纠音:Ray 10-17 跟读的真原声(从 talk/2026-10-17-1106/call.wav 按 kidVoice 切)和一对 TTS(bus / boss),手动轮次;
  *           老师先念那一项,孩子读,两种接法各一遍——现在的「夸一两个词 + 下一句」与带读(挑一个音、先说对的、请他跟着说)
  *   context 上下文里的短回答:嘴先问一句(英文 / 中文),再喂 Ray 的「好的」、TTS 的 Yes / Red / Yellow / 嗯;和不问直接喂的比,semantic_vad 收不收

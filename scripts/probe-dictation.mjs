@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 听写(《wip/听写设想.md》)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
+ * 听写(《听写设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock,Chrome 开孩子端首页(iPad 横屏 1180×820)→ 点听写卡进 /dictation → 开始 →
  * 照 hanzi-writer-data 的中线用鼠标写:春天写对、鼓励的鼓少写第 7 笔、叶写成页 → 每个词「写好了」→ 对答案:
  * 三张词卡、书上的字叠着、鼓励与叶问「这个再写一遍?」、春天不问;拿开 / 叠上蓝字 → 点鼓逐笔看:一共 13 笔、写到最后 →
@@ -96,7 +96,7 @@ try {
   ok('听写中:听写本三行(2、2、1 格)、右边一个大格;气泡里没有字', await waitFor(`document.querySelectorAll('#l-book .brow').length === 3 && document.querySelectorAll('#l-big .padbox').length === 1`) && (await evaluate(`[...document.querySelectorAll('#l-book .brow')].map((r) => r.querySelectorAll('.padbox').length).join() === '2,2,1' && document.querySelector('#l-what').textContent === '第一个词的第一个字' && !document.body.innerText.includes('春')`)));
   const bigSize = await evaluate(`Math.round(document.querySelector('#l-big .padbox').getBoundingClientRect().width)`);
   ok('大格放得大(≥ 480)', bigSize >= 480, `${bigSize}px`);
-  // 听写本拼起来、写字格三档(《wip/听写设想.md》拍板 30)
+  // 听写本拼起来、写字格三档(《听写设计.md》拍板 30)
   const bk = await evaluate(`(() => { const rs = [...document.querySelectorAll('#l-book .brow')].map((r) => r.getBoundingClientRect()); const cs = [...document.querySelectorAll('#l-book .brow')[0].querySelectorAll('.padbox')].map((c) => c.getBoundingClientRect()); return { tops: rs.map((r) => Math.round(r.top)), seam: Math.round(cs[1].left - cs[0].right) }; })()`);
   ok('听写本:一个词的格子拼在一起,前两个词(各两格)排在同一行', bk.seam === 0 && bk.tops[0] === bk.tops[1] && bk.tops[2] > bk.tops[0], JSON.stringify(bk));
   ok('写字格档位:右上角三颗,缺省大', (await evaluate(`[...document.querySelectorAll('#l-size button')].map((b) => b.dataset.pad + (b.getAttribute('aria-pressed') === 'true' ? '*' : '')).join()`)) === 's,m,l*');
@@ -108,7 +108,7 @@ try {
   await tap('#l-size [data-pad="l"]');
   ok('点大:回到铺满', (await evaluate(`Math.round(document.querySelector('#l-big .padbox').getBoundingClientRect().width)`)) === bigSize && (await evaluate('document.cookie')).includes('cotutor_dict_pad=l'));
   const btnsZh = await evaluate(`(() => { const bs = [...document.querySelectorAll('.view.on button.tool, .view.on button.main')].filter((b) => b.getClientRects().length); return { bare: bs.filter((b) => !b.querySelector('svg')).map((b) => b.textContent.trim()), labels: bs.map((b) => b.textContent.trim()) }; })()`);
-  ok('写字屏的按钮都带图标,字同英文页:再念 撤销 擦掉 不会写,给答案 写好了(《wip/听写设想.md》拍板 28)', btnsZh.bare.length === 0 && ['再念', '撤销', '擦掉', '不会写,给答案', '写好了'].every((t) => btnsZh.labels.includes(t)), JSON.stringify(btnsZh));
+  ok('写字屏的按钮都带图标,字同英文页:再念 撤销 擦掉 不会写,给答案 写好了(《听写设计.md》拍板 28)', btnsZh.bare.length === 0 && ['再念', '撤销', '擦掉', '不会写,给答案', '写好了'].every((t) => btnsZh.labels.includes(t)), JSON.stringify(btnsZh));
   await writeChar('#l-big .padbox', '春');
   ok('写:大格里 9 笔,听写本上当前这格跟着画', (await inkCount('#l-big .ink')) === 9 && (await inkCount('#l-book .here .ink')) === 9);
   await shot('03-listen');
@@ -141,7 +141,7 @@ try {
   await sleep(2500);
   ok('写着写着:前面的笔变蓝,气泡跟着数', (await evaluate(`document.querySelectorAll('#l-big .std path.sd').length`)) >= 1 && !/^第 1 笔/.test(await evaluate(`document.querySelector('#l-status').textContent`)));
   await shot('03c-answer');
-  // 看笔顺时一落笔就换成照着写,没有「我来写」(《wip/听写设想.md》拍板 31);紧接着点「写好了」在半秒保护里,不算
+  // 看笔顺时一落笔就换成照着写,没有「我来写」(《听写设计.md》拍板 31);紧接着点「写好了」在半秒保护里,不算
   ok('看笔顺时没有「我来写」', !(await evaluate(`document.body.innerText.includes('我来写')`)));
   await writeChar('#l-big .padbox', '叶', [1, 2, 3, 4]);
   { const r = await rect('#l-next'); const x = r.x + r.w / 2, y = r.y + r.h / 2; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 }); await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 }); }

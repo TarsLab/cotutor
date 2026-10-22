@@ -1,4 +1,4 @@
-/** activity 文件(《wip/activity设计.md》):出厂的那份过检查、各种写错都报到行、递给老师的那节怎么裁、画家那段和出厂画风一字不差、init / upgrade 拷贝与 hash。 */
+/** activity 文件(《activity设计.md》):出厂的那份过检查、各种写错都报到行、递给老师的那节怎么裁、画家那段和出厂画风一字不差、init / upgrade 拷贝与 hash。 */
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -196,7 +196,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('模拟孩子的提示词:故事、人设、对话、板上的整段', kp.includes('小熊种瓜') && kp.includes('问一句答一句') && kp.includes('孩子:小熊') && kp.includes('板上:小熊睡大觉。 / 小熊浇了水。'));
 }
 
-// ---- 听写:不起老师(page:),认字那段和出厂的要求(DICTATION_PROMPT_DEFAULT)拼出来一字不差(《wip/activity设计.md》拍板 20、21)----
+// ---- 听写:不起老师(page:),认字那段和出厂的要求(DICTATION_PROMPT_DEFAULT)拼出来一字不差(《activity设计.md》拍板 20、21)----
 {
   const { photoPrompt, photoPromptFrom } = await import('../src/dictation/recognize.ts');
   const { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT } = await import('../src/schema/index.ts');

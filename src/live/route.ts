@@ -1,7 +1,7 @@
 /**
- * 实时老师的那条 WebSocket(《wip/实时老师开发计划.md》P2.5):WS /api/live/<老师>/ws,一次连接一个 LiveCall(call.ts)。
+ * 实时老师的那条 WebSocket(《实时老师设计.md》):WS /api/live/<老师>/ws,一次连接一个 LiveCall(call.ts)。
  * serve.ts 的 upgrade 里接一行;有脸的老师都走这里(《产品规划.md》拍板 30),不是有脸的、关着的、藏着的回 404。
- * ?listen=open = 一直听(孩子不用按,《wip/实时老师常开麦设计.md》);缺省按住说。
+ * ?listen=open = 一直听(孩子不用按,《一直听设计.md》);缺省按住说。
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';

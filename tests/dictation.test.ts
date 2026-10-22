@@ -1,5 +1,5 @@
 /**
- * 听写(不花钱,《wip/听写设想.md》):比对(照 hanzi-writer 的一笔像不像 + 写完一起配对)→ 听写卡的解析与剥字 →
+ * 听写(不花钱,《听写设计.md》):比对(照 hanzi-writer 的一笔像不像 + 写完一起配对)→ 听写卡的解析与剥字 →
  * 经 app.ts 的 route() 走一遍:首页发布 → 孩子端首页没有字 → 开始 / 接着 → 念(假配音、退合成声)→ 一个词一个词交 →
  * 交卷前拿不到字 → 交卷:少一笔、写成别字、空着的问「再写一遍?」,笔顺只记给家长 → 再写一遍 → 对好了 → 家长看 → 首页换了 → 边界。
  * 孩子写的字用 hanzi-writer-data 的中线加抖动模拟(和真笔迹一样是 [x, y, t] 的点列,坐标 1024 见方、y 向上)。
@@ -209,7 +209,7 @@ try {
     const st = [await okEv({ kind: 'view', word: 0, t: 10, w: 1180, h: 820 }), await okEv({ kind: 'trace', word: 1, char: 0, t: 20 }), await okEv({ kind: 'open', word: 1, char: 1, t: 30 }), await okEv({ kind: 'close', word: 1, t: 40 }), await okEv({ kind: 'away', word: 1, t: 50 }), await okEv({ kind: 'back', word: 1, t: 60 }), await okEv({ kind: 'view', word: 0, t: 70 })];
     const fv = (await call('GET', `/api/dictation/${fid}`)).json.events.find((e: J) => e.kind === 'view');
     check('事件:view 带屏幕尺寸;trace / open / close / away / back 都收;view 没尺寸 400', st.join() === '200,200,200,200,200,200,400' && fv.w === 1180 && fv.h === 820, st.join());
-    // 写字格的档(《wip/听写设想.md》拍板 30):view 顺带记,认不得的档不记
+    // 写字格的档(《听写设计.md》拍板 30):view 顺带记,认不得的档不记
     await okEv({ kind: 'view', word: 0, t: 80, w: 1180, h: 820, pad: 's' }); await okEv({ kind: 'view', word: 0, t: 90, w: 1180, h: 820, pad: 'x' });
     const pv = (await call('GET', `/api/dictation/${fid}`)).json.events.filter((e: J) => e.kind === 'view');
     check('事件:view 带写字格的档(s),认不得的不记;老的那条没有', pv.length === 3 && pv[0].pad === undefined && pv[1].pad === 's' && pv[2].pad === undefined, JSON.stringify(pv));
@@ -281,7 +281,7 @@ try {
     srv.close();
     check('流式认:边收边回调、key 只进请求头、缺省 qwen3.8-max、提示词是传进来的要求 + 格式;全文也收;没有 key 回 no_key', rr.ok && seen.includes('肚皮') && seen[seen.length - 1] === '肚皮孩' && rr.full.join() === '肚皮 白白 的' && seenAuth === 'Bearer k-test' && seenModel === 'qwen3.8-max' && sentPrompt.startsWith('挑写字栏\n') && sentPrompt.includes('{"full":') && !none.ok && none.error === 'no_key', JSON.stringify(rr));
   }
-  // ---- 认词的要求在听写 activity「认字收到什么」(《wip/activity设计.md》拍板 21)----
+  // ---- 认词的要求在听写 activity「认字收到什么」(《activity设计.md》拍板 21)----
   {
     const { dictationTemplate } = await import('../src/dictation/route.ts');
     const { createServer } = await import('node:http');
@@ -363,7 +363,7 @@ try {
   };
   walk(srcDir);
   check('边界:cotutor 别处不引用 src/dictation/(只有 app.ts、mock.ts 接一行)', offenders.length === 0, offenders.join());
-  // ---- 英文单词听写(《wip/听写设想.md》拍板 15):一个单词一格,不逐字母比,孩子自己对 ----
+  // ---- 英文单词听写(《听写设计.md》拍板 15):一个单词一格,不逐字母比,孩子自己对 ----
   {
     const enHome = await publish('```dictation english-tutor\nred\n🟡 yellow yellow, a yellow bus\n```\n\n## 为什么这么排\n\n英语\n');
     const kh2 = (await call('GET', '/api/kid/home')).json;
@@ -402,7 +402,7 @@ try {
     r2.end();
     check('认英文:只收英文单词、全文去掉标点按词分;提示词换英文的格式', parseItem({ text: 'red' }, 'en')?.text === 'red' && parseItem({ text: '红' }, 'en') === null && r2.items.map((x) => x.text).join() === 'yellow' && r2.full[0] === "What colour is it It's yellow" && sw2('a, b!', 'en') === 'a b' && pp(['x'], 'en').includes('一个英文单词'), JSON.stringify(r2.full));
   }
-  // ---- 英文单词的样子照四线三格(《wip/听写设想.md》拍板 29):单词卡那套字形,不用字体 ----
+  // ---- 英文单词的样子照四线三格(《听写设计.md》拍板 29):单词卡那套字形,不用字体 ----
   {
     const { EN_BOX_JS } = await import('../src/dictation/en-box.ts');
     type El = { tag: string; attrs: Record<string, string>; kids: El[]; text: string; append: (...c: El[]) => void; setAttribute: (k: string, v: string) => void; getAttribute: (k: string) => string | null };
@@ -425,7 +425,7 @@ try {
     const model = box.enModel(sv, 'red');
     check('再写一遍上面照着看的:一小条四线格,视窗框住单词', model.tag === 'svg' && model.attrs['aria-label'] === 'red' && /^\d+ 40 \d+ 440$/.test(model.attrs.viewBox), model.attrs.viewBox);
   }
-  // ---- 两页的按钮同一套(《wip/听写设想.md》拍板 28):英文页从第一版起没有图标,修了几次又漂开,这里拦着 ----
+  // ---- 两页的按钮同一套(《听写设计.md》拍板 28):英文页从第一版起没有图标,修了几次又漂开,这里拦着 ----
   {
     const { DICTATION_PAGE } = await import('../src/dictation/page.ts');
     const { DICTATION_EN_PAGE } = await import('../src/dictation/en-page.ts');

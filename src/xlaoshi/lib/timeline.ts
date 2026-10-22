@@ -1,6 +1,6 @@
 /**
  * timeline.md:给家长的 Claude Code 读的那一份——一句一行,这句说了什么、这段画了几笔、这段结束时的画面是哪张图。
- * 说的和画的对不对得上,要把这两样按时刻摆在一起才看得出来(《wip/小老师设想.md》§一)。
+ * 说的和画的对不对得上,要把这两样按时刻摆在一起才看得出来(《小老师设计.md》§一)。
  */
 import { strokesIn, type Strokes } from './strokes.ts';
 import { clock, lineEnd, type Transcript } from './transcript.ts';

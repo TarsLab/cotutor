@@ -144,7 +144,7 @@ export interface ConfigTemplateInput {
 const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean; cards?: BoardCardKind[]; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
   // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(2026-10-13 Jack 拍板,同语文老师)
   'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮', runtime: 'qwen', cards: ['text', 'choice', 'image', 'lecture', 'canvas', 'code'], policy: { effort: 'medium' } },
-  // 画图卡(paint)不在这里:只在「你说我画」activity 的话题里有(agents/chinese-tutor/activities/你说我画.md 头上的 cards,《wip/activity设计.md》拍板 11)
+  // 画图卡(paint)不在这里:只在「你说我画」activity 的话题里有(agents/chinese-tutor/activities/你说我画.md 头上的 cards,《activity设计.md》拍板 11)
   // 语文老师走 qwen(2026-10-12 Jack 拍板:以后语文老师都用 qwen;你说我画、看图说话两套 activity eval 在 qwen3.8-max 上真跑过)
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚', runtime: 'qwen', cards: ['text', 'read', 'choice', 'image', 'tianzige', 'lecture', 'canvas'] },
   // 英语老师走 qwen3.8-flash(2026-10-13 Jack 拍板:Token Plan 上扣 Credits,比 claude 便宜;真跑三问 2.5–4 秒开口)

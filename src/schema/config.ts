@@ -180,7 +180,7 @@ export const VaultPolicySchema = z.object({
 export type VaultPolicy = z.infer<typeof VaultPolicySchema>;
 
 /**
- * 口语课(《口语课设计.md》、《wip/口语课改实时老师设计.md》):孩子在口语课页拍一张今天学的那页,改好口语单,交给英语老师的实时页上课
+ * 口语课(《口语课设计.md》、《口语课实时设计.md》):孩子在口语课页拍一张今天学的那页,改好口语单,交给英语老师的实时页上课
  * (activity「口语课」:先热身、再打电话)。口语课页自己不再打电话(《产品规划.md》拍板 30)。出厂关着;要百炼 key。
  */
 export const TALK_DEFAULT = { enabled: false, listModel: 'qwen3.8-omni-flash', minutes: 5 };
@@ -193,7 +193,7 @@ export const TalkSchema = z.object({
 export type TalkConfig = z.infer<typeof TalkSchema>;
 
 /**
- * 实时老师(《wip/实时老师设想.md》):老师用 realtime 模型开口(嘴),老师 CLI 在后面写板书(脑);讲稿不配音,交给嘴照念。
+ * 实时老师(《实时老师设计.md》):老师用 realtime 模型开口(嘴),老师 CLI 在后面写板书(脑);讲稿不配音,交给嘴照念。
  * 有脸的老师都走实时,没有开关(《产品规划.md》拍板 30);要百炼按量 key 与业务空间 id,没配孩子端打不开。
  */
 /** 嘴的缺省音色:出厂三位各一个(10-19 起 Ray 那里用着的),别的老师用 MOUTH_VOICE。不进 voices 的缺省值:voices 的键要是在的老师 */
@@ -206,10 +206,10 @@ export const LiveSchema = z.object({
     .record(z.string().regex(AGENT_NAME_RE), z.string().min(1))
     .default({})
     .describe(`老师的嘴用哪个 realtime 音色(这个模型认的 56 个在 src/live/voices.ts,工作台音色页「实时的嘴」听着挑;写错了第一次开口才报错,doctor 的 live.voices 会提示);没写的出厂老师用出厂的(语文 Serena、数学 Andre、英语 Theo Calm),别的用 ${MOUTH_VOICE}`),
-  // 一直听(《wip/实时老师常开麦设计.md》):孩子不用按,百炼的 VAD 判开口 / 说完,应用判收下 / 放过;老师说话时也在听(全双工)。
+  // 一直听(《一直听设计.md》):孩子不用按,百炼的 VAD 判开口 / 说完,应用判收下 / 放过;老师说话时也在听(全双工)。
   // 孩子端没有开关(拍板 4):10-20 真跑,一问一答以外孩子的停顿、语气词、旁边的话都被当成一句;口语课自己开,不看这里
   listen: z.enum(['hold', 'open']).default(LIVE_DEFAULT.listen).describe('实时老师页怎么说话:hold 按住说(缺省)、open 一直听(试验;孩子停一下就算说完、旁边的话也会当成一句)。孩子端没有开关;口语课总是一直听,不看这里'),
-  // 缺省 server_vad(2026-10-20,《wip/实时老师常开麦设计.md》拍板 3):semantic_vad 听不见一两个字的回答(好的、Yes,问过也一样,probe-live-vad context)
+  // 缺省 server_vad(2026-10-20,《一直听设计.md》拍板 3):semantic_vad 听不见一两个字的回答(好的、Yes,问过也一样,probe-live-vad context)
   vad: z.enum(['semantic_vad', 'server_vad']).default(LIVE_DEFAULT.vad).describe('一直听时谁判说完:server_vad 按静音(缺省;一两个字的回答也认,「嗯」、笑声也会让老师小声一下);semantic_vad 按语义(切得少、不理「嗯」和笑声,但「好的」「Yes」这类短回答听不见)'),
   silenceMs: z.number().int().min(500).max(4000).default(LIVE_DEFAULT.silenceMs).describe('一直听时停多久算说完(毫秒;孩子一句话中间停一下接着说,太短会切碎)'),
 });
@@ -218,7 +218,7 @@ export type LiveConfig = z.infer<typeof LiveSchema>;
 export const mouthVoice = (live: Pick<LiveConfig, 'voices'>, tutor: string): string => live.voices[tutor] ?? SHIPPED_MOUTHS[tutor] ?? MOUTH_VOICE;
 
 /**
- * 听写(《wip/听写设想.md》):拍照认词表用哪个模型。挑词的要求在听写 activity 文件「认字收到什么」(《wip/activity设计.md》拍板 21);
+ * 听写(《听写设计.md》):拍照认词表用哪个模型。挑词的要求在听写 activity 文件「认字收到什么」(《activity设计.md》拍板 21);
  * 下面两份是出厂那节的原文,workspace 里没有听写 activity 文件时照它。回什么格式(一行一段 JSON)由应用填(src/dictation/recognize.ts 的 FORMAT)。
  */
 export const DICTATION_PROMPT_DEFAULT = [
@@ -233,7 +233,7 @@ export const DICTATION_PROMPT_DEFAULT = [
   '- 课文正文里别的词:不挑,全文里有就够了。',
   '念法:听写时老师怎么念给孩子听。先念这一项,再说一个孩子熟悉的短语或短句把它用进去,让同音字分得开;短语里要有别的字,不能只是把它重复一遍。例如「鼓励,老师鼓励我」「灰色,灰色的小蝌蚪」「叶,树叶的叶」。30 字以内。',
 ];
-/** 英文单词的拍照认词(英语老师卡上的拍照听写,《wip/听写设想.md》拍板 15) */
+/** 英文单词的拍照认词(英语老师卡上的拍照听写,《听写设计.md》拍板 15) */
 export const DICTATION_PROMPT_EN_DEFAULT = [
   '这是一张照片:小学英语课本的一页(单词表、对话、课文),或者老师发的单词听写单。孩子在读二年级。',
   '先把照片上的正文一行一行全认出来;再挑出这页要孩子会写的英文单词,当听写的词。',
@@ -252,8 +252,8 @@ export const DictationSchema = z.object({
 export type DictationConfig = z.infer<typeof DictationSchema>;
 
 /**
- * 你说我画(《wip/你说我画设想.md》):画图卡(paint)用哪个文生图模型、画多大、一天最多几张、画成什么样。
- * 画风在 activity 文件「画家收到什么」那节(《wip/activity设计.md》拍板 12);PAINT_PROMPT_DEFAULT 是出厂那节的画风,不在 activity 话题里画照它。版式、角色、分幅由应用接(src/paint/prompt.ts)。
+ * 你说我画(《你说我画设计.md》):画图卡(paint)用哪个文生图模型、画多大、一天最多几张、画成什么样。
+ * 画风在 activity 文件「画家收到什么」那节(《activity设计.md》拍板 12);PAINT_PROMPT_DEFAULT 是出厂那节的画风,不在 activity 话题里画照它。版式、角色、分幅由应用接(src/paint/prompt.ts)。
  * 2026-10-11 拿「小熊和小猴种西瓜」四格试:qwen-image-2.0 4 秒、qwen-image-2.0-pro 15 秒,四格里角色都对得上;pro 的表情(低头、脸红)更到位。
  * 2026-10-13 缺省换 qwen-image-3.0-pro:千问 Token Plan 有它(一张约 50 Credits),2.0 系列没有;同一个四格 10 秒,画风照提示词,角色分到哪格有几处没对上。
  * 2026-10-21「除了圆圈数字」挪进多格的版式:写在画风里一幅的图也收到,宇宙那张散着画了 ①③Ⓐ。
@@ -282,7 +282,7 @@ export const CotutorConfigSchema = z
       grade: z.string().optional(),
       /** 孩子端用哪个主题(themes/<name>/);缺省 default(出厂主题,init 拷进 workspace) */
       theme: z.string().regex(AGENT_NAME_RE).default('default').describe('孩子端的主题:themes/<名字>/(theme.json + kid.css);cotutor add-theme <名字> 拷一份出厂的来改'),
-      /** 孩子的惯用手(《wip/实时老师设想.md》拍板 22):left = 左撇子,平板横屏实时老师页的左栏浮层挪到右边(写字的手空着,另一只手按住说话);缺省右手,不写进文件 */
+      /** 孩子的惯用手(《实时老师设计.md》拍板 22):left = 左撇子,平板横屏实时老师页的左栏浮层挪到右边(写字的手空着,另一只手按住说话);缺省右手,不写进文件 */
       hand: z.enum(['right', 'left']).optional().describe('孩子的惯用手:left = 左撇子,平板横屏实时老师页的浮层(按住说话)挪到右边;缺省右手(浮层在左边)。工作台设置页能切'),
     }),
     server: z

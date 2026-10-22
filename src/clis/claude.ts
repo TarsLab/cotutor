@@ -47,7 +47,7 @@ export const claude: CliAdapter = {
     // 板书写法由应用递给老师,递法看模板(《agent层设计.md》拍板 11):{boardFile} = 板书技能 SKILL.md 的绝对路径,claude 用 --append-system-prompt-file 追加进系统提示
     // (落在「工具 → 系统」这段缓存前缀里,同一位老师的各话题共享);{systemBody} = 老师正文 + 板书写法,给只收一段系统提示文字的 CLI;
     // 两个都没用的运行时(以后的 codex 之类),应用在话题第一条注入 <cotutor-board>。frontmatter 的 skills: 对 --agent 主线程不生效(claude 2.1.275 实测)
-    // --agents {agentsFile}(2026-10-12,《wip/activity设计.md》拍板 13):activity 话题不读老师文件,应用现生成一份 agent 定义(activity 的人设与做法),{agent} 换成它的名字;
+    // --agents {agentsFile}(2026-10-12,《activity设计.md》拍板 13):activity 话题不读老师文件,应用现生成一份 agent 定义(activity 的人设与做法),{agent} 换成它的名字;
     // 别的话题指一份空的 {}(prepare 写),照旧 --agent <老师>。claude 2.1.296 实测两种都行
     claude: {
       run: ['claude', '--agent', '{agent}', '--agents', '{agentsFile}', '-p', '{prompt}', '--dangerously-skip-permissions', '--setting-sources', 'project', '--strict-mcp-config', '--tools', '{tools}', '--effort', '{effort}', '--append-system-prompt-file', '{boardFile}', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'],

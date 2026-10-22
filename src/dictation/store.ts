@@ -1,5 +1,5 @@
 /**
- * 听写的存放(《wip/听写设想.md》):workspace 根的 dictation/<id>.json,一次听写一个文件;孩子的笔迹整个不进 git(目录里放一份 .gitignore)。
+ * 听写的存放(《听写设计.md》):workspace 根的 dictation/<id>.json,一次听写一个文件;孩子的笔迹整个不进 git(目录里放一份 .gitignore)。
  * id = 开始的时刻 YYYY-MM-DD-HHMM,同一分钟再开加 -2、-3。先写临时文件再换名,页面轮询读不到半截。
  */
 import { existsSync } from 'node:fs';
@@ -54,7 +54,7 @@ export interface DictationEvent {
   /** view:孩子屏幕的 CSS 尺寸 */
   w?: number;
   h?: number;
-  /** view:写字格的档(《wip/听写设想.md》拍板 30,l 铺满 / m 500 / s 380);老数据没有,按 l */
+  /** view:写字格的档(《听写设计.md》拍板 30,l 铺满 / m 500 / s 380);老数据没有,按 l */
   pad?: 'l' | 'm' | 's';
 }
 
@@ -67,7 +67,7 @@ export interface Session {
   photo?: string;
   lesson?: string | null;
   tutor: string | null;
-  /** 英文单词听写(一个单词一个四线三格,不逐字母比;《wip/听写设想.md》拍板 15);汉字的不写 */
+  /** 英文单词听写(一个单词一个四线三格,不逐字母比;《听写设计.md》拍板 15);汉字的不写 */
   lang?: 'en';
   words: DictationWord[];
   startedAt: string;

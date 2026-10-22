@@ -29,7 +29,7 @@ export type RunEvent = { t: number } & (
   | { lane: 'index'; kind: 'written'; warnings: number }
   /** 记账:话题的一段写进了 vault 的日记(file 是日记文件名) */
   | { lane: 'ledger'; kind: 'diary'; thread: string; file: string }
-  /** 实时老师的嘴(《wip/实时老师设想.md》):孩子按下 · 松手(voice)或发了不是说的(text / photo / card;ask 是卡上的「?」,拍板 18 撤了,旧记录里还有)· 嘴接住的声音开始在孩子端放 ·
+  /** 实时老师的嘴(《实时老师设计.md》):孩子按下 · 松手(voice)或发了不是说的(text / photo / card;ask 是卡上的「?」,拍板 18 撤了,旧记录里还有)· 嘴接住的声音开始在孩子端放 ·
    *  讲稿第几句开始放 · 孩子按下打断了这一轮(line = 正念到第几句,0 起;还没念到讲稿 = null) */
   | { lane: 'mouth'; kind: 'hold' }
   /** vad = 一直听时孩子说完(服务端 VAD 判的、应用收下了) */

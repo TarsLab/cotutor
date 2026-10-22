@@ -1,5 +1,5 @@
 /**
- * 小老师的纯函数(《wip/小老师设想.md》):笔迹(按时刻可见、数笔、形状校验)、出帧 PNG、转写(浏览器段 → 行、paraformer 句 → 行、
+ * 小老师的纯函数(《小老师设计.md》):笔迹(按时刻可见、数笔、形状校验)、出帧 PNG、转写(浏览器段 → 行、paraformer 句 → 行、
  * 够不够叫 paraformer、家长改字、重转留下改过的行)、notes.md(分节、时刻、追问的勾)、timeline.md。
  */
 import { inflateSync } from 'node:zlib';

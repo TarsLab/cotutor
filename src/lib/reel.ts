@@ -238,7 +238,7 @@ export interface ReelInput {
   now: number;
   /** 实录(第二期):这个话题各轮的 play.jsonl 合在一起 */
   plays?: readonly PlayRecord[];
-  /** 实时的轮所在的通话(《wip/实时老师设想.md》);没有通话录像的实时轮当不是实时的(写完那一刻铺上) */
+  /** 实时的轮所在的通话(《实时老师设计.md》);没有通话录像的实时轮当不是实时的(写完那一刻铺上) */
   calls?: readonly ReelCall[];
 }
 

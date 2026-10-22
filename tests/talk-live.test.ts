@@ -1,5 +1,5 @@
 /**
- * 口语课交给英语老师的实时页(src/server/talk-run.ts、app.ts 的 kidSendInput,《wip/口语课改实时老师设计.md》§三之六):
+ * 口语课交给英语老师的实时页(src/server/talk-run.ts、app.ts 的 kidSendInput,《口语课实时设计.md》§三之六):
  * 口语课页拍好的那份口语单 → 新话题跑 activity「口语课」(口语单、打电话几分钟、家长的话是参数),消息记 talk。
  */
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';

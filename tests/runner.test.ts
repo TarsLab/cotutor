@@ -408,7 +408,7 @@ try {
   check('首句就绪(拍板 15):第一句配好就记,发 ready:speak,不晚于第一拍就绪', (() => { const t = (mS as { timing?: { firstReadyMs?: number; beats?: { readyMs?: number }[] } }).timing; const sp = evFile.filter((e) => e.lane === 'ready' && e.kind === 'speak'); return sp.length === 1 && typeof t?.firstReadyMs === 'number' && t.firstReadyMs <= (t.beats?.[0]?.readyMs ?? Infinity); })(), JSON.stringify((mS as { timing?: unknown }).timing));
   check('事件:格式化成一行(相对秒 · 道 · 一句话)', /^\s*\d+\.\d\d main\s+起 .*(新会话|resume)/.test(formatEvent(evFile[0])) && formatEvent(evFile.find((e) => e.kind === 'card')!).includes('卡 0 text'), formatEvent(evFile[0]));
   check('跑完:正式一节(不带 partial)、2 张卡 3 句、讲稿没有 mp3、子代理的增量没混进来', mS.section?.cards.length === 2 && !('partial' in mS.section) && mS.section.lines.length === 3 && mS.section.lines.every((l) => l.audio === null) && !mS.kidText?.includes('子代理') && mS.kidText?.includes('第一次说:流式 板书') === true, JSON.stringify(mS));
-  // ---- 实时轮(《wip/实时老师开发计划.md》P2.3):讲稿不配音、拍关就就绪;消息记 live;上下文包带 live: ----
+  // ---- 实时轮(《实时老师设计.md》):讲稿不配音、拍关就就绪;消息记 live;上下文包带 live: ----
   {
     const evL: { job: string; lane: string; kind: string; label: string }[] = [];
     const offL = ctx.runner.onEvent((e) => evL.push({ job: e.job, lane: e.event.lane, kind: e.event.kind, label: 'label' in e.event ? String(e.event.label) : '' }));
@@ -625,7 +625,7 @@ try {
   check('不合契约的补丁 422 且不落盘', p2.status === 422 && (JSON.parse(readFileSync(cfgFile, 'utf8')) as typeof raw).tutors['math-tutor'].display === '数学老师', JSON.stringify(p2.json));
   check('改运行时模板被拒', (await route('PATCH', '/api/config', ctx, { runtimes: { fake: { run: ['x'], resume: ['x'] } } })).status === 422);
   check('改 kid 被拒', (await route('PATCH', '/api/config', ctx, { kid: { slug: 'x' } })).status === 422);
-  // 工作台能改孩子那段的只有惯用手(kid.hand,左撇子镜像;《wip/实时老师设想.md》拍板 22):写进文件、孩子端首页接口带出去;null 删键回到缺省右手
+  // 工作台能改孩子那段的只有惯用手(kid.hand,左撇子镜像;《实时老师设计.md》拍板 22):写进文件、孩子端首页接口带出去;null 删键回到缺省右手
   const ph = await route('PATCH', '/api/config', ctx, { kid: { hand: 'left' } });
   check('工作台改 kid.hand:写进文件、首页接口带 hand', ph.status === 200 && (JSON.parse(readFileSync(cfgFile, 'utf8')) as { kid: { hand?: string } }).kid.hand === 'left' && ((await route('GET', '/api/kid/home', ctx)).json as { hand: string }).hand === 'left', JSON.stringify(ph.json));
   check('kid.hand 和别的 kid 字段一起改照旧被拒', (await route('PATCH', '/api/config', ctx, { kid: { hand: 'right', slug: 'x' } })).status === 422);

@@ -1,5 +1,5 @@
 /**
- * 你说我画(《wip/你说我画设想.md》):画图卡的提示词、交给百炼画(假服务)、后台画与一天的上限、下发时补画好没有、告诉老师画好没有。不花钱、不联网。
+ * 你说我画(《你说我画设计.md》):画图卡的提示词、交给百炼画(假服务)、后台画与一天的上限、下发时补画好没有、告诉老师画好没有。不花钱、不联网。
  */
 import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -123,7 +123,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   await startPaints(ws, 'chinese-tutor', date, '1004-1', sec(['回放的。']), { draw: fakeDraw, now: () => now, replay: true });
   check('回放不画', asked.length === 4 && JSON.parse(readFileSync(join(dir('1004-1', 1), 'paint.json'), 'utf8')).error === 'replay');
 
-  // activity 文件「画家收到什么」接管画风(《wip/activity设计.md》拍板 12):给了 painter 就照它的模板与不要的
+  // activity 文件「画家收到什么」接管画风(《activity设计.md》拍板 12):给了 painter 就照它的模板与不要的
   {
     const d2 = '2026-10-13';
     const got: { prompt: string; negative?: string }[] = [];

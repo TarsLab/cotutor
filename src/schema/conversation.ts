@@ -97,7 +97,7 @@ const MessageObjectSchema = z.object({
   replayOf: z.string().min(1).optional(),
   /** 这条是 cotutor activity eval 跑的(落在 evals/,模拟孩子):同回放,不写记忆、不预热 */
   eval: z.literal(true).optional(),
-  /** 这一轮走实时(《wip/实时老师设想.md》):讲稿没配音,由 realtime 模型(嘴)照念;孩子端放的是嘴的声音,以前的话题里这几句不出声 */
+  /** 这一轮走实时(《实时老师设计.md》):讲稿没配音,由 realtime 模型(嘴)照念;孩子端放的是嘴的声音,以前的话题里这几句不出声 */
   live: z.literal(true).optional(),
   /**
    * 这条是孩子看完小课堂后的第一条(《小课堂设计.md》§七):哪份课包、课名、看了多久、看完没、停过几次、画过的几处;节前的小课堂卡与画的卡从这里画。
@@ -124,9 +124,9 @@ const MessageObjectSchema = z.object({
     .optional(),
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2);开场按钮的 text 就是按钮上的字,不是孩子说的 */
   via: MessageViaSchema.optional(),
-  /** 这个话题是从哪个 activity 起的(只记在话题第一条;《wip/activity设计.md》):名字与点的那一刻的参数,话题后面每条都照它带 */
+  /** 这个话题是从哪个 activity 起的(只记在话题第一条;《activity设计.md》):名字与点的那一刻的参数,话题后面每条都照它带 */
   activity: ActivityRunSchema.optional(),
-  /** 口语课页的哪份口语单起的这个话题(talk/<id>/;《wip/口语课改实时老师设计.md》§六 4,只记在话题第一条) */
+  /** 口语课页的哪份口语单起的这个话题(talk/<id>/;《口语课实时设计.md》§六 4,只记在话题第一条) */
   talk: z.string().optional(),
   /** 这个话题接着以前哪天的哪个话题(首页的「接着」按钮;新会话,上下文包带那个话题的尾巴) */
   continues: z.object({ date: z.string().regex(DATE_RE), thread: z.string().min(1) }).optional(),

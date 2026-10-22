@@ -200,7 +200,7 @@ async function talkedSince(ws: Workspace, tutor: string, since: string, now: Dat
 }
 
 /** 这位老师今天孩子能接着的话题(孩子端最后一条所在、孩子在里面说过话的) */
-/** 今天这位老师每个入口最近的话题(《wip/activity设计.md》§八);读不出来 → 空 */
+/** 今天这位老师每个入口最近的话题(《activity设计.md》§八);读不出来 → 空 */
 async function resumesOf(ws: Workspace, tutor: string, today: string): Promise<Map<string, Resume>> {
   try {
     return todayResumes((await readIndex(ws, tutor, today)).messages);
@@ -295,7 +295,7 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
   if (!b) return null;
   const brief = b.brief ? { brief: b.brief } : {};
   if (b.kind === 'start') return { kind: 'start', label: b.label, ...brief };
-  // activity 的参数在点的那一刻按 activity 文件解析、补缺省,跟着话题走(家长后来改了只管以后的话题,《wip/activity设计.md》拍板 2);文件不在、参数不对 → null
+  // activity 的参数在点的那一刻按 activity 文件解析、补缺省,跟着话题走(家长后来改了只管以后的话题,《activity设计.md》拍板 2);文件不在、参数不对 → null
   const runOf = async (name: string, params: Record<string, string>): Promise<ActivityRun | null> => {
     const text = await readFile(activityFile(ws.root, tutor, name), 'utf8').catch(() => null);
     if (text === null) return null;

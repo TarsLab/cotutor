@@ -254,7 +254,7 @@ export function homeOwners(cards: readonly BoardCard[], tutors: readonly string[
 }
 
 /**
- * 今天从同一个入口进去的话题(《wip/activity设计.md》§八,设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm):
+ * 今天从同一个入口进去的话题(《activity设计.md》§八,设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm):
  * 新话题的空白板上一个胶囊接它;activity、小课堂按钮先问接着它还是重新开始。title = 那个话题孩子说的第一句(截到 10 字;activity 是按钮字之后那句,还没说就空),at = 最后一条的时刻
  */
 export interface Resume {
@@ -306,7 +306,7 @@ export function todayResumes(messages: readonly { thread?: string; job: string; 
 }
 
 /**
- * 一张老师卡的按钮:新话题第一,然后是文件里的。应用不再加「接着刚才的」(《wip/activity设计.md》§八):每个按钮进去都是新话题,
+ * 一张老师卡的按钮:新话题第一,然后是文件里的。应用不再加「接着刚才的」(《activity设计.md》§八):每个按钮进去都是新话题,
  * 新话题、activity、小课堂三种按钮带上 resume(今天同一个入口的话题),孩子端在空白板上接。
  * 接着按钮指的话题现在找不到(alive 说没有)就不出现。keepBriefs = 家长预览(讲法留着)。
  */

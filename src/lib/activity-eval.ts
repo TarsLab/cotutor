@@ -1,5 +1,5 @@
 /**
- * activity 的例子与判分(《wip/activity设计.md》6.1):`agents/<老师>/activities/<名>.例子.md`,一个 `## ` 一个例子。
+ * activity 的例子与判分(《activity设计.md》6.1):`agents/<老师>/activities/<名>.例子.md`,一个 `## ` 一个例子。
  * 例子 = 孩子心里的故事 + 人设(模拟孩子照它答)+ 开头几句写死的孩子的话 + 参数 + 几条判。判只看板书(讲稿与卡),应用就能判,不用再请模型。
  * 纯函数:解析、判分;跑在 src/server/activity-eval.ts。
  */

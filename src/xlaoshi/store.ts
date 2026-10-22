@@ -1,5 +1,5 @@
 /**
- * 小老师的数据:workspace/xlaoshi/<id>/,一次讲课一个目录(《wip/小老师设想.md》§四 3)。
+ * 小老师的数据:workspace/xlaoshi/<id>/,一次讲课一个目录(《小老师设计.md》§四 3)。
  * 不进对话索引、不进录像、不算条数;cotutor 别处不读这里。
  *
  *   session.json   题目、几时出的、家长记的一句

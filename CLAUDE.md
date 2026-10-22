@@ -4,7 +4,7 @@
 
 本文件只写怎么在这个仓干活,不记历史、不记拍板:
 
-- 设计在 `docs/`:《产品规划.md》定位、两个端;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡;《首页设计.md》孩子端首页与 cotutor-home;《作业照片设计.md》孩子端拍照、编辑与发;《家长板书页设计.md》家长端 `/parent`;《工作台设计.md》工作台 `/dev` 的样子(纸面控制台)、概览的数、activity 页;《家长录像设计.md》家长端看录像:录数据不录屏幕;《小课堂设计.md》做好的课(课包或视频)孩子看完再聊:播放器、画(一处一张截图)、画的卡、老师放课里一段;《看图说话设计.md》语文老师一问一答带看图说话;《口语课设计.md》英语老师的口语课:孩子拍一页,热身 + 打电话在英语老师的实时页;《孩子端流水设计.md》孩子端记什么(设备、页面脚本出错)、工作台怎么显示;《接一个 CLI.md》再接一家 agent CLI(写给开发者)
+- 设计在 `docs/`:《产品规划.md》定位、两个端;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡;《首页设计.md》孩子端首页与 cotutor-home;《作业照片设计.md》孩子端拍照、编辑与发;《家长板书页设计.md》家长端 `/parent`;《工作台设计.md》工作台 `/dev` 的样子(纸面控制台)、概览的数、activity 页;《家长录像设计.md》家长端看录像:录数据不录屏幕;《小课堂设计.md》做好的课(课包或视频)孩子看完再聊:播放器、画(一处一张截图)、画的卡、老师放课里一段;《看图说话设计.md》语文老师一问一答带看图说话;《实时老师设计.md》嘴(realtime)开口、脑(老师 CLI)写板书,有脸的老师都这样;《实时老师页设计.md》实时老师页的样子与按钮;《一直听设计.md》不用按住说话的那种说法;《口语课设计.md》英语老师的口语课:孩子拍一页,热身 + 打电话在英语老师的实时页(《口语课实时设计.md》);《activity设计.md》首页按钮进去的一种做法;《听写设计.md》听写与拍照听写;《你说我画设计.md》画图卡;《小老师设计.md》家长端的小老师(试验);《孩子端流水设计.md》孩子端记什么(设备、页面脚本出错)、工作台怎么显示;《接一个 CLI.md》再接一家 agent CLI(写给开发者)
 - 各设计文档末尾有「拍板记录」,带日期。**带日期的决定都是可推翻的**;一条约定要在两轮以上迭代里活下来才进本文件末尾的「约定」
 - 改 `agents/`、`skills/`、`cards/` 下的 md 的字先看《写提示词.md》;自造的词查《词表.md》
 - 《开发者手册.md》怎么跑;给用的人看的是《家长手册.md》《iPad与iPhone.md》。模块的来龙去脉与真跑数据不另存,看 git log 与各设计文档
@@ -13,15 +13,15 @@
 ## 目录
 
 - `agents/*.md` 出厂老师文件:frontmatter 取两 CLI 公共子集,正文即系统提示;init 拷进 workspace,hash 记 `.cotutor/shipped.json`
-- `agents/<老师>/activities/<名>.md` 出厂 activity(孩子从首页一个按钮进去的一种做法):一节一个读者,init 拷进 workspace 同一位置(老师的家),hash 同上;形状在 `src/schema/activity.ts`,解析与检查在 `src/lib/activity.ts`;设计在 `docs/wip/activity设计.md`
+- `agents/<老师>/activities/<名>.md` 出厂 activity(孩子从首页一个按钮进去的一种做法):一节一个读者,init 拷进 workspace 同一位置(老师的家),hash 同上;形状在 `src/schema/activity.ts`,解析与检查在 `src/lib/activity.ts`;设计在 `docs/activity设计.md`
 - `skills/<name>/` 出厂技能:cotutor-tutor(有脸的老师共同的守则,应用注入上下文包)、cotutor-board(由 `cards/板书怎么写.md` 与 `cards/*/card.md` 生成)、cotutor-vault、cotutor-analyze、cotutor-tune、cotutor-home(家长在 workspace 里排首页);不再出厂的机器件列在 `src/cli/skills.ts` 的 `RETIRED_SKILLS`,upgrade 时删
 - `cards/<kind>/` 卡的协议:`card.md` 八栏(例子即测试)+ `card.css`
 - `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`
 - `src/schema/` 契约(zod,类型即文档);`src/lib/` 纯函数,离屏可测;`src/cards/` 卡的注册表;`src/clis/` 各 agent CLI 的适配器(一家一个文件,读输出、关工具、环境、出厂模板都在里面,别处只认统一事件)
-- `src/paint/` 你说我画的画图卡在后台画(百炼文生图,同步接口):拼提示词、画、落盘到卡的资产目录、下发时补画好没有;runner 一轮跑完起它,app 的孩子 / 家长那天接一行;设计在 `docs/wip/你说我画设想.md`
+- `src/paint/` 你说我画的画图卡在后台画(百炼文生图,同步接口):拼提示词、画、落盘到卡的资产目录、下发时补画好没有;runner 一轮跑完起它,app 的孩子 / 家长那天接一行;设计在 `docs/你说我画设计.md`
 - `src/stage/` 舞台包(React,esbuild 打到 `dist/stage/`);`src/cli/` 命令;`src/server/` 服务、runner、页面,地址按端分:孩子端 `/`、`/dictation`、`/talk`(孩子拍口语单,交给英语老师的实时页);家长端都在 `/parent` 下(记录 `/parent`、设首页 `/parent/home`、听写 `/parent/dictation`、小老师 `/parent/xlaoshi`);工作台都在 `/dev` 下(扫码 `/dev/qr`)。录像里孩子的屏幕(`/reel`、`/dictation?reel=`)与家长「首页」里的预览(`/preview`)是孩子端页面本身,只开在家长端的 iframe 里;孩子端页面的源码里不出现 `/parent`,家长清单上的跳转由服务端只在家长模式塞进 `MODE.links`、mock;家长端与工作台的锁在 `src/server/access.ts`(机器级 PIN,`cotutor pin`;没设就全开;孩子端新加的路径要在那里的白名单登记,`tests/access.test.ts` 盯着)
-- `src/live/` realtime 那条线:有脸的老师都走它(百炼 realtime 客户端、零依赖 WebSocket 服务端、录像记录 `CallRecorder`、孩子端采音放音的内联源);实时老师(`docs/wip/实时老师设想.md`)的一次通话在 `call.ts`(嘴接住、脑写板书、照念排队 `lib/queue.ts`、开口指令 `lib/cue.ts`),WS `/api/live/<老师>/ws`,serve.ts 的 upgrade 接一行;孩子端发一条的验与拼和 HTTP 共用 app.ts 的 `kidSendInput`。百炼(按量 key + 业务空间 id)是机器级的 `~/.config/cotutor/bailian.json`,家长端「首页」里填(`src/server/bailian.ts`);没配孩子端只出「老师们还没到」
-- 一个场景一个目录、cotutor 只在 app.ts 接一行的模块:`src/xlaoshi/`(小老师,`/parent/xlaoshi`)、`src/talk/`(口语课,孩子 `/talk`:拍一页、老师读出口语单、孩子改,交给英语老师的实时页跑 activity「口语课」;`src/server/talk-run.ts` 只读 `talk/<id>/talk.json`)、`src/dictation/`(听写,`/dictation`:从首页的 `dictation` 卡点进来,所以多了卡的注册、kid-page 画卡、mock 接一行;老师卡上常驻「拍照听写」,照片交百炼视觉模型流式认词;英文单词听写是另一页 `/dictation?lang=en`(四线三格,不逐字母比);比对照搬 hanzi-writer 的一笔像不像,改它先过 `tests/dictation.test.ts`,页面走 `scripts/probe-dictation.mjs` 与 `probe-dictation-en.mjs`);设计在 `docs/wip/`
+- `src/live/` realtime 那条线:有脸的老师都走它(百炼 realtime 客户端、零依赖 WebSocket 服务端、录像记录 `CallRecorder`、孩子端采音放音的内联源);实时老师(`docs/实时老师设计.md`)的一次通话在 `call.ts`(嘴接住、脑写板书、照念排队 `lib/queue.ts`、开口指令 `lib/cue.ts`),WS `/api/live/<老师>/ws`,serve.ts 的 upgrade 接一行;孩子端发一条的验与拼和 HTTP 共用 app.ts 的 `kidSendInput`。百炼(按量 key + 业务空间 id)是机器级的 `~/.config/cotutor/bailian.json`,家长端「首页」里填(`src/server/bailian.ts`);没配孩子端只出「老师们还没到」
+- 一个场景一个目录、cotutor 只在 app.ts 接一行的模块:`src/xlaoshi/`(小老师,`/parent/xlaoshi`)、`src/talk/`(口语课,孩子 `/talk`:拍一页、老师读出口语单、孩子改,交给英语老师的实时页跑 activity「口语课」;`src/server/talk-run.ts` 只读 `talk/<id>/talk.json`)、`src/dictation/`(听写,`/dictation`:从首页的 `dictation` 卡点进来,所以多了卡的注册、kid-page 画卡、mock 接一行;老师卡上常驻「拍照听写」,照片交百炼视觉模型流式认词;英文单词听写是另一页 `/dictation?lang=en`(四线三格,不逐字母比);比对照搬 hanzi-writer 的一笔像不像,改它先过 `tests/dictation.test.ts`,页面走 `scripts/probe-dictation.mjs` 与 `probe-dictation-en.mjs`);设计在 `docs/小老师设计.md`、`docs/口语课设计.md`、`docs/听写设计.md`
 - `tests/` 一文件一子进程,零依赖 `check()`;`_fake-cli.ts` / `_fake-tts.ts` 让全流程不花钱;`fixtures/board/` 真跑样本
 
 ## 运行与验证

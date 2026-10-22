@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * 孩子端实时老师页(《工作流程.md》§孩子端「实时老师」,《wip/实时老师开发计划.md》P2.6)的手动验收(不进 pnpm test,要本机 Chrome;假百炼 + 假老师,不花钱):
+ * 孩子端实时老师页(《工作流程.md》§孩子端「实时老师」,《实时老师设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;假百炼 + 假老师,不花钱):
  * 本进程起服务(临时 workspace,语文老师开实时;老师是 tests/_fake-cli.ts --stream,嘴是 tests/_fake-realtime.ts,一次回答的声音拉长到 1.5 秒),
  * 无头 Chrome 带假麦克风开孩子端语文老师(新话题):
  *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴不先说、头像在想(板上没有占位卡,拍板 19)→ 脑写的卡铺上、卡角没有钮(拍板 18 撤了「?」)、讲稿一句一句上字幕;
  *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点开一张卡再按住说 = 问这张卡(消息带 focus);板是脑写的(节头是它那张「# 标题」卡、没写就接着上一节、孩子的话在左栏、不出卡的一轮板上不留字、卡和讲稿不同步);嘴连不上留在实时页「正在叫老师」、自己再连;
  *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1);讲稿的 [[play]] 念完铺满放小课堂那一段,放完嘴才接着念(P3.2);
- *   一直听(《wip/实时老师常开麦设计.md》;孩子端没有开关,家长在 live.listen 开):连接开 VAD、不用按声音一直推、关麦就不推、一段声音收下了就是一轮;
- *   口语课(《wip/口语课改实时老师设计.md》):口语单页过来点一下开始,热身那拍念完卡亮「轮到你」、孩子跟了下一拍,[[call]] 念完响铃、老师说英文。
+ *   一直听(《一直听设计.md》;孩子端没有开关,家长在 live.listen 开):连接开 VAD、不用按声音一直推、关麦就不推、一段声音收下了就是一轮;
+ *   口语课(《口语课实时设计.md》):口语单页过来点一下开始,热身那拍念完卡亮「轮到你」、孩子跟了下一拍,[[call]] 念完响铃、老师说英文。
  * iPad 横屏、手机各截一张。
  * 用法:node scripts/probe-live-page.mjs [--out <截图目录>] [--keep]
  */
@@ -89,7 +89,7 @@ try {
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y - dy, button: 'left', buttons: 0, clickCount: 1 });
   };
   const tap = async (sel) => press(sel, 40);
-  /** 平板横屏实时:按住说话在左栏浮层里那块(《wip/实时老师页改版设计.md》§二) */
+  /** 平板横屏实时:按住说话在左栏浮层里那块(《实时老师页设计.md》§二) */
   const HOLD = '#lv-hold';
   const cap = () => evaluate(`({ p: document.querySelector('#lv-cap .lv-prev').textContent, c: document.querySelector('#lv-cap .lv-cur').textContent, cut: document.querySelector('#lv-cap .lv-cur').classList.contains('cut'), done: document.querySelector('#lv-cap').classList.contains('done') })`);
   const body = (cls) => evaluate(`document.body.classList.contains(${JSON.stringify(cls)})`);
@@ -116,7 +116,7 @@ try {
   await sleep(400);
   const lay = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), wrap = r('#wrap'), hold = r('#lv-hold'), back = r('#back'), more = r('#more-btn'), tools = r('#lv-tools'); const av = document.querySelector('#lv-hold .vb-av .av'); const st = getComputedStyle(document.querySelector('#lv')); return { lv: [Math.round(lv.left), Math.round(lv.top), Math.round(lv.width), Math.round(innerHeight - lv.bottom)], pos: st.position, lvBg: st.backgroundColor, lvRadius: st.borderTopRightRadius, wrap: [Math.round(wrap.left), Math.round(wrap.top), Math.round(wrap.width)], phoneAv: getComputedStyle(document.querySelector('#lv-av')).display, av: av ? Math.round(av.getBoundingClientRect().width) : 0, hold: [Math.round(hold.width), Math.round(hold.height), Math.round(innerHeight - hold.bottom), Math.round((hold.top + hold.height / 2) / innerHeight * 100)], toolsBottom: Math.round(innerHeight - tools.bottom), voice: document.querySelector('#lv-hold').dataset.voice, backIn: back.left >= lv.left && back.right <= lv.right && back.top >= lv.top, more: [Math.round(innerWidth - more.right), Math.round(more.top), more.left > lv.right], tools: [...document.querySelectorAll('#lv-tools button')].map((b) => b.textContent), bar: getComputedStyle(document.querySelector('#bar')).display, sub: getComputedStyle(document.querySelector('#sub')).display, bg: getComputedStyle(document.querySelector('#wrap')).backgroundColor, padL: parseInt(getComputedStyle(document.querySelector('#board')).paddingLeft), cap: getComputedStyle(document.querySelector('#lv-cap')).display, blank: Boolean(document.querySelector('#board .blank')), blankShown: getComputedStyle(document.querySelector('#board .blank')).display !== 'none', opening: document.body.classList.contains('lv-opening'), ask: document.querySelector('#lv-ask b').textContent, askIn: (() => { const a = r('#lv-ask'); return a.width > 0 && a.left >= lv.left && a.right <= lv.right && a.top > back.bottom && a.bottom < hold.top; })(), name: document.querySelector('#tutor').innerText.includes('语文老师') }; })()`);
   ok('进老师页:body.live、连上了嘴(配了会话)', connected, JSON.stringify(conn()?.session?.voice ?? null));
-  ok('横屏(1180×760,Safari 带地址栏的高):板占满整屏(纸色、不套卡片框);左栏是贴边的白纸(上、左、下不留边,宽 360,不带圆角),回首页在白纸顶上、「更多」浮在右上;头像和按住说话是一颗按钮 312×120(头像 72 在按钮里,手机那颗藏着),下沿离屏底 ≥ 150、中心在屏高六成多;最底下一排拍照 / 相册 / 打字离底边 ~20;输入条与板书的字幕行收起;空板(《wip/实时老师设想.md》拍板 24):开场那句「换个话题吧,想问什么?」在左栏字幕位、板上那块收着(板是干净的纸),页面上没有「语文老师」那行字;按钮是「按住说话」', lay.pos === 'absolute' && lay.lv[0] === 0 && lay.lv[1] === 0 && lay.lv[2] === 360 && lay.lv[3] === 0 && lay.lvBg === 'rgb(255, 255, 255)' && lay.lvRadius === '0px' && lay.wrap[0] === 0 && lay.wrap[1] === 0 && lay.wrap[2] === 1180 && lay.bg === 'rgba(0, 0, 0, 0)' && lay.padL >= 380 && lay.backIn && lay.more[0] <= 24 && lay.more[2] && lay.phoneAv === 'none' && lay.av === 72 && lay.hold[0] === 312 && lay.hold[1] === 120 && lay.hold[2] >= 150 && lay.hold[3] >= 60 && lay.hold[3] <= 72 && lay.toolsBottom >= 16 && lay.toolsBottom <= 28 && lay.voice === 'idle' && lay.tools.join() === '拍照,相册,打字' && lay.bar === 'none' && lay.sub === 'none' && lay.blank && !lay.blankShown && lay.opening && lay.ask === '换个话题吧,想问什么?' && lay.askIn && lay.cap === 'none' && !lay.name, JSON.stringify(lay));
+  ok('横屏(1180×760,Safari 带地址栏的高):板占满整屏(纸色、不套卡片框);左栏是贴边的白纸(上、左、下不留边,宽 360,不带圆角),回首页在白纸顶上、「更多」浮在右上;头像和按住说话是一颗按钮 312×120(头像 72 在按钮里,手机那颗藏着),下沿离屏底 ≥ 150、中心在屏高六成多;最底下一排拍照 / 相册 / 打字离底边 ~20;输入条与板书的字幕行收起;空板(《实时老师设计.md》拍板 24):开场那句「换个话题吧,想问什么?」在左栏字幕位、板上那块收着(板是干净的纸),页面上没有「语文老师」那行字;按钮是「按住说话」', lay.pos === 'absolute' && lay.lv[0] === 0 && lay.lv[1] === 0 && lay.lv[2] === 360 && lay.lv[3] === 0 && lay.lvBg === 'rgb(255, 255, 255)' && lay.lvRadius === '0px' && lay.wrap[0] === 0 && lay.wrap[1] === 0 && lay.wrap[2] === 1180 && lay.bg === 'rgba(0, 0, 0, 0)' && lay.padL >= 380 && lay.backIn && lay.more[0] <= 24 && lay.more[2] && lay.phoneAv === 'none' && lay.av === 72 && lay.hold[0] === 312 && lay.hold[1] === 120 && lay.hold[2] >= 150 && lay.hold[3] >= 60 && lay.hold[3] <= 72 && lay.toolsBottom >= 16 && lay.toolsBottom <= 28 && lay.voice === 'idle' && lay.tools.join() === '拍照,相册,打字' && lay.bar === 'none' && lay.sub === 'none' && lay.blank && !lay.blankShown && lay.opening && lay.ask === '换个话题吧,想问什么?' && lay.askIn && lay.cap === 'none' && !lay.name, JSON.stringify(lay));
   console.log('  ', await shot('live-open-new-ipad.png'));
 
   // ---- 按下反馈(10-21 Jack:拍照、相册、打字按着、长按都没变化):CDP 强制 :active,看样子(缩放、明暗、透明、字色)变没变;part = 变的是里面哪一块 ----
@@ -384,7 +384,7 @@ try {
   const first = idx.messages.find((m) => m.thread === today.thread && m.from === 'kid');
   ok('首页点 activity:开实时;开场那条走嘴的连接(嘴照念脑的第一句)、脑照 activity 带、实时轮', pub.ok && liveOn && started && sec && first?.activity?.name === '看图说话' && first?.live === true, JSON.stringify({ pub: pub.ok, liveOn, started, sec, activity: first?.activity?.name, live: first?.live }));
 
-  // ---- 空板(《wip/实时老师设想.md》拍板 24,原型 F 排):老师对孩子说的话都在左栏,板是干净的纸 ----
+  // ---- 空板(《实时老师设计.md》拍板 24,原型 F 排):老师对孩子说的话都在左栏,板是干净的纸 ----
   // F2 新话题、今天聊过:首页点「新话题」,「接着刚才的」跟在开场那句下面
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   /** 回首页,点语文老师牌上写着 label 的那颗 */
@@ -452,7 +452,7 @@ try {
   const stillOpen = await evaluate(`Boolean(document.querySelector('#stage.on'))`);
   ok('[[play]]:念完那句铺满放小课堂那一段,放着时嘴不往下念;放完舞台停在末帧不关、嘴接着念后面的', staged && during.first && !during.rest && resumed && stillOpen, JSON.stringify({ staged, during, resumed, stillOpen }));
 
-  // ---- 一直听(《wip/实时老师常开麦设计.md》):孩子端没有开关、首页没有入口(拍板 4);家长在 live.listen 开 → 连接开 VAD;不用按,假麦克风的声音一直推;关麦就不推;一段声音收下了就是一轮 ----
+  // ---- 一直听(《一直听设计.md》):孩子端没有开关、首页没有入口(拍板 4);家长在 live.listen 开 → 连接开 VAD;不用按,假麦克风的声音一直推;关麦就不推;一段声音收下了就是一轮 ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   const noSwitch = await evaluate(`!document.querySelector('#lv-listen') && !document.querySelector('.bt-listen')`);
   cfg.live.listen = 'open';
@@ -491,7 +491,7 @@ try {
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   await ctx.reload();
 
-  // ---- 口语课(《wip/口语课改实时老师设计.md》):口语单拍好进英语老师页,点一下开始;热身那拍念完卡亮「轮到你」,孩子跟了下一拍;[[call]] 念完响铃,铃响够了老师说英文 ----
+  // ---- 口语课(《口语课实时设计.md》):口语单拍好进英语老师页,点一下开始;热身那拍念完卡亮「轮到你」,孩子跟了下一拍;[[call]] 念完响铃,铃响够了老师说英文 ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   const talkId = '2026-10-17-1106';
   mkdirSync(join(wsRoot, 'talk', talkId), { recursive: true });

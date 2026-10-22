@@ -1,5 +1,5 @@
 /**
- * activity 文件(《wip/activity设计.md》):孩子从首页一个按钮进去的一种做法。一个 activity 一个文件,归一位老师,
+ * activity 文件(《activity设计.md》):孩子从首页一个按钮进去的一种做法。一个 activity 一个文件,归一位老师,
  * 放在老师的家 `agents/<老师>/activities/<名>.md`(仓里同一个相对位置,init 拷进去,hash 记 shipped.json)。
  *
  * 头上平铺 `name` / `description` / `cards`(这个 activity 要用的卡,空格隔开);正文按 `## ` 节分读者,标题就是读者:
@@ -38,7 +38,7 @@ export const ACTIVITY_TOOLS: Readonly<Record<string, { slots: readonly string[] 
 };
 
 /**
- * 不起老师的会话、按钮进一页的 activity(头上 `page:`,《wip/activity设计.md》拍板 20):名字、音色、牌还是那位老师的。
+ * 不起老师的会话、按钮进一页的 activity(头上 `page:`,《activity设计.md》拍板 20):名字、音色、牌还是那位老师的。
  * dictation = 中文听写页,dictation-en = 英文单词听写页(四线三格)
  */
 export const ACTIVITY_PAGES: Readonly<Record<string, string>> = {
@@ -52,7 +52,7 @@ export const ACTIVITY_TOOL_SECTION_RE = /^(.+?)收到什么$/;
 /** 首页按钮下面已经占用的行名,参数不能叫这些 */
 export const ACTIVITY_RESERVED_PARAMS = ['讲法', '留到'] as const;
 
-/** 小课堂按钮没写 `activity:` 时,看完照这位老师的这个 activity 聊(《wip/activity设计.md》拍板 17、18) */
+/** 小课堂按钮没写 `activity:` 时,看完照这位老师的这个 activity 聊(《activity设计.md》拍板 17、18) */
 export const LECTURE_ACTIVITY = '小课堂';
 
 export const ActivityParamSchema = z.object({

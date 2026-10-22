@@ -556,7 +556,7 @@ export async function doctorWorkspace(
       push({ name: 'live.bailian', ok: why === null, required: true, detail: why === null ? '试连百炼实时模型:通' : probeMessage(why), fix: why === null ? undefined : '家长端「首页」里换一把 key,或查百炼控制台的余额与业务空间' });
     }
 
-    // ---- 实时老师的嘴(《wip/实时老师设想.md》):音色写错了连接照样连得上,第一次开口才报错,孩子那边嘴一直不出声 ----
+    // ---- 实时老师的嘴(《实时老师设计.md》):音色写错了连接照样连得上,第一次开口才报错,孩子那边嘴一直不出声 ----
     const lv = ws.config.live;
     {
       const bad = Object.entries(lv.voices).filter(([, v]) => !isRealtimeVoice(v));

@@ -1,6 +1,6 @@
 /**
  * workspace 里 xlaoshi/怎么看.md 的原文:家长在 workspace 根开 Claude Code,说「读 xlaoshi/怎么看.md,看看 xlaoshi/<id>」。
- * 机器件,服务每次列表时覆盖(家长要改的话改这里)。不做出厂技能(《wip/小老师设想.md》§四 6)。
+ * 机器件,服务每次列表时覆盖(家长要改的话改这里)。不做出厂技能(《小老师设计.md》§四 6)。
  */
 export const GUIDE_FILE = '怎么看.md';
 

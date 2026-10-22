@@ -72,8 +72,8 @@ export const ContextPackSchema = z.object({
     })
     .optional(),
   /**
-   * 这一轮走实时(《wip/实时老师设想.md》):嘴(realtime 模型)已经替老师接住了孩子,讲稿交给嘴照念、不配音。caught = 嘴接住时说的那句;cut = 上一轮的讲稿念到第几句被孩子打断(1 起;0 = 一句都没念到就被打断了;没打断不写)。
-   * 口语课(《wip/口语课改实时老师设计.md》):warmup = 热身的摸底,一拍一行(应用按转写记);phone = 打电话打了几分钟(0 起,还没打不写);
+   * 这一轮走实时(《实时老师设计.md》):嘴(realtime 模型)已经替老师接住了孩子,讲稿交给嘴照念、不配音。caught = 嘴接住时说的那句;cut = 上一轮的讲稿念到第几句被孩子打断(1 起;0 = 一句都没念到就被打断了;没打断不写)。
+   * 口语课(《口语课实时设计.md》):warmup = 热身的摸底,一拍一行(应用按转写记);phone = 打电话打了几分钟(0 起,还没打不写);
    * app = 这一轮不是孩子说的:call = 你念了 [[call]],现在开始打电话;quiet = 热身里孩子连着两拍没开口
    */
   live: z
@@ -86,7 +86,7 @@ export const ContextPackSchema = z.object({
     })
     .optional(),
   /**
-   * 孩子从首页的 activity 进来的话题(《wip/activity设计.md》):哪个 activity、家长填的参数(点的那一刻,补了缺省)、应用算的值。
+   * 孩子从首页的 activity 进来的话题(《activity设计.md》):哪个 activity、家长填的参数(点的那一刻,补了缺省)、应用算的值。
    * 话题里每条都带;放在 YAML 块最后,键序固定(name、params、state;参数照文件「家长填的」的顺序)
    */
   activity: z.object({ name: z.string().min(1), params: z.record(z.string(), ActivityValueSchema).default({}), state: z.record(z.string(), ActivityValueSchema).default({}) }).optional(),

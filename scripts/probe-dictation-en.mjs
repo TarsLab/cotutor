@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 英文单词听写(《wip/听写设想.md》拍板 15)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
+ * 英文单词听写(《听写设计.md》拍板 15)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock,Chrome 开孩子端首页(iPad 横屏 1180×820)→ 把英语老师换到最前 → 点「单词听写」进 /dictation?lang=en → 开始 →
  * 在四线三格里用鼠标写(一个单词一格)→ 第二个点「给答案」:灰单词打底、没写不让过,照着写 → 交上去 → 对一对:三行、蓝字叠着、
  * 没有「再写一遍?」、拿开 / 叠上蓝字 → 自己点「再写一遍」→ 对好了回首页 → 家长页四线三格、录像页一个单词一格。
@@ -99,7 +99,7 @@ try {
   ok('撤销撤一笔', (await evaluate(`document.querySelectorAll('#w-pad .eni path').length`)) === 2);
   await shot('en-02-write');
   const btnsEn = await evaluate(`(() => { const bs = [...document.querySelectorAll('.view.on button.tool, .view.on button.main')].filter((b) => b.getClientRects().length); return { bare: bs.filter((b) => !b.querySelector('svg')).map((b) => b.textContent.trim()), labels: bs.map((b) => b.textContent.trim()) }; })()`);
-  ok('写字屏的按钮都带图标,字同语文页:再念 撤销 擦掉 不会写,给答案 写好了(《wip/听写设想.md》拍板 28)', btnsEn.bare.length === 0 && ['再念', '撤销', '擦掉', '不会写,给答案', '写好了'].every((t) => btnsEn.labels.includes(t)), JSON.stringify(btnsEn));
+  ok('写字屏的按钮都带图标,字同语文页:再念 撤销 擦掉 不会写,给答案 写好了(《听写设计.md》拍板 28)', btnsEn.bare.length === 0 && ['再念', '撤销', '擦掉', '不会写,给答案', '写好了'].every((t) => btnsEn.labels.includes(t)), JSON.stringify(btnsEn));
   ok('学科色:写好了是英语老师的绿(拍板 20)', await evaluate(`getComputedStyle(document.querySelector('#w-done')).backgroundColor === 'rgb(31, 138, 76)'`));
   ok('出口同老师页:左上角「‹ logo 英」胶囊,填英语老师的绿(不放老师的脸,《产品规划.md》拍板 24、26);按钮叫「再念」', await evaluate(`(() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('svg.ct-logo') && !b.querySelector('.tfav') && b.classList.contains('tinted') && b.querySelector('.bk-ini').textContent === '英' && getComputedStyle(b).backgroundColor === 'rgb(31, 138, 76)' && b.getBoundingClientRect().left < 30 && !document.body.innerText.includes('回首页') && document.querySelector('#w-again').textContent === '再念'; })()`));
   await tap('#w-done');

@@ -216,7 +216,7 @@ gǔ lì
 鼓是敲鼓的鼓,励是[努力]的力多一个厂字头,一个人在厂下面使劲。
 
 你想再看一遍哪个字?点一下它就再写一遍。`,
-      // 你说我画(《wip/你说我画设想.md》):出题版的画图卡;mock 不真画,刚出来几秒是「画家在画」,之后给一张占位的四格
+      // 你说我画(《你说我画设计.md》):出题版的画图卡;mock 不真画,刚出来几秒是「画家在画」,之后给一张占位的四格
       `你说得清清楚楚,四个词都放好了。
 
 ~~~read
@@ -974,7 +974,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const f = await bundleAsset(MOCK_BUNDLES_DIR, p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
-    // 字幕重放(《wip/实时老师设想.md》拍板 21):真服务端给 src/live/call.ts 落的那份嘴的声音;mock 没有嘴,每句按字数估多长、放一段静音
+    // 字幕重放(《实时老师设计.md》拍板 21):真服务端给 src/live/call.ts 落的那份嘴的声音;mock 没有嘴,每句按字数估多长、放一段静音
     const mouth = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/mouth\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d+)$/.exec(p);
     if (mouth && method === 'GET') {
       const day = (await route('GET', `/api/kid/conversations/${mouth[1]}/today`)).json as KidDay | undefined;

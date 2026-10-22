@@ -1,5 +1,5 @@
 /**
- * /dictation 与 /api/dictation/*:听写的页面与接口(《wip/听写设想.md》)。
+ * /dictation 与 /api/dictation/*:听写的页面与接口(《听写设计.md》)。
  * cotutor 只在 app.ts 的 route() 里接一行、kid-page 画首页那张卡;这里引用 cotutor 的东西,cotutor 别处不引用这里。拆掉 = 删 src/dictation/、cards/dictation/ 与那两处。
  * 词是答案:孩子端交卷(check)之前只拿得到几个词、每个词几个字和念的音频;交了才拿到字与「要不要再写一遍」。
  *
@@ -325,7 +325,7 @@ function startRecognizing(deps: DictationDeps, rec: PhotoRecord, image: { data: 
 export async function handleDictation(method: string, url: URL, deps: DictationDeps, body: unknown): Promise<RouteResult | null> {
   const p = url.pathname;
   if (!isOurs(p)) return null;
-  // 英文单词听写另一页(四线三格写整个单词,《wip/听写设想.md》拍板 15)
+  // 英文单词听写另一页(四线三格写整个单词,《听写设计.md》拍板 15)
   if (p === '/dictation' || p === '/dictation/') {
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
     // 胶囊带上念的老师(《产品规划.md》拍板 26):听写一定有念的老师——老师牌「拍照听写」带 ?tutor=,首页听写卡上写了谁就是谁、没写的公共卡 reader() 给语文老师;

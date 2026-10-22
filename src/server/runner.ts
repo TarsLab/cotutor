@@ -90,7 +90,7 @@ export interface SendInput {
   via?: MessageVia;
   /** 按钮的字与家长备好的讲法(服务端从发布件查的),进上下文包 home: 段 */
   home?: { button: string; brief?: string };
-  /** 这一轮走实时(《wip/实时老师设想.md》):讲稿不配音(拍关就就绪)、交给嘴照念;消息记 live,上下文包带 live:(嘴接住时说的、上一轮念到第几句被打断;口语课的摸底、打电话几分钟、应用起的这一轮) */
+  /** 这一轮走实时(《实时老师设计.md》):讲稿不配音(拍关就就绪)、交给嘴照念;消息记 live,上下文包带 live:(嘴接住时说的、上一轮念到第几句被打断;口语课的摸底、打电话几分钟、应用起的这一轮) */
   live?: NonNullable<ContextPack['live']>;
   /** 接着以前哪天的哪个话题:这条开新话题时上下文包带那个话题的尾巴(continue: 段),消息记 continues;pack 给了就不现读(回放从原 workspace 读好的) */
   continues?: { date: string; thread: string; pack?: NonNullable<ContextPack['continue']> };
@@ -149,7 +149,7 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
     /* 没有课程表:不带 slot */
   }
   const { notes, files } = await scanVault(ws);
-  // activity 话题的记忆是它自己的(agent: <老师>/<activity>,《wip/activity设计.md》拍板 14);档案、入口文件、日记观察照旧共用
+  // activity 话题的记忆是它自己的(agent: <老师>/<activity>,《activity设计.md》拍板 14);档案、入口文件、日记观察照旧共用
   const pick = pickNotes(notes, files, { date: localDate(input.at), subject: t?.subject, agent: input.agent ?? tutor });
   const limit = policy.contextPack.entryChars;
   if (pick.semester) pack.semester = pick.semester;
@@ -195,7 +195,7 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
 }
 
 /**
- * activity 的那两段(《wip/activity设计.md》§五):`activity:`(名字、参数、应用算的)每条都带;
+ * activity 的那两段(《activity设计.md》§五):`activity:`(名字、参数、应用算的)每条都带;
  * 「老师怎么带」那节(按参数与这个话题的卡裁过、剥了注释)+ 这个 activity 多带的卡的写法,作为一条笔记放进话题第一条(<cotutor-activity>),
  * 续话题没改过写「未变」(同守则)。文件不在、读不了 → activityGuide 写「缺」,老师照自己的文件做。返回给这轮的提醒。
  */
@@ -218,7 +218,7 @@ export async function attachActivity(ws: Workspace, tutor: string, pack: Context
   const cards = activityCards(a, mine ?? undefined);
   const body = renderTutorSection(a, { params: run.params, cards });
   if (body === null) return [];
-  // 这个 activity 要用、老师的板书写法里没有的卡:写法跟在后面(不动系统提示,《wip/activity设计.md》5.1)
+  // 这个 activity 要用、老师的板书写法里没有的卡:写法跟在后面(不动系统提示,《activity设计.md》5.1)
   const extra = mine ? a.cards.filter((k) => !mine.includes(k)) : [];
   const notes = pack.notes ?? [];
   const at = Math.max(notes.findIndex((n) => n.role === 'boardGuide'), notes.findIndex((n) => n.role === 'rules'));
@@ -235,7 +235,7 @@ export const TUTOR_BOARD_DIR = '.cotutor/board';
 export const ACTIVITY_IN_SYSTEM = '已在你的系统提示里(这个话题的 activity,照它带)';
 
 /**
- * activity 话题的系统提示(《wip/activity设计.md》九点五、拍板 13–14):不读老师文件,人设与做法都是 activity 自己的。
+ * activity 话题的系统提示(《activity设计.md》九点五、拍板 13–14):不读老师文件,人设与做法都是 activity 自己的。
  *   body   「老师怎么带」按参数与这个话题的卡裁好、剥了注释
  *   kinds  这个话题的卡:activity 头上的 cards 加 text(不并老师的)
  *   guide  只讲这几种卡的板书写法,写到 .cotutor/board/
@@ -413,7 +413,7 @@ export class Runner {
   get env(): NodeJS.ProcessEnv | undefined {
     return this.opts.env;
   }
-  /** 画图卡交给谁画(《wip/你说我画设想.md》§6;测试与 mock 注入假的) */
+  /** 画图卡交给谁画(《你说我画设计.md》§6;测试与 mock 注入假的) */
   readonly draw: Draw;
   constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number; warm?: boolean; draw?: Draw } = {}) {
     this.getWs = getWs;
@@ -586,7 +586,7 @@ export class Runner {
     const tools: ToolSet = policy.tools === 'on' ? 'on' : input.from !== 'kid' || seen.length > 0 || drawings > 0 ? 'read' : 'off';
     const bare = tools === 'off' && controlsTools(runtime);
     if (bare) { delete pack.refs; delete pack.vault; }
-    // 画图卡(《wip/你说我画设想.md》):这个话题上一节有画图卡,告诉老师画好没有(老师看不到图)
+    // 画图卡(《你说我画设计.md》):这个话题上一节有画图卡,告诉老师画好没有(老师看不到图)
     if (!fresh && !input.bookkeep) {
       const prevAt = index.messages.map((m, i) => ({ m, th: known[i] })).reverse().find((x) => x.th === thread && x.m.result === 'ok' && x.m.section);
       if (prevAt?.m.section?.cards.some((c) => c.kind === 'paint')) for (const line of await paintLines(ws, tutor, date, prevAt.m.job, prevAt.m.section)) cards.push({ card: line.slice(0, line.indexOf(' ')), text: line.slice(line.indexOf(' ') + 1) });
@@ -747,7 +747,7 @@ export class Runner {
       }
     };
     emit({ lane: 'main', kind: 'start', cli: plan.argv[0].slice(plan.argv[0].lastIndexOf('/') + 1), runtime: plan.runtime, resume: plan.resume, ...(spare ? { warmMs: t0 - spare.bornAt } : {}) });
-    // 讲稿不配音(嘴照念,《产品规划.md》拍板 30):拍关就就绪;卡自己的声音(点读段、单词,《wip/实时老师设想.md》拍板 6)照配
+    // 讲稿不配音(嘴照念,《产品规划.md》拍板 30):拍关就就绪;卡自己的声音(点读段、单词,《实时老师设计.md》拍板 6)照配
     const cardVoice = ws.config.tutors[tutor]?.voice;
     const queue = cardVoice ? new DubQueue(ws.config.tts, cardVoice, files.err(job), this.opts.env) : null;
     if (queue) queue.report = (e) => emit(e.kind === 'queued' ? { lane: 'tts', kind: 'queued', label: e.label } : e.kind === 'done' ? { lane: 'tts', kind: 'done', label: e.label, ms: e.ms, file: e.file ?? '' } : { lane: 'tts', kind: 'failed', label: e.label, ms: e.ms, error: e.error ?? '?' });

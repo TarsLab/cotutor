@@ -150,7 +150,7 @@ try {
   ok('发出去:屏关、一条消息、只有照片(问句是「拍了 2 张」)、两张照片都是 jpg', closed && mine?.question === '(拍了 2 张)' && mine?.photos?.length === 2 && mine.photos.every((p) => /^captures\/\d{4}-\d{2}-\d{2}\/\d{4}-\d+\.jpg$/.test(p)), JSON.stringify({ closed, q: mine?.question, photos: mine?.photos }));
   const sizes = await evaluate(`Promise.all(${JSON.stringify(mine?.photos ?? [])}.map((p) => new Promise((r) => { const im = new Image(); im.onload = () => r([im.naturalWidth, im.naturalHeight]); im.onerror = () => r(null); im.src = '/api/kid/image?p=' + encodeURIComponent(p); })))`);
   ok('第一张是裁过的(宽 < 高)、第二张没改(512 见方,不放大)', sizes?.[0] && sizes[0][0] < sizes[0][1] && sizes[0][1] === 192 && sizes?.[1]?.[0] === 512 && sizes[1][1] === 512, JSON.stringify(sizes));
-  // 实时的轮节头是老师写的,孩子发的照片不挂节头(《wip/实时老师设想.md》拍板 20);从接口发的那轮(第一节)还挂着小图
+  // 实时的轮节头是老师写的,孩子发的照片不挂节头(《实时老师设计.md》拍板 20);从接口发的那轮(第一节)还挂着小图
   const lb = await evaluate(`(async () => {
     const live = document.querySelectorAll('#board .sec .sh.lh img.ph').length;
     const ph = document.querySelector('#board .sec .sh img.ph');

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 「接着刚才的」挪到空白板(《wip/activity设计.md》§八,设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm)的手动验收
+ * 「接着刚才的」挪到空白板(《activity设计.md》§八,设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm)的手动验收
  * (不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 临时 workspace + HTTP serve → 语文老师先有一个自由话题、一个你说我画话题 → 发布带 `activity 你说我画` 的首页 →
  * Chrome 开孩子端:牌上没有「接着刚才的」→ 新话题的左栏有「接着刚才的」,点了回到那个话题 →

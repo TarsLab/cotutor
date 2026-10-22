@@ -157,7 +157,7 @@ try {
   check('extras null = 回到按学科的缺省(字段删掉);给老师的话清空 = 删掉', !('extras' in c2.tutors['english-tutor']) && !('note' in c2.talk));
   check('设置不对 400:不认识的常驻、老师', (await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: ['x'] } } })).status === 400 && (await call('PATCH', '/api/parent/settings', { tutors: { 'nobody-tutor': {} } })).status === 400);
 
-  // 一直听不再是常驻入口(《wip/实时老师常开麦设计.md》拍板 4):孩子端没有入口,家长端也开不了
+  // 一直听不再是常驻入口(《一直听设计.md》拍板 4):孩子端没有入口,家长端也开不了
   check('一直听不是常驻入口:extras 写 listen 回 400', (await call('PATCH', '/api/parent/settings', { tutors: { 'chinese-tutor': { extras: ['dictation', 'listen'] } } })).status === 400);
 
   // 页面

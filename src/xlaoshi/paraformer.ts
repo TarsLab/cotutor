@@ -1,5 +1,5 @@
 /**
- * paraformer 补转(《wip/小老师设想.md》拍板 7):原声先用 ffmpeg 转成 16k 单声道 PCM,再走百炼的实时识别 WebSocket(paraformer-realtime-v2),
+ * paraformer 补转(《小老师设计.md》拍板 7):原声先用 ffmpeg 转成 16k 单声道 PCM,再走百炼的实时识别 WebSocket(paraformer-realtime-v2),
  * 按约 4 倍速推过去,收 sentence_end 的句子(带起止毫秒和每个词的标点)。
  * key:百炼按量那把(Token Plan 没有 paraformer;怎么找见 src/lib/qianwen.ts);只在内存里用。
  */

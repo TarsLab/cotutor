@@ -1,7 +1,7 @@
 /**
  * /talk:口语课的页面,孩子端(《口语课设计.md》拍板 12;设计稿 https://claude.ai/artifact/6uL5XfzhFEfX74cmeWbF9c)。家长端没有这一页(拍板 13)。
  * 按 hash 切两屏:#/ 拍照(同拍照听写的骨架,photo-ui.ts;上次的口语单给「接着上」)、#/list/<id> 照片在左、口语单在右(孩子能改、能补、能删)。
- * 改好了交给英语老师的实时页上课(先热身、再打电话,《wip/口语课改实时老师设计.md》);这一页自己不打电话了(《产品规划.md》拍板 30)。
+ * 改好了交给英语老师的实时页上课(先热身、再打电话,《口语课实时设计.md》);这一页自己不打电话了(《产品规划.md》拍板 30)。
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
 import { TUTOR_FACE_CSS, TUTOR_FACE_JS, backTutorJson } from '../server/tutor-face.ts';
@@ -276,7 +276,7 @@ __KID_LOG_JS__
     handoff(async () => { P.meta = await api('PUT', '/api/talk/' + id + '/list', { words, sentences, ready: true }); return id; }, e.currentTarget);
   });
 
-  // ---- 交给英语老师的实时页(《wip/口语课改实时老师设计.md》拍板 1、2;《产品规划.md》拍板 30 起这一页不再自己打电话):存好口语单(或接着上),换到老师页;那边点「先热身,再打电话」那一下才起声音 ----
+  // ---- 交给英语老师的实时页(《口语课实时设计.md》拍板 1、2;《产品规划.md》拍板 30 起这一页不再自己打电话):存好口语单(或接着上),换到老师页;那边点「先热身,再打电话」那一下才起声音 ----
   async function handoff(getId, btn) {
     if (btn) btn.disabled = true;
     if (!OWNER) await wearOwner();

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 小老师的手动验收(不进 pnpm test,要本机 Chrome 与一个跑着的 serve;《wip/小老师设想.md》):
+ * 小老师的手动验收(不进 pnpm test,要本机 Chrome 与一个跑着的 serve;《小老师设计.md》):
  * 出题 → 开始讲(假麦克风放一段 wav,当孩子在说)→ 用 CDP 的鼠标画几笔 → 讲完了 → 回看页出转写(无头 Chrome 的浏览器识别多半认不出字,
  * 就会自动叫 paraformer,要本机拿得到百炼 key)→ 写一份 notes.md(当 Claude Code)→ 初步理解页 → 追问:放那段、画一画、录、记一笔、问完了。
  * 每屏截一张图到 XLAOSHI_SHOTS 目录(给了才截)。

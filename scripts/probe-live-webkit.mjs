@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 实时老师页在 Safari(WebKit)上的音频路径(《wip/实时老师开发计划.md》P2.6):常开那路麦克风接到 AudioWorklet 采 16k(makeAudio().use,不再开第二路)、
+ * 实时老师页在 Safari(WebKit)上的音频路径(《实时老师设计.md》):常开那路麦克风接到 AudioWorklet 采 16k(makeAudio().use,不再开第二路)、
  * 推上去;嘴的 24k PCM 排进 AudioContext 放。本进程起服务(临时 workspace,语文老师开实时,老师是假 CLI,嘴是 tests/_fake-realtime.ts);
  * WebKit 没有假麦克风,页面加载前把 getUserMedia 换成一路振荡器的流,顺手数它被调了几次、worklet 出了几块、发了几块、排了几块声音。
  * 本仓不装 playwright:借一份 playwright-core 和它配套的 WebKit(见 probe-lecture-webkit.mjs)。
@@ -123,7 +123,7 @@ try {
   if (process.env.PROBE_DEBUG) console.log(readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => { const r = JSON.parse(l); return `${r.at.slice(11, 23)} ${r.where} ${JSON.stringify(r.ev)}`; }).join('\n'));
   ok('切后台再回来:麦克风重开(第二次 getUserMedia)、实时那个 AudioContext 换了一个新的,再按住照样推得上去、诊断记「发了」', back.gum === 2 && back.ctx === 2 && back.listening && sent2 > 0 && fake.conns.at(-1).audio > a0 && dl2?.ev.some((e) => e[0] === 'up' && e[2] === 'sent') && dl2.peak > 0, JSON.stringify({ ...back, sent2, server: fake.conns.at(-1).audio - a0, diag: dl2 }));
 
-  // 一直听(《wip/实时老师常开麦设计.md》;孩子端没有开关,家长在 live.listen 开,口语课总是一直听):进页面就连开 VAD 的连接,不按也推
+  // 一直听(《一直听设计.md》;孩子端没有开关,家长在 live.listen 开,口语课总是一直听):进页面就连开 VAD 的连接,不按也推
   cfg.live.listen = 'open';
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   await ctx.reload();

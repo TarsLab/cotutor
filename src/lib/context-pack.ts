@@ -99,7 +99,7 @@ export function renderContextPack(pack: ContextPack): string {
     out.push('  photoFiles:');
     for (const c of p.photoFiles) out.push(`    - ${yamlScalar(c)}`);
   }
-  // activity 放最后、键序固定:剩几张这种每条会变的,离孩子的话最近(《wip/activity设计.md》拍板 5)
+  // activity 放最后、键序固定:剩几张这种每条会变的,离孩子的话最近(《activity设计.md》拍板 5)
   if (p.activity) {
     const a = p.activity;
     out.push('  activity:', `    name: ${yamlScalar(a.name)}`);

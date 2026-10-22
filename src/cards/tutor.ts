@@ -3,7 +3,7 @@
  * 标签修饰 = 老师的键;正文一行一个按钮:`接着 <日期> <话题> <字>` 接着那天的那个话题,`小课堂 <课包 id> <字>` 先看那份课包再聊(《小课堂设计.md》),其余行是开场按钮;
  * `讲法:` 行挂在上一个按钮下面,是家长和 LLM 写给老师的,strip 剥掉,孩子端 JSON 里没有;`留到: <日期>` 也挂在上一个按钮下面,过了那天孩子端不再出现(家长端表单的「只今天 / 到周日」,《首页设计.md》拍板 20)。
  * 小课堂按钮下面 `activity: <名>` 挂一个 activity,看完开口那条起照它带。
- * `activity <名> [孩子看到的字]` 进那个 activity(agents/<老师>/activities/<名>.md,《wip/activity设计.md》);它下面 `名: 值` 的行是这个 activity 的参数,和讲法一样 strip 剥掉。
+ * `activity <名> [孩子看到的字]` 进那个 activity(agents/<老师>/activities/<名>.md,《activity设计.md》);它下面 `名: 值` 的行是这个 activity 的参数,和讲法一样 strip 剥掉。
  * 「新话题」应用永远放第一个,不进 props。老师在不在、话题在不在,由首页检查(src/server/home.ts)查。
  */
 import { z } from 'zod';

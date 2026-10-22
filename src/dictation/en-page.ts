@@ -1,5 +1,5 @@
 /**
- * 英文单词听写(/dictation?lang=en,《wip/听写设想.md》拍板 15):老师念一个单词(念两遍),孩子在四线三格里写整个单词;
+ * 英文单词听写(/dictation?lang=en,《听写设计.md》拍板 15):老师念一个单词(念两遍),孩子在四线三格里写整个单词;
  * 不会写点「给答案」,单词灰灰地打底,照着描一遍;全写完交卷,正确的单词淡淡叠在他写的上面,自己对——不逐字母比、不问「再写一遍?」,
  * 想再写自己点。从首页英语老师卡上的「单词听写」进来(?home=&n=),或者「拍照听写」(?tutor=&lang=en,拍课本认单词)。
  * 接口和汉字的一样(src/dictation/route.ts),会话带 lang = en、一个单词一格;笔迹的点记在 2048 × 512 的尺子上(en-box.ts)。
@@ -23,7 +23,7 @@ ${faviconLinks()}
 <title>单词听写</title>
 <style>
   :root { --ink:#2b2b2b; --dim:#66625b; --line:#e2dfd6; --paper:#faf9f4; --card:#ffffff; --accent:#e8743b;
-    /* 学科色(《wip/听写设想.md》拍板 20):这次听写那位老师的颜色,页面读到老师后换(缺省英语绿);按钮、气泡、当前那格都跟它 */
+    /* 学科色(《听写设计.md》拍板 20):这次听写那位老师的颜色,页面读到老师后换(缺省英语绿);按钮、气泡、当前那格都跟它 */
     --sc:#1f8a4c; --green:var(--sc); --tutor:color-mix(in srgb, var(--sc) 10%, #fff); --tutor-line:color-mix(in srgb, var(--sc) 32%, #fff); --tutor-ink:color-mix(in srgb, var(--sc) 62%, #000); --tutor-ink2:color-mix(in srgb, var(--sc) 78%, #000); }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   [hidden] { display:none !important; }
@@ -196,7 +196,7 @@ ${BTN_JS}
   // 孩子端不往浏览器历史里加东西(kid-nav.ts,《产品规划.md》拍板 25):回首页是替换当前页
   ${KID_NAV_JS}
   var goHome = function () { stopSay(); kidGo('/'); };
-  // ---- 左上角「‹ logo」胶囊,同老师页(《wip/听写设想.md》拍板 16,《产品规划.md》拍板 24);再写一遍是叠在对一对上的一层,右上角 × 回去 ----
+  // ---- 左上角「‹ logo」胶囊,同老师页(《听写设计.md》拍板 16,《产品规划.md》拍板 24);再写一遍是叠在对一对上的一层,右上角 × 回去 ----
   ${TUTOR_FACE_JS}
   // 胶囊带上念的老师(《产品规划.md》拍板 26):服务端出页面时就按 ?tutor= 或首页那张卡的 reader 插进来(BACK_TUTOR),打开就是他的颜色和首字,不先浅底再变色;一位能念的老师都没有才是 null
   var BACK_TUTOR = __BACK_TUTOR__;
@@ -405,7 +405,7 @@ ${BTN_JS}
   });
 
   api('GET', '/api/kid/home').then(function (j) { TUTORS = j.tutors || []; showFace(); }, function () {});
-  /** 今天这位老师没写完(没点「对好了」)的拍照听写,拍照屏最上面给「接着写」(《wip/听写设想.md》拍板 17);会话先读好,点下去在手势里直接念 */
+  /** 今天这位老师没写完(没点「对好了」)的拍照听写,拍照屏最上面给「接着写」(《听写设计.md》拍板 17);会话先读好,点下去在手势里直接念 */
   var ymdOf = function (d) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
   var R = { v: null };
   var showResume = function (v) {

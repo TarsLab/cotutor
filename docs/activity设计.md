@@ -2,7 +2,7 @@
 
 > 调研见《wip/activity调研.md》(2026-10-12):方向印证;它第五节「要改的」已并进本稿(拍板 1–5)。
 >
-> 样板:你说我画。材料:`agents/chinese-tutor.md` 的「你说我画」一节、`src/paint/prompt.ts`、`cotutor.json paint`、`cards/tutor/card.md`、`src/lib/card-guards.ts`、《首页设计.md》§3.3 §六、《wip/你说我画设想.md》。拍板在文末(2026-10-12 拍完)。
+> 样板:你说我画。材料:`agents/chinese-tutor.md` 的「你说我画」一节、`src/paint/prompt.ts`、`cotutor.json paint`、`cards/tutor/card.md`、`src/lib/card-guards.ts`、《首页设计.md》§3.3 §六、《你说我画设计.md》。拍板在文末(2026-10-12 拍完)。
 
 ## 一、为什么
 
@@ -128,7 +128,7 @@ cards: read paint
 - 用画家的口吻问:「画家想知道……」。不说「你没说清楚」。
 - 前后对不上:把孩子说过的两句并排放一张 `read` 卡,问画家画哪个。
 (……其余照搬,略)
-<!-- 为什么用画家的口吻:二年级说不清楚,多半是不知道听的人缺什么;画家是个具体的读者,追问就不是评判。《wip/你说我画设想.md》§1.1 -->
+<!-- 为什么用画家的口吻:二年级说不清楚,多半是不知道听的人缺什么;画家是个具体的读者,追问就不是评判。《你说我画设计.md》§1.1 -->
 
 ### 画好以后
 

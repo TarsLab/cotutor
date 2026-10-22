@@ -37,7 +37,7 @@ const rows: Row[] = [
   { name: '安静 + 点卡上的声音 → 念它,卡在念', from: 'quiet', ev: { type: 'cardTap' }, want: (m, fx) => m.status === 'card' && fx === 'playCard' },
   { name: '卡在念 + 点卡上的(另一个)声音 → 换成这个', from: 'card', ev: { type: 'cardTap' }, want: (m, fx) => m.status === 'card' && fx === 'playCard' },
   { name: '卡在念 + 念完 → 安静', from: 'card', ev: { type: 'cardEnded' }, want: (m, fx) => m.status === 'quiet' && fx === '' },
-  // ---- 字幕重放(《wip/实时老师设想.md》拍板 21):家长提醒着用,什么都不告诉服务端 ----
+  // ---- 字幕重放(《实时老师设计.md》拍板 21):家长提醒着用,什么都不告诉服务端 ----
   { name: '安静、脑不在写 + 点「再听一遍」→ 放这一轮嘴照念过的声音,在重放', from: 'quiet', ev: { type: 'replay' }, want: (m, fx) => m.status === 'replay' && fx === 'playReplay,render' },
   { name: '脑在写 + 点「再听一遍」→ 不响', from: 'quiet', ev: { type: 'replay', pending: true }, want: (m, fx) => m.status === 'quiet' && fx === '' },
   { name: '嘴在说 / 孩子按着 / 卡在念 / 在放小课堂 / 在响铃 / 在重放 + 点「再听一遍」→ 不响', from: ['mouth', 'holding', 'card', 'lecture', 'ring', 'replay'], ev: { type: 'replay' }, want: (_m, fx) => fx === '' },
@@ -78,7 +78,7 @@ const rows: Row[] = [
   { name: '一直听、嘴在说 + 放完到 [[play]] 的小课堂 → 放那一段、不推了', from: 'mouth', base: { open: true }, ev: { type: 'drained', play: 'open' }, want: (m, fx) => m.status === 'lecture' && fx === 'openLecture,render,gate:off' },
   { name: '一直听、在放小课堂 + 那一段放完 → staged、接着推', from: 'lecture', base: { open: true }, ev: { type: 'lectureDone' }, want: (_m, fx) => fx === 'staged,render,gate:on' },
   { name: '按住说 + 点卡上的声音 → 没有 gate', from: 'quiet', ev: { type: 'cardTap' }, want: (_m, fx) => fx === 'playCard' },
-  // ---- 口语课:热身的 [[echo]] / [[say]] 等孩子跟,[[call]] 响铃(《wip/口语课改实时老师设计.md》§三之四)----
+  // ---- 口语课:热身的 [[echo]] / [[say]] 等孩子跟,[[call]] 响铃(《口语课实时设计.md》§三之四)----
   { name: '嘴在说 + 放完了、刚念完的那句是热身的 [[echo]] / [[say]] → 安静,那句锚的卡亮「轮到你」', from: 'mouth', ev: { type: 'drained', echo: true }, want: (m, fx) => m.status === 'quiet' && m.turn && fx === 'render' },
   { name: '等孩子跟 + 服务端 vad 开 → 光变实(在听你说)', from: 'quiet', base: { open: true, turn: true }, ev: { type: 'vad', on: true }, want: (m, fx) => m.turn && m.hearing && fx === 'render' },
   { name: '等孩子跟 + 嘴的声音到了(下一拍)→ 光收,放嘴的', from: 'quiet', base: { turn: true }, ev: { type: 'audio' }, want: (m, fx) => m.status === 'mouth' && !m.turn && fx === 'enqueue,render' },

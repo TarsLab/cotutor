@@ -1,5 +1,5 @@
 /**
- * 听写卡(kind 名 dictation,只用在首页,《wip/听写设想.md》):家长写一串词,孩子在首页点开,老师一个一个念、孩子在田字格里写,写完自己对。
+ * 听写卡(kind 名 dictation,只用在首页,《听写设计.md》):家长写一串词,孩子在首页点开,老师一个一个念、孩子在田字格里写,写完自己对。
  * 英文单词也行(拍板 15):词都是英文单词时 props.lang = 'en',孩子在四线三格里写整个单词。
  * 标签修饰 = 念的老师(cotutor.json 的键,用他的音色;不写用语文老师或第一位配了音色的);正文一行一个词,词后面空一格可以跟「怎么念」。
  * 英文单词前面可以配一个 emoji(拍板 21):只在孩子写完对一对时出,写的时候看不到。
@@ -11,7 +11,7 @@ import { bodyLines, type CardKind } from './kind.ts';
 
 /** 一个词最多几个字(一个字一个田字格,同田字格卡) */
 export const DICTATION_WORD_MAX = 4;
-/** 英文单词最多几个字母(一个单词一个四线三格,《wip/听写设想.md》拍板 15) */
+/** 英文单词最多几个字母(一个单词一个四线三格,《听写设计.md》拍板 15) */
 export const DICTATION_EN_MAX = 20;
 /** 英文单词:字母开头,可以带连字符与撇号(ice-cream、don't);不带空格,一行一个单词 */
 export const EN_WORD_RE = /^[A-Za-z][A-Za-z'-]*$/;
@@ -31,7 +31,7 @@ export const DICTATION_SAY_MAX = 40;
 const NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 /** 一个 emoji:图形字符开头,后面只跟修饰符、连接符(👨‍👩‍👧、👍🏽、🇨🇳) */
 const EMOJI_RE = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\u200d|\ufe0f)*$/u;
-/** 是一个 emoji 就回它(去掉两头空白),不是 undefined;英文单词配的图(《wip/听写设想.md》拍板 21) */
+/** 是一个 emoji 就回它(去掉两头空白),不是 undefined;英文单词配的图(《听写设计.md》拍板 21) */
 export function dictationEmoji(v: unknown): string | undefined {
   const t = typeof v === 'string' ? v.trim() : '';
   return t && t.length <= 16 && EMOJI_RE.test(t) ? t : undefined;

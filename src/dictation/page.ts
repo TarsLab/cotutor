@@ -26,7 +26,7 @@ ${faviconLinks()}
 <style>
   :root { --ink:#2b2b2b; --dim:#66625b; --line:#e2dfd6; --paper:#faf9f4; --card:#ffffff; --sand:#d8c7a0; --sand2:#e2d4b4;
     --accent:#e8743b; --blue:#4f86d1;
-    /* 学科色(《wip/听写设想.md》拍板 20):这次听写那位老师的颜色,页面读到老师后换(缺省语文);按钮、气泡、当前那格都跟它。橙色只留给「正在写的那一笔」 */
+    /* 学科色(《听写设计.md》拍板 20):这次听写那位老师的颜色,页面读到老师后换(缺省语文);按钮、气泡、当前那格都跟它。橙色只留给「正在写的那一笔」 */
     --sc:#c43c74; --clay:var(--sc); --tutor:color-mix(in srgb, var(--sc) 10%, #fff); --tutor-line:color-mix(in srgb, var(--sc) 32%, #fff); --tutor-ink:color-mix(in srgb, var(--sc) 62%, #000); --tutor-ink2:color-mix(in srgb, var(--sc) 78%, #000); }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { margin:0; height:100%; background:var(--paper); color:var(--ink); font:17px/1.5 -apple-system,"PingFang SC","Hiragino Sans GB",sans-serif; overscroll-behavior:none; -webkit-user-select:none; user-select:none; }
@@ -152,7 +152,7 @@ ${BTN_CSS}
   .count b { color:#b9531c; }
   .row { display:flex; gap:12px; flex-wrap:wrap; }
   /* 再写一遍 */
-  /* 整词并排,格子按范字旁边(竖着是下面)剩的地方放到最大(《wip/听写设想.md》拍板 27,rowFit) */
+  /* 整词并排,格子按范字旁边(竖着是下面)剩的地方放到最大(《听写设计.md》拍板 27,rowFit) */
   #v-rewrite { height:100vh; height:100dvh; }
   #v-rewrite .grow { flex-direction:row; align-items:center; justify-content:center; gap:40px; flex-wrap:nowrap; min-height:0; }
   #v-rewrite #w-pads { flex-wrap:nowrap; }
@@ -341,7 +341,7 @@ ${BTN_JS}
   // 孩子端不往浏览器历史里加东西(kid-nav.ts,《产品规划.md》拍板 25):回首页是替换当前页
   ${KID_NAV_JS}
   var goHome = function () { stopSay(); kidGo('/'); };
-  // ---- 左上角「‹ logo」胶囊,同老师页(《wip/听写设想.md》拍板 16,《产品规划.md》拍板 24);拍照屏的大头像是听写这次的老师,没开始时是从哪位老师卡上进来的 ----
+  // ---- 左上角「‹ logo」胶囊,同老师页(《听写设计.md》拍板 16,《产品规划.md》拍板 24);拍照屏的大头像是听写这次的老师,没开始时是从哪位老师卡上进来的 ----
   ${TUTOR_FACE_JS}
   // 胶囊带上念的老师(《产品规划.md》拍板 26):服务端出页面时就按 ?tutor= 或首页那张卡的 reader 插进来(BACK_TUTOR),打开就是他的颜色和首字,不先浅底再变色;一位能念的老师都没有才是 null
   var BACK_TUTOR = __BACK_TUTOR__;
@@ -436,7 +436,7 @@ ${BTN_JS}
   var cs = document.querySelectorAll('[data-clear]'); for (var i2 = 0; i2 < cs.length; i2++) cs[i2].addEventListener('click', clearActive);
   var padsOut = function () { return { chars: S.pads.map(function (p) { return { strokes: p.strokes, undos: p.undos, gone: p.gone }; }) }; };
   /**
-   * 再写一遍那一排格子多大(《wip/听写设想.md》拍板 27):先把格子缩成 0,量范字旁边(竖着是下面)剩多少,整词并排放得下的最大;
+   * 再写一遍那一排格子多大(《听写设计.md》拍板 27):先把格子缩成 0,量范字旁边(竖着是下面)剩多少,整词并排放得下的最大;
    * 上限同写字屏(选的档,拍板 30)。原来按屏幕估、封顶 340,iPad 横放只有写字屏格子的一半大
    */
   var rowFit = function (box, count) {
@@ -524,7 +524,7 @@ ${BTN_JS}
 
   // ---------- 拍照开始:拍 → 传 → 一项一项认出来 → 点选 → 开始 ----------
   var P = { id: null, items: [], full: [], extra: [], on: {}, edits: {}, timer: 0, img: null, url: null };
-  /** 今天这位老师没写完(没点「对好了」)的拍照听写,拍照屏最上面给「接着写」(《wip/听写设想.md》拍板 17);会话先读好,点下去在手势里直接念 */
+  /** 今天这位老师没写完(没点「对好了」)的拍照听写,拍照屏最上面给「接着写」(《听写设计.md》拍板 17);会话先读好,点下去在手势里直接念 */
   var ymdOf = function (d) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
   var R = { v: null };
   var showResume = function (v) {

@@ -1,5 +1,5 @@
 /**
- * /parent/xlaoshi(家长端)与 /api/xlaoshi/*:小老师的页面与接口(《wip/小老师设想.md》)。
+ * /parent/xlaoshi(家长端)与 /api/xlaoshi/*:小老师的页面与接口(《小老师设计.md》)。
  * cotutor 只在 app.ts 的 route() 里接一行;这里引用 cotutor 的东西,cotutor 别处不引用这里。拆掉 = 删 src/xlaoshi/ 和那一行。
  *
  *   GET  /parent/xlaoshi                 页面

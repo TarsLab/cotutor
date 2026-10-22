@@ -1,5 +1,5 @@
 /**
- * activity 全流程(假 CLI,不花钱,《wip/activity设计.md》第 2 期):init 拷进出厂的你说我画 → 首页 activity 按钮的检查(文件不在、参数不对)→
+ * activity 全流程(假 CLI,不花钱,《activity设计.md》第 2 期):init 拷进出厂的你说我画 → 首页 activity 按钮的检查(文件不在、参数不对)→
  * 孩子端是开场按钮、参数不下发 → 点了:新话题、按钮字、参数补了缺省记在第一条 → 上下文包 activity: 在最后、<cotutor-activity> 按参数裁过、
  * 老师没有的 paint 卡写法跟在后面 → 同一话题下一条:activity: 还在、原文「未变」→ 家长改了参数,旧话题照旧 → pack / send --activity → 回放带上。
  */

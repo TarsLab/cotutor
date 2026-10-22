@@ -96,7 +96,7 @@ function parseButtons(v: unknown): TutorButton[] | string {
   return out;
 }
 
-/** 这周的词:语文老师一到四个汉字;英语老师(学科「英语」)一个英文单词(《wip/听写设想.md》拍板 15) */
+/** 这周的词:语文老师一到四个汉字;英语老师(学科「英语」)一个英文单词(《听写设计.md》拍板 15) */
 function parseWords(v: unknown, lang: DictationLang): { chars: string; say?: string }[] | string {
   if (!Array.isArray(v)) return '要 {words: [{chars, say?}]}';
   if (v.length > DICTATION_WORDS_MAX) return `一次最多 ${DICTATION_WORDS_MAX} 个词`;
@@ -112,7 +112,7 @@ function parseWords(v: unknown, lang: DictationLang): { chars: string; say?: str
 }
 
 /**
- * 英文单词配 emoji(《wip/听写设想.md》拍板 21,只在对一对时出):已发布的那张卡上同一个单词配过的照用,剩下的问一次 qwen3.8-flash;问不到就不配。
+ * 英文单词配 emoji(《听写设计.md》拍板 21,只在对一对时出):已发布的那张卡上同一个单词配过的照用,剩下的问一次 qwen3.8-flash;问不到就不配。
  * COTUTOR_EMOJI_ENDPOINT:测试与探针指到假的千问
  */
 async function withEmoji(ctx: AppContext, name: string, words: { chars: string; say?: string }[]): Promise<{ chars: string; say?: string; emoji?: string }[]> {

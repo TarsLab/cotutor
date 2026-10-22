@@ -323,7 +323,7 @@ async function undoThreadTraces(ws: Workspace, tutor: string, date: string, gone
   const undo: ThreadUndo = { memory: 0, diary: 0, misses: [] };
   const edits = gone.flatMap((m) => m.memoryLines ?? []);
   if (edits.length) {
-    // activity 话题写的是 activity 自己的记忆(agent: <老师>/<activity>,《wip/activity设计.md》拍板 14)
+    // activity 话题写的是 activity 自己的记忆(agent: <老师>/<activity>,《activity设计.md》拍板 14)
     const run = gone.find((m) => m.activity)?.activity;
     const agent = run ? `${tutor}/${run.name}` : tutor;
     const found = (await scanVault(ws)).notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === agent);

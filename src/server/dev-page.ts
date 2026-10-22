@@ -1443,7 +1443,7 @@ ${BRAND_CSS}
     panel.append(h('p', { class: 'hint' }, '试听是真合成一次(voxtell 有缓存,同一句同一个音色以后不再花钱);挑中就写进 cotutor.json,卡点了就用新声音。只管卡自己的声音(点读卡、单词卡);老师开口的声音在「实时的嘴」那半。'));
     $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), kindSeg(), h('span', { class: 'sub' }, '先听再挑,挑中的写进 cotutor.json')), panel));
   };
-  // ---- 实时的嘴(《wip/实时老师设想.md》):百炼 realtime 认的 56 个音色(src/live/voices.ts);试听是真连一次照念这一句(几分钱,存着)。
+  // ---- 实时的嘴(《实时老师设计.md》):百炼 realtime 认的 56 个音色(src/live/voices.ts);试听是真连一次照念这一句(几分钱,存着)。
   //      挑中的写进 live.voices.<老师>;有脸的老师都走实时(《产品规划.md》拍板 30),没挑的用缺省音色;清掉 = 回到缺省 ----
   const liveVoiceState = { data: null, error: null, q: '', lang: '', loading: false };
   const loadLiveVoices = async () => {
@@ -1600,7 +1600,7 @@ ${BRAND_CSS}
         tryFb)));
     tts.append(h('p', { class: 'hint' }, '用第一位配了音色的老师试;voxtell 不在 PATH 就把第一项写成完整路径。kid 的别的字段、version、运行时模板请直接编辑 cotutor.json。'));
 
-    // 孩子端:惯用手(kid.hand,《wip/实时老师设想.md》拍板 22)——左撇子时平板横屏实时老师页的浮层(按住说话)挪到右边;孩子端下次进老师页生效
+    // 孩子端:惯用手(kid.hand,《实时老师设计.md》拍板 22)——左撇子时平板横屏实时老师页的浮层(按住说话)挪到右边;孩子端下次进老师页生效
     const kid = h('div', { class: 'panel' });
     const left = (c.kid && c.kid.hand) === 'left';
     const handBtn = (v, label) => h('button', { type: 'button', class: left === (v === 'left') ? 'on' : '', 'aria-pressed': String(left === (v === 'left')), on: { click: async () => {

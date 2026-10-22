@@ -500,7 +500,7 @@ export function deepMerge(base: unknown, patch: unknown): unknown {
  * 补丁合到原始 JSON 上(保留 _note 等机器不认识的键),整份过契约再写;写坏了不落盘。
  * 返回新配置;agents 只允许改 default(运行时模板走编辑器,页面上改错一个引号就把老师全弄哑)。
  */
-/** also:除了工作台能改的,这次还放行哪几个顶层键(家长端设置自己拼好补丁,只放 kid.listen 与 talk 的几项) */
+/** also:除了工作台能改的,这次还放行哪几个顶层键(家长端设置自己拼好补丁,只放 talk 的几项) */
 export async function patchConfig(ws: Workspace, patch: Record<string, unknown>, opts: { also?: readonly string[] } = {}): Promise<CotutorConfig> {
   const allowed: readonly string[] = [...CONFIG_PATCH_KEYS, ...(opts.also ?? [])];
   const unknown = Object.keys(patch).filter((k) => !allowed.includes(k));

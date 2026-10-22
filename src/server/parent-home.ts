@@ -7,12 +7,12 @@
  *   PUT   /api/parent/home/tutors/<老师>/buttons     {buttons: [{kind, label, brief?, until?, date?, thread?, bundle?}]} 换掉这位老师的按钮
  *   PUT   /api/parent/home/tutors/<老师>/dictation   {words: [{chars, say?}]} 这周的词;[] = 删掉
  *   PUT   /api/parent/home/order                    {tutors: [老师…]} 老师的先后(排第一的进首页时在最前)
- *   PATCH /api/parent/settings                      {tutors?: {<老师>: {extras?: [..] | null, hidden?}}, talk?: {note?, minutes?}, listen?}
+ *   PATCH /api/parent/settings                      {tutors?: {<老师>: {extras?: [..] | null, hidden?}}, talk?: {note?, minutes?}}
  */
 import { DICTATION_EN_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, dictationWordLang, type DictationLang, type TutorButton } from '../cards/index.ts';
 import { localDate } from '../lib/conversation.ts';
 import { orderTutors, setTutorButtons, setTutorDictation } from '../lib/home-edit.ts';
-import { AGENT_NAME_RE, KID_LISTEN, TUTOR_EXTRAS, subjectLang, tutorExtras, type CotutorConfig } from '../schema/index.ts';
+import { AGENT_NAME_RE, TUTOR_EXTRAS, subjectLang, tutorExtras, type CotutorConfig } from '../schema/index.ts';
 import type { AppContext, RouteResult } from './app.ts';
 import { editPublished, readPublished, type PublishResult } from './home.ts';
 import { patchConfig } from './store.ts';
@@ -78,7 +78,6 @@ export async function parentHome(ctx: AppContext): Promise<Record<string, unknow
     home: home ? { id: home.id, publishedAt: home.publishedAt } : null,
     tutors,
     talk: { enabled: c.talk.enabled, note: c.talk.note ?? '', minutes: c.talk.minutes },
-    listen: c.kid.listen,
     extrasAll: TUTOR_EXTRAS,
   };
 }
@@ -190,12 +189,8 @@ export async function parentHomeRoute(method: string, p: string, ctx: AppContext
       if (body.talk.minutes !== undefined) t.minutes = body.talk.minutes;
       patch.talk = t;
     }
-    if (body.listen !== undefined) {
-      if (!(KID_LISTEN as readonly unknown[]).includes(body.listen)) return bad(`listen 只认 ${KID_LISTEN.join(' / ')}`);
-      patch.kid = { listen: body.listen };
-    }
     try {
-      await patchConfig(ctx.ws, patch, { also: ['kid', 'talk'] });
+      await patchConfig(ctx.ws, patch, { also: ['talk'] });
     } catch (err) {
       return bad(err instanceof Error ? err.message : String(err));
     }

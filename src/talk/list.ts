@@ -1,10 +1,9 @@
 /**
  * 照片 → 口语单:交给 qwen3.8-omni-flash(兼容接口,不想)读出今天学的词和句,各带中文(《口语课设计.md》§二 2)。
  * 只读印刷体(2026-10-10 实测:印刷稳、手写不稳);读出来的家长要看一眼改,孩子只拿改过的。
- * key 同 listen.ts(omni 只有百炼按量,见 src/lib/qianwen.ts)。
+ * key:omni 只有百炼按量(src/lib/qianwen.ts)。
  */
-import { chatUrl, qianwenKeys, qianwenLine } from '../lib/qianwen.ts';
-import { readStream } from '../server/listen.ts';
+import { chatUrl, qianwenKeys, qianwenLine, readStream } from '../lib/qianwen.ts';
 import { word as wordCard } from '../cards/word.ts';
 import type { ListItem, TalkList } from './lib/used.ts';
 

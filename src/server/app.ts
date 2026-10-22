@@ -44,10 +44,8 @@ import { devOverview } from './dev-overview.ts';
 import { ActivityConflict, checkDevActivity, findDevActivity, listDevActivities, readDevActivity, restoreDevActivity, saveDevActivity } from './dev-activities.ts';
 import { checkDevTutorFile, hasDevTutorFile, listDevTutorFiles, readDevTutorFile, restoreDevTutorFile, saveDevTutorFile } from './dev-tutor-files.ts';
 import { doctorWorkspace } from '../cli/doctor.ts';
-import { VOICE_TEST_PAGE } from './voice-test-page.ts';
 import { VOICE_GALLERY_PAGE } from './voice-gallery-page.ts';
 import { BusyError, Runner, type SendInput } from './runner.ts';
-import { listenOmni, type Transcribe } from './listen.ts';
 import { sendFile } from './send-file.ts';
 import { xlaoshiRoute } from '../xlaoshi/route.ts';
 import { talkRoute } from '../talk/route.ts';
@@ -98,8 +96,6 @@ export interface AppContext {
   configError: string | null;
   /** 在哪个地址上听着(serve 在 listen 之后填;扫码页 /qr 每次现问——局域网 IP 会在服务跑着的时候变)。没起端口(测试走 route)→ null */
   listen: (() => ListenInfo) | null;
-  /** 按住说话的原声听写(kid.listen: omni);测试注入假的,不花钱 */
-  transcribe: Transcribe;
   /** 重读 cotutor.json(改了才读) */
   reload(): Promise<void>;
   /** 家长端与工作台的锁(access.ts):机器级 PIN,没设就全开;测试可注入 */
@@ -108,7 +104,7 @@ export interface AppContext {
   bailian: Bailian;
 }
 
-export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean; transcribe?: Transcribe; draw?: Draw; access?: Access; bailian?: Bailian } = {}): AppContext {
+export function createContext(ws: Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warm?: boolean; draw?: Draw; access?: Access; bailian?: Bailian } = {}): AppContext {
   let mtime = -1;
   const ctx: AppContext = {
     ws,
@@ -116,7 +112,6 @@ export function createContext(ws: Workspace, opts: { now?: () => Date; env?: Nod
     now: opts.now ?? (() => new Date()),
     configError: null,
     listen: null,
-    transcribe: opts.transcribe ?? ((audio) => listenOmni(audio, { env: opts.env })),
     access: opts.access ?? createAccess({ now: () => ctx.now() }),
     bailian: opts.bailian ?? createBailian({ env: opts.env }),
     async reload() {
@@ -203,8 +198,6 @@ export interface KidHome {
   cards: BoardCard[];
   /** 「给老师们换个样子」的入口(figshot pick 在这台电脑的哪个端口);cotutor.json 没配 figshot 就是 null */
   figshot: { port: number } | null;
-  /** 按住说话怎么听(cotutor.json 的 kid.listen):omni = 松手后原声交给 /api/kid/listen 再听一遍 */
-  listen: 'browser' | 'omni';
   /** 孩子的惯用手(cotutor.json 的 kid.hand,缺省 right):left = 平板横屏实时老师页的浮层挪到右边 */
   hand: 'right' | 'left';
   /** 百炼配好了(《产品规划.md》拍板 30):没配孩子端只出「老师们还没到」,家长端配 */
@@ -216,7 +209,7 @@ export async function kidHome(ctx: AppContext, now: Date): Promise<KidHome> {
   const date = localDate(now);
   const view = await kidHomeView(ws, now);
   const figshot = ws.config.figshot ? { port: ws.config.figshot.port } : null;
-  return { title: ws.config.title, date, tutors: await kidTutors(ctx), home: view.home, cards: view.cards, figshot, listen: ws.config.kid.listen, hand: ws.config.kid.hand ?? 'right', ready: ctx.bailian.status().ready };
+  return { title: ws.config.title, date, tutors: await kidTutors(ctx), home: view.home, cards: view.cards, figshot, hand: ws.config.kid.hand ?? 'right', ready: ctx.bailian.status().ready };
 }
 
 export interface KidDay {
@@ -350,7 +343,7 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
     talk = t.id;
   }
   if (!text.trim() && !action && !photos?.length) return { error: { status: 400, json: { error: 'bad_request' } } };
-  return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(listenedOf(body.listened) ? { listened: listenedOf(body.listened) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
+  return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(voiceOf(body.voice) ? { voice: voiceOf(body.voice) } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 
 /** 家长板书页的一天(《家长板书页设计.md》§4.1):形状同 KidDay;答案不剥,系统发的也在 */
@@ -749,15 +742,6 @@ function voiceOf(v: unknown): { data: Buffer; ext: string; seconds: number } | u
   return a ? { ...a, seconds: v.seconds } : undefined;
 }
 
-/** 按住说话是怎么听的(kid.listen: omni 时孩子端带来):形状不对就当没带,字照发 */
-function listenedOf(v: unknown): NonNullable<ConversationMessage['listened']> | undefined {
-  if (!isObj(v)) return undefined;
-  const str = (x: unknown, max: number): string | undefined => (typeof x === 'string' && x.length <= max ? x : undefined);
-  const out = { browser: str(v.browser, 2000), omni: str(v.omni, 2000), model: str(v.model, 60), ms: typeof v.ms === 'number' && v.ms >= 0 && v.ms < 600000 ? Math.round(v.ms) : undefined, error: str(v.error, 40) };
-  const kept = Object.fromEntries(Object.entries(out).filter(([, x]) => x !== undefined));
-  return Object.keys(kept).length ? kept : undefined;
-}
-
 /** 一处画里一笔最多几个点(播放器抽到 MARK_STROKE_POINTS,这里松一点);一条消息最多几处、一处几笔几个点见 src/lib/lecture.ts(《小课堂设计.md》§四) */
 const MAX_STROKE_POINTS = 400;
 /** 看的过程最多几条(拖进度条只记松手那一下,一堂课几十条) */
@@ -1003,14 +987,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       await mkdir(join(ws.root, '.cotutor'), { recursive: true });
       await appendFile(join(ws.root, '.cotutor', 'voice-diag.jsonl'), `${JSON.stringify(row)}\n`).catch(() => {});
       return { status: 200, json: { ok: true } };
-    }
-    // 按住说话的原声听写(kid.listen: omni,《家长录像设计.md》§4.12):收 {audio: data:audio/…},回 {text, model, ms};没开、没成都不是孩子的错,孩子端退回浏览器认的字
-    if (p === '/api/kid/listen' && method === 'POST') {
-      if (ws.config.kid.listen !== 'omni') return { status: 404, json: { error: 'listen_off' } };
-      const audio = isObj(body) ? audioData(body.audio) : undefined;
-      if (!audio) return { status: 400, json: { error: 'bad_request' } };
-      const r = await ctx.transcribe(audio);
-      return r.ok ? { status: 200, json: { text: r.text, model: r.model, ms: r.ms } } : { status: 502, json: { error: r.error, ms: r.ms } };
     }
     const kid =/^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|play|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (kid) {
@@ -1318,7 +1294,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
           photos,
           device: device?.data,
           voice: voiceOf(body.voice),
-          listened: listenedOf(body.listened),
         });
         return { status: 202, json: { tutor, date: started.date, job: started.job, thread: started.thread, runtime: started.plan.runtime, resume: started.plan.resume } };
       }
@@ -1367,7 +1342,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     // 扫码页:在电脑上打开,iPad 用相机扫(不在孩子端的入口里)
     if (p === '/dev/qr') return ctx.listen ? { status: 200, html: qrPage(ws.config.title, ctx.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     // 按住说话的试验页(真机上比策略用;不在孩子端与家长端的入口里)
-    if (p === '/dev/voice-test') return { status: 200, html: VOICE_TEST_PAGE };
     // 按钮样张(《wip/实时老师设想.md》拍板 23):老师页那颗「头像 + 按住说话」的每一种样子,调动画时看这一页
     if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
     // 主屏幕(iPad「添加到主屏幕」):清单与图标都按标题现生成,没有静态资源

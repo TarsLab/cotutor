@@ -2,7 +2,7 @@
  * 家长端「首页」(/parent/home,《家长板书页设计.md》拍板 20、33、34):
  * 左边(手机上是上面)是孩子端首页本身——iframe 装 /preview(孩子端页面的预览模式),按孩子设备的尺寸开、等比缩进来,可切 iPad / 手机;
  * 点牌上的按钮在旁边改它(字、讲法、留多久),改字时牌上跟着变;点后面那张牌换老师;听写、口语课点了去改这周的词、口语课。
- * 预览下面一排是老师的先后(按住左右拖)、孩子看不到的按钮、加一个开场按钮;右边是改着的那颗、这位老师「每天都在」的、在不在首页、孩子端常改的两项。
+ * 预览下面一排是老师的先后(按住左右拖)、孩子看不到的按钮、加一个开场按钮;右边是百炼(没配时在最上面)、改着的那颗、这位老师「每天都在」的、在不在首页。
  * 另一个标签「记录」是 /parent。零依赖内联脚本,只走 /api/parent/*;每次现读,改了马上发到孩子的首页(src/server/parent-home.ts)。
  * iframe 一挪地方就会重新加载:它在 #pv 里常驻,重画只动 #pv-under 与 #body。
  * 用 String.raw:脚本里的反斜杠原样留着;脚本里不写反引号和 ${。
@@ -334,17 +334,12 @@ ${BRAND_JS}
     const extras = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '每天都在 · ' + t.display)), h('div', { class: 'grp' }, ...daily));
     const self = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '这位老师')), h('div', { class: 'grp' },
       h('div', { class: 'it' }, h('span', { class: 'tx' }, h('b', {}, '在孩子的首页上')), sw(!t.hidden, '在首页上', () => save('PATCH', '/api/parent/settings', { tutors: { [t.name]: { hidden: !t.hidden } } })))));
-    // 孩子端(所有老师一份)
-    const kid = h('div', {}, h('div', { class: 'gh' }, h('span', {}, '孩子端(所有老师)')), h('div', { class: 'grp' },
-      h('div', { class: 'box' }, h('div', { class: 'row2' }, h('span', {}, '按住说话怎么听'), h('span', { class: 'seg', style: 'width:180px' },
-        ...[['browser', '浏览器'], ['omni', 'omni']].map(([v, l]) => h('button', { type: 'button', class: D.listen === v ? 'on' : '', on: { click: () => { if (D.listen !== v) save('PATCH', '/api/parent/settings', { listen: v }); } } }, l)))),
-        h('div', { class: 'note', style: 'padding:0' }, 'omni:松手后原声交给百炼再听一遍,认得更准,要百炼的 key'))));
     const pane = !wide ? null : sel === null || (sel >= 0 && !t.buttons[sel])
       ? h('div', { class: 'grp hint' }, '点左边牌上的按钮,在这里改它的字和讲法;', h('br'), '改的时候牌上跟着变,点「发布」才到孩子那边。')
       : inlineForm(t, sel);
     blDraw();
     const blTop = BL.st && !BL.st.ready;
-    $('#body').replaceChildren(h('div', {}, blTop ? blEl : null, pane, extras, self, kid, blTop ? null : blEl));
+    $('#body').replaceChildren(h('div', {}, blTop ? blEl : null, pane, extras, self, blTop ? null : blEl));
   };
 
   // ---- 改一个按钮的表单(k = -1 是新加的开场按钮):窄屏整屏盖上,宽屏在右栏;预览里那颗跟着变 ----

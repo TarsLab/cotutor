@@ -103,3 +103,20 @@ export const compatibleBase = (host: string): string => `https://${host}/compati
 export const imageUrl = (host: string): string => `https://${host}/api/v1/services/aigc/multimodal-generation/generation`;
 export const ttsUrl = (host: string): string => `https://${host}/api/v1/services/audio/tts/SpeechSynthesizer`;
 export const inferenceWs = (host: string): string => `wss://${host}/api-ws/v1/inference/`;
+
+/** 兼容接口的流(data: {...} 一行一块):拼出 delta.content;流里报错 → null */
+export function readStream(raw: string): string | null {
+  let out = '';
+  for (const line of raw.split('\n')) {
+    const s = line.trim();
+    if (!s.startsWith('data:') || s === 'data: [DONE]') continue;
+    try {
+      const e = JSON.parse(s.slice(5)) as { error?: unknown; choices?: { delta?: { content?: unknown } }[] };
+      if (e.error) return null;
+      for (const c of e.choices ?? []) if (typeof c.delta?.content === 'string') out += c.delta.content;
+    } catch {
+      return null;
+    }
+  }
+  return out;
+}

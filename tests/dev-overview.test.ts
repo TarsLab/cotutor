@@ -17,7 +17,6 @@ const { devOverview, SLOW_FIRST_MS } = await import('../src/server/dev-overview.
 const { localDate } = await import('../src/lib/conversation.ts');
 const { DEV_PAGE } = await import('../src/server/dev-page.ts');
 const { qrPage } = await import('../src/server/qr-page.ts');
-const { VOICE_TEST_PAGE } = await import('../src/server/voice-test-page.ts');
 const { DEV_CSS } = await import('../src/server/dev-theme.ts');
 const { recordKidLog } = await import('../src/server/kid-log.ts');
 const { codeChanged } = await import('../src/server/build.ts');
@@ -121,7 +120,7 @@ try {
   let parsed = '';
   try { new Function(devScript); } catch (e) { parsed = String(e); }
   check('工作台页面的内联脚本能解析', devScript.length > 1000 && parsed === '', parsed);
-  check('工作台三页共用一份色板', [DEV_PAGE, qrPage('t', { name: 'https://m.local:5180/', ip: 'https://192.168.1.9:5180/', https: true }), VOICE_TEST_PAGE].every((p) => p.includes(DEV_CSS)));
+  check('工作台两页共用一份色板', [DEV_PAGE, qrPage('t', { name: 'https://m.local:5180/', ip: 'https://192.168.1.9:5180/', https: true })].every((p) => p.includes(DEV_CSS)));
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

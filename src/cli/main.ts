@@ -99,7 +99,7 @@ async function printQr(page: string, open: boolean): Promise<void> {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'listen', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -184,9 +184,7 @@ export async function main(argv: string[]): Promise<void> {
         if (!['normal', 'offline', 'nopost', 'nokey'].includes(scenario)) throw new UsageError('--scenario 只能是 normal / offline / nopost / nokey');
         const delayMs = typeof flags.delay === 'string' ? Number(flags.delay) : undefined;
         if (delayMs !== undefined && !(Number.isInteger(delayMs) && delayMs >= 0)) throw new UsageError('--delay 要是非负整数(毫秒)');
-        const listen = typeof flags.listen === 'string' ? flags.listen : 'browser';
-        if (listen !== 'browser' && listen !== 'omni') throw new UsageError('--listen 只能是 browser / omni');
-        const r = await serveMock({ port, scenario: scenario as MockScenario, delayMs, http: flags.http === true, listen, live: flags.live === true });
+        const r = await serveMock({ port, scenario: scenario as MockScenario, delayMs, http: flags.http === true, live: flags.live === true });
         // 被杀(Ctrl-C、探针收尾)也走 exit,mock 的临时目录才删得掉
         for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.once(s, () => process.exit(128 + osConstants.signals[s]));
         process.stdout.write(`cotutor mock 场景 ${scenario}(不经真实老师与配音;配音退回浏览器合成声)${flags.live === true ? ';语文、数学老师走实时(假嘴念静音的声音)' : ''}\n`);

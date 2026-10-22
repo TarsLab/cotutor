@@ -80,8 +80,6 @@ import { arrangeHome, homeOwners, kidButtons, parseHome } from '../lib/home.ts';
 import type { TutorButton } from '../cards/index.ts';
 import { packageTheme } from '../cli/themes.ts';
 import { cardsCss } from '../cards/docs.ts';
-import { audioData } from '../lib/audio-data.ts';
-import { listenOmni, type Transcribe } from './listen.ts';
 import { VOICE_GALLERY_PAGE } from './voice-gallery-page.ts';
 
 export type MockScenario = 'normal' | 'offline' | 'nopost' | 'nokey';
@@ -562,9 +560,6 @@ export interface MockOptions {
   delayMs?: number;
   now?: () => Date;
   title?: string;
-  /** 按住说话怎么听(同 cotutor.json 的 kid.listen);omni 时 /api/kid/listen 真去问百炼(要 key,不然回 502、孩子端退回浏览器认的字) */
-  listen?: 'browser' | 'omni';
-  transcribe?: Transcribe;
   /** 语文、数学老师走实时老师页(mock-live.ts 的假嘴) */
   live?: boolean;
 }
@@ -670,7 +665,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       return { kind: 'tutor', props: { tutor: name, buttons: kidButtons((c.props.buttons ?? []) as TutorButton[], { resumes, alive, lecture: (id) => Boolean(mockLecture(id)), today: localDate(d) }).map((b) => { const l = b.kind === 'lecture' ? mockLecture(b.bundle) : null; return l ? { ...b, title: l.title, ms: l.ms, ...(l.video ? { video: true as const } : {}) } : b; }) } };
     });
     // figshot:和配了 figshot 的 workspace 一样给端口;这台电脑上 figshot 没开着,页面照样藏着这张卡
-    return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, listen: opts.listen ?? 'browser', hand: 'right', ready: scenario !== 'nokey' };
+    return { title, date: localDate(d), tutors: tutorsJson(), home: mockHomeId(), cards, figshot: { port: 8477 }, hand: 'right', ready: scenario !== 'nokey' };
   };
   const mockHomeId = (): string => `${yesterday()}-2130`;
   let dictationRoot: string | null = null;
@@ -775,13 +770,6 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p === '/api/kid/log' && method === 'POST') return { status: 200, json: { ok: true } };
     // 听写(src/dictation/,和真服务同一套接口):卡从 mock 的首页取,存在临时目录,不配音(页面退浏览器合成声)
     const tx = await handleDictation(method, url, dictationDeps(), body); if (tx) return tx;
-    if (p === '/api/kid/listen' && method === 'POST') {
-      if (opts.listen !== 'omni') return { status: 404, json: { error: 'listen_off' } };
-      const audio = isObj(body) ? audioData(body.audio) : undefined;
-      if (!audio) return { status: 400, json: { error: 'bad_request' } };
-      const r = await (opts.transcribe ?? listenOmni)(audio);
-      return r.ok ? { status: 200, json: { text: r.text, model: r.model, ms: r.ms } } : { status: 502, json: { error: r.error, ms: r.ms } };
-    }
     const ov = /^\/api\/overview\/(today|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (ov && method === 'GET') {
       const today = localDate(now());

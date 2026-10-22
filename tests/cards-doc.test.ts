@@ -50,12 +50,12 @@ for (const d of docs) {
     check('守卫不配对就抛(gen:skills 先红)', threw === 2);
     check('全部卡的递法 = 出厂 SKILL.md 去掉 frontmatter(没写 cards 的老师拿的那份)', boardGuideFor(kindsFor('board').map((k) => k.name)) === boardGuideBody(skillDoc()));
     const k = boardGuideFor(['text', 'read', 'record']);
-    check('按老师裁:只有清单里的卡,没给 choice / fill 那句与作业照片,没有守卫行', k.includes('### record') && k.includes('### read') && !k.includes('### choice') && !k.includes('能选,就配一张') && !k.includes('## 作业照片') && !k.includes('{{') && k.includes('## 一节长什么样'));
-    const noCanvas = boardGuideFor(['text', 'choice', 'fill', 'image']);
+    check('按老师裁:只有清单里的卡,没给 choice 那句与作业照片,没有守卫行', k.includes('### record') && k.includes('### read') && !k.includes('### choice') && !k.includes('能选,就配一张') && !k.includes('## 作业照片') && !k.includes('{{') && k.includes('## 一节长什么样'));
+    const noCanvas = boardGuideFor(['text', 'choice', 'image']);
     check('有图片没画板:作业照片在,「用 canvas 卡」那段不在', noCanvas.includes('## 作业照片') && !noCanvas.includes('用 `canvas` 卡'));
   }
   const css = cardsCss();
-  check('各卡的 css 拼成一段,每种一个标头,选项行与空都在', CARD_KINDS.every((k) => css.includes(`cards/${k.name}/card.css`)) && css.includes('.ch-o {') && css.includes('.bl {') && css.includes('.c-lecture .th') && !css.includes('c-scene'));
+  check('各卡的 css 拼成一段,每种一个标头,选项行都在', CARD_KINDS.every((k) => css.includes(`cards/${k.name}/card.css`)) && css.includes('.ch-o {') && !css.includes('.bl {') && css.includes('.c-lecture .th') && !css.includes('c-scene'));
   const sp = splitSections('# x — y\n\n## 甲\na\n\n## 乙\nb\nc\n');
   check('splitSections:标题行与栏目', sp.headline === 'x — y' && sp.sections['甲'] === 'a' && sp.sections['乙'] === 'b\nc');
 }

@@ -128,8 +128,6 @@ export function cardTexts(card: BoardCard): string[] {
       return strs(p.segments);
     case 'choice':
       return [str(p.question), ...strs(p.options)];
-    case 'fill':
-      return [str(p.text)];
     case 'code':
       return [str(p.text)];
     case 'image':
@@ -224,7 +222,6 @@ export function tintFor(card: BoardCard): string {
     case 'text':
       return isAskCard(card) ? 'plum' : style === 'formula' ? 'paper' : str(p.title) ? 'sky' : 'sand';
     case 'choice':
-    case 'fill':
     case 'canvas':
     case 'record':
     case 'photo':
@@ -255,8 +252,6 @@ export function penFor(card: BoardCard, phrase: string): PenName {
   switch (card.kind) {
     case 'choice':
       return strs(p.options).some((o) => findPhrase(o, phrase) >= 0) ? 'box' : 'underline';
-    case 'fill':
-      return 'underline';
     case 'read':
       return 'marker';
     case 'text': {
@@ -278,7 +273,7 @@ export function standsAlone(card: BoardCard): boolean {
   return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'record' || card.kind === 'lecture' || card.kind === 'paint' || card.kind === 'photo';
 }
 
-const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice', 'fill'];
+const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice'];
 
 /** 能半宽的种类:文字、点读、代码、田字格、单词卡、选择题、填空题。字形(大字等)不算:字大放不下,量出来自然是全宽 */
 export function canHalf(card: BoardCard): boolean {
@@ -507,18 +502,9 @@ export function segmentAudio(card: BoardCard, k: number): string | null {
   return (card.assets || []).find((a) => a.endsWith(want)) ?? null;
 }
 
-/** 填空当前填了什么(按空的顺序;没填的空是空串) */
-export function filledAnswers(card: BoardCard): string[] {
-  const blanks = typeof (card.props || {}).blanks === 'number' ? (card.props.blanks as number) : 0;
-  const st = card.state as { answers?: unknown } | undefined;
-  const got = Array.isArray(st?.answers) ? st.answers.map((x) => (typeof x === 'string' ? x.trim() : '')) : [];
-  return Array.from({ length: blanks }, (_, i) => got[i] ?? '');
-}
-
-/** 孩子在这张卡上做了什么(「交给老师」能不能按):选择题是选项,填空是填的字;没做 → [] */
+/** 孩子在这张卡上做了什么(「交给老师」能不能按):选择题是选项;没做 → [] */
 export function stateSummary(card: BoardCard): string[] {
   if (card.kind === 'choice') return pickedLabels(card);
-  if (card.kind === 'fill') return filledAnswers(card).filter(Boolean);
   if (card.kind === 'canvas') return inkCount(card) ? [`画了 ${inkCount(card)} 笔`] : [];
   if (card.kind === 'record') { const sec = recordSeconds(card); return sec ? [`录了 ${sec.toFixed(1)} 秒`] : []; }
   return [];

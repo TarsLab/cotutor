@@ -1566,15 +1566,6 @@ ${BOARD_MARK_JS}
         const short = (p.options || []).length > 0 && (p.options || []).every((o) => Array.from(String(o)).length <= 4);
         return box('choice', h('div', { class: 'ch-q' }, p.question || ''), h('div', { class: 'ch-os' + (short ? ' short' : '') }, ...(p.options || []).map((o, i) => h('div', { class: 'ch-o' + (picked.includes(i) ? ' on' : '') }, h('i', {}, 'ABCDEFGH'[i] || ''), o))));
       }
-      case 'fill': {
-        // 填空停用了(《卡片协议.md》拍板 3):旧记录里的只看,舞台里也没有输入框;句子与空放在一个 .cb 里(卡本身是 flex 列,直接塞文字节点会一段一行)
-        const body = h('div', { class: 'cb' + (stage ? ' fq' : '') });
-        const el = box('fill', body);
-        const parts = String(p.text || '').split(/_{2,}/);
-        const got = filledAnswers(c);
-        parts.forEach((t, i) => { body.append(t); if (i < parts.length - 1) body.append(h('span', { class: 'bl' + (got[i] ? ' f' : '') }, got[i] || '\\u200b')); });
-        return el;
-      }
       case 'lecture': {
         // 小课堂卡(《小课堂设计.md》§六):老师放课里的一段;紧凑态是那一段末帧的画面、「0:19–0:30 ▷」;舞台是舞台包里的小课堂播放器
         const ready = lectureReady(c);
@@ -2809,7 +2800,6 @@ __WORD_DRAW_JS__
   const reelAnswer = (c) => {
     const p = c.props || {};
     if (c.kind === 'choice' && Array.isArray(p.answer) && p.answer.length) return p.answer.map((i) => ('ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i] || String(i + 1)) + (p.options && p.options[i] ? ' ' + p.options[i] : '')).join('、');
-    if (c.kind === 'fill' && Array.isArray(p.answers) && p.answers.length) return p.answers.join(' / ');
     return '';
   };
   const reelHms = (t) => { const d = new Date(t); const p2 = (n) => String(n).padStart(2, '0'); return p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()); };

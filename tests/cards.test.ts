@@ -1,13 +1,13 @@
 /** 卡的注册表:每种卡的解析 / 剥秘密 / 语法表;不认识的标签;解析失败的退路。 */
-import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, fill, kindsFor, parseCard, parseCardState, stripSecrets, tutorCardKinds, wordChunks } from '../src/cards/index.ts';
+import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, kindsFor, parseCard, parseCardState, stripSecrets, tutorCardKinds, wordChunks } from '../src/cards/index.ts';
 import { BOARD_CARD_KINDS } from '../src/schema/config.ts';
 import { boardSkillDoc, boardSyntaxDoc } from '../src/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 {
-  check('有状态的卡:choice / fill / lecture / canvas / record;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,fill,lecture,canvas,record');
-  check('十五种卡登记在册:板书十三种 + 首页的老师卡与听写卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,fill,image,tianzige,word,lecture,canvas,record,paint,photo,code,tutor,dictation' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
-  check('用在哪:板书十二种(fill 停用了,哪儿都不能用);首页 = 老师卡 + 听写卡 + 一段字 / 点读 / 图片 / 田字格 / 单词', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,canvas,record,paint,photo,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,word,tutor,dictation');
+  check('有状态的卡:choice / lecture / canvas / record;text / read / image / code 没有', CARD_KINDS.filter((k) => k.state).map((k) => k.name).join() === 'choice,lecture,canvas,record');
+  check('十四种卡登记在册:板书十二种 + 首页的老师卡与听写卡', CARD_KINDS.map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,canvas,record,paint,photo,code,tutor,dictation' && cardKind('choice')?.name === 'choice' && cardKind('widget') === undefined);
+  check('用在哪:板书十二种;首页 = 老师卡 + 听写卡 + 一段字 / 点读 / 图片 / 田字格 / 单词', kindsFor('board').map((k) => k.name).join() === 'text,read,choice,image,tianzige,word,lecture,canvas,record,paint,photo,code' && kindsFor('home').map((k) => k.name).join() === 'text,read,image,tianzige,word,tutor,dictation');
   check('契约里的板书种类表与注册表对得上(schema 不 import 卡,靠这条锁住)', BOARD_CARD_KINDS.join() === kindsFor('board').map((k) => k.name).join());
   check('老师的卡:没写 = null(全部);写了 = 注册表顺序、text 总在、首页的卡不算', tutorCardKinds(undefined) === null && tutorCardKinds(['record', 'read'])?.join() === 'text,read,record' && tutorCardKinds(['choice', 'tutor', 'text'])?.join() === 'text,choice' && tutorCardKinds([])?.join() === 'text');
   const tut = parseCard('tutor chinese-tutor', '- 我要预习小蝌蚪找妈妈\n讲法: 先读课文\n讲法: 再认字\n新话题\n接着 2026-09-16 1930-1 接着写看图写话', 'home');
@@ -93,17 +93,12 @@ import { check, done } from './_check.ts';
   check('choice 没问题 → 文字卡 + warning', noQ.card.kind === 'text' && noQ.warning?.includes('问题') === true);
 }
 {
-  // fill 停用了(《卡片协议.md》拍板 3):老师再写退成文字卡,只留句子、答案不下发;旧记录里的照旧(解析、剥秘密、describe)
-  const fp = parseCard('fill', '底 × 高 ÷ ____ = 面积,单位是___。\n= 2\n= 平方厘米');
-  check('fill 停用:退成文字卡、只留句子(空统一成 ___)、答案不在、带 warning', fp.card.kind === 'text' && fp.card.props.text === '底 × 高 ÷ ___ = 面积,单位是___。' && !JSON.stringify(fp.card).includes('平方厘米') && Boolean(fp.warning) && fp.fallback === true, JSON.stringify(fp));
-  check('fill 停用:没留空也退文字卡、答案行去掉', parseCard('fill', '没有空\n= 1').card.kind === 'text' && parseCard('fill', '没有空\n= 1').card.props.text === '没有空');
-  const f = { card: { kind: 'fill', props: fill.props.parse(fill.parse('底 × 高 ÷ ____ = 面积,单位是___。\n= 2\n= 平方厘米', [])) as Record<string, unknown> } };
-  check('旧的 fill:空统一成 ___、数空、答案按顺序', f.card.props.text === '底 × 高 ÷ ___ = 面积,单位是___。' && f.card.props.blanks === 2 && JSON.stringify(f.card.props.answers) === '["2","平方厘米"]', JSON.stringify(f));
-  check('旧的 fill 剥秘密:answers 不下发', !('answers' in stripSecrets({ cards: [f.card], lines: [] }).cards[0].props));
+  // 填空 10-22 删了(《卡片协议.md》拍板 3):老师再写 ```fill 当不认识的标签;老对话里存下的退成一段字,答案不下发
+  check('fill 不再是卡:当代码卡原样显示', parseCard('fill', '一共 ___ 个\n= 3').card.kind === 'code' && cardKind('fill') === undefined);
+  check('老对话里存下的 fill 卡:下发孩子前退成一段字,只留句子,答案不下发', JSON.stringify(stripSecrets({ cards: [{ kind: 'fill', props: { text: '一共 ___ 个', blanks: 1, answers: ['3'] } }], lines: [] }).cards) === '[{"kind":"text","props":{"text":"一共 ___ 个"}}]');
   const r = parseCard('read', '\napple 苹果\n\nbanana 香蕉\n');
   check('read:非空行成段', JSON.stringify(r.card.props.segments) === '["apple 苹果","banana 香蕉"]');
   check('read 空 → 文字卡', parseCard('read', '\n').card.kind === 'text');
-  check('fill 状态与 describe:第 n 空填「…」(答案「…」),没填的写没填', parseCardState(f.card, { answers: ['2'] }).ok && describeCard(f.card, { answers: ['2', ''] }).startsWith('fill「') && describeCard(f.card, { answers: ['2'] }).includes('第 1 空填「2」'), describeCard(f.card, { answers: ['2'] }));
 }
 {
   const py = parseCard('python', 'print(1)\n');
@@ -112,7 +107,7 @@ import { check, done } from './_check.ts';
   check('没标签 → 代码卡 lang null', bare.card.kind === 'code' && bare.card.props.lang === null);
   const widget = parseCard('widget', '画一个三角形');
   check('还没做的种类(widget)也只是代码卡,不报错', widget.card.kind === 'code' && widget.card.props.lang === 'widget' && !widget.warning);
-  check('不认识的 kind 剥秘密时原样', stripSecrets({ cards: [{ kind: 'widget', props: { a: 1 } }], lines: [] }).cards[0].props.a === 1);
+  check('不认识的 kind 下发前退成一段字,别的字段不下发', stripSecrets({ cards: [{ kind: 'widget', props: { a: 1, text: '一句' } }], lines: [] }).cards[0].kind === 'text' && JSON.stringify(stripSecrets({ cards: [{ kind: 'widget', props: { a: 1, text: '一句' } }], lines: [] }).cards[0].props) === '{"text":"一句"}');
 }
 {
   const doc = boardSyntaxDoc();

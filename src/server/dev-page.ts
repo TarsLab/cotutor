@@ -226,7 +226,6 @@ ${BRAND_CSS}
   .opt.right { box-shadow:0 0 0 1.5px var(--ok); }
   .opt .ans { margin-left:auto; font:600 11.5px/1 var(--sans); color:var(--ok); background:var(--ok-soft); padding:3px 7px; border-radius:5px; flex:none; }
   .rseg { display:inline-block; box-shadow:0 0 0 1px var(--line); background:var(--surface); border-radius:var(--r-tag); padding:3px 8px; margin:0 6px 6px 0; font-size:14px; }
-  .fillline u { text-decoration:none; border-bottom:1.5px solid var(--accent-line); color:var(--accent); padding:0 10px; }
   .card img { max-width:100%; border-radius:6px; display:block; }
   .card pre { margin:0; font:400 13px/1.7 var(--mono); white-space:pre-wrap; word-break:break-word; color:var(--ink-2); }
   .card .meta2 { font:400 12px/1.6 var(--mono); color:var(--muted); }
@@ -850,11 +849,6 @@ ${BRAND_CSS}
       (p.options || []).forEach((o, i) => body.append(h('div', { class: 'opt' + (ans.includes(i) ? ' right' : '') },
         h('span', { class: 'k' }, 'ABCDEFGHIJ'[i] || String(i + 1)), o, ans.includes(i) ? h('span', { class: 'ans' }, '答案') : null)));
       if (p.multi) body.append(h('div', { class: 'meta2' }, '多选'));
-    } else if (card.kind === 'fill') {
-      const row = h('div', { class: 'fillline' });
-      const parts = String(p.text || '').split(/_{2,}/);
-      parts.forEach((s, i) => { row.append(s); if (i < parts.length - 1) row.append(h('u', {}, (p.answers || [])[i] || '　')); });
-      body.append(row, p.answers ? h('div', { class: 'meta2' }, '答案:' + p.answers.join(' / ')) : null);
     } else if (card.kind === 'image') {
       body.append(h('img', { src: /^https?:/.test(p.src || '') ? p.src : '/api/kid/image?p=' + encodeURIComponent(p.src || ''), alt: p.caption || '' }), p.caption ? h('p', {}, p.caption) : null);
     } else if (card.kind === 'lecture') {

@@ -4,7 +4,6 @@ import {
   barNext,
   cardTexts,
   cardTitle,
-  filledAnswers,
   findPhrase,
   hasState,
   isHeavy,
@@ -56,7 +55,7 @@ const cards: BoardCard[] = [
   { kind: 'text', props: { style: 'note', text: '画蛇添足 = 多做一步,反而坏事' } },
   { kind: 'read', props: { segments: ['楚有祠者', '先成者饮酒'] } },
   { kind: 'choice', props: { question: '酒是谁的?', options: ['他自己的', '第二个画完的'] } },
-  { kind: 'fill', props: { text: '做到了还要___', blanks: 1 } },
+  { kind: 'text', props: { text: '做到了还要多做一步' } },
   { kind: 'gizmo', props: { bundle: 'x', title: '场景' } },
 ];
 const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-guilv5', text: '再看一遍', title: '找规律', ready: true, start: 0, end: 8000 } };
@@ -74,10 +73,10 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   const def: BoardCard = { kind: 'text', props: { title: '认边', text: '两条短边叫直角边,最长的一条叫斜边' } };
   const plain: BoardCard = { kind: 'text', props: { text: '一个直角三角形,斜边是 13' } };
   const formula: BoardCard = { kind: 'text', props: { style: 'formula', text: '直角边² + 直角边² = 斜边²' } };
-  check('底色槽:# 标题 sky、素文 sand、formula paper、后期定的优先、做题的紫、点读米、图 / 小课堂 / 代码白', tintFor(cards[0]) === 'sky' && tintFor(def) === 'sky' && tintFor(plain) === 'sand' && tintFor(cards[1]) === 'sand' && tintFor(formula) === 'paper' && tintFor({ kind: 'text', props: { text: 'x' }, look: { tint: 'night' } }) === 'night' && tintFor(cards[3]) === 'plum' && tintFor(cards[4]) === 'plum' && tintFor({ kind: 'canvas', props: {} }) === 'plum' && tintFor(cards[2]) === 'sand' && tintFor(lectureCard) === 'paper' && tintFor({ kind: 'image', props: {} }) === 'paper');
+  check('底色槽:# 标题 sky、素文 sand、formula paper、后期定的优先、做题的紫、点读米、图 / 小课堂 / 代码白', tintFor(cards[0]) === 'sky' && tintFor(def) === 'sky' && tintFor(plain) === 'sand' && tintFor(cards[1]) === 'sand' && tintFor(formula) === 'paper' && tintFor({ kind: 'text', props: { text: 'x' }, look: { tint: 'night' } }) === 'night' && tintFor(cards[3]) === 'plum' && tintFor(cards[4]) === 'sand' && tintFor({ kind: 'canvas', props: {} }) === 'plum' && tintFor(cards[2]) === 'sand' && tintFor(lectureCard) === 'paper' && tintFor({ kind: 'image', props: {} }) === 'paper');
   check('后期定的 look 优先', tintFor({ ...plain, look: { tint: 'moss' } }) === 'moss' && lookFor({ ...plain, look: { look: 'quote' } }) === 'quote');
   check('字形槽:formula → formula、后期定的优先,其余 plain', lookFor(cards[1]) === 'plain' && lookFor(formula) === 'formula' && lookFor({ kind: 'text', props: { text: 'x' }, look: { look: 'title' } }) === 'title' && lookFor(def) === 'plain' && lookFor(cards[3]) === 'plain');
-  check('笔:选项 box、问题里的词 underline、填空 underline、点读 marker、公式 / 大字 marker、标题位 circle、数字 underline、正文里的词 tint;后期定的 pen 页面直接用', penFor(cards[3], '他自己的') === 'box' && penFor(cards[3], '酒') === 'underline' && penFor(cards[4], '做到了') === 'underline' && penFor(cards[2], '楚有祠者') === 'marker' && penFor(formula, '斜边') === 'marker' && penFor({ kind: 'text', props: { text: '多做一步' }, look: { look: 'title' } }, '多做一步') === 'marker' && penFor(cards[1], '多做一步') === 'tint' && penFor(cards[0], '画蛇添足') === 'circle' && penFor(def, '认边') === 'circle' && penFor(def, '直角边') === 'tint' && penFor({ kind: 'text', props: { title: '验证', text: '9 加 16 等于 25' } }, '25') === 'underline' && penFor(lectureCard, '找规律') === 'underline');
+  check('笔:选项 box、问题里的词 underline、点读 marker、公式 / 大字 marker、标题位 circle、数字 underline、正文里的词 tint;后期定的 pen 页面直接用', penFor(cards[3], '他自己的') === 'box' && penFor(cards[3], '酒') === 'underline' && penFor(cards[2], '楚有祠者') === 'marker' && penFor(formula, '斜边') === 'marker' && penFor({ kind: 'text', props: { text: '多做一步' }, look: { look: 'title' } }, '多做一步') === 'marker' && penFor(cards[1], '多做一步') === 'tint' && penFor(cards[0], '画蛇添足') === 'circle' && penFor(def, '认边') === 'circle' && penFor(def, '直角边') === 'tint' && penFor({ kind: 'text', props: { title: '验证', text: '9 加 16 等于 25' } }, '25') === 'underline' && penFor(lectureCard, '找规律') === 'underline');
   const hd: BoardCard = { kind: 'text', props: { title: '两大类型', text: '', heading: true } };
   check('小节标题不是卡:没有能标注的字,sectionTitle 优先拿它', isHeading(hd) && !isHeading(def) && cardTexts(hd).length === 0 && sectionTitle({ cards: [hd, def], lines: [] }) === '两大类型');
   // ---- 行(2026-10-01 排版归代码):每张卡半宽或全宽,相邻两张半宽并一行;明写的并排照办;手机上折;标题行与有状态的卡独占 ----
@@ -104,7 +103,7 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   {
     const fit = (lines: number, extra: Partial<CardFit> = {}): CardFit => ({ half: 100, full: 80, lines, overflow: false, ...extra });
     const code: BoardCard = { kind: 'code', props: { text: '🟧🟧🟧' } };
-    check('能半宽的种类:文字、点读、代码、田字格、单词卡、选择题、填空题;标题行、提问卡、画板、录音卡、小课堂、图不行;大字的照量', canHalf(def) && canHalf(cards[2]) && canHalf(code) && canHalf(cards[3]) && canHalf(cards[4]) && !canHalf({ kind: 'canvas', props: {} }) && !canHalf({ kind: 'record', props: { text: '山' } }) && canHalf({ kind: 'tianzige', props: { chars: '鼓' } }) && canHalf({ kind: 'word', props: { word: 'apple' } }) && !canHalf(hd) && !canHalf({ kind: 'text', props: { text: '?', ask: true } }) && !canHalf(lectureCard) && !canHalf({ kind: 'image', props: { src: 'a.png' } }) && canHalf({ ...def, look: { look: 'title' } }) && canHalf({ kind: 'word', props: { word: 'yellow' }, look: { look: 'title' } }));
+    check('能半宽的种类:文字、点读、代码、田字格、单词卡、选择题;标题行、提问卡、画板、录音卡、小课堂、图不行;大字的照量', canHalf(def) && canHalf(cards[2]) && canHalf(code) && canHalf(cards[3]) && canHalf(cards[4]) && !canHalf({ kind: 'canvas', props: {} }) && !canHalf({ kind: 'record', props: { text: '山' } }) && canHalf({ kind: 'tianzige', props: { chars: '鼓' } }) && canHalf({ kind: 'word', props: { word: 'apple' } }) && !canHalf(hd) && !canHalf({ kind: 'text', props: { text: '?', ask: true } }) && !canHalf(lectureCard) && !canHalf({ kind: 'image', props: { src: 'a.png' } }) && canHalf({ ...def, look: { look: 'title' } }) && canHalf({ kind: 'word', props: { word: 'yellow' }, look: { look: 'title' } }));
     check('文字卡看半宽时几行:平板 ≤ 4、手机 ≤ 2;横着溢出不行', fitsHalf(def, 'tablet-landscape', fit(4)) && !fitsHalf(def, 'tablet-landscape', fit(5)) && fitsHalf(def, 'phone', fit(2)) && !fitsHalf(def, 'phone', fit(3)) && !fitsHalf(def, 'tablet-portrait', fit(1, { overflow: true })));
     check('公式 / 代码 / 田字格 / 单词卡 / 选择题:半宽时不比全宽高(没折行)才行;画板量成什么都不行', fitsHalf(formula, 'tablet-landscape', fit(1, { half: 60, full: 60 })) && !fitsHalf(formula, 'phone', fit(2, { half: 90, full: 60 })) && fitsHalf(code, 'tablet-landscape', fit(0, { half: 80 })) && fitsHalf(code, 'tablet-landscape', fit(0, { half: 81 })) && !fitsHalf(code, 'tablet-landscape', fit(0, { half: 120 })) && fitsHalf(cards[3], 'tablet-landscape', fit(1, { half: 80 })) && !fitsHalf(cards[3], 'tablet-landscape', fit(1, { half: 130 })) && !fitsHalf({ kind: 'canvas', props: {} }, 'tablet-landscape', fit(1, { half: 80 })));
   }
@@ -116,10 +115,9 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   const p1 = penPath('circle', 70, 34, '斜边:0');
   check('路径:圈是折线一圈多一点、方框四段曲线、下划线一笔;同种子同路径,换种子不同', p1.startsWith('M') && p1.split(' L ').length === 40 && p1 === penPath('circle', 70, 34, '斜边:0') && p1 !== penPath('circle', 70, 34, '斜边:1') && penPath('box', 60, 30, 'x').split(' C ').length === 5 && penPath('underline', 60, 10, 'x').includes(' S ') && penPath('marker', 10, 10, 'x') === '');
   check('问句', isQuestion('酒是谁的?') && isQuestion('明白吗?') && !isQuestion('明白了。'));
-  check('有舞台交互的是选择题;填空停用了,旧的只看(《卡片协议.md》拍板 3)', cards[3].kind === 'choice' && hasState(cards[3]) && cards[4].kind === 'fill' && !hasState(cards[4]) && !hasState(cards[0]) && !hasState(cards[2]) && !hasState(cards[5]) && !hasState({ kind: 'image', props: { src: 'a.png' } }));
+  check('有舞台交互的是选择题(填空 10-22 删了,《卡片协议.md》拍板 3)', cards[3].kind === 'choice' && hasState(cards[3]) && !hasState(cards[4]) && !hasState(cards[0]) && !hasState(cards[2]) && !hasState(cards[5]) && !hasState({ kind: 'image', props: { src: 'a.png' } }));
   check('点读段的配音:assets 里有 <段号>.mp3 才有', segmentAudio({ ...cards[2], assets: ['2026-09-10.1620-1.cards/2/2.mp3'] }, 1) === '2026-09-10.1620-1.cards/2/2.mp3' && segmentAudio({ ...cards[2], assets: ['2026-09-10.1620-1.cards/2/2.mp3'] }, 0) === null && segmentAudio(cards[2], 0) === null);
-  check('填空填了什么:按空数补齐,没填是空串;坏状态当没填', JSON.stringify(filledAnswers({ ...cards[4], state: { answers: [' 多做一步 '] } })) === '["多做一步"]' && JSON.stringify(filledAnswers({ kind: 'fill', props: { text: '_ _', blanks: 2 }, state: { answers: ['a'] } })) === '["a",""]' && JSON.stringify(filledAnswers({ ...cards[4], state: 'x' })) === '[""]');
-  check('做了什么(交给老师能不能按):选择题是选项、填空是填的字、别的卡永远空', stateSummary({ ...cards[3], state: { picked: [0] } }).join() === 'A 他自己的' && stateSummary({ ...cards[4], state: { answers: ['多做一步'] } }).join() === '多做一步' && stateSummary(cards[4]).length === 0 && stateSummary({ ...cards[0], state: { x: 1 } }).length === 0);
+  check('做了什么(交给老师能不能按):选择题是选项、别的卡永远空', stateSummary({ ...cards[3], state: { picked: [0] } }).join() === 'A 他自己的' && stateSummary({ ...cards[4], state: { answers: ['多做一步'] } }).length === 0 && stateSummary({ ...cards[0], state: { x: 1 } }).length === 0);
   const cv: BoardCard = { kind: 'canvas', props: { base: null, prompt: '画一条蛇' } };
   check('画板卡:有交互(给老师看)、重卡;做了什么 = 画了 N 笔;标题是题目', hasState(cv) && isHeavy(cv) && stateSummary(cv).length === 0 && stateSummary({ ...cv, state: { ink: [{}, {}, {}] } }).join() === '画了 3 笔' && cardTitle(cv) === '画一条蛇' && cardTitle({ kind: 'canvas', props: { base: null } }) === '画一画' && cardTexts(cv).join() === '画一条蛇');
   check('重卡:小课堂 / canvas 在舞台包里开;小课堂卡读得出、有起止才 ready', isHeavy(lectureCard) && isHeavy({ kind: 'canvas', props: {} }) && !isHeavy(cards[3]) && lectureReady(lectureCard) && !lectureReady({ kind: 'lecture', props: { bundle: 'x' } }) && !lectureReady(cards[0]) && !isHeavy({ kind: 'scene', props: { bundle: 'x', ready: true } }));
@@ -200,18 +198,18 @@ check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人�
   const q = (t: string, extra: Partial<BoardCard['props']> = {}): BoardCard => ({ kind: 'text', props: { text: t, ...extra } });
   const asks: BoardSection = { cards: [q('想一想')], lines: [L('分完了吗?', { anchor: 0 })] };
   const askAdded: BoardSection = { cards: [{ kind: 'code', props: { code: 'x' } }, q('还剩几个?', { ask: true })], lines: [L('还剩几个?', { anchor: 0 })] };
-  const onFill: BoardSection = { cards: [{ kind: 'fill', props: { text: '一共 ___ 个' } }], lines: [L('一共几个?', { anchor: 0 })] };
+  const onCanvas: BoardSection = { cards: [{ kind: 'canvas', props: { prompt: '画出一共几个' } }], lines: [L('一共几个?', { anchor: 0 })] };
   const told: BoardSection = { cards: [q('一捆 10 根')], lines: [L('这就是一捆。', { anchor: 0 })] };
-  check('askCard:末句问句锚着文字卡 → 它;解析器补的提问卡 → 它;锚着填空 / 没问 / 还在写 → 没有', askCard(asks) === 0 && askCard(askAdded) === 1 && askCard(onFill) === null && askCard(told) === null && askCard({ ...asks, partial: true }) === null);
+  check('askCard:末句问句锚着文字卡 → 它;解析器补的提问卡 → 它;锚着画板 / 没问 / 还在写 → 没有', askCard(asks) === 0 && askCard(askAdded) === 1 && askCard(onCanvas) === null && askCard(told) === null && askCard({ ...asks, partial: true }) === null);
   const msgs = [
     { job: 'a', question: '分一分', reply: 'x', pending: false, fromHome: true, section: asks },
-    { job: 'b', question: '嗯……每个人两个吧', reply: 'x', pending: false, section: onFill },
+    { job: 'b', question: '嗯……每个人两个吧', reply: 'x', pending: false, section: onCanvas },
     { job: 'c', question: '', reply: 'x', pending: false, action: 'submit' as const, section: asks },
     { job: 'd', question: '4', reply: null, pending: true },
   ];
   const says = kidSaid(msgs);
   check('kidSaid:首页按钮、交卡的不放;答问题卡的挂那张卡;上一节问在填空上 → 单独一行;刚发出去的也有', !says.has('a') && !says.has('c') && says.get('b')?.on?.job === 'a' && says.get('b')?.on?.card === 0 && says.get('b')?.said.text === '嗯……每个人两个吧' && says.get('d')?.on?.job === 'c' && says.get('d')?.said.text === '4', JSON.stringify([...says]));
-  const lone = kidSaid([{ job: 'x', question: '有7个小朋友呢?', reply: 'x', pending: false, section: onFill }, { job: 'y', question: '我不会', reply: 'x', pending: false, section: asks }]);
+  const lone = kidSaid([{ job: 'x', question: '有7个小朋友呢?', reply: 'x', pending: false, section: onCanvas }, { job: 'y', question: '我不会', reply: 'x', pending: false, section: asks }]);
   check('kidSaid:话题第一句、上一节问在填空上 → 单独一行(on = null)', lone.get('x')?.on === null && lone.get('y')?.on === null);
   const es = sectionsFromMessages(msgs);
   check('sectionsFromMessages:节带上 said / saidOn', es.find((e) => e.job === 'b')?.saidOn?.job === 'a' && es.find((e) => e.job === 'b')?.said?.text === '嗯……每个人两个吧' && es.find((e) => e.job === 'a')?.said === undefined);

@@ -7,7 +7,6 @@ import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
 import { canvas } from './canvas.ts';
 import { choice } from './choice.ts';
 import { code } from './code.ts';
-import { fill } from './fill.ts';
 import { tianzige } from './tianzige.ts';
 import { word } from './word.ts';
 import { image } from './image.ts';
@@ -25,7 +24,6 @@ export { BUNDLE_ID_RE, type CardKind, type CardPlace } from './kind.ts';
 export { text, TEXT_STYLES, type TextProps, type TextStyle } from './text.ts';
 export { read, type ReadProps } from './read.ts';
 export { choice, type ChoiceProps } from './choice.ts';
-export { fill, type FillProps } from './fill.ts';
 export { code, type CodeProps } from './code.ts';
 export { image, IMAGE_EXT, type ImageProps } from './image.ts';
 export { lecture, type LectureProps, type LectureState } from './lecture.ts';
@@ -37,9 +35,9 @@ export { word, wordChunks, WORD_MAX, WORD_MAX_WORDS, WORD_RE, type WordProps } f
 export { tutor, BUTTON_LABEL_MAX, TUTOR_BUTTONS_MAX, TutorButtonSchema, type TutorButton, type TutorProps } from './tutor.ts';
 export { dictation, dictationEmoji, dictationWordLang, DictationPropsSchema, DICTATION_EN_MAX, DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, EN_WORD_RE, type DictationLang, type DictationProps, type DictationWord } from './dictation.ts';
 
-/** 全部种类:先板书的十三种(注册表顺序即技能里的顺序),再首页专属的 */
+/** 全部种类:先板书的十二种(注册表顺序即技能里的顺序),再首页专属的 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, fill, image, tianzige, word, lecture, canvas, record, paint, photo, code, tutor, dictation];
+export const CARD_KINDS: readonly CardKind<any>[] = [text, read, choice, image, tianzige, word, lecture, canvas, record, paint, photo, code, tutor, dictation];
 
 export function cardKind(name: string): CardKind | undefined {
   return CARD_KINDS.find((k) => k.name === name) as CardKind | undefined;
@@ -96,15 +94,6 @@ export function parseCard(tag: string, body: string, place: CardPlace = 'board')
   if (!name) return place === 'board' ? { card: { kind: 'code', props: code.parse(body, []) } } : asText('围栏没写种类');
   const kind = cardKind(name.toLowerCase());
   if (!kind) return place === 'board' ? { card: { kind: 'code', props: code.parse(body, [name]) } } : asText(`不认识的卡:${name}`);
-  // 停用的卡:解析得出就退成文字卡、只留题面(答案不下发);解析不出也把「= 答案」那几行去掉
-  if (kind.retired) {
-    const why = `${name} 卡停用了,退成文字卡(《卡片协议.md》拍板 3)`;
-    try {
-      return { card: { kind: 'text', props: { text: kind.retired(kind.props.parse(kind.parse(body, mods))) } }, warning: why, fallback: true };
-    } catch {
-      return { card: { kind: 'text', props: { text: body.split('\n').filter((l) => !/^\s*=/.test(l)).join('\n').trim() || name } }, warning: why, fallback: true };
-    }
-  }
   if (!usableIn(kind, place)) return asText(place === 'board' ? `${name} 是首页的卡,板书里不能用` : `首页放不了 ${name} 卡(它要交给某位老师,只能在板书里)`);
   const um = TEXTUAL.has(kind.name) ? unmark(body) : { body, had: false };
   try {
@@ -122,10 +111,10 @@ export function stripSecrets(section: BoardSection): BoardSection {
   return {
     ...section,
     cards: section.cards.map((c) => {
-      // 场景卡 2026-10-07 删了:老对话里存下的退成一段字,只留老师那句;题面 / 讲法(写给画图老师的)与课包 id 不下发
-      if (c.kind === 'scene') return { kind: 'text', props: { text: typeof c.props.text === 'string' ? c.props.text : '' } };
+      // 认不出的种类(删掉的卡:场景 10-07、填空 10-22):老对话里存下的退成一段字,只留它的那句,别的字段(答案、题面)不下发
       const k = cardKind(c.kind);
-      return k?.strip ? { ...c, props: k.strip(c.props) } : c;
+      if (!k) return { ...c, kind: 'text', props: { text: typeof c.props.text === 'string' ? c.props.text : cardLabel(c) } };
+      return k.strip ? { ...c, props: k.strip(c.props) } : c;
     }),
   };
 }

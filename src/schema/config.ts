@@ -63,12 +63,6 @@ export const POLICY_DEFAULTS: Policy = {
 /** 板书能用的卡(注册表顺序;tests/cards.test.ts 断言与 src/cards 的 kindsFor('board') 一致,这里不 import 卡,免得契约拖进卡的依赖) */
 export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'image', 'tianzige', 'word', 'lecture', 'canvas', 'record', 'paint', 'photo', 'code'] as const;
 export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
-/**
- * 停用的卡(《卡片协议.md》拍板 3):填空要孩子在 iPad 上打字,打不出拼音的声调,2026-10-21 停了。
- * cotutor.json、activity 头上还写着的读的时候丢掉,不报错;老师写了退成文字卡(src/cards/index.ts)
- */
-export const RETIRED_CARD_KINDS: readonly string[] = ['fill'];
-const dropRetired = (v: unknown): unknown => (Array.isArray(v) ? v.filter((k) => !RETIRED_CARD_KINDS.includes(k)) : v);
 
 /** agent 名:与 .claude/agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -86,12 +80,12 @@ export const TutorSchema = z.object({
   /** 学科色(《首页设计.md》拍板 26):头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮;不写 = 自动(src/lib/tutor-color.ts) */
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, '要 #rrggbb').optional().describe('学科色 #rrggbb:头像的环、牌的边、新话题气泡(白字压在上面,要够深,doctor 会查)、听写页的按钮;不写 = 语文粉、数学蓝、英语绿,其余按先后自动分、不撞色'),
   /** voxtell 音色 id(2026-09-08 拍板);没有 = 用 voxtell 缺省 */
-  voice: z.string().optional().describe('voxtell 音色 id(voxtell voices 可查);不配就不配音,孩子端用浏览器的声'),
+  voice: z.string().optional().describe('卡的配音用的 voxtell 音色 id(voxtell voices 可查;点读、单词卡的声音);不配这些卡就没有声音。老师开口的嘴在 live.voices'),
   enabled: z.boolean().default(true).describe('开关:false 时两端都不见'),
   /** 孩子端不露(只和系统、家长打交道的工具人) */
   hidden: z.boolean().default(false).describe('孩子端不露(只和系统、家长打交道的工具人)'),
   /** 这位老师的板书写法里有哪几种卡(《卡片协议.md》「谁拿到哪些卡」);不写 = 全部。text 总是带着(写坏的卡退成它) */
-  cards: z.preprocess(dropRetired, z.array(z.enum(BOARD_CARD_KINDS)).optional()).describe(`这位老师的板书写法里讲哪几种卡(${BOARD_CARD_KINDS.join(' / ')});不写 = 全部,text 总是带着。只裁递给老师的写法,写了清单外的卡照常显示`),
+  cards: z.array(z.enum(BOARD_CARD_KINDS)).optional().describe(`这位老师的板书写法里讲哪几种卡(${BOARD_CARD_KINDS.join(' / ')});不写 = 全部,text 总是带着。只裁递给老师的写法,写了清单外的卡照常显示`),
   policy: PolicyPatchSchema.optional().describe('覆盖 policyDefaults 的字段,没写的继承'),
   /** 这位老师用哪个运行时(runtimes 里的键);不配用 runtimes.default。要更大预算与时限的老师配一个自己的 */
   runtime: z.string().optional().describe('这位老师用的运行时(runtimes 里的键;不配用 default)——预算、时限不同的老师配自己的'),

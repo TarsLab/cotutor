@@ -8,7 +8,7 @@
  * 场景:normal(缺省)/ offline(接口全 500,页面该灰)。
  * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有开场与接着昨天的按钮,数学老师有开场,英语老师没写(补一张);
  * 发消息带 via 时照真服务的规则换成按钮上的字、定话题。
- * --live:语文、数学老师走实时老师页,那条 WebSocket 是 mock-live.ts 的假嘴(照脚本「念」静音的声音,不花钱)。
+ * 老师都走实时老师页(《产品规划.md》拍板 30),那条 WebSocket 是 mock-live.ts 的假嘴(照脚本「念」静音的声音,不花钱)。
  */
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
@@ -560,8 +560,6 @@ export interface MockOptions {
   delayMs?: number;
   now?: () => Date;
   title?: string;
-  /** 语文、数学老师走实时老师页(mock-live.ts 的假嘴) */
-  live?: boolean;
 }
 
 export interface Mock {
@@ -637,9 +635,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   };
   // 学科色同真服务:按老师的先后定(src/lib/tutor-color.ts)
   const colors = tutorColors(Object.fromEntries(MOCK_TUTORS.map((t) => [t.name, { subject: t.subject }])));
-  /** --live:有脸的三位老师走实时老师页(口播老师是工具人式的,照旧板书) */
-  const LIVE_TUTORS = new Set(['chinese-tutor', 'math-tutor', 'english-tutor']);
-  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: false, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk'), live: Boolean(opts.live) && LIVE_TUTORS.has(t.name), listen: 'hold' }));
+  const tutorsJson = (): KidTutor[] => MOCK_TUTORS.map((t) => ({ name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: false, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk'), listen: 'hold' }));
   /** 小课堂:样本课包与样本视频在仓库里(tests/fixtures/bundles/、lectures/),起来时和真服务一样读一遍(readLecture)、记住 */
   const lectures = new Map<string, Lecture>();
   const lecturesLoaded = (async () => {
@@ -1058,7 +1054,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const f = await bundleAsset(MOCK_BUNDLES_DIR, p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
-    // 字幕重放(《wip/实时老师设想.md》拍板 21):真服务端给 src/live/call.ts 落的那份嘴的声音;mock 没有嘴,每句按字数估多长、放一段静音(--live 看「再听一遍」)
+    // 字幕重放(《wip/实时老师设想.md》拍板 21):真服务端给 src/live/call.ts 落的那份嘴的声音;mock 没有嘴,每句按字数估多长、放一段静音
     const mouth = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/mouth\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d+)$/.exec(p);
     if (mouth && method === 'GET') {
       const day = (await route('GET', `/api/kid/conversations/${mouth[1]}/today`)).json as KidDay | undefined;
@@ -1127,7 +1123,7 @@ export async function serveMock(opts: ServeMockOptions = {}): Promise<ServeMockR
     }
   }
   const server = tls ? createHttps(tls, mock.handler) : createHttp(mock.handler);
-  if (opts.live) { const up = mockLiveUpgrade(mock); server.on('upgrade', (req, socket, head) => { if (!up(req, socket, head)) socket.destroy(); }); }
+  { const up = mockLiveUpgrade(mock); server.on('upgrade', (req, socket, head) => { if (!up(req, socket, head)) socket.destroy(); }); }
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(opts.port ?? 8790, opts.host ?? '0.0.0.0', () => resolve());

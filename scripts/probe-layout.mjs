@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 排版(《工作流程.md》§二「排版」,2026-10-01 归代码)的验收(在 pnpm test 里:tests/probe.test.ts 起它,要本机 Chrome,没有就跳过;走 mock,不花钱):
- * 起 cotutor mock,Chrome 开孩子端数学老师。iPad 横屏、竖屏、手机各看一遍预载的那节(勾股定理):
+ * 起 cotutor mock(老师都走实时),Chrome 开孩子端数学老师。iPad 横屏、竖屏、手机各看一遍预载的那节(勾股定理):
  * 字少的卡半宽、相邻两张半宽并一行、落单的半宽卡占左半、短选项的选择题也能并排、页面不横滚、半宽卡里的字不溢出;
  * 再从输入条发一句,老师一张张出卡时,已经出来的卡不挪(位置、宽度都不变)。每种尺寸截一张。
  *
@@ -92,7 +92,8 @@ try {
 
   const ipad = await look('iPad 横屏', 1180, 820, 1, false, 'layout-ipad.png');
   ok('iPad 横屏:有两张并一行的(字少的兄弟卡)', ipad.pairs.length >= 1, JSON.stringify(ipad.pairs.map((r) => r.cards.map((c) => c.k))));
-  ok('iPad 横屏:三个短选项的选择题和前面落单的半宽卡并一行(右边不空着)', ipad.pairs.some((r) => r.cards.some((c) => c.kind === 'c-choice')), JSON.stringify(ipad.rows.map((r) => r.cards.map((c) => c.k))));
+  // 实时老师页横屏左边有 360 宽的白纸,板窄:三个短选项的选择题放得进半宽就和落单的那张并一行,放不进就占整行(不留半行空着)
+  ok('iPad 横屏:三个短选项的选择题和前面落单的半宽卡并一行,放不进半宽就占整行', ipad.pairs.some((r) => r.cards.some((c) => c.kind === 'c-choice')) || ipad.rows.some((r) => r.cards.length === 1 && r.cards[0].kind === 'c-choice' && r.cards[0].w > 600), JSON.stringify(ipad.rows.map((r) => r.cards.map((c) => [c.k, c.w]))));
   const portrait = await look('iPad 竖屏', 820, 1180, 1, false, 'layout-portrait.png');
   ok('iPad 竖屏:有两张并一行的', portrait.pairs.length >= 1);
   const phone = await look('手机', 390, 844, 2, true, 'layout-phone.png');

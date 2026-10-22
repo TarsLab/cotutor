@@ -1,6 +1,6 @@
 /**
- * `cotutor mock --live`(src/server/mock-live.ts):不花钱看实时老师页。首页接口里语文、数学老师 live;那条 WebSocket 是假嘴——
- * 松手接住、发消息给 mock 的老师(消息带 live)、写完一句一句念(静音的声音 + 到点的 read)、按下打断;不开 --live 不升级。
+ * `cotutor mock`(src/server/mock-live.ts):不花钱看实时老师页(老师都走实时)。那条 WebSocket 是假嘴——
+ * 松手接住、发消息给 mock 的老师(消息带 live)、写完一句一句念(静音的声音 + 到点的 read)、按下打断。
  */
 import { check, done } from './_check.ts';
 
@@ -16,11 +16,11 @@ type Msg = Record<string, any>;
   check('不开 --live:首页接口里谁都不是实时的', home.tutors.length > 0 && home.tutors.every((t) => !t.live));
 }
 
-const r = await serveMock({ port: 0, http: true, live: true, delayMs: 60 });
+const r = await serveMock({ port: 0, http: true, delayMs: 60 });
 const base = `127.0.0.1:${r.port}`;
 try {
-  const home = (await (await fetch(`http://${base}/api/kid/home`)).json()) as { tutors: { name: string; live: boolean }[] };
-  check('--live:首页接口里语文、数学、英语老师是实时的,口播老师不是', home.tutors.filter((t) => t.live).map((t) => t.name).sort().join() === 'chinese-tutor,english-tutor,math-tutor', JSON.stringify(home.tutors.map((t) => [t.name, t.live])));
+  const home = (await (await fetch(`http://${base}/api/kid/home`)).json()) as { tutors: { name: string; live?: boolean }[] };
+  check('首页接口不再带 live(老师都走实时)', home.tutors.length > 0 && home.tutors.every((t) => t.live === undefined), JSON.stringify(home.tutors.map((t) => [t.name, t.live])));
 
   const ws = new WebSocket(`ws://${base}/api/live/chinese-tutor/ws`);
   ws.binaryType = 'arraybuffer';
@@ -64,13 +64,6 @@ try {
   ws.close();
 } finally {
   r.server.close();
-}
-{
-  const plain = await serveMock({ port: 0, http: true, delayMs: 0 });
-  const ws = new WebSocket(`ws://127.0.0.1:${plain.port}/api/live/chinese-tutor/ws`);
-  const refused = await new Promise<boolean>((res) => { ws.onopen = () => res(false); ws.onerror = () => res(true); ws.onclose = () => res(true); });
-  check('不开 --live:那条 WebSocket 不升级', refused);
-  plain.server.close();
 }
 
 done();

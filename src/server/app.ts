@@ -173,8 +173,6 @@ export interface KidTutor {
   hasVoice: boolean;
   /** 卡上的常驻入口(《首页设计.md》拍板 18):dictation 听写与拍照听写、talk 口语课(要 talk.enabled) */
   extras: TutorExtra[];
-  /** 走实时(《产品规划.md》拍板 30):有脸的老师都是;孩子端连 /api/live/<老师>/ws,连不上就等着重连 */
-  live: boolean;
   /** 实时老师页缺省怎么说话(live.listen):hold 按住说、open 一直听;孩子切过的记在设备上,以那个为准 */
   listen: 'hold' | 'open';
 }
@@ -183,7 +181,7 @@ export async function kidTutors(ctx: AppContext): Promise<KidTutor[]> {
   const out: KidTutor[] = [];
   const colors = tutorColors(ctx.ws.config.tutors);
   for (const t of listTutors(ctx.ws.config, { kidOnly: true })) {
-    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), live: true, listen: ctx.ws.config.live.listen });
+    out.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name], mark: boardMarkOf(t.subject), lang: subjectLang(t.subject), hasVoice: Boolean(t.voice), extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)), listen: ctx.ws.config.live.listen });
   }
   return out;
 }

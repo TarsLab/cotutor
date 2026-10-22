@@ -3523,7 +3523,7 @@ __REEL_DOCK_JS__
   //      孩子端不念讲稿(板书的 step 照旧收事件、只是不自动念);卡照旧从「今天」拉,闭合了就铺。谁出声、谁停走 liveDispatch → liveStep(live-board.ts),
   //      这里只照单执行。按住说话推 PCM(常开那路麦克风,makeAudio().use);连不上、断了 → 回到「正在叫老师」,过一会儿再连(《产品规划.md》拍板 30) ----
   /** 这次进老师页走不走实时:这位老师开了实时、孩子端今天能说话的话题;以前的、家长端、录像、预览不走,首页按钮开场、小课堂、activity 先走板书 */
-  const liveWanted = (t) => Boolean(t && t.live) && !PARENT && !REEL && !PREVIEW && !S.readonly;
+  const liveWanted = (t) => Boolean(t) && !PARENT && !REEL && !PREVIEW && !S.readonly;
   const lvSend = (o) => { if (LV.ws && LV.ws.readyState === 1) LV.ws.send(JSON.stringify(o)); };
   /** 实时时改「谁出声」的事都走这里,页面里不许再直接改 LV.model(tests/live-player.test.ts 数着)。data = release / send 的 body、audio 的那块声音 */
   const liveDispatch = (ev, data) => {

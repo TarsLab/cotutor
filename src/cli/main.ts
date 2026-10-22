@@ -184,7 +184,7 @@ export async function main(argv: string[]): Promise<void> {
         if (!['normal', 'offline', 'nopost', 'nokey'].includes(scenario)) throw new UsageError('--scenario 只能是 normal / offline / nopost / nokey');
         const delayMs = typeof flags.delay === 'string' ? Number(flags.delay) : undefined;
         if (delayMs !== undefined && !(Number.isInteger(delayMs) && delayMs >= 0)) throw new UsageError('--delay 要是非负整数(毫秒)');
-        const r = await serveMock({ port, scenario: scenario as MockScenario, delayMs, http: flags.http === true, live: flags.live === true });
+        const r = await serveMock({ port, scenario: scenario as MockScenario, delayMs, http: flags.http === true });
         // 被杀(Ctrl-C、探针收尾)也走 exit,mock 的临时目录才删得掉
         for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.once(s, () => process.exit(128 + osConstants.signals[s]));
         process.stdout.write(`cotutor mock 场景 ${scenario}(不经真实老师与配音;配音退回浏览器合成声)${flags.live === true ? ';语文、数学老师走实时(假嘴念静音的声音)' : ''}\n`);

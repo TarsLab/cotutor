@@ -143,6 +143,7 @@ ${BRAND_CSS}
   .devs .dr.th { font-size:12px; color:var(--muted); padding-top:4px; }
   .devs .dr .r { text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums; }
   .devs .dr .muted { font:400 12px/1.4 var(--mono); }
+  .devs .dr .lab { display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-width:0; }
   .dname { border:0; background:transparent; padding:0; font:600 14px/1.4 var(--sans); color:var(--ink); cursor:text; text-align:left; }
   .dname.none { font-weight:400; color:var(--muted); }
   .dname:hover { color:var(--accent); }
@@ -1746,7 +1747,7 @@ ${BRAND_CSS}
       } } }, dv.name || '没起名');
       return b;
     };
-    const devRow = (dv) => h('div', { class: 'dr' }, h('span', { class: 'nm' }, nameEl(dv)), h('span', { class: 'muted' }, dv.label), h('span', { class: 'r', title: dv.commit ? '那次打开时服务端跑的是 ' + dv.commit : '' }, when(dv.last)), h('span', { class: 'r' }, dv.today ? dv.today + ' 次' + (dv.todayMs >= 60000 ? ' · ' + dur(dv.todayMs) : '') : '—'), h('span', { class: 'r' }, dv.errors ? h('span', { class: 'st err' }, '出错 ' + dv.errors) : ''));
+    const devRow = (dv) => h('div', { class: 'dr' }, h('span', { class: 'nm' }, nameEl(dv)), h('span', { class: 'lab' }, h('span', { class: 'muted' }, dv.label), ...dv.flags.map((f) => h('span', { class: 'st ' + f.level }, f.text))), h('span', { class: 'r', title: dv.commit ? '那次打开时服务端跑的是 ' + dv.commit : '' }, when(dv.last)), h('span', { class: 'r' }, dv.today ? dv.today + ' 次' + (dv.todayMs >= 60000 ? ' · ' + dur(dv.todayMs) : '') : '—'), h('span', { class: 'r' }, dv.errors ? h('span', { class: 'st err' }, '出错 ' + dv.errors) : ''));
     const devBox = h('section', { class: 'blk' },
       h('div', { class: 'hd' }, h('h2', {}, '设备'), h('span', { class: 'sub' }, '孩子端开在哪 · 近 30 天'), h('span', { class: 'right' }, h('span', { class: 'sub' }, '点名字起名'))),
       d.devices.length ? h('div', { class: 'devs' }, h('div', { class: 'dr th' }, h('span', {}, '名字'), h('span', {}, '浏览器'), h('span', { class: 'r' }, '最近打开'), h('span', { class: 'r' }, '今天'), h('span', { class: 'r' }, '近 7 天')), ...d.devices.map(devRow))

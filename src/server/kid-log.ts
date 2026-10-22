@@ -14,13 +14,15 @@ import { DEVICE_COOKIE, DEVICE_COOKIE_DAYS, DEVICE_ID_RE, deviceLabel } from '..
 /**
  * 各页共用的那段脚本:装上出错的监听,kidLog.start({page, mode, v, ctx}) 报一次打开(只在 mode 是 kid 时)。
  * 孩子端模式下还在前台计时(7.4):切到后台、离开页面时记一笔 fg,一直开着每 5 分钟也记一笔;不满 1 秒的不记。
+ * 打开那行带 caps(7.2):麦克风权限(问 navigator.permissions,问不出 unknown;最多等 1.5 秒)、有没有 getUserMedia、有没有语音识别;
+ * 麦克风权限变了、kidLog.blocked('autoplay')(老师的声音被浏览器拦了,一次打开只记一次)各记一行 perm。
  * 同一次打开里同一条报错只报一次、最多 20 条(防一个死循环写满文件,是护栏不是限额);只收脚本错,图片、声音读不出不收。
  * 用在首页 / 老师页(kid-page.ts,各种模式都带)、听写(中、英)、口语课;tests/kid-log.test.ts 盯着这几页都带它。
  * 脚本是 ES5、没有反斜杠与反引号(插进各页的模板字符串)。
  */
 export const KID_LOG_JS = `
   var kidLog = (function () {
-    var sent = {}, n = 0, page = '', mode = 'kid', v = '', ctx = null, fgSince = 0;
+    var sent = {}, n = 0, page = '', mode = 'kid', v = '', ctx = null, fgSince = 0, blocked = {};
     var cut = function (s, k) { s = String(s == null ? '' : s); return s.length > k ? s.slice(0, k) : s; };
     var post = function (row) { try { fetch('/api/kid/log', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(row), keepalive: true, credentials: 'same-origin' }).catch(function () {}); } catch (e) {} };
     var report = function (msg, where, stack) {
@@ -47,12 +49,30 @@ export const KID_LOG_JS = `
       report('unhandledrejection: ' + (r && r.message ? r.message : String(r)), '', r && r.stack);
     });
     return {
+      blocked: function (what) {
+        if (mode !== 'kid' || blocked[what]) return;
+        blocked[what] = 1;
+        post({ k: 'perm', page: page, what: what, state: 'blocked' });
+      },
       start: function (o) {
         page = o.page || ''; mode = o.mode || 'kid'; v = o.v || ''; ctx = o.ctx || null;
         if (mode !== 'kid') return;
         var standalone = Boolean(navigator.standalone);
         try { standalone = standalone || matchMedia('(display-mode: standalone)').matches; } catch (e) {}
-        post({ k: 'open', page: page, v: v, ua: cut(navigator.userAgent, 400), touch: navigator.maxTouchPoints || 0, standalone: standalone, w: screen.width, h: screen.height, vw: innerWidth, vh: innerHeight, dpr: window.devicePixelRatio || 1, lang: cut(navigator.language, 20) });
+        var caps = { mic: 'unknown', gum: Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia), sr: Boolean(window.SpeechRecognition || window.webkitSpeechRecognition) };
+        var opened = false;
+        var sendOpen = function (mic) {
+          if (opened) return;
+          opened = true; caps.mic = mic;
+          post({ k: 'open', page: page, v: v, ua: cut(navigator.userAgent, 400), touch: navigator.maxTouchPoints || 0, standalone: standalone, w: screen.width, h: screen.height, vw: innerWidth, vh: innerHeight, dpr: window.devicePixelRatio || 1, lang: cut(navigator.language, 20), caps: caps });
+        };
+        setTimeout(function () { sendOpen('unknown'); }, 1500);
+        try {
+          navigator.permissions.query({ name: 'microphone' }).then(function (st) {
+            sendOpen(st.state);
+            st.onchange = function () { post({ k: 'perm', page: page, what: 'mic', state: st.state }); };
+          }, function () { sendOpen('unknown'); });
+        } catch (e) { sendOpen('unknown'); }
         fgSince = document.hidden ? 0 : Date.now();
         document.addEventListener('visibilitychange', function () { if (document.hidden) flushFg(); else fgSince = Date.now(); });
         window.addEventListener('pagehide', flushFg);
@@ -62,11 +82,22 @@ export const KID_LOG_JS = `
   })();
 `;
 
+/** 打开时的权限与能力(7.2):麦克风权限、有没有 getUserMedia、有没有语音识别 */
+export interface KidCaps {
+  mic: 'granted' | 'denied' | 'prompt' | 'unknown';
+  gum: boolean;
+  sr: boolean;
+}
+const MIC_STATES = ['granted', 'denied', 'prompt', 'unknown'] as const;
+const micState = (v: unknown): KidCaps['mic'] => ((MIC_STATES as readonly unknown[]).includes(v) ? (v as KidCaps['mic']) : 'unknown');
+
 /** 流水的一行(服务端补 at、device、ip) */
 export type KidLogRow =
-  | { k: 'open'; page: string; v: string; ua: string; touch: number; standalone: boolean; w: number; h: number; vw: number; vh: number; dpr: number; lang: string }
+  | { k: 'open'; page: string; v: string; ua: string; touch: number; standalone: boolean; w: number; h: number; vw: number; vh: number; dpr: number; lang: string; caps?: KidCaps }
   /** 在前台多久(7.4):这一笔的毫秒,时刻是这一笔记下的那一刻 */
   | { k: 'fg'; page: string; ms: number }
+  /** 权限变了(7.2):mic = 麦克风权限变成 state;autoplay = 老师的声音被拦了(state blocked) */
+  | { k: 'perm'; page: string; what: 'mic' | 'autoplay'; state: string }
   | { k: 'error'; page: string; mode: string; v: string; msg: string; where: string; stack: string; ua: string; ctx: Record<string, unknown> | null };
 /** 服务端那时跑的是哪份代码(打开那行补,《孩子端流水设计.md》7.1) */
 export interface KidLogSrv {
@@ -89,6 +120,10 @@ export interface KidDevice {
   name?: string;
   /** 最近一次打开时服务端的提交 */
   commit?: string;
+  /** 最近的权限与能力(打开时记,麦克风权限变了跟着改) */
+  caps?: KidCaps;
+  /** 老师的声音最近一次被浏览器拦的时刻 */
+  blockedAt?: string;
 }
 export type KidDevices = Record<string, KidDevice>;
 
@@ -100,7 +135,11 @@ const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v)
 export function parseKidLog(body: unknown): KidLogRow | null {
   if (!body || typeof body !== 'object' || Array.isArray(body) || JSON.stringify(body).length > MAX_BODY) return null;
   const b = body as Record<string, unknown>;
-  if (b.k === 'open') return { k: 'open', page: str(b.page, 40), v: str(b.v, 40), ua: str(b.ua, 400), touch: num(b.touch), standalone: b.standalone === true, w: num(b.w), h: num(b.h), vw: num(b.vw), vh: num(b.vh), dpr: num(b.dpr), lang: str(b.lang, 20) };
+  if (b.k === 'open') {
+    const c = b.caps && typeof b.caps === 'object' ? (b.caps as Record<string, unknown>) : null;
+    return { k: 'open', page: str(b.page, 40), v: str(b.v, 40), ua: str(b.ua, 400), touch: num(b.touch), standalone: b.standalone === true, w: num(b.w), h: num(b.h), vw: num(b.vw), vh: num(b.vh), dpr: num(b.dpr), lang: str(b.lang, 20), ...(c ? { caps: { mic: micState(c.mic), gum: c.gum === true, sr: c.sr === true } } : {}) };
+  }
+  if (b.k === 'perm') return b.what === 'mic' || b.what === 'autoplay' ? { k: 'perm', page: str(b.page, 40), what: b.what, state: b.what === 'mic' ? micState(b.state) : 'blocked' } : null;
   // 一笔最多算 6 小时(页面每 5 分钟记一笔,长了是钟跳了)
   if (b.k === 'fg') return typeof b.ms === 'number' && b.ms > 0 && b.ms <= 6 * 3600_000 ? { k: 'fg', page: str(b.page, 40), ms: Math.round(b.ms) } : null;
   if (b.k === 'error') {
@@ -148,11 +187,21 @@ export async function recordKidLog(ws: Workspace, row: KidLogRow, who: { device:
   const line: KidLogLine = { at: now.toISOString(), ...row, device: who.device, ...(who.ip ? { ip: who.ip } : {}), ...(row.k === 'open' && who.srv ? { srv: who.srv } : {}) };
   await mkdir(logDir(ws), { recursive: true });
   await appendFile(join(logDir(ws), `${localDate(now)}.jsonl`), `${JSON.stringify(line)}\n`);
+  if (row.k === 'perm') {
+    // 权限变了:只改登记过的设备(家长端那几页不报 perm)
+    await updateDevices(ws, (d) => {
+      const dev = d[who.device];
+      if (!dev) return;
+      if (row.what === 'autoplay') dev.blockedAt = line.at;
+      else dev.caps = { ...(dev.caps ?? { gum: true, sr: true }), mic: micState(row.state) };
+    });
+    return;
+  }
   if (row.k !== 'open') return;
   await updateDevices(ws, (d) => {
     const was = d[who.device];
     const hint = { ua: row.ua, touch: row.touch, standalone: row.standalone };
-    d[who.device] = { first: was?.first ?? line.at, last: line.at, opens: (was?.opens ?? 0) + 1, ...hint, label: deviceLabel(hint), ...(was?.name ? { name: was.name } : {}), ...(who.srv?.commit ? { commit: who.srv.commit } : {}) };
+    d[who.device] = { first: was?.first ?? line.at, last: line.at, opens: (was?.opens ?? 0) + 1, ...hint, label: deviceLabel(hint), ...(was?.name ? { name: was.name } : {}), ...(who.srv?.commit ? { commit: who.srv.commit } : {}), ...(row.caps ? { caps: row.caps } : was?.caps ? { caps: was.caps } : {}), ...(was?.blockedAt ? { blockedAt: was.blockedAt } : {}) };
   });
 }
 

@@ -69,7 +69,7 @@ try {
     const err = (msg: string, extra: Record<string, unknown> = {}) => ({ k: 'error' as const, page: 'kid', mode: 'kid', v: 'v1', msg, where: '12:3', stack: 'at f (/:12:3)', ua: IPAD, ctx: { tutor: 'chinese-tutor', thread: '1500-1' }, ...extra });
     const ipad = 'aaaaaaaaaaaa', mac = 'bbbbbbbbbbbb', old = 'cccccccccccc';
     await recordKidLog(ws, open(MAC, 0), { device: old }, new Date(2026, 7, 1, 9));
-    await recordKidLog(ws, open(MAC, 0), { device: mac }, new Date(2026, 9, 15, 21, 2));
+    await recordKidLog(ws, { ...open(MAC, 0), caps: { mic: 'granted', gum: true, sr: false } }, { device: mac }, new Date(2026, 9, 15, 21, 2));
     await recordKidLog(ws, open(IPAD, 5), { device: ipad }, new Date(2026, 9, 16, 15, 0));
     await recordKidLog(ws, open(IPAD, 5), { device: ipad }, new Date(2026, 9, 16, 15, 30));
     await recordKidLog(ws, err('x is null'), { device: ipad }, new Date(2026, 9, 16, 15, 31));
@@ -80,7 +80,9 @@ try {
     await recordKidLog(ws, { k: 'fg', page: 'kid', ms: 30 * 60_000 }, { device: ipad }, new Date(2026, 9, 16, 15, 30));
     await recordKidLog(ws, { k: 'fg', page: 'dictation', ms: 10 * 60_000 }, { device: ipad }, new Date(2026, 9, 16, 15, 45));
     await recordKidLog(ws, { k: 'fg', page: 'kid', ms: 5 * 60_000 }, { device: mac }, new Date(2026, 9, 16, 15, 46));
+    await recordKidLog(ws, { k: 'perm', page: 'kid', what: 'autoplay', state: 'blocked' }, { device: ipad }, new Date(2026, 9, 16, 15, 47));
     const o2 = await devOverview(ws, now);
+    check('设备的毛病:iPad 声音被拦过(琥珀),Mac 没有语音识别(琥珀);没毛病的不写', o2.devices[0].flags.map((f) => f.text + f.level).join() === '声音被拦过warn' && o2.devices[1].flags.map((f) => f.text + f.level).join() === '没有语音识别warn' && o2.olderDevices[0].flags.length === 0, JSON.stringify(o2.devices.map((x) => x.flags)));
     check('孩子端开着:今天前台 45 分、15:00–15:46;近七天昨天 20 分;设备今天各几分', o2.kidTime.today?.ms === 45 * 60_000 && o2.kidTime.today.from === '15:00' && o2.kidTime.today.to === '15:46' && o2.kidTime.days.find((x) => x.date === yesterday)?.ms === 20 * 60_000 && o2.devices[0].todayMs === 40 * 60_000 && o2.devices[1].todayMs === 5 * 60_000, JSON.stringify({ t: o2.kidTime, d: o2.devices.map((x) => x.todayMs) }));
     check('设备卡:近 30 天的,最近开的在前,今天开了几次、近 7 天出错几条;更早的折起来', o2.devices.map((x) => x.id).join() === `${ipad},${mac}` && o2.devices[0].label === 'iPad · Safari 27' && o2.devices[0].today === 2 && o2.devices[0].errors === 1 && o2.devices[1].today === 0 && o2.devices[1].label === 'Mac · Safari 26' && o2.olderDevices.map((x) => x.id).join() === old, JSON.stringify(o2.devices));
     const js = o2.issues.filter((i) => i.kind === 'js');

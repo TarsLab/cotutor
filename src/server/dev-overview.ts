@@ -46,6 +46,8 @@ export interface DevDevice {
   errors: number;
   /** 最近一次打开时服务端的提交(7.1) */
   commit: string | null;
+  /** 这台的毛病(7.2):有才列,err 砖红、warn 琥珀 */
+  flags: { text: string; level: 'err' | 'warn' }[];
 }
 
 export interface DevTutorRow {
@@ -222,7 +224,14 @@ async function kidSide(ws: Workspace, today: string, days: readonly string[]): P
   const hm = (t: number): string => localMinute(new Date(t)).slice(11);
   const time: DevOverview['kidTime'] = { days: days.map((date) => ({ date, ms: fgByDay.get(date) ?? 0 })), today: Number.isFinite(from) ? { ms: fgByDay.get(today) ?? 0, from: hm(from), to: hm(to) } : null };
   const all = Object.entries(table).sort((a, b) => (a[1].last < b[1].last ? 1 : -1));
-  const row = ([id, d]: [string, KidDevice]): DevDevice => ({ id, name: d.name ?? null, label: d.label, last: d.last, today: opensToday.get(id) ?? 0, todayMs: fgToday.get(id) ?? 0, errors: errorsBy.get(id) ?? 0, commit: d.commit ?? null });
+  const weekStart = new Date(`${days[0]}T00:00:00`).toISOString();
+  const flagsOf = (d: KidDevice): DevDevice['flags'] => [
+    ...(d.caps?.mic === 'denied' ? [{ text: '麦克风拒了', level: 'err' as const }] : []),
+    ...(d.caps && !d.caps.gum ? [{ text: '没有麦克风接口', level: 'err' as const }] : []),
+    ...(d.caps && !d.caps.sr ? [{ text: '没有语音识别', level: 'warn' as const }] : []),
+    ...(d.blockedAt && d.blockedAt >= weekStart ? [{ text: '声音被拦过', level: 'warn' as const }] : []),
+  ];
+  const row = ([id, d]: [string, KidDevice]): DevDevice => ({ id, name: d.name ?? null, label: d.label, last: d.last, today: opensToday.get(id) ?? 0, todayMs: fgToday.get(id) ?? 0, errors: errorsBy.get(id) ?? 0, commit: d.commit ?? null, flags: flagsOf(d) });
   return {
     devices: all.filter(([, d]) => d.last >= floor).map(row),
     older: all.filter(([, d]) => d.last < floor).map(row),

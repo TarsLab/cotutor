@@ -36,30 +36,32 @@ const { deviceLabel } = await import('../src/lib/kid-device.ts');
 check('KID_LOG_JS 能插进模板字符串(没有反斜杠、反引号)', !/[\\`]/.test(KID_LOG_JS));
 {
   type Handler = (e: unknown) => void;
-  type Fake = { log: { start(o: Record<string, unknown>): void } & Record<string, (...a: unknown[]) => void>; posts: Record<string, unknown>[]; fire(type: string, e: unknown): void; doc: { hidden: boolean; fire(type: string): void }; clock: { t: number }; tick(): void };
+  type Fake = { log: { start(o: Record<string, unknown>): void } & Record<string, (...a: unknown[]) => void>; posts: Record<string, unknown>[]; fire(type: string, e: unknown): void; doc: { hidden: boolean; fire(type: string): void }; clock: { t: number }; tick(): void; later(): void };
   /** 假的 window / document / 钟 / 定时器;nav 盖在缺省的 navigator 上(权限、语音识别那几样) */
   const run = (over: { nav?: Record<string, unknown>; win?: Record<string, unknown> } = {}): Fake => {
     const handlers: Record<string, Handler[]> = {};
     const docHandlers: Record<string, Handler[]> = {};
     const timers: (() => void)[] = [];
+    const timeouts: (() => void)[] = [];
     const posts: Record<string, unknown>[] = [];
     const clock = { t: 1_000_000 };
     const win = { addEventListener: (t: string, f: Handler) => { (handlers[t] ??= []).push(f); }, devicePixelRatio: 2, ...over.win };
     const doc = { hidden: false, addEventListener: (t: string, f: Handler) => { (docHandlers[t] ??= []).push(f); } };
     const nav = { userAgent: 'UA-x', maxTouchPoints: 5, language: 'zh-CN', standalone: false, ...over.nav };
     const fetch = (_u: string, o: { body: string }): Promise<void> => { posts.push(JSON.parse(o.body)); return Promise.resolve(); };
-    const log = new Function('window', 'document', 'navigator', 'screen', 'innerWidth', 'innerHeight', 'matchMedia', 'fetch', 'Date', 'setInterval', `${KID_LOG_JS}; return kidLog;`)(win, doc, nav, { width: 820, height: 1180 }, 1180, 820, () => ({ matches: true }), fetch, { now: () => clock.t }, (f: () => void) => { timers.push(f); return timers.length; });
+    const log = new Function('window', 'document', 'navigator', 'screen', 'innerWidth', 'innerHeight', 'matchMedia', 'fetch', 'Date', 'setInterval', 'setTimeout', `${KID_LOG_JS}; return kidLog;`)(win, doc, nav, { width: 820, height: 1180 }, 1180, 820, () => ({ matches: true }), fetch, { now: () => clock.t }, (f: () => void) => { timers.push(f); return timers.length; }, (f: () => void) => { timeouts.push(f); return timeouts.length; });
     return {
       log, posts, clock,
       fire: (type, e) => { for (const f of handlers[type] ?? []) f(e); },
       doc: Object.assign(doc, { fire: (type: string) => { for (const f of docHandlers[type] ?? []) f({}); } }),
       tick: () => { for (const f of timers) f(); },
+      later: () => { for (const f of timeouts.splice(0)) f(); },
     };
   };
   const a = run();
   a.log.start({ page: 'kid', mode: 'kid', v: 'abc', ctx: () => ({ tutor: 'chinese-tutor' }) });
   const open = a.posts[0];
-  check('孩子端:报一次打开,带认设备要的那几样', a.posts.length === 1 && open.k === 'open' && open.page === 'kid' && open.v === 'abc' && open.ua === 'UA-x' && open.touch === 5 && open.standalone === true && open.w === 820 && open.dpr === 2 && open.lang === 'zh-CN', JSON.stringify(open));
+  check('孩子端:报一次打开,带认设备要的那几样;问不出权限的(没有 navigator.permissions)马上报、麦克风 unknown', a.posts.length === 1 && open.k === 'open' && open.page === 'kid' && open.v === 'abc' && open.ua === 'UA-x' && open.touch === 5 && open.standalone === true && open.w === 820 && open.dpr === 2 && open.lang === 'zh-CN' && JSON.stringify(open.caps) === '{"mic":"unknown","gum":false,"sr":false}', JSON.stringify(open));
   a.fire('error', { message: 'x is null', lineno: 12, colno: 3, error: { stack: 'at f' } });
   a.fire('error', { message: 'x is null', lineno: 12, colno: 3, error: { stack: 'at f' } });
   const err = a.posts[1];
@@ -89,6 +91,26 @@ check('KID_LOG_JS 能插进模板字符串(没有反斜杠、反引号)', !/[\\`
   fp.log.start({ page: 'kid', mode: 'reel' });
   fp.clock.t += 90_000; fp.doc.hidden = true; fp.doc.fire('visibilitychange'); fp.tick();
   check('录像、家长端不计前台', fp.posts.length === 0);
+
+  // 权限与能力(7.2):问得出麦克风权限等它再报打开;变了记 perm;问不出(一直不回)1.5 秒后照报 unknown;声音被拦一次打开只记一次
+  const st: { state: string; onchange: null | (() => void) } = { state: 'granted', onchange: null };
+  const c = run({ nav: { permissions: { query: () => Promise.resolve(st) }, mediaDevices: { getUserMedia: () => null } }, win: { webkitSpeechRecognition: function () {} } });
+  c.log.start({ page: 'kid', mode: 'kid' });
+  await Promise.resolve(); await Promise.resolve();
+  check('打开带 caps:麦克风 granted、有 getUserMedia、有语音识别', c.posts.length === 1 && JSON.stringify(c.posts[0].caps) === '{"mic":"granted","gum":true,"sr":true}', JSON.stringify(c.posts));
+  st.state = 'denied'; st.onchange?.();
+  c.later();
+  check('麦克风权限变了记一行 perm;1.5 秒的兜底不再报一次打开', c.posts.length === 2 && c.posts[1].k === 'perm' && c.posts[1].what === 'mic' && c.posts[1].state === 'denied', JSON.stringify(c.posts));
+  c.log.blocked('autoplay'); c.log.blocked('autoplay');
+  check('老师的声音被拦:一次打开只记一次', c.posts.filter((p) => p.what === 'autoplay').length === 1 && c.posts[2].state === 'blocked');
+  const hang = run({ nav: { permissions: { query: () => new Promise(() => {}) } } });
+  hang.log.start({ page: 'kid', mode: 'kid' });
+  check('权限问不出(一直不回):先不报', hang.posts.length === 0);
+  hang.later();
+  check('1.5 秒后照报打开,麦克风 unknown', hang.posts.length === 1 && (hang.posts[0].caps as { mic: string }).mic === 'unknown');
+  const pp = run();
+  pp.log.start({ page: 'kid', mode: 'parent' }); pp.log.blocked('autoplay');
+  check('家长端不记声音被拦', pp.posts.length === 0);
 }
 
 // ---- 各页都带 ----
@@ -133,6 +155,18 @@ check('坏正文、k 不认得、太长:400', bad.every((r) => r.status === 400)
 const fgOk = await route('POST', '/api/kid/log', ctx, { k: 'fg', page: 'kid', ms: 90_000 }, 'local', { device: id });
 const fgBad = await Promise.all([{ k: 'fg', ms: 0 }, { k: 'fg', ms: 7 * 3600_000 }, { k: 'fg', ms: '9' }].map((b) => route('POST', '/api/kid/log', ctx, b, 'local', { device: id })));
 check('前台一笔收下;0、超过 6 小时、不是数的 400', fgOk.status === 200 && (await readKidLog(ctx.ws, ['2026-10-22'])).some((l) => l.k === 'fg' && l.ms === 90_000) && fgBad.every((r) => r.status === 400), fgBad.map((r) => r.status).join());
+
+const capsOpen = await route('POST', '/api/kid/log', ctx, { ...openBody, caps: { mic: 'granted', gum: true, sr: false } }, 'local', { device: id });
+check('打开带 caps:设备表记最近的', capsOpen.status === 200 && JSON.stringify((await readDevices(ctx.ws))[id].caps) === '{"mic":"granted","gum":true,"sr":false}');
+await route('POST', '/api/kid/log', ctx, { k: 'perm', page: 'kid', what: 'mic', state: 'denied' }, 'local', { device: id });
+await route('POST', '/api/kid/log', ctx, { k: 'perm', page: 'kid', what: 'autoplay', state: 'blocked' }, 'local', { device: id });
+const afterPerm = (await readDevices(ctx.ws))[id];
+check('perm:麦克风权限跟着改,声音被拦记时刻', afterPerm.caps?.mic === 'denied' && afterPerm.caps.gum && typeof afterPerm.blockedAt === 'string', JSON.stringify(afterPerm));
+const permBad = await route('POST', '/api/kid/log', ctx, { k: 'perm', what: 'camera', state: 'granted' }, 'local', { device: id });
+await route('POST', '/api/kid/log', ctx, { k: 'perm', page: 'kid', what: 'mic', state: 'denied' }, 'local', { device: 'eeeeeeeeeeee' });
+check('perm:不认得的 400;没登记过的设备不进设备表', permBad.status === 400 && !('eeeeeeeeeeee' in (await readDevices(ctx.ws))));
+await route('POST', '/api/kid/log', ctx, openBody, 'local', { device: id });
+check('再打开没带 caps(老页面):留着上次的,被拦的时刻也留着', (await readDevices(ctx.ws))[id].caps?.mic === 'denied' && Boolean((await readDevices(ctx.ws))[id].blockedAt));
 const r4 = await route('POST', '/api/kid/log', ctx, openBody, 'local', { device: '../etc' });
 check('cookie 不像设备编号:当没有,种新的', /^cotutor_kid=[0-9a-f]{12};/.test(r4.setCookie ?? ''));
 check('起名、去掉名字;没有这台 → false', (await renameDevice(ctx.ws, id, '  Ray 的 iPad  ')) && (await readDevices(ctx.ws))[id].name === 'Ray 的 iPad' && (await renameDevice(ctx.ws, id, '')) && !('name' in (await readDevices(ctx.ws))[id]) && !(await renameDevice(ctx.ws, 'ffffffffffff', 'x')));

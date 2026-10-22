@@ -929,7 +929,8 @@ ${BOARD_MARK_JS}
       audioEl.onplaying = () => start(isFinite(audioEl.duration) && audioEl.duration > 0 ? audioEl.duration * 1000 : lineDurationMs(line.text));
       audioEl.src = audioUrl(line.audio);
       audioRate(1);
-      audioEl.play().catch(fallbackVoice);
+      // 浏览器拦了自动出声(NotAllowedError)记一笔流水(kid-log.ts,《孩子端流水设计.md》7.2),照旧退回去念
+      audioEl.play().catch((e) => { if (e && e.name === 'NotAllowedError') kidLog.blocked('autoplay'); fallbackVoice(); });
     } else speak(plainLine(line.text), finish, fallback, start);
   };
   /** 浏览器合成声;不是 mock(SYNTH)就直接 onFail——孩子端听到的只有老师的音色 */

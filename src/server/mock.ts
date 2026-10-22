@@ -10,7 +10,7 @@
  * 发消息带 via 时照真服务的规则换成按钮上的字、定话题。
  * 老师都走实时老师页(《产品规划.md》拍板 30),那条 WebSocket 是 mock-live.ts 的假嘴(照脚本「念」静音的声音,不花钱)。
  */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { createServer as createHttp, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttps } from 'node:https';
@@ -685,7 +685,13 @@ export function createMock(opts: MockOptions = {}): Mock {
     reader: (t) => (t && MOCK_TUTORS.some((x) => x.name === t) ? t : 'chinese-tutor'),
     display: (t) => MOCK_TUTORS.find((x) => x.name === t)?.display ?? '老师',
     face: (t) => backTutorOf(Object.fromEntries(MOCK_TUTORS.map((x) => [x.name, { display: x.display, subject: x.subject }])), t),
-    say: async () => null,
+    // 念的是一段 0.8 秒的静音(不配音、不念浏览器合成声):页面照真服务那样放音频、等放完
+    say: async () => {
+      const f = join(dictationDir(), 'say-silence.wav');
+      if (!existsSync(f)) writeFileSync(f, wavOfPcm(Buffer.alloc(24000 * 2 * 0.8), 24000));
+      return f;
+    },
+    voiced: () => true,
     medians: async (ch) => (await tianzigeData(ch))?.medians ?? null,
     recognize: mockRecognize,
   });
@@ -764,7 +770,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: home() };
     // 孩子端的流水(kid-log.ts):mock 照收,不落盘
     if (p === '/api/kid/log' && method === 'POST') return { status: 200, json: { ok: true } };
-    // 听写(src/dictation/,和真服务同一套接口):卡从 mock 的首页取,存在临时目录,不配音(页面退浏览器合成声)
+    // 听写(src/dictation/,和真服务同一套接口):卡从 mock 的首页取,存在临时目录,念的是静音
     const tx = await handleDictation(method, url, dictationDeps(), body); if (tx) return tx;
     const ov = /^\/api\/overview\/(today|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (ov && method === 'GET') {

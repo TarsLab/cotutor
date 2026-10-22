@@ -328,7 +328,7 @@ ${BTN_JS}
   var REEL_ID = q.get('reel');
   // 录像里只记出错,不报打开
   kidLog.start({ page: 'dictation', mode: REEL_ID ? 'reel' : 'kid', ctx: function () { return { tutor: TUTOR || null }; } });
-  var S = { v: null, base: Date.now(), i: 0, w: null, pads: [], stack: [], active: null, sawPen: false, noAudio: false, sayTimer: 0, order: null, rw: null };
+  var S = { v: null, base: Date.now(), i: 0, w: null, pads: [], stack: [], active: null, sawPen: false, sayTimer: 0, order: null, rw: null };
   /** 写字格多大(拍板 30):l 铺满写字区(上限 900)、m 500、s 380;再写一遍也照它封顶。孩子选的记在 cookie,录像照记录 */
   var PAD_CAP = { l: 900, m: 500, s: 380 };
   var readPad = function () { var m = /(?:^|; )cotutor_dict_pad=([lms])/.exec(document.cookie); return m ? m[1] : 'l'; };
@@ -465,29 +465,25 @@ ${BTN_JS}
   // ---------- 念 ----------
   var audio = new Audio(); audio.preload = 'auto';
   ${UNLOCK_JS}
-  var stopSay = function () { clearTimeout(S.sayTimer); S.sayTok = (S.sayTok || 0) + 1; try { audio.pause(); } catch (e) {} try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {} };
+  var stopSay = function () { clearTimeout(S.sayTimer); S.sayTok = (S.sayTok || 0) + 1; try { audio.pause(); } catch (e) {} };
+  /** 念不出来(老师没配音色、合成失败)就直接说,不念浏览器合成声 */
+  var NO_VOICE = '老师的声音还没配好 · 叫爸爸妈妈来看一下';
   var status = function (t) { $('#l-status').textContent = t; };
   /** 看笔顺放到第几笔,一行字(拍板 24:不画一排数字方块,字本身的蓝、橙、淡就是进度) */
   var strokeAt = function (k, n) { return k < n ? '第 ' + (k + 1) + ' 笔 · 一共 ' + n + ' 笔' : '写完了 · 一共 ' + n + ' 笔'; };
-  /** 念第 i 个词,念 times 遍,两遍之间停一下;没有音频(没配音色、合成失败)退浏览器合成声 */
+  /** 念第 i 个词,念 times 遍,两遍之间停一下;没有音频(没配音色、合成失败)状态行直接提示 */
   var sayWord = function (i, times) {
     stopSay();
+    if (S.v.voice === false) { status(NO_VOICE); return; }
     var tok = S.sayTok; var left = times; var nth = 0;
     var next = function () { if (tok !== S.sayTok) return; if (left <= 0) { status('听完了就写'); return; } left--; nth++; status('正在念 · 第 ' + nth + ' 遍'); event('say', i, undefined, nth); play(); };
     var gap = function () { if (tok !== S.sayTok) return; status(left > 0 ? '再听一遍' : '听完了就写'); if (left > 0) S.sayTimer = setTimeout(next, 1800); };
-    var synth = function () {
-      api('GET', '/api/dictation/' + S.v.id + '/say/' + i + '?text=1').then(function (j) {
-        if (tok !== S.sayTok || !window.speechSynthesis) return;
-        var u = new SpeechSynthesisUtterance(j.text); u.lang = 'zh-CN'; u.rate = 0.8;
-        u.onend = gap; u.onerror = gap; speechSynthesis.speak(u);
-      }, function () { status(''); });
-    };
+    var mute = function () { if (tok === S.sayTok) status(NO_VOICE); };
     var play = function () {
-      if (S.noAudio) return synth();
       audio.onended = gap;
-      audio.onerror = function () { S.noAudio = true; synth(); };
+      audio.onerror = mute;
       audio.src = '/api/dictation/' + S.v.id + '/say/' + i;
-      var pr = audio.play(); if (pr && pr.catch) pr.catch(function (e) { if (tok !== S.sayTok) return; if (audio.error) { S.noAudio = true; synth(); } else if (blocked(e)) status('点「再念」听老师念'); });
+      var pr = audio.play(); if (pr && pr.catch) pr.catch(function (e) { if (tok !== S.sayTok) return; if (audio.error) mute(); else if (blocked(e)) status('点「再念」听老师念'); });
     };
     next();
   };
@@ -502,6 +498,9 @@ ${BTN_JS}
     if (v.done) {
       $('#s-sub').textContent = '今天写过了';
       acts.replaceChildren(h('button', { 'class': 'main', on: { click: function () { start(true); } } }, ico('start'), lbl('再听写一次')), h('button', { 'class': 'tool', on: { click: openCheck } }, ico('look'), lbl('看看写的')));
+    } else if (v.voice === false) {
+      $('#s-sub').textContent = NO_VOICE;
+      acts.replaceChildren(h('button', { 'class': 'main', on: { click: goHome } }, ico('home'), lbl('回首页')));
     } else if (wrote > 0) {
       $('#s-sub').textContent = '写到第' + cn(wrote + 1) + '个了';
       acts.replaceChildren(h('button', { 'class': 'main', on: { click: function () { openListen(); } } }, ico('start'), lbl('接着写')));

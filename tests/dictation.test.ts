@@ -133,7 +133,7 @@ try {
   check('开始:要 {home, n}', (await call('POST', '/api/dictation', { n: 0 })).status === 400 && (await call('POST', '/api/dictation', { home: homeId, n: 1 })).status === 404);
   const st = await call('POST', '/api/dictation', { home: homeId, n: 0 });
   const id = st.json.id as string;
-  check('开始:201,id 是日期-时分;只给几个字一个词,没有字;语文老师念', st.status === 201 && id === '2026-10-10-1930' && st.json.sizes.join() === '2,2,1,1' && st.json.tutor === '语文老师' && !JSON.stringify(st.json).includes('春') && st.json.answers === null, JSON.stringify(st.json));
+  check('开始:201,id 是日期-时分;只给几个字一个词,没有字;语文老师念', st.status === 201 && id === '2026-10-10-1930' && st.json.sizes.join() === '2,2,1,1' && st.json.tutor === '语文老师' && st.json.voice === true && !JSON.stringify(st.json).includes('春') && st.json.answers === null, JSON.stringify(st.json));
   check('dictation/ 整个不进 git', readFileSync(join(root, 'dictation', '.gitignore'), 'utf8').split('\n').includes('*'));
   const again = await call('POST', '/api/dictation', { home: homeId, n: 0 });
   check('今天这张卡开过、没对好:再点进来接着那一次', again.status === 200 && again.json.id === id);
@@ -141,7 +141,7 @@ try {
   // ---- 念 ----
   const say = await call('GET', `/api/dictation/${id}/say/1`);
   check('念:用语文老师的音色合成,缓存在 .cotutor/dictation-say/', say.status === 200 && say.file !== undefined && readFileSync(say.file!, 'utf8') === 'fake-mp3:v-kid:鼓励,老师鼓励我的鼓励' && say.file!.includes(join('.cotutor', 'dictation-say')));
-  check('念:?text=1 给要念的字(退浏览器合成声用);没写念法念词本身', (await call('GET', `/api/dictation/${id}/say/1?text=1`)).json.text === '鼓励,老师鼓励我的鼓励' && (await call('GET', `/api/dictation/${id}/say/0?text=1`)).json.text === '春天');
+  check('念:?text=1 给要念的字;没写念法念词本身', (await call('GET', `/api/dictation/${id}/say/1?text=1`)).json.text === '鼓励,老师鼓励我的鼓励' && (await call('GET', `/api/dictation/${id}/say/0?text=1`)).json.text === '春天');
 
   // ---- 一个词一个词交 ----
   check('交:格数对不上 400', (await call('PUT', `/api/dictation/${id}/first/0`, { chars: [cell(await write('春'))] })).status === 400);
@@ -227,7 +227,12 @@ try {
   cfg.tutors['chinese-tutor'].voice = undefined;
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   await ctx.reload();
-  check('没配音色:音频 404,页面退浏览器合成声', (await call('GET', `/api/dictation/${id}/say/3`)).status === 404);
+  check('没配音色:音频 404;会话带 voice: false(孩子端不开始、直接提示叫家长,不念浏览器合成声)', (await call('GET', `/api/dictation/${id}/say/3`)).status === 404 && (await call('GET', `/api/dictation/${id}/kid`)).json.voice === false);
+
+  {
+    const pages = readFileSync(new URL('../src/dictation/page.ts', import.meta.url), 'utf8') + readFileSync(new URL('../src/dictation/en-page.ts', import.meta.url), 'utf8');
+    check('听写两页不念浏览器合成声(没音色、合成失败直接提示叫家长)', !/speechSynthesis|SpeechSynthesisUtterance/.test(pages) && (pages.match(/叫爸爸妈妈来看一下/g) ?? []).length === 2);
+  }
 
   // ---- 首页检查 ----
   const chk = await checkHome(ctx.ws, '```dictation nobody-tutor\n春天\n```\n\n## 为什么这么排\n\n试\n', now);

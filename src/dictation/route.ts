@@ -14,7 +14,7 @@
  *   GET  /api/dictation                      全部听写(家长)
  *   GET  /api/dictation/<id>                 一次听写的全部(家长)
  *   GET  /api/dictation/<id>/kid             孩子端的样子(交卷前没有字)
- *   GET  /api/dictation/<id>/say/<i>         第 i 个词念的音频;没有音色 / 合成失败 404,?text=1 给要念的字(页面退浏览器合成声)
+ *   GET  /api/dictation/<id>/say/<i>         第 i 个词念的音频;没有音色 / 合成失败 404(页面直接提示叫家长,不念浏览器合成声),?text=1 给要念的字
  *   PUT  /api/dictation/<id>/first/<i>       {chars: [{strokes, undos, gone?}]} 第一遍写的(交卷前可以改);gone 是擦掉的笔,录像用
  *   POST /api/dictation/<id>/check           交卷:逐字比对,回字与「再写一遍?」
  *   POST /api/dictation/<id>/rewrites/<i>    {chars, self} 再写一遍(交卷后)
@@ -57,6 +57,8 @@ export interface DictationDeps {
   face(tutor: string | null): { color: string; initial: string; display: string } | null;
   /** 合成一句的音频文件;没有音色、合成失败 → null */
   say(text: string, tutor: string | null): Promise<string | null>;
+  /** 念的老师配了音色没有:没有就孩子端直接提示叫家长,不念浏览器合成声 */
+  voiced(tutor: string | null): boolean;
   /** 一个字的笔画中线(hanzi-writer-data);数据里没有 → null */
   medians(ch: string): Promise<number[][][] | null>;
   /** 认一张照片(流式,每认出一项回调一次);lang = en 认英文单词 */
@@ -89,6 +91,9 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
     face(tutor) {
       return backTutorOf(ws().config.tutors, tutor);
     },
+    voiced(tutor) {
+      return Boolean(tutor && voiced(tutor));
+    },
     async say(text, tutor) {
       const voice = tutor ? ws().config.tutors[tutor]?.voice : undefined;
       if (!voice) return null;
@@ -97,8 +102,8 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
       if ((await stat(file).catch(() => null))?.isFile()) return file;
       await mkdir(dir, { recursive: true });
       const r = await synthesize(ws().config.tts, { text, voice, out: file }, { env: process.env });
-      // 孩子端照样退回浏览器的声;原因只在这里说,不然家长只看到「声音不对」
-      if (r.error) console.error(`dictation: 「${text}」没合成(${r.error});孩子端用浏览器的声`);
+      // 孩子端只说「叫爸爸妈妈来看一下」;原因只在这里说
+      if (r.error) console.error(`dictation: 「${text}」没合成(${r.error});孩子端提示叫家长`);
       return r.file;
     },
     async medians(ch) {
@@ -200,10 +205,12 @@ const latestOf = (s: Session, i: number): Attempt | null => {
 };
 
 /** 孩子端看到的:交卷前只有几个词、每个词几个字、写了哪几个;交了才有字、问不问再写一遍、最近写的那遍 */
-export function kidView(s: Session, display: string): unknown {
+export function kidView(s: Session, display: string, voiced: boolean): unknown {
   return {
     id: s.id,
     tutor: display,
+    /** 念的老师配了音色没有:false 时孩子端不开始、直接提示叫家长 */
+    voice: voiced,
     /** 哪位老师(cotutor.json 的键):左上角胶囊画他的头像 */
     tutorName: s.tutor ?? null,
     ...(s.lang ? { lang: s.lang } : {}),
@@ -369,7 +376,7 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
       // 从哪位老师卡上的「拍照听写」进来就用他的声音
       const tutor = deps.reader(typeof body.tutor === 'string' ? body.tutor : undefined);
       const s = await createSession(root, { home: null, n: -1, tutor, words, photo: rec.id, lesson: rec.lesson, ...(lang === 'en' ? { lang } : {}) }, now);
-      return { status: 201, json: kidView(s, deps.display(tutor)) };
+      return { status: 201, json: kidView(s, deps.display(tutor), deps.voiced(tutor)) };
     }
     if (!isObj(body) || !(body.home === null || (typeof body.home === 'string' && HOME_ID_RE.test(body.home))) || !num(body.n, 0, 99) || !Number.isInteger(body.n)) return bad('要 {home, n}');
     const home = body.home as string | null;
@@ -380,11 +387,11 @@ export async function handleDictation(method: string, url: URL, deps: DictationD
     if (body.fresh !== true) {
       const today = localDate(now);
       const same = (await listSessions(root)).find((s) => s.home === home && s.n === n && localDate(new Date(s.startedAt)) === today);
-      if (same) return { status: 200, json: kidView(same, deps.display(same.tutor)) };
+      if (same) return { status: 200, json: kidView(same, deps.display(same.tutor), deps.voiced(same.tutor)) };
     }
     const tutor = deps.reader(card.tutor);
     const s = await createSession(root, { home, n, tutor, words: card.words, ...(card.lang ? { lang: card.lang } : {}) }, now);
-    return { status: 201, json: kidView(s, deps.display(tutor)) };
+    return { status: 201, json: kidView(s, deps.display(tutor), deps.voiced(tutor)) };
   }
 
   const m = /^\/api\/dictation\/([^/]+)(?:\/([a-z]+)(?:\/(\d{1,2}))?)?$/.exec(p);
@@ -412,7 +419,7 @@ async function handleSession(method: string, url: URL, deps: DictationDeps, body
   if (idx !== undefined && i >= s.words.length) return { status: 404, json: { error: 'no_such_word' } };
 
   if (!sub) return method === 'GET' ? { status: 200, json: s } : { status: 405, json: { error: 'method_not_allowed' } };
-  if (sub === 'kid' && method === 'GET') return { status: 200, json: kidView(s, deps.display(s.tutor)) };
+  if (sub === 'kid' && method === 'GET') return { status: 200, json: kidView(s, deps.display(s.tutor), deps.voiced(s.tutor)) };
 
   if (sub === 'say' && method === 'GET' && i >= 0) {
     const w = s.words[i];
@@ -420,7 +427,7 @@ async function handleSession(method: string, url: URL, deps: DictationDeps, body
     if (url.searchParams.get('text')) return { status: 200, json: { text } };
     const file = await deps.say(text, s.tutor);
     if (!file) return { status: 404, json: { error: 'no_audio' } };
-    return { status: 200, file, contentType: 'audio/mpeg' };
+    return { status: 200, file, contentType: file.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg' };
   }
 
   if (sub === 'first' && method === 'PUT' && i >= 0) {
@@ -446,7 +453,7 @@ async function handleSession(method: string, url: URL, deps: DictationDeps, body
       s.checkedAt = now.toISOString();
       await writeSession(root, s);
     }
-    return { status: 200, json: kidView(s, deps.display(s.tutor)) };
+    return { status: 200, json: kidView(s, deps.display(s.tutor), deps.voiced(s.tutor)) };
   }
 
   if (sub === 'rewrites' && method === 'POST' && i >= 0) {
@@ -456,7 +463,7 @@ async function handleSession(method: string, url: URL, deps: DictationDeps, body
     const self = isObj(body) && body.self === true;
     s.rewrites.push({ word: i, self, attempt: { at: now.toISOString(), chars, judges: await judge(deps, s.words[i].chars, chars, s.lang) } });
     await writeSession(root, s);
-    return { status: 200, json: kidView(s, deps.display(s.tutor)) };
+    return { status: 200, json: kidView(s, deps.display(s.tutor), deps.voiced(s.tutor)) };
   }
 
   if (sub === 'reveal' && method === 'POST' && i >= 0) {

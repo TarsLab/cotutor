@@ -177,7 +177,7 @@ ${BTN_JS}
   var REEL_ID = q.get('reel');
   // 录像里只记出错,不报打开
   kidLog.start({ page: 'dictation-en', mode: REEL_ID ? 'reel' : 'kid', ctx: function () { return { tutor: TUTOR || null }; } });
-  var S = { v: null, base: Date.now(), i: 0, strokes: [], undos: 0, gone: [], revealed: false, word: null, sawPen: false, mode: 'first', hide: false, noAudio: false, tok: 0, timer: 0 };
+  var S = { v: null, base: Date.now(), i: 0, strokes: [], undos: 0, gone: [], revealed: false, word: null, sawPen: false, mode: 'first', hide: false, tok: 0, timer: 0 };
   var now = function () { return Math.max(0, Date.now() - S.base); };
   var setView = function (v) { var fresh = !S.v || S.v.id !== v.id; S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); if (fresh) { S.vw = 0; sendView(); } };
   var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'write' && S.mode === 'rewrite'; if (name === 'write') fitPad(); window.scrollTo(0, 0); if (!REEL_ID) guard(); };
@@ -204,29 +204,24 @@ ${BTN_JS}
   var TUTORS = null;
   var showFace = function () { var name = (S.v && S.v.tutorName) || TUTOR; if (!TUTORS || !name) return; var t = TUTORS.filter(function (x) { return x.name === name; })[0] || null; if (t) BACK.set(t); $('#snap-av').replaceChildren(t ? tutorAvatar(t) : ''); if (t && t.color) document.documentElement.style.setProperty('--sc', t.color); };
 
-  // ---------- 念:配了音色放音频,没有退浏览器的英文合成声 ----------
+  // ---------- 念:配了音色放音频;没有音色、合成失败直接提示叫家长,不念浏览器合成声 ----------
   var audio = new Audio(); audio.preload = 'auto';
   ${UNLOCK_JS}
-  var stopSay = function () { clearTimeout(S.timer); S.tok++; try { audio.pause(); } catch (e) {} try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {} };
+  var stopSay = function () { clearTimeout(S.timer); S.tok++; try { audio.pause(); } catch (e) {} };
+  var NO_VOICE = '老师的声音还没配好 · 叫爸爸妈妈来看一下';
   var status = function (t) { $('#w-status').textContent = t; };
   var sayWord = function (i, times) {
     stopSay();
+    if (S.v.voice === false) { status(NO_VOICE); return; }
     var tok = S.tok; var left = times; var nth = 0;
     var next = function () { if (tok !== S.tok) return; if (left <= 0) { status('听完了就写'); return; } left--; nth++; status('正在念 · 第 ' + nth + ' 遍'); event('say', i, nth); play(); };
     var gap = function () { if (tok !== S.tok) return; status(left > 0 ? '再听一遍' : '听完了就写'); if (left > 0) S.timer = setTimeout(next, 1600); };
-    var synth = function () {
-      api('GET', '/api/dictation/' + S.v.id + '/say/' + i + '?text=1').then(function (j) {
-        if (tok !== S.tok || !window.speechSynthesis) return gap();
-        var u = new SpeechSynthesisUtterance(j.text); u.lang = 'en-US'; u.rate = 0.75;
-        u.onend = gap; u.onerror = gap; speechSynthesis.speak(u);
-      }, gap);
-    };
+    var mute = function () { if (tok === S.tok) status(NO_VOICE); };
     var play = function () {
-      if (S.noAudio) return synth();
       audio.onended = gap;
-      audio.onerror = function () { S.noAudio = true; synth(); };
+      audio.onerror = mute;
       audio.src = '/api/dictation/' + S.v.id + '/say/' + i;
-      var pr = audio.play(); if (pr && pr.catch) pr.catch(function (e) { if (tok !== S.tok) return; if (audio.error) { S.noAudio = true; synth(); } else if (blocked(e)) status('点「再念」听老师念'); });
+      var pr = audio.play(); if (pr && pr.catch) pr.catch(function (e) { if (tok !== S.tok) return; if (audio.error) mute(); else if (blocked(e)) status('点「再念」听老师念'); });
     };
     next();
   };
@@ -340,8 +335,9 @@ ${BTN_JS}
     if (v.checked) return openCheck();
     $('#s-title').textContent = '单词听写 · ' + v.sizes.length + ' 个单词';
     var wrote = v.written.filter(Boolean).length;
-    $('#s-sub').textContent = wrote ? '写到第 ' + (wrote + 1) + ' 个了' : (v.tutor || '老师') + '念,你来写';
+    $('#s-sub').textContent = v.voice === false ? NO_VOICE : wrote ? '写到第 ' + (wrote + 1) + ' 个了' : (v.tutor || '老师') + '念,你来写';
     $('#s-go span').textContent = wrote ? '接着写' : '开始';
+    $('#s-go').hidden = v.voice === false;
     show('start');
   };
   $('#s-go').addEventListener('click', function () { nextWord(); });

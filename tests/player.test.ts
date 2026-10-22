@@ -79,7 +79,7 @@ function fuzz(seed: number): string | null {
     const s = m.state;
     if (s.section >= sections.length) return `种子 ${seed} 第 ${k} 步:节 ${s.section} 超出 ${sections.length}`;
     if (s.status === 'waiting' && !sections[s.section]?.lines.at(-1)?.ask) return `种子 ${seed} 第 ${k} 步:末句不是问句却在等`;
-    if (['playing', 'paused', 'stage'].includes(s.status) || s.replay) return `种子 ${seed} 第 ${k} 步:孩子端进了「在念」的状态 ${s.status}`;
+    if (s.status === 'playing') return `种子 ${seed} 第 ${k} 步:孩子端进了「在念」的状态`;
     if (out.effects.some((f) => f.kind === 'stop') && ev.type !== 'halt' && ev.type !== 'liveDropped') return `种子 ${seed} 第 ${k} 步:${ev.type} 停了声音`;
   }
   return null;

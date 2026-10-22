@@ -1,5 +1,5 @@
 /**
- * 实时老师整条线(《wip/实时老师开发计划.md》P2.4、P2.5),假百炼(_fake-realtime.ts)+ 假老师(_fake-cli.ts --stream),不花钱:
+ * 实时老师整条线(《实时老师设计.md》),假百炼(_fake-realtime.ts)+ 假老师(_fake-cli.ts --stream),不花钱:
  * 连上(手动轮次、嘴的人设)→ 按住说、松手 → 嘴先接住 → 转写交给脑(实时轮,消息记 live、上下文包带 caught)→ 一拍一拍照念(念的字就是讲稿)→
  * 念的时候按下 = 打断(清队列,下一轮上下文包带 cut)→ 挂了落录像;没开 / 不在 live.voices 拒升级;嘴连不上告诉孩子端走板书。
  */
@@ -412,7 +412,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   k.ws.send(loud());
   k.ws.send(JSON.stringify({ t: 'release', body: {} }));
   const okNext = await until(() => cur.commits === cm + 1 && cur.responses.length >= 1, 8000);
-  check('换连接:一轮讲完、安静了换上新的,旧的关掉;孩子端没收到 end / fallback;下一轮落在新连接上', swapped && okNext && !k.msgs.some((m) => m.t === 'end' || m.t === 'fallback') && k.closed === null, JSON.stringify({ conns: fake.conns.length - n0, oldClosed: c.closed, commits: cur.commits - cm, after: k.msgs.slice(nk).map((m) => m.t).join(',') }));
+  check('换连接:一轮讲完、安静了换上新的,旧的关掉;孩子端没收到 end / down;下一轮落在新连接上', swapped && okNext && !k.msgs.some((m) => m.t === 'end' || m.t === 'down') && k.closed === null, JSON.stringify({ conns: fake.conns.length - n0, oldClosed: c.closed, commits: cur.commits - cm, after: k.msgs.slice(nk).map((m) => m.t).join(',') }));
   await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
   k.ws.send(JSON.stringify({ t: 'bye' }));
   await until(() => k.closed !== null);
@@ -440,7 +440,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   c.sock.sendText(JSON.stringify({ type: 'error', error: { code: 'response_idle_timeout', message: 'Your session was closed because no response was generated for 300 seconds.' } }));
   const okClosed = await until(() => c.closed);
   await sleep(200);
-  check('idle 超时:嘴的会话当场关;孩子端没收到 end / fallback,电话还通着,也不马上重连', okClosed && !k.msgs.slice(n).some((m) => m.t === 'end' || m.t === 'fallback') && k.closed === null && fake.conns.length === nc, JSON.stringify(k.msgs.slice(n)));
+  check('idle 超时:嘴的会话当场关;孩子端没收到 end / down,电话还通着,也不马上重连', okClosed && !k.msgs.slice(n).some((m) => m.t === 'end' || m.t === 'down') && k.closed === null && fake.conns.length === nc, JSON.stringify(k.msgs.slice(n)));
 
   // 下次按下:现连一条新会话,连上之前按着说的照序补过去,松手照常一轮
   fake.kidText = '再讲一个字';
@@ -460,9 +460,9 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await until(() => c2.closed);
   fake.failUpdate = true;
   k.ws.send(JSON.stringify({ t: 'hold' }));
-  const okFb = await until(() => has({ msgs: k.msgs.slice(nf) }, (m) => m.t === 'fallback') && k.closed !== null);
+  const okFb = await until(() => has({ msgs: k.msgs.slice(nf) }, (m) => m.t === 'down') && k.closed !== null);
   fake.failUpdate = false;
-  check('现连两次都连不上:孩子端收到 fallback,电话挂掉', okFb && fake.conns.length === nc + 3, JSON.stringify({ msgs: k.msgs.slice(nf), conns: fake.conns.length - nc }));
+  check('现连两次都连不上:孩子端收到 down,电话挂掉', okFb && fake.conns.length === nc + 3, JSON.stringify({ msgs: k.msgs.slice(nf), conns: fake.conns.length - nc }));
 
   // 孩子走开久了(最后一次动静过了 keepAliveMs)就不跳,让百炼关
   liveDeps.keepAliveMs = 250;
@@ -480,7 +480,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 {
-  // ---- 一直听(《wip/实时老师常开麦设计.md》):VAD 判开口 / 说完,应用判收下 / 放过 ----
+  // ---- 一直听(《一直听设计.md》):VAD 判开口 / 说完,应用判收下 / 放过 ----
   const quiet = (): Uint8Array => new Uint8Array(3200);
   const say = (k: { ws: WebSocket }, n = 3): void => { for (let i = 0; i < n; i++) k.ws.send(loud()); k.ws.send(quiet()); };
   const idle = () => until(() => ctx.runner.running('chinese-tutor') === null, 15000);
@@ -604,7 +604,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 {
-  // ---- 口语课热身(《wip/口语课改实时老师设计.md》§三之四):[[echo 词]] / [[say 词]] 念完等孩子跟,[[call]] 念完进打电话 ----
+  // ---- 口语课热身(《口语课实时设计.md》§三之四):[[echo 词]] / [[say 词]] 念完等孩子跟,[[call]] 念完进打电话 ----
   const quiet = (): Uint8Array => new Uint8Array(3200);
   const say = (k: { ws: WebSocket }, n = 3): void => { for (let i = 0; i < n; i++) k.ws.send(loud()); k.ws.send(quiet()); };
   const idle = () => until(() => ctx.runner.running('chinese-tutor') === null, 15000);
@@ -710,12 +710,12 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   k1.ws.close();
   check('没挑音色的出厂老师照样连得上,嘴用出厂的音色(数学 Andre)', !k1.refused && okMath && fake.conns[n0]?.session?.voice === 'Andre', JSON.stringify(fake.conns[n0]?.session));
   check('不是有脸的老师:升级被拒', (await connect('nobody')).refused && (await connect('nobody-tutor')).refused);
-  // 嘴连不上(配会话就报错):告诉孩子端 fallback(孩子端回到「正在叫老师」再连),然后关
+  // 嘴连不上(配会话就报错):告诉孩子端 down(孩子端回到「正在叫老师」再连),然后关
   fake.failUpdate = true;
   const k2 = await connect('chinese-tutor');
-  const okFb = await until(() => has(k2, (m) => m.t === 'fallback') && k2.closed !== null);
+  const okFb = await until(() => has(k2, (m) => m.t === 'down') && k2.closed !== null);
   fake.failUpdate = false;
-  check('嘴连不上:孩子端收到 fallback(带原因),连接关掉', okFb && String(k2.msgs.find((m) => m.t === 'fallback')?.why).includes('Voice not supported'), JSON.stringify(k2.msgs));
+  check('嘴连不上:孩子端收到 down(带原因),连接关掉', okFb && String(k2.msgs.find((m) => m.t === 'down')?.why).includes('Voice not supported'), JSON.stringify(k2.msgs));
 }
 
 {

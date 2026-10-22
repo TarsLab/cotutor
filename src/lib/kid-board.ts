@@ -375,7 +375,7 @@ export function nowCard(sections: readonly BoardSection[], state: PlayerState): 
   if (!line) return null;
   // 停下等答:亮的是提问卡(有的话)——孩子要答的那句在它上面
   const askAt = s.cards.length - 1;
-  if (state.status === 'waiting' && !state.replay && state.line === s.lines.length - 1 && askAt >= 0 && isAskCard(s.cards[askAt])) return askAt;
+  if (state.status === 'waiting' && state.line === s.lines.length - 1 && askAt >= 0 && isAskCard(s.cards[askAt])) return askAt;
   const t = lineTarget(line);
   if (t !== null && s.cards[t] && !isHeading(s.cards[t])) return t;
   const first = s.cards.findIndex((c) => !isHeading(c));
@@ -609,7 +609,7 @@ export interface BoardEntry extends BoardSection {
 }
 
 /**
- * 实时的一节怎么接(《wip/实时老师设想.md》拍板 20):新一节的开头由脑定,不再机械是孩子那句。
+ * 实时的一节怎么接(《实时老师设计.md》拍板 20):新一节的开头由脑定,不再机械是孩子那句。
  * 这一轮第一张卡是节头 → head;没写(只有讲稿、开头是别的卡、还没写出卡)→ cont,接着上一节。一轮中间的节头卡,是从那张卡起新一节
  */
 export function liveHead(s: Pick<BoardSection, 'cards'>): { head: string } | { cont: true } {
@@ -696,15 +696,13 @@ export function sectionTitle(s: BoardSection): string {
 
 /** 板上的位置。孩子端不念讲稿了(《产品规划.md》拍板 30):讲稿由嘴照念(live-board.ts 的 liveStep),这里的状态只剩
  *  thinking = 老师还在写 · waiting = 写完了、末句是问句 · done = 写完了 · idle = 板上还没东西。
- *  playing / paused / stage 与 replay 只出现在录像里孩子的屏幕(reel 照记下的播放位置算的),孩子端自己不会进这几个状态 */
-export type PlayStatus = 'idle' | 'playing' | 'paused' | 'waiting' | 'done' | 'stage' | 'thinking';
+ *  playing 只出现在录像里孩子的屏幕(嘴在念这一句),孩子端自己不会进 */
+export type PlayStatus = 'idle' | 'playing' | 'waiting' | 'done' | 'thinking';
 
 export interface PlayerState {
   section: number;
   line: number;
   status: PlayStatus;
-  /** 录像里:那时孩子在「再听」的句子(板书时代的录像) */
-  replay?: { lines: number[]; back: PlayerState };
 }
 
 /** 打开页面时的位置:停在最后一节末尾;末句是问句就等着 */
@@ -732,34 +730,28 @@ export interface SubtitleInput {
 
 export interface SubtitleView {
   text: string;
-  /** wait = 第一拍前(板上有占位卡);gap = 拍与拍之间(留着刚念那句,变暗加点);replay = 再听(淡一档、前面一个小喇叭,和老师正在说的分开) */
-  kind: 'line' | 'wait' | 'gap' | 'replay' | 'empty';
-  /** stop = 再听时的钮(停,回原位置),和暂停 / 播放长得不一样;等答时没有钮(「继续」2026-10-08 去掉了) */
-  right: 'pause' | 'play' | 'stop' | 'none';
+  /** wait = 第一拍前;gap = 拍与拍之间(留着刚念那句,变暗加点) */
+  kind: 'line' | 'wait' | 'gap' | 'empty';
+  /** 右边的钮只剩舞台里小课堂那一段的暂停 / 播放(stageSubtitle);别的时候没有 */
+  right: 'pause' | 'play' | 'none';
 }
 
 /** 第一拍前等过这么久,字幕从「我写给你看」换成「再等我一下下」 */
 export const WAIT_LONG_MS = 8000;
 
-/** 字幕行:等老师 > 当前句(按播放状态定右侧的钮) */
+/** 字幕行:等老师 > 当前句 */
 export function subtitleFor(i: SubtitleInput): SubtitleView {
   const line = i.sections[i.state.section]?.lines[i.state.line];
   const text = line ? plainLine(line.text) : '';
   // 老师还在写:正在播已就绪的句子就照常出字幕;这节念过几句了就留着刚念那句等下一拍;一句还没念(第一拍前)才出等的话
   if (i.state.status === 'thinking' && text) return { text, kind: 'gap', right: 'none' };
-  if (i.state.status === 'thinking' || (i.pending && i.state.status !== 'playing' && i.state.status !== 'paused' && i.state.status !== 'stage')) return { text: i.waitedMs < WAIT_LONG_MS ? '我写给你看' : '再等我一下下', kind: 'wait', right: 'none' };
-  if (i.state.replay) return { text, kind: 'replay', right: 'stop' };
+  if (i.state.status === 'thinking' || (i.pending && i.state.status !== 'playing')) return { text: i.waitedMs < WAIT_LONG_MS ? '我写给你看' : '再等我一下下', kind: 'wait', right: 'none' };
   switch (i.state.status) {
     case 'playing':
-      return { text, kind: 'line', right: 'pause' };
-    case 'paused':
-      return { text, kind: 'line', right: 'play' };
     case 'waiting':
       return { text, kind: 'line', right: 'none' };
     case 'done':
       return { text, kind: text ? 'line' : 'empty', right: 'none' };
-    case 'stage':
-      return { text, kind: 'line', right: 'none' };
     default:
       return { text: '', kind: 'empty', right: 'none' };
   }

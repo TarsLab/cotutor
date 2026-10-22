@@ -17,8 +17,8 @@ export const SLOW_FIRST_MS = 15_000;
 const MAX_ISSUES = 8;
 
 export interface DevIssue {
-  /** js = 孩子端页面脚本出错(流水里的 error;tutor、job 可能是空的) */
-  kind: 'slow' | 'error' | 'warn' | 'js';
+  /** js = 孩子端页面脚本出错(流水里的 error;tutor、job 可能是空的);net = 孩子端连接(一台设备一天一条,7.3) */
+  kind: 'slow' | 'error' | 'warn' | 'js' | 'net';
   tutor: string;
   date: string;
   job: string;
@@ -203,6 +203,24 @@ async function kidSide(ws: Workspace, today: string, days: readonly string[]): P
     if (tutor) g.tutor = tutor;
     if (thread) g.js.thread = thread;
   }
+  // 连接(7.3):一台设备一天合一条
+  const nets = new Map<string, { device: string; ua: string; date: string; at: string; off: number; offMax: number; fail: number; drop: number }>();
+  for (const l of log) {
+    if (l.k !== 'net') continue;
+    const at = localMinute(new Date(l.at));
+    const key = `${l.device}/${at.slice(0, 10)}`;
+    const n = nets.get(key) ?? { device: l.device, ua: table[l.device]?.ua ?? '', date: at.slice(0, 10), at, off: 0, offMax: 0, fail: 0, drop: 0 };
+    n.at = at;
+    if (l.what === 'offline') { n.off++; n.offMax = Math.max(n.offMax, l.ms); }
+    else if (l.opened) n.drop++;
+    else n.fail++;
+    nets.set(key, n);
+  }
+  const span = (ms: number): string => { const s = Math.round(ms / 1000); return s < 60 ? `${s} 秒` : `${Math.floor(s / 60)} 分${s % 60 ? ` ${s % 60} 秒` : ''}`; };
+  const netIssues: DevIssue[] = [...nets.values()].map((n) => ({
+    kind: 'net', tutor: '', date: n.date, job: '', at: n.at, text: nameOf(n.device, n.ua),
+    detail: [n.off ? `断线 ${n.off} 次,最长 ${span(n.offMax)}` : '', n.fail || n.drop ? `实时${n.fail ? `连不上 ${n.fail} 次` : ''}${n.fail && n.drop ? '、' : ''}${n.drop ? `断了 ${n.drop} 次` : ''}` : ''].filter(Boolean).join(' · '),
+  }));
   const floor = new Date(Date.parse(`${today}T00:00:00`) - (DEVICE_DAYS - 1) * 86_400_000).toISOString();
   const opensToday = new Map<string, number>();
   for (const l of log) if (l.k === 'open' && localDate(new Date(l.at)) === today) opensToday.set(l.device, (opensToday.get(l.device) ?? 0) + 1);
@@ -235,7 +253,7 @@ async function kidSide(ws: Workspace, today: string, days: readonly string[]): P
   return {
     devices: all.filter(([, d]) => d.last >= floor).map(row),
     older: all.filter(([, d]) => d.last < floor).map(row),
-    issues: [...groups.values()],
+    issues: [...groups.values(), ...netIssues],
     time,
   };
 }

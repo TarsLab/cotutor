@@ -81,7 +81,13 @@ try {
     await recordKidLog(ws, { k: 'fg', page: 'dictation', ms: 10 * 60_000 }, { device: ipad }, new Date(2026, 9, 16, 15, 45));
     await recordKidLog(ws, { k: 'fg', page: 'kid', ms: 5 * 60_000 }, { device: mac }, new Date(2026, 9, 16, 15, 46));
     await recordKidLog(ws, { k: 'perm', page: 'kid', what: 'autoplay', state: 'blocked' }, { device: ipad }, new Date(2026, 9, 16, 15, 47));
+    // 连接:iPad 今天断两次(40 秒、2 分 10 秒)、实时连不上 2 次断 1 次;Mac 昨天实时断 1 次
+    for (const [ms, min] of [[40_000, 10], [130_000, 20]]) await recordKidLog(ws, { k: 'net', page: 'kid', what: 'offline', ms }, { device: ipad }, new Date(2026, 9, 16, 15, min));
+    for (const [opened, min] of [[false, 21], [false, 22], [true, 25]] as const) await recordKidLog(ws, { k: 'net', page: 'kid', what: 'live', opened, ms: opened ? 60_000 : 0 }, { device: ipad }, new Date(2026, 9, 16, 15, min));
+    await recordKidLog(ws, { k: 'net', page: 'kid', what: 'live', opened: true, ms: 5000 }, { device: mac }, new Date(2026, 9, 15, 21, 10));
     const o2 = await devOverview(ws, now);
+    const nets = o2.issues.filter((i) => i.kind === 'net');
+    check('连接:一台设备一天一条,断线几次、最长多久,实时连不上几次、断了几次', nets.length === 2 && nets.some((i) => i.text === 'iPad · Safari 27' && i.date === today && i.at === `${today}T15:25` && i.detail === '断线 2 次,最长 2 分 10 秒 · 实时连不上 2 次、断了 1 次') && nets.some((i) => i.text === 'Mac · Safari 26' && i.date === yesterday && i.detail === '实时断了 1 次'), JSON.stringify(nets));
     check('设备的毛病:iPad 声音被拦过(琥珀),Mac 没有语音识别(琥珀);没毛病的不写', o2.devices[0].flags.map((f) => f.text + f.level).join() === '声音被拦过warn' && o2.devices[1].flags.map((f) => f.text + f.level).join() === '没有语音识别warn' && o2.olderDevices[0].flags.length === 0, JSON.stringify(o2.devices.map((x) => x.flags)));
     check('孩子端开着:今天前台 45 分、15:00–15:46;近七天昨天 20 分;设备今天各几分', o2.kidTime.today?.ms === 45 * 60_000 && o2.kidTime.today.from === '15:00' && o2.kidTime.today.to === '15:46' && o2.kidTime.days.find((x) => x.date === yesterday)?.ms === 20 * 60_000 && o2.devices[0].todayMs === 40 * 60_000 && o2.devices[1].todayMs === 5 * 60_000, JSON.stringify({ t: o2.kidTime, d: o2.devices.map((x) => x.todayMs) }));
     check('设备卡:近 30 天的,最近开的在前,今天开了几次、近 7 天出错几条;更早的折起来', o2.devices.map((x) => x.id).join() === `${ipad},${mac}` && o2.devices[0].label === 'iPad · Safari 27' && o2.devices[0].today === 2 && o2.devices[0].errors === 1 && o2.devices[1].today === 0 && o2.devices[1].label === 'Mac · Safari 26' && o2.olderDevices.map((x) => x.id).join() === old, JSON.stringify(o2.devices));
@@ -90,7 +96,7 @@ try {
     check('页面出错:同一条合成一条,×2、两台设备、时刻是最近一次(本地时间)、带老师与话题', js.length === 2 && x?.js?.count === 2 && x.js.devices.join() === 'iPad · Safari 27,Mac · Safari 26' && x.at === `${today}T15:40` && x.js.first === `${today}T15:31` && x.tutor === 'chinese-tutor' && x.js.thread === '1500-1' && x.detail === 'kid · 12:3', JSON.stringify(js));
     const y = js.find((i) => i.text === 'y is undefined');
     check('家长端的出错照记,标上模式;设备不在表里写浏览器标签', y?.detail === 'kid(parent) · 12:3' && y.js?.devices[0] === 'iPad · Safari 27' && y.tutor === '', JSON.stringify(y));
-    check('和轮次的问题一起按时刻排,新的在前', o2.issues[0].kind === 'js' && o2.issues[0].text === 'y is undefined');
+    check('和轮次的问题一起按时刻排,新的在前', o2.issues[0].kind === 'js' && o2.issues[0].text === 'y is undefined', JSON.stringify(o2.issues.map((i) => [i.kind, i.at])));
     const c2 = createContext(ws);
     const rn = await route('PATCH', `/api/dev/devices/${ipad}`, c2, { name: 'Ray 的 iPad' });
     const list = (await route('GET', '/api/dev/devices', c2)).json as Record<string, { name: string | null; label: string }>;

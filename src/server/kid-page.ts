@@ -1437,6 +1437,8 @@ ${BOARD_MARK_JS}
   const setOffline = (off) => {
     if (S.offline === off) return;
     S.offline = off;
+    // 断了多久记一笔流水(kid-log.ts,《孩子端流水设计.md》7.3):断着发不出去,通了再报
+    kidLog.offline(off);
     document.body.classList.toggle('offline', off);
     if (off && S.tutor) closeTutor();
   };
@@ -3947,14 +3949,16 @@ __REEL_DOCK_JS__
     const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/live/' + encodeURIComponent(S.tutor.name) + '/ws' + (LV.model.open ? '?listen=open' : ''));
     ws.binaryType = 'arraybuffer';
     LV.ws = ws;
-    ws.onopen = () => { if (LV.ws === ws) lvSend({ t: 'view', w: innerWidth, h: innerHeight }); };
+    let wsOpenAt = 0;
+    ws.onopen = () => { wsOpenAt = Date.now(); if (LV.ws === ws) lvSend({ t: 'view', w: innerWidth, h: innerHeight }); };
     ws.onmessage = (e) => {
       if (LV.ws !== ws) return;
       if (typeof e.data !== 'string') { liveDispatch({ type: 'audio' }, e.data); return; }
       let m; try { m = JSON.parse(e.data); } catch { return; }
       liveMsg(m);
     };
-    ws.onclose = () => { if (LV.ws === ws) liveDispatch({ type: 'drop' }); };
+    // 不是孩子自己收的(liveClose 先摘了 onclose):记一笔流水,没连上还是连上又断(7.3)
+    ws.onclose = () => { if (LV.ws === ws) { kidLog.live(wsOpenAt > 0, wsOpenAt ? Date.now() - wsOpenAt : 0); liveDispatch({ type: 'drop' }); } };
     micWarm();
   };
   /** 实时那个 AudioContext 关掉(连着它的麦克风也放掉);下次要用(进实时、开麦克风、按住)再起新的 */

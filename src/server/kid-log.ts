@@ -16,13 +16,14 @@ import { DEVICE_COOKIE, DEVICE_COOKIE_DAYS, DEVICE_ID_RE, deviceLabel } from '..
  * 孩子端模式下还在前台计时(7.4):切到后台、离开页面时记一笔 fg,一直开着每 5 分钟也记一笔;不满 1 秒的不记。
  * 打开那行带 caps(7.2):麦克风权限(问 navigator.permissions,问不出 unknown;最多等 1.5 秒)、有没有 getUserMedia、有没有语音识别;
  * 麦克风权限变了、kidLog.blocked('autoplay')(老师的声音被浏览器拦了,一次打开只记一次)各记一行 perm。
+ * 连接(7.3):kidLog.offline(on) 心跳断了 / 又通了,通了那一下记 net offline 与断了多久;kidLog.live(opened, ms) 实时老师的连接不是孩子自己收的、自己关了。
  * 同一次打开里同一条报错只报一次、最多 20 条(防一个死循环写满文件,是护栏不是限额);只收脚本错,图片、声音读不出不收。
  * 用在首页 / 老师页(kid-page.ts,各种模式都带)、听写(中、英)、口语课;tests/kid-log.test.ts 盯着这几页都带它。
  * 脚本是 ES5、没有反斜杠与反引号(插进各页的模板字符串)。
  */
 export const KID_LOG_JS = `
   var kidLog = (function () {
-    var sent = {}, n = 0, page = '', mode = 'kid', v = '', ctx = null, fgSince = 0, blocked = {};
+    var sent = {}, n = 0, page = '', mode = 'kid', v = '', ctx = null, fgSince = 0, blocked = {}, offSince = 0;
     var cut = function (s, k) { s = String(s == null ? '' : s); return s.length > k ? s.slice(0, k) : s; };
     var post = function (row) { try { fetch('/api/kid/log', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(row), keepalive: true, credentials: 'same-origin' }).catch(function () {}); } catch (e) {} };
     var report = function (msg, where, stack) {
@@ -49,6 +50,18 @@ export const KID_LOG_JS = `
       report('unhandledrejection: ' + (r && r.message ? r.message : String(r)), '', r && r.stack);
     });
     return {
+      offline: function (on) {
+        if (mode !== 'kid') return;
+        if (on) { if (!offSince) offSince = Date.now(); return; }
+        if (!offSince) return;
+        var ms = Date.now() - offSince;
+        offSince = 0;
+        post({ k: 'net', page: page, what: 'offline', ms: Math.round(ms) });
+      },
+      live: function (opened, ms) {
+        if (mode !== 'kid') return;
+        post({ k: 'net', page: page, what: 'live', opened: Boolean(opened), ms: Math.round(ms || 0) });
+      },
       blocked: function (what) {
         if (mode !== 'kid' || blocked[what]) return;
         blocked[what] = 1;
@@ -98,6 +111,9 @@ export type KidLogRow =
   | { k: 'fg'; page: string; ms: number }
   /** 权限变了(7.2):mic = 麦克风权限变成 state;autoplay = 老师的声音被拦了(state blocked) */
   | { k: 'perm'; page: string; what: 'mic' | 'autoplay'; state: string }
+  /** 连接(7.3):offline = 心跳断了多久(通了才报);live = 实时老师的连接自己关了,opened false = 没连上,true = 连上 ms 毫秒后断了 */
+  | { k: 'net'; page: string; what: 'offline'; ms: number }
+  | { k: 'net'; page: string; what: 'live'; opened: boolean; ms: number }
   | { k: 'error'; page: string; mode: string; v: string; msg: string; where: string; stack: string; ua: string; ctx: Record<string, unknown> | null };
 /** 服务端那时跑的是哪份代码(打开那行补,《孩子端流水设计.md》7.1) */
 export interface KidLogSrv {
@@ -138,6 +154,13 @@ export function parseKidLog(body: unknown): KidLogRow | null {
   if (b.k === 'open') {
     const c = b.caps && typeof b.caps === 'object' ? (b.caps as Record<string, unknown>) : null;
     return { k: 'open', page: str(b.page, 40), v: str(b.v, 40), ua: str(b.ua, 400), touch: num(b.touch), standalone: b.standalone === true, w: num(b.w), h: num(b.h), vw: num(b.vw), vh: num(b.vh), dpr: num(b.dpr), lang: str(b.lang, 20), ...(c ? { caps: { mic: micState(c.mic), gum: c.gum === true, sr: c.sr === true } } : {}) };
+  }
+  if (b.k === 'net') {
+    const ms = typeof b.ms === 'number' && b.ms >= 0 && b.ms <= 86_400_000 ? Math.round(b.ms) : null;
+    if (ms === null) return null;
+    if (b.what === 'offline') return { k: 'net', page: str(b.page, 40), what: 'offline', ms };
+    if (b.what === 'live') return { k: 'net', page: str(b.page, 40), what: 'live', opened: b.opened === true, ms };
+    return null;
   }
   if (b.k === 'perm') return b.what === 'mic' || b.what === 'autoplay' ? { k: 'perm', page: str(b.page, 40), what: b.what, state: b.what === 'mic' ? micState(b.state) : 'blocked' } : null;
   // 一笔最多算 6 小时(页面每 5 分钟记一笔,长了是钟跳了)

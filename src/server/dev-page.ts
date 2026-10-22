@@ -134,6 +134,8 @@ ${BRAND_CSS}
   .issue .tx span { font-size:12.5px; color:var(--ink-2); word-break:break-word; }
   .issue .go { flex:none; font-size:12.5px; color:var(--accent); line-height:20px; }
   .jsissue { display:flex; flex-direction:column; gap:6px; }
+  .issue.static { cursor:default; }
+  .issue.static:hover { box-shadow:0 0 0 1px var(--line-soft); }
   .jsmore { padding:4px 12px 8px; display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
   .jsmore[hidden] { display:none; }
   .jsmore pre { margin:0; max-width:100%; overflow-x:auto; font:400 11.5px/1.5 var(--mono); color:var(--ink-2); white-space:pre-wrap; word-break:break-all; }
@@ -1766,10 +1768,13 @@ ${BRAND_CSS}
         h('span', { class: 'go' }, '展开'));
       return h('div', { class: 'jsissue' }, btn, more);
     };
+    // 连接(7.3):一台设备一天一条,不是哪一轮,点不开
+    const netIssue = (i) => h('div', { class: 'issue static' }, h('span', { class: 'st warn' }, '连接'),
+      h('span', { class: 'tx' }, h('b', {}, i.text + ' · ' + (i.date === d.today ? '今天' : i.date.slice(5)) + ' 最近 ' + i.at.slice(11, 16)), h('span', {}, i.detail)));
     const KIND = { slow: ['warn', '慢'], error: ['err', '出错'], warn: ['info', '提醒'] };
     const issueBox = h('section', { class: 'blk', style: 'flex:2 1 340px' },
       h('div', { class: 'hd' }, h('h2', {}, '要看一眼'), h('span', { class: 'sub num' }, d.issues.length ? String(d.issues.length) : ''), h('span', { class: 'sub' }, '近 7 天')),
-      ...(d.issues.length ? d.issues.map((i) => i.kind === 'js' ? jsIssue(i) : h('button', { type: 'button', class: 'issue', on: { click: () => goChat(i.tutor, i.date, i.job) } },
+      ...(d.issues.length ? d.issues.map((i) => i.kind === 'js' ? jsIssue(i) : i.kind === 'net' ? netIssue(i) : h('button', { type: 'button', class: 'issue', on: { click: () => goChat(i.tutor, i.date, i.job) } },
         h('span', { class: 'st ' + KIND[i.kind][0] }, KIND[i.kind][1]),
         h('span', { class: 'tx' }, h('b', {}, tutorOfName(i.tutor).display + ' · ' + (i.date === d.today ? '' : i.date.slice(5) + ' ') + i.at.slice(11, 16)), h('span', {}, i.detail), h('span', { class: 'muted' }, '「' + i.text + '」')),
         h('span', { class: 'go' }, '看原文'))) : [h('p', { class: 'note' }, '七天里没有慢的、出错的、带提醒的轮次,孩子端页面也没出过错。')]),

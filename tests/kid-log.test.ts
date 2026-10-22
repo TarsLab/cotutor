@@ -111,6 +111,19 @@ check('KID_LOG_JS 能插进模板字符串(没有反斜杠、反引号)', !/[\\`
   const pp = run();
   pp.log.start({ page: 'kid', mode: 'parent' }); pp.log.blocked('autoplay');
   check('家长端不记声音被拦', pp.posts.length === 0);
+  // 连接(7.3):断了不报,通了报断了多久;连着报两次断只算第一次的起点;实时连不上 / 连上又断
+  const n = run();
+  n.log.start({ page: 'kid', mode: 'kid' });
+  const before = n.posts.length;
+  n.log.offline(true); n.clock.t += 5_000; n.log.offline(true); n.clock.t += 125_000;
+  check('断着不报', n.posts.length === before);
+  n.log.offline(false); n.log.offline(false);
+  n.log.live(false, 0); n.log.live(true, 61_000.4);
+  const net = n.posts.slice(before);
+  check('通了报一行断了多久(从第一次断起);再通不重报;实时没连上、连上 61 秒后断', net.length === 3 && net[0].what === 'offline' && net[0].ms === 130_000 && net[1].what === 'live' && net[1].opened === false && net[2].opened === true && net[2].ms === 61_000, JSON.stringify(net));
+  const np = run();
+  np.log.start({ page: 'kid', mode: 'preview' }); np.log.offline(true); np.log.offline(false); np.log.live(false, 0);
+  check('预览、家长端不记连接', np.posts.length === 0);
 }
 
 // ---- 各页都带 ----
@@ -154,6 +167,9 @@ const bad = await Promise.all([route('POST', '/api/kid/log', ctx, { page: 'kid' 
 check('坏正文、k 不认得、太长:400', bad.every((r) => r.status === 400), bad.map((r) => r.status).join());
 const fgOk = await route('POST', '/api/kid/log', ctx, { k: 'fg', page: 'kid', ms: 90_000 }, 'local', { device: id });
 const fgBad = await Promise.all([{ k: 'fg', ms: 0 }, { k: 'fg', ms: 7 * 3600_000 }, { k: 'fg', ms: '9' }].map((b) => route('POST', '/api/kid/log', ctx, b, 'local', { device: id })));
+const netOk = await Promise.all([{ k: 'net', page: 'kid', what: 'offline', ms: 130_000 }, { k: 'net', page: 'kid', what: 'live', opened: false, ms: 0 }].map((b) => route('POST', '/api/kid/log', ctx, b, 'local', { device: id })));
+const netBad = await Promise.all([{ k: 'net', what: 'wifi', ms: 1 }, { k: 'net', what: 'offline' }, { k: 'net', what: 'offline', ms: -1 }].map((b) => route('POST', '/api/kid/log', ctx, b)));
+check('连接:断线、实时收下;不认得的、没有毫秒、负的 400', netOk.every((r) => r.status === 200) && netBad.every((r) => r.status === 400), netBad.map((r) => r.status).join());
 check('前台一笔收下;0、超过 6 小时、不是数的 400', fgOk.status === 200 && (await readKidLog(ctx.ws, ['2026-10-22'])).some((l) => l.k === 'fg' && l.ms === 90_000) && fgBad.every((r) => r.status === 400), fgBad.map((r) => r.status).join());
 
 const capsOpen = await route('POST', '/api/kid/log', ctx, { ...openBody, caps: { mic: 'granted', gum: true, sr: false } }, 'local', { device: id });

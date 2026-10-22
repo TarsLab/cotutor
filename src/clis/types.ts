@@ -11,7 +11,7 @@ export type ToolKind = 'read' | 'shell' | 'search' | 'edit' | 'skill' | 'other';
 
 /**
  * 这轮带不带工具(政策 tools 与消息种类定,《工作流程.md》拍板 12、20):off 一个不带;read 只读(看照片、读 vault、查教材);
- * on 还多 shell(家长明说 policy.tools: on 才有,口播老师要跑 koubo 命令)
+ * on 还多 shell(家长明说 policy.tools: on 才有)
  */
 export type ToolSet = 'off' | 'read' | 'on';
 

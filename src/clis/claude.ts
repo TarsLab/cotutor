@@ -10,7 +10,7 @@ import type { CliAdapter, ToolKind, ToolSet } from './types.ts';
 
 /** 只读那轮的白名单(`--tools`,2026-10-17):Read 看照片、读 vault 与技能文件,Grep / Glob 查教材。带照片的那条、系统任务走它 */
 export const CLAUDE_READ_TOOLS = 'Read,Grep,Glob';
-/** policy.tools: on 的老师(口播老师要跑 koubo 命令)多一个 Bash。Bash 不再给缺省的带工具轮:作业照片里一句话就能让老师读 ~/.ssh、写 workspace 外 */
+/** policy.tools: on 的老师多一个 Bash(家长明说才有)。Bash 不再给缺省的带工具轮:作业照片里一句话就能让老师读 ~/.ssh、写 workspace 外 */
 export const CLAUDE_TUTOR_TOOLS = `Bash,${CLAUDE_READ_TOOLS}`;
 const toolsOf = (set: ToolSet): string => (set === 'on' ? CLAUDE_TUTOR_TOOLS : set === 'read' ? CLAUDE_READ_TOOLS : '');
 

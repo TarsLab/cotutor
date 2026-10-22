@@ -149,9 +149,6 @@ const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚', runtime: 'qwen', cards: ['text', 'read', 'choice', 'image', 'tianzige', 'lecture', 'canvas'] },
   // 英语老师走 qwen3.8-flash(2026-10-13 Jack 拍板:Token Plan 上扣 Credits,比 claude 便宜;真跑三问 2.5–4 秒开口)
   'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤', runtime: 'qwen-flash', cards: ['text', 'read', 'choice', 'image', 'word', 'lecture'] },
-  // 口播老师(《口播老师设计.md》§6):要 koubo 才有用,出厂关着;在要练的那个 workspace 里打开,upgrade 再装 koubo 的技能
-  // 它每节都要跑 koubo 命令(进度、出题),孩子说的话也带工具
-  'koubo-tutor': { display: '口播老师', subject: '口播', avatar: '🎙️', enabled: false, cards: ['text', 'read', 'record'], policy: { tools: 'on' } },
 };
 
 /** cotutor.json 模板:只在文件不存在时写入;政策文件永不自动重建或覆盖(家长的决定不由机器替她拍板)。 */

@@ -223,7 +223,7 @@ export function kidThreads(messages: readonly KidMessage[]): KidThread[] {
 
 /**
  * 今天交给老师过的卡(`<job>/<n>`):交答案那条的 focus.card。交过的卡锁住——不能改、不能再交(2026-10-21,Jack:
- * 孩子改了交过的卡的答案又交一次,老师再答一遍,孩子糊涂)。录音卡另有一节一锁(kid-board 的 recordLocked)
+ * 孩子改了交过的卡的答案又交一次,老师再答一遍,孩子糊涂)。
  */
 export function submittedCards(index: { messages: readonly ConversationMessage[] }): Set<string> {
   return new Set(index.messages.flatMap((m) => (m.action === 'submit' && m.focus?.card ? [m.focus.card] : [])));

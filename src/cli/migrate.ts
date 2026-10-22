@@ -23,11 +23,11 @@ import { installTutors, type InstallStep } from './tutors.ts';
 import { CONFIG_FILE, ConfigError, readJson } from './workspace.ts';
 
 /** section:出厂模板里有的整段(dictation 这种后加的),你这份没有 */
-export type GapKind = 'tutor' | 'runtime' | 'flag' | 'policy' | 'cards' | 'section';
+export type GapKind = 'tutor' | 'runtime' | 'flag' | 'cards' | 'section';
 
 export interface ConfigGap {
   kind: GapKind;
-  /** 点位:tutors.koubo-tutor / runtimes.qwen / runtimes.claude.run */
+  /** 点位:tutors.math-tutor / runtimes.qwen / runtimes.claude.run */
   path: string;
   /** 人话:缺的是什么、补上有什么用 */
   detail: string;
@@ -135,15 +135,6 @@ export async function configGaps(raw: unknown): Promise<ConfigGap[]> {
       gaps.push({ kind: 'flag', path: `runtimes.${name}.${key}`, detail: `${name} 的 ${key} 命令模板${what}`, value: argv });
     }
   }
-  // 模板换成 {tools} 之后,出厂就要带工具的老师(口播老师要跑 koubo 命令)得在政策里写明,不然它孩子那轮没工具
-  if (gaps.some((g) => g.kind === 'flag' && (g.value as string[]).includes('{tools}') && !(getAt(raw, g.path) as string[]).includes('{tools}'))) {
-    for (const [name, entry] of Object.entries(factoryTutors)) {
-      const want = isObj(entry) && isObj(entry.policy) ? entry.policy.tools : undefined;
-      const mine = mineTutors[name];
-      if (want === undefined || !isObj(mine) || (isObj(mine.policy) && mine.policy.tools !== undefined)) continue;
-      gaps.push({ kind: 'policy', path: `tutors.${name}.policy.tools`, detail: `${name} 要带工具才干得了活(出厂政策 tools: ${String(want)})`, value: want });
-    }
-  }
   // 后加的整段(2026-10-10 听写的拍照认词要求):写进文件家长才看得见、改得动;已经有这一段就不碰
   for (const key of SECTIONS) {
     if (key in raw || !(key in factory)) continue;
@@ -155,10 +146,6 @@ export async function configGaps(raw: unknown): Promise<ConfigGap[]> {
 /** 补缺时会整段补上的配置段:出厂模板写了、写进文件才好改的 */
 const SECTIONS = ['dictation'] as const;
 const SECTION_WHAT: Record<(typeof SECTIONS)[number], string> = { dictation: '听写拍照认词用的模型,补上就能在文件里改(挑词的要求在听写 activity 文件)' };
-
-function getAt(obj: Record<string, unknown>, path: string): unknown {
-  return path.split('.').reduce<unknown>((cur, k) => (isObj(cur) ? cur[k] : undefined), obj);
-}
 
 function setAt(obj: Record<string, unknown>, path: string, value: unknown): void {
   const keys = path.split('.');

@@ -15,15 +15,15 @@ export type VoiceFace = 'still' | 'talk' | 'listen' | 'think' | 'ring' | 'dim';
 /** 声音:out 老师的三道小弧 · in 孩子的竖条往头像里走 · both 插话(两样都在,老师的淡到三成)· none 不画 */
 export type VoiceFlow = 'out' | 'in' | 'both' | 'none';
 /** 大字前的小图标 */
-export type VoiceIcon = '' | 'mic' | 'micOff' | 'photo' | 'up' | 'phone' | 'rec';
-/** 按下去:hold 按住说话 · toggle 点一下开 / 关麦(一直听)· hint 不接、晃一下说为什么 · off 不接(录音卡在录) */
-export type VoicePress = 'hold' | 'toggle' | 'hint' | 'off';
+export type VoiceIcon = '' | 'mic' | 'micOff' | 'photo' | 'up' | 'phone';
+/** 按下去:hold 按住说话 · toggle 点一下开 / 关麦(一直听)· hint 不接、晃一下说为什么 */
+export type VoicePress = 'hold' | 'toggle' | 'hint';
 /** 刚才那一下的提示(页面留 2 秒):busy 老师在想时按了 · connecting 嘴还没连上时按了 · unclear 太短 / 麦克风没开上 · tap 点一下没按住 */
 export type VoiceHint = '' | 'busy' | 'connecting' | 'unclear' | 'tap';
 
 export interface VoiceIn {
   /** liveStep 的状态(src/lib/live-board.ts 的 LiveStatus) */
-  status: 'quiet' | 'holding' | 'mouth' | 'card' | 'recording' | 'lecture' | 'ring' | 'replay';
+  status: 'quiet' | 'holding' | 'mouth' | 'card' | 'lecture' | 'ring' | 'replay';
   /** 一直听;hearing 服务端说孩子在说;ducked 嘴的声音压低着;muted 关了麦;turn 热身那拍等孩子跟 */
   open: boolean;
   hearing: boolean;
@@ -64,8 +64,6 @@ export interface VoiceView {
   shake: boolean;
   /** 慢慢呼吸的光(轮到你跟读) */
   breathe: boolean;
-  /** 整颗淡(录音卡在录) */
-  faded: boolean;
   press: VoicePress;
 }
 
@@ -76,7 +74,7 @@ export function voiceIn(p: Partial<VoiceIn> = {}): VoiceIn {
   return { status: 'quiet', open: false, hearing: false, ducked: false, muted: false, turn: false, pending: false, photo: false, ready: true, choose: false, holdAudio: false, cancel: false, silentMs: 0, hint: '', ...p };
 }
 
-const voiceLook = (o: Partial<VoiceView> & { key: string }): VoiceView => ({ tone: 'white', face: 'still', flow: 'none', dots: false, big: '', icon: '', wait: false, small: '', shake: false, breathe: false, faded: false, press: 'hold', ...o });
+const voiceLook = (o: Partial<VoiceView> & { key: string }): VoiceView => ({ tone: 'white', face: 'still', flow: 'none', dots: false, big: '', icon: '', wait: false, small: '', shake: false, breathe: false, press: 'hold', ...o });
 
 export function voiceView(i: VoiceIn): VoiceView {
   // 先点上面一个:按钮灰着写「点上面开始」,不接(按了晃一下);嘴连没连上、一直听不一直听都一样
@@ -90,7 +88,6 @@ export function voiceView(i: VoiceIn): VoiceView {
     if (i.silentMs >= VOICE_SILENT_MS) return voiceLook({ key: 'hold-silent', tone: 'blue', face: 'listen', flow: 'in', dots: true, small: '我还没听到声音' });
     return voiceLook({ key: 'hold', tone: 'blue', face: 'listen', flow: 'in', small: '松手发送 · 往上滑取消' });
   }
-  if (i.status === 'recording') return voiceLook({ key: 'recording', face: 'dim', icon: 'rec', big: '在录音', faded: true, press: 'off' });
   if (i.open) {
     // 一直听:不用按,这颗是麦克风开关
     const small = i.muted ? '点一下开麦' : '点一下关麦';

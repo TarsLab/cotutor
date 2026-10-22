@@ -3,7 +3,7 @@
  * serve 又常从没 export 代理的终端起 → 老师 403「Request not allowed」(0 token、不到 1 秒)。
  * 办法:cotutor.json 的 proxy 记下家长的选择,起 claude 子进程时把 HTTP(S)_PROXY 注进它的环境——不靠 serve 从哪个终端起,
  * 也不靠 .claude/settings.local.json(那条路要 --setting-sources 含 local,且 workspace 是 git 仓:claude 以 git 根为项目根找 .claude/)。
- * 只注给 claude:qwen、voxtell、koubo 连的是国内服务,不动。
+ * 只注给 claude:qwen、voxtell 连的是国内服务,不动。
  */
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';

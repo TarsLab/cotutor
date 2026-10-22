@@ -18,3 +18,7 @@
 #st-body .c-word .gh { transition:stroke .45s; }
 #st-body .c-word .wg:not(.merged) .lt.k1.done .gh, #st-body .c-word .wg:not(.merged) .lt.k1 .ink { stroke:var(--accent); }
 @media (max-width: 480px) { .c-word .we { font-size:36px; } }
+/* 「听」「再听一遍」钮(原来借录音卡的 .rc-pl,录音卡 10-22 删了) */
+.wd-pl { display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 14px; border-radius:18px; background:#ffffff; border:1.5px solid var(--tint-plum-line); color:var(--tint-plum-head); font-size:15px; font-weight:600; white-space:nowrap; }
+.wd-pl svg { width:18px; height:18px; }
+.wd-pl.on { background:var(--tint-plum-bg); border-color:var(--tint-plum-head); }

@@ -8,7 +8,7 @@
  *
  * 孩子端 → 这里:二进制帧 = PCM16 16k 单声道一块(按着时才推);文本帧 = JSON
  *   {t:'hold'} 按下 · {t:'release', body} 松手(body 同 POST /api/kid/conversations/<老师>/messages 少 text:thread / newThread / device…)
- *   {t:'hush'} 停下不开新一轮(上滑取消、按下录音卡的录音键):嘴在出就掐、孩子端清了、没念的丢掉
+ *   {t:'hush'} 停下不开新一轮(上滑取消):嘴在出就掐、孩子端清了、没念的丢掉
  *   {t:'send', body} 不是说的(打字、拍照、交卡、首页按钮;舞台开着带 focus.card):body 同那条 POST · {t:'view', w, h} 屏幕多大 · {t:'bye'}
  *   {t:'staged'} 讲稿 [[play]] 的小课堂那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
  * 这里 → 孩子端:二进制帧 = PCM16 24k 嘴的声音;文本帧 = JSON

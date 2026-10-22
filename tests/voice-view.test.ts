@@ -28,7 +28,6 @@ check('上滑优先于没声音', V({ status: 'holding', holdAudio: true, silent
 // 接不接按
 check('老师在想:不接、按了说为什么', V({ pending: true }).press === 'hint');
 check('嘴还没连上:不接(不掉进板书的识别)', V({ ready: false }).press === 'hint' && V({ ready: false, status: 'mouth' }).key === 'connecting');
-check('录音卡在录:不接、整颗淡', (() => { const v = V({ status: 'recording' }); return v.press === 'off' && v.faded; })());
 check('一直听:都是开关麦(点上面开始之前除外)', VOICE_SCENES.filter((s) => s.input.open && !s.input.choose).every((s) => V(s.input).press === 'toggle'));
 check('先点上面一个:灰着写「点上面开始」、不接;压过嘴没连上与一直听', (() => { const v = V({ choose: true }); return v.tone === 'grey' && v.big === '点上面开始' && v.press === 'hint' && v.face === 'still' && v.flow === 'none' && V({ choose: true, ready: false }).key === 'choose' && V({ choose: true, open: true }).key === 'choose'; })());
 check('一直听时点一下没按住的提示不出(点一下就是开关麦)', V({ open: true, hint: 'tap' }).key === 'open');
@@ -39,7 +38,7 @@ check('没提示时不晃', VOICE_SCENES.filter((s) => !s.input.hint).every((s) 
 check('老师在想时按了:提示压过「老师在想」', V({ pending: true, hint: 'busy' }).big === '老师在想,等一下再说');
 
 // 穷举:每种状态 × 开关组合都给得出一种样子,不抛
-const statuses: VoiceIn['status'][] = ['quiet', 'holding', 'mouth', 'card', 'recording', 'lecture', 'ring', 'replay'];
+const statuses: VoiceIn['status'][] = ['quiet', 'holding', 'mouth', 'card', 'lecture', 'ring', 'replay'];
 let n = 0, bad = 0;
 for (const status of statuses) for (let bits = 0; bits < 1 << 9; bits++) {
   const b = (k: number) => Boolean(bits & (1 << k));

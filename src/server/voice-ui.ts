@@ -76,7 +76,6 @@ const ICONS: Record<string, string> = {
   photo: '<svg width="22" height="22" viewBox="0 0 26 26" aria-hidden="true"><rect x="4" y="5" width="18" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 17 l5-5 4 4 3-3 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
   up: '<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M11 18 V5 M5 10.5 L11 4.5 L17 10.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   phone: '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5 l3 3 -2 2.5 a12 12 0 0 0 7.5 7.5 l2.5 -2 3 3 -2.5 3 a15 15 0 0 1 -14.5 -14.5 z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
-  rec: '<span class="vb-rec"></span>',
 };
 
 export const VOICE_CSS = `
@@ -87,10 +86,9 @@ export const VOICE_CSS = `
   .vb[data-tone=grey] { background:#f7f6f2; border-color:#ebe8df; color:#8a8781; box-shadow:none; }
   .vb[data-tone=cancel] { background:#e9ecf1; border-color:#d5dbe4; color:#4d5563; box-shadow:none; }
   .vb[data-tone=light] { background:#eaf2fd; border-color:#bcd6f5; color:#2a5ea8; box-shadow:none; }
-  .vb.vb-faded { opacity:.45; }
   /* 按下反馈,同孩子端大块面那一档(缩到 98.5% + 暗一点):按上去马上有手感;满 150 毫秒才算按住说话、变蓝(轻碰不打断老师) */
-  .vb:active:not(.vb-faded) { transform:scale(.985); filter:brightness(.97); transition-duration:.06s; }
-  @media (hover:hover) { .vb:hover:not(.vb-faded) { filter:brightness(.98); } }
+  .vb:active { transform:scale(.985); filter:brightness(.97); transition-duration:.06s; }
+  @media (hover:hover) { .vb:hover { filter:brightness(.98); } }
   .vb-av { position:relative; flex:none; width:96px; height:96px; display:grid; place-items:center; border-radius:50%; --vb-h1:6px; --vb-h2:-2px; transition:box-shadow .2s; }
   .vb-av > .av { width:72px; height:72px; font-size:34px; }
   .vb-side { position:relative; z-index:1; flex:1; align-self:stretch; min-width:0; }
@@ -100,7 +98,6 @@ export const VOICE_CSS = `
   .vb-ic { display:inline-flex; flex:none; }
   .vb-ic:empty { display:none; }
   .vb-ic svg { display:block; }
-  .vb-rec { width:10px; height:10px; border-radius:50%; background:#d9534f; animation:vb-blink 1s ease-in-out infinite; }
   .vb-dots { display:none; gap:3px; align-items:center; }
   .vb-wait .vb-dots { display:inline-flex; }
   .vb-dots i { width:5px; height:5px; border-radius:50%; background:currentColor; animation:vb-dot 1.2s ease-in-out infinite; }
@@ -145,7 +142,6 @@ export const VOICE_CSS = `
   @keyframes vb-shake { 0%,100% { transform:translateX(0); } 18% { transform:translateX(-6px); } 36% { transform:translateX(6px); } 54% { transform:translateX(-4px); } 72% { transform:translateX(4px); } }
   @keyframes vb-glow { 0%,100% { box-shadow:0 0 0 3px #3d7fd940, 0 0 0 10px #3d7fd90f; } 50% { box-shadow:0 0 0 6px #3d7fd973, 0 0 0 18px #3d7fd914; } }
   @keyframes vb-dot { 0%,100% { opacity:.25; } 50% { opacity:1; } }
-  @keyframes vb-blink { 0%,100% { opacity:1; } 50% { opacity:.3; } }
   @media (prefers-reduced-motion:reduce) { .vb, .vb *, .vb-face, .vb-face *, .vb-face::before, .vb-face::after { animation:none !important; transition:none !important; } }
 `;
 
@@ -284,7 +280,6 @@ export const VOICE_JS = `
           smEl.hidden = !v.small;
           el.classList.toggle('vb-wait', v.wait);
           el.classList.toggle('vb-breathe', v.breathe);
-          el.classList.toggle('vb-faded', v.faded);
           el.setAttribute('aria-label', v.big || v.small || '按住说话');
           voiceFace(av, v.face);
           if (v.shake) shake();

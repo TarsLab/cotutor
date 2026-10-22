@@ -1,6 +1,6 @@
 /**
  * 实时老师的孩子端:谁出声、谁停、谁让谁(《工作流程.md》§孩子端「实时老师」那张表)。纯函数,页面只 dispatch、照单执行。
- * 实时时孩子端不念讲稿(嘴照念,声音从 WebSocket 下来,src/live/call.ts);出声的只有嘴和卡自己的声音(朗读卡点读、单词卡、录音卡的示范与回放)。
+ * 实时时孩子端不念讲稿(嘴照念,声音从 WebSocket 下来,src/live/call.ts);出声的只有嘴和卡自己的声音(朗读卡点读、单词卡)。
  * 和板书的 step(kid-board.ts)是两个状态机,页面按这位老师这一次是不是实时 dispatch 到其中一个。
  * 改规则的顺序:先改表 → 再改 tests/live-player.test.ts → 最后改这里。
  * 一直听(《wip/实时老师常开麦设计.md》,全双工):孩子不用按,服务端的 VAD 判开口 / 说完;推不推孩子的声音是状态的函数(liveGate),一变就告诉服务端 gate。
@@ -8,8 +8,8 @@
  * 字幕重放(《wip/实时老师设想.md》拍板 21):字幕下「再听一遍」,孩子端放这一轮嘴照念过的声音(服务端按轮留的那份);只在安静、脑不在写时开始,不告诉服务端任何东西。
  */
 
-/** quiet 安静 · holding 孩子按着说话 · mouth 嘴的声音在放(或还在来)· card 卡的声音在念 · recording 录音卡在录 · lecture 在放小课堂卡上那一段(讲稿的 [[play]])· ring 在响铃(讲稿的 [[call]])· replay 在重放这一轮嘴说过的 */
-export type LiveStatus = 'quiet' | 'holding' | 'mouth' | 'card' | 'recording' | 'lecture' | 'ring' | 'replay';
+/** quiet 安静 · holding 孩子按着说话 · mouth 嘴的声音在放(或还在来)· card 卡的声音在念 · lecture 在放小课堂卡上那一段(讲稿的 [[play]])· ring 在响铃(讲稿的 [[call]])· replay 在重放这一轮嘴说过的 */
+export type LiveStatus = 'quiet' | 'holding' | 'mouth' | 'card' | 'lecture' | 'ring' | 'replay';
 
 export interface LiveModel {
   status: LiveStatus;
@@ -26,7 +26,7 @@ export interface LiveModel {
 
 /**
  * 孩子做的:press 按满 150 毫秒 · release 松手 · cancel 上滑松手 · cardTap 点卡上的声音 · send 打字发出、交答案、发照片 ·
- * stage 开 / 关舞台、拿起相机 · recStart 按下录音键 · recEnd 松手、上滑、关舞台(停录);
+ * stage 开 / 关舞台、拿起相机;
  * 声音的:audio 嘴的一块声音到了 · drained 孩子端的队列放完了(play:刚念完的那句 [[play]] 到小课堂卡,open = 能放、skip = 课包读不出来;
  * echo:刚念完的是热身的 [[echo]] / [[say]];call:刚念完的是 [[call]])· cardEnded 卡的声音念完 / 停了 · lectureDone 小课堂那一段放完 / 孩子关了 · ringEnd 铃响够了;
  * 服务端的:flush 清播放队列 · cards 卡铺上来、老师写完 · drop 连不上 / 断了;页面的:reset 换老师、关老师页;
@@ -47,8 +47,6 @@ export type LiveEvent =
   | { type: 'send' }
   | { type: 'cards' }
   | { type: 'stage' }
-  | { type: 'recStart' }
-  | { type: 'recEnd' }
   | { type: 'drop' }
   | { type: 'reset' }
   | { type: 'listen'; open: boolean }
@@ -95,9 +93,9 @@ export function initialLive(): LiveModel {
   return { status: 'quiet', cut: false, open: false, hearing: false, ducked: false, muted: false, turn: false };
 }
 
-/** 一直听时推不推孩子的声音:没关麦,卡没在念、没在录、小课堂没在放、没在响铃、没在重放(这些时候进麦的不是对老师说的;重放的是嘴从前说的,服务端比字比不到) */
+/** 一直听时推不推孩子的声音:没关麦,卡没在念、小课堂没在放、没在响铃、没在重放(这些时候进麦的不是对老师说的;重放的是嘴从前说的,服务端比字比不到) */
 export function liveGate(m: LiveModel): boolean {
-  return m.open && !m.muted && m.status !== 'card' && m.status !== 'recording' && m.status !== 'lecture' && m.status !== 'ring' && m.status !== 'replay' && m.status !== 'holding';
+  return m.open && !m.muted && m.status !== 'card' && m.status !== 'lecture' && m.status !== 'ring' && m.status !== 'replay' && m.status !== 'holding';
 }
 
 /** 停掉孩子端在出的声音:嘴的清掉、卡的停、小课堂那一段停下、铃停、重放停 */
@@ -123,8 +121,8 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
   const to = (status: LiveStatus, extra: Partial<LiveModel> = {}): void => { m = { ...m, status, ...extra }; };
   switch (ev.type) {
     case 'press':
-      // 在录时输入条那颗不接(录音卡自己的键在录);一直听时那条是胶囊,不是按住说话
-      if (m.status === 'recording' || m.status === 'holding' || m.open) break;
+      // 一直听时那条是胶囊,不是按住说话
+      if (m.status === 'holding' || m.open) break;
       hushLocal(m, fx);
       fx.push({ kind: 'hold' });
       to('holding', { cut: m.status === 'mouth' });
@@ -140,8 +138,8 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
       to('quiet');
       break;
     case 'audio':
-      // 按着、在录:按下前已经在路上的那几块丢掉
-      if (m.status === 'holding' || m.status === 'recording') break;
+      // 按着:按下前已经在路上的那几块丢掉
+      if (m.status === 'holding') break;
       if (m.status === 'card') fx.push({ kind: 'stopCard' });
       if (m.status === 'lecture') fx.push({ kind: 'stopLecture' });
       if (m.status === 'ring') fx.push({ kind: 'stopRing' });
@@ -192,15 +190,6 @@ function liveTransition(model: LiveModel, ev: LiveEvent): { model: LiveModel; ef
       break;
     case 'cards':
     case 'stage':
-      break;
-    case 'recStart':
-      hushLocal(m, fx);
-      fx.push({ kind: 'hush' });
-      to('recording', { turn: false });
-      fx.push({ kind: 'render' });
-      break;
-    case 'recEnd':
-      if (m.status === 'recording') { to('quiet'); fx.push({ kind: 'render' }); }
       break;
     case 'drop':
       fx.push({ kind: 'flush' }, { kind: 'stopCard' }, { kind: 'stopLecture' }, { kind: 'stopRing' }, { kind: 'stopReplay' }, { kind: 'retry' });

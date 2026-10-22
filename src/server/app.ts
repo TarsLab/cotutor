@@ -18,7 +18,6 @@ import { kidConversation, kidThreads, submittedCards, parentConversation, type K
 import { parseEvents, type RunEvent } from '../lib/events.ts';
 import { NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, tutorColors } from '../lib/tutor-color.ts';
 import { boardMarkOf, type BoardMarkId } from './board-mark.ts';
-import { audioData } from '../lib/audio-data.ts';
 import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type PlayRecord, type Reel, type ReelCall } from '../lib/reel.ts';
 import type { CallReel } from '../live/recorder.ts';
 import { isRealtimeVoice, REALTIME_VOICES } from '../live/voices.ts';
@@ -52,10 +51,9 @@ import { parentHomeRoute } from './parent-home.ts';
 import { bailianRoute, createBailian, type Bailian } from './bailian.ts';
 import { PARENT_HOME_PAGE } from './parent-home-page.ts';
 import { dictationRoute } from '../dictation/route.ts';
-import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardAudio, writeCardImage, writeCardState } from './store.ts';
-import { IMAGE_EXT, parseCardState, stripSecrets, type Heard, type RecordProps } from '../cards/index.ts';
+import { IndexError, capturePathOk, deleteThread, listDates, patchConfig, rateThread, readErrLog, readIndex, readTranscript, reloadIfChanged, scanCards, writeCapture, writeCardImage, writeCardState } from './store.ts';
+import { IMAGE_EXT, parseCardState, stripSecrets } from '../cards/index.ts';
 import { BUNDLE_ID_RE } from '../cards/kind.ts';
-import { kouboYuanOfDay, readHeard } from './koubo.ts';
 import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { themeFiles } from './theme.ts';
@@ -363,17 +361,6 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
     if (m) m.section = partial;
   }
   for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichPaints(ctx.ws, tutor, date, m.job, m.at, await enrichLectures(ctx.ws, m.section), { parent: true }); }
-  // 录音卡:家长端旁注要评测全量(档、逐字分、花费),从录音旁边的 heard.json 读;孩子端不走这里。
-  // 挂在新的卡对象上:索引有进程内缓存,改原对象判就漏到孩子端了
-  for (const m of messages) {
-    if (!m.section?.cards.some((c) => c.kind === 'record')) continue;
-    const cards = await Promise.all(m.section.cards.map(async (c) => {
-      const audio = c.kind === 'record' ? (c.state as { audio?: unknown } | undefined)?.audio : undefined;
-      const heard = typeof audio === 'string' && audio ? await readHeard(join(ctx.ws.root, audio)) : null;
-      return heard ? ({ ...c, heard } as BoardCard & { heard: Heard }) : c;
-    }));
-    m.section = { ...m.section, cards };
-  }
   // 「做了」旁注带上孩子在弹窗里想了多久、改过几次(《家长录像设计.md》§4.7;有实录才有):这张卡从同一话题上一条消息到这条之间的弹窗
   const plays = await readPlays(ctx.ws, tutor, date);
   if (plays.length) {
@@ -443,7 +430,7 @@ export async function parentReel(ctx: AppContext, tutor: string, date: string, t
   const cards = Object.fromEntries(Object.entries(states).filter(([job]) => jobs.has(job)));
   const plays = await readPlays(ctx.ws, tutor, date, jobs);
   const calls = mine.some((m) => m.live) ? await liveCalls(ctx, tutor, date, jobs) : [];
-  const reel = buildReel({ messages: mine, events, cards, tutor, now: ctx.now().getTime(), plays, calls });
+  const reel = buildReel({ messages: mine, events, cards, now: ctx.now().getTime(), plays, calls });
   if (!reel) return null;
   const day = await parentDay(ctx, tutor, date);
   const kid = await kidDay(ctx, tutor, date);
@@ -513,8 +500,6 @@ export interface OverviewTutor {
   threads: OverviewThread[];
   /** 正在记账(记账或整理记忆的轮还在跑):家长端清单上的「记账」灰掉、行上写「记账中」 */
   booking: boolean;
-  /** 这天录音卡在 koubo 上花的钱(元,heard.json 加总);没花就没有 */
-  kouboYuan?: number;
   /** 卡上的常驻入口:家长端「记录」把听写、口语课挂在常驻它们的老师下面 */
   extras: TutorExtra[];
 }
@@ -577,8 +562,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       if (n) th.misses = n;
     }
     const booking = index.messages.some((m) => (m.bookkeep || m.tidy) && m.result === 'running');
-    const kouboYuan = await kouboYuanOfDay(join(ctx.ws.dirs.conversations, t.name), date);
-    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name] ?? NEUTRAL_COLOR, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], booking, ...(kouboYuan > 0 ? { kouboYuan } : {}), extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)) });
+    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name] ?? NEUTRAL_COLOR, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], booking, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)) });
   }
   const today = localDate(ctx.now());
   const names = tutors.map((t) => t.name);
@@ -592,7 +576,6 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
 /**
  * 卡的状态:孩子在舞台里选了、填了 → 存 <日期>.<job>.cards/<n>.json,不起老师;下一条消息带给老师。
  * 画板:body 里可以带 image(data:image/png;base64,…),存成 .cards/<n>.png,状态里只留路径(相对 workspace 根,老师 Read 看)
- * 录音卡:body 的 audio 可以是 data:audio/…;base64,…,存成 .cards/<n>/rec-<k>.<ext>,状态里换成路径(《口播老师设计.md》§2)
  */
 async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: string, n: number, body: unknown): Promise<RouteResult> {
   const date = localDate(ctx.now());
@@ -603,21 +586,12 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
   // 交过的卡锁住了,不能再改
   if (submittedCards(index).has(`${job}/${n}`)) return { status: 409, json: { error: 'submitted' } };
   let state = body;
-  /** 录音卡这次带来的新录音(相对 workspace 根):存好状态后起评测 */
-  let fresh: string | null = null;
   if (target.kind === 'canvas' && isObj(body) && typeof body.image === 'string') {
     const { image, ...rest } = body;
     const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(image);
     if (!m || m[1].length > 8_000_000) return { status: 400, json: { error: 'bad_state' } };
     const png = await writeCardImage(ws, tutor, date, job, n, Buffer.from(m[1], 'base64'));
     state = { ...rest, image: `conversations/${tutor}/${png}` };
-  }
-  if (target.kind === 'record' && isObj(body) && typeof body.audio === 'string' && body.audio.startsWith('data:')) {
-    const a = audioData(body.audio);
-    if (!a) return { status: 400, json: { error: 'bad_state' } };
-    const rel = await writeCardAudio(ws, tutor, date, job, n, a.data, a.ext);
-    state = { ...body, audio: `conversations/${tutor}/${rel}` };
-    fresh = `conversations/${tutor}/${rel}`;
   }
   const r = parseCardState(target, state);
   if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
@@ -627,15 +601,11 @@ async function putCardState(ctx: AppContext, ws: Workspace, tutor: string, job: 
   await writeCardState(ws, tutor, date, job, n, { at: ctx.now().toISOString(), turn: lastJobOf(index, mine) ?? last.job, state: r.state });
   // 录像的实录:孩子的每一次存都记一条(选了又改、填空的过程、画板一笔一笔)
   await appendFile(conversationFiles(ws.dirs.conversations, tutor, date).play(job), `${JSON.stringify({ at: ctx.now().getTime(), k: 'card', job, card: n, state: r.state })}\n`).catch(() => {});
-  if (fresh && target.kind === 'record') ctx.runner.assessRecording(fresh, target.props as RecordProps);
   return { status: 200, json: { ok: true, card: `${job}/${n}`, state: r.state } };
 }
 
-/** <日期>.<job>.mp3(整段)/ .<n>.mp3(讲稿第 n 句)/ .cards/<n>/<k>.mp3(第 n 张卡的第 k 个资产) */
-const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+(?:\.\d+|\.cards\/\d+\/\d+)?\.mp3$/;
-/** 录音卡的录音(回放):<日期>.<job>.cards/<n>/rec-<k>.<ext>;按住说话的原声:<日期>.<job>.voice.<ext>(《家长录像设计.md》拍板 4) */
-const REC_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.(?:cards\/\d+\/rec-\d+|voice)\.(webm|m4a|ogg|wav)$/;
-const REC_TYPES: Record<string, string> = { webm: 'audio/webm', m4a: 'audio/mp4', ogg: 'audio/ogg', wav: 'audio/wav' };
+/** 卡的配音:<日期>.<job>.cards/<n>/<k>.mp3(第 n 张卡的第 k 个资产) */
+const AUDIO_FILE_RE = /^\d{4}-\d{2}-\d{2}\.\d{4}-\d+\.cards\/\d+\/\d+\.mp3$/;
 /** 实时老师一次通话的声音(两边混好的,src/live/call.ts):<日期>.live/<时分秒>.wav;录像里实时的轮从这里放 */
 const LIVE_CALL_RE = /^\d{4}-\d{2}-\d{2}\.live\/\d{6}\.wav$/;
 /** 实时那一轮嘴照念的声音(字幕重放,src/live/call.ts 落的):<日期>.<job>.mouth.wav */
@@ -1038,13 +1008,12 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     const audio = /^\/api\/audio\/([a-z0-9][a-z0-9-]*)\/(.+)$/.exec(p);
     if (audio && method === 'GET') {
       const [, tutor, name] = audio;
-      const rec = REC_FILE_RE.exec(name);
       const call = LIVE_CALL_RE.test(name) || MOUTH_FILE_RE.test(name);
-      if (!ws.config.tutors[tutor] || (!AUDIO_FILE_RE.test(name) && !rec && !call)) return { status: 404, json: { error: 'not_found' } };
+      if (!ws.config.tutors[tutor] || (!AUDIO_FILE_RE.test(name) && !call)) return { status: 404, json: { error: 'not_found' } };
       const file = join(ws.dirs.conversations, tutor, name);
       if (!(await stat(file).catch(() => null))?.isFile()) return { status: 404, json: { error: 'not_found' } };
       // 嘴照念的那份一段一段重落(这一轮还在念时就取得到),别让孩子端拿到缓存里的半截
-      return { status: 200, file, contentType: rec ? REC_TYPES[rec[1]] : call ? 'audio/wav' : 'audio/mpeg', ...(MOUTH_FILE_RE.test(name) ? { cacheControl: 'no-cache' } : {}) };
+      return { status: 200, file, contentType: call ? 'audio/wav' : 'audio/mpeg', ...(MOUTH_FILE_RE.test(name) ? { cacheControl: 'no-cache' } : {}) };
     }
 
     // 看原文(2026-09-11):一轮拆成六站,一个接口给全;/fixture 是原文原样一份,开发者放进 tests/fixtures/board/

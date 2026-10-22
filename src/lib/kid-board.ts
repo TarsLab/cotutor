@@ -140,8 +140,6 @@ export function cardTexts(card: BoardCard): string[] {
       return []; // 田字格里是 SVG 路径不是文字,标注落不上;讲稿里的 [鼓] 去别的卡找
     case 'word':
       return [str(p.word)]; // [apple] 落到这张卡上(讲到时亮这张);格里是笔顺不是文字,页面不画标注
-    case 'record':
-      return [str(p.show) || (p.mode === 'pinyin' ? '' : str(p.text))];
     case 'paint':
       return [str(p.ask), ...strs(p.panels), ...strs(p.words)];
     case 'photo':
@@ -223,7 +221,6 @@ export function tintFor(card: BoardCard): string {
       return isAskCard(card) ? 'plum' : style === 'formula' ? 'paper' : str(p.title) ? 'sky' : 'sand';
     case 'choice':
     case 'canvas':
-    case 'record':
     case 'photo':
       return 'plum';
     case 'read':
@@ -268,9 +265,9 @@ export function penFor(card: BoardCard, phrase: string): PenName {
 /** 一行最多几张:明写的并排(课文件 / 老师的 same)能到 3 张;按宽度排的最多 2 张(半宽 + 半宽) */
 export const MAX_CARDS_PER_ROW = 3;
 
-/** 独占一行的卡:标题行、提问卡、画板、录音卡、小课堂、画图、拍给我看(选择题、填空题量得下就能半宽,2026-10-01) */
+/** 独占一行的卡:标题行、提问卡、画板、小课堂、画图、拍给我看(选择题量得下就能半宽,2026-10-01) */
 export function standsAlone(card: BoardCard): boolean {
-  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'record' || card.kind === 'lecture' || card.kind === 'paint' || card.kind === 'photo';
+  return isHeading(card) || isAskCard(card) || card.kind === 'canvas' || card.kind === 'lecture' || card.kind === 'paint' || card.kind === 'photo';
 }
 
 const HALF_KINDS = ['text', 'read', 'code', 'tianzige', 'word', 'choice'];
@@ -317,7 +314,7 @@ function validRows(rows: readonly (readonly number[])[], n: number): boolean {
  * 一节的行(2026-10-01 起排版归代码,《工作流程.md》§二「排版」):每张卡半宽还是全宽,看它自己量出来的样子
  * (half(i),页面在量具里量;没给就按 isShortCard 估)。从左往右排,只看前面的卡:
  * - 相邻两张半宽的并一行;一张半宽后面跟的不是半宽,它自己一行、占左半(右边空着)
- * - 全宽的一行一张;标题行、提问卡、画板、录音卡、小课堂永远独占
+ * - 全宽的一行一张;标题行、提问卡、画板、小课堂永远独占
  * - 明写的并排(section.layout 里不止一张的行:课文件 / 老师写的 same)照办,最多 3 张;
  *   别的端排的到了手机上,超过 2 张或有不能半宽的就拆开,再按宽度排
  * 流式一张张来时,前面的行不会因为后来的卡变。
@@ -458,9 +455,9 @@ export function penPath(pen: PenName, w: number, h: number, seed: string): strin
   return '';
 }
 
-/** 有舞台交互(能改状态、能「交给老师」)的种类;其余点开只是放大看。填空停用了(《卡片协议.md》拍板 3),旧的只看 */
+/** 有舞台交互(能改状态、能「交给老师」)的种类;其余点开只是放大看 */
 export function hasState(card: BoardCard): boolean {
-  return card.kind === 'choice' || card.kind === 'canvas' || card.kind === 'record';
+  return card.kind === 'choice' || card.kind === 'canvas';
 }
 
 /** 画板上画了几笔(状态里的 ink 元素数) */
@@ -506,17 +503,10 @@ export function segmentAudio(card: BoardCard, k: number): string | null {
 export function stateSummary(card: BoardCard): string[] {
   if (card.kind === 'choice') return pickedLabels(card);
   if (card.kind === 'canvas') return inkCount(card) ? [`画了 ${inkCount(card)} 笔`] : [];
-  if (card.kind === 'record') { const sec = recordSeconds(card); return sec ? [`录了 ${sec.toFixed(1)} 秒`] : []; }
   return [];
 }
 
-// ---- 录音卡(《口播老师设计.md》§2–3) ----
-
-/** 录了几秒;没录 → 0 */
-export function recordSeconds(card: BoardCard): number {
-  const st = card.state as { audio?: unknown; seconds?: unknown } | undefined;
-  return typeof st?.audio === 'string' && typeof st.seconds === 'number' ? st.seconds : 0;
-}
+// ---- 拼音 ----
 
 const TONE_MARKS: Record<string, string> = { a: 'āáǎà', e: 'ēéěè', i: 'īíǐì', o: 'ōóǒò', u: 'ūúǔù', ü: 'ǖǘǚǜ' };
 
@@ -530,29 +520,6 @@ export function toneMark(syl: string): string {
   if (at < 0) at = base.includes('ou') ? base.indexOf('o') : Math.max(...Array.from(base).map((c, i) => (TONE_MARKS[c] ? i : -1)));
   if (at < 0) return base;
   return base.slice(0, at) + TONE_MARKS[base[at]][Number(t) - 1] + base.slice(at + 1);
-}
-
-/** 一串拼音(shi4 si4)→ 带调号的(shì sì) */
-export function toneMarks(ref: string): string {
-  return ref.split(/\s+/).filter(Boolean).map(toneMark).join(' ');
-}
-
-/** 这一节里 idx 之后(转一圈)下一张还没录的录音卡;都录了 → -1 */
-export function nextUnrecorded(section: BoardSection, idx: number): number {
-  const n = section.cards.length;
-  for (let k = 1; k <= n; k++) {
-    const j = (idx + k) % n;
-    const c = section.cards[j];
-    if (c && c.kind === 'record' && !recordSeconds(c)) return j;
-  }
-  return -1;
-}
-
-/** 这一节的录音卡锁没锁:交给老师了(这一节的 job 在 submitted 里),或者后面老师又出了一节 */
-export function recordLocked(sections: readonly BoardSection[], secIdx: number, submitted: ReadonlySet<string>): boolean {
-  const s = sections[secIdx] as (BoardSection & { job?: string }) | undefined;
-  if (!s) return true;
-  return secIdx < sections.length - 1 || Boolean(s.job && submitted.has(s.job));
 }
 
 /** 舞台顶栏的名字:文字卡的标题 / 正文、选择题的问题、其余第一段有字的;截 24 字 */

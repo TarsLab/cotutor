@@ -54,8 +54,8 @@ const markBoard = new Function(`${BOARD_MARK_JS}; return markBoard;`)() as (el: 
 const el = fakeEl();
 markBoard(el, { name: 'chinese-tutor', mark: 'yuwen' });
 check('语文老师:板上有字', !el.hidden && el.attrs['data-mark'] === 'yuwen' && el.innerHTML.includes('<path') && el.props['--bm-o'] === String(BOARD_MARK_PLACE.yuwen.o), JSON.stringify({ h: el.hidden, a: el.attrs }));
-markBoard(el, { name: 'koubo-tutor', mark: null });
-check('口播老师:收起来、不写字', el.hidden && !('data-mark' in el.attrs) && el.textContent === '', JSON.stringify(el.attrs));
+markBoard(el, { name: 'science-tutor', mark: null });
+check('副科老师:收起来、不写字', el.hidden && !('data-mark' in el.attrs) && el.textContent === '', JSON.stringify(el.attrs));
 markBoard(el, null);
 check('还不知道是谁:收起来', el.hidden);
 
@@ -71,6 +71,5 @@ check('左撇子横屏字挪到左边', html.includes('body.live.hand-left #bmar
 const kh = (await route('GET', '/api/kid/home', ctx)).json as { tutors: { name: string; mark: string | null }[] };
 const marks = Object.fromEntries(kh.tutors.map((t) => [t.name, t.mark]));
 check('首页数据:三门主科带 mark', marks['chinese-tutor'] === 'yuwen' && marks['math-tutor'] === 'shuxue' && marks['english-tutor'] === 'english', JSON.stringify(marks));
-check('首页数据:口播老师没有', 'koubo-tutor' in marks ? marks['koubo-tutor'] === null : true, JSON.stringify(marks));
 
 done();

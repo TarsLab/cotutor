@@ -77,14 +77,12 @@ export interface ReelStage {
 }
 
 /**
- * 一段不是讲稿的声音:rec = 录音卡上的录音(存下来那一刻往前推 seconds);voice = 按住说话的原声(发出去那一刻往前推 seconds,text 是识别认成的字);
- * mouth = 实时的轮里嘴接住的那句(text 是它说的)。audio 相对 conversations/<老师>/;seek = 这段在 audio 里从哪开始(实时的轮是整次通话的声音)
+ * 一段不是讲稿的声音(都在实时那次通话的录音里):voice = 孩子按住说的那一段(text 是嘴认成的字);mouth = 嘴接住的那句(text 是它说的)。
+ * audio 相对 conversations/<老师>/;seek = 这段在 audio 里从哪开始(整次通话是一条声音)
  */
 export interface ReelClip {
-  kind: 'rec' | 'voice' | 'mouth';
+  kind: 'voice' | 'mouth';
   job: string;
-  /** 录音卡是第几张;原声没有 */
-  card: number | null;
   from: number;
   to: number;
   audio: string;
@@ -237,8 +235,6 @@ export interface ReelInput {
   /** job → 那轮的事件(没有 events.jsonl 的轮不在) */
   events: Readonly<Record<string, readonly RunEvent[]>>;
   cards: CardStates;
-  /** 老师文件的 key(录音卡的路径去掉 conversations/<老师>/ 用) */
-  tutor: string;
   now: number;
   /** 实录(第二期):这个话题各轮的 play.jsonl 合在一起 */
   plays?: readonly PlayRecord[];
@@ -357,7 +353,7 @@ export function buildReel(input: ReelInput): Reel | null {
     const stop = next - call.startAt;
     const ev = input.events[m.job] ?? [];
     marks.push({ kind: 'said', at: W(ct.from), job: m.job, label: reelSaid(m) });
-    if (ct.voice && ct.sent > ct.from) clips.push({ kind: 'voice', job: m.job, card: null, from: W(ct.from), to: W(ct.sent), audio: call.audio, seek: ct.from, text: m.text });
+    if (ct.voice && ct.sent > ct.from) clips.push({ kind: 'voice', job: m.job, from: W(ct.from), to: W(ct.sent), audio: call.audio, seek: ct.from, text: m.text });
     const reads = call.msgs.filter(([t, d, x]) => d === 'o' && x.t === 'read' && x.job === m.job && typeof x.line === 'number' && t < stop).map(([t, , x]) => ({ t, line: x.line as number }));
     // 接住:松手 / 发出后第一段嘴的声音,到第一句开始放为止(两段连着时 playing 并成了一段);
     // 脑想得久时嘴垫的那句(call.ts 的 fill)是第一句之前的又一段,同样是嘴的声音,字是它开始放之后的那条 tutor
@@ -366,7 +362,7 @@ export function buildReel(input: ReelInput): Reel | null {
     const said = [...call.msgs].reverse().find(([t, d, x]) => d === 'o' && x.t === 'tutor' && x.of === 'catch' && typeof x.done === 'string' && t >= ct.sent && t <= ct.turnAt)?.[2].done;
     before.forEach(([a, b], i) => {
       const text = i === 0 ? said : call.msgs.find(([t, d, x]) => d === 'o' && x.t === 'tutor' && x.of === 'catch' && typeof x.done === 'string' && t >= a && t < firstRead)?.[2].done;
-      clips.push({ kind: 'mouth', job: m.job, card: null, from: W(a), to: W(Math.min(b, firstRead)), audio: call.audio, seek: a, ...(typeof text === 'string' && text ? { text } : {}) });
+      clips.push({ kind: 'mouth', job: m.job, from: W(a), to: W(Math.min(b, firstRead)), audio: call.audio, seek: a, ...(typeof text === 'string' && text ? { text } : {}) });
     });
     if (before[0] && before[0][0] > ct.sent) waits.push({ job: m.job, from: W(ct.sent), to: W(before[0][0]) });
     const s = sectionOf(m);
@@ -515,9 +511,8 @@ export function buildReel(input: ReelInput): Reel | null {
   const misses = reelMissRuns(holds, [...speakAt, ...types.filter((t) => t.sent).map((t) => t.to)]);
   for (const x of misses) marks.push({ kind: 'misses', at: x.from, to: x.to, job: '', label: `按住说话连着 ${x.n} 次没发出去` });
 
-  // ---- 卡的状态:有实录的卡用每一次存(选了又改都在);没有的用状态文件(at 起生效,只有最后一次)。录音卡把孩子的录音也排进来 ----
+  // ---- 卡的状态:有实录的卡用每一次存(选了又改都在);没有的用状态文件(at 起生效,只有最后一次) ----
   const cards: ReelCardChange[] = [];
-  const recPrefix = `conversations/${input.tutor}/`;
   const seenCard = new Set<string>();
   for (const r of plays) if (r.k === 'card' && secByJob.get(r.job)?.cards[r.card]) { cards.push({ job: r.job, card: r.card, at: r.at, state: r.state }); seenCard.add(`${r.job}/${r.card}`); }
   for (const [job, per] of Object.entries(input.cards)) {
@@ -538,10 +533,6 @@ export function buildReel(input: ReelInput): Reel | null {
     // 进度条上的点:同一张卡 3 秒内连着改的只点一个(填空打字、画板连着画)
     if ((lastMark.get(key) ?? -Infinity) < c.at - 3000) marks.push({ kind: 'card', at: c.at, job: c.job, label: cardTitle(sec.cards[c.card]) });
     lastMark.set(key, c.at);
-    const st = c.state as { audio?: unknown; seconds?: unknown } | null;
-    if (sec.cards[c.card].kind === 'record' && st && typeof st.audio === 'string' && st.audio.startsWith(recPrefix) && typeof st.seconds === 'number' && st.seconds > 0 && !clips.some((x) => x.kind === 'rec' && x.audio === st.audio!.toString().slice(recPrefix.length))) {
-      clips.push({ kind: 'rec', job: c.job, card: c.card, from: c.at - Math.round(st.seconds * 1000), to: c.at, audio: st.audio.slice(recPrefix.length) });
-    }
   }
   clips.sort((a, b) => a.from - b.from);
   marks.sort((a, b) => a.at - b.at);
@@ -637,8 +628,8 @@ export interface ReelFrame {
   sections: { job: string; cards: number; spoken: number }[];
   /** 正在念的一句:offset = 从这句开头过了多久 */
   saying: { job: string; line: number; offset: number; audio: string | null; seek?: number } | null;
-  /** 正在放的孩子的声音(录音卡的录音 / 按住说话的原声) */
-  clip: { kind: ReelClip['kind']; job: string; card: number | null; offset: number; audio: string; text?: string; seek?: number } | null;
+  /** 正在放的一段:孩子按住说的、嘴接住的那句(都在通话的录音里) */
+  clip: { kind: ReelClip['kind']; job: string; offset: number; audio: string; text?: string; seek?: number } | null;
   /** 最近开始念的一句(不在念时字幕留着它) */
   last: { job: string; line: number } | null;
   /** `<job>/<卡>` → 这一刻的状态;不在 = 还没做 */
@@ -696,7 +687,7 @@ export function reelFrameAt(reel: Reel, t: number): ReelFrame {
     saying = t < x.to ? { job: x.job, line: x.line, offset: t - x.from, audio: x.audio, ...(x.seek !== undefined ? { seek: x.seek } : {}) } : null;
   }
   let clip: ReelFrame['clip'] = null;
-  for (const c of reel.clips) if (c.from <= t && t < c.to) clip = { kind: c.kind, job: c.job, card: c.card, offset: t - c.from, audio: c.audio, ...(c.text !== undefined ? { text: c.text } : {}), ...(c.seek !== undefined ? { seek: c.seek } : {}) };
+  for (const c of reel.clips) if (c.from <= t && t < c.to) clip = { kind: c.kind, job: c.job, offset: t - c.from, audio: c.audio, ...(c.text !== undefined ? { text: c.text } : {}), ...(c.seek !== undefined ? { seek: c.seek } : {}) };
   const cards: Record<string, unknown> = {};
   for (const c of reel.cards) if (c.at <= t) cards[`${c.job}/${c.card}`] = c.state;
   const notes = reel.notes.filter((x) => x.at <= t).map((x) => ({ job: x.job, post: x.postAt <= t }));

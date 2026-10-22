@@ -66,7 +66,7 @@ try {
   await send('Input.insertText', { text: 'apple' });
   await tapSel('#go');
   await until(`Boolean(document.querySelector('#board .c-word .wg svg'))`, 60);
-  const c0 = await evaluate(`(() => { const c = document.querySelector('#board .c-word'); return { letters: c.querySelectorAll('.lt').length, lines: c.querySelectorAll('.grid line').length, emoji: c.querySelector('.we')?.textContent, text: c.innerText, pill: c.querySelector('.rc-pl')?.textContent, han: /\\p{Script=Han}/u.test([...c.querySelectorAll('.wg, .we')].map((x) => x.textContent).join('')) }; })()`);
+  const c0 = await evaluate(`(() => { const c = document.querySelector('#board .c-word'); return { letters: c.querySelectorAll('.lt').length, lines: c.querySelectorAll('.grid line').length, emoji: c.querySelector('.we')?.textContent, text: c.innerText, pill: c.querySelector('.wd-pl')?.textContent, han: /\\p{Script=Han}/u.test([...c.querySelectorAll('.wg, .we')].map((x) => x.textContent).join('')) }; })()`);
   ok('紧凑态:四线三格四条线、apple 五个字母、🍎、右边「听」、格里和图上没有中文', c0.letters === 5 && c0.lines === 4 && c0.emoji === '🍎' && c0.pill === '听' && !c0.han, JSON.stringify(c0));
   const wrote = await until(`window.__inked > 0`, 80);
   ok('落下时按笔顺写一遍', wrote, String(await evaluate(`window.__inked`)));
@@ -85,7 +85,7 @@ try {
   await sleep(250);
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: hb.x, y: hb.y, button: 'left', clickCount: 1 });
   await until(`!document.body.classList.contains('speaking')`, 40);
-  await evaluate(`__said.length = 0; document.querySelector('#board .c-word .rc-pl').click()`);
+  await evaluate(`__said.length = 0; document.querySelector('#board .c-word .wd-pl').click()`);
   await sleep(200);
   const s1 = await evaluate(`__said.slice()`);
   ok('点「听」:念 apple,英文、正常速度', s1.length === 1 && s1[0].text === 'apple' && s1[0].lang === 'en-US' && s1[0].rate === 0.9, JSON.stringify(s1));

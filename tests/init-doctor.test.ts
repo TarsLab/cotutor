@@ -23,7 +23,7 @@ try {
   const ws = join(home, 'cotutor', 'ming');
   check('缺省建在 ~/cotutor/<slug>', r1.root === ws && existsSync(ws), r1.root);
   check('骨架目录齐(.qwen/ 退役,不建)', ['agents', 'ledger', 'conversations', '.claude/agents', 'bundles'].every((d) => existsSync(join(ws, d))) && !existsSync(join(ws, 'scenes')) && !existsSync(join(ws, 'snaps')) && !existsSync(join(ws, '.qwen')));
-  check('老师目录齐', ['math-tutor', 'chinese-tutor', 'english-tutor', 'koubo-tutor'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
+  check('老师目录齐', ['math-tutor', 'chinese-tutor', 'english-tutor'].every((n) => existsSync(join(ws, 'agents', n, '.gitkeep'))));
   const link = join(ws, '.claude', 'agents', 'math-tutor.md');
   check('老师文件是拷贝,内容同本包', !lstatSync(link).isSymbolicLink() && readFileSync(link, 'utf8') === readFileSync(join(PACKAGE_AGENTS_DIR, 'math-tutor.md'), 'utf8'));
   check('出厂 hash 记下', (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { tutors: Record<string, { hash: string }> }).tutors['math-tutor'].hash.startsWith('sha256:'));
@@ -76,15 +76,15 @@ try {
   const again = await initWorkspace({ slug: 'ming' });
   check('init 再跑:档案按属性认出来,不再补', again.steps.some((x) => x.item.endsWith('孩子.md') && x.action === 'exists'), JSON.stringify(again.steps.filter((x) => x.item.includes('孩子'))));
   check('doctor 查板书技能(机器件,必需)', d1.checks.some((c) => c.name === 'skill.cotutor-board' && c.ok && c.required));
-  check('老师链都查了(四位:含关着的口播老师)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 4);
-  check('doctor 报每位有脸的老师讲哪几种卡', d1.checks.find((c) => c.name === 'tutor.math-tutor.cards')?.detail === '板书写法讲 text choice image lecture canvas code' && d1.checks.find((c) => c.name === 'tutor.koubo-tutor.cards')?.detail === '板书写法讲 text read record', JSON.stringify(d1.checks.filter((c) => c.name.endsWith('.cards'))));
+  check('老师链都查了(三位)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 3);
+  check('doctor 报每位有脸的老师讲哪几种卡', d1.checks.find((c) => c.name === 'tutor.math-tutor.cards')?.detail === '板书写法讲 text choice image lecture canvas code' && d1.checks.find((c) => c.name === 'tutor.english-tutor.cards')?.detail === '板书写法讲 text read choice image word lecture', JSON.stringify(d1.checks.filter((c) => c.name.endsWith('.cards'))));
   {
     // 学科色(拍板 26):手写的颜色白字压不住,doctor 提示;压得住的不说
     const cfgPath = join(ws, 'cotutor.json'), before = readFileSync(cfgPath, 'utf8');
-    const cfg = JSON.parse(before); cfg.tutors['koubo-tutor'].color = '#d9a520'; cfg.tutors['chinese-tutor'].color = '#a33a2a';
+    const cfg = JSON.parse(before); cfg.tutors['english-tutor'].color = '#d9a520'; cfg.tutors['chinese-tutor'].color = '#a33a2a';
     writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
     const dc = await doctorWorkspace(ws, { probeEnv: false });
-    const light = dc.checks.find((c) => c.name === 'tutors.koubo-tutor.color');
+    const light = dc.checks.find((c) => c.name === 'tutors.english-tutor.color');
     check('doctor:学科色太浅(黄 2.25)提示、说怎么改;深的不说;不算必需', light?.ok === false && !light.required && light.detail.includes('2.25') && !dc.checks.some((c) => c.name === 'tutors.chinese-tutor.color'), JSON.stringify(light));
     writeFileSync(cfgPath, before);
   }
@@ -166,14 +166,14 @@ try {
     ins.argv.join(' '));
   check('已经齐了就没有 added', insertMissingFlags(factory, factory).added.length === 0);
 
-  // 老版的 cotutor.json:还没有口播老师,claude 模板没有那两个旗标
+  // 老版的 cotutor.json:还没有英语老师,claude 模板没有那两个旗标
   const home2 = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-migrate-')));
   try {
     const r = await initWorkspace({ slug: 'ming', name: '小明', dir: join(home2, 'ws') });
     const ws = r.root;
     const cfgFile = join(ws, 'cotutor.json');
     const old = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
-    delete old.tutors['koubo-tutor'];
+    delete old.tutors['english-tutor'];
     for (const k of ['run', 'resume'] as const) {
       // 老 workspace 的样子:没有流式旗标;工具是黑名单(--disallowedTools Agent)、没有白名单与 --effort(2026-09-20 之前)
       old.runtimes.claude[k] = (old.runtimes.claude[k] as string[]).flatMap((a: string, i: number, arr: string[]) => (a === '--include-partial-messages' || a === '--effort' || arr[i - 1] === '--effort' || arr[i - 1] === '--tools' ? [] : a === '--tools' ? ['--disallowedTools', 'Agent'] : [a]));
@@ -181,18 +181,18 @@ try {
     }
     old.policyDefaults = { replyMaxChars: 40 };
     old.runtimes.default = 'qwen';
-    old.tutors['english-tutor'].enabled = false;
+    old.tutors['chinese-tutor'].enabled = false;
     old._note = '家长自己写的说明';
     writeFileSync(cfgFile, `${JSON.stringify(old, null, 2)}\n`);
-    // 那会儿口播老师还不存在:文件、链、家、出厂记录都没有
-    unlinkSync(join(ws, '.claude', 'agents', 'koubo-tutor.md'));
-    rmSync(join(ws, 'agents', 'koubo-tutor'), { recursive: true, force: true });
+    // 那会儿英语老师还不存在:文件、家、出厂记录都没有
+    unlinkSync(join(ws, '.claude', 'agents', 'english-tutor.md'));
+    rmSync(join(ws, 'agents', 'english-tutor'), { recursive: true, force: true });
     const shipped = JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { tutors: Record<string, unknown> };
-    delete shipped.tutors['koubo-tutor'];
+    delete shipped.tutors['english-tutor'];
     writeFileSync(join(ws, '.cotutor', 'shipped.json'), `${JSON.stringify(shipped, null, 2)}\n`);
 
     const gaps = await configGaps(old);
-    check('差异三项:新老师 + run / resume 各一条', gaps.map((g) => g.path).join(' ') === 'tutors.koubo-tutor runtimes.claude.run runtimes.claude.resume', JSON.stringify(gaps.map((g) => g.path)));
+    check('差异三项:新老师 + run / resume 各一条', gaps.map((g) => g.path).join(' ') === 'tutors.english-tutor runtimes.claude.run runtimes.claude.resume', JSON.stringify(gaps.map((g) => g.path)));
 
     {
       // 卡的清单(2026-10-07)之前的条目:没有 cards → 补出厂的;写过的(哪怕是全部)不动
@@ -206,7 +206,7 @@ try {
     const cap = d.checks.find((c) => c.name === 'captures');
     check('doctor:captures 还没拍过也绿(第一张时建),不是必需项', cap?.ok === true && cap.required === false && cap.detail.includes('还没有'), JSON.stringify(cap));
     const mig = d.checks.find((c) => c.name === 'config.migrate');
-    check('doctor 点名 config.migrate,不是必需项(点名不拦体检)', mig !== undefined && !mig.ok && !mig.required && mig.detail.includes('koubo-tutor') && (mig.fix ?? '').includes('cotutor upgrade --config'), JSON.stringify(mig));
+    check('doctor 点名 config.migrate,不是必需项(点名不拦体检)', mig !== undefined && !mig.ok && !mig.required && mig.detail.includes('english-tutor') && (mig.fix ?? '').includes('cotutor upgrade --config'), JSON.stringify(mig));
 
     const before = readFileSync(cfgFile, 'utf8');
     const dry = await upgradeConfig(ws, { dryRun: true });
@@ -214,22 +214,21 @@ try {
 
     const applied = await upgradeConfig(ws);
     const after = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
-    check('补上之后:新老师、旗标都在', applied.applied && after.tutors['koubo-tutor'].enabled === false && (after.runtimes.claude.run as string[]).join(' ').includes('--tools {tools} --effort {effort}') && (after.runtimes.claude.run as string[]).join(' ').includes('--disallowedTools Agent') && (after.runtimes.claude.resume as string[]).join(' ').includes('--effort {effort}') && (after.runtimes.claude.resume as string[]).includes('--include-partial-messages'));
-    check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['english-tutor'].enabled === false && (after.runtimes.claude.run as string[]).slice(-2).join(' ') === '--model sonnet' && after._note === '家长自己写的说明' && after.$schema === old.$schema);
-    check('新老师的文件、家跟着补上(不再建 .qwen 链)', existsSync(join(ws, '.claude', 'agents', 'koubo-tutor.md')) && !existsSync(join(ws, '.qwen', 'agents', 'koubo-tutor.md')) && existsSync(join(ws, 'agents', 'koubo-tutor', '.gitkeep')) && applied.installed.length > 0);
+    check('补上之后:新老师、旗标都在', applied.applied && after.tutors['english-tutor'].display === '英语老师' && (after.runtimes.claude.run as string[]).join(' ').includes('--tools {tools} --effort {effort}') && (after.runtimes.claude.run as string[]).join(' ').includes('--disallowedTools Agent') && (after.runtimes.claude.resume as string[]).join(' ').includes('--effort {effort}') && (after.runtimes.claude.resume as string[]).includes('--include-partial-messages'));
+    check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['chinese-tutor'].enabled === false && (after.runtimes.claude.run as string[]).slice(-2).join(' ') === '--model sonnet' && after._note === '家长自己写的说明' && after.$schema === old.$schema);
+    check('新老师的文件、家跟着补上(不再建 .qwen 链)', existsSync(join(ws, '.claude', 'agents', 'english-tutor.md')) && !existsSync(join(ws, '.qwen', 'agents', 'english-tutor.md')) && existsSync(join(ws, 'agents', 'english-tutor', '.gitkeep')) && applied.installed.length > 0);
 
     {
-      // 2026-10-04 之前的模板:--tools 后面是写死的白名单。没改过的换成 {tools},出厂要带工具的老师(口播)政策里写明;家长改过的白名单不动
+      // 2026-10-04 之前的模板:--tools 后面是写死的白名单。没改过的换成 {tools};家长改过的白名单不动
       const lit = JSON.parse(JSON.stringify(after)) as Record<string, any>;
       for (const k of ['run', 'resume'] as const) lit.runtimes.claude[k] = (lit.runtimes.claude[k] as string[]).map((a) => (a === '{tools}' ? 'Bash,Read,Grep,Glob' : a));
-      delete lit.tutors['koubo-tutor'].policy;
       const g = await configGaps(lit);
-      check('写死的出厂白名单 → 换成 {tools}(run / resume 各一条),口播老师补 policy.tools: on', g.map((x) => x.path).join(' ') === 'runtimes.claude.run runtimes.claude.resume tutors.koubo-tutor.policy.tools' && (g[0].value as string[]).join(' ').includes('--tools {tools}') && g[2].value === 'on', JSON.stringify(g.map((x) => [x.path, x.detail])));
+      check('写死的出厂白名单 → 换成 {tools}(run / resume 各一条)', g.map((x) => x.path).join(' ') === 'runtimes.claude.run runtimes.claude.resume' && (g[0].value as string[]).join(' ').includes('--tools {tools}'), JSON.stringify(g.map((x) => [x.path, x.detail])));
       for (const k of ['run', 'resume'] as const) lit.runtimes.claude[k] = (lit.runtimes.claude[k] as string[]).map((a) => (a === 'Bash,Read,Grep,Glob' ? 'Read' : a));
       check('家长改过的白名单不动', (await configGaps(lit)).length === 0);
     }
     const d2 = await doctorWorkspace(ws, { probeEnv: false });
-    check('补完 doctor 的 config.migrate 与口播老师都绿', d2.checks.find((c) => c.name === 'config.migrate')?.ok === true && d2.checks.filter((c) => c.name.startsWith('tutor.koubo-tutor')).every((c) => c.ok));
+    check('补完 doctor 的 config.migrate 与英语老师都绿(没配卡的配音音色只是提示)', d2.checks.find((c) => c.name === 'config.migrate')?.ok === true && d2.checks.filter((c) => c.name.startsWith('tutor.english-tutor') && !c.name.endsWith('.voice')).every((c) => c.ok));
     check('再补一次是空操作', (await upgradeConfig(ws)).gaps.length === 0);
   } finally {
     rmSync(home2, { recursive: true, force: true });

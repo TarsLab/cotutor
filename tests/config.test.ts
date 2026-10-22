@@ -4,13 +4,13 @@ import { configTemplate, shippedAgents } from '../src/cli/skeleton.ts';
 import { check, done } from './_check.ts';
 
 const agents = await shippedAgents();
-check('本包带 4 位老师(口播老师出厂关着;画图老师 2026-10-07 删了)', agents.length === 4 && !agents.some((a) => a.name === 'scene-maker'), agents.map((a) => a.name).join(','));
+check('本包带 3 位老师(画图老师 10-07、口播老师 10-22 删了)', agents.length === 3 && !agents.some((a) => a.name === 'scene-maker' || a.name === 'koubo-tutor'), agents.map((a) => a.name).join(','));
 
 const raw = JSON.parse(configTemplate({ slug: 'ming', name: '小明', port: 5181, tutors: agents }));
 const cfg = CotutorConfigSchema.parse(raw);
 check('模板可解析', cfg.kid.slug === 'ming' && cfg.title === '小明的老师们' && cfg.server.port === 5181);
-check('老师表齐;没有画图老师与它的运行时', Object.keys(cfg.tutors).length === 4 && !('scene-maker' in cfg.tutors) && !('claude-scene' in cfg.runtimes) && !('qwen-scene' in cfg.runtimes));
-check('enabled 缺省 true;口播老师出厂关着(要 koubo)', cfg.tutors['math-tutor'].enabled === true && Object.entries(cfg.tutors).every(([k, t]) => t.enabled === (k !== 'koubo-tutor')));
+check('老师表齐;没有画图老师与它的运行时', Object.keys(cfg.tutors).length === 3 && !('scene-maker' in cfg.tutors) && !('claude-scene' in cfg.runtimes) && !('qwen-scene' in cfg.runtimes));
+check('enabled 缺省 true;出厂老师都开着', cfg.tutors['math-tutor'].enabled === true && Object.values(cfg.tutors).every((t) => t.enabled === true));
 check('运行时 claude/qwen 都在', 'claude' in cfg.runtimes && 'qwen' in cfg.runtimes && cfg.runtimes.default === 'claude');
 
 const pol = resolvePolicy(cfg, 'math-tutor');
@@ -25,11 +25,11 @@ const p2 = resolvePolicy(layered, 'math-tutor');
 check('政策逐层覆盖;老 workspace 写着的 dailyMessages 读得进、不起作用', p2.replyMaxChars === 80 && p2.contextPack.recent === 3 && p2.contextPack.planLines === 10 && !('dailyMessages' in p2) && p2.board === 'off');
 check('别的老师不受影响', resolvePolicy(layered, 'chinese-tutor').board === 'auto' && resolvePolicy(layered, 'chinese-tutor').replyMaxChars === 80);
 
-check('出厂老师带卡的清单(text 总在);口播只有 text / read / record', cfg.tutors['math-tutor'].cards?.join() === 'text,choice,image,lecture,canvas,code' && cfg.tutors['koubo-tutor'].cards?.join() === 'text,read,record' && Object.values(cfg.tutors).every((t) => t.cards?.includes('text')));
+check('出厂老师带卡的清单(text 总在)', cfg.tutors['math-tutor'].cards?.join() === 'text,choice,image,lecture,canvas,code' && Object.values(cfg.tutors).every((t) => t.cards?.includes('text')));
 check('cards 只认板书的种类:写错名字、写首页的老师卡都过不了契约;不写也行', !CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['txt'] } } }).success && !CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x', cards: ['tutor'] } } }).success && CotutorConfigSchema.safeParse({ ...raw, tutors: { ...raw.tutors, x: { display: 'x' } } }).success);
-const withHelper = CotutorConfigSchema.parse({ ...raw, tutors: { ...raw.tutors, helper: { display: '工具人', hidden: true } } });
+const withHelper = CotutorConfigSchema.parse({ ...raw, tutors: { ...raw.tutors, helper: { display: '工具人', hidden: true }, 'off-tutor': { display: '关着的', enabled: false } } });
 const kidOnly = listTutors(withHelper, { kidOnly: true });
-check('孩子端不见 hidden 与关着的', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'helper' || t.name === 'koubo-tutor'));
+check('孩子端不见 hidden 与关着的', kidOnly.length === 3 && !kidOnly.some((t) => t.name === 'helper' || t.name === 'off-tutor'));
 check('列表带有效政策', listTutors(cfg)[0].policy.replyMaxChars === 60);
 
 check('实时没有开关;没挑的出厂三位用出厂的音色,别的老师用缺省', !('enabled' in cfg.live) && Object.keys(cfg.live.voices).length === 0 && mouthVoice(cfg.live, 'chinese-tutor') === 'Serena' && mouthVoice(cfg.live, 'math-tutor') === 'Andre' && mouthVoice(cfg.live, 'english-tutor') === 'Theo Calm' && mouthVoice(cfg.live, 'science-tutor') === MOUTH_VOICE && mouthVoice({ voices: { 'math-tutor': 'Maia' } }, 'math-tutor') === 'Maia' && cfg.live.model === 'qwen3.8-omni-flash-realtime');

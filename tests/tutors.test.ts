@@ -56,8 +56,8 @@ try {
   check('untracked 也不覆盖', (await upgradeTutors(root)).find((s) => s.name === 'english-tutor')?.action === 'kept-custom' && readFileSync(file('english-tutor'), 'utf8').includes('手写'));
 
   // 缺的补
-  unlinkSync(file('koubo-tutor'));
-  check('缺 → installed', (await upgradeTutors(root)).find((s) => s.name === 'koubo-tutor')?.action === 'installed' && existsSync(file('koubo-tutor')));
+  unlinkSync(file('chinese-tutor'));
+  check('缺 → installed', (await upgradeTutors(root)).find((s) => s.name === 'chinese-tutor')?.action === 'installed' && existsSync(file('chinese-tutor')));
 
   check('lineDiff', lineDiff('a\nb\nc', 'a\nx\nc').join('|') === '- b|+ x' && lineDiff('a', 'a').length === 0 && lineDiff('a\nb', 'a').join('|') === '- b');
 

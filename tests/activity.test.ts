@@ -68,7 +68,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('填了词:出题那段在', quiz.includes('### 我来出题') && quiz.includes('第 6 步之后') && !quiz.includes('{{'));
   check('空列表、空字符串算没填', !(renderTutorSection(a, { params: { 词: [] }, cards }) ?? '').includes('我来出题') && !(renderTutorSection(a, { params: { 词: ' ' }, cards }) ?? '').includes('我来出题'));
   check('卡也能当裁段的名字', renderTutorSection({ ...a, tutor: { text: '甲\n{{有 paint}}\n乙\n{{/有}}', line: 1 } }, { cards: ['paint'] }) === '甲\n乙' && renderTutorSection({ ...a, tutor: { text: '甲\n{{有 paint}}\n乙\n{{/有}}', line: 1 } }, { cards: ['text'] }) === '甲');
-  check('activity 的卡并上老师的,text 总在', activityCards(a, ['read']).join(' ') === 'text read paint' && activityCards(a).length >= 12);
+  check('activity 的卡并上老师的,text 总在', activityCards(a, ['read']).join(' ') === 'text read paint' && activityCards(a).length >= 11);
 
   // 插槽
   const filled = fillSlots(painter!.prompt, { 版式: '一张四格连环画。', 角色: '同一个角色:\n- 小熊:棕色', 分幅: '第 1 格:小熊种瓜' });
@@ -112,7 +112,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('正文用的卡老师和 activity 都没有', has(fixesAfter('cards: read paint', 'cards: read', { fileName: '你说我画', tutorCards: ['text', 'read'] }), '`paint` 卡,老师和这个 activity 都没有'));
   check('出厂语文老师的卡里没有 paint(只跟着 activity)', !factoryCards?.includes('paint'));
   const factoryTutors = (JSON.parse(configTemplate({ slug: 'x', tutors: await shippedAgents() })) as { tutors: Record<string, { runtime?: string }> }).tutors;
-  check('出厂语文、数学老师走 qwen,英语老师走 qwen-flash,口播老师照旧(缺省运行时)', factoryTutors['chinese-tutor'].runtime === 'qwen' && factoryTutors['math-tutor'].runtime === 'qwen' && factoryTutors['english-tutor'].runtime === 'qwen-flash' && factoryTutors['koubo-tutor'].runtime === undefined);
+  check('出厂语文、数学老师走 qwen,英语老师走 qwen-flash', factoryTutors['chinese-tutor'].runtime === 'qwen' && factoryTutors['math-tutor'].runtime === 'qwen' && factoryTutors['english-tutor'].runtime === 'qwen-flash');
   check('老师有这种卡就不用 activity 再写', fixesAfter('cards: read paint', 'cards: read', { fileName: '你说我画', tutorCards: ['text', 'read', 'paint'] }).length === 0);
   check('缺第一句', has(fixesAfter('第一句: ', '先说: '), '「第一句: …」'));
   check('缺人设', has(fixesAfter('你是这个家的语文老师,今天陪孩子玩', '今天陪孩子玩'), '以「你是」开头'));
@@ -261,7 +261,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     check('activity check:workspace 里出厂的都对得上(例子文件不当 activity)', ok.map((x) => `${x.tutor}/${x.name}`).join() === 'chinese-tutor/你说我画,chinese-tutor/听写,chinese-tutor/小课堂,chinese-tutor/看图说话,english-tutor/口语课,english-tutor/听写,english-tutor/小课堂,math-tutor/小课堂' && ok.every((x) => x.issues.length === 0), JSON.stringify(ok.map((x) => x.issues)));
     const orphan = await checkActivities(root, {});
     check('activity check:老师不在 cotutor.json 里报一条', has(orphan[0].issues, '没有 chinese-tutor 这位老师'));
-    check('activity check:按老师、按名字筛', (await checkActivities(root, {}, { tutor: 'math-tutor' })).map((x) => x.name).join() === '小课堂' && (await checkActivities(root, {}, { tutor: 'koubo-tutor' })).length === 0 && (await checkActivities(root, {}, { tutor: 'chinese-tutor', name: '别的' })).length === 0);
+    check('activity check:按老师、按名字筛', (await checkActivities(root, {}, { tutor: 'math-tutor' })).map((x) => x.name).join() === '小课堂' && (await checkActivities(root, {}, { tutor: 'nobody-tutor' })).length === 0 && (await checkActivities(root, {}, { tutor: 'chinese-tutor', name: '别的' })).length === 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

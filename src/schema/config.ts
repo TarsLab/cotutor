@@ -61,7 +61,7 @@ export const POLICY_DEFAULTS: Policy = {
 };
 
 /** 板书能用的卡(注册表顺序;tests/cards.test.ts 断言与 src/cards 的 kindsFor('board') 一致,这里不 import 卡,免得契约拖进卡的依赖) */
-export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'image', 'tianzige', 'word', 'lecture', 'canvas', 'record', 'paint', 'photo', 'code'] as const;
+export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'image', 'tianzige', 'word', 'lecture', 'canvas', 'paint', 'photo', 'code'] as const;
 export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
 
 /** agent 名:与 .claude/agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
@@ -152,24 +152,6 @@ export const TtsSchema = z.object({
 });
 export type Tts = z.infer<typeof TtsSchema>;
 export const TTS_DEFAULT: Tts = { say: ['voxtell', 'say', '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: TTS_VOICES_DEFAULT };
-
-/**
- * 录音卡的评测(《口播老师设计.md》§4、§8):存录音时后台起一条 koubo card,结果落在录音旁边的 heard.json。
- * 占位 {audio}(录音的绝对路径){text}(送评的参考文本){mode}(1 句子 / 8 拼音){pairs}(风险组,逗号隔开;没有是 auto)。
- * 第一个词是相对路径就相对 workspace 根(.cotutor/koubo 是 init 生成的壳脚本);子进程的 cwd 是 workspace 根(koubo 的工作区就是它)。
- * 门槛、上不上云、每日上限不在这里,在 workspace 根的 koubo.json(koubo 自己的政策文件)。
- */
-export const KOUBO_DEFAULT = { card: ['.cotutor/koubo', 'card', '--audio', '{audio}', '--text', '{text}', '--mode', '{mode}', '--pairs', '{pairs}', '--json'], timeoutMs: 20_000 };
-export const KouboSchema = z.object({
-  card: z.array(z.string()).min(1).default(KOUBO_DEFAULT.card),
-  /** 一条最多等多久(子进程超时;交给老师时从存录音那一刻算起也最多等这么久) */
-  timeoutMs: z.number().int().positive().default(KOUBO_DEFAULT.timeoutMs),
-});
-export type Koubo = z.infer<typeof KouboSchema>;
-
-export function fillKouboCard(argv: readonly string[], vars: { audio: string; text: string; mode: string; pairs: string }): string[] {
-  return argv.map((a) => a.replaceAll('{audio}', vars.audio).replaceAll('{text}', vars.text).replaceAll('{mode}', vars.mode).replaceAll('{pairs}', vars.pairs));
-}
 
 /**
  * paths 里 CLI 认识的角色;其余角色原样保留给应用层。vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根;
@@ -324,7 +306,6 @@ export const CotutorConfigSchema = z
       .object({ port: z.number().int().min(1).max(65535).default(8477) })
       .optional()
       .describe('给老师换样子(figshot pick):它在这台电脑的哪个端口(缺省 8477)。配了孩子端首页多一张「给老师们换个样子」,figshot 没开着就不出现;不配就没有这张卡'),
-    koubo: KouboSchema.default(KOUBO_DEFAULT).describe('录音卡的评测命令模板(口播老师):card 一条龙评一条录音(占位 {audio} {text} {mode} {pairs}),timeoutMs 一条最多等多久;门槛与花费上限在 workspace 根的 koubo.json'),
     dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型(改了不用重起服务);挑词的要求在听写 activity 文件「认字收到什么」'),
     paint: PaintSchema.default(PAINT_DEFAULT).describe('你说我画:画图卡(paint)用的文生图模型、尺寸、一天几张(改了不用重起服务);画风在 activity 文件「画家收到什么」'),
     talk: TalkSchema.default(TALK_DEFAULT).describe('口语课(/talk):孩子拍一张今天学的,改好口语单交给英语老师的实时页(先热身、再打电话);enabled 出厂 false'),

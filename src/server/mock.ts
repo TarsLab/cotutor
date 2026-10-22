@@ -116,13 +116,6 @@ export const MOCK_POST: Record<string, { marks: { line: number; card: number; ph
   'chinese-tutor:0': { marks: [{ line: 1, card: 1, phrase: '多做一步', pen: 'marker' }], look: { '1': { emoji: '💡' } } },
 };
 
-/** mock 家长端的录音卡评测(真服务从 heard.json 读):过、重录、没评上各一份 */
-const MOCK_HEARD = [
-  { ok: true, take: '20260926-162103-a1b2c3', verdict: '过', reasons: ['全部过线'], accuracy: 91, chars: ['十', '四', '是', '十', '四'].map((ch, i) => ({ ch, phone: i % 2 ? 's' : 'sh', score: [88, 90, 84, 86, 92][i], ok: true, risk: ['sh_s'] })), costYuan: 0.01, ms: 1100 },
-  { ok: true, take: '20260926-162203-b7a1c2', verdict: '重录', reasons: ['句准确度 36 < 80', '山 的 sh 19 < 65,读成 s', '树 的 sh 20 < 65', '语速 92 字/分 < 160,太慢'], accuracy: 36, charsPerMin: 92, chars: [{ ch: '老', phone: 'l', score: 43, ok: true }, { ch: '师', phone: 'sh', score: 74, ok: true, risk: ['sh_s'] }, { ch: '上', phone: 'sh', score: 71, ok: true, risk: ['sh_s'] }, { ch: '山', phone: 'sh', score: 19, ok: false, risk: ['sh_s'], readAs: 's' }, { ch: '看', phone: 'an4', score: 88, ok: true }, { ch: '树', phone: 'sh', score: 20, ok: false, risk: ['sh_s'] }], costYuan: 0.02, ms: 1400 },
-  { ok: false, error: 'timeout', ms: 20000 },
-];
-
 function withMockPost(section: BoardSection, tutor: string, i: number): BoardSection {
   const out = MOCK_POST[`${tutor}:${i}`];
   if (!out) return section;
@@ -382,60 +375,6 @@ Which one do you want to try first, [apple], [banana], or [orange]? 你先读哪
 Find a fruit at home. 找一个家里的水果,拍下来给我看。`,
     ],
   },
-  {
-    // 口播老师(《口播老师设计.md》):一节三张录音卡;交了之后只盯一个字。mock 不起 koubo,老师的第二节就是按「山」重录写的
-    name: 'koubo-tutor',
-    display: '口播老师',
-    subject: '口播',
-    avatar: '播',
-    preloaded: 0,
-    firstQuestion: '',
-    script: [
-      `今天练 [sh] 和 s。上周 sh 的中位数是 58,还差一点。
-
-~~~text
-# 今天练什么
-sh 舌尖翘起来往后,s 舌尖平放抵住下牙。
-~~~
-
-~~~record pinyin focus=sh_s
-shi2 si4 shi4 shi2 si4
-【十】四【是】【十】四
-~~~
-
-~~~record focus=sh_s
-老师上【山】看【树】
-~~~
-
-~~~record focus=sh_s
-四是四,十是十,十四是十四
-~~~
-
-三句,一句一句来:点开听我念一遍,再按住录。三句都录完交给我。`,
-      `十四是十四,读得很准。[山] 这个字舌尖再往后一点,我们先只盯这一个字。
-
-~~~text
-# 口型
-「山」的 sh:舌尖翘起来,往后缩一点,不碰牙齿,气从舌尖上面出来。
-~~~
-
-~~~read
-山
-上山
-老师上山看树
-~~~
-
-~~~record focus=sh_s
-上【山】
-~~~
-
-~~~record focus=sh_s
-老师上【山】看树
-~~~
-
-先由字到句听一遍,再录这两句。`,
-    ],
-  },
 ];
 
 interface MockMessage {
@@ -611,8 +550,6 @@ export function createMock(opts: MockOptions = {}): Mock {
   }
   /** 话题打星(家长端清单上):<老师>/<话题> → 1–5;记过账的话题(同样的键) */
   const ratings = new Map<string, number>();
-  /** 录音卡的录音(<老师>/<日期>.<job>.cards/<n>/rec-<k>.<ext> → 字节),只在内存里 */
-  const recordings = new Map<string, { type: string; data: Buffer }>();
   const booked = new Set<string>();
   /** 孩子这回发的消息是真钟几点发的(mock 的 now 可能是假钟;画图卡「在画」按它算,种子里的直接是画好的) */
   const sentAt = new Map<string, number>();
@@ -798,8 +735,7 @@ export function createMock(opts: MockOptions = {}): Mock {
           const n = Math.max(0, ...reelMissRuns(reelHolds(plays), plays.filter((r) => r.k === 'type' && r.e === 'send').map((r) => r.at)).map((x) => x.n));
           if (n) th.misses = n;
         }
-        const recorded = list.reduce((n, m) => n + Object.keys(m.states ?? {}).filter((k) => m.section?.cards[Number(k)]?.kind === 'record').length, 0);
-        return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], booking: false, ...(recorded ? { kouboYuan: recorded * 0.015 } : {}), extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') };
+        return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], booking: false, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') };
       });
       const week = weekOf(date, today).map((d) => ({ date: d, tutors: MOCK_TUTORS.filter((t) => listOf(t.name, d).length).map((t) => t.name) }));
       const out: Overview = { title, date, today, tutors, week, ready: scenario !== 'nokey' };
@@ -816,16 +752,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       const list = (date === today ? messages.get(name) : date === yesterday() ? past.get(name) : undefined) ?? [];
       const out = await Promise.all(list.map(async (m, i) => {
         const { states, ...rest } = m;
-        // 录音卡录过的:家长端旁注给一份写死的评测(mock 不起 koubo),按这一节里第几张录音卡轮着给 过 / 重录 / 没评上
-        let rec = 0;
-        const withHeard = (c: BoardSection['cards'][number], k: number) => {
-          const st = states && k in states ? states[k] : undefined;
-          if (c.kind !== 'record') return st === undefined ? c : { ...c, state: st };
-          const h = st === undefined ? undefined : MOCK_HEARD[rec % MOCK_HEARD.length];
-          rec++;
-          return st === undefined ? c : { ...c, state: st, ...(h ? { heard: h } : {}) };
-        };
-        const section = m.section ? mockPaints(await enrichLectures(MOCK_LECTURE_DIRS, { ...m.section, cards: m.section.cards.map(withHeard) }), m, true) : null;
+        const withState = (c: BoardSection['cards'][number], k: number) => (states && k in states ? { ...c, state: states[k] } : c);
+        const section = m.section ? mockPaints(await enrichLectures(MOCK_LECTURE_DIRS, { ...m.section, cards: m.section.cards.map(withState) }), m, true) : null;
         return { ...rest, from: 'kid' as const, section, ...(i === 0 && !m.pending ? { parentText: '## 家长\n第一遍就答上了,后面那句是我故意留的:看他会不会自己往下想。', remembered: [`${date} 讲故事时爱抢着说结局,可以先让他猜`] } : {}) };
       }));
       const pending = list.find((m) => m.pending);
@@ -859,7 +787,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const cards: CardStates = {};
       mine.forEach((m, k) => (m.section?.cards ?? []).forEach((c, n) => { if (c.state !== undefined) (cards[m.job] ??= {})[n] = { at: new Date((starts[k + 1] ?? t) - 5000).toISOString(), turn: m.job, state: c.state }; }));
       const plays = (mockPlays[name] ?? []).filter((x) => x.thread === thread).map((x) => x.rec);
-      const reel = buildReel({ messages: conv, events: {}, cards, tutor: name, now: now().getTime(), plays });
+      const reel = buildReel({ messages: conv, events: {}, cards, now: now().getTime(), plays });
       // mock 的孩子接口只认 today 是今天(写日期的走「以前的」那份)
       const kidDay = await route('GET', `/api/kid/conversations/${name}/${tail === localDate(now()) ? 'today' : tail}`);
       const kid = kidDay.status === 200 ? (kidDay.json as { messages: { thread: string }[] }).messages.filter((m) => m.thread === thread) : [];
@@ -1003,18 +931,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (!target) return { status: 404, json: { error: 'no_such_card' } };
       if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
       if ((messages.get(name) ?? []).some((x) => x.submitted === `${job}/${n}`)) return { status: 409, json: { error: 'submitted' } };
-      // 录音卡:data:audio 存在内存里,状态换成真服务那样的路径(/api/audio 从内存回放);mock 不评测
-      let raw = body;
-      if (target.kind === 'record' && isObj(body) && typeof body.audio === 'string' && body.audio.startsWith('data:')) {
-        const am = /^data:(audio\/[a-z0-9.+-]+)(?:;[^,]*)?;base64,([A-Za-z0-9+/=]+)$/.exec(body.audio);
-        if (!am) return { status: 400, json: { error: 'bad_state' } };
-        const k = [...recordings.keys()].filter((x) => x.startsWith(`${name}/${localDate(now())}.${job}.cards/${n}/`)).length + 1;
-        const ext = am[1].includes('mp4') ? 'm4a' : 'webm';
-        const rel = `${localDate(now())}.${job}.cards/${n}/rec-${k}.${ext}`;
-        recordings.set(`${name}/${rel}`, { type: am[1], data: Buffer.from(am[2], 'base64') });
-        raw = { ...body, audio: `conversations/${name}/${rel}` };
-      }
-      const r = parseCardState(target, raw);
+      const r = parseCardState(target, body);
       if (!r.ok) return { status: 400, json: { error: 'bad_state' } };
       (m!.states ??= {})[Number(n)] = r.state;
       return { status: 200, json: { ok: true, card: `${job}/${n}`, state: r.state } };
@@ -1074,10 +991,6 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p === '/api/mock/silence.wav' && method === 'GET') {
       const ms = Math.min(120_000, Math.max(0, Number(url.searchParams.get('ms')) || 0));
       return { status: 200, contentType: 'audio/wav', body: wavOfPcm(Buffer.alloc(Math.round(ms * 24) * 2), 24000) };
-    }
-    if (p.startsWith('/api/audio/')) {
-      const rec = recordings.get(decodeURIComponent(p.slice('/api/audio/'.length)));
-      return rec ? { status: 200, contentType: rec.type, body: rec.data } : { status: 404, json: { error: 'not_found' } };
     }
     if (p.startsWith('/api/')) return { status: 404, json: { error: 'not_found', path: p } };
     return { status: 404, json: { error: 'not_found', path: p } };

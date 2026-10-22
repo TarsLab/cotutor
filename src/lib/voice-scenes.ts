@@ -38,7 +38,6 @@ export const VOICE_SCENES: VoiceScene[] = [
   { group: '别的声音', name: '卡在念', note: '点读、单词卡、田字格的声音:不是老师,不画声音', input: { status: 'card' }, sound: 'none', tutor: 'chinese', expect: 'card' },
   { group: '别的声音', name: '再听一遍', note: '放的是刚才录下的老师,不是老师在说', input: { status: 'replay' }, sound: 'none', tutor: 'chinese', expect: 'replay' },
   { group: '别的声音', name: '小课堂在放', note: '课里原来的声音在舞台上放', input: { status: 'lecture' }, sound: 'none', tutor: 'chinese', expect: 'lecture' },
-  { group: '别的声音', name: '录音卡在录', note: '录音卡自己那颗键在录:这颗淡、不接', input: { status: 'recording' }, sound: 'none', tutor: 'chinese', expect: 'recording' },
   { group: '口语课一直听', name: '口语单拍好 · 点上面开始', note: '左栏「先热身,再打电话」点之前:灰着、不接,麦也不开(拍板 24)', input: { open: true, choose: true }, sound: 'none', tutor: 'english', expect: 'choose' },
   { group: '口语课一直听', name: '在听', note: '不用按,这颗是麦克风开关', input: { open: true }, sound: 'none', tutor: 'english', expect: 'open' },
   { group: '口语课一直听', name: '孩子在说', note: '服务端判出孩子开口', input: { open: true, hearing: true }, sound: 'kid', tutor: 'english', expect: 'open-kid' },

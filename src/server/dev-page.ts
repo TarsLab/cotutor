@@ -1330,7 +1330,7 @@ ${BRAND_CSS}
     $('#team').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '老师团'), h('span', { class: 'sub' }, '按 cotutor.json 里有谁走;键以 -tutor 结尾的是有脸的老师')), top, roster));
   };
 
-  // ---- 音色:两样声音,页头切——卡的配音(tts.voices 列出全部音色,挑中的写进 tutors.<名>.voice;点读、单词、录音卡的声音)、
+  // ---- 音色:两样声音,页头切——卡的配音(tts.voices 列出全部音色,挑中的写进 tutors.<名>.voice;点读、单词卡的声音)、
   //      实时的嘴(百炼 realtime 认的 56 个,挑中的写进 live.voices.<名>,见下面 renderLiveVoices)。都是先听再挑 ----
   const AGE_BANDS = [['', '全部年龄'], ['kid', '12 岁以下'], ['young', '13–25 岁'], ['adult', '26–40 岁'], ['senior', '41 岁以上']];
   const inBand = (age, band) => !band || (typeof age === 'number' && (band === 'kid' ? age <= 12 : band === 'young' ? age >= 13 && age <= 25 : band === 'adult' ? age >= 26 && age <= 40 : age >= 41));
@@ -1440,7 +1440,7 @@ ${BRAND_CSS}
     };
     renderVoiceList();
     panel.append(filters, list);
-    panel.append(h('p', { class: 'hint' }, '试听是真合成一次(voxtell 有缓存,同一句同一个音色以后不再花钱);挑中就写进 cotutor.json,老师下一句话起用新声音。板书时讲稿与卡的声音都是它;实时的老师只有卡自己的声音(朗读卡、单词卡、录音卡)用它。'));
+    panel.append(h('p', { class: 'hint' }, '试听是真合成一次(voxtell 有缓存,同一句同一个音色以后不再花钱);挑中就写进 cotutor.json,卡点了就用新声音。只管卡自己的声音(点读卡、单词卡);老师开口的声音在「实时的嘴」那半。'));
     $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), kindSeg(), h('span', { class: 'sub' }, '先听再挑,挑中的写进 cotutor.json')), panel));
   };
   // ---- 实时的嘴(《wip/实时老师设想.md》):百炼 realtime 认的 56 个音色(src/live/voices.ts);试听是真连一次照念这一句(几分钱,存着)。

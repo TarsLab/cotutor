@@ -18,12 +18,11 @@ import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
 import { addMessage, applyRun, cardId, lastJobOf, changedCards, conversationFiles, jobId, localDate, localMinute, sessionFor, threads } from '../lib/conversation.ts';
 import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
-import { cardAssets, cardLabel, describeCard, tutorCardKinds, type RecordProps } from '../cards/index.ts';
+import { cardAssets, cardLabel, describeCard, tutorCardKinds } from '../cards/index.ts';
 import { boardGuideFor, cardGuidesFor } from '../cards/docs.ts';
 import { activityCards, parseActivity, renderTutorSection } from '../lib/activity.ts';
 import { activityFile } from '../cli/activities.ts';
 import { activityState, paintGate, paintTool, readActivity, threadActivity } from './activity-state.ts';
-import { KouboQueue } from './koubo.ts';
 import { controlsTools, parserOf, prepareCli, processEnv, toolsOf, unexpectedTools, type ToolSet } from '../clis/index.ts';
 import { endsWithToolCall, lineFlags, parseBoard } from '../lib/board.ts';
 import { readyBeats, beatsOf, type BoardSection, type Device } from '../lib/kid-board.ts';
@@ -414,24 +413,13 @@ export class Runner {
   get env(): NodeJS.ProcessEnv | undefined {
     return this.opts.env;
   }
-  /** 录音卡的评测队列(《口播老师设计.md》§4) */
-  readonly koubo: KouboQueue;
   /** 画图卡交给谁画(《wip/你说我画设想.md》§6;测试与 mock 注入假的) */
   readonly draw: Draw;
   constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number; warm?: boolean; draw?: Draw } = {}) {
     this.getWs = getWs;
     this.opts = opts;
-    this.koubo = new KouboQueue(opts.env);
     this.draw = opts.draw ?? makeDraw({ env: opts.env });
     this.spares = new WarmPool({ idleMs: opts.warmIdleMs });
-  }
-
-  /** 录音卡存了一条新录音:后台起评测(结果落录音旁边的 heard.json,交给老师时取) */
-  assessRecording(audio: string, props: RecordProps): void {
-    const ws = this.getWs();
-    const p = this.koubo.start(ws.root, ws.config.koubo, join(ws.root, audio), props).then(() => {});
-    this.background.add(p);
-    void p.finally(() => this.background.delete(p));
   }
 
   running(tutor: string): { job: string; date: string } | null {
@@ -580,23 +568,20 @@ export class Runner {
     const noteWarnings = pack.entry?.startsWith('缺:') && !input.bookkeep ? [`入口文件${pack.entry}——在 vault 里给这位老师建一篇(cotutor doctor 有写法)`] : [];
     if (policy.board === 'off') pack.board = 'off';
     // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
-    // 录音卡:评测结果接在那一行后面(存录音时就起了,这里取;还在跑就等,最多等到存录音之后 timeoutMs;回放不起新的)
     // 画板交上来的图(状态里是相对 workspace 根的路径):包里那行换成绝对路径(Read 只认绝对路径,老师的 cwd 在 agents/<名>/),消息里照旧记相对的
     const changed = fresh || input.bookkeep ? [] : changedCards(index, await readCardStates(ws, tutor, date), thread);
     let drawings = 0;
     const cards: { card: string; text: string; pack?: string }[] = await Promise.all(changed.map(async (c) => {
       const card = index.messages.find((m) => m.job === c.job)?.section?.cards[c.n];
       const id = cardId(c.job, c.n);
-      const audio = (c.file.state as { audio?: unknown } | null)?.audio;
-      const extra = card?.kind === 'record' && typeof audio === 'string' ? await this.koubo.take(ws.root, ws.config.koubo, join(ws.root, audio), card.props as RecordProps, { noStart: Boolean(input.replayOf) }) : undefined;
       if (!card) return { card: id, text: JSON.stringify(c.file.state) };
       const image = card.kind === 'canvas' ? (c.file.state as { image?: unknown } | null)?.image : undefined;
-      if (typeof image !== 'string') return { card: id, text: describeCard(card, c.file.state, extra) };
+      if (typeof image !== 'string') return { card: id, text: describeCard(card, c.file.state) };
       drawings++;
-      return { card: id, text: describeCard(card, c.file.state, extra), pack: describeCard(card, { ...(c.file.state as object), image: join(ws.root, image) }, extra) };
+      return { card: id, text: describeCard(card, c.file.state), pack: describeCard(card, { ...(c.file.state as object), image: join(ws.root, image) }) };
     }));
     // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的、交了画的(要 Read 看图,《工作流程.md》拍板 21)、
-    // 系统任务带只读的(拍板 20,2026-10-17:以前是整份白名单,照片里一句话就能让老师拿 Bash 读写 workspace 外);policy.tools: on 的老师(口播老师要跑 koubo)总是整份。
+    // 系统任务带只读的(拍板 20,2026-10-17:以前是整份白名单,照片里一句话就能让老师拿 Bash 读写 workspace 外);policy.tools: on 的老师总是整份。
     // 不带的那轮,只有工具才用得上的路径(refs / vault)不进包;模板管不了工具的运行时(没有 {tools} / {toolArgs}),照旧
     const tools: ToolSet = policy.tools === 'on' ? 'on' : input.from !== 'kid' || seen.length > 0 || drawings > 0 ? 'read' : 'off';
     const bare = tools === 'off' && controlsTools(runtime);
@@ -762,7 +747,7 @@ export class Runner {
       }
     };
     emit({ lane: 'main', kind: 'start', cli: plan.argv[0].slice(plan.argv[0].lastIndexOf('/') + 1), runtime: plan.runtime, resume: plan.resume, ...(spare ? { warmMs: t0 - spare.bornAt } : {}) });
-    // 讲稿不配音(嘴照念,《产品规划.md》拍板 30):拍关就就绪;卡自己的声音(点读段、单词、录音卡的示范,《wip/实时老师设想.md》拍板 6)照配
+    // 讲稿不配音(嘴照念,《产品规划.md》拍板 30):拍关就就绪;卡自己的声音(点读段、单词,《wip/实时老师设想.md》拍板 6)照配
     const cardVoice = ws.config.tutors[tutor]?.voice;
     const queue = cardVoice ? new DubQueue(ws.config.tts, cardVoice, files.err(job), this.opts.env) : null;
     if (queue) queue.report = (e) => emit(e.kind === 'queued' ? { lane: 'tts', kind: 'queued', label: e.label } : e.kind === 'done' ? { lane: 'tts', kind: 'done', label: e.label, ms: e.ms, file: e.file ?? '' } : { lane: 'tts', kind: 'failed', label: e.label, ms: e.ms, error: e.error ?? '?' });

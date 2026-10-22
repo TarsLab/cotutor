@@ -336,7 +336,7 @@ export async function doctorWorkspace(
       push({ name: `tutor.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建' });
       // 音色:一老师一音色走 API 是正路(《工作流程.md》§四);没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师不对孩子说话,不用音色
       const tc = ws.config.tutors[name];
-      if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡、录音卡的示范音)配不了——只适合测试`, fix: '家长端「音色」页能听着挑(挑中直接写进去);终端里 voxtell voices --grep <关键词> 挑一个、voxtell preview <voice> 试听,填进 voice' });
+      if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡)配不了——只适合测试`, fix: '家长端「音色」页能听着挑(挑中直接写进去);终端里 voxtell voices --grep <关键词> 挑一个、voxtell preview <voice> 试听,填进 voice' });
       // 卡的清单(《卡片协议.md》「谁拿到哪些卡」):有脸的老师才递板书写法;只是报一声讲哪几种
       if (takesTutorRules(name)) {
         const kinds = tutorCardKinds(tc.cards);
@@ -360,32 +360,6 @@ export async function doctorWorkspace(
       const dt = drawtellBin();
       const shim = (await statOrNull(join(root, TOOL_SHIM)))?.isFile() ?? false;
       push({ name: 'drawtell', ok: dt !== null && shim, required: false, detail: !dt ? 'node_modules 里没有 drawtell,服务端烤不了课包的画面' : shim ? `${TOOL_SHIM} 在,指向本包的 drawtell(家长做课包用它 build / dub / bake)` : `${TOOL_SHIM} 不在,家长做课包只能用全局的 drawtell(版本可能和服务端对不上)`, fix: !dt ? '仓库根 pnpm install' : shim ? undefined : 'cotutor init 或 cotutor upgrade 生成' });
-      // 口播老师(《口播老师设计.md》§8):开着才查——壳与 koubo 包在不在,再把 koubo doctor 的各项并进来(凭据、cloud 政策、ffmpeg;--live 真评一句)
-      {
-        const { kouboTutorOn } = await import('./koubo-setup.ts');
-        const { KOUBO_SHIM, kouboBin } = await import('./skills.ts');
-        if (await kouboTutorOn(root)) {
-          const kb = kouboBin();
-          const kshim = (await statOrNull(join(root, KOUBO_SHIM)))?.isFile() ?? false;
-          push({ name: 'koubo', ok: kb !== null && kshim, required: false, detail: !kb ? 'node_modules 里没有 koubo,录音卡评不了(老师每句都说没听清)' : kshim ? `${KOUBO_SHIM} 在,指向本包的 koubo(录音卡的评测与口播老师用它)` : `${KOUBO_SHIM} 不在,录音卡评不了`, fix: !kb ? '仓库根 pnpm install' : kshim ? undefined : 'cotutor upgrade 生成' });
-          if (kb && kshim) {
-            let out = '';
-            try {
-              out = (await execFileP(join(root, KOUBO_SHIM), ['doctor', '--json', ...(opts.live ? ['--live'] : [])], { cwd: root, timeout: 60_000 })).stdout;
-            } catch (err) {
-              out = String((err as { stdout?: unknown }).stdout ?? '');
-            }
-            let checks: DoctorCheck[] = [];
-            try {
-              checks = (JSON.parse(out.trim().split('\n').pop() ?? '') as { checks?: DoctorCheck[] }).checks ?? [];
-            } catch {
-              /* koubo doctor 没回 JSON */
-            }
-            if (!checks.length) push({ name: 'koubo.doctor', ok: false, required: false, detail: 'koubo doctor 没回检查项', fix: `在 workspace 根跑 ${KOUBO_SHIM} doctor 看看` });
-            for (const c of checks) push({ name: `koubo.${c.name}`, ok: c.ok, required: c.required, detail: c.detail, ...(c.ok || !c.fix ? {} : { fix: c.fix }) });
-          }
-        }
-      }
       for (const sk of await skillStatuses(root)) {
         const label: Record<string, string> = { latest: sk.machine ? '机器件,最新' : '出厂件,最新', upgradable: sk.machine ? '机器件,和包里不一样(改过或包已更新)' : `出厂件,基于 ${sk.basedOn},包已更新`, custom: `自定义(基于 ${sk.basedOn})`, untracked: '自定义(没有出厂记录)', missing: sk.machine ? '缺(机器件,老师或家长的技能靠它)' : '缺', unavailable: `${sk.source} 没装,没法拷` };
         push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'unavailable' && sk.state !== 'upgradable', required: Boolean(sk.machine), detail: `.claude/skills/${sk.name}/:${label[sk.state]}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor upgrade 换新版' : sk.state === 'unavailable' ? '仓库根 pnpm install' : undefined });

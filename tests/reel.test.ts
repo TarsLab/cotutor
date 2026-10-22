@@ -12,7 +12,7 @@ const T = Date.parse('2026-09-28T12:00:00.000Z');
 const iso = (t: number) => new Date(t).toISOString();
 const msg = (job: string, o: Partial<ConversationMessage>): ConversationMessage => ({ job, thread: 'th', at: '2026-09-28T20:00', from: 'kid', text: '', result: 'ok', artifacts: [], ...o }) as ConversationMessage;
 const ev = (list: RunEvent[]): RunEvent[] => list;
-const input = (messages: ConversationMessage[], o: Partial<ReelInput> = {}): ReelInput => ({ messages, events: {}, cards: {}, tutor: 'math-tutor', now: T + 3_600_000, ...o });
+const input = (messages: ConversationMessage[], o: Partial<ReelInput> = {}): ReelInput => ({ messages, events: {}, cards: {}, now: T + 3_600_000, ...o });
 
 // S1:没卡的开头一句、卡 A 一句、卡 B 一句末句问句;9.5 秒写完(ready all)
 const S1: BoardSection = { cards: [card('A'), card('B')], lines: [line('开头', null), line('讲 A', 0), line('B 呢?', 1, true)] };
@@ -84,17 +84,10 @@ check('一轮都没有 → 没有录像', buildReel(input([])) === null);
 }
 
 {
-  // 没成的轮、录音卡
+  // 没成的轮
   const err = msg('e', { text: '再来', result: 'error', error: 'timeout', timing: { startedAt: iso(T) } });
   const r = buildReel(input([err], { events: { e: ev([{ t: 4000, lane: 'main', kind: 'exit', ok: false, reason: 'timeout' }]) } }))!;
   check('没成的轮:没有节;「没成」的点在老师退出那一刻,节尾旁注那时出来,之前算等老师', r.tracks.length === 0 && r.marks.map((m) => m.kind).join() === 'said,error' && r.marks[1].at === T + 4000 && r.notes[0].postAt === T + 4000 && reelFrameAt(r, T + 3000).wait?.ms === 3000);
-
-  const RS: BoardSection = { cards: [card('山', 'record')], lines: [line('读一遍。', 0, true)] };
-  const m1 = msg('1', { timing: { startedAt: iso(T), doneMs: 1000 }, section: RS });
-  const m2 = msg('2', { action: 'submit', timing: { startedAt: iso(T + 60000), doneMs: 1000 }, section: S2 });
-  const rec = { at: iso(T + 30000), turn: '1', state: { audio: 'conversations/math-tutor/2026-09-28.1.cards/0/rec-1.webm', seconds: 3 } };
-  const rr = buildReel(input([m1, m2], { cards: { 1: { 0: rec } } }))!;
-  check('录音卡:孩子的录音排在存下来之前 3 秒,路径去掉 conversations/<老师>/;这 3 秒不被压', rr.clips.length === 1 && rr.clips[0].from === T + 27000 && rr.clips[0].audio === '2026-09-28.1.cards/0/rec-1.webm' && reelFrameAt(rr, T + 28000).clip?.offset === 1000 && !rr.gaps.some((g) => g.from < T + 30000 && g.to > T + 27000), JSON.stringify(rr.gaps));
 }
 
 {

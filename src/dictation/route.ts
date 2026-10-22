@@ -32,7 +32,7 @@ import { readPublished } from '../server/home.ts';
 import { tianzigeData } from '../server/tianzige.ts';
 import { synthesize } from '../server/tts.ts';
 import { judgeChar, type CharJudge, type InkPoint } from './lib/match.ts';
-import { dictationPromptCustom, photoPromptFrom, recognizePhoto, type Recognize } from './recognize.ts';
+import { photoPromptFrom, recognizePhoto, type Recognize } from './recognize.ts';
 import { readFile } from 'node:fs/promises';
 import { listActivities } from '../cli/activities.ts';
 import { parseActivity } from '../lib/activity.ts';
@@ -104,19 +104,17 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
     async medians(ch) {
       return (await tianzigeData(ch))?.medians ?? null;
     },
-    // 每次现读(家长改了要求不用重起服务):听写 activity 文件「认字收到什么」;cotutor.json 的要求改过(老 workspace)以它为准
+    // 每次现读(家长改了要求不用重起服务):听写 activity 文件「认字收到什么」;没有这份文件照出厂的要求
     recognize: async (image, onProgress, lang) => {
-      const cfg = ws().config.dictation;
-      const prompt = lang === 'en' ? cfg.promptEn : cfg.prompt;
-      const tpl = dictationPromptCustom(prompt, lang) ? null : await dictationTemplate(ws().root, lang ?? 'zh');
-      return recognizePhoto(image, onProgress, { model: cfg.model, prompt, lang, ...(tpl ? { text: photoPromptFrom(tpl, lang) } : {}) });
+      const tpl = await dictationTemplate(ws().root, lang ?? 'zh');
+      return recognizePhoto(image, onProgress, { model: ws().config.dictation.model, lang, ...(tpl ? { text: photoPromptFrom(tpl, lang) } : {}) });
     },
   };
 }
 
 /**
  * 认词的要求:workspace 里头上写着这一页(page: dictation / dictation-en)、有「认字收到什么」的那份听写 activity(按老师排第一份);
- * 没有 → null(照 cotutor.json 的 dictation.prompt / promptEn)
+ * 没有 → null(照出厂的要求)
  */
 export async function dictationTemplate(root: string, lang: DictationLang): Promise<string | null> {
   const page = lang === 'en' ? 'dictation-en' : 'dictation';

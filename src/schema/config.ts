@@ -243,8 +243,7 @@ export const mouthVoice = (live: Pick<LiveConfig, 'voices'>, tutor: string): str
 
 /**
  * 听写(《wip/听写设想.md》):拍照认词表用哪个模型。挑词的要求在听写 activity 文件「认字收到什么」(《wip/activity设计.md》拍板 21);
- * prompt / promptEn 是老 workspace 的要求:和出厂的一样就当没写,改过就以它为准(doctor 提示挪进 activity 文件)。
- * 回什么格式(一行一段 JSON)由应用接在后面(src/dictation/recognize.ts 的 FORMAT),改 prompt 不会把解析改坏。
+ * 下面两份是出厂那节的原文,workspace 里没有听写 activity 文件时照它。回什么格式(一行一段 JSON)由应用填(src/dictation/recognize.ts 的 FORMAT)。
  */
 export const DICTATION_PROMPT_DEFAULT = [
   '这是一张照片:小学语文课本的一页(课文、写字、词语表、读读写写、识字),或者老师发的听写单。孩子在读二年级。',
@@ -270,18 +269,15 @@ export const DICTATION_PROMPT_EN_DEFAULT = [
   '- 人名、a / the 这类小词:不挑。',
   '念法:先念这个单词,再说一个孩子熟悉的短语把它用进去,例如「yellow, a yellow bus」「cat, a little cat」。英文,10 个词以内。',
 ];
-export const DICTATION_DEFAULT = { model: 'qwen3.8-max', prompt: DICTATION_PROMPT_DEFAULT, promptEn: DICTATION_PROMPT_EN_DEFAULT };
+export const DICTATION_DEFAULT = { model: 'qwen3.8-max' };
 export const DictationSchema = z.object({
-  model: z.string().min(1).default(DICTATION_DEFAULT.model).describe('拍照认词表用的百炼视觉模型(兼容接口,流式)'),
-  prompt: z.array(z.string()).min(1).default(DICTATION_PROMPT_DEFAULT).describe('旧的拍照认词要求(一行一个字符串)。要求现在写在 agents/chinese-tutor/activities/听写.md「认字收到什么」;这里和出厂的一样就不起作用,改过就以它为准'),
-  promptEn: z.array(z.string()).min(1).default(DICTATION_PROMPT_EN_DEFAULT).describe('旧的英文单词拍照认词要求。要求现在写在 agents/english-tutor/activities/听写.md「认字收到什么」;这里和出厂的一样就不起作用,改过就以它为准'),
+  model: z.string().min(1).default(DICTATION_DEFAULT.model).describe('拍照认词表用的百炼视觉模型(兼容接口,流式);挑词的要求在听写 activity 文件「认字收到什么」'),
 });
 export type DictationConfig = z.infer<typeof DictationSchema>;
 
 /**
  * 你说我画(《wip/你说我画设想.md》):画图卡(paint)用哪个文生图模型、画多大、一天最多几张、画成什么样。
- * 画风在 activity 文件「画家收到什么」那节(《wip/activity设计.md》拍板 12)。prompt 是老 workspace 的画风:和出厂的(PAINT_PROMPT_DEFAULT)一样就当没写,
- * 改过就以它为准(doctor 提示挪进 activity 文件);不在 activity 话题里画也照它。版式、角色、分幅由应用接(src/paint/prompt.ts)。
+ * 画风在 activity 文件「画家收到什么」那节(《wip/activity设计.md》拍板 12);PAINT_PROMPT_DEFAULT 是出厂那节的画风,不在 activity 话题里画照它。版式、角色、分幅由应用接(src/paint/prompt.ts)。
  * 2026-10-11 拿「小熊和小猴种西瓜」四格试:qwen-image-2.0 4 秒、qwen-image-2.0-pro 15 秒,四格里角色都对得上;pro 的表情(低头、脸红)更到位。
  * 2026-10-13 缺省换 qwen-image-3.0-pro:千问 Token Plan 有它(一张约 50 Credits),2.0 系列没有;同一个四格 10 秒,画风照提示词,角色分到哪格有几处没对上。
  * 2026-10-21「除了圆圈数字」挪进多格的版式:写在画风里一幅的图也收到,宇宙那张散着画了 ①③Ⓐ。
@@ -291,11 +287,10 @@ export const PAINT_PROMPT_DEFAULT = [
   '人物是可爱的卡通形象,表情和动作夸张一点,一眼看得出在干什么、心情怎样。',
   '画面里不要任何文字、对话气泡、拟声词。',
 ];
-export const PAINT_DEFAULT = { model: 'qwen-image-3.0-pro', size: '1280*1280', prompt: PAINT_PROMPT_DEFAULT };
+export const PAINT_DEFAULT = { model: 'qwen-image-3.0-pro', size: '1280*1280' };
 export const PaintSchema = z.object({
   model: z.string().min(1).default(PAINT_DEFAULT.model).describe('画图用的千问文生图模型(同步接口):qwen-image-3.0-pro 约 10–20 秒,Token Plan 有它;qwen-image-2.0-pro(约 15 秒)、qwen-image-2.0(约 4 秒)只有百炼按量'),
   size: z.string().regex(/^\d{3,4}\*\d{3,4}$/).default(PAINT_DEFAULT.size).describe('图多大,「宽*高」;四格是方的,缺省 1280*1280(总像素在 512*512 到 2048*2048 之间)'),
-  prompt: z.array(z.string()).min(1).default(PAINT_PROMPT_DEFAULT).describe('旧的画风(一行一个字符串)。画风现在写在 activity 文件「画家收到什么」;这里和出厂的一样就不起作用,改过就以它为准(挪进 activity 文件后删掉这一项)'),
 });
 export type PaintConfig = z.infer<typeof PaintSchema>;
 

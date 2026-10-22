@@ -2,7 +2,7 @@
  * 拍照认词表(《wip/听写设想.md》拍板 10、12):孩子端拍课本(课文、写字、词语、识字)或老师发的听写单,交给百炼的视觉模型,一次回齐:
  * 挑出的字词(是什么、哪一栏、在照片上的哪儿、默认选不选、认没认准、老师怎么念),再是正文全文(分好词,孩子端能点着加)。
  * 「认哪些、默认选哪些、怎么念」在听写 activity 文件的「认字收到什么」(`{{格式}}` 插槽由这里的 FORMAT 填,《wip/activity设计.md》拍板 21);
- * 老 workspace 改过 cotutor.json 的 dictation.prompt / promptEn 的,以它为准,FORMAT 接在后面。改要求不会把解析改坏。
+ * workspace 里没有听写 activity 文件时照出厂的要求(DICTATION_PROMPT_DEFAULT / EN),FORMAT 接在后面。改要求不会把解析改坏。
  * 流式:模型一行一段地吐,收到一行就交出到这时为止认出的全部,孩子端轮询着一个一个画框,不用干等整张认完。
  * 2026-10-10 拿一页仿课本试(识字 9、写字 9、读读写写 6):qwen3.8-max 24 项全对、框都套在字上,第一项 2.8 秒、全部 23 秒;
  * qwen3.5-omni-flash 整张 20 秒但不照一行一段回;qwen-vl-max / qwen3-vl-plus 36–37 秒。
@@ -74,9 +74,10 @@ export const FORMAT_EN = `回答的格式:一行一段 JSON,不要别的字、�
    - emoji:能画出来的东西配一个 emoji(👵 🚌 🍎);抽象的词(like、the、is)不写这一栏。孩子写完对答案时才看到。
 3. 最后是全文:照片上的正文照原样一行写一行 {"full": "What colour is it? It's yellow."};不要页码、栏目名。`;
 
-/** 交给模型的整段:cotutor.json 的要求 + 格式 */
-export function photoPrompt(prompt: readonly string[] = DICTATION_PROMPT_DEFAULT, lang: DictationLang = 'zh'): string {
-  return `${prompt.join('\n')}\n\n${lang === 'en' ? FORMAT_EN : FORMAT}`;
+/** 交给模型的整段(没有听写 activity 文件时):出厂的要求 + 格式 */
+export function photoPrompt(prompt?: readonly string[], lang: DictationLang = 'zh'): string {
+  const ask = prompt ?? (lang === 'en' ? DICTATION_PROMPT_EN_DEFAULT : DICTATION_PROMPT_DEFAULT);
+  return `${ask.join('\n')}\n\n${lang === 'en' ? FORMAT_EN : FORMAT}`;
 }
 
 /** 交给模型的整段:听写 activity 文件「认字收到什么」的模板填好 {{格式}} */
@@ -84,10 +85,6 @@ export function photoPromptFrom(template: string, lang: DictationLang = 'zh'): s
   return fillSlots(template, { 格式: lang === 'en' ? FORMAT_EN : FORMAT });
 }
 
-/** cotutor.json 的 dictation.prompt / promptEn 改过(和出厂的不一样):老 workspace 家长改的要求,以它为准 */
-export function dictationPromptCustom(prompt: readonly string[] | undefined, lang: DictationLang = 'zh'): boolean {
-  return prompt !== undefined && JSON.stringify(prompt) !== JSON.stringify(lang === 'en' ? DICTATION_PROMPT_EN_DEFAULT : DICTATION_PROMPT_DEFAULT);
-}
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);

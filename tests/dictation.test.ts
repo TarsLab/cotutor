@@ -94,7 +94,6 @@ cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS,
 cfg.tutors['chinese-tutor'].voice = 'v-kid';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
-const cfgNow = (): Record<string, any> => JSON.parse(readFileSync(cfgFile, 'utf8')); // eslint-disable-line @typescript-eslint/no-explicit-any
 let now = new Date(2026, 9, 10, 19, 30);
 const ctx = createContext(loadWorkspace(root), { now: () => now });
 type J = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -310,10 +309,8 @@ try {
       { text: '皮', kind: 'char' as const, pick: true, box: [700, 530, 750, 570] as [number, number, number, number], sure: true, say: '皮,肚皮的皮' },
     ];
     let fail = false;
-    let gotPrompt: readonly string[] | undefined;
     const real = dictationDeps(ctx);
     const deps = { ...real, recognize: async (_img: { data: Buffer; mime: string }, onProgress: (p: { items: typeof fakeItems; lesson: string | null; full: string[] }) => void) => {
-      gotPrompt = ctx.ws.config.dictation.prompt;
       const p = { items: [] as typeof fakeItems, lesson: '小蝌蚪找妈妈' as string | null, full: [] as string[] };
       for (const it of fakeItems.slice(0, fail ? 1 : 3)) { await new Promise((r) => setTimeout(r, 5)); p.items = [...p.items, it]; onProgress({ ...p }); }
       if (!fail) { p.full = ['池塘 里 有 一群 小蝌蚪']; onProgress({ ...p }); }
@@ -331,7 +328,6 @@ try {
     await photosIdle();
     const done = await hx('GET', `/api/dictation/photos/${pid}`);
     check('拍照:201 回 id,后台认;认的时候 running,认完 done、课名、三项与全文都在', up.status === 201 && pid.length >= 15 && running.json.state === 'running' && done.json.state === 'done' && done.json.lesson === '小蝌蚪找妈妈' && done.json.items.map((i: J) => i.text).join() === '脑袋,宽大,皮' && done.json.full.join() === '池塘 里 有 一群 小蝌蚪', JSON.stringify(done.json));
-    check('认的时候用的是 cotutor.json 的 dictation.prompt(init 写进文件的出厂要求)', JSON.stringify(gotPrompt) === JSON.stringify(cfgNow().dictation.prompt) && cfgNow().dictation.model === 'qwen3.8-max');
     const img = await hx('GET', `/api/dictation/photos/${pid}/image`);
     check('照片原样存在 dictation/photos/,取得回来', img.status === 200 && readFileSync(img.file!).equals(jpg) && img.file!.includes(join('dictation', 'photos')));
     check('开始:词不对 400(空、不是汉字、超过四个字、超过 20 个);照片不在 404', (await hx('POST', '/api/dictation', { photo: pid, words: [] })).status === 400 && (await hx('POST', '/api/dictation', { photo: pid, words: [{ chars: 'pi' }] })).status === 400 && (await hx('POST', '/api/dictation', { photo: pid, words: [{ chars: '画蛇添足啊' }] })).status === 400 && (await hx('POST', '/api/dictation', { photo: pid, words: Array.from({ length: 21 }, () => ({ chars: '皮' })) })).status === 400 && (await hx('POST', '/api/dictation', { photo: '2020-01-01-0000', words: [{ chars: '皮' }] })).status === 404);
@@ -342,15 +338,6 @@ try {
     const viaNone = await hx('POST', '/api/dictation', { photo: pid, words: [{ chars: '皮' }], tutor: 'nobody' });
     check('拍照开始带 tutor(从哪位老师卡上进来):用他的声音;没有这位老师退回语文老师', (await hx('GET', `/api/dictation/${viaMath.json.id}`)).json.tutor === 'math-tutor' && (await hx('GET', `/api/dictation/${viaNone.json.id}`)).json.tutor === 'chinese-tutor');
     check('拍照开始的照样能念、能交', (await hx('GET', `/api/dictation/${go.json.id}/say/0?text=1`)).json.text === '脑袋,小蝌蚪的大脑袋');
-    {
-      const c2 = cfgNow();
-      c2.dictation.prompt = ['只挑写字栏的字,全都默认选上。'];
-      writeFileSync(cfgFile, JSON.stringify(c2, null, 2));
-      await ctx.reload();
-      await hx('POST', '/api/dictation/photos', { image: `data:image/jpeg;base64,${jpg.toString('base64')}` });
-      await photosIdle();
-      check('家长改了 cotutor.json 的要求:下一张就用新的,不用重起服务', JSON.stringify(gotPrompt) === JSON.stringify(['只挑写字栏的字,全都默认选上。']));
-    }
     fail = true;
     const up2 = await hx('POST', '/api/dictation/photos', { image: `data:image/jpeg;base64,${jpg.toString('base64')}` });
     await photosIdle();
@@ -409,7 +396,6 @@ try {
     r2.push('{"lesson": "Unit 3"}\n{"text": "yellow", "kind": "word", "pick": true, "box": [1,2,30,40], "sure": true, "say": "yellow, a yellow bus"}\n{"text": "春天", "kind": "word"}\n{"full": "What colour is it? It\'s yellow."}\n');
     r2.end();
     check('认英文:只收英文单词、全文去掉标点按词分;提示词换英文的格式', parseItem({ text: 'red' }, 'en')?.text === 'red' && parseItem({ text: '红' }, 'en') === null && r2.items.map((x) => x.text).join() === 'yellow' && r2.full[0] === "What colour is it It's yellow" && sw2('a, b!', 'en') === 'a b' && pp(['x'], 'en').includes('一个英文单词'), JSON.stringify(r2.full));
-    check('cotutor.json 有英文的认词要求(缺省填上)', Array.isArray(ctx.ws.config.dictation.promptEn) && ctx.ws.config.dictation.promptEn.join('').includes('英文单词'));
   }
   // ---- 英文单词的样子照四线三格(《wip/听写设想.md》拍板 29):单词卡那套字形,不用字体 ----
   {

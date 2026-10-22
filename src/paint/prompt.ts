@@ -1,7 +1,7 @@
 /**
  * 画图卡 → 交给文生图模型的一段(《wip/你说我画设想.md》§5.3):版式(几格怎么排)+ 画风 + 角色 + 分幅。
  * 画风在 activity 文件「画家收到什么」那节(模板里留 {{版式}} {{角色}} {{分幅}} 三个插槽,《wip/activity设计.md》拍板 12);
- * 不在 activity 话题里、或 cotutor.json 的 paint.prompt 改过(老 workspace),照旧是 paint.prompt 夹在版式与角色中间。
+ * 不在 activity 话题里画,照出厂的画风(PAINT_PROMPT_DEFAULT)夹在版式与角色中间。
  * 纯函数;版式与角色、分幅由这里接,改画风不会把分幅弄丢。
  */
 import type { PaintProps } from '../cards/index.ts';
@@ -36,24 +36,13 @@ export function paintSlots(p: Pick<PaintProps, 'panels' | 'cast'>): { 版式: st
   };
 }
 
-/** cotutor.json 的画风(paint.prompt):版式、画风、角色、分幅,空一行隔开 */
-export function paintPrompt(p: Pick<PaintProps, 'panels' | 'cast'>, style: readonly string[] = PAINT_PROMPT_DEFAULT): string {
+/** 不在 activity 话题里:版式、出厂的画风、角色、分幅,空一行隔开 */
+export function paintPrompt(p: Pick<PaintProps, 'panels' | 'cast'>): string {
   const s = paintSlots(p);
-  return [s.版式, style.join('\n'), s.角色, s.分幅].filter(Boolean).join('\n\n');
+  return [s.版式, PAINT_PROMPT_DEFAULT.join('\n'), s.角色, s.分幅].filter(Boolean).join('\n\n');
 }
 
 /** activity 文件「画家收到什么」的模板填好插槽 */
 export function paintPromptFrom(template: string, p: Pick<PaintProps, 'panels' | 'cast'>): string {
   return fillSlots(template, paintSlots(p));
-}
-
-/** 出厂过的画风:老 workspace 的 cotutor.json 里写着其中一份,也当没改过 */
-const PAINT_PROMPT_SHIPPED = [
-  PAINT_PROMPT_DEFAULT,
-  [...PAINT_PROMPT_DEFAULT.slice(0, 2), '除了圆圈数字,画面里不要任何文字、对话气泡、拟声词。'], // 2026-10-21 前
-].map((s) => JSON.stringify(s));
-
-/** cotutor.json 的 paint.prompt 改过(和出厂过的都不一样):老 workspace 家长改的画风,以它为准 */
-export function paintStyleCustom(style: readonly string[] | undefined): boolean {
-  return style !== undefined && !PAINT_PROMPT_SHIPPED.includes(JSON.stringify(style));
 }

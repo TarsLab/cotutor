@@ -50,10 +50,10 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('应用拦的:连说过一遍、还能画', a.gates.map((g) => g.rule).join(' ') === '连说过一遍 还能画' && a.gates.every((g) => g.note));
   check('老师那节从「## 老师怎么带」下一行起', a.tutor !== null && a.tutor.line > lineOf('## 老师怎么带') && !a.tutor.text.includes('## 画家收到什么'));
 
-  // 画家那节接管了画风(拍板 12);出厂那份仍和 paint.prompt 缺省一字不差:不在 activity 话题里画、老 workspace 都照缺省,两处画得一样
+  // 画家那节接管了画风(拍板 12);出厂那份和 PAINT_PROMPT_DEFAULT 一字不差:不在 activity 话题里画照它,两处画得一样
   const painter = a.tools.find((t) => t.tool === '画家');
   const style = painter?.prompt.split('\n').filter((l) => l.trim() && !l.includes('{{')) ?? [];
-  check('画家那段的画风 = 出厂 paint.prompt', JSON.stringify(style) === JSON.stringify(PAINT_PROMPT_DEFAULT), JSON.stringify(style));
+  check('画家那段的画风 = PAINT_PROMPT_DEFAULT', JSON.stringify(style) === JSON.stringify(PAINT_PROMPT_DEFAULT), JSON.stringify(style));
   check('画家不要 = 出厂反向提示词', painter?.negative === PAINT_NEGATIVE, painter?.negative);
   const cast = { panels: ['小熊播种。', '小猴睡觉。'], cast: [{ name: '小熊', look: '棕色' }, { name: '小猴' }] };
   const bare = { panels: ['小熊播种。'] };
@@ -196,7 +196,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('模拟孩子的提示词:故事、人设、对话、板上的整段', kp.includes('小熊种瓜') && kp.includes('问一句答一句') && kp.includes('孩子:小熊') && kp.includes('板上:小熊睡大觉。 / 小熊浇了水。'));
 }
 
-// ---- 听写:不起老师(page:),认字那段和出厂的 dictation.prompt 拼出来一字不差(《wip/activity设计.md》拍板 20、21)----
+// ---- 听写:不起老师(page:),认字那段和出厂的要求(DICTATION_PROMPT_DEFAULT)拼出来一字不差(《wip/activity设计.md》拍板 20、21)----
 {
   const { photoPrompt, photoPromptFrom } = await import('../src/dictation/recognize.ts');
   const { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT } = await import('../src/schema/index.ts');
@@ -204,7 +204,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
     const r = lintActivity(readFileSync(join(PACKAGE_AGENTS_DIR, t, 'activities', '听写.md'), 'utf8'), { fileName: '听写' });
     const tool = r.activity.tools.find((x) => x.tool === '认字');
     check(`${t} 的听写:page ${page}、没有老师那节、没有要改的(也没有「不起老师」的提醒)`, r.activity.page === page && r.activity.tutor === null && r.issues.length === 0, JSON.stringify(r.issues));
-    check(`${t} 的听写:认字那段填好格式 = 照出厂 dictation.${lang === 'en' ? 'promptEn' : 'prompt'} 拼的`, !!tool && photoPromptFrom(tool.prompt, lang) === photoPrompt(def, lang));
+    check(`${t} 的听写:认字那段填好格式 = 照出厂的要求拼的`, !!tool && photoPromptFrom(tool.prompt, lang) === photoPrompt(def, lang));
   }
   const bad = lintActivity('---\nname: 听写\ndescription: x\npage: 别的页\n---\n\n## 老师怎么带\n\n你是老师。\n第一句: 好\n收: 好\n', { fileName: '听写' });
   check('page 不认得、写了 page 又写老师那节:都报', has(bad.issues, '不认得') && has(bad.issues, '用不上'), JSON.stringify(bad.issues));

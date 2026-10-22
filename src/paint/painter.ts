@@ -11,7 +11,7 @@ import type { BoardSection } from '../lib/kid-board.ts';
 import { cardId, conversationFiles } from '../lib/conversation.ts';
 import { PaintPropsSchema, type PaintProps } from '../cards/index.ts';
 import { PAINT_DEFAULT } from '../schema/index.ts';
-import { PAINT_NEGATIVE, paintPrompt, paintPromptFrom, paintSize, paintStyleCustom } from './prompt.ts';
+import { PAINT_NEGATIVE, paintPrompt, paintPromptFrom, paintSize } from './prompt.ts';
 import type { Draw } from './draw.ts';
 
 export const PAINT_PNG = 'paint.png';
@@ -70,12 +70,12 @@ let chain: Promise<unknown> = Promise.resolve();
 
 /**
  * 这一轮板书里的画图卡,一张一张画。已经有记录的不再画(重起、重放都不重画);replay = 回放那轮不画(evals 目录里,不花钱)。
- * painter = 这个话题的 activity 文件「画家收到什么」(模板与不要的);给了且 cotutor.json 的 paint.prompt 没改过,照它画。
+ * painter = 这个话题的 activity 文件「画家收到什么」(模板与不要的);给了就照它画,没给照出厂的画风。
  * 返回画完的 Promise(测试与关服前等它),不抛。
  */
 export function startPaints(ws: Workspace, tutor: string, date: string, job: string, section: BoardSection, opts: { draw: Draw; now?: () => Date; replay?: boolean; gate?: () => Promise<string | null>; painter?: { prompt: string; negative?: string } | null }): Promise<void> {
   const cfg = ws.config.paint ?? PAINT_DEFAULT;
-  const painter = opts.painter && !paintStyleCustom(cfg.prompt) ? opts.painter : null;
+  const painter = opts.painter ?? null;
   const negative = painter?.negative || PAINT_NEGATIVE;
   const files = conversationFiles(ws.dirs.conversations, tutor, date);
   const at = (): string => (opts.now?.() ?? new Date()).toISOString();
@@ -91,7 +91,7 @@ export function startPaints(ws: Workspace, tutor: string, date: string, job: str
       const rec = join(dir, PAINT_JSON);
       if (await readRecord(rec)) continue;
       await mkdir(dir, { recursive: true });
-      const prompt = painter ? paintPromptFrom(painter.prompt, props) : paintPrompt(props, cfg.prompt);
+      const prompt = painter ? paintPromptFrom(painter.prompt, props) : paintPrompt(props);
       const model = cfg.model;
       if (opts.replay) { await writeRecord(rec, { state: 'none', at: at(), error: 'replay' }); continue; }
       // activity「应用拦的」(《wip/activity设计.md》4.1):没过就不画、不占张数,下一条告诉老师缺哪条;排在队里现查,同一轮第二张看得到第一张

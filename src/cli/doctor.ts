@@ -396,19 +396,11 @@ export async function doctorWorkspace(
         const states = new Map((await activityStatuses(root)).map((s) => [s.key, s]));
         const label: Record<string, string> = { latest: '出厂件,最新', upgradable: '出厂件,包已更新', custom: '自定义', untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
         for (const s of states.values()) if (s.state === 'missing') push({ name: `activity.${s.key}`, ok: false, required: false, detail: `agents/${s.key.replace('/', '/activities/')}.md 不在`, fix: 'cotutor init 补拷' });
-        // 画风挪进了 activity 文件「画家收到什么」(《wip/activity设计.md》拍板 12);老 workspace 在 cotutor.json 改过的还以它为准,提示挪过去
-        const { paintStyleCustom } = await import('../paint/prompt.ts');
-        if (paintStyleCustom(ws.config.paint?.prompt)) push({ name: 'paint.prompt', ok: false, required: false, detail: 'cotutor.json 的 paint.prompt 改过:画家照它画,activity 文件「画家收到什么」那节的画风不起作用', fix: '把改的画风挪进 agents/chinese-tutor/activities/你说我画.md「画家收到什么」,再删掉 cotutor.json 的 paint.prompt' });
         // 学科色(《首页设计.md》拍板 26):手改 cotutor.json 写的颜色,新话题气泡的白字要压得住
         for (const [name, t] of Object.entries(ws.config.tutors)) {
           if (!t.color) continue;
           const cr = contrastWithWhite(t.color);
           if (cr < MIN_CONTRAST) push({ name: `tutors.${name}.color`, ok: false, required: false, detail: `${t.display}的学科色 ${t.color} 太浅:白字对比度 ${cr.toFixed(2)},要 ${MIN_CONTRAST} 以上,新话题气泡上的字看不清`, fix: `在工作台「老师团」里点一个色块,或删掉 cotutor.json 的 tutors.${name}.color 用自动的` });
-        }
-        // 认词的要求挪进了听写 activity「认字收到什么」(拍板 21);同上
-        const { dictationPromptCustom } = await import('../dictation/recognize.ts');
-        for (const [k, lang, t] of [['prompt', 'zh', 'chinese-tutor'], ['promptEn', 'en', 'english-tutor']] as const) {
-          if (dictationPromptCustom(ws.config.dictation?.[k], lang)) push({ name: `dictation.${k}`, ok: false, required: false, detail: `cotutor.json 的 dictation.${k} 改过:拍照认词照它,听写 activity「认字收到什么」那段不起作用`, fix: `把改的要求挪进 agents/${t}/activities/听写.md「认字收到什么」,再删掉 cotutor.json 的 dictation.${k}` });
         }
         for (const r of await checkActivities(root, ws.config.tutors)) {
           const key = `${r.tutor}/${r.name}`;

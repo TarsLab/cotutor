@@ -154,7 +154,7 @@ export async function configGaps(raw: unknown): Promise<ConfigGap[]> {
 
 /** 补缺时会整段补上的配置段:出厂模板写了、写进文件才好改的 */
 const SECTIONS = ['dictation'] as const;
-const SECTION_WHAT: Record<(typeof SECTIONS)[number], string> = { dictation: '听写拍照认词用的模型与挑词要求,补上就能在文件里改' };
+const SECTION_WHAT: Record<(typeof SECTIONS)[number], string> = { dictation: '听写拍照认词用的模型,补上就能在文件里改(挑词的要求在听写 activity 文件)' };
 
 function getAt(obj: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((cur, k) => (isObj(cur) ? cur[k] : undefined), obj);

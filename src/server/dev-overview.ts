@@ -40,6 +40,8 @@ export interface DevDevice {
   last: string;
   /** 今天开了几次 */
   today: number;
+  /** 今天在前台多久(毫秒,7.4) */
+  todayMs: number;
   /** 近 7 天页面出错几条 */
   errors: number;
   /** 最近一次打开时服务端的提交(7.1) */
@@ -79,6 +81,8 @@ export interface DevOverview {
   /** 近 30 天开过的设备,最近开的在前;更早的折起来 */
   devices: DevDevice[];
   olderDevices: DevDevice[];
+  /** 孩子端开着多久(7.4):近七天每天前台的毫秒,今天另给几点到几点(本地「时:分」);今天没开过 → today null */
+  kidTime: { days: { date: string; ms: number }[]; today: { ms: number; from: string; to: string } | null };
 }
 
 const median = (xs: number[]): number | null => {
@@ -162,13 +166,14 @@ export async function devOverview(ws: Workspace, now: Date = new Date()): Promis
     issues: issues.slice(0, MAX_ISSUES),
     devices: kid.devices,
     olderDevices: kid.older,
+    kidTime: kid.time,
   };
 }
 
 const DEVICE_DAYS = 30;
 
 /** 设备卡与页面出错(《孩子端流水设计.md》§五):设备表 + 近 7 天的流水 */
-async function kidSide(ws: Workspace, today: string, days: readonly string[]): Promise<{ devices: DevDevice[]; older: DevDevice[]; issues: DevIssue[] }> {
+async function kidSide(ws: Workspace, today: string, days: readonly string[]): Promise<{ devices: DevDevice[]; older: DevDevice[]; issues: DevIssue[]; time: DevOverview['kidTime'] }> {
   const table = await readDevices(ws);
   const log = await readKidLog(ws, days).catch(() => [] as KidLogLine[]);
   const nameOf = (id: string, ua: string): string => table[id]?.name ?? table[id]?.label ?? deviceLabel({ ua });
@@ -199,11 +204,29 @@ async function kidSide(ws: Workspace, today: string, days: readonly string[]): P
   const floor = new Date(Date.parse(`${today}T00:00:00`) - (DEVICE_DAYS - 1) * 86_400_000).toISOString();
   const opensToday = new Map<string, number>();
   for (const l of log) if (l.k === 'open' && localDate(new Date(l.at)) === today) opensToday.set(l.device, (opensToday.get(l.device) ?? 0) + 1);
+  // 前台多久:fg 一笔的时刻是记下的那一刻,开始在 ms 之前;几点到几点 = 今天第一次打开(或第一笔的开头)到最后一笔
+  const fgByDay = new Map<string, number>();
+  const fgToday = new Map<string, number>();
+  let from = Infinity, to = -Infinity;
+  for (const l of log) {
+    const t = Date.parse(l.at);
+    const date = localDate(new Date(t));
+    if (l.k === 'fg') {
+      fgByDay.set(date, (fgByDay.get(date) ?? 0) + l.ms);
+      if (date === today) fgToday.set(l.device, (fgToday.get(l.device) ?? 0) + l.ms);
+    }
+    if (date !== today || (l.k !== 'fg' && l.k !== 'open')) continue;
+    from = Math.min(from, l.k === 'fg' ? t - l.ms : t);
+    to = Math.max(to, t);
+  }
+  const hm = (t: number): string => localMinute(new Date(t)).slice(11);
+  const time: DevOverview['kidTime'] = { days: days.map((date) => ({ date, ms: fgByDay.get(date) ?? 0 })), today: Number.isFinite(from) ? { ms: fgByDay.get(today) ?? 0, from: hm(from), to: hm(to) } : null };
   const all = Object.entries(table).sort((a, b) => (a[1].last < b[1].last ? 1 : -1));
-  const row = ([id, d]: [string, KidDevice]): DevDevice => ({ id, name: d.name ?? null, label: d.label, last: d.last, today: opensToday.get(id) ?? 0, errors: errorsBy.get(id) ?? 0, commit: d.commit ?? null });
+  const row = ([id, d]: [string, KidDevice]): DevDevice => ({ id, name: d.name ?? null, label: d.label, last: d.last, today: opensToday.get(id) ?? 0, todayMs: fgToday.get(id) ?? 0, errors: errorsBy.get(id) ?? 0, commit: d.commit ?? null });
   return {
     devices: all.filter(([, d]) => d.last >= floor).map(row),
     older: all.filter(([, d]) => d.last < floor).map(row),
     issues: [...groups.values()],
+    time,
   };
 }

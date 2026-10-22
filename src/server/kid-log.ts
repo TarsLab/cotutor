@@ -13,13 +13,14 @@ import { DEVICE_COOKIE, DEVICE_COOKIE_DAYS, DEVICE_ID_RE, deviceLabel } from '..
 
 /**
  * 各页共用的那段脚本:装上出错的监听,kidLog.start({page, mode, v, ctx}) 报一次打开(只在 mode 是 kid 时)。
+ * 孩子端模式下还在前台计时(7.4):切到后台、离开页面时记一笔 fg,一直开着每 5 分钟也记一笔;不满 1 秒的不记。
  * 同一次打开里同一条报错只报一次、最多 20 条(防一个死循环写满文件,是护栏不是限额);只收脚本错,图片、声音读不出不收。
  * 用在首页 / 老师页(kid-page.ts,各种模式都带)、听写(中、英)、口语课;tests/kid-log.test.ts 盯着这几页都带它。
  * 脚本是 ES5、没有反斜杠与反引号(插进各页的模板字符串)。
  */
 export const KID_LOG_JS = `
   var kidLog = (function () {
-    var sent = {}, n = 0, page = '', mode = 'kid', v = '', ctx = null;
+    var sent = {}, n = 0, page = '', mode = 'kid', v = '', ctx = null, fgSince = 0;
     var cut = function (s, k) { s = String(s == null ? '' : s); return s.length > k ? s.slice(0, k) : s; };
     var post = function (row) { try { fetch('/api/kid/log', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(row), keepalive: true, credentials: 'same-origin' }).catch(function () {}); } catch (e) {} };
     var report = function (msg, where, stack) {
@@ -34,6 +35,13 @@ export const KID_LOG_JS = `
       if (!e || typeof e.message !== 'string') return;
       report(e.message || 'error', (e.lineno || 0) + ':' + (e.colno || 0), e.error && e.error.stack);
     });
+    var flushFg = function () {
+      if (!fgSince) return;
+      var ms = Date.now() - fgSince;
+      if (ms < 1000 && !document.hidden) return;
+      fgSince = document.hidden ? 0 : Date.now();
+      if (ms >= 1000) post({ k: 'fg', page: page, ms: Math.round(ms) });
+    };
     window.addEventListener('unhandledrejection', function (e) {
       var r = e ? e.reason : null;
       report('unhandledrejection: ' + (r && r.message ? r.message : String(r)), '', r && r.stack);
@@ -45,6 +53,10 @@ export const KID_LOG_JS = `
         var standalone = Boolean(navigator.standalone);
         try { standalone = standalone || matchMedia('(display-mode: standalone)').matches; } catch (e) {}
         post({ k: 'open', page: page, v: v, ua: cut(navigator.userAgent, 400), touch: navigator.maxTouchPoints || 0, standalone: standalone, w: screen.width, h: screen.height, vw: innerWidth, vh: innerHeight, dpr: window.devicePixelRatio || 1, lang: cut(navigator.language, 20) });
+        fgSince = document.hidden ? 0 : Date.now();
+        document.addEventListener('visibilitychange', function () { if (document.hidden) flushFg(); else fgSince = Date.now(); });
+        window.addEventListener('pagehide', flushFg);
+        setInterval(function () { if (!document.hidden) flushFg(); }, 300000);
       },
     };
   })();
@@ -53,6 +65,8 @@ export const KID_LOG_JS = `
 /** 流水的一行(服务端补 at、device、ip) */
 export type KidLogRow =
   | { k: 'open'; page: string; v: string; ua: string; touch: number; standalone: boolean; w: number; h: number; vw: number; vh: number; dpr: number; lang: string }
+  /** 在前台多久(7.4):这一笔的毫秒,时刻是这一笔记下的那一刻 */
+  | { k: 'fg'; page: string; ms: number }
   | { k: 'error'; page: string; mode: string; v: string; msg: string; where: string; stack: string; ua: string; ctx: Record<string, unknown> | null };
 /** 服务端那时跑的是哪份代码(打开那行补,《孩子端流水设计.md》7.1) */
 export interface KidLogSrv {
@@ -87,6 +101,8 @@ export function parseKidLog(body: unknown): KidLogRow | null {
   if (!body || typeof body !== 'object' || Array.isArray(body) || JSON.stringify(body).length > MAX_BODY) return null;
   const b = body as Record<string, unknown>;
   if (b.k === 'open') return { k: 'open', page: str(b.page, 40), v: str(b.v, 40), ua: str(b.ua, 400), touch: num(b.touch), standalone: b.standalone === true, w: num(b.w), h: num(b.h), vw: num(b.vw), vh: num(b.vh), dpr: num(b.dpr), lang: str(b.lang, 20) };
+  // 一笔最多算 6 小时(页面每 5 分钟记一笔,长了是钟跳了)
+  if (b.k === 'fg') return typeof b.ms === 'number' && b.ms > 0 && b.ms <= 6 * 3600_000 ? { k: 'fg', page: str(b.page, 40), ms: Math.round(b.ms) } : null;
   if (b.k === 'error') {
     const ctx = b.ctx && typeof b.ctx === 'object' && !Array.isArray(b.ctx) ? (b.ctx as Record<string, unknown>) : null;
     return { k: 'error', page: str(b.page, 40), mode: str(b.mode, 20), v: str(b.v, 40), msg: str(b.msg, 300), where: str(b.where, 40), stack: str(b.stack, 1500), ua: str(b.ua, 400), ctx };

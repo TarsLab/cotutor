@@ -139,7 +139,7 @@ ${BRAND_CSS}
   .jsmore pre { margin:0; max-width:100%; overflow-x:auto; font:400 11.5px/1.5 var(--mono); color:var(--ink-2); white-space:pre-wrap; word-break:break-all; }
   .stack { display:flex; flex-direction:column; gap:16px; min-width:0; }
   .devs { overflow-x:auto; margin:0 -22px; }
-  .devs .dr { display:grid; grid-template-columns:minmax(120px,1.2fr) minmax(160px,1.6fr) 104px 56px 72px; gap:12px; align-items:center; padding:9px 22px; border-bottom:1px solid var(--line-soft); min-width:560px; font-size:13.5px; }
+  .devs .dr { display:grid; grid-template-columns:minmax(120px,1.2fr) minmax(150px,1.5fr) 104px 104px 72px; gap:12px; align-items:center; padding:9px 22px; border-bottom:1px solid var(--line-soft); min-width:600px; font-size:13.5px; }
   .devs .dr.th { font-size:12px; color:var(--muted); padding-top:4px; }
   .devs .dr .r { text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums; }
   .devs .dr .muted { font:400 12px/1.4 var(--mono); }
@@ -1677,6 +1677,9 @@ ${BRAND_CSS}
       h('button', { type: 'button', disabled: ov.doctorBusy, on: { click: runDoctor } }, icon('<path d="M3 12h4l2.5-6 5 12 2.5-6h4"/>'), h('b', {}, '体检一次'), h('small', { class: 'num' }, ov.doctorBusy ? '在跑……' : 'doctor')));
 
     const slowEl = d.slow ? h('span', { class: 'st warn' }, d.slow + ' 轮') : h('span', { class: 'st ok' }, '没有');
+    // 孩子端开着多久(《孩子端流水设计.md》7.4):前台的时间,不是学了多久
+    const dur = (ms) => { const m = Math.round(ms / 60000); return ms < 60000 ? '不到 1 分' : m >= 60 ? Math.floor(m / 60) + ' 时 ' + (m % 60) + ' 分' : m + ' 分'; };
+    const kt = d.kidTime.today;
     const todayBox = h('section', { class: 'blk' },
       h('div', { class: 'hd' }, h('h2', {}, '今天')),
       h('div', { class: 'hero' }, h('b', { class: 'big' }, String(d.todayTurns)), h('span', {}, '轮'),
@@ -1685,7 +1688,10 @@ ${BRAND_CSS}
       h('div', { class: 'kv' },
         h('div', {}, h('span', {}, '首句就绪中位'), h('b', {}, d.firstMedianMs === null ? '—' : secs(d.firstMedianMs))),
         h('div', {}, h('span', {}, '整轮中位'), h('b', {}, d.doneMedianMs === null ? '—' : secs(d.doneMedianMs))),
-        h('div', {}, h('span', {}, '慢的(> 15s)'), slowEl)));
+        h('div', {}, h('span', {}, '慢的(> 15s)'), slowEl)),
+      h('div', { class: 'kv two', title: '孩子端页面在前台的时间,页面开着、人走开了也算' },
+        h('div', {}, h('span', {}, '孩子端开着'), h('b', {}, kt ? dur(kt.ms) : '—')),
+        h('div', {}, h('span', {}, '几点到几点'), h('b', {}, kt ? kt.from + '–' + kt.to : '—'))));
 
     const max = Math.max(1, ...d.days.map((x) => x.turns));
     const top = d.days.reduce((a, x) => (x.turns > a.turns ? x : a), d.days[0]);
@@ -1693,7 +1699,7 @@ ${BRAND_CSS}
       h('div', { class: 'hd' }, h('h2', {}, '近 7 天')),
       h('div', { class: 'hero' }, h('b', { class: 'mid' }, String(d.days.reduce((a, x) => a + x.turns, 0))), h('span', {}, '轮 · 每天孩子说了几轮')),
       h('div', { class: 'bars', role: 'img', 'aria-label': '近 7 天每天的轮数:' + d.days.map((x) => x.date.slice(5) + ' ' + x.turns + ' 轮').join(',') },
-        ...d.days.map((x) => h('div', { class: 'b' + (x.date === d.today ? ' today' : '') + (x.date === d.today || (x === top && x.turns) ? ' lab' : ''), title: x.date + ' · ' + x.turns + ' 轮' },
+        ...d.days.map((x, i) => h('div', { class: 'b' + (x.date === d.today ? ' today' : '') + (x.date === d.today || (x === top && x.turns) ? ' lab' : ''), title: x.date + ' · ' + x.turns + ' 轮' + (d.kidTime.days[i] && d.kidTime.days[i].ms ? ' · 孩子端开着 ' + dur(d.kidTime.days[i].ms) : '') },
           h('span', {}, String(x.turns)), h('i', { style: 'height:' + Math.round((x.turns / max) * 104) + 'px' })))),
       h('div', { class: 'axis' }, ...d.days.map((x) => h('span', { class: x.date === d.today ? 'today' : '' }, x.date === d.today ? '今天' : x.date.slice(5)))));
 
@@ -1740,7 +1746,7 @@ ${BRAND_CSS}
       } } }, dv.name || '没起名');
       return b;
     };
-    const devRow = (dv) => h('div', { class: 'dr' }, h('span', { class: 'nm' }, nameEl(dv)), h('span', { class: 'muted' }, dv.label), h('span', { class: 'r', title: dv.commit ? '那次打开时服务端跑的是 ' + dv.commit : '' }, when(dv.last)), h('span', { class: 'r' }, dv.today ? dv.today + ' 次' : '—'), h('span', { class: 'r' }, dv.errors ? h('span', { class: 'st err' }, '出错 ' + dv.errors) : ''));
+    const devRow = (dv) => h('div', { class: 'dr' }, h('span', { class: 'nm' }, nameEl(dv)), h('span', { class: 'muted' }, dv.label), h('span', { class: 'r', title: dv.commit ? '那次打开时服务端跑的是 ' + dv.commit : '' }, when(dv.last)), h('span', { class: 'r' }, dv.today ? dv.today + ' 次' + (dv.todayMs >= 60000 ? ' · ' + dur(dv.todayMs) : '') : '—'), h('span', { class: 'r' }, dv.errors ? h('span', { class: 'st err' }, '出错 ' + dv.errors) : ''));
     const devBox = h('section', { class: 'blk' },
       h('div', { class: 'hd' }, h('h2', {}, '设备'), h('span', { class: 'sub' }, '孩子端开在哪 · 近 30 天'), h('span', { class: 'right' }, h('span', { class: 'sub' }, '点名字起名'))),
       d.devices.length ? h('div', { class: 'devs' }, h('div', { class: 'dr th' }, h('span', {}, '名字'), h('span', {}, '浏览器'), h('span', { class: 'r' }, '最近打开'), h('span', { class: 'r' }, '今天'), h('span', { class: 'r' }, '近 7 天')), ...d.devices.map(devRow))

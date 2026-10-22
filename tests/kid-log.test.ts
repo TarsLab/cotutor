@@ -36,14 +36,25 @@ const { deviceLabel } = await import('../src/lib/kid-device.ts');
 check('KID_LOG_JS 能插进模板字符串(没有反斜杠、反引号)', !/[\\`]/.test(KID_LOG_JS));
 {
   type Handler = (e: unknown) => void;
-  const run = (): { log: { start(o: Record<string, unknown>): void }; posts: Record<string, unknown>[]; fire(type: string, e: unknown): void } => {
+  type Fake = { log: { start(o: Record<string, unknown>): void } & Record<string, (...a: unknown[]) => void>; posts: Record<string, unknown>[]; fire(type: string, e: unknown): void; doc: { hidden: boolean; fire(type: string): void }; clock: { t: number }; tick(): void };
+  /** 假的 window / document / 钟 / 定时器;nav 盖在缺省的 navigator 上(权限、语音识别那几样) */
+  const run = (over: { nav?: Record<string, unknown>; win?: Record<string, unknown> } = {}): Fake => {
     const handlers: Record<string, Handler[]> = {};
+    const docHandlers: Record<string, Handler[]> = {};
+    const timers: (() => void)[] = [];
     const posts: Record<string, unknown>[] = [];
-    const win = { addEventListener: (t: string, f: Handler) => { (handlers[t] ??= []).push(f); }, devicePixelRatio: 2 };
-    const nav = { userAgent: 'UA-x', maxTouchPoints: 5, language: 'zh-CN', standalone: false };
+    const clock = { t: 1_000_000 };
+    const win = { addEventListener: (t: string, f: Handler) => { (handlers[t] ??= []).push(f); }, devicePixelRatio: 2, ...over.win };
+    const doc = { hidden: false, addEventListener: (t: string, f: Handler) => { (docHandlers[t] ??= []).push(f); } };
+    const nav = { userAgent: 'UA-x', maxTouchPoints: 5, language: 'zh-CN', standalone: false, ...over.nav };
     const fetch = (_u: string, o: { body: string }): Promise<void> => { posts.push(JSON.parse(o.body)); return Promise.resolve(); };
-    const log = new Function('window', 'navigator', 'screen', 'innerWidth', 'innerHeight', 'matchMedia', 'fetch', `${KID_LOG_JS}; return kidLog;`)(win, nav, { width: 820, height: 1180 }, 1180, 820, () => ({ matches: true }), fetch);
-    return { log, posts, fire: (type, e) => { for (const f of handlers[type] ?? []) f(e); } };
+    const log = new Function('window', 'document', 'navigator', 'screen', 'innerWidth', 'innerHeight', 'matchMedia', 'fetch', 'Date', 'setInterval', `${KID_LOG_JS}; return kidLog;`)(win, doc, nav, { width: 820, height: 1180 }, 1180, 820, () => ({ matches: true }), fetch, { now: () => clock.t }, (f: () => void) => { timers.push(f); return timers.length; });
+    return {
+      log, posts, clock,
+      fire: (type, e) => { for (const f of handlers[type] ?? []) f(e); },
+      doc: Object.assign(doc, { fire: (type: string) => { for (const f of docHandlers[type] ?? []) f({}); } }),
+      tick: () => { for (const f of timers) f(); },
+    };
   };
   const a = run();
   a.log.start({ page: 'kid', mode: 'kid', v: 'abc', ctx: () => ({ tutor: 'chinese-tutor' }) });
@@ -63,6 +74,21 @@ check('KID_LOG_JS 能插进模板字符串(没有反斜杠、反引号)', !/[\\`
   b.log.start({ page: 'kid', mode: 'parent', ctx: () => { throw new Error('S 还没有'); } });
   b.fire('error', { message: 'y', lineno: 1, colno: 1 });
   check('家长端、录像、预览:不报打开,出错照记(ctx 抛了记 null)', b.posts.length === 1 && b.posts[0].k === 'error' && b.posts[0].mode === 'parent' && b.posts[0].ctx === null, JSON.stringify(b.posts));
+
+  // 前台计时(7.4):切后台记一笔、回来重新计、5 分钟一笔、离开页面一笔;不满 1 秒不记;家长模式不计
+  const f = run();
+  f.log.start({ page: 'dictation', mode: 'kid' });
+  f.clock.t += 90_000; f.doc.hidden = true; f.doc.fire('visibilitychange');
+  f.clock.t += 600_000; f.doc.hidden = false; f.doc.fire('visibilitychange');
+  f.clock.t += 300_000; f.tick();
+  f.clock.t += 400; f.fire('pagehide', {});
+  f.clock.t += 30_000; f.fire('pagehide', {});
+  const fg = f.posts.filter((p) => p.k === 'fg');
+  check('前台:切后台记 90 秒,后台那 10 分钟不算,5 分钟一笔,不满 1 秒的不记,离开页面再记一笔', fg.map((p) => p.ms).join() === '90000,300000,30400' && fg.every((p) => p.page === 'dictation'), JSON.stringify(fg));
+  const fp = run();
+  fp.log.start({ page: 'kid', mode: 'reel' });
+  fp.clock.t += 90_000; fp.doc.hidden = true; fp.doc.fire('visibilitychange'); fp.tick();
+  check('录像、家长端不计前台', fp.posts.length === 0);
 }
 
 // ---- 各页都带 ----
@@ -104,6 +130,9 @@ const day2 = await readKidLog(ctx.ws, ['2026-10-22']);
 check('出错:记一行,不动设备表', r3.status === 200 && day2.length === 3 && day2[2].k === 'error' && (day2[2] as { msg: string }).msg === 'x is null' && (await readDevices(ctx.ws))[id].opens === 2);
 const bad = await Promise.all([route('POST', '/api/kid/log', ctx, { page: 'kid' }), route('POST', '/api/kid/log', ctx, { k: 'nope' }), route('POST', '/api/kid/log', ctx, { k: 'error', msg: 'x'.repeat(5000) }), route('POST', '/api/kid/log', ctx, [1])]);
 check('坏正文、k 不认得、太长:400', bad.every((r) => r.status === 400), bad.map((r) => r.status).join());
+const fgOk = await route('POST', '/api/kid/log', ctx, { k: 'fg', page: 'kid', ms: 90_000 }, 'local', { device: id });
+const fgBad = await Promise.all([{ k: 'fg', ms: 0 }, { k: 'fg', ms: 7 * 3600_000 }, { k: 'fg', ms: '9' }].map((b) => route('POST', '/api/kid/log', ctx, b, 'local', { device: id })));
+check('前台一笔收下;0、超过 6 小时、不是数的 400', fgOk.status === 200 && (await readKidLog(ctx.ws, ['2026-10-22'])).some((l) => l.k === 'fg' && l.ms === 90_000) && fgBad.every((r) => r.status === 400), fgBad.map((r) => r.status).join());
 const r4 = await route('POST', '/api/kid/log', ctx, openBody, 'local', { device: '../etc' });
 check('cookie 不像设备编号:当没有,种新的', /^cotutor_kid=[0-9a-f]{12};/.test(r4.setCookie ?? ''));
 check('起名、去掉名字;没有这台 → false', (await renameDevice(ctx.ws, id, '  Ray 的 iPad  ')) && (await readDevices(ctx.ws))[id].name === 'Ray 的 iPad' && (await renameDevice(ctx.ws, id, '')) && !('name' in (await readDevices(ctx.ws))[id]) && !(await renameDevice(ctx.ws, 'ffffffffffff', 'x')));

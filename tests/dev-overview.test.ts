@@ -75,7 +75,13 @@ try {
     await recordKidLog(ws, err('x is null'), { device: ipad }, new Date(2026, 9, 16, 15, 31));
     await recordKidLog(ws, err('x is null'), { device: mac }, new Date(2026, 9, 16, 15, 40));
     await recordKidLog(ws, err('y is undefined', { mode: 'parent', ctx: null }), { device: 'dddddddddddd' }, new Date(2026, 9, 16, 15, 45));
+    // 前台:昨天 20 分;今天 iPad 15:00 打开、15:30 记 30 分、15:45 又 10 分,Mac 一笔 5 分
+    await recordKidLog(ws, { k: 'fg', page: 'kid', ms: 20 * 60_000 }, { device: mac }, new Date(2026, 9, 15, 21, 30));
+    await recordKidLog(ws, { k: 'fg', page: 'kid', ms: 30 * 60_000 }, { device: ipad }, new Date(2026, 9, 16, 15, 30));
+    await recordKidLog(ws, { k: 'fg', page: 'dictation', ms: 10 * 60_000 }, { device: ipad }, new Date(2026, 9, 16, 15, 45));
+    await recordKidLog(ws, { k: 'fg', page: 'kid', ms: 5 * 60_000 }, { device: mac }, new Date(2026, 9, 16, 15, 46));
     const o2 = await devOverview(ws, now);
+    check('孩子端开着:今天前台 45 分、15:00–15:46;近七天昨天 20 分;设备今天各几分', o2.kidTime.today?.ms === 45 * 60_000 && o2.kidTime.today.from === '15:00' && o2.kidTime.today.to === '15:46' && o2.kidTime.days.find((x) => x.date === yesterday)?.ms === 20 * 60_000 && o2.devices[0].todayMs === 40 * 60_000 && o2.devices[1].todayMs === 5 * 60_000, JSON.stringify({ t: o2.kidTime, d: o2.devices.map((x) => x.todayMs) }));
     check('设备卡:近 30 天的,最近开的在前,今天开了几次、近 7 天出错几条;更早的折起来', o2.devices.map((x) => x.id).join() === `${ipad},${mac}` && o2.devices[0].label === 'iPad · Safari 27' && o2.devices[0].today === 2 && o2.devices[0].errors === 1 && o2.devices[1].today === 0 && o2.devices[1].label === 'Mac · Safari 26' && o2.olderDevices.map((x) => x.id).join() === old, JSON.stringify(o2.devices));
     const js = o2.issues.filter((i) => i.kind === 'js');
     const x = js.find((i) => i.text === 'x is null');

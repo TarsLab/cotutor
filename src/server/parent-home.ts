@@ -113,7 +113,7 @@ function parseWords(v: unknown, lang: DictationLang): { chars: string; say?: str
 
 /**
  * 英文单词配 emoji(《wip/听写设想.md》拍板 21,只在对一对时出):已发布的那张卡上同一个单词配过的照用,剩下的问一次 qwen3.8-flash;问不到就不配。
- * COTUTOR_EMOJI_ENDPOINT:测试与探针指到假的千问(同口语课的 COTUTOR_TALK_ENDPOINT)
+ * COTUTOR_EMOJI_ENDPOINT:测试与探针指到假的千问
  */
 async function withEmoji(ctx: AppContext, name: string, words: { chars: string; say?: string }[]): Promise<{ chars: string; say?: string; emoji?: string }[]> {
   const { home } = await readPublished(ctx.ws);

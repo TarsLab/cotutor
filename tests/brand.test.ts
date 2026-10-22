@@ -22,7 +22,7 @@ const { LOGO_CLAY } = await import('../src/lib/logo.ts');
 const MARK = 'data-cotutor-brand';
 const BRANDED = ['/parent', '/parent/home', '/parent/xlaoshi', '/parent/dictation', '/dev'];
 const KID = ['/', '/reel', '/preview', '/dictation', '/dictation?lang=en', '/talk'];
-const PLAYERS = ['/parent/talk/reel', '/parent/dictation/reel'];
+const PLAYERS = ['/parent/dictation/reel'];
 
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const ctx = createContext(loadWorkspace(root));

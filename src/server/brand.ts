@@ -3,7 +3,7 @@
  * 家长端各页的页脚用 BRAND_FOOTER,工作台的页头用 brandLogo + BRAND_CSS;「XX的老师们」前面的那颗用 titleLogo(孩子端首页、家长端记录与首页,
  * 《首页设计.md》拍板 33):家长端彩色;孩子端跟标题同色、不带链接(首页的颜色是分给老师的,孩子端也没有外链)。
  * 孩子端回首页的胶囊「‹ logo」用 BACK_LOGO(《产品规划.md》拍板 24):单色、不带链接、不动。
- * 录像的两页(/parent/talk/reel、/parent/dictation/reel)是全屏播放器,不放。
+ * 听写的录像页(/parent/dictation/reel)是全屏播放器,不放。
  * 哪几页带它见 tests/brand.test.ts:每页都带、孩子端一个都不带。
  *
  * logo 是「一起教」双 C(《产品规划.md》拍板 23,几何在 src/lib/logo.ts):大 C 是家长、小 C 是老师,开口都朝右;大号时小 C 侧头 28°,像正要点头。

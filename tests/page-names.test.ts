@@ -20,7 +20,7 @@ const { loadWorkspace } = await import('../src/cli/workspace.ts');
 const { createContext, route } = await import('../src/server/app.ts');
 
 /** 带内联脚本的页面:孩子端(家长端、录像、预览是同一份)、家长端、工作台、听写、口语课、小老师、舞台 */
-const PAGES = ['/', '/parent', '/parent/home', '/dev', '/dev/voice', '/dictation', '/dictation?lang=en', '/talk', '/parent/xlaoshi', '/parent/dictation', '/parent/talk/reel', '/stage/'];
+const PAGES = ['/', '/parent', '/parent/home', '/dev', '/dev/voice', '/dictation', '/dictation?lang=en', '/talk', '/parent/xlaoshi', '/parent/dictation', '/stage/'];
 
 try {
   const { root } = await initWorkspace({ slug: 'ming', name: '小明' });

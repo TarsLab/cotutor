@@ -1,45 +1,28 @@
 /**
- * /talk 与 /api/talk/*:口语课的页面与接口(《口语课设计.md》)。
- * cotutor 只在 app.ts 的 route() 里接一行、serve.ts 的 upgrade 里接一行;这里引用 cotutor 的东西,cotutor 别处不引用这里。拆掉 = 删 src/talk/ 和那两行。
+ * /talk 与 /api/talk/*:口语课的页面与接口(《口语课设计.md》)。孩子在这里拍一页、改好口语单,交给英语老师的实时页上课
+ * (src/server/talk-run.ts,activity「口语课」);这一页自己不打电话(《产品规划.md》拍板 30)。
+ * cotutor 只在 app.ts 的 route() 里接一行;这里引用 cotutor 的东西,cotutor 别处不引用这里。拆掉 = 删 src/talk/ 和那一行。
  *
- *   GET    /talk                       孩子端的页面:拍照、看口语单、跟读与聊(按 hash 切;家长端没有这一页,《口语课设计.md》拍板 13)
- *   GET    /api/talk                   开关、有没有 key、设置、全部口语课(新的在前)
+ *   GET    /talk                       孩子端的页面:拍照、看口语单(按 hash 切;家长端没有这一页,《口语课设计.md》拍板 13)
+ *   GET    /api/talk                   开关、全部口语单(新的在前)
  *   POST   /api/talk                   {photo?: dataURL} 开一次;有照片就交给 omni 读口语单(孩子拍的,读完才回)
- *                                      {from: 'latest'} 拍照屏的「接着上」:最近那份口语单还没聊过就用它,聊过了照它再开一次(404 = 还没有口语单)
- *   GET    /api/talk/<id>              一次的全部(口语单、通话的字、有没有声音)
- *   PUT    /api/talk/<id>/list         {words, sentences, ready?} 孩子(或帮忙的家长)改过的口语单;ready = 开始跟读
+ *                                      {from: 'latest'} 拍照屏的「接着上」:最近那份改好了的口语单(404 = 还没有)
+ *   GET    /api/talk/<id>              一次的全部({meta})
+ *   PUT    /api/talk/<id>/list         {words, sentences, ready?} 改过的口语单;ready = 交给老师
  *   DELETE /api/talk/<id>
  *   GET    /api/talk/<id>/photo        那页照片
- *   GET    /api/talk/<id>/audio/<who>  kid / tutor 的声音(wav);call = 录像的那一条(两边按时刻混好)
- *   GET    /api/talk/<id>/reel        录像的数据(reel.json + 这一次的 meta);没有 404
- *   GET    /parent/talk/reel?id=      家长看录像的外壳(reel-page.ts)
- *   WS     /api/talk/<id>/ws           通话(serve 的 upgrade 交给 talkUpgrade)
  */
-import type { IncomingMessage } from 'node:http';
-import type { Duplex } from 'node:stream';
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AppContext, RouteResult } from '../server/app.ts';
-import type { ListItem } from './lib/used.ts';
-import { makeHint } from './hint.ts';
-import { readList, wordCardOf } from './list.ts';
+import { readList, wordCardOf, type ListItem } from './list.ts';
 import { talkPage } from './page.ts';
 import { backTutorOf } from '../server/tutor-face.ts';
-import { TALK_REEL_PAGE } from './reel-page.ts';
-import { dashscopeAuth } from '../live/realtime.ts';
-import { TalkCall } from './relay.ts';
-import { ID_RE, createTalk, deleteTalk, dirOf, listTalks, readMeta, readTalk, writeMeta } from './store.ts';
-import { acceptWebSocket, isUpgrade } from '../live/ws.ts';
+import { ID_RE, createTalk, deleteTalk, dirOf, listTalks, readMeta, writeMeta } from './store.ts';
 
 export interface TalkDeps {
   /** 照片 → 口语单(测试换假的) */
   readList: typeof readList;
-  /** realtime 端点(测试换假的);不给用真的 */
-  endpoint?: string;
   env?: NodeJS.ProcessEnv;
-  onFinished?(id: string, why: string): void;
-  /** 打电话的提示卡(测试、探针换假的) */
-  hint?: typeof makeHint;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -76,8 +59,7 @@ export function parseItems(v: unknown, max: number, card = false): ListItem[] | 
 export function makeTalkRoute(deps: TalkDeps = { readList }) {
   return async function talkRoute(method: string, url: URL, ctx: AppContext, body: unknown): Promise<RouteResult | null> {
     const p = url.pathname;
-    if (p === '/talk' || p === '/talk/') return method === 'GET' ? { status: 200, html: talkPage(url.searchParams.get('reel') ? null : backTutorOf(ctx.ws.config.tutors, url.searchParams.get('tutor'))) } : { status: 405, json: { error: 'method_not_allowed' } };
-    if (p === '/parent/talk/reel') return method === 'GET' ? { status: 200, html: TALK_REEL_PAGE } : { status: 405, json: { error: 'method_not_allowed' } };
+    if (p === '/talk' || p === '/talk/') return method === 'GET' ? { status: 200, html: talkPage(backTutorOf(ctx.ws.config.tutors, url.searchParams.get('tutor'))) } : { status: 405, json: { error: 'method_not_allowed' } };
     if (p !== '/api/talk' && !p.startsWith('/api/talk/')) return null;
     const ws = ctx.ws;
     const cfg = ws.config.talk;
@@ -85,19 +67,15 @@ export function makeTalkRoute(deps: TalkDeps = { readList }) {
     const env = deps.env ?? process.env;
 
     if (p === '/api/talk') {
-      if (method === 'GET') return { status: 200, json: { enabled: cfg.enabled, auth: Boolean(deps.endpoint) || dashscopeAuth(env) !== null, voice: cfg.voice, minutes: cfg.minutes, interrupt: cfg.interrupt, model: cfg.model, kid: ws.config.kid.name ?? '', talks: await listTalks(root) } };
+      if (method === 'GET') return { status: 200, json: { enabled: cfg.enabled, talks: await listTalks(root) } };
       if (method !== 'POST') return { status: 405, json: { error: 'method_not_allowed' } };
       if (!cfg.enabled) return { status: 404, json: { error: 'talk_disabled', message: 'cotutor.json 的 talk.enabled 还是 false' } };
       const b = isObj(body) ? body : {};
       if (b.from !== undefined) {
         if (b.from !== 'latest') return bad("from 只认 'latest'");
-        const last = (await listTalks(root)).find((t) => (t.status === 'ready' || t.status === 'done') && t.list.words.length + t.list.sentences.length > 0);
+        const last = (await listTalks(root)).find((t) => t.status === 'ready' && t.list.words.length + t.list.sentences.length > 0);
         if (!last) return { status: 404, json: { error: 'no_list', message: '还没有给孩子的口语单' } };
-        if (last.status === 'ready') return { status: 200, json: last };
-        const again = await createTalk(root, ctx.now(), null);
-        Object.assign(again, { status: 'ready', list: last.list, listBy: last.listBy, from: last.id });
-        await writeMeta(root, again);
-        return { status: 201, json: again };
+        return { status: 200, json: last };
       }
       const photo = b.photo === undefined ? null : photoData(b.photo);
       if (photo === undefined) return bad('photo 要是 data:image/…;base64,…,不超过 4MB');
@@ -120,7 +98,7 @@ export function makeTalkRoute(deps: TalkDeps = { readList }) {
     if (!meta) return { status: 404, json: { error: 'not_found' } };
     const dir = dirOf(root, id);
 
-    if (rest === '' && method === 'GET') return { status: 200, json: await readTalk(root, id) };
+    if (rest === '' && method === 'GET') return { status: 200, json: { meta } };
     if (rest === '' && method === 'DELETE') { await deleteTalk(root, id); return { status: 200, json: { ok: true } }; }
     if (rest === 'list' && method === 'PUT') {
       const b = isObj(body) ? body : {};
@@ -130,45 +108,12 @@ export function makeTalkRoute(deps: TalkDeps = { readList }) {
       const changed = JSON.stringify({ words, sentences }) !== JSON.stringify(meta.list);
       meta.list = { words, sentences };
       if (changed) meta.listBy = 'parent';
-      if (b.ready === true) meta.status = words.length + sentences.length ? 'ready' : 'draft';
-      else if (meta.status !== 'done') meta.status = 'draft';
+      meta.status = b.ready === true && words.length + sentences.length ? 'ready' : 'draft';
       await writeMeta(root, meta);
       return { status: 200, json: meta };
     }
     if (rest === 'photo' && method === 'GET') return meta.photo ? { status: 200, file: join(dir, meta.photo), contentType: 'image/jpeg', cacheControl: 'private, max-age=3600' } : { status: 404, json: { error: 'no_photo' } };
-    if (rest === 'reel' && method === 'GET') {
-      const reel = await readFile(join(dir, 'reel.json'), 'utf8').then((t) => JSON.parse(t) as unknown, () => null);
-      return reel ? { status: 200, json: { reel, meta } } : { status: 404, json: { error: 'no_reel' } };
-    }
-    const a = /^audio\/(kid|tutor|call)$/.exec(rest);
-    if (a && method === 'GET') return { status: 200, file: join(dir, `${a[1]}.wav`), contentType: 'audio/wav', cacheControl: 'no-cache' };
-    if (rest === 'ws') return { status: 426, json: { error: 'upgrade_required' } };
     return { status: 404, json: { error: 'not_found' } };
-  };
-}
-
-/** serve 的 upgrade:/api/talk/<id>/ws 交给这里;不是它的回 false(调用方把 socket 销掉) */
-export function makeTalkUpgrade(deps: TalkDeps = { readList }) {
-  return async function talkUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer, ctx: AppContext): Promise<boolean> {
-    const m = /^\/api\/talk\/([^/?]+)\/ws(?:\?.*)?$/.exec(req.url ?? '');
-    if (!m || !isUpgrade(req)) return false;
-    const id = m[1];
-    const ws = ctx.ws;
-    const cfg = ws.config.talk;
-    const refuse = (status: number, why: string): boolean => { socket.end(`HTTP/1.1 ${status} ${why}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`); return true; };
-    if (!cfg.enabled) return refuse(404, 'talk disabled');
-    if (!ID_RE.test(id)) return refuse(404, 'not found');
-    const meta = await readMeta(ws.root, id);
-    if (!meta) return refuse(404, 'not found');
-    let call: TalkCall | null = null;
-    const sock = acceptWebSocket(req, socket, head, {
-      onText: (t) => call?.onText(t),
-      onBinary: (b) => call?.onAudio(b),
-      onClose: () => call?.onSocketClose(),
-    });
-    call = new TalkCall(meta, sock, { root: ws.root, config: cfg, kidName: ws.config.kid.name ?? '', env: deps.env, endpoint: deps.endpoint, now: ctx.now, onFinished: (why) => deps.onFinished?.(id, why), hint: deps.hint });
-    void call.start();
-    return true;
   };
 }
 
@@ -177,9 +122,4 @@ const fakeReadList: typeof readList = async () => {
   await new Promise((r) => setTimeout(r, 800));
   return { ok: true, list: { words: [{ en: 'red', zh: '红色', emoji: '🔴' }], sentences: [{ en: 'It is a red car.', zh: '这是一辆红色的车。' }] }, model: 'fake', ms: 800 };
 };
-/** 探针用的假提示卡:老师说什么都回同一张 */
-const fakeHint: typeof makeHint = async () => ({ hint: { zh: '说一说:它是什么颜色的?', en: "It's ___.", opts: ['red'] }, by: 'model' });
-/** 探针用:COTUTOR_TALK_ENDPOINT 指向假 realtime(tests/_fake-realtime.ts),COTUTOR_TALK_FAKE_LIST 换假的读口语单与提示卡,不花钱 */
-const PROBE_DEPS: TalkDeps = { readList: process.env.COTUTOR_TALK_FAKE_LIST ? fakeReadList : readList, ...(process.env.COTUTOR_TALK_FAKE_LIST ? { hint: fakeHint } : {}), ...(process.env.COTUTOR_TALK_ENDPOINT ? { endpoint: process.env.COTUTOR_TALK_ENDPOINT, env: { ...process.env, DASHSCOPE_API_KEY: process.env.DASHSCOPE_API_KEY ?? 'sk-probe' } } : {}) };
-export const talkRoute = makeTalkRoute(PROBE_DEPS);
-export const talkUpgrade = makeTalkUpgrade(PROBE_DEPS);
+export const talkRoute = makeTalkRoute({ readList: process.env.COTUTOR_TALK_FAKE_LIST ? fakeReadList : readList });

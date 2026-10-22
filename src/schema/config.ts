@@ -204,29 +204,15 @@ export const VaultPolicySchema = z.object({
 export type VaultPolicy = z.infer<typeof VaultPolicySchema>;
 
 /**
- * 口语课(《口语课设计.md》):家长拍一张今天学的,孩子先跟读、再和 realtime 模型用这些词聊。出厂关着;要百炼 key 与业务空间 id。
- * 不进老师团:没有老师文件、板书、记忆;音色是 realtime 自己那套(Tina / Serena…),和 voxtell 的不是一家。
+ * 口语课(《口语课设计.md》、《wip/口语课改实时老师设计.md》):孩子在口语课页拍一张今天学的那页,改好口语单,交给英语老师的实时页上课
+ * (activity「口语课」:先热身、再打电话)。口语课页自己不再打电话(《产品规划.md》拍板 30)。出厂关着;要百炼 key。
  */
-export const TALK_READ_DEFAULT = { waitMs: 5000, again: 0, endMs: 900, pass: 0.5 };
-/** 跟我读不用按(《口语课设计.md》§8.1):孩子读完自动下一句、几秒没出声老师再读 */
-export const TalkReadSchema = z.object({
-  waitMs: z.number().int().min(1000).max(30000).default(TALK_READ_DEFAULT.waitMs).describe('老师读完多久没开口:again 是 0 时孩子端「再听一遍」亮一下,大于 0 时老师再读一遍'),
-  again: z.number().int().min(0).max(5).default(TALK_READ_DEFAULT.again).describe('一句里自动再读最多几遍;缺省 0 = 只读一遍,读得不全也往下走(《口语课设计.md》拍板 15)'),
-  endMs: z.number().int().min(300).max(3000).default(TALK_READ_DEFAULT.endMs).describe('孩子开口之后静多久算读完'),
-  pass: z.number().min(0).max(1).default(TALK_READ_DEFAULT.pass).describe('转写里有这句的词占多少算读完;不到且 again 还有就老师再读一遍'),
-});
-export const TALK_DEFAULT = { enabled: false, model: 'qwen3.8-omni-flash-realtime', listModel: 'qwen3.8-omni-flash', voice: 'Serena', minutes: 5, silenceMs: 1200, interrupt: false, read: TALK_READ_DEFAULT };
+export const TALK_DEFAULT = { enabled: false, listModel: 'qwen3.8-omni-flash', minutes: 5 };
 export const TalkSchema = z.object({
   enabled: z.boolean().default(false).describe('开不开口语课(/talk);关着页面只说怎么开'),
-  model: z.string().min(1).default(TALK_DEFAULT.model).describe('通话用的 realtime 模型'),
   listModel: z.string().min(1).default(TALK_DEFAULT.listModel).describe('照片读成口语单用的模型(兼容接口,不想)'),
-  voice: z.string().min(1).default(TALK_DEFAULT.voice).describe('老师的音色:realtime 音色表里的名字(Tina 缺省;Serena 温柔)'),
-  minutes: z.number().int().min(1).max(20).default(TALK_DEFAULT.minutes).describe('聊那段几分钟;到了老师收尾'),
-  callMaxMinutes: z.number().int().min(1).optional().describe('一通电话(跟读加聊)最长几分钟,到了就挂;不写 = 不限(《产品规划.md》拍板 29)。聊那段孩子 3 分钟不出声照旧挂'),
-  silenceMs: z.number().int().min(400).max(4000).default(TALK_DEFAULT.silenceMs).describe('聊那段 VAD 判「说完了」的静音毫秒;孩子想词慢就调长'),
-  interrupt: z.boolean().default(false).describe('聊那段老师说话时麦克风开不开:false = 老师说完才听(没有回声问题,但孩子插不了嘴);true = 全双工,靠设备的回声消除'),
-  read: TalkReadSchema.default(TALK_READ_DEFAULT).describe('跟我读:读完自动下一句、没出声怎么办的几个数'),
-  note: z.string().max(600).optional().describe('家长给口语课老师的话(这周学什么、想多聊什么);跟读与聊的系统提示都带上,孩子看不到'),
+  minutes: z.number().int().min(1).max(20).default(TALK_DEFAULT.minutes).describe('打电话那段聊几分钟(activity「口语课」的参数);到了老师收尾'),
+  note: z.string().max(600).optional().describe('家长给口语课老师的话(这周学什么、想多聊什么);activity「口语课」的参数,孩子看不到'),
 });
 export type TalkConfig = z.infer<typeof TalkSchema>;
 
@@ -352,7 +338,7 @@ export const CotutorConfigSchema = z
     koubo: KouboSchema.default(KOUBO_DEFAULT).describe('录音卡的评测命令模板(口播老师):card 一条龙评一条录音(占位 {audio} {text} {mode} {pairs}),timeoutMs 一条最多等多久;门槛与花费上限在 workspace 根的 koubo.json'),
     dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型(改了不用重起服务);挑词的要求在听写 activity 文件「认字收到什么」'),
     paint: PaintSchema.default(PAINT_DEFAULT).describe('你说我画:画图卡(paint)用的文生图模型、尺寸、一天几张(改了不用重起服务);画风在 activity 文件「画家收到什么」'),
-    talk: TalkSchema.default(TALK_DEFAULT).describe('口语课(/talk):家长拍一张今天学的,孩子先跟读、再和 realtime 模型用这些词聊;enabled 出厂 false;要百炼 key 与业务空间 id(DASHSCOPE_WORKSPACE_ID 或 voxtell 的配置)'),
+    talk: TalkSchema.default(TALK_DEFAULT).describe('口语课(/talk):孩子拍一张今天学的,改好口语单交给英语老师的实时页(先热身、再打电话);enabled 出厂 false'),
     live: LiveSchema.default(LIVE_DEFAULT).describe('实时老师:有脸的老师都由 realtime 模型开口、老师 CLI 在后面写板书(讲稿不配音、嘴照念);voices 挑嘴的音色;要百炼按量 key 与业务空间 id'),
   })
   .superRefine((c, ctx) => {

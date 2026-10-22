@@ -47,5 +47,5 @@ export function makeLiveUpgrade(deps: LiveRouteDeps = {}) {
   };
 }
 
-/** 探针:COTUTOR_LIVE_ENDPOINT 指到假百炼(同口语课的 COTUTOR_TALK_ENDPOINT) */
+/** 探针:COTUTOR_LIVE_ENDPOINT 指到假百炼 */
 export const liveUpgrade = makeLiveUpgrade(process.env.COTUTOR_LIVE_ENDPOINT ? { endpoint: process.env.COTUTOR_LIVE_ENDPOINT, env: { ...process.env, DASHSCOPE_API_KEY: process.env.DASHSCOPE_API_KEY ?? 'sk-probe' } } : {});

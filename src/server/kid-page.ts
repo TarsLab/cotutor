@@ -1243,19 +1243,19 @@ ${BOARD_MARK_JS}
   };
   // ---- 家长板书页的清单(《家长板书页设计.md》§2.2):日期、每位老师一块、一行一个话题,点了进板书 ----
   const shiftDate = (date, n) => { const [y, m, d] = date.split('-').map(Number); const t = new Date(y, m - 1, d + n); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); };
-  // 听写(/api/dictation)与口语课(/api/talk)的记录:模块自己的接口,15 秒读一次;读回来重画清单
+  // 听写(/api/dictation)的记录:模块自己的接口,15 秒读一次;读回来重画清单。口语课不单列:那一课是英语老师的一个话题(《产品规划.md》拍板 30)
   const modFetch = () => {
     if (S.modAt && Date.now() - S.modAt < 15000) return;
     S.modAt = Date.now();
-    Promise.all([api('GET', '/api/dictation').catch(() => null), api('GET', '/api/talk').catch(() => null)]).then(([d, t]) => {
-      S.mods = { dictation: (d && d.sessions) || [], talks: (t && t.talks) || [] };
+    api('GET', '/api/dictation').catch(() => null).then((d) => {
+      S.mods = { dictation: (d && d.sessions) || [] };
       if (S.home && !S.tutor) renderOverview();
     });
   };
   const hhmm = (iso) => { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
   const ymd = (iso) => { const d = new Date(iso); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
-  /** 听写、口语课挂在哪位老师下:记了老师的照记的,没记的给常驻它的老师,都没有单列一块(':听写') */
-  const modOwner = (H, kind, tutor) => (tutor && H.tutors.some((t) => t.name === tutor) ? tutor : (H.tutors.find((t) => (t.extras || []).includes(kind)) || {}).name || ':' + (kind === 'talk' ? '口语课' : '听写'));
+  /** 听写挂在哪位老师下:记了老师的照记的,没记的给常驻它的老师,都没有单列一块(':听写') */
+  const modOwner = (H, kind, tutor) => (tutor && H.tutors.some((t) => t.name === tutor) ? tutor : (H.tutors.find((t) => (t.extras || []).includes(kind)) || {}).name || ':听写');
   const WEEKDAY = '日一二三四五六';
   /** 话题的 at → 毫秒:索引里是本地时间到分钟(YYYY-MM-DDTHH:MM,不带时区);带时区的(mock)照 ISO 读 */
   const atMs = (at) => { const x = String(at || ''); if (/(Z|[+-][0-9]{2}:?[0-9]{2})$/.test(x)) return Date.parse(x); const p = x.slice(0, 16).split(/[-T:]/).map(Number); return p.length === 5 && p.every((v) => Number.isFinite(v)) ? new Date(p[0], p[1] - 1, p[2], p[3], p[4]).getTime() : NaN; };
@@ -1292,12 +1292,11 @@ ${BOARD_MARK_JS}
     if ($('#home .arm')) return;
     modFetch();
     const goTo = (d) => { if (d > H.today) d = H.today; S.pdate = d === H.today ? null : d; loadHome(); };
-    const M = S.mods || { dictation: [], talks: [] };
+    const M = S.mods || { dictation: [] };
     const tutorOf = (name) => H.tutors.find((t) => t.name === name) || { name, display: name.slice(1), subject: name.slice(1) };
-    // 七天日期条(拍板 24):接口给每天有话题的老师,听写、口语课从模块的记录补
+    // 七天日期条(拍板 24):接口给每天有话题的老师,听写从模块的记录补
     const days = new Map((H.week || []).map((w) => [w.date, new Set(w.tutors)]));
     for (const x of M.dictation) { const set = days.get(ymd(x.startedAt)); if (set) set.add(modOwner(H, 'dictation', x.tutor)); }
-    for (const x of M.talks) { const set = x.call ? days.get(ymd(x.createdAt)) : null; if (set) set.add(modOwner(H, 'talk', null)); }
     const week = H.week || [];
     $('#pweek').replaceChildren(
       h('button', { type: 'button', class: 'nv', 'aria-label': '往前七天', on: { click: () => goTo(shiftDate(H.date, -7)) } }, '‹'),
@@ -1356,13 +1355,6 @@ ${BOARD_MARK_JS}
       const sub = [x.revealed ? '看了答案 ' + x.revealed + ' 个' : '', x.asked ? '再写 ' + x.asked + ' 个' : '', x.done ? '对好了' : x.checked ? '交了' : '还在写'].filter(Boolean).join(' · ');
       const end = Date.parse(x.doneAt || '');
       evs.push({ at: Date.parse(x.startedAt), end: Number.isFinite(end) ? end : null, t: tutorOf(modOwner(H, 'dictation', x.tutor)), kid: h('a', { class: 'kid c-tutor', href: MODE.links.dictationReel + encodeURIComponent(x.id), 'aria-label': '看录像' }, look), pf: [h('span', {}, sub)], practice: x.practice || [] });
-    }
-    for (const x of M.talks.filter((x) => x.call && ymd(x.call.startedAt) === H.date)) {
-      const n = x.list.words.length + x.list.sentences.length;
-      const tt = tutorOf(modOwner(H, 'talk', null));
-      const look = h('span', { class: 'bt bt-extra bt-x-talk', style: '--sc:' + colorOf(tt) }, h('span', { class: 'pg', 'aria-hidden': 'true' }, h('i', {}, 'Hi'), h('span', { class: 'cam', html: EXTRA_ICON.photo })), h('span', { class: 'lb' }, h('span', { class: 'btx' }, '口语课'), h('small', { class: 'ln' }, n + ' 句口语单')));
-      const at = Date.parse(x.call.startedAt);
-      evs.push({ at, end: at + x.call.ms, t: tt, kid: h('a', { class: 'kid c-tutor', href: MODE.links.talkReel + encodeURIComponent(x.id), 'aria-label': '看录像' }, look), pf: [h('span', {}, '跟读 ' + x.call.read + '/' + x.call.items + ' 句 · 聊了 ' + mins(x.call.ms))] });
     }
     evs.sort((p, q) => (q.at || 0) - (p.at || 0));
     const [y0, m0, d0] = H.date.split('-').map(Number);
@@ -4107,12 +4099,12 @@ export interface KidPageMode {
   /** 家长端「首页」里的预览(/preview,《家长板书页设计.md》拍板 33):孩子端首页本身,点了告诉家长页,不跳走、不记看过了 */
   preview?: boolean;
   /** 家长端清单上的跳转(听写的录像、口语课的回看):只在家长模式由服务端填,孩子端页面里永远没有家长端的路径 */
-  links?: { dictationReel: string; talkReel: string };
+  links?: { dictationReel: string };
 }
 
 /** 孩子端页面:标题(已转义)填进去;mode 见 KidPageMode,不给 = 孩子端 */
 export function kidPage(title: string, mode: KidPageMode = {}, stageV = '0'): string {
   const shown = mode.parent ? `${title} · 家长` : title;
-  const m: KidPageMode = mode.parent ? { ...mode, links: { dictationReel: '/parent/dictation/reel?id=', talkReel: '/parent/talk/reel?id=' } } : mode;
+  const m: KidPageMode = mode.parent ? { ...mode, links: { dictationReel: '/parent/dictation/reel?id=' } } : mode;
   return KID_PAGE.replaceAll('__TITLE__', shown).replace('__SHORT__', shown).replace('__MODE__', JSON.stringify(m)).replace('__STAGE_V__', stageV).replace('__MANIFEST__', mode.parent ? '/parent/manifest.webmanifest' : '/manifest.webmanifest').replace('__BRAND__', mode.parent ? BRAND_FOOTER : '').replace('__MARK__', titleLogo(Boolean(mode.parent)));
 }

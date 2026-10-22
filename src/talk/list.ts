@@ -5,7 +5,10 @@
  */
 import { chatUrl, qianwenKeys, qianwenLine, readStream } from '../lib/qianwen.ts';
 import { word as wordCard } from '../cards/word.ts';
-import type { ListItem, TalkList } from './lib/used.ts';
+
+/** 口语单的一条;词另有单词卡(cards/word)要的 emoji 与自然拼读分段(读照片时出,过 cards/word 的 parse;没有就卡上只有词) */
+export interface ListItem { en: string; zh: string; emoji?: string; chunks?: string[] }
+export interface TalkList { words: ListItem[]; sentences: ListItem[] }
 
 export const LIST_TIMEOUT_MS = 40_000;
 const MAX_WORDS = 12;

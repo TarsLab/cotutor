@@ -45,7 +45,7 @@ try {
   const gate = await anon('GET', '/parent');
   check('设了:匿名开家长端是输 PIN 的页(401 + html),页面不含孩子端以外的路径泄露', gate.status === 401 && (gate.html ?? '').includes('家长的页') && (gate.html ?? '').includes("fetch('/api/auth'"), String(gate.status));
   check('输 PIN 页的脚本能解析', (() => { const js = /<script>([\s\S]*?)<\/script>/.exec(gate.html ?? '')?.[1] ?? ''; try { new Function(js); return js.length > 0; } catch { return false; } })());
-  check('设了:匿名开工作台、录像 iframe、预览也是输 PIN 的页;接口 401 json', (await anon('GET', '/dev')).status === 401 && (await anon('GET', '/reel')).status === 401 && (await anon('GET', '/preview')).status === 401 && (await anon('GET', '/parent/home')).status === 401 && ((await anon('GET', '/api/config')).json as { error: string }).error === 'auth' && (await anon('PATCH', '/api/config', { title: 'x' })).status === 401 && (await anon('POST', '/api/conversations/math-tutor/messages', { text: 'x' })).status === 401 && (await anon('GET', '/api/overview/today')).status === 401 && (await anon('GET', '/parent/xlaoshi')).status === 401 && (await anon('GET', '/api/xlaoshi')).status === 401 && (await anon('GET', '/parent/dictation')).status === 401);
+  check('设了:匿名开工作台、录像 iframe、预览也是输 PIN 的页;接口 401 json', (await anon('GET', '/dev')).status === 401 && (await anon('GET', '/reel')).status === 401 && (await anon('GET', '/preview')).status === 401 && (await anon('GET', '/parent/home')).status === 401 && ((await anon('GET', '/api/config')).json as { error: string }).error === 'auth' && (await anon('PATCH', '/api/config', { title: 'x' })).status === 401 && (await anon('POST', '/api/conversations/math-tutor/messages', { text: 'x' })).status === 401 && (await anon('GET', '/api/overview/today')).status === 401 && (await anon('GET', '/parent/dictation')).status === 401);
   check('设了:本机照旧免密', (await local('GET', '/parent')).status === 200 && (await local('GET', '/dev')).status === 200 && (await local('GET', '/api/config')).status === 200);
   check('设了:配置里仍然看不到 PIN 相关的东西(不进 cotutor.json)', !JSON.stringify((await local('GET', '/api/config')).json).includes('2468') && !JSON.stringify((await local('GET', '/api/workspace')).json).includes('pin.json'));
 
@@ -80,7 +80,7 @@ try {
   const kidOnly = [...used].filter((p) => !/^\/api\/(conversations|overview)/.test(p));
   check('孩子端源码里的接口前缀都在白名单里(/api/conversations、/api/overview 是家长模式才用)', kidOnly.every((p) => isKidPath(p) || isKidPath(`${p}/`)), kidOnly.filter((p) => !isKidPath(p) && !isKidPath(`${p}/`)).join(' '));
   check('字幕重放(《实时老师设计.md》拍板 21)的两条在白名单里:每句起点、嘴照念的声音', isKidPath('/api/kid/conversations/chinese-tutor/mouth/2026-10-21/2100-5') && isKidPath('/api/audio/chinese-tutor/2026-10-21.2100-5.mouth.wav'));
-  check('白名单不放家长与工作台的路径', !isKidPath('/parent') && !isKidPath('/dev') && !isKidPath('/api/config') && !isKidPath('/api/conversations/x') && !isKidPath('/api/parent/home') && !isKidPath('/api/xlaoshi') && !isKidPath('/reel') && !isKidPath('/preview'));
+  check('白名单不放家长与工作台的路径', !isKidPath('/parent') && !isKidPath('/dev') && !isKidPath('/api/config') && !isKidPath('/api/conversations/x') && !isKidPath('/api/parent/home') && !isKidPath('/reel') && !isKidPath('/preview'));
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

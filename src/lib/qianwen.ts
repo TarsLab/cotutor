@@ -16,7 +16,7 @@ export const TOKEN_PLAN_KEY_ENV = 'QWENCLOUD_TOKEN_PLAN_API_KEY';
 
 /**
  * Token Plan 个人版调得通的模型(2026-10-13:文档表、token-plan 的 /models、实测三处对过)。
- * 没有 omni 系列、qwen-image-2.0、qwen-plus、paraformer(握手能过,文档与 /models 都没有,不算)
+ * 没有 omni 系列、qwen-image-2.0、qwen-plus
  */
 export const TOKEN_PLAN_MODELS: ReadonlySet<string> = new Set([
   'qwen3.8-max',

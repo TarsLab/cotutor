@@ -45,7 +45,6 @@ import { doctorWorkspace } from '../cli/doctor.ts';
 import { VOICE_GALLERY_PAGE } from './voice-gallery-page.ts';
 import { BusyError, Runner, type SendInput } from './runner.ts';
 import { sendFile } from './send-file.ts';
-import { xlaoshiRoute } from '../xlaoshi/route.ts';
 import { talkRoute } from '../talk/route.ts';
 import { parentHomeRoute } from './parent-home.ts';
 import { bailianRoute, createBailian, type Bailian } from './bailian.ts';
@@ -1225,8 +1224,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const f = await bundleAsset(ws.dirs.bundles, p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
-    // 小老师(家长用,代码都在 src/xlaoshi/,《小老师设计.md》):/xlaoshi 与 /api/xlaoshi/* 交给它
-    const xl = await xlaoshiRoute(method, url, ctx, body); if (xl) return xl;
     // 家长端「首页」的接口(/api/parent/*)
     const phr = await parentHomeRoute(method, p, ctx, body); if (phr) return phr;
     const blr = await bailianRoute(method, p, ctx, body, who); if (blr) return blr;

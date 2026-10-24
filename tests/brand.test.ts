@@ -20,7 +20,7 @@ const { BRAND_FOOTER, BRAND_NAME, BRAND_URL } = await import('../src/server/bran
 const { LOGO_CLAY } = await import('../src/lib/logo.ts');
 
 const MARK = 'data-cotutor-brand';
-const BRANDED = ['/parent', '/parent/home', '/parent/xlaoshi', '/parent/dictation', '/dev'];
+const BRANDED = ['/parent', '/parent/home', '/parent/dictation', '/dev'];
 const KID = ['/', '/reel', '/preview', '/dictation', '/dictation?lang=en', '/talk'];
 const PLAYERS = ['/parent/dictation/reel'];
 

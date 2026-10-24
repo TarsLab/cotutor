@@ -12,7 +12,7 @@ const home = mkdtempSync(join(tmpdir(), 'cotutor-qianwen-'));
 const both = { plan: 'sk-sp-p', payg: 'sk-ws-g' };
 
 check('Token Plan 有的模型(qwen3.8-max、画图 3.0-pro、配音)走 Token Plan', ['qwen3.8-max', 'qwen-image-3.0-pro', 'qwen-audio-3.0-tts-plus'].every((m) => qianwenLine(m, both)?.host === TOKEN_PLAN_HOST && qianwenLine(m, both)?.key === 'sk-sp-p'));
-check('Token Plan 没有的(omni、paraformer、qwen-image-2.0-pro)走按量', ['qwen3.8-omni-flash', 'paraformer-realtime-v2', 'qwen-image-2.0-pro'].every((m) => qianwenLine(m, both)?.host === DASHSCOPE_HOST && qianwenLine(m, both)?.key === 'sk-ws-g'));
+check('Token Plan 没有的(omni、qwen-image-2.0-pro)走按量', ['qwen3.8-omni-flash', 'qwen-image-2.0-pro'].every((m) => qianwenLine(m, both)?.host === DASHSCOPE_HOST && qianwenLine(m, both)?.key === 'sk-ws-g'));
 check('只有按量的 key:全走按量', qianwenLine('qwen3.8-max', { plan: null, payg: 'sk-ws-g' })?.plan === false);
 check('只有 Token Plan 的 key:它没有的模型拿不到线', qianwenLine('qwen3.8-omni-flash', { plan: 'sk-sp-p', payg: null }) === null && qianwenLine('qwen3.8-max', { plan: 'sk-sp-p', payg: null })?.plan === true);
 

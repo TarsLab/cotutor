@@ -41,7 +41,7 @@
   conversations/<name>/<日期>.*          对话索引(session id、话题、打星 ratings、记过 booked、费用)+ 每轮的 run / events / 转录 / 配音,卡的资产在 .cards/
   evals/<name>/                          回放(cotutor replay),形状同 conversations
   captures/<日期>/                       应用拍的作业照片(paths.captures;vault 里只存老师认出的文字)
-  talk/<id>/  dictation/  xlaoshi/       口语课、听写、小老师,各一个场景目录(后两个自带 .gitignore,第一次用时建)
+  talk/<id>/  dictation/                 口语课、听写,各一个场景目录(听写自带 .gitignore,第一次用时建)
   ── 机器的
   .cotutor/shipped.json  cotutor.schema.json  出厂 hash(upgrade 据此分辨没改过 / 改过)与 cotutor.json 的 schema;.cotutor/ 只有这两个进 git
   .cotutor/board/  activity/             按老师裁的板书写法、activity 现生成的 agent 定义(名字带 hash,改了就换)

@@ -5,6 +5,8 @@
  * 底层(课包终帧 / 行内骨架 / 一张照片)锁定、灰一档(opacity 45)、打 customData.layer = 'base';课包取最后一块画板上留着的(finalBoard)、过 drawtell 的 prepareSkeletons,有背景图就垫在底下;孩子画的全打 'ink',全黑(或红 / 蓝)。
  * 照片做底(R5):页面给 imageUrl,这里取回来当 excalidraw 的 image 元素(files 里一张),长边落到 1200,孩子在自己的作业上圈画。
  * 状态(ink 元素)改了就回页面(防抖);页面按「给老师看」→ control submit → 导出 png(底图恢复原色)连 ink 一起交回去。
+ * 铺满(full,《画板设计.md》§二):题目在页面的顶栏,这里不画题目条;工具一列竖着(左撇子在右),最底下空出一格放页面浮上来的老师小头像。
+ * 清空(要点两下)之前先导出一张图交回页面(cleared,《画板设计.md》拍板 9);边画边聊要看图时页面发 control snap,回一张长边 768 的 jpeg(snap)。
  */
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react';
 import { Excalidraw, convertToExcalidrawElements, exportToBlob } from '@excalidraw/excalidraw';
@@ -14,7 +16,12 @@ import { finalBoard, isEraser, prepareSkeletons, type ChalkBackground, type Chal
 
 export interface CanvasStageHandle {
   submit(): void;
+  /** 这一刻的画(边画边聊给嘴看):长边 768 的 jpeg data URL;还没画 / 导不出回 null */
+  snap(): Promise<string | null>;
 }
+
+/** 清空了的那一版:清空的时刻、第一笔画完的时刻、几笔、清空前的图(jpeg data URL,页面转存) */
+export interface CanvasCleared { at: number; from?: number; strokes: number; image?: string }
 
 export interface CanvasStageProps {
   base: { bundle: string } | { skeletons: Record<string, unknown>[] } | { image: string } | null;
@@ -25,8 +32,12 @@ export interface CanvasStageProps {
   ink: Record<string, unknown>[];
   /** 交给老师过了:只看(Excalidraw 的 view 模式),没有工具条 */
   readonly?: boolean;
+  /** 铺满:不画题目条,工具一列、底下给老师的小头像空一格;hand = left 时工具在右 */
+  full?: boolean;
+  hand?: 'left' | 'right';
   onState(ink: Record<string, unknown>[]): void;
   onSubmit(ink: Record<string, unknown>[], image: string): void;
+  onCleared?(c: CanvasCleared): void;
   onError(message: string): void;
 }
 
@@ -86,6 +97,14 @@ async function loadBase(base: CanvasStageProps['base'], bundleUrl?: string, imag
 const isBase = (el: ExcalidrawElement): boolean => (el.customData as { layer?: string } | undefined)?.layer === 'base';
 const isInk = (el: ExcalidrawElement): boolean => !el.isDeleted && !isBase(el);
 
+const blobUrl = (blob: Blob): Promise<string> => new Promise<string>((resolve, reject) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result)); fr.onerror = () => reject(new Error('图读不出')); fr.readAsDataURL(blob); });
+
+/** 导出一张 jpeg(给嘴看、清空前存的那版):底图恢复原色、纸色底;长边 side */
+function exportJpeg(a: ExcalidrawImperativeAPI, elements: readonly ExcalidrawElement[], side: number): Promise<string> {
+  const els = elements.filter((e) => !e.isDeleted).map((e) => (isBase(e) ? { ...e, opacity: 100 } : e)) as ExcalidrawElement[];
+  return exportToBlob({ elements: els, appState: { ...a.getAppState(), exportBackground: true, viewBackgroundColor: '#fffdf8', exportWithDarkMode: false }, files: a.getFiles(), mimeType: 'image/jpeg', quality: 0.72, exportPadding: 16, maxWidthOrHeight: side }).then(blobUrl);
+}
+
 const svg = (paths: string, size = 26): JSX.Element => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" dangerouslySetInnerHTML={{ __html: paths }} />
 );
@@ -97,7 +116,7 @@ const ICON = {
   chevron: '<path d="M6 9l6 6 6-6"></path>',
 };
 
-export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(function CanvasStage({ base, bundleUrl, imageUrl, prompt, ink, readonly, onState, onSubmit, onError }, ref) {
+export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(function CanvasStage({ base, bundleUrl, imageUrl, prompt, ink, readonly, full, hand, onState, onSubmit, onCleared, onError }, ref) {
   const [initial, setInitial] = useState<Base | null>(null);
   const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
   const [color, setColor] = useState<string>(INK_COLORS[0]);
@@ -163,9 +182,18 @@ export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(funct
     setConfirmClear(false);
     const a = api.current;
     if (!a) return;
-    a.updateScene({ elements: a.getSceneElements().map((e) => (isInk(e) ? { ...e, isDeleted: true } : e)) as ExcalidrawElement[] });
+    const before = a.getSceneElements();
+    const inks = before.filter(isInk);
+    // 清空前那一版存一张图(拍板 9):先记下来再擦,图导出来是异步的,拿的是擦之前那份元素
+    if (inks.length && onCleared) {
+      const at = Date.now();
+      const times = inks.map((e) => Number(e.updated) || 0).filter((x) => x > 0);
+      const info: CanvasCleared = { at, strokes: inks.length, ...(times.length ? { from: Math.min(...times) } : {}) };
+      exportJpeg(a, before, 1200).then((image) => onCleared({ ...info, image }), () => onCleared(info));
+    }
+    a.updateScene({ elements: before.map((e) => (isInk(e) ? { ...e, isDeleted: true } : e)) as ExcalidrawElement[] });
     onChange();
-  }, [confirmClear, onChange]);
+  }, [confirmClear, onChange, onCleared]);
 
   useImperativeHandle(ref, () => ({
     submit() {
@@ -178,6 +206,11 @@ export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(funct
         .then((image: string) => onSubmit(inkNow(), image))
         .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
     },
+    snap() {
+      const a = api.current;
+      if (!a || !inkNow().length) return Promise.resolve(null);
+      return exportJpeg(a, a.getSceneElements(), 768).catch(() => null);
+    },
   }), [inkNow, onSubmit, onError]);
 
   if (!initial) return <div className="stage-wait">画板准备中…</div>;
@@ -185,8 +218,8 @@ export const CanvasStage = forwardRef<CanvasStageHandle, CanvasStageProps>(funct
     <button type="button" className={`ct-btn ${cls}${on ? ' on' : ''}`} onClick={onClick} aria-label={label} title={label}>{inner}</button>
   );
   return (
-    <div className="canvas-wrap">
-      {prompt ? (
+    <div className={`canvas-wrap${full ? ' full' : ''}${full && hand === 'left' ? ' hand-left' : ''}`}>
+      {prompt && !full ? (
         <div className={`canvas-prompt${promptOpen ? '' : ' closed'}`}>
           <span className="canvas-prompt-text">{prompt}</span>
           <button type="button" className="canvas-prompt-toggle" onClick={() => setPromptOpen((v) => !v)} aria-label={promptOpen ? '收起题目' : '展开题目'}>{svg(ICON.chevron, 20)}</button>

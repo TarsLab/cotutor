@@ -8,8 +8,9 @@ export const STAGE_SOURCE = 'cotutor-stage';
 
 /** 页面 → 舞台 */
 export type ToStage =
-  | { source: typeof STAGE_SOURCE; type: 'card'; id: string; kind: string; props: Record<string, unknown>; state: unknown; /** 课包目录 URL(小课堂、画板的底),如 /api/bundles/<id>/ */ bundleUrl?: string; /** 画板底图是一张图(照片)时它的 URL,如 /api/kid/image?p=captures/… */ imageUrl?: string; /** 装好就播(讲稿 [[play]] 委托) */ autoplay?: boolean; /** 交给老师过了:画板只看,不能再画 */ readonly?: boolean }
-  | { source: typeof STAGE_SOURCE; type: 'control'; action: 'toggle' | 'next' | 'prev' | 'play' | 'pause' | 'submit' }
+  | { source: typeof STAGE_SOURCE; type: 'card'; id: string; kind: string; props: Record<string, unknown>; state: unknown; /** 课包目录 URL(小课堂、画板的底),如 /api/bundles/<id>/ */ bundleUrl?: string; /** 画板底图是一张图(照片)时它的 URL,如 /api/kid/image?p=captures/… */ imageUrl?: string; /** 装好就播(讲稿 [[play]] 委托) */ autoplay?: boolean; /** 交给老师过了:画板只看,不能再画 */ readonly?: boolean; /** 画板铺满(《画板设计.md》§二):题目在页面顶栏,工具一列、底下给老师的小头像留一格;hand = left 工具在右 */ full?: boolean; hand?: 'left' | 'right' }
+  /** snap = 画板导一张这一刻的 jpeg 回来(边画边聊给嘴看,回 snap) */
+  | { source: typeof STAGE_SOURCE; type: 'control'; action: 'toggle' | 'next' | 'prev' | 'play' | 'pause' | 'submit' | 'snap' }
   /** 家长看录像时的小课堂(card props.follow):录像这一刻停在课里的哪儿、在不在放、倍速、到这一刻画过的几处;页面每 100 毫秒发一次 */
   | { source: typeof STAGE_SOURCE; type: 'follow'; ms: number; playing: boolean; rate: number; marks: unknown[] };
 
@@ -19,6 +20,10 @@ export type FromStage =
   | { source: typeof STAGE_SOURCE; type: 'phase'; phase: 'drawing' | 'paused' | 'done'; step: number; total: number; line: string }
   | { source: typeof STAGE_SOURCE; type: 'state'; state: unknown }
   | { source: typeof STAGE_SOURCE; type: 'submit'; state: unknown; /** 画板导出的 png(data URL),页面转存 */ image?: string }
+  /** 画板清空了(要点两下):清空的时刻、那一版第一笔画完的时刻、几笔、清空前的图(jpeg data URL,页面转存进 captures/)(《画板设计.md》拍板 9) */
+  | { source: typeof STAGE_SOURCE; type: 'cleared'; at: number; from?: number; strokes: number; image?: string }
+  /** control snap 的回话:这一刻的画(长边 768 的 jpeg data URL;还没画是 null) */
+  | { source: typeof STAGE_SOURCE; type: 'snap'; image: string | null }
   | { source: typeof STAGE_SOURCE; type: 'close' }
   /** 小课堂(《小课堂设计.md》):放到结尾一次 = finished(停在最后一帧,页面不收);孩子按回去 = close;放完点「去问老师」= ask。都带看了多久、停过几次 */
   | { source: typeof STAGE_SOURCE; type: 'lecture'; event: 'finished' | 'close' | 'ask'; watchedMs: number; finished: boolean; pauses: number }

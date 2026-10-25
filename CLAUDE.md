@@ -4,7 +4,7 @@
 
 本文件只写怎么在这个仓干活,不记历史、不记拍板:
 
-- 设计在 `docs/`:《产品规划.md》定位、两个端;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡;《首页设计.md》孩子端首页与 cotutor-home;《作业照片设计.md》孩子端拍照、编辑与发;《家长板书页设计.md》家长端 `/parent`;《工作台设计.md》工作台 `/dev` 的样子(纸面控制台)、概览的数、activity 页;《家长录像设计.md》家长端看录像:录数据不录屏幕;《小课堂设计.md》做好的课(课包或视频)孩子看完再聊:播放器、画(一处一张截图)、画的卡、老师放课里一段;《看图说话设计.md》语文老师一问一答带看图说话;《实时老师设计.md》嘴(realtime)开口、脑(老师 CLI)写板书,有脸的老师都这样;《实时老师页设计.md》实时老师页的样子与按钮;《一直听设计.md》不用按住说话的那种说法;《口语课设计.md》英语老师的口语课:孩子拍一页,热身 + 打电话在英语老师的实时页(《口语课实时设计.md》);《activity设计.md》首页按钮进去的一种做法;《听写设计.md》听写与拍照听写;《你说我画设计.md》画图卡;《孩子端流水设计.md》孩子端记什么(设备、页面脚本出错)、工作台怎么显示;《接一个 CLI.md》再接一家 agent CLI(写给开发者)
+- 设计在 `docs/`:《产品规划.md》定位、两个端;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡;《首页设计.md》孩子端首页与 cotutor-home;《作业照片设计.md》孩子端拍照、编辑与发;《家长板书页设计.md》家长端 `/parent`;《工作台设计.md》工作台 `/dev` 的样子(纸面控制台)、概览的数、activity 页;《家长录像设计.md》家长端看录像:录数据不录屏幕;《小课堂设计.md》做好的课(课包或视频)孩子看完再聊:播放器、画(一处一张截图)、画的卡、老师放课里一段;《看图说话设计.md》语文老师一问一答带看图说话;《实时老师设计.md》嘴(realtime)开口、脑(老师 CLI)写板书,有脸的老师都这样;《实时老师页设计.md》实时老师页的样子与按钮;《一直听设计.md》不用按住说话的那种说法;《口语课设计.md》英语老师的口语课:孩子拍一页,热身 + 打电话在英语老师的实时页(《口语课实时设计.md》);《activity设计.md》首页按钮进去的一种做法;《听写设计.md》听写与拍照听写;《你说我画设计.md》画图卡;《画板设计.md》画板卡与左栏的纸铺满、边画边聊、给老师看;《孩子端流水设计.md》孩子端记什么(设备、页面脚本出错)、工作台怎么显示;《接一个 CLI.md》再接一家 agent CLI(写给开发者)
 - 各设计文档末尾有「拍板记录」,带日期。**带日期的决定都是可推翻的**;一条约定要在两轮以上迭代里活下来才进本文件末尾的「约定」
 - 改 `agents/`、`skills/`、`cards/` 下的 md 的字先看《写提示词.md》;自造的词查《词表.md》
 - 《开发者手册.md》怎么跑;给用的人看的是《家长手册.md》《iPad与iPhone.md》。模块的来龙去脉与真跑数据不另存,看 git log 与各设计文档
@@ -32,6 +32,7 @@
 - 改 activity 文件或 `src/lib/activity.ts` 先过 `tests/activity.test.ts`(出厂那份画家的画风要和 `PAINT_PROMPT_DEFAULT` 一字不差),workspace 里的跑 `cotutor activity check`
 - 改工作台(`src/server/dev-*.ts`、`qr-page.ts`)先过 `tests/dev-overview.test.ts`、`tests/dev-activities.test.ts` 与 `tests/dev-tutor-files.test.ts`,颜色只用 `dev-theme.ts` 的变量;页面走 `scripts/probe-dev.mjs`(只看不改)
 - 改孩子端流水(`src/server/kid-log.ts`、`src/lib/kid-device.ts`)先过 `tests/kid-log.test.ts` 与 `tests/dev-overview.test.ts`;新加孩子端页面要带 `KID_LOG_JS`(kid-log.test 的 PAGES 里登记);页面走 `scripts/probe-kid-log.mjs`(会写流水与设备表,拿试用 workspace)
+- 改画板(`src/lib/canvas-chat.ts`、`src/stage/canvas.tsx`、`src/server/paper.ts`、`call.ts` 的边画边聊、kid-page 的「画板」)先过 `tests/canvas-chat.test.ts` 与 `tests/live-canvas.test.ts`;页面走 `scripts/probe-paper.mjs`(先起 `cotutor mock --http`,探针交掉 mock 里那张画板卡,再跑要重起 mock)
 - 改 `src/paint/` 或画图卡先过 `tests/paint.test.ts`(假百炼、假老师全流程),页面走 `scripts/probe-paint.mjs`;真画按张计费
 - 改孩子端播放(嘴、卡的声音、孩子谁打断谁)先改《工作流程.md》的仲裁表,再改 `tests/live-player.test.ts`,最后改 `live-board.ts` 的 `liveStep`;页面只 `liveDispatch`。板上的节(铺、写完、撤掉)是 `kid-board.ts` 的 `step`,对 `tests/player.test.ts`,页面只 `dispatch`
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`(老师都走实时老师页,假嘴念静音的声音;`--scenario nokey` 看没配百炼)

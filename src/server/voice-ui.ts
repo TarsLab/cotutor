@@ -109,6 +109,11 @@ export const VOICE_CSS = `
   .vb[data-tone=cancel] .vb-small { color:#4d5563; }
   .vb-track { position:absolute; z-index:0; left:96px; right:18px; top:50%; height:56px; margin-top:-28px; pointer-events:none; }
   .vb-right .vb-track { left:18px; right:96px; }
+  /* 画板铺满时工具列最底下那颗(《画板设计.md》§二):只有头像;底色、头像的动作同大的那颗(两颗一起变),声音的弧和竖条不画 */
+  .vb.vb-mini { width:64px; height:64px; padding:0; border-radius:50%; justify-content:center; gap:0; }
+  .vb.vb-mini .vb-side, .vb.vb-mini .vb-track { display:none; }
+  .vb.vb-mini .vb-av { width:56px; height:56px; --vb-h1:-3px; --vb-h2:-9px; }
+  .vb.vb-mini .vb-av > .av { width:46px; height:46px; font-size:22px; }
   .vb.vb-shake { animation:vb-shake .5s ease-in-out; }
   .vb.vb-breathe { animation:vb-glow 2.4s ease-in-out infinite; }
   /* 头像的动作(按钮里那颗、手机字幕行那颗、板书模式字幕行那颗都用这一套) */

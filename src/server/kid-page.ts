@@ -46,7 +46,7 @@ import { BACK_TINT_CSS, BACK_TINT_JS } from './tutor-face.ts';
 import { BOARD_MARK_CSS, BOARD_MARK_HAND_LEFT_CSS, BOARD_MARK_JS } from './board-mark.ts';
 
 /** 读 src/lib/<name> 的源码(仓库里是 .ts,npm 包里是 dist 的 .js),剥类型、去 export,变成能内联的普通脚本 */
-function libSource(name: 'kid-board' | 'photo-edit' | 'reel' | 'live-board' | 'voice-view'): string {
+function libSource(name: 'kid-board' | 'photo-edit' | 'reel' | 'live-board' | 'voice-view' | 'canvas-chat'): string {
   return inlineScript(new URL(`../lib/${name}.ts`, import.meta.url));
 }
 
@@ -357,6 +357,29 @@ ${BACK_TINT_CSS}
   /* 舞台的遮罩:板书与顶栏压暗,点一下 = 点 ×;字幕行与输入条不盖(舞台开着孩子照样能说话) */
   #st-dim { position:absolute; left:0; right:0; bottom:0; top:-100vh; z-index:4; background:#00000073; display:none; }
   #stage.on ~ #st-dim { display:block; }
+  /* ---- 画板铺满(《画板设计.md》§二):画板卡与左栏的纸都铺满整屏、盖住左栏;顶栏 × · 题目一行(点开看全)· 给老师看(轻点只交画,按住说 = 画和这句话一起给老师);
+     工具一列在舞台里,最底下浮着老师的小头像(按住说话 = 边画边聊,给嘴);嘴说的话在画布顶上浮一条,说完几秒淡掉 ---- */
+  #stage.cv, body.live #stage.cv, body.live.hand-left #stage.cv { position:fixed; inset:0; width:auto; transform:none; border-radius:0; box-shadow:none; z-index:20; }
+  #stage.cv .top { min-height:56px; box-sizing:border-box; padding:calc(env(safe-area-inset-top) + 6px) calc(env(safe-area-inset-right) + 220px) 6px calc(env(safe-area-inset-left) + 12px); gap:12px; }
+  #stage.cv #st-x { order:-1; }
+  #stage.cv .top .ttl { cursor:pointer; font-size:18px; }
+  #stage.cv .top .ttl.open { white-space:normal; }
+  #stage.cv #st-act { position:absolute; top:env(safe-area-inset-top); right:env(safe-area-inset-right); height:56px; box-sizing:border-box; padding:0 12px; border-top:0; gap:10px; }
+  #stage.cv #st-note { font-size:14px; }
+  #st-go.holding { background:#3d7fd9; border-color:#3d7fd9; color:#fff; }
+  #cv-hold, #cv-cap { display:none !important; }
+  body.live #stage.cv #cv-hold { display:flex !important; position:absolute; z-index:2; left:calc(env(safe-area-inset-left) + 4px); bottom:calc(env(safe-area-inset-bottom) + 20px); }
+  body.live.hand-left #stage.cv #cv-hold { left:auto; right:calc(env(safe-area-inset-right) + 4px); }
+  body.reel #stage.cv #cv-hold { pointer-events:none; }
+  #stage.cv #cv-cap { display:block !important; position:absolute; z-index:2; top:calc(env(safe-area-inset-top) + 68px); left:50%; translate:-50% 0; width:max-content; max-width:min(720px, calc(100% - 200px)); box-sizing:border-box; padding:10px 18px; border-radius:16px; background:#fffffff2; box-shadow:0 4px 18px #0000001f; font-size:20px; line-height:1.45; font-weight:600; color:var(--ink); opacity:0; pointer-events:none; transition:opacity .3s; }
+  #stage.cv #cv-cap.on { opacity:1; }
+  /* 孩子从纸上交的画(《画板设计.md》§三):节前一张——图(点开看大图)、几笔、接着画 */
+  .c.c-draw { flex-direction:row; align-items:center; gap:14px; padding:10px 12px; border:2px solid #7a4fc9; border-radius:16px; background:#fff; max-width:100%; align-self:flex-start; }
+  .c-draw .dw-th { width:156px; height:104px; flex:none; border:1px solid var(--line); border-radius:10px; object-fit:contain; background:#fffdf8; cursor:zoom-in; }
+  .c-draw .dw-t { display:flex; flex-direction:column; gap:2px; }
+  .c-draw .dw-t small { font-size:13px; font-weight:700; color:#7a4fc9; }
+  .c-draw .dw-t b { font-size:20px; }
+  .c-draw .dw-go { margin-left:8px; height:44px; padding:0 16px; border-radius:22px; border:1.5px solid #7a4fc9; background:#fff; color:#7a4fc9; font:inherit; font-size:16px; font-weight:600; }
   #board { flex:1; min-height:0; overflow:auto; padding:calc(env(safe-area-inset-top) + 68px) 16px 24px; display:flex; flex-direction:column; gap:12px; -webkit-overflow-scrolling:touch; scroll-behavior:smooth; }
   /* 字幕行 */
   .sh .ph { display:inline-block; height:34px; width:auto; max-width:120px; border-radius:6px; object-fit:cover; border:1px solid var(--line); background:#fff; vertical-align:middle; }
@@ -443,8 +466,11 @@ __BRAND_CSS__
   #sheet .dimmer { position:absolute; inset:0; background:#00000033; }
   #sheet .panel { position:absolute; left:0; right:0; bottom:0; background:var(--card); border-radius:22px 22px 0 0; padding:18px 20px calc(env(safe-area-inset-bottom) + 24px); display:flex; flex-direction:column; gap:14px; }
   #sheet .grab { width:40px; height:4px; border-radius:2px; background:var(--line); align-self:center; }
-  #sheet .opts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-  #sheet label { display:flex; flex-direction:column; align-items:center; gap:8px; padding:18px 0; border-radius:16px; background:var(--paper); font-size:15px; font-weight:600; }
+  #sheet .opts { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:12px; }
+  #sheet .opts > [hidden] { display:none; }
+  body:not(.live) #sheet-paper { display:none; }
+  #sheet label, #sheet .opts button { display:flex; flex-direction:column; align-items:center; gap:8px; padding:18px 0; border-radius:16px; background:var(--paper); font-size:15px; font-weight:600; }
+  #sheet .opts button { border:0; color:inherit; font-family:inherit; line-height:inherit; }
   input[type=file] { display:none; }
   /* 发照片屏(《作业照片设计.md》):看一眼、裁剪 / 圈画 / 转 90°、配一句话,再发 */
   #ps { position:absolute; inset:0; z-index:40; background:#1d1c1a; color:#fff; display:none; flex-direction:column; }
@@ -656,7 +682,7 @@ __VOICE_CSS__
     body.live .lv-go .s { font-size:19px; }
     /* 按住说话那颗按钮(头像 + 声音,样子在 voice-ui.ts):挨着字幕往下顶到底下那排上面;下沿离屏底 = 底下那排 + 13vh 的空 */
     body.live #lv-hold { display:flex; flex:none; align-self:center; margin-top:auto; }
-    body.live #lv-tools { display:flex; flex:none; justify-content:center; gap:36px; margin-top:clamp(36px, 13vh, 150px); }
+    body.live #lv-tools { display:flex; flex:none; justify-content:center; gap:24px; margin-top:clamp(36px, 13vh, 150px); }
     #lv-tools button { display:flex; flex-direction:column; align-items:center; gap:6px; font-size:13px; color:#6f6b63; }
     #lv-tools .ic { width:56px; height:56px; box-sizing:border-box; border-radius:50%; border:1px solid var(--line); background:#fff; display:grid; place-items:center; color:#6f6b63; }
     /* 老师在想:按钮自己画灰(voice-view 的 think),照样接按(按了晃一下说为什么);底下那排不接 */
@@ -697,10 +723,10 @@ __VOICE_CSS__
     <div id="wrap">
       <div id="bmark" hidden></div>
       <div id="board"></div>
-      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div></div>
+      <div id="stage"><div class="top"><span class="ttl" id="st-ttl"></span><span class="kd" id="st-kd"></span><button id="st-x" type="button"></button></div><div id="st-body"></div><iframe id="st-frame" hidden title="stage"></iframe><div id="st-act" hidden><span class="note" id="st-note"></span><button id="st-go" type="button">交给老师</button></div><button id="cv-hold" class="vb-mini" type="button"></button><div id="cv-cap"></div></div>
       <div id="st-dim"></div>
     </div>
-    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
+    <div id="lv"><div id="lv-av"></div><div id="lv-kid"></div><div id="lv-cap"><div class="lv-prev"></div><div class="lv-cur"></div></div><div id="lv-ask"><b></b><small></small></div><div id="lv-acts"></div><button id="lv-replay" type="button" hidden><span class="ic"></span><span class="tx"></span></button><button id="lv-hold" type="button"></button><div id="lv-tools"><button type="button" id="lv-paper"><span class="ic"></span>画板</button><button type="button" id="lv-cam"><span class="ic"></span>拍照</button><button type="button" id="lv-album"><span class="ic"></span>相册</button><button type="button" id="lv-type"><span class="ic"></span>打字</button></div></div>
     <div id="sub"><span class="av" id="sub-av"></span><span id="sub-text"></span><button id="sub-btn" type="button" hidden></button></div>
     <div id="bar">
       <div id="pill">
@@ -724,6 +750,7 @@ __VOICE_CSS__
   <div id="sheet"><div class="dimmer"></div><div class="panel"><div class="grab"></div><div class="opts">
     <label><span class="ic" id="ic-album"></span>相册<input type="file" accept="image/*" multiple></label>
     <label><span class="ic" id="ic-cam2"></span>拍照<input type="file" accept="image/*" capture="environment"></label>
+    <button type="button" id="sheet-paper"><span class="ic" id="ic-paper"></span>画板</button>
   </div></div></div>
   <div id="ps">
     <div id="ps-top"><span id="ps-to"></span></div>
@@ -744,6 +771,7 @@ __BOARD_JS__
 __PHOTO_JS__
 __REEL_JS__
 __LIVE_JS__
+__CANVAS_CHAT_JS__
 __AUDIO_JS__
 __VOICE_VIEW_JS__
 __VOICE_JS__
@@ -801,6 +829,7 @@ __BRAND_JS__
     micMd: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 22, 2),
     micLg: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 30, 1.8),
     keyboard: SVG('<rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M7 10h1M11 10h1M15 10h1M8 15h8"></path>', 26, 1.8),
+    paper: SVG('<path d="M15 4l5 5-9 9H6v-5z"></path><path d="M13 6l5 5"></path><path d="M3 21c2-1.5 4-1.5 6 0s4 1.5 6 0"></path>', 26, 1.8),
     micOff: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"></path>', 22, 2),
     image: SVG('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 16l5-5 4 4 3-3 6 6"></path><circle cx="16" cy="9" r="1.5"></circle>', 36, 1.6),
     album: __ALBUM_28__,
@@ -859,7 +888,9 @@ ${BOARD_MARK_JS}
   /** 按住说话那颗按钮(平板横屏左栏;头像 + 声音,《实时老师设计.md》拍板 23):样子是 voice-view.ts 的 voiceView 给的、画法在 voice-ui.ts,
    *  这里只在一处(voiceSync)把状态凑好交过去、把音量喂进去。hint = 刚才那一下的提示(留 2 秒);photo = 这一轮发的是照片;loudAt = 按着时最近一次有声音;
    *  reelHold / reelSpeak = 录像里孩子的屏幕这一刻(按着没有、嘴在不在出声) */
-  const VB = { btn: voiceButton($('#lv-hold'), { side: 'left' }), hint: '', hintT: 0, loudAt: 0, photo: false, silentT: 0, side: 'left', reelHold: null, reelSpeak: false };
+  /** 两颗按住说话的按钮一起变:左栏那颗、画板铺满时工具列底下那颗小的(《画板设计.md》§二);探针、录像读的是大的那颗 */
+  const vbPair = (a, b) => ({ el: a.el, set: (v) => { a.set(v); b.set(v); }, shake: () => { a.shake(); b.shake(); }, nod: () => { a.nod(); b.nod(); }, avatar: (n) => { a.avatar(n); b.avatar(n.cloneNode(true)); }, side: (x) => { a.side(x); b.side(x); }, color: (c) => { a.color(c); b.color(c); }, level: (w, v) => { a.level(w, v); b.level(w, v); }, tutorSource: (fn) => { a.tutorSource(fn); b.tutorSource(fn); }, drawn: a.drawn });
+  const VB = { btn: vbPair(voiceButton($('#lv-hold'), { side: 'left' }), voiceButton($('#cv-hold'), { side: 'left' })), hint: '', hintT: 0, loudAt: 0, photo: false, silentT: 0, side: 'left', reelHold: null, reelSpeak: false };
   VB.btn.tutorSource(() => (LV.audio && LV.audio.outLevel ? LV.audio.outLevel() : 0));
   $('#lv-av').classList.add('vb-halo');
 
@@ -1419,7 +1450,7 @@ ${BOARD_MARK_JS}
   const openTutor = (t, intent) => {
     unlock();
     intent = intent || { kind: 'new' };
-    S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.stage = null; S.partial = null; $('#stage').classList.remove('on');
+    S.tutor = t; S.sections = []; S.played = new Set(); dispatch({ type: 'reset' }); S.pending = false; S.stage = null; S.paper = null; S.partial = null; $('#stage').classList.remove('on', 'cv');
     S.thread = intent.kind === 'thread' ? intent.thread : null; S.threadAt = null; S.hist = null; S.readonly = false; S.newThread = intent.kind === 'new';
     S.via = intent.via || null; S.cont = intent.cont || null; S.lecture = intent.lecture ? { ...intent.lecture, watch: null, sent: false, marks: [], flying: [], log: [] } : null; S.ask = intent.ask || null;
     // 口语课页拍好了口语单(《口语课实时设计.md》§三之一):先等孩子点「先热身,再打电话」(那一下起声音),发出去的第一条带 talk
@@ -1933,7 +1964,13 @@ __WORD_DRAW_JS__
   /** 孩子单独说的那句当节头(拍板 19):话 —— 线 —— [时间] [照片] 再听;meta = false 只要话和线(刚发出去挂在板尾的、小课堂卡下面的) */
   const saidHead = (s, sd, meta, first) => h('div', { class: 'sh said' }, ...saidBody(sd, { click: toggleSaid(sd) }), h('span', { class: 'ln' }), ...(meta ? [first && s.at ? clock(s.at) : null, ...headPhotos(s)] : []));
   /** 一节开头:孩子没单独说话 → 原来的节头(只留第一节与带照片的);说了 → 他的话就是节头;看完小课堂后的第一问写在小课堂卡下面 */
-  const headEls = (s, i) => {
+  /** 孩子从纸上交的画(《画板设计.md》§三):节前一张——图(点开看大图)、几笔、「接着画」打开这个话题的纸(只读、家长端、录像里不出) */
+  const drawHead = (s) => !s.drawing ? null : h('div', { class: 'c c-draw' },
+    h('img', { class: 'dw-th', src: '/api/kid/image?p=' + encodeURIComponent(s.drawing.image), alt: '', loading: 'lazy', on: { click: (e) => { e.stopPropagation(); openLb([s.drawing.image], 0); } } }),
+    h('div', { class: 'dw-t' }, h('small', {}, '我画的'), h('b', {}, '画了 ' + s.drawing.strokes + ' 笔')),
+    !S.readonly && !PARENT && !REEL ? h('button', { class: 'dw-go', type: 'button', on: { click: (e) => { e.stopPropagation(); openPaper(); } } }, '接着画') : null);
+  const headEls = (s, i) => [...headEls0(s, i), drawHead(s)];
+  const headEls0 = (s, i) => {
     // 实时:节头是脑写的那张卡(liveHeadEl,随卡画);板上第一节没写节头,只挂时间。孩子的话不当节头(在左栏 #lv-kid)
     if (s.live) return [i === 0 && !s.head && s.at ? h('div', { class: 'sh lh' }, h('span', { class: 'ln' }), h('span', { class: 'tm' }, clock(s.at))) : null, ...lectureHead(s)];
     const sd = s.said && !s.saidOn ? s.said : null;
@@ -2146,6 +2183,142 @@ __WORD_DRAW_JS__
   // ---- 舞台:点卡放大,交互都在这里;开着时讲稿暂停,关了字幕行出「播放」 ----
   const KIND_NAME = { text: '', read: '点读', choice: '选一选', image: '看图', tianzige: '田字格', dictation: '听写', word: '单词', lecture: '小课堂', canvas: '画一画', code: '' };
   const GO_LABEL = { canvas: '给老师看' };
+  // ---- 画板(《画板设计.md》):画板卡与左栏的纸都铺满(§二);纸一个话题一张、一直能改(§三);边画边聊(§四):画板开着时按头像说的给嘴(看得见画),
+  //      「给老师看」轻点只交画、按住说 = 画和这句话一起给脑(拍板 6);嘴什么时候主动说一句照 canvas-chat.ts 的规矩(已内联),孩子端定、服务端再看一眼安不安静 ----
+  const CV = { chat: null, strokes: [], timer: 0, snapWait: null, snapP: null, capT: 0, give: null, asking: null };
+  /** 舞台上那张卡:板上的卡,或者左栏的纸(纸不在板上,S.paper.card 是一张只在这里的画板卡) */
+  const stageCardNow = () => (!S.stage ? null : S.stage.paper ? (S.paper ? S.paper.card : null) : S.sections[S.stage.section] ? S.sections[S.stage.section].cards[S.stage.card] : null);
+  /** 画板开着、还能画(画板卡没交,或者纸);只读、家长端、录像里不算 */
+  const canvasNow = () => { const c = stageCardNow(); return c && c.kind === 'canvas' && !c.submitted && !S.readonly && !PARENT && !REEL ? c : null; };
+  /** 舞台存回来的只有笔迹;清空前存的那几版(cleared)在页面这份状态里,并上 */
+  const withCleared = (prev, next) => (prev && Array.isArray(prev.cleared) && prev.cleared.length ? { ...next, cleared: prev.cleared } : next);
+  /** 纸的名字:这个话题;话题还没有(新话题、空板)叫 new,第一条发出去服务端改名 */
+  const paperKey = () => (S.newThread || !S.thread ? 'new' : S.thread);
+  const paperOk = () => LV.on && !S.readonly && !PARENT && !REEL && !PREVIEW && Boolean(S.tutor);
+  const savePaper = () => (S.paper && S.tutor && S.paper.tutor === S.tutor.name ? api('PUT', CONV + S.tutor.name + '/paper', { key: S.paper.key, state: S.paper.card.state }).catch(() => {}) : Promise.resolve());
+  /** 左栏「画板」、加号单子里的「画板」、板上画卡的「接着画」:打开这个话题的那张纸(关了不丢,状态在服务端) */
+  const openPaper = () => {
+    if (!paperOk() || S.stage) return;
+    const key = paperKey();
+    const show = (st) => {
+      if (S.stage || !paperOk()) return;
+      S.paper = { tutor: S.tutor.name, key, card: { kind: 'canvas', props: { base: null }, state: st && Array.isArray(st.ink) ? st : { ink: [] } } };
+      S.stage = { paper: true, section: null, card: null, id: 'paper', playing: null, delegate: false, autoplay: false };
+      $('#st-ttl').textContent = '画板'; $('#st-ttl').classList.remove('open');
+      $('#st-kd').hidden = true;
+      $('#stage').classList.add('cv');
+      renderStage();
+      $('#stage').classList.add('on');
+      canvasOpened();
+    };
+    api('GET', CONV + S.tutor.name + '/paper?key=' + encodeURIComponent(key)).then((r) => show(r && r.state), () => show(null));
+  };
+  /** 画板开了:边画边聊从这一刻算(点开 20 秒内不说) */
+  const canvasOpened = () => {
+    const c = stageCardNow();
+    CV.chat = canvasChatInit(Date.now());
+    CV.strokes = c && c.state && Array.isArray(c.state.ink) ? canvasStrokes(c.state.ink) : [];
+    clearInterval(CV.timer); CV.timer = 0;
+    if (LV.on && canvasNow()) CV.timer = setInterval(canvasTick, 1000);
+  };
+  const canvasClosed = () => {
+    clearInterval(CV.timer); CV.timer = 0; CV.chat = null; CV.strokes = [];
+    if (CV.asking) { clearTimeout(CV.asking.timer); CV.asking = null; }
+    if (CV.snapWait) { const w = CV.snapWait; CV.snapWait = null; w(null); }
+    if (CV.give) { const g = CV.give; CV.give = null; g(null); }
+    clearTimeout(CV.capT); CV.capT = 0; $('#cv-cap').classList.remove('on');
+    $('#stage').classList.remove('cv'); $('#st-go').classList.remove('holding');
+  };
+  /** 这一刻的画(长边 768 的 jpeg data URL):问舞台要,1.5 秒没回就算没有 */
+  const canvasSnap = () => new Promise((resolve) => {
+    if (!canvasNow()) { resolve(null); return; }
+    if (CV.snapWait) { const w = CV.snapWait; CV.snapWait = null; w(null); }
+    let t = 0;
+    const done = (img) => { clearTimeout(t); resolve(img || null); };
+    t = setTimeout(() => { if (CV.snapWait === done) CV.snapWait = null; resolve(null); }, 1500);
+    CV.snapWait = done;
+    postStage({ type: 'control', action: 'snap' });
+  });
+  /** 给嘴的题(cue.ts 的 ChatAsk):题目、说哪个颜色、问不问、画了多久、各颜色几笔在哪、清空过几次 */
+  const canvasAsk = (due) => {
+    const c = canvasNow();
+    const sum = canvasSummary(CV.strokes);
+    const cleared = c && c.state && Array.isArray(c.state.cleared) ? c.state.cleared : [];
+    const starts = cleared.map((x) => x.from || x.at).concat(sum.firstAt ? [sum.firstAt] : []).filter((x) => x > 0);
+    const ms = starts.length && sum.lastAt ? sum.lastAt - Math.min(...starts) : 0;
+    return { ...(c && c.props && c.props.prompt ? { prompt: c.props.prompt } : {}), ...(due ? { color: due.color, ask: due.ask } : {}), minutes: canvasMinutesText(ms), colors: sum.colors, cleared: cleared.length };
+  };
+  /**
+   * 每秒看一眼该不该主动说一句(canvasChatDue);该说就要一张图交给嘴。这一句先挂着(CV.asking),服务端回 {t:'chat', said} 才记成说过,
+   * 回 skipped(不安静)或 6 秒没回就作废——不然没说出去的也占了一句、算成没回
+   */
+  const canvasTick = () => {
+    if (!canvasNow() || !CV.chat || !LV.on || !LV.ready || LV.model.open) return;
+    const busy = LV.model.status !== 'quiet' || S.pending || Boolean(press) || LV.letGo || Boolean(CV.snapWait) || Boolean(CV.give) || Boolean(CV.asking);
+    const now = Date.now();
+    const due = canvasChatDue(CV.chat, now, CV.strokes, busy);
+    if (!due.say) return;
+    const id = S.stage.id;
+    const asking = { id, due, at: now, strokes: CV.strokes.slice(), timer: 0 };
+    CV.asking = asking;
+    asking.timer = setTimeout(() => { if (CV.asking === asking) CV.asking = null; }, 6000);
+    canvasSnap().then((img) => {
+      if (CV.asking !== asking) return;
+      if (img && canvasNow() && S.stage && S.stage.id === id && LV.model.status === 'quiet' && !press && !LV.letGo) lvSend({ t: 'chat', canvas: id, image: img, ask: canvasAsk(due) });
+      else { clearTimeout(asking.timer); CV.asking = null; }
+    });
+  };
+  /** 服务端回了主动说的那一句:said = 嘴说了,记下;skipped = 不安静没说,作废 */
+  const canvasChatAck = (m) => {
+    const a = CV.asking;
+    if (!a || m.canvas !== a.id) return;
+    clearTimeout(a.timer); CV.asking = null;
+    if (m.said && CV.chat && S.stage && S.stage.id === a.id) CV.chat = canvasChatSaid(CV.chat, a.at, a.due, a.strokes);
+  };
+  /** 画板铺满时嘴说的话:画布顶上浮一条,说完 4 秒淡掉 */
+  const cvCap = () => {
+    const el = $('#cv-cap');
+    if (!$('#stage').classList.contains('cv')) { el.classList.remove('on'); return; }
+    if (LV.model.status === 'mouth' && LV.cap.cur) { if (el.textContent !== LV.cap.cur) el.textContent = LV.cap.cur; el.classList.add('on'); clearTimeout(CV.capT); CV.capT = 0; return; }
+    if (el.classList.contains('on') && !CV.capT) CV.capT = setTimeout(() => { CV.capT = 0; el.classList.remove('on'); }, 4000);
+  };
+  /** 「给老师看」:让舞台导出 png;画板卡存状态(连图)、纸把图传进 captures/,回这一条要带的(交卡的 action + focus / 纸的 drawing);舞台关掉。8 秒没导出来算了 */
+  const canvasGive = () => new Promise((resolve) => {
+    if (CV.give) { const g = CV.give; CV.give = null; g(null); }
+    CV.give = resolve;
+    postStage({ type: 'control', action: 'submit' });
+    setTimeout(() => { if (CV.give === resolve) { CV.give = null; resolve(null); } }, 8000);
+  });
+  /** 纸上的画交出去:先存纸(服务端按它算摘要),再传图;纸不锁,接着能画 */
+  const paperSubmit = (m) => {
+    const P = S.paper;
+    if (!P || !m.image) return Promise.resolve(null);
+    P.card.state = withCleared(P.card.state, m.state);
+    closeStage();
+    return savePaper().then(() => api('POST', CONV + S.tutor.name + '/photos', { image: m.image })).then((r) => (r && r.path ? { drawing: { key: P.key, image: r.path } } : null), () => null);
+  };
+  /** 清空了(舞台先导出了那一版):图传进 captures/,记进这张的 cleared;边画边聊重新算 */
+  const canvasCleared = (card, m) => {
+    if (CV.chat) CV.chat = canvasChatCleared(CV.chat, m.at || Date.now());
+    const entry = { at: m.at || Date.now(), strokes: m.strokes || 0, ...(m.from ? { from: m.from } : {}) };
+    // 先记下是哪一张:图传上去要一会儿,这时舞台可能关了、换了一张;存回清空的那张(画板卡按 job 与第几张,纸按那个对象)
+    const tutor = S.tutor ? S.tutor.name : null;
+    const P = S.stage && S.stage.paper ? S.paper : null;
+    const where = P ? null : { job: S.sections[S.stage.section].job, idx: S.stage.card };
+    const put = (image) => {
+      if (!S.tutor || S.tutor.name !== tutor) return;
+      const add = (st) => ({ ...(st || { ink: [] }), cleared: [...(st && Array.isArray(st.cleared) ? st.cleared : []), { ...entry, ...(image ? { image } : {}) }].slice(-50) });
+      if (P) { if (S.paper !== P) return; P.card.state = add(P.card.state); savePaper(); return; }
+      const sec = S.sections.find((x) => x.job === where.job);
+      const c = sec ? sec.cards[where.idx] : card;
+      if (!c || c.submitted) return;
+      c.state = add(c.state);
+      if (c !== card) card.state = c.state;
+      saveState(where.job, where.idx, c.state);
+    };
+    if (!m.image || !S.tutor) { put(null); return; }
+    api('POST', CONV + S.tutor.name + '/photos', { image: m.image }).then((r) => put(r && r.path), () => put(null));
+  };
   const openStage = (secIdx, idx, opts = {}) => {
     const card = S.sections[secIdx] && S.sections[secIdx].cards[idx];
     if (!card) return;
@@ -2153,20 +2326,24 @@ __WORD_DRAW_JS__
     if (S.readonly && hasState(card) && !opts.delegate) return; // 以前的只能看:选择 / 填空 / 画板不开,免得改了当时的答案
     S.stage = { section: secIdx, card: idx, id: S.sections[secIdx].job + '/' + idx, playing: null, delegate: Boolean(opts.delegate), autoplay: Boolean(opts.autoplay) };
     playRec({ k: 'stage', job: S.sections[secIdx].job, card: idx, open: true });
-    // 画板:题目在工作台自己的题目条上(可收起),顶栏只写「画一画」
-    $('#st-ttl').textContent = card.kind === 'canvas' ? '画一画' : cardTitle(card);
+    // 画板铺满(《画板设计.md》§二):题目一行写在顶栏,点开看全
+    $('#st-ttl').textContent = card.kind === 'canvas' ? (card.props.prompt || '画一画') : cardTitle(card);
+    $('#st-ttl').classList.remove('open');
     $('#st-kd').textContent = KIND_NAME[card.kind] || card.kind;
     $('#st-kd').hidden = card.kind === 'canvas' || !(KIND_NAME[card.kind] || card.kind);
+    $('#stage').classList.toggle('cv', card.kind === 'canvas');
     renderStage();
     $('#stage').classList.add('on');
     setNow(secIdx, idx);
+    if (card.kind === 'canvas') canvasOpened();
   };
   const STAGE_SOURCE = 'cotutor-stage';
   const frame = $('#st-frame');
   const postStage = (m) => { try { frame.contentWindow.postMessage({ source: STAGE_SOURCE, ...m }, '*'); } catch {} };
   const renderStage = () => {
     if (!S.stage) return;
-    const card = S.sections[S.stage.section].cards[S.stage.card];
+    const card = stageCardNow();
+    if (!card) return;
     const heavy = isHeavy(card);
     $('#st-body').hidden = heavy;
     frame.hidden = !heavy;
@@ -2177,6 +2354,7 @@ __WORD_DRAW_JS__
     $('#st-go').disabled = !stateSummary(card).length;
     $('#st-go').hidden = false;
     $('#st-note').textContent = card.kind === 'canvas' ? stateSummary(card).join('、') : '';
+    $('#st-go').classList.remove('holding');
     // 交过的卡锁住:只看,没有「交给老师」
     if (card.submitted) { act.hidden = S.readonly; $('#st-go').hidden = true; $('#st-note').innerHTML = ICON.lock + ' 交给老师了'; }
   };
@@ -2184,29 +2362,49 @@ __WORD_DRAW_JS__
   const stageCard = (card) => {
     const b = card.kind === 'lecture' ? card.props.bundle : card.kind === 'canvas' && card.props.base && card.props.base.bundle ? card.props.base.bundle : null;
     const im = card.kind === 'canvas' && card.props.base && typeof card.props.base.image === 'string' ? card.props.base.image : null;
-    return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, readonly: Boolean(card.submitted), bundleUrl: b ? lcBundleUrl(b, card.kind === 'lecture' && card.props.video === true) : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
+    return { type: 'card', id: S.stage.id, kind: card.kind, props: card.props, state: card.state === undefined ? null : card.state, readonly: Boolean(card.submitted), ...(card.kind === 'canvas' ? { full: true, hand: document.body.classList.contains('hand-left') ? 'left' : 'right' } : {}), bundleUrl: b ? lcBundleUrl(b, card.kind === 'lecture' && card.props.video === true) : undefined, imageUrl: im ? '/api/kid/image?p=' + encodeURIComponent(im) : undefined, autoplay: S.stage.autoplay };
   };
   /** 舞台包说话:ready → 把卡发过去;phase → 字幕行;state → 存;done 且是讲稿委托的 → 关舞台接着念 */
   window.addEventListener('message', (e) => {
     const m = e.data;
     if (!m || m.source !== STAGE_SOURCE || !S.stage) return;
-    const card = S.sections[S.stage.section].cards[S.stage.card];
+    const card = stageCardNow();
+    if (!card) return;
     if (m.type === 'ready') postStage(stageCard(card));
+    else if (m.type === 'snap') { const w = CV.snapWait; CV.snapWait = null; if (w) w(m.image); }
+    else if (m.type === 'cleared') { if (!card.submitted) canvasCleared(card, m); }
     else if (m.type === 'phase') {
       S.stage.playing = { phase: m.phase, line: m.line };
       // 小课堂卡(仲裁表「交给小课堂」):那一段放完,舞台不关、停在末帧,字幕行还给老师,接着念
       if (m.phase === 'done' && card.kind === 'lecture') { S.stage.playing = null; if (S.stage.delegate) { S.stage.delegate = false; resumeAfter(); } }
       renderSubtitle();
     }
-    else if (m.type === 'state') { if (card.submitted) return; card.state = m.state; $('#st-go').disabled = !stateSummary(card).length; $('#st-note').textContent = stateSummary(card).join('、'); repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, m.state); }
-    else if (m.type === 'submit') { if (card.submitted) return; card.state = m.state; card.submitted = true; const id = S.stage.id; const secI = S.stage.section, job = S.sections[secI].job; const idx = S.stage.card; closeStage(); repaintCard(secI, idx); api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...m.state, image: m.image } : m.state).catch(() => {}).then(() => send('', { action: 'submit', focus: { card: id } })); }
+    else if (m.type === 'state') {
+      if (card.submitted) return;
+      card.state = withCleared(card.state, m.state);
+      if (card.kind === 'canvas') CV.strokes = canvasStrokes(Array.isArray(m.state && m.state.ink) ? m.state.ink : []);
+      $('#st-go').disabled = !stateSummary(card).length; $('#st-note').textContent = stateSummary(card).join('、');
+      if (S.stage.paper) { savePaper(); return; }
+      repaintCard(S.stage.section, S.stage.card); saveState(S.sections[S.stage.section].job, S.stage.card, card.state);
+    }
+    else if (m.type === 'submit') {
+      // 「给老师看」:轻点的直接发这一条;按住说的(CV.give)把要带的交回去,等松手那一下发
+      const done = CV.give; CV.give = null;
+      const finish = (patch) => { if (done) done(patch); else if (patch) send('', patch); };
+      if (S.stage.paper) { paperSubmit(m).then(finish, () => finish(null)); return; }
+      if (card.submitted) { finish(null); return; }
+      card.state = withCleared(card.state, m.state); card.submitted = true;
+      const id = S.stage.id; const secI = S.stage.section, job = S.sections[secI].job; const idx = S.stage.card;
+      closeStage(); repaintCard(secI, idx);
+      api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, m.image ? { ...card.state, image: m.image } : card.state).catch(() => {}).then(() => finish({ action: 'submit', focus: { card: id } }));
+    }
     else if (m.type === 'close' || m.type === 'error') { const d = S.stage; closeStage(); if (d.delegate) resumeAfter(d); }
   });
   const resumeAfter = () => { if (LV.on) liveDispatch({ type: 'lectureDone' }); };
   const closeStage = () => { if (S.stage && S.sections[S.stage.section]) playRec({ k: 'stage', job: S.sections[S.stage.section].job, card: S.stage.card, open: false });
     // 单词卡舞台:自动那一遍停下,慢念也停
     for (const v of document.querySelectorAll('#st-body video')) { try { v.pause(); } catch {} }
-    wordRun++; if (S.stage && !S.reel && S.sections[S.stage.section] && (S.sections[S.stage.section].cards[S.stage.card] || {}).kind === 'word') silence(); S.stage = null; frame.src = 'about:blank'; $('#stage').classList.remove('on'); renderSubtitle(); if (LV.on) setNow(null, null); else showNow(); };
+    wordRun++; if (S.stage && !S.reel && S.sections[S.stage.section] && (S.sections[S.stage.section].cards[S.stage.card] || {}).kind === 'word') silence(); S.stage = null; frame.src = 'about:blank'; canvasClosed(); $('#stage').classList.remove('on'); renderSubtitle(); if (LV.on) setNow(null, null); else showNow(); };
   $('#st-x').innerHTML = ICON.close;
   // 孩子关:讲稿交给小课堂卡、还没放完的,关了接着念
   const closeByKid = () => { const d = S.stage; const card = d && S.sections[d.section] ? S.sections[d.section].cards[d.card] : null; closeStage(); if (d && d.delegate && card && (!isHeavy(card) || card.kind === 'lecture')) resumeAfter(); };
@@ -2222,11 +2420,12 @@ __WORD_DRAW_JS__
     saveState(S.sections[secIdx].job, idx, card.state);
   };
   const saveState = (job, idx, state) => { if (!S.tutor || S.readonly) return; api('PUT', CONV + S.tutor.name + '/cards/' + job + '/' + idx, state).catch(() => {}); };
-  $('#st-go').addEventListener('click', () => {
+  /** 「交给老师」/「给老师看」点一下;画板的按住说在 bindGive(按住说话那几颗旁边) */
+  const giveTap = () => {
     if (!S.stage) return;
-    const card = S.sections[S.stage.section].cards[S.stage.card];
-    if (card.submitted) return;
-    if (isHeavy(card)) { postStage({ type: 'control', action: 'submit' }); return; } // 画板:让舞台包导出 png 再交
+    const card = stageCardNow();
+    if (!card || card.submitted) return;
+    if (isHeavy(card)) { if (card.kind === 'canvas' && !stateSummary(card).length) return; postStage({ type: 'control', action: 'submit' }); return; } // 画板:让舞台包导出 png 再交
     if (!stateSummary(card).length) return;
     if (card.submitted) return;
     const id = S.stage.id, secI = S.stage.section, idx = S.stage.card;
@@ -2234,7 +2433,8 @@ __WORD_DRAW_JS__
     closeStage();
     repaintCard(secI, idx);
     send('', { action: 'submit', focus: { card: id } });
-  });
+  };
+  $('#st-ttl').addEventListener('click', () => { if ($('#stage').classList.contains('cv')) $('#st-ttl').classList.toggle('open'); });
   const NS = 'http://www.w3.org/2000/svg';
   /** 线条类的笔:被标注的字每一行一段 SVG 路径,贴在卡上(卡是 position:relative);animate = 描出来(dashoffset 从全长到 0) */
   const drawPen = (span, card, pen, animate) => {
@@ -2457,7 +2657,7 @@ __WORD_DRAW_JS__
       if (S.partial && !entries.some((e) => e.job === S.partial.job)) { const P = S.partial; S.partial = null; P.el.remove(); if (P.live) { S.sections.splice(P.idx, 1); dispatch({ type: 'liveDropped' }); } }
       // 服务端的状态是真相(别的设备上选的、重开页面):没在舞台里改着的卡照它画;props 也跟(小课堂卡的 ready、起止是服务端下发时现读的)
       entries.forEach((e) => { const i = S.sections.findIndex((x) => x.job === e.job); if (i < 0 || fresh.includes(i)) return; e.cards.forEach((c, idx) => { const mine = S.sections[i].cards[idx]; if (!mine || (S.stage && S.stage.section === i && S.stage.card === idx)) return; const ds = JSON.stringify(mine.state) !== JSON.stringify(c.state), dp = JSON.stringify(mine.props) !== JSON.stringify(c.props); if (ds || dp) { mine.state = c.state; mine.props = c.props; repaintCard(i, idx); } }); });
-      if (fresh.length && S.stage) closeStage();
+      if (fresh.length && S.stage && !S.stage.paper) closeStage();
       // 孩子的话:刚发出去、这一节还没出来的先挂上;答案栏对一遍
       {
         const lastM = mine[mine.length - 1];
@@ -2586,7 +2786,7 @@ __WORD_DRAW_JS__
    *  不走实时的页面(以前的话题、家长端、录像、预览)发不了(《产品规划.md》拍板 30) */
   const send = (text, opts = {}) => {
     text = (text || '').trim();
-    if (!text && !opts.action && !(opts.photos && opts.photos.length)) return;
+    if (!text && !opts.action && !(opts.photos && opts.photos.length) && !opts.drawing) return;
     if (!S.tutor || !canSend() || !LV.on) return;
     unlock();
     if (LV.ready) liveSendNow(text, opts); else LV.queued = [text, opts];
@@ -3147,7 +3347,7 @@ __REEL_DOCK_JS__
     for (const f of r.effects) {
       switch (f.kind) {
         case 'hold': LV.playLine = null; LV.endLine = null; lvSend({ t: 'hold' }); break;
-        case 'release': lvSend({ t: 'release', body: data }); break;
+        case 'release': lvSend({ t: 'release', body: data, ...(LV.chatNext ? { chat: LV.chatNext } : {}) }); break;
         case 'hush': lvSend({ t: 'hush' }); break;
         case 'send': lvSend({ t: 'send', body: data }); break;
         case 'enqueue': if (LV.audio) LV.audio.play(data); liveDrainWatch(); break;
@@ -3342,6 +3542,7 @@ __REEL_DOCK_JS__
     c.classList.toggle('cut', cut);
     c.classList.toggle('nm', !LV.cap.cur);
     cap.classList.toggle('done', LV.model.status !== 'mouth');
+    cvCap();
   };
   /** 字幕换一句:上一句挪上去 */
   const liveSay = (text) => { if (!text) return; if (LV.cap.cur && LV.cap.cur !== text) LV.cap.prev = LV.cap.cur; LV.cap.cur = text; renderSubtitle(); };
@@ -3377,6 +3578,8 @@ __REEL_DOCK_JS__
     // 带着小课堂的那条:这时才知道是哪一轮
     if (LV.lcPending && S.lecture && m.job) { LV.lcPending = false; const L = S.lecture; if (!L.firstJob) L.firstJob = m.job; L.job = m.job; renderLecturePending(); }
     if (m.thread) S.thread = m.thread;
+    // 纸是话题还没有时打开的(new):这个话题有了,归它(服务端第一条也改了名;这里再存一份,new 那张删掉)
+    if (m.thread && S.paper && S.paper.key === 'new' && S.tutor && S.paper.tutor === S.tutor.name) { S.paper.key = m.thread; api('PUT', CONV + S.tutor.name + '/paper', { key: m.thread, from: 'new', state: S.paper.card.state }).catch(() => {}); }
     S.newThread = false; S.via = null;
     { const b = $('#board .blank'); if (b) b.remove(); }
     S.pending = true; if (!S.waitSince) S.waitSince = Date.now();
@@ -3404,6 +3607,7 @@ __REEL_DOCK_JS__
       // 转写是空的(按了没说清):嘴说没听清,不会有这一轮
       case 'kid': if (!String(m.text || '').trim()) { S.pending = false; renderSubtitle(); } else if (LV.model.open) { S.pending = true; if (!S.waitSince) S.waitSince = Date.now(); renderSubtitle(); } break;
       case 'turn': liveTurn(m); break;
+      case 'chat': canvasChatAck(m); break;
       case 'flush': liveDispatch({ type: 'flush' }); break;
       case 'err': S.pending = false; renderSubtitle(); break;
       default: break;
@@ -3426,7 +3630,7 @@ __REEL_DOCK_JS__
     const body = { device: S.device };
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
-    if (S.stage) body.focus = { card: S.stage.id };
+    if (S.stage && !S.stage.paper) body.focus = { card: S.stage.id };
     return body;
   };
   /**
@@ -3447,7 +3651,8 @@ __REEL_DOCK_JS__
       LV.audio = makeAudio();
       LV.audio.muted = false;
       // 按着才推;一直听时推不推看 liveGate(关麦、卡的声音、小课堂时不推)
-      LV.audio.onChunk = (ab) => { if ((LV.model.status === 'holding' || liveGateSync()) && LV.ws && LV.ws.readyState === 1) LV.ws.send(ab); };
+      // 松了手、还在等画(边画边聊要那张图、给老师看在导出上传):状态还是按着,声音不再推
+      LV.audio.onChunk = (ab) => { if (((LV.model.status === 'holding' && !LV.letGo) || liveGateSync()) && LV.ws && LV.ws.readyState === 1) LV.ws.send(ab); };
       LV.audio.onLevel = (v) => {
         if (LV.model.status === 'holding') {
           const lv = Math.min(1, v * 4);
@@ -3520,6 +3725,11 @@ __REEL_DOCK_JS__
   const liveDiagSend = (d) => { if (!d) return; const { mark: _m, ...row } = d; row.peak = Math.round(row.peak * 100) / 100; try { fetch('/api/kid/voice-diag', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(row), keepalive: true }).catch(() => {}); } catch {} };
   /** 按满 150 毫秒:嘴、卡的声音停(liveStep),告诉服务端 hold,开始推声音(常开那路麦克风接到采音节点上,第一次要等它开好) */
   const liveHold = () => {
+    // 画板开着(《画板设计.md》拍板 2、6):按的是「给老师看」= 画和这句话给脑;按头像 = 边画边聊,给嘴,先要一张这一刻的画
+    LV.holdKind = press && press.give ? 'give' : canvasNow() && !LV.model.open ? 'chat' : null;
+    LV.letGo = false;
+    CV.snapP = LV.holdKind === 'chat' ? canvasSnap() : null;
+    $('#st-go').classList.toggle('holding', LV.holdKind === 'give');
     setBar(barNext(S.bar, 'holdStart'));
     dispatch({ type: 'halt' });
     hold.audio = false; renderHold(); holdText('');
@@ -3536,6 +3746,9 @@ __REEL_DOCK_JS__
   const liveRelease = (cancelled, sys) => {
     const long = Date.now() - LV.holdAt >= 400;
     const keep = !cancelled && hold.audio && long;
+    const kind = LV.holdKind; LV.holdKind = null;
+    const snapP = CV.snapP; CV.snapP = null;
+    $('#st-go').classList.remove('holding');
     const d = LV.diag; LV.diag = null;
     if (d) { d.mark(sys ? 'cancel' : 'up', keep ? 'sent' : cancelled ? 'slide' : !long ? 'short' : 'nomic'); liveDiagSend(d); }
     holdEnd(keep ? 'sent' : cancelled ? 'cancel' : 'unclear');
@@ -3544,8 +3757,35 @@ __REEL_DOCK_JS__
     if (!LV.on) return;
     if (!keep) {
       liveDispatch({ type: 'cancel' });
+      // 按住「给老师看」没说出话(太短、麦克风没开上):照轻点交画;上滑取消的不交
+      if (kind === 'give' && !cancelled) { giveTap(); renderSubtitle(); return; }
       if (!cancelled) voiceHint('unclear', long ? '没听清,再按住说一次' : '');
       renderSubtitle();
+      return;
+    }
+    // 边画边聊:等那张画(最多 1.5 秒),松手带 chat;嘴接住,不起脑(板上不等老师)
+    // 等画的这一会儿(LV.letGo):声音不推、别的按钮不接,发出去才放开
+    if (kind === 'chat' && canvasNow() && S.stage) {
+      const canvas = S.stage.id;
+      LV.letGo = true;
+      Promise.resolve(snapP).then((img) => {
+        LV.letGo = false;
+        LV.chatNext = { canvas, ...(img ? { image: img } : {}), ask: canvasAsk(null) };
+        liveDispatch({ type: 'release' }, liveBody());
+        LV.chatNext = null;
+        if (CV.chat) CV.chat = canvasChatAnswered(CV.chat, Date.now());
+      });
+      return;
+    }
+    // 「给老师看」按住说:舞台导出、存好 / 传好那张画,这一句带着它交给脑(没说清服务端照交画);画没交成这一下作废
+    if (kind === 'give' && canvasNow()) {
+      LV.letGo = true;
+      canvasGive().then((patch) => {
+        LV.letGo = false;
+        if (!patch) { liveDispatch({ type: 'cancel' }); renderSubtitle(); return; }
+        liveDispatch({ type: 'release' }, { ...liveBody(), ...patch });
+        S.pending = true; S.waitSince = Date.now(); renderSubtitle();
+      });
       return;
     }
     const body = liveBody();
@@ -3563,7 +3803,8 @@ __REEL_DOCK_JS__
     const body = { text, device: S.device };
     if (opts.action) body.action = opts.action;
     if (opts.photos && opts.photos.length) { body.photos = opts.photos; VB.photo = true; }
-    const focus = opts.focus || (S.stage ? { card: S.stage.id } : null);
+    if (opts.drawing) body.drawing = opts.drawing;
+    const focus = opts.focus || (S.stage && !S.stage.paper ? { card: S.stage.id } : null);
     if (focus) body.focus = focus;
     if (S.newThread) body.newThread = true; else if (S.thread) body.thread = S.thread;
     if (S.via) body.via = S.via;
@@ -3580,7 +3821,7 @@ __REEL_DOCK_JS__
    *  上滑过 cancelPx 松手取消(浮层那块大,门限放宽到它的高) */
   const bindHold = (el, cancelPx, onTap) => {
   el.addEventListener('pointerdown', (e) => {
-    if (S.bar === 'typing') return;
+    if (S.bar === 'typing' || LV.letGo) return;
     e.preventDefault(); unlock();
     // 先点上面一个(按钮写着「点上面开始」):不接,晃一下
     if (choosing()) { VB.btn.shake(); return; }
@@ -3617,6 +3858,42 @@ __REEL_DOCK_JS__
     // 点了一下没按住:晃一下提示,不打字(打字是下面那颗)
     voiceHint('tap');
   });
+  // 画板铺满时工具列底下那颗小头像(《画板设计.md》§二):同左栏那颗;画板开着按住说 = 边画边聊,给嘴
+  bindHold($('#cv-hold'), 80, () => voiceHint('tap'));
+  /**
+   * 「给老师看」(画板,《画板设计.md》拍板 6):轻点 = 只交画;按住说(满 300 毫秒,比头像长一点,免得点一下成了按住)= 画和这句话一起给老师。
+   * 嘴没连上、一直听、老师在想、不是画板:只能点(点了照旧交)
+   */
+  const bindGive = (el) => {
+    let tapAt = 0;
+    el.addEventListener('pointerdown', (e) => {
+      if (el.disabled || press || LV.letGo || !canvasNow() || !LV.on || !LV.ready || LV.model.open || S.bar === 'typing' || document.body.classList.contains('pending')) return;
+      e.preventDefault(); unlock();
+      if (LV.audio) LV.audio.wake().catch(() => {});
+      press = { y: e.clientY, cancelled: false, held: false, live: false, give: true, cancelPx: 80, onTap: giveTap, timer: setTimeout(() => { if (!press || !press.give) return; press.held = true; press.live = true; liveHold(); }, 300) };
+      try { el.setPointerCapture(e.pointerId); } catch {}
+    });
+    el.addEventListener('pointermove', (e) => { if (press && press.give && press.held) { const up = press.y - e.clientY > press.cancelPx; if (up !== press.cancelled) { press.cancelled = up; renderHold(); holdRec('slide', { on: up }); } } });
+    const up = (e) => {
+      if (!press || !press.give) return;
+      const sys = Boolean(e && e.type === 'pointercancel');
+      clearTimeout(press.timer);
+      const p = press; press = null;
+      tapAt = Date.now();
+      if (!p.held) { p.onTap(); return; }
+      if (p.live) liveRelease(p.cancelled, sys);
+    };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    // 没走按住的那几种(嘴没连上、不是画板、键盘):照点
+    el.addEventListener('click', () => { if (Date.now() - tapAt < 800 || LV.letGo) return; giveTap(); });
+  };
+  bindGive($('#st-go'));
+  // 画板(《画板设计.md》§三):左栏第一颗;手机、竖屏在加号那张单子里
+  $('#lv-paper .ic').innerHTML = ICON.paper; $('#ic-paper').innerHTML = ICON.paper;
+  $('#lv-paper').addEventListener('click', () => openPaper());
+  $('#sheet-paper').addEventListener('click', () => { $('#sheet').classList.remove('on'); openPaper(); });
   // 左栏最底下那排:拍照、相册走输入条与加号面板的那两个 file input(wireFile),打字同点输入条中间那段
   $('#lv-cam .ic').innerHTML = ICON.cameraLg; $('#lv-album .ic').innerHTML = ICON.album; $('#lv-type .ic').innerHTML = ICON.keyboard;
   $('#lv-cam').addEventListener('click', () => $('#cam input').click());
@@ -3867,7 +4144,7 @@ __REEL_DOCK_JS__
 </html>
 `;
 
-const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__LIVE_JS__', () => libSource('live-board')).replace('__AUDIO_JS__', () => AUDIO_CLIENT_JS).replace('__VOICE_VIEW_JS__', () => libSource('voice-view')).replace('__VOICE_JS__', () => VOICE_JS).replace('__VOICE_CSS__', () => VOICE_CSS).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR)).replace('__BRAND_CSS__', () => BRAND_CSS).replace('__BACK_LOGO__', () => BACK_LOGO).replace('__BRAND_JS__', () => BRAND_JS)
+const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).replace('__WORD_DRAW_JS__', () => wordDrawJs()).replace('__PHOTO_JS__', () => libSource('photo-edit')).replace('__REEL_JS__', () => libSource('reel')).replace('__LIVE_JS__', () => libSource('live-board')).replace('__CANVAS_CHAT_JS__', () => libSource('canvas-chat')).replace('__AUDIO_JS__', () => AUDIO_CLIENT_JS).replace('__VOICE_VIEW_JS__', () => libSource('voice-view')).replace('__VOICE_JS__', () => VOICE_JS).replace('__VOICE_CSS__', () => VOICE_CSS).replace('__REEL_DOCK_CSS__', () => REEL_DOCK_CSS).replace('__REEL_DOCK_HTML__', () => REEL_DOCK_HTML).replace('__REEL_DOCK_JS__', () => REEL_DOCK_JS).replace('__NEUTRAL_COLOR__', () => JSON.stringify(NEUTRAL_COLOR)).replace('__BRAND_CSS__', () => BRAND_CSS).replace('__BACK_LOGO__', () => BACK_LOGO).replace('__BRAND_JS__', () => BRAND_JS)
   .replace('__CAMERA_22__', () => JSON.stringify(cameraSvg(22))).replace('__CAMERA_28__', () => JSON.stringify(cameraSvg(28))).replace('__CAMERA_20__', () => JSON.stringify(cameraSvg(20))).replace('__ALBUM_28__', () => JSON.stringify(albumSvg(28)));
 export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 

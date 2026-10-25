@@ -4,13 +4,16 @@
  * 嘴一空就把排着的几句一起交给它照念(lib/queue.ts,流水线:嘴出完上一段就交下一段,声音在孩子端接着排)→ 讲完就停。
  * 按句不按拍(2026-10-19):卡宁缺毋滥以后一节常常只有一拍、甚至没卡,按拍要等脑整段写完才念;卡只管自己闭合了就铺,和念哪句不挂钩。
  * 转写是空的(按了没说清):嘴在说就掐掉,改说「没听清」,不交给脑;按着时声音不到 100 毫秒(不 commit)、commit 没收下也一样。孩子在嘴的声音还在放时按下 = 打断:掐掉、孩子端清播放队列,
- * 没念的拍丢掉,孩子听到第几句(lib/playback.ts 按声音排到哪算)进下一轮的上下文包 live:。嘴只接住、只照念,不讲新内容(2026-10-19 P1)。
+ * 没念的拍丢掉,孩子听到第几句(lib/playback.ts 按声音排到哪算)进下一轮的上下文包 live:。嘴只接住、只照念,不讲新内容(2026-10-19 P1);画板开着时例外(边画边聊,见下)。
  *
  * 孩子端 → 这里:二进制帧 = PCM16 16k 单声道一块(按着时才推);文本帧 = JSON
  *   {t:'hold'} 按下 · {t:'release', body} 松手(body 同 POST /api/kid/conversations/<老师>/messages 少 text:thread / newThread / device…)
  *   {t:'hush'} 停下不开新一轮(上滑取消):嘴在出就掐、孩子端清了、没念的丢掉
  *   {t:'send', body} 不是说的(打字、拍照、交卡、首页按钮;舞台开着带 focus.card):body 同那条 POST · {t:'view', w, h} 屏幕多大 · {t:'bye'}
  *   {t:'staged'} 讲稿 [[play]] 的小课堂那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
+ *   边画边聊(《画板设计.md》§四):画板开着时按头像说的,松手带 chat {canvas, image, ask}——只给嘴(图跟着声音进对话、嘴接住),不起脑;
+ *   {t:'chat', canvas, image, ask} 孩子端觉得该说一句了(换了颜色、停笔很久,src/lib/canvas-chat.ts):安静时 0.5 秒静音 + 图交给嘴、嘴主动说一句,回 {t:'chat', canvas, said};不安静回 {t:'chat', canvas, skipped}。
+ *   这张画上孩子说的、嘴说的记下来,交画那一轮(交画板卡 / 纸上的 drawing)带给脑(live.draw)
  * 这里 → 孩子端:二进制帧 = PCM16 24k 嘴的声音;文本帧 = JSON
  *   {t:'ready'} 嘴连上了 · {t:'down', why} 连不上(孩子端回到「正在叫老师」,过一会儿重连)· {t:'kid', text} 孩子那句的转写 · {t:'tutor', of, delta} / {t:'tutor', of, done} 嘴的字(of:catch 接住 / read 照念)
  *   {t:'turn', job, thread} 脑开始写这一轮 · {t:'read', job, line, text, play?} 讲稿这一句开始放(play = 念完放小课堂那一段;一句一个,按孩子端放到的时刻发:一段里第一句在段首,
@@ -42,7 +45,7 @@ import type { RunEvent } from '../lib/events.ts';
 import { readIndex } from '../server/store.ts';
 import { conversationFiles, localDate } from '../lib/conversation.ts';
 import { lineFlags } from '../lib/board.ts';
-import { catchCue, readCue, type CatchKind } from './lib/cue.ts';
+import { catchCue, chatCue, readCue, type CatchKind, type ChatAsk } from './lib/cue.ts';
 import { judge } from './lib/listen.ts';
 import { echoKind, warmLines, type WarmBeat } from './lib/warm.ts';
 import { coverage } from '../lib/en-words.ts';
@@ -53,9 +56,10 @@ import { mouthIndex, type MouthSeg } from './lib/mouth.ts';
 import { wavOfPcm } from './lib/wav.ts';
 import { mouthInstructions } from './prompt.ts';
 import { mouthVoice } from '../schema/index.ts';
-import { INPUT_RATE, OUTPUT_RATE, RealtimeSession } from './realtime.ts';
+import { INPUT_RATE, MAX_IMAGE_B64, OUTPUT_RATE, RealtimeSession } from './realtime.ts';
 import { CallRecorder } from './recorder.ts';
 import type { ServerSocket } from './ws.ts';
+import { adoptPaper } from '../server/paper.ts';
 
 export interface LiveDeps {
   ctx: AppContext;
@@ -108,8 +112,15 @@ const RING_MS = 3000;
 /** 字幕重放的声音最多留几轮在内存里(一轮约 1–2 MB;落了盘就只为接着往后接) */
 const MOUTH_KEEP = 3;
 
-/** 嘴这次回答是什么:接住(孩子这一轮)、照念哪几句、脑想得久时垫的一句、一直听进来先招呼的一句 */
-type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat };
+/** 嘴主动说一句前垫的静音(百炼要先有声音再有图,commit 时一起进对话):0.5 秒 */
+const CHAT_SILENCE = Buffer.alloc((INPUT_RATE * 2) / 2);
+/** 静音那段的转写(空的)多久之内来算它的;过了就不吞了,免得吞掉孩子后来说的 */
+const CHAT_QUIET_MS = 5000;
+/** 一张画上边画边说最多记几句给脑 */
+const DRAW_TALK_MAX = 24;
+
+/** 嘴这次回答是什么:接住(孩子这一轮)、照念哪几句、边画边聊(哪张画) */
+type Said = { kind: 'catch' } | { kind: 'read'; beat: Beat } | { kind: 'chat'; canvas: string };
 
 /** 一轮嘴照念的声音(字幕重放):每段是一次照念的回答;writing 把这一轮的落盘串起来 */
 interface MouthTake { date: string; segs: (MouthSeg & { said: Said; pcm: Buffer[] })[]; writing: Promise<void> }
@@ -198,6 +209,14 @@ export class LiveCall {
   private thread: string | null = null;
   /** 字幕重放:最近几轮嘴照念的声音(job → 那一轮的几段) */
   private readonly takes = new Map<string, MouthTake>();
+  /** 边画边聊:每张画(画板卡 <job>/<n>,纸 paper)上孩子说的、嘴说的,一句一行;交画那轮给脑后清掉 */
+  private readonly drawTalk = new Map<string, string[]>();
+  /** 边画边聊:按着头像说的那句在等转写(记到哪张画上) */
+  private chatHeard: string | null = null;
+  private chatHeardUntil = 0;
+  /** 嘴主动说那几次垫的静音:几段转写还没回来、等到什么时候(空的转写吞掉,不说没听清) */
+  private chatQuiet = 0;
+  private chatQuietUntil = 0;
   private offEvents: (() => void) | null = null;
   private ended = false;
   private readonly sock: ServerSocket;
@@ -297,6 +316,7 @@ export class LiveCall {
         const of = kind === 'read' ? 'read' : 'catch';
         if (done !== null) {
           if (done.trim()) this.saidLog = [...this.saidLog.slice(-5), { text: done.trim(), at: Date.now() }];
+          if (this.said?.kind === 'chat' && done.trim()) this.noteDraw(this.said.canvas, `你:${done.trim()}`);
           if (kind === 'catch') { this.caught = done.trim(); this.caughtDone = true; const c = [...this.pre].reverse().find((x) => x.ev.kind === 'catch'); if (c && c.ev.kind === 'catch') c.ev.text = this.caught; }
           this.send({ t: 'tutor', of, done: done.trim() });
           return;
@@ -418,6 +438,9 @@ export class LiveCall {
     if (this.echoing && this.echoing.endAt === null) this.armEcho(this.ms());
     // 按着时断的:推过去的声音跟着那条会话没了,松手就说没听清
     this.heldBytes = 0;
+    // 边画边聊在等的转写跟着那条会话没了
+    this.chatHeard = null;
+    this.chatQuiet = 0;
     // 一直听时孩子说到一半断的:那一句跟着会话没了
     this.vadOn = false;
     this.vadAwait = null;
@@ -553,7 +576,8 @@ export class LiveCall {
     let m: Record<string, unknown>;
     try { m = JSON.parse(raw) as Record<string, unknown>; } catch { return; }
     if (typeof m.t !== 'string') return;
-    this.rec.in(m);
+    // 录像不存图(一张一两百 KB,画在纸上的那张交画时另存了)
+    this.rec.in(withoutImages(m));
     // 嘴断了:按下、松手、发来的先攒着,现连,连上了照序补
     if (!this.session && this.opened && INPUTS.has(m.t)) {
       this.backlog.push({ m, at: Date.now() });
@@ -586,8 +610,11 @@ export class LiveCall {
       case 'release': {
         if (!this.session || !this.holding) return;
         this.holding = false;
-        this.pre.push({ at, ev: { lane: 'mouth', kind: 'release', how: 'voice' } });
         const body = isObj(m.body) ? m.body : {};
+        // 边画边聊(《画板设计.md》拍板 2、6):画板开着时按头像说的只给嘴;图跟着这段声音进对话,嘴接住,不起脑
+        const chat = isObj(m.chat) && typeof m.chat.canvas === 'string' && m.chat.canvas ? m.chat : null;
+        if (chat && !this.echoing && !this.mouthOpen) { this.chatRelease(chat); break; }
+        this.pre.push({ at, ev: { lane: 'mouth', kind: 'release', how: 'voice' } });
         // 热身在等孩子跟:等转写回来再判是跟读还是对老师说的(heard)
         if (this.echoing) {
           if (this.heldBytes < MIN_COMMIT_BYTES) { this.session.clearAudio(); this.echoHeard(''); break; }
@@ -598,6 +625,8 @@ export class LiveCall {
         }
         if (this.heldBytes < MIN_COMMIT_BYTES) {
           this.session.clearAudio();
+          // 按住「给老师看」没说出话:照交画(画板卡已经锁了、纸上的图传好了),嘴不先说
+          if (handsIn(body)) { this.turn('card', body, ''); break; }
           this.send({ t: 'kid', text: '' });
           this.turn('empty', body);
           break;
@@ -617,7 +646,8 @@ export class LiveCall {
       case 'send': {
         if (!this.session || !isObj(m.body)) return;
         const body = m.body;
-        const kind: CatchKind = body.action === 'submit' ? 'card' : Array.isArray(body.photos) && body.photos.length ? 'photo' : isObj(body.talk) ? 'warm' : isObj(body.via) ? 'start' : 'text';
+        // 纸上交的画同交卡:嘴不先说(《画板设计.md》拍板 8)
+        const kind: CatchKind = body.action === 'submit' || isObj(body.drawing) ? 'card' : Array.isArray(body.photos) && body.photos.length ? 'photo' : isObj(body.talk) ? 'warm' : isObj(body.via) ? 'start' : 'text';
         this.interrupt();
         this.pre = [{ at, ev: { lane: 'mouth', kind: 'release', how: kind === 'card' || kind === 'photo' ? kind : 'text' } }];
         const text = typeof body.text === 'string' ? body.text : '';
@@ -626,6 +656,8 @@ export class LiveCall {
       }
       // 孩子端放完了小课堂那一段(或放不了、被关):后面的讲稿接着交给嘴
       case 'staged': this.step({ e: 'staged' }); break;
+      // 边画边聊:孩子端觉得该说一句了
+      case 'chat': this.chatLook(m); break;
       // 一直听:孩子端开口时报的上下文(收下时当松手的 body)
       case 'ctx': if (isObj(m.body)) this.ctxBody = m.body; break;
       // 一直听:孩子端停推(关麦、卡的声音、录音、小课堂)/ 接着推;停的时候孩子正说到一半,那一句作废
@@ -680,17 +712,81 @@ export class LiveCall {
   /** 孩子那句的转写回来了:空的改说没听清、不交给脑;不空交给脑 */
   private heard(text: string): void {
     if (this.echoHeld) { this.echoHeard(text); return; }
+    // 嘴主动说那次垫的静音:那段的转写(真百炼回空的;转写按 commit 的先后到)不是孩子说的
+    if (this.chatQuiet > 0 && Date.now() < this.chatQuietUntil) { this.chatQuiet--; return; }
+    if (this.chatHeard && Date.now() < this.chatHeardUntil) {
+      const canvas = this.chatHeard;
+      this.chatHeard = null;
+      this.send({ t: 'kid', text });
+      if (text.trim()) this.noteDraw(canvas, `孩子:${text.trim()}`);
+      return;
+    }
     this.send({ t: 'kid', text });
     const v = this.pendingVoice;
     this.pendingVoice = null;
     if (!v || v.seq !== this.turnSeq) return;
     if (text.trim()) { void this.toBrain(v.seq, { ...v.body, text }); return; }
+    // 按住「给老师看」说的转写是空的:画照交,不说没听清
+    if (handsIn(v.body)) { void this.toBrain(v.seq, { ...v.body, text: '' }); return; }
     const sorry = (): void => this.ask({ kind: 'catch' }, catchCue('empty', this.lang())!);
     if (!this.said) { sorry(); return; }
     // 接住还在要 / 在出:掐掉,出完(被掐)再说没听清
     this.afterDone = sorry;
     if (this.session?.responding) this.session.cancel(); else this.cancelOnCreate = true;
     if (this.playing()) { this.play = flushAt(this.play, this.ms()); this.send({ t: 'flush' }); }
+  }
+
+  /** 边画边聊:这张画上记一句(孩子说的、嘴说的),交画那轮给脑 */
+  private noteDraw(canvas: string, line: string): void {
+    const lines = [...(this.drawTalk.get(canvas) ?? []), line];
+    this.drawTalk.set(canvas, lines.slice(-DRAW_TALK_MAX));
+  }
+
+  /**
+   * 边画边聊:画板开着时按着头像说完松手。声音太少照「没听清」;不然这一刻的画跟着这段声音 commit,嘴接住(看图、顺着他的话),不起脑。
+   * 按下时攒的那几条嘴的事件不归哪一轮(没有这一轮),丢掉
+   */
+  private chatRelease(chat: Record<string, unknown>): void {
+    const s = this.session!;
+    const canvas = String(chat.canvas);
+    this.pre = [];
+    this.q = queueStep(this.q, { e: 'release' }).s;
+    if (this.heldBytes < MIN_COMMIT_BYTES) {
+      s.clearAudio();
+      this.send({ t: 'kid', text: '' });
+      const sorry = (): void => this.ask({ kind: 'catch' }, catchCue('empty', this.lang())!);
+      if (this.said) this.afterDone = sorry; else sorry();
+      this.state();
+      return;
+    }
+    const img = jpegOf(chat.image);
+    if (img) s.appendImage(img);
+    s.commit();
+    this.chatHeard = canvas;
+    this.chatHeardUntil = Date.now() + 10_000;
+    const go = (): void => this.ask({ kind: 'chat', canvas }, chatCue('reply', askOf(chat.ask), this.drawTalk.get(canvas) ?? []));
+    if (this.said) this.afterDone = go; else go();
+    this.state();
+  }
+
+  /**
+   * 边画边聊:孩子端觉得该说一句了(src/lib/canvas-chat.ts 的规矩)。只在安静时说(孩子没按着、嘴没在说也没要说、脑没在写、讲稿没排着),
+   * 一直听、热身时不说;0.5 秒静音 + 这一刻的画 commit(百炼要先有声音再有图),嘴照应用给的题说一两句。说不了回 {t:'chat', skipped}
+   */
+  private chatLook(m: Record<string, unknown>): void {
+    const s = this.session;
+    const canvas = typeof m.canvas === 'string' ? m.canvas : '';
+    const img = jpegOf(m.image);
+    if (!s?.isReady || !canvas || !img || this.mouthOpen || this.echoing || !this.quiet()) { this.send({ t: 'chat', canvas, skipped: true }); return; }
+    s.clearAudio();
+    s.appendAudio(CHAT_SILENCE);
+    if (!s.appendImage(img)) { s.clearAudio(); this.send({ t: 'chat', canvas, skipped: true }); return; }
+    s.commit();
+    this.chatQuiet++;
+    this.chatQuietUntil = Date.now() + CHAT_QUIET_MS;
+    this.lastActive = Date.now();
+    this.ask({ kind: 'chat', canvas }, chatCue('look', askOf(m.ask), this.drawTalk.get(canvas) ?? []));
+    this.send({ t: 'chat', canvas, said: true });
   }
 
   /** 一直听:VAD 判出孩子开口 / 说完。开口先暂停照念(不丢)、嘴在放就让孩子端压低;说完了等转写 */
@@ -798,7 +894,12 @@ export class LiveCall {
     const r = await kidSendInput(ctx, tutor, rest, localDate(ctx.now()), this.deps.deviceId);
     if ('error' in r) { this.send({ t: 'err', status: r.error.status, error: (r.error.json as { error?: string } | undefined)?.error ?? 'error' }); return; }
     // 口语课:热身的摸底一直带着;打了电话带打了几分钟;应用起的这一轮说明为什么
+    // 交画那一轮(交画板卡、纸上的画):这张画上边画边说的带给脑,之后清掉
+    const drawKey = rest.action === 'submit' && isObj(rest.focus) && typeof rest.focus.card === 'string' ? rest.focus.card : isObj(rest.drawing) ? 'paper' : null;
+    const draw = drawKey ? this.drawTalk.get(drawKey) : undefined;
+    if (drawKey) this.drawTalk.delete(drawKey);
     const live = {
+      ...(draw?.length ? { draw } : {}),
       ...(this.caught ? { caught: this.caught } : {}),
       ...(this.cut !== undefined ? { cut: this.cut } : {}),
       ...(this.warm.length ? { warmup: warmLines(this.warm) } : {}),
@@ -818,6 +919,8 @@ export class LiveCall {
     this.running = started;
     this.job = started.job;
     this.thread = started.thread;
+    // 新话题的第一条:话题还没有时画的那张纸归它
+    if (started.thread === started.job) void adoptPaper(ctx.ws, tutor, started.date, started.thread);
     this.linesQueued = 0;
     // 字幕重放:这一轮的声音从这里接;更早的几轮落过盘了,内存里只留最近几轮
     this.takes.set(started.job, { date: started.date, segs: [], writing: Promise.resolve() });
@@ -1008,6 +1111,32 @@ export class LiveCall {
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+/** 孩子端发来的图(data:image/jpeg;base64,…)→ 字节;不是 jpeg、太大(百炼一帧上限)回 null */
+const jpegOf = (v: unknown): Buffer | null => {
+  const m = typeof v === 'string' ? /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(v) : null;
+  return m && m[1].length <= MAX_IMAGE_B64 ? Buffer.from(m[1], 'base64') : null;
+};
+/** 这一条带着交的东西(交卡、纸上的画):没说清也要交给脑 */
+const handsIn = (body: Record<string, unknown>): boolean => body.action === 'submit' || isObj(body.drawing);
+/** 录像里记的那条:去掉图,留一个 image: true */
+const withoutImages = (m: Record<string, unknown>): Record<string, unknown> => {
+  if (typeof m.image === 'string') return { ...m, image: true };
+  if (isObj(m.chat) && typeof m.chat.image === 'string') return { ...m, chat: { ...m.chat, image: true } };
+  return m;
+};
+/** 孩子端交来的 ask(《画板设计.md》§四):只留认得的字段 */
+const askOf = (v: unknown): ChatAsk => {
+  if (!isObj(v)) return {};
+  const colors = Array.isArray(v.colors) ? v.colors.filter((c): c is { name: string; strokes: number; where: string } => isObj(c) && typeof c.name === 'string' && typeof c.strokes === 'number' && typeof c.where === 'string').slice(0, 6) : undefined;
+  return {
+    ...(typeof v.prompt === 'string' && v.prompt.trim() ? { prompt: v.prompt.trim().slice(0, 200) } : {}),
+    ...(typeof v.color === 'string' && v.color ? { color: v.color.slice(0, 8) } : {}),
+    ...(typeof v.ask === 'boolean' ? { ask: v.ask } : {}),
+    ...(typeof v.minutes === 'string' ? { minutes: v.minutes.slice(0, 20) } : {}),
+    ...(colors?.length ? { colors } : {}),
+    ...(typeof v.cleared === 'number' && v.cleared > 0 ? { cleared: Math.floor(v.cleared) } : {}),
+  };
+};
 /** 孩子这边的动作(嘴断了要攒着补的那几种) */
 const INPUTS = new Set(['hold', 'release', 'hush', 'send', 'staged']);
 

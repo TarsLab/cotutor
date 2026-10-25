@@ -8,7 +8,7 @@ import { stripSecrets } from '../cards/index.ts';
 import { type Bookkeeping, type ConversationMessage } from '../schema/index.ts';
 import { parseBoard } from './board.ts';
 import { threads, type CardAssets, type CardStates } from './conversation.ts';
-import type { BoardSection, KidLecture } from './kid-board.ts';
+import type { BoardSection, KidDrawing, KidLecture } from './kid-board.ts';
 import { parseSections } from './sections.ts';
 import type { Transcript } from './transcript.ts';
 
@@ -104,6 +104,8 @@ export interface KidMessage {
   photos?: string[];
   /** 这条是看完小课堂后的第一条:哪份课包、课名、画过的几处(节前的小课堂卡与画的卡从这里画);again = 再看一遍又画的那条,节前只画画的卡 */
   lecture?: KidLecture;
+  /** 孩子从左栏的纸交的画(《画板设计.md》§三):节前一张孩子的画卡 */
+  drawing?: KidDrawing;
   /** 孩子的话怎么上板(《工作流程.md》§二「一个话题一节」):交卡不写;首页按钮发的(正文就是按钮上的字)不写,从按钮进来后孩子自己说的照写 */
   action?: 'submit';
   fromHome?: true;
@@ -112,6 +114,11 @@ export interface KidMessage {
 }
 
 /** 索引里的小课堂 → 孩子端(画不带那段话)/ 家长端(带) */
+/** 孩子的画卡要的:图、几笔、画了多久 */
+function drawingView(d: NonNullable<ConversationMessage['drawing']>): KidDrawing {
+  return { image: d.image, strokes: d.strokes, ...(d.ms !== undefined ? { ms: d.ms } : {}) };
+}
+
 function lectureView(l: NonNullable<ConversationMessage['lecture']>, parent: boolean): KidLecture {
   return { bundle: l.bundle, title: l.title, ...(l.again ? { again: true as const } : {}), ...(l.video ? { video: true as const } : {}), ...(l.marks?.length ? { marks: l.marks.map((m) => ({ atMs: m.atMs, svgMs: m.svgMs, strokes: m.strokes, ...(m.image ? { image: m.image } : {}), ...(parent && m.text ? { text: m.text } : {}) })) } : {}) };
 }
@@ -141,7 +148,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
     if (question === null && reply === null && !pending) continue;
     const withState = cardsWithState(m, states, assets, submitted);
     const section = m.result === 'ok' && withState ? stripSecrets(withState) : undefined;
-    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}), ...(m.live ? { live: true as const } : {}) });
+    out.push({ job: m.job, thread: ths[i], at: m.at, question, reply, pending, artifacts: reply ? [...m.artifacts] : [], ...(section ? { section } : {}), ...(question !== null && m.photos?.length ? { photos: [...m.photos] } : {}), ...(question !== null && m.drawing ? { drawing: drawingView(m.drawing) } : {}), ...(m.lecture ? { lecture: lectureView(m.lecture, false) } : {}), ...(question !== null && m.action ? { action: m.action } : {}), ...(question !== null && m.via && question.trim() === m.via.label.trim() ? { fromHome: true as const } : {}), ...(m.live ? { live: true as const } : {}) });
   }
   return out;
 }
@@ -180,6 +187,7 @@ export function parentConversation(index: { messages: readonly ConversationMessa
       job: m.job, thread: ths[i], at: m.at, from: m.from, question: m.text, reply, pending, artifacts: reply ? [...m.artifacts] : [],
       ...(section ? { section } : {}),
       ...(m.photos?.length ? { photos: [...m.photos] } : {}),
+      ...(m.drawing ? { drawing: drawingView(m.drawing) } : {}),
       ...(m.via ? { via: m.via } : {}),
       ...(m.action ? { action: m.action } : {}),
       ...(m.cards?.length ? { cards: m.cards } : {}),

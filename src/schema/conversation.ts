@@ -122,6 +122,19 @@ const MessageObjectSchema = z.object({
       log: z.array(z.object({ t: z.number(), pos: z.number().nonnegative(), play: z.boolean() })).optional(),
     })
     .optional(),
+  /**
+   * 孩子从左栏的纸「给老师看」交的画(《画板设计.md》§三):图在 captures/(相对 workspace 根)、几笔、各颜色几笔(「黑 12、红 40」)、
+   * 画了多久(第一笔到最后一笔,算上清空前那几版)、清空前存的那几版的图。板上节前一张孩子的画卡从这里画;图和清掉的那几版进上下文包 photos 给老师 Read
+   */
+  drawing: z
+    .object({
+      image: z.string().min(1),
+      strokes: z.number().int().nonnegative(),
+      colors: z.string().optional(),
+      ms: z.number().nonnegative().optional(),
+      cleared: z.array(z.string().min(1)).optional(),
+    })
+    .optional(),
   /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2);开场按钮的 text 就是按钮上的字,不是孩子说的 */
   via: MessageViaSchema.optional(),
   /** 这个话题是从哪个 activity 起的(只记在话题第一条;《activity设计.md》):名字与点的那一刻的参数,话题后面每条都照它带 */

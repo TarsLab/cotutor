@@ -560,6 +560,13 @@ export interface KidLecture {
   marks?: { atMs: number; svgMs: number; strokes: [number, number][][]; text?: string; image?: string }[];
 }
 
+/** 孩子从纸上交的画在板上那张卡(《画板设计.md》§三):图(相对 workspace 根)、几笔、画了多久 */
+export interface KidDrawing {
+  image: string;
+  strokes: number;
+  ms?: number;
+}
+
 export interface BoardMessage {
   job: string;
   at?: string;
@@ -571,6 +578,8 @@ export interface BoardMessage {
   photos?: string[];
   /** 看完小课堂后的第一条(《小课堂设计.md》):这一节前面是小课堂卡 */
   lecture?: KidLecture;
+  /** 孩子从左栏的纸交的画(《画板设计.md》§三):这一节前面是孩子的画卡 */
+  drawing?: KidDrawing;
   /** 孩子这条不是说的话:submit = 交卡(答案在卡上) */
   action?: 'submit';
   /** 按住说话的(索引里带 voice):板上去口头禅、一行截断 */
@@ -597,6 +606,8 @@ export interface BoardEntry extends BoardSection {
   photos?: string[];
   /** 这一节答的是看完小课堂后的第一问:节前画小课堂卡 */
   lecture?: KidLecture;
+  /** 这一节答的是孩子从纸上交的画:节前一张孩子的画卡 */
+  drawing?: KidDrawing;
   /** 孩子引出这一节的那句话;saidOn = 它答的是哪一节的哪张问题卡(写进那张卡的答案栏),没有 = 在这一节开头单独一行。实时的节头不是它(看 head),它只给左栏用 */
   said?: KidSaid;
   saidOn?: { job: string; card: number };
@@ -636,6 +647,8 @@ export function askCard(section: Pick<BoardSection, 'cards' | 'lines' | 'partial
 
 /** 只发了照片、没说话时服务端补的那句(runner.ts:「(拍了一张)」「(拍了 N 张)」) */
 const PHOTO_ONLY = /^\(拍了(?:一| \d+ )张\)$/;
+/** 只从纸上交了画、没说话时服务端补的那句(src/server/paper.ts 的 DRAW_ONLY_TEXT):不当孩子说的话,板上有那张画卡 */
+const DRAW_ONLY = /^\(画了一张,没说话\)$/;
 
 /**
  * 每条孩子的话放在板上哪(《工作流程.md》§二):交卡、首页按钮、空的不放;答的是上一节的问题卡就进那张卡的答案栏(on),
@@ -650,7 +663,7 @@ export function kidSaid(messages: readonly BoardMessage[]): Map<string, { said: 
     // 答拍给我看卡的照片跟着话进答案栏;只发了照片没说话(服务端补的「(拍了一张)」)就只有照片
     const photos = card !== null && prev!.section!.cards[card].kind === 'photo' && m.photos?.length ? m.photos : null;
     const words = photos && PHOTO_ONLY.test(q) ? '' : q;
-    if ((q || photos) && !m.action && !m.fromHome) {
+    if ((q || photos) && !m.action && !m.fromHome && !(m.drawing && DRAW_ONLY.test(q))) {
       out.set(m.job, { said: { text: words, full: words, ...(photos ? { photos } : {}) }, on: prev && card !== null ? { job: prev.job, card } : null });
     }
     if (m.section && !m.section.partial && !m.pending && (m.section.cards.length || m.section.lines.length)) prev = m;
@@ -667,7 +680,7 @@ export function sectionsFromMessages(messages: readonly BoardMessage[]): BoardEn
   const says = kidSaid(messages);
   for (const m of messages) {
     const k = says.get(m.job);
-    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length && !k?.said.photos ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}), ...(m.live ? { live: true as const, ...liveHead(m.section ?? { cards: [] }) } : {}) };
+    const at = { ...(m.at ? { at: m.at } : {}), ...(m.photos?.length && !k?.said.photos ? { photos: m.photos } : {}), ...(m.lecture ? { lecture: m.lecture } : {}), ...(m.drawing ? { drawing: m.drawing } : {}), ...(k ? { said: k.said, ...(k.on ? { saidOn: k.on } : {}) } : {}), ...(m.live ? { live: true as const, ...liveHead(m.section ?? { cards: [] }) } : {}) };
     if (m.pending) {
       if (m.section && m.section.partial && (m.section.cards.length || (m.live && m.section.lines.length))) out.push({ job: m.job, ...at, cards: m.section.cards, lines: m.section.lines, partial: true, ready: m.section.ready ?? 0, ...(m.section.layout ? { layout: m.section.layout } : {}) });
       continue;

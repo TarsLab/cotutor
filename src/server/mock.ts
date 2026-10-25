@@ -31,6 +31,8 @@ import { handleDictation, type DictationDeps } from '../dictation/route.ts';
 import type { PhotoItem, PhotoProgress, Recognize } from '../dictation/recognize.ts';
 import { lettersData } from './letters.ts';
 import { mockLiveUpgrade } from './mock-live.ts';
+import { DRAW_ONLY_TEXT, PAPER_KEY_RE, paperDrawing, type PaperState } from './paper.ts';
+import { CanvasStateSchema } from '../cards/canvas.ts';
 // 回给页面的形状直接用真服务的(app.ts):真接口加字段、改字段,这里不跟就红(2026-10-17;以前 mock 自己拼对象,motto 这种真服务没有的字段只在 mock 下显示)
 import type { KidDay, KidHistory, KidHome, KidTutor, Overview, OverviewThread, OverviewTutor } from './app.ts';
 
@@ -403,6 +405,8 @@ interface MockMessage {
   lectureLog?: { t: number; pos: number; play: boolean }[];
   /** 实时的一轮(mock 的假嘴发的) */
   live?: true;
+  /** 孩子从左栏的纸交的画(《画板设计.md》§三;摘要按 mock 内存里那张纸算) */
+  drawing?: ConversationMessage['drawing'];
 }
 
 /** mock 的首页原文(昨晚 21:30 发布的那份;接着按钮指向 past 里昨天的话题,job = 0930-<老师名长度>) */
@@ -523,6 +527,10 @@ export function createMock(opts: MockOptions = {}): Mock {
   const yesterday = (): string => localDate(new Date(now().getTime() - 86400000));
   const title = opts.title ?? '小明的老师们';
   const messages = new Map<string, MockMessage[]>();
+  /** 左栏的纸(《画板设计.md》§三):老师|话题 → 那张纸;不落盘 */
+  const papers = new Map<string, PaperState>();
+  /** 孩子端传上来的图(照片、纸上交的画、清空前那几版):路径 → 字节,看大图、画卡缩略图给真图;别的路径照旧占位 */
+  const uploads = new Map<string, { type: string; data: Buffer }>();
   /** 以前的:昨天每位讲过课的老师有一个话题(拿脚本最后一节充数),只读回放用 */
   const past = new Map<string, MockMessage[]>();
   const cursor = new Map<string, number>();
@@ -560,13 +568,13 @@ export function createMock(opts: MockOptions = {}): Mock {
   };
   /** 下发孩子端的形状:答案剥掉、状态并到卡上、小课堂卡补那一段的起止(样本课包在仓库里) */
   const kidMessage = async (m: MockMessage): Promise<KidMessage> => {
-    const { states, action: _a, submitted: _s, lectureWatch: _w, lectureLog: _l, ...rest } = m;
+    const { states, action: _a, submitted: _s, lectureWatch: _w, lectureLog: _l, drawing, ...rest } = m;
     if (rest.lecture?.marks) rest.lecture = { ...rest.lecture, marks: rest.lecture.marks.map(({ text: _t, ...k }) => k) };
     const mine = [...messages.values()].find((l) => l.includes(m)) ?? [];
     const done = new Set(mine.flatMap((x) => (x.submitted ? [x.submitted] : [])));
     const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => ({ ...c, ...(done.has(`${m.job}/${i}`) ? { submitted: true } : {}), ...(states && i in states ? { state: states[i] } : {}) })) } : null;
     const section = withState ? mockPaints(await enrichLectures(MOCK_LECTURE_DIRS, stripSecrets(withState)), m) : null;
-    return { ...rest, section };
+    return { ...rest, ...(drawing && rest.question !== null ? { drawing: { image: drawing.image, strokes: drawing.strokes, ...(drawing.ms !== undefined ? { ms: drawing.ms } : {}) } } : {}), section };
   };
   // 学科色同真服务:按老师的先后定(src/lib/tutor-color.ts)
   const colors = tutorColors(Object.fromEntries(MOCK_TUTORS.map((t) => [t.name, { subject: t.subject }])));
@@ -824,7 +832,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       return { status: 200, json: { tutor: name, thread, rating } };
     }
     const pk = p;
-    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|play|\d{4}-\d{2}-\d{2})$/.exec(pk);
+    const kid = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|messages|history|photos|play|paper|\d{4}-\d{2}-\d{2})$/.exec(pk);
     if (kid) {
       const [, name, tail] = kid;
       const t = MOCK_TUTORS.find((x) => x.name === name);
@@ -844,7 +852,22 @@ export function createMock(opts: MockOptions = {}): Mock {
       if (tail === 'photos' && method === 'POST') {
         if (!isObj(body) || typeof body.image !== 'string' || !body.image.startsWith('data:image/')) return { status: 400, json: { error: 'bad_request' } };
         const d = now();
-        return { status: 201, json: { path: `captures/${date}/${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}-${list.length + 1}.jpg` } };
+        const up = /^data:(image\/(?:jpeg|png));base64,(.+)$/.exec(body.image);
+        const path = `captures/${date}/${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}-${list.length + 1 + uploads.size}.${up && up[1] === 'image/png' ? 'png' : 'jpg'}`;
+        if (up) uploads.set(path, { type: up[1], data: Buffer.from(up[2], 'base64') });
+        return { status: 201, json: { path } };
+      }
+      // 左栏的纸:同真服务(app.ts 的 paperRoute),存在内存里
+      if (tail === 'paper') {
+        const key = method === 'GET' ? (url.searchParams.get('key') ?? '') : isObj(body) && typeof body.key === 'string' ? body.key : '';
+        if (!PAPER_KEY_RE.test(key)) return { status: 400, json: { error: 'bad_request' } };
+        if (method === 'GET') return { status: 200, json: { key, state: papers.get(`${name}|${key}`) ?? { ink: [] } } };
+        if (method !== 'PUT') return { status: 405, json: { error: 'method_not_allowed' } };
+        const r = CanvasStateSchema.safeParse(isObj(body) ? body.state : null);
+        if (!r.success) return { status: 400, json: { error: 'bad_state' } };
+        papers.set(`${name}|${key}`, { ink: r.data.ink, ...(r.data.cleared?.length ? { cleared: r.data.cleared } : {}) });
+        if (isObj(body) && body.from === 'new' && key !== 'new') papers.delete(`${name}|new`);
+        return { status: 200, json: { ok: true, key } };
       }
       if (tail === 'today' && method === 'GET') {
         const shown = (messages.get(name) ?? []);
@@ -894,11 +917,14 @@ export function createMock(opts: MockOptions = {}): Mock {
           if (button.kind === 'continue' && button.date === date) { wantThread = button.thread; newThread = false; }
           else { newThread = true; wantThread = undefined; }
         }
-        if (!said.trim() && !action && !photos.length) return { status: 400, json: { error: 'bad_request' } };
+        const drawIn = isObj(body.drawing) && typeof body.drawing.key === 'string' && PAPER_KEY_RE.test(body.drawing.key) && typeof body.drawing.image === 'string' ? { key: body.drawing.key, image: body.drawing.image } : null;
+        if (body.drawing !== undefined && !drawIn) return { status: 400, json: { error: 'bad_request' } };
+        const drawing = drawIn ? paperDrawing(papers.get(`${name}|${drawIn.key}`) ?? { ink: [] }, drawIn.image) : null;
+        if (!said.trim() && !action && !photos.length && !drawing) return { status: 400, json: { error: 'bad_request' } };
         if (list.some((m) => m.pending)) return { status: 409, json: { error: 'busy' } };
         const focusCard = isObj(body.focus) && typeof body.focus.card === 'string' ? body.focus.card : null;
         if (action === 'submit' && focusCard && list.some((x) => x.submitted === focusCard)) return { status: 409, json: { error: 'submitted' } };
-        const text = said.trim() || (action === 'submit' ? '(交了答案,没说话)' : photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`);
+        const text = said.trim() || (action === 'submit' ? '(交了答案,没说话)' : photos.length === 1 ? '(拍了一张)' : photos.length ? `(拍了 ${photos.length} 张)` : DRAW_ONLY_TEXT);
         const job = nextJob();
         // 话题:newThread → 自己的 job;指定的要在今天的列表里;缺省接当前(末条)的
         let thread = job;
@@ -911,7 +937,9 @@ export function createMock(opts: MockOptions = {}): Mock {
         const lt = lec ? mockLecture(lec.bundle) : null;
         const marks = lt ? storedMarks(lt, marksIn, photos.length) : [];
         sentAt.set(job, Date.now());
-        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(body.live === true ? { live: true as const } : {}), ...(action ? { action } : {}), ...(action === 'submit' && focusCard ? { submitted: focusCard } : {}), ...(photos.length ? { photos } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
+        // 新话题的第一条:话题还没有时画的那张纸归它(同真服务的 adoptPaper)
+        if (thread === job && papers.has(`${name}|new`) && !papers.has(`${name}|${thread}`)) { papers.set(`${name}|${thread}`, papers.get(`${name}|new`)!); papers.delete(`${name}|new`); }
+        const m: MockMessage = { job, thread, at: now().toISOString(), question: text, reply: null, pending: true, artifacts: [], section: null, ...(body.live === true ? { live: true as const } : {}), ...(action ? { action } : {}), ...(action === 'submit' && focusCard ? { submitted: focusCard } : {}), ...(photos.length ? { photos } : {}), ...(drawing ? { drawing } : {}), ...(lec ? { lecture: { bundle: lec.bundle, title: lt?.title ?? lec.bundle, ...(lec.again ? { again: true as const } : {}), ...(lt?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}) }, lectureWatch: { watchedMs: lec.watchedMs, finished: lec.finished, pauses: lec.pauses }, ...(logIn.length ? { lectureLog: logIn } : {}) } : {}) };
         list.push(m);
         const done = think(t, m, cursor).then(() => { inflight.delete(m.job); });
         inflight.set(m.job, done);
@@ -949,6 +977,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       // 图片卡:任何路径都给一张占位 svg(写着路径),前端能看到版式;画图卡(mock-paint/)给一张方的四格
       const rel = url.searchParams.get('p') ?? '';
       if (rel.startsWith('mock-paint/')) return { status: 200, contentType: 'image/svg+xml', html: MOCK_PAINT_SVG };
+      const up = uploads.get(rel);
+      if (up) return { status: 200, contentType: up.type, body: up.data };
       const esc = rel.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
       return { status: 200, contentType: 'image/svg+xml', html: `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7d9a8"/><stop offset="1" stop-color="#8fbf9f"/></linearGradient></defs><rect width="800" height="500" fill="url(#g)"/><circle cx="260" cy="250" r="90" fill="#e8743b"/><circle cx="420" cy="230" r="80" fill="#f4c542"/><circle cx="560" cy="270" r="85" fill="#e0508a"/><text x="400" y="460" font-size="22" text-anchor="middle" fill="#2b2b2b" font-family="sans-serif">${esc}</text></svg>` };
     }

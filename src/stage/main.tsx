@@ -13,7 +13,7 @@ const backOf = (v: unknown): LectureBack | null => {
   const b = v as Record<string, unknown>;
   return typeof b.color === 'string' && typeof b.initial === 'string' && b.initial ? { color: b.color, initial: b.initial } : null;
 };
-import type { CanvasStageHandle } from './canvas.tsx';
+import type { CanvasCleared, CanvasStageHandle } from './canvas.tsx';
 import '@excalidraw/excalidraw/dist/prod/index.css';
 import { STAGE_SOURCE, type FromStage, type ToStage } from './protocol.ts';
 import './stage.css';
@@ -47,7 +47,11 @@ function App(): JSX.Element {
       if (!m || m.source !== STAGE_SOURCE) return;
       if (m.type === 'card') setCard(m);
       else if (m.type === 'follow') { if (lecture.current) lecture.current.follow(m.ms, m.playing, m.rate, m.marks as StageMark[]); else pendingFollow.current = m; }
-      else if (m.type === 'control') { if (m.action === 'submit') canvas.current?.submit(); else lecture.current?.control(m.action); }
+      else if (m.type === 'control') {
+        if (m.action === 'submit') canvas.current?.submit();
+        else if (m.action === 'snap') void (canvas.current ? canvas.current.snap() : Promise.resolve(null)).then((image) => post({ type: 'snap', image }));
+        else lecture.current?.control(m.action);
+      }
     };
     window.addEventListener('message', onMsg);
     post({ type: 'ready' });
@@ -62,6 +66,7 @@ function App(): JSX.Element {
   const onError = useCallback((message: string) => post({ type: 'error', message }), []);
   const onInk = useCallback((ink: Record<string, unknown>[]) => post({ type: 'state', state: { ink } }), []);
   const onSubmit = useCallback((ink: Record<string, unknown>[], image: string) => post({ type: 'submit', state: { ink }, image }), []);
+  const onCleared = useCallback((c: CanvasCleared) => post({ type: 'cleared', ...c }), []);
   const onLectureDone = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'finished', ...w }), []);
   const onLectureClose = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'close', ...w }), []);
   const onLectureAsk = useCallback((w: LectureWatch) => post({ type: 'lecture', event: 'ask', ...w }), []);
@@ -86,7 +91,7 @@ function App(): JSX.Element {
     return (
       <Suspense fallback={<div className="stage-wait">画板准备中…</div>}>
         {/* key 跟着笔数:页面重发 card(家长看录像时孩子又画了一笔)就按新笔迹重装;孩子端平时只在 ready 发一次,不受影响 */}
-        <CanvasStage key={Array.isArray(st.ink) ? st.ink.length : 0} ref={canvas} base={base} bundleUrl={card.bundleUrl} imageUrl={card.imageUrl} prompt={typeof card.props.prompt === 'string' ? card.props.prompt : undefined} ink={Array.isArray(st.ink) ? st.ink : []} readonly={card.readonly === true} onState={onInk} onSubmit={onSubmit} onError={onError} />
+        <CanvasStage key={Array.isArray(st.ink) ? st.ink.length : 0} ref={canvas} base={base} bundleUrl={card.bundleUrl} imageUrl={card.imageUrl} prompt={typeof card.props.prompt === 'string' ? card.props.prompt : undefined} ink={Array.isArray(st.ink) ? st.ink : []} readonly={card.readonly === true} full={card.full === true} hand={card.hand === 'left' ? 'left' : 'right'} onState={onInk} onSubmit={onSubmit} onCleared={onCleared} onError={onError} />
       </Suspense>
     );
   }

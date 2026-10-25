@@ -219,6 +219,10 @@ check('随机事件序列 3000 条 × 150 步:不变式都成立', failures.leng
   const kb = names('kid-board.ts');
   const both = [...names('live-board.ts')].filter((n) => kb.has(n));
   check('live-board.ts 与 kid-board.ts 顶层的名字不撞', both.length === 0, both.join());
+  // 孩子端页面内联的几份(kid-page.ts 的 libSource)两两不撞
+  const libs = ['kid-board.ts', 'live-board.ts', 'voice-view.ts', 'photo-edit.ts', 'reel.ts', 'canvas-chat.ts'].map((f) => [f, names(f)] as const);
+  const clash = libs.flatMap(([a, na], i) => libs.slice(i + 1).flatMap(([b, nb]) => [...na].filter((n) => nb.has(n)).map((n) => `${a}/${b}:${n}`)));
+  check('孩子端页面内联的几份纯函数(含边画边聊的 canvas-chat.ts)顶层的名字两两不撞', clash.length === 0, clash.join());
 }
 
 // ---- 页面不绕过 liveStep:实时的状态只在 liveDispatch 里写;卡上的声音都先过 cardSoundOk(板书时那里停讲稿,实时时问 liveStep)----

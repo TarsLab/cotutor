@@ -89,7 +89,7 @@ export async function readDevTutorFile(ws: Workspace, tutor: string): Promise<{ 
     text,
     hash: sha256(text),
     ...(await stateOf(ws, tutor)),
-    shipped: (await shippedTutorText(tutor)) !== null,
+    shipped: (await shippedTutorText(tutor, ws.root)) !== null,
     examples: 0,
   };
 }
@@ -146,7 +146,7 @@ export async function checkDevTutorFile(ws: Workspace, tutor: string, text: stri
       rules = { path: TUTOR_RULES_PATH, text: r, chars: charsOf(r) };
     }
   }
-  const shipped = await shippedTutorText(tutor);
+  const shipped = await shippedTutorText(tutor, ws.root);
   return {
     issues: lintAgentFile(text, tutor),
     sections: tutorFileSections(text),

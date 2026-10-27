@@ -26,8 +26,10 @@ import { parseTimetable } from '../lib/timetable.ts';
 import { configGapsOf } from './migrate.ts';
 import { httpsFiles } from './serve.ts';
 import { readPin } from '../server/access.ts';
+import { gradeOfSemester } from '../lib/grade.ts';
 import { DIRS } from './skeleton.ts';
-import { tutorStatuses } from './tutors.ts';
+import { tutorStatuses, readManifest } from './tutors.ts';
+import { workspaceGradePack, type GradePack } from './grades.ts';
 import {
   CONFIG_FILE,
   ConfigError,
@@ -249,6 +251,16 @@ export async function doctorWorkspace(
     push({ name: CONFIG_FILE, ok: false, required: true, detail: err.message, fix: '按上面逐条修;政策文件机器不重建,改坏了靠 git 回退' });
   }
 
+  let teachingPack: GradePack | null = null;
+  try {
+    const manifest = await readManifest(root);
+    teachingPack = await workspaceGradePack(root);
+    push({ name: 'teachingPack', ok: true, required: true, detail: `${teachingPack.grade} 年级教学包 · ${redactHome(teachingPack.dir)}` });
+    if (!manifest.teachingPack) push({ name: 'teachingPack.origin', ok: false, required: false, detail: '旧版出厂内容按二年级来源读取,尚未补记;孩子档案不变', fix: 'cotutor upgrade 补记来源,保留自定义文件与原 hash' });
+  } catch (err) {
+    push({ name: 'teachingPack', ok: false, required: true, detail: (err as Error).message, fix: '检查 .cotutor/shipped.json 的 teachingPack 与本包 grades/;恢复原来源记录或安装包含该年级的版本,不要改成其他年级绕过' });
+  }
+
   // ---- 配置迁移:包更新带来的新出厂件(老师 / 运行时 / 命令模板旗标)不会自己进政策文件,缺了是静默的 ----
   {
     const gaps = await configGapsOf(root);
@@ -295,7 +307,7 @@ export async function doctorWorkspace(
   if (ws) {
     // ---- 老师:定义文件(拷贝)+ 名字一致 + 出厂 / 自定义状态 + 老师目录 ----
     // 老师文件只有 .claude/agents/ 这一份:claude 用 --agent 读,别的 CLI 由应用读正文递进系统提示({agentBody} / {systemBody});.qwen/agents/ 的链 2026-10-09 退役
-    const statuses = new Map((await tutorStatuses(root)).map((s) => [s.name, s]));
+    const statuses = new Map((teachingPack ? await tutorStatuses(root) : []).map((s) => [s.name, s]));
     for (const name of Object.keys(ws.config.tutors)) {
       const shipped = statuses.has(name);
       const file = join(ws.dirs.claudeAgents, `${name}.md`);
@@ -320,7 +332,7 @@ export async function doctorWorkspace(
             : `这是自家加的老师:写 .claude/agents/${name}.md(frontmatter name: ${name}),cotutor add ${name} --display <显示名> 可出模板;或把 cotutor.json 里这条删掉`,
       });
       const st = statuses.get(name);
-      if (!st) push({ name: `tutor.${name}.origin`, ok: true, required: false, detail: '自家加的老师(不是出厂件,upgrade 不碰)' });
+      if (!st) push({ name: `tutor.${name}.origin`, ok: true, required: false, detail: teachingPack ? '自家加的老师(不是出厂件,upgrade 不碰)' : '出厂来源无法确认,先修复 teachingPack 检查项' });
       if (st) {
         const label: Record<string, string> = { latest: '出厂件,最新', upgradable: `出厂件,基于 ${st.basedOn},包已更新`, custom: `自定义(基于 ${st.basedOn})`, untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
         push({
@@ -360,14 +372,14 @@ export async function doctorWorkspace(
       const dt = drawtellBin();
       const shim = (await statOrNull(join(root, TOOL_SHIM)))?.isFile() ?? false;
       push({ name: 'drawtell', ok: dt !== null && shim, required: false, detail: !dt ? 'node_modules 里没有 drawtell,服务端烤不了课包的画面' : shim ? `${TOOL_SHIM} 在,指向本包的 drawtell(家长做课包用它 build / dub / bake)` : `${TOOL_SHIM} 不在,家长做课包只能用全局的 drawtell(版本可能和服务端对不上)`, fix: !dt ? '仓库根 pnpm install' : shim ? undefined : 'cotutor init 或 cotutor upgrade 生成' });
-      for (const sk of await skillStatuses(root)) {
+      for (const sk of teachingPack ? await skillStatuses(root) : []) {
         const label: Record<string, string> = { latest: sk.machine ? '机器件,最新' : '出厂件,最新', upgradable: sk.machine ? '机器件,和包里不一样(改过或包已更新)' : `出厂件,基于 ${sk.basedOn},包已更新`, custom: `自定义(基于 ${sk.basedOn})`, untracked: '自定义(没有出厂记录)', missing: sk.machine ? '缺(机器件,老师或家长的技能靠它)' : '缺', unavailable: `${sk.source} 没装,没法拷` };
         push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'unavailable' && sk.state !== 'upgradable', required: Boolean(sk.machine), detail: `.claude/skills/${sk.name}/:${label[sk.state]}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor upgrade 换新版' : sk.state === 'unavailable' ? '仓库根 pnpm install' : undefined });
       }
       // ---- activity:老师的家里 agents/<老师>/activities/<名>.md;出厂的看新旧,每份都过一遍 activity check ----
       {
         const { activityStatuses, checkActivities } = await import('./activities.ts');
-        const states = new Map((await activityStatuses(root)).map((s) => [s.key, s]));
+        const states = new Map((teachingPack ? await activityStatuses(root) : []).map((s) => [s.key, s]));
         const label: Record<string, string> = { latest: '出厂件,最新', upgradable: '出厂件,包已更新', custom: '自定义', untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
         for (const s of states.values()) if (s.state === 'missing') push({ name: `activity.${s.key}`, ok: false, required: false, detail: `agents/${s.key.replace('/', '/activities/')}.md 不在`, fix: 'cotutor init 补拷' });
         // 学科色(《首页设计.md》拍板 26):手改 cotutor.json 写的颜色,新话题气泡的白字要压得住
@@ -383,7 +395,7 @@ export async function doctorWorkspace(
           if (new RegExp(`^#{2,4}\\s*${r.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm').test(agentText)) push({ name: `activity.${key}.dup`, ok: false, required: false, detail: `.claude/agents/${r.tutor}.md 里还有一节「${r.name}」,和 activity 文件两处说法会打架`, fix: `删掉老师文件里那一节(做法以 agents/${r.tutor}/activities/${r.name}.md 为准)` });
           const st = states.get(key);
           const fixes = r.issues.filter((i) => i.level === 'fix');
-          const origin = st ? label[st.state] + (st.basedOn && st.state !== 'latest' ? `(基于 ${st.basedOn})` : '') : '自家写的';
+          const origin = st ? label[st.state] + (st.basedOn && st.state !== 'latest' ? `(基于 ${st.basedOn})` : '') : teachingPack ? '自家写的' : '出厂来源无法确认';
           push({
             name: `activity.${key}`,
             ok: !fixes.length && st?.state !== 'upgradable',
@@ -404,7 +416,7 @@ export async function doctorWorkspace(
         } catch (err) {
           push({ name: 'theme.manifest', ok: false, required: false, detail: `themes/${name}/ 用不了(服务退回出厂 default):${err instanceof Error ? err.message : String(err)}`, fix: name === 'default' ? 'cotutor init 补拷(已有的不动)或 cotutor upgrade' : `修 themes/${name}/theme.json 与 kid.css,或把 cotutor.json 的 kid.theme 改回 default` });
         }
-        for (const th of await themeStatuses(root)) {
+        for (const th of teachingPack ? await themeStatuses(root) : []) {
           if (!th.shipped) {
             push({ name: `theme.${th.name}.origin`, ok: true, required: false, detail: `themes/${th.name}/:自家的主题(不是出厂件,upgrade 不碰)` });
             continue;
@@ -465,8 +477,14 @@ export async function doctorWorkspace(
     // ---- vault(《obsidian仓库设计.md》2026-09-17):档案与每位老师的入口文件按 frontmatter 找,原文整篇进上下文包 ----
     {
       const { notes, files } = await scanVault(ws);
-      const today = localDate(new Date());
+      const today = localDate(opts.now ?? new Date());
       const base = pickNotes(notes, files, { date: today });
+      const currentGrade = gradeOfSemester(base.semester);
+      if (teachingPack && base.semester) push({
+        name: 'teachingPack.grade', ok: currentGrade === teachingPack.grade, required: false,
+        detail: `档案学期 ${base.semester};已安装 ${teachingPack.grade} 年级教学包`,
+        fix: currentGrade === teachingPack.grade ? undefined : '核对档案学期与教学内容;升年级不会自动换文件。用 cotutor grades 查看可用年级,可自行调整教学文件或贡献相应年级包',
+      });
       const limit = resolvePolicy(ws.config, '').contextPack.entryChars;
       push({
         name: 'vault.profile',

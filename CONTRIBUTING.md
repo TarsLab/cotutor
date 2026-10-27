@@ -26,7 +26,11 @@ pnpm typecheck && pnpm test && pnpm build && pnpm smoke
 
 ## 加一位出厂老师
 
-在 `agents/<name>.md` 写文件(frontmatter:name / description / maxTurns / permissionMode,正文即系统提示,只写人设与这一科的做法,照现有几位有脸的老师,写法见 `docs/写提示词.md`;公共守则在 `skills/cotutor-tutor/SKILL.md`,名字要以 `-tutor` 结尾才拿得到),`src/cli/skeleton.ts` 的 `TUTOR_DEFAULTS` 加人设缺省。用户侧加老师不用改仓库:`cotutor add`。
+在对应年级的 `grades/grade-<n>/agents/<name>.md` 写文件(frontmatter:name / description / maxTurns / permissionMode,正文即系统提示,只写人设与这一科的做法,照现有几位有脸的老师,写法见 `docs/写提示词.md`;公共守则在 `skills/cotutor-tutor/SKILL.md`,名字要以 `-tutor` 结尾才拿得到),`src/cli/skeleton.ts` 的 `TUTOR_DEFAULTS` 加人设缺省。用户侧加老师不用改仓库:`cotutor add`。
+
+## 贡献年级教学包
+
+当前只提供 `grades/grade-2/`。其他年级按 [年级教学包设计](docs/年级教学包.md) 新建独立目录,补齐三位老师、activity 与对话例子,注明教材和能力前提。不要只替换年级数字。新增例子先静态检查,再用真实模型跑并人工核对输出。
 
 ## 许可
 

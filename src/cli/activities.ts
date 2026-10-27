@@ -1,6 +1,6 @@
 /**
  * activity 文件的安装、升级与检查(《activity设计.md》)。和老师文件同一套:**拷贝,不链**。
- * 包里的 agents/<老师>/activities/<名>.md 是出厂件;init 拷进 workspace 同一个位置(老师的家里,会话 cwd 下),这份是家长的;
+ * 包里的 grades/grade-<n>/agents/<老师>/activities/<名>.md 是出厂件;init 拷进 workspace 同一个位置(老师的家里,会话 cwd 下),这份是家长的;
  * 出厂 hash 记 .cotutor/shipped.json 的 activities(键「老师/名」),据此分 latest / upgradable / custom / untracked / missing,意思同 tutors.ts。
  */
 import { readFile, readdir, mkdir, writeFile, lstat } from 'node:fs/promises';
@@ -10,6 +10,7 @@ import type { Activity, ActivityRun } from '../schema/index.ts';
 import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION } from './skeleton.ts';
 import { lineDiff, readManifest, sha256, writeManifest, type ShippedManifest, type TutorState } from './tutors.ts';
 import { UsageError } from './workspace.ts';
+import { workspaceGradePack } from './grades.ts';
 
 export const ACTIVITIES_DIR = 'activities';
 
@@ -36,7 +37,7 @@ export async function listActivities(agentsDir: string, tutor?: string, opts: { 
 }
 
 /** 出厂的 activity 与它们的例子文件 */
-export const shippedActivities = (): Promise<ActivityRef[]> => listActivities(PACKAGE_AGENTS_DIR, undefined, { examples: true });
+export const shippedActivities = async (root?: string): Promise<ActivityRef[]> => listActivities(root ? (await workspaceGradePack(root)).agentsDir : PACKAGE_AGENTS_DIR, undefined, { examples: true });
 
 /** workspace 里那份的位置 */
 export function activityFile(root: string, tutor: string, name: string): string {
@@ -71,7 +72,7 @@ async function readState(root: string, a: ActivityRef, manifest: ShippedManifest
 
 export async function activityStatuses(root: string): Promise<ActivityStatus[]> {
   const manifest = await readManifest(root);
-  return Promise.all((await shippedActivities()).map((a) => readState(root, a, manifest)));
+  return Promise.all((await shippedActivities(root)).map((a) => readState(root, a, manifest)));
 }
 
 async function installOne(root: string, a: ActivityRef, manifest: ShippedManifest): Promise<void> {
@@ -79,6 +80,7 @@ async function installOne(root: string, a: ActivityRef, manifest: ShippedManifes
   await mkdir(dirname(file), { recursive: true });
   const text = await readFile(a.file, 'utf8');
   await writeFile(file, text);
+  manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };
   manifest.activities ??= {};
   manifest.activities[keyOf(a)] = { hash: sha256(text), version: PACKAGE_VERSION };
 }
@@ -93,8 +95,9 @@ export interface ActivityInstallStep {
 export async function installActivities(root: string): Promise<ActivityInstallStep[]> {
   const steps: ActivityInstallStep[] = [];
   const manifest = await readManifest(root);
-  let touched = false;
-  for (const a of await shippedActivities()) {
+  let touched = !manifest.teachingPack;
+  manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };
+  for (const a of await shippedActivities(root)) {
     const s = await readState(root, a, manifest);
     const item = `agents/${a.tutor}/${ACTIVITIES_DIR}/${a.name}.md`;
     if (s.state === 'missing' || s.state === 'broken') {
@@ -117,8 +120,9 @@ export interface ActivityUpgradeStep {
 /** upgrade 用:同 upgradeTutors;force 里写「老师/名」才覆盖(原文留 .bak) */
 export async function upgradeActivities(root: string, opts: { force?: string[] } = {}): Promise<ActivityUpgradeStep[]> {
   const manifest = await readManifest(root);
+  manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };
   const steps: ActivityUpgradeStep[] = [];
-  for (const a of await shippedActivities()) {
+  for (const a of await shippedActivities(root)) {
     const s = await readState(root, a, manifest);
     if (s.state === 'latest') steps.push({ key: s.key, action: 'latest', basedOn: s.basedOn });
     else if (s.state === 'missing' || s.state === 'broken') {
@@ -142,7 +146,7 @@ export async function upgradeActivities(root: string, opts: { force?: string[] }
  * 现在那份和出厂不一样就先存 .bak。不是出厂的 → UsageError。返回 .bak 的路径(没存就是 null)
  */
 export async function restoreActivity(root: string, tutor: string, name: string): Promise<{ bak: string | null }> {
-  const ref = (await shippedActivities()).find((a) => a.tutor === tutor && a.name === name);
+  const ref = (await shippedActivities(root)).find((a) => a.tutor === tutor && a.name === name);
   if (!ref) throw new UsageError(`${tutor}/${name} 不是出厂的 activity,没有出厂那份可换`);
   const manifest = await readManifest(root);
   const file = activityFile(root, tutor, name);
@@ -158,14 +162,14 @@ export async function restoreActivity(root: string, tutor: string, name: string)
 }
 
 /** 出厂那份的原文;不是出厂的 → null */
-export async function shippedActivityText(tutor: string, name: string): Promise<string | null> {
-  const ref = (await shippedActivities()).find((a) => a.tutor === tutor && a.name === name);
+export async function shippedActivityText(tutor: string, name: string, root?: string): Promise<string | null> {
+  const ref = (await shippedActivities(root)).find((a) => a.tutor === tutor && a.name === name);
   return ref ? readFile(ref.file, 'utf8') : null;
 }
 
 /** workspace 里一个 activity 现在的状态(出厂的看新旧;自家加的是 untracked) */
 export async function activityStatusOf(root: string, tutor: string, name: string): Promise<ActivityStatus> {
-  const ref = (await shippedActivities()).find((a) => a.tutor === tutor && a.name === name);
+  const ref = (await shippedActivities(root)).find((a) => a.tutor === tutor && a.name === name);
   if (ref) return readState(root, ref, await readManifest(root));
   const file = activityFile(root, tutor, name);
   return { key: `${tutor}/${name}`, state: (await lstat(file).catch(() => null)) ? 'untracked' : 'missing', file };

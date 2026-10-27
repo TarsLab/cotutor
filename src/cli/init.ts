@@ -9,12 +9,13 @@ import type { DetectedProxy } from '../lib/proxy.ts';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, configTemplate, profileTemplate, shippedAgents, writeSchemaFile } from './skeleton.ts';
-import { installTutors } from './tutors.ts';
+import { installTutors, readManifest, writeManifest } from './tutors.ts';
+import { DEFAULT_GRADE, LEGACY_GRADE, requireGradePack } from './grades.ts';
 import { installActivities } from './activities.ts';
 import { TOOL_SHIM, installSkills, writeToolShim } from './skills.ts';
 import { installThemes } from './themes.ts';
 import { scanVault } from '../server/store.ts';
-import { CONFIG_FILE, ConfigError, HOME_ROOT, USER_CONFIG, expandPath, loadWorkspace, parseConfig, readJson, redactHome } from './workspace.ts';
+import { CONFIG_FILE, ConfigError, UsageError, HOME_ROOT, USER_CONFIG, expandPath, loadWorkspace, parseConfig, readJson, redactHome } from './workspace.ts';
 
 export interface InitStep {
   item: string;
@@ -33,6 +34,8 @@ export interface InitOptions {
   dir?: string;
   name?: string;
   port?: number;
+  /** 出厂教学包年级,不是孩子档案的覆盖值。 */
+  grade?: number;
   /** 老师进程的代理:命令行给的(--proxy <url> 是地址,--no-proxy 是 false);没给就探本机,有 askProxy 就问 */
   proxy?: ProxyChoice;
   askProxy?: (d: DetectedProxy) => Promise<boolean | null>;
@@ -45,10 +48,20 @@ async function exists(p: string): Promise<boolean> {
 export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const root = opts.dir ? expandPath(opts.dir, resolve(process.cwd())) : join(HOME_ROOT, opts.slug);
   const steps: InitStep[] = [];
-  const agents = await shippedAgents();
+  const manifest = await readManifest(root);
+  const installed = manifest.teachingPack?.grade;
+  const existing = await exists(join(root, CONFIG_FILE));
+  const grade = opts.grade ?? installed ?? (existing ? LEGACY_GRADE : DEFAULT_GRADE);
+  const pack = await requireGradePack(grade);
+  if (existing && grade !== (installed ?? LEGACY_GRADE)) throw new UsageError('init 只补缺,不能切换已有 workspace 的年级包;请另建 workspace,原有自定义文件和话题保持不动。');
+  if (installed !== undefined && installed !== grade) throw new UsageError(`已安装 ${installed} 年级包,init 不切换年级`);
+  const agents = await shippedAgents(pack.agentsDir);
 
   const rootExisted = await exists(root);
   if (!rootExisted) await mkdir(root, { recursive: true });
+  manifest.teachingPack = { grade };
+  await writeManifest(root, manifest);
+  steps.push({ item: 'teachingPack', action: installed === undefined ? 'created' : 'exists', note: `${grade} 年级教学包${existing && installed === undefined ? '(旧版来源补记,保留原 hash)' : opts.grade === undefined && installed === undefined ? '(默认)' : ''};孩子当前年级仍读档案` });
   steps.push({ item: '.', action: rootExisted ? 'exists' : 'created' });
 
   for (const dir of DIRS) {

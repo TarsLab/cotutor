@@ -1,0 +1,247 @@
+{
+  "schema": "chalk-scene",
+  "version": 1,
+  "id": "2026-10-27-pingjunfen",
+  "title": "平均分:每盘一样多",
+  "problem": "6 个圆片平均放进 3 个盘子,每盘几个?",
+  "model": "实物分组",
+  "template": "paper-strict",
+  "subject": "数学",
+  "skeletons": [
+    {
+      "type": "text",
+      "id": "title",
+      "x": 55,
+      "y": 30,
+      "animateDuration": 900,
+      "text": "6 个圆片,平均放进 3 个盘子",
+      "fontSize": 26,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "rectangle",
+      "id": "plate-0",
+      "x": 55,
+      "y": 100,
+      "animateDuration": 900,
+      "width": 150,
+      "height": 100,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "rectangle",
+      "id": "plate-1",
+      "x": 270,
+      "y": 100,
+      "animateDuration": 900,
+      "width": 150,
+      "height": 100,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "rectangle",
+      "id": "plate-2",
+      "x": 485,
+      "y": 100,
+      "animateDuration": 900,
+      "width": 150,
+      "height": 100,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "ellipse",
+      "id": "round-1-0",
+      "x": 92,
+      "y": 135,
+      "animateDuration": 900,
+      "width": 26,
+      "height": 26,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "#d3f9d8",
+      "fillStyle": "solid"
+    },
+    {
+      "type": "ellipse",
+      "id": "round-1-1",
+      "x": 307,
+      "y": 135,
+      "animateDuration": 900,
+      "width": 26,
+      "height": 26,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "#d3f9d8",
+      "fillStyle": "solid"
+    },
+    {
+      "type": "ellipse",
+      "id": "round-1-2",
+      "x": 522,
+      "y": 135,
+      "animateDuration": 900,
+      "width": 26,
+      "height": 26,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "#d3f9d8",
+      "fillStyle": "solid"
+    },
+    {
+      "type": "ellipse",
+      "id": "round-2-0",
+      "x": 137,
+      "y": 135,
+      "animateDuration": 900,
+      "width": 26,
+      "height": 26,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "#d3f9d8",
+      "fillStyle": "solid"
+    },
+    {
+      "type": "ellipse",
+      "id": "round-2-1",
+      "x": 352,
+      "y": 135,
+      "animateDuration": 900,
+      "width": 26,
+      "height": 26,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "#d3f9d8",
+      "fillStyle": "solid"
+    },
+    {
+      "type": "ellipse",
+      "id": "round-2-2",
+      "x": 567,
+      "y": 135,
+      "animateDuration": 900,
+      "width": 26,
+      "height": 26,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "#d3f9d8",
+      "fillStyle": "solid"
+    },
+    {
+      "type": "text",
+      "id": "answer",
+      "x": 55,
+      "y": 240,
+      "animateDuration": 900,
+      "text": "每盘 2 个,三盘一样多。",
+      "fontSize": 26,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "verify",
+      "x": 55,
+      "y": 300,
+      "animateDuration": 900,
+      "text": "2 + 2 + 2 = 6",
+      "fontSize": 26,
+      "strokeColor": "#1e1e1e"
+    }
+  ],
+  "groups": [
+    {
+      "id": "group-0",
+      "label": "第 1 个盘子",
+      "elementIds": [
+        "plate-0",
+        "round-1-0",
+        "round-2-0"
+      ]
+    },
+    {
+      "id": "group-1",
+      "label": "第 2 个盘子",
+      "elementIds": [
+        "plate-1",
+        "round-1-1",
+        "round-2-1"
+      ]
+    },
+    {
+      "id": "group-2",
+      "label": "第 3 个盘子",
+      "elementIds": [
+        "plate-2",
+        "round-1-2",
+        "round-2-2"
+      ]
+    }
+  ],
+  "bounds": {
+    "title": [
+      55,
+      30,
+      385.3,
+      62.5
+    ],
+    "plate-0": [
+      55,
+      100,
+      205,
+      200
+    ],
+    "plate-1": [
+      270,
+      100,
+      420,
+      200
+    ],
+    "plate-2": [
+      485,
+      100,
+      635,
+      200
+    ],
+    "round-1-0": [
+      92,
+      135,
+      118,
+      161
+    ],
+    "round-1-1": [
+      307,
+      135,
+      333,
+      161
+    ],
+    "round-1-2": [
+      522,
+      135,
+      548,
+      161
+    ],
+    "round-2-0": [
+      137,
+      135,
+      163,
+      161
+    ],
+    "round-2-1": [
+      352,
+      135,
+      378,
+      161
+    ],
+    "round-2-2": [
+      567,
+      135,
+      593,
+      161
+    ],
+    "answer": [
+      55,
+      240,
+      334.7,
+      272.5
+    ],
+    "verify": [
+      55,
+      300,
+      232.6,
+      332.5
+    ]
+  }
+}

@@ -113,7 +113,7 @@ export async function readDevActivity(ws: Workspace, tutor: string, name: string
     hash: sha256(text),
     state: st.state,
     ...(st.basedOn ? { basedOn: st.basedOn } : {}),
-    shipped: (await shippedActivityText(tutor, name)) !== null,
+    shipped: (await shippedActivityText(tutor, name, ws.root)) !== null,
     examples: await exampleCount(file),
   };
 }
@@ -192,7 +192,7 @@ export async function checkDevActivity(ws: Workspace, tutor: string, name: strin
   const kinds = [...new Set(['text', ...activity.cards.filter((k) => (BOARD_CARD_KINDS as readonly string[]).includes(k))])];
   const p = resolveParams(activity, params);
   const body = activity.tutor ? renderTutorSection(activity, { params: p.values, cards: kinds }) : null;
-  const shipped = await shippedActivityText(tutor, name);
+  const shipped = await shippedActivityText(tutor, name, ws.root);
   return {
     issues,
     summary: summaryOf(activity),

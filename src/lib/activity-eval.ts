@@ -34,6 +34,7 @@ export interface ExampleIssue {
 
 /** 认得的判:名字 → 一句话。带参数的写成「名字: 参数」 */
 export const GRADERS: Readonly<Record<string, string>> = {
+  每节有讲稿: '每一轮至少有一句非空讲稿;只有卡、空回复或没有轮次都不通过',
   出画图卡: '最后写了画图卡',
   不出画图卡: '一张画图卡都没写',
   画图卡前放过整段: '第一张画图卡之前,有一节放过三行以上的 read 卡,孩子在它后面开过口',
@@ -169,6 +170,10 @@ export function gradeRun(checks: readonly string[], turns: readonly EvalTurn[], 
     const [name, ...rest] = check.split(/[:：]/);
     const arg = rest.join(':').trim();
     switch (name.trim()) {
+      case '每节有讲稿': {
+        const silent = turns.findIndex((t) => !t.section?.lines.some((l) => l.text.trim()));
+        return { check, pass: turns.length > 0 && silent < 0, ...(!turns.length ? { why: '没有老师回复' } : silent >= 0 ? { why: `第 ${silent + 1} 轮没有讲稿` } : {}) };
+      }
       case '出画图卡':
         return { check, pass: firstPaint >= 0, ...(firstPaint < 0 ? { why: `${turns.length} 轮都没写画图卡` } : {}) };
       case '不出画图卡':

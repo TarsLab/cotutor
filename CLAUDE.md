@@ -6,14 +6,16 @@
 
 - 设计在 `docs/`:《产品规划.md》定位、两个端;《agent层设计.md》目录、记忆、子代理;《契约草案.md》各文件形状的「为什么」(真相在 `src/schema/`);《工作流程.md》一拍一就绪、事件;《obsidian仓库设计.md》vault;《卡片协议.md》加一种卡;《首页设计.md》孩子端首页与 cotutor-home;《作业照片设计.md》孩子端拍照、编辑与发;《家长板书页设计.md》家长端 `/parent`;《工作台设计.md》工作台 `/dev` 的样子(纸面控制台)、概览的数、activity 页;《家长录像设计.md》家长端看录像:录数据不录屏幕;《小课堂设计.md》做好的课(课包或视频)孩子看完再聊:播放器、画(一处一张截图)、画的卡、老师放课里一段;《看图说话设计.md》语文老师一问一答带看图说话;《实时老师设计.md》嘴(realtime)开口、脑(老师 CLI)写板书,有脸的老师都这样;《实时老师页设计.md》实时老师页的样子与按钮;《一直听设计.md》不用按住说话的那种说法;《口语课设计.md》英语老师的口语课:孩子拍一页,热身 + 打电话在英语老师的实时页(《口语课实时设计.md》);《activity设计.md》首页按钮进去的一种做法;《听写设计.md》听写与拍照听写;《你说我画设计.md》画图卡;《画板设计.md》画板卡与左栏的纸铺满、边画边聊、给老师看;《孩子端流水设计.md》孩子端记什么(设备、页面脚本出错)、工作台怎么显示;《接一个 CLI.md》再接一家 agent CLI(写给开发者)
 - 各设计文档末尾有「拍板记录」,带日期。**带日期的决定都是可推翻的**;一条约定要在两轮以上迭代里活下来才进本文件末尾的「约定」
-- 改 `agents/`、`skills/`、`cards/` 下的 md 的字先看《写提示词.md》;自造的词查《词表.md》
+- 改 `grades/`、`skills/`、`cards/` 下的 md 的字先看《写提示词.md》;自造的词查《词表.md》
 - 《开发者手册.md》怎么跑;给用的人看的是《家长手册.md》《iPad与iPhone.md》。模块的来龙去脉与真跑数据不另存,看 git log 与各设计文档
 - 草稿与随手记放 `docs/wip/`(gitignore);过时的文档与截图移到 `docs/archive/`(gitignore,只留本机),原处留一句「原文在 git 历史 <提交>」
 
+年级教学包的来源、旧版迁移和贡献要求见 `docs/年级教学包.md`。
+
 ## 目录
 
-- `agents/*.md` 出厂老师文件:frontmatter 取两 CLI 公共子集,正文即系统提示;init 拷进 workspace,hash 记 `.cotutor/shipped.json`
-- `agents/<老师>/activities/<名>.md` 出厂 activity(孩子从首页一个按钮进去的一种做法):一节一个读者,init 拷进 workspace 同一位置(老师的家),hash 同上;形状在 `src/schema/activity.ts`,解析与检查在 `src/lib/activity.ts`;设计在 `docs/activity设计.md`
+- `grades/grade-<n>/agents/*.md` 出厂老师文件:frontmatter 取两 CLI 公共子集,正文即系统提示;init 拷进 workspace,hash 记 `.cotutor/shipped.json`
+- `grades/grade-<n>/agents/<老师>/activities/<名>.md` 出厂 activity(孩子从首页一个按钮进去的一种做法):一节一个读者,init 拷进 workspace 的 `agents/<老师>/activities/`(老师的家),hash 同上;形状在 `src/schema/activity.ts`,解析与检查在 `src/lib/activity.ts`;设计在 `docs/activity设计.md`
 - `skills/<name>/` 出厂技能:cotutor-tutor(有脸的老师共同的守则,应用注入上下文包)、cotutor-board(由 `cards/板书怎么写.md` 与 `cards/*/card.md` 生成)、cotutor-vault、cotutor-analyze、cotutor-tune、cotutor-home(家长在 workspace 里排首页);不再出厂的机器件列在 `src/cli/skills.ts` 的 `RETIRED_SKILLS`,upgrade 时删
 - `cards/<kind>/` 卡的协议:`card.md` 八栏(例子即测试)+ `card.css`
 - `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`

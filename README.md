@@ -10,7 +10,7 @@
 
 ```sh
 npm i -g cotutor
-cotutor init ming --name 小明     # 建 ~/cotutor/ming/:四位老师、十个 skill、账本、对话目录、cotutor.json
+cotutor init ming --name 小明 --grade 2     # 建 ~/cotutor/ming/:三位老师、十个 skill、账本、对话目录、cotutor.json
 cotutor doctor                    # 逐项体检,不过的每条都带修复命令;--live 真起一次老师
 cotutor serve                     # 孩子端 http://<ip>:5180/,家长端 /parent
 ```
@@ -27,6 +27,14 @@ cotutor serve                     # 孩子端 http://<ip>:5180/,家长端 /paren
 
 想听老师的声音:装 [voxtell](https://github.com/tarslab/voxtell),给老师填音色;没装就退回浏览器合成的声音。
 不花钱先看孩子端长什么样:`cotutor mock` 起一份模拟接口,不经真实老师。细节见 [docs/家长手册.md](docs/家长手册.md)。
+
+## 年级教学包
+
+面向中国大陆小学一至六年级,当前提供二年级教学包。`cotutor grades` 查看可用年级;新建时未指定 `--grade` 默认二年级,未提供的年级不会自动回退。
+
+出厂文件在 `grades/grade-2/`。三科分别提供预习、批改、复习;语文有写话与看图写话,英语有口语课,数学小课堂配合提前做好的课包。家长按教材版本、学期和孩子实际进度设置材料。
+
+孩子当前学期仍由档案决定;升年级不会自动替换家长的老师文件。旧 workspace 执行 `cotutor upgrade` 补记二年级来源,保留自定义内容。贡献其他年级与验证方式见 [年级教学包设计](docs/年级教学包.md)。
 
 ## 老师是文件
 

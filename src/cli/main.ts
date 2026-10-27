@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { constants as osConstants } from 'node:os';
 import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
+import { gradePacks } from './grades.ts';
 import { makeCert } from './cert.ts';
 import { PIN_RE, USER_PIN_FILE, clearPin, readPin, setPin } from '../server/access.ts';
 import { addTutorFile, upgradeTutors } from './tutors.ts';
@@ -110,13 +111,19 @@ export async function main(argv: string[]): Promise<void> {
       return;
     }
     switch (cmd) {
+      case 'grades': {
+        const packs = (await gradePacks()).map(({ grade }) => ({ grade }));
+        process.stdout.write(json ? `${JSON.stringify(packs, null, 2)}\n` : `可安装的教学包:${packs.map((p) => `${p.grade} 年级`).join('、') || '无'}\n`);
+        return;
+      }
       case 'init': {
         const slug = positionals[0];
         if (!slug || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) throw new UsageError(`init 需要一个 slug(小写字母数字连字符,是短名不是真名),如 cotutor init ming。\n${USAGE}`);
         const port = typeof flags.port === 'string' ? Number(flags.port) : undefined;
         if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) throw new UsageError('--port 要是 1–65535 的整数');
         const proxy = typeof flags.proxy === 'string' ? flags.proxy : flags['no-proxy'] === true ? (false as const) : undefined;
-        const r = await initWorkspace({ slug, dir: typeof flags.dir === 'string' ? flags.dir : undefined, name: typeof flags.name === 'string' ? flags.name : undefined, port, proxy, askProxy: interactive(json) ? askProxy : undefined });
+        if (flags.grade !== undefined && (typeof flags.grade !== 'string' || !/^[1-6]$/.test(flags.grade))) throw new UsageError('--grade 要是 1–6 的整数,如 --grade 2');
+        const r = await initWorkspace({ slug, grade: flags.grade === undefined ? undefined : Number(flags.grade), dir: typeof flags.dir === 'string' ? flags.dir : undefined, name: typeof flags.name === 'string' ? flags.name : undefined, port, proxy, askProxy: interactive(json) ? askProxy : undefined });
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
         else {
           process.stdout.write(`cotutor init → ${redactHome(r.root)}\n`);
@@ -218,6 +225,7 @@ export async function main(argv: string[]): Promise<void> {
         return;
       }
       case 'upgrade': {
+        if (flags.grade !== undefined) throw new UsageError('upgrade 只更新已安装的教学包,不能用 --grade 切换年级');
         const { root } = resolveRoot(workspace);
         // --config 是另一件事:政策文件补缺(老师文件与 skill 不碰)
         if (flags.config === true) {

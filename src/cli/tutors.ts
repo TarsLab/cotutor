@@ -1,6 +1,6 @@
 /**
  * 老师文件的安装与升级(2026-09-09 拍板:**拷贝,不链**)。
- * 包里的 agents/<name>.md 是出厂件;init 把它拷进 workspace 的 .claude/agents/<name>.md(这份是家长的,想改就改),
+ * 包里的 grades/grade-<n>/agents/<name>.md 是出厂件;init 把它拷进 workspace 的 .claude/agents/<name>.md(这份是家长的,想改就改),
  * (原来 .qwen/agents/<name>.md 是指向它的相对链,2026-10-09 退役,init / upgrade 删掉旧链,《agent层设计.md》拍板 15。)
  * 出厂时的内容 hash 记在 .cotutor/shipped.json(机器文件,家长不用管),据此分三种状态:
  *   latest     与本包一致
@@ -8,45 +8,15 @@
  *   custom     改过 → upgrade 只报 diff,不动
  *   untracked  没有记录(旧workspace、或家长手写的老师)→ 当 custom 对待
  */
-import { createHash } from 'node:crypto';
 import { lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { PACKAGE_VERSION, shippedAgents, tutorTemplate, writeSchemaFile, type ShippedAgent, type TutorTemplateInput } from './skeleton.ts';
 import { AGENT_NAME_RE } from '../schema/index.ts';
 import { UsageError } from './workspace.ts';
+import { SHIPPED_FILE, sha256, readManifest, writeManifest, type ShippedManifest } from './shipped.ts';
+import { workspaceGradePack } from './grades.ts';
 
-export const SHIPPED_FILE = '.cotutor/shipped.json';
-
-export interface ShippedManifest {
-  /** 出厂 skill(drawtell 的四个领域 skill + 本包的机器件)的 hash,与 tutors 同一套机制(src/cli/skills.ts) */
-  skills?: Record<string, { hash: string; version: string }>;
-  /** 出厂主题(themes/<name>/)的目录 hash,同一套机制(src/cli/themes.ts) */
-  themes?: Record<string, { hash: string; version: string }>;
-  /** 出厂 activity(agents/<老师>/activities/<名>.md,键是「老师/名」),同一套机制(src/cli/activities.ts) */
-  activities?: Record<string, { hash: string; version: string }>;
-  version: string;
-  tutors: Record<string, { hash: string; version: string }>;
-}
-
-export const sha256 = (text: string): string => `sha256:${createHash('sha256').update(text).digest('hex')}`;
-
-export async function readManifest(root: string): Promise<ShippedManifest> {
-  try {
-    const raw = JSON.parse(await readFile(join(root, SHIPPED_FILE), 'utf8')) as Partial<ShippedManifest>;
-    // skills / themes / activities 也要带回来,不然 tutors 这边一写就把它们抹了
-    return { version: raw.version ?? '0', tutors: raw.tutors ?? {}, ...(raw.skills ? { skills: raw.skills } : {}), ...(raw.themes ? { themes: raw.themes } : {}), ...(raw.activities ? { activities: raw.activities } : {}) };
-  } catch {
-    return { version: '0', tutors: {} };
-  }
-}
-
-export async function writeManifest(root: string, m: ShippedManifest): Promise<void> {
-  const file = join(root, SHIPPED_FILE);
-  await mkdir(dirname(file), { recursive: true });
-  const tmp = `${file}.tmp`;
-  await writeFile(tmp, `${JSON.stringify({ ...m, _note: '出厂时老师文件的 hash,cotutor upgrade 据此分辨「没改过」与「改过」;机器写,不用手改' }, null, 2)}\n`);
-  await rename(tmp, file);
-}
+export { SHIPPED_FILE, sha256, readManifest, writeManifest, type ShippedManifest } from './shipped.ts';
 
 export type TutorState = 'latest' | 'upgradable' | 'custom' | 'untracked' | 'missing' | 'broken';
 
@@ -85,7 +55,7 @@ async function readState(root: string, a: ShippedAgent, manifest: ShippedManifes
 export async function tutorStatuses(root: string): Promise<TutorStatus[]> {
   const manifest = await readManifest(root);
   const out: TutorStatus[] = [];
-  for (const a of await shippedAgents()) out.push(await readState(root, a, manifest));
+  for (const a of await shippedAgents((await workspaceGradePack(root)).agentsDir)) out.push(await readState(root, a, manifest));
   return out;
 }
 
@@ -96,6 +66,7 @@ async function installOne(root: string, a: ShippedAgent, manifest: ShippedManife
   const text = await readFile(a.file, 'utf8');
   await unlink(claude).catch(() => {});
   await writeFile(claude, text);
+  manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };
   manifest.tutors[a.name] = { hash: sha256(text), version: PACKAGE_VERSION };
 }
 
@@ -113,8 +84,9 @@ export interface InstallStep {
 export async function installTutors(root: string, configured: string[] = []): Promise<InstallStep[]> {
   const steps: InstallStep[] = [];
   const manifest = await readManifest(root);
-  let touched = false;
-  const shipped = await shippedAgents();
+  let touched = !manifest.teachingPack;
+  manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };
+  const shipped = await shippedAgents((await workspaceGradePack(root)).agentsDir);
   for (const a of shipped) {
     const s = await readState(root, a, manifest);
     const item = `.claude/agents/${basename(a.file)}`;
@@ -205,8 +177,9 @@ export function lineDiff(a: string, b: string): string[] {
  */
 export async function upgradeTutors(root: string, opts: { force?: string[] } = {}): Promise<UpgradeStep[]> {
   const manifest = await readManifest(root);
+  manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };
   const steps: UpgradeStep[] = [];
-  for (const a of await shippedAgents()) {
+  for (const a of await shippedAgents((await workspaceGradePack(root)).agentsDir)) {
     const s = await readState(root, a, manifest);
     const force = opts.force?.includes(a.name) ?? false;
     if (s.state === 'latest') {
@@ -264,7 +237,7 @@ export async function writeTutorFile(root: string, name: string, text: string): 
 
 /** 删自家加的老师文件:改名成 .removed-<时间>(不真删;记忆目录与对话不动);出厂的不让删,用开关 */
 export async function removeTutorFile(root: string, name: string): Promise<{ moved: string | null }> {
-  if ((await shippedAgents()).some((a) => a.name === name)) throw new UsageError(`${name} 是出厂老师,不删文件;不想用就在老师团页关掉`);
+  if ((await shippedAgents((await workspaceGradePack(root)).agentsDir)).some((a) => a.name === name)) throw new UsageError(`${name} 是出厂老师,不删文件;不想用就在老师团页关掉`);
   const { claude } = tutorFiles(root, name);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const moved = `${claude}.removed-${stamp}`;
@@ -277,8 +250,8 @@ export async function removeTutorFile(root: string, name: string): Promise<{ mov
 }
 
 /** 出厂那份老师文件的原文;不是出厂的 → null */
-export async function shippedTutorText(name: string): Promise<string | null> {
-  const a = (await shippedAgents()).find((x) => x.name === name);
+export async function shippedTutorText(name: string, root?: string): Promise<string | null> {
+  const a = (await shippedAgents(root ? (await workspaceGradePack(root)).agentsDir : undefined)).find((x) => x.name === name);
   return a ? readFile(a.file, 'utf8') : null;
 }
 
@@ -287,7 +260,7 @@ export async function shippedTutorText(name: string): Promise<string | null> {
  * 现在那份和出厂不一样就先存 .bak。不是出厂的 → UsageError。返回 .bak 的路径(没存就是 null)
  */
 export async function restoreTutor(root: string, name: string): Promise<{ bak: string | null }> {
-  const a = (await shippedAgents()).find((x) => x.name === name);
+  const a = (await shippedAgents((await workspaceGradePack(root)).agentsDir)).find((x) => x.name === name);
   if (!a) throw new UsageError(`${name} 是自家加的老师,没有出厂那份可换`);
   const manifest = await readManifest(root);
   const { claude } = tutorFiles(root, name);

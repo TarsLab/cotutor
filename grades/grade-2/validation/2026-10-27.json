@@ -1,0 +1,4410 @@
+{
+  "date": "2026-10-27",
+  "note": "合成孩子,不是实际儿童教学效果测量。full-flow 的旧开场及语文复习问题由后续 opening-repeat / review-repeat 验证替代;历史失败保留。哈希为当前交付源文件,不代表所有历史试跑都使用此版本。",
+  "runtime": {
+    "chinese": "qwen3.8-max / low",
+    "math": "qwen3.8-max / medium",
+    "english": "qwen3.8-flash / medium (initial 与 opening-example 使用 low)"
+  },
+  "source_sha256": {
+    "agents/chinese-tutor/activities/你说我画.md": "d523f2b501bf0bccab65fd31bada606e9db2fe2a2d65a96fd326890d31e9b082",
+    "agents/chinese-tutor/activities/你说我画.例子.md": "84d85d4f75c282eac097ef1aeb8b116086ca1dd2cd1f1e3893a0c4a70aaedc03",
+    "agents/chinese-tutor/activities/写话.md": "93478f11a9d62676e225e35c15d8ef7e4270ef1564e0659a1a7d74bd87ce03ad",
+    "agents/chinese-tutor/activities/写话.例子.md": "e217c2451d83cb5ff9ed2cc9891e8107cb5efee3db59a6bcfe89f3dec505e847",
+    "agents/chinese-tutor/activities/听写.md": "792c657705f4832ff203918fc1d3115568e35979d83b86081875b97632a0719c",
+    "agents/chinese-tutor/activities/复习.md": "369ba8078281e2a28733c2e9ee66f9544ed8b4e6c818d59f5ae126125ca93650",
+    "agents/chinese-tutor/activities/复习.例子.md": "b222735074ba47dd4cbcff32b001927c23b85e3c3d144234588e05194a00fb3f",
+    "agents/chinese-tutor/activities/小课堂.md": "dd4077151e04e0c49dcbc235f7e476e94ac231686e0dc658b39394edc8873c83",
+    "agents/chinese-tutor/activities/批改.md": "571c06407191ec1940066a5af4835210e939d165e4581273403c0e4d0947d330",
+    "agents/chinese-tutor/activities/批改.例子.md": "16847554b4295044405b09cb1cc23112dbb7057381451e67a53c31d65af7930d",
+    "agents/chinese-tutor/activities/看图说话.md": "8cc8272aaa1c7a6dd1450cb987cff3cb75a7915c34b569b774ad3b7903cf91c1",
+    "agents/chinese-tutor/activities/看图说话.例子.md": "c024c29bed01d24844ab04aeda89ea11587efd69dd99e5f11472b5d49e496090",
+    "agents/chinese-tutor/activities/预习.md": "280982ef5d51766b60c8ac456313f94c8cca2f9e868aa7b3eaba2236d5de8606",
+    "agents/chinese-tutor/activities/预习.例子.md": "9f9433d95329e245ea1f13857ee415d8b122c295e4614bdcd3effe77fff3d897",
+    "agents/chinese-tutor.md": "4aacfcf59fba0b4c7017dd8aa0d094b3c5e1f99ec81b3acc21b64188619bf0fd",
+    "agents/english-tutor/activities/口语课.md": "e5036c2970fdb3923e24f79d2f0d88635fa79a8203a18040cd80194dce42098c",
+    "agents/english-tutor/activities/口语课.例子.md": "aae9911f5c94d90e65040fe70bb78c183c2cb1d772a4fdd2144bf8f893323703",
+    "agents/english-tutor/activities/听写.md": "e50465fbfe503ff8d9da18ef65da249df65652f8614885fa1ed76f3e47a20096",
+    "agents/english-tutor/activities/复习.md": "1eeba0f742b7890a1c1839ea4010d0bcb97fd35a120a365ea5b2472fde5fadc5",
+    "agents/english-tutor/activities/复习.例子.md": "6900e6fa0aef733635ba9453b8e9cdfaad816ac86b5f0de48504d697a553ca55",
+    "agents/english-tutor/activities/小课堂.md": "87f44f382df7c01e3819d24d6655368f758c095178cbe402f186026f6fba88ee",
+    "agents/english-tutor/activities/批改.md": "4a8f164d66b35f0631a86814e7f7cff8c7b6127fcef35fe0b53d2511736e610d",
+    "agents/english-tutor/activities/批改.例子.md": "b826907263465bb6c0747194ac28c0cc5acc677cf0e2f18a4d162dd285edb381",
+    "agents/english-tutor/activities/预习.md": "8e95d07675c2cc112de458ec5dd4cd1ac773e044a3aa86828b3da3e0dd5c9f9c",
+    "agents/english-tutor/activities/预习.例子.md": "5ef263772085a3c557a52d1d79296adaf759d06a7fac4a619cd5c5369a317bba",
+    "agents/english-tutor.md": "e3e57ac436ec2157f91173279cfa671bfe512026f2af7646e6538043f79cfd3d",
+    "agents/math-tutor/activities/复习.md": "77b38b1f873eeaac91aebb9bb8f10b6d3a9ecc37352e8af3ee544e68a6796d0f",
+    "agents/math-tutor/activities/复习.例子.md": "a2982d5a7526b34651e1dc3d93715e0106bbdbb496a71941237da98b25fe17e5",
+    "agents/math-tutor/activities/小课堂.md": "1d9e0e2b4af9aa07b233c46c73b386206329d786e51e0b01f1b9770cb6eb2887",
+    "agents/math-tutor/activities/小课堂.例子.md": "458f3e2af8178611fc48021f37d94b50fbfdc88c364a893a9b57207d66a006b2",
+    "agents/math-tutor/activities/批改.md": "72781079388a027e91104d5670ecce8841c16fc82a2de04d0d6cbd5b4bb198e0",
+    "agents/math-tutor/activities/批改.例子.md": "897cb865b2c5e0ff45a162f20ca83a1d1907855a5f248bcdb6621abb84fa9dd0",
+    "agents/math-tutor/activities/预习.md": "d45e5abe6c9428fef77fc689fba75d04ee2bed1748c4fb9f388747d7d92257cf",
+    "agents/math-tutor/activities/预习.例子.md": "74d71267afa7010ff9d99928e153de08ce268d708030b0d14d2a6ab51a0f23d5",
+    "agents/math-tutor.md": "1672a45dc9e9962ce490aa93544c81e8dd5cf82058c4cc18a03d6be461c8db5a"
+  },
+  "phases": [
+    {
+      "phase": "initial",
+      "complete": true,
+      "results": [
+        {
+          "tutor": "math-tutor",
+          "name": "批改",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "math-tutor",
+          "name": "预习",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "math-tutor",
+          "name": "复习",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "chinese-tutor",
+          "name": "批改",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "chinese-tutor",
+          "name": "预习",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "chinese-tutor",
+          "name": "复习",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "chinese-tutor",
+          "name": "写话",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "讲一件小事",
+              "fail": []
+            },
+            {
+              "name": "想停就停",
+              "fail": []
+            },
+            {
+              "name": "没看到字不能判书写",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "批改",
+          "pass": false,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": false,
+                  "why": "1 轮都没写拍给我看卡"
+                }
+              ]
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "预习",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "复习",
+          "pass": false,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": false,
+                  "why": "1 轮都没写拍给我看卡"
+                }
+              ]
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "opening-example",
+      "complete": true,
+      "results": [
+        {
+          "tutor": "english-tutor",
+          "name": "批改",
+          "pass": false,
+          "checks": [
+            {
+              "name": "缺少材料",
+              "errors": [],
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "errors": [],
+              "fail": [
+                {
+                  "check": "每节有讲稿",
+                  "pass": false,
+                  "why": "第 1 轮没有讲稿"
+                }
+              ]
+            },
+            {
+              "name": "孩子想停",
+              "errors": [],
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "预习",
+          "pass": false,
+          "checks": [
+            {
+              "name": "缺少材料",
+              "errors": [],
+              "fail": [
+                {
+                  "check": "每节有讲稿",
+                  "pass": false,
+                  "why": "第 1 轮没有讲稿"
+                }
+              ]
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "errors": [],
+              "fail": [
+                {
+                  "check": "每节有讲稿",
+                  "pass": false,
+                  "why": "第 6 轮没有讲稿"
+                }
+              ]
+            },
+            {
+              "name": "孩子想停",
+              "errors": [],
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "复习",
+          "pass": false,
+          "checks": [
+            {
+              "name": "缺少材料",
+              "errors": [],
+              "fail": [
+                {
+                  "check": "每节有讲稿",
+                  "pass": false,
+                  "why": "第 1 轮没有讲稿"
+                }
+              ]
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "errors": [],
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "errors": [],
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "math-tutor",
+          "name": "预习",
+          "pass": false,
+          "checks": [
+            {
+              "name": "缺少材料",
+              "errors": [],
+              "fail": [
+                {
+                  "check": "一节一问",
+                  "pass": false,
+                  "why": "第 1 轮问了 2 个"
+                }
+              ]
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "errors": [],
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "errors": [],
+              "fail": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "english-medium",
+      "complete": true,
+      "results": [
+        {
+          "tutor": "english-tutor",
+          "name": "批改",
+          "pass": true,
+          "checks": [
+            {
+              "name": "缺少材料",
+              "errors": [],
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "errors": [],
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "errors": [],
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "预习",
+          "pass": true,
+          "checks": [
+            {
+              "name": "缺少材料",
+              "errors": [],
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "errors": [],
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "errors": [],
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "复习",
+          "pass": false,
+          "checks": [
+            {
+              "name": "缺少材料",
+              "errors": [],
+              "fail": [
+                {
+                  "check": "一节一问",
+                  "pass": false,
+                  "why": "第 1 轮问了 2 个"
+                }
+              ]
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "errors": [],
+              "fail": [
+                {
+                  "check": "一节一问",
+                  "pass": false,
+                  "why": "第 1 轮问了 2 个"
+                }
+              ]
+            },
+            {
+              "name": "孩子想停",
+              "errors": [],
+              "fail": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "full-flow",
+      "complete": true,
+      "results": [
+        {
+          "tutor": "math-tutor",
+          "name": "批改",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "math-tutor",
+          "name": "预习",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "math-tutor",
+          "name": "复习",
+          "pass": false,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": [
+                {
+                  "check": "一节一问",
+                  "pass": false,
+                  "why": "第 1 轮问了 2 个"
+                }
+              ]
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "chinese-tutor",
+          "name": "批改",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "chinese-tutor",
+          "name": "预习",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "chinese-tutor",
+          "name": "复习",
+          "pass": false,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": [
+                {
+                  "check": "一节一问",
+                  "pass": false,
+                  "why": "第 3 轮问了 2 个"
+                }
+              ]
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "chinese-tutor",
+          "name": "写话",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "讲一件小事",
+              "fail": []
+            },
+            {
+              "name": "想停就停",
+              "fail": []
+            },
+            {
+              "name": "没看到字不能判书写",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "批改",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "预习",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "复习",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "缺少材料",
+              "fail": []
+            },
+            {
+              "name": "给定范围后尝试并结束",
+              "fail": []
+            },
+            {
+              "name": "孩子想停",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "口语课",
+          "pass": true,
+          "errors": [],
+          "checks": [
+            {
+              "name": "按给定词句热身",
+              "fail": []
+            }
+          ]
+        },
+        {
+          "tutor": "math-tutor",
+          "name": "平均分小课堂",
+          "pass": true,
+          "checks": [
+            {
+              "name": "看懂就结束",
+              "fail": [],
+              "errors": []
+            },
+            {
+              "name": "主动想试一题",
+              "fail": [],
+              "errors": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "opening-repeat-chinese-tutor",
+      "complete": true,
+      "results": [
+        {
+          "tutor": "chinese-tutor",
+          "name": "预习",
+          "pass": true,
+          "checks": []
+        },
+        {
+          "tutor": "chinese-tutor",
+          "name": "批改",
+          "pass": true,
+          "checks": []
+        },
+        {
+          "tutor": "chinese-tutor",
+          "name": "复习",
+          "pass": true,
+          "checks": []
+        }
+      ]
+    },
+    {
+      "phase": "opening-repeat-math-tutor",
+      "complete": true,
+      "results": [
+        {
+          "tutor": "math-tutor",
+          "name": "预习",
+          "pass": true,
+          "checks": []
+        },
+        {
+          "tutor": "math-tutor",
+          "name": "批改",
+          "pass": true,
+          "checks": []
+        },
+        {
+          "tutor": "math-tutor",
+          "name": "复习",
+          "pass": true,
+          "checks": []
+        }
+      ]
+    },
+    {
+      "phase": "opening-repeat-english-tutor",
+      "complete": true,
+      "results": [
+        {
+          "tutor": "english-tutor",
+          "name": "预习",
+          "pass": true,
+          "checks": []
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "批改",
+          "pass": true,
+          "checks": []
+        },
+        {
+          "tutor": "english-tutor",
+          "name": "复习",
+          "pass": true,
+          "checks": []
+        }
+      ]
+    },
+    {
+      "phase": "review-repeat-chinese-tutor",
+      "complete": true,
+      "results": [
+        {
+          "tutor": "chinese-tutor",
+          "name": "复习",
+          "pass": true,
+          "checks": []
+        }
+      ]
+    },
+    {
+      "phase": "review-repeat-math-tutor",
+      "complete": true,
+      "results": [
+        {
+          "tutor": "math-tutor",
+          "name": "复习",
+          "pass": true,
+          "checks": []
+        }
+      ]
+    }
+  ],
+  "traces": [
+    {
+      "phase": "full-flow",
+      "tutor": "math-tutor",
+      "activity": "批改",
+      "at": "2026-10-27T03:58:41.180Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "给定范围后尝试并结束",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "题目是 23 加 18,我写了 31,怎么算的我记不清了",
+                  "said": "我们先从个位看起。\n3 加 8,你算算是多少?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "11",
+                  "said": "对,3 加 8 等于 11。\n个位写 1,还有 1 个十要进到十位去。\n十位上是 2 加 1,再加上进上来的 1,你算算是多少?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "4",
+                  "said": "对,十位是 4。\n所以 23 加 18 等于 41,你原来写的 31 是忘了加进上来的那个 1。把答案改成 41 就好了。",
+                  "cards": []
+                },
+                {
+                  "kid": "哦，原来是这样。老师，今天先到这里吧。",
+                  "said": "好的,今天这道题你已经弄明白了,下次见。",
+                  "cards": []
+                },
+                {
+                  "kid": "好的，老师再见！",
+                  "said": "再见,小明!",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "孩子想停",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "小明,把题目和你写好的答案拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好的,今天先休息。下次想写了随时拍给我看。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "full-flow",
+      "tutor": "math-tutor",
+      "activity": "预习",
+      "at": "2026-10-27T04:00:00.136Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "我们来看看明天要学什么。\n把今天要预习的那一页拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "给定范围后尝试并结束",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了、余数、7 颗、7颗、七颗",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "小明，今天预习数学。把课本翻到明天要学的那一页，拍给我看看。\n拍好了发给我。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "明天学平均分,我还没学除法,我能数到十",
+                  "said": "好，明天学的是平均分，就是分东西的时候每份一样多。\n我们先来试一试。6 颗糖分给两只小熊，每只小熊要一样多。你想怎么分？画一画给我看。",
+                  "cards": [
+                    "canvas"
+                  ]
+                },
+                {
+                  "kid": "一只三颗",
+                  "said": "对，一只三颗，两只小熊一样多，这就是平均分。明天课上老师会带你们分更多东西，你已经会了。",
+                  "cards": []
+                },
+                {
+                  "kid": "今天先到这里",
+                  "said": "好，今天预习到这里。明天上课见。",
+                  "cards": []
+                },
+                {
+                  "kid": "老师再见",
+                  "said": "再见，小明。明天学平均分的时候你已经会了，放心吧。",
+                  "cards": []
+                },
+                {
+                  "kid": "老师再见",
+                  "said": "再见，小明。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "孩子想停",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "小明,我们今天要预习数学。把课本翻到明天要学的那一页,拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好的,今天先休息。想学的时候随时来找我。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "full-flow",
+      "tutor": "math-tutor",
+      "activity": "复习",
+      "at": "2026-10-27T04:01:31.370Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看，好吗？",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "给定范围后尝试并结束",
+          "pass": false,
+          "runs": [
+            {
+              "pass": false,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": false,
+                  "why": "第 1 轮问了 2 个"
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "小明，今天想复习哪一页呀？\n把那一页拍给我看看，好吗？",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "复习两位数加法,我学过进位,但个位满十有时忘了进一",
+                  "said": "好，我们就练个位满十要进一的加法。\n先看个位，4 个一加 7 个一，一共有多少个一？",
+                  "cards": [
+                    "text",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "十一个",
+                  "said": "对，4 加 7 等于 11 个一。\n11 个一里面，10 个一可以捆成 1 个十。这个十要送到十位上去，这就是进一。\n那个位上写几？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "写1",
+                  "said": "对，个位写 1，进上去的 1 记在十位上。\n现在看十位，2 个十加 1 个十，再加上进上来的 1 个十，一共是几个十？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "四个",
+                  "said": "对，十位是 4 个十。所以 24 加 17 等于 41。\n再来一道试试，这回你自己算。\n36 加 25 等于多少？",
+                  "cards": [
+                    "text",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "个位6加5是11，写1进1。十位3加2加1是6。等于61。",
+                  "said": "对了！个位满十，你写 1 进 1，十位也记得把进上来的 1 加上了。\n两道都做得很好，进位这一步你都记住了，今天就到这里。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "孩子想停",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "今天我们复习数学。\n把今天要复习的内容拍给我看看，好吗？",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好的，今天先休息，下次想复习的时候再来找我。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "full-flow",
+      "tutor": "chinese-tutor",
+      "activity": "批改",
+      "at": "2026-10-27T04:02:00.107Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "小明，我们来批改作业啦。\n把题目和你写好的答案拍给我看看，好吗？",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "给定范围后尝试并结束",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "小明,我们来批改。\n把题目和你写好的答案拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "我写的是:小鸟在天上飞,它很开兴。帮我看看用词",
+                  "said": "这句话说清楚了小鸟在哪里。\n我们看看「开兴」这个词。\n表示高兴的「开心」,后面是哪个字?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "是心字，我写错了。",
+                  "said": "对,是「开心」的心。\n你一下就找出来了。\n把「开兴」改成「开心」,这句话就写对了。",
+                  "cards": [
+                    "tianzige"
+                  ]
+                },
+                {
+                  "kid": "我改好了。今天先到这里，不想再写了。",
+                  "said": "改好了就行,今天写得很棒。\n那就先到这里,休息去吧。",
+                  "cards": []
+                },
+                {
+                  "kid": "好，老师再见。",
+                  "said": "再见,小明。",
+                  "cards": []
+                },
+                {
+                  "kid": "（背着书包跑远了）",
+                  "said": "慢点跑,路上小心。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "孩子想停",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "小明,我们来批改作业。\n把题目和你写好的答案拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好的,今天先到这里。\n下次想批改了再来找我。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "full-flow",
+      "tutor": "chinese-tutor",
+      "activity": "预习",
+      "at": "2026-10-27T04:02:29.893Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "小明,我们今天来预习语文。\n把今天要预习的那一页拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "给定范围后尝试并结束",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "小明,我们开始预习。\n把今天要预习的那一页拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "预习这一段:小蝌蚪游来游去。我不会读蝌蚪",
+                  "said": "蝌蚪,就是青蛙小时候的样子。\n你把「小蝌蚪游来游去」读一遍,好吗?",
+                  "cards": [
+                    "read",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "小蝌蚪游来游去",
+                  "said": "读得很清楚。\n小蝌蚪在水里游来游去,说明它们很活泼。\n你从这句话里知道小蝌蚪在做什么了吗?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "在游来游去",
+                  "said": "对,它们在水里游来游去。\n这一句我们读会了,也懂了。\n你有没有想带到课堂上问老师的问题?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "没有",
+                  "said": "好,那这一句我们就预习完了。",
+                  "cards": []
+                },
+                {
+                  "kid": "今天先到这里",
+                  "said": "好,今天就预习到这里。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "孩子想停",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "今天我们要预习语文。\n把今天要预习的那一页拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好的,那今天就先到这里。\n下次想预习了再来找我。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "full-flow",
+      "tutor": "chinese-tutor",
+      "activity": "复习",
+      "at": "2026-10-27T04:02:58.166Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "小明,我们准备复习语文。\n把今天要复习的内容拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "给定范围后尝试并结束",
+          "pass": false,
+          "runs": [
+            {
+              "pass": false,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": false,
+                  "why": "第 3 轮问了 2 个"
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "小明，我们来复习语文。\n把今天要复习的内容拍给我看看，好吗？",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天想复习学过的池和河,我常把它们弄混",
+                  "said": "这两个字都跟水有关，难怪容易混。\n我们想想小鱼生活的地方。\n「池塘」的「池」，你记得它旁边是什么偏旁吗？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "三点水",
+                  "said": "对，它们都是三点水。\n那右边呢？「池塘」的「池」，右边是什么字？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "右边是也",
+                  "said": "对，池的右边是「也」。\n池塘小小的，水不怎么动。\n那「小河」的河呢，右边是什么字？",
+                  "cards": [
+                    "tianzige",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "右边是可",
+                  "said": "对，河的右边是「可」。\n你看，左边都是三点水，就看右边来分。\n右边是「也」的是池塘的池，右边是「可」的是小河的河。\n这两个字你分清啦。",
+                  "cards": []
+                },
+                {
+                  "kid": "嗯，分清啦。",
+                  "said": "那今天「池」和「河」就复习到这里。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "孩子想停",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "小明,我们来复习语文。\n把今天要复习的内容拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好的,那今天先休息。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "full-flow",
+      "tutor": "chinese-tutor",
+      "activity": "写话",
+      "at": "2026-10-27T04:03:39.810Z",
+      "examples": [
+        {
+          "name": "讲一件小事",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "放过整段",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你错了、必须写一百字",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "写话",
+                  "said": "小明，今天有什么事让你想讲一讲？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "今天我和妈妈去公园,看到一只猫",
+                  "said": "你已经说清楚和谁去了哪里。\n那只猫正在做什么呀？",
+                  "cards": [
+                    "read",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "小猫在树下睡觉",
+                  "said": "你把小猫在哪里、在做什么也说清楚了。\n你觉得它睡得怎么样，是安安静静的，还是缩成一团？",
+                  "cards": [
+                    "read",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "它缩成一团，安安静静的。",
+                  "said": "这三句话把在哪里、看到什么、小猫怎么睡，都说清楚了。\n你把这三句连起来念一遍给我听听。",
+                  "cards": [
+                    "read"
+                  ]
+                },
+                {
+                  "kid": "今天，我和妈妈去公园，看到一只猫。小猫在树下睡觉。它缩成一团，安安静静的。",
+                  "said": "念得很顺，事情说清楚了。\n学校要写下来的话，你拍一张写的给我看；不想写了，今天就到这里。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "不想写了，下次再去看它。",
+                  "said": "好，今天就到这里。下次去公园再看那只小猫。",
+                  "cards": []
+                },
+                {
+                  "kid": "嗯，下次再去看它。",
+                  "said": "好，下次去公园再看它。",
+                  "cards": []
+                },
+                {
+                  "kid": "嗯，下次再去看它。",
+                  "said": "好，小明再见。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "想停就停",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "写话",
+                  "said": "小明，今天有什么事让你想讲一讲呀？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "我今天不想写了",
+                  "said": "好，今天不想写就不写。\n那我们聊聊天也行，或者你想歇一会儿都可以。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "没看到字不能判书写",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "不说: 没有错别字、标点全对、字写得真好",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "写话",
+                  "said": "小明，今天有什么事让你想讲一讲呀？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "我已经在纸上写好了,但现在没有照片",
+                  "said": "写好了呀，真棒。\n没有照片也没关系，你把你写的念给我听听吧。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "full-flow",
+      "tutor": "english-tutor",
+      "activity": "批改",
+      "at": "2026-10-27T04:04:29.403Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "给定范围后尝试并结束",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "题目是写出苹果的英文,我纸上写的是 aple",
+                  "said": "你已经写出了开头的 a 和结尾的 le。\n中间有两个 p。\n你把这个词补完整,好吗?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "apple",
+                  "said": "对了,两个 p 都补上了,这个词写完整了。",
+                  "cards": []
+                },
+                {
+                  "kid": "今天先到这里",
+                  "said": "好的,今天写得不错,明天见。",
+                  "cards": []
+                },
+                {
+                  "kid": "明天见",
+                  "said": "明天见,小明。",
+                  "cards": []
+                },
+                {
+                  "kid": "老师再见",
+                  "said": "再见,小明。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "孩子想停",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "小明,来批改作业呀。\n把题目和你写好的答案拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好,那今天先到这里。\n下次想批改的时候再拍给我看就行,再见啦小明。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "full-flow",
+      "tutor": "english-tutor",
+      "activity": "预习",
+      "at": "2026-10-27T04:05:20.486Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "把今天要预习的那一页拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "给定范围后尝试并结束",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了、四个字母、4 个字母、4个字母",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "你好小明,今天我们一起预习英语。\n把今天要预习的那一页拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天学 apple 和 I like apples,我不会说",
+                  "said": "好,我们今天学一个词和一个句子。先学这个词。\nApple,苹果。\n我念给你听:a-pp-le,apple。\n你也说一次,好吗?",
+                  "cards": [
+                    "word",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "a-pp-le",
+                  "said": "说得好。\n现在我们把 apple 放到一个句子里。\nI like apples.\n先跟我念前半句:I like...\n你再念后半句:apples.",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "I like apples",
+                  "said": "说得很好。\n现在确认一下你听懂了。\n你来选一选,这句话是什么意思?",
+                  "cards": [
+                    "choice"
+                  ]
+                },
+                {
+                  "kid": "我喜欢苹果",
+                  "said": "对,就是\"我喜欢苹果\"。\n今天你学会了 apple 和 I like apples,都自己说出来了,很棒。",
+                  "cards": []
+                },
+                {
+                  "kid": "今天先到这里",
+                  "said": "好的,今天到这里。下次见,小明。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "孩子想停",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "把今天要预习的那一页拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好,那今天先到这里。\n想学的时候再叫我。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "full-flow",
+      "tutor": "english-tutor",
+      "activity": "复习",
+      "at": "2026-10-27T04:06:20.070Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "今天复习什么我还不知道。\n把今天要复习的内容拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "给定范围后尝试并结束",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "小明,今天我们一起复习英语。\n先让我看看要复习哪一页,你拍下来发给我。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "复习学过的 duck、bus 和 under,我记不住 under",
+                  "said": "under,我们先想想。\n你把它想成一个东西在另一个东西的下面。\n比如小鸭子在公交车的下面。\n你试试,「在……下面」英文怎么说?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "under",
+                  "said": "对,under 就是「在……下面」,你想出来了。\n那我们连起来说一句:小鸭子在公交车下面。\nThe duck is under the bus.",
+                  "cards": []
+                },
+                {
+                  "kid": "under",
+                  "said": "under 你记住了。\n现在把三个词连起来试试:The duck is under the bus.\n你来念一念?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "The duck is under the bus.",
+                  "said": "太棒了!三个词连成一句话,你完整说出来了。\nduck、bus、under 都记住了,今天复习到这里就够。",
+                  "cards": []
+                },
+                {
+                  "kid": "今天先到这里，不想再做。",
+                  "said": "好的,今天 under 你想出来了,句子也说完整了,很棒。\n下次见,小明。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "孩子想停",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "今天咱们复习英语。\n把今天要复习的内容拍给我看看,好吗?",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好,今天先到这里。下次想复习了再来找我。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "full-flow",
+      "tutor": "english-tutor",
+      "activity": "口语课",
+      "at": "2026-10-27T04:06:33.350Z",
+      "examples": [
+        {
+          "name": "按给定词句热身",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "说到: duck",
+                  "pass": true
+                },
+                {
+                  "check": "不说: Ray、一年级、发音标准",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "口语课",
+                  "said": "我们先热热身！我说一个英文，你学一个，像回声。我先来：duck！\n嘎嘎嘎！小鸭子在说话，小声一点：duck…\n这只鸭子变成了大狮子！DUCK！\n慢慢说，一个字母一个字母：d-u-ck，duck\n你先说：鸭子，英文怎么说？\n一起说：duck！\n热身好啦！老师给你打个电话，电话里我只说英文哦，听不懂就说「听不懂」。",
+                  "cards": [
+                    "word"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "full-flow",
+      "tutor": "math-tutor",
+      "activity": "小课堂",
+      "at": "2026-10-27T04:07:21.062Z",
+      "examples": [
+        {
+          "name": "看懂就结束",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "我知道了,平均分就是每盘一样多,今天先到这里",
+                  "said": "好，平均分就是每盘一样多，你记住了。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "主动想试一题",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 方程、未知数",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "我想自己试一道平均分",
+                  "said": "好，你来试一道。\n8 个圆片，放进 2 个盘子，每盘要一样多。\n你一个一个地放，每盘放几个？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "我先每盘放一个，再每盘放一个，就是两个啦！",
+                  "said": "你放了 2 轮，每盘 2 个，一共用掉了 4 个。\n可是你一共有 8 个圆片呀，还剩几个没放？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "还剩四个，我再每盘放一个，再放一个就分完啦！",
+                  "said": "对，再放两轮，每盘就是 4 个，8 个圆片正好分完。\n8 个圆片放进 2 个盘子，每盘一样多，每盘 4 个，这就是平均分。",
+                  "cards": []
+                },
+                {
+                  "kid": "哦！每盘四个，分完啦！",
+                  "said": "你自己分对了，真棒！",
+                  "cards": []
+                },
+                {
+                  "kid": "嘿嘿，我数到八就分完啦！",
+                  "said": "对，一个一个数到 8，每盘一样多，就是平均分。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "opening-repeat-chinese-tutor",
+      "tutor": "chinese-tutor",
+      "activity": "预习",
+      "at": "2026-10-27T04:02:10.163Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "把今天要预习的那一页拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "把今天要预习的那一页拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "把今天要预习的那一页拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "opening-repeat-chinese-tutor",
+      "tutor": "chinese-tutor",
+      "activity": "批改",
+      "at": "2026-10-27T04:02:17.231Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "opening-repeat-chinese-tutor",
+      "tutor": "chinese-tutor",
+      "activity": "复习",
+      "at": "2026-10-27T04:02:25.559Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "opening-repeat-math-tutor",
+      "tutor": "math-tutor",
+      "activity": "预习",
+      "at": "2026-10-27T04:02:26.422Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "把今天要预习的那一页拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "把今天要预习的那一页拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "把今天要预习的那一页拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "opening-repeat-math-tutor",
+      "tutor": "math-tutor",
+      "activity": "批改",
+      "at": "2026-10-27T04:02:46.581Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "opening-repeat-math-tutor",
+      "tutor": "math-tutor",
+      "activity": "复习",
+      "at": "2026-10-27T04:03:10.460Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "opening-repeat-english-tutor",
+      "tutor": "english-tutor",
+      "activity": "预习",
+      "at": "2026-10-27T04:02:18.752Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "把今天要预习的那一页拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "把今天要预习的那一页拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "预习",
+                  "said": "把今天要预习的那一页拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "opening-repeat-english-tutor",
+      "tutor": "english-tutor",
+      "activity": "批改",
+      "at": "2026-10-27T04:02:36.794Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "批改",
+                  "said": "把题目和你写好的答案拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "opening-repeat-english-tutor",
+      "tutor": "english-tutor",
+      "activity": "复习",
+      "at": "2026-10-27T04:02:54.520Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "review-repeat-chinese-tutor",
+      "tutor": "chinese-tutor",
+      "activity": "复习",
+      "at": "2026-10-27T04:05:17.383Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "给定范围后尝试并结束",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天想复习学过的池和河,我常把它们弄混",
+                  "said": "我们想想小鱼生活的地方。\n「池塘」的「池」，你记得它旁边是什么偏旁吗？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "三点水",
+                  "said": "对，「池」和「河」旁边都是三点水，都跟水有关。\n那它们右边不一样，你记得「池塘」的「池」右边是什么字吗？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "是也",
+                  "said": "对，就是「也是」的也。\n池塘不大，水安安静静待在那里，所以右边是「也」。\n大河的水一直往前流，右边这个字念「可」。\n你用手比划一下，「河」右边怎么写？",
+                  "cards": [
+                    "tianzige",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "横竖钩，再写一个口",
+                  "said": "对，「可」就是这样写的。\n左边都是三点水，看右边就能分清了。\n「也」是池塘，「可」是大河。\n这两个字你都认出来了，今天就复习到这里。",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "好的，今天先到这里。",
+                  "said": "好，今天先到这里。",
+                  "cards": []
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天想复习学过的池和河,我常把它们弄混",
+                  "said": "我们想想小鱼生活的地方。\n「池塘」的「池」，你记得它旁边是什么偏旁吗？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "三点水",
+                  "said": "对，「池」和「河」都是三点水，都跟水有关。\n我们再看看它们右边不一样的地方。\n「池塘」的池，右边是个「也」字，就是你常说的「也是」的那个「也」。\n「小河」的河，右边是个「可」字，就是「可以」的那个「可」。\n小鱼游在小池塘里，我们用哪个字？",
+                  "cards": [
+                    "text",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "池",
+                  "said": "说对了，小池塘就是三点水加一个「也」。\n那长长的、一直往前流的小河呢？",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "河",
+                  "said": "也对了，小河就是三点水加一个「可」。\n这两个字你都分清了。",
+                  "cards": []
+                },
+                {
+                  "kid": "今天先到这里，不想再做。",
+                  "said": "好，今天就到这儿。\n你刚才把「池」和「河」都分清了，下次见。",
+                  "cards": []
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天想复习学过的池和河,我常把它们弄混",
+                  "said": "我们想想小鱼生活的地方。\n「池塘」的「池」,你记得它旁边是什么偏旁吗?",
+                  "cards": [
+                    "text",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "三点水",
+                  "said": "对,是三点水。\n「池塘」的池和「小河」的河,左边都是三点水,说明它们都跟水有关。\n右边不一样:「池」右边是个「也」,「河」右边是个「可」。\n你用手比划一下,「河」字右边的「可」,第一笔是什么?",
+                  "cards": [
+                    "tianzige",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "横",
+                  "said": "对,第一笔是横。\n「河」的右边是个可,先写一横,再写下面的部分。\n「池」的右边是个也,没有那一长横。\n记住这个:有长横的是小河的「河」,没长横的是池塘的「池」。\n这两个字今天就分清啦。",
+                  "cards": []
+                },
+                {
+                  "kid": "谢谢老师，今天先到这里。",
+                  "said": "好,今天先到这里。\n下次分不清的时候,就想想右边有没有那一长横。",
+                  "cards": []
+                },
+                {
+                  "kid": "好，老师再见",
+                  "said": "再见,小明。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "孩子想停",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好,今天先到这里,去休息吧。",
+                  "cards": []
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好,那今天就先到这里。\n去休息吧,下次想复习了再来找我。",
+                  "cards": []
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好,那今天就先到这里。\n下次想复习了再来找我。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "review-repeat-math-tutor",
+      "tutor": "math-tutor",
+      "activity": "复习",
+      "at": "2026-10-27T04:07:58.529Z",
+      "examples": [
+        {
+          "name": "缺少材料",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "出拍给我看卡",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不说: photo 卡、上下文包、材料不足、没有范围、没有照片",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "一节一问",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "给定范围后尝试并结束",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "复习两位数加法,我学过进位,但个位满十有时忘了进一",
+                  "said": "好,我们就练进位加法。\n这道题,先看个位。\n个位上是 4 和 7,4 加 7 等于多少?",
+                  "cards": [
+                    "text",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "11",
+                  "said": "对,4 加 7 等于 11。\n11 满十了,所以要向十位进 1。\n那个位上写几?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "个位写1",
+                  "said": "对,个位写 1。\n现在看十位,2 加 1,还有进上来的那个 1,十位上一共是几?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "4",
+                  "said": "对,十位是 4。\n24 加 17 等于 41,你算对了。\n这道题你每一步都是自己完成的,进位那一步没有忘,很好。",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "今天先到这里，我不想再做啦。",
+                  "said": "好,今天练得很棒,进位那一步记得牢牢的。下次见!",
+                  "cards": []
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "复习两位数加法,我学过进位,但个位满十有时忘了进一",
+                  "said": "我们再试一道:24 加 17。\n先看个位,4 个一加 7 个一,有多少个一?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "十一个",
+                  "said": "对,4 加 7 等于 11 个一。\n11 个一里面有一个十,这个十要把进位带到十位去。\n个位写 1,进上去的 1 记在十位。\n那十位上,2 个十加 1 个十,再加上进上来的 1 个十,一共几个十?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "四个",
+                  "said": "对,4 个十,所以 24 加 17 等于 41。\n这次进位没有忘。\n再来一道试试:36 加 25,个位先算,6 加 5 等于多少?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "十一个",
+                  "said": "对,6 加 5 等于 11。\n满十了,进位别忘了。\n十位上 3 加 2,再加进上去的 1,等于多少?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "六个",
+                  "said": "对,3 加 2 再加进上来的 1,等于 6 个十。\n36 加 25 等于 61。\n两道都算对了。第一道我带着你走了一遍进位,第二道你自己记住了满十进一,没有忘。\n今天就到这里,下次再练。",
+                  "cards": []
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "一节一问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                },
+                {
+                  "check": "不说: 你太笨、这么简单都不会、你错了",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "复习两位数加法,我学过进位,但个位满十有时忘了进一",
+                  "said": "我们再试一道:24 加 17。\n先看个位,4 个一加 7 个一,有多少个一?",
+                  "cards": [
+                    "text",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "十一个一",
+                  "said": "对,11 个一。\n11 个一里面有一个十和一个一。那一个一留在个位,那一个十怎么办?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "进一",
+                  "said": "对,进一个十到十位。\n那十位上,2 加 1,再加上进上来的 1,等于几?",
+                  "cards": [
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "四",
+                  "said": "对,十位是 4,所以 24 加 17 等于 41。\n再来一道,这次你自己算算看。\n36 加 25,等于多少?",
+                  "cards": [
+                    "text",
+                    "text"
+                  ]
+                },
+                {
+                  "kid": "个位六加五，十一，进一",
+                  "said": "对,个位 6 加 5 等于 11,进一。\n十位上呢?",
+                  "cards": [
+                    "text"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "孩子想停",
+          "pass": true,
+          "runs": [
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好的，今天先休息，下次想复习了再来找我。",
+                  "cards": []
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好的，那今天就到这里，休息去吧。",
+                  "cards": []
+                }
+              ]
+            },
+            {
+              "pass": true,
+              "error": null,
+              "checks": [
+                {
+                  "check": "收尾不问",
+                  "pass": true
+                },
+                {
+                  "check": "每节有讲稿",
+                  "pass": true
+                },
+                {
+                  "check": "不出画图卡",
+                  "pass": true
+                }
+              ],
+              "turns": [
+                {
+                  "kid": "复习",
+                  "said": "把今天要复习的内容拍给我看看。",
+                  "cards": [
+                    "photo"
+                  ]
+                },
+                {
+                  "kid": "今天不想学了,先到这里吧",
+                  "said": "好的,今天先休息,下次再一起复习。",
+                  "cards": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

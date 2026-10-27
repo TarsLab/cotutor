@@ -14,6 +14,7 @@
  * 差异是**现算的**:拿家长自己的 slug / name / port 生成一份出厂模板,和她这份逐项比,
  * 所以以后模板再加东西,这里不用跟着改。
  */
+import { workspaceGradePack } from './grades.ts';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CotutorConfigSchema, explainIssues } from '../schema/index.ts';
@@ -72,7 +73,7 @@ export function insertMissingFlags(mine: readonly string[], factory: readonly st
 }
 
 /** 出厂模板:拿这份配置自己的 slug / name / port 生成,免得差异里混进「孩子叫什么」这种无关项 */
-async function factoryConfig(raw: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function factoryConfig(raw: Record<string, unknown>, agentsDir?: string): Promise<Record<string, unknown>> {
   const kid = isObj(raw.kid) ? raw.kid : {};
   const server = isObj(raw.server) ? raw.server : {};
   return JSON.parse(
@@ -80,7 +81,7 @@ async function factoryConfig(raw: Record<string, unknown>): Promise<Record<strin
       slug: typeof kid.slug === 'string' ? kid.slug : 'kid',
       name: typeof kid.name === 'string' ? kid.name : undefined,
       port: typeof server.port === 'number' ? server.port : undefined,
-      tutors: await shippedAgents(),
+      tutors: await shippedAgents(agentsDir),
     }),
   ) as Record<string, unknown>;
 }
@@ -90,9 +91,9 @@ async function factoryConfig(raw: Record<string, unknown>): Promise<Record<strin
  * 注意:出厂老师是家长手动从 tutors 里删掉的(页面删不了出厂老师),这里也会当成缺,
  * 所以 `--dry-run` 先列、doctor 那条不是必需项。
  */
-export async function configGaps(raw: unknown): Promise<ConfigGap[]> {
+export async function configGaps(raw: unknown, agentsDir?: string): Promise<ConfigGap[]> {
   if (!isObj(raw)) return [];
-  const factory = await factoryConfig(raw);
+  const factory = await factoryConfig(raw, agentsDir);
   const gaps: ConfigGap[] = [];
 
   const mineTutors = isObj(raw.tutors) ? raw.tutors : {};
@@ -175,7 +176,7 @@ export async function upgradeConfig(root: string, opts: { dryRun?: boolean } = {
   const raw = readJson(file);
   if (raw === null) throw new ConfigError(file, '不存在:先 cotutor init <slug> 建 workspace');
   if (!isObj(raw)) throw new ConfigError(file, '顶层不是一个 JSON 对象');
-  const gaps = await configGaps(raw);
+  const gaps = await configGaps(raw, (await workspaceGradePack(root)).agentsDir);
   if (opts.dryRun || !gaps.length) return { file, gaps, applied: false, installed: [] };
 
   const merged = JSON.parse(JSON.stringify(raw)) as Record<string, unknown>;
@@ -199,7 +200,7 @@ export async function upgradeConfig(root: string, opts: { dryRun?: boolean } = {
 /** doctor 与家长端都要:读文件算差异;文件读不到 / 坏了就当没有差异(那边有别的检查在报) */
 export async function configGapsOf(root: string): Promise<ConfigGap[]> {
   try {
-    return await configGaps(JSON.parse(await readFile(join(root, CONFIG_FILE), 'utf8')));
+    return await configGaps(JSON.parse(await readFile(join(root, CONFIG_FILE), 'utf8')), (await workspaceGradePack(root)).agentsDir);
   } catch {
     return [];
   }

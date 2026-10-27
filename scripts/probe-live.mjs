@@ -198,7 +198,7 @@ async function ray() {
 
 // ---- script:看图说话 ----
 function activityHow() {
-  const body = readFileSync(join(repo, 'agents', 'chinese-tutor', 'activities', '看图说话.md'), 'utf8');
+  const body = readFileSync(join(repo, 'grades', 'grade-2', 'agents', 'chinese-tutor', 'activities', '看图说话.md'), 'utf8');
   const m = body.match(/## 老师怎么带\n([\s\S]*?)(?=\n## |\n收:)/);
   return (m ? m[1] : '').replace(/<!--[\s\S]*?-->/g, '').trim();
 }

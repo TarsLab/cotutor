@@ -1,5 +1,5 @@
 /**
- * 发布前的出厂检查:体检的是**要发的那份**(dist + agents/),不是仓库里直跑的 src。
+ * 发布前的出厂检查:体检的是**要发的那份**(dist + grades/),不是仓库里直跑的 src。
  * bin 在仓库内优先走 src,所以 dist 的坏掉在本地跑不出来;prepublishOnly 在 build 之后跑这个。
  * 跑法:pnpm build && node --experimental-strip-types scripts/smoke.ts
  */
@@ -36,11 +36,26 @@ try {
 }
 need(out.trim() === pkg.version, `dist 的 --version 报 ${JSON.stringify(out)},应是 ${pkg.version}`);
 
-// 3. 老师定义从 dist 出发要能找到,且随包发出去(init 靠它建链)
+// 3. 老师定义从 dist 出发要能找到,且随包发出去(init 靠它拷贝)
 const { PACKAGE_AGENTS_DIR } = await import(new URL('../dist/cli/skeleton.js', import.meta.url).href) as { PACKAGE_AGENTS_DIR: string };
-need(PACKAGE_AGENTS_DIR === join(root, 'agents/'), `dist 算出的 agents 目录是 ${PACKAGE_AGENTS_DIR}`);
+need(PACKAGE_AGENTS_DIR === join(root, 'grades', 'grade-2', 'agents'), `dist 算出的 agents 目录是 ${PACKAGE_AGENTS_DIR}`);
 const shipped = existsSync(PACKAGE_AGENTS_DIR) ? readdirSync(PACKAGE_AGENTS_DIR).filter((f) => f.endsWith('.md')) : [];
-need(shipped.length >= 4, `agents/ 里只有 ${shipped.length} 份老师定义`);
+need(shipped.length >= 3, `agents/ 里只有 ${shipped.length} 份老师定义`);
+// 每个声明的年级都要完整,所有 activity 与对话例子都必须可解析。
+const { gradePacks, PACKAGE_GRADES_DIR } = await import(new URL('../dist/cli/grades.js', import.meta.url).href) as typeof import('../src/cli/grades.ts');
+const { listActivities } = await import(new URL('../dist/cli/activities.js', import.meta.url).href) as typeof import('../src/cli/activities.ts');
+const { lintActivity } = await import(new URL('../dist/lib/activity.js', import.meta.url).href) as typeof import('../src/lib/activity.ts');
+const { parseExamples } = await import(new URL('../dist/lib/activity-eval.js', import.meta.url).href) as typeof import('../src/lib/activity-eval.ts');
+const packs = await gradePacks();
+const declared = readdirSync(PACKAGE_GRADES_DIR).filter((d) => /^grade-[1-6]$/.test(d));
+need(packs.length === declared.length && packs.length > 0, 'grades/ 有不完整的年级包(README、三位老师、activities 目录)');
+for (const pack of packs) {
+  for (const ref of await listActivities(pack.agentsDir, undefined, { examples: true })) {
+    const text = readFileSync(ref.file, 'utf8');
+    const issues = ref.name.endsWith('.例子') ? parseExamples(text).issues : lintActivity(text, { fileName: ref.name, tutorCards: [] }).issues;
+    need(issues.length === 0, `${ref.file}: ${issues.map((i) => i.text).join(';')}`);
+  }
+}
 need(existsSync(join(root, 'themes', 'default', 'theme.json')) && existsSync(join(root, 'themes', 'default', 'kid.css')), 'themes/default/ 不全(出厂主题:theme.json + kid.css)');
 need(['text', 'read', 'choice', 'image', 'tianzige', 'word', 'lecture', 'canvas', 'code', 'tutor'].every((k) => existsSync(join(root, 'cards', k, 'card.md')) && existsSync(join(root, 'cards', k, 'card.css'))), 'cards/<kind>/ 不全(每种卡的 card.md + card.css)');
 

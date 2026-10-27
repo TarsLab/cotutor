@@ -1,0 +1,63 @@
+{
+  "schema": "lesson-manifest",
+  "version": 2,
+  "steps": [
+    {
+      "step": 1,
+      "elementIds": [
+        "title",
+        "plate-0",
+        "plate-1",
+        "plate-2"
+      ],
+      "line": "6 个圆片,放进 3 个盘子,每盘要一样多。",
+      "pauseAfter": true,
+      "audioSrc": "audio/step-1.mp3",
+      "audioDurationMs": 6144
+    },
+    {
+      "step": 2,
+      "elementIds": [
+        "round-1-0",
+        "round-1-1",
+        "round-1-2"
+      ],
+      "line": "先给每个盘子放 1 个,一共放了 3 个。",
+      "pauseAfter": true,
+      "audioSrc": "audio/step-2.mp3",
+      "audioDurationMs": 4128
+    },
+    {
+      "step": 3,
+      "elementIds": [
+        "round-2-0",
+        "round-2-1",
+        "round-2-2"
+      ],
+      "line": "还剩 3 个,再给每盘放 1 个,正好放完。",
+      "pauseAfter": true,
+      "audioSrc": "audio/step-3.mp3",
+      "audioDurationMs": 4368
+    },
+    {
+      "step": 4,
+      "elementIds": [
+        "answer"
+      ],
+      "line": "数一数,每盘都是 2 个。每盘一样多,就是平均分。",
+      "pauseAfter": true,
+      "audioSrc": "audio/step-4.mp3",
+      "audioDurationMs": 5496
+    },
+    {
+      "step": 5,
+      "elementIds": [
+        "verify"
+      ],
+      "line": "再合起来数,2 加 2 加 2 是 6,一个也没少。",
+      "pauseAfter": true,
+      "audioSrc": "audio/step-5.mp3",
+      "audioDurationMs": 4776
+    }
+  ]
+}

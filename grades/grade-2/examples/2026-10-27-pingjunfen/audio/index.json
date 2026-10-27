@@ -1,0 +1,44 @@
+{
+  "schema": "drawtell-audio",
+  "version": 1,
+  "voice": "qwen-audio-3.0-tts-plus-longcanzhuyue",
+  "model": null,
+  "instruction": null,
+  "steps": [
+    {
+      "step": 1,
+      "file": "step-1.mp3",
+      "textHash": "42ec7d6953257ee4",
+      "characters": 36,
+      "durationMs": 6144
+    },
+    {
+      "step": 2,
+      "file": "step-2.mp3",
+      "textHash": "3a5c9b2f8c3d762a",
+      "characters": 34,
+      "durationMs": 4128
+    },
+    {
+      "step": 3,
+      "file": "step-3.mp3",
+      "textHash": "8f94180947c5428a",
+      "characters": 35,
+      "durationMs": 4368
+    },
+    {
+      "step": 4,
+      "file": "step-4.mp3",
+      "textHash": "6abe214c27ffed1f",
+      "characters": 43,
+      "durationMs": 5496
+    },
+    {
+      "step": 5,
+      "file": "step-5.mp3",
+      "textHash": "7f7cd0a9f58c7d04",
+      "characters": 39,
+      "durationMs": 4776
+    }
+  ]
+}

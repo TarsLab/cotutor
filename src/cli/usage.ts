@@ -1,6 +1,7 @@
 /** 命令用法(cotutor --help;技能 cotutor-analyze 的 references/命令与文件.md 从这里取分析用的那几行,所以放单独文件,别的模块 import 不会跑到 CLI) */
 export const USAGE = `用法:
-  cotutor init <slug> [--dir <path>] [--name <孩子名>] [--port <n>] [--proxy <地址> | --no-proxy]   建 ~/cotutor/<slug>/ 骨架(幂等补缺);本机有代理、还没选过就问老师走不走它
+  cotutor init <slug> [--dir <path>] [--name <孩子名>] [--grade <1-6>] [--port <n>] [--proxy <地址> | --no-proxy]   建 ~/cotutor/<slug>/ 骨架(幂等补缺;默认二年级教学包);本机有代理、还没选过就问老师走不走它
+  cotutor grades [--json]                                          列出本包可安装的年级教学包
   cotutor proxy [on | off | <地址>] [--workspace <dir>] [--json]       老师进程(claude)走不走代理:写 cotutor.json 的 proxy,起 claude 时注进 HTTP(S)_PROXY(不靠 serve 从哪个终端起);不给参数看现状
   cotutor doctor [--workspace <dir>] [--json] [--live]                 逐项体检;--live 真起一次老师与配音(花一分钱)把 API 层的坑摆出来
   cotutor upgrade [--workspace <dir>] [--force <老师>]...                老师文件、activity 与 skill 换新版:没改过的直接换,改过的只报 diff(--force <老师> 或 --force <老师>/<名> 才覆盖,原文留 .bak)

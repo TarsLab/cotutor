@@ -1,7 +1,7 @@
 /**
  * workspace骨架清单:init 建、doctor 查,同一张清单(两边各写一遍必然漂移)。
  * 布局见《cotutor-agent层设计.md》§2:
- *   cotutor.json / .claude/agents(老师文件,拷自本包 agents/,是家长的;所有 CLI 都从这里拿老师正文)/ .cotutor/shipped.json(出厂 hash)
+ *   cotutor.json / .claude/agents(老师文件,拷自本包 grades/grade-<n>/agents/,是家长的;所有 CLI 都从这里拿老师正文)/ .cotutor/shipped.json(出厂 hash)
  *   agents/<name>/(老师的家 = 会话 cwd)/ ledger/(产物账本)/ conversations/(对话索引与转录)
  * vault 侧(《obsidian仓库设计.md》):档案 / 课程表 / 日记 / 教材 / 计划 / 参考,init 只建档案与参考 README(缺了才写)
  */
@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { CONFIG_SCHEMA_FILE, DICTATION_DEFAULT, TTS_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../schema/index.ts';
 import { factoryRuntimes } from '../clis/index.ts';
+import { DEFAULT_GRADE, PACKAGE_GRADES_DIR } from './grades.ts';
 
 import { mkdir, writeFile } from 'node:fs/promises';
 
@@ -19,8 +20,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', 'bundles'] as const;
 export const LEDGER_FILES = ['ledger/artifacts.jsonl'] as const;
 
-/** 本包自带的老师文件目录(仓库检出与 npm 安装都在包根 agents/) */
-export const PACKAGE_AGENTS_DIR = fileURLToPath(new URL('../../agents/', import.meta.url));
+/** 默认年级的出厂老师目录;workspace 的操作用 workspaceGradePack 选来源 */
+export const PACKAGE_AGENTS_DIR = join(PACKAGE_GRADES_DIR, `grade-${DEFAULT_GRADE}`, 'agents');
 /** 本包版本(出厂件的 hash 记录带它,升级时知道基于哪版) */
 export const PACKAGE_VERSION = (JSON.parse(readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8')) as { version: string }).version;
 
@@ -147,8 +148,8 @@ const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar
   // 画图卡(paint)不在这里:只在「你说我画」activity 的话题里有(agents/chinese-tutor/activities/你说我画.md 头上的 cards,《activity设计.md》拍板 11)
   // 语文老师走 qwen(2026-10-12 Jack 拍板:以后语文老师都用 qwen;你说我画、看图说话两套 activity eval 在 qwen3.8-max 上真跑过)
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚', runtime: 'qwen', cards: ['text', 'read', 'choice', 'image', 'tianzige', 'lecture', 'canvas'] },
-  // 英语老师走 qwen3.8-flash(2026-10-13 Jack 拍板:Token Plan 上扣 Credits,比 claude 便宜;真跑三问 2.5–4 秒开口)
-  'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤', runtime: 'qwen-flash', cards: ['text', 'read', 'choice', 'image', 'word', 'lecture'] },
+  // 英语仍走 qwen3.8-flash;2026-10-27 新 activity 真跑:low 偶尔只出卡或念规则,medium 补齐讲稿(详见年级教学包验证记录)。
+  'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤', runtime: 'qwen-flash', cards: ['text', 'read', 'choice', 'image', 'word', 'lecture'], policy: { effort: 'medium' } },
 };
 
 /** cotutor.json 模板:只在文件不存在时写入;政策文件永不自动重建或覆盖(家长的决定不由机器替她拍板)。 */

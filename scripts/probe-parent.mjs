@@ -62,7 +62,7 @@ try {
   const ev = (who) => `[...document.querySelectorAll('#ptl .pev')].find((e) => e.querySelector('.pv-who')?.textContent.endsWith('${who}') && e.querySelector('.bt-new'))`;
   const list = await evaluate(`(() => ({ title: document.title, date: document.querySelector('#pweek .dy.on small')?.textContent, days: document.querySelectorAll('#pweek .dy').length, dots: document.querySelectorAll('#pweek .dy.on .wd i').length,
     evs: [...document.querySelectorAll('#ptl .pev')].map((e) => ({ who: e.querySelector('.pv-who').lastChild.textContent, at: e.querySelector('.pv-tm').textContent, look: e.querySelector('.kid .bt').className, btx: e.querySelector('.kid .btx')?.textContent, pf: e.querySelector('.pf').textContent })),
-    ink: document.querySelectorAll('#ptl .bt-x-dictation .dg i svg path').length, kidCss: getComputedStyle(document.querySelector('#ptl .bt-new')).borderRadius, day: document.querySelector('#pday')?.textContent, more: document.querySelector('#more-btn').hidden }))()`);
+    ink: document.querySelectorAll('#ptl .bt-x-dictation .dg i svg path').length, kidCss: getComputedStyle(document.querySelector('#ptl .bt-new')).borderRadius, day: document.querySelector('#pday')?.textContent, more: !document.querySelector('#more-btn') }))()`);
   const sorted = list.evs.every((e, i, a) => !i || a[i - 1].at.slice(0, 5) >= e.at.slice(0, 5));
   ok('时间线:标题带「家长」;七天日期条停在今天;语文、数学两个新话题 + 一次听写,最新的在上;新话题是孩子端的气泡(.bt-new,同一份样式),行尾「停下等孩子」', list.title.endsWith('· 家长') && list.date === '今天' && list.days === 7 && list.dots > 0 && list.evs.length === 3 && sorted && list.evs.filter((e) => e.look.includes('bt-new') && e.btx === '新话题' && e.pf.includes('停下等孩子')).length === 2 && list.evs.some((e) => e.look.includes('bt-x-dictation')) && list.kidCss === '24px', JSON.stringify(list.evs));
   ok('听写的格子里画着孩子写的', list.ink >= 1, String(list.ink));
@@ -71,9 +71,9 @@ try {
 
   // ---- 点一件就是录像,停在最后一帧 ----
   await evaluate(`${ev('语文老师')}.querySelector('.kid').click()`);
-  for (let i = 0; i < 40; i++) { if (await evaluate(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').contentDocument?.querySelectorAll('#board .sec').length ?? 0) > 0`)) break; await sleep(250); }
+  for (let i = 0; i < 40; i++) { if (await evaluate(`!document.querySelector('#rl').hidden && !document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').contentDocument?.querySelectorAll('#board .sec').length ?? 0) > 0`)) break; await sleep(250); }
   await sleep(500);
-  const rl = await evaluate(`({ src: document.querySelector('#rl-frame').getAttribute('src'), v: Number(document.querySelector('#rl-seek').value), max: Number(document.querySelector('#rl-seek').max), play: document.querySelector('#rl-play').getAttribute('aria-label'), log: document.querySelector('#rl-log').hidden, board: getComputedStyle(document.querySelector('#wrap')).display, notes: document.querySelectorAll('.notes').length })`);
+  const rl = await evaluate(`({ src: document.querySelector('#rl-frame').getAttribute('src'), v: Number(document.querySelector('#rl-seek').value), max: Number(document.querySelector('#rl-seek').max), play: document.querySelector('#rl-play').getAttribute('aria-label'), log: document.querySelector('#rl-log').hidden, board: document.querySelector('#board') ? 'shown' : 'none', notes: document.querySelectorAll('.notes').length })`);
   ok('点一件:直接是录像,停在最后一帧不放;经过收着;家长页上没有板书与旁注', rl.src.includes('end=1') && rl.max > 0 && rl.v >= rl.max - 100 && rl.play === '播放' && rl.log && rl.board === 'none' && rl.notes === 0, JSON.stringify(rl));
   await evaluate(`document.querySelector('#rl-more').click()`);
   await sleep(300);
@@ -91,7 +91,7 @@ try {
   await key('?', 'Slash');
   const kz = await evaluate(`!document.querySelector('#rl-keys').hidden && document.querySelector('#rl-keys').textContent.includes('上一章,落在那一章讲完')`);
   await key('Escape', 'Escape');
-  ok('快捷键:? 打开那张表,Esc 关上(还在录像里)', kz && await evaluate(`document.querySelector('#rl-keys').hidden && document.body.classList.contains('reel')`));
+  ok('快捷键:? 打开那张表,Esc 关上(还在录像里)', kz && await evaluate(`document.querySelector('#rl-keys').hidden && !document.querySelector('#rl').hidden`));
   await key(' ', 'Space');
   const sp1 = await evaluate(`document.querySelector('#rl-play').getAttribute('aria-label')`);
   await key(' ', 'Space');
@@ -108,8 +108,8 @@ try {
   await sleep(300);
   ok('下一章:落在这一章讲完 = 末尾', await evaluate(`Number(document.querySelector('#rl-seek').value) >= Number(document.querySelector('#rl-seek').max) - 100`));
   await key('Escape', 'Escape');
-  for (let i = 0; i < 20; i++) { if (await evaluate(`!document.querySelector('#tutor').classList.contains('on')`)) break; await sleep(250); }
-  ok('退出:Esc 回到记录,深底去掉', await evaluate(`!document.body.classList.contains('reel') && document.querySelectorAll('#ptl .pev').length > 0 && !document.documentElement.classList.contains('rl-dark')`));
+  for (let i = 0; i < 20; i++) { if (await evaluate(`document.querySelector('#rl').hidden`)) break; await sleep(250); }
+  ok('退出:Esc 回到记录,深底去掉', await evaluate(`document.querySelector('#rl').hidden && document.querySelectorAll('#ptl .pev').length > 0 && !document.documentElement.classList.contains('rl-dark')`));
 
   // ---- 宽屏:时间线与「这一天」并排,卡上有的右栏不重复 ----
   await sleep(400);
@@ -143,8 +143,8 @@ try {
   // ---- 直接开某个话题的录像(重载回来靠它) ----
   const ov = await (await fetch(`${base}/api/overview/today`)).json();
   const th = ov.tutors.find((t) => t.name === 'chinese-tutor')?.threads[0]?.thread;
-  await open(`${base}/parent?tutor=chinese-tutor&thread=${th}`, `document.body.classList.contains('reel') && !document.querySelector('#reel').hidden`);
-  ok('?tutor=&thread= 直接开那个话题的录像', await evaluate(`document.body.classList.contains('reel') && (document.querySelector('#rl-frame').getAttribute('src') || '').includes('thread=${th}')`), String(th));
+  await open(`${base}/parent?tutor=chinese-tutor&thread=${th}`, `!document.querySelector('#rl').hidden && !document.querySelector('#reel').hidden`);
+  ok('?tutor=&thread= 直接开那个话题的录像', await evaluate(`!document.querySelector('#rl').hidden && (document.querySelector('#rl-frame').getAttribute('src') || '').includes('thread=${th}')`), String(th));
 
   // ---- 护栏:孩子端没有旁注、没有答案 ----
   await open(`${base}/?tutor=chinese-tutor`, `document.querySelectorAll('#board .sec').length > 0`);

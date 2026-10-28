@@ -236,7 +236,7 @@ try {
   const MATH_EV = `[...document.querySelectorAll('.pev')].find((p) => (p.querySelector('.pv-who')?.textContent ?? '').includes('数学'))?.querySelector('.kid')`;
   await until(`Boolean(${MATH_EV})`, 40);
   await evaluate(`${MATH_EV}.click()`);
-  await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`, 40);
+  await until(`!document.querySelector('#rl').hidden && !document.querySelector('#rl-screen').hidden`, 40);
   // 孩子的屏幕(#rl-frame 里的录像页)装好了再拖进度条,没装好时拖的会丢
   await until(`Boolean(document.querySelector('#rl-frame').contentWindow.cotutorReel)`, 40);
   // 记录点进来停在最后一帧;这里要从头看,拖回开头
@@ -244,7 +244,7 @@ try {
   // 录像里孩子的屏幕在 iframe(#rl-frame)里,小课堂的播放器在它里面的 #lc-frame
   const KF = `document.querySelector('#rl-frame').contentDocument.querySelector('#lc-frame')`;
   const KD = `${KF}?.contentDocument`;
-  const reelOn = await until(`document.body.classList.contains('reel') && Boolean(document.querySelector('#rl-frame').contentDocument) && !${KF}?.hidden && Boolean(${KD}?.querySelector('.lc .lc-svg'))`, 80);
+  const reelOn = await until(`!document.querySelector('#rl').hidden && Boolean(document.querySelector('#rl-frame').contentDocument) && !${KF}?.hidden && Boolean(${KD}?.querySelector('.lc .lc-svg'))`, 80);
   const r0 = await evaluate(`({ kinds: [...document.querySelectorAll('#rl-marks i')].map((i) => i.className).join(' '), sub: document.querySelector('#rl-cap').textContent, back: Boolean(${KD}.querySelector('.lc-back')), start: Boolean(${KD}.querySelector('.lc-start')), h: Math.round(${KF}.getBoundingClientRect().height) })`);
   ok('录像从看小课堂开始:进度条上「看小课堂」「画了一处」的点;孩子的屏幕上铺着播放器、只看(没有回去、没有开始看);录像栏写在看小课堂', reelOn && r0.kinds.startsWith('lecture') && r0.kinds.includes('ink') && !r0.back && !r0.start && r0.h > 500 && /^[▷⏸] /.test(r0.sub), JSON.stringify(r0));
   await shot('reel-lecture.png');

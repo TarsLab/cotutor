@@ -163,7 +163,7 @@ try {
   const MATH_EV = `[...document.querySelectorAll('.pev')].find((p) => (p.querySelector('.pv-who')?.textContent ?? '').includes('数学'))?.querySelector('.kid')`;
   await until(`Boolean(${MATH_EV})`, 40);
   await evaluate(`${MATH_EV}.click()`);
-  await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`, 40);
+  await until(`!document.querySelector('#rl').hidden && !document.querySelector('#rl-screen').hidden`, 40);
   // 孩子的屏幕(#rl-frame 里的录像页)装好了再动(没装好时拖进度条会丢);小课堂的播放器在它里面的 #lc-frame
   await until(`Boolean(document.querySelector('#rl-frame').contentWindow.cotutorReel)`, 40);
   const KF = `document.querySelector('#rl-frame').contentDocument.querySelector('#lc-frame')`;

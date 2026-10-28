@@ -37,6 +37,6 @@ for (const p of KID) {
 // 首页去听写、口语课的入口是同站链接(点了由 KID_NAV_JS 换成替换当前页)
 const kid = await html('/');
 check('首页的听写、口语课入口是以 / 开头的同站链接', kid.includes("href: '/dictation?") && kid.includes("href: '/talk?"));
-check('家长端、录像、预览不走孩子端的跳转(老师页里那段有条件)', kid.includes('if (!PARENT && !REEL && !PREVIEW) {'));
+check('录像、预览不走孩子端的跳转(老师页里那段有条件;家长端是自己的一页,不带它)', kid.includes('if (!REEL && !PREVIEW) {') && !(await html('/parent')).includes('kidGo'));
 
 done();

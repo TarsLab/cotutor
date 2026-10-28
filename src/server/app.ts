@@ -35,6 +35,7 @@ import { DEVICE_COOKIE } from '../lib/kid-device.ts';
 import { BUILD, codeChanged, headNow, shortCommit } from './build.ts';
 import { qrPage, type ListenInfo } from './qr-page.ts';
 import { kidPage } from './kid-page.ts';
+import { parentPage } from './parent-page.ts';
 import { kidHomeView, messageVia, resolveVia } from './home.ts';
 import { talkRun } from './talk-run.ts';
 import { DEV_PAGE } from './dev-page.ts';
@@ -1285,7 +1286,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (fav) return { status: 200, ...fav, cacheControl: 'no-cache' };
     if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title), {}, await stageVersion()) };
     // 家长端:也是孩子端页面本身,数据走家长接口(答案在、家长的话在),卡锁着;自己的清单,加到主屏幕才不会拿到孩子端那份
-    if (p === '/parent') return { status: 200, html: kidPage(esc(ws.config.title), { parent: true }, await stageVersion()) };
+    if (p === '/parent') return { status: 200, html: parentPage(esc(ws.config.title)) };
     // 家长端「首页」(设孩子的首页与几项常改的设置)
     if (p === '/parent/home') return { status: 200, html: PARENT_HOME_PAGE };
     // 录像里孩子的屏幕:家长端录像时开在 iframe 里;直接打开也能看(调试),?tutor=&date=&thread=[&at=时:分:秒]

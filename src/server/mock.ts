@@ -78,6 +78,7 @@ import { kidThreads, type KidMessage } from '../lib/kid-view.ts';
 import { ICON_SIZES, appIconPng, webManifest } from '../lib/icon.ts';
 import { faviconResponse } from '../lib/favicon.ts';
 import { kidPage } from './kid-page.ts';
+import { parentPage } from './parent-page.ts';
 import { arrangeHome, homeOwners, kidButtons, parseHome } from '../lib/home.ts';
 import type { TutorButton } from '../cards/index.ts';
 import { packageTheme } from '../cli/themes.ts';
@@ -693,8 +694,8 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p === '/dev/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
-    // 家长端:同一个页面,家长模式;清单与一天的板书(答案不剥,第一节带一条给家长的尾巴与记忆,看旁注的样子)。mock 没有工作台 /dev
-    if (p === '/parent') return { status: 200, html: kidPage(title, { parent: true, synth: true }, await stageVersion()) };
+    // 家长端「记录」:自己的一页(parent-page.ts);清单接口照真服务(答案不剥,第一节带一条给家长的尾巴与记忆)。mock 没有工作台 /dev
+    if (p === '/parent') return { status: 200, html: parentPage(title) };
     if (p === '/reel') return { status: 200, html: kidPage(title, { reel: true, synth: true }, await stageVersion()) };
     if (p === '/preview') return { status: 200, html: kidPage(title, { preview: true, synth: true }, await stageVersion()) };
     if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };

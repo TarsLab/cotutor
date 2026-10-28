@@ -134,8 +134,8 @@ const html = async (p: string): Promise<string> => {
   const r = await route('GET', p, ctx);
   return r.status === 200 && typeof r.html === 'string' ? r.html : '';
 };
-/** 带孩子端页面那份的:孩子自己开的、家长端与录像里开的同一份页面 */
-const PAGES = [['/', 'kid'], ['/parent', 'kid'], ['/reel', 'kid'], ['/preview', 'kid'], ['/dictation', 'dictation'], ['/dictation?lang=en', 'dictation-en'], ['/talk', 'talk']];
+/** 带孩子端页面那份的:孩子自己开的、录像与预览里开的同一份页面;家长端「记录」是自己的一页,只记出错 */
+const PAGES = [['/', 'kid'], ['/parent', 'parent'], ['/reel', 'kid'], ['/preview', 'kid'], ['/dictation', 'dictation'], ['/dictation?lang=en', 'dictation-en'], ['/talk', 'talk']];
 for (const [p, page] of PAGES) {
   const h = await html(p);
   check(`${p} 带 KID_LOG_JS、报的是 ${page}`, h.includes(KID_LOG_JS.trim()) && h.includes(`kidLog.start({ page: '${page}'`), String(h.length));
@@ -143,7 +143,7 @@ for (const [p, page] of PAGES) {
 const stage = await html('/stage/');
 if (stage) check('/stage/ 带 KID_LOG_JS,只记出错', stage.includes(KID_LOG_JS.trim()) && stage.includes("kidLog.start({ page: 'stage', mode: 'stage'"));
 else console.log('  (舞台没打包,跳过 /stage/)');
-check('老师页按模式报:家长端、录像、预览不是 kid', (await html('/')).includes("mode: PARENT ? 'parent' : REEL ? 'reel' : PREVIEW ? 'preview' : 'kid'"));
+check('老师页按模式报:录像、预览不是 kid;家长端报 parent(不报打开、不登记设备)', (await html('/')).includes("mode: REEL ? 'reel' : PREVIEW ? 'preview' : 'kid'") && (await html('/parent')).includes("kidLog.start({ page: 'parent', mode: 'parent'"));
 
 // ---- 接口 ----
 const IPAD = 'Mozilla/5.0 (iPad; CPU OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Mobile/15E148 Safari/604.1';

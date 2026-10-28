@@ -197,14 +197,15 @@ interface Day { messages: Msg[]; pending: string | null }
     try { new Function(pv.slice(pv.indexOf('<script>') + 8, pv.lastIndexOf('</script>'))); } catch (e) { ok = false; console.error(String(e)); }
     check('预览 /preview:孩子端页面带预览标记、内联脚本能解析、没有家长端的路径', pv.includes('const MODE = {"preview":true') && ok && !pv.includes('/parent'));
   }
-  check('家长端 /parent:带家长标记、自己的 manifest、内联脚本能解析', page.includes('const MODE = {"parent":true,"synth":true,"links":') && page.includes('/parent/manifest.webmanifest') && parses && ((await get('/parent/manifest.webmanifest')).json as { start_url: string }).start_url === '/parent');
+  check('家长端 /parent:自己的一页(不是孩子端页面)、自己的 manifest、内联脚本能解析', page.includes('id="ptl"') && !page.includes('const MODE') && page.includes('/parent/manifest.webmanifest') && parses && ((await get('/parent/manifest.webmanifest')).json as { start_url: string }).start_url === '/parent');
   type PMsg = Msg & { from: string; parentText?: string; remembered?: string[] };
   const pb = (await get('/api/conversations/chinese-tutor/today/board')).json as { messages: PMsg[] };
   const ch = pb.messages[0].section!.cards.find((c) => c.kind === 'choice');
   check('板书接口:答案不剥、from、第一节带给家长的尾巴与记忆', pb.messages.length === 1 && pb.messages[0].from === 'kid' && Array.isArray(ch?.props.answer) && pb.messages[0].parentText?.startsWith('## 家长') === true && pb.messages[0].remembered?.length === 1, JSON.stringify(pb.messages[0].parentText));
   check('孩子接口照旧剥答案', !('answer' in ((await get('/api/kid/conversations/chinese-tutor/today')).json as Day).messages[0].section!.cards.find((c) => c.kind === 'choice')!.props));
-  // 看录像:页面内联了录像的纯函数、有入口与控制条;mock 按固定节奏排时刻
-  check('家长端:内联了录像(buildReel / reelFrameAt / reelClock)、底部有录像栏;没有板书页的「看录像」钮与旁注', page.includes('function reelFrameAt(') && page.includes('function reelClock(') && !page.includes('id="reel-btn"') && !page.includes('syncNotes') && page.includes('id="rl-seek"') && page.includes("end: '1'") && !/^import /m.test(js));
+  // 看录像:录像的纯函数内联在孩子的屏幕(/reel,孩子端页面)里;家长页只开 iframe、放录像栏;mock 按固定节奏排时刻
+  const reelPage = (await get('/reel')).html ?? '';
+  check('家长端:底部有录像栏、开 /reel 停在最后一帧,录像引擎(reelFrameAt / reelClock)在孩子的屏幕里不在家长页;没有板书页的「看录像」钮与旁注', reelPage.includes('function reelFrameAt(') && reelPage.includes('function reelClock(') && !page.includes('function reelFrameAt(') && !page.includes('id="reel-btn"') && !page.includes('syncNotes') && page.includes('id="rl-seek"') && page.includes("end: '1'") && !/^import /m.test(js));
   const rl = await get(`/api/conversations/chinese-tutor/today/threads/${(pb.messages[0] as PMsg & { thread: string }).thread}/reel`);
   const rj = rl.json as { reel: { tracks: unknown[]; says: unknown[]; marks: { kind: string }[]; startAt: number; endAt: number }; messages: unknown[] };
   check('mock 的录像:一节(不是实时的轮写完就铺上、不念)、有开口的点、条目一条', rl.status === 200 && rj.reel.tracks.length === 1 && rj.reel.says.length === 0 && rj.reel.marks[0].kind === 'said' && rj.messages.length === 1 && rj.reel.endAt > rj.reel.startAt, JSON.stringify(rj.reel.marks));

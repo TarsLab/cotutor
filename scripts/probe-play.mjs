@@ -81,7 +81,7 @@ try {
   // 清单是一天的时间线:每个话题一条 .pev,上面的 .kid 按钮开录像;mock 今天只有语文老师聊过
   await until(`document.querySelectorAll('.pev .kid').length > 0`);
   await evaluate(`document.querySelector('.pev .kid').click()`);
-  await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`);
+  await until(`!document.querySelector('#rl').hidden && !document.querySelector('#rl-screen').hidden`);
   await sleep(800);
   await evaluate(`window.dispatchEvent(new Event('pagehide'))`);
   await sleep(300);

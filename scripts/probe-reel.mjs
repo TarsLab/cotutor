@@ -70,7 +70,7 @@ try {
   await until(`Boolean(${ZH_EV})`);
   // ---- 记录里点话题:就是录像,停在最后一帧 ----
   await evaluate(`${ZH_EV}.click()`);
-  await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`);
+  await until(`!document.querySelector('#rl').hidden && !document.querySelector('#rl-screen').hidden`);
   await until(`Boolean(document.querySelector('#rl-frame').contentWindow.cotutorReel)`, 40);
   await until(`(() => { const d = document.querySelector('#rl-frame').contentDocument; return !!d && d.querySelectorAll('#board .sec').length === 2; })()`, 40);
   await sleep(400);
@@ -99,8 +99,8 @@ try {
   // 回到开头,下面照旧从头放
   await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); document.querySelector('#rl-play').click(); })()`);
   await sleep(300);
-  const s0 = await evaluate(`({ board: getComputedStyle(document.querySelector('#wrap')).display, screen: !document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), fw: document.querySelector('#rl-frame').style.width, scale: document.querySelector('#rl-frame').style.transform, max: Number(document.querySelector('#rl-seek').max), marks: [...document.querySelectorAll('#rl-marks i')].map((i) => i.className), cap: document.querySelector('#rl-cap').textContent, clock: document.querySelector('#rl-clock').textContent, sub: document.querySelector('#rl-sub').textContent, fill: (() => { const a = document.querySelector('#rl-screen').getBoundingClientRect(), b = document.querySelector('#rl-frame').getBoundingClientRect(); return Math.abs(a.width - b.width) < 2 || Math.abs(a.height - b.height) < 2; })() })`);
-  ok('进录像:家长页的老师页收起来,上半是孩子的屏幕(/reel,按 iPad 横屏 1180 宽开、等比缩到铺满),下半录像栏;时间是「放到哪 / 一共多久」、下面小字当时几点', s0.board === 'none' && s0.screen && s0.src.startsWith('/reel?') && s0.fw === '1180px' && /scale\(0\.\d+\)/.test(s0.scale) && /^\d+:\d\d \/ \d+:\d\d$/.test(s0.clock) && /^当时 \d\d:\d\d:\d\d$/.test(s0.sub) && s0.fill, JSON.stringify(s0));
+  const s0 = await evaluate(`({ board: document.querySelector('#board') ? 'shown' : 'none', screen: !document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), fw: document.querySelector('#rl-frame').style.width, scale: document.querySelector('#rl-frame').style.transform, max: Number(document.querySelector('#rl-seek').max), marks: [...document.querySelectorAll('#rl-marks i')].map((i) => i.className), cap: document.querySelector('#rl-cap').textContent, clock: document.querySelector('#rl-clock').textContent, sub: document.querySelector('#rl-sub').textContent, fill: (() => { const a = document.querySelector('#rl-screen').getBoundingClientRect(), b = document.querySelector('#rl-frame').getBoundingClientRect(); return Math.abs(a.width - b.width) < 2 || Math.abs(a.height - b.height) < 2; })() })`);
+  ok('进录像:整页盖一层(家长页上没有板书),上半是孩子的屏幕(/reel,按 iPad 横屏 1180 宽开、等比缩到铺满),下半录像栏;时间是「放到哪 / 一共多久」、下面小字当时几点', s0.board === 'none' && s0.screen && s0.src.startsWith('/reel?') && s0.fw === '1180px' && /scale\(0\.\d+\)/.test(s0.scale) && /^\d+:\d\d \/ \d+:\d\d$/.test(s0.clock) && /^当时 \d\d:\d\d:\d\d$/.test(s0.sub) && s0.fill, JSON.stringify(s0));
   ok('进度条上的点:两次开口、停下等孩子', s0.marks.filter((c) => c === 'said').length === 2 && s0.marks.includes('ask') && s0.max > 0, JSON.stringify(s0.marks));
   const k0 = await kid(`({ rlk: document.body.classList.contains('rlk'), pill: !document.querySelector('#pill').hidden, bar: getComputedStyle(document.querySelector('#bar')).pointerEvents, secs: document.querySelectorAll('#board .sec').length, pend: document.querySelectorAll('#board > .sh.said.pend').length, wait: document.querySelectorAll('#board > .wait-card').length, notes: document.querySelectorAll('.notes').length, reelUi: !document.querySelector('#reel').hidden, mo: document.querySelector('#c-mo').hidden, back: document.querySelector('#back-today').hidden })`);
   ok('孩子的屏幕:孩子端的样子——输入条露着(点不动)、没有旁注、没有录像栏、没有「以前的」「回到今天」', k0.rlk && k0.pill && k0.bar === 'none' && k0.notes === 0 && !k0.reelUi && k0.mo && k0.back, JSON.stringify(k0));
@@ -167,11 +167,11 @@ try {
   // ---- 录像里的弹窗(实录):注入的实录——第一节念完 0.5 秒后打开选择题的弹窗,4 秒选 B、6 秒改 A、8 秒关上。关掉「跳过空白」按真实时间逐个时刻拖 ----
   await device(1180, 820, 1, false);
   await evaluate(`document.querySelector('#rl-x').click()`);
-  await until(`!document.body.classList.contains('reel') && !document.querySelector('#tutor').classList.contains('on')`);
+  await until(`document.querySelector('#rl').hidden`);
   await evaluate(`window.__patchStage = true`);
   await until(`Boolean(${ZH_EV})`);
   await evaluate(`${ZH_EV}.click()`);
-  await until(`document.body.classList.contains('reel') && window.__X !== undefined && !document.querySelector('#rl-screen').hidden`);
+  await until(`!document.querySelector('#rl').hidden && window.__X !== undefined && !document.querySelector('#rl-screen').hidden`);
   await evaluate(`document.querySelector('#rl-play').click()`);
   await evaluate(`document.querySelector('#rl-skip').click()`);
   const X = await evaluate(`window.__X`);
@@ -192,8 +192,8 @@ try {
 
   // ---- 退出 ----
   await evaluate(`document.querySelector('#rl-x').click()`);
-  await until(`!document.body.classList.contains('reel') && !document.querySelector('#tutor').classList.contains('on')`);
-  const s5 = await evaluate(`({ reel: document.body.classList.contains('reel'), screen: document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), rows: document.querySelectorAll('.pev').length })`);
+  await until(`document.querySelector('#rl').hidden`);
+  const s5 = await evaluate(`({ reel: !document.querySelector('#rl').hidden, screen: document.querySelector('#rl-screen').hidden, src: document.querySelector('#rl-frame').getAttribute('src'), rows: document.querySelectorAll('.pev').length })`);
   ok('退出:孩子的屏幕撤了,回到记录清单', !s5.reel && s5.screen && s5.src === 'about:blank' && s5.rows > 0, JSON.stringify(s5));
   ok('页面没抛异常', errors.length === 0, errors.join(' | '));
   console.log(bad ? `${bad} 项没过` : '全过');

@@ -476,23 +476,7 @@ export function lectureReady(card: BoardCard): boolean {
   return card.kind === 'lecture' && p.ready === true && typeof p.start === 'number' && typeof p.end === 'number' && p.end > p.start;
 }
 
-export type StagePhase = 'drawing' | 'paused' | 'done';
-
-/** 舞台里小课堂那一段在放时的字幕行:讲稿句是课里的,右侧按钮映射到播放器(drawing → 暂停;paused → 播放;done → 没钮) */
-export function stageSubtitle(phase: StagePhase, line: string): SubtitleView {
-  switch (phase) {
-    case 'drawing':
-      return { text: line, kind: 'line', right: 'pause' };
-    case 'paused':
-      return { text: line, kind: 'line', right: 'play' };
-    case 'done':
-      return { text: line, kind: 'line', right: 'none' };
-    default:
-      return { text: '', kind: 'empty', right: 'none' };
-  }
-}
-
-/** 点读第 k 段(0 起)的配音文件(相对 conversations/<老师>/);没生成好 → null(孩子端等它到,mock 退浏览器合成声) */
+/** 点读第 k 段(0 起)的配音文件(相对 conversations/<老师>/);没生成好 → null(孩子端等它到,等不到不出声) */
 export function segmentAudio(card: BoardCard, k: number): string | null {
   const want = `/${k + 1}.mp3`;
   return (card.assets || []).find((a) => a.endsWith(want)) ?? null;
@@ -731,43 +715,6 @@ export function playerAtEnd(sections: readonly BoardSection[]): PlayerState {
 export function lineTarget(line: BoardLine): number | null {
   if (line.marks.length) return line.marks[line.marks.length - 1].card;
   return line.anchor;
-}
-
-export interface SubtitleInput {
-  state: PlayerState;
-  sections: readonly BoardSection[];
-  pending: boolean;
-  /** 孩子发出后等了多久(毫秒):第一拍前等久了换一句 */
-  waitedMs: number;
-}
-
-export interface SubtitleView {
-  text: string;
-  /** wait = 第一拍前;gap = 拍与拍之间(留着刚念那句,变暗加点) */
-  kind: 'line' | 'wait' | 'gap' | 'empty';
-  /** 右边的钮只剩舞台里小课堂那一段的暂停 / 播放(stageSubtitle);别的时候没有 */
-  right: 'pause' | 'play' | 'none';
-}
-
-/** 第一拍前等过这么久,字幕从「我写给你看」换成「再等我一下下」 */
-export const WAIT_LONG_MS = 8000;
-
-/** 字幕行:等老师 > 当前句 */
-export function subtitleFor(i: SubtitleInput): SubtitleView {
-  const line = i.sections[i.state.section]?.lines[i.state.line];
-  const text = line ? plainLine(line.text) : '';
-  // 老师还在写:正在播已就绪的句子就照常出字幕;这节念过几句了就留着刚念那句等下一拍;一句还没念(第一拍前)才出等的话
-  if (i.state.status === 'thinking' && text) return { text, kind: 'gap', right: 'none' };
-  if (i.state.status === 'thinking' || (i.pending && i.state.status !== 'playing')) return { text: i.waitedMs < WAIT_LONG_MS ? '我写给你看' : '再等我一下下', kind: 'wait', right: 'none' };
-  switch (i.state.status) {
-    case 'playing':
-    case 'waiting':
-      return { text, kind: 'line', right: 'none' };
-    case 'done':
-      return { text, kind: text ? 'line' : 'empty', right: 'none' };
-    default:
-      return { text: '', kind: 'empty', right: 'none' };
-  }
 }
 
 // ---- 板上的节(2026-10-22 起只剩这些):老师开始写、又就绪一拍、写完、出错撤掉、整节到了;页面的 reset(换老师)、halt(停卡的声音)。

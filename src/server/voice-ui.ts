@@ -1,7 +1,7 @@
 /**
  * 实时老师页那颗「头像 + 按住说话」按钮的画法,动画只写这一处。
  * 页面只做两件事:把状态凑好交给 src/lib/voice-view.ts 的 voiceView,拿到样子交给这里的按钮(set);把音量喂进来(老师的给一个取音量的口子,孩子的随时 level)。
- * 孩子端老师页(平板横屏左栏、手机字幕行那颗头像、板书模式字幕行那颗头像的动作)和工作台 /dev/voice 样张都引用这里。
+ * 孩子端老师页(平板横屏左栏、手机字幕行那颗头像的动作)和工作台 /dev/voice 样张都引用这里。
  *
  * 两种声音:
  * - 老师的:头像旁紧挨着三道小弧「)))」,老师的颜色,不走、不放大,只有深浅跟老师的音量(平滑、三道依次错开一点);没声音淡到最低。
@@ -116,7 +116,7 @@ export const VOICE_CSS = `
   .vb.vb-mini .vb-av > .av { width:46px; height:46px; font-size:22px; }
   .vb.vb-shake { animation:vb-shake .5s ease-in-out; }
   .vb.vb-breathe { animation:vb-glow 2.4s ease-in-out infinite; }
-  /* 头像的动作(按钮里那颗、手机字幕行那颗、板书模式字幕行那颗都用这一套) */
+  /* 头像的动作(按钮里那颗、手机字幕行那颗都用这一套) */
   .vb-halo::before, .vb-halo::after { content:""; position:absolute; border-radius:50%; border:3px solid var(--tc, currentColor); opacity:0; pointer-events:none; transition:opacity .3s, border-color .2s; }
   .vb-halo::before { inset:var(--vb-h1, -12%); }
   .vb-halo::after { inset:var(--vb-h2, -26%); }
@@ -131,12 +131,10 @@ export const VOICE_CSS = `
   .vb-av.vb-recv { box-shadow:0 0 0 7px #3d7fd940; }
   .vb[data-tone=blue] .vb-av.vb-recv { box-shadow:0 0 0 7px #ffffff66; }
   .vb-think .ring circle { animation:vb-spin 2.4s linear infinite, vb-breathe 1.2s ease-in-out infinite; }
-  .vb-mouth .ring circle { animation:vb-mouth 1.6s ease-in-out infinite; }
   .vb-listen:not(.vb-av) .ring circle { animation:vb-turn .35s ease-out both, vb-listen 1.6s ease-in-out .35s infinite; }
   .vb-nod .ring circle { animation:vb-nod .9s ease-in-out; }
   .vb-ring { animation:vb-phone 1.2s ease-in-out infinite; }
   .vb-dim { opacity:.6; }
-  @keyframes vb-mouth { 0%,46%,100% { stroke-dasharray:221.17 55.29; transform:rotate(36deg); } 12% { stroke-dasharray:187.99 88.47; transform:rotate(57.6deg); } 22% { stroke-dasharray:226.7 49.76; transform:rotate(32.4deg); } 34% { stroke-dasharray:193.52 82.94; transform:rotate(54deg); } 58% { stroke-dasharray:182.46 94; transform:rotate(61.2deg); } 70% { stroke-dasharray:215.64 60.82; transform:rotate(39.6deg); } 82% { stroke-dasharray:199.05 77.41; transform:rotate(50.4deg); } }
   @keyframes vb-spin { from { transform:rotate(36deg); } to { transform:rotate(396deg); } }
   @keyframes vb-breathe { 0%,100% { stroke-dasharray:221.17 55.29; } 50% { stroke-dasharray:204.58 71.88; } }
   @keyframes vb-turn { to { transform:rotate(126deg); } }
@@ -154,14 +152,14 @@ export const VOICE_JS = `
   /* ---- 按住说话那颗按钮的画法(src/server/voice-ui.ts;样子是 voice-view.ts 的 voiceView 给的)---- */
   var VOICE_TUNE = ${JSON.stringify(VOICE_TUNE)};
   var VOICE_ICONS = ${JSON.stringify(ICONS)};
-  var VOICE_FACES = ['still', 'talk', 'listen', 'think', 'ring', 'dim', 'mouth'];
+  var VOICE_FACES = ['still', 'talk', 'listen', 'think', 'ring', 'dim'];
   try {
     var vbRoot = document.documentElement;
     vbRoot.classList.add('vb-halo-' + VOICE_TUNE.talkHalo);
     vbRoot.style.setProperty('--vb-halo-op', String(VOICE_TUNE.talkHaloOpacity));
     vbRoot.style.setProperty('--vb-halo-ms', VOICE_TUNE.talkHaloBreathMs + 'ms');
   } catch (e) {}
-  /** 头像的动作:el 是装着 .av 的那一格(或 .av 本身);face 是 voiceView 的 face,板书模式多一种 mouth(开口一张一合) */
+  /** 头像的动作:el 是装着 .av 的那一格(或 .av 本身);face 是 voiceView 的 face(底部字幕行那颗「开口一张一合」的 mouth 10-28 跟着删了) */
   function voiceFace(el, face) {
     if (!el) return;
     for (var i = 0; i < VOICE_FACES.length; i++) el.classList.remove('vb-' + VOICE_FACES[i]);

@@ -150,9 +150,9 @@ try {
 
   const SF = `document.querySelector('#st-frame')`;
   const playing = await until(`document.querySelector('#stage').classList.contains('on') && Boolean(${SF}.contentDocument?.querySelector('.lc.lc-card video.lc-video'))`, 120);
-  const segDone = playing && await until(`${SF}.contentDocument?.querySelector('.lc-time span')?.textContent === '0:10 / 0:18' && document.querySelector('#sub-text').textContent.startsWith('每人分到几块')`, 120);
+  const segDone = playing && await until(`${SF}.contentDocument?.querySelector('.lc-time span')?.textContent === '0:10 / 0:18' && document.querySelector('#lv-cap .lv-cur').textContent.startsWith('每人分到几块')`, 120);
   const st = await evaluate(`({ t: ${SF}.contentDocument?.querySelector('video')?.currentTime, paused: ${SF}.contentDocument?.querySelector('video')?.paused, on: document.querySelector('#stage').classList.contains('on') })`);
-  ok('讲稿 [[play]]:舞台里放视频那一段,停在 0:11 前、舞台不关、字幕行接着念', segDone && st.paused && st.t > 10.5 && st.t < 11.2 && st.on, JSON.stringify(st));
+  ok('讲稿 [[play]]:舞台里放视频那一段,停在 0:11 前、舞台不关、左栏字幕接着念', segDone && st.paused && st.t > 10.5 && st.t < 11.2 && st.on, JSON.stringify(st));
   await shot('video-seg-done.png');
 
   const pb = await (await fetch(`${base}/api/conversations/math-tutor/today/board`)).json();

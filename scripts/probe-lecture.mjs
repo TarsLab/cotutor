@@ -195,12 +195,12 @@ try {
   const seg = await evaluate(`(() => { const c = document.querySelector('#board .sec .c-lecture'); return c ? { pl: c.querySelector('.pl')?.textContent, title: c.querySelector('.sp')?.textContent, svg: (c.querySelector('.th img')?.naturalWidth ?? 0) > 0 && c.querySelector('.th img').src.includes('/frame.svg?svg=') } : null; })()`);
   ok('老师那一节有一张小课堂卡:课名、「0:19–0:30 ▷」、缩略图是那一段的末帧', seg?.pl === '0:19–0:30 ▷' && seg.title === '13 − 8 破十法' && seg.svg, JSON.stringify(seg));
   const opened2 = await until(`document.querySelector('#stage').classList.contains('on') && Boolean(${SF}.contentDocument?.querySelector('.lc.lc-card .lc-svg'))`, 120);
-  const st0 = opened2 ? await evaluate(`({ time: ${SF}.contentDocument.querySelector('.lc-time span').textContent, top: Boolean(${SF}.contentDocument.querySelector('.lc-top')), kd: document.querySelector('#st-kd').textContent, sub: document.querySelector('#sub-text').textContent })`) : null;
-  ok('讲稿念到 [[play]]:自己铺满放,从 0:19 起;舞台顶栏写「小课堂」,播放器没有自己的顶栏;字幕行是课里那句', opened2 && /^0:(19|2\d) \/ 0:46$/.test(st0.time) && !st0.top && st0.kd === '小课堂' && st0.sub.startsWith('那就拆开这一捆'), JSON.stringify(st0));
+  const st0 = opened2 ? await evaluate(`({ time: ${SF}.contentDocument.querySelector('.lc-time span').textContent, top: Boolean(${SF}.contentDocument.querySelector('.lc-top')), kd: document.querySelector('#st-kd').textContent, sub: document.querySelector('#lv-cap .lv-cur').textContent })`) : null;
+  ok('讲稿念到 [[play]]:自己铺满放,从 0:19 起;舞台顶栏写「小课堂」,播放器没有自己的顶栏;左栏字幕停在嘴念的那句([[play]] 那句,课里的字在舞台上)', opened2 && /^0:(19|2\d) \/ 0:46$/.test(st0.time) && !st0.top && st0.kd === '小课堂' && st0.sub.startsWith('我们回到拆开那一捆的地方'), JSON.stringify(st0));
   await shot('lecture-seg-playing.png');
-  const segDone = await until(`${SF}.contentDocument?.querySelector('.lc-time span')?.textContent === '0:30 / 0:46' && document.querySelector('#sub-text').textContent.startsWith('拿走 8 根')`, 120);
-  const st1 = await evaluate(`({ time: ${SF}.contentDocument?.querySelector('.lc-time span')?.textContent, on: document.querySelector('#stage').classList.contains('on'), sub: document.querySelector('#sub-text').textContent, playing: ${SF}.contentDocument?.querySelector('.lc-play')?.getAttribute('aria-label') })`);
-  ok('放到 0:30 停在末帧,舞台不关,字幕行接着念下一句', segDone && st1.on && st1.playing === '播放', JSON.stringify(st1));
+  const segDone = await until(`${SF}.contentDocument?.querySelector('.lc-time span')?.textContent === '0:30 / 0:46' && document.querySelector('#lv-cap .lv-cur').textContent.startsWith('拿走 8 根')`, 120);
+  const st1 = await evaluate(`({ time: ${SF}.contentDocument?.querySelector('.lc-time span')?.textContent, on: document.querySelector('#stage').classList.contains('on'), sub: document.querySelector('#lv-cap .lv-cur').textContent, playing: ${SF}.contentDocument?.querySelector('.lc-play')?.getAttribute('aria-label') })`);
+  ok('放到 0:30 停在末帧,舞台不关,左栏字幕接着念下一句', segDone && st1.on && st1.playing === '播放', JSON.stringify(st1));
   await shot('lecture-seg-done.png');
   await evaluate(`document.querySelector('#st-x').click()`);
   await sleep(300);

@@ -23,6 +23,7 @@ export interface VoiceScene {
 export const VOICE_SCENES: VoiceScene[] = [
   { group: '老师这边', name: '安静 · 等你说', note: '老师讲完、孩子还没开口', input: {}, sound: 'none', tutor: 'chinese', expect: 'idle' },
   { group: '老师这边', name: '正在叫老师', note: '刚进老师页、换连接,嘴还没连上(一两秒);按了晃一下', input: { ready: false }, sound: 'none', tutor: 'chinese', expect: 'connecting' },
+  { group: '老师这边', name: '以前的话题 · 只能看', note: '看以前的话题:灰着、不接(按了晃一下),底下一行「回到今天」', input: { readonly: true }, sound: 'none', tutor: 'chinese', expect: 'readonly' },
   { group: '老师这边', name: '今天点过 · 点上面开始', note: '今天点过同一个按钮:左栏先问「接着那个 / 重新开始」,点之前按钮灰着、不接', input: { choose: true }, sound: 'none', tutor: 'chinese', expect: 'choose' },
   { group: '老师这边', name: '老师在说', note: '头像旁三道小弧,深浅跟嘴的音量;不走、不放大', input: { status: 'mouth' }, sound: 'tutor', tutor: 'chinese', expect: 'tutor' },
   { group: '老师这边', name: '老师两句之间', note: '还在说这一轮,但这会儿没声音:三道弧淡到最低', input: { status: 'mouth' }, sound: 'none', tutor: 'chinese', expect: 'tutor' },

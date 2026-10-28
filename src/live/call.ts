@@ -691,7 +691,7 @@ export class LiveCall {
   }
 
   /**
-   * 一轮开始:多半嘴不出声,等脑的第一句(孩子端板上有占位卡);拍照、热身这几种才先说一句(lib/cue.ts;上一次回答被掐了还没回 done 就等它回了再说)。
+   * 一轮开始:多半嘴不出声,等脑的第一句(孩子端左栏头像在想);拍照、热身这几种才先说一句(lib/cue.ts;上一次回答被掐了还没回 done 就等它回了再说)。
    * 说的等转写回来再交给脑,不是说的直接交
    */
   private turn(kind: CatchKind, body: Record<string, unknown>, text?: string): void {

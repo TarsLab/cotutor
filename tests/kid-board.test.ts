@@ -8,7 +8,6 @@ import {
   hasState,
   isHeavy,
   lectureReady,
-  stageSubtitle,
   segmentAudio,
   stateSummary,
   pickedLabels,
@@ -40,10 +39,8 @@ import {
   liveHead,
   askCard,
   kidSaid,
-  subtitleFor,
   type BoardCard,
   type BoardLine,
-  type PlayerState,
   type BoardSection,
 } from '../src/lib/kid-board.ts';
 import { wordLayout } from '../src/lib/word-layout.ts';
@@ -122,7 +119,6 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   check('画板卡:有交互(给老师看)、重卡;做了什么 = 画了 N 笔;标题是题目', hasState(cv) && isHeavy(cv) && stateSummary(cv).length === 0 && stateSummary({ ...cv, state: { ink: [{}, {}, {}] } }).join() === '画了 3 笔' && cardTitle(cv) === '画一条蛇' && cardTitle({ kind: 'canvas', props: { base: null } }) === '画一画' && cardTexts(cv).join() === '画一条蛇');
   check('重卡:小课堂 / canvas 在舞台包里开;小课堂卡读得出、有起止才 ready', isHeavy(lectureCard) && isHeavy({ kind: 'canvas', props: {} }) && !isHeavy(cards[3]) && lectureReady(lectureCard) && !lectureReady({ kind: 'lecture', props: { bundle: 'x' } }) && !lectureReady(cards[0]) && !isHeavy({ kind: 'scene', props: { bundle: 'x', ready: true } }));
   check('小课堂卡:能标注标题 / 那句话;标题是 title;没有「交给老师」', cardTexts(lectureCard).join('|') === '找规律|再看一遍' && cardTitle(lectureCard) === '找规律' && !hasState(lectureCard));
-  check('小课堂那一段在放时的字幕行:drawing 暂停、paused 播放、done 没钮', stageSubtitle('drawing', '一').right === 'pause' && stageSubtitle('paused', '一').right === 'play' && JSON.stringify(stageSubtitle('done', '三')) === '{"text":"三","kind":"line","right":"none"}');
   check('图片卡:能标注的是图注,标题是图注 / 「图」', cardTexts({ kind: 'image', props: { src: 'a.png', caption: '看这里' } }).join() === '看这里' && cardTitle({ kind: 'image', props: { src: 'a.png', caption: '看这里' } }) === '看这里' && cardTitle({ kind: 'image', props: { src: 'a.png' } }) === '图');
   check('舞台顶栏的名字:标题 > 问题 > 正文 > 第一段;截 24 字', cardTitle(cards[0]) === '画蛇添足' && cardTitle(cards[3]) === '酒是谁的?' && cardTitle(cards[2]) === '楚有祠者' && cardTitle(cards[1]) === '画蛇添足 = 多做一步,反而坏事' && cardTitle({ kind: 'text', props: { text: '字'.repeat(30) } }).length === 25 && cardTitle({ kind: 'gizmo', props: { bundle: 'x' } }) === 'x');
   check('单选:点了换成它,再点取消;多选:切换', JSON.stringify(togglePick([], 1, false)) === '[1]' && JSON.stringify(togglePick([1], 2, false)) === '[2]' && JSON.stringify(togglePick([1], 1, false)) === '[]' && JSON.stringify(togglePick([0], 2, true)) === '[0,2]' && JSON.stringify(togglePick([0, 2], 0, true)) === '[2]');
@@ -157,16 +153,6 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   const bsec = { cards: [cd, cd, cd], lines: [ln(null, 'z'), ln(0, 'a'), ln(0, 'b'), ln(1), ln(2, 'c')] };
   check('拍:按锚点分组、顺序对', JSON.stringify(beatsOf(bsec)) === '[{"card":null,"lines":[0]},{"card":0,"lines":[1,2]},{"card":1,"lines":[3]},{"card":2,"lines":[4]}]', JSON.stringify(beatsOf(bsec)));
   check('就绪:末拍没写完不算,写完了才算;没有拍就是 0', readyBeats(bsec, { done: false }) === 3 && readyBeats(bsec, { done: true }) === 4 && readyBeats({ cards: [], lines: [] }, { done: false }) === 0);
-  const lv = { ...bsec, partial: true, ready: 2 };
-  const subOf = (state: PlayerState, pending: boolean, waitedMs = 0) => subtitleFor({ state, sections: [lv], pending, waitedMs });
-  check('字幕:念过几句再等下一拍 → gap 留着刚念那句;一句没念 → wait;pending 时正在播照常出字幕', JSON.stringify(subOf({ section: 0, line: 0, status: 'thinking' }, true)) === '{"text":"句","kind":"gap","right":"none"}' && subOf({ section: 0, line: -1, status: 'thinking' }, true).kind === 'wait' && subOf({ section: 0, line: 0, status: 'playing' }, true).kind === 'line' && subOf({ section: 0, line: 0, status: 'done' }, true).kind === 'wait');
-  check('字幕:第一拍前等过 8 秒换一句', subOf({ section: 0, line: -1, status: 'thinking' }, true, 7999).text === '我写给你看' && subOf({ section: 0, line: -1, status: 'thinking' }, true, 8000).text === '再等我一下下');
-  const base = { sections: [s1], pending: false, waitedMs: 0 };
-  check('字幕:录像里嘴在念这句 → 当前句,没有钮', JSON.stringify(subtitleFor({ ...base, state: { section: 0, line: 0, status: 'playing' } })) === '{"text":"一","kind":"line","right":"none"}');
-  check('字幕:停下等 → 留着问句、没钮(「继续」去掉了)', JSON.stringify(subtitleFor({ ...base, state: { section: 0, line: 1, status: 'waiting' } })) === '{"text":"二?","kind":"line","right":"none"}');
-  check('字幕:完 → 留末句、没钮', JSON.stringify(subtitleFor({ ...base, state: { section: 0, line: 1, status: 'done' } })) === '{"text":"二?","kind":"line","right":"none"}');
-  check('字幕:等老师', subtitleFor({ ...base, pending: true, state: { section: 0, line: 1, status: 'done' } }).text === '我写给你看');
-  check('字幕:什么都没有', subtitleFor({ ...base, sections: [], state: { section: -1, line: -1, status: 'idle' } }).kind === 'empty');
 }
 {
   const cd: BoardCard = { kind: 'text', props: { text: 'x' } };

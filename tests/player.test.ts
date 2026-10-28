@@ -9,7 +9,6 @@ import {
   isQuestion,
   playerAtEnd,
   step,
-  subtitleFor,
   type BoardCard,
   type BoardLine,
   type BoardSection,
@@ -56,7 +55,6 @@ for (const r of rows) {
 }
 
 check('打开页面的位置:没节 → idle;末句问句 → 等;否则写完', playerAtEnd([]).status === 'idle' && playerAtEnd([done0]).status === 'waiting' && playerAtEnd([done0, said]).status === 'done');
-check('字幕:老师在写 → 等的话;写完 → 末句;右边没有钮', subtitleFor({ state: THINK1, sections: [done0, live], pending: true, waitedMs: 0 }).kind === 'wait' && subtitleFor({ state: playerAtEnd([done0]), sections: [done0], pending: false, waitedMs: 0 }).text === '三?' && subtitleFor({ state: playerAtEnd([done0]), sections: [done0], pending: false, waitedMs: 0 }).right === 'none');
 
 // ---- 随机事件序列:状态总是合法的(节的下标在范围里;等答只在末句问句时;只有 halt / 撤掉出 stop)----
 function rnd(seed: number) { let x = seed; return () => { x = (x * 1103515245 + 12345) % 2147483648; return x / 2147483648; }; }

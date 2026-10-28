@@ -28,6 +28,7 @@ import { readPin } from '../server/access.ts';
 import { gradeOfSemester } from '../lib/grade.ts';
 import { DIRS } from './skeleton.ts';
 import { tutorStatuses, readManifest } from './tutors.ts';
+import { tokenText } from '../lib/tokens.ts';
 import { workspaceGradePack, type GradePack } from './grades.ts';
 import {
   CONFIG_FILE,
@@ -170,7 +171,7 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
     name: `live.${runtimeName}`,
     ok,
     required: false,
-    detail: ok ? `${first.display} 回了「${(t.final?.text ?? '').slice(0, 20)}」${t.final?.costUsd !== undefined ? ` · $${t.final.costUsd.toFixed(3)}` : ''}` : `起不来或没答上:${raw.slice(0, 300)}`,
+    detail: ok ? `${first.display} 回了「${(t.final?.text ?? '').slice(0, 20)}」${t.final?.inTokens !== undefined ? ` · ${tokenText({ in: t.final.inTokens, out: t.final.outTokens ?? 0 })}` : ''}` : `起不来或没答上:${raw.slice(0, 300)}`,
     fix: ok ? undefined : explainLlmFailure(raw, runtime.run),
   });
 

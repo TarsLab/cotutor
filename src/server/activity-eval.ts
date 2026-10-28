@@ -54,8 +54,7 @@ export interface EvalRun {
   pass: boolean;
   /** 跑不下去的原因(老师出错、模拟孩子不通) */
   error?: string;
-  costUsd: number;
-  /** 不报钱数的运行时(qwen)记 token */
+  /** 老师这几轮的 token(模拟孩子另算) */
   tokens: { in: number; out: number };
   thread: string;
   date: string;
@@ -73,7 +72,6 @@ export interface EvalReport {
   activity: string;
   at: string;
   examples: EvalExampleReport[];
-  costUsd: number;
   tokens: { in: number; out: number };
   /** 报告落在哪(相对 workspace 根) */
   file: string;
@@ -127,7 +125,6 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
       const turns: EvalTurn[] = [];
       let thread = '';
       let date = '';
-      let costUsd = 0;
       const tokens = { in: 0, out: 0 };
       let error: string | undefined;
       // 第一句是按钮上的字(activity 的名字),和孩子点首页按钮一样;照片随第一句写死的孩子的话发。
@@ -145,7 +142,6 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
         const index = await started.done;
         await runner.flush();
         const m = index.messages.find((x) => x.job === started.job);
-        costUsd += m?.costUsd ?? 0;
         tokens.in += m?.tokens?.in ?? 0;
         tokens.out += m?.tokens?.out ?? 0;
         if (!m || m.result !== 'ok') { error = `第 ${turns.length + 1} 轮老师出错:${m?.error ?? '未知'}`; break; }
@@ -164,14 +160,14 @@ export async function evalActivity(ws: Workspace, tutor: string, name: string, o
         } else say = null;
       }
       const grades = gradeRun(e.checks, turns, run.params);
-      runs.push({ turns, grades, pass: !error && grades.every((g) => g.pass), ...(error ? { error } : {}), costUsd, tokens, thread, date });
+      runs.push({ turns, grades, pass: !error && grades.every((g) => g.pass), ...(error ? { error } : {}), tokens, thread, date });
     }
     out.push({ name: e.name, runs, pass: runs.every((r) => r.pass) });
   }
   const at = new Date().toISOString();
   const rel = join(EVALS_DIR, 'activity-eval', `${tutor}-${name}-${at.replace(/[:.]/g, '-')}.json`);
   const all = out.flatMap((x) => x.runs);
-  const report: EvalReport = { tutor, activity: name, at, examples: out, costUsd: all.reduce((a, r) => a + r.costUsd, 0), tokens: { in: all.reduce((a, r) => a + r.tokens.in, 0), out: all.reduce((a, r) => a + r.tokens.out, 0) }, file: rel };
+  const report: EvalReport = { tutor, activity: name, at, examples: out, tokens: { in: all.reduce((a, r) => a + r.tokens.in, 0), out: all.reduce((a, r) => a + r.tokens.out, 0) }, file: rel };
   await mkdir(join(ws.root, EVALS_DIR, 'activity-eval'), { recursive: true });
   await writeFile(join(ws.root, rel), `${JSON.stringify(report, null, 2)}\n`);
   return report;

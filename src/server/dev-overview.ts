@@ -76,8 +76,8 @@ export interface DevOverview {
   doneMedianMs: number | null;
   slow: number;
   tutors: DevTutorRow[];
-  /** 近七天,按运行时分:报钱数的记美元,只报 token 的记 token */
-  usage: { runtime: string; turns: number; costUsd: number; tokensIn: number; tokensOut: number }[];
+  /** 近七天,按运行时分:几轮、老师用的 token(没报的轮只算轮数) */
+  usage: { runtime: string; turns: number; tokensIn: number; tokensOut: number }[];
   paint: { today: number };
   issues: DevIssue[];
   /** 近 30 天开过的设备,最近开的在前;更早的折起来 */
@@ -100,7 +100,7 @@ export async function devOverview(ws: Workspace, now: Date = new Date()): Promis
   const days = weekOf(today, today);
   const tutors = listTutors(ws.config);
   const perDay = new Map(days.map((d) => [d, 0]));
-  const usage = new Map<string, { runtime: string; turns: number; costUsd: number; tokensIn: number; tokensOut: number }>();
+  const usage = new Map<string, { runtime: string; turns: number; tokensIn: number; tokensOut: number }>();
   const issues: DevIssue[] = [];
   const todayFirst: number[] = [];
   const todayDone: number[] = [];
@@ -120,9 +120,8 @@ export async function devOverview(ws: Workspace, now: Date = new Date()): Promis
       for (const m of index.messages) {
         const kid = m.from === 'kid';
         const rt = m.runtime ?? ws.config.runtimes.default;
-        const u = usage.get(rt) ?? { runtime: rt, turns: 0, costUsd: 0, tokensIn: 0, tokensOut: 0 };
+        const u = usage.get(rt) ?? { runtime: rt, turns: 0, tokensIn: 0, tokensOut: 0 };
         u.turns++;
-        u.costUsd += m.costUsd ?? 0;
         u.tokensIn += m.tokens?.in ?? 0;
         u.tokensOut += m.tokens?.out ?? 0;
         usage.set(rt, u);

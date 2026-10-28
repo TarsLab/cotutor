@@ -73,7 +73,7 @@ const ctx = createContext(loadWorkspace(root), { now: () => now });
 const post = (tutor: string, body: unknown) => route('POST', `/api/conversations/${tutor}/messages`, ctx, body);
 const day = (tutor: string, date: string) => route('GET', `/api/conversations/${tutor}/${date}`, ctx);
 type Timing = { startedAt: string; firstCardMs?: number; doneMs?: number };
-type Day = { index: { session: { id: string; runtime: string } | null; messages: { job: string; result: string; kidText?: string | null; timing?: Timing; artifacts?: string[]; bookkeeping?: { entries: { name: string }[] } | null; handoff?: { to: string } | null; runtime?: string; error?: string | null; audio?: string | null }[]; costUsd: number }; running: string | null; runs: Record<string, { kind: string; sub?: boolean; tools?: unknown[] }[]>; errors: Record<string, string> };
+type Day = { index: { session: { id: string; runtime: string } | null; messages: { job: string; result: string; tokens?: { in: number; out: number }; kidText?: string | null; timing?: Timing; artifacts?: string[]; bookkeeping?: { entries: { name: string }[] } | null; handoff?: { to: string } | null; runtime?: string; error?: string | null; audio?: string | null }[]; costUsd: number }; running: string | null; runs: Record<string, { kind: string; sub?: boolean; tools?: unknown[] }[]>; errors: Record<string, string> };
 const wait = async (tutor: string): Promise<void> => {
   // runner 没暴露 done 给路由层,这里轮询 running 直到空
   for (let i = 0; i < 200 && ctx.runner.running(tutor); i++) await new Promise((r) => setTimeout(r, 25));
@@ -124,7 +124,7 @@ try {
   await wait('math-tutor');
   const d1 = (await day('math-tutor', '2026-09-08')).json as Day;
   const m1 = d1.index.messages[0];
-  check('跑完:ok、kidText 物化、费用累计', m1.result === 'ok' && m1.kidText === '第一次说:妈妈我不懂这一步' && d1.index.costUsd === 0.05 && m1.runtime === 'fake', JSON.stringify(m1));
+  check('跑完:ok、kidText 物化、记下 token(报的钱数不认)', m1.result === 'ok' && m1.kidText === '第一次说:妈妈我不懂这一步' && m1.tokens?.in === 1000 && m1.tokens.out === 50 && !('costUsd' in m1) && !('costUsd' in d1.index) && m1.runtime === 'fake', JSON.stringify(m1));
   check('会话记下', d1.index.session?.runtime === 'fake' && d1.index.session.id.startsWith('fake-'));
   check('埋点:startedAt 是 ISO、整轮记了;整块出的没有首卡', typeof m1.timing?.startedAt === 'string' && !Number.isNaN(Date.parse(m1.timing.startedAt)) && typeof m1.timing.doneMs === 'number' && m1.timing.doneMs >= 0 && m1.timing.firstCardMs === undefined, JSON.stringify(m1.timing));
   const log = readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${job1}.log`), 'utf8');
@@ -223,7 +223,7 @@ try {
   }
   check('笔记原文:续会话没改过 → 只写「未变」', !pr2.includes('<vault-note') && pr2.includes('entry: "随便/二上/数学.md(未变,原文在本话题前面)"') && pr2.includes('profile: "档案.md(未变'), pr2);
   check('笔记原文:话题里家长改了入口文件 → 再带一次新的,档案仍未变', pr3.includes('<vault-note role="entry"') && pr3.includes('会竖式了') && !pr3.includes('<vault-note role="profile"') && pr3.includes('profile: "档案.md(未变'), pr3);
-  check('三轮同一会话,费用累计', d3.index.messages.length === 3 && d3.index.session?.id === d1.index.session?.id && d3.index.costUsd === 0.15, JSON.stringify(d3.index));
+  check('三轮同一会话,每轮各记 token', d3.index.messages.length === 3 && d3.index.session?.id === d1.index.session?.id && d3.index.messages.every((m) => m.tokens?.in === 1000), JSON.stringify(d3.index));
   check('resume 的回复接着说', d3.index.messages[1].kidText === '接着说:再讲一遍,段在前');
   check('写在前面的记账段剥掉并物化,孩子视图没有它', d3.index.messages[1].bookkeeping?.entries[0].name === '重讲' && !d3.index.messages[1].kidText?.includes('记账'), JSON.stringify(d3.index.messages[1]));
   // ---- 记忆(2026-09-17):「## 记忆」段追加进 vault 的记忆文件,每轮最多两条;下个话题原文进上下文包 ----

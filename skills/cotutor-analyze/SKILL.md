@@ -1,6 +1,6 @@
 ---
 name: cotutor-analyze
-description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了什么上下文、读了什么文件、为什么没看见档案或日记里的某句、改了老师文件 / 技能 / vault 之后回放对照、一天的费用与延迟。家长或开发者在 workspace 根开编程助手问「老师为什么…」「这轮读了什么」「我改了 X 效果如何」「今天花了多少」时用。
+description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了什么上下文、读了什么文件、为什么没看见档案或日记里的某句、改了老师文件 / 技能 / vault 之后回放对照、一天的 token 与延迟。家长或开发者在 workspace 根开编程助手问「老师为什么…」「这轮读了什么」「我改了 X 效果如何」「今天花了多少」时用。
 ---
 
 <!-- 给人看
@@ -17,7 +17,7 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 
 - 一轮 = 一条消息 + 老师的回答。
 - 文件都在 conversations/<老师>/,按 `<日期>.<job>.*` 命名,job 形如 1620-1。
-- 索引 `<日期>.json` 一天一份。每条消息物化了讲稿与卡、读了什么(tools)、用时(timing)、费用、提醒。
+- 索引 `<日期>.json` 一天一份。每条消息物化了讲稿与卡、读了什么(tools)、用时(timing)、token(tokens)、提醒。
 - 各文件是什么、命令怎么用,见 references/命令与文件.md。
 
 **老师看到的只有两样:**
@@ -40,16 +40,16 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 
 | 想知道 | 跑 | 花钱 |
 |---|---|---|
-| 某一轮的全部:问句、上下文包、当时的老师文件与技能 hash、讲稿、卡、读了什么、费用、用时、给家长的尾巴 | `cotutor show <老师> <job> <日期>`(--json 是全量) | 不 |
+| 某一轮的全部:问句、上下文包、当时的老师文件与技能 hash、讲稿、卡、读了什么、token、用时、给家长的尾巴 | `cotutor show <老师> <job> <日期>`(--json 是全量) | 不 |
 | 现在发这句话,老师会看到什么;每段从哪个文件来、那里共几条、截了几条 | `cotutor pack <老师> "<消息>" [--from kid] [--at 时间]` | 不 |
 | 一轮每道工序的时刻:首卡、每句配音、就绪 | `cotutor trace <老师> <job> <日期> [--lane main,tts]` | 不 |
-| 改了老师文件、技能、vault 之后,**同一问答案怎么变** | `cotutor replay <老师> <job> <日期>`,跑完并排打印;`cotutor compare <老师> [evalJob] <日期>` 再看或列 | **是**,一轮老师的钱(几分到两毛美元),**跑前先问** |
+| 改了老师文件、技能、vault 之后,**同一问答案怎么变** | `cotutor replay <老师> <job> <日期>`,跑完并排打印;`cotutor compare <老师> [evalJob] <日期>` 再看或列 | **是**,花一轮老师的钱(按 token 计),**跑前先问** |
 | 回放那轮自己的全部 | `cotutor show <老师> <evalJob> <日期> --evals` | 不 |
 | workspace 哪里坏了:路径、证书、技能、配置缺口 | `cotutor doctor` | 不(--live 花一分钱) |
 
-一天的费用与延迟不用命令,读 conversations/<老师>/<日期>.json:
+一天的 token 与延迟不用命令,读 conversations/<老师>/<日期>.json:
 
-- 每条的 `costUsd` 是这轮的费用;顶层 `costUsd` 是这天合计。
+- 每条的 `tokens` 是这轮老师用的 token(`in` 输入,含缓存读;`out` 输出);一天合计自己加。老数据里的 `costUsd` 是 claude 时代记的美元,不用管。
 - `timing` 是从 startedAt 起算的毫秒:`firstReadyMs` 首拍就绪,`doneMs` 老师写完,`dubbedMs` 配音齐。
 
 ## 查「老师为什么没提 X」的顺序

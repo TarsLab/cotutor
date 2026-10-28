@@ -5,6 +5,7 @@
  * mouth 道是通话(src/live/call.ts)补进来的,孩子按下、松手、嘴接住都在老师进程起来之前,t 是负的。
  * 这里只有形状与格式化,纯函数;发事件的在 server/runner.ts。
  */
+import { tokenText, type Tokens } from './tokens.ts';
 
 export type Lane = 'main' | 'tts' | 'ready' | 'index' | 'ledger' | 'mouth';
 export const LANES: readonly Lane[] = ['main', 'tts', 'ready', 'index', 'ledger', 'mouth'];
@@ -16,7 +17,7 @@ export type RunEvent = { t: number } & (
   /** play:这句的 [[play]] 锚着小课堂卡(念完放那一段;实时时服务端等孩子端放完再交后面的句子);echo / call:热身的 [[echo 词]] [[say 词]] 与 [[call]](实时时服务端等孩子跟、进打电话) */
   | { lane: 'main'; kind: 'line'; line: number; text: string; play?: true; echo?: { word: string; say?: true }; call?: true }
   | { lane: 'main'; kind: 'tool'; name: string; sub: boolean }
-  | { lane: 'main'; kind: 'exit'; ok: boolean; reason?: string; costUsd?: number; turns?: number }
+  | { lane: 'main'; kind: 'exit'; ok: boolean; reason?: string; tokens?: Tokens; turns?: number }
   /** 断流:老师进程 idleMs 没吐一个字节(工具不在跑),杀掉;retry = 接着跑第几次(0 = 次数用完,不再跑),kept = 断前已写出的正文字数 */
   | { lane: 'main'; kind: 'stall'; idleMs: number; retry: number; kept: number }
   | { lane: 'tts'; kind: 'queued'; label: string }
@@ -53,7 +54,7 @@ export interface RunEventEnvelope {
 }
 
 const secs = (ms: number): string => (ms / 1000).toFixed(2);
-const money = (v: number | undefined): string => (v === undefined ? '' : ` · $${v.toFixed(3)}`);
+const used = (t: Tokens | undefined): string => (t ? ` · ${tokenText(t)}` : '');
 
 /** 一条事件的一句话(不带时间与道) */
 export function describeEvent(e: RunEvent): string {
@@ -64,7 +65,7 @@ export function describeEvent(e: RunEvent): string {
       if (e.kind === 'line') return `句 ${e.line}「${e.text}」`;
       if (e.kind === 'tool') return `${e.sub ? '子代理 ' : ''}工具 ${e.name}`;
       if (e.kind === 'stall') return `断流:${secs(e.idleMs)}s 没动静,杀掉${e.retry ? `,resume 接着写(第 ${e.retry} 次${e.kept ? `,已写 ${e.kept} 字` : ''})` : ',接着跑的次数用完了'}`;
-      return e.ok ? `退出 ok${e.turns !== undefined ? ` · ${e.turns} turns` : ''}${money(e.costUsd)}` : `退出 出错(${e.reason ?? '?'})${money(e.costUsd)}`;
+      return e.ok ? `退出 ok${e.turns !== undefined ? ` · ${e.turns} turns` : ''}${used(e.tokens)}` : `退出 出错(${e.reason ?? '?'})${used(e.tokens)}`;
     case 'tts':
       if (e.kind === 'queued') return `${e.label}排队`;
       if (e.kind === 'done') return `${e.label}✓ ${secs(e.ms)}s`;

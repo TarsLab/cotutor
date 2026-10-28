@@ -5,6 +5,7 @@
  */
 import { parseStreamJson } from '../clis/stream-json.ts';
 import type { CliEvent, CliFinal } from '../clis/types.ts';
+import { tokenText } from './tokens.ts';
 
 /** 一行输出 → 统一事件(CLI 适配器的 parse) */
 export type LineParser = (line: string) => CliEvent[];
@@ -142,7 +143,7 @@ export function parseTranscript(text: string, parse: LineParser = parseStreamJso
       } else if (e.kind === 'result') {
         const f = e.final;
         if (f.text && !items.some((i) => i.kind === 'text' && !i.sub)) items.push({ kind: 'text', text: f.text });
-        const cost = f.costUsd !== undefined ? ` · $${f.costUsd.toFixed(2)}` : '';
+        const cost = f.inTokens !== undefined ? ` · ${tokenText({ in: f.inTokens, out: f.outTokens ?? 0 })}` : '';
         const turns = f.numTurns !== undefined ? ` · ${f.numTurns} 轮` : '';
         items.push({ kind: 'done', text: f.ok ? `本轮结束${turns}${cost}` : `本轮出错(${f.reason})${turns}${cost}` });
         final = f;

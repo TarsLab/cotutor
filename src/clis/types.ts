@@ -43,13 +43,8 @@ export interface CliFinal {
   text: string | null;
   /** 不 ok 时的原因 */
   reason: string | null;
-  /** 花了多少美元;有的 CLI 不报。历史日志可能记录整个会话的累计费用 */
-  costUsd?: number;
   numTurns?: number;
-  /** 各模型的输出 token 之和(累计时也累计)与最后一次请求的输出 token:判断 历史日志里的 costUsd 是不是累计 */
-  modelOut?: number;
-  lastOut?: number;
-  /** 这一轮的 token(没有钱数的 CLI 靠它记账) */
+  /** 这一轮的 token:输入(含缓存读、缓存写)与输出;记账按它(报的钱数不认,src/lib/tokens.ts) */
   inTokens?: number;
   outTokens?: number;
 }

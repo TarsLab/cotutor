@@ -1,7 +1,7 @@
 /**
  * 回放(2026-09-15):把某一轮的问题,按**现在**的 vault / 老师文件 / 技能重新问一遍,和原轮并排比。
  * 手改了提示词或 vault 之后「效果好不好」不靠打分,靠人眼看 diff:上下文包哪几行变了、讲稿哪几句变了、卡变没变、
- * 读了什么文件、费用与用时。只有 CLI(`cotutor replay` / `cotutor compare`),家长端不露;给在 workspace 里开编程助手分析用。
+ * 读了什么文件、token 与用时。只有 CLI(`cotutor replay` / `cotutor compare`),家长端不露;给在 workspace 里开编程助手分析用。
  *
  * 落在 workspace 的 evals/(和 conversations/ 同一套文件:索引 / run.json / log / events),不进孩子的对话、
  * 永远新话题新会话;不配音。做法是给 Runner 一个改了目录与配置的 Workspace,
@@ -14,6 +14,7 @@ import { parserForRuntime } from '../clis/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { conversationFiles, threads } from '../lib/conversation.ts';
 import { compactDiff, diffLines, type DiffRow } from '../lib/diff.ts';
+import { tokenText, type Tokens } from '../lib/tokens.ts';
 import { toolCalls, type ToolCall } from '../lib/transcript.ts';
 import type { ConversationMessage, Timing } from '../schema/index.ts';
 import { continueContext, homeButtonAt } from './home.ts';
@@ -94,7 +95,7 @@ export interface RunSide {
   result: ConversationMessage['result'];
   error: string | null;
   runtime: string | null;
-  costUsd: number | null;
+  tokens: Tokens | null;
   timing: Timing | null;
   kidText: string | null;
   lines: string[];
@@ -136,7 +137,7 @@ export function sideOf(m: ConversationMessage, run: { prompt: string; sources?: 
     result: m.result,
     error: m.error ?? null,
     runtime: m.runtime ?? null,
-    costUsd: m.costUsd ?? null,
+    tokens: m.tokens ?? null,
     timing: m.timing ?? null,
     kidText: m.kidText ?? null,
     lines: m.section?.lines.map((l) => l.text) ?? [],
@@ -195,23 +196,23 @@ export interface ReplayRow {
   replayOf: string;
   at: string;
   result: ConversationMessage['result'];
-  costUsd: number | null;
+  tokens: Tokens | null;
   runtime: string | null;
 }
 
 /** 这天回放过哪些(evals/<老师>/<日期>.json 里 replayOf 指向 job 的;不给 job 就全部) */
 export async function listReplays(ws: Workspace, tutor: string, date: string, job?: string): Promise<ReplayRow[]> {
   const evalIndex = await readIndex(evalWorkspace(ws), tutor, date);
-  return evalIndex.messages.filter((m) => m.replayOf && (!job || m.replayOf === job)).map((m) => ({ evalJob: m.job, replayOf: m.replayOf as string, at: m.at, result: m.result, costUsd: m.costUsd ?? null, runtime: m.runtime ?? null }));
+  return evalIndex.messages.filter((m) => m.replayOf && (!job || m.replayOf === job)).map((m) => ({ evalJob: m.job, replayOf: m.replayOf as string, at: m.at, result: m.result, tokens: m.tokens ?? null, runtime: m.runtime ?? null }));
 }
 
 /** 终端打印 */
 export function formatCompare(c: Compare): string {
   const out: string[] = [];
-  const money = (s: RunSide): string => `${s.costUsd !== null ? `$${s.costUsd.toFixed(3)}` : '$?'}${s.timing?.doneMs !== undefined ? ` · ${(s.timing.doneMs / 1000).toFixed(1)}s` : ''}${s.runtime ? ` · ${s.runtime}` : ''}`;
+  const side = (s: RunSide): string => `${s.tokens ? tokenText(s.tokens) : 'token ?'}${s.timing?.doneMs !== undefined ? ` · ${(s.timing.doneMs / 1000).toFixed(1)}s` : ''}${s.runtime ? ` · ${s.runtime}` : ''}`;
   out.push(`回放 ${c.tutor} ${c.date} ${c.job} → evals/${c.tutor}/${c.date}.${c.evalJob}.*(${c.status})`);
-  out.push(`  - 原轮 ${c.orig.at} · ${money(c.orig)}${c.orig.error ? ` · 出错 ${c.orig.error}` : ''}`);
-  out.push(`  + 回放 ${c.next.at} · ${money(c.next)}${c.next.error ? ` · 出错 ${c.next.error}` : ''}`);
+  out.push(`  - 原轮 ${c.orig.at} · ${side(c.orig)}${c.orig.error ? ` · 出错 ${c.orig.error}` : ''}`);
+  out.push(`  + 回放 ${c.next.at} · ${side(c.next)}${c.next.error ? ` · 出错 ${c.next.error}` : ''}`);
   for (const n of c.notes) out.push(`  ! ${n}`);
   const section = (title: string, rows: DiffRow[], empty: string): void => {
     const changed = rows.filter((r) => r.s !== '·').length;

@@ -27,6 +27,7 @@ import { PHOTO_MAX_BYTES, createContext } from '../server/app.ts';
 import { MESSAGE_FROM, type MessageFrom } from '../schema/index.ts';
 import { formatEvent, laneFilter, parseEvents } from '../lib/events.ts';
 import { localDate } from '../lib/conversation.ts';
+import { sumTokens, tokenText } from '../lib/tokens.ts';
 import { rateThread, writeCapture } from '../server/store.ts';
 
 
@@ -266,8 +267,7 @@ export async function main(argv: string[]): Promise<void> {
                 if (y.error) process.stdout.write(`    #${k + 1} ${y.error}\n`);
               });
             }
-            const spent = r.costUsd > 0 ? `花了 $${r.costUsd.toFixed(3)}` : `用了 ${r.tokens.in} 进 / ${r.tokens.out} 出 token(这个运行时不报钱数)`;
-            process.stdout.write(`${spent}(老师;模拟孩子另算,很少)· 报告 ${r.file} · 每轮在 evals/${tutor}/ 里,cotutor show ${tutor} <job> --evals 看\n`);
+            process.stdout.write(`用了 ${tokenText(r.tokens)}(老师;模拟孩子另算,很少)· 报告 ${r.file} · 每轮在 evals/${tutor}/ 里,cotutor show ${tutor} <job> --evals 看\n`);
           }
           if (r.examples.some((x) => !x.pass)) process.exitCode = 1;
           return;
@@ -365,7 +365,7 @@ export async function main(argv: string[]): Promise<void> {
         if (json) { process.stdout.write(`${JSON.stringify(redactDeep(v), null, 2)}\n`); return; }
         const secs = (ms?: number): string => (ms === undefined ? '?' : `${(ms / 1000).toFixed(1)}s`);
         const out: string[] = [];
-        out.push(`${v.tutor} ${v.date} ${v.job} · ${v.from} 问 · ${v.result}${v.error ? ` · 出错 ${v.error}` : ''}${v.costUsd !== null ? ` · $${v.costUsd.toFixed(3)}` : ''}${v.timing ? ` · 首句就绪 ${secs(v.timing.firstReadyMs)} 老师写完 ${secs(v.timing.doneMs)}` : ''}`);
+        out.push(`${v.tutor} ${v.date} ${v.job} · ${v.from} 问 · ${v.result}${v.error ? ` · 出错 ${v.error}` : ''}${v.tokens ? ` · ${tokenText(v.tokens)}` : ''}${v.timing ? ` · 首句就绪 ${secs(v.timing.firstReadyMs)} 老师写完 ${secs(v.timing.doneMs)}` : ''}`);
         out.push(`问:${v.text}`);
         const src = v.pack?.sources;
         out.push(`上下文包:${v.pack ? `${v.pack.prompt.length} 字 · ${v.pack.resume ? 'resume' : '新开'} · ${v.pack.runtime}` : '没落(老轮次)'}${src ? ` · 老师文件 ${src.agent ? `${src.agent.file} ${src.agent.hash.slice(7)}` : '读不到'} · 技能 ${Object.entries(src.skills).map(([k, h]) => `${k} ${h.slice(7, 13)}`).join(' / ') || '无'}` : ''}`);
@@ -408,7 +408,7 @@ export async function main(argv: string[]): Promise<void> {
           const rows = await listReplays(ws, tutor, date);
           if (json) process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
           else if (!rows.length) process.stdout.write(`${tutor} ${date} 没有回放过(cotutor replay ${tutor} <job> ${date})\n`);
-          else for (const r of rows) process.stdout.write(`${r.evalJob}  ← ${r.replayOf}  ${r.at.slice(11)}  ${r.result}${r.costUsd !== null ? `  $${r.costUsd.toFixed(3)}` : ''}${r.runtime ? `  ${r.runtime}` : ''}\n`);
+          else for (const r of rows) process.stdout.write(`${r.evalJob}  ← ${r.replayOf}  ${r.at.slice(11)}  ${r.result}${r.tokens ? `  ${tokenText(r.tokens)}` : ''}${r.runtime ? `  ${r.runtime}` : ''}\n`);
           return;
         }
         const c = await compareReplay(ws, tutor, date, evalJobArg);
@@ -547,7 +547,7 @@ export async function main(argv: string[]): Promise<void> {
         if (!json) process.stdout.write(`→ ${tutor} ${started.date} ${started.job} 话题 ${started.thread}(${started.plan.runtime}${started.plan.resume ? ',resume ' + started.plan.session : ',新会话'})…\n`);
         const index = await started.done;
         const m = index.messages.find((x) => x.job === started.job);
-        if (json) process.stdout.write(`${JSON.stringify({ tutor, date: started.date, job: started.job, runtime: started.plan.runtime, resume: started.plan.resume, message: m, session: index.session, costUsd: index.costUsd }, null, 2)}\n`);
+        if (json) process.stdout.write(`${JSON.stringify({ tutor, date: started.date, job: started.job, runtime: started.plan.runtime, resume: started.plan.resume, message: m, session: index.session, tokens: sumTokens(index.messages) }, null, 2)}\n`);
         else if (!m || m.result !== 'ok') {
           process.stdout.write(`本轮出错:${m?.error ?? '未知'};看 conversations/${tutor}/${started.date}.${started.job}.err.log\n`);
           process.exitCode = 1;
@@ -556,7 +556,7 @@ export async function main(argv: string[]): Promise<void> {
           const secs = (ms: number): string => (ms < 120000 ? `${Math.round(ms / 100) / 10}s` : `${Math.round(ms / 6000) / 10}min`);
           const timing = [m.timing?.firstReadyMs !== undefined ? `首句就绪 ${secs(m.timing.firstReadyMs)}` : null, m.timing?.firstCardMs !== undefined ? `首卡 ${secs(m.timing.firstCardMs)}` : null, m.timing?.doneMs !== undefined ? `整轮 ${secs(m.timing.doneMs)}` : null].filter(Boolean);
           if (m.artifacts.length) process.stdout.write(`课包:${m.artifacts.join(', ')}\n`);
-          process.stdout.write(`会话 ${index.session?.id ?? '?'}${timing.length ? ' · ' + timing.join(' · ') : ''} · 本轮 ${m.costUsd === undefined && m.tokens ? `${m.tokens.in} 入 / ${m.tokens.out} 出 token(这个运行时不报钱数)` : `$${(m.costUsd ?? 0).toFixed(2)}`} · 今日 $${index.costUsd.toFixed(2)}\n`);
+          process.stdout.write(`会话 ${index.session?.id ?? '?'}${timing.length ? ' · ' + timing.join(' · ') : ''}${m.tokens ? ` · 本轮 ${tokenText(m.tokens)}` : ''}${sumTokens(index.messages) ? ` · 今日 ${tokenText(sumTokens(index.messages))}` : ''}\n`);
         }
         return;
       }

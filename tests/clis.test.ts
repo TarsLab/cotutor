@@ -17,9 +17,9 @@ const j = (o: unknown): string => JSON.stringify(o);
   const r = parseStreamJson(j({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: [{ type: 'text', text: '没有' }, { type: 'image' }] }, { type: 'text', text: 'x' }] } }));
   check('工具结果:成没成、文字', j(r) === j([{ kind: 'results', results: [{ id: 't1', ok: false, text: '没有' }], sub: false }]));
   const f = parseStreamJson(j({ type: 'result', subtype: 'success', result: ' 好 ', total_cost_usd: 0.03, num_turns: 2, usage: { input_tokens: 10, cache_read_input_tokens: 90, output_tokens: 5 }, modelUsage: { a: { outputTokens: 7 } } }));
-  check('收尾:正文、费用、轮数、token', f[0]?.kind === 'result' && j(f[0].final) === j({ ok: true, text: '好', reason: null, costUsd: 0.03, numTurns: 2, modelOut: 7, lastOut: 5, outTokens: 5, inTokens: 100 }));
+  check('收尾:正文、轮数、token(输入含缓存读;报的钱数与 modelUsage 不读)', f[0]?.kind === 'result' && j(f[0].final) === j({ ok: true, text: '好', reason: null, numTurns: 2, outTokens: 5, inTokens: 100 }), j(f[0]?.kind === 'result' ? f[0].final : null));
   const q = parseStreamJson(j({ type: 'result', subtype: 'success', is_error: false, result: '391', usage: { input_tokens: 6808, output_tokens: 22, cache_read_input_tokens: 6509, total_tokens: 6830 } }));
-  check('qwen 的收尾:没有钱数,只有 token', q[0]?.kind === 'result' && q[0].final.costUsd === undefined && q[0].final.inTokens === 13317 && q[0].final.outTokens === 22);
+  check('qwen 的收尾:没有钱数,只有 token', q[0]?.kind === 'result' && !('costUsd' in q[0].final) && q[0].final.inTokens === 13317 && q[0].final.outTokens === 22);
   const e = parseStreamJson(j({ type: 'result', subtype: 'error_max_turns', is_error: true }));
   check('出错的收尾带原因', e[0]?.kind === 'result' && !e[0].final.ok && e[0].final.reason === 'error_max_turns');
 }

@@ -741,7 +741,7 @@ export function createMock(opts: MockOptions = {}): Mock {
           const n = Math.max(0, ...reelMissRuns(reelHolds(plays), plays.filter((r) => r.k === 'type' && r.e === 'send').map((r) => r.at)).map((x) => x.n));
           if (n) th.misses = n;
         }
-        return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], turns: list.length, costUsd: list.length * 0.03, threads: [...by.values()], booking: false, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') };
+        return { name: t.name, display: t.display, avatar: t.avatar, subject: t.subject, color: colors[t.name], turns: list.length, threads: [...by.values()], booking: false, extras: tutorExtras({ subject: t.subject }).filter((x) => x !== 'talk') };
       });
       const week = weekOf(date, today).map((d) => ({ date: d, tutors: MOCK_TUTORS.filter((t) => listOf(t.name, d).length).map((t) => t.name) }));
       const out: Overview = { title, date, today, tutors, week, ready: scenario !== 'nokey' };

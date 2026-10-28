@@ -59,7 +59,7 @@ export interface RawView {
   text: string;
   result: string;
   runtime: string | null;
-  costUsd: number | null;
+  tokens: ConversationMessage['tokens'] | null;
   timing: ConversationMessage['timing'] | null;
   error: string | null;
   stations: RawStation[];
@@ -195,7 +195,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
     text: m.text,
     result: m.result,
     runtime: m.runtime ?? null,
-    costUsd: m.costUsd ?? null,
+    tokens: m.tokens ?? null,
     timing: m.timing ?? null,
     error: m.error ?? null,
     stations,

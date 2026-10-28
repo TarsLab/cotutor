@@ -48,13 +48,10 @@ const MessageObjectSchema = z.object({
   /** 这条消息带的作业照片(R5,2026-09-14):相对 workspace 根的路径(captures/<日期>/<HHMM>-<n>.jpg),上下文包 photos: 段原样给老师 Read;日记永不引用它 */
   photos: z.array(z.string().min(1)).optional(),
   result: z.enum(['running', 'ok', 'error']).default('running'),
-  /** 这一轮花了多少(美元)。claude 接着会话跑(--resume)报的是整个会话的累计,这里记的是减掉同一话题上一轮的累计之后的 */
-  costUsd: z.number().optional(),
-  /** 运行时不报钱数时(qwen)这一轮的 token:输入(含缓存读)与输出;报钱数的运行时不记 */
+  /** 这一轮的 token:输入(含缓存读)与输出;记账、显示都按它(src/lib/tokens.ts)。运行时没报(出错没收尾)就没有 */
   tokens: z.object({ in: z.number().int().nonnegative(), out: z.number().int().nonnegative() }).optional(),
-  /** 运行时报的花费原数(新版 claude 续会话时是累计)与那时的累计输出 token;下一轮拿它们判断、算自己花了多少。没有 = 老数据 */
-  sessionUsd: z.number().optional(),
-  sessionOut: z.number().optional(),
+  /** 老数据:2026-10-28 之前 claude 那几轮记的美元。不再写、不显示,留在这里免得改写索引时丢掉 */
+  costUsd: z.number().optional(),
   /** 孩子视图文本;null = 这次运行没有给孩子的话(出错或空) */
   kidText: z.string().nullable().optional(),
   /** 本次运行新增的产物 id */
@@ -156,7 +153,6 @@ export const ConversationIndexSchema = z.object({
   /** 话题 id → 那个话题的会话;今天的旧话题接着聊就 resume 它 */
   sessions: z.record(z.string(), SessionSchema).default({}),
   messages: z.array(ConversationMessageSchema).default([]),
-  costUsd: z.number().default(0),
   /** 话题 id → 家长打的星(1–5;《obsidian仓库设计.md》§4:打分的单位是话题;≥ vault.keepScore 记账时才沉淀摘要) */
   ratings: z.record(z.string(), z.number().int().min(1).max(5)).default({}),
   /** 话题 id → 记账那轮的 job(记过的不再记;日记里已有这个话题的一段) */

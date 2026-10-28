@@ -312,8 +312,7 @@ export async function deleteThread(ws: Workspace, tutor: string, date: string, t
   const keptThreads = threads(kept);
   const last = keptThreads[keptThreads.length - 1];
   const session = ths[ths.length - 1] === thread ? (last ? (sessions[last] ?? null) : null) : index.session;
-  const cost = Math.max(0, index.costUsd - gone.reduce((s, m) => s + (m.costUsd ?? 0), 0));
-  const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, session, costUsd: Math.round(cost * 1e6) / 1e6 };
+  const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, session };
   const undo = await undoThreadTraces(ws, tutor, date, gone);
   await writeIndex(ws, next);
   return { index: next, undo };

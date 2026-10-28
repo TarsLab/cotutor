@@ -18,9 +18,9 @@ export function analyzeReferenceDoc(): string {
   });
   const f = conversationFiles('conversations', '<老师>', '<日期>');
   const rows = [
-    [f.index, '一天的索引:每条消息物化了 text / kidText / section(卡与讲稿)/ tools(读了什么)/ timing / costUsd / warnings / bookkeeping;顶层 sessions / ratings / booked / costUsd'],
+    [f.index, '一天的索引:每条消息物化了 text / kidText / section(卡与讲稿)/ tools(读了什么)/ timing / tokens(这轮老师用的 token:输入 / 输出)/ warnings / bookkeeping;顶层 sessions / ratings / booked(老数据里还有 costUsd,是 claude 时代的美元,不用管)'],
     [f.run('<job>'), '这轮发给老师的:prompt(上下文包 + 消息)、argv(完整命令行)、resume / session、sources(当时的老师文件正文与 hash、技能 SKILL.md 的 hash)'],
-    [f.log('<job>'), '老师进程的 stdout 原样(stream-json):每次 tool_use 的完整参数、tool_result 的内容、文本、result(费用、轮数)。最大最全,别整个读,按 job 与关键字 grep'],
+    [f.log('<job>'), '老师进程的 stdout 原样(stream-json):每次 tool_use 的完整参数、tool_result 的内容、文本、result(token、轮数)。最大最全,别整个读,按 job 与关键字 grep'],
     [f.err('<job>'), 'stderr'],
     [f.events('<job>'), '这轮的事件流,一行一条 {t, lane, kind, …}:main 老师 / tts 配音 / ready 就绪 / index / ledger;cotutor trace 读它'],
     [f.card('<job>', 9999).replace('9999', '<n>'), '第 n 张卡的状态(孩子在卡上做的):{at, turn, state}'],

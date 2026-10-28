@@ -505,7 +505,6 @@ export interface OverviewTutor {
   subject: string | null;
   color: string;
   turns: number;
-  costUsd: number;
   threads: OverviewThread[];
   /** 正在记账(记账或整理记忆的轮还在跑):家长端清单上的「记账」灰掉、行上写「记账中」 */
   booking: boolean;
@@ -571,7 +570,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       if (n) th.misses = n;
     }
     const booking = index.messages.some((m) => (m.bookkeep || m.tidy) && m.result === 'running');
-    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name] ?? NEUTRAL_COLOR, turns: index.messages.length, costUsd: index.costUsd, threads: [...by.values()], booking, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)) });
+    tutors.push({ name: t.name, display: t.display, avatar: t.avatar ?? null, subject: t.subject ?? null, color: colors[t.name] ?? NEUTRAL_COLOR, turns: index.messages.length, threads: [...by.values()], booking, extras: t.extras.filter((x) => (x !== 'talk' || ctx.ws.config.talk.enabled)) });
   }
   const today = localDate(ctx.now());
   const names = tutors.map((t) => t.name);

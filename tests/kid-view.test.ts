@@ -66,7 +66,7 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   const base = { at: 'x', artifacts: [] as string[] };
   const idx = {
     messages: [
-      { ...base, job: '1', from: 'kid' as const, text: '为什么', result: 'ok' as const, kidText: '因为借位', costUsd: 0.1, error: null, parentText: '## 家长\n家长的话' },
+      { ...base, job: '1', from: 'kid' as const, text: '为什么', result: 'ok' as const, kidText: '因为借位', costUsd: 0.1, tokens: { in: 2500, out: 120 }, error: null, parentText: '## 家长\n家长的话' },
       { ...base, job: '2', from: 'system' as const, text: '系统派的', result: 'ok' as const, kidText: '给孩子的话' },
       { ...base, job: '3', from: 'system' as const, text: '记账', result: 'ok' as const, kidText: null },
       { ...base, job: '4', from: 'kid' as const, text: '又问', result: 'error' as const, kidText: null, error: 'error_max_turns' },
@@ -82,7 +82,7 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   check('系统消息的问句不露,只有给孩子的话', v[1].question === null && v[1].reply === '给孩子的话');
   check('出错:问句在、没有回复、没有原因', v[2].question === '又问' && v[2].reply === null && !('error' in v[2]) && !('result' in v[2]));
   check('还在跑 → pending', v[3].pending && v[3].reply === null);
-  check('序列化后搜不到工具 / 错误 / 家长尾巴 / 费用 / 答案', !/工具|error|家长的话|costUsd|result|answer/.test(JSON.stringify(v)), JSON.stringify(v));
+  check('序列化后搜不到工具 / 错误 / 家长尾巴 / 费用与 token / 答案', !/工具|error|家长的话|costUsd|tokens|result|answer/.test(JSON.stringify(v)), JSON.stringify(v));
   const withStates = kidConversation(idx, { '7': { 0: { at: 'x', turn: '7', state: { picked: [1] } } } });
   check('孩子做的状态并到卡上(答案还是剥掉),没做过的卡没有 state', JSON.stringify(withStates[4].section?.cards[0].state) === '{"picked":[1]}' && !('answer' in withStates[4].section!.cards[0].props) && !('state' in withStates[4].section!.cards[1]), JSON.stringify(withStates[4].section));
   const withAssets = kidConversation(idx, {}, { '7': { 1: ['2026-09-09.7.cards/1/1.mp3'] } });

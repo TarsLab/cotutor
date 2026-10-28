@@ -752,13 +752,16 @@ ${pageDomJs(4000)}
     const done = v.index.messages.filter((m) => m.result !== 'running');
     const first = median(done.map((m) => m.timing && m.timing.firstCardMs).filter((x) => x !== undefined && x !== null));
     const whole = median(done.map((m) => m.timing && m.timing.doneMs).filter((x) => x !== undefined && x !== null));
+    // 这天老师用的 token(输入 / 输出;没报的轮不算,src/lib/tokens.ts)
+    const used = v.index.messages.filter((m) => m.tokens);
+    const tk = { in: used.reduce((a, m) => a + m.tokens.in, 0), out: used.reduce((a, m) => a + m.tokens.out, 0) };
     $('#top').replaceChildren(
       h('span', { class: 'who' }, avatarEl(t), h('span', {}, t.display)),
       h('select', { title: '哪一天', on: { change: (e) => { state.date = e.target.value; loadDay(); } } },
         ...state.dates.map((x) => h('option', { value: x, selected: x === state.date }, x === state.today ? x + '(今天)' : x))),
       h('span', { class: 'today' },
         h('span', {}, (state.date === state.today ? '今日 ' : '这天 '), h('b', {}, String(v.index.messages.length)), ' 轮'),
-        h('span', {}, '费用 ', h('b', {}, '$' + v.index.costUsd.toFixed(2))),
+        used.length ? h('span', { title: '老师用的 token:输入 / 输出' }, 'token ', h('b', {}, kTok(tk.in) + ' / ' + kTok(tk.out))) : null,
         first !== null ? h('span', {}, '首卡中位 ', h('b', {}, secs(first))) : null,
         whole !== null ? h('span', {}, '整轮中位 ', h('b', {}, secs(whole))) : null,
         v.index.session ? h('span', {}, '会话 ' + v.index.session.id.slice(0, 8)) : null,
@@ -908,8 +911,7 @@ ${pageDomJs(4000)}
       if (m.timing.firstCardMs !== undefined) foot.append(h('span', { class: 'chip' + (m.timing.firstCardMs > SLOW_FIRST ? ' slow' : '') }, '首卡 ', h('b', {}, secs(m.timing.firstCardMs))));
       if (m.timing.doneMs !== undefined) foot.append(h('span', { class: 'chip' }, '整轮 ', h('b', {}, secs(m.timing.doneMs))));
     }
-    if (m.costUsd !== undefined) foot.append(h('span', { class: 'chip money' }, '$', h('b', {}, m.costUsd.toFixed(2))));
-    else if (m.tokens) foot.append(h('span', { class: 'chip money', title: '这个运行时不报钱数,只报 token(输入 / 输出)' }, h('b', {}, m.tokens.in + ' / ' + m.tokens.out), ' token'));
+    if (m.tokens) foot.append(h('span', { class: 'chip', title: '这一轮老师用的 token(输入 / 输出)' }, h('b', {}, m.tokens.in + ' / ' + m.tokens.out), ' token'));
     if (m.artifacts && m.artifacts.length) foot.append(h('span', { class: 'chip' }, '课包 ' + m.artifacts.join(', ')));
     if (m.deviceId) { const dv = (state.devices || {})[m.deviceId]; foot.append(h('span', { class: 'chip', title: '孩子端开在哪台设备上(概览的设备卡里起名)' }, dv ? dv.name || dv.label : '设备 ' + m.deviceId.slice(0, 4))); }
     const rows = v.runs[m.job] || [];
@@ -1682,7 +1684,7 @@ ${pageDomJs(4000)}
 
     const useBox = h('section', { class: 'blk' },
       h('div', { class: 'hd' }, h('h2', {}, '用量'), h('span', { class: 'sub' }, '近 7 天,按运行时')),
-      ...(d.usage.length ? d.usage.slice(0, 4).map((u) => h('div', { class: 'meter' }, h('div', { class: 't' }, h('b', { class: 'num' }, u.runtime), h('span', {}, u.turns + ' 轮 · ' + (u.costUsd ? '$' + u.costUsd.toFixed(2) : kTok(u.tokensIn) + ' / ' + kTok(u.tokensOut) + ' token'))))) : [h('p', { class: 'note' }, '七天里没跑过老师')]),
+      ...(d.usage.length ? d.usage.slice(0, 4).map((u) => h('div', { class: 'meter' }, h('div', { class: 't' }, h('b', { class: 'num' }, u.runtime), h('span', {}, u.turns + ' 轮 · ' + kTok(u.tokensIn) + ' / ' + kTok(u.tokensOut) + ' token')))) : [h('p', { class: 'note' }, '七天里没跑过老师')]),
       h('div', { class: 'rule' }),
       h('div', { class: 'meter' }, h('div', { class: 't' }, h('b', {}, '画图 · 今天'), h('span', {}, d.paint.today + ' 张'))));
 

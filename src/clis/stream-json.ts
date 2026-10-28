@@ -5,7 +5,7 @@
  * - `{"type":"stream_event","event":{…}}`:`--include-partial-messages` 才有;message_start 开新的一条,content_block_delta 的 text_delta 是正文、thinking_delta 是在想
  * - `{"type":"assistant","message":{"content":[text / tool_use 块]}}`:一条整的回复
  * - `{"type":"user","message":{"content":[tool_result 块]}}`:工具结果
- * - `{"type":"result","subtype","is_error","result","total_cost_usd","num_turns","usage","modelUsage"}`:收尾
+ * - `{"type":"result","subtype","is_error","result","num_turns","usage"}`:收尾;记账只认 usage 的 token(total_cost_usd 有也不读)
  * parent_tool_use_id 非空的是子代理的。
  */
 import type { AssistantPart, CliEvent, CliFinal, ToolResult } from './types.ts';
@@ -31,8 +31,6 @@ interface Line {
   message?: { content?: unknown };
   is_error?: boolean;
   num_turns?: unknown;
-  total_cost_usd?: unknown;
-  modelUsage?: Record<string, { outputTokens?: unknown }>;
   usage?: { input_tokens?: unknown; output_tokens?: unknown; cache_read_input_tokens?: unknown; cache_creation_input_tokens?: unknown };
   terminal_reason?: string;
   result?: unknown;
@@ -52,10 +50,8 @@ function finalOf(e: Line): CliFinal {
     ok: !failed,
     text,
     reason: failed ? (e.subtype && e.subtype !== 'success' ? e.subtype : (e.terminal_reason ?? '未知')) : null,
-    costUsd: num(e.total_cost_usd),
     numTurns: num(e.num_turns),
-    ...(e.modelUsage && typeof e.modelUsage === 'object' ? { modelOut: Object.values(e.modelUsage).reduce((s, m) => s + (typeof m?.outputTokens === 'number' ? m.outputTokens : 0), 0) } : {}),
-    ...(num(u?.output_tokens) !== undefined ? { lastOut: num(u?.output_tokens), outTokens: num(u?.output_tokens) } : {}),
+    ...(num(u?.output_tokens) !== undefined ? { outTokens: num(u?.output_tokens) } : {}),
     ...(inTokens !== undefined ? { inTokens } : {}),
   };
 }

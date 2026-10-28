@@ -64,7 +64,7 @@ const lastLine = prompt.trim().split('\n').filter(Boolean).pop() ?? '';
 
 // 整块 JSON 出(--output-format json):通用 JSON 壳,正文原样回提示词的最后一行
 if (outputFormat === 'json') {
-  emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.0021, duration_ms: 900, result: lastLine });
+  emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, usage: { input_tokens: 100, output_tokens: 10 }, duration_ms: 900, result: lastLine });
   process.exit(0);
 }
 
@@ -95,7 +95,7 @@ if (prompt.includes('起就卡')) {
     const text = '句话接上了。';
     start(); delta(text);
     emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'text', text }] } });
-    emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.01, result: text });
+    emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, usage: { input_tokens: 100, output_tokens: 10 }, result: text });
     process.exit(0);
   }
   // 工具调用写成正文(qwen 没那个工具时,10-21):「写成正文」先说一句再写一块 <tool_call>,停在那里;resume 来的「(应用注)…没有执行」照常回一句。「一直写成正文」每次都写
@@ -103,7 +103,7 @@ if (prompt.includes('起就卡')) {
     const text = `${said}<tool_call>\n<function=Read>\n<parameter=file_path>\nconversations/x.cards/0.png\n</parameter>\n</function>\n</tool_call>`;
     start(); delta(text);
     emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'text', text }] } });
-    emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.01, result: text });
+    emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, usage: { input_tokens: 100, output_tokens: 10 }, result: text });
     process.exit(0);
   };
   if (prompt.includes('(应用注)') && prompt.includes('没有执行')) {
@@ -111,7 +111,7 @@ if (prompt.includes('起就卡')) {
     const text = '看到你的画了,楼画得真高!';
     start(); delta(text);
     emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'text', text }] } });
-    emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.01, result: text });
+    emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, usage: { input_tokens: 100, output_tokens: 10 }, result: text });
     process.exit(0);
   }
   if (prompt.includes('一直写成正文')) { fsWrite('.always-leak', ''); leak(''); }
@@ -200,7 +200,7 @@ if (fail) {
     emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'text', text: result }] } });
     emit({ type: 'stream_event', event: { type: 'message_stop' }, session_id: sid, parent_tool_use_id: null });
   }
-  emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 2, ...(qwenish ? { usage: { input_tokens: 2000, output_tokens: 120, cache_read_input_tokens: 500, total_tokens: 2620 } } : { total_cost_usd: 0.05 }), result });
+  emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 2, ...(qwenish ? { usage: { input_tokens: 2000, output_tokens: 120, cache_read_input_tokens: 500, total_tokens: 2620 } } : { usage: { input_tokens: 1000, output_tokens: 50 }, total_cost_usd: 0.05 }), result });
 }
 process.stderr.write('fake-cli done\n');
 // 消息走 stdin 的:用于测试预热,回完还等下一条,stdin 关了才退

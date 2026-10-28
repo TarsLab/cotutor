@@ -940,7 +940,7 @@ export class Runner {
       transcript.final = { text: null, ok: false, reason: exit.spawnError ? `spawn:${exit.spawnError.message}` : `exit:${exit.code ?? 'signal'}` };
       transcript.items.push({ kind: 'done', text: `本轮没有收尾(${transcript.final.reason}),看 ${date}.${job}.err.log` });
     }
-    emit({ lane: 'main', kind: 'exit', ok: transcript.final.ok, ...(transcript.final.reason ? { reason: transcript.final.reason } : {}), ...(transcript.final.costUsd !== undefined ? { costUsd: transcript.final.costUsd } : {}), ...(transcript.final.numTurns !== undefined ? { turns: transcript.final.numTurns } : {}) });
+    emit({ lane: 'main', kind: 'exit', ok: transcript.final.ok, ...(transcript.final.reason ? { reason: transcript.final.reason } : {}), ...(transcript.final.inTokens !== undefined ? { tokens: { in: transcript.final.inTokens, out: transcript.final.outTokens ?? 0 } } : {}), ...(transcript.final.numTurns !== undefined ? { turns: transcript.final.numTurns } : {}) });
     const kidView = deriveKidView(transcript, { replyMaxChars }, { live: active.live });
     if (unexpected.length) kidView.warnings.push(`${plan.cli} 起来时带着这轮不该有的工具:${unexpected.join('、')}(${plan.tools === 'off' ? '这轮应该一个工具都不带' : '这轮只该带只读的几样'});关工具的旗标可能随 CLI 升级失效了,看 src/clis/${plan.cli}.ts`);
     if (leaked) kidView.warnings.push('老师把工具调用写成了正文、停在那里等结果(板上没出、嘴没念),应用 resume 同一个会话叫它直接回孩子');

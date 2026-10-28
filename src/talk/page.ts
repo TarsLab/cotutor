@@ -6,6 +6,7 @@
  */
 import { TUTOR_FACE_CSS, TUTOR_FACE_JS, backTutorJson } from '../server/tutor-face.ts';
 import { KID_NAV_JS } from '../server/kid-nav.ts';
+import { pageDomJs } from '../server/page-dom.ts';
 import { KID_LOG_JS } from '../server/kid-log.ts';
 import { SNAP_CSS, cameraSvg, snapHtml } from '../server/photo-ui.ts';
 import { faviconLinks } from '../lib/favicon.ts';
@@ -115,11 +116,8 @@ ${SNAP_CSS}
 // 孩子端的流水(kid-log.ts):最先装上出错的监听
 __KID_LOG_JS__
 (() => {
-  const $ = (s) => document.querySelector(s);
-  const h = (tag, attrs, ...kids) => { const el = document.createElement(tag); for (const k in attrs || {}) { if (k === 'class') el.className = attrs[k]; else if (k === 'on') { for (const e in attrs[k]) el.addEventListener(e, attrs[k][e]); } else if (k === 'html') el.innerHTML = attrs[k]; else if (attrs[k] !== null && attrs[k] !== undefined) el.setAttribute(k, attrs[k]); } for (const c of kids.flat()) if (c !== null && c !== undefined) el.append(c); return el; };
-  const api = async (method, path, body) => { const r = await fetch(path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => null); if (!r.ok) throw new Error((j && (j.message || j.error)) || ('HTTP ' + r.status)); return j; };
-  let toastTimer = null;
-  const toast = (s) => { const t = $('#toast'); t.textContent = s; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2400); };
+  // $ / h / toast / api(../server/page-dom.ts,几页共用)
+${pageDomJs(2400)}
   let info = null;
 
   // ---- 路由:#/ 拍照、#/list/<id> 看口语单 ----

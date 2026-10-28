@@ -10,6 +10,7 @@
  */
 import { faviconLinks } from '../lib/favicon.ts';
 import { DEV_CSS } from './dev-theme.ts';
+import { pageDomJs } from './page-dom.ts';
 import { BRAND_CSS, BRAND_NAME, BRAND_URL, brandLogo } from './brand.ts';
 
 export const DEV_PAGE = `<!doctype html>
@@ -613,23 +614,8 @@ ${BRAND_CSS}
 <div id="drawer"></div>
 <script>
 (() => {
-  const $ = (s, el = document) => el.querySelector(s);
-  const h = (tag, attrs = {}, ...kids) => {
-    const el = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs)) {
-      if (k === 'class') el.className = v;
-      else if (k === 'on') for (const [e, f] of Object.entries(v)) el.addEventListener(e, f);
-      else if (v !== undefined && v !== null && v !== false) el.setAttribute(k, v === true ? '' : v);
-    }
-    for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false) el.append(k.nodeType ? k : document.createTextNode(String(k)));
-    return el;
-  };
-  const api = async (method, path, body) => {
-    const r = await fetch(path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
-    const j = await r.json().catch(() => null);
-    if (!r.ok) throw new Error((j && j.message) || (j && j.error) || (r.status + ' ' + r.statusText));
-    return j;
-  };
+  // $ / h / api(page-dom.ts,几页共用;这页没有 #toast)
+${pageDomJs(4000)}
   const copy = (text, btn) => {
     const done = () => { const old = btn.textContent; btn.textContent = '复制好了'; setTimeout(() => { btn.textContent = old; }, 1200); };
     if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, () => {});

@@ -6,6 +6,7 @@
  * 内联脚本里不写反斜杠、不写反引号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
 import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from '../server/reel-dock.ts';
+import { pageDomJs } from '../server/page-dom.ts';
 import { faviconLinks } from '../lib/favicon.ts';
 
 export const DICTATION_REEL_PAGE = `<!doctype html>
@@ -31,10 +32,9 @@ ${REEL_DOCK_HTML}
 <script>
 (() => {
   'use strict';
-  const $ = (s) => document.querySelector(s);
+  // $ / h / toast / api(../server/page-dom.ts,几页共用)
+${pageDomJs(4000)}
 ${REEL_DOCK_JS}
-  let toastTimer = 0;
-  const toast = (text) => { const t = $('#toast'); t.textContent = text; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4000); };
   const blank = (text) => { $('#rl-screen').hidden = true; reelDock.close(); const b = document.createElement('div'); b.className = 'blank'; b.textContent = text; document.body.prepend(b); };
   const exit = () => { if (history.length > 1) history.back(); else location.href = '/parent/dictation'; };
   // 孩子的屏幕放的声音用这一个 Audio:家长第一次点这一页时放一段静音解锁

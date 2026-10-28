@@ -9,6 +9,7 @@
  */
 import { faviconLinks } from '../lib/favicon.ts';
 import { BRAND_CSS, BRAND_FOOTER, BRAND_JS, titleLogo } from './brand.ts';
+import { pageDomJs } from './page-dom.ts';
 
 export const PARENT_HOME_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -136,11 +137,8 @@ ${BRAND_CSS}
 <script>
 (() => {
 ${BRAND_JS}
-  const $ = (s) => document.querySelector(s);
-  const h = (tag, attrs, ...kids) => { const el = document.createElement(tag); for (const k in attrs || {}) { const v = attrs[k]; if (k === 'class') el.className = v; else if (k === 'on') { for (const e in v) el.addEventListener(e, v[e]); } else if (k === 'html') el.innerHTML = v; else if (v !== null && v !== undefined && v !== false) el.setAttribute(k, v === true ? '' : v); } for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) el.append(c); return el; };
-  const api = async (method, path, body) => { const r = await fetch(path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => null); if (!r.ok) throw new Error((j && (j.message || j.error)) || ('HTTP ' + r.status)); return j; };
-  let toastTimer = 0;
-  const toast = (s) => { const t = $('#toast'); t.textContent = s; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 3200); };
+  // $ / h / toast / api(page-dom.ts,几页共用)
+${pageDomJs(3200)}
   const CHEV = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>';
   const GRIP = '<svg width="14" height="18" viewBox="0 0 14 18" aria-hidden="true"><g fill="currentColor"><circle cx="4" cy="4" r="1.6"></circle><circle cx="10" cy="4" r="1.6"></circle><circle cx="4" cy="9" r="1.6"></circle><circle cx="10" cy="9" r="1.6"></circle><circle cx="4" cy="14" r="1.6"></circle><circle cx="10" cy="14" r="1.6"></circle></g></svg>';
   const PLAY = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z" fill="currentColor"></path></svg>';

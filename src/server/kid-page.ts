@@ -42,6 +42,7 @@ import { albumSvg, cameraSvg } from './photo-ui.ts';
 import { AUDIO_CLIENT_JS } from '../live/audio-client.ts';
 import { VOICE_CSS, VOICE_JS } from './voice-ui.ts';
 import { KID_NAV_JS } from './kid-nav.ts';
+import { pageDomJs } from './page-dom.ts';
 import { KID_LOG_JS } from './kid-log.ts';
 import { BACK_TINT_CSS, BACK_TINT_JS } from './tutor-face.ts';
 import { BOARD_MARK_CSS, BOARD_MARK_HAND_LEFT_CSS, BOARD_MARK_JS } from './board-mark.ts';
@@ -796,19 +797,9 @@ __BRAND_JS__
   const AUDIO = '/api/audio/';
   // 家长端在电脑上,标题前的 logo 悬停也点一下头;孩子端只有点一下
   if (PARENT && ctMark) ctMark.classList.add('ct-hover');
-  const $ = (s) => document.querySelector(s);
-  const h = (tag, attrs = {}, ...kids) => {
-    const el = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs)) {
-      if (k === 'class') el.className = v;
-      else if (k === 'html') el.innerHTML = v;
-      else if (k === 'on') for (const [e, f] of Object.entries(v)) el.addEventListener(e, f);
-      else if (v !== undefined && v !== null) el.setAttribute(k, v);
-    }
-    for (const k of kids.flat()) if (k !== null && k !== undefined) el.append(k.nodeType ? k : document.createTextNode(String(k)));
-    return el;
-  };
-  const SVG = (paths, size, sw) => '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (sw || 2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>';
+  // $ / h / toast / api(page-dom.ts,几页共用)
+${pageDomJs(4000)}
+  const SVG =(paths, size, sw) => '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (sw || 2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>';
   const ICON = {
     back: SVG('<path d="M15 5l-7 7 7 7"></path>', 28, 2.2),
     // 相机、相册同拍照听写那几屏(photo-ui.ts);加号面板里两个一样大
@@ -836,13 +827,10 @@ __BRAND_JS__
     start: SVG('<path d="M8 5l11 7-11 7z" fill="currentColor"></path>', 18, 1.5),
     spark: SVG('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"></path>', 24, 1.8),
   };
-  const api = async (method, path, body) => {
-    const r = await fetch(path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
-    // 服务重起过(启动号变了)→ 记下,空下来自己重载(见 staleReload)
+  // 服务重起过(启动号变了)→ 记下,空下来自己重载(见 staleReload)
+  apiSeen = (r) => {
     const boot = r.headers.get('x-cotutor-boot');
     if (boot) { if (!bootId) bootId = boot; else if (boot !== bootId) stale = true; }
-    if (!r.ok) { const e = new Error('http ' + r.status); e.status = r.status; try { e.body = await r.json(); } catch { e.body = null; } throw e; }
-    return r.json();
   };
   let bootId = null, stale = false;
   // 学科色:服务端定好随老师下发(t.color,src/lib/tutor-color.ts);不归哪位老师的块用中性的灰
@@ -939,8 +927,6 @@ ${BOARD_MARK_JS}
 
   // ---- 首页:老师卡在上,其余卡照发布的顺序;按钮决定进老师页之后的话题 ----
   const BUTTON_ICON = { new: 'spark', start: 'start', continue: 'again', lecture: 'play' };
-  let toastTimer = null;
-  const toast = (text) => { const t = $('#toast'); t.textContent = text; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4000); };
   const pickButton = (t, b) => {
     const via = { home: S.home.home, button: b.id };
     // 今天同一个入口聊过的(b.resume):新话题在空白板上放一个胶囊;activity、小课堂先问接着那个还是重新开始

@@ -14,7 +14,7 @@ import { DEVICE_COOKIE, DEVICE_COOKIE_DAYS, DEVICE_ID_RE, deviceLabel } from '..
 /**
  * 各页共用的那段脚本:装上出错的监听,kidLog.start({page, mode, v, ctx}) 报一次打开(只在 mode 是 kid 时)。
  * 孩子端模式下还在前台计时(7.4):切到后台、离开页面时记一笔 fg,一直开着每 5 分钟也记一笔;不满 1 秒的不记。
- * 打开那行带 caps(7.2):麦克风权限(问 navigator.permissions,问不出 unknown;最多等 1.5 秒)、有没有 getUserMedia、有没有语音识别;
+ * 打开那行带 caps(7.2):麦克风权限(问 navigator.permissions,问不出 unknown;最多等 1.5 秒)、有没有 getUserMedia;
  * 麦克风权限变了、kidLog.blocked('autoplay')(老师的声音被浏览器拦了,一次打开只记一次)各记一行 perm。
  * 连接(7.3):kidLog.offline(on) 心跳断了 / 又通了,通了那一下记 net offline 与断了多久;kidLog.live(opened, ms) 实时老师的连接不是孩子自己收的、自己关了。
  * 同一次打开里同一条报错只报一次、最多 20 条(防一个死循环写满文件,是护栏不是限额);只收脚本错,图片、声音读不出不收。
@@ -72,7 +72,7 @@ export const KID_LOG_JS = `
         if (mode !== 'kid') return;
         var standalone = Boolean(navigator.standalone);
         try { standalone = standalone || matchMedia('(display-mode: standalone)').matches; } catch (e) {}
-        var caps = { mic: 'unknown', gum: Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia), sr: Boolean(window.SpeechRecognition || window.webkitSpeechRecognition) };
+        var caps = { mic: 'unknown', gum: Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) };
         var opened = false;
         var sendOpen = function (mic) {
           if (opened) return;
@@ -95,11 +95,10 @@ export const KID_LOG_JS = `
   })();
 `;
 
-/** 打开时的权限与能力(7.2):麦克风权限、有没有 getUserMedia、有没有语音识别 */
+/** 打开时的权限与能力(7.2):麦克风权限、有没有 getUserMedia(2026-10-22 删了浏览器识别,不再探语音识别;老设备表里的 sr 留着不读) */
 export interface KidCaps {
   mic: 'granted' | 'denied' | 'prompt' | 'unknown';
   gum: boolean;
-  sr: boolean;
 }
 const MIC_STATES = ['granted', 'denied', 'prompt', 'unknown'] as const;
 const micState = (v: unknown): KidCaps['mic'] => ((MIC_STATES as readonly unknown[]).includes(v) ? (v as KidCaps['mic']) : 'unknown');
@@ -153,7 +152,7 @@ export function parseKidLog(body: unknown): KidLogRow | null {
   const b = body as Record<string, unknown>;
   if (b.k === 'open') {
     const c = b.caps && typeof b.caps === 'object' ? (b.caps as Record<string, unknown>) : null;
-    return { k: 'open', page: str(b.page, 40), v: str(b.v, 40), ua: str(b.ua, 400), touch: num(b.touch), standalone: b.standalone === true, w: num(b.w), h: num(b.h), vw: num(b.vw), vh: num(b.vh), dpr: num(b.dpr), lang: str(b.lang, 20), ...(c ? { caps: { mic: micState(c.mic), gum: c.gum === true, sr: c.sr === true } } : {}) };
+    return { k: 'open', page: str(b.page, 40), v: str(b.v, 40), ua: str(b.ua, 400), touch: num(b.touch), standalone: b.standalone === true, w: num(b.w), h: num(b.h), vw: num(b.vw), vh: num(b.vh), dpr: num(b.dpr), lang: str(b.lang, 20), ...(c ? { caps: { mic: micState(c.mic), gum: c.gum === true } } : {}) };
   }
   if (b.k === 'net') {
     const ms = typeof b.ms === 'number' && b.ms >= 0 && b.ms <= 86_400_000 ? Math.round(b.ms) : null;
@@ -216,7 +215,7 @@ export async function recordKidLog(ws: Workspace, row: KidLogRow, who: { device:
       const dev = d[who.device];
       if (!dev) return;
       if (row.what === 'autoplay') dev.blockedAt = line.at;
-      else dev.caps = { ...(dev.caps ?? { gum: true, sr: true }), mic: micState(row.state) };
+      else dev.caps = { ...(dev.caps ?? { gum: true }), mic: micState(row.state) };
     });
     return;
   }

@@ -70,7 +70,7 @@ try {
 
   // ---- Chrome:孩子端节头缩略图 → 直开画板舞台 → excalidraw 场景里有底图 → 画一笔给老师看 ----
   const secIdx = 0;
-  const url = `${base}/?tutor=math-tutor&step=${secIdx}.0&stage=${secIdx}.${canvasIdx}`;
+  const url = `${base}/?tutor=math-tutor&stage=${secIdx}.${canvasIdx}`;
   browser = spawn(chrome, [...QUIET_ARGS, '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--remote-debugging-port=${cdp}`, '--window-size=1180,820', `--user-data-dir=${join(home, 'chrome')}`, url], { stdio: 'ignore' });
   let wsUrl = null;
   for (let i = 0; i < 40 && !wsUrl; i++) { try { const list = await (await fetch(`http://127.0.0.1:${cdp}/json`)).json(); wsUrl = list.find((t) => t.type === 'page' && t.url.startsWith('http'))?.webSocketDebuggerUrl ?? null; } catch {} if (!wsUrl) await sleep(250); }

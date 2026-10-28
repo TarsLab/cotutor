@@ -37,7 +37,7 @@ check('KID_LOG_JS 能插进模板字符串(没有反斜杠、反引号)', !/[\\`
 {
   type Handler = (e: unknown) => void;
   type Fake = { log: { start(o: Record<string, unknown>): void } & Record<string, (...a: unknown[]) => void>; posts: Record<string, unknown>[]; fire(type: string, e: unknown): void; doc: { hidden: boolean; fire(type: string): void }; clock: { t: number }; tick(): void; later(): void };
-  /** 假的 window / document / 钟 / 定时器;nav 盖在缺省的 navigator 上(权限、语音识别那几样) */
+  /** 假的 window / document / 钟 / 定时器;nav 盖在缺省的 navigator 上(权限那几样) */
   const run = (over: { nav?: Record<string, unknown>; win?: Record<string, unknown> } = {}): Fake => {
     const handlers: Record<string, Handler[]> = {};
     const docHandlers: Record<string, Handler[]> = {};
@@ -61,7 +61,7 @@ check('KID_LOG_JS 能插进模板字符串(没有反斜杠、反引号)', !/[\\`
   const a = run();
   a.log.start({ page: 'kid', mode: 'kid', v: 'abc', ctx: () => ({ tutor: 'chinese-tutor' }) });
   const open = a.posts[0];
-  check('孩子端:报一次打开,带认设备要的那几样;问不出权限的(没有 navigator.permissions)马上报、麦克风 unknown', a.posts.length === 1 && open.k === 'open' && open.page === 'kid' && open.v === 'abc' && open.ua === 'UA-x' && open.touch === 5 && open.standalone === true && open.w === 820 && open.dpr === 2 && open.lang === 'zh-CN' && JSON.stringify(open.caps) === '{"mic":"unknown","gum":false,"sr":false}', JSON.stringify(open));
+  check('孩子端:报一次打开,带认设备要的那几样;问不出权限的(没有 navigator.permissions)马上报、麦克风 unknown', a.posts.length === 1 && open.k === 'open' && open.page === 'kid' && open.v === 'abc' && open.ua === 'UA-x' && open.touch === 5 && open.standalone === true && open.w === 820 && open.dpr === 2 && open.lang === 'zh-CN' && JSON.stringify(open.caps) === '{"mic":"unknown","gum":false}', JSON.stringify(open));
   a.fire('error', { message: 'x is null', lineno: 12, colno: 3, error: { stack: 'at f' } });
   a.fire('error', { message: 'x is null', lineno: 12, colno: 3, error: { stack: 'at f' } });
   const err = a.posts[1];
@@ -94,10 +94,10 @@ check('KID_LOG_JS 能插进模板字符串(没有反斜杠、反引号)', !/[\\`
 
   // 权限与能力(7.2):问得出麦克风权限等它再报打开;变了记 perm;问不出(一直不回)1.5 秒后照报 unknown;声音被拦一次打开只记一次
   const st: { state: string; onchange: null | (() => void) } = { state: 'granted', onchange: null };
-  const c = run({ nav: { permissions: { query: () => Promise.resolve(st) }, mediaDevices: { getUserMedia: () => null } }, win: { webkitSpeechRecognition: function () {} } });
+  const c = run({ nav: { permissions: { query: () => Promise.resolve(st) }, mediaDevices: { getUserMedia: () => null } } });
   c.log.start({ page: 'kid', mode: 'kid' });
   await Promise.resolve(); await Promise.resolve();
-  check('打开带 caps:麦克风 granted、有 getUserMedia、有语音识别', c.posts.length === 1 && JSON.stringify(c.posts[0].caps) === '{"mic":"granted","gum":true,"sr":true}', JSON.stringify(c.posts));
+  check('打开带 caps:麦克风 granted、有 getUserMedia', c.posts.length === 1 && JSON.stringify(c.posts[0].caps) === '{"mic":"granted","gum":true}', JSON.stringify(c.posts));
   st.state = 'denied'; st.onchange?.();
   c.later();
   check('麦克风权限变了记一行 perm;1.5 秒的兜底不再报一次打开', c.posts.length === 2 && c.posts[1].k === 'perm' && c.posts[1].what === 'mic' && c.posts[1].state === 'denied', JSON.stringify(c.posts));
@@ -173,7 +173,7 @@ check('连接:断线、实时收下;不认得的、没有毫秒、负的 400', n
 check('前台一笔收下;0、超过 6 小时、不是数的 400', fgOk.status === 200 && (await readKidLog(ctx.ws, ['2026-10-22'])).some((l) => l.k === 'fg' && l.ms === 90_000) && fgBad.every((r) => r.status === 400), fgBad.map((r) => r.status).join());
 
 const capsOpen = await route('POST', '/api/kid/log', ctx, { ...openBody, caps: { mic: 'granted', gum: true, sr: false } }, 'local', { device: id });
-check('打开带 caps:设备表记最近的', capsOpen.status === 200 && JSON.stringify((await readDevices(ctx.ws))[id].caps) === '{"mic":"granted","gum":true,"sr":false}');
+check('打开带 caps:设备表记最近的;老页面带的 sr 不收', capsOpen.status === 200 && JSON.stringify((await readDevices(ctx.ws))[id].caps) === '{"mic":"granted","gum":true}');
 await route('POST', '/api/kid/log', ctx, { k: 'perm', page: 'kid', what: 'mic', state: 'denied' }, 'local', { device: id });
 await route('POST', '/api/kid/log', ctx, { k: 'perm', page: 'kid', what: 'autoplay', state: 'blocked' }, 'local', { device: id });
 const afterPerm = (await readDevices(ctx.ws))[id];

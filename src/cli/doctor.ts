@@ -176,7 +176,7 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
 
   const voiced = tutors.find((x) => x.voice);
   if (!voiced) {
-    push({ name: 'live.tts', ok: true, required: false, detail: '没有老师配 voice,不探配音(孩子端用浏览器的声)' });
+    push({ name: 'live.tts', ok: true, required: false, detail: '没有老师配 voice,不探配音(点读、单词卡没有声音)' });
     return;
   }
   const dir = await mkdtemp(join(tmpdir(), 'cotutor-doctor-'));
@@ -572,9 +572,9 @@ export async function doctorWorkspace(
       const ttsBin = runtimeCli(ws.config.tts.say);
       try {
         await execFileP(ttsBin, ['--version'], { timeout: 8000 });
-        push({ name: 'tts', ok: true, required: false, detail: `${ttsBin} 在;老师配了 voice 的回复会配音` });
+        push({ name: 'tts', ok: true, required: false, detail: `${ttsBin} 在;老师配了 voice 的,卡上的点读段、单词会配音` });
       } catch {
-        push({ name: 'tts', ok: false, required: false, detail: `PATH 里没有 ${ttsBin},回复不配音(孩子端用浏览器的声)`, fix: `装 ${ttsBin},或改 cotutor.json 的 tts.say` });
+        push({ name: 'tts', ok: false, required: false, detail: `PATH 里没有 ${ttsBin},卡不配音(点读、单词卡没有声音)`, fix: `装 ${ttsBin},或改 cotutor.json 的 tts.say` });
       }
       for (const [runtime, p] of Object.entries(ws.config.runtimes)) {
         if (runtime === 'default' || typeof p === 'string' || runtimeIssue(p)) continue;

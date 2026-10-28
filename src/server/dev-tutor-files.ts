@@ -6,7 +6,7 @@
  */
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
-import { restoreTutor, sha256, shippedTutorText, tutorFiles, tutorStatuses, type TutorState } from '../cli/tutors.ts';
+import { restoreTutor, sha256, shippedTutorText, tutorFile, tutorStatuses, type TutorState } from '../cli/tutors.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { lintAgentFile, parseAgentFile, type AgentFileIssue } from '../lib/agent-file.ts';
 import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody } from '../lib/tutor-rules.ts';
@@ -34,7 +34,7 @@ export interface DevTutorFileRow {
   buttons: number;
 }
 
-const fileOf = (ws: Workspace, tutor: string): string => tutorFiles(ws.root, tutor).claude;
+const fileOf = (ws: Workspace, tutor: string): string => tutorFile(ws.root, tutor);
 
 async function stateOf(ws: Workspace, tutor: string): Promise<{ state: TutorFileState; basedOn?: string }> {
   const st = (await tutorStatuses(ws.root)).find((s) => s.name === tutor);

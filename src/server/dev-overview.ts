@@ -246,7 +246,6 @@ async function kidSide(ws: Workspace, today: string, days: readonly string[]): P
   const flagsOf = (d: KidDevice): DevDevice['flags'] => [
     ...(d.caps?.mic === 'denied' ? [{ text: '麦克风拒了', level: 'err' as const }] : []),
     ...(d.caps && !d.caps.gum ? [{ text: '没有麦克风接口', level: 'err' as const }] : []),
-    ...(d.caps && !d.caps.sr ? [{ text: '没有语音识别', level: 'warn' as const }] : []),
     ...(d.blockedAt && d.blockedAt >= weekStart ? [{ text: '声音被拦过', level: 'warn' as const }] : []),
   ];
   const row = ([id, d]: [string, KidDevice]): DevDevice => ({ id, name: d.name ?? null, label: d.label, last: d.last, today: opensToday.get(id) ?? 0, todayMs: fgToday.get(id) ?? 0, errors: errorsBy.get(id) ?? 0, commit: d.commit ?? null, flags: flagsOf(d) });

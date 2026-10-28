@@ -252,7 +252,7 @@ export const DictationSchema = z.object({
 export type DictationConfig = z.infer<typeof DictationSchema>;
 
 /**
- * 你说我画:画图卡(paint)用哪个文生图模型、画多大、一天最多几张、画成什么样。
+ * 你说我画:画图卡(paint)用哪个文生图模型、画多大、画成什么样(一天几张的上限 10-21 去掉了,老配置里的 daily 不认)。
  * 画风在 activity 文件「画家收到什么」那节;PAINT_PROMPT_DEFAULT 是出厂那节的画风,不在 activity 话题里画照它。版式、角色、分幅由应用接(src/paint/prompt.ts)。
  * 2026-10-11 拿「小熊和小猴种西瓜」四格试:qwen-image-2.0 4 秒、qwen-image-2.0-pro 15 秒,四格里角色都对得上;pro 的表情(低头、脸红)更到位。
  * 2026-10-13 缺省换 qwen-image-3.0-pro:千问 Token Plan 有它(一张约 50 Credits),2.0 系列没有;同一个四格 10 秒,画风照提示词,角色分到哪格有几处没对上。
@@ -303,7 +303,7 @@ export const CotutorConfigSchema = z
       .optional()
       .describe('给老师换样子(figshot pick):它在这台电脑的哪个端口(缺省 8477)。配了孩子端首页多一张「给老师们换个样子」,figshot 没开着就不出现;不配就没有这张卡'),
     dictation: DictationSchema.default(DICTATION_DEFAULT).describe('听写(/dictation):拍照认词表用的模型(改了不用重起服务);挑词的要求在听写 activity 文件「认字收到什么」'),
-    paint: PaintSchema.default(PAINT_DEFAULT).describe('你说我画:画图卡(paint)用的文生图模型、尺寸、一天几张(改了不用重起服务);画风在 activity 文件「画家收到什么」'),
+    paint: PaintSchema.default(PAINT_DEFAULT).describe('你说我画:画图卡(paint)用的文生图模型、尺寸(改了不用重起服务);画风在 activity 文件「画家收到什么」'),
     talk: TalkSchema.default(TALK_DEFAULT).describe('口语课(/talk):孩子拍一张今天学的,改好口语单交给英语老师的实时页(先热身、再打电话);enabled 出厂 false'),
     live: LiveSchema.default(LIVE_DEFAULT).describe('实时老师:有脸的老师都由 realtime 模型开口、老师 CLI 在后面写板书(讲稿不配音、嘴照念);voices 挑嘴的音色;要百炼按量 key 与业务空间 id'),
   })

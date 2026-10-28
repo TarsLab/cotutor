@@ -1,9 +1,9 @@
 /**
  * 发消息 = 拼上下文包 → 按运行时 spawn / resume → stream-json 落 conversations/<老师>/<日期>.<job>.log → 索引更新
- * (最终文本 → 板书节 section + 讲稿逐句配音 <日期>.<job>.<n>.mp3 + 家长尾巴 parentText + 解析提醒 warnings)。
+ * (最终文本 → 板书节 section + 家长尾巴 parentText + 解析提醒 warnings)。
  * 流式:stdout 经本进程落盘,同时喂 PartialReader 拼当前回复正文 → parseBoard(partial) → 内存里的 partial section
- * (孩子端 pending 条目带着它,卡随围栏闭合逐张出现);讲稿每定稿一句就开始配音,整轮跑完只等没配完的;
- * 点读段等资产在索引写好之后后台接着配(同一条队列),孩子端点到还没好的段用浏览器的声。
+ * (孩子端 pending 条目带着它,卡随围栏闭合逐张出现);讲稿不配音,交给实时的嘴照念。
+ * 点读段、单词等卡的资产在索引写好之后后台配,孩子端点到还没好的段等它到,等不到就不出声。
  * 一老师同时只跑一条(老师还在回上一条就 409),跨天自动新开(索引按本地日期分文件,新文件没 session 就不带 --resume)。
  * 话题(2026-09-11):一天可多个,每个话题自己的会话(index.sessions[thread]);newThread / 系统消息 / 今天第一条开新话题(不 resume、不带旧卡),
  * 指定 thread 接着今天的旧话题(resume 它的会话),缺省接当前话题。
@@ -784,7 +784,7 @@ export class Runner {
       }
       active.partial = { ...active.partial, ready: n };
     };
-    // 流式:stdout 的每一块先落盘再喂读取器;正文变了就(节流 150ms)重解析成 partial 板书,定稿的句子交去配音
+    // 流式:stdout 的每一块先落盘再喂读取器;正文变了就(节流 150ms)重解析成 partial 板书
     let reader = createPartialReader();
     // 断流接着跑(policy.stall):carried = 被杀那次已经拼出的正文(接着跑的那次换新读取器,正文 = carried + 新的);
     // open = 断在半截、没进会话的那段(递回给老师,收尾时拼在最后一段前面)

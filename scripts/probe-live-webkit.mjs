@@ -80,7 +80,7 @@ try {
   if (process.env.PROBE_DEBUG) { page.on('console', (m) => console.log('  [page]', m.type(), m.text())); page.on('pageerror', (e) => console.log('  [pageerror]', e.message)); }
   // 先到首页记下给过麦克风权限(进老师页就先把常开那路开好,micWarm),再用 ?tutor= 进老师页的新话题
   await page.goto(`${base}/`);
-  await page.waitForSelector('#tutors .c-tutor, #deck .c-tutor', { timeout: 10000 });
+  await page.waitForSelector('#deck .c-tutor', { timeout: 10000 });
   await page.evaluate(() => { try { localStorage.setItem('kid-mic-ok', '1'); } catch {} });
   await page.goto(`${base}/?tutor=chinese-tutor&new=1`);
   await page.waitForFunction(() => document.body.classList.contains('live'), null, { timeout: 10000 });

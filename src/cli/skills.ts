@@ -115,25 +115,25 @@ export interface SkillStatus {
   machine: boolean;
 }
 
-export function skillDirs(root: string, name: string): { claude: string } {
-  return { claude: join(root, '.claude', 'skills', name) };
+export function skillDir(root: string, name: string): string {
+  return join(root, '.claude', 'skills', name);
 }
 
 async function readState(root: string, skill: ShippedSkill, manifest: ShippedManifest): Promise<SkillStatus> {
   const { name } = skill;
   const base = { name, source: skill.source, machine: Boolean(skill.machine) };
-  const { claude } = skillDirs(root, name);
+  const dir = skillDir(root, name);
   const src = skillSourceDir(skill);
-  const st = await lstat(claude).catch(() => null);
-  if (!st?.isDirectory()) return { ...base, state: src ? 'missing' : 'unavailable', dir: claude };
+  const st = await lstat(dir).catch(() => null);
+  if (!st?.isDirectory()) return { ...base, state: src ? 'missing' : 'unavailable', dir };
   const rec = manifest.skills?.[name];
-  const mine = await dirHash(claude);
+  const mine = await dirHash(dir);
   const shipped = src ? await dirHash(src).catch(() => null) : null;
-  if (shipped && mine === shipped) return { ...base, state: 'latest', dir: claude, basedOn: rec?.version };
+  if (shipped && mine === shipped) return { ...base, state: 'latest', dir, basedOn: rec?.version };
   // 机器件不认家长的改动:和包里不一样就是该换
-  if (skill.machine) return { ...base, state: src ? 'upgradable' : 'latest', dir: claude, basedOn: rec?.version };
-  if (rec && rec.hash === mine) return { ...base, state: src ? 'upgradable' : 'latest', dir: claude, basedOn: rec.version };
-  return { ...base, state: rec ? 'custom' : 'untracked', dir: claude, basedOn: rec?.version };
+  if (skill.machine) return { ...base, state: src ? 'upgradable' : 'latest', dir, basedOn: rec?.version };
+  if (rec && rec.hash === mine) return { ...base, state: src ? 'upgradable' : 'latest', dir, basedOn: rec.version };
+  return { ...base, state: rec ? 'custom' : 'untracked', dir, basedOn: rec?.version };
 }
 
 export async function skillStatuses(root: string): Promise<SkillStatus[]> {
@@ -145,12 +145,12 @@ export async function skillStatuses(root: string): Promise<SkillStatus[]> {
 
 /** 整个目录换成包里的(先删再拷),hash 记进清单;顺手清旧位置 */
 async function installOne(root: string, skill: ShippedSkill, src: string, manifest: ShippedManifest): Promise<void> {
-  const { claude } = skillDirs(root, skill.name);
-  await rm(claude, { recursive: true, force: true });
-  await mkdir(dirname(claude), { recursive: true });
-  await cp(src, claude, { recursive: true });
+  const dir = skillDir(root, skill.name);
+  await rm(dir, { recursive: true, force: true });
+  await mkdir(dirname(dir), { recursive: true });
+  await cp(src, dir, { recursive: true });
   manifest.skills ??= {};
-  manifest.skills[skill.name] = { hash: await dirHash(claude), version: PACKAGE_VERSION };
+  manifest.skills[skill.name] = { hash: await dirHash(dir), version: PACKAGE_VERSION };
 }
 
 export interface SkillStep {
@@ -215,8 +215,8 @@ export async function upgradeSkills(root: string): Promise<SkillUpgradeStep[]> {
   }
   for (const name of RETIRED_SKILLS) {
     if (!manifest.skills?.[name]) continue;
-    const { claude } = skillDirs(root, name);
-    await rm(claude, { recursive: true, force: true });
+    const dir = skillDir(root, name);
+    await rm(dir, { recursive: true, force: true });
     delete manifest.skills[name];
     steps.push({ name, action: 'retired', machine: true });
   }

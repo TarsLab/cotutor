@@ -102,7 +102,6 @@ export const chatUrl = (host: string): string => `https://${host}/compatible-mod
 export const compatibleBase = (host: string): string => `https://${host}/compatible-mode/v1`;
 export const imageUrl = (host: string): string => `https://${host}/api/v1/services/aigc/multimodal-generation/generation`;
 export const ttsUrl = (host: string): string => `https://${host}/api/v1/services/audio/tts/SpeechSynthesizer`;
-export const inferenceWs = (host: string): string => `wss://${host}/api-ws/v1/inference/`;
 
 /** 兼容接口的流(data: {...} 一行一块):拼出 delta.content;流里报错 → null */
 export function readStream(raw: string): string | null {

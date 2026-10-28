@@ -1,7 +1,7 @@
 /**
- * 单词卡(cards/word)的画法:四线三格、按笔顺写、舞台里分段两色与合拢。孩子端老师页(kid-page.ts)与口语课(talk/page.ts)共用一份,插进各页的内联脚本。
+ * 单词卡(cards/word)的画法:四线三格、按笔顺写、舞台里分段两色与合拢。插进孩子端老师页(kid-page.ts)的内联脚本。
  * 插进去的地方要已经有 h(tag, attrs, ...kids)与 sv(tag, attrs)(建 SVG 元素);样式在 cards/word/card.css(页面装 /kid/theme.css 就有)。
- * 念这个词各页自己做(老师页走配音与播放仲裁,口语课用浏览器的声)。脚本里不写反斜杠、反引号、美元加花括号(模板字符串)。
+ * 念这个词由页面做(老师页走配音与播放仲裁)。脚本里不写反斜杠、反引号、美元加花括号(模板字符串)。
  */
 import { inlineScript } from './inline-lib.ts';
 import { letterAdvances } from './letters.ts';

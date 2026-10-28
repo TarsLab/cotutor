@@ -30,26 +30,26 @@ export interface TutorStatus {
 }
 
 /** 老师文件在 workspace 里的位置:.claude/agents/<name>.md 是真相(别的 CLI 由应用读正文递进系统提示) */
-export function tutorFiles(root: string, name: string): { claude: string } {
-  return { claude: join(root, '.claude', 'agents', `${name}.md`) };
+export function tutorFile(root: string, name: string): string {
+  return join(root, '.claude', 'agents', `${name}.md`);
 }
 
 async function readState(root: string, a: ShippedAgent, manifest: ShippedManifest): Promise<TutorStatus> {
-  const { claude } = tutorFiles(root, a.name);
-  const st = await lstat(claude).catch(() => null);
-  if (!st) return { name: a.name, state: 'missing', file: claude };
+  const file = tutorFile(root, a.name);
+  const st = await lstat(file).catch(() => null);
+  if (!st) return { name: a.name, state: 'missing', file };
   let text: string;
   try {
-    text = await readFile(claude, 'utf8');
+    text = await readFile(file, 'utf8');
   } catch {
-    return { name: a.name, state: 'broken', file: claude };
+    return { name: a.name, state: 'broken', file };
   }
   const shipped = await readFile(a.file, 'utf8');
   const h = sha256(text);
   const rec = manifest.tutors[a.name];
-  if (h === sha256(shipped)) return { name: a.name, state: 'latest', file: claude, basedOn: rec?.version };
-  if (rec && rec.hash === h) return { name: a.name, state: 'upgradable', file: claude, basedOn: rec.version };
-  return { name: a.name, state: rec ? 'custom' : 'untracked', file: claude, basedOn: rec?.version };
+  if (h === sha256(shipped)) return { name: a.name, state: 'latest', file, basedOn: rec?.version };
+  if (rec && rec.hash === h) return { name: a.name, state: 'upgradable', file, basedOn: rec.version };
+  return { name: a.name, state: rec ? 'custom' : 'untracked', file, basedOn: rec?.version };
 }
 
 export async function tutorStatuses(root: string): Promise<TutorStatus[]> {
@@ -61,11 +61,11 @@ export async function tutorStatuses(root: string): Promise<TutorStatus[]> {
 
 /** 把出厂件写进 workspace(覆盖),并记 hash */
 async function installOne(root: string, a: ShippedAgent, manifest: ShippedManifest): Promise<void> {
-  const { claude } = tutorFiles(root, a.name);
-  await mkdir(dirname(claude), { recursive: true });
+  const file = tutorFile(root, a.name);
+  await mkdir(dirname(file), { recursive: true });
   const text = await readFile(a.file, 'utf8');
-  await unlink(claude).catch(() => {});
-  await writeFile(claude, text);
+  await unlink(file).catch(() => {});
+  await writeFile(file, text);
   manifest.teachingPack ??= { grade: (await workspaceGradePack(root)).grade };
   manifest.tutors[a.name] = { hash: sha256(text), version: PACKAGE_VERSION };
 }
@@ -102,8 +102,8 @@ export async function installTutors(root: string, configured: string[] = []): Pr
     }
   }
   for (const name of configured.filter((n) => !shipped.some((a) => a.name === n))) {
-    const { claude } = tutorFiles(root, name);
-    if (!(await lstat(claude).catch(() => null))) steps.push({ item: `.claude/agents/${name}.md`, action: 'kept', note: `缺:cotutor.json 里有 ${name},文件还没写;cotutor add ${name} 出模板,或自己写(frontmatter name: ${name})` });
+    const file = tutorFile(root, name);
+    if (!(await lstat(file).catch(() => null))) steps.push({ item: `.claude/agents/${name}.md`, action: 'kept', note: `缺:cotutor.json 里有 ${name},文件还没写;cotutor add ${name} 出模板,或自己写(frontmatter name: ${name})` });
   }
   for (const name of [...new Set([...shipped.map((a) => a.name), ...configured])]) {
     const home = join(root, 'agents', name);
@@ -131,14 +131,14 @@ export interface AddResult {
  */
 export async function addTutorFile(root: string, input: TutorTemplateInput): Promise<AddResult> {
   if (!AGENT_NAME_RE.test(input.name)) throw new UsageError(`老师名 "${input.name}" 不合规:小写字母数字连字符,如 science-tutor`);
-  const { claude } = tutorFiles(root, input.name);
-  if (await lstat(claude).catch(() => null)) throw new UsageError(`${claude} 已经在了;要改就直接改它,要重来先把它挪开`);
-  await mkdir(dirname(claude), { recursive: true });
-  await writeFile(claude, tutorTemplate(input));
+  const file = tutorFile(root, input.name);
+  if (await lstat(file).catch(() => null)) throw new UsageError(`${file} 已经在了;要改就直接改它,要重来先把它挪开`);
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, tutorTemplate(input));
   const home = join(root, 'agents', input.name);
   await mkdir(home, { recursive: true });
   await writeFile(join(home, '.gitkeep'), '').catch(() => {});
-  return { name: input.name, file: claude, home };
+  return { name: input.name, file, home };
 }
 
 export interface UpgradeStep {
@@ -215,9 +215,9 @@ export interface TutorFileView {
 }
 
 export async function readTutorFile(root: string, name: string): Promise<TutorFileView> {
-  const { claude } = tutorFiles(root, name);
-  const text = await readFile(claude, 'utf8').catch(() => null);
-  if (text === null) throw new UsageError(`老师文件不在:${claude};cotutor add ${name} --display <显示名> 可出模板`);
+  const file = tutorFile(root, name);
+  const text = await readFile(file, 'utf8').catch(() => null);
+  if (text === null) throw new UsageError(`老师文件不在:${file};cotutor add ${name} --display <显示名> 可出模板`);
   const st = (await tutorStatuses(root)).find((s) => s.name === name);
   return { name, text, state: st?.state ?? 'own', basedOn: st?.basedOn };
 }
@@ -227,22 +227,22 @@ export async function writeTutorFile(root: string, name: string, text: string): 
   const { parseAgentFile } = await import('../lib/agent-file.ts');
   const fm = parseAgentFile(text).frontmatter;
   if (fm.name !== name) throw new UsageError(`frontmatter 的 name 要是 ${name}(现在是 "${fm.name ?? ''}"),老师键靠它对上`);
-  const { claude } = tutorFiles(root, name);
-  await mkdir(dirname(claude), { recursive: true });
-  const tmp = `${claude}.tmp`;
+  const file = tutorFile(root, name);
+  await mkdir(dirname(file), { recursive: true });
+  const tmp = `${file}.tmp`;
   await writeFile(tmp, text.endsWith('\n') ? text : `${text}\n`);
-  await rename(tmp, claude);
+  await rename(tmp, file);
   return readTutorFile(root, name);
 }
 
 /** 删自家加的老师文件:改名成 .removed-<时间>(不真删;记忆目录与对话不动);出厂的不让删,用开关 */
 export async function removeTutorFile(root: string, name: string): Promise<{ moved: string | null }> {
   if ((await shippedAgents((await workspaceGradePack(root)).agentsDir)).some((a) => a.name === name)) throw new UsageError(`${name} 是出厂老师,不删文件;不想用就在老师团页关掉`);
-  const { claude } = tutorFiles(root, name);
+  const file = tutorFile(root, name);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const moved = `${claude}.removed-${stamp}`;
+  const moved = `${file}.removed-${stamp}`;
   try {
-    await rename(claude, moved);
+    await rename(file, moved);
     return { moved };
   } catch {
     return { moved: null };
@@ -263,11 +263,11 @@ export async function restoreTutor(root: string, name: string): Promise<{ bak: s
   const a = (await shippedAgents((await workspaceGradePack(root)).agentsDir)).find((x) => x.name === name);
   if (!a) throw new UsageError(`${name} 是自家加的老师,没有出厂那份可换`);
   const manifest = await readManifest(root);
-  const { claude } = tutorFiles(root, name);
-  const cur = await readFile(claude, 'utf8').catch(() => null);
+  const file = tutorFile(root, name);
+  const cur = await readFile(file, 'utf8').catch(() => null);
   let bak: string | null = null;
   if (cur !== null && cur !== (await readFile(a.file, 'utf8'))) {
-    bak = `${claude}.bak`;
+    bak = `${file}.bak`;
     await writeFile(bak, cur);
   }
   await installOne(root, a, manifest);

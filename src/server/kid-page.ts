@@ -11,12 +11,12 @@
  * 铁律:界面上永远没有错误与评判——后端不通、老师出错、识别失败,都只是「什么都不出现」或头像灰;
  * 文字尽量少,语音优先。孩子设备上没有通往家长端的入口。
  *
- * 老师页照豆包爱学的形态:板书是一天一份、越讲越长的文档;孩子的话进问题卡的答案栏或节开头一行,不在字幕行回显;
- * 一轮回复 = 一节:卡整块铺出,讲稿逐句播(有 mp3 放 mp3,没有就不出声、按字数计时;浏览器合成声只在 mock 里用),
- * 播到哪句就在卡上画标注、滚到那张卡;末句是问句就停下等孩子答。
- * 输入条照豆包通用版:相机 | 发消息或按住说话 | 加号(相册)。平板横屏:板书两列(最宽 1040 居中),没有左栏。
- * 实时的老师(body.live):嘴照念讲稿、声音从 WebSocket 下来,孩子端不念;横屏左栏大头像 + 字幕、板在右边一块白板,
- * 卡角没有钮;谁出声谁停走 ../lib/live-board.ts 的 liveStep(同样剥类型内联);连不上回到上面的板书。
+ * 老师页照豆包爱学的形态:板书是一天一份、越讲越长的文档。一轮回复 = 一节。
+ * 今天能说话的话题都走实时(body.live):嘴照念脑的讲稿、声音从 WebSocket 下来,孩子端不念;卡闭合了就铺,落下时标这张卡的标注一起画上;
+ * 节头是脑写的那张卡,孩子的话不上板(在左栏);横屏左栏大头像 + 字幕、板在右边一块白板,卡角没有钮;
+ * 谁出声谁停走 ../lib/live-board.ts 的 liveStep(同样剥类型内联);连不上、断了回到「正在叫老师」再连,不退回别的样子。
+ * 不走实时的(以前的话题只读回放、家长端试发与 cotutor send 的轮):整节铺上、标注画齐、不念;孩子的话进问题卡的答案栏或节开头一行。
+ * 输入条照豆包通用版:相机 | 发消息或按住说话 | 加号(相册)。
  *
  * 交互逻辑在 ../lib/kid-board.ts(纯函数,有测试),这里把它剥掉类型内联进页面,两处一份源码。卡按 kind 渲染(text / read / choice / fill / code),
  * 每种卡的紧凑态只读;点卡开舞台(盖住板书那块,顶栏是卡的名字 + 关闭,讲稿暂停):选择题在舞台里点大按钮,选了就 PUT 状态,
@@ -27,8 +27,9 @@
  * 讲稿 [[play]] 锚到小课堂卡 → 念完那句铺满放那一段,放完停在末帧、接着念。
  * 点读段:card.assets 里有 <段号>.mp3 的放服务端配的,还没配好的等它到(拉今天会补上);填空舞台逐空打字、「交给老师」;图片舞台双指缩放。
  * 作业照片:相机 / 相册先进发照片屏(裁剪、圈画、转 90°、配一句话,坐标在 src/lib/photo-edit.ts),再一条 {text, photos};节头小图点开看大图。
- * 流式:老师还在说时 pending 条目带 partial 板书,卡按下标只追加不重画(先出的卡不闪),讲稿不播;整轮跑完那节换成正式的,声音从第一句起。
- * __TITLE__ / __SHORT__(主屏幕图标下的名字)由路由替换。调试:`?step=<节>.<句>` 直接停在某句(标注画齐、不出声),截图与测试用。
+ * 流式:老师还在写时 pending 条目带 partial 板书,卡按下标只追加不重画(先出的卡不闪);整轮跑完那节换成正式的,不重播。
+ * __TITLE__ / __SHORT__(主屏幕图标下的名字)由路由替换。调试参数(只管这一次打开,见文末启动):`?tutor=` 进哪位老师,
+ * `&stage=<节>.<卡>` 直接开某张卡的舞台,`&new=1` / `&hist=<日期>.<话题>` / `&panel=1` 见启动那段;`?device=` 一直留着。
  */
 import { createHash } from 'node:crypto';
 import { wordDrawJs } from './word-draw.ts';
@@ -75,7 +76,6 @@ ${faviconLinks()}
   #ttl { display:flex; align-items:center; gap:10px; }
   #ct-mark { display:flex; color:var(--dim); -webkit-tap-highlight-color:transparent; }
   #ct-mark .ct-go, #ct-mark .ct-gi { transition:transform .45s cubic-bezier(.3,1.6,.5,1); }
-  .tutors { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
   /* 老师头像 = C 形开口环(Cotutor 的 C,开口朝右、朝着老师说出来的话):环是 r=44 的圆(周长 276.46),
      描 80% 留 20%,转 36° 让缺口居中在右;环是学科色(currentColor),里面一个白底圆放图或字。会动的只改 dasharray 与转角 */
   .av { position:relative; display:grid; place-items:center; font-weight:700; flex:0 0 auto; }
@@ -168,7 +168,6 @@ ${faviconLinks()}
   /* 家长端预览里正在改的那颗 */
   #deck .pc .bt.pv-sel { outline:4px solid var(--ink); outline-offset:3px; }
   body.offline #deck .pc, body.gated #deck .pc { pointer-events:none; }
-  .tutors:empty { display:none; }
   @media (prefers-reduced-motion:reduce) { #deck .pc:active { transform:var(--tf) !important; } }
   /* 给老师换样子(figshot):不是首页发布的卡,是 cotutor.json 配了 figshot 就有的固定入口;figshot 没开着就不出现 */
   .c.c-figshot { flex-direction:row; align-items:center; gap:16px; text-decoration:none; color:var(--ink); background:#fff3e8; border-color:var(--accent); }
@@ -642,7 +641,6 @@ __VOICE_CSS__
   @media (min-width:900px) and (orientation:landscape) {
     #home { max-width:1040px; padding:calc(env(safe-area-inset-top) + 40px) 48px 40px; gap:24px; }
     #home h1 { font-size:22px; }
-    #home .tutors { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; align-items:start; }
     #home .hcards { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
     .tb.l { left:calc(env(safe-area-inset-left) + 20px); } .tb.r { right:calc(env(safe-area-inset-right) + 20px); }
     #menu .panel { right:calc(env(safe-area-inset-right) + 20px); }
@@ -708,7 +706,6 @@ __VOICE_CSS__
   <div id="ttl"><span id="ct-mark" class="ct-draw">__MARK__</span><h1 id="title">__TITLE__</h1></div>
   <div class="hcards" id="hcards"></div>
   <div class="deck" id="deck" hidden></div>
-  <div class="tutors" id="tutors"></div>
   <p id="rest">老师们休息中</p>
   <p id="gate">老师们还没到<small>叫爸爸妈妈来看一下</small></p>
   <a class="c c-figshot" id="figshot" hidden><span class="avs"></span><span class="tx"><b>给老师们换个样子</b><span>帽子、脸、衣服,都由你来挑</span></span><span class="go">去搭</span></a>
@@ -823,22 +820,16 @@ __BRAND_JS__
     speaker: SVG('<path d="M4 10v4h4l5 4V6L8 10z"></path><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path>', 24),
     replay: SVG('<path d="M4 10v4h4l5 4V6L8 10z"></path><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path>', 16, 2),
     stop: SVG('<rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor"></rect>', 16, 1.5),
-    mute: SVG('<path d="M4 10v4h4l5 4V6L8 10z"></path><path d="M17 9l4 6M21 9l-4 6"></path>', 24),
     send: SVG('<path d="M12 19V5M5 12l7-7 7 7"></path>', 20, 2.4),
-    micSm: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 16, 2.2),
     micMd: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 22, 2),
-    micLg: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>', 30, 1.8),
     keyboard: SVG('<rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M7 10h1M11 10h1M15 10h1M8 15h8"></path>', 26, 1.8),
     paper: SVG('<path d="M15 4l5 5-9 9H6v-5z"></path><path d="M13 6l5 5"></path><path d="M3 21c2-1.5 4-1.5 6 0s4 1.5 6 0"></path>', 26, 1.8),
     micOff: SVG('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"></path>', 22, 2),
-    image: SVG('<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 16l5-5 4 4 3-3 6 6"></path><circle cx="16" cy="9" r="1.5"></circle>', 36, 1.6),
     album: __ALBUM_28__,
     close: SVG('<path d="M6 6l12 12M18 6L6 18"></path>', 24, 2.2),
     closeSm: SVG('<path d="M7 7l10 10M17 7L7 17"></path>', 14, 2.8),
     check: SVG('<path d="M5 12l5 5 9-10"></path>', 16, 3),
-    mic: SVG('<rect x="9" y="3" width="6" height="12" rx="3"></rect><path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6"></path>', 44),
     lock: SVG('<rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path>', 14, 2.2),
-    up: SVG('<path d="M12 19V5M6 11l6-6 6 6"></path>', 18, 2.4),
     more: SVG('<circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle>', 24),
     history: SVG('<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path>', 24),
     again: SVG('<path d="M4 12a8 8 0 1 0 2.4-5.7"></path><path d="M4 4v4.5h4.5"></path>', 20, 2),
@@ -875,14 +866,12 @@ ${BOARD_MARK_JS}
   const debug = new URLSearchParams(location.search);
 
   // ---- 状态 ----
-  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, submitted: new Set(), pending: false, waitSince: null, waitTimer: null, offline: false, autoplay: true, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, talk: null, talkWait: false, reel: null, pendSaid: null, homeDraw: true };
-  // 家长板书页看的模式缺省不念(家长想听哪句点哪句);开关各记一个键,不和孩子的搅
+  const S = { home: null, tutor: null, day: null, sections: [], played: new Set(), state: { section: -1, line: -1, status: 'idle' }, pending: false, waitSince: null, waitTimer: null, offline: false, bar: 'idle', pollTimer: null, stage: null, partial: null, thread: null, threadAt: null, hist: null, readonly: false, newThread: false, device: 'phone', via: null, cont: null, ask: null, talk: null, talkWait: false, reel: null, pendSaid: null, homeDraw: true };
   /** 家长板书页:清单的日期(null = 今天) */
   S.pdate = null;
   // 实时的老师这一次(连、发、收、画在下面「实时的老师」那一块):on = 这位老师这一次走实时(左栏的样子);ready = 嘴连上了;
   // model = liveStep 的状态(只在 liveDispatch 里写);cap = 字幕(上一句、在说的、被打断的那句);heard = 每一轮(job)念到第几句
   const LV = { on: false, ready: false, ws: null, audio: null, model: initialLive(), cap: { prev: '', cur: '', cut: '', catching: false }, heard: new Map(), jobs: new Set(), drain: 0, was: 'quiet', holdAt: 0, diag: null, queued: null, playLine: null, endLine: null, ring: null, ringEnd: 0, lcPending: false, gateOn: false, retries: 0, retryTimer: 0 };
-  /** 标注画到第几句:实时的一节不跟句子(卡落下时整节都画),板书照播放的位置 */
   /** 页面是实时老师的样子:正连着嘴,或录像里放的是有实时轮的话题(卡角没有钮、没有再听) */
   const liveLook = () => LV.on || Boolean(S.reel && S.reel.realtime);
   /** 按住说话那颗按钮(平板横屏左栏;头像 + 声音):样子是 voice-view.ts 的 voiceView 给的、画法在 voice-ui.ts,
@@ -1301,7 +1290,7 @@ ${BOARD_MARK_JS}
       head.append($('#ttl'), h('nav', { id: 'ptabs', class: 'ptabs' }, h('a', { href: (location.pathname + '/home').replace('//', '/') }, '首页'), h('a', { class: 'on', href: location.pathname }, '记录')));
       head.after(h('div', { id: 'pweek' }));
       const cols = h('div', { id: 'pcols' }, h('div', { id: 'ptl' }), h('aside', { id: 'pday', 'aria-label': '这一天老师跟你说的' }));
-      $('#tutors').before(cols);
+      $('#rest').before(cols);
       // 百炼没配:孩子那边打不开,顶上一行叫家长去「首页」配
       head.after(h('a', { id: 'pnokey', href: (location.pathname + '/home').replace('//', '/'), hidden: true }, '孩子那边现在打不开:还没配百炼的 key。去「首页」配好就能用 ›'));
     }
@@ -2099,9 +2088,8 @@ __WORD_DRAW_JS__
     if (!S.partial || S.partial.job !== e.job) { if (S.partial) S.partial.el.remove(); const idx = S.sections.length; S.partial = { job: e.job, idx, live: false, shown: 0, el: h('div', { class: 'sec', 'data-sec': idx, 'data-job': e.job }, ...headEls(e, idx)) }; $('#board').append(S.partial.el); }
     const P = S.partial, idx = P.idx;
     P.el.classList.toggle('cont', Boolean(e.live && e.cont));
-    // 第一句配好就开播:卡还是一拍就绪才铺,先出声、后出卡
-    // 实时的一轮:卡闭合了就铺、有句就出节(讲稿嘴在念,不等拍)
-    if (!(e.ready > 0) && !(e.voiced > 0) && !(e.live && (e.cards.length || e.lines.length))) return;
+    // 不是实时的一轮:一拍就绪才铺;实时的一轮:卡闭合了就铺、有句就出节(讲稿嘴在念,不等拍)
+    if (!(e.ready > 0) && !(e.live && (e.cards.length || e.lines.length))) return;
     const sec = { ...e, partial: true };
     const wasLive = P.live;
     if (!wasLive) { P.live = true; S.played.add(e.job); S.sections.push(sec); }
@@ -2113,11 +2101,10 @@ __WORD_DRAW_JS__
     dispatch({ type: wasLive ? 'liveBeat' : 'liveStart', section: idx });
     if (LV.on && placed) liveDispatch({ type: 'cards' });
   };
-  /** 老师写完了:live 的那节换成正式的(带标注 / 样子、每句配音),不重播——没铺的卡补上,铺过的换样子并把已播过的标注补画;等着的接上 */
+  /** 老师写完了:live 的那节换成正式的(带标注 / 样子),不重播——没铺的卡补上,铺过的换样子并把标注补画 */
   const finalizeLive = (e) => {
     const P = S.partial; S.partial = null;
     const idx = P.idx;
-    const prevLines = S.sections[idx].lines.map((l) => l.text);
     const sec = { ...e };
     S.sections[idx] = sec;
     const el = P.el;
@@ -2129,8 +2116,7 @@ __WORD_DRAW_JS__
       // 实时:换了样子的卡标注补画,新铺的照落下画、写
       liveLand(idx, k, !old);
     }
-    // 定稿的句下标对不上时按文字找回位置、再听让路、等着的接上:都在 step 的 liveFinal
-    dispatch({ type: 'liveFinal', section: idx, prevLines });
+    dispatch({ type: 'liveFinal', section: idx });
     if (LV.on) liveDispatch({ type: 'cards' });
   };
   /** 一张卡的状态变了:紧凑态原地重画(标注会掉,重画这张卡的;选中态照旧) */
@@ -2792,12 +2778,10 @@ __WORD_DRAW_JS__
     if (LV.ready) liveSendNow(text, opts); else LV.queued = [text, opts];
   };
 
-  // ---- 喇叭:自动朗读开关 ----
-
   // ---- 看录像:录像 = 孩子的屏幕 + 录像栏。
   //      孩子的屏幕:这个页面以 MODE.reel 开在 iframe 里(/reel?tutor=&date=&thread=),按孩子那台设备的尺寸开,家长页等比缩。
   //      轨道是服务端排好的(lib/reel.ts,已内联),每 100 毫秒算一次 reelFrameAt:板书用 renderSection 现画(孩子端条目:孩子的话当节头、进答案栏)、
-  //      露几张卡与卡的状态照它、标注画到念到的句、放当时那句的 mp3;字幕行、占位卡、「等你说…」照孩子端自己的逻辑(这一刻的位置放进 S.reel.view 再 renderSubtitle)。
+  //      露几张卡与卡的状态照它、标注整节一次画上、放那次通话的声音(从这句起);字幕行、占位卡、「等你说…」照孩子端自己的逻辑(这一刻的位置放进 S.reel.view 再 renderSubtitle)。
   //      不经过 step、不 dispatch;轮询停着(loadDay 见 S.reel 就回)。
   //      录像栏(进度条、这一刻的说明、播放、跳过空白、倍速、退出)在家长页上,只经 iframe 的 window.cotutorReel 说话:同源直接调,家长点「播放」的那一下调进去;
   //      iframe 放声音用的是家长页那个 Audio(家长点「看录像」时已解锁)。直接打开 iframe 的地址(调试)时,录像栏在它自己身上 ----
@@ -2860,7 +2844,7 @@ __WORD_DRAW_JS__
       }
       // 实时的一节不跟句子:标注整节一次画上;板书念到哪画到哪
       if (S.sections[i].live) { if (!R.painted[fs.job]) { paintAll(i); R.painted[fs.job] = Infinity; } }
-      else if (fs.spoken > (R.painted[fs.job] || 0)) { paintAll(i, fs.spoken - 1); R.painted[fs.job] = fs.spoken; }
+      else if (fs.spoken > (R.painted[fs.job] || 0)) { paintAll(i); R.painted[fs.job] = fs.spoken; }
     });
     // 念到哪张亮哪张
     const at = f.saying || f.last;
@@ -3332,8 +3316,6 @@ __REEL_DOCK_JS__
   // 真音量:25 根条往左滚;没有麦克风那一路(老浏览器、没授权)就还是原来的假波形
   const holdBars = [...document.querySelectorAll('#hold .w i')], holdLv = new Array(25).fill(0);
   const holdLevel = (v) => { holdLvRec(v); $('#hold').classList.add('real'); holdLv.shift(); holdLv.push(v); for (let i = 0; i < 25; i++) holdBars[i].style.height = Math.round(4 + holdLv[i] * 24) + 'px'; };
-  // 按住时认出的字:浮层上跟着出,太长只留最后 60 个字
-  const holdText = (t) => { $('#hold .t').textContent = t.length > 60 ? '…' + t.slice(-60) : t; };
   // ---- 实时的老师:嘴是 realtime,讲稿由它照念,声音从 WebSocket /api/live/<老师>/ws 下来,
   //      孩子端不念讲稿(板书的 step 照旧收事件、只是不自动念);卡照旧从「今天」拉,闭合了就铺。谁出声、谁停走 liveDispatch → liveStep(live-board.ts),
   //      这里只照单执行。按住说话推 PCM(常开那路麦克风,makeAudio().use);连不上、断了 → 回到「正在叫老师」,过一会儿再连 ----
@@ -3732,7 +3714,7 @@ __REEL_DOCK_JS__
     $('#st-go').classList.toggle('holding', LV.holdKind === 'give');
     setBar(barNext(S.bar, 'holdStart'));
     dispatch({ type: 'halt' });
-    hold.audio = false; renderHold(); holdText('');
+    hold.audio = false; renderHold();
     holdRec('down');
     LV.holdAt = Date.now();
     const d = LV.diag = liveDiagOf();

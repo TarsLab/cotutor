@@ -1,6 +1,6 @@
 /**
- * 配音:老师说完,把 kidText 按 cotutor.json 的 tts 运行时合成到 conversations/<老师>/<日期>.<job>.mp3。
- * 失败不响、不阻塞对话:这条没有音频,孩子端退回浏览器自带的声;原因写进 err.log 供家长看。
+ * 配音:卡自己的声音(点读段、单词)按 cotutor.json 的 tts 运行时合成到那张卡的资产目录;讲稿不配音,由实时的嘴照念。
+ * 失败不响、不阻塞对话:这段没有音频,孩子端点了不出声;原因写进 err.log 供家长看。
  * 音色是人设(tutors[].voice),没配就不合成——「无缺省音色」是 voxtell 的政策,这里照办。
  * 起 voxtell 时按合成模型定走哪家(src/lib/qianwen.ts):Token Plan 有就把它的端点与 key 注给 voxtell,否则给按量那把。
  */
@@ -130,7 +130,7 @@ export class DubQueue {
       const t0 = Date.now();
       this.queue.push(async () => {
         const r = await synthesize(this.tts, { text, voice: this.voice, out }, { env: this.env });
-        if (r.error) await appendFile(this.err, `cotutor tts: ${label}没合成(${r.error});用浏览器的声\n`).catch(() => {});
+        if (r.error) await appendFile(this.err, `cotutor tts: ${label}没合成(${r.error});这段不出声\n`).catch(() => {});
         const file = out.slice(out.lastIndexOf('/') + 1);
         if (r.error) this.report?.({ kind: 'failed', label, ms: Date.now() - t0, error: r.error });
         else this.report?.({ kind: 'done', label, ms: Date.now() - t0, file });

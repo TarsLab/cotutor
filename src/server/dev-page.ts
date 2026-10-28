@@ -1,6 +1,6 @@
 /**
  * 工作台 /dev(2026-09-22 之前叫家长端 /parent;现在家长端是 /parent = 记录与首页,给不懂技术的家长日常用,这页给有技术背景的家长与开发者):
- * 四个标签(对话 / 老师团 / 音色 / 设置)+「看原文」抽屉,零依赖内联脚本,只走 /api/*。
+ * 六个标签(概览 / 对话 / 老师团 / activity / 音色 / 设置)+「看原文」抽屉,零依赖内联脚本,只走 /api/*。
  * 2026-09-11 重做:一轮 = 一张卡(问句 → 板书 → 埋点 → 孩子看到 → 通知块),板书按 kind 渲染成卡片而不是把围栏原文倒给家长;
  * 顶栏与输入框各自钉死(grid-rows auto/1fr/auto + min-height:0,不再硬算 100vh - 47px:顶栏一换行就错位,composer 被顶出视口);
  * 老师团一位一行、九项政策折叠、改过的才亮;设置分路径 / 服务 / 配音三块,配音能当场试一句。
@@ -1405,7 +1405,7 @@ ${BRAND_CSS}
     if (who) {
       const cur = (voiceState.list || []).find((v) => v.voice === who.voice);
       panel.append(h('div', { class: 'now' }, avatarEl(who), h('b', {}, who.display),
-        who.voice ? h('span', {}, '现在用 ', h('b', {}, cur ? cur.name : who.voice), cur ? h('small', {}, ' ' + who.voice) : h('small', {}, '(列表里没有这个 id)')) : h('span', { class: 'muted' }, '还没配音色,孩子端用浏览器自带的声'),
+        who.voice ? h('span', {}, '现在用 ', h('b', {}, cur ? cur.name : who.voice), cur ? h('small', {}, ' ' + who.voice) : h('small', {}, '(列表里没有这个 id)')) : h('span', { class: 'muted' }, '还没配音色,点读、单词卡没有声音'),
         who.voice ? h('button', { class: 'btn', type: 'button', on: { click: () => patchAndReload(panel, { tutors: { [who.name]: { voice: null } } }, renderVoices) } }, '清掉') : null));
     }
     if (voiceState.error) panel.append(h('p', { class: 'fb bad', style: 'padding:12px 16px 0' }, '列不出音色:' + voiceState.error), h('p', { class: 'hint' }, '设置页里 tts.voices 是列音色的命令(缺省 voxtell voices --json);voxtell 不在 PATH 就把第一项写成完整路径,或者先在终端跑 voxtell doctor。'));

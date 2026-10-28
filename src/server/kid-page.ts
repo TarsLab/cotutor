@@ -2781,7 +2781,7 @@ __WORD_DRAW_JS__
   // ---- 看录像:录像 = 孩子的屏幕 + 录像栏。
   //      孩子的屏幕:这个页面以 MODE.reel 开在 iframe 里(/reel?tutor=&date=&thread=),按孩子那台设备的尺寸开,家长页等比缩。
   //      轨道是服务端排好的(lib/reel.ts,已内联),每 100 毫秒算一次 reelFrameAt:板书用 renderSection 现画(孩子端条目:孩子的话当节头、进答案栏)、
-  //      露几张卡与卡的状态照它、标注整节一次画上、放那次通话的声音(从这句起);字幕行、占位卡、「等你说…」照孩子端自己的逻辑(这一刻的位置放进 S.reel.view 再 renderSubtitle)。
+  //      露几张卡与卡的状态照它、卡露出来时画上它的标注、放那次通话的声音(从这句起);字幕行、占位卡、「等你说…」照孩子端自己的逻辑(这一刻的位置放进 S.reel.view 再 renderSubtitle)。
   //      不经过 step、不 dispatch;轮询停着(loadDay 见 S.reel 就回)。
   //      录像栏(进度条、这一刻的说明、播放、跳过空白、倍速、退出)在家长页上,只经 iframe 的 window.cotutorReel 说话:同源直接调,家长点「播放」的那一下调进去;
   //      iframe 放声音用的是家长页那个 Audio(家长点「看录像」时已解锁)。直接打开 iframe 的地址(调试)时,录像栏在它自己身上 ----
@@ -2816,12 +2816,12 @@ __WORD_DRAW_JS__
     R.stageState = sk;
     if (isHeavy(card)) postStage(stageCard(card)); else renderStage();
   };
-  /** 板书:哪几节、卡的状态变了就整块重画(往回拖也是);露几张卡、标注画到哪、孩子刚发出去的话每次对一下 */
+  /** 板书:哪几节、卡的状态变了就整块重画(往回拖也是);露几张卡、露出来的卡的标注、孩子刚发出去的话每次对一下 */
   const reelDraw = (f) => {
     const R = S.reel;
     const shown = f.sections.filter((fs) => R.entries.some((e) => e.job === fs.job));
     const key = JSON.stringify([shown.map((fs) => fs.job), f.cards]);
-    if (key !== R.key || shown.some((fs) => (R.painted[fs.job] || 0) > fs.spoken)) {
+    if (key !== R.key) {
       R.key = key; R.painted = {}; R.now = '';
       S.sections = shown.map((fs) => { const e = R.entries.find((x) => x.job === fs.job); return { ...e, cards: e.cards.map((c, k) => { const o = { ...c }; const st = f.cards[fs.job + '/' + k]; if (st === undefined) delete o.state; else o.state = st; return o; }) }; });
       const board = $('#board'); const top = board.scrollTop;
@@ -2842,9 +2842,14 @@ __WORD_DRAW_JS__
         for (const c of row.querySelectorAll(':scope > [data-card]')) { const hide = Number(c.dataset.card) >= fs.cards; if (!hide && c.classList.contains('pend')) fresh = c; c.classList.toggle('pend', hide); any = any || !hide; }
         row.classList.toggle('pend', !any);
       }
-      // 实时的一节不跟句子:标注整节一次画上;板书念到哪画到哪
-      if (S.sections[i].live) { if (!R.painted[fs.job]) { paintAll(i); R.painted[fs.job] = Infinity; } }
-      else if (fs.spoken > (R.painted[fs.job] || 0)) { paintAll(i); R.painted[fs.job] = fs.spoken; }
+      // 标注不跟句子:卡露出来就画上这张卡的(同孩子端 liveLand;藏着的卡量不出位置,画线的笔要等它露出来),实时与不是实时的轮一样
+      const sec = S.sections[i];
+      for (let k = 0; k < Math.min(fs.cards, sec.cards.length); k++) {
+        const id = fs.job + '/' + k;
+        if (R.painted[id]) continue;
+        R.painted[id] = true;
+        for (const l of sec.lines) for (const m of l.marks) if (m.card === k) applyMark(i, m, false);
+      }
     });
     // 念到哪张亮哪张
     const at = f.saying || f.last;

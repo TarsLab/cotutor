@@ -624,8 +624,8 @@ export function reelClock(reel: Pick<Reel, 'startAt' | 'endAt' | 'gaps'>, real: 
 
 /** 某一刻的样子 */
 export interface ReelFrame {
-  /** 出来了的节(按出来的先后):露几张卡、开始念过几句(标注画到这里) */
-  sections: { job: string; cards: number; spoken: number }[];
+  /** 出来了的节(按出来的先后):露几张卡(标注随卡露出来画) */
+  sections: { job: string; cards: number }[];
   /** 正在念的一句:offset = 从这句开头过了多久 */
   saying: { job: string; line: number; offset: number; audio: string | null; seek?: number } | null;
   /** 正在放的一段:孩子按住说的、嘴接住的那句(都在通话的录音里) */
@@ -673,10 +673,7 @@ export function reelFrameAt(reel: Reel, t: number): ReelFrame {
     if (tr.at > t) continue;
     let n = 0;
     for (const c of tr.cards) if (c.at <= t) n = c.n;
-    // 念过几句 = 嘴念到的最远那句 + 1
-    let spoken = 0;
-    for (const x of reel.says) if (x.job === tr.job && x.from <= t) spoken = Math.max(spoken, x.line + 1);
-    sections.push({ job: tr.job, cards: n, spoken });
+    sections.push({ job: tr.job, cards: n });
   }
   let saying: ReelFrame['saying'] = null;
   let last: ReelFrame['last'] = null;

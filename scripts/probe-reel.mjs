@@ -119,6 +119,11 @@ try {
   const s2 = await kid(`({ secs: document.querySelectorAll('#board .sec').length, pend: document.querySelectorAll('#board .sec .c.pend').length, notes: document.querySelectorAll('.notes').length })`);
   const p2 = await evaluate(`document.querySelector('#rl-play').getAttribute('aria-label')`);
   ok('拖到头:两节都在、卡都露着、没有旁注、停了(按钮回到「播放」)', s2.secs === 2 && s2.pend === 0 && s2.notes === 0 && p2 === '播放', JSON.stringify({ s2, p2 }));
+  // 不是实时的轮整节铺上:讲稿里的标注每节都画上(同孩子端);停着时板不再整块重画
+  await kid(`(() => { window.__rebuilt = 0; new MutationObserver(() => { window.__rebuilt++; }).observe(document.querySelector('#board'), { childList: true }); })()`);
+  await sleep(1000);
+  const mk = await kid(`({ marks: [...document.querySelectorAll('#board > .sec')].map((s) => s.querySelectorAll('.mk').length), pens: document.querySelectorAll('#board svg.pen').length, rebuilt: window.__rebuilt })`);
+  ok('拖到头:两节的标注都画上了;停着一秒板没重画', mk.marks.length === 2 && mk.marks.every((n) => n > 0) && mk.rebuilt === 0, JSON.stringify(mk));
   await seek(0);
   await sleep(300);
   const s3 = await kid(`({ secs: document.querySelectorAll('#board .sec').length, pend: document.querySelectorAll('#board > .sh.said.pend').length })`);

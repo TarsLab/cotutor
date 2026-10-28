@@ -350,6 +350,19 @@ try {
   const rv = await evaluate(`(() => ({ live: document.body.classList.contains('live'), cur: document.querySelector('#lv-cap .lv-cur').textContent, corner: document.querySelectorAll('#board .c > .again').length, says: [...document.querySelectorAll('#board .says p')].filter((p) => getComputedStyle(p).display !== 'none').map((p) => p.textContent) }))()`);
   rv.faces = await evaluate(FACES);
   ok('录像里孩子的屏幕:实时老师页的样子(左栏字幕停在最后一句、卡角没有钮、板上不留讲稿的字);老师头像只有左栏一颗', rv.live && rv.cur.length > 0 && rv.corner === 0 && rv.says.length === 0 && rv.faces === 1, JSON.stringify(rv));
+  // 录像每 100 毫秒算一帧:节与卡的状态没变就不整块重画(原来实时的一节每帧都重画)
+  await evaluate(`(() => { window.__rebuilt = 0; new MutationObserver(() => { window.__rebuilt++; }).observe(document.querySelector('#board'), { childList: true }); })()`);
+  await sleep(1000);
+  const rb = await evaluate(`({ rebuilt: window.__rebuilt, marks: document.querySelectorAll('#board .mk').length, pens: document.querySelectorAll('#board svg.pen').length })`);
+  ok('录像停在最后:一秒里板没整块重画', rb.rebuilt === 0, JSON.stringify(rb));
+  // 从头 4 倍速放 1.5 秒(约 15 帧):只在新的一节、卡的状态变了时重画;卡一张张露出来,露出来的那张补上标注,放完和停在最后画的一样多
+  await evaluate(`(() => { const r = window.cotutorReel; r.seek(0); r.speed(4); window.__rebuilt = 0; r.play(true); })()`);
+  await sleep(1500);
+  const playing = await evaluate(`({ rebuilt: window.__rebuilt, p: window.cotutorReel.get().p })`);
+  await evaluate(`(() => { const r = window.cotutorReel; r.play(false); r.speed(1); r.seek(r.get().total); })()`);
+  await sleep(300);
+  const rb2 = await evaluate(`({ marks: document.querySelectorAll('#board .mk').length, pens: document.querySelectorAll('#board svg.pen').length })`);
+  ok('录像放着:不每帧整块重画;拖到最后标注和画线照旧', playing.p > 0 && playing.rebuilt <= 5 && rb2.marks === rb.marks && rb2.pens === rb.pens, JSON.stringify({ playing, rb2 }));
   console.log('  ', await shot('live-reel-ipad.png'));
 
   // ---- 嘴连不上:不回板书,留在实时页「正在叫老师」,过一会儿自己再连上 ----

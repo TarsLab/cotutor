@@ -661,10 +661,8 @@ __VOICE_VIEW_JS__
 __VOICE_JS__
 __BRAND_JS__
 
-  /** 页面的模式:{} = 孩子端;reel = 录像里孩子的屏幕;preview = 家长端「首页」里的预览;synth = 没有配音时用浏览器合成声(只有 mock) */
+  /** 页面的模式:{} = 孩子端;reel = 录像里孩子的屏幕;preview = 家长端「首页」里的预览 */
   const MODE = __MODE__;
-  /** 浏览器合成声:只在 mock 里用(那里没有配音文件)。真服务上一律不用——老师配了音色,机械声孩子不习惯 */
-  const SYNTH = MODE.synth === true;
   /** 舞台包的版本(src/server/stage.ts stageVersion):iframe 的地址带上它,打包过一次就换一个地址,不用浏览器缓存里的旧舞台 */
   const STAGE_V = '__STAGE_V__';
   /** 这份页面的版本(源码的 hash):孩子端记进实录,录像对不上时标「画法已更新」 */
@@ -752,7 +750,7 @@ ${BOARD_MARK_JS}
   VB.btn.tutorSource(() => (LV.audio && LV.audio.outLevel ? LV.audio.outLevel() : 0));
   $('#lv-av').classList.add('vb-halo');
 
-  // ---- 声音:共享 Audio,首个手势解锁(iOS);没配音就不出声、按字数计时(浏览器合成声只在 mock 里,见 SYNTH) ----
+  // ---- 声音:共享 Audio,首个手势解锁(iOS);卡没配好音就不出声(不用浏览器合成声:老师配了音色,机械声孩子不习惯) ----
   // 录像里孩子的屏幕在家长页的 iframe 里:用家长页那个 Audio(家长点「看录像」时在手势里解锁过),声音才放得出来
   const audioEl = (() => { if (REEL) { try { if (window.parent !== window && window.parent.__cotutorAudio) return window.parent.__cotutorAudio; } catch {} } return new Audio(); })();
   let unlocked = false;
@@ -768,12 +766,12 @@ ${BOARD_MARK_JS}
   const audioUrl = (rel) => AUDIO + S.tutor.name + '/' + rel.split('/').map(encodeURIComponent).join('/');
   /** 卡上第 k 段的配音(点读段、单词):这一轮跑完才在后台配,孩子刚看到卡就点时可能还没好。
    *  好了就 play(相对路径);没好就每秒拉一次今天(会把 card.assets 补上),到了再放,最多 CARD_CLIP_WAIT_MS;等的时候被别的声音打断(token 变了)就算了。
-   *  等不到:mock 里 synth()(浏览器合成声),真服务上 miss()(不出声)。2026-10-08 之前直接退合成声:刚出来的单词卡「听」是机械声,iPad 上开着麦克风时还可能把话筒弄哑 */
+   *  等不到就 miss()(不出声)。2026-10-08 之前直接退合成声:刚出来的单词卡「听」是机械声,iPad 上开着麦克风时还可能把话筒弄哑;10-28 合成声整个去掉(mock 也配静音的段) */
   const CARD_CLIP_WAIT_MS = 12000;
-  const cardClip = (card, k, token, play, synth, miss) => {
+  const cardClip = (card, k, token, play, miss) => {
     const a = S.tutor ? segmentAudio(card, k) : null;
     if (a) return play(a);
-    if (SYNTH || !S.tutor) return synth();
+    if (!S.tutor) return miss();
     const until = Date.now() + CARD_CLIP_WAIT_MS;
     const tick = async () => {
       try { await loadDay(true); } catch {}
@@ -788,22 +786,7 @@ ${BOARD_MARK_JS}
   /** 换了音源后定倍速(单词卡舞台慢放;看录像另有倍速):换 src 会把 playbackRate 重置成 defaultPlaybackRate,两个一起设;音高不变 */
   const audioRate = (r) => { audioEl.defaultPlaybackRate = r; audioEl.playbackRate = r; try { audioEl.preservesPitch = true; audioEl.webkitPreservesPitch = true; } catch {} };
   /** 只停声音。播放状态不在这里改——那走 dispatch(见下面「播放器」) */
-  const silence = () => { voiceToken++; try { audioEl.pause(); } catch {} try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {} };
-  /** 浏览器合成声;不是 mock(SYNTH)就直接 onFail——孩子端听到的只有老师的音色 */
-  const speak = (text, onEnd, onFail, onStart, opts) => {
-    try {
-      if (!SYNTH || !('speechSynthesis' in window)) return onFail();
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text); u.lang = (opts && opts.lang) || 'zh-CN'; u.rate = (opts && opts.rate) || 0.95;
-      let ended = false;
-      u.onstart = () => { if (onStart) onStart(lineDurationMs(text)); };
-      u.onend = () => { if (!ended) { ended = true; onEnd(); } };
-      u.onerror = () => { if (!ended) { ended = true; onFail(); } };
-      speechSynthesis.speak(u);
-      // 有的浏览器不发 onend:兜一个按字数的上限
-      setTimeout(() => { if (!ended) { ended = true; onEnd(); } }, lineDurationMs(text) * 2 + 1500);
-    } catch { onFail(); }
-  };
+  const silence = () => { voiceToken++; try { audioEl.pause(); } catch {} };
 
   // ---- 首页:老师卡在上,其余卡照发布的顺序;按钮决定进老师页之后的话题 ----
   const BUTTON_ICON = { new: 'spark', start: 'start', continue: 'again', lecture: 'play' };
@@ -1247,7 +1230,7 @@ ${BOARD_MARK_JS}
         return el;
       }
       case 'read':
-        return box('read', ...(p.segments || []).map((seg, k) => h('div', { class: 'rd', on: { click: (e) => { e.stopPropagation(); readSegment(e.currentTarget, c, k, seg); } } }, seg)));
+        return box('read', ...(p.segments || []).map((seg, k) => h('div', { class: 'rd', on: { click: (e) => { e.stopPropagation(); readSegment(e.currentTarget, c, k); } } }, seg)));
       case 'image': {
         const src = /^https?:\\/\\//.test(p.src || '') ? p.src : '/api/kid/image?p=' + encodeURIComponent(p.src || '');
         if (stage) { const el = box('image'); el.className = 'zoom'; el.append(h('img', { src, alt: p.caption || '' })); pinch(el); return el; }
@@ -1411,16 +1394,15 @@ __WORD_DRAW_JS__
     for (const x of document.querySelectorAll('.c-word .wd-pl.on')) x.classList.remove('on');
     if (btn) btn.classList.add('on');
     const done = () => { if (btn) btn.classList.remove('on'); if (token === voiceToken && then) then(); };
-    const w = String((card.props || {}).word || '');
-    const synth = () => { if (token === voiceToken) speak(w, done, done, null, { lang: 'en-US', rate: 0.9 * rate }); };
+    const miss = () => { if (token === voiceToken) done(); };
     cardClip(card, 0, token, (a) => {
       audioEl.onplaying = null;
-      audioEl.onended = () => { if (token === voiceToken) done(); };
-      audioEl.onerror = synth;
+      audioEl.onended = miss;
+      audioEl.onerror = miss;
       audioEl.src = audioUrl(a);
       audioRate(rate);
-      audioEl.play().catch(synth);
-    }, synth, done);
+      audioEl.play().catch(miss);
+    }, done);
   };
   /** 舞台里的单词卡:emoji、分段两色的四线三格、「再听一遍」(慢);打开就走一遍:慢念与一段一段慢写同时开始 → 写完合拢 → 再慢念。点一段,那段慢写一遍 */
   let wordRun = 0;
@@ -1454,25 +1436,25 @@ __WORD_DRAW_JS__
     return el;
   };
   /** 点读:点哪段念哪段——服务端配好的段(card.assets 里有 <段号>.mp3)放 mp3,没好的等它到(cardClip) */
-  const readSegment = (el, card, k, seg) => {
+  const readSegment = (el, card, k) => {
     if (!cardSoundOk()) return;
     for (const x of document.querySelectorAll('.rd.on')) x.classList.remove('on');
     el.classList.add('on');
     const off = () => el.classList.remove('on');
-    cardClip(card, k, ++voiceToken, (a) => playClip(audioUrl(a), el, seg), () => speak(seg, off, off), off);
+    cardClip(card, k, ++voiceToken, (a) => playClip(audioUrl(a), el), off);
   };
   // ---- 卡上的声音钮(单词卡的「听」「再听一遍」)与放一段 ----
   const soundPill = (icon, label, onClick) => h('button', { type: 'button', class: 'wd-pl', html: icon, on: { click: (e) => { e.stopPropagation(); onClick(e); } } }, label);
   /** 放卡上的一段声音(点读段、单词);被别的声音打断不回调 */
-  const playClip = (src, btn, fallbackText) => {
+  const playClip = (src, btn) => {
     if (!cardSoundOk()) return;
     const token = ++voiceToken;
     const off = () => { if (btn) btn.classList.remove('on'); };
     if (btn) btn.classList.add('on');
-    if (!src) { if (fallbackText) speak(fallbackText, off, off); else off(); return; }
+    if (!src) { off(); return; }
     audioEl.onplaying = null;
     audioEl.onended = () => { if (token === voiceToken) off(); };
-    audioEl.onerror = () => { if (token === voiceToken) { if (fallbackText) speak(fallbackText, off, off); else off(); } };
+    audioEl.onerror = () => { if (token === voiceToken) off(); };
     audioEl.src = src;
     audioRate(1);
     audioEl.play().catch(() => { if (token === voiceToken) off(); });
@@ -3792,8 +3774,6 @@ const KID_PAGE_SRC = PAGE.replace('__BOARD_JS__', () => libSource('kid-board')).
 export const KID_PAGE = KID_PAGE_SRC.replace('__PAGE_V__', createHash('sha1').update(KID_PAGE_SRC).digest('hex').slice(0, 8));
 
 export interface KidPageMode {
-  /** 没有配音时用浏览器合成声:只有 mock 给(它没有配音文件);真服务不给 */
-  synth?: boolean;
   /** 录像里孩子的屏幕(/reel):孩子端的样子,数据是 /reel 给的一个话题,只读、不记、点不动 */
   reel?: boolean;
   /** 家长端「首页」里的预览(/preview):孩子端首页本身,点了告诉家长页,不跳走、不记看过了 */

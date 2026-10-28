@@ -13,7 +13,7 @@ import { probeDir, spawn } from './_guard.mjs';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
@@ -57,7 +57,6 @@ try {
   const shot = async (name) => { const r = await send('Page.captureScreenshot', { format: 'png' }); const f = join(shots, name); writeFileSync(f, Buffer.from(r.result.data, 'base64')); console.log('  ', f); };
   await send('Runtime.enable');
   await send('Page.enable');
-  await quiet(send);
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: `${base}/` });
   // 首页只展开最前那位(C 版):小课堂按钮在数学老师卡上,先把数学换到最前

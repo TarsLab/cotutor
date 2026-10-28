@@ -12,7 +12,7 @@ import { probeDir, spawn } from './_guard.mjs';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -64,7 +64,6 @@ try {
   const typeInto = async (sel, text) => { await evaluate(`(() => { const el = document.querySelector('${sel}'); el.focus(); el.value = ''; })()`); await send('Input.insertText', { text }); };
   await send('Runtime.enable');
   await send('Page.enable');
-  await quiet(send);
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 2, mobile: false });
 
   // ---- 孩子端首页:灰着 ----

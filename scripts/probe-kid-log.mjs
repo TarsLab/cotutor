@@ -8,7 +8,7 @@
  * 用法:node scripts/probe-kid-log.mjs [--base http://127.0.0.1:5180]
  */
 import { spawn } from './_guard.mjs';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i >= 0 ? process.argv[i + 1] : d; };
 const base = arg('--base', 'http://127.0.0.1:5180');
@@ -46,7 +46,6 @@ const tag = `probe-${Date.now().toString(36)}`;
 try {
   await send('Runtime.enable');
   await send('Page.enable');
-  await quiet(send);
   const before = await overview();
 
   // ---- 孩子端老师页:报打开、种 cookie;故意抛一个错 ----

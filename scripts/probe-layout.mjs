@@ -11,7 +11,7 @@ import { probeDir, spawn } from './_guard.mjs';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -61,10 +61,8 @@ try {
   const until = async (expr, n = 40) => { for (let i = 0; i < n; i++) { if (await evaluate(expr)) return true; await sleep(250); } return false; };
   await send('Runtime.enable');
   await send('Page.enable');
-  await quiet(send);
-  // 浏览器合成声念得很快就算念完;流式时记下每张卡第一次出来的位置,之后每次板上有变化都对一遍
-  await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.speechSynthesis && (speechSynthesis.speak = (u) => { setTimeout(() => u.onend && u.onend(), 150); });
-    window.__track = null; window.__moved = [];
+  // 流式时记下每张卡第一次出来的位置,之后每次板上有变化都对一遍
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__track = null; window.__moved = [];
     new MutationObserver(() => { const t = window.__track; if (!t) return; const sec = document.querySelector('#board > .sec[data-sec="' + t.sec + '"]'); if (!sec) return;
       for (const c of sec.querySelectorAll('.row > [data-card]')) { const r = c.getBoundingClientRect(); const now = Math.round(r.left) + ',' + Math.round(r.width) + ',' + Math.round(r.top - sec.querySelector(':scope > .row').getBoundingClientRect().top); const k = c.dataset.card;
         if (!(k in t.first)) t.first[k] = now; else if (t.first[k] !== now && !c.classList.contains('pend')) window.__moved.push(k + ': ' + t.first[k] + ' → ' + now); } }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'class'] });` });

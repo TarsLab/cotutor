@@ -11,7 +11,7 @@ import { probeDir, spawn } from './_guard.mjs';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -106,7 +106,6 @@ for: ${day}
   const stack = () => evaluate(`(() => { const els = [...document.querySelectorAll('#deck .pc')].sort((a, b) => a.style.zIndex - b.style.zIndex); const f = document.querySelector('#deck .pc.front'); const r = (e) => e.getBoundingClientRect(); return { order: els.map((e) => e.dataset.tutor), front: els.filter((e) => e.classList.contains('front')).map((e) => e.dataset.tutor), dots: els.filter((e) => e.querySelector('.dot')).map((e) => e.dataset.tutor), card: f.dataset.tutor, name: f.querySelector('.pc-hd .nm').textContent, buttons: [...f.querySelectorAll('.bt:not(.bt-extra)')].map((b) => b.querySelector('.btx').textContent), extras: [...f.querySelectorAll('.bt-extra')].map((b) => b.getAttribute('href')), owned: [...f.querySelectorAll('.kcards > *')].map((c) => c.className), shared: [...document.querySelectorAll('#hcards > *')].map((c) => c.className), brief: document.body.innerHTML.includes('重点字'), rects: els.map((e) => [Math.round(r(e).left), Math.round(r(e).top), Math.round(r(e).bottom)]), heights: [...new Set(els.map((e) => e.offsetHeight))] }; })()`);
   await send('Runtime.enable');
   await send('Page.enable');
-  await quiet(send);
 
   // ---- 孩子端首页 ----
   await device(390, 844, 2, true);

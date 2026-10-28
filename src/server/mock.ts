@@ -2,7 +2,7 @@
  * 模拟接口(`cotutor mock`):不经真实老师与百炼,用固定的板书 JSON 把孩子端页面喂起来,
  * 专门测前端的交互逻辑与渲染效果(卡一张张铺、停下等、追问追加)。老师都走实时老师页,假嘴念静音的声音、字幕照走。
  * 不需要 workspace。老师的每一轮从各自的脚本里按顺序取(脚本就是老师会写的正文,过真解析器);脚本用完给一句收尾话。
- * 卡没有配音文件(/api/audio 一律 404),点读、单词卡退回浏览器自带的合成声(页面模式 synth,只有这里给;真服务的孩子端不用合成声)。
+ * 卡不配音:点读段、单词卡挂上段名(同真服务的 card.assets),/api/audio 一律回一段静音,页面照真服务那样放音频、等放完(不用浏览器合成声)。
  * 老师「想」的期间按流式模拟:卡在 delay 里一张张出现(pending 条目带 partial 板书),想完才有讲稿与声音。
  * 卡的状态 PUT 假存在内存里(过真的 state 契约),today 里并回卡上;发消息接 {text, action, focus},「交给老师」后照常追加下一节。
  * 场景:normal(缺省)/ nokey(没配百炼,孩子端只出「老师们还没到」)。
@@ -17,7 +17,7 @@ import { createServer as createHttps } from 'node:https';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseBoard } from '../lib/board.ts';
-import { parseCardState, stripSecrets, DictationPropsSchema } from '../cards/index.ts';
+import { cardAssets, parseCardState, stripSecrets, DictationPropsSchema } from '../cards/index.ts';
 import { fileURLToPath } from 'node:url';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
 import { sendFile } from './send-file.ts';
@@ -67,7 +67,7 @@ export const MOCK_BUNDLES_DIR = fileURLToPath(new URL('../../tests/fixtures/bund
 /** mock 的视频小课堂目录:仓库里的样本(tests/fixtures/lectures/) */
 export const MOCK_LECTURES_DIR = fileURLToPath(new URL('../../tests/fixtures/lectures/', import.meta.url));
 const MOCK_LECTURE_DIRS = { dirs: { bundles: MOCK_BUNDLES_DIR, lectures: MOCK_LECTURES_DIR } };
-import { lineDurationMs, plainLine, readyBeats, type BoardSection, type KidLecture, type PenName } from '../lib/kid-board.ts';
+import { lineDurationMs, plainLine, readyBeats, type BoardCard, type BoardSection, type KidLecture, type PenName } from '../lib/kid-board.ts';
 import { wavOfPcm } from '../live/lib/wav.ts';
 import { buildReel, playRecordOk, reelHolds, reelMissRuns, type PlayRecord } from '../lib/reel.ts';
 import { weekOf, type CardStates } from '../lib/conversation.ts';
@@ -573,7 +573,9 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (rest.lecture?.marks) rest.lecture = { ...rest.lecture, marks: rest.lecture.marks.map(({ text: _t, ...k }) => k) };
     const mine = [...messages.values()].find((l) => l.includes(m)) ?? [];
     const done = new Set(mine.flatMap((x) => (x.submitted ? [x.submitted] : [])));
-    const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => ({ ...c, ...(done.has(`${m.job}/${i}`) ? { submitted: true } : {}), ...(states && i in states ? { state: states[i] } : {}) })) } : null;
+    // 卡的配音同真服务挂在 assets 上(<job>.cards/<n>/<段号>.mp3),都是静音(见 /api/audio)
+    const voiced = (c: BoardCard, i: number) => { const a = cardAssets(c); return a.length ? { assets: a.map((x) => `mock.${m.job}.cards/${i}/${x.file}`) } : {}; };
+    const withState = m.section ? { ...m.section, cards: m.section.cards.map((c, i) => ({ ...c, ...voiced(c, i), ...(done.has(`${m.job}/${i}`) ? { submitted: true } : {}), ...(states && i in states ? { state: states[i] } : {}) })) } : null;
     const section = withState ? mockPaints(await enrichLectures(MOCK_LECTURE_DIRS, stripSecrets(withState)), m) : null;
     return { ...rest, ...(drawing && rest.question !== null ? { drawing: { image: drawing.image, strokes: drawing.strokes, ...(drawing.ms !== undefined ? { ms: drawing.ms } : {}) } } : {}), section };
   };
@@ -690,14 +692,14 @@ export function createMock(opts: MockOptions = {}): Mock {
     await lecturesLoaded;
     const url = new URL(path, 'http://x');
     const p = url.pathname;
-    if (p === '/') return { status: 200, html: kidPage(title, { synth: true }, await stageVersion()) };
+    if (p === '/') return { status: 200, html: kidPage(title, {}, await stageVersion()) };
     if (p === '/dev/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
     // 家长端「记录」:自己的一页(parent-page.ts);清单接口照真服务(答案不剥,第一节带一条给家长的尾巴与记忆)。mock 没有工作台 /dev
     if (p === '/parent') return { status: 200, html: parentPage(title) };
-    if (p === '/reel') return { status: 200, html: kidPage(title, { reel: true, synth: true }, await stageVersion()) };
-    if (p === '/preview') return { status: 200, html: kidPage(title, { preview: true, synth: true }, await stageVersion()) };
+    if (p === '/reel') return { status: 200, html: kidPage(title, { reel: true }, await stageVersion()) };
+    if (p === '/preview') return { status: 200, html: kidPage(title, { preview: true }, await stageVersion()) };
     if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };
     // 主题:mock 没有 workspace,直接给包里的出厂 default
     if (p === '/kid/theme.css') return { status: 200, html: `${cardsCss()}\n\n${(await packageTheme()).css}`, contentType: 'text/css; charset=utf-8' };
@@ -1005,6 +1007,8 @@ export function createMock(opts: MockOptions = {}): Mock {
       const f = await bundleAsset(MOCK_BUNDLES_DIR, p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
+    // 卡的配音(点读段、单词):mock 不配音,一律回 0.8 秒的静音
+    if (p.startsWith('/api/audio/') && method === 'GET') return { status: 200, contentType: 'audio/wav', body: wavOfPcm(Buffer.alloc(24000 * 2 * 0.8), 24000) };
     // 字幕重放:真服务端给 src/live/call.ts 落的那份嘴的声音;mock 没有嘴,每句按字数估多长、放一段静音
     const mouth = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/mouth\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d+)$/.exec(p);
     if (mouth && method === 'GET') {

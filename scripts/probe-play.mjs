@@ -10,7 +10,7 @@ import { probeDir, spawn } from './_guard.mjs';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const repo = fileURLToPath(new URL('..', import.meta.url));
@@ -50,7 +50,6 @@ try {
   const until = async (expr, n = 40) => { for (let i = 0; i < n; i++) { if (await evaluate(expr)) return true; await sleep(250); } return false; };
   await send('Runtime.enable');
   await send('Page.enable');
-  await quiet(send);
   await send('Page.addScriptToEvaluateOnNewDocument', { source: TAP });
 
   // ---- 孩子端 ----

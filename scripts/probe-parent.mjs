@@ -11,7 +11,7 @@ import { probeDir, spawn } from './_guard.mjs';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -47,7 +47,6 @@ try {
   const open = async (url, ready) => { await send('Page.navigate', { url }); for (let i = 0; i < 40; i++) { if (await evaluate(ready)) break; await sleep(250); } await sleep(300); };
   await send('Runtime.enable');
   await send('Page.enable');
-  await quiet(send);
 
   // ---- 先开一次听写、写一个词(格子里要画孩子的笔迹) ----
   const kh = await (await fetch(`${base}/api/kid/home`)).json();

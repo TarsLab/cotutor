@@ -2,7 +2,7 @@
 /**
  * 单词卡(cards/word/card.md)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock(老师都走实时,假嘴念静音的声音),Chrome 开孩子端英语老师,孩子说 apple → 老师那节里有单词卡:四线三格、五个字母、卡上没有中文、右边「听」;
- * 落下时一笔一笔写;嘴念完后点「听」按正常速度念(mock 没配音,走浏览器英文合成声);点卡开舞台:不自动念(实时那张表),分段两色分开慢写 → 合拢、颜色退掉;
+ * 落下时一笔一笔写;嘴念完后点「听」按正常速度放这个词的配音(mock 的配音是静音,看放的是不是这张卡的 1.mp3);点卡开舞台:不自动念(实时那张表),分段两色分开慢写 → 合拢、颜色退掉;
  * 点第二段只写那一段;关舞台。iPad 横屏、手机各截一张。
  *
  * 用法:node scripts/probe-word.mjs [--out <截图目录>] [--keep](留下 mock)
@@ -11,7 +11,7 @@ import { probeDir, spawn } from './_guard.mjs';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -49,9 +49,8 @@ try {
   const until = async (expr, n = 40) => { for (let i = 0; i < n; i++) { if (await evaluate(expr)) return true; await sleep(250); } return false; };
   await send('Runtime.enable');
   await send('Page.enable');
-  await quiet(send);
-  // 浏览器合成声记下来(念了什么、什么语言、多快),1.2 秒算念完(免得等兜底计时;也够看出念的同时在写)
-  await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__said = []; window.speechSynthesis && (speechSynthesis.speak = (u) => { __said.push({ text: u.text, lang: u.lang, rate: +u.rate.toFixed(2) }); setTimeout(() => { __ended++; u.onend && u.onend(); }, 1200); }); window.__ended = 0;
+  // 卡的声音记下来(放的是哪一段、多快):mock 给卡挂了段名,放的是静音
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__said = []; const play0 = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { if (this.src && this.src.includes('/api/audio/')) __said.push({ src: decodeURIComponent(new URL(this.src).pathname), rate: +this.playbackRate.toFixed(2) }); return play0.apply(this, arguments); };
     // 讲到单词卡时写没写:看板上有没有长出过 .ink(元素可能被重画换掉,只看出现过)
     window.__inked = 0; new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList && n.classList.contains('ink') && n.closest('#board')) window.__inked++; }).observe(document, { subtree: true, childList: true });` });
 
@@ -88,13 +87,13 @@ try {
   await evaluate(`__said.length = 0; document.querySelector('#board .c-word .wd-pl').click()`);
   await sleep(200);
   const s1 = await evaluate(`__said.slice()`);
-  ok('点「听」:念 apple,英文、正常速度', s1.length === 1 && s1[0].text === 'apple' && s1[0].lang === 'en-US' && s1[0].rate === 0.9, JSON.stringify(s1));
+  ok('点「听」:放这张单词卡的配音(<job>.cards/<n>/1.mp3)、正常速度', s1.length === 1 && /^\/api\/audio\/english-tutor\/mock\.[^/]+\.cards\/\d+\/1\.mp3$/.test(s1[0].src) && s1[0].rate === 1, JSON.stringify(s1));
   const stayed = await evaluate(`!document.querySelector('#stage').classList.contains('on')`);
   ok('点「听」不开舞台', stayed);
 
   // 点卡开舞台:不自动念;分开慢写 → 合拢
   await sleep(1300);
-  await evaluate(`__said.length = 0; __ended = 0; document.querySelector('#board .c-word').click()`);
+  await evaluate(`__said.length = 0; document.querySelector('#board .c-word').click()`);
   await until(`document.querySelector('#stage').classList.contains('on') && Boolean(document.querySelector('#st-body .c-word .wg svg'))`);
   const st0 = await evaluate(`(() => { const ls = [...document.querySelectorAll('#st-body .lt')]; return { kd: document.querySelector('#st-kd').textContent, ttl: document.querySelector('#st-ttl').textContent, k: ls.map((l) => l.dataset.k).join(''), faint: ls.filter((l) => !l.classList.contains('done')).length, x: ls.map((l) => l.style.transform), said: __said.slice() }; })()`);
   ok('舞台:顶栏「apple · 单词」;分段 ap|ple;字先淡着;不自动念', st0.kd === '单词' && st0.ttl === 'apple' && st0.k === '00111' && st0.faint === 5 && st0.said.length === 0, JSON.stringify(st0));

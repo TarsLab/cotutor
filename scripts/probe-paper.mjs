@@ -13,7 +13,7 @@
 import { probeDir, spawn } from './_guard.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const args = process.argv.slice(2);
 const outAt = args.indexOf('--out');
@@ -88,7 +88,6 @@ try {
   await send('Runtime.enable');
   await send('Page.enable');
   await send('Network.enable');
-  await quiet(send);
 
   // ---- 一、画板卡铺满 ----
   // mock 的语文老师第三轮回复里有画板卡:先经接口发到第三轮(每条等老师写完)

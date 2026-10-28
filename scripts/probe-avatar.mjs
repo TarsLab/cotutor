@@ -12,7 +12,7 @@ import { probeDir, spawn } from './_guard.mjs';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
@@ -50,7 +50,6 @@ try {
   const AV = `(el) => { if (!el) return null; const c = el.querySelector('.ring circle'), f = el.querySelector('.face'), cs = c && getComputedStyle(c); return { ring: Boolean(c), face: Boolean(f), border: getComputedStyle(el).borderTopWidth, stroke: cs && cs.stroke, color: getComputedStyle(el).color, dash: cs && cs.strokeDasharray, transform: cs && cs.transform, anim: cs && cs.animationName, draw: el.classList.contains('draw') }; }`;
 
   await send('Page.enable');
-  await quiet(send);
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: `${base}/` });
   await until(`document.querySelectorAll('#deck .pc-hd .av').length > 0`);

@@ -16,7 +16,7 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'nod
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const outAt = process.argv.indexOf('--out');
@@ -95,7 +95,6 @@ try {
   const body = (cls) => evaluate(`document.body.classList.contains(${JSON.stringify(cls)})`);
   await send('Runtime.enable');
   await send('Page.enable');
-  await quiet(send);
 
   // ---- 进老师页:新话题,连上嘴 ----
   await device(1180, 760, 1, false);

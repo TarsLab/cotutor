@@ -9,7 +9,7 @@ import { probeDir, spawn } from './_guard.mjs';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -62,7 +62,6 @@ try {
   await send('Runtime.enable');
   await send('Page.enable');
   await send('DOM.enable');
-  await quiet(send);
   await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false });
 
   // ---- 拍照屏 → 相册选一张 → 老师在看 → 口语单 ----

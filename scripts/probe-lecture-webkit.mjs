@@ -12,7 +12,6 @@
 import { createRequire } from 'node:module';
 import { spawn } from './_guard.mjs';
 import { fileURLToPath } from 'node:url';
-import { LOUD, SILENT_SPEECH } from './_quiet.mjs';
 const require = createRequire(import.meta.url);
 if (!process.env.PLAYWRIGHT_CORE) { console.error('要 PLAYWRIGHT_CORE=<含 node_modules/playwright-core 的目录>'); process.exit(2); }
 const { webkit } = require(process.env.PLAYWRIGHT_CORE + '/node_modules/playwright-core');
@@ -26,7 +25,6 @@ const browser = await webkit.launch();
 const ok = (n, c, d = '') => console.log(`${c ? '✓' : '✗'} ${n} ${d}`);
 try {
   const page = await browser.newPage({ ignoreHTTPSErrors: true, viewport: { width: 1180, height: 820 } });
-  if (!LOUD) await page.addInitScript(SILENT_SPEECH); // 合成声不出声(_quiet.mjs);WebKit 没有 --mute-audio
   page.on('pageerror', (e) => console.log('ERR', e.message));
   await page.goto(`${base}/`);
   await page.click('#deck .pc[data-tutor="math-tutor"]', { position: { x: 40, y: 40 } }); // 后面那张只露出左上角(牌角的头像),里面的东西不收触摸

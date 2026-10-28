@@ -11,7 +11,7 @@ import { probeDir, spawn } from './_guard.mjs';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const keep = process.argv.includes('--keep');
 const outAt = process.argv.indexOf('--out');
@@ -65,7 +65,6 @@ try {
   const typeInto = async (sel, text) => { await evaluate(`(() => { const el = document.querySelector('${sel}'); el.focus(); el.value = ''; el.dispatchEvent(new Event('input')); })()`); await send('Input.insertText', { text }); await sleep(100); };
   await send('Runtime.enable');
   await send('Page.enable');
-  await quiet(send);
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
   await send('Page.navigate', { url: `${base}/parent/home` });
   // 预览里的东西(iframe 同源,直接读它的 DOM);点预览里的东西用 CDP 鼠标(iframe 缩着,坐标照缩放算)

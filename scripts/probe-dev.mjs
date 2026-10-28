@@ -10,7 +10,7 @@
 import { spawn } from './_guard.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i >= 0 ? process.argv[i + 1] : d; };
 const base = arg('--base', 'http://127.0.0.1:5180');
@@ -67,7 +67,6 @@ const clickEl = async (expr) => {
 try {
   await send('Runtime.enable');
   await send('Page.enable');
-  await quiet(send);
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false });
 
   // 概览

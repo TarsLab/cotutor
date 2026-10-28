@@ -10,7 +10,7 @@
 import { spawn } from './_guard.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { QUIET_ARGS, quiet } from './_quiet.mjs';
+import { QUIET_ARGS } from './_quiet.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i >= 0 ? process.argv[i + 1] : d; };
 const base = arg('--base', 'http://127.0.0.1:5180');
@@ -57,7 +57,6 @@ let who = null;
 try {
   await send('Runtime.enable');
   await send('Page.enable');
-  await quiet(send);
   const api = await (await fetch(`${base}/api/tts/voices`)).json();
   ok('接口列出音色', api.ok && api.count > 0, `${api.count} 个${api.error ? ' · ' + api.error : ''}`);
   let rows = 0;

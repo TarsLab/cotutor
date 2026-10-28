@@ -1,5 +1,5 @@
 /**
- * Qwen Code(`qwen`,0.25 起)的适配器(《agent层设计.md》拍板 15)。输出与 claude 同族(stream-json.ts),出入的地方:
+ * Qwen Code(`qwen`,0.25 起)的适配器(《agent层设计.md》拍板 15)。输出读法在 stream-json.ts,运行约定:
  * - **隔离的家**:不用 `--bare`(它不读任何配置、不认 `--core-tools`、自带 read_file / edit / run_shell_command 一套)。
  *   `QWEN_HOME` 指 workspace 的 `.cotutor/qwen/home/`(不改 HOME),里面的 settings.json 由这里生成:模型供应商(key 只写环境变量名)、
  *   关掉它自己的记忆整理(不然一轮跑完在后台用 write_file 写文件)、使用统计、遥测、防休眠。会话落在 `.cotutor/qwen/runtime/`。

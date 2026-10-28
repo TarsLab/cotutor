@@ -371,7 +371,7 @@ ${BRAND_JS}
     return {
       title: t.display + ' · ' + (k >= 0 ? '改按钮' : '开场按钮'), go, del, label,
       fields: [
-        what ? h('div', { class: 'note' }, what + '(从 Claude Code 排的,这里只改字和讲法)') : null,
+        what ? h('div', { class: 'note' }, what + '(从编程助手排的,这里只改字和讲法)') : null,
         h('div', {}, h('div', { class: 'gh' }, h('label', { for: 'b-label' }, '按钮上的字(孩子的口吻)'), count), label),
         h('div', {}, h('div', { class: 'gh' }, h('label', { for: 'b-brief' }, '讲法(写给老师,孩子看不到)')), brief),
         h('div', {}, h('div', { class: 'gh' }, h('span', {}, '留多久')), seg),

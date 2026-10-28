@@ -3,8 +3,6 @@
  * exit:0 通过 / 1 体检不过 / 2 用法错误 / 4 内部错误。
  */
 import { createInterface } from 'node:readline/promises';
-import { detectProxy, type DetectedProxy } from '../lib/proxy.ts';
-import { proxyOf, setProxy } from './proxy.ts';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -48,19 +46,6 @@ function interactive(json: boolean): boolean {
   return !json && Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }
 
-/** 问一句要不要走本机的代理;直接回车 = 要;Ctrl+D / Ctrl+C = 没选(null,不写) */
-async function askProxy(d: DetectedProxy): Promise<boolean | null> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const a = (await rl.question(`本机有代理 ${d.url}(来自 ${d.source})。老师(claude)要走它吗?不走的话,serve 得从带代理的终端起,不然会 403。[Y/n] `)).trim().toLowerCase();
-    return a === '' || a === 'y' || a === 'yes' || a === '是' || a === '要';
-  } catch {
-    return null;
-  } finally {
-    rl.close();
-  }
-}
-
 function parseArgs(argv: string[], valued: string[]): Parsed {
   const flags: Record<string, string | true> = {};
   const positionals: string[] = [];
@@ -98,7 +83,7 @@ async function printQr(page: string, open: boolean): Promise<void> {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'proxy', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -121,36 +106,14 @@ export async function main(argv: string[]): Promise<void> {
         if (!slug || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) throw new UsageError(`init 需要一个 slug(小写字母数字连字符,是短名不是真名),如 cotutor init ming。\n${USAGE}`);
         const port = typeof flags.port === 'string' ? Number(flags.port) : undefined;
         if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) throw new UsageError('--port 要是 1–65535 的整数');
-        const proxy = typeof flags.proxy === 'string' ? flags.proxy : flags['no-proxy'] === true ? (false as const) : undefined;
         if (flags.grade !== undefined && (typeof flags.grade !== 'string' || !/^[1-6]$/.test(flags.grade))) throw new UsageError('--grade 要是 1–6 的整数,如 --grade 2');
-        const r = await initWorkspace({ slug, grade: flags.grade === undefined ? undefined : Number(flags.grade), dir: typeof flags.dir === 'string' ? flags.dir : undefined, name: typeof flags.name === 'string' ? flags.name : undefined, port, proxy, askProxy: interactive(json) ? askProxy : undefined });
+        const r = await initWorkspace({ slug, grade: flags.grade === undefined ? undefined : Number(flags.grade), dir: typeof flags.dir === 'string' ? flags.dir : undefined, name: typeof flags.name === 'string' ? flags.name : undefined, port });
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
         else {
           process.stdout.write(`cotutor init → ${redactHome(r.root)}\n`);
           for (const s of r.steps) process.stdout.write(`  ${s.action.padEnd(7)} ${s.item}${s.note ? `  (${s.note})` : ''}\n`);
           process.stdout.write('下一步:\n');
           for (const s of r.suggestions) process.stdout.write(`  - ${s}\n`);
-        }
-        return;
-      }
-      case 'proxy': {
-        // cotutor proxy [on|off|<地址>]:老师进程(claude)走不走代理;不给参数就看现状,终端里还没选过就问
-        const { root } = resolveRoot(workspace);
-        const arg = positionals[0];
-        const found = detectProxy();
-        if (arg === 'on') {
-          if (!found) throw new UsageError('本机没探到代理(~/.claude/settings.json 的 env 与环境变量里都没有 HTTP(S)_PROXY);直接给地址:cotutor proxy http://127.0.0.1:7890');
-          await setProxy(root, found.url);
-        } else if (arg === 'off') await setProxy(root, false);
-        else if (arg) await setProxy(root, arg);
-        else if ((await proxyOf(root)) === undefined && found && interactive(json)) { const yes = await askProxy(found); if (yes !== null) await setProxy(root, yes ? found.url : false); }
-        const now = await proxyOf(root);
-        const out = { root, proxy: now ?? null, detected: found };
-        if (json) process.stdout.write(`${JSON.stringify(redactDeep(out), null, 2)}\n`);
-        else {
-          process.stdout.write(`${now ? `老师(claude)走 ${now}` : now === false ? '选了不走代理' : '还没选'}(${redactHome(root)}/cotutor.json 的 proxy;服务热重载,不用重起)\n`);
-          process.stdout.write(found ? `本机的代理:${found.url}(${found.source})\n` : '本机没探到代理\n');
-          if (now === undefined && found) process.stdout.write('要老师走它:cotutor proxy on;不用:cotutor proxy off\n');
         }
         return;
       }
@@ -422,10 +385,10 @@ export async function main(argv: string[]): Promise<void> {
         const [tutor, jobArg, dateArg] = positionals;
         if (!tutor || !jobArg) throw new UsageError(`replay 需要老师名和 job,如 cotutor replay math-tutor 1620-1 2026-09-12(日期缺省今天)。\n${USAGE}`);
         const ws = loadWorkspace(workspace);
-        const { childEnv, compareReplay, formatCompare, startReplay } = await import('../server/replay.ts');
+        const { compareReplay, formatCompare, startReplay } = await import('../server/replay.ts');
         const { localDate } = await import('../lib/conversation.ts');
         const date = dateArg ?? localDate(new Date());
-        const r = await startReplay(ws, tutor, date, jobArg, { runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, env: childEnv(process.env) });
+        const r = await startReplay(ws, tutor, date, jobArg, { runtime: typeof flags.runtime === 'string' ? flags.runtime : undefined, env: process.env });
         if (!json) process.stdout.write(`回放起了:evals/${tutor}/${date}.${r.evalJob}.*(原轮 ${jobArg}),等老师说完……\n`);
         await r.done;
         const c = await compareReplay(ws, tutor, date, r.evalJob);

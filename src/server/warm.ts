@@ -4,7 +4,7 @@
  * 一位老师两个位置:resume(接某个话题的会话)与 fresh(新开会话:新话题、接着上次)。
  * 对得上 = argv、适配器定的环境变量、cwd、日期、**这个话题**末条 job 都和它起来时一样(fresh 没有会话,末条记 null):
  * argv 管换话题 / 会话 / 老师正文 / effort / cotutor.json,末条 job 管「会话被别的进程写过」(它起来时读的会话就旧了,拿它写会分叉)。
- * 对不上、闲置超时、自己退了,都杀掉,调用方走冷起。开口前吐的字节(claude 实测一个都没有)先攒着,接过来时交出去。
+ * 对不上、闲置超时、自己退了,都杀掉,调用方走冷起。开口前吐的字节先攒着,接过来时交出去。
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 
@@ -29,7 +29,7 @@ export interface Spare {
   child: ChildProcess;
   /** 起来的时刻(Date.now()) */
   bornAt: number;
-  /** 接过来之前 stdout / stderr 吐的(claude 开口前不吐;假 CLI 也不吐) */
+  /** 接过来之前 stdout / stderr 吐的 */
   stdout: Buffer[];
   stderr: Buffer[];
   /** 进程已经 close(或起不来)了:接手之前就发生的 close 接手的等不到,看这个 */

@@ -1,7 +1,7 @@
 /**
  * 家长端「首页」(《家长板书页设计.md》拍板 20、《首页设计.md》拍板 17–20):家长在 iPad / 手机上设孩子的首页。
  * 按钮与听写的词改的是已发布那份首页的原文(editPublished:检查、留历史、发布);开关与几项常改的设置写回 cotutor.json(patchConfig)。
- * 页面每次现读,不缓存:家长也可能同时在编辑器里改 cotutor.json、在 Claude Code 里发布首页。
+ * 页面每次现读,不缓存:家长也可能同时在编辑器里改 cotutor.json、在编程助手里发布首页。
  *
  *   GET   /api/parent/home                          老师们(按首页的先后)、各自的按钮(带讲法)、听写的词、常驻入口;口语课与孩子端的几项设置
  *   PUT   /api/parent/home/tutors/<老师>/buttons     {buttons: [{kind, label, brief?, until?, date?, thread?, bundle?}]} 换掉这位老师的按钮

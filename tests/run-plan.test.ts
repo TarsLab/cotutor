@@ -10,31 +10,29 @@ import { parseConfig } from '../src/cli/workspace.ts';
 import { check, done } from './_check.ts';
 
 const config = parseConfig(JSON.parse(configTemplate({ slug: 'ming', tutors: await shippedAgents() })), 'x');
-const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\n', agentBody: '正文' };
+const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\n', agentBody: '正文', systemBody: '正文', root: '/ws' };
 
 {
   const fresh = planRun(config, { session: null }, vars);
-  check('无会话 → run,缺省 claude', fresh.runtime === 'claude' && !fresh.resume && fresh.argv[0] === 'claude' && !fresh.argv.includes('--resume') && fresh.argv.includes(vars.prompt), fresh.argv.join(' '));
-  const eff = (argv: string[]): string => argv[argv.indexOf('--effort') + 1];
-  check('老师政策的 effort 进命令行(run 与 resume 都带);工具是白名单', eff(planRun(config, { session: null }, { ...vars, effort: 'medium' }).argv) === 'medium' && eff(planRun(config, { session: { id: 's-1', runtime: 'claude' } }, { ...vars, effort: 'high' }).argv) === 'high' && fresh.argv[fresh.argv.indexOf('--tools') + 1] === 'Bash,Read,Grep,Glob' && !fresh.argv.includes('--disallowedTools'));
-  const again = planRun(config, { session: { id: 's-1', runtime: 'claude' } }, vars);
-  check('同运行时有会话 → resume 带 id', again.resume && again.session === 's-1' && again.argv.includes('--resume') && again.argv[again.argv.indexOf('--resume') + 1] === 's-1');
-  const switched = planRun(config, { session: { id: 's-1', runtime: 'claude' } }, { ...vars, systemBody: '正文\n\n板书写法', runtime: 'qwen' });
-  check('换运行时 → 新开,不带别家的会话 id', switched.runtime === 'qwen' && !switched.resume && switched.argv[0] === 'qwen' && !switched.argv.includes('s-1'));
-  check('qwen 模板拿到老师正文 + 板书写法({systemBody})', switched.argv.includes('正文\n\n板书写法') && runtimeUses(config.runtimes.qwen as { run: string[]; resume: string[] }, '{systemBody}'));
-  check('claude 模板不用正文', !runtimeUses(config.runtimes.claude as { run: string[]; resume: string[] }, '{agentBody}'));
+  check('无会话 → run,缺省 Qwen,消息走 stdin', fresh.runtime === 'qwen' && !fresh.resume && fresh.argv[0] === 'qwen' && !fresh.argv.includes('--resume') && !fresh.argv.includes(vars.prompt) && JSON.parse(fresh.stdin!).message.content === vars.prompt);
+  check('思考量由环境配置控制;工具是只读白名单', planRun(config, { session: null }, { ...vars, effort: 'medium' }).env.QWEN_CODE_SYSTEM_SETTINGS_PATH.endsWith('effort-low.json') && planRun(config, { session: { id: 's-1', runtime: 'qwen' } }, { ...vars, effort: 'high' }).env.QWEN_CODE_SYSTEM_SETTINGS_PATH.endsWith('effort-xhigh.json') && fresh.argv[fresh.argv.indexOf('--core-tools') + 1] === 'read_file,glob,grep_search');
+  const again = planRun(config, { session: { id: 's-1', runtime: 'qwen' } }, vars);
+  check('同运行时有会话 → resume 带 id', again.resume && again.session === 's-1' && again.argv[again.argv.indexOf('--resume') + 1] === 's-1');
+  const switched = planRun(config, { session: { id: 's-1', runtime: 'qwen' } }, { ...vars, systemBody: '正文\n\n板书写法', runtime: 'qwen-flash' });
+  check('换模型运行时 → 新开,不带原会话 id', switched.runtime === 'qwen-flash' && !switched.resume && !switched.argv.includes('s-1'));
+  check('Qwen 模板拿到老师正文 + 板书写法', switched.argv.includes('正文\n\n板书写法') && runtimeUses(config.runtimes.qwen as { run: string[]; resume: string[] }, '{systemBody}'));
   let threw = '';
   try {
     getRuntime(config, 'gemini');
   } catch (e) {
     threw = (e as Error).message;
   }
-  check('不存在的运行时 → 报错列出可用的', threw.includes('gemini') && threw.includes('claude') && threw.includes('qwen'), threw);
+  check('不存在的运行时 → 报错列出可用的', threw.includes('gemini') && threw.includes('qwen-flash') && threw.includes('qwen'), threw);
 }
 {
   // 换运行时后 applyRun 要把索引里的会话换成新的(不然下一条又拿旧 id 去 resume)
   let idx = emptyIndex('math-tutor', '2026-09-08');
-  idx = { ...idx, session: { id: 'c-1', runtime: 'claude' } };
+  idx = { ...idx, session: { id: 'c-1', runtime: 'qwen-flash' } };
   idx = addMessage(idx, { job: '1', at: 'x', from: 'kid', text: 'hi', result: 'running', artifacts: [] });
   const t = parseTranscript('{"type":"system","session_id":"q-1"}\n{"type":"result","subtype":"success","result":"好"}');
   const after = applyRun(idx, '1', { transcript: t, kidView: deriveKidView(t, { replyMaxChars: 60 }), runtime: 'qwen' });
@@ -44,16 +42,15 @@ const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\
   const same = applyRun(idx2, '2', { transcript: t, kidView: deriveKidView(t, { replyMaxChars: 60 }), runtime: 'qwen' });
   check('同话题同运行时保留原会话;话题首条拿新的', same.session?.id === 'q-0' && same.sessions['1']?.id === 'q-0' && after.sessions['1']?.id === 'q-1');
   const failed = parseTranscript('{"type":"result","subtype":"error_max_turns","is_error":true}');
-  const bad = applyRun(idx, '1', { transcript: failed, kidView: deriveKidView(failed, { replyMaxChars: 60 }), runtime: 'claude' });
+  const bad = applyRun(idx, '1', { transcript: failed, kidView: deriveKidView(failed, { replyMaxChars: 60 }), runtime: 'qwen-flash' });
   check('出错写 error 原因', bad.messages[0].result === 'error' && bad.messages[0].error === 'error_max_turns');
 }
 {
   const rt = (run: string[]) => ({ run, resume: run });
-  check('板书预载的判断:{boardFile} / {systemBody} / 头一版写死的路径算预载;什么都没有(codex 之类)不算', boardPreloaded(rt(['claude', '--append-system-prompt-file', '{boardFile}'])) && boardPreloaded(rt(['qwen', '--append-system-prompt', '{systemBody}'])) && boardPreloaded(rt(['claude', '--append-system-prompt-file', '../../.claude/skills/cotutor-board/SKILL.md'])) && !boardPreloaded(rt(['codex', 'exec', '{prompt}'])) && !boardPreloaded(rt(['qwen', '--append-system-prompt', '{agentBody}'])));
+  check('板书预载的判断:{boardFile} / {systemBody} / 头一版写死的路径算预载;什么都没有(codex 之类)不算', boardPreloaded(rt(['fake', '--board-file', '{boardFile}'])) && boardPreloaded(rt(['qwen', '--append-system-prompt', '{systemBody}'])) && boardPreloaded(rt(['fake', '--board-file', '../../.claude/skills/cotutor-board/SKILL.md'])) && !boardPreloaded(rt(['codex', 'exec', '{prompt}'])) && !boardPreloaded(rt(['qwen', '--append-system-prompt', '{agentBody}'])));
   const cfg = parseConfig(JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })), 'x');
-  const p1 = planRun(cfg, { session: null }, { agent: 'math-tutor', prompt: 'hi', boardFile: '/ws/.claude/skills/cotutor-board/SKILL.md', runtime: 'claude' });
   const p2 = planRun(cfg, { session: null }, { agent: 'math-tutor', prompt: 'hi', agentBody: 'A', systemBody: 'A\n\nB', runtime: 'qwen' });
-  check('占位符:claude 填 {boardFile},qwen 填 {systemBody};没给值的原样留着', p1.argv.join(' ').includes('--append-system-prompt-file /ws/.claude/skills/cotutor-board/SKILL.md') && p2.argv.includes('A\n\nB') && planRun(cfg, { session: null }, { agent: 'a', prompt: 'hi', runtime: 'claude' }).argv.includes('{boardFile}'), JSON.stringify([p1.argv, p2.argv]));
+  check('占位符:Qwen 填 systemBody;没给值的原样留着', p2.argv.includes('A\n\nB') && planRun(cfg, { session: null }, { agent: 'a', prompt: 'hi' }).argv.includes('{systemBody}'));
   const reads = boardGuideReads([{ name: 'Skill', arg: 'cotutor-board' }, { name: 'Read', arg: '/ws/.claude/skills/cotutor-board/SKILL.md' }, { name: 'Bash', arg: 'cat ../../.claude/skills/cotutor-board/SKILL.md' }, { name: 'Read', arg: '/ws/.claude/skills/cotutor-board/references/choice.md' }, { name: 'Skill', arg: 'cotutor-vault' }]);
   check('回读检查:Skill 点名、Read / cat SKILL.md 都算;references 与别的技能不算', reads.length === 3 && !reads.join().includes('choice.md') && !reads.join().includes('cotutor-vault'), JSON.stringify(reads));
   check('按老师裁的那份也算回读', boardGuideReads([{ name: 'Read', arg: '/ws/.cotutor/board/math-tutor-1a2b3c4d.md' }]).length === 1);

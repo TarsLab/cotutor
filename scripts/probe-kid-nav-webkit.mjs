@@ -26,7 +26,7 @@ const { createContext, createHandler } = await import(join(repo, 'src', 'server'
 
 const tmp = probeDir('cotutor-probe-kid-nav-');
 const wsRoot = join(tmp, 'ws');
-await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot, proxy: false });
+await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot });
 const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();
 const server = createServer(createHandler(ctx));

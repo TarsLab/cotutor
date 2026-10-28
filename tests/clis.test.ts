@@ -1,5 +1,5 @@
 /** CLI 适配器(《agent层设计.md》§6):stream-json 读成统一事件、按运行时找适配器、填模板(含 {toolArgs})、工具类别、环境。 */
-import { ADAPTERS, STREAM_JSON, adapterFor, controlsTools, factoryRuntimes, fillArgs, parserForRuntime, processEnv, runtimeCli, toolKind, unexpectedTools, withoutNested } from '../src/clis/index.ts';
+import { ADAPTERS, STREAM_JSON, adapterFor, controlsTools, factoryRuntimes, fillArgs, parserForRuntime, processEnv, runtimeCli, runtimeIssue, toolKind, unexpectedTools } from '../src/clis/index.ts';
 import { qwen } from '../src/clis/qwen.ts';
 import { parseStreamJson } from '../src/clis/stream-json.ts';
 import { check, done } from './_check.ts';
@@ -25,25 +25,28 @@ const j = (o: unknown): string => JSON.stringify(o);
 }
 
 {
-  check('按 run[0] 的文件名认;cli 字段优先;认不出按 stream-json', adapterFor({ run: ['/opt/bin/claude', '-p'] }).name === 'claude' && adapterFor({ run: ['qwen'] }).name === 'qwen' && adapterFor({ run: ['.cotutor/qwen-wrap'], cli: 'qwen' }).name === 'qwen' && adapterFor({ run: ['node', 'fake.ts'] }) === STREAM_JSON && runtimeCli({ run: ['x/y/z'] }) === 'z');
+  check('按 run[0] 的文件名认;cli 字段优先;认不出按 stream-json', adapterFor({ run: ['/opt/bin/qwen'] }).name === 'qwen' && adapterFor({ run: ['qwen'] }).name === 'qwen' && adapterFor({ run: ['.cotutor/qwen-wrap'], cli: 'qwen' }).name === 'qwen' && adapterFor({ run: ['node', 'fake.ts'] }) === STREAM_JSON && runtimeCli({ run: ['x/y/z'] }) === 'z');
   check('工具类别:各家的名字都认,不认的是 other', toolKind('Read') === 'read' && toolKind('read_file') === 'read' && toolKind('Bash') === 'shell' && toolKind('run_shell_command') === 'shell' && toolKind('Skill') === 'skill' && toolKind('skill') === 'skill' && toolKind('grep_search') === 'search' && toolKind('Artifact') === 'other');
-  const claude = adapterFor({ run: ['claude'] });
-  const filled = fillArgs(claude, ['claude', '--tools', '{tools}', '{toolArgs}', '--effort', '{effort}'], { agent: 'a', prompt: 'p', tools: 'off' });
-  check('{tools} 填工具名单,{toolArgs} 展开成几个参数,{effort} 没给用缺省', j(filled) === j(['claude', '--tools', '', '--tools', '', '--effort', 'low']), j(filled));
-  check('不给 tools = 带', fillArgs(claude, ['{tools}'], { agent: 'a', prompt: 'p' })[0] === 'Bash,Read,Grep,Glob');
-  check('只读那档(照片、记账):没有 Bash;qwen 的 read 与 on 一样', fillArgs(claude, ['{tools}', '{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'read' }).join(' ') === 'Read,Grep,Glob --tools Read,Grep,Glob' && j(fillArgs(qwen, ['{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'read', readDirs: ['/ws'] })) === j(fillArgs(qwen, ['{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'on', readDirs: ['/ws'] })));
+  const filled = fillArgs(qwen, ['qwen', '{tools}', '{effort}'], { agent: 'a', prompt: 'p', tools: 'off' });
+  check('{tools} 填工具名单,{effort} 没给用缺省', j(filled) === j(['qwen', '', 'low']), j(filled));
+  check('不给 tools = 只读', fillArgs(qwen, ['{tools}'], { agent: 'a', prompt: 'p' })[0] === 'read_file,glob,grep_search');
+  check('qwen 的 read 与 on 一样', j(fillArgs(qwen, ['{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'read', readDirs: ['/ws'] })) === j(fillArgs(qwen, ['{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'on', readDirs: ['/ws'] })));
   check('{toolArgs} 展开成零个参数也行', j(fillArgs({ ...STREAM_JSON, toolArgs: () => [] }, ['x', '{toolArgs}', 'y'], { agent: 'a', prompt: 'p' })) === j(['x', 'y']));
   check('模板管得了工具:{tools} 或独占参数的 {toolArgs}', controlsTools({ run: ['a', '--tools', '{tools}'], resume: ['a'] }) && controlsTools({ run: ['a'], resume: ['a', '{toolArgs}'] }) && !controlsTools({ run: ['a'], resume: ['a'] }));
 }
 
 {
-  const base = { PATH: '/bin', CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'cli' };
-  check('claude 注代理(大小写都给);没设、false 不注', processEnv({ cli: 'claude', env: {} }, base, { proxy: 'http://p:1' }).https_proxy === 'http://p:1' && processEnv({ cli: 'claude', env: {} }, base, { proxy: false }).HTTPS_PROXY === undefined);
-  check('认不出的 CLI 不注代理;计划里的环境变量盖上去', processEnv({ cli: 'stream-json', env: { X: '1' } }, base, { proxy: 'http://p:1' }).HTTPS_PROXY === undefined && processEnv({ cli: 'stream-json', env: { X: '1' } }, base, {}).X === '1');
-  check('去掉各 CLI 认作嵌套的变量', withoutNested(base).CLAUDECODE === undefined && withoutNested(base).CLAUDE_CODE_ENTRYPOINT === undefined && withoutNested(base).PATH === '/bin');
-  check('按运行时名找读法;没这个运行时按 stream-json', parserForRuntime({ claude: { run: ['claude'], resume: ['claude'] } }, 'claude') === adapterFor({ run: ['claude'] }).parse && parserForRuntime({}, 'gone') === STREAM_JSON.parse && parserForRuntime({ default: 'claude' }, 'default') === STREAM_JSON.parse);
+  const base = { PATH: '/bin' };
+  check('计划里的环境变量盖上去,不修改基础环境', processEnv({ cli: 'stream-json', env: { X: '1' } }, base).X === '1' && !('X' in base));
+  check('按运行时名找读法;没这个运行时按 stream-json', parserForRuntime({ qwen: { run: ['qwen'], resume: ['qwen'] } }, 'qwen') === qwen.parse && parserForRuntime({}, 'gone') === STREAM_JSON.parse && parserForRuntime({ default: 'qwen' }, 'default') === STREAM_JSON.parse);
+  for (const rt of [{ run: ['claude'] }, { run: ['/opt/bin/claude'] }, { run: ['wrapper'], cli: 'claude' }, { run: ['qwen'], resume: ['claude'] }]) {
+    let error = '';
+    try { adapterFor(rt); } catch (e) { error = (e as Error).message; }
+    check('退役运行时不走通用兜底,提示迁移', Boolean(runtimeIssue(rt)) && error.includes('Claude CLI 已移除') && error.includes('qwen'));
+  }
+  check('旧 Claude 日志仍能读', parserForRuntime({ old: { run: ['claude'], resume: ['claude'] } }, 'old') === STREAM_JSON.parse);
   const rt = factoryRuntimes();
-  check('出厂运行时由各适配器给,每个都能找回自己的适配器', ADAPTERS.every((a) => Object.values(a.runtimes()).every((r) => adapterFor(r) === a)) && 'claude' in rt && 'qwen' in rt);
+  check('只登记 Qwen,只出厂 qwen 与 qwen-flash', ADAPTERS.length === 1 && ADAPTERS[0] === qwen && Object.keys(rt).join() === 'qwen,qwen-flash' && Object.values(rt).every((r) => adapterFor(r) === qwen));
 }
 
 {
@@ -51,7 +54,7 @@ const j = (o: unknown): string => JSON.stringify(o);
   const on = fillArgs(qwen, ['qwen', '{toolArgs}'], { agent: 'a', prompt: 'p', tools: 'on' });
   check('qwen 不带工具:--core-tools 给一个再排除掉,非核心的也排除', off[1] === '--core-tools' && off[2] === 'read_file' && off[3] === '--exclude-tools' && off[4].split(',').includes('read_file') && off[4].split(',').includes('agent') && off[4].split(',').includes('skill') && off[5] === '-m', off.join(' '));
   check('qwen 只读:read_file / glob / grep_search,非核心的排除', on[2] === 'read_file,glob,grep_search' && !on[4].split(',').includes('read_file') && on[4].split(',').includes('agent'));
-  check('qwen 核对工具表:不带时多一个都提醒,只读时多出只读三样以外的提醒', unexpectedTools('qwen', 'off', ['read_file']).join() === 'read_file' && unexpectedTools('qwen', 'on', ['glob', 'edit']).join() === 'edit' && unexpectedTools('claude', 'off', ['Bash']).length === 0);
+  check('qwen 核对工具表:不带时多一个都提醒,只读时多出只读三样以外的提醒', unexpectedTools('qwen', 'off', ['read_file']).join() === 'read_file' && unexpectedTools('qwen', 'on', ['glob', 'edit']).join() === 'edit' && unexpectedTools('stream-json', 'off', ['shell']).length === 0);
   const env = qwen.planEnv!({ root: '/ws', effort: 'high', tools: 'off' });
   check('qwen 的家与思考量:high → xhigh;没给 root 不设', env.QWEN_HOME === '/ws/.cotutor/qwen/home' && env.QWEN_CODE_SYSTEM_SETTINGS_PATH === '/ws/.cotutor/qwen/effort-xhigh.json' && Object.keys(qwen.planEnv!({ effort: 'low', tools: 'off' })).length === 0);
   check('qwen:effort low 不带工具不想,带工具(照片、记账)至少想一点', qwen.planEnv!({ root: '/ws', effort: 'low', tools: 'off' }).QWEN_CODE_SYSTEM_SETTINGS_PATH.endsWith('effort-none.json') && qwen.planEnv!({ root: '/ws', effort: 'low', tools: 'on' }).QWEN_CODE_SYSTEM_SETTINGS_PATH.endsWith('effort-low.json'));

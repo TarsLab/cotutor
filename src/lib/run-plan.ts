@@ -1,13 +1,12 @@
 /**
  * 一次运行的命令规划(纯函数):按运行时选 run 还是 resume、填占位符、定 cwd 相对路径。
  * 规则:当天索引里已有会话**且**是同一运行时跑出来的 → resume;否则新开(跨天索引本来就是新的,零点后第一条自然不带 --resume;
- * 换了运行时也新开——claude 的会话 id qwen 不认)。{agentBody} 只给模板里真用到它的运行时读老师正文。
+ * 换了运行时也新开——不同运行时的会话不混用)。{agentBody} 只给模板里真用到它的运行时读老师正文。
  */
 import { adapterFor, fillArgs } from '../clis/index.ts';
 import { streamJsonUserMessage } from '../clis/stream-json.ts';
 import type { ToolSet } from '../clis/types.ts';
-import { join } from 'node:path';
-import { NO_AGENTS_FILE, POLICY_DEFAULTS, type ConversationIndex, type CotutorConfig, type Policy, type Runtime } from '../schema/index.ts';
+import { POLICY_DEFAULTS, type ConversationIndex, type CotutorConfig, type Policy, type Runtime } from '../schema/index.ts';
 
 export interface RunPlan {
   /** 运行时名(runtimes 里的键) */
@@ -56,7 +55,7 @@ export function boardPreloaded(runtime: Runtime): boolean {
 export function planRun(
   config: CotutorConfig,
   index: Pick<ConversationIndex, 'session'>,
-  vars: { agent: string; prompt: string; agentBody?: string; systemBody?: string; boardFile?: string; agentsFile?: string; runtime?: string; effort?: Policy['effort']; tools?: ToolSet; root?: string; readDirs?: readonly string[] },
+  vars: { agent: string; prompt: string; agentBody?: string; systemBody?: string; boardFile?: string; runtime?: string; effort?: Policy['effort']; tools?: ToolSet; root?: string; readDirs?: readonly string[] },
 ): RunPlan {
   const { name, runtime } = getRuntime(config, vars.runtime);
   const adapter = adapterFor(runtime);
@@ -67,7 +66,7 @@ export function planRun(
     runtime: name,
     cli: adapter.name,
     tools: vars.tools ?? 'on',
-    argv: fillArgs(adapter, template, { agent: vars.agent, prompt: vars.prompt, session: session ?? undefined, agentBody: vars.agentBody, systemBody: vars.systemBody, boardFile: vars.boardFile, agentsFile: vars.agentsFile ?? (vars.root ? join(vars.root, NO_AGENTS_FILE) : undefined), effort: vars.effort, tools: vars.tools, readDirs: vars.readDirs }),
+    argv: fillArgs(adapter, template, { agent: vars.agent, prompt: vars.prompt, session: session ?? undefined, agentBody: vars.agentBody, systemBody: vars.systemBody, boardFile: vars.boardFile, effort: vars.effort, tools: vars.tools, readDirs: vars.readDirs }),
     resume: session !== null,
     session,
     ...(runtime.stdin ? { stdin: adapter.stdinMessage(vars.prompt) } : {}),
@@ -75,7 +74,7 @@ export function planRun(
   };
 }
 
-/** stream-json 输入的一条用户消息(claude / qwen 的 `--input-format stream-json` 一行一条;别的 CLI 看它的适配器) */
+/** stream-json 输入的一条用户消息(Qwen 的 `--input-format stream-json` 一行一条;别的 CLI 看它的适配器) */
 export const stdinMessage = streamJsonUserMessage;
 
 /**

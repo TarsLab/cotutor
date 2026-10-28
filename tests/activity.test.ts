@@ -76,16 +76,6 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('没给的插槽填空,不留三个换行', !fillSlots(painter!.prompt, { 版式: 'A', 分幅: 'B' }).includes('\n\n\n'));
 }
 
-// ---- 老 workspace 的 claude 模板:upgrade --config 补上 --agents {agentsFile}(activity 独立,拍板 13)----
-{
-  const { insertMissingFlags } = await import('../src/cli/migrate.ts');
-  const { factoryRuntimes } = await import('../src/clis/index.ts');
-  const factory = factoryRuntimes().claude.run;
-  const old = factory.filter((a, i) => a !== '--agents' && factory[i - 1] !== '--agents');
-  const r = insertMissingFlags(old, factory);
-  check('旧 claude 模板补上 --agents {agentsFile},紧跟在 --agent {agent} 后面', r.added.join(' ') === '--agents {agentsFile}' && r.argv.join(' ') === factory.join(' '), JSON.stringify(r));
-}
-
 // ---- 写错了报到行 ----
 {
   check('类型不认得', has(fixesAfter('词: 词表,可空', '词: 词组,可空'), '类型「词组」不认得', lineOf('词: 词表')));

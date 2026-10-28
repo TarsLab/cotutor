@@ -37,7 +37,7 @@ export interface AgentFileIssue {
 const CONFIG_KEYS = ['display', 'avatar', 'voice', 'enabled', 'hidden', 'policy', 'runtime', 'subject', 'color', 'cards'];
 
 /**
- * 老师文件的检查(工作台边改边查):frontmatter 要在、name 要是老师键(claude 的 --agent 靠它找,不对这位老师就起不来);
+ * 老师文件的检查(工作台边改边查):frontmatter 要在、name 要是老师键(与 cotutor.json 的老师键一致);
  * 正文不能空(正文就是系统提示);两家 CLI 公共子集外的键提醒一句。和 parseAgentFile 同一套认法
  */
 export function lintAgentFile(text: string, name: string): AgentFileIssue[] {

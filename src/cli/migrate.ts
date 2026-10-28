@@ -3,13 +3,9 @@
  *
  * cotutor.json 是**政策文件**:init 只在缺失时写模板,已有的那份机器永不改(家长的决定不由机器替她拍板)。
  * 代价是包更新带来的新出厂件不会自己出现在老 workspace 里,而且「没有」的表现是**静默**的——
- * 2026-09-10 板书那一期加了 scene-maker(画图老师)、claude-scene / qwen-scene 运行时、
- * claude 模板的 `--disallowedTools Agent` 与 `--include-partial-messages`;老 workspace 缺了它们的表现是
- * 「画图老师不存在」「场景作业起不来」「老师自己派子代理烧预算」「回复整块出不流式」,没有一条会报错。
- *
  * 所以有这一层:把「出厂模板有、你这份没有」算出来(doctor 的 `config.migrate` 点名、家长端设置页顶部提示),
  * `cotutor upgrade --config` 只**补缺**——加缺的键、往命令模板里插缺的旗标;家长写过的值一个都不动
- * (改小的预算、加过的 `--model sonnet`、换掉的 default 运行时全都原样留着)。
+ * (改小的预算、加过的 `-m qwen3.8-flash`、换掉的 default 运行时全都原样留着)。
  *
  * 差异是**现算的**:拿家长自己的 slug / name / port 生成一份出厂模板,和她这份逐项比,
  * 所以以后模板再加东西,这里不用跟着改。
@@ -18,7 +14,6 @@ import { workspaceGradePack } from './grades.ts';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CotutorConfigSchema, explainIssues } from '../schema/index.ts';
-import { CLAUDE_TUTOR_TOOLS } from '../clis/claude.ts';
 import { configTemplate, shippedAgents } from './skeleton.ts';
 import { installTutors, type InstallStep } from './tutors.ts';
 import { CONFIG_FILE, ConfigError, readJson } from './workspace.ts';
@@ -28,7 +23,7 @@ export type GapKind = 'tutor' | 'runtime' | 'flag' | 'cards' | 'section';
 
 export interface ConfigGap {
   kind: GapKind;
-  /** 点位:tutors.math-tutor / runtimes.qwen / runtimes.claude.run */
+  /** 点位:tutors.math-tutor / runtimes.qwen / runtimes.qwen.run */
   path: string;
   /** 人话:缺的是什么、补上有什么用 */
   detail: string;
@@ -38,7 +33,7 @@ export interface ConfigGap {
 
 const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 
-/** 命令模板里一个旗标带几个词:`--disallowedTools Agent` 是两个,`--verbose` 是一个(值不以 - 打头) */
+/** 命令模板里一个旗标带几个词:`--output-format stream-json` 是两个,`--include-partial-messages` 是一个(值不以 - 打头) */
 function flagSpan(argv: readonly string[], i: number): string[] {
   const span = [argv[i] as string];
   for (let j = i + 1; j < argv.length && !(argv[j] as string).startsWith('-'); j++) span.push(argv[j] as string);
@@ -127,12 +122,8 @@ export async function configGaps(raw: unknown, agentsDir?: string): Promise<Conf
       const u = mine[key];
       if (!Array.isArray(f) || !Array.isArray(u)) continue;
       const { argv, added } = insertMissingFlags(u as string[], f as string[]);
-      // --tools 的值还是旧出厂的白名单(没人改过)、出厂模板已经换成 {tools}:一起换,孩子的话才不带工具(policy.tools)。改过的白名单是家长的决定,不动
-      const at = argv.indexOf('--tools');
-      const swap = at >= 0 && argv[at + 1] === CLAUDE_TUTOR_TOOLS && (f as string[])[(f as string[]).indexOf('--tools') + 1] === '{tools}';
-      if (swap) argv[at + 1] = '{tools}';
-      if (!added.length && !swap) continue;
-      const what = [added.length ? `缺出厂旗标 ${added.join(' ')}` : '', swap ? `--tools 还是写死的白名单,换成 {tools}(孩子的话不带工具,开口快)` : ''].filter(Boolean).join(';');
+      if (!added.length) continue;
+      const what = `缺出厂旗标 ${added.join(' ')}`;
       gaps.push({ kind: 'flag', path: `runtimes.${name}.${key}`, detail: `${name} 的 ${key} 命令模板${what}`, value: argv });
     }
   }

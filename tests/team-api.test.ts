@@ -1,4 +1,4 @@
-/** 家长页背后的接口:新老师 / 老师文件读写 / 删老师、设置页的 paths / server / tts 补丁、JSON Schema、doctor 认嵌套与 API 层错误。 */
+/** 家长页背后的接口:新老师 / 老师文件读写 / 删老师、设置页的 paths / server / tts 补丁、JSON Schema、doctor 检查运行时与 API 层错误。 */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync as writeBytes } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -80,24 +80,23 @@ try {
   check('kid 仍不让改', (await route('PATCH', '/api/config', ctx, { kid: { slug: 'x' } })).status === 422);
   check('坏 tts 拒', (await route('PATCH', '/api/config', ctx, { tts: { say: [] } })).status === 422);
 
-  // ---- doctor:嵌套环境、API 层错误的修复指南 ----
+  // ---- doctor:Qwen 的 API 层错误与退役运行时 ----
   const nested = await doctorWorkspace(root, { probeEnv: false, env: { CLAUDECODE: '1' } });
-  check('CLAUDECODE 在 → env.nested 提醒 unset', nested.checks.some((c) => c.name === 'env.nested' && !c.ok && !c.required && c.fix?.includes('unset CLAUDECODE')));
-  check('普通终端没有 env.nested', !(await doctorWorkspace(root, { probeEnv: false, env: {} })).checks.some((c) => c.name === 'env.nested'));
-  check('模型不认 → 加 --model', explainLlmFailure('API Error: 400 Claude Code 2.1.220 does not support this model; version 2.1.251 or newer is required', ['claude']).includes('--model'));
-  check('嵌套 → unset', explainLlmFailure('nested session', ['claude']).includes('unset'));
-  check('没登录 → 登录', explainLlmFailure('Not logged in', ['qwen']).includes('qwen 登录'));
+  check('Qwen 不受 Claude 的嵌套环境影响', !nested.checks.some((c) => c.name === 'env.nested' || c.name === 'env.userSettings' || c.name === 'proxy'));
+  check('模型不认 → 检查 -m 与升级', explainLlmFailure('does not support this model', ['qwen']).includes('-m'));
+  check('401 → 检查千问 key', explainLlmFailure('401 Unauthorized', ['qwen']).includes('QWENCLOUD_TOKEN_PLAN_API_KEY'));
+  check('403 → 检查模型权限', explainLlmFailure('403 Request not allowed', ['qwen']).includes('模型权限'));
   // --live 走假 CLI(第一位开着的老师),看它能把结果摆出来
   const node = process.execPath;
   const fakeCli = new URL('./_fake-cli.ts', import.meta.url).pathname;
-  await route('PATCH', '/api/config', ctx, { runtimes: { default: 'claude' } });
+  await route('PATCH', '/api/config', ctx, { runtimes: { default: 'qwen' } });
   const raw = JSON.parse(readFileSync(join(root, 'cotutor.json'), 'utf8')) as Record<string, unknown>;
-  (raw.runtimes as Record<string, unknown>).claude = { run: [node, '--experimental-strip-types', '--no-warnings', fakeCli, '--agent', '{agent}', '{prompt}'], resume: [node, fakeCli, '--resume', '{session}', '{prompt}'] };
+  (raw.runtimes as Record<string, unknown>).qwen = { run: [node, '--experimental-strip-types', '--no-warnings', fakeCli, '--agent', '{agent}', '{prompt}'], resume: [node, fakeCli, '--resume', '{session}', '{prompt}'] };
   (raw.runtimes as Record<string, unknown>).broken = { run: [node, '--experimental-strip-types', '--no-warnings', fakeCli, '--fail', '{prompt}'], resume: [node, fakeCli, '{prompt}'] };
   const { writeFileSync } = await import('node:fs');
   writeFileSync(join(root, 'cotutor.json'), JSON.stringify(raw, null, 2));
   const live = await doctorWorkspace(root, { probeEnv: false, env: {}, live: true });
-  check('--live 起假 CLI 成功 → live.claude ✓', live.checks.some((c) => c.name === 'live.claude' && c.ok && c.detail.includes('回了')), JSON.stringify(live.checks.filter((c) => c.name.startsWith('live'))));
+  check('--live 起假 CLI 成功 → live.qwen ✓', live.checks.some((c) => c.name === 'live.qwen' && c.ok && c.detail.includes('回了')), JSON.stringify(live.checks.filter((c) => c.name.startsWith('live'))));
   check('没人配 voice → live.tts 跳过', live.checks.some((c) => c.name === 'live.tts' && c.ok && c.detail.includes('不探')));
   (raw.runtimes as Record<string, unknown>).default = 'broken';
   writeFileSync(join(root, 'cotutor.json'), JSON.stringify(raw, null, 2));

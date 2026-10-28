@@ -1,12 +1,12 @@
 ---
 name: cotutor-home
-description: 排 cotutor 孩子端的首页。孩子学完之后,家长在 workspace 根开 Claude Code 说「总结一下今天」「排明天的首页」「给语文老师加个预习按钮」「把那几个字放首页」「上次推荐的他点了没有」时用。读今天的对话、说清学了什么停在哪,商量下次从哪几个按钮进、首页放哪几张卡;家长点头才写草稿,家长明说才发布。不是:改老师的提示词或 vault(→ cotutor-tune)、查老师为什么那样答(→ cotutor-analyze)。
+description: 排 cotutor 孩子端的首页。孩子学完之后,家长在 workspace 根开编程助手说「总结一下今天」「排明天的首页」「给语文老师加个预习按钮」「把那几个字放首页」「上次推荐的他点了没有」时用。读今天的对话、说清学了什么停在哪,商量下次从哪几个按钮进、首页放哪几张卡;家长点头才写草稿,家长明说才发布。不是:改老师的提示词或 vault(→ cotutor-tune)、查老师为什么那样答(→ cotutor-analyze)。
 ---
 
 <!-- 给人看
-谁读:家长在 workspace 根开的 Claude Code
+谁读:家长在 workspace 根开的编程助手
 能改:机器件,upgrade 覆盖;references/ 下的首页语法.md、命令.md、tutor.md 由 src/lib/home-doc.ts 与 cards/tutor/card.md 生成
-改了:在试用 workspace 里开 Claude Code 说一句「总结一下今天」(《写提示词.md》§一)
+改了:在试用 workspace 里开编程助手说一句「总结一下今天」(《写提示词.md》§一)
 -->
 
 # 排首页
@@ -28,7 +28,7 @@ description: 排 cotutor 孩子端的首页。孩子学完之后,家长在 works
 - 不改 conversations/、ledger/、cotutor.json、老师文件。
 - home/published.json 与 home/history/ 是机器件,不手改。
 - 孩子看得到的字(按钮、卡)不评判:不写对错、分数、名次、「真棒」「聪明」「最…」。
-- .claude/agents/ 里的老师是给 cotutor 起 claude -p 用的。不要当子代理派,也不要替老师回答孩子。
+- .claude/agents/ 里的老师是由 cotutor 读正文传给 Qwen 的。不要当子代理派,也不要替老师回答孩子。
 
 ## 一、看今天
 

@@ -14,7 +14,7 @@
 
 ## 目录
 
-- `grades/grade-<n>/agents/*.md` 出厂老师文件:frontmatter 取两 CLI 公共子集,正文即系统提示;init 拷进 workspace,hash 记 `.cotutor/shipped.json`
+- `grades/grade-<n>/agents/*.md` 出厂老师文件:frontmatter 取应用支持的字段,正文即系统提示;init 拷进 workspace,hash 记 `.cotutor/shipped.json`
 - `grades/grade-<n>/agents/<老师>/activities/<名>.md` 出厂 activity(孩子从首页一个按钮进去的一种做法):一节一个读者,init 拷进 workspace 的 `agents/<老师>/activities/`(老师的家),hash 同上;形状在 `src/schema/activity.ts`,解析与检查在 `src/lib/activity.ts`;设计在 `docs/activity设计.md`
 - `skills/<name>/` 出厂技能:cotutor-tutor(有脸的老师共同的守则,应用注入上下文包)、cotutor-board(由 `cards/板书怎么写.md` 与 `cards/*/card.md` 生成)、cotutor-vault、cotutor-analyze、cotutor-tune、cotutor-home(家长在 workspace 里排首页);不再出厂的机器件列在 `src/cli/skills.ts` 的 `RETIRED_SKILLS`,upgrade 时删
 - `cards/<kind>/` 卡的协议:`card.md` 八栏(例子即测试)+ `card.css`
@@ -43,8 +43,6 @@
 ## 坑(不可推导的)
 
 - 页面模板是模板字符串:反斜杠写 `\\n`,正则里 `\/` 写 `\\/`,吃掉一层那行就成了注释而脚本照样能解析
-- Claude Code 会话里起 claude 子进程要 `env -u CLAUDECODE`
-- claude 运行时模板带 `--setting-sources project` 隔离本机配置,代价是 `~/.claude/settings.json` 的代理 env 也不进:cotutor.json 的 `proxy`(init 会问,`cotutor proxy on`)起 claude 时注进去;没设就得从 export 了代理的 shell 起 serve
 - serve 只热重载 cotutor.json;改 `src/` 要重起
 - 提交按文件名 stage,仓里常有并行的未提交改动
 - 舞台页(`/stage/`)也装孩子端的 `theme.css`:舞台里自己的类名要带前缀(`lc-` 这种),撞上 `.pen` `.c` 之类会被那边的样式改掉(`.pen` 关着 pointer-events,圈不上)

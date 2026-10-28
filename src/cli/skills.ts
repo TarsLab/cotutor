@@ -43,7 +43,7 @@ export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
   { name: 'drawtell-verify', source: 'drawtell' },
 ];
 
-/** 不再出厂的机器件:upgrade 时 workspace 里还有(出厂记录里有它)就删掉,免得 Claude Code 照旧技能干活。现在没有(cotutor-prep 2026-10-22 起不再认:workspace 里都删过了) */
+/** 不再出厂的机器件:upgrade 时 workspace 里还有(出厂记录里有它)就删掉,免得编程助手照旧技能干活。现在没有(cotutor-prep 2026-10-22 起不再认:workspace 里都删过了) */
 export const RETIRED_SKILLS: readonly string[] = [];
 
 export type ShippedSkillName = string;

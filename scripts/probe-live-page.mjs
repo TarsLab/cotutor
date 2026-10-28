@@ -45,7 +45,7 @@ fake.audioMs = 1500;
 const FAKE = join(repo, 'tests', '_fake-cli.ts');
 const rt = { run: [process.execPath, '--experimental-strip-types', '--no-warnings', FAKE, '--stream', '--tools', '{tools}', '--agent', '{agent}', '{prompt}'], resume: [process.execPath, '--experimental-strip-types', '--no-warnings', FAKE, '--stream', '--tools', '{tools}', '--agent', '{agent}', '--resume', '{session}', '{prompt}'] };
 const wsRoot = join(tmp, 'ws');
-await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot, proxy: false });
+await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot });
 const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 cfg.runtimes = { default: 'stream', stream: rt };

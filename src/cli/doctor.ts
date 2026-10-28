@@ -5,8 +5,7 @@
  */
 import { isRealtimeVoice } from '../live/voices.ts';
 import { dashscopeAuth } from '../live/realtime.ts';
-import { detectProxy } from '../lib/proxy.ts';
-import { adapterFor, parserOf, prepareCli, processEnv } from '../clis/index.ts';
+import { adapterFor, parserOf, prepareCli, processEnv, runtimeIssue } from '../clis/index.ts';
 import { execFile } from 'node:child_process';
 import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
@@ -86,13 +85,11 @@ export function runtimeCli(run: readonly string[]): string {
 export function explainLlmFailure(text: string, runtime: readonly string[]): string {
   const bin = runtimeCli(runtime);
   if (/does not support this model|version [\d.]+ or newer is required/i.test(text)) {
-    return `这版 ${bin} 不认全局 settings 里的模型:给 cotutor.json 的 ${bin} 运行时 run / resume 末尾加 "--model", "sonnet"(或 ${bin} update 升级)`;
+    return `这版 ${bin} 不认模型:检查 cotutor.json 的运行时 run / resume 中 -m 后的模型名,或运行 ${bin} update 升级`;
   }
-  if (/nested|CLAUDECODE|already running inside/i.test(text)) return '在 Claude Code 会话里嵌套起 claude 被拒:换个普通终端,或 unset CLAUDECODE 及 CLAUDE_CODE_* 后再跑';
-  if (/403|request not allowed/i.test(text)) return `API 拒了(403):多半是老师会话没走代理——运行时模板带 --setting-sources project,${bin} 不再读 ~/.claude/settings.json 的 env,代理要在起 serve 的 shell 里 export HTTPS_PROXY`;
-  if (/not logged in|login|authentication|401|unauthorized/i.test(text)) return `${bin} 没登录或 key 失效:先在终端跑一次 ${bin} 登录`;
+  if (/403|request not allowed/i.test(text)) return `API 拒了(403):检查 ${bin} 使用的千问 key、端点与模型权限`;
+  if (/not logged in|login|authentication|401|unauthorized/i.test(text)) return `${bin} 的 key 无效:检查 QWENCLOUD_TOKEN_PLAN_API_KEY 或 DASHSCOPE_API_KEY,再跑 cotutor doctor`;
   if (/ENOENT|command not found/i.test(text)) return `PATH 里没有 ${bin}`;
-  if (/budget|max_budget/i.test(text)) return '预算旗太小:调大运行时模板里的 --max-budget-usd';
   return `看上面的原文;不认识的错先在终端手跑一次同样的命令`;
 }
 
@@ -117,6 +114,7 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
   const runtimeName = ws.config.runtimes.default;
   const runtime = ws.config.runtimes[runtimeName];
   if (!runtime || typeof runtime === 'string') return;
+  if (runtimeIssue(runtime)) return; // 静态体检已报退役,不启动旧 CLI
   let agentBody: string | undefined;
   try {
     agentBody = parseAgentFile(await readFile(join(ws.dirs.claudeAgents, `${first.name}.md`), 'utf8')).body;
@@ -139,7 +137,7 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
   const run = await new Promise<{ out: string; err: string; code: number | null; spawnErr?: string }>((resolveRun) => {
     let out = '';
     let err = '';
-    const child = spawn(argv[0], argv.slice(1), { cwd, env: processEnv(plan, { ...env, COTUTOR_WORKSPACE: ws.root }, { proxy: ws.config.proxy }), stdio: [plan.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
+    const child = spawn(argv[0], argv.slice(1), { cwd, env: processEnv(plan, { ...env, COTUTOR_WORKSPACE: ws.root }), stdio: [plan.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
     const timer = setTimeout(() => child.kill(), 120_000);
     // 消息走 stdin 的运行时:写一条,看到收尾就关 stdin
     if (plan.stdin) {
@@ -208,10 +206,6 @@ export async function doctorWorkspace(
   const [maj, min] = process.versions.node.split('.').map(Number);
   const nodeOk = maj > 22 || (maj === 22 && min >= 18);
   push({ name: 'node', ok: nodeOk, required: true, detail: `node ${process.versions.node}`, fix: nodeOk ? undefined : '需要 Node ≥ 22.18' });
-  if (env.CLAUDECODE) {
-    push({ name: 'env.nested', ok: false, required: false, detail: '现在在 Claude Code 会话里(CLAUDECODE 已设),从这里起的 claude 老师会被当嵌套拒掉', fix: '换个普通终端跑 cotutor serve;或 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_SESSION_ID CLAUDE_CODE_CHILD_SESSION CLAUDE_PID CLAUDE_EFFORT' });
-  }
-
   let root: string | null = null;
   let source: RootSource | null = null;
   try {
@@ -273,23 +267,6 @@ export async function doctorWorkspace(
     });
   }
 
-  // ---- 老师会话的隔离(2026-09-15):claude 模板带 --setting-sources project,只读 workspace 的 .claude/,~/.claude 的技能 / hooks / 额外目录都不进老师;
-  // 代价是 ~/.claude/settings.json 的 env(代理)也不进,得在起 serve 的 shell 里 export,不然老师 403 ----
-  if (ws) {
-    const isolated = Object.values(ws.config.runtimes).some((r) => typeof r !== 'string' && r.run.includes('--setting-sources'));
-    let userEnv: Record<string, string> = {};
-    try {
-      userEnv = (JSON.parse(await readFile(join(env.HOME ?? '', '.claude', 'settings.json'), 'utf8')) as { env?: Record<string, string> }).env ?? {};
-    } catch {
-      /* 没有用户级 settings 就没有这条 */
-    }
-    // cotutor.json 设了 proxy:代理那几个键由应用注进 claude,不算丢
-    const lost = Object.keys(userEnv).filter((k) => !(k in env) && !(typeof ws.config.proxy === 'string' && /^(https?|all)_proxy$/i.test(k)));
-    if (isolated && lost.length) {
-      push({ name: 'env.userSettings', ok: false, required: false, detail: `~/.claude/settings.json 的 env 有 ${lost.join(' ')},这个 shell 里没有;老师会话带 --setting-sources project 读不到它们(代理没了就 403)`, fix: `起 serve 前 export ${lost.map((k) => `${k}=…`).join(' ')}` });
-    }
-  }
-
   // ---- 骨架 ----
   const missing: string[] = [];
   for (const d of DIRS) if (!(await statOrNull(join(root, d)))?.isDirectory()) missing.push(`${d}/`);
@@ -300,13 +277,13 @@ export async function doctorWorkspace(
     detail: missing.length ? `缺 ${missing.join(' ')}` : [...DIRS].map((d) => `${d}/`).join(' '),
     fix: missing.length ? `cotutor init <slug> --dir ${redactHome(root)}(幂等补缺)` : undefined,
   });
-  // 家规(根的 CLAUDE.md / QWEN.md)2026-09-15 起不出厂:有就是家长自建的共同规矩,提一句;没有不缺
-  const rulesThere = (await Promise.all(['CLAUDE.md', 'QWEN.md'].map(async (f) => ((await statOrNull(join(root, f))) ? f : null)))).filter(Boolean);
-  push({ name: 'rules', ok: true, required: false, detail: rulesThere.length ? `家长自建的家规 ${rulesThere.join(' ')} 在,所有老师每轮都读` : '没有根目录的 CLAUDE.md / QWEN.md(不需要:老师要知道的都在老师文件与技能里)' });
+  // 家规(根的 QWEN.md)2026-09-15 起不出厂:有就是家长自建的共同规矩,提一句;没有不缺
+  const rulesThere = (await Promise.all(['QWEN.md'].map(async (f) => ((await statOrNull(join(root, f))) ? f : null)))).filter(Boolean);
+  push({ name: 'rules', ok: true, required: false, detail: rulesThere.length ? `家长自建的家规 ${rulesThere.join(' ')} 在,所有老师每轮都读` : '没有根目录的 QWEN.md(不需要:老师要知道的都在老师文件与技能里)' });
 
   if (ws) {
     // ---- 老师:定义文件(拷贝)+ 名字一致 + 出厂 / 自定义状态 + 老师目录 ----
-    // 老师文件只有 .claude/agents/ 这一份:claude 用 --agent 读,别的 CLI 由应用读正文递进系统提示({agentBody} / {systemBody});.qwen/agents/ 的链 2026-10-09 退役
+    // 老师文件只有 .claude/agents/ 这一份:应用读正文递进 Qwen 的系统提示({agentBody} / {systemBody});.qwen/agents/ 的链 2026-10-09 退役
     const statuses = new Map((teachingPack ? await tutorStatuses(root) : []).map((s) => [s.name, s]));
     for (const name of Object.keys(ws.config.tutors)) {
       const shipped = statuses.has(name);
@@ -436,7 +413,7 @@ export async function doctorWorkspace(
       else if (!home) push({ name: 'home.published', ok: true, required: false, detail: '没发布过首页:孩子端是缺省首页(每位老师一张只有「新话题」的卡)' });
       else {
         const days = daysSince(home, now);
-        push({ name: 'home.published', ok: days <= 3, required: false, detail: `已发布 ${home.id}(${days === 0 ? '今天' : `${days} 天前`})· ${home.cards.length} 张卡`, fix: days > 3 ? '首页是好几天前的:孩子学完后在 workspace 根开 Claude Code,用 cotutor-home 技能排一份新的' : undefined });
+        push({ name: 'home.published', ok: days <= 3, required: false, detail: `已发布 ${home.id}(${days === 0 ? '今天' : `${days} 天前`})· ${home.cards.length} 张卡`, fix: days > 3 ? '首页是好几天前的:孩子学完后在 workspace 根开编程助手,用 cotutor-home 技能排一份新的' : undefined });
         const broken = await publishedIssues(ws, home, now);
         push({ name: 'home.refs', ok: !broken.length, required: false, detail: broken.length ? broken.map((i) => i.text).join(';') : '已发布那份里的老师与话题都在', fix: broken.length ? '坏了的按钮孩子端不出现;要补就改草稿重发(cotutor home check 看细节)' : undefined });
       }
@@ -582,6 +559,14 @@ export async function doctorWorkspace(
       push({ name: 'live.voices', ok: !bad.length, required: false, detail: bad.length ? `${bad.map(([t, v]) => `${t} 的「${v}」`).join('、')}:这个模型不认,嘴会一直不出声` : `嘴的音色:${who}`, fix: bad.length ? '工作台「音色」页「实时的嘴」里换一个(这个模型认的 56 个在 src/live/voices.ts),或改 cotutor.json 的 live.voices' : undefined });
     }
 
+    // 旧配置允许加载与升级;退役运行时不探版本、不启动。
+    const usedRuntimes = new Set([ws.config.runtimes.default, ...Object.values(ws.config.tutors).filter((t) => t.enabled).map((t) => t.runtime ?? ws.config.runtimes.default)]);
+    for (const [name, rt] of Object.entries(ws.config.runtimes)) {
+      if (typeof rt === 'string') continue;
+      const issue = runtimeIssue(rt);
+      if (issue) push({ name: `runtime.${name}`, ok: false, required: usedRuntimes.has(name), detail: issue, fix: '按 docs/开发者手册.md 的旧 workspace 迁移说明切换到 Qwen' });
+    }
+
     // ---- 运行时的 CLI 在不在 ----
     if (probeEnv) {
       const ttsBin = runtimeCli(ws.config.tts.say);
@@ -592,9 +577,9 @@ export async function doctorWorkspace(
         push({ name: 'tts', ok: false, required: false, detail: `PATH 里没有 ${ttsBin},回复不配音(孩子端用浏览器的声)`, fix: `装 ${ttsBin},或改 cotutor.json 的 tts.say` });
       }
       for (const [runtime, p] of Object.entries(ws.config.runtimes)) {
-        if (runtime === 'default' || typeof p === 'string') continue;
+        if (runtime === 'default' || typeof p === 'string' || runtimeIssue(p)) continue;
         const bin = runtimeCli(p.run);
-        const required = runtime === ws.config.runtimes.default;
+        const required = usedRuntimes.has(runtime);
         try {
           const { stdout } = await execFileP(bin, ['--version'], { timeout: 8000 });
           const version = stdout.trim().split('\n')[0];
@@ -605,29 +590,6 @@ export async function doctorWorkspace(
           push({ name: `runtime.${runtime}`, ok: false, required, detail: `PATH 里没有 ${bin}`, fix: required ? `装 ${bin},或把 runtimes.default 改成装了的那个运行时` : undefined });
         }
       }
-    }
-  }
-
-  // ---- 代理(2026-09-26):本机的 claude 走代理时,老师进程要拿得到它,不然 403;cotutor.json 的 proxy 记家长的选择,起 claude 时注进环境 ----
-  if (ws && Object.entries(ws.config.runtimes).some(([k, r]) => k !== 'default' && typeof r !== 'string' && runtimeCli(r.run) === 'claude')) {
-    const found = detectProxy({ env });
-    const set = ws.config.proxy;
-    const fixOn = `cotutor proxy on --workspace ${redactHome(root)}`;
-    if (typeof set === 'string') {
-      const same = !found || found.url === set;
-      push({ name: 'proxy', ok: same, required: false, detail: same ? `老师(claude)走 ${set}(cotutor.json 的 proxy)` : `cotutor.json 写的是 ${set},本机现在是 ${found!.url}(${found!.source})`, fix: same ? undefined : `${fixOn}(换成本机现在的)` });
-    } else if (set === false) push({ name: 'proxy', ok: true, required: false, detail: `选了不走代理(cotutor.json 的 proxy 是 false)${found ? `;本机有 ${found.url},要用就 ${fixOn}` : ''}` });
-    else if (found) {
-      // 旧法(ray 那样手补的):.claude/settings.local.json 写了代理、运行时读 local、workspace 是 git 仓(claude 以 git 根为项目根),三样齐了也拿得到
-      let local = false;
-      try {
-        const s = JSON.parse(await readFile(join(root, '.claude', 'settings.local.json'), 'utf8')) as { env?: Record<string, unknown> };
-        const readsLocal = Object.values(ws.config.runtimes).some((r) => { if (typeof r === 'string') return false; const i = r.run.indexOf('--setting-sources'); return i >= 0 && (r.run[i + 1] ?? '').split(',').includes('local'); });
-        local = Boolean(s.env && (s.env.HTTPS_PROXY || s.env.HTTP_PROXY)) && readsLocal && (await statOrNull(join(root, '.git'))) !== null;
-      } catch {
-        /* 没有 settings.local.json */
-      }
-      push({ name: 'proxy', ok: local, required: false, detail: local ? `靠 .claude/settings.local.json 走代理(旧法);本机是 ${found.url}` : `本机有代理 ${found.url}(${found.source}),老师进程拿不拿得到要看 serve 从哪个终端起;拿不到 claude 会 403`, fix: local ? `可以换成 ${fixOn}(不靠 git 与 --setting-sources)` : `${fixOn};不用代理就 cotutor proxy off` });
     }
   }
 

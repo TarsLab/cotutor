@@ -1,12 +1,12 @@
 ---
 name: cotutor-analyze
-description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了什么上下文、读了什么文件、为什么没看见档案或日记里的某句、改了老师文件 / 技能 / vault 之后回放对照、一天的费用与延迟。家长或开发者在 workspace 根开 Claude Code 问「老师为什么…」「这轮读了什么」「我改了 X 效果如何」「今天花了多少」时用。
+description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了什么上下文、读了什么文件、为什么没看见档案或日记里的某句、改了老师文件 / 技能 / vault 之后回放对照、一天的费用与延迟。家长或开发者在 workspace 根开编程助手问「老师为什么…」「这轮读了什么」「我改了 X 效果如何」「今天花了多少」时用。
 ---
 
 <!-- 给人看
-谁读:家长在 workspace 根开的 Claude Code
+谁读:家长在 workspace 根开的编程助手
 能改:机器件,upgrade 覆盖;references/命令与文件.md 由 src/lib/analyze-doc.ts 生成
-改了:在试用 workspace 里开 Claude Code 问一句「老师为什么…」(《写提示词.md》§一)
+改了:在试用 workspace 里开编程助手问一句「老师为什么…」(《写提示词.md》§一)
 -->
 
 # 分析老师的对话
@@ -29,7 +29,7 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 
 ## 禁区
 
-- .claude/agents/ 里的老师文件是给 cotutor 起 claude -p 用的。**不要把它们当子代理派(Task)**,也不要替老师回答孩子。
+- .claude/agents/ 里的老师文件是由 cotutor 读正文传给 Qwen 的。**不要把它们当子代理派(Task)**,也不要替老师回答孩子。
 - **不改** conversations/、evals/、ledger/ 里的任何文件。
 - **不写 vault**(日记、档案、计划、教材)。那是家长的长期记忆,要改也是家长自己动手。
 - 改老师文件、技能、cotutor.json,要先说清改什么、为什么、会影响哪些老师,得到同意再动。

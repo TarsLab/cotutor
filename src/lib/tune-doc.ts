@@ -54,7 +54,7 @@ export function tuneReferenceDoc(): string {
 
 ## 老师文件 .claude/agents/<name>.md
 
-frontmatter 只写这几个键(两个 CLI 的公共子集),多写的 claude 不认、qwen 会报:${AGENT_FRONTMATTER_KEYS.map((k) => `\`${k}\``).join('、')}。\`name\` 必须等于文件名,也是 cotutor.json 里 tutors 的键,**不能改**。正文就是系统提示。
+frontmatter 只写应用支持的这几个键:${AGENT_FRONTMATTER_KEYS.map((k) => `\`${k}\``).join('、')}。\`name\` 必须等于文件名,也是 cotutor.json 里 tutors 的键,**不能改**。正文就是系统提示。
 
 ## cotutor.json 的 tutors.<name>(人设、开关、运行时)
 

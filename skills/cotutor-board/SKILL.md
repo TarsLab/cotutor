@@ -1,7 +1,6 @@
 ---
 name: cotutor-board
 description: cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:text / read / choice / image / tianzige / word / lecture / canvas / paint / photo / code)。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。
-disable-model-invocation: true
 ---
 
 # 板书怎么写

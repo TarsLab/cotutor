@@ -116,12 +116,11 @@ ${rows.join('\n')}
 /** 技能名;目录 .claude/skills/cotutor-board/ */
 export const BOARD_SKILL = 'cotutor-board';
 
-/** SKILL.md:frontmatter(两 CLI 都认 name / description;disable-model-invocation 只有 claude 认)+ 语法表;description 列出卡的种类,让模型不读正文也知道有哪几种 */
+/** SKILL.md:frontmatter(name / description)+ 语法表;description 列出卡的种类,让模型不读正文也知道有哪几种 */
 export function boardSkillDoc(dir = PACKAGE_CARDS_DIR): string {
   const kinds = kindsFor('board').map((k) => k.name).join(' / ');
   const description = `cotutor 的板书怎么写:讲稿一行一句,围栏是卡(种类:${kinds})。应用已经递给老师,老师不用读;家长查阅用。每种卡完整的协议在 references/<种类>.md。机器生成,源在 cotutor 仓的 cards/,别在这里改。`;
-  // disable-model-invocation:claude 不再主动用 Skill 工具调它(正文由应用递,再调一次就是白跑一个来回);家长仍可手动 /cotutor-board;别的 CLI 不认这个键,无害
-  return `---\nname: ${BOARD_SKILL}\ndescription: ${description}\ndisable-model-invocation: true\n---\n\n${boardSyntaxDoc(dir)}`;
+  return `---\nname: ${BOARD_SKILL}\ndescription: ${description}\n---\n\n${boardSyntaxDoc(dir)}`;
 }
 
 /** 技能目录的全部文件(相对技能根):SKILL.md + references/README.md + references/<kind>.md;scripts/gen-skills.ts 写进包根 skills/cotutor-board/,tests/skills.test.ts 断言入库的和它一致 */

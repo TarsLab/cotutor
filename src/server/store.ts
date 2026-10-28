@@ -179,7 +179,7 @@ export async function capturePathOk(ws: Workspace, rel: string): Promise<boolean
  * 这一轮真发出去的东西(<date>.<job>.run.json):上下文包与完整命令行。
  * 跑完就丢的话「老师为什么没看见孩子选了 C」永远查不了,所以落一份;只有家长端「看原文」读它。
  */
-/** 这轮用的老师文件与技能的快照(2026-09-15):claude 走 --agent 时正文不在命令行里,文件后来改了就查不回当时那份,所以记正文与 hash;技能只记 hash,变没变一眼看 */
+/** 这轮用的老师文件与技能的快照(2026-09-15):文件后来改了就查不回当时那份,所以记正文与 hash;技能只记 hash,变没变一眼看 */
 export interface RunSources {
   agent: { file: string; hash: string; body: string } | null;
   /** 技能名 → SKILL.md 的 hash(workspace .claude/skills/ 下有的全部) */
@@ -197,7 +197,7 @@ export interface RunFile {
   session: string | null;
   /** 老师文件与技能的快照;2026-09-15 之前的轮次没有 */
   sources?: RunSources;
-  /** 这个运行时把老师正文塞进了命令行({agentBody};claude 走 --agent 就没有) */
+  /** 这个运行时把老师正文塞进了命令行({agentBody} / {systemBody}) */
   agentBody: boolean;
 }
 

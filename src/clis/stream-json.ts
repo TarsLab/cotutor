@@ -1,6 +1,6 @@
 /**
- * Claude Code 的 stream-json(`--output-format stream-json`,一行一个 JSON)读成统一事件。claude 与 qwen code 同族,共用这一份;
- * 各家的出入写在各自的适配器里。形状是 claude 2.1.220 起实测的(growth-apps 的 gen-transcript),qwen code 0.25 对过:
+ * Qwen Code 的 stream-json(`--output-format stream-json`,一行一个 JSON)读成统一事件。
+ * 同时保留历史日志的费用字段解析,让已有对话仍能查看。Qwen Code 0.25 的输出:
  * - `{"type":"system","subtype":"init","session_id","tools":[…]}`(qwen 的 json 模式叫 session_start)
  * - `{"type":"stream_event","event":{…}}`:`--include-partial-messages` 才有;message_start 开新的一条,content_block_delta 的 text_delta 是正文、thinking_delta 是在想
  * - `{"type":"assistant","message":{"content":[text / tool_use 块]}}`:一条整的回复

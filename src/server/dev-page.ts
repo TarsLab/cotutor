@@ -1977,7 +1977,7 @@ ${BRAND_CSS}
     };
     act.el.list.replaceChildren(
       ...groups.map((g) => { const t = tutorOf(g.tutor); return h('div', { class: 'grp' }, h('div', { class: 'gh' }, avatarEl(Object.assign({ name: g.tutor }, t), 'xs'), h('span', {}, t.display)), ...g.rows.map(item)); }),
-      h('p', { class: 'note' }, '「新话题」改的是老师文件:首页的新话题、开场按钮都照它带。新建、改名、删一个 activity,在 workspace 里和 Claude Code 说;这里只改已有的。'));
+      h('p', { class: 'note' }, '「新话题」改的是老师文件:首页的新话题、开场按钮都照它带。新建、改名、删一个 activity,在 workspace 里和编程助手说;这里只改已有的。'));
   };
 
   const paintHead = () => {
@@ -2037,7 +2037,7 @@ ${BRAND_CSS}
     const c = act.cur;
     b.replaceChildren(
       h('span', { class: 'st' }, '撞车'),
-      h('span', { class: 'tx' }, '这份文件在别处改过了(比如在 workspace 里用 Claude Code 改的)。你还有 ' + dirtyCount() + ' 处没存,直接存会盖掉那边的,所以「保存」先停了。'),
+      h('span', { class: 'tx' }, '这份文件在别处改过了(比如在 workspace 里用编程助手改的)。你还有 ' + dirtyCount() + ' 处没存,直接存会盖掉那边的,所以「保存」先停了。'),
       h('span', { class: 'acts' },
         h('button', { class: 'btn small', type: 'button', on: { click: async () => {
           try { const d = await api('GET', docUrl(c)); showHunks('那边改了什么', '和你读进来的那份比(没算你还没存的改动):', diffLines(act.saved, d.text)); } catch (e) { alert(e.message); }
@@ -2136,7 +2136,7 @@ ${BRAND_CSS}
         ...Object.entries(pv.values).map(([k, v]) => h('span', { class: 'tag' }, k + ' ' + v)),
         ...pv.paramIssues.map((x) => h('span', { class: 'st err' }, x))));
       out.push(h('pre', { class: 'pv' }, pv.text));
-      out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是这个话题老师的系统提示(qwen 的 systemBody、claude 的 --agents):不读老师文件,注释已剥,后面再接这几种卡的板书写法。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
+      out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是这个话题老师的系统提示(Qwen 的 systemBody):不读老师文件,注释已剥,后面再接这几种卡的板书写法。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
     }
     for (const t of pv.tools) {
       out.push(rule(), h('h3', {}, t.tool + '收到什么'), h('p', { class: 'note' }, '{{插槽}} 由应用在交出去那一刻填。'), h('pre', { class: 'pv tool' }, t.prompt));
@@ -2193,7 +2193,7 @@ ${BRAND_CSS}
       pv.board ? h('span', { class: 'tag', title: pv.board.cards.length ? '这位老师的卡:' + pv.board.cards.join(' ') : '全部的卡' }, '+ 板书写法 ' + pv.board.chars.toLocaleString() + ' 字') : null,
       pv.rules ? h('span', { class: 'tag' }, '+ 守则 ' + pv.rules.chars.toLocaleString() + ' 字') : null)];
     out.push(h('pre', { class: 'pv' }, pv.text || '(空)'));
-    out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是新话题里老师的系统提示(qwen 的 systemBody、claude 的 --agent):老师文件去掉 frontmatter' + (pv.board ? ',后面再接板书写法' : '') + '。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
+    out.push(h('div', { class: 'srow' }, h('span', { class: 'note', style: 'flex:1;min-width:160px' }, '这就是新话题里老师的系统提示(Qwen 的 systemBody):老师文件去掉 frontmatter' + (pv.board ? ',后面再接板书写法' : '') + '。'), h('button', { class: 'btn small', type: 'button', on: { click: (e) => copy(pv.text, e.target) } }, '复制全文')));
     if (pv.rules) {
       out.push(rule(), h('h3', {}, '话题第一条还带守则'),
         h('p', { class: 'note' }, '有脸的老师共用的 ' + pv.rules.path + ',机器件,cotutor upgrade 每次覆盖,这里不改。这位老师要不一样的做法,写进上面的老师文件,它优先。'),
@@ -2252,7 +2252,7 @@ ${BRAND_CSS}
     paintBar();
   };
 
-  /** 别处(Claude Code、编辑器)改了这份:没改动就悄悄读进来,有改动就亮撞车条、停住保存 */
+  /** 别处(编程助手、编辑器)改了这份:没改动就悄悄读进来,有改动就亮撞车条、停住保存 */
   const checkDisk = async () => {
     const c = act.cur;
     if (!c || act.conflict || state.tab !== 'activity') return;

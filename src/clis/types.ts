@@ -2,7 +2,7 @@
  * CLI 适配器(《agent层设计.md》§6、拍板 15):一个 agent CLI 一个文件,写「这个 CLI 怎么说话」——
  * 输出流怎么读、消息怎么写进 stdin、工具叫什么怎么关、思考量怎么调、起进程要什么环境、出厂模板长什么样。
  * 选哪个模型、预算、时限还在 cotutor.json 的运行时模板里(数据);应用的其余部分只认这里的统一事件,不认哪家的 JSON。
- * 接一个新 CLI:照 claude.ts / qwen.ts 写一个文件,在 index.ts 的 ADAPTERS 里登记(《接一个 CLI.md》)。
+ * 接一个新 CLI:照 qwen.ts 写一个文件,在 index.ts 的 ADAPTERS 里登记(《接一个 CLI.md》)。
  */
 import type { Policy, Runtime } from '../schema/index.ts';
 
@@ -11,7 +11,7 @@ export type ToolKind = 'read' | 'shell' | 'search' | 'edit' | 'skill' | 'other';
 
 /**
  * 这轮带不带工具(政策 tools 与消息种类定,《工作流程.md》拍板 12、20):off 一个不带;read 只读(看照片、读 vault、查教材);
- * on 还多 shell(家长明说 policy.tools: on 才有)
+ * on 与 read 一样只读,不提供 shell 与写入工具
  */
 export type ToolSet = 'off' | 'read' | 'on';
 
@@ -43,10 +43,10 @@ export interface CliFinal {
   text: string | null;
   /** 不 ok 时的原因 */
   reason: string | null;
-  /** 花了多少美元;有的 CLI 不报。新版 claude 接着会话跑时是整个会话的累计 */
+  /** 花了多少美元;有的 CLI 不报。历史日志可能记录整个会话的累计费用 */
   costUsd?: number;
   numTurns?: number;
-  /** 各模型的输出 token 之和(累计时也累计)与最后一次请求的输出 token:判断 costUsd 是不是累计(claude) */
+  /** 各模型的输出 token 之和(累计时也累计)与最后一次请求的输出 token:判断 历史日志里的 costUsd 是不是累计 */
   modelOut?: number;
   lastOut?: number;
   /** 这一轮的 token(没有钱数的 CLI 靠它记账) */
@@ -75,12 +75,6 @@ export type CliEvent =
   | { kind: 'results'; results: ToolResult[]; sub: boolean }
   | { kind: 'result'; final: CliFinal };
 
-/** 起进程时环境的来源(适配器按需取用) */
-export interface EnvContext {
-  /** cotutor.json 的 proxy */
-  proxy?: string | false;
-}
-
 /** 运行时模板里与适配器有关的占位能拿到的值 */
 export interface PlanContext {
   /** workspace 根(适配器的私有文件放在它的 .cotutor/ 下);测试与不关心的调用可以不给 */
@@ -108,10 +102,8 @@ export interface CliAdapter {
   prepare?(root: string): Promise<void>;
   /** 由这轮的计划定下来的环境变量(进预热的比对:变了的备用进程不能用);没有就不写 */
   planEnv?(ctx: PlanContext): Record<string, string>;
-  /** 起进程前最后过一遍环境(代理之类);不改就原样返回 */
-  env(env: NodeJS.ProcessEnv, ctx: EnvContext): NodeJS.ProcessEnv;
-  /** 在别的 agent 会话里起这个 CLI 会被当嵌套拒掉的那几个环境变量(cotutor replay 起老师前去掉) */
-  nestedEnv?: readonly string[];
+  /** 起进程前最后过一遍环境(认证等);不改就原样返回 */
+  env(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
   /** cotutor doctor 查这个 CLI 时多看几样(version 是 `--version` 的第一行);不给就只查装没装 */
   check?(ctx: { version: string; env: NodeJS.ProcessEnv }): { name: string; ok: boolean; detail: string; fix?: string }[];
   /** 出厂运行时模板:键是运行时名 */

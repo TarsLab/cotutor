@@ -1,7 +1,7 @@
 /**
  * 回放(2026-09-15):把某一轮的问题,按**现在**的 vault / 老师文件 / 技能重新问一遍,和原轮并排比。
  * 手改了提示词或 vault 之后「效果好不好」不靠打分,靠人眼看 diff:上下文包哪几行变了、讲稿哪几句变了、卡变没变、
- * 读了什么文件、费用与用时。只有 CLI(`cotutor replay` / `cotutor compare`),家长端不露;给在 workspace 里开 Claude Code 分析用。
+ * 读了什么文件、费用与用时。只有 CLI(`cotutor replay` / `cotutor compare`),家长端不露;给在 workspace 里开编程助手分析用。
  *
  * 落在 workspace 的 evals/(和 conversations/ 同一套文件:索引 / run.json / log / events),不进孩子的对话、
  * 永远新话题新会话;不配音。做法是给 Runner 一个改了目录与配置的 Workspace,
@@ -10,7 +10,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { cardLabel } from '../cards/index.ts';
-import { parserForRuntime, withoutNested } from '../clis/index.ts';
+import { parserForRuntime } from '../clis/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { conversationFiles, threads } from '../lib/conversation.ts';
 import { compactDiff, diffLines, type DiffRow } from '../lib/diff.ts';
@@ -22,11 +22,6 @@ import { threadActivity } from './activity-state.ts';
 import { readIndex, readRunFile } from './store.ts';
 
 export const EVALS_DIR = 'evals';
-
-/** 在 Claude Code 会话里跑 cotutor replay(技能 cotutor-analyze 就是这么用的):claude 见到 CLAUDECODE 会当嵌套拒掉,起老师前把各 CLI 认作嵌套的变量去掉(src/clis/) */
-export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return withoutNested(env);
-}
 
 export interface ReplayOptions {
   /** 换个运行时跑(比模型 / 比 CLI);缺省老师自己的 */

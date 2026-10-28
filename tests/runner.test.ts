@@ -36,7 +36,7 @@ cfg.runtimes = {
   broken: fake(['--fail']),
   stream: fake(['--stream']),
   missing: { run: ['/nonexistent/cli', '{prompt}'], resume: ['/nonexistent/cli', '{prompt}'] },
-  // 像 claude 模板那样把板书写法预载进系统提示({boardFile});假 CLI 吃掉这个旗标
+  // 自定义模板把板书写法预载进系统提示({boardFile});假 CLI 吃掉这个旗标
   preload: fake(['--append-system-prompt-file', '{boardFile}']),
 };
 for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
@@ -565,7 +565,7 @@ try {
   {
     // 孩子的话缺省不带工具;带照片的那条要 Read 看图,照旧带白名单,vault 的路径也在
     const argv = (phRun as unknown as { argv: string[] }).argv;
-    check('孩子带照片的那条:带只读工具(--tools 没有 Bash,拍板 20)、上下文包有 vault:', argv[argv.indexOf('--tools') + 1] === 'Read,Grep,Glob' && phRun.prompt.includes('\n  vault:'), argv.join(' ').slice(0, 300));
+    check('孩子带照片的那条:带只读工具(--tools 没有 Bash,拍板 20)、上下文包有 vault:', argv[argv.indexOf('--tools') + 1] === 'read_file,glob,grep_search' && phRun.prompt.includes('\n  vault:'), argv.join(' ').slice(0, 300));
     const r1Run = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-08.${(r1.json as { job: string }).job}.run.json`), 'utf8')) as { prompt: string; argv: string[] };
     check('孩子没带照片的那条:不带工具(--tools 填空),上下文包没有 refs: / vault:', r1Run.argv[r1Run.argv.indexOf('--tools') + 1] === '' && !r1Run.prompt.includes('\n  refs:') && !r1Run.prompt.includes('\n  vault:'), r1Run.prompt.slice(0, 500));
   }
@@ -596,7 +596,7 @@ try {
     const cvJob = (cvR.json as { job: string }).job;
     const cvRun = JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${cvJob}.run.json`), 'utf8')) as { prompt: string; argv: string[] };
     const cvM = ((await day('math-tutor', phDate)).json as { index: { messages: { job: string; cards?: { card: string; text: string }[] }[] } }).index.messages.find((m) => m.job === cvJob)!;
-    check('交了画板的那条:带只读工具,包里是图的绝对路径,消息里是相对的', cvPut.status === 200 && existsSync(join(root, cvRel)) && cvR.status === 202 && cvRun.argv[cvRun.argv.indexOf('--tools') + 1] === 'Read,Grep,Glob' && cvRun.prompt.includes(`画了 2 笔,图:${join(root, cvRel)}(用 Read 看)`) && cvM.cards?.[0]?.text.endsWith(`画了 2 笔,图:${cvRel}(用 Read 看)`) === true, JSON.stringify({ put: cvPut.status, tools: cvRun.argv[cvRun.argv.indexOf('--tools') + 1], cards: cvM.cards, prompt: cvRun.prompt.slice(0, 600) }));
+    check('交了画板的那条:带只读工具,包里是图的绝对路径,消息里是相对的', cvPut.status === 200 && existsSync(join(root, cvRel)) && cvR.status === 202 && cvRun.argv[cvRun.argv.indexOf('--tools') + 1] === 'read_file,glob,grep_search' && cvRun.prompt.includes(`画了 2 笔,图:${join(root, cvRel)}(用 Read 看)`) && cvM.cards?.[0]?.text.endsWith(`画了 2 笔,图:${cvRel}(用 Read 看)`) === true, JSON.stringify({ put: cvPut.status, tools: cvRun.argv[cvRun.argv.indexOf('--tools') + 1], cards: cvM.cards, prompt: cvRun.prompt.slice(0, 600) }));
   }
   await route('PUT', rateUrl(phJ.thread), ctx, { rating: 4 });
   const phBk = await route('POST', `/api/conversations/math-tutor/${phDate}/bookkeep`, ctx, { threads: [phJ.thread] });

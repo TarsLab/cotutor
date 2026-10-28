@@ -36,10 +36,9 @@ cfg.runtimes = {
   fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] },
 };
 for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
-// activity 独立(拍板 13):一个像 qwen 的({systemBody}),一个像 claude 的(--agents {agentsFile})
+// activity 独立:Qwen 用 {systemBody} 收系统提示
 const fakeArgs = [node, '--experimental-strip-types', '--no-warnings', FAKE];
 (cfg.runtimes as Record<string, unknown>).fakesys = { run: [...fakeArgs, '--agent', '{agent}', '--system-prompt', '{systemBody}', '{prompt}'], resume: [...fakeArgs, '--agent', '{agent}', '--resume', '{session}', '--system-prompt', '{systemBody}', '{prompt}'] };
-(cfg.runtimes as Record<string, unknown>).fakeagents = { run: [...fakeArgs, '--agent', '{agent}', '--agents', '{agentsFile}', '--append-system-prompt-file', '{boardFile}', '{prompt}'], resume: [...fakeArgs, '--agent', '{agent}', '--agents', '{agentsFile}', '--resume', '{session}', '--append-system-prompt-file', '{boardFile}', '{prompt}'] };
 cfg.paths = { vault: 'vault' };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault'), { recursive: true });
@@ -352,18 +351,7 @@ try {
     await deleteThread(ctx.ws, 'chinese-tutor', DATE, s1.thread);
     check('删话题:从 activity 那篇记忆里撤', !readFileSync(actMem, 'utf8').split('\n').some((l) => l.startsWith('- ')));
     void s2;
-    // claude 那种:--agents 现生成的定义,--agent 换成它的名字
-    const c1 = await go({ text: '你说我画', runtime: 'fakeagents' });
-    const av = c1.file.argv as string[];
-    const agentName = av[av.indexOf('--agent') + 1];
-    const def = JSON.parse(readFileSync(av[av.indexOf('--agents') + 1], 'utf8')) as Record<string, { prompt: string }>;
-    const boardFile = readFileSync(av[av.indexOf('--append-system-prompt-file') + 1], 'utf8');
-    check('claude 那种:--agent 是现生成的名字,--agents 里它的 prompt 是 activity 那节', /^chinese-tutor-a[0-9a-f]{8}$/.test(agentName) && def[agentName]?.prompt.startsWith('你是这个家的语文老师,今天陪孩子玩'), `${agentName} ${JSON.stringify(Object.keys(def))}`);
-    check('claude 那种:追加的板书写法只讲 activity 的卡', boardFile.includes('### paint') && !boardFile.includes('### choice'));
-    const cfree = await ctx.runner.send('chinese-tutor', { from: 'kid', text: '随便聊聊', runtime: 'fakeagents', newThread: true });
-    await cfree.done;
-    const cfreeArgv = (await readRunFile(ctx.ws, 'chinese-tutor', DATE, cfree.job))!.argv as string[];
-    check('claude 那种,自由话题:--agent 老师,--agents 指空定义', cfreeArgv[cfreeArgv.indexOf('--agent') + 1] === 'chinese-tutor' && cfreeArgv[cfreeArgv.indexOf('--agents') + 1].endsWith('.cotutor/activity/none.json'));
+
   }
 
   // ---- 渲染:没有 activity 的包不多出东西 ----

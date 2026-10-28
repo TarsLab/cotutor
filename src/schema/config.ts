@@ -16,7 +16,7 @@ export const PolicySchema = z.object({
     entryChars: z.number().int().positive().describe('档案与这位老师的入口文件(vault 里 cotutor: subject 那篇)原文各最多带多少字;超出截断并在上下文包里注明'),
   }),
   /**
-   * 老师动笔前想多久(2026-09-20):填进运行时模板的 {effort}(claude 的 --effort)。孩子在等第一个字:9 月 18–19 日真跑,输出 token 的 60–95% 是思考,
+   * 老师动笔前想多久(2026-09-20):由 Qwen 适配器转成思考量配置。孩子在等第一个字:9 月 18–19 日真跑,输出 token 的 60–95% 是思考,
    * 用工具的轮次首拍就绪 38–50 秒;low 把思考从 1000–1900 token 压到几十、来回从 5–6 个变 2 个,首拍 11–16 秒。
    * 不用 MAX_THINKING_TOKENS=0:同日真跑,思考归零后老师把盘算写进了讲稿(会念给孩子听)、字源开始编
    */
@@ -25,12 +25,12 @@ export const PolicySchema = z.object({
    * 孩子的话,老师带不带工具(2026-10-04):填进运行时模板的 {tools}。ray 9 月的真实对话,用了工具的轮首拍就绪中位数 31.7 秒(24 轮),没用的 6.8 秒(37 轮);
    * 孩子最喜欢的是回得快的那位老师。off 时要用的东西由应用放进上下文包
    */
-  tools: z.enum(['off', 'on']).describe('孩子说的话,老师带不带工具:off = 不带,只凭上下文包答,开口快(缺省);on = 带(查教材、读 vault,慢),claude 还多 Bash。带照片的那条、记账,总是带只读的(Read / Grep / Glob)。模板里没有 {tools} 的运行时不受影响'),
+  tools: z.enum(['off', 'on']).describe('孩子说的话,老师带不带工具:off = 不带,只凭上下文包答,开口快(缺省);on = 带只读工具(查教材、读 vault,慢)。带照片的那条、记账,总是带只读工具(read_file / glob / grep_search)。模板里没有 {tools} / {toolArgs} 的运行时不受影响'),
   /** 板书开关:auto = 老师判断要不要出卡(缺省);off = 只说话不出卡 */
   board: z.enum(['auto', 'off']).describe('板书:auto = 讲题讲概念时老师出卡(缺省);off = 只说话不出卡'),
   /**
    * 断流看门狗(2026-09-21):老师进程多久一个字节都不吐(工具在跑时不算)就当 API 流断了,杀掉、resume 同一个会话接着写。
-   * claude CLI 自己要等约 180 秒才认断流再重试,9 月 21 日真跑连断两次,「讲个故事」一轮等了 6 分钟,模型真干活不到 10 秒
+   * CLI 自己的断流重试可能要等很久,9 月 21 日真跑连断两次,「讲个故事」一轮等了 6 分钟,模型真干活不到 10 秒
    */
   stall: z.object({
     ms: z.number().int().nonnegative().describe('老师进程多少毫秒没有任何输出就当断流(缺省 30000;工具在跑时不算;0 = 不看,交给 CLI 自己约 180 秒的重试)'),
@@ -124,14 +124,14 @@ export function tutorExtras(t: Pick<Tutor, 'extras' | 'subject'>, talkOn = false
  * {agent} 老师名 / {agentBody} 老师文件正文(给没有 --agent 的 CLI 塞系统提示)/ {prompt} 消息 / {session} 会话 id。
  * 板书写法的两种预载({boardFile} 板书技能 SKILL.md 的绝对路径,给能从文件追加系统提示的 CLI;{systemBody} 老师正文 + 板书写法,给只收一段系统提示文字的 CLI):
  * 模板里用了其中一个,应用就当板书写法已在系统提示里;都没用,应用在话题第一条消息里注入 <cotutor-board>(任何 CLI 都成立的退路)。
- * {effort} 这位老师的政策 effort(low / medium / high),claude 模板里是 `--effort {effort}`;别的 CLI 怎么落地由它的适配器定。
- * 带不带工具由适配器展开(src/clis/,《agent层设计.md》§6):{tools} 填一串工具名(claude 的 `--tools {tools}`),独占一个参数的 {toolArgs} 展开成几个参数。
+ * {effort} 这位老师的政策 effort(low / medium / high),qwen 由适配器写入思考量配置。
+ * 带不带工具由适配器展开(src/clis/,《agent层设计.md》§6):{tools} 填一串工具名,独占一个参数的 {toolArgs} 展开成几个参数。
  * 政策旋钮(预算、轮数、模型)写进模板,换 agent 只换运行时。
- * stdin: "stream-json"(2026-09-29,《工作流程.md》§四「预热」):消息不进命令行,写进 stdin(claude 的 `--input-format stream-json`),
+ * stdin: "stream-json"(2026-09-29,《工作流程.md》§四「预热」):消息不进命令行,写进 stdin(`--input-format stream-json`),
  * 模板里就不写 {prompt};argv 与消息无关,应用把下一轮的进程提前起好等着。
  */
 export const RuntimeSchema = z.object({
-  cli: z.string().min(1).optional().describe('这是哪个 CLI(src/clis/ 里的适配器名:claude / qwen);不写按 run 的第一个词认。套了壳脚本的运行时要写'),
+  cli: z.string().min(1).optional().describe('这是哪个 CLI(src/clis/ 里的适配器名:qwen);不写按 run 的第一个词认。套了壳脚本的运行时要写'),
   run: z.array(z.string()).min(1),
   resume: z.array(z.string()).min(1),
   stdin: z.literal('stream-json').optional().describe('消息写进 stdin(模板带 --input-format stream-json、不写 {prompt});这样的运行时,应用提前把下一轮的老师进程起好等着(预热)'),
@@ -296,11 +296,7 @@ export const CotutorConfigSchema = z
     vault: VaultPolicySchema.default({ keepScore: 4 }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4)'),
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 板书 auto / 观察 10 条、计划 10 行、原文 4000 字)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
-    runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {systemBody} {boardFile} {agentsFile} {prompt} {session};模型、预算、时限写在这里'),
-    proxy: z
-      .union([z.string().regex(/^(https?|socks5h?):\/\/\S+$/), z.literal(false)])
-      .optional()
-      .describe('老师进程(claude)走的代理,如 http://127.0.0.1:32769:起 claude 时注进 HTTP(S)_PROXY,不靠 serve 从哪个终端起;false = 选了不走代理;不写 = 还没选(init / cotutor proxy 会问)'),
+    runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {systemBody} {boardFile} {prompt} {session};模型、预算、时限写在这里'),
     tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板:say 合成一句(占位 {text} {voice} {out});voices 列音色(stdout JSON),家长端音色页据此列表与试听'),
     figshot: z
       .object({ port: z.number().int().min(1).max(65535).default(8477) })
@@ -386,14 +382,10 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
     }));
 }
 
-/** activity 话题现生成的 agent 定义与板书写法放在这(机器文件);none.json 是别的话题 --agents 指的空定义 */
-export const ACTIVITY_RUN_DIR = '.cotutor/activity';
-export const NO_AGENTS_FILE = `${ACTIVITY_RUN_DIR}/none.json`;
-
 /** 运行时模板填占位符;{tools} 填适配器给的工具名单(src/clis/ 的 fillArgs 先算好,没给就填空);{agentBody} / {systemBody} / {boardFile} 只在给了值时替换,否则原样留着(doctor 会报);{effort} 没给用出厂缺省(课文件排版这类不认老师政策的调用) */
 export function fillRuntime(
   argv: readonly string[],
-  vars: { agent: string; prompt: string; session?: string; agentBody?: string; systemBody?: string; boardFile?: string; agentsFile?: string; effort?: Policy['effort']; tools?: string },
+  vars: { agent: string; prompt: string; session?: string; agentBody?: string; systemBody?: string; boardFile?: string; effort?: Policy['effort']; tools?: string },
 ): string[] {
   return argv.map((a) =>
     a
@@ -403,7 +395,6 @@ export function fillRuntime(
       .replaceAll('{agentBody}', vars.agentBody ?? '{agentBody}')
       .replaceAll('{systemBody}', vars.systemBody ?? '{systemBody}')
       .replaceAll('{boardFile}', vars.boardFile ?? '{boardFile}')
-      .replaceAll('{agentsFile}', vars.agentsFile ?? '{agentsFile}')
       .replaceAll('{effort}', vars.effort ?? POLICY_DEFAULTS.effort)
       .replaceAll('{tools}', vars.tools ?? ''),
   );

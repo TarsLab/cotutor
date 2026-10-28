@@ -1,10 +1,10 @@
 /**
- * 假 CLI:模仿 claude / qwen 的 stream-json 无头输出,给 runner 测试用(不花钱、不联网)。
+ * 假 CLI:模仿 Qwen 的 stream-json 无头输出,给 runner 测试用(不花钱、不联网)。
  * 用法(运行时模板里):node --experimental-strip-types _fake-cli.ts [--resume <id>] [--agent <name>] [--fail] [--stream] <prompt>
- * --stream:最终文本先按行以 stream_event(content_block_delta)吐出来,每行歇 80ms(模仿 claude --include-partial-messages),再发 assistant 与 result。
+ * --stream:最终文本先按行以 stream_event(content_block_delta)吐出来,每行歇 80ms(模仿 --include-partial-messages),再发 assistant 与 result。
  * 行为:回显 prompt 的最后一行;上下文包里有 cards 段就把那几行回显在前面(「看到卡:…」);prompt 含「段在前」就在最终文本前加一段「## 记账」;含「想要小课堂」出一张写着 scene 的旧式卡(场景卡删了,该当代码卡)和一段「## 想要小课堂」;含「节头」先出一张只有一行 # 标题的文字卡(实时的节头);含「板书」出两张卡(「坏卡」再加一张解析不出的,「点读」再加一张两段的点读卡,「图片」再加一张 vault/pic.png 的图片卡);含「画图」出一张四幅的画图卡;含「整段」出一张三行的点读卡(你说我画的整段故事);含「热身」或「口语课」出口语课的热身(两拍 [[echo]]、一拍 [[say]]、[[call]]),「直接打电话」回一句带 [[call]],「(打电话)」回英文开场;含「家长段」加「## 家长」;含「记住它」「改记忆」回「## 记忆」(加两条 / 改一条删一条);
  * --resume 时 session_id 沿用给的 id,否则新造;--fail 出 error_max_turns。
- * --input-format stream-json(预热,2026-09-29):消息不在 argv,从 stdin 读第一行 {"type":"user","message":{"content":…}};读到之前一个字节不吐(同真 claude),
+ * --input-format stream-json(预热,2026-09-29):消息不在 argv,从 stdin 读第一行 {"type":"user","message":{"content":…}};读到之前一个字节不吐(用于测试预热),
  * init 带 waitedMs(起来到收到消息等了多久);回完 result 等 stdin 关了才退。
  * 含「断流」/「一直断」/「工具慢」/「写成正文」/「一直写成正文」的见下面断流那段(stall.test)。
  * qwen 方言(命令行里有 --core-tools,qwen 适配器的 {toolArgs} 展开出来的):init 报工具表(核心工具按 --core-tools 留、非核心的照带,再减 --exclude-tools;
@@ -35,7 +35,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === '--core-tools') coreTools = argv[++i].split(',').filter(Boolean);
   else if (argv[i] === '--exclude-tools') excludeTools = argv[++i].split(',').filter(Boolean);
   else if (argv[i] === '-m' || argv[i] === '--approval-mode' || argv[i] === '--max-wall-time') i++;
-  else if (argv[i] === '--model' || argv[i] === '--disallowedTools' || argv[i] === '--max-budget-usd' || argv[i] === '--setting-sources' || argv[i] === '--tools' || argv[i] === '--effort' || argv[i] === '--system-prompt' || argv[i] === '--append-system-prompt-file' || argv[i] === '--agents') i++;
+  else if (argv[i] === '--model' || argv[i] === '--tools' || argv[i] === '--effort' || argv[i] === '--system-prompt' || argv[i] === '--append-system-prompt-file') i++;
   else if (argv[i] === '--disable-slash-commands') continue;
   else rest.push(argv[i]);
 }
@@ -62,7 +62,7 @@ const sid = session ?? `fake-${process.pid}-${Date.now()}`;
 const emit = (o: unknown): void => void process.stdout.write(`${JSON.stringify(o)}\n`);
 const lastLine = prompt.trim().split('\n').filter(Boolean).pop() ?? '';
 
-// 整块 JSON 出(--output-format json):模仿 claude 的壳,正文原样回提示词的最后一行
+// 整块 JSON 出(--output-format json):通用 JSON 壳,正文原样回提示词的最后一行
 if (outputFormat === 'json') {
   emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 1, total_cost_usd: 0.0021, duration_ms: 900, result: lastLine });
   process.exit(0);
@@ -71,7 +71,7 @@ if (outputFormat === 'json') {
 const qwenish = coreTools !== null;
 // qwen 的工具表:核心工具只留 --core-tools 里的,非核心的(agent / skill / get_goal…)照带,再减 --exclude-tools
 const qwenTools = qwenish ? [...new Set([...['read_file', 'glob', 'grep_search', 'run_shell_command', 'edit', 'write_file'].filter((t) => coreTools!.includes(t)), 'agent', 'skill', 'get_goal', ...(process.env.FAKE_QWEN_LEAK ?? '').split(',').filter(Boolean)])].filter((t) => !excludeTools.includes(t) || (process.env.FAKE_QWEN_LEAK ?? '').split(',').includes(t)) : [];
-emit({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), agent: agent || undefined, bodyLen: body.length, proxy: process.env.HTTPS_PROXY, ...(viaStdin ? { waitedMs } : {}), ...(qwenish ? { tools: qwenTools, qwenHome: process.env.QWEN_HOME, effortFile: process.env.QWEN_CODE_SYSTEM_SETTINGS_PATH, key: process.env.COTUTOR_QWEN_API_KEY ?? null, base: process.env.COTUTOR_QWEN_BASE_URL ?? null, openai: Boolean(process.env.OPENAI_MODEL) } : {}) });
+emit({ type: 'system', subtype: 'init', session_id: sid, cwd: process.cwd(), agent: agent || undefined, bodyLen: body.length, ...(viaStdin ? { waitedMs } : {}), ...(qwenish ? { tools: qwenTools, qwenHome: process.env.QWEN_HOME, effortFile: process.env.QWEN_CODE_SYSTEM_SETTINGS_PATH, key: process.env.COTUTOR_QWEN_API_KEY ?? null, base: process.env.COTUTOR_QWEN_BASE_URL ?? null, openai: Boolean(process.env.OPENAI_MODEL) } : {}) });
 if (qwenish) {
   emit({ type: 'stream_event', event: { type: 'goal_state', goal_state: { v: 2, goal: null, activity: 'idle' } }, session_id: sid, parent_tool_use_id: null });
   emit({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: '想一想' } }, session_id: sid, parent_tool_use_id: null });
@@ -203,7 +203,7 @@ if (fail) {
   emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 2, ...(qwenish ? { usage: { input_tokens: 2000, output_tokens: 120, cache_read_input_tokens: 500, total_tokens: 2620 } } : { total_cost_usd: 0.05 }), result });
 }
 process.stderr.write('fake-cli done\n');
-// 消息走 stdin 的:同真 claude,回完还等下一条,stdin 关了才退
+// 消息走 stdin 的:用于测试预热,回完还等下一条,stdin 关了才退
 if (viaStdin) {
   process.stdin.resume();
   await new Promise((r) => process.stdin.once('end', r));

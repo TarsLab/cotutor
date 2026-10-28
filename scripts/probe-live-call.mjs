@@ -39,7 +39,7 @@ const { spoken } = await import(join(repo, 'src', 'live', 'lib', 'cue.ts'));
 
 // ---- 临时 workspace:出厂老师(qwen),语文老师开实时 ----
 const wsRoot = join(out, 'ws');
-await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot, proxy: false });
+await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot });
 const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 cfg.live = { voices: { [tutor]: voice } };

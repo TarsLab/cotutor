@@ -6,7 +6,9 @@
 
 ## 五分钟用起来
 
-需要 Node ≥ 22.18,以及 Claude Code 或 Qwen Code 至少一个(老师是它们跑出来的)。
+需要 Node ≥ 22.18 和 Qwen Code ≥ 0.25。老师采用 realtime + 脑模型:默认 `qwen3.8-omni-flash-realtime` 负责听说,Qwen Code 运行脑模型生成讲稿和板书。出厂运行时为 `qwen`(`qwen3.8-max`,默认)与 `qwen-flash`(`qwen3.8-flash`)。
+
+实时语音需要百炼按量 key 与业务空间 id,在家长端「首页」配置;脑模型支持千问 Token Plan 或百炼按量 key,详见[开发者手册](docs/开发者手册.md)。
 
 ```sh
 npm i -g cotutor
@@ -15,7 +17,7 @@ cotutor doctor                    # 逐项体检,不过的每条都带修复命�
 cotutor serve                     # 孩子端 http://<ip>:5180/,家长端 /parent
 ```
 
-`init` 把出厂老师拷进 `.claude/agents/`,把做课包用的四个领域 skill(随 drawtell 包来)和六个机器件 cotutor-tutor / cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.claude/skills/`;
+为兼容已有 workspace,老师与技能沿用 `.claude/` 历史数据目录,无需安装 Claude CLI。`init` 把出厂老师拷进 `.claude/agents/`,把做课包用的四个领域 skill(随 drawtell 包来)和六个机器件 cotutor-tutor / cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.claude/skills/`;
 做课包用的 drawtell 随包装好(`.cotutor/drawtell`),不用另外装。要在 iPad 上用(按住说话要 HTTPS):`cotutor cert` 签一张
 自签证书,把根证书装到 iPad,重启 `serve`。
 
@@ -25,7 +27,7 @@ cotutor serve                     # 孩子端 http://<ip>:5180/,家长端 /paren
 - **工作台 `/dev`**:给有技术背景的家长与开发者。和任何一位老师说话、看一轮的原文;老师团页改人设、政策、老师文件,加新老师;音色页试听挑声音;设置页改路径、端口、配音。
 - **孩子端 `/`**:首页每位老师一张卡,卡上的按钮是家长排好的(新话题、接着以前的话题、带讲法的开场、先看一堂小课堂);点了进板书页,按住说话或打字。老师的回答是一页板书:卡先铺开(选择题、填空、点读、田字格、单词、图、小课堂、画板、录音),讲稿一句句念、笔跟着声音标注,末句问句停下来等孩子。点一张卡进舞台做题,做完「交给老师」。孩子永远看不到工具、报错、评判。
 
-想听老师的声音:装 [voxtell](https://github.com/tarslab/voxtell),给老师填音色;没装就退回浏览器合成的声音。
+实时老师的声音由 realtime 模型提供;点读、单词等卡片的配音可选装 [voxtell](https://github.com/tarslab/voxtell)。
 不花钱先看孩子端长什么样:`cotutor mock` 起一份模拟接口,不经真实老师。细节见 [docs/家长手册.md](docs/家长手册.md)。
 
 ## 年级教学包

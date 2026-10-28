@@ -172,7 +172,7 @@ export interface Workspace {
     bundles: string;
     /** 首页(《首页设计.md》):草稿、已发布、历史;publish 时才建,不进骨架 */
     home: string;
-    /** 视频小课堂(《小课堂设计.md》§八第 4 步):lectures/<id>/lecture.md + video.mp4;家长在 Claude Code 里做,不进骨架 */
+    /** 视频小课堂(《小课堂设计.md》§八第 4 步):lectures/<id>/lecture.md + video.mp4;家长在编程助手里做,不进骨架 */
     lectures: string;
   };
   files: {

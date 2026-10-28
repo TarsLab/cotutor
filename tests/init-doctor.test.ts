@@ -42,15 +42,35 @@ try {
   check('没有画图老师(2026-10-07 删了):老师表、运行时、老师文件都没有', !('scene-maker' in (JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { tutors: Record<string, unknown> }).tutors) && !('claude-scene' in (JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { runtimes: Record<string, unknown> }).runtimes) && !existsSync(join(ws, '.claude', 'agents', 'scene-maker.md')));
   const cfg = JSON.parse(readFileSync(join(ws, 'cotutor.json'), 'utf8')) as { kid: { slug: string; name?: string } };
   check('cotutor.json 模板带 slug 与名', cfg.kid.slug === 'ming' && cfg.kid.name === '小明');
+  {
+    const file = join(ws, 'cotutor.json');
+    const before = readFileSync(file, 'utf8');
+    const legacy = JSON.parse(before);
+    legacy.runtimes.old = { run: ['/no/claude', '-p', '{prompt}'], resume: ['/no/claude', '--resume', '{session}', '{prompt}'] };
+    legacy.runtimes.default = 'old';
+    legacy.proxy = 'http://127.0.0.1:7890';
+    writeFileSync(file, JSON.stringify(legacy));
+    const retired = await doctorWorkspace(ws, { probeEnv: false, env: {} });
+    check('旧配置仍能读;默认运行时退役时点名迁移,不检查旧代理', retired.checks.some((c) => c.name === 'runtime.old' && !c.ok && c.required && c.detail.includes('Claude CLI 已移除')) && !retired.checks.some((c) => c.name === 'proxy'));
+    legacy.runtimes.default = 'qwen';
+    writeFileSync(file, JSON.stringify(legacy));
+    const unused = await doctorWorkspace(ws, { probeEnv: false, env: {} });
+    check('闲置的旧运行时只提醒删除,不要求安装 Claude', unused.checks.some((c) => c.name === 'runtime.old' && !c.required));
+    legacy.tutors['math-tutor'].runtime = 'old';
+    writeFileSync(file, JSON.stringify(legacy));
+    const tutor = await doctorWorkspace(ws, { probeEnv: false, env: {} });
+    check('老师单独指定了退役运行时也报必需失败', tutor.checks.some((c) => c.name === 'runtime.old' && c.required && !c.ok));
+    writeFileSync(file, before);
+  }
   check('家规不再出厂(老师要知道的都在老师文件与技能里)', !existsSync(join(ws, 'CLAUDE.md')) && !existsSync(join(ws, 'QWEN.md')));
   check('用户配置指过来', (JSON.parse(readFileSync(join(home, '.config', 'cotutor', 'config.json'), 'utf8')) as { workspace: string }).workspace === ws);
   check('首跑全部 created', r1.steps.every((s) => s.action === 'created'), JSON.stringify(r1.steps.filter((s) => s.action !== 'created')));
 
-  writeFileSync(join(ws, 'CLAUDE.md'), '# 我家的规矩');
+  writeFileSync(join(ws, 'QWEN.md'), '# 我家的规矩');
   const r2 = await initWorkspace({ slug: 'ming' });
   check('重跑没有 created', r2.steps.every((s) => s.action !== 'created'), JSON.stringify(r2.steps.filter((s) => s.action === 'created')));
-  check('家长自建的家规,init 不动', readFileSync(join(ws, 'CLAUDE.md'), 'utf8') === '# 我家的规矩');
-  unlinkSync(join(ws, 'CLAUDE.md'));
+  check('家长自建的家规,init 不动', readFileSync(join(ws, 'QWEN.md'), 'utf8') === '# 我家的规矩');
+  unlinkSync(join(ws, 'QWEN.md'));
   writeFileSync(join(ws, '.claude', 'skills', 'cotutor-board', 'references', 'gone.md'), '退役的卡');
   writeFileSync(join(ws, '.claude', 'skills', 'drawtell-cli', 'SKILL.md'), '家长改过');
   const r2b = await initWorkspace({ slug: 'ming' });
@@ -136,37 +156,25 @@ try {
 }
 {
   const { configTemplate } = await import('../src/cli/skeleton.ts');
-  const tpl = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: { claude: { run: string[]; resume: string[] }; qwen: { run: string[]; resume: string[]; stdin?: string } } };
-  check('claude、qwen 模板都带 --include-partial-messages(流式);qwen 的消息走 stdin、工具由适配器展开', tpl.runtimes.claude.run.includes('--include-partial-messages') && tpl.runtimes.claude.resume.includes('--include-partial-messages') && tpl.runtimes.qwen.run.includes('--include-partial-messages') && tpl.runtimes.qwen.stdin === 'stream-json' && tpl.runtimes.qwen.resume.includes('{toolArgs}'));
-  const tplS = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [{ name: 'math-tutor' }, { name: 'chinese-tutor' }] as never })) as { runtimes: Record<string, { run: string[]; resume: string[] }>; tutors: Record<string, { policy?: { effort?: string } }> };
-  check('普通老师的 claude 模板:--tools {tools}(孩子的话填空 = 不带工具,别的填白名单;没有 Agent / Skill / Artifact,不派子代理)+ --effort {effort};run 与 resume 一样', (['run', 'resume'] as const).every((k) => tplS.runtimes.claude[k].join(' ').includes('--tools {tools} --effort {effort}')) && !tplS.runtimes.claude.run.includes('--disallowedTools'));
-  check('数学老师出厂多想一会儿(effort medium),别的老师用缺省 low', tplS.tutors['math-tutor'].policy?.effort === 'medium' && tplS.tutors['chinese-tutor'].policy === undefined);
-  {
-    const want = '--append-system-prompt-file {boardFile}';
-    const c = tplS.runtimes.claude as { run: string[]; resume?: string[] };
-    const q = tplS.runtimes.qwen as { run: string[]; resume?: string[] };
-    check('板书写法的预载:claude 模板 --append-system-prompt-file {boardFile}(run / resume 一致)', c.run.join(' ').includes(want) && (c.resume ?? []).join(' ').includes(want));
-    check('板书写法的预载:qwen 模板收 {systemBody}(老师正文 + 板书写法)', q.run.includes('{systemBody}') && (q.resume ?? []).includes('{systemBody}') && !q.run.includes('{agentBody}'));
+  const tpl = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] }));
+  check('只出厂 Qwen,缺省 qwen', Object.keys(tpl.runtimes).join() === 'default,qwen,qwen-flash' && tpl.runtimes.default === 'qwen');
+  for (const name of ['qwen', 'qwen-flash']) {
+    const rt = tpl.runtimes[name];
+    check(`${name}:流式、stdin、只读工具与系统提示`, rt.stdin === 'stream-json' && ['run', 'resume'].every((k) => rt[k].includes('--include-partial-messages') && rt[k].includes('{toolArgs}') && rt[k].includes('{systemBody}')));
   }
-  const tplR = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })) as { runtimes: Record<string, string | { run: string[]; resume: string[] }> };
-  const claudeOnes = Object.entries(tplR.runtimes).filter((e): e is [string, { run: string[]; resume: string[] }] => typeof e[1] !== 'string' && e[1].run[0] === 'claude');
-  check('不再出厂 claude-fast(给课文件排版的快模型,备课 2026-10-05 删了)', !('claude-fast' in tplR.runtimes));
-  check('claude 模板 run / resume 都带 --setting-sources project(只读 workspace 的 .claude/,用户级技能 / hooks / 额外目录不进老师);qwen 没有;只出厂 claude、qwen、qwen-flash 三个运行时', claudeOnes.length === 1 && Object.keys(tplR.runtimes).join() === 'default,claude,qwen,qwen-flash' && claudeOnes.every(([, r]) => r.run.join(' ').includes('--setting-sources project') && r.resume.join(' ').includes('--setting-sources project')) && !(tplR.runtimes.qwen as { run: string[] }).run.includes('--setting-sources'));
 }
 // ---- 老 workspace 迁移(步 2):cotutor.json 是政策文件,机器不自动改,所以要算差异 + 只补缺 ----
 {
   const { configGaps, insertMissingFlags, upgradeConfig } = await import('../src/cli/migrate.ts');
 
   // 旗标插的位置照出厂模板:排在它前面、我这份也有的那个旗标之后;已有的旗标与值不碰
-  const factory = ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--disallowedTools', 'Agent', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--max-budget-usd', '2'];
-  const mine = ['claude', '--agent', '{agent}', '-p', '{prompt}', '--dangerously-skip-permissions', '--output-format', 'stream-json', '--verbose', '--max-budget-usd', '5', '--model', 'sonnet'];
+  const factory = ['qwen', '-m', 'qwen3.8-max', '--output-format', 'stream-json', '--include-partial-messages', '--max-wall-time', '10m'];
+  const mine = ['qwen', '-m', 'qwen3.8-flash', '--output-format', 'stream-json', '--max-wall-time', '5m'];
   const ins = insertMissingFlags(mine, factory);
-  check('缺的旗标插到出厂模板里的位置,家长改过的预算与自己加的 --model 都留着',
-    ins.argv.join(' ') === 'claude --agent {agent} -p {prompt} --dangerously-skip-permissions --disallowedTools Agent --output-format stream-json --verbose --include-partial-messages --max-budget-usd 5 --model sonnet' && ins.added.join(' ') === '--disallowedTools Agent --include-partial-messages',
-    ins.argv.join(' '));
+  check('缺的旗标按出厂位置补,家长的模型与时限不动', ins.argv.join(' ') === 'qwen -m qwen3.8-flash --output-format stream-json --include-partial-messages --max-wall-time 5m' && ins.added.join() === '--include-partial-messages');
   check('已经齐了就没有 added', insertMissingFlags(factory, factory).added.length === 0);
 
-  // 老版的 cotutor.json:还没有英语老师,claude 模板没有那两个旗标
+  // 老版的 cotutor.json:还没有英语老师,qwen 模板没有流式旗标
   const home2 = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-migrate-')));
   try {
     const r = await initWorkspace({ slug: 'ming', name: '小明', dir: join(home2, 'ws') });
@@ -175,9 +183,9 @@ try {
     const old = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
     delete old.tutors['english-tutor'];
     for (const k of ['run', 'resume'] as const) {
-      // 老 workspace 的样子:没有流式旗标;工具是黑名单(--disallowedTools Agent)、没有白名单与 --effort(2026-09-20 之前)
-      old.runtimes.claude[k] = (old.runtimes.claude[k] as string[]).flatMap((a: string, i: number, arr: string[]) => (a === '--include-partial-messages' || a === '--effort' || arr[i - 1] === '--effort' || arr[i - 1] === '--tools' ? [] : a === '--tools' ? ['--disallowedTools', 'Agent'] : [a]));
-      old.runtimes.claude[k].push('--model', 'sonnet');
+      old.runtimes.qwen[k] = (old.runtimes.qwen[k] as string[]).filter((a) => a !== '--include-partial-messages');
+      const model = old.runtimes.qwen[k].indexOf('-m');
+      old.runtimes.qwen[k][model + 1] = 'qwen3.8-flash';
     }
     old.policyDefaults = { replyMaxChars: 40 };
     old.runtimes.default = 'qwen';
@@ -192,7 +200,7 @@ try {
     writeFileSync(join(ws, '.cotutor', 'shipped.json'), `${JSON.stringify(shipped, null, 2)}\n`);
 
     const gaps = await configGaps(old);
-    check('差异三项:新老师 + run / resume 各一条', gaps.map((g) => g.path).join(' ') === 'tutors.english-tutor runtimes.claude.run runtimes.claude.resume', JSON.stringify(gaps.map((g) => g.path)));
+    check('差异三项:新老师 + run / resume 各一条', gaps.map((g) => g.path).join(' ') === 'tutors.english-tutor runtimes.qwen.run runtimes.qwen.resume', JSON.stringify(gaps.map((g) => g.path)));
 
     {
       // 卡的清单(2026-10-07)之前的条目:没有 cards → 补出厂的;写过的(哪怕是全部)不动
@@ -214,19 +222,10 @@ try {
 
     const applied = await upgradeConfig(ws);
     const after = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
-    check('补上之后:新老师、旗标都在', applied.applied && after.tutors['english-tutor'].display === '英语老师' && (after.runtimes.claude.run as string[]).join(' ').includes('--tools {tools} --effort {effort}') && (after.runtimes.claude.run as string[]).join(' ').includes('--disallowedTools Agent') && (after.runtimes.claude.resume as string[]).join(' ').includes('--effort {effort}') && (after.runtimes.claude.resume as string[]).includes('--include-partial-messages'));
-    check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['chinese-tutor'].enabled === false && (after.runtimes.claude.run as string[]).slice(-2).join(' ') === '--model sonnet' && after._note === '家长自己写的说明' && after.$schema === old.$schema);
+    check('补上之后:新老师、旗标都在', applied.applied && after.tutors['english-tutor'].display === '英语老师' && ['run', 'resume'].every((k) => after.runtimes.qwen[k].includes('--include-partial-messages')));
+    check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['chinese-tutor'].enabled === false && after.runtimes.qwen.run[after.runtimes.qwen.run.indexOf('-m') + 1] === 'qwen3.8-flash' && after._note === '家长自己写的说明' && after.$schema === old.$schema);
     check('新老师的文件、家跟着补上(不再建 .qwen 链)', existsSync(join(ws, '.claude', 'agents', 'english-tutor.md')) && !existsSync(join(ws, '.qwen', 'agents', 'english-tutor.md')) && existsSync(join(ws, 'agents', 'english-tutor', '.gitkeep')) && applied.installed.length > 0);
 
-    {
-      // 2026-10-04 之前的模板:--tools 后面是写死的白名单。没改过的换成 {tools};家长改过的白名单不动
-      const lit = JSON.parse(JSON.stringify(after)) as Record<string, any>;
-      for (const k of ['run', 'resume'] as const) lit.runtimes.claude[k] = (lit.runtimes.claude[k] as string[]).map((a) => (a === '{tools}' ? 'Bash,Read,Grep,Glob' : a));
-      const g = await configGaps(lit);
-      check('写死的出厂白名单 → 换成 {tools}(run / resume 各一条)', g.map((x) => x.path).join(' ') === 'runtimes.claude.run runtimes.claude.resume' && (g[0].value as string[]).join(' ').includes('--tools {tools}'), JSON.stringify(g.map((x) => [x.path, x.detail])));
-      for (const k of ['run', 'resume'] as const) lit.runtimes.claude[k] = (lit.runtimes.claude[k] as string[]).map((a) => (a === 'Bash,Read,Grep,Glob' ? 'Read' : a));
-      check('家长改过的白名单不动', (await configGaps(lit)).length === 0);
-    }
     const d2 = await doctorWorkspace(ws, { probeEnv: false });
     check('补完 doctor 的 config.migrate 与英语老师都绿(没配卡的配音音色只是提示)', d2.checks.find((c) => c.name === 'config.migrate')?.ok === true && d2.checks.filter((c) => c.name.startsWith('tutor.english-tutor') && !c.name.endsWith('.voice')).every((c) => c.ok));
     check('再补一次是空操作', (await upgradeConfig(ws)).gaps.length === 0);

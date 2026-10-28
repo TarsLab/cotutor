@@ -29,7 +29,7 @@ try {
   for (const n of [0, 7, 2.5, NaN]) await rejects(`年级 ${n} 不合法`, () => requireGradePack(n), /1–6/);
   await rejects('未提供年级不回退', () => requireGradePack(3), /可用年级:2/);
   const absent = join(testHome, 'unsupported');
-  await rejects('初始化前验证年级', () => initWorkspace({ slug: 'a', dir: absent, grade: 6, proxy: false }), /没有完整/);
+  await rejects('初始化前验证年级', () => initWorkspace({ slug: 'a', dir: absent, grade: 6 }), /没有完整/);
   check('失败的初始化不留半个 workspace', !existsSync(absent));
   check('学期对比支持上下学期与假期', ['二年级上', '二年级下', '二年级暑假', '2年级上'].every((s) => gradeOfSemester(s) === 2) && gradeOfSemester(null) === null && gradeOfSemester('初一') === null);
 
@@ -41,7 +41,7 @@ try {
   check('贡献新年级无需注册表,不完整的包不列出', (await gradePacks(catalog)).map((p) => p.grade).join() === '4' && (await requireGradePack(4, catalog)).agentsDir === join(catalog, 'grade-4', 'agents'));
 
   const root = join(testHome, 'family');
-  const first = await initWorkspace({ slug: 'kid', dir: root, grade: 2, proxy: false });
+  const first = await initWorkspace({ slug: 'kid', dir: root, grade: 2 });
   check('显式安装来源写入清单', (await readManifest(root)).teachingPack?.grade === 2 && first.steps.some((s) => s.item === 'teachingPack'));
   const teacher = join(root, '.claude/agents/math-tutor.md');
   const activity = join(root, 'agents/math-tutor/activities/批改.md');
@@ -71,7 +71,7 @@ try {
   check('旧版未改文件按原 hash 更新', upgrade.find((s) => s.name === 'english-tutor')?.action === 'upgraded' && !readFileSync(enFile, 'utf8').includes('旧版出厂教学说明'));
   check('旧版自定义老师和 activity 保留', upgrade.find((s) => s.name === 'math-tutor')?.action === 'kept-custom' && acts.find((s) => s.key === 'math-tutor/批改')?.action === 'kept-custom' && readFileSync(teacher, 'utf8') === mine && readFileSync(activity, 'utf8') === mineActivity);
   check('迁移补来源但不重置自定义 hash', (await readManifest(root)).teachingPack?.grade === 2 && (await readManifest(root)).tutors['math-tutor'].hash === customHash);
-  await initWorkspace({ slug: 'kid', dir: root, proxy: false });
+  await initWorkspace({ slug: 'kid', dir: root });
   check('重复 init 保留自定义、档案和配置', readFileSync(teacher, 'utf8') === mine && readFileSync(activity, 'utf8') === mineActivity && readFileSync(profile, 'utf8') === profileText && readFileSync(join(root, 'cotutor.json'), 'utf8') === configText);
   await restoreTutor(root, 'math-tutor');
   await restoreActivity(root, 'math-tutor', '批改');
@@ -117,7 +117,7 @@ try {
   check('doctor 报缺失包而不崩溃', missing.checks.some((c) => c.name === 'teachingPack' && !c.ok && c.required));
   check('失败操作不改老师文件', readFileSync(teacher, 'utf8') === factoryTeacher && readFileSync(activity, 'utf8') === factoryActivity);
   writeFileSync(join(root, '.cotutor/shipped.json'), '{bad');
-  await rejects('损坏记录不重建 hash', () => initWorkspace({ slug: 'kid', dir: root, proxy: false }), /出厂记录用不了/);
+  await rejects('损坏记录不重建 hash', () => initWorkspace({ slug: 'kid', dir: root }), /出厂记录用不了/);
   const corrupt = await doctorWorkspace(root, { probeEnv: false });
   check('doctor 报损坏记录而不崩溃', corrupt.checks.some((c) => c.name === 'teachingPack' && !c.ok));
   check('损坏记录保留原样供修复', readFileSync(join(root, '.cotutor/shipped.json'), 'utf8') === '{bad');

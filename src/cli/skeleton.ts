@@ -170,8 +170,8 @@ export function configTemplate(input: ConfigTemplateInput): string {
     paths: {},
     policyDefaults: {},
     tutors,
-    // 出厂运行时由各 CLI 的适配器给(src/clis/<cli>.ts 的 runtimes(),旗标为什么这么写的注释也在那里);缺省 claude
-    runtimes: { default: 'claude', ...factoryRuntimes() },
+    // 出厂运行时由各 CLI 的适配器给(src/clis/<cli>.ts 的 runtimes(),旗标为什么这么写的注释也在那里);缺省 qwen
+    runtimes: { default: 'qwen', ...factoryRuntimes() },
     tts: TTS_DEFAULT,
     // 听写的拍照认词:模型与挑词要求(prompt 一行一个字符串)写进文件,家长看得见、改得动
     dictation: DICTATION_DEFAULT,

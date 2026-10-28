@@ -1,12 +1,12 @@
 ---
 name: cotutor-tune
-description: 调 cotutor 的老师团:改某位老师的提示词(口气、规矩、学科做法)、改 vault 里给老师看的档案 / 日记 / 计划、加一位新老师、改政策与开关。家长或开发者在 workspace 根开 Claude Code 说「我想让数学老师…」「把孩子怕竖式记下来」「加一个英语老师」「老师话太多」时用。每一处改动先给 diff、点头才写,写完带着验效果。
+description: 调 cotutor 的老师团:改某位老师的提示词(口气、规矩、学科做法)、改 vault 里给老师看的档案 / 日记 / 计划、加一位新老师、改政策与开关。家长或开发者在 workspace 根开编程助手说「我想让数学老师…」「把孩子怕竖式记下来」「加一个英语老师」「老师话太多」时用。每一处改动先给 diff、点头才写,写完带着验效果。
 ---
 
 <!-- 给人看
-谁读:家长在 workspace 根开的 Claude Code
+谁读:家长在 workspace 根开的编程助手
 能改:机器件,upgrade 覆盖;references/字段.md 由 src/lib/tune-doc.ts 生成
-改了:在试用 workspace 里开 Claude Code 说一句「老师话太多」(《写提示词.md》§一)
+改了:在试用 workspace 里开编程助手说一句「老师话太多」(《写提示词.md》§一)
 -->
 
 # 调老师团
@@ -29,7 +29,7 @@ description: 调 cotutor 的老师团:改某位老师的提示词(口气、规�
 - 不改 conversations/、evals/、ledger/。
 - 不碰 .cotutor/、.claude/skills/:那是机器件,upgrade 会覆盖。
 - 出厂老师的文件改过之后,cotutor upgrade 不再覆盖它,只报 diff。告诉家长这个代价;想回出厂的,用 `cotutor upgrade --force <老师>`。
-- .claude/agents/ 里的老师是给 cotutor 起 claude -p 用的,**不要把它们当子代理派**。
+- .claude/agents/ 里的老师是由 cotutor 读正文传给 Qwen 的,**不要把它们当子代理派**。
 
 ## 一、改某位老师的提示词
 

@@ -34,7 +34,7 @@ import { getRuntime, planRun, runtimeUses, stallPrompt, toolLeakPrompt, type Run
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { ACTIVITY_RUN_DIR, BOARD_CARD_KINDS, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
+import { BOARD_CARD_KINDS, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { updateVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
 import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPrompt, type MemoryLine } from '../lib/vault-notes.ts';
@@ -242,7 +242,6 @@ export const ACTIVITY_IN_SYSTEM = '已在你的系统提示里(这个话题的 a
  *   body   「老师怎么带」按参数与这个话题的卡裁好、剥了注释
  *   kinds  这个话题的卡:activity 头上的 cards 加 text(不并老师的)
  *   guide  只讲这几种卡的板书写法,写到 .cotutor/board/
- *   agent / agentsFile  claude 的 --agent / --agents:现生成的 agent 定义(prompt = body),名字带内容 hash,改了就换
  *   memory 这个 activity 自己的记忆:agent: <老师>/<activity>,文件名 <老师显示名>·<activity>
  * activity 文件不在、没有「老师怎么带」→ null(退回老师文件)。
  */
@@ -250,8 +249,6 @@ export interface ActivityParts {
   body: string;
   kinds: string[];
   guide: { body: string; path: string };
-  agent: string;
-  agentsFile: string;
   memory: { agent: string; display: string };
 }
 
@@ -262,13 +259,9 @@ export async function activityParts(ws: Workspace, tutor: string, run: ActivityR
   const body = renderTutorSection(a, { params: run.params, cards: kinds }) ?? '';
   const guideBody = boardGuideFor(kinds);
   const guide = { body: guideBody, path: `${TUTOR_BOARD_DIR}/${tutor}-${textHash(guideBody).slice(0, 8)}.md` };
-  const agent = `${tutor}-a${textHash(body).slice(0, 8)}`;
-  const agentsFile = join(ws.root, ACTIVITY_RUN_DIR, `${agent}.json`);
   const display = ws.config.tutors[tutor]?.display ?? tutor;
-  const def = `${JSON.stringify({ [agent]: { description: `${display}的 activity「${run.name}」`, prompt: body } }, null, 2)}\n`;
   await writeIfChanged(join(ws.root, guide.path), guideBody);
-  await writeIfChanged(agentsFile, def);
-  return { body, kinds, guide, agent, agentsFile, memory: { agent: `${tutor}/${run.name}`, display: `${display}·${run.name}` } };
+  return { body, kinds, guide, memory: { agent: `${tutor}/${run.name}`, display: `${display}·${run.name}` } };
 }
 
 async function writeIfChanged(file: string, text: string): Promise<void> {
@@ -328,14 +321,14 @@ export async function attachBoardGuide(ws: Workspace, tutor: string, pack: Conte
  * 老师正文({agentBody})与系统提示({systemBody} = 正文 + 板书写法)、板书写法的文件({boardFile}):模板用到才读。send 与预热同一份,预热起的进程 argv 才对得上。
  * 顺手把板书写法挂到上下文包上(attachBoardGuide)。没递板书写法(工具人、板书关了)的 {boardFile} 照旧是出厂的 SKILL.md。
  */
-async function systemParts(ws: Workspace, tutor: string, runtime: Runtime, policy: Policy, pack: ContextPack, act: ActivityParts | null = null): Promise<{ agentBody?: string; systemBody?: string; boardFile: string; agent: string; agentsFile?: string; activityInSystem: boolean }> {
+async function systemParts(ws: Workspace, tutor: string, runtime: Runtime, policy: Policy, pack: ContextPack, act: ActivityParts | null = null): Promise<{ agentBody?: string; systemBody?: string; boardFile: string; agent: string; activityInSystem: boolean }> {
   const wantsSystemBody = runtimeUses(runtime, '{systemBody}');
-  // activity 话题:系统提示换成 activity 的(qwen 走 {systemBody},claude 走 --agents);模板两样都没有就退回老师文件 + 第一条带原文
-  if (act && takesTutorRules(tutor) && (wantsSystemBody || runtimeUses(runtime, '{agentsFile}'))) {
+  // activity 话题:系统提示换成 activity 的(Qwen 走 {systemBody});模板没有它就退回老师文件 + 第一条带原文
+  if (act && takesTutorRules(tutor) && wantsSystemBody) {
     const boardOff = policy.board === 'off';
     if (!boardOff) pack.boardGuide = BOARD_GUIDE_IN_SYSTEM;
     const systemBody = boardOff ? act.body : `${act.body}\n\n${act.guide.body}`;
-    return { agentBody: act.body, systemBody, boardFile: join(ws.root, boardOff ? BOARD_GUIDE_PATH : act.guide.path), agent: runtimeUses(runtime, '{agentsFile}') ? act.agent : tutor, agentsFile: act.agentsFile, activityInSystem: true };
+    return { agentBody: act.body, systemBody, boardFile: join(ws.root, boardOff ? BOARD_GUIDE_PATH : act.guide.path), agent: tutor, activityInSystem: true };
   }
   const agentBody = runtimeUses(runtime, '{agentBody}') || wantsSystemBody ? await readAgentBody(ws, tutor) : undefined;
   const guide = await attachBoardGuide(ws, tutor, pack, { preloaded: boardPreloaded(runtime), boardOff: policy.board === 'off' });
@@ -499,7 +492,7 @@ export class Runner {
     await mkdir(cwd, { recursive: true });
     // 读索引这会儿孩子可能已经开口了:这轮在跑就不起(它收尾时会再起)
     if (this.active.has(tutor)) return false;
-    const env = (p: RunPlan): NodeJS.ProcessEnv => processEnv(p, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, { proxy: ws.config.proxy });
+    const env = (p: RunPlan): NodeJS.ProcessEnv => processEnv(p, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root });
     await prepareCli(fresh.cli, ws.root).catch(() => {});
     if (this.active.has(tutor)) return false;
     this.spares.warm(tutor, 'fresh', { argv: fresh.argv, env: fresh.env, cwd, date, lastJob: null }, env(fresh));
@@ -564,7 +557,7 @@ export class Runner {
     const act = threadRun ? await activityParts(ws, tutor, threadRun) : null;
     const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus, ...(act ? { agent: act.memory.agent, kinds: act.kinds } : {}) });
     const policy = resolvePolicy(ws.config, tutor);
-    const { agentBody, systemBody, boardFile, agent, agentsFile, activityInSystem } = await systemParts(ws, tutor, runtime, policy, gathered, act);
+    const { agentBody, systemBody, boardFile, agent, activityInSystem } = await systemParts(ws, tutor, runtime, policy, gathered, act);
     const activityRun = input.bookkeep ? null : threadRun;
     const activityWarn = activityRun ? await attachActivity(ws, tutor, gathered, activityRun, { date, messages: index.messages, thread, now: now.getTime() }, activityInSystem) : [];
     // 家长笔记原文:新会话整篇带;续会话时这个话题带过、没改的只写「未变」
@@ -617,7 +610,7 @@ export class Runner {
       pack.live = { ...(l.caught ? { caught: l.caught } : {}), ...(l.cut !== undefined ? { cut: l.cut } : {}), ...(l.warmup?.length ? { warmup: l.warmup } : {}), ...(l.phone !== undefined ? { phone: l.phone } : {}), ...(l.app ? { app: l.app } : {}), ...(l.draw?.length ? { draw: l.draw } : {}) };
     }
     const prompt = buildContextPack(pack, text, policy.contextPack);
-    const plan = planRun(ws.config, { session }, { agent, prompt, agentBody, systemBody, boardFile, agentsFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
+    const plan = planRun(ws.config, { session }, { agent, prompt, agentBody, systemBody, boardFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
 
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
     const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards: cards.map(({ card, text }) => ({ card, text })) } : {}), ...(photos.length ? { photos } : {}), ...(input.drawing ? { drawing: input.drawing } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && input.talk ? { talk: input.talk } : {}), ...(noteWarnings.length || lectureWarn.length || activityWarn.length ? { warnings: [...noteWarnings, ...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
@@ -631,7 +624,7 @@ export class Runner {
     active.job = job;
     if (input.live) active.live = true;
     // 断流后接着跑、工具调用写成了正文:同一运行时 resume 这个会话,消息换成 stallPrompt / toolLeakPrompt
-    const resumePlan = (id: string, prompt: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent, prompt, agentBody, systemBody, boardFile, agentsFile, runtime: plan.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
+    const resumePlan = (id: string, prompt: string): RunPlan => planRun(ws.config, { session: { id, runtime: plan.runtime } }, { agent, prompt, agentBody, systemBody, boardFile, runtime: plan.runtime, effort: policy.effort, tools, root: ws.root, readDirs: readDirsOf(ws) });
     // 实时的一轮讲稿是嘴念的,不按 replyMaxChars 截(截了孩子听到半句:10-20「题目已经…」后面「你补上 ēng 就行」没了)
     const runPolicy = input.live ? { ...policy, replyMaxChars: Number.MAX_SAFE_INTEGER } : policy;
     active.done = this.spawn(ws, tutor, date, job, plan, runPolicy, active, resumePlan, spare).finally(() => {
@@ -814,7 +807,7 @@ export class Runner {
       settleReady();
     };
     // 断流看门狗:进程 stall.ms 没吐一个字节、也没有工具在跑 → 杀掉,resume 同一个会话接着写(最多 stall.retries 次)。
-    // claude CLI 自己要等约 180 秒才认断流(2026-09-21 真跑一轮连断两次,等了 6 分钟)
+    // CLI 自己的断流重试可能要等很久(2026-09-21 真跑一轮连断两次,等了 6 分钟)
     let session = plan.session;
     // 新会话要等模型开始回了(开始回复、吐字、在想、整条回复)才在盘上、才 resume 得了
     // (2026-09-22 真跑:init 吐了会话 id 就被杀,resume 报 No conversation found;吐过三个字再杀,盘上有这条用户消息)
@@ -826,7 +819,7 @@ export class Runner {
       lineBuf = '';
       const child = warm?.child ?? spawn(p.argv[0], p.argv.slice(1), {
         cwd,
-        env: processEnv(p, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }, { proxy: ws.config.proxy }),
+        env: processEnv(p, { ...(this.opts.env ?? process.env), COTUTOR_WORKSPACE: ws.root }),
         stdio: [p.stdin ? 'pipe' : 'ignore', 'pipe', err],
       });
       if (warm) {
@@ -893,7 +886,7 @@ export class Runner {
       child.once('error', (e) => done({ code: null, spawnError: e }));
       child.once('close', (code) => { if (stalled) void appendFile(files.err(job), `cotutor: ${Date.now() - lastByte}ms 没有输出,当断流杀掉\n`).catch(() => {}); done({ code }); });
       if (warm) {
-        // 开口前吐的(claude 实测一个字节都没有)按顺序补喂,再放开暂停;接手之前就退了的,close 已经错过,直接收尾
+        // 开口前吐的按顺序补喂,再放开暂停;接手之前就退了的,close 已经错过,直接收尾
         for (const c of warm.stdout) child.stdout?.emit('data', c);
         child.stdout?.resume();
         if (warm.closed()) done({ code: child.exitCode });

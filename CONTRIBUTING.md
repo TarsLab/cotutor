@@ -14,7 +14,8 @@
 - **文件是真相,页面是视图**:cotutor.json、老师文件、账本、课程表都是文本;页面只写这些文件,不藏状态。
 - **孩子端永远没有错误与评判**:过滤在服务端做(`/api/kid/*`),不靠前端隐藏。
 - **不动用户数据**:init 幂等补缺,政策文件与家规只在缺失时写;老师文件拷进 workspace 后归家长,upgrade 不覆盖改过的。
-- 两个 CLI(claude / qwen)都要能跑:老师文件只用 frontmatter 的公共子集,CLI 差异写在 `src/clis/<cli>.ts` 的适配器里(再接一家见 `docs/接一个 CLI.md`)。
+- **只支持 Qwen Code**:实时模型负责听说(默认 `qwen3.8-omni-flash-realtime`),脑模型通过 Qwen Code 生成讲稿与板书。Qwen 的工具、环境与命令模板集中在 `src/clis/qwen.ts`;不再维护 Claude CLI。
+- 老师文件与技能仍沿用 `.claude/agents/`、`.claude/skills/` 这两个历史数据目录,由应用读取并传给 Qwen,不依赖 Claude CLI。
 
 ## 提交前
 

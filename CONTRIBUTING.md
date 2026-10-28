@@ -3,9 +3,10 @@
 ## 先读什么
 
 - `CLAUDE.md`:这个仓怎么长的(目录、约定、验证方式)。人和 agent 都按它来。
-- `docs/产品规划.md`:定位、两个端、拍板记录。改设计先改这里。
-- `docs/契约草案.md` 只剩「为什么」,契约的真相是 `src/schema/`(zod,类型即文档)。
-- `docs/开发者手册.md`:检出后怎么跑起来、怎么冒烟、iPad 真机怎么试。
+- `README.md`:安装配置、升级、检出后怎么跑与怎么验证。
+- `src/schema/`:数据契约(zod,类型即文档);对应模块的测试说明行为边界。
+- `docs/iPad与iPhone.md`:HTTPS、证书与 iPad 真机使用。
+- 改提示词、卡或教学包,分别读 `docs/写提示词.md`、`docs/卡片协议.md`、`docs/年级教学包.md`。
 
 ## 规矩
 
@@ -20,7 +21,7 @@
 ## 提交前
 
 ```sh
-pnpm typecheck && pnpm test && pnpm build && pnpm smoke
+pnpm typecheck && pnpm test && pnpm build && pnpm build:stage && pnpm smoke
 ```
 
 `cotutor doctor --json` 的输出是 issue 里最有用的东西;报老师起不来时附上 `conversations/<老师>/<日期>.<job>.err.log` 的尾巴。

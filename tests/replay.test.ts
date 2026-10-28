@@ -87,7 +87,7 @@ try {
   check('listReplays:一条,指向原轮', rows.length === 1 && rows[0].replayOf === orig.job && rows[0].evalJob === rp.evalJob);
   check('listReplays:按 job 过滤', (await listReplays(ws, 'math-tutor', '2026-09-08', 'nope')).length === 0);
 
-  // 原轮是实时的:回放也按实时写(消息带 live、上下文包有 live:),新规矩才验得到(《实时老师设计.md》拍板 20)
+  // 原轮是实时的:回放也按实时写(消息带 live、上下文包有 live:),新规矩才验得到
   const lv = await runner.send('math-tutor', { from: 'kid', text: '讲讲板书', newThread: true, live: {} });
   await lv.done;
   await runner.flush();

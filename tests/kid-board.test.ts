@@ -115,7 +115,7 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
   const p1 = penPath('circle', 70, 34, '斜边:0');
   check('路径:圈是折线一圈多一点、方框四段曲线、下划线一笔;同种子同路径,换种子不同', p1.startsWith('M') && p1.split(' L ').length === 40 && p1 === penPath('circle', 70, 34, '斜边:0') && p1 !== penPath('circle', 70, 34, '斜边:1') && penPath('box', 60, 30, 'x').split(' C ').length === 5 && penPath('underline', 60, 10, 'x').includes(' S ') && penPath('marker', 10, 10, 'x') === '');
   check('问句', isQuestion('酒是谁的?') && isQuestion('明白吗?') && !isQuestion('明白了。'));
-  check('有舞台交互的是选择题(填空 10-22 删了,《卡片协议.md》拍板 3)', cards[3].kind === 'choice' && hasState(cards[3]) && !hasState(cards[4]) && !hasState(cards[0]) && !hasState(cards[2]) && !hasState(cards[5]) && !hasState({ kind: 'image', props: { src: 'a.png' } }));
+  check('有舞台交互的是选择题(填空 10-22 删了,《卡片协议.md》)', cards[3].kind === 'choice' && hasState(cards[3]) && !hasState(cards[4]) && !hasState(cards[0]) && !hasState(cards[2]) && !hasState(cards[5]) && !hasState({ kind: 'image', props: { src: 'a.png' } }));
   check('点读段的配音:assets 里有 <段号>.mp3 才有', segmentAudio({ ...cards[2], assets: ['2026-09-10.1620-1.cards/2/2.mp3'] }, 1) === '2026-09-10.1620-1.cards/2/2.mp3' && segmentAudio({ ...cards[2], assets: ['2026-09-10.1620-1.cards/2/2.mp3'] }, 0) === null && segmentAudio(cards[2], 0) === null);
   check('做了什么(交给老师能不能按):选择题是选项、别的卡永远空', stateSummary({ ...cards[3], state: { picked: [0] } }).join() === 'A 他自己的' && stateSummary({ ...cards[4], state: { answers: ['多做一步'] } }).length === 0 && stateSummary({ ...cards[0], state: { x: 1 } }).length === 0);
   const cv: BoardCard = { kind: 'canvas', props: { base: null, prompt: '画一条蛇' } };
@@ -191,7 +191,7 @@ const lectureCard: BoardCard = { kind: 'lecture', props: { bundle: '2026-09-04-g
 // 问句认半角与全角问号(2026-10-04:真老师写「你想问什么呀？」,原来只认半角,孩子端念完不停)
 check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人几块?') && isQuestion('每人几块？') && isQuestion(' 好吗？ ') && !isQuestion('好的。'));
 
-// ---- 一个话题一节:孩子的话进问题卡(《工作流程.md》§二、拍板 17) ----
+// ---- 一个话题一节:孩子的话进问题卡 ----
 {
   const q = (t: string, extra: Partial<BoardCard['props']> = {}): BoardCard => ({ kind: 'text', props: { text: t, ...extra } });
   const asks: BoardSection = { cards: [q('想一想')], lines: [L('分完了吗?', { anchor: 0 })] };
@@ -229,7 +229,7 @@ check('isQuestion:半角、全角问号都算;句号不算', isQuestion('每人�
   check('sectionsFromMessages:照片进了答案栏,节头不再带 photos', pe?.saidOn?.card === 1 && pe.photos === undefined);
   const notSnap = sectionsFromMessages([{ ...pm[0], section: asks }, pm[1]]).find((e) => e.job === 'r');
   check('sectionsFromMessages:答的不是拍给我看卡,照片照旧在节头', notSnap?.photos?.length === 1 && !notSnap.said?.photos);
-  // 实时(《实时老师设计.md》拍板 20):节头是脑写的那张 # 标题卡,没写就接着上一节;孩子的话照旧挂在 said 上(给左栏),不是节头
+  // 实时:节头是脑写的那张 # 标题卡,没写就接着上一节;孩子的话照旧挂在 said 上(给左栏),不是节头
   const head: BoardSection = { cards: [{ kind: 'text', props: { title: '补读音:瀑、布、穷、尽', text: '', heading: true } }, q('瀑 pù')], lines: [L('先看「瀑」。')] };
   const plain: BoardSection = { cards: [q('布 bù')], lines: [L('对,pù。')] };
   const talkOnly: BoardSection = { cards: [], lines: [L('嗯,我在。')] };

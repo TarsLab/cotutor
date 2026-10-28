@@ -1,6 +1,6 @@
 /**
- * 工作台概览(2026-10-16,《工作台设计.md》):把近七天各老师的会话索引读一遍,算成一页数字。
- * 只读不写;只看 conversations/ 下的索引(回放在 evals/,不算)、今天画了几张(不限张数,只数)、孩子端的流水与设备表(《孩子端流水设计.md》§五)。
+ * 工作台概览:把近七天各老师的会话索引读一遍,算成一页数字。
+ * 只读不写;只看 conversations/ 下的索引(回放在 evals/,不算)、今天画了几张(不限张数,只数)、孩子端的流水与设备表。
  * 「轮」只算孩子的话(from: kid);记账、整理记忆这类应用派的任务(from: system)单记,钱和 token 照算进用量。
  */
 import { localDate, localMinute, weekOf } from '../lib/conversation.ts';
@@ -174,7 +174,7 @@ export async function devOverview(ws: Workspace, now: Date = new Date()): Promis
 
 const DEVICE_DAYS = 30;
 
-/** 设备卡与页面出错(《孩子端流水设计.md》§五):设备表 + 近 7 天的流水 */
+/** 设备卡与页面出错:设备表 + 近 7 天的流水 */
 async function kidSide(ws: Workspace, today: string, days: readonly string[]): Promise<{ devices: DevDevice[]; older: DevDevice[]; issues: DevIssue[]; time: DevOverview['kidTime'] }> {
   const table = await readDevices(ws);
   const log = await readKidLog(ws, days).catch(() => [] as KidLogLine[]);

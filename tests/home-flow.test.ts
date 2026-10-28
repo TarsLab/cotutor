@@ -1,5 +1,5 @@
 /**
- * 首页全流程(假 CLI,不花钱,《首页设计.md》):没发布 = 缺省首页 → 草稿 → check 两级 → publish 拒绝 / --force / 同一分钟再发 →
+ * 首页全流程(假 CLI,不花钱):没发布 = 缺省首页 → 草稿 → check 两级 → publish 拒绝 / --force / 同一分钟再发 →
  * 孩子端首页(老师卡置顶、讲法不下发、接着刚才的)→ 按钮发来的 via(开场 = 按钮字 + 讲法进上下文包;接着以前 = 新话题 + continue 段)→
  * 点击统计 → 回放带上讲法与 continue → 家长接口与预览页 → doctor → 发布件坏了退回缺省。
  */
@@ -96,7 +96,7 @@ try {
   withFigshot(undefined);
   check('去掉配置入口就没了', (await kidHome()).figshot === null);
 
-  // 常驻入口(《首页设计.md》拍板 18):没配按学科(语文 = 听写);配了照配的;口语课要 talk.enabled
+  // 常驻入口:没配按学科(语文 = 听写);配了照配的;口语课要 talk.enabled
   type KT = { name: string; extras: string[] };
   const extrasOf = async (): Promise<Record<string, string>> => Object.fromEntries(((await route('GET', '/api/kid/home', ctx)).json as { tutors: KT[] }).tutors.map((t) => [t.name, t.extras.join('+')]));
   const e0 = await extrasOf();
@@ -165,7 +165,7 @@ for: 2026-09-18
   const zh = buttonsOf(h1, 'chinese-tutor');
   check('孩子端首页:发布的 id、老师卡置顶、英语补上、讲法不下发', h1.home === '2026-09-17-2130-2' && h1.cards.map((c) => c.props.tutor ?? c.kind).join() === 'chinese-tutor,math-tutor,english-tutor,tianzige' && zh.map((b) => b.id).join() === 'new,0,1' && zh[2].kind === 'continue' && zh[2].thread === t16 && !JSON.stringify(h1).includes('第 22 课') && !JSON.stringify(h1).includes('brief'), JSON.stringify(h1));
 
-  // ---- 只展开一位老师(拍板 16–19):非老师卡的归属、橙点 ----
+  // ---- 只展开一位老师:非老师卡的归属、橙点 ----
   type HC = { kind: string; owner?: string | null; props: { tutor?: string; news?: boolean } };
   const hc = h1.cards as HC[];
   const newsOf = (h: KidHome): string => (h.cards as HC[]).filter((c) => c.kind === 'tutor' && c.props.news).map((c) => c.props.tutor).join();

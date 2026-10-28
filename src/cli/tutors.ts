@@ -1,7 +1,7 @@
 /**
- * 老师文件的安装与升级(2026-09-09 拍板:**拷贝,不链**)。
+ * 老师文件的安装与升级(**拷贝,不链**)。
  * 包里的 grades/grade-<n>/agents/<name>.md 是出厂件;init 把它拷进 workspace 的 .claude/agents/<name>.md(这份是家长的,想改就改),
- * (原来 .qwen/agents/<name>.md 是指向它的相对链,2026-10-09 退役,init / upgrade 删掉旧链,《agent层设计.md》拍板 15。)
+ * (原来 .qwen/agents/<name>.md 是指向它的相对链,2026-10-09 退役,init / upgrade 删掉旧链。)
  * 出厂时的内容 hash 记在 .cotutor/shipped.json(机器文件,家长不用管),据此分三种状态:
  *   latest     与本包一致
  *   upgradable 与记录的出厂 hash 一致(没改过,只是包更新了)→ cotutor upgrade 直接换新

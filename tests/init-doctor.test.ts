@@ -8,7 +8,7 @@ const PACKAGE_SKILLS_DIR = join(import.meta.dirname, '..', 'skills');
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-init-home-')));
 process.env.HOME = home;
-// 这台电脑配好了百炼(《产品规划.md》拍板 30:没配时 doctor 的 bailian 是红的必需项)
+// 这台电脑配好了百炼(没配时 doctor 的 bailian 是红的必需项)
 mkdirSync(join(home, '.config', 'cotutor'), { recursive: true });
 writeFileSync(join(home, '.config', 'cotutor', 'bailian.json'), JSON.stringify({ apiKey: 'sk-test0000000000000000', workspaceId: 'llm-test' }));
 delete process.env.COTUTOR_WORKSPACE;
@@ -99,7 +99,7 @@ try {
   check('老师链都查了(三位)', d1.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.claude')).length === 3);
   check('doctor 报每位有脸的老师讲哪几种卡', d1.checks.find((c) => c.name === 'tutor.math-tutor.cards')?.detail === '板书写法讲 text choice image lecture canvas code' && d1.checks.find((c) => c.name === 'tutor.english-tutor.cards')?.detail === '板书写法讲 text read choice image word lecture', JSON.stringify(d1.checks.filter((c) => c.name.endsWith('.cards'))));
   {
-    // 学科色(拍板 26):手写的颜色白字压不住,doctor 提示;压得住的不说
+    // 学科色:手写的颜色白字压不住,doctor 提示;压得住的不说
     const cfgPath = join(ws, 'cotutor.json'), before = readFileSync(cfgPath, 'utf8');
     const cfg = JSON.parse(before); cfg.tutors['english-tutor'].color = '#d9a520'; cfg.tutors['chinese-tutor'].color = '#a33a2a';
     writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
@@ -109,7 +109,7 @@ try {
     writeFileSync(cfgPath, before);
   }
   {
-    // 实时老师的嘴:音色写错(这个模型不认)提示,写对的报谁用什么;都没写也报(用出厂的,《产品规划.md》拍板 30)
+    // 实时老师的嘴:音色写错(这个模型不认)提示,写对的报谁用什么;都没写也报(用出厂的)
     const cfgPath = join(ws, 'cotutor.json'), before = readFileSync(cfgPath, 'utf8');
     const cfg = JSON.parse(before); cfg.live = { voices: { 'chinese-tutor': 'Serena', 'math-tutor': 'Bella' } };
     writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));

@@ -24,7 +24,7 @@ check('时间显示:分:秒,一小时以上带时', clockLabel(0) === '0:00' && 
 const lines = lectureLines(clock);
 check('上下文包的每句起点', lines.length === 6 && lines[0].startsWith('0:00 先看 13 减 8') && lines[1].startsWith(`${clockLabel(s2.start)} `), JSON.stringify(lines));
 
-// ---- 放着的时候跟着声音走(拍板 36) ----
+// ---- 放着的时候跟着声音走 ----
 {
   // 两段:第一段配音 3 秒(画 0.5 秒),第二段没有配音(画 0.5 秒)
   const v = lectureClock([{ type: 'line', id: 'a', x: 0, y: 0, points: [[0, 0], [10, 0]], animateDuration: 500 }, { type: 'line', id: 'b', x: 0, y: 9, points: [[0, 0], [10, 0]], animateDuration: 500 }], [{ step: 1, elementIds: ['a'], line: '一', pauseAfter: true, audioSrc: 'audio/step-1.mp3' }, { step: 2, elementIds: ['b'], line: '二', pauseAfter: true }], { durations: [3000] });
@@ -80,7 +80,7 @@ const s3 = clock.segments[2];
     const svg = await lectureFrameSvg({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8', s3mid, [[[300, 80], [360, 80], [360, 160]], [[400, 80], [410, 90]]]) ?? '';
     check('frame.svg:那一刻画到第 3 步一半(橙色斜线有、第 4 步的红圈没有),叠着画的两笔(加了平移),字体内嵌', svg.startsWith('<svg') && svg.includes('#e8590c') && !svg.includes('#e03131') && svg.includes('stroke="#2f6fd6"') && svg.includes('M284 94 L344 94 L344 174 M384 94 L394 104') && svg.includes('@font-face'), svg.slice(0, 200));
     const end = await lectureFrameSvg({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8', parseSvgMs('end')) ?? '';
-    check('frame.svg?svg=end:最后一帧(小课堂卡的缩略图,拍板 37),第 4 步的红圈也画上了;认不出来的 svg = 0', end.includes('#e03131') && parseSvgMs('end') === Infinity && parseSvgMs('x') === 0 && parseSvgMs(null) === 0 && parseSvgMs('1500') === 1500);
+    check('frame.svg?svg=end:最后一帧(小课堂卡的缩略图),第 4 步的红圈也画上了;认不出来的 svg = 0', end.includes('#e03131') && parseSvgMs('end') === Infinity && parseSvgMs('x') === 0 && parseSvgMs(null) === 0 && parseSvgMs('1500') === 1500);
     check('frame.svg:画面改过没重烤、id 不对 → null(页面退回自己克隆)', (await lectureFrameSvg({ dirs: { bundles: tmp } }, 'po', 2000)) === null && (await lectureFrameSvg({ dirs: { bundles: tmp } }, '../x', 2000)) === null);
     check('ring 参数:一笔「x,y;x,y」、笔间「~」,认不出来就当没有,一共最多 1200 个点', JSON.stringify(parseRing('1,2;3,4')) === '[[[1,2],[3,4]]]' && JSON.stringify(parseRing('1,2;3,4~5,6;7,8')) === '[[[1,2],[3,4]],[[5,6],[7,8]]]' && parseRing('1,2;x').length === 0 && parseRing(null).length === 0 && parseRing(Array.from({ length: 5 }, () => Array.from({ length: 300 }, () => '1,1').join(';')).join('~')).flat().length === 1200);
   } finally {

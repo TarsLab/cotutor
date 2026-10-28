@@ -1,5 +1,5 @@
 /**
- * 实时老师的一次通话(《实时老师设计.md》):孩子端的 WebSocket ↔ 嘴(百炼 realtime,手动轮次)+ 脑(老师 CLI,Runner)。
+ * 实时老师的一次通话:孩子端的 WebSocket ↔ 嘴(百炼 realtime,手动轮次)+ 脑(老师 CLI,Runner)。
  * 一轮:孩子按住说 → 松手(嘴不接话,拍照才先说一句「我看一看图片」,lib/cue.ts)→ 孩子那句的转写交给脑(实时轮:讲稿不配音)→ 脑的讲稿定稿一句交一句,
  * 嘴一空就把排着的几句一起交给它照念(lib/queue.ts,流水线:嘴出完上一段就交下一段,声音在孩子端接着排)→ 讲完就停。
  * 按句不按拍(2026-10-19):卡宁缺毋滥以后一节常常只有一拍、甚至没卡,按拍要等脑整段写完才念;卡只管自己闭合了就铺,和念哪句不挂钩。
@@ -11,7 +11,7 @@
  *   {t:'hush'} 停下不开新一轮(上滑取消):嘴在出就掐、孩子端清了、没念的丢掉
  *   {t:'send', body} 不是说的(打字、拍照、交卡、首页按钮;舞台开着带 focus.card):body 同那条 POST · {t:'view', w, h} 屏幕多大 · {t:'bye'}
  *   {t:'staged'} 讲稿 [[play]] 的小课堂那一段放完了(或放不了、被关):后面的讲稿接着交给嘴
- *   边画边聊(《画板设计.md》§四):画板开着时按头像说的,松手带 chat {canvas, image, ask}——只给嘴(图跟着声音进对话、嘴接住),不起脑;
+ *   边画边聊:画板开着时按头像说的,松手带 chat {canvas, image, ask}——只给嘴(图跟着声音进对话、嘴接住),不起脑;
  *   {t:'chat', canvas, image, ask} 孩子端觉得该说一句了(换了颜色、停笔很久,src/lib/canvas-chat.ts):安静时 0.5 秒静音 + 图交给嘴、嘴主动说一句,回 {t:'chat', canvas, said};不安静回 {t:'chat', canvas, skipped}。
  *   这张画上孩子说的、嘴说的记下来,交画那一轮(交画板卡 / 纸上的 drawing)带给脑(live.draw)
  * 这里 → 孩子端:二进制帧 = PCM16 24k 嘴的声音;文本帧 = JSON
@@ -22,17 +22,17 @@
  * 嘴的会话断了(百炼 300 秒没输入就关,2026-10-20 照 Qwen-Live-Harness 的换连接):电话不挂、孩子端不知道;下次按下或发来时现连,
  *   连上之前来的照序攒着补(录像里记一条 {t:'lost'},只记不发)。平时孩子没按着就 30 秒一次心跳,最后一次动静 15 分钟后停跳。
  * 换连接:嘴的历史越长每次回答越贵,输入过了 SWAP_TOKENS 就在安静时换一条新的(录像里记 {t:'swap'},只记不发)。
- * 一直听(《一直听设计.md》;孩子端只在口语课、或 live.listen 是 open 时连接带 ?listen=open,中途发 {t:'listen', open} 也能换):孩子端一直推声音(卡的声音、录音、小课堂、关麦时不推,{t:'gate', on} 告诉这里),
+ * 一直听(孩子端只在口语课、或 live.listen 是 open 时连接带 ?listen=open,中途发 {t:'listen', open} 也能换):孩子端一直推声音(卡的声音、录音、小课堂、关麦时不推,{t:'gate', on} 告诉这里),
  *   嘴的会话开 VAD(live.vad 缺省 server_vad、live.silenceMs),create_response / interrupt_response 关着:开口(speech_started)先暂停照念、嘴在放就让孩子端压低({t:'duck'}),
  *   转写回来 lib/listen.ts 判收下 / 放过——收下才算按下 + 松手(打断、接住、交给脑;交给脑之前孩子停一下又开口的并成一句),放过的恢复音量接着念({t:'skip', why} / {t:'unduck'})。
  *   孩子那一句的上下文(话题、设备、舞台上的卡)孩子端开口时报一次 {t:'ctx', body}。换模式 = 安静时换一条连接(silence 只有新连接能给)。
  *   commit 了不回答 300 秒百炼就关(response_idle_timeout,探针 probe-live-vad):放过的多了,离上次回答 IDLE_SWAP_MS 就在安静时换连接。
- * 口语课(《口语课实时设计.md》§三):先热身、再打电话。热身是脑一轮写完的跟读,讲稿的 [[echo 词]] / [[say 词]] 那句念完关闸(lib/queue.ts),
+ * 口语课:先热身、再打电话。热身是脑一轮写完的跟读,讲稿的 [[echo 词]] / [[say 词]] 那句念完关闸(lib/queue.ts),
  *   孩子说完(像跟读,lib/warm.ts)开闸下一拍,不接住、不交脑;对老师说的照收下办(打断、接住、交脑);ECHO_WAIT_MS 没开口接着走,连着两拍没开口停下交脑(app: quiet)。
  *   每拍记进摸底(录像 {t:'echo'},只记不发),交脑时带上(live.warmup)。[[call]] 那句念完孩子端响铃,这里马上交脑一轮(app: call,不接住),
  *   之后的接住换英文(cue.ts 的 CATCH_EN),交脑带打电话几分钟(live.phone)。孩子端连上发来的第一条带 talk(口语单)时嘴先说「好,我们先热热身!」。
  * 录像:进出的消息、两边的声音都记(CallRecorder),挂了落在 conversations/<老师>/<日期>.live/<时分秒>.reel.json / .wav。
- * 字幕重放(《实时老师设计.md》拍板 21):嘴照念的声音按轮另留一份,出了的都留(孩子按下时清掉、没放出来的也在),
+ * 字幕重放:嘴照念的声音按轮另留一份,出了的都留(孩子按下时清掉、没放出来的也在),
  *   一段出完(或被掐、断了)就落 <日期>.<job>.mouth.wav 与每句的起点 .mouth.json(lib/mouth.ts);接住那句不在里面。孩子端从 /api/kid/conversations/<老师>/mouth/<日期>/<job> 取。
  * 事件:嘴这一道(mouth:按下、松手 / 发了、接住开始放、第几句开始放、打断)补进那一轮的 events.jsonl(Runner.noteEvent),工作台的时间线上看;
  * 按下、松手、接住在脑起来之前,先攒着,等那一轮的老师进程起来(main:start)再按它的起点换成相对毫秒(负的)。
@@ -64,7 +64,7 @@ import { adoptPaper } from '../server/paper.ts';
 export interface LiveDeps {
   ctx: AppContext;
   tutor: string;
-  /** 哪一台设备(升级请求里的设备 cookie,《孩子端流水设计.md》§二):孩子发的每一条记上 */
+  /** 哪一台设备(升级请求里的设备 cookie):孩子发的每一条记上 */
   deviceId?: string | null;
   /** 测试:realtime 的端点与环境 */
   endpoint?: string;
@@ -404,7 +404,7 @@ export class LiveCall {
   }
 
   /**
-   * 换连接(《实时老师设计.md》):嘴的输入每次回答都带着整条连接的历史,一轮约多 230 token(2026-10-20 真连 15 轮:843 涨到 5468,
+   * 换连接:嘴的输入每次回答都带着整条连接的历史,一轮约多 230 token(2026-10-20 真连 15 轮:843 涨到 5468,
    * 首包不变,只是钱);嘴每次都给词、不靠前情,安静时开一条新的换上就行,不用摘要。开的时候孩子动了就作废这次。
    */
   private maybeSwap(): void {
@@ -611,7 +611,7 @@ export class LiveCall {
         if (!this.session || !this.holding) return;
         this.holding = false;
         const body = isObj(m.body) ? m.body : {};
-        // 边画边聊(《画板设计.md》拍板 2、6):画板开着时按头像说的只给嘴;图跟着这段声音进对话,嘴接住,不起脑
+        // 边画边聊:画板开着时按头像说的只给嘴;图跟着这段声音进对话,嘴接住,不起脑
         const chat = isObj(m.chat) && typeof m.chat.canvas === 'string' && m.chat.canvas ? m.chat : null;
         if (chat && !this.echoing && !this.mouthOpen) { this.chatRelease(chat); break; }
         this.pre.push({ at, ev: { lane: 'mouth', kind: 'release', how: 'voice' } });
@@ -646,7 +646,7 @@ export class LiveCall {
       case 'send': {
         if (!this.session || !isObj(m.body)) return;
         const body = m.body;
-        // 纸上交的画同交卡:嘴不先说(《画板设计.md》拍板 8)
+        // 纸上交的画同交卡:嘴不先说
         const kind: CatchKind = body.action === 'submit' || isObj(body.drawing) ? 'card' : Array.isArray(body.photos) && body.photos.length ? 'photo' : isObj(body.talk) ? 'warm' : isObj(body.via) ? 'start' : 'text';
         this.interrupt();
         this.pre = [{ at, ev: { lane: 'mouth', kind: 'release', how: kind === 'card' || kind === 'photo' ? kind : 'text' } }];
@@ -1124,7 +1124,7 @@ const withoutImages = (m: Record<string, unknown>): Record<string, unknown> => {
   if (isObj(m.chat) && typeof m.chat.image === 'string') return { ...m, chat: { ...m.chat, image: true } };
   return m;
 };
-/** 孩子端交来的 ask(《画板设计.md》§四):只留认得的字段 */
+/** 孩子端交来的 ask:只留认得的字段 */
 const askOf = (v: unknown): ChatAsk => {
   if (!isObj(v)) return {};
   const colors = Array.isArray(v.colors) ? v.colors.filter((c): c is { name: string; strokes: number; where: string } => isObj(c) && typeof c.name === 'string' && typeof c.strokes === 'number' && typeof c.where === 'string').slice(0, 6) : undefined;

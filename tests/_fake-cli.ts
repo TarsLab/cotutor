@@ -147,7 +147,7 @@ if (fail) {
   if (msg.includes('直接打电话')) parts.push('好,那我们现在就打电话! [[call]]');
   if (msg.includes('(打电话)')) parts.push('Hello Ray! Where are the ducks?');
   if (msg.includes('整段')) parts.push('```read\n小熊种西瓜。\n小猴睡大觉。\n西瓜熟了。\n```\n\n你看着连起来说一遍?');
-  // 含「节头」:板书前先一张只有一行 # 标题的文字卡(实时的节头,设想稿拍板 20)
+  // 含「节头」:板书前先一张只有一行 # 标题的文字卡(实时的节头)
   if (msg.includes('节头')) parts.push('```text\n# 认识三角形\n```');
   if (msg.includes('板书')) parts.push('```text\n# 三角形\n拼一拼\n```\n\n先看[三角形]。\n\n```choice\n三角形有几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n三角形有几个角?' + (msg.includes('坏卡') ? '\n\n```choice\n没选项\n```' : '') + (msg.includes('点读') ? '\n\n```read\napple 苹果\nbanana 香蕉\n```\n\n点一下听一下。' : '') + (msg.includes('图片') ? '\n\n```image\nvault/pic.png\n看这张图\n```' : ''));
   // 作业照片(R5):上下文包有 photos: 段就「看图」——回显看到了哪张,板书 image 卡引用原图、canvas 卡照片做底

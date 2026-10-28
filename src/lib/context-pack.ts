@@ -1,5 +1,5 @@
 /**
- * 上下文包序列化(《cotutor契约草案.md》§2):固定 YAML 块 + 老师守则原文(<cotutor-rules>)、家长笔记原文段(<vault-note>)+ `---` + 消息原文。
+ * 上下文包序列化:固定 YAML 块 + 老师守则原文(<cotutor-rules>)、家长笔记原文段(<vault-note>)+ `---` + 消息原文。
  * 手写 YAML 子集:标量能裸写就裸写,其余 JSON 双引号(合法 YAML);空的 plan / recent 不写。
  */
 import { ContextPackSchema, VAULT_PACK_ROLES, type ContextPack } from '../schema/index.ts';
@@ -104,7 +104,7 @@ export function renderContextPack(pack: ContextPack): string {
     out.push('  photoFiles:');
     for (const c of p.photoFiles) out.push(`    - ${yamlScalar(c)}`);
   }
-  // activity 放最后、键序固定:剩几张这种每条会变的,离孩子的话最近(《activity设计.md》拍板 5)
+  // activity 放最后、键序固定:剩几张这种每条会变的,离孩子的话最近
   if (p.activity) {
     const a = p.activity;
     out.push('  activity:', `    name: ${yamlScalar(a.name)}`);

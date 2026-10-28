@@ -62,7 +62,7 @@ export const SNAP_CSS = `
   .pg.talk { width:72px; height:56px; }
   .pg.talk i { font-size:28px; font-weight:700; font-family:"Chalkboard SE","Comic Sans MS","Marker Felt",sans-serif; color:var(--sc); border:1.5px solid color-mix(in srgb, var(--sc) 40%, #fff); border-radius:18px 18px 18px 5px; background:#fff; }
   .pg .cam { position:absolute; right:-11px; bottom:-10px; width:32px; height:32px; border-radius:50%; background:var(--sc); color:#fff; display:grid; place-items:center; box-shadow:0 0 0 2px var(--paper); }
-  /* 今天没写完的拍照听写(拍板 17):拍照屏最上面一块,点了接着写 */
+  /* 今天没写完的拍照听写:拍照屏最上面一块,点了接着写 */
   .resume { display:flex; align-items:center; gap:24px; padding:12px 12px 12px 26px; background:#fff; border:1px solid var(--line); border-radius:32px; text-align:left; box-shadow:0 2px 10px #00000010; }
   .resume b { display:block; font-size:20px; } .resume small { display:block; color:var(--dim); font-size:15px; }
   @media (max-height:600px) { .snap { gap:14px; } .snap-av, .snap-av .tfav { width:84px; height:84px; font-size:40px; } }

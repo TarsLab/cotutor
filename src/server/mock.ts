@@ -8,7 +8,7 @@
  * 场景:normal(缺省)/ nokey(没配百炼,孩子端只出「老师们还没到」)。
  * 首页是一份写死的「已发布」(mockHomeMd,过真解析器与真排法):语文老师有开场与接着昨天的按钮,数学老师有开场,英语老师没写(补一张);
  * 发消息带 via 时照真服务的规则换成按钮上的字、定话题。
- * 老师都走实时老师页(《产品规划.md》拍板 30),那条 WebSocket 是 mock-live.ts 的假嘴(照脚本「念」静音的声音,不花钱)。
+ * 老师都走实时老师页,那条 WebSocket 是 mock-live.ts 的假嘴(照脚本「念」静音的声音,不花钱)。
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
@@ -36,7 +36,7 @@ import { CanvasStateSchema } from '../cards/canvas.ts';
 // 回给页面的形状直接用真服务的(app.ts):真接口加字段、改字段,这里不跟就红(2026-10-17;以前 mock 自己拼对象,motto 这种真服务没有的字段只在 mock 下显示)
 import type { KidDay, KidHistory, KidHome, KidTutor, Overview, OverviewThread, OverviewTutor } from './app.ts';
 
-/** 看完小课堂的第一问,mock 老师这样答:对着画的地方说,放课里拆开那一捆的那一段(《小课堂设计.md》§六);视频的放轮着分那一段 */
+/** 看完小课堂的第一问,mock 老师这样答:对着画的地方说,放课里拆开那一捆的那一段;视频的放轮着分那一段 */
 const MOCK_VIDEO_LECTURE_REPLY = [
   '你画的是轮着分的那一下。',
   '',
@@ -218,7 +218,7 @@ gǔ lì
 鼓是敲鼓的鼓,励是[努力]的力多一个厂字头,一个人在厂下面使劲。
 
 你想再看一遍哪个字?点一下它就再写一遍。`,
-      // 你说我画(《你说我画设计.md》):出题版的画图卡;mock 不真画,刚出来几秒是「画家在画」,之后给一张占位的四格
+      // 你说我画:出题版的画图卡;mock 不真画,刚出来几秒是「画家在画」,之后给一张占位的四格
       `你说得清清楚楚,四个词都放好了。
 
 ~~~read
@@ -405,7 +405,7 @@ interface MockMessage {
   lectureLog?: { t: number; pos: number; play: boolean }[];
   /** 实时的一轮(mock 的假嘴发的) */
   live?: true;
-  /** 孩子从左栏的纸交的画(《画板设计.md》§三;摘要按 mock 内存里那张纸算) */
+  /** 孩子从左栏的纸交的画(摘要按 mock 内存里那张纸算) */
   drawing?: ConversationMessage['drawing'];
 }
 
@@ -527,7 +527,7 @@ export function createMock(opts: MockOptions = {}): Mock {
   const yesterday = (): string => localDate(new Date(now().getTime() - 86400000));
   const title = opts.title ?? '小明的老师们';
   const messages = new Map<string, MockMessage[]>();
-  /** 左栏的纸(《画板设计.md》§三):老师|话题 → 那张纸;不落盘 */
+  /** 左栏的纸:老师|话题 → 那张纸;不落盘 */
   const papers = new Map<string, PaperState>();
   /** 孩子端传上来的图(照片、纸上交的画、清空前那几版):路径 → 字节,看大图、画卡缩略图给真图;别的路径照旧占位 */
   const uploads = new Map<string, { type: string; data: Buffer }>();
@@ -693,7 +693,7 @@ export function createMock(opts: MockOptions = {}): Mock {
     if (p === '/dev/qr') return mock.listen ? { status: 200, html: qrPage(title, mock.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(title), contentType: 'application/manifest+json; charset=utf-8' };
-    // 家长端(《家长板书页设计.md》):同一个页面,家长模式;清单与一天的板书(答案不剥,第一节带一条给家长的尾巴与记忆,看旁注的样子)。mock 没有工作台 /dev
+    // 家长端:同一个页面,家长模式;清单与一天的板书(答案不剥,第一节带一条给家长的尾巴与记忆,看旁注的样子)。mock 没有工作台 /dev
     if (p === '/parent') return { status: 200, html: kidPage(title, { parent: true, synth: true }, await stageVersion()) };
     if (p === '/reel') return { status: 200, html: kidPage(title, { reel: true, synth: true }, await stageVersion()) };
     if (p === '/preview') return { status: 200, html: kidPage(title, { preview: true, synth: true }, await stageVersion()) };
@@ -734,7 +734,7 @@ export function createMock(opts: MockOptions = {}): Mock {
           if (m.pending) th.stoppedAt = 'writing';
           else if (m.section && (m.section.cards.length || m.section.lines.length)) { th.sections++; th.cards += m.section.cards.length; th.stoppedAt = m.section.lines[m.section.lines.length - 1]?.ask ? 'ask' : null; }
         }
-        // 按住说话连着没发出去(拍板 10):攒着的实录里的 hold;mock 的消息没有真时刻,发成的一句只认打字发出去的
+        // 按住说话连着没发出去:攒着的实录里的 hold;mock 的消息没有真时刻,发成的一句只认打字发出去的
         if (date === today) for (const th of by.values()) {
           const plays = (mockPlays[t.name] ?? []).filter((x) => x.thread === th.thread).map((x) => x.rec);
           const n = Math.max(0, ...reelMissRuns(reelHolds(plays), plays.filter((r) => r.k === 'type' && r.e === 'send').map((r) => r.at)).map((x) => x.n));
@@ -764,7 +764,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const pending = list.find((m) => m.pending);
       return { status: 200, json: { tutor: name, date, messages: out, pending: pending ? pending.job : null, thread: list.length ? list[list.length - 1].thread : null } };
     }
-    // 看录像(《家长录像设计.md》):mock 的消息没有真时刻(种子全是同一刻),照一个固定节奏排——
+    // 看录像:mock 的消息没有真时刻(种子全是同一刻),照一个固定节奏排——
     // 等老师 3 秒(第二轮 14 秒,看「等老师」的压缩)、念完孩子想 8 秒(第一轮 40 秒,看「孩子想了」);卡的状态算在下一轮开口前 5 秒
     /** 看小课堂的那条:录像要它的看的过程(mock 的家长端条目带着 lecture 与 lectureLog) */
     const lectureOfMock = (m: Record<string, unknown>): { lecture?: NonNullable<ConversationMessage['lecture']> } => {
@@ -1004,7 +1004,7 @@ export function createMock(opts: MockOptions = {}): Mock {
       const f = await bundleAsset(MOCK_BUNDLES_DIR, p);
       return f ? { status: 200, file: f.file, contentType: f.contentType } : { status: 404, json: { error: 'not_found' } };
     }
-    // 字幕重放(《实时老师设计.md》拍板 21):真服务端给 src/live/call.ts 落的那份嘴的声音;mock 没有嘴,每句按字数估多长、放一段静音
+    // 字幕重放:真服务端给 src/live/call.ts 落的那份嘴的声音;mock 没有嘴,每句按字数估多长、放一段静音
     const mouth = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/mouth\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d+)$/.exec(p);
     if (mouth && method === 'GET') {
       const day = (await route('GET', `/api/kid/conversations/${mouth[1]}/today`)).json as KidDay | undefined;

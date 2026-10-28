@@ -100,7 +100,7 @@ const okRun = (result: string): ReturnType<typeof parseTranscript> =>
   check('分组:两个话题(系统起的没孩子问 → 不列),名字截 20 字,节数与卡数,pending 不算节', list.length === 2 && list[0].thread === '1' && list[0].title === '这道题怎么做我完全不懂啊老师请你讲讲好不' && list[0].title.length === 20 && list[0].sections === 2 && list[0].cards === 5 && list[1].thread === '4' && list[1].sections === 0, JSON.stringify(list));
 }
 
-// 家长板书页的条目(《家长板书页设计.md》§4.2):和 kidConversation 对同一份索引,差集恰好是那几个字段与「答案不剥」
+// 家长板书页的条目:和 kidConversation 对同一份索引,差集恰好是那几个字段与「答案不剥」
 {
   const board = parseBoard('开场。\n\n```choice\n酒是谁的?\n- [x] 他自己的\n- [ ] 平分\n```\n\n酒是谁的?').section;
   const base = { at: '2026-09-14T16:20', artifacts: [] as string[] };

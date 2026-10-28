@@ -1,6 +1,6 @@
 /**
- * 对话索引:一老师一天一份(《cotutor契约草案.md》§3)。每条消息 = 一次 -p 运行 = 一份 NDJSON 转录;
- * 索引里的 kidText / artifacts 是孩子视图的物化结果,孩子端不解析日志。跨天自动新开(2026-09-08 拍板)。
+ * 对话索引:一老师一天一份。每条消息 = 一次 -p 运行 = 一份 NDJSON 转录;
+ * 索引里的 kidText / artifacts 是孩子视图的物化结果,孩子端不解析日志。跨天自动新开。
  */
 import { z } from 'zod';
 import { FocusSchema, MESSAGE_FROM } from './context-pack.ts';
@@ -10,7 +10,7 @@ import { MessageViaSchema } from './home.ts';
 import { ActivityRunSchema } from './activity.ts';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-/** 孩子端设备的编号(《孩子端流水设计.md》§二):服务端种的 cookie,随机 12 位十六进制 */
+/** 孩子端设备的编号:服务端种的 cookie,随机 12 位十六进制 */
 export const DEVICE_ID_RE = /^[0-9a-f]{12}$/;
 
 export const TimingSchema = z.object({
@@ -20,7 +20,7 @@ export const TimingSchema = z.object({
   warm: z.literal(true).optional(),
   /** 流式时第一张卡闭合(孩子端第一次看到东西);整块出的运行时没有 */
   firstCardMs: z.number().int().nonnegative().optional(),
-  /** 首句就绪:嘴能开口的那一刻(头号埋点),第一拍关了就算(讲稿不配音,《产品规划.md》拍板 30) */
+  /** 首句就绪:嘴能开口的那一刻(头号埋点),第一拍关了就算(讲稿不配音) */
   firstReadyMs: z.number().int().nonnegative().optional(),
   /** 老师进程退出 */
   doneMs: z.number().int().nonnegative().optional(),
@@ -35,7 +35,7 @@ export type Session = z.infer<typeof SessionSchema>;
 const MessageObjectSchema = z.object({
   /** 一轮的 id(job),也是转录文件名的一段:<date>.<job>.log */
   job: z.string().min(1),
-  /** 话题 id = 话题第一条消息的 job(2026-09-11 拍板:一个话题 = 一段连续问答 = 老师的一个会话;一天可多个)。旧索引没有:读时按 threadOf 现算 */
+  /** 话题 id = 话题第一条消息的 job(一个话题 = 一段连续问答 = 老师的一个会话;一天可多个)。旧索引没有:读时按 threadOf 现算 */
   thread: z.string().optional(),
   at: z.string().min(1),
   /** 谁发的:孩子(孩子端、工作台、cotutor send 都算)或应用派的任务 */
@@ -50,7 +50,7 @@ const MessageObjectSchema = z.object({
   result: z.enum(['running', 'ok', 'error']).default('running'),
   /** 这一轮花了多少(美元)。claude 接着会话跑(--resume)报的是整个会话的累计,这里记的是减掉同一话题上一轮的累计之后的 */
   costUsd: z.number().optional(),
-  /** 运行时不报钱数时(qwen,《agent层设计.md》§6)这一轮的 token:输入(含缓存读)与输出;报钱数的运行时不记 */
+  /** 运行时不报钱数时(qwen)这一轮的 token:输入(含缓存读)与输出;报钱数的运行时不记 */
   tokens: z.object({ in: z.number().int().nonnegative(), out: z.number().int().nonnegative() }).optional(),
   /** 运行时报的花费原数(新版 claude 续会话时是累计)与那时的累计输出 token;下一轮拿它们判断、算自己花了多少。没有 = 老数据 */
   sessionUsd: z.number().optional(),
@@ -83,7 +83,7 @@ const MessageObjectSchema = z.object({
   timing: TimingSchema.optional(),
   /** 发这条时孩子端是什么端(缺省当平板横屏) */
   device: DeviceSchema.optional(),
-  /** 哪一台设备(《孩子端流水设计.md》§二):服务端种的 cookie 编号;工作台、cotutor send 发的没有 */
+  /** 哪一台设备:服务端种的 cookie 编号;工作台、cotutor send 发的没有 */
   deviceId: z.string().regex(DEVICE_ID_RE).optional(),
   /** 这轮是给某个话题记账的任务(from: system,resume 那个话题的会话);跑完老师回的「## 记账」段经应用落进日记 */
   bookkeep: z.object({ thread: z.string().min(1) }).optional(),
@@ -97,10 +97,10 @@ const MessageObjectSchema = z.object({
   replayOf: z.string().min(1).optional(),
   /** 这条是 cotutor activity eval 跑的(落在 evals/,模拟孩子):同回放,不写记忆、不预热 */
   eval: z.literal(true).optional(),
-  /** 这一轮走实时(《实时老师设计.md》):讲稿没配音,由 realtime 模型(嘴)照念;孩子端放的是嘴的声音,以前的话题里这几句不出声 */
+  /** 这一轮走实时:讲稿没配音,由 realtime 模型(嘴)照念;孩子端放的是嘴的声音,以前的话题里这几句不出声 */
   live: z.literal(true).optional(),
   /**
-   * 这条是孩子看完小课堂后的第一条(《小课堂设计.md》§七):哪份课包、课名、看了多久、看完没、停过几次、画过的几处;节前的小课堂卡与画的卡从这里画。
+   * 这条是孩子看完小课堂后的第一条:哪份课包、课名、看了多久、看完没、停过几次、画过的几处;节前的小课堂卡与画的卡从这里画。
    * again = 问过以后「再看一遍」又画了,这条只为带上新画的(节前只画画的卡)。一处画:时刻、SVG 停在哪(缩略图)、几笔(课包坐标)、给老师的那段话、截图
    */
   lecture: z
@@ -116,14 +116,14 @@ const MessageObjectSchema = z.object({
       /** 一处 = 停在同一刻画的几笔;截图在 captures/ 里(画面叠上那几笔;路径相对 workspace 根)。2026-10-19 以前一笔一处(path),读成一笔的 strokes */
       marks: z.array(z.object({ atMs: z.number().nonnegative(), svgMs: z.number().nonnegative(), strokes: z.array(z.array(z.tuple([z.number(), z.number()]))), text: z.string().optional(), image: z.string().optional(), t: z.number().optional() })).optional(),
       /**
-       * 看的过程(录像用,《小课堂设计.md》§八第 5 步):放 / 停 / 拖到哪 / 放完,一次一条。t = 离这条消息发出去多少毫秒(≤ 0,孩子端自己的钟算,
+       * 看的过程(录像用第 5 步):放 / 停 / 拖到哪 / 放完,一次一条。t = 离这条消息发出去多少毫秒(≤ 0,孩子端自己的钟算,
        * 不用对钟);pos = 那时停在课里的哪一刻;play = 那之后在放。画的 t 同理(这一处第一笔画下去的那一刻)
        */
       log: z.array(z.object({ t: z.number(), pos: z.number().nonnegative(), play: z.boolean() })).optional(),
     })
     .optional(),
   /**
-   * 孩子从左栏的纸「给老师看」交的画(《画板设计.md》§三):图在 captures/(相对 workspace 根)、几笔、各颜色几笔(「黑 12、红 40」)、
+   * 孩子从左栏的纸「给老师看」交的画:图在 captures/(相对 workspace 根)、几笔、各颜色几笔(「黑 12、红 40」)、
    * 画了多久(第一笔到最后一笔,算上清空前那几版)、清空前存的那几版的图。板上节前一张孩子的画卡从这里画;图和清掉的那几版进上下文包 photos 给老师 Read
    */
   drawing: z
@@ -135,11 +135,11 @@ const MessageObjectSchema = z.object({
       cleared: z.array(z.string().min(1)).optional(),
     })
     .optional(),
-  /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2);开场按钮的 text 就是按钮上的字,不是孩子说的 */
+  /** 孩子从首页哪个按钮进来的;开场按钮的 text 就是按钮上的字,不是孩子说的 */
   via: MessageViaSchema.optional(),
-  /** 这个话题是从哪个 activity 起的(只记在话题第一条;《activity设计.md》):名字与点的那一刻的参数,话题后面每条都照它带 */
+  /** 这个话题是从哪个 activity 起的(只记在话题第一条):名字与点的那一刻的参数,话题后面每条都照它带 */
   activity: ActivityRunSchema.optional(),
-  /** 口语课页的哪份口语单起的这个话题(talk/<id>/;《口语课实时设计.md》§六 4,只记在话题第一条) */
+  /** 口语课页的哪份口语单起的这个话题(talk/<id>/ 4,只记在话题第一条) */
   talk: z.string().optional(),
   /** 这个话题接着以前哪天的哪个话题(首页的「接着」按钮;新会话,上下文包带那个话题的尾巴) */
   continues: z.object({ date: z.string().regex(DATE_RE), thread: z.string().min(1) }).optional(),
@@ -153,7 +153,7 @@ export const ConversationIndexSchema = z.object({
   date: z.string().regex(DATE_RE),
   /** 当前话题(末条消息所在)的会话;首条消息跑完后写入。每个话题自己的会话在 sessions 里,这里只是最新那条(旧索引只有它) */
   session: SessionSchema.nullable().default(null),
-  /** 话题 id → 那个话题的会话;今天的旧话题接着聊就 resume 它(2026-09-11 拍板) */
+  /** 话题 id → 那个话题的会话;今天的旧话题接着聊就 resume 它 */
   sessions: z.record(z.string(), SessionSchema).default({}),
   messages: z.array(ConversationMessageSchema).default([]),
   costUsd: z.number().default(0),

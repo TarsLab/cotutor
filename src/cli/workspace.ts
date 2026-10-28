@@ -1,5 +1,5 @@
 /**
- * workspace解析:一孩一 workspace(`~/cotutor/<slug>/`,2026-09-08 拍板)。
+ * workspace解析:一孩一 workspace(`~/cotutor/<slug>/`)。
  * 解析链(定根):`--workspace <dir>` → 环境变量 COTUTOR_WORKSPACE → cwd 或其祖先有 cotutor.json
  * (老师的 cwd 是 <ws>/agents/<name>/,从那里跑 doctor 也要找得到根)→ 用户配置
  * ~/.config/cotutor/config.json 的 workspace → ~/cotutor/ 下**唯一**的一个孩子目录 → 都没有就报错附修复指南。
@@ -33,7 +33,7 @@ export class ConfigError extends UsageError {
 
 export const CONFIG_FILE = 'cotutor.json';
 export const USER_CONFIG = join(homedir(), '.config', 'cotutor', 'config.json');
-/** 机器级自签证书目录(cotutor cert 写 cert.pem + key.pem):证书签的是本机名与局域网 IP,与孩子无关,所以不在 workspace 里(2026-09-09 拍板) */
+/** 机器级自签证书目录(cotutor cert 写 cert.pem + key.pem):证书签的是本机名与局域网 IP,与孩子无关,所以不在 workspace 里 */
 export const USER_CERT_DIR = join(homedir(), '.config', 'cotutor', 'certs');
 export const HOME_ROOT = join(homedir(), 'cotutor');
 
@@ -170,9 +170,9 @@ export interface Workspace {
     claudeAgents: string;
     /** 课包(drawtell build 的产物,小课堂与 lecture 卡从这里放;派生物,gitignore) */
     bundles: string;
-    /** 首页(《首页设计.md》):草稿、已发布、历史;publish 时才建,不进骨架 */
+    /** 首页:草稿、已发布、历史;publish 时才建,不进骨架 */
     home: string;
-    /** 视频小课堂(《小课堂设计.md》§八第 4 步):lectures/<id>/lecture.md + video.mp4;家长在编程助手里做,不进骨架 */
+    /** 视频小课堂(第 4 步):lectures/<id>/lecture.md + video.mp4;家长在编程助手里做,不进骨架 */
     lectures: string;
   };
   files: {

@@ -1,6 +1,6 @@
 /**
- * 板书底纹(src/server/board-mark.ts,《产品规划.md》拍板 27):三门主科照课本封面在板右边竖写学科名,别的老师不写字;
- * 字是烤好的轮廓(board-mark-art.ts,scripts/bake-board-marks.py);板不铺纸纹(拍板 28);老师页三处换老师都跟着换字,首页数据带 mark。
+ * 板书底纹(src/server/board-mark.ts):三门主科照课本封面在板右边竖写学科名,别的老师不写字;
+ * 字是烤好的轮廓(board-mark-art.ts,scripts/bake-board-marks.py);板不铺纸纹;老师页三处换老师都跟着换字,首页数据带 mark。
  */
 import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -65,7 +65,7 @@ const ctx = createContext(loadWorkspace(root));
 const page = await route('GET', '/', ctx);
 const html = typeof page.html === 'string' ? page.html : '';
 check('老师页有垫底的 #bmark', html.includes('<div id="bmark" hidden></div>'));
-check('板不铺纸纹(拍板 28):平的纸色,没有 SVG 噪声', !html.includes('feTurbulence') && !html.includes('--paper-tex'));
+check('板不铺纸纹:平的纸色,没有 SVG 噪声', !html.includes('feTurbulence') && !html.includes('--paper-tex'));
 check('换老师的三处都跟着换字(开老师、录像、家长开录像)', (html.match(/markBoard\(\$\('#bmark'\), /g) ?? []).length === 3, String((html.match(/markBoard\(\$\('#bmark'\), /g) ?? []).length));
 check('左撇子横屏字挪到左边', html.includes('body.live.hand-left #bmark svg'));
 const kh = (await route('GET', '/api/kid/home', ctx)).json as { tutors: { name: string; mark: string | null }[] };

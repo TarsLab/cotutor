@@ -40,7 +40,7 @@ for (const f of fixtures) {
   check('没有 warning', r.warnings.length === 0, r.warnings.map((w) => w.text).join());
 }
 {
-  // 热身的记号(《口语课实时设计.md》§三之四):不是卡的动作,记在句子上;不锚卡也认
+  // 热身的记号:不是卡的动作,记在句子上;不锚卡也认
   const r = parseBoard('好,我们先热热身!\n\n```word\n🦆 duck\nd-u-ck\n```\n\n我说一个英文,你学一个。我先来:duck! [[echo duck]]\n\n小声一点,像小老鼠:duck… [[echo]]\n\n你先说:鸭子,英文怎么说? [[say duck]]\n\n热身好啦!老师给你打个电话。 [[call]]\n');
   const { lines, cards } = r.section;
   check('[[echo 词]] → 句子的 echo,不进 cues,句子里不留痕', lines[1].echo?.word === 'duck' && !lines[1].echo?.say && lines[1].cues.length === 0 && lines[1].text === '我说一个英文,你学一个。我先来:duck!', JSON.stringify(lines[1]));
@@ -145,7 +145,7 @@ for (const f of fixtures) {
   check('提问卡:有拍给我看卡 → 不补;卡解析成 photo', snap.section.cards.length === 1 && snap.section.cards[0].kind === 'photo' && snap.section.cards[0].props.text === '看图说话的那幅图' && snap.warnings.length === 0, JSON.stringify(snap.section.cards));
   const snapFirst = parseBoard('```photo\n写好的那一页\n```\n\n```text\n写一句\n```\n\n写好了拍给我看,好吗?\n');
   check('提问卡:拍给我看卡不在最后、末句锚着文字卡 → 也不补', snapFirst.section.cards.length === 2, JSON.stringify(snapFirst.section.cards));
-  // 实时的一轮(《实时老师设计.md》拍板 20):板上放什么由脑定,末句问话不补成提问卡;只有一行 # 标题的文字卡是节头,解析成 heading
+  // 实时的一轮:板上放什么由脑定,末句问话不补成提问卡;只有一行 # 标题的文字卡是节头,解析成 heading
   const live = parseBoard('```text\n# 补读音:瀑、布、穷、尽\n```\n\n先看「瀑」。\n你读读看,「瀑」怎么念?\n', { live: true });
   check('实时:末句问句不补提问卡', live.section.cards.length === 1 && live.section.cards.every((c) => c.props.ask !== true) && live.section.lines[1].ask, JSON.stringify(live.section.cards));
   check('实时:节头是 heading 文字卡,标题照写', live.section.cards[0].kind === 'text' && live.section.cards[0].props.heading === true && live.section.cards[0].props.title === '补读音:瀑、布、穷、尽', JSON.stringify(live.section.cards[0]));
@@ -165,7 +165,7 @@ for (const f of fixtures) {
   check('答案行:没有空的算式照旧,不报', String(stripSecrets(math.section).cards[0].props.text).includes('= 12') && math.warnings.length === 0, JSON.stringify([math.section.cards[0], math.warnings]));
 }
 {
-  // 写成正文的工具调用(10-21 Ray 交画那轮,原文一字不差;《工作流程.md》拍板 21):板上不出、嘴不念,报一句;回复停在它上面 = 没写完
+  // 写成正文的工具调用(10-21 Ray 交画那轮,原文一字不差):板上不出、嘴不念,报一句;回复停在它上面 = 没写完
   const leak = '<tool_call>\n<function=Read>\n<parameter=file_path>\nconversations/chinese-tutor/2026-10-21.2059-10.cards/0.png\n</parameter>\n</function>\n</tool_call>';
   const r = parseBoard(leak, { live: true });
   check('工具调用:整块不进板书,报一句点名工具', r.section.lines.length === 0 && r.section.cards.length === 0 && r.warnings.length === 1 && r.warnings[0].text.includes('Read') && r.warnings[0].line === 0 && JSON.stringify(r.spans.toolCalls) === '[[0,6]]', JSON.stringify([r.section, r.warnings, r.spans]));

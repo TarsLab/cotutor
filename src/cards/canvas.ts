@@ -2,7 +2,7 @@
  * 画板卡:孩子在上面画。底图四种——课包 id(整幅终帧做底层)、行内小骨架 JSON、一张图(孩子拍的作业
  * captures/… 或别的 workspace 里的图片,R5:在自己的作业照片上圈错题、写答案)、空白 + 题目;
  * 舞台是舞台包里的 excalidraw 编辑器(底层锁定,孩子的笔打 customData.layer = 'ink');「给老师看」→ 导出 png 存 .cards/<n>.png,
- * 状态存 ink 元素;清空前那一版存一张图(《画板设计.md》拍板 9,cleared);describe 给笔数、各颜色几笔、画了多久、清空过几次与图的路径,
+ * 状态存 ink 元素;清空前那一版存一张图(cleared);describe 给笔数、各颜色几笔、画了多久、清空过几次与图的路径,
  * 老师 Read 看图(进上下文包时 runner 换成绝对路径、这轮带只读工具;看不了图就靠笔数)。
  */
 import { z } from 'zod';
@@ -26,7 +26,7 @@ export const CanvasStateSchema = z.object({
   ink: z.array(z.record(z.string(), z.unknown())).max(2000),
   /** 「给老师看」时导出的 png(相对 workspace 根,如 conversations/math-tutor/2026-09-10.1620-1.cards/2.png);服务端写,页面不填 */
   image: z.string().optional(),
-  /** 清空过的几版(《画板设计.md》拍板 9:清空前自动存一张图,脑和家长都看得到) */
+  /** 清空过的几版(清空前自动存一张图,脑和家长都看得到) */
   cleared: z.array(CanvasClearedSchema).max(50).optional(),
 });
 export type CanvasState = z.infer<typeof CanvasStateSchema>;

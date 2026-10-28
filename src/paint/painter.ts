@@ -1,7 +1,7 @@
 /**
- * 画图卡的画(《你说我画设计.md》§6):一轮跑完,板书里的 paint 卡在后台画,和配音同一个时机。
+ * 画图卡的画:一轮跑完,板书里的 paint 卡在后台画,和配音同一个时机。
  * 落在这张卡的资产目录 <日期>.<job>.cards/<n>/:paint.png 是图,paint.json 是记录(在画 / 画好了 / 没画成,拼好的提示词、模型、几秒、原因)。
- * 一天画几张不限(《产品规划.md》拍板 29);今天画了几张由工作台概览数(paintedToday)。
+ * 一天画几张不限;今天画了几张由工作台概览数(paintedToday)。
  * 一张一张排着画。孩子端没有错误:没画成就停在分幅那几句,原因只给家长看。
  */
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
@@ -94,7 +94,7 @@ export function startPaints(ws: Workspace, tutor: string, date: string, job: str
       const prompt = painter ? paintPromptFrom(painter.prompt, props) : paintPrompt(props);
       const model = cfg.model;
       if (opts.replay) { await writeRecord(rec, { state: 'none', at: at(), error: 'replay' }); continue; }
-      // activity「应用拦的」(《activity设计.md》4.1):没过就不画、不占张数,下一条告诉老师缺哪条;排在队里现查,同一轮第二张看得到第一张
+      // activity「应用拦的」:没过就不画、不占张数,下一条告诉老师缺哪条;排在队里现查,同一轮第二张看得到第一张
       const stop = opts.gate ? await opts.gate().catch(() => null) : null;
       if (stop) { await writeRecord(rec, { state: 'none', at: at(), error: `gate:${stop}`, prompt, model }); continue; }
       await writeRecord(rec, { state: 'drawing', at: at(), prompt, model, negative });
@@ -117,7 +117,7 @@ export function paintNote(r: PaintRecord | null): string {
   if (r.state === 'drawing') return `在画(${r.model})`;
   if (r.state === 'done') return `画好了:${r.model},${Math.round(r.ms / 1000)} 秒`;
   const e = r.error;
-  // daily: 是 10-21 前一天几张的上限(拍板 29 去掉了),旧记录照旧说得出来
+  // daily: 是 10-21 前一天几张的上限(去掉了),旧记录照旧说得出来
   const why = e.startsWith('daily:') ? `今天画了 ${e.slice(6).split('/')[0]} 张,到了当时一天的上限(现在不限了)`
     : e.startsWith('gate:') ? `应用拦下了,没交给画家(activity「应用拦的」:${e.slice(5)})`
     : e === 'replay' ? '回放不画'

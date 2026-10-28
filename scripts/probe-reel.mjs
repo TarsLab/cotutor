@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 看录像(《家长录像设计.md》,拍板 6:录像 = 孩子的屏幕 + 录像栏)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
+ * 看录像(录像 = 孩子的屏幕 + 录像栏)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock,孩子端再发一条「继续」(话题里两轮)→ Chrome 开 /parent,点语文老师的话题 → 顶上「看录像」→
  * 上半是 iframe 里的孩子端(/reel,按 iPad 横屏开、等比缩)、下半是录像栏;孩子屏幕上是孩子端的样子(孩子的话当节头、输入条在、没有旁注);
  * 一开始孩子刚开口:话挂在板尾、占位卡、录像栏写「等老师」;播着往前走(不是实时的轮写完整节铺上、不念);拖到头两节都在;拖回开头又空了;
@@ -65,10 +65,10 @@ try {
 
   await device(1180, 820, 1, false);
   await send('Page.navigate', { url: `${base}/parent` });
-  // 清单是一天的时间线(《家长板书页设计.md》拍板 22、35,最新的在上):语文老师最新那件的 .kid 开录像
+  // 清单是一天的时间线(最新的在上):语文老师最新那件的 .kid 开录像
   const ZH_EV = `[...document.querySelectorAll('.pev')].find((p) => (p.querySelector('.pv-who')?.textContent ?? '').includes('语文'))?.querySelector('.kid')`;
   await until(`Boolean(${ZH_EV})`);
-  // ---- 记录里点话题:就是录像,停在最后一帧(拍板 16) ----
+  // ---- 记录里点话题:就是录像,停在最后一帧 ----
   await evaluate(`${ZH_EV}.click()`);
   await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`);
   await until(`Boolean(document.querySelector('#rl-frame').contentWindow.cotutorReel)`, 40);
@@ -108,7 +108,7 @@ try {
   await until(`(() => { const d = document.querySelector('#rl-frame').contentDocument; return d.querySelectorAll('#board .sec .c:not(.pend)').length > 0; })()`, 60);
   const s1 = await evaluate(`({ v: Number(document.querySelector('#rl-seek').value), cap: document.querySelector('#rl-cap').textContent })`);
   const k1 = await kid(`({ secs: document.querySelectorAll('#board .sec').length, head: (document.querySelector('#board .sec .sh.said .ka-t') || {}).textContent || '', pend: document.querySelectorAll('#board > .sh.said.pend').length, shown: document.querySelectorAll('#board .sec .c:not(.pend)').length, now: document.querySelectorAll('#board .c.now').length, sub: document.querySelector('#sub-text').textContent })`);
-  // 不是实时的轮(mock 从接口发的):写完那一刻整节铺上、不念(《产品规划.md》拍板 30)
+  // 不是实时的轮(mock 从接口发的):写完那一刻整节铺上、不念
   ok('播着:进度往前走;第一节写完整节出来,节头是孩子的话(挂在板尾的那句收了);不念', s1.v > 0 && k1.secs === 1 && k1.head.length > 0 && k1.pend === 0 && k1.shown >= 1 && s1.cap !== '🔊 老师在念', JSON.stringify({ s1, k1 }));
   console.log('  ', await shot('reel-ipad.png'));
 
@@ -141,7 +141,7 @@ try {
   const c4 = await evaluate(`({ seps: document.querySelectorAll('#rl-chaps i').length, chap: document.querySelector('#rl-chap').textContent, hidden: document.querySelector('#rl-chap').hidden })`);
   ok('章:孩子每开口一次一轮,进度条上断开一处;跳到第二次开口时说明那行左边写「第 2 轮」', c4.seps === 1 && !c4.hidden && c4.chap === '第 2 轮', JSON.stringify(c4));
 
-  // ---- 录像栏收起 / 展开(拍板 15) ----
+  // ---- 录像栏收起 / 展开 ----
   const tall = await evaluate(`document.querySelector('#rl-screen').getBoundingClientRect().height`);
   await evaluate(`document.querySelector('#rl-fold').click()`);
   await sleep(300);
@@ -159,7 +159,7 @@ try {
   ok('手机宽度:孩子的屏幕缩进去(不超宽)、录像栏不撑出横向滚动', narrow.w <= narrow.vw && narrow.row && narrow.fr <= narrow.vw, JSON.stringify(narrow));
   console.log('  ', await shot('reel-phone.png'));
 
-  // ---- 录像里的弹窗(实录,§4.7):注入的实录——第一节念完 0.5 秒后打开选择题的弹窗,4 秒选 B、6 秒改 A、8 秒关上。关掉「跳过空白」按真实时间逐个时刻拖 ----
+  // ---- 录像里的弹窗(实录):注入的实录——第一节念完 0.5 秒后打开选择题的弹窗,4 秒选 B、6 秒改 A、8 秒关上。关掉「跳过空白」按真实时间逐个时刻拖 ----
   await device(1180, 820, 1, false);
   await evaluate(`document.querySelector('#rl-x').click()`);
   await until(`!document.body.classList.contains('reel') && !document.querySelector('#tutor').classList.contains('on')`);

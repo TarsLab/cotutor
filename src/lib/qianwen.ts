@@ -1,9 +1,9 @@
 /**
- * 千问的两套账(《wip/2026-10-13-token-plan调研.md》):千问 AI 平台的 Token Plan(`sk-sp-`,只认 token-plan 域名,按订阅 Credits 抵)
+ * 千问的两套账:千问 AI 平台的 Token Plan(`sk-sp-`,只认 token-plan 域名,按订阅 Credits 抵)
  * 与百炼按量(`sk-` / `sk-ws-`,dashscope 域名)。两把 key 互不通用。
  * 一条线调哪个模型:Token Plan 有这个模型、本机又有它的 key 就走 Token Plan,否则走按量(2026-10-13 定)。key 只进请求头与子进程环境。
  * - Token Plan 的 key:环境变量 QWENCLOUD_TOKEN_PLAN_API_KEY(Qwen Code 官方页用的名字);DASHSCOPE_API_KEY 里放的是 `sk-sp-` 也认作它。
- * - 按量的 key:先看家长在家长端配的(~/.config/cotutor/bailian.json,《产品规划.md》拍板 30),再看 DASHSCOPE_API_KEY(不是 `sk-sp-` 时),
+ * - 按量的 key:先看家长在家长端配的(~/.config/cotutor/bailian.json),再看 DASHSCOPE_API_KEY(不是 `sk-sp-` 时),
  *   再看本机 qwen(~/.qwen/settings.json 的 env)、voxtell(~/.config/voxtell/config.json)的配置。
  */
 import { readFileSync } from 'node:fs';

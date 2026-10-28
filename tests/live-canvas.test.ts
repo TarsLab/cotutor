@@ -1,5 +1,5 @@
 /**
- * 画板(《画板设计.md》)的服务端,假百炼(_fake-realtime.ts)+ 假老师(_fake-cli.ts --stream),不花钱:
+ * 画板的服务端,假百炼(_fake-realtime.ts)+ 假老师(_fake-cli.ts --stream),不花钱:
  * 纸的读写(key 是话题或 new;清掉那几版的图只认 captures/;from new 存到话题名下删掉 new 那张);
  * 边画边聊:画板开着时按头像说的(release 带 chat)只给嘴——图跟着声音进对话、嘴照 chatCue 接住、不起脑;孩子端说该说一句了({t:'chat'})安静时 0.5 秒静音 + 图交给嘴、
  * 那段的转写吞掉,不安静回 skipped;交画那一轮(纸的 drawing、画板卡的 submit)上下文包带 drawing: 与 live.draw:(这张画上说过的),嘴不先说;
@@ -162,7 +162,7 @@ let drawJob = '';
   check('交画:消息记 drawing(图、几笔、各颜色、多久、清掉的那几版),字是「(画了一张,没说话)」', okTurn && msg.drawing?.image === draw.json.path && msg.drawing.strokes === 3 && msg.drawing.colors === '红 2、蓝 1' && msg.drawing.ms === 420_000 && msg.drawing.cleared?.join() === shot && msg.text === '(画了一张,没说话)', JSON.stringify(msg.drawing));
   check('上下文包 drawing: 一句(photos 第几张、几笔、多久、清掉的那几版是第几张);画和清掉的那版进 photos', prompt.includes('  drawing: "孩子在纸上画的,photos 第 1 张;画了 3 笔(红 2、蓝 1);画了约 7 分钟;清空重画过,清掉的那几版是 photos 第 2 张"') && prompt.includes(`  photos:\n    - ${JSON.stringify(draw.json.path)}\n    - ${JSON.stringify(shot)}`), prompt.slice(prompt.indexOf('  live'), prompt.indexOf('  live') + 600));
   check('上下文包 live.draw:这张画上孩子说的、嘴说的', prompt.includes('    draw:\n      - "孩子:这是我画的楼"\n      - "你:'), prompt.slice(prompt.indexOf('  live'), prompt.indexOf('  live') + 400));
-  check('交画那轮嘴不先说(《画板设计.md》拍板 8):后面的回答都是照念', c.responses.slice(r).every((x) => (x?.instructions ?? '').includes('说完就停:「')), JSON.stringify(c.responses.slice(r).map((x) => (x?.instructions ?? '').slice(0, 30))));
+  check('交画那轮嘴不先说:后面的回答都是照念', c.responses.slice(r).every((x) => (x?.instructions ?? '').includes('说完就停:「')), JSON.stringify(c.responses.slice(r).map((x) => (x?.instructions ?? '').slice(0, 30))));
   check('新话题的第一条收下 new 那张纸', existsSync(paperFile(turn.job)) && !existsSync(paperFile('new')));
   const day = (await api('GET', '/api/kid/conversations/chinese-tutor/today')).json;
   const km = day.messages.find((m: Msg) => m.job === turn.job);

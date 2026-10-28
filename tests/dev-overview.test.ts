@@ -1,4 +1,4 @@
-/** 工作台(《工作台设计.md》):概览的数字从会话索引算对、接口在、页面是侧栏 + 五个标签、三页共用一份色板。 */
+/** 工作台:概览的数字从会话索引算对、接口在、页面是侧栏 + 五个标签、三页共用一份色板。 */
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -60,7 +60,7 @@ try {
   check('最近一轮给「看原文」直达', ov.last?.tutor === 'math-tutor' && ov.last.job === '1544-2');
   check('画图:今天 0 张,只数不带上限', ov.paint.today === 0 && !('daily' in ov.paint));
 
-  // ---- 孩子端的流水(《孩子端流水设计.md》§五):设备卡、页面出错合成一条、改名 ----
+  // ---- 孩子端的流水:设备卡、页面出错合成一条、改名 ----
   {
     const IPAD = 'Mozilla/5.0 (iPad; CPU OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Mobile/15E148 Safari/604.1';
     const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15';

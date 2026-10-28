@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * 家长端「记录」(《家长板书页设计.md》,拍板 22;《家长录像设计.md》拍板 16)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
+ * 家长端「记录」的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock → 开一次听写写一个词 → Chrome 开 /parent:七天日期条、一天一条时间线(卡照搬孩子端、听写格子画笔迹)、「这一天老师跟你说的」→
  * 点话题就是录像:停在最后一帧不放、经过收着,展开有原来板书页的旁注(孩子、答案、给家长、记住了)→ 退出回清单 →
- * 宽屏两栏(拍板 31)→ 打星、记账、删话题 → 点昨天、往前七天 → ?tutor=&thread= 直接开那个话题的录像。手机与平板各截一张。孩子端 `/` 上没有答案(护栏)。
+ * 宽屏两栏→ 打星、记账、删话题 → 点昨天、往前七天 → ?tutor=&thread= 直接开那个话题的录像。手机与平板各截一张。孩子端 `/` 上没有答案(护栏)。
  *
  * 用法:node scripts/probe-parent.mjs [--out <截图目录>] [--keep](留下 mock)
  */
@@ -49,14 +49,14 @@ try {
   await send('Page.enable');
   await quiet(send);
 
-  // ---- 先开一次听写、写一个词(格子里要画孩子的笔迹,拍板 32) ----
+  // ---- 先开一次听写、写一个词(格子里要画孩子的笔迹) ----
   const kh = await (await fetch(`${base}/api/kid/home`)).json();
   const ds = await (await fetch(`${base}/api/dictation`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ home: kh.home, n: 0 }) })).json();
   const stroke = [[220, 700, 0], [500, 690, 60], [800, 680, 120]];
   const wr = await fetch(`${base}/api/dictation/${ds.id}/first/0`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chars: Array.from({ length: ds.sizes[0] }, () => ({ strokes: [stroke], undos: 0 })) }) });
   ok('开一次听写、写了第一个词', wr.ok, String(wr.status));
 
-  // ---- 记录:一天一条时间线(拍板 29、30) ----
+  // ---- 记录:一天一条时间线 ----
   await device(390, 844, 2, true);
   await open(`${base}/parent`, `document.querySelectorAll('#ptl .pev').length > 2`);
   const ev = (who) => `[...document.querySelectorAll('#ptl .pev')].find((e) => e.querySelector('.pv-who')?.textContent.endsWith('${who}') && e.querySelector('.bt-new'))`;
@@ -64,12 +64,12 @@ try {
     evs: [...document.querySelectorAll('#ptl .pev')].map((e) => ({ who: e.querySelector('.pv-who').lastChild.textContent, at: e.querySelector('.pv-tm').textContent, look: e.querySelector('.kid .bt').className, btx: e.querySelector('.kid .btx')?.textContent, pf: e.querySelector('.pf').textContent })),
     ink: document.querySelectorAll('#ptl .bt-x-dictation .dg i svg path').length, kidCss: getComputedStyle(document.querySelector('#ptl .bt-new')).borderRadius, day: document.querySelector('#pday')?.textContent, more: document.querySelector('#more-btn').hidden }))()`);
   const sorted = list.evs.every((e, i, a) => !i || a[i - 1].at.slice(0, 5) >= e.at.slice(0, 5));
-  ok('时间线:标题带「家长」;七天日期条停在今天;语文、数学两个新话题 + 一次听写,最新的在上(拍板 35);新话题是孩子端的气泡(.bt-new,同一份样式),行尾「停下等孩子」', list.title.endsWith('· 家长') && list.date === '今天' && list.days === 7 && list.dots > 0 && list.evs.length === 3 && sorted && list.evs.filter((e) => e.look.includes('bt-new') && e.btx === '新话题' && e.pf.includes('停下等孩子')).length === 2 && list.evs.some((e) => e.look.includes('bt-x-dictation')) && list.kidCss === '24px', JSON.stringify(list.evs));
-  ok('听写的格子里画着孩子写的(拍板 32)', list.ink >= 1, String(list.ink));
+  ok('时间线:标题带「家长」;七天日期条停在今天;语文、数学两个新话题 + 一次听写,最新的在上;新话题是孩子端的气泡(.bt-new,同一份样式),行尾「停下等孩子」', list.title.endsWith('· 家长') && list.date === '今天' && list.days === 7 && list.dots > 0 && list.evs.length === 3 && sorted && list.evs.filter((e) => e.look.includes('bt-new') && e.btx === '新话题' && e.pf.includes('停下等孩子')).length === 2 && list.evs.some((e) => e.look.includes('bt-x-dictation')) && list.kidCss === '24px', JSON.stringify(list.evs));
+  ok('听写的格子里画着孩子写的', list.ink >= 1, String(list.ink));
   ok('窄屏:「这一天老师跟你说的」接在后面,有给家长的、记住了、记账', /老师跟你说的/.test(list.day) && list.day.includes('给家长的') && list.day.includes('记住了') && list.day.includes('记账') && !/null|undefined/.test(list.day), list.day);
   console.log('  ', await shot('parent-list-phone.png'));
 
-  // ---- 点一件就是录像,停在最后一帧(拍板 16、30) ----
+  // ---- 点一件就是录像,停在最后一帧 ----
   await evaluate(`${ev('语文老师')}.querySelector('.kid').click()`);
   for (let i = 0; i < 40; i++) { if (await evaluate(`document.body.classList.contains('reel') && !document.querySelector('#reel').hidden && (document.querySelector('#rl-frame').contentDocument?.querySelectorAll('#board .sec').length ?? 0) > 0`)) break; await sleep(250); }
   await sleep(500);
@@ -84,9 +84,9 @@ try {
   await device(1180, 820, 1, false);
   await sleep(400);
   const dark = await evaluate(`(() => { const x = document.querySelector('#rl-x').getBoundingClientRect(), sc = document.querySelector('#rl-screen').getBoundingClientRect(); return { dark: document.documentElement.classList.contains('rl-dark'), bg: getComputedStyle(document.body).backgroundColor, x: [Math.round(x.left), Math.round(x.top), Math.round(x.bottom)], above: x.bottom <= sc.top, ttl: document.querySelector('#rl-ttl').textContent, fill: document.querySelector('#rl-seek').style.getPropertyValue('--fill') }; })()`);
-  ok('录像深底(《家长录像设计.md》拍板 20):整页深色,「退出录像」在孩子屏幕外的左上角,旁边写哪位老师的哪件事;进度条走过的那段跟着写', dark.dark && dark.bg === 'rgb(28, 28, 28)' && dark.x[0] < 40 && dark.above && dark.ttl.startsWith('语文老师 · 新话题') && dark.fill === '100.00%', JSON.stringify(dark));
+  ok('录像深底:整页深色,「退出录像」在孩子屏幕外的左上角,旁边写哪位老师的哪件事;进度条走过的那段跟着写', dark.dark && dark.bg === 'rgb(28, 28, 28)' && dark.x[0] < 40 && dark.above && dark.ttl.startsWith('语文老师 · 新话题') && dark.fill === '100.00%', JSON.stringify(dark));
   console.log('  ', await shot('parent-reel-tablet.png'));
-  // 快捷键(《家长录像设计.md》拍板 22):? 一张表、Esc 关上;空格放 / 停;上一章(只有一章)回开头;Esc 退出
+  // 快捷键:? 一张表、Esc 关上;空格放 / 停;上一章(只有一章)回开头;Esc 退出
   const key = async (k, code) => { for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key: k, code, ...(type === 'keyDown' && k.length === 1 ? { text: k } : {}) }); await sleep(300); };
   await key('?', 'Slash');
   const kz = await evaluate(`!document.querySelector('#rl-keys').hidden && document.querySelector('#rl-keys').textContent.includes('上一章,落在那一章讲完')`);
@@ -111,7 +111,7 @@ try {
   for (let i = 0; i < 20; i++) { if (await evaluate(`!document.querySelector('#tutor').classList.contains('on')`)) break; await sleep(250); }
   ok('退出:Esc 回到记录,深底去掉', await evaluate(`!document.body.classList.contains('reel') && document.querySelectorAll('#ptl .pev').length > 0 && !document.documentElement.classList.contains('rl-dark')`));
 
-  // ---- 宽屏:时间线与「这一天」并排(拍板 31),卡上有的右栏不重复 ----
+  // ---- 宽屏:时间线与「这一天」并排,卡上有的右栏不重复 ----
   await sleep(400);
   const wide = await evaluate(`({ cols: getComputedStyle(document.querySelector('#pcols')).display, side: document.querySelector('#pday').getBoundingClientRect().left > document.querySelector('#ptl').getBoundingClientRect().right - 5, stars: document.querySelectorAll('#pday .stars').length, dels: document.querySelectorAll('#pday .del').length, books: document.querySelectorAll('.book').length, inBook: !!document.querySelector('#pday .book'), text: document.querySelector('#pday').textContent })`);
   ok('宽屏:两栏,「这一天」在右;右栏没有星和删,「记账」只有一颗、在右栏', wide.cols === 'grid' && wide.side && wide.stars === 0 && wide.dels === 0 && wide.books === 1 && wide.inBook && !/null|undefined/.test(wide.text), JSON.stringify(wide));

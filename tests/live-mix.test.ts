@@ -1,5 +1,5 @@
 /**
- * 录像的声音(src/live/lib/mix.ts,《口语课设计.md》§8.3):两边按到达时刻摆成一条、老师的块照孩子端的排法排、flush 截断、老师出声的时段。纯函数。
+ * 录像的声音(src/live/lib/mix.ts):两边按到达时刻摆成一条、老师的块照孩子端的排法排、flush 截断、老师出声的时段。纯函数。
  * 录像记录(src/live/recorder.ts):进出的消息带毫秒、flush 消息记成清队列、开口前垫的块带自己的时刻、屏幕尺寸、finish 拼出 reel.json 与声音。
  */
 import { check, done } from './_check.ts';

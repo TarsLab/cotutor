@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 英文单词听写(《听写设计.md》拍板 15)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
+ * 英文单词听写的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock,Chrome 开孩子端首页(iPad 横屏 1180×820)→ 把英语老师换到最前 → 点「单词听写」进 /dictation?lang=en → 开始 →
  * 在四线三格里用鼠标写(一个单词一格)→ 第二个点「给答案」:灰单词打底、没写不让过,照着写 → 交上去 → 对一对:三行、蓝字叠着、
  * 没有「再写一遍?」、拿开 / 叠上蓝字 → 自己点「再写一遍」→ 对好了回首页 → 家长页四线三格、录像页一个单词一格。
@@ -49,9 +49,9 @@ try {
   const shot = async (name) => { if (!out) return; const r = await send('Page.captureScreenshot', { format: 'png' }); writeFileSync(join(out, `${name}.png`), Buffer.from(r.result.data, 'base64')); };
   const waitFor = async (expr, ms = 8000) => { for (let i = 0; i < ms / 100; i++) { if (await evaluate(expr)) return true; await sleep(100); } return false; };
   const rect = (sel) => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`);
-  const tap = async (sel) => { await waitFor(`!document.querySelector('.main.arm')`, 1500); /* 主按钮换了意思后的半秒保护(拍板 31):等它亮了再点 */ const r = await rect(sel); if (!r) throw new Error(`点不到 ${sel}`); const x = r.x + r.w / 2, y = r.y + r.h / 2; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 }); await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 }); await sleep(150); };
+  const tap = async (sel) => { await waitFor(`!document.querySelector('.main.arm')`, 1500); /* 主按钮换了意思后的半秒保护:等它亮了再点 */ const r = await rect(sel); if (!r) throw new Error(`点不到 ${sel}`); const x = r.x + r.w / 2, y = r.y + r.h / 2; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 }); await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 }); await sleep(150); };
   const tapText = async (text) => { const sel = await evaluate(`(() => { document.querySelectorAll('[data-probe]').forEach((x) => x.removeAttribute('data-probe')); const b = [...document.querySelectorAll('.view.on button, .view.on a')].find((x) => x.textContent.trim() === ${JSON.stringify(text)}); if (!b) return null; b.setAttribute('data-probe', ${JSON.stringify(text)}); return '[data-probe=' + JSON.stringify(${JSON.stringify(text)}) + ']'; })()`); if (!sel) throw new Error(`找不到按钮 ${text}`); await tap(sel); };
-  /** 在四线三格里写一个单词:几笔折线,画在基线上下(尺子 2048 × 512;写字屏看得到哪一段看格子的 viewBox,拍板 23);第一笔竖着冒出最上面那条线(线在 y 80,起笔在 0;拍板 22) */
+  /** 在四线三格里写一个单词:几笔折线,画在基线上下(尺子 2048 × 512;写字屏看得到哪一段看格子的 viewBox);第一笔竖着冒出最上面那条线(线在 y 80,起笔在 0) */
   const writeWord = async (padSel, n = 3) => {
     const r = await rect(padSel);
     const vb = await evaluate(`(() => { const v = document.querySelector(${JSON.stringify(padSel)}).viewBox.baseVal; return [v.x, v.y, v.width, v.height]; })()`);
@@ -67,7 +67,7 @@ try {
     }
   };
   const view = () => evaluate(`document.querySelector('.view.on')?.id ?? null`);
-  /** 胶囊打开就是念的老师(《产品规划.md》拍板 26):挡住 /api/kid/home 再打开 url,这时胶囊已经是他的颜色和首字(服务端出页面时插进来的,不等老师名单) */
+  /** 胶囊打开就是念的老师:挡住 /api/kid/home 再打开 url,这时胶囊已经是他的颜色和首字(服务端出页面时插进来的,不等老师名单) */
   const capsuleBeforeHome = async (url) => {
     await send('Fetch.enable', { patterns: [{ urlPattern: '*/api/kid/home*' }] });
     await send('Page.navigate', { url });
@@ -93,22 +93,22 @@ try {
   ok('写字屏不出 emoji', await evaluate(`!document.body.innerText.includes('🚌')`));
   await writeWord('#w-pad');
   ok('写了三笔', (await evaluate(`document.querySelectorAll('#w-pad .eni path').length`)) === 3);
-  ok('第一笔冒出最上面那条线,出格的那截照样画着(拍板 22)', await evaluate(`(() => { const b = document.querySelector('#w-pad .eni path').getBBox(); return b.y < 40; })()`));
-  ok('格子铺满(拍板 23):1180 × 820 上四线带起码 300 高(iPad 实拍原来约 138),横着看得到尺子 1300 宽以上', await evaluate(`(() => { const p = document.querySelector('#w-pad'), v = p.viewBox.baseVal, h = p.getBoundingClientRect().height; return 360 / v.height * h >= 300 && v.width >= 1299; })()`), await evaluate(`(() => { const p = document.querySelector('#w-pad'), v = p.viewBox.baseVal; return [v.x, v.y, v.width, v.height, Math.round(360 / v.height * p.getBoundingClientRect().height)].join(' '); })()`));
+  ok('第一笔冒出最上面那条线,出格的那截照样画着', await evaluate(`(() => { const b = document.querySelector('#w-pad .eni path').getBBox(); return b.y < 40; })()`));
+  ok('格子铺满:1180 × 820 上四线带起码 300 高(iPad 实拍原来约 138),横着看得到尺子 1300 宽以上', await evaluate(`(() => { const p = document.querySelector('#w-pad'), v = p.viewBox.baseVal, h = p.getBoundingClientRect().height; return 360 / v.height * h >= 300 && v.width >= 1299; })()`), await evaluate(`(() => { const p = document.querySelector('#w-pad'), v = p.viewBox.baseVal; return [v.x, v.y, v.width, v.height, Math.round(360 / v.height * p.getBoundingClientRect().height)].join(' '); })()`));
   await tap('#w-undo');
   ok('撤销撤一笔', (await evaluate(`document.querySelectorAll('#w-pad .eni path').length`)) === 2);
   await shot('en-02-write');
   const btnsEn = await evaluate(`(() => { const bs = [...document.querySelectorAll('.view.on button.tool, .view.on button.main')].filter((b) => b.getClientRects().length); return { bare: bs.filter((b) => !b.querySelector('svg')).map((b) => b.textContent.trim()), labels: bs.map((b) => b.textContent.trim()) }; })()`);
-  ok('写字屏的按钮都带图标,字同语文页:再念 撤销 擦掉 不会写,给答案 写好了(《听写设计.md》拍板 28)', btnsEn.bare.length === 0 && ['再念', '撤销', '擦掉', '不会写,给答案', '写好了'].every((t) => btnsEn.labels.includes(t)), JSON.stringify(btnsEn));
-  ok('学科色:写好了是英语老师的绿(拍板 20)', await evaluate(`getComputedStyle(document.querySelector('#w-done')).backgroundColor === 'rgb(31, 138, 76)'`));
-  ok('出口同老师页:左上角「‹ logo 英」胶囊,填英语老师的绿(不放老师的脸,《产品规划.md》拍板 24、26);按钮叫「再念」', await evaluate(`(() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('svg.ct-logo') && !b.querySelector('.tfav') && b.classList.contains('tinted') && b.querySelector('.bk-ini').textContent === '英' && getComputedStyle(b).backgroundColor === 'rgb(31, 138, 76)' && b.getBoundingClientRect().left < 30 && !document.body.innerText.includes('回首页') && document.querySelector('#w-again').textContent === '再念'; })()`));
+  ok('写字屏的按钮都带图标,字同语文页:再念 撤销 擦掉 不会写,给答案 写好了', btnsEn.bare.length === 0 && ['再念', '撤销', '擦掉', '不会写,给答案', '写好了'].every((t) => btnsEn.labels.includes(t)), JSON.stringify(btnsEn));
+  ok('学科色:写好了是英语老师的绿', await evaluate(`getComputedStyle(document.querySelector('#w-done')).backgroundColor === 'rgb(31, 138, 76)'`));
+  ok('出口同老师页:左上角「‹ logo 英」胶囊,填英语老师的绿(不放老师的脸);按钮叫「再念」', await evaluate(`(() => { const b = document.querySelector('#back'); return !!b && !b.hidden && !!b.querySelector('svg.ct-logo') && !b.querySelector('.tfav') && b.classList.contains('tinted') && b.querySelector('.bk-ini').textContent === '英' && getComputedStyle(b).backgroundColor === 'rgb(31, 138, 76)' && b.getBoundingClientRect().left < 30 && !document.body.innerText.includes('回首页') && document.querySelector('#w-again').textContent === '再念'; })()`));
   await tap('#w-done');
   ok('写好了:到第 2 个', await waitFor(`document.querySelector('#w-who').textContent.includes('第 2 个') && document.querySelectorAll('#w-pad .eni path').length === 0`));
-  ok('横排的听写本:第 1 条画着刚写的笔,第 2 条描边(拍板 20)', await evaluate(`document.querySelectorAll('#w-book .bk').length === 3 && document.querySelectorAll('#w-book .bk.d .eni path').length === 2 && document.querySelector('#w-book .bk.c small').textContent === '2'`));
+  ok('横排的听写本:第 1 条画着刚写的笔,第 2 条描边', await evaluate(`document.querySelectorAll('#w-book .bk').length === 3 && document.querySelectorAll('#w-book .bk.d .eni path').length === 2 && document.querySelector('#w-book .bk.c small').textContent === '2'`));
   await tap('#w-reveal');
   ok('给答案:灰色的 yellow 打底', await waitFor(`document.querySelector('#w-pad .enw.trace')?.getAttribute('data-word') === 'yellow'`));
   const tb = await evaluate(`(() => { const b = document.querySelector('#w-pad .enw.trace').getBBox(); return { top: Math.round(b.y), bottom: Math.round(b.y + b.height), paths: document.querySelectorAll('#w-pad .enw.trace path').length }; })()`);
-  ok('打底的单词照四线三格(拍板 29):l 顶第一线(80)、y 到第四线(440),一笔一条线', tb.top <= 82 && tb.top >= 70 && tb.bottom >= 436 && tb.bottom <= 452 && tb.paths >= 6, JSON.stringify(tb));
+  ok('打底的单词照四线三格:l 顶第一线(80)、y 到第四线(440),一笔一条线', tb.top <= 82 && tb.top >= 70 && tb.bottom >= 436 && tb.bottom <= 452 && tb.paths >= 6, JSON.stringify(tb));
   await tap('#w-done');
   ok('没照着写就点写好了:不让过', await waitFor(`document.querySelector('#w-who').textContent.includes('第 2 个') && document.querySelector('#w-status').textContent.includes('照着')`));
   await writeWord('#w-pad', 2);
@@ -120,7 +120,7 @@ try {
   ok('都写完了:交上去', await waitFor(`document.querySelector('.view.on')?.id === 'v-submit'`));
   await tap('#u-go');
   ok('对一对:三行,蓝字叠着(red / yellow / bus),没有「再写一遍?」的问', await waitFor(`document.querySelector('.view.on')?.id === 'v-check' && document.querySelectorAll('#c-rows .row').length === 3 && [...document.querySelectorAll('#c-rows .enw')].map((t) => t.getAttribute('data-word')).join() === 'red,yellow,bus' && !document.body.innerText.includes('这个再写一遍')`));
-  ok('emoji 只在对一对出:bus 那行左下有 🚌,别的行没有(拍板 21)', await evaluate(`(() => { const r = [...document.querySelectorAll('#c-rows .row')]; return r.length === 3 && r[2].querySelector('.em')?.textContent === '🚌' && !r[0].querySelector('.em') && !r[1].querySelector('.em'); })()`));
+  ok('emoji 只在对一对出:bus 那行左下有 🚌,别的行没有', await evaluate(`(() => { const r = [...document.querySelectorAll('#c-rows .row')]; return r.length === 3 && r[2].querySelector('.em')?.textContent === '🚌' && !r[0].querySelector('.em') && !r[1].querySelector('.em'); })()`));
   ok('看过答案的那个写着', await evaluate(`document.querySelectorAll('#c-rows .row')[1].innerText.includes('看了答案')`));
   ok('页面上没有叉、没有分数、没有对错的字', await evaluate(`!/[×✗✘]|分数|错|对了/.test(document.body.innerText.replace('对一对', '').replace('对好了', ''))`));
   await shot('en-04-check');
@@ -187,7 +187,7 @@ try {
   await shot('en-08-resume');
   await tap('#snap-resume-go');
   ok('点接着写:写第 1 个', await waitFor(`!!document.querySelector('#v-write.on') && document.querySelector('#w-who').textContent.includes('第 1 个')`));
-  // 胶囊打开就是念的老师(《产品规划.md》拍板 26);放在最后:再开一次那张卡会把录像的开头拉长
+  // 胶囊打开就是念的老师;放在最后:再开一次那张卡会把录像的开头拉长
   const capEn = await capsuleBeforeHome(enUrl);
   ok('挡住 /api/kid/home 时胶囊已经是英语老师的绿、首字「英」(首页听写卡进来)', capEn.held >= 1 && capEn.tinted && capEn.ini === '英' && capEn.bg === 'rgb(31, 138, 76)', JSON.stringify(capEn));
   const capEnPhoto = await capsuleBeforeHome(`${base}/dictation?tutor=english-tutor&lang=en`);

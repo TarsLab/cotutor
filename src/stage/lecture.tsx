@@ -1,13 +1,13 @@
 /**
- * 小课堂的播放器(《小课堂设计.md》§三):不用 ChalkPlayer(那是接力式,一步一停、只能跳到步开头),
+ * 小课堂的播放器:不用 ChalkPlayer(那是接力式,一步一停、只能跳到步开头),
  * 时钟是 drawtell/core 的(src/lib/lecture.ts):一段 = 一步,段长 = max(画, 配音);一个 <audio> 全程复用,换段换 src。
  * 画面:课包烤过(bake.json,和 scene.json 的画面对得上)就用 drawtell/render 按这一刻每个元素画了多少现画,不用 excalidraw、不用 SMIL;
  * 没烤过的课包在浏览器里现烤一份(drawtell/bake,按需装 excalidraw),画法一样;不再有 SMIL。
  * 能拖到任意一刻(拖的时候不出声),气口不停,放到结尾一次就算看完(发给页面)。
- * 画(§四):停住了就能在画面上画,停在同一刻画的几笔算一处;记那一刻(课里的毫秒)与几笔(课包坐标:屏幕点经 getScreenCTM 反算到 SVG,再减掉导出时的平移),
+ * 画:停住了就能在画面上画,停在同一刻画的几笔算一处;记那一刻(课里的毫秒)与几笔(课包坐标:屏幕点经 getScreenCTM 反算到 SVG,再减掉导出时的平移),
  * 每画一笔重截一张图(画面 + 这一刻的几笔,给老师看);进度条上那一刻留一个蓝色记号;画了、擦了都把整张单子发给页面(页面是画的主人,带给老师、画画的卡)。
  * 界面照原型:顶上回去 + 课名,中间画面,下面字幕、进度条(步骤点、画的记号、拖动、时间)、一行提示。没有错误文案:装不上就发 error。
- * 老师放课里的一段(§六,板书上的小课堂卡,range):舞台的顶栏与字幕行是页面的,这里只有画面与进度条;从那一段的开头放(讲稿交来的自己放),
+ * 老师放课里的一段(板书上的小课堂卡,range):舞台的顶栏与字幕行是页面的,这里只有画面与进度条;从那一段的开头放(讲稿交来的自己放),
  * 放到那一段的末尾一次就停在末帧、发 done;放着 / 停着 / 放完都发 phase(页面字幕行显示课里那句)。iPad 不让出声就停着等孩子点「放这一段」。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from 'react';
@@ -80,7 +80,7 @@ export interface LectureStageProps {
   onMarks(marks: StageMark[]): void;
   onFinished(w: LectureWatch): void;
   onClose(w: LectureWatch): void;
-  /** 放完了,孩子点「去问老师」(拍板 37);不给就不画这个按钮 */
+  /** 放完了,孩子点「去问老师」;不给就不画这个按钮 */
   onAsk?(w: LectureWatch): void;
   onError(message: string): void;
   /** 板书上的小课堂卡:只放这一段(毫秒);有它就是卡的样子(没有顶栏、字幕行、提示,只看不画) */
@@ -95,7 +95,7 @@ export interface LectureStageProps {
   onLog?(e: WatchEntry): void;
   /** 家长看录像:只看,时钟跟着页面(follow) */
   follow?: boolean;
-  /** 左上返回胶囊上的老师(《产品规划.md》拍板 26):填他的颜色、logo 后面接首字,同老师页的 #back(src/server/tutor-face.ts 的 backTint);不给浅底只放 logo */
+  /** 左上返回胶囊上的老师:填他的颜色、logo 后面接首字,同老师页的 #back(src/server/tutor-face.ts 的 backTint);不给浅底只放 logo */
   back?: LectureBack | null;
 }
 
@@ -104,7 +104,7 @@ export interface LectureBack {
   initial: string;
 }
 
-/** 左上返回胶囊里的 logo(和老师页的「‹ logo」同一颗:brand.ts 的 BACK_LOGO,28 px 大号那档;单色、不动;《产品规划.md》拍板 24) */
+/** 左上返回胶囊里的 logo(和老师页的「‹ logo」同一颗:brand.ts 的 BACK_LOGO,28 px 大号那档;单色、不动) */
 const BACK_LOGO_BODY = logoBody(LOGO_BIG, { outer: 'currentColor', inner: 'currentColor' });
 
 /** 视频小课堂的时钟:服务端按 lecture.md 拼好的一句一段 */
@@ -122,7 +122,7 @@ export interface LectureStageHandle {
   follow(ms: number, playing: boolean, rate: number, marks: StageMark[]): void;
 }
 
-/** 放完了停在最后一帧,话音落了多久「再看一遍」「去问老师」才淡入(拍板 37) */
+/** 放完了停在最后一帧,话音落了多久「再看一遍」「去问老师」才淡入 */
 const END_UI_MS = 1000;
 /** 声音和画面差多少就把声音拉回来(毫秒) */
 const RESYNC_MS = 300;
@@ -176,7 +176,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
   const t = useRef(0);
   const last = useRef(0);
   const seg = useRef(-1);
-  /** 配音放到哪、从什么时候起没动(时钟跟着声音走,拍板 36) */
+  /** 配音放到哪、从什么时候起没动(时钟跟着声音走) */
   const voiceAt = useRef({ index: -1, pos: -1, since: 0 });
   const scrubbing = useRef(false);
   const watch = useRef<LectureWatch>({ watchedMs: 0, finished: false, pauses: 0 });
@@ -415,7 +415,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
 
   // 拖:按下就跟手,不出声;松手从那一刻接着(原来在放就接着放)
   const track = useRef<HTMLDivElement>(null);
-  /** 进度条一句一段,段间空 SEG_GAP(拍板 40):点哪就跳到哪,算的时候把空隙扣掉 */
+  /** 进度条一句一段,段间空 SEG_GAP:点哪就跳到哪,算的时候把空隙扣掉 */
   const msAt = (clientX: number): number => {
     const r = track.current?.getBoundingClientRect();
     if (!r || !clock || !segs.length) return 0;
@@ -653,7 +653,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
 
   return (
     <div className={'lc' + (card ? ' lc-card' : ' lc-full') + (video ? ' lc-vid' : '')}>
-      {/* 左上「‹ logo 首字」浮在上面,和老师页的返回胶囊一个样子(拍板 39;《产品规划.md》拍板 24 起放 logo、不放老师头像,拍板 26 起填老师的颜色、接首字) */}
+      {/* 左上「‹ logo 首字」浮在上面,和老师页的返回胶囊一个样子(放 logo、不放老师头像,填老师的颜色、接首字) */}
       {!card && !follow && <button type="button" className={'lc-back' + (back ? ' lc-tinted' : '')} style={back ? ({ '--bk': back.color } as CSSProperties) : undefined} aria-label="回首页" onClick={() => { log(false); onClose({ ...watch.current }); }}>
         <i className="lc-back-ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg></i>
         <svg className="lc-logo" width="28" height="28" viewBox="0 0 100 100" aria-hidden="true" dangerouslySetInnerHTML={{ __html: BACK_LOGO_BODY }} />
@@ -708,7 +708,7 @@ export const LectureStage = forwardRef<LectureStageHandle, LectureStageProps>(fu
           <span>{clockLabel(now)} / {clock ? clockLabel(clock.total) : '0:00'}</span>
           {marks.length ? <small>画了 {marks.length} 处</small> : null}
         </div>
-        {/* 「看完就能问老师」与「去问老师」占同一个位置:放完了话音落了一会儿才换(拍板 37) */}
+        {/* 「看完就能问老师」与「去问老师」占同一个位置:放完了话音落了一会儿才换 */}
         {!card && !follow && <div className="lc-slot">
           {!ended
             ? <span className="lc-hint">看完就能问老师</span>

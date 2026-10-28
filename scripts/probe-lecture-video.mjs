@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 视频小课堂(《小课堂设计.md》§八第 4 步)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱;样本视频 tests/fixtures/lectures/2026-10-06-pingjunfen,18 秒,三句):
+ * 视频小课堂(第 4 步)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱;样本视频 tests/fixtures/lectures/2026-10-06-pingjunfen,18 秒,三句):
  * 首页数学老师卡上第二个小课堂按钮(视频,「18 秒」)→ 点了铺满:「开始看」→ 放着:视频在走、字幕是第一句、三个句子点 → 拖到 0:12:视频跟着 →
  * 暂停,在画面上画一处:记号、「画好了」;同一刻再画两笔还是一处,截图(jpeg)叠着三笔 → 拖到另外 5 个时刻各画一笔(6 处),第 7 个时刻画不进去、笔还拿着、字幕说画满了 →
  * 点记号回去擦掉,只留第一处 → 放到结尾 → 看完那排画的卡是截图 →
@@ -135,7 +135,7 @@ try {
 
   // 放到结尾(点第 3 个句子点再放完)
   await evaluate(`${D}.querySelector('.lc-play').click()`);
-  // 放完停在最后一帧(拍板 37),「去问老师」淡入了才回板书
+  // 放完停在最后一帧,「去问老师」淡入了才回板书
   const asked = await until(`${D}.querySelector('.lc-askbtn') !== null && !${F}.hidden`, 60);
   await evaluate(`${D}.querySelector('.lc-askbtn').click()`);
   const finished = await until(`${F}.hidden && Boolean(document.querySelector('.lc-pending .c-mark'))`, 60);
@@ -159,16 +159,16 @@ try {
   const pb = await (await fetch(`${base}/api/conversations/math-tutor/today/board`)).json();
   const pm = pb.messages.find((m) => m.lecture?.video)?.lecture?.marks?.[0];
   await send('Page.navigate', { url: `${base}/parent` });
-  // 清单是一天的时间线(《家长板书页设计.md》拍板 22、35,最新的在上):数学老师最新那件的 .kid 开录像
+  // 清单是一天的时间线(最新的在上):数学老师最新那件的 .kid 开录像
   const MATH_EV = `[...document.querySelectorAll('.pev')].find((p) => (p.querySelector('.pv-who')?.textContent ?? '').includes('数学'))?.querySelector('.kid')`;
   await until(`Boolean(${MATH_EV})`, 40);
   await evaluate(`${MATH_EV}.click()`);
   await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`, 40);
-  // 孩子的屏幕(#rl-frame 里的录像页)装好了再动(没装好时拖进度条会丢);小课堂的播放器在它里面的 #lc-frame(拍板 6)
+  // 孩子的屏幕(#rl-frame 里的录像页)装好了再动(没装好时拖进度条会丢);小课堂的播放器在它里面的 #lc-frame
   await until(`Boolean(document.querySelector('#rl-frame').contentWindow.cotutorReel)`, 40);
   const KF = `document.querySelector('#rl-frame').contentDocument.querySelector('#lc-frame')`;
   const KD = `${KF}?.contentDocument`;
-  // 记录点进来停在最后一帧(拍板 16),看小课堂那一段在前面,播放器还没开;停着直接点「画了一处」——播放器这时才打开
+  // 记录点进来停在最后一帧,看小课堂那一段在前面,播放器还没开;停着直接点「画了一处」——播放器这时才打开
   // (2026-10-19:页面只发一条 follow,播放器还没在听,一直停在 0:00、没有圈)
   const closedBefore = await evaluate(`Boolean(${KF}?.hidden)`);
   await evaluate(`document.querySelector('#rl-marks i.ink').click()`);

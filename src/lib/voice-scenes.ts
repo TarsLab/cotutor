@@ -1,5 +1,5 @@
 /**
- * 按钮的各个场景(《实时老师页设计.md》§二之二「按钮的动画」,原型 E 排):一格 = 一种状态、它该是哪种样子(voice-view.ts)、样张里放什么声音。
+ * 按钮的各个场景:一格 = 一种状态、它该是哪种样子(voice-view.ts)、样张里放什么声音。
  * 例子即测试:tests/voice-view.test.ts 逐格查 voiceView 给的 key;工作台 /dev/voice 照这张表把每格用真的按钮摆出来,声音是模拟的。
  * 加一种场景:这里加一格 → 测试跟着过 → /dev/voice 自己就有。不进孩子端页面(那边只要 voice-view)。
  */
@@ -23,7 +23,7 @@ export interface VoiceScene {
 export const VOICE_SCENES: VoiceScene[] = [
   { group: '老师这边', name: '安静 · 等你说', note: '老师讲完、孩子还没开口', input: {}, sound: 'none', tutor: 'chinese', expect: 'idle' },
   { group: '老师这边', name: '正在叫老师', note: '刚进老师页、换连接,嘴还没连上(一两秒);按了晃一下', input: { ready: false }, sound: 'none', tutor: 'chinese', expect: 'connecting' },
-  { group: '老师这边', name: '今天点过 · 点上面开始', note: '今天点过同一个按钮:左栏先问「接着那个 / 重新开始」,点之前按钮灰着、不接(拍板 24)', input: { choose: true }, sound: 'none', tutor: 'chinese', expect: 'choose' },
+  { group: '老师这边', name: '今天点过 · 点上面开始', note: '今天点过同一个按钮:左栏先问「接着那个 / 重新开始」,点之前按钮灰着、不接', input: { choose: true }, sound: 'none', tutor: 'chinese', expect: 'choose' },
   { group: '老师这边', name: '老师在说', note: '头像旁三道小弧,深浅跟嘴的音量;不走、不放大', input: { status: 'mouth' }, sound: 'tutor', tutor: 'chinese', expect: 'tutor' },
   { group: '老师这边', name: '老师两句之间', note: '还在说这一轮,但这会儿没声音:三道弧淡到最低', input: { status: 'mouth' }, sound: 'none', tutor: 'chinese', expect: 'tutor' },
   { group: '老师这边', name: '老师在想', note: '脑在写、嘴没出声;按了晃一下「老师在想,等一下再说」', input: { pending: true }, sound: 'none', tutor: 'chinese', expect: 'think' },
@@ -38,7 +38,7 @@ export const VOICE_SCENES: VoiceScene[] = [
   { group: '别的声音', name: '卡在念', note: '点读、单词卡、田字格的声音:不是老师,不画声音', input: { status: 'card' }, sound: 'none', tutor: 'chinese', expect: 'card' },
   { group: '别的声音', name: '再听一遍', note: '放的是刚才录下的老师,不是老师在说', input: { status: 'replay' }, sound: 'none', tutor: 'chinese', expect: 'replay' },
   { group: '别的声音', name: '小课堂在放', note: '课里原来的声音在舞台上放', input: { status: 'lecture' }, sound: 'none', tutor: 'chinese', expect: 'lecture' },
-  { group: '口语课一直听', name: '口语单拍好 · 点上面开始', note: '左栏「先热身,再打电话」点之前:灰着、不接,麦也不开(拍板 24)', input: { open: true, choose: true }, sound: 'none', tutor: 'english', expect: 'choose' },
+  { group: '口语课一直听', name: '口语单拍好 · 点上面开始', note: '左栏「先热身,再打电话」点之前:灰着、不接,麦也不开', input: { open: true, choose: true }, sound: 'none', tutor: 'english', expect: 'choose' },
   { group: '口语课一直听', name: '在听', note: '不用按,这颗是麦克风开关', input: { open: true }, sound: 'none', tutor: 'english', expect: 'open' },
   { group: '口语课一直听', name: '孩子在说', note: '服务端判出孩子开口', input: { open: true, hearing: true }, sound: 'kid', tutor: 'english', expect: 'open-kid' },
   { group: '口语课一直听', name: '老师在说', note: '同上面「老师在说」,底是淡蓝的', input: { open: true, status: 'mouth' }, sound: 'tutor', tutor: 'english', expect: 'open-tutor' },

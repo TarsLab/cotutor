@@ -1,5 +1,5 @@
 /**
- * mp4 的时长(视频小课堂的课长,《小课堂设计.md》§八第 4 步):走顶层的盒子找 moov,再在里面找 mvhd,读 timescale 与 duration。
+ * mp4 的时长(视频小课堂的课长第 4 步):走顶层的盒子找 moov,再在里面找 mvhd,读 timescale 与 duration。
  * 只读盒子头,不把整个文件读进来(moov 在末尾也行);认不出来回 null,不抛。
  */
 import { open } from 'node:fs/promises';

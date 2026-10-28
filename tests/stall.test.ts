@@ -63,7 +63,7 @@ try {
     const starts = es.filter((e) => e.kind === 'start') as { resume: boolean }[];
     check('断一次:第二次起是 resume', starts.length === 2 && !starts[0].resume && starts[1].resume, JSON.stringify(starts));
   }
-  // 工具调用写成了正文、停在那里(《工作流程.md》拍板 21):resume 同一会话叫它直接回孩子,一次;那块不进板书,前面那句留着
+  // 工具调用写成了正文、停在那里:resume 同一会话叫它直接回孩子,一次;那块不进板书,前面那句留着
   {
     const m = await send('math-tutor', '写成正文');
     const starts = events('math-tutor', m.job).filter((e) => e.kind === 'start') as { resume: boolean }[];

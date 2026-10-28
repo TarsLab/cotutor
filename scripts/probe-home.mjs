@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 首页(《首页设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
+ * 首页的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 临时 workspace + HTTP serve → 语文老师先讲一轮(给「接着」一个话题)→ 写草稿、cotutor home publish →
  * Chrome 开孩子端(牌堆,一位老师一张牌):叠的顺序、最前那张在最上层、卡的归属、橙点;手机竖着叠、平板横着叠;点后面那张抽出换到最前;手机与平板各截一张 →
  * 点「新话题」是空白老师页 → 回首页点开场按钮:老师页打开、按钮上的字发出去、索引里那条带 via →
@@ -39,7 +39,7 @@ for (const t of Object.values(cfg.tutors)) delete t.runtime;
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
-// 老师都走实时(《产品规划.md》拍板 30):嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
+// 老师都走实时:嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
 const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
 const mouth = await startFakeRealtime();
 const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home, COTUTOR_LIVE_ENDPOINT: mouth.endpoint }, stdio: 'ignore', detached: keep });
@@ -147,7 +147,7 @@ for: ${day}
   await evaluate(`document.querySelector('#deck .pc.front .bt-new').click()`);
   await sleep(600);
   const blank = await evaluate(`({ on: document.querySelector('#tutor').classList.contains('on'), blank: document.querySelector('#board .blank b')?.textContent, mo: document.querySelector('#c-mo').textContent })`);
-  ok('新话题:空白老师页,等孩子开口;胶囊旁不挂「新话题」小标签(《产品规划.md》拍板 26)', blank.on && blank.blank === '想问什么?' && blank.mo === '', JSON.stringify(blank));
+  ok('新话题:空白老师页,等孩子开口;胶囊旁不挂「新话题」小标签', blank.on && blank.blank === '想问什么?' && blank.mo === '', JSON.stringify(blank));
   await evaluate(`document.querySelector('#back').click()`);
   await sleep(1500);
   ok('从老师页回来:还是数学在最前', (await stack()).card === 'math-tutor');

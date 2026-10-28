@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * 口语课页面(孩子端 /talk,《口语课设计.md》拍板 12)的手动验收,不花钱:真 serve(临时 workspace,talk.enabled)+ 假的读口语单(COTUTOR_TALK_FAKE_LIST)+ 无头 Chrome。
+ * 口语课页面(孩子端 /talk)的手动验收,不花钱:真 serve(临时 workspace,talk.enabled)+ 假的读口语单(COTUTOR_TALK_FAKE_LIST)+ 无头 Chrome。
  * 走一遍:拍照屏 → 相册选一张 → 老师在看 → 口语单(补一个词、× 掉一句)→「先热身,再打电话」交给英语老师的实时页(地址带这份口语单,talk.json 改好了)→
- * 回口语课页,拍照屏有「接着上」→ 点了还是交给英语老师、同一份。上课在实时页那头(probe-live-page 的口语课那段);这一页不再打电话(《产品规划.md》拍板 30)。
+ * 回口语课页,拍照屏有「接着上」→ 点了还是交给英语老师、同一份。上课在实时页那头(probe-live-page 的口语课那段);这一页不再打电话。
  * 用法:node scripts/probe-talk-page.mjs [--keep] [--out <截图目录>]
  */
 import { probeDir, spawn } from './_guard.mjs';

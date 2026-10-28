@@ -1,5 +1,5 @@
 /**
- * 听写的录像(《家长录像设计.md》拍板 13,src/dictation/lib/reel.ts):一次听写的记录 → 章、点、经过、空白,任一刻屏幕上是什么。
+ * 听写的录像(src/dictation/lib/reel.ts):一次听写的记录 → 章、点、经过、空白,任一刻屏幕上是什么。
  * 记录是手搭的:冬天写得顺;雪白——想了 10 秒、雪写两笔不会了点「给答案」(两笔清掉)、看笔顺、照着写,白写歪了擦掉重写;
  * 鼻子——念完切到别处 38 分钟,回来接着写;交卷后自己说要再写冬天,写好交了;对好了。
  */
@@ -37,7 +37,7 @@ const s = {
     ev(7600, 'show', 1), ev(7700, 'say', 1, { n: 1 }), ev(9300, 'say', 1, { n: 2 }),
     // 9300 + 念 → 想了 10 秒才动笔(22000);两笔之后停住,24000 点给答案
     { at: iso(24000), t: 24000, kind: 'reveal', word: 1, char: 0 }, ev(24300, 'order', 1, { char: 0 }), ev(26500, 'trace', 1, { char: 0 }),
-    // 26600 换成小档写字格(拍板 30)
+    // 26600 换成小档写字格
     ev(26600, 'view', 1, { w: 1180, h: 820, pad: 's' }),
     ev(28000, 'done', 1, { char: 0 }), ev(33000, 'done', 1, { char: 1 }),
     ev(34000, 'show', 2), ev(34300, 'say', 2, { n: 1 }), ev(36800, 'say', 2, { n: 2 }),
@@ -84,7 +84,7 @@ const sq = drClock(r, false), real = drClock(r, true);
 check('跳过空白:总长短得多(38 分钟压成 1.5 秒),来回换算对得上', sq.total < 60_000 && real.total === r.end && Math.abs(sq.toWall(sq.toPlay(back + 5100)) - (back + 5100)) < 1, `${sq.total} / ${real.total}`);
 check('空白里的一刻压在 1.5 秒里', sq.toPlay(back) - sq.toPlay(away) === 1500);
 
-// 比对(拍板 16):这个词写好那一刻进经过,孩子的屏幕上没有
+// 比对:这个词写好那一刻进经过,孩子的屏幕上没有
 {
   const J = { judged: true, empty: false, std: 5, wrote: 4, matched: [0, 1, 2, 3], missing: [4], extra: [], order: true, backwards: [], place: { size: 0.6, dx: 0, dy: 0 }, ask: true };
   const sj = { ...s, first: s.first.map((a, w) => (a && w === 0 ? { ...a, judges: [J, { ...J, missing: [], wrote: 5, matched: [0, 1, 2, 3, 4], ask: false, place: null }] } : a)) } as unknown as Session;

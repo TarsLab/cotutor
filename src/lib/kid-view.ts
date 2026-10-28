@@ -1,5 +1,5 @@
 /**
- * 孩子视图(《cotutor契约草案.md》§4,2026-09-10 改板书):最终文本剥掉「记账」段后,正文就是板书——
+ * 孩子视图(2026-09-10 改板书):最终文本剥掉「记账」段后,正文就是板书——
  * 普通段落是讲稿(一行一句),围栏是卡(src/lib/board.ts 解析);kidText = 讲稿各句拼起来(家长视图的「孩子看到」摘要),
  * 每句按 replyMaxChars 截;第一个 H2 起是给家长的尾巴(parentText),孩子看不到。出错什么都不出现。机械规则,不靠模型判断。
  * 正文取自 kidSource:带卡 / 带固定段的顶层文本段 + 最后一段(老师板书之后又用了工具也不丢)。
@@ -52,7 +52,7 @@ const none = (ok: boolean, bookkeeping: Bookkeeping | null = null): KidView => (
 const FENCE_OR_H2 = /^\s*(?:```|~~~|## )/m;
 
 /**
- * 孩子看的正文从哪来(2026-09-10 拍板,两次真跑的教训):`result.result` 只是这轮**最后一段**顶层文本——老师写完板书再用一次工具、再补一句,
+ * 孩子看的正文从哪来:`result.result` 只是这轮**最后一段**顶层文本——老师写完板书再用一次工具、再补一句,
  * 板书和「## 记账」段就没了。所以正文 = 这轮里**带围栏(卡)或带 H2 固定段的顶层文本段** + **最后一段**(顺序不变,重复不算两次);
  * 中间那些「我先看看账本」之类没卡没段的话不进。子代理的话本来就不在顶层。
  */
@@ -104,12 +104,12 @@ export interface KidMessage {
   photos?: string[];
   /** 这条是看完小课堂后的第一条:哪份课包、课名、画过的几处(节前的小课堂卡与画的卡从这里画);again = 再看一遍又画的那条,节前只画画的卡 */
   lecture?: KidLecture;
-  /** 孩子从左栏的纸交的画(《画板设计.md》§三):节前一张孩子的画卡 */
+  /** 孩子从左栏的纸交的画:节前一张孩子的画卡 */
   drawing?: KidDrawing;
-  /** 孩子的话怎么上板(《工作流程.md》§二「一个话题一节」):交卡不写;首页按钮发的(正文就是按钮上的字)不写,从按钮进来后孩子自己说的照写 */
+  /** 孩子的话怎么上板:交卡不写;首页按钮发的(正文就是按钮上的字)不写,从按钮进来后孩子自己说的照写 */
   action?: 'submit';
   fromHome?: true;
-  /** 这一轮是实时的(《实时老师设计.md》):讲稿不配音、嘴照念;不出卡的一轮板上留讲稿的字(拍板 8),还在跑时有句就出节 */
+  /** 这一轮是实时的:讲稿不配音、嘴照念;不出卡的一轮板上留讲稿的字,还在跑时有句就出节 */
   live?: true;
 }
 
@@ -132,7 +132,7 @@ function cardsWithState(m: ConversationMessage, states: CardStates, assets: Card
 }
 
 /**
- * 对话索引 → 孩子端条目(《契约草案.md》§4 的机械过滤在服务端做):不带 result / error / 费用 / 家长尾巴;
+ * 对话索引 → 孩子端条目(的机械过滤在服务端做):不带 result / error / 费用 / 家长尾巴;
  * 卡上的答案剥掉,孩子自己做的状态(states)与已生成的资产(assets,都从 .cards/ 读)并到卡上。出错的运行:没有 question 的直接不出现;有 question 的只留问句(老师头像不灰,下一条照常)。
  */
 export function kidConversation(index: { messages: readonly ConversationMessage[] }, states: CardStates = {}, assets: CardAssets = {}): KidMessage[] {
@@ -154,7 +154,7 @@ export function kidConversation(index: { messages: readonly ConversationMessage[
 }
 
 /**
- * 家长板书页的一条(《家长板书页设计.md》§3、§4.1):形状同 KidMessage,家长多看到的都是可选字段;
+ * 家长板书页的一条:形状同 KidMessage,家长多看到的都是可选字段;
  * `section` **不剥答案**;`question` 不管谁发的都给;记账 / 整理记忆那两种轮也在(旁注写「已记进日记」「整理了记忆」)。
  */
 export interface ParentMessage extends KidMessage {

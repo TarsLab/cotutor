@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * 录像的实录(《家长录像设计.md》§4)孩子端这一段的验收(在 pnpm test 里:tests/probe.test.ts 起它,要本机 Chrome,没有就跳过;走 mock,不花钱):
+ * 录像的实录孩子端这一段的验收(在 pnpm test 里:tests/probe.test.ts 起它,要本机 Chrome,没有就跳过;走 mock,不花钱):
  * 孩子端进语文老师 → 点开选择题 → 选一项 → 关弹窗 → 页面退到后台(pagehide)→ 拦下发出去的实录:
- * 话题对、弹窗开关各一条(那张卡)、按顺序、不再记播放位置(讲稿不念了,《产品规划.md》拍板 30);家长端 /parent 看同一个话题什么都不发。
+ * 话题对、弹窗开关各一条(那张卡)、按顺序、不再记播放位置(讲稿不念了);家长端 /parent 看同一个话题什么都不发。
  *
  * 用法:node scripts/probe-play.mjs [--keep](留下 mock)
  */
@@ -78,7 +78,7 @@ try {
 
   // ---- 家长端看同一个话题:不记 ----
   await send('Page.navigate', { url: `${base}/parent` });
-  // 清单是一天的时间线(《家长板书页设计.md》拍板 22):每个话题一条 .pev,上面的 .kid 按钮开录像;mock 今天只有语文老师聊过
+  // 清单是一天的时间线:每个话题一条 .pev,上面的 .kid 按钮开录像;mock 今天只有语文老师聊过
   await until(`document.querySelectorAll('.pev .kid').length > 0`);
   await evaluate(`document.querySelector('.pev .kid').click()`);
   await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`);

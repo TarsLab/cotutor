@@ -1,5 +1,5 @@
 /**
- * activity 全流程(假 CLI,不花钱,《activity设计.md》第 2 期):init 拷进出厂的你说我画 → 首页 activity 按钮的检查(文件不在、参数不对)→
+ * activity 全流程(假 CLI,不花钱第 2 期):init 拷进出厂的你说我画 → 首页 activity 按钮的检查(文件不在、参数不对)→
  * 孩子端是开场按钮、参数不下发 → 点了:新话题、按钮字、参数补了缺省记在第一条 → 上下文包 activity: 在最后、<cotutor-activity> 按参数裁过、
  * 老师没有的 paint 卡写法跟在后面 → 同一话题下一条:activity: 还在、原文「未变」→ 家长改了参数,旧话题照旧 → pack / send --activity → 回放带上。
  */
@@ -202,7 +202,7 @@ try {
     check('activity 话题里的 paint 不报「清单外的卡」', !(index.messages.find((m) => m.job === a1.job)?.warnings ?? []).some((w) => w.includes('清单外')));
     const a2 = await send({ text: '整段', thread: th });
     check('下一条:cards 说没画、为什么;缺 = 连说过一遍;拦下的不占张数', a2.prompt.includes('没画:孩子还没看着整段连着说一遍') && stateOf(a2.prompt).includes('"缺": "连说过一遍"') && stateOf(a2.prompt).includes('"还能画": 2'), stateOf(a2.prompt));
-    // 画风照 workspace 里这份 activity 文件的「画家收到什么」(拍板 12):家长改了那一行,下一张就照它
+    // 画风照 workspace 里这份 activity 文件的「画家收到什么」:家长改了那一行,下一张就照它
     const actFile = join(root, 'agents', 'chinese-tutor', 'activities', '你说我画.md');
     const actText = readFileSync(actFile, 'utf8');
     writeFileSync(actFile, actText.replace('儿童绘本插画,水彩加干净的线条', '剪纸风格插画,红纸黑线'));
@@ -259,7 +259,7 @@ try {
     check('挂的 activity 不在:按钮点不了(null)', (await resolveVia(ctx.ws, 'chinese-tutor', { home: '2026-10-12-0900', button: 0 })) === null);
     writeFileSync(pubFile, lec());
     const plain = await resolveVia(ctx.ws, 'chinese-tutor', { home: '2026-10-12-0900', button: 0 });
-    check('不挂:看完照这位老师的「小课堂」activity(拍板 17、18)', plain?.kind === 'lecture' && JSON.stringify((plain as { activity?: unknown }).activity) === JSON.stringify({ name: '小课堂', params: {} }), JSON.stringify(plain));
+    check('不挂:看完照这位老师的「小课堂」activity', plain?.kind === 'lecture' && JSON.stringify((plain as { activity?: unknown }).activity) === JSON.stringify({ name: '小课堂', params: {} }), JSON.stringify(plain));
     const lecFile = join(root, 'agents', 'chinese-tutor', 'activities', '小课堂.md');
     const lecText = readFileSync(lecFile, 'utf8');
     rmSync(lecFile);
@@ -311,7 +311,7 @@ try {
     check('eval 先看小课堂:课不在 workspace 里,一轮都不跑,说换成自己的课', msg.includes('不在 bundles/ 或 lectures/'), msg);
   }
 
-  // ---- activity 独立:系统提示、卡、记忆都是 activity 的(拍板 13–14)----
+  // ---- activity 独立:系统提示、卡、记忆都是 activity 的----
   {
     const run = { name: '你说我画', params: { 最多画: 2 } };
     const go = async (body: { text: string; runtime: string; thread?: string }) => {

@@ -1,5 +1,5 @@
 /**
- * 学科色与学科别名(《首页设计.md》拍板 26):三门主科固定、别名归一;其余按先后分、同一家不撞色;cotutor.json 的 color 优先;
+ * 学科色与学科别名:三门主科固定、别名归一;其余按先后分、同一家不撞色;cotutor.json 的 color 优先;
  * 自动分的八种都是白字压得住的深色。
  */
 import { check, done } from './_check.ts';
@@ -9,7 +9,7 @@ import { canonicalSubject, subjectLang, tutorExtras, TutorSchema } from '../src/
 try {
   check('别名归一:英文 / English / english 是英语,中文 / Chinese 是语文,Math 是数学;别的原样、去两头空白', canonicalSubject('英文') === '英语' && canonicalSubject(' English ') === '英语' && canonicalSubject('中文') === '语文' && canonicalSubject('Chinese') === '语文' && canonicalSubject('Math') === '数学' && canonicalSubject(' 口播 ') === '口播' && canonicalSubject('') === null && canonicalSubject(undefined) === null);
   check('听写写哪种跟着别名:英文、English 是 en;语文、没写是 zh', subjectLang('英文') === 'en' && subjectLang('English') === 'en' && subjectLang('英语') === 'en' && subjectLang('语文') === 'zh' && subjectLang(undefined) === 'zh');
-  check('英语缺省带口语课,要口语课开着(《口语课设计.md》拍板 20);写了 extras 照写的', tutorExtras({ subject: 'English' }, true).join() === 'talk' && tutorExtras({ subject: '英语' }).length === 0 && tutorExtras({ subject: '英语', extras: ['dictation'] }, true).join() === 'dictation' && tutorExtras({ subject: '数学' }, true).length === 0);
+  check('英语缺省带口语课,要口语课开着;写了 extras 照写的', tutorExtras({ subject: 'English' }, true).join() === 'talk' && tutorExtras({ subject: '英语' }).length === 0 && tutorExtras({ subject: '英语', extras: ['dictation'] }, true).join() === 'dictation' && tutorExtras({ subject: '数学' }, true).length === 0);
   check('语文缺省带听写,别名也算', tutorExtras({ subject: '中文' }).join() === 'dictation' && tutorExtras({ subject: '数学' }).length === 0 && tutorExtras({ subject: '语文', extras: [] }).length === 0);
 
   const c = tutorColors({ 'chinese-tutor': { subject: '语文' }, 'math-tutor': { subject: '数学' }, 'english-tutor': { subject: 'English' }, 'science-tutor': { subject: '科学' }, 'music-tutor': { subject: '音乐' }, 'pe-tutor': { subject: '体育' } });

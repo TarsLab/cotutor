@@ -1,5 +1,5 @@
 /**
- * 首页文件(《首页设计.md》§三、§四、§七)的纯函数:解析草稿、查问题(两级)、排卡(老师卡置顶、缺的补)、孩子端按钮。
+ * 首页文件的纯函数:解析草稿、查问题(两级)、排卡(老师卡置顶、缺的补)、孩子端按钮。
  * 解析走板书同一个解析器(place = home);永不抛错,问题都带行号(1 起)与修法。要读盘的引用(话题在不在)由调用方查好传进来。
  */
 import type { TutorButton } from '../cards/index.ts';
@@ -243,7 +243,7 @@ export function arrangeHome(cards: readonly BoardCard[], tutors: readonly string
   return [...top, ...rest];
 }
 
-/** 非老师卡归哪位老师(《首页设计.md》拍板 19):文件顺序里跟在哪张(上首页的)老师卡后面;听写卡写了念的老师(而且上首页)就归他;都没有 = 公共 */
+/** 非老师卡归哪位老师:文件顺序里跟在哪张(上首页的)老师卡后面;听写卡写了念的老师(而且上首页)就归他;都没有 = 公共 */
 export function homeOwners(cards: readonly BoardCard[], tutors: readonly string[]): (string | null)[] {
   let cur: string | null = null;
   return cards.map((c) => {
@@ -254,7 +254,7 @@ export function homeOwners(cards: readonly BoardCard[], tutors: readonly string[
 }
 
 /**
- * 今天从同一个入口进去的话题(《activity设计.md》§八,设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm):
+ * 今天从同一个入口进去的话题(设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm):
  * 新话题的空白板上一个胶囊接它;activity、小课堂按钮先问接着它还是重新开始。title = 那个话题孩子说的第一句(截到 10 字;activity 是按钮字之后那句,还没说就空),at = 最后一条的时刻
  */
 export interface Resume {
@@ -306,7 +306,7 @@ export function todayResumes(messages: readonly { thread?: string; job: string; 
 }
 
 /**
- * 一张老师卡的按钮:新话题第一,然后是文件里的。应用不再加「接着刚才的」(《activity设计.md》§八):每个按钮进去都是新话题,
+ * 一张老师卡的按钮:新话题第一,然后是文件里的。应用不再加「接着刚才的」:每个按钮进去都是新话题,
  * 新话题、activity、小课堂三种按钮带上 resume(今天同一个入口的话题),孩子端在空白板上接。
  * 接着按钮指的话题现在找不到(alive 说没有)就不出现。keepBriefs = 家长预览(讲法留着)。
  */
@@ -318,7 +318,7 @@ export function kidButtons(buttons: readonly TutorButton[], opts: { resumes?: Re
     if (b.until && opts.today && b.until < opts.today) return;
     const brief = opts.keepBriefs && b.brief ? { brief: b.brief } : {};
     // activity 按钮在孩子那边就是开场按钮:点了发出按钮上的字;是哪个 activity、参数是什么,服务端照 via 从发布件查
-    // activity 用不了(文件不在、写坏了、这个按钮的参数按现在的文件解析不出),按钮不出(《首页设计.md》拍板 30):不让孩子点进一个没人带或带不了的话题;小课堂看完照它聊,同样
+    // activity 用不了(文件不在、写坏了、这个按钮的参数按现在的文件解析不出),按钮不出:不让孩子点进一个没人带或带不了的话题;小课堂看完照它聊,同样
     const hasActivity = (name: string, params: Readonly<Record<string, string>> = {}): boolean => opts.activity?.(name, params) ?? true;
     if (b.kind === 'start') out.push({ id: k, kind: 'start', label: b.label, ...brief });
     else if (b.kind === 'activity') { if (hasActivity(b.activity, b.params)) out.push({ id: k, kind: 'start', label: b.label, ...brief, ...resume(`activity:${b.activity}`) }); }

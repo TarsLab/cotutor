@@ -1,5 +1,5 @@
 /**
- * 听写的比对(《听写设计.md》):孩子在田字格里写的每一笔,对 hanzi-writer-data 的中线(medians),判这个字写没写全、先后对不对、占格偏不偏。
+ * 听写的比对:孩子在田字格里写的每一笔,对 hanzi-writer-data 的中线(medians),判这个字写没写全、先后对不对、占格偏不偏。
  * 一笔像不像一笔照搬 hanzi-writer 3.7.2 的 strokeMatches(MIT,Copyright (c) 2014 David Chanin):均距、起止点、方向、Fréchet 形状、长度五项;
  * 它是描红时一笔一笔现判(知道该写第几笔),听写是写完了一起判,所以这里另做一步配对:每一笔对每一笔都试,按均距从近到远一对一配上。
  * 坐标同 hanzi-writer:1024 见方、y 向上(页面上 y = 900 − 屏幕 y)。纯函数,离屏可测。
@@ -247,7 +247,7 @@ export interface CharJudge {
   backwards: number[];
   /** 占格:孩子的字相对书上的,size = 大小之比,dx / dy = 中心偏多少(1024 见方,y 向上) */
   place: { size: number; dx: number; dy: number } | null;
-  /** 孩子端问不问「这个再写一遍?」:空着、少笔、多笔、有一笔对不上(2026-10-10 拍板) */
+  /** 孩子端问不问「这个再写一遍?」:空着、少笔、多笔、有一笔对不上 */
   ask: boolean;
 }
 

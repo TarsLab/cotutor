@@ -63,7 +63,7 @@ try {
   const sb = await fr.locator('.lc-seg').nth(5).boundingBox();
   await page.mouse.click(sb.x + 2, sb.y + sb.height / 2);
   await fr.locator('.lc-play').click();
-  // 放完停在最后一帧(拍板 37),「去问老师」淡入了才回板书
+  // 放完停在最后一帧,「去问老师」淡入了才回板书
   await fr.locator('.lc-askbtn').waitFor({ timeout: 60000 });
   await fr.locator('.lc-askbtn').click();
   await page.waitForSelector('.lc-pending .c-mark img.mk-svg', { timeout: 30000 });

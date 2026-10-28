@@ -354,7 +354,7 @@ ${BRAND_CSS}
   .field label { font-size:12.5px; color:var(--muted); }
   .field input, .field select { height:36px; font-size:14px; padding:0 10px; border:0; box-shadow:0 0 0 1px var(--line); border-radius:9px; background:var(--surface); width:100%; }
   .field input:focus, .field select:focus { outline:0; box-shadow:0 0 0 1.5px var(--accent-line); }
-  /* 学科色的色块(拍板 26):自动 + 三门主科 + 八种,都是白字压得住的深色;不开放随便填 */
+  /* 学科色的色块:自动 + 三门主科 + 八种,都是白字压得住的深色;不开放随便填 */
   .swatches { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .swatches .sw { width:28px; height:28px; border-radius:50%; border:0; box-shadow:inset 0 0 0 2px rgba(255,255,255,.35); cursor:pointer; padding:0; }
   .swatches .sw.auto { width:auto; height:28px; padding:0 12px; border-radius:14px; font-size:12.5px; color:#fff; }
@@ -424,7 +424,7 @@ ${BRAND_CSS}
   .vrow .tags { display:flex; gap:6px; flex-wrap:wrap; }
   .vrow .pick { font-size:12.5px; height:30px; padding:0 10px; }
 
-  /* ---------- activity(《工作台设计.md》拍板 7–11):列表(每位老师先是新话题 = 老师文件)/ 原文 / 检查·预览·和出厂比 ---------- */
+  /* ---------- activity:列表(每位老师先是新话题 = 老师文件)/ 原文 / 检查·预览·和出厂比 ---------- */
   .act-wrap { max-width:none; }
   .act { display:grid; grid-template-columns:212px minmax(0,1fr) minmax(300px,380px); gap:16px; align-items:start; }
   .alist { display:flex; flex-direction:column; gap:10px; position:sticky; top:0; }
@@ -670,7 +670,7 @@ ${BRAND_CSS}
     const el = $('#health');
     try {
       const hh = await api('GET', '/api/health');
-      // 仓里的提交变了:serve 还跑着起来时那份代码(build.ts,《孩子端流水设计.md》7.1)
+      // 仓里的提交变了:serve 还跑着起来时那份代码(build.ts)
       const changed = !hh.configError && hh.changed;
       el.textContent = hh.configError ? 'cotutor.json 改坏了' : changed ? '代码更新了,重起 serve 才用上' : '服务正常';
       el.classList.toggle('bad', Boolean(hh.configError));
@@ -689,7 +689,7 @@ ${BRAND_CSS}
 
   const loadConfig = async () => {
     state.config = await api('GET', '/api/config');
-    // 孩子端的设备(《孩子端流水设计.md》§五):对话页每轮写设备名
+    // 孩子端的设备:对话页每轮写设备名
     state.devices = await api('GET', '/api/dev/devices').catch(() => ({}));
     $('#title').textContent = state.config.title;
     $('#ws-ini').textContent = (state.config.title || '·').slice(0, 1);
@@ -702,7 +702,7 @@ ${BRAND_CSS}
   // ---- 对话:左栏 ----
   /** 头像:和孩子端同一条判定——是图片路径就走 /api/kid/avatar/<老师>(figshot 写的),否则当 emoji 显示 */
   const isAvatarImage = (v) => Boolean(v) && /\.(png|jpe?g|webp|svg)$/i.test(v);
-  /** 学科色(拍板 26):「自动」= 不写 color(三门主科固定色,其余按先后分);点一个色块 = 写进 cotutor.json */
+  /** 学科色:「自动」= 不写 color(三门主科固定色,其余按先后分);点一个色块 = 写进 cotutor.json */
   const colorField = (t, c) => {
     const box = h('div', { class: 'swatches', 'data-f': 'color', 'data-v': t.color || '' });
     const pick = (v) => { box.dataset.v = v; for (const b of box.children) b.classList.toggle('on', (b.dataset.c || '') === v); };
@@ -1237,7 +1237,7 @@ ${BRAND_CSS}
     return out;
   };
 
-  /** 老师文件在 activity 页改(拍板 11):和 activity 同一个编辑器,带检查、预览、和出厂比、撞车保护 */
+  /** 老师文件在 activity 页改:和 activity 同一个编辑器,带检查、预览、和出厂比、撞车保护 */
   const fileEditor = (t) => [h('button', { class: 'btn', type: 'button', title: '到 activity 页的「' + (t.name.endsWith('-tutor') ? '新话题' : '老师文件') + '」改:新话题照它带', on: { click: () => {
     act.want = { tutor: t.name, name: t.name.endsWith('-tutor') ? '新话题' : '老师文件', kind: 'tutor' };
     location.hash = '#activity?a=' + encodeURIComponent(t.name);
@@ -1442,8 +1442,8 @@ ${BRAND_CSS}
     panel.append(h('p', { class: 'hint' }, '试听是真合成一次(voxtell 有缓存,同一句同一个音色以后不再花钱);挑中就写进 cotutor.json,卡点了就用新声音。只管卡自己的声音(点读卡、单词卡);老师开口的声音在「实时的嘴」那半。'));
     $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), kindSeg(), h('span', { class: 'sub' }, '先听再挑,挑中的写进 cotutor.json')), panel));
   };
-  // ---- 实时的嘴(《实时老师设计.md》):百炼 realtime 认的 56 个音色(src/live/voices.ts);试听是真连一次照念这一句(几分钱,存着)。
-  //      挑中的写进 live.voices.<老师>;有脸的老师都走实时(《产品规划.md》拍板 30),没挑的用缺省音色;清掉 = 回到缺省 ----
+  // ---- 实时的嘴:百炼 realtime 认的 56 个音色(src/live/voices.ts);试听是真连一次照念这一句(几分钱,存着)。
+  //      挑中的写进 live.voices.<老师>;有脸的老师都走实时,没挑的用缺省音色;清掉 = 回到缺省 ----
   const liveVoiceState = { data: null, error: null, q: '', lang: '', loading: false };
   const loadLiveVoices = async () => {
     liveVoiceState.loading = true;
@@ -1599,7 +1599,7 @@ ${BRAND_CSS}
         tryFb)));
     tts.append(h('p', { class: 'hint' }, '用第一位配了音色的老师试;voxtell 不在 PATH 就把第一项写成完整路径。kid 的别的字段、version、运行时模板请直接编辑 cotutor.json。'));
 
-    // 孩子端:惯用手(kid.hand,《实时老师设计.md》拍板 22)——左撇子时平板横屏实时老师页的浮层(按住说话)挪到右边;孩子端下次进老师页生效
+    // 孩子端:惯用手(kid.hand)——左撇子时平板横屏实时老师页的浮层(按住说话)挪到右边;孩子端下次进老师页生效
     const kid = h('div', { class: 'panel' });
     const left = (c.kid && c.kid.hand) === 'left';
     const handBtn = (v, label) => h('button', { type: 'button', class: left === (v === 'left') ? 'on' : '', 'aria-pressed': String(left === (v === 'left')), on: { click: async () => {
@@ -1615,7 +1615,7 @@ ${BRAND_CSS}
     $('#settings').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '设置'), h('span', { class: 'sub' }, '路径、服务、配音;文件仍是真相,这页只是改它的一个口子')), ...(mig ? [mig] : []), paths, server, tts, kid));
   };
 
-  // ---- 概览(《工作台设计.md》):近七天的数字、今天各老师、要看一眼的轮次、体检(doctor 不带 --live) ----
+  // ---- 概览:近七天的数字、今天各老师、要看一眼的轮次、体检(doctor 不带 --live) ----
   const ov = { data: null, doctor: null, doctorBusy: false, error: null };
   const icon = (d, cls) => { const s = h('span', { class: 'ic' + (cls ? ' ' + cls : '') }); s.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'; return s; };
   const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
@@ -1668,7 +1668,7 @@ ${BRAND_CSS}
       h('button', { type: 'button', disabled: ov.doctorBusy, on: { click: runDoctor } }, icon('<path d="M3 12h4l2.5-6 5 12 2.5-6h4"/>'), h('b', {}, '体检一次'), h('small', { class: 'num' }, ov.doctorBusy ? '在跑……' : 'doctor')));
 
     const slowEl = d.slow ? h('span', { class: 'st warn' }, d.slow + ' 轮') : h('span', { class: 'st ok' }, '没有');
-    // 孩子端开着多久(《孩子端流水设计.md》7.4):前台的时间,不是学了多久
+    // 孩子端开着多久:前台的时间,不是学了多久
     const dur = (ms) => { const m = Math.round(ms / 60000); return ms < 60000 ? '不到 1 分' : m >= 60 ? Math.floor(m / 60) + ' 时 ' + (m % 60) + ' 分' : m + ' 分'; };
     const kt = d.kidTime.today;
     const todayBox = h('section', { class: 'blk' },
@@ -1715,7 +1715,7 @@ ${BRAND_CSS}
       h('div', { class: 'hd' }, h('h2', {}, '老师今天'), h('span', { class: 'sub' }, '按 cotutor.json 里有谁走'), h('span', { class: 'right' }, h('a', { href: '#team', on: { click: (e) => { e.preventDefault(); location.hash = '#team'; showTab('team'); } } }, '管理老师团'))),
       tbl);
 
-    // 设备(《孩子端流水设计.md》§五):近 30 天开过的,点名字起名(回车存、Esc 不存,空着 = 去掉名字)
+    // 设备:近 30 天开过的,点名字起名(回车存、Esc 不存,空着 = 去掉名字)
     const when = (iso) => { const t = new Date(iso); const p2 = (n) => String(n).padStart(2, '0'); return (t.toDateString() === now.toDateString() ? '今天 ' : p2(t.getMonth() + 1) + '-' + p2(t.getDate()) + ' ') + p2(t.getHours()) + ':' + p2(t.getMinutes()); };
     const nameEl = (dv) => {
       const b = h('button', { type: 'button', class: 'dname' + (dv.name ? '' : ' none'), title: '起个名字', on: { click: () => {
@@ -1777,9 +1777,9 @@ ${BRAND_CSS}
     $('#overview').replaceChildren(h('div', { class: 'wrap' }, head, tiles, h('div', { class: 'cols3' }, todayBox, weekBox, useBox), h('div', { class: 'cols2' }, left, issueBox)));
   };
 
-  // ---- activity(《工作台设计.md》拍板 7–11):看、改、边改边查(不落盘)、老师收到什么、和出厂比、恢复出厂;存要带读进来时的 hash。老师文件(新话题)同一个编辑器 ----
+  // ---- activity:看、改、边改边查(不落盘)、老师收到什么、和出厂比、恢复出厂;存要带读进来时的 hash。老师文件(新话题)同一个编辑器 ----
   const FENCE = String.fromCharCode(96, 96, 96);
-  // 老师文件(拍板 11):kind 'tutor' 的那份是「新话题」照的提示词,同一个编辑器;act.tfiles 是它们的行,act.want = 别的页点过来要开的那份
+  // 老师文件:kind 'tutor' 的那份是「新话题」照的提示词,同一个编辑器;act.tfiles 是它们的行,act.want = 别的页点过来要开的那份
   const act = { list: null, tfiles: null, want: null, cur: null, saved: '', hash: '', text: '', diff: [], check: null, tab: 'check', pick: 'auto', params: {}, seq: 0, timer: 0, conflict: false, caret: 1, msg: '', msgBad: false, el: null };
   const STATE_TAG = { latest: ['出厂', ''], upgradable: ['可升级', 'info'], custom: ['改过', 'accent'], untracked: ['自家的', ''], own: ['自家的', ''], missing: ['不在', 'err'], broken: ['读不出', 'err'] };
   const actUrl = (t, n) => '/api/dev/activities/' + t + '/' + encodeURIComponent(n);

@@ -82,7 +82,7 @@ export async function stageIndex(): Promise<string | null> {
   const html = await readFile(join(STAGE_DIR, 'index.html'), 'utf8').catch(() => null);
   if (html === null) return null;
   const v = await stageVersion();
-  // 舞台开在 iframe 里,自己装孩子端流水的出错监听(kid-log.ts,《孩子端流水设计.md》§三):只记出错,不报打开
+  // 舞台开在 iframe 里,自己装孩子端流水的出错监听(kid-log.ts):只记出错,不报打开
   const log = `<script>${KID_LOG_JS}  kidLog.start({ page: 'stage', mode: 'stage', v: '${v}' });\n</script>\n`;
   return html.replace('<script', () => `${log}<script`).replace('/stage/stage.js', `/stage/stage.js?v=${v}`).replace('/stage/stage.css', `/stage/stage.css?v=${v}`);
 }

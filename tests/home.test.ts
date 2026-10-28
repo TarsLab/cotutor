@@ -1,4 +1,4 @@
-/** 首页文件的纯函数(《首页设计.md》):解析、两级问题、排卡、孩子端按钮、--force 丢卡、发布 id;上下文包的 home / continue 两段;日记不记按钮字。 */
+/** 首页文件的纯函数:解析、两级问题、排卡、孩子端按钮、--force 丢卡、发布 id;上下文包的 home / continue 两段;日记不记按钮字。 */
 import { arrangeHome, dropFixes, homeId, homeIssues, homeRefs, homeTutors, kidButtons, parseHome, threadKey, todayResumes, type HomeTutorInfo } from '../src/lib/home.ts';
 import { renderContextPack } from '../src/lib/context-pack.ts';
 import { kidQuestions } from '../src/lib/diary.ts';
@@ -100,7 +100,7 @@ const tutors: Record<string, HomeTutorInfo> = {
   check('孩子端按钮:新话题、文件里的;应用不再加「接着刚才的」;找不到的接着不出现;讲法不下发', kb.map((b) => b.id).join() === 'new,0,1' && !JSON.stringify(kb).includes('brief') && !JSON.stringify(kb).includes('接着刚才的'), JSON.stringify(kb));
   const pv = kidButtons(buttons, { alive, keepBriefs: true });
   check('家长预览留讲法', pv.map((b) => b.id).join() === 'new,0,1' && JSON.stringify(pv).includes('念给他听'));
-  // 今天同一个入口的话题(《activity设计.md》§八):新话题接自由话题,activity 按名字,小课堂按课包;开场按钮不接
+  // 今天同一个入口的话题:新话题接自由话题,activity 按名字,小课堂按课包;开场按钮不接
   const R = (thread: string) => ({ thread, title: thread, at: '2026-09-17T10:00:00.000Z' });
   const rs = new Map([['free', R('f')], ['activity:你说我画', R('a')], ['lecture:b1', R('l')]]);
   const withR = kidButtons([{ kind: 'start', label: '开场' }, { kind: 'activity', label: '画', activity: '你说我画', params: {} }, { kind: 'activity', label: '看图', activity: '看图说话', params: {} }, { kind: 'lecture', label: '课', bundle: 'b1' }] as never[], { alive, resumes: rs });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 小课堂(《小课堂设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱;样本课包 tests/fixtures/bundles/2026-09-18-po13-jian-8 没有配音,按配音时长走):
+ * 小课堂的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱;样本课包 tests/fixtures/bundles/2026-09-18-po13-jian-8 没有配音,按配音时长走):
  * 首页数学老师卡上的小课堂按钮(课长、「看完再问老师」)→ 点了铺满:「开始看」→ 放着:字幕、进度条一段段走、时间走 → 拖到中间:画面跟着、不出声 →
  * 暂停 → 竖栏「画一画」变蓝、「擦掉」灰 → 在画面上圈散的 3 根小棒:进度条上一个蓝记号、字幕行「画好了,记在 0:2x」→ 擦掉再圈 → 同一刻再画一笔:还是一处、两笔 →
  * 接着看 → 放着点「画一画」= 停下拿起笔 →
@@ -78,12 +78,12 @@ try {
   await evaluate(`document.querySelector('.bt-lecture').click()`);
   const opened = await until(`!${F}.hidden && Boolean(${D}?.querySelector('.lc-start'))`);
   const pre = await evaluate(`({ segs: ${D}.querySelectorAll('.lc-seg').length, nums: ${D}.querySelectorAll('.lc-dot').length, time: ${D}.querySelector('.lc-time').textContent, pill: document.querySelector('#pill').hidden })`);
-  ok('点了:铺满,「开始看」,进度条一句一段六段、不写数字(拍板 40)、课长;下面的输入条藏着', opened && pre.segs === 6 && pre.nums === 0 && /^0:00 \/ 0:4\d$/.test(pre.time) && pre.pill, JSON.stringify(pre));
-  // 左上「‹ logo 首字」和老师页的返回胶囊一个样子、一个位置(拍板 39;《产品规划.md》拍板 24 起两处都是 logo、不放老师头像,拍板 26 填老师的颜色带首字);浮在上面,不压画面(《产品规划.md》拍板 26 起胶囊宽了,压到画面四周的纸色不算,量的是画框)
+  ok('点了:铺满,「开始看」,进度条一句一段六段、不写数字、课长;下面的输入条藏着', opened && pre.segs === 6 && pre.nums === 0 && /^0:00 \/ 0:4\d$/.test(pre.time) && pre.pill, JSON.stringify(pre));
+  // 左上「‹ logo 首字」和老师页的返回胶囊一个样子、一个位置(两处都用 logo、不放老师头像,填老师的颜色带首字);浮在上面,不压画面(量画框与胶囊是否相交,四周纸色不算画框)
   const cap = await evaluate(`(() => { const r = (e) => { const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]; }; const mine = ${D}.querySelector('.lc-back'), logo = mine?.querySelector('svg.lc-logo'), page = document.querySelector('#back'), pageLogo = page.querySelector('svg.ct-logo'); const rings = (e) => e ? [...e.querySelectorAll('circle')].map((c) => c.getAttribute('r') + '/' + c.getAttribute('stroke')).join() : null; return { mine: mine ? r(mine) : null, page: r(page), logo: rings(logo), pageLogo: rings(pageLogo), faces: (mine ? mine.querySelectorAll('img, .lc-av, .lc-face').length : -1) + page.querySelectorAll('.av, img').length, color: logo ? getComputedStyle(logo).color : null, pageColor: pageLogo ? getComputedStyle(pageLogo).color : null, gap: (() => { const p = ${D}.querySelector('.lc-canvas .lc-vbox').getBoundingClientRect(), m = mine.getBoundingClientRect(); return Math.round(Math.max(p.left - m.right, p.top - m.bottom)); })(), bg: mine ? getComputedStyle(mine).backgroundColor : null, pageBg: getComputedStyle(page).backgroundColor, ini: mine?.querySelector('.lc-ini')?.textContent ?? '', pageIni: page.querySelector('.bk-ini')?.textContent ?? '' }; })()`);
-  ok('左上「‹ logo 首字」:和老师页的返回胶囊同一个位置、同样大、同一颗 logo 同一个颜色、填同一位老师的颜色接同一个首字(《产品规划.md》拍板 26),都没有老师头像;不压画面', cap.mine && cap.mine.join() === cap.page.join() && cap.logo && cap.logo === cap.pageLogo && cap.logo.includes('currentColor') && cap.faces === 0 && cap.color === cap.pageColor && cap.bg === cap.pageBg && cap.bg !== 'rgba(255, 255, 255, 0.94)' && cap.ini && cap.ini === cap.pageIni && cap.gap >= 8, JSON.stringify(cap));
+  ok('左上「‹ logo 首字」:和老师页的返回胶囊同一个位置、同样大、同一颗 logo 同一个颜色、填同一位老师的颜色接同一个首字,都没有老师头像;不压画面', cap.mine && cap.mine.join() === cap.page.join() && cap.logo && cap.logo === cap.pageLogo && cap.logo.includes('currentColor') && cap.faces === 0 && cap.color === cap.pageColor && cap.bg === cap.pageBg && cap.bg !== 'rgba(255, 255, 255, 0.94)' && cap.ini && cap.ini === cap.pageIni && cap.gap >= 8, JSON.stringify(cap));
   const bare = await evaluate(`(() => { const d = ${D}, c = getComputedStyle(d.querySelector('.lc-canvas')), b = d.querySelector('.lc-vbox').getBoundingClientRect(), vb = d.querySelector('.lc-svg').viewBox.baseVal; return { border: c.borderTopWidth, canvasBg: c.backgroundColor, bg: getComputedStyle(d.querySelector('.lc')).backgroundColor, ratio: Math.round(b.width / b.height * 100) / 100, vb: Math.round(vb.width / vb.height * 100) / 100, bar: getComputedStyle(d.querySelector('.lc-bar')).borderTopWidth }; })()`);
-  ok('画面没有框:底色是板子的纸色、画框按课包 viewBox 的宽高比,控制那行也不加框(拍板 40)', bare.border === '0px' && bare.canvasBg === 'rgba(0, 0, 0, 0)' && bare.bg === 'rgb(255, 253, 248)' && Math.abs(bare.ratio - bare.vb) < 0.02 && bare.bar === '0px', JSON.stringify(bare));
+  ok('画面没有框:底色是板子的纸色、画框按课包 viewBox 的宽高比,控制那行也不加框', bare.border === '0px' && bare.canvasBg === 'rgba(0, 0, 0, 0)' && bare.bg === 'rgb(255, 253, 248)' && Math.abs(bare.ratio - bare.vb) < 0.02 && bare.bar === '0px', JSON.stringify(bare));
   await shot('lecture-start.png');
 
   await evaluate(`${D}.querySelector('.lc-start').click()`);
@@ -147,7 +147,7 @@ try {
   await sleep(500);
   const resumed = await evaluate(`({ ink: ${D}.querySelectorAll('.lc-ink path').length, tools: [...${D}.querySelectorAll('.lc-tool')].map((b) => b.textContent.trim() + (b.disabled ? '(灰)' : '') + (b.classList.contains('on') ? '(蓝)' : '')).join(' '), pen: Boolean(${D}.querySelector('.lc-canvas.lc-pen')), line: ${D}.querySelector('.lc-line').textContent })`);
   ok('接着看:画的从画面上收起、字幕回到讲稿;竖栏里工具还在(画一画能点、擦掉灰);记号还在进度条上', resumed.ink === 0 && resumed.tools === '画一画 擦掉(灰)' && !resumed.pen && !resumed.line.startsWith('画好了') && await evaluate(`${D}.querySelectorAll('.lc-mark').length === 1`), JSON.stringify(resumed));
-  // 放着点「画一画」= 停下并拿起笔(拍板 38)
+  // 放着点「画一画」= 停下并拿起笔
   const t0 = await evaluate(`${D}.querySelector('.lc-time span').textContent`);
   await evaluate(`${D}.querySelector('.lc-tool').click()`);
   await sleep(1200);
@@ -158,7 +158,7 @@ try {
   await sleep(300);
 
   await tapSeg(5);
-  // 放完停在最后一帧(拍板 37):页面不收;按钮先藏着,约 1 秒后淡入
+  // 放完停在最后一帧:页面不收;按钮先藏着,约 1 秒后淡入
   const atEnd = await until(`/^0:4\\d \\/ 0:4\\d$/.test(${D}.querySelector('.lc-time span').textContent) && ${D}.querySelector('.lc-play').getAttribute('aria-label') === '播放'`, 60);
   const hold = await evaluate(`({ shown: !${F}.hidden, ask: Boolean(${D}.querySelector('.lc-askbtn')), hint: Boolean(${D}.querySelector('.lc-hint')), play: ${D}.querySelector('.lc-play').textContent.trim(), time: ${D}.querySelector('.lc-time span').textContent })`);
   const faded = await until(`Boolean(${D}.querySelector('.lc-askbtn'))`, 12);
@@ -191,7 +191,7 @@ try {
   ok('问了一句:老师那一节的节前画着小课堂卡(画了 1 处)与画的卡(不能删了),提示撤掉', answered && secMk.n === 1 && secMk.x === 0 && secMk.sub === '看完了 · 画了 1 处', JSON.stringify(secMk));
   await shot('lecture-answered.png');
 
-  // 老师放课里的一段(§六):节里一张小课堂卡,讲稿 [[play]] 交给它
+  // 老师放课里的一段:节里一张小课堂卡,讲稿 [[play]] 交给它
   const SF = `document.querySelector('#st-frame')`;
   const seg = await evaluate(`(() => { const c = document.querySelector('#board .sec .c-lecture'); return c ? { pl: c.querySelector('.pl')?.textContent, title: c.querySelector('.sp')?.textContent, svg: (c.querySelector('.th img')?.naturalWidth ?? 0) > 0 && c.querySelector('.th img').src.includes('/frame.svg?svg=') } : null; })()`);
   ok('老师那一节有一张小课堂卡:课名、「0:19–0:30 ▷」、缩略图是那一段的末帧', seg?.pl === '0:19–0:30 ▷' && seg.title === '13 − 8 破十法' && seg.svg, JSON.stringify(seg));
@@ -232,16 +232,16 @@ try {
 
   // 家长看录像(第 5 步):看小课堂那一段也在
   await send('Page.navigate', { url: `${base}/parent` });
-  // 清单是一天的时间线(《家长板书页设计.md》拍板 22、35,最新的在上):数学老师最新那件的 .kid 开录像
+  // 清单是一天的时间线(最新的在上):数学老师最新那件的 .kid 开录像
   const MATH_EV = `[...document.querySelectorAll('.pev')].find((p) => (p.querySelector('.pv-who')?.textContent ?? '').includes('数学'))?.querySelector('.kid')`;
   await until(`Boolean(${MATH_EV})`, 40);
   await evaluate(`${MATH_EV}.click()`);
   await until(`document.body.classList.contains('reel') && !document.querySelector('#rl-screen').hidden`, 40);
   // 孩子的屏幕(#rl-frame 里的录像页)装好了再拖进度条,没装好时拖的会丢
   await until(`Boolean(document.querySelector('#rl-frame').contentWindow.cotutorReel)`, 40);
-  // 记录点进来停在最后一帧(拍板 16);这里要从头看,拖回开头
+  // 记录点进来停在最后一帧;这里要从头看,拖回开头
   await evaluate(`(() => { const r = document.querySelector('#rl-seek'); r.value = '0'; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); })()`);
-  // 录像里孩子的屏幕在 iframe(#rl-frame)里,小课堂的播放器在它里面的 #lc-frame(拍板 6)
+  // 录像里孩子的屏幕在 iframe(#rl-frame)里,小课堂的播放器在它里面的 #lc-frame
   const KF = `document.querySelector('#rl-frame').contentDocument.querySelector('#lc-frame')`;
   const KD = `${KF}?.contentDocument`;
   const reelOn = await until(`document.body.classList.contains('reel') && Boolean(document.querySelector('#rl-frame').contentDocument) && !${KF}?.hidden && Boolean(${KD}?.querySelector('.lc .lc-svg'))`, 80);

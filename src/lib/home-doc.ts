@@ -1,5 +1,5 @@
 /**
- * cotutor-home 技能的生成部分(《首页设计.md》§八):references/ 整个由这里现生成,scripts/gen-skills.ts 写进包根 skills/cotutor-home/,
+ * cotutor-home 技能的生成部分:references/ 整个由这里现生成,scripts/gen-skills.ts 写进包根 skills/cotutor-home/,
  * tests/skills.test.ts 断言入库的和生成的一致。首页语法.md 从首页能用的卡的 card.md 拼(首页专属的全文,和板书共用的只给一句 + 指向 cotutor-board),
  * <kind>.md 是首页专属卡的协议全文,命令.md 从 CLI 用法文本取。SKILL.md 本体(流程、铁律)是手写的。
  */

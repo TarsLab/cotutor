@@ -7,7 +7,7 @@
 import { z } from 'zod';
 
 export const PolicySchema = z.object({
-  /** 老师说给孩子听的每一句的字数上限;超出在句末截断(《cotutor契约草案.md》§4;板书后按句算) */
+  /** 老师说给孩子听的每一句的字数上限;超出在句末截断(板书后按句算) */
   replyMaxChars: z.number().int().positive().describe('老师说给孩子听的每一句的字数上限(板书讲稿一行一句,按句截);超出在句末截断'),
   /** 上下文包的三个数:最近观察条数(从日记的「- 观察:」行抽,最近 14 天)、计划行数、档案 / 入口文件 / 记忆原文各带多少字 */
   contextPack: z.object({
@@ -67,7 +67,7 @@ export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
 /** agent 名:与 .claude/agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
-/** 老师卡上的常驻入口(《首页设计.md》拍板 18):不经首页发布、一直在那位老师的卡上 */
+/** 老师卡上的常驻入口:不经首页发布、一直在那位老师的卡上 */
 export const TUTOR_EXTRAS = ['dictation', 'talk'] as const;
 export type TutorExtra = (typeof TUTOR_EXTRAS)[number];
 
@@ -77,9 +77,9 @@ export const TutorSchema = z.object({
   subject: z.string().optional().describe('学科:与课程表的学科列、观察的 subject、vault 入口文件的 subject 属性对齐即归到这位老师'),
   /** 头像:一个 emoji 或图片相对路径 */
   avatar: z.string().optional().describe('头像:一个 emoji,或 workspace 根以内的图片相对路径(如 avatars/math-tutor.png;figshot pick --workspace 会写这个)'),
-  /** 学科色(《首页设计.md》拍板 26):头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮;不写 = 自动(src/lib/tutor-color.ts) */
+  /** 学科色:头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮;不写 = 自动(src/lib/tutor-color.ts) */
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, '要 #rrggbb').optional().describe('学科色 #rrggbb:头像的环、牌的边、新话题气泡(白字压在上面,要够深,doctor 会查)、听写页的按钮;不写 = 语文粉、数学蓝、英语绿,其余按先后自动分、不撞色'),
-  /** voxtell 音色 id(2026-09-08 拍板);没有 = 用 voxtell 缺省 */
+  /** voxtell 音色 id;没有 = 用 voxtell 缺省 */
   voice: z.string().optional().describe('卡的配音用的 voxtell 音色 id(voxtell voices 可查;点读、单词卡的声音);不配这些卡就没有声音。老师开口的嘴在 live.voices'),
   enabled: z.boolean().default(true).describe('开关:false 时两端都不见'),
   /** 孩子端不露(只和系统、家长打交道的工具人) */
@@ -93,7 +93,7 @@ export const TutorSchema = z.object({
 });
 export type Tutor = z.infer<typeof TutorSchema>;
 
-/** 三门主科的别名(《首页设计.md》拍板 26):学科写「英文」「English」也认作英语,颜色、听写用英文、语文缺省带听写都照它 */
+/** 三门主科的别名:学科写「英文」「English」也认作英语,颜色、听写用英文、语文缺省带听写都照它 */
 const SUBJECT_ALIASES: Readonly<Record<string, string>> = {
   语文: '语文', 中文: '语文', 国语: '语文', chinese: '语文',
   数学: '数学', math: '数学', maths: '数学', mathematics: '数学',
@@ -111,7 +111,7 @@ export function subjectLang(subject: string | null | undefined): 'zh' | 'en' {
 }
 
 /**
- * 这位老师卡上的常驻入口:配了照配的;没配按学科——语文 = 听写;英语 = 口语课,要口语课开着(talkOn = talk.enabled,《口语课设计.md》拍板 20)
+ * 这位老师卡上的常驻入口:配了照配的;没配按学科——语文 = 听写;英语 = 口语课,要口语课开着(talkOn = talk.enabled)
  */
 export function tutorExtras(t: Pick<Tutor, 'extras' | 'subject'>, talkOn = false): TutorExtra[] {
   if (t.extras) return [...new Set(t.extras)];
@@ -125,9 +125,9 @@ export function tutorExtras(t: Pick<Tutor, 'extras' | 'subject'>, talkOn = false
  * 板书写法的两种预载({boardFile} 板书技能 SKILL.md 的绝对路径,给能从文件追加系统提示的 CLI;{systemBody} 老师正文 + 板书写法,给只收一段系统提示文字的 CLI):
  * 模板里用了其中一个,应用就当板书写法已在系统提示里;都没用,应用在话题第一条消息里注入 <cotutor-board>(任何 CLI 都成立的退路)。
  * {effort} 这位老师的政策 effort(low / medium / high),qwen 由适配器写入思考量配置。
- * 带不带工具由适配器展开(src/clis/,《agent层设计.md》§6):{tools} 填一串工具名,独占一个参数的 {toolArgs} 展开成几个参数。
+ * 带不带工具由适配器展开(src/clis/):{tools} 填一串工具名,独占一个参数的 {toolArgs} 展开成几个参数。
  * 政策旋钮(预算、轮数、模型)写进模板,换 agent 只换运行时。
- * stdin: "stream-json"(2026-09-29,《工作流程.md》§四「预热」):消息不进命令行,写进 stdin(`--input-format stream-json`),
+ * stdin: "stream-json":消息不进命令行,写进 stdin(`--input-format stream-json`),
  * 模板里就不写 {prompt};argv 与消息无关,应用把下一轮的进程提前起好等着。
  */
 export const RuntimeSchema = z.object({
@@ -180,8 +180,8 @@ export const VaultPolicySchema = z.object({
 export type VaultPolicy = z.infer<typeof VaultPolicySchema>;
 
 /**
- * 口语课(《口语课设计.md》、《口语课实时设计.md》):孩子在口语课页拍一张今天学的那页,改好口语单,交给英语老师的实时页上课
- * (activity「口语课」:先热身、再打电话)。口语课页自己不再打电话(《产品规划.md》拍板 30)。出厂关着;要百炼 key。
+ * 口语课:孩子在口语课页拍一张今天学的那页,改好口语单,交给英语老师的实时页上课
+ * (activity「口语课」:先热身、再打电话)。口语课页自己不再打电话。出厂关着;要百炼 key。
  */
 export const TALK_DEFAULT = { enabled: false, listModel: 'qwen3.8-omni-flash', minutes: 5 };
 export const TalkSchema = z.object({
@@ -193,8 +193,8 @@ export const TalkSchema = z.object({
 export type TalkConfig = z.infer<typeof TalkSchema>;
 
 /**
- * 实时老师(《实时老师设计.md》):老师用 realtime 模型开口(嘴),老师 CLI 在后面写板书(脑);讲稿不配音,交给嘴照念。
- * 有脸的老师都走实时,没有开关(《产品规划.md》拍板 30);要百炼按量 key 与业务空间 id,没配孩子端打不开。
+ * 实时老师:老师用 realtime 模型开口(嘴),老师 CLI 在后面写板书(脑);讲稿不配音,交给嘴照念。
+ * 有脸的老师都走实时,没有开关;要百炼按量 key 与业务空间 id,没配孩子端打不开。
  */
 /** 嘴的缺省音色:出厂三位各一个(10-19 起 Ray 那里用着的),别的老师用 MOUTH_VOICE。不进 voices 的缺省值:voices 的键要是在的老师 */
 export const MOUTH_VOICE = 'Serena';
@@ -206,10 +206,10 @@ export const LiveSchema = z.object({
     .record(z.string().regex(AGENT_NAME_RE), z.string().min(1))
     .default({})
     .describe(`老师的嘴用哪个 realtime 音色(这个模型认的 56 个在 src/live/voices.ts,工作台音色页「实时的嘴」听着挑;写错了第一次开口才报错,doctor 的 live.voices 会提示);没写的出厂老师用出厂的(语文 Serena、数学 Andre、英语 Theo Calm),别的用 ${MOUTH_VOICE}`),
-  // 一直听(《一直听设计.md》):孩子不用按,百炼的 VAD 判开口 / 说完,应用判收下 / 放过;老师说话时也在听(全双工)。
-  // 孩子端没有开关(拍板 4):10-20 真跑,一问一答以外孩子的停顿、语气词、旁边的话都被当成一句;口语课自己开,不看这里
+  // 一直听:孩子不用按,百炼的 VAD 判开口 / 说完,应用判收下 / 放过;老师说话时也在听(全双工)。
+  // 孩子端没有开关:10-20 真跑,一问一答以外孩子的停顿、语气词、旁边的话都被当成一句;口语课自己开,不看这里
   listen: z.enum(['hold', 'open']).default(LIVE_DEFAULT.listen).describe('实时老师页怎么说话:hold 按住说(缺省)、open 一直听(试验;孩子停一下就算说完、旁边的话也会当成一句)。孩子端没有开关;口语课总是一直听,不看这里'),
-  // 缺省 server_vad(2026-10-20,《一直听设计.md》拍板 3):semantic_vad 听不见一两个字的回答(好的、Yes,问过也一样,probe-live-vad context)
+  // 缺省 server_vad:semantic_vad 听不见一两个字的回答(好的、Yes,问过也一样,probe-live-vad context)
   vad: z.enum(['semantic_vad', 'server_vad']).default(LIVE_DEFAULT.vad).describe('一直听时谁判说完:server_vad 按静音(缺省;一两个字的回答也认,「嗯」、笑声也会让老师小声一下);semantic_vad 按语义(切得少、不理「嗯」和笑声,但「好的」「Yes」这类短回答听不见)'),
   silenceMs: z.number().int().min(500).max(4000).default(LIVE_DEFAULT.silenceMs).describe('一直听时停多久算说完(毫秒;孩子一句话中间停一下接着说,太短会切碎)'),
 });
@@ -218,7 +218,7 @@ export type LiveConfig = z.infer<typeof LiveSchema>;
 export const mouthVoice = (live: Pick<LiveConfig, 'voices'>, tutor: string): string => live.voices[tutor] ?? SHIPPED_MOUTHS[tutor] ?? MOUTH_VOICE;
 
 /**
- * 听写(《听写设计.md》):拍照认词表用哪个模型。挑词的要求在听写 activity 文件「认字收到什么」(《activity设计.md》拍板 21);
+ * 听写:拍照认词表用哪个模型。挑词的要求在听写 activity 文件「认字收到什么」;
  * 下面两份是出厂那节的原文,workspace 里没有听写 activity 文件时照它。回什么格式(一行一段 JSON)由应用填(src/dictation/recognize.ts 的 FORMAT)。
  */
 export const DICTATION_PROMPT_DEFAULT = [
@@ -233,7 +233,7 @@ export const DICTATION_PROMPT_DEFAULT = [
   '- 课文正文里别的词:不挑,全文里有就够了。',
   '念法:听写时老师怎么念给孩子听。先念这一项,再说一个孩子熟悉的短语或短句把它用进去,让同音字分得开;短语里要有别的字,不能只是把它重复一遍。例如「鼓励,老师鼓励我」「灰色,灰色的小蝌蚪」「叶,树叶的叶」。30 字以内。',
 ];
-/** 英文单词的拍照认词(英语老师卡上的拍照听写,《听写设计.md》拍板 15) */
+/** 英文单词的拍照认词(英语老师卡上的拍照听写) */
 export const DICTATION_PROMPT_EN_DEFAULT = [
   '这是一张照片:小学英语课本的一页(单词表、对话、课文),或者老师发的单词听写单。按照片中的内容和难度识别,不推断孩子年级。',
   '先把照片上的正文一行一行全认出来;再挑出这页要孩子会写的英文单词,当听写的词。',
@@ -252,8 +252,8 @@ export const DictationSchema = z.object({
 export type DictationConfig = z.infer<typeof DictationSchema>;
 
 /**
- * 你说我画(《你说我画设计.md》):画图卡(paint)用哪个文生图模型、画多大、一天最多几张、画成什么样。
- * 画风在 activity 文件「画家收到什么」那节(《activity设计.md》拍板 12);PAINT_PROMPT_DEFAULT 是出厂那节的画风,不在 activity 话题里画照它。版式、角色、分幅由应用接(src/paint/prompt.ts)。
+ * 你说我画:画图卡(paint)用哪个文生图模型、画多大、一天最多几张、画成什么样。
+ * 画风在 activity 文件「画家收到什么」那节;PAINT_PROMPT_DEFAULT 是出厂那节的画风,不在 activity 话题里画照它。版式、角色、分幅由应用接(src/paint/prompt.ts)。
  * 2026-10-11 拿「小熊和小猴种西瓜」四格试:qwen-image-2.0 4 秒、qwen-image-2.0-pro 15 秒,四格里角色都对得上;pro 的表情(低头、脸红)更到位。
  * 2026-10-13 缺省换 qwen-image-3.0-pro:千问 Token Plan 有它(一张约 50 Credits),2.0 系列没有;同一个四格 10 秒,画风照提示词,角色分到哪格有几处没对上。
  * 2026-10-21「除了圆圈数字」挪进多格的版式:写在画风里一幅的图也收到,宇宙那张散着画了 ①③Ⓐ。
@@ -282,7 +282,7 @@ export const CotutorConfigSchema = z
       grade: z.string().optional(),
       /** 孩子端用哪个主题(themes/<name>/);缺省 default(出厂主题,init 拷进 workspace) */
       theme: z.string().regex(AGENT_NAME_RE).default('default').describe('孩子端的主题:themes/<名字>/(theme.json + kid.css);cotutor add-theme <名字> 拷一份出厂的来改'),
-      /** 孩子的惯用手(《实时老师设计.md》拍板 22):left = 左撇子,平板横屏实时老师页的左栏浮层挪到右边(写字的手空着,另一只手按住说话);缺省右手,不写进文件 */
+      /** 孩子的惯用手:left = 左撇子,平板横屏实时老师页的左栏浮层挪到右边(写字的手空着,另一只手按住说话);缺省右手,不写进文件 */
       hand: z.enum(['right', 'left']).optional().describe('孩子的惯用手:left = 左撇子,平板横屏实时老师页的浮层(按住说话)挪到右边;缺省右手(浮层在左边)。工作台设置页能切'),
     }),
     server: z

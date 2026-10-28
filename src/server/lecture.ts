@@ -1,5 +1,5 @@
 /**
- * 小课堂(《小课堂设计.md》)读盘的那一半:从 bundles/<id>/ 读课包,或从 lectures/<id>/ 读视频(lecture.md + video.mp4,第 4 步),拼时钟(src/lib/lecture.ts),
+ * 小课堂读盘的那一半:从 bundles/<id>/ 读课包,或从 lectures/<id>/ 读视频(lecture.md + video.mp4,第 4 步),拼时钟(src/lib/lecture.ts),
  * 给首页按钮的标题与课长、首页检查、上下文包 lecture: 用。同一个 id 两边都有,课包先。坏了、不在都回 null,不抛;为什么读不出来给首页检查(inspectLecture)。
  */
 import { spawn } from 'node:child_process';
@@ -107,7 +107,7 @@ export interface StoredMark extends IncomingMark {
 }
 
 /**
- * 孩子带来的画 → 落盘的样子(《小课堂设计.md》§四):那段话 = 时刻与那时在讲哪句 + 截图是上下文包 photos 的第几张(photoBase = 前面已经有几张孩子自己拍的)
+ * 孩子带来的画 → 落盘的样子:那段话 = 时刻与那时在讲哪句 + 截图是上下文包 photos 的第几张(photoBase = 前面已经有几张孩子自己拍的)
  * + 课包的再说画的地方盖着什么(按课包现算,用课里的叫法)。读不出来就只留时刻与笔画
  */
 export function storedMarks(l: Lecture | null, marks: readonly IncomingMark[], photoBase = 0): StoredMark[] {
@@ -197,7 +197,7 @@ export function bakeSectionSoon(bundlesDir: string, section: BoardSection): void
 }
 
 /**
- * 课包在 SVG 时刻 svgMs 的画面(画的卡、lecture 卡的缩略图,播放器截图的底;《小课堂设计.md》§五):用烤好的画面(bake.json)在服务端现画成一张 SVG,
+ * 课包在 SVG 时刻 svgMs 的画面(画的卡、lecture 卡的缩略图,播放器截图的底):用烤好的画面(bake.json)在服务端现画成一张 SVG,
  * 有画就叠上那几笔(课包坐标,加上导出时的平移)。没烤过、画面改过没重烤:给了 bake(路由给 ensureBaked)就先烤再画,烤不了 → null。
  * 背景图内嵌成 data URI:SVG 当 <img> 用时不去取外面的文件。
  */
@@ -233,7 +233,7 @@ export async function lectureFrameSvg(ws: Pick<LectureDirs, 'dirs'>, id: string,
   }
 }
 
-/** frame.svg 的 svg 参数:SVG 时刻(毫秒);`end` = 最后一帧(小课堂卡的缩略图,拍板 37);认不出来 = 0 */
+/** frame.svg 的 svg 参数:SVG 时刻(毫秒);`end` = 最后一帧(小课堂卡的缩略图);认不出来 = 0 */
 export function parseSvgMs(s: string | null): number {
   return s === 'end' ? Infinity : Number(s) || 0;
 }

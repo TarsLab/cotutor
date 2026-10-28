@@ -1,5 +1,5 @@
 /**
- * 听写的存放(《听写设计.md》):workspace 根的 dictation/<id>.json,一次听写一个文件;孩子的笔迹整个不进 git(目录里放一份 .gitignore)。
+ * 听写的存放:workspace 根的 dictation/<id>.json,一次听写一个文件;孩子的笔迹整个不进 git(目录里放一份 .gitignore)。
  * id = 开始的时刻 YYYY-MM-DD-HHMM,同一分钟再开加 -2、-3。先写临时文件再换名,页面轮询读不到半截。
  */
 import { existsSync } from 'node:fs';
@@ -37,7 +37,7 @@ export interface Attempt {
  * 孩子做的事,录像按它排时间:
  * 写的时候 show 出了这个词、say 老师念了一遍(n 第几遍)、again 点了再念、reveal 点了「给答案」(服务端记)、order 看了一遍笔顺、done 写好了这个字;
  * 对答案时 strokeOrder 点开一个字逐笔看、rewrite 问了再写一遍点「好」、self 自己说「我想再写」。
- * 录像要的(《家长录像设计.md》拍板 13):trace 给答案后换成照着写(看笔顺放完或落笔,老记录是点「我来写」)、open 点听写本上的一格回去改、close 从逐笔看 / 再写一遍回到对一对、
+ * 录像要的:trace 给答案后换成照着写(看笔顺放完或落笔,老记录是点「我来写」)、open 点听写本上的一格回去改、close 从逐笔看 / 再写一遍回到对一对、
  * view 屏幕多大(w、h,进页面与转屏)与写字格的档(pad,换档也记)、away / back 切到别处 / 回来。
  */
 export const EVENT_KINDS = ['show', 'say', 'again', 'reveal', 'order', 'done', 'strokeOrder', 'rewrite', 'self', 'trace', 'open', 'close', 'view', 'away', 'back'] as const;
@@ -54,7 +54,7 @@ export interface DictationEvent {
   /** view:孩子屏幕的 CSS 尺寸 */
   w?: number;
   h?: number;
-  /** view:写字格的档(《听写设计.md》拍板 30,l 铺满 / m 500 / s 380);老数据没有,按 l */
+  /** view:写字格的档(l 铺满 / m 500 / s 380);老数据没有,按 l */
   pad?: 'l' | 'm' | 's';
 }
 
@@ -67,7 +67,7 @@ export interface Session {
   photo?: string;
   lesson?: string | null;
   tutor: string | null;
-  /** 英文单词听写(一个单词一个四线三格,不逐字母比;《听写设计.md》拍板 15);汉字的不写 */
+  /** 英文单词听写(一个单词一个四线三格,不逐字母比);汉字的不写 */
   lang?: 'en';
   words: DictationWord[];
   startedAt: string;

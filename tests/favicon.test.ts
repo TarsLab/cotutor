@@ -1,5 +1,5 @@
 /**
- * 网页图标:所有页面都是 cotutor 的双 C(《产品规划.md》拍板 20、23)——logo 的几何(logo.ts)、SVG 与页面里的 logo 同一份、
+ * 网页图标:所有页面都是 cotutor 的双 C——logo 的几何(logo.ts)、SVG 与页面里的 logo 同一份、
  * PNG 现画(两个 C 的颜色在该在的地方、纸色圆底、圆外透明)、页面引的与路由给的对得上、哪一页都不再跟着老师换图标(mock 与真服务)。
  */
 import { mkdtempSync, realpathSync } from 'node:fs';

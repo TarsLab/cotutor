@@ -3,7 +3,7 @@
  * 这份文件两处共用:服务端(解析器、测试)与孩子端页面——kid-page.ts 把它剥掉类型内联进 <script>,
  * 所以**不能有运行时 import、不能碰 DOM、不能用 enum / namespace**(Node 的 stripTypeScriptTypes 只剥类型)。
  *
- * 契约的分工(《板书卡片设计.md》):老师写「段落 = 讲稿,围栏 = 卡」的正文,服务端(src/lib/board.ts + src/cards/)解析成
+ * 契约的分工(见 docs/卡片协议.md):老师写「段落 = 讲稿,围栏 = 卡」的正文,服务端(src/lib/board.ts + src/cards/)解析成
  * 下面的 BoardSection JSON 放进对话索引;孩子端只认 JSON。卡 = {kind, props},每种卡的 props 契约在 src/cards/<kind>.ts;
  * 这里只知道每种卡「哪些字能被标注、笔是什么样」,不认识的 kind 也有兜底。
  */
@@ -84,7 +84,7 @@ export interface BoardSection {
 }
 
 /**
- * 拍(2026-09-13,《工作流程.md》§二):一张卡 + 它后面直到下一张卡之前的讲稿句;第一张卡之前的句子是没有卡的一拍。
+ * 拍:一张卡 + 它后面直到下一张卡之前的讲稿句;第一张卡之前的句子是没有卡的一拍。
  * 不进契约,从卡与句的顺序现算——句子锚到上一张卡(anchor),所以按 anchor 分组。
  */
 export interface Beat {
@@ -106,7 +106,7 @@ export function beatsOf(section: Pick<BoardSection, 'cards' | 'lines'>): Beat[] 
 }
 
 /**
- * 流式时前几拍就绪了:一拍要「关了」(后面已经有下一张卡,或老师写完了)。讲稿不配音(《产品规划.md》拍板 30),不等配音。
+ * 流式时前几拍就绪了:一拍要「关了」(后面已经有下一张卡,或老师写完了)。讲稿不配音,不等配音。
  * 返回就绪的拍数(前缀:第 k 拍就绪的前提是前面都就绪)。
  */
 export function readyBeats(section: Pick<BoardSection, 'cards' | 'lines'>, opts: { done: boolean }): number {
@@ -310,7 +310,7 @@ function validRows(rows: readonly (readonly number[])[], n: number): boolean {
 }
 
 /**
- * 一节的行(2026-10-01 起排版归代码,《工作流程.md》§二「排版」):每张卡半宽还是全宽,看它自己量出来的样子
+ * 一节的行(2026-10-01 起排版归代码):每张卡半宽还是全宽,看它自己量出来的样子
  * (half(i),页面在量具里量;没给就按 isShortCard 估)。从左往右排,只看前面的卡:
  * - 相邻两张半宽的并一行;一张半宽后面跟的不是半宽,它自己一行、占左半(右边空着)
  * - 全宽的一行一张;标题行、提问卡、画板、小课堂永远独占
@@ -470,7 +470,7 @@ export function isHeavy(card: BoardCard): boolean {
   return card.kind === 'canvas' || card.kind === 'lecture';
 }
 
-/** 小课堂卡能不能放(《小课堂设计.md》§六):课包读得出来,下发时服务端填 ready 与那一段的起止 */
+/** 小课堂卡能不能放:课包读得出来,下发时服务端填 ready 与那一段的起止 */
 export function lectureReady(card: BoardCard): boolean {
   const p = card.props || {};
   return card.kind === 'lecture' && p.ready === true && typeof p.start === 'number' && typeof p.end === 'number' && p.end > p.start;
@@ -551,7 +551,7 @@ export function isQuestion(text: string): boolean {
 }
 
 /** 孩子端条目里页面用到的字段(与 kid-view 的 KidMessage 兼容) */
-/** 孩子端一条带的小课堂(《小课堂设计.md》§五):画的卡是截下来的图(没截图的课包现画那一刻再叠那几笔);家长端的画多一段老师拿到的话(text);again = 再看一遍又画的那条 */
+/** 孩子端一条带的小课堂:画的卡是截下来的图(没截图的课包现画那一刻再叠那几笔);家长端的画多一段老师拿到的话(text);again = 再看一遍又画的那条 */
 export interface KidLecture {
   bundle: string;
   title: string;
@@ -560,7 +560,7 @@ export interface KidLecture {
   marks?: { atMs: number; svgMs: number; strokes: [number, number][][]; text?: string; image?: string }[];
 }
 
-/** 孩子从纸上交的画在板上那张卡(《画板设计.md》§三):图(相对 workspace 根)、几笔、画了多久 */
+/** 孩子从纸上交的画在板上那张卡:图(相对 workspace 根)、几笔、画了多久 */
 export interface KidDrawing {
   image: string;
   strokes: number;
@@ -576,9 +576,9 @@ export interface BoardMessage {
   section?: BoardSection | null;
   /** 孩子这条带的作业照片(相对 workspace 根;R5):节头上回显缩略图 */
   photos?: string[];
-  /** 看完小课堂后的第一条(《小课堂设计.md》):这一节前面是小课堂卡 */
+  /** 看完小课堂后的第一条:这一节前面是小课堂卡 */
   lecture?: KidLecture;
-  /** 孩子从左栏的纸交的画(《画板设计.md》§三):这一节前面是孩子的画卡 */
+  /** 孩子从左栏的纸交的画:这一节前面是孩子的画卡 */
   drawing?: KidDrawing;
   /** 孩子这条不是说的话:submit = 交卡(答案在卡上) */
   action?: 'submit';
@@ -589,7 +589,7 @@ export interface BoardMessage {
   live?: boolean;
 }
 
-/** 板上孩子的一句话(《工作流程.md》§二「一个话题一节」):text 是显示的(语音去了口头禅),full 是原话 */
+/** 板上孩子的一句话:text 是显示的(语音去了口头禅),full 是原话 */
 export interface KidSaid {
   text: string;
   full: string;
@@ -620,7 +620,7 @@ export interface BoardEntry extends BoardSection {
 }
 
 /**
- * 实时的一节怎么接(《实时老师设计.md》拍板 20):新一节的开头由脑定,不再机械是孩子那句。
+ * 实时的一节怎么接:新一节的开头由脑定,不再机械是孩子那句。
  * 这一轮第一张卡是节头 → head;没写(只有讲稿、开头是别的卡、还没写出卡)→ cont,接着上一节。一轮中间的节头卡,是从那张卡起新一节
  */
 export function liveHead(s: Pick<BoardSection, 'cards'>): { head: string } | { cont: true } {
@@ -651,7 +651,7 @@ const PHOTO_ONLY = /^\(拍了(?:一| \d+ )张\)$/;
 const DRAW_ONLY = /^\(画了一张,没说话\)$/;
 
 /**
- * 每条孩子的话放在板上哪(《工作流程.md》§二):交卡、首页按钮、空的不放;答的是上一节的问题卡就进那张卡的答案栏(on),
+ * 每条孩子的话放在板上哪:交卡、首页按钮、空的不放;答的是上一节的问题卡就进那张卡的答案栏(on),
  * 否则在它引出的那一节开头单独一行(on = null)。看完小课堂后的第一问不算答卡。按 job 给,还在跑的那条也有(刚发出去先挂上)。
  */
 export function kidSaid(messages: readonly BoardMessage[]): Map<string, { said: KidSaid; on: { job: string; card: number } | null }> {
@@ -707,7 +707,7 @@ export function sectionTitle(s: BoardSection): string {
   return cps.length > 14 ? `${cps.slice(0, 14).join('')}…` : cps.join('');
 }
 
-/** 板上的位置。孩子端不念讲稿了(《产品规划.md》拍板 30):讲稿由嘴照念(live-board.ts 的 liveStep),这里的状态只剩
+/** 板上的位置。孩子端不念讲稿了:讲稿由嘴照念(live-board.ts 的 liveStep),这里的状态只剩
  *  thinking = 老师还在写 · waiting = 写完了、末句是问句 · done = 写完了 · idle = 板上还没东西。
  *  playing 只出现在录像里孩子的屏幕(嘴在念这一句),孩子端自己不会进 */
 export type PlayStatus = 'idle' | 'playing' | 'waiting' | 'done' | 'thinking';
@@ -770,8 +770,8 @@ export function subtitleFor(i: SubtitleInput): SubtitleView {
   }
 }
 
-// ---- 板上的节(2026-10-22 起只剩这些,《产品规划.md》拍板 30):老师开始写、又就绪一拍、写完、出错撤掉、整节到了;页面的 reset(换老师)、halt(停卡的声音)。
-// 页面只照单执行回来的「要做的事」;表在《工作流程.md》§孩子端「播放器」,每一格在 tests/player.test.ts 里有一条 ----
+// ---- 板上的节(2026-10-22 起只剩这些):老师开始写、又就绪一拍、写完、出错撤掉、整节到了;页面的 reset(换老师)、halt(停卡的声音)。
+// 页面只照单执行回来的「要做的事」;事件与状态的组合在 tests/player.test.ts 逐项覆盖 ----
 
 export interface PlayerModel {
   state: PlayerState;

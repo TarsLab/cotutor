@@ -1,5 +1,5 @@
 /**
- * 工作台改 activity(2026-10-17,《工作台设计.md》拍板 7–10;设计稿 https://claude.ai/artifact/Srg1Pe4z51iUbei1TxNtLp):
+ * 工作台改 activity(2026-10-17;设计稿 https://claude.ai/artifact/Srg1Pe4z51iUbei1TxNtLp):
  * 列 workspace 里每位老师的 activity、读一份原文、边改边查(不落盘:检查、首页按钮解析不解析得出、老师实际收到什么、和出厂比)、
  * 存(带读进来时的 hash,磁盘上的变了就不存,免得盖掉编程助手那边的改动)、恢复出厂(原文留 .bak)。
  * 只认 listActivities 列得出的名字,不拼路径;新建、改名、删不在这里(在 workspace 里和编程助手说)。

@@ -1,9 +1,9 @@
 /**
- * 英文单词听写的四线三格(《听写设计.md》拍板 15):孩子写字页、家长页、录像页共用一份画法,插进各页的内联脚本与样式。
+ * 英文单词听写的四线三格:孩子写字页、家长页、录像页共用一份画法,插进各页的内联脚本与样式。
  * 一格 = 一个单词,坐标 2048 × 512(笔迹的点也记在这个尺子上,y 朝下);四条线在 80 / 200 / 320 / 440,第三条是基线(红)。
- * 写字屏的格子铺满、按屏幕大小只露尺子的一段(拍板 23,en-page.ts 的 fitPad);对一对、录像、家长页照 EN_VIEW。
- * 格子上下各多露一截(《听写设计.md》拍板 22):画的视窗是 EN_VIEW(0 -192 2048 896,16 : 7),四条线在中间,写出格的笔画照样看得见;尺子不变,出格的点 y 为负或大于 512。
- * 单词的样子用单词卡那套字形画(拍板 29,drawtell/glyphs:52 个字母的印刷体笔顺,按四线三格归一化):x 高 = 中格 120,
+ * 写字屏的格子铺满、按屏幕大小只露尺子的一段(en-page.ts 的 fitPad);对一对、录像、家长页照 EN_VIEW。
+ * 格子上下各多露一截:画的视窗是 EN_VIEW(0 -192 2048 896,16 : 7),四条线在中间,写出格的笔画照样看得见;尺子不变,出格的点 y 为负或大于 512。
+ * 单词的样子用单词卡那套字形画(drawtell/glyphs:52 个字母的印刷体笔顺,按四线三格归一化):x 高 = 中格 120,
  * b d h k l 与大写顶第一线、g j p q y 到第四线、t 的头在上格中间。原来用字体(Chalkboard SE),升部只到上格六成、降部只到下格一半,孩子照着描也矮。
  * 不逐字母比,只叠着给孩子自己对:长单词横着压(坐标压,笔画粗细不变);有字形包里没有的字(数字、标点)整个词退回字体。
  * 脚本是 ES5、没有反斜杠与反引号。
@@ -52,7 +52,7 @@ export const EN_BOX_JS = `
   };
   /** 写不出的字(数字、标点):整个词用字体,长了压窄 */
   var enWordFont = function (sv, word, cls, room) { var t = sv('text', { x: EN_W / 2, y: EN_BASE, 'text-anchor': 'middle', 'class': (cls || 'enw') + ' font', 'data-word': word }); if (word.length > 12 || word.length * 132 > room) { t.setAttribute('textLength', String(Math.round(Math.min(room, word.length * 132)))); t.setAttribute('lengthAdjust', 'spacingAndGlyphs'); } t.textContent = word; return t; };
-  /** 单词的样子(一个 g,一笔一条 path,居中);maxW = 最多多宽(写字屏只看得到尺子的一段,拍板 23),放不下就横着压 */
+  /** 单词的样子(一个 g,一笔一条 path,居中);maxW = 最多多宽(写字屏只看得到尺子的一段),放不下就横着压 */
   var enWord = function (sv, word, cls, maxW) {
     var room = Math.min(EN_W - 160, maxW || EN_W), w = enWidth(word);
     if (w < 0) return enWordFont(sv, word, cls, room);

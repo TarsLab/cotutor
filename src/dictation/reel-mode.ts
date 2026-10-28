@@ -1,5 +1,5 @@
 /**
- * 听写页的录像模式(《家长录像设计.md》拍板 13):中文页(page.ts)与英文页(en-page.ts)共用的那一段——钟、把手、念的那一刻放声音、启动。
+ * 听写页的录像模式:中文页(page.ts)与英文页(en-page.ts)共用的那一段——钟、把手、念的那一刻放声音、启动。
  * 页面开在录像外壳(reel-page.ts)的 iframe 里,带 ?reel=<id>;轨道与任一刻的样子是纯函数 lib/reel.ts(一起内联进来)。
  * 页面自己要有:REEL_ID、S(S.v 放孩子端的样子,画左上角胶囊)、showFace、api、audio,和照这一刻画屏幕的 reelDraw(f)。
  * 脚本是 ES5(内联的纯函数除外),没有反斜杠与反引号,插进模板字符串也照样。
@@ -76,12 +76,12 @@ ${DICT_REEL_JS}
       if (!r.first.length && !r.says_.length) { host.cotutorReelFail(); return; }
       RL = { s: x[0], r: r, p: 0, t: 0, playing: false, seeking: false, speed: 1, real: false, last: 0, timer: 0, key: '', gl: 0, f: null, std: '' };
       RL.clock = drClock(r, false);
-      // 停在最后一帧(拍板 16:家长从记录点进来,最后一帧信息最多;要看过程往前拖)
+      // 停在最后一帧(家长从记录点进来,最后一帧信息最多;要看过程往前拖)
       RL.p = RL.clock.total;
       reelTick();
       window.cotutorReel = reelApi;
       host.cotutorReelReady(reelApi, { size: RL.f.size || [1180, 820] });
-      // 焦点在孩子的屏幕里时按键也认(《家长录像设计.md》拍板 22):交给外面的录像栏,它认了就不让这一页再处理
+      // 焦点在孩子的屏幕里时按键也认:交给外面的录像栏,它认了就不让这一页再处理
       document.addEventListener('keydown', function (e) { try { if (host.cotutorReelKey && host.cotutorReelKey({ key: e.key, shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey })) e.preventDefault(); } catch (x) {} });
     }, function () { host.cotutorReelFail(); });
   };

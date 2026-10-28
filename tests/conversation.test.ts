@@ -74,7 +74,7 @@ check('卡的状态文件与 id', f.cardsDir('1620-1') === '/ws/conversations/ma
   const parsed = ConversationIndexSchema.safeParse({ tutor: 'x', date: '2026-09-08', session: { id: 's', runtime: 'claude' }, messages: [] });
   check('旧索引没有 sessions 也过契约(缺省空)', parsed.success && Object.keys(parsed.data.sessions).length === 0);
 }
-// 2026-10-22 起不认老数据(《产品规划.md》拍板 30,板书时代的话题挪出了 workspace):from 只认 kid / system;删话题要用的 memoryLines、diaryBlock 照存
+// 2026-10-22 起不认老数据(板书时代的话题挪出了 workspace):from 只认 kid / system;删话题要用的 memoryLines、diaryBlock 照存
 {
   check('from: parent 不认了', !ConversationIndexSchema.safeParse({ tutor: 'x', date: '2026-10-04', messages: [{ job: '1902-3', thread: '1902-3', at: 'x', from: 'parent', text: '工作台发的', result: 'ok', artifacts: [] }] }).success);
   const one = ConversationIndexSchema.parse({ tutor: 'x', date: '2026-10-22', messages: [{ job: '1901-2', thread: '1901-2', at: 'x', from: 'kid', text: '孩子说的', result: 'ok', artifacts: [], memoryLines: [{ before: null, after: '- 2026-10-22 爱抢答' }], diaryBlock: '## 数学 · 平均分\n' }] });

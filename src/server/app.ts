@@ -1,7 +1,7 @@
 /**
  * 服务的路由层:route(method, path, ctx, body) → {status, json|html},测试不用起端口。
  * R1 的查询接口照旧;R2 加:对话(列日期、看一天的家长视图、发消息)、cotutor.json 补丁(老师团页)、工作台 /dev(2026-09-22 之前叫家长页 /parent;
- * 现在 /parent 是家长端 = 家长板书页,给不懂技术的家长日常用,《家长板书页设计.md》拍板 13)。
+ * 现在 /parent 是家长端 = 家长板书页,给不懂技术的家长日常用)。
  * R3 加:孩子端 `/`(kidPage)与 /api/kid/*(首页:课程表 + 老师卡 + 家长发布的首页卡;对话:服务端过滤后的孩子视图;发消息:from 固定 kid)、配音文件 /api/audio。
  * 配置热重载:每个请求先看 cotutor.json 的 mtime,改了就重读;改坏了留旧配置并把错误挂在 /api/health 上。
  */
@@ -164,12 +164,12 @@ export interface KidTutor {
   subject: string | null;
   /** 学科色(服务端定好,src/lib/tutor-color.ts;页面不自己算) */
   color: string;
-  /** 板书底纹上写哪个学科字(《产品规划.md》拍板 27,board-mark.ts):三门主科各一个,别的老师 null 不写字 */
+  /** 板书底纹上写哪个学科字(board-mark.ts):三门主科各一个,别的老师 null 不写字 */
   mark: BoardMarkId | null;
   /** 他的听写写哪种:学科是英语(含别名)= en */
   lang: 'zh' | 'en';
   hasVoice: boolean;
-  /** 卡上的常驻入口(《首页设计.md》拍板 18):dictation 听写与拍照听写、talk 口语课(要 talk.enabled) */
+  /** 卡上的常驻入口:dictation 听写与拍照听写、talk 口语课(要 talk.enabled) */
   extras: TutorExtra[];
   /** 实时老师页缺省怎么说话(live.listen):hold 按住说、open 一直听;孩子切过的记在设备上,以那个为准 */
   listen: 'hold' | 'open';
@@ -190,13 +190,13 @@ export interface KidHome {
   tutors: KidTutor[];
   /** 发布的首页 id(孩子点按钮时带回来);缺省首页 / 预览 = null */
   home: string | null;
-  /** 首页的卡(《首页设计.md》):老师卡在前,props.buttons 是孩子端的按钮;其余卡照文件顺序 */
+  /** 首页的卡:老师卡在前,props.buttons 是孩子端的按钮;其余卡照文件顺序 */
   cards: BoardCard[];
   /** 「给老师们换个样子」的入口(figshot pick 在这台电脑的哪个端口);cotutor.json 没配 figshot 就是 null */
   figshot: { port: number } | null;
   /** 孩子的惯用手(cotutor.json 的 kid.hand,缺省 right):left = 平板横屏实时老师页的浮层挪到右边 */
   hand: 'right' | 'left';
-  /** 百炼配好了(《产品规划.md》拍板 30):没配孩子端只出「老师们还没到」,家长端配 */
+  /** 百炼配好了:没配孩子端只出「老师们还没到」,家长端配 */
   ready: boolean;
 }
 
@@ -255,7 +255,7 @@ export async function kidDay(ctx: AppContext, tutor: string, date: string): Prom
 }
 
 /**
- * 孩子端发一条(POST /api/kid/conversations/<老师>/messages 与实时老师的那条线共用,《实时老师设计.md》):
+ * 孩子端发一条(POST /api/kid/conversations/<老师>/messages 与实时老师的那条线共用):
  * 验正文、话题、首页按钮、小课堂、activity、照片,拼成 Runner.send 的入参;不对就回该回的错(400 / 409)。不起老师
  */
 export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown, date: string, deviceId?: string | null): Promise<{ input: SendInput } | { error: RouteResult }> {
@@ -267,7 +267,7 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
   if (action === null) return { error: { status: 400, json: { error: 'bad_request' } } };
   const photos = await photosOf(ws, body.photos);
   if (photos === null) return { error: { status: 400, json: { error: 'bad_request' } } };
-  // 左栏的纸交的画(《画板设计.md》§三):{key, image};图得在 captures/ 里,摘要按那张纸上的笔迹算
+  // 左栏的纸交的画:{key, image};图得在 captures/ 里,摘要按那张纸上的笔迹算
   let drawing: NonNullable<ConversationMessage['drawing']> | undefined;
   if (body.drawing !== undefined) {
     const d = body.drawing;
@@ -281,7 +281,7 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
   if (action === 'submit' && focus?.data?.card && submittedCards(today).has(focus.data.card)) return { error: { status: 409, json: { error: 'submitted' } } };
   const device = body.device === undefined ? undefined : DeviceSchema.safeParse(body.device);
   if (device && !device.success) return { error: { status: 400, json: { error: 'bad_request' } } };
-  // 首页的按钮(《首页设计.md》§5.2):via 只带 id,按钮是什么、讲法是什么都从服务端的发布件查;对不上就 400(孩子端刷新首页)
+  // 首页的按钮:via 只带 id,按钮是什么、讲法是什么都从服务端的发布件查;对不上就 400(孩子端刷新首页)
   const via = body.via === undefined ? undefined : HomeViaSchema.safeParse(body.via);
   if (via && !via.success) return { error: { status: 400, json: { error: 'bad_request' } } };
   const button = via ? await resolveVia(ws, tutor, via.data!) : null;
@@ -292,7 +292,7 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
   let home: { button: string; brief?: string } | undefined;
   let continues: { date: string; thread: string } | undefined;
   let activity: { name: string; params: Record<string, ActivityValue> } | undefined;
-  // 小课堂(《小课堂设计.md》):看完才能开口——这一条要带 lecture(哪份课包、看完了、看了多久、停过几次、画过的几处),字是孩子说的;新开话题。
+  // 小课堂:看完才能开口——这一条要带 lecture(哪份课包、看完了、看了多久、停过几次、画过的几处),字是孩子说的;新开话题。
   // 问过以后「再看一遍」:同一话题的下一条带 lecture(新画的、又看的过程;话题得是从这份课包开始的)
   let lecture: (NonNullable<ReturnType<typeof lectureOf>> & { again?: true }) | null | undefined = lectureOf(body.lecture);
   if (lecture === null) return { error: { status: 400, json: { error: 'bad_request' } } };
@@ -327,7 +327,7 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
       if (button.kind === 'continue') continues = { date: button.date, thread: button.thread };
     }
   }
-  // activity 按钮(《activity设计.md》):和开场按钮一样新开话题、发按钮上的字;参数是 resolveVia 按 activity 文件解析好的,记在这条消息上
+  // activity 按钮:和开场按钮一样新开话题、发按钮上的字;参数是 resolveVia 按 activity 文件解析好的,记在这条消息上
   if (button?.kind === 'activity') {
     text = button.label;
     home = { button: button.label, ...(button.brief ? { brief: button.brief } : {}) };
@@ -335,7 +335,7 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
     pick = undefined;
     activity = { name: button.activity, params: button.params };
   }
-  // 口语课(《口语课实时设计.md》§三之六):口语课页拍好、改好的那份口语单,新开话题跑这位老师的 activity「口语课」
+  // 口语课:口语课页拍好、改好的那份口语单,新开话题跑这位老师的 activity「口语课」
   let talk: string | undefined;
   if (body.talk !== undefined) {
     const t = await talkRun(ws, tutor, body.talk);
@@ -349,7 +349,7 @@ export async function kidSendInput(ctx: AppContext, tutor: string, body: unknown
   return { input: { ...(talk ? { talk } : {}), from: 'kid', text, focus: focus?.data, action, newThread, thread: pick, device: device?.data, ...(validDevice(deviceId) ? { deviceId: deviceId! } : {}), photos, ...(drawing ? { drawing } : {}), ...(via && button ? { via: messageVia(via.data!, button) } : {}), ...(home ? { home } : {}), ...(continues ? { continues } : {}), ...(activity ? { activity } : {}), ...(lecture ? { lecture } : {}) } };
 }
 
-/** 家长板书页的一天(《家长板书页设计.md》§4.1):形状同 KidDay;答案不剥,系统发的也在 */
+/** 家长板书页的一天:形状同 KidDay;答案不剥,系统发的也在 */
 export interface ParentDay {
   tutor: string;
   date: string;
@@ -369,7 +369,7 @@ export async function parentDay(ctx: AppContext, tutor: string, date: string): P
     if (m) m.section = partial;
   }
   for (const m of messages) if (m.section) { bakeSectionSoon(ctx.ws.dirs.bundles, m.section); m.section = await enrichPaints(ctx.ws, tutor, date, m.job, m.at, await enrichLectures(ctx.ws, m.section), { parent: true }); }
-  // 「做了」旁注带上孩子在弹窗里想了多久、改过几次(《家长录像设计.md》§4.7;有实录才有):这张卡从同一话题上一条消息到这条之间的弹窗
+  // 「做了」旁注带上孩子在弹窗里想了多久、改过几次(有实录才有):这张卡从同一话题上一条消息到这条之间的弹窗
   const plays = await readPlays(ctx.ws, tutor, date);
   if (plays.length) {
     const th = threads(index.messages);
@@ -404,8 +404,8 @@ async function readPlays(ws: Workspace, tutor: string, date: string, jobs?: Read
 }
 
 /**
- * 家长端看录像(《家长录像设计.md》):这个话题的轨道(lib/reel.ts 排)+ 这个话题的家长条目(录像栏的说明用)+ 孩子端条目(孩子的屏幕照它画,
- * 和 /api/kid 一样剥了答案,拍板 6)+ 孩子那台设备(屏幕多大)与老师的脸(孩子屏幕左上角)。话题一轮都没有 → null;孩子没开过口的也有(只有老师一轨,拍板 17)
+ * 家长端看录像:这个话题的轨道(lib/reel.ts 排)+ 这个话题的家长条目(录像栏的说明用)+ 孩子端条目(孩子的屏幕照它画,
+ * 和 /api/kid 一样剥了答案)+ 孩子那台设备(屏幕多大)与老师的脸(孩子屏幕左上角)。话题一轮都没有 → null;孩子没开过口的也有(只有老师一轨)
  */
 export interface ParentReel {
   tutor: string;
@@ -416,9 +416,9 @@ export interface ParentReel {
   kid: KidMessage[];
   /** 孩子发这个话题最后一句时的设备;没记 → null(页面按 iPad 横屏) */
   device: Device | null;
-  /** 今天的话题:还会长(老师在写、孩子还会接着说),录像停在最后时隔几秒重拿(拍板 16) */
+  /** 今天的话题:还会长(老师在写、孩子还会接着说),录像停在最后时隔几秒重拿 */
   live: boolean;
-  /** 这个话题有实时的轮(《实时老师设计.md》):孩子的屏幕是实时老师页的样子(左栏大头像 + 字幕、卡角没有钮) */
+  /** 这个话题有实时的轮:孩子的屏幕是实时老师页的样子(左栏大头像 + 字幕、卡角没有钮) */
   realtime: boolean;
   face: { name: string; display: string; avatar: string | null; subject: string | null; color: string };
 }
@@ -466,7 +466,7 @@ async function liveCalls(ctx: AppContext, tutor: string, date: string, jobs: Set
 }
 
 
-/** 家长板书页的清单(《家长板书页设计.md》§2.2):这一天每位有脸的老师几轮、几个话题、停在哪 */
+/** 家长板书页的清单:这一天每位有脸的老师几轮、几个话题、停在哪 */
 export interface OverviewThread {
   thread: string;
   at: string;
@@ -475,7 +475,7 @@ export interface OverviewThread {
   from: ConversationMessage['from'];
   via: string | null;
   /**
-   * 孩子是点哪颗进来的(拍板 30:记录的卡照搬孩子端那颗):new 新话题(或没从首页进来)、start 开场、continue 接着、lecture 小课堂、activity、system 系统起的;
+   * 孩子是点哪颗进来的(记录的卡照搬孩子端那颗):new 新话题(或没从首页进来)、start 开场、continue 接着、lecture 小课堂、activity、system 系统起的;
    * label = 按钮上的字(new 是「新话题」)
    */
   start: { kind: 'new' | 'start' | 'continue' | 'lecture' | 'activity' | 'system'; label: string };
@@ -485,7 +485,7 @@ export interface OverviewThread {
   endAt: string | null;
   /** 看过小课堂:海报用 */
   lecture?: { bundle: string; title: string; video?: true; watchedMs: number; finished: boolean; marks: number };
-  /** 各轮给家长的(去掉「## 家长」)与记住了:宽屏右栏「这一天老师跟你说的」(拍板 31) */
+  /** 各轮给家长的(去掉「## 家长」)与记住了:宽屏右栏「这一天老师跟你说的」 */
   notes: string[];
   remembered: string[];
   sections: number;
@@ -494,7 +494,7 @@ export interface OverviewThread {
   stoppedAt: 'writing' | 'ask' | null;
   rating: number | null;
   booked: boolean;
-  /** 按住说话连着几次没发出去(最长的一串,够 REEL_MISS_STREAK 才有;《家长录像设计.md》拍板 10) */
+  /** 按住说话连着几次没发出去(最长的一串,够 REEL_MISS_STREAK 才有) */
   misses?: number;
 }
 export interface OverviewTutor {
@@ -517,9 +517,9 @@ export interface Overview {
   date: string;
   today: string;
   tutors: OverviewTutor[];
-  /** 七天日期条(拍板 24):date 所在的七天,每天有话题的老师(听写、口语课页面自己从模块接口补) */
+  /** 七天日期条:date 所在的七天,每天有话题的老师(听写、口语课页面自己从模块接口补) */
   week: { date: string; tutors: string[] }[];
-  /** 百炼配好了(《产品规划.md》拍板 30);没配清单顶上一行叫家长去「首页」配 */
+  /** 百炼配好了;没配清单顶上一行叫家长去「首页」配 */
   ready: boolean;
 }
 
@@ -559,7 +559,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
         th.stoppedAt = last?.ask ? 'ask' : null;
       }
     }
-    // 按住说话连着没发出去(拍板 10):实录里的 hold;孩子发成的一句(开口、打字发出去)把一串断开
+    // 按住说话连着没发出去:实录里的 hold;孩子发成的一句(开口、打字发出去)把一串断开
     for (const th of by.values()) {
       const mine = index.messages.filter((_m, i) => ths[i] === th.thread);
       const plays = await readPlays(ctx.ws, t.name, date, new Set(mine.map((m) => m.job)));
@@ -646,7 +646,7 @@ async function uploadPhoto(ws: Workspace, body: unknown, now: Date): Promise<Rou
   return { status: 201, json: { path } };
 }
 
-/** 左栏的纸(《画板设计.md》§三):读 / 存一张;key 是话题 id 或 new */
+/** 左栏的纸:读 / 存一张;key 是话题 id 或 new */
 async function paperRoute(ctx: AppContext, tutor: string, date: string, method: string, url: URL, body: unknown): Promise<RouteResult> {
   const ws = ctx.ws;
   const key = method === 'GET' ? (url.searchParams.get('key') ?? '') : isObj(body) && typeof body.key === 'string' ? body.key : '';
@@ -671,13 +671,13 @@ async function photosOf(ws: Workspace, v: unknown): Promise<string[] | null | un
   return v;
 }
 
-/** 一处画里一笔最多几个点(播放器抽到 MARK_STROKE_POINTS,这里松一点);一条消息最多几处、一处几笔几个点见 src/lib/lecture.ts(《小课堂设计.md》§四) */
+/** 一处画里一笔最多几个点(播放器抽到 MARK_STROKE_POINTS,这里松一点);一条消息最多几处、一处几笔几个点见 src/lib/lecture.ts */
 const MAX_STROKE_POINTS = 400;
 /** 看的过程最多几条(拖进度条只记松手那一下,一堂课几十条) */
 const MAX_WATCH_LOG = 500;
 type WatchLog = { t: number; pos: number; play: boolean }[];
 
-/** 孩子看完小课堂带来的(《小课堂设计.md》§七):{bundle, watchedMs, finished, pauses, marks?};没带 undefined,形状不对 null(路由回 400) */
+/** 孩子看完小课堂带来的:{bundle, watchedMs, finished, pauses, marks?};没带 undefined,形状不对 null(路由回 400) */
 function lectureOf(v: unknown): { bundle: string; watchedMs: number; finished: boolean; pauses: number; marks: IncomingMark[]; log: WatchLog } | null | undefined {
   if (v === undefined) return undefined;
   if (!isObj(v) || typeof v.bundle !== 'string' || !BUNDLE_ID_RE.test(v.bundle) || typeof v.watchedMs !== 'number' || !(v.watchedMs >= 0) || v.watchedMs > 6 * 3600_000 || typeof v.finished !== 'boolean') return null;
@@ -724,7 +724,7 @@ function warmOpts(url: URL): { throttleMs: number; thread?: string } {
   return { throttleMs: 30_000, ...(thread ? { thread } : {}) };
 }
 
-/** 请求从哪来(createHandler 从请求头取):设备 cookie(《孩子端流水设计.md》§二)、来源地址 */
+/** 请求从哪来(createHandler 从请求头取):设备 cookie、来源地址 */
 export interface RouteClient {
   device?: string | null;
   ip?: string;
@@ -737,7 +737,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
   const url = new URL(path, 'http://x');
   const p = url.pathname;
   try {
-    // 服务起来的时刻、版本、跑的是哪个提交;仓里的提交变了 = 代码更新了,重起才用上(build.ts,《孩子端流水设计.md》7.1)
+    // 服务起来的时刻、版本、跑的是哪个提交;仓里的提交变了 = 代码更新了,重起才用上(build.ts)
     if (p === '/api/health') {
       const head = await headNow();
       return { status: 200, json: { ok: true, configError: ctx.configError, started: BUILD.started, version: BUILD.version, commit: shortCommit(BUILD.commit), dirty: BUILD.dirty, head: shortCommit(head), changed: codeChanged(BUILD.commit, head) } };
@@ -753,9 +753,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     if (who === 'anon' && !isKidPath(p) && (await ctx.access.pinSet())) {
       return method === 'GET' && !p.startsWith('/api/') ? { status: 401, html: gatePage(ws.config.title) } : { status: 401, json: { error: 'auth', message: '要家长 PIN:在 /parent 或 /dev 上输一次' } };
     }
-    // 工作台概览(《工作台设计.md》):近七天的轮数、今天各老师、用量、要看一眼的轮次;体检 = doctor 不带 --live(不花钱)
+    // 工作台概览:近七天的轮数、今天各老师、用量、要看一眼的轮次;体检 = doctor 不带 --live(不花钱)
     if (p === '/api/dev/overview' && method === 'GET') return { status: 200, json: await devOverview(ws) };
-    // 孩子端的设备(《孩子端流水设计.md》§五):对话页拿它给每轮写设备名;起名写进设备表,空着 = 去掉名字
+    // 孩子端的设备:对话页拿它给每轮写设备名;起名写进设备表,空着 = 去掉名字
     if (p === '/api/dev/devices' && method === 'GET') {
       const table = await readDevices(ws);
       return { status: 200, json: Object.fromEntries(Object.entries(table).map(([id, d]) => [id, { name: d.name ?? null, label: d.label }])) };
@@ -769,7 +769,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const r = await doctorWorkspace(ws.root, { live: false });
       return { status: 200, json: { ok: r.ok, at: new Date().toISOString(), checks: r.checks.map((c) => ({ name: c.name, ok: c.ok, required: c.required, detail: redactHome(c.detail), fix: c.fix })) } };
     }
-    // 工作台改 activity(《工作台设计.md》拍板 7–10):只认 workspace 里列得出的名字;存要带读进来时的 hash,对不上 409
+    // 工作台改 activity:只认 workspace 里列得出的名字;存要带读进来时的 hash,对不上 409
     if (p === '/api/dev/activities' && method === 'GET') return { status: 200, json: await listDevActivities(ws) };
     const da = /^\/api\/dev\/activities\/([a-z0-9][a-z0-9-]*)\/([^/]+?)(\/check|\/restore)?$/.exec(p);
     if (da) {
@@ -795,7 +795,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (sub === '/restore' && method === 'POST') return { status: 200, json: await restoreDevActivity(ws, tutor, name) };
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
-    // 工作台改老师文件(拍板 11):「新话题」照的提示词;和 activity 同一套(存带 hash、对不上 409),检查有要改的不存(400)
+    // 工作台改老师文件:「新话题」照的提示词;和 activity 同一套(存带 hash、对不上 409),检查有要改的不存(400)
     if (p === '/api/dev/tutor-files' && method === 'GET') return { status: 200, json: await listDevTutorFiles(ws) };
     const dt = /^\/api\/dev\/tutor-files\/([a-z0-9][a-z0-9-]*)(\/check|\/restore)?$/.exec(p);
     if (dt) {
@@ -834,7 +834,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             paths: ws.config.paths,
             resolvedPaths: Object.fromEntries(Object.entries(ws.paths).map(([k, v]) => [k, redactHome(v)])),
             tts: ws.config.tts,
-            /** 实时老师(《实时老师设计.md》):总开关、嘴的模型、哪几位老师走实时用哪个音色(工作台音色页「实时的嘴」改) */
+            /** 实时老师:总开关、嘴的模型、哪几位老师走实时用哪个音色(工作台音色页「实时的嘴」改) */
             live: ws.config.live,
             theme: ws.config.kid.theme,
             https: ws.config.server.https ?? null,
@@ -842,7 +842,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             /** 老 workspace 的政策文件缺的出厂件(新老师 / 新运行时 / 模板里的新旗标);设置页据此提示一行 */
             migrate: await configGapsOf(ws.root),
             tutors: listTutors(ws.config),
-            /** 学科色(《首页设计.md》拍板 26):每位老师现在用的(写了的、主科的、自动分的),与工作台点选的色块 */
+            /** 学科色:每位老师现在用的(写了的、主科的、自动分的),与工作台点选的色块 */
             colors: tutorColors(ws.config.tutors),
             palette: { subject: SUBJECT_COLORS, auto: TUTOR_PALETTE },
             /** 老师条目的原始政策补丁(页面区分「继承」与「覆盖」) */
@@ -852,7 +852,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       }
       if (method === 'PATCH') {
         if (!isObj(body)) return { status: 400, json: { error: 'bad_request', message: '要一个 JSON 对象' } };
-        // 工作台能改孩子那段的只有 kid.hand(左撇子镜像,《实时老师设计.md》拍板 22);kid 的别的字段照旧直接编辑文件
+        // 工作台能改孩子那段的只有 kid.hand(左撇子镜像);kid 的别的字段照旧直接编辑文件
         const handOnly = isObj(body.kid) && Object.keys(body.kid).length > 0 && Object.keys(body.kid).every((k) => k === 'hand');
         await patchConfig(ws, body, handOnly ? { also: ['kid'] } : {});
         await ctx.reload();
@@ -901,7 +901,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     // ---- 孩子端:过滤在服务端做,永远不带工具 / 错误 / 评判 ----
     if (p === '/api/kid/home' && method === 'GET') return { status: 200, json: await kidHome(ctx, ctx.now()) };
     // 按住说话的诊断:识别全在浏览器里、出错静默,真机上哪一步断了只有它自己知道;只收事件码与毫秒,不收字也不收声音
-    // 孩子端的流水(《孩子端流水设计.md》):一次打开、页面脚本出错;没有设备 cookie 就种一枚
+    // 孩子端的流水:一次打开、页面脚本出错;没有设备 cookie 就种一枚
     if (p === '/api/kid/log' && method === 'POST') {
       const row = parseKidLog(body);
       if (!row) return { status: 400, json: { error: 'bad_request' } };
@@ -923,7 +923,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const t = ws.config.tutors[tutor];
       if (!t || !t.enabled || t.hidden) return { status: 404, json: { error: 'no_such_tutor' } };
       const date = localDate(ctx.now());
-      // 录像的实录(《家长录像设计.md》§4):孩子端每 10 秒一批 {thread, sentAt, records};时刻按 sentAt 把两边的钟差校到服务端;
+      // 录像的实录:孩子端每 10 秒一批 {thread, sentAt, records};时刻按 sentAt 把两边的钟差校到服务端;
       // 形状不对的、不是这个话题的、太旧太新的丢掉,卡的改动只认服务端自己记的;不回错(孩子端不报错)。记在话题当时的末条 job 上,删话题一起删
       if (tail === 'play' && method === 'POST') {
         if (!isObj(body) || typeof body.thread !== 'string' || !Array.isArray(body.records) || body.records.length > 400) return { status: 400, json: { error: 'bad_request' } };
@@ -947,10 +947,10 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       }
       // 作业照片(R5):先传图拿 path,再连 path 一起发消息;不起老师、不计上限
       if (tail === 'photos') return method === 'POST' ? uploadPhoto(ws, body, ctx.now()) : { status: 405, json: { error: 'method_not_allowed' } };
-      // 左栏的纸(《画板设计.md》§三):GET ?key=<话题 | new> 读;PUT {key, state} 存(清掉那几版的图只认 captures/ 里在的)。不起老师
+      // 左栏的纸:GET ?key=<话题 | new> 读;PUT {key, state} 存(清掉那几版的图只认 captures/ 里在的)。不起老师
       if (tail === 'paper') return paperRoute(ctx, tutor, date, method, url, body);
       if (tail === 'today' && method === 'GET') {
-        // 孩子点进这位老师 / 选了话题(页面轮询也走这里,同一话题 30 秒看一次):把下一轮的老师进程提前起好(《工作流程.md》§四「预热」)
+        // 孩子点进这位老师 / 选了话题(页面轮询也走这里,同一话题 30 秒看一次):把下一轮的老师进程提前起好
         void ctx.runner.prewarm(tutor, warmOpts(url)).catch(() => {});
         return { status: 200, json: await kidDay(ctx, tutor, date) };
       }
@@ -972,7 +972,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       }
       return { status: 405, json: { error: 'method_not_allowed' } };
     }
-    // 字幕重放(《实时老师设计.md》拍板 21):实时那一轮嘴照念的声音在哪、多长、讲稿每句从哪开始(毫秒);只给实时的轮,没落过声音 404
+    // 字幕重放:实时那一轮嘴照念的声音在哪、多长、讲稿每句从哪开始(毫秒);只给实时的轮,没落过声音 404
     const mouth = /^\/api\/kid\/conversations\/([a-z0-9][a-z0-9-]*)\/mouth\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d+)$/.exec(p);
     if (mouth) {
       const [, tutor, d, job] = mouth;
@@ -1020,7 +1020,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const d = lettersData(decodeURIComponent(lt[1]));
       return d ? { status: 200, json: d, cacheControl: 'max-age=86400' } : { status: 404, json: { error: 'not_found' } };
     }
-    // 视频小课堂(《小课堂设计.md》§八第 4 步):lectures/<id>/ 的课名与一句一段(舞台包的播放器拼时钟用),与 video.mp4(Range 由 sendFile 管)
+    // 视频小课堂(第 4 步):lectures/<id>/ 的课名与一句一段(舞台包的播放器拼时钟用),与 video.mp4(Range 由 sendFile 管)
     const lv = /^\/api\/kid\/lectures\/([a-z0-9][a-z0-9-]*)\/(lecture\.json|video\.mp4)$/.exec(p);
     if (lv && method === 'GET') {
       const { lecture: l } = await inspectLecture(ws, lv[1]);
@@ -1134,7 +1134,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         return { status: 404, json: { error: 'no_such_thread', message: err instanceof Error ? err.message : String(err) } };
       }
     }
-    // 看录像(《家长录像设计.md》):一个话题按时间排好的轨道;没有孩子开口的话题 404
+    // 看录像:一个话题按时间排好的轨道;没有孩子开口的话题 404
     const reel = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(today|\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/reel$/.exec(p);
     if (reel && method === 'GET') {
       const [, tutor, tail, raw] = reel;
@@ -1174,7 +1174,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       return { status: 202, json: { tutor, date, ...r } };
     }
 
-    // 家长板书页(《家长板书页设计.md》):清单与一天的板书,都在家长命名空间下;/api/kid/* 不动
+    // 家长板书页:清单与一天的板书,都在家长命名空间下;/api/kid/* 不动
     const ov = /^\/api\/overview\/(today|\d{4}-\d{2}-\d{2})$/.exec(p);
     if (ov && method === 'GET') {
       const date = ov[1] === 'today' ? localDate(ctx.now()) : ov[1];
@@ -1260,9 +1260,9 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     // 家长端「首页」的接口(/api/parent/*)
     const phr = await parentHomeRoute(method, p, ctx, body); if (phr) return phr;
     const blr = await bailianRoute(method, p, ctx, body, who); if (blr) return blr;
-    // 口语课(代码都在 src/talk/,《口语课设计.md》):/talk 与 /api/talk/* 交给它;上课在英语老师的实时页(talk-run.ts)
+    // 口语课(代码都在 src/talk/):/talk 与 /api/talk/* 交给它;上课在英语老师的实时页(talk-run.ts)
     const tk = await talkRoute(method, url, ctx, body); if (tk) return tk;
-    // 听写(代码都在 src/dictation/,《听写设计.md》):/dictation 与 /api/dictation/* 交给它;首页的听写卡在 kid-page 画
+    // 听写(代码都在 src/dictation/):/dictation 与 /api/dictation/* 交给它;首页的听写卡在 kid-page 画
     const tx = await dictationRoute(method, url, ctx, body); if (tx) return tx;
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
     // 工作台:对话原始视图、看原文、老师团、音色、设置、首页排版——给有技术背景的家长与开发者;家长端在 /parent
@@ -1270,7 +1270,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     // 扫码页:在电脑上打开,iPad 用相机扫(不在孩子端的入口里)
     if (p === '/dev/qr') return ctx.listen ? { status: 200, html: qrPage(ws.config.title, ctx.listen(), url.searchParams.get('via') === 'ip' ? 'ip' : 'name', url.searchParams.get('to') === 'parent' ? 'parent' : 'kid') } : { status: 404, json: { error: 'not_listening' } };
     // 按住说话的试验页(真机上比策略用;不在孩子端与家长端的入口里)
-    // 按钮样张(《实时老师设计.md》拍板 23):老师页那颗「头像 + 按住说话」的每一种样子,调动画时看这一页
+    // 按钮样张:老师页那颗「头像 + 按住说话」的每一种样子,调动画时看这一页
     if (p === '/dev/voice') return { status: 200, html: VOICE_GALLERY_PAGE };
     // 主屏幕(iPad「添加到主屏幕」):清单与图标都按标题现生成,没有静态资源
     if (p === '/manifest.webmanifest') return { status: 200, json: webManifest(ws.config.title), contentType: 'application/manifest+json; charset=utf-8' };
@@ -1284,11 +1284,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
     const fav = faviconResponse(p);
     if (fav) return { status: 200, ...fav, cacheControl: 'no-cache' };
     if (p === '/') return { status: 200, html: kidPage(esc(ws.config.title), {}, await stageVersion()) };
-    // 家长端(《家长板书页设计.md》):也是孩子端页面本身,数据走家长接口(答案在、家长的话在),卡锁着;自己的清单,加到主屏幕才不会拿到孩子端那份
+    // 家长端:也是孩子端页面本身,数据走家长接口(答案在、家长的话在),卡锁着;自己的清单,加到主屏幕才不会拿到孩子端那份
     if (p === '/parent') return { status: 200, html: kidPage(esc(ws.config.title), { parent: true }, await stageVersion()) };
-    // 家长端「首页」(设孩子的首页与几项常改的设置;《家长板书页设计.md》拍板 20)
+    // 家长端「首页」(设孩子的首页与几项常改的设置)
     if (p === '/parent/home') return { status: 200, html: PARENT_HOME_PAGE };
-    // 录像里孩子的屏幕(《家长录像设计.md》拍板 6):家长端录像时开在 iframe 里;直接打开也能看(调试),?tutor=&date=&thread=[&at=时:分:秒]
+    // 录像里孩子的屏幕:家长端录像时开在 iframe 里;直接打开也能看(调试),?tutor=&date=&thread=[&at=时:分:秒]
     if (p === '/reel') return { status: 200, html: kidPage(esc(ws.config.title), { reel: true }, await stageVersion()) };
     if (p === '/preview') return { status: 200, html: kidPage(esc(ws.config.title), { preview: true }, await stageVersion()) };
     if (p === '/parent/manifest.webmanifest') return { status: 200, json: webManifest(`${ws.config.title} · 家长`, { startUrl: '/parent', scope: '/parent' }), contentType: 'application/manifest+json; charset=utf-8' };

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-板书底纹的学科字(《产品规划.md》拍板 27):三门主科照课本封面,把学科名烤成 SVG 轮廓写进 src/server/board-mark-art.ts(生成的,别手改)。
+板书底纹的学科字:三门主科照课本封面,把学科名烤成 SVG 轮廓写进 src/server/board-mark-art.ts(生成的,别手改)。
 孩子端不加载字体:iPad 不碰外网,三个词是死的,烤一次进仓就行。
 
 - 语文:马善政毛笔楷(Ma Shan Zheng,OFL)「语文」,竖排,转 −2°

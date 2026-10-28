@@ -24,7 +24,7 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .canvas-board .excalidraw .App-toolbar-container, .canvas-board .excalidraw .App-menu_top, .canvas-board .excalidraw .layer-ui__wrapper__top-right, .canvas-board .excalidraw .App-bottom-bar, .canvas-board .excalidraw .mobile-misc-tools-container, .canvas-board .excalidraw .undo-redo-buttons, .canvas-board .excalidraw .App-menu__left, .canvas-board .excalidraw .help-icon, .canvas-board .excalidraw .zoom-actions, .canvas-board .excalidraw .scroll-back-to-content, .canvas-board .excalidraw .context-menu, .canvas-board .excalidraw .excalidraw-tooltip, .canvas-board .excalidraw .layer-ui__wrapper__footer-left, .canvas-board .excalidraw .footer-center, .canvas-board .excalidraw .zen-mode-transition { display: none !important; }
 /* excalidraw 画布上那句「点击并拖动,完成时松开」:孩子不用它 */
 .canvas-board .excalidraw .HintViewer { display: none !important; }
-/* 铺满(《画板设计.md》§二):题目在页面顶栏;工具不管横竖都一列,左撇子在右;最底下空一格,页面把老师的小头像(按住说话)浮在那里 */
+/* 铺满:题目在页面顶栏;工具不管横竖都一列,左撇子在右;最底下空一格,页面把老师的小头像(按住说话)浮在那里 */
 .canvas-wrap.full .canvas-main { flex-direction: row; }
 .canvas-wrap.full.hand-left .canvas-main { flex-direction: row-reverse; }
 .canvas-wrap.full .canvas-tools { flex-direction: column; flex-wrap: nowrap; gap: 10px; padding: 14px 12px calc(env(safe-area-inset-bottom) + 104px); border-bottom: 0; border-right: 1px solid #e2dfd6; align-self: stretch; justify-content: flex-start; overflow-y: auto; }
@@ -40,8 +40,8 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
   .canvas-sep { width: 28px; height: 1px; }
 }
 
-/* ---- 小课堂(《小课堂设计.md》拍板 38–40):左边一条竖栏(回去、课名、圈一圈 / 擦掉),画面占满中间,下面字幕、一行控制(播放、进度条、时间、去问老师) ---- */
-/* 底色就是课包板子的纸色(#fffdf8):画面四周不留白框,也不画分割线,竖向的地方都给画面(拍板 40) */
+/* ---- 小课堂:左边一条竖栏(回去、课名、圈一圈 / 擦掉),画面占满中间,下面字幕、一行控制(播放、进度条、时间、去问老师) ---- */
+/* 底色就是课包板子的纸色(#fffdf8):画面四周不留白框,也不画分割线,竖向的地方都给画面 */
 .lc { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: #fffdf8; }
 /* 横着拿:画面被高卡着,两边本来就空;竖栏放左边,右边留一条同宽的空,画面在整屏居中 */
 .lc.lc-full { position: relative; display: grid; grid-template-columns: 76px minmax(0, 1fr) 76px; grid-template-rows: minmax(0, 1fr) auto auto; column-gap: 12px; row-gap: 8px; }
@@ -49,13 +49,13 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .lc-full > .lc-canvas { grid-column: 2; grid-row: 1; }
 .lc-full > .lc-line, .lc-full > .lc-bar { grid-column: 1 / -1; }
 .lc-rail { min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-/* 左上「‹ logo」:和老师页的 #back 一个样子(kid-page.ts),浮在上面;竖栏让出它的位置(拍板 39;《产品规划.md》拍板 24 起放 logo) */
+/* 左上「‹ logo」:和老师页的 #back 一个样子(kid-page.ts),浮在上面;竖栏让出它的位置(放 logo) */
 .lc-back { position: absolute; z-index: 5; top: calc(env(safe-area-inset-top) + 10px); left: calc(env(safe-area-inset-left) + 12px); display: flex; align-items: center; gap: 2px; height: 48px; padding: 0 4px 0 8px; border-radius: 24px; background: #fffffff0; border: 1px solid #e2dfd6; box-shadow: 0 2px 10px #00000018; color: #8a8781; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .12s, filter .12s; }
 .lc-back:active { transform: scale(.94); filter: brightness(.92); transition-duration: .06s; }
 .lc-back-ic { width: 24px; height: 24px; display: grid; place-items: center; }
 /* 同 kid-page.ts 的 #back .ct-logo:墨色、不动 */
 .lc-logo { display: block; flex: none; overflow: visible; color: var(--ink, #2b2b2b); margin: 0 8px 0 4px; }
-/* 带上老师(《产品规划.md》拍板 26):同 tutor-face.ts 的 BACK_TINT_CSS——填老师的颜色,箭头、logo、首字白色 */
+/* 带上老师:同 tutor-face.ts 的 BACK_TINT_CSS——填老师的颜色,箭头、logo、首字白色 */
 .lc-back.lc-tinted { background: var(--bk); border-color: var(--bk); color: #fff; }
 .lc-tinted .lc-back-ic { color: #ffffffd9; }
 .lc-tinted .lc-logo { color: #fff; }
@@ -90,7 +90,7 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .lc-play.again { width: auto; border-radius: 24px; padding: 0 18px 0 14px; display: flex; gap: 8px; background: #ffffff; color: #2b2b2b; border: 1.5px solid #e2dfd6; font: inherit; font-size: 16px; font-weight: 600; }
 /* 铺满的时候三种样子(暂停圆钮、接着看、再看一遍)一样宽,进度条的左头不跟着跳 */
 .lc-full .lc-play { width: 132px; padding: 0; border-radius: 24px; justify-content: center; }
-/* 进度条:一句一段,段间空 3px,不写数字(拍板 40);点哪就跳到哪,整行 48 高都能按 */
+/* 进度条:一句一段,段间空 3px,不写数字;点哪就跳到哪,整行 48 高都能按 */
 .lc-track { position: relative; flex: 1; min-width: 0; height: 48px; touch-action: none; cursor: pointer; }
 .lc-segs { position: absolute; left: 0; right: 0; top: 21px; height: 6px; display: flex; gap: 3px; pointer-events: none; }
 .lc-seg { display: block; flex: 1 1 0; min-width: 0; height: 100%; border-radius: 3px; background: #e6e2d8; overflow: hidden; }
@@ -102,14 +102,14 @@ html, body, #root { margin: 0; height: 100%; background: #fffdf8; font: 18px/1.5
 .lc-range { position: absolute; top: 16px; height: 16px; border-radius: 8px; background: #2f6fd633; pointer-events: none; }
 .lc-time { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.25; }
 .lc-time small { font-size: 12px; color: #2f6fd6; font-weight: 600; }
-/* 右头一格:放着写「看完就能问老师」,放完了话音落了一会儿换成「去问老师」(拍板 37);播放钮同时换成「再看一遍」 */
+/* 右头一格:放着写「看完就能问老师」,放完了话音落了一会儿换成「去问老师」;播放钮同时换成「再看一遍」 */
 .lc-slot { flex: none; width: 152px; display: flex; justify-content: flex-end; }
 .lc-hint { height: 44px; border-radius: 22px; background: #f1eee7; color: #66625b; font-size: 15px; display: flex; align-items: center; padding: 0 18px; white-space: nowrap; }
 .lc-askbtn { height: 48px; border-radius: 24px; border: none; background: #c95a22; color: #ffffff; font: inherit; font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 6px; padding: 0 16px 0 22px; cursor: pointer; white-space: nowrap; }
 .lc-in { animation: lc-in .4s ease-out both; }
 @keyframes lc-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .lc-in { animation: none; } .lc-back, .lc-knob { transition: none; } }
-/* 竖栏里的工具一直在,位置不跳;放着点「圈一圈」= 停下并拿起笔(拍板 38) */
+/* 竖栏里的工具一直在,位置不跳;放着点「圈一圈」= 停下并拿起笔 */
 .lc-tools { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
 .lc-tool { width: 72px; height: 72px; border-radius: 20px; border: 1.5px solid #e2dfd6; background: #ffffff; color: #2b2b2b; font: inherit; font-size: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; cursor: pointer; }
 .lc-tool.on { background: #2f6fd6; border-color: #2f6fd6; color: #ffffff; font-weight: 700; }

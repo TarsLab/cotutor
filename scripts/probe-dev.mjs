@@ -3,7 +3,7 @@
  * 工作台 /dev 的手动验收(不进 pnpm test,要本机 Chrome 与一个跑着的 serve;只看不改,不发消息、不花钱):
  * 概览(数字与 /api/dev/overview 对得上、跑一次体检)→ 对话(选第一位有话的老师,板书与轮次出来)→ 看原文(六站、原文行)→
  * 老师团(展开第一行)→ activity(原文与底色层对齐、改一处标出要改的行、预览、和出厂比、撤销,不存;新话题 = 老师文件同样走一遍,老师团跳过来)→ 音色 → 设置;
- * 每屏桌面截一张,概览与对话再截手机尺寸。工作台的样子见《工作台设计.md》。
+ * 每屏桌面截一张,概览与对话再截手机尺寸。
  *
  * 用法:node scripts/probe-dev.mjs [--base http://127.0.0.1:5180] [--shots <目录>]
  */
@@ -136,7 +136,7 @@ try {
   }
   const diskAfter = (await (await fetch(`${base}/api/dev/activities/${tutor}/${encodeURIComponent(name)}`)).json()).text;
   ok('activity:磁盘上那份没动', diskAfter === diskBefore);
-  // 新话题(老师文件,拍板 11):同一个编辑器;改坏 name 标要改、保存拦住,预览是去掉 frontmatter 的正文,撤销,不存
+  // 新话题(老师文件):同一个编辑器;改坏 name 标要改、保存拦住,预览是去掉 frontmatter 的正文,撤销,不存
   await clickEl(`document.querySelector('#activity .ai.tf')`);
   ok('新话题:点开老师文件', await waitFor(`document.querySelector('#activity .ehead h2')?.textContent === '新话题' && document.querySelector('#activity .ehead .l2').textContent.includes('.claude/agents/')`));
   const tfTutor = await evaluate(`new URLSearchParams(location.hash.split('?')[1]).get('a')`);

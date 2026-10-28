@@ -48,7 +48,7 @@ const byIp = qrPage('t', info, 'ip');
 check('?via=ip 编 IP,能换回来', byIp.includes('>https://192.168.1.9:5180/</p>') && byIp.includes(qrSvg(info.ip) as string) && byIp.includes('href="/dev/qr"'));
 const offline = qrPage('t', { ...info, ip: null }, 'ip');
 check('没有局域网地址:仍编主机名,不给退路', offline.includes('>https://ae86s-Mac.local:5180/</p>') && !offline.includes('via=ip'));
-// 家长那张(《家长板书页设计.md》§2.1):编家长端 /parent,标「家长看」,能换回孩子那张;孩子那张页脚有去家长那张的链接;两张互换时带着现在的地址种类
+// 家长那张:编家长端 /parent,标「家长看」,能换回孩子那张;孩子那张页脚有去家长那张的链接;两张互换时带着现在的地址种类
 const parent = qrPage('t', info, 'name', 'parent');
 check('?to=parent 编家长端,能换回孩子那张', parent.includes('>https://ae86s-Mac.local:5180/parent</p>') && parent.includes(qrSvg('https://ae86s-Mac.local:5180/parent') as string) && parent.includes('家长看') && parent.includes('href="/dev/qr"') && parent.includes('href="/dev/qr?via=ip&to=parent"'));
 check('孩子那张页脚有家长那张;IP 那张换过去仍是 IP', qrPage('t', info).includes('href="/dev/qr?to=parent"') && byIp.includes('href="/dev/qr?via=ip&to=parent"') && !offline.includes('via=ip'));

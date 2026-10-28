@@ -1,5 +1,5 @@
 /**
- * 家长端「首页」(《家长板书页设计.md》拍板 20、《首页设计.md》拍板 17–20):改首页原文的纯函数(切块、按老师换按钮、听写的词、先后)→
+ * 家长端「首页」:改首页原文的纯函数(切块、按老师换按钮、听写的词、先后)→
  * 接口(读、换按钮带讲法与留到、这周的词、调先后、开关与几项设置)→ 每改一次就发布、留历史 → 孩子端首页跟着变 → 页面能解析。
  */
 import { mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
@@ -86,7 +86,7 @@ try {
   {
     const kt = ((await call('GET', '/api/kid/home')).json as { tutors: { name: string; color: string; lang: string }[] }).tutors;
     const pt = (g0 as unknown as { tutors: { name: string; color: string }[] }).tutors;
-    check('学科色服务端定好随老师下发:孩子端、家长端一样;英语老师 lang en(拍板 26)', kt.length > 0 && kt.every((t) => /^#[0-9a-f]{6}$/.test(t.color) && pt.find((x) => x.name === t.name)?.color === t.color) && kt.find((t) => t.name === 'english-tutor')?.lang === 'en' && kt.find((t) => t.name === 'chinese-tutor')?.color === '#c43c74', JSON.stringify(kt.map((t) => [t.name, t.color, t.lang])));
+    check('学科色服务端定好随老师下发:孩子端、家长端一样;英语老师 lang en', kt.length > 0 && kt.every((t) => /^#[0-9a-f]{6}$/.test(t.color) && pt.find((x) => x.name === t.name)?.color === t.color) && kt.find((t) => t.name === 'english-tutor')?.lang === 'en' && kt.find((t) => t.name === 'chinese-tutor')?.color === '#c43c74', JSON.stringify(kt.map((t) => [t.name, t.color, t.lang])));
   }
   check('没发布过:老师按 cotutor.json 的顺序,没有按钮;语文常驻听写(没写 extras 走缺省)', g0.home === null && g0.tutors.map((t) => t.name).join() === 'chinese-tutor,english-tutor,math-tutor' && g0.tutors.every((t) => !t.buttons.length) && g0.tutors[0].extras.join() === 'dictation' && g0.tutors[0].extrasSet === null && g0.today === '2026-10-10', JSON.stringify(g0.tutors.map((t) => [t.name, t.extras])));
 
@@ -117,7 +117,7 @@ try {
   check('这周的词:发布了;读回来词与念法;孩子端那张听写卡归语文、只给几个词', w.status === 200 && JSON.stringify(g2.tutors.find((t) => t.name === 'chinese-tutor')!.dictation) === JSON.stringify([{ chars: '春天' }, { chars: '叶', say: '树叶的叶' }]) && dc?.owner === 'chinese-tutor' && dc.props.count === 2 && !JSON.stringify(k2).includes('春天') && history().length === 2, JSON.stringify(dc));
   check('词不对 400:不是汉字、超过四个字', (await call('PUT', '/api/parent/home/tutors/chinese-tutor/dictation', { words: [{ chars: 'red' }] })).status === 400 && (await call('PUT', '/api/parent/home/tutors/chinese-tutor/dictation', { words: [{ chars: '画蛇添足啊' }] })).status === 400);
 
-  // 英语老师的这周的词配 emoji(拍板 21):假千问回一段 JSON,数它被问了几次
+  // 英语老师的这周的词配 emoji:假千问回一段 JSON,数它被问了几次
   const { createServer } = await import('node:http');
   let asked: string[] = [];
   const fakeQw = createServer((req, res) => { let b = ''; req.on('data', (d) => (b += d)).on('end', () => { asked.push(b); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ choices: [{ message: { content: '好的:{"Grandmother": "👵", "bus": "🚌", "like": "x"}' } }] })); }); });
@@ -157,7 +157,7 @@ try {
   check('extras null = 回到按学科的缺省(字段删掉);给老师的话清空 = 删掉', !('extras' in c2.tutors['english-tutor']) && !('note' in c2.talk));
   check('设置不对 400:不认识的常驻、老师', (await call('PATCH', '/api/parent/settings', { tutors: { 'english-tutor': { extras: ['x'] } } })).status === 400 && (await call('PATCH', '/api/parent/settings', { tutors: { 'nobody-tutor': {} } })).status === 400);
 
-  // 一直听不再是常驻入口(《一直听设计.md》拍板 4):孩子端没有入口,家长端也开不了
+  // 一直听不再是常驻入口:孩子端没有入口,家长端也开不了
   check('一直听不是常驻入口:extras 写 listen 回 400', (await call('PATCH', '/api/parent/settings', { tutors: { 'chinese-tutor': { extras: ['dictation', 'listen'] } } })).status === 400);
 
   // 页面

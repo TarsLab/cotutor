@@ -1,5 +1,5 @@
 /**
- * cotutor serve:一 workspace 一进程(2026-09-08 拍板),端口读 cotutor.json(--port 覆盖)。
+ * cotutor serve:一 workspace 一进程,端口读 cotutor.json(--port 覆盖)。
  * 启动打印解析结果与体检警告(配置坏了直接不起,骨架缺失只警告)。
  * 扫码页:/qr 现画一张二维码(编 <本机名>.local 那条,不随 Wi-Fi 变),iPad 用相机扫;listen 之后把真端口交给 ctx.listen。
  * HTTPS(iPad 上录音要):server.https 指了证书就用它(单个 workspace 的例外);没指就看机器级 ~/.config/cotutor/certs/(cotutor cert 用 mkcert 建);都没有走 HTTP。

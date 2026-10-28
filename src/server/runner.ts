@@ -8,7 +8,7 @@
  * 话题(2026-09-11):一天可多个,每个话题自己的会话(index.sessions[thread]);newThread / 系统消息 / 今天第一条开新话题(不 resume、不带旧卡),
  * 指定 thread 接着今天的旧话题(resume 它的会话),缺省接当前话题。
  * 埋点(2026-09-11):每轮记 timing(进程起的时刻、首卡、进程退出、配音收尾,毫秒),家长视图每轮一行。
- * 进程 cwd 是老师目录 agents/<name>/(《agent层设计.md》拍板)。
+ * 进程 cwd 是老师目录 agents/<name>/。
  */
 import { spawn } from 'node:child_process';
 import { lecturePack, readLecture, storedMarks, type IncomingMark } from './lecture.ts';
@@ -71,7 +71,7 @@ export interface SendInput {
   thread?: string;
   /** 孩子端是什么端(记进消息);缺省当平板横屏 */
   device?: Device;
-  /** 哪一台设备(服务端从 cookie 取,《孩子端流水设计.md》§二) */
+  /** 哪一台设备(服务端从 cookie 取) */
   deviceId?: string;
   /** 记到哪一天的索引(缺省今天);记账给昨天的话题用 */
   date?: string;
@@ -81,19 +81,19 @@ export interface SendInput {
   tidy?: boolean;
   /** 这条带的作业照片(相对 workspace 根,已由路由验过在 captures/ 里;R5):进上下文包 photos: 段,老师自己 Read 看图;文字可以空 */
   photos?: string[];
-  /** 孩子从左栏的纸交的画(《画板设计.md》§三;路由已验过图在 captures/、摘要按纸上的笔迹算好):图与清掉的那几版排在照片后面进 photos:,上下文包 drawing: 一句;消息记 drawing */
+  /** 孩子从左栏的纸交的画(路由已验过图在 captures/、摘要按纸上的笔迹算好):图与清掉的那几版排在照片后面进 photos:,上下文包 drawing: 一句;消息记 drawing */
   drawing?: NonNullable<ConversationMessage['drawing']>;
   /** 这条是回放(server/replay.ts):原轮的 job,记进消息;调用方已经把 Runner 指到 evals/ */
   replayOf?: string;
   /** cotutor activity eval 跑的一轮:不写记忆、不预热(画照画,画家由 eval 换成假的) */
   eval?: true;
-  /** 孩子看完小课堂后的第一条(《小课堂设计.md》§六):上下文包带 lecture:(课的每句、看的情况、画过的几处),消息记 lecture;again = 问过以后再看一遍又画了 */
+  /** 孩子看完小课堂后的第一条:上下文包带 lecture:(课的每句、看的情况、画过的几处),消息记 lecture;again = 问过以后再看一遍又画了 */
   lecture?: { bundle: string; watchedMs: number; finished: boolean; pauses: number; again?: boolean; marks?: IncomingMark[]; log?: { t: number; pos: number; play: boolean }[] };
-  /** 孩子从首页哪个按钮进来的(《首页设计.md》§5.2),记进消息 */
+  /** 孩子从首页哪个按钮进来的,记进消息 */
   via?: MessageVia;
   /** 按钮的字与家长备好的讲法(服务端从发布件查的),进上下文包 home: 段 */
   home?: { button: string; brief?: string };
-  /** 这一轮走实时(《实时老师设计.md》):讲稿不配音(拍关就就绪)、交给嘴照念;消息记 live,上下文包带 live:(嘴接住时说的、上一轮念到第几句被打断;口语课的摸底、打电话几分钟、应用起的这一轮) */
+  /** 这一轮走实时:讲稿不配音(拍关就就绪)、交给嘴照念;消息记 live,上下文包带 live:(嘴接住时说的、上一轮念到第几句被打断;口语课的摸底、打电话几分钟、应用起的这一轮) */
   live?: NonNullable<ContextPack['live']>;
   /** 接着以前哪天的哪个话题:这条开新话题时上下文包带那个话题的尾巴(continue: 段),消息记 continues;pack 给了就不现读(回放从原 workspace 读好的) */
   continues?: { date: string; thread: string; pack?: NonNullable<ContextPack['continue']> };
@@ -152,7 +152,7 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
     /* 没有课程表:不带 slot */
   }
   const { notes, files } = await scanVault(ws);
-  // activity 话题的记忆是它自己的(agent: <老师>/<activity>,《activity设计.md》拍板 14);档案、入口文件、日记观察照旧共用
+  // activity 话题的记忆是它自己的(agent: <老师>/<activity>);档案、入口文件、日记观察照旧共用
   const pick = pickNotes(notes, files, { date: localDate(input.at), subject: t?.subject, agent: input.agent ?? tutor });
   const limit = policy.contextPack.entryChars;
   if (pick.semester) pack.semester = pick.semester;
@@ -198,7 +198,7 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
 }
 
 /**
- * activity 的那两段(《activity设计.md》§五):`activity:`(名字、参数、应用算的)每条都带;
+ * activity 的那两段:`activity:`(名字、参数、应用算的)每条都带;
  * 「老师怎么带」那节(按参数与这个话题的卡裁过、剥了注释)+ 这个 activity 多带的卡的写法,作为一条笔记放进话题第一条(<cotutor-activity>),
  * 续话题没改过写「未变」(同守则)。文件不在、读不了 → activityGuide 写「缺」,老师照自己的文件做。返回给这轮的提醒。
  */
@@ -212,7 +212,7 @@ export async function attachActivity(ws: Workspace, tutor: string, pack: Context
   }
   const a = parseActivity(text).activity;
   pack.activity.state = await activityState(ws, tutor, where.date, where.messages, where.thread, run, a, where.now);
-  // activity 已经是这个会话的系统提示(拍板 13):不再在第一条里带原文
+  // activity 已经是这个会话的系统提示:不再在第一条里带原文
   if (inSystem) {
     pack.activityGuide = ACTIVITY_IN_SYSTEM;
     return [];
@@ -221,7 +221,7 @@ export async function attachActivity(ws: Workspace, tutor: string, pack: Context
   const cards = activityCards(a, mine ?? undefined);
   const body = renderTutorSection(a, { params: run.params, cards });
   if (body === null) return [];
-  // 这个 activity 要用、老师的板书写法里没有的卡:写法跟在后面(不动系统提示,《activity设计.md》5.1)
+  // 这个 activity 要用、老师的板书写法里没有的卡:写法跟在后面(不动系统提示)
   const extra = mine ? a.cards.filter((k) => !mine.includes(k)) : [];
   const notes = pack.notes ?? [];
   const at = Math.max(notes.findIndex((n) => n.role === 'boardGuide'), notes.findIndex((n) => n.role === 'rules'));
@@ -238,7 +238,7 @@ export const TUTOR_BOARD_DIR = '.cotutor/board';
 export const ACTIVITY_IN_SYSTEM = '已在你的系统提示里(这个话题的 activity,照它带)';
 
 /**
- * activity 话题的系统提示(《activity设计.md》九点五、拍板 13–14):不读老师文件,人设与做法都是 activity 自己的。
+ * activity 话题的系统提示(九点五):不读老师文件,人设与做法都是 activity 自己的。
  *   body   「老师怎么带」按参数与这个话题的卡裁好、剥了注释
  *   kinds  这个话题的卡:activity 头上的 cards 加 text(不并老师的)
  *   guide  只讲这几种卡的板书写法,写到 .cotutor/board/
@@ -401,7 +401,7 @@ export class Runner {
   private readonly listeners = new Set<(e: RunEventEnvelope) => void>();
   /** noteEvent 每个事件文件一条追加链 */
   private readonly notes = new Map<string, Promise<void>>();
-  /** 预热的老师进程(《工作流程.md》§四「预热」):一位老师最多一个 */
+  /** 预热的老师进程:一位老师最多一个 */
   readonly spares: WarmPool;
   /** 页面拉今天时的预热:每位老师(与带的话题)上次看的时刻 */
   private readonly prewarmedAt = new Map<string, number>();
@@ -409,7 +409,7 @@ export class Runner {
   get env(): NodeJS.ProcessEnv | undefined {
     return this.opts.env;
   }
-  /** 画图卡交给谁画(《你说我画设计.md》§6;测试与 mock 注入假的) */
+  /** 画图卡交给谁画(测试与 mock 注入假的) */
   readonly draw: Draw;
   constructor(getWs: () => Workspace, opts: { now?: () => Date; env?: NodeJS.ProcessEnv; warmIdleMs?: number; warm?: boolean; draw?: Draw } = {}) {
     this.getWs = getWs;
@@ -457,7 +457,7 @@ export class Runner {
   }
 
   /**
-   * 预热(《工作流程.md》§四「预热」):给这位老师起好下一轮的进程,两个位置都补齐——
+   * 预热:给这位老师起好下一轮的进程,两个位置都补齐——
    * fresh:新开会话(新话题、接着上次都用它);
    * resume:接 thread(页面选着的话题;不给或今天没有 = 当天末条所在的话题,和 send 缺省一样)的会话,它没有会话就不留。
    * 只给有脸的、开着的、运行时 stdin: "stream-json"、这会儿没在跑的老师起;throttleMs 内同一话题看过就不再看(页面轮询今天)。
@@ -512,9 +512,9 @@ export class Runner {
     if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
     if (!t.enabled) throw new UsageError(`${t.display} 已关闭(cotutor.json tutors.${tutor}.enabled = false),打开再发`);
     const photos = input.photos?.filter(Boolean) ?? [];
-    // 小课堂画的一处带一张截图(《小课堂设计.md》拍板 41):和照片一样进上下文包 photos:(排在孩子拍的后面),这一轮带工具读图;消息的 photos 只记孩子拍的
+    // 小课堂画的一处带一张截图:和照片一样进上下文包 photos:(排在孩子拍的后面),这一轮带工具读图;消息的 photos 只记孩子拍的
     const shots = input.lecture?.marks?.flatMap((m) => (m.image ? [m.image] : [])) ?? [];
-    // 纸上交的画(《画板设计.md》§三):那张画与清空前存的那几版也给老师 Read,排在照片与小课堂截图后面
+    // 纸上交的画:那张画与清空前存的那几版也给老师 Read,排在照片与小课堂截图后面
     const drawn = input.drawing ? [input.drawing.image, ...(input.drawing.cleared ?? [])] : [];
     const seen = [...photos, ...shots, ...drawn];
     const text = input.text.trim() || (input.action === 'submit' ? '(交了答案,没说话)' : photos.length ? (photos.length === 1 ? '(拍了一张)' : `(拍了 ${photos.length} 张)`) : input.drawing ? DRAW_ONLY_TEXT : '');
@@ -575,20 +575,20 @@ export class Runner {
       if (!card) return { card: id, text: JSON.stringify(c.file.state) };
       const st = card.kind === 'canvas' ? (c.file.state as { image?: unknown; cleared?: { image?: unknown }[] } | null) : null;
       const image = typeof st?.image === 'string' ? st.image : undefined;
-      // 清空前存的那几版(《画板设计.md》拍板 9)也是图,一样换绝对路径、一样要 Read
+      // 清空前存的那几版也是图,一样换绝对路径、一样要 Read
       const cleared = Array.isArray(st?.cleared) ? st.cleared : [];
       if (!image && !cleared.some((x) => typeof x?.image === 'string')) return { card: id, text: describeCard(card, c.file.state) };
       drawings++;
       const abs = { ...(st as object), ...(image ? { image: join(ws.root, image) } : {}), cleared: cleared.map((x) => (typeof x?.image === 'string' ? { ...x, image: join(ws.root, x.image) } : x)) };
       return { card: id, text: describeCard(card, c.file.state), pack: describeCard(card, abs) };
     }));
-    // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的、交了画的(要 Read 看图,《工作流程.md》拍板 21)、
-    // 系统任务带只读的(拍板 20,2026-10-17:以前是整份白名单,照片里一句话就能让老师拿 Bash 读写 workspace 外);policy.tools: on 的老师总是整份。
+    // 这轮带不带工具(policy.tools,2026-10-04):孩子说的话缺省不带,只凭上下文包答;带照片的、交了画的(要 Read 看图)、
+    // 系统任务带只读的(以前是整份白名单,照片里一句话就能让老师拿 Bash 读写 workspace 外);policy.tools: on 的老师总是整份。
     // 不带的那轮,只有工具才用得上的路径(refs / vault)不进包;模板管不了工具的运行时(没有 {tools} / {toolArgs}),照旧
     const tools: ToolSet = policy.tools === 'on' ? 'on' : input.from !== 'kid' || seen.length > 0 || drawings > 0 ? 'read' : 'off';
     const bare = tools === 'off' && controlsTools(runtime);
     if (bare) { delete pack.refs; delete pack.vault; }
-    // 画图卡(《你说我画设计.md》):这个话题上一节有画图卡,告诉老师画好没有(老师看不到图)
+    // 画图卡:这个话题上一节有画图卡,告诉老师画好没有(老师看不到图)
     if (!fresh && !input.bookkeep) {
       const prevAt = index.messages.map((m, i) => ({ m, th: known[i] })).reverse().find((x) => x.th === thread && x.m.result === 'ok' && x.m.section);
       if (prevAt?.m.section?.cards.some((c) => c.kind === 'paint')) for (const line of await paintLines(ws, tutor, date, prevAt.m.job, prevAt.m.section)) cards.push({ card: line.slice(0, line.indexOf(' ')), text: line.slice(line.indexOf(' ') + 1) });
@@ -672,7 +672,7 @@ export class Runner {
           /* 这条记不了(老师忙 / 起不来),下一条照记;索引里没记 booked,再点一次记账会重试 */
         }
       }
-      // 账记完,这位老师整理一遍自己的记忆(新会话,结果直接落盘;《obsidian仓库设计.md》§8 2026-09-18)
+      // 账记完,这位老师整理一遍自己的记忆(新会话,结果直接落盘;《obsidian仓库设计.md》§8)
       try {
         const tidy = await this.tidyMemory(tutor, date);
         if (tidy) await tidy.done;
@@ -751,7 +751,7 @@ export class Runner {
       }
     };
     emit({ lane: 'main', kind: 'start', cli: plan.argv[0].slice(plan.argv[0].lastIndexOf('/') + 1), runtime: plan.runtime, resume: plan.resume, ...(spare ? { warmMs: t0 - spare.bornAt } : {}) });
-    // 讲稿不配音(嘴照念,《产品规划.md》拍板 30):拍关就就绪;卡自己的声音(点读段、单词,《实时老师设计.md》拍板 6)照配
+    // 讲稿不配音(嘴照念):拍关就就绪;卡自己的声音(点读段、单词)照配
     const cardVoice = ws.config.tutors[tutor]?.voice;
     const queue = cardVoice ? new DubQueue(ws.config.tts, cardVoice, files.err(job), this.opts.env) : null;
     if (queue) queue.report = (e) => emit(e.kind === 'queued' ? { lane: 'tts', kind: 'queued', label: e.label } : e.kind === 'done' ? { lane: 'tts', kind: 'done', label: e.label, ms: e.ms, file: e.file ?? '' } : { lane: 'tts', kind: 'failed', label: e.label, ms: e.ms, error: e.error ?? '?' });
@@ -909,7 +909,7 @@ export class Runner {
       exit = await runOnce(next);
     }
     // 回复停在写成正文的工具调用上(这轮没给它那个工具,qwen 照自己的格式写出来;板书解析器已剥掉,孩子没看到):老师在等结果,
-    // resume 同一个会话告诉它不会有结果、接着回孩子,只一次(《工作流程.md》拍板 21)。这次的正文接在前面那段后面
+    // resume 同一个会话告诉它不会有结果、接着回孩子,只一次。这次的正文接在前面那段后面
     let leaked = '';
     if (!exit.stalled && exit.code === 0 && session && endsWithToolCall(parseSections(liveText()).body)) {
       leaked = liveText();

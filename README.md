@@ -8,7 +8,7 @@
 
 需要 Node ≥ 22.18 和 Qwen Code ≥ 0.25。老师采用 realtime + 脑模型:默认 `qwen3.8-omni-flash-realtime` 负责听说,Qwen Code 运行脑模型生成讲稿和板书。出厂运行时为 `qwen`(`qwen3.8-max`,默认)与 `qwen-flash`(`qwen3.8-flash`)。
 
-实时语音需要百炼按量 key 与业务空间 id,在家长端「首页」配置;脑模型支持千问 Token Plan 或百炼按量 key,详见[开发者手册](docs/开发者手册.md)。
+实时语音需要百炼按量 key 与业务空间 id,在家长端「首页」配置;脑模型支持千问 Token Plan 或百炼按量 key,配置方式见下文。
 
 ```sh
 npm i -g cotutor
@@ -19,16 +19,16 @@ cotutor serve                     # 孩子端 http://<ip>:5180/,家长端 /paren
 
 为兼容已有 workspace,老师与技能沿用 `.claude/` 历史数据目录,无需安装 Claude CLI。`init` 把出厂老师拷进 `.claude/agents/`,把做课包用的四个领域 skill(随 drawtell 包来)和六个机器件 cotutor-tutor / cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.claude/skills/`;
 做课包用的 drawtell 随包装好(`.cotutor/drawtell`),不用另外装。要在 iPad 上用(按住说话要 HTTPS):`cotutor cert` 签一张
-自签证书,把根证书装到 iPad,重启 `serve`。
+自签证书,把根证书装到 iPad,重启 `serve`。步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
 
 然后在浏览器里:
 
 - **家长端 `/parent`**:只看。按天看孩子和每位老师的板书(答案不剥)、看录像、打星、记账、删话题。
 - **工作台 `/dev`**:给有技术背景的家长与开发者。和任何一位老师说话、看一轮的原文;老师团页改人设、政策、老师文件,加新老师;音色页试听挑声音;设置页改路径、端口、配音。
-- **孩子端 `/`**:首页每位老师一张卡,卡上的按钮是家长排好的(新话题、接着以前的话题、带讲法的开场、先看一堂小课堂);点了进板书页,按住说话或打字。老师的回答是一页板书:卡先铺开(选择题、填空、点读、田字格、单词、图、小课堂、画板、录音),讲稿一句句念、笔跟着声音标注,末句问句停下来等孩子。点一张卡进舞台做题,做完「交给老师」。孩子永远看不到工具、报错、评判。
+- **孩子端 `/`**:首页每位老师一张卡,卡上的按钮是家长排好的(新话题、接着以前的话题、带讲法的开场、先看一堂小课堂);点了进板书页,按住说话或打字。老师的回答是一页板书:卡先铺开(选择题、点读、田字格、单词、图、小课堂、画板、拍照),讲稿一句句念、笔跟着声音标注,末句问句停下来等孩子。点一张卡进舞台做题,做完「交给老师」。孩子永远看不到工具、报错、评判。
 
 实时老师的声音由 realtime 模型提供;点读、单词等卡片的配音可选装 [voxtell](https://github.com/tarslab/voxtell)。
-不花钱先看孩子端长什么样:`cotutor mock` 起一份模拟接口,不经真实老师。细节见 [docs/家长手册.md](docs/家长手册.md)。
+不花钱先看孩子端长什么样:`cotutor mock` 起一份模拟接口,不经真实老师。
 
 ## 年级教学包
 
@@ -63,15 +63,56 @@ import { deriveKidView, parseSections } from 'cotutor/lib';               // 转
 import { loadWorkspace } from 'cotutor/workspace';                        // 解析链 + 校验
 ```
 
-## 开发
+## 配置模型
 
-改代码的看 [docs/开发者手册.md](docs/开发者手册.md)(检出、冒烟、iPad 真机)与 [CONTRIBUTING.md](CONTRIBUTING.md);设计与拍板在 [docs/](docs/)(产品规划、agent 层设计、契约草案)。
+嘴使用百炼按量 API key 与业务空间 id。在家长端「首页」填写,保存到本机 `~/.config/cotutor/bailian.json`;也可在启动服务的终端设置 `DASHSCOPE_API_KEY` 与 `DASHSCOPE_WORKSPACE_ID`。Token Plan 的 key 不能用于 realtime。
+
+脑模型可用 `QWENCLOUD_TOKEN_PLAN_API_KEY`(千问 Token Plan)或 `DASHSCOPE_API_KEY`(百炼按量),也可先运行 `qwen` 配好本机 Qwen 设置。两类 key 对应不同端点,由适配器选择。模型、预算与老师运行时在 workspace 的 `cotutor.json` 中配置,编辑器按首行 `$schema` 提供字段说明。
+
+`cotutor doctor` 检查缺失配置并给修复建议;`--live` 会实际连接服务。页面上的老师起不来时,先看 doctor 和 `conversations/<老师>/<日期>.<job>.err.log`。家长端与工作台需要访问锁时,运行 `cotutor pin` 设置本机 PIN。
+
+## 数据与升级
+
+默认 workspace 是 `~/cotutor/<孩子>/`:配置在 `cotutor.json`,老师在 `.claude/agents/`,activity 在 `agents/<老师>/activities/`,对话在 `conversations/`,账本在 `ledger/`,照片在 `captures/`,课包在 `bundles/`,首页在 `home/`。长期档案、记忆和日记在配置的 Obsidian vault,规则见 [obsidian 仓库设计](docs/obsidian仓库设计.md)。备份时保留整个 workspace 与 vault。
 
 ```sh
-pnpm i && pnpm typecheck && pnpm test
-node bin/cotutor.js --help        # bin 在仓库内直跑 src,零构建
-pnpm build && pnpm smoke          # 出厂检查:体检要发的那份
+cotutor upgrade                      # 更新未修改的出厂老师、activity、主题与技能
+cotutor upgrade --config --dry-run    # 预览 cotutor.json 的迁移
+cotutor upgrade --config              # 执行配置迁移
+cotutor doctor
 ```
+
+家长改过的老师与主题保留并显示差异;机器技能会随版本覆盖。配置迁移补缺,并更新未自定义的旧命令模板,保留自定义配置。升级程序后重新启动 `serve`。
+
+### 旧 workspace 切换到 Qwen
+
+先运行 `cotutor upgrade --config` 补齐 Qwen 模板,再把 `runtimes.default` 和仍指向旧运行时的 `tutors.*.runtime` 改为 `qwen` 或 `qwen-flash`,删除旧 Claude 运行时条目。旧 `proxy` 字段可删除,对应命令已移除。`.claude/` 是共用的历史数据目录,老师与技能不用搬动。
+
+## 开发
+
+先把 [drawtell](https://github.com/tarslab/drawtell) 检出到本仓旁边,在它的目录执行 `pnpm i && pnpm build`;本仓通过 `link:../drawtell` 引用它。
+
+```sh
+pnpm i
+pnpm typecheck
+pnpm test
+node bin/cotutor.js --help        # 仓库内直跑 src,Node ≥ 22.18
+pnpm build
+pnpm build:stage                 # build 清空 dist 后重建舞台
+pnpm smoke                      # 检查待发布内容
+node bin/cotutor.js mock         # 假模型接口,查看前端
+```
+
+本地 `link:../drawtell` 不能直接用于发布包,发布前需换成可打包的依赖并通过 smoke。改卡片文档或技能生成代码后运行 `pnpm gen:skills`。开发约定与分模块验证见 [CLAUDE.md](CLAUDE.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+正式文档只保留以下六篇,历史讨论查 Git:
+
+- [iPad 与 iPhone](docs/iPad与iPhone.md)
+- [obsidian 仓库设计](docs/obsidian仓库设计.md)
+- [写提示词](docs/写提示词.md)
+- [卡片协议](docs/卡片协议.md)
+- [年级教学包](docs/年级教学包.md)
+- [词表](docs/词表.md)
 
 ## 许可
 

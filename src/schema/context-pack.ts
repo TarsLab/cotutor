@@ -1,5 +1,5 @@
 /**
- * 上下文包:应用在每条消息前拼的固定 YAML 块(《cotutor契约草案.md》§2),后面接家长笔记的原文段。老师不用自己找上下文。
+ * 上下文包:应用在每条消息前拼的固定 YAML 块,后面接家长笔记的原文段。老师不用自己找上下文。
  * 孩子由 workspace 决定,不进包。
  */
 import { z } from 'zod';
@@ -47,7 +47,7 @@ export const ContextPackSchema = z.object({
   board: z.enum(['auto', 'off']).optional(),
   /** 上一轮之后孩子改过状态的卡,每张一句(「<job>/<n> choice「问题」 选了「B …」(答案:「…」)」) */
   cards: z.array(z.string()).optional(),
-  /** 孩子刚看完小课堂(《小课堂设计.md》§六):课名、哪份课包、课长、每句的起点与原话、看的情况、画过的几处;看完后的第一条,和问过以后再看一遍又画了的那条 */
+  /** 孩子刚看完小课堂:课名、哪份课包、课长、每句的起点与原话、看的情况、画过的几处;看完后的第一条,和问过以后再看一遍又画了的那条 */
   lecture: z
     .object({
       title: z.string().min(1),
@@ -59,7 +59,7 @@ export const ContextPackSchema = z.object({
       marks: z.array(z.string()).default([]),
     })
     .optional(),
-  /** 孩子从首页的按钮进来(《首页设计.md》§六):按钮上的字与家长备好的讲法;只在带按钮的那条 */
+  /** 孩子从首页的按钮进来:按钮上的字与家长备好的讲法;只在带按钮的那条 */
   home: z.object({ button: z.string().min(1), brief: z.string().optional() }).optional(),
   /** 接着以前的话题:那个话题是哪天哪个、叫什么、最后一节的讲稿与卡、索引在哪;只在新话题的第一条 */
   continue: z
@@ -72,10 +72,10 @@ export const ContextPackSchema = z.object({
     })
     .optional(),
   /**
-   * 这一轮走实时(《实时老师设计.md》):嘴(realtime 模型)已经替老师接住了孩子,讲稿交给嘴照念、不配音。caught = 嘴接住时说的那句;cut = 上一轮的讲稿念到第几句被孩子打断(1 起;0 = 一句都没念到就被打断了;没打断不写)。
-   * 口语课(《口语课实时设计.md》):warmup = 热身的摸底,一拍一行(应用按转写记);phone = 打电话打了几分钟(0 起,还没打不写);
+   * 这一轮走实时:嘴(realtime 模型)已经替老师接住了孩子,讲稿交给嘴照念、不配音。caught = 嘴接住时说的那句;cut = 上一轮的讲稿念到第几句被孩子打断(1 起;0 = 一句都没念到就被打断了;没打断不写)。
+   * 口语课:warmup = 热身的摸底,一拍一行(应用按转写记);phone = 打电话打了几分钟(0 起,还没打不写);
    * app = 这一轮不是孩子说的:call = 你念了 [[call]],现在开始打电话;quiet = 热身里孩子连着两拍没开口。
-   * draw = 边画边聊(《画板设计.md》§四):这张画画着的时候孩子说的和你(嘴)说的,一句一行,按先后
+   * draw = 边画边聊:这张画画着的时候孩子说的和你(嘴)说的,一句一行,按先后
    */
   live: z
     .object({
@@ -87,10 +87,10 @@ export const ContextPackSchema = z.object({
       draw: z.array(z.string()).optional(),
     })
     .optional(),
-  /** 孩子从左栏的纸交来的画(《画板设计.md》§三):一句话说它是 photos 第几张、几笔、各颜色几笔、画了多久、清空过几次(清掉的那几版是 photos 第几张) */
+  /** 孩子从左栏的纸交来的画:一句话说它是 photos 第几张、几笔、各颜色几笔、画了多久、清空过几次(清掉的那几版是 photos 第几张) */
   drawing: z.string().optional(),
   /**
-   * 孩子从首页的 activity 进来的话题(《activity设计.md》):哪个 activity、家长填的参数(点的那一刻,补了缺省)、应用算的值。
+   * 孩子从首页的 activity 进来的话题:哪个 activity、家长填的参数(点的那一刻,补了缺省)、应用算的值。
    * 话题里每条都带;放在 YAML 块最后,键序固定(name、params、state;参数照文件「家长填的」的顺序)
    */
   activity: z.object({ name: z.string().min(1), params: z.record(z.string(), ActivityValueSchema).default({}), state: z.record(z.string(), ActivityValueSchema).default({}) }).optional(),

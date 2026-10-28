@@ -1,8 +1,8 @@
 /**
- * CLI 适配器(《agent层设计.md》§6、拍板 15):一个 agent CLI 一个文件,写「这个 CLI 怎么说话」——
+ * CLI 适配器:一个 agent CLI 一个文件,写「这个 CLI 怎么说话」——
  * 输出流怎么读、消息怎么写进 stdin、工具叫什么怎么关、思考量怎么调、起进程要什么环境、出厂模板长什么样。
  * 选哪个模型、预算、时限还在 cotutor.json 的运行时模板里(数据);应用的其余部分只认这里的统一事件,不认哪家的 JSON。
- * 接一个新 CLI:照 qwen.ts 写一个文件,在 index.ts 的 ADAPTERS 里登记(《接一个 CLI.md》)。
+ * 接一个新 CLI:照 qwen.ts 写一个文件,在 index.ts 的 ADAPTERS 里登记。
  */
 import type { Policy, Runtime } from '../schema/index.ts';
 
@@ -10,7 +10,7 @@ import type { Policy, Runtime } from '../schema/index.ts';
 export type ToolKind = 'read' | 'shell' | 'search' | 'edit' | 'skill' | 'other';
 
 /**
- * 这轮带不带工具(政策 tools 与消息种类定,《工作流程.md》拍板 12、20):off 一个不带;read 只读(看照片、读 vault、查教材);
+ * 这轮带不带工具(政策 tools 与消息种类定):off 一个不带;read 只读(看照片、读 vault、查教材);
  * on 与 read 一样只读,不提供 shell 与写入工具
  */
 export type ToolSet = 'off' | 'read' | 'on';

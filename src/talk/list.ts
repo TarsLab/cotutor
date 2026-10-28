@@ -1,5 +1,5 @@
 /**
- * 照片 → 口语单:交给 qwen3.8-omni-flash(兼容接口,不想)读出今天学的词和句,各带中文(《口语课设计.md》§二 2)。
+ * 照片 → 口语单:交给 qwen3.8-omni-flash(兼容接口,不想)读出今天学的词和句,各带中文。
  * 只读印刷体(2026-10-10 实测:印刷稳、手写不稳);读出来的家长要看一眼改,孩子只拿改过的。
  * key:omni 只有百炼按量(src/lib/qianwen.ts)。
  */
@@ -22,7 +22,7 @@ const PROMPT = `这是家长拍的一页小学英语课本或练习册。把这�
 只回一个 JSON 对象,形如 {"words":[{"en":"red","zh":"红色","emoji":"🔴","split":"r-e-d"}],"sentences":[{"en":"It's a red car.","zh":"这是一辆红色的车。"}]},不要别的字。`;
 
 /**
- * 口语单的一个词 → 单词卡要的 emoji 与分段:拼成单词卡的正文过 cards/word 的 parse(《口语课设计.md》§8.2),
+ * 口语单的一个词 → 单词卡要的 emoji 与分段:拼成单词卡的正文过 cards/word 的 parse,
  * 分段拼不回这个词就丢分段、emoji 不是 emoji 就丢——和老师写错时一个下场;词本身写不进四线三格(带标点、整句)两样都不要
  */
 export function wordCardOf(en: string, emoji?: unknown, split?: unknown): { emoji?: string; chunks?: string[] } {

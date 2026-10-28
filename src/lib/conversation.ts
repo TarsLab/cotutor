@@ -13,7 +13,7 @@ export function localDate(d: Date): string {
 }
 
 /**
- * 家长端记录的七天日期条(《家长板书页设计.md》拍板 24):以今天结尾、一次翻七天,date 落在哪一段就是哪七天(升序)。
+ * 家长端记录的七天日期条:以今天结尾、一次翻七天,date 落在哪一段就是哪七天(升序)。
  * 日期按日历算(不经时区):YYYY-MM-DD 进,YYYY-MM-DD 出
  */
 export function weekOf(date: string, today: string): string[] {
@@ -47,7 +47,7 @@ export interface ConversationFiles {
   run: (job: string) => string;
   /** 这一轮的事件流 <date>.<job>.events.jsonl(lib/events.ts;控制台与时间线的唯一来源) */
   events: (job: string) => string;
-  /** 录像的实录 <date>.<job>.play.jsonl(《家长录像设计.md》§4):孩子端报上来的记在话题当时的末条 job 上,卡的每次存记在卡所在那轮;删话题一起删 */
+  /** 录像的实录 <date>.<job>.play.jsonl:孩子端报上来的记在话题当时的末条 job 上,卡的每次存记在卡所在那轮;删话题一起删 */
   play: (job: string) => string;
   /** 实时那一轮嘴照念的声音 <date>.<job>.mouth.wav 与每句的起点 .mouth.json(字幕重放,src/live/lib/mouth.ts;删话题时按 <date>.<job>.* 一起删) */
   mouth: (job: string, ext: 'wav' | 'json') => string;

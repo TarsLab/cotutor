@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 画图卡(cards/paint/card.md,《你说我画设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
+ * 画图卡(cards/paint/card.md)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 起 cotutor mock,Chrome 开孩子端语文老师,从输入条发到第五节(mock 脚本的最后一节是出题版的画图卡):
  * 刚出来是题干 + 分好的四幅 +「画家在画」+ 词语宝库,没有图、不显示角色;老师说完以后页面自己隔几秒拉一次,图到了淡入、「画家在画」没了;
  * 点卡开舞台放大看图;手机不横向滚。iPad 横屏、手机各截一张。

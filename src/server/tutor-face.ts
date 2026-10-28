@@ -1,6 +1,6 @@
 /**
  * 老师的脸:学科色 + C 形开口环 + 白底圆里的图或字。学科色服务端定好随老师下发(t.color,src/lib/tutor-color.ts)。
- * 听写页、口语课用这里的「‹ logo」胶囊回首页(《听写设计.md》拍板 16,《首页设计.md》拍板 27;《产品规划.md》拍板 24 起放 logo、不放老师头像),
+ * 听写页、口语课用这里的「‹ logo」胶囊回首页(放 logo、不放老师头像),
  * 样子照 kid-page.ts 的 #back,两处改要一起改(logo 是 brand.ts 的 BACK_LOGO,两处同一份)。
  * 脚本是 ES5、没有反斜杠与反引号(插进各页的模板字符串)。
  */
@@ -9,7 +9,7 @@ import { BACK_LOGO } from './brand.ts';
 import { tutorColors } from '../lib/tutor-color.ts';
 
 /**
- * 回首页胶囊带上老师(《产品规划.md》拍板 26):整颗填这位老师的颜色(同首页牌上那块首字小牌),logo 后面接名字的首字,箭头、logo、首字白色;
+ * 回首页胶囊带上老师:整颗填这位老师的颜色(同首页牌上那块首字小牌),logo 后面接名字的首字,箭头、logo、首字白色;
  * 还不知道是哪位老师时浅底只放 logo。老师页(kid-page.ts)、听写中英文与口语课(下面的 backCapsule)用这一份;小课堂舞台在 React 里照它画(src/stage/lecture.tsx)。
  * 首字的取法同首页牌上的 .fc:名字(display)的第一个字。tests/brand.test.ts 盯着几处一个样子。
  */

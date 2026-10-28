@@ -1,5 +1,5 @@
 /**
- * qwen 适配器走完整条路(《agent层设计.md》拍板 15,假 CLI 的 qwen 方言,不花钱):
+ * qwen 适配器走完整条路(假 CLI 的 qwen 方言,不花钱):
  * 隔离的家(QWEN_HOME 与思考量配置按 effort 选)、key 从环境或本机 ~/.qwen/settings.json 来且不落盘、有 Token Plan 的 key 就走 Token Plan、别处的 OPENAI_MODEL 去掉、
  * 孩子的话工具表为空 / 系统轮只读三样、多出来的工具记提醒、没有钱数记 token、超时退出不吐 result 当出错、旧出厂模板 upgrade 整份换新。
  */

@@ -1,5 +1,5 @@
 /**
- * 孩子端的流水(《孩子端流水设计.md》):孩子端各页往服务端记的事,一件一行,按天存 .cotutor/kid-log/<日期>.jsonl。
+ * 孩子端的流水:孩子端各页往服务端记的事,一件一行,按天存 .cotutor/kid-log/<日期>.jsonl。
  * 这期两件:open = 孩子端模式下打开一次(带认设备要的浏览器信息,登记进设备表 .cotutor/devices.json);error = 页面脚本出错(各种模式都记)。
  * 设备是服务端种的 cookie(cotutor_kid,src/lib/kid-device.ts);消息上的 deviceId 也由服务端从 cookie 取,不靠页面带。
  * 孩子端照旧什么都不显示;删话题不动流水。
@@ -115,7 +115,7 @@ export type KidLogRow =
   | { k: 'net'; page: string; what: 'offline'; ms: number }
   | { k: 'net'; page: string; what: 'live'; opened: boolean; ms: number }
   | { k: 'error'; page: string; mode: string; v: string; msg: string; where: string; stack: string; ua: string; ctx: Record<string, unknown> | null };
-/** 服务端那时跑的是哪份代码(打开那行补,《孩子端流水设计.md》7.1) */
+/** 服务端那时跑的是哪份代码(打开那行补) */
 export interface KidLogSrv {
   v: string | null;
   commit: string | null;

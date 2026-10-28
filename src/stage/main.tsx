@@ -7,7 +7,7 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client';
 import { LectureStage, type LectureBack, type LectureStageHandle, type LectureWatch, type StageMark, type WatchEntry } from './lecture.tsx';
 
-/** 页面发来的胶囊上的老师(颜色、首字,《产品规划.md》拍板 26);形状不对就浅底只放 logo */
+/** 页面发来的胶囊上的老师(颜色、首字);形状不对就浅底只放 logo */
 const backOf = (v: unknown): LectureBack | null => {
   if (!v || typeof v !== 'object') return null;
   const b = v as Record<string, unknown>;

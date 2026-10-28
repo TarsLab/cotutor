@@ -1,5 +1,5 @@
 /**
- * 工作台改 activity(《工作台设计.md》拍板 7–10):孩子端首页的护栏(写坏了、参数解析不出的按钮不出);
+ * 工作台改 activity:孩子端首页的护栏(写坏了、参数解析不出的按钮不出);
  * 接口:列、读、边改边查(检查 / 首页按钮 / 预览 / 和出厂比,不落盘)、存(hash 对不上 409)、恢复出厂(留 .bak)、只认列得出的名字。
  */
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';

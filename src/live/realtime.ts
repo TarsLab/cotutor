@@ -1,5 +1,5 @@
 /**
- * 百炼 Qwen-Omni-Realtime 的 WebSocket 客户端:口语课(src/talk/,《口语课设计.md》§三)和实时老师(《实时老师设计.md》)共用。
+ * 百炼 Qwen-Omni-Realtime 的 WebSocket 客户端:口语课(src/talk/)和实时老师共用。
  * 一次通话一条会话。服务端连,key 不出服务端;孩子端的声音由调用方推进来,老师的声音从这里出去。
  *
  * 协议(OpenAI realtime 同族,2026-10-10 真连核对):

@@ -93,7 +93,7 @@ import { check, done } from './_check.ts';
   check('choice 没问题 → 文字卡 + warning', noQ.card.kind === 'text' && noQ.warning?.includes('问题') === true);
 }
 {
-  // 填空 10-22 删了(《卡片协议.md》拍板 3):老师再写 ```fill 当不认识的标签;老对话里存下的退成一段字,答案不下发
+  // 填空 10-22 删了(《卡片协议.md》):老师再写 ```fill 当不认识的标签;老对话里存下的退成一段字,答案不下发
   check('fill 不再是卡:当代码卡原样显示', parseCard('fill', '一共 ___ 个\n= 3').card.kind === 'code' && cardKind('fill') === undefined);
   check('老对话里存下的 fill 卡:下发孩子前退成一段字,只留句子,答案不下发', JSON.stringify(stripSecrets({ cards: [{ kind: 'fill', props: { text: '一共 ___ 个', blanks: 1, answers: ['3'] } }], lines: [] }).cards) === '[{"kind":"text","props":{"text":"一共 ___ 个"}}]');
   const r = parseCard('read', '\napple 苹果\n\nbanana 香蕉\n');

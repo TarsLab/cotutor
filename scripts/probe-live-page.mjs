@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * 孩子端实时老师页(《工作流程.md》§孩子端「实时老师」,《实时老师设计.md》)的手动验收(不进 pnpm test,要本机 Chrome;假百炼 + 假老师,不花钱):
+ * 孩子端实时老师页的手动验收(不进 pnpm test,要本机 Chrome;假百炼 + 假老师,不花钱):
  * 本进程起服务(临时 workspace,语文老师开实时;老师是 tests/_fake-cli.ts --stream,嘴是 tests/_fake-realtime.ts,一次回答的声音拉长到 1.5 秒),
  * 无头 Chrome 带假麦克风开孩子端语文老师(新话题):
- *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴不先说、头像在想(板上没有占位卡,拍板 19)→ 脑写的卡铺上、卡角没有钮(拍板 18 撤了「?」)、讲稿一句一句上字幕;
+ *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴不先说、头像在想(板上没有占位卡)→ 脑写的卡铺上、卡角没有钮(撤了「?」)、讲稿一句一句上字幕;
  *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点开一张卡再按住说 = 问这张卡(消息带 focus);板是脑写的(节头是它那张「# 标题」卡、没写就接着上一节、孩子的话在左栏、不出卡的一轮板上不留字、卡和讲稿不同步);嘴连不上留在实时页「正在叫老师」、自己再连;
  *   首页点 activity 按钮也开实时,开场那条走嘴的连接(P3.1);讲稿的 [[play]] 念完铺满放小课堂那一段,放完嘴才接着念(P3.2);
- *   一直听(《一直听设计.md》;孩子端没有开关,家长在 live.listen 开):连接开 VAD、不用按声音一直推、关麦就不推、一段声音收下了就是一轮;
- *   口语课(《口语课实时设计.md》):口语单页过来点一下开始,热身那拍念完卡亮「轮到你」、孩子跟了下一拍,[[call]] 念完响铃、老师说英文。
+ *   一直听(孩子端没有开关,家长在 live.listen 开):连接开 VAD、不用按声音一直推、关麦就不推、一段声音收下了就是一轮;
+ *   口语课:口语单页过来点一下开始,热身那拍念完卡亮「轮到你」、孩子跟了下一拍,[[call]] 念完响铃、老师说英文。
  * iPad 横屏、手机各截一张。
  * 用法:node scripts/probe-live-page.mjs [--out <截图目录>] [--keep]
  */
@@ -89,7 +89,7 @@ try {
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y - dy, button: 'left', buttons: 0, clickCount: 1 });
   };
   const tap = async (sel) => press(sel, 40);
-  /** 平板横屏实时:按住说话在左栏浮层里那块(《实时老师页设计.md》§二) */
+  /** 平板横屏实时:按住说话在左栏浮层里那块 */
   const HOLD = '#lv-hold';
   const cap = () => evaluate(`({ p: document.querySelector('#lv-cap .lv-prev').textContent, c: document.querySelector('#lv-cap .lv-cur').textContent, cut: document.querySelector('#lv-cap .lv-cur').classList.contains('cut'), done: document.querySelector('#lv-cap').classList.contains('done') })`);
   const body = (cls) => evaluate(`document.body.classList.contains(${JSON.stringify(cls)})`);
@@ -102,7 +102,7 @@ try {
   fake.createDelayMs = 2500;
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&new=1` });
   await until(`document.body.classList.contains('live')`);
-  // 嘴还没连上(正在叫老师,《工作流程.md》实时那张表):按了不接、不掉进板书的浏览器识别;按钮晃一下写「正在叫老师」,voice-diag 记 busy(connecting)
+  // 嘴还没连上(正在叫老师实时那张表):按了不接、不掉进板书的浏览器识别;按钮晃一下写「正在叫老师」,voice-diag 记 busy(connecting)
   const VOICE = `document.querySelector('#lv-hold').dataset.voice`;
   const diagRow = (where) => { try { return readFileSync(join(wsRoot, '.cotutor', 'voice-diag.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((x) => x.where === where).pop() ?? null; } catch { return null; } };
   const connPre = await evaluate(VOICE);
@@ -116,7 +116,7 @@ try {
   await sleep(400);
   const lay = await evaluate(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const lv = r('#lv'), wrap = r('#wrap'), hold = r('#lv-hold'), back = r('#back'), more = r('#more-btn'), tools = r('#lv-tools'); const av = document.querySelector('#lv-hold .vb-av .av'); const st = getComputedStyle(document.querySelector('#lv')); return { lv: [Math.round(lv.left), Math.round(lv.top), Math.round(lv.width), Math.round(innerHeight - lv.bottom)], pos: st.position, lvBg: st.backgroundColor, lvRadius: st.borderTopRightRadius, wrap: [Math.round(wrap.left), Math.round(wrap.top), Math.round(wrap.width)], phoneAv: getComputedStyle(document.querySelector('#lv-av')).display, av: av ? Math.round(av.getBoundingClientRect().width) : 0, hold: [Math.round(hold.width), Math.round(hold.height), Math.round(innerHeight - hold.bottom), Math.round((hold.top + hold.height / 2) / innerHeight * 100)], toolsBottom: Math.round(innerHeight - tools.bottom), voice: document.querySelector('#lv-hold').dataset.voice, backIn: back.left >= lv.left && back.right <= lv.right && back.top >= lv.top, more: [Math.round(innerWidth - more.right), Math.round(more.top), more.left > lv.right], tools: [...document.querySelectorAll('#lv-tools button')].map((b) => b.textContent), bar: getComputedStyle(document.querySelector('#bar')).display, sub: getComputedStyle(document.querySelector('#sub')).display, bg: getComputedStyle(document.querySelector('#wrap')).backgroundColor, padL: parseInt(getComputedStyle(document.querySelector('#board')).paddingLeft), cap: getComputedStyle(document.querySelector('#lv-cap')).display, blank: Boolean(document.querySelector('#board .blank')), blankShown: getComputedStyle(document.querySelector('#board .blank')).display !== 'none', opening: document.body.classList.contains('lv-opening'), ask: document.querySelector('#lv-ask b').textContent, askIn: (() => { const a = r('#lv-ask'); return a.width > 0 && a.left >= lv.left && a.right <= lv.right && a.top > back.bottom && a.bottom < hold.top; })(), name: document.querySelector('#tutor').innerText.includes('语文老师') }; })()`);
   ok('进老师页:body.live、连上了嘴(配了会话)', connected, JSON.stringify(conn()?.session?.voice ?? null));
-  ok('横屏(1180×760,Safari 带地址栏的高):板占满整屏(纸色、不套卡片框);左栏是贴边的白纸(上、左、下不留边,宽 360,不带圆角),回首页在白纸顶上、「更多」浮在右上;头像和按住说话是一颗按钮 312×120(头像 72 在按钮里,手机那颗藏着),下沿离屏底 ≥ 150、中心在屏高六成多;最底下一排画板 / 拍照 / 相册 / 打字离底边 ~20;输入条与板书的字幕行收起;空板(《实时老师设计.md》拍板 24):开场那句「换个话题吧,想问什么?」在左栏字幕位、板上那块收着(板是干净的纸),页面上没有「语文老师」那行字;按钮是「按住说话」', lay.pos === 'absolute' && lay.lv[0] === 0 && lay.lv[1] === 0 && lay.lv[2] === 360 && lay.lv[3] === 0 && lay.lvBg === 'rgb(255, 255, 255)' && lay.lvRadius === '0px' && lay.wrap[0] === 0 && lay.wrap[1] === 0 && lay.wrap[2] === 1180 && lay.bg === 'rgba(0, 0, 0, 0)' && lay.padL >= 380 && lay.backIn && lay.more[0] <= 24 && lay.more[2] && lay.phoneAv === 'none' && lay.av === 72 && lay.hold[0] === 312 && lay.hold[1] === 120 && lay.hold[2] >= 150 && lay.hold[3] >= 60 && lay.hold[3] <= 72 && lay.toolsBottom >= 16 && lay.toolsBottom <= 28 && lay.voice === 'idle' && lay.tools.join() === '画板,拍照,相册,打字' && lay.bar === 'none' && lay.sub === 'none' && lay.blank && !lay.blankShown && lay.opening && lay.ask === '换个话题吧,想问什么?' && lay.askIn && lay.cap === 'none' && !lay.name, JSON.stringify(lay));
+  ok('横屏(1180×760,Safari 带地址栏的高):板占满整屏(纸色、不套卡片框);左栏是贴边的白纸(上、左、下不留边,宽 360,不带圆角),回首页在白纸顶上、「更多」浮在右上;头像和按住说话是一颗按钮 312×120(头像 72 在按钮里,手机那颗藏着),下沿离屏底 ≥ 150、中心在屏高六成多;最底下一排画板 / 拍照 / 相册 / 打字离底边 ~20;输入条与板书的字幕行收起;空板:开场那句「换个话题吧,想问什么?」在左栏字幕位、板上那块收着(板是干净的纸),页面上没有「语文老师」那行字;按钮是「按住说话」', lay.pos === 'absolute' && lay.lv[0] === 0 && lay.lv[1] === 0 && lay.lv[2] === 360 && lay.lv[3] === 0 && lay.lvBg === 'rgb(255, 255, 255)' && lay.lvRadius === '0px' && lay.wrap[0] === 0 && lay.wrap[1] === 0 && lay.wrap[2] === 1180 && lay.bg === 'rgba(0, 0, 0, 0)' && lay.padL >= 380 && lay.backIn && lay.more[0] <= 24 && lay.more[2] && lay.phoneAv === 'none' && lay.av === 72 && lay.hold[0] === 312 && lay.hold[1] === 120 && lay.hold[2] >= 150 && lay.hold[3] >= 60 && lay.hold[3] <= 72 && lay.toolsBottom >= 16 && lay.toolsBottom <= 28 && lay.voice === 'idle' && lay.tools.join() === '画板,拍照,相册,打字' && lay.bar === 'none' && lay.sub === 'none' && lay.blank && !lay.blankShown && lay.opening && lay.ask === '换个话题吧,想问什么?' && lay.askIn && lay.cap === 'none' && !lay.name, JSON.stringify(lay));
   console.log('  ', await shot('live-open-new-ipad.png'));
 
   // ---- 按下反馈(10-21 Jack:拍照、相册、打字按着、长按都没变化):CDP 强制 :active,看样子(缩放、明暗、透明、字色)变没变;part = 变的是里面哪一块 ----
@@ -152,7 +152,7 @@ try {
   console.log('  ', await shot('live-hold-ipad.png'));
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button: 'left', buttons: 0, clickCount: 1 });
   ok('按住:按钮自己整块变蓝(不再盖一块上去)、孩子的竖条在轨道上往头像走、老师的弧收掉;假麦克风的声音推上去了', holding.listening && holding.voice === 'hold' && holding.tone === 'blue' && holding.overlay === 'none' && holding.drawn.bars > 0 && holding.drawn.arcs.length === 0 && holding.pushed > 3200, JSON.stringify(holding));
-  // 一页只有一张脸(《产品规划.md》拍板 24):左上胶囊是 logo、字幕行那颗在实时藏着,看得见的老师头像只有左栏那颗
+  // 一页只有一张脸:左上胶囊是 logo、字幕行那颗在实时藏着,看得见的老师头像只有左栏那颗
   const FACES = `[...document.querySelectorAll('#main .av')].filter((e) => e.getClientRects().length > 0).length`;
   const pend = await until(`document.body.classList.contains('pending')`, 20);
   const waitCard = await evaluate(`Boolean(document.querySelector('#board > .wait-card'))`);
@@ -170,7 +170,7 @@ try {
   const cards = await until(`document.querySelectorAll('#board .sec .c').length >= 2`, 60);
   const board1 = await evaluate(`(() => { const sec = document.querySelector('#board .sec'); return { said: sec.querySelector('.sh')?.textContent ?? '', kidHead: document.querySelectorAll('#board .sh.said').length, marks: sec.querySelectorAll('.c .mk').length, now: document.querySelectorAll('#board .c.now').length, cards: sec.querySelectorAll('.c').length, corner: sec.querySelectorAll('.c > .again').length, qmark: [...sec.querySelectorAll('.c')].filter((c) => [...c.children].some((x) => x.textContent === '?')).length }; })()`);
   board1.faces = await evaluate(FACES); board1.backLogo = await evaluate(`(() => { const b = document.querySelector('#back'); return !!b.querySelector('svg.ct-logo') && b.classList.contains('tinted') && b.querySelector('.bk-ini').textContent === '语' && getComputedStyle(b).backgroundColor === 'rgb(196, 60, 116)'; })()`);
-  ok('脑写的卡铺上:没写节头的第一节只挂时间、孩子那句不当节头(在左栏);卡落下时标注就画好了、不描边;卡角没有钮(没有「?」、没有再听的喇叭);左上是「‹ logo 语」填语文老师的粉(《产品规划.md》拍板 26),看得见的老师头像只有左栏一颗', cards && /^\d\d:\d\d$/.test(board1.said) && board1.kidHead === 0 && board1.marks >= 1 && board1.now === 0 && board1.cards >= 2 && board1.corner === 0 && board1.qmark === 0 && board1.faces === 1 && board1.backLogo, JSON.stringify(board1));
+  ok('脑写的卡铺上:没写节头的第一节只挂时间、孩子那句不当节头(在左栏);卡落下时标注就画好了、不描边;卡角没有钮(没有「?」、没有再听的喇叭);左上是「‹ logo 语」填语文老师的粉,看得见的老师头像只有左栏一颗', cards && /^\d\d:\d\d$/.test(board1.said) && board1.kidHead === 0 && board1.marks >= 1 && board1.now === 0 && board1.cards >= 2 && board1.corner === 0 && board1.qmark === 0 && board1.faces === 1 && board1.backLogo, JSON.stringify(board1));
   const speaking = await until(`document.body.classList.contains('speaking') && document.querySelector('#lv-hold').dataset.voice === 'tutor'`, 40);
   await sleep(250);
   const arcs1 = await evaluate(`document.querySelector('#lv-hold').vb.drawn().arcs`);
@@ -201,7 +201,7 @@ try {
   await device(1180, 760, 1, false);
   ok('长字幕也不压按钮:1180×760 与 1366×790 字幕都在按钮上沿以上、按钮离底边 ≥ 150、最底下那排离底边 ~20', Object.values(fits).every((f) => f.capBottom <= f.holdTop && f.holdGap >= 150 && f.toolsGap >= 16 && f.toolsGap <= 28), JSON.stringify(fits));
 
-  // ---- 字幕重放(拍板 21):安静了字幕下面露「再听一遍」;点了从这一轮第一句放(服务端留的那份嘴的声音)、字幕跟着走、上面一行「再听一遍 · 第 n 句,共 m 句」,头像不动;点「停」停;按住说话也停 ----
+  // ---- 字幕重放:安静了字幕下面露「再听一遍」;点了从这一轮第一句放(服务端留的那份嘴的声音)、字幕跟着走、上面一行「再听一遍 · 第 n 句,共 m 句」,头像不动;点「停」停;按住说话也停 ----
   const rpShown = await until(`!document.querySelector('#lv-replay').hidden && document.querySelector('#lv-replay').textContent === '再听一遍'`, 40);
   const rpPress = await pressLook('#lv-replay');
   ok('按下反馈:「再听一遍」按着变淡', rpPress.changed, JSON.stringify(rpPress));
@@ -262,7 +262,7 @@ try {
   const typedBack = await evaluate(`getComputedStyle(document.querySelector('#bar')).display === 'none'`);
   ok('打字:点「打字」输入条横跨全屏出来、#typed 拿到焦点(相机、加号在浮层里,不重复);失焦没字就收回去', typing.shown && typing.w >= 1180 && typing.focus && typing.cam === 'none' && typedBack, JSON.stringify({ ...typing, typedBack }));
 
-  // ---- 问某张卡:点开它(舞台),再按住说 → 这一轮带 focus 那张卡(拍板 18 撤了卡上的「?」) ----
+  // ---- 问某张卡:点开它(舞台),再按住说 → 这一轮带 focus 那张卡(撤了卡上的「?」) ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   await until(`!document.body.classList.contains('speaking')`, 40);
   const secs0 = await evaluate(`document.querySelectorAll('#board .sec').length`);
@@ -282,7 +282,7 @@ try {
   await tap('#st-x');
   await until(`!document.querySelector('#stage').classList.contains('on')`, 20);
 
-  // ---- 系统抢走触摸(pointercancel,iPadOS 底部手势;拍板 22):照旧发出去,voice-diag 记 cancel 不记 up ----
+  // ---- 系统抢走触摸(pointercancel,iPadOS 底部手势):照旧发出去,voice-diag 记 cancel 不记 up ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   await until(`!document.body.classList.contains('speaking')`, 40);
   await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
@@ -298,7 +298,7 @@ try {
   const lastDiag = diagRows.at(-1);
   ok('系统抢走触摸(touchCancel → pointercancel):照旧发出去(commit 一次)、voice-diag 记 cancel 不记 up', conn().commits === cc0 + 1 && Boolean(lastDiag?.ev.some((x) => x[0] === 'cancel' && x[2] === 'sent')) && !lastDiag?.ev.some((x) => x[0] === 'up'), JSON.stringify({ commits: conn().commits - cc0, ev: lastDiag?.ev }));
 
-  // ---- 不出卡的一轮:板上什么都不留(撤了留讲稿的字,设想稿拍板 20);下一轮脑写了节头 → 新一节,节头是那张卡 ----
+  // ---- 不出卡的一轮:板上什么都不留(撤了留讲稿的字);下一轮脑写了节头 → 新一节,节头是那张卡 ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   await until(`!document.body.classList.contains('speaking')`, 40);
   fake.kidText = '一加一等于几';
@@ -341,7 +341,7 @@ try {
   const mouth = (rj.reel?.clips ?? []).filter((c) => c.kind === 'mouth');
   const voice = (rj.reel?.clips ?? []).filter((c) => c.kind === 'voice');
   const wav = callSays[0] ? await fetch(`${base}/api/audio/chinese-tutor/${callSays[0].audio}`, { headers: { range: 'bytes=0-99' } }) : null;
-  // 拍板 14 以后这几轮嘴都不先说,没有接住那段;照念的第一块声音比 read 早排一两毫秒,reel 会切出 1–2 毫秒的 mouth 段(没字),不算
+  //  以后这几轮嘴都不先说,没有接住那段;照念的第一块声音比 read 早排一两毫秒,reel 会切出 1–2 毫秒的 mouth 段(没字),不算
   const caught = mouth.filter((c) => c.to - c.from >= 100);
   ok('挂了:落通话录像;话题的录像是实时的(realtime)、讲稿每句从通话的声音里放(带 seek)、孩子按住是一段原声、嘴不先说(没有接住那段)、通话的 wav 取得到(支持 Range)', ended && rj.realtime === true && callSays.length >= 3 && callSays.every((x) => typeof x.seek === 'number') && caught.length === 0 && voice.length >= 2 && wav?.status === 206 && wav.headers.get('content-type') === 'audio/wav', JSON.stringify({ realtime: rj.realtime, says: callSays.length, mouth: mouth.map((c) => `${c.to - c.from}ms ${c.text ?? ''}`), voice: voice.length, wav: wav?.status }));
   await send('Page.navigate', { url: `${base}/reel?tutor=chinese-tutor&date=${day.date}&thread=${encodeURIComponent(day.thread)}&end=1` });
@@ -352,7 +352,7 @@ try {
   ok('录像里孩子的屏幕:实时老师页的样子(左栏字幕停在最后一句、卡角没有钮、板上不留讲稿的字);老师头像只有左栏一颗', rv.live && rv.cur.length > 0 && rv.corner === 0 && rv.says.length === 0 && rv.faces === 1, JSON.stringify(rv));
   console.log('  ', await shot('live-reel-ipad.png'));
 
-  // ---- 嘴连不上(《产品规划.md》拍板 30):不回板书,留在实时页「正在叫老师」,过一会儿自己再连上 ----
+  // ---- 嘴连不上:不回板书,留在实时页「正在叫老师」,过一会儿自己再连上 ----
   fake.failUpdate = true;
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&new=1` });
   await until(`Boolean(document.querySelector('#board .blank'))`);
@@ -384,7 +384,7 @@ try {
   const first = idx.messages.find((m) => m.thread === today.thread && m.from === 'kid');
   ok('首页点 activity:开实时;开场那条走嘴的连接(嘴照念脑的第一句)、脑照 activity 带、实时轮', pub.ok && liveOn && started && sec && first?.activity?.name === '看图说话' && first?.live === true, JSON.stringify({ pub: pub.ok, liveOn, started, sec, activity: first?.activity?.name, live: first?.live }));
 
-  // ---- 空板(《实时老师设计.md》拍板 24,原型 F 排):老师对孩子说的话都在左栏,板是干净的纸 ----
+  // ---- 空板(原型 F 排):老师对孩子说的话都在左栏,板是干净的纸 ----
   // F2 新话题、今天聊过:首页点「新话题」,「接着刚才的」跟在开场那句下面
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   /** 回首页,点语文老师牌上写着 label 的那颗 */
@@ -452,7 +452,7 @@ try {
   const stillOpen = await evaluate(`Boolean(document.querySelector('#stage.on'))`);
   ok('[[play]]:念完那句铺满放小课堂那一段,放着时嘴不往下念;放完舞台停在末帧不关、嘴接着念后面的', staged && during.first && !during.rest && resumed && stillOpen, JSON.stringify({ staged, during, resumed, stillOpen }));
 
-  // ---- 一直听(《一直听设计.md》):孩子端没有开关、首页没有入口(拍板 4);家长在 live.listen 开 → 连接开 VAD;不用按,假麦克风的声音一直推;关麦就不推;一段声音收下了就是一轮 ----
+  // ---- 一直听:孩子端没有开关、首页没有入口;家长在 live.listen 开 → 连接开 VAD;不用按,假麦克风的声音一直推;关麦就不推;一段声音收下了就是一轮 ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   const noSwitch = await evaluate(`!document.querySelector('#lv-listen') && !document.querySelector('.bt-listen')`);
   cfg.live.listen = 'open';
@@ -491,7 +491,7 @@ try {
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   await ctx.reload();
 
-  // ---- 口语课(《口语课实时设计.md》):口语单拍好进英语老师页,点一下开始;热身那拍念完卡亮「轮到你」,孩子跟了下一拍;[[call]] 念完响铃,铃响够了老师说英文 ----
+  // ---- 口语课:口语单拍好进英语老师页,点一下开始;热身那拍念完卡亮「轮到你」,孩子跟了下一拍;[[call]] 念完响铃,铃响够了老师说英文 ----
   await untilNode(() => ctx.runner.running('chinese-tutor') === null, 15000);
   const talkId = '2026-10-17-1106';
   mkdirSync(join(wsRoot, 'talk', talkId), { recursive: true });
@@ -515,7 +515,7 @@ try {
   await sleep(300);
   tb.afterPress = await evaluate(`document.querySelector('#lv-hold').dataset.voice`);
   const spoke = conn().responses.length;
-  ok('口语单页过来(F4,拍板 24):英语老师页、一直听(live.listen 是 hold 也一样);左栏「口语单拍好啦」、「1 个单词、1 个句子」,下面一颗「先热身,再打电话」,板上那块收着、没有「英语老师」;没点之前输入条收着,左栏那颗灰着写「点上面开始」、按了不接(不开关麦),底下那排淡着,嘴不出声', talkBoard && tb.go.includes('先热身,再打电话') && tb.inLv && tb.ask === '口语单拍好啦' && tb.small === '1 个单词、1 个句子' && !tb.blankShown && !tb.name && tb.pill && tb.hold === 'flex' && tb.voice === 'choose' && tb.big === '点上面开始' && tb.afterPress === 'choose' && tb.tools === '0.45' && tb.open && spoke === 0 && conn().responses.length === 0, JSON.stringify({ ...tb, spoke }));
+  ok('口语单页过来(F4):英语老师页、一直听(live.listen 是 hold 也一样);左栏「口语单拍好啦」、「1 个单词、1 个句子」,下面一颗「先热身,再打电话」,板上那块收着、没有「英语老师」;没点之前输入条收着,左栏那颗灰着写「点上面开始」、按了不接(不开关麦),底下那排淡着,嘴不出声', talkBoard && tb.go.includes('先热身,再打电话') && tb.inLv && tb.ask === '口语单拍好啦' && tb.small === '1 个单词、1 个句子' && !tb.blankShown && !tb.name && tb.pill && tb.hold === 'flex' && tb.voice === 'choose' && tb.big === '点上面开始' && tb.afterPress === 'choose' && tb.tools === '0.45' && tb.open && spoke === 0 && conn().responses.length === 0, JSON.stringify({ ...tb, spoke }));
   await tap('#talk-go');
   const warmCaught = await untilNode(() => conn().responses.some((r) => r?.instructions === catchCue('warm')), 10000);
   const turnLit = await until(`Boolean(document.querySelector('#board .c.lv-turn'))`, 120);
@@ -540,7 +540,7 @@ try {
   const firstT = idxT.messages.find((m) => m.from === 'kid' && m.talk === talkId);
   ok('那个话题跑 activity 口语课、记着口语单是哪份', firstT?.activity?.name === '口语课' && String(firstT.activity.params?.口语单 ?? '').includes('🦆 duck'), JSON.stringify(firstT?.activity ?? null).slice(0, 200));
 
-  // ---- 左撇子镜像(kid.hand: left,工作台设置页切;拍板 22、23):白纸挪到右边、板在左边、按钮里头像在右头;回首页、「更多」的位置同右手(回首页浮在板的左上,「更多」在右上点得到) ----
+  // ---- 左撇子镜像(kid.hand: left,工作台设置页切):白纸挪到右边、板在左边、按钮里头像在右头;回首页、「更多」的位置同右手(回首页浮在板的左上,「更多」在右上点得到) ----
   const hp = await fetch(`${base}/api/config`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kid: { hand: 'left' } }) });
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&new=1` });
   await until(`Boolean(document.body && document.body.classList.contains('live') && document.body.classList.contains('hand-left'))`, 40);

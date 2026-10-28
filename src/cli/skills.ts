@@ -1,6 +1,6 @@
 /**
  * 出厂 skill:与老师文件同一套「拷不链」机制——init 拷进 workspace 的 .claude/skills/<name>/,hash 记 .cotutor/shipped.json 的 skills,
- * (原来 .qwen/skills/<name> 是相对链,2026-10-09 退役,init / upgrade 删掉旧链,《agent层设计.md》拍板 15。)出厂表 SHIPPED_SKILLS 每项带来源与 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录):
+ * (原来 .qwen/skills/<name> 是相对链,2026-10-09 退役,init / upgrade 删掉旧链。)出厂表 SHIPPED_SKILLS 每项带来源与 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录):
  * - 来源 cotutor = 本包根 skills/<name>/(进 npm files;cotutor-board 整个、cotutor-vault 的 references/ 是 scripts/gen-skills.ts 生成后入库的,
  *   tests/skills.test.ts 断言一致),来源 drawtell = drawtell 包根 skills/<name>/(四个领域 skill,2026-09-15 从退役的 drawtell-skills 仓搬过去的;
  *   没装 → unavailable,doctor 点名,init 跳过)

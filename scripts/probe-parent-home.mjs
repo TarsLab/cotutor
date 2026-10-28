@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * 家长端「首页」(/parent/home,《家长板书页设计.md》拍板 20)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
- * 临时 workspace + HTTP serve → 手机尺寸开 /parent/home:预览是孩子端首页本身(/preview,拍板 33)→ 给英语老师加一个开场按钮 → 发布了、孩子端与预览都有 →
+ * 家长端「首页」(/parent/home)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
+ * 临时 workspace + HTTP serve → 手机尺寸开 /parent/home:预览是孩子端首页本身(/preview)→ 给英语老师加一个开场按钮 → 发布了、孩子端与预览都有 →
  * 在预览里点后面那张换老师、设语文这周的词 → 一排里拖数学到第一 → 宽屏:在预览里点那颗、右栏改、改字时预览跟着变、切手机样子、拖语文到第一 →
  * 「记录」有两个标签,时间线上有这次听写;截图。
  *
@@ -37,7 +37,7 @@ cfg.runtimes.fake = { run: [process.execPath, '--experimental-strip-types', '--n
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
-// 老师都走实时(《产品规划.md》拍板 30):嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
+// 老师都走实时:嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
 const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
 const mouth = await startFakeRealtime();
 const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home, COTUTOR_LIVE_ENDPOINT: mouth.endpoint }, stdio: 'ignore', detached: keep });

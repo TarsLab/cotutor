@@ -1,5 +1,5 @@
 /**
- * 孩子端不往浏览器历史里加东西(src/server/kid-nav.ts,《产品规划.md》拍板 25):孩子端各页都带 KID_NAV_JS(同站链接、回首页都是替换当前页,
+ * 孩子端不往浏览器历史里加东西(src/server/kid-nav.ts):孩子端各页都带 KID_NAV_JS(同站链接、回首页都是替换当前页,
  * 从浏览器缓存原样恢复就重载),页面里没有 location.href = / location.assign 这种加一条历史的跳转。新加孩子端页面要在 KID 里登记。
  */
 import { mkdtempSync, realpathSync } from 'node:fs';

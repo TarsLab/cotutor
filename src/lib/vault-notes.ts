@@ -1,5 +1,5 @@
 /**
- * vault 里家长写的笔记按 frontmatter 定位(《obsidian仓库设计.md》2026-09-17 拍板):
+ * vault 里家长写的笔记按 frontmatter 定位(《obsidian仓库设计.md》):
  * `cotutor: profile | subject | textbook`,不认文件名与目录——家长会改名、挪位置。
  *  - profile:孩子档案,一个 vault 一个;`school_start: YYYY-MM` 算当前学期,`semester` 可覆盖
  *  - subject:一科一学期一个,就是这位老师的**入口文件**,原文整篇进上下文包

@@ -14,7 +14,7 @@ import { SNAP_CSS, snapHtml } from '../server/photo-ui.ts';
 import { faviconLinks } from '../lib/favicon.ts';
 import { BTN_CSS, BTN_JS, btn } from './ui.ts';
 
-/** 写字格三档的按钮(拍板 30):档、图标边长、读屏的名字;越下越大 */
+/** 写字格三档的按钮:档、图标边长、读屏的名字;越下越大 */
 const PAD_SIZES: [string, number, string][] = [['s', 14, '小'], ['m', 20, '中'], ['l', 28, '大']];
 
 export const DICTATION_PAGE = `<!doctype html>
@@ -26,7 +26,7 @@ ${faviconLinks()}
 <style>
   :root { --ink:#2b2b2b; --dim:#66625b; --line:#e2dfd6; --paper:#faf9f4; --card:#ffffff; --sand:#d8c7a0; --sand2:#e2d4b4;
     --accent:#e8743b; --blue:#4f86d1;
-    /* 学科色(《听写设计.md》拍板 20):这次听写那位老师的颜色,页面读到老师后换(缺省语文);按钮、气泡、当前那格都跟它。橙色只留给「正在写的那一笔」 */
+    /* 学科色:这次听写那位老师的颜色,页面读到老师后换(缺省语文);按钮、气泡、当前那格都跟它。橙色只留给「正在写的那一笔」 */
     --sc:#c43c74; --clay:var(--sc); --tutor:color-mix(in srgb, var(--sc) 10%, #fff); --tutor-line:color-mix(in srgb, var(--sc) 32%, #fff); --tutor-ink:color-mix(in srgb, var(--sc) 62%, #000); --tutor-ink2:color-mix(in srgb, var(--sc) 78%, #000); }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { margin:0; height:100%; background:var(--paper); color:var(--ink); font:17px/1.5 -apple-system,"PingFang SC","Hiragino Sans GB",sans-serif; overscroll-behavior:none; -webkit-user-select:none; user-select:none; }
@@ -35,7 +35,7 @@ ${faviconLinks()}
   .view.on { display:flex; }
   .bar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .bar .l { display:flex; align-items:center; gap:14px; min-width:0; }
-  /* 按钮两页同一份(拍板 28,ui.ts) */
+  /* 按钮两页同一份(ui.ts) */
 ${BTN_CSS}
   .ttl { font-size:22px; font-weight:700; }
   .dots { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
@@ -75,7 +75,7 @@ ${BTN_CSS}
   #v-listen { flex-direction:row; gap:24px; padding:calc(env(safe-area-inset-top) + 10px) 20px 20px; height:100vh; height:100dvh; }
   /* 左上角的胶囊(回首页)浮在左边一栏、照片上面:它们从胶囊下面开始 */
   #v-pick .shot { margin-top:58px; }
-  /* 听写本(拍板 30):一个词的格子拼成一条(字与字共用一条线),词挨着排、排满换行 */
+  /* 听写本:一个词的格子拼成一条(字与字共用一条线),词挨着排、排满换行 */
   .book { width:300px; flex:none; min-height:0; display:flex; flex-flow:row wrap; align-content:flex-start; gap:8px 6px; padding:14px 8px; background:#fff; border:1px solid var(--line); border-radius:22px; overflow:auto; }
   .book .bh { flex:0 0 100%; display:flex; align-items:baseline; justify-content:space-between; padding:0 8px 2px; }
   .book .bh b { font-size:20px; }
@@ -95,7 +95,7 @@ ${BTN_CSS}
   .chip b { display:block; font-size:18px; color:var(--tutor-ink); white-space:nowrap; }
   .chip small { display:block; font-size:14px; color:var(--tutor-ink2); white-space:nowrap; min-height:20px; }
   .big { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
-  /* 写字格三档(拍板 30):写字区右上角一竖排,越下越大;选的记在 cookie(cotutor_dict_pad) */
+  /* 写字格三档:写字区右上角一竖排,越下越大;选的记在 cookie(cotutor_dict_pad) */
   .bigw { flex:1; min-height:0; min-width:0; position:relative; display:flex; }
   .padsz { position:absolute; right:0; top:0; display:flex; flex-direction:column; gap:4px; padding:6px 4px; background:#fff; border:1px solid var(--line); border-radius:16px; }
   .padsz button { width:44px; height:44px; border:0; border-radius:12px; background:none; display:grid; place-items:center; padding:0; }
@@ -105,7 +105,7 @@ ${BTN_CSS}
   .padsz button[aria-pressed="true"] { background:var(--tutor); }
   .padsz button[aria-pressed="true"] rect { stroke:var(--sc); }
   .std.trace path { fill:#d9d5cc; fill-opacity:1; }
-  /* 写字的左边一栏(拍板 20):气泡与再念、听写本、按钮都在这;右边 .big 整块高度只放田字格 */
+  /* 写字的左边一栏:气泡与再念、听写本、按钮都在这;右边 .big 整块高度只放田字格 */
   #v-listen .side3 { width:300px; flex:none; min-height:0; display:flex; flex-direction:column; gap:12px; padding-top:58px; }
   #v-listen .side3 .book { width:auto; flex:1 1 auto; }
   #v-listen .chip { padding:8px 8px 8px 14px; border-radius:22px; }
@@ -152,7 +152,7 @@ ${BTN_CSS}
   .count b { color:#b9531c; }
   .row { display:flex; gap:12px; flex-wrap:wrap; }
   /* 再写一遍 */
-  /* 整词并排,格子按范字旁边(竖着是下面)剩的地方放到最大(《听写设计.md》拍板 27,rowFit) */
+  /* 整词并排,格子按范字旁边(竖着是下面)剩的地方放到最大(rowFit) */
   #v-rewrite { height:100vh; height:100dvh; }
   #v-rewrite .grow { flex-direction:row; align-items:center; justify-content:center; gap:40px; flex-wrap:nowrap; min-height:0; }
   #v-rewrite #w-pads { flex-wrap:nowrap; }
@@ -232,7 +232,7 @@ ${TUTOR_FACE_CSS}
 </div>
 
 <div class="view" id="v-listen">
-  <!-- 写字(拍板 20):左边一栏是气泡与再念、听写本、按钮;右边整块高度只放田字格 -->
+  <!-- 写字:左边一栏是气泡与再念、听写本、按钮;右边整块高度只放田字格 -->
   <div class="side3">
     <div class="chip">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:var(--tutor-ink)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg>
@@ -249,7 +249,7 @@ ${TUTOR_FACE_CSS}
       </div>
       ${btn('main', 'done', '写好了', 'id="l-next"')}
     </div>
-    <!-- 看笔顺(拍板 31):没有「我来写」;放完或一落笔就换成照着写 -->
+    <!-- 看笔顺:没有「我来写」;放完或一落笔就换成照着写 -->
     <div class="foot" id="l-foot-order" hidden>
       <div class="tools">${btn('tool', 'replay', '再看一遍', 'id="l-again-order"')}</div>
     </div>
@@ -303,7 +303,7 @@ ${TUTOR_FACE_CSS}
 </div>
 
 <script>
-// 孩子端的流水(kid-log.ts,《孩子端流水设计.md》):最先装上出错的监听
+// 孩子端的流水(kid-log.ts):最先装上出错的监听
 ${KID_LOG_JS}
 (function () {
   'use strict';
@@ -324,12 +324,12 @@ ${BTN_JS}
 
   var q = new URLSearchParams(location.search);
   var HOME = q.get('home'); var N = Number(q.get('n') || 0); var TUTOR = q.get('tutor');
-  /** 家长看录像时,这一页开在录像外壳的 iframe 里:只照记录画,不发事件、不念、点不动(《家长录像设计.md》拍板 13) */
+  /** 家长看录像时,这一页开在录像外壳的 iframe 里:只照记录画,不发事件、不念、点不动 */
   var REEL_ID = q.get('reel');
   // 录像里只记出错,不报打开
   kidLog.start({ page: 'dictation', mode: REEL_ID ? 'reel' : 'kid', ctx: function () { return { tutor: TUTOR || null }; } });
   var S = { v: null, base: Date.now(), i: 0, w: null, pads: [], stack: [], active: null, sawPen: false, sayTimer: 0, order: null, rw: null };
-  /** 写字格多大(拍板 30):l 铺满写字区(上限 900)、m 500、s 380;再写一遍也照它封顶。孩子选的记在 cookie,录像照记录 */
+  /** 写字格多大:l 铺满写字区(上限 900)、m 500、s 380;再写一遍也照它封顶。孩子选的记在 cookie,录像照记录 */
   var PAD_CAP = { l: 900, m: 500, s: 380 };
   var readPad = function () { var m = /(?:^|; )cotutor_dict_pad=([lms])/.exec(document.cookie); return m ? m[1] : 'l'; };
   S.padl = REEL_ID ? 'l' : readPad();
@@ -338,12 +338,12 @@ ${BTN_JS}
   var setView = function (v) { var fresh = !S.v || S.v.id !== v.id; S.v = v; S.base = Date.parse(v.startedAt) || S.base; showFace(); if (fresh) { S.vw = 0; sendView(); } };
 
   var show = function (name) { var vs = document.querySelectorAll('.view'); for (var i = 0; i < vs.length; i++) vs[i].classList.toggle('on', vs[i].id === 'v-' + name); BACK.el.hidden = name === 'order' || name === 'rewrite'; window.scrollTo(0, 0); if (!REEL_ID) guard(); };
-  // 孩子端不往浏览器历史里加东西(kid-nav.ts,《产品规划.md》拍板 25):回首页是替换当前页
+  // 孩子端不往浏览器历史里加东西(kid-nav.ts):回首页是替换当前页
   ${KID_NAV_JS}
   var goHome = function () { stopSay(); kidGo('/'); };
-  // ---- 左上角「‹ logo」胶囊,同老师页(《听写设计.md》拍板 16,《产品规划.md》拍板 24);拍照屏的大头像是听写这次的老师,没开始时是从哪位老师卡上进来的 ----
+  // ---- 左上角「‹ logo」胶囊,同老师页;拍照屏的大头像是听写这次的老师,没开始时是从哪位老师卡上进来的 ----
   ${TUTOR_FACE_JS}
-  // 胶囊带上念的老师(《产品规划.md》拍板 26):服务端出页面时就按 ?tutor= 或首页那张卡的 reader 插进来(BACK_TUTOR),打开就是他的颜色和首字,不先浅底再变色;一位能念的老师都没有才是 null
+  // 胶囊带上念的老师:服务端出页面时就按 ?tutor= 或首页那张卡的 reader 插进来(BACK_TUTOR),打开就是他的颜色和首字,不先浅底再变色;一位能念的老师都没有才是 null
   var BACK_TUTOR = __BACK_TUTOR__;
   var BACK = backCapsule(goHome); BACK.set(BACK_TUTOR); document.body.append(BACK.el);
   var TUTORS = null;
@@ -428,7 +428,7 @@ ${BTN_JS}
     var up = function (e) { if (cur && e.pointerId === cur.id) { cur = null; if (pad.onUp) pad.onUp(); } };
     pad.svg.addEventListener('pointerup', up); pad.svg.addEventListener('pointercancel', up);
   };
-  /** 擦掉的笔留着,记上擦的时刻(录像里在那一刻消失,《家长录像设计.md》拍板 13) */
+  /** 擦掉的笔留着,记上擦的时刻(录像里在那一刻消失) */
   var drop = function (pad, pts) { if (pad.gone.length < 200) pad.gone.push({ t: now(), pts: pts }); };
   var undo = function () { var pad = S.stack.pop(); if (!pad || !pad.strokes.length) return; drop(pad, pad.strokes.pop()); if (pad.ink.lastChild) pad.ink.lastChild.remove(); pad.undos++; if (pad.onUp) pad.onUp(); };
   var clearActive = function () { var pad = S.active; if (!pad || !pad.strokes.length) return; pad.strokes.forEach(function (st) { drop(pad, st); }); pad.strokes = []; pad.ink.replaceChildren(); pad.undos++; S.stack = S.stack.filter(function (x) { return x !== pad; }); if (pad.onUp) pad.onUp(); };
@@ -436,8 +436,8 @@ ${BTN_JS}
   var cs = document.querySelectorAll('[data-clear]'); for (var i2 = 0; i2 < cs.length; i2++) cs[i2].addEventListener('click', clearActive);
   var padsOut = function () { return { chars: S.pads.map(function (p) { return { strokes: p.strokes, undos: p.undos, gone: p.gone }; }) }; };
   /**
-   * 再写一遍那一排格子多大(《听写设计.md》拍板 27):先把格子缩成 0,量范字旁边(竖着是下面)剩多少,整词并排放得下的最大;
-   * 上限同写字屏(选的档,拍板 30)。原来按屏幕估、封顶 340,iPad 横放只有写字屏格子的一半大
+   * 再写一遍那一排格子多大:先把格子缩成 0,量范字旁边(竖着是下面)剩多少,整词并排放得下的最大;
+   * 上限同写字屏(选的档)。原来按屏幕估、封顶 340,iPad 横放只有写字屏格子的一半大
    */
   var rowFit = function (box, count) {
     box.style.setProperty('--pad', '0px');
@@ -469,7 +469,7 @@ ${BTN_JS}
   /** 念不出来(老师没配音色、合成失败)就直接说,不念浏览器合成声 */
   var NO_VOICE = '老师的声音还没配好 · 叫爸爸妈妈来看一下';
   var status = function (t) { $('#l-status').textContent = t; };
-  /** 看笔顺放到第几笔,一行字(拍板 24:不画一排数字方块,字本身的蓝、橙、淡就是进度) */
+  /** 看笔顺放到第几笔,一行字(不画一排数字方块,字本身的蓝、橙、淡就是进度) */
   var strokeAt = function (k, n) { return k < n ? '第 ' + (k + 1) + ' 笔 · 一共 ' + n + ' 笔' : '写完了 · 一共 ' + n + ' 笔'; };
   /** 念第 i 个词,念 times 遍,两遍之间停一下;没有音频(没配音色、合成失败)状态行直接提示 */
   var sayWord = function (i, times) {
@@ -524,7 +524,7 @@ ${BTN_JS}
 
   // ---------- 拍照开始:拍 → 传 → 一项一项认出来 → 点选 → 开始 ----------
   var P = { id: null, items: [], full: [], extra: [], on: {}, edits: {}, timer: 0, img: null, url: null };
-  /** 今天这位老师没写完(没点「对好了」)的拍照听写,拍照屏最上面给「接着写」(《听写设计.md》拍板 17);会话先读好,点下去在手势里直接念 */
+  /** 今天这位老师没写完(没点「对好了」)的拍照听写,拍照屏最上面给「接着写」;会话先读好,点下去在手势里直接念 */
   var ymdOf = function (d) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
   var R = { v: null };
   var showResume = function (v) {
@@ -734,7 +734,7 @@ ${BTN_JS}
     var prev = S.w.inks[S.w.c];
     S.w.inks[S.w.c] = { strokes: S.w.pad.strokes, undos: S.w.pad.undos, gone: S.w.pad.gone, revealed: S.w.mode === 'trace' || Boolean(prev && prev.revealed) };
   };
-  /** 右边的田字格占满 .big(拍板 20:纵向尽量大),再按选的档封顶(拍板 30);两边让出右上角那排档位按钮;转屏时跟着改 */
+  /** 右边的田字格占满 .big(纵向尽量大),再按选的档封顶;两边让出右上角那排档位按钮;转屏时跟着改 */
   var fitPad = function (el) { var r = $('#l-big').getBoundingClientRect(); el.style.width = el.style.height = Math.max(240, Math.min(PAD_CAP[S.padl], Math.floor(Math.min(r.width - 112, r.height)) - 10)) + 'px'; };
   var refit = function () { var el = $('#l-big').firstElementChild; if (el) { el.style.width = el.style.height = '0px'; fitPad(el); } };
   window.addEventListener('resize', function () { if ($('#v-listen').classList.contains('on')) refit(); });
@@ -821,7 +821,7 @@ ${BTN_JS}
   };
   $('#l-again-order').addEventListener('click', playOrder);
   /**
-   * 换成照着写:描红打底,必须照着写一遍才能写好了(拍板 8)。看笔顺放完、或看的时候一落笔就换(拍板 31:原来要点「我来写」,
+   * 换成照着写:描红打底,必须照着写一遍才能写好了。看笔顺放完、或看的时候一落笔就换(原来要点「我来写」,
    * 10-18 孩子看着淡字直接写完了,还得点「我来写」,再在同一个位置点「写好了」);动画停下,写的这一笔照常留着
    */
   var toTrace = function () {
@@ -952,7 +952,7 @@ ${BTN_JS}
     persist('POST', '/api/dictation/' + S.v.id + '/rewrites/' + S.rw.wi, body, $('#w-done')).then(function (v) { setView(v); S.rw = null; openCheck(); }, function () { openCheck(); });
   });
 
-  // ---------- 录像(?reel=<id>,《家长录像设计.md》拍板 13):开在录像外壳的 iframe 里,照记录用这一页的画法画;钟、把手、启动在 reel-mode.ts ----------
+  // ---------- 录像(?reel=<id>):开在录像外壳的 iframe 里,照记录用这一页的画法画;钟、把手、启动在 reel-mode.ts ----------
   /** 字形要同步拿:还没到就先不画,到了整屏重画一次 */
   var RG = {};
   var reelGlyph = function (ch) {

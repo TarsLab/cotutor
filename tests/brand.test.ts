@@ -1,7 +1,7 @@
 /**
  * 品牌标记(src/server/brand.ts,LICENSE 附加条件第 2 条):家长端各页的页脚、PIN 页、工作台页头都带;
  * 孩子端的页面(含家长端 iframe 里开的 /reel、/preview)不带页脚与仓库链接;录像两页是全屏播放器,不带。
- * 「XX的老师们」前面的 logo(《首页设计.md》拍板 33):家长端记录与首页彩色,孩子端首页跟标题同色。
+ * 「XX的老师们」前面的 logo:家长端记录与首页彩色,孩子端首页跟标题同色。
  */
 import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -49,7 +49,7 @@ for (const p of ['/', '/reel', '/preview']) {
   const m = mark(await html(p));
   check(`${p} 标题前是单色的 logo(跟标题同色)`, m.includes('stroke="currentColor"') && !m.includes(LOGO_CLAY), p);
 }
-// 回首页的胶囊「‹ logo」(《产品规划.md》拍板 24):老师页、听写、口语课、小课堂舞台同一颗单色 logo,不放老师头像、不动
+// 回首页的胶囊「‹ logo」:老师页、听写、口语课、小课堂舞台同一颗单色 logo,不放老师头像、不动
 const { BACK_LOGO } = await import('../src/server/brand.ts');
 const { TUTOR_FACE_JS } = await import('../src/server/tutor-face.ts');
 const { readFileSync } = await import('node:fs');
@@ -62,7 +62,7 @@ for (const p of ['/', '/reel']) {
 check('听写、口语课的胶囊里是同一颗 logo、不塞老师头像', TUTOR_FACE_JS.includes(BACK_LOGO) && !/backCapsule[\s\S]*tutorAvatar\(/.test(TUTOR_FACE_JS.slice(TUTOR_FACE_JS.indexOf('var backCapsule'))));
 const lecture = readFileSync(new URL('../src/stage/lecture.tsx', import.meta.url), 'utf8');
 check('小课堂舞台的胶囊画同一颗 logo(logo.ts 大号那档、单色)、没有老师头像', /logoBody\(LOGO_BIG, \{ outer: 'currentColor', inner: 'currentColor' \}\)/.test(lecture) && lecture.includes('className="lc-logo"') && !lecture.includes('lc-av'));
-// 胶囊带上老师(《产品规划.md》拍板 26):填这位老师的颜色、logo 后面接名字首字(同首页牌上的 .fc),四处一份——老师页、听写与口语课(tutor-face.ts 的 BACK_TINT_*)、小课堂舞台
+// 胶囊带上老师:填这位老师的颜色、logo 后面接名字首字(同首页牌上的 .fc),四处一份——老师页、听写与口语课(tutor-face.ts 的 BACK_TINT_*)、小课堂舞台
 const { BACK_TINT_JS, BACK_TINT_CSS, TUTOR_FACE_CSS } = await import('../src/server/tutor-face.ts');
 const { SUBJECT_COLORS } = await import('../src/lib/tutor-color.ts');
 check('胶囊着色:首字取名字第一个字、填老师的颜色加 .tinted', BACK_TINT_JS.includes("Array.from(t.display || '')[0]") && BACK_TINT_JS.includes("classList.toggle('tinted'") && BACK_TINT_CSS.includes('#back.tinted { background:var(--bk)') && BACK_TINT_CSS.includes('#back.tinted .ct-logo { color:#fff; }'));

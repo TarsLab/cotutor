@@ -1,7 +1,7 @@
 /**
- * 录像(《家长录像设计.md》):一个话题按时间排好的一条轨道——每一刻板上有哪几节、每节露了几张卡、嘴在念哪句、卡的状态、该出哪些旁注。
+ * 录像:一个话题按时间排好的一条轨道——每一刻板上有哪几节、每节露了几张卡、嘴在念哪句、卡的状态、该出哪些旁注。
  * 实时的轮照通话放(<日期>.live/ 的 reel.json + wav:按下、松手、嘴每句开始放的时刻都记着);不是实时的轮(家长端试发、cotutor send)写完那一刻整节铺上、不念。
- * 2026-10-22 之前还有按每句 mp3 时长推算着「念」、拿孩子端的播放位置校正、原声与 voice-diag 补老话题的那一套,跟着讲稿配音一起删了(《产品规划.md》拍板 30)。
+ * 2026-10-22 之前还有按每句 mp3 时长推算着「念」、拿孩子端的播放位置校正、原声与 voice-diag 补老话题的那一套,跟着讲稿配音一起删了。
  *
  * 两处共用,和 kid-board.ts 一个做法:服务端 buildReel 算好下发;家长端页面把这份剥掉类型内联,拖进度条时现算 reelFrameAt / reelClock。
  * 所以**只准从 kid-board.ts 取运行时的东西**(内联时 import 行删掉,页面里本来就有那些函数)、不碰 DOM、不用 enum;顶层名字都带 reel 前缀,免得和页面撞。
@@ -27,10 +27,10 @@ export interface ReelSay {
 export type ReelHoldResult = 'sent' | 'unclear' | 'cancel';
 
 /**
- * 实录(第二期,《家长录像设计.md》§4):孩子端记下的一条,落 <日期>.<job>.play.jsonl。at 是服务端的墙钟(路由按发来时两边的钟差校过)。
+ * 实录(第二期):孩子端记下的一条,落 <日期>.<job>.play.jsonl。at 是服务端的墙钟(路由按发来时两边的钟差校过)。
  * stage = 弹窗开 / 关;
  * visible = 页面切到后台 / 回来;card = 卡的一次存(服务端在 putCardState 里记,孩子端不发)。
- * 改版(拍板 6、7,孩子看到什么记什么):view = 孩子屏幕的 CSS 尺寸、键盘高、页面版本;
+ * 改版(孩子看到什么记什么):view = 孩子屏幕的 CSS 尺寸、键盘高、页面版本;
  * hold = 按住说话的一步(down 按下 / audio 话筒开了 / slide 上滑取消 on 或滑回来 / up 松手,cancel = 不是孩子松的手、是系统抢走了触摸(pointercancel,iPadOS 底部手势),照旧当松手 / end 收尾,r 见 ReelHoldResult,lv = 按下起每 100 毫秒一位的音量 0–9);
  * type = 打字(focus 点进输入框 / v 值变了 / send 发了 / blur 收起);ps = 发照片屏(open / tool:crop 裁剪 · pen 圈画 · rot 转 / send / cancel);
  * scroll = 孩子自己翻到哪(锚在卡上:那张卡的上沿离板书上沿 dy 像素)
@@ -126,7 +126,7 @@ export interface ReelGap {
 
 /**
  * 进度条上的点:said 孩子 / 家长开口、card 孩子改了一张卡、ask 老师停下等孩子、error 这轮没成、lecture 开始看小课堂、ink 在小课堂上画了一处、
- * miss 按住说话没发出去(淡,偶尔一两次不算事)、misses 连着 REEL_MISS_STREAK 次以上没发出去(拍板 10;to 是这一串的末尾)
+ * miss 按住说话没发出去(淡,偶尔一两次不算事)、misses 连着 REEL_MISS_STREAK 次以上没发出去(to 是这一串的末尾)
  */
 export interface ReelMark {
   kind: 'said' | 'card' | 'ask' | 'error' | 'lecture' | 'ink' | 'miss' | 'misses';
@@ -137,7 +137,7 @@ export interface ReelMark {
 }
 
 /**
- * 看小课堂的一段(《小课堂设计.md》§八第 5 步):孩子开口那条消息带来的看的过程,换成墙钟。log 每条:那一刻停在课里的哪儿、之后在不在放;
+ * 看小课堂的一段(第 5 步):孩子开口那条消息带来的看的过程,换成墙钟。log 每条:那一刻停在课里的哪儿、之后在不在放;
  * marks:画下去的那一刻(at)、画在课里的哪一刻(atMs)与几笔(没记 t 的当在这段末尾)
  */
 export interface ReelLecture {
@@ -151,7 +151,7 @@ export interface ReelLecture {
   marks: { at: number; atMs: number; svgMs: number; strokes: [number, number][][]; image?: string }[];
 }
 
-/** 按住说话的一次(拍板 6):按下 → 话筒开 → 松手 → 收尾 */
+/** 按住说话的一次:按下 → 话筒开 → 松手 → 收尾 */
 export interface ReelHold {
   from: number;
   to: number;
@@ -196,7 +196,7 @@ export interface Reel {
   aways: { from: number; to: number }[];
   /** 看小课堂的几段(没有 = 这个话题不是从小课堂开始的,或那时还不记) */
   lectures: ReelLecture[];
-  /** 改版补记的(拍板 6):孩子屏幕尺寸、按住说话、打字、发照片屏、自己翻板书;连着没发出去的几串(拍板 10) */
+  /** 改版补记的:孩子屏幕尺寸、按住说话、打字、发照片屏、自己翻板书;连着没发出去的几串 */
   views: { at: number; w: number; h: number; kb: number; v: string }[];
   holds: ReelHold[];
   types: ReelType[];
@@ -213,7 +213,7 @@ export const REEL_THINK_MIN_MS = 5000;
 export const REEL_GAP_PLAY_MS = 1500;
 /** 最后一件事之后再留一会儿 */
 export const REEL_TAIL_MS = 1500;
-/** 按住说话连着几次没发出去(中间一句也没发成)才标出来(拍板 10;待定,真看几个话题再调) */
+/** 按住说话连着几次没发出去(中间一句也没发成)才标出来(待定,真看几个话题再调) */
 export const REEL_MISS_STREAK = 3;
 /** 「没听清,再按住说一次」在输入条上留多久(同孩子端) */
 export const REEL_UNCLEAR_MS = 2500;
@@ -238,7 +238,7 @@ export interface ReelInput {
   now: number;
   /** 实录(第二期):这个话题各轮的 play.jsonl 合在一起 */
   plays?: readonly PlayRecord[];
-  /** 实时的轮所在的通话(《实时老师设计.md》);没有通话录像的实时轮当不是实时的(写完那一刻铺上) */
+  /** 实时的轮所在的通话;没有通话录像的实时轮当不是实时的(写完那一刻铺上) */
   calls?: readonly ReelCall[];
 }
 
@@ -275,7 +275,7 @@ export function reelHolds(plays: readonly PlayRecord[]): ReelHold[] {
 /** 前奏一段接一段:后一段开始前多久以内结束的前一段算连着(按住说话没认出来、马上又按一次) */
 export const REEL_LEAD_GAP_MS = 1500;
 /**
- * 每章的章尾(《家长录像设计.md》拍板 21):上一章 / 下一章落在这里,不落章头。章尾 = 下一章的前奏开始之前;最后一章是 endAt。
+ * 每章的章尾:上一章 / 下一章落在这里,不落章头。章尾 = 下一章的前奏开始之前;最后一章是 endAt。
  * starts = 每章开头(墙钟,升序);leads = 孩子为开口做的动作的时段(按住说话、打字、发照片屏);前奏 = 跨过下一章开头、或在它前面
  * REEL_LEAD_GAP_MS 以内结束的那一段,再一段段往前连。章尾不早于这一章的开头
  */
@@ -292,7 +292,7 @@ export function reelChapterEnds(starts: readonly number[], leads: readonly { fro
   });
 }
 
-/** 连着没发出去的几串(拍板 10):按时间走,发出去的一次或中间孩子发成了一句(sentAt:开口、打字发出去的时刻)就断开;够 REEL_MISS_STREAK 次才算 */
+/** 连着没发出去的几串:按时间走,发出去的一次或中间孩子发成了一句(sentAt:开口、打字发出去的时刻)就断开;够 REEL_MISS_STREAK 次才算 */
 export function reelMissRuns(holds: readonly ReelHold[], sentAt: readonly number[]): { from: number; to: number; n: number }[] {
   const out: { from: number; to: number; n: number }[] = [];
   let run: ReelHold[] = [];
@@ -470,7 +470,7 @@ export function buildReel(input: ReelInput): Reel | null {
     aways.push({ from: r.at, to: back ? back.at : Math.max(r.at, plays[plays.length - 1].at) });
   });
 
-  // ---- 改版补记的(拍板 6):按住说话、打字、发照片屏、屏幕尺寸、翻板书 ----
+  // ---- 改版补记的:按住说话、打字、发照片屏、屏幕尺寸、翻板书 ----
   const holds = reelHolds(plays);
   const types: ReelType[] = [];
   let ty: ReelType | null = null;
@@ -505,7 +505,7 @@ export function buildReel(input: ReelInput): Reel | null {
     if (r.k === 'view') views.push({ at: r.at, w: r.w, h: r.h, kb: r.kb, v: r.v });
     else if (r.k === 'scroll' && secByJob.get(r.job)) scrolls.push({ at: r.at, job: r.job, card: r.card, dy: r.dy });
   }
-  // 没发出去的按住:每次一个淡点;连着 REEL_MISS_STREAK 次以上(中间孩子一句也没发成:开口或打字发出去)标成一串(拍板 10)
+  // 没发出去的按住:每次一个淡点;连着 REEL_MISS_STREAK 次以上(中间孩子一句也没发成:开口或打字发出去)标成一串
   const MISS_LABEL: Record<ReelHoldResult, string> = { sent: '', unclear: '没听清', cancel: '上滑取消了' };
   for (const x of holds) if (x.result !== 'sent') marks.push({ kind: 'miss', at: x.from, job: '', label: '按住说话没发出去' + (x.result ? ' · ' + MISS_LABEL[x.result] : '') });
   const misses = reelMissRuns(holds, [...speakAt, ...types.filter((t) => t.sent).map((t) => t.to)]);
@@ -553,7 +553,7 @@ export function buildReel(input: ReelInput): Reel | null {
     ...tracks.map((t): [number, number] => [t.at, t.doneAt]),
     ...says.map((x): [number, number] => [x.from, x.to]),
     ...clips.map((c): [number, number] => [c.from, c.to]),
-    // 孩子按着说话、在打字、在发照片屏:照真实时间放(拍板 6)
+    // 孩子按着说话、在打字、在发照片屏:照真实时间放
     ...holds.map((x): [number, number] => [x.from, x.to + (x.result === 'unclear' ? REEL_UNCLEAR_MS : 0)]),
     ...types.map((x): [number, number] => [x.from, x.to]),
     ...photoScreens.map((x): [number, number] => [x.from, x.to]),
@@ -649,7 +649,7 @@ export interface ReelFrame {
   /** 在看小课堂:看的是哪一课、停在课里的哪一刻、在不在放、到这一刻画过的几处 */
   lecture: { job: string; bundle: string; title: string; video: boolean; pos: number; playing: boolean; marks: ReelLecture['marks'] } | null;
   /**
-   * 孩子按着说话(拍板 6):wait = 话筒还没开(「等一下…」)、live = 在听、tail = 松手了在收尾(「正在听清…」);text = 到这一刻认出的字;
+   * 孩子按着说话:wait = 话筒还没开(「等一下…」)、live = 在听、tail = 松手了在收尾(「正在听清…」);text = 到这一刻认出的字;
    * slide = 手上滑到了取消区;lv = 到这一刻为止最近 25 个 100 毫秒的音量(0–9;没记 = null,页面用假波形);diag = 老话题推的
    */
   hold: { phase: 'wait' | 'live' | 'tail'; slide: boolean; lv: string | null } | null;
@@ -746,7 +746,7 @@ function reelAwayMs(aways: readonly { from: number; to: number }[], from: number
 }
 
 /**
- * 一张卡孩子在弹窗里想了多久、改了几次(《家长录像设计.md》§4.7):[after, before) 里这张卡的弹窗加在一起——
+ * 一张卡孩子在弹窗里想了多久、改了几次:[after, before) 里这张卡的弹窗加在一起——
  * 第一次打开到第一次改动(切到后台的不算)= 想了多久;改动的次数。没打开过弹窗 → null;打开了没改 → think = null
  */
 export function reelCardTook(plays: readonly PlayRecord[], job: string, card: number, after: number, before: number): { think: number | null; changes: number } | null {

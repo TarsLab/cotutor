@@ -1,5 +1,5 @@
 /**
- * 百炼(src/server/bailian.ts,《产品规划.md》拍板 30):孩子端要它才打得开,家长端配。
+ * 百炼(src/server/bailian.ts):孩子端要它才打得开,家长端配。
  * 读的先后(家长端配的在最前)、配的接口(先试连,通了才存;Token Plan 的 key、坏的业务空间 id 不收;没设 PIN 时别的设备不让配)、
  * 孩子端首页与家长记录带 ready、假端点当配好了、doctor 的 bailian 是必需项。
  */

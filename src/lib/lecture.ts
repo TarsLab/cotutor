@@ -1,5 +1,5 @@
 /**
- * 小课堂(《小课堂设计.md》)的纯函数:服务端(课长、上下文包 lecture: 的每句起点、画的地方盖着什么)与舞台包(播放器)共用。
+ * 小课堂的纯函数:服务端(课长、上下文包 lecture: 的每句起点、画的地方盖着什么)与舞台包(播放器)共用。
  *
  * 课包的时钟、几何、圈住了什么(这里拿来说画的地方盖着什么)都在 drawtell/core(纯计算,不带 React,服务端能 import):一段 = 一步,段长 = max(画, 配音),
  * 课的 0 毫秒对着 SVG 的 START_MS;笔画按配音拉伸,和 buildAnimatedSvg 画出来的同一份时间。这里用小课堂的名字转出来
@@ -32,7 +32,7 @@ export function lectureLines(clock: Pick<LectureClock, 'segments'>): string[] {
 export const VOICE_STALL_MS = 1500;
 
 /**
- * 放着的时候时钟下一刻走到哪(课包;《小课堂设计.md》§三、拍板 36):这一段的配音在放,跟着配音走——
+ * 放着的时候时钟下一刻走到哪(课包):这一段的配音在放,跟着配音走——
  * 「段起点 + 配音放到哪」,声音还没出来就停在原地等(不往回退);等过 VOICE_STALL_MS、配音放完了、没在放配音,按墙上的钟走 dt。
  * voice:正在放的是第几段的配音、放到哪(毫秒)、位置多久没动了;没在放 = null。
  */
@@ -46,7 +46,7 @@ export function lectureNext(clock: Pick<LectureClock, 'segments' | 'total'>, cur
   return Math.min(clock.total, Math.max(cur, s.start + voice.posMs));
 }
 
-// ---- 画(《小课堂设计.md》§四):孩子停住了在画面上画的一处(停在同一刻画的几笔)→ 一张截图 + 一段话(那一刻在讲哪句、画的地方盖着什么) ----
+// ---- 画:孩子停住了在画面上画的一处(停在同一刻画的几笔)→ 一张截图 + 一段话(那一刻在讲哪句、画的地方盖着什么) ----
 
 /** 一处画:课里的时刻 + 几笔(课包画面坐标,即 scene.json 的坐标系;视频是视频自己的像素坐标) */
 export interface LectureMark {
@@ -112,7 +112,7 @@ export function describeMark(clock: LectureClock, mark: LectureMark, picture: Le
   return { text: `${markHead(clock, mark.atMs)}${h.text ? `;${h.text}` : ''}`, ids: h.ids };
 }
 
-// ---- 老师放课里的一段(《小课堂设计.md》§六):lecture 卡写「<课包 id> 0:19-0:30」 ----
+// ---- 老师放课里的一段:lecture 卡写「<课包 id> 0:19-0:30」 ----
 
 /** 「分:秒」「时:分:秒」→ 毫秒;认不出来 null */
 export function parseClock(s: string): number | null {
@@ -140,7 +140,7 @@ export function lectureRange(clock: Pick<LectureClock, 'segments' | 'total'>, fr
   return end > start ? { start, end } : null;
 }
 
-// ---- 视频来源(《小课堂设计.md》§八第 4 步):lectures/<id>/lecture.md + video.mp4 ----
+// ---- 视频来源(第 4 步):lectures/<id>/lecture.md + video.mp4 ----
 
 export const LECTURE_FILE = 'lecture.md';
 export const LECTURE_VIDEO = 'video.mp4';

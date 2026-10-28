@@ -1,5 +1,5 @@
 /**
- * 英文单词听写(/dictation?lang=en,《听写设计.md》拍板 15):老师念一个单词(念两遍),孩子在四线三格里写整个单词;
+ * 英文单词听写(/dictation?lang=en):老师念一个单词(念两遍),孩子在四线三格里写整个单词;
  * 不会写点「给答案」,单词灰灰地打底,照着描一遍;全写完交卷,正确的单词淡淡叠在他写的上面,自己对——不逐字母比、不问「再写一遍?」,
  * 想再写自己点。从首页英语老师卡上的「单词听写」进来(?home=&n=),或者「拍照听写」(?tutor=&lang=en,拍课本认单词)。
  * 接口和汉字的一样(src/dictation/route.ts),会话带 lang = en、一个单词一格;笔迹的点记在 2048 × 512 的尺子上(en-box.ts)。
@@ -23,7 +23,7 @@ ${faviconLinks()}
 <title>单词听写</title>
 <style>
   :root { --ink:#2b2b2b; --dim:#66625b; --line:#e2dfd6; --paper:#faf9f4; --card:#ffffff; --accent:#e8743b;
-    /* 学科色(《听写设计.md》拍板 20):这次听写那位老师的颜色,页面读到老师后换(缺省英语绿);按钮、气泡、当前那格都跟它 */
+    /* 学科色:这次听写那位老师的颜色,页面读到老师后换(缺省英语绿);按钮、气泡、当前那格都跟它 */
     --sc:#1f8a4c; --green:var(--sc); --tutor:color-mix(in srgb, var(--sc) 10%, #fff); --tutor-line:color-mix(in srgb, var(--sc) 32%, #fff); --tutor-ink:color-mix(in srgb, var(--sc) 62%, #000); --tutor-ink2:color-mix(in srgb, var(--sc) 78%, #000); }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   [hidden] { display:none !important; }
@@ -33,10 +33,10 @@ ${faviconLinks()}
   .view { display:none; flex-direction:column; gap:18px; max-width:1000px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 10px) 20px calc(env(safe-area-inset-bottom) + 28px); }
   .view.on { display:flex; }
   .bar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-  /* 按钮两页同一份(拍板 28,ui.ts) */
+  /* 按钮两页同一份(ui.ts) */
 ${BTN_CSS}
   .ttl { font-size:22px; font-weight:700; }
-  /* 写字屏(拍板 20):不限 1000 宽,四线格占满宽度(高度不够时按 16 : 7 收窄);听写本横排,一个单词一小条 */
+  /* 写字屏:不限 1000 宽,四线格占满宽度(高度不够时按 16 : 7 收窄);听写本横排,一个单词一小条 */
   #v-write { max-width:none; gap:12px; height:100vh; height:100dvh; padding-bottom:calc(env(safe-area-inset-bottom) + 16px); }
   .wtop { flex-wrap:wrap; row-gap:8px; }
   .wbook { flex:1; min-width:0; height:56px; box-sizing:border-box; display:flex; align-items:center; gap:8px; padding:0 10px; background:#fff; border:1px solid var(--line); border-radius:18px; overflow-x:auto; }
@@ -54,7 +54,7 @@ ${BTN_CSS}
   .wsay .tool { min-height:44px; padding:0 16px; border-color:var(--tutor-line); }
   #v-write .model { flex:1; min-width:0; height:56px; display:flex; align-items:center; padding-left:6px; }
   #v-write .model .enm { height:56px; width:auto; max-width:100%; display:block; }
-  /* 格子铺满剩下的高(拍板 23);看得到尺子的哪一段由 fitPad 按格子大小定 */
+  /* 格子铺满剩下的高;看得到尺子的哪一段由 fitPad 按格子大小定 */
   #v-write .pad { flex:1 1 0; min-height:0; width:100%; height:auto; aspect-ratio:auto; margin:auto 0; }
   .wtools { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
   .wtools .tools { justify-content:flex-start; }
@@ -67,7 +67,7 @@ ${BTN_CSS}
   .center { display:flex; flex-direction:column; align-items:center; gap:18px; padding-top:40px; text-align:center; }
   .center b { font-size:28px; }
   .center span { color:var(--dim); }
-  /* 对一对(拍板 20):不限 1000 宽,一行两格(窄了一格);格子上下留白后变高,一列只看得到一个半 */
+  /* 对一对:不限 1000 宽,一行两格(窄了一格);格子上下留白后变高,一列只看得到一个半 */
   #v-check { max-width:none; }
   .rows { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap:14px; }
   .row { background:#fff; border:1.5px solid var(--line); border-radius:18px; padding:12px; display:flex; flex-direction:column; gap:8px; }
@@ -130,7 +130,7 @@ ${BTN_CSS}
   </div>
 </div>
 <div class="view" id="v-write">
-  <!-- 写字(拍板 23,iPad 实拍后放大):胶囊、听写本、气泡与再念并成一行,格子铺满中间,按钮一行 -->
+  <!-- 写字(iPad 实拍后放大):胶囊、听写本、气泡与再念并成一行,格子铺满中间,按钮一行 -->
   <div class="bar wtop"><span class="bk-slot"></span><div class="wbook" id="w-book"></div><div class="model" id="w-model" hidden></div>
     <div class="bubble wsay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg><div><b id="w-who">老师在念</b><small id="w-status"></small></div>${btn('tool', 'again', '再念', 'id="w-again"')}</div>
     <button class="layer-x" type="button" id="w-x" aria-label="回到对一对" hidden>${LAYER_X}</button></div>
@@ -156,7 +156,7 @@ ${BTN_CSS}
 </div>
 <div id="toast"></div>
 <script>
-// 孩子端的流水(kid-log.ts,《孩子端流水设计.md》):最先装上出错的监听
+// 孩子端的流水(kid-log.ts):最先装上出错的监听
 ${KID_LOG_JS}
 (function () {
   'use strict';
@@ -173,7 +173,7 @@ ${BTN_JS}
 
   var q = new URLSearchParams(location.search);
   var HOME = q.get('home'); var N = Number(q.get('n') || 0); var TUTOR = q.get('tutor');
-  /** 家长看录像时,这一页开在录像外壳的 iframe 里:只照记录画,不发事件、不念、点不动(《家长录像设计.md》拍板 13) */
+  /** 家长看录像时,这一页开在录像外壳的 iframe 里:只照记录画,不发事件、不念、点不动 */
   var REEL_ID = q.get('reel');
   // 录像里只记出错,不报打开
   kidLog.start({ page: 'dictation-en', mode: REEL_ID ? 'reel' : 'kid', ctx: function () { return { tutor: TUTOR || null }; } });
@@ -193,12 +193,12 @@ ${BTN_JS}
   window.addEventListener('resize', function () { clearTimeout(viewTimer); viewTimer = setTimeout(sendView, 300); });
   document.addEventListener('visibilitychange', function () { if (S.v && !S.v.done) event(document.hidden ? 'away' : 'back', S.i || 0); });
   var drop = function (pts) { if (S.gone.length < 200) S.gone.push({ t: now(), pts: pts }); };
-  // 孩子端不往浏览器历史里加东西(kid-nav.ts,《产品规划.md》拍板 25):回首页是替换当前页
+  // 孩子端不往浏览器历史里加东西(kid-nav.ts):回首页是替换当前页
   ${KID_NAV_JS}
   var goHome = function () { stopSay(); kidGo('/'); };
-  // ---- 左上角「‹ logo」胶囊,同老师页(《听写设计.md》拍板 16,《产品规划.md》拍板 24);再写一遍是叠在对一对上的一层,右上角 × 回去 ----
+  // ---- 左上角「‹ logo」胶囊,同老师页;再写一遍是叠在对一对上的一层,右上角 × 回去 ----
   ${TUTOR_FACE_JS}
-  // 胶囊带上念的老师(《产品规划.md》拍板 26):服务端出页面时就按 ?tutor= 或首页那张卡的 reader 插进来(BACK_TUTOR),打开就是他的颜色和首字,不先浅底再变色;一位能念的老师都没有才是 null
+  // 胶囊带上念的老师:服务端出页面时就按 ?tutor= 或首页那张卡的 reader 插进来(BACK_TUTOR),打开就是他的颜色和首字,不先浅底再变色;一位能念的老师都没有才是 null
   var BACK_TUTOR = __BACK_TUTOR__;
   var BACK = backCapsule(goHome); BACK.set(BACK_TUTOR); document.body.append(BACK.el);
   var TUTORS = null;
@@ -233,7 +233,7 @@ ${BTN_JS}
   var drawInk = function () { ink.replaceChildren.apply(ink, S.strokes.map(function (s) { return sv('path', { d: pathD(s) }); })); };
   var cur = null;
   /**
-   * 格子铺满(拍板 23):四条线占格子高的 62%,横着起码看得到尺子上 1300 宽(grandmother 写得下),以单词中间(x 1024)、四条线中间(y 260)为准。
+   * 格子铺满:四条线占格子高的 62%,横着起码看得到尺子上 1300 宽(grandmother 写得下),以单词中间(x 1024)、四条线中间(y 260)为准。
    * 只改看得到哪一段,尺子不变:存的点、对一对叠的字照旧对得上。PV = 现在的 viewBox
    */
   var PV = { x: 0, y: EN_TOP, w: EN_W, h: EN_VH };
@@ -312,7 +312,7 @@ ${BTN_JS}
       (a.ink[0] || []).forEach(function (s) { if (s.length) g.append(sv('path', { d: pathD(s) })); });
       svg.append(enLines(sv), g); if (!S.hide) svg.append(enWord(sv, a.chars));
       var again = h('button', { 'class': 'tool', type: 'button', on: { click: function () { rewrite(i); } } }, ico('write'), lbl('再写一遍'));
-      // emoji 只在对一对出(拍板 21):写的时候看不到,写完了当个提示放在这一行的左下
+      // emoji 只在对一对出:写的时候看不到,写完了当个提示放在这一行的左下
       rows.append(h('div', { 'class': 'row' }, svg, h('div', { 'class': 'ft' }, a.emoji ? h('span', { 'class': 'em', text: a.emoji }) : null, h('small', { text: (i + 1) + (a.revealed ? ' · 看了答案,照着写的' : a.rewrote ? ' · 又写了一遍' : '') }), again)));
     });
     show('check');
@@ -405,7 +405,7 @@ ${BTN_JS}
   });
 
   api('GET', '/api/kid/home').then(function (j) { TUTORS = j.tutors || []; showFace(); }, function () {});
-  /** 今天这位老师没写完(没点「对好了」)的拍照听写,拍照屏最上面给「接着写」(《听写设计.md》拍板 17);会话先读好,点下去在手势里直接念 */
+  /** 今天这位老师没写完(没点「对好了」)的拍照听写,拍照屏最上面给「接着写」;会话先读好,点下去在手势里直接念 */
   var ymdOf = function (d) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
   var R = { v: null };
   var showResume = function (v) {
@@ -426,7 +426,7 @@ ${BTN_JS}
   };
   $('#snap-resume-go').addEventListener('click', function () { var v = R.v; if (!v) return; showResume(null); setView(v); if (v.checked) openCheck(); else nextWord(); });
 
-  // ---------- 录像(?reel=<id>,《家长录像设计.md》拍板 13):照记录用这一页的画法画;钟、把手、启动在 reel-mode.ts ----------
+  // ---------- 录像(?reel=<id>):照记录用这一页的画法画;钟、把手、启动在 reel-mode.ts ----------
   ${REEL_MODE_JS}
   /** 一组笔这一刻的样子:点数变了才重画 */
   var reelPaths = function (o, g, strokes) {

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * 老师头像 C 形开口环(《首页设计.md》§5.1、拍板 15)的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
+ * 老师头像 C 形开口环的手动验收(不进 pnpm test,要本机 Chrome;走 mock,不花钱):
  * 首页老师卡头像是环 + 白底圆、开口朝右、打开时一笔画出来(5 秒一轮的刷新不再画)→ 进数学老师、新话题:空白板的头像画出来 →
  * 从输入条问一句:等的时候看得见的那张脸「想」(转圈);休息(开口朝下、变灰)用类直接看样式。实时老师页的「说」「听」在按钮里,见 /dev/voice 与 probe-live-page。
- * 左上返回胶囊是「‹ logo」不是头像(《产品规划.md》拍板 24),一页只有一张会动的脸。
+ * 左上返回胶囊是「‹ logo」不是头像,一页只有一张会动的脸。
  * iPad 横屏,每步截图。
  *
  * 用法:node scripts/probe-avatar.mjs [--shots <目录>] [--keep]
@@ -79,7 +79,7 @@ try {
   await until(`document.querySelector('#tutor.on .blank .av')`);
   const blank = await evaluate(`(${AV})(document.querySelector('.blank .av'))`);
   const back = await evaluate(`(() => { const b = document.querySelector('#back'); return { logo: !!b.querySelector('svg.ct-logo'), av: b.querySelectorAll('.av').length, ini: b.querySelector('.bk-ini')?.textContent ?? '', bg: getComputedStyle(b).backgroundColor, sub: getComputedStyle(document.querySelector('#sub-av')).display }; })()`);
-  ok('空白板的头像画出来;左上返回胶囊是「‹ logo 数」、填数学老师的蓝、没有头像(《产品规划.md》拍板 26:首字不动);字幕行那颗不露(一页一张脸)', blank && blank.draw && blank.anim === 'av-draw' && back.logo && back.av === 0 && back.ini === '数' && back.bg === 'rgb(47, 111, 214)' && back.sub === 'none', JSON.stringify({ blank, back }));
+  ok('空白板的头像画出来;左上返回胶囊是「‹ logo 数」、填数学老师的蓝、没有头像(首字不动);字幕行那颗不露(一页一张脸)', blank && blank.draw && blank.anim === 'av-draw' && back.logo && back.av === 0 && back.ini === '数' && back.bg === 'rgb(47, 111, 214)' && back.sub === 'none', JSON.stringify({ blank, back }));
   await sleep(1300); await shot('avatar-blank.png');
 
   // 从输入条问一句(页面外 POST 的回答不播放)

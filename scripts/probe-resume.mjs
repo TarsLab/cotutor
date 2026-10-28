@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * 「接着刚才的」挪到空白板(《activity设计.md》§八,设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm)的手动验收
+ * 「接着刚才的」挪到空白板(设计稿 https://claude.ai/artifact/QkJBzLVbL7tgfEGKcDjaRm)的手动验收
  * (不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
  * 临时 workspace + HTTP serve → 语文老师先有一个自由话题、一个你说我画话题 → 发布带 `activity 你说我画` 的首页 →
  * Chrome 开孩子端:牌上没有「接着刚才的」→ 新话题的左栏有「接着刚才的」,点了回到那个话题 →
  * 点你说我画:先问「接着刚才那个 / 重新开始」(按钮灰着「点上面开始」,没发消息)→ 接着:回到那个话题 → 再点、重新开始:按钮字发出去、新话题记 activity。
- * 老师都走实时(《产品规划.md》拍板 30):开场的话与选择在左栏(#lv-ask、#lv-acts),板上那块收着;嘴是假百炼。
+ * 老师都走实时:开场的话与选择在左栏(#lv-ask、#lv-acts),板上那块收着;嘴是假百炼。
  *
  * 用法:node scripts/probe-resume.mjs [--out <截图目录>] [--keep]
  */
@@ -41,7 +41,7 @@ for (const t of Object.values(cfg.tutors)) delete t.runtime;
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
-// 老师都走实时(《产品规划.md》拍板 30):嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
+// 老师都走实时:嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
 const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
 const mouth = await startFakeRealtime();
 const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home, COTUTOR_LIVE_ENDPOINT: mouth.endpoint }, stdio: 'ignore', detached: keep });

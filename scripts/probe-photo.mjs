@@ -5,8 +5,8 @@
  * 把服务自己画的 /icon-192.png 当「照片」传上去(POST …/photos)→ 只带照片发一条 → 假老师「看图」:Read 那张、板书出 image 卡 + canvas 卡照片做底 →
  * 用 Chrome DevTools 协议开孩子端:节头有缩略图、直开画板舞台、iframe 里 excalidraw 的场景有一个 image 元素(底图)与一份 files →
  * 画一笔「给老师看」→ .cards/<n>.png 落盘;家长端那轮的问句下有缩略图。
- * 再走发照片屏(《作业照片设计.md》):相册选 2 张 → 裁一张、画一笔(没有配一句话那条了,拍板 10)→ 一条消息两张 jpg;点节头小图看大图。
- * 老师都走实时(《产品规划.md》拍板 30):嘴是假百炼;发照片屏发的那轮是实时的,节头是老师写的、不挂照片。
+ * 再走发照片屏:相册选 2 张 → 裁一张、画一笔(没有配一句话那条了)→ 一条消息两张 jpg;点节头小图看大图。
+ * 老师都走实时:嘴是假百炼;发照片屏发的那轮是实时的,节头是老师写的、不挂照片。
  *
  * 用法:node scripts/probe-photo.mjs [--keep](留下临时 workspace 与 serve 不杀,自己再看)[--shots <目录>](发照片屏:刚打开 / 裁剪中 / 编辑完 三张截图)
  */
@@ -42,7 +42,7 @@ cfg.runtimes.fake = { run: [process.execPath, '--experimental-strip-types', '--n
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
-// 老师都走实时(《产品规划.md》拍板 30):嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
+// 老师都走实时:嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
 const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
 const mouth = await startFakeRealtime();
 const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home, COTUTOR_LIVE_ENDPOINT: mouth.endpoint }, stdio: 'ignore', detached: keep });
@@ -108,7 +108,7 @@ try {
   for (let i = 0; i < 40 && !thumbs; i++) { thumbs = await evaluate(`(() => { const im = document.querySelector('.ask .q .photos img'); return im ? im.getAttribute('src') : null; })()`); if (!thumbs) await sleep(250); }
   ok('家长端那轮的问句下有缩略图', typeof thumbs === 'string' && thumbs.includes('/api/kid/image?p='), String(thumbs));
 
-  // ---- 发照片屏(《作业照片设计.md》):相册选 2 张 → 第一张裁掉右边、画一笔 → 打一句 → 发一条;点节头小图看大图 ----
+  // ---- 发照片屏:相册选 2 张 → 第一张裁掉右边、画一笔 → 打一句 → 发一条;点节头小图看大图 ----
   for (let i = 0; i < 80; i++) { const d = (await api('GET', '/api/kid/conversations/math-tutor/today')).json; if (d && !d.pending && d.messages.every((m) => !m.pending)) break; await sleep(250); }
   const picks = [192, 512].map((n) => join(home, `pick-${n}.png`));
   for (const [i, n] of [192, 512].entries()) writeFileSync(picks[i], Buffer.from(await (await fetch(`${base}/icon-${n}.png`)).arrayBuffer()));
@@ -150,7 +150,7 @@ try {
   ok('发出去:屏关、一条消息、只有照片(问句是「拍了 2 张」)、两张照片都是 jpg', closed && mine?.question === '(拍了 2 张)' && mine?.photos?.length === 2 && mine.photos.every((p) => /^captures\/\d{4}-\d{2}-\d{2}\/\d{4}-\d+\.jpg$/.test(p)), JSON.stringify({ closed, q: mine?.question, photos: mine?.photos }));
   const sizes = await evaluate(`Promise.all(${JSON.stringify(mine?.photos ?? [])}.map((p) => new Promise((r) => { const im = new Image(); im.onload = () => r([im.naturalWidth, im.naturalHeight]); im.onerror = () => r(null); im.src = '/api/kid/image?p=' + encodeURIComponent(p); })))`);
   ok('第一张是裁过的(宽 < 高)、第二张没改(512 见方,不放大)', sizes?.[0] && sizes[0][0] < sizes[0][1] && sizes[0][1] === 192 && sizes?.[1]?.[0] === 512 && sizes[1][1] === 512, JSON.stringify(sizes));
-  // 实时的轮节头是老师写的,孩子发的照片不挂节头(《实时老师设计.md》拍板 20);从接口发的那轮(第一节)还挂着小图
+  // 实时的轮节头是老师写的,孩子发的照片不挂节头;从接口发的那轮(第一节)还挂着小图
   const lb = await evaluate(`(async () => {
     const live = document.querySelectorAll('#board .sec .sh.lh img.ph').length;
     const ph = document.querySelector('#board .sec .sh img.ph');

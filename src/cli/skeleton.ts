@@ -1,6 +1,6 @@
 /**
  * workspace骨架清单:init 建、doctor 查,同一张清单(两边各写一遍必然漂移)。
- * 布局见《cotutor-agent层设计.md》§2:
+ * workspace 布局:
  *   cotutor.json / .claude/agents(老师文件,拷自本包 grades/grade-<n>/agents/,是家长的;所有 CLI 都从这里拿老师正文)/ .cotutor/shipped.json(出厂 hash)
  *   agents/<name>/(老师的家 = 会话 cwd)/ ledger/(产物账本)/ conversations/(对话索引与转录)
  * vault 侧(《obsidian仓库设计.md》):档案 / 课程表 / 日记 / 教材 / 计划 / 参考,init 只建档案与参考 README(缺了才写)
@@ -143,16 +143,16 @@ export interface ConfigTemplateInput {
 
 /** 出厂老师的条目;cards = 板书写法里讲哪几种卡(《卡片协议.md》「谁拿到哪些卡」,2026-10-07),text 总在 */
 const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean; cards?: BoardCardKind[]; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
-  // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(2026-10-13 Jack 拍板,同语文老师)
+  // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(同语文老师)
   'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮', runtime: 'qwen', cards: ['text', 'choice', 'image', 'lecture', 'canvas', 'code'], policy: { effort: 'medium' } },
-  // 画图卡(paint)不在这里:只在「你说我画」activity 的话题里有(agents/chinese-tutor/activities/你说我画.md 头上的 cards,《activity设计.md》拍板 11)
-  // 语文老师走 qwen(2026-10-12 Jack 拍板:以后语文老师都用 qwen;你说我画、看图说话两套 activity eval 在 qwen3.8-max 上真跑过)
+  // 画图卡(paint)不在这里:只在「你说我画」activity 的话题里有(agents/chinese-tutor/activities/你说我画.md 头上的 cards)
+  // 语文老师走 qwen(你说我画、看图说话两套 activity eval 在 qwen3.8-max 上验证)
   'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚', runtime: 'qwen', cards: ['text', 'read', 'choice', 'image', 'tianzige', 'lecture', 'canvas'] },
   // 英语仍走 qwen3.8-flash;2026-10-27 新 activity 真跑:low 偶尔只出卡或念规则,medium 补齐讲稿(详见年级教学包验证记录)。
   'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤', runtime: 'qwen-flash', cards: ['text', 'read', 'choice', 'image', 'word', 'lecture'], policy: { effort: 'medium' } },
 };
 
-/** cotutor.json 模板:只在文件不存在时写入;政策文件永不自动重建或覆盖(家长的决定不由机器替她拍板)。 */
+/** cotutor.json 模板:只在文件不存在时写入;政策文件永不自动重建或覆盖(家长的决定不由机器代做)。 */
 export function configTemplate(input: ConfigTemplateInput): string {
   const tutors: Record<string, unknown> = {};
   for (const a of input.tutors) {

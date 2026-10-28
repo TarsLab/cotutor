@@ -1,6 +1,6 @@
 /**
- * 口语课页的接口(《口语课设计.md》),假 omni,不花钱:开关、开一次 + 照片读口语单、改、交给老师(ready)、照片、删、「接着上」;照片 → 口语单的解析。
- * 上课在英语老师的实时页(tests/talk-live.test.ts);这一页不再打电话(《产品规划.md》拍板 30)。
+ * 口语课页的接口,假 omni,不花钱:开关、开一次 + 照片读口语单、改、交给老师(ready)、照片、删、「接着上」;照片 → 口语单的解析。
+ * 上课在英语老师的实时页(tests/talk-live.test.ts);这一页不再打电话。
  */
 import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';

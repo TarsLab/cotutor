@@ -1,5 +1,5 @@
 /**
- * 首页的读写(《首页设计.md》):草稿 home/draft.md → 检查(引用读盘查)→ 发布 home/published.json + home/history/<id>.md;
+ * 首页的读写:草稿 home/draft.md → 检查(引用读盘查)→ 发布 home/published.json + home/history/<id>.md;
  * 孩子端的首页现算(老师卡置顶、补缺、剥讲法、今天的「接着刚才的」);孩子点按钮发来的 via 在这里对上发布的那份,讲法只从这里取;
  * 接着以前话题时上下文包的 continue 段;家长看的点击统计。CLI(cotutor home)、家长端「首页」页、孩子端都走这里。
  */
@@ -131,7 +131,7 @@ export async function publishHome(ws: Workspace, opts: { force?: boolean; from?:
 }
 
 /**
- * 家长端表单改首页(《首页设计.md》拍板 20):拿已发布那份的原文(没发布过 = 空的)改一下,照常检查、留历史、发布。
+ * 家长端表单改首页:拿已发布那份的原文(没发布过 = 空的)改一下,照常检查、留历史、发布。
  * 改完和原来一样就不发;有「要改」的不发,回检查结果。草稿 home/draft.md 不动。
  */
 export async function editPublished(ws: Workspace, edit: (md: string) => string, now: Date): Promise<PublishResult | null> {
@@ -177,7 +177,7 @@ export function historyFile(ws: Workspace, id: string): string | null {
   return HOME_ID_RE.test(id) ? join(homeFiles(ws).history, `${id}.md`) : null;
 }
 
-/** 首页上的一张卡;非老师卡带 owner(《首页设计.md》拍板 19:写在哪张老师卡后面归哪位,听写卡写了念的老师归那位;null = 公共的) */
+/** 首页上的一张卡;非老师卡带 owner(写在哪张老师卡后面归哪位,听写卡写了念的老师归那位;null = 公共的) */
 export type KidHomeCard = BoardCard & { owner?: string | null };
 
 export interface KidHomeView {
@@ -200,7 +200,7 @@ async function talkedSince(ws: Workspace, tutor: string, since: string, now: Dat
 }
 
 /** 这位老师今天孩子能接着的话题(孩子端最后一条所在、孩子在里面说过话的) */
-/** 今天这位老师每个入口最近的话题(《activity设计.md》§八);读不出来 → 空 */
+/** 今天这位老师每个入口最近的话题;读不出来 → 空 */
 async function resumesOf(ws: Workspace, tutor: string, today: string): Promise<Map<string, Resume>> {
   try {
     return todayResumes((await readIndex(ws, tutor, today)).messages);
@@ -238,7 +238,7 @@ export async function kidHomeView(ws: Workspace, now: Date, opts: { source?: 'pu
     lectures.set(id, l);
     if (l && !l.video && !l.baked) bakeSoon(ws.dirs.bundles, id);
   }
-  // 按钮引用的 activity 用不用得了:文件在、检查没有要改的;参数再按按钮各自解析(工作台能存下写坏的 activity,《首页设计.md》拍板 30、《工作台设计.md》拍板 8)
+  // 按钮引用的 activity 用不用得了:文件在、检查没有要改的;参数再按按钮各自解析(工作台能存下写坏的 activity)
   const usable = new Map<string, Activity>();
   for (const a of homeActivities({ cards })) {
     const act = await usableActivity(ws, a.tutor, a.name);
@@ -295,14 +295,14 @@ export async function resolveVia(ws: Workspace, tutor: string, via: HomeVia): Pr
   if (!b) return null;
   const brief = b.brief ? { brief: b.brief } : {};
   if (b.kind === 'start') return { kind: 'start', label: b.label, ...brief };
-  // activity 的参数在点的那一刻按 activity 文件解析、补缺省,跟着话题走(家长后来改了只管以后的话题,《activity设计.md》拍板 2);文件不在、参数不对 → null
+  // activity 的参数在点的那一刻按 activity 文件解析、补缺省,跟着话题走(家长后来改了只管以后的话题);文件不在、参数不对 → null
   const runOf = async (name: string, params: Record<string, string>): Promise<ActivityRun | null> => {
     const text = await readFile(activityFile(ws.root, tutor, name), 'utf8').catch(() => null);
     if (text === null) return null;
     const r = resolveParams(parseActivity(text).activity, params);
     return r.issues.length ? null : { name, params: r.values };
   };
-  // 小课堂看完照哪个 activity 聊:写了 activity: 是它,没写是这位老师的「小课堂」(拍板 17、18);文件不在 → null
+  // 小课堂看完照哪个 activity 聊:写了 activity: 是它,没写是这位老师的「小课堂」;文件不在 → null
   if (b.kind === 'lecture') {
     const run = await runOf(b.activity ?? LECTURE_ACTIVITY, {});
     return run ? { kind: 'lecture', label: b.label, bundle: b.bundle, ...brief, activity: run } : null;
@@ -438,7 +438,7 @@ export function formatCheck(ws: Workspace, check: HomeCheck, title: string, kid:
     // 听写卡在孩子端剥了字,家长看的这份从草稿里的原卡取词表
     const lists = check.doc.cards.filter((x) => x.kind === 'dictation');
     let k = 0;
-    // 归哪位老师(拍板 19):孩子端只在那位老师展开时看到;公共的放在头像那一叠上面
+    // 归哪位老师:孩子端只在那位老师展开时看到;公共的放在头像那一叠上面
     for (const c of rest) out.push(`  ${c.kind}「${cardLabel(c.kind === 'dictation' ? (lists[k++] ?? c) : c)}」 → ${c.owner ? `${display(c.owner)}的卡里` : '公共(头像上面)'}`);
   }
   out.push(`家长段:${check.doc.note ? `${check.doc.note.split('\n').length} 行` : '没有'}`);

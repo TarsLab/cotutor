@@ -1,5 +1,5 @@
 /**
- * 家长端与工作台的锁(src/server/access.ts,《产品规划.md》拍板 21):没设 PIN 全开、设了孩子端白名单照旧开、别的要凭证;
+ * 家长端与工作台的锁(src/server/access.ts):没设 PIN 全开、设了孩子端白名单照旧开、别的要凭证;
  * 本机免密;对 PIN 换 cookie;连错锁;改 PIN 换密钥;doctor 的 server.access;孩子端页面源码里用到的接口都在白名单里。
  */
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
@@ -79,7 +79,7 @@ try {
   const used = new Set([...KID_PAGE.matchAll(/'(\/api\/[a-z-]+(?:\/[a-z-]+)?)/g)].map((m) => m[1]));
   const kidOnly = [...used].filter((p) => !/^\/api\/(conversations|overview)/.test(p));
   check('孩子端源码里的接口前缀都在白名单里(/api/conversations、/api/overview 是家长模式才用)', kidOnly.every((p) => isKidPath(p) || isKidPath(`${p}/`)), kidOnly.filter((p) => !isKidPath(p) && !isKidPath(`${p}/`)).join(' '));
-  check('字幕重放(《实时老师设计.md》拍板 21)的两条在白名单里:每句起点、嘴照念的声音', isKidPath('/api/kid/conversations/chinese-tutor/mouth/2026-10-21/2100-5') && isKidPath('/api/audio/chinese-tutor/2026-10-21.2100-5.mouth.wav'));
+  check('字幕重放的两条在白名单里:每句起点、嘴照念的声音', isKidPath('/api/kid/conversations/chinese-tutor/mouth/2026-10-21/2100-5') && isKidPath('/api/audio/chinese-tutor/2026-10-21.2100-5.mouth.wav'));
   check('白名单不放家长与工作台的路径', !isKidPath('/parent') && !isKidPath('/dev') && !isKidPath('/api/config') && !isKidPath('/api/conversations/x') && !isKidPath('/api/parent/home') && !isKidPath('/reel') && !isKidPath('/preview'));
 } finally {
   rmSync(home, { recursive: true, force: true });

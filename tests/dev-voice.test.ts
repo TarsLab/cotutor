@@ -1,5 +1,5 @@
 /**
- * 工作台按钮样张 /dev/voice(《实时老师设计.md》拍板 23):页在、用工作台的色板、内联脚本能解析、场景表每一格都摆出来;
+ * 工作台按钮样张 /dev/voice:页在、用工作台的色板、内联脚本能解析、场景表每一格都摆出来;
  * 画法只有一处(voice-ui.ts):孩子端页面与样张引用的是同一份;老师那边的动画是弱的(10-21 Jack:三道小弧、不走,最深 0.45,最外离头像边不超过 36)。
  */
 import { mkdtempSync, realpathSync } from 'node:fs';
@@ -35,7 +35,7 @@ try { new Function(js); } catch (e) { parses = false; console.error(String(e)); 
 check('样张的内联脚本能解析', parses);
 check('场景表每一格都在样张里', VOICE_SCENES.every((s) => VOICE_GALLERY_PAGE.includes(s.name)));
 check('画法的脚本里没有模板字符串会吃掉的东西(反引号、美元花括号)', !/[`]|\$\{/.test(VOICE_JS));
-// 老师那边是弱的(拍板 23 后 10-21 改:有字幕在变、有声音,动画太强会把注意力从内容上拉走)
+// 老师那边是弱的(后 10-21 改:有字幕在变、有声音,动画太强会把注意力从内容上拉走)
 check('老师的三道小弧:三道、最外离头像边不超过 36、最深不超过 0.45、最浅不低于 0', VOICE_TUNE.arcR.length === 3 && Math.max(...VOICE_TUNE.arcR) <= 36 && VOICE_TUNE.arcMax <= 0.45 && VOICE_TUNE.arcMin >= 0 && VOICE_TUNE.arcMin < VOICE_TUNE.arcMax);
 check('老师在说时头像不放大(外圈只有静止 / 很慢的明暗 / 没有)', ['static', 'breath', 'none'].includes(VOICE_TUNE.talkHalo) && !/vb-talk[^{]*\{[^}]*scale/.test(VOICE_CSS));
 

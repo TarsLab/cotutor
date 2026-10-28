@@ -1,5 +1,5 @@
 /**
- * 百炼(《产品规划.md》拍板 30):孩子端的老师靠实时模型开口,没配百炼孩子端打不开,家长在家长端「首页」里配。
+ * 百炼:孩子端的老师靠实时模型开口,没配百炼孩子端打不开,家长在家长端「首页」里配。
  * 配的是按量的 key + 业务空间 id(Token Plan 的 `sk-sp-` 没有 realtime;端点要业务空间 id 的域名)。
  * 存机器级 ~/.config/cotutor/bailian.json(0600,同 PIN、证书,几个孩子的 workspace 共用),不进 cotutor.json:
  * workspace 是 git 仓,工作台的 PATCH /api/config 也能改它。读的顺序(家长端配的在最前)见 src/lib/qianwen.ts。

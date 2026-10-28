@@ -1,5 +1,5 @@
 /**
- * 实时老师整条线(《实时老师设计.md》),假百炼(_fake-realtime.ts)+ 假老师(_fake-cli.ts --stream),不花钱:
+ * 实时老师整条线,假百炼(_fake-realtime.ts)+ 假老师(_fake-cli.ts --stream),不花钱:
  * 连上(手动轮次、嘴的人设)→ 按住说、松手 → 嘴先接住 → 转写交给脑(实时轮,消息记 live、上下文包带 caught)→ 一拍一拍照念(念的字就是讲稿)→
  * 念的时候按下 = 打断(清队列,下一轮上下文包带 cut)→ 挂了落录像;没开 / 不在 live.voices 拒升级;嘴连不上告诉孩子端走板书。
  */
@@ -159,7 +159,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
     check('上滑取消:hush → 声音缓冲清掉、不 commit、嘴不接住、没有新一轮', c.commits === ch && c.clears >= clr + 2 && c.responses.length === rh && !k.msgs.slice(nh).some((m) => m.t === 'turn') && has(k, (m) => m.t === 'state' && m.holding === false), JSON.stringify({ commits: c.commits - ch, clears: c.clears - clr, responses: c.responses.length - rh }));
   }
 
-  // ---- 舞台开着打字(问这张卡,拍板 18 撤了卡上的「?」):一轮普通的(嘴不先说,脑拿到 focus 那张卡) ----
+  // ---- 舞台开着打字(问这张卡 撤了卡上的「?」):一轮普通的(嘴不先说,脑拿到 focus 那张卡) ----
   const na = k.msgs.length;
   const ra = c.responses.length;
   k.ws.send(JSON.stringify({ t: 'send', body: { text: '我想问这张卡', focus: { card: `${turn.job}/0` } } }));
@@ -288,7 +288,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 {
-  // ---- 不垫话(设想稿拍板 14):脑想得久(讲稿一句还没有)嘴也不出声;第一句就是讲稿,照常念完;事件里没有接住 ----
+  // ---- 不垫话:脑想得久(讲稿一句还没有)嘴也不出声;第一句就是讲稿,照常念完;事件里没有接住 ----
   const k = await connect('chinese-tutor');
   await until(() => has(k, (m) => m.t === 'ready'));
   const c = fake.conns.at(-1)!;
@@ -366,7 +366,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 {
-  // ---- 交卡(设想稿拍板 14,改拍板 11):嘴不当场说「对啦」,也不说「我看看」;第一句就是脑的 ----
+  // ---- 交卡:嘴不当场说「对啦」,也不说「我看看」;第一句就是脑的 ----
   const k = await connect('chinese-tutor');
   await until(() => has(k, (m) => m.t === 'ready'));
   const c = fake.conns.at(-1)!;
@@ -480,7 +480,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 {
-  // ---- 一直听(《一直听设计.md》):VAD 判开口 / 说完,应用判收下 / 放过 ----
+  // ---- 一直听:VAD 判开口 / 说完,应用判收下 / 放过 ----
   const quiet = (): Uint8Array => new Uint8Array(3200);
   const say = (k: { ws: WebSocket }, n = 3): void => { for (let i = 0; i < n; i++) k.ws.send(loud()); k.ws.send(quiet()); };
   const idle = () => until(() => ctx.runner.running('chinese-tutor') === null, 15000);
@@ -604,7 +604,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 {
-  // ---- 口语课热身(《口语课实时设计.md》§三之四):[[echo 词]] / [[say 词]] 念完等孩子跟,[[call]] 念完进打电话 ----
+  // ---- 口语课热身:[[echo 词]] / [[say 词]] 念完等孩子跟,[[call]] 念完进打电话 ----
   const quiet = (): Uint8Array => new Uint8Array(3200);
   const say = (k: { ws: WebSocket }, n = 3): void => { for (let i = 0; i < n; i++) k.ws.send(loud()); k.ws.send(quiet()); };
   const idle = () => until(() => ctx.runner.running('chinese-tutor') === null, 15000);
@@ -703,7 +703,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 {
-  // 有脸的老师都走实时(《产品规划.md》拍板 30):没挑音色的用出厂的;不是有脸的老师拒升级
+  // 有脸的老师都走实时:没挑音色的用出厂的;不是有脸的老师拒升级
   const n0 = fake.conns.length;
   const k1 = await connect('math-tutor');
   const okMath = await until(() => has(k1, (m) => m.t === 'ready'));

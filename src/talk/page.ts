@@ -1,7 +1,7 @@
 /**
- * /talk:口语课的页面,孩子端(《口语课设计.md》拍板 12;设计稿 https://claude.ai/artifact/6uL5XfzhFEfX74cmeWbF9c)。家长端没有这一页(拍板 13)。
+ * /talk:口语课的页面,孩子端(设计稿 https://claude.ai/artifact/6uL5XfzhFEfX74cmeWbF9c)。家长端没有这一页。
  * 按 hash 切两屏:#/ 拍照(同拍照听写的骨架,photo-ui.ts;上次的口语单给「接着上」)、#/list/<id> 照片在左、口语单在右(孩子能改、能补、能删)。
- * 改好了交给英语老师的实时页上课(先热身、再打电话,《口语课实时设计.md》);这一页自己不打电话了(《产品规划.md》拍板 30)。
+ * 改好了交给英语老师的实时页上课(先热身、再打电话);这一页自己不打电话了。
  * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
  */
 import { TUTOR_FACE_CSS, TUTOR_FACE_JS, backTutorJson } from '../server/tutor-face.ts';
@@ -19,7 +19,7 @@ ${faviconLinks()}
 <link rel="stylesheet" href="/kid/theme.css">
 <style>
   :root { --paper:#faf9f4; --ink:#2b2b2b; --dim:#8a8781; --line:#e2dfd6; --card:#ffffff; --kid:#dbeeff; --tutor:#fff3d6; --tutor-line:#f0dca8; --tutor-ink:#8a5a12; --accent:#e8743b; --blue:#eef4ff; --blue-ink:#2f5e9e; --plum:#efe9fb; --plum-ink:#7a4fc9; --grey:#eeece6; --night:#2b3a4a; --red:#b3412a; }
-  /* 孩子那几屏跟口语课挂的那位老师走(《首页设计.md》拍板 27):他的学科色(读到老师后换,缺省英语绿)、头像、名字 */
+  /* 孩子那几屏跟口语课挂的那位老师走:他的学科色(读到老师后换,缺省英语绿)、头像、名字 */
   :root { --sc:#1f8a4c; --sc-soft:color-mix(in srgb, var(--sc) 12%, #fff); --sc-ink:color-mix(in srgb, var(--sc) 62%, #000); }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   /* 自己写了 display:flex 的块会盖掉浏览器自带的 [hidden](2026-10-10 Safari 上看到的) */
@@ -112,7 +112,7 @@ ${SNAP_CSS}
 <div class="toast" id="toast"></div>
 
 <script>
-// 孩子端的流水(kid-log.ts,《孩子端流水设计.md》):最先装上出错的监听
+// 孩子端的流水(kid-log.ts):最先装上出错的监听
 __KID_LOG_JS__
 (() => {
   const $ = (s) => document.querySelector(s);
@@ -125,12 +125,12 @@ __KID_LOG_JS__
   // ---- 路由:#/ 拍照、#/list/<id> 看口语单 ----
   const views = ['snap', 'pick'];
   const show = (name) => { for (const v of views) $('#' + v).classList.toggle('on', v === name); BACK.el.hidden = false; };
-  // 左上角「‹ logo」胶囊同老师页(《首页设计.md》拍板 27,《产品规划.md》拍板 24):点了回首页
+  // 左上角「‹ logo」胶囊同老师页:点了回首页
   __TUTOR_FACE_JS__
-  // 孩子端不往浏览器历史里加东西(kid-nav.ts,《产品规划.md》拍板 25):回首页、交给老师页都是替换当前页
+  // 孩子端不往浏览器历史里加东西(kid-nav.ts):回首页、交给老师页都是替换当前页
   __KID_NAV_JS__
   const BACK = backCapsule(() => kidGo('/'));
-  // 胶囊带上口语课挂的老师(《产品规划.md》拍板 26):链接带 ?tutor= 时服务端出页面就插进来(BACK_TUTOR),打开就是他的颜色和首字;没带的等 wearOwner 找到老师再填
+  // 胶囊带上口语课挂的老师:链接带 ?tutor= 时服务端出页面就插进来(BACK_TUTOR),打开就是他的颜色和首字;没带的等 wearOwner 找到老师再填
   const BACK_TUTOR = __BACK_TUTOR__;
   BACK.set(BACK_TUTOR);
   BACK.el.hidden = true; document.body.append(BACK.el);
@@ -157,7 +157,7 @@ __KID_LOG_JS__
   };
   window.addEventListener('hashchange', route);
 
-  // ---- 拍照(《口语课设计.md》拍板 12、14):同拍照听写的骨架;上次的口语单在最上面给「接着上」 ----
+  // ---- 拍照:同拍照听写的骨架;上次的口语单在最上面给「接着上」 ----
   const lastList = () => (info && info.enabled ? (info.talks || []).find((x) => x.status === 'ready' && x.list.words.length + x.list.sentences.length > 0) : null) || null;
   async function snap() {
     try { info = await api('GET', '/api/talk'); } catch (e) { info = null; }
@@ -178,7 +178,7 @@ __KID_LOG_JS__
     img.src = url;
   });
 
-  // ---- 看口语单(拍板 12):照片在左;读的时候「老师在看这一页…」,读完原地填上;点一项改字、× 去掉、能补 ----
+  // ---- 看口语单:照片在左;读的时候「老师在看这一页…」,读完原地填上;点一项改字、× 去掉、能补 ----
   const MAX = { words: 12, sentences: 8 };
   let P = { id: null, meta: null, waiting: false, failed: false, edit: null };
   async function shoot(file) {
@@ -276,7 +276,7 @@ __KID_LOG_JS__
     handoff(async () => { P.meta = await api('PUT', '/api/talk/' + id + '/list', { words, sentences, ready: true }); return id; }, e.currentTarget);
   });
 
-  // ---- 交给英语老师的实时页(《口语课实时设计.md》拍板 1、2;《产品规划.md》拍板 30 起这一页不再自己打电话):存好口语单(或接着上),换到老师页;那边点「先热身,再打电话」那一下才起声音 ----
+  // ---- 交给英语老师的实时页(这页只准备口语单):存好口语单(或接着上),换到老师页;那边点「先热身,再打电话」那一下才起声音 ----
   async function handoff(getId, btn) {
     if (btn) btn.disabled = true;
     if (!OWNER) await wearOwner();
@@ -292,7 +292,7 @@ __KID_LOG_JS__
 </script>
 </body></html>`;
 
-/** back:链接带的 ?tutor= 那位老师(胶囊上的颜色、首字,《产品规划.md》拍板 26);不知道 null */
+/** back:链接带的 ?tutor= 那位老师(胶囊上的颜色、首字);不知道 null */
 export function talkPage(back: { color: string; initial: string; display: string } | null = null): string {
   return TALK_PAGE.replace('__TUTOR_FACE_JS__', () => TUTOR_FACE_JS).replace('__KID_LOG_JS__', () => KID_LOG_JS).replace('__KID_NAV_JS__', () => KID_NAV_JS).replace('__BACK_TUTOR__', () => backTutorJson(back)).replace('__TUTOR_FACE_CSS__', () => TUTOR_FACE_CSS);
 }

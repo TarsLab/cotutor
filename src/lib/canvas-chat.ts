@@ -1,7 +1,7 @@
 /**
- * 画板(《画板设计.md》):孩子的笔迹怎么数(各色几笔、大致在哪、画了多久),边画边聊时嘴什么时候主动说一句、说哪个颜色。纯函数。
+ * 画板:孩子的笔迹怎么数(各色几笔、大致在哪、画了多久),边画边聊时嘴什么时候主动说一句、说哪个颜色。纯函数。
  * 剥类型内联进孩子端页面(同 live-board.ts),名字都带 canvas 前缀;服务端的画板卡 describe、纸交画时的摘要也用它。
- * 改「什么时候说」先改《画板设计.md》§四的规矩,再改 tests/canvas-chat.test.ts,最后改这里(CANVAS_CHAT 是调参表)。
+ * 改「什么时候说」先改的规矩,再改 tests/canvas-chat.test.ts,最后改这里(CANVAS_CHAT 是调参表)。
  */
 
 /** 舞台的三支笔(src/stage/canvas.tsx 的 INK_COLORS)叫什么;别的颜色(以后加的)叫「别的颜色」 */
@@ -85,7 +85,7 @@ export function canvasMinutesText(ms: number): string {
 }
 
 /**
- * 边画边聊的规矩(《画板设计.md》§四,10-22 拍板 4:先这样,跑一周再调)。毫秒。
+ * 边画边聊的规矩(10-22 :先这样,跑一周再调)。毫秒。
  * 换色:一种颜色从上一句到现在新画了 ≥ colorStrokes 笔、孩子换了颜色 → 说刚画完的那种;
  * 久停:这一张 ≥ pauseStrokes 笔以后停笔 ≥ pauseMs → 说整张(上一句之后又画过才算);
  * 不说:点开后 openQuietMs 内、上一笔不到 drawingMs(正在画)、清空后 clearQuietMs 内、孩子按头像说过 kidQuietMs 内、离上一句不到 gapMs、一张已经说了 maxLines 句;

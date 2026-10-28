@@ -1,4 +1,4 @@
-/** CLI 适配器(《agent层设计.md》§6):stream-json 读成统一事件、按运行时找适配器、填模板(含 {toolArgs})、工具类别、环境。 */
+/** CLI 适配器:stream-json 读成统一事件、按运行时找适配器、填模板(含 {toolArgs})、工具类别、环境。 */
 import { ADAPTERS, STREAM_JSON, adapterFor, controlsTools, factoryRuntimes, fillArgs, parserForRuntime, processEnv, runtimeCli, runtimeIssue, toolKind, unexpectedTools } from '../src/clis/index.ts';
 import { qwen } from '../src/clis/qwen.ts';
 import { parseStreamJson } from '../src/clis/stream-json.ts';

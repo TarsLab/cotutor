@@ -1,5 +1,5 @@
 /**
- * 听写的录像(《家长录像设计.md》拍板 13):一次听写的记录 → 一条按时间排好的轨道,任一刻孩子的屏幕是什么样子。
+ * 听写的录像:一次听写的记录 → 一条按时间排好的轨道,任一刻孩子的屏幕是什么样子。
  * 纯函数,不碰 DOM、不读盘;听写页(/dictation?reel=<id>)把它内联进去,用写字屏自己的画法照它画(录结果、照结果画)。
  * 时刻都是「离这次听写开始(startedAt)多少毫秒」,和笔迹的点同一把尺子;老事件没有 t 的按服务端时刻折算。
  * 页面是 ES5 写的,内联进去的名字都带 dr 前缀,别撞上页面里的。
@@ -226,7 +226,7 @@ export function drBuild(s: Session): DrReel {
     if (!kept.length && checkedAt !== null) notes.push({ t: checkedAt - 1, kind: '', chip: '空着', text: '「' + ch(w, c) + '」一笔没写' });
   }
   for (const r of rewrites) notes.push({ t: r.to, kind: 'tail', chip: '写好了', text: '再写的「' + s.words[r.word].chars + '」交了' });
-  // 比对(拍板 16):第一遍在这个词写好(交上去)的那一刻,再写的在交上去那一刻;家长页的逐字那几句,孩子的屏幕上没有
+  // 比对:第一遍在这个词写好(交上去)的那一刻,再写的在交上去那一刻;家长页的逐字那几句,孩子的屏幕上没有
   s.first.forEach((a, w) => {
     if (!a) return;
     const lastDone = steps.filter((x) => x.k === 'done' && x.word === w).pop();
@@ -297,7 +297,7 @@ export interface DrFrame {
   writing: { word: number; char: number } | null;
   gap: DrGap | null;
   size: [number, number] | null;
-  /** 写字格的档(拍板 30):照这一刻之前最后一条 view,没有就 l */
+  /** 写字格的档:照这一刻之前最后一条 view,没有就 l */
   pad: 'l' | 'm' | 's';
 }
 

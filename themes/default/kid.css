@@ -1,5 +1,5 @@
 /*
- * cotutor 出厂主题 default —— 孩子端板书的样子:板、卡、笔、舞台壳(《卡片重设计评估.md》§三,原型「cotutor 板书卡片」)。
+ * cotutor 出厂主题 default —— 孩子端板书的样子:板、卡、笔、舞台壳。
  * 这份是家长的(init 拷进 workspace 的 themes/default/,改了刷新就有;没改过的随 cotutor upgrade 更新)。
  * 槽的名字在旁边的 theme.json:底色槽 → .c[data-tint="<名>"],字形槽 → .c[data-look="<名>"],笔 → .mk-<名> / .pen-<名>;
  * 名字对不上的卡落回 paper / plain(.c 的缺省)。页面骨架(首页、头部、字幕行、输入条)在页面里,这里只管板书。

@@ -323,7 +323,7 @@ export async function doctorWorkspace(
       const home = join(ws.dirs.agents, name);
       const there = (await statOrNull(home))?.isDirectory() ?? false;
       push({ name: `tutor.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建' });
-      // 音色:一老师一音色走 API 是正路(《工作流程.md》§四);没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师不对孩子说话,不用音色
+      // 音色:一老师一音色走 API 是正路;没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师不对孩子说话,不用音色
       const tc = ws.config.tutors[name];
       if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡)配不了——只适合测试`, fix: '家长端「音色」页能听着挑(挑中直接写进去);终端里 voxtell voices --grep <关键词> 挑一个、voxtell preview <voice> 试听,填进 voice' });
       // 卡的清单(《卡片协议.md》「谁拿到哪些卡」):有脸的老师才递板书写法;只是报一声讲哪几种
@@ -359,7 +359,7 @@ export async function doctorWorkspace(
         const states = new Map((teachingPack ? await activityStatuses(root) : []).map((s) => [s.key, s]));
         const label: Record<string, string> = { latest: '出厂件,最新', upgradable: '出厂件,包已更新', custom: '自定义', untracked: '自定义(没有出厂记录)', missing: '缺', broken: '读不到' };
         for (const s of states.values()) if (s.state === 'missing') push({ name: `activity.${s.key}`, ok: false, required: false, detail: `agents/${s.key.replace('/', '/activities/')}.md 不在`, fix: 'cotutor init 补拷' });
-        // 学科色(《首页设计.md》拍板 26):手改 cotutor.json 写的颜色,新话题气泡的白字要压得住
+        // 学科色:手改 cotutor.json 写的颜色,新话题气泡的白字要压得住
         for (const [name, t] of Object.entries(ws.config.tutors)) {
           if (!t.color) continue;
           const cr = contrastWithWhite(t.color);
@@ -404,7 +404,7 @@ export async function doctorWorkspace(
       }
     }
 
-    // ---- 首页(《首页设计.md》):没发布 = 缺省首页;坏了孩子端退回缺省;超过 3 天提醒;引用坏了的按钮孩子端不出现 ----
+    // ---- 首页:没发布 = 缺省首页;坏了孩子端退回缺省;超过 3 天提醒;引用坏了的按钮孩子端不出现 ----
     {
       const { daysSince, publishedIssues, readPublished } = await import('../server/home.ts');
       const now = opts.now ?? new Date();
@@ -526,7 +526,7 @@ export async function doctorWorkspace(
     const tls = httpsFiles(ws);
     push({ name: 'https', ok: tls !== null, required: false, detail: tls ? `${redactHome(tls.cert)}` : '没有证书,serve 走 HTTP(iPad / iPhone 上按住说话不可用)', fix: tls ? undefined : 'cotutor cert(需要 mkcert:brew install mkcert && mkcert -install)' });
 
-    // ---- 板书写法怎么递给老师(《agent层设计.md》拍板 11):有脸的老师用到的运行时逐个说清,run / resume 不一致点名 ----
+    // ---- 板书写法怎么递给老师:有脸的老师用到的运行时逐个说清,run / resume 不一致点名 ----
     {
       const used = new Set<string>();
       for (const [name, t] of Object.entries(ws.config.tutors)) if (takesTutorRules(name) && t.enabled !== false) used.add(t.runtime ?? ws.config.runtimes.default);
@@ -541,7 +541,7 @@ export async function doctorWorkspace(
       }
     }
 
-    // ---- 百炼(《产品规划.md》拍板 30):老师靠实时模型开口,没配孩子端打不开;--live 真试连一次(握手就挂,不花钱) ----
+    // ---- 百炼:老师靠实时模型开口,没配孩子端打不开;--live 真试连一次(握手就挂,不花钱) ----
     const bl = dashscopeAuth(env);
     push({ name: 'bailian', ok: Boolean(bl), required: true, detail: bl ? `百炼按量 key …${bl.key.slice(-4)}、业务空间 ${bl.workspaceId}` : '没有百炼按量的 key 或业务空间 id:孩子端打不开(只出「老师们还没到」)', fix: bl ? undefined : '家长端「首页」里配(在这台电脑上开,或者先 cotutor pin 设家长密码);Token Plan 的 sk-sp- 不行' });
     if (bl && opts.live) {
@@ -551,7 +551,7 @@ export async function doctorWorkspace(
       push({ name: 'live.bailian', ok: why === null, required: true, detail: why === null ? '试连百炼实时模型:通' : probeMessage(why), fix: why === null ? undefined : '家长端「首页」里换一把 key,或查百炼控制台的余额与业务空间' });
     }
 
-    // ---- 实时老师的嘴(《实时老师设计.md》):音色写错了连接照样连得上,第一次开口才报错,孩子那边嘴一直不出声 ----
+    // ---- 实时老师的嘴:音色写错了连接照样连得上,第一次开口才报错,孩子那边嘴一直不出声 ----
     const lv = ws.config.live;
     {
       const bad = Object.entries(lv.voices).filter(([, v]) => !isRealtimeVoice(v));
@@ -564,7 +564,7 @@ export async function doctorWorkspace(
     for (const [name, rt] of Object.entries(ws.config.runtimes)) {
       if (typeof rt === 'string') continue;
       const issue = runtimeIssue(rt);
-      if (issue) push({ name: `runtime.${name}`, ok: false, required: usedRuntimes.has(name), detail: issue, fix: '按 docs/开发者手册.md 的旧 workspace 迁移说明切换到 Qwen' });
+      if (issue) push({ name: `runtime.${name}`, ok: false, required: usedRuntimes.has(name), detail: issue, fix: '按 README.md 的「旧 workspace 切换到 Qwen」说明迁移' });
     }
 
     // ---- 运行时的 CLI 在不在 ----

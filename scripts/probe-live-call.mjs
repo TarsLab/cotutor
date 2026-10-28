@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * 实时老师整条线真跑一遍(《实时老师设计.md》,孩子端页面之前):临时 workspace(语文老师开实时),本进程起服务,
+ * 实时老师整条线真跑一遍(孩子端页面之前):临时 workspace(语文老师开实时),本进程起服务,
  * 孩子是 Ray 的真录音(conversations/<老师>/<日期>.<job>.voice.webm,按真实节奏 100 毫秒一块推),嘴是真百炼 realtime,脑是真 qwen 语文老师。
  * 量:松手 → 嘴的首包(多半就是第一拍照念;拍照先说一句「我看一看图片」)、松手 → 第一拍照念的首包、讲完;嘴念的字与讲稿对不对得上;嘴的声音存成 wav 听。一轮几分钱。
  * 用法:node scripts/probe-live-call.mjs [--ws ~/cotutor/ray] [--out <目录>] [--voice Serena] [--tutor chinese-tutor] [--say 2026-10-18/1205-2,2026-10-18/1206-3]
  *   --say:按顺序发那位老师的哪几条(<日期>/<job>):按住说的推录音,拍照的那条把照片拷进临时 workspace 走 send;缺省语文老师「老师三明治怎么写」「能吃的三」两段,
  *   第二条起接着同一话题。数学:--tutor math-tutor --say 2026-10-18/1133-7,2026-10-18/1135-8,2026-10-18/1140-14(拍题、不会做、我才一年级)
- *   --open:一直听(《一直听设计.md》):连接带 ?listen=open,不按;一直推声音(录音之间推静音),真百炼的 VAD 判开口 / 说完;
+ *   --open:一直听:连接带 ?listen=open,不按;一直推声音(录音之间推静音),真百炼的 VAD 判开口 / 说完;
  *   「松手」那一刻换成录音推完的那一刻(录音尾巴上本来就有一点静音)。
  */
 import { execFileSync } from 'node:child_process';
@@ -120,7 +120,7 @@ for (const [date, job] of says) {
   const reads = mine.filter((x) => x.t === 'read');
   const firstRead = reads[0]?.at ?? null;
   const totalMs = Math.round(pcmOut.length / 48);
-  // 嘴念的 = 照念的那几段(嘴先说的那句标 of: catch,只有拍照、没听清有,设想稿拍板 14)
+  // 嘴念的 = 照念的那几段(嘴先说的那句标 of: catch,只有拍照、没听清有)
   const caught = mine.filter((x) => x.t === 'tutor' && x.of === 'catch' && typeof x.done === 'string').map((x) => x.done);
   const readDones = mine.filter((x) => x.t === 'tutor' && x.of === 'read' && typeof x.done === 'string').map((x) => x.done);
   const kid = mine.find((x) => x.t === 'kid')?.text;

@@ -1,5 +1,5 @@
 /**
- * 口语课热身(src/live/lib/warm.ts,《口语课实时设计.md》§三之三、§三之四):孩子说的是跟读还是对老师说的;每拍的摸底一行。纯函数。
+ * 口语课热身(src/live/lib/warm.ts):孩子说的是跟读还是对老师说的;每拍的摸底一行。纯函数。
  * 例子用 Ray 10-17 跟读的真转写(duck、under under 在下面、Boss.、The dog.、他不等人的、那我们直接打电话吧)。
  */
 import { check, done } from './_check.ts';

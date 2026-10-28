@@ -1,9 +1,9 @@
 /**
- * /talk 与 /api/talk/*:口语课的页面与接口(《口语课设计.md》)。孩子在这里拍一页、改好口语单,交给英语老师的实时页上课
- * (src/server/talk-run.ts,activity「口语课」);这一页自己不打电话(《产品规划.md》拍板 30)。
+ * /talk 与 /api/talk/*:口语课的页面与接口。孩子在这里拍一页、改好口语单,交给英语老师的实时页上课
+ * (src/server/talk-run.ts,activity「口语课」);这一页自己不打电话。
  * cotutor 只在 app.ts 的 route() 里接一行;这里引用 cotutor 的东西,cotutor 别处不引用这里。拆掉 = 删 src/talk/ 和那一行。
  *
- *   GET    /talk                       孩子端的页面:拍照、看口语单(按 hash 切;家长端没有这一页,《口语课设计.md》拍板 13)
+ *   GET    /talk                       孩子端的页面:拍照、看口语单(按 hash 切;家长端没有这一页)
  *   GET    /api/talk                   开关、全部口语单(新的在前)
  *   POST   /api/talk                   {photo?: dataURL} 开一次;有照片就交给 omni 读口语单(孩子拍的,读完才回)
  *                                      {from: 'latest'} 拍照屏的「接着上」:最近那份改好了的口语单(404 = 还没有)

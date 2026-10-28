@@ -1,5 +1,5 @@
 /**
- * 家长端「首页」(/parent/home,《家长板书页设计.md》拍板 20、33、34):
+ * 家长端「首页」(/parent/home):
  * 左边(手机上是上面)是孩子端首页本身——iframe 装 /preview(孩子端页面的预览模式),按孩子设备的尺寸开、等比缩进来,可切 iPad / 手机;
  * 点牌上的按钮在旁边改它(字、讲法、留多久),改字时牌上跟着变;点后面那张牌换老师;听写、口语课点了去改这周的词、口语课。
  * 预览下面一排是老师的先后(按住左右拖)、孩子看不到的按钮、加一个开场按钮;右边是百炼(没配时在最上面)、改着的那颗、这位老师「每天都在」的、在不在首页。
@@ -25,7 +25,7 @@ ${faviconLinks()}
   .wrap { max-width:640px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 20px) 16px calc(env(safe-area-inset-bottom) + 40px); display:flex; flex-direction:column; gap:16px; }
   .top { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:12px 20px; }
   .top b { font-size:20px; }
-  /* 标题前那颗 logo(《首页设计.md》拍板 33):彩色,打开时画出来、悬停点一下头 */
+  /* 标题前那颗 logo:彩色,打开时画出来、悬停点一下头 */
   .top .ttl { display:inline-flex; align-items:center; gap:10px; align-self:center; }
   #ct-mark { display:flex; }
 ${BRAND_CSS}
@@ -67,7 +67,7 @@ ${BRAND_CSS}
   .box { padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
   .row2 { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .lnk { color:var(--accent); text-decoration:none; font-size:15px; }
-  /* 孩子端首页本身(拍板 33):iframe 按孩子设备的尺寸开,等比缩到这一栏 */
+  /* 孩子端首页本身:iframe 按孩子设备的尺寸开,等比缩到这一栏 */
   .pvh { display:flex; align-items:center; gap:10px; padding:0 4px 8px; }
   .pvh > span:first-child { flex:1; font-size:13px; color:var(--mute); }
   .pvh .seg { flex:none; width:150px; }
@@ -78,7 +78,7 @@ ${BRAND_CSS}
   #pvoff.on { display:block; }
   #pv-under { display:flex; flex-direction:column; gap:14px; padding-top:14px; }
   .addb { height:46px; border:2px dashed #d9d5cc; border-radius:23px; background:transparent; color:var(--dim); font-size:15px; cursor:pointer; }
-  /* 老师的先后(拍板 34):一位一个,按住左右拖;点一下看这位老师 */
+  /* 老师的先后:一位一个,按住左右拖;点一下看这位老师 */
   .ord { display:flex; gap:6px; overflow-x:auto; padding:2px; }
   .ch { position:relative; flex:0 0 84px; display:flex; flex-direction:column; align-items:center; gap:3px; padding:8px 0; border:2px solid transparent; border-radius:14px; background:transparent; font-size:13px; color:var(--dim); cursor:grab; touch-action:pan-y; user-select:none; -webkit-user-select:none; }
   .ch.on { background:#fff; border-color:var(--ink); color:var(--ink); font-weight:600; }
@@ -104,7 +104,7 @@ ${BRAND_CSS}
   #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%); max-width:min(560px,calc(100% - 32px)); padding:12px 18px; border-radius:16px; background:#2b2b2bee; color:#fff; font-size:15px; display:none; z-index:20; white-space:pre-line; }
   #toast.on { display:block; }
   .main { display:flex; flex-direction:column; gap:18px; }
-  /* 百炼没配(《产品规划.md》拍板 30):孩子那边打不开,这块放在右栏最上面 */
+  /* 百炼没配:孩子那边打不开,这块放在右栏最上面 */
   .grp.warn { background:#fff3e8; }
   .grp.warn .it, .grp.warn .box { background:transparent; }
   .lbl { font-size:13px; color:var(--dim); }
@@ -162,7 +162,7 @@ ${BRAND_JS}
   /** 预览里改着的(只在预览里,发布了才到孩子那边):edit = 改的那颗 {k, kind, label, until},add = 新加那颗的字 */
   let draft = { edit: null, add: null };
 
-  // ---- 孩子端首页本身(拍板 33):iframe 装 /preview,按孩子设备的尺寸开,等比缩进来 ----
+  // ---- 孩子端首页本身:iframe 装 /preview,按孩子设备的尺寸开,等比缩进来 ----
   const SIZES = { tablet: [1180, 820], phone: [390, 844] };
   // 缺省跟着这块屏幕(宽屏看 iPad 的样子、手机看手机的);家长点过就记住
   let picked = null; try { picked = localStorage.getItem('parent-home-dev'); } catch (e) {}
@@ -191,7 +191,7 @@ ${BRAND_JS}
   for (const b of document.querySelectorAll('#pvdev button')) b.addEventListener('click', () => { dev = picked = b.dataset.d; try { localStorage.setItem('parent-home-dev', dev); } catch (e) {} fit(); });
   window.addEventListener('resize', fit);
 
-  // ---- 百炼(《产品规划.md》拍板 30):老师开口靠它,没配孩子那边打不开。一块常驻的元素,重画只挪它的位置,输着的 key 不会被抹掉 ----
+  // ---- 百炼:老师开口靠它,没配孩子那边打不开。一块常驻的元素,重画只挪它的位置,输着的 key 不会被抹掉 ----
   const BL = { st: null, open: false, busy: false, msg: '' };
   const blEl = h('div', { id: 'bailian' });
   const blKey = h('input', { class: 'fld', id: 'bl-key', type: 'password', autocomplete: 'off', spellcheck: 'false', placeholder: 'sk- 开头' });
@@ -257,7 +257,7 @@ ${BRAND_JS}
   };
   const putOrder = (names) => save('PUT', '/api/parent/home/order', { tutors: names });
 
-  // ---- 老师的先后(拍板 34):一位一个,按住左右拖;点一下看这位老师;左右键也能挪 ----
+  // ---- 老师的先后:一位一个,按住左右拖;点一下看这位老师;左右键也能挪 ----
   const orderRow = () => {
     const box = h('div', { class: 'ord' });
     const chips = D.tutors.map((t, i) => {
@@ -354,7 +354,7 @@ ${BRAND_JS}
     const seg = h('div', { class: 'seg' });
     const drawSeg = () => seg.replaceChildren(...keeps.map(([v, l]) => h('button', { type: 'button', class: v === keep ? 'on' : '', on: { click: () => { keep = v; dirty = true; drawSeg(); tell(); } } }, l)));
     const sync = () => { const n = Array.from(label.value.trim()).length; count.textContent = n + ' / 16'; count.style.color = n > 16 ? 'var(--red)' : ''; go.disabled = !n || n > 16; };
-    // 预览里的那颗跟着变(拍板 33):改的换字,新加的排在最后;只在预览里,发布了才到孩子那边
+    // 预览里的那颗跟着变:改的换字,新加的排在最后;只在预览里,发布了才到孩子那边
     const tell = () => { const lb = label.value.trim(); draft = k >= 0 ? { edit: { k, kind: b.kind, label: lb || b.label, until: keep || undefined }, add: null } : { edit: null, add: lb || '(按钮上的字)' }; pvSync(); };
     label.addEventListener('input', () => { dirty = true; sync(); tell(); });
     brief.addEventListener('input', () => { dirty = true; });

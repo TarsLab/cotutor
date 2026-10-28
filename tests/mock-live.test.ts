@@ -53,7 +53,7 @@ try {
   check('念着时按下:孩子端清播放队列、没念的不再念', okFlush && msgs.filter((m) => m.t === 'read' && m.job === turn.job).length === reads && reads < lines.length, JSON.stringify({ reads, lines: lines.length }));
   ws.send(JSON.stringify({ t: 'hush' }));
 
-  // 舞台开着打字(问这张卡;拍板 18 撤了卡上的「?」):嘴不先说,新一轮
+  // 舞台开着打字(问这张卡 撤了卡上的「?」):嘴不先说,新一轮
   const n1 = msgs.length;
   ws.send(JSON.stringify({ t: 'send', body: { text: '讲讲这张卡', focus: { card: `${turn.job}/0` }, thread: turn.thread } }));
   check('舞台开着发的(带 focus):新一轮、嘴不先说', await until(() => msgs.slice(n1).some((m) => m.t === 'turn')) && !msgs.slice(n1).some((m) => m.t === 'tutor' && m.of === 'catch'));

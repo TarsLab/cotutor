@@ -32,7 +32,7 @@ export function kidQuestions(messages: readonly Pick<ConversationMessage, 'job' 
   const ths = threads(messages);
   const out: string[] = [];
   messages.forEach((m, i) => {
-    // 首页的开场 / 接着按钮发的是按钮上的字,不是孩子说的(《首页设计.md》§5.2)
+    // 首页的开场 / 接着按钮发的是按钮上的字,不是孩子说的
     if (ths[i] !== thread || m.from !== 'kid' || m.action || (m.via && typeof m.via.button === 'number')) return;
     const text = m.text.replace(/\s+/g, ' ').trim();
     if (text && text !== '继续') out.push(text);

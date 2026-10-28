@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 画板(《画板设计.md》)的手动验收(不进 pnpm test,要本机 Chrome 与一个跑着的 mock;不花钱):
+ * 画板的手动验收(不进 pnpm test,要本机 Chrome 与一个跑着的 mock;不花钱):
  * 一、画板卡铺满:盖住左栏、题目在顶栏(点开看全)、工具一列、底下老师的小头像;画三笔、撤销一笔 → 清空(清空前那一版存图)→ 再画 →
  *     按住小头像说(边画边聊:松手带 chat 与一张 jpeg,假嘴接住一句、画布顶上浮字幕,不起老师)→ 点「给老师看」交了、紧凑态出缩略图。
  * 二、左栏的纸:左栏四个钮(画板 · 拍照 · 相册 · 打字);点「画板」铺满、空白;画三笔、关掉再开还在(存在服务端);
@@ -185,7 +185,7 @@ try {
   await canvasUp();
   ok('「接着画」又打开那张纸(还是 3 笔,没锁)', /画了 3 笔/.test(String(await until(`(() => { const t = document.querySelector('#st-note').textContent; return /画了/.test(t) && t; })()`, 6000))) && !(await evaluate(`document.querySelector('#st-go').hidden`)));
 
-  // 嘴主动说一句(《画板设计.md》§4.2):红的再画到 ≥ 5 笔、换蓝画一笔、停笔;点开 20 秒后孩子端发 chat(说红色),假嘴说一句、回 said
+  // 嘴主动说一句:红的再画到 ≥ 5 笔、换蓝画一笔、停笔;点开 20 秒后孩子端发 chat(说红色),假嘴说一句、回 said
   sent.length = 0;
   const opened = Date.now();
   await draw(TWO, RED);

@@ -151,7 +151,7 @@ export async function writeCardImage(ws: Workspace, tutor: string, date: string,
 }
 
 /**
- * 作业照片(R5,2026-09-14,《产品规划.md》拍板 14):落 workspace 的 captures/<日期>/<HHMM>-<n>.<ext>(paths.captures,相对 workspace 根),
+ * 作业照片(R5,2026-09-14):落 workspace 的 captures/<日期>/<HHMM>-<n>.<ext>(paths.captures,相对 workspace 根),
  * 不落 vault。返回相对 workspace 根的路径(消息的 photos、上下文包的 photos: 段、/api/kid/image?p= 都用它)。
  */
 export async function writeCapture(ws: Workspace, at: Date, data: Buffer, ext: 'jpg' | 'png'): Promise<string> {
@@ -323,7 +323,7 @@ async function undoThreadTraces(ws: Workspace, tutor: string, date: string, gone
   const undo: ThreadUndo = { memory: 0, diary: 0, misses: [] };
   const edits = gone.flatMap((m) => m.memoryLines ?? []);
   if (edits.length) {
-    // activity 话题写的是 activity 自己的记忆(agent: <老师>/<activity>,《activity设计.md》拍板 14)
+    // activity 话题写的是 activity 自己的记忆(agent: <老师>/<activity>)
     const run = gone.find((m) => m.activity)?.activity;
     const agent = run ? `${tutor}/${run.name}` : tutor;
     const found = (await scanVault(ws)).notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === agent);

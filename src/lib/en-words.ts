@@ -1,6 +1,6 @@
 /**
  * 孩子说的英文说出了几个词:实时老师的热身(src/live/lib/warm.ts)用。纯函数。
- * 比的是转写的字,不是发音:百炼的转写会往对的词上靠(《口语课实时设计.md》§五之二 coach),说出来了不等于念对了。
+ * 比的是转写的字,不是发音:百炼的转写会往对的词上靠(coach),说出来了不等于念对了。
  */
 
 const CONTRACT: Record<string, string> = { "it's": 'it is', "i'm": 'i am', "that's": 'that is', "what's": 'what is', "he's": 'he is', "she's": 'she is', "there's": 'there is', "don't": 'do not', "can't": 'can not', "isn't": 'is not', "you're": 'you are', "they're": 'they are', "we're": 'we are', "let's": 'let us', "i'll": 'i will' };

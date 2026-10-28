@@ -1,5 +1,5 @@
-/** 录像(《家长录像设计.md》):轨道、某一刻的样子、空白压缩与播放时钟。纯函数,手搭的节,时刻都算得准。
- *  实时的轮照通话放;不是实时的轮写完那一刻整节铺上、不念(2026-10-22 起,《产品规划.md》拍板 30)。 */
+/** 录像:轨道、某一刻的样子、空白压缩与播放时钟。纯函数,手搭的节,时刻都算得准。
+ *  实时的轮照通话放;不是实时的轮写完那一刻整节铺上、不念(2026-10-22 起)。 */
 import { buildReel, playRecordOk, reelCardTook, reelChapterEnds, reelClock, reelDuration, reelFrameAt, reelSaid, REEL_GAP_PLAY_MS, type PlayRecord, type ReelInput } from '../src/lib/reel.ts';
 import type { BoardSection } from '../src/lib/kid-board.ts';
 import type { RunEvent } from '../src/lib/events.ts';
@@ -27,7 +27,7 @@ const S2: BoardSection = { cards: [card('C')], lines: [line('讲 C', 0)] };
 
 check('一轮都没有 → 没有录像', buildReel(input([])) === null);
 {
-  // 孩子一句都没说(系统起的轮):只有老师那一轨,从这轮自己的时刻起(拍板 17)
+  // 孩子一句都没说(系统起的轮):只有老师那一轨,从这轮自己的时刻起
   const r0 = buildReel(input([msg('p1', { from: 'system', section: S2 })]));
   const last = r0 ? reelFrameAt(r0, r0.endAt) : null;
   check('孩子一句都没说:照样有录像,只有老师那一轨;最后一帧整节都在', !!r0 && r0.tracks.length === 1 && r0.says.length === 0 && r0.marks.length >= 1 && !!last && last.sections.length === 1 && last.sections[0].cards === S2.cards.length, JSON.stringify(r0?.marks));
@@ -115,7 +115,7 @@ check('一轮都没有 → 没有录像', buildReel(input([])) === null);
   check('想了多久、改过几次:打开到第一次改动减去切到后台的;改了两次', JSON.stringify(reelCardTook(plays, '1', 0, -Infinity, T + 40000)) === '{"think":6000,"changes":2}' && reelCardTook(plays, '1', 0, T + 27000, T + 40000) === null && reelCardTook(plays, '2', 0, -Infinity, Infinity) === null);
 }
 {
-  // 看小课堂(《小课堂设计.md》§八第 5 步):开口前 60 秒开始看;放 10 秒停下、5 秒后画一处、再过 7 秒接着放;放 8 秒后拖到 0:30;放到 0:46 看完;14 秒后开口
+  // 看小课堂(第 5 步):开口前 60 秒开始看;放 10 秒停下、5 秒后画一处、再过 7 秒接着放;放 8 秒后拖到 0:30;放到 0:46 看完;14 秒后开口
   const L = { bundle: '2026-09-18-po13-jian-8', title: '13 − 8 破十法', watchedMs: 46000, finished: true, pauses: 1,
     log: [{ t: -60000, pos: 0, play: true }, { t: -50000, pos: 10000, play: false }, { t: -38000, pos: 10000, play: true }, { t: -30000, pos: 30000, play: true }, { t: -14000, pos: 46000, play: false }],
     marks: [{ atMs: 10000, svgMs: 9000, strokes: [[[1, 1], [9, 1], [5, 9]], [[2, 2], [3, 3]]] as [number, number][][], t: -45000 }] };
@@ -129,7 +129,7 @@ check('一轮都没有 → 没有录像', buildReel(input([])) === null);
   check('没带看的过程(以前的话题):没有这一段', buildReel(input([msg('1', { text: 'x', timing: { startedAt: iso(T) }, section: S2, lecture: { ...L, log: undefined } })]))!.lectures.length === 0);
 }
 {
-  // 改版补记(拍板 6、7、10):按住说话、打字、发照片屏、屏幕尺寸、翻板书;连着没发出去
+  // 改版补记:按住说话、打字、发照片屏、屏幕尺寸、翻板书;连着没发出去
   // 老师那轮 0 秒开口、写完就铺上;孩子 30 秒按住、话筒 31 秒开、34 秒松手、35 秒没听清;
   // 40 秒、50 秒又两次没听清(一共三次连着);60 秒打字、删改、66 秒发出去;70 秒开发照片屏、圈画、发;80 秒那条带照片
   const at = (dt: number) => T + dt;
@@ -166,7 +166,7 @@ check('进度条上怎么写孩子这句', reelSaid({ text: '', action: 'submit'
 check('时长的写法', reelDuration(23400) === '23 秒' && reelDuration(130000) === '2 分 10 秒' && reelDuration(120000) === '2 分' && reelDuration(3_900_000) === '1 小时 5 分');
 
 {
-  // 章尾(《家长录像设计.md》拍板 21):下一章的前奏开始之前;前奏一段段往前连(没认出来马上又按一次);最后一章是录像末尾
+  // 章尾:下一章的前奏开始之前;前奏一段段往前连(没认出来马上又按一次);最后一章是录像末尾
   const ends = reelChapterEnds([1000, 10_000, 20_000], [{ from: 8000, to: 9000 }, { from: 9500, to: 10_200 }, { from: 3000, to: 3500 }, { from: 19_000, to: 19_800 }], 30_000);
   check('章尾:第 1 章落在两次按住说话(连着)之前;中间那次早早没发出去的不算;第 2 章落在下一次按住之前;最后一章是末尾', JSON.stringify(ends) === '[7999,18999,30000]', JSON.stringify(ends));
   const bare = reelChapterEnds([0, 5000], [], 9000);
@@ -176,7 +176,7 @@ check('时长的写法', reelDuration(23400) === '23 秒' && reelDuration(130000
 }
 
 {
-  // 实时的轮(《实时老师设计.md》):照那次通话的录像放——孩子按住到松手是原声、嘴接住一段、每句从开始放(read)到下一句或这段放完,声音都在通话那一条里(seek)
+  // 实时的轮:照那次通话的录像放——孩子按住到松手是原声、嘴接住一段、每句从开始放(read)到下一句或这段放完,声音都在通话那一条里(seek)
   const call = {
     audio: '2026-09-28.live/120000.wav', startAt: T,
     msgs: [

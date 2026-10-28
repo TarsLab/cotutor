@@ -1,6 +1,6 @@
 /**
  * 作业照片编辑的坐标(photo-edit.ts):拖框夹边、转 90° 框与笔画跟着走、转四次回原样、导出缩放。
- * 《作业照片设计.md》§六。
+ * 。
  */
 import { PHOTO_MAX_SIDE, dragCrop, edited, exportPlan, newEdit, newStroke, region, rotMatrix, rotateEdit, rotatedSize, setCrop, type PhotoEdit, type Pt } from '../src/lib/photo-edit.ts';
 import { check, done } from './_check.ts';

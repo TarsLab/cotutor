@@ -1,5 +1,5 @@
 /**
- * 实时老师页那颗「头像 + 按住说话」按钮的画法,动画只写这一处(《实时老师设计.md》拍板 23,《实时老师页设计.md》§二之二)。
+ * 实时老师页那颗「头像 + 按住说话」按钮的画法,动画只写这一处。
  * 页面只做两件事:把状态凑好交给 src/lib/voice-view.ts 的 voiceView,拿到样子交给这里的按钮(set);把音量喂进来(老师的给一个取音量的口子,孩子的随时 level)。
  * 孩子端老师页(平板横屏左栏、手机字幕行那颗头像、板书模式字幕行那颗头像的动作)和工作台 /dev/voice 样张都引用这里。
  *
@@ -79,7 +79,7 @@ const ICONS: Record<string, string> = {
 };
 
 export const VOICE_CSS = `
-  /* ---- 按住说话那颗按钮(头像 + 声音,src/server/voice-ui.ts,设想稿拍板 23):底色在 data-tone,哪种样子在 data-voice,头像的动作是 .vb-face 上的 .vb-<face> ---- */
+  /* ---- 按住说话那颗按钮(头像 + 声音,src/server/voice-ui.ts):底色在 data-tone,哪种样子在 data-voice,头像的动作是 .vb-face 上的 .vb-<face> ---- */
   .vb { position:relative; display:flex; align-items:center; gap:10px; width:312px; height:120px; box-sizing:border-box; padding:0 18px 0 12px; border-radius:32px; border:1.5px solid #e2dfd6; background:#fff; box-shadow:0 4px 16px #00000012; color:#2b2b2b; font:inherit; text-align:left; touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; transition:background-color .15s, border-color .15s, box-shadow .15s, color .15s, opacity .15s, transform .2s ease-out, filter .2s ease-out; }
   .vb.vb-right { flex-direction:row-reverse; padding:0 12px 0 18px; text-align:right; }
   .vb[data-tone=blue] { background:#3d7fd9; border-color:#3d7fd9; color:#fff; box-shadow:0 8px 22px #3d7fd961; }
@@ -109,7 +109,7 @@ export const VOICE_CSS = `
   .vb[data-tone=cancel] .vb-small { color:#4d5563; }
   .vb-track { position:absolute; z-index:0; left:96px; right:18px; top:50%; height:56px; margin-top:-28px; pointer-events:none; }
   .vb-right .vb-track { left:18px; right:96px; }
-  /* 画板铺满时工具列最底下那颗(《画板设计.md》§二):只有头像;底色、头像的动作同大的那颗(两颗一起变),声音的弧和竖条不画 */
+  /* 画板铺满时工具列最底下那颗:只有头像;底色、头像的动作同大的那颗(两颗一起变),声音的弧和竖条不画 */
   .vb.vb-mini { width:64px; height:64px; padding:0; border-radius:50%; justify-content:center; gap:0; }
   .vb.vb-mini .vb-side, .vb.vb-mini .vb-track { display:none; }
   .vb.vb-mini .vb-av { width:56px; height:56px; --vb-h1:-3px; --vb-h2:-9px; }

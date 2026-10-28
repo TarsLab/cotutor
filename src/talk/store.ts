@@ -1,5 +1,5 @@
 /**
- * 口语课的数据:workspace/talk/<id>/,一次一个目录(《口语课设计.md》§四)。不进对话索引、不写 vault。
+ * 口语课的数据:workspace/talk/<id>/,一次一个目录。不进对话索引、不写 vault。
  * 口语课页只拍照、改口语单,上课在英语老师的实时页(src/server/talk-run.ts 读这里的 talk.json,那一课的录像在那个话题里)。
  *
  *   talk.json   口语单(读出来的 + 改过的)、状态

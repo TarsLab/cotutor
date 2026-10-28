@@ -1,12 +1,12 @@
 /**
- * 家长端与工作台的锁(2026-10-17,《产品规划.md》拍板 21):一个机器级 PIN,孩子端永远不要。
+ * 家长端与工作台的锁:一个机器级 PIN,孩子端永远不要。
  * - **没设 PIN:行为和以前一字不差**,局域网全开。家长在旁边、用完收回 iPad 的家可以不设;doctor 的 server.access 提一句,不算错。
  * - 设了:孩子端的路径(下面的白名单)照旧开;其余页面与接口要凭证。**本机(127.0.0.1 / ::1)免密**,所以电脑上开工作台、
  *   探针脚本、测试都不用改;别的设备在 /parent、/dev 上输一次 PIN,拿一枚 HttpOnly cookie:HMAC 签的过期时间(90 天),不存会话表,重启 serve 还在。
  * - PIN 存 ~/.config/cotutor/pin.json(scrypt 哈希,不存明文),签 cookie 的密钥在同目录 secret;**改 PIN 换密钥**,所有设备重输。连错 5 次锁 60 秒(挡孩子的好奇心够了)。
  * - 白名单而不是黑名单:漏一条孩子端坏,马上看得见;黑名单漏一条就是又一个洞。
  * - PIN 不放 cotutor.json:它能被工作台的 PATCH /api/config 改;放机器级和证书一样,几个孩子的 workspace 共用一个。
- * 想想为什么不是「只许 loopback」:家长的主设备是 iPad(扫码进 /parent,打星、记账、删话题都在上面),工作台在手机上也要能开(《工作台设计.md》侧栏收成顶上一条)。
+ * 想想为什么不是「只许 loopback」:家长的主设备是 iPad(扫码进 /parent,打星、记账、删话题都在上面),工作台在手机上也要能开(侧栏收成顶上一条)。
  */
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';

@@ -52,7 +52,7 @@ function crc32(buf: Buffer): number {
 }
 
 {
-  // 双 C(《产品规划.md》拍板 20、23):陶土色底、白线,两个 C 占 100 见方画布的 0.62,大号那一档(小 C 侧头 28°)
+  // 双 C:陶土色底、白线,两个 C 占 100 见方画布的 0.62,大号那一档(小 C 侧头 28°)
   const png = appIconPng(180);
   const img = decode(png);
   check('180 见方', img.w === 180 && img.h === 180);

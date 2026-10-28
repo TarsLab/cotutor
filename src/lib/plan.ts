@@ -1,5 +1,5 @@
 /**
- * 计划文件解析(《cotutor契约草案.md》§8),与课程表解析同法:纯函数,错误即修复指南带行号。
+ * 计划文件解析,与课程表解析同法:纯函数,错误即修复指南带行号。
  * frontmatter 要有 week(2026-W37)与 status(draft | confirmed);正文按老师显示名分 H2。
  */
 import { PLAN_STATUS, WEEK_RE, type Plan, type PlanSection, type PlanStatus } from '../schema/index.ts';

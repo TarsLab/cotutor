@@ -114,7 +114,7 @@ try {
     const saved = (JSON.parse(readFileSync(join(root, 'cotutor.json'), 'utf8')) as { tutors: Record<string, { policy?: unknown }> }).tutors['chinese-tutor'].policy;
     check('板书与思考深浅这两个旋钮存得进老师条目,留空的字段不落盘', r.status === 200 && JSON.stringify(saved) === '{"board":"off","effort":"medium"}', JSON.stringify(saved));
   }
-  // 家长板书页(《家长板书页设计.md》§4.3):板书接口答案在、家长的话在、出错的轮有 error;同一份索引下孩子接口的输出不变(护栏);清单;页面与 manifest
+  // 家长板书页:板书接口答案在、家长的话在、出错的轮有 error;同一份索引下孩子接口的输出不变(护栏);清单;页面与 manifest
   {
     const { emptyIndex, addMessage, localDate } = await import('../src/lib/conversation.ts');
     const { writeIndex } = await import('../src/server/store.ts');
@@ -139,9 +139,9 @@ try {
     // 卡数 2:选择题一张,第二节末句问句没配能答的卡、解析器补的提问卡一张
     check('清单:三位有脸的老师;数学老师 3 轮、两个话题;第一个话题的题、节数、卡数、停在末句问句、星;出错的话题 0 节', ov.date === today && ov.tutors.length === 3 && mt?.turns === 3 && mt.costUsd === 0.12 && mt.threads.length === 2 && mt.threads[0].title === '7 减 9 怎么算' && mt.threads[0].sections === 2 && mt.threads[0].cards === 2 && mt.threads[0].stoppedAt === 'ask' && mt.threads[0].rating === 4 && !mt.threads[0].booked && mt.threads[1].sections === 0 && mt.threads[1].stoppedAt === null, JSON.stringify(ov));
     const wk = (ov as unknown as { week: { date: string; tutors: string[] }[] }).week;
-    check('清单:七天日期条以今天结尾,今天有话题的是数学老师(拍板 24)', wk.length === 7 && wk[6].date === today && JSON.stringify(wk[6].tutors) === '["math-tutor"]' && wk[0].tutors.length === 0, JSON.stringify(wk));
+    check('清单:七天日期条以今天结尾,今天有话题的是数学老师', wk.length === 7 && wk[6].date === today && JSON.stringify(wk[6].tutors) === '["math-tutor"]' && wk[0].tutors.length === 0, JSON.stringify(wk));
     const t0 = mt?.threads[0] as unknown as { start: { kind: string; label: string }; said: string | null; endAt: string | null; notes: string[]; remembered: string[] };
-    check('清单:话题从哪颗进来(没从首页来 = 新话题)、孩子的第一句、给家长的(去掉标题)与记住了;没计时的 endAt 为 null(拍板 30、31)', t0.start.kind === 'new' && t0.start.label === '新话题' && t0.said === '7 减 9 怎么算' && JSON.stringify(t0.notes) === '["他其实会了。"]' && t0.remembered.length === 1 && t0.endAt === null, JSON.stringify(t0));
+    check('清单:话题从哪颗进来(没从首页来 = 新话题)、孩子的第一句、给家长的(去掉标题)与记住了;没计时的 endAt 为 null', t0.start.kind === 'new' && t0.start.label === '新话题' && t0.said === '7 减 9 怎么算' && JSON.stringify(t0.notes) === '["他其实会了。"]' && t0.remembered.length === 1 && t0.endAt === null, JSON.stringify(t0));
     {
       // 首页开场按钮进来的话题:种类 start、按钮字;按钮发出去的那句不算孩子的第一句;有计时就有结束时刻;用完删掉,后面的检查照旧
       let ci = emptyIndex('chinese-tutor', today);
@@ -155,24 +155,24 @@ try {
     const page = (await get('/parent')).html ?? '';
     // 地址按端分(2026-10-14):孩子端 /、/dictation、/talk(只有跟读那一屏);家长端 /parent/*;工作台 /dev/*;旧地址不留
     const talkKid = (await get('/talk')).html ?? '', talkParent = await get('/parent/talk');
-    check('口语课:/talk 是孩子的拍照、口语单(上课交给英语老师的实时页,这一页不打电话),页面里没有家长端的路径;/parent/talk 删了(《口语课设计.md》拍板 13)', talkKid.includes('id="snap"') && talkKid.includes('id="pick"') && !talkKid.includes('id="kid"') && !talkKid.includes('/parent') && talkParent.status === 404);
+    check('口语课:/talk 是孩子的拍照、口语单(上课交给英语老师的实时页,这一页不打电话),页面里没有家长端的路径;/parent/talk 删了', talkKid.includes('id="snap"') && talkKid.includes('id="pick"') && !talkKid.includes('id="kid"') && !talkKid.includes('/parent') && talkParent.status === 404);
     check('家长端清单的跳转只在家长页(听写录像),孩子端页面里没有;口语课录像删了(那一课是英语老师的话题)', page.includes('/parent/dictation/reel?id=') && !page.includes('/parent/talk/reel') && !((await get('/')).html ?? '').includes('/parent/') && (await get('/parent/talk/reel')).status === 404);
     check('家长端与工作台的新地址在;旧地址、删掉的识别试验页与小老师 404', (await get('/parent/dictation')).status === 200 && (await get('/parent/dictation/reel')).status === 200 && (await Promise.all(['/dictation/parent', '/dictation/reel', '/xlaoshi', '/parent/xlaoshi', '/api/xlaoshi', '/qr', '/voice-test', '/dev/voice-test'].map(async (u) => (await get(u)).status))).every((x) => x === 404));
     check('家长端 /parent:孩子端页面带家长标记、自己的 manifest;manifest 从这页起;工作台在 /dev,/parent/board 没了', page.includes('const MODE = {"parent":true,"links":') && page.includes('href="/parent/manifest.webmanifest"') && page.includes('· 家长</title>') && ((await get('/parent/manifest.webmanifest')).json as { start_url: string; scope: string }).start_url === '/parent' && ((await get('/manifest.webmanifest')).json as { start_url: string }).start_url === '/' && ((await get('/dev')).html ?? '').includes('老师团') && (await get('/parent/board')).status === 404);
-    // 看录像(《家长录像设计.md》):一个话题的轨道 + 这个话题的家长条目;老轮没有 timing 就按 at(分钟)放,事件的 t 从那一刻起算
+    // 看录像:一个话题的轨道 + 这个话题的家长条目;老轮没有 timing 就按 at(分钟)放,事件的 t 从那一刻起算
     const { conversationFiles } = await import('../src/lib/conversation.ts');
     writeFileSync(conversationFiles(ctx.ws.dirs.conversations, 'math-tutor', today).events('1620-1'), `${JSON.stringify({ t: 5000, lane: 'ready', kind: 'all', cards: 1, lines: 2 })}\n`);
     type Rl = { thread: string; reel: { tracks: { job: string; at: number }[]; says: unknown[]; marks: { kind: string; label: string }[] }; messages: PMsg[] };
     const rl = await get('/api/conversations/math-tutor/today/threads/1620-1/reel');
     const rj = rl.json as Rl;
     check('录像接口:两节(孩子问的、家长补的)、节在 ready all 那一刻整节铺上、不念、两次开口;条目只有这个话题的、答案不剥', rl.status === 200 && rj.thread === '1620-1' && rj.reel.tracks.map((t) => t.job).join() === '1620-1,1625-2' && rj.reel.tracks[0].at - Date.parse(`${today}T16:20`) === 5000 && rj.reel.marks.filter((m) => m.kind === 'said').map((m) => m.label).join() === '7 减 9 怎么算,换个说法' && rj.reel.says.length === 0 && rj.messages.length === 2 && JSON.stringify(rj.messages[0].section?.cards[0].props.answer) === '[0]', JSON.stringify(rj));
-    // 孩子的屏幕照孩子端条目画(拍板 6):答案剥掉、孩子的话带着;老师的脸;设备没记就是 null
+    // 孩子的屏幕照孩子端条目画:答案剥掉、孩子的话带着;老师的脸;设备没记就是 null
     const rk = rl.json as Rl & { kid: { job: string; question: string | null; section?: { cards: { props: Record<string, unknown> }[] } }[]; device: string | null; face: { name: string; display: string } };
     check('录像接口:孩子端条目(答案剥了、只有这个话题的)、老师的脸、设备', rk.kid.length === 2 && rk.kid.map((m) => m.job).join() === '1620-1,1625-2' && rk.kid[0].section?.cards[0].props.answer === undefined && rk.kid[0].question === '7 减 9 怎么算' && rk.face.name === 'math-tutor' && typeof rk.face.display === 'string' && 'device' in rk, JSON.stringify({ kid: rk.kid.map((m) => [m.job, m.question, m.section?.cards[0]?.props]), face: rk.face, device: rk.device }));
-    check('录像接口:今天的话题标 live(录像停在最后时跟着长,拍板 16)', (rl.json as Rl & { live: boolean }).live === true);
+    check('录像接口:今天的话题标 live(录像停在最后时跟着长)', (rl.json as Rl & { live: boolean }).live === true);
     const re = (await get('/api/conversations/math-tutor/today/threads/1630-3/reel')).json as Rl;
     check('录像接口:出错的话题也有录像(开口 + 没成)', re.reel.tracks.length === 0 && re.reel.marks.map((m) => m.kind).join() === 'said,error', JSON.stringify(re));
-    // voice-diag 只是诊断日志:2026-10-22 起不再拿它补没有 hold 实录的老话题(《产品规划.md》拍板 30,老话题挪出了 workspace)
+    // voice-diag 只是诊断日志:2026-10-22 起不再拿它补没有 hold 实录的老话题(老话题挪出了 workspace)
     const diagRow = (hm: string, ev: unknown[]) => JSON.stringify({ at: new Date(`${today}T${hm}`).toISOString(), where: 'bar', peak: 0, ev });
     mkdirSync(join(root, '.cotutor'), { recursive: true });
     writeFileSync(join(root, '.cotutor', 'voice-diag.jsonl'), [

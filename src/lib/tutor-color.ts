@@ -1,12 +1,12 @@
 /**
- * 老师的颜色(学科色,《首页设计.md》拍板 21、26):头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮与气泡。
+ * 老师的颜色(学科色):头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮与气泡。
  * 定法:cotutor.json 里这位老师写了 color 用它;三门主科(含别名,canonicalSubject)固定;其余按 cotutor.json 里老师的先后,
  * 从 TUTOR_PALETTE 里挑还没人用的,同一家里不撞色。都是白字压得住的深色(对比度 ≥ 4.5)。
  * 服务端算好随老师一起下发(color 字段),页面不自己算。
  */
 import { canonicalSubject } from '../schema/config.ts';
 
-/** 三门主科(2026-10-12 拍板 21 调深过) */
+/** 三门主科(2026-10-12  调深过) */
 export const SUBJECT_COLORS: Readonly<Record<string, string>> = { 语文: '#c43c74', 数学: '#2f6fd6', 英语: '#1f8a4c' };
 /** 别的老师自动分的八种:橙、赭、青、紫、靛、橄榄、砖红、石板灰,白字对比度 4.9–6.6 */
 export const TUTOR_PALETTE = ['#c2410c', '#8a6a10', '#0f7a8a', '#8a44b0', '#5b55c9', '#4f7a1f', '#a33a2a', '#4a6278'] as const;

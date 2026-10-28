@@ -1,5 +1,5 @@
 /**
- * 孩子端的流水(src/server/kid-log.ts,《孩子端流水设计.md》):设备 cookie、打开登记设备、页面出错一行;各页都带 KID_LOG_JS;
+ * 孩子端的流水(src/server/kid-log.ts):设备 cookie、打开登记设备、页面出错一行;各页都带 KID_LOG_JS;
  * 自动标签(src/lib/kid-device.ts);孩子发的消息记 deviceId。新加孩子端页面要在 PAGES 里登记。
  */
 import { existsSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs';

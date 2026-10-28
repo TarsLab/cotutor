@@ -1,5 +1,5 @@
 /**
- * 画板的笔迹怎么数、边画边聊什么时候开口(src/lib/canvas-chat.ts;规矩在《画板设计.md》§四)。
+ * 画板的笔迹怎么数、边画边聊什么时候开口(src/lib/canvas-chat.ts;规矩在)。
  * 时间线照 10-21 晚 Ray 那张(《边画边聊评估》§一):第一版红楼、楼顶一道蓝线,清空,最后一版蓝色的大浪。
  */
 import { CANVAS_CHAT, canvasChatAnswered, canvasChatCleared, canvasChatDue, canvasChatInit, canvasChatSaid, canvasColorsText, canvasMinutesText, canvasStrokes, canvasSummary, type CanvasStroke } from '../src/lib/canvas-chat.ts';

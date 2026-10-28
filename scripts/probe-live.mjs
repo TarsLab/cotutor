@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 实时老师的 P1 探针(《实时老师设计.md》):真连百炼 realtime(一次几毛钱),不进产品。
+ * 实时老师的 P1 探针:真连百炼 realtime(一次几毛钱),不进产品。
  * 结果写进 --out 目录的 report.md,听的 wav 也在那里。
  *   voices  realtime 几个音色照念同一段语文 / 数学老师的话(念得对不对照字幕核);voxtell 几个候选卡的声音念同一段卡上的字(含英文单词),和两位老师现在的声音放一起
  *   ray     Ray 的真录音(workspace 的 conversations/<老师>/<日期>.<job>.voice.webm)按话题一条连接、手动轮次喂进去:松手到首包、realtime 的转写、嘴回了什么

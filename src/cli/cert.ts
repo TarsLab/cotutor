@@ -1,7 +1,7 @@
 /**
  * cotutor cert:用 mkcert 给这台机器签一张证书到 ~/.config/cotutor/certs/(cert.pem + key.pem),serve 看到就走 HTTPS。
  * 为什么要:iPad Safari 的录音 / 语音识别只在安全上下文里给;局域网 IP 不是 localhost,得自签。
- * 为什么放机器级而不是 workspace:签的是本机名与局域网 IP,与孩子无关;多个 workspace 共用一张,IP 变了只重签一次(2026-09-09 拍板)。
+ * 为什么放机器级而不是 workspace:签的是本机名与局域网 IP,与孩子无关;多个 workspace 共用一张,IP 变了只重签一次。
  * 主机名 = 本机名、本机名.local、所有局域网 IPv4、localhost、127.0.0.1,再加 --host 给的。已有证书就覆盖(证书可再生)。不需要 workspace。
  */
 import { execFile } from 'node:child_process';

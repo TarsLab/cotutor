@@ -1,5 +1,5 @@
 /**
- * activity 文件的纯函数(《activity设计.md》,形状在 src/schema/activity.ts):
+ * activity 文件的纯函数(形状在 src/schema/activity.ts):
  * 解析(永不抛,写坏的行变成问题)、检查(带行号,fix = 要改 / note = 提醒)、递给老师的那节(剥注释、按参数与卡裁段)、工具人模板填插槽。不读文件。
  */
 import {
@@ -60,7 +60,7 @@ const NOTE_SEP = /\s*——\s*/;
 const SLOT = /\{\{([^{}\s]+)\}\}/g;
 const CARD_MENTION = /`([a-z]+)` 卡/g;
 const FIRST_LINE = /^第一句[ \t]*[:：]/m;
-/** 人设:activity 不读老师文件(《activity设计.md》拍板 13),「老师怎么带」自己写「你是……」 */
+/** 人设:activity 不读老师文件,「老师怎么带」自己写「你是……」 */
 const PERSONA_LINE = /^你是/m;
 const CLOSE_LINE = /^收[ \t]*[:：]/m;
 
@@ -422,7 +422,7 @@ const STORY_LINES = 3;
 
 /** 一条拦法过没过(规则名见 ACTIVITY_GATES;不认得的当过,activity check 会报) */
 export function gatePasses(rule: string, input: GateInput): boolean {
-  // 没有还能画 = 家长没设最多画,不限(《产品规划.md》拍板 29)
+  // 没有还能画 = 家长没设最多画,不限
   if (rule === '还能画') return typeof input.state.还能画 !== 'number' || input.state.还能画 > 0;
   if (rule === '连说过一遍') {
     const at = input.thread.findIndex((m) => m.job === input.job);

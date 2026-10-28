@@ -1,6 +1,6 @@
 /**
- * 计划文件 vault/计划/<周>.md(《cotutor契约草案.md》§8):frontmatter week / status / author,
- * 正文按老师分 H2(用显示名,2026-09-08 拍板),行内自由。家长改成 confirmed 即真相。
+ * 计划文件 vault/计划/<周>.md:frontmatter week / status / author,
+ * 正文按老师分 H2(用显示名),行内自由。家长改成 confirmed 即真相。
  */
 import { z } from 'zod';
 

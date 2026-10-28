@@ -1,5 +1,5 @@
 /**
- * /dictation 与 /api/dictation/*:听写的页面与接口(《听写设计.md》)。
+ * /dictation 与 /api/dictation/*:听写的页面与接口。
  * cotutor 只在 app.ts 的 route() 里接一行、kid-page 画首页那张卡;这里引用 cotutor 的东西,cotutor 别处不引用这里。拆掉 = 删 src/dictation/、cards/dictation/ 与那两处。
  * 词是答案:孩子端交卷(check)之前只拿得到几个词、每个词几个字和念的音频;交了才拿到字与「要不要再写一遍」。
  *
@@ -53,7 +53,7 @@ export interface DictationDeps {
   reader(tutor: string | undefined): string | null;
   /** 老师的显示名(听写页的气泡上) */
   display(tutor: string | null): string;
-  /** 胶囊上的老师:颜色、首字、名字(《产品规划.md》拍板 26);没有这位老师 → null */
+  /** 胶囊上的老师:颜色、首字、名字;没有这位老师 → null */
   face(tutor: string | null): { color: string; initial: string; display: string } | null;
   /** 合成一句的音频文件;没有音色、合成失败 → null */
   say(text: string, tutor: string | null): Promise<string | null>;
@@ -189,7 +189,7 @@ export function parseChars(v: unknown, size: number): CharInk[] | null {
 }
 
 async function judge(deps: DictationDeps, chars: string, ink: CharInk[], lang?: 'en'): Promise<CharJudge[]> {
-  // 英文单词不逐字母比(拍板 15):孩子自己对
+  // 英文单词不逐字母比:孩子自己对
   if (lang === 'en') return [];
   const out: CharJudge[] = [];
   const cs = Array.from(chars);
@@ -235,7 +235,7 @@ export function kidView(s: Session, display: string, voiced: boolean): unknown {
 }
 
 /**
- * 一格的笔迹缩成一条 SVG path(家长端记录的听写格子画它,《家长板书页设计.md》拍板 32):点取整、隔一个丢一个(首尾留着),不要时刻。
+ * 一格的笔迹缩成一条 SVG path(家长端记录的听写格子画它):点取整、隔一个丢一个(首尾留着),不要时刻。
  * 坐标照原样(汉字是 hanzi-writer 的 1024 尺、y 朝上;英文是 2048 × 512、y 朝下),画的那头自己翻
  */
 export function inkPath(strokes: InkPoint[][]): string {
@@ -325,10 +325,10 @@ function startRecognizing(deps: DictationDeps, rec: PhotoRecord, image: { data: 
 export async function handleDictation(method: string, url: URL, deps: DictationDeps, body: unknown): Promise<RouteResult | null> {
   const p = url.pathname;
   if (!isOurs(p)) return null;
-  // 英文单词听写另一页(四线三格写整个单词,《听写设计.md》拍板 15)
+  // 英文单词听写另一页(四线三格写整个单词)
   if (p === '/dictation' || p === '/dictation/') {
     if (method !== 'GET') return { status: 405, json: { error: 'method_not_allowed' } };
-    // 胶囊带上念的老师(《产品规划.md》拍板 26):听写一定有念的老师——老师牌「拍照听写」带 ?tutor=,首页听写卡上写了谁就是谁、没写的公共卡 reader() 给语文老师;
+    // 胶囊带上念的老师:听写一定有念的老师——老师牌「拍照听写」带 ?tutor=,首页听写卡上写了谁就是谁、没写的公共卡 reader() 给语文老师;
     // 出页面时就插进去,打开就是他的颜色和首字。录像(?reel=)里胶囊藏着,不用
     const q = url.searchParams;
     let who: string | null = null;
@@ -448,7 +448,7 @@ async function handleSession(method: string, url: URL, deps: DictationDeps, body
           s.first[k] = { at: now.toISOString(), chars: empty, judges: await judge(deps, s.words[k].chars, empty, s.lang) };
         }
       }
-      // 看过答案的词不问「再写一遍?」:已经照着写过一遍了(拍板 8)
+      // 看过答案的词不问「再写一遍?」:已经照着写过一遍了
       s.asked = s.first.map((a, k) => (a!.judges.some((j) => j.ask) && !a!.chars.some((c) => c.revealed) ? k : -1)).filter((k) => k >= 0);
       s.checkedAt = now.toISOString();
       await writeSession(root, s);

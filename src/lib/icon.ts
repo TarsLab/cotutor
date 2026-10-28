@@ -1,6 +1,6 @@
 /**
  * 主屏幕图标与 web app manifest:iPad / iPhone「添加到主屏幕」用(主屏幕从 manifest 取图标,页面不写 apple-touch-icon)。
- * 图标是 cotutor 的双 C(《产品规划.md》拍板 20、23):陶土色底、白线,同工作台页头那块;不透明(iOS 的图标不该有透明)。
+ * 图标是 cotutor 的双 C:陶土色底、白线,同工作台页头那块;不透明(iOS 的图标不该有透明)。
  * 按尺寸现画(src/lib/favicon.ts),同一尺寸只画一次,之后走缓存。
  */
 import { homeScreenPng } from './favicon.ts';

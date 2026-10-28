@@ -1,7 +1,7 @@
 /**
  * 板上的节(kid-board.ts 的 step):表一格一条 + 随机事件序列跑不变式 + 页面不绕过 step。
- * 孩子端不念讲稿了(《产品规划.md》拍板 30):讲稿由嘴照念(live-board.ts,tests/live-player.test.ts),这里只剩铺节、画标注、写完、撤掉。
- * 表的中文版在《工作流程.md》§孩子端「播放器」;改规则先改表、再改这里、最后改 step。
+ * 孩子端不念讲稿了:讲稿由嘴照念(live-board.ts,tests/live-player.test.ts),这里只剩铺节、画标注、写完、撤掉。
+ * 下面的测试列出状态与事件的预期组合;改规则先改这里,再改 step。
  */
 import { readFileSync } from 'node:fs';
 import {
@@ -92,6 +92,6 @@ check('随机事件序列 2000 条 × 80 步:状态合法、不进「在念」�
 const page = readFileSync(new URL('../src/server/kid-page.ts', import.meta.url), 'utf8');
 const count = (re: RegExp) => (page.match(re) ?? []).length;
 check('页面:S.state 只在 dispatch 里写一次', count(/S\.state = /g) === 1 && count(/S\.state\.\w+ = /g) === 0, String(count(/S\.state = /g)));
-check('页面:没有念讲稿、再听讲稿、自动念的开关(拍板 30)', !/const playLine\b|[^.\w]playLine\(/.test(page) && !/\bS\.autoplay\b/.test(page) && !/\bagainBtn\b/.test(page) && !/tapAgain|tapSubtitle|tapButton|lineEnded|autoplayOff/.test(page) && !/S\.replayOf|S\.held\b|S\.unfold/.test(page) && !/id="spk"/.test(page));
+check('页面:没有念讲稿、再听讲稿、自动念的开关', !/const playLine\b|[^.\w]playLine\(/.test(page) && !/\bS\.autoplay\b/.test(page) && !/\bagainBtn\b/.test(page) && !/tapAgain|tapSubtitle|tapButton|lineEnded|autoplayOff/.test(page) && !/S\.replayOf|S\.held\b|S\.unfold/.test(page) && !/id="spk"/.test(page));
 
 done();

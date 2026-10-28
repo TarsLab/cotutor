@@ -1,4 +1,4 @@
-/** activity 文件(《activity设计.md》):出厂的那份过检查、各种写错都报到行、递给老师的那节怎么裁、画家那段和出厂画风一字不差、init / upgrade 拷贝与 hash。 */
+/** activity 文件:出厂的那份过检查、各种写错都报到行、递给老师的那节怎么裁、画家那段和出厂画风一字不差、init / upgrade 拷贝与 hash。 */
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -34,7 +34,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('包里出厂:语文老师的你说我画、看图说话与它们的例子;语文、数学、英语各一份小课堂;英语老师的口语课', 'chinese-tutor/你说我画 chinese-tutor/你说我画.例子 chinese-tutor/听写 chinese-tutor/小课堂 chinese-tutor/看图说话 chinese-tutor/看图说话.例子 english-tutor/口语课 english-tutor/听写 english-tutor/小课堂 math-tutor/小课堂 math-tutor/小课堂.例子'.split(' ').every((key) => shipped.some((x) => `${x.tutor}/${x.name}` === key)), JSON.stringify(shipped));
   const kantu = readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', '看图说话.md'), 'utf8');
   check('出厂的看图说话过检查(老师的卡照出厂 cotutor.json)', lintActivity(kantu, { fileName: '看图说话', tutorCards: factoryCards }).issues.length === 0, JSON.stringify(lintActivity(kantu, { fileName: '看图说话', tutorCards: factoryCards }).issues));
-  check('看图说话:老师收到的那节不说「点一下能听」(《看图说话设计.md》拍板 17)', !(renderTutorSection(parseActivity(kantu).activity, { cards: ['read', 'image'] }) ?? '点一下能听').includes('点一下能听'));
+  check('看图说话:老师收到的那节不说「点一下能听」', !(renderTutorSection(parseActivity(kantu).activity, { cards: ['read', 'image'] }) ?? '点一下能听').includes('点一下能听'));
   const teacher = readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor.md'), 'utf8');
   check('语文老师文件只留人设与学科功夫:没有看图说话、你说我画的流程', !/^#{2,4}\s*(看图说话|你说我画)/m.test(teacher) && !teacher.includes('这是你说的话,点一下能听') && teacher.includes('### 孩子问怎么写'));
   for (const cards of [undefined, factoryCards]) {
@@ -50,7 +50,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('应用拦的:连说过一遍、还能画', a.gates.map((g) => g.rule).join(' ') === '连说过一遍 还能画' && a.gates.every((g) => g.note));
   check('老师那节从「## 老师怎么带」下一行起', a.tutor !== null && a.tutor.line > lineOf('## 老师怎么带') && !a.tutor.text.includes('## 画家收到什么'));
 
-  // 画家那节接管了画风(拍板 12);出厂那份和 PAINT_PROMPT_DEFAULT 一字不差:不在 activity 话题里画照它,两处画得一样
+  // 画家那节接管了画风;出厂那份和 PAINT_PROMPT_DEFAULT 一字不差:不在 activity 话题里画照它,两处画得一样
   const painter = a.tools.find((t) => t.tool === '画家');
   const style = painter?.prompt.split('\n').filter((l) => l.trim() && !l.includes('{{')) ?? [];
   check('画家那段的画风 = PAINT_PROMPT_DEFAULT', JSON.stringify(style) === JSON.stringify(PAINT_PROMPT_DEFAULT), JSON.stringify(style));
@@ -187,7 +187,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
   check('模拟孩子的提示词:故事、人设、对话、板上的整段', kp.includes('小熊种瓜') && kp.includes('问一句答一句') && kp.includes('孩子:小熊') && kp.includes('板上:小熊睡大觉。 / 小熊浇了水。'));
 }
 
-// ---- 听写:不起老师(page:),认字那段和出厂的要求(DICTATION_PROMPT_DEFAULT)拼出来一字不差(《activity设计.md》拍板 20、21)----
+// ---- 听写:不起老师(page:),认字那段和出厂的要求(DICTATION_PROMPT_DEFAULT)拼出来一字不差----
 {
   const { photoPrompt, photoPromptFrom } = await import('../src/dictation/recognize.ts');
   const { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT } = await import('../src/schema/index.ts');

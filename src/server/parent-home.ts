@@ -1,5 +1,5 @@
 /**
- * 家长端「首页」(《家长板书页设计.md》拍板 20、《首页设计.md》拍板 17–20):家长在 iPad / 手机上设孩子的首页。
+ * 家长端「首页」:家长在 iPad / 手机上设孩子的首页。
  * 按钮与听写的词改的是已发布那份首页的原文(editPublished:检查、留历史、发布);开关与几项常改的设置写回 cotutor.json(patchConfig)。
  * 页面每次现读,不缓存:家长也可能同时在编辑器里改 cotutor.json、在编程助手里发布首页。
  *
@@ -96,7 +96,7 @@ function parseButtons(v: unknown): TutorButton[] | string {
   return out;
 }
 
-/** 这周的词:语文老师一到四个汉字;英语老师(学科「英语」)一个英文单词(《听写设计.md》拍板 15) */
+/** 这周的词:语文老师一到四个汉字;英语老师(学科「英语」)一个英文单词 */
 function parseWords(v: unknown, lang: DictationLang): { chars: string; say?: string }[] | string {
   if (!Array.isArray(v)) return '要 {words: [{chars, say?}]}';
   if (v.length > DICTATION_WORDS_MAX) return `一次最多 ${DICTATION_WORDS_MAX} 个词`;
@@ -112,7 +112,7 @@ function parseWords(v: unknown, lang: DictationLang): { chars: string; say?: str
 }
 
 /**
- * 英文单词配 emoji(《听写设计.md》拍板 21,只在对一对时出):已发布的那张卡上同一个单词配过的照用,剩下的问一次 qwen3.8-flash;问不到就不配。
+ * 英文单词配 emoji(只在对一对时出):已发布的那张卡上同一个单词配过的照用,剩下的问一次 qwen3.8-flash;问不到就不配。
  * COTUTOR_EMOJI_ENDPOINT:测试与探针指到假的千问
  */
 async function withEmoji(ctx: AppContext, name: string, words: { chars: string; say?: string }[]): Promise<{ chars: string; say?: string; emoji?: string }[]> {

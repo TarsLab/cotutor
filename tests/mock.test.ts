@@ -163,7 +163,7 @@ interface Day { messages: Msg[]; pending: string | null }
   const yd = (await m.route('GET', '/api/kid/conversations/chinese-tutor/2026-09-09')).json as TDay;
   check('昨天的日期路由:一节板书、thread 在;未来日期 400;别的日期空', yd.messages.length === 1 && yd.messages[0].section !== null && yd.thread === yd.messages[0].thread && (await m.route('GET', '/api/kid/conversations/chinese-tutor/2026-09-11')).status === 400 && ((await m.route('GET', '/api/kid/conversations/chinese-tutor/2026-09-01')).json as TDay).messages.length === 0);
 }
-// 首页按钮发来的 via(《首页设计.md》§5.2):对不上 400;开场 = 按钮上的字 + 新话题;接着昨天的 = 新话题;接着刚才的 / 新话题照孩子的话
+// 首页按钮发来的 via:对不上 400;开场 = 按钮上的字 + 新话题;接着昨天的 = 新话题;接着刚才的 / 新话题照孩子的话
 {
   const m = createMock({ delayMs: 0, now: () => new Date('2026-09-10T16:30:00') });
   const home = ((await m.route('GET', '/api/kid/home')).json as { home: string }).home;
@@ -182,7 +182,7 @@ interface Day { messages: Msg[]; pending: string | null }
   check('新话题按钮:孩子自己的话,新话题', s2.status === 202 && l2.question === '再讲一遍' && l2.thread === l2.job);
 }
 
-// 家长板书页(《家长板书页设计.md》):mock 也起——页面能解析、板书接口答案在、第一节带给家长的尾巴、清单今天与昨天
+// 家长板书页:mock 也起——页面能解析、板书接口答案在、第一节带给家长的尾巴、清单今天与昨天
 {
   const m = createMock({ delayMs: 0, now: () => new Date('2026-09-10T16:30:00') });
   const get = (p: string) => m.route('GET', p);
@@ -191,7 +191,7 @@ interface Day { messages: Msg[]; pending: string | null }
   let parses = true;
   try { new Function(js); } catch (e) { parses = false; console.error(String(e)); }
   {
-    // 家长端「首页」里的预览(《家长板书页设计.md》拍板 33):孩子端页面本身,带预览标记;页面里照旧没有家长端的路径
+    // 家长端「首页」里的预览:孩子端页面本身,带预览标记;页面里照旧没有家长端的路径
     const pv = (await get('/preview')).html ?? '';
     let ok = true;
     try { new Function(pv.slice(pv.indexOf('<script>') + 8, pv.lastIndexOf('</script>'))); } catch (e) { ok = false; console.error(String(e)); }
@@ -203,8 +203,8 @@ interface Day { messages: Msg[]; pending: string | null }
   const ch = pb.messages[0].section!.cards.find((c) => c.kind === 'choice');
   check('板书接口:答案不剥、from、第一节带给家长的尾巴与记忆', pb.messages.length === 1 && pb.messages[0].from === 'kid' && Array.isArray(ch?.props.answer) && pb.messages[0].parentText?.startsWith('## 家长') === true && pb.messages[0].remembered?.length === 1, JSON.stringify(pb.messages[0].parentText));
   check('孩子接口照旧剥答案', !('answer' in ((await get('/api/kid/conversations/chinese-tutor/today')).json as Day).messages[0].section!.cards.find((c) => c.kind === 'choice')!.props));
-  // 看录像(《家长录像设计.md》):页面内联了录像的纯函数、有入口与控制条;mock 按固定节奏排时刻
-  check('家长端:内联了录像(buildReel / reelFrameAt / reelClock)、底部有录像栏;没有板书页的「看录像」钮与旁注(拍板 16、18)', page.includes('function reelFrameAt(') && page.includes('function reelClock(') && !page.includes('id="reel-btn"') && !page.includes('syncNotes') && page.includes('id="rl-seek"') && page.includes("end: '1'") && !/^import /m.test(js));
+  // 看录像:页面内联了录像的纯函数、有入口与控制条;mock 按固定节奏排时刻
+  check('家长端:内联了录像(buildReel / reelFrameAt / reelClock)、底部有录像栏;没有板书页的「看录像」钮与旁注', page.includes('function reelFrameAt(') && page.includes('function reelClock(') && !page.includes('id="reel-btn"') && !page.includes('syncNotes') && page.includes('id="rl-seek"') && page.includes("end: '1'") && !/^import /m.test(js));
   const rl = await get(`/api/conversations/chinese-tutor/today/threads/${(pb.messages[0] as PMsg & { thread: string }).thread}/reel`);
   const rj = rl.json as { reel: { tracks: unknown[]; says: unknown[]; marks: { kind: string }[]; startAt: number; endAt: number }; messages: unknown[] };
   check('mock 的录像:一节(不是实时的轮写完就铺上、不念)、有开口的点、条目一条', rl.status === 200 && rj.reel.tracks.length === 1 && rj.reel.says.length === 0 && rj.reel.marks[0].kind === 'said' && rj.messages.length === 1 && rj.reel.endAt > rj.reel.startAt, JSON.stringify(rj.reel.marks));

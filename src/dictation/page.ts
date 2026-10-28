@@ -3,7 +3,7 @@
  * 五屏同一页:开始、听写(老师念、孩子在田字格里写)、对答案(书上的字淡淡叠在上面)、逐笔看(书上的字在孩子写的上面一笔一笔写)、再写一遍。
  * 田字格是 SVG,坐标同 hanzi-writer:1024 见方、y 向上,组上 scale(1,-1) translate(0,-900) 摆正;孩子的笔、书上的字、逐笔写都在这一个坐标里。
  * 页面上永远没有对错:没有叉、没有分数;比对的结果只变成一句「这个再写一遍?」,其余给家长(/parent/dictation)。
- * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
+ * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 AGENTS.md「坑」)。
  */
 import { LAYER_X, TUTOR_FACE_CSS, TUTOR_FACE_JS } from '../server/tutor-face.ts';
 import { KID_NAV_JS } from '../server/kid-nav.ts';

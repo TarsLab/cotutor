@@ -2,7 +2,7 @@
 
 ## 先读什么
 
-- `CLAUDE.md`:这个仓怎么长的(目录、约定、验证方式)。人和 agent 都按它来。
+- `AGENTS.md`:这个仓怎么长的(目录、约定、验证方式)。人和 agent 都按它来。
 - `README.md`:安装配置、升级、检出后怎么跑与怎么验证。
 - `src/schema/`:数据契约(zod,类型即文档);对应模块的测试说明行为边界。
 - `docs/iPad与iPhone.md`:HTTPS、证书与 iPad 真机使用。

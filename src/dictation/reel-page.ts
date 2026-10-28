@@ -3,7 +3,7 @@
  * 和话题的录像同一个样子:上半是孩子的屏幕——听写页本身以录像模式开在 iframe 里(/dictation?reel=<id>,英文 &lang=en),
  * 照记录用写字屏自己的画法画;下半是录像栏(src/server/reel-dock.ts),只经 iframe 交过来的把手说话。
  * 声音:iframe 用这一页的 Audio(window.__cotutorAudio),家长第一次点这一页就解锁(Safari 只让手势里起的声音响)。
- * 内联脚本里不写反斜杠、不写反引号(这是模板字符串,见 CLAUDE.md「坑」)。
+ * 内联脚本里不写反斜杠、不写反引号(这是模板字符串,见 AGENTS.md「坑」)。
  */
 import { REEL_DOCK_CSS, REEL_DOCK_HTML, REEL_DOCK_JS } from '../server/reel-dock.ts';
 import { pageDomJs } from '../server/page-dom.ts';

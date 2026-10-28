@@ -6,7 +6,7 @@
  * 二、左栏的纸:左栏四个钮(画板 · 拍照 · 相册 · 打字);点「画板」铺满、空白;画三笔、关掉再开还在(存在服务端);
  *     按住「给老师看」说一句 = 画和这句话一起给老师(消息带 drawing),板上节前一张孩子的画卡(真图)、「接着画」又打开那张纸;
  *     再画到换色、停笔,点开 20 秒后嘴主动说一句(孩子端发 chat、假嘴说、字幕浮上来)。
- * iPad 横屏各截一张(Page.captureScreenshot,CLAUDE.md:无头 --screenshot 会挂)。
+ * iPad 横屏各截一张(Page.captureScreenshot,AGENTS.md:无头 --screenshot 会挂)。
  * 用法:node scripts/probe-paper.mjs [mock 根地址] [--out <截图目录>]
  *   缺省 http://127.0.0.1:8790(先 cotutor mock --http;探针会交掉 mock 里那张画板卡,再跑要重起 mock)
  */
@@ -57,7 +57,7 @@ const evaluate = async (expression) => { const r = await send('Runtime.evaluate'
 const shot = async (name) => { const r = await send('Page.captureScreenshot', { format: 'png' }); writeFileSync(join(shots, name), Buffer.from(r.result.data, 'base64')); return join(shots, name); };
 const until = async (expr, ms = 8000) => { for (let t = 0; t < ms; t += 200) { const v = await evaluate(expr); if (v) return v; await sleep(200); } return null; };
 const center = (sel) => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; el.scrollIntoView({ block: 'nearest' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height }; })()`);
-/** 手指按住 ms 再松(CDP 鼠标事件走命中判定;CLAUDE.md「坑」) */
+/** 手指按住 ms 再松(CDP 鼠标事件走命中判定;AGENTS.md「坑」) */
 const press = async (sel, ms) => {
   const p = await center(sel);
   if (!p) return false;

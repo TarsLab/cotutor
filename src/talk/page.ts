@@ -2,7 +2,7 @@
  * /talk:口语课的页面,孩子端(设计稿 https://claude.ai/artifact/6uL5XfzhFEfX74cmeWbF9c)。家长端没有这一页。
  * 按 hash 切两屏:#/ 拍照(同拍照听写的骨架,photo-ui.ts;上次的口语单给「接着上」)、#/list/<id> 照片在左、口语单在右(孩子能改、能补、能删)。
  * 改好了交给英语老师的实时页上课(先热身、再打电话);这一页自己不打电话了。
- * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 CLAUDE.md「坑」)。
+ * 内联脚本里不写反斜杠、不写反引号、不写美元加花括号(这是模板字符串,见 AGENTS.md「坑」)。
  */
 import { TUTOR_FACE_CSS, TUTOR_FACE_JS, backTutorJson } from '../server/tutor-face.ts';
 import { KID_NAV_JS } from '../server/kid-nav.ts';

@@ -103,7 +103,7 @@ pnpm smoke                      # 检查待发布内容
 node bin/cotutor.js mock         # 假模型接口,查看前端
 ```
 
-本地 `link:../drawtell` 不能直接用于发布包,发布前需换成可打包的依赖并通过 smoke。改卡片文档或技能生成代码后运行 `pnpm gen:skills`。开发约定与分模块验证见 [CLAUDE.md](CLAUDE.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
+本地 `link:../drawtell` 不能直接用于发布包,发布前需换成可打包的依赖并通过 smoke。改卡片文档或技能生成代码后运行 `pnpm gen:skills`。开发约定与分模块验证见 [AGENTS.md](AGENTS.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 正式文档只保留以下六篇,历史讨论查 Git:
 

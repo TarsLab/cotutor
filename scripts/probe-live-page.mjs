@@ -79,7 +79,7 @@ try {
   const device = async (w, h, dsf, mobile) => { await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: dsf, mobile }); await sleep(400); };
   const until = async (expr, n = 40) => { for (let i = 0; i < n; i++) { if (await evaluate(expr)) return true; await sleep(250); } return false; };
   const untilNode = async (f, ms = 10000) => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(50); return f(); };
-  /** 手指:CDP 鼠标(走命中判定,CLAUDE.md「坑」);按住 hold 毫秒再松,dy = 松手前往上滑多少 */
+  /** 手指:CDP 鼠标(走命中判定,AGENTS.md「坑」);按住 hold 毫秒再松,dy = 松手前往上滑多少 */
   const center = async (sel) => evaluate(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   const press = async (sel, holdMs, dy = 0) => {
     const p = await center(sel);

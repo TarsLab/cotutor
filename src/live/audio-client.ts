@@ -6,7 +6,7 @@
  * duck(v):放出来的声音压到 v(0–1,一直听时孩子开口先压低嘴,1 恢复);放声都过一个总的 GainNode,后面一个 AnalyserNode,outLevel() 回放出去的音量(0–1 左右,压低之前的)。
  * 页面自己开着麦克风的(孩子端老师页的常开那路)不用 open:点击里先 wake()(只起 AudioContext),拿到那路再 use(stream)——
  * iPad 上再 getUserMedia 一次会把先开的那路弄哑;use 的那路不归它管,close 不停它,换了一路就换源。
- * 脚本里不写反斜杠、反引号、美元加花括号(插进去的地方是模板字符串,见 CLAUDE.md「坑」)。
+ * 脚本里不写反斜杠、反引号、美元加花括号(插进去的地方是模板字符串,见 AGENTS.md「坑」)。
  */
 export const AUDIO_CLIENT_JS = `
   const WORKLET = 'class P extends AudioWorkletProcessor { constructor() { super(); this.buf = []; this.n = 0; this.acc = 0; } process(inputs) { const ch = inputs[0] && inputs[0][0]; if (!ch) return true; const ratio = sampleRate / 16000; const out = []; for (let i = 0; i < ch.length; i++) { this.acc += 1; if (this.acc >= ratio) { this.acc -= ratio; out.push(ch[i]); } } for (const v of out) { this.buf.push(v); } if (this.buf.length >= 1600) { const n = 1600; const pcm = new Int16Array(n); let s = 0; for (let i = 0; i < n; i++) { const v = Math.max(-1, Math.min(1, this.buf[i])); pcm[i] = v < 0 ? v * 32768 : v * 32767; s += v * v; } this.buf = this.buf.slice(n); this.port.postMessage({ pcm: pcm.buffer, rms: Math.sqrt(s / n) }, [pcm.buffer]); } return true; } } registerProcessor("cotutor-pcm16", P);';

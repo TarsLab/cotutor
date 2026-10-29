@@ -4,7 +4,7 @@
  * exit 约定同 drawtell / voxtell doctor:必需项全过 exit 0,否则 1;--json 带 ok 与整份 checks。
  */
 import { isRealtimeVoice } from '../live/voices.ts';
-import { dashscopeAuth } from '../live/realtime.ts';
+import { dashscopeAuth } from '../realtime/bailian.ts';
 import { adapterFor, parserOf, prepareCli, processEnv, runtimeIssue } from '../clis/index.ts';
 import { execFile } from 'node:child_process';
 import { access, readFile, readdir, stat } from 'node:fs/promises';

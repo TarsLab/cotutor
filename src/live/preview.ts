@@ -4,7 +4,7 @@
  */
 import { readCue } from './lib/cue.ts';
 import { wavOfPcm } from './lib/wav.ts';
-import { OUTPUT_RATE, RealtimeSession } from './realtime.ts';
+import { OUTPUT_RATE, RealtimeSession } from '../realtime/bailian.ts';
 
 export async function previewVoice(o: { voice: string; text: string; model?: string; env?: NodeJS.ProcessEnv; endpoint?: string; timeoutMs?: number }): Promise<{ wav: Buffer } | { error: string }> {
   const chunks: Buffer[] = [];

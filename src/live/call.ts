@@ -55,7 +55,7 @@ import { mouthIndex, type MouthSeg } from './lib/mouth.ts';
 import { wavOfPcm } from './lib/wav.ts';
 import { mouthInstructions } from './prompt.ts';
 import { mouthVoice } from '../schema/index.ts';
-import { INPUT_RATE, MAX_IMAGE_B64, OUTPUT_RATE, RealtimeSession } from './realtime.ts';
+import { INPUT_RATE, MAX_IMAGE_B64, OUTPUT_RATE, RealtimeSession } from '../realtime/bailian.ts';
 import { CallRecorder } from './recorder.ts';
 import type { ServerSocket } from './ws.ts';
 import { adoptPaper } from '../server/paper.ts';

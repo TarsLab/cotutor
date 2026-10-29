@@ -15,7 +15,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname } from 'node:path';
 import { bailianFile, cotutorBailian } from '../lib/qianwen.ts';
-import { dashscopeAuth } from '../live/realtime.ts';
+import { dashscopeAuth } from '../realtime/bailian.ts';
 import { probeRealtime } from '../live/preview.ts';
 import type { Who } from './access.ts';
 import type { AppContext, RouteResult } from './app.ts';

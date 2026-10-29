@@ -40,7 +40,7 @@ import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTE
 import { DubQueue } from './tts.ts';
 import { continueContext } from './home.ts';
 import { kidInput, type KidAccept } from './kid-input.ts';
-import { dashscopeAuth } from '../live/realtime.ts';
+import { dashscopeAuth } from '../realtime/bailian.ts';
 import { qianwenKeys } from '../lib/qianwen.ts';
 import { DRAW_ONLY_TEXT, drawingPackLine } from './paper.ts';
 import { makeDraw, type Draw } from '../paint/draw.ts';

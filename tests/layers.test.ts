@@ -91,10 +91,6 @@ const LEGACY: readonly string[] = [
   'server → cli/themes.ts',
   'server → cli/tutors.ts',
   'server → cli/workspace.ts',
-  // server → clis:直接认 CLI 适配器(store、raw-view、replay);runner 已经走 brain
-  'server → clis/index.ts',
-  // cli → clis:同上(doctor、skeleton)
-  'cli → clis/index.ts',
 ];
 
 /** 舞台包的入口(scripts/build-stage.mjs) */

@@ -16,6 +16,12 @@ import { CliBrain } from './cli.ts';
 export type { ToolSet } from '../clis/index.ts';
 export type { Slot } from './warm.ts';
 
+/**
+ * CLI 那一家给外面用的几样(经 brain 的出口给,外面不直接引 clis/):工具名属于哪一类(家长端看原文、板书写法有没有被读);
+ * 出厂的运行时模板(init 写 cotutor.json);doctor 体检 CLI 运行时用的(退役没有、适配器、读输出、备机器文件、起进程的环境)
+ */
+export { adapterFor, factoryRuntimes, parserOf, prepareCli, processEnv, runtimeIssue, toolKind, type ToolKind } from '../clis/index.ts';
+
 /** 一轮要脑做的:哪个运行时、接哪个会话、系统提示的几样、这条消息(上下文包 + 孩子的话)、思考量、工具 */
 export interface BrainRequest {
   /** 运行时名,缺省 cotutor.json 的 runtimes.default */

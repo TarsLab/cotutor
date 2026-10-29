@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { CONFIG_SCHEMA_FILE, DICTATION_DEFAULT, TTS_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../schema/index.ts';
-import { factoryRuntimes } from '../clis/index.ts';
+import { factoryRuntimes } from '../brain/index.ts';
 import { DEFAULT_GRADE, PACKAGE_GRADES_DIR } from './grades.ts';
 
 import { mkdir, writeFile } from 'node:fs/promises';

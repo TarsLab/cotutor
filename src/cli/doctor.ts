@@ -5,7 +5,7 @@
  */
 import { isRealtimeVoice } from '../live/voices.ts';
 import { dashscopeAuth } from '../realtime/bailian.ts';
-import { adapterFor, parserOf, prepareCli, processEnv, runtimeIssue } from '../clis/index.ts';
+import { adapterFor, parserOf, prepareCli, processEnv, runtimeIssue } from '../brain/index.ts';
 import { execFile } from 'node:child_process';
 import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';

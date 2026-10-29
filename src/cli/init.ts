@@ -12,7 +12,7 @@ import { DEFAULT_GRADE, LEGACY_GRADE, requireGradePack } from './grades.ts';
 import { installActivities } from './activities.ts';
 import { TOOL_SHIM, installSkills, writeToolShim } from './skills.ts';
 import { installThemes } from './themes.ts';
-import { scanVault } from '../server/store.ts';
+import { scanVault } from '../memory/vault.ts';
 import { CONFIG_FILE, ConfigError, UsageError, HOME_ROOT, USER_CONFIG, expandPath, loadWorkspace, parseConfig, readJson, redactHome } from './workspace.ts';
 
 export interface InitStep {

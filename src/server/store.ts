@@ -3,24 +3,21 @@
  * 纯函数在 lib/,这里只碰文件系统。
  */
 import { createHash } from 'node:crypto';
-import type { Dirent } from 'node:fs';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, relative, sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { parseAgentFile } from '../lib/agent-file.ts';
 import { cardAssetName, conversationFiles, emptyIndex, localDate, threads, type CardAssets, type CardStateFile, type CardStates } from '../lib/conversation.ts';
 import { parseTranscript, type Transcript } from '../lib/transcript.ts';
 import { logParser } from '../brain/index.ts';
-import { applyMemoryOps, frontmatter, memoryPath, memoryTemplate, parseMemoryOp, undoMemoryLines, type MemoryLine, type VaultNote } from '../lib/vault-notes.ts';
 import {
   ConversationIndexSchema,
   CotutorConfigSchema,
   DATE_RE,
   explainIssues,
   type ConversationIndex,
-  type ConversationMessage,
   type CotutorConfig,
 } from '../schema/index.ts';
-import { removeDiaryBlock } from '../lib/diary.ts';
+import { undoThreadVault, type ThreadUndo } from '../memory/vault.ts';
 import { ConfigError, assembleWorkspace, parseConfig, readJson, redactHome, type Workspace } from '../cli/workspace.ts';
 
 export class IndexError extends Error {
@@ -280,15 +277,8 @@ export async function rateThread(ws: Workspace, tutor: string, date: string, thr
   return next;
 }
 
-// ---- vault(《obsidian仓库设计.md》§6 的封闭清单:日记只追加;教材只读)----
-
-/** 这几天的日记(<日记目录>/<日期>.md);没有的跳过 */
-/** 删话题撤销了多少:记忆几行、日记几段;找不到原文没撤的(家长或整理那轮后来改过)一条一句 */
-export interface ThreadUndo {
-  memory: number;
-  diary: number;
-  misses: string[];
-}
+// ---- vault 搬到了 src/memory/vault.ts;旧路径留转发,迁完删 ----
+export { readDiaries, readTextbooks, scanVault, undoThreadVault, updateVaultMemory, writeDiary, type ThreadUndo, type Vault } from '../memory/vault.ts';
 
 /**
  * 删掉一天里的一个话题(家长板书页清单上的「删」,2026-09-22):索引里它的消息、会话、星、记账标记都去掉,
@@ -313,147 +303,9 @@ export async function deleteThread(ws: Workspace, tutor: string, date: string, t
   const last = keptThreads[keptThreads.length - 1];
   const session = ths[ths.length - 1] === thread ? (last ? (sessions[last] ?? null) : null) : index.session;
   const next: ConversationIndex = { ...index, messages: kept, sessions, ratings, booked, session };
-  const undo = await undoThreadTraces(ws, tutor, date, gone);
+  const undo = await undoThreadVault(ws, tutor, date, gone);
   await writeIndex(ws, next);
   return { index: next, undo };
-}
-
-async function undoThreadTraces(ws: Workspace, tutor: string, date: string, gone: readonly ConversationMessage[]): Promise<ThreadUndo> {
-  const undo: ThreadUndo = { memory: 0, diary: 0, misses: [] };
-  const edits = gone.flatMap((m) => m.memoryLines ?? []);
-  if (edits.length) {
-    // activity 话题写的是 activity 自己的记忆(agent: <老师>/<activity>)
-    const run = gone.find((m) => m.activity)?.activity;
-    const agent = run ? `${tutor}/${run.name}` : tutor;
-    const found = (await scanVault(ws)).notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === agent);
-    if (!found) undo.misses.push('记忆文件不在了,记忆没撤');
-    else {
-      const r = undoMemoryLines(found.text, edits);
-      undo.memory = r.undone;
-      undo.misses.push(...r.misses.map((l) => `记忆:找不到这行,没撤:${l}`));
-      if (r.undone) {
-        const file = join(ws.paths.vault, found.path);
-        await writeFile(`${file}.tmp`, r.text);
-        await rename(`${file}.tmp`, file);
-      }
-    }
-  }
-  for (const m of gone) {
-    if (!m.diaryBlock) continue;
-    const existing = await readFile(join(ws.paths.diary, `${date}.md`), 'utf8').catch(() => null);
-    const out = existing === null ? null : removeDiaryBlock(existing, m.diaryBlock);
-    if (out === null) { undo.misses.push(`日记:${date} 里找不到这个话题记的那段,没摘`); continue; }
-    await writeDiary(ws, date, () => out);
-    undo.diary++;
-  }
-  return undo;
-}
-
-export async function readDiaries(ws: Workspace, dates: readonly string[]): Promise<{ date: string; text: string }[]> {
-  const out: { date: string; text: string }[] = [];
-  for (const date of dates) {
-    try {
-      out.push({ date, text: await readFile(join(ws.paths.diary, `${date}.md`), 'utf8') });
-    } catch {
-      /* 那天没写 */
-    }
-  }
-  return out;
-}
-
-/** 当天的日记:update 拿现有内容(没有 → null)回新内容;先 .tmp 再 rename。返回文件名(<日期>.md) */
-export async function writeDiary(ws: Workspace, date: string, update: (existing: string | null) => string): Promise<string> {
-  await mkdir(ws.paths.diary, { recursive: true });
-  const file = join(ws.paths.diary, `${date}.md`);
-  const existing = await readFile(file, 'utf8').catch(() => null);
-  const tmp = `${file}.tmp`;
-  await writeFile(tmp, update(existing));
-  await rename(tmp, file);
-  return basename(file);
-}
-
-/** 教材目录下的每册文件(<教材目录>/<册>.md),给 textbookHeadings;没有目录 → [] */
-export async function readTextbooks(ws: Workspace): Promise<{ name: string; text: string }[]> {
-  let names: string[];
-  try {
-    names = (await readdir(ws.paths.textbooks)).filter((f) => f.endsWith('.md') && !f.startsWith('.')).sort();
-  } catch {
-    return [];
-  }
-  const out: { name: string; text: string }[] = [];
-  for (const name of names) {
-    try {
-      out.push({ name, text: await readFile(join(ws.paths.textbooks, name), 'utf8') });
-    } catch {
-      /* 读不到就跳过 */
-    }
-  }
-  return out;
-}
-
-/**
- * 扫 vault:所有文件的相对路径(解析 [[链接]] 用)+ 带 `cotutor:` 属性的 md(按属性定位,《obsidian仓库设计.md》2026-09-17)。
- * 跳过点开头的目录(.obsidian / .git)与日记、计划目录(机器写的,不带属性,越积越多)。读不到的文件跳过;vault 不在 → 全空。
- */
-export async function scanVault(ws: Workspace): Promise<{ notes: VaultNote[]; files: string[] }> {
-  const root = ws.paths.vault;
-  const skip = new Set([ws.paths.diary, ws.paths.plans]);
-  const notes: VaultNote[] = [];
-  const files: string[] = [];
-  const walk = async (dir: string): Promise<void> => {
-    let entries: Dirent[];
-    try {
-      entries = await readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const e of entries) {
-      if (e.name.startsWith('.')) continue;
-      const abs = join(dir, e.name);
-      if (e.isDirectory()) {
-        if (!skip.has(abs)) await walk(abs);
-        continue;
-      }
-      if (!e.isFile()) continue;
-      const rel = relative(root, abs).split(sep).join('/');
-      files.push(rel);
-      if (!e.name.endsWith('.md')) continue;
-      try {
-        const text = await readFile(abs, 'utf8');
-        const props = frontmatter(text);
-        if (props.cotutor) notes.push({ path: rel, props, text });
-      } catch {
-        /* 读不到(iCloud 占位)就跳过 */
-      }
-    }
-  };
-  await walk(root);
-  return { notes, files: files.sort() };
-}
-
-/**
- * 把「## 记忆」段落进这位 agent 的记忆文件(按 `cotutor: memory` + `agent:` 找;没有就建 记忆/<显示名>.md):
- * 新增追加到末尾,「改:」「删:」按原话找行改、删(任何一行都能动,2026-09-18);缺省位置已有一篇没属性的同名文件就不碰,进提醒。先 .tmp 再 rename。
- */
-export async function updateVaultMemory(ws: Workspace, agent: string, display: string, items: readonly string[], date: string): Promise<{ file: string | null; changes: string[]; lines: MemoryLine[]; warnings: string[] }> {
-  const found = (await scanVault(ws)).notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === agent);
-  let file: string;
-  let existing: string;
-  if (found) {
-    file = join(ws.paths.vault, found.path);
-    existing = found.text;
-  } else {
-    file = join(ws.paths.vault, memoryPath(display));
-    if ((await stat(file).catch(() => null)) !== null) return { file: null, changes: [], lines: [], warnings: [`记忆没写:${memoryPath(display)} 已经有了但没有 cotutor: memory / agent: ${agent} 属性;加上属性,或挪开它`] };
-    existing = memoryTemplate(agent, display);
-  }
-  const r = applyMemoryOps(existing, items.map(parseMemoryOp), date);
-  const warnings = r.misses.length ? [`记忆:找不到原话,没改:${r.misses.join(';')}`] : [];
-  if (!r.changes.length) return { file: null, changes: [], lines: [], warnings };
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(`${file}.tmp`, r.text);
-  await rename(`${file}.tmp`, file);
-  return { file, changes: r.changes, lines: r.lines, warnings };
 }
 
 /** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 运行时模板走编辑器 */

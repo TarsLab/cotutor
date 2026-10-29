@@ -24,13 +24,15 @@ const ALLOW: Record<string, readonly string[]> = {
   brain: ['schema', 'lib', 'clis'],
   // 听说:百炼 realtime 的客户端(以后加别家、加 ASR + TTS 组合也在这)
   realtime: ['schema', 'lib'],
+  // 家长的 vault 与学习记忆:读取、取材、应用写入与撤回
+  memory: ['schema', 'lib'],
   live: ['schema', 'lib', 'cards', 'realtime'],
   paint: ['schema', 'lib', 'cards'],
   talk: ['schema', 'lib', 'cards'],
   dictation: ['schema', 'lib', 'cards'],
   stage: ['schema', 'lib'],
-  server: ['schema', 'lib', 'cards', 'brain', 'realtime', 'live', 'paint', 'talk', 'dictation'],
-  cli: ['schema', 'lib', 'cards', 'brain', 'realtime', 'live', 'paint', 'talk', 'dictation', 'server'],
+  server: ['schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'live', 'paint', 'talk', 'dictation'],
+  cli: ['schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'live', 'paint', 'talk', 'dictation', 'server'],
 };
 
 /** 现有的反向依赖(「模块 → 被引的文件」);只许删,不许加 */

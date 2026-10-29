@@ -19,7 +19,7 @@ import { MIN_CONTRAST, contrastWithWhite } from '../lib/tutor-color.ts';
 import { memoryPath, missingEntry, pickNotes } from '../lib/vault-notes.ts';
 import { isApiRuntime, listTutors, mouthVoice, resolvePolicy } from '../schema/index.ts';
 import { kindsFor, tutorCardKinds } from '../cards/index.ts';
-import { scanVault } from '../server/store.ts';
+import { scanVault } from '../memory/vault.ts';
 import { parseArtifactEvents } from '../lib/ledger.ts';
 import { parseTimetable } from '../lib/timetable.ts';
 import { configGapsOf } from './migrate.ts';

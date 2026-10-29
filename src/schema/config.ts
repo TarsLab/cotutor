@@ -235,7 +235,7 @@ export const mouthVoice = (live: Pick<LiveConfig, 'voices'>, tutor: string): str
 
 /**
  * 听写:拍照认词表用哪个模型。挑词的要求在听写 activity 文件「认字收到什么」;
- * 下面两份是出厂那节的原文,workspace 里没有听写 activity 文件时照它。回什么格式(一行一段 JSON)由应用填(src/dictation/recognize.ts 的 FORMAT)。
+ * 下面两份是出厂那节的原文,workspace 里没有听写 activity 文件时照它。回什么格式(一行一段 JSON)由应用填(src/scenes/dictation/recognize.ts 的 FORMAT)。
  */
 export const DICTATION_PROMPT_DEFAULT = [
   '这是一张照片:小学语文课本的一页(课文、写字、词语表、读读写写、识字),或者老师发的听写单。按照片中的内容和难度识别,不推断孩子年级。',

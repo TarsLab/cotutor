@@ -31,7 +31,7 @@ import type { AppContext, RouteResult } from '../server/app.ts';
 import { readPublished } from '../server/home.ts';
 import { tianzigeData } from '../server/tianzige.ts';
 import { synthesize } from '../server/tts.ts';
-import { judgeChar, type CharJudge, type InkPoint } from './lib/match.ts';
+import { judgeChar, type CharJudge, type InkPoint } from '../scenes/dictation/match.ts';
 import { photoPromptFrom, recognizePhoto, type Recognize } from './recognize.ts';
 import { readFile } from 'node:fs/promises';
 import { listActivities } from '../cli/activities.ts';
@@ -41,7 +41,7 @@ import { DICTATION_EN_PAGE } from './en-page.ts';
 import { backTutorJson, backTutorOf } from '../server/tutor-face.ts';
 import { DICTATION_PARENT_PAGE } from './parent-page.ts';
 import { DICTATION_REEL_PAGE } from './reel-page.ts';
-import { EVENT_KINDS, ID_RE, createPhoto, createSession, listSessions, photoFile, readPhotoRecord, readSession, writePhotoRecord, writeSession, type PhotoRecord, type Attempt, type CharInk, type InkGone, type Session, type DictationEvent } from './store.ts';
+import { EVENT_KINDS, ID_RE, createPhoto, createSession, listSessions, photoFile, readPhotoRecord, readSession, writePhotoRecord, writeSession, type PhotoRecord, type Attempt, type CharInk, type InkGone, type Session, type DictationEvent } from '../scenes/dictation/store.ts';
 
 export interface DictationDeps {
   /** workspace 根 */

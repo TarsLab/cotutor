@@ -4,8 +4,8 @@
  * 时刻都是「离这次听写开始(startedAt)多少毫秒」,和笔迹的点同一把尺子;老事件没有 t 的按服务端时刻折算。
  * 页面是 ES5 写的,内联进去的名字都带 dr 前缀,别撞上页面里的。
  */
-import type { DictationEvent, InkGone, Session } from '../store.ts';
-import type { CharJudge, InkPoint } from './match.ts';
+import type { DictationEvent, InkGone, Session } from '../../scenes/dictation/store.ts';
+import type { CharJudge, InkPoint } from '../../scenes/dictation/match.ts';
 
 /** 停多久算空白(压成 1.5 秒,「跳过空白」关掉就照真实时间) */
 export const DR_GAP_MS = 4000;

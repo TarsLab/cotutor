@@ -35,7 +35,7 @@ const ALLOW: Record<string, readonly string[]> = {
   paint: ['schema', 'lib', 'cards', 'scenes', 'media'],
   // 口语课、听写这两个目录现在是场景的页面与路由(应用那层):规则在 scenes/,看图在 media/,由这里接起来
   talk: ['schema', 'lib', 'cards', 'scenes', 'media'],
-  dictation: ['schema', 'lib', 'cards'],
+  dictation: ['schema', 'lib', 'cards', 'scenes', 'media'],
   stage: ['schema', 'lib'],
   server: ['schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation'],
   cli: ['schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation', 'server'],

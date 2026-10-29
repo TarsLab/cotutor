@@ -1,5 +1,5 @@
 /**
- * 板书底纹(src/server/board-mark.ts):三门主科照课本封面在板右边竖写学科名,别的老师不写字;
+ * 板书底纹(src/ui/kid/board-mark.ts):三门主科照课本封面在板右边竖写学科名,别的老师不写字;
  * 字是烤好的轮廓(board-mark-art.ts,scripts/bake-board-marks.py);板不铺纸纹;老师页三处换老师都跟着换字,首页数据带 mark。
  */
 import { mkdtempSync, realpathSync } from 'node:fs';
@@ -11,11 +11,11 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-board-mark-home-')
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { boardMarkOf, BOARD_MARK_PLACE, BOARD_MARK_BOTTOM, BOARD_MARK_JS, BOARD_MARK_CSS } = await import('../src/server/board-mark.ts');
-const { BOARD_MARK_ART } = await import('../src/server/board-mark-art.ts');
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
+const { boardMarkOf, BOARD_MARK_PLACE, BOARD_MARK_BOTTOM, BOARD_MARK_JS, BOARD_MARK_CSS } = await import('../src/ui/kid/board-mark.ts');
+const { BOARD_MARK_ART } = await import('../src/ui/kid/board-mark-art.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
 
 // ---- 哪位老师写什么 ----
 const want: [string | null, string | null][] = [['语文', 'yuwen'], ['中文', 'yuwen'], ['Chinese', 'yuwen'], ['数学', 'shuxue'], ['math', 'shuxue'], ['英语', 'english'], ['English', 'english'], ['英文', 'english'], ['口播', null], ['科学', null], ['', null], [null, null]];

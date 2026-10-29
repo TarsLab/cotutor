@@ -8,12 +8,13 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-activity-home-')))
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { activityCards, checkActivity, fillSlots, lintActivity, parseActivity, renderTutorSection, resolveParams, failingGate, gatePasses } = await import('../src/lib/activity.ts');
+const { activityCards, checkActivity, lintActivity, parseActivity, renderTutorSection, resolveParams, failingGate, gatePasses } = await import('../src/runtime/activity.ts');
+const { fillSlots } = await import('../src/schema/index.ts');
 const { PAINT_PROMPT_DEFAULT } = await import('../src/schema/index.ts');
-const { PAINT_NEGATIVE, paintPrompt, paintPromptFrom } = await import('../src/paint/prompt.ts');
-const { PACKAGE_AGENTS_DIR, configTemplate, shippedAgents } = await import('../src/cli/skeleton.ts');
-const { activityFile, checkActivities, installActivities, shippedActivities, upgradeActivities } = await import('../src/cli/activities.ts');
-const { installTutors, readManifest, sha256, writeManifest } = await import('../src/cli/tutors.ts');
+const { PAINT_NEGATIVE, paintPrompt, paintPromptFrom } = await import('../src/scenes/paint/prompt.ts');
+const { PACKAGE_AGENTS_DIR, configTemplate, shippedAgents } = await import('../src/app/cli/skeleton.ts');
+const { activityFile, checkActivities, installActivities, shippedActivities, upgradeActivities } = await import('../src/app/cli/activities.ts');
+const { installTutors, readManifest, sha256, writeManifest } = await import('../src/app/cli/tutors.ts');
 
 const SHIPPED = join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', '你说我画.md');
 const text = readFileSync(SHIPPED, 'utf8');
@@ -145,7 +146,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
 
 // ---- 例子与判分(activity eval)----
 {
-  const { gradeRun, kidPrompt, parseExamples } = await import('../src/lib/activity-eval.ts');
+  const { gradeRun, kidPrompt, parseExamples } = await import('../src/app/activity-eval-rules.ts');
   const ex = parseExamples(readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', '你说我画.例子.md'), 'utf8'));
   check('出厂例子文件:没有要改的,五个例子', ex.activity === '你说我画' && ex.issues.length === 0 && ex.examples.length === 5, JSON.stringify(ex.issues));
   const ex2 = parseExamples(readFileSync(join(PACKAGE_AGENTS_DIR, 'chinese-tutor', 'activities', '看图说话.例子.md'), 'utf8'));
@@ -189,7 +190,7 @@ const has = (issues: { text: string; line?: number }[], word: string, line?: num
 
 // ---- 听写:不起老师(page:),认字那段和出厂的要求(DICTATION_PROMPT_DEFAULT)拼出来一字不差----
 {
-  const { photoPrompt, photoPromptFrom } = await import('../src/dictation/recognize.ts');
+  const { photoPrompt, photoPromptFrom } = await import('../src/app/dictation/recognize.ts');
   const { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT } = await import('../src/schema/index.ts');
   for (const [t, page, lang, def] of [['chinese-tutor', 'dictation', 'zh', DICTATION_PROMPT_DEFAULT], ['english-tutor', 'dictation-en', 'en', DICTATION_PROMPT_EN_DEFAULT]] as const) {
     const r = lintActivity(readFileSync(join(PACKAGE_AGENTS_DIR, t, 'activities', '听写.md'), 'utf8'), { fileName: '听写' });

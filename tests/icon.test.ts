@@ -1,8 +1,8 @@
 /** 主屏幕图标与 manifest:iPad「添加到主屏幕」用的两样——PNG 现画(尺寸 / 签名 / 双 C 的像素对得上)、清单是 standalone。 */
 import { inflateSync } from 'node:zlib';
-import { createMock } from '../src/server/mock.ts';
-import { ICON_SIZES, appIconPng, webManifest } from '../src/lib/icon.ts';
-import { LOGO_CLAY } from '../src/lib/logo.ts';
+import { createMock } from '../src/app/mock/mock.ts';
+import { ICON_SIZES, appIconPng, webManifest } from '../src/ui/shared/icon.ts';
+import { LOGO_CLAY } from '../src/ui/shared/logo.ts';
 import { check, done } from './_check.ts';
 
 /** 极简 PNG 解码:只认本模块写出来的那种(8 位真彩、filter 0) */

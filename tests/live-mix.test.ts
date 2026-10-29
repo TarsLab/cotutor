@@ -1,11 +1,11 @@
 /**
- * 录像的声音(src/live/lib/mix.ts):两边按到达时刻摆成一条、老师的块照孩子端的排法排、flush 截断、老师出声的时段。纯函数。
- * 录像记录(src/live/recorder.ts):进出的消息带毫秒、flush 消息记成清队列、开口前垫的块带自己的时刻、屏幕尺寸、finish 拼出 reel.json 与声音。
+ * 录像的声音(src/runtime/journal/mix.ts):两边按到达时刻摆成一条、老师的块照孩子端的排法排、flush 截断、老师出声的时段。纯函数。
+ * 录像记录(src/runtime/journal/recorder.ts):进出的消息带毫秒、flush 消息记成清队列、开口前垫的块带自己的时刻、屏幕尺寸、finish 拼出 reel.json 与声音。
  */
 import { check, done } from './_check.ts';
 
-const { MIX_RATE, mixCall, playingOf, scheduleTutor } = await import('../src/live/lib/mix.ts');
-const { CallRecorder } = await import('../src/live/recorder.ts');
+const { MIX_RATE, mixCall, playingOf, scheduleTutor } = await import('../src/runtime/journal/mix.ts');
+const { CallRecorder } = await import('../src/runtime/journal/recorder.ts');
 
 /** 一块 PCM16:n 毫秒、值 v(rate 采样率) */
 const block = (ms: number, v: number, rate: number): Buffer => { const n = Math.round((ms * rate) / 1000); const b = Buffer.alloc(n * 2); for (let i = 0; i < n; i++) b.writeInt16LE(v, i * 2); return b; };

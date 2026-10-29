@@ -11,6 +11,6 @@
     "src"
   ],
   "exclude": [
-    "src/stage"
+    "src/ui/stage"
   ]
 }

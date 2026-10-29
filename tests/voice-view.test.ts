@@ -1,9 +1,9 @@
 /**
- * 按钮的样子(src/lib/voice-view.ts):src/lib/voice-scenes.ts 每一格是一条用例(例子即测试),再查几条不变式。
+ * 按钮的样子(src/ui/kid/voice-view.ts):src/ui/dev/voice-scenes.ts 每一格是一条用例(例子即测试),再查几条不变式。
  */
 import { check, done } from './_check.ts';
-import { voiceIn, voiceView, VOICE_SILENT_MS, type VoiceIn } from '../src/lib/voice-view.ts';
-import { VOICE_SCENES } from '../src/lib/voice-scenes.ts';
+import { voiceIn, voiceView, VOICE_SILENT_MS, type VoiceIn } from '../src/ui/kid/voice-view.ts';
+import { VOICE_SCENES } from '../src/ui/dev/voice-scenes.ts';
 
 for (const s of VOICE_SCENES) {
   const v = voiceView(voiceIn(s.input));

@@ -3,7 +3,7 @@
  * 只读印刷体(2026-10-10 实测:印刷稳、手写不稳);读出来的家长要看一眼改,孩子只拿改过的。
  * 这里是口语课这个场景的规则(提示词、怎么解析、单词卡的那两样);看图的请求在 src/media/vision.ts(key:omni 只有百炼按量),由路由那层交进来。
  */
-import { word as wordCard } from '../../cards/word.ts';
+import { word as wordCard } from '../../board/cards/word.ts';
 import type { Look } from '../look.ts';
 
 /** 口语单的一条;词另有单词卡(cards/word)要的 emoji 与自然拼读分段(读照片时出,过 cards/word 的 parse;没有就卡上只有词) */

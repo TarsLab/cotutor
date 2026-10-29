@@ -12,13 +12,13 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-favicon-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { faviconLinks, faviconPng, faviconSvg } = await import('../src/lib/favicon.ts');
-const { LOGO_BIG, LOGO_CLAY, LOGO_INK, LOGO_PAPER, LOGO_SMALL, logoBody, logoGeom, logoHit, ringDash } = await import('../src/lib/logo.ts');
-const { brandLogo } = await import('../src/server/brand.ts');
-const { createMock } = await import('../src/server/mock.ts');
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
+const { faviconLinks, faviconPng, faviconSvg } = await import('../src/ui/shared/favicon.ts');
+const { LOGO_BIG, LOGO_CLAY, LOGO_INK, LOGO_PAPER, LOGO_SMALL, logoBody, logoGeom, logoHit, ringDash } = await import('../src/ui/shared/logo.ts');
+const { brandLogo } = await import('../src/ui/shared/brand.ts');
+const { createMock } = await import('../src/app/mock/mock.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
 
 /** 只认 encodePng 写的 RGBA(filter 0) */
 function rgba(png: Buffer): { n: number; at: (x: number, y: number) => number[] } {

@@ -1,5 +1,5 @@
 /** 最终文本里的「## 记账」「## 记忆」段:剥出来、正文干净;解析不出整段留正文;别的 H2 都是普通段。 */
-import { parseSections } from '../src/lib/sections.ts';
+import { parseSections } from '../src/board/sections.ts';
 import { check, done } from './_check.ts';
 
 const TEXT = [

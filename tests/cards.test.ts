@@ -1,7 +1,7 @@
 /** 卡的注册表:每种卡的解析 / 剥秘密 / 语法表;不认识的标签;解析失败的退路。 */
-import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, kindsFor, parseCard, parseCardState, stripSecrets, tutorCardKinds, wordChunks } from '../src/cards/index.ts';
+import { CARD_KINDS, cardAssets, cardKind, cardLabel, describeCard, kindsFor, parseCard, parseCardState, stripSecrets, tutorCardKinds, wordChunks } from '../src/board/cards/index.ts';
 import { BOARD_CARD_KINDS } from '../src/schema/config.ts';
-import { boardSkillDoc, boardSyntaxDoc } from '../src/cards/docs.ts';
+import { boardSkillDoc, boardSyntaxDoc } from '../src/board/cards/docs.ts';
 import { check, done } from './_check.ts';
 
 {

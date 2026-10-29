@@ -1,13 +1,13 @@
 /**
- * realtime 那条线的底层(src/live/,口语课与实时老师共用),不花钱:
+ * realtime 那条线的底层(src/realtime/、src/app/ws/,口语课与实时老师共用),不花钱:
  * ws.ts 的帧与握手(Node 自带的 WebSocket 客户端连上来,文本 / 二进制 / 分片 / close);
  * realtime.ts 对一个假百炼:连上先 session.update、updated 才算好;喂音频、commit、response.create;声音与字幕回调;转写;cancel 只在有回答时发;
  * setTurn 的成与败;连接时报错、服务端断线都不抛。
  */
 import { createServer } from 'node:http';
 import { check, done } from './_check.ts';
-import { acceptWebSocket, decodeFrame, encodeFrame, isUpgrade, acceptKey, type ServerSocket } from '../src/live/ws.ts';
-import { MAX_IMAGE_B64, RealtimeSession, sessionConfig, turnDetection, endpointOf, type Usage } from '../src/live/realtime.ts';
+import { acceptWebSocket, decodeFrame, encodeFrame, isUpgrade, acceptKey, type ServerSocket } from '../src/app/ws/ws.ts';
+import { MAX_IMAGE_B64, RealtimeSession, sessionConfig, turnDetection, endpointOf, type Usage } from '../src/realtime/bailian.ts';
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const until = async (f: () => boolean, ms = 3000): Promise<boolean> => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(10); return f(); };

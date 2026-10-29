@@ -1,7 +1,7 @@
 /** CLI 适配器:stream-json 读成统一事件、按运行时找适配器、填模板(含 {toolArgs})、工具类别、环境。 */
-import { ADAPTERS, STREAM_JSON, adapterFor, controlsTools, factoryRuntimes, fillArgs, parserForRuntime, processEnv, runtimeCli, runtimeIssue, toolKind, unexpectedTools } from '../src/clis/index.ts';
-import { qwen } from '../src/clis/qwen.ts';
-import { parseStreamJson } from '../src/clis/stream-json.ts';
+import { ADAPTERS, STREAM_JSON, adapterFor, controlsTools, factoryRuntimes, fillArgs, parserForRuntime, processEnv, runtimeCli, runtimeIssue, toolKind, unexpectedTools } from '../src/brain/cli/adapters.ts';
+import { qwen } from '../src/brain/cli/qwen.ts';
+import { parseStreamJson } from '../src/brain/cli/stream-json.ts';
 import { check, done } from './_check.ts';
 
 const j = (o: unknown): string => JSON.stringify(o);

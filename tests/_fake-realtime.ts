@@ -9,7 +9,7 @@
  *   response.create 带 response.instructions(实时老师):记进 responses;指令里有「说完就停:「…」」(照念)就把引号里的当字幕说,别的照旧
  */
 import { createServer, type Server } from 'node:http';
-import { acceptWebSocket, isUpgrade, type ServerSocket } from '../src/live/ws.ts';
+import { acceptWebSocket, isUpgrade, type ServerSocket } from '../src/app/ws/ws.ts';
 
 export interface FakeConn {
   sock: ServerSocket;

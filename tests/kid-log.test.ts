@@ -1,6 +1,6 @@
 /**
- * 孩子端的流水(src/server/kid-log.ts):设备 cookie、打开登记设备、页面出错一行;各页都带 KID_LOG_JS;
- * 自动标签(src/lib/kid-device.ts);孩子发的消息记 deviceId。新加孩子端页面要在 PAGES 里登记。
+ * 孩子端的流水(页面脚本 src/ui/kid/kid-log.ts,收与存 src/runtime/journal/kid-log.ts):设备 cookie、打开登记设备、页面出错一行;各页都带 KID_LOG_JS;
+ * 自动标签(src/schema/kid-device.ts);孩子发的消息记 deviceId。新加孩子端页面要在 PAGES 里登记。
  */
 import { existsSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,11 +11,12 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-kid-log-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, kidSendInput, route } = await import('../src/server/app.ts');
-const { KID_LOG_JS, readDevices, readKidLog, renameDevice } = await import('../src/server/kid-log.ts');
-const { deviceLabel } = await import('../src/lib/kid-device.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, kidSendInput, route } = await import('../src/app/http/app.ts');
+const { KID_LOG_JS } = await import('../src/ui/kid/kid-log.ts');
+const { readDevices, readKidLog, renameDevice } = await import('../src/runtime/journal/kid-log.ts');
+const { deviceLabel } = await import('../src/schema/kid-device.ts');
 
 // ---- 自动标签 ----
 {

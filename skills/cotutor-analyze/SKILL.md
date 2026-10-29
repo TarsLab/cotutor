@@ -5,7 +5,7 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 
 <!-- 给人看
 谁读:家长在 workspace 根开的编程助手
-能改:机器件,upgrade 覆盖;references/命令与文件.md 由 src/lib/analyze-doc.ts 生成
+能改:机器件,upgrade 覆盖;references/命令与文件.md 由 src/app/skills/analyze-doc.ts 生成
 改了:在试用 workspace 里开编程助手问一句「老师为什么…」(《写提示词.md》§一)
 -->
 

@@ -1,0 +1,167 @@
+/**
+ * cotutor init <slug>:建 ~/cotutor/<slug>/ 骨架。语义是**幂等补缺**——已有的文件与目录一律不动,缺什么补什么。
+ * 三条边界(沿 drawtell init):政策文件只在缺失时写模板;用户配置只在还没指定 workspace 时补;不动 git。
+ * 老师文件**拷贝**进 .claude/agents/:拷进来就是家长的,想改就改;出厂 hash 记 .cotutor/shipped.json,
+ * cotutor upgrade 据此换新或报 diff。旧workspace里指向包的链会被换成拷贝。
+ */
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, configTemplate, profileTemplate, shippedAgents, writeSchemaFile } from './skeleton.ts';
+import { installTutors, readManifest, writeManifest } from './tutors.ts';
+import { DEFAULT_GRADE, LEGACY_GRADE, requireGradePack } from './grades.ts';
+import { installActivities } from './activities.ts';
+import { TOOL_SHIM, installSkills, writeToolShim } from './skills.ts';
+import { installThemes } from './themes.ts';
+import { scanVault } from '../../memory/vault.ts';
+import { CONFIG_FILE, ConfigError, UsageError, HOME_ROOT, USER_CONFIG, expandPath, loadWorkspace, parseConfig, readJson, redactHome } from '../workspace.ts';
+
+export interface InitStep {
+  item: string;
+  action: 'created' | 'exists' | 'kept' | 'replaced' | 'removed';
+  note?: string;
+}
+
+export interface InitResult {
+  root: string;
+  steps: InitStep[];
+  suggestions: string[];
+}
+
+export interface InitOptions {
+  slug: string;
+  dir?: string;
+  name?: string;
+  port?: number;
+  /** 出厂教学包年级,不是孩子档案的覆盖值。 */
+  grade?: number;
+}
+
+async function exists(p: string): Promise<boolean> {
+  return (await stat(p).catch(() => null)) !== null;
+}
+
+export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
+  const root = opts.dir ? expandPath(opts.dir, resolve(process.cwd())) : join(HOME_ROOT, opts.slug);
+  const steps: InitStep[] = [];
+  const manifest = await readManifest(root);
+  const installed = manifest.teachingPack?.grade;
+  const existing = await exists(join(root, CONFIG_FILE));
+  const grade = opts.grade ?? installed ?? (existing ? LEGACY_GRADE : DEFAULT_GRADE);
+  const pack = await requireGradePack(grade);
+  if (existing && grade !== (installed ?? LEGACY_GRADE)) throw new UsageError('init 只补缺,不能切换已有 workspace 的年级包;请另建 workspace,原有自定义文件和话题保持不动。');
+  if (installed !== undefined && installed !== grade) throw new UsageError(`已安装 ${installed} 年级包,init 不切换年级`);
+  const agents = await shippedAgents(pack.agentsDir);
+
+  const rootExisted = await exists(root);
+  if (!rootExisted) await mkdir(root, { recursive: true });
+  manifest.teachingPack = { grade };
+  await writeManifest(root, manifest);
+  steps.push({ item: 'teachingPack', action: installed === undefined ? 'created' : 'exists', note: `${grade} 年级教学包${existing && installed === undefined ? '(旧版来源补记,保留原 hash)' : opts.grade === undefined && installed === undefined ? '(默认)' : ''};孩子当前年级仍读档案` });
+  steps.push({ item: '.', action: rootExisted ? 'exists' : 'created' });
+
+  for (const dir of DIRS) {
+    const p = join(root, dir);
+    if (await exists(p)) {
+      steps.push({ item: `${dir}/`, action: 'exists' });
+      continue;
+    }
+    await mkdir(p, { recursive: true });
+    steps.push({ item: `${dir}/`, action: 'created' });
+  }
+
+  const config = join(root, CONFIG_FILE);
+  if (await exists(config)) steps.push({ item: CONFIG_FILE, action: 'kept', note: '政策文件不覆盖(家长的决定)' });
+  else {
+    await writeFile(config, configTemplate({ slug: opts.slug, name: opts.name, port: opts.port, tutors: agents }));
+    steps.push({ item: CONFIG_FILE, action: 'created' });
+  }
+  // 老师按 cotutor.json 里有谁走(家长自己加的也补目录与链);配置坏了就只管出厂的,doctor 去报
+  let tutorNames: string[] = [];
+  try {
+    const raw = readJson(config);
+    if (raw !== null) tutorNames = Object.keys(parseConfig(raw, config).tutors);
+  } catch (err) {
+    if (!(err instanceof ConfigError)) throw err;
+  }
+  steps.push(...(await installTutors(root, tutorNames)));
+  // 出厂 activity(老师的家里 agents/<老师>/activities/):缺的拷,有的不动
+  steps.push(...(await installActivities(root)));
+  const schemaThere = await exists(join(root, '.cotutor', 'cotutor.schema.json'));
+  await writeSchemaFile(root);
+  steps.push({ item: '.cotutor/cotutor.schema.json', action: schemaThere ? 'exists' : 'created', note: schemaThere ? '已按本包刷新(机器文件)' : 'cotutor.json 的 JSON Schema,编辑器补全用' });
+  // 出厂 skill(机器件 cotutor-board 等 + drawtell 的四个领域 skill,家长做课包用)与 drawtell 壳脚本
+  steps.push(...(await installSkills(root)));
+  // 出厂主题(孩子端板书的样子):拷进 themes/default/,是家长的
+  steps.push(...(await installThemes(root)));
+  const shimThere = await exists(join(root, TOOL_SHIM));
+  const shim = await writeToolShim(root);
+  steps.push({ item: TOOL_SHIM, action: shimThere ? 'exists' : 'created', note: shim.available ? (shimThere ? '已按本包刷新(机器文件)' : 'drawtell CLI 的壳,家长做课包用它,和服务端烤画面是同一版 drawtell') : 'node_modules 里没有 drawtell,壳只会报错' });
+
+  for (const f of LEDGER_FILES) {
+    const p = join(root, f);
+    if (await exists(p)) steps.push({ item: f, action: 'exists' });
+    else {
+      await writeFile(p, '');
+      steps.push({ item: f, action: 'created' });
+    }
+  }
+
+  // vault 侧(《obsidian仓库设计.md》§2):只补档案与参考 README,缺了才写;档案按 cotutor: profile 找(2026-09-17),vault 里已有一篇就不补;
+  // 入口文件(每科每学期一篇)不自动建,doctor 提醒;日记由记账现建,计划家长自己写
+  try {
+    const ws = loadWorkspace(root);
+    const profile = ws.paths.profile;
+    const found = (await scanVault(ws)).notes.find((n) => n.props.cotutor === 'profile');
+    if (found) steps.push({ item: redactHome(join(ws.paths.vault, found.path)), action: 'exists' });
+    else if (await exists(profile)) steps.push({ item: redactHome(profile), action: 'kept', note: '没有 cotutor: profile 属性,老师读不到;在 frontmatter 加上(cotutor doctor 有写法)' });
+    else {
+      await mkdir(dirname(profile), { recursive: true });
+      await writeFile(profile, profileTemplate(ws.config.kid.name ?? ws.config.kid.slug));
+      steps.push({ item: redactHome(profile), action: 'created', note: '档案:填 school_start 与孩子的情况,每个话题开头整篇进上下文包' });
+    }
+    const readme = join(ws.paths.reference, 'README.md');
+    if (await exists(readme)) steps.push({ item: redactHome(readme), action: 'exists' });
+    else {
+      await mkdir(ws.paths.reference, { recursive: true });
+      await writeFile(readme, REFERENCE_README);
+      steps.push({ item: redactHome(readme), action: 'created' });
+    }
+  } catch {
+    /* 配置读不了(doctor 去体检):vault 侧不动 */
+  }
+
+  const gitignore = join(root, '.gitignore');
+  if (await exists(gitignore)) steps.push({ item: '.gitignore', action: 'kept' });
+  else {
+    await writeFile(gitignore, GITIGNORE);
+    steps.push({ item: '.gitignore', action: 'created' });
+  }
+
+  // 用户配置:补缺不改向;解析不了也不动(doctor 去体检)
+  let user: Record<string, unknown> | null = null;
+  let userBroken = false;
+  try {
+    user = JSON.parse(await readFile(USER_CONFIG, 'utf8')) as Record<string, unknown>;
+  } catch (err) {
+    userBroken = (err as NodeJS.ErrnoException).code !== 'ENOENT';
+  }
+  const configured = user && typeof user.workspace === 'string' && user.workspace ? user.workspace : null;
+  if (userBroken) steps.push({ item: 'user-config', action: 'kept', note: '解析失败,未动(cotutor doctor 可体检)' });
+  else if (configured) {
+    steps.push(
+      expandPath(configured, root) === root
+        ? { item: 'user-config', action: 'exists', note: '已指向本workspace' }
+        : { item: 'user-config', action: 'kept', note: '已指向别的workspace,未改;多孩子时一 workspace 一进程,用 --workspace / COTUTOR_WORKSPACE 指定' },
+    );
+  } else {
+    await mkdir(dirname(USER_CONFIG), { recursive: true });
+    await writeFile(USER_CONFIG, `${JSON.stringify({ ...(user ?? {}), workspace: root }, null, 2)}\n`);
+    steps.push({ item: 'user-config', action: 'created', note: 'workspace 指向本workspace' });
+  }
+
+  const suggestions: string[] = [];
+  if (!(await exists(join(root, '.git')))) suggestions.push('git init(建议:老师记忆、账本、政策都是不可再生状态,git 是破坏后的兜底)');
+  suggestions.push(`改 ${CONFIG_FILE}:paths.vault 指到孩子的 Obsidian vault,tutors.*.voice 填 voxtell 音色 id`);
+  suggestions.push('cotutor doctor 逐项体检;cotutor serve 起服务');
+  return { root, steps, suggestions };
+}

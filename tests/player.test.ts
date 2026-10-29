@@ -1,6 +1,6 @@
 /**
- * 板上的节(kid-board.ts 的 step):表一格一条 + 随机事件序列跑不变式 + 页面不绕过 step。
- * 孩子端不念讲稿了:讲稿由嘴照念(live-board.ts,tests/live-player.test.ts),这里只剩铺节、画标注、写完、撤掉。
+ * 板上的节(board/presentation.ts 的 step):表一格一条 + 随机事件序列跑不变式 + 页面不绕过 step。
+ * 孩子端不念讲稿了:讲稿由嘴照念(runtime/delivery/player.ts,tests/live-player.test.ts),这里只剩铺节、画标注、写完、撤掉。
  * 下面的测试列出状态与事件的预期组合;改规则先改这里,再改 step。
  */
 import { readFileSync } from 'node:fs';
@@ -16,7 +16,7 @@ import {
   type PlayerEvent,
   type PlayerModel,
   type PlayerState,
-} from '../src/lib/kid-board.ts';
+} from '../src/board/presentation.ts';
 import { check, done } from './_check.ts';
 
 const L = (text: string, anchor: number | null): BoardLine => ({ text, audio: null, marks: [], ask: isQuestion(text), anchor, cues: [] });
@@ -87,7 +87,7 @@ for (let seed = 1; seed <= 2000 && failures.length < 3; seed++) { const f = fuzz
 check('随机事件序列 2000 条 × 80 步:状态合法、不进「在念」、只有 halt 与撤掉停声音', failures.length === 0, failures.join('\n'));
 
 // ---- 页面不绕过 step;念讲稿的那些都不在了 ----
-const page = readFileSync(new URL('../src/server/kid-page.ts', import.meta.url), 'utf8');
+const page = readFileSync(new URL('../src/ui/kid/kid-page.ts', import.meta.url), 'utf8');
 const count = (re: RegExp) => (page.match(re) ?? []).length;
 check('页面:S.state 只在 dispatch 里写一次', count(/S\.state = /g) === 1 && count(/S\.state\.\w+ = /g) === 0, String(count(/S\.state = /g)));
 check('页面:没有念讲稿、再听讲稿、自动念的开关', !/const playLine\b|[^.\w]playLine\(/.test(page) && !/\bS\.autoplay\b/.test(page) && !/\bagainBtn\b/.test(page) && !/tapAgain|tapSubtitle|tapButton|lineEnded|autoplayOff/.test(page) && !/S\.replayOf|S\.held\b|S\.unfold/.test(page) && !/id="spk"/.test(page));

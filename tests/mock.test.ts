@@ -1,6 +1,6 @@
 /** 模拟接口:不经真实服务把孩子端喂起来——首页、板书节、发消息 → 想 → 追加一节、继续、脚本用完、上限、离线、页面。 */
-import { createMock } from '../src/server/mock.ts';
-import { tintFor, type BoardSection } from '../src/lib/kid-board.ts';
+import { createMock } from '../src/app/mock/mock.ts';
+import { tintFor, type BoardSection } from '../src/board/presentation.ts';
 import { check, done } from './_check.ts';
 
 interface Msg { job: string; question: string | null; reply: string | null; pending: boolean; section: BoardSection | null; action?: string }
@@ -122,7 +122,7 @@ interface Day { messages: Msg[]; pending: string | null }
   const si = sc ? sc.cards.findIndex((c) => c.kind === 'lecture') : -1;
   check('小课堂卡下发时带 ready 与那一段的起止;讲稿 [[play]] 锚到它', si >= 0 && sc.cards[si].props.ready === true && sc.cards[si].props.start === 0 && Number(sc.cards[si].props.end) > 0 && sc.lines.some((l) => l.cues.some((c) => c.name === 'play' && c.card === si)), JSON.stringify(sc.cards[si]));
   check('课包文件能取;没有的 404', (await get('/api/bundles/2026-09-04-guilv5/manifest.json')).status === 200 && (await get('/api/bundles/nope/scene.json')).status === 404);
-  const { stageBuilt } = await import('../src/server/stage.ts');
+  const { stageBuilt } = await import('../src/app/http/stage.ts');
   if (stageBuilt()) check('舞台包能取', (await get('/stage/')).status === 200 && (await get('/stage/stage.js')).file !== undefined);
   check('模板里的正则斜杠没被吃掉(\\/ 变 / 会把整行变成注释)', js.includes('/^https?:\\/\\//') && !js.includes('/^https?:///'), js.slice(js.indexOf('https?:') - 20, js.indexOf('https?:') + 20));
 }

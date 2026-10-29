@@ -8,19 +8,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
-import { parseEvents } from '../src/lib/events.ts';
-import { addMessage } from '../src/lib/conversation.ts';
-import { planRun, stdinMessage } from '../src/lib/run-plan.ts';
-import { WarmPool } from '../src/server/warm.ts';
+import { parseEvents } from '../src/runtime/journal/events.ts';
+import { addMessage } from '../src/runtime/journal/conversation.ts';
+import { planRun, stdinMessage } from '../src/brain/cli/run-plan.ts';
+import { WarmPool } from '../src/brain/cli/warm.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-warm-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace, parseConfig } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { readIndex, writeIndex } = await import('../src/server/store.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace, parseConfig } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { readIndex, writeIndex } = await import('../src/runtime/journal/store.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
 const node = process.execPath;

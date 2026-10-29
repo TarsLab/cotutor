@@ -1,11 +1,11 @@
 /**
- * 听写的录像(src/dictation/lib/reel.ts):一次听写的记录 → 章、点、经过、空白,任一刻屏幕上是什么。
+ * 听写的录像(src/ui/dictation/reel.ts):一次听写的记录 → 章、点、经过、空白,任一刻屏幕上是什么。
  * 记录是手搭的:冬天写得顺;雪白——想了 10 秒、雪写两笔不会了点「给答案」(两笔清掉)、看笔顺、照着写,白写歪了擦掉重写;
  * 鼻子——念完切到别处 38 分钟,回来接着写;交卷后自己说要再写冬天,写好交了;对好了。
  */
 import { check, done } from './_check.ts';
-import type { Session } from '../src/dictation/store.ts';
-import { drBuild, drCaption, drClock, drFrameAt } from '../src/dictation/lib/reel.ts';
+import type { Session } from '../src/scenes/dictation/store.ts';
+import { drBuild, drCaption, drClock, drFrameAt } from '../src/ui/dictation/reel.ts';
 
 type P = [number, number, number];
 /** 一笔:从 t 起 n 个点,每点 40 毫秒 */

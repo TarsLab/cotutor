@@ -12,8 +12,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
-const { RealtimeSession, INPUT_RATE } = await import(join(repo, 'src', 'live', 'realtime.ts'));
-const { readCue } = await import(join(repo, 'src', 'live', 'lib', 'cue.ts'));
+const { RealtimeSession, INPUT_RATE } = await import(join(repo, 'src', 'realtime', 'bailian.ts'));
+const { readCue } = await import(join(repo, 'src', 'realtime', 'cues.ts'));
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const secs = Number(arg('--secs', '400'));

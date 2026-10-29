@@ -9,8 +9,8 @@ process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 const originalCwd = process.cwd();
 
-const { ConfigError, UsageError, loadWorkspace, resolveRoot, resolvePaths } = await import('../src/cli/workspace.ts');
-const { configTemplate, shippedAgents } = await import('../src/cli/skeleton.ts');
+const { ConfigError, UsageError, loadWorkspace, resolveRoot, resolvePaths } = await import('../src/app/workspace.ts');
+const { configTemplate, shippedAgents } = await import('../src/app/cli/skeleton.ts');
 
 const agents = await shippedAgents();
 const mk = (dir: string, slug = 'k'): string => {

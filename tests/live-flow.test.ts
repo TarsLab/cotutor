@@ -16,12 +16,12 @@ process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 delete process.env.DASHSCOPE_API_KEY;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, createHandler } = await import('../src/server/app.ts');
-const { makeLiveUpgrade } = await import('../src/live/route.ts');
-const { catchCue } = await import('../src/live/lib/cue.ts');
-const { localDate } = await import('../src/lib/conversation.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, createHandler } = await import('../src/app/http/app.ts');
+const { makeLiveUpgrade } = await import('../src/app/ws/route.ts');
+const { catchCue } = await import('../src/realtime/cues.ts');
+const { localDate } = await import('../src/shared/time.ts');
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const until = async (f: () => boolean, ms = 6000): Promise<boolean> => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(10); return f(); };
@@ -234,7 +234,7 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 
 {
   // ---- activity 也走实时(P3.1):首页按钮的开场 → 嘴不先说、脑照 activity 带;上一句念的是问句,孩子再开口嘴也不先说 ----
-  const { publishHome } = await import('../src/server/home.ts');
+  const { publishHome } = await import('../src/runtime/home/store.ts');
   mkdirSync(join(wsRoot, 'home'), { recursive: true });
   writeFileSync(join(wsRoot, 'home', 'draft.md'), '```tutor chinese-tutor\nactivity 看图说话\n```\n\n## 为什么这么排\n\n试实时\n');
   const pub = await publishHome(ctx.ws, { now: ctx.now() });

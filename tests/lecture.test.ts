@@ -1,12 +1,12 @@
 /**
- * 小课堂的纯函数(src/lib/lecture.ts):时钟用 drawtell/core(它自己的测试对过 timeline 与拉伸,这里只看接得对)、
+ * 小课堂的纯函数(src/board/lecture.ts):时钟用 drawtell/core(它自己的测试对过 timeline 与拉伸,这里只看接得对)、
  * 时间显示、上下文包的每句、一处画说成一段话(时刻 + 那时在讲的那句 + 画的地方盖着什么:几笔的凸包交给 drawtell 认;课包有分组就说组名)。
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { computeStepWindows, frameAt } from 'drawtell/core';
-import { DRAW_START_MS, VOICE_STALL_MS, clockLabel, describeMark, inkRing, lectureAt, lectureClock, lectureLines, lectureNext, lectureRange, parseClock, parseLectureDoc, videoClock, type LectureSkeleton, type LectureStep } from '../src/lib/lecture.ts';
+import { DRAW_START_MS, VOICE_STALL_MS, clockLabel, describeMark, inkRing, lectureAt, lectureClock, lectureLines, lectureNext, lectureRange, parseClock, parseLectureDoc, videoClock, type LectureSkeleton, type LectureStep } from '../src/board/lecture.ts';
 import { check, done } from './_check.ts';
 
 const dir = fileURLToPath(new URL('./fixtures/bundles/2026-09-18-po13-jian-8/', import.meta.url));
@@ -56,7 +56,7 @@ const s3 = clock.segments[2];
   // 服务端读课包:分组与 bounds 从 scene.json、命中块从 manifest.json(drawtell build 就这么放)
   const { mkdtempSync, cpSync, writeFileSync, rmSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
-  const { readLecture } = await import('../src/server/lecture.ts');
+  const { readLecture } = await import('../src/runtime/lecture.ts');
   const tmp = mkdtempSync(join(tmpdir(), 'cotutor-lecture-pic-'));
   try {
     cpSync(dir, join(tmp, 'po'), { recursive: true });
@@ -69,11 +69,11 @@ const s3 = clock.segments[2];
     check('readLecture:groups、bounds 从 scene.json,blocks 从 manifest.json;画面改过 → 烤的那份不算数', l?.picture.groups?.length === 1 && l.picture.blocks?.[0]?.text === '十三减八' && JSON.stringify(l.picture.bounds?.q) === '[0,0,1,1]' && l.baked === false, JSON.stringify(l?.picture));
     // 形状不对的课包(drawtell 的 parseBundle 校验不过):不读,首页检查说为什么
     writeFileSync(join(tmp, 'po', 'scene.json'), JSON.stringify({ ...sj, groups: [{ bad: true }] }));
-    const { inspectLecture: inspect } = await import('../src/server/lecture.ts');
+    const { inspectLecture: inspect } = await import('../src/runtime/lecture.ts');
     const broken = await inspect({ dirs: { bundles: tmp } }, 'po');
     check('课包不合契约:读不出来,problems 说哪里不对', broken.lecture === null && broken.problems.length === 1 && broken.problems[0].includes('bundles/po/') && broken.problems[0].includes('groups'), JSON.stringify(broken.problems));
     // 服务端出缩略图(frame.svg):烤过且画面对得上才出
-    const { lectureFrameSvg, parseRing, parseSvgMs } = await import('../src/server/lecture.ts');
+    const { lectureFrameSvg, parseRing, parseSvgMs } = await import('../src/runtime/lecture.ts');
     const fresh = await readLecture({ dirs: { bundles: fileURLToPath(new URL('./fixtures/bundles/', import.meta.url)) } }, '2026-09-18-po13-jian-8');
     check('样本课包烤过:baked', fresh?.baked === true);
     const s3mid = clock.segments[2].drawStart + 2000;
@@ -100,7 +100,7 @@ check('时间:分:秒、时:分:秒;秒过 59、乱写的不认', parseClock('0:
   check('都不写 = 整堂课;越界夹到课里;止不在起后 = null', JSON.stringify(lectureRange(clock, undefined, undefined)) === JSON.stringify({ start: 0, end: clock.total }) && lectureRange(clock, 0, 999_000)?.end === clock.total && lectureRange(clock, 20_000, 20_000) === null && lectureRange(lectureClock([], []), 0, 1000) === null);
 }
 {
-  const { enrichLectures } = await import('../src/server/lecture.ts');
+  const { enrichLectures } = await import('../src/runtime/lecture.ts');
   const bundles = fileURLToPath(new URL('./fixtures/bundles/', import.meta.url));
   const sec = await enrichLectures({ dirs: { bundles } }, { cards: [{ kind: 'lecture', props: { bundle: '2026-09-18-po13-jian-8', from: 19_000, to: 30_000 } }, { kind: 'lecture', props: { bundle: '2026-01-01-gone', from: 0 } }, { kind: 'text', props: { text: 'x' } }], lines: [] });
   const [a, b, c] = sec.cards.map((x) => x.props as Record<string, unknown>);
@@ -119,8 +119,8 @@ check('时间:分:秒、时:分:秒;秒过 59、乱写的不认', parseClock('0:
   check('第一句不从 0 起:前面补一段没话的;超过视频长度的那句不算', late.segments.length === 2 && late.segments[0].line === '' && late.segments[1].start === 3000 && late.segments[1].len === 15_000);
 }
 {
-  const { mp4DurationMs } = await import('../src/server/mp4.ts');
-  const { inspectLecture } = await import('../src/server/lecture.ts');
+  const { mp4DurationMs } = await import('../src/media/mp4.ts');
+  const { inspectLecture } = await import('../src/runtime/lecture.ts');
   const lectures = fileURLToPath(new URL('./fixtures/lectures/', import.meta.url));
   const bundles = fileURLToPath(new URL('./fixtures/bundles/', import.meta.url));
   check('mp4 的时长:读 moov/mvhd;不是 mp4 回 null', (await mp4DurationMs(join(lectures, '2026-10-06-pingjunfen', 'video.mp4'))) === 18_000 && (await mp4DurationMs(join(dir, 'scene.json'))) === null && (await mp4DurationMs('/nope.mp4')) === null);

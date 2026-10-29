@@ -14,15 +14,15 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-dictation-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { publishHome, checkHome } = await import('../src/server/home.ts');
-const { parseCard, stripSecrets } = await import('../src/cards/index.ts');
-const { judgeChar, placeNote, strokeFit } = await import('../src/dictation/lib/match.ts');
-const { LineReader, photoPrompt, recognizePhoto, splitWords } = await import('../src/dictation/recognize.ts');
-const { dictationDeps, handleDictation, parseChars, photosIdle } = await import('../src/dictation/route.ts');
-const { tianzigeData } = await import('../src/server/tianzige.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { publishHome, checkHome } = await import('../src/runtime/home/store.ts');
+const { parseCard, stripSecrets } = await import('../src/board/cards/index.ts');
+const { judgeChar, placeNote, strokeFit } = await import('../src/scenes/dictation/match.ts');
+const { LineReader, photoPrompt, recognizePhoto, splitWords } = await import('../src/app/dictation/recognize.ts');
+const { dictationDeps, handleDictation, parseChars, photosIdle } = await import('../src/app/dictation/route.ts');
+const { tianzigeData } = await import('../src/ui/kid/tianzige.ts');
 
 type InkPoint = [number, number, number];
 const medians = async (ch: string): Promise<number[][][]> => (await tianzigeData(ch))!.medians;
@@ -213,7 +213,7 @@ try {
     await okEv({ kind: 'view', word: 0, t: 80, w: 1180, h: 820, pad: 's' }); await okEv({ kind: 'view', word: 0, t: 90, w: 1180, h: 820, pad: 'x' });
     const pv = (await call('GET', `/api/dictation/${fid}`)).json.events.filter((e: J) => e.kind === 'view');
     check('事件:view 带写字格的档(s),认不得的不记;老的那条没有', pv.length === 3 && pv[0].pad === undefined && pv[1].pad === 's' && pv[2].pad === undefined, JSON.stringify(pv));
-    const zh = (await import('../src/dictation/page.ts')).DICTATION_PAGE;
+    const zh = (await import('../src/ui/dictation/page.ts')).DICTATION_PAGE;
     check('看笔顺:没有「我来写」;落笔、放完都换成照着写,换字也半秒保护', !zh.includes('<span>我来写</span>') && !zh.includes('l-trace') && zh.includes("pad.onDown = function () { if (S.w && S.w.pad === pad && S.w.mode === 'order') toTrace(); }") && zh.includes("w.mode === 'order') toTrace(); }, 900)") && zh.includes('renderFoot(); renderBook(); guard();'));
     check('写字屏有三档写字格(小 中 大),cookie 记 cotutor_dict_pad;再写一遍也照档封顶', ['s', 'm', 'l'].every((k) => zh.includes(`data-pad="${k}"`)) && zh.includes('cotutor_dict_pad=') && zh.includes('Math.min(PAD_CAP[S.padl], Math.floor(Math.min((w - (count - 1) * 24)'));
     const reelPage = (await call('GET', '/dictation?reel=' + fid)).html ?? '';
@@ -230,8 +230,8 @@ try {
   check('没配音色:音频 404;会话带 voice: false(孩子端不开始、直接提示叫家长,不念浏览器合成声)', (await call('GET', `/api/dictation/${id}/say/3`)).status === 404 && (await call('GET', `/api/dictation/${id}/kid`)).json.voice === false);
 
   {
-    const pages = readFileSync(new URL('../src/dictation/page.ts', import.meta.url), 'utf8') + readFileSync(new URL('../src/dictation/en-page.ts', import.meta.url), 'utf8');
-    const unlockJs = readFileSync(new URL('../src/dictation/unlock.ts', import.meta.url), 'utf8');
+    const pages = readFileSync(new URL('../src/ui/dictation/page.ts', import.meta.url), 'utf8') + readFileSync(new URL('../src/ui/dictation/en-page.ts', import.meta.url), 'utf8');
+    const unlockJs = readFileSync(new URL('../src/ui/dictation/unlock.ts', import.meta.url), 'utf8');
     check('听写两页不念浏览器合成声(没音色、合成失败直接提示叫家长;解锁也不碰它)', !/speechSynthesis|SpeechSynthesisUtterance/.test(pages + unlockJs) && (pages.match(/叫爸爸妈妈来看一下/g) ?? []).length === 2);
   }
 
@@ -284,9 +284,9 @@ try {
   }
   // ---- 认词的要求在听写 activity「认字收到什么」----
   {
-    const { dictationTemplate } = await import('../src/dictation/route.ts');
+    const { dictationTemplate } = await import('../src/app/dictation/route.ts');
     const { createServer } = await import('node:http');
-    const { photoPromptFrom, FORMAT, FORMAT_EN } = await import('../src/dictation/recognize.ts');
+    const { photoPromptFrom, FORMAT, FORMAT_EN } = await import('../src/app/dictation/recognize.ts');
     const { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT } = await import('../src/schema/index.ts');
     const zh = await dictationTemplate(root, 'zh');
     const en = await dictationTemplate(root, 'en');
@@ -302,7 +302,7 @@ try {
     let sent = '';
     const fake = createServer((req, res) => { let b = ''; req.on('data', (c: Buffer) => (b += c)); req.on('end', () => { sent = JSON.parse(b).messages[0].content[1].text; res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: [DONE]\n\n'); }); });
     await new Promise<void>((r) => fake.listen(0, '127.0.0.1', () => r()));
-    const { recognizePhoto: rp } = await import('../src/dictation/recognize.ts');
+    const { recognizePhoto: rp } = await import('../src/app/dictation/recognize.ts');
     await rp({ data: Buffer.from('jpg'), mime: 'image/jpeg' }, () => {}, { env: { DASHSCOPE_API_KEY: 'k' }, endpoint: `http://127.0.0.1:${(fake.address() as { port: number }).port}/`, text: '整段给的要求' });
     fake.close();
     check('recognizePhoto 给了 text 就整段用它', sent === '整段给的要求');
@@ -358,12 +358,12 @@ try {
   const walk = (d: string): void => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
       const f = join(d, e.name);
-      if (e.isDirectory()) { if (!f.endsWith(join('src', 'dictation'))) walk(f); continue; }
-      if (f.endsWith('.ts') && /from '[./]*dictation\//.test(readFileSync(f, 'utf8')) && !f.endsWith(join('server', 'app.ts')) && !f.endsWith(join('server', 'mock.ts'))) offenders.push(f);
+      if (e.isDirectory()) { if (e.name !== 'dictation') walk(f); continue; }
+      if (f.endsWith('.ts') && /from '[./]*([a-z]+\/)*dictation\//.test(readFileSync(f, 'utf8')) && !f.endsWith(join('app', 'http', 'app.ts')) && !f.endsWith(join('app', 'mock', 'mock.ts'))) offenders.push(f);
     }
   };
   walk(srcDir);
-  check('边界:cotutor 别处不引用 src/dictation/(只有 app.ts、mock.ts 接一行)', offenders.length === 0, offenders.join());
+  check('边界:听写的几个目录(app/、ui/、scenes/ 下的 dictation/)之外不引用它们(只有 app.ts、mock.ts 接一行)', offenders.length === 0, offenders.join());
   // ---- 英文单词听写:一个单词一格,不逐字母比,孩子自己对 ----
   {
     const enHome = await publish('```dictation english-tutor\nred\n🟡 yellow yellow, a yellow bus\n```\n\n## 为什么这么排\n\n英语\n');
@@ -393,10 +393,10 @@ try {
     check('同一次听写同时来的请求一个一个落:八个事件与一遍重写都在,不互相盖掉', rs.every((r) => r.status === 200) && after.events.length === before + 8 && after.rewrites.filter((r: J) => r.word === 1).length === 1, JSON.stringify(rs.map((r) => r.status)));
     const list = (await call('GET', '/api/dictation')).json.sessions.find((x: J) => x.id === id);
     check('列表一行带 lang 与老师', list?.lang === 'en' && list.tutor === 'english-tutor', JSON.stringify(list));
-    const { parseWords } = await import('../src/dictation/route.ts');
+    const { parseWords } = await import('../src/app/dictation/route.ts');
     check('拍照开始的词:英文只收英文单词,汉字只收汉字,不混', parseWords([{ chars: 'red' }, { chars: "don't" }], 'en')?.length === 2 && parseWords([{ chars: '春天' }], 'en') === null && parseWords([{ chars: 'red' }], 'zh') === null && parseWords([{ chars: 'red apple' }], 'en') === null);
     check('拍照开始的词带 emoji:英文收、不是 emoji 的丢;汉字的不收', JSON.stringify(parseWords([{ chars: 'bus', emoji: ' 🚌 ' }, { chars: 'like', emoji: 'x' }], 'en')) === JSON.stringify([{ chars: 'bus', emoji: '🚌' }, { chars: 'like' }]) && parseWords([{ chars: '春天', emoji: '🌸' }], 'zh')?.[0].emoji === undefined);
-    const { parseItem, photoPrompt: pp, splitWords: sw2, LineReader: LR } = await import('../src/dictation/recognize.ts');
+    const { parseItem, photoPrompt: pp, splitWords: sw2, LineReader: LR } = await import('../src/app/dictation/recognize.ts');
     check('认英文的一项带 emoji(认词那次顺带回);汉字的、不是 emoji 的不收', parseItem({ text: 'bus', emoji: '🚌' }, 'en')?.emoji === '🚌' && parseItem({ text: 'like', emoji: 'like' }, 'en')?.emoji === undefined && parseItem({ text: '春天', emoji: '🌸' }, 'zh')?.emoji === undefined && pp(undefined, 'en').includes('emoji'));
     const r2 = new LR(() => {}, 'en');
     r2.push('{"lesson": "Unit 3"}\n{"text": "yellow", "kind": "word", "pick": true, "box": [1,2,30,40], "sure": true, "say": "yellow, a yellow bus"}\n{"text": "春天", "kind": "word"}\n{"full": "What colour is it? It\'s yellow."}\n');
@@ -405,7 +405,7 @@ try {
   }
   // ---- 英文单词的样子照四线三格:单词卡那套字形,不用字体 ----
   {
-    const { EN_BOX_JS } = await import('../src/dictation/en-box.ts');
+    const { EN_BOX_JS } = await import('../src/ui/dictation/en-box.ts');
     type El = { tag: string; attrs: Record<string, string>; kids: El[]; text: string; append: (...c: El[]) => void; setAttribute: (k: string, v: string) => void; getAttribute: (k: string) => string | null };
     const sv = (tag: string, attrs: Record<string, unknown> = {}): El => {
       const el: El = { tag, attrs: {}, kids: [], text: '', append: (...c) => { el.kids.push(...c); }, setAttribute: (k, v) => { el.attrs[k] = v; }, getAttribute: (k) => el.attrs[k] ?? null };
@@ -428,9 +428,9 @@ try {
   }
   // ---- 两页的按钮同一套:英文页从第一版起没有图标,修了几次又漂开,这里拦着 ----
   {
-    const { DICTATION_PAGE } = await import('../src/dictation/page.ts');
-    const { DICTATION_EN_PAGE } = await import('../src/dictation/en-page.ts');
-    const { BTN_CSS, WRITE_TOOLS } = await import('../src/dictation/ui.ts');
+    const { DICTATION_PAGE } = await import('../src/ui/dictation/page.ts');
+    const { DICTATION_EN_PAGE } = await import('../src/ui/dictation/en-page.ts');
+    const { BTN_CSS, WRITE_TOOLS } = await import('../src/ui/dictation/ui.ts');
     for (const [name, page] of [['语文', DICTATION_PAGE], ['英文', DICTATION_EN_PAGE]] as const) {
       const bare = [...page.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].filter((m) => !m[1].includes('<svg')).map((m) => m[0].slice(0, 80));
       check(`${name}页:写死的按钮都带图标`, bare.length === 0, bare.join(' | '));

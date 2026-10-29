@@ -7,7 +7,7 @@
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { SHIPPED_SKILLS, skillSourceDir } from '../src/cli/skills.ts';
+import { SHIPPED_SKILLS, skillSourceDir } from '../src/app/cli/skills.ts';
 import { GENERATED, writeGeneratedSkills } from '../scripts/gen-skills.ts';
 import { check, done } from './_check.ts';
 import { ContextPackSchema } from '../src/schema/context-pack.ts';

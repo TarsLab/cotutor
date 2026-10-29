@@ -14,11 +14,11 @@ delete process.env.COTUTOR_WORKSPACE;
 delete process.env.DASHSCOPE_API_KEY;
 delete process.env.QWENCLOUD_TOKEN_PLAN_API_KEY;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext } = await import('../src/server/app.ts');
-const { makeTalkRoute, parseItems, photoData } = await import('../src/talk/route.ts');
-const { parseList, readList } = await import('../src/talk/list.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext } = await import('../src/app/http/app.ts');
+const { makeTalkRoute, parseItems, photoData } = await import('../src/app/talk/route.ts');
+const { parseList, readList } = await import('../src/app/talk/list.ts');
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 

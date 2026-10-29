@@ -1,5 +1,5 @@
 /**
- * 百炼 Qwen-Omni-Realtime 的 WebSocket 客户端:口语课(src/talk/)和实时老师共用。
+ * 百炼 Qwen-Omni-Realtime 的 WebSocket 客户端:口语课和实时老师共用。
  * 一次通话一条会话。服务端连,key 不出服务端;孩子端的声音由调用方推进来,老师的声音从这里出去。
  *
  * 协议(OpenAI realtime 同族,2026-10-10 真连核对):
@@ -20,7 +20,7 @@
  * 不抛:连不上、断了、服务端报错都走 onClose / onError;send 在没连上时丢弃并回 false。
  */
 import { homedir } from 'node:os';
-import { cotutorBailian, qianwenKeys, voxtellConfig } from '../lib/qianwen.ts';
+import { cotutorBailian, qianwenKeys, voxtellConfig } from '../shared/qianwen.ts';
 
 export const REALTIME_MODEL = 'qwen3.8-omni-flash-realtime';
 export const REALTIME_VOICE = 'Serena';
@@ -75,7 +75,7 @@ export interface RealtimeEvents {
   onClose?(reason: string): void;
 }
 
-/** 百炼按量的 key 与业务空间 id(Token Plan 没有 omni realtime;key 怎么找见 src/lib/qianwen.ts,业务空间 id 先看家长端配的、再看环境、再看 voxtell 的配置) */
+/** 百炼按量的 key 与业务空间 id(Token Plan 没有 omni realtime;key 怎么找见 src/shared/qianwen.ts,业务空间 id 先看家长端配的、再看环境、再看 voxtell 的配置) */
 export function dashscopeAuth(env: NodeJS.ProcessEnv = process.env): { key: string; workspaceId: string } | null {
   const home = env.HOME || homedir();
   const key = qianwenKeys(env).payg;

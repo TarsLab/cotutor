@@ -1,5 +1,5 @@
 /** 计划文件:frontmatter 必需、H2 按显示名分段、行号错误、抽本老师的行。 */
-import { parsePlan, planLinesFor } from '../src/lib/plan.ts';
+import { parsePlan, planLinesFor } from '../src/memory/plan.ts';
 import { check, done } from './_check.ts';
 
 const GOOD = ['---', 'week: 2026-W37', 'status: draft', 'author: 妈妈', '---', '# 下周', '## 数学老师', '- 周三前把两位数退位讲一遍', '- 周五出两道类似题', '', '## 英语老师', '1. 继续 U3', '', '## 家长', '- 周六一起复述'].join('\n');

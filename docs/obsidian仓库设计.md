@@ -189,4 +189,4 @@ vault 里不存照片(落 workspace `captures/`)、不存课包终帧、不设�
 
 应用按各轮的 `memoryLines` 倒序撤回:新增的删除、改过的改回、删除的补到末尾。日记只移除记账时记录的 `diaryBlock` 原文。内容被家长或后续整理改过、无法匹配时保留现状并提醒,不强行覆盖。
 
-实现与边界测试见 `src/lib/vault-notes.ts`、`src/server/store.ts`、`src/server/runner.ts` 与 `tests/vault-notes.test.ts`。
+实现与边界测试见 `src/memory/vault-notes.ts`、`src/runtime/journal/store.ts`、`src/runtime/runner.ts` 与 `tests/vault-notes.test.ts`。

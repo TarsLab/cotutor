@@ -13,17 +13,17 @@ delete process.env.COTUTOR_WORKSPACE;
 delete process.env.DASHSCOPE_API_KEY;
 delete process.env.QWENCLOUD_TOKEN_PLAN_API_KEY;
 
-const { paintPrompt, paintLayout, paintSize, PAINT_NEGATIVE } = await import('../src/paint/prompt.ts');
-const { makeDraw } = await import('../src/paint/draw.ts');
-const { startPaints, enrichPaints, paintLines, paintedToday, paintNote, PAINT_STALE_MS } = await import('../src/paint/painter.ts');
-const { parseCard } = await import('../src/cards/index.ts');
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { readIndex } = await import('../src/server/store.ts');
+const { paintPrompt, paintLayout, paintSize, PAINT_NEGATIVE } = await import('../src/scenes/paint/prompt.ts');
+const { makeDraw } = await import('../src/media/draw.ts');
+const { startPaints, enrichPaints, paintLines, paintedToday, paintNote, PAINT_STALE_MS } = await import('../src/scenes/paint/painter.ts');
+const { parseCard } = await import('../src/board/cards/index.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { readIndex } = await import('../src/runtime/journal/store.ts');
 const { PAINT_PROMPT_DEFAULT } = await import('../src/schema/index.ts');
-type Draw = import('../src/paint/draw.ts').Draw;
-type BoardSection = import('../src/lib/kid-board.ts').BoardSection;
+type Draw = import('../src/media/draw.ts').Draw;
+type BoardSection = import('../src/board/presentation.ts').BoardSection;
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 

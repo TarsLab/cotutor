@@ -1,8 +1,8 @@
 /** 录像:轨道、某一刻的样子、空白压缩与播放时钟。纯函数,手搭的节,时刻都算得准。
  *  实时的轮照通话放;不是实时的轮写完那一刻整节铺上、不念(2026-10-22 起)。 */
-import { buildReel, playRecordOk, reelCardTook, reelChapterEnds, reelClock, reelDuration, reelFrameAt, reelSaid, REEL_GAP_PLAY_MS, type PlayRecord, type ReelInput } from '../src/lib/reel.ts';
-import type { BoardSection } from '../src/lib/kid-board.ts';
-import type { RunEvent } from '../src/lib/events.ts';
+import { buildReel, playRecordOk, reelCardTook, reelChapterEnds, reelClock, reelDuration, reelFrameAt, reelSaid, REEL_GAP_PLAY_MS, type PlayRecord, type ReelInput } from '../src/ui/kid/reel.ts';
+import type { BoardSection } from '../src/board/presentation.ts';
+import type { RunEvent } from '../src/schema/index.ts';
 import type { ConversationMessage } from '../src/schema/conversation.ts';
 import { check, done } from './_check.ts';
 

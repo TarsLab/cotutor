@@ -1,5 +1,5 @@
 /** 转录解析:实测事件流、子代理标记、最终文本、出错、旧格式、qwen 容差;折叠。 */
-import { type TranscriptItem, foldRuns, parseTranscript } from '../src/lib/transcript.ts';
+import { type TranscriptItem, foldRuns, parseTranscript } from '../src/brain/transcript.ts';
 import { check, done } from './_check.ts';
 
 const STREAM = [
@@ -45,7 +45,7 @@ const STREAM = [
   check('报错行永不折', kinds(foldRuns([T('tool'), T('tool'), T('tool'), T('tool-error'), T('tool'), T('done')])) === 'fold3,tool-error,tool,done');
 }
 {
-  const { toolCalls } = await import('../src/lib/transcript.ts');
+  const { toolCalls } = await import('../src/brain/transcript.ts');
   const log = [
     JSON.stringify({ type: 'assistant', session_id: 's', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 't1', name: 'Read', input: { file_path: '../../vault/孩子.md' } }] } }),
     JSON.stringify({ type: 'user', session_id: 's', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: [{ type: 'text', text: '# 小明\n> 现在' }] }] } }),

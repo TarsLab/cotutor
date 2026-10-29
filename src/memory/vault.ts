@@ -1,13 +1,13 @@
 /**
- * 家长的 vault(从 server/store.ts 搬来,2026-10-29,行为不变):《obsidian仓库设计.md》§6 的封闭清单——日记只追加,教材只读,
+ * 家长的 vault(从 runtime/journal/store.ts 搬来,2026-10-29,行为不变):《obsidian仓库设计.md》§6 的封闭清单——日记只追加,教材只读,
  * 记忆文件按「## 记忆」段增、改、删,删话题时撤回这个话题写进去的。扫 vault 按 `cotutor:` 属性找档案、入口、记忆。
  * 只要 vault 那几个路径(paths),不认整个 workspace;先 .tmp 再 rename。
  */
 import type { Dirent } from 'node:fs';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { removeDiaryBlock } from '../lib/diary.ts';
-import { applyMemoryOps, frontmatter, memoryPath, memoryTemplate, parseMemoryOp, undoMemoryLines, type MemoryLine, type VaultNote } from '../lib/vault-notes.ts';
+import { removeDiaryBlock } from './diary.ts';
+import { applyMemoryOps, frontmatter, memoryPath, memoryTemplate, parseMemoryOp, undoMemoryLines, type MemoryLine, type VaultNote } from './vault-notes.ts';
 import type { ConversationMessage, PathRole } from '../schema/index.ts';
 
 /** vault 在哪:workspace 的 paths(vault、diary、plans、textbooks…);传整个 workspace 也行 */

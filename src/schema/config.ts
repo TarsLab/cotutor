@@ -60,7 +60,7 @@ export const POLICY_DEFAULTS: Policy = {
   stall: { ms: 30000, retries: 2 },
 };
 
-/** 板书能用的卡(注册表顺序;tests/cards.test.ts 断言与 src/cards 的 kindsFor('board') 一致,这里不 import 卡,免得契约拖进卡的依赖) */
+/** 板书能用的卡(注册表顺序;tests/cards.test.ts 断言与 src/board/cards 的 kindsFor('board') 一致,这里不 import 卡,免得契约拖进卡的依赖) */
 export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'image', 'tianzige', 'word', 'lecture', 'canvas', 'paint', 'photo', 'code'] as const;
 export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
 
@@ -77,7 +77,7 @@ export const TutorSchema = z.object({
   subject: z.string().optional().describe('学科:与课程表的学科列、观察的 subject、vault 入口文件的 subject 属性对齐即归到这位老师'),
   /** 头像:一个 emoji 或图片相对路径 */
   avatar: z.string().optional().describe('头像:一个 emoji,或 workspace 根以内的图片相对路径(如 avatars/math-tutor.png;figshot pick --workspace 会写这个)'),
-  /** 学科色:头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮;不写 = 自动(src/lib/tutor-color.ts) */
+  /** 学科色:头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮;不写 = 自动(src/ui/shared/tutor-color.ts) */
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, '要 #rrggbb').optional().describe('学科色 #rrggbb:头像的环、牌的边、新话题气泡(白字压在上面,要够深,doctor 会查)、听写页的按钮;不写 = 语文粉、数学蓝、英语绿,其余按先后自动分、不撞色'),
   /** voxtell 音色 id;没有 = 用 voxtell 缺省 */
   voice: z.string().optional().describe('卡的配音用的 voxtell 音色 id(voxtell voices 可查;点读、单词卡的声音);不配这些卡就没有声音。老师开口的嘴在 live.voices'),
@@ -125,13 +125,13 @@ export function tutorExtras(t: Pick<Tutor, 'extras' | 'subject'>, talkOn = false
  * 板书写法的两种预载({boardFile} 板书技能 SKILL.md 的绝对路径,给能从文件追加系统提示的 CLI;{systemBody} 老师正文 + 板书写法,给只收一段系统提示文字的 CLI):
  * 模板里用了其中一个,应用就当板书写法已在系统提示里;都没用,应用在话题第一条消息里注入 <cotutor-board>(任何 CLI 都成立的退路)。
  * {effort} 这位老师的政策 effort(low / medium / high),qwen 由适配器写入思考量配置。
- * 带不带工具由适配器展开(src/clis/):{tools} 填一串工具名,独占一个参数的 {toolArgs} 展开成几个参数。
+ * 带不带工具由适配器展开(src/brain/cli/):{tools} 填一串工具名,独占一个参数的 {toolArgs} 展开成几个参数。
  * 政策旋钮(预算、轮数、模型)写进模板,换 agent 只换运行时。
  * stdin: "stream-json":消息不进命令行,写进 stdin(`--input-format stream-json`),
  * 模板里就不写 {prompt};argv 与消息无关,应用把下一轮的进程提前起好等着。
  */
 export const CliRuntimeSchema = z.object({
-  cli: z.string().min(1).optional().describe('这是哪个 CLI(src/clis/ 里的适配器名:qwen);不写按 run 的第一个词认。套了壳脚本的运行时要写'),
+  cli: z.string().min(1).optional().describe('这是哪个 CLI(src/brain/cli/ 里的适配器名:qwen);不写按 run 的第一个词认。套了壳脚本的运行时要写'),
   run: z.array(z.string()).min(1),
   resume: z.array(z.string()).min(1),
   stdin: z.literal('stream-json').optional().describe('消息写进 stdin(模板带 --input-format stream-json、不写 {prompt});这样的运行时,应用提前把下一轮的老师进程起好等着(预热)'),
@@ -221,7 +221,7 @@ export const LiveSchema = z.object({
   voices: z
     .record(z.string().regex(AGENT_NAME_RE), z.string().min(1))
     .default({})
-    .describe(`老师的嘴用哪个 realtime 音色(这个模型认的 56 个在 src/live/voices.ts,工作台音色页「实时的嘴」听着挑;写错了第一次开口才报错,doctor 的 live.voices 会提示);没写的出厂老师用出厂的(语文 Serena、数学 Andre、英语 Theo Calm),别的用 ${MOUTH_VOICE}`),
+    .describe(`老师的嘴用哪个 realtime 音色(这个模型认的 56 个在 src/realtime/voices.ts,工作台音色页「实时的嘴」听着挑;写错了第一次开口才报错,doctor 的 live.voices 会提示);没写的出厂老师用出厂的(语文 Serena、数学 Andre、英语 Theo Calm),别的用 ${MOUTH_VOICE}`),
   // 一直听:孩子不用按,百炼的 VAD 判开口 / 说完,应用判收下 / 放过;老师说话时也在听(全双工)。
   // 孩子端没有开关:10-20 真跑,一问一答以外孩子的停顿、语气词、旁边的话都被当成一句;口语课自己开,不看这里
   listen: z.enum(['hold', 'open']).default(LIVE_DEFAULT.listen).describe('实时老师页怎么说话:hold 按住说(缺省)、open 一直听(试验;孩子停一下就算说完、旁边的话也会当成一句)。孩子端没有开关;口语课总是一直听,不看这里'),
@@ -372,7 +372,7 @@ export interface TutorView {
   display: string;
   subject?: string;
   avatar?: string;
-  /** cotutor.json 里写的学科色(没写 = 自动;用的颜色看 src/lib/tutor-color.ts 的 tutorColors) */
+  /** cotutor.json 里写的学科色(没写 = 自动;用的颜色看 src/ui/shared/tutor-color.ts 的 tutorColors) */
   color?: string;
   voice?: string;
   enabled: boolean;
@@ -400,7 +400,7 @@ export function listTutors(config: CotutorConfig, opts: { kidOnly?: boolean } = 
     }));
 }
 
-/** 运行时模板填占位符;{tools} 填适配器给的工具名单(src/clis/ 的 fillArgs 先算好,没给就填空);{agentBody} / {systemBody} / {boardFile} 只在给了值时替换,否则原样留着(doctor 会报);{effort} 没给用出厂缺省(课文件排版这类不认老师政策的调用) */
+/** 运行时模板填占位符;{tools} 填适配器给的工具名单(src/brain/cli/ 的 fillArgs 先算好,没给就填空);{agentBody} / {systemBody} / {boardFile} 只在给了值时替换,否则原样留着(doctor 会报);{effort} 没给用出厂缺省(课文件排版这类不认老师政策的调用) */
 export function fillRuntime(
   argv: readonly string[],
   vars: { agent: string; prompt: string; session?: string; agentBody?: string; systemBody?: string; boardFile?: string; effort?: Policy['effort']; tools?: string },

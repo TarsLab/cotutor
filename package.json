@@ -25,8 +25,8 @@
       "default": "./dist/schema/index.js"
     },
     "./workspace": {
-      "types": "./dist/cli/workspace.d.ts",
-      "default": "./dist/cli/workspace.js"
+      "types": "./dist/app/workspace.d.ts",
+      "default": "./dist/app/workspace.js"
     },
     "./lib": {
       "types": "./dist/lib/index.d.ts",

@@ -4,8 +4,8 @@
  * 不在 activity 话题里画,照出厂的画风(PAINT_PROMPT_DEFAULT)夹在版式与角色中间。
  * 纯函数;版式与角色、分幅由这里接,改画风不会把分幅弄丢。
  */
-import type { PaintProps } from '../../cards/index.ts';
-import { fillSlots } from '../../lib/activity.ts';
+import type { PaintProps } from '../../board/cards/index.ts';
+import { fillSlots } from '../../schema/index.ts';
 import { PAINT_PROMPT_DEFAULT } from '../../schema/index.ts';
 
 /** 反向提示词(百炼限 500 字符);出厂那串在 schema,和画风放一起 */

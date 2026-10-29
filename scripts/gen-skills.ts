@@ -6,12 +6,12 @@
  */
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
-import { BOARD_SKILL, boardSkillFiles } from '../src/cards/docs.ts';
-import { VAULT_SKILL, vaultSkillGeneratedFiles } from '../src/lib/vault-doc.ts';
-import { ANALYZE_SKILL, analyzeSkillGeneratedFiles } from '../src/lib/analyze-doc.ts';
-import { TUNE_SKILL, tuneSkillGeneratedFiles } from '../src/lib/tune-doc.ts';
-import { HOME_SKILL, homeSkillGeneratedFiles } from '../src/lib/home-doc.ts';
-import { PACKAGE_SKILLS_DIR } from '../src/cli/skills.ts';
+import { BOARD_SKILL, boardSkillFiles } from '../src/board/cards/docs.ts';
+import { VAULT_SKILL, vaultSkillGeneratedFiles } from '../src/app/skills/vault-doc.ts';
+import { ANALYZE_SKILL, analyzeSkillGeneratedFiles } from '../src/app/skills/analyze-doc.ts';
+import { TUNE_SKILL, tuneSkillGeneratedFiles } from '../src/app/skills/tune-doc.ts';
+import { HOME_SKILL, homeSkillGeneratedFiles } from '../src/app/skills/home-doc.ts';
+import { PACKAGE_SKILLS_DIR } from '../src/app/cli/skills.ts';
 
 export interface GeneratedSkill {
   files: () => Record<string, string>;

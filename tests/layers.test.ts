@@ -2,8 +2,8 @@
  * src 的依赖方向:扫每个文件的 import、import type、export … from、动态 import() 与 import('…') 类型,
  * 按顶层目录归到模块,对 ALLOW 查。现有的反向依赖按「模块 → 被引的文件」列在 LEGACY,只减不增:引了表外的文件就红,表里的哪条代码里没了也红(把那条删掉)。
  * 不按「文件 → 文件」记:迁移要拆大文件,拆出来的新文件照旧引同一个被引的文件,不算多了一条反向依赖。
- * 另两条:内联进页面的文件(server/inline-lib.ts 删掉整行 import)运行时只能从别的内联文件拿值;舞台包的传递依赖里没有 Node 内置模块。
- * 搬目录时改 ALLOW 的「目录 → 可以导入的目录」。
+ * 另两条:内联进页面的文件(ui/shared/inline-lib.ts 删掉整行 import)运行时只能从别的内联文件拿值;舞台包的传递依赖里没有 Node 内置模块。
+ * 模块就是 src 下的顶层目录;加模块时改 ALLOW。
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { builtinModules } from 'node:module';
@@ -14,87 +14,34 @@ import { check, done } from './_check.ts';
 
 const SRC = fileURLToPath(new URL('../src/', import.meta.url));
 
-/** 现有目录 → 可以导入的目录(自己总可以)。目标模块出现之前按这张表 */
+/**
+ * 模块 → 可以导入的模块(自己总可以),照 docs/wip/src架构设计.md §4(2026-10-29 目录归位):
+ * 能力模块(brain、realtime、board、memory、media)只引 schema、shared,不互相调;场景只多引 board 的公开协议;
+ * 运行层可以调各模块;页面只认 schema、shared、board 的纯协议(内联的纯文件经 URL 读,不是 import);应用那层(路由、命令、组装)谁都能引
+ */
+const CORE = ['shared', 'schema'];
 const ALLOW: Record<string, readonly string[]> = {
-  // 无业务归属的小件(错误类、路径打码);谁都能引
   shared: [],
   schema: ['shared'],
-  lib: ['shared', 'schema'],
-  cards: ['shared', 'schema', 'lib'],
-  clis: ['shared', 'schema', 'lib'],
-  // 脑执行;clis 是它现在的 CLI 实现(以后搬进 brain/cli/)
-  brain: ['shared', 'schema', 'lib', 'clis'],
-  // 听说:百炼 realtime 的客户端(以后加别家、加 ASR + TTS 组合也在这)
-  realtime: ['shared', 'schema', 'lib'],
-  // 家长的 vault 与学习记忆:读取、取材、应用写入与撤回
-  memory: ['shared', 'schema', 'lib'],
-  // 每种一家的媒体能力(文生图;以后配音、认图、课包)
-  media: ['shared', 'schema', 'lib'],
-  // 具体场景的规则:不引 runtime、不调 media 与厂商实现(要画就由调用方交进来)
-  scenes: ['shared', 'schema', 'lib', 'cards'],
-  // 运行层:能调各模块的公开出口(现在只有读 activity 文件那一份,搬目录时 runner、交付这些都进来)
-  runtime: ['shared', 'schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes'],
-  live: ['shared', 'schema', 'lib', 'cards', 'realtime', 'runtime'],
-  // 旧路径,转发到 scenes/paint 与 media;迁完删
-  paint: ['shared', 'schema', 'lib', 'cards', 'scenes', 'media'],
-  // 口语课、听写这两个目录现在是场景的页面与路由(应用那层):规则在 scenes/,看图在 media/,由这里接起来
-  talk: ['shared', 'schema', 'lib', 'cards', 'scenes', 'media', 'runtime'],
-  dictation: ['shared', 'schema', 'lib', 'cards', 'scenes', 'media', 'runtime'],
-  stage: ['shared', 'schema', 'lib'],
-  server: ['shared', 'schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation', 'runtime'],
-  cli: ['shared', 'schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation', 'server', 'runtime'],
+  brain: CORE,
+  realtime: CORE,
+  board: CORE,
+  memory: CORE,
+  media: CORE,
+  scenes: [...CORE, 'board'],
+  runtime: [...CORE, 'brain', 'realtime', 'board', 'memory', 'media', 'scenes'],
+  // 页面画板书与场景的记录(听写的录像照听写的事件画)
+  ui: [...CORE, 'board', 'scenes'],
+  app: [...CORE, 'brain', 'realtime', 'board', 'memory', 'media', 'scenes', 'runtime', 'ui'],
+  // npm 包的 ./lib 出口:只是把几样纯函数转出去
+  lib: ['shared', 'schema', 'brain', 'realtime', 'board', 'memory', 'media', 'scenes', 'runtime', 'ui', 'app'],
 };
 
 /** 现有的反向依赖(「模块 → 被引的文件」);只许删,不许加 */
-const LEGACY: readonly string[] = [
-  // lib → cards:lib 与卡的注册表互引
-  'lib → cards/docs.ts',
-  'lib → cards/index.ts',
-  // lib → cli:技能文档引命令用法
-  'lib → cli/usage.ts',
-  // lib → clis:纯逻辑认识 CLI 方言;以后收进 brain
-  'lib → clis/index.ts',
-  'lib → clis/stream-json.ts',
-  'lib → clis/types.ts',
-  // live → server:实时老师引 runner(BusyError、SendStarted)、store、paper 与 access 的 cookie
-  'live → server/access.ts',
-  'live → server/paper.ts',
-  'live → server/runner.ts',
-  'live → server/store.ts',
-  // talk → server:场景的页面借孩子端零件,路由借 AppContext
-  'talk → server/app.ts',
-  'talk → server/kid-log.ts',
-  'talk → server/kid-nav.ts',
-  'talk → server/page-dom.ts',
-  'talk → server/photo-ui.ts',
-  'talk → server/tutor-face.ts',
-  // dictation → server:同上,另有配音、天字格、首页
-  'dictation → server/app.ts',
-  'dictation → server/brand.ts',
-  'dictation → server/home.ts',
-  'dictation → server/inline-lib.ts',
-  'dictation → server/kid-log.ts',
-  'dictation → server/kid-nav.ts',
-  'dictation → server/letters.ts',
-  'dictation → server/page-dom.ts',
-  'dictation → server/photo-ui.ts',
-  'dictation → server/reel-dock.ts',
-  'dictation → server/tianzige.ts',
-  'dictation → server/tts.ts',
-  'dictation → server/tutor-face.ts',
-  // server → cli:多数是 cli/workspace.ts 这个大对象
-  'server → cli/activities.ts',
-  'server → cli/doctor.ts',
-  'server → cli/grades.ts',
-  'server → cli/migrate.ts',
-  'server → cli/serve.ts',
-  'server → cli/themes.ts',
-  'server → cli/tutors.ts',
-  'server → cli/workspace.ts',
-];
+const LEGACY: readonly string[] = [];
 
 /** 舞台包的入口(scripts/build-stage.mjs) */
-const STAGE_ENTRY = 'stage/main.tsx';
+const STAGE_ENTRY = 'ui/stage/main.tsx';
 
 const rel = (abs: string) => relative(SRC, abs).split(sep).join('/');
 const moduleOf = (file: string) => (file.includes('/') ? file.slice(0, file.indexOf('/')) : '');
@@ -146,18 +93,16 @@ function resolveIn(from: string, spec: string): string | null {
 
 const isBuiltin = (spec: string) => spec.startsWith('node:') || builtinModules.includes(spec.split('/')[0]);
 
-/** 内联进页面的文件:inlineScript(new URL('…')) 的字面路径,加 kid-page 里 libSource 的那几个名字 */
+/** 内联进页面的文件:调 inlineScript 的文件里 new URL('….ts', import.meta.url) 指的那些(kid-page 的 INLINE 表、听写录像、单词卡) */
 function inlineFilesOf(files: readonly string[]): Set<string> {
   const out = new Set<string>();
   for (const f of files) {
     const text = readFileSync(join(SRC, f), 'utf8');
-    if (!text.includes('inlineScript(')) continue;
-    for (const m of text.matchAll(/inlineScript\(new URL\('([^']+\.ts)'/g)) {
+    if (!/inlineScript\(/.test(text) || f.endsWith('inline-lib.ts')) continue;
+    for (const m of text.matchAll(/new URL\('(\.[^']+\.ts)', import\.meta\.url\)/g)) {
       const r = resolveIn(f, m[1]);
       if (r) out.add(r);
     }
-    const union = /function libSource\(name: ([^)]+)\)/.exec(text);
-    if (union) for (const m of union[1].matchAll(/'([a-z-]+)'/g)) out.add(`lib/${m[1]}.ts`);
   }
   return out;
 }
@@ -205,7 +150,7 @@ if (process.env.LAYERS_DUMP) for (const e of LEGACY) console.log(`${e.padEnd(40)
 
 // ---- 内联文件:运行时只从别的内联文件拿值 ----
 const inline = inlineFilesOf(files);
-check('认出了内联文件(kid-board、live-board、听写录像都在)', ['lib/kid-board.ts', 'lib/live-board.ts', 'dictation/lib/reel.ts'].every((f) => inline.has(f)), [...inline].join(' '));
+check('认出了内联文件(板书、孩子端的声音、听写录像都在)', ['board/presentation.ts', 'runtime/delivery/player.ts', 'ui/dictation/reel.ts'].every((f) => inline.has(f)), [...inline].join(' '));
 const missingInline = [...inline].filter((f) => !fileSet.has(f));
 check('内联清单里的文件都在', missingInline.length === 0, missingInline.join(' '));
 const badInline: string[] = [];

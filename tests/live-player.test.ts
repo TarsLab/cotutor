@@ -1,9 +1,9 @@
 /**
- * 实时老师的孩子端仲裁(live-board.ts 的 liveStep):表的每格一条 + 随机事件序列跑不变式。
+ * 实时老师的孩子端仲裁(runtime/delivery/player.ts 的 liveStep):表的每格一条 + 随机事件序列跑不变式。
  * 下面的 rows 列出状态与事件的预期组合;改规则先改这里,再改 liveStep。
  */
 import { readFileSync } from 'node:fs';
-import { initialLive, liveGate, liveStep, type LiveEffect, type LiveEvent, type LiveModel, type LiveStatus } from '../src/lib/live-board.ts';
+import { initialLive, liveGate, liveStep, type LiveEffect, type LiveEvent, type LiveModel, type LiveStatus } from '../src/runtime/delivery/player.ts';
 import { check, done } from './_check.ts';
 
 const M = (status: LiveStatus, cut = false): LiveModel => ({ ...initialLive(), status, cut });
@@ -215,18 +215,20 @@ check('随机事件序列 3000 条 × 150 步:不变式都成立', failures.leng
 
 // ---- 两份状态机都内联进孩子端页面(libSource):顶层的名字撞了,后一份的函数声明会盖掉前一份(2026-10-20 live-board 的 step 盖了 kid-board 的 step,板书页整个不动)----
 {
-  const names = (f: string) => new Set([...readFileSync(new URL(`../src/lib/${f}`, import.meta.url), 'utf8').matchAll(/^(?:export )?(?:function|const|let|class) ([A-Za-z_$][\w$]*)/gm)].map((x) => x[1]));
-  const kb = names('kid-board.ts');
-  const both = [...names('live-board.ts')].filter((n) => kb.has(n));
-  check('live-board.ts 与 kid-board.ts 顶层的名字不撞', both.length === 0, both.join());
+  // 原来都在 src/lib/,2026-10-29 目录归位以后各在各的模块
+  const AT: Record<string, string> = { 'presentation.ts': '../src/board/presentation.ts', 'player.ts': '../src/runtime/delivery/player.ts', 'voice-view.ts': '../src/ui/kid/voice-view.ts', 'photo-edit.ts': '../src/ui/kid/photo-edit.ts', 'reel.ts': '../src/ui/kid/reel.ts', 'canvas-chat.ts': '../src/board/canvas-chat.ts' };
+  const names = (f: string) => new Set([...readFileSync(new URL(AT[f], import.meta.url), 'utf8').matchAll(/^(?:export )?(?:function|const|let|class) ([A-Za-z_$][\w$]*)/gm)].map((x) => x[1]));
+  const kb = names('presentation.ts');
+  const both = [...names('player.ts')].filter((n) => kb.has(n));
+  check('player.ts 与 presentation.ts 顶层的名字不撞', both.length === 0, both.join());
   // 孩子端页面内联的几份(kid-page.ts 的 libSource)两两不撞
-  const libs = ['kid-board.ts', 'live-board.ts', 'voice-view.ts', 'photo-edit.ts', 'reel.ts', 'canvas-chat.ts'].map((f) => [f, names(f)] as const);
+  const libs = ['presentation.ts', 'player.ts', 'voice-view.ts', 'photo-edit.ts', 'reel.ts', 'canvas-chat.ts'].map((f) => [f, names(f)] as const);
   const clash = libs.flatMap(([a, na], i) => libs.slice(i + 1).flatMap(([b, nb]) => [...na].filter((n) => nb.has(n)).map((n) => `${a}/${b}:${n}`)));
   check('孩子端页面内联的几份纯函数(含边画边聊的 canvas-chat.ts)顶层的名字两两不撞', clash.length === 0, clash.join());
 }
 
 // ---- 页面不绕过 liveStep:实时的状态只在 liveDispatch 里写;卡上的声音都先过 cardSoundOk(板书时那里停讲稿,实时时问 liveStep)----
-const page = readFileSync(new URL('../src/server/kid-page.ts', import.meta.url), 'utf8');
+const page = readFileSync(new URL('../src/ui/kid/kid-page.ts', import.meta.url), 'utf8');
 const count = (re: RegExp) => (page.match(re) ?? []).length;
 check('页面:LV.model 只在 liveDispatch 里写一次', count(/LV\.model = /g) === 1 && count(/LV\.model\.\w+ = /g) === 0, String(count(/LV\.model = /g)));
 check('页面:卡上的声音(点读、单词)都先过 cardSoundOk;不是实时时它只停别的声音(halt),板书的 segment 没了', count(/dispatch\(\{ type: 'segment' \}\)/g) === 0 && count(/cardSoundOk\(\)/g) === 3, `${count(/dispatch\(\{ type: 'segment' \}\)/g)} ${count(/cardSoundOk\(\)/g)}`);

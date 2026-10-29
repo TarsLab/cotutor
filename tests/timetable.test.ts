@@ -1,5 +1,5 @@
 /** 课程表解析(抄 growth-apps 的回归):好表、星期/时间各种写法、错误带行号、多表、忽略无关表、孩子列可选、时段命中。 */
-import { currentSlot, dayOf, parseTimetable, slotLabel } from '../src/lib/timetable.ts';
+import { currentSlot, dayOf, parseTimetable, slotLabel } from '../src/memory/timetable.ts';
 import { check, done } from './_check.ts';
 
 const GOOD = `---

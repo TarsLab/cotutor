@@ -10,10 +10,10 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-server-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { httpsFiles } = await import('../src/cli/serve.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { httpsFiles } = await import('../src/app/cli/serve.ts');
 
 try {
   const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
@@ -63,9 +63,9 @@ try {
     check('模板的换行转义没被吃掉(\\\\n 少写一层就变成真换行,字符串断在这里)', js.includes('replace(/\\n/g') && js.includes("split('\\n')"));
   }
   // 舞台包与课包:静态文件;越界、不存在 404;dist/stage 没打包时 /stage/ 404(doctor 点名)
-  const { stageBuilt, STAGE_DIR } = await import('../src/server/stage.ts');
+  const { stageBuilt, STAGE_DIR } = await import('../src/app/http/stage.ts');
   const st = await get('/stage/');
-  const { stageVersion } = await import('../src/server/stage.ts');
+  const { stageVersion } = await import('../src/app/http/stage.ts');
   const sv = await stageVersion();
   check('舞台包:打了包就给 index.html(当 html 发,不缓存;stage.js / stage.css 带版本),没打就 404', stageBuilt() ? st.status === 200 && st.html?.includes(`/stage/stage.js?v=${sv}`) === true && st.html.includes(`/stage/stage.css?v=${sv}`) && sv !== '0' : st.status === 404, JSON.stringify(st).slice(0, 300));
   const kidHtml = (await get('/')).html ?? '';
@@ -80,7 +80,7 @@ try {
   const font = await get('/stage/fonts/Xiaolai/Xiaolai-Regular-019d66dcad46dc156b162d267f981c20.woff2');
   // 字体目录是从 @excalidraw/excalidraw 的包入口**现解析**的,不是写死的 `<包根>/node_modules/`——
   // npm 扁平安装时依赖不在本包下,写死的话装出来的 /stage/fonts/ 全 404(2026-09-11 发版前用 tgz 装出来撞见)
-  const { FONTS_DIR, fontsDir } = await import('../src/server/stage.ts');
+  const { FONTS_DIR, fontsDir } = await import('../src/app/http/stage.ts');
   check('字体从 excalidraw 包里给,目录现解析', font.status === 200 && font.contentType === 'font/woff2' && font.file?.includes('@excalidraw') === true
     && FONTS_DIR === join(dirname(createRequire(import.meta.url).resolve('@excalidraw/excalidraw')), 'fonts') + sep, JSON.stringify(font));
   // 部署包把字体拷进 dist/stage/fonts/、去掉 excalidraw 依赖(docs/wip/deploy/):舞台包里带了就用它
@@ -107,7 +107,7 @@ try {
   // 老师条目本来没有 policy 键(出厂的语文、英语老师都是),页面把留空的字段发成 null:
   // 深合并要先剥 null 再落,否则写出 policy: {replyMaxChars: null, …},整份过不了契约、一保存就报错
   {
-    const { deepMerge } = await import('../src/cli/workspace.ts');
+    const { deepMerge } = await import('../src/app/workspace.ts');
     check('深合并:底下没这个对象时也剥 null、不留空对象', JSON.stringify(deepMerge({}, { policy: { board: 'off', replyMaxChars: null, contextPack: { recent: null } } })) === '{"policy":{"board":"off"}}', JSON.stringify(deepMerge({}, { policy: { board: 'off', replyMaxChars: null, contextPack: { recent: null } } })));
     check('深合并:原有的键该删还是删', JSON.stringify(deepMerge({ a: { x: 1, y: 2 } }, { a: { x: null } })) === '{"a":{"y":2}}');
     const r = await route('PATCH', '/api/config', ctx, { tutors: { 'chinese-tutor': { policy: { board: 'off', effort: 'medium', replyMaxChars: null, contextPack: { recent: null, planLines: null } } } } });
@@ -116,9 +116,10 @@ try {
   }
   // 家长板书页:板书接口答案在、家长的话在、出错的轮有 error;同一份索引下孩子接口的输出不变(护栏);清单;页面与 manifest
   {
-    const { emptyIndex, addMessage, localDate } = await import('../src/lib/conversation.ts');
-    const { writeIndex } = await import('../src/server/store.ts');
-    const { parseBoard } = await import('../src/lib/board.ts');
+    const { emptyIndex, addMessage } = await import('../src/runtime/journal/conversation.ts');
+    const { localDate } = await import('../src/shared/time.ts');
+    const { writeIndex } = await import('../src/runtime/journal/store.ts');
+    const { parseBoard } = await import('../src/board/parse.ts');
     const today = localDate(new Date());
     const b1 = parseBoard('开场。\n\n```choice\n酒是谁的?\n- [x] 他自己的\n- [ ] 平分\n```\n\n酒是谁的?').section;
     const b2 = parseBoard('再想想,借一个够不够?').section;
@@ -160,7 +161,7 @@ try {
     check('家长端与工作台的新地址在;旧地址、删掉的识别试验页与小老师 404', (await get('/parent/dictation')).status === 200 && (await get('/parent/dictation/reel')).status === 200 && (await Promise.all(['/dictation/parent', '/dictation/reel', '/xlaoshi', '/parent/xlaoshi', '/api/xlaoshi', '/qr', '/voice-test', '/dev/voice-test'].map(async (u) => (await get(u)).status))).every((x) => x === 404));
     check('家长端 /parent:自己的一页(2026-10-28 起不是孩子端页面的家长模式)、自己的 manifest;manifest 从这页起;工作台在 /dev,/parent/board 没了', page.includes('id="ptl"') && !page.includes('const MODE') && page.includes('href="/parent/manifest.webmanifest"') && page.includes('· 家长</title>') && ((await get('/parent/manifest.webmanifest')).json as { start_url: string; scope: string }).start_url === '/parent' && ((await get('/manifest.webmanifest')).json as { start_url: string }).start_url === '/' && ((await get('/dev')).html ?? '').includes('老师团') && (await get('/parent/board')).status === 404);
     // 看录像:一个话题的轨道 + 这个话题的家长条目;老轮没有 timing 就按 at(分钟)放,事件的 t 从那一刻起算
-    const { conversationFiles } = await import('../src/lib/conversation.ts');
+    const { conversationFiles } = await import('../src/schema/index.ts');
     writeFileSync(conversationFiles(ctx.ws.dirs.conversations, 'math-tutor', today).events('1620-1'), `${JSON.stringify({ t: 5000, lane: 'ready', kind: 'all', cards: 1, lines: 2 })}\n`);
     type Rl = { thread: string; reel: { tracks: { job: string; at: number }[]; says: unknown[]; marks: { kind: string; label: string }[] }; messages: PMsg[] };
     const rl = await get('/api/conversations/math-tutor/today/threads/1620-1/reel');

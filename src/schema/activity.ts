@@ -8,7 +8,7 @@
  *   ## 应用拦的       ```应用拦  一行一条:`规则 —— 说明`(规则是应用认得的,见 ACTIVITY_GATES)
  *   ## 老师怎么带     给有脸的老师;参数不插值,只用 `{{有 名}}` … `{{/有}}` 裁段
  *   ## <工具人>收到什么  ```<工具人> 一段模板,`{{插槽}}` 由应用填;```<工具人>不要 可选
- * 别的节只给人看,应用不读。这里是解析出来的形状;解析与检查在 src/lib/activity.ts。
+ * 别的节只给人看,应用不读。这里是解析出来的形状;解析与检查在 src/runtime/activity.ts。
  */
 import { z } from 'zod';
 
@@ -18,17 +18,28 @@ export type ActivityParamType = (typeof ACTIVITY_PARAM_TYPES)[number];
 
 /** 应用会算的值(名 → 类型);activity 文件「应用算的」只能列这里有的 */
 export const ACTIVITY_STATE: Readonly<Record<string, ActivityParamType>> = {
-  /** 这个话题还能画几张:参数「最多画」减已画;没填最多画 = 不限,不写(src/server/activity-state.ts) */
+  /** 这个话题还能画几张:参数「最多画」减已画;没填最多画 = 不限,不写(src/runtime/activity-state.ts) */
   还能画: '数',
   /** 上一张画图卡没画的原因(「应用拦的」哪一条没过);画了就是空的 */
   缺: '字',
 };
 
-/** 应用认得的拦法(规则名 → 一句话);判断在 src/lib/activity.ts gatePasses,画图前由 src/server/activity-state.ts 接上。activity 文件「应用拦的」只能列这里有的 */
+/** 应用认得的拦法(规则名 → 一句话);判断在 src/runtime/activity.ts gatePasses,画图前由 src/runtime/activity-state.ts 接上。activity 文件「应用拦的」只能列这里有的 */
 export const ACTIVITY_GATES: Readonly<Record<string, string>> = {
   连说过一遍: '话题里有一张三行以上的 read 卡,孩子在它后面开过口',
   还能画: '还能画大于 0;不限时照过',
 };
+
+/** 工具人模板里的插槽 `{{名}}` */
+export const ACTIVITY_SLOT = /\{\{([^{}\s]+)\}\}/g;
+
+/** 工具人的模板填插槽;没给的插槽填空,填完连续空行并成一行 */
+export function fillSlots(template: string, values: Readonly<Record<string, string>>): string {
+  return template
+    .replace(ACTIVITY_SLOT, (_, name: string) => values[name] ?? '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 /** 工具人与它认得的插槽(都要在模板里出现) */
 export const ACTIVITY_TOOLS: Readonly<Record<string, { slots: readonly string[] }>> = {

@@ -9,13 +9,13 @@ process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
 const { ThemeManifestSchema } = await import('../src/schema/index.ts');
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { addTheme, packageTheme, readTheme, themeDir, themeStatuses, upgradeThemes } = await import('../src/cli/themes.ts');
-const { readManifest, writeManifest } = await import('../src/cli/tutors.ts');
-const { dirHash } = await import('../src/cli/skills.ts');
-const { PACKAGE_VERSION } = await import('../src/cli/skeleton.ts');
-const { themeFiles, resetThemeCache } = await import('../src/server/theme.ts');
-const { doctorWorkspace } = await import('../src/cli/doctor.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { addTheme, packageTheme, readTheme, themeDir, themeStatuses, upgradeThemes } = await import('../src/app/cli/themes.ts');
+const { readManifest, writeManifest } = await import('../src/app/cli/tutors.ts');
+const { dirHash } = await import('../src/app/cli/skills.ts');
+const { PACKAGE_VERSION } = await import('../src/app/cli/skeleton.ts');
+const { themeFiles, resetThemeCache } = await import('../src/app/http/theme.ts');
+const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
 
 try {
   // ---- 契约 ----

@@ -11,12 +11,12 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-parent-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { readPublished } = await import('../src/server/home.ts');
-const { splitHomeMd, joinHomeMd, setTutorButtons, setTutorDictation, orderTutors } = await import('../src/lib/home-edit.ts');
-const { parseHome } = await import('../src/lib/home.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { readPublished } = await import('../src/runtime/home/store.ts');
+const { splitHomeMd, joinHomeMd, setTutorButtons, setTutorDictation, orderTutors } = await import('../src/runtime/home/edit.ts');
+const { parseHome } = await import('../src/runtime/home/home.ts');
 
 // ---- 纯函数:改原文只动要动的块 ----
 {

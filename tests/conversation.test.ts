@@ -1,8 +1,10 @@
 /** 对话索引纯函数:命名、并入运行结果、session 只记一次。 */
-import { addMessage, applyRun, cardAssetName, cardId, changedCards, conversationFiles, currentThread, emptyIndex, jobId, lastJobOf, localDate, localMinute, sessionFor, threads, weekOf } from '../src/lib/conversation.ts';
-import { deriveKidView } from '../src/lib/kid-view.ts';
-import { sumTokens } from '../src/lib/tokens.ts';
-import { parseTranscript } from '../src/lib/transcript.ts';
+import { addMessage, applyRun, changedCards, currentThread, emptyIndex, jobId, lastJobOf, sessionFor } from '../src/runtime/journal/conversation.ts';
+import { localDate, localMinute, weekOf } from '../src/shared/time.ts';
+import { cardAssetName, cardId, conversationFiles, threads } from '../src/schema/index.ts';
+import { deriveKidView } from '../src/runtime/kid-view.ts';
+import { sumTokens } from '../src/shared/tokens.ts';
+import { parseTranscript } from '../src/brain/transcript.ts';
 import { ConversationIndexSchema } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
 

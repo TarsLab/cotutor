@@ -1,5 +1,5 @@
 /** 上下文包:固定 YAML 块、按政策截、空项不写、需要引号的引号。 */
-import { buildContextPack, renderContextPack, yamlScalar } from '../src/lib/context-pack.ts';
+import { buildContextPack, renderContextPack, yamlScalar } from '../src/runtime/context/context-pack.ts';
 import { check, done } from './_check.ts';
 
 check('裸标量', yamlScalar('2026-09-08T16:20') === '2026-09-08T16:20' && yamlScalar(3) === '3');

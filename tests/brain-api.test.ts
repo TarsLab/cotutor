@@ -14,12 +14,12 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-brain-api-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, dayView } = await import('../src/server/app.ts');
-const { DIGEST_HEAD } = await import('../src/lib/thread-digest.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, dayView } = await import('../src/app/http/app.ts');
+const { DIGEST_HEAD } = await import('../src/runtime/context/thread-digest.ts');
 const { bailianBase, thinkingOf } = await import('../src/brain/api.ts');
-const { localDate } = await import('../src/lib/conversation.ts');
+const { localDate } = await import('../src/shared/time.ts');
 
 const fake = await startFakeChat();
 const SECRET = 'sk-test-secret-never-log';

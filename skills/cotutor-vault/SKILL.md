@@ -5,7 +5,7 @@ description: cotutor 的老师怎么读家长的 Obsidian 仓库(档案、入口
 
 <!-- 给人看
 谁读:有脸的老师按需 Read
-能改:机器件,upgrade 覆盖;references/记账.md 由 src/lib/vault-doc.ts 生成
+能改:机器件,upgrade 覆盖;references/记账.md 由 src/app/skills/vault-doc.ts 生成
 改了:cotutor replay 一轮讲解;记账看 cotutor bookkeep(《写提示词.md》§一)
 -->
 

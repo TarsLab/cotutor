@@ -8,16 +8,16 @@ import { check, done } from './_check.ts';
 const testHome = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-grades-')));
 process.env.HOME = testHome;
 delete process.env.COTUTOR_WORKSPACE;
-const { gradePacks, requireGradePack, workspaceGradePack } = await import('../src/cli/grades.ts');
-const { gradeOfSemester } = await import('../src/lib/grade.ts');
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { readManifest, writeManifest, sha256, upgradeTutors, restoreTutor, shippedTutorText } = await import('../src/cli/tutors.ts');
-const { upgradeActivities, restoreActivity, shippedActivityText, shippedActivities } = await import('../src/cli/activities.ts');
-const { lintActivity, resolveParams, renderTutorSection } = await import('../src/lib/activity.ts');
-const { parseExamples } = await import('../src/lib/activity-eval.ts');
-const { doctorWorkspace } = await import('../src/cli/doctor.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { packDryRun } = await import('../src/server/runner.ts');
+const { gradePacks, requireGradePack, workspaceGradePack } = await import('../src/app/cli/grades.ts');
+const { gradeOfSemester } = await import('../src/memory/grade.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { readManifest, writeManifest, sha256, upgradeTutors, restoreTutor, shippedTutorText } = await import('../src/app/cli/tutors.ts');
+const { upgradeActivities, restoreActivity, shippedActivityText, shippedActivities } = await import('../src/app/cli/activities.ts');
+const { lintActivity, resolveParams, renderTutorSection } = await import('../src/runtime/activity.ts');
+const { parseExamples } = await import('../src/app/activity-eval-rules.ts');
+const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { packDryRun } = await import('../src/runtime/runner.ts');
 
 async function rejects(label: string, fn: () => Promise<unknown>, pattern: RegExp): Promise<void> {
   try { await fn(); check(label, false, '没有拒绝'); }
@@ -95,7 +95,7 @@ try {
   const dry = await packDryRun(ws, 'math-tutor', { from: 'kid', at: new Date('2026-10-27T00:00:00Z'), text: '帮我检查', activity: { name: '批改', params: { 范围: '23 + 18 = 31' } } });
   check('pack 里活动参数与孩子学期都在,不会伪改孩子年级', dry.prompt.includes('23 + 18 = 31') && dry.prompt.includes('三年级上') && dry.pack.activity?.name === '批改');
 
-  const { readLecture } = await import('../src/server/lecture.ts');
+  const { readLecture } = await import('../src/runtime/lecture.ts');
   const { default: sample } = await import('../grades/grade-2/examples/2026-10-27-pingjunfen.ts');
   const sampleDir = join(source.dir, 'examples', sample.id);
   const lesson = await readLecture({ dirs: { bundles: join(source.dir, 'examples') } }, sample.id);

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
-import { compactDiff, diffLines } from '../src/lib/diff.ts';
+import { compactDiff, diffLines } from '../src/app/diff.ts';
 
 {
   const d = diffLines(['a', 'b', 'c', 'd'], ['a', 'c', 'x', 'd']);
@@ -23,11 +23,11 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-replay-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { Runner } = await import('../src/server/runner.ts');
-const { compareReplay, evalWorkspace, formatCompare, listReplays, startReplay } = await import('../src/server/replay.ts');
-const { readIndex } = await import('../src/server/store.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { Runner } = await import('../src/runtime/runner.ts');
+const { compareReplay, evalWorkspace, formatCompare, listReplays, startReplay } = await import('../src/app/replay.ts');
+const { readIndex } = await import('../src/runtime/journal/store.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
 const FAKE_TTS = fileURLToPath(new URL('./_fake-tts.ts', import.meta.url));

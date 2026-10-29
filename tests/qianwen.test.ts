@@ -1,12 +1,12 @@
 /**
- * 千问两套账的路由(src/lib/qianwen.ts):Token Plan 有这个模型、本机有它的 key 就走它,否则百炼按量;两把 key 从哪找、放错格怎么认。
+ * 千问两套账的路由(src/shared/qianwen.ts):Token Plan 有这个模型、本机有它的 key 就走它,否则百炼按量;两把 key 从哪找、放错格怎么认。
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
-import { qianwenKeys, qianwenLine, DASHSCOPE_HOST, TOKEN_PLAN_HOST } from '../src/lib/qianwen.ts';
-import { voxtellEnv } from '../src/server/tts.ts';
+import { qianwenKeys, qianwenLine, DASHSCOPE_HOST, TOKEN_PLAN_HOST } from '../src/shared/qianwen.ts';
+import { voxtellEnv } from '../src/media/tts.ts';
 
 const home = mkdtempSync(join(tmpdir(), 'cotutor-qianwen-'));
 const both = { plan: 'sk-sp-p', payg: 'sk-ws-g' };

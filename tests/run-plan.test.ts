@@ -1,12 +1,12 @@
 /** 运行规划:同运行时有会话 → resume;跨运行时 / 无会话 → 新开;{agentBody} 只给用到它的运行时;ISO 周;recent 取材。 */
-import { boardPreloaded, getRuntime, planRun, runtimeUses } from '../src/lib/run-plan.ts';
-import { boardGuideReads, tutorRulesBody } from '../src/lib/tutor-rules.ts';
-import { isoWeek } from '../src/lib/plan.ts';
-import { applyRun, emptyIndex, addMessage } from '../src/lib/conversation.ts';
-import { deriveKidView } from '../src/lib/kid-view.ts';
-import { parseTranscript } from '../src/lib/transcript.ts';
-import { configTemplate, shippedAgents } from '../src/cli/skeleton.ts';
-import { parseConfig } from '../src/cli/workspace.ts';
+import { boardPreloaded, getRuntime, planRun, runtimeUses } from '../src/brain/cli/run-plan.ts';
+import { boardGuideReads, tutorRulesBody } from '../src/runtime/context/tutor-rules.ts';
+import { isoWeek } from '../src/memory/plan.ts';
+import { applyRun, emptyIndex, addMessage } from '../src/runtime/journal/conversation.ts';
+import { deriveKidView } from '../src/runtime/kid-view.ts';
+import { parseTranscript } from '../src/brain/transcript.ts';
+import { configTemplate, shippedAgents } from '../src/app/cli/skeleton.ts';
+import { parseConfig } from '../src/app/workspace.ts';
 import { check, done } from './_check.ts';
 
 const config = parseConfig(JSON.parse(configTemplate({ slug: 'ming', tutors: await shippedAgents() })), 'x');

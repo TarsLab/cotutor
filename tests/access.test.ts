@@ -1,5 +1,5 @@
 /**
- * 家长端与工作台的锁(src/server/access.ts):没设 PIN 全开、设了孩子端白名单照旧开、别的要凭证;
+ * 家长端与工作台的锁(src/app/http/access.ts):没设 PIN 全开、设了孩子端白名单照旧开、别的要凭证;
  * 本机免密;对 PIN 换 cookie;连错锁;改 PIN 换密钥;doctor 的 server.access;孩子端页面源码里用到的接口都在白名单里。
  */
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
@@ -11,12 +11,12 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-access-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { KID_PAGE } = await import('../src/server/kid-page.ts');
-const { createAccess, setPin, clearPin, readPin, isKidPath, signToken, verifyToken, cookieOf, COOKIE_NAME, USER_PIN_FILE } = await import('../src/server/access.ts');
-const { doctorWorkspace } = await import('../src/cli/doctor.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { KID_PAGE } = await import('../src/ui/kid/kid-page.ts');
+const { createAccess, setPin, clearPin, readPin, isKidPath, signToken, verifyToken, cookieOf, COOKIE_NAME, USER_PIN_FILE } = await import('../src/app/http/access.ts');
+const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
 
 try {
   const { root } = await initWorkspace({ slug: 'ming', name: '小明' });

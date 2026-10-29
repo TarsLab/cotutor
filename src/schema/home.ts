@@ -1,6 +1,6 @@
 /**
- * 首页:家长批准后发布的那页卡。草稿 home/draft.md 是板书同一套围栏语法(src/lib/home.ts 解析),
- * `cotutor home publish` 校验后写 home/published.json,孩子端只读它。卡的 props 契约在 src/cards/<kind>.ts(老师卡的讲法留在这里,下发孩子前剥掉)。
+ * 首页:家长批准后发布的那页卡。草稿 home/draft.md 是板书同一套围栏语法(src/runtime/home/home.ts 解析),
+ * `cotutor home publish` 校验后写 home/published.json,孩子端只读它。卡的 props 契约在 src/board/cards/<kind>.ts(老师卡的讲法留在这里,下发孩子前剥掉)。
  */
 import { z } from 'zod';
 import { BoardCardSchema } from './board.ts';

@@ -1,9 +1,9 @@
 /** 扫码页:编码器对 node-qrcode 的样本(逐格)、内联 SVG、页面编什么由服务端定(不看 Host)、?via=ip 的退路。 */
-import { certCovers, listenInfo, localName } from '../src/cli/serve.ts';
-import { encodeQR } from '../src/lib/qr.ts';
-import { qrNotes, qrSvg } from '../src/lib/qr-svg.ts';
-import { createMock } from '../src/server/mock.ts';
-import { qrPage } from '../src/server/qr-page.ts';
+import { certCovers, listenInfo, localName } from '../src/app/cli/serve.ts';
+import { encodeQR } from '../src/ui/shared/qr.ts';
+import { qrNotes, qrSvg } from '../src/ui/shared/qr-svg.ts';
+import { createMock } from '../src/app/mock/mock.ts';
+import { qrPage } from '../src/ui/dev/qr-page.ts';
 import { check, done } from './_check.ts';
 
 /** node-qrcode 1.5(字节模式、纠错 M、自动掩码)的输出,每行按位打成十六进制 */

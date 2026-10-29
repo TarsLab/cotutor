@@ -13,9 +13,9 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-play-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
 
 const node = process.execPath;
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));

@@ -1,11 +1,11 @@
 /**
- * `cotutor mock`(src/server/mock-live.ts):不花钱看实时老师页(老师都走实时)。那条 WebSocket 是假嘴——
+ * `cotutor mock`(src/app/mock/mock-live.ts):不花钱看实时老师页(老师都走实时)。那条 WebSocket 是假嘴——
  * 松手接住、发消息给 mock 的老师(消息带 live)、写完一句一句念(静音的声音 + 到点的 read)、按下打断。
  */
 import { check, done } from './_check.ts';
 
-const { serveMock, createMock } = await import('../src/server/mock.ts');
-const { MOCK_LIVE_SAID } = await import('../src/server/mock-live.ts');
+const { serveMock, createMock } = await import('../src/app/mock/mock.ts');
+const { MOCK_LIVE_SAID } = await import('../src/app/mock/mock-live.ts');
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const until = async (f: () => boolean, ms = 8000): Promise<boolean> => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(20); return f(); };

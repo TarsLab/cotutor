@@ -1,10 +1,10 @@
 /**
- * 读 activity 文件(从 cli/activities.ts 拆出来,2026-10-29,行为不变):在哪、每位老师有哪几个、按「名=值」的参数拼成一次跑。
- * 运行层每轮都要读,所以不放在命令行那一层;装、升级、还原、检查仍在 cli/activities.ts。
+ * 读 activity 文件(从 app/cli/activities.ts 拆出来,2026-10-29,行为不变):在哪、每位老师有哪几个、按「名=值」的参数拼成一次跑。
+ * 运行层每轮都要读,所以不放在命令行那一层;装、升级、还原、检查仍在 app/cli/activities.ts。
  */
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseActivity, resolveParams } from '../lib/activity.ts';
+import { parseActivity, resolveParams } from './activity.ts';
 import type { ActivityRun } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 

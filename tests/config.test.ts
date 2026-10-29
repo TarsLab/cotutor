@@ -1,6 +1,6 @@
 /** cotutor.json 契约:模板可解析、缺省与政策合并、错误即修复指南、运行时占位填充。 */
 import { CotutorConfigSchema, explainIssues, fillRuntime, isApiRuntime, listTutors, MOUTH_VOICE, mouthVoice, resolvePolicy, type CliRuntime } from '../src/schema/index.ts';
-import { configTemplate, shippedAgents } from '../src/cli/skeleton.ts';
+import { configTemplate, shippedAgents } from '../src/app/cli/skeleton.ts';
 import { check, done } from './_check.ts';
 
 const agents = await shippedAgents();

@@ -1,0 +1,39 @@
+/**
+ * 一种卡的服务端定义(见 docs/卡片协议.md):props 契约、围栏正文怎么解析、哪些字段不下发孩子端;给老师看的写法在包根 cards/<kind>/card.md(src/board/cards/docs.ts 读它);
+ * 有交互的卡再加 state 契约(孩子在卡上做的事,PUT 进来先过它)与 describe(把 props + state 说成给老师看的一句,进上下文包)。
+ * 页面那一半(紧凑态怎么画、舞台里怎么交互、标注落在哪些字上)在 kid-page.ts / board/presentation.ts;两边靠 kind 名对上。
+ */
+import type { z } from 'zod';
+
+/** 卡用在哪:板书(老师的回复)/ 首页(家长批准的那页) */
+export type CardPlace = 'board' | 'home';
+
+export interface CardKind<P = Record<string, unknown>, S = unknown> {
+  name: string;
+  /** 能用在哪;缺省只板书。首页专属的卡(tutor 等)不进 cotutor-board 技能,老师写了退文字卡 */
+  where?: readonly CardPlace[];
+  props: z.ZodType<P>;
+  /** 围栏正文 + 标签后的修饰词 → props;抛错 = 没解析成(退成文字卡显示原文,家长视图报一行) */
+  parse(body: string, mods: readonly string[]): P;
+  /** 解析成了、但正文有一部分没用上(田字格的拼音对不上字数):给家长视图的一句;没有 / null = 不报 */
+  note?(body: string, props: P): string | null;
+  /** 剥掉不下发孩子端的字段(答案);没有 = 全给 */
+  strip?(props: P): P;
+  /** 孩子在卡上做的事的形状;没有 = 这种卡没有状态,PUT 一律 400 */
+  state?: z.ZodType<S>;
+  /** props + state → 给老师看的一句(不含卡的标题,那句由注册表拼);没有 = 状态原样 JSON */
+  describe?(props: P, state: S): string;
+  /** 这张卡要在后台预生成的配音资产(点读的段):文件名相对这张卡的资产目录 <日期>.<job>.cards/<n>/,text 是要念的字 */
+  assets?(props: P): { file: string; text: string }[];
+}
+
+/** 课包 / 视频小课堂的 id(bundles/<id>/、lectures/<id>/):lecture 卡、画板的底、首页的小课堂按钮共用 */
+export const BUNDLE_ID_RE = /^[a-z0-9][a-z0-9-]{0,80}$/;
+
+/** 围栏正文 → 非空行(各自 trim) */
+export function bodyLines(body: string): string[] {
+  return body
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+}

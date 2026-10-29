@@ -18,11 +18,11 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-lecture-flow-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { readIndex, readRunFile } = await import('../src/server/store.ts');
-const { checkHome, publishHome } = await import('../src/server/home.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { readIndex, readRunFile } = await import('../src/runtime/journal/store.ts');
+const { checkHome, publishHome } = await import('../src/runtime/home/store.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
 const BUNDLE = '2026-09-18-po13-jian-8';

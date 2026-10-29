@@ -1,5 +1,5 @@
 /** 流式:从 stream-json 增量事件里拼当前顶层回复;子代理跳过;message_start 清零;整条 assistant 也认;半行先攒着。 */
-import { createPartialReader } from '../src/lib/stream.ts';
+import { createPartialReader } from '../src/brain/stream.ts';
 import { check, done } from './_check.ts';
 
 const ev = (o: unknown): string => `${JSON.stringify(o)}\n`;

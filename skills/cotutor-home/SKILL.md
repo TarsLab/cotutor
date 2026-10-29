@@ -5,7 +5,7 @@ description: 排 cotutor 孩子端的首页。孩子学完之后,家长在 works
 
 <!-- 给人看
 谁读:家长在 workspace 根开的编程助手
-能改:机器件,upgrade 覆盖;references/ 下的首页语法.md、命令.md、tutor.md 由 src/lib/home-doc.ts 与 cards/tutor/card.md 生成
+能改:机器件,upgrade 覆盖;references/ 下的首页语法.md、命令.md、tutor.md 由 src/app/skills/home-doc.ts 与 cards/tutor/card.md 生成
 改了:在试用 workspace 里开编程助手说一句「总结一下今天」(《写提示词.md》§一)
 -->
 

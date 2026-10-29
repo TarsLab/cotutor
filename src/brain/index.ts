@@ -2,25 +2,25 @@
  * 脑执行:一轮教学里「让脑想、写出正文」的那一步。
  * runner 拼好上下文包与系统提示交到这里;这里起老师(或接预热好的)、读输出、断流接着跑,随流回报正文与工具,收尾给出整轮的转录。
  * 执行完不等于这一轮交付完:板书解析、配音、记忆与日记的收尾归 runner。
- * 两种实现,按 cotutor.json 里这轮的运行时分:{run, resume} 起 CLI(./cli.ts,各家方言在 src/clis/);{api, model} 应用直连模型(./api.ts)。
+ * 两种实现,按 cotutor.json 里这轮的运行时分:{run, resume} 起 CLI(./cli/run.ts,各家方言在 ./cli/ 的适配器);{api, model} 应用直连模型(./api.ts)。
  */
-import { controlsTools as cliControlsTools, parserForRuntime, type CliEvent } from '../clis/index.ts';
-import { getRuntime, type RunPlan } from '../lib/run-plan.ts';
-import type { ToolCall, Transcript } from '../lib/transcript.ts';
+import { controlsTools as cliControlsTools, parserForRuntime, type CliEvent } from './cli/adapters.ts';
+import { getRuntime, type RunPlan } from './cli/run-plan.ts';
+import type { ToolCall, Transcript } from './transcript.ts';
 import { isApiRuntime, type CotutorConfig, type Policy, type Runtime } from '../schema/index.ts';
-import type { ToolSet } from '../clis/index.ts';
-import type { Slot } from './warm.ts';
+import type { ToolSet } from './cli/adapters.ts';
+import type { Slot } from './cli/warm.ts';
 import { API_CLI, ApiBrain, parseEventLine } from './api.ts';
-import { CliBrain } from './cli.ts';
+import { CliBrain } from './cli/run.ts';
 
-export type { ToolSet } from '../clis/index.ts';
-export type { Slot } from './warm.ts';
+export type { ToolSet } from './cli/adapters.ts';
+export type { Slot } from './cli/warm.ts';
 
 /**
  * CLI 那一家给外面用的几样(经 brain 的出口给,外面不直接引 clis/):工具名属于哪一类(家长端看原文、板书写法有没有被读);
  * 出厂的运行时模板(init 写 cotutor.json);doctor 体检 CLI 运行时用的(退役没有、适配器、读输出、备机器文件、起进程的环境)
  */
-export { adapterFor, factoryRuntimes, parserOf, prepareCli, processEnv, runtimeIssue, toolKind, type ToolKind } from '../clis/index.ts';
+export { adapterFor, factoryRuntimes, parserOf, prepareCli, processEnv, runtimeIssue, toolKind, type ToolKind } from './cli/adapters.ts';
 
 /** 一轮要脑做的:哪个运行时、接哪个会话、系统提示的几样、这条消息(上下文包 + 孩子的话)、思考量、工具 */
 export interface BrainRequest {
@@ -41,6 +41,8 @@ export interface BrainRequest {
   images?: readonly string[];
   /** 整段压缩(API 运行时;上一轮结束时上下文过了 32k):之前的模型历史不再发,digest 是应用照索引拼的前情;prompt 这一轮带笔记全文。CLI 不用它 */
   compact?: { digest: string };
+  /** 回复停在写成正文的工具调用上了吗(板书的规矩,runner 交进来);CLI 据此 resume 一次告诉老师不会有结果,没给就不查。API 不用它 */
+  stuckOnTool?: (text: string) => boolean;
 }
 
 /** 接预热好的进程要对得上的:老师目录(进程 cwd)、日期、这个话题末条 job(新开记 null) */

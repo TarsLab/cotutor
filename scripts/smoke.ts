@@ -42,10 +42,10 @@ need(PACKAGE_AGENTS_DIR === join(root, 'grades', 'grade-2', 'agents'), `dist 算
 const shipped = existsSync(PACKAGE_AGENTS_DIR) ? readdirSync(PACKAGE_AGENTS_DIR).filter((f) => f.endsWith('.md')) : [];
 need(shipped.length >= 3, `agents/ 里只有 ${shipped.length} 份老师定义`);
 // 每个声明的年级都要完整,所有 activity 与对话例子都必须可解析。
-const { gradePacks, PACKAGE_GRADES_DIR } = await import(new URL('../dist/cli/grades.js', import.meta.url).href) as typeof import('../src/cli/grades.ts');
-const { listActivities } = await import(new URL('../dist/cli/activities.js', import.meta.url).href) as typeof import('../src/cli/activities.ts');
-const { lintActivity } = await import(new URL('../dist/lib/activity.js', import.meta.url).href) as typeof import('../src/lib/activity.ts');
-const { parseExamples } = await import(new URL('../dist/lib/activity-eval.js', import.meta.url).href) as typeof import('../src/lib/activity-eval.ts');
+const { gradePacks, PACKAGE_GRADES_DIR } = await import(new URL('../dist/cli/grades.js', import.meta.url).href) as typeof import('../src/app/cli/grades.ts');
+const { listActivities } = await import(new URL('../dist/cli/activities.js', import.meta.url).href) as typeof import('../src/app/cli/activities.ts');
+const { lintActivity } = await import(new URL('../dist/lib/activity.js', import.meta.url).href) as typeof import('../src/runtime/activity.ts');
+const { parseExamples } = await import(new URL('../dist/lib/activity-eval.js', import.meta.url).href) as typeof import('../src/app/activity-eval-rules.ts');
 const packs = await gradePacks();
 const declared = readdirSync(PACKAGE_GRADES_DIR).filter((d) => /^grade-[1-6]$/.test(d));
 need(packs.length === declared.length && packs.length > 0, 'grades/ 有不完整的年级包(README、三位老师、activities 目录)');

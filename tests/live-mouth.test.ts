@@ -1,5 +1,5 @@
 /**
- * 字幕重放的声音(src/live/lib/mouth.ts + call.ts 落盘 + 孩子端取的接口),假百炼 + 假老师,不花钱:
+ * 字幕重放的声音(src/runtime/journal/mouth-index.ts + call.ts 落盘 + 孩子端取的接口),假百炼 + 假老师,不花钱:
  * 每句的起点怎么摊(出齐的按字数、没出齐的按出了的字幕);一轮念完落 <日期>.<job>.mouth.wav / .json;孩子按下时没放的那几句也在;
  * 嘴出到一半被掐,出了的那截在;换了连接接着留;接口只给实时的轮、没有就 404。
  */
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
 import { startFakeRealtime } from './_fake-realtime.ts';
 
-const { mouthIndex } = await import('../src/live/lib/mouth.ts');
+const { mouthIndex } = await import('../src/runtime/journal/mouth-index.ts');
 
 // ---- 起点怎么摊(纯函数;48 字节 = 1 毫秒,24k 单声道)----
 {
@@ -30,13 +30,13 @@ process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 delete process.env.DASHSCOPE_API_KEY;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, createHandler, route } = await import('../src/server/app.ts');
-const { makeLiveUpgrade } = await import('../src/live/route.ts');
-const { localDate } = await import('../src/lib/conversation.ts');
-const { pcmOfWav } = await import('../src/live/lib/wav.ts');
-const { isKidPath } = await import('../src/server/access.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, createHandler, route } = await import('../src/app/http/app.ts');
+const { makeLiveUpgrade } = await import('../src/app/ws/route.ts');
+const { localDate } = await import('../src/shared/time.ts');
+const { pcmOfWav } = await import('../src/shared/wav.ts');
+const { isKidPath } = await import('../src/app/http/access.ts');
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const until = async (f: () => boolean, ms = 8000): Promise<boolean> => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(10); return f(); };

@@ -5,8 +5,8 @@
  * - 「## 记账」:这个话题在日记里的一段(打分不够只留孩子问与观察),追加到当天日记
  * 记账去重(索引的 booked)、删话题时撤回要的原文(memoryLines、diaryBlock)由调用方记在这一轮的索引上。
  */
-import { appendDiary, diaryTopic, entryFor, renderDiaryBlock } from '../lib/diary.ts';
-import type { MemoryLine } from '../lib/vault-notes.ts';
+import { appendDiary, diaryTopic, entryFor, renderDiaryBlock } from './diary.ts';
+import type { MemoryLine } from './vault-notes.ts';
 import type { Bookkeeping, ConversationIndex } from '../schema/index.ts';
 import { updateVaultMemory, writeDiary, type Vault } from './vault.ts';
 

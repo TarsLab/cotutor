@@ -1,5 +1,5 @@
 /**
- * 口语课交给英语老师的实时页(src/server/talk-run.ts、app.ts 的 kidSendInput):
+ * 口语课交给英语老师的实时页(src/runtime/talk-run.ts、app.ts 的 kidSendInput):
  * 口语课页拍好的那份口语单 → 新话题跑 activity「口语课」(口语单、打电话几分钟、家长的话是参数),消息记 talk。
  */
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -11,10 +11,10 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-talklive-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, kidSendInput } = await import('../src/server/app.ts');
-const { talkListText } = await import('../src/server/talk-run.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, kidSendInput } = await import('../src/app/http/app.ts');
+const { talkListText } = await import('../src/runtime/talk-run.ts');
 
 const ws = join(home, 'ws');
 await initWorkspace({ slug: 'ray', name: 'Ray', dir: ws });

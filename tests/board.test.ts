@@ -1,7 +1,7 @@
 /** 板书解析器:真跑样本逐个过 + 围栏 / 段落 / cue / 锚点 / 未知标签 / 解析失败 / partial / H2 尾巴。 */
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { annotateSource, cleanSpeech, endsWithToolCall, parseBoard } from '../src/lib/board.ts';
+import { annotateSource, cleanSpeech, endsWithToolCall, parseBoard } from '../src/board/parse.ts';
 import { check, done } from './_check.ts';
 
 const KNOWN = ['text', 'read', 'choice'];
@@ -153,7 +153,7 @@ for (const f of fixtures) {
 }
 {
   // 文字卡里的「= 答案」(10-20 21:24):正文有空才算答案——家长那份留着、报一句,孩子那份剥掉;没有空的算式照旧
-  const { stripSecrets } = await import('../src/cards/index.ts');
+  const { stripSecrets } = await import('../src/board/cards/index.ts');
   const r = parseBoard('```text\n( )穷( )尽,填两个字。\n= 山\n= 水\n```\n\n你试试填上。\n', { live: true });
   const card = r.section.cards[0];
   check('答案行:家长那份原样、报一句', card.kind === 'text' && String(card.props.text).includes('= 山') && r.warnings.some((w) => w.text.includes('像答案')), JSON.stringify([card, r.warnings]));

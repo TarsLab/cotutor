@@ -1,5 +1,5 @@
 /** vault 笔记按属性定位(2026-09-17):frontmatter、学期推算、链接解析、挑档案 / 入口 / 参考。 */
-import { appendMemory, applyMemoryOps, clipNote, findMemoryLine, frontmatter, memoryCount, parseMemoryOp, tidyMemoryPrompt, memoryPath, memoryTemplate, missingEntry, pickNotes, resolveLink, semesterAt, textHash, wikilinks, type VaultNote } from '../src/lib/vault-notes.ts';
+import { appendMemory, applyMemoryOps, clipNote, findMemoryLine, frontmatter, memoryCount, parseMemoryOp, tidyMemoryPrompt, memoryPath, memoryTemplate, missingEntry, pickNotes, resolveLink, semesterAt, textHash, wikilinks, type VaultNote } from '../src/memory/vault-notes.ts';
 import { check, done } from './_check.ts';
 
 check('frontmatter:平铺键值,引号去掉,中文键也收', JSON.stringify(frontmatter('---\ncotutor: textbook\n原书: "[[a.pdf]]"\n单元: 8\n---\n# x\n')) === JSON.stringify({ cotutor: 'textbook', 原书: '[[a.pdf]]', 单元: '8' }));

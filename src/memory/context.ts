@@ -6,11 +6,11 @@
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { localDate } from '../lib/conversation.ts';
-import { extractObservations, recentDiaryDates } from '../lib/diary.ts';
-import { isoWeek, parsePlan, planLinesFor } from '../lib/plan.ts';
-import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
-import { clipNote, missingEntry, pickNotes } from '../lib/vault-notes.ts';
+import { localDate } from '../shared/time.ts';
+import { extractObservations, recentDiaryDates } from './diary.ts';
+import { isoWeek, parsePlan, planLinesFor } from './plan.ts';
+import { currentSlot, parseTimetable, slotLabel } from './timetable.ts';
+import { clipNote, missingEntry, pickNotes } from './vault-notes.ts';
 import type { ContextPack } from '../schema/index.ts';
 import { readDiaries, scanVault, type Vault } from './vault.ts';
 

@@ -1,10 +1,10 @@
 /**
- * 一直听:一句收下还是放过(src/live/lib/listen.ts 的 judge),纯函数。
+ * 一直听:一句收下还是放过(src/realtime/listen.ts 的 judge),纯函数。
  * 空的、老师没问时只有语气词、和嘴最近 10 秒说过的字重合过六成(回声)放过;其余收下。
  */
 import { check, done } from './_check.ts';
 
-const { judge, overlap, ECHO_WINDOW_MS } = await import('../src/live/lib/listen.ts');
+const { judge, overlap, ECHO_WINDOW_MS } = await import('../src/realtime/listen.ts');
 const now = 1_000_000;
 const said = [{ text: '这幅图上是下课的时候,小朋友们都跑到操场上玩。', at: now - 2000 }];
 const j = (text: string, asked = false, s = said) => judge(text, { asked, said: s, now });

@@ -1,6 +1,6 @@
 /** 例子即测试:每种卡的 card.md 里的围栏喂 parseCard,`<!-- expect {…} -->` 是期望;八个栏目齐;README 索引每种一行;css 拼得起来。 */
-import { CARD_KINDS, kindsFor, parseCard, usableIn } from '../src/cards/index.ts';
-import { PACKAGE_CARDS_DIR, boardSyntaxDoc, cardDocs, cardsCss, cardsIndexDoc, docExamples, readCardDoc, splitSections } from '../src/cards/docs.ts';
+import { CARD_KINDS, kindsFor, parseCard, usableIn } from '../src/board/cards/index.ts';
+import { PACKAGE_CARDS_DIR, boardSyntaxDoc, cardDocs, cardsCss, cardsIndexDoc, docExamples, readCardDoc, splitSections } from '../src/board/cards/docs.ts';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { check, done } from './_check.ts';
@@ -40,9 +40,9 @@ for (const d of docs) {
   const syn = boardSyntaxDoc();
   check('语法表从 md 拼:板书每种卡的写法与例子都在、没有 expect 注释、没有「反例」栏', kindsFor('board').every((k) => syn.includes(`### ${k.name} — `)) && syn.includes('- [x] 12 平方厘米') && !syn.includes('<!-- expect') && !syn.includes('## 反例'));
   {
-    const { applyCardGuards } = await import('../src/lib/card-guards.ts');
-    const { boardGuideFor, boardSkillDoc: skillDoc } = await import('../src/cards/docs.ts');
-    const { boardGuideBody } = await import('../src/lib/tutor-rules.ts');
+    const { applyCardGuards } = await import('../src/board/card-guards.ts');
+    const { boardGuideFor, boardSkillDoc: skillDoc } = await import('../src/board/cards/docs.ts');
+    const { boardGuideBody } = await import('../src/runtime/context/tutor-rules.ts');
     const g = 'a\n{{有 x}}\nb\n{{有 y}}\nc\n{{/有}}\n{{/有}}\n\n\n\nd';
     check('守卫:{{有 x}} 里的行 x 在才留,能套,守卫行不留,删出来的连续空行并掉', applyCardGuards(g, ['x']) === 'a\nb\n\nd' && applyCardGuards(g, ['x', 'y']) === 'a\nb\nc\n\nd' && applyCardGuards(g, []) === 'a\n\nd' && applyCardGuards('{{有 x y}}\nq\n{{/有}}', ['x']) === '');
     let threw = 0;

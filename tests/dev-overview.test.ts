@@ -8,18 +8,18 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-dev-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { writeIndex } = await import('../src/server/store.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { writeIndex } = await import('../src/runtime/journal/store.ts');
 const { ConversationIndexSchema } = await import('../src/schema/conversation.ts');
-const { devOverview, SLOW_FIRST_MS } = await import('../src/server/dev-overview.ts');
-const { localDate } = await import('../src/lib/conversation.ts');
-const { DEV_PAGE } = await import('../src/server/dev-page.ts');
-const { qrPage } = await import('../src/server/qr-page.ts');
-const { DEV_CSS } = await import('../src/server/dev-theme.ts');
-const { recordKidLog } = await import('../src/server/kid-log.ts');
-const { codeChanged } = await import('../src/server/build.ts');
+const { devOverview, SLOW_FIRST_MS } = await import('../src/app/http/dev-overview.ts');
+const { localDate } = await import('../src/shared/time.ts');
+const { DEV_PAGE } = await import('../src/ui/dev/dev-page.ts');
+const { qrPage } = await import('../src/ui/dev/qr-page.ts');
+const { DEV_CSS } = await import('../src/ui/dev/dev-theme.ts');
+const { recordKidLog } = await import('../src/runtime/journal/kid-log.ts');
+const { codeChanged } = await import('../src/app/build.ts');
 
 try {
   const { root } = await initWorkspace({ slug: 'ming', name: '小明' });

@@ -7,16 +7,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
-import { formatEvent, parseEvents } from '../src/lib/events.ts';
+import { formatEvent, parseEvents } from '../src/runtime/journal/events.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-runner-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { parseTranscript } = await import('../src/lib/transcript.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { parseTranscript } = await import('../src/brain/transcript.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
 const FAKE_TTS = fileURLToPath(new URL('./_fake-tts.ts', import.meta.url));
@@ -82,7 +82,7 @@ const wait = async (tutor: string): Promise<void> => {
 try {
   // ---- 干跑上下文包(2026-09-15):不起模型,来源与截断算得出来 ----
   {
-    const { packDryRun } = await import('../src/server/runner.ts');
+    const { packDryRun } = await import('../src/runtime/runner.ts');
     const r = await packDryRun(loadWorkspace(root), 'math-tutor', { from: 'kid', at: now, text: '干跑一句' });
     check('pack 干跑:prompt 带档案与入口文件原文 / 计划 / 观察与消息', r.prompt.includes('有阅读困难') && r.prompt.includes('<vault-note role="entry" path="随便/二上/数学.md">') && !r.prompt.includes('上学期的') && r.prompt.includes('周三前讲退位') && r.prompt.includes('借位忘了') && r.prompt.endsWith('干跑一句\n'), r.prompt);
     check('pack 干跑:来源清单', r.report.vault.semester === '二年级上' && r.report.vault.profile === '档案.md' && r.report.vault.entry === '随便/二上/数学.md' && r.report.vault.refs.join() === '随便/数学二上课本.md,参考/跨十.md' && r.report.plan.found && r.report.plan.kept === 1 && r.report.recent.filesFound.join() === '2026-09-06,2026-09-07' && r.report.recent.total === 1 && r.report.recent.kept === 1 && r.report.recent.subject === '数学', JSON.stringify(r.report));
@@ -138,7 +138,7 @@ try {
 
   // 上下文包内容:假 CLI 只回显最后一行,所以检查索引里 text 与 prompt 分离——直接从 spawn 的 argv 无法取,改看 fake 的 init 事件之外的方式:读日志里 prompt 不存在。
   // 换个法子:再发一条让假 CLI 把整段 prompt 回显——它回显最后一行,而上下文包在前面。这里改为直接测 gatherContext。
-  const { gatherContext } = await import('../src/server/runner.ts');
+  const { gatherContext } = await import('../src/runtime/runner.ts');
   const pack = await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: now });
   check('gatherContext:本老师的计划行、本学科观察(从日记抽)、学期、守则(去掉 frontmatter)与档案、入口、参考给绝对路径、at', pack.plan.join() === '周三前讲退位' && pack.recent.map((r) => r.claim).join() === '借位忘了' && pack.semester === '二年级上' && pack.profile === '档案.md' && pack.entry === '随便/二上/数学.md' && pack.rules === '.claude/skills/cotutor-tutor/SKILL.md' && pack.notes?.map((n) => n.role).join() === 'rules,profile,entry' && pack.notes?.[0].text.startsWith('# 老师守则') && pack.refs?.join() === [join(root, 'vault', '随便', '数学二上课本.md'), join(root, 'vault', '参考', '跨十.md')].join() && pack.at === '2026-09-08T16:20', JSON.stringify(pack));
   const packZh = await gatherContext(ctx.ws, 'chinese-tutor', { from: 'kid', at: now });
@@ -537,11 +537,11 @@ try {
   check('再记一次:都跳过(记过了)', bkAgain.queued.length === 0 && bkAgain.skipped.every((s) => s.why.includes('记过了')), JSON.stringify(bkAgain));
   const bkEvents = parseEvents(readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${bkMsgs[0].job}.events.jsonl`), 'utf8'));
   check('事件:ledger 道有日记那条', bkEvents.some((e) => e.lane === 'ledger' && e.kind === 'diary' && formatEvent(e).includes('2026-09-09.md')));
-  const { gatherContext: gather2 } = await import('../src/server/runner.ts');
+  const { gatherContext: gather2 } = await import('../src/runtime/runner.ts');
   check('上下文包里带着刚记的观察', (await gather2(ctx.ws, 'math-tutor', { from: 'kid', at: now })).recent.some((r) => r.claim === '角和边会混'));
 
   // ---- 作业照片(R5):传图落 captures/ → 连 path 发消息 → 上下文包 photos: 段、老师 Read → 板书引用原图 → 孩子端问句带缩略图;记账提示词提到照片、日记不写路径 ----
-  const { localDate: ld } = await import('../src/lib/conversation.ts');
+  const { localDate: ld } = await import('../src/shared/time.ts');
   const phDate = ld(now);
   const phHm = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
   const JPEG = 'data:image/jpeg;base64,' + Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0xff, 0xd9]).toString('base64');

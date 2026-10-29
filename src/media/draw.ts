@@ -1,9 +1,9 @@
 /**
  * 交给百炼文生图(同步接口 multimodal-generation)画一张,拿回 PNG。百炼给的图片地址 24 小时就过期,拿到就下载。
- * key 与端点按模型定(src/lib/qianwen.ts:Token Plan 有这个模型就走它,否则百炼按量),key 只进请求头。出错、超时都不抛。
+ * key 与端点按模型定(src/shared/qianwen.ts:Token Plan 有这个模型就走它,否则百炼按量),key 只进请求头。出错、超时都不抛。
  * 2026-10-11 实测:qwen-image-2.0 一张 4 秒、qwen-image-2.0-pro 15 秒(1536*1536);公网域名能用,不用业务空间的域名。
  */
-import { imageUrl, qianwenKeys, qianwenLine } from '../lib/qianwen.ts';
+import { imageUrl, qianwenKeys, qianwenLine } from '../shared/qianwen.ts';
 import { PAINT_NEGATIVE } from '../schema/index.ts';
 
 export const DRAW_TIMEOUT_MS = 180_000;

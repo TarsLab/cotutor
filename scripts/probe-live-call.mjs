@@ -29,13 +29,13 @@ mkdirSync(out, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const until = async (f, ms) => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(20); return f(); };
 
-const { initWorkspace } = await import(join(repo, 'src', 'cli', 'init.ts'));
-const { loadWorkspace } = await import(join(repo, 'src', 'cli', 'workspace.ts'));
-const { createContext, createHandler } = await import(join(repo, 'src', 'server', 'app.ts'));
-const { makeLiveUpgrade } = await import(join(repo, 'src', 'live', 'route.ts'));
-const { wavOfPcm } = await import(join(repo, 'src', 'live', 'lib', 'wav.ts'));
-const { addChunk, playbackInit } = await import(join(repo, 'src', 'live', 'lib', 'playback.ts'));
-const { spoken } = await import(join(repo, 'src', 'live', 'lib', 'cue.ts'));
+const { initWorkspace } = await import(join(repo, 'src', 'app', 'cli', 'init.ts'));
+const { loadWorkspace } = await import(join(repo, 'src', 'app', 'workspace.ts'));
+const { createContext, createHandler } = await import(join(repo, 'src', 'app', 'http', 'app.ts'));
+const { makeLiveUpgrade } = await import(join(repo, 'src', 'app', 'ws', 'route.ts'));
+const { wavOfPcm } = await import(join(repo, 'src', 'shared', 'wav.ts'));
+const { addChunk, playbackInit } = await import(join(repo, 'src', 'runtime', 'delivery', 'playback.ts'));
+const { spoken } = await import(join(repo, 'src', 'realtime', 'cues.ts'));
 
 // ---- 临时 workspace:出厂老师(qwen),语文老师开实时 ----
 const wsRoot = join(out, 'ws');

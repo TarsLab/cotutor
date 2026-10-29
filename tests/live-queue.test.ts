@@ -1,13 +1,13 @@
 /**
- * 实时老师的照念排队(src/live/lib/queue.ts)、声音排到哪(src/live/lib/playback.ts)、开口指令(src/live/lib/cue.ts),纯函数。
+ * 实时老师的照念排队(src/runtime/delivery/queue.ts)、声音排到哪(src/runtime/delivery/playback.ts)、开口指令(src/realtime/cues.ts),纯函数。
  * 排队是流水线:嘴一空(不在要 / 出回答、没按着)就交,排着的同一轮几拍并成一段;按下 = 打断,丢排着的、丢那一轮后面的拍。
  * 声音照孩子端的排法:到达 + 60 毫秒或上一块放完,取晚的;按下时在放哪段、清队列后截到哪。
  */
 import { check, done } from './_check.ts';
 
-const { queueInit, queueStep } = await import('../src/live/lib/queue.ts');
-const { LEAD_MS, addChunk, flushAt, playbackInit, playingAt } = await import('../src/live/lib/playback.ts');
-const { catchCue, readCue, spoken } = await import('../src/live/lib/cue.ts');
+const { queueInit, queueStep } = await import('../src/runtime/delivery/queue.ts');
+const { LEAD_MS, addChunk, flushAt, playbackInit, playingAt } = await import('../src/runtime/delivery/playback.ts');
+const { catchCue, readCue, spoken } = await import('../src/realtime/cues.ts');
 type S = ReturnType<typeof queueInit>;
 type Ev = Parameters<typeof queueStep>[1];
 const b = (job: string, lines: number[], texts = lines.map((i) => `第 ${i + 1} 句。`)) => ({ job, lines, texts });

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
 
-const { main } = await import('../src/cli/main.ts');
+const { main } = await import('../src/app/cli/main.ts');
 const { version } = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as { version: string };
 
 /** 跑一次 main,收走两股输出与 exitCode(main 不 process.exit,只置码)。 */

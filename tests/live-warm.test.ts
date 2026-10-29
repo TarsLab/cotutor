@@ -1,11 +1,11 @@
 /**
- * 口语课热身(src/live/lib/warm.ts):孩子说的是跟读还是对老师说的;每拍的摸底一行。纯函数。
+ * 口语课热身(src/scenes/talk/warmup.ts):孩子说的是跟读还是对老师说的;每拍的摸底一行。纯函数。
  * 例子用 Ray 10-17 跟读的真转写(duck、under under 在下面、Boss.、The dog.、他不等人的、那我们直接打电话吧)。
  */
 import { check, done } from './_check.ts';
 
-const { echoKind, warmLines } = await import('../src/live/lib/warm.ts');
-const { catchCue } = await import('../src/live/lib/cue.ts');
+const { echoKind, warmLines } = await import('../src/scenes/talk/warmup.ts');
+const { catchCue } = await import('../src/realtime/cues.ts');
 
 check('说出了记号里的词:跟读(带中文的也算)', echoKind('duck,鸭子。', 'duck') === 'said' && echoKind('under under 在下面。', 'under') === 'said' && echoKind('The dog.', 'The ducks are under the bus') === 'said');
 check('四个英文词以内、没中文:跟读(念偏了的「Boss.」)', echoKind('Boss.', 'bus') === 'said' && echoKind('I am driving car', 'No, you are walking') === 'said');

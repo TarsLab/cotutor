@@ -14,9 +14,9 @@ writeFileSync(join(home, '.config', 'cotutor', 'bailian.json'), JSON.stringify({
 delete process.env.COTUTOR_WORKSPACE;
 const originalCwd = process.cwd();
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { doctorWorkspace } = await import('../src/cli/doctor.ts');
-const { PACKAGE_AGENTS_DIR } = await import('../src/cli/skeleton.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
+const { PACKAGE_AGENTS_DIR } = await import('../src/app/cli/skeleton.ts');
 
 try {
   const r1 = await initWorkspace({ slug: 'ming', name: '小明' });
@@ -155,7 +155,7 @@ try {
   rmSync(home, { recursive: true, force: true });
 }
 {
-  const { configTemplate } = await import('../src/cli/skeleton.ts');
+  const { configTemplate } = await import('../src/app/cli/skeleton.ts');
   const tpl = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] }));
   check('只出厂 Qwen,缺省 qwen', Object.keys(tpl.runtimes).join() === 'default,qwen,qwen-flash' && tpl.runtimes.default === 'qwen');
   for (const name of ['qwen', 'qwen-flash']) {
@@ -165,7 +165,7 @@ try {
 }
 // ---- 老 workspace 迁移(步 2):cotutor.json 是政策文件,机器不自动改,所以要算差异 + 只补缺 ----
 {
-  const { configGaps, insertMissingFlags, upgradeConfig } = await import('../src/cli/migrate.ts');
+  const { configGaps, insertMissingFlags, upgradeConfig } = await import('../src/app/cli/migrate.ts');
 
   // 旗标插的位置照出厂模板:排在它前面、我这份也有的那个旗标之后;已有的旗标与值不碰
   const factory = ['qwen', '-m', 'qwen3.8-max', '--output-format', 'stream-json', '--include-partial-messages', '--max-wall-time', '10m'];

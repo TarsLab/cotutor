@@ -1,4 +1,4 @@
-/** 跨模块共用的错误(从 cli/workspace.ts 挪来,2026-10-29) */
+/** 跨模块共用的错误(从 app/workspace.ts 挪来,2026-10-29) */
 import { redactHome } from './home.ts';
 
 /** 用法错误:main 捕获后 exit 2,错误信息即修复指南。 */

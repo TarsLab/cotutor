@@ -5,7 +5,7 @@ description: 调 cotutor 的老师团:改某位老师的提示词(口气、规�
 
 <!-- 给人看
 谁读:家长在 workspace 根开的编程助手
-能改:机器件,upgrade 覆盖;references/字段.md 由 src/lib/tune-doc.ts 生成
+能改:机器件,upgrade 覆盖;references/字段.md 由 src/app/skills/tune-doc.ts 生成
 改了:在试用 workspace 里开编程助手说一句「老师话太多」(《写提示词.md》§一)
 -->
 

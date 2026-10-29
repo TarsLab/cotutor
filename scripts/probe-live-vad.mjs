@@ -21,8 +21,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
-const { dashscopeAuth, endpointOf, sessionConfig, INPUT_RATE, REALTIME_MODEL, REALTIME_VOICE } = await import(join(repo, 'src', 'live', 'realtime.ts'));
-const { readCue } = await import(join(repo, 'src', 'live', 'lib', 'cue.ts'));
+const { dashscopeAuth, endpointOf, sessionConfig, INPUT_RATE, REALTIME_MODEL, REALTIME_VOICE } = await import(join(repo, 'src', 'realtime', 'bailian.ts'));
+const { readCue } = await import(join(repo, 'src', 'realtime', 'cues.ts'));
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const what = process.argv[2] ?? 'all';
@@ -33,7 +33,7 @@ const silenceMs = Number(arg('--silence', '1200'));
 const out = arg('--out', mkdtempSync(join(tmpdir(), 'cotutor-probe-vad-')));
 mkdirSync(out, { recursive: true });
 const auth = dashscopeAuth();
-if (!auth) { console.error('没有百炼按量 key 或业务空间 id(见 src/lib/qianwen.ts)'); process.exit(1); }
+if (!auth) { console.error('没有百炼按量 key 或业务空间 id(见 src/shared/qianwen.ts)'); process.exit(1); }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const report = [`# 一直听探针(${new Date().toLocaleString('zh-CN')})`, '', `workspace \`${wsRoot}\`,silence ${silenceMs} 毫秒`, ''];

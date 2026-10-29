@@ -8,10 +8,10 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-team-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { doctorWorkspace, explainLlmFailure } = await import('../src/cli/doctor.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { doctorWorkspace, explainLlmFailure } = await import('../src/app/cli/doctor.ts');
 const { cotutorJsonSchema, CotutorConfigSchema } = await import('../src/schema/index.ts');
 
 try {

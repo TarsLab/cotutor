@@ -25,7 +25,7 @@ let bad = 0;
 const ok = (name, cond, detail = '') => { if (!cond) bad++; console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`); };
 
 const tmp = probeDir('cotutor-probe-talk-');
-const { initWorkspace } = await import(join(repo, 'src', 'cli', 'init.ts'));
+const { initWorkspace } = await import(join(repo, 'src', 'app', 'cli', 'init.ts'));
 const wsRoot = join(tmp, 'ws');
 await initWorkspace({ slug: 'probe', name: 'Ray', dir: wsRoot });
 const cfgFile = join(wsRoot, 'cotutor.json');

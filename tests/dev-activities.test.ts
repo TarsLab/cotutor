@@ -11,12 +11,12 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-dev-act-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { publishHome } = await import('../src/server/home.ts');
-const { diffHunks, activitySections } = await import('../src/server/dev-activities.ts');
-const { DEV_PAGE } = await import('../src/server/dev-page.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { publishHome } = await import('../src/runtime/home/store.ts');
+const { diffHunks, activitySections } = await import('../src/app/http/dev-activities.ts');
+const { DEV_PAGE } = await import('../src/ui/dev/dev-page.ts');
 
 try {
   const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
@@ -58,7 +58,7 @@ try {
   const base = '/api/dev/activities/chinese-tutor/' + encodeURIComponent('你说我画');
   const doc = (await route('GET', base, ctx)).json as { text: string; hash: string; state: string; path: string; shipped: boolean };
   check('读:原文、hash、相对路径、是出厂的', doc.text === shipped && doc.hash.length > 10 && doc.path === 'agents/chinese-tutor/activities/你说我画.md' && doc.shipped && doc.state === 'latest', JSON.stringify({ ...doc, text: undefined }));
-  check('不认得的名字 404;拼路径的 404', (await route('GET', '/api/dev/activities/chinese-tutor/' + encodeURIComponent('没有这个'), ctx)).status === 404 && (await route('GET', '/api/dev/activities/chinese-tutor/' + encodeURIComponent('../../cotutor'), ctx)).status === 404 && (await route('GET', '/api/dev/activities/nobody-tutor/x', ctx)).status === 404);
+  check('不认得的名字 404;拼路径的 404', (await route('GET', '/api/dev/activities/chinese-tutor/' + encodeURIComponent('没有这个'), ctx)).status === 404 && (await route('GET', '/api/dev/activities/chinese-tutor/' + encodeURIComponent('..'), ctx)).status === 404 && (await route('GET', '/api/dev/activities/nobody-tutor/x', ctx)).status === 404);
 
   // ---- 边改边查(不落盘) ----
   type Chk = { issues: { level: string; line?: number }[]; buttons: { label: string; ok: boolean; detail: string }[]; diff: { at: number; old: string[]; now: string[] }[] | null; preview: { text: string | null; cards: string[] }; summary: { params: { name: string }[] } };

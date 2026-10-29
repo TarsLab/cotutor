@@ -22,10 +22,10 @@ let bad = 0;
 const ok = (name, cond, detail = '') => { if (!cond) bad++; console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`); };
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import(join(repo, 'src', 'cli', 'init.ts'));
-const { loadWorkspace } = await import(join(repo, 'src', 'cli', 'workspace.ts'));
-const { createContext, createHandler } = await import(join(repo, 'src', 'server', 'app.ts'));
-const { makeLiveUpgrade } = await import(join(repo, 'src', 'live', 'route.ts'));
+const { initWorkspace } = await import(join(repo, 'src', 'app', 'cli', 'init.ts'));
+const { loadWorkspace } = await import(join(repo, 'src', 'app', 'workspace.ts'));
+const { createContext, createHandler } = await import(join(repo, 'src', 'app', 'http', 'app.ts'));
+const { makeLiveUpgrade } = await import(join(repo, 'src', 'app', 'ws', 'route.ts'));
 const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
 
 const fake = await startFakeRealtime();

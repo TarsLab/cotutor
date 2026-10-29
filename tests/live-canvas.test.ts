@@ -18,15 +18,15 @@ process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 delete process.env.DASHSCOPE_API_KEY;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, createHandler } = await import('../src/server/app.ts');
-const { makeLiveUpgrade } = await import('../src/live/route.ts');
-const { chatCue } = await import('../src/live/lib/cue.ts');
-const { localDate } = await import('../src/lib/conversation.ts');
-const { deleteThread } = await import('../src/server/store.ts');
-const { canvasInkText } = await import('../src/cards/canvas.ts');
-const { sectionsFromMessages } = await import('../src/lib/kid-board.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, createHandler } = await import('../src/app/http/app.ts');
+const { makeLiveUpgrade } = await import('../src/app/ws/route.ts');
+const { chatCue } = await import('../src/realtime/cues.ts');
+const { localDate } = await import('../src/shared/time.ts');
+const { deleteThread } = await import('../src/runtime/journal/store.ts');
+const { canvasInkText } = await import('../src/board/cards/canvas.ts');
+const { sectionsFromMessages } = await import('../src/board/presentation.ts');
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const until = async (f: () => boolean, ms = 6000): Promise<boolean> => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(10); return f(); };

@@ -2,9 +2,9 @@
  * 作业照片编辑的坐标(photo-edit.ts):拖框夹边、转 90° 框与笔画跟着走、转四次回原样、导出缩放。
  * 。
  */
-import { PHOTO_MAX_SIDE, dragCrop, edited, exportPlan, newEdit, newStroke, region, rotMatrix, rotateEdit, rotatedSize, setCrop, type PhotoEdit, type Pt } from '../src/lib/photo-edit.ts';
+import { PHOTO_MAX_SIDE, dragCrop, edited, exportPlan, newEdit, newStroke, region, rotMatrix, rotateEdit, rotatedSize, setCrop, type PhotoEdit, type Pt } from '../src/ui/kid/photo-edit.ts';
 import { check, done } from './_check.ts';
-import { DEV_PAGE } from '../src/server/dev-page.ts';
+import { DEV_PAGE } from '../src/ui/dev/dev-page.ts';
 
 const eq = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 /** rotMatrix 作用在原图的点上 */

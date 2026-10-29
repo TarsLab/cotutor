@@ -11,14 +11,14 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-dev-voice-home-'))
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { VOICE_GALLERY_PAGE } = await import('../src/server/voice-gallery-page.ts');
-const { VOICE_CSS, VOICE_JS, VOICE_TUNE } = await import('../src/server/voice-ui.ts');
-const { DEV_CSS } = await import('../src/server/dev-theme.ts');
-const { VOICE_SCENES } = await import('../src/lib/voice-scenes.ts');
-const { kidPage } = await import('../src/server/kid-page.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { VOICE_GALLERY_PAGE } = await import('../src/ui/dev/voice-gallery-page.ts');
+const { VOICE_CSS, VOICE_JS, VOICE_TUNE } = await import('../src/ui/kid/voice-ui.ts');
+const { DEV_CSS } = await import('../src/ui/dev/dev-theme.ts');
+const { VOICE_SCENES } = await import('../src/ui/dev/voice-scenes.ts');
+const { kidPage } = await import('../src/ui/kid/kid-page.ts');
 
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const ctx = createContext(loadWorkspace(root));

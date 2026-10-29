@@ -6,9 +6,9 @@
  */
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import type { BoardSection } from '../../lib/kid-board.ts';
-import { cardId, conversationFiles } from '../../lib/conversation.ts';
-import { PaintPropsSchema, type PaintProps } from '../../cards/index.ts';
+import type { BoardSection } from '../../board/presentation.ts';
+import { cardId, conversationFiles } from '../../schema/index.ts';
+import { PaintPropsSchema, type PaintProps } from '../../board/cards/index.ts';
 import { PAINT_DEFAULT, PAINT_NEGATIVE, type CotutorConfig } from '../../schema/index.ts';
 import { paintPrompt, paintPromptFrom, paintSize } from './prompt.ts';
 

@@ -1,4 +1,4 @@
-/** 给人看的路径里把家目录换成 $HOME(报错、doctor、--json 输出不带出用户名;从 cli/workspace.ts 挪来,2026-10-29) */
+/** 给人看的路径里把家目录换成 $HOME(报错、doctor、--json 输出不带出用户名;从 app/workspace.ts 挪来,2026-10-29) */
 import { homedir } from 'node:os';
 
 export function redactHome(value: string): string {

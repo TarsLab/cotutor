@@ -75,7 +75,7 @@ description: cotutor 有脸的老师共同的守则:上下文包怎么看、三�
 - 上下文包里有 `board: off`,就只说话,不出卡。
 - **板书写完就停。** 后面不补总结,不再用工具。
 - 要记东西,紧接着写「## 记忆」段,在同一段回复里写完。
-<!-- 为什么不再读 SKILL.md:已经递到手里,再读白花一轮工具调用;runner 的 boardGuideReads 专门报这个(src/lib/tutor-rules.ts)。
+<!-- 为什么不再读 SKILL.md:已经递到手里,再读白花一轮工具调用;runner 的 boardGuideReads 专门报这个(src/runtime/context/tutor-rules.ts)。
      为什么写完就停:孩子看到的是这轮最后一段话,隔着工具调用再补的板书会丢(cotutor-board「板书写完就停」)。 -->
 
 ### 任务

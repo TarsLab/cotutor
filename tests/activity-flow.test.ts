@@ -13,18 +13,18 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-activity-flow-')))
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { readIndex, readRunFile } = await import('../src/server/store.ts');
-const { publishHome, checkHome, resolveVia } = await import('../src/server/home.ts');
-const { deleteThread } = await import('../src/server/store.ts');
-const { startReplay } = await import('../src/server/replay.ts');
-const { main } = await import('../src/cli/main.ts');
-const { parseHome } = await import('../src/lib/home.ts');
-const { setTutorButtons } = await import('../src/lib/home-edit.ts');
-const { renderContextPack } = await import('../src/lib/context-pack.ts');
-const { evalActivity } = await import('../src/server/activity-eval.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { readIndex, readRunFile } = await import('../src/runtime/journal/store.ts');
+const { publishHome, checkHome, resolveVia } = await import('../src/runtime/home/store.ts');
+const { deleteThread } = await import('../src/runtime/journal/store.ts');
+const { startReplay } = await import('../src/app/replay.ts');
+const { main } = await import('../src/app/cli/main.ts');
+const { parseHome } = await import('../src/runtime/home/home.ts');
+const { setTutorButtons } = await import('../src/runtime/home/edit.ts');
+const { renderContextPack } = await import('../src/runtime/context/context-pack.ts');
+const { evalActivity } = await import('../src/app/activity-eval.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
 const node = process.execPath;

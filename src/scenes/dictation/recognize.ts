@@ -9,8 +9,8 @@
  * 这里是听写这个场景的规则(要求怎么拼、一行一段怎么解析);看图的请求在 src/media/vision.ts(key 与端点按模型定),由路由那层交进来。出错、超时都不抛。
  */
 import { DICTATION_PROMPT_DEFAULT, DICTATION_PROMPT_EN_DEFAULT, DICTATION_DEFAULT } from '../../schema/index.ts';
-import { fillSlots } from '../../lib/activity.ts';
-import { DICTATION_SAY_MAX, dictationEmoji, dictationWordLang, type DictationLang } from '../../cards/index.ts';
+import { fillSlots } from '../../schema/index.ts';
+import { DICTATION_SAY_MAX, dictationEmoji, dictationWordLang, type DictationLang } from '../../board/cards/index.ts';
 import type { Look } from '../look.ts';
 
 export const VISION_TIMEOUT_MS = 120_000;

@@ -1,5 +1,5 @@
 /**
- * 百炼(src/server/bailian.ts):孩子端要它才打得开,家长端配。
+ * 百炼(src/app/machine/bailian.ts):孩子端要它才打得开,家长端配。
  * 读的先后(家长端配的在最前)、配的接口(先试连,通了才存;Token Plan 的 key、坏的业务空间 id 不收;没设 PIN 时别的设备不让配)、
  * 孩子端首页与家长记录带 ready、假端点当配好了、doctor 的 bailian 是必需项。
  */
@@ -13,16 +13,16 @@ process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 delete process.env.COTUTOR_LIVE_ENDPOINT;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route, kidHome, overview } = await import('../src/server/app.ts');
-const { createBailian, probeMessage } = await import('../src/server/bailian.ts');
-const { createAccess, setPin } = await import('../src/server/access.ts');
-const { dashscopeAuth } = await import('../src/live/realtime.ts');
-const { bailianFile, qianwenKeys } = await import('../src/lib/qianwen.ts');
-const { doctorWorkspace } = await import('../src/cli/doctor.ts');
-const { KID_PAGE } = await import('../src/server/kid-page.ts');
-const { PARENT_HOME_PAGE } = await import('../src/server/parent-home-page.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route, kidHome, overview } = await import('../src/app/http/app.ts');
+const { createBailian, probeMessage } = await import('../src/app/machine/bailian.ts');
+const { createAccess, setPin } = await import('../src/app/http/access.ts');
+const { dashscopeAuth } = await import('../src/realtime/bailian.ts');
+const { bailianFile, qianwenKeys } = await import('../src/shared/qianwen.ts');
+const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
+const { KID_PAGE } = await import('../src/ui/kid/kid-page.ts');
+const { PARENT_HOME_PAGE } = await import('../src/ui/parent/parent-home-page.ts');
 
 const env = { HOME: home } as NodeJS.ProcessEnv;
 const GOOD = 'sk-0123456789abcdef0123';

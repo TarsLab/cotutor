@@ -1,5 +1,5 @@
 /**
- * 孩子端不往浏览器历史里加东西(src/server/kid-nav.ts):孩子端各页都带 KID_NAV_JS(同站链接、回首页都是替换当前页,
+ * 孩子端不往浏览器历史里加东西(src/ui/kid/kid-nav.ts):孩子端各页都带 KID_NAV_JS(同站链接、回首页都是替换当前页,
  * 从浏览器缓存原样恢复就重载),页面里没有 location.href = / location.assign 这种加一条历史的跳转。新加孩子端页面要在 KID 里登记。
  */
 import { mkdtempSync, realpathSync } from 'node:fs';
@@ -11,10 +11,10 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-kid-nav-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { KID_NAV_JS } = await import('../src/server/kid-nav.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { KID_NAV_JS } = await import('../src/ui/kid/kid-nav.ts');
 
 /** 孩子端自己开的页面(录像、预览是家长端 iframe 里开的,不在这里) */
 const KID = ['/', '/dictation', '/dictation?lang=en', '/talk'];

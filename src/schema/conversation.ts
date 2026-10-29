@@ -48,7 +48,7 @@ const MessageObjectSchema = z.object({
   /** 这条消息带的作业照片(R5,2026-09-14):相对 workspace 根的路径(captures/<日期>/<HHMM>-<n>.jpg),上下文包 photos: 段原样给老师 Read;日记永不引用它 */
   photos: z.array(z.string().min(1)).optional(),
   result: z.enum(['running', 'ok', 'error']).default('running'),
-  /** 这一轮的 token:输入(含缓存读)与输出;记账、显示都按它(src/lib/tokens.ts)。运行时没报(出错没收尾)就没有 */
+  /** 这一轮的 token:输入(含缓存读)与输出;记账、显示都按它(src/shared/tokens.ts)。运行时没报(出错没收尾)就没有 */
   /** cached = 输入里命中缓存的,context = 最后一次请求的输入(这一轮结束时上下文多大);这两样只有 API 运行时报 */
   tokens: z.object({ in: z.number().int().nonnegative(), out: z.number().int().nonnegative(), cached: z.number().int().nonnegative().optional(), context: z.number().int().nonnegative().optional() }).optional(),
   /** 老数据:2026-10-28 之前 claude 那几轮记的美元。不再写、不显示,留在这里免得改写索引时丢掉 */
@@ -87,13 +87,13 @@ const MessageObjectSchema = z.object({
   bookkeep: z.object({ thread: z.string().min(1) }).optional(),
   /** 这轮是记账后整理记忆的任务(from: system,新会话;2026-09-18):老师回「## 记忆」段的一串增 / 改 / 删,不受每轮条数上限;孩子端看不到 */
   tidy: z.literal(true).optional(),
-  /** 这一轮整段压缩过(API 运行时,上一轮结束时上下文过了 32k):之前的模型历史不再发,前情由应用照索引拼(src/lib/thread-digest.ts) */
+  /** 这一轮整段压缩过(API 运行时,上一轮结束时上下文过了 32k):之前的模型历史不再发,前情由应用照索引拼(src/runtime/context/thread-digest.ts) */
   compacted: z.literal(true).optional(),
   /** 最终文本里剥出来的「## 记账」段(物化;日记已按它写好);null = 这轮没有 */
   bookkeeping: BookkeepingSchema.nullable().optional(),
-  /** 这轮模型用了哪些工具、读了什么(2026-09-15,从 .log 抽,lib/transcript.ts toolCalls):名字、最要紧的参数、成没成、结果多少字。家长端「看原文」的「读了什么」站;cotutor show 也吐 */
+  /** 这轮模型用了哪些工具、读了什么(2026-09-15,从 .log 抽,brain/transcript.ts toolCalls):名字、最要紧的参数、成没成、结果多少字。家长端「看原文」的「读了什么」站;cotutor show 也吐 */
   tools: z.array(z.object({ name: z.string().min(1), arg: z.string(), ok: z.boolean().nullable(), chars: z.number().int().nonnegative(), sub: z.boolean().optional() })).optional(),
-  /** 这条是回放(cotutor replay,server/replay.ts):原轮的 job。回放落在 evals/ 里,不在 conversations/ */
+  /** 这条是回放(cotutor replay,app/replay.ts):原轮的 job。回放落在 evals/ 里,不在 conversations/ */
   replayOf: z.string().min(1).optional(),
   /** 这条是 cotutor activity eval 跑的(落在 evals/,模拟孩子):同回放,不写记忆、不预热 */
   eval: z.literal(true).optional(),
@@ -162,3 +162,13 @@ export const ConversationIndexSchema = z.object({
   booked: z.record(z.string(), z.string().min(1)).default({}),
 });
 export type ConversationIndex = z.infer<typeof ConversationIndexSchema>;
+
+/**
+ * 每条消息的话题 id(与 messages 对齐)。有 thread 字段照它;没有(旧索引)按规则现算:第一条 = 自己的 job,
+ * from: system 的(记账、整理记忆这类)永远开新话题,其余跟前一条。写新消息时 runner 已经填了 thread,这里只是兜底。
+ */
+export function threads(messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread'>[]): string[] {
+  const out: string[] = [];
+  messages.forEach((m, i) => out.push(m.thread ?? (i === 0 || m.from === 'system' ? m.job : out[i - 1])));
+  return out;
+}

@@ -31,13 +31,13 @@ const shots = outAt > 0 ? process.argv[outAt + 1] : join(tmp, 'shots');
 mkdirSync(shots, { recursive: true });
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import(join(repo, 'src', 'cli', 'init.ts'));
-const { loadWorkspace } = await import(join(repo, 'src', 'cli', 'workspace.ts'));
-const { createContext, createHandler } = await import(join(repo, 'src', 'server', 'app.ts'));
-const { makeLiveUpgrade } = await import(join(repo, 'src', 'live', 'route.ts'));
+const { initWorkspace } = await import(join(repo, 'src', 'app', 'cli', 'init.ts'));
+const { loadWorkspace } = await import(join(repo, 'src', 'app', 'workspace.ts'));
+const { createContext, createHandler } = await import(join(repo, 'src', 'app', 'http', 'app.ts'));
+const { makeLiveUpgrade } = await import(join(repo, 'src', 'app', 'ws', 'route.ts'));
 const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
-const { publishHome } = await import(join(repo, 'src', 'server', 'home.ts'));
-const { catchCue } = await import(join(repo, 'src', 'live', 'lib', 'cue.ts'));
+const { publishHome } = await import(join(repo, 'src', 'runtime', 'home', 'store.ts'));
+const { catchCue } = await import(join(repo, 'src', 'realtime', 'cues.ts'));
 
 // ---- 临时 workspace:老师都是假 CLI(流式),语文老师开实时;嘴是假百炼 ----
 const fake = await startFakeRealtime();

@@ -1,5 +1,5 @@
 /** 产物账本:逐行解析报行号、按 id 折叠后者为准、产物首行要全。(观察 2026-09-14 起在日记里,见 diary.test) */
-import { mergeArtifacts, parseArtifactEvents, parseJsonl } from '../src/lib/ledger.ts';
+import { mergeArtifacts, parseArtifactEvents, parseJsonl } from '../src/runtime/journal/ledger.ts';
 import { ArtifactEventSchema } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
 

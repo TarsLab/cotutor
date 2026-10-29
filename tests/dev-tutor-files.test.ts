@@ -12,13 +12,13 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-dev-tf-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { publishHome } = await import('../src/server/home.ts');
-const { lintAgentFile } = await import('../src/lib/agent-file.ts');
-const { tutorFileSections } = await import('../src/server/dev-tutor-files.ts');
-const { DEV_PAGE } = await import('../src/server/dev-page.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { publishHome } = await import('../src/runtime/home/store.ts');
+const { lintAgentFile } = await import('../src/runtime/agent-file.ts');
+const { tutorFileSections } = await import('../src/app/http/dev-tutor-files.ts');
+const { DEV_PAGE } = await import('../src/ui/dev/dev-page.ts');
 
 try {
   // ---- 纯函数:检查、节 ----

@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
-const { chatUrl, qianwenKeys, qianwenLine } = await import(join(repo, 'src', 'lib', 'qianwen.ts'));
+const { chatUrl, qianwenKeys, qianwenLine } = await import(join(repo, 'src', 'shared', 'qianwen.ts'));
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const photo = arg('--photo', join(homedir(), 'cotutor', 'ray', 'captures', '2026-09-18', '2101-1.jpg'));
 const think = process.argv.includes('--think');

@@ -11,13 +11,13 @@ mkdirSync(join(home, '.config', 'cotutor'), { recursive: true });
 writeFileSync(join(home, '.config', 'cotutor', 'bailian.json'), JSON.stringify({ apiKey: 'sk-test0000000000000000', workspaceId: 'llm-test' }));
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { addTutorFile, installTutors, lineDiff, readManifest, tutorStatuses, upgradeTutors, writeManifest } = await import('../src/cli/tutors.ts');
-const { doctorWorkspace } = await import('../src/cli/doctor.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { patchConfig } = await import('../src/cli/workspace.ts');
-const { parseAgentFile } = await import('../src/lib/agent-file.ts');
-const { PACKAGE_VERSION } = await import('../src/cli/skeleton.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { addTutorFile, installTutors, lineDiff, readManifest, tutorStatuses, upgradeTutors, writeManifest } = await import('../src/app/cli/tutors.ts');
+const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { patchConfig } = await import('../src/app/workspace.ts');
+const { parseAgentFile } = await import('../src/runtime/agent-file.ts');
+const { PACKAGE_VERSION } = await import('../src/app/cli/skeleton.ts');
 
 try {
   const { root } = await initWorkspace({ slug: 'ming' });
@@ -31,7 +31,7 @@ try {
   const old = readFileSync(file('math-tutor'), 'utf8').replace('数学老师', '算术老师');
   writeFileSync(file('math-tutor'), old);
   const m = await readManifest(root);
-  const { sha256 } = await import('../src/cli/tutors.ts');
+  const { sha256 } = await import('../src/app/cli/tutors.ts');
   m.tutors['math-tutor'] = { hash: sha256(old), version: '0.0.9' };
   await writeManifest(root, m);
   check('状态 upgradable', (await states())['math-tutor'] === 'upgradable');

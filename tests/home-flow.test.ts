@@ -13,14 +13,14 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-home-flow-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { readIndex, readRunFile } = await import('../src/server/store.ts');
-const { homeStats, publishHome, readPublished } = await import('../src/server/home.ts');
-const { startReplay } = await import('../src/server/replay.ts');
-const { doctorWorkspace } = await import('../src/cli/doctor.ts');
-const { main } = await import('../src/cli/main.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { readIndex, readRunFile } = await import('../src/runtime/journal/store.ts');
+const { homeStats, publishHome, readPublished } = await import('../src/runtime/home/store.ts');
+const { startReplay } = await import('../src/app/replay.ts');
+const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
+const { main } = await import('../src/app/cli/main.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
 const node = process.execPath;
@@ -174,7 +174,7 @@ for: 2026-09-18
   const ck = await run(['home', 'check', '--published']);
   check('home check 说每张卡归谁', ck.out.includes('tianzige「塘脑袋」 → 数学老师的卡里'), ck.out);
   {
-    const { homeOwners } = await import('../src/lib/home.ts');
+    const { homeOwners } = await import('../src/runtime/home/home.ts');
     const T = (tutor: string) => ({ kind: 'tutor', props: { tutor, buttons: [] } });
     const owners = homeOwners([{ kind: 'text', props: {} }, T('chinese-tutor'), { kind: 'image', props: {} }, { kind: 'dictation', props: { tutor: 'english-tutor', words: [] } }, T('nobody-tutor'), { kind: 'text', props: {} }, { kind: 'dictation', props: { words: [] } }], ['chinese-tutor', 'english-tutor']);
     check('homeOwners:第一张老师卡前面的公共;跟在谁后面归谁;听写卡写了念的老师归他;不上首页的老师卡不算', owners.join() === ',,chinese-tutor,english-tutor,,chinese-tutor,chinese-tutor', owners.join());

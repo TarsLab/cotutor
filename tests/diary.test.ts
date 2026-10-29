@@ -1,5 +1,5 @@
 /** 日记与档案的纯函数(《obsidian仓库设计.md》):记账段 → 日记一段的形状、打分门槛、观察与档案的抽取、记账提示词。 */
-import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings, threadBundles } from '../src/lib/diary.ts';
+import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings, threadBundles } from '../src/memory/diary.ts';
 import { check, done } from './_check.ts';
 
 const msgs = [

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 孩子端不往浏览器历史里加东西(src/server/kid-nav.ts)在 Safari(WebKit)上的验收:
+ * 孩子端不往浏览器历史里加东西(src/ui/kid/kid-nav.ts)在 Safari(WebKit)上的验收:
  * 首页点老师卡上的「拍照听写」→ 听写页 → 左上胶囊回首页,浏览器历史一条没多;这时按后退,离开孩子端(回到打开首页之前那页),不会回到旧的听写页;
  * 页面从浏览器缓存原样恢复(pageshow.persisted)就重载一次。本进程起服务(临时 workspace,不花钱)。
  * 本仓不装 playwright:借一份 playwright-core 和它配套的 WebKit(见 probe-lecture-webkit.mjs)。
@@ -20,9 +20,9 @@ let bad = 0;
 const ok = (name, cond, detail = '') => { if (!cond) bad++; console.log(`${cond ? '✓' : '✗'} ${name}${detail ? `  ${detail}` : ''}`); };
 delete process.env.COTUTOR_WORKSPACE;
 
-const { initWorkspace } = await import(join(repo, 'src', 'cli', 'init.ts'));
-const { loadWorkspace } = await import(join(repo, 'src', 'cli', 'workspace.ts'));
-const { createContext, createHandler } = await import(join(repo, 'src', 'server', 'app.ts'));
+const { initWorkspace } = await import(join(repo, 'src', 'app', 'cli', 'init.ts'));
+const { loadWorkspace } = await import(join(repo, 'src', 'app', 'workspace.ts'));
+const { createContext, createHandler } = await import(join(repo, 'src', 'app', 'http', 'app.ts'));
 
 const tmp = probeDir('cotutor-probe-kid-nav-');
 const wsRoot = join(tmp, 'ws');

@@ -1,7 +1,7 @@
 /** 孩子视图:最终文本剥段后正文即板书(段落 = 讲稿,围栏 = 卡),每句按上限截;家长尾巴不进;答案剥掉;出错什么都没有。 */
-import { deriveKidView, kidConversation, kidSource, kidThreads, parentConversation, truncateReply } from '../src/lib/kid-view.ts';
-import { parseBoard } from '../src/lib/board.ts';
-import { parseTranscript } from '../src/lib/transcript.ts';
+import { deriveKidView, kidConversation, kidSource, kidThreads, parentConversation, truncateReply } from '../src/runtime/kid-view.ts';
+import { parseBoard } from '../src/board/parse.ts';
+import { parseTranscript } from '../src/brain/transcript.ts';
 import { check, done } from './_check.ts';
 
 {

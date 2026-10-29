@@ -18,8 +18,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
-const { RealtimeSession, INPUT_RATE, OUTPUT_RATE, REALTIME_VOICE, MAX_IMAGE_B64 } = await import(join(repo, 'src', 'live', 'realtime.ts'));
-const { pcmOfWav, wavOfPcm } = await import(join(repo, 'src', 'live', 'lib', 'wav.ts'));
+const { RealtimeSession, INPUT_RATE, OUTPUT_RATE, REALTIME_VOICE, MAX_IMAGE_B64 } = await import(join(repo, 'src', 'realtime', 'bailian.ts'));
+const { pcmOfWav, wavOfPcm } = await import(join(repo, 'src', 'shared', 'wav.ts'));
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const what = process.argv[2] ?? 'all';

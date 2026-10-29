@@ -1,8 +1,8 @@
 /** 首页文件的纯函数:解析、两级问题、排卡、孩子端按钮、--force 丢卡、发布 id;上下文包的 home / continue 两段;日记不记按钮字。 */
-import { arrangeHome, dropFixes, homeId, homeIssues, homeRefs, homeTutors, kidButtons, parseHome, threadKey, todayResumes, type HomeTutorInfo } from '../src/lib/home.ts';
-import { renderContextPack } from '../src/lib/context-pack.ts';
-import { kidQuestions } from '../src/lib/diary.ts';
-import type { TutorButton } from '../src/cards/index.ts';
+import { arrangeHome, dropFixes, homeId, homeIssues, homeRefs, homeTutors, kidButtons, parseHome, threadKey, todayResumes, type HomeTutorInfo } from '../src/runtime/home/home.ts';
+import { renderContextPack } from '../src/runtime/context/context-pack.ts';
+import { kidQuestions } from '../src/memory/diary.ts';
+import type { TutorButton } from '../src/board/cards/index.ts';
 import { check, done } from './_check.ts';
 
 const DRAFT = [

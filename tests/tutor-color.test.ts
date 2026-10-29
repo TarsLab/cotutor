@@ -3,7 +3,7 @@
  * 自动分的八种都是白字压得住的深色。
  */
 import { check, done } from './_check.ts';
-import { MIN_CONTRAST, NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, contrastWithWhite, tutorColors } from '../src/lib/tutor-color.ts';
+import { MIN_CONTRAST, NEUTRAL_COLOR, SUBJECT_COLORS, TUTOR_PALETTE, contrastWithWhite, tutorColors } from '../src/ui/shared/tutor-color.ts';
 import { canonicalSubject, subjectLang, tutorExtras, TutorSchema } from '../src/schema/config.ts';
 
 try {

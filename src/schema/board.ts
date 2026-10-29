@@ -1,6 +1,6 @@
 /**
- * 板书(孩子端老师页)一节的契约:卡 {kind, props} + 讲稿句。类型在这里;src/lib/kid-board.ts 内联进页面,只 import type 这几样
- * (剥类型时一起没了)。下面的 zod 与类型对齐,文件底部用赋值断言锁住。每种卡的 props 契约在 src/cards/<kind>.ts。
+ * 板书(孩子端老师页)一节的契约:卡 {kind, props} + 讲稿句。类型在这里;src/board/presentation.ts 内联进页面,只 import type 这几样
+ * (剥类型时一起没了)。下面的 zod 与类型对齐,文件底部用赋值断言锁住。每种卡的 props 契约在 src/board/cards/<kind>.ts。
  */
 import { z } from 'zod';
 

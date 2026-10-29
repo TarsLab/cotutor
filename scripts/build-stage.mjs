@@ -1,5 +1,5 @@
 /**
- * 舞台包:src/stage/(React + drawtell 播放器 + excalidraw)→ dist/stage/stage.js + chunk-*.js + stage.css + index.html(esbuild)。
+ * 舞台包:src/ui/stage/(React + drawtell 播放器 + excalidraw)→ dist/stage/stage.js + chunk-*.js + stage.css + index.html(esbuild)。
  * 字体不进包:index.html 把 EXCALIDRAW_ASSET_PATH 指到 /stage/,serve 从 node_modules 的 excalidraw 里提供 /stage/fonts/。
  * react / react-dom / excalidraw 强制解析到本包的 node_modules(drawtell 是 link 进来的,不钉住会打进两份 React)。
  *
@@ -7,7 +7,7 @@
  * 自己用 `import()` 懒加载的,不拆就被 esbuild 全部内联进一个文件,开个场景卡也得先下 8 MB。
  * 拆开之后打开舞台只要 stage.js + 它静态依赖的那几个 chunk(约 1.3 MB),其余按需取;
  * 画板卡的编辑器再由 main.tsx 的 lazy import 单独成块。chunk 是 stage.js 的相对 import,
- * 服务端 `/stage/<文件>` 本来就整目录给(src/server/stage.ts),不用另配路由。
+ * 服务端 `/stage/<文件>` 本来就整目录给(src/app/http/stage.ts),不用另配路由。
  *
  * 跑法:pnpm run build:stage(prepublishOnly 也跑);开发时缺了 doctor 点名。
  */
@@ -22,7 +22,7 @@ const out = join(root, 'dist', 'stage');
 await mkdir(out, { recursive: true });
 const t0 = Date.now();
 const r = await build({
-  entryPoints: [join(root, 'src', 'stage', 'main.tsx')],
+  entryPoints: [join(root, 'src', 'ui', 'stage', 'main.tsx')],
   bundle: true,
   outdir: out,
   entryNames: 'stage',

@@ -14,10 +14,10 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-media-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
 
-const { parseRange } = await import('../src/lib/range.ts');
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, createHandler } = await import('../src/server/app.ts');
+const { parseRange } = await import('../src/app/http/range.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, createHandler } = await import('../src/app/http/app.ts');
 
 // ---- parseRange
 check('没给 / 写坏 / 多段 / 两头空 → 当没给', parseRange(undefined, 100) === null && parseRange('items=0-1', 100) === null && parseRange('bytes=0-1,5-6', 100) === null && parseRange('bytes=-', 100) === null);

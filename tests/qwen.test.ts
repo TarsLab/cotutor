@@ -16,10 +16,10 @@ process.env.DASHSCOPE_API_KEY = 'sk-from-env';
 delete process.env.QWENCLOUD_TOKEN_PLAN_API_KEY;
 process.env.OPENAI_MODEL = 'gpt-x';
 
-const { initWorkspace } = await import('../src/cli/init.ts');
-const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { createContext, route } = await import('../src/server/app.ts');
-const { configGaps } = await import('../src/cli/migrate.ts');
+const { initWorkspace } = await import('../src/app/cli/init.ts');
+const { loadWorkspace } = await import('../src/app/workspace.ts');
+const { createContext, route } = await import('../src/app/http/app.ts');
+const { configGaps } = await import('../src/app/cli/migrate.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
 const flags = ['--system-prompt', '{systemBody}', '--input-format', 'stream-json', '--output-format', 'stream-json', '--approval-mode', 'default', '{toolArgs}', '--max-wall-time', '10m'];

@@ -1,5 +1,5 @@
 /**
- * 一个孩子的 workspace 解析好的样子(cli/workspace.ts 的 loadWorkspace 给;从那边挪来,2026-10-29):根、从哪认出来的、cotutor.json、各角色的绝对路径、几个目录。
+ * 一个孩子的 workspace 解析好的样子(app/workspace.ts 的 loadWorkspace 给;从那边挪来,2026-10-29):根、从哪认出来的、cotutor.json、各角色的绝对路径、几个目录。
  * 类型放在 schema:运行层、记忆、场景都按它取自己要的那几样,不用去引命令行那一层。
  */
 import type { CotutorConfig, PathRole } from './config.ts';

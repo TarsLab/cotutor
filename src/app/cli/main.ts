@@ -156,7 +156,7 @@ export async function main(argv: string[]): Promise<void> {
         const r = await serveMock({ port, scenario: scenario as MockScenario, delayMs, http: flags.http === true });
         // 被杀(Ctrl-C、探针收尾)也走 exit,mock 的临时目录才删得掉
         for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.once(s, () => process.exit(128 + osConstants.signals[s]));
-        process.stdout.write(`cotutor mock 场景 ${scenario}(不经真实老师与百炼:老师都走实时老师页,假嘴念静音的声音;卡的声音退回浏览器合成声)\n`);
+        process.stdout.write(`cotutor mock 场景 ${scenario}(不经真实老师与百炼:老师都走实时老师页,假嘴念静音的声音)\n`);
         if (!r.https) process.stdout.write('  ! HTTP:iPad / iPhone 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write('  孩子端 /,家长端 /parent;直接开某位老师:/?tutor=chinese-tutor\n');

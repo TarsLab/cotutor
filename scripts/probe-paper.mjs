@@ -67,6 +67,22 @@ const press = async (sel, ms) => {
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button: 'left', buttons: 0, clickCount: 1 });
   return true;
 };
+/**
+ * 按住说话:按下先等麦克风接上(#hold 有 on 没 wait:按住了、声音推得出去)再按 ms 松手。新开的页面第一次按下才开麦克风,开完自检 600 毫秒;
+ * 假麦克风一秒嘀一声,赶上两声之间就判成哑的、重开一回(约 1.6 秒),固定按 1.2 秒就成了「没听清」作废(同 probe-live-page)。
+ * 不看那行字:按满 150 毫秒才算按住,在那之前它还是上一次的「松手发送」
+ */
+const pressLive = async (sel, ms) => {
+  const p = await center(sel);
+  if (!p) return false;
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p.x, y: p.y });
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p.x, y: p.y, button: 'left', buttons: 1, clickCount: 1 });
+  const hot = await until(`(() => { const h = document.querySelector('#hold'); return h.classList.contains('on') && !h.classList.contains('wait'); })()`, 6000);
+  if (!hot) console.log('  麦克风 6 秒没接上:', await evaluate(`document.querySelector('#hold').className`));
+  await sleep(ms);
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button: 'left', buttons: 0, clickCount: 1 });
+  return true;
+};
 /** 在舞台 iframe 的画布上画几笔(iframe 里派 PointerEvent;顶层鼠标画不上 excalidraw) */
 const draw = (strokes, color) => evaluate(`(async () => {
   const d = document.querySelector('#st-frame').contentDocument;
@@ -99,6 +115,8 @@ try {
   await send('Page.navigate', { url: `${base}/?tutor=chinese-tutor&stage=2.1` });
   ok('画板卡开了(iframe 里有画布)', Boolean(await canvasUp()));
   await until(`Boolean(window.__cv_ready = document.body.classList.contains('live'))`, 8000);
+  // 舞台打开有个过渡(scale .96 → 1):等它停稳再量,不然量在半截差一两个像素
+  await until(`(() => { const r = document.querySelector('#stage').getBoundingClientRect(); return r.left === 0 && r.top === 0 && r.width >= innerWidth - 2 && r.height >= innerHeight - 2; })()`, 3000);
   const lay = await evaluate(`(() => {
     const st = document.querySelector('#stage').getBoundingClientRect();
     const d = document.querySelector('#st-frame').contentDocument;
@@ -134,7 +152,7 @@ try {
   // 边画边聊:按住小头像说 1.2 秒 → release 带 chat(画板卡的 id、一张 jpeg、题目);假嘴接住一句,字幕浮在画布顶上;不起老师
   sent.length = 0;
   await until(`!document.body.classList.contains('pending')`, 15000);
-  await press('#cv-hold', 1200);
+  await pressLive('#cv-hold', 1200);
   const rel = await (async () => { for (let i = 0; i < 20; i++) { const r = sent.find((x) => x.t === 'release'); if (r) return r; await sleep(150); } return null; })();
   if (!rel) console.log('  发出去的:', JSON.stringify(sent.map((x) => x.t)));
   ok('按住小头像说 → release 带 chat(画板卡、jpeg、题目)', Boolean(rel?.chat) && /^\d{4}-\d+\/\d+$/.test(rel.chat.canvas) && String(rel.chat.image).startsWith('data:image/jpeg') && Boolean(rel.chat.ask?.prompt), rel ? JSON.stringify({ ...rel, chat: rel.chat ? { ...rel.chat, image: String(rel.chat.image).slice(0, 24) } : null }) : '没发');
@@ -173,7 +191,7 @@ try {
 
   // 按住「给老师看」说一句:画和这句话一起给老师(release 带 drawing,不带 chat)
   sent.length = 0;
-  await press('#st-go', 1400);
+  await pressLive('#st-go', 1400);
   const give = await (async () => { for (let i = 0; i < 40; i++) { const r = sent.find((x) => x.t === 'release'); if (r) return r; await sleep(200); } return null; })();
   ok('按住「给老师看」说 → release 带 drawing(纸、captures/ 里的图),不带 chat', Boolean(give?.body?.drawing) && give.body.drawing.key && /^captures\//.test(give.body.drawing.image) && !give.chat, JSON.stringify(give ?? null));
   const card = await until(`(() => { const im = document.querySelector('#board .c-draw img'); return im && im.complete && im.naturalWidth > 0 && { w: im.naturalWidth, t: document.querySelector('#board .c-draw b').textContent }; })()`, 15000);

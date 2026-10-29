@@ -16,7 +16,7 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
 import { addMessage, applyRun, cardId, lastJobOf, changedCards, conversationFiles, jobId, localDate, localMinute, sessionFor, threads } from '../lib/conversation.ts';
-import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
+import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, kidQuestions, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
 import { cardAssets, cardLabel, describeCard, tutorCardKinds } from '../cards/index.ts';
 import { boardGuideFor, cardGuidesFor } from '../cards/docs.ts';
 import { activityCards, parseActivity, renderTutorSection } from '../lib/activity.ts';
@@ -27,16 +27,15 @@ import { lineFlags, parseBoard } from '../lib/board.ts';
 import { readyBeats, beatsOf, type BoardSection, type Device } from '../lib/kid-board.ts';
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
 import { parseSections } from '../lib/sections.ts';
-import { isoWeek, parsePlan, planLinesFor } from '../lib/plan.ts';
 import { threadDigest } from '../lib/thread-digest.ts';
 import { getRuntime, runtimeUses, type RunPlan, boardPreloaded } from '../lib/run-plan.ts';
-import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
 import { BOARD_CARD_KINDS, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { readAgentBody, readCardStates, readIndex, snapshotSources, writeIndex, writeRunFile } from './store.ts';
-import { readDiaries, readTextbooks, scanVault, updateVaultMemory, writeDiary } from '../memory/vault.ts';
-import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPrompt, type MemoryLine } from '../lib/vault-notes.ts';
+import { readTextbooks, scanVault, updateVaultMemory, writeDiary } from '../memory/vault.ts';
+import { learningContext, type PackReport } from '../memory/context.ts';
+import { memoryCount, textHash, tidyMemoryPrompt, type MemoryLine } from '../lib/vault-notes.ts';
 import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTEM, BOARD_GUIDE_PATH, boardGuideBody, boardGuideReads } from '../lib/tutor-rules.ts';
 import { DubQueue } from './tts.ts';
 import { continueContext } from './home.ts';
@@ -121,18 +120,7 @@ interface Active {
   live?: boolean;
 }
 
-/**
- * 上下文包的来源清单(2026-09-15,`cotutor pack` 干跑用):每段来自哪个文件、那里一共有多少、按政策带了几条。
- * 家长改了档案 / 入口文件 / 日记 / 计划,不起模型就能看到老师下一轮会看见什么、什么被截掉了。
- */
-export interface PackReport {
-  timetable: { file: string; found: boolean; slot: string | null };
-  vault: { root: string; semester: string | null; profile: string | null; extraProfiles: string[]; entry: string | null; extraEntries: string[]; memory: string | null; extraMemories: string[]; subject: string | null; refs: string[]; limit: number; chars: { profile: number; entry: number; memory: number } };
-  plan: { file: string; found: boolean; total: number; kept: number; limit: number };
-  recent: { dir: string; days: number; filesFound: string[]; total: number; kept: number; limit: number; subject: string | null };
-}
-
-const MANY = 100_000;
+export type { PackReport } from '../memory/context.ts';
 
 /** API 运行时的长话题:上一轮结束时上下文(tokens.context)过了这么多,这一轮整段压缩(2026-10-29 定 32k) */
 export const COMPACT_TOKENS = 32_000;
@@ -159,20 +147,10 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
   const t = ws.config.tutors[tutor];
   const policy = resolvePolicy(ws.config, tutor);
   const pack: ContextPack = { at: localMinute(input.at), focus: input.focus, plan: [], recent: [] };
-  if (report) report.timetable = { file: ws.paths.timetable, found: false, slot: null };
-  try {
-    const slot = currentSlot(parseTimetable(await readFile(ws.paths.timetable, 'utf8')).entries, input.at);
-    if (report) report.timetable.found = true;
-    if (slot) pack.slot = slotLabel(slot);
-    if (report) report.timetable.slot = pack.slot ?? null;
-  } catch {
-    /* 没有课程表:不带 slot */
-  }
-  const { notes, files } = await scanVault(ws);
-  // activity 话题的记忆是它自己的(agent: <老师>/<activity>);档案、入口文件、日记观察照旧共用
-  const pick = pickNotes(notes, files, { date: localDate(input.at), subject: t?.subject, agent: input.agent ?? tutor });
-  const limit = policy.contextPack.entryChars;
-  if (pick.semester) pack.semester = pick.semester;
+  // vault 那几段(src/memory/context.ts):activity 话题的记忆是它自己的(agent: <老师>/<activity>);档案、入口文件、日记观察照旧共用
+  const mem = await learningContext(ws, { at: input.at, agent: input.agent ?? tutor, subject: t?.subject, display: t?.display, teacher: Boolean(t) && tutor.endsWith('-tutor'), limits: { entryChars: policy.contextPack.entryChars, planLines: policy.contextPack.planLines, recent: policy.contextPack.recent } }, report);
+  if (mem.slot) pack.slot = mem.slot;
+  if (mem.semester) pack.semester = mem.semester;
   pack.notes = [];
   // 有脸的老师的公共守则:机器技能 cotutor-tutor 的原文,排在家长笔记前面(不截;同一话题没改过由 send 换成「未变」)
   if (takesTutorRules(tutor)) {
@@ -183,33 +161,13 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
       pack.rules = `缺:${TUTOR_RULES_PATH} 不在(cotutor upgrade 补),照你老师文件里的做`;
     }
   }
-  for (const [role, n] of [['profile', pick.profile], ['entry', pick.entry], ['memory', pick.memory]] as const) {
-    if (!n) continue;
-    const clip = clipNote(n.text, limit, role === 'memory' ? 'tail' : 'head');
-    pack[role] = clip.cut ? `${n.path}(原文 ${n.text.length} 字,${role === 'memory' ? `只带最近 ${limit}` : `截到 ${limit}`})` : n.path;
-    pack.notes.push({ role, path: n.path, text: clip.text });
-  }
-  if (!pick.profile) pack.profile = '缺:vault 里没有 cotutor: profile 的档案';
-  if (!pick.entry && t && tutor.endsWith('-tutor')) pack.entry = missingEntry(t.subject, pick);
-  if (!pick.memory) pack.memory = '还没有';
-  if (pick.refs.length) pack.refs = pick.refs.map((r) => join(ws.paths.vault, r));
-  if (report) report.vault = { root: ws.paths.vault, semester: pick.semester, profile: pick.profile?.path ?? null, extraProfiles: pick.extraProfiles, entry: pick.entry?.path ?? null, extraEntries: pick.extraEntries, memory: pick.memory?.path ?? null, extraMemories: pick.extraMemories, subject: t?.subject ?? null, refs: pick.refs, limit, chars: { profile: pick.profile?.text.length ?? 0, entry: pick.entry?.text.length ?? 0, memory: pick.memory?.text.length ?? 0 } };
-  const planFile = join(ws.paths.plans, `${isoWeek(input.at)}.md`);
-  if (report) report.plan = { file: planFile, found: false, total: 0, kept: 0, limit: policy.contextPack.planLines };
-  try {
-    const { plan } = parsePlan(await readFile(planFile, 'utf8'));
-    if (report) report.plan.found = true;
-    if (plan && t) {
-      pack.plan = planLinesFor(plan, t.display, policy.contextPack.planLines);
-      if (report) report.plan = { ...report.plan, total: planLinesFor(plan, t.display, MANY).length, kept: pack.plan.length };
-    }
-  } catch {
-    /* 没有本周计划,或读不到:上下文包不带 plan */
-  }
-  const dates = recentDiaryDates(localDate(input.at), 14);
-  const diaries = await readDiaries(ws, dates);
-  pack.recent = extractObservations(diaries, { subject: t?.subject, n: policy.contextPack.recent });
-  if (report) report.recent = { dir: ws.paths.diary, days: dates.length, filesFound: diaries.map((d) => d.date).sort(), total: extractObservations(diaries, { subject: t?.subject, n: MANY }).length, kept: pack.recent.length, limit: policy.contextPack.recent, subject: t?.subject ?? null };
+  pack.notes.push(...mem.notes);
+  pack.profile = mem.profile;
+  if (mem.entry !== undefined) pack.entry = mem.entry;
+  pack.memory = mem.memory;
+  if (mem.refs) pack.refs = mem.refs;
+  pack.plan = mem.plan;
+  pack.recent = mem.recent;
   pack.vault = vaultPack(ws.paths);
   return pack;
 }

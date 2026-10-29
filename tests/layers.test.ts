@@ -43,8 +43,6 @@ const ALLOW: Record<string, readonly string[]> = {
 
 /** 现有的反向依赖(「模块 → 被引的文件」);只许删,不许加 */
 const LEGACY: readonly string[] = [
-  // schema → lib:契约反向引实现的类型
-  'schema → lib/kid-board.ts',
   // lib → cards:lib 与卡的注册表互引
   'lib → cards/docs.ts',
   'lib → cards/index.ts',
@@ -204,6 +202,8 @@ const gone = LEGACY.filter((e) => !edges.has(e));
 check('没有 ALLOW 之外的新依赖', fresh.length === 0, `\n${fresh.map((e) => `  '${e}', // ${edges.get(e)!.join('、')}`).join('\n')}\n(改代码去掉这些依赖;确属目录该调整的,改 ALLOW)`);
 check('LEGACY 里的每条代码里都还在(没了的删掉)', gone.length === 0, `\n${gone.map((e) => `  '${e}',`).join('\n')}`);
 check('LEGACY 没有重复', legacy.size === LEGACY.length);
+// LAYERS_DUMP=1:列出白名单里每条现在是谁在引(清白名单时看)
+if (process.env.LAYERS_DUMP) for (const e of LEGACY) console.log(`${e.padEnd(40)} ${(edges.get(e) ?? []).join(' ')}`);
 
 // ---- 内联文件:运行时只从别的内联文件拿值 ----
 const inline = inlineFilesOf(files);

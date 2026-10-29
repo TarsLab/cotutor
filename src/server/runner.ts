@@ -16,7 +16,7 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from '../lib/context-pack.ts';
 import { addMessage, applyRun, cardId, lastJobOf, changedCards, conversationFiles, jobId, localDate, localMinute, sessionFor, threads } from '../lib/conversation.ts';
-import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, kidQuestions, renderDiaryBlock, textbookHeadings } from '../lib/diary.ts';
+import { bookkeepingPrompt, kidQuestions, textbookHeadings } from '../lib/diary.ts';
 import { cardAssets, cardLabel, describeCard, tutorCardKinds } from '../cards/index.ts';
 import { boardGuideFor, cardGuidesFor } from '../cards/docs.ts';
 import { activityCards, parseActivity, renderTutorSection } from '../lib/activity.ts';
@@ -33,8 +33,9 @@ import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput }
 import { BOARD_CARD_KINDS, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { readAgentBody, readCardStates, readIndex, snapshotSources, writeIndex, writeRunFile } from './store.ts';
-import { readTextbooks, scanVault, updateVaultMemory, writeDiary } from '../memory/vault.ts';
+import { readTextbooks, scanVault } from '../memory/vault.ts';
 import { learningContext, type PackReport } from '../memory/context.ts';
+import { commitDiary, commitMemory } from '../memory/commit.ts';
 import { memoryCount, textHash, tidyMemoryPrompt, type MemoryLine } from '../lib/vault-notes.ts';
 import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTEM, BOARD_GUIDE_PATH, boardGuideBody, boardGuideReads } from '../lib/tutor-rules.ts';
 import { DubQueue } from './tts.ts';
@@ -690,29 +691,17 @@ export class Runner {
 
   /** 记忆段收尾:讲课的轮每轮最多 MEMORY_MAX_PER_TURN 条,多的丢(整理轮 max = null 不限);写不进(vault 不在、同名文件没属性)进提醒,不影响这轮 */
   private async settleMemory(ws: Workspace, tutor: string, date: string, items: string[], max: number | null, owner?: { agent: string; display: string }): Promise<{ changes: string[]; lines: MemoryLine[]; warnings: string[] }> {
-    const warnings: string[] = [];
-    if (max !== null && items.length > max) warnings.push(`记忆:一轮最多记 ${max} 条,丢了 ${items.length - max} 条:${items.slice(max).join(';')}`);
-    try {
-      const r = await updateVaultMemory(ws, owner?.agent ?? tutor, owner?.display ?? ws.config.tutors[tutor]?.display ?? tutor, max === null ? items : items.slice(0, max), date);
-      return { changes: r.changes, lines: r.lines, warnings: [...warnings, ...r.warnings] };
-    } catch (err) {
-      return { changes: [], lines: [], warnings: [...warnings, `记忆没写进去:${err instanceof Error ? err.message : String(err)}`] };
-    }
+    return commitMemory(ws, { agent: owner?.agent ?? tutor, display: owner?.display ?? ws.config.tutors[tutor]?.display ?? tutor, items, max, date });
   }
 
   /** 记账那轮收尾:「## 记账」段 → 这个话题在日记里的一段(打分不够只留孩子问与观察)→ 追加到 vault 的日记,索引记 booked */
   private async settleDiary(ws: Workspace, tutor: string, date: string, job: string, index: ConversationIndex, thread: string, b: Bookkeeping | null): Promise<{ index: ConversationIndex; file: string | null; warnings: string[] }> {
-    if (!b) return { index, file: null, warnings: ['记账:老师没回「## 记账」段,日记没写;再点一次记账'] };
-    const entry = entryFor(b, thread);
-    if (!entry) return { index, file: null, warnings: [`记账:「## 记账」段里没有话题 ${thread} 的那条,日记没写`] };
     const t = ws.config.tutors[tutor];
-    const topic = diaryTopic(index, entry, { subject: t?.subject ?? t?.display ?? tutor, keepScore: ws.config.vault.keepScore });
-    const block = renderDiaryBlock(topic);
-    if (!block) return { index, file: null, warnings: ['记账:这个话题没有孩子的话、摘要、观察,日记没写'] };
-    const file = await writeDiary(ws, date, (existing) => appendDiary(existing, block));
-    // 写进去的那段原文记在这轮上:删这个话题时从日记里摘掉(store.deleteThread)
-    const messages = index.messages.map((m) => (m.job === job ? { ...m, diaryBlock: block } : m));
-    return { index: { ...index, messages, booked: { ...index.booked, [thread]: job } }, file, warnings: [] };
+    const r = await commitDiary(ws, { date, index, thread, bookkeeping: b, subject: t?.subject ?? t?.display ?? tutor, keepScore: ws.config.vault.keepScore });
+    if ('warning' in r) return { index, file: null, warnings: [r.warning] };
+    // 写进去的那段原文记在这轮上:删这个话题时从日记里摘掉(memory/vault.ts 的 undoThreadVault)
+    const messages = index.messages.map((m) => (m.job === job ? { ...m, diaryBlock: r.block } : m));
+    return { index: { ...index, messages, booked: { ...index.booked, [thread]: job } }, file: r.file, warnings: [] };
   }
 
   private async spawn(ws: Workspace, tutor: string, date: string, job: string, thread: string, req: BrainRequest, plan: RunPlan, policy: Policy, active: Active, lastJob: string | null): Promise<ConversationIndex> {

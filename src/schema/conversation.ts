@@ -49,7 +49,8 @@ const MessageObjectSchema = z.object({
   photos: z.array(z.string().min(1)).optional(),
   result: z.enum(['running', 'ok', 'error']).default('running'),
   /** 这一轮的 token:输入(含缓存读)与输出;记账、显示都按它(src/lib/tokens.ts)。运行时没报(出错没收尾)就没有 */
-  tokens: z.object({ in: z.number().int().nonnegative(), out: z.number().int().nonnegative() }).optional(),
+  /** cached = 输入里命中缓存的,context = 最后一次请求的输入(这一轮结束时上下文多大);这两样只有 API 运行时报 */
+  tokens: z.object({ in: z.number().int().nonnegative(), out: z.number().int().nonnegative(), cached: z.number().int().nonnegative().optional(), context: z.number().int().nonnegative().optional() }).optional(),
   /** 老数据:2026-10-28 之前 claude 那几轮记的美元。不再写、不显示,留在这里免得改写索引时丢掉 */
   costUsd: z.number().optional(),
   /** 孩子视图文本;null = 这次运行没有给孩子的话(出错或空) */

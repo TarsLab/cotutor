@@ -1,6 +1,7 @@
 /**
  * API 运行时全流程(假百炼,不花钱):cotutor.json 里写 {api: 'bailian', model},走它的老师不起 CLI——
  * 流式板书与卡、记忆段落盘、同一话题接着聊带上前文、照片直接附成图、只读工具来回(出界的读不到)、思考档、
+ * 拼回去的历史是瘦过的(结束的轮不带思考、工具往返成一句话、照片只附最近那组)、缓存命中与上下文大小记下,
  * 用量缺了不记零、断流停住且下一轮注明、401 收尾、没配百炼的提醒;key 不落盘;家长端的转录照旧读得出。
  */
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -38,7 +39,7 @@ try {
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   mkdirSync(join(root, '教材'), { recursive: true });
   const book = join(root, '教材', '三角形.md');
-  writeFileSync(book, '三角形有三条边、三个角。\n第二行\n');
+  writeFileSync(book, '三角形有三条边、三个角。\n只在书里的一行 ZQX\n');
   mkdirSync(join(root, 'captures'), { recursive: true });
   writeFileSync(join(root, 'captures', 'dot.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5G8AAAAASUVORK5CYII=', 'base64'));
 
@@ -59,6 +60,7 @@ try {
   check('API 一轮:成了,两张卡,讲稿在', t1.m.result === 'ok' && t1.m.section?.cards.length === 2 && (t1.m.section?.lines.length ?? 0) >= 2, JSON.stringify({ result: t1.m.result, warnings: t1.m.warnings, section: t1.m.section }));
   check('API 一轮:记忆段照样落进 vault', (t1.m.remembered ?? []).some((x) => x.includes('手指比划')), JSON.stringify(t1.m.remembered));
   check('API 一轮:用量记上(假百炼回的 100 / 20)', t1.m.tokens?.in === 100 && t1.m.tokens?.out === 20, JSON.stringify(t1.m.tokens));
+  check('API 一轮:命中缓存的与上下文大小记下(只有 API 报)', t1.m.tokens?.cached === 60 && t1.m.tokens?.context === 100, JSON.stringify(t1.m.tokens));
   check('API 一轮:运行时与会话记下', t1.m.runtime === 'api' && t1.index.sessions[t1.started.thread]?.runtime === 'api' && /^api-/.test(t1.index.sessions[t1.started.thread]?.id ?? ''), JSON.stringify(t1.index.sessions));
   check('API 一轮:一次请求,流式,系统提示是老师正文 + 板书写法', r1.length === 1 && r1[0].stream === true && r1[0].messages[0]?.role === 'system' && textOf(r1[0].messages[0].content).includes('```choice'), JSON.stringify(r1.map((r) => r.messages.map((m) => m.role))));
   check('API 一轮:孩子的话不带工具;数学老师 medium 想一点', r1[0].tools === undefined && r1[0].enable_thinking === true && r1[0].thinking_budget === 1024 && r1[0].preserve_thinking === true, JSON.stringify({ tools: r1[0].tools, enable: r1[0].enable_thinking, budget: r1[0].thinking_budget }));
@@ -88,16 +90,37 @@ try {
   check('照片:用户消息里是图(data URI),不只是路径', t3.m.result === 'ok' && JSON.stringify(user3?.content).includes('data:image/png;base64,'), JSON.stringify(user3?.content).slice(0, 300));
   check('照片:这轮带只读的三样工具', JSON.stringify(r3?.tools?.map((t) => t.function.name)) === JSON.stringify(['read_file', 'glob', 'grep_search']), JSON.stringify(r3?.tools));
   const hist3 = JSON.parse(readFileSync(join(conv('math-tutor'), `${date}.${t3.started.thread}.brain.jsonl`), 'utf8').trim()) as { user: { images: string[] } };
+  const images = (b: ChatBody | undefined): number => JSON.stringify(b?.messages ?? []).split('data:image/png;base64,').length - 1;
+  writeFileSync(join(root, 'captures', 'dot2.png'), readFileSync(join(root, 'captures', 'dot.png')));
+  n = fake.requests.length;
+  await send('math-tutor', { from: 'kid', text: '再看看', thread: t3.started.thread });
+  const r3b = since(n)[0];
+  check('照片接着聊:最近交的那张照样附着(看图说话一张图聊十几轮)', images(r3b) === 1, String(images(r3b)));
+  n = fake.requests.length;
+  await send('math-tutor', { from: 'kid', text: '这是第二张', photos: ['captures/dot2.png'], thread: t3.started.thread });
+  const r3c = since(n)[0];
+  check('交了新照片:只附新的,前面那张换成一句占位', images(r3c) === 1 && JSON.stringify(r3c.messages).includes('(照片 captures/dot.png:前面交过,这里不再附图)'), JSON.stringify(r3c.messages.map((m) => [m.role, textOf(m.content).slice(0, 80)])));
+  n = fake.requests.length;
+  await send('math-tutor', { from: 'kid', text: '好了', thread: t3.started.thread });
+  const r3d = since(n)[0];
+  check('再接着聊:附的是第二张,第一张还是占位', images(r3d) === 1 && JSON.stringify(r3d.messages).includes('captures/dot.png:前面交过') && !JSON.stringify(r3d.messages).includes('captures/dot2.png:前面交过'));
   check('照片:历史只记相对 workspace 的路径,不存整张图', JSON.stringify(hist3.user.images) === JSON.stringify(['captures/dot.png']) && !readFileSync(join(conv('math-tutor'), `${date}.${t3.started.thread}.brain.jsonl`), 'utf8').includes('base64'));
 
   // ---- 只读工具:读教材来回一次;出界的读不到 ----
   n = fake.requests.length;
   const t4 = await send('chinese-tutor', { from: 'kid', text: `ZTOOL ${book}` });
   const r4 = since(n);
-  check('工具:两次请求,第二次带着工具结果', r4.length === 2 && r4[1].messages.at(-1)?.role === 'tool' && textOf(r4[1].messages.at(-1)?.content).includes('三条边'), JSON.stringify(r4.map((r) => r.messages.at(-1)?.role)));
+  check('工具:两次请求,第二次带着工具结果', r4.length === 2 && r4[1].messages.at(-1)?.role === 'tool' && textOf(r4[1].messages.at(-1)?.content).includes('ZQX'), JSON.stringify(r4.map((r) => r.messages.at(-1)?.role)));
   check('工具:回的是读到的内容', t4.m.result === 'ok' && (t4.m.kidText ?? '').includes('三角形有三条边'), JSON.stringify({ kidText: t4.m.kidText, warnings: t4.m.warnings }));
   check('工具:索引记下这轮读了哪个文件', t4.m.tools?.[0]?.name === 'read_file' && t4.m.tools[0].arg === book && t4.m.tools[0].ok === true, JSON.stringify(t4.m.tools));
   check('工具:上一步的思考原样带回(preserve_thinking)', r4[1].messages.some((m) => m.role === 'assistant' && m.reasoning_content === '先查一下书。'), JSON.stringify(r4[1].messages.filter((m) => m.role === 'assistant')));
+  check('工具:一轮里的用量按两次请求累计,上下文是最后那次的', t4.m.tokens?.in === 200 && t4.m.tokens?.cached === 120 && t4.m.tokens?.context === 100, JSON.stringify(t4.m.tokens));
+  n = fake.requests.length;
+  await send('chinese-tutor', { from: 'kid', text: '我懂了', thread: t4.started.thread });
+  const r4b = since(n)[0];
+  const flat4 = JSON.stringify(r4b?.messages ?? []);
+  check('工具那轮结束后:下一轮的历史里没有工具消息、没有思考', !r4b.messages.some((m) => m.role === 'tool' || m.tool_calls || m.reasoning_content), JSON.stringify(r4b.messages.map((m) => [m.role, Boolean(m.tool_calls), Boolean(m.reasoning_content)])));
+  check('工具那轮结束后:工具往返换成一句话,读到的全文不再带', flat4.includes('(用了 read_file') && flat4.includes('结果这里不再带') && !flat4.includes('ZQX'), flat4.slice(0, 400));
   const t5 = await send('chinese-tutor', { from: 'kid', text: 'ZTOOL /etc/hosts', newThread: true });
   check('工具:workspace 与 vault 外面的读不到(工具报错,这轮照样收尾)', t5.m.result === 'ok' && t5.m.tools?.[0]?.ok === false && (t5.m.kidText ?? '').includes('书没读到'), JSON.stringify({ tools: t5.m.tools, kidText: t5.m.kidText }));
 

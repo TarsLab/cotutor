@@ -170,7 +170,7 @@ export function applyRun(
       ? {
           ...m,
           result: transcript.final ? (transcript.final.ok ? ('ok' as const) : ('error' as const)) : ('running' as const),
-          ...(transcript.final?.inTokens !== undefined ? { tokens: { in: transcript.final.inTokens, out: transcript.final.outTokens ?? 0 } } : {}),
+          ...(transcript.final?.inTokens !== undefined ? { tokens: { in: transcript.final.inTokens, out: transcript.final.outTokens ?? 0, ...(transcript.final.cachedTokens !== undefined ? { cached: transcript.final.cachedTokens } : {}), ...(transcript.final.contextTokens !== undefined ? { context: transcript.final.contextTokens } : {}) } } : {}),
           kidText: kidView.kidText,
           artifacts: run.artifacts ?? m.artifacts,
           runtime: run.runtime,

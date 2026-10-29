@@ -47,6 +47,10 @@ export interface CliFinal {
   /** 这一轮的 token:输入(含缓存读、缓存写)与输出;记账按它(报的钱数不认,src/lib/tokens.ts) */
   inTokens?: number;
   outTokens?: number;
+  /** 输入里命中缓存的那部分(API 运行时报;CLI 不报) */
+  cachedTokens?: number;
+  /** 这一轮最后一次请求的输入 = 这一轮结束时上下文多大(API 运行时报;过 32k 整段压缩看它) */
+  contextTokens?: number;
 }
 
 /**

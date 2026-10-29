@@ -10,7 +10,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { cardLabel } from '../cards/index.ts';
-import { parserForRuntime } from '../clis/index.ts';
+import { logParser } from '../brain/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { conversationFiles, threads } from '../lib/conversation.ts';
 import { compactDiff, diffLines, type DiffRow } from '../lib/diff.ts';
@@ -176,7 +176,7 @@ export function compareSides(base: { tutor: string; date: string; job: string; e
 async function toolsOf(ws: Workspace, tutor: string, date: string, m: ConversationMessage): Promise<ToolCall[]> {
   if (m.tools) return m.tools;
   const text = await readFile(conversationFiles(ws.dirs.conversations, tutor, date).log(m.job), 'utf8').catch(() => '');
-  return toolCalls(text, parserForRuntime(ws.config.runtimes, m.runtime));
+  return toolCalls(text, logParser(ws.config.runtimes, m.runtime));
 }
 
 export async function compareReplay(ws: Workspace, tutor: string, date: string, evalJob: string): Promise<Compare | null> {

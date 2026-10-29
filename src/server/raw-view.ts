@@ -12,7 +12,8 @@ import { conversationFiles, type CardStateFile } from '../lib/conversation.ts';
 import { kidSource, truncateReply } from '../lib/kid-view.ts';
 import type { BoardCard, BoardSection } from '../lib/kid-board.ts';
 import { foldRuns, toolCalls, type ToolCall, type TranscriptRow } from '../lib/transcript.ts';
-import { parserForRuntime, toolKind, type ToolKind } from '../clis/index.ts';
+import { toolKind, type ToolKind } from '../clis/index.ts';
+import { logParser } from '../brain/index.ts';
 import { resolvePolicy, type ConversationMessage } from '../schema/index.ts';
 import type { Workspace } from '../cli/workspace.ts';
 import { readErrLog, readIndex, readRunFile, readTranscript, scanCards, type RunSources } from './store.ts';
@@ -164,7 +165,7 @@ export async function rawView(ws: Workspace, tutor: string, date: string, job: s
 
   const err = await readErrLog(ws, tutor, date, job);
   // 读了什么:索引里物化过的优先(和当时一致),没有(老轮次)就从 .log 现抽
-  const tools = (m.tools ?? toolCalls(await readFile(files.log(job), 'utf8').catch(() => ''), parserForRuntime(ws.config.runtimes, m.runtime))).map((t) => ({ ...t, kind: toolKind(t.name) }));
+  const tools = (m.tools ?? toolCalls(await readFile(files.log(job), 'utf8').catch(() => ''), logParser(ws.config.runtimes, m.runtime))).map((t) => ({ ...t, kind: toolKind(t.name) }));
   const toolFiles = new Set(tools.filter((t) => t.kind === 'read' && t.arg).map((t) => t.arg)).size;
   const toolFailed = tools.filter((t) => t.ok === false).length;
   const events = parseEvents(await readFile(files.events(job), 'utf8').catch(() => ''));

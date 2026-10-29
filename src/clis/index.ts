@@ -4,7 +4,7 @@
  * 只复用流协议与 Qwen 的工具参数,不设置 Qwen 的运行环境。
  */
 import { basename } from 'node:path';
-import { POLICY_DEFAULTS, fillRuntime, type Policy, type Runtime } from '../schema/index.ts';
+import { POLICY_DEFAULTS, fillRuntime, type CliRuntime, type Policy } from '../schema/index.ts';
 import { parseStreamJson, streamJsonUserMessage } from './stream-json.ts';
 import { qwen } from './qwen.ts';
 import type { CliAdapter, CliEvent, ToolKind, ToolSet } from './types.ts';
@@ -60,12 +60,12 @@ export function toolKind(name: string): ToolKind {
 }
 
 /** 模板管得了这轮带不带工具吗:用了 `{tools}` 或 `{toolArgs}`。管不了的,应用也就不替它省掉上下文包里只有工具才用得上的路径 */
-export function controlsTools(runtime: Runtime): boolean {
+export function controlsTools(runtime: CliRuntime): boolean {
   return [...runtime.run, ...runtime.resume].some((a) => a.includes('{tools}') || a === '{toolArgs}');
 }
 
 /** 出厂运行时:各适配器的模板合在一起(default 由 skeleton 定) */
-export function factoryRuntimes(): Record<string, Runtime> {
+export function factoryRuntimes(): Record<string, CliRuntime> {
   return Object.assign({}, ...ADAPTERS.map((a) => a.runtimes()));
 }
 
@@ -103,10 +103,10 @@ export function parserOf(cli: string | undefined): (line: string) => CliEvent[] 
   return (cli ? adapterNamed(cli) : null)?.parse ?? STREAM_JSON.parse;
 }
 
-/** 按运行时名读输出(落盘的老轮次只记了运行时名;运行时后来删了或改了就按 stream-json) */
+/** 按运行时名读输出(落盘的老轮次只记了运行时名;运行时后来删了或改了就按 stream-json)。API 运行时的日志不归这里读,见 src/brain/index.ts 的 logParser */
 export function parserForRuntime(runtimes: Readonly<Record<string, unknown>>, name: string | undefined): (line: string) => CliEvent[] {
   const r = name && name !== 'default' ? runtimes[name] : undefined;
-  return r && typeof r === 'object' && Array.isArray((r as Runtime).run) ? (adapterNamed(runtimeCli(r as Runtime)) ?? STREAM_JSON).parse : STREAM_JSON.parse;
+  return r && typeof r === 'object' && Array.isArray((r as CliRuntime).run) ? (adapterNamed(runtimeCli(r as CliRuntime)) ?? STREAM_JSON).parse : STREAM_JSON.parse;
 }
 
 /** 起进程前让这个 CLI 的适配器备好 workspace 里的机器文件(qwen 的隔离家目录);没有这一步的 CLI 什么都不做 */

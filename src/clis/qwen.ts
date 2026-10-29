@@ -13,7 +13,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { compatibleBase, qianwenKeys, qianwenLine } from '../lib/qianwen.ts';
-import type { Policy, Runtime } from '../schema/index.ts';
+import type { CliRuntime, Policy } from '../schema/index.ts';
 import { parseStreamJson, streamJsonUserMessage } from './stream-json.ts';
 import type { CliAdapter, ToolKind, ToolSet } from './types.ts';
 
@@ -139,11 +139,11 @@ export const qwen: CliAdapter = {
         : { name: 'key', ok: false, detail: '千问的 key 一把都拿不到:老师进程起来就会 401', fix: '在起 serve 的 shell 里 export QWENCLOUD_TOKEN_PLAN_API_KEY(Token Plan,sk-sp-)或 DASHSCOPE_API_KEY(百炼按量)' },
     ];
   },
-  runtimes: (): Record<string, Runtime> => {
+  runtimes: (): Record<string, CliRuntime> => {
     // 消息走 stdin(预热能用;数组旗标 --core-tools 之类会吞掉跟在后面的消息,不进 argv 正好避开);-m 选模型(家里那份 settings.json 列着的);
     // {systemBody} = 老师正文 + 板书写法,整份换掉 qwen 自己的系统提示;{toolArgs} 由适配器展开;--approval-mode default:shell、写、读 workspace 外都拒
     // qwen-flash 只差模型(2026-10-13 英语老师出厂走它:Token Plan 上便宜、开口 2.5–4 秒)
-    const of = (model: string): Runtime => {
+    const of = (model: string): CliRuntime => {
       const flags = ['-m', model, '--system-prompt', '{systemBody}', '--input-format', 'stream-json', '--output-format', 'stream-json', '--include-partial-messages', '--approval-mode', 'default', '{toolArgs}', '--max-wall-time', '10m'];
       return { stdin: 'stream-json', run: ['qwen', ...flags], resume: ['qwen', '--resume', '{session}', ...flags] };
     };

@@ -4,7 +4,7 @@
  * 选哪个模型、预算、时限还在 cotutor.json 的运行时模板里(数据);应用的其余部分只认这里的统一事件,不认哪家的 JSON。
  * 接一个新 CLI:照 qwen.ts 写一个文件,在 index.ts 的 ADAPTERS 里登记。
  */
-import type { Policy, Runtime } from '../schema/index.ts';
+import type { CliRuntime, Policy } from '../schema/index.ts';
 
 /** 工具的类别:应用要知道「读了哪个文件」「是不是用技能回读板书写法」时按类别认,不比工具名 */
 export type ToolKind = 'read' | 'shell' | 'search' | 'edit' | 'skill' | 'other';
@@ -102,5 +102,5 @@ export interface CliAdapter {
   /** cotutor doctor 查这个 CLI 时多看几样(version 是 `--version` 的第一行);不给就只查装没装 */
   check?(ctx: { version: string; env: NodeJS.ProcessEnv }): { name: string; ok: boolean; detail: string; fix?: string }[];
   /** 出厂运行时模板:键是运行时名 */
-  runtimes(): Record<string, Runtime>;
+  runtimes(): Record<string, CliRuntime>;
 }

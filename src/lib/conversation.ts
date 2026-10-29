@@ -59,6 +59,8 @@ export interface ConversationFiles {
   cardAssetsDir: (job: string, n: number) => string;
   /** 第 n 张卡的一个资产文件(点读第 k 段 = <k>.mp3) */
   cardAsset: (job: string, n: number, file: string) => string;
+  /** API 运行时这个话题的模型历史 <date>.<话题>.brain.jsonl(src/brain/api.ts;话题 id 就是第一轮的 job,删话题按 <date>.<job>.* 一起删) */
+  brain: (thread: string) => string;
 }
 
 /** conversations/<tutor>/<date>.json 与 <date>.<job>.log / .err.log / .mp3(整段配音)/ .<n>.mp3(讲稿第 n 句)/ .cards/<n>.json(卡的状态) */
@@ -76,6 +78,7 @@ export function conversationFiles(conversationsDir: string, tutor: string, date:
     card: (job, n) => `${base}.${job}.cards/${n}.json`,
     cardAssetsDir: (job, n) => `${base}.${job}.cards/${n}`,
     cardAsset: (job, n, file) => `${base}.${job}.cards/${n}/${file}`,
+    brain: (thread) => `${base}.${thread}.brain.jsonl`,
   };
 }
 

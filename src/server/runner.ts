@@ -39,6 +39,7 @@ import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTE
 import { DubQueue } from './tts.ts';
 import { continueContext } from './home.ts';
 import { kidInput, type KidAccept } from './kid-input.ts';
+import { dashscopeAuth } from '../live/realtime.ts';
 import { DRAW_ONLY_TEXT, drawingPackLine } from './paper.ts';
 import { makeDraw, type Draw } from '../paint/draw.ts';
 import { paintLines, startPaints } from '../paint/painter.ts';
@@ -420,7 +421,9 @@ export class Runner {
     this.getWs = getWs;
     this.opts = opts;
     this.draw = opts.draw ?? makeDraw({ env: opts.env });
-    this.brain = createBrain({ workspace: () => { const ws = this.getWs(); return { config: ws.config, root: ws.root }; }, env: opts.env, warmIdleMs: opts.warmIdleMs });
+    // API 运行时的凭证与实时那边同一条查找链(家长端配的在最前);COTUTOR_BRAIN_ENDPOINT:测试与探针指到假百炼
+    const env = opts.env ?? process.env;
+    this.brain = createBrain({ workspace: () => { const ws = this.getWs(); return { config: ws.config, root: ws.root }; }, env: opts.env, warmIdleMs: opts.warmIdleMs, auth: () => dashscopeAuth(env), endpoint: env.COTUTOR_BRAIN_ENDPOINT || undefined });
   }
 
   /** 孩子端发一条的验与拼(HTTP 与实时老师共用,./kid-input.ts):拼成 send 的入参,或回 reject;不起老师 */
@@ -619,7 +622,7 @@ export class Runner {
       pack.live = { ...(l.caught ? { caught: l.caught } : {}), ...(l.cut !== undefined ? { cut: l.cut } : {}), ...(l.warmup?.length ? { warmup: l.warmup } : {}), ...(l.phone !== undefined ? { phone: l.phone } : {}), ...(l.app ? { app: l.app } : {}), ...(l.draw?.length ? { draw: l.draw } : {}) };
     }
     const prompt = buildContextPack(pack, text, policy.contextPack);
-    const req: BrainRequest = { agent, prompt, agentBody, systemBody, boardFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, readDirs: readDirsOf(ws), session };
+    const req: BrainRequest = { agent, prompt, agentBody, systemBody, boardFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, readDirs: readDirsOf(ws), session, ...(pack.photoFiles?.length ? { images: pack.photoFiles } : {}) };
     const plan = this.brain.plan(req);
 
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
@@ -635,7 +638,7 @@ export class Runner {
     const runPolicy = input.live ? { ...policy, replyMaxChars: Number.MAX_SAFE_INTEGER } : policy;
     // 预热的进程按这个话题末条 job 对(新开记 null);spawn 在同一拍里接过来
     const lastJob = plan.resume ? lastJobOf(index, thread) : null;
-    active.done = this.spawn(ws, tutor, date, job, req, plan, runPolicy, active, lastJob).finally(() => {
+    active.done = this.spawn(ws, tutor, date, job, thread, req, plan, runPolicy, active, lastJob).finally(() => {
       if (this.active.get(tutor) === active) this.active.delete(tutor);
       // 孩子 / 家长这轮完了,马上起好下一轮的进程;系统轮(记账、整理记忆)之后孩子多半不在,不起
       if (input.from !== 'system' && !input.replayOf && !input.eval) void this.prewarm(tutor).catch(() => {});
@@ -732,7 +735,7 @@ export class Runner {
     return { index: { ...index, messages, booked: { ...index.booked, [thread]: job } }, file, warnings: [] };
   }
 
-  private async spawn(ws: Workspace, tutor: string, date: string, job: string, req: BrainRequest, plan: RunPlan, policy: Policy, active: Active, lastJob: string | null): Promise<ConversationIndex> {
+  private async spawn(ws: Workspace, tutor: string, date: string, job: string, thread: string, req: BrainRequest, plan: RunPlan, policy: Policy, active: Active, lastJob: string | null): Promise<ConversationIndex> {
     const replyMaxChars = policy.replyMaxChars;
     const files = conversationFiles(ws.dirs.conversations, tutor, date);
     // 埋点:从这一轮起算,首卡 = partial 板书第一次有卡(孩子端第一次看到东西),done = 进程退出,dubbed = 配音收尾
@@ -795,7 +798,7 @@ export class Runner {
       settleReady();
     };
     // 起老师(src/brain/):预热的进程在这一拍里接过来(send 查完 busy 到这里之间没有 await);正文、工具、断流随流回报
-    const brainRun = this.brain.start(req, plan, { tutor, key: { cwd: join(ws.dirs.agents, tutor), date, lastJob }, files: { log: files.log(job), err: files.err(job) }, stall: policy.stall }, {
+    const brainRun = this.brain.start(req, plan, { tutor, key: { cwd: join(ws.dirs.agents, tutor), date, lastJob }, files: { log: files.log(job), err: files.err(job), history: files.brain(thread) }, stall: policy.stall }, {
       onStart: (s) => emit({ lane: 'main', kind: 'start', cli: s.cli, runtime: s.runtime, resume: s.resume, ...(s.warmBornAt !== undefined ? { warmMs: t0 - s.warmBornAt } : {}) }),
       onText: () => {
         dirty = true;

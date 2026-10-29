@@ -17,7 +17,7 @@ import { parseAgentFile } from '../lib/agent-file.ts';
 import { localDate } from '../lib/conversation.ts';
 import { MIN_CONTRAST, contrastWithWhite } from '../lib/tutor-color.ts';
 import { memoryPath, missingEntry, pickNotes } from '../lib/vault-notes.ts';
-import { listTutors, mouthVoice, resolvePolicy } from '../schema/index.ts';
+import { isApiRuntime, listTutors, mouthVoice, resolvePolicy } from '../schema/index.ts';
 import { kindsFor, tutorCardKinds } from '../cards/index.ts';
 import { scanVault } from '../server/store.ts';
 import { parseArtifactEvents } from '../lib/ledger.ts';
@@ -115,6 +115,10 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
   const runtimeName = ws.config.runtimes.default;
   const runtime = ws.config.runtimes[runtimeName];
   if (!runtime || typeof runtime === 'string') return;
+  if (isApiRuntime(runtime)) {
+    push({ name: `live.${runtimeName}`, ok: true, required: false, detail: `API 运行时(百炼 ${runtime.model}),不起 CLI;真跑一轮用 cotutor send` });
+    return;
+  }
   if (runtimeIssue(runtime)) return; // 静态体检已报退役,不启动旧 CLI
   let agentBody: string | undefined;
   try {
@@ -534,6 +538,10 @@ export async function doctorWorkspace(
       for (const name of used) {
         const rt = ws.config.runtimes[name];
         if (!rt || typeof rt === 'string') continue;
+        if (isApiRuntime(rt)) {
+          push({ name: `runtime.${name}.board`, ok: true, required: false, detail: 'API 运行时:板书写法连老师正文一起进系统提示' });
+          continue;
+        }
         const inRun = boardPreloaded({ run: rt.run, resume: rt.run });
         const inResume = boardPreloaded({ run: rt.resume, resume: rt.resume });
         const how = runtimeUses(rt, '{boardFile}') ? '{boardFile} 追加进系统提示' : runtimeUses(rt, '{systemBody}') ? '{systemBody} 连老师正文一起进系统提示' : '模板里写死的 SKILL.md 路径';
@@ -563,7 +571,7 @@ export async function doctorWorkspace(
     // 旧配置允许加载与升级;退役运行时不探版本、不启动。
     const usedRuntimes = new Set([ws.config.runtimes.default, ...Object.values(ws.config.tutors).filter((t) => t.enabled).map((t) => t.runtime ?? ws.config.runtimes.default)]);
     for (const [name, rt] of Object.entries(ws.config.runtimes)) {
-      if (typeof rt === 'string') continue;
+      if (typeof rt === 'string' || isApiRuntime(rt)) continue;
       const issue = runtimeIssue(rt);
       if (issue) push({ name: `runtime.${name}`, ok: false, required: usedRuntimes.has(name), detail: issue, fix: '按 README.md 的「旧 workspace 切换到 Qwen」说明迁移' });
     }
@@ -578,7 +586,12 @@ export async function doctorWorkspace(
         push({ name: 'tts', ok: false, required: false, detail: `PATH 里没有 ${ttsBin},卡不配音(点读、单词卡没有声音)`, fix: `装 ${ttsBin},或改 cotutor.json 的 tts.say` });
       }
       for (const [runtime, p] of Object.entries(ws.config.runtimes)) {
-        if (runtime === 'default' || typeof p === 'string' || runtimeIssue(p)) continue;
+        if (runtime === 'default' || typeof p === 'string') continue;
+        if (isApiRuntime(p)) {
+          push({ name: `runtime.${runtime}`, ok: true, required: usedRuntimes.has(runtime), detail: `API 运行时(百炼 ${p.model}),不用装 CLI;凭证看 bailian 那条` });
+          continue;
+        }
+        if (runtimeIssue(p)) continue;
         const bin = runtimeCli(p.run);
         const required = usedRuntimes.has(runtime);
         try {

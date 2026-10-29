@@ -17,7 +17,7 @@ import { planRun, stallPrompt, toolLeakPrompt, type RunPlan } from '../lib/run-p
 import { parseSections } from '../lib/sections.ts';
 import { createPartialReader } from '../lib/stream.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
-import type { CotutorConfig, Policy, Runtime } from '../schema/index.ts';
+import type { CliRuntime, CotutorConfig, Policy } from '../schema/index.ts';
 import type { BrainExecutor, BrainHooks, BrainRequest, BrainResult, BrainRun, WarmKey } from './index.ts';
 import { WarmPool, type Slot, type Spare } from './warm.ts';
 
@@ -43,7 +43,7 @@ export class CliBrain implements BrainExecutor {
     return prepareCli(plan.cli, this.workspace().root).catch(() => {});
   }
 
-  canWarm(runtime: Runtime): boolean {
+  canWarm(runtime: CliRuntime): boolean {
     return Boolean(runtime.stdin);
   }
 

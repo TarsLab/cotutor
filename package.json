@@ -58,7 +58,9 @@
     "node": ">=22.18"
   },
   "dependencies": {
+    "@ai-sdk/alibaba": "2.0.78",
     "@excalidraw/excalidraw": "0.18.1",
+    "ai": "7.0.155",
     "drawtell": "link:../drawtell",
     "hanzi-writer-data": "2.0.1",
     "zod": "^4.4.3"

@@ -130,13 +130,29 @@ export function tutorExtras(t: Pick<Tutor, 'extras' | 'subject'>, talkOn = false
  * stdin: "stream-json":消息不进命令行,写进 stdin(`--input-format stream-json`),
  * 模板里就不写 {prompt};argv 与消息无关,应用把下一轮的进程提前起好等着。
  */
-export const RuntimeSchema = z.object({
+export const CliRuntimeSchema = z.object({
   cli: z.string().min(1).optional().describe('这是哪个 CLI(src/clis/ 里的适配器名:qwen);不写按 run 的第一个词认。套了壳脚本的运行时要写'),
   run: z.array(z.string()).min(1),
   resume: z.array(z.string()).min(1),
   stdin: z.literal('stream-json').optional().describe('消息写进 stdin(模板带 --input-format stream-json、不写 {prompt});这样的运行时,应用提前把下一轮的老师进程起好等着(预热)'),
 });
+export type CliRuntime = z.infer<typeof CliRuntimeSchema>;
+
+/**
+ * 内置 API 运行时(2026-10-29):应用自己直连模型(src/brain/api.ts),不起 CLI、不用装 Qwen Code。
+ * 现在只有百炼(OpenAI 兼容的 Chat Completions,端点是业务空间 id 的域名);凭证是机器级的百炼配置(家长端「首页」里填的按量 key 与业务空间 id)。
+ * 系统提示 = 老师正文 + 板书写法;同一话题的模型历史由应用存;effort 映射成思考开关与思考量;工具只有只读的三样。
+ */
+export const ApiRuntimeSchema = z.object({
+  api: z.literal('bailian').describe('哪家的接口:现在只有百炼'),
+  model: z.string().min(1).describe('模型名,如 qwen3.6-plus'),
+  maxSteps: z.number().int().min(1).max(20).optional().describe('一轮里模型最多来回几次(每用一次工具多一次);缺省 6'),
+});
+export type ApiRuntime = z.infer<typeof ApiRuntimeSchema>;
+
+export const RuntimeSchema = z.union([CliRuntimeSchema, ApiRuntimeSchema]);
 export type Runtime = z.infer<typeof RuntimeSchema>;
+export const isApiRuntime = (r: Runtime): r is ApiRuntime => 'api' in r;
 
 export const RuntimesSchema = z.object({ default: z.string().min(1) }).catchall(RuntimeSchema);
 
@@ -296,7 +312,7 @@ export const CotutorConfigSchema = z
     vault: VaultPolicySchema.default({ keepScore: 4 }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4)'),
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 板书 auto / 观察 10 条、计划 10 行、原文 4000 字)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
-    runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时 {run, resume} 命令模板,占位 {agent} {agentBody} {systemBody} {boardFile} {prompt} {session};模型、预算、时限写在这里'),
+    runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时是 {run, resume} 命令模板(起 CLI)或 {api, model}(应用直连模型),占位 {agent} {agentBody} {systemBody} {boardFile} {prompt} {session};模型、预算、时限写在这里'),
     tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板:say 合成一句(占位 {text} {voice} {out});voices 列音色(stdout JSON),家长端音色页据此列表与试听'),
     figshot: z
       .object({ port: z.number().int().min(1).max(65535).default(8477) })
@@ -315,11 +331,11 @@ export const CotutorConfigSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['runtimes', 'default'],
-        message: `运行时 "${c.runtimes.default}" 不存在;runtimes 里要有同名的 {run, resume}`,
+        message: `运行时 "${c.runtimes.default}" 不存在;runtimes 里要有同名的 {run, resume}(或 API 运行时 {api, model})`,
       });
     }
     for (const [name, r] of Object.entries(c.runtimes)) {
-      if (typeof r === 'string' || !r.stdin) continue;
+      if (typeof r === 'string' || isApiRuntime(r) || !r.stdin) continue;
       for (const key of ['run', 'resume'] as const) {
         const argv = r[key];
         const at = argv.indexOf('--input-format');

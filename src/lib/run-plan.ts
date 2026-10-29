@@ -6,7 +6,7 @@
 import { adapterFor, fillArgs } from '../clis/index.ts';
 import { streamJsonUserMessage } from '../clis/stream-json.ts';
 import type { ToolSet } from '../clis/types.ts';
-import { POLICY_DEFAULTS, type ConversationIndex, type CotutorConfig, type Policy, type Runtime } from '../schema/index.ts';
+import { POLICY_DEFAULTS, isApiRuntime, type ConversationIndex, type CotutorConfig, type Policy, type Runtime } from '../schema/index.ts';
 
 export interface RunPlan {
   /** 运行时名(runtimes 里的键) */
@@ -39,8 +39,9 @@ export function getRuntime(config: CotutorConfig, name?: string): { name: string
   return { name: n, runtime: p };
 }
 
-/** 模板里有没有用到某个占位符(决定要不要去读老师正文) */
+/** 模板里有没有用到某个占位符(决定要不要去读老师正文)。API 运行时没有模板:系统提示由应用给,算用了 {systemBody} */
 export function runtimeUses(runtime: Runtime, placeholder: string): boolean {
+  if (isApiRuntime(runtime)) return placeholder === '{systemBody}';
   return [...runtime.run, ...runtime.resume].some((a) => a.includes(placeholder));
 }
 
@@ -58,6 +59,7 @@ export function planRun(
   vars: { agent: string; prompt: string; agentBody?: string; systemBody?: string; boardFile?: string; runtime?: string; effort?: Policy['effort']; tools?: ToolSet; root?: string; readDirs?: readonly string[] },
 ): RunPlan {
   const { name, runtime } = getRuntime(config, vars.runtime);
+  if (isApiRuntime(runtime)) throw new RuntimeError(`运行时 "${name}" 是 API 运行时,不起命令行(src/brain/api.ts)`);
   const adapter = adapterFor(runtime);
   const session = index.session && index.session.runtime === name ? index.session.id : null;
   const template = session ? runtime.resume : runtime.run;

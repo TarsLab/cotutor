@@ -33,7 +33,8 @@ const ALLOW: Record<string, readonly string[]> = {
   live: ['schema', 'lib', 'cards', 'realtime'],
   // 旧路径,转发到 scenes/paint 与 media;迁完删
   paint: ['schema', 'lib', 'cards', 'scenes', 'media'],
-  talk: ['schema', 'lib', 'cards'],
+  // 口语课、听写这两个目录现在是场景的页面与路由(应用那层):规则在 scenes/,看图在 media/,由这里接起来
+  talk: ['schema', 'lib', 'cards', 'scenes', 'media'],
   dictation: ['schema', 'lib', 'cards'],
   stage: ['schema', 'lib'],
   server: ['schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation'],

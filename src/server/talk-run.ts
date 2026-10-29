@@ -11,7 +11,7 @@ import type { ActivityRun } from '../schema/index.ts';
 
 /** 口语单交给哪个 activity(英语老师的家里那份) */
 export const TALK_ACTIVITY = '口语课';
-/** 同 src/talk/store.ts 的 ID_RE */
+/** 同 src/scenes/talk/store.ts 的 ID_RE */
 const TALK_ID_RE = /^\d{4}-\d{2}-\d{2}-\d{4}(?:-\d{1,2})?$/;
 
 interface Item { en: string; zh?: string; emoji?: string; chunks?: string[] }

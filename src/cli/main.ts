@@ -17,7 +17,7 @@ import { activityRunFor, checkActivities, upgradeActivities } from './activities
 import { configGapsOf, upgradeConfig } from './migrate.ts';
 import { upgradeSkills, writeToolShim } from './skills.ts';
 import { addTheme, upgradeThemes } from './themes.ts';
-import { patchConfig } from '../server/store.ts';
+import { patchConfig } from './workspace.ts';
 import { resolveRoot } from './workspace.ts';
 import { serveWorkspace } from './serve.ts';
 import { serveMock, type MockScenario } from '../server/mock.ts';

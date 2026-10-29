@@ -7,6 +7,11 @@
  * 配置"在但解析不了"响亮报错,不静默走缺省(沿 drawtell 的教训)。
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { writeFile, rename, stat } from 'node:fs/promises';
+import { ConfigError, UsageError } from '../shared/errors.ts';
+import { redactDeep, redactHome } from '../shared/home.ts';
+import type { RootSource, Workspace } from '../schema/workspace.ts';
+
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import {
@@ -16,20 +21,13 @@ import {
   WORKSPACE_ROLES,
   explainIssues,
   type CotutorConfig,
-  type PathRole,
 } from '../schema/index.ts';
 
-/** 用法错误:main 捕获后 exit 2,错误信息即修复指南。 */
-export class UsageError extends Error {}
+// 挪走了的几样照旧从这里转出(旧的引法不用改)
+export { ConfigError, UsageError, redactDeep, redactHome };
+export type { RootSource, Workspace };
 
-/** 配置文件损坏或形状不对:文件在,但用不了。 */
-export class ConfigError extends UsageError {
-  readonly file: string;
-  constructor(file: string, cause: string) {
-    super(`配置文件用不了:${redactHome(file)}\n${cause}\n修好它;文件在 git 里就 git diff 看改动、git checkout 回退。cotutor doctor 可逐项体检。`);
-    this.file = file;
-  }
-}
+
 
 export const CONFIG_FILE = 'cotutor.json';
 export const USER_CONFIG = join(homedir(), '.config', 'cotutor', 'config.json');
@@ -37,7 +35,6 @@ export const USER_CONFIG = join(homedir(), '.config', 'cotutor', 'config.json');
 export const USER_CERT_DIR = join(homedir(), '.config', 'cotutor', 'certs');
 export const HOME_ROOT = join(homedir(), 'cotutor');
 
-export type RootSource = 'flag' | 'env' | 'cwd' | 'user-config' | 'home-single';
 
 export interface ResolvedRoot {
   root: string;
@@ -50,19 +47,6 @@ export function expandPath(p: string, base: string): string {
   return isAbsolute(p) ? p : resolve(base, p);
 }
 
-export function redactHome(value: string): string {
-  const home = homedir();
-  return home && value.startsWith(home) ? '$HOME' + value.slice(home.length) : value;
-}
-
-export function redactDeep<T>(value: T): T {
-  if (typeof value === 'string') return redactHome(value) as T;
-  if (Array.isArray(value)) return value.map(redactDeep) as T;
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, redactDeep(v)])) as T;
-  }
-  return value;
-}
 
 const isDir = (p: string): boolean => {
   try {
@@ -157,29 +141,6 @@ export function resolveRoot(override?: string, opts: ResolveOptions = {}): Resol
   throw new UsageError('找不到 workspace:没有 --workspace、COTUTOR_WORKSPACE、cwd 里的 cotutor.json、用户配置,~/cotutor/ 下也没有。先 cotutor init <slug>。');
 }
 
-export interface Workspace {
-  root: string;
-  source: RootSource;
-  config: CotutorConfig;
-  /** 角色 → 绝对路径;vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根;captures 相对 workspace 根 */
-  paths: Record<PathRole, string> & Record<string, string>;
-  dirs: {
-    agents: string;
-    ledger: string;
-    conversations: string;
-    claudeAgents: string;
-    /** 课包(drawtell build 的产物,小课堂与 lecture 卡从这里放;派生物,gitignore) */
-    bundles: string;
-    /** 首页:草稿、已发布、历史;publish 时才建,不进骨架 */
-    home: string;
-    /** 视频小课堂(第 4 步):lectures/<id>/lecture.md + video.mp4;家长在编程助手里做,不进骨架 */
-    lectures: string;
-  };
-  files: {
-    config: string;
-    artifacts: string;
-  };
-}
 
 /** 校验 cotutor.json 的形状;失败 → ConfigError,信息是逐条修复指南 */
 export function parseConfig(raw: unknown, file: string): CotutorConfig {
@@ -242,4 +203,66 @@ export function workspaceReport(ws: Workspace): Record<string, unknown> {
     tutors: Object.keys(ws.config.tutors),
     runtime: ws.config.runtimes.default,
   });
+}
+
+// ---- cotutor.json 的补丁写回与热重载(从 server/store.ts 搬来,2026-10-29) ----
+
+/** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 运行时模板走编辑器 */
+export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'agents', 'paths', 'server', 'tts', 'vault', 'live'] as const;
+
+const isPlainObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * 深合并:对象递归、其余覆盖、null 删键(老师条目可整体删:tutors.x = null)。
+ * 底下没有这个对象时也要**先剥掉 null 再放**——页面上留空的字段发的就是 null,
+ * 直接把补丁原样放进去会写出 `policy: {replyMaxChars: null, …}`,整份过不了契约、一保存就报错
+ * (2026-09-11:老师条目本来没有 policy 键时必然撞上,出厂六位都是这样)。
+ */
+export function deepMerge(base: unknown, patch: unknown): unknown {
+  if (!isPlainObj(patch)) return patch;
+  const out: Record<string, unknown> = isPlainObj(base) ? { ...base } : {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) {
+      delete out[k];
+      continue;
+    }
+    const had = k in out;
+    const merged = deepMerge(out[k], v);
+    // 补丁里一组字段全留空(全是 null)时别凭空造个空对象出来:policy: {contextPack: {}} 这种噪音不该进政策文件
+    if (!had && isPlainObj(merged) && !Object.keys(merged).length) continue;
+    out[k] = merged;
+  }
+  return out;
+}
+
+/**
+ * 补丁合到原始 JSON 上(保留 _note 等机器不认识的键),整份过契约再写;写坏了不落盘。
+ * 返回新配置;agents 只允许改 default(运行时模板走编辑器,页面上改错一个引号就把老师全弄哑)。
+ */
+/** also:除了工作台能改的,这次还放行哪几个顶层键(家长端设置自己拼好补丁,只放 talk 的几项) */
+export async function patchConfig(ws: Workspace, patch: Record<string, unknown>, opts: { also?: readonly string[] } = {}): Promise<CotutorConfig> {
+  const allowed: readonly string[] = [...CONFIG_PATCH_KEYS, ...(opts.also ?? [])];
+  const unknown = Object.keys(patch).filter((k) => !allowed.includes(k));
+  if (unknown.length) throw new ConfigError(ws.files.config, `页面只能改 ${CONFIG_PATCH_KEYS.join(' / ')},不认识:${unknown.join(', ')};其余字段请直接编辑文件`);
+  if (isPlainObj(patch.agents) && Object.keys(patch.agents).some((k) => k !== 'default')) {
+    throw new ConfigError(ws.files.config, 'agents 只能在页面上改 default;运行时模板请直接编辑文件');
+  }
+  const raw = readJson(ws.files.config);
+  if (raw === null) throw new ConfigError(ws.files.config, '不存在');
+  const merged = deepMerge(raw, patch);
+  const r = CotutorConfigSchema.safeParse(merged);
+  if (!r.success) throw new ConfigError(ws.files.config, `补丁应用后不合契约,未写入:\n${explainIssues(r.error.issues).map((l) => `  - ${l}`).join('\n')}`);
+  const tmp = `${ws.files.config}.tmp`;
+  await writeFile(tmp, `${JSON.stringify(merged, null, 2)}\n`);
+  await rename(tmp, ws.files.config);
+  return r.data;
+}
+
+/** 文件改了(页面写的、或家长在编辑器改的)就重读;坏了抛 ConfigError,调用方决定是留旧的还是响 */
+export async function reloadIfChanged(ws: Workspace, lastMtime: number): Promise<{ ws: Workspace; mtime: number }> {
+  const st = await stat(ws.files.config);
+  if (st.mtimeMs === lastMtime) return { ws, mtime: lastMtime };
+  const raw = readJson(ws.files.config);
+  if (raw === null) throw new ConfigError(ws.files.config, '不存在了');
+  return { ws: assembleWorkspace(ws.root, ws.source, parseConfig(raw, ws.files.config)), mtime: st.mtimeMs };
 }

@@ -7,7 +7,8 @@
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { restoreTutor, sha256, shippedTutorText, tutorFile, tutorStatuses, type TutorState } from '../cli/tutors.ts';
-import { UsageError, type Workspace } from '../cli/workspace.ts';
+import { UsageError } from '../shared/errors.ts';
+import type { Workspace } from '../schema/index.ts';
 import { lintAgentFile, parseAgentFile, type AgentFileIssue } from '../lib/agent-file.ts';
 import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody } from '../lib/tutor-rules.ts';
 import { tutorCardKinds, type TutorButton } from '../cards/index.ts';

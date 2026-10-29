@@ -6,7 +6,8 @@
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { cardLabel, describeCard, stripSecrets, type TutorButton } from '../cards/index.ts';
-import { UsageError, type Workspace } from '../cli/workspace.ts';
+import { UsageError } from '../shared/errors.ts';
+import type { Workspace } from '../schema/index.ts';
 import { conversationFiles, localDate, threads } from '../lib/conversation.ts';
 import { kidQuestions } from '../lib/diary.ts';
 import { activityFile } from '../cli/activities.ts';

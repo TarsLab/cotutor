@@ -3,7 +3,7 @@
  * 数这个话题画了几张、今天还剩几张、上一张为什么没画。纯判断在 src/lib/activity.ts(gatePasses / failingGate),这里只管读盘。
  */
 import { readFile } from 'node:fs/promises';
-import type { Workspace } from '../cli/workspace.ts';
+import type { Workspace } from '../schema/index.ts';
 import { activityFile } from '../cli/activities.ts';
 import { failingGate, parseActivity } from '../lib/activity.ts';
 import { threads } from '../lib/conversation.ts';

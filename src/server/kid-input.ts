@@ -8,7 +8,7 @@ import { BUNDLE_ID_RE } from '../cards/kind.ts';
 import { threads } from '../lib/conversation.ts';
 import { submittedCards } from '../lib/kid-view.ts';
 import { MARK_MAX, MARK_MAX_POINTS, MARK_MAX_STROKES } from '../lib/lecture.ts';
-import type { Workspace } from '../cli/workspace.ts';
+import type { Workspace } from '../schema/index.ts';
 import { messageVia, resolveVia } from './home.ts';
 import { validDevice } from './kid-log.ts';
 import type { IncomingMark } from './lecture.ts';

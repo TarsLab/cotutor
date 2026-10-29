@@ -7,7 +7,7 @@
 import { randomBytes } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Workspace } from '../cli/workspace.ts';
+import type { Workspace } from '../schema/index.ts';
 import { localDate } from '../lib/conversation.ts';
 import { DEVICE_COOKIE, DEVICE_COOKIE_DAYS, DEVICE_ID_RE, deviceLabel } from '../lib/kid-device.ts';
 

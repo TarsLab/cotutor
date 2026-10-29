@@ -16,29 +16,31 @@ const SRC = fileURLToPath(new URL('../src/', import.meta.url));
 
 /** 现有目录 → 可以导入的目录(自己总可以)。目标模块出现之前按这张表 */
 const ALLOW: Record<string, readonly string[]> = {
-  schema: [],
-  lib: ['schema'],
-  cards: ['schema', 'lib'],
-  clis: ['schema', 'lib'],
+  // 无业务归属的小件(错误类、路径打码);谁都能引
+  shared: [],
+  schema: ['shared'],
+  lib: ['shared', 'schema'],
+  cards: ['shared', 'schema', 'lib'],
+  clis: ['shared', 'schema', 'lib'],
   // 脑执行;clis 是它现在的 CLI 实现(以后搬进 brain/cli/)
-  brain: ['schema', 'lib', 'clis'],
+  brain: ['shared', 'schema', 'lib', 'clis'],
   // 听说:百炼 realtime 的客户端(以后加别家、加 ASR + TTS 组合也在这)
-  realtime: ['schema', 'lib'],
+  realtime: ['shared', 'schema', 'lib'],
   // 家长的 vault 与学习记忆:读取、取材、应用写入与撤回
-  memory: ['schema', 'lib'],
+  memory: ['shared', 'schema', 'lib'],
   // 每种一家的媒体能力(文生图;以后配音、认图、课包)
-  media: ['schema', 'lib'],
+  media: ['shared', 'schema', 'lib'],
   // 具体场景的规则:不引 runtime、不调 media 与厂商实现(要画就由调用方交进来)
-  scenes: ['schema', 'lib', 'cards'],
-  live: ['schema', 'lib', 'cards', 'realtime'],
+  scenes: ['shared', 'schema', 'lib', 'cards'],
+  live: ['shared', 'schema', 'lib', 'cards', 'realtime'],
   // 旧路径,转发到 scenes/paint 与 media;迁完删
-  paint: ['schema', 'lib', 'cards', 'scenes', 'media'],
+  paint: ['shared', 'schema', 'lib', 'cards', 'scenes', 'media'],
   // 口语课、听写这两个目录现在是场景的页面与路由(应用那层):规则在 scenes/,看图在 media/,由这里接起来
-  talk: ['schema', 'lib', 'cards', 'scenes', 'media'],
-  dictation: ['schema', 'lib', 'cards', 'scenes', 'media'],
-  stage: ['schema', 'lib'],
-  server: ['schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation'],
-  cli: ['schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation', 'server'],
+  talk: ['shared', 'schema', 'lib', 'cards', 'scenes', 'media'],
+  dictation: ['shared', 'schema', 'lib', 'cards', 'scenes', 'media'],
+  stage: ['shared', 'schema', 'lib'],
+  server: ['shared', 'schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation'],
+  cli: ['shared', 'schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation', 'server'],
 };
 
 /** 现有的反向依赖(「模块 → 被引的文件」);只许删,不许加 */

@@ -11,14 +11,14 @@ import { parseTranscript, type Transcript } from '../lib/transcript.ts';
 import { logParser } from '../brain/index.ts';
 import {
   ConversationIndexSchema,
-  CotutorConfigSchema,
   DATE_RE,
   explainIssues,
   type ConversationIndex,
-  type CotutorConfig,
 } from '../schema/index.ts';
 import { undoThreadVault, type ThreadUndo } from '../memory/vault.ts';
-import { ConfigError, assembleWorkspace, parseConfig, readJson, redactHome, type Workspace } from '../cli/workspace.ts';
+import { ConfigError } from '../shared/errors.ts';
+import { redactHome } from '../shared/home.ts';
+import type { Workspace } from '../schema/index.ts';
 
 export class IndexError extends Error {
   constructor(file: string, cause: string) {
@@ -308,62 +308,4 @@ export async function deleteThread(ws: Workspace, tutor: string, date: string, t
   return { index: next, undo };
 }
 
-/** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 运行时模板走编辑器 */
-export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'agents', 'paths', 'server', 'tts', 'vault', 'live'] as const;
-
-const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
-
-/**
- * 深合并:对象递归、其余覆盖、null 删键(老师条目可整体删:tutors.x = null)。
- * 底下没有这个对象时也要**先剥掉 null 再放**——页面上留空的字段发的就是 null,
- * 直接把补丁原样放进去会写出 `policy: {replyMaxChars: null, …}`,整份过不了契约、一保存就报错
- * (2026-09-11:老师条目本来没有 policy 键时必然撞上,出厂六位都是这样)。
- */
-export function deepMerge(base: unknown, patch: unknown): unknown {
-  if (!isObj(patch)) return patch;
-  const out: Record<string, unknown> = isObj(base) ? { ...base } : {};
-  for (const [k, v] of Object.entries(patch)) {
-    if (v === null) {
-      delete out[k];
-      continue;
-    }
-    const had = k in out;
-    const merged = deepMerge(out[k], v);
-    // 补丁里一组字段全留空(全是 null)时别凭空造个空对象出来:policy: {contextPack: {}} 这种噪音不该进政策文件
-    if (!had && isObj(merged) && !Object.keys(merged).length) continue;
-    out[k] = merged;
-  }
-  return out;
-}
-
-/**
- * 补丁合到原始 JSON 上(保留 _note 等机器不认识的键),整份过契约再写;写坏了不落盘。
- * 返回新配置;agents 只允许改 default(运行时模板走编辑器,页面上改错一个引号就把老师全弄哑)。
- */
-/** also:除了工作台能改的,这次还放行哪几个顶层键(家长端设置自己拼好补丁,只放 talk 的几项) */
-export async function patchConfig(ws: Workspace, patch: Record<string, unknown>, opts: { also?: readonly string[] } = {}): Promise<CotutorConfig> {
-  const allowed: readonly string[] = [...CONFIG_PATCH_KEYS, ...(opts.also ?? [])];
-  const unknown = Object.keys(patch).filter((k) => !allowed.includes(k));
-  if (unknown.length) throw new ConfigError(ws.files.config, `页面只能改 ${CONFIG_PATCH_KEYS.join(' / ')},不认识:${unknown.join(', ')};其余字段请直接编辑文件`);
-  if (isObj(patch.agents) && Object.keys(patch.agents).some((k) => k !== 'default')) {
-    throw new ConfigError(ws.files.config, 'agents 只能在页面上改 default;运行时模板请直接编辑文件');
-  }
-  const raw = readJson(ws.files.config);
-  if (raw === null) throw new ConfigError(ws.files.config, '不存在');
-  const merged = deepMerge(raw, patch);
-  const r = CotutorConfigSchema.safeParse(merged);
-  if (!r.success) throw new ConfigError(ws.files.config, `补丁应用后不合契约,未写入:\n${explainIssues(r.error.issues).map((l) => `  - ${l}`).join('\n')}`);
-  const tmp = `${ws.files.config}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(merged, null, 2)}\n`);
-  await rename(tmp, ws.files.config);
-  return r.data;
-}
-
-/** 文件改了(页面写的、或家长在编辑器改的)就重读;坏了抛 ConfigError,调用方决定是留旧的还是响 */
-export async function reloadIfChanged(ws: Workspace, lastMtime: number): Promise<{ ws: Workspace; mtime: number }> {
-  const st = await stat(ws.files.config);
-  if (st.mtimeMs === lastMtime) return { ws, mtime: lastMtime };
-  const raw = readJson(ws.files.config);
-  if (raw === null) throw new ConfigError(ws.files.config, '不存在了');
-  return { ws: assembleWorkspace(ws.root, ws.source, parseConfig(raw, ws.files.config)), mtime: st.mtimeMs };
-}
+// cotutor.json 的补丁写回与热重载在 src/cli/workspace.ts(读配置那边)

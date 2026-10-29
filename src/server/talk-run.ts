@@ -4,7 +4,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Workspace } from '../cli/workspace.ts';
+import type { Workspace } from '../schema/index.ts';
 import { activityFile } from '../cli/activities.ts';
 import { parseActivity, resolveParams } from '../lib/activity.ts';
 import type { ActivityRun } from '../schema/index.ts';

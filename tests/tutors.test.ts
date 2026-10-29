@@ -15,7 +15,7 @@ const { initWorkspace } = await import('../src/cli/init.ts');
 const { addTutorFile, installTutors, lineDiff, readManifest, tutorStatuses, upgradeTutors, writeManifest } = await import('../src/cli/tutors.ts');
 const { doctorWorkspace } = await import('../src/cli/doctor.ts');
 const { loadWorkspace } = await import('../src/cli/workspace.ts');
-const { patchConfig } = await import('../src/server/store.ts');
+const { patchConfig } = await import('../src/cli/workspace.ts');
 const { parseAgentFile } = await import('../src/lib/agent-file.ts');
 const { PACKAGE_VERSION } = await import('../src/cli/skeleton.ts');
 

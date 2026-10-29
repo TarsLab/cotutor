@@ -15,7 +15,7 @@ import { foldRuns, toolCalls, type ToolCall, type TranscriptRow } from '../lib/t
 import { toolKind, type ToolKind } from '../clis/index.ts';
 import { logParser } from '../brain/index.ts';
 import { resolvePolicy, type ConversationMessage } from '../schema/index.ts';
-import type { Workspace } from '../cli/workspace.ts';
+import type { Workspace } from '../schema/index.ts';
 import { readErrLog, readIndex, readRunFile, readTranscript, scanCards, type RunSources } from './store.ts';
 import { formatEvent, parseEvents, timelineSpans, type RunEvent, type TimelineSpan } from '../lib/events.ts';
 

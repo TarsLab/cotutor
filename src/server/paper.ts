@@ -7,7 +7,7 @@
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Workspace } from '../cli/workspace.ts';
+import type { Workspace } from '../schema/index.ts';
 import { CanvasStateSchema, type CanvasState } from '../cards/canvas.ts';
 import { canvasStrokes, canvasSummary, canvasMinutesText } from '../lib/canvas-chat.ts';
 import type { ConversationMessage } from '../schema/index.ts';

@@ -107,7 +107,7 @@ try {
   // 老师条目本来没有 policy 键(出厂的语文、英语老师都是),页面把留空的字段发成 null:
   // 深合并要先剥 null 再落,否则写出 policy: {replyMaxChars: null, …},整份过不了契约、一保存就报错
   {
-    const { deepMerge } = await import('../src/server/store.ts');
+    const { deepMerge } = await import('../src/cli/workspace.ts');
     check('深合并:底下没这个对象时也剥 null、不留空对象', JSON.stringify(deepMerge({}, { policy: { board: 'off', replyMaxChars: null, contextPack: { recent: null } } })) === '{"policy":{"board":"off"}}', JSON.stringify(deepMerge({}, { policy: { board: 'off', replyMaxChars: null, contextPack: { recent: null } } })));
     check('深合并:原有的键该删还是删', JSON.stringify(deepMerge({ a: { x: 1, y: 2 } }, { a: { x: null } })) === '{"a":{"y":2}}');
     const r = await route('PATCH', '/api/config', ctx, { tutors: { 'chinese-tutor': { policy: { board: 'off', effort: 'medium', replyMaxChars: null, contextPack: { recent: null, planLines: null } } } } });

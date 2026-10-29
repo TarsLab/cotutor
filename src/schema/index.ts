@@ -13,6 +13,7 @@
  */
 export * from './issues.ts';
 export * from './config.ts';
+export * from './workspace.ts';
 export * from './context-pack.ts';
 export * from './conversation.ts';
 export * from './ledger.ts';

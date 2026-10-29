@@ -15,7 +15,7 @@ import { orderTutors, setTutorButtons, setTutorDictation } from '../lib/home-edi
 import { AGENT_NAME_RE, TUTOR_EXTRAS, subjectLang, tutorExtras, type CotutorConfig } from '../schema/index.ts';
 import type { AppContext, RouteResult } from './app.ts';
 import { editPublished, readPublished, type PublishResult } from './home.ts';
-import { patchConfig } from './store.ts';
+import { patchConfig } from '../cli/workspace.ts';
 import { tutorColors } from '../lib/tutor-color.ts';
 import { wordEmoji } from './word-emoji.ts';
 

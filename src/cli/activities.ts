@@ -3,46 +3,21 @@
  * 包里的 grades/grade-<n>/agents/<老师>/activities/<名>.md 是出厂件;init 拷进 workspace 同一个位置(老师的家里,会话 cwd 下),这份是家长的;
  * 出厂 hash 记 .cotutor/shipped.json 的 activities(键「老师/名」),据此分 latest / upgradable / custom / untracked / missing,意思同 tutors.ts。
  */
-import { readFile, readdir, mkdir, writeFile, lstat } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, lstat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { lintActivity, parseActivity, resolveParams, type ActivityIssue } from '../lib/activity.ts';
-import type { Activity, ActivityRun } from '../schema/index.ts';
+import { lintActivity, type ActivityIssue } from '../lib/activity.ts';
+import type { Activity } from '../schema/index.ts';
 import { PACKAGE_AGENTS_DIR, PACKAGE_VERSION } from './skeleton.ts';
 import { lineDiff, readManifest, sha256, writeManifest, type ShippedManifest, type TutorState } from './tutors.ts';
 import { UsageError } from './workspace.ts';
 import { workspaceGradePack } from './grades.ts';
+import { ACTIVITIES_DIR, EXAMPLES_SUFFIX, activityFile, activityRunFor, listActivities, type ActivityRef } from '../runtime/activities.ts';
 
-export const ACTIVITIES_DIR = 'activities';
-
-export interface ActivityRef {
-  tutor: string;
-  name: string;
-  /** 文件的绝对路径 */
-  file: string;
-}
-
-/** 例子文件(cotutor activity eval 用):和 activity 放在一起,`<名>.例子.md`;跟着 activity 一起出厂,检查时不当 activity */
-export const EXAMPLES_SUFFIX = '.例子';
-
-/** 某个根下(包的 agents/,或 workspace 的 agents/)每位老师的 activities/*.md;examples = 连例子文件一起(出厂、升级用) */
-export async function listActivities(agentsDir: string, tutor?: string, opts: { examples?: boolean } = {}): Promise<ActivityRef[]> {
-  const out: ActivityRef[] = [];
-  const tutors = tutor ? [tutor] : (await readdir(agentsDir, { withFileTypes: true }).catch(() => [])).filter((d) => d.isDirectory()).map((d) => d.name).sort();
-  for (const t of tutors) {
-    const dir = join(agentsDir, t, ACTIVITIES_DIR);
-    const files = (await readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith('.md')).sort();
-    for (const f of files) if (opts.examples || !f.slice(0, -3).endsWith(EXAMPLES_SUFFIX)) out.push({ tutor: t, name: f.slice(0, -3), file: join(dir, f) });
-  }
-  return out;
-}
+// 读的那一半在 src/runtime/activities.ts;照旧从这里转出
+export { ACTIVITIES_DIR, EXAMPLES_SUFFIX, activityFile, activityRunFor, listActivities, type ActivityRef };
 
 /** 出厂的 activity 与它们的例子文件 */
 export const shippedActivities = async (root?: string): Promise<ActivityRef[]> => listActivities(root ? (await workspaceGradePack(root)).agentsDir : PACKAGE_AGENTS_DIR, undefined, { examples: true });
-
-/** workspace 里那份的位置 */
-export function activityFile(root: string, tutor: string, name: string): string {
-  return join(root, 'agents', tutor, ACTIVITIES_DIR, `${name}.md`);
-}
 
 const keyOf = (a: { tutor: string; name: string }): string => `${a.tutor}/${a.name}`;
 
@@ -208,18 +183,3 @@ export async function checkActivities(root: string, tutors: Readonly<Record<stri
  * 终端里起一个 activity 话题(cotutor send / pack --activity):读 workspace 里那份,参数照首页按钮的写法给(`名=值`,几个用 ; 隔开),
  * 和孩子点按钮同一条解析(补缺省、按类型转)。不在、参数不对 → UsageError。
  */
-export async function activityRunFor(root: string, tutor: string, name: string, raw = ''): Promise<ActivityRun> {
-  const file = activityFile(root, tutor, name);
-  const text = await readFile(file, 'utf8').catch(() => null);
-  if (text === null) throw new UsageError(`${file} 不在;cotutor activity check ${tutor} 看这位老师有哪些`);
-  const params: Record<string, string> = {};
-  for (const pair of raw.split(/[;；]/).map((x) => x.trim()).filter(Boolean)) {
-    // 值可以有几行(口语课的口语单)
-    const m = /^([^=]+)=([\s\S]*)$/.exec(pair);
-    if (!m) throw new UsageError(`--param 写成「名=值」,几个用 ; 隔开,如 --param '词=播种、羞愧;最多画=1'(「${pair}」不对)`);
-    params[m[1].trim()] = m[2].trim();
-  }
-  const r = resolveParams(parseActivity(text).activity, params);
-  if (r.issues.length) throw new UsageError(r.issues.join(';'));
-  return { name, params: r.values };
-}

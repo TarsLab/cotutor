@@ -6,7 +6,8 @@
  */
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
-import { EXAMPLES_SUFFIX, activityFile, activityStatusOf, listActivities, restoreActivity, shippedActivityText, type ActivityStatus } from '../cli/activities.ts';
+import { activityStatusOf, restoreActivity, shippedActivityText, type ActivityStatus } from '../cli/activities.ts';
+import { EXAMPLES_SUFFIX, activityFile, listActivities } from '../runtime/activities.ts';
 import { sha256 } from '../cli/tutors.ts';
 import type { Workspace } from '../schema/index.ts';
 import { lintActivity, renderTutorSection, resolveParams, type ActivityIssue } from '../lib/activity.ts';

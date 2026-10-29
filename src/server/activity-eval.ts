@@ -6,7 +6,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { chatUrl, qianwenKeys, qianwenLine } from '../lib/qianwen.ts';
-import { ACTIVITIES_DIR, activityRunFor } from '../cli/activities.ts';
+import { ACTIVITIES_DIR, activityRunFor } from '../runtime/activities.ts';
 import { workspaceGradePack } from '../cli/grades.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';

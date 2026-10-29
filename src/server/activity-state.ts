@@ -4,7 +4,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import type { Workspace } from '../schema/index.ts';
-import { activityFile } from '../cli/activities.ts';
+import { activityFile } from '../runtime/activities.ts';
 import { failingGate, parseActivity } from '../lib/activity.ts';
 import { threads } from '../lib/conversation.ts';
 import { type Activity, type ActivityRun, type ActivityValue, type ConversationMessage } from '../schema/index.ts';

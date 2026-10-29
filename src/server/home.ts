@@ -10,7 +10,7 @@ import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
 import { conversationFiles, localDate, threads } from '../lib/conversation.ts';
 import { kidQuestions } from '../lib/diary.ts';
-import { activityFile } from '../cli/activities.ts';
+import { activityFile } from '../runtime/activities.ts';
 import { lintActivity, parseActivity, resolveParams } from '../lib/activity.ts';
 import { arrangeHome, dropFixes, homeActivities, homeOwners, faceTutor, homeId, homeIssues, homeLectures, homeRefs, homeTutors, kidButtons, parseHome, threadKey, todayResumes, type Resume, type HomeCheckContext, type HomeDoc, type HomeIssue, type HomeTutorInfo, type KidHomeButton } from '../lib/home.ts';
 import type { BoardCard } from '../lib/kid-board.ts';

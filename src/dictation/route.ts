@@ -34,7 +34,7 @@ import { synthesize } from '../server/tts.ts';
 import { judgeChar, type CharJudge, type InkPoint } from '../scenes/dictation/match.ts';
 import { photoPromptFrom, recognizePhoto, type Recognize } from './recognize.ts';
 import { readFile } from 'node:fs/promises';
-import { listActivities } from '../cli/activities.ts';
+import { listActivities } from '../runtime/activities.ts';
 import { parseActivity } from '../lib/activity.ts';
 import { DICTATION_PAGE } from './page.ts';
 import { DICTATION_EN_PAGE } from './en-page.ts';

@@ -32,15 +32,17 @@ const ALLOW: Record<string, readonly string[]> = {
   media: ['shared', 'schema', 'lib'],
   // 具体场景的规则:不引 runtime、不调 media 与厂商实现(要画就由调用方交进来)
   scenes: ['shared', 'schema', 'lib', 'cards'],
-  live: ['shared', 'schema', 'lib', 'cards', 'realtime'],
+  // 运行层:能调各模块的公开出口(现在只有读 activity 文件那一份,搬目录时 runner、交付这些都进来)
+  runtime: ['shared', 'schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes'],
+  live: ['shared', 'schema', 'lib', 'cards', 'realtime', 'runtime'],
   // 旧路径,转发到 scenes/paint 与 media;迁完删
   paint: ['shared', 'schema', 'lib', 'cards', 'scenes', 'media'],
   // 口语课、听写这两个目录现在是场景的页面与路由(应用那层):规则在 scenes/,看图在 media/,由这里接起来
-  talk: ['shared', 'schema', 'lib', 'cards', 'scenes', 'media'],
-  dictation: ['shared', 'schema', 'lib', 'cards', 'scenes', 'media'],
+  talk: ['shared', 'schema', 'lib', 'cards', 'scenes', 'media', 'runtime'],
+  dictation: ['shared', 'schema', 'lib', 'cards', 'scenes', 'media', 'runtime'],
   stage: ['shared', 'schema', 'lib'],
-  server: ['shared', 'schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation'],
-  cli: ['shared', 'schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation', 'server'],
+  server: ['shared', 'schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation', 'runtime'],
+  cli: ['shared', 'schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation', 'server', 'runtime'],
 };
 
 /** 现有的反向依赖(「模块 → 被引的文件」);只许删,不许加 */
@@ -80,8 +82,6 @@ const LEGACY: readonly string[] = [
   'dictation → server/tianzige.ts',
   'dictation → server/tts.ts',
   'dictation → server/tutor-face.ts',
-  // dictation → cli:读 activity
-  'dictation → cli/activities.ts',
   // server → cli:多数是 cli/workspace.ts 这个大对象
   'server → cli/activities.ts',
   'server → cli/doctor.ts',

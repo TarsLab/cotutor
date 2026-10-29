@@ -5,7 +5,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Workspace } from '../schema/index.ts';
-import { activityFile } from '../cli/activities.ts';
+import { activityFile } from '../runtime/activities.ts';
 import { parseActivity, resolveParams } from '../lib/activity.ts';
 import type { ActivityRun } from '../schema/index.ts';
 

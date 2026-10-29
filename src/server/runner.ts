@@ -20,7 +20,7 @@ import { bookkeepingPrompt, kidQuestions, textbookHeadings } from '../lib/diary.
 import { cardAssets, cardLabel, describeCard, tutorCardKinds } from '../cards/index.ts';
 import { boardGuideFor, cardGuidesFor } from '../cards/docs.ts';
 import { activityCards, parseActivity, renderTutorSection } from '../lib/activity.ts';
-import { activityFile } from '../cli/activities.ts';
+import { activityFile } from '../runtime/activities.ts';
 import { activityState, paintGate, paintTool, readActivity, threadActivity } from './activity-state.ts';
 import { controlsTools, createBrain, type BrainExecutor, type BrainRequest, type Slot, type ToolSet } from '../brain/index.ts';
 import { lineFlags, parseBoard } from '../lib/board.ts';

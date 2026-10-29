@@ -33,6 +33,8 @@ export interface BrainRequest {
   readDirs: readonly string[];
   /** 本轮附的照片(绝对路径):API 直接附成图;CLI 不用它,老师按上下文包里的路径自己读 */
   images?: readonly string[];
+  /** 整段压缩(API 运行时;上一轮结束时上下文过了 32k):之前的模型历史不再发,digest 是应用照索引拼的前情;prompt 这一轮带笔记全文。CLI 不用它 */
+  compact?: { digest: string };
 }
 
 /** 接预热好的进程要对得上的:老师目录(进程 cwd)、日期、这个话题末条 job(新开记 null) */

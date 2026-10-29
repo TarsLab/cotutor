@@ -1,7 +1,7 @@
 /**
  * API 运行时全流程(假百炼,不花钱):cotutor.json 里写 {api: 'bailian', model},走它的老师不起 CLI——
  * 流式板书与卡、记忆段落盘、同一话题接着聊带上前文、照片直接附成图、只读工具来回(出界的读不到)、思考档、
- * 拼回去的历史是瘦过的(结束的轮不带思考、工具往返成一句话、照片只附最近那组)、缓存命中与上下文大小记下,
+ * 拼回去的历史是瘦过的(结束的轮不带思考、工具往返成一句话、照片只附最近那组)、缓存命中与上下文大小记下、过 32k 整段压缩,
  * 用量缺了不记零、断流停住且下一轮注明、401 收尾、没配百炼的提醒;key 不落盘;家长端的转录照旧读得出。
  */
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -17,6 +17,7 @@ delete process.env.COTUTOR_WORKSPACE;
 const { initWorkspace } = await import('../src/cli/init.ts');
 const { loadWorkspace } = await import('../src/cli/workspace.ts');
 const { createContext, dayView } = await import('../src/server/app.ts');
+const { DIGEST_HEAD } = await import('../src/lib/thread-digest.ts');
 const { bailianBase, thinkingOf } = await import('../src/brain/api.ts');
 const { localDate } = await import('../src/lib/conversation.ts');
 
@@ -137,6 +138,34 @@ try {
   const t8 = await send('english-tutor', { from: 'kid', text: '继续' });
   const r8 = since(n)[0];
   check('断流后接着聊:前一轮写出来的那句在,这条消息前头注明没回完', t8.m.result === 'ok' && r8.messages.some((m) => m.role === 'assistant' && textOf(m.content).includes('我们先想一想')) && textOf(r8.messages.at(-1)?.content).includes('上一轮你没有回完'), JSON.stringify(r8?.messages.map((m) => [m.role, textOf(m.content).slice(0, 40)])));
+
+  // ---- 过 32k 整段压缩:前情照索引拼、笔记全文、最近的照片带过来;以后从压缩那轮算起 ----
+  const c1 = await send('math-tutor', { from: 'kid', text: '第一题 ZPHOTO', photos: ['captures/dot.png'], newThread: true });
+  const T = c1.started.thread;
+  const c2 = await send('math-tutor', { from: 'kid', text: '我写的是 7 ZBIG', thread: T });
+  check('压缩:上一轮报的上下文记下(40000)', c2.m.tokens?.context === 40000 && !c2.m.compacted, JSON.stringify(c2.m.tokens));
+  n = fake.requests.length;
+  const c3 = await send('math-tutor', { from: 'kid', text: '下一题', thread: T });
+  const r3x = since(n)[0];
+  const u3 = textOf(r3x?.messages.at(-1)?.content);
+  check('压缩:之前的模型历史不再发(只有系统提示与这一条)', r3x?.messages.length === 2 && r3x.messages[0].role === 'system', JSON.stringify(r3x?.messages.map((m) => m.role)));
+  check('压缩:前情在这条消息前头,孩子原话、老师说的都在', u3.includes(DIGEST_HEAD) && u3.includes('孩子:第一题 ZPHOTO (拍了 1 张照片)') && u3.includes('孩子:我写的是 7 ZBIG') && u3.includes('老师:收到:'), u3.slice(0, 600));
+  check('压缩:这一轮笔记带全文,不写「未变」', !u3.includes('未变,原文在本话题前面') && u3.includes('<cotutor-rules'), u3.slice(0, 300));
+  check('压缩:最近交的那张照片带过来', images(r3x) === 1, String(images(r3x)));
+  check('压缩:索引记下这一轮压缩过', c3.m.result === 'ok' && c3.m.compacted === true);
+  const histC = readFileSync(join(conv('math-tutor'), `${date}.${T}.brain.jsonl`), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { compacted?: boolean; user: { images: string[] } });
+  check('压缩:历史里那一轮记 compacted,照片也记上', histC.length === 3 && histC[2].compacted === true && JSON.stringify(histC[2].user.images) === JSON.stringify(['captures/dot.png']));
+  n = fake.requests.length;
+  const c4 = await send('math-tutor', { from: 'kid', text: '好的', thread: T });
+  const r4x = since(n)[0];
+  check('压缩之后接着聊:从压缩那轮算起(系统、压缩那条、老师、这一条)', c4.m.result === 'ok' && !c4.m.compacted && r4x?.messages.map((m) => m.role).join(',') === 'system,user,assistant,user' && textOf(r4x.messages[1].content).includes(DIGEST_HEAD) && images(r4x) === 1, JSON.stringify(r4x?.messages.map((m) => [m.role, textOf(m.content).slice(0, 60)])));
+
+  await send('math-tutor', { from: 'kid', text: 'ZBIG 又长了', thread: T });
+  const c6 = await send('math-tutor', { from: 'kid', text: 'ZBIG 还是很长', thread: T });
+  n = fake.requests.length;
+  const c7 = await send('math-tutor', { from: 'kid', text: '然后呢', thread: T });
+  const r7 = since(n)[0];
+  check('压缩:再过线又压一次;压完还过线的下一轮不连着压', c6.m.compacted === true && c6.m.tokens?.context === 40000 && !c7.m.compacted && r7?.messages.map((m) => m.role).join(',') === 'system,user,assistant,user', JSON.stringify({ c6: c6.m.compacted, c7: c7.m.compacted, roles: r7?.messages.map((m) => m.role) }));
 
   // ---- 401:收尾,err.log 只记状态码 ----
   const t9 = await send('math-tutor', { from: 'kid', text: 'ZHTTP401', newThread: true });

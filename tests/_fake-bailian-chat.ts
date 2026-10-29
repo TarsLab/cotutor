@@ -3,7 +3,7 @@
  * 从 cotutor-api-prototype 的 fake-bailian.ts 来:SSE 帧故意按 17 字节切开写(验跨块拼接,中文的 UTF-8 也会被切开),收尾给 usage。
  * 看最后一条用户消息里的记号定怎么回(记号是大写字母,老师守则与上下文包里不会有):
  *   ZBOARD 两张卡加讲稿;ZMEM 加一段「## 记忆」;ZTOOL <路径> 先调 read_file 读它,拿到结果再回「书上说:…」;
- *   ZNOUSAGE 不回 usage(回的时候一次 100 入、其中 60 命中缓存、20 出);ZSTALL 吐一句就不动了(连接不关,等客户端断);ZHTTP401 回 401;
+ *   ZNOUSAGE 不回 usage(回的时候一次 100 入、其中 60 命中缓存、20 出;孩子这句有 ZBIG 就报 40000 入,下一轮该整段压缩了);ZSTALL 吐一句就不动了(连接不关,等客户端断);ZHTTP401 回 401;
  *   别的回一句「收到:<孩子的话>」,话题里前面有老师的回复就先说「接着刚才的」
  */
 import { createServer } from 'node:http';
@@ -55,7 +55,7 @@ export async function startFakeChat(): Promise<{ baseURL: string; requests: Chat
       };
       const finish = async (reason = 'stop'): Promise<void> => {
         await send({}, reason);
-        if (!said.includes('ZNOUSAGE')) res.write(`data: ${JSON.stringify({ id: 'fake', choices: [], usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120, prompt_tokens_details: { cached_tokens: 60 } } })}\n\n`);
+        if (!said.includes('ZNOUSAGE')) res.write(`data: ${JSON.stringify({ id: 'fake', choices: [], usage: { prompt_tokens: kid.includes('ZBIG') ? 40000 : 100, completion_tokens: 20, total_tokens: 120, prompt_tokens_details: { cached_tokens: 60 } } })}\n\n`);
         res.end('data: [DONE]\n\n');
       };
       const last = body.messages.at(-1);

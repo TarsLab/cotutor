@@ -28,10 +28,11 @@ import { readyBeats, beatsOf, type BoardSection, type Device } from '../lib/kid-
 import { deriveKidView, truncateReply } from '../lib/kid-view.ts';
 import { parseSections } from '../lib/sections.ts';
 import { isoWeek, parsePlan, planLinesFor } from '../lib/plan.ts';
+import { threadDigest } from '../lib/thread-digest.ts';
 import { getRuntime, runtimeUses, type RunPlan, boardPreloaded } from '../lib/run-plan.ts';
 import { currentSlot, parseTimetable, slotLabel } from '../lib/timetable.ts';
 import { beatTimings, type RunEvent, type RunEventEnvelope, type RunEventInput } from '../lib/events.ts';
-import { BOARD_CARD_KINDS, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
+import { BOARD_CARD_KINDS, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type Bookkeeping, type ContextPack, type ConversationIndex, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { updateVaultMemory, readAgentBody, readCardStates, readDiaries, readIndex, readTextbooks, scanVault, snapshotSources, writeDiary, writeIndex, writeRunFile } from './store.ts';
 import { clipNote, memoryCount, missingEntry, pickNotes, textHash, tidyMemoryPrompt, type MemoryLine } from '../lib/vault-notes.ts';
@@ -131,6 +132,22 @@ export interface PackReport {
 }
 
 const MANY = 100_000;
+
+/** API 运行时的长话题:上一轮结束时上下文(tokens.context)过了这么多,这一轮整段压缩(2026-10-29 定 32k) */
+export const COMPACT_TOKENS = 32_000;
+
+/**
+ * 这一轮该不该整段压缩:这个话题最近一轮报的上下文(只有 API 运行时报)过了 COMPACT_TOKENS,而且上一轮不是刚压缩过的
+ * (压缩完还过线,说明系统提示与笔记本身就大,再压也小不下去,隔一轮再看)
+ */
+function dueCompact(messages: readonly ConversationMessage[], ths: readonly string[], thread: string): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (ths[i] !== thread) continue;
+    if (messages[i].compacted) return false;
+    if (messages[i].tokens?.context !== undefined) return messages[i].tokens!.context! >= COMPACT_TOKENS;
+  }
+  return false;
+}
 
 /**
  * 上下文包的取材(《obsidian仓库设计.md》§7 每轮那行,2026-09-17 改):课程表命中的时段 + 老师守则(有脸的老师)+ 当前学期 + 档案与入口文件的原文(按 entryChars 截)
@@ -565,6 +582,8 @@ export class Runner {
     const fresh = thread === job;
     const session = fresh ? null : sessionFor(index, thread);
     const { runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
+    // 长话题整段压缩(API 运行时):之前的模型历史不再发,前情照索引拼;这一轮笔记带全文,不写「未变」(原文所在的那几轮不发了)
+    const compact = !fresh && isApiRuntime(runtime) && dueCompact(index.messages, known, thread);
     // activity:新话题照这条带的,续话题照话题第一条记的。系统提示、卡、记忆都是它的(记账轮也是,接着同一个会话);上下文包的 activity 段记账轮不带
     // 隔天「接着」是新话题:没带 activity 就沿用被接的那个话题的(参数也是那时的),不然退回老师文件,没有那套做法和卡
     const threadRun = fresh ? (input.activity ?? (input.continues ? threadActivity((await readIndex(ws, tutor, input.continues.date)).messages, input.continues.thread) : null)) : threadActivity(index.messages, thread);
@@ -576,7 +595,7 @@ export class Runner {
     const activityWarn = activityRun ? await attachActivity(ws, tutor, gathered, activityRun, { date, messages: index.messages, thread, now: now.getTime() }, activityInSystem) : [];
     // 家长笔记原文:新会话整篇带;续会话时这个话题带过、没改的只写「未变」
     const notes = noteVersions(gathered);
-    const pack = session ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
+    const pack = session && !compact ? dropSeenNotes(gathered, seenNotes(index.messages, thread)) : gathered;
     const noteWarnings = pack.entry?.startsWith('缺:') && !input.bookkeep ? [`入口文件${pack.entry}——在 vault 里给这位老师建一篇(cotutor doctor 有写法)`] : [];
     if (policy.board === 'off') pack.board = 'off';
     // 这个话题里上一轮之后孩子在卡上做的事:逐张 describe 进上下文包,也记进这条消息(家长视图「孩子在板书上做的」);新话题不带
@@ -624,11 +643,11 @@ export class Runner {
       pack.live = { ...(l.caught ? { caught: l.caught } : {}), ...(l.cut !== undefined ? { cut: l.cut } : {}), ...(l.warmup?.length ? { warmup: l.warmup } : {}), ...(l.phone !== undefined ? { phone: l.phone } : {}), ...(l.app ? { app: l.app } : {}), ...(l.draw?.length ? { draw: l.draw } : {}) };
     }
     const prompt = buildContextPack(pack, text, policy.contextPack);
-    const req: BrainRequest = { agent, prompt, agentBody, systemBody, boardFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, readDirs: readDirsOf(ws), session, ...(pack.photoFiles?.length ? { images: pack.photoFiles } : {}) };
+    const req: BrainRequest = { agent, prompt, agentBody, systemBody, boardFile, runtime: input.runtime ?? t.runtime, effort: policy.effort, tools, readDirs: readDirsOf(ws), session, ...(compact ? { compact: { digest: threadDigest(index.messages.filter((_, i) => known[i] === thread)) } } : {}), ...(pack.photoFiles?.length ? { images: pack.photoFiles } : {}) };
     const plan = this.brain.plan(req);
 
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
-    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards: cards.map(({ card, text }) => ({ card, text })) } : {}), ...(photos.length ? { photos } : {}), ...(input.drawing ? { drawing: input.drawing } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && input.talk ? { talk: input.talk } : {}), ...(noteWarnings.length || lectureWarn.length || activityWarn.length ? { warnings: [...noteWarnings, ...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
+    const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards: cards.map(({ card, text }) => ({ card, text })) } : {}), ...(photos.length ? { photos } : {}), ...(input.drawing ? { drawing: input.drawing } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && input.talk ? { talk: input.talk } : {}), ...(compact ? { compacted: true as const } : {}), ...(noteWarnings.length || lectureWarn.length || activityWarn.length ? { warnings: [...noteWarnings, ...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
     await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
     // 这个 CLI 在 workspace 里要的机器文件(qwen 的隔离家目录):备不好这轮照起,起不来的原因会在 err.log

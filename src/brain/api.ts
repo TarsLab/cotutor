@@ -5,6 +5,8 @@
  *   接着话题时把同一会话的那几行拼回去。照片只记相对 workspace 根的路径,发的时候再编码。没回完的一轮只留写出来的正文,下一条消息前头注明
  * - 拼回去的已经结束的轮是瘦过的(slimTurn):思考不带(只在本轮工具来回里回传),工具往返换成一句话;照片只附最近交的那组,更早的换成一句占位。
  *   瘦法只由那一轮自己的记录定,下一轮发出去的开头和上一轮一样,百炼的缓存接得上;原始记录不动
+ * - 整段压缩(runner 在上下文过了 32k 的下一轮给 compact):之前的历史不再发,前情(应用照索引拼的)放在这一轮的消息前头,
+ *   最近交的照片带过来;这一轮记 compacted,以后从它算起
  * - 工具:这轮带工具(read / on)就给只读的三样(./api-tools.ts),不带就一样没有;一轮最多来回 maxSteps 次
  * - 思考:同 qwen 的档(low 不想、medium 想一点、high 不限;带工具的轮次至少想一点),还没和 CLI 那边真跑对照过
  * - .log 落统一事件(一行一条 CliEvent,parseEventLine 认),孩子端的流式板书、家长端看原文、转录、工具清单都走原来那套读法;
@@ -79,6 +81,8 @@ interface TurnRecord {
   /** 没回完的轮次写出来的正文 */
   partial?: string;
   ok: boolean;
+  /** 这一轮整段压缩过:user.text 里有前情,之前的轮不再拼回去 */
+  compacted?: true;
 }
 
 /** 报错只说状态码:SDK 的异常里带着整个请求 */
@@ -149,9 +153,10 @@ export function slimTurn(messages: readonly ModelMessage[]): string {
 
 /**
  * 同一会话的前几轮拼回模型消息;note = 最后一轮没回完时,接在这条消息前头的那句。
- * 照片只附最近交的那组(这一轮自己带了照片就一张都不附),更早的换成一句占位:看图说话那种一张图聊十几轮的,图一直在
+ * 照片只附最近交的那组(这一轮自己带了照片就一张都不附),更早的换成一句占位:看图说话那种一张图聊十几轮的,图一直在。
+ * 从最近一次整段压缩的那一轮算起;这一轮要压缩(current.compact)就不拼,只回 note 与最近交的那组照片(带进压缩这一轮)
  */
-async function pastOf(file: string, session: string, root: string, current: { images: boolean }): Promise<{ messages: ModelMessage[]; note: string | null }> {
+async function pastOf(file: string, session: string, root: string, current: { images: boolean; compact: boolean }): Promise<{ messages: ModelMessage[]; note: string | null; photos: string[] }> {
   const raw = await readFile(file, 'utf8').catch(() => '');
   const records: TurnRecord[] = [];
   for (const line of raw.split('\n')) {
@@ -163,7 +168,11 @@ async function pastOf(file: string, session: string, root: string, current: { im
       /* 写到一半的末行 */
     }
   }
-  const lastPhotos = current.images ? -1 : records.map((r) => r.user.images.length > 0).lastIndexOf(true);
+  records.splice(0, Math.max(0, records.map((r) => r.compacted === true).lastIndexOf(true)));
+  const withPhotos = records.map((r) => r.user.images.length > 0).lastIndexOf(true);
+  const photos = withPhotos >= 0 ? records[withPhotos].user.images : [];
+  if (current.compact) return { messages: [], note: records.at(-1)?.ok === false ? UNFINISHED : null, photos };
+  const lastPhotos = current.images ? -1 : withPhotos;
   const messages: ModelMessage[] = [];
   let note: string | null = null;
   for (const [i, r] of records.entries()) {
@@ -179,7 +188,7 @@ async function pastOf(file: string, session: string, root: string, current: { im
       note = UNFINISHED;
     }
   }
-  return { messages, note };
+  return { messages, note, photos };
 }
 
 export class ApiBrain {
@@ -226,8 +235,16 @@ export class ApiBrain {
         final = { ok: false, text: null, reason: 'auth:没有百炼按量 key' };
         warnings.push('百炼还没配好(按量 key):家长端「首页」里填,这位老师的运行时是 API 的,没有它说不了话');
       } else {
-        const { messages: past, note } = plan.resume ? await pastOf(files.history, session, root, { images: stored.length > 0 }) : { messages: [], note: null };
-        const user = await userMessage(note ? `${note}\n\n${req.prompt}` : req.prompt, stored, root, warnings);
+        const { messages: past, note, photos } = plan.resume ? await pastOf(files.history, session, root, { images: stored.length > 0, compact: Boolean(req.compact) }) : { messages: [], note: null, photos: [] };
+        const head = [note, req.compact?.digest].filter((x): x is string => Boolean(x)).join('\n\n');
+        const text = head ? `${head}\n\n${req.prompt}` : req.prompt;
+        // 压缩这一轮:前情与没回完的那句都在消息里了,最近交的照片带过来;记下来,以后从这一轮算起
+        const attach = req.compact && !stored.length ? photos : stored;
+        if (req.compact) {
+          record.compacted = true;
+          record.user = { text, images: attach };
+        }
+        const user = await userMessage(text, attach, root, warnings);
         const alibaba = createAlibaba({ apiKey: auth?.key ?? 'sk-endpoint', baseURL: this.endpoint ?? bailianBase(auth!.workspaceId), includeUsage: true });
         // 断流看门狗:stall.ms 没有一块流到就停(工具在本进程里跑,几毫秒的事,不另算)
         const abort = new AbortController();

@@ -87,6 +87,8 @@ const MessageObjectSchema = z.object({
   bookkeep: z.object({ thread: z.string().min(1) }).optional(),
   /** 这轮是记账后整理记忆的任务(from: system,新会话;2026-09-18):老师回「## 记忆」段的一串增 / 改 / 删,不受每轮条数上限;孩子端看不到 */
   tidy: z.literal(true).optional(),
+  /** 这一轮整段压缩过(API 运行时,上一轮结束时上下文过了 32k):之前的模型历史不再发,前情由应用照索引拼(src/lib/thread-digest.ts) */
+  compacted: z.literal(true).optional(),
   /** 最终文本里剥出来的「## 记账」段(物化;日记已按它写好);null = 这轮没有 */
   bookkeeping: BookkeepingSchema.nullable().optional(),
   /** 这轮模型用了哪些工具、读了什么(2026-09-15,从 .log 抽,lib/transcript.ts toolCalls):名字、最要紧的参数、成没成、结果多少字。家长端「看原文」的「读了什么」站;cotutor show 也吐 */

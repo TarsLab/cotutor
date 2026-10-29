@@ -16,7 +16,7 @@ delete process.env.COTUTOR_WORKSPACE;
 const { initWorkspace } = await import('../src/cli/init.ts');
 const { loadWorkspace } = await import('../src/cli/workspace.ts');
 const { createContext, dayView } = await import('../src/server/app.ts');
-const { thinkingOf } = await import('../src/brain/api.ts');
+const { bailianBase, thinkingOf } = await import('../src/brain/api.ts');
 const { localDate } = await import('../src/lib/conversation.ts');
 
 const fake = await startFakeChat();
@@ -135,6 +135,8 @@ try {
 
   // ---- 思考档(同 qwen:low 不想,带工具至少想一点,high 不限) ----
   check('思考档:low 不想;low 带工具想一点;medium 想一点;high 不限', JSON.stringify([thinkingOf('low', 'off'), thinkingOf('low', 'read'), thinkingOf('medium', 'off'), thinkingOf('high', 'on')]) === JSON.stringify([{ enableThinking: false }, { enableThinking: true, thinkingBudget: 1024 }, { enableThinking: true, thinkingBudget: 1024 }, { enableThinking: true }]));
+  // 端点:有业务空间 id 走它的域名;只有按量 key 走公网域名(同 qwen 按量那条线)
+  check('端点:业务空间域名 / 公网域名', bailianBase('ws-1') === 'https://ws-1.cn-beijing.maas.aliyuncs.com/compatible-mode/v1' && bailianBase(null) === 'https://dashscope.aliyuncs.com/compatible-mode/v1');
   ctx.runner.close();
   ctx2.runner.close();
 } finally {

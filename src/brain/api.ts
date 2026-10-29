@@ -20,6 +20,7 @@ import type { AssistantPart, CliEvent, CliFinal, ToolResult } from '../clis/type
 import { getRuntime, type RunPlan } from '../lib/run-plan.ts';
 import { createPartialReader } from '../lib/stream.ts';
 import { parseTranscript, toolCalls, toolSummary } from '../lib/transcript.ts';
+import { compatibleBase, DASHSCOPE_HOST } from '../lib/qianwen.ts';
 import { isApiRuntime, type CotutorConfig, type Policy } from '../schema/index.ts';
 import { readOnlyTools } from './api-tools.ts';
 import type { BrainHooks, BrainRequest, BrainResult, BrainRun, WarmKey } from './index.ts';
@@ -55,8 +56,12 @@ export function thinkingOf(effort: Policy['effort'] | undefined, tools: BrainReq
   return { enableThinking: false };
 }
 
-/** 百炼 Chat Completions 的端点:业务空间 id 的域名(同 realtime;公网域名的按量 key 用不了业务空间) */
-export const bailianBase = (workspaceId: string): string => `https://${workspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`;
+/**
+ * 百炼 Chat Completions 的端点:知道业务空间 id 就走它的域名(原型验过,同 realtime);只有按量 key 就走公网域名(qwen 那边按量的线也走它,2026-10-29 真跑通)
+ */
+export function bailianBase(workspaceId: string | null): string {
+  return workspaceId ? `https://${workspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` : compatibleBase(DASHSCOPE_HOST);
+}
 
 /** 历史文件的一行 = 一轮 */
 interface TurnRecord {
@@ -135,10 +140,10 @@ async function pastOf(file: string, session: string, root: string): Promise<{ me
 
 export class ApiBrain {
   private readonly workspace: () => { config: CotutorConfig; root: string };
-  private readonly auth: () => { key: string; workspaceId: string } | null;
+  private readonly auth: () => { key: string; workspaceId: string | null } | null;
   /** 测试与探针:…/compatible-mode/v1(假百炼);不给按业务空间 id 拼 */
   private readonly endpoint: string | undefined;
-  constructor(opts: { workspace: () => { config: CotutorConfig; root: string }; auth: () => { key: string; workspaceId: string } | null; endpoint?: string }) {
+  constructor(opts: { workspace: () => { config: CotutorConfig; root: string }; auth: () => { key: string; workspaceId: string | null } | null; endpoint?: string }) {
     this.workspace = opts.workspace;
     this.auth = opts.auth;
     this.endpoint = opts.endpoint;
@@ -174,8 +179,8 @@ export class ApiBrain {
       let final: CliFinal;
       const auth = this.auth();
       if (!auth && !this.endpoint) {
-        final = { ok: false, text: null, reason: 'auth:没有百炼按量 key 或业务空间 id' };
-        warnings.push('百炼还没配好(按量 key 与业务空间 id):家长端「首页」里填,这位老师的运行时是 API 的,没有它说不了话');
+        final = { ok: false, text: null, reason: 'auth:没有百炼按量 key' };
+        warnings.push('百炼还没配好(按量 key):家长端「首页」里填,这位老师的运行时是 API 的,没有它说不了话');
       } else {
         const { messages: past, note } = plan.resume ? await pastOf(files.history, session, root) : { messages: [], note: null };
         const user = await userMessage(note ? `${note}\n\n${req.prompt}` : req.prompt, stored, root, warnings);

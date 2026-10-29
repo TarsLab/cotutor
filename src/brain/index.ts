@@ -98,9 +98,9 @@ export interface BrainExecutor {
 }
 
 /**
- * auth:百炼按量 key 与业务空间 id(API 运行时用;runner 给的是和实时那边同一条查找链);endpoint:测试与探针指到假百炼(…/compatible-mode/v1)
+ * auth:百炼按量 key,知道的话带业务空间 id(API 运行时用;runner 给的是和实时那边同一条查找链);endpoint:测试与探针指到假百炼(…/compatible-mode/v1)
  */
-export function createBrain(opts: { workspace: () => { config: CotutorConfig; root: string }; env?: NodeJS.ProcessEnv; warmIdleMs?: number; auth?: () => { key: string; workspaceId: string } | null; endpoint?: string }): BrainExecutor {
+export function createBrain(opts: { workspace: () => { config: CotutorConfig; root: string }; env?: NodeJS.ProcessEnv; warmIdleMs?: number; auth?: () => { key: string; workspaceId: string | null } | null; endpoint?: string }): BrainExecutor {
   return new Brains(opts.workspace, new CliBrain(opts), new ApiBrain({ workspace: opts.workspace, auth: opts.auth ?? (() => null), endpoint: opts.endpoint }));
 }
 

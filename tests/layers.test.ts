@@ -1,6 +1,7 @@
 /**
- * src 的依赖方向(docs/wip/src架构设计.md §4):扫每个文件的 import、import type、export … from、动态 import() 与 import('…') 类型,
- * 按顶层目录归到模块,对 ALLOW 查。现有的反向边逐条列在 LEGACY,只减不增:出了表外的新边红,表里的边代码里没了也红(把那条删掉)。
+ * src 的依赖方向:扫每个文件的 import、import type、export … from、动态 import() 与 import('…') 类型,
+ * 按顶层目录归到模块,对 ALLOW 查。现有的反向依赖按「模块 → 被引的文件」列在 LEGACY,只减不增:引了表外的文件就红,表里的哪条代码里没了也红(把那条删掉)。
+ * 不按「文件 → 文件」记:迁移要拆大文件,拆出来的新文件照旧引同一个被引的文件,不算多了一条反向依赖。
  * 另两条:内联进页面的文件(server/inline-lib.ts 删掉整行 import)运行时只能从别的内联文件拿值;舞台包的传递依赖里没有 Node 内置模块。
  * 搬目录时改 ALLOW 的「目录 → 可以导入的目录」。
  */
@@ -19,118 +20,73 @@ const ALLOW: Record<string, readonly string[]> = {
   lib: ['schema'],
   cards: ['schema', 'lib'],
   clis: ['schema', 'lib'],
+  // 脑执行;clis 是它现在的 CLI 实现(以后搬进 brain/cli/)
+  brain: ['schema', 'lib', 'clis'],
   live: ['schema', 'lib', 'cards'],
   paint: ['schema', 'lib', 'cards'],
   talk: ['schema', 'lib', 'cards'],
   dictation: ['schema', 'lib', 'cards'],
   stage: ['schema', 'lib'],
-  server: ['schema', 'lib', 'cards', 'live', 'paint', 'talk', 'dictation'],
-  cli: ['schema', 'lib', 'cards', 'live', 'paint', 'talk', 'dictation', 'server'],
+  server: ['schema', 'lib', 'cards', 'brain', 'live', 'paint', 'talk', 'dictation'],
+  cli: ['schema', 'lib', 'cards', 'brain', 'live', 'paint', 'talk', 'dictation', 'server'],
 };
 
-/** 现有的反向边(「文件 → 文件」);只许删,不许加 */
+/** 现有的反向依赖(「模块 → 被引的文件」);只许删,不许加 */
 const LEGACY: readonly string[] = [
   // schema → lib:契约反向引实现的类型
-  'schema/board.ts → lib/kid-board.ts',
+  'schema → lib/kid-board.ts',
   // lib → cards:lib 与卡的注册表互引
-  'lib/board.ts → cards/index.ts',
-  'lib/home-doc.ts → cards/docs.ts',
-  'lib/home-doc.ts → cards/index.ts',
-  'lib/home-edit.ts → cards/index.ts',
-  'lib/home.ts → cards/index.ts',
-  'lib/kid-view.ts → cards/index.ts',
+  'lib → cards/docs.ts',
+  'lib → cards/index.ts',
   // lib → cli:技能文档引命令用法
-  'lib/analyze-doc.ts → cli/usage.ts',
-  'lib/home-doc.ts → cli/usage.ts',
-  'lib/tune-doc.ts → cli/usage.ts',
-  // lib → clis:纯逻辑认识 CLI 方言;脑执行抽出后收进 brain
-  'lib/run-plan.ts → clis/index.ts',
-  'lib/run-plan.ts → clis/stream-json.ts',
-  'lib/run-plan.ts → clis/types.ts',
-  'lib/stream.ts → clis/stream-json.ts',
-  'lib/stream.ts → clis/types.ts',
-  'lib/transcript.ts → clis/stream-json.ts',
-  'lib/transcript.ts → clis/types.ts',
-  'lib/tutor-rules.ts → clis/index.ts',
-  // live → server:实时老师依赖 HTTP 应用的总装(kidSendInput、AppContext)与 runner、store
-  'live/call.ts → server/app.ts',
-  'live/call.ts → server/paper.ts',
-  'live/call.ts → server/runner.ts',
-  'live/call.ts → server/store.ts',
-  'live/route.ts → server/access.ts',
-  'live/route.ts → server/app.ts',
+  'lib → cli/usage.ts',
+  // lib → clis:纯逻辑认识 CLI 方言;以后收进 brain
+  'lib → clis/index.ts',
+  'lib → clis/stream-json.ts',
+  'lib → clis/types.ts',
+  // live → server:实时老师引 runner(BusyError、SendStarted)、store、paper 与 access 的 cookie
+  'live → server/access.ts',
+  'live → server/paper.ts',
+  'live → server/runner.ts',
+  'live → server/store.ts',
   // talk → server:场景的页面借孩子端零件,路由借 AppContext
-  'talk/page.ts → server/kid-log.ts',
-  'talk/page.ts → server/kid-nav.ts',
-  'talk/page.ts → server/page-dom.ts',
-  'talk/page.ts → server/photo-ui.ts',
-  'talk/page.ts → server/tutor-face.ts',
-  'talk/route.ts → server/app.ts',
-  'talk/route.ts → server/tutor-face.ts',
-  // dictation → server:同上
-  'dictation/en-box.ts → server/letters.ts',
-  'dictation/en-page.ts → server/kid-log.ts',
-  'dictation/en-page.ts → server/kid-nav.ts',
-  'dictation/en-page.ts → server/photo-ui.ts',
-  'dictation/en-page.ts → server/tutor-face.ts',
-  'dictation/page.ts → server/kid-log.ts',
-  'dictation/page.ts → server/kid-nav.ts',
-  'dictation/page.ts → server/photo-ui.ts',
-  'dictation/page.ts → server/tutor-face.ts',
-  'dictation/parent-page.ts → server/brand.ts',
-  'dictation/reel-mode.ts → server/inline-lib.ts',
-  'dictation/reel-page.ts → server/page-dom.ts',
-  'dictation/reel-page.ts → server/reel-dock.ts',
-  'dictation/route.ts → server/app.ts',
-  'dictation/route.ts → server/home.ts',
-  'dictation/route.ts → server/tianzige.ts',
-  'dictation/route.ts → server/tts.ts',
-  'dictation/route.ts → server/tutor-face.ts',
-  'dictation/ui.ts → server/photo-ui.ts',
+  'talk → server/app.ts',
+  'talk → server/kid-log.ts',
+  'talk → server/kid-nav.ts',
+  'talk → server/page-dom.ts',
+  'talk → server/photo-ui.ts',
+  'talk → server/tutor-face.ts',
+  // dictation → server:同上,另有配音、天字格、首页
+  'dictation → server/app.ts',
+  'dictation → server/brand.ts',
+  'dictation → server/home.ts',
+  'dictation → server/inline-lib.ts',
+  'dictation → server/kid-log.ts',
+  'dictation → server/kid-nav.ts',
+  'dictation → server/letters.ts',
+  'dictation → server/page-dom.ts',
+  'dictation → server/photo-ui.ts',
+  'dictation → server/reel-dock.ts',
+  'dictation → server/tianzige.ts',
+  'dictation → server/tts.ts',
+  'dictation → server/tutor-face.ts',
   // paint → cli:读 workspace、activity
-  'paint/painter.ts → cli/workspace.ts',
+  'paint → cli/workspace.ts',
   // dictation → cli:同上
-  'dictation/route.ts → cli/activities.ts',
+  'dictation → cli/activities.ts',
   // server → cli:多数是 cli/workspace.ts 这个大对象
-  'server/access.ts → cli/workspace.ts',
-  'server/activity-eval.ts → cli/activities.ts',
-  'server/activity-eval.ts → cli/grades.ts',
-  'server/activity-eval.ts → cli/workspace.ts',
-  'server/activity-state.ts → cli/activities.ts',
-  'server/activity-state.ts → cli/workspace.ts',
-  'server/app.ts → cli/doctor.ts',
-  'server/app.ts → cli/migrate.ts',
-  'server/app.ts → cli/tutors.ts',
-  'server/app.ts → cli/workspace.ts',
-  'server/dev-activities.ts → cli/activities.ts',
-  'server/dev-activities.ts → cli/tutors.ts',
-  'server/dev-activities.ts → cli/workspace.ts',
-  'server/dev-overview.ts → cli/workspace.ts',
-  'server/dev-tutor-files.ts → cli/tutors.ts',
-  'server/dev-tutor-files.ts → cli/workspace.ts',
-  'server/home.ts → cli/activities.ts',
-  'server/home.ts → cli/workspace.ts',
-  'server/kid-log.ts → cli/workspace.ts',
-  'server/mock.ts → cli/serve.ts',
-  'server/mock.ts → cli/themes.ts',
-  'server/mock.ts → cli/workspace.ts',
-  'server/paper.ts → cli/workspace.ts',
-  'server/raw-view.ts → cli/workspace.ts',
-  'server/replay.ts → cli/workspace.ts',
-  'server/runner.ts → cli/activities.ts',
-  'server/runner.ts → cli/workspace.ts',
-  'server/store.ts → cli/workspace.ts',
-  'server/talk-run.ts → cli/activities.ts',
-  'server/talk-run.ts → cli/workspace.ts',
-  'server/theme.ts → cli/themes.ts',
-  // server → clis:直接认 CLI 适配器;脑执行抽出后经 brain
-  'server/raw-view.ts → clis/index.ts',
-  'server/replay.ts → clis/index.ts',
-  'server/runner.ts → clis/index.ts',
-  'server/store.ts → clis/index.ts',
-  // cli → clis:同上
-  'cli/doctor.ts → clis/index.ts',
-  'cli/skeleton.ts → clis/index.ts',
+  'server → cli/activities.ts',
+  'server → cli/doctor.ts',
+  'server → cli/grades.ts',
+  'server → cli/migrate.ts',
+  'server → cli/serve.ts',
+  'server → cli/themes.ts',
+  'server → cli/tutors.ts',
+  'server → cli/workspace.ts',
+  // server → clis:直接认 CLI 适配器(store、raw-view、replay);runner 已经走 brain
+  'server → clis/index.ts',
+  // cli → clis:同上(doctor、skeleton)
+  'cli → clis/index.ts',
 ];
 
 /** 舞台包的入口(scripts/build-stage.mjs) */
@@ -211,7 +167,8 @@ const unknownDirs = [...new Set(files.map(moduleOf))].filter((m) => !(m in ALLOW
 check('src 下每个文件都在 ALLOW 里登记过的目录', unknownDirs.length === 0, `没登记的:${unknownDirs.map((m) => m || '(src 根)').join('、')}`);
 
 const unresolved: string[] = [];
-const edges = new Set<string>();
+/** 「模块 → 被引的文件」→ 引它的那几个文件 */
+const edges = new Map<string, string[]>();
 for (const [f, list] of specs) {
   for (const { spec } of list) {
     if (!spec.startsWith('.')) continue;
@@ -225,17 +182,19 @@ for (const [f, list] of specs) {
     }
     const a = moduleOf(f);
     const b = moduleOf(to);
-    if (a !== b && !(ALLOW[a] ?? []).includes(b)) edges.add(`${f} → ${to}`);
+    if (a === b || (ALLOW[a] ?? []).includes(b)) continue;
+    const k = `${a} → ${to}`;
+    edges.set(k, [...new Set([...(edges.get(k) ?? []), f])]);
   }
 }
 check('相对导入都能落到 src 里的文件', unresolved.length === 0, unresolved.join('\n'));
 
 // ---- 反向边:只减不增 ----
 const legacy = new Set(LEGACY);
-const fresh = [...edges].filter((e) => !legacy.has(e)).sort();
+const fresh = [...edges.keys()].filter((e) => !legacy.has(e)).sort();
 const gone = LEGACY.filter((e) => !edges.has(e));
-check('没有 ALLOW 之外的新依赖', fresh.length === 0, `\n${fresh.map((e) => `  '${e}',`).join('\n')}\n(改代码去掉这些边;确属目录该调整的,改 ALLOW)`);
-check('LEGACY 里的边代码里都还在(没了的删掉)', gone.length === 0, `\n${gone.map((e) => `  '${e}',`).join('\n')}`);
+check('没有 ALLOW 之外的新依赖', fresh.length === 0, `\n${fresh.map((e) => `  '${e}', // ${edges.get(e)!.join('、')}`).join('\n')}\n(改代码去掉这些依赖;确属目录该调整的,改 ALLOW)`);
+check('LEGACY 里的每条代码里都还在(没了的删掉)', gone.length === 0, `\n${gone.map((e) => `  '${e}',`).join('\n')}`);
 check('LEGACY 没有重复', legacy.size === LEGACY.length);
 
 // ---- 内联文件:运行时只从别的内联文件拿值 ----

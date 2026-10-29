@@ -39,8 +39,7 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { kidSendInput, type AppContext } from '../server/app.ts';
-import { BusyError, type SendStarted } from '../server/runner.ts';
+import { BusyError, type Runner, type SendStarted } from '../server/runner.ts';
 import type { RunEvent } from '../lib/events.ts';
 import { readIndex } from '../server/store.ts';
 import { conversationFiles, localDate } from '../lib/conversation.ts';
@@ -61,8 +60,14 @@ import { CallRecorder } from './recorder.ts';
 import type { ServerSocket } from './ws.ts';
 import { adoptPaper } from '../server/paper.ts';
 
+/** 实时老师从应用拿的(server/app.ts 的 AppContext 满足它):运行时与时钟,不认路由与页面 */
+export interface LiveApp {
+  readonly runner: Runner;
+  now(): Date;
+}
+
 export interface LiveDeps {
-  ctx: AppContext;
+  ctx: LiveApp;
   tutor: string;
   /** 哪一台设备(升级请求里的设备 cookie):孩子发的每一条记上 */
   deviceId?: string | null;
@@ -289,7 +294,7 @@ export class LiveCall {
   /** 开一条嘴的会话(第一次、断了以后现连、换连接都走这里);不是 this.session 的会话,回调都不认 */
   private async openMouth(): Promise<{ why: string | null; s: RealtimeSession; open: boolean }> {
     const { ctx, tutor } = this.deps;
-    const cfg = ctx.ws.config;
+    const cfg = ctx.runner.ws.config;
     const t = cfg.tutors[tutor];
     let firstOfAnswer = true;
     const open = this.open;
@@ -527,7 +532,7 @@ export class LiveCall {
     const take = this.takes.get(job)!;
     const pcm = Buffer.concat(take.segs.flatMap((s) => s.pcm));
     const index = mouthIndex(take.segs, BYTES_PER_MS);
-    const f = conversationFiles(this.deps.ctx.ws.dirs.conversations, this.deps.tutor, take.date);
+    const f = conversationFiles(this.deps.ctx.runner.ws.dirs.conversations, this.deps.tutor, take.date);
     take.writing = take.writing
       .then(async () => {
         await writeFile(f.mouth(job, 'wav'), wavOfPcm(pcm, OUTPUT_RATE));
@@ -891,8 +896,8 @@ export class LiveCall {
   private async dispatch(body: Record<string, unknown>): Promise<void> {
     const { ctx, tutor } = this.deps;
     const { app, ...rest } = body;
-    const r = await kidSendInput(ctx, tutor, rest, localDate(ctx.now()), this.deps.deviceId);
-    if ('error' in r) { this.send({ t: 'err', status: r.error.status, error: (r.error.json as { error?: string } | undefined)?.error ?? 'error' }); return; }
+    const r = await ctx.runner.accept(tutor, rest, localDate(ctx.now()), this.deps.deviceId);
+    if ('reject' in r) { this.send({ t: 'err', status: r.reject.status, error: r.reject.error }); return; }
     // 口语课:热身的摸底一直带着;打了电话带打了几分钟;应用起的这一轮说明为什么
     // 交画那一轮(交画板卡、纸上的画):这张画上边画边说的带给脑,之后清掉
     const drawKey = rest.action === 'submit' && isObj(rest.focus) && typeof rest.focus.card === 'string' ? rest.focus.card : isObj(rest.drawing) ? 'paper' : null;
@@ -920,7 +925,7 @@ export class LiveCall {
     this.job = started.job;
     this.thread = started.thread;
     // 新话题的第一条:话题还没有时画的那张纸归它
-    if (started.thread === started.job) void adoptPaper(ctx.ws, tutor, started.date, started.thread);
+    if (started.thread === started.job) void adoptPaper(ctx.runner.ws, tutor, started.date, started.thread);
     this.linesQueued = 0;
     // 字幕重放:这一轮的声音从这里接;更早的几轮落过盘了,内存里只留最近几轮
     this.takes.set(started.job, { date: started.date, segs: [], writing: Promise.resolve() });
@@ -929,7 +934,7 @@ export class LiveCall {
     const job = started.job;
     void started.done.then(async (index) => {
       // 收尾:整块出的运行时、或流式时没发出来的最后几句,从正式的一节补上
-      const m = index.messages.find((x) => x.job === job) ?? (await readIndex(ctx.ws, tutor, started.date)).messages.find((x) => x.job === job);
+      const m = index.messages.find((x) => x.job === job) ?? (await readIndex(ctx.runner.ws, tutor, started.date)).messages.find((x) => x.job === job);
       const sec = m?.section;
       if (sec && this.job === job) this.linesUpTo(sec.lines.map((l, i) => ({ i, text: l.text, ...lineFlags(l, sec.cards) })));
     }, () => {}).finally(() => {
@@ -1093,7 +1098,7 @@ export class LiveCall {
       if (take.reel.msgs.length > 2) {
         const { ctx, tutor } = this.deps;
         const at = this.rec.startedAt;
-        const dir = join(ctx.ws.dirs.conversations, tutor, `${localDate(at)}.live`);
+        const dir = join(ctx.runner.ws.dirs.conversations, tutor, `${localDate(at)}.live`);
         const name = [at.getHours(), at.getMinutes(), at.getSeconds()].map((n) => String(n).padStart(2, '0')).join('');
         await mkdir(dir, { recursive: true });
         await writeFile(join(dir, `${name}.wav`), wavOfPcm(take.callPcm, MIX_RATE));

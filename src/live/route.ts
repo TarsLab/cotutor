@@ -5,8 +5,7 @@
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { AppContext } from '../server/app.ts';
-import { LiveCall } from './call.ts';
+import { LiveCall, type LiveApp } from './call.ts';
 import { acceptWebSocket, isUpgrade } from './ws.ts';
 import { cookieOf } from '../server/access.ts';
 import { DEVICE_COOKIE } from '../lib/kid-device.ts';
@@ -26,11 +25,11 @@ export interface LiveRouteDeps {
 }
 
 export function makeLiveUpgrade(deps: LiveRouteDeps = {}) {
-  return async function liveUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer, ctx: AppContext): Promise<boolean> {
+  return async function liveUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer, ctx: LiveApp): Promise<boolean> {
     const m = /^\/api\/live\/([a-z0-9][a-z0-9-]*)\/ws(?:\?.*)?$/.exec(req.url ?? '');
     if (!m || !isUpgrade(req)) return false;
     const tutor = m[1];
-    const cfg = ctx.ws.config;
+    const cfg = ctx.runner.ws.config;
     const refuse = (status: number, why: string): boolean => { socket.end(`HTTP/1.1 ${status} ${why}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`); return true; };
     const t = cfg.tutors[tutor];
     if (!tutor.endsWith('-tutor') || !t || !t.enabled || t.hidden) return refuse(404, 'not live');

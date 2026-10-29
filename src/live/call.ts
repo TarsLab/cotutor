@@ -39,10 +39,8 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { BusyError, type Runner, type SendStarted } from '../server/runner.ts';
-import { readIndex } from '../server/store.ts';
+import type { Runner } from '../server/runner.ts';
 import { localDate } from '../lib/conversation.ts';
-import { lineFlags } from '../lib/board.ts';
 import { catchCue, chatCue, readCue, type CatchKind, type ChatAsk } from './lib/cue.ts';
 import { judge } from './lib/listen.ts';
 import { echoKind, warmLines, type WarmBeat } from './lib/warm.ts';
@@ -52,12 +50,12 @@ import { Delivery, type Said } from './delivery.ts';
 import { MIX_RATE } from './lib/mix.ts';
 import { wavOfPcm } from './lib/wav.ts';
 import { mouthInstructions } from './prompt.ts';
-import { mouthVoice } from '../schema/index.ts';
+import { mouthVoice, type ContextPack } from '../schema/index.ts';
 import { INPUT_RATE, MAX_IMAGE_B64, OUTPUT_RATE, RealtimeSession } from '../realtime/bailian.ts';
 import { CallRecorder } from './recorder.ts';
 import { MouthEvents, MouthTakes, type MouthEvent } from './journal.ts';
 import type { ServerSocket } from './ws.ts';
-import { adoptPaper } from '../server/paper.ts';
+import { Turns } from './turns.ts';
 
 /** 实时老师从应用拿的(server/app.ts 的 AppContext 满足它):运行时与时钟,不认路由与页面 */
 export interface LiveApp {
@@ -143,9 +141,8 @@ export class LiveCall {
   /** 嘴这一道的事件(补进那一轮的 events.jsonl)与字幕重放的声音(./journal.ts) */
   private readonly events: MouthEvents;
   private readonly takes: MouthTakes;
-  private running: SendStarted | null = null;
-  /** 脑在忙时孩子又说的:等它写完合并成一条 */
-  private waiting: Record<string, unknown>[] = [];
+  /** 交给脑:验与拼、runner.send、脑忙时排着(./turns.ts) */
+  private readonly turns: Turns;
   private turnSeq = 0;
   /** 按住说的这一轮还在等转写 */
   private pendingVoice: { seq: number; body: Record<string, unknown> } | null = null;
@@ -193,8 +190,6 @@ export class LiveCall {
   private quietBeats = 0;
   /** 打电话从哪一刻起(墙钟,[[call]] 那句在孩子端放完、开始响铃);null = 还没打 */
   private phoneAt: number | null = null;
-  /** 脑最近写的那一轮的话题(应用起的那一轮接在它后面) */
-  private thread: string | null = null;
   /** 边画边聊:每张画(画板卡 <job>/<n>,纸 paper)上孩子说的、嘴说的,一句一行;交画那轮给脑后清掉 */
   private readonly drawTalk = new Map<string, string[]>();
   /** 边画边聊:按着头像说的那句在等转写(记到哪张画上) */
@@ -214,6 +209,24 @@ export class LiveCall {
     this.rec = new CallRecorder(deps.ctx.now);
     this.events = new MouthEvents((date, job, ev) => void deps.ctx.runner.noteEvent(deps.tutor, date, job, ev));
     this.d = new Delivery({ now: () => this.ms(), send: (o) => this.send(o), event: (job, at, ev) => this.events.record(job, at, ev), onRead: (beat) => this.read(beat), ended: () => this.ended });
+    this.turns = new Turns({
+      runner: deps.ctx.runner,
+      now: deps.ctx.now,
+      tutor: deps.tutor,
+      deviceId: deps.deviceId,
+      live: (body) => this.liveOf(body),
+      send: (o) => this.send(o),
+      started: (st) => {
+        this.d.begin(st.job);
+        // 字幕重放:这一轮的声音从这里接
+        this.takes.open(st.job, st.date);
+        this.send({ t: 'turn', job: st.job, thread: st.thread });
+      },
+      lines: (job, lines) => { if (this.d.job === job) this.d.lines(lines); },
+      settled: () => this.maybeSwap(),
+      timer: (t) => this.timers.push(t),
+      ended: () => this.ended,
+    });
     this.takes = new MouthTakes({ conversations: () => deps.ctx.runner.ws.dirs.conversations, tutor: deps.tutor, keep: MOUTH_KEEP, bytesPerMs: BYTES_PER_MS, rate: OUTPUT_RATE });
     this.open = deps.listen === 'open';
   }
@@ -378,7 +391,7 @@ export class LiveCall {
 
   /** 安静:孩子没按着、嘴没在说也没要说的、讲稿没排着、脑没在写、没在现连 / 换连接 */
   private quiet(): boolean {
-    return !this.holding && !this.vadOn && this.vadAwait === null && !this.said && !this.session?.responding && !this.d.pending && !this.d.gated && !this.running && !this.reviving && !this.swapping;
+    return !this.holding && !this.vadOn && this.vadAwait === null && !this.said && !this.session?.responding && !this.d.pending && !this.d.gated && !this.turns.busy && !this.reviving && !this.swapping;
   }
 
   /**
@@ -795,22 +808,20 @@ export class LiveCall {
     while (this.draft?.seq === seq && (this.vadOn || this.vadAwait !== null) && Date.now() < more && !this.ended && seq === this.turnSeq) await new Promise((r) => setTimeout(r, 20));
     if (this.ended || seq !== this.turnSeq) return;
     if (this.draft?.seq === seq) { body = { ...body, text: this.draft.texts.join(',') }; this.draft = null; }
-    if (this.running) { this.waiting.push(body); return; }
-    await this.dispatch(body);
+    await this.turns.submit(body);
   }
 
-  private async dispatch(body: Record<string, unknown>): Promise<void> {
-    const { ctx, tutor } = this.deps;
+  /**
+   * 这一轮实时的那些(收下了才算,交给脑时带):口语课热身的摸底一直带着,打了电话带打了几分钟,应用起的这一轮说明为什么;
+   * 交画那一轮(交画板卡、纸上的画):这张画上边画边说的带给脑,之后清掉;上一轮念到第几句被打断,带了就清
+   */
+  private liveOf(body: Record<string, unknown>): NonNullable<ContextPack['live']> {
     const { app, ...rest } = body;
-    const r = await ctx.runner.accept(tutor, rest, localDate(ctx.now()), this.deps.deviceId);
-    if ('reject' in r) { this.send({ t: 'err', status: r.reject.status, error: r.reject.error }); return; }
-    // 口语课:热身的摸底一直带着;打了电话带打了几分钟;应用起的这一轮说明为什么
-    // 交画那一轮(交画板卡、纸上的画):这张画上边画边说的带给脑,之后清掉
     const drawKey = rest.action === 'submit' && isObj(rest.focus) && typeof rest.focus.card === 'string' ? rest.focus.card : isObj(rest.drawing) ? 'paper' : null;
     const draw = drawKey ? this.drawTalk.get(drawKey) : undefined;
     if (drawKey) this.drawTalk.delete(drawKey);
     const cut = this.d.takeCut();
-    const live = {
+    return {
       ...(draw?.length ? { draw } : {}),
       ...(this.caught ? { caught: this.caught } : {}),
       ...(cut !== undefined ? { cut } : {}),
@@ -818,54 +829,6 @@ export class LiveCall {
       ...(this.phoneAt !== null ? { phone: Math.max(0, Math.floor((Date.now() - this.phoneAt) / 60_000)) } : {}),
       ...(app === 'call' || app === 'quiet' ? { app: app as 'call' | 'quiet' } : {}),
     };
-    let started: SendStarted;
-    try {
-      started = await ctx.runner.send(tutor, { ...r.input, live });
-    } catch (err) {
-      // 别处(页面、工作台)正在让这位老师写:排着,它写完再发
-      if (err instanceof BusyError) { this.waiting.push(body); this.afterBusy(); return; }
-      this.send({ t: 'err', status: 500, error: err instanceof Error ? err.message : String(err) });
-      return;
-    }
-    this.running = started;
-    this.d.begin(started.job);
-    this.thread = started.thread;
-    // 新话题的第一条:话题还没有时画的那张纸归它
-    if (started.thread === started.job) void adoptPaper(ctx.runner.ws, tutor, started.date, started.thread);
-    // 字幕重放:这一轮的声音从这里接;更早的几轮落过盘了,内存里只留最近几轮
-    this.takes.open(started.job, started.date);
-    this.send({ t: 'turn', job: started.job, thread: started.thread });
-    const job = started.job;
-    void started.done.then(async (index) => {
-      // 收尾:整块出的运行时、或流式时没发出来的最后几句,从正式的一节补上
-      const m = index.messages.find((x) => x.job === job) ?? (await readIndex(ctx.runner.ws, tutor, started.date)).messages.find((x) => x.job === job);
-      const sec = m?.section;
-      if (sec && this.d.job === job) this.d.lines(sec.lines.map((l, i) => ({ i, text: l.text, ...lineFlags(l, sec.cards) })));
-    }, () => {}).finally(() => {
-      if (this.running === started) this.running = null;
-      this.flushWaiting();
-      this.maybeSwap();
-    });
-  }
-
-  /** 别处在写:等那一轮完了再发排着的 */
-  private afterBusy(): void {
-    const { ctx, tutor } = this.deps;
-    const busy = ctx.runner.running(tutor);
-    const poll = setInterval(() => {
-      if (this.ended || ctx.runner.running(tutor)?.job === busy?.job) return;
-      clearInterval(poll);
-      this.flushWaiting();
-    }, 200);
-    this.timers.push(poll);
-  }
-
-  /** 脑忙时孩子说的几句:合并成一条(话题等照最后一句的),发 */
-  private flushWaiting(): void {
-    if (this.ended || this.running || !this.waiting.length) return;
-    const all = this.waiting.splice(0);
-    const last = all[all.length - 1];
-    void this.dispatch({ ...last, text: all.map((b) => String(b.text ?? '').trim()).filter(Boolean).join('\n') });
   }
 
   /** 接住说中文还是英文:口语课打了电话以后说英文 */
@@ -947,7 +910,7 @@ export class LiveCall {
     this.caughtDone = true;
     this.pendingVoice = null;
     this.draft = null;
-    const body: Record<string, unknown> = { text, app, ...(this.thread ? { thread: this.thread } : {}), ...(this.ctxBody.device ? { device: this.ctxBody.device } : {}) };
+    const body: Record<string, unknown> = { text, app, ...(this.turns.thread ? { thread: this.turns.thread } : {}), ...(this.ctxBody.device ? { device: this.ctxBody.device } : {}) };
     void this.toBrain(seq, body);
   }
 

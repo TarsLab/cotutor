@@ -269,7 +269,7 @@ export type DictationConfig = z.infer<typeof DictationSchema>;
 
 /**
  * 你说我画:画图卡(paint)用哪个文生图模型、画多大、画成什么样(一天几张的上限 10-21 去掉了,老配置里的 daily 不认)。
- * 画风在 activity 文件「画家收到什么」那节;PAINT_PROMPT_DEFAULT 是出厂那节的画风,不在 activity 话题里画照它。版式、角色、分幅由应用接(src/paint/prompt.ts)。
+ * 画风在 activity 文件「画家收到什么」那节;PAINT_PROMPT_DEFAULT 是出厂那节的画风,不在 activity 话题里画照它。版式、角色、分幅由应用接(src/scenes/paint/prompt.ts)。
  * 2026-10-11 拿「小熊和小猴种西瓜」四格试:qwen-image-2.0 4 秒、qwen-image-2.0-pro 15 秒,四格里角色都对得上;pro 的表情(低头、脸红)更到位。
  * 2026-10-13 缺省换 qwen-image-3.0-pro:千问 Token Plan 有它(一张约 50 Credits),2.0 系列没有;同一个四格 10 秒,画风照提示词,角色分到哪格有几处没对上。
  * 2026-10-21「除了圆圈数字」挪进多格的版式:写在画风里一幅的图也收到,宇宙那张散着画了 ①③Ⓐ。
@@ -279,6 +279,8 @@ export const PAINT_PROMPT_DEFAULT = [
   '人物是可爱的卡通形象,表情和动作夸张一点,一眼看得出在干什么、心情怎样。',
   '画面里不要任何文字、对话气泡、拟声词。',
 ];
+/** 反向提示词(百炼限 500 字符):画家不要的;activity 文件「画家收到什么」没写就用它 */
+export const PAINT_NEGATIVE = '文字,字母,水印,对话气泡,拟声词,写实照片,恐怖,血腥,武器,畸形的手,多余的肢体,格子数量不对';
 export const PAINT_DEFAULT = { model: 'qwen-image-3.0-pro', size: '1280*1280' };
 export const PaintSchema = z.object({
   model: z.string().min(1).default(PAINT_DEFAULT.model).describe('画图用的千问文生图模型(同步接口):qwen-image-3.0-pro 约 10–20 秒,Token Plan 有它;qwen-image-2.0-pro(约 15 秒)、qwen-image-2.0(约 4 秒)只有百炼按量'),

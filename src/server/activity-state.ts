@@ -8,7 +8,7 @@ import { activityFile } from '../cli/activities.ts';
 import { failingGate, parseActivity } from '../lib/activity.ts';
 import { threads } from '../lib/conversation.ts';
 import { type Activity, type ActivityRun, type ActivityValue, type ConversationMessage } from '../schema/index.ts';
-import { paintRecordAt } from '../paint/painter.ts';
+import { paintRecordAt } from '../scenes/paint/painter.ts';
 
 /** 这个话题是从哪个 activity 起的:话题里第一条带 activity 的消息(只记在第一条);没有 → null */
 export function threadActivity(messages: readonly ConversationMessage[], thread: string): ActivityRun | null {

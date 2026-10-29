@@ -44,8 +44,8 @@ import { kidInput, type KidAccept } from './kid-input.ts';
 import { dashscopeAuth } from '../realtime/bailian.ts';
 import { qianwenKeys } from '../lib/qianwen.ts';
 import { DRAW_ONLY_TEXT, drawingPackLine } from './paper.ts';
-import { makeDraw, type Draw } from '../paint/draw.ts';
-import { paintLines, startPaints } from '../paint/painter.ts';
+import { makeDraw, type Draw } from '../media/draw.ts';
+import { paintLines, startPaints } from '../scenes/paint/painter.ts';
 
 export class BusyError extends Error {
   constructor(tutor: string, job: string) {

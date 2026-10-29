@@ -7,7 +7,7 @@ import { localDate, localMinute, weekOf } from '../lib/conversation.ts';
 import type { ConversationMessage } from '../schema/conversation.ts';
 import { listTutors } from '../schema/config.ts';
 import type { Workspace } from '../cli/workspace.ts';
-import { paintedToday } from '../paint/painter.ts';
+import { paintedToday } from '../scenes/paint/painter.ts';
 import { readIndex } from './store.ts';
 import { readDevices, readKidLog, type KidDevice, type KidLogLine } from './kid-log.ts';
 import { deviceLabel } from '../lib/kid-device.ts';

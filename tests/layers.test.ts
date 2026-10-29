@@ -26,13 +26,18 @@ const ALLOW: Record<string, readonly string[]> = {
   realtime: ['schema', 'lib'],
   // 家长的 vault 与学习记忆:读取、取材、应用写入与撤回
   memory: ['schema', 'lib'],
+  // 每种一家的媒体能力(文生图;以后配音、认图、课包)
+  media: ['schema', 'lib'],
+  // 具体场景的规则:不引 runtime、不调 media 与厂商实现(要画就由调用方交进来)
+  scenes: ['schema', 'lib', 'cards'],
   live: ['schema', 'lib', 'cards', 'realtime'],
-  paint: ['schema', 'lib', 'cards'],
+  // 旧路径,转发到 scenes/paint 与 media;迁完删
+  paint: ['schema', 'lib', 'cards', 'scenes', 'media'],
   talk: ['schema', 'lib', 'cards'],
   dictation: ['schema', 'lib', 'cards'],
   stage: ['schema', 'lib'],
-  server: ['schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'live', 'paint', 'talk', 'dictation'],
-  cli: ['schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'live', 'paint', 'talk', 'dictation', 'server'],
+  server: ['schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation'],
+  cli: ['schema', 'lib', 'cards', 'brain', 'realtime', 'memory', 'media', 'scenes', 'live', 'paint', 'talk', 'dictation', 'server'],
 };
 
 /** 现有的反向依赖(「模块 → 被引的文件」);只许删,不许加 */
@@ -74,9 +79,7 @@ const LEGACY: readonly string[] = [
   'dictation → server/tianzige.ts',
   'dictation → server/tts.ts',
   'dictation → server/tutor-face.ts',
-  // paint → cli:读 workspace、activity
-  'paint → cli/workspace.ts',
-  // dictation → cli:同上
+  // dictation → cli:读 activity
   'dictation → cli/activities.ts',
   // server → cli:多数是 cli/workspace.ts 这个大对象
   'server → cli/activities.ts',

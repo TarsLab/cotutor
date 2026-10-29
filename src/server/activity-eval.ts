@@ -10,7 +10,7 @@ import { ACTIVITIES_DIR, activityRunFor } from '../cli/activities.ts';
 import { workspaceGradePack } from '../cli/grades.ts';
 import { UsageError, type Workspace } from '../cli/workspace.ts';
 import { gradeRun, kidPrompt, parseExamples, type ActivityExample, type EvalTurn, type GradeResult } from '../lib/activity-eval.ts';
-import type { Draw } from '../paint/draw.ts';
+import type { Draw } from '../media/draw.ts';
 import { evalWorkspace, EVALS_DIR } from './replay.ts';
 import { readLecture } from './lecture.ts';
 import { Runner } from './runner.ts';

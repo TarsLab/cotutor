@@ -188,7 +188,9 @@ if (fail) {
   if (msg.includes('带证据')) parts.push('## 记忆\n- 阵列题先伸手指定行数,再一行点一个。证据:「我数成35了」\n- 他自己说会了竖式。证据:「第一次说」');
   // 记账任务(runner.bookkeep 发的):回一段固定形状的「## 记账」;prompt 里有「记账坏」就少写 name(应用该报 warning、日记不写)
   const bk = /给刚才这个话题记账\(话题 (\S+?)[,,]/.exec(prompt);
-  if (bk) parts.push(msg.includes('记账坏') ? `## 记账\n- thread: ${bk[1]}\n  summary: 没名字` : `## 记账\n- thread: ${bk[1]}\n  name: 三角形的角\n  textbook: 人教数学一下#1 认识图形(二)\n  summary: 讲了三角形有三个角,孩子一开始说四个。\n  steps: 看图 → 数角 → 选一选\n  observations:\n    - 角和边会混`);
+  // 自动记账的测试(2026-10-30):环境变量 FAKE_BOOKKEEP_ASKED 里 | 分开的几句当 asked 写上;FAKE_BOOKKEEP_BAD=1 同「记账坏」
+  const asked = (process.env.FAKE_BOOKKEEP_ASKED ?? '').split('|').filter(Boolean);
+  if (bk) parts.push(msg.includes('记账坏') || process.env.FAKE_BOOKKEEP_BAD === '1' ? `## 记账\n- thread: ${bk[1]}\n  summary: 没名字` : `## 记账\n- thread: ${bk[1]}\n  name: 三角形的角\n  textbook: 人教数学一下#1 认识图形(二)\n${asked.length ? `  asked:\n${asked.map((q) => `    - ${q}`).join('\n')}\n` : ''}  summary: 讲了三角形有三个角,孩子一开始说四个。\n  steps: 看图 → 数角 → 选一选\n  observations:\n    - 角和边会混`);
   const result = parts.join('\n\n');
   if (stream) {
     const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));

@@ -1,5 +1,5 @@
 /** 日记与档案的纯函数(《obsidian仓库设计.md》):记账段 → 日记一段的形状、打分门槛、观察与档案的抽取、记账提示词。 */
-import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings, threadBundles } from '../src/memory/diary.ts';
+import { appendDiary, bookkeepingPrompt, diaryTopic, entryFor, extractObservations, kidQuestions, recentDiaryDates, renderDiaryBlock, textbookHeadings, threadBundles, tidyQuestions } from '../src/memory/diary.ts';
 import { check, done } from './_check.ts';
 
 const msgs = [
@@ -57,10 +57,16 @@ check('最近几天(含今天,跨月)', recentDiaryDates('2026-09-02', 3).join()
   check('记账提示词:打分够要 summary / steps,教材目录列在后面', keep.includes('- thread: 1620-1') && keep.includes('summary:') && keep.includes('steps:') && keep.includes('- 人教数学一下#4 100以内数的认识') && keep.includes('家长打了 4 星'), keep);
   check('打分不够:不要 summary / steps,说明不到几星', !low.includes('summary:') && low.includes('不到 4 星') && !low.includes('教材目录'), low);
   check('没打分', bookkeepingPrompt({ thread: 'x', keepScore: 4, headings: [] }).includes('还没打分'));
+  check('打没打分都要 asked:照孩子原话挑 1–3 句(2026-10-30)', keep.includes('  asked:\n    - 孩子在这个话题里问的、说的,挑 1–3 句') && low.includes('  asked:'));
   check('有照片:打分够时 summary 那行要求把册子 / 页 / 题号 / 题面写成文字、不写路径;打分不够没有 summary 也就不提', bookkeepingPrompt({ thread: 'x', rating: 5, keepScore: 4, headings: [], photos: 2 }).includes('有 2 张作业照片') && !bookkeepingPrompt({ thread: 'x', rating: 2, keepScore: 4, headings: [], photos: 2 }).includes('作业照片') && !keep.includes('作业照片'));
 }
 check('记账段里挑话题:对上的;只有一条且 thread 写错也认;多条都不对 → null', entryFor({ entries: [{ ...entry, thread: 'a' }, { ...entry, thread: 'b' }] }, 'b')?.thread === 'b' && entryFor({ entries: [{ ...entry, thread: 'wrong' }] }, 'b')?.thread === 'b' && entryFor({ entries: [{ ...entry, thread: 'a' }, { ...entry, thread: 'c' }] }, 'b') === null);
 // 日记里「- 观察：」写全角冒号也算
 check('观察行认全角冒号', extractObservations([{ date: '2026-10-03', text: '## 数学\n- 观察：平均分会一个一个轮着分\n' }], { subject: '数学', n: 5 }).some((o) => o.claim === '平均分会一个一个轮着分'));
+
+// ---- 孩子问的兜底筛法(2026-10-30):老师没挑时,转写里的碎句不进日记 ----
+check('筛孩子问:去掉标点、语气词、称呼后不到四个字的不要', tidyQuestions(['嗯', '语文老师。', '宇宙', '嗯，老师，呃，人字怎么画？', '画一幅图']).join('|') === '嗯，老师，呃，人字怎么画？|画一幅图');
+check('筛孩子问:重复的(去掉标点空格后一样)只留第一句;最多 5 句', tidyQuestions(['画一幅图', '画 一幅图!', '宇宙怎么写']).join('|') === '画一幅图|宇宙怎么写' && tidyQuestions(Array.from({ length: 8 }, (_, i) => `第${i}个问题是什么`)).length === 5);
+check('筛孩子问:英文按字母数', tidyQuestions(['Yes', 'I like apples']).join() === 'I like apples');
 
 done();

@@ -1030,8 +1030,8 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const [, tutor, date] = book;
       if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
       const only = isObj(body) && Array.isArray(body.threads) ? (body.threads as unknown[]).filter((t): t is string => typeof t === 'string') : undefined;
-      const r = await ctx.runner.bookkeep(tutor, date, only);
-      return { status: 202, json: { tutor, date, ...r } };
+      const { queued, skipped } = await ctx.runner.bookkeep(tutor, date, only);
+      return { status: 202, json: { tutor, date, queued, skipped } };
     }
 
     // 家长板书页:清单与一天的板书,都在家长命名空间下;/api/kid/* 不动

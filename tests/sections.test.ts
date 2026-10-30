@@ -30,6 +30,8 @@ const TEXT = [
   const bk = parseSections('记好了。\n\n## 记账\n- thread: 1620-1\n  name: 找规律填数(递减)\n  textbook: "人教数学一下#4 100以内数的认识"\n  summary: 讲了递减数列,难点在 80 减 2 过十。\n  steps: 抄数列 → 连箭头 → 一格一格减 → 倒着加回去检查\n  observations:\n    - 跨十会停一拍\n    - 两个两个倒着数能过去\n');
   check('记账段:字段与观察列表', bk.bookkeeping?.entries.length === 1 && bk.bookkeeping.entries[0].thread === '1620-1' && bk.bookkeeping.entries[0].textbook === '人教数学一下#4 100以内数的认识' && bk.bookkeeping.entries[0].steps?.startsWith('抄数列') && bk.bookkeeping.entries[0].observations.join('|') === '跨十会停一拍|两个两个倒着数能过去' && bk.body === '记好了。', JSON.stringify(bk));
   const bk2 = parseSections('## 记账\nthread: 1620-1\nname: 退位\nobservations:\n  - 借位忘了\n');
+  const bkAsked = parseSections('## 记账\n- thread: 1620-1\n  name: 宇宙\n  asked:\n    - 宇宙怎么写\n    - "老师把宇宙给画出来"\n  observations:\n    - 喜欢字源\n');
+  check('记账段的 asked(2026-10-30):和观察一样是列表;不写就没有这个字段', bkAsked.bookkeeping?.entries[0].asked?.join('|') === '宇宙怎么写|老师把宇宙给画出来' && bkAsked.bookkeeping.entries[0].observations.join() === '喜欢字源' && !('asked' in (bk.bookkeeping?.entries[0] ?? {})), JSON.stringify(bkAsked));
   check('记账段漏写 - thread 也认', bk2.bookkeeping?.entries[0].name === '退位' && bk2.bookkeeping.entries[0].observations.join() === '借位忘了' && bk2.body === '', JSON.stringify(bk2));
   const bk3 = parseSections('## 记账\n- thread: x\n  summary: 没有名字\n');
   check('记账段缺 name → 整段留正文', bk3.bookkeeping === null && bk3.body.includes('## 记账'));

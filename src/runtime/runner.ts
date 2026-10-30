@@ -639,9 +639,10 @@ export class Runner {
   /**
    * 记账(《obsidian仓库设计.md》§4 / §6):家长晚上点一次。这天索引里每个还没记过、有孩子的话或打了分的话题,各起一轮记账任务
    * (from: system、resume 那个话题的会话,消息正文是 bookkeepingPrompt),顺着跑,老师回的「## 记账」段由 settleDiary 落进日记。
-   * 立刻返回排了哪些、跳过哪些;链在后台跑(flush 会等)。老师正忙 → BusyError。
+   * 立刻返回排了哪些、跳过哪些;链在后台跑(flush 会等,done 也行)。老师正忙 → BusyError。
+   * tidy: false 记完不整理记忆(自动记账记今天的话题时,孩子晚上可能还来,src/runtime/auto-bookkeep.ts)。
    */
-  async bookkeep(tutor: string, date: string, only?: string[]): Promise<{ queued: string[]; skipped: { thread: string; why: string }[] }> {
+  async bookkeep(tutor: string, date: string, only?: string[], opts: { tidy?: boolean } = {}): Promise<{ queued: string[]; skipped: { thread: string; why: string }[]; done: Promise<void> }> {
     const ws = this.getWs();
     const t = ws.config.tutors[tutor];
     if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
@@ -660,7 +661,7 @@ export class Runner {
       else if (!only && !kidQuestions(index.messages, th).length && index.ratings[th] === undefined) skipped.push({ thread: th, why: '没有孩子的话也没打分' });
       else queued.push(th);
     }
-    if (!queued.length) return { queued, skipped };
+    if (!queued.length) return { queued, skipped, done: Promise.resolve() };
     const busy = this.active.get(tutor);
     if (busy) throw new BusyError(tutor, busy.job);
     const headings = textbookHeadings(await readTextbooks(ws));
@@ -678,6 +679,7 @@ export class Runner {
         }
       }
       // 账记完,这位老师整理一遍自己的记忆(新会话,结果直接落盘;《obsidian仓库设计.md》§8)
+      if (opts.tidy === false) return;
       try {
         const tidy = await this.tidyMemory(tutor, date);
         if (tidy) await tidy.done;
@@ -687,7 +689,7 @@ export class Runner {
     })();
     this.background.add(chain);
     void chain.finally(() => this.background.delete(chain));
-    return { queued, skipped };
+    return { queued, skipped, done: chain };
   }
 
   /**
@@ -832,7 +834,7 @@ export class Runner {
     const bookThread = asked?.bookkeep?.thread;
     const t = ws.config.tutors[tutor];
     const diary = bookThread ? planDiary({ date, index: next, thread: bookThread, bookkeeping: kidView.bookkeeping, subject: t?.subject ?? t?.display ?? tutor, keepScore: ws.config.vault.keepScore }) : null;
-    const vaultWarnings = [...(memory?.warnings ?? []), ...(diary && 'warning' in diary ? [diary.warning] : [])];
+    const vaultWarnings = [...(memory?.warnings ?? []), ...(diary ? ('warning' in diary ? [diary.warning] : diary.notes) : [])];
     // 先在索引上记一笔 pending,再写 vault,写完换成结果(《运行层行为设计》§5):中间断了,下次记账、删话题前由 recoverPending 对照文件补
     const mp = memory?.plan;
     const cp = memory?.child;

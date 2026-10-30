@@ -1,7 +1,7 @@
 /**
  * 日记与档案的纯函数(《obsidian仓库设计.md》§3 / §6 / §7):vault 是长期记忆,机器只新建或追加,形状由这里保证。
  *  - 记账:老师回「## 记账」段(sections.ts 解析),应用按话题渲染成日记里的一段 `## 学科 · 话题名`:
- *    孩子问的话总是记(callout,一行一问);摘要 + 星 + 教材单元链接 + 课包 id、`骨架:` 行只在话题打分 ≥ keepScore 时有;
+ *    孩子问的话总是记(callout,一行一问;老师挑的 asked 核对过才用,没有就由 tidyQuestions 筛);摘要 + 星 + 教材单元链接 + 课包 id、`骨架:` 行只在话题打分 ≥ keepScore 时有;
  *    `- 观察:` 行是上下文包「最近观察」的来源——家长在 Obsidian 里改一句、删一行,下次对话就变(观察的真相在日记,账本 jsonl 退役)。
  *  - 抽取:`extractObservations` 从最近几天的日记抽「- 观察:」行(按 H2 的学科过滤)。
  *  - 老师(LLM)不直接写 vault 文件;`bookkeepingPrompt` 是记账任务的消息正文,教材目录(册#节)列在里面让它原样挑。
@@ -40,6 +40,26 @@ export function kidQuestions(messages: readonly Pick<ConversationMessage, 'job' 
   return out;
 }
 
+/** 语气词与称呼:转写里只剩这些的不算孩子问的 */
+const FILLER = /[嗯呃啊哦噢喔唉哎诶欸额呀吧呢嘛哈]|(?:语文|数学|英语)?老师/g;
+
+/**
+ * 老师没挑「孩子问」(或挑的都对不上)时,从孩子的话里筛(2026-10-30):去掉标点、语气词与称呼后不到四个字的、和前面重复的不要,最多 max 句。
+ * 语音转写里「嗯,老师,呃」「语文老师。」这种碎句不进日记;孩子的原话全在 workspace 的录像里。
+ */
+export function tidyQuestions(said: readonly string[], max = 5): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const s of said) {
+    const core = s.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '').replace(FILLER, '');
+    if (Array.from(core).length < 4 || seen.has(core)) continue;
+    seen.add(core);
+    out.push(s);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
 /** 这个话题里做出来的课包(消息的 artifacts) */
 export function threadBundles(messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'artifacts'>[], thread: string): string[] {
   const ths = threads(messages);
@@ -50,18 +70,18 @@ export function threadBundles(messages: readonly Pick<ConversationMessage, 'job'
   return [...out];
 }
 
-/** 把记账段的一条与索引里的话题拼成日记的素材;打分不够就丢掉摘要与骨架(老师多写了也不进) */
+/** 把记账段的一条与索引里的话题拼成日记的素材;打分不够就丢掉摘要与骨架(老师多写了也不进)。questions = 调用方挑好的孩子问(缺省照抄孩子的话) */
 export function diaryTopic(
   index: { messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread' | 'text' | 'action' | 'artifacts'>[]; ratings: Record<string, number> },
   entry: BookkeepingEntry,
-  opts: { subject: string; keepScore: number },
+  opts: { subject: string; keepScore: number; questions?: string[] },
 ): DiaryTopic {
   const rating = index.ratings[entry.thread];
   const keep = rating !== undefined && rating >= opts.keepScore;
   return {
     subject: opts.subject,
     name: entry.name.trim(),
-    questions: kidQuestions(index.messages, entry.thread),
+    questions: opts.questions ?? kidQuestions(index.messages, entry.thread),
     rating,
     ...(keep && entry.summary ? { summary: entry.summary.trim() } : {}),
     ...(keep && entry.steps ? { steps: entry.steps.trim() } : {}),
@@ -162,7 +182,7 @@ export function recentDiaryDates(today: string, days: number): string[] {
 
 /**
  * 记账任务的消息正文(上下文包由 runner 照常拼在前面;这轮 resume 那个话题的会话,老师记得聊了什么)。
- * 打分够:要 name / textbook / summary / steps / observations;不够或没打:只要 name / textbook / observations。
+ * 打分够:要 name / textbook / asked / summary / steps / observations;不够或没打:只要 name / textbook / asked / observations。
  */
 export function bookkeepingPrompt(opts: { thread: string; rating?: number; keepScore: number; headings: string[]; /** 这个话题里孩子拍了几张作业照片(R5):有就让摘要把图上的东西写成文字 */ photos?: number }): string {
   const keep = opts.rating !== undefined && opts.rating >= opts.keepScore;
@@ -174,6 +194,8 @@ export function bookkeepingPrompt(opts: { thread: string; rating?: number; keepS
     `- thread: ${opts.thread}`,
     '  name: 这个话题叫什么(不超过 12 字,像日记里的小标题)',
     opts.headings.length ? '  textbook: 属于哪册哪节——从下面的教材目录里挑一条原样抄;都不是就不写这行' : '  textbook: 属于哪册哪节,写成「册#节」;认不出就不写这行',
+    '  asked:',
+    '    - 孩子在这个话题里问的、说的,挑 1–3 句以后还值得看的,照他的原话抄,可以只抄其中一截(语音转写有错字也照抄;没有就不写 asked)',
     ...(keep ? [`  summary: 一到三句,讲了什么、难点在哪、孩子哪里卡住${opts.photos ? ';这个话题里有 ' + opts.photos + ' 张作业照片,把你认出的册子 / 页 / 题号 / 题面写成文字(日记不存图、不写照片路径)' : ''}`, '  steps: 讲解的骨架,一行,步骤用 → 连'] : []),
     '  observations:',
     '    - 关于孩子、值得别的老师下次知道的一句话(0–3 条;没有就不写 observations)',

@@ -70,16 +70,16 @@ function segments(text: string): Segment[] {
 }
 
 /**
- * 记账段:`- thread: x` 起一条,缩进的 `key: value` 是它的字段,`observations:` 后面缩进的 `- ` 是观察;
+ * 记账段:`- thread: x` 起一条,缩进的 `key: value` 是它的字段,`observations:` / `asked:` 后面缩进的 `- ` 是观察 / 孩子问;
  * 老师漏写 `- thread:` 直接写 `thread:`(或只写字段)也认——记账任务一次只记一个话题。
  */
 function parseBookkeepingBody(lines: string[]): Bookkeeping | null {
-  type Draft = { thread?: string; name?: string; textbook?: string; summary?: string; steps?: string; observations: string[] };
+  type Draft = { thread?: string; name?: string; textbook?: string; summary?: string; steps?: string; observations: string[]; asked: string[] };
   const entries: Draft[] = [];
   let cur: Draft | undefined;
-  let inObs = false;
+  let inList: 'observations' | 'asked' | null = null;
   const start = (): Draft => {
-    const d: Draft = { observations: [] };
+    const d: Draft = { observations: [], asked: [] };
     entries.push(d);
     return d;
   };
@@ -89,25 +89,25 @@ function parseBookkeepingBody(lines: string[]): Bookkeeping | null {
     if (m) {
       cur = start();
       cur.thread = unquote(m[1]);
-      inObs = false;
+      inList = null;
       continue;
     }
     m = /^\s*-?\s*([a-z]+):\s*(.*)$/.exec(raw);
-    if (m && (!inObs || /^\s*[a-z]+:/.test(raw))) {
+    if (m && (!inList || /^\s*[a-z]+:/.test(raw))) {
       const c = cur ?? (cur = start());
       const [, key, v] = m;
-      inObs = false;
-      if (key === 'observations') {
-        inObs = true;
+      inList = null;
+      if (key === 'observations' || key === 'asked') {
+        inList = key;
         const val = unquote(v);
-        if (val) c.observations.push(val);
+        if (val) c[key].push(val);
       } else if (key === 'thread' || key === 'name' || key === 'textbook' || key === 'summary' || key === 'steps') c[key] = unquote(v);
       continue;
     }
     const li = /^\s*-\s+(.*)$/.exec(raw);
-    if (li && inObs && cur) cur.observations.push(unquote(li[1]));
+    if (li && inList && cur) cur[inList].push(unquote(li[1]));
   }
-  const r = BookkeepingSchema.safeParse({ entries: entries.filter((e) => e.thread && e.name) });
+  const r = BookkeepingSchema.safeParse({ entries: entries.filter((e) => e.thread && e.name).map(({ asked, ...e }) => (asked.length ? { ...e, asked } : e)) });
   return r.success ? r.data : null;
 }
 

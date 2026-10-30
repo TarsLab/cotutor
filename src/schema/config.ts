@@ -192,6 +192,7 @@ export const ROLE_DEFAULTS: Record<PathRole, string> = {
 /** vault 的写入政策(《obsidian仓库设计.md》§4):话题打分 ≥ keepScore 才把摘要与骨架沉淀进日记;孩子问的话总是记 */
 export const VaultPolicySchema = z.object({
   keepScore: z.number().int().min(1).max(5).default(4).describe('话题打几星(1–5)起才值得记:记账时摘要与讲解骨架进日记;低于它只记孩子问的话'),
+  autoBookkeep: z.boolean().default(false).describe('自动记账(2026-10-30):serve 开着时,今天的话题空闲 2 小时就记进日记,昨天没记的第二天补上并整理一次记忆;每个话题多一次老师调用(ray 上实测一次 1.6 万–5.5 万输入 token)。缺省关,家长照旧能点「记账」'),
 });
 export type VaultPolicy = z.infer<typeof VaultPolicySchema>;
 
@@ -311,7 +312,7 @@ export const CotutorConfigSchema = z
       })
       .default({ port: 5180 }),
     paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;diary / plans / profile / timetable / textbooks / reference 相对 vault(缺省 日记 / 计划 / 孩子.md / 课程表.md / 教材 / 参考),不配 vault 就相对 workspace 根;profile 只是 init 新建档案的位置,老师按 cotutor: profile 属性找;captures(作业照片)相对 workspace 根'),
-    vault: VaultPolicySchema.default({ keepScore: 4 }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4)'),
+    vault: VaultPolicySchema.default({ keepScore: 4, autoBookkeep: false }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4);autoBookkeep 自动记账(缺省关)'),
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 板书 auto / 观察 10 条、计划 10 行、原文 4000 字)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
     runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时是 {run, resume} 命令模板(起 CLI)或 {api, model}(应用直连模型),占位 {agent} {agentBody} {systemBody} {boardFile} {prompt} {session};模型、预算、时限写在这里'),

@@ -12,6 +12,7 @@ export const BookkeepingEntrySchema = z.object({
   summary: z.string().optional().describe('1–3 句:讲了什么、难点在哪、孩子哪里卡住;只在家长打分 ≥ keepScore 时才要(消息里要了才写),不够的应用会丢'),
   steps: z.string().optional().describe('讲解的骨架,一行,步骤用 → 连;只在打分够时才要'),
   observations: z.array(z.string().min(1)).default([]).describe('关于孩子、值得别的老师下次知道的,0–3 条;进日记的「- 观察:」行,是上下文包 recent 的来源;没有就不写'),
+  asked: z.array(z.string().min(1)).optional().describe('孩子在这个话题里说的话,挑 1–3 句值得留的,照原话抄(可以只抄其中一截);应用核对必须是孩子说过的,进日记的「孩子问」;不写就由应用从孩子的话里筛(2026-10-30)'),
 });
 export type BookkeepingEntry = z.infer<typeof BookkeepingEntrySchema>;
 

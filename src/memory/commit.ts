@@ -9,8 +9,8 @@
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { appendDiary, diaryTopic, entryFor, renderDiaryBlock } from './diary.ts';
-import { childItem, proposalsOf } from './proposals.ts';
+import { appendDiary, diaryTopic, entryFor, kidQuestions, renderDiaryBlock, tidyQuestions } from './diary.ts';
+import { checkEvidence, childItem, proposalsOf } from './proposals.ts';
 import { CHILD_MEMORY_AGENT, textHash, type MemoryLine } from './vault-notes.ts';
 import type { Bookkeeping, ConversationIndex, ConversationMessage, MemoryProposal, PendingMemory } from '../schema/index.ts';
 import { planVaultMemory, writeDiary, type MemoryPlan, type Vault } from './vault.ts';
@@ -53,14 +53,21 @@ export async function planMemory(
 /** 进孩子的记忆的那几条,在这轮的 remembered 里前面标一下(家长视图分得清) */
 export const childChanges = (changes: readonly string[]): string[] => changes.map((c) => `孩子的记忆:${c}`);
 
-/** 记账那轮的「## 记账」段 → 这个话题在日记里的一段(不写);算成了回那段原文与文件名,没有回为什么 */
-export function planDiary(o: { date: string; index: ConversationIndex; thread: string; bookkeeping: Bookkeeping | null; subject: string; keepScore: number }): { block: string; file: string } | { warning: string } {
+/**
+ * 记账那轮的「## 记账」段 → 这个话题在日记里的一段(不写);算成了回那段原文与文件名(notes 是要提醒家长的),没有回为什么。
+ * 孩子问:老师挑的 asked 拿孩子在这个话题里的话核对(同记忆的证据,proposals.ts),对上的最多 3 句;一句都没对上就由 tidyQuestions 筛
+ */
+export function planDiary(o: { date: string; index: ConversationIndex; thread: string; bookkeeping: Bookkeeping | null; subject: string; keepScore: number }): { block: string; file: string; notes: string[] } | { warning: string } {
   if (!o.bookkeeping) return { warning: '记账:老师没回「## 记账」段,日记没写;再点一次记账' };
   const entry = entryFor(o.bookkeeping, o.thread);
   if (!entry) return { warning: `记账:「## 记账」段里没有话题 ${o.thread} 的那条,日记没写` };
-  const block = renderDiaryBlock(diaryTopic(o.index, entry, { subject: o.subject, keepScore: o.keepScore }));
+  const said = kidQuestions(o.index.messages, o.thread);
+  const asked = (entry.asked ?? []).map((q) => ({ q, check: checkEvidence(q, said) }));
+  const picked = asked.filter((a) => a.check === 'verified').map((a) => a.q).slice(0, 3);
+  const wrong = asked.filter((a) => a.check === 'rejected').map((a) => a.q);
+  const block = renderDiaryBlock(diaryTopic(o.index, entry, { subject: o.subject, keepScore: o.keepScore, questions: picked.length ? picked : tidyQuestions(said) }));
   if (!block) return { warning: '记账:这个话题没有孩子的话、摘要、观察,日记没写' };
-  return { block, file: `${o.date}.md` };
+  return { block, file: `${o.date}.md`, notes: wrong.length ? [`记账:老师挑的孩子问有 ${wrong.length} 句孩子没说过,没进日记:${wrong.join(';')}`] : [] };
 }
 
 /** 把算好的那段追加到当天日记 */

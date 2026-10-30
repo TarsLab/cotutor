@@ -14,6 +14,7 @@ import { doctorWorkspace } from './doctor.ts';
 import type { ListenInfo } from '../../ui/dev/qr-page.ts';
 import { createContext, createHandler, type AppContext } from '../http/app.ts';
 import { liveUpgrade } from '../ws/route.ts';
+import { AUTO_BOOKKEEP_EVERY_MS, autoBookkeep } from '../../runtime/auto-bookkeep.ts';
 import { USER_CERT_DIR, expandPath, loadWorkspace, type ResolveOptions, type Workspace } from '../workspace.ts';
 
 export interface ServeOptions extends ResolveOptions {
@@ -99,6 +100,18 @@ export async function serveWorkspace(opts: ServeOptions = {}): Promise<ServeResu
   const scheme = tls ? 'https' : 'http';
   const urls = [hostname(), ...lanAddresses()].map((h) => `${scheme}://${h}:${actual}/`);
   ctx.listen = () => listenInfo(Boolean(tls), actual);
+  // 自动记账(cotutor.json vault.autoBookkeep,缺省关;src/runtime/auto-bookkeep.ts):隔一阵看一次,开关跟着 cotutor.json 热重载;上一次没跑完不叠
+  let booking = false;
+  const timer = setInterval(() => {
+    if (booking) return;
+    booking = true;
+    void (async () => {
+      await ctx.reload();
+      await autoBookkeep(ctx.runner, ctx.ws, ctx.now());
+    })().catch(() => undefined).finally(() => { booking = false; });
+  }, AUTO_BOOKKEEP_EVERY_MS);
+  timer.unref();
+  server.once('close', () => clearInterval(timer));
   if (tls && !certCovers(tls.cert, localName())) warnings.push(`证书不含 ${localName()}:扫码打开会报「不安全」(重跑 cotutor cert,再重启 serve)`);
   return { server, ctx, ws, port: actual, https: Boolean(tls), urls, qrPage: `${scheme}://localhost:${actual}/dev/qr`, warnings };
 }

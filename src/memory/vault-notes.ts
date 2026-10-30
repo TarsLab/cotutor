@@ -102,6 +102,8 @@ export interface VaultPick {
   child: VaultNote | null;
   /** 参考资料的路径:这科这学期的教材 + 档案与入口文件里的 [[链接]](去重,不含它俩自己) */
   refs: string[];
+  /** 这科这学期的教材(取材用,memory/retrieval.ts) */
+  textbooks: VaultNote[];
 }
 
 const byPath = (a: VaultNote, b: VaultNote): number => a.path.localeCompare(b.path);
@@ -122,7 +124,8 @@ export function pickNotes(notes: readonly VaultNote[], files: readonly string[],
   const entry = entries[0] ?? null;
   const memories = of('memory').filter((n) => !!opts.agent && n.props.agent?.trim() === opts.agent);
   const child = of('memory').find((n) => n.props.agent?.trim() === CHILD_MEMORY_AGENT) ?? null;
-  const refs: string[] = of('textbook').filter(same).map((n) => n.path);
+  const textbooks = of('textbook').filter(same);
+  const refs: string[] = textbooks.map((n) => n.path);
   for (const n of [profile, entry]) {
     if (!n) continue;
     for (const l of wikilinks(n.text)) {
@@ -141,6 +144,7 @@ export function pickNotes(notes: readonly VaultNote[], files: readonly string[],
     extraMemories: memories.slice(1).map((n) => n.path),
     child,
     refs: [...new Set(refs)].filter((p) => !self.has(p)),
+    textbooks,
   };
 }
 

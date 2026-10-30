@@ -5,12 +5,13 @@
  * 有脸的老师的守则(机器技能的原文)不在 vault 里,runner 自己加在这几条笔记前面。
  */
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { localDate } from '../shared/time.ts';
 import { extractObservations, recentDiaryDates } from './diary.ts';
 import { isoWeek, parsePlan, planLinesFor } from './plan.ts';
 import { currentSlot, parseTimetable, slotLabel } from './timetable.ts';
 import { clipNote, missingEntry, pickNotes } from './vault-notes.ts';
+import { lookup, type Retrieved } from './retrieval.ts';
 import type { ContextPack } from '../schema/index.ts';
 import { readDiaries, scanVault, type Vault } from './vault.ts';
 
@@ -41,18 +42,24 @@ export interface LearningContext {
   refs?: string[];
   plan: string[];
   recent: ContextPack['recent'];
+  /** 替老师查好的(retrieval.ts);口径原文在 notes(role: lesson),lesson 是它在哪 */
+  lookup: string[];
+  lesson?: string;
+  /** 取材用到的文件与为什么查(进这一轮的运行记录) */
+  retrieved: Retrieved[];
 }
 
 /**
  * 这一轮从 vault 取的材。agent = 记忆认谁的(activity 话题是 <老师>/<activity>,档案、入口文件、日记观察照旧共用);
  * teacher = 这位是有脸的老师(没有入口文件时写「缺」;带孩子的记忆——它是有意的例外,activity 话题也带同一篇);display = 计划里认他的名字(不在 tutors 里就不带计划)
+ * query = 孩子这一轮说的话(加首页按钮的讲法):有脸的老师才拿它替老师查生字表、口径、以前讲过的骨架(retrieval.ts)
  */
 export async function learningContext(
   v: Vault,
-  o: { at: Date; agent: string; subject?: string; display?: string; teacher: boolean; limits: { entryChars: number; planLines: number; recent: number } },
+  o: { at: Date; agent: string; subject?: string; display?: string; teacher: boolean; query?: string; limits: { entryChars: number; planLines: number; recent: number } },
   report?: PackReport,
 ): Promise<LearningContext> {
-  const out: LearningContext = { notes: [], profile: '', memory: '', plan: [], recent: [] };
+  const out: LearningContext = { notes: [], profile: '', memory: '', plan: [], recent: [], lookup: [], retrieved: [] };
   if (report) report.timetable = { file: v.paths.timetable, found: false, slot: null };
   try {
     const slot = currentSlot(parseTimetable(await readFile(v.paths.timetable, 'utf8')).entries, o.at);
@@ -72,7 +79,7 @@ export async function learningContext(
     const tail = role === 'memory' || role === 'child';
     const clip = clipNote(n.text, limit, tail ? 'tail' : 'head');
     labels[role] = clip.cut ? `${n.path}(原文 ${n.text.length} 字,${tail ? `只带最近 ${limit}` : `截到 ${limit}`})` : n.path;
-    out.notes.push({ role, path: n.path, text: clip.text });
+    out.notes.push({ role, path: n.path, text: clip.text, ...(clip.cut ? { cut: true as const } : {}) });
   }
   out.profile = labels.profile ?? '缺:vault 里没有 cotutor: profile 的档案';
   if (o.teacher) out.child = labels.child ?? '还没有';
@@ -92,6 +99,18 @@ export async function learningContext(
     }
   } catch {
     /* 没有本周计划,或读不到:上下文包不带 plan */
+  }
+  // 取材:孩子问到的字、提到的课(只读教材与最近 30 天日记,不调模型)
+  if (o.teacher && o.query?.trim() && pick.textbooks.length) {
+    const diaryRel = (date: string): string => relative(v.paths.vault, join(v.paths.diary, `${date}.md`)).split(sep).join('/');
+    const old = (await readDiaries(v, recentDiaryDates(localDate(o.at), 30))).map((d) => ({ ...d, path: diaryRel(d.date) }));
+    const r = lookup({ query: o.query, textbooks: pick.textbooks, diaries: old });
+    out.lookup = r.lines;
+    out.retrieved = r.retrieved;
+    if (r.caliber) {
+      out.notes.push({ role: 'lesson', path: r.caliber.path, text: r.caliber.text });
+      out.lesson = `${r.caliber.path}(${r.caliber.text.split('\n')[0].replace(/^##\s+/, '')} 的口径)`;
+    }
   }
   const dates = recentDiaryDates(localDate(o.at), 14);
   const diaries = await readDiaries(v, dates);

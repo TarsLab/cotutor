@@ -285,6 +285,30 @@ try {
     rmSync(childFile);
     rmSync(mathFile);
   }
+  // ---- 取材(2026-10-30,《vault重构方案》§6、§7):应用替老师查生字表、带那一课的口径、以前讲过的骨架;run.json 记带了哪些笔记、查了什么 ----
+  {
+    const { deleteThread } = await import('../src/runtime/journal/store.ts');
+    const { textHash } = await import('../src/memory/vault-notes.ts');
+    const bookFile = join(root, 'vault', '随便', '语文二上.md');
+    const book = '---\ncotutor: textbook\nsubject: 语文\nsemester: 二年级上\n---\n\n## 课文 2 我是什么\n\n识字:晒 极\n写字:变 海\n\n### 口径\n\n先讲三点水,再讲河流汇入海。\n';
+    const diaryFile = join(root, 'vault', '日记', '2026-09-05.md');
+    writeFileSync(bookFile, book);
+    writeFileSync(diaryFile, '## 语文 · 海\n\n讲了海 → [[语文二上#课文 2 我是什么]]\n骨架:三点水 → 河流汇入海\n');
+    const zp = await gatherContext(ctx.ws, 'chinese-tutor', { from: 'kid', at: now, query: '海字怎么写' });
+    check('语文老师问字:lookup 有生字表那行与以前讲的骨架;口径原文进 <vault-note role="lesson">', zp.lookup?.join('|') === '「海」:课文 2 我是什么 会写|以前讲过「课文 2 我是什么」(2026-09-05):骨架:三点水 → 河流汇入海' && zp.lesson === '随便/语文二上.md(课文 2 我是什么 的口径)' && zp.notes?.some((n) => n.role === 'lesson' && n.text.includes('河流汇入海')) === true, JSON.stringify({ lookup: zp.lookup, lesson: zp.lesson }));
+    const mq = await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: now, query: '海字怎么写' });
+    const hq = await gatherContext(ctx.ws, 'helper', { from: 'kid', at: now, query: '海字怎么写' });
+    check('数学老师(教材是数学的)、工具人:不查', !mq.lookup && !hq.lookup && mq.retrieved.length === 0);
+    const zs = await ctx.runner.send('chinese-tutor', { from: 'kid', text: '海字怎么写', newThread: true });
+    await zs.done;
+    const zr = JSON.parse(readFileSync(join(root, 'conversations', 'chinese-tutor', `2026-09-08.${zs.job}.run.json`), 'utf8')) as { prompt: string; sources: { notes?: { role: string; path: string; hash: string; chars: number; cut?: true }[]; retrieved?: { path: string; hash: string; why: string }[] } };
+    check('真发一条:上下文包里有 lookup 与口径', zr.prompt.includes('  lookup:\n    - "「海」:课文 2 我是什么 会写"') && zr.prompt.includes('<vault-note role="lesson" path="随便/语文二上.md">'), zr.prompt.slice(0, 1500));
+    const lessonNote = zr.sources.notes?.find((n) => n.role === 'lesson');
+    check('run.json:每篇带进去的笔记(role、路径、那段的 hash 与字数),替老师查的文件(整篇 hash、为什么)', zr.sources.notes?.some((n) => n.role === 'rules') === true && zr.sources.notes?.some((n) => n.role === 'profile' && n.path === '档案.md') === true && lessonNote?.path === '随便/语文二上.md' && lessonNote.chars > 0 && zr.sources.retrieved?.find((r) => r.path === '随便/语文二上.md')?.hash === textHash(book) && zr.sources.retrieved?.some((r) => r.path === '日记/2026-09-05.md' && r.why.includes('以前讲过')) === true, JSON.stringify(zr.sources.notes) + JSON.stringify(zr.sources.retrieved));
+    await deleteThread(ctx.ws, 'chinese-tutor', '2026-09-08', zs.job);
+    rmSync(bookFile);
+    rmSync(diaryFile);
+  }
   const dates = (await route('GET', '/api/conversations/math-tutor', ctx)).json as { dates: string[] };
   check('日期列表', dates.dates.join() === '2026-09-08');
 

@@ -24,6 +24,7 @@ export function renderContextPack(pack: ContextPack): string {
   if (p.child) out.push(`  child: ${yamlScalar(p.child)}`);
   if (p.entry) out.push(`  entry: ${yamlScalar(p.entry)}`);
   if (p.memory) out.push(`  memory: ${yamlScalar(p.memory)}`);
+  if (p.lesson) out.push(`  lesson: ${yamlScalar(p.lesson)}`);
   if (p.refs?.length) {
     out.push('  refs:');
     for (const r of p.refs) out.push(`    - ${yamlScalar(r)}`);
@@ -35,6 +36,10 @@ export function renderContextPack(pack: ContextPack): string {
   if (p.recent.length) {
     out.push('  recent:');
     for (const r of p.recent) out.push(`    - ${yamlScalar(`${r.date} ${r.claim}`)}`);
+  }
+  if (p.lookup?.length) {
+    out.push('  lookup:');
+    for (const l of p.lookup) out.push(`    - ${yamlScalar(l)}`);
   }
   // vault 是 workspace 级的,放在每条消息才变的 board / cards / photos 前面
   if (p.vault) {

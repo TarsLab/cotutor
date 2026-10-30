@@ -184,6 +184,10 @@ export interface RunSources {
   agent: { file: string; hash: string; body: string } | null;
   /** 技能名 → SKILL.md 的 hash(workspace .claude/skills/ 下有的全部) */
   skills: Record<string, string>;
+  /** 这轮上下文包里带了原文的笔记(守则、档案、记忆、口径……):role、路径、带进去那段的 hash 与字数、截没截(2026-10-30;续话题「未变」的不在这里) */
+  notes?: { role: string; path: string; hash: string; chars: number; cut?: true }[];
+  /** 替老师查的(memory/retrieval.ts):文件(相对 vault 根)、整篇的 hash、为什么查 */
+  retrieved?: { path: string; hash: string; why: string }[];
 }
 
 export interface RunFile {

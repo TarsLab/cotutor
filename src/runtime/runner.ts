@@ -41,6 +41,7 @@ import { readTextbooks, scanVault, writeVaultMemory, type MemoryPlan } from '../
 import { learningContext, type PackReport } from '../memory/context.ts';
 import { childChanges, planDiary, planMemory, recoverPending, writeDiaryBlock } from '../memory/commit.ts';
 import { kidSaid } from '../memory/proposals.ts';
+import type { Retrieved } from '../memory/retrieval.ts';
 import { memoryCount, textHash, tidyMemoryPrompt } from '../memory/vault-notes.ts';
 import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTEM, BOARD_GUIDE_PATH, boardGuideBody, boardGuideReads } from './context/tutor-rules.ts';
 import { DubQueue } from '../media/tts.ts';
@@ -149,12 +150,12 @@ function dueCompact(messages: readonly ConversationMessage[], ths: readonly stri
  * + 参考路径 + 本周计划里本老师的行 + 最近 14 天日记里本学科的「- 观察:」行。
  * 守则与笔记原文总是带上;同一话题里没改过的由 send 换成「未变」。
  */
-export async function gatherContext(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; focus?: Focus; agent?: string; kinds?: readonly string[] }, report?: PackReport): Promise<ContextPack> {
+export async function gatherContext(ws: Workspace, tutor: string, input: { from: MessageFrom; at: Date; focus?: Focus; agent?: string; kinds?: readonly string[]; query?: string }, report?: PackReport): Promise<ContextPack & { retrieved: Retrieved[] }> {
   const t = ws.config.tutors[tutor];
   const policy = resolvePolicy(ws.config, tutor);
   const pack: ContextPack = { at: localMinute(input.at), focus: input.focus, plan: [], recent: [] };
   // vault 那几段(src/memory/context.ts):activity 话题的记忆是它自己的(agent: <老师>/<activity>);档案、入口文件、日记观察照旧共用
-  const mem = await learningContext(ws, { at: input.at, agent: input.agent ?? tutor, subject: t?.subject, display: t?.display, teacher: Boolean(t) && tutor.endsWith('-tutor'), limits: { entryChars: policy.contextPack.entryChars, planLines: policy.contextPack.planLines, recent: policy.contextPack.recent } }, report);
+  const mem = await learningContext(ws, { at: input.at, agent: input.agent ?? tutor, subject: t?.subject, display: t?.display, teacher: Boolean(t) && tutor.endsWith('-tutor'), ...(input.query ? { query: input.query } : {}), limits: { entryChars: policy.contextPack.entryChars, planLines: policy.contextPack.planLines, recent: policy.contextPack.recent } }, report);
   if (mem.slot) pack.slot = mem.slot;
   if (mem.semester) pack.semester = mem.semester;
   pack.notes = [];
@@ -172,11 +173,13 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
   if (mem.child !== undefined) pack.child = mem.child;
   if (mem.entry !== undefined) pack.entry = mem.entry;
   pack.memory = mem.memory;
+  if (mem.lesson) pack.lesson = mem.lesson;
   if (mem.refs) pack.refs = mem.refs;
   pack.plan = mem.plan;
   pack.recent = mem.recent;
+  if (mem.lookup.length) pack.lookup = mem.lookup;
   pack.vault = vaultPack(ws.paths);
-  return pack;
+  return { ...pack, retrieved: mem.retrieved };
 }
 
 /**
@@ -353,7 +356,7 @@ export async function packDryRun(ws: Workspace, tutor: string, input: { from: Me
   if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
   const report = {} as PackReport;
   const act = input.activity ? await activityParts(ws, tutor, input.activity) : null;
-  const pack = await gatherContext(ws, tutor, { from: input.from, at: input.at, ...(act ? { agent: act.memory.agent, kinds: act.kinds } : {}) }, report);
+  const pack = await gatherContext(ws, tutor, { from: input.from, at: input.at, ...(input.from === 'kid' ? { query: input.text } : {}), ...(act ? { agent: act.memory.agent, kinds: act.kinds } : {}) }, report);
   const policy = resolvePolicy(ws.config, tutor);
   if (policy.board === 'off') pack.board = 'off';
   const { runtime } = getRuntime(ws.config, t.runtime);
@@ -557,7 +560,9 @@ export class Runner {
     // 隔天「接着」是新话题:没带 activity 就沿用被接的那个话题的(参数也是那时的),不然退回老师文件,没有那套做法和卡
     const threadRun = fresh ? (input.activity ?? (input.continues ? threadActivity((await readIndex(ws, tutor, input.continues.date)).messages, input.continues.thread) : null)) : threadActivity(index.messages, thread);
     const act = threadRun ? await activityParts(ws, tutor, threadRun) : null;
-    const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus, ...(act ? { agent: act.memory.agent, kinds: act.kinds } : {}) });
+    // 取材的查询:孩子这句话,加首页按钮的讲法(系统任务不查)
+    const query = input.from === 'kid' ? [text, input.home?.brief].filter(Boolean).join('\n') : '';
+    const gathered = await gatherContext(ws, tutor, { from: input.from, at: now, focus: input.focus, ...(query ? { query } : {}), ...(act ? { agent: act.memory.agent, kinds: act.kinds } : {}) });
     const policy = resolvePolicy(ws.config, tutor);
     const { agentBody, systemBody, boardFile, agent, activityInSystem } = await systemParts(ws, tutor, runtime, policy, gathered, act);
     const activityRun = input.bookkeep ? null : threadRun;
@@ -618,7 +623,9 @@ export class Runner {
     // 原声:落在这轮旁边(删话题一起删);写不下就当没有,消息照发
     const started = addMessage(index, { job, thread, at: pack.at, from: input.from, text, focus: input.focus, ...(input.action ? { action: input.action } : {}), ...(cards.length ? { cards: cards.map(({ card, text }) => ({ card, text })) } : {}), ...(photos.length ? { photos } : {}), ...(input.drawing ? { drawing: input.drawing } : {}), ...(input.device ? { device: input.device } : {}), ...(input.deviceId ? { deviceId: input.deviceId } : {}), ...(input.bookkeep ? { bookkeep: input.bookkeep } : {}), ...(input.tidy ? { tidy: true as const } : {}), ...(input.replayOf ? { replayOf: input.replayOf } : {}), ...(input.eval ? { eval: true as const } : {}), ...(input.live ? { live: true as const } : {}), ...(input.via ? { via: input.via } : {}), ...(continued && input.continues ? { continues: { date: input.continues.date, thread: input.continues.thread } } : {}), ...(input.lecture ? { lecture: { bundle: input.lecture.bundle, title: lecture?.title ?? input.lecture.bundle, watchedMs: input.lecture.watchedMs, finished: input.lecture.finished, pauses: input.lecture.pauses, ...(input.lecture.again ? { again: true as const } : {}), ...(lecture?.video ? { video: true as const } : {}), ...(marks.length ? { marks } : {}), ...(input.lecture.log?.length ? { log: input.lecture.log } : {}) } } : {}), ...(Object.keys(notes).length ? { notes } : {}), ...(fresh && activityRun ? { activity: activityRun } : {}), ...(fresh && input.talk ? { talk: input.talk } : {}), ...(compact ? { compacted: true as const } : {}), ...(noteWarnings.length || lectureWarn.length || activityWarn.length ? { warnings: [...noteWarnings, ...lectureWarn, ...activityWarn] } : {}), result: 'running', artifacts: [], runtime: plan.runtime });
     await writeIndex(ws, started);
-    await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: await snapshotSources(ws, tutor) });
+    // 运行记录(《vault重构方案》§7):除了老师文件与技能,还记这轮带进上下文的每篇笔记、替老师查的每个文件,事后重建得出老师看到的是哪一版
+    const notesSent = (pack.notes ?? []).map((n) => ({ role: n.role, path: n.path, hash: textHash(n.text), chars: n.text.length, ...(n.cut ? { cut: true as const } : {}) }));
+    await writeRunFile(ws, tutor, date, job, { at: pack.at, prompt, plan, agentBody: agentBody !== undefined, sources: { ...(await snapshotSources(ws, tutor)), notes: notesSent, retrieved: gathered.retrieved } });
     // 这个 CLI 在 workspace 里要的机器文件(qwen 的隔离家目录):备不好这轮照起,起不来的原因会在 err.log
     await this.brain.prepare(plan);
 

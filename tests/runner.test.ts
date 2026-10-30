@@ -344,7 +344,7 @@ try {
   await post('chinese-tutor', { text: '起不来', runtime: 'missing', from: 'system' });
   await wait('chinese-tutor');
   const dm = (await day('chinese-tutor', '2026-09-09')).json as Day;
-  check('没有入口文件:这条消息带提醒(家长端看得到),起不来的尾巴没把它盖掉', (dm.index.messages[0] as { warnings?: string[] }).warnings?.[0]?.startsWith('入口文件缺:vault 里没有 cotutor: subject、subject: 语文') === true, JSON.stringify(dm.index.messages[0]));
+  check('没有入口文件:可选的(2026-10-30),不再每轮提醒;起不来照样记 error', !((dm.index.messages[0] as { warnings?: string[] }).warnings ?? []).some((w) => w.includes('入口文件')) && dm.index.messages[0].result === 'error', JSON.stringify(dm.index.messages[0]));
   check('起不来 → error 指向 err.log,尾巴带原因', dm.index.messages[0].result === 'error' && String(dm.index.messages[0].error).startsWith('spawn:') && dm.errors[dm.index.messages[0].job]?.includes('起不来'), JSON.stringify({ m: dm.index.messages[0], e: dm.errors }));
 
   // ---- 孩子端接口:首页、过滤后的会话、发消息、不限条数、配音文件 ----

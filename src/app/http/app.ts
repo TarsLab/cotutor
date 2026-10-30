@@ -25,7 +25,7 @@ import { buildReel, playRecordOk, reelCardTook, reelHolds, reelMissRuns, type Pl
 import type { CallReel } from '../../runtime/journal/recorder.ts';
 import { isRealtimeVoice, REALTIME_VOICES } from '../../realtime/voices.ts';
 import { previewVoice } from '../../realtime/preview.ts';
-import { DATE_RE, FocusSchema, MESSAGE_FROM, MOUTH_VOICE, listTutors, mouthVoice, subjectLang, type ConversationIndex, type ConversationMessage, type TutorExtra } from '../../schema/index.ts';
+import { DATE_RE, FocusSchema, MESSAGE_FROM, MOUTH_VOICE, listTutors, mouthVoice, subjectLang, type ConversationIndex, type ConversationMessage, type MemoryLine, type TutorExtra } from '../../schema/index.ts';
 import type { BoardCard, Device } from '../../board/presentation.ts';
 import { ConfigError, patchConfig, reloadIfChanged, workspaceReport } from '../workspace.ts';
 import { UsageError } from '../../shared/errors.ts';
@@ -57,7 +57,9 @@ import { parentHomeRoute } from './parent-home.ts';
 import { bailianRoute, createBailian, type Bailian } from '../machine/bailian.ts';
 import { PARENT_HOME_PAGE } from '../../ui/parent/parent-home-page.ts';
 import { dictationRoute } from '../dictation/route.ts';
-import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, scanCards, writeCapture, writeCardImage, writeCardState } from '../../runtime/journal/store.ts';
+import { IndexError, capturePathOk, deleteThread, listDates, rateThread, readErrLog, readIndex, readTranscript, scanCards, undoVaultWrite, writeCapture, writeCardImage, writeCardState, type VaultWrite } from '../../runtime/journal/store.ts';
+import { memoryLineText } from '../../memory/vault-notes.ts';
+import { childItem } from '../../memory/proposals.ts';
 import { IMAGE_EXT, parseCardState, stripSecrets } from '../../board/cards/index.ts';
 import { resolve, sep } from 'node:path';
 import { bundleAsset, stageAsset, stageIndex, stageVersion } from './stage.ts';
@@ -404,6 +406,8 @@ export interface OverviewThread {
   /** 各轮给家长的(去掉「## 家长」)与记住了:宽屏右栏「这一天老师跟你说的」 */
   notes: string[];
   remembered: string[];
+  /** 这个话题写进 vault 的每一笔(2026-10-30,《vault重构方案》§8):家长过目、单行撤回(job / kind / n 交给撤回接口);quote = 对上了的孩子原话 */
+  writes: { job: string; kind: VaultWrite['kind']; n: number; text: string; quote?: string }[];
   sections: number;
   cards: number;
   /** 老师还在写 / 末句问句停下等孩子 / 没停 */
@@ -438,6 +442,25 @@ export interface Overview {
   ready: boolean;
 }
 
+/**
+ * 一轮写进 vault 的每一笔,给家长过目(2026-10-30):记忆的行(memoryLines)、孩子的记忆的行(childLines)、日记那段(diaryBlock)。
+ * quote = 那一行对上了的孩子原话(这一轮的 memoryProposals 里核对过的那条)
+ */
+function vaultWrites(m: ConversationMessage): OverviewThread['writes'] {
+  const verified = (m.memoryProposals ?? []).filter((p) => p.check === 'verified' && p.quote);
+  const quoteOf = (text: string, child: boolean): string | undefined => verified.find((p) => {
+    const item = child ? childItem(p.item) : p.item;
+    return item === text || item.replace(/\s*(?:→|->)\s*/, ' → ').endsWith(` → ${text.replace(/^改:.*? → /, '')}`);
+  })?.quote;
+  const lines = (kind: 'memory' | 'child', ls: readonly MemoryLine[] | undefined): OverviewThread['writes'] => (ls ?? []).map((l, n) => {
+    const text = memoryLineText(l);
+    const quote = quoteOf(text, kind === 'child');
+    return { job: m.job, kind, n, text: kind === 'child' ? `孩子的记忆:${text}` : text, ...(quote ? { quote } : {}) };
+  });
+  const diary = m.diaryBlock ? [{ job: m.job, kind: 'diary' as const, n: 0, text: `日记:${m.diaryBlock.split('\n')[0].replace(/^##\s*/, '')}` }] : [];
+  return [...lines('memory', m.memoryLines), ...lines('child', m.childLines), ...diary];
+}
+
 export async function overview(ctx: AppContext, date: string): Promise<Overview> {
   const tutors: OverviewTutor[] = [];
   const colors = tutorColors(ctx.ws.config.tutors);
@@ -445,7 +468,10 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
     const index = await readIndex(ctx.ws, t.name, date);
     const ths = threads(index.messages);
     const by = new Map<string, OverviewThread>();
+    const diaries: { id: string; m: (typeof index.messages)[number] }[] = [];
     for (const [i, m] of index.messages.entries()) {
+      // 记账那轮不算一节,写进日记的那段挂回它记的话题
+      if (m.bookkeep && m.diaryBlock) diaries.push({ id: ths[i], m });
       if (m.bookkeep || m.tidy) continue;
       const id = ths[i];
       let th = by.get(id);
@@ -454,7 +480,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
         const raw = via ? `首页 · ${via}` : m.from === 'kid' ? m.text : `系统:${m.text}`;
         const b = m.via?.button;
         const kind = m.from === 'system' ? 'system' : m.lecture ? 'lecture' : m.continues ? 'continue' : m.activity ? 'activity' : typeof b === 'number' ? 'start' : 'new';
-        th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, start: { kind, label: kind === 'new' ? '新话题' : (via ?? m.lecture?.title ?? '') }, said: null, endAt: null, notes: [], remembered: [], sections: 0, cards: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked };
+        th = { thread: id, at: m.at, title: Array.from(raw.trim()).slice(0, 20).join(''), from: m.from, via, start: { kind, label: kind === 'new' ? '新话题' : (via ?? m.lecture?.title ?? '') }, said: null, endAt: null, notes: [], remembered: [], writes: [], sections: 0, cards: 0, stoppedAt: null, rating: index.ratings[id] ?? null, booked: id in index.booked };
         by.set(id, th);
       }
       if (m.lecture && !th.lecture) th.lecture = { bundle: m.lecture.bundle, title: m.lecture.title, ...(m.lecture.video ? { video: true as const } : {}), watchedMs: m.lecture.watchedMs, finished: m.lecture.finished, marks: (m.lecture.marks ?? []).length };
@@ -466,6 +492,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       const tail = (m.parentText ?? '').replace(/^##\s*家长\s*/, '').trim();
       if (tail) th.notes.push(tail);
       if (m.remembered?.length) th.remembered.push(...m.remembered);
+      th.writes.push(...vaultWrites(m));
       if (m.result === 'running') th.stoppedAt = 'writing';
       else if (m.result === 'ok' && m.section && (m.section.cards.length || m.section.lines.length)) {
         th.sections++;
@@ -474,6 +501,7 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
         th.stoppedAt = last?.ask ? 'ask' : null;
       }
     }
+    for (const d of diaries) by.get(d.id)?.writes.push(...vaultWrites(d.m));
     // 按住说话连着没发出去:实录里的 hold;孩子发成的一句(开口、打字发出去)把一串断开
     for (const th of by.values()) {
       const mine = index.messages.filter((_m, i) => ths[i] === th.thread);
@@ -1022,6 +1050,22 @@ export async function route(method: string, path: string, ctx: AppContext, body?
         return { status: 200, json: { tutor, date, thread, threadsLeft: new Set(threads(index.messages)).size, undo } };
       } catch (err) {
         if (err instanceof IndexError) return { status: 404, json: { error: 'no_such_thread', message: err.message } };
+        throw err;
+      }
+    }
+    // 撤回话题写进 vault 的一笔(家长端「记录」的「记住了」,2026-10-30):{job, kind, n},kind = memory / child / diary;这位老师这天还有轮在跑就 409(会写同一篇)
+    const unw = /^\/api\/conversations\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/threads\/([^/]+)\/vault\/undo$/.exec(p);
+    if (unw && method === 'POST') {
+      const [, tutor, date, raw] = unw;
+      if (!ws.config.tutors[tutor]) return { status: 404, json: { error: 'no_such_tutor', tutor } };
+      const kinds = ['memory', 'child', 'diary'];
+      if (!isObj(body) || typeof body.job !== 'string' || typeof body.kind !== 'string' || !kinds.includes(body.kind) || (body.kind !== 'diary' && (typeof body.n !== 'number' || !Number.isInteger(body.n) || body.n < 0))) return { status: 400, json: { error: 'bad_request', message: '要 {job, kind: memory | child | diary, n}' } };
+      if (ctx.runner.running(tutor)?.date === date) return { status: 409, json: { error: 'busy', message: '老师还在写,等它写完再撤' } };
+      try {
+        const { undo } = await undoVaultWrite(ws, tutor, date, decodeURIComponent(raw), { job: body.job, kind: body.kind as VaultWrite['kind'], n: typeof body.n === 'number' ? body.n : 0 });
+        return undo.memory || undo.diary ? { status: 200, json: { ok: true, undo } } : { status: 409, json: { error: 'changed', message: undo.misses.join(';') || '找不到那一行,没撤', undo } };
+      } catch (err) {
+        if (err instanceof IndexError) return { status: 404, json: { error: 'no_such_write', message: err.message } };
         throw err;
       }
     }

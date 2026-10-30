@@ -730,7 +730,7 @@ export function createMock(opts: MockOptions = {}): Mock {
         for (const m of list) {
           let th = by.get(m.thread);
           if (!th) {
-            th = { thread: m.thread, at: m.at, title: Array.from((m.question ?? '').trim()).slice(0, 20).join(''), from: 'kid', via: null, start: { kind: 'new', label: '新话题' }, said: (m.question ?? '').trim() || null, endAt: null, notes: [], remembered: [], sections: 0, cards: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: booked.has(`${t.name}/${m.thread}`) };
+            th = { thread: m.thread, at: m.at, title: Array.from((m.question ?? '').trim()).slice(0, 20).join(''), from: 'kid', via: null, start: { kind: 'new', label: '新话题' }, said: (m.question ?? '').trim() || null, endAt: null, notes: [], remembered: [], writes: [], sections: 0, cards: 0, stoppedAt: null, rating: ratings.get(`${t.name}/${m.thread}`) ?? null, booked: booked.has(`${t.name}/${m.thread}`) };
             by.set(m.thread, th);
           }
           // 给家长的、记住了:同 mock 的板书接口,那天第一条带

@@ -229,6 +229,13 @@ export function parseMemoryOp(item: string): MemoryOp {
 /** 一行记忆去掉列表点与日期前缀后的原话(比对用) */
 const bareLine = (l: string): string => l.replace(/^\s*[-*]\s+/, '').replace(/^\d{4}-\d{2}-\d{2}\s+/, '').replace(/\s+/g, ' ').trim();
 
+/** 一行改动给家长看的样子:新增的原话、「改:旧 → 新」、「删:旧」(家长端「记录」的「记住了」) */
+export function memoryLineText(l: MemoryLine): string {
+  if (l.before === null) return bareLine(l.after ?? '');
+  if (l.after === null) return `删:${bareLine(l.before)}`;
+  return `改:${bareLine(l.before)} → ${bareLine(l.after)}`;
+}
+
 /**
  * 按原话找一行:正文(frontmatter 之后)里原话一字不差的那行;没有就找唯一一行包含它的(原话至少 4 个字);都不是 → -1。
  * 不分老师写的、家长写的(2026-09-18 定:机器一律可以改)。fuzzy = false 只认一字不差的(这轮里家长改过文件,2026-10-30)。

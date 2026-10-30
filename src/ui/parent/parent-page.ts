@@ -151,6 +151,11 @@ ${BRAND_CSS}
   #pday .nt p { grid-column:2; margin:0; font-size:15px; line-height:1.6; white-space:pre-line; }
   #pday .mem { display:flex; gap:8px; align-items:flex-start; font-size:14px; line-height:1.55; background:#eef6ef; color:#33402f; border-radius:10px; padding:8px 12px; }
   #pday .mem small { flex:none; color:#6b7a66; font-size:12px; padding-top:2px; }
+  #pday .mem > span { flex:1; min-width:0; }
+  #pday .mem .qt { display:block; padding-top:2px; }
+  #pday .mem .undo { flex:none; font-size:12px; color:#6b7a66; padding:2px 8px; border-radius:6px; }
+  #pday .mem .undo.arm { color:#fff; background:#b3541e; }
+  #pday .mem .undo:disabled { opacity:.35; }
   #pday .rw { display:flex; gap:8px; flex-wrap:wrap; }
   #pday .rw span { display:inline-flex; align-items:center; height:40px; padding:0 12px; border-radius:12px; background:var(--tint-sand-bg); border:1px solid var(--tint-sand-line); font-size:18px; font-family:"Kaiti SC","STKaiti",serif; }
   #pday .dia { border-top:1px solid var(--line); padding-top:16px; }
@@ -345,6 +350,21 @@ ${pageDomJs(4000)}
       });
       return b;
     };
+    // 撤回写进 vault 的一笔(「记住了」那几行,2026-10-30):点一下变「确定撤?」,3 秒内再点才撤;家长后来在 Obsidian 改过那行就撤不了,弹服务端说的那句
+    const undoBtn = (t, th, w) => {
+      const b = h('button', { type: 'button', class: 'undo', 'aria-label': '撤回这一笔' }, '撤回');
+      let timer = null;
+      b.addEventListener('click', async () => {
+        if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = '确定撤?'; timer = setTimeout(() => { b.classList.remove('arm'); b.textContent = '撤回'; }, 3000); return; }
+        clearTimeout(timer); b.classList.remove('arm'); b.disabled = true;
+        try {
+          await api('POST', '/api/conversations/' + encodeURIComponent(t.name) + '/' + H.date + '/threads/' + encodeURIComponent(th.thread) + '/vault/undo', { job: w.job, kind: w.kind, n: w.n });
+          toast(w.kind === 'diary' ? '日记里摘掉了这一段' : '撤回了');
+        } catch (err) { toast(err && err.message ? err.message : '没撤成'); }
+        loadHome();
+      });
+      return b;
+    };
     // ---- 这一天的事,最新的在上:话题、听写、口语课 ----
     const evs = [];
     for (const t of H.tutors) for (const th of t.threads) {
@@ -392,7 +412,8 @@ ${pageDomJs(4000)}
     // ---- 这一天老师跟你说的:卡上没有的才放这里;记账只在这里 ----
     const what = (th) => (th.start && th.start.kind === 'new' ? '新话题' + (th.said ? '「' + th.said + '」' : '') : th.start && th.start.kind === 'lecture' && th.lecture ? '小课堂「' + th.lecture.title + '」' : th.start ? th.start.label || th.title : th.title);
     const notes = evs.filter((e) => e.th && e.th.notes && e.th.notes.length);
-    const mem = evs.filter((e) => e.th && e.th.remembered && e.th.remembered.length);
+    // 记住了:这一天写进 vault 的每一笔(记忆、孩子的记忆、日记那段),对上了孩子原话的带一句「孩子说」,每笔能撤回
+    const mem = evs.filter((e) => e.th && e.th.writes && e.th.writes.length);
     const practice = [...new Set(evs.flatMap((e) => e.practice || []))];
     const booking = H.tutors.some((t) => t.booking);
     const writing = H.tutors.some((t) => t.threads.some((th) => th.stoppedAt === 'writing'));
@@ -417,7 +438,7 @@ ${pageDomJs(4000)}
     $('#pday').replaceChildren(...[
       h('b', {}, (H.date === H.today ? '今天' : '这一天') + '老师跟你说的'),
       notes.length ? h('div', { class: 'rs' }, h('h3', {}, '给家长的'), ...notes.flatMap((e) => e.th.notes.map((x) => h('div', { class: 'nt' }, avatarEl(e.t), h('small', {}, hhmm(e.at) + ' · ' + what(e.th)), h('p', {}, x))))) : null,
-      mem.length ? h('div', { class: 'rs' }, h('h3', {}, '记住了'), ...mem.flatMap((e) => e.th.remembered.map((x) => h('div', { class: 'mem' }, h('small', {}, (e.t.subject || e.t.display).replace(/老师$/, '')), x)))) : null,
+      mem.length ? h('div', { class: 'rs' }, h('h3', {}, '记住了 · 写进了 vault'), ...mem.flatMap((e) => e.th.writes.map((w) => h('div', { class: 'mem' }, h('small', {}, (e.t.subject || e.t.display).replace(/老师$/, '')), h('span', {}, w.text, w.quote ? h('small', { class: 'qt' }, '孩子说「' + w.quote + '」') : null), undoBtn(e.t, e.th, w))))) : null,
       practice.length ? h('div', { class: 'rs' }, h('h3', {}, '要再练的 · 听写里看了答案、重写过、被问了再写的'), h('div', { class: 'rw' }, ...practice.map((w) => h('span', {}, w)))) : null,
       !notes.length && !mem.length && !practice.length ? h('div', { class: 'quiet' }, evs.length ? '老师这天没留话给你。' : '这天没聊。') : null,
       anyThread ? h('div', { class: 'rs dia' }, h('h3', {}, '日记'), h('div', {}, h('span', {}, booking ? '老师在记账' : left ? (done ? done + ' 个话题已记进日记,还有 ' : '还有 ') + left + ' 个没记' : '话题都记进日记了'), bookBtn)) : null,

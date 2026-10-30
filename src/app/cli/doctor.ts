@@ -490,11 +490,13 @@ export async function doctorWorkspace(
         const p = pickNotes(notes, files, { date: today, subject: t.subject });
         const big = p.entry && p.entry.text.length > limit;
         const where = t.subject && p.semester ? `课程/${p.semester}/${t.subject}.md` : null;
+        // 入口文件是可选的(2026-10-30):配置都对、只是没写,算过,detail 里说一句可以怎么写;没配 subject、算不出学期才不过
+        const optional = !p.entry && !!t.subject && !!p.semester && !!where;
         push({
           name: `vault.entry.${t.name}`,
-          ok: !!p.entry && !big && !p.extraEntries.length,
+          ok: optional || (!!p.entry && !big && !p.extraEntries.length),
           required: false,
-          detail: p.entry ? `${p.entry.path}(${p.entry.text.length} 字${big ? `,超过 ${limit},会截断` : ''})${p.refs.length ? ` · 参考 ${p.refs.length} 篇` : ''}${p.extraEntries.length ? ` · 另有 ${p.extraEntries.join('、')} 没用` : ''}` : missingEntry(t.subject, p),
+          detail: p.entry ? `${p.entry.path}(${p.entry.text.length} 字${big ? `,超过 ${limit},会截断` : ''})${p.refs.length ? ` · 参考 ${p.refs.length} 篇` : ''}${p.extraEntries.length ? ` · 另有 ${p.extraEntries.join('、')} 没用` : ''}` : optional ? `没有(可选):想写这学期${t.subject}的情况,建 ${where},frontmatter 写 cotutor: subject、subject: ${t.subject}、semester: ${p.semester}` : missingEntry(t.subject, p),
           fix: !t.subject ? `在 cotutor.json 的 tutors.${t.name} 里配 subject` : !p.semester ? '先让档案算得出学期(见 vault.profile)' : !p.entry && where ? `建 ${where}(路径随意),frontmatter 写 cotutor: subject、subject: ${t.subject}、semester: ${p.semester};正文写这学期这科的情况,${t.display}每个话题开头整篇读到` : big ? '长的内容挪到别的笔记,入口文件里 [[链过去]](老师只拿到路径,要用时自己读);或调 policy.contextPack.entryChars' : p.extraEntries.length ? '同一科同一学期只留一篇' : undefined,
         });
       }

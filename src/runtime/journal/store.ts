@@ -16,6 +16,7 @@ import {
   DATE_RE,
   explainIssues,
   type ConversationIndex,
+  type ConversationMessage,
 } from '../../schema/index.ts';
 import { undoThreadVault, type ThreadUndo } from '../../memory/vault.ts';
 import { recoverPending } from '../../memory/commit.ts';
@@ -313,6 +314,40 @@ export async function deleteThread(ws: Workspace, tutor: string, date: string, t
   const undo = await undoThreadVault(ws, tutor, date, gone);
   await writeIndex(ws, next);
   return { index: next, undo };
+}
+
+/** 话题写进 vault 的一笔:memory = 这位老师(或这个 activity)的记忆,child = 孩子的记忆,diary = 记账写进日记的那段 */
+export type VaultWrite = { job: string; kind: 'memory' | 'child' | 'diary'; n: number };
+
+/**
+ * 撤回一个话题写进 vault 的一笔(家长端「记录」的「撤回」,2026-10-30,《vault重构方案》§8):n = 那一轮 memoryLines / childLines 的第几条(diary 不用)。
+ * 撤法同删话题(undoThreadVault):家长后来改过那行就找不到,不动,回 misses。撤成了就从那一轮的记录里去掉(删话题时不再撤一遍);
+ * 日记那段撤了 booked 照留,不再自动记它。写到一半断了的先补记。跑着的轮由路由先挡(409)。
+ */
+export async function undoVaultWrite(ws: Workspace, tutor: string, date: string, thread: string, w: VaultWrite): Promise<{ index: ConversationIndex; undo: ThreadUndo }> {
+  const { index } = await recoverPending(ws, await readIndex(ws, tutor, date));
+  const ths = threads(index.messages);
+  const file = conversationFiles(ws.dirs.conversations, tutor, date).index;
+  const at = index.messages.findIndex((m, i) => m.job === w.job && ths[i] === thread);
+  if (at < 0) throw new IndexError(file, `${date} 的话题 ${thread} 里没有 ${w.job} 这一轮`);
+  const m = index.messages[at];
+  const lines = w.kind === 'memory' ? m.memoryLines : w.kind === 'child' ? m.childLines : undefined;
+  if (w.kind === 'diary' ? !m.diaryBlock : !lines?.[w.n]) throw new IndexError(file, `${w.job} 这一轮没有这一笔(${w.kind} ${w.n})`);
+  // 一笔撤一笔:拼一条只带这一笔的消息交给删话题那套;activity 话题的记忆在 activity 自己那篇,activity 记在话题第一条
+  const activity = index.messages.find((x, i) => ths[i] === thread && x.activity)?.activity;
+  const one: ConversationMessage = { ...m, ...(activity ? { activity } : {}), memoryLines: w.kind === 'memory' ? [lines![w.n]] : [], childLines: w.kind === 'child' ? [lines![w.n]] : [], diaryBlock: w.kind === 'diary' ? m.diaryBlock : undefined };
+  const undo = await undoThreadVault(ws, tutor, date, [one]);
+  if (!undo.memory && !undo.diary) return { index, undo };
+  // remembered = 自己的改动在前、孩子的记忆在后(和 memoryLines、childLines 一一对上);对不上的老数据不动它
+  const mem = m.memoryLines ?? [];
+  const kid = m.childLines ?? [];
+  const remembered = m.remembered && m.remembered.length === mem.length + kid.length && w.kind !== 'diary' ? m.remembered.filter((_, k) => k !== (w.kind === 'memory' ? w.n : mem.length + w.n)) : m.remembered;
+  const next: ConversationMessage = w.kind === 'diary'
+    ? (({ diaryBlock: _d, ...rest }) => rest)(m)
+    : { ...m, ...(w.kind === 'memory' ? { memoryLines: mem.filter((_, k) => k !== w.n) } : { childLines: kid.filter((_, k) => k !== w.n) }), ...(remembered ? { remembered } : {}) };
+  const out: ConversationIndex = { ...index, messages: index.messages.map((x, k) => (k === at ? next : x)) };
+  await writeIndex(ws, out);
+  return { index: out, undo };
 }
 
 // cotutor.json 的补丁写回与热重载在 src/app/workspace.ts(读配置那边)

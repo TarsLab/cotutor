@@ -105,7 +105,7 @@ try {
   writeFileSync(join(ws, '课程', '二年级上', '数学.md'), '---\ncotutor: subject\nsubject: 数学\nsemester: 二年级上\n---\n\n会凑十\n');
   const dv = await doctorWorkspace(ws, { probeEnv: false });
   const zhEntry = dv.checks.find((c) => c.name === 'vault.entry.chinese-tutor');
-  check('doctor:档案齐了;数学有入口文件,语文没有 → 说建哪、写什么属性', dv.checks.find((c) => c.name === 'vault.profile')?.ok === true && dv.checks.find((c) => c.name === 'vault.entry.math-tutor')?.ok === true && zhEntry?.ok === false && zhEntry.fix?.includes('课程/二年级上/语文.md') === true && zhEntry.fix.includes('subject: 语文'), JSON.stringify(zhEntry));
+  check('doctor:档案齐了;数学有入口文件,语文没有 → 入口文件可选(2026-10-30),算过,说想写的话建哪、写什么属性', dv.checks.find((c) => c.name === 'vault.profile')?.ok === true && dv.checks.find((c) => c.name === 'vault.entry.math-tutor')?.ok === true && zhEntry?.ok === true && zhEntry.detail.includes('可选') && zhEntry.detail.includes('课程/二年级上/语文.md') && zhEntry.detail.includes('subject: 语文'), JSON.stringify(zhEntry));
   check('doctor:每个 agent 查记忆文件,还没有不算错、说会建在哪', ['math-tutor', 'chinese-tutor'].every((n) => dv.checks.some((c) => c.name === `vault.memory.${n}` && c.ok)) && dv.checks.find((c) => c.name === 'vault.memory.chinese-tutor')?.detail.includes('记忆/语文老师.md') === true);
   const again = await initWorkspace({ slug: 'ming' });
   check('init 再跑:档案按属性认出来,不再补', again.steps.some((x) => x.item.endsWith('孩子.md') && x.action === 'exists'), JSON.stringify(again.steps.filter((x) => x.item.includes('孩子'))));

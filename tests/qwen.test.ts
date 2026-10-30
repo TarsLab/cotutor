@@ -38,8 +38,8 @@ const ctx = createContext(loadWorkspace(root), { now: () => now, warm: false });
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const until = async (f: () => boolean, ms = 10_000): Promise<boolean> => { for (let t = 0; t < ms && !f(); t += 25) await sleep(25); return f(); };
 type Msg = { job: string; result: string; error?: string | null; costUsd?: number; tokens?: { in: number; out: number }; warnings?: string[] };
-const send = async (tutor: string, text: string, from: 'kid' | 'system' = 'kid'): Promise<Msg> => {
-  const r = await route('POST', `/api/conversations/${tutor}/messages`, ctx, { text, from, newThread: true });
+const send = async (tutor: string, text: string, from: 'kid' | 'system' = 'kid', thread?: string): Promise<Msg> => {
+  const r = await route('POST', `/api/conversations/${tutor}/messages`, ctx, { text, from, ...(thread ? { thread } : { newThread: true }) });
   const job = (r.json as { job: string }).job;
   await until(() => !ctx.runner.running(tutor));
   const d = (await route('GET', `/api/conversations/${tutor}/${DATE}`, ctx)).json as { index: { messages: Msg[] } };
@@ -58,6 +58,9 @@ try {
   check('思考量:语文老师 effort low → 不想(effort-none.json)', i1.effortFile === join(root, '.cotutor', 'qwen', 'effort-none.json') && readFileSync(i1.effortFile!, 'utf8').includes('"reasoningEffort": "none"'));
   check('key 从环境来(百炼按量);别处的 OPENAI_MODEL 去掉', i1.key === 'sk-from-env' && i1.base === 'https://dashscope.aliyuncs.com/compatible-mode/v1' && !i1.openai, JSON.stringify(i1));
   check('没有钱数,记 token(输入含缓存读)', kid.costUsd === undefined && kid.tokens?.in === 2500 && kid.tokens?.out === 120, JSON.stringify(kid));
+  // 续会话时 qwen 收尾报的是整个会话的累计(2026-10-30 在 ray 上量出来的):这一轮的 token 按每次请求自己的加总,同一条回复分几行出的只算一次
+  const again = await send('chinese-tutor', '再讲一遍', 'kid', kid.job);
+  check('续会话:token 是这一轮自己的(不是会话累计的 42500),缓存读记 cached', again.result === 'ok' && again.tokens?.in === 2500 && again.tokens?.out === 120 && (again.tokens as { cached?: number }).cached === 500, JSON.stringify(again));
 
   const sys = await send('math-tutor', '给家长写一句', 'system');
   const i2 = init('math-tutor', sys.job);

@@ -61,4 +61,16 @@ const STREAM = [
   check('toolCalls:Bash 取 command 不取 description;没结果 ok=null', calls[2].arg === 'ls ../../captures' && calls[2].ok === null && calls[2].chars === 0);
   check('toolCalls:空日志', toolCalls('').length === 0);
 }
+// ---- 这一轮的 token 按每次请求自己的 usage 加总(2026-10-30):qwen 续会话时收尾报的是整个会话的累计 ----
+{
+  const req = (id: string | null, input: number, cached: number, out: number, sub = false): string => JSON.stringify({ type: 'assistant', session_id: 's-2', parent_tool_use_id: sub ? 't9' : null, ...(id ? {} : { uuid: 'u-anon' }), message: { ...(id ? { id } : {}), content: [{ type: 'text', text: 'x' }], usage: { input_tokens: input, cache_read_input_tokens: cached, output_tokens: out } } });
+  const result = JSON.stringify({ type: 'result', subtype: 'success', is_error: false, num_turns: 2, usage: { input_tokens: 44115, cache_read_input_tokens: 14336, output_tokens: 1121 }, result: 'x' });
+  const t1 = parseTranscript([req('a', 16023, 0, 190), req('b', 18287, 5841, 555), result].join('\n'));
+  check('有每次请求的 usage:按它们加总,不认收尾报的会话累计;cached 记命中缓存的', t1.final?.inTokens === 16023 + 18287 + 5841 && t1.final?.outTokens === 745 && t1.final?.cachedTokens === 5841 && t1.items.at(-1)?.text.includes('40151 入 / 745 出'), JSON.stringify(t1.final));
+  const t2 = parseTranscript([req('a', 100, 0, 5), req('a', 100, 0, 5), req(null, 10, 0, 1), req('c', 20, 0, 2, true), result].join('\n'));
+  check('同一条回复分几行出只算一次;没有消息 id 的认 uuid;子代理的也算', t2.final?.inTokens === 130 && t2.final?.outTokens === 8, JSON.stringify(t2.final));
+  const t3 = parseTranscript(result);
+  check('没有每次请求的 usage(老日志、别的 CLI):照收尾报的', t3.final?.inTokens === 58451 && t3.final?.outTokens === 1121 && t3.final?.cachedTokens === undefined, JSON.stringify(t3.final));
+}
+
 done();

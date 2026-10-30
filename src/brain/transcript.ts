@@ -4,7 +4,7 @@
  * 收尾的最终正文单独取出作 final——各家 CLI 都有的稳定锚点,孩子视图只看它。
  */
 import { parseStreamJson } from './cli/stream-json.ts';
-import type { CliEvent, CliFinal } from './cli/types.ts';
+import type { CliEvent, CliFinal, RequestUsage } from './cli/types.ts';
 import { tokenText } from '../shared/tokens.ts';
 
 /** 一行输出 → 统一事件(CLI 适配器的 parse) */
@@ -127,11 +127,14 @@ export function parseTranscript(text: string, parse: LineParser = parseStreamJso
   let sessionId: string | null = null;
   const items: TranscriptItem[] = [];
   let final: TranscriptFinal | null = null;
+  // 每次请求自己的 token,按消息 id 去重(同一条回复分几行出时 usage 是重复的,留最后一份);子代理的也算钱
+  const used = new Map<string, RequestUsage>();
   for (const line of text.split('\n')) {
     for (const e of parse(line)) {
       if (e.kind === 'session') {
         if (!sessionId) sessionId = e.id;
       } else if (e.kind === 'assistant') {
+        if (e.usage) used.set(e.usage.id, e.usage);
         const sub = e.sub ? true : undefined;
         for (const p of e.parts) {
           if (p.type === 'text' && p.text.trim()) items.push({ kind: 'text', text: p.text.trim(), sub });
@@ -141,7 +144,9 @@ export function parseTranscript(text: string, parse: LineParser = parseStreamJso
         const sub = e.sub ? true : undefined;
         for (const r of e.results) if (!r.ok) items.push({ kind: 'tool-error', text: clip(r.text.trim(), 300), sub });
       } else if (e.kind === 'result') {
-        const f = e.final;
+        // 收尾报的可能是整个会话的累计(qwen 续会话):有每次请求的就按它们加总
+        const reqs = [...used.values()];
+        const f = reqs.length ? { ...e.final, inTokens: reqs.reduce((n, u) => n + u.in, 0), outTokens: reqs.reduce((n, u) => n + u.out, 0), cachedTokens: reqs.reduce((n, u) => n + u.cached, 0) } : e.final;
         if (f.text && !items.some((i) => i.kind === 'text' && !i.sub)) items.push({ kind: 'text', text: f.text });
         const cost = f.inTokens !== undefined ? ` · ${tokenText({ in: f.inTokens, out: f.outTokens ?? 0 })}` : '';
         const turns = f.numTurns !== undefined ? ` · ${f.numTurns} 轮` : '';

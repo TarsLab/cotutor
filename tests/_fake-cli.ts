@@ -204,7 +204,15 @@ if (fail) {
     emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { content: [{ type: 'text', text: result }] } });
     emit({ type: 'stream_event', event: { type: 'message_stop' }, session_id: sid, parent_tool_use_id: null });
   }
-  emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 2, ...(qwenish ? { usage: { input_tokens: 2000, output_tokens: 120, cache_read_input_tokens: 500, total_tokens: 2620 } } : { usage: { input_tokens: 1000, output_tokens: 50 }, total_cost_usd: 0.05 }), result });
+  // qwen 方言:两次请求各报自己的 usage(第二条分两行出,usage 重复);收尾的 usage 在续会话时是整个会话的累计(真 qwen 就这样,2026-10-30)
+  if (qwenish) {
+    const req = (id: string, input: number, cached: number, out: number): void => emit({ type: 'assistant', session_id: sid, parent_tool_use_id: null, message: { id, content: [{ type: 'thinking', thinking: '…' }], usage: { input_tokens: input, cache_read_input_tokens: cached, output_tokens: out } } });
+    req('q-1', 900, 300, 50);
+    req('q-2', 1100, 200, 70);
+    req('q-2', 1100, 200, 70);
+  }
+  const before = session ? 40_000 : 0;
+  emit({ type: 'result', subtype: 'success', is_error: false, session_id: sid, num_turns: 2, ...(qwenish ? { usage: { input_tokens: 2000 + before, output_tokens: 120 + before / 100, cache_read_input_tokens: 500, total_tokens: 2620 + before } } : { usage: { input_tokens: 1000, output_tokens: 50 }, total_cost_usd: 0.05 }), result });
 }
 process.stderr.write('fake-cli done\n');
 // 消息走 stdin 的:用于测试预热,回完还等下一条,stdin 关了才退

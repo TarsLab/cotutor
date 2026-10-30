@@ -3,9 +3,11 @@
  * 同时保留历史日志的费用字段解析,让已有对话仍能查看。Qwen Code 0.25 的输出:
  * - `{"type":"system","subtype":"init","session_id","tools":[…]}`(qwen 的 json 模式叫 session_start)
  * - `{"type":"stream_event","event":{…}}`:`--include-partial-messages` 才有;message_start 开新的一条,content_block_delta 的 text_delta 是正文、thinking_delta 是在想
- * - `{"type":"assistant","message":{"content":[text / tool_use 块]}}`:一条整的回复
+ * - `{"type":"assistant","message":{"id","content":[text / tool_use 块],"usage"}}`:一条整的回复;usage 是这一次请求自己的
  * - `{"type":"user","message":{"content":[tool_result 块]}}`:工具结果
- * - `{"type":"result","subtype","is_error","result","num_turns","usage"}`:收尾;记账只认 usage 的 token(total_cost_usd 有也不读)
+ * - `{"type":"result","subtype","is_error","result","num_turns","usage"}`:收尾;记账只认 usage 的 token(total_cost_usd 有也不读)。
+ *   qwen 续会话时这里的 usage 是整个会话的累计(2026-10-30 在 ray 上量出来的:续了 28 轮的话题,索引里加起来 15.6M,实际约 1.2M),
+ *   所以 assistant 那几行的 usage 也读出来,parseTranscript 按它们加总
  * parent_tool_use_id 非空的是子代理的。
  */
 import type { AssistantPart, CliEvent, CliFinal, ToolResult } from './types.ts';
@@ -21,6 +23,13 @@ interface Block {
   is_error?: boolean;
 }
 
+interface Usage {
+  input_tokens?: unknown;
+  output_tokens?: unknown;
+  cache_read_input_tokens?: unknown;
+  cache_creation_input_tokens?: unknown;
+}
+
 interface Line {
   type?: string;
   subtype?: string;
@@ -28,10 +37,11 @@ interface Line {
   parent_tool_use_id?: unknown;
   tools?: unknown;
   event?: { type?: string; delta?: { type?: string; text?: unknown } };
-  message?: { content?: unknown };
+  message?: { id?: unknown; content?: unknown; usage?: Usage };
   is_error?: boolean;
   num_turns?: unknown;
-  usage?: { input_tokens?: unknown; output_tokens?: unknown; cache_read_input_tokens?: unknown; cache_creation_input_tokens?: unknown };
+  usage?: Usage;
+  uuid?: unknown;
   terminal_reason?: string;
   result?: unknown;
 }
@@ -41,11 +51,14 @@ const blocks = (c: unknown): Block[] => (Array.isArray(c) ? (c as Block[]) : [])
 export const blockText = (c: unknown): string => (typeof c === 'string' ? c : blocks(c).map((b) => (typeof b.text === 'string' ? b.text : '')).join(''));
 const num = (v: unknown): number | undefined => (typeof v === 'number' ? v : undefined);
 
+/** 输入 = 没命中的 + 缓存读 + 缓存写;一样都没报 → undefined */
+const inputOf = (u: Usage): number | undefined => [u.input_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens].reduce<number | undefined>((s, v) => (typeof v === 'number' ? (s ?? 0) + v : s), undefined);
+
 function finalOf(e: Line): CliFinal {
   const failed = Boolean(e.is_error) || Boolean(e.subtype && e.subtype !== 'success');
   const text = typeof e.result === 'string' && e.result.trim() ? e.result.trim() : null;
   const u = e.usage;
-  const inTokens = u ? [u.input_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens].reduce<number | undefined>((s, v) => (typeof v === 'number' ? (s ?? 0) + v : s), undefined) : undefined;
+  const inTokens = u ? inputOf(u) : undefined;
   return {
     ok: !failed,
     text,
@@ -86,7 +99,10 @@ export function parseStreamJson(line: string): CliEvent[] {
         if (b.type === 'text' && typeof b.text === 'string') parts.push({ type: 'text', text: b.text });
         else if (b.type === 'tool_use' && b.name) parts.push({ type: 'tool', tool: { ...(b.id ? { id: b.id } : {}), name: b.name, ...(b.input ? { input: b.input } : {}) } });
       }
-      out.push({ kind: 'assistant', parts, sub });
+      const u = e.message.usage;
+      const id = typeof e.message.id === 'string' ? e.message.id : typeof e.uuid === 'string' ? e.uuid : null;
+      const inTok = u ? inputOf(u) : undefined;
+      out.push({ kind: 'assistant', parts, sub, ...(u && id && inTok !== undefined ? { usage: { id, in: inTok, out: num(u.output_tokens) ?? 0, cached: num(u.cache_read_input_tokens) ?? 0 } } : {}) });
       break;
     }
     case 'user': {

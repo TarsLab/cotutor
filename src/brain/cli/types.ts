@@ -36,6 +36,14 @@ export type AssistantPart = { type: 'text'; text: string } | { type: 'tool'; too
 export const textsOf = (parts: readonly AssistantPart[]): string[] => parts.flatMap((p) => (p.type === 'text' ? [p.text] : []));
 export const toolsOf = (parts: readonly AssistantPart[]): ToolUse[] => parts.flatMap((p) => (p.type === 'tool' ? [p.tool] : []));
 
+/** 一次模型请求的 token:in 含缓存读、缓存写,cached 是其中命中缓存的;id 是那条回复的消息 id */
+export interface RequestUsage {
+  id: string;
+  in: number;
+  out: number;
+  cached: number;
+}
+
 /** 一轮的收尾 */
 export interface CliFinal {
   ok: boolean;
@@ -44,10 +52,11 @@ export interface CliFinal {
   /** 不 ok 时的原因 */
   reason: string | null;
   numTurns?: number;
-  /** 这一轮的 token:输入(含缓存读、缓存写)与输出;记账按它(报的钱数不认,src/shared/tokens.ts) */
+  /** 这一轮的 token:输入(含缓存读、缓存写)与输出;记账按它(报的钱数不认,src/shared/tokens.ts)。
+   *  CLI 收尾报的可能是整个会话的累计(qwen 续会话时就是),parseTranscript 有每次请求的 usage 就按它们加总 */
   inTokens?: number;
   outTokens?: number;
-  /** 输入里命中缓存的那部分(API 运行时报;CLI 不报) */
+  /** 输入里命中缓存的那部分(API 运行时报;CLI 有每次请求的 usage 时也有) */
   cachedTokens?: number;
   /** 这一轮最后一次请求的输入 = 这一轮结束时上下文多大(API 运行时报;过 32k 整段压缩看它) */
   contextTokens?: number;
@@ -60,7 +69,7 @@ export interface CliFinal {
  * - start:开始新的一条回复(增量模式)
  * - delta:回复正文的一小段(增量模式)
  * - thinking:模型在想(增量模式,只说明模型开始回了)
- * - assistant:一条整的回复:正文段与工具调用,按原来的先后
+ * - assistant:一条整的回复:正文段与工具调用,按原来的先后;usage = 这一次请求自己的 token(消息 id 去重用,同一条回复可能分几行出)
  * - results:工具结果
  * - result:一轮收尾
  */
@@ -70,7 +79,7 @@ export type CliEvent =
   | { kind: 'start'; sub: boolean }
   | { kind: 'delta'; text: string; sub: boolean }
   | { kind: 'thinking'; sub: boolean }
-  | { kind: 'assistant'; parts: AssistantPart[]; sub: boolean }
+  | { kind: 'assistant'; parts: AssistantPart[]; sub: boolean; usage?: RequestUsage }
   | { kind: 'results'; results: ToolResult[]; sub: boolean }
   | { kind: 'result'; final: CliFinal };
 

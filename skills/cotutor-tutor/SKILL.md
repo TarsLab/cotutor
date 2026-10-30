@@ -40,7 +40,7 @@ description: cotutor 有脸的老师共同的守则:上下文包怎么看、三�
 - 入口文件里的讲法偏好,优先于你老师文件里的。
 - 记忆是你以前记下的。家长可能改过、删过,以现在的为准。
 - 孩子的记忆是老师们一起记的。和档案对不上,以档案为准。
-- 每一行是什么、路径后面的状态怎么看,见 `../../.claude/skills/cotutor-tutor/references/上下文包.md`。
+- 每一行是什么、路径后面的状态怎么看,见 `../../.agents/skills/cotutor-tutor/references/上下文包.md`。
 
 ### 孩子的话,不用工具
 
@@ -73,7 +73,7 @@ description: cotutor 有脸的老师共同的守则:上下文包怎么看、三�
 - 孩子接着问、做完卡,再写下一节。
 - 板书怎么写,应用已经递给你了。上下文包 `boardGuide:` 那一行写着在哪:在你的系统提示里(「# 板书怎么写」),或在本话题第一条的 `<cotutor-board>` 里。作业照片怎么接也在里面。
 - 照着写。别再用 Skill 工具、Read 或别的办法去读 cotutor-board 的 SKILL.md。
-- 有工具的那轮,要查某种卡的完整协议,才读 `../../.claude/skills/cotutor-board/references/<种类>.md`。
+- 有工具的那轮,要查某种卡的完整协议,才读 `../../.agents/skills/cotutor-board/references/<种类>.md`。
 - 上下文包里有 `board: off`,就只说话,不出卡。
 - **板书写完就停。** 后面不补总结,不再用工具。
 - 要记东西,紧接着写「## 记忆」段,在同一段回复里写完。

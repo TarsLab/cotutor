@@ -1,5 +1,5 @@
 /**
- * 老 workspace 的配置迁移。
+ * 老 workspace 的迁移:cotutor.json 补缺(下面大半),和目录搬家(文件末尾的 migrateLayout)。
  *
  * cotutor.json 是**政策文件**:init 只在缺失时写模板,已有的那份机器永不改(家长的决定不由机器代做)。
  * 代价是包更新带来的新出厂件不会自己出现在老 workspace 里,而且「没有」的表现是**静默**的——
@@ -11,9 +11,9 @@
  * 所以以后模板再加东西,这里不用跟着改。
  */
 import { workspaceGradePack } from './grades.ts';
-import { readFile, rename, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, rename, rm, rmdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CotutorConfigSchema, explainIssues } from '../../schema/index.ts';
+import { CotutorConfigSchema, SKILLS_DIR, explainIssues } from '../../schema/index.ts';
 import { configTemplate, shippedAgents } from './skeleton.ts';
 import { installTutors, type InstallStep } from './tutors.ts';
 import { CONFIG_FILE, ConfigError, readJson } from '../workspace.ts';
@@ -182,6 +182,8 @@ export async function upgradeConfig(root: string, opts: { dryRun?: boolean } = {
 
   // 新老师进了表,她的文件与家还得在,否则 doctor 立刻报「老师文件读不到」——
   // 补缺就补到底(installTutors 是 init 用的同一条路:缺的拷、有的不动)
+  // 老布局先搬:不然新位置是空的,出厂老师先拷进去,家长改过的那份晾在 .claude/agents/
+  if (gaps.some((g) => g.kind === 'tutor')) await migrateLayout(root);
   const installed = gaps.some((g) => g.kind === 'tutor')
     ? (await installTutors(root, Object.keys(r.data.tutors))).filter((s) => s.action === 'created' || s.action === 'replaced')
     : [];
@@ -195,4 +197,56 @@ export async function configGapsOf(root: string): Promise<ConfigGap[]> {
   } catch {
     return [];
   }
+}
+
+// ---- 目录搬家(2026-10-30):老师文件 .claude/agents/ → agents/,技能 .claude/skills/ → .agents/skills/ ----
+// 起因:Claude CLI 2026-10-28 移除后 .claude/ 只是历史名字;Codex、Qwen Code 认 .agents/skills,老师文件和老师的家并排才和包里一样。
+// 老 workspace 都搬完了这一段就删(同 2026-10-22 删 .qwen 链的迁移)。
+
+/** 还没搬完的老位置(实体目录才算;.claude/skills 是链就是新布局) */
+const LEGACY_DIRS = [
+  { from: '.claude/agents', to: 'agents' },
+  { from: '.claude/skills', to: SKILLS_DIR },
+] as const;
+
+export interface LayoutStep {
+  item: string;
+  action: 'moved' | 'kept' | 'removed';
+  note?: string;
+}
+
+/** doctor 用:老位置里还有东西的那几个(相对 workspace 根) */
+export async function legacyLayout(root: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const { from } of LEGACY_DIRS) {
+    const st = await lstat(join(root, from)).catch(() => null);
+    if (st?.isDirectory() && (await readdir(join(root, from))).some((n) => n !== '.DS_Store')) out.push(`${from}/`);
+  }
+  return out;
+}
+
+/**
+ * init / upgrade 第一步:老位置里的东西原样挪到新位置(不改内容、不看 hash),出厂件新不新由后面安装那一步照常查。
+ * 必须在 installTutors / installSkills 之前:不然新位置是空的,出厂件先拷进去,家长改过的那份就晾在老位置。
+ * 新位置已经有同名的不挪、报一声;老目录搬空了删掉(.claude/skills 随后换成链,见 skills.ts 的 linkClaudeSkills),.claude/ 里别的东西不碰。
+ */
+export async function migrateLayout(root: string): Promise<LayoutStep[]> {
+  const steps: LayoutStep[] = [];
+  for (const { from, to } of LEGACY_DIRS) {
+    const dir = join(root, from);
+    if (!(await lstat(dir).catch(() => null))?.isDirectory()) continue;
+    await rm(join(dir, '.DS_Store'), { force: true });
+    for (const name of (await readdir(dir)).sort()) {
+      const dest = join(root, to, name);
+      if (await lstat(dest).catch(() => null)) {
+        steps.push({ item: `${from}/${name}`, action: 'kept', note: `${to}/${name} 已经有了,没挪;对一下要哪份,删掉另一份` });
+        continue;
+      }
+      await mkdir(join(root, to), { recursive: true });
+      await rename(join(dir, name), dest);
+      steps.push({ item: `${to}/${name}`, action: 'moved', note: `从 ${from}/ 挪来` });
+    }
+    if (await rmdir(dir).then(() => true, () => false)) steps.push({ item: `${from}/`, action: 'removed', note: '搬空了' });
+  }
+  return steps;
 }

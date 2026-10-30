@@ -1,7 +1,7 @@
 /**
  * 卡的协议文件:每种能力型卡在包根 cards/<kind>/ 下有 card.md(协议:是什么 / 何时用 / 写法 / 例子 / 反例 /
  * 孩子看到什么 / 你会收回什么 / 状态的形状)与 card.css(这种卡的结构样式,只用主题变量)。
- * md 是可以单独 @ 的文件:init / upgrade 出厂成 workspace 里的**一个技能** .claude/skills/cotutor-board/:SKILL.md = 语法表(frontmatter + 各 md 的「是什么 / 写法 / 例子」拼),references/<kind>.md 逐张协议,
+ * md 是可以单独 @ 的文件:init / upgrade 出厂成 workspace 里的**一个技能** .agents/skills/cotutor-board/:SKILL.md = 语法表(frontmatter + 各 md 的「是什么 / 写法 / 例子」拼),references/<kind>.md 逐张协议,
  * references/README.md 索引;老师按需 @ 单张。写盘的在 app/cli/skills.ts `writeBoardSkill`。
  * 例子即测试:tests/cards-doc.test.ts 把每个 card.md 里的围栏喂 parseCard,`<!-- expect {…} -->` 注释是期望。
  */
@@ -112,7 +112,7 @@ ${rows.join('\n')}
 `;
 }
 
-/** 技能名;目录 .claude/skills/cotutor-board/ */
+/** 技能名;目录 .agents/skills/cotutor-board/ */
 export const BOARD_SKILL = 'cotutor-board';
 
 /** SKILL.md:frontmatter(name / description)+ 语法表;description 列出卡的种类,让模型不读正文也知道有哪几种 */

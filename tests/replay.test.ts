@@ -61,7 +61,7 @@ try {
 
   // 改 vault 与老师文件后回放
   writeFileSync(join(root, 'vault', '孩子.md'), '---\ncotutor: profile\nschool_start: 2025-09\n---\n\n数学:人教数学一下 第 5 单元 在学\n还没学、别用:竖式\n');
-  const agentFile = join(root, '.claude', 'agents', 'math-tutor.md');
+  const agentFile = join(root, 'agents', 'math-tutor.md');
   writeFileSync(agentFile, `${readFileSync(agentFile, 'utf8')}\n改了一句。\n`);
   now = new Date(2026, 8, 8, 17, 12);
   const rp = await startReplay(ws, 'math-tutor', '2026-09-08', orig.job, { now: () => now });

@@ -43,7 +43,7 @@ try {
   const root = join(testHome, 'family');
   const first = await initWorkspace({ slug: 'kid', dir: root, grade: 2 });
   check('显式安装来源写入清单', (await readManifest(root)).teachingPack?.grade === 2 && first.steps.some((s) => s.item === 'teachingPack'));
-  const teacher = join(root, '.claude/agents/math-tutor.md');
+  const teacher = join(root, 'agents/math-tutor.md');
   const activity = join(root, 'agents/math-tutor/activities/批改.md');
   const factoryTeacher = readFileSync(teacher, 'utf8');
   const factoryActivity = readFileSync(activity, 'utf8');
@@ -59,7 +59,7 @@ try {
   // 模拟旧版出厂清单:记录一个未改过的旧老师版本,另两份已经自定义。
   const m = await readManifest(root);
   delete m.teachingPack;
-  const enFile = join(root, '.claude/agents/english-tutor.md');
+  const enFile = join(root, 'agents/english-tutor.md');
   const oldEnglish = readFileSync(enFile, 'utf8') + '\n旧版出厂教学说明。\n';
   writeFileSync(enFile, oldEnglish);
   m.tutors['english-tutor'] = { hash: sha256(oldEnglish), version: '0.1.0' };

@@ -22,14 +22,14 @@ description: 在 cotutor workspace 里分析 AI 老师的对话:某一轮传了�
 
 **老师看到的只有两样:**
 
-1. 上下文包:run.json 里的 prompt。每一行是什么,见 `.claude/skills/cotutor-tutor/references/上下文包.md`。
+1. 上下文包:run.json 里的 prompt。每一行是什么,见 `.agents/skills/cotutor-tutor/references/上下文包.md`。
 2. 它自己 Read 的文件:消息的 tools。
 
 它看不到 cotutor.json,看不到别的老师,也看不到今天之前的对话。以前的事只有沉淀进 vault 的,它才看得到。
 
 ## 禁区
 
-- .claude/agents/ 里的老师文件是由 cotutor 读正文传给 Qwen 的。**不要把它们当子代理派(Task)**,也不要替老师回答孩子。
+- agents/<name>.md 是老师文件,由 cotutor 读正文传给 Qwen。**不要把它们当子代理派(Task)**,也不要替老师回答孩子。
 - **不改** conversations/、evals/、ledger/ 里的任何文件。
 - **不写 vault**(日记、档案、计划、教材)。那是家长的长期记忆,要改也是家长自己动手。
 - 改老师文件、技能、cotutor.json,要先说清改什么、为什么、会影响哪些老师,得到同意再动。

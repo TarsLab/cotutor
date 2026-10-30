@@ -27,9 +27,10 @@ description: 调 cotutor 的老师团:改某位老师的提示词(口气、规�
   - 改 vault:pack 干跑(不花钱)。
   - 加老师:doctor,再 pack。
 - 不改 conversations/、evals/、ledger/。
-- 不碰 .cotutor/、.claude/skills/:那是机器件,upgrade 会覆盖。
+- 不碰 .cotutor/、.agents/skills/:那是机器件,upgrade 会覆盖。
+- .claude/skills 是链到 .agents/skills 的,同一份,也不碰。
 - 出厂老师的文件改过之后,cotutor upgrade 不再覆盖它,只报 diff。告诉家长这个代价;想回出厂的,用 `cotutor upgrade --force <老师>`。
-- .claude/agents/ 里的老师是由 cotutor 读正文传给 Qwen 的,**不要把它们当子代理派**。
+- agents/<name>.md 是老师文件,由 cotutor 读正文传给 Qwen,**不要把它们当子代理派**。
 
 ## 一、改某位老师的提示词
 
@@ -39,7 +40,7 @@ description: 调 cotutor 的老师团:改某位老师的提示词(口气、规�
 
 | 家长说的是 | 改哪 |
 |---|---|
-| 口气、人设、这一科的做法 | 老师文件正文 .claude/agents/<name>.md |
+| 口气、人设、这一科的做法 | 老师文件正文 agents/<name>.md |
 | 从首页某个按钮进去的那一套(你说我画、看图说话):怎么带、家长填什么、应用拦什么 | 那个 activity 文件 agents/<name>/activities/<activity>.md(第四节) |
 | 显示名、头像、音色、开关、每句字数、板书开关、运行时 | cotutor.json 的 tutors.<name>(字段表见 references/字段.md) |
 | 所有老师都该知道的、关于孩子的事 | vault 里的档案(第二节);老师们自己记的在孩子的记忆里 |
@@ -47,7 +48,7 @@ description: 调 cotutor 的老师团:改某位老师的提示词(口气、规�
 
 - 老师文件要通用:换个孩子、换个学期也能用。关于孩子的事不进老师文件。
 - 老师文件只管自由话题。某个 activity 的做法不写进老师文件:activity 话题不读老师文件,写了也用不上。
-- 有脸的老师共同的守则(上下文包怎么看、三种回复、记忆段、不说错、不写文件、不派子代理)在机器技能 .claude/skills/cotutor-tutor/。应用每个话题第一条把原文放进上下文包,upgrade 会覆盖,别改它。
+- 有脸的老师共同的守则(上下文包怎么看、三种回复、记忆段、不说错、不写文件、不派子代理)在机器技能 .agents/skills/cotutor-tutor/。应用每个话题第一条把原文放进上下文包,upgrade 会覆盖,别改它。
 - 某位老师要和守则不一样的做法,写进那位老师文件里这一科那一节,它优先。只有守则的「不变的规矩」改不了。
 
 ### 路子

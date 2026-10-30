@@ -137,7 +137,7 @@ try {
   ok('activity:磁盘上那份没动', diskAfter === diskBefore);
   // 新话题(老师文件):同一个编辑器;改坏 name 标要改、保存拦住,预览是去掉 frontmatter 的正文,撤销,不存
   await clickEl(`document.querySelector('#activity .ai.tf')`);
-  ok('新话题:点开老师文件', await waitFor(`document.querySelector('#activity .ehead h2')?.textContent === '新话题' && document.querySelector('#activity .ehead .l2').textContent.includes('.claude/agents/')`));
+  ok('新话题:点开老师文件', await waitFor(`document.querySelector('#activity .ehead h2')?.textContent === '新话题' && document.querySelector('#activity .ehead .l2').textContent.startsWith('agents/') && !document.querySelector('#activity .ehead .l2').textContent.includes('/activities/')`));
   const tfTutor = await evaluate(`new URLSearchParams(location.hash.split('?')[1]).get('a')`);
   const tfBefore = (await (await fetch(`${base}/api/dev/tutor-files/${tfTutor}`)).json()).text;
   ok('新话题:检查跑完、节有头和开头', await waitFor(`document.querySelector('#activity .aside .srow .st') !== null && [...document.querySelectorAll('#activity .secs b')].map((b) => b.textContent).slice(0, 2).join() === '头,开头'`));

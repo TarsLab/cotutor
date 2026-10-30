@@ -1,8 +1,8 @@
 /**
  * cotutor init <slug>:建 ~/cotutor/<slug>/ 骨架。语义是**幂等补缺**——已有的文件与目录一律不动,缺什么补什么。
  * 三条边界(沿 drawtell init):政策文件只在缺失时写模板;用户配置只在还没指定 workspace 时补;不动 git。
- * 老师文件**拷贝**进 .claude/agents/:拷进来就是家长的,想改就改;出厂 hash 记 .cotutor/shipped.json,
- * cotutor upgrade 据此换新或报 diff。旧workspace里指向包的链会被换成拷贝。
+ * 老师文件**拷贝**进 agents/<name>.md:拷进来就是家长的,想改就改;出厂 hash 记 .cotutor/shipped.json,
+ * cotutor upgrade 据此换新或报 diff。老布局(.claude/agents、.claude/skills)先原样挪到新位置(migrate.ts 的 migrateLayout)。
  */
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -10,14 +10,15 @@ import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, configTemplate, profil
 import { installTutors, readManifest, writeManifest } from './tutors.ts';
 import { DEFAULT_GRADE, LEGACY_GRADE, requireGradePack } from './grades.ts';
 import { installActivities } from './activities.ts';
-import { TOOL_SHIM, installSkills, writeToolShim } from './skills.ts';
+import { TOOL_SHIM, installSkills, linkClaudeSkills, writeToolShim } from './skills.ts';
+import { migrateLayout } from './migrate.ts';
 import { installThemes } from './themes.ts';
 import { scanVault } from '../../memory/vault.ts';
 import { CONFIG_FILE, ConfigError, UsageError, HOME_ROOT, USER_CONFIG, expandPath, loadWorkspace, parseConfig, readJson, redactHome } from '../workspace.ts';
 
 export interface InitStep {
   item: string;
-  action: 'created' | 'exists' | 'kept' | 'replaced' | 'removed';
+  action: 'created' | 'exists' | 'kept' | 'replaced' | 'removed' | 'moved';
   note?: string;
 }
 
@@ -58,6 +59,8 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   await writeManifest(root, manifest);
   steps.push({ item: 'teachingPack', action: installed === undefined ? 'created' : 'exists', note: `${grade} 年级教学包${existing && installed === undefined ? '(旧版来源补记,保留原 hash)' : opts.grade === undefined && installed === undefined ? '(默认)' : ''};孩子当前年级仍读档案` });
   steps.push({ item: '.', action: rootExisted ? 'exists' : 'created' });
+  // 老布局先搬,再补缺:不然出厂件先占了新位置,家长改过的那份晾在老位置
+  steps.push(...(await migrateLayout(root)));
 
   for (const dir of DIRS) {
     const p = join(root, dir);
@@ -91,6 +94,7 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   steps.push({ item: '.cotutor/cotutor.schema.json', action: schemaThere ? 'exists' : 'created', note: schemaThere ? '已按本包刷新(机器文件)' : 'cotutor.json 的 JSON Schema,编辑器补全用' });
   // 出厂 skill(机器件 cotutor-board 等 + drawtell 的四个领域 skill,家长做课包用)与 drawtell 壳脚本
   steps.push(...(await installSkills(root)));
+  steps.push(await linkClaudeSkills(root));
   // 出厂主题(孩子端板书的样子):拷进 themes/default/,是家长的
   steps.push(...(await installThemes(root)));
   const shimThere = await exists(join(root, TOOL_SHIM));

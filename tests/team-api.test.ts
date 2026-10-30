@@ -29,7 +29,7 @@ try {
   const bad = await route('POST', '/api/tutors', ctx, { name: 'Bad Name', display: 'x' });
   check('坏名 400', bad.status === 400, JSON.stringify(bad.json));
   const added = await route('POST', '/api/tutors', ctx, { name: 'science-tutor', display: '科学老师', subject: '科学', avatar: '🔬' });
-  check('POST 201,进表、文件、目录', added.status === 201 && ctx.ws.config.tutors['science-tutor']?.subject === '科学' && existsSync(join(root, '.claude', 'agents', 'science-tutor.md')) && existsSync(join(root, 'agents', 'science-tutor')), JSON.stringify(added.json));
+  check('POST 201,进表、文件、目录', added.status === 201 && ctx.ws.config.tutors['science-tutor']?.subject === '科学' && existsSync(join(root, 'agents', 'science-tutor.md')) && existsSync(join(root, 'agents', 'science-tutor')), JSON.stringify(added.json));
   check('重名 409', (await route('POST', '/api/tutors', ctx, { name: 'science-tutor', display: 'x' })).status === 409);
   const cfg = (await route('GET', '/api/config', ctx)).json as { shipped: string[]; paths: Record<string, string>; resolvedPaths: Record<string, string>; tts: { say: string[] } };
   check('config 回报出厂名单与路径', cfg.shipped.length === 3 && !cfg.shipped.includes('scene-maker') && !cfg.shipped.includes('planner') && !cfg.shipped.includes('science-tutor') && typeof cfg.resolvedPaths.vault === 'string' && cfg.tts.say[0] === 'voxtell');
@@ -59,7 +59,7 @@ try {
   const renamed = await route('PUT', '/api/tutors/science-tutor/file', ctx, { text: f.text.replace('name: science-tutor', 'name: other') });
   check('改 name 被拒', renamed.status === 400, JSON.stringify(renamed.json));
   const put = await route('PUT', '/api/tutors/science-tutor/file', ctx, { text: f.text.replace('(在这里写', '说话慢一点。(在这里写') });
-  check('PUT 写回', put.status === 200 && readFileSync(join(root, '.claude', 'agents', 'science-tutor.md'), 'utf8').includes('说话慢一点'));
+  check('PUT 写回', put.status === 200 && readFileSync(join(root, 'agents', 'science-tutor.md'), 'utf8').includes('说话慢一点'));
   const shippedFile = (await route('GET', '/api/tutors/math-tutor/file', ctx)).json as { state: string };
   check('出厂老师 state=latest', shippedFile.state === 'latest');
   const mathFile = (await route('GET', '/api/tutors/math-tutor/file', ctx)).json as { text: string };
@@ -70,7 +70,7 @@ try {
   // ---- 删老师 ----
   check('出厂老师不能删', (await route('DELETE', '/api/tutors/math-tutor', ctx)).status === 400);
   const del = await route('DELETE', '/api/tutors/science-tutor', ctx);
-  check('自家老师删掉:表里没了,文件改名保留', del.status === 200 && !ctx.ws.config.tutors['science-tutor'] && !existsSync(join(root, '.claude', 'agents', 'science-tutor.md')) && readdirSync(join(root, '.claude', 'agents')).some((n) => n.startsWith('science-tutor.md.removed-')), JSON.stringify(del.json));
+  check('自家老师删掉:表里没了,文件改名保留', del.status === 200 && !ctx.ws.config.tutors['science-tutor'] && !existsSync(join(root, 'agents', 'science-tutor.md')) && readdirSync(join(root, 'agents')).some((n) => n.startsWith('science-tutor.md.removed-')), JSON.stringify(del.json));
 
   // ---- 设置页补丁 ----
   const p1 = await route('PATCH', '/api/config', ctx, { paths: { vault: 'vault', timetable: '课程表.md', diary: null }, server: { port: 5199, https: { cert: 'certs/a.pem', key: 'certs/b.pem' } }, tts: { say: ['node', '/x/voxtell.js', 'say', '{text}', '--voice', '{voice}', '-o', '{out}'] } });

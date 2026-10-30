@@ -28,7 +28,7 @@ description: 排 cotutor 孩子端的首页。孩子学完之后,家长在 works
 - 不改 conversations/、ledger/、cotutor.json、老师文件。
 - home/published.json 与 home/history/ 是机器件,不手改。
 - 孩子看得到的字(按钮、卡)不评判:不写对错、分数、名次、「真棒」「聪明」「最…」。
-- .claude/agents/ 里的老师是由 cotutor 读正文传给 Qwen 的。不要当子代理派,也不要替老师回答孩子。
+- agents/<name>.md 是老师文件,由 cotutor 读正文传给 Qwen。不要当子代理派,也不要替老师回答孩子。
 
 ## 一、看今天
 

@@ -21,7 +21,7 @@ const { PACKAGE_VERSION } = await import('../src/app/cli/skeleton.ts');
 
 try {
   const { root } = await initWorkspace({ slug: 'ming' });
-  const file = (n: string): string => join(root, '.claude', 'agents', `${n}.md`);
+  const file = (n: string): string => join(root, 'agents', `${n}.md`);
   const states = () => tutorStatuses(root).then((l) => Object.fromEntries(l.map((s) => [s.name, s.state])));
   check('刚 init:全部 latest', Object.values(await states()).every((s) => s === 'latest'), JSON.stringify(await states()));
   const u0 = await upgradeTutors(root);
@@ -82,16 +82,16 @@ try {
   check('名字不合规拒绝', badName.includes('不合规'));
   await patchConfig(loadWorkspace(root), { tutors: { 'science-tutor': { display: '科学老师', subject: '科学', avatar: '🔬', enabled: true } } });
   const d = await doctorWorkspace(root, { probeEnv: false });
-  check('doctor:自家老师文件 / 目录都 ✓,origin 标自家的', d.ok && d.checks.some((c) => c.name === 'tutor.science-tutor.claude' && c.ok) && !d.checks.some((c) => c.name === 'tutor.science-tutor.qwen') && d.checks.some((c) => c.name === 'tutor.science-tutor.home' && c.ok) && d.checks.some((c) => c.name === 'tutor.science-tutor.origin' && c.detail.includes('自家')), JSON.stringify(d.checks.filter((c) => c.name.includes('science'))));
+  check('doctor:自家老师文件 / 目录都 ✓,origin 标自家的', d.ok && d.checks.some((c) => c.name === 'tutor.science-tutor.file' && c.ok) && !d.checks.some((c) => c.name === 'tutor.science-tutor.qwen') && d.checks.some((c) => c.name === 'tutor.science-tutor.home' && c.ok) && d.checks.some((c) => c.name === 'tutor.science-tutor.origin' && c.detail.includes('自家')), JSON.stringify(d.checks.filter((c) => c.name.includes('science'))));
   check('upgrade 不碰自家老师', !(await upgradeTutors(root)).some((s) => s.name === 'science-tutor') && readFileSync(added.file, 'utf8').includes('科学老师'));
   check('tutorStatuses 只列出厂的', !(await tutorStatuses(root)).some((s) => s.name === 'science-tutor'));
 
   // 只在 cotutor.json 里加了名字、没写文件:init 补目录,doctor 点名怎么写
   await patchConfig(loadWorkspace(root), { tutors: { 'art-tutor': { display: '美术老师', enabled: true } } });
   const steps = await installTutors(root, ['science-tutor', 'art-tutor']);
-  check('installTutors 给配置里的老师补目录,文件缺的点名 add', existsSync(join(root, 'agents', 'art-tutor')) && steps.some((s) => s.item === '.claude/agents/art-tutor.md' && s.action === 'kept' && s.note?.includes('cotutor add art-tutor')), JSON.stringify(steps.filter((s) => s.item.includes('art'))));
+  check('installTutors 给配置里的老师补目录,文件缺的点名 add', existsSync(join(root, 'agents', 'art-tutor')) && steps.some((s) => s.item === 'agents/art-tutor.md' && s.action === 'kept' && s.note?.includes('cotutor add art-tutor')), JSON.stringify(steps.filter((s) => s.item.includes('art'))));
   const d2 = await doctorWorkspace(root, { probeEnv: false });
-  check('doctor:文件缺 → 必需失败,修复说写文件或 add', !d2.ok && d2.checks.some((c) => c.name === 'tutor.art-tutor.claude' && !c.ok && c.fix?.includes('cotutor add art-tutor')), JSON.stringify(d2.checks.filter((c) => c.name.includes('art'))));
+  check('doctor:文件缺 → 必需失败,修复说写文件或 add', !d2.ok && d2.checks.some((c) => c.name === 'tutor.art-tutor.file' && !c.ok && c.fix?.includes('cotutor add art-tutor')), JSON.stringify(d2.checks.filter((c) => c.name.includes('art'))));
 } finally {
   rmSync(home, { recursive: true, force: true });
 }

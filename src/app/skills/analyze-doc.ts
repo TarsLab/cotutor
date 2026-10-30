@@ -42,7 +42,7 @@ job 形如 1620-1(时分-当天序号)。
 |---|---|
 ${rows.map(([p, d]) => `| \`${p}\` | ${d} |`).join('\n')}
 
-上下文包里每一行是什么、路径后面的状态怎么看,见 \`.claude/skills/cotutor-tutor/references/上下文包.md\`;截断的上限是哪个政策旋钮,见 cotutor-tune 的 references/字段.md。
+上下文包里每一行是什么、路径后面的状态怎么看,见 \`.agents/skills/cotutor-tutor/references/上下文包.md\`;截断的上限是哪个政策旋钮,见 cotutor-tune 的 references/字段.md。
 `;
 }
 

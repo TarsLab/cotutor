@@ -35,7 +35,7 @@ try {
 
   const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
   const ctx = createContext(loadWorkspace(root));
-  const file = join(root, '.claude', 'agents', 'math-tutor.md');
+  const file = join(root, 'agents', 'math-tutor.md');
   const shipped = readFileSync(file, 'utf8');
   const base = '/api/dev/tutor-files/math-tutor';
 
@@ -50,7 +50,7 @@ try {
 
   // ---- 读 ----
   const doc = (await route('GET', base, ctx)).json as { kind: string; text: string; hash: string; state: string; path: string; shipped: boolean; name: string };
-  check('读:原文、hash、相对路径、是出厂的', doc.kind === 'tutor' && doc.name === '新话题' && doc.text === shipped && doc.hash.startsWith('sha256:') && doc.path === '.claude/agents/math-tutor.md' && doc.shipped && doc.state === 'latest', JSON.stringify({ ...doc, text: undefined }));
+  check('读:原文、hash、相对路径、是出厂的', doc.kind === 'tutor' && doc.name === '新话题' && doc.text === shipped && doc.hash.startsWith('sha256:') && doc.path === 'agents/math-tutor.md' && doc.shipped && doc.state === 'latest', JSON.stringify({ ...doc, text: undefined }));
   check('cotutor.json 里没有的老师 404;拼路径的不匹配', (await route('GET', '/api/dev/tutor-files/nobody-tutor', ctx)).status === 404 && (await route('GET', '/api/dev/tutor-files/..%2Fcotutor', ctx)).status !== 200);
 
   // ---- 首页上照它带的按钮:新话题 + 开场按钮,activity 按钮不算 ----
@@ -64,7 +64,7 @@ try {
   const edited = shipped.replace('说话慢,一次只讲一个想法', '说话慢,一次只讲一个想法,多夸一句');
   const c1 = (await route('POST', base + '/check', ctx, { text: edited })).json as Chk;
   check('查:首页上照它带的是新话题与开场按钮', c1.buttons.map((b) => b.kind + ':' + b.label).join(',') === 'new:新话题,start:今天的口算', JSON.stringify(c1.buttons));
-  check('查:老师收到的是去掉 frontmatter 的正文 + 板书写法,话题第一条带守则', c1.preview.text.startsWith('你是这个家的数学老师') && c1.preview.text.includes('多夸一句') && !c1.preview.text.includes('maxTurns') && (c1.preview.board?.chars ?? 0) > 100 && c1.preview.rules?.path === '.claude/skills/cotutor-tutor/SKILL.md' && (c1.preview.rules?.text.length ?? 0) > 100, JSON.stringify({ ...c1.preview, text: c1.preview.text.slice(0, 40), rules: undefined }));
+  check('查:老师收到的是去掉 frontmatter 的正文 + 板书写法,话题第一条带守则', c1.preview.text.startsWith('你是这个家的数学老师') && c1.preview.text.includes('多夸一句') && !c1.preview.text.includes('maxTurns') && (c1.preview.board?.chars ?? 0) > 100 && c1.preview.rules?.path === '.agents/skills/cotutor-tutor/SKILL.md' && (c1.preview.rules?.text.length ?? 0) > 100, JSON.stringify({ ...c1.preview, text: c1.preview.text.slice(0, 40), rules: undefined }));
   check('查:和出厂比一块', c1.diff?.length === 1 && c1.diff[0].now[0].includes('多夸一句'), JSON.stringify(c1.diff));
   check('查:不落盘', readFileSync(file, 'utf8') === shipped);
   const c2 = (await route('POST', base + '/check', ctx, { text: shipped.replace('name: math-tutor', 'name: maths') })).json as Chk;
@@ -81,10 +81,10 @@ try {
   check('列:改过', (await rows()).find((r) => r.tutor === 'math-tutor')?.state === 'custom');
 
   // ---- 恢复出厂 ----
-  const chinese = join(root, '.claude', 'agents', 'chinese-tutor.md');
+  const chinese = join(root, 'agents', 'chinese-tutor.md');
   writeFileSync(chinese, readFileSync(chinese, 'utf8') + '\n别的老师的改动\n');
   const rs = await route('POST', base + '/restore', ctx, {});
-  check('恢复出厂:换回出厂那份,你这份留 .bak,状态回最新', rs.status === 200 && readFileSync(file, 'utf8') === shipped && readFileSync(file + '.bak', 'utf8') === edited && (rs.json as { bak: string }).bak === '.claude/agents/math-tutor.md.bak' && ((await route('GET', base, ctx)).json as { state: string }).state === 'latest', JSON.stringify(rs.json));
+  check('恢复出厂:换回出厂那份,你这份留 .bak,状态回最新', rs.status === 200 && readFileSync(file, 'utf8') === shipped && readFileSync(file + '.bak', 'utf8') === edited && (rs.json as { bak: string }).bak === 'agents/math-tutor.md.bak' && ((await route('GET', base, ctx)).json as { state: string }).state === 'latest', JSON.stringify(rs.json));
   check('恢复出厂:别的老师不碰', readFileSync(chinese, 'utf8').includes('别的老师的改动'));
 
   check('页面:老师文件走这条接口,老师团跳过来', DEV_PAGE.includes("'/api/dev/tutor-files/'") && DEV_PAGE.includes('改老师文件 →'));

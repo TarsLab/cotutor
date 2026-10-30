@@ -1,7 +1,7 @@
 /**
  * 老师文件的安装与升级(**拷贝,不链**)。
- * 包里的 grades/grade-<n>/agents/<name>.md 是出厂件;init 把它拷进 workspace 的 .claude/agents/<name>.md(这份是家长的,想改就改),
- * (原来 .qwen/agents/<name>.md 是指向它的相对链,2026-10-09 退役,init / upgrade 删掉旧链。)
+ * 包里的 grades/grade-<n>/agents/<name>.md 是出厂件;init 把它拷进 workspace 的 agents/<name>.md(这份是家长的,想改就改),
+ * 和老师的家 agents/<name>/ 并排,同包里一样(2026-10-30 从 .claude/agents/ 挪来,老 workspace 由 migrate.ts 的 migrateLayout 搬)。
  * 出厂时的内容 hash 记在 .cotutor/shipped.json(机器文件,家长不用管),据此分三种状态:
  *   latest     与本包一致
  *   upgradable 与记录的出厂 hash 一致(没改过,只是包更新了)→ cotutor upgrade 直接换新
@@ -11,7 +11,7 @@
 import { lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { PACKAGE_VERSION, shippedAgents, tutorTemplate, writeSchemaFile, type ShippedAgent, type TutorTemplateInput } from './skeleton.ts';
-import { AGENT_NAME_RE } from '../../schema/index.ts';
+import { AGENT_NAME_RE, tutorFilePath } from '../../schema/index.ts';
 import { UsageError } from '../workspace.ts';
 import { SHIPPED_FILE, sha256, readManifest, writeManifest, type ShippedManifest } from './shipped.ts';
 import { workspaceGradePack } from './grades.ts';
@@ -29,9 +29,9 @@ export interface TutorStatus {
   basedOn?: string;
 }
 
-/** 老师文件在 workspace 里的位置:.claude/agents/<name>.md 是真相(别的 CLI 由应用读正文递进系统提示) */
+/** 老师文件在 workspace 里的位置:agents/<name>.md 是真相(应用读正文递进系统提示) */
 export function tutorFile(root: string, name: string): string {
-  return join(root, '.claude', 'agents', `${name}.md`);
+  return tutorFilePath(join(root, 'agents'), name);
 }
 
 async function readState(root: string, a: ShippedAgent, manifest: ShippedManifest): Promise<TutorStatus> {
@@ -89,7 +89,7 @@ export async function installTutors(root: string, configured: string[] = []): Pr
   const shipped = await shippedAgents((await workspaceGradePack(root)).agentsDir);
   for (const a of shipped) {
     const s = await readState(root, a, manifest);
-    const item = `.claude/agents/${basename(a.file)}`;
+    const item = `agents/${basename(a.file)}`;
     if (s.state === 'missing' || s.state === 'broken') {
       await installOne(root, a, manifest);
       touched = true;
@@ -103,7 +103,7 @@ export async function installTutors(root: string, configured: string[] = []): Pr
   }
   for (const name of configured.filter((n) => !shipped.some((a) => a.name === n))) {
     const file = tutorFile(root, name);
-    if (!(await lstat(file).catch(() => null))) steps.push({ item: `.claude/agents/${name}.md`, action: 'kept', note: `缺:cotutor.json 里有 ${name},文件还没写;cotutor add ${name} 出模板,或自己写(frontmatter name: ${name})` });
+    if (!(await lstat(file).catch(() => null))) steps.push({ item: `agents/${name}.md`, action: 'kept', note: `缺:cotutor.json 里有 ${name},文件还没写;cotutor add ${name} 出模板,或自己写(frontmatter name: ${name})` });
   }
   for (const name of [...new Set([...shipped.map((a) => a.name), ...configured])]) {
     const home = join(root, 'agents', name);

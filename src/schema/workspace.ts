@@ -4,6 +4,17 @@
  */
 import type { CotutorConfig, PathRole } from './config.ts';
 
+/**
+ * 技能目录,相对 workspace 根(2026-10-30 从 .claude/skills 挪来):Codex、Qwen Code 在 workspace 里对话时直接读它;
+ * Claude Code 只认 .claude/skills,那里是一条指过来的相对链(init / upgrade 建)
+ */
+export const SKILLS_DIR = '.agents/skills';
+
+/** 老师文件 agents/<name>.md(2026-10-30 从 .claude/agents 挪来):和老师的家 agents/<name>/ 并排,同包里的 grades/grade-<n>/agents/ */
+export function tutorFilePath(agentsDir: string, name: string): string {
+  return `${agentsDir}/${name}.md`;
+}
+
 /** workspace 是怎么找到的:--workspace / COTUTOR_WORKSPACE / cwd 祖先 / ~/.config/cotutor/config.json / ~/cotutor/ 唯一目录 */
 export type RootSource = 'flag' | 'env' | 'cwd' | 'user-config' | 'home-single';
 
@@ -14,10 +25,12 @@ export interface Workspace {
   /** 角色 → 绝对路径;vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根;captures 相对 workspace 根 */
   paths: Record<PathRole, string> & Record<string, string>;
   dirs: {
+    /** 老师文件 <name>.md 与老师的家 <name>/(会话 cwd,activity 在里面) */
     agents: string;
     ledger: string;
     conversations: string;
-    claudeAgents: string;
+    /** 技能 .agents/skills/ */
+    skills: string;
     /** 课包(drawtell build 的产物,小课堂与 lecture 卡从这里放;派生物,gitignore) */
     bundles: string;
     /** 首页:草稿、已发布、历史;publish 时才建,不进骨架 */

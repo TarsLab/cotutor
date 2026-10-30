@@ -1,8 +1,9 @@
 /**
  * workspace骨架清单:init 建、doctor 查,同一张清单(两边各写一遍必然漂移)。
  * workspace 布局:
- *   cotutor.json / .claude/agents(老师文件,拷自本包 grades/grade-<n>/agents/,是家长的;所有 CLI 都从这里拿老师正文)/ .cotutor/shipped.json(出厂 hash)
- *   agents/<name>/(老师的家 = 会话 cwd)/ ledger/(产物账本)/ conversations/(对话索引与转录)
+ *   cotutor.json / .cotutor/shipped.json(出厂 hash)/ .agents/skills/(技能;.claude/skills 是指过去的链,给 Claude Code)
+ *   agents/<name>.md(老师文件,拷自本包 grades/grade-<n>/agents/,是家长的;所有运行时都从这里拿老师正文)与 agents/<name>/(老师的家 = 会话 cwd)
+ *   ledger/(产物账本)/ conversations/(对话索引与转录)
  * vault 侧(《obsidian仓库设计.md》):档案 / 课程表 / 日记 / 教材 / 计划 / 参考,init 只建档案与参考 README(缺了才写)
  */
 import { readFileSync } from 'node:fs';
@@ -17,7 +18,7 @@ import { DEFAULT_GRADE, PACKAGE_GRADES_DIR } from './grades.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 
-export const DIRS = ['agents', 'ledger', 'conversations', '.claude/agents', 'bundles'] as const;
+export const DIRS = ['agents', 'ledger', 'conversations', 'bundles'] as const;
 export const LEDGER_FILES = ['ledger/artifacts.jsonl'] as const;
 
 /** 默认年级的出厂老师目录;workspace 的操作用 workspaceGradePack 选来源 */
@@ -55,7 +56,7 @@ snaps/
 talk/
 # 作业照片(孩子在老师页上拍的;paths.captures):体积大、只是这一轮的素材,认出的文字在日记里
 captures/
-# 本机代理等私有设置
+# 家长在 workspace 里用 Claude Code 时它的个人设置
 .claude/settings.local.json
 # .cotutor/ 是机器文件(板书写法缓存、配音试听、二维码、日志、CLI 壳、qwen 的家),只留出厂 hash 与 schema
 .cotutor/*

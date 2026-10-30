@@ -14,8 +14,8 @@ import { makeCert } from './cert.ts';
 import { PIN_RE, USER_PIN_FILE, clearPin, readPin, setPin } from '../http/access.ts';
 import { addTutorFile, upgradeTutors } from './tutors.ts';
 import { activityRunFor, checkActivities, upgradeActivities } from './activities.ts';
-import { configGapsOf, upgradeConfig } from './migrate.ts';
-import { upgradeSkills, writeToolShim } from './skills.ts';
+import { configGapsOf, migrateLayout, upgradeConfig } from './migrate.ts';
+import { linkClaudeSkills, upgradeSkills, writeToolShim } from './skills.ts';
 import { addTheme, upgradeThemes } from './themes.ts';
 import { patchConfig } from '../workspace.ts';
 import { resolveRoot } from '../workspace.ts';
@@ -209,15 +209,20 @@ export async function main(argv: string[]): Promise<void> {
           return;
         }
         const force = typeof flags.force === 'string' ? [flags.force, ...positionals] : positionals;
+        // 老布局先原样搬到新位置,下面再照常比新旧
+        const layoutSteps = await migrateLayout(root);
         const steps = await upgradeTutors(root, { force });
         const activitySteps = await upgradeActivities(root, { force });
         const skillSteps = await upgradeSkills(root);
+        const link = await linkClaudeSkills(root);
         const themeSteps = await upgradeThemes(root);
         await writeToolShim(root);
         // 老师文件换新了,政策文件却不会自动多出新老师与新运行时(cotutor.json 是家长的),提一句
         const gaps = await configGapsOf(root);
-        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, steps, activities: activitySteps, skills: skillSteps, themes: themeSteps, configGaps: gaps }), null, 2)}\n`);
+        if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, layout: layoutSteps, steps, activities: activitySteps, skills: skillSteps, claudeSkills: link, themes: themeSteps, configGaps: gaps }), null, 2)}\n`);
         else {
+          for (const s of layoutSteps) process.stdout.write(`${s.action === 'kept' ? '!' : '✓'} ${s.item.padEnd(24)} ${s.note ?? ''}\n`);
+          if (link.action !== 'exists') process.stdout.write(`${link.action === 'kept' ? '!' : '✓'} ${link.item.padEnd(24)} ${link.note ?? ''}\n`);
           const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', unavailable: '来源的包没装,没法换', retired: '不再出厂,删了' };
           for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' || s.action === 'unavailable' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.machine ? '(机器件)' : ''}\n`);
           for (const s of themeSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} theme ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.action === 'kept-custom' ? '(themes/ 里改过的主题不动)' : ''}\n`);

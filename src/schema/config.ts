@@ -64,7 +64,7 @@ export const POLICY_DEFAULTS: Policy = {
 export const BOARD_CARD_KINDS = ['text', 'read', 'choice', 'image', 'tianzige', 'word', 'lecture', 'canvas', 'paint', 'photo', 'code'] as const;
 export type BoardCardKind = (typeof BOARD_CARD_KINDS)[number];
 
-/** agent 名:与 .claude/agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
+/** agent 名:与 agents/<name>.md 的 frontmatter name 一致,小写字母数字连字符 */
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 /** 老师卡上的常驻入口:不经首页发布、一直在那位老师的卡上 */
@@ -314,7 +314,7 @@ export const CotutorConfigSchema = z
     paths: z.record(z.string(), z.string()).default({}).describe('角色 → 目录:vault 指 Obsidian vault 根;diary / plans / profile / timetable / textbooks / reference 相对 vault(缺省 日记 / 计划 / 孩子.md / 课程表.md / 教材 / 参考),不配 vault 就相对 workspace 根;profile 只是 init 新建档案的位置,老师按 cotutor: profile 属性找;captures(作业照片)相对 workspace 根'),
     vault: VaultPolicySchema.default({ keepScore: 4, autoBookkeep: false }).describe('vault 的写入政策:keepScore 话题打几星起才把摘要沉淀进日记(缺省 4);autoBookkeep 自动记账(缺省关)'),
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 板书 auto / 观察 10 条、计划 10 行、原文 4000 字)'),
-    tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = .claude/agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
+    tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
     runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时是 {run, resume} 命令模板(起 CLI)或 {api, model}(应用直连模型),占位 {agent} {agentBody} {systemBody} {boardFile} {prompt} {session};模型、预算、时限写在这里'),
     tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板:say 合成一句(占位 {text} {voice} {out});voices 列音色(stdout JSON),家长端音色页据此列表与试听'),
     figshot: z

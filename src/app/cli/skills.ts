@@ -1,6 +1,7 @@
 /**
- * 出厂 skill:与老师文件同一套「拷不链」机制——init 拷进 workspace 的 .claude/skills/<name>/,hash 记 .cotutor/shipped.json 的 skills,
- * (原来 .qwen/skills/<name> 是相对链,2026-10-09 退役,init / upgrade 删掉旧链。)出厂表 SHIPPED_SKILLS 每项带来源与 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录):
+ * 出厂 skill:与老师文件同一套「拷不链」机制——init 拷进 workspace 的 .agents/skills/<name>/,hash 记 .cotutor/shipped.json 的 skills,
+ * (2026-10-30 从 .claude/skills/ 挪来:Codex、Qwen Code 认 .agents/skills;Claude Code 只认 .claude/skills,那里是一条指过来的链,见 linkClaudeSkills。)
+ * 出厂表 SHIPPED_SKILLS 每项带来源与 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录):
  * - 来源 cotutor = 本包根 skills/<name>/(进 npm files;cotutor-board 整个、其余几个的 references/ 是 scripts/gen-skills.ts 生成后入库的,
  *   tests/skills.test.ts 断言一致),来源 drawtell = drawtell 包根 skills/<name>/(四个领域 skill,2026-09-15 从退役的 drawtell-skills 仓搬过去的;
  *   没装 → unavailable,doctor 点名,init 跳过)
@@ -9,7 +10,7 @@
  * 顺带一个机器文件 .cotutor/drawtell:指向本包 node_modules 里 drawtell CLI 的壳脚本,家长做课包时用相对路径就能跑它。
  */
 import { createHash } from 'node:crypto';
-import { chmod, cp, lstat, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, lstat, mkdir, readFile, readdir, readlink, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +19,7 @@ import { ANALYZE_SKILL } from '../skills/analyze-doc.ts';
 import { TUNE_SKILL } from '../skills/tune-doc.ts';
 import { HOME_SKILL } from '../skills/home-doc.ts';
 import { TUTOR_SKILL } from '../../runtime/context/tutor-rules.ts';
+import { SKILLS_DIR } from '../../schema/index.ts';
 export { ANALYZE_SKILL, BOARD_SKILL, HOME_SKILL, TUNE_SKILL, TUTOR_SKILL };
 import { PACKAGE_VERSION } from './skeleton.ts';
 import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
@@ -117,7 +119,7 @@ export interface SkillStatus {
 }
 
 export function skillDir(root: string, name: string): string {
-  return join(root, '.claude', 'skills', name);
+  return join(root, SKILLS_DIR, name);
 }
 
 async function readState(root: string, skill: ShippedSkill, manifest: ShippedManifest): Promise<SkillStatus> {
@@ -169,7 +171,7 @@ export async function installSkills(root: string): Promise<SkillStep[]> {
     const { name } = skill;
     const s = await readState(root, skill, manifest);
     const src = skillSourceDir(skill);
-    const item = `.claude/skills/${name}/`;
+    const item = `${SKILLS_DIR}/${name}/`;
     if (s.state === 'unavailable' || !src) {
       steps.push({ item, action: 'kept', note: `${skill.source} 没装,没拷(家长做课包要它);仓库根 pnpm install` });
       continue;
@@ -223,6 +225,25 @@ export async function upgradeSkills(root: string): Promise<SkillUpgradeStep[]> {
   }
   await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   return steps;
+}
+
+/** Claude Code 只认 .claude/skills(Codex、Qwen Code 认 .agents/skills):在那里放一条相对链,两边看到的是同一份 */
+export const CLAUDE_SKILLS_LINK = '.claude/skills';
+
+/** init / upgrade 用:没有就建链;已经是链不动;是实体目录(老 workspace 没搬完)不碰,报一声 */
+export async function linkClaudeSkills(root: string): Promise<SkillStep> {
+  const link = join(root, CLAUDE_SKILLS_LINK);
+  const target = join('..', SKILLS_DIR);
+  const item = `${CLAUDE_SKILLS_LINK} → ${SKILLS_DIR}`;
+  const st = await lstat(link).catch(() => null);
+  if (st?.isSymbolicLink()) {
+    const to = await readlink(link);
+    return to === target ? { item, action: 'exists' } : { item, action: 'kept', note: `已经是指向 ${to} 的链,没动` };
+  }
+  if (st) return { item, action: 'kept', note: `${CLAUDE_SKILLS_LINK} 是实体目录,没建链:把里面的技能挪进 ${SKILLS_DIR}/、删掉它,再跑 cotutor upgrade` };
+  await mkdir(dirname(link), { recursive: true });
+  await symlink(target, link);
+  return { item, action: 'created', note: 'Claude Code 只认 .claude/skills,链到同一份' };
 }
 
 /** .cotutor/drawtell:壳脚本,家长在 workspace 里做课包时用 .cotutor/drawtell 跑 drawtell CLI(和服务端烤画面同一版);机器文件,init / upgrade 每次刷新 */

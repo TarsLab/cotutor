@@ -10,7 +10,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { writeFile, rename, stat } from 'node:fs/promises';
 import { ConfigError, UsageError } from '../shared/errors.ts';
 import { redactDeep, redactHome } from '../shared/home.ts';
-import type { RootSource, Workspace } from '../schema/workspace.ts';
+import { SKILLS_DIR, type RootSource, type Workspace } from '../schema/workspace.ts';
 
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
@@ -170,7 +170,7 @@ export function assembleWorkspace(root: string, source: RootSource, config: Cotu
       agents: join(root, 'agents'),
       ledger: join(root, 'ledger'),
       conversations: join(root, 'conversations'),
-      claudeAgents: join(root, '.claude', 'agents'),
+      skills: join(root, SKILLS_DIR),
       bundles: join(root, 'bundles'),
       home: join(root, 'home'),
       lectures: join(root, 'lectures'),

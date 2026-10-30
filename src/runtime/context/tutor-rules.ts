@@ -8,10 +8,11 @@ import { stripHumanNotes } from '../../shared/human-notes.ts';
 import { applyCardGuards } from '../../board/card-guards.ts';
 import { BOARD_CARD_KINDS } from '../../schema/config.ts';
 import { toolKind } from '../../brain/cli/adapters.ts';
+import { SKILLS_DIR } from '../../schema/workspace.ts';
 
 export const TUTOR_SKILL = 'cotutor-tutor';
 /** 相对 workspace 根 */
-export const TUTOR_RULES_PATH = `.claude/skills/${TUTOR_SKILL}/SKILL.md`;
+export const TUTOR_RULES_PATH = `${SKILLS_DIR}/${TUTOR_SKILL}/SKILL.md`;
 
 /**
  * 放进上下文包的正文:去掉 frontmatter(那是给 CLI 的技能索引看的)与给人看的注释,按这位老师的卡裁 `{{有 …}}` 段(没给 = 全部)。
@@ -32,7 +33,7 @@ export function takesTutorRules(agent: string): boolean {
 }
 
 /** 板书写法(机器技能 cotutor-board 的 SKILL.md),相对 workspace 根。由应用递给老师:运行时能预载就进系统提示,否则进话题第一条的 <cotutor-board> */
-export const BOARD_GUIDE_PATH = '.claude/skills/cotutor-board/SKILL.md';
+export const BOARD_GUIDE_PATH = `${SKILLS_DIR}/cotutor-board/SKILL.md`;
 
 /** 递给老师的正文:去掉 frontmatter 与给人看的注释 */
 export function boardGuideBody(skillMd: string): string {

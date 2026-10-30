@@ -7,7 +7,7 @@ import { isRealtimeVoice } from '../../realtime/voices.ts';
 import { dashscopeAuth } from '../../realtime/bailian.ts';
 import { adapterFor, parserOf, prepareCli, processEnv, runtimeIssue } from '../../brain/index.ts';
 import { execFile } from 'node:child_process';
-import { access, readFile, readdir, stat } from 'node:fs/promises';
+import { access, lstat, readFile, readdir, stat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
@@ -17,12 +17,12 @@ import { parseAgentFile } from '../../runtime/agent-file.ts';
 import { localDate } from '../../shared/time.ts';
 import { MIN_CONTRAST, contrastWithWhite } from '../../ui/shared/tutor-color.ts';
 import { memoryPath, missingEntry, pickNotes } from '../../memory/vault-notes.ts';
-import { isApiRuntime, listTutors, mouthVoice, resolvePolicy } from '../../schema/index.ts';
+import { SKILLS_DIR, isApiRuntime, listTutors, mouthVoice, resolvePolicy, tutorFilePath } from '../../schema/index.ts';
 import { kindsFor, tutorCardKinds } from '../../board/cards/index.ts';
 import { scanVault } from '../../memory/vault.ts';
 import { parseArtifactEvents } from '../../runtime/journal/ledger.ts';
 import { parseTimetable } from '../../memory/timetable.ts';
-import { configGapsOf } from './migrate.ts';
+import { configGapsOf, legacyLayout } from './migrate.ts';
 import { httpsFiles } from './serve.ts';
 import { readPin } from '../http/access.ts';
 import { gradeOfSemester } from '../../memory/grade.ts';
@@ -122,7 +122,7 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
   if (runtimeIssue(runtime)) return; // 静态体检已报退役,不启动旧 CLI
   let agentBody: string | undefined;
   try {
-    agentBody = parseAgentFile(await readFile(join(ws.dirs.claudeAgents, `${first.name}.md`), 'utf8')).body;
+    agentBody = parseAgentFile(await readFile(tutorFilePath(ws.dirs.agents, first.name), 'utf8')).body;
   } catch {
     /* 上面 tutor.* 已报 */
   }
@@ -282,17 +282,20 @@ export async function doctorWorkspace(
     detail: missing.length ? `缺 ${missing.join(' ')}` : [...DIRS].map((d) => `${d}/`).join(' '),
     fix: missing.length ? `cotutor init <slug> --dir ${redactHome(root)}(幂等补缺)` : undefined,
   });
+  // 老布局(2026-10-30 之前):老师文件在 .claude/agents/、技能在 .claude/skills/,现在都读不到了
+  const legacy = await legacyLayout(root);
+  if (legacy.length) push({ name: 'layout', ok: false, required: true, detail: `${legacy.join(' ')} 是老位置:老师文件现在在 agents/<老师>.md,技能在 ${SKILLS_DIR}/`, fix: 'cotutor upgrade(原样挪过去,不改内容;新位置已有同名的不挪、会点名)' });
   // 家规(根的 QWEN.md)2026-09-15 起不出厂:有就是家长自建的共同规矩,提一句;没有不缺
   const rulesThere = (await Promise.all(['QWEN.md'].map(async (f) => ((await statOrNull(join(root, f))) ? f : null)))).filter(Boolean);
   push({ name: 'rules', ok: true, required: false, detail: rulesThere.length ? `家长自建的家规 ${rulesThere.join(' ')} 在,所有老师每轮都读` : '没有根目录的 QWEN.md(不需要:老师要知道的都在老师文件与技能里)' });
 
   if (ws) {
     // ---- 老师:定义文件(拷贝)+ 名字一致 + 出厂 / 自定义状态 + 老师目录 ----
-    // 老师文件只有 .claude/agents/ 这一份:应用读正文递进 Qwen 的系统提示({agentBody} / {systemBody});.qwen/agents/ 的链 2026-10-09 退役
+    // 老师文件只有 agents/<name>.md 这一份:应用读正文递进系统提示({agentBody} / {systemBody})
     const statuses = new Map((teachingPack ? await tutorStatuses(root) : []).map((s) => [s.name, s]));
     for (const name of Object.keys(ws.config.tutors)) {
       const shipped = statuses.has(name);
-      const file = join(ws.dirs.claudeAgents, `${name}.md`);
+      const file = tutorFilePath(ws.dirs.agents, name);
       let detail: string;
       let ok = false;
       try {
@@ -303,7 +306,7 @@ export async function doctorWorkspace(
         detail = `${redactHome(file)} 读不到`;
       }
       push({
-        name: `tutor.${name}.claude`,
+        name: `tutor.${name}.file`,
         ok,
         required: true,
         detail,
@@ -311,7 +314,7 @@ export async function doctorWorkspace(
           ? undefined
           : shipped
             ? `cotutor init 补拷(拷自本包 agents/${name}.md),或把老师键改成文件里的 name`
-            : `这是自家加的老师:写 .claude/agents/${name}.md(frontmatter name: ${name}),cotutor add ${name} --display <显示名> 可出模板;或把 cotutor.json 里这条删掉`,
+            : `这是自家加的老师:写 agents/${name}.md(frontmatter name: ${name}),cotutor add ${name} --display <显示名> 可出模板;或把 cotutor.json 里这条删掉`,
       });
       const st = statuses.get(name);
       if (!st) push({ name: `tutor.${name}.origin`, ok: true, required: false, detail: teachingPack ? '自家加的老师(不是出厂件,upgrade 不碰)' : '出厂来源无法确认,先修复 teachingPack 检查项' });
@@ -350,14 +353,17 @@ export async function doctorWorkspace(
       const { stageBuilt } = await import('../http/stage.ts');
       const built = stageBuilt();
       push({ name: 'stage.bundle', ok: built, required: false, detail: built ? 'dist/stage/ 在(舞台包:小课堂与画板卡的舞台)' : 'dist/stage/ 不在,小课堂与画板卡的舞台打不开(轻卡照常)', fix: built ? undefined : '仓库根 pnpm run build:stage(npm 装的包自带)' });
-      const { TOOL_SHIM, drawtellBin, skillStatuses } = await import('./skills.ts');
+      const { CLAUDE_SKILLS_LINK, TOOL_SHIM, drawtellBin, skillStatuses } = await import('./skills.ts');
       const dt = drawtellBin();
       const shim = (await statOrNull(join(root, TOOL_SHIM)))?.isFile() ?? false;
       push({ name: 'drawtell', ok: dt !== null && shim, required: false, detail: !dt ? 'node_modules 里没有 drawtell,服务端烤不了课包的画面' : shim ? `${TOOL_SHIM} 在,指向本包的 drawtell(家长做课包用它 build / dub / bake)` : `${TOOL_SHIM} 不在,家长做课包只能用全局的 drawtell(版本可能和服务端对不上)`, fix: !dt ? '仓库根 pnpm install' : shim ? undefined : 'cotutor init 或 cotutor upgrade 生成' });
       for (const sk of teachingPack ? await skillStatuses(root) : []) {
         const label: Record<string, string> = { latest: sk.machine ? '机器件,最新' : '出厂件,最新', upgradable: sk.machine ? '机器件,和包里不一样(改过或包已更新)' : `出厂件,基于 ${sk.basedOn},包已更新`, custom: `自定义(基于 ${sk.basedOn})`, untracked: '自定义(没有出厂记录)', missing: sk.machine ? '缺(机器件,老师或家长的技能靠它)' : '缺', unavailable: `${sk.source} 没装,没法拷` };
-        push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'unavailable' && sk.state !== 'upgradable', required: Boolean(sk.machine), detail: `.claude/skills/${sk.name}/:${label[sk.state]}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor upgrade 换新版' : sk.state === 'unavailable' ? '仓库根 pnpm install' : undefined });
+        push({ name: `skill.${sk.name}`, ok: sk.state !== 'missing' && sk.state !== 'unavailable' && sk.state !== 'upgradable', required: Boolean(sk.machine), detail: `${SKILLS_DIR}/${sk.name}/:${label[sk.state]}`, fix: sk.state === 'missing' ? 'cotutor init 补拷' : sk.state === 'upgradable' ? 'cotutor upgrade 换新版' : sk.state === 'unavailable' ? '仓库根 pnpm install' : undefined });
       }
+      // Claude Code 只认 .claude/skills:那里该是指向 .agents/skills 的链;老师用不到,家长在 workspace 里用 Claude Code 才要
+      const linked = (await lstat(join(root, CLAUDE_SKILLS_LINK)).catch(() => null))?.isSymbolicLink() ?? false;
+      push({ name: 'skills.claude', ok: linked, required: false, detail: linked ? `${CLAUDE_SKILLS_LINK} 链到 ${SKILLS_DIR}(Claude Code 读的是同一份)` : `${CLAUDE_SKILLS_LINK} 不是链,在 workspace 里用 Claude Code 看不到 ${SKILLS_DIR}/ 的技能`, fix: linked ? undefined : 'cotutor upgrade 建链(是实体目录的话先把里面的挪进 .agents/skills/ 再删掉)' });
       // ---- activity:老师的家里 agents/<老师>/activities/<名>.md;出厂的看新旧,每份都过一遍 activity check ----
       {
         const { activityStatuses, checkActivities } = await import('./activities.ts');
@@ -373,8 +379,8 @@ export async function doctorWorkspace(
         for (const r of await checkActivities(root, ws.config.tutors)) {
           const key = `${r.tutor}/${r.name}`;
           // 老 workspace 改过老师文件:upgrade 只报 diff,里面同名那节还在,两处说法会打架
-          const agentText = await readFile(join(ws.dirs.claudeAgents, `${r.tutor}.md`), 'utf8').catch(() => '');
-          if (new RegExp(`^#{2,4}\\s*${r.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm').test(agentText)) push({ name: `activity.${key}.dup`, ok: false, required: false, detail: `.claude/agents/${r.tutor}.md 里还有一节「${r.name}」,和 activity 文件两处说法会打架`, fix: `删掉老师文件里那一节(做法以 agents/${r.tutor}/activities/${r.name}.md 为准)` });
+          const agentText = await readFile(tutorFilePath(ws.dirs.agents, r.tutor), 'utf8').catch(() => '');
+          if (new RegExp(`^#{2,4}\\s*${r.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm').test(agentText)) push({ name: `activity.${key}.dup`, ok: false, required: false, detail: `agents/${r.tutor}.md 里还有一节「${r.name}」,和 activity 文件两处说法会打架`, fix: `删掉老师文件里那一节(做法以 agents/${r.tutor}/activities/${r.name}.md 为准)` });
           const st = states.get(key);
           const fixes = r.issues.filter((i) => i.level === 'fix');
           const origin = st ? label[st.state] + (st.basedOn && st.state !== 'latest' ? `(基于 ${st.basedOn})` : '') : teachingPack ? '自家写的' : '出厂来源无法确认';

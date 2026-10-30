@@ -52,7 +52,7 @@ export function tuneReferenceDoc(): string {
   const policyRows = rows(PolicySchema.shape as Record<string, z.ZodTypeAny>, POLICY_DEFAULTS as unknown as Record<string, unknown>);
   return `# 能改的字段(机器生成,别改)
 
-## 老师文件 .claude/agents/<name>.md
+## 老师文件 agents/<name>.md
 
 frontmatter 只写应用支持的这几个键:${AGENT_FRONTMATTER_KEYS.map((k) => `\`${k}\``).join('、')}。\`name\` 必须等于文件名,也是 cotutor.json 里 tutors 的键,**不能改**。正文就是系统提示。
 

@@ -17,7 +17,7 @@ cotutor doctor                    # 逐项体检,不过的每条都带修复命�
 cotutor serve                     # 孩子端 http://<ip>:5180/,家长端 /parent
 ```
 
-为兼容已有 workspace,老师与技能沿用 `.claude/` 历史数据目录,无需安装 Claude CLI。`init` 把出厂老师拷进 `.claude/agents/`,把做课包用的四个领域 skill(随 drawtell 包来)和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.claude/skills/`;
+`init` 把出厂老师拷进 `agents/<老师>.md`,把做课包用的四个领域 skill(随 drawtell 包来)和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
 做课包用的 drawtell 随包装好(`.cotutor/drawtell`),不用另外装。要在 iPad 上用(按住说话要 HTTPS):`cotutor cert` 签一张
 自签证书,把根证书装到 iPad,重启 `serve`。步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
 
@@ -73,7 +73,7 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 ## 数据与升级
 
-默认 workspace 是 `~/cotutor/<孩子>/`:配置在 `cotutor.json`,老师在 `.claude/agents/`,activity 在 `agents/<老师>/activities/`,对话在 `conversations/`,账本在 `ledger/`,照片在 `captures/`,课包在 `bundles/`,首页在 `home/`。长期档案、记忆和日记在配置的 Obsidian vault,规则见 [obsidian 仓库设计](docs/obsidian仓库设计.md)。备份时保留整个 workspace 与 vault。
+默认 workspace 是 `~/cotutor/<孩子>/`:配置在 `cotutor.json`,老师在 `agents/<老师>.md`,activity 在 `agents/<老师>/activities/`,技能在 `.agents/skills/`,对话在 `conversations/`,账本在 `ledger/`,照片在 `captures/`,课包在 `bundles/`,首页在 `home/`。长期档案、记忆和日记在配置的 Obsidian vault,规则见 [obsidian 仓库设计](docs/obsidian仓库设计.md)。备份时保留整个 workspace 与 vault。
 
 ```sh
 cotutor upgrade                      # 更新未修改的出厂老师、activity、主题与技能
@@ -84,9 +84,11 @@ cotutor doctor
 
 家长改过的老师与主题保留并显示差异;机器技能会随版本覆盖。配置迁移补缺,并更新未自定义的旧命令模板,保留自定义配置。升级程序后重新启动 `serve`。
 
+2026-10-30 之前建的 workspace,老师在 `.claude/agents/`、技能在 `.claude/skills/`。`cotutor upgrade`(或 `init`)先把它们原样挪到新位置,再照常升级;新位置已有同名的不挪,会点名。`.claude/` 里别的文件不动。
+
 ### 旧 workspace 切换到 Qwen
 
-先运行 `cotutor upgrade --config` 补齐 Qwen 模板,再把 `runtimes.default` 和仍指向旧运行时的 `tutors.*.runtime` 改为 `qwen` 或 `qwen-flash`,删除旧 Claude 运行时条目。旧 `proxy` 字段可删除,对应命令已移除。`.claude/` 是共用的历史数据目录,老师与技能不用搬动。
+先运行 `cotutor upgrade --config` 补齐 Qwen 模板,再把 `runtimes.default` 和仍指向旧运行时的 `tutors.*.runtime` 改为 `qwen` 或 `qwen-flash`,删除旧 Claude 运行时条目。旧 `proxy` 字段可删除,对应命令已移除。
 
 ## 开发
 

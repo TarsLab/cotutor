@@ -50,7 +50,7 @@ cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS,
 (cfg.tutors as Record<string, Record<string, unknown>>).helper = { display: '小帮手', avatar: '🧰', enabled: true, hidden: true };
 // 按老师配卡:一位只讲 text / choice 的老师,运行时预载板书写法(孩子端不露,不占首页)
 (cfg.tutors as Record<string, Record<string, unknown>>)['science-tutor'] = { display: '科学老师', enabled: true, hidden: true, runtime: 'preload', cards: ['choice'] };
-writeFileSync(join(root, '.claude', 'agents', 'helper.md'), '---\nname: helper\ndescription: 测试用的工具人\n---\n只和系统打交道。\n');
+writeFileSync(join(root, 'agents', 'helper.md'), '---\nname: helper\ndescription: 测试用的工具人\n---\n只和系统打交道。\n');
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault', '计划'), { recursive: true });
 writeFileSync(join(root, 'vault', '课程表.md'), '| 星期 | 时间 | 学科 |\n|---|---|---|\n| 二 | 16:00–17:00 | 数学 |\n| 三 | 19:00–19:40 | 语文 |\n');
@@ -105,7 +105,7 @@ try {
     const wsAll = loadWorkspace(root);
     delete wsAll.config.tutors['chinese-tutor'].cards;
     const ra = await packDryRun(wsAll, 'chinese-tutor', { from: 'kid', at: now, text: '干跑一句' });
-    check('没写 cards → 照旧递出厂的 SKILL.md(全部卡)', ra.pack.boardGuide === '.claude/skills/cotutor-board/SKILL.md', String(ra.pack.boardGuide));
+    check('没写 cards → 照旧递出厂的 SKILL.md(全部卡)', ra.pack.boardGuide === '.agents/skills/cotutor-board/SKILL.md', String(ra.pack.boardGuide));
     const rs = await ctx.runner.send('science-tutor', { from: 'kid', text: '你好', newThread: true });
     await wait('science-tutor');
     const runS = JSON.parse(readFileSync(join(root, 'conversations', 'science-tutor', `2026-09-08.${rs.job}.run.json`), 'utf8')) as { prompt: string; argv: string[] };
@@ -140,7 +140,7 @@ try {
   // 换个法子:再发一条让假 CLI 把整段 prompt 回显——它回显最后一行,而上下文包在前面。这里改为直接测 gatherContext。
   const { gatherContext } = await import('../src/runtime/runner.ts');
   const pack = await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: now });
-  check('gatherContext:本老师的计划行、本学科观察(从日记抽)、学期、守则(去掉 frontmatter)与档案、入口、参考给绝对路径、at', pack.plan.join() === '周三前讲退位' && pack.recent.map((r) => r.claim).join() === '借位忘了' && pack.semester === '二年级上' && pack.profile === '档案.md' && pack.entry === '随便/二上/数学.md' && pack.rules === '.claude/skills/cotutor-tutor/SKILL.md' && pack.notes?.map((n) => n.role).join() === 'rules,profile,entry' && pack.notes?.[0].text.startsWith('# 老师守则') && pack.refs?.join() === [join(root, 'vault', '随便', '数学二上课本.md'), join(root, 'vault', '参考', '跨十.md')].join() && pack.at === '2026-09-08T16:20', JSON.stringify(pack));
+  check('gatherContext:本老师的计划行、本学科观察(从日记抽)、学期、守则(去掉 frontmatter)与档案、入口、参考给绝对路径、at', pack.plan.join() === '周三前讲退位' && pack.recent.map((r) => r.claim).join() === '借位忘了' && pack.semester === '二年级上' && pack.profile === '档案.md' && pack.entry === '随便/二上/数学.md' && pack.rules === '.agents/skills/cotutor-tutor/SKILL.md' && pack.notes?.map((n) => n.role).join() === 'rules,profile,entry' && pack.notes?.[0].text.startsWith('# 老师守则') && pack.refs?.join() === [join(root, 'vault', '随便', '数学二上课本.md'), join(root, 'vault', '参考', '跨十.md')].join() && pack.at === '2026-09-08T16:20', JSON.stringify(pack));
   const packZh = await gatherContext(ctx.ws, 'chinese-tutor', { from: 'kid', at: now });
   check('语文老师拿到自己的;没有入口文件 → entry 写缺了什么,只带档案', packZh.plan.join() === '背古诗' && packZh.recent.map((r) => r.claim).join() === '错别字' && packZh.entry === '缺:vault 里没有 cotutor: subject、subject: 语文、semester: 二年级上 的文件' && packZh.notes?.map((n) => n.role).join() === 'rules,profile' && !packZh.refs, JSON.stringify(packZh));
   const packTight = await gatherContext({ ...ctx.ws, config: { ...ctx.ws.config, policyDefaults: { ...ctx.ws.config.policyDefaults, contextPack: { entryChars: 20 } } } }, 'math-tutor', { from: 'kid', at: now });
@@ -148,7 +148,7 @@ try {
   const packHelper = await gatherContext(ctx.ws, 'helper', { from: 'system', at: now });
   check('守则只给有脸的老师:helper 不带', !packHelper.rules && !packHelper.notes?.some((n) => n.role === 'rules'), JSON.stringify(packHelper.notes?.map((n) => n.role)));
   {
-    const rulesFile = join(ctx.ws.root, '.claude', 'skills', 'cotutor-tutor', 'SKILL.md');
+    const rulesFile = join(ctx.ws.root, '.agents', 'skills', 'cotutor-tutor', 'SKILL.md');
     const saved = readFileSync(rulesFile, 'utf8');
     rmSync(rulesFile);
     const packNoRules = await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: now });
@@ -210,7 +210,7 @@ try {
   const pr2 = await promptOf(d3.index.messages[1].job);
   const pr3 = await promptOf(d3.index.messages[2].job);
   check('笔记原文:新会话整篇带,消息记下版本', pr1.includes('<vault-note role="profile"') && pr1.includes('<vault-note role="entry"') && /^随便\/二上\/数学\.md@[0-9a-f]{8}$/.test((d3.index.messages[0] as { notes?: Record<string, string> }).notes?.entry ?? ''), pr1);
-  check('守则:新会话整篇带在笔记前面,续会话没改过 → 只写「未变」', pr1.includes('\n  rules: ".claude/skills/cotutor-tutor/SKILL.md"\n') && pr1.indexOf('<cotutor-rules') < pr1.indexOf('<vault-note') && !pr1.includes('name: cotutor-tutor') && !pr2.includes('<cotutor-rules') && pr2.includes('rules: ".claude/skills/cotutor-tutor/SKILL.md(未变,原文在本话题前面)"'), pr2);
+  check('守则:新会话整篇带在笔记前面,续会话没改过 → 只写「未变」', pr1.includes('\n  rules: ".agents/skills/cotutor-tutor/SKILL.md"\n') && pr1.indexOf('<cotutor-rules') < pr1.indexOf('<vault-note') && !pr1.includes('name: cotutor-tutor') && !pr2.includes('<cotutor-rules') && pr2.includes('rules: ".agents/skills/cotutor-tutor/SKILL.md(未变,原文在本话题前面)"'), pr2);
   check('板书写法:fake 运行时没有预载占位符 → 话题第一条注入 <cotutor-board>(在守则后、家长笔记前,不带 frontmatter),续会话「未变」', /\n  boardGuide: "\.cotutor\/board\/math-tutor-[0-9a-f]{8}\.md"\n/.test(pr1) && pr1.indexOf('<cotutor-rules path=') < pr1.indexOf('<cotutor-board path=') && pr1.indexOf('<cotutor-board path=') > 0 && pr1.indexOf('<cotutor-board path=') < pr1.indexOf('<vault-note role=') && pr1.includes('# 板书怎么写') && !pr1.includes('disable-model-invocation') && !pr2.includes('<cotutor-board path=') && /boardGuide: "\.cotutor\/board\/math-tutor-[0-9a-f]{8}\.md\(未变,原文在本话题前面\)"/.test(pr2), JSON.stringify({ line: pr1.split('\n').filter((l) => l.includes('boardGuide')), tag1: pr1.indexOf('<cotutor-board'), rules1: pr1.indexOf('<cotutor-rules'), note1: pr1.indexOf('<vault-note'), title: pr1.includes('# 板书怎么写'), fm: pr1.includes('disable-model-invocation'), tag2: pr2.includes('<cotutor-board'), line2: pr2.split('\n').filter((l) => l.includes('boardGuide')) }));
   {
     // 换语文老师跑:数学老师这一天的消息序号后面的断言写死了,不往里插
@@ -657,7 +657,7 @@ try {
   const phTools = (phM as { tools?: { name: string; arg: string; ok: boolean | null; chars: number }[] }).tools ?? [];
   check('消息 tools:Read 了那张照片,参数是路径', phTools.some((t) => t.name === 'Read' && t.arg.endsWith(phOne)), JSON.stringify(phTools));
   const phSrc = (JSON.parse(readFileSync(join(root, 'conversations', 'math-tutor', `${phDate}.${phJ.job}.run.json`), 'utf8')) as { sources?: { agent: { file: string; hash: string; body: string } | null; skills: Record<string, string> } }).sources;
-  check('run.json sources:老师文件正文与 hash、技能 hash', phSrc?.agent?.file === '.claude/agents/math-tutor.md' && phSrc.agent.hash.startsWith('sha256:') && phSrc.agent.body.includes('name: math-tutor') && typeof phSrc.skills === 'object' && 'cotutor-board' in phSrc.skills, JSON.stringify({ file: phSrc?.agent?.file, skills: Object.keys(phSrc?.skills ?? {}) }));
+  check('run.json sources:老师文件正文与 hash、技能 hash', phSrc?.agent?.file === 'agents/math-tutor.md' && phSrc.agent.hash.startsWith('sha256:') && phSrc.agent.body.includes('name: math-tutor') && typeof phSrc.skills === 'object' && 'cotutor-board' in phSrc.skills, JSON.stringify({ file: phSrc?.agent?.file, skills: Object.keys(phSrc?.skills ?? {}) }));
   const rawPh = (await route('GET', `/api/conversations/math-tutor/${phDate}/raw/${phJ.job}`, ctx)).json as { tools: { name: string; kind: string; ok: boolean | null; chars: number }[]; stations: { id: string; note: string }[]; pack: { sources: { agent: { hash: string } } | null } };
   check('看原文「读了什么」:一站(按工具类别数读了几个文件)+ tools 数组 + 快照 hash', rawPh.stations.find((s) => s.id === 'tools')?.note.includes('读了') === true && rawPh.tools.length > 0 && rawPh.tools.some((t) => t.kind === 'read') && rawPh.pack.sources?.agent.hash.startsWith('sha256:') === true, JSON.stringify(rawPh.stations.find((s) => s.id === 'tools')));
   const phKid = ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { messages: { job: string; question: string | null; photos?: string[] }[] }).messages.find((m) => m.job === phJ.job)!;

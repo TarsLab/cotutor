@@ -8,7 +8,7 @@ import { join, relative, sep } from 'node:path';
 import { parseAgentFile } from '../agent-file.ts';
 import { emptyIndex } from './conversation.ts';
 import { localDate } from '../../shared/time.ts';
-import { cardAssetName, conversationFiles, threads, type CardAssets, type CardStateFile, type CardStates } from '../../schema/index.ts';
+import { cardAssetName, conversationFiles, threads, tutorFilePath, type CardAssets, type CardStateFile, type CardStates } from '../../schema/index.ts';
 import { parseTranscript, type Transcript } from '../../brain/transcript.ts';
 import { logParser } from '../../brain/index.ts';
 import {
@@ -183,7 +183,7 @@ export async function capturePathOk(ws: Workspace, rel: string): Promise<boolean
 /** 这轮用的老师文件与技能的快照(2026-09-15):文件后来改了就查不回当时那份,所以记正文与 hash;技能只记 hash,变没变一眼看 */
 export interface RunSources {
   agent: { file: string; hash: string; body: string } | null;
-  /** 技能名 → SKILL.md 的 hash(workspace .claude/skills/ 下有的全部) */
+  /** 技能名 → SKILL.md 的 hash(workspace .agents/skills/ 下有的全部) */
   skills: Record<string, string>;
   /** 这轮上下文包里带了原文的笔记(守则、档案、记忆、口径……):role、路径、带进去那段的 hash 与字数、截没截(2026-10-30;续话题「未变」的不在这里) */
   notes?: { role: string; path: string; hash: string; chars: number; cut?: true }[];
@@ -246,7 +246,7 @@ const sha = (text: string): string => `sha256:${createHash('sha256').update(text
 /** 这轮起跑时老师文件与技能长什么样(记进 run.json;读不到的就 null / 空,不拦这一轮) */
 export async function snapshotSources(ws: Workspace, name: string): Promise<RunSources> {
   let agent: RunSources['agent'] = null;
-  const file = join(ws.dirs.claudeAgents, `${name}.md`);
+  const file = tutorFilePath(ws.dirs.agents, name);
   try {
     const body = await readFile(file, 'utf8');
     agent = { file: relative(ws.root, file), hash: sha(body), body };
@@ -254,18 +254,17 @@ export async function snapshotSources(ws: Workspace, name: string): Promise<RunS
     /* 读不到:记 null */
   }
   const skills: Record<string, string> = {};
-  const skillsDir = join(ws.root, '.claude', 'skills');
-  for (const d of await readdir(skillsDir, { withFileTypes: true }).catch(() => [])) {
+  for (const d of await readdir(ws.dirs.skills, { withFileTypes: true }).catch(() => [])) {
     if (!d.isDirectory() && !d.isSymbolicLink()) continue;
-    const text = await readFile(join(skillsDir, d.name, 'SKILL.md'), 'utf8').catch(() => null);
+    const text = await readFile(join(ws.dirs.skills, d.name, 'SKILL.md'), 'utf8').catch(() => null);
     if (text !== null) skills[d.name] = sha(text);
   }
   return { agent, skills };
 }
 
-/** 老师文件正文(系统提示),给 {agentBody} / {systemBody};从 .claude/agents/ 读(所有 CLI 都从这里拿) */
+/** 老师文件正文(系统提示),给 {agentBody} / {systemBody};从 agents/<name>.md 读(所有运行时都从这里拿) */
 export async function readAgentBody(ws: Workspace, name: string): Promise<string> {
-  const file = join(ws.dirs.claudeAgents, `${name}.md`);
+  const file = tutorFilePath(ws.dirs.agents, name);
   try {
     return parseAgentFile(await readFile(file, 'utf8')).body;
   } catch {

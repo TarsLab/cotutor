@@ -1,5 +1,5 @@
 /** vault 笔记按属性定位(2026-09-17):frontmatter、学期推算、链接解析、挑档案 / 入口 / 参考。 */
-import { appendMemory, applyMemoryOps, clipNote, findMemoryLine, frontmatter, memoryCount, parseMemoryOp, tidyMemoryPrompt, memoryPath, memoryTemplate, missingEntry, pickNotes, resolveLink, semesterAt, textHash, wikilinks, type VaultNote } from '../src/memory/vault-notes.ts';
+import { CHILD_MEMORY_AGENT, CHILD_MEMORY_CAP, CHILD_MEMORY_PATH, appendMemory, applyMemoryOps, childMemoryTemplate, clipNote, findMemoryLine, frontmatter, memoryCount, parseMemoryOp, tidyMemoryPrompt, memoryPath, memoryTemplate, missingEntry, pickNotes, resolveLink, semesterAt, textHash, wikilinks, type VaultNote } from '../src/memory/vault-notes.ts';
 import { check, done } from './_check.ts';
 
 check('frontmatter:平铺键值,引号去掉,中文键也收', JSON.stringify(frontmatter('---\ncotutor: textbook\n原书: "[[a.pdf]]"\n单元: 8\n---\n# x\n')) === JSON.stringify({ cotutor: 'textbook', 原书: '[[a.pdf]]', 单元: '8' }));
@@ -35,6 +35,18 @@ check('没配 subject / 没档案 → 没有入口', pickNotes(notes, all, { dat
   const mem = [note('记忆/数学老师.md', { cotutor: 'memory', agent: 'math-tutor' }), note('记忆/别人.md', { cotutor: 'memory', agent: 'chinese-tutor' })];
   const p = pickNotes([...notes, ...mem], all, { date: '2026-09-17', subject: '语文', agent: 'math-tutor' });
   check('记忆:按 agent 属性挑,不进 refs', p.memory?.path === '记忆/数学老师.md' && !p.refs.includes('记忆/数学老师.md') && pickNotes(mem, [], { date: '2026-09-17' }).memory === null);
+}
+{
+  // 孩子的记忆(2026-10-30):agent: all 那篇谁都拿得到,不算任何一位老师自己的;满了新增的不进,删掉的腾出地方
+  const kid = note('随便/孩子.md', { cotutor: 'memory', agent: CHILD_MEMORY_AGENT });
+  const p = pickNotes([...notes, kid, note('记忆/数学老师.md', { cotutor: 'memory', agent: 'math-tutor' })], all, { date: '2026-09-17', agent: 'math-tutor' });
+  check('孩子的记忆:按 agent: all 挑(路径随意),不当这位老师的记忆,没有就是 null', p.child?.path === '随便/孩子.md' && p.memory?.path === '记忆/数学老师.md' && pickNotes(notes, all, { date: '2026-09-17' }).child === null && pickNotes([kid], [], { date: '2026-09-17', agent: 'all' }).memory?.path === '随便/孩子.md');
+  const tpl = childMemoryTemplate();
+  check('孩子的记忆模板:agent: all,写明以档案为准、最多几条', tpl.startsWith('---\ncotutor: memory\nagent: all\n---\n') && tpl.includes('以档案为准') && tpl.includes(`最多 ${CHILD_MEMORY_CAP} 条`) && CHILD_MEMORY_PATH === '记忆/孩子.md');
+  const two = appendMemory(`${tpl}- 2026-09-01 一\n- 2026-09-01 二\n`, ['三', '四'], '2026-10-30', 3);
+  check('cap:满了的不加,进 full', two.added.join() === '- 2026-10-30 三' && two.full.join() === '四' && memoryCount(two.text) === 3);
+  const freed = applyMemoryOps(two.text, ['删:一', '五', '六'].map(parseMemoryOp), '2026-10-30', { cap: 3 });
+  check('cap:先删后加,删掉的那条腾出一个位置', freed.changes.join() === '删:一,- 2026-10-30 五' && freed.full.join() === '六' && memoryCount(freed.text) === 3, JSON.stringify(freed));
 }
 {
   const tpl = memoryTemplate('math-tutor', '数学老师');

@@ -262,6 +262,29 @@ try {
     const del5 = await deleteThread(ctx.ws, 'helper', '2026-09-08', s4.job);
     check('写到一半断了的话题:删的时候补记再撤,删掉的那行接回来', del5.undo.memory === 1 && readFileSync(memFile, 'utf8').includes('- 2026-09-01 爱用手指数') && !del5.index.messages.some((m) => m.pending), JSON.stringify({ undo: del5.undo, text: readFileSync(memFile, 'utf8') }));
   }
+  // ---- 孩子的记忆(2026-10-30,《vault重构方案》§4):有脸的老师写的 孩子: 进共用的 记忆/孩子.md,所有有脸的老师话题第一条都带;满 20 条不再进 ----
+  {
+    const { deleteThread } = await import('../src/runtime/journal/store.ts');
+    const childFile = join(root, 'vault', '记忆', '孩子.md');
+    const mathFile = join(root, 'vault', '记忆', '数学老师.md');
+    const c1 = await ctx.runner.send('math-tutor', { from: 'kid', text: '记孩子 我不会', newThread: true });
+    const cm = (await c1.done).messages.find((m) => m.job === c1.job)!;
+    const ct = readFileSync(childFile, 'utf8');
+    check('孩子: 那条进 记忆/孩子.md(agent: all,不带前缀与证据),另一条进数学老师自己的;remembered 分得清', ct.startsWith('---\ncotutor: memory\nagent: all\n---\n') && ct.endsWith('- 2026-09-08 卡住时会先说我不会,先肯定他做对的部分。\n') && !readFileSync(mathFile, 'utf8').includes('我不会') && readFileSync(mathFile, 'utf8').includes('讲角用手指比划') && cm.childLines?.length === 1 && cm.memoryLines?.length === 1 && cm.remembered?.some((r) => r.startsWith('孩子的记忆:- 2026-09-08 卡住时')) === true && cm.memoryProposals?.map((p) => `${p.target}:${p.check}`).join() === 'child:verified,tutor:unverified', JSON.stringify({ ct, cm }));
+    const cp = await gatherContext(ctx.ws, 'chinese-tutor', { from: 'kid', at: now });
+    const hp = await gatherContext(ctx.ws, 'helper', { from: 'kid', at: now });
+    check('别的有脸的老师也带(child: 路径 + <vault-note role="child">);工具人不带', cp.child === '记忆/孩子.md' && cp.notes?.some((n) => n.role === 'child' && n.text.includes('先说我不会')) === true && hp.child === undefined && !hp.notes?.some((n) => n.role === 'child'), JSON.stringify({ child: cp.child, h: hp.child }));
+    const cdel = await deleteThread(ctx.ws, 'math-tutor', '2026-09-08', c1.job);
+    check('删话题:孩子的记忆里那行也撤掉', cdel.undo.memory === 2 && !readFileSync(childFile, 'utf8').includes('先说我不会'), JSON.stringify(cdel.undo));
+    writeFileSync(childFile, `${ct.slice(0, ct.indexOf('- 2026-09-08'))}${Array.from({ length: 20 }, (_, i) => `- 2026-09-01 第 ${i + 1} 条`).join('\n')}\n`);
+    const c2 = await ctx.runner.send('math-tutor', { from: 'kid', text: '记孩子 我不会', newThread: true });
+    const cm2 = (await c2.done).messages.find((m) => m.job === c2.job)!;
+    check('孩子的记忆满了(20 条):新的不进,提醒家长删几条', !readFileSync(childFile, 'utf8').includes('先说我不会') && cm2.warnings?.some((w) => w.includes('孩子的记忆满了')) === true && !cm2.childLines, JSON.stringify(cm2.warnings));
+    // 收拾干净:后面按数学老师这天的条数算 job,记忆文件也当没有
+    await deleteThread(ctx.ws, 'math-tutor', '2026-09-08', c2.job);
+    rmSync(childFile);
+    rmSync(mathFile);
+  }
   const dates = (await route('GET', '/api/conversations/math-tutor', ctx)).json as { dates: string[] };
   check('日期列表', dates.dates.join() === '2026-09-08');
 

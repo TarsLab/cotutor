@@ -33,10 +33,12 @@ export const ContextPackSchema = z.object({
   entry: z.string().optional(),
   /** 这位 agent 的记忆文件(`cotutor: memory`、`agent: <名>`):路径 + 状态,或「还没有」;原文在 notes */
   memory: z.string().optional(),
+  /** 孩子的记忆(`cotutor: memory`、`agent: all`,所有有脸的老师共用,2026-10-30):路径 + 状态,或「还没有」;原文在 notes。有脸的老师才带 */
+  child: z.string().optional(),
   /** 参考资料的绝对路径:这科这学期的教材 + 档案与入口文件里的 [[链接]];只给路径,老师要用自己 Read(这轮带工具才给) */
   refs: z.array(z.string()).optional(),
   /** 整篇带进来的原文(话题第一条、或话题里改过了才带):老师守则(rules)与家长笔记;接在 YAML 块后面,不进 YAML */
-  notes: z.array(z.object({ role: z.enum(['rules', 'boardGuide', 'activityGuide', 'profile', 'entry', 'memory']), path: z.string().min(1), text: z.string() })).optional(),
+  notes: z.array(z.object({ role: z.enum(['rules', 'boardGuide', 'activityGuide', 'profile', 'child', 'entry', 'memory']), path: z.string().min(1), text: z.string() })).optional(),
   /** 这个话题的 activity 文件(「老师怎么带」那节,按参数裁过,后面接这个 activity 多带的卡的写法):相对 workspace 根的路径 + 状态(未变 / 缺);原文在 notes(<cotutor-activity>) */
   activityGuide: z.string().optional(),
   /** 本周计划里与本老师相关的行(已按 planLines 截) */

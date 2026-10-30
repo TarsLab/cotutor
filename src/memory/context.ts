@@ -1,6 +1,6 @@
 /**
  * 上下文包里从 vault 来的那几段(从 runner.gatherContext 拆出来,2026-10-29,行为不变):
- * 课程表命中的时段、当前学期、档案 / 入口文件 / 记忆的原文(按 entryChars 截;记忆留最近的)、参考路径、本周计划里本老师的行、
+ * 课程表命中的时段、当前学期、档案 / 孩子的记忆 / 入口文件 / 记忆的原文(按 entryChars 截;记忆留最近的)、参考路径、本周计划里本老师的行、
  * 最近 14 天日记里本学科的「- 观察:」行(《obsidian仓库设计.md》§7)。都是现读的:家长改了这些文件,下一轮取材就是新的。
  * 有脸的老师的守则(机器技能的原文)不在 vault 里,runner 自己加在这几条笔记前面。
  */
@@ -30,10 +30,12 @@ export interface PackReport {
 export interface LearningContext {
   slot?: string;
   semester?: string;
-  /** 档案、入口文件、记忆的原文(截过) */
+  /** 档案、孩子的记忆、入口文件、记忆的原文(截过) */
   notes: NonNullable<ContextPack['notes']>;
   /** 上下文包里那几行:路径(截了注明)或「缺:…」「还没有」 */
   profile: string;
+  /** 孩子的记忆:有脸的老师才带 */
+  child?: string;
   entry?: string;
   memory: string;
   refs?: string[];
@@ -43,7 +45,7 @@ export interface LearningContext {
 
 /**
  * 这一轮从 vault 取的材。agent = 记忆认谁的(activity 话题是 <老师>/<activity>,档案、入口文件、日记观察照旧共用);
- * teacher = 这位是有脸的老师(没有入口文件时写「缺」);display = 计划里认他的名字(不在 tutors 里就不带计划)
+ * teacher = 这位是有脸的老师(没有入口文件时写「缺」;带孩子的记忆——它是有意的例外,activity 话题也带同一篇);display = 计划里认他的名字(不在 tutors 里就不带计划)
  */
 export async function learningContext(
   v: Vault,
@@ -64,14 +66,16 @@ export async function learningContext(
   const pick = pickNotes(notes, files, { date: localDate(o.at), subject: o.subject, agent: o.agent });
   const limit = o.limits.entryChars;
   if (pick.semester) out.semester = pick.semester;
-  const labels: Partial<Record<'profile' | 'entry' | 'memory', string>> = {};
-  for (const [role, n] of [['profile', pick.profile], ['entry', pick.entry], ['memory', pick.memory]] as const) {
+  const labels: Partial<Record<'profile' | 'child' | 'entry' | 'memory', string>> = {};
+  for (const [role, n] of [['profile', pick.profile], ['child', o.teacher ? pick.child : null], ['entry', pick.entry], ['memory', pick.memory]] as const) {
     if (!n) continue;
-    const clip = clipNote(n.text, limit, role === 'memory' ? 'tail' : 'head');
-    labels[role] = clip.cut ? `${n.path}(原文 ${n.text.length} 字,${role === 'memory' ? `只带最近 ${limit}` : `截到 ${limit}`})` : n.path;
+    const tail = role === 'memory' || role === 'child';
+    const clip = clipNote(n.text, limit, tail ? 'tail' : 'head');
+    labels[role] = clip.cut ? `${n.path}(原文 ${n.text.length} 字,${tail ? `只带最近 ${limit}` : `截到 ${limit}`})` : n.path;
     out.notes.push({ role, path: n.path, text: clip.text });
   }
   out.profile = labels.profile ?? '缺:vault 里没有 cotutor: profile 的档案';
+  if (o.teacher) out.child = labels.child ?? '还没有';
   const entry = labels.entry ?? (o.teacher ? missingEntry(o.subject, pick) : undefined);
   if (entry !== undefined) out.entry = entry;
   out.memory = labels.memory ?? '还没有';

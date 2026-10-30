@@ -35,6 +35,8 @@ check('plan 截到 2 行', text.includes('    - a\n    - b\n') && !text.includes
 check('recent 取最近 2 条', text.includes('"2026-09-06 二"') && text.includes('"2026-09-07 三"') && !text.includes('一"'), text);
 check('分隔与消息', text.endsWith('---\n妈妈我不懂这一步\n'), text);
 
+const withChild = renderContextPack({ at: '2026-10-30T16:00', profile: '档案.md', child: '记忆/孩子.md', entry: '数学.md', memory: '还没有', plan: [], recent: [] });
+check('孩子的记忆(2026-10-30):紧跟档案,在入口文件、自己的记忆前', withChild.includes('  profile: "档案.md"\n  child: "记忆/孩子.md"\n  entry: "数学.md"\n  memory: "还没有"'), withChild);
 const minimal = renderContextPack({ at: '2026-09-08T20:00', plan: [], recent: [] });
 check('空项不写', minimal === 'cotutor:\n  at: 2026-09-08T20:00', minimal);
 const withVault = renderContextPack({ at: '2026-09-08T20:00', plan: [], recent: [], vault: { root: '/Users/x/Library/Mobile Documents/iCloud~md~obsidian/Documents/Ray', diary: '日记', timetable: '/elsewhere/课程表.md' } });

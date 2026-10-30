@@ -18,6 +18,11 @@ export function parseProposal(raw: string): Omit<MemoryProposal, 'check'> {
   return { item, target: CHILD.test(item) ? 'child' : 'tutor', ...(quote ? { quote } : {}) };
 }
 
+/** 进孩子的记忆时去掉 `孩子:` 前缀(那篇里不用标) */
+export function childItem(item: string): string {
+  return item.replace(/^孩子\s*[:：]\s*/, '');
+}
+
 /** 比对用:去掉空白、标点、符号,英文不分大小写(孩子的话是语音转写,标点靠不住) */
 const norm = (s: string): string => s.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
 

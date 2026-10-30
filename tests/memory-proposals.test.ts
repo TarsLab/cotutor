@@ -5,10 +5,10 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkEvidence, kidSaid, parseProposal, proposalsOf } from '../src/memory/proposals.ts';
+import { checkEvidence, childItem, kidSaid, parseProposal, proposalsOf } from '../src/memory/proposals.ts';
 import { applyMemoryOps, clipNote, parseMemoryOp, textHash } from '../src/memory/vault-notes.ts';
 import { planVaultMemory, writeVaultMemory, type Vault } from '../src/memory/vault.ts';
-import { memoryLanded, recoverPending } from '../src/memory/commit.ts';
+import { memoryLanded, planMemory, recoverPending } from '../src/memory/commit.ts';
 import { emptyIndex } from '../src/runtime/journal/conversation.ts';
 import type { ConversationIndex, ConversationMessage } from '../src/schema/index.ts';
 import { check, done } from './_check.ts';
@@ -94,6 +94,16 @@ try {
   check('没写成的丢掉,不补 booked(再点记账会重记);pending 都清掉,各自进提醒', !c.memoryLines && !d.diaryBlock && !('1720-3' in r.index.booked) && r.index.messages.every((m) => !m.pending && m.warnings?.length === 1) && d.warnings![0].includes('再点一次记账'), JSON.stringify(r.index.messages.map((m) => m.warnings)));
   const again = await recoverPending(v, r.index);
   check('没有 pending:原样', !again.changed && again.index === r.index);
+
+  // ---- 孩子的记忆(2026-10-30):有脸的老师写的 孩子: 分到 agent: all 那篇,前缀去掉;工具人写的照旧进自己的 ----
+  const split = await planMemory(v, { agent: 'math-tutor', display: '数学老师', items: ['孩子:卡住先说我不会。证据:「我不会」', '讲角用手指比划'], max: 2, date: '2026-10-30', said: ['我不会'], shared: true });
+  check('有脸的老师:孩子: 那条进 记忆/孩子.md(去掉前缀),另一条进自己的', split.child?.file === '记忆/孩子.md' && split.child.base === null && split.child.text.includes('agent: all') && split.child.changes.join() === '- 2026-10-30 卡住先说我不会。' && split.plan?.file === '记忆/数学老师.md' && split.plan.changes.join() === '- 2026-10-30 讲角用手指比划', JSON.stringify(split));
+  const tool = await planMemory(v, { agent: 'helper', display: '小帮手', items: ['孩子:卡住先说我不会'], max: 2, date: '2026-10-30', said: [], shared: false });
+  check('工具人:孩子: 照旧进自己的,前缀留着', tool.child === null && tool.plan?.changes.join() === '- 2026-10-30 孩子:卡住先说我不会', JSON.stringify(tool));
+  check('改、删也能分过去:孩子:删:原话', childItem('孩子:删:卡住先说我不会') === '删:卡住先说我不会' && childItem('孩子: 读题慢') === '读题慢');
+  await writeVaultMemory(v, split.child!);
+  const cr = await recoverPending(v, { ...emptyIndex('math-tutor', '2026-10-30'), messages: [msg({ job: '1800-1', thread: '1800-1', from: 'kid', text: '我不会', pending: { child: { file: split.child!.file, base: null, hash: textHash(split.child!.text), changes: split.child!.changes, lines: split.child!.lines } } })] });
+  check('孩子的记忆写到一半断了:补 childLines,remembered 里标着孩子的记忆', JSON.stringify(cr.index.messages[0].childLines) === JSON.stringify(split.child!.lines) && cr.index.messages[0].remembered?.join() === '孩子的记忆:- 2026-10-30 卡住先说我不会。' && !cr.index.messages[0].memoryLines, JSON.stringify(cr.index.messages[0]));
 } finally {
   rmSync(root, { recursive: true, force: true });
 }

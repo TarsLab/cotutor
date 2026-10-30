@@ -68,10 +68,12 @@ const MessageObjectSchema = z.object({
   parentText: z.string().optional(),
   /** 解析板书时的提醒(卡没解析成等),家长视图显示;孩子端不报 */
   warnings: z.array(z.string()).optional(),
-  /** 这轮「## 记忆」段真落进 vault 记忆文件的改动:新增的行(带日期)、「改:旧 → 新」、「删:旧」;家长视图显示 */
+  /** 这轮「## 记忆」段真落进 vault 记忆文件的改动:新增的行(带日期)、「改:旧 → 新」、「删:旧」;进孩子的记忆的前面加「孩子的记忆:」;家长视图显示 */
   remembered: z.array(z.string()).optional(),
   /** 同一批改动的整行原文(删话题时按它撤销,2026-10-05):before = 改之前那行(新增的为 null),after = 改之后那行(删掉的为 null) */
   memoryLines: z.array(MemoryLineSchema).optional(),
+  /** 同上,写进孩子的记忆(`agent: all`)的那几行(2026-10-30) */
+  childLines: z.array(MemoryLineSchema).optional(),
   /** 记账那轮追加进日记的那一段原文(删话题时从日记里摘掉,2026-10-05) */
   diaryBlock: z.string().optional(),
   /** 这轮「## 记忆」段的每一条建议与证据对没对上(2026-10-30,schema/memory.ts);家长视图看哪些没证据、哪些对不上没记 */

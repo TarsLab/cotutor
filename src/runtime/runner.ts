@@ -33,13 +33,13 @@ import { threadDigest } from './context/thread-digest.ts';
 import { getRuntime, runtimeUses, type RunPlan, boardPreloaded } from '../brain/cli/run-plan.ts';
 import { beatTimings } from './journal/events.ts';
 import { type RunEvent, type RunEventEnvelope, type RunEventInput } from '../schema/index.ts';
-import { BOARD_CARD_KINDS, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
+import { BOARD_CARD_KINDS, MEMORY_MAX_PER_TURN, MEMORY_TIDY_CAP, VAULT_PACK_ROLES, isApiRuntime, resolvePolicy, type ContextPack, type ConversationIndex, type MemoryProposal, type PendingMemory, type ActivityRun, type ConversationMessage, type Focus, type MessageFrom, type MessageVia, type Policy, type Runtime, type Timing } from '../schema/index.ts';
 import { UsageError } from '../shared/errors.ts';
 import type { Workspace } from '../schema/index.ts';
 import { readAgentBody, readCardStates, readIndex, snapshotSources, writeIndex, writeRunFile } from './journal/store.ts';
 import { readTextbooks, scanVault, writeVaultMemory, type MemoryPlan } from '../memory/vault.ts';
 import { learningContext, type PackReport } from '../memory/context.ts';
-import { planDiary, planMemory, recoverPending, writeDiaryBlock } from '../memory/commit.ts';
+import { childChanges, planDiary, planMemory, recoverPending, writeDiaryBlock } from '../memory/commit.ts';
 import { kidSaid } from '../memory/proposals.ts';
 import { memoryCount, textHash, tidyMemoryPrompt } from '../memory/vault-notes.ts';
 import { TUTOR_RULES_PATH, takesTutorRules, tutorRulesBody, BOARD_GUIDE_IN_SYSTEM, BOARD_GUIDE_PATH, boardGuideBody, boardGuideReads } from './context/tutor-rules.ts';
@@ -169,6 +169,7 @@ export async function gatherContext(ws: Workspace, tutor: string, input: { from:
   }
   pack.notes.push(...mem.notes);
   pack.profile = mem.profile;
+  if (mem.child !== undefined) pack.child = mem.child;
   if (mem.entry !== undefined) pack.entry = mem.entry;
   pack.memory = mem.memory;
   if (mem.refs) pack.refs = mem.refs;
@@ -703,13 +704,19 @@ export class Runner {
 
   /**
    * 「## 记忆」段 → 建议与要怎么改,还不写:讲课的轮每轮最多 MEMORY_MAX_PER_TURN 条(整理轮不限);回放、eval 不写。
-   * 证据对孩子在这个话题里说过的话(整理轮自成话题,对这一天的);seen = 这轮上下文包里老师看到的记忆版本(消息的 notes.memory)
+   * 证据对孩子在这个话题里说过的话(整理轮自成话题,对这一天的);有脸的老师写的 `孩子:` 进孩子的记忆。
+   * seen = 这轮上下文包里老师看到的那两篇的版本(消息的 notes.memory / notes.child,`路径@hash`)
    */
-  private async planMemoryOf(ws: Workspace, tutor: string, date: string, items: string[], asked: ConversationMessage | undefined, said: readonly string[], clip: number, owner?: { agent: string; display: string }): Promise<{ proposals: MemoryProposal[]; plan: MemoryPlan | null; warnings: string[] }> {
-    if (asked?.replayOf || asked?.eval) return { proposals: [], plan: null, warnings: [asked.eval ? 'eval 不写记忆' : '回放不写记忆'] };
-    const seenAt = asked?.notes?.memory?.lastIndexOf('@') ?? -1;
-    const seen = asked?.notes?.memory && seenAt > 0 ? { path: asked.notes.memory.slice(0, seenAt), hash: asked.notes.memory.slice(seenAt + 1), clip } : undefined;
-    return planMemory(ws, { agent: owner?.agent ?? tutor, display: owner?.display ?? ws.config.tutors[tutor]?.display ?? tutor, items, max: asked?.tidy ? null : MEMORY_MAX_PER_TURN, date, said, ...(seen ? { seen } : {}) });
+  private async planMemoryOf(ws: Workspace, tutor: string, date: string, items: string[], asked: ConversationMessage | undefined, said: readonly string[], clip: number, owner?: { agent: string; display: string }): Promise<{ proposals: MemoryProposal[]; plan: MemoryPlan | null; child: MemoryPlan | null; warnings: string[] }> {
+    if (asked?.replayOf || asked?.eval) return { proposals: [], plan: null, child: null, warnings: [asked.eval ? 'eval 不写记忆' : '回放不写记忆'] };
+    const seenOf = (v: string | undefined): { path: string; hash: string; clip: number } | undefined => {
+      const at = v?.lastIndexOf('@') ?? -1;
+      return v && at > 0 ? { path: v.slice(0, at), hash: v.slice(at + 1), clip } : undefined;
+    };
+    const seen = seenOf(asked?.notes?.memory);
+    const childSeen = seenOf(asked?.notes?.child);
+    const shared = Boolean(ws.config.tutors[tutor]) && tutor.endsWith('-tutor');
+    return planMemory(ws, { agent: owner?.agent ?? tutor, display: owner?.display ?? ws.config.tutors[tutor]?.display ?? tutor, items, max: asked?.tidy ? null : MEMORY_MAX_PER_TURN, date, said, shared, ...(seen ? { seen } : {}), ...(childSeen ? { childSeen } : {}) });
   }
 
   private async spawn(ws: Workspace, tutor: string, date: string, job: string, thread: string, req: BrainRequest, plan: RunPlan, policy: Policy, active: Active, lastJob: string | null): Promise<ConversationIndex> {
@@ -828,18 +835,24 @@ export class Runner {
     const vaultWarnings = [...(memory?.warnings ?? []), ...(diary && 'warning' in diary ? [diary.warning] : [])];
     // 先在索引上记一笔 pending,再写 vault,写完换成结果(《运行层行为设计》§5):中间断了,下次记账、删话题前由 recoverPending 对照文件补
     const mp = memory?.plan;
+    const cp = memory?.child;
     const db = diary && 'block' in diary && bookThread ? { file: diary.file, block: diary.block, thread: bookThread } : null;
-    if (mp || db) {
-      const pending = { ...(mp ? { memory: { file: mp.file, base: mp.base === null ? null : textHash(mp.base), hash: textHash(mp.text), changes: mp.changes, lines: mp.lines } } : {}), ...(db ? { diary: db } : {}) };
+    const pendingOf = (x: MemoryPlan): PendingMemory => ({ file: x.file, base: x.base === null ? null : textHash(x.base), hash: textHash(x.text), changes: x.changes, lines: x.lines });
+    if (mp || cp || db) {
+      const pending = { ...(mp ? { memory: pendingOf(mp) } : {}), ...(cp ? { child: pendingOf(cp) } : {}), ...(db ? { diary: db } : {}) };
       patch((m) => ({ ...m, pending }));
       await writeIndex(ws, next);
       patch(({ pending: _, ...m }) => m);
     }
-    if (mp) {
-      const w = await writeVaultMemory(ws, mp).catch((err: unknown) => `记忆没写进去:${err instanceof Error ? err.message : String(err)}`);
-      if (w) vaultWarnings.push(w);
-      else patch((m) => ({ ...m, remembered: mp.changes, memoryLines: mp.lines }));
+    const remembered: string[] = [];
+    for (const [x, child] of [[mp, false], [cp, true]] as [MemoryPlan | null | undefined, boolean][]) {
+      if (!x) continue;
+      const w = await writeVaultMemory(ws, x).catch((err: unknown) => `${child ? '孩子的记忆' : '记忆'}没写进去:${err instanceof Error ? err.message : String(err)}`);
+      if (w) { vaultWarnings.push(w); continue; }
+      remembered.push(...(child ? childChanges(x.changes) : x.changes));
+      patch((m) => (child ? { ...m, childLines: x.lines } : { ...m, memoryLines: x.lines }));
     }
+    if (remembered.length) patch((m) => ({ ...m, remembered }));
     if (db) {
       try {
         await writeDiaryBlock(ws, date, db.block);

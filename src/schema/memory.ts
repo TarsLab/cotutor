@@ -1,6 +1,6 @@
 /**
  * 老师回的「## 记忆」「## 记账」怎么进 vault(《vault重构方案》§3,2026-10-30):老师写的是建议,应用校验后提交。
- *  - 建议:「## 记忆」的一条。行首 `孩子:` 是关于孩子本人的(target: child;还没有那篇共用记忆之前照旧写进这位老师的),
+ *  - 建议:「## 记忆」的一条。行首 `孩子:` 是关于孩子本人的(target: child),有脸的老师写的进孩子的记忆(`agent: all`,所有有脸的老师共用),
  *    行末 `证据:「…」` 是孩子在这个话题里说过的原话。证据对不上孩子说过的就不提交;没写证据的照旧提交,记成 unverified。
  *  - 提交:先在这一轮的索引上记 pending(要写什么、写到哪、写之前的版本),再写 vault,写完把 pending 换成 memoryLines / diaryBlock / booked。
  *    写 vault 与写索引之间断了,下次记账、删话题之前先对照文件里的实际结果补记或丢掉,不重写一遍。
@@ -27,18 +27,25 @@ export const MemoryProposalSchema = z.object({
 });
 export type MemoryProposal = z.infer<typeof MemoryProposalSchema>;
 
-/** 写 vault 之前记下的一笔;写完就换成 memoryLines / diaryBlock(没了这条 = 提交完了) */
+/** 一个记忆文件要写的那笔 */
+export const PendingMemorySchema = z.object({
+  /** 记忆文件,相对 vault 根 */
+  file: z.string().min(1),
+  /** 写之前的版本(textHash);新建的文件为 null */
+  base: z.string().nullable(),
+  /** 写成之后的版本 */
+  hash: z.string().min(1),
+  changes: z.array(z.string()),
+  lines: z.array(MemoryLineSchema),
+});
+export type PendingMemory = z.infer<typeof PendingMemorySchema>;
+
+/** 写 vault 之前记下的一笔;写完就换成 memoryLines / childLines / diaryBlock(没了这条 = 提交完了) */
 export const PendingCommitSchema = z.object({
-  memory: z.object({
-    /** 记忆文件,相对 vault 根 */
-    file: z.string().min(1),
-    /** 写之前的版本(textHash);新建的文件为 null */
-    base: z.string().nullable(),
-    /** 写成之后的版本 */
-    hash: z.string().min(1),
-    changes: z.array(z.string()),
-    lines: z.array(MemoryLineSchema),
-  }).optional(),
+  /** 这位老师(或这个 activity)自己的记忆 */
+  memory: PendingMemorySchema.optional(),
+  /** 孩子的记忆(`agent: all`,`孩子:` 开头的那几条) */
+  child: PendingMemorySchema.optional(),
   diary: z.object({
     /** 日记文件名(<日期>.md) */
     file: z.string().min(1),

@@ -4,7 +4,8 @@
  *  - profile:孩子档案,一个 vault 一个;`school_start: YYYY-MM` 算当前学期,`semester` 可覆盖
  *  - subject:一科一学期一个,就是这位老师的**入口文件**,原文整篇进上下文包
  *  - textbook:可以没有、可以多本;只给路径,老师要用自己 Read
- *  - memory:一个 agent 一篇(`agent: <name>`),老师在回复里写「## 记忆」、应用追加;家长可读可改,原文整篇进上下文包
+ *  - memory:一个 agent 一篇(`agent: <name>`),老师在回复里写「## 记忆」、应用追加;家长可读可改,原文整篇进上下文包。
+ *    `agent: all` 那篇是孩子的记忆(2026-10-30):关于孩子本人、换一科也成立的,所有有脸的老师共用,老师写 `孩子:` 开头的行进这里
  * 程序读的键用英文(cotutor / subject / semester / school_start / agent),中文键是给人看的描述,这里不读。
  */
 
@@ -97,6 +98,8 @@ export interface VaultPick {
   /** 这位 agent 的记忆文件;还没有 → null */
   memory: VaultNote | null;
   extraMemories: string[];
+  /** 孩子的记忆(`agent: all`);还没有 → null */
+  child: VaultNote | null;
   /** 参考资料的路径:这科这学期的教材 + 档案与入口文件里的 [[链接]](去重,不含它俩自己) */
   refs: string[];
 }
@@ -118,6 +121,7 @@ export function pickNotes(notes: readonly VaultNote[], files: readonly string[],
   const entries = of('subject').filter(same);
   const entry = entries[0] ?? null;
   const memories = of('memory').filter((n) => !!opts.agent && n.props.agent?.trim() === opts.agent);
+  const child = of('memory').find((n) => n.props.agent?.trim() === CHILD_MEMORY_AGENT) ?? null;
   const refs: string[] = of('textbook').filter(same).map((n) => n.path);
   for (const n of [profile, entry]) {
     if (!n) continue;
@@ -135,6 +139,7 @@ export function pickNotes(notes: readonly VaultNote[], files: readonly string[],
     extraEntries: entries.slice(1).map((n) => n.path),
     memory: memories[0] ?? null,
     extraMemories: memories.slice(1).map((n) => n.path),
+    child,
     refs: [...new Set(refs)].filter((p) => !self.has(p)),
   };
 }
@@ -164,22 +169,42 @@ ${display}自己记下的,每个话题开头会整篇读到。你可以随便改
 `;
 }
 
+/** 孩子的记忆(2026-10-30):`agent: all` 的那篇,缺省在 记忆/孩子.md;满了(列表行到 CHILD_MEMORY_CAP 条)新的不再进,提醒家长删 */
+export const CHILD_MEMORY_AGENT = 'all';
+export const CHILD_MEMORY_PATH = '记忆/孩子.md';
+export const CHILD_MEMORY_CAP = 20;
+
+/** 新建的孩子的记忆 */
+export function childMemoryTemplate(): string {
+  return `---
+cotutor: memory
+agent: ${CHILD_MEMORY_AGENT}
+---
+
+关于孩子本人、换一科也成立的事(情绪、读写、注意力、家里谁在旁边),每位老师每个话题开头都会读到。老师在「## 记忆」里写「孩子:」开头的行,应用记在这里;你可以随便改、删。和档案说的不一样时,以档案为准。最多 ${CHILD_MEMORY_CAP} 条,满了就不再记,删几条才有地方。
+
+`;
+}
+
 /**
  * 往记忆文件末尾追加:每条一行 `- <日期> <原话>`(老师自己写了日期开头就不再加);文里已有同样的话就跳过。
- * 返回新全文与真加上的行;一条都没加 → text 原样。
+ * cap:列表行最多这么多条,满了的不加,进 full。返回新全文与真加上的行;一条都没加 → text 原样。
  */
-export function appendMemory(existing: string, items: readonly string[], date: string): { text: string; added: string[] } {
+export function appendMemory(existing: string, items: readonly string[], date: string, cap?: number): { text: string; added: string[]; full: string[] } {
   const has = (s: string): boolean => existing.split('\n').some((l) => l.replace(/^\s*[-*]\s+(\d{4}-\d{2}-\d{2}\s+)?/, '').trim() === s);
   const added: string[] = [];
+  const full: string[] = [];
+  const room = cap === undefined ? Infinity : cap - memoryCount(existing);
   for (const raw of items) {
     const s = raw.replace(/\s+/g, ' ').trim();
     const bare = s.replace(/^\d{4}-\d{2}-\d{2}\s+/, '');
     if (!bare || has(bare) || added.some((a) => a.endsWith(` ${bare}`))) continue;
+    if (added.length >= room) { full.push(bare); continue; }
     added.push(`- ${/^\d{4}-\d{2}-\d{2}\s/.test(s) ? s : `${date} ${s}`}`);
   }
-  if (!added.length) return { text: existing, added };
+  if (!added.length) return { text: existing, added, full };
   const base = existing.replace(/\s*$/, '');
-  return { text: `${base}\n${/^\s*[-*]\s/.test(base.split('\n').at(-1) ?? '') ? '' : '\n'}${added.join('\n')}\n`, added };
+  return { text: `${base}\n${/^\s*[-*]\s/.test(base.split('\n').at(-1) ?? '') ? '' : '\n'}${added.join('\n')}\n`, added, full };
 }
 
 /**
@@ -220,6 +245,8 @@ export interface MemoryApplied {
   changes: string[];
   /** 找不到原话的改 / 删 */
   misses: string[];
+  /** 满了没加上的新增(有 cap 时) */
+  full: string[];
   /** 同一批改动的整行原文:before = 改之前那行(新增为 null),after = 改之后那行(删掉为 null);删话题时 undoMemoryLines 按它撤销 */
   lines: MemoryLine[];
 }
@@ -228,9 +255,9 @@ export type { MemoryLine };
 
 /**
  * 把一串操作落到记忆全文上:先改、删(按原话找行,见 findMemoryLine),再把新增的追加到末尾(appendMemory,去重)。
- * 改过的列表行换成 `- <今天> 新的`;不是列表的行整行换成新的。strict:改、删只认一字不差的原话。
+ * 改过的列表行换成 `- <今天> 新的`;不是列表的行整行换成新的。strict:改、删只认一字不差的原话;cap:新增后最多几条(先删后加,删掉的腾出地方)。
  */
-export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date: string, opts: { strict?: boolean } = {}): MemoryApplied {
+export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date: string, opts: { strict?: boolean; cap?: number } = {}): MemoryApplied {
   const lines = existing.split('\n');
   const fm = /^\uFEFF?---\s*$/.test(lines[0] ?? '') ? lines.findIndex((l, i) => i > 0 && /^---\s*$/.test(l)) : -1;
   const bodyStart = fm > 0 ? fm + 1 : 0;
@@ -260,8 +287,8 @@ export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date:
   }
   const kept = lines.filter((_, i) => !gone.has(i)).join('\n');
   const adds = ops.flatMap((o) => (o.op === 'add' ? [o.text] : []));
-  const r = appendMemory(kept, adds, date);
-  return { text: r.text, changes: [...changes, ...r.added], misses, lines: [...edits, ...r.added.map((after) => ({ before: null, after }))] };
+  const r = appendMemory(kept, adds, date, opts.cap);
+  return { text: r.text, changes: [...changes, ...r.added], misses, full: r.full, lines: [...edits, ...r.added.map((after) => ({ before: null, after }))] };
 }
 
 /**

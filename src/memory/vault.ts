@@ -7,7 +7,7 @@ import type { Dirent } from 'node:fs';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { removeDiaryBlock } from './diary.ts';
-import { applyMemoryOps, clipNote, frontmatter, memoryPath, memoryTemplate, parseMemoryOp, textHash, undoMemoryLines, type MemoryLine, type VaultNote } from './vault-notes.ts';
+import { CHILD_MEMORY_AGENT, CHILD_MEMORY_CAP, CHILD_MEMORY_PATH, applyMemoryOps, childMemoryTemplate, clipNote, frontmatter, memoryPath, memoryTemplate, parseMemoryOp, textHash, undoMemoryLines, type MemoryLine, type VaultNote } from './vault-notes.ts';
 import type { ConversationMessage, PathRole } from '../schema/index.ts';
 
 /** vault 在哪:workspace 的 paths(vault、diary、plans、textbooks…);传整个 workspace 也行 */
@@ -23,27 +23,28 @@ export interface ThreadUndo {
 }
 
 /**
- * 删话题时撤回它留在 vault 里的:各轮写进记忆的行(memoryLines)倒着撤、记账写进日记的那段(diaryBlock)摘掉;
+ * 删话题时撤回它留在 vault 里的:各轮写进记忆的行(memoryLines;孩子的记忆是 childLines)倒着撤、记账写进日记的那段(diaryBlock)摘掉;
  * 找不到原文的(家长或整理那轮后来改过)不撤,一条一句列进 misses
  */
 export async function undoThreadVault(v: Vault, tutor: string, date: string, gone: readonly ConversationMessage[]): Promise<ThreadUndo> {
   const undo: ThreadUndo = { memory: 0, diary: 0, misses: [] };
-  const edits = gone.flatMap((m) => m.memoryLines ?? []);
-  if (edits.length) {
-    // activity 话题写的是 activity 自己的记忆(agent: <老师>/<activity>)
-    const run = gone.find((m) => m.activity)?.activity;
-    const agent = run ? `${tutor}/${run.name}` : tutor;
-    const found = (await scanVault(v)).notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === agent);
-    if (!found) undo.misses.push('记忆文件不在了,记忆没撤');
-    else {
-      const r = undoMemoryLines(found.text, edits);
-      undo.memory = r.undone;
-      undo.misses.push(...r.misses.map((l) => `记忆:找不到这行,没撤:${l}`));
-      if (r.undone) {
-        const file = join(v.paths.vault, found.path);
-        await writeFile(`${file}.tmp`, r.text);
-        await rename(`${file}.tmp`, file);
-      }
+  // activity 话题写的是 activity 自己的记忆(agent: <老师>/<activity>);孩子的记忆大家共用一篇
+  const run = gone.find((m) => m.activity)?.activity;
+  const files = [
+    { agent: run ? `${tutor}/${run.name}` : tutor, edits: gone.flatMap((m) => m.memoryLines ?? []), name: '记忆' },
+    { agent: CHILD_MEMORY_AGENT, edits: gone.flatMap((m) => m.childLines ?? []), name: '孩子的记忆' },
+  ].filter((f) => f.edits.length);
+  const notes = files.length ? (await scanVault(v)).notes : [];
+  for (const f of files) {
+    const found = notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === f.agent);
+    if (!found) { undo.misses.push(`${f.name}文件不在了,${f.name}没撤`); continue; }
+    const r = undoMemoryLines(found.text, f.edits);
+    undo.memory += r.undone;
+    undo.misses.push(...r.misses.map((l) => `${f.name}:找不到这行,没撤:${l}`));
+    if (r.undone) {
+      const file = join(v.paths.vault, found.path);
+      await writeFile(`${file}.tmp`, r.text);
+      await rename(`${file}.tmp`, file);
     }
   }
   for (const m of gone) {
@@ -152,19 +153,23 @@ export interface MemoryPlan {
 }
 
 /**
- * 「## 记忆」段 → 这位 agent 的记忆文件要怎么改(按 `cotutor: memory` + `agent:` 找;没有就建 记忆/<显示名>.md),只算不写:
+ * 「## 记忆」段 → 这位 agent 的记忆文件要怎么改(按 `cotutor: memory` + `agent:` 找;没有就建 记忆/<显示名>.md,孩子的记忆建 记忆/孩子.md),只算不写:
  * 新增追加到末尾,「改:」「删:」按原话找行改、删(任何一行都能动,2026-09-18);缺省位置已有一篇没属性的同名文件就不碰,进提醒。
  * seen = 这一轮上下文包里老师看到的那版(截过的那段的 textHash 与截的字数):文件和它对不上 = 这轮里家长改过,
  * 改、删只认一字不差的原话,找不到的不改——按「包含」找会把家长刚补上的半句一起盖掉(2026-10-30)。
+ * 孩子的记忆(agent: all)最多 CHILD_MEMORY_CAP 条,满了新增的不进,提醒家长删几条。
  */
 export async function planVaultMemory(v: Vault, o: { agent: string; display: string; items: readonly string[]; date: string; seen?: { path: string; hash: string; clip: number } }): Promise<{ plan: MemoryPlan | null; warnings: string[] }> {
   const found = (await scanVault(v)).notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === o.agent);
-  const file = found?.path ?? memoryPath(o.display);
+  const child = o.agent === CHILD_MEMORY_AGENT;
+  const file = found?.path ?? (child ? CHILD_MEMORY_PATH : memoryPath(o.display));
   if (!found && (await stat(join(v.paths.vault, file)).catch(() => null)) !== null) return { plan: null, warnings: [`记忆没写:${file} 已经有了但没有 cotutor: memory / agent: ${o.agent} 属性;加上属性,或挪开它`] };
   const base = found?.text ?? null;
   const strict = base !== null && o.seen?.path === file && textHash(clipNote(base, o.seen.clip, 'tail').text) !== o.seen.hash;
-  const r = applyMemoryOps(base ?? memoryTemplate(o.agent, o.display), o.items.map(parseMemoryOp), o.date, { strict });
-  const warnings = !r.misses.length ? [] : strict ? [`记忆:这轮里家长改过记忆文件,找不到原话的没改(不盖掉家长改的):${r.misses.join(';')}`] : [`记忆:找不到原话,没改:${r.misses.join(';')}`];
+  const r = applyMemoryOps(base ?? (child ? childMemoryTemplate() : memoryTemplate(o.agent, o.display)), o.items.map(parseMemoryOp), o.date, { strict, ...(child ? { cap: CHILD_MEMORY_CAP } : {}) });
+  const name = child ? '孩子的记忆' : '记忆';
+  const warnings = !r.misses.length ? [] : strict ? [`${name}:这轮里家长改过记忆文件,找不到原话的没改(不盖掉家长改的):${r.misses.join(';')}`] : [`${name}:找不到原话,没改:${r.misses.join(';')}`];
+  if (r.full.length) warnings.push(`孩子的记忆满了(${CHILD_MEMORY_CAP} 条),这几条没记:${r.full.join(';')};在 Obsidian 里删几条才有地方`);
   if (!r.changes.length) return { plan: null, warnings };
   return { plan: { file, base, text: r.text, changes: r.changes, lines: r.lines }, warnings };
 }

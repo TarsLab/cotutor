@@ -8,6 +8,7 @@ import { BoardSectionSchema, DeviceSchema } from './board.ts';
 import { BookkeepingSchema } from './sections.ts';
 import { MessageViaSchema } from './home.ts';
 import { ActivityRunSchema } from './activity.ts';
+import { MemoryLineSchema, MemoryProposalSchema, PendingCommitSchema } from './memory.ts';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** 孩子端设备的编号:服务端种的 cookie,随机 12 位十六进制 */
@@ -70,9 +71,13 @@ const MessageObjectSchema = z.object({
   /** 这轮「## 记忆」段真落进 vault 记忆文件的改动:新增的行(带日期)、「改:旧 → 新」、「删:旧」;家长视图显示 */
   remembered: z.array(z.string()).optional(),
   /** 同一批改动的整行原文(删话题时按它撤销,2026-10-05):before = 改之前那行(新增的为 null),after = 改之后那行(删掉的为 null) */
-  memoryLines: z.array(z.object({ before: z.string().nullable(), after: z.string().nullable() })).optional(),
+  memoryLines: z.array(MemoryLineSchema).optional(),
   /** 记账那轮追加进日记的那一段原文(删话题时从日记里摘掉,2026-10-05) */
   diaryBlock: z.string().optional(),
+  /** 这轮「## 记忆」段的每一条建议与证据对没对上(2026-10-30,schema/memory.ts);家长视图看哪些没证据、哪些对不上没记 */
+  memoryProposals: z.array(MemoryProposalSchema).optional(),
+  /** 写 vault 之前记的一笔,写完就没了;还在 = 写到一半断了,下次记账、删话题之前对照文件补记或丢掉(schema/memory.ts) */
+  pending: PendingCommitSchema.optional(),
   /** 这轮上下文包里家长笔记的版本:role(profile / entry)→ `路径@hash`;同一话题下一轮对得上就只写「未变」(2026-09-17) */
   notes: z.record(z.string(), z.string()).optional(),
   /** 这条消息带给老师的卡(上一轮之后孩子改过状态的):id 与 describe 出的那句;家长视图显示「孩子在板书上做的」 */

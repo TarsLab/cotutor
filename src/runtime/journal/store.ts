@@ -18,6 +18,7 @@ import {
   type ConversationIndex,
 } from '../../schema/index.ts';
 import { undoThreadVault, type ThreadUndo } from '../../memory/vault.ts';
+import { recoverPending } from '../../memory/commit.ts';
 import { ConfigError } from '../../shared/errors.ts';
 import { redactHome } from '../../shared/home.ts';
 import type { Workspace } from '../../schema/index.ts';
@@ -280,16 +281,16 @@ export async function rateThread(ws: Workspace, tutor: string, date: string, thr
 }
 
 // ---- vault 搬到了 src/memory/vault.ts;旧路径留转发,迁完删 ----
-export { readDiaries, readTextbooks, scanVault, undoThreadVault, updateVaultMemory, writeDiary, type ThreadUndo, type Vault } from '../../memory/vault.ts';
+export { readDiaries, readTextbooks, scanVault, undoThreadVault, writeDiary, type ThreadUndo, type Vault } from '../../memory/vault.ts';
 
 /**
  * 删掉一天里的一个话题(家长板书页清单上的「删」,2026-09-22):索引里它的消息、会话、星、记账标记都去掉,
  * 这些轮的文件(转录、run、事件、配音、卡的状态与资产)按 <日期>.<job>.* 整个删。
  * 这个话题留下的痕迹一起撤(2026-10-05,家长在孩子端试过再删):各轮写进 vault 记忆的行(memoryLines)倒着撤、记账写进日记的那段(diaryBlock)摘掉;
- * 不动的:captures/ 里的照片。跑着的轮由路由先挡(409)。
+ * 写到一半断了的(还带着 pending)先对照文件补记,写成了的一样撤。不动的:captures/ 里的照片。跑着的轮由路由先挡(409)。
  */
 export async function deleteThread(ws: Workspace, tutor: string, date: string, thread: string): Promise<{ index: ConversationIndex; undo: ThreadUndo }> {
-  const index = await readIndex(ws, tutor, date);
+  const { index } = await recoverPending(ws, await readIndex(ws, tutor, date));
   const ths = threads(index.messages);
   if (!ths.includes(thread)) throw new IndexError(conversationFiles(ws.dirs.conversations, tutor, date).index, `${date} 没有话题 ${thread}`);
   const gone = index.messages.filter((_, i) => ths[i] === thread);

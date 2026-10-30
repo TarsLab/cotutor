@@ -6,6 +6,7 @@
  *  ledger        产物账本(追加式)
  *  events        一轮运行的事件(events.jsonl)
  *  sections      最终文本里的「记账」「记忆」段
+ *  memory        「记忆」段的建议与证据、写 vault 前记下的那一笔(pending)
  *  plan          计划文件
  *  timetable     课程表(vault 里的 markdown 表)
  *  theme         主题清单(themes/<name>/theme.json:底色槽、字形槽、笔)
@@ -21,6 +22,7 @@ export * from './conversation-files.ts';
 export * from './ledger.ts';
 export * from './events.ts';
 export * from './sections.ts';
+export * from './memory.ts';
 export * from './board.ts';
 export * from './plan.ts';
 export * from './timetable.ts';

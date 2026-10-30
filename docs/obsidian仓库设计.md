@@ -183,10 +183,16 @@ vault 里不存照片(落 workspace `captures/`)、不存课包终帧、不设�
 
 新增会加日期并去重。改、删按原话匹配:整行相同,或至少四字且唯一包含。记忆中家长写的行也允许改、删;找不到或匹配不唯一就不动并提醒。讲课每轮最多两项操作,回放不写。家长可在 Obsidian 编辑,原文变化后再带入上下文。
 
+每条是一个**建议**(2026-10-30)。行末可以带 `证据:「孩子的原话」`,应用拿它对孩子在这个话题里说过的话(整理轮对当天的),去掉空白与标点后包含就算对上;对不上的那条不记并提醒,没写证据的照记。证据与对没对上记在这一轮索引的 `memoryProposals` 上,不进 vault。行首的 `孩子:` 先照原样写进这位老师的记忆,等有了所有老师共用的那篇再分开。
+
+这一轮里家长改过记忆文件(老师看到的那版和写入时的文件对不上),改、删只认整行相同的原话,包含匹配不算,免得把家长刚补上的半句盖掉。写之前再读一次文件,和算的时候不一样就这轮不写。
+
 记账完成后,已有记忆的老师另起一次系统会话整理记忆,带记忆原文与当天日记路径。整理不限制操作条数,要求保留不超过 30 条;不算孩子的话题,家长端显示改动。
 
 ### 删话题时撤回
 
 应用按各轮的 `memoryLines` 倒序撤回:新增的删除、改过的改回、删除的补到末尾。日记只移除记账时记录的 `diaryBlock` 原文。内容被家长或后续整理改过、无法匹配时保留现状并提醒,不强行覆盖。
 
-实现与边界测试见 `src/memory/vault-notes.ts`、`src/runtime/journal/store.ts`、`src/runtime/runner.ts` 与 `tests/vault-notes.test.ts`。
+写 vault 分三步:先在这一轮的索引上记 `pending`(要写什么、写到哪、写之前的版本),再写 vault,写完换成 `memoryLines`、`diaryBlock` 与 `booked`。写完 vault、没写进索引就断了的,下次记账和删话题之前先对照文件:写成了就补记(日记不追加第二遍,删话题照样撤得回),没写成就丢掉,再点记账会重记。
+
+实现与边界测试见 `src/memory/vault-notes.ts`、`src/memory/proposals.ts`、`src/memory/commit.ts`、`src/runtime/journal/store.ts`、`src/runtime/runner.ts` 与 `tests/vault-notes.test.ts`、`tests/memory-proposals.test.ts`。

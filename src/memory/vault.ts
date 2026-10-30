@@ -7,7 +7,7 @@ import type { Dirent } from 'node:fs';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { removeDiaryBlock } from './diary.ts';
-import { applyMemoryOps, frontmatter, memoryPath, memoryTemplate, parseMemoryOp, undoMemoryLines, type MemoryLine, type VaultNote } from './vault-notes.ts';
+import { applyMemoryOps, clipNote, frontmatter, memoryPath, memoryTemplate, parseMemoryOp, textHash, undoMemoryLines, type MemoryLine, type VaultNote } from './vault-notes.ts';
 import type { ConversationMessage, PathRole } from '../schema/index.ts';
 
 /** vault 在哪:workspace 的 paths(vault、diary、plans、textbooks…);传整个 workspace 也行 */
@@ -140,27 +140,41 @@ export async function scanVault(v: Vault): Promise<{ notes: VaultNote[]; files: 
   return { notes, files: files.sort() };
 }
 
+/** 要写进记忆文件的一次改动(还没写):planVaultMemory 算,writeVaultMemory 写 */
+export interface MemoryPlan {
+  /** 相对 vault 根 */
+  file: string;
+  /** 算的时候文件的原文;新建 = null */
+  base: string | null;
+  text: string;
+  changes: string[];
+  lines: MemoryLine[];
+}
+
 /**
- * 把「## 记忆」段落进这位 agent 的记忆文件(按 `cotutor: memory` + `agent:` 找;没有就建 记忆/<显示名>.md):
- * 新增追加到末尾,「改:」「删:」按原话找行改、删(任何一行都能动,2026-09-18);缺省位置已有一篇没属性的同名文件就不碰,进提醒。先 .tmp 再 rename。
+ * 「## 记忆」段 → 这位 agent 的记忆文件要怎么改(按 `cotutor: memory` + `agent:` 找;没有就建 记忆/<显示名>.md),只算不写:
+ * 新增追加到末尾,「改:」「删:」按原话找行改、删(任何一行都能动,2026-09-18);缺省位置已有一篇没属性的同名文件就不碰,进提醒。
+ * seen = 这一轮上下文包里老师看到的那版(截过的那段的 textHash 与截的字数):文件和它对不上 = 这轮里家长改过,
+ * 改、删只认一字不差的原话,找不到的不改——按「包含」找会把家长刚补上的半句一起盖掉(2026-10-30)。
  */
-export async function updateVaultMemory(v: Vault, agent: string, display: string, items: readonly string[], date: string): Promise<{ file: string | null; changes: string[]; lines: MemoryLine[]; warnings: string[] }> {
-  const found = (await scanVault(v)).notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === agent);
-  let file: string;
-  let existing: string;
-  if (found) {
-    file = join(v.paths.vault, found.path);
-    existing = found.text;
-  } else {
-    file = join(v.paths.vault, memoryPath(display));
-    if ((await stat(file).catch(() => null)) !== null) return { file: null, changes: [], lines: [], warnings: [`记忆没写:${memoryPath(display)} 已经有了但没有 cotutor: memory / agent: ${agent} 属性;加上属性,或挪开它`] };
-    existing = memoryTemplate(agent, display);
-  }
-  const r = applyMemoryOps(existing, items.map(parseMemoryOp), date);
-  const warnings = r.misses.length ? [`记忆:找不到原话,没改:${r.misses.join(';')}`] : [];
-  if (!r.changes.length) return { file: null, changes: [], lines: [], warnings };
+export async function planVaultMemory(v: Vault, o: { agent: string; display: string; items: readonly string[]; date: string; seen?: { path: string; hash: string; clip: number } }): Promise<{ plan: MemoryPlan | null; warnings: string[] }> {
+  const found = (await scanVault(v)).notes.find((n) => n.props.cotutor === 'memory' && n.props.agent?.trim() === o.agent);
+  const file = found?.path ?? memoryPath(o.display);
+  if (!found && (await stat(join(v.paths.vault, file)).catch(() => null)) !== null) return { plan: null, warnings: [`记忆没写:${file} 已经有了但没有 cotutor: memory / agent: ${o.agent} 属性;加上属性,或挪开它`] };
+  const base = found?.text ?? null;
+  const strict = base !== null && o.seen?.path === file && textHash(clipNote(base, o.seen.clip, 'tail').text) !== o.seen.hash;
+  const r = applyMemoryOps(base ?? memoryTemplate(o.agent, o.display), o.items.map(parseMemoryOp), o.date, { strict });
+  const warnings = !r.misses.length ? [] : strict ? [`记忆:这轮里家长改过记忆文件,找不到原话的没改(不盖掉家长改的):${r.misses.join(';')}`] : [`记忆:找不到原话,没改:${r.misses.join(';')}`];
+  if (!r.changes.length) return { plan: null, warnings };
+  return { plan: { file, base, text: r.text, changes: r.changes, lines: r.lines }, warnings };
+}
+
+/** 写下 planVaultMemory 算好的:先重读,和算的时候不一样(家长刚存了一版)就不写,回为什么;写成回 null。先 .tmp 再 rename */
+export async function writeVaultMemory(v: Vault, plan: MemoryPlan): Promise<string | null> {
+  const file = join(v.paths.vault, plan.file);
+  if ((await readFile(file, 'utf8').catch(() => null)) !== plan.base) return `记忆没写:${plan.file} 刚被改过,这轮的记忆没写:${plan.changes.join(';')}`;
   await mkdir(dirname(file), { recursive: true });
-  await writeFile(`${file}.tmp`, r.text);
+  await writeFile(`${file}.tmp`, plan.text);
   await rename(`${file}.tmp`, file);
-  return { file, changes: r.changes, lines: r.lines, warnings };
+  return null;
 }

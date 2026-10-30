@@ -242,6 +242,25 @@ try {
     check('记忆:新话题带原文(家长改过的样子);已有的不重复记,家长删掉的那条会被记回来', run2.prompt.includes('  memory: "记忆/小帮手.md"') && run2.prompt.includes('<vault-note role="memory" path="记忆/小帮手.md">') && run2.prompt.includes('家长改过:可以出选择题') && text2.endsWith('- 家长改过:可以出选择题\n- 2026-09-08 家长说别出选择题\n') && i2.messages.find((m) => m.job === s2.job)?.remembered?.join() === '- 2026-09-08 家长说别出选择题', JSON.stringify({ text2 }));
     const mp = await gatherContext(ctx.ws, 'math-tutor', { from: 'kid', at: now });
     check('记忆按 agent 分:数学老师还没有', mp.memory === '还没有' && !mp.notes?.some((n) => n.role === 'memory'), JSON.stringify(mp.memory));
+    // ---- 记忆是建议(2026-10-30,《vault重构方案》§3):证据对孩子说过的话;这轮里家长改过不盖掉;写到一半断了也撤得回 ----
+    const s3 = await ctx.runner.send('helper', { from: 'kid', text: '带证据 我数成 35 了!', newThread: true, runtime: 'fake' });
+    const m3 = (await s3.done).messages.find((m) => m.job === s3.job)!;
+    const text3 = readFileSync(memFile, 'utf8');
+    check('证据:抄孩子原话的那条记了(vault 里不带证据),抄老师自己回复的那条不记、进提醒;每条对没对上记在索引上', text3.includes('- 2026-09-08 阵列题先伸手指定行数,再一行点一个。\n') && !text3.includes('证据') && !text3.includes('会了竖式') && m3.memoryProposals?.map((p) => p.check).join() === 'verified,rejected' && m3.warnings?.some((w) => w.includes('证据对不上') && w.includes('第一次说')) === true && m3.remembered?.length === 1 && !m3.pending, JSON.stringify({ text3, m3 }));
+    writeFileSync(memFile, `${text3}- 2026-09-01 讲慢点他跟得上\n- 2026-09-01 爱用手指数\n`);
+    const s4 = await ctx.runner.send('helper', { from: 'kid', text: '工具慢 改记忆', newThread: true, runtime: 'fake' });
+    // 老师还在跑(工具慢歇 1 秒),家长在 Obsidian 里给那行补了半句;老师回的「改:讲慢点他跟得上 → …」按包含找得到它
+    writeFileSync(memFile, readFileSync(memFile, 'utf8').replace('- 2026-09-01 讲慢点他跟得上\n', '- 2026-09-01 讲慢点他跟得上,周末例外\n'));
+    const m4 = (await s4.done).messages.find((m) => m.job === s4.job)!;
+    const text4 = readFileSync(memFile, 'utf8');
+    check('这轮里家长改过记忆文件:那行不盖掉(补的半句还在)、报出来;一字不差的「删:」照删', text4.includes('- 2026-09-01 讲慢点他跟得上,周末例外\n') && !text4.includes('讲慢点才跟得上') && !text4.includes('爱用手指数') && m4.warnings?.some((w) => w.includes('家长改过记忆文件')) === true && m4.memoryLines?.length === 1, JSON.stringify({ text4, m4 }));
+    // 写完记忆、还没写进索引就断了:索引上只有 pending,没有 memoryLines;删这个话题之前先对照文件补记,照样撤得回
+    const { deleteThread, readIndex: ri, writeIndex: wi } = await import('../src/runtime/journal/store.ts');
+    const { textHash } = await import('../src/memory/vault-notes.ts');
+    const i5 = await ri(ctx.ws, 'helper', '2026-09-08');
+    await wi(ctx.ws, { ...i5, messages: i5.messages.map(({ memoryLines, remembered, ...m }) => (m.job === s4.job ? { ...m, pending: { memory: { file: '记忆/小帮手.md', base: null, hash: textHash(text4), changes: remembered!, lines: memoryLines! } } } : { ...m, memoryLines, remembered })) });
+    const del5 = await deleteThread(ctx.ws, 'helper', '2026-09-08', s4.job);
+    check('写到一半断了的话题:删的时候补记再撤,删掉的那行接回来', del5.undo.memory === 1 && readFileSync(memFile, 'utf8').includes('- 2026-09-01 爱用手指数') && !del5.index.messages.some((m) => m.pending), JSON.stringify({ undo: del5.undo, text: readFileSync(memFile, 'utf8') }));
   }
   const dates = (await route('GET', '/api/conversations/math-tutor', ctx)).json as { dates: string[] };
   check('日期列表', dates.dates.join() === '2026-09-08');
@@ -535,6 +554,22 @@ try {
   check('没有记忆就不起整理轮', (await ctx.runner.tidyMemory('math-tutor', '2026-09-09')) === null);
   const bkAgain = (await route('POST', '/api/conversations/math-tutor/2026-09-09/bookkeep', ctx, {})).json as { queued: string[]; skipped: { why: string }[] };
   check('再记一次:都跳过(记过了)', bkAgain.queued.length === 0 && bkAgain.skipped.every((s) => s.why.includes('记过了')), JSON.stringify(bkAgain));
+  // 写完日记、还没写进索引就断了(《运行层行为设计》§5,2026-10-30):索引上只有 pending,没有 booked 与 diaryBlock;再点记账先对照日记补记,不记第二遍
+  {
+    const { readIndex: ri, writeIndex: wi } = await import('../src/runtime/journal/store.ts');
+    const diaryFile = join(root, 'vault', '日记', '2026-09-09.md');
+    const before = await ri(ctx.ws, 'math-tutor', '2026-09-09');
+    const bm = before.messages.find((m) => m.bookkeep && m.diaryBlock)!;
+    const th = bm.bookkeep!.thread;
+    const { [th]: _gone, ...rest } = before.booked;
+    await wi(ctx.ws, { ...before, booked: rest, messages: before.messages.map(({ diaryBlock, ...m }) => (m.job === bm.job ? { ...m, pending: { diary: { file: '2026-09-09.md', block: diaryBlock!, thread: th } } } : { ...m, diaryBlock })) });
+    const diaryBefore = readFileSync(diaryFile, 'utf8');
+    const again = (await route('POST', '/api/conversations/math-tutor/2026-09-09/bookkeep', ctx, { threads: [th] })).json as { queued: string[]; skipped: { why: string }[] };
+    await ctx.runner.flush();
+    const after = await ri(ctx.ws, 'math-tutor', '2026-09-09');
+    const am = after.messages.find((m) => m.job === bm.job);
+    check('记账断在写完日记之后:再点不重记(日记一字没变),补回 booked 与 diaryBlock,那轮上写着补记过', again.queued.length === 0 && again.skipped[0]?.why.includes('记过了') && readFileSync(diaryFile, 'utf8') === diaryBefore && after.booked[th] === bm.job && am?.diaryBlock === bm.diaryBlock && !after.messages.some((m) => m.pending) && am?.warnings?.some((w) => w.includes('已补记')) === true, JSON.stringify({ again, am }));
+  }
   const bkEvents = parseEvents(readFileSync(join(root, 'conversations', 'math-tutor', `2026-09-09.${bkMsgs[0].job}.events.jsonl`), 'utf8'));
   check('事件:ledger 道有日记那条', bkEvents.some((e) => e.lane === 'ledger' && e.kind === 'diary' && formatEvent(e).includes('2026-09-09.md')));
   const { gatherContext: gather2 } = await import('../src/runtime/runner.ts');

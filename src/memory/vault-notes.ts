@@ -8,6 +8,8 @@
  * 程序读的键用英文(cotutor / subject / semester / school_start / agent),中文键是给人看的描述,这里不读。
  */
 
+import type { MemoryLine } from '../schema/index.ts';
+
 export const NOTE_KINDS = ['profile', 'subject', 'textbook', 'memory'] as const;
 export type NoteKind = (typeof NOTE_KINDS)[number];
 
@@ -200,14 +202,14 @@ const bareLine = (l: string): string => l.replace(/^\s*[-*]\s+/, '').replace(/^\
 
 /**
  * 按原话找一行:正文(frontmatter 之后)里原话一字不差的那行;没有就找唯一一行包含它的(原话至少 4 个字);都不是 → -1。
- * 不分老师写的、家长写的(2026-09-18 定:机器一律可以改)。
+ * 不分老师写的、家长写的(2026-09-18 定:机器一律可以改)。fuzzy = false 只认一字不差的(这轮里家长改过文件,2026-10-30)。
  */
-export function findMemoryLine(lines: readonly string[], from: string, bodyStart: number): number {
+export function findMemoryLine(lines: readonly string[], from: string, bodyStart: number, fuzzy = true): number {
   const want = bareLine(from);
   if (!want) return -1;
   const exact = lines.findIndex((l, i) => i >= bodyStart && bareLine(l) === want);
   if (exact >= 0) return exact;
-  if (Array.from(want).length < 4) return -1;
+  if (!fuzzy || Array.from(want).length < 4) return -1;
   const hits = lines.map((l, i) => (i >= bodyStart && l.trim() && bareLine(l).includes(want) ? i : -1)).filter((i) => i >= 0);
   return hits.length === 1 ? hits[0] : -1;
 }
@@ -222,16 +224,13 @@ export interface MemoryApplied {
   lines: MemoryLine[];
 }
 
-export interface MemoryLine {
-  before: string | null;
-  after: string | null;
-}
+export type { MemoryLine };
 
 /**
  * 把一串操作落到记忆全文上:先改、删(按原话找行,见 findMemoryLine),再把新增的追加到末尾(appendMemory,去重)。
- * 改过的列表行换成 `- <今天> 新的`;不是列表的行整行换成新的。
+ * 改过的列表行换成 `- <今天> 新的`;不是列表的行整行换成新的。strict:改、删只认一字不差的原话。
  */
-export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date: string): MemoryApplied {
+export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date: string, opts: { strict?: boolean } = {}): MemoryApplied {
   const lines = existing.split('\n');
   const fm = /^\uFEFF?---\s*$/.test(lines[0] ?? '') ? lines.findIndex((l, i) => i > 0 && /^---\s*$/.test(l)) : -1;
   const bodyStart = fm > 0 ? fm + 1 : 0;
@@ -241,7 +240,7 @@ export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date:
   const gone = new Set<number>();
   for (const o of ops) {
     if (o.op === 'add') continue;
-    const i = findMemoryLine(lines, o.from, bodyStart);
+    const i = findMemoryLine(lines, o.from, bodyStart, !opts.strict);
     if (i < 0 || gone.has(i)) {
       misses.push(o.op === 'change' ? `改:${o.from}` : `删:${o.from}`);
       continue;

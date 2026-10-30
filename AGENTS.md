@@ -70,7 +70,7 @@
 
 ## 实时对话的核心约束
 
-- realtime 模型负责听说,Qwen Code 运行脑模型生成讲稿和卡。嘴按句照念脑的讲稿,不另编教学内容;画板上的边画边聊由独立的有限上下文处理。
+- realtime 模型负责听说,脑(按运行时起 Qwen Code,或应用直连百炼)生成讲稿和卡。嘴按句照念脑的讲稿,不另编教学内容;画板上的边画边聊由独立的有限上下文处理。
 - 孩子开口或发出新一轮时,中断旧播放并使旧轮的延迟结果失效,不能把上一轮语音接到下一轮。队列与取消逻辑在 `src/runtime/live/call.ts`、`src/runtime/delivery/queue.ts`。
 - 嘴、卡片配音和小课堂的声音互斥;暂停、恢复和打断统一经 `liveDispatch` / `liveStep`,页面不私自改播放状态。板书状态由 `board/presentation.ts` 的 `step` 管。
 - 按句交付讲稿,卡片就绪后按顺序展示;问答、口语课热身和交卡的等待时机以 `tests/live-player.test.ts`、`tests/live-flow.test.ts` 与 `tests/player.test.ts` 为准。

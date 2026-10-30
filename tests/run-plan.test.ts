@@ -51,8 +51,8 @@ const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\
   const cfg = parseConfig(JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })), 'x');
   const p2 = planRun(cfg, { session: null }, { agent: 'math-tutor', prompt: 'hi', agentBody: 'A', systemBody: 'A\n\nB', runtime: 'qwen' });
   check('占位符:Qwen 填 systemBody;没给值的原样留着', p2.argv.includes('A\n\nB') && planRun(cfg, { session: null }, { agent: 'a', prompt: 'hi' }).argv.includes('{systemBody}'));
-  const reads = boardGuideReads([{ name: 'Skill', arg: 'cotutor-board' }, { name: 'Read', arg: '/ws/.claude/skills/cotutor-board/SKILL.md' }, { name: 'Bash', arg: 'cat ../../.claude/skills/cotutor-board/SKILL.md' }, { name: 'Read', arg: '/ws/.claude/skills/cotutor-board/references/choice.md' }, { name: 'Skill', arg: 'cotutor-vault' }]);
-  check('回读检查:Skill 点名、Read / cat SKILL.md 都算;references 与别的技能不算', reads.length === 3 && !reads.join().includes('choice.md') && !reads.join().includes('cotutor-vault'), JSON.stringify(reads));
+  const reads = boardGuideReads([{ name: 'Skill', arg: 'cotutor-board' }, { name: 'Read', arg: '/ws/.claude/skills/cotutor-board/SKILL.md' }, { name: 'Bash', arg: 'cat ../../.claude/skills/cotutor-board/SKILL.md' }, { name: 'Read', arg: '/ws/.claude/skills/cotutor-board/references/choice.md' }, { name: 'Skill', arg: 'cotutor-home' }]);
+  check('回读检查:Skill 点名、Read / cat SKILL.md 都算;references 与别的技能不算', reads.length === 3 && !reads.join().includes('choice.md') && !reads.join().includes('cotutor-home'), JSON.stringify(reads));
   check('按老师裁的那份也算回读', boardGuideReads([{ name: 'Read', arg: '/ws/.cotutor/board/math-tutor-1a2b3c4d.md' }]).length === 1);
   const guarded = '---\nname: x\n---\n\n# 守则\n\n{{有 lecture}}\n## 小课堂\n- 放一段\n{{/有}}\n\n## 记忆\n';
   check('守则按老师的卡裁:没给 = 全有;没有 lecture 那段去掉;守卫写坏了只去掉守卫行', tutorRulesBody(guarded).includes('## 小课堂') && !tutorRulesBody(guarded).includes('{{') && !tutorRulesBody(guarded, ['text']).includes('小课堂') && tutorRulesBody(guarded, ['text']).includes('## 记忆') && tutorRulesBody('# 守则\n{{有 lecture}}\n- 一条\n', ['text']) === '# 守则\n- 一条');

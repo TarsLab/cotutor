@@ -17,7 +17,7 @@ cotutor doctor                    # 逐项体检,不过的每条都带修复命�
 cotutor serve                     # 孩子端 http://<ip>:5180/,家长端 /parent
 ```
 
-为兼容已有 workspace,老师与技能沿用 `.claude/` 历史数据目录,无需安装 Claude CLI。`init` 把出厂老师拷进 `.claude/agents/`,把做课包用的四个领域 skill(随 drawtell 包来)和六个机器件 cotutor-tutor / cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.claude/skills/`;
+为兼容已有 workspace,老师与技能沿用 `.claude/` 历史数据目录,无需安装 Claude CLI。`init` 把出厂老师拷进 `.claude/agents/`,把做课包用的四个领域 skill(随 drawtell 包来)和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.claude/skills/`;
 做课包用的 drawtell 随包装好(`.cotutor/drawtell`),不用另外装。要在 iPad 上用(按住说话要 HTTPS):`cotutor cert` 签一张
 自签证书,把根证书装到 iPad,重启 `serve`。步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
 

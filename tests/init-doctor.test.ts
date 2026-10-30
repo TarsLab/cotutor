@@ -34,8 +34,22 @@ try {
   check('analyze 技能出厂(2026-09-15):手写 SKILL.md + 生成的 references/命令与文件.md(命令行从 usage 取、文件名从 conversationFiles 取)', analyzeMd.startsWith('---\nname: cotutor-analyze\ndescription: ') && readFileSync(join(ws, '.claude', 'skills', 'cotutor-analyze', 'references', '命令与文件.md'), 'utf8').includes('cotutor replay <老师> <job>') && readFileSync(join(ws, '.claude', 'skills', 'cotutor-analyze', 'references', '命令与文件.md'), 'utf8').includes('<日期>.<job>.run.json'));
   const tuneRef = readFileSync(join(ws, '.claude', 'skills', 'cotutor-tune', 'references', '字段.md'), 'utf8');
   check('tune 技能出厂(2026-09-15):手写 SKILL.md + 生成的 references/字段.md(tutors 字段与政策缺省从契约取、frontmatter 键从 agent-file 取)', readFileSync(join(ws, '.claude', 'skills', 'cotutor-tune', 'SKILL.md'), 'utf8').startsWith('---\nname: cotutor-tune\ndescription: ') && tuneRef.includes('| `display` | 必需 |') && tuneRef.includes('| `contextPack.entryChars` | 必需 | 4000 |') && tuneRef.includes('`permissionMode`') && tuneRef.includes('cotutor add <老师名>'));
-  const vaultMd = readFileSync(join(ws, '.claude', 'skills', 'cotutor-vault', 'SKILL.md'), 'utf8');
-  check('vault 技能出厂:手写 SKILL.md + 生成的 references/记账.md,和包里一致', vaultMd.startsWith('---\nname: cotutor-vault\ndescription: ') && vaultMd === readFileSync(join(PACKAGE_SKILLS_DIR, 'cotutor-vault', 'SKILL.md'), 'utf8') && readFileSync(join(ws, '.claude', 'skills', 'cotutor-vault', 'references', '记账.md'), 'utf8').includes('## 字段'));
+  check('cotutor-vault 不再出厂(2026-10-30)', !existsSync(join(ws, '.claude', 'skills', 'cotutor-vault')));
+  {
+    // 旧 workspace:出厂记录里有退役的机器件 → upgrade 删目录、删记录
+    const { upgradeSkills } = await import('../src/app/cli/skills.ts');
+    const manifestFile = join(ws, '.cotutor', 'shipped.json');
+    const before = readFileSync(manifestFile, 'utf8');
+    const m = JSON.parse(before) as { skills: Record<string, unknown> };
+    m.skills['cotutor-vault'] = { hash: 'sha256:old', version: '0.0.0' };
+    writeFileSync(manifestFile, JSON.stringify(m));
+    mkdirSync(join(ws, '.claude', 'skills', 'cotutor-vault'), { recursive: true });
+    writeFileSync(join(ws, '.claude', 'skills', 'cotutor-vault', 'SKILL.md'), '---\nname: cotutor-vault\n---\n');
+    const steps = await upgradeSkills(ws);
+    const after = JSON.parse(readFileSync(manifestFile, 'utf8')) as { skills: Record<string, unknown> };
+    check('upgrade 删掉退役的 cotutor-vault:目录与出厂记录都没了', steps.some((s) => s.name === 'cotutor-vault' && s.action === 'retired') && !existsSync(join(ws, '.claude', 'skills', 'cotutor-vault')) && !('cotutor-vault' in after.skills), JSON.stringify(steps.filter((s) => s.action !== 'latest')));
+    writeFileSync(manifestFile, before);
+  }
   check('四个领域 skill 拷进 .claude/skills/,hash 记下', existsSync(join(ws, '.claude', 'skills', 'drawtell-scene', 'SKILL.md')) && existsSync(join(ws, '.claude', 'skills', 'drawtell-teaching', 'models-index.md')) && (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { skills: Record<string, { hash: string }> }).skills['drawtell-verify'].hash.startsWith('sha256:'));
   check('出厂主题拷进 themes/default/,hash 记下', existsSync(join(ws, 'themes', 'default', 'theme.json')) && existsSync(join(ws, 'themes', 'default', 'kid.css')) && (JSON.parse(readFileSync(join(ws, '.cotutor', 'shipped.json'), 'utf8')) as { themes: Record<string, { hash: string }> }).themes.default.hash.startsWith('sha256:'));
   check('drawtell 壳脚本在,可执行,指向本包的 drawtell', readFileSync(join(ws, '.cotutor', 'drawtell'), 'utf8').includes('drawtell.js') && (statSync(join(ws, '.cotutor', 'drawtell')).mode & 0o100) !== 0);
@@ -123,7 +137,7 @@ try {
     check('doctor:嘴的音色写错提示(不认的点名、说去哪换、不算必需);写对了报谁用什么;都没写报出厂的', lv?.ok === false && !lv.required && lv.detail.includes('math-tutor 的「Bella」') && !lv.detail.includes('Serena」') && Boolean(lv.fix) && lv2?.ok === true && lv2.detail.includes('math-tutor 用 Theo Calm') && lv0?.ok === true && lv0.detail.includes('english-tutor 用 Theo Calm') && lv0.detail.includes('math-tutor 用 Andre'), JSON.stringify([lv, lv2, lv0]));
   }
   check('doctor 查主题:清单过契约、出厂件最新', d1.checks.some((c) => c.name === 'theme.manifest' && c.ok) && d1.checks.some((c) => c.name === 'theme.default.origin' && c.ok));
-  check('doctor 查 skill 与 drawtell 壳', d1.checks.filter((c) => c.name.startsWith('skill.') && c.ok).length === 10 && d1.checks.some((c) => c.name === 'skill.cotutor-vault' && c.required) && d1.checks.some((c) => c.name === 'skill.cotutor-home' && c.required) && !d1.checks.some((c) => c.name === 'skill.cotutor-prep') && d1.checks.filter((c) => c.name.startsWith('skill.drawtell') && !c.required).length === 4 && d1.checks.some((c) => c.name === 'drawtell' && c.ok && !c.required));
+  check('doctor 查 skill 与 drawtell 壳', d1.checks.filter((c) => c.name.startsWith('skill.') && c.ok).length === 9 && !d1.checks.some((c) => c.name === 'skill.cotutor-vault') && d1.checks.some((c) => c.name === 'skill.cotutor-home' && c.required) && !d1.checks.some((c) => c.name === 'skill.cotutor-prep') && d1.checks.filter((c) => c.name.startsWith('skill.drawtell') && !c.required).length === 4 && d1.checks.some((c) => c.name === 'drawtell' && c.ok && !c.required));
   check('老师文件(.claude/agents/)必需,不管哪个 CLI;不再查 .qwen 链', d1.checks.some((c) => c.name === 'tutor.math-tutor.claude' && c.required) && !d1.checks.some((c) => c.name.endsWith('.qwen')));
   check('git 是建议', d1.checks.some((c) => c.name === 'git' && !c.ok && !c.required));
 

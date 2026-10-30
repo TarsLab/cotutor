@@ -69,7 +69,7 @@ description: 调 cotutor 的老师团:改某位老师的提示词(口气、规�
 
 ## 二、改 vault 里给老师看的
 
-老师不用工具就能看到的只有下面这几处,别的它看不见。形状在 cotutor-vault 技能的 SKILL.md,别重写。
+老师不用工具就能看到的只有下面这几处,别的它看不见。
 
 vault 里的文件**按属性找,不认文件名与目录**。
 
@@ -97,7 +97,7 @@ vault 是 Obsidian 仓库,可能在 iCloud 里:
 ### 路子
 
 1. 家长说的事,归到上面哪一处。
-2. 给出要加、要改的那一行,照 cotutor-vault 里的形状。
+2. 给出要加、要改的那一行,属性与位置照上面的表。
 3. 点头写入。
 4. `cotutor pack <老师> "随便一句"`,看那一行进没进上下文包,来源里有没有「截掉」。
 5. 被截了,就商量:是把长的挪出去链过去,还是调 contextPack 的上限(cotutor.json policyDefaults.contextPack.entryChars)。

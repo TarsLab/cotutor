@@ -130,7 +130,7 @@ vault 里不存照片(落 workspace `captures/`)、不存课包终帧、不设�
 
 **永不**:写 `#标签`、写图片、改家长写过的字(记忆文件除外)、删文件、建代码认得的分类目录、写档案、入口文件、计划、`参考/`。老师(LLM)**不直接写 vault 文件**:记账时它回一段固定形状的文本,应用解析后按上表落盘——形状由代码保证,老师写错了应用报 warning、不落。
 
-记账的输入形状(老师在正文末尾写,应用只认这个段;写法在老师文件与 `cotutor-vault` 技能里):
+记账的输入形状(老师在正文末尾写,应用只认这个段;写法在记账那条消息里,`src/memory/diary.ts` 的 `bookkeepingPrompt`):
 
 ```markdown
 ## 记账
@@ -145,7 +145,7 @@ vault 里不存照片(落 workspace `captures/`)、不存课包终帧、不设�
 
 ## 7. 老师读 vault 的路径
 
-> 这一节的内容住在技能 `cotutor-vault`(仓库 `skills/cotutor-vault/SKILL.md`,init 拷进 workspace 的 `.claude/skills/`);老师文件尾巴点名它。路径从上下文包的 `vault:` 段取,老师不读 cotutor.json。
+> 老师看到的只有守则(cotutor-tutor)里的一句「读教材先 Grep,只读命中的那一节」;下表是应用这边的设计。路径从上下文包的 `vault:` 段取,老师不读 cotutor.json。
 
 | 何时 | 读什么 | 怎么读 |
 |---|---|---|

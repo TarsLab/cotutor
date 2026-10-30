@@ -1,10 +1,10 @@
 /**
  * 出厂 skill:与老师文件同一套「拷不链」机制——init 拷进 workspace 的 .claude/skills/<name>/,hash 记 .cotutor/shipped.json 的 skills,
  * (原来 .qwen/skills/<name> 是相对链,2026-10-09 退役,init / upgrade 删掉旧链。)出厂表 SHIPPED_SKILLS 每项带来源与 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录):
- * - 来源 cotutor = 本包根 skills/<name>/(进 npm files;cotutor-board 整个、cotutor-vault 的 references/ 是 scripts/gen-skills.ts 生成后入库的,
+ * - 来源 cotutor = 本包根 skills/<name>/(进 npm files;cotutor-board 整个、其余几个的 references/ 是 scripts/gen-skills.ts 生成后入库的,
  *   tests/skills.test.ts 断言一致),来源 drawtell = drawtell 包根 skills/<name>/(四个领域 skill,2026-09-15 从退役的 drawtell-skills 仓搬过去的;
  *   没装 → unavailable,doctor 点名,init 跳过)
- * - machine: true 的是机器件(cotutor-tutor / cotutor-board / cotutor-vault / cotutor-analyze / cotutor-tune / cotutor-home:它们和解析器、契约、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
+ * - machine: true 的是机器件(cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home:它们和解析器、契约、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
  *   其余拷进来就是家长的:upgrade 没改过的换新、改过的报 diff 保留(custom / untracked)
  * 顺带一个机器文件 .cotutor/drawtell:指向本包 node_modules 里 drawtell CLI 的壳脚本,家长做课包时用相对路径就能跑它。
  */
@@ -14,12 +14,11 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BOARD_SKILL } from '../../board/cards/docs.ts';
-import { VAULT_SKILL } from '../skills/vault-doc.ts';
 import { ANALYZE_SKILL } from '../skills/analyze-doc.ts';
 import { TUNE_SKILL } from '../skills/tune-doc.ts';
 import { HOME_SKILL } from '../skills/home-doc.ts';
 import { TUTOR_SKILL } from '../../runtime/context/tutor-rules.ts';
-export { ANALYZE_SKILL, BOARD_SKILL, HOME_SKILL, TUNE_SKILL, TUTOR_SKILL, VAULT_SKILL };
+export { ANALYZE_SKILL, BOARD_SKILL, HOME_SKILL, TUNE_SKILL, TUTOR_SKILL };
 import { PACKAGE_VERSION } from './skeleton.ts';
 import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
 
@@ -33,7 +32,6 @@ export interface ShippedSkill {
 export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
   { name: TUTOR_SKILL, source: 'cotutor', machine: true },
   { name: BOARD_SKILL, source: 'cotutor', machine: true },
-  { name: VAULT_SKILL, source: 'cotutor', machine: true },
   { name: ANALYZE_SKILL, source: 'cotutor', machine: true },
   { name: TUNE_SKILL, source: 'cotutor', machine: true },
   { name: HOME_SKILL, source: 'cotutor', machine: true },
@@ -43,8 +41,11 @@ export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
   { name: 'drawtell-verify', source: 'drawtell' },
 ];
 
-/** 不再出厂的机器件:upgrade 时 workspace 里还有(出厂记录里有它)就删掉,免得编程助手照旧技能干活。现在没有(cotutor-prep 2026-10-22 起不再认:workspace 里都删过了) */
-export const RETIRED_SKILLS: readonly string[] = [];
+/**
+ * 不再出厂的机器件:upgrade 时 workspace 里还有(出厂记录里有它)就删掉,免得编程助手照旧技能干活。
+ * cotutor-vault(2026-10-30):老师从没读过它(孩子的话不带工具,记账那条消息自带写法),要紧的几句并进了守则 cotutor-tutor
+ */
+export const RETIRED_SKILLS: readonly string[] = ['cotutor-vault'];
 
 export type ShippedSkillName = string;
 

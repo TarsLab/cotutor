@@ -1,6 +1,6 @@
 /**
  * 包根 skills/ 的两条纪律(2026-09-15,照 hyperframes 的 lint-skills):
- * 1. 生成的技能入库后要和生成器一致(cotutor-board 整个 ← cards/<kind>/card.md;cotutor-vault 的 references/记账.md ← 记账契约;UPDATE_SNAPSHOTS=1 或 pnpm run gen:skills 重写)
+ * 1. 生成的技能入库后要和生成器一致(cotutor-board 整个 ← cards/<kind>/card.md;其余几个只有 references/ 下列出的文件;UPDATE_SNAPSHOTS=1 或 pnpm run gen:skills 重写)
  * 2. 每个出厂 SKILL.md 的 frontmatter:能解析、只有 name / description(两 CLI 的公共子集)、name 等于目录名、description ≤ 1536 字;
  *    正文围栏外的行内反引号里不出现 `!` 与 `>字`(Claude Code 的 bash 权限检查会把它们当 history 展开 / 重定向,技能装不上——hyperframes 踩过)
  *    drawtell 的四个也一起查(拷进 workspace 的是它们),没装就跳过;它们的闸门在 drawtell 仓自己的 tests/skills.test.ts,这里只提醒

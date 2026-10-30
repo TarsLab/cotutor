@@ -6,7 +6,6 @@ export * from '../runtime/kid-view.ts';
 export * from '../board/presentation.ts';
 export * from '../board/parse.ts';
 export * from '../runtime/context/context-pack.ts';
-export * from '../app/skills/vault-doc.ts';
 export * from '../runtime/context/tutor-rules.ts';
 export * from '../memory/plan.ts';
 export * from '../runtime/journal/ledger.ts';

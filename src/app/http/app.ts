@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { foldRuns, type TranscriptRow } from '../../brain/transcript.ts';
 import { RuntimeError } from '../../brain/cli/run-plan.ts';
 import { PHOTO_MAX_SIDE } from '../../ui/kid/photo-edit.ts';
-import { currentThread, lastJobOf } from '../../runtime/journal/conversation.ts';
+import { currentThread, lastJobOf, sameRuntime } from '../../runtime/journal/conversation.ts';
 import { localDate, weekOf } from '../../shared/time.ts';
 import { conversationFiles, threads } from '../../schema/index.ts';
 import { kidConversation, kidThreads, submittedCards, parentConversation, type KidMessage, type KidThread, type ParentMessage } from '../../runtime/kid-view.ts';
@@ -414,6 +414,8 @@ export interface OverviewThread {
   stoppedAt: 'writing' | 'ask' | null;
   rating: number | null;
   booked: boolean;
+  /** 换过运行时(2026-10-31):这个话题是在哪个运行时下聊的;老师现在用别的,接不上那时的对话,不记账 */
+  oldRuntime?: string;
   /** 按住说话连着几次没发出去(最长的一串,够 REEL_MISS_STREAK 才有) */
   misses?: number;
 }
@@ -502,6 +504,9 @@ export async function overview(ctx: AppContext, date: string): Promise<Overview>
       }
     }
     for (const d of diaries) by.get(d.id)?.writes.push(...vaultWrites(d.m));
+    // 换过运行时的话题:卡上说一句,记账按钮不算它(runner.bookkeep 也会跳过)
+    const runtimeName = ctx.ws.config.tutors[t.name]?.runtime ?? ctx.ws.config.runtimes.default;
+    for (const th of by.values()) if (!th.booked && !sameRuntime(index, th.thread, runtimeName)) th.oldRuntime = index.sessions[th.thread].runtime;
     // 按住说话连着没发出去:实录里的 hold;孩子发成的一句(开口、打字发出去)把一串断开
     for (const th of by.values()) {
       const mine = index.messages.filter((_m, i) => ths[i] === th.thread);

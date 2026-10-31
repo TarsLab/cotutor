@@ -16,10 +16,11 @@ delete process.env.COTUTOR_WORKSPACE;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
-const { createContext, dayView } = await import('../src/app/http/app.ts');
+const { createContext, dayView, overview } = await import('../src/app/http/app.ts');
 const { DIGEST_HEAD } = await import('../src/runtime/context/thread-digest.ts');
 const { bailianBase, effortFetch, effortOf, thinkingOf } = await import('../src/brain/api.ts');
 const { localDate } = await import('../src/shared/time.ts');
+const { readIndex } = await import('../src/runtime/journal/store.ts');
 
 const fake = await startFakeChat();
 const SECRET = 'sk-test-secret-never-log';
@@ -201,6 +202,17 @@ try {
   const r11 = since(n);
   check('qwen3.8 的运行时:数学老师 medium → 请求带 reasoning_effort: low,不带 thinking_budget', r11.length === 1 && (r11[0] as Record<string, unknown>).reasoning_effort === 'low' && r11[0].thinking_budget === undefined && r11[0].model === 'qwen3.8-max', JSON.stringify(r11.map((r) => ({ model: r.model, effort: (r as Record<string, unknown>).reasoning_effort, budget: r.thinking_budget }))));
 
+  // ---- 话题只属于开它的那种运行时(2026-10-31):s11 的话题是 api38 的,数学老师现在用 api ----
+  const s12 = await ctx3.runner.send('math-tutor', { from: 'kid', text: '我们接着说' });
+  await s12.done;
+  check('换过运行时:接着说开新话题,不把两种会话混在一个话题里;原话题的会话还是原来的', s12.thread === s12.job && s12.thread !== s11.thread && (await readIndex(ctx3.ws, 'math-tutor', date)).sessions[s11.thread]?.runtime === 'api38', JSON.stringify({ s11: s11.thread, s12: s12.thread }));
+  n = fake.requests.length;
+  const bk = await ctx3.runner.bookkeep('math-tutor', date, [s11.thread]);
+  await bk.done;
+  check('换过运行时:点记账跳过那个话题、说清为什么,不发请求', bk.queued.length === 0 && bk.skipped[0]?.oldRuntime === 'api38' && bk.skipped[0].why.includes('接不上') && fake.requests.length === n, JSON.stringify(bk));
+  const ov = await overview(ctx3, date);
+  const ovThreads = ov.tutors.find((x) => x.name === 'math-tutor')?.threads ?? [];
+  check('换过运行时:家长端那个话题标 oldRuntime(卡上说一句,记账按钮不算它);新话题不标', ovThreads.find((x) => x.thread === s11.thread)?.oldRuntime === 'api38' && !ovThreads.find((x) => x.thread === s12.thread)?.oldRuntime, JSON.stringify(ovThreads.map((x) => ({ thread: x.thread, old: x.oldRuntime }))));
   ctx3.runner.close();
   // 端点:有业务空间 id 走它的域名;只有按量 key 走公网域名(同 qwen 按量那条线)
   check('端点:业务空间域名 / 公网域名', bailianBase('ws-1') === 'https://ws-1.cn-beijing.maas.aliyuncs.com/compatible-mode/v1' && bailianBase(null) === 'https://dashscope.aliyuncs.com/compatible-mode/v1');

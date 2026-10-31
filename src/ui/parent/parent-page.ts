@@ -373,7 +373,7 @@ ${pageDomJs(4000)}
       const what = [L ? (L.finished ? '看完了' : '看了 ' + lcLen(L.watchedMs)) + (L.marks ? ' · 画了 ' + L.marks + ' 处' : '') : '', th.sections + ' 节 · ' + th.cards + ' 张卡'].filter(Boolean).join(' · ');
       const pf = [h('span', {}, what), th.misses ? h('span', { class: 'miss' }, '⚠ 按住说话连着 ' + th.misses + ' 次没发出去') : null,
         th.stoppedAt === 'writing' ? h('span', { class: 'chip live' }, h('i'), '老师在写') : th.stoppedAt === 'ask' ? h('span', { class: 'chip ask' }, '停下等孩子') : null,
-        th.booked ? h('span', { class: 'chip' }, '已记账') : t.booking && th.sections > 0 ? h('span', { class: 'chip' }, '记账中') : null,
+        th.booked ? h('span', { class: 'chip' }, '已记账') : th.oldRuntime ? h('span', { class: 'chip', title: '这个话题是在「' + th.oldRuntime + '」下聊的,老师现在换了,接不上那时的对话' }, '换过运行时 · 不记账') : t.booking && th.sections > 0 ? h('span', { class: 'chip' }, '记账中') : null,
         h('span', { class: 'sp' }), stars(t, th), th.stoppedAt === 'writing' ? null : delBtn(t, th)];
       evs.push({ at, end: Number.isFinite(end) ? end : null, t, th, kid: h('button', { type: 'button', class: 'kid c-tutor', 'aria-label': '看录像', on: { click: () => openReel(t, th.thread, H.date) } }, kidLook(t, th)), pf });
     }
@@ -418,19 +418,20 @@ ${pageDomJs(4000)}
     const booking = H.tutors.some((t) => t.booking);
     const writing = H.tutors.some((t) => t.threads.some((th) => th.stoppedAt === 'writing'));
     const done = H.tutors.reduce((n, t) => n + t.threads.filter((th) => th.booked).length, 0);
-    const left = H.tutors.reduce((n, t) => n + t.threads.filter((th) => !th.booked && th.sections > 0).length, 0);
+    // 换过运行时的话题不记账(卡上写着),不算还没记的
+    const left = H.tutors.reduce((n, t) => n + t.threads.filter((th) => !th.booked && !th.oldRuntime && th.sections > 0).length, 0);
     // 记账(《obsidian仓库设计.md》§4):这天每位老师还没记过的话题各起一轮,老师回「## 记账」段,应用写日记。花钱,所以两下确认;老师在写或在记就灰
     const bookBtn = h('button', { type: 'button', class: 'book', disabled: booking || writing || !left ? '' : null }, booking ? '记账中…' : '记账');
     let bookTimer = null;
     bookBtn.addEventListener('click', async () => {
       if (!bookBtn.classList.contains('arm')) { bookBtn.classList.add('arm'); bookBtn.textContent = '确定记?要花钱'; bookTimer = setTimeout(() => { bookBtn.classList.remove('arm'); bookBtn.textContent = '记账'; }, 4000); return; }
       clearTimeout(bookTimer); bookBtn.classList.remove('arm'); bookBtn.disabled = true; bookBtn.textContent = '记账中…';
-      let n = 0;
+      let n = 0, old = 0;
       for (const t of H.tutors) {
-        if (!t.threads.some((th) => !th.booked && th.sections > 0)) continue;
-        try { const r = await api('POST', '/api/conversations/' + encodeURIComponent(t.name) + '/' + H.date + '/bookkeep', {}); n += (r.queued || []).length; } catch {}
+        if (!t.threads.some((th) => !th.booked && !th.oldRuntime && th.sections > 0)) continue;
+        try { const r = await api('POST', '/api/conversations/' + encodeURIComponent(t.name) + '/' + H.date + '/bookkeep', {}); n += (r.queued || []).length; old += (r.skipped || []).filter((x) => x.oldRuntime).length; } catch {}
       }
-      toast(n ? '记 ' + n + ' 个话题,老师在写;记好了卡上会亮「已记账」' : '没有要记的话题');
+      toast((n ? '记 ' + n + ' 个话题,老师在写;记好了卡上会亮「已记账」' : '没有要记的话题') + (old ? ';另有 ' + old + ' 个是换运行时之前聊的,接不上那时的对话,不记账' : ''));
       loadHome();
     });
     const anyThread = done + left > 0;

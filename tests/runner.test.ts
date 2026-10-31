@@ -312,7 +312,7 @@ try {
   const dates = (await route('GET', '/api/conversations/math-tutor', ctx)).json as { dates: string[] };
   check('日期列表', dates.dates.join() === '2026-09-08');
 
-  // ---- 换运行时 → 新开,索引会话换掉 ----
+  // ---- 换运行时 → 开新话题(话题只属于开它的运行时),顶层会话是新话题的 ----
   now = new Date(2026, 8, 8, 16, 40);
   const r4 = await post('math-tutor', { text: '换个 CLI', runtime: 'fake2' });
   check('换运行时不 resume', (r4.json as { resume: boolean; runtime: string }).resume === false && (r4.json as { runtime: string }).runtime === 'fake2', JSON.stringify(r4.json));
@@ -438,7 +438,9 @@ try {
   now = new Date(2026, 8, 9, 9, 30);
   const live: { job: string; lane: string; kind: string; t: number }[] = [];
   const off = ctx.runner.onEvent((e) => live.push({ job: e.job, lane: e.event.lane, kind: e.event.kind, t: e.event.t }));
-  const rs = await post('math-tutor', { text: '流式 板书', from: 'kid', runtime: 'stream' });
+  // 流式这几轮换了运行时:话题只属于开它的运行时(2026-10-31),它们自成一个话题;后面的回到早上那个话题
+  const morning = ((await day('math-tutor', '2026-09-09')).json as { index: { messages: { job: string }[] } }).index.messages[0].job;
+  const rs = await post('math-tutor', { text: '流式 板书', from: 'kid', runtime: 'stream', newThread: true });
   const jobS2 = (rs.json as { job: string }).job;
   const seen: { cards: number; partial: boolean | undefined; secret: boolean; ready: number; audio: number }[] = [];
   for (let i = 0; i < 200 && ctx.runner.running('math-tutor'); i++) {
@@ -500,7 +502,7 @@ try {
   check('看原文:没有「板书后期」与「配音」', rawS.stations.map((x) => x.id).join() === 'pack,timeline,source,parse,kid,tools,trace', JSON.stringify(rawS.stations));
   check('看原文:时间线站有事件、甘特的段与一行一条', (rawS as unknown as { timeline: { spans: unknown[]; lines: string[] } }).timeline.spans.length > 5 && (rawS as unknown as { timeline: { lines: string[] } }).timeline.lines[0].includes('起 '), '');
   // 孩子端发消息带端:记在消息上(行由页面排);坏的端 400
-  const rPhone = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '板书 手机', device: 'phone' });
+  const rPhone = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '板书 手机', device: 'phone', thread: morning });
   await wait('math-tutor');
   const phone = ((await day('math-tutor', '2026-09-09')).json as Day).index.messages.find((m) => m.job === (rPhone.json as { job: string }).job) as unknown as PostMsg | undefined;
   check('孩子端带 device=phone → 消息记了端;坏的端 400', rPhone.status === 202 && phone?.device === 'phone' && (await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: 'x', device: 'watch' })).status === 400, JSON.stringify([phone?.device, phone?.section?.layout]));
@@ -512,7 +514,7 @@ try {
   now = new Date(2026, 8, 9, 9, 40);
   mkdirSync(join(root, 'vault'), { recursive: true });
   writeFileSync(join(root, 'vault', 'pic.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
-  const ra = await post('math-tutor', { text: '板书 点读 图片', from: 'kid' });
+  const ra = await post('math-tutor', { text: '板书 点读 图片', from: 'kid', thread: morning });
   const jobA = (ra.json as { job: string }).job;
   await wait('math-tutor');
   await ctx.runner.flush();
@@ -547,7 +549,7 @@ try {
   const oldThread = before.messages[0].job;
   const oldSession = before.session!.id;
   // 旧话题的一张卡先改一下(turn = 旧话题末条),新话题第一条不该带它
-  const boardJob = before.messages.find((m) => m.job === jobS2)!.job;
+  const boardJob = before.messages.find((m) => m.job === jobA)!.job;
   check('PUT 旧话题的卡', (await route('PUT', `/api/kid/conversations/math-tutor/cards/${boardJob}/1`, ctx, { picked: [0] })).status === 200);
   const rn = await route('POST', '/api/kid/conversations/math-tutor/messages', ctx, { text: '换个话题 板书', newThread: true });
   const newThread = (rn.json as { job: string; thread: string }).thread;
@@ -573,7 +575,7 @@ try {
   check('系统消息每条各开一个话题(没说 newThread 也开)', smDay.messages.length === 2 && smDay.messages.every((m) => m.thread === m.job));
   const hist = (await route('GET', '/api/kid/conversations/math-tutor/history?days=30', ctx)).json as { today: string; days: { date: string; threads: { thread: string; title: string; sections: number; cards: number }[] }[] };
   const todayH = hist.days.find((d) => d.date === '2026-09-09')!;
-  check('history:按天(新的在前),今天两个话题(新的在前),名字是孩子第一句、节数与卡数', hist.today === '2026-09-09' && hist.days[0].date === '2026-09-09' && hist.days.some((d) => d.date === '2026-09-08') && todayH.threads[0].thread === newThread && todayH.threads[0].title === '换个话题 板书' && todayH.threads[0].sections === 2 && todayH.threads[0].cards === 2 && todayH.threads[1].thread === oldThread && todayH.threads[1].sections > 2, JSON.stringify(hist.days.map((d) => ({ date: d.date, n: d.threads.length, t: d.threads.map((t) => t.title) }))));
+  check('history:按天(新的在前),今天三个话题(新的在前;流式那几轮换了运行时,自成一个),名字是孩子第一句、节数与卡数', hist.today === '2026-09-09' && hist.days[0].date === '2026-09-09' && hist.days.some((d) => d.date === '2026-09-08') && todayH.threads.length === 3 && todayH.threads[0].thread === newThread && todayH.threads[0].title === '换个话题 板书' && todayH.threads[0].sections === 2 && todayH.threads[0].cards === 2 && todayH.threads[1].title === '流式 板书' && todayH.threads[2].thread === oldThread && todayH.threads[2].sections > 2, JSON.stringify(hist.days.map((d) => ({ date: d.date, n: d.threads.length, t: d.threads.map((t) => t.title) }))));
   const kdOld = (await route('GET', '/api/kid/conversations/math-tutor/2026-09-08', ctx)).json as { date: string; thread: string | null; messages: { thread: string }[] };
   check('日期路由给那天的孩子视图(带 thread);未来 / 坏日期 400;today 也带 thread', kdOld.date === '2026-09-08' && kdOld.messages.length > 0 && kdOld.messages.every((m) => typeof m.thread === 'string') && kdOld.thread === kdOld.messages[kdOld.messages.length - 1].thread && (await route('GET', '/api/kid/conversations/math-tutor/2027-01-01', ctx)).status === 400 && (await route('GET', '/api/kid/conversations/math-tutor/2026-13-01', ctx)).status === 400 && ((await route('GET', '/api/kid/conversations/math-tutor/today', ctx)).json as { thread: string }).thread === oldThread);
 
@@ -599,8 +601,8 @@ try {
   check('整理记忆:新会话、带记忆原文与条数、指到今天的日记', tidyRun.prompt.includes('<vault-note role="memory" path="记忆/数学老师.md">') && tidyRun.prompt.includes('现在 2 条') && tidyRun.prompt.includes(join('日记', '2026-09-09.md')), tidyRun.prompt.slice(-600));
   rmSync(mathMem);
   check('没有记忆就不起整理轮', (await ctx.runner.tidyMemory('math-tutor', '2026-09-09')) === null);
-  const bkAgain = (await route('POST', '/api/conversations/math-tutor/2026-09-09/bookkeep', ctx, {})).json as { queued: string[]; skipped: { why: string }[] };
-  check('再记一次:都跳过(记过了)', bkAgain.queued.length === 0 && bkAgain.skipped.every((s) => s.why.includes('记过了')), JSON.stringify(bkAgain));
+  const bkAgain = (await route('POST', '/api/conversations/math-tutor/2026-09-09/bookkeep', ctx, {})).json as { queued: string[]; skipped: { why: string; oldRuntime?: string }[] };
+  check('再记一次:都跳过(记过了;流式那个话题是另一个运行时的,说接不上)', bkAgain.queued.length === 0 && bkAgain.skipped.every((s) => s.why.includes('记过了') || (s.oldRuntime === 'stream' && s.why.includes('接不上'))) && bkAgain.skipped.some((s) => s.oldRuntime === 'stream'), JSON.stringify(bkAgain));
   // 写完日记、还没写进索引就断了(《运行层行为设计》§5,2026-10-30):索引上只有 pending,没有 booked 与 diaryBlock;再点记账先对照日记补记,不记第二遍
   {
     const { readIndex: ri, writeIndex: wi } = await import('../src/runtime/journal/store.ts');

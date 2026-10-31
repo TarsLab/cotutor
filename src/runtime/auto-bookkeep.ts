@@ -9,6 +9,7 @@
 import { kidQuestions } from '../memory/diary.ts';
 import { localDate } from '../shared/time.ts';
 import { threads, type ConversationIndex, type ConversationMessage, type Workspace } from '../schema/index.ts';
+import { sameRuntime } from './journal/conversation.ts';
 import { readIndex } from './journal/store.ts';
 import type { Runner } from './runner.ts';
 
@@ -20,12 +21,16 @@ export const AUTO_BOOKKEEP_EVERY_MS = 10 * 60 * 1000;
 /** 一轮最后有动静的时刻:开始的那分钟(at,本地时间,和 runner 的时钟同源)+ 跑了多久 */
 const lastAt = (m: ConversationMessage): number => new Date(m.at).getTime() + (m.timing?.doneMs ?? 0);
 
-/** 这一天该自动记哪几个话题、记完要不要整理记忆。past = 不是今天(不等空闲) */
-export function dueBookkeeping(index: Pick<ConversationIndex, 'messages' | 'booked' | 'ratings'>, o: { now: Date; past: boolean }): { threads: string[]; tidy: boolean } {
+/**
+ * 这一天该自动记哪几个话题、记完要不要整理记忆。past = 不是今天(不等空闲)。
+ * runtime = 老师现在用的运行时:换过运行时的话题接不上那时的对话,不记、也不提醒(家长点「记账」才说为什么,runner.bookkeep)
+ */
+export function dueBookkeeping(index: Pick<ConversationIndex, 'messages' | 'booked' | 'ratings'> & { sessions?: ConversationIndex['sessions'] }, o: { now: Date; past: boolean; runtime?: string }): { threads: string[]; tidy: boolean } {
   const ths = threads(index.messages);
   const due: string[] = [];
   for (const th of new Set(ths.filter((_, i) => !index.messages[i].tidy))) {
     if (index.booked[th]) continue;
+    if (o.runtime && index.sessions && !sameRuntime({ sessions: index.sessions }, th, o.runtime)) continue;
     const mine = index.messages.filter((_, i) => ths[i] === th);
     if (mine.some((m) => m.result === 'running')) continue;
     if (!kidQuestions(index.messages, th).length && index.ratings[th] === undefined) continue;
@@ -52,7 +57,7 @@ export async function autoBookkeep(runner: Runner, ws: Workspace, now: Date): Pr
     if (!tutor.endsWith('-tutor') || t.enabled === false) continue;
     for (const [date, past] of [[dayBefore(now), true], [localDate(now), false]] as const) {
       if (runner.running(tutor)) break;
-      const due = dueBookkeeping(await readIndex(ws, tutor, date), { now, past });
+      const due = dueBookkeeping(await readIndex(ws, tutor, date), { now, past, runtime: t.runtime ?? ws.config.runtimes.default });
       try {
         if (due.threads.length) {
           const r = await runner.bookkeep(tutor, date, due.threads, { tidy: due.tidy });

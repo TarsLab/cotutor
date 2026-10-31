@@ -41,6 +41,15 @@ export function sessionFor(index: { sessions: Record<string, Session> }, thread:
   return index.sessions[thread] ?? null;
 }
 
+/**
+ * 这个话题还接得上这个运行时吗(2026-10-31):话题只属于开它的那种运行时,换过运行时就当话题已经结束——接着说开新话题,不记账,记录照样看;
+ * 历史不迁移、不导入。还没有会话的(这个话题一轮都没成)算接得上
+ */
+export function sameRuntime(index: { sessions: Record<string, Session> }, thread: string, runtime: string): boolean {
+  const s = index.sessions[thread];
+  return !s || s.runtime === runtime;
+}
+
 /** 某个话题里最后一条消息的 job(卡的状态文件 turn 记它;没有这个话题 → null) */
 export function lastJobOf(index: { messages: readonly Pick<ConversationMessage, 'job' | 'from' | 'thread'>[] }, thread: string): string | null {
   const t = threads(index.messages);

@@ -15,7 +15,7 @@ import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { buildContextPack } from './context/context-pack.ts';
-import { addMessage, applyRun, lastJobOf, changedCards, jobId, sessionFor } from './journal/conversation.ts';
+import { addMessage, applyRun, lastJobOf, changedCards, jobId, sameRuntime, sessionFor } from './journal/conversation.ts';
 import { localDate, localMinute } from '../shared/time.ts';
 import { cardId, conversationFiles, threads } from '../schema/index.ts';
 import { bookkeepingPrompt, kidQuestions, textbookHeadings } from '../memory/diary.ts';
@@ -551,9 +551,11 @@ export class Runner {
       if (!known.includes(input.thread)) throw new UsageError(`${date} 没有话题 ${input.thread};有:${[...new Set(known)].join('、')}`);
       thread = input.thread;
     } else thread = known[known.length - 1];
+    const { name: runtimeName, runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
+    // 话题只属于开它的那种运行时(2026-10-31):会话是别的运行时的(换过运行时)就接不上,这条开新话题,不把两种会话混在一个话题里;记账在 bookkeep 里先跳过了
+    if (thread !== job && !input.bookkeep && !sameRuntime(index, thread, runtimeName)) thread = job;
     const fresh = thread === job;
     const session = fresh ? null : sessionFor(index, thread);
-    const { runtime } = getRuntime(ws.config, input.runtime ?? t.runtime);
     // 长话题整段压缩(API 运行时):之前的模型历史不再发,前情照索引拼;这一轮笔记带全文,不写「未变」(原文所在的那几轮不发了)
     const compact = !fresh && isApiRuntime(runtime) && dueCompact(index.messages, known, thread);
     // activity:新话题照这条带的,续话题照话题第一条记的。系统提示、卡、记忆都是它的(记账轮也是,接着同一个会话);上下文包的 activity 段记账轮不带
@@ -649,7 +651,7 @@ export class Runner {
    * 立刻返回排了哪些、跳过哪些;链在后台跑(flush 会等,done 也行)。老师正忙 → BusyError。
    * tidy: false 记完不整理记忆(自动记账记今天的话题时,孩子晚上可能还来,src/runtime/auto-bookkeep.ts)。
    */
-  async bookkeep(tutor: string, date: string, only?: string[], opts: { tidy?: boolean } = {}): Promise<{ queued: string[]; skipped: { thread: string; why: string }[]; done: Promise<void> }> {
+  async bookkeep(tutor: string, date: string, only?: string[], opts: { tidy?: boolean } = {}): Promise<{ queued: string[]; skipped: { thread: string; why: string; oldRuntime?: string }[]; done: Promise<void> }> {
     const ws = this.getWs();
     const t = ws.config.tutors[tutor];
     if (!t) throw new UsageError(`没有叫 ${tutor} 的老师;cotutor.json 的 tutors 里有:${Object.keys(ws.config.tutors).join('、')}`);
@@ -661,10 +663,13 @@ export class Runner {
     // 整理记忆那轮自成一个话题,不是学的东西,不记账
     const all = [...new Set(threads(index.messages).filter((_, i) => !index.messages[i].tidy))];
     const queued: string[] = [];
-    const skipped: { thread: string; why: string }[] = [];
+    const skipped: { thread: string; why: string; oldRuntime?: string }[] = [];
+    const runtimeName = t.runtime ?? ws.config.runtimes.default;
     for (const th of only ?? all) {
       if (!all.includes(th)) skipped.push({ thread: th, why: `${date} 没有这个话题` });
       else if (index.booked[th]) skipped.push({ thread: th, why: `记过了(${index.booked[th]})` });
+      // 换过运行时:老师接不上那时的对话,硬记就是编(2026-10-31 副本上试过,还被整理进了记忆)
+      else if (!sameRuntime(index, th, runtimeName)) skipped.push({ thread: th, why: `这个话题是在「${index.sessions[th].runtime}」下聊的,老师现在用「${runtimeName}」,接不上那时的对话,不记账`, oldRuntime: index.sessions[th].runtime });
       else if (!only && !kidQuestions(index.messages, th).length && index.ratings[th] === undefined) skipped.push({ thread: th, why: '没有孩子的话也没打分' });
       else queued.push(th);
     }

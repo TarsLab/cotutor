@@ -62,6 +62,10 @@ try {
   await enable(true);
   const i0 = await readIndex(ctx.ws, 'math-tutor', '2026-10-28');
   check('今天的:空闲不到 2 小时不记;过了才记', dueBookkeeping(i0, { now: at(28, 17, 0), past: false }).threads.length === 0 && dueBookkeeping(i0, { now: at(28, 18, 30), past: false }).threads.join() === `${a},${b}` && !dueBookkeeping(i0, { now: at(28, 18, 30), past: false }).tidy);
+  // 换过运行时:话题 a 的会话是别的运行时的,接不上那时的对话,不记(也不算一次没成)
+  const rtNow = i0.sessions[b].runtime;
+  const switched = { ...i0, sessions: { ...i0.sessions, [a]: { ...i0.sessions[a], runtime: 'old-cli' } } };
+  check('换过运行时的话题不自动记;同一运行时的照记', dueBookkeeping(switched, { now: at(28, 18, 30), past: false, runtime: rtNow }).threads.join() === b && dueBookkeeping(i0, { now: at(28, 18, 30), past: false, runtime: rtNow }).threads.join() === `${a},${b}`, JSON.stringify({ rtNow, a: i0.sessions[a] }));
 
   // 老师挑了两句孩子问:话题 a 里一句对得上、一句孩子没说过;话题 b 里两句都对不上
   process.env.FAKE_BOOKKEEP_ASKED = '宇宙怎么写|孩子没说过这句';

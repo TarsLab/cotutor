@@ -89,8 +89,9 @@ try {
   // --live 走假 CLI(第一位开着的老师),看它能把结果摆出来
   const node = process.execPath;
   const fakeCli = new URL('./_fake-cli.ts', import.meta.url).pathname;
-  await route('PATCH', '/api/config', ctx, { runtimes: { default: 'qwen' } });
   const raw = JSON.parse(readFileSync(join(root, 'cotutor.json'), 'utf8')) as Record<string, unknown>;
+  // 探的是缺省运行时:出厂缺省是 api(不起 CLI),换成假 CLI 顶的 qwen
+  (raw.runtimes as Record<string, unknown>).default = 'qwen';
   (raw.runtimes as Record<string, unknown>).qwen = { run: [node, '--experimental-strip-types', '--no-warnings', fakeCli, '--agent', '{agent}', '{prompt}'], resume: [node, fakeCli, '--resume', '{session}', '{prompt}'] };
   (raw.runtimes as Record<string, unknown>).broken = { run: [node, '--experimental-strip-types', '--no-warnings', fakeCli, '--fail', '{prompt}'], resume: [node, fakeCli, '{prompt}'] };
   const { writeFileSync } = await import('node:fs');

@@ -9,7 +9,9 @@ import { configTemplate, shippedAgents } from '../src/app/cli/skeleton.ts';
 import { parseConfig } from '../src/app/workspace.ts';
 import { check, done } from './_check.ts';
 
-const config = parseConfig(JSON.parse(configTemplate({ slug: 'ming', tutors: await shippedAgents() })), 'x');
+// 这里规划的是 CLI:出厂缺省是 api(应用直连百炼,不起命令行),缺省换成 Qwen Code 那条
+const tpl = JSON.parse(configTemplate({ slug: 'ming', tutors: await shippedAgents() })) as { runtimes: Record<string, unknown> };
+const config = parseConfig({ ...tpl, runtimes: { ...tpl.runtimes, default: 'qwen' } }, 'x');
 const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\n', agentBody: '正文', systemBody: '正文', root: '/ws' };
 
 {
@@ -50,7 +52,7 @@ const vars = { agent: 'math-tutor', prompt: 'cotutor:\n  from: kid\n---\n不懂\
   check('板书预载的判断:{boardFile} / {systemBody} / 头一版写死的路径算预载;什么都没有(codex 之类)不算', boardPreloaded(rt(['fake', '--board-file', '{boardFile}'])) && boardPreloaded(rt(['qwen', '--append-system-prompt', '{systemBody}'])) && boardPreloaded(rt(['fake', '--board-file', '../../.claude/skills/cotutor-board/SKILL.md'])) && !boardPreloaded(rt(['codex', 'exec', '{prompt}'])) && !boardPreloaded(rt(['qwen', '--append-system-prompt', '{agentBody}'])));
   const cfg = parseConfig(JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] })), 'x');
   const p2 = planRun(cfg, { session: null }, { agent: 'math-tutor', prompt: 'hi', agentBody: 'A', systemBody: 'A\n\nB', runtime: 'qwen' });
-  check('占位符:Qwen 填 systemBody;没给值的原样留着', p2.argv.includes('A\n\nB') && planRun(cfg, { session: null }, { agent: 'a', prompt: 'hi' }).argv.includes('{systemBody}'));
+  check('占位符:Qwen 填 systemBody;没给值的原样留着', p2.argv.includes('A\n\nB') && planRun(cfg, { session: null }, { agent: 'a', prompt: 'hi', runtime: 'qwen' }).argv.includes('{systemBody}'));
   const reads = boardGuideReads([{ name: 'Skill', arg: 'cotutor-board' }, { name: 'Read', arg: '/ws/.agents/skills/cotutor-board/SKILL.md' }, { name: 'Bash', arg: 'cat ../../.agents/skills/cotutor-board/SKILL.md' }, { name: 'Read', arg: '/ws/.agents/skills/cotutor-board/references/choice.md' }, { name: 'Skill', arg: 'cotutor-home' }]);
   check('回读检查:Skill 点名、Read / cat SKILL.md 都算;references 与别的技能不算', reads.length === 3 && !reads.join().includes('choice.md') && !reads.join().includes('cotutor-home'), JSON.stringify(reads));
   check('按老师裁的那份也算回读', boardGuideReads([{ name: 'Read', arg: '/ws/.cotutor/board/math-tutor-1a2b3c4d.md' }]).length === 1);

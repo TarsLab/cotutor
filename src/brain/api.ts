@@ -26,12 +26,19 @@ import { getRuntime, type RunPlan } from './cli/run-plan.ts';
 import { createPartialReader } from './stream.ts';
 import { parseTranscript, toolCalls, toolSummary } from './transcript.ts';
 import { compatibleBase, DASHSCOPE_HOST } from '../shared/qianwen.ts';
-import { isApiRuntime, type CotutorConfig, type Policy } from '../schema/index.ts';
+import { isApiRuntime, type ApiRuntime, type CotutorConfig, type Policy } from '../schema/index.ts';
 import { readOnlyTools } from './api-tools.ts';
 import type { BrainHooks, BrainRequest, BrainResult, BrainRun, WarmKey } from './index.ts';
 
 /** 计划里记的 cli 名:API 的轮次按它分流 */
 export const API_CLI = 'api';
+/**
+ * 出厂的 API 运行时(2026-10-31 起新装缺省 api,Qwen Code 那两条留作备用):模型同那两条——api 对 qwen(qwen3.8-max),api-flash 对 qwen-flash(qwen3.8-flash)
+ */
+export const FACTORY_API_RUNTIMES: Record<string, ApiRuntime> = {
+  api: { api: 'bailian', model: 'qwen3.8-max' },
+  'api-flash': { api: 'bailian', model: 'qwen3.8-flash' },
+};
 const DEFAULT_STEPS = 6;
 /** 想一点:没有思考档的模型思考最多多少 token(有档的发 reasoning_effort,见 effortOf) */
 const THINK_LITTLE = 1024;

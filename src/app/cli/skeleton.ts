@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../../runtime/agent-file.ts';
 import { CONFIG_SCHEMA_FILE, DICTATION_DEFAULT, TTS_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../../schema/index.ts';
-import { factoryRuntimes } from '../../brain/index.ts';
+import { FACTORY_API_RUNTIMES, factoryRuntimes } from '../../brain/index.ts';
 import { DEFAULT_GRADE, PACKAGE_GRADES_DIR } from './grades.ts';
 
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -144,13 +144,14 @@ export interface ConfigTemplateInput {
 
 /** 出厂老师的条目;cards = 板书写法里讲哪几种卡(《卡片协议.md》「谁拿到哪些卡」,2026-10-07),text 总在 */
 const TUTOR_DEFAULTS: Record<string, { display: string; subject?: string; avatar: string; hidden?: boolean; runtime?: string; enabled?: boolean; cards?: BoardCardKind[]; policy?: { effort?: 'low' | 'medium' | 'high'; tools?: 'on' } }> = {
-  // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(同语文老师)
-  'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮', runtime: 'qwen', cards: ['text', 'choice', 'image', 'lecture', 'canvas', 'code'], policy: { effort: 'medium' } },
+  // 数学多想一会儿:算错的代价大(别的老师用缺省 low);走 qwen3.8-max(同语文老师)。运行时 api = 应用直连百炼(2026-10-31 起出厂缺省;Qwen Code 那条是 qwen)
+  'math-tutor': { display: '数学老师', subject: '数学', avatar: '🧮', runtime: 'api', cards: ['text', 'choice', 'image', 'lecture', 'canvas', 'code'], policy: { effort: 'medium' } },
   // 画图卡(paint)不在这里:只在「你说我画」activity 的话题里有(agents/chinese-tutor/activities/你说我画.md 头上的 cards)
-  // 语文老师走 qwen(你说我画、看图说话两套 activity eval 在 qwen3.8-max 上验证)
-  'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚', runtime: 'qwen', cards: ['text', 'read', 'choice', 'image', 'tianzige', 'lecture', 'canvas'] },
-  // 英语仍走 qwen3.8-flash;2026-10-27 新 activity 真跑:low 偶尔只出卡或念规则,medium 补齐讲稿(详见年级教学包验证记录)。
-  'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤', runtime: 'qwen-flash', cards: ['text', 'read', 'choice', 'image', 'word', 'lecture'], policy: { effort: 'medium' } },
+  // 语文老师走 qwen3.8-max(你说我画、看图说话两套 activity eval 在它上面验证;2026-10-31 Ray 上 API 与 Qwen Code 对照过)
+  'chinese-tutor': { display: '语文老师', subject: '语文', avatar: '📚', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'tianzige', 'lecture', 'canvas'] },
+  // 英语也走 api(qwen3.8-max):2026-10-31 api-flash 真跑英语四个 activity,13 次里 5 次第一轮只出一张拍照卡、没有讲稿(实时页嘴没话可念);max 在 Ray 上都过。
+  // 想省钱改 api-flash,先跑 activity eval。medium 是 2026-10-27 给 flash 加的(low 偶尔只出卡或念规则,详见年级教学包验证记录)
+  'english-tutor': { display: '英语老师', subject: '英语', avatar: '🔤', runtime: 'api', cards: ['text', 'read', 'choice', 'image', 'word', 'lecture'], policy: { effort: 'medium' } },
 };
 
 /** cotutor.json 模板:只在文件不存在时写入;政策文件永不自动重建或覆盖(家长的决定不由机器代做)。 */
@@ -171,8 +172,9 @@ export function configTemplate(input: ConfigTemplateInput): string {
     paths: {},
     policyDefaults: {},
     tutors,
-    // 出厂运行时由各 CLI 的适配器给(src/brain/cli/<cli>.ts 的 runtimes(),旗标为什么这么写的注释也在那里);缺省 qwen
-    runtimes: { default: 'qwen', ...factoryRuntimes() },
+    // 缺省 api:应用直连百炼,家长端「首页」填一次按量 key + 业务空间 id 就能用(2026-10-31)。
+    // Qwen Code 那两条留作备用(开发者、有 Token Plan 的):由适配器给(src/brain/cli/<cli>.ts 的 runtimes(),旗标为什么这么写的注释也在那里)
+    runtimes: { default: 'api', ...FACTORY_API_RUNTIMES, ...factoryRuntimes() },
     tts: TTS_DEFAULT,
     // 听写的拍照认词:模型与挑词要求(prompt 一行一个字符串)写进文件,家长看得见、改得动
     dictation: DICTATION_DEFAULT,

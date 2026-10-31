@@ -6,20 +6,23 @@
 
 ## 五分钟用起来
 
-需要 Node ≥ 22.18 和 Qwen Code ≥ 0.25。老师采用 realtime + 脑模型:默认 `qwen3.8-omni-flash-realtime` 负责听说,Qwen Code 运行脑模型生成讲稿和板书。出厂运行时为 `qwen`(`qwen3.8-max`,默认)与 `qwen-flash`(`qwen3.8-flash`)。
-
-实时语音需要百炼按量 key 与业务空间 id,在家长端「首页」配置;脑模型支持千问 Token Plan 或百炼按量 key,配置方式见下文。
+需要一台电脑(Mac 最省事)、Node ≥ 22.18,和一个百炼账号(北京地域,按量付费)。老师的嘴和脑都走百炼,由应用直接调用,不用另装模型客户端:嘴是 `qwen3.8-omni-flash-realtime`,听孩子说、照着讲稿念;脑是 `qwen3.8-max`,写讲稿和板书。
 
 ```sh
 npm i -g cotutor
-cotutor init ming --name 小明 --grade 2     # 建 ~/cotutor/ming/:三位老师、十个 skill、账本、对话目录、cotutor.json
-cotutor doctor                    # 逐项体检,不过的每条都带修复命令;--live 真起一次老师
-cotutor serve                     # 孩子端 http://<ip>:5180/,家长端 /parent
+cotutor init ming --name 小明 --grade 2     # 建 ~/cotutor/ming/:三位老师、技能、账本、对话目录、cotutor.json
+cotutor serve                              # 孩子端 http://<ip>:5180/,家长端 /parent
 ```
+
+接着三件事:
+
+1. **填百炼**:在这台电脑上打开家长端 `/parent` 的「首页」,填百炼「按量付费」的 API Key 和业务空间 ID,保存前会先试连。API Key 在百炼控制台的「密钥管理」里创建,业务空间 ID 在控制台的业务空间详情里看,以百炼文档为准:[获取与配置 API Key](https://help.aliyun.com/zh/model-studio/get-api-key)、[首次调用千问 API](https://help.aliyun.com/zh/model-studio/first-api-call-to-qwen)(里面讲了业务空间 ID)。Key 跟地域绑定,控制台右上角先选北京。Token Plan 的 `sk-sp-` 不行。没填时孩子端只出「老师们还没到」。
+2. **填档案**:workspace 里的 `孩子.md` 填 `school_start`(读一年级的年月,如 `2025-09`),老师据此知道现在是几年级哪个学期。想用自己的 Obsidian 库,改 `cotutor.json` 的 `paths.vault`。
+3. **体检**:`cotutor doctor` 逐项检查,不过的每条都带修复命令。
 
 `init` 把出厂老师拷进 `agents/<老师>.md`,把做课包用的四个领域 skill(随 drawtell 包来)和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
 做课包用的 drawtell 随包装好(`.cotutor/drawtell`),不用另外装。要在 iPad 上用(按住说话要 HTTPS):`cotutor cert` 签一张
-自签证书,把根证书装到 iPad,重启 `serve`。步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
+自签证书(要 mkcert:`brew install mkcert && mkcert -install`),把根证书装到 iPad 并打开信任,重启 `serve`,扫码打开。步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
 
 然后在浏览器里:
 
@@ -27,7 +30,7 @@ cotutor serve                     # 孩子端 http://<ip>:5180/,家长端 /paren
 - **工作台 `/dev`**:给有技术背景的家长与开发者。和任何一位老师说话、看一轮的原文;老师团页改人设、政策、老师文件,加新老师;音色页试听挑声音;设置页改路径、端口、配音。
 - **孩子端 `/`**:首页每位老师一张卡,卡上的按钮是家长排好的(新话题、接着以前的话题、带讲法的开场、先看一堂小课堂);点了进板书页,按住说话或打字。老师的回答是一页板书:卡先铺开(选择题、点读、田字格、单词、图、小课堂、画板、拍照),讲稿一句句念、笔跟着声音标注,末句问句停下来等孩子。点一张卡进舞台做题,做完「交给老师」。孩子永远看不到工具、报错、评判。
 
-实时老师的声音由 realtime 模型提供;点读、单词等卡片的配音可选装 [voxtell](https://github.com/tarslab/voxtell)。
+实时老师的声音由 realtime 模型提供;点读、单词等卡片的配音可选装 [voxtell](https://github.com/tarslab/voxtell),在工作台「音色」页挑声音。
 不花钱先看孩子端长什么样:`cotutor mock` 起一份模拟接口,不经真实老师。
 
 ## 年级教学包
@@ -65,9 +68,11 @@ import { loadWorkspace } from 'cotutor/workspace';                        // 解
 
 ## 配置模型
 
-嘴使用百炼按量 API key 与业务空间 id。在家长端「首页」填写,保存到本机 `~/.config/cotutor/bailian.json`;也可在启动服务的终端设置 `DASHSCOPE_API_KEY` 与 `DASHSCOPE_WORKSPACE_ID`。Token Plan 的 key 不能用于 realtime。
+**缺省:应用直连百炼。** 嘴和脑都用家长端「首页」填的那份百炼按量 API Key 与业务空间 ID,存在本机 `~/.config/cotutor/bailian.json`(几个孩子的 workspace 共用);也可以在起 `serve` 的终端设 `DASHSCOPE_API_KEY` 与 `DASHSCOPE_WORKSPACE_ID`。老师用哪个模型写在 `cotutor.json` 的 `runtimes` 里:出厂的 `api`(`qwen3.8-max`,三位老师都用它)和 `api-flash`(`qwen3.8-flash`,便宜些;换之前先跑 `cotutor activity eval` 看例子过不过)。卡的配音、听写认字、口语单、画图也用这份 key;机器上同时有千问 Token Plan 的 key 时,Token Plan 有的模型先走它。
 
-脑模型可用 `QWENCLOUD_TOKEN_PLAN_API_KEY`(千问 Token Plan)或 `DASHSCOPE_API_KEY`(百炼按量),也可先运行 `qwen` 配好本机 Qwen 设置。两类 key 对应不同端点,由适配器选择。模型、预算与老师运行时在 workspace 的 `cotutor.json` 中配置,编辑器按首行 `$schema` 提供字段说明。
+**备用:Qwen Code。** 订了千问 Token Plan 的开发者,可以让老师的脑走 Qwen Code:装 Qwen Code ≥ 0.25,在起 `serve` 的终端设 `QWENCLOUD_TOKEN_PLAN_API_KEY`(或 `DASHSCOPE_API_KEY`),把老师的 `runtime` 改成出厂的 `qwen`(`qwen3.8-max`)或 `qwen-flash`(`qwen3.8-flash`)。嘴照样要百炼按量 key,Token Plan 的 key 不能用于实时语音。
+
+换了运行时,之前的话题接不上,也不导入历史:孩子接着说会开新话题;换之前聊的话题不记账,家长端卡上标「换过运行时 · 不记账」,记录照样能看。模型、预算与老师运行时都在 workspace 的 `cotutor.json` 里,编辑器按首行 `$schema` 提供字段说明。
 
 `cotutor doctor` 检查缺失配置并给修复建议;`--live` 会实际连接服务。页面上的老师起不来时,先看 doctor 和 `conversations/<老师>/<日期>.<job>.err.log`。家长端与工作台需要访问锁时,运行 `cotutor pin` 设置本机 PIN。
 
@@ -86,9 +91,11 @@ cotutor doctor
 
 2026-10-30 之前建的 workspace,老师在 `.claude/agents/`、技能在 `.claude/skills/`。`cotutor upgrade`(或 `init`)先把它们原样挪到新位置,再照常升级;新位置已有同名的不挪,会点名。`.claude/` 里别的文件不动。
 
-### 旧 workspace 切换到 Qwen
+### 旧 workspace 换运行时
 
-先运行 `cotutor upgrade --config` 补齐 Qwen 模板,再把 `runtimes.default` 和仍指向旧运行时的 `tutors.*.runtime` 改为 `qwen` 或 `qwen-flash`,删除旧 Claude 运行时条目。旧 `proxy` 字段可删除,对应命令已移除。
+2026-10-31 之前建的 workspace 缺省走 Qwen Code。要换成应用直连百炼:先 `cotutor upgrade --config` 补上出厂的 `api` / `api-flash`,再把 `runtimes.default` 和 `tutors.*.runtime` 改成 `api`,在家长端「首页」填好百炼。换之前聊的话题照上面「配置模型」说的办:不导入、不记账。
+
+更早还留着 Claude 运行时的:同样先 `cotutor upgrade --config`,把指向 Claude 的 `runtimes.default` 和 `tutors.*.runtime` 改成 `api`(或 `qwen`),再删掉旧条目。旧 `proxy` 字段可删除,对应命令已移除。
 
 ## 开发
 

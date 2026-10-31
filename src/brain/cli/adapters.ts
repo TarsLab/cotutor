@@ -41,7 +41,7 @@ export function adapterNamed(name: string): CliAdapter | null {
 /** 旧配置仍可读取,但退役的运行器不能通过通用协议兜底启动。 */
 export function runtimeIssue(runtime: { run: readonly string[]; resume?: readonly string[]; cli?: string }): string | null {
   const retired = [runtime.cli, basename(runtime.run[0] ?? ''), basename(runtime.resume?.[0] ?? '')].some((name) => name && /^claude(?:\.exe|\.cmd)?$/i.test(name));
-  return retired ? 'Claude CLI 已移除;先 cotutor upgrade --config 补齐 Qwen 模板,把 runtimes.default 和 tutors.*.runtime 改为 qwen 或 qwen-flash,再删除旧运行时条目' : null;
+  return retired ? 'Claude CLI 已移除;先 cotutor upgrade --config 补齐出厂运行时,把 runtimes.default 和 tutors.*.runtime 改为 api 或 api-flash(应用直连百炼;用 Qwen Code 就改为 qwen 或 qwen-flash),再删除旧运行时条目' : null;
 }
 
 export function adapterFor(runtime: { run: readonly string[]; resume?: readonly string[]; cli?: string }): CliAdapter {

@@ -333,7 +333,7 @@ export async function doctorWorkspace(
       push({ name: `tutor.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建' });
       // 音色:一老师一音色走 API 是正路;没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师不对孩子说话,不用音色
       const tc = ws.config.tutors[name];
-      if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡)配不了——只适合测试`, fix: '家长端「音色」页能听着挑(挑中直接写进去);终端里 voxtell voices --grep <关键词> 挑一个、voxtell preview <voice> 试听,填进 voice' });
+      if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡)配不了——只适合测试`, fix: '工作台 /dev 的「音色」页能听着挑(挑中直接写进去);终端里 voxtell voices --grep <关键词> 挑一个、voxtell preview <voice> 试听,填进 voice' });
       // 卡的清单(《卡片协议.md》「谁拿到哪些卡」):有脸的老师才递板书写法;只是报一声讲哪几种
       if (takesTutorRules(name)) {
         const kinds = tutorCardKinds(tc.cards);
@@ -581,7 +581,7 @@ export async function doctorWorkspace(
     for (const [name, rt] of Object.entries(ws.config.runtimes)) {
       if (typeof rt === 'string' || isApiRuntime(rt)) continue;
       const issue = runtimeIssue(rt);
-      if (issue) push({ name: `runtime.${name}`, ok: false, required: usedRuntimes.has(name), detail: issue, fix: '按 README.md 的「旧 workspace 切换到 Qwen」说明迁移' });
+      if (issue) push({ name: `runtime.${name}`, ok: false, required: usedRuntimes.has(name), detail: issue, fix: '按 README.md 的「旧 workspace 换运行时」说明迁移' });
     }
 
     // ---- 运行时的 CLI 在不在 ----
@@ -602,6 +602,11 @@ export async function doctorWorkspace(
         if (runtimeIssue(p)) continue;
         const bin = runtimeCli(p.run);
         const required = usedRuntimes.has(runtime);
+        // 没有老师用的 CLI 运行时(新装缺省 api,Qwen Code 那两条是备用):不探,免得没装 qwen 的家长看到一串「起不来」
+        if (!required) {
+          push({ name: `runtime.${runtime}`, ok: true, required: false, detail: `备用(${bin}),没有老师用它;要用就把老师的 runtime 改成 ${runtime},再跑一次 doctor` });
+          continue;
+        }
         try {
           const { stdout } = await execFileP(bin, ['--version'], { timeout: 8000 });
           const version = stdout.trim().split('\n')[0];

@@ -11,7 +11,7 @@ const cfg = CotutorConfigSchema.parse(raw);
 check('模板可解析', cfg.kid.slug === 'ming' && cfg.title === '小明的老师们' && cfg.server.port === 5181);
 check('老师表齐;没有画图老师与它的运行时', Object.keys(cfg.tutors).length === 3 && !('scene-maker' in cfg.tutors) && !('claude-scene' in cfg.runtimes) && !('qwen-scene' in cfg.runtimes));
 check('enabled 缺省 true;出厂老师都开着', cfg.tutors['math-tutor'].enabled === true && Object.values(cfg.tutors).every((t) => t.enabled === true));
-check('只出厂 Qwen 运行时,缺省 qwen', Object.keys(cfg.runtimes).join() === 'default,qwen,qwen-flash' && cfg.runtimes.default === 'qwen');
+check('出厂运行时:缺省 api(应用直连百炼),api-flash 与 Qwen Code 的两条备用', Object.keys(cfg.runtimes).join() === 'default,api,api-flash,qwen,qwen-flash' && cfg.runtimes.default === 'api');
 
 const pol = resolvePolicy(cfg, 'math-tutor');
 check('政策缺省 60/10/10/4000,没有每天条数', pol.replyMaxChars === 60 && !('dailyMessages' in pol) && pol.contextPack.recent === 10 && pol.contextPack.planLines === 10 && pol.contextPack.entryChars === 4000 && !('reviewGate' in pol) && !('forms' in pol));

@@ -198,7 +198,7 @@ try {
 {
   const { configTemplate } = await import('../src/app/cli/skeleton.ts');
   const tpl = JSON.parse(configTemplate({ slug: 'x', name: 'x', tutors: [] }));
-  check('只出厂 Qwen,缺省 qwen', Object.keys(tpl.runtimes).join() === 'default,qwen,qwen-flash' && tpl.runtimes.default === 'qwen');
+  check('出厂运行时:缺省 api,api-flash 与 Qwen Code 的两条备用', Object.keys(tpl.runtimes).join() === 'default,api,api-flash,qwen,qwen-flash' && tpl.runtimes.default === 'api' && tpl.runtimes.api.model === 'qwen3.8-max' && tpl.runtimes['api-flash'].model === 'qwen3.8-flash');
   for (const name of ['qwen', 'qwen-flash']) {
     const rt = tpl.runtimes[name];
     check(`${name}:流式、stdin、只读工具与系统提示`, rt.stdin === 'stream-json' && ['run', 'resume'].every((k) => rt[k].includes('--include-partial-messages') && rt[k].includes('{toolArgs}') && rt[k].includes('{systemBody}')));

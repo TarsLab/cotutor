@@ -21,6 +21,7 @@ export type { Slot } from './cli/warm.ts';
  * 出厂的运行时模板(init 写 cotutor.json);doctor 体检 CLI 运行时用的(退役没有、适配器、读输出、备机器文件、起进程的环境)
  */
 export { adapterFor, factoryRuntimes, parserOf, prepareCli, processEnv, runtimeIssue, toolKind, type ToolKind } from './cli/adapters.ts';
+export { FACTORY_API_RUNTIMES } from './api.ts';
 
 /** 一轮要脑做的:哪个运行时、接哪个会话、系统提示的几样、这条消息(上下文包 + 孩子的话)、思考量、工具 */
 export interface BrainRequest {

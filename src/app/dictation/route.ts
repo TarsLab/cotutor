@@ -22,8 +22,6 @@
  *   POST /api/dictation/<id>/events          {kind, word, char?, t?, n?, w?, h?} 孩子做了什么(录像按它排)
  *   POST /api/dictation/<id>/done            对好了
  */
-import { createHash } from 'node:crypto';
-import { mkdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DICTATION_SAY_MAX, DICTATION_WORD_MAX, DICTATION_WORDS_MAX, DictationPropsSchema, dictationEmoji, dictationWordLang, type DictationLang, type DictationProps, type DictationWord } from '../../board/cards/index.ts';
 import { localDate } from '../../shared/time.ts';
@@ -65,7 +63,7 @@ export interface DictationDeps {
   recognize: Recognize;
 }
 
-/** 真服务的依赖:首页从 home/published.json 读,音色从 cotutor.json,配音缓存在 .cotutor/dictation-say/ */
+/** 真服务的依赖:首页从 home/published.json 读,音色从 cotutor.json,配音缓存在 .cotutor/tts/(和卡的配音同一份) */
 export function dictationDeps(ctx: AppContext): DictationDeps {
   const ws = (): AppContext['ws'] => ctx.ws;
   const voiced = (t: string): boolean => Boolean(ws().config.tutors[t]?.voice);
@@ -97,11 +95,7 @@ export function dictationDeps(ctx: AppContext): DictationDeps {
     async say(text, tutor) {
       const voice = tutor ? ws().config.tutors[tutor]?.voice : undefined;
       if (!voice) return null;
-      const dir = join(ws().root, '.cotutor', 'dictation-say');
-      const file = join(dir, `${createHash('sha1').update(`${voice}\n${text}`).digest('hex').slice(0, 20)}.mp3`);
-      if ((await stat(file).catch(() => null))?.isFile()) return file;
-      await mkdir(dir, { recursive: true });
-      const r = await synthesize(ws().config.tts, { text, voice, out: file }, { env: process.env });
+      const r = await synthesize({ text, voice }, { cacheDir: ws().dirs.tts, env: process.env });
       // 孩子端只说「叫爸爸妈妈来看一下」;原因只在这里说
       if (r.error) console.error(`dictation: 「${text}」没合成(${r.error});孩子端提示叫家长`);
       return r.file;

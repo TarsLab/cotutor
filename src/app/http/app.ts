@@ -73,7 +73,7 @@ import { fixtureOf, rawView } from './raw-view.ts';
 import { DeviceSchema } from '../../schema/index.ts';
 import { CanvasStateSchema } from '../../board/cards/canvas.ts';
 import { PAPER_KEY_RE, adoptPaper, dropPaper, readPaper, writePaper } from '../../board/paper.ts';
-import { listVoices, synthesize, type VoiceInfo } from '../../media/tts.ts';
+import { synthesize, TTS_VOICES } from '../../media/tts.ts';
 import { addTutorFile, readTutorFile, removeTutorFile, writeTutorFile } from '../cli/tutors.ts';
 import type { MouthIndex } from '../../runtime/journal/mouth-index.ts';
 
@@ -574,11 +574,9 @@ const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg
 
 /** 作业照片一张最多这么大(解码后;页面先缩到长边 PHOTO_MAX_SIDE 的 jpeg,通常几百 KB) */
 export const PHOTO_MAX_BYTES = 3_000_000;
-/** 音色页的试听句;与 tutors.*.voice 里合法的 id 形状(voxtell 的是 qwen-audio-3.0-tts-plus-xxx) */
+/** 音色页的试听句;与 tutors.*.voice 里合法的 id 形状(qwen-audio-3.0-tts-plus-xxx) */
 const PREVIEW_TEXT = '你好呀,我是你的老师。今天我们一起来学一个新东西,准备好了吗?';
 const VOICE_ID_RE = /^[A-Za-z0-9._:-]{1,120}$/;
-/** 音色列表按命令模板缓存(进程内):列一次要起子进程,列表本身不会变 */
-const voiceCache = new Map<string, { voices: VoiceInfo[]; error: string | null }>();
 
 /**
  * 上传作业照片(R5):body {image: "data:image/jpeg;base64,…"}(也认 png)→ 落 captures/<日期>/<HHMM>-<n>.jpg → {path}。
@@ -726,7 +724,6 @@ export async function route(method: string, path: string, ctx: AppContext, body?
             policyDefaults: ws.config.policyDefaults,
             paths: ws.config.paths,
             resolvedPaths: Object.fromEntries(Object.entries(ws.paths).map(([k, v]) => [k, redactHome(v)])),
-            tts: ws.config.tts,
             /** 实时老师:总开关、嘴的模型、哪几位老师走实时用哪个音色(工作台音色页「实时的嘴」改) */
             live: ws.config.live,
             theme: ws.config.kid.theme,
@@ -951,30 +948,11 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       if (!view) return { status: 404, json: { error: 'not_found', message: `${d} 没有 ${job} 这一轮` } };
       return { status: 200, json: fixture ? fixtureOf(view) : view };
     }
-    // 试一句配音:设置页按一下就知道 tts.say 配没配对(最常见的坏法是等孩子那边没声音才发现)
-    if (p === '/api/tts/try' && method === 'POST') {
-      const text = isObj(body) && typeof body.text === 'string' && body.text.trim() ? body.text.trim() : '今天我们讲勾股定理';
-      const voice = isObj(body) && typeof body.voice === 'string' && body.voice.trim() ? body.voice.trim() : Object.values(ws.config.tutors).find((t) => t.voice)?.voice;
-      if (!voice) return { status: 400, json: { error: 'no_voice', message: '没有老师配了音色(cotutor.json tutors.<名>.voice),先配一个再试' } };
-      const out = join(ws.root, '.cotutor', 'tts-try.mp3');
-      await mkdir(join(ws.root, '.cotutor'), { recursive: true });
-      const t0 = Date.now();
-      const r = await synthesize(ws.config.tts, { text, voice, out }, { env: process.env });
-      if (!r.file) return { status: 200, json: { ok: false, ms: Date.now() - t0, voice, error: r.error } };
-      const mp3 = await readFile(out).catch(() => null);
-      return { status: 200, json: { ok: true, ms: Date.now() - t0, voice, bytes: mp3?.length ?? 0, audio: mp3 ? `data:audio/mpeg;base64,${mp3.toString('base64')}` : null } };
-    }
-    // 音色页(2026-09-17):列出 tts.voices 给的全部音色,家长挑之前先听。列表按命令模板缓存在进程里(597 条不会变);?refresh=1 重跑
+    // 音色页(2026-09-17):卡的配音认的全部音色(src/media/tts-voices.ts),家长挑之前先听
     if (p === '/api/tts/voices' && method === 'GET') {
-      const key = JSON.stringify(ws.config.tts.voices);
-      let list = url.searchParams.get('refresh') ? undefined : voiceCache.get(key);
-      if (!list) {
-        list = await listVoices(ws.config.tts, { env: process.env });
-        if (!list.error) voiceCache.set(key, list);
-      }
       const inUse: Record<string, string[]> = {};
       for (const [name, t] of Object.entries(ws.config.tutors)) if (t.voice) (inUse[t.voice] ??= []).push(name);
-      return { status: 200, json: { ok: !list.error, error: list.error, count: list.voices.length, voices: list.voices, inUse, sample: PREVIEW_TEXT } };
+      return { status: 200, json: { ok: true, count: TTS_VOICES.length, voices: TTS_VOICES, inUse, sample: PREVIEW_TEXT } };
     }
     // 嘴的音色(工作台音色页「实时的嘴」):这个 realtime 模型认的 56 个(src/realtime/voices.ts)、谁在用(没挑的用缺省)
     if (p === '/api/tts/realtime' && method === 'GET') {
@@ -997,19 +975,14 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       }
       return { status: 200, file, contentType: 'audio/wav' };
     }
-    // 试听一个音色:同一句同一音色合成一次就存在 .cotutor/tts-preview/,之后直接给文件;失败回 JSON 说原因(页面拿 message 显示)
+    // 试听一个音色:同一句同一音色合成一次就在配音缓存里(.cotutor/tts/),之后直接给文件;失败回 JSON 说原因(页面拿 message 显示)
     if (p === '/api/tts/preview' && method === 'GET') {
       const voice = url.searchParams.get('voice')?.trim() ?? '';
       if (!VOICE_ID_RE.test(voice)) return { status: 400, json: { error: 'bad_voice', message: '音色 id 只能是字母数字与 . _ : -' } };
       const text = url.searchParams.get('text')?.trim().slice(0, 200) || PREVIEW_TEXT;
-      const dir = join(ws.root, '.cotutor', 'tts-preview');
-      const file = join(dir, `${createHash('sha1').update(`${voice}\n${text}`).digest('hex').slice(0, 20)}.mp3`);
-      if (!(await stat(file).catch(() => null))?.isFile()) {
-        await mkdir(dir, { recursive: true });
-        const r = await synthesize(ws.config.tts, { text, voice, out: file }, { env: process.env });
-        if (!r.file) return { status: 502, json: { error: 'tts_failed', voice, message: r.error } };
-      }
-      return { status: 200, file, contentType: 'audio/mpeg' };
+      const r = await synthesize({ text, voice }, { cacheDir: ws.dirs.tts, env: process.env });
+      if (!r.file) return { status: 502, json: { error: 'tts_failed', voice, message: r.error } };
+      return { status: 200, file: r.file, contentType: 'audio/mpeg' };
     }
 
 

@@ -1,126 +1,159 @@
 /**
- * 配音:卡自己的声音(点读段、单词)按 cotutor.json 的 tts 运行时合成到那张卡的资产目录;讲稿不配音,由实时的嘴照念。
- * 失败不响、不阻塞对话:这段没有音频,孩子端点了不出声;原因写进 err.log 供家长看。
- * 音色是人设(tutors[].voice),没配就不合成——「无缺省音色」是 voxtell 的政策,这里照办。
- * 起 voxtell 时按合成模型定走哪家(src/shared/qianwen.ts):Token Plan 有就把它的端点与 key 注给 voxtell,否则给按量那把。
+ * 配音:卡自己的声音(点读段、单词、听写念的词)与音色页的试听;讲稿不配音,由实时的嘴照念。
+ * 百炼 Qwen-Audio-TTS 的非实时合成(2026-10-31 从 voxtell 并进来,不再起子进程):POST 回一个 24 小时有效的音频地址,马上下载。
+ * 走哪条线按模型定(src/shared/qianwen.ts):Token Plan 有这个模型就走它;否则百炼按量,端点是业务空间的域名(voxtell 2026-08-07 实测,公网域名不认)。
+ * 模型看音色 id 的前缀(qwen-audio-3.0-tts-plus-xxx / -flash-xxx,flash 的音色给 plus 回 400);没前缀的老短名走 TTS_MODEL。
+ * 缓存:按「模型 + 音色 + 字 + 格式」寻址,放在调用方给的目录(workspace 的 .cotutor/tts/);同一句同一个音色合成过就直接给那个文件,不再花钱。
+ * 失败不抛、不响:结果带原因(不含 key),调用方写进 err.log 或回给家长端;孩子端点了不出声。
+ * 测试与探针:COTUTOR_TTS_ENDPOINT 指到假百炼(tests/_fake-tts.ts)。
  */
-import { execFile } from 'node:child_process';
-import { appendFile, stat } from 'node:fs/promises';
-import { basename } from 'node:path';
-import { qianwenKeys, qianwenLine, ttsUrl } from '../shared/qianwen.ts';
-import { fillTts, type Tts } from '../schema/index.ts';
+import { createHash } from 'node:crypto';
+import { appendFile, copyFile, mkdir, rename, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { bailianWorkspaceId, qianwenKeys, qianwenLine, ttsUrl, workspaceHost } from '../shared/qianwen.ts';
+
+export { TTS_VOICES, type TtsVoice } from './tts-voices.ts';
+
+/** 音色 id 不带模型前缀时用的合成模型 */
+export const TTS_MODEL = 'qwen-audio-3.0-tts-plus';
+const FORMAT = 'mp3';
+const SAMPLE_RATE = 24000;
+/** 网络错、5xx、429 最多试几次(间隔 1.5 秒、3 秒);参数与鉴权错不重试 */
+const ATTEMPTS = 3;
 
 export interface TtsResult {
-  /** 成功 → 输出文件路径;失败 → null */
+  /** 成功 → 音频文件路径(给了 out 就是 out,不然是缓存里那份);失败 → null */
   file: string | null;
   error: string | null;
 }
 
-/** 子进程失败的原因:没装 / 退出码 + 它自己说的话(voxtell 带 --json 时错误是一份 JSON,在 stderr;只取它的 message) */
-function explainExec(argv: readonly string[], err: Error, stdout: unknown, stderr: unknown): string {
-  if ((err as NodeJS.ErrnoException).code === 'ENOENT') return `PATH 里没有 ${argv[0]}`;
-  const said = `${String(stderr ?? '').trim()}\n${String(stdout ?? '').trim()}`.trim().slice(-500);
-  let detail = said;
-  for (const chunk of [stdout, stderr]) {
+export interface TtsOptions {
+  /** 缓存目录(workspace 的 dirs.tts) */
+  cacheDir: string;
+  env?: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+}
+
+/** 音色 id 的前缀就是模型 */
+export function ttsModelOf(voice: string): string {
+  return /^(qwen-audio-[\d.]+-tts-[a-z]+)-/.exec(voice)?.[1] ?? TTS_MODEL;
+}
+
+/** 这个模型发到哪、带哪把 key;两把 key 都用不上、按量又没有业务空间 id → 原因 */
+export function ttsTarget(model: string, env: NodeJS.ProcessEnv = process.env): { url: string; key: string; plan: boolean } | { error: string } {
+  const line = qianwenLine(model, qianwenKeys(env));
+  const fake = env.COTUTOR_TTS_ENDPOINT?.trim();
+  if (fake) return { url: fake, key: line?.key ?? 'sk-test', plan: false };
+  if (!line) return { error: '没有百炼的 key(家长端「首页」里填)' };
+  if (line.plan) return { url: ttsUrl(line.host), key: line.key, plan: true };
+  const ws = bailianWorkspaceId(env);
+  if (!ws) return { error: '按量的配音要百炼的业务空间 id(家长端「首页」里填)' };
+  return { url: ttsUrl(workspaceHost(ws)), key: line.key, plan: false };
+}
+
+/** 同一个文件正在合成:后来的等它,不再花一次钱 */
+const inflight = new Map<string, Promise<TtsResult>>();
+
+/** 合成一句;给了 out 就把音频放到那里(缓存里留一份) */
+export async function synthesize(say: { text: string; voice: string; out?: string }, opts: TtsOptions): Promise<TtsResult> {
+  const model = ttsModelOf(say.voice);
+  const key = createHash('sha256').update(JSON.stringify({ format: FORMAT, model, sampleRate: SAMPLE_RATE, text: say.text, voice: say.voice })).digest('hex');
+  const cached = join(opts.cacheDir, `${key.slice(0, 24)}.${FORMAT}`);
+  let r: TtsResult;
+  if ((await stat(cached).catch(() => null))?.size) r = { file: cached, error: null };
+  else {
+    let p = inflight.get(cached);
+    if (!p) {
+      p = fetchAudio(model, say, cached, opts).finally(() => inflight.delete(cached));
+      inflight.set(cached, p);
+    }
+    r = await p;
+  }
+  if (!r.file || !say.out) return r;
+  try {
+    await copyFile(r.file, say.out);
+    return { file: say.out, error: null };
+  } catch (err) {
+    return { file: null, error: `合成好了但放不到 ${say.out}:${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+interface TtsReply {
+  request_id?: string;
+  code?: string;
+  message?: string;
+  output?: { audio?: { url?: string } };
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+async function fetchAudio(model: string, say: { text: string; voice: string }, file: string, opts: TtsOptions): Promise<TtsResult> {
+  const fail = (error: string): TtsResult => ({ file: null, error });
+  const target = ttsTarget(model, opts.env ?? process.env);
+  if ('error' in target) return fail(target.error);
+  const timeoutMs = opts.timeoutMs ?? 60_000;
+  let last = '';
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    if (attempt > 1) await sleep(1500 * (attempt - 1));
     try {
-      const j = JSON.parse(String(chunk ?? '')) as { message?: unknown; error?: unknown };
-      if (typeof j.message === 'string') detail = j.message;
-      else if (typeof j.error === 'string') detail = j.error;
-      else continue;
-      break;
-    } catch {
-      /* 不是 JSON 就原样 */
+      const res = await fetch(target.url, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${target.key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model, input: { text: say.text, voice: say.voice, format: FORMAT, sample_rate: SAMPLE_RATE } }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      const raw = await res.text();
+      let j: TtsReply = {};
+      try {
+        j = JSON.parse(raw) as TtsReply;
+      } catch {
+        /* 不是 JSON:按状态码说 */
+      }
+      const detail = `${j.code ?? ''} ${j.message ?? raw.slice(0, 200)}`.trim();
+      if (res.status === 401 || res.status === 403) return fail(`百炼不认这把 key(HTTP ${res.status}:${detail});看家长端「首页」里填的 key${target.plan ? '' : '与业务空间'},业务空间要开通 ${model}`);
+      if (res.status === 429 || res.status >= 500) {
+        last = `百炼${res.status === 429 ? '限流或额度不够' : '出错'}(HTTP ${res.status}:${detail})`;
+        continue;
+      }
+      if (!res.ok) return fail(`合成被拒(HTTP ${res.status}:${detail});核对音色 ${say.voice} 和字`);
+      const url = j.output?.audio?.url;
+      if (!url) return fail(`百炼没给音频地址(request_id ${j.request_id ?? '?'})`);
+      const audio = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+      if (!audio.ok) {
+        last = `下载音频失败(HTTP ${audio.status})`;
+        continue;
+      }
+      const bytes = Buffer.from(await audio.arrayBuffer());
+      if (!bytes.length) return fail('百炼给的音频是空的');
+      // 先写到旁边再改名:缓存里只有整份(别的请求看见就能直接给)
+      await mkdir(opts.cacheDir, { recursive: true });
+      const tmp = `${file}.${process.pid}.tmp`;
+      await writeFile(tmp, bytes);
+      await rename(tmp, file);
+      return { file, error: null };
+    } catch (err) {
+      last = err instanceof Error && err.name === 'TimeoutError' ? `等了 ${timeoutMs / 1000} 秒没合成完` : `连不上百炼:${err instanceof Error ? err.message : String(err)}`;
     }
   }
-  return `${argv[0]} ${argv[1] ?? ''} 失败${detail ? `:${detail}` : `(${err.message})`}`;
-}
-
-/** voxtell 不带 --model 时用的合成模型 */
-const VOXTELL_MODEL = 'qwen-audio-3.0-tts-plus';
-
-/** 起 voxtell 的环境:模型 Token Plan 有 → 端点换成它的、key 换成它的;否则按量那把(别让 sk-sp- 顶在 DASHSCOPE_API_KEY 上)。不是 voxtell 就原样 */
-export function voxtellEnv(argv: readonly string[], env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  if (basename(argv[0]) !== 'voxtell') return env;
-  const i = argv.indexOf('--model');
-  const line = qianwenLine(i >= 0 && argv[i + 1] ? argv[i + 1] : VOXTELL_MODEL, qianwenKeys(env));
-  if (!line) return env;
-  return line.plan ? { ...env, DASHSCOPE_API_KEY: line.key, VOXTELL_TTS_ENDPOINT: ttsUrl(line.host) } : { ...env, DASHSCOPE_API_KEY: line.key };
-}
-
-export function synthesize(tts: Tts, vars: { text: string; voice: string; out: string }, opts: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}): Promise<TtsResult> {
-  const argv = fillTts(tts.say, vars);
-  return new Promise((resolveResult) => {
-    execFile(argv[0], argv.slice(1), { env: voxtellEnv(argv, opts.env ?? process.env), timeout: opts.timeoutMs ?? 60_000, maxBuffer: 1 << 20 }, async (err, stdout, stderr) => {
-      if (err) return resolveResult({ file: null, error: explainExec(argv, err, stdout, stderr) });
-      const st = await stat(vars.out).catch(() => null);
-      if (!st?.isFile() || st.size === 0) return resolveResult({ file: null, error: `命令跑完了但 ${vars.out} 没有内容` });
-      resolveResult({ file: vars.out, error: null });
-    });
-  });
-}
-
-/** 一个音色:voice 是 id(填进 tutors.*.voice 的),其余是给家长挑的时候看的 */
-export interface VoiceInfo {
-  voice: string;
-  name: string;
-  gender?: string;
-  age?: number;
-  trait?: string;
-  scene?: string;
-  lang?: string;
-}
-
-const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
-
-/**
- * 列音色:跑 tts.voices(缺省 voxtell voices --json),stdout 认两种形状——{voices: [...]} 或直接数组;
- * 每项至少要有 voice(id),name 缺了用 id 顶。失败不抛,error 带原因给家长端显示。
- */
-export function listVoices(tts: Tts, opts: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}): Promise<{ voices: VoiceInfo[]; error: string | null }> {
-  const argv = tts.voices;
-  return new Promise((resolveResult) => {
-    execFile(argv[0], argv.slice(1), { env: opts.env ?? process.env, timeout: opts.timeoutMs ?? 30_000, maxBuffer: 8 << 20 }, (err, stdout, stderr) => {
-      if (err) return resolveResult({ voices: [], error: explainExec(argv, err, stdout, stderr) });
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(String(stdout));
-      } catch {
-        return resolveResult({ voices: [], error: `${argv.join(' ')} 的输出不是 JSON` });
-      }
-      const raw = Array.isArray(parsed) ? parsed : parsed && typeof parsed === 'object' && Array.isArray((parsed as { voices?: unknown }).voices) ? ((parsed as { voices: unknown[] }).voices) : null;
-      if (!raw) return resolveResult({ voices: [], error: `${argv.join(' ')} 的输出里没有 voices 数组` });
-      const voices: VoiceInfo[] = [];
-      for (const item of raw) {
-        if (!item || typeof item !== 'object') continue;
-        const o = item as Record<string, unknown>;
-        const voice = str(o.voice) ?? str(o.id);
-        if (!voice) continue;
-        const age = typeof o.age === 'number' && Number.isFinite(o.age) ? o.age : undefined;
-        voices.push({ voice, name: str(o.name) ?? voice, gender: str(o.gender), age, trait: str(o.trait), scene: str(o.scene), lang: str(o.lang) });
-      }
-      resolveResult({ voices, error: null });
-    });
-  });
+  return fail(last);
 }
 
 /**
- * 一轮的配音队列:讲稿句与点读段同一条队,三个并行,先进先出(讲稿句在流式时就进了,自然排在点读段前面)。
+ * 一轮的配音队列:卡自己的声音(点读段、单词),三个并行,先进先出。
  * 每个文件一项;失败写 err.log、结果 null。
  */
 export class DubQueue {
   private readonly queue: (() => Promise<void>)[] = [];
   private running = 0;
-  private readonly tts: Tts;
   private readonly voice: string;
   private readonly err: string;
-  private readonly env?: NodeJS.ProcessEnv;
+  private readonly opts: TtsOptions;
   /** 每条的进展(排队 / 完成 / 失败)报给谁:runner 把它变成 tts 道的事件 */
   report?: (e: { kind: 'queued' | 'done' | 'failed'; label: string; ms: number; file?: string; error?: string }) => void;
-  constructor(tts: Tts, voice: string, err: string, env?: NodeJS.ProcessEnv) {
-    this.tts = tts;
+  constructor(voice: string, err: string, opts: TtsOptions) {
     this.voice = voice;
     this.err = err;
-    this.env = env;
+    this.opts = opts;
   }
 
   /** 合成 text 到 out;resolve 成文件名(最后一段)或 null;label 是 err.log 里的称呼 */
@@ -129,7 +162,7 @@ export class DubQueue {
       this.report?.({ kind: 'queued', label, ms: 0 });
       const t0 = Date.now();
       this.queue.push(async () => {
-        const r = await synthesize(this.tts, { text, voice: this.voice, out }, { env: this.env });
+        const r = await synthesize({ text, voice: this.voice, out }, this.opts);
         if (r.error) await appendFile(this.err, `cotutor tts: ${label}没合成(${r.error});这段不出声\n`).catch(() => {});
         const file = out.slice(out.lastIndexOf('/') + 1);
         if (r.error) this.report?.({ kind: 'failed', label, ms: Date.now() - t0, error: r.error });

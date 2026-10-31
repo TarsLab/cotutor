@@ -393,9 +393,6 @@ ${BRAND_CSS}
   .gaps { margin:0; padding:14px 20px; list-style:none; display:flex; flex-direction:column; gap:7px; }
   .gaps li { display:flex; gap:9px; font-size:14px; align-items:baseline; }
   .gaps li .plus { font:600 13px/1 var(--mono); color:var(--ok); }
-  .ttsbox { padding:18px 20px; display:flex; flex-direction:column; gap:10px; }
-  .ttsbox textarea { width:100%; min-height:56px; font:13.5px/1.6 var(--mono); padding:9px 12px; border:0; box-shadow:0 0 0 1px var(--line); border-radius:var(--r-ctl); background:var(--surface); resize:vertical; }
-  .ttsbox .try { display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
 
   .field .withbtn { display:flex; gap:6px; align-items:center; }
   .field .withbtn input { flex:1; min-width:0; }
@@ -1279,7 +1276,7 @@ ${pageDomJs(4000)}
         h('div', { class: 'field' }, h('label', {}, '学科'), h('input', { type: 'text', 'data-f': 'subject', value: t.subject || '' })),
         colorField(t, c),
         h('div', { class: 'field' }, h('label', {}, '头像(emoji,或图片路径如 avatars/' + t.name + '.png)'), h('input', { type: 'text', 'data-f': 'avatar', value: t.avatar || '' })),
-        h('div', { class: 'field' }, h('label', {}, '音色(voxtell id)'), h('div', { class: 'withbtn' }, h('input', { type: 'text', 'data-f': 'voice', value: t.voice || '' }),
+        h('div', { class: 'field' }, h('label', {}, '卡的配音音色'), h('div', { class: 'withbtn' }, h('input', { type: 'text', 'data-f': 'voice', value: t.voice || '' }),
           h('button', { class: 'btn', type: 'button', title: '到音色页听着挑', on: { click: () => { voiceState.for = t.name; voiceState.kind = 'tts'; location.hash = '#voices'; showTab('voices'); } } }, '去挑'))),
         h('div', { class: 'field chk' }, h('input', { type: 'checkbox', 'data-f': 'enabled', checked: t.enabled }), h('label', {}, '开启')),
         h('div', { class: 'field chk' }, h('input', { type: 'checkbox', 'data-f': 'hidden', checked: t.hidden }), h('label', {}, '孩子端不露')),
@@ -1317,7 +1314,7 @@ ${pageDomJs(4000)}
     $('#team').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '老师团'), h('span', { class: 'sub' }, '按 cotutor.json 里有谁走;键以 -tutor 结尾的是有脸的老师')), top, roster));
   };
 
-  // ---- 音色:两样声音,页头切——卡的配音(tts.voices 列出全部音色,挑中的写进 tutors.<名>.voice;点读、单词卡的声音)、
+  // ---- 音色:两样声音,页头切——卡的配音(百炼 Qwen-Audio-TTS 的 597 个,src/media/tts-voices.ts;挑中的写进 tutors.<名>.voice;点读、单词卡的声音)、
   //      实时的嘴(百炼 realtime 认的 56 个,挑中的写进 live.voices.<名>,见下面 renderLiveVoices)。都是先听再挑 ----
   const AGE_BANDS = [['', '全部年龄'], ['kid', '12 岁以下'], ['young', '13–25 岁'], ['adult', '26–40 岁'], ['senior', '41 岁以上']];
   const inBand = (age, band) => !band || (typeof age === 'number' && (band === 'kid' ? age <= 12 : band === 'young' ? age >= 13 && age <= 25 : band === 'adult' ? age >= 26 && age <= 40 : age >= 41));
@@ -1353,10 +1350,10 @@ ${pageDomJs(4000)}
       feedback(panel, false, '没成:' + e.message);
     }
   };
-  const loadVoices = async (refresh) => {
+  const loadVoices = async () => {
     voiceState.loading = true;
     try {
-      const r = await api('GET', '/api/tts/voices' + (refresh ? '?refresh=1' : ''));
+      const r = await api('GET', '/api/tts/voices');
       voiceState.list = r.voices;
       voiceState.error = r.error;
       voiceState.sample = r.sample;
@@ -1377,7 +1374,7 @@ ${pageDomJs(4000)}
     if (voiceState.kind === 'live') return renderLiveVoices();
     if (!voiceState.list && !voiceState.loading) {
       $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), kindSeg()), h('div', { class: 'panel' }, h('p', { class: 'hint', style: 'padding:16px 20px' }, '在列音色……'))));
-      await loadVoices(false);
+      await loadVoices();
       if (state.tab !== 'voices' || voiceState.kind !== 'tts') return;
     }
     if (voiceState.loading) return;
@@ -1387,16 +1384,15 @@ ${pageDomJs(4000)}
     const fb = h('span', { class: 'fb' });
     const forSel = h('select', { id: 'v-for', title: '挑中的音色给谁', on: { change: (e) => { voiceState.for = e.target.value; renderVoices(); } } },
       ...c.tutors.map((t) => h('option', { value: t.name, selected: who && t.name === who.name }, t.display + (t.enabled ? '' : '(已关闭)'))));
-    panel.append(h('header', {}, h('h4', {}, '音色'), h('span', { class: 'sub' }, (voiceState.list || []).length + ' 个', h('span', { class: 'cmd' }, ' · ' + (c.tts.voices || []).join(' '))),
-      h('span', { class: 'right' }, fb, h('label', { class: 'for' }, '给谁挑', forSel),
-        h('button', { class: 'btn', type: 'button', title: '重新跑一遍列音色的命令', on: { click: async () => { stopPreview(); await loadVoices(true); renderVoices(); } } }, '刷新'))));
+    panel.append(h('header', {}, h('h4', {}, '音色'), h('span', { class: 'sub' }, (voiceState.list || []).length + ' 个', h('span', { class: 'cmd' }, '百炼 Qwen-Audio-TTS')),
+      h('span', { class: 'right' }, fb, h('label', { class: 'for' }, '给谁挑', forSel))));
     if (who) {
       const cur = (voiceState.list || []).find((v) => v.voice === who.voice);
       panel.append(h('div', { class: 'now' }, avatarEl(who), h('b', {}, who.display),
         who.voice ? h('span', {}, '现在用 ', h('b', {}, cur ? cur.name : who.voice), cur ? h('small', {}, ' ' + who.voice) : h('small', {}, '(列表里没有这个 id)')) : h('span', { class: 'muted' }, '还没配音色,点读、单词卡没有声音'),
         who.voice ? h('button', { class: 'btn', type: 'button', on: { click: () => patchAndReload(panel, { tutors: { [who.name]: { voice: null } } }, renderVoices) } }, '清掉') : null));
     }
-    if (voiceState.error) panel.append(h('p', { class: 'fb bad', style: 'padding:12px 16px 0' }, '列不出音色:' + voiceState.error), h('p', { class: 'hint' }, '设置页里 tts.voices 是列音色的命令(缺省 voxtell voices --json);voxtell 不在 PATH 就把第一项写成完整路径,或者先在终端跑 voxtell doctor。'));
+    if (voiceState.error) panel.append(h('p', { class: 'fb bad', style: 'padding:12px 16px 0' }, '列不出音色:' + voiceState.error));
 
     const genders = [...new Set((voiceState.list || []).map((v) => v.gender).filter(Boolean))];
     const filters = h('div', { class: 'filters' },
@@ -1427,7 +1423,7 @@ ${pageDomJs(4000)}
     };
     renderVoiceList();
     panel.append(filters, list);
-    panel.append(h('p', { class: 'hint' }, '试听是真合成一次(voxtell 有缓存,同一句同一个音色以后不再花钱);挑中就写进 cotutor.json,卡点了就用新声音。只管卡自己的声音(点读卡、单词卡);老师开口的声音在「实时的嘴」那半。'));
+    panel.append(h('p', { class: 'hint' }, '试听是真合成一次(合成过的存着,同一句同一个音色以后不再花钱;要百炼的 key,家长端「首页」里填);挑中就写进 cotutor.json,卡点了就用新声音。只管卡自己的声音(点读卡、单词卡、听写念的词);老师开口的声音在「实时的嘴」那半。'));
     $('#voices').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '音色'), kindSeg(), h('span', { class: 'sub' }, '先听再挑,挑中的写进 cotutor.json')), panel));
   };
   // ---- 实时的嘴:百炼 realtime 认的 56 个音色(src/realtime/voices.ts);试听是真连一次照念这一句(几分钱,存着)。
@@ -1553,40 +1549,6 @@ ${pageDomJs(4000)}
       h('div', { class: 'field' }, h('label', {}, 'HTTPS 证书(相对 workspace)'), h('input', { type: 'text', id: 's-cert', value: c.https ? c.https.cert : '', placeholder: '空 = 机器级 ~/.config/cotutor/certs/' })),
       h('div', { class: 'field' }, h('label', {}, 'HTTPS 私钥'), h('input', { type: 'text', id: 's-key', value: c.https ? c.https.key : '', placeholder: '空 = 机器级' }))));
 
-    const tts = h('div', { class: 'panel' });
-    const say = h('textarea', { id: 's-tts', spellcheck: 'false' }, JSON.stringify(c.tts.say));
-    const tryFb = h('span', { class: 'fb' });
-    tts.append(h('header', {}, h('h4', {}, '配音'), h('span', { class: 'sub' }, 'voxtell · 占位 {text} {voice} {out}'),
-      h('span', { class: 'right' }, h('span', { class: 'fb' }), h('button', { class: 'btn primary', type: 'button', on: { click: async () => {
-        try {
-          let arr;
-          try { arr = JSON.parse(say.value); } catch (bad) { throw new Error('配音命令要是 JSON 数组'); }
-          if (!Array.isArray(arr) || !arr.length || !arr.every((x) => typeof x === 'string')) throw new Error('配音命令要是非空字符串数组');
-          await api('PATCH', '/api/config', { tts: { say: arr } });
-          await loadConfig();
-          feedback(tts, true, '已写入 cotutor.json');
-        } catch (e) { feedback(tts, false, e.message); }
-      } } }, '保存配音'))));
-    tts.append(h('div', { class: 'ttsbox' }, say,
-      h('div', { class: 'try' },
-        h('button', { class: 'btn', type: 'button', on: { click: async (e) => {
-          const btn = e.target;
-          btn.disabled = true;
-          tryFb.className = 'fb';
-          tryFb.textContent = '合成中……';
-          try {
-            const r = await api('POST', '/api/tts/try', { text: '今天我们讲勾股定理' });
-            if (!r.ok) { tryFb.className = 'fb bad'; tryFb.textContent = '没成:' + r.error; }
-            else {
-              tryFb.textContent = r.voice + ' · ' + (r.ms / 1000).toFixed(1) + 's · ' + Math.round(r.bytes / 1024) + 'kB';
-              if (r.audio) new Audio(r.audio).play().catch(() => {});
-            }
-          } catch (err) { tryFb.className = 'fb bad'; tryFb.textContent = err.message; }
-          btn.disabled = false;
-        } } }, '试一句「今天我们讲勾股定理」'),
-        tryFb)));
-    tts.append(h('p', { class: 'hint' }, '用第一位配了音色的老师试;voxtell 不在 PATH 就把第一项写成完整路径。kid 的别的字段、version、运行时模板请直接编辑 cotutor.json。'));
-
     // 孩子端:惯用手(kid.hand)——左撇子时平板横屏实时老师页的浮层(按住说话)挪到右边;孩子端下次进老师页生效
     const kid = h('div', { class: 'panel' });
     const left = (c.kid && c.kid.hand) === 'left';
@@ -1597,10 +1559,11 @@ ${pageDomJs(4000)}
     } } }, label);
     kid.append(h('header', {}, h('h4', {}, '孩子端'), h('span', { class: 'sub' }, 'kid.hand · 孩子下次进老师页生效'), h('span', { class: 'right' }, h('span', { class: 'fb' }))),
       h('div', { class: 'handrow' }, h('b', {}, '惯用手'), h('span', { class: 'seg' }, handBtn('right', '右手'), handBtn('left', '左撇子')),
-        h('span', { class: 'muted' }, left ? '平板横屏的实时老师页:按住说话那一栏在右边,左手写字' : '平板横屏的实时老师页:按住说话那一栏在左边,右手写字')));
+        h('span', { class: 'muted' }, left ? '平板横屏的实时老师页:按住说话那一栏在右边,左手写字' : '平板横屏的实时老师页:按住说话那一栏在左边,右手写字')),
+      h('p', { class: 'hint' }, 'kid 的别的字段、version、运行时模板请直接编辑 cotutor.json。'));
 
     const mig = migratePanel();
-    $('#settings').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '设置'), h('span', { class: 'sub' }, '路径、服务、配音;文件仍是真相,这页只是改它的一个口子')), ...(mig ? [mig] : []), paths, server, tts, kid));
+    $('#settings').replaceChildren(h('div', { class: 'wrap' }, h('header', { class: 'ph' }, h('h1', {}, '设置'), h('span', { class: 'sub' }, '路径、服务、孩子端;文件仍是真相,这页只是改它的一个口子')), ...(mig ? [mig] : []), paths, server, kid));
   };
 
   // ---- 概览:近七天的数字、今天各老师、要看一眼的轮次、体检(doctor 不带 --live) ----

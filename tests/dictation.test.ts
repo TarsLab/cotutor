@@ -85,12 +85,12 @@ const cell = (strokes: InkPoint[][]): { strokes: InkPoint[][]; undos: number } =
 }
 
 // ---- 全流程 ----
-const FAKE_TTS = fileURLToPath(new URL('./_fake-tts.ts', import.meta.url));
-const node = process.execPath;
+const { startFakeTts } = await import('./_fake-tts.ts');
+const tts = await startFakeTts();
+process.env.COTUTOR_TTS_ENDPOINT = tts.url;
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, 'voices', '--json'] };
 cfg.tutors['chinese-tutor'].voice = 'v-kid';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
@@ -140,7 +140,7 @@ try {
 
   // ---- 念 ----
   const say = await call('GET', `/api/dictation/${id}/say/1`);
-  check('念:用语文老师的音色合成,缓存在 .cotutor/dictation-say/', say.status === 200 && say.file !== undefined && readFileSync(say.file!, 'utf8') === 'fake-mp3:v-kid:鼓励,老师鼓励我的鼓励' && say.file!.includes(join('.cotutor', 'dictation-say')));
+  check('念:用语文老师的音色合成,缓存在配音缓存 .cotutor/tts/', say.status === 200 && say.file !== undefined && readFileSync(say.file!, 'utf8') === 'fake-mp3:v-kid:鼓励,老师鼓励我的鼓励' && say.file!.includes(join('.cotutor', 'tts')));
   check('念:?text=1 给要念的字;没写念法念词本身', (await call('GET', `/api/dictation/${id}/say/1?text=1`)).json.text === '鼓励,老师鼓励我的鼓励' && (await call('GET', `/api/dictation/${id}/say/0?text=1`)).json.text === '春天');
 
   // ---- 一个词一个词交 ----

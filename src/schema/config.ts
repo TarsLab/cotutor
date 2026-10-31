@@ -79,8 +79,8 @@ export const TutorSchema = z.object({
   avatar: z.string().optional().describe('头像:一个 emoji,或 workspace 根以内的图片相对路径(如 avatars/math-tutor.png;figshot pick --workspace 会写这个)'),
   /** 学科色:头像的环、牌的边、新话题气泡(白字压在上面)、听写页的按钮;不写 = 自动(src/ui/shared/tutor-color.ts) */
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, '要 #rrggbb').optional().describe('学科色 #rrggbb:头像的环、牌的边、新话题气泡(白字压在上面,要够深,doctor 会查)、听写页的按钮;不写 = 语文粉、数学蓝、英语绿,其余按先后自动分、不撞色'),
-  /** voxtell 音色 id;没有 = 用 voxtell 缺省 */
-  voice: z.string().optional().describe('卡的配音用的 voxtell 音色 id(voxtell voices 可查;点读、单词卡的声音);不配这些卡就没有声音。老师开口的嘴在 live.voices'),
+  /** 卡的配音音色 id(src/media/tts-voices.ts);没有 = 卡不配音 */
+  voice: z.string().optional().describe('卡的配音用的音色 id(百炼 Qwen-Audio-TTS,如 qwen-audio-3.0-tts-plus-longcanzhuyue;工作台音色页「卡的配音」听着挑;点读、单词卡、听写念词的声音);不配这些卡就没有声音。老师开口的嘴在 live.voices'),
   enabled: z.boolean().default(true).describe('开关:false 时两端都不见'),
   /** 孩子端不露(只和系统、家长打交道的工具人) */
   hidden: z.boolean().default(false).describe('孩子端不露(只和系统、家长打交道的工具人)'),
@@ -155,19 +155,6 @@ export type Runtime = z.infer<typeof RuntimeSchema>;
 export const isApiRuntime = (r: Runtime): r is ApiRuntime => 'api' in r;
 
 export const RuntimesSchema = z.object({ default: z.string().min(1) }).catchall(RuntimeSchema);
-
-/**
- * 配音运行时:老师说完,应用把 kidText 合成一段音频给孩子端播。占位符 {text} {voice} {out}(输出文件路径)。
- * 命令要把音频写到 {out};没配、没装、失败 → 这条没有音频,孩子端退回浏览器自带的合成声。
- */
-export const TTS_VOICES_DEFAULT = ['voxtell', 'voices', '--json'];
-export const TtsSchema = z.object({
-  say: z.array(z.string()).min(1),
-  /** 列音色的命令(家长端音色页据此列表 + 试听);stdout 是 JSON:{voices: [{voice, name, gender?, age?, trait?, scene?, lang?}]} 或直接是数组 */
-  voices: z.array(z.string()).min(1).default(TTS_VOICES_DEFAULT),
-});
-export type Tts = z.infer<typeof TtsSchema>;
-export const TTS_DEFAULT: Tts = { say: ['voxtell', 'say', '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: TTS_VOICES_DEFAULT };
 
 /**
  * paths 里 CLI 认识的角色;其余角色原样保留给应用层。vault 侧角色相对 vault 解析,没配 vault 就相对 workspace 根;
@@ -316,7 +303,6 @@ export const CotutorConfigSchema = z
     policyDefaults: PolicyPatchSchema.default({}).describe('所有老师的政策缺省;没写的用出厂缺省(60 字 / 板书 auto / 观察 10 条、计划 10 行、原文 4000 字)'),
     tutors: z.record(z.string().regex(AGENT_NAME_RE), TutorSchema).default({}).describe('老师表:键 = agents/<键>.md 的 frontmatter name;人设、开关、政策都在这里,老师文件里只有正文'),
     runtimes: RuntimesSchema.describe('运行时:default 指一个键;每个运行时是 {run, resume} 命令模板(起 CLI)或 {api, model}(应用直连模型),占位 {agent} {agentBody} {systemBody} {boardFile} {prompt} {session};模型、预算、时限写在这里'),
-    tts: TtsSchema.default(TTS_DEFAULT).describe('配音命令模板:say 合成一句(占位 {text} {voice} {out});voices 列音色(stdout JSON),家长端音色页据此列表与试听'),
     figshot: z
       .object({ port: z.number().int().min(1).max(65535).default(8477) })
       .optional()
@@ -419,6 +405,3 @@ export function fillRuntime(
   );
 }
 
-export function fillTts(argv: readonly string[], vars: { text: string; voice: string; out: string }): string[] {
-  return argv.map((a) => a.replaceAll('{text}', vars.text).replaceAll('{voice}', vars.voice).replaceAll('{out}', vars.out));
-}

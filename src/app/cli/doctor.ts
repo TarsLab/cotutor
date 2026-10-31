@@ -5,6 +5,7 @@
  */
 import { isRealtimeVoice } from '../../realtime/voices.ts';
 import { dashscopeAuth } from '../../realtime/bailian.ts';
+import { TTS_MODEL, ttsTarget } from '../../media/tts.ts';
 import { adapterFor, parserOf, prepareCli, processEnv, runtimeIssue } from '../../brain/index.ts';
 import { execFile } from 'node:child_process';
 import { access, lstat, readFile, readdir, stat } from 'node:fs/promises';
@@ -100,8 +101,8 @@ export function explainLlmFailure(text: string, runtime: readonly string[]): str
  */
 async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: NodeJS.ProcessEnv): Promise<void> {
   const { spawn } = await import('node:child_process');
-  const { fillTts, listTutors } = await import('../../schema/index.ts');
-  const { voxtellEnv } = await import('../../media/tts.ts');
+  const { listTutors } = await import('../../schema/index.ts');
+  const { synthesize } = await import('../../media/tts.ts');
   const { parseTranscript } = await import('../../brain/transcript.ts');
   const { parseAgentFile } = await import('../../runtime/agent-file.ts');
   const { tmpdir } = await import('node:os');
@@ -184,19 +185,12 @@ async function probeLive(ws: Workspace, push: (c: DoctorCheck) => number, env: N
     push({ name: 'live.tts', ok: true, required: false, detail: '没有老师配 voice,不探配音(点读、单词卡没有声音)' });
     return;
   }
+  // 缓存放临时目录:真合成一次,不拿 workspace 里存着的那份充数
   const dir = await mkdtemp(join(tmpdir(), 'cotutor-doctor-'));
-  const out = join(dir, 'probe.mp3');
-  const argvT = fillTts(ws.config.tts.say, { text: '你好', voice: voiced.voice as string, out });
-  const r = await new Promise<{ ok: boolean; msg: string }>((resolveTts) => {
-    // 和孩子端配音同一个环境:模型 Token Plan 有就注它的端点与 key
-    execFile(argvT[0], argvT.slice(1), { env: voxtellEnv(argvT, env), timeout: 60_000 }, async (e, _o, se) => {
-      if (e) return resolveTts({ ok: false, msg: (e as NodeJS.ErrnoException).code === 'ENOENT' ? `PATH 里没有 ${argvT[0]}` : `${e.message} ${String(se).trim().slice(-200)}` });
-      const st = await stat(out).catch(() => null);
-      resolveTts(st?.isFile() && st.size > 0 ? { ok: true, msg: `${voiced.display} 的音色 ${voiced.voice} 能合成(${st.size} 字节)` } : { ok: false, msg: '命令跑完但没出文件' });
-    });
-  });
+  const r = await synthesize({ text: '你好', voice: voiced.voice as string }, { cacheDir: dir, env });
+  const size = r.file ? ((await stat(r.file).catch(() => null))?.size ?? 0) : 0;
   await rm(dir, { recursive: true, force: true });
-  push({ name: 'live.tts', ok: r.ok, required: false, detail: r.msg, fix: r.ok ? undefined : `改 cotutor.json 的 tts.say(voxtell 不在 PATH 就写完整路径),或查 voxtell doctor` });
+  push({ name: 'live.tts', ok: Boolean(r.file), required: false, detail: r.file ? `${voiced.display} 的音色 ${voiced.voice} 能合成(${size} 字节)` : `${voiced.display} 的音色 ${voiced.voice} 没合成:${r.error}`, fix: r.file ? undefined : '家长端「首页」里填百炼的 key 与业务空间 id;音色到工作台音色页「卡的配音」重挑' });
 }
 
 export async function doctorWorkspace(
@@ -333,7 +327,7 @@ export async function doctorWorkspace(
       push({ name: `tutor.${name}.home`, ok: there, required: true, detail: there ? `agents/${name}/ 在(会话 cwd)` : `agents/${name}/ 不在`, fix: there ? undefined : 'cotutor init 补建' });
       // 音色:一老师一音色走 API 是正路;没配的孩子端只剩浏览器合成声(只该在测试里);hidden 的老师不对孩子说话,不用音色
       const tc = ws.config.tutors[name];
-      if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡)配不了——只适合测试`, fix: '工作台 /dev 的「音色」页能听着挑(挑中直接写进去);终端里 voxtell voices --grep <关键词> 挑一个、voxtell preview <voice> 试听,填进 voice' });
+      if (tc.enabled && !tc.hidden && !tc.voice) push({ name: `tutor.${name}.voice`, ok: false, required: false, detail: `${tc.display} 没配音色(cotutor.json tutors.${name}.voice),卡上的声音(点读卡、单词卡)配不了——只适合测试`, fix: '工作台 /dev 的「音色」页「卡的配音」能听着挑(挑中直接写进去)' });
       // 卡的清单(《卡片协议.md》「谁拿到哪些卡」):有脸的老师才递板书写法;只是报一声讲哪几种
       if (takesTutorRules(name)) {
         const kinds = tutorCardKinds(tc.cards);
@@ -567,6 +561,9 @@ export async function doctorWorkspace(
       const why = await probeRealtime({ env, model: ws.config.live.model });
       push({ name: 'live.bailian', ok: why === null, required: true, detail: why === null ? '试连百炼实时模型:通' : probeMessage(why), fix: why === null ? undefined : '家长端「首页」里换一把 key,或查百炼控制台的余额与业务空间' });
     }
+    // 卡的配音(点读段、单词、听写念的词):应用直连百炼合成,看 key 与业务空间齐不齐;--live 真合成一句(live.tts)
+    const tt = ttsTarget(TTS_MODEL, env);
+    push({ name: 'tts', ok: !('error' in tt), required: false, detail: 'error' in tt ? `卡不配音(点读、单词卡没有声音):${tt.error}` : `卡的配音走${tt.plan ? ' Token Plan' : '百炼按量'};老师配了 voice 的,点读段、单词会配音`, fix: 'error' in tt ? '家长端「首页」里填百炼' : undefined });
 
     // ---- 实时老师的嘴:音色写错了连接照样连得上,第一次开口才报错,孩子那边嘴一直不出声 ----
     const lv = ws.config.live;
@@ -586,13 +583,6 @@ export async function doctorWorkspace(
 
     // ---- 运行时的 CLI 在不在 ----
     if (probeEnv) {
-      const ttsBin = runtimeCli(ws.config.tts.say);
-      try {
-        await execFileP(ttsBin, ['--version'], { timeout: 8000 });
-        push({ name: 'tts', ok: true, required: false, detail: `${ttsBin} 在;老师配了 voice 的,卡上的点读段、单词会配音` });
-      } catch {
-        push({ name: 'tts', ok: false, required: false, detail: `PATH 里没有 ${ttsBin},卡不配音(点读、单词卡没有声音)`, fix: `装 ${ttsBin},或改 cotutor.json 的 tts.say` });
-      }
       for (const [runtime, p] of Object.entries(ws.config.runtimes)) {
         if (runtime === 'default' || typeof p === 'string') continue;
         if (isApiRuntime(p)) {

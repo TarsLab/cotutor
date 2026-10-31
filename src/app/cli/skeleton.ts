@@ -11,7 +11,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAgentFile } from '../../runtime/agent-file.ts';
-import { CONFIG_SCHEMA_FILE, DICTATION_DEFAULT, TTS_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../../schema/index.ts';
+import { CONFIG_SCHEMA_FILE, DICTATION_DEFAULT, cotutorJsonSchema, type BoardCardKind } from '../../schema/index.ts';
 import { FACTORY_API_RUNTIMES, factoryRuntimes } from '../../brain/index.ts';
 import { DEFAULT_GRADE, PACKAGE_GRADES_DIR } from './grades.ts';
 
@@ -58,7 +58,7 @@ talk/
 captures/
 # 家长在 workspace 里用 Claude Code 时它的个人设置
 .claude/settings.local.json
-# .cotutor/ 是机器文件(板书写法缓存、配音试听、二维码、日志、CLI 壳、qwen 的家),只留出厂 hash 与 schema
+# .cotutor/ 是机器文件(板书写法缓存、配音缓存、二维码、日志、CLI 壳、qwen 的家),只留出厂 hash 与 schema
 .cotutor/*
 !.cotutor/shipped.json
 !.cotutor/cotutor.schema.json
@@ -175,7 +175,6 @@ export function configTemplate(input: ConfigTemplateInput): string {
     // 缺省 api:应用直连百炼,家长端「首页」填一次按量 key + 业务空间 id 就能用(2026-10-31)。
     // Qwen Code 那两条留作备用(开发者、有 Token Plan 的):由适配器给(src/brain/cli/<cli>.ts 的 runtimes(),旗标为什么这么写的注释也在那里)
     runtimes: { default: 'api', ...FACTORY_API_RUNTIMES, ...factoryRuntimes() },
-    tts: TTS_DEFAULT,
     // 听写的拍照认词:模型与挑词要求(prompt 一行一个字符串)写进文件,家长看得见、改得动
     dictation: DICTATION_DEFAULT,
     // 字段说明不写在这里:一写进去就冻住(政策文件永不覆盖),$schema 指的 schema 文件每次 init / upgrade 从 zod 的 .describe() 刷新

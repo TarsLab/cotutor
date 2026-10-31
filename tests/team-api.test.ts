@@ -20,7 +20,7 @@ try {
 
   // ---- JSON Schema ----
   const js = cotutorJsonSchema() as { properties: Record<string, { description?: string }>; required: string[] };
-  check('schema 有顶层字段与说明', ['$schema', 'version', 'tutors', 'runtimes', 'tts', 'paths', '_note'].every((k) => k in js.properties) && js.required.includes('runtimes') && String(js.properties.tutors.description).includes('老师表'));
+  check('schema 有顶层字段与说明;配音不再是命令模板(没有 tts)', ['$schema', 'version', 'tutors', 'runtimes', 'paths', '_note'].every((k) => k in js.properties) && !('tts' in js.properties) && js.required.includes('runtimes') && String(js.properties.tutors.description).includes('老师表'));
   const cfgRaw = JSON.parse(readFileSync(join(root, 'cotutor.json'), 'utf8')) as { $schema: string };
   check('模板首键 $schema 指向 workspace 里的 schema 文件', cfgRaw.$schema === '.cotutor/cotutor.schema.json' && existsSync(join(root, '.cotutor', 'cotutor.schema.json')));
   check('带 $schema 的配置照样过契约', CotutorConfigSchema.safeParse(cfgRaw).success);
@@ -31,8 +31,8 @@ try {
   const added = await route('POST', '/api/tutors', ctx, { name: 'science-tutor', display: '科学老师', subject: '科学', avatar: '🔬' });
   check('POST 201,进表、文件、目录', added.status === 201 && ctx.ws.config.tutors['science-tutor']?.subject === '科学' && existsSync(join(root, 'agents', 'science-tutor.md')) && existsSync(join(root, 'agents', 'science-tutor')), JSON.stringify(added.json));
   check('重名 409', (await route('POST', '/api/tutors', ctx, { name: 'science-tutor', display: 'x' })).status === 409);
-  const cfg = (await route('GET', '/api/config', ctx)).json as { shipped: string[]; paths: Record<string, string>; resolvedPaths: Record<string, string>; tts: { say: string[] } };
-  check('config 回报出厂名单与路径', cfg.shipped.length === 3 && !cfg.shipped.includes('scene-maker') && !cfg.shipped.includes('planner') && !cfg.shipped.includes('science-tutor') && typeof cfg.resolvedPaths.vault === 'string' && cfg.tts.say[0] === 'voxtell');
+  const cfg = (await route('GET', '/api/config', ctx)).json as { shipped: string[]; paths: Record<string, string>; resolvedPaths: Record<string, string> };
+  check('config 回报出厂名单与路径', cfg.shipped.length === 3 && !cfg.shipped.includes('scene-maker') && !cfg.shipped.includes('planner') && !cfg.shipped.includes('science-tutor') && typeof cfg.resolvedPaths.vault === 'string' && !('tts' in cfg));
 
   // ---- 老师头像(R5b):avatar 是图片相对路径时 /api/kid/avatar/<老师> 给文件,no-cache;emoji / 越界 / 不是图 / 不存在 / 没这位都 404 ----
   check('emoji 头像 404(孩子端自己显示 emoji)', (await route('GET', '/api/kid/avatar/math-tutor', ctx)).status === 404);
@@ -73,16 +73,17 @@ try {
   check('自家老师删掉:表里没了,文件改名保留', del.status === 200 && !ctx.ws.config.tutors['science-tutor'] && !existsSync(join(root, 'agents', 'science-tutor.md')) && readdirSync(join(root, 'agents')).some((n) => n.startsWith('science-tutor.md.removed-')), JSON.stringify(del.json));
 
   // ---- 设置页补丁 ----
-  const p1 = await route('PATCH', '/api/config', ctx, { paths: { vault: 'vault', timetable: '课程表.md', diary: null }, server: { port: 5199, https: { cert: 'certs/a.pem', key: 'certs/b.pem' } }, tts: { say: ['node', '/x/voxtell.js', 'say', '{text}', '--voice', '{voice}', '-o', '{out}'] } });
-  check('paths / server / tts 能改', p1.status === 200 && ctx.ws.config.paths.vault === 'vault' && ctx.ws.config.server.port === 5199 && ctx.ws.config.server.https?.cert === 'certs/a.pem' && ctx.ws.config.tts.say[1] === '/x/voxtell.js', JSON.stringify(p1.json));
+  const p1 = await route('PATCH', '/api/config', ctx, { paths: { vault: 'vault', timetable: '课程表.md', diary: null }, server: { port: 5199, https: { cert: 'certs/a.pem', key: 'certs/b.pem' } } });
+  check('paths / server 能改', p1.status === 200 && ctx.ws.config.paths.vault === 'vault' && ctx.ws.config.server.port === 5199 && ctx.ws.config.server.https?.cert === 'certs/a.pem', JSON.stringify(p1.json));
   const p2 = await route('PATCH', '/api/config', ctx, { server: { https: null } });
   check('https 置 null 即删', p2.status === 200 && ctx.ws.config.server.https === undefined && ctx.ws.config.server.port === 5199);
   check('kid 仍不让改', (await route('PATCH', '/api/config', ctx, { kid: { slug: 'x' } })).status === 422);
-  check('坏 tts 拒', (await route('PATCH', '/api/config', ctx, { tts: { say: [] } })).status === 422);
+  check('tts 不让改了(配音在应用里,不再是命令模板)', (await route('PATCH', '/api/config', ctx, { tts: { say: ['voxtell'] } })).status === 422);
 
   // ---- doctor:Qwen 的 API 层错误与退役运行时 ----
   const nested = await doctorWorkspace(root, { probeEnv: false, env: { CLAUDECODE: '1' } });
   check('Qwen 不受 Claude 的嵌套环境影响', !nested.checks.some((c) => c.name === 'env.nested' || c.name === 'env.userSettings' || c.name === 'proxy'));
+  check('没有百炼的 key → tts 报出来(不是必需,卡只是不配音)', nested.checks.some((c) => c.name === 'tts' && !c.ok && !c.required && c.detail.includes('没有百炼的 key') && c.fix), JSON.stringify(nested.checks.find((c) => c.name === 'tts')));
   check('模型不认 → 检查 -m 与升级', explainLlmFailure('does not support this model', ['qwen']).includes('-m'));
   check('401 → 检查千问 key', explainLlmFailure('401 Unauthorized', ['qwen']).includes('QWENCLOUD_TOKEN_PLAN_API_KEY'));
   check('403 → 检查模型权限', explainLlmFailure('403 Request not allowed', ['qwen']).includes('模型权限'));

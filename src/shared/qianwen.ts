@@ -71,6 +71,15 @@ export function cotutorBailian(home = homedir()): { apiKey: string | null; works
   return { apiKey: text(v?.apiKey), workspaceId: text(v?.workspaceId) };
 }
 
+/** 百炼的业务空间 id(按量的 realtime、配音走它的域名):先看家长端配的,再看环境,再看 voxtell 的配置 */
+export function bailianWorkspaceId(env: NodeJS.ProcessEnv = process.env): string | null {
+  const home = env.HOME || homedir();
+  return cotutorBailian(home).workspaceId || text(env.DASHSCOPE_WORKSPACE_ID) || voxtellConfig(home).workspaceId;
+}
+
+/** 业务空间的域名(北京地域);公网域名连 realtime 1 秒就断、配音不认 */
+export const workspaceHost = (workspaceId: string): string => `${workspaceId}.cn-beijing.maas.aliyuncs.com`;
+
 /** 本机的两把 key:先看家长端配的,再看环境,再看 qwen、voxtell 的配置;哪处放错了套(按量的位置放了 `sk-sp-`)就挪到对的那格 */
 export function qianwenKeys(env: NodeJS.ProcessEnv = process.env): QianwenKeys {
   const home = env.HOME || homedir();

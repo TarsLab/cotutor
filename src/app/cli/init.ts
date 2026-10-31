@@ -168,7 +168,7 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   suggestions.push('档案里填 school_start(读一年级的年月,如 2025-09),老师才知道现在是几年级哪个学期;想用自己的 Obsidian 库,改 cotutor.json 的 paths.vault');
   suggestions.push('cotutor serve 起服务,在这台电脑上打开家长端 /parent 的「首页」,填百炼的按量 API Key 与业务空间 ID(老师的嘴和脑都用它;没填孩子端只出「老师们还没到」)');
   suggestions.push('在 iPad / iPhone 上用:cotutor cert 签证书(要 mkcert),根证书装到设备上并打开信任,步骤见 README 里的《iPad 与 iPhone》');
-  suggestions.push('可选:装 voxtell 给点读、单词卡配音(工作台 /dev 的「音色」页挑声音);cotutor pin 给家长端与工作台加锁');
+  suggestions.push('可选:点读、单词卡的配音用百炼(和老师的嘴同一把 key),到工作台 /dev 的「音色」页给老师挑声音;cotutor pin 给家长端与工作台加锁');
   suggestions.push('cotutor doctor 逐项体检');
   return { root, steps, suggestions };
 }

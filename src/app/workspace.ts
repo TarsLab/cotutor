@@ -174,6 +174,7 @@ export function assembleWorkspace(root: string, source: RootSource, config: Cotu
       bundles: join(root, 'bundles'),
       home: join(root, 'home'),
       lectures: join(root, 'lectures'),
+      tts: join(root, '.cotutor', 'tts'),
     },
     files: {
       config: join(root, CONFIG_FILE),
@@ -208,7 +209,7 @@ export function workspaceReport(ws: Workspace): Record<string, unknown> {
 // ---- cotutor.json 的补丁写回与热重载(从 runtime/journal/store.ts 搬来,2026-10-29) ----
 
 /** PATCH 允许改的顶层键(老师团页与设置页);kid / version / 运行时模板走编辑器 */
-export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'agents', 'paths', 'server', 'tts', 'vault', 'live'] as const;
+export const CONFIG_PATCH_KEYS = ['title', 'policyDefaults', 'tutors', 'agents', 'paths', 'server', 'vault', 'live'] as const;
 
 const isPlainObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 

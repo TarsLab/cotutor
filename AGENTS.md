@@ -1,6 +1,6 @@
 # cotutor
 
-家里的 AI 老师团,和家长一起教。应用仓,2026-09-08 起。drawtell 是本仓旁边的检出(`link:../drawtell`,要先 build),voxtell 是 PATH 上的命令,都不在本仓。
+家里的 AI 老师团,和家长一起教。应用仓,2026-09-08 起。drawtell 是本仓旁边的检出(`link:../drawtell`,要先 build),不在本仓;配音(原来的 voxtell)已经并进 `src/media/tts.ts`。
 
 本文件写仓库结构、开发方式与当前约束。历史讨论看 git log。Codex 直接读本文件,Claude Code 经 `CLAUDE.md` 的 `@AGENTS.md` 引入;改规矩只改这里。
 

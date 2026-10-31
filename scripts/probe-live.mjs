@@ -2,14 +2,14 @@
 /**
  * 实时老师的 P1 探针:真连百炼 realtime(一次几毛钱),不进产品。
  * 结果写进 --out 目录的 report.md,听的 wav 也在那里。
- *   voices  realtime 几个音色照念同一段语文 / 数学老师的话(念得对不对照字幕核);voxtell 几个候选卡的声音念同一段卡上的字(含英文单词),和两位老师现在的声音放一起
+ *   voices  realtime 几个音色照念同一段语文 / 数学老师的话(念得对不对照字幕核);几个候选卡的声音(src/media/tts.ts)念同一段卡上的字(含英文单词),和两位老师现在的声音放一起
  *   ray     Ray 的真录音(workspace 的 conversations/<老师>/<日期>.<job>.voice.webm)按话题一条连接、手动轮次喂进去:松手到首包、realtime 的转写、嘴回了什么
  *   script  看图说话(10-17 1113-1 那串):嘴的系统指令 = 人设 + activity「老师怎么带」+ 嘴的规矩;开头交那幅图和一段「图上有什么」(故意错一处),
  *           按顺序喂 Ray 的 8 段录音;第 2 段后塞一张板上的卡,第 3 段后塞一条更正;每句查问号、评判的词
  *   image   单问一次:图 + 一句「图上的小朋友在干什么?」(say 念的),看它看没看见
  *   cue     要嘴原样说一句,四种交法各两遍:用户消息带「原样念」/ response.instructions / system 消息 / 孩子说完一句后 instructions「先接,再原样说」;看照没照说、有没有把问题自己答了
  * 用法:node scripts/probe-live.mjs <voices|ray|script|image|cue|all> [--ws ~/cotutor/ray] [--out <目录>] [--voice Serena]
- * 要本机的百炼按量 key 与业务空间 id(同口语课);要 ffmpeg(解 webm)、say / afconvert / sips(macOS)、voxtell(卡的声音)。
+ * 要本机的百炼按量 key 与业务空间 id(同口语课);要 ffmpeg(解 webm)、say / afconvert / sips(macOS)。
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const { RealtimeSession, INPUT_RATE, OUTPUT_RATE, REALTIME_VOICE, MAX_IMAGE_B64 } = await import(join(repo, 'src', 'realtime', 'bailian.ts'));
 const { pcmOfWav, wavOfPcm } = await import(join(repo, 'src', 'shared', 'wav.ts'));
+const { synthesize } = await import(join(repo, 'src', 'media', 'tts.ts'));
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const what = process.argv[2] ?? 'all';
@@ -105,7 +106,7 @@ const CARD_VOICES = [
   ['qwen-audio-3.0-tts-plus-loongadriangao', '候选:男 22 有声阅读(英文)'],
 ];
 async function voices() {
-  say('## voices:老师的声音(realtime)与卡的声音(voxtell)');
+  say('## voices:老师的声音(realtime)与卡的声音(配音)');
   say('');
   say('| realtime 音色 | 语文 | 数学 | 照念了吗(念成了什么) | 首包 |');
   say('|---|---|---|---|---|');
@@ -127,13 +128,14 @@ async function voices() {
     say(`| ${v} | ${cells[0]} | ${cells[1]} | ${diffs.length ? diffs.join(';') : '照念'} | ${firsts.join(' / ')} ms |`);
   }
   say('');
-  say('| 卡的声音(voxtell) | 中文卡 | 英文 |');
+  say('| 卡的声音(配音) | 中文卡 | 英文 |');
   say('|---|---|---|');
   for (const [v, label] of CARD_VOICES) {
     const files = [];
     for (const [k, text] of Object.entries(CARD_TEXT)) {
-      const f = join('voices', `card-${v.split('-').pop()}-${k}.wav`);
-      try { execFileSync('voxtell', ['say', text, '--voice', v, '--format', 'wav', '-o', join(out, f)], { stdio: 'ignore' }); files.push(f); } catch (e) { files.push(`失败:${String(e.message).slice(0, 40)}`); }
+      const f = join('voices', `card-${v.split('-').pop()}-${k}.mp3`);
+      const r = await synthesize({ text, voice: v, out: join(out, f) }, { cacheDir: join(out, 'voices', '.tts') });
+      files.push(r.file ? f : `失败:${String(r.error).slice(0, 40)}`);
     }
     say(`| ${label} \`${v.split('-').pop()}\` | ${files[0]} | ${files[1]} |`);
   }

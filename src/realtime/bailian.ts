@@ -19,8 +19,7 @@
  *   type 在 null 与 vad 之间随时能切。所以跟读与聊各开一条会话(跟读手动;聊 semantic_vad 带自己的 silence),setTurn 只在不改 silence 时用。
  * 不抛:连不上、断了、服务端报错都走 onClose / onError;send 在没连上时丢弃并回 false。
  */
-import { homedir } from 'node:os';
-import { cotutorBailian, qianwenKeys, voxtellConfig } from '../shared/qianwen.ts';
+import { bailianWorkspaceId, qianwenKeys, workspaceHost } from '../shared/qianwen.ts';
 
 export const REALTIME_MODEL = 'qwen3.8-omni-flash-realtime';
 export const REALTIME_VOICE = 'Serena';
@@ -77,13 +76,12 @@ export interface RealtimeEvents {
 
 /** 百炼按量的 key 与业务空间 id(Token Plan 没有 omni realtime;key 怎么找见 src/shared/qianwen.ts,业务空间 id 先看家长端配的、再看环境、再看 voxtell 的配置) */
 export function dashscopeAuth(env: NodeJS.ProcessEnv = process.env): { key: string; workspaceId: string } | null {
-  const home = env.HOME || homedir();
   const key = qianwenKeys(env).payg;
-  const workspaceId = cotutorBailian(home).workspaceId || env.DASHSCOPE_WORKSPACE_ID?.trim() || voxtellConfig(home).workspaceId;
+  const workspaceId = bailianWorkspaceId(env);
   return key && workspaceId ? { key, workspaceId } : null;
 }
 
-export const endpointOf = (workspaceId: string, model: string): string => `wss://${workspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=${model}`;
+export const endpointOf = (workspaceId: string, model: string): string => `wss://${workspaceHost(workspaceId)}/api-ws/v1/realtime?model=${model}`;
 
 /** 轮次模式 → session.turn_detection */
 export function turnDetection(turn: TurnMode, silenceMs: number, vad: VadOptions = {}): Record<string, unknown> | null {

@@ -37,6 +37,8 @@ export interface Workspace {
     home: string;
     /** 视频小课堂(第 4 步):lectures/<id>/lecture.md + video.mp4;家长在编程助手里做,不进骨架 */
     lectures: string;
+    /** 配音的缓存(.cotutor/tts/,src/media/tts.ts):同一句同一个音色只合成一次;机器文件,gitignore */
+    tts: string;
   };
   files: {
     config: string;

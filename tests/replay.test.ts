@@ -30,7 +30,9 @@ const { compareReplay, evalWorkspace, formatCompare, listReplays, startReplay } 
 const { readIndex } = await import('../src/runtime/journal/store.ts');
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
-const FAKE_TTS = fileURLToPath(new URL('./_fake-tts.ts', import.meta.url));
+const { startFakeTts } = await import('./_fake-tts.ts');
+const tts = await startFakeTts();
+process.env.COTUTOR_TTS_ENDPOINT = tts.url;
 const node = process.execPath;
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
@@ -41,7 +43,6 @@ cfg.runtimes = {
 };
 for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
 cfg.paths = { vault: 'vault' };
-cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'] };
 (cfg.tutors as Record<string, Record<string, unknown>>)['math-tutor'].voice = 'v-math';
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault', '日记'), { recursive: true });
@@ -104,6 +105,7 @@ try {
 
   check('骨架 .gitignore 有 evals/', readFileSync(join(root, '.gitignore'), 'utf8').includes('evals/'));
 } finally {
+  await tts.close();
   rmSync(home, { recursive: true, force: true });
 }
 done();

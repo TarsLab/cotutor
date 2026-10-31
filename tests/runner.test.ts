@@ -17,9 +17,12 @@ const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { createContext, route } = await import('../src/app/http/app.ts');
 const { parseTranscript } = await import('../src/brain/transcript.ts');
+const { startFakeTts } = await import('./_fake-tts.ts');
+const { TTS_VOICES } = await import('../src/media/tts.ts');
+const tts = await startFakeTts();
+process.env.COTUTOR_TTS_ENDPOINT = tts.url;
 
 const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
-const FAKE_TTS = fileURLToPath(new URL('./_fake-tts.ts', import.meta.url));
 const node = process.execPath;
 const fake = (extra: string[] = []): { run: string[]; resume: string[] } => ({
   run: [node, '--experimental-strip-types', '--no-warnings', FAKE, ...extra, '--tools', '{tools}', '--agent', '{agent}', '{prompt}'],
@@ -41,7 +44,6 @@ cfg.runtimes = {
 };
 for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
 cfg.paths = { vault: 'vault', plans: '计划', timetable: '课程表.md' };
-cfg.tts = { say: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: [node, '--experimental-strip-types', '--no-warnings', FAKE_TTS, 'voices', '--json'] };
 (cfg.tutors as Record<string, Record<string, unknown>>)['math-tutor'].voice = 'v-math';
 (cfg.tutors as Record<string, Record<string, unknown>>)['english-tutor'].voice = 'fail';
 // 老 workspace 写着的每天条数(10-21 起不认):写 1 也不拦
@@ -181,15 +183,14 @@ try {
   const fx = (await route('GET', `/api/conversations/math-tutor/2026-09-08/raw/${job1}/fixture`, ctx)).json as { name: string; text: string };
   check('看原文:fixture 是原文原样一份', fx.name === `math-tutor-2026-09-08-${job1}.md` && fx.text.includes('第一次说') && fx.text.endsWith('\n'), JSON.stringify(fx));
   check('看原文:没有这一轮 → 404', (await route('GET', '/api/conversations/math-tutor/2026-09-08/raw/9999-9', ctx)).status === 404);
-  const tryR = (await route('POST', '/api/tts/try', ctx, { text: '试一句', voice: 'v-math' })).json as { ok: boolean; voice: string; ms: number; audio: string };
-  check('设置页试一句:真跑一次 tts.say,回音色 / 耗时 / 音频', tryR.ok === true && tryR.voice === 'v-math' && typeof tryR.ms === 'number' && tryR.audio.startsWith('data:audio/mpeg;base64,'), JSON.stringify({ ok: tryR.ok, voice: tryR.voice }));
-  // 音色页:列表来自 tts.voices;试听同句同音色只合成一次;坏 id 400、合成失败 502 带原因
+  // 音色页:列表是 src/media/tts-voices.ts 那张表;试听同句同音色只合成一次;坏 id 400、合成失败 502 带原因
   const vl = (await route('GET', '/api/tts/voices', ctx)).json as { ok: boolean; count: number; voices: { voice: string; name: string; gender?: string; age?: number }[]; inUse: Record<string, string[]>; sample: string };
-  check('音色列表:三个音色、字段齐、谁在用谁', vl.ok && vl.count === 3 && vl.voices[1].name === '假少年' && vl.voices[1].gender === '男' && vl.voices[1].age === 10 && vl.inUse['v-math']?.[0] === 'math-tutor' && vl.inUse.fail?.[0] === 'english-tutor' && vl.sample.length > 5, JSON.stringify(vl));
+  check('音色列表:整张表、字段齐、谁在用谁', vl.ok && vl.count === TTS_VOICES.length && vl.count > 500 && vl.voices.every((v) => v.voice.startsWith('qwen-audio-3.0-tts-plus-') && v.name && v.gender && typeof v.age === 'number') && vl.inUse['v-math']?.[0] === 'math-tutor' && vl.inUse.fail?.[0] === 'english-tutor' && vl.sample.length > 5, JSON.stringify({ count: vl.count, inUse: vl.inUse }));
+  const asked = tts.requests.length;
   const pv = await route('GET', '/api/tts/preview?voice=v-kid', ctx);
-  check('试听:合成到 .cotutor/tts-preview/ 并给 mp3 文件', pv.status === 200 && pv.contentType === 'audio/mpeg' && typeof pv.file === 'string' && pv.file.includes('/.cotutor/tts-preview/') && readFileSync(pv.file, 'utf8') === 'fake-mp3:v-kid:你好呀,我是你的老师。今天我们一起来学一个新东西,准备好了吗?', JSON.stringify(pv));
+  check('试听:合成到配音缓存 .cotutor/tts/ 并给 mp3 文件;没前缀的音色走 plus 模型', pv.status === 200 && pv.contentType === 'audio/mpeg' && typeof pv.file === 'string' && pv.file.includes('/.cotutor/tts/') && readFileSync(pv.file, 'utf8') === 'fake-mp3:v-kid:你好呀,我是你的老师。今天我们一起来学一个新东西,准备好了吗?' && tts.requests.at(-1)?.model === 'qwen-audio-3.0-tts-plus', JSON.stringify(pv));
   const pvAgain = await route('GET', '/api/tts/preview?voice=v-kid', ctx);
-  check('试听:同句同音色不重合成(同一个文件)', pvAgain.file === pv.file);
+  check('试听:同句同音色不重合成(同一个文件,只请求了一次)', pvAgain.file === pv.file && tts.requests.length === asked + 1);
   check('试听:自定义句子进文件名', (await route('GET', '/api/tts/preview?voice=v-kid&text=' + encodeURIComponent('另一句'), ctx)).file !== pv.file);
   check('试听:坏 id 400', (await route('GET', '/api/tts/preview?voice=' + encodeURIComponent('a b/c'), ctx)).status === 400);
   const pvBad = await route('GET', '/api/tts/preview?voice=fail', ctx);
@@ -742,6 +743,7 @@ try {
   check('改坏了 → 留旧配置,health 报错', hh.configError !== null && ctx.ws.config.title === '改过的标题', JSON.stringify(hh));
   check('工作台 /dev 在', ((await route('GET', '/dev', ctx)).html ?? '').includes('老师团'));
 } finally {
+  await tts.close();
   rmSync(home, { recursive: true, force: true });
 }
 done();

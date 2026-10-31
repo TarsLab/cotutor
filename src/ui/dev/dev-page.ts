@@ -393,6 +393,7 @@ ${BRAND_CSS}
   .gaps { margin:0; padding:14px 20px; list-style:none; display:flex; flex-direction:column; gap:7px; }
   .gaps li { display:flex; gap:9px; font-size:14px; align-items:baseline; }
   .gaps li .plus { font:600 13px/1 var(--mono); color:var(--ok); }
+  .gaps li .minus { color:var(--muted); }
 
   .field .withbtn { display:flex; gap:6px; align-items:center; }
   .field .withbtn input { flex:1; min-width:0; }
@@ -1503,13 +1504,13 @@ ${pageDomJs(4000)}
     const gaps = (state.config && state.config.migrate) || [];
     if (!gaps.length) return null;
     const card = h('div', { class: 'panel migrate' });
-    card.append(h('header', {}, h('h4', {}, '这份 cotutor.json 缺 ' + gaps.length + ' 项出厂件'),
+    card.append(h('header', {}, h('h4', {}, '这份 cotutor.json 和新版差 ' + gaps.length + ' 项'),
       h('span', { class: 'right' }, h('span', { class: 'fb' }), h('button', { class: 'btn primary', type: 'button', on: { click: async () => {
         try { await api('POST', '/api/config/migrate', {}); await loadConfig(); renderSettings(); }
         catch (e) { feedback(card, false, e.message); }
       } } }, '补上'))));
-    card.append(h('ul', { class: 'gaps' }, ...gaps.map((g) => h('li', {}, h('span', { class: 'plus' }, '+'), h('span', {}, g.detail)))));
-    card.append(h('p', { class: 'hint' }, '新版 cotutor 带来的新老师、新运行时、命令模板里的新旗标。cotutor.json 是你的政策文件,机器不会自己改它,所以要你点一下。只加上面这些,你改过的值一个都不动;终端里等同于 cotutor upgrade --config。'));
+    card.append(h('ul', { class: 'gaps' }, ...gaps.map((g) => h('li', {}, h('span', { class: g.kind === 'retired' ? 'plus minus' : 'plus' }, g.kind === 'retired' ? '−' : '+'), h('span', {}, g.detail)))));
+    card.append(h('p', { class: 'hint' }, '新版 cotutor 带来的新老师、新运行时、命令模板里的新旗标(+),和新版不再读的出厂段(−)。cotutor.json 是你的政策文件,机器不会自己改它,所以要你点一下。只改上面这些,你改过的值一个都不动;终端里等同于 cotutor upgrade --config。'));
     return card;
   };
 

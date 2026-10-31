@@ -1,11 +1,12 @@
 /**
- * 老 workspace 的迁移:cotutor.json 补缺(下面大半),和目录搬家(文件末尾的 migrateLayout)。
+ * 老 workspace 的迁移:cotutor.json 补缺(下面大半),和目录搬家、清掉不再用的机器文件(文件末尾的 migrateLayout)。
  *
  * cotutor.json 是**政策文件**:init 只在缺失时写模板,已有的那份机器永不改(家长的决定不由机器代做)。
  * 代价是包更新带来的新出厂件不会自己出现在老 workspace 里,而且「没有」的表现是**静默**的——
  * 所以有这一层:把「出厂模板有、你这份没有」算出来(doctor 的 `config.migrate` 点名、家长端设置页顶部提示),
  * `cotutor upgrade --config` 只**补缺**——加缺的键、往命令模板里插缺的旗标;家长写过的值一个都不动
  * (改小的预算、加过的 `-m qwen3.8-flash`、换掉的 default 运行时全都原样留着)。
+ * 唯一删的是 RETIRED 里点了名的出厂段(机器写进去、应用已经不读的,如 2026-10-31 的 tts);家长自己加的键不在表里,不碰。
  *
  * 差异是**现算的**:拿家长自己的 slug / name / port 生成一份出厂模板,和她这份逐项比,
  * 所以以后模板再加东西,这里不用跟着改。
@@ -18,8 +19,8 @@ import { configTemplate, shippedAgents } from './skeleton.ts';
 import { installTutors, type InstallStep } from './tutors.ts';
 import { CONFIG_FILE, ConfigError, readJson } from '../workspace.ts';
 
-/** section:出厂模板里有的整段(dictation 这种后加的),你这份没有 */
-export type GapKind = 'tutor' | 'runtime' | 'flag' | 'cards' | 'section';
+/** section:出厂模板里有的整段(dictation 这种后加的),你这份没有;retired:出厂写进去、应用已经不读的整段,补缺时删掉 */
+export type GapKind = 'tutor' | 'runtime' | 'flag' | 'cards' | 'section' | 'retired';
 
 export interface ConfigGap {
   kind: GapKind;
@@ -27,7 +28,7 @@ export interface ConfigGap {
   path: string;
   /** 人话:缺的是什么、补上有什么用 */
   detail: string;
-  /** 补上之后这个点位的值(--dry-run 打印、页面提示用) */
+  /** 补上之后这个点位的值(--dry-run 打印、页面提示用);retired 是 undefined(删掉) */
   value: unknown;
 }
 
@@ -132,12 +133,19 @@ export async function configGaps(raw: unknown, agentsDir?: string): Promise<Conf
     if (key in raw || !(key in factory)) continue;
     gaps.push({ kind: 'section', path: key, detail: `缺 ${key} 这一段(${SECTION_WHAT[key]})`, value: factory[key] });
   }
+  for (const key of RETIRED) {
+    if (key in raw) gaps.push({ kind: 'retired', path: key, detail: `${key} 这一段不再用了(${RETIRED_WHAT[key]}),删掉`, value: undefined });
+  }
   return gaps;
 }
 
 /** 补缺时会整段补上的配置段:出厂模板写了、写进文件才好改的 */
 const SECTIONS = ['dictation'] as const;
 const SECTION_WHAT: Record<(typeof SECTIONS)[number], string> = { dictation: '听写拍照认词用的模型,补上就能在文件里改(挑词的要求在听写 activity 文件)' };
+
+/** 不再用的出厂段:老模板写进去的,应用已经不读(契约照样放过,只是留着让人以为还管用) */
+const RETIRED = ['tts'] as const;
+const RETIRED_WHAT: Record<(typeof RETIRED)[number], string> = { tts: '配音 2026-10-31 并进了应用,直连百炼,不再起 voxtell 命令' };
 
 function setAt(obj: Record<string, unknown>, path: string, value: unknown): void {
   const keys = path.split('.');
@@ -146,7 +154,9 @@ function setAt(obj: Record<string, unknown>, path: string, value: unknown): void
     if (!isObj(cur[k])) cur[k] = {};
     cur = cur[k] as Record<string, unknown>;
   }
-  cur[keys[keys.length - 1] as string] = value;
+  const last = keys[keys.length - 1] as string;
+  if (value === undefined) delete cur[last];
+  else cur[last] = value;
 }
 
 export interface UpgradeConfigResult {
@@ -209,6 +219,9 @@ const LEGACY_DIRS = [
   { from: '.claude/skills', to: SKILLS_DIR },
 ] as const;
 
+/** 不再用的机器文件(相对 workspace 根):2026-10-31 配音的缓存合成一份 .cotutor/tts/,试听、听写念词原来各存一处,设置页的「试一句」也去掉了 */
+const RETIRED_FILES = ['.cotutor/tts-preview', '.cotutor/dictation-say', '.cotutor/tts-try.mp3'] as const;
+
 export interface LayoutStep {
   item: string;
   action: 'moved' | 'kept' | 'removed';
@@ -229,6 +242,7 @@ export async function legacyLayout(root: string): Promise<string[]> {
  * init / upgrade 第一步:老位置里的东西原样挪到新位置(不改内容、不看 hash),出厂件新不新由后面安装那一步照常查。
  * 必须在 installTutors / installSkills 之前:不然新位置是空的,出厂件先拷进去,家长改过的那份就晾在老位置。
  * 新位置已经有同名的不挪、报一声;老目录搬空了删掉(.claude/skills 随后换成链,见 skills.ts 的 linkClaudeSkills),.claude/ 里别的东西不碰。
+ * 顺带删掉 RETIRED_FILES(机器文件,删了也只是缓存没了)。
  */
 export async function migrateLayout(root: string): Promise<LayoutStep[]> {
   const steps: LayoutStep[] = [];
@@ -247,6 +261,11 @@ export async function migrateLayout(root: string): Promise<LayoutStep[]> {
       steps.push({ item: `${to}/${name}`, action: 'moved', note: `从 ${from}/ 挪来` });
     }
     if (await rmdir(dir).then(() => true, () => false)) steps.push({ item: `${from}/`, action: 'removed', note: '搬空了' });
+  }
+  for (const rel of RETIRED_FILES) {
+    if (!(await lstat(join(root, rel)).catch(() => null))) continue;
+    await rm(join(root, rel), { recursive: true, force: true });
+    steps.push({ item: rel, action: 'removed', note: '不再用的机器文件' });
   }
   return steps;
 }

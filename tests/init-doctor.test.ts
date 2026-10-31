@@ -164,10 +164,18 @@ try {
     mkdirSync(join(claude, 'agents'));
     for (const n of ['math-tutor', 'chinese-tutor', 'english-tutor']) renameSync(join(ws, 'agents', `${n}.md`), join(claude, 'agents', `${n}.md`));
     writeFileSync(join(claude, 'settings.local.json'), '{}\n');
+    // 不再用的机器文件(2026-10-31 配音的缓存合成 .cotutor/tts/ 一份)
+    mkdirSync(join(ws, '.cotutor', 'tts-preview'), { recursive: true });
+    writeFileSync(join(ws, '.cotutor', 'tts-preview', 'a.mp3'), 'x');
+    mkdirSync(join(ws, '.cotutor', 'dictation-say'), { recursive: true });
+    writeFileSync(join(ws, '.cotutor', 'tts-try.mp3'), 'x');
+    mkdirSync(join(ws, '.cotutor', 'tts'), { recursive: true });
+    writeFileSync(join(ws, '.cotutor', 'tts', 'b.mp3'), 'x');
     const dOld = await doctorWorkspace(ws, { probeEnv: false });
     check('老布局 → doctor 的 layout 必需失败,点名两处、附 upgrade;链那项不过', !dOld.ok && dOld.checks.some((c) => c.name === 'layout' && c.required && !c.ok && c.detail.includes('.claude/agents/') && c.detail.includes('.claude/skills/') && c.fix?.includes('cotutor upgrade') === true) && dOld.checks.some((c) => c.name === 'skills.claude' && !c.ok), JSON.stringify(dOld.checks.filter((c) => c.name === 'layout' || c.name === 'skills.claude')));
     const r = await initWorkspace({ slug: 'ming' });
     check('init 先搬家:改过的老师文件原样挪到 agents/,没被出厂件占位;老目录删掉', readFileSync(link, 'utf8').includes('再温柔一点') && r.steps.some((s) => s.item === 'agents/math-tutor.md' && s.action === 'moved') && r.steps.some((s) => s.item === '.claude/agents/' && s.action === 'removed') && !existsSync(join(claude, 'agents')), JSON.stringify(r.steps.filter((s) => s.action === 'moved' || s.action === 'removed' || s.item.startsWith('.claude'))));
+    check('不再用的机器文件删掉,现用的配音缓存不碰', ['tts-preview', 'dictation-say', 'tts-try.mp3'].every((n) => !existsSync(join(ws, '.cotutor', n)) && r.steps.some((s) => s.item === `.cotutor/${n}` && s.action === 'removed')) && existsSync(join(ws, '.cotutor', 'tts', 'b.mp3')), JSON.stringify(r.steps.filter((s) => s.item.startsWith('.cotutor'))));
     check('技能连家长自己的一起挪进 .agents/skills/,.claude/skills 换成链;settings.local.json 不碰', existsSync(join(ws, '.agents', 'skills', 'my-notes', 'SKILL.md')) && existsSync(join(ws, '.agents', 'skills', 'cotutor-board', 'SKILL.md')) && lstatSync(join(claude, 'skills')).isSymbolicLink() && existsSync(join(claude, 'settings.local.json')));
     const dNew = await doctorWorkspace(ws, { probeEnv: false });
     check('搬完 doctor:没有 layout 项,链是绿的,老师文件都在', !dNew.checks.some((c) => c.name === 'layout') && dNew.checks.some((c) => c.name === 'skills.claude' && c.ok) && dNew.checks.filter((c) => c.name.startsWith('tutor.') && c.name.endsWith('.file')).every((c) => c.ok), JSON.stringify(dNew.checks.filter((c) => !c.ok)));
@@ -232,6 +240,9 @@ try {
     old.runtimes.default = 'qwen';
     old.tutors['chinese-tutor'].enabled = false;
     old._note = '家长自己写的说明';
+    // 2026-10-31 之前的模板写着配音命令(voxtell);家长自己加的键(myNote)不在不再用的表里
+    old.tts = { say: ['voxtell', 'say', '{text}', '--voice', '{voice}', '--json', '-o', '{out}'], voices: ['voxtell', 'voices', '--json'] };
+    old.myNote = '家长自己加的键';
     writeFileSync(cfgFile, `${JSON.stringify(old, null, 2)}\n`);
     // 那会儿英语老师还不存在:文件、家、出厂记录都没有
     unlinkSync(join(ws, 'agents', 'english-tutor.md'));
@@ -241,7 +252,7 @@ try {
     writeFileSync(join(ws, '.cotutor', 'shipped.json'), `${JSON.stringify(shipped, null, 2)}\n`);
 
     const gaps = await configGaps(old);
-    check('差异三项:新老师 + run / resume 各一条', gaps.map((g) => g.path).join(' ') === 'tutors.english-tutor runtimes.qwen.run runtimes.qwen.resume', JSON.stringify(gaps.map((g) => g.path)));
+    check('差异四项:新老师 + run / resume 各一条 + 不再用的 tts', gaps.map((g) => g.path).join(' ') === 'tutors.english-tutor runtimes.qwen.run runtimes.qwen.resume tts' && gaps[3].kind === 'retired' && gaps[3].detail.includes('不再用'), JSON.stringify(gaps.map((g) => g.path)));
 
     {
       // 卡的清单(2026-10-07)之前的条目:没有 cards → 补出厂的;写过的(哪怕是全部)不动
@@ -259,12 +270,13 @@ try {
 
     const before = readFileSync(cfgFile, 'utf8');
     const dry = await upgradeConfig(ws, { dryRun: true });
-    check('--dry-run 列差异但不动文件', dry.gaps.length === 3 && !dry.applied && readFileSync(cfgFile, 'utf8') === before);
+    check('--dry-run 列差异但不动文件', dry.gaps.length === 4 && !dry.applied && readFileSync(cfgFile, 'utf8') === before);
 
     const applied = await upgradeConfig(ws);
     const after = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
     check('补上之后:新老师、旗标都在', applied.applied && after.tutors['english-tutor'].display === '英语老师' && ['run', 'resume'].every((k) => after.runtimes.qwen[k].includes('--include-partial-messages')));
-    check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['chinese-tutor'].enabled === false && after.runtimes.qwen.run[after.runtimes.qwen.run.indexOf('-m') + 1] === 'qwen3.8-flash' && after._note === '家长自己写的说明' && after.$schema === old.$schema);
+    check('家长写过的一个都没动(每句字数、缺省运行时、关掉的老师、自己加的 --model、_note、自己加的键)', after.policyDefaults.replyMaxChars === 40 && after.runtimes.default === 'qwen' && after.tutors['chinese-tutor'].enabled === false && after.runtimes.qwen.run[after.runtimes.qwen.run.indexOf('-m') + 1] === 'qwen3.8-flash' && after._note === '家长自己写的说明' && after.myNote === '家长自己加的键' && after.$schema === old.$schema);
+    check('不再用的 tts 删掉了', !('tts' in after), JSON.stringify(Object.keys(after)));
     check('新老师的文件、家跟着补上(不再建 .qwen 链)', existsSync(join(ws, 'agents', 'english-tutor.md')) && !existsSync(join(ws, '.qwen', 'agents', 'english-tutor.md')) && existsSync(join(ws, 'agents', 'english-tutor', '.gitkeep')) && applied.installed.length > 0);
 
     const d2 = await doctorWorkspace(ws, { probeEnv: false });

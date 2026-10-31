@@ -261,8 +261,8 @@ export async function doctorWorkspace(
       name: 'config.migrate',
       ok: gaps.length === 0,
       required: false,
-      detail: gaps.length ? `${gaps.length} 项可补:${gaps.map((g) => g.detail).join(';')}` : 'cotutor.json 有出厂模板里的全部老师、运行时与旗标',
-      fix: gaps.length ? 'cotutor upgrade --config --dry-run 先看,再 cotutor upgrade --config 补(只加缺的,你改过的值不动)' : undefined,
+      detail: gaps.length ? `${gaps.length} 项要改:${gaps.map((g) => g.detail).join(';')}` : 'cotutor.json 有出厂模板里的全部老师、运行时与旗标,也没有不再用的段',
+      fix: gaps.length ? 'cotutor upgrade --config --dry-run 先看,再 cotutor upgrade --config 改(只加缺的、删不再用的出厂段,你改过的值不动)' : undefined,
     });
   }
 

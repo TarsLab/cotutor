@@ -1,16 +1,16 @@
 /**
  * 小课堂的纯函数:服务端(课长、上下文包 lecture: 的每句起点、画的地方盖着什么)与舞台包(播放器)共用。
  *
- * 课包的时钟、几何、圈住了什么(这里拿来说画的地方盖着什么)都在 drawtell/core(纯计算,不带 React,服务端能 import):一段 = 一步,段长 = max(画, 配音),
+ * 课包的时钟、几何、圈住了什么(这里拿来说画的地方盖着什么)都在 src/chalk(纯计算,不带 React,服务端能 import):一段 = 一步,段长 = max(画, 配音),
  * 课的 0 毫秒对着 SVG 的 START_MS;笔画按配音拉伸,和 buildAnimatedSvg 画出来的同一份时间。这里用小课堂的名字转出来
  * (视频也有时钟,videoClock),外加小课堂自己的:时间怎么写、上下文包的每句、老师放的那一段、视频的 lecture.md。
  */
-import { circleHits, clockAt, hitPhrase, type LessonPicture } from 'drawtell/core';
-import type { LessonClock, LessonSegment } from 'drawtell/core';
+import { circleHits, clockAt, hitPhrase, type LessonPicture } from '../chalk/index.ts';
+import type { LessonClock, LessonSegment } from '../chalk/index.ts';
 
-export { lessonClock as lectureClock, clockAt as lectureAt, START_MS as DRAW_START_MS } from 'drawtell/core';
-export type { ChalkSkeleton as LectureSkeleton, ChalkStep as LectureStep, ChalkBlock as LectureBlock, ChalkGroup as LectureGroup, LessonPicture as LecturePicture } from 'drawtell/core';
-/** 小课堂的时钟:课包的(drawtell lessonClock)或视频的(videoClock,没有画面元素) */
+export { lessonClock as lectureClock, clockAt as lectureAt, START_MS as DRAW_START_MS } from '../chalk/index.ts';
+export type { ChalkSkeleton as LectureSkeleton, ChalkStep as LectureStep, ChalkBlock as LectureBlock, ChalkGroup as LectureGroup, LessonPicture as LecturePicture } from '../chalk/index.ts';
+/** 小课堂的时钟:课包的(src/chalk 的 lessonClock)或视频的(videoClock,没有画面元素) */
 export type LectureClock = LessonClock;
 export type LectureSegment = LessonSegment;
 
@@ -71,7 +71,7 @@ export function markHead(clock: LectureClock, atMs: number): string {
 const MIN_RING = 24;
 
 /**
- * 几笔 → 给 drawtell circleHits 的一圈:所有点的凸包(圈了一圈就是那一圈,没封口的也合上);
+ * 几笔 → 给 src/chalk circleHits 的一圈:所有点的凸包(圈了一圈就是那一圈,没封口的也合上);
  * 太细的(划一道、点一下)用外框,各边放宽到 MIN_RING。没有点 = []。
  */
 export function inkRing(strokes: readonly (readonly [number, number][])[]): [number, number][] {
@@ -95,7 +95,7 @@ export function inkRing(strokes: readonly (readonly [number, number][])[]): [num
 
 /**
  * 画的地方盖着什么(只给课包,老师对着截图时的提示,用课里的叫法):「画的地方盖着:散的 3 根小棒;文字『3』」/「画在文字『3』旁边」/
- * 「画的地方那时还没画东西」。认的是 drawtell 的 circleHits(分组 > 命中块 > 带 label 的元素 > 文字 > 没字的按第几步、什么、颜色归堆),圈是 inkRing。
+ * 「画的地方那时还没画东西」。认的是 src/chalk 的 circleHits(分组 > 命中块 > 带 label 的元素 > 文字 > 没字的按第几步、什么、颜色归堆),圈是 inkRing。
  */
 export function inkHint(clock: LectureClock, mark: LectureMark, picture: LessonPicture = {}): { text: string; ids: string[] } {
   const ring = inkRing(mark.strokes);

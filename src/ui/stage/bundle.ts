@@ -1,8 +1,8 @@
 /**
- * 课包怎么读进舞台:scene.json + manifest.json 拼回 ChalkScene(drawtell/core 的 assembleBundle,与 drawtell 播放页同一拼法),烤好的画面另取 bake.json。
+ * 课包怎么读进舞台:scene.json + manifest.json 拼回 ChalkScene(src/chalk 的 assembleBundle),烤好的画面另取 bake.json。
  * 小课堂(lecture.tsx)用它;课包从 bundleUrl 取,如 /api/bundles/<id>/。
  */
-import { assembleBundle, bakeMatches, type BakedLesson, type ChalkScene } from 'drawtell/core';
+import { assembleBundle, bakeMatches, type BakedLesson, type ChalkScene } from '../../chalk/index.ts';
 
 async function fetchJson(url: string): Promise<Record<string, unknown>> {
   const r = await fetch(url, { cache: 'no-store' });
@@ -10,7 +10,7 @@ async function fetchJson(url: string): Promise<Record<string, unknown>> {
   return r.json() as Promise<Record<string, unknown>>;
 }
 
-/** 课包 → ChalkScene:拼法是 drawtell 的 assembleBundle(不过 zod:服务端 readBundleLecture 已用 parseBundle 校验过,舞台首屏不带 zod) */
+/** 课包 → ChalkScene:拼法是 src/chalk 的 assembleBundle(不过 zod:服务端 readBundleLecture 已用 parseBundle 校验过,舞台首屏不带 zod) */
 export async function loadBundle(bundleUrl: string): Promise<ChalkScene> {
   const [scene, manifest] = await Promise.all([fetchJson(`${bundleUrl}scene.json`), fetchJson(`${bundleUrl}manifest.json`)]);
   return assembleBundle(scene, manifest).scene;

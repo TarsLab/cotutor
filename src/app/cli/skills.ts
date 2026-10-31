@@ -1,17 +1,13 @@
 /**
  * 出厂 skill:与老师文件同一套「拷不链」机制——init 拷进 workspace 的 .agents/skills/<name>/,hash 记 .cotutor/shipped.json 的 skills,
  * (2026-10-30 从 .claude/skills/ 挪来:Codex、Qwen Code 认 .agents/skills;Claude Code 只认 .claude/skills,那里是一条指过来的链,见 linkClaudeSkills。)
- * 出厂表 SHIPPED_SKILLS 每项带来源与 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录):
- * - 来源 cotutor = 本包根 skills/<name>/(进 npm files;cotutor-board 整个、其余几个的 references/ 是 scripts/gen-skills.ts 生成后入库的,
- *   tests/skills.test.ts 断言一致),来源 drawtell = drawtell 包根 skills/<name>/(四个领域 skill,2026-09-15 从退役的 drawtell-skills 仓搬过去的;
- *   没装 → unavailable,doctor 点名,init 跳过)
+ * 出厂表 SHIPPED_SKILLS 每项带 machine 标记(2026-09-15,照 hyperframes 的 skills/ 目录),都在本包根 skills/<name>/(进 npm files;
+ * cotutor-board 整个、其余几个的 references/ 是 scripts/gen-skills.ts 生成后入库的,tests/skills.test.ts 断言一致):
  * - machine: true 的是机器件(cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home:它们和解析器、契约、CLI 要一起变),init / upgrade 每次按包里的覆盖、家长改了也刷,状态只有 latest / upgradable;
- *   其余拷进来就是家长的:upgrade 没改过的换新、改过的报 diff 保留(custom / untracked)
- * 顺带一个机器文件 .cotutor/drawtell:指向本包 node_modules 里 drawtell CLI 的壳脚本,家长做课包时用相对路径就能跑它。
+ *   其余拷进来就是家长的:upgrade 没改过的换新、改过的报 diff 保留(custom / untracked)。chalk-* 四个是做课包的(2026-10-31 随 drawtell 并进来,原名 drawtell-*)。
  */
 import { createHash } from 'node:crypto';
-import { chmod, cp, lstat, mkdir, readFile, readdir, readlink, rm, symlink, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
+import { cp, lstat, mkdir, readFile, readdir, readlink, rm, symlink } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BOARD_SKILL } from '../../board/cards/docs.ts';
@@ -26,65 +22,39 @@ import { readManifest, writeManifest, type ShippedManifest } from './tutors.ts';
 
 export interface ShippedSkill {
   name: string;
-  source: 'cotutor' | 'drawtell';
   /** 机器件:每次 init / upgrade 都按包里的覆盖,不认家长的改动 */
   machine?: boolean;
 }
 
 export const SHIPPED_SKILLS: readonly ShippedSkill[] = [
-  { name: TUTOR_SKILL, source: 'cotutor', machine: true },
-  { name: BOARD_SKILL, source: 'cotutor', machine: true },
-  { name: ANALYZE_SKILL, source: 'cotutor', machine: true },
-  { name: TUNE_SKILL, source: 'cotutor', machine: true },
-  { name: HOME_SKILL, source: 'cotutor', machine: true },
-  { name: 'drawtell-scene', source: 'drawtell' },
-  { name: 'drawtell-teaching', source: 'drawtell' },
-  { name: 'drawtell-cli', source: 'drawtell' },
-  { name: 'drawtell-verify', source: 'drawtell' },
+  { name: TUTOR_SKILL, machine: true },
+  { name: BOARD_SKILL, machine: true },
+  { name: ANALYZE_SKILL, machine: true },
+  { name: TUNE_SKILL, machine: true },
+  { name: HOME_SKILL, machine: true },
+  { name: 'chalk-scene' },
+  { name: 'chalk-teaching' },
+  { name: 'chalk-cli' },
+  { name: 'chalk-verify' },
 ];
 
 /**
- * 不再出厂的机器件:upgrade 时 workspace 里还有(出厂记录里有它)就删掉,免得编程助手照旧技能干活。
- * cotutor-vault(2026-10-30):老师从没读过它(孩子的话不带工具,记账那条消息自带写法),要紧的几句并进了守则 cotutor-tutor
+ * 不再出厂的技能:upgrade 时 workspace 里还有(出厂记录里有它)就删掉,免得编程助手照旧技能干活。
+ * 机器件(machine)向来不认家长的改动,照删;别的家长改过就留着,只是不再记在出厂清单里。
+ * cotutor-vault(2026-10-30,机器件):老师从没读过它(孩子的话不带工具,记账那条消息自带写法),要紧的几句并进了守则 cotutor-tutor。
+ * drawtell-*(2026-10-31):drawtell 并进本包,改名 chalk-*,命令是 cotutor chalk
  */
-export const RETIRED_SKILLS: readonly string[] = ['cotutor-vault'];
+export const RETIRED_SKILLS: readonly ShippedSkill[] = [{ name: 'cotutor-vault', machine: true }, { name: 'drawtell-scene' }, { name: 'drawtell-teaching' }, { name: 'drawtell-cli' }, { name: 'drawtell-verify' }];
 
 export type ShippedSkillName = string;
 
 /** 本包自带的技能目录(仓库检出与 npm 安装都在包根 skills/) */
 export const PACKAGE_SKILLS_DIR = fileURLToPath(new URL('../../../skills/', import.meta.url));
 
-/** 本包 node_modules 里某个依赖的包根;没装 → null */
-function depDir(name: 'drawtell'): string | null {
-  try {
-    return dirname(createRequire(import.meta.url).resolve(`${name}/package.json`));
-  } catch {
-    return null;
-  }
+/** 这个技能在包里的目录 */
+export function skillSourceDir(skill: ShippedSkill): string {
+  return join(PACKAGE_SKILLS_DIR, skill.name);
 }
-
-/** drawtell 包的 skills/ 目录(四个领域 skill 随它发,0.7.0 起);包没装 → null(doctor 点名,init 跳过) */
-export function drawtellSkillsDir(): string | null {
-  const d = depDir('drawtell');
-  return d ? join(d, 'skills') : null;
-}
-
-/** 这个技能在包里的目录;来源没装 → null */
-export function skillSourceDir(skill: ShippedSkill): string | null {
-  const base = skill.source === 'cotutor' ? PACKAGE_SKILLS_DIR : drawtellSkillsDir();
-  return base ? join(base, skill.name) : null;
-}
-
-/** drawtell CLI 的入口(本包 node_modules 里);没装 → null */
-export function drawtellBin(): string | null {
-  try {
-    return join(dirname(createRequire(import.meta.url).resolve('drawtell/package.json')), 'bin', 'drawtell.js');
-  } catch {
-    return null;
-  }
-}
-
-export const TOOL_SHIM = '.cotutor/drawtell';
 
 /** 一个目录的内容 hash:相对路径 + 内容,按路径排序 */
 export async function dirHash(dir: string): Promise<string> {
@@ -107,14 +77,13 @@ export async function dirHash(dir: string): Promise<string> {
   return `sha256:${h.digest('hex')}`;
 }
 
-export type SkillState = 'latest' | 'upgradable' | 'custom' | 'untracked' | 'missing' | 'unavailable';
+export type SkillState = 'latest' | 'upgradable' | 'custom' | 'untracked' | 'missing';
 
 export interface SkillStatus {
   name: ShippedSkillName;
   state: SkillState;
   dir: string;
   basedOn?: string;
-  source: ShippedSkill['source'];
   machine: boolean;
 }
 
@@ -124,18 +93,17 @@ export function skillDir(root: string, name: string): string {
 
 async function readState(root: string, skill: ShippedSkill, manifest: ShippedManifest): Promise<SkillStatus> {
   const { name } = skill;
-  const base = { name, source: skill.source, machine: Boolean(skill.machine) };
+  const base = { name, machine: Boolean(skill.machine) };
   const dir = skillDir(root, name);
-  const src = skillSourceDir(skill);
   const st = await lstat(dir).catch(() => null);
-  if (!st?.isDirectory()) return { ...base, state: src ? 'missing' : 'unavailable', dir };
+  if (!st?.isDirectory()) return { ...base, state: 'missing', dir };
   const rec = manifest.skills?.[name];
   const mine = await dirHash(dir);
-  const shipped = src ? await dirHash(src).catch(() => null) : null;
+  const shipped = await dirHash(skillSourceDir(skill)).catch(() => null);
   if (shipped && mine === shipped) return { ...base, state: 'latest', dir, basedOn: rec?.version };
   // 机器件不认家长的改动:和包里不一样就是该换
-  if (skill.machine) return { ...base, state: src ? 'upgradable' : 'latest', dir, basedOn: rec?.version };
-  if (rec && rec.hash === mine) return { ...base, state: src ? 'upgradable' : 'latest', dir, basedOn: rec.version };
+  if (skill.machine) return { ...base, state: 'upgradable', dir, basedOn: rec?.version };
+  if (rec && rec.hash === mine) return { ...base, state: 'upgradable', dir, basedOn: rec.version };
   return { ...base, state: rec ? 'custom' : 'untracked', dir, basedOn: rec?.version };
 }
 
@@ -162,7 +130,7 @@ export interface SkillStep {
   note?: string;
 }
 
-/** init 用:缺的拷,有的不动;机器件每次按包里的刷;drawtell 包没装就那几项各报一行 */
+/** init 用:缺的拷,有的不动;机器件每次按包里的刷 */
 export async function installSkills(root: string): Promise<SkillStep[]> {
   const steps: SkillStep[] = [];
   const manifest = await readManifest(root);
@@ -172,14 +140,10 @@ export async function installSkills(root: string): Promise<SkillStep[]> {
     const s = await readState(root, skill, manifest);
     const src = skillSourceDir(skill);
     const item = `${SKILLS_DIR}/${name}/`;
-    if (s.state === 'unavailable' || !src) {
-      steps.push({ item, action: 'kept', note: `${skill.source} 没装,没拷(家长做课包要它);仓库根 pnpm install` });
-      continue;
-    }
     if (s.state === 'missing') {
       await installOne(root, skill, src, manifest);
       touched = true;
-      steps.push({ item, action: 'created', note: skill.machine ? '机器件,从包里生成的技能,别改' : `拷自 ${skill.source}` });
+      steps.push({ item, action: 'created', note: skill.machine ? '机器件,从包里生成的技能,别改' : '拷自本包' });
     } else if (skill.machine) {
       await installOne(root, skill, src, manifest);
       touched = true;
@@ -192,13 +156,13 @@ export async function installSkills(root: string): Promise<SkillStep[]> {
 
 export interface SkillUpgradeStep {
   name: string;
-  action: 'upgraded' | 'latest' | 'kept-custom' | 'installed' | 'unavailable' | 'retired';
+  action: 'upgraded' | 'latest' | 'kept-custom' | 'installed' | 'retired';
   basedOn?: string;
   machine?: boolean;
   /** 顺手清掉的旧位置 */
 }
 
-/** upgrade 用:latest 跳过;upgradable 换新(机器件改过也换);custom / untracked 保留只报;缺的补;来源没装的报 unavailable */
+/** upgrade 用:latest 跳过;upgradable 换新(机器件改过也换);custom / untracked 保留只报;缺的补;不再出厂的删(改过的留) */
 export async function upgradeSkills(root: string): Promise<SkillUpgradeStep[]> {
   const steps: SkillUpgradeStep[] = [];
   const manifest = await readManifest(root);
@@ -207,21 +171,23 @@ export async function upgradeSkills(root: string): Promise<SkillUpgradeStep[]> {
     const machine = Boolean(skill.machine);
     const s = await readState(root, skill, manifest);
     const src = skillSourceDir(skill);
-    if (s.state === 'unavailable' || !src) {
-      steps.push({ name, action: 'unavailable', machine });
-      continue;
-    }
     if (s.state === 'latest') steps.push({ name, action: 'latest', basedOn: s.basedOn, machine });
     else if (s.state === 'missing') { await installOne(root, skill, src, manifest); steps.push({ name, action: 'installed', machine }); }
     else if (s.state === 'upgradable') { await installOne(root, skill, src, manifest); steps.push({ name, action: 'upgraded', basedOn: s.basedOn, machine }); }
     else steps.push({ name, action: 'kept-custom', basedOn: s.basedOn, machine });
   }
-  for (const name of RETIRED_SKILLS) {
-    if (!manifest.skills?.[name]) continue;
+  for (const { name, machine } of RETIRED_SKILLS) {
+    const rec = manifest.skills?.[name];
+    if (!rec) continue;
     const dir = skillDir(root, name);
+    delete manifest.skills![name];
+    // 家长改过的不删:那份已经是她的了,只是不再记在出厂清单里(机器件不算)
+    if (!machine && (await lstat(dir).catch(() => null))?.isDirectory() && (await dirHash(dir)) !== rec.hash) {
+      steps.push({ name, action: 'kept-custom', basedOn: rec.version });
+      continue;
+    }
     await rm(dir, { recursive: true, force: true });
-    delete manifest.skills[name];
-    steps.push({ name, action: 'retired', machine: true });
+    steps.push({ name, action: 'retired', machine: Boolean(machine) });
   }
   await writeManifest(root, { ...manifest, version: PACKAGE_VERSION });
   return steps;
@@ -244,17 +210,4 @@ export async function linkClaudeSkills(root: string): Promise<SkillStep> {
   await mkdir(dirname(link), { recursive: true });
   await symlink(target, link);
   return { item, action: 'created', note: 'Claude Code 只认 .claude/skills,链到同一份' };
-}
-
-/** .cotutor/drawtell:壳脚本,家长在 workspace 里做课包时用 .cotutor/drawtell 跑 drawtell CLI(和服务端烤画面同一版);机器文件,init / upgrade 每次刷新 */
-export async function writeToolShim(root: string): Promise<{ file: string; available: boolean }> {
-  const file = join(root, TOOL_SHIM);
-  const bin = drawtellBin();
-  await mkdir(dirname(file), { recursive: true });
-  const body = bin
-    ? `#!/bin/sh\n# cotutor 生成的机器文件:drawtell CLI 的壳,指向本包 node_modules 里的 drawtell;init / upgrade 会刷新\nexec node "${bin}" "$@"\n`
-    : `#!/bin/sh\necho "cotutor: node_modules 里没有 drawtell(仓库根 pnpm install),做不了课包" >&2\nexit 1\n`;
-  await writeFile(file, body);
-  await chmod(file, 0o755);
-  return { file, available: bin !== null };
 }

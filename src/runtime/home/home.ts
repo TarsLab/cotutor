@@ -98,7 +98,7 @@ export interface HomeCheckContext {
   lectures?: ReadonlyMap<string, string | null>;
   /** 读不出来的那几份,为什么(src/runtime/lecture.ts inspectLecture);没给就说一句笼统的 */
   lectureProblems?: ReadonlyMap<string, readonly string[]>;
-  /** 读得出来但没烤过(或画面改过没重烤)的课包 id:播放退回在浏览器里现跑 excalidraw,提醒去 drawtell bake */
+  /** 读得出来但没烤过(或画面改过没重烤)的课包 id:播放退回在浏览器里现跑 excalidraw,提醒去 cotutor chalk bake */
   unbaked?: ReadonlySet<string>;
   today: string;
   /**
@@ -182,7 +182,7 @@ export function homeIssues(doc: HomeDoc, ctx: HomeCheckContext): HomeIssue[] {
         const subject = ctx.lectures?.get(b.bundle);
         if (ctx.lectures && subject === undefined) out.push({ level: 'fix', line, card: n, button: k, text: `${t.display}的「${b.label}」:${ctx.lectureProblems?.get(b.bundle)?.join(';') || `bundles/${b.bundle}/ 不在或读不出来(要有 scene.json 与带步的 manifest.json)`}` });
         else if (subject && t.subject && subject !== t.subject) out.push({ level: 'note', line, card: n, button: k, text: `${t.display}的「${b.label}」:小课堂 ${b.bundle} 是${subject}的,${t.display}教${t.subject}` });
-        if (ctx.unbaked?.has(b.bundle)) out.push({ level: 'note', line, card: n, button: k, text: `${t.display}的「${b.label}」:课包 ${b.bundle} 没烤过(或画面改过没重烤),孩子端要现画,慢、iPad 上可能不顺;在做课包的地方跑 drawtell bake ${b.bundle},再拷进 bundles/` });
+        if (ctx.unbaked?.has(b.bundle)) out.push({ level: 'note', line, card: n, button: k, text: `${t.display}的「${b.label}」:课包 ${b.bundle} 没烤过(或画面改过没重烤),孩子端要现画,慢、iPad 上可能不顺;跑 cotutor chalk bake ${b.bundle}(服务端发现了也会在后台补烤)` });
         return;
       }
       if (b.kind !== 'continue') return;

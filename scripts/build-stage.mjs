@@ -1,7 +1,8 @@
 /**
- * 舞台包:src/ui/stage/(React + drawtell 播放器 + excalidraw)→ dist/stage/stage.js + chunk-*.js + stage.css + index.html(esbuild)。
+ * 舞台包:src/ui/stage/(React + 课包的画面 src/ui/stage/chalk/ + excalidraw)→ dist/stage/stage.js + chunk-*.js + stage.css + index.html(esbuild)。
  * 字体不进包:index.html 把 EXCALIDRAW_ASSET_PATH 指到 /stage/,serve 从 node_modules 的 excalidraw 里提供 /stage/fonts/。
- * react / react-dom / excalidraw 强制解析到本包的 node_modules(drawtell 是 link 进来的,不钉住会打进两份 React)。
+ * react / react-dom / excalidraw 强制解析到本包的 node_modules(不钉住的话,link 进来的包会打进两份 React)。
+ * src/chalk 的模块没有副作用(package.json 的 sideEffects 只认 css):舞台只用 assembleBundle,zod 与场景契约整个摇掉,首屏不带。
  *
  * **splitting: true**(2026-09-11):整包 8 MB,但其中 mermaid / cytoscape / katex 这些是 excalidraw
  * 自己用 `import()` 懒加载的,不拆就被 esbuild 全部内联进一个文件,开个场景卡也得先下 8 MB。

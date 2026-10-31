@@ -17,12 +17,12 @@ importers:
       ai:
         specifier: 7.0.155
         version: 7.0.155(zod@4.5.4)
-      drawtell:
-        specifier: link:../drawtell
-        version: link:../drawtell
       hanzi-writer-data:
         specifier: 2.0.1
         version: 2.0.1
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
       zod:
         specifier: ^4.4.3
         version: 4.5.4
@@ -45,9 +45,6 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
-      typescript:
-        specifier: ^5.6.0
-        version: 5.9.3
 
 packages:
 

@@ -1,0 +1,164 @@
+/**
+ * 在浏览器里画烤好的课包(bake.json),不用 excalidraw、不用 SMIL(drawtell 重新设计的第 4 步)。
+ * mountBaked 把画面建成一张 SVG(只建一次),paint(frame) 按这一刻每个元素画了多少改属性:描边画到哪(dashoffset)、
+ * 字露到哪(裁剪框)、实心填充淡入、笔尖在哪。没变的元素不碰,一帧只动正在画的那一两个。
+ * 「这一刻画了多少」是 src/chalk 的 frameAt(时钟)给的,两边同一份 paintElement,和服务端 renderFrameSvg 出的图一样。
+ */
+
+import { actionState, bakedPaths, boardOf, paintElement, pointerBox, progressMap, type BakedNode, type BakedPicture, type FrameProgress } from '../../../chalk/paint.ts';
+
+const NS = 'http://www.w3.org/2000/svg';
+
+export interface MountOptions {
+  /** 背景图的 URL(bake 里的 src 相对课包目录,调用方拼好);只管第 0 块画板,换过画板的课用 assetHref */
+  backgroundHref?: string;
+  /** 课包里的文件(背景图的 src)→ URL;给了就用它,每块画板的背景图都能出 */
+  assetHref?: (src: string) => string | undefined;
+  /** 换到另一块画板时(svg 的 viewBox 已经换好):应用要按新视口重新铺画框就用它 */
+  onBoard?: (board: number, viewBox: [number, number, number, number]) => void;
+  /** 画不画笔尖;缺省画 */
+  pointer?: boolean;
+  /** 换一支笔(笔尖落在图片 (0,0),30×30);橡皮那一笔照旧是橡皮 */
+  pointerImg?: string;
+}
+
+export interface MountedLesson {
+  svg: SVGSVGElement;
+  /** 画到这一刻 */
+  paint(frame: FrameProgress): void;
+  /** 现在在第几块画板(0 起) */
+  readonly board: number;
+}
+
+let seq = 0;
+
+function build(n: BakedNode, paths: SVGElement[]): SVGElement {
+  const el = document.createElementNS(NS, n.tag) as SVGElement;
+  for (const [k, v] of Object.entries(n.attrs)) el.setAttribute(k, v);
+  if (n.text !== undefined) el.textContent = n.text;
+  for (const c of n.children ?? []) el.append(build(c, paths));
+  if (n.tag === 'path') paths.push(el);
+  return el;
+}
+
+export function mountBaked(baked: BakedPicture, opts: MountOptions = {}): MountedLesson {
+  const uid = `dt${++seq}`;
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', baked.viewBox.join(' '));
+  const defs = document.createElementNS(NS, 'defs');
+  const style = document.createElementNS(NS, 'style');
+  style.textContent = baked.fonts;
+  defs.append(style);
+  if (baked.defs) {
+    const tmp = document.createElementNS(NS, 'g');
+    tmp.innerHTML = baked.defs;
+    defs.append(...Array.from(tmp.childNodes));
+  }
+  svg.append(defs);
+  // 每块画板一张背景图(没有背景图 = null),只露当前那块的
+  const boardCount = baked.boards?.length ?? 1;
+  const bgs = Array.from({ length: boardCount }, (_, k) => {
+    const b = boardOf(baked, k).background;
+    const href = b ? (opts.assetHref ? opts.assetHref(b.src) : k === 0 ? opts.backgroundHref : undefined) : undefined;
+    if (!b || !href) return null;
+    const img = document.createElementNS(NS, 'image');
+    img.setAttribute('href', href);
+    for (const key of ['x', 'y', 'width', 'height'] as const) img.setAttribute(key, String(b[key]));
+    img.setAttribute('preserveAspectRatio', 'none');
+    if (k) img.style.display = 'none';
+    svg.append(img);
+    return img;
+  });
+  let board = 0;
+  const els = baked.elements.map((el, i) => {
+    const paths: SVGElement[] = [];
+    const root = build(el.node, paths);
+    let clipRect: SVGRectElement | null = null;
+    if (el.reveal) {
+      // 字:元素 <g> 里再套一层裁剪(元素局部坐标),框的宽 = 露出来的宽
+      const clip = document.createElementNS(NS, 'clipPath');
+      clip.id = `${uid}-c${i}`;
+      clipRect = document.createElementNS(NS, 'rect');
+      clipRect.setAttribute('x', '-2');
+      clipRect.setAttribute('y', String(-el.reveal.height * 0.5));
+      clipRect.setAttribute('height', String(el.reveal.height * 2));
+      clip.append(clipRect);
+      defs.append(clip);
+      const inner = document.createElementNS(NS, 'g');
+      inner.append(...Array.from(root.childNodes));
+      root.append(inner);
+      inner.setAttribute('clip-path', `url(#${clip.id})`);
+    }
+    root.style.display = 'none';
+    svg.append(root);
+    return { el, root, paths, clipRect, last: -1, fade: 1 };
+  });
+  const pen = document.createElementNS(NS, 'image');
+  pen.style.display = 'none';
+  pen.style.pointerEvents = 'none';
+  svg.append(pen);
+  const showPointer = opts.pointer !== false;
+  const kinds = baked.elements.map((el) => bakedPaths(el.node));
+
+  return {
+    svg,
+    get board() {
+      return board;
+    },
+    paint(frame) {
+      const prog = progressMap(frame);
+      const act = actionState(baked, prog);
+      if (act.board !== board) {
+        board = act.board;
+        const vb = boardOf(baked, board).viewBox;
+        svg.setAttribute('viewBox', vb.join(' '));
+        bgs.forEach((img, k) => { if (img) img.style.display = k === board ? '' : 'none'; });
+        opts.onBoard?.(board, vb);
+      }
+      const bg = bgs[board];
+      if (bg) bg.style.opacity = act.backgroundOpacity < 1 ? String(act.backgroundOpacity) : '';
+      let pointer: { at: [number, number]; eraser: boolean } | null = null;
+      els.forEach((x, i) => {
+        // 被擦:淡掉;擦完 = 当没画(藏起来,下回再出现时从头按进度画)
+        const left = act.fade.get(x.el.id) ?? 1;
+        if (left !== x.fade) {
+          x.fade = left;
+          x.root.style.opacity = left > 0 && left < 1 ? String(left) : '';
+        }
+        const p = left > 0 ? (prog.get(x.el.id) ?? 0) : 0;
+        if (p === x.last) {
+          if (p > 0 && p < 1) { const pp = paintElement(x.el, p); if (pp.pointer) pointer = { at: pp.pointer, eraser: Boolean(x.el.eraser) }; }
+          return;
+        }
+        x.last = p;
+        const pp = paintElement(x.el, p);
+        x.root.style.display = pp.visible ? '' : 'none';
+        if (!pp.visible) return;
+        x.paths.forEach((path, j) => {
+          const s = pp.paths[j];
+          if (s?.dash) {
+            path.setAttribute('stroke-dasharray', `${s.dash.len} ${s.dash.len}`);
+            path.setAttribute('stroke-dashoffset', String(s.dash.offset));
+          } else if (!kinds[i][j]?.dashed) {
+            path.removeAttribute('stroke-dasharray');
+            path.removeAttribute('stroke-dashoffset');
+          }
+          if (s?.opacity !== undefined && s.opacity < 1) path.setAttribute('opacity', String(s.opacity));
+          else path.removeAttribute('opacity');
+        });
+        if (x.clipRect) x.clipRect.setAttribute('width', String((pp.clip ?? 0) + 2));
+        if (pp.pointer && !pp.done) pointer = { at: pp.pointer, eraser: Boolean(x.el.eraser) };
+      });
+      const at = pointer as { at: [number, number]; eraser: boolean } | null;
+      if (showPointer && at) {
+        const b = !at.eraser && opts.pointerImg ? { href: opts.pointerImg, x: at.at[0], y: at.at[1], size: 30 } : pointerBox(at.at, at.eraser);
+        if (pen.getAttribute('href') !== b.href) pen.setAttribute('href', b.href);
+        pen.setAttribute('x', String(b.x));
+        pen.setAttribute('y', String(b.y));
+        pen.setAttribute('width', String(b.size));
+        pen.setAttribute('height', String(b.size));
+        pen.style.display = '';
+      } else pen.style.display = 'none';
+    },
+  };
+}

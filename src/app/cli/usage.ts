@@ -23,6 +23,7 @@ export const USAGE = `用法:
   cotutor home show [--json]                                          现在发布的是哪份、几天前、每个按钮被点了几次(哪天、哪个话题)
   cotutor activity check [<老师> [<名>]] [--json]                      检查 activity 文件(agents/<老师>/activities/<名>.md):家长填的、应用算的、应用拦的、裁段、插槽、正文用的卡、第一句与收(带行号);不花钱
   cotutor activity eval <老师> <名> [--runs <n>] [--only <例子>] [--kid-model <千问模型>] [--json]   照 <名>.例子.md 跑:真老师 + 模拟孩子(千问,缺省 qwen3.8-flash,有 Token Plan 走它)多轮,判只看板书;一个例子跑 n 次(缺省 3)次次都过才算过;落 evals/,画家是假的;花钱
+  cotutor chalk <check|build|bake|snap|dub> <scene.ts|课包 id> [...]   做小课堂的课包:check 校验场景、build 出课包到 bundles/、bake 烤画面、snap 每步截图、dub 配音(cotutor chalk 看各自的选项;bake / snap 要本机的 Chrome)
   cotutor mock [--port <n>] [--scenario normal|nokey] [--delay <ms>] [--http]   不经真实老师与百炼,用固定的板书 JSON 起孩子端,测前端交互与渲染(不需要 workspace;老师都走实时老师页,假嘴照脚本念静音的声音;nokey = 没配百炼,孩子端只出「老师们还没到」)
   cotutor --version | --help
 workspace解析:--workspace > COTUTOR_WORKSPACE > cwd 或祖先有 cotutor.json > ~/.config/cotutor/config.json > ~/cotutor/ 下唯一的孩子目录

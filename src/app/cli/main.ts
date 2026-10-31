@@ -15,7 +15,7 @@ import { PIN_RE, USER_PIN_FILE, clearPin, readPin, setPin } from '../http/access
 import { addTutorFile, upgradeTutors } from './tutors.ts';
 import { activityRunFor, checkActivities, upgradeActivities } from './activities.ts';
 import { configGapsOf, migrateLayout, upgradeConfig } from './migrate.ts';
-import { linkClaudeSkills, upgradeSkills, writeToolShim } from './skills.ts';
+import { linkClaudeSkills, upgradeSkills } from './skills.ts';
 import { addTheme, upgradeThemes } from './themes.ts';
 import { patchConfig } from '../workspace.ts';
 import { resolveRoot } from '../workspace.ts';
@@ -84,7 +84,7 @@ async function printQr(page: string, open: boolean): Promise<void> {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'grade', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'grade', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin', 'out', 'bundles', 'step', 'voice', 'tutor', 'instruction']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理
@@ -216,15 +216,14 @@ export async function main(argv: string[]): Promise<void> {
         const skillSteps = await upgradeSkills(root);
         const link = await linkClaudeSkills(root);
         const themeSteps = await upgradeThemes(root);
-        await writeToolShim(root);
         // 老师文件换新了,政策文件却不会自动多出新老师与新运行时(cotutor.json 是家长的),提一句
         const gaps = await configGapsOf(root);
         if (json) process.stdout.write(`${JSON.stringify(redactDeep({ root, layout: layoutSteps, steps, activities: activitySteps, skills: skillSteps, claudeSkills: link, themes: themeSteps, configGaps: gaps }), null, 2)}\n`);
         else {
           for (const s of layoutSteps) process.stdout.write(`${s.action === 'kept' ? '!' : '✓'} ${s.item.padEnd(24)} ${s.note ?? ''}\n`);
           if (link.action !== 'exists') process.stdout.write(`${link.action === 'kept' ? '!' : '✓'} ${link.item.padEnd(24)} ${link.note ?? ''}\n`);
-          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', unavailable: '来源的包没装,没法换', retired: '不再出厂,删了' };
-          for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' || s.action === 'unavailable' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.machine ? '(机器件)' : ''}\n`);
+          const word: Record<string, string> = { upgraded: '已换新', latest: '已是最新', 'kept-custom': '自定义,保留', forced: '已覆盖(原文 .bak)', installed: '补上了', retired: '不再出厂,删了' };
+          for (const s of skillSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} skill ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.machine ? '(机器件)' : ''}\n`);
           for (const s of themeSteps) process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} theme ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}${s.action === 'kept-custom' ? '(themes/ 里改过的主题不动)' : ''}\n`);
           for (const s of steps) {
             process.stdout.write(`${s.action === 'kept-custom' ? '!' : '✓'} ${s.name.padEnd(18)} ${word[s.action]}${s.basedOn && s.action !== 'latest' ? `(基于 ${s.basedOn})` : ''}\n`);
@@ -564,6 +563,11 @@ export async function main(argv: string[]): Promise<void> {
           if (m.artifacts.length) process.stdout.write(`课包:${m.artifacts.join(', ')}\n`);
           process.stdout.write(`会话 ${index.session?.id ?? '?'}${timing.length ? ' · ' + timing.join(' · ') : ''}${m.tokens ? ` · 本轮 ${tokenText(m.tokens)}` : ''}${sumTokens(index.messages) ? ` · 今日 ${tokenText(sumTokens(index.messages))}` : ''}\n`);
         }
+        return;
+      }
+      case 'chalk': {
+        const { chalkCommand } = await import('./chalk/main.ts');
+        await chalkCommand(positionals, flags, { workspace, json });
         return;
       }
       default:

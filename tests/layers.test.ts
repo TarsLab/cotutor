@@ -23,18 +23,20 @@ const CORE = ['shared', 'schema'];
 const ALLOW: Record<string, readonly string[]> = {
   shared: [],
   schema: ['shared'],
+  // 画面引擎(2026-10-31 drawtell 并进来):骨架、时钟、圈住了什么、烤好的画面怎么逐笔画;比能力模块低一层,板书、运行层、页面、命令都能引它
+  chalk: CORE,
   brain: CORE,
   realtime: CORE,
-  board: CORE,
+  board: [...CORE, 'chalk'],
   memory: CORE,
   media: CORE,
   scenes: [...CORE, 'board'],
-  runtime: [...CORE, 'brain', 'realtime', 'board', 'memory', 'media', 'scenes'],
-  // 页面画板书与场景的记录(听写的录像照听写的事件画)
-  ui: [...CORE, 'board', 'scenes'],
-  app: [...CORE, 'brain', 'realtime', 'board', 'memory', 'media', 'scenes', 'runtime', 'ui'],
+  runtime: [...CORE, 'chalk', 'brain', 'realtime', 'board', 'memory', 'media', 'scenes'],
+  // 页面画板书与场景的记录(听写的录像照听写的事件画);舞台画课包、单词卡写字母用 chalk
+  ui: [...CORE, 'chalk', 'board', 'scenes'],
+  app: [...CORE, 'chalk', 'brain', 'realtime', 'board', 'memory', 'media', 'scenes', 'runtime', 'ui'],
   // npm 包的 ./lib 出口:只是把几样纯函数转出去
-  lib: ['shared', 'schema', 'brain', 'realtime', 'board', 'memory', 'media', 'scenes', 'runtime', 'ui', 'app'],
+  lib: ['shared', 'schema', 'chalk', 'brain', 'realtime', 'board', 'memory', 'media', 'scenes', 'runtime', 'ui', 'app'],
 };
 
 /** 现有的反向依赖(「模块 → 被引的文件」);只许删,不许加 */

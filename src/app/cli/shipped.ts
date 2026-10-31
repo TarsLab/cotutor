@@ -9,7 +9,7 @@ export const SHIPPED_FILE = '.cotutor/shipped.json';
 export interface ShippedManifest {
   /** 已安装的出厂教学包;旧版缺省按二年级迁移,与孩子当前年级分开。 */
   teachingPack?: { grade: number };
-  /** 出厂 skill(drawtell 的四个领域 skill + 本包的机器件)的 hash,与 tutors 同一套机制(src/app/cli/skills.ts) */
+  /** 出厂 skill(做课包的四个 chalk-* + 本包的机器件)的 hash,与 tutors 同一套机制(src/app/cli/skills.ts) */
   skills?: Record<string, { hash: string; version: string }>;
   /** 出厂主题(themes/<name>/)的目录 hash,同一套机制(src/app/cli/themes.ts) */
   themes?: Record<string, { hash: string; version: string }>;

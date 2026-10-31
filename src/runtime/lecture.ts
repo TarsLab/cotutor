@@ -4,12 +4,12 @@
  */
 import { spawn } from 'node:child_process';
 import { readFile, stat } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { BUNDLE_ID_RE } from '../board/cards/kind.ts';
 import { mp4DurationMs } from '../media/mp4.ts';
 import { LECTURE_FILE, LECTURE_VIDEO, MARK_MAX_POINTS, clockLabel, inkHint, lectureAt, lectureClock, lectureLines, lectureRange, markHead, parseLectureDoc, videoClock, type LectureClock, type LectureMark, type LecturePicture } from '../board/lecture.ts';
-import { bakeMatches, BundleError, elementsAtSvgTime, parseBundle, renderFrameSvg, type LessonBundle } from 'drawtell/core';
+import { bakeMatches, BundleError, elementsAtSvgTime, parseBundle, renderFrameSvg, type LessonBundle } from '../chalk/index.ts';
 import type { ContextPack } from '../schema/index.ts';
 import type { BoardCard, BoardSection } from '../board/presentation.ts';
 
@@ -60,7 +60,7 @@ export async function inspectLecture(ws: LectureDirs, id: string): Promise<{ lec
   return { lecture: { id, title: doc.title, problem: '', subject: doc.subject, clock: videoClock(doc.chapters, total), picture: {}, video: true }, problems: [] };
 }
 
-/** 读课包:拼法与校验是 drawtell 的 parseBundle;读不出来时 problem 说为什么(不在 = 没有 problem,让给视频) */
+/** 读课包:拼法与校验是 src/chalk 的 parseBundle;读不出来时 problem 说为什么(不在 = 没有 problem,让给视频) */
 async function readBundleLecture(ws: LectureDirs, id: string): Promise<{ lecture: Lecture | null; problem?: string }> {
   const dir = join(ws.dirs.bundles, id);
   let sceneJson: unknown;
@@ -74,7 +74,7 @@ async function readBundleLecture(ws: LectureDirs, id: string): Promise<{ lecture
   try {
     bundle = parseBundle(sceneJson, manifestJson);
   } catch (e) {
-    return { lecture: null, problem: `bundles/${id}/ ${e instanceof BundleError ? e.message : String(e)};用源 TS 重新 drawtell build` };
+    return { lecture: null, problem: `bundles/${id}/ ${e instanceof BundleError ? e.message : String(e)};用源 TS 重新 cotutor chalk build` };
   }
   const { scene, picture } = bundle;
   if (!scene.steps.length) return { lecture: null, problem: `bundles/${id}/ 的 manifest.json 没有步(小课堂要逐步讲的课包)` };
@@ -154,7 +154,7 @@ export async function enrichLectures(ws: LectureDirs, section: BoardSection): Pr
 const baking = new Map<string, Promise<boolean>>();
 
 /**
- * 课包没烤过(或画面改过没重烤):起一次 drawtell bake(同一份课包同时只烤一次;要 playwright,drawtell 的可选依赖)。
+ * 课包没烤过(或画面改过没重烤):起一次 cotutor chalk bake(同一份课包同时只烤一次;要本机的 Chrome,src/app/cli/chalk/)。
  * 烤好 true;烤不了(没浏览器、课包坏了、超时)false,不抛。
  */
 export function ensureBaked(bundlesDir: string, id: string): Promise<boolean> {
@@ -162,9 +162,7 @@ export function ensureBaked(bundlesDir: string, id: string): Promise<boolean> {
   let p = baking.get(key);
   if (!p) {
     p = new Promise<boolean>((resolve) => {
-      let bin: string;
-      try { bin = join(dirname(createRequire(import.meta.url).resolve('drawtell/package.json')), 'bin', 'drawtell.js'); } catch { resolve(false); return; }
-      const child = spawn(process.execPath, [bin, 'bake', id, '--bundles', bundlesDir, '--json'], { stdio: 'ignore' });
+      const child = spawn(process.execPath, [COTUTOR_BIN, 'chalk', 'bake', id, '--bundles', bundlesDir, '--json'], { stdio: 'ignore' });
       const timer = setTimeout(() => child.kill(), BAKE_TIMEOUT_MS);
       child.on('error', () => { clearTimeout(timer); resolve(false); });
       child.on('exit', (code) => { clearTimeout(timer); resolve(code === 0); });
@@ -174,6 +172,8 @@ export function ensureBaked(bundlesDir: string, id: string): Promise<boolean> {
   return p;
 }
 const BAKE_TIMEOUT_MS = 120_000;
+/** 本包的命令入口(仓库里与 npm 装的都是包根 bin/cotutor.js;src/runtime 与 dist/runtime 到包根同样两级) */
+const COTUTOR_BIN = fileURLToPath(new URL('../../bin/cotutor.js', import.meta.url));
 
 const tried = new Set<string>();
 
@@ -218,7 +218,7 @@ export async function lectureFrameSvg(ws: Pick<LectureDirs, 'dirs'>, id: string,
     const [dx, dy] = baked.offset;
     const d = ink.filter((st) => st.length >= 2).map((st) => st.map((p, i) => `${i ? 'L' : 'M'}${p[0] + dx} ${p[1] + dy}`).join(' ')).join(' ');
     const overlay = d ? `<path d="${d}" fill="none" stroke="#2f6fd6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` : '';
-    // 背景图(换过画板的课每块板一张)内嵌成 data URI;画哪块板、淡没淡由 drawtell 按那一刻算
+    // 背景图(换过画板的课每块板一张)内嵌成 data URI;画哪块板、淡没淡由 src/chalk 按那一刻算
     const hrefs = new Map<string, string>();
     for (const b of (baked.boards ?? [baked]).map((x) => x.background)) {
       if (!b || hrefs.has(b.src)) continue;

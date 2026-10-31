@@ -3,7 +3,8 @@
  * 百炼 Qwen-Audio-TTS 的非实时合成(2026-10-31 从 voxtell 并进来,不再起子进程):POST 回一个 24 小时有效的音频地址,马上下载。
  * 走哪条线按模型定(src/shared/qianwen.ts):Token Plan 有这个模型就走它;否则百炼按量,端点是业务空间的域名(voxtell 2026-08-07 实测,公网域名不认)。
  * 模型看音色 id 的前缀(qwen-audio-3.0-tts-plus-xxx / -flash-xxx,flash 的音色给 plus 回 400);没前缀的老短名走 TTS_MODEL。
- * 缓存:按「模型 + 音色 + 字 + 格式」寻址,放在调用方给的目录(workspace 的 .cotutor/tts/);同一句同一个音色合成过就直接给那个文件,不再花钱。
+ * 缓存:按「模型 + 音色 + 字 + 格式(+ 语气)」寻址,放在调用方给的目录(workspace 的 .cotutor/tts/);同一句同一个音色合成过就直接给那个文件,不再花钱。
+ * 语气(instruction)只有课包配音用(cotutor chalk dub --instruction),卡的配音不带。
  * 失败不抛、不响:结果带原因(不含 key),调用方写进 err.log 或回给家长端;孩子端点了不出声。
  * 测试与探针:COTUTOR_TTS_ENDPOINT 指到假百炼(tests/_fake-tts.ts)。
  */
@@ -54,10 +55,18 @@ export function ttsTarget(model: string, env: NodeJS.ProcessEnv = process.env): 
 /** 同一个文件正在合成:后来的等它,不再花一次钱 */
 const inflight = new Map<string, Promise<TtsResult>>();
 
-/** 合成一句;给了 out 就把音频放到那里(缓存里留一份) */
-export async function synthesize(say: { text: string; voice: string; out?: string }, opts: TtsOptions): Promise<TtsResult> {
+/** 一句要合成的:字、音色、语气;给了 out 就把音频放到那里(缓存里留一份) */
+export interface Say {
+  text: string;
+  voice: string;
+  instruction?: string;
+  out?: string;
+}
+
+/** 合成一句 */
+export async function synthesize(say: Say, opts: TtsOptions): Promise<TtsResult> {
   const model = ttsModelOf(say.voice);
-  const key = createHash('sha256').update(JSON.stringify({ format: FORMAT, model, sampleRate: SAMPLE_RATE, text: say.text, voice: say.voice })).digest('hex');
+  const key = createHash('sha256').update(JSON.stringify({ format: FORMAT, ...(say.instruction ? { instruction: say.instruction } : {}), model, sampleRate: SAMPLE_RATE, text: say.text, voice: say.voice })).digest('hex');
   const cached = join(opts.cacheDir, `${key.slice(0, 24)}.${FORMAT}`);
   let r: TtsResult;
   if ((await stat(cached).catch(() => null))?.size) r = { file: cached, error: null };
@@ -87,7 +96,7 @@ interface TtsReply {
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-async function fetchAudio(model: string, say: { text: string; voice: string }, file: string, opts: TtsOptions): Promise<TtsResult> {
+async function fetchAudio(model: string, say: Say, file: string, opts: TtsOptions): Promise<TtsResult> {
   const fail = (error: string): TtsResult => ({ file: null, error });
   const target = ttsTarget(model, opts.env ?? process.env);
   if ('error' in target) return fail(target.error);
@@ -99,7 +108,7 @@ async function fetchAudio(model: string, say: { text: string; voice: string }, f
       const res = await fetch(target.url, {
         method: 'POST',
         headers: { authorization: `Bearer ${target.key}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ model, input: { text: say.text, voice: say.voice, format: FORMAT, sample_rate: SAMPLE_RATE } }),
+        body: JSON.stringify({ model, input: { text: say.text, voice: say.voice, format: FORMAT, sample_rate: SAMPLE_RATE, ...(say.instruction ? { instruction: say.instruction } : {}) } }),
         signal: AbortSignal.timeout(timeoutMs),
       });
       const raw = await res.text();

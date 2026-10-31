@@ -3,12 +3,12 @@
  * 一格 = 一个单词,坐标 2048 × 512(笔迹的点也记在这个尺子上,y 朝下);四条线在 80 / 200 / 320 / 440,第三条是基线(红)。
  * 写字屏的格子铺满、按屏幕大小只露尺子的一段(en-page.ts 的 fitPad);对一对、录像、家长页照 EN_VIEW。
  * 格子上下各多露一截:画的视窗是 EN_VIEW(0 -192 2048 896,16 : 7),四条线在中间,写出格的笔画照样看得见;尺子不变,出格的点 y 为负或大于 512。
- * 单词的样子用单词卡那套字形画(drawtell/glyphs:52 个字母的印刷体笔顺,按四线三格归一化):x 高 = 中格 120,
+ * 单词的样子用单词卡那套字形画(src/chalk/glyphs:52 个字母的印刷体笔顺,按四线三格归一化):x 高 = 中格 120,
  * b d h k l 与大写顶第一线、g j p q y 到第四线、t 的头在上格中间。原来用字体(Chalkboard SE),升部只到上格六成、降部只到下格一半,孩子照着描也矮。
  * 不逐字母比,只叠着给孩子自己对:长单词横着压(坐标压,笔画粗细不变);有字形包里没有的字(数字、标点)整个词退回字体。
  * 脚本是 ES5、没有反斜杠与反引号。
  */
-import { GLYPHS, SPACE_ADVANCE } from 'drawtell/glyphs';
+import { GLYPHS, SPACE_ADVANCE } from '../../chalk/glyphs/index.ts';
 import { EXTRA, GAP } from '../kid/letters.ts';
 
 const r = (v: number): number => Math.round(v * 1000) / 1000;

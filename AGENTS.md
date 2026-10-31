@@ -1,6 +1,6 @@
 # cotutor
 
-家里的 AI 老师团,和家长一起教。应用仓,2026-09-08 起。drawtell 是本仓旁边的检出(`link:../drawtell`,要先 build),不在本仓;配音(原来的 voxtell)已经并进 `src/media/tts.ts`。
+家里的 AI 老师团,和家长一起教。应用仓,2026-09-08 起。2026-10-31 起原来的两个旁仓都并进来了:画面引擎 drawtell 成了 `src/chalk/`(命令 `cotutor chalk`),配音 voxtell 成了 `src/media/tts.ts`。
 
 本文件写仓库结构、开发方式与当前约束。历史讨论看 git log。Codex 直接读本文件,Claude Code 经 `CLAUDE.md` 的 `@AGENTS.md` 引入;改规矩只改这里。
 
@@ -18,7 +18,7 @@
 - `skills/<name>/` 出厂技能:cotutor-tutor(有脸的老师共同的守则,应用注入上下文包)、cotutor-board(由 `cards/板书怎么写.md` 与 `cards/*/card.md` 生成)、cotutor-analyze、cotutor-tune、cotutor-home(家长在 workspace 里排首页);init 拷进 workspace 的 `.agents/skills/`(Codex、Qwen Code 认这里),`.claude/skills` 是链到它的(Claude Code 只认那里);不再出厂的机器件列在 `src/app/cli/skills.ts` 的 `RETIRED_SKILLS`,upgrade 时删
 - `cards/<kind>/` 卡的协议:`card.md` 八栏(例子即测试)+ `card.css`
 - `themes/default/` 出厂主题:`theme.json` 槽表、`kid.css`
-- `src/` 按模块分,谁能引谁见 `tests/layers.test.ts` 的 `ALLOW`:底层 `schema/`(契约,zod,类型即文档;落盘的形状与文件布局也在这)与 `shared/`(没有业务归属的小函数);中间 `brain/` 脑、`realtime/` 嘴、`board/` 板书与卡、`memory/` vault、`media/` 配音画图认图(每种一家),彼此不引;`scenes/` 场景的规则与存取(只引 board);`runtime/` 教学运行层,只有它把这些串起来(runner、上下文包 `context/`、交付 `delivery/`、运行记录 `journal/`、实时通话 `live/`、首页 `home/`);`ui/` 页面(孩子 `kid/`、家长 `parent/`、工作台 `dev/`、舞台 `stage/`、场景页 `talk/` `dictation/`、几页共用 `shared/`);`app/` 入口(命令 `cli/`、HTTP `http/`、WS `ws/`、`mock/`、机器级配置 `machine/`、场景的路由 `talk/` `dictation/`、技能里机器生成的那几篇 `skills/`)。`src/lib/index.ts` 只给 npm 的 `./lib` 出口转发几样纯函数
+- `src/` 按模块分,谁能引谁见 `tests/layers.test.ts` 的 `ALLOW`:底层 `schema/`(契约,zod,类型即文档;落盘的形状与文件布局也在这)与 `shared/`(没有业务归属的小函数);再上一层是画面引擎 `chalk/`(课包的骨架、时钟、擦掉与换画板、圈住了什么、烤好的画面怎么逐笔画、字母笔顺 `glyphs/`;只能在浏览器里跑的在 `ui/stage/chalk/`,做课包的命令 `cotutor chalk` 在 `app/cli/chalk/`),板书、运行层、页面、命令都能引它;中间 `brain/` 脑、`realtime/` 嘴、`board/` 板书与卡、`memory/` vault、`media/` 配音画图认图(每种一家),彼此不引;`scenes/` 场景的规则与存取(只引 board);`runtime/` 教学运行层,只有它把这些串起来(runner、上下文包 `context/`、交付 `delivery/`、运行记录 `journal/`、实时通话 `live/`、首页 `home/`);`ui/` 页面(孩子 `kid/`、家长 `parent/`、工作台 `dev/`、舞台 `stage/`、场景页 `talk/` `dictation/`、几页共用 `shared/`);`app/` 入口(命令 `cli/`、HTTP `http/`、WS `ws/`、`mock/`、机器级配置 `machine/`、场景的路由 `talk/` `dictation/`、技能里机器生成的那几篇 `skills/`)。`src/lib/index.ts` 只给 npm 的 `./lib` 出口转发几样纯函数
 - `src/brain/` 脑执行(`BrainExecutor`:定这一轮怎么跑、起老师、读输出,收尾给整轮转录),runner 只经它起老师;按这轮的运行时分两种:`{run, resume}` 起 CLI(`cli/`:各 CLI 的适配器一家一个文件,`qwen.ts` 与通用的 `stream-json.ts`,读输出、关工具、环境、出厂模板都在里面,别处只认统一事件;起进程、断流接着跑在 `cli/run.ts`,预热在 `cli/warm.ts`),`{api: "bailian", model}` 应用直连百炼(`api.ts`,AI SDK;只读工具在 `api-tools.ts`,话题的模型历史在 `<日期>.<话题>.brain.jsonl`,拼回去时结束的轮瘦身(不带思考、工具往返成一句、照片只附最近那组),上一轮上下文过 32k 就整段压缩(前情 `src/runtime/context/thread-digest.ts` 照索引拼,不调模型);`.log` 落一行一条统一事件)
 - `src/board/` 板书:正文解析 `parse.ts`(第一个 H2 起的尾巴 `sections.ts`),卡的注册表 `cards/`(一种卡一个文件;协议文档在包根 `cards/<kind>/`),孩子端板上的节 `presentation.ts`(内联进页面)
 - 你说我画的画图卡在后台画:场景的规则在 `src/scenes/paint/`(拼提示词、哪几幅、落盘到卡的资产目录、下发时补画好没有),百炼文生图的请求在 `src/media/draw.ts`(同步接口);runner 一轮跑完起它、把画一张的函数交进去(场景不引 media),app 的孩子 / 家长那天接一行
@@ -37,6 +37,7 @@
 - 改工作台(`src/app/http/dev-*.ts`、`src/ui/dev/`)先过 `tests/dev-overview.test.ts`、`tests/dev-activities.test.ts` 与 `tests/dev-tutor-files.test.ts`,颜色只用 `dev-theme.ts` 的变量;页面走 `scripts/probe-dev.mjs`(只看不改)
 - 改孩子端流水(页面脚本 `src/ui/kid/kid-log.ts`、收与存 `src/runtime/journal/kid-log.ts`、`src/schema/kid-device.ts`)先过 `tests/kid-log.test.ts` 与 `tests/dev-overview.test.ts`;新加孩子端页面要带 `KID_LOG_JS`(kid-log.test 的 PAGES 里登记);页面走 `scripts/probe-kid-log.mjs`(会写流水与设备表,拿试用 workspace)
 - 改画板(`src/board/canvas-chat.ts`、`src/ui/stage/canvas.tsx`、`src/board/paper.ts`、`call.ts` 的边画边聊、kid-page 的「画板」)先过 `tests/canvas-chat.test.ts` 与 `tests/live-canvas.test.ts`;页面走 `scripts/probe-paper.mjs`(先起 `cotutor mock --http`,探针交掉 mock 里那张画板卡,再跑要重起 mock)
+- 改画面引擎 `src/chalk/` 先过 `tests/chalk-*.test.ts`(烤好的画面、圈住了什么、擦掉与换画板、字母笔顺),改做课包的命令 `src/app/cli/chalk/` 或舞台的 `src/ui/stage/chalk/` 再拿年级包的例子真跑一遍 `cotutor chalk build / bake / snap`(要本机的 Chrome;烤出的 bake.json 和入库的那份该一字不差)
 - 改 `src/scenes/paint/`、`src/media/draw.ts` 或画图卡先过 `tests/paint.test.ts`(假百炼、假老师全流程),页面走 `scripts/probe-paint.mjs`;真画按张计费
 - 改孩子端播放(嘴、卡的声音、孩子谁打断谁)先在 `tests/live-player.test.ts` 明确预期,再改 `runtime/delivery/player.ts` 的 `liveStep`;页面只 `liveDispatch`。板上的节(铺、写完、撤掉)是 `board/presentation.ts` 的 `step`,对 `tests/player.test.ts`,页面只 `dispatch`
 - 冒烟:`init <slug> --dir <tmp>` → `doctor --workspace <tmp> --live` → `serve`;真跑老师 `cotutor send`;不花钱看前端 `cotutor mock`(老师都走实时老师页,假嘴念静音的声音;`--scenario nokey` 看没配百炼)
@@ -49,7 +50,7 @@
 - 提交按文件名 stage,仓里常有并行的未提交改动
 - 舞台页(`/stage/`)也装孩子端的 `theme.css`:舞台里自己的类名要带前缀(`lc-` 这种),撞上 `.pen` `.c` 之类会被那边的样式改掉(`.pen` 关着 pointer-events,圈不上)
 - 探针模拟手指用 CDP `Input.dispatchMouseEvent`,别用 `dispatchEvent`:后者直接派到元素上,不走命中判定,盖住了、pointer-events 关了都照样过
-- 课包的画面是 build 后烤好的(`bake.json`),孩子端不跑 excalidraw 也没有 SMIL;改了画面要重烤(`drawtell bake`,snap 顺手烤),不然孩子端在浏览器里现烤、服务端后台补烤
+- 课包的画面是 build 后烤好的(`bake.json`),孩子端不跑 excalidraw 也没有 SMIL;改了画面要重烤(`cotutor chalk bake`,snap 顺手烤,要本机的 Chrome),不然孩子端在浏览器里现烤、服务端后台补烤
 - qwen 老师的家是 workspace 的 `.cotutor/qwen/home/`(`QWEN_HOME`,适配器生成),手跑 qwen 复现要带上 `QWEN_HOME`、`QWEN_RUNTIME_DIR`、`QWEN_CODE_SYSTEM_SETTINGS_PATH`,还有 `COTUTOR_QWEN_BASE_URL` 与 `COTUTOR_QWEN_API_KEY`(家里的 settings.json 只写这两个占位,适配器按 Token Plan / 按量填);别改 `HOME`。`--bare` 不认 `--core-tools`,别用
 - qwen 读会话 cwd(老师目录)外的文件要征得同意,消息走 stdin 时没人回答,进程就挂到 `--max-wall-time`;只读那轮的 `--include-directories` 由适配器展开
 - Safari 才有的毛病拿 Playwright 的 WebKit 复现(`scripts/probe-lecture-webkit.mjs`,本仓不装 playwright,借一份)

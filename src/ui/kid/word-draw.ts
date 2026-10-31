@@ -7,7 +7,7 @@ import { inlineScript } from '../shared/inline-lib.ts';
 import { letterAdvances } from './letters.ts';
 
 const WORD_DRAW = `
-  // ---- 单词卡:四线三格(x 高为 1:升部 / 大写顶 -2、x 高顶 -1、基线 0、降部 +1),笔顺 /api/kid/letters/<词>(drawtell/glyphs 采好的中线点);
+  // ---- 单词卡:四线三格(x 高为 1:升部 / 大写顶 -2、x 高顶 -1、基线 0、降部 +1),笔顺 /api/kid/letters/<词>(src/chalk/glyphs 采好的中线点);
   // 写 = 每一笔一条粗线,stroke-dashoffset 从头长到尾,和田字格一个手法;数据没有(写不出的词)退成字体的字、不动 ----
   const WL = new Map();
   const lettersFor = (w) => { if (!WL.has(w)) WL.set(w, fetch('/api/kid/letters/' + encodeURIComponent(w)).then((r) => (r.ok ? r.json() : null)).catch(() => null)); return WL.get(w); };
@@ -17,7 +17,7 @@ const WORD_DRAW = `
   const WORD_SPEED = { ms: 120, pause: 50, chunk: 0 };
   const WORD_SLOW = { ms: 190, pause: 110, chunk: 320, rate: 0.7 };
   /** 一个词的四线三格:chunks 给了(舞台)就按段上两色、先分开摆,wordMerge 合拢;fresh = 先淡着等写 */
-  /** 每个字母的宽、字间距、空格宽(服务端从 drawtell/glyphs 拼进来):格子同步就排好、画出准确大小,排版量的是终态;笔画晚到只往里填 */
+  /** 每个字母的宽、字间距、空格宽(服务端从 src/chalk/glyphs 拼进来):格子同步就排好、画出准确大小,排版量的是终态;笔画晚到只往里填 */
   const WORD_ADV = __WORD_ADV__;
   const WORD_G = Object.fromEntries(Object.entries(WORD_ADV.adv).map(([ch, a]) => [ch, { advance: a }]));
   const wordGrid = (w, chunks, opts = {}) => {

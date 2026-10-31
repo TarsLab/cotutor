@@ -219,8 +219,11 @@ const LEGACY_DIRS = [
   { from: '.claude/skills', to: SKILLS_DIR },
 ] as const;
 
-/** 不再用的机器文件(相对 workspace 根):2026-10-31 配音的缓存合成一份 .cotutor/tts/,试听、听写念词原来各存一处,设置页的「试一句」也去掉了 */
-const RETIRED_FILES = ['.cotutor/tts-preview', '.cotutor/dictation-say', '.cotutor/tts-try.mp3'] as const;
+/**
+ * 不再用的机器文件(相对 workspace 根):2026-10-31 配音的缓存合成一份 .cotutor/tts/,试听、听写念词原来各存一处,设置页的「试一句」也去掉了;
+ * 同日 drawtell 并进本包,做课包是 cotutor chalk,不再要指向 drawtell CLI 的壳 .cotutor/drawtell
+ */
+const RETIRED_FILES = ['.cotutor/tts-preview', '.cotutor/dictation-say', '.cotutor/tts-try.mp3', '.cotutor/drawtell'] as const;
 
 export interface LayoutStep {
   item: string;

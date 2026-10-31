@@ -20,8 +20,8 @@ cotutor serve                              # 孩子端 http://<ip>:5180/,家长�
 2. **填档案**:workspace 里的 `孩子.md` 填 `school_start`(读一年级的年月,如 `2025-09`),老师据此知道现在是几年级哪个学期。想用自己的 Obsidian 库,改 `cotutor.json` 的 `paths.vault`。
 3. **体检**:`cotutor doctor` 逐项检查,不过的每条都带修复命令。
 
-`init` 把出厂老师拷进 `agents/<老师>.md`,把做课包用的四个领域 skill(随 drawtell 包来)和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
-做课包用的 drawtell 随包装好(`.cotutor/drawtell`),不用另外装。要在 iPad 上用(按住说话要 HTTPS):`cotutor cert` 签一张
+`init` 把出厂老师拷进 `agents/<老师>.md`,把做课包用的四个技能 chalk-* 和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
+做小课堂的课包用 `cotutor chalk`(check / build / bake / snap / dub),烤画面与截图用本机的 Chrome。要在 iPad 上用(按住说话要 HTTPS):`cotutor cert` 签一张
 自签证书(要 mkcert:`brew install mkcert && mkcert -install`),把根证书装到 iPad 并打开信任,重启 `serve`,扫码打开。步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
 
 然后在浏览器里:
@@ -99,8 +99,6 @@ cotutor doctor
 
 ## 开发
 
-先把 [drawtell](https://github.com/tarslab/drawtell) 检出到本仓旁边,在它的目录执行 `pnpm i && pnpm build`;本仓通过 `link:../drawtell` 引用它。
-
 ```sh
 pnpm i
 pnpm typecheck
@@ -112,7 +110,7 @@ pnpm smoke                      # 检查待发布内容
 node bin/cotutor.js mock         # 假模型接口,查看前端
 ```
 
-本地 `link:../drawtell` 不能直接用于发布包,发布前需换成可打包的依赖并通过 smoke。改卡片文档或技能生成代码后运行 `pnpm gen:skills`。开发约定与分模块验证见 [AGENTS.md](AGENTS.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
+改卡片文档或技能生成代码后运行 `pnpm gen:skills`。开发约定与分模块验证见 [AGENTS.md](AGENTS.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 正式文档只保留以下六篇,历史讨论查 Git:
 

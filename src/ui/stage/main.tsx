@@ -1,6 +1,7 @@
 /**
  * 舞台包入口(打成 dist/stage/stage.js,页面在 iframe 里装 /stage/?card=<id>):等页面发 card,按 kind 装组件;
  * 小课堂(孩子从首页看的整堂、老师放的一段)= lecture.tsx;画板卡 = excalidraw 编辑器(步 10)。所有对外说话都走 postMessage(protocol.ts)。
+ * ?chalk=bake|snap 是做课包时 CDP 开的(chalk/tool.ts),不是孩子端。
  * 界面上没有错误文案:装不上就发 error,页面关掉舞台、什么都不显示。
  */
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
@@ -98,4 +99,7 @@ function App(): JSX.Element {
   return <div className="stage-wait">{String(card.props.title ?? card.props.text ?? '')}</div>;
 }
 
-createRoot(document.getElementById('root')!).render(<App />);
+// 做课包(cotutor chalk bake / snap):?chalk=bake|snap 不装舞台,只烤画面或停在某一步给 CDP 截图(./chalk/tool.ts,按需装)
+const tool = new URLSearchParams(location.search);
+if (tool.get('chalk')) void import('./chalk/tool.ts').then((m) => m.runTool(tool));
+else createRoot(document.getElementById('root')!).render(<App />);

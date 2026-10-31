@@ -904,7 +904,7 @@ export async function route(method: string, path: string, ctx: AppContext, body?
       const d = await tianzigeData(decodeURIComponent(hz[1]));
       return d ? { status: 200, json: d, cacheControl: 'max-age=86400' } : { status: 404, json: { error: 'not_found' } };
     }
-    // 单词卡的笔顺:词里每个字母的点序列(drawtell/glyphs 现采);写不出的词 404(页面退成字体的字)
+    // 单词卡的笔顺:词里每个字母的点序列(src/chalk/glyphs 现采);写不出的词 404(页面退成字体的字)
     const lt = /^\/api\/kid\/letters\/([^/]+)$/.exec(p);
     if (lt && method === 'GET') {
       const d = lettersData(decodeURIComponent(lt[1]));

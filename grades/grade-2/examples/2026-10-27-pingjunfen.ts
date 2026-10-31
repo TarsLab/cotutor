@@ -1,5 +1,5 @@
 /** 6 个圆片平均放进 3 个盘子。一轮一个,每盘一样多;无需先学除法。 */
-import type { ChalkScene, ChalkSkeleton } from 'drawtell';
+import type { ChalkScene, ChalkSkeleton } from 'cotutor/chalk';
 const ink = '#1e1e1e';
 const text = (id: string, value: string, x: number, y: number): ChalkSkeleton => ({ type: 'text', id, text: value, x, y, fontSize: 26, strokeColor: ink, animateDuration: 900 });
 const plates: ChalkSkeleton[] = Array.from({ length: 3 }, (_, i) => ({ type: 'rectangle', id: `plate-${i}`, x: 55 + i * 215, y: 100, width: 150, height: 100, strokeColor: ink, animateDuration: 900 }));

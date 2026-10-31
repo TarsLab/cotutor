@@ -70,18 +70,12 @@ const stageKb = Math.round(stageJs.reduce((n, f) => n + statSync(join(STAGE_DIR,
 need(stageJs.length > 10, `dist/stage 里只有 ${stageJs.length} 个 js,拆包后应该有上百个 chunk(pnpm run build:stage)`);
 need(stageKb > 3000, `dist/stage 的 js 合计只有 ${stageKb} KB,不像打全了`);
 
-// 5. 运行期要的两个外部件:drawtell CLI(壳脚本 .cotutor/drawtell 指过去)与 excalidraw 字体(/stage/fonts/ 现取,不进包)
-const { drawtellBin, SHIPPED_SKILLS, skillSourceDir } = await import(new URL('../dist/cli/skills.js', import.meta.url).href) as {
-  drawtellBin: () => string | null;
-  SHIPPED_SKILLS: readonly { name: string; source: string }[];
-  skillSourceDir: (s: { name: string; source: string }) => string | null;
+// 5. 出厂技能都在包里;运行期要的 excalidraw 字体(/stage/fonts/ 现取,不进包)
+const { SHIPPED_SKILLS, skillSourceDir } = await import(new URL('../dist/cli/skills.js', import.meta.url).href) as {
+  SHIPPED_SKILLS: readonly { name: string }[];
+  skillSourceDir: (s: { name: string }) => string;
 };
-const bin = drawtellBin();
-need(bin && existsSync(bin), `node_modules 里没有 drawtell 的 bin(${bin ?? '解析不到包'});场景作业跑不了`);
-for (const s of SHIPPED_SKILLS) {
-  const dir = skillSourceDir(s as { name: string; source: 'cotutor' | 'drawtell' });
-  need(dir !== null && existsSync(join(dir, 'SKILL.md')), `${s.source} 里没有 ${s.name}/SKILL.md(${dir ?? '解析不到包'})`);
-}
+for (const s of SHIPPED_SKILLS) need(existsSync(join(skillSourceDir(s), 'SKILL.md')), `包里没有 skills/${s.name}/SKILL.md`);
 need(existsSync(FONTS_DIR), `dist/stage/fonts/ 与 node_modules 的 excalidraw 里都没有字体目录(${FONTS_DIR});/stage/fonts/ 会 404,舞台里中文字形回退`);
 
 // 6. 依赖不能带 link:(link 的包发出去装不上)

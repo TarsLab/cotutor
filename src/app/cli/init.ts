@@ -10,7 +10,7 @@ import { DIRS, GITIGNORE, LEDGER_FILES, REFERENCE_README, configTemplate, profil
 import { installTutors, readManifest, writeManifest } from './tutors.ts';
 import { DEFAULT_GRADE, LEGACY_GRADE, requireGradePack } from './grades.ts';
 import { installActivities } from './activities.ts';
-import { TOOL_SHIM, installSkills, linkClaudeSkills, writeToolShim } from './skills.ts';
+import { installSkills, linkClaudeSkills } from './skills.ts';
 import { migrateLayout } from './migrate.ts';
 import { installThemes } from './themes.ts';
 import { scanVault } from '../../memory/vault.ts';
@@ -92,14 +92,11 @@ export async function initWorkspace(opts: InitOptions): Promise<InitResult> {
   const schemaThere = await exists(join(root, '.cotutor', 'cotutor.schema.json'));
   await writeSchemaFile(root);
   steps.push({ item: '.cotutor/cotutor.schema.json', action: schemaThere ? 'exists' : 'created', note: schemaThere ? '已按本包刷新(机器文件)' : 'cotutor.json 的 JSON Schema,编辑器补全用' });
-  // 出厂 skill(机器件 cotutor-board 等 + drawtell 的四个领域 skill,家长做课包用)与 drawtell 壳脚本
+  // 出厂 skill(机器件 cotutor-board 等 + 做课包的四个 chalk-*)
   steps.push(...(await installSkills(root)));
   steps.push(await linkClaudeSkills(root));
   // 出厂主题(孩子端板书的样子):拷进 themes/default/,是家长的
   steps.push(...(await installThemes(root)));
-  const shimThere = await exists(join(root, TOOL_SHIM));
-  const shim = await writeToolShim(root);
-  steps.push({ item: TOOL_SHIM, action: shimThere ? 'exists' : 'created', note: shim.available ? (shimThere ? '已按本包刷新(机器文件)' : 'drawtell CLI 的壳,家长做课包用它,和服务端烤画面是同一版 drawtell') : 'node_modules 里没有 drawtell,壳只会报错' });
 
   for (const f of LEDGER_FILES) {
     const p = join(root, f);

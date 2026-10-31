@@ -31,7 +31,7 @@ export interface Workspace {
     conversations: string;
     /** 技能 .agents/skills/ */
     skills: string;
-    /** 课包(drawtell build 的产物,小课堂与 lecture 卡从这里放;派生物,gitignore) */
+    /** 课包(cotutor chalk build 的产物,小课堂与 lecture 卡从这里放;派生物,gitignore) */
     bundles: string;
     /** 首页:草稿、已发布、历史;publish 时才建,不进骨架 */
     home: string;

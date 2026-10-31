@@ -10,7 +10,7 @@
 - 出厂 activity 与例子均通过静态检查。
 - npm 打包预览确认包含年级文件、例子、课包及五段音频,不再包含旧的包根 agents 目录。
 - 平均分课包通过 drawtell 构建检查;逐步截图检查了空盘、第一轮、第二轮及结论;课包可读取、画面已烤、配音文件和时长齐全。
-- `pnpm smoke` 仍有一个原有阻塞:根 package.json 的 drawtell 依赖是 `link:../drawtell`,需要正式发版时换成可安装的版本。其他出厂检查通过。本次未发布。
+- `pnpm smoke` 仍有一个原有阻塞:根 package.json 的 drawtell 依赖是 `link:../drawtell`,需要正式发版时换成可安装的版本。其他出厂检查通过。本次未发布。(2026-10-31 drawtell 并进本包成了 src/chalk,这个依赖没有了。)
 
 ## 模型与范围
 

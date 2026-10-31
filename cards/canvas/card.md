@@ -18,7 +18,7 @@
 - 底有四种:
   - 课包 id:那幅图的终帧做底,孩子在上面标画。
   - 一张图的路径:照 `photos:` 里那样的 `captures/…` 相对路径写,照片做底。
-  - 一段行内骨架 JSON:`{"skeletons":[…]}`,drawtell 的元素写法,不超过 40 个。
+  - 一段行内骨架 JSON:`{"skeletons":[…]}`,课包场景的元素写法(chalk),不超过 40 个。
   - 什么底都没有:只写题目,就是空白画板。
 
 ## 例子
@@ -65,4 +65,4 @@ captures/2026-09-14/1620-1.jpg
 
 ## 状态的形状
 
-`{"ink": [...], "image": "conversations/…/3.png", "cleared": [{"at": …, "from": …, "strokes": 12, "image": "captures/…jpg"}]}` —— 孩子画的元素(drawtell 的 ink 层)、导出的 png 路径(服务端写)、清空过的几版(清空的时刻、那一版第一笔的时刻、几笔、清空前存的图)。
+`{"ink": [...], "image": "conversations/…/3.png", "cleared": [{"at": …, "from": …, "strokes": 12, "image": "captures/…jpg"}]}` —— 孩子画的元素(画板的 ink 层)、导出的 png 路径(服务端写)、清空过的几版(清空的时刻、那一版第一笔的时刻、几笔、清空前存的图)。

@@ -93,13 +93,12 @@ description: 排 cotutor 孩子端的首页。孩子学完之后,家长在 works
 
 ### 课包小课堂
 
-- drawtell 用 `.cotutor/drawtell`,和服务端烤画面是同一版;没有它才用全局的 `drawtell`。
-- 课包用 drawtell 做:场景怎么写看 drawtell-scene 技能,怎么讲看 drawtell-teaching。做好 build、dub,把整个课包目录拷进 `bundles/<id>/`。
-- 画面上孩子可能画到的东西,在场景里起名字:几笔合起来是一样东西写 `groups`,单独一笔写 `label`。写法见 drawtell-scene。
+- 课包用 `cotutor chalk` 做:场景怎么写看 chalk-scene 技能,怎么讲看 chalk-teaching,命令看 chalk-cli。`build` 直接出到 `bundles/<id>/`,再 `dub` 配音。
+- 画面上孩子可能画到的东西,在场景里起名字:几笔合起来是一样东西写 `groups`,单独一笔写 `label`。写法见 chalk-scene。
 - 名字用讲稿里的说法,如「散的 3 根小棒」。
 <!-- 为什么:孩子在它上面画了,老师拿到的是这个名字;不起名字只能说「第 1 步画的 3 条线」。 -->
-- 起了名字要重新 build,再拷一次。配音不用重配。
-- 拷之前烤一下画面:`.cotutor/drawtell bake <id>`(跑过 snap 就已经烤了)。烤过的课包,孩子端不用现画,iPad 上顺;首页检查会提醒没烤的。
+- 起了名字要重新 build。配音不用重配。
+- 挂首页之前烤一下画面:`cotutor chalk bake <id>`(跑过 snap 就已经烤了)。烤过的课包,孩子端不用现画,iPad 上顺;首页检查会提醒没烤的。
 - 改了画面要重烤;只改讲稿、重配音不用。
 
 ### 视频小课堂

@@ -100,18 +100,13 @@ export function lintSkill(md: string, dirName: string): string[] {
 
 for (const skill of SHIPPED_SKILLS) {
   const dir = skillSourceDir(skill);
-  if (!dir || !statSync(join(dir, 'SKILL.md'), { throwIfNoEntry: false })) {
-    check(`${skill.name}:来源 ${skill.source} 没装,跳过`, true);
-    continue;
-  }
+  check(`${skill.name}:包里有 SKILL.md`, Boolean(statSync(join(dir, 'SKILL.md'), { throwIfNoEntry: false })));
   const problems = lintSkill(readFileSync(join(dir, 'SKILL.md'), 'utf8'), skill.name);
-  // 别的包的文件这里改不了:本包的判失败,drawtell 的只打一行提醒(闸门在 drawtell 仓的 tests/skills.test.ts)
-  if (skill.source === 'cotutor') check(`${skill.name}(${skill.source})SKILL.md 过 lint`, problems.length === 0, problems.join(' | '));
-  else check(`${skill.name}(${skill.source})SKILL.md 过 lint${problems.length ? `——没过,去 drawtell 仓改:${problems.join(' | ')}` : ''}`, true);
+  check(`${skill.name} SKILL.md 过 lint`, problems.length === 0, problems.join(' | '));
 }
 {
   // 上下文包每一行的说明是手写的 markdown(人改得动),和 schema 靠这条对上:加了字段忘了写,这里红
-  const doc = readFileSync(join(skillSourceDir(SHIPPED_SKILLS.find((s) => s.name === 'cotutor-tutor')!)!, 'references', '上下文包.md'), 'utf8');
+  const doc = readFileSync(join(skillSourceDir(SHIPPED_SKILLS.find((s) => s.name === 'cotutor-tutor')!), 'references', '上下文包.md'), 'utf8');
   const keys = Object.keys(ContextPackSchema.shape).filter((k) => k !== 'notes');
   const missing = keys.filter((k) => !doc.includes(`| \`${k}\` |`));
   const extra = [...doc.matchAll(/^\| `(\w+)` \|/gm)].map((m) => m[1]).filter((k) => !keys.includes(k) && !['rules', 'boardGuide', 'profile', 'entry', 'memory'].includes(k));

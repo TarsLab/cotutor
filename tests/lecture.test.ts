@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { computeStepWindows, frameAt } from 'drawtell/core';
+import { computeStepWindows, frameAt } from '../src/chalk/index.ts';
 import { DRAW_START_MS, VOICE_STALL_MS, clockLabel, describeMark, inkRing, lectureAt, lectureClock, lectureLines, lectureNext, lectureRange, parseClock, parseLectureDoc, videoClock, type LectureSkeleton, type LectureStep } from '../src/board/lecture.ts';
 import { check, done } from './_check.ts';
 
@@ -53,7 +53,7 @@ const s3 = clock.segments[2];
   check('凸包:没封口的也合上;一个点放宽成框', inkRing([[[0, 0], [100, 0], [100, 100]], [[0, 100], [50, 50]]]).length === 4 && JSON.stringify(inkRing([[[10, 10], [11, 10]]])) === JSON.stringify([[-1.5, -2], [22.5, -2], [22.5, 22], [-1.5, 22]]) && inkRing([]).length === 0, JSON.stringify(inkRing([[[10, 10], [11, 10]]])));
 }
 {
-  // 服务端读课包:分组与 bounds 从 scene.json、命中块从 manifest.json(drawtell build 就这么放)
+  // 服务端读课包:分组与 bounds 从 scene.json、命中块从 manifest.json(cotutor chalk build 就这么放)
   const { mkdtempSync, cpSync, writeFileSync, rmSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { readLecture } = await import('../src/runtime/lecture.ts');

@@ -1,8 +1,8 @@
 /**
  * 小课堂的播放器:不用 ChalkPlayer(那是接力式,一步一停、只能跳到步开头),
- * 时钟是 drawtell/core 的(src/board/lecture.ts):一段 = 一步,段长 = max(画, 配音);一个 <audio> 全程复用,换段换 src。
- * 画面:课包烤过(bake.json,和 scene.json 的画面对得上)就用 drawtell/render 按这一刻每个元素画了多少现画,不用 excalidraw、不用 SMIL;
- * 没烤过的课包在浏览器里现烤一份(drawtell/bake,按需装 excalidraw),画法一样;不再有 SMIL。
+ * 时钟是 src/chalk 的(src/board/lecture.ts):一段 = 一步,段长 = max(画, 配音);一个 <audio> 全程复用,换段换 src。
+ * 画面:课包烤过(bake.json,和 scene.json 的画面对得上)就用 ./chalk/render.ts 按这一刻每个元素画了多少现画,不用 excalidraw、不用 SMIL;
+ * 没烤过的课包在浏览器里现烤一份(./chalk/bake.ts,按需装 excalidraw),画法一样;不再有 SMIL。
  * 能拖到任意一刻(拖的时候不出声),气口不停,放到结尾一次就算看完(发给页面)。
  * 画:停住了就能在画面上画,停在同一刻画的几笔算一处;记那一刻(课里的毫秒)与几笔(课包坐标:屏幕点经 getScreenCTM 反算到 SVG,再减掉导出时的平移),
  * 每画一笔重截一张图(画面 + 这一刻的几笔,给老师看);进度条上那一刻留一个蓝色记号;画了、擦了都把整张单子发给页面(页面是画的主人,带给老师、画画的卡)。
@@ -11,8 +11,8 @@
  * 放到那一段的末尾一次就停在末帧、发 done;放着 / 停着 / 放完都发 phase(页面字幕行显示课里那句)。iPad 不让出声就停着等孩子点「放这一段」。
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { frameAt } from 'drawtell/core';
-import { mountBaked } from 'drawtell/render';
+import { frameAt } from '../../chalk/index.ts';
+import { mountBaked } from './chalk/render.ts';
 import { MARK_MAX, MARK_MAX_POINTS, MARK_MAX_STROKES, MARK_STROKE_POINTS, clockLabel, lectureAt, lectureClock, lectureNext, type LectureClock } from '../../board/lecture.ts';
 import { LOGO_BIG, logoBody } from '../shared/logo.ts';
 import { loadBaked, loadBundle } from './bundle.ts';
@@ -48,12 +48,12 @@ export interface BuiltLecture {
   onBoard?: () => void;
 }
 
-/** 课包 → 时钟 + 画面:烤好的用 bake.json,没烤过的在浏览器里现烤(drawtell/bake,按需装 excalidraw);画都由 drawtell/render 按 frameAt 现画 */
+/** 课包 → 时钟 + 画面:烤好的用 bake.json,没烤过的在浏览器里现烤(./chalk/bake.ts,按需装 excalidraw);画都由 ./chalk/render.ts 按 frameAt 现画 */
 export async function buildLecture(bundleUrl: string): Promise<BuiltLecture> {
   const [scene, baked] = await Promise.all([loadBundle(bundleUrl), loadBaked(bundleUrl)]);
   const clock = lectureClock(scene.skeletons, scene.steps);
   if (!clock.segments.length) throw new Error('这份课包没有步');
-  const picture = baked ?? (await (await import('drawtell/bake')).bakeSkeletons(scene.skeletons, { background: scene.background }));
+  const picture = baked ?? (await (await import('./chalk/bake.ts')).bakeSkeletons(scene.skeletons, { background: scene.background }));
   // 背景图(换过画板的课每块板一张)相对课包目录;所有画板同一个 offset,屏幕 → 课包坐标的换算不跟着变
   const base = new URL(bundleUrl, location.href);
   const hooks: Pick<BuiltLecture, 'onBoard'> = {};

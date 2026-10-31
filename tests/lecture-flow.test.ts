@@ -52,7 +52,7 @@ try {
     renameSync(bk, `${bk}.off`);
     const unbaked = await checkHome(ctx.ws, readFileSync(join(root, 'home', 'draft.md'), 'utf8'), now);
     renameSync(`${bk}.off`, bk);
-    check('课包没烤过:提醒去 drawtell bake(不算要改的)', unbaked.fixes === 0 && unbaked.issues.some((i) => i.level === 'note' && i.text.includes(`drawtell bake ${BUNDLE}`)), JSON.stringify(unbaked.issues));
+    check('课包没烤过:提醒去 cotutor chalk bake(不算要改的)', unbaked.fixes === 0 && unbaked.issues.some((i) => i.level === 'note' && i.text.includes(`cotutor chalk bake ${BUNDLE}`)), JSON.stringify(unbaked.issues));
   }
   const pub = await publishHome(ctx.ws, { now });
   type Btn = { id: string | number; kind: string; label: string; bundle?: string; title?: string; ms?: number; brief?: string };

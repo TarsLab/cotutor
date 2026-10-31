@@ -213,16 +213,18 @@ export function appendMemory(existing: string, items: readonly string[], date: s
 
 /**
  * 「## 记忆」段的一条(2026-09-18):缺省是新增;`改:原话 → 新的` 改一行;`删:原话` 删一行。
- * 冒号全角半角都认,箭头认 → 与 ->。
+ * 冒号全角半角都认,箭头认 → 与 ->。原话或新的里也有箭头(「宇宙→太空员」、骨架「数一数 → 分一分」)时切法不止一种:
+ * from / to 是从第一个箭头切的,alt 是其余箭头的切法(从左到右),applyMemoryOps 挑原话对得上的那种(2026-10-31)。
  */
-export type MemoryOp = { op: 'add'; text: string } | { op: 'change'; from: string; to: string } | { op: 'delete'; from: string };
+export type MemoryOp = { op: 'add'; text: string } | { op: 'change'; from: string; to: string; alt?: { from: string; to: string }[] } | { op: 'delete'; from: string };
 
 export function parseMemoryOp(item: string): MemoryOp {
   const s = item.replace(/\s+/g, ' ').trim();
   const del = /^删[:：]\s*(.+)$/.exec(s);
   if (del) return { op: 'delete', from: del[1].trim() };
-  const chg = /^改[:：]\s*(.+?)\s*(?:→|->)\s*(.+)$/.exec(s);
-  if (chg) return { op: 'change', from: chg[1].trim(), to: chg[2].trim() };
+  const body = /^改[:：]\s*(.+)$/.exec(s)?.[1] ?? '';
+  const cuts = [...body.matchAll(/\s*(?:→|->)\s*/g)].map((m) => ({ from: body.slice(0, m.index).trim(), to: body.slice(m.index + m[0].length).trim() })).filter((c) => c.from && c.to);
+  if (cuts.length) return { op: 'change', ...cuts[0], ...(cuts.length > 1 ? { alt: cuts.slice(1) } : {}) };
   return { op: 'add', text: s };
 }
 
@@ -266,7 +268,8 @@ export type { MemoryLine };
 
 /**
  * 把一串操作落到记忆全文上:先改、删(按原话找行,见 findMemoryLine),再把新增的追加到末尾(appendMemory,去重)。
- * 改过的列表行换成 `- <今天> 新的`;不是列表的行整行换成新的。strict:改、删只认一字不差的原话;cap:新增后最多几条(先删后加,删掉的腾出地方)。
+ * 改过的列表行换成 `- <今天> 新的`(新的自己带着日期就去掉,不写两个日期);不是列表的行整行换成新的。strict:改、删只认一字不差的原话;cap:新增后最多几条(先删后加,删掉的腾出地方)。
+ * 改有几种切法(parseMemoryOp 的 alt)时:先挑原话一字不差的那种;都不是再模糊找,原话长的先(短的是长的前缀,会把原话后半截切进新的里)。
  */
 export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date: string, opts: { strict?: boolean; cap?: number } = {}): MemoryApplied {
   const lines = existing.split('\n');
@@ -276,10 +279,23 @@ export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date:
   const misses: string[] = [];
   const edits: MemoryLine[] = [];
   const gone = new Set<number>();
+  const locate = (o: Exclude<MemoryOp, { op: 'add' }>): { i: number; to: string } => {
+    const cuts = o.op === 'change' ? [{ from: o.from, to: o.to }, ...(o.alt ?? [])] : [{ from: o.from, to: '' }];
+    const free = (i: number): boolean => i >= 0 && !gone.has(i);
+    for (const c of cuts) {
+      const i = findMemoryLine(lines, c.from, bodyStart, false);
+      if (free(i)) return { i, to: c.to };
+    }
+    if (!opts.strict) for (const c of [...cuts].reverse()) {
+      const i = findMemoryLine(lines, c.from, bodyStart, true);
+      if (free(i)) return { i, to: c.to };
+    }
+    return { i: -1, to: '' };
+  };
   for (const o of ops) {
     if (o.op === 'add') continue;
-    const i = findMemoryLine(lines, o.from, bodyStart, !opts.strict);
-    if (i < 0 || gone.has(i)) {
+    const { i, to } = locate(o);
+    if (i < 0) {
       misses.push(o.op === 'change' ? `改:${o.from}` : `删:${o.from}`);
       continue;
     }
@@ -291,8 +307,9 @@ export function applyMemoryOps(existing: string, ops: readonly MemoryOp[], date:
     } else {
       const bullet = /^(\s*[-*]\s+)/.exec(lines[i]);
       const before = lines[i];
-      lines[i] = bullet ? `${bullet[1]}${date} ${o.to}` : o.to;
-      changes.push(`改:${old} → ${o.to}`);
+      const fresh = to.replace(/^\d{4}-\d{2}-\d{2}\s+/, '');
+      lines[i] = bullet ? `${bullet[1]}${date} ${fresh}` : fresh;
+      changes.push(`改:${old} → ${fresh}`);
       edits.push({ before, after: lines[i] });
     }
   }

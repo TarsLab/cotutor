@@ -78,6 +78,15 @@ check('hash:稳定、8 位、内容变就变', textHash('a') === textHash('a') &
   check('applyMemoryOps:改列表行换今天日期、删家长手写的行、找不到进 misses、新增追加且去重', r.text === '---\ncotutor: memory\nagent: math-tutor\n---\n\n说明段\n\n- 2026-09-18 9 月中学会了两位数竖式\n- 2026-09-11 讲角用手指比划管用\n## 家长整理的\n- 2026-09-12 凑十他懂\n- 2026-09-18 新的一条\n' && r.changes.join('|') === '改:还没学竖式 → 9 月中学会了两位数竖式|删:别出选择题|- 2026-09-18 新的一条' && r.misses.join() === '删:没有这句话呀', JSON.stringify(r));
   check('applyMemoryOps:不是列表的行整行换', applyMemoryOps('说明段\n', [parseMemoryOp('改:说明段 → 新说明')], '2026-09-18').text === '新说明\n');
   check('applyMemoryOps:同一行删两次,第二次算没找到', applyMemoryOps('- a 行一二三\n', [parseMemoryOp('删:a 行一二三'), parseMemoryOp('删:a 行一二三')], '2026-09-18').misses.length === 1);
+  // 2026-10-31 Ray 的记忆整理:原话里有「宇宙→太空员」,从第一个箭头切会把原话后半截写进新的那行
+  const arrowMem = '- 2026-10-21 学完字要一幅画(宇宙→太空员、人→爸爸和我),画板兜底管用\n- 2026-10-22 凑十他懂\n';
+  const arrowOp = parseMemoryOp('改:2026-10-21 学完字要一幅画(宇宙→太空员、人→爸爸和我),画板兜底管用 → 2026-10-21 学完字常要一幅相关的画(宇宙→太空员),画板兜底管用');
+  check('parseMemoryOp:原话或新的里有箭头,其余切法进 alt', arrowOp.op === 'change' && arrowOp.from.endsWith('(宇宙') && arrowOp.alt?.length === 3, JSON.stringify(arrowOp));
+  const arrow = applyMemoryOps(arrowMem, [arrowOp], '2026-10-31');
+  check('applyMemoryOps:箭头切法挑原话一字不差的那种,新的自带日期去掉', arrow.text === '- 2026-10-31 学完字常要一幅相关的画(宇宙→太空员),画板兜底管用\n- 2026-10-22 凑十他懂\n' && !arrow.misses.length, JSON.stringify(arrow));
+  const fuzzy = applyMemoryOps(arrowMem, [parseMemoryOp('改:学完字要一幅画(宇宙→太空员、人→爸爸和我) → 画板兜底管用')], '2026-10-31');
+  check('applyMemoryOps:没有一字不差的切法时模糊找,原话长的先', fuzzy.text === '- 2026-10-31 画板兜底管用\n- 2026-10-22 凑十他懂\n', JSON.stringify(fuzzy));
+  check('applyMemoryOps:strict 时有箭头也只认一字不差的', applyMemoryOps(arrowMem, [parseMemoryOp('改:人→爸爸和我) → 别的')], '2026-10-31', { strict: true }).misses.length === 1);
   check('memoryCount:只数 frontmatter 之后的列表行', memoryCount(mem) === 3 && memoryCount('') === 0);
   const tp = tidyMemoryPrompt({ date: '2026-09-18', count: 3, cap: 30, diaryFile: '/v/日记/2026-09-18.md' });
   check('tidyMemoryPrompt:带条数、上限、日记路径与三种写法', tp.includes('现在 3 条') && tp.includes('不超过 30 条') && tp.includes('/v/日记/2026-09-18.md') && tp.includes('- 删:') && tp.includes('- 改:') && tp.includes('记忆不用整理'));

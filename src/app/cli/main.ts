@@ -84,7 +84,7 @@ async function printQr(page: string, open: boolean): Promise<void> {
 export async function main(argv: string[]): Promise<void> {
   let json = false;
   try {
-    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin']);
+    const { cmd, positionals, flags } = parseArgs(argv, ['workspace', 'dir', 'name', 'grade', 'port', 'from', 'runtime', 'force', 'display', 'subject', 'avatar', 'description', 'scenario', 'delay', 'lane', 'job', 'date', 'thread', 'at', 'photo', 'activity', 'param', 'runs', 'only', 'kid-model', 'pin']);
     json = flags.json === true;
     const workspace = typeof flags.workspace === 'string' ? flags.workspace : undefined;
     // --version / --help 是旗标不是命令,parseArgs 把它们收进 flags,cmd 拿不到,所以在 switch 前处理

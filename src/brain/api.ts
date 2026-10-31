@@ -8,7 +8,8 @@
  * - 整段压缩(runner 在上下文过了 32k 的下一轮给 compact):之前的历史不再发,前情(应用照索引拼的)放在这一轮的消息前头,
  *   最近交的照片带过来;这一轮记 compacted,以后从它算起
  * - 工具:这轮带工具(read / on)就给只读的三样(./api-tools.ts),不带就一样没有;一轮最多来回 maxSteps 次
- * - 思考:同 qwen 的档(low 不想、medium 想一点、high 不限;带工具的轮次至少想一点),还没和 CLI 那边真跑对照过
+ * - 思考:同 qwen 的档(low 不想、medium 想一点、high 不限;带工具的轮次至少想一点)。qwen3.8 系列和 Qwen Code 一样发 reasoning_effort(effortOf),
+ *   别的模型按 thinking_budget 卡;2026-10-31 Ray 上对照过:qwen3.8-max 卡 1024 时有照片的话题每轮想满,首句 18 秒,qwen 运行时 6 秒
  * - .log 落统一事件(一行一条 CliEvent,parseEventLine 认),孩子端的流式板书、家长端看原文、转录、工具清单都走原来那套读法;
  *   用量按每次请求累计,有一次没回 usage 就不记(不当成零);另记命中缓存的输入与最后一次请求的输入(这一轮结束时上下文多大)
  * - 没有断流接着跑:流 stall.ms 没动静就停,这轮记没成(重发会把念过的再念一遍,先不做)
@@ -32,8 +33,10 @@ import type { BrainHooks, BrainRequest, BrainResult, BrainRun, WarmKey } from '.
 /** 计划里记的 cli 名:API 的轮次按它分流 */
 export const API_CLI = 'api';
 const DEFAULT_STEPS = 6;
-/** 想一点:思考最多多少 token */
+/** 想一点:没有思考档的模型思考最多多少 token(有档的发 reasoning_effort,见 effortOf) */
 const THINK_LITTLE = 1024;
+/** 有思考档的模型:同 Qwen Code 里的 qwen3.8 系列(src/brain/cli/qwen.ts 的 tiers),百炼兼容接口认 reasoning_effort */
+const TIERED = /^qwen3\.8-/;
 /** 一张照片最大多少字节(百炼按 base64 收,太大的不附,记一条提醒) */
 const IMAGE_MAX = 10 * 1024 * 1024;
 const MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
@@ -58,6 +61,25 @@ export function thinkingOf(effort: Policy['effort'] | undefined, tools: BrainReq
   if (effort === 'high') return { enableThinking: true };
   if (effort === 'medium' || tools !== 'off') return { enableThinking: true, thinkingBudget: THINK_LITTLE };
   return { enableThinking: false };
+}
+
+/**
+ * 有思考档的模型照 qwen 运行时发 reasoning_effort(src/brain/cli/qwen.ts 的 EFFORT):想一点 = low、不限 = xhigh;不想或没有档 → null,照 thinkingOf 发。
+ * low 是它自己看着想:闲聊想一两百 token,认照片题想得多;thinking_budget 是死卡,1024 时有照片的话题每轮都想满(2026-10-31)
+ */
+export function effortOf(model: string, effort: Policy['effort'] | undefined, tools: BrainRequest['tools']): 'low' | 'xhigh' | null {
+  if (!TIERED.test(model)) return null;
+  const t = thinkingOf(effort, tools);
+  return !t.enableThinking ? null : t.thinkingBudget ? 'low' : 'xhigh';
+}
+
+/** AI SDK 的 alibaba 只认 thinking_budget:在 fetch 这一层把请求体里的换成 reasoning_effort(SDK 给的中间件口子) */
+export function effortFetch(effort: 'low' | 'xhigh', base: typeof fetch = fetch): typeof fetch {
+  return (input, init) => {
+    if (typeof init?.body !== 'string') return base(input, init);
+    const { thinking_budget: _budget, ...body } = JSON.parse(init.body) as Record<string, unknown>;
+    return base(input, { ...init, body: JSON.stringify({ ...body, reasoning_effort: effort }) });
+  };
 }
 
 /**
@@ -245,7 +267,8 @@ export class ApiBrain {
           record.user = { text, images: attach };
         }
         const user = await userMessage(text, attach, root, warnings);
-        const alibaba = createAlibaba({ apiKey: auth?.key ?? 'sk-endpoint', baseURL: this.endpoint ?? bailianBase(auth!.workspaceId), includeUsage: true });
+        const tier = effortOf(runtime.model, req.effort, req.tools);
+        const alibaba = createAlibaba({ apiKey: auth?.key ?? 'sk-endpoint', baseURL: this.endpoint ?? bailianBase(auth!.workspaceId), includeUsage: true, ...(tier ? { fetch: effortFetch(tier) } : {}) });
         // 断流看门狗:stall.ms 没有一块流到就停(工具在本进程里跑,几毫秒的事,不另算)
         const abort = new AbortController();
         let stalled = false;

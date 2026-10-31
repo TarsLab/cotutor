@@ -18,7 +18,7 @@ const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { createContext, dayView } = await import('../src/app/http/app.ts');
 const { DIGEST_HEAD } = await import('../src/runtime/context/thread-digest.ts');
-const { bailianBase, thinkingOf } = await import('../src/brain/api.ts');
+const { bailianBase, effortFetch, effortOf, thinkingOf } = await import('../src/brain/api.ts');
 const { localDate } = await import('../src/shared/time.ts');
 
 const fake = await startFakeChat();
@@ -187,6 +187,21 @@ try {
 
   // ---- 思考档(同 qwen:low 不想,带工具至少想一点,high 不限) ----
   check('思考档:low 不想;low 带工具想一点;medium 想一点;high 不限', JSON.stringify([thinkingOf('low', 'off'), thinkingOf('low', 'read'), thinkingOf('medium', 'off'), thinkingOf('high', 'on')]) === JSON.stringify([{ enableThinking: false }, { enableThinking: true, thinkingBudget: 1024 }, { enableThinking: true, thinkingBudget: 1024 }, { enableThinking: true }]));
+  check('思考档:qwen3.8 系列照 qwen 运行时发 reasoning_effort(想一点 low、不限 xhigh、不想不发);别的模型不发', JSON.stringify([effortOf('qwen3.8-max', 'medium', 'off'), effortOf('qwen3.8-flash', 'low', 'read'), effortOf('qwen3.8-max', 'high', 'on'), effortOf('qwen3.8-max', 'low', 'off'), effortOf('qwen3.6-plus', 'medium', 'off')]) === JSON.stringify(['low', 'low', 'xhigh', null, null]));
+  let sentBody: Record<string, unknown> = {};
+  await effortFetch('low', async (_u, init) => { sentBody = JSON.parse(String(init?.body)); return new Response('{}'); })('https://x/chat/completions', { method: 'POST', body: JSON.stringify({ model: 'qwen3.8-max', enable_thinking: true, thinking_budget: 1024, stream: true }) });
+  check('effortFetch:请求体里的 thinking_budget 换成 reasoning_effort,别的不动', sentBody.reasoning_effort === 'low' && !('thinking_budget' in sentBody) && sentBody.enable_thinking === true && sentBody.stream === true, JSON.stringify(sentBody));
+  // 真走一轮:qwen3.8 的运行时,发出去的请求带 reasoning_effort、不带 thinking_budget
+  cfg.runtimes.api38 = { api: 'bailian', model: 'qwen3.8-max' };
+  writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
+  const ctx3 = createContext(loadWorkspace(root), { env, warm: false, now: () => NOW });
+  n = fake.requests.length;
+  const s11 = await ctx3.runner.send('math-tutor', { from: 'kid', text: '你好', newThread: true, runtime: 'api38' });
+  await s11.done;
+  const r11 = since(n);
+  check('qwen3.8 的运行时:数学老师 medium → 请求带 reasoning_effort: low,不带 thinking_budget', r11.length === 1 && (r11[0] as Record<string, unknown>).reasoning_effort === 'low' && r11[0].thinking_budget === undefined && r11[0].model === 'qwen3.8-max', JSON.stringify(r11.map((r) => ({ model: r.model, effort: (r as Record<string, unknown>).reasoning_effort, budget: r.thinking_budget }))));
+
+  ctx3.runner.close();
   // 端点:有业务空间 id 走它的域名;只有按量 key 走公网域名(同 qwen 按量那条线)
   check('端点:业务空间域名 / 公网域名', bailianBase('ws-1') === 'https://ws-1.cn-beijing.maas.aliyuncs.com/compatible-mode/v1' && bailianBase(null) === 'https://dashscope.aliyuncs.com/compatible-mode/v1');
   ctx.runner.close();

@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
 
+// init 在没配过的机器上会写 ~/.config/cotutor/config.json:HOME 指到临时目录,不碰真的(要在 import 之前,路径是载入时算的)
+process.env.HOME = mkdtempSync(join(tmpdir(), 'cotutor-main-home-'));
 const { main } = await import('../src/app/cli/main.ts');
 const { version } = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as { version: string };
 
@@ -47,7 +49,7 @@ try {
   check('缺值的选项报用法错误', noValue.code === 2 && noValue.err.includes('--workspace 需要一个值'));
 
   // README 的第一条命令(2026-10-31:--grade 没进带值的选项表,init 一律报「要是 1–6 的整数」)
-  const dir = mkdtempSync(join(tmpdir(), 'cotutor-main-'));
+  const dir = process.env.HOME!;
   const init = await run(['init', 'ming', '--name', '小明', '--grade', '2', '--dir', join(dir, 'ming')]);
   check('init --grade 2 建得起来', init.code === 0 && init.out.includes('cotutor init →') && existsSync(join(dir, 'ming', 'cotutor.json')), init.err || init.out.slice(0, 300));
   const badGrade = await run(['init', 'ming', '--grade', '9', '--dir', join(dir, 'x')]);

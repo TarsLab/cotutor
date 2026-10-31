@@ -7,6 +7,7 @@
  * 一直听:孩子开口先 pause(不交新的、也不丢),判出这句是对老师说的才 hold(丢),放过就 release 接着交。
  * 热身:讲稿的 [[echo 词]] / [[say 词]] 同 [[play]],并段到那句为止、交出去关闸,孩子跟完(或等够了)echoed 才交后面的;
  * [[call]] 并段到那句为止、交出去关闸(孩子端响铃),铃响够了 rung 才交打电话那一轮的;那一轮后面再来的拍都不要(打电话那段由下一轮写)。
+ * 嘴卡住(交出去的那段一个字没出,2026-10-31):retry 放回排头、不交,调用方换好连接 done 了再交(和后来的同一轮的并成一段)。
  */
 
 /** 热身那句要孩子说的:word = 记号里的词;say = 你先说(老师没说出这个词) */
@@ -44,7 +45,9 @@ export type QueueEvent =
   /** 孩子跟完了 [[echo]] / [[say]] 那句(或等够了没开口) */
   | { e: 'echoed' }
   /** [[call]] 那句放完、铃响够了 */
-  | { e: 'rung' };
+  | { e: 'rung' }
+  /** 交给嘴的那段一个字都没出就卡住了:放回排头(打断过的那一轮不放),闸也开了;这时来的拍也不交,等调用方换好连接 done */
+  | { e: 'retry'; beat: Beat };
 
 /** read = 把这几句交给嘴;dropped = 按下时还排着没交的(调用方算孩子听到哪) */
 export type QueueAction = { kind: 'read'; beat: Beat } | { kind: 'dropped'; beats: Beat[] } | null;
@@ -92,5 +95,7 @@ export function queueStep(s: QueueState, ev: QueueEvent): { s: QueueState; act: 
       return s.gated && s.gated !== 'echo' ? { s, act: null } : drain({ ...s, gated: false });
     case 'rung':
       return s.gated && s.gated !== 'call' ? { s, act: null } : drain({ ...s, gated: false });
+    case 'retry':
+      return { s: { ...s, busy: true, gated: false, ...(ev.beat.job === s.dropJob ? {} : { pending: [ev.beat, ...s.pending] }) }, act: null };
   }
 }

@@ -6,6 +6,7 @@
  *   VAD 会话(turn_detection 非空):收到有声的块(有采样过 300)→ speech_started;有声之后收到安静的块 → speech_stopped、committed、转写、自动回一次(create_response:false 不回);
  *   kidTexts 排着的先用(一段一句),vadReject > 0 这一段回「not accepted by semantic turn detection」(没有 committed),failTranscript 回转写失败
  *   long = true 时回答只出一半、不 done(等 cancel);cancel 在有回答时回 done:cancelled,没有就报错
+ *   stuck > 0:接下来几次回答只回 created,声音、字幕、done 都不出(2026-10-31 真百炼卡住的样子;cancel 也当没有回答)
  *   response.create 带 response.instructions(实时老师):记进 responses;指令里有「说完就停:「…」」(照念)就把引号里的当字幕说,别的照旧
  */
 import { createServer, type Server } from 'node:http';
@@ -33,6 +34,8 @@ export interface FakeRealtime {
   conns: FakeConn[];
   /** 下一次回答只出一半、不 done */
   long: boolean;
+  /** 接下来几次回答只回 created,别的都不出 */
+  stuck: number;
   /** 配会话时就报错 */
   failUpdate: boolean;
   /** 发了 created 就断 */
@@ -55,7 +58,7 @@ export interface FakeRealtime {
 
 export async function startFakeRealtime(): Promise<FakeRealtime> {
   const server: Server = createServer((_req, res) => { res.writeHead(404); res.end(); });
-  const fake: FakeRealtime = { endpoint: '', conns: [], long: false, failUpdate: false, dropEarly: false, createDelayMs: 0, kidText: "It's a red car.", kidTexts: [], vadReject: 0, failTranscript: false, failCommit: false, audioMs: 100, close: () => { for (const c of fake.conns) c.sock.close(); server.close(); } };
+  const fake: FakeRealtime = { endpoint: '', conns: [], long: false, stuck: 0, failUpdate: false, dropEarly: false, createDelayMs: 0, kidText: "It's a red car.", kidTexts: [], vadReject: 0, failTranscript: false, failCommit: false, audioMs: 100, close: () => { for (const c of fake.conns) c.sock.close(); server.close(); } };
   server.on('upgrade', (req, socket, head) => {
     if (!isUpgrade(req)) { socket.destroy(); return; }
     let active = 0;
@@ -67,6 +70,7 @@ export async function startFakeRealtime(): Promise<FakeRealtime> {
     const respond = (response: { instructions?: string } | null = null): void => {
       c.creates++;
       c.responses.push(response);
+      if (fake.stuck > 0) { fake.stuck--; send({ type: 'response.created' }); return; }
       active++;
       const ins = response?.instructions ?? '';
       const at = ins.indexOf('说完就停:「');

@@ -87,6 +87,8 @@ export interface LiveDeps {
   /** 测试:热身那句念完等孩子多久、打电话先响多久的铃 */
   echoWaitMs?: number;
   ringMs?: number;
+  /** 测试:要嘴说了多久一个字没出算卡住 */
+  stallMs?: number;
   onFinished?(why: string): void;
 }
 
@@ -116,6 +118,11 @@ const ECHO_WAIT_MS = 8000;
 const QUIET_BEATS = 2;
 /** 打电话:[[call]] 那句放完先响这么久的铃,脑的英文开场来得再早也等它(孩子听得到在打电话) */
 const RING_MS = 3000;
+/**
+ * 要嘴说了,这么久一块声音、一个字都没出就算卡住(真百炼首包约 0.5 秒;2026-10-31 照念第二段回了 created 就再没动静,孩子只听到第一句):
+ * 当这条连接坏了,照念的那段放回排头、换一条接着念(一个字没出,孩子没听过,再念不重复)
+ */
+const STALL_MS = 10_000;
 
 /** 字幕重放的声音最多留几轮在内存里(一轮约 1–2 MB;落了盘就只为接着往后接) */
 const MOUTH_KEEP = 3;
@@ -141,6 +148,8 @@ export class LiveCall {
   private said: Said | null = null;
   private afterDone: (() => void) | null = null;
   private cancelOnCreate = false;
+  /** 这次回答出过声音或字没有(看门狗 STALL_MS 看它) */
+  private saidOut = false;
   /** 这一轮:嘴接住时说的、接住出完没有 */
   private caught = '';
   private caughtDone = false;
@@ -262,8 +271,21 @@ export class LiveCall {
   /** 让嘴说一次;接住要先告诉排队,嘴出完之前别交讲稿 */
   private ask(said: Said, instructions: string): void {
     this.said = said;
+    this.saidOut = false;
     if (said.kind !== 'read') this.d.note({ e: 'asked' });
     this.session?.createResponse(instructions);
+    this.timers.push(setTimeout(() => this.stalled(said), this.deps.stallMs ?? STALL_MS));
+  }
+
+  /** 要嘴说的这次一个字、一块声音都没出(STALL_MS):当这条连接坏了,照念的那段放回排头、换一条接着念;接住、边画边聊那句不补 */
+  private stalled(said: Said): void {
+    if (this.ended || this.said !== said || this.saidOut) return;
+    const old = this.session;
+    this.rec.out({ t: 'stall', kind: said.kind });
+    this.lost('stall');
+    old?.close('stall');
+    // 放回排头以后排队不交(连接还没换好),现连好了 revive 里 done 再交
+    if (said.kind === 'read') { this.d.retry(said.beat); void this.revive(); }
   }
 
   /** 连嘴;连不上告诉孩子端(它灰着「正在叫老师」、过一会儿重连)、挂掉 */
@@ -294,6 +316,7 @@ export class LiveCall {
     const s: RealtimeSession = new RealtimeSession({ instructions: mouthInstructions({ display: t?.display ?? tutor, kidName: cfg.kid.name ?? cfg.kid.slug }), voice: mouthVoice(cfg.live, tutor), model: cfg.live.model, turn: open ? cfg.live.vad : 'manual', silenceMs: cfg.live.silenceMs, vad: { createResponse: false, interruptResponse: false }, endpoint: this.deps.endpoint, env: this.deps.env }, {
       onAudio: (pcm) => {
         if (this.session !== s) return;
+        this.saidOut = true;
         const said: Said = this.said ?? { kind: 'catch' };
         const start = this.d.add(said, pcm.length / BYTES_PER_MS);
         // 照念的第一块:到它在孩子端开始放的那一刻,告诉孩子端这段的第一句;接住的第一块记一条(开始放的时刻)
@@ -308,6 +331,7 @@ export class LiveCall {
       },
       onTutorText: (delta, done) => {
         if (this.session !== s) return;
+        this.saidOut = true;
         const kind = this.said?.kind ?? 'catch';
         // 垫的那句在孩子端同接住的字一样上字幕
         const of = kind === 'read' ? 'read' : 'catch';

@@ -48,7 +48,7 @@ const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();
 const finished: [string, string][] = [];
 // 心跳缺省 30 秒,前面几段跑不到;断线那段改短
-const liveDeps: { endpoint: string; env: NodeJS.ProcessEnv; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; idleSwapMs?: number; echoWaitMs?: number; ringMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) };
+const liveDeps: { endpoint: string; env: NodeJS.ProcessEnv; heartbeatMs?: number; keepAliveMs?: number; swapTokens?: number; idleSwapMs?: number; echoWaitMs?: number; ringMs?: number; stallMs?: number; onFinished: (tutor: string, why: string) => void } = { endpoint: fake.endpoint, env: { DASHSCOPE_API_KEY: 'sk-t' }, onFinished: (tutor, why) => finished.push([tutor, why]) };
 const liveUpgrade = makeLiveUpgrade(liveDeps);
 const server = createServer(createHandler(ctx));
 server.on('upgrade', (req, socket, head) => { void liveUpgrade(req, socket, head, ctx).then((took) => { if (!took) socket.destroy(); }); });
@@ -305,6 +305,31 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
   await until(() => (readFileSync(evFile, 'utf8').match(/"lane":"mouth","kind":"read"/g) ?? []).length >= 1, 2000);
   const ev = readFileSync(evFile, 'utf8');
   check('不垫话:脑想得久嘴也不出声,嘴说的每次都是照念讲稿;孩子端没有接住的字;事件里没有 catch / fill', okRead && lines.length >= 2 && c.responses.length >= 1 && c.responses.every((r) => String(r?.instructions).startsWith('把这几句话原样说给孩子听')) && !has(k, (m) => m.t === 'tutor' && m.of === 'catch') && !ev.includes('"kind":"catch"') && !ev.includes('"kind":"fill"'), JSON.stringify(c.responses.map((r) => String(r?.instructions).slice(0, 20))));
+  k.ws.send(JSON.stringify({ t: 'bye' }));
+  await until(() => k.closed !== null);
+}
+
+{
+  // ---- 嘴卡住(2026-10-31 真百炼:照念那段回了 created 就再没动静,孩子只听到第一句):换一条连接,那段放回排头再念 ----
+  liveDeps.stallMs = 400;
+  const k = await connect('chinese-tutor');
+  await until(() => has(k, (m) => m.t === 'ready'));
+  const n0 = fake.conns.length;
+  const c = fake.conns[n0 - 1];
+  fake.kidText = '老师板书怎么写';
+  fake.stuck = 1;
+  k.ws.send(JSON.stringify({ t: 'hold' }));
+  k.ws.send(loud());
+  k.ws.send(JSON.stringify({ t: 'release', body: { newThread: true } }));
+  await until(() => has(k, (m) => m.t === 'turn'), 10000);
+  const turn = k.msgs.find((m) => m.t === 'turn')!;
+  await until(() => ctx.runner.running('chinese-tutor') === null, 15000);
+  const lines: string[] = (indexOf(localDate(ctx.now())).messages.find((m) => m.job === turn.job)?.section?.lines ?? []).map((l: Msg) => String(l.text));
+  const okAll = await until(() => k.msgs.filter((m) => m.t === 'read' && m.job === turn.job).length === lines.length, 10000);
+  const reads = k.msgs.filter((m) => m.t === 'read' && m.job === turn.job).map((m) => m.line);
+  const said = fake.conns.slice(n0).flatMap((x) => x.responses.map((r) => quoted(r?.instructions))).join('');
+  check('嘴卡住:那段一个字没出 → 旧连接关掉、换一条;从卡住的那句接着念,每句亮一次,念的拼起来就是讲稿;孩子端没收到 end / down', okAll && lines.length >= 2 && c.closed && fake.conns.length > n0 && reads.join() === lines.map((_l, i) => i).join() && said === lines.join('') && !k.msgs.some((m) => m.t === 'end' || m.t === 'down'), JSON.stringify({ reads, lines, said, conns: fake.conns.length - n0, oldClosed: c.closed }));
+  delete liveDeps.stallMs;
   k.ws.send(JSON.stringify({ t: 'bye' }));
   await until(() => k.closed !== null);
 }

@@ -21,6 +21,17 @@ const run = (s: S, evs: Ev[]) => { const acts: any[] = []; for (const e of evs) 
   check('一直听:pause 后收下(hold)丢掉排着的', r2.acts[3]?.kind === 'dropped' && r2.s.pending.length === 0, JSON.stringify(r2.acts));
 }
 {
+  // 嘴卡住(2026-10-31):交出去的那段一个字没出,放回排头不交;换好连接 done 了再交,和后来的同一轮的并成一段
+  const r = run(queueInit(), [{ e: 'beat', beat: b('j1', [0]) }, { e: 'beat', beat: b('j1', [1]) }]);
+  const stuck = r.acts[0].beat;
+  const r2 = run(r.s, [{ e: 'retry', beat: stuck }, { e: 'beat', beat: b('j1', [2]) }]);
+  check('retry:卡住的那段放回排头、不交,闸开;这时来的拍也先排着(连接还没换好)', r2.acts.every((a) => a === null) && r2.s.busy && !r2.s.gated && r2.s.pending.map((x) => x.lines.join()).join('|') === '0|1|2', JSON.stringify(r2));
+  const r3 = run(r.s, [{ e: 'retry', beat: stuck }, { e: 'done' }]);
+  check('retry 后 done:从卡住的那句接着交,同一轮排着的并成一段', r3.acts[1]?.kind === 'read' && r3.acts[1].beat.lines.join() === '0,1', JSON.stringify(r3.acts));
+  const r4 = run(r.s, [{ e: 'hold', drop: 'j1' }, { e: 'retry', beat: stuck }, { e: 'done' }]);
+  check('retry:那一轮被打断过就不放回', r4.s.pending.length === 0 && r4.acts[2] === null, JSON.stringify(r4));
+}
+{
   // 接住在出:拍来了先排着;接住出完马上交(不等声音放完)
   const r = run(queueInit(), [{ e: 'asked' }, { e: 'beat', beat: b('j1', [0]) }, { e: 'done' }]);
   check('接住在出时来的拍排着;嘴一出完就交,不等声音放完', r.acts[1] === null && r.acts[2]?.kind === 'read' && r.acts[2].beat.lines.join() === '0' && r.s.busy, JSON.stringify(r.acts));

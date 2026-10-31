@@ -82,6 +82,11 @@ export class Delivery {
     this.q = { ...this.q, busy: false };
   }
 
+  /** 交给嘴的那段一个字都没出就卡住了:放回排头,换好连接 done 了再交 */
+  retry(beat: Beat): void {
+    this.note({ e: 'retry', beat });
+  }
+
   /** 嘴的一块声音到了:接在孩子端排着的后面;回它在孩子端开始放的时刻 */
   add(said: Said, ms: number): number {
     const r = addChunk(this.play, said, this.deps.now(), ms);

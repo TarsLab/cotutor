@@ -8,6 +8,7 @@
  *   第二条起接着同一话题。数学:--tutor math-tutor --say 2026-10-18/1133-7,2026-10-18/1135-8,2026-10-18/1140-14(拍题、不会做、我才一年级)
  *   --open:一直听:连接带 ?listen=open,不按;一直推声音(录音之间推静音),真百炼的 VAD 判开口 / 说完;
  *   「松手」那一刻换成录音推完的那一刻(录音尾巴上本来就有一点静音)。
+ *   --runtime:这位老师的脑走哪个运行时;api = 应用直连百炼(qwen3.8-max),别的名字是出厂 runtimes 里的键(qwen、qwen-flash);缺省照出厂
  */
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -25,6 +26,7 @@ const voice = arg('--voice', 'Serena');
 const tutor = arg('--tutor', 'chinese-tutor');
 const says = arg('--say', '2026-10-18/1205-2,2026-10-18/1206-3').split(',').map((x) => x.split('/'));
 const open = process.argv.includes('--open');
+const runtime = arg('--runtime', null);
 mkdirSync(out, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const until = async (f, ms) => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(20); return f(); };
@@ -44,6 +46,9 @@ const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
 cfg.live = { voices: { [tutor]: voice } };
 cfg.kid.name = 'Ray';
+if (runtime === 'api') cfg.runtimes.api = { api: 'bailian', model: 'qwen3.8-max' };
+if (runtime) cfg.tutors[tutor].runtime = runtime;
+const brain = cfg.tutors[tutor].runtime ?? cfg.runtimes.default;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 const ctx = createContext(loadWorkspace(wsRoot), { warm: false });
 await ctx.reload();
@@ -71,7 +76,7 @@ if (!ready || msgs.some((m) => m.t === 'down')) { console.log('嘴没连上', JS
 let feeding = false;
 if (open) setInterval(() => { if (!feeding && ws.readyState === 1) ws.send(Buffer.alloc(3200)); }, 100);
 
-const report = [`# 实时老师整条线真跑(${new Date().toLocaleString('zh-CN')})`, '', `嘴 ${voice},脑 qwen ${tutor}(临时 workspace \`${wsRoot}\`)`, ''];
+const report = [`# 实时老师整条线真跑(${new Date().toLocaleString('zh-CN')})`, '', `嘴 ${voice},脑 ${brain} ${tutor}(临时 workspace \`${wsRoot}\`)`, ''];
 let first = true;
 for (const [date, job] of says) {
   const idx = JSON.parse(readFileSync(join(src, 'conversations', tutor, `${date}.json`), 'utf8'));
@@ -104,7 +109,8 @@ for (const [date, job] of says) {
   const turn = msgs.slice(n0).find((x) => x.t === 'turn');
   await until(() => turn && ctx.runner.running(tutor) === null, 240000);
   const today = new Intl.DateTimeFormat('sv-SE').format(new Date());
-  const sec = JSON.parse(readFileSync(join(wsRoot, 'conversations', tutor, `${today}.json`), 'utf8')).messages.find((x) => x.job === turn?.job)?.section;
+  const brainTurn = JSON.parse(readFileSync(join(wsRoot, 'conversations', tutor, `${today}.json`), 'utf8')).messages.find((x) => x.job === turn?.job);
+  const sec = brainTurn?.section;
   const lines = (sec?.lines ?? []).map((l) => l.text);
   await until(() => msgs.slice(n0).filter((x) => x.t === 'read').length >= lines.length, 60000);
   // 等这一轮的声音在孩子端放完再按下一轮(2026-10-19 第一版只等 4 秒,把最后一段掐了):不再来声音了,按收到的字节算放到哪
@@ -132,7 +138,7 @@ for (const [date, job] of says) {
     ...(open ? [`- 一直听:vad 开 ${mine.filter((x) => x.t === 'vad' && x.on).length} 次、放过 ${skips.length} 句${skips.length ? `(${skips.join(' ')})` : ''}、压低 ${mine.filter((x) => x.t === 'duck').length} 次`] : []),
     `- realtime 认的:${kid}`,
     `- 嘴先说的:${caught.length ? `「${caught.join('」「')}」` : '没有'};松手到首包 ${firstAudio} ms`,
-    `- 脑:${turn?.job},讲稿 ${lines.length} 句、${sec?.cards?.length ?? 0} 张卡(${(sec?.cards ?? []).map((c) => c.kind).join('、')});进程起来到第一句定稿 ${line0 ?? '?'} ms${startEv?.warmMs !== undefined ? '(预热的)' : '(冷起)'}`,
+    `- 脑:${turn?.job},讲稿 ${lines.length} 句、${sec?.cards?.length ?? 0} 张卡(${(sec?.cards ?? []).map((c) => c.kind).join('、')});进程起来到第一句定稿 ${line0 ?? '?'} ms${startEv?.warmMs !== undefined ? '(预热的)' : '(冷起)'}${brainTurn?.tokens ? `;token 入 ${brainTurn.tokens.in}、出 ${brainTurn.tokens.out}` : ''}`,
     `- 松手到第一句开始放 ${firstRead} ms(孩子端放到那一刻发 {t:read},一句一个);嘴念了 ${readDones.length} 段`,
     `- 嘴的声音一共 ${(totalMs / 1000).toFixed(1)} 秒;松手到放完 ${(audio.slice(a0).reduce((p, x) => addChunk(p, 0, x.at, x.pcm.length / 48).p, playbackInit()).end / 1000).toFixed(1)} 秒(照孩子端的排法算)`,
     `- 嘴念的:${readDones.join('')}`,

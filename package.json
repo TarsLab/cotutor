@@ -68,6 +68,8 @@
     "@excalidraw/excalidraw": "0.18.1",
     "ai": "7.0.155",
     "hanzi-writer-data": "2.0.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^5.6.0",
     "zod": "^4.4.3"
   },
@@ -75,8 +77,6 @@
     "@types/node": "^22.20.1",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
-    "esbuild": "^0.28.2",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "esbuild": "^0.28.2"
   }
 }

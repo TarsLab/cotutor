@@ -7,7 +7,7 @@
 import { constants } from 'node:fs';
 import { open, readdir, realpath } from 'node:fs/promises';
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { tool } from 'ai';
+import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 
 const TEXT = new Set(['.md', '.txt', '.json', '.csv', '.tsv', '.yaml', '.yml']);
@@ -66,8 +66,9 @@ const outside = (rel: string): boolean => rel === '..' || rel.startsWith(`..${se
 
 /**
  * 这轮的只读工具。roots[0] 是相对路径的起点(workspace 根);images = 本轮已经附在消息里的照片(绝对路径),老师去读它们时告诉它已经看得到了。
+ * 返回类型要写明:推断出的类型引到 pnpm 里 @ai-sdk 的深路径,build 出 .d.ts 时报 TS2742(typecheck 不出 .d.ts,看不见)。
  */
-export function readOnlyTools(roots: readonly string[], opts: { images?: readonly string[] } = {}) {
+export function readOnlyTools(roots: readonly string[], opts: { images?: readonly string[] } = {}): ToolSet {
   let real: Promise<string[]> | null = null;
   const realRoots = (): Promise<string[]> => (real ??= Promise.all(roots.map((r) => realpath(r).catch(() => null))).then((rs) => [...new Set(rs.filter((r): r is string => r !== null))]));
   const attached = new Set(opts.images ?? []);

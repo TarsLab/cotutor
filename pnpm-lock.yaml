@@ -20,6 +20,12 @@ importers:
       hanzi-writer-data:
         specifier: 2.0.1
         version: 2.0.1
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -39,12 +45,6 @@ importers:
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
-      react:
-        specifier: ^18.3.1
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.3.1
-        version: 18.3.1(react@18.3.1)
 
 packages:
 

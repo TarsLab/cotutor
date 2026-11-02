@@ -63,9 +63,9 @@ export interface GlyphPenOptions {
   /** 采样步长(归一化单位);缺省 SAMPLE_STEP。调小更平滑,但动画 DOM 体积约按平方涨 */
   sampleStep?: number;
   /**
-   * 字形表(provider):缺省内置拉丁包(a–z / A–Z)。扩展字形数据包
-   * (如 drawtell-glyphs-hanzi)导出同构的 Map,从这里传入即共用同一支笔——
-   * 归一化约定由各包自定并写明(拉丁 = 四线三格;汉字 = 格子高 1、底线 y=0、顶 y=-1)。
+   * 字形表(provider):缺省内置拉丁包(a–z / A–Z)。别的字形做成同构的 Map 从这里传入,就和字母共用同一支笔;
+   * 归一化约定由传入方定并写明(拉丁 = 四线三格;汉字可取格子高 1、底线 y=0、顶 y=-1)。
+   * 汉字要逐笔写时从 hanzi-writer-data 的 medians 现做(本包已依赖它,田字格卡就读它),不另挑字表。
    */
   glyphs?: ReadonlyMap<string, Glyph>;
 }
@@ -79,7 +79,7 @@ export class UnknownGlyphError extends Error {
   /** node 的 strip-only 类型擦除不支持构造函数参数属性,字段显式声明 */
   ch: string;
   constructor(ch: string) {
-    super(`字形表未收录 '${ch}'。内置包只有 a–z 与 A–Z;汉字等扩展字形经 glyphs 选项传入(如 drawtell-glyphs-hanzi)。`);
+    super(`字形表未收录 '${ch}'。内置包只有 a–z 与 A–Z;别的字形做成同构的 Map 经 glyphs 选项传入。`);
     this.ch = ch;
   }
 }

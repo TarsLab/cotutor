@@ -13,25 +13,25 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-lecture-flow-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
+const teacher = await startFakeTeacher();
+process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { createContext, route } = await import('../src/app/http/app.ts');
 const { readIndex, readRunFile } = await import('../src/runtime/journal/store.ts');
 const { checkHome, publishHome } = await import('../src/runtime/home/store.ts');
-
-const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
 const BUNDLE = '2026-09-18-po13-jian-8';
-const node = process.execPath;
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
-cfg.runtimes = { default: 'fake', fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] } };
-for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
+cfg.runtimes = { ...FAKE_RUNTIMES };
+for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 测试都走假老师
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 cpSync(fileURLToPath(new URL(`./fixtures/bundles/${BUNDLE}/`, import.meta.url)), join(root, 'bundles', BUNDLE), { recursive: true });
 
@@ -144,6 +144,7 @@ try {
   const kl4 = kd4.messages.find((x) => x.job === j4)?.lecture;
   check('孩子端那一条带 video 与截图路径(画的卡画这张),不带那段话', kl4?.video === true && kl4.marks?.[0].image === shotPath && !kl4.marks[0].text);
 } finally {
+  await teacher.close();
   rmSync(home, { recursive: true, force: true });
 }
 done();

@@ -5,25 +5,23 @@
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-review-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
+const teacher = await startFakeTeacher();
+process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { createContext, route } = await import('../src/app/http/app.ts');
 const { readIndex } = await import('../src/runtime/journal/store.ts');
-
-const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
-const node = process.execPath;
-const cli = [node, '--experimental-strip-types', '--no-warnings', FAKE, '--tools', '{tools}', '--agent', '{agent}'];
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
-cfg.runtimes = { default: 'fake', fake: { run: [...cli, '{prompt}'], resume: [...cli, '--resume', '{session}', '{prompt}'] } };
+cfg.runtimes = { ...FAKE_RUNTIMES };
 for (const t of Object.values(cfg.tutors as Record<string, { runtime?: string }>)) delete t.runtime;
 cfg.paths = { vault: 'vault' };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
@@ -84,6 +82,7 @@ try {
   const u = (del.json as { undo: { memory: number; diary: number; misses: string[] } }).undo;
   check('删话题:只撤还在的(撤过的不再撤,家长改过的那行进 misses)', del.status === 200 && left === 2 && u.memory === 1 && u.diary === 0 && u.misses.some((m) => m.includes('讲慢点才跟得上')) && !readFileSync(memFile, 'utf8').includes('讲角用手指比划'), JSON.stringify({ left, u }));
 } finally {
+  await teacher.close();
   rmSync(home, { recursive: true, force: true });
 }
 

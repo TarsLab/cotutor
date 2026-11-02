@@ -31,16 +31,18 @@ const run = (args) => new Promise((resolve, reject) => { const p = spawn(process
 await run(['init', 'probe', '--dir', root, '--name', '小探']);
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
-const fake = join(repo, 'tests', '_fake-cli.ts');
+// 老师是假老师(tests/_fake-teacher.ts,逐行吐),serve 经 COTUTOR_BRAIN_ENDPOINT 找它
+const { startFakeTeacher } = await import(join(repo, 'tests', '_fake-teacher.ts'));
+const teacher = await startFakeTeacher();
 cfg.runtimes.default = 'fake';
-cfg.runtimes.fake = { run: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '{prompt}'], resume: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '--resume', '{session}', '{prompt}'] };
+cfg.runtimes.fake = { api: 'bailian', model: 'fake-stream' };
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
 // 老师都走实时:嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
 const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
 const mouth = await startFakeRealtime();
-const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home, COTUTOR_LIVE_ENDPOINT: mouth.endpoint }, stdio: 'ignore', detached: keep });
+const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home, COTUTOR_LIVE_ENDPOINT: mouth.endpoint, COTUTOR_BRAIN_ENDPOINT: teacher.baseURL }, stdio: 'ignore', detached: keep });
 for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch {} await sleep(250); }
 const api = async (method, path, body) => { const r = await fetch(base + path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, json: await r.json().catch(() => null) }; };
 const settle = async (tutor) => { for (let i = 0; i < 80; i++) { const d = (await api('GET', `/api/kid/conversations/${tutor}/today`)).json; if (d && !d.pending && d.messages.every((m) => !m.pending)) return d; await sleep(250); } return null; };
@@ -165,6 +167,7 @@ try {
   ws.close();
 } finally {
   mouth.close();
+  void teacher.close();
   if (browser) browser.kill();
   if (!keep) {
     serve.kill();

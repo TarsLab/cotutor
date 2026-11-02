@@ -4,12 +4,14 @@
 import { mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-send-cli-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
+const teacher = await startFakeTeacher();
+process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
@@ -18,17 +20,11 @@ const { createContext } = await import('../src/app/http/app.ts');
 const { localDate } = await import('../src/shared/time.ts');
 const { yamlScalar } = await import('../src/runtime/context/context-pack.ts');
 const { main } = await import('../src/app/cli/main.ts');
-
-const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
-const node = process.execPath;
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
-cfg.runtimes = {
-  default: 'fake',
-  fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] },
-};
-for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
+cfg.runtimes = { ...FAKE_RUNTIMES };
+for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 测试都走假老师
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
 async function run(argv: string[]): Promise<{ out: string; code: number; err: string }> {
@@ -85,4 +81,5 @@ const date = localDate(new Date());
   check('warm: false 不预热', (await ctx.runner.prewarm('chinese-tutor')) === false && !ctx.runner.spares.has('chinese-tutor'));
 }
 
+await teacher.close();
 done();

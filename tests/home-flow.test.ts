@@ -6,12 +6,14 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-home-flow-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
+const teacher = await startFakeTeacher();
+process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
@@ -21,17 +23,11 @@ const { homeStats, publishHome, readPublished } = await import('../src/runtime/h
 const { startReplay } = await import('../src/app/replay.ts');
 const { doctorWorkspace } = await import('../src/app/cli/doctor.ts');
 const { main } = await import('../src/app/cli/main.ts');
-
-const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
-const node = process.execPath;
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
-cfg.runtimes = {
-  default: 'fake',
-  fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] },
-};
-for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
+cfg.runtimes = { ...FAKE_RUNTIMES };
+for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 测试都走假老师
 cfg.paths = { vault: 'vault' };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault'), { recursive: true });
@@ -296,6 +292,7 @@ for: 2026-09-18
     check('工作台发的:记 from kid,孩子端看得到问句;家长端没有备课与交给孩子的接口', dv.status === 202 && dvm?.from === 'kid' && dvk.messages.find((m) => m.job === dvm.job)?.question === '工作台问一句' && gone.every((x) => x >= 400), JSON.stringify({ dvm, gone }));
   }
 } finally {
+  await teacher.close();
   rmSync(home, { recursive: true, force: true });
 }
 done();

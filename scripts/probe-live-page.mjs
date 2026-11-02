@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 孩子端实时老师页的手动验收(不进 pnpm test,要本机 Chrome;假百炼 + 假老师,不花钱):
- * 本进程起服务(临时 workspace,语文老师开实时;老师是 tests/_fake-cli.ts --stream,嘴是 tests/_fake-realtime.ts,一次回答的声音拉长到 1.5 秒),
+ * 本进程起服务(临时 workspace,语文老师开实时;老师是 tests/_fake-teacher.ts(逐行吐),嘴是 tests/_fake-realtime.ts,一次回答的声音拉长到 1.5 秒),
  * 无头 Chrome 带假麦克风开孩子端语文老师(新话题):
  *   横屏是左栏大头像 + 字幕、右边白板;按住说话(CDP 鼠标)→ 推了声音、松手嘴不先说、头像在想(板上没有占位卡)→ 脑写的卡铺上、卡角没有钮(撤了「?」)、讲稿一句一句上字幕;
  *   嘴在说时按下 = 打断(孩子端清了、字幕那句淡加省略号)、上滑松手作废;点开一张卡再按住说 = 问这张卡(消息带 focus);板是脑写的(节头是它那张「# 标题」卡、没写就接着上一节、孩子的话在左栏、不出卡的一轮板上不留字、卡和讲稿不同步);嘴连不上留在实时页「正在叫老师」、自己再连;
@@ -42,13 +42,14 @@ const { catchCue } = await import(join(repo, 'src', 'realtime', 'cues.ts'));
 // ---- 临时 workspace:老师都是假 CLI(流式),语文老师开实时;嘴是假百炼 ----
 const fake = await startFakeRealtime();
 fake.audioMs = 1500;
-const FAKE = join(repo, 'tests', '_fake-cli.ts');
-const rt = { run: [process.execPath, '--experimental-strip-types', '--no-warnings', FAKE, '--stream', '--tools', '{tools}', '--agent', '{agent}', '{prompt}'], resume: [process.execPath, '--experimental-strip-types', '--no-warnings', FAKE, '--stream', '--tools', '{tools}', '--agent', '{agent}', '--resume', '{session}', '{prompt}'] };
+const { startFakeTeacher } = await import(join(repo, 'tests', '_fake-teacher.ts'));
+const teacher = await startFakeTeacher();
+process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
 const wsRoot = join(tmp, 'ws');
 await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot });
 const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
-cfg.runtimes = { default: 'stream', stream: rt };
+cfg.runtimes = { default: 'stream', stream: { api: 'bailian', model: 'fake-stream' } };
 for (const t of Object.values(cfg.tutors)) delete t.runtime;
 cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 cfg.kid.name = 'Ray';
@@ -577,6 +578,7 @@ try {
   if (browser) browser.kill();
   server.close();
   fake.close();
+  void teacher.close();
   await ctx.runner.flush?.().catch?.(() => {});
 }
 console.log(bad ? `\n${bad} 项没过` : '\n全过');

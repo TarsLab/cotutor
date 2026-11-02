@@ -5,26 +5,24 @@
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-autobk-home-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
+const teacher = await startFakeTeacher();
+process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
 const { createContext } = await import('../src/app/http/app.ts');
 const { autoBookkeep, dueBookkeeping } = await import('../src/runtime/auto-bookkeep.ts');
 const { readIndex } = await import('../src/runtime/journal/store.ts');
-
-const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
-const node = process.execPath;
-const cli = [node, '--experimental-strip-types', '--no-warnings', FAKE, '--tools', '{tools}', '--agent', '{agent}'];
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
-cfg.runtimes = { default: 'fake', fake: { run: [...cli, '{prompt}'], resume: [...cli, '--resume', '{session}', '{prompt}'] } };
+cfg.runtimes = { ...FAKE_RUNTIMES };
 for (const t of Object.values(cfg.tutors as Record<string, { runtime?: string }>)) delete t.runtime;
 cfg.paths = { vault: 'vault' };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
@@ -117,6 +115,7 @@ try {
   const idx = { booked: {}, ratings: { r: 5 }, messages: [msg('1', 'run', { result: 'running' }), msg('2', 'r', { from: 'system', text: '应用派的' }), msg('3', 't', { tidy: true, from: 'system' }), msg('4', 'q', { from: 'system' })] };
   check('跑着的不记;没有孩子的话但打了分的记;整理轮不算话题;都没有的不记', dueBookkeeping(idx as never, { now: at(28, 23, 0), past: true }).threads.join() === 'r');
 } finally {
+  await teacher.close();
   rmSync(home, { recursive: true, force: true });
 }
 

@@ -1,5 +1,5 @@
 /**
- * 实时老师整条线,假百炼(_fake-realtime.ts)+ 假老师(_fake-cli.ts --stream),不花钱:
+ * 实时老师整条线,假百炼(_fake-realtime.ts)+ 假老师(_fake-teacher.ts,逐行吐),不花钱:
  * 连上(手动轮次、嘴的人设)→ 按住说、松手 → 嘴先接住 → 转写交给脑(实时轮,消息记 live、上下文包带 caught)→ 一拍一拍照念(念的字就是讲稿)→
  * 念的时候按下 = 打断(清队列,下一轮上下文包带 cut)→ 挂了落录像;没开 / 不在 live.voices 拒升级;嘴连不上告诉孩子端走板书。
  */
@@ -7,13 +7,15 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpath
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 import { startFakeRealtime } from './_fake-realtime.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-live-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
+const teacher = await startFakeTeacher();
+process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
@@ -25,19 +27,13 @@ const { localDate } = await import('../src/shared/time.ts');
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const until = async (f: () => boolean, ms = 6000): Promise<boolean> => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(10); return f(); };
 
-const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
-const node = process.execPath;
-const fakeRt = (extra: string[] = []) => ({
-  run: [node, '--experimental-strip-types', '--no-warnings', FAKE, ...extra, '--tools', '{tools}', '--agent', '{agent}', '{prompt}'],
-  resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, ...extra, '--tools', '{tools}', '--agent', '{agent}', '--resume', '{session}', '{prompt}'],
-});
 
 const fake = await startFakeRealtime();
 const wsRoot = join(home, 'ws');
 await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot });
 const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
-cfg.runtimes = { default: 'stream', stream: fakeRt(['--stream']) };
+cfg.runtimes = { ...FAKE_RUNTIMES, default: 'stream' };
 for (const t of Object.values(cfg.tutors as Record<string, { runtime?: string }>)) delete t.runtime;
 cfg.tutors['chinese-tutor'].voice = 'v-chinese';
 cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
@@ -767,5 +763,6 @@ const indexOf = (date: string) => JSON.parse(readFileSync(join(wsRoot, 'conversa
 }
 
 server.close();
+await teacher.close();
 fake.close();
 done();

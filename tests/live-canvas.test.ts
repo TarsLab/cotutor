@@ -1,5 +1,5 @@
 /**
- * 画板的服务端,假百炼(_fake-realtime.ts)+ 假老师(_fake-cli.ts --stream),不花钱:
+ * 画板的服务端,假百炼(_fake-realtime.ts)+ 假老师(_fake-teacher.ts,逐行吐),不花钱:
  * 纸的读写(key 是话题或 new;清掉那几版的图只认 captures/;from new 存到话题名下删掉 new 那张);
  * 边画边聊:画板开着时按头像说的(release 带 chat)只给嘴——图跟着声音进对话、嘴照 chatCue 接住、不起脑;孩子端说该说一句了({t:'chat'})安静时 0.5 秒静音 + 图交给嘴、
  * 那段的转写吞掉,不安静回 skipped;交画那一轮(纸的 drawing、画板卡的 submit)上下文包带 drawing: 与 live.draw:(这张画上说过的),嘴不先说;
@@ -9,13 +9,15 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } fr
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 import { startFakeRealtime } from './_fake-realtime.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-live-canvas-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
+const teacher = await startFakeTeacher();
+process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
@@ -30,19 +32,13 @@ const { sectionsFromMessages } = await import('../src/board/presentation.ts');
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const until = async (f: () => boolean, ms = 6000): Promise<boolean> => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(10); return f(); };
 
-const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
-const node = process.execPath;
-const fakeRt = (extra: string[] = []) => ({
-  run: [node, '--experimental-strip-types', '--no-warnings', FAKE, ...extra, '--tools', '{tools}', '--agent', '{agent}', '{prompt}'],
-  resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, ...extra, '--tools', '{tools}', '--agent', '{agent}', '--resume', '{session}', '{prompt}'],
-});
 
 const fake = await startFakeRealtime();
 const wsRoot = join(home, 'ws');
 await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot });
 const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
-cfg.runtimes = { default: 'stream', stream: fakeRt(['--stream']) };
+cfg.runtimes = { ...FAKE_RUNTIMES, default: 'stream' };
 for (const t of Object.values(cfg.tutors as Record<string, { runtime?: string }>)) delete t.runtime;
 cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 cfg.kid.name = 'Ray';
@@ -232,5 +228,6 @@ let drawJob = '';
 k.ws.send(JSON.stringify({ t: 'bye' }));
 await sleep(200);
 server.close();
+await teacher.close();
 fake.close();
 done();

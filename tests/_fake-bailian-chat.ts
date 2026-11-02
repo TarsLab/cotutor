@@ -5,6 +5,7 @@
  *   ZBOARD 两张卡加讲稿;ZMEM 加一段「## 记忆」;ZTOOL <路径> 先调 read_file 读它,拿到结果再回「书上说:…」;
  *   ZNOUSAGE 不回 usage(回的时候一次 100 入、其中 60 命中缓存、20 出;孩子这句有 ZBIG 就报 40000 入,下一轮该整段压缩了);ZSTALL 吐一句就不动了(连接不关,等客户端断);ZHTTP401 回 401;
  *   别的回一句「收到:<孩子的话>」,话题里前面有老师的回复就先说「接着刚才的」
+ * 给了 reply(假老师 _fake-teacher.ts 用)就先问它:回了 FakeReply 就照它回,回 null 才走上面的记号。
  */
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -26,9 +27,18 @@ export interface ChatBody {
 
 const textOf = (c: unknown): string => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((p) => (p && typeof p === 'object' && 'text' in p ? String((p as { text: unknown }).text) : '')).join('\n') : '');
 
+/** 照脚本回一轮:status 回 HTTP 错误;否则先 reasoning、再 tool(只在请求带了工具时)、再 text,lineMs 逐行歇这么久(模仿流式慢慢吐) */
+export interface FakeReply {
+  text: string;
+  status?: number;
+  reasoning?: string;
+  tool?: { name: string; args: Record<string, unknown> };
+  lineMs?: number;
+}
+
 export const BOARD = '```text\n# 三角形\n拼一拼\n```\n\n先看[三角形]。\n\n```choice\n三角形有几个角?\n- [x] 三个\n- [ ] 四个\n```\n\n三角形有几个角?';
 
-export async function startFakeChat(): Promise<{ baseURL: string; requests: ChatBody[]; close(): Promise<void> }> {
+export async function startFakeChat(opts: { reply?: (body: ChatBody) => FakeReply | null } = {}): Promise<{ baseURL: string; requests: ChatBody[]; close(): Promise<void> }> {
   const requests: ChatBody[] = [];
   const server = createServer(async (req, res) => {
     try {
@@ -43,6 +53,11 @@ export async function startFakeChat(): Promise<{ baseURL: string; requests: Chat
       const lastUser = [...body.messages].reverse().find((m) => m.role === 'user');
       const said = textOf(lastUser?.content);
       const kid = said.trim().split('\n').at(-1) ?? '';
+      const scripted = opts.reply?.(body) ?? null;
+      if (scripted?.status) {
+        res.writeHead(scripted.status, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { message: 'fake failure', type: 'invalid_request_error', code: 'fake' } }));
+        return;
+      }
       if (said.includes('ZHTTP401')) {
         res.writeHead(401, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { message: 'invalid key', type: 'invalid_api_key', code: 'invalid_api_key' } }));
         return;
@@ -59,6 +74,25 @@ export async function startFakeChat(): Promise<{ baseURL: string; requests: Chat
         res.end('data: [DONE]\n\n');
       };
       const last = body.messages.at(-1);
+      if (scripted) {
+        if (scripted.reasoning) await send({ reasoning_content: scripted.reasoning });
+        if (scripted.tool && body.tools?.length && last?.role !== 'tool') {
+          await send({ tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: scripted.tool.name, arguments: JSON.stringify(scripted.tool.args) } }] });
+          await finish('tool_calls');
+          return;
+        }
+        if (scripted.lineMs) {
+          for (const line of scripted.text.split(/(?<=\n)/)) {
+            await send({ content: line });
+            await delay(scripted.lineMs);
+          }
+        } else {
+          await send({ content: scripted.text.slice(0, 20) });
+          await send({ content: scripted.text.slice(20) });
+        }
+        await finish();
+        return;
+      }
       // 工具结果回来了:照结果回
       if (last?.role === 'tool') {
         let text = '';

@@ -8,10 +8,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-activity-flow-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
+const teacher = await startFakeTeacher();
+process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
@@ -25,20 +28,13 @@ const { parseHome } = await import('../src/runtime/home/home.ts');
 const { setTutorButtons } = await import('../src/runtime/home/edit.ts');
 const { renderContextPack } = await import('../src/runtime/context/context-pack.ts');
 const { evalActivity } = await import('../src/app/activity-eval.ts');
-
-const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
-const node = process.execPath;
 const { root } = await initWorkspace({ slug: 'ming', name: '小明' });
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
-cfg.runtimes = {
-  default: 'fake',
-  fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] },
-};
-for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
-// activity 独立:Qwen 用 {systemBody} 收系统提示
-const fakeArgs = [node, '--experimental-strip-types', '--no-warnings', FAKE];
-(cfg.runtimes as Record<string, unknown>).fakesys = { run: [...fakeArgs, '--agent', '{agent}', '--system-prompt', '{systemBody}', '{prompt}'], resume: [...fakeArgs, '--agent', '{agent}', '--resume', '{session}', '--system-prompt', '{systemBody}', '{prompt}'] };
+cfg.runtimes = { ...FAKE_RUNTIMES };
+for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 测试都走假老师
+// activity 独立:API 运行时的系统提示就是 {systemBody}(老师文件或 activity + 板书写法);看假老师收到的那条 system
+const lastSystem = (): string => { const m = teacher.requests.at(-1)?.messages.find((x) => x.role === 'system'); return typeof m?.content === 'string' ? m.content : ''; };
 cfg.paths = { vault: 'vault' };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 mkdirSync(join(root, 'vault'), { recursive: true });
@@ -110,14 +106,14 @@ try {
   check('新话题,发的是按钮上的字', t1 === j1 && m1.text === '我来出题');
   check('第一条记下 activity:参数是解析好的;没设最多画就没有(不限)', JSON.stringify(m1.activity) === JSON.stringify({ name: '你说我画', params: { 词: ['播种', '睡大觉', '羞愧'] } }), JSON.stringify(m1.activity));
   const p1 = (await readRunFile(ctx.ws, 'chinese-tutor', DATE, j1))!.prompt;
+  const guide = lastSystem();
   const yaml = p1.slice(0, p1.indexOf('\n<'));
   check('上下文包:activity: 在 YAML 最后,参数一行一个、词表是列表,state 跟在后面;不限张数就没有还能画', yaml.endsWith('  activity:\n    name: "你说我画"\n    params:\n      "词":\n        - "播种"\n        - "睡大觉"\n        - "羞愧"\n    state:\n      "缺": ""'), yaml.slice(-200));
-  check('上下文包:activityGuide 指到文件', p1.includes('  activityGuide: "agents/chinese-tutor/activities/你说我画.md"\n'));
+  check('上下文包:activityGuide 说已在系统提示里', p1.includes('  activityGuide: "已在你的系统提示里'), /activityGuide: .*/.exec(p1)?.[0]);
   check('上下文包:home: 照旧带按钮字与讲法', p1.includes('  home:\n    button: "我来出题"\n    brief: "羞愧要落到一幅上"'));
-  const guide = p1.slice(p1.indexOf('<cotutor-activity path='), p1.indexOf('</cotutor-activity>'));
-  check('<cotutor-activity>:填了词,出题那段在;注释与守卫行不在', guide.includes('### 我来出题') && guide.includes('第一句:') && !guide.includes('<!--') && !guide.includes('{{'));
-  check('<cotutor-activity>:老师没有的 paint 卡,写法跟在后面', guide.includes('## 这个 activity 多用的卡') && guide.includes('paint'));
-  check('<cotutor-activity>:不带给人看的节、不带画家那段', !guide.includes('## 画家收到什么') && !guide.includes('儿童绘本插画') && !guide.includes('## 家长填的'));
+  check('系统提示里的 activity:填了词,出题那段在;注释与守卫行不在', guide.includes('### 我来出题') && guide.includes('第一句:') && !guide.includes('<!--') && !guide.includes('{{'), guide.slice(0, 300));
+  check('系统提示里的板书写法:老师没有的 paint 卡也讲', guide.includes('### paint'));
+  check('系统提示里的 activity:不带给人看的节、不带画家那段', !guide.includes('## 画家收到什么') && !guide.includes('儿童绘本插画') && !guide.includes('## 家长填的'));
   check('守则说以 activity 为准', p1.includes('有 `<cotutor-activity>`,照它带'));
 
   // ---- 同一话题下一条:activity 还在,原文未变 ----
@@ -126,7 +122,7 @@ try {
   const j2 = (r2.json as { job: string }).job;
   const p2 = (await readRunFile(ctx.ws, 'chinese-tutor', DATE, j2))!.prompt;
   check('续话题:activity: 每条都带', p2.includes('  activity:\n    name: "你说我画"\n    params:\n      "词":'));
-  check('续话题:原文不再带,写「未变」', !p2.includes('<cotutor-activity path=') && /activityGuide: .*未变/.test(p2), p2.slice(0, 600));
+  check('续话题:原文不进消息,照旧在系统提示里', !p2.includes('<cotutor-activity path=') && p2.includes('  activityGuide: "已在你的系统提示里') && lastSystem().includes('### 我来出题'), /activityGuide: .*/.exec(p2)?.[0]);
   index = await readIndex(ctx.ws, 'chinese-tutor', DATE);
   check('续话题那条不再记 activity(只记在第一条)', index.messages.find((m) => m.job === j2)?.activity === undefined);
 
@@ -165,7 +161,7 @@ try {
 
   // ---- 终端:pack / send --activity ----
   const pk = await run(['pack', 'chinese-tutor', '--activity', '你说我画', '--param', '词=春风、柳树;最多画=1']);
-  check('pack --activity:看得到 activity 那两段', pk.code === 0 && pk.out.includes('name: "你说我画"') && pk.out.includes('"最多画": 1') && pk.out.includes('<cotutor-activity path='), pk.out.slice(0, 300));
+  check('pack --activity:看得到 activity 那段', pk.code === 0 && pk.out.includes('name: "你说我画"') && pk.out.includes('"最多画": 1'), pk.out.slice(0, 300));
   const pkBad = await run(['pack', 'chinese-tutor', '--activity', '你说我画', '--param', '最多画=两']).catch((e: Error) => ({ out: e.message, code: 2 }));
   check('pack --activity 参数不对:用法错误退出', pkBad.code === 2, String(pkBad.code));
   const sd = await run(['send', 'chinese-tutor', '--activity', '你说我画', '--quiet']);
@@ -177,7 +173,7 @@ try {
   const rp = await startReplay(ctx.ws, 'chinese-tutor', DATE, j2, { now: () => now });
   await rp.done;
   const ev = (await readRunFile({ ...ctx.ws, dirs: { ...ctx.ws.dirs, conversations: join(root, 'evals') } }, 'chinese-tutor', DATE, rp.evalJob))!.prompt;
-  check('回放:新会话,activity 那段整篇带', ev.includes('<cotutor-activity path=') && ev.includes('    name: "你说我画"'));
+  check('回放:新会话,activity 照带(系统提示里是它)', ev.includes('    name: "你说我画"') && lastSystem().includes('你说我画'), ev.slice(0, 300));
 
   // ---- 第 3 期:应用算的、应用拦的(你说我画,家长设了最多画 2)----
   {
@@ -320,33 +316,31 @@ try {
       await ctx.runner.flush();
       return { ...st, file: (await readRunFile(ctx.ws, 'chinese-tutor', DATE, st.job))! };
     };
-    const s1 = await go({ text: '你说我画', runtime: 'fakesys' });
-    const argv = s1.file.argv as string[];
-    const sys = argv[argv.indexOf('--system-prompt') + 1];
-    check('qwen 那种:系统提示是 activity 的人设与做法,不是老师文件', sys.startsWith('你是这个家的语文老师,今天陪孩子玩「你说我画」') && !sys.includes('### 孩子问怎么写'), sys.slice(0, 80));
-    check('qwen 那种:板书写法只讲 activity 的卡(read、paint、text)', sys.includes('### paint') && sys.includes('### read') && !sys.includes('### choice') && !sys.includes('### tianzige'));
-    check('qwen 那种:第一条不再带 <cotutor-activity>,写「已在系统提示里」;activity: 照带', !s1.file.prompt.includes('<cotutor-activity path=') && s1.file.prompt.includes('activityGuide: "已在你的系统提示里') && s1.file.prompt.includes('  activity:\n    name: "你说我画"'), JSON.stringify({ tag: s1.file.prompt.includes('<cotutor-activity'), g: /activityGuide: .*/.exec(s1.file.prompt)?.[0], a: s1.file.prompt.includes('  activity:') }));
+    const s1 = await go({ text: '你说我画', runtime: 'fake' });
+    const sys = lastSystem();
+    check('系统提示:系统提示是 activity 的人设与做法,不是老师文件', sys.startsWith('你是这个家的语文老师,今天陪孩子玩「你说我画」') && !sys.includes('### 孩子问怎么写'), sys.slice(0, 80));
+    check('系统提示:板书写法只讲 activity 的卡(read、paint、text)', sys.includes('### paint') && sys.includes('### read') && !sys.includes('### choice') && !sys.includes('### tianzige'));
+    check('系统提示:第一条不再带 <cotutor-activity>,写「已在系统提示里」;activity: 照带', !s1.file.prompt.includes('<cotutor-activity path=') && s1.file.prompt.includes('activityGuide: "已在你的系统提示里') && s1.file.prompt.includes('  activity:\n    name: "你说我画"'), JSON.stringify({ tag: s1.file.prompt.includes('<cotutor-activity'), g: /activityGuide: .*/.exec(s1.file.prompt)?.[0], a: s1.file.prompt.includes('  activity:') }));
     check('守则按 activity 的卡裁:没有 lecture 卡就没有小课堂那段', !s1.file.prompt.includes('孩子刚看完小课堂'));
     // 记忆:activity 自己一篇
-    const s2 = await go({ text: '记住它', runtime: 'fakesys', thread: s1.thread });
+    const s2 = await go({ text: '记住它', runtime: 'fake', thread: s1.thread });
     const memDir = join(root, 'vault', '记忆');
     const actMem = join(memDir, '语文老师·你说我画.md');
     const memText = readFileSync(actMem, 'utf8');
     check('记忆写进 activity 自己那篇(agent: chinese-tutor/你说我画)', memText.includes('agent: chinese-tutor/你说我画') && memText.split('\n').some((l) => l.startsWith('- ')) && !readdirSync(memDir).includes('语文老师.md'), readdirSync(memDir).join());
-    const s3 = await go({ text: '后来呢', runtime: 'fakesys', thread: s1.thread });
+    const s3 = await go({ text: '后来呢', runtime: 'fake', thread: s1.thread });
     check('续话题:上下文包的记忆是 activity 那篇', /memory: "记忆\/语文老师·你说我画\.md/.test(s3.file.prompt), s3.file.prompt.slice(0, 600));
     // 隔天「接着」:新话题、只带 continues,沿用被接话题的 activity
-    const cont = await ctx.runner.send('chinese-tutor', { from: 'kid', text: '接着刚才的', runtime: 'fakesys', newThread: true, continues: { date: DATE, thread: s1.thread } });
+    const cont = await ctx.runner.send('chinese-tutor', { from: 'kid', text: '接着刚才的', runtime: 'fake', newThread: true, continues: { date: DATE, thread: s1.thread } });
     await cont.done;
     await ctx.runner.flush();
-    const contRun = (await readRunFile(ctx.ws, 'chinese-tutor', DATE, cont.job))!;
-    const contSys = (contRun.argv as string[])[(contRun.argv as string[]).indexOf('--system-prompt') + 1];
+    const contSys = lastSystem();
     const contMsg = (await readIndex(ctx.ws, 'chinese-tutor', DATE)).messages.find((m) => m.job === cont.job);
     check('接着以前的 activity 话题:新话题照旧是那个 activity(系统提示、记在第一条)', contSys.startsWith('你是这个家的语文老师,今天陪孩子玩「你说我画」') && contMsg?.activity?.name === '你说我画' && contMsg.activity.params.最多画 === 2 && !!contMsg.continues, JSON.stringify({ sys: contSys.slice(0, 40), act: contMsg?.activity, cont: contMsg?.continues }));
-    const free = await ctx.runner.send('chinese-tutor', { from: 'kid', text: '随便聊聊', runtime: 'fakesys', newThread: true });
+    const free = await ctx.runner.send('chinese-tutor', { from: 'kid', text: '随便聊聊', runtime: 'fake', newThread: true });
     await free.done;
     const freeRun = (await readRunFile(ctx.ws, 'chinese-tutor', DATE, free.job))!;
-    const freeSys = (freeRun.argv as string[])[(freeRun.argv as string[]).indexOf('--system-prompt') + 1];
+    const freeSys = lastSystem();
     check('自由话题:照旧是老师文件,记忆是老师的(还没有)', freeSys.includes('### 孩子问怎么写') && freeRun.prompt.includes('memory: "还没有"'), freeRun.prompt.slice(0, 400));
     await deleteThread(ctx.ws, 'chinese-tutor', DATE, s1.thread);
     check('删话题:从 activity 那篇记忆里撤', !readFileSync(actMem, 'utf8').split('\n').some((l) => l.startsWith('- ')));
@@ -357,6 +351,7 @@ try {
   // ---- 渲染:没有 activity 的包不多出东西 ----
   check('没 activity 的包没有那几行', !renderContextPack({ at: 'x', plan: [], recent: [] }).includes('activity'));
 } finally {
+  await teacher.close();
   await ctx.runner.flush();
   rmSync(home, { recursive: true, force: true });
 }

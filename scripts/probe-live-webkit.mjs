@@ -30,14 +30,15 @@ const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.t
 
 const fake = await startFakeRealtime();
 fake.kidText = '老师板书怎么写';
-const FAKE = join(repo, 'tests', '_fake-cli.ts');
-const rt = { run: [process.execPath, '--experimental-strip-types', '--no-warnings', FAKE, '--stream', '--tools', '{tools}', '--agent', '{agent}', '{prompt}'], resume: [process.execPath, '--experimental-strip-types', '--no-warnings', FAKE, '--stream', '--tools', '{tools}', '--agent', '{agent}', '--resume', '{session}', '{prompt}'] };
+const { startFakeTeacher } = await import(join(repo, 'tests', '_fake-teacher.ts'));
+const teacher = await startFakeTeacher();
+process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
 const tmp = probeDir('cotutor-probe-live-webkit-');
 const wsRoot = join(tmp, 'ws');
 await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot });
 const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
-cfg.runtimes = { default: 'stream', stream: rt };
+cfg.runtimes = { default: 'stream', stream: { api: 'bailian', model: 'fake-stream' } };
 for (const t of Object.values(cfg.tutors)) delete t.runtime;
 cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
@@ -136,6 +137,7 @@ try {
   await browser.close();
   server.close();
   fake.close();
+  void teacher.close();
 }
 console.log(bad ? `\n${bad} 项没过` : '\n全过');
 process.exit(bad ? 1 : 0);

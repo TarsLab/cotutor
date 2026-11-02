@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 作业照片线(R5)的手动验收(不进 pnpm test,要本机 Chrome;老师是假 CLI,不花钱):
- * 自己起一个临时 workspace(运行时指 tests/_fake-cli.ts --stream)+ 一个 HTTP 的 serve →
+ * 自己起一个临时 workspace(运行时指假老师 tests/_fake-teacher.ts)+ 一个 HTTP 的 serve →
  * 把服务自己画的 /icon-192.png 当「照片」传上去(POST …/photos)→ 只带照片发一条 → 假老师「看图」:Read 那张、板书出 image 卡 + canvas 卡照片做底 →
  * 用 Chrome DevTools 协议开孩子端:节头有缩略图、直开画板舞台、iframe 里 excalidraw 的场景有一个 image 元素(底图)与一份 files →
  * 画一笔「给老师看」→ .cards/<n>.png 落盘;家长端那轮的问句下有缩略图。
@@ -34,18 +34,20 @@ const run = (args, opts = {}) => new Promise((resolve, reject) => { const p = sp
 await run(['init', 'probe', '--dir', root, '--name', '小探']);
 const cfgFile = join(root, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8'));
-const fake = join(repo, 'tests', '_fake-cli.ts');
+// 老师是假老师(tests/_fake-teacher.ts,逐行吐),serve 经 COTUTOR_BRAIN_ENDPOINT 找它
+const { startFakeTeacher } = await import(join(repo, 'tests', '_fake-teacher.ts'));
+const teacher = await startFakeTeacher();
 cfg.runtimes.default = 'fake';
-// 出厂老师写死了 runtime(qwen):去掉,都走假老师(不然这里叫的是真 qwen)
+// 出厂老师写死了 runtime(api):去掉,都走假老师(不然这里叫的是真百炼)
 for (const t of Object.values(cfg.tutors)) delete t.runtime;
-cfg.runtimes.fake = { run: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '{prompt}'], resume: [process.execPath, '--experimental-strip-types', '--no-warnings', fake, '--stream', '--agent', '{agent}', '--resume', '{session}', '{prompt}'] };
+cfg.runtimes.fake = { api: 'bailian', model: 'fake-stream' };
 cfg.server.port = port;
 writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
 
 // 老师都走实时:嘴是假百炼,serve 认 COTUTOR_LIVE_ENDPOINT(当百炼配好了)
 const { startFakeRealtime } = await import(join(repo, 'tests', '_fake-realtime.ts'));
 const mouth = await startFakeRealtime();
-const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home, COTUTOR_LIVE_ENDPOINT: mouth.endpoint }, stdio: 'ignore', detached: keep });
+const serve = spawn(process.execPath, [join(repo, 'bin', 'cotutor.js'), 'serve', '--workspace', root, '--http'], { env: { ...process.env, HOME: home, COTUTOR_LIVE_ENDPOINT: mouth.endpoint, COTUTOR_BRAIN_ENDPOINT: teacher.baseURL }, stdio: 'ignore', detached: keep });
 for (let i = 0; i < 40; i++) { try { if ((await fetch(`${base}/api/health`)).ok) break; } catch {} await sleep(250); }
 const api = async (method, path, body) => { const r = await fetch(base + path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, json: await r.json().catch(() => null) }; };
 
@@ -163,6 +165,7 @@ try {
   process.exitCode = 1;
 } finally {
   mouth.close();
+  void teacher.close();
   browser?.kill();
   if (keep) { serve.unref(); console.log(`留着:workspace ${root},serve ${base}(pid ${serve.pid},自己 kill)`); }
   else { serve.kill(); await sleep(800); rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 }); }

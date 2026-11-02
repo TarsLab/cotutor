@@ -4,8 +4,8 @@
 import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 import { keysHome } from './_keys.ts';
 
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-paint-home-')));
@@ -161,13 +161,13 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 
 // ---- 全流程:假老师出画图卡 → 后台画 → 孩子端看到图 → 下一条老师拿到「画好了」 ----
 {
-  const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
-  const node = process.execPath;
+  const teacher = await startFakeTeacher();
+  process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
   const { root } = await initWorkspace({ slug: 'flow', name: '小流', dir: join(home, 'ws-flow') });
   const cfgFile = join(root, 'cotutor.json');
   const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, unknown>;
-  cfg.runtimes = { default: 'fake', fake: { run: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '{prompt}'], resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, '--agent', '{agent}', '--resume', '{session}', '{prompt}'] } };
-  for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 出厂语文老师走 qwen;测试都走假 CLI
+  cfg.runtimes = { ...FAKE_RUNTIMES };
+  for (const t of Object.values((cfg as { tutors: Record<string, { runtime?: string }> }).tutors)) delete t.runtime; // 测试都走假老师
   writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
   let calls = 0;
   const now = new Date('2026-10-11T02:00:00Z');
@@ -195,6 +195,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   const m2 = idx2.messages[1];
   check('下一条:上下文包的 cards 里告诉老师画好了;家长视图也记着', (m2.cards ?? []).some((c) => c.card === `${m.job}/${n}` && c.text.startsWith('画图卡:画好了')), JSON.stringify(m2.cards));
   check('这一条没有画图卡,不再画', calls === 1);
+  await teacher.close();
 }
 
 done();

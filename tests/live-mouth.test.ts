@@ -7,8 +7,8 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } fr
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { check, done } from './_check.ts';
+import { FAKE_RUNTIMES, startFakeTeacher } from './_fake-teacher.ts';
 import { startFakeRealtime } from './_fake-realtime.ts';
 
 const { mouthIndex } = await import('../src/runtime/journal/mouth-index.ts');
@@ -28,6 +28,8 @@ const { mouthIndex } = await import('../src/runtime/journal/mouth-index.ts');
 const home = realpathSync(mkdtempSync(join(tmpdir(), 'cotutor-live-mouth-')));
 process.env.HOME = home;
 delete process.env.COTUTOR_WORKSPACE;
+const teacher = await startFakeTeacher();
+process.env.COTUTOR_BRAIN_ENDPOINT = teacher.baseURL;
 
 const { initWorkspace } = await import('../src/app/cli/init.ts');
 const { loadWorkspace } = await import('../src/app/workspace.ts');
@@ -40,12 +42,6 @@ const { isKidPath } = await import('../src/app/http/access.ts');
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const until = async (f: () => boolean, ms = 8000): Promise<boolean> => { const t = Date.now() + ms; while (!f() && Date.now() < t) await sleep(10); return f(); };
 
-const FAKE = fileURLToPath(new URL('./_fake-cli.ts', import.meta.url));
-const node = process.execPath;
-const fakeRt = (extra: string[] = []) => ({
-  run: [node, '--experimental-strip-types', '--no-warnings', FAKE, ...extra, '--tools', '{tools}', '--agent', '{agent}', '{prompt}'],
-  resume: [node, '--experimental-strip-types', '--no-warnings', FAKE, ...extra, '--tools', '{tools}', '--agent', '{agent}', '--resume', '{session}', '{prompt}'],
-});
 
 const fake = await startFakeRealtime();
 // 一段声音放 1.5 秒:嘴出完了,孩子端还要放好一会儿(按下时没放的那几句是有声音的)
@@ -54,7 +50,7 @@ const wsRoot = join(home, 'ws');
 await initWorkspace({ slug: 'ray', name: 'Ray', dir: wsRoot });
 const cfgFile = join(wsRoot, 'cotutor.json');
 const cfg = JSON.parse(readFileSync(cfgFile, 'utf8')) as Record<string, any>;
-cfg.runtimes = { default: 'stream', stream: fakeRt(['--stream']) };
+cfg.runtimes = { ...FAKE_RUNTIMES, default: 'stream' };
 for (const t of Object.values(cfg.tutors as Record<string, { runtime?: string }>)) delete t.runtime;
 cfg.live = { voices: { 'chinese-tutor': 'Serena' } };
 cfg.kid.name = 'Ray';
@@ -157,5 +153,6 @@ await sleep(200);
 check('挂了以后文件还在(删话题时按 <日期>.<job>.* 一起删)', existsSync(join(dir, `${today}.${job1}.mouth.wav`)) && existsSync(join(dir, `${today}.${job3}.mouth.json`)));
 
 server.close();
+await teacher.close();
 fake.close();
 done();

@@ -326,4 +326,11 @@ try {
   }
 }
 
+// ---- 证书的提示按系统说装法(2026-11-02:Windows 上原来也说 brew)----
+{
+  const { mkcertHint } = await import('../src/app/cli/cert.ts');
+  const win = mkcertHint('win32');
+  check('mkcert 装法:Mac 说 brew;Windows 说 winget、没有就下官方 exe,再 mkcert -install,不说 brew', mkcertHint('darwin') === 'brew install mkcert && mkcert -install' && win.includes('winget install FiloSottile.mkcert') && win.includes('github.com/FiloSottile/mkcert/releases') && win.includes('mkcert -install') && !win.includes('brew'), win);
+}
+
 done();

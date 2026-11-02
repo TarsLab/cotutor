@@ -21,8 +21,8 @@ cotutor serve                              # 孩子端 http://<ip>:5180/,家长�
 3. **体检**:`cotutor doctor` 逐项检查,不过的每条都带修复命令。
 
 `init` 把出厂老师拷进 `agents/<老师>.md`,把做课包用的四个技能 chalk-* 和五个机器件 cotutor-tutor / cotutor-board / cotutor-analyze / cotutor-tune / cotutor-home 拷进 `.agents/skills/`(Codex、Qwen Code 直接读;Claude Code 读的 `.claude/skills` 是链到它的);
-做小课堂的课包用 `cotutor chalk`(check / build / bake / snap / dub),烤画面与截图用本机的 Chrome。要在 iPad 上用(按住说话要 HTTPS):`cotutor cert` 签一张
-自签证书(要 mkcert:`brew install mkcert && mkcert -install`),把根证书装到 iPad 并打开信任,重启 `serve`,扫码打开。步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
+做小课堂的课包用 `cotutor chalk`(check / build / bake / snap / dub),烤画面与截图用本机的 Chrome(Windows 上没有 Chrome 就用 Edge)。要在平板上用(按住说话要 HTTPS):`cotutor cert` 签一张
+自签证书(要 mkcert:Mac 上 `brew install mkcert && mkcert -install`;Windows 上 `winget install FiloSottile.mkcert`,重开终端再 `mkcert -install`),把根证书装到平板并打开信任,重启 `serve`,扫码打开。iPad 的步骤见 [iPad 与 iPhone](docs/iPad与iPhone.md)。
 
 然后在浏览器里:
 

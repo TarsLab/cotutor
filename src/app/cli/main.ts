@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { constants as osConstants } from 'node:os';
+import { join } from 'node:path';
 import { doctorWorkspace } from './doctor.ts';
 import { initWorkspace } from './init.ts';
 import { gradePacks } from './grades.ts';
@@ -140,7 +141,7 @@ export async function main(argv: string[]): Promise<void> {
         }
         process.stdout.write(`cotutor serve ${JSON.stringify(workspaceReport(r.ws))}\n`);
         for (const w of r.warnings) process.stdout.write(`  ! ${w}\n`);
-        if (!r.https) process.stdout.write('  ! HTTP:iPad / iPhone 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
+        if (!r.https) process.stdout.write('  ! HTTP:平板、手机上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write(`  孩子端 /,家长端 /parent,工作台 /dev(设置、老师团、看原文)\n`);
         await printQr(r.qrPage, flags['open-qr'] === true);
@@ -157,7 +158,7 @@ export async function main(argv: string[]): Promise<void> {
         // 被杀(Ctrl-C、探针收尾)也走 exit,mock 的临时目录才删得掉
         for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.once(s, () => process.exit(128 + osConstants.signals[s]));
         process.stdout.write(`cotutor mock 场景 ${scenario}(不经真实老师与百炼:老师都走实时老师页,假嘴念静音的声音)\n`);
-        if (!r.https) process.stdout.write('  ! HTTP:iPad / iPhone 上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
+        if (!r.https) process.stdout.write('  ! HTTP:平板、手机上按住说话要 HTTPS;cotutor cert 建证书后重启即走 HTTPS\n');
         for (const u of r.urls) process.stdout.write(`  ${u}\n`);
         process.stdout.write('  孩子端 /,家长端 /parent;直接开某位老师:/?tutor=chinese-tutor\n');
         await printQr(r.qrPage, flags['open-qr'] === true);
@@ -318,7 +319,13 @@ export async function main(argv: string[]): Promise<void> {
         if (json) process.stdout.write(`${JSON.stringify(redactDeep(r), null, 2)}\n`);
         else {
           process.stdout.write(`证书:${redactHome(r.cert)}\n私钥:${redactHome(r.key)}\n主机:${r.hosts.join(' ')}\n`);
-          process.stdout.write(`iPad / iPhone 要先信任这台机器的根证书:把 ${redactHome(r.caRoot)}/rootCA.pem 隔空投送过去 → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里**把开关打开**(装了不等于信任,每台设备各做一次);然后重启 cotutor serve,在这台电脑上打开它打印的扫码页,用相机扫(个别设备扫完一直转圈,就改手输打印的 https://<局域网 IP>:<端口>/)。详见 docs/iPad与iPhone.md\n`);
+          // 根证书怎么到设备上:Mac 隔空投送;Windows 等没有,用微信、邮件或网盘传
+          const rootCa = redactHome(join(r.caRoot, 'rootCA.pem'));
+          const send = process.platform === 'darwin' ? '隔空投送过去' : '用微信、邮件或网盘传到设备上';
+          process.stdout.write(`平板、手机要先信任这台机器的根证书 ${rootCa}(每台设备各做一次):\n`);
+          process.stdout.write(`  iPad / iPhone:${send} → 设置里安装描述文件 → 通用 › 关于本机 › 证书信任设置里**把开关打开**(装了不等于信任)\n`);
+          process.stdout.write(`  安卓:${process.platform === 'darwin' ? '传到设备上' : send} → 设置里搜「CA 证书」,按提示安装(各家菜单不一样,会提示「网络可能受到监控」)\n`);
+          process.stdout.write(`然后重启 cotutor serve,在这台电脑上打开它打印的扫码页,用相机扫(个别设备扫完一直转圈,就改手输打印的 https://<局域网 IP>:<端口>/)。详见 docs/iPad与iPhone.md\n`);
         }
         return;
       }
